@@ -1,0 +1,267 @@
+{
+  "observations": [
+    {
+      "compositionCount": 2,
+      "frames": 0,
+      "playback": {
+        "duration": 0.0,
+        "gaussianEnabled": false,
+        "path": null,
+        "paused": true,
+        "position": 0.0,
+        "sigma": 2.0
+      },
+      "playlist": null,
+      "stage": "file-plugin-installed",
+      "windowGeneration": 2,
+      "windowSize": {
+        "height": 640,
+        "scale": 1.0,
+        "width": 960
+      }
+    },
+    {
+      "compositionCount": 2,
+      "frames": 0,
+      "playback": {
+        "duration": 0.0,
+        "gaussianEnabled": false,
+        "path": null,
+        "paused": true,
+        "position": 0.0,
+        "sigma": 2.0
+      },
+      "playlist": null,
+      "stage": "open-through-ts-action",
+      "windowGeneration": 2,
+      "windowSize": {
+        "height": 1280,
+        "scale": 2.0,
+        "width": 1920
+      }
+    },
+    {
+      "compositionCount": 2,
+      "frames": 5,
+      "playback": {
+        "duration": 12.0,
+        "gaussianEnabled": false,
+        "path": "/Users/ziyang/Documents/vestra-player/doc/experimental1/samples/sample.mp4",
+        "paused": false,
+        "position": 0.4666666666666667,
+        "sigma": 2.0
+      },
+      "playlist": null,
+      "stage": "frames-displayed",
+      "windowGeneration": 2,
+      "windowSize": {
+        "height": 1280,
+        "scale": 2.0,
+        "width": 1920
+      }
+    },
+    {
+      "compositionCount": 2,
+      "frames": 6,
+      "playback": {
+        "duration": 12.0,
+        "gaussianEnabled": false,
+        "path": "/Users/ziyang/Documents/vestra-player/doc/experimental1/samples/sample.mp4",
+        "paused": true,
+        "position": 0.5333333333333333,
+        "sigma": 2.0
+      },
+      "playlist": null,
+      "stage": "paused-through-ts",
+      "windowGeneration": 2,
+      "windowSize": {
+        "height": 1280,
+        "scale": 2.0,
+        "width": 1920
+      }
+    },
+    {
+      "compositionCount": 3,
+      "frames": 6,
+      "playback": {
+        "duration": 12.0,
+        "gaussianEnabled": false,
+        "path": "/Users/ziyang/Documents/vestra-player/doc/experimental1/samples/sample.mp4",
+        "paused": false,
+        "position": 1.0,
+        "sigma": 2.0
+      },
+      "playlist": {},
+      "stage": "playlist-first-install-recomposed",
+      "windowGeneration": 3,
+      "windowSize": {
+        "height": 640,
+        "scale": 1.0,
+        "width": 960
+      }
+    },
+    {
+      "compositionCount": 3,
+      "frames": 7,
+      "playback": {
+        "duration": 12.0,
+        "gaussianEnabled": false,
+        "path": "/Users/ziyang/Documents/vestra-player/doc/experimental1/samples/sample.mp4",
+        "paused": false,
+        "position": 1.7,
+        "sigma": 2.0
+      },
+      "playlist": {
+        "visible": true
+      },
+      "stage": "playlist-ready",
+      "windowGeneration": 3,
+      "windowSize": {
+        "height": 1280,
+        "scale": 2.0,
+        "width": 1920
+      }
+    },
+    {
+      "compositionCount": 3,
+      "frames": 10,
+      "playback": {
+        "duration": 12.0,
+        "gaussianEnabled": false,
+        "path": "/Users/ziyang/Documents/vestra-player/doc/experimental1/samples/sample.mp4",
+        "paused": false,
+        "position": 1.9333333333333333,
+        "sigma": 2.0
+      },
+      "playlist": {
+        "count": 1,
+        "has-next": false,
+        "has-previous": false,
+        "items-text": "▶1. sample.mp4",
+        "page": 0,
+        "status": "共 1 个文件 · 第 1 / 1 页",
+        "visible": true
+      },
+      "stage": "playlist-item-added-through-ts",
+      "windowGeneration": 3,
+      "windowSize": {
+        "height": 1280,
+        "scale": 2.0,
+        "width": 1920
+      }
+    },
+    {
+      "compositionCount": 3,
+      "frames": 19,
+      "playback": {
+        "duration": 12.0,
+        "gaussianEnabled": false,
+        "path": "/Users/ziyang/Documents/vestra-player/doc/experimental1/samples/sample.mp4",
+        "paused": false,
+        "position": 2.466666666666667,
+        "sigma": 2.0
+      },
+      "playlist": {
+        "count": 1,
+        "has-next": false,
+        "has-previous": false,
+        "items-text": "▶1. sample.mp4",
+        "page": 0,
+        "status": "共 1 个文件 · 第 1 / 1 页",
+        "visible": false
+      },
+      "stage": "hidden-without-recompose",
+      "windowGeneration": 3,
+      "windowSize": {
+        "height": 1280,
+        "scale": 2.0,
+        "width": 1920
+      }
+    },
+    {
+      "compositionCount": 3,
+      "frames": 29,
+      "playback": {
+        "duration": 12.0,
+        "gaussianEnabled": false,
+        "path": "/Users/ziyang/Documents/vestra-player/doc/experimental1/samples/sample.mp4",
+        "paused": false,
+        "position": 3.6666666666666665,
+        "sigma": 2.0
+      },
+      "playlist": {
+        "count": 1,
+        "has-next": false,
+        "has-previous": false,
+        "items-text": "▶1. sample.mp4",
+        "page": 0,
+        "status": "共 1 个文件 · 第 1 / 1 页",
+        "visible": true
+      },
+      "stage": "shown-without-recompose",
+      "windowGeneration": 3,
+      "windowSize": {
+        "height": 1280,
+        "scale": 2.0,
+        "width": 1920
+      }
+    },
+    {
+      "compositionCount": 4,
+      "frames": 30,
+      "playback": {
+        "duration": 12.0,
+        "gaussianEnabled": false,
+        "path": "/Users/ziyang/Documents/vestra-player/doc/experimental1/samples/sample.mp4",
+        "paused": false,
+        "position": 4.9,
+        "sigma": 2.0
+      },
+      "playlist": {
+        "count": 1,
+        "has-next": false,
+        "has-previous": false,
+        "items-text": "▶1. sample.mp4",
+        "page": 0,
+        "status": "共 1 个文件 · 第 1 / 1 页",
+        "visible": true
+      },
+      "stage": "later-install-preserved-playlist",
+      "windowGeneration": 4,
+      "windowSize": {
+        "height": 1280,
+        "scale": 2.0,
+        "width": 1920
+      }
+    },
+    {
+      "compositionCount": 4,
+      "frames": 32,
+      "playback": {
+        "duration": 12.0,
+        "gaussianEnabled": true,
+        "path": "/Users/ziyang/Documents/vestra-player/doc/experimental1/samples/sample.mp4",
+        "paused": false,
+        "position": 5.033333333333333,
+        "sigma": 2.0
+      },
+      "playlist": {
+        "count": 1,
+        "has-next": false,
+        "has-previous": false,
+        "items-text": "▶1. sample.mp4",
+        "page": 0,
+        "status": "共 1 个文件 · 第 1 / 1 页",
+        "visible": true
+      },
+      "stage": "gaussian-enabled-through-ts",
+      "windowGeneration": 4,
+      "windowSize": {
+        "height": 1280,
+        "scale": 2.0,
+        "width": 1920
+      }
+    }
+  ],
+  "passed": true
+}

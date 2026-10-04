@@ -1,0 +1,8 @@
+{
+  "name": "vestra-slint-experimental1",
+  "private": true,
+  "description": "仅用于 Slint 实验，与最终成品 API 会有很大差异",
+  "type": "module",
+  "engines": { "node": ">=22.18.0" },
+  "scripts": { "test": "node --test tests/*.test.ts" }
+}

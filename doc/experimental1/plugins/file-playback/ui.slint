@@ -1,0 +1,40 @@
+// 仅用于 Slint 实验；本版本界面与接口和最终成品 API 会有很大差异。
+import { Button, Slider } from "std-widgets.slint";
+
+export global FilePlaybackState {
+    in-out property <string> status: "请选择 MP4 文件";
+    in-out property <bool> is-paused: true;
+    in-out property <float> position: 0;
+    in-out property <float> duration: 0;
+    callback action(string, float);
+}
+
+export component FilePlaybackPanel inherits Rectangle {
+    background: #17202b;
+    VerticalLayout {
+        padding: 12px;
+        spacing: 8px;
+        Text { text: FilePlaybackState.status; color: #dce5ef; overflow: elide; }
+        HorizontalLayout {
+            spacing: 8px;
+            Button { text: "打开 MP4"; clicked => { FilePlaybackState.action("open", 0); } }
+            Button {
+                text: FilePlaybackState.is-paused ? "播放" : "暂停";
+                clicked => { FilePlaybackState.action("toggle-pause", 0); }
+            }
+            Slider {
+                min-width: 80px;
+                horizontal-stretch: 1;
+                minimum: 0;
+                maximum: max(1, FilePlaybackState.duration);
+                value: FilePlaybackState.position;
+                changed(value) => { FilePlaybackState.action("seek", value); }
+            }
+            Text {
+                text: round(FilePlaybackState.position) + " / " + round(FilePlaybackState.duration) + " s";
+                color: #dce5ef;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
