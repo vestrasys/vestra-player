@@ -1,0 +1,11 @@
+{
+  "id": "file-playback",
+  "name": "文件播放（实验）",
+  "experimental": true,
+  "entry": "index.ts",
+  "ui": {
+    "file": "ui.slint",
+    "component": "FilePlaybackPanel",
+    "global": "FilePlaybackState"
+  }
+}

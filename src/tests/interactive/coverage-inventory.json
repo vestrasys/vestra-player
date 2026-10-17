@@ -1,0 +1,717 @@
+{
+  "experimental": true,
+  "scope": "All nine current plugins; inventory is a plan, never proof of execution",
+  "registeredActions": 68,
+  "manifestCommands": 30,
+  "plugins": [
+    {
+      "plugin": "file-playback",
+      "actions": [
+        {
+          "action": "open",
+          "controlArguments": ["0"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "toggle-pause",
+          "controlArguments": ["0"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "seek",
+          "controlArguments": ["value"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        }
+      ]
+    },
+    {
+      "plugin": "gaussian-blur",
+      "actions": [
+        {
+          "action": "enabled",
+          "controlArguments": ["self.checked ? 1 : 0"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "sigma",
+          "controlArguments": ["value"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "apply",
+          "controlArguments": ["0"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        }
+      ]
+    },
+    {
+      "plugin": "playlist",
+      "actions": [
+        {
+          "action": "add",
+          "controlArguments": ["0"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "play-index",
+          "controlArguments": ["PlaylistState.page * 3 + slot"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "previous-page",
+          "controlArguments": ["0"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "next-page",
+          "controlArguments": ["0"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "hide",
+          "controlArguments": ["0"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "show",
+          "controlArguments": [],
+          "menu": null,
+          "requiredEvidence": ["B/G-internal-only"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "toggle",
+          "controlArguments": [],
+          "menu": null,
+          "requiredEvidence": ["N-host-sidebar-menu"],
+          "status": "pending",
+          "observations": []
+        }
+      ]
+    },
+    {
+      "plugin": "video-adjust",
+      "actions": [
+        {
+          "action": "brightness",
+          "controlArguments": ["v"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "contrast",
+          "controlArguments": ["v"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "saturation",
+          "controlArguments": ["v"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "hue",
+          "controlArguments": ["v"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "preset-bright",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "preset-bright",
+            "title": "明亮预设",
+            "menu": ["视频", "画面预设"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "preset-cinema",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "preset-cinema",
+            "title": "影院预设",
+            "menu": ["视频", "画面预设"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "preset-neutral",
+          "controlArguments": [],
+          "menu": null,
+          "requiredEvidence": ["B/G-internal-only"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "brightness-up",
+          "controlArguments": [],
+          "menu": {
+            "id": "brightness-up",
+            "title": "增加亮度",
+            "menu": ["视频", "画面调节"]
+          },
+          "requiredEvidence": ["N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "brightness-down",
+          "controlArguments": [],
+          "menu": {
+            "id": "brightness-down",
+            "title": "降低亮度",
+            "menu": ["视频", "画面调节"]
+          },
+          "requiredEvidence": ["N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "reset",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "reset",
+            "title": "复位画面参数",
+            "menu": ["工具", "复位"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        }
+      ]
+    },
+    {
+      "plugin": "audio-workbench",
+      "actions": [
+        {
+          "action": "bass",
+          "controlArguments": ["v"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "mid",
+          "controlArguments": ["v"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "treble",
+          "controlArguments": ["v"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "delay-ms",
+          "controlArguments": ["v"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "normalize",
+          "controlArguments": ["self.checked ? 1 : 0"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "voice",
+          "controlArguments": ["self.checked ? 1 : 0"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "preset",
+          "controlArguments": ["1", "2"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "reset",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "reset",
+            "title": "复位音频参数",
+            "menu": ["工具", "音频工作台"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "preset-dialogue",
+          "controlArguments": [],
+          "menu": {
+            "id": "preset-dialogue",
+            "title": "对白预设",
+            "menu": ["音频", "预设"]
+          },
+          "requiredEvidence": ["N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "preset-music",
+          "controlArguments": [],
+          "menu": {
+            "id": "preset-music",
+            "title": "音乐预设",
+            "menu": ["音频", "预设"]
+          },
+          "requiredEvidence": ["N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "toggle-normalize",
+          "controlArguments": [],
+          "menu": {
+            "id": "toggle-normalize",
+            "title": "响度规范化",
+            "menu": ["音频", "处理"]
+          },
+          "requiredEvidence": ["N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        }
+      ]
+    },
+    {
+      "plugin": "subtitle-workbench",
+      "actions": [
+        {
+          "action": "open",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "open",
+            "title": "加载 SRT 字幕",
+            "menu": ["字幕", "来源"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "toggle",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "toggle",
+            "title": "显示/隐藏字幕",
+            "menu": ["字幕", "显示"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "delay",
+          "controlArguments": ["v"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "font-size",
+          "controlArguments": ["round(v)"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "yellow",
+          "controlArguments": ["0"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "original",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "original",
+            "title": "选择原文",
+            "menu": ["字幕", "轨道"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "translated",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "translated",
+            "title": "选择译文",
+            "menu": ["字幕", "轨道"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "next-cue",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "next-cue",
+            "title": "跳至下一条字幕",
+            "menu": ["播放", "字幕导航"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "mock-fail-next",
+          "controlArguments": [],
+          "menu": null,
+          "requiredEvidence": ["B/G-internal-only"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "cancel",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "cancel",
+            "title": "取消翻译",
+            "menu": ["工具", "字幕翻译"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "translate",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "translate",
+            "title": "翻译字幕（Mock）",
+            "menu": ["工具", "字幕翻译"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        }
+      ]
+    },
+    {
+      "plugin": "capture-export",
+      "actions": [
+        {
+          "action": "capture-raw",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "capture-raw",
+            "title": "原始画面截图",
+            "menu": ["视频", "截图"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "capture-processed",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "capture-processed",
+            "title": "处理后画面截图",
+            "menu": ["视频", "截图"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "capture-burst",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "capture-burst",
+            "title": "连续截图",
+            "menu": ["工具", "导出"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "export-clip",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "export-clip",
+            "title": "导出当前片段",
+            "menu": ["工具", "导出"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "cancel",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "cancel",
+            "title": "取消导出",
+            "menu": ["工具", "导出"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "include-subtitles",
+          "controlArguments": ["self.checked ? 1 : 0"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "burst-count",
+          "controlArguments": ["round(value)"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "burst-interval",
+          "controlArguments": ["round(value * 10) / 10"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "clip-duration",
+          "controlArguments": ["round(value * 10) / 10"],
+          "menu": null,
+          "requiredEvidence": ["N-control"],
+          "status": "pending",
+          "observations": []
+        }
+      ]
+    },
+    {
+      "plugin": "nes",
+      "actions": [
+        {
+          "action": "open-rom",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "open-rom",
+            "title": "打开 NES ROM…",
+            "menu": ["文件", "模拟器"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "toggle-pause",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "toggle-pause",
+            "title": "暂停/恢复 NES",
+            "menu": ["模拟器"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "save-state",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "save-state",
+            "title": "保存 NES 状态…",
+            "menu": ["模拟器", "存档"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "load-state",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "load-state",
+            "title": "恢复 NES 状态…",
+            "menu": ["模拟器", "存档"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "close-rom",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "close-rom",
+            "title": "关闭 NES 会话",
+            "menu": ["模拟器"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        }
+      ]
+    },
+    {
+      "plugin": "plugin-workshop",
+      "actions": [
+        {
+          "action": "generate",
+          "controlArguments": ["1", "2"],
+          "menu": {
+            "id": "generate",
+            "title": "生成计数器插件（Pi mock）",
+            "menu": ["工具", "插件工坊"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "invalid",
+          "controlArguments": [],
+          "menu": null,
+          "requiredEvidence": ["B/G-internal-only"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "activation-failure",
+          "controlArguments": [],
+          "menu": null,
+          "requiredEvidence": ["B/G-internal-only"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "slow",
+          "controlArguments": [],
+          "menu": null,
+          "requiredEvidence": ["B/G-internal-only"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "slint-failure",
+          "controlArguments": [],
+          "menu": null,
+          "requiredEvidence": ["B/G-internal-only"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "request-file",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "request-file",
+            "title": "读取工坊需求 JSON",
+            "menu": ["工具", "插件工坊"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "cancel",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "cancel",
+            "title": "取消生成",
+            "menu": ["工具", "插件工坊"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "rollback",
+          "controlArguments": ["0"],
+          "menu": {
+            "id": "rollback",
+            "title": "回退上一个生成版本",
+            "menu": ["工具", "插件工坊"]
+          },
+          "requiredEvidence": ["N-control", "N-contribution-menu"],
+          "status": "pending",
+          "observations": []
+        },
+        {
+          "action": "remove-generated",
+          "controlArguments": [],
+          "menu": null,
+          "requiredEvidence": ["B/G-internal-only"],
+          "status": "pending",
+          "observations": []
+        }
+      ]
+    }
+  ]
+}

@@ -133,7 +133,7 @@ Slint 已有 ComponentContainer/ComponentFactory 机制，但 1.18.1 interpreter
 
 ## 6. 第一个实验及其证据
 
-代码位于 [experimental1](experimental1/README.md)，所有接口和实现安排均为实验版本，与最终 API 可能相差很大。
+代码现位于 [src](../src/README.md)，实验说明与历史证据保留在 [experimental1](experimental1/README.md)。所有接口和实现安排均为实验版本，与最终 API 可能相差很大。
 
 实验包含：
 

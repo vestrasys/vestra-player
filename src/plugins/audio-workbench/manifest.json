@@ -1,0 +1,21 @@
+{
+  "id": "audio-workbench",
+  "name": "音频工作台（实验）",
+  "experimental": true,
+  "entry": "index.ts",
+  "commands": [
+    {
+      "id": "toggle-normalize",
+      "title": "响度规范化",
+      "menu": ["音频", "处理"]
+    },
+    { "id": "preset-dialogue", "title": "对白预设", "menu": ["音频", "预设"] },
+    { "id": "preset-music", "title": "音乐预设", "menu": ["音频", "预设"] },
+    { "id": "reset", "title": "复位音频参数", "menu": ["工具", "音频工作台"] }
+  ],
+  "ui": {
+    "file": "ui.slint",
+    "component": "AudioWorkbenchPanel",
+    "global": "AudioWorkbenchState"
+  }
+}
