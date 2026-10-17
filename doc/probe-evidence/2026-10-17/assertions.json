@@ -1,0 +1,16 @@
+{
+  "experimental": true,
+  "passed": true,
+  "panelSwitchRecompiled": false,
+  "nesReleasedRgb": [
+    188,
+    25,
+    0
+  ],
+  "nesPressedRgb": [
+    60,
+    171,
+    255
+  ],
+  "scope": "six probes plus Pi-generated plugin in one native window; callback input, not physical keyboard"
+}

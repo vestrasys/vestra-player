@@ -1,0 +1,7 @@
+# 实验构建与生成文件；与最终项目目录策略无关。
+/host/target/
+/.cache/
+/samples/
+/node_modules/
+# 每个插件的独立 npm 依赖由其锁文件恢复。
+**/node_modules/

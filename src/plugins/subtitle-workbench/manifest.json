@@ -1,0 +1,28 @@
+{
+  "id": "subtitle-workbench",
+  "name": "字幕工作台（实验）",
+  "experimental": true,
+  "entry": "index.ts",
+  "ui": {
+    "file": "ui.slint",
+    "component": "SubtitleWorkbenchPanel",
+    "global": "SubtitleWorkbenchState"
+  },
+  "commands": [
+    { "id": "open", "title": "加载 SRT 字幕", "menu": ["字幕", "来源"] },
+    { "id": "toggle", "title": "显示/隐藏字幕", "menu": ["字幕", "显示"] },
+    {
+      "id": "next-cue",
+      "title": "跳至下一条字幕",
+      "menu": ["播放", "字幕导航"]
+    },
+    {
+      "id": "translate",
+      "title": "翻译字幕（Mock）",
+      "menu": ["工具", "字幕翻译"]
+    },
+    { "id": "cancel", "title": "取消翻译", "menu": ["工具", "字幕翻译"] },
+    { "id": "original", "title": "选择原文", "menu": ["字幕", "轨道"] },
+    { "id": "translated", "title": "选择译文", "menu": ["字幕", "轨道"] }
+  ]
+}

@@ -1,0 +1,5 @@
+# Frozen API evidence is byte-preserved; publish a new baseline instead of formatting it.
+sdk/baselines/probe-*.contract.md
+sdk/baselines/probe-*.types.ts.txt
+
+**/.cache/**

@@ -1,5 +1,0 @@
-# 实验构建与生成文件；与最终项目目录策略无关。
-/host/target/
-/.cache/
-/samples/
-/node_modules/

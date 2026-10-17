@@ -1,0 +1,1362 @@
+[
+  {
+    "id": "F001",
+    "category": "文件与来源",
+    "feature": "打开本地文件或目录",
+    "candidate_group": "文件来源",
+    "evidence": [
+      "M:101_0_1_0",
+      "M:101_0_1_2"
+    ],
+    "architecture_question": "文件选择、多文件/目录展开",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F002",
+    "category": "文件与来源",
+    "feature": "打开 URL 或远程文件",
+    "candidate_group": "网络来源",
+    "evidence": [
+      "M:101_0_1_1",
+      "M:101_0_1_3"
+    ],
+    "architecture_question": "协议支持、凭据、异步连接",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F003",
+    "category": "文件与来源",
+    "feature": "重开当前或上次媒体",
+    "candidate_group": "历史与续播",
+    "evidence": [
+      "M:101_0_1_23"
+    ],
+    "architecture_question": "媒体身份、会话恢复",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F004",
+    "category": "文件与来源",
+    "feature": "来源导航与默认打开行为",
+    "candidate_group": "文件来源",
+    "evidence": [
+      "M:101_0_1_4",
+      "M:101_0_1_5"
+    ],
+    "architecture_question": "命令上下文、来源选择策略",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F005",
+    "category": "文件与来源",
+    "feature": "加载外部音轨",
+    "candidate_group": "音轨管理",
+    "evidence": [
+      "M:101_0_1_24"
+    ],
+    "architecture_question": "轨道挂载和同步",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F006",
+    "category": "文件与来源",
+    "feature": "扩展名过滤与系统文件关联",
+    "candidate_group": "桌面集成",
+    "evidence": [
+      "D:467/3286",
+      "D:336/3384"
+    ],
+    "architecture_question": "来源处理器、平台文件关联",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F007",
+    "category": "播放与时间轴",
+    "feature": "播放暂停与关闭当前播放",
+    "candidate_group": "播放控制",
+    "evidence": [
+      "M:101_0_9_0",
+      "M:101_0_4",
+      "M:115_0_0",
+      "M:115_0_1"
+    ],
+    "architecture_question": "同一行为跨多个菜单入口",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F008",
+    "category": "播放与时间轴",
+    "feature": "上一项与下一项",
+    "candidate_group": "播放列表",
+    "evidence": [
+      "M:101_0_9_2",
+      "M:101_0_9_3"
+    ],
+    "architecture_question": "队列切换、播放事件",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F009",
+    "category": "播放与时间轴",
+    "feature": "逐帧及关键帧导航",
+    "candidate_group": "播放控制",
+    "evidence": [
+      "M:101_0_9_6_0",
+      "M:101_0_9_6_1",
+      "M:101_0_9_6_2",
+      "M:101_0_9_6_3"
+    ],
+    "architecture_question": "后端精确定位能力",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F010",
+    "category": "播放与时间轴",
+    "feature": "按时间间隔跳转与自定义步长",
+    "candidate_group": "播放控制",
+    "evidence": [
+      "M:101_0_9_6_5",
+      "M:101_0_9_6_6",
+      "D:364/3381"
+    ],
+    "architecture_question": "命令参数、快捷键配置",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F011",
+    "category": "播放与时间轴",
+    "feature": "指定时间或帧号与起止中点导航",
+    "candidate_group": "播放控制",
+    "evidence": [
+      "M:101_0_9_6_14",
+      "M:101_0_9_6_15",
+      "M:101_0_9_6_16",
+      "M:101_0_9_6_23"
+    ],
+    "architecture_question": "时间单位、时长、定位反馈",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F012",
+    "category": "播放与时间轴",
+    "feature": "按字幕位置跳转",
+    "candidate_group": "字幕导航",
+    "evidence": [
+      "M:101_0_9_6_18",
+      "M:101_0_9_6_19",
+      "M:101_0_9_6_20"
+    ],
+    "architecture_question": "字幕时间与播放时间关联",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F013",
+    "category": "播放与时间轴",
+    "feature": "场景浏览与预览",
+    "candidate_group": "场景浏览",
+    "evidence": [
+      "M:101_0_9_6_24",
+      "M:101_0_9_6_25",
+      "M:101_0_9_6_26",
+      "D:471/3038"
+    ],
+    "architecture_question": "异步缩略图、时间/标记/字幕导航",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F014",
+    "category": "播放与时间轴",
+    "feature": "变速及音频变速变调策略",
+    "candidate_group": "播放控制",
+    "evidence": [
+      "M:101_0_9_7"
+    ],
+    "architecture_question": "音视频时间基、能力查询",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F015",
+    "category": "播放与时间轴",
+    "feature": "片头片尾及章节跳过",
+    "candidate_group": "播放规则",
+    "evidence": [
+      "M:101_0_9_8"
+    ],
+    "architecture_question": "区间规则、事件订阅",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F016",
+    "category": "播放与时间轴",
+    "feature": "A-B 循环与区间列表",
+    "candidate_group": "区间循环",
+    "evidence": [
+      "M:101_0_9_10",
+      "D:453/3038",
+      "D:503/3034"
+    ],
+    "architecture_question": "区间状态、循环结束策略",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F017",
+    "category": "播放与时间轴",
+    "feature": "字幕区间与标记区间重复",
+    "candidate_group": "区间循环",
+    "evidence": [
+      "M:101_0_9_10_12",
+      "M:101_0_9_10_13"
+    ],
+    "architecture_question": "跨功能组合",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F018",
+    "category": "播放与时间轴",
+    "feature": "单项循环、列表循环和随机播放",
+    "candidate_group": "播放列表",
+    "evidence": [
+      "M:101_0_9_11",
+      "M:101_0_9_14"
+    ],
+    "architecture_question": "调度策略及状态一致性",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F019",
+    "category": "播放与时间轴",
+    "feature": "多文件预载与无缝拼接",
+    "candidate_group": "无缝播放",
+    "evidence": [
+      "M:101_0_9_12"
+    ],
+    "architecture_question": "预载资源、多来源时间轴",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F020",
+    "category": "播放与时间轴",
+    "feature": "记忆播放位置与启动恢复",
+    "candidate_group": "历史与续播",
+    "evidence": [
+      "M:101_0_9_15",
+      "D:457/3132"
+    ],
+    "architecture_question": "持久化策略、权威状态",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F021",
+    "category": "播放与时间轴",
+    "feature": "进度提示、缩略图与章节书签标记",
+    "candidate_group": "时间轴增强",
+    "evidence": [
+      "M:101_0_9_21",
+      "M:101_0_9_22",
+      "M:101_0_9_23"
+    ],
+    "architecture_question": "时间轴呈现、后台取帧",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F022",
+    "category": "播放列表与收藏",
+    "feature": "收藏当前文件/目录及编辑收藏",
+    "candidate_group": "收藏",
+    "evidence": [
+      "M:101_0_3"
+    ],
+    "architecture_question": "持久化、媒体身份",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F023",
+    "category": "播放列表与收藏",
+    "feature": "专辑创建、编辑、删除与存储位置",
+    "candidate_group": "播放列表",
+    "evidence": [
+      "M:101_0_9_9_0",
+      "M:111_0_3"
+    ],
+    "architecture_question": "同一功能多入口",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F024",
+    "category": "播放列表与收藏",
+    "feature": "播放列表打开、保存与记忆",
+    "candidate_group": "播放列表",
+    "evidence": [
+      "M:101_0_9_9_1",
+      "M:111_0_4"
+    ],
+    "architecture_question": "文件格式、持久化",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F025",
+    "category": "播放列表与收藏",
+    "feature": "独立播放队列的添加与清空",
+    "candidate_group": "播放列表",
+    "evidence": [
+      "M:101_0_9_9_2",
+      "M:111_0_5"
+    ],
+    "architecture_question": "列表与队列区别",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F026",
+    "category": "播放列表与收藏",
+    "feature": "加入文件、目录和 URL",
+    "candidate_group": "播放列表",
+    "evidence": [
+      "M:111_0_6_0",
+      "M:111_0_6_1",
+      "M:111_0_6_2"
+    ],
+    "architecture_question": "复用来源处理能力",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F027",
+    "category": "播放列表与收藏",
+    "feature": "修改标题、重命名、定位文件和搜索",
+    "candidate_group": "播放列表",
+    "evidence": [
+      "M:111_0_6_4",
+      "M:111_0_6_5",
+      "M:111_0_6_6",
+      "M:111_0_6_7"
+    ],
+    "architecture_question": "列表元数据、文件操作",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F028",
+    "category": "播放列表与收藏",
+    "feature": "列表复制粘贴与选择",
+    "candidate_group": "播放列表",
+    "evidence": [
+      "M:111_0_6_9",
+      "M:111_0_6_10",
+      "M:111_0_9"
+    ],
+    "architecture_question": "剪贴板、焦点上下文",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F029",
+    "category": "播放列表与收藏",
+    "feature": "移除条目、清理失效项与删除关联文件",
+    "candidate_group": "播放列表",
+    "evidence": [
+      "M:111_0_7"
+    ],
+    "architecture_question": "移除记录与删除文件的边界",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F030",
+    "category": "播放列表与收藏",
+    "feature": "排序与随机排序",
+    "candidate_group": "播放列表",
+    "evidence": [
+      "M:111_0_8"
+    ],
+    "architecture_question": "稳定排序、后台元数据",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F031",
+    "category": "播放列表与收藏",
+    "feature": "缩略图布局、时长探测与列表侧栏",
+    "candidate_group": "播放列表",
+    "evidence": [
+      "M:111_0_10",
+      "M:111_0_12",
+      "M:111_0_17",
+      "M:101_0_24"
+    ],
+    "architecture_question": "动态模型、侧栏生命周期",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F032",
+    "category": "画面参数与处理",
+    "feature": "亮度、对比度、饱和度、色相及恢复",
+    "candidate_group": "画面调节",
+    "evidence": [
+      "M:101_0_11_16",
+      "M:101_0_11_17",
+      "M:101_0_11_19",
+      "M:101_0_11_21",
+      "M:101_0_11_23",
+      "D:384/3289"
+    ],
+    "architecture_question": "一插件多命令、参数组合",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F033",
+    "category": "画面参数与处理",
+    "feature": "电平、伽玛、亮度/色度偏移",
+    "candidate_group": "画面调节",
+    "evidence": [
+      "M:101_0_11_10_5",
+      "M:101_0_11_10_6",
+      "M:101_0_11_10_11",
+      "D:371/3383"
+    ],
+    "architecture_question": "处理顺序、数值范围",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F034",
+    "category": "画面参数与处理",
+    "feature": "颜色空间、矩阵和输出范围",
+    "candidate_group": "色彩管理",
+    "evidence": [
+      "D:384/3296",
+      "D:384/3301",
+      "D:384/3302",
+      "D:384/3304"
+    ],
+    "architecture_question": "媒体色彩元数据、后端能力",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F035",
+    "category": "画面参数与处理",
+    "feature": "ICC、YCgCo 和 HDR 校正/色调映射",
+    "candidate_group": "色彩管理",
+    "evidence": [
+      "M:101_0_11_2_9",
+      "M:101_0_11_2_10",
+      "M:101_0_11_2_11",
+      "M:101_0_11_2_12",
+      "D:505/3381"
+    ],
+    "architecture_question": "显示器信息、处理链阶段",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F036",
+    "category": "画面参数与处理",
+    "feature": "柔化、锐化与 WarpSharp",
+    "candidate_group": "画面效果",
+    "evidence": [
+      "M:101_0_11_10_3",
+      "M:101_0_11_10_4",
+      "M:101_0_11_10_12"
+    ],
+    "architecture_question": "参数组合与滤镜所有权",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F037",
+    "category": "画面参数与处理",
+    "feature": "去块、降噪、去色带和运动模糊",
+    "candidate_group": "画面效果",
+    "evidence": [
+      "M:101_0_11_10_7",
+      "M:101_0_11_10_8",
+      "M:101_0_11_10_9",
+      "M:101_0_11_10_10",
+      "M:101_0_11_10_13",
+      "M:101_0_11_10_14"
+    ],
+    "architecture_question": "时间历史、性能与资源撤销",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F038",
+    "category": "画面参数与处理",
+    "feature": "去隔行模式与硬件处理",
+    "candidate_group": "高级视频",
+    "evidence": [
+      "M:101_0_11_7",
+      "D:385/3298"
+    ],
+    "architecture_question": "场序、后端能力",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F039",
+    "category": "画面参数与处理",
+    "feature": "像素 shader 的前/后缩放处理与堆叠",
+    "candidate_group": "shader 管理",
+    "evidence": [
+      "M:101_0_11_2_0",
+      "M:101_0_11_2_1",
+      "M:101_0_11_2_3",
+      "M:101_0_11_2_4"
+    ],
+    "architecture_question": "处理链组合和顺序",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F040",
+    "category": "画面参数与处理",
+    "feature": "shader 列表重载与目录管理",
+    "candidate_group": "shader 管理",
+    "evidence": [
+      "M:101_0_11_2_6",
+      "M:101_0_11_2_7"
+    ],
+    "architecture_question": "代码资源加载与热更新",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F041",
+    "category": "画面参数与处理",
+    "feature": "AviSynth 与 VapourSynth 处理",
+    "candidate_group": "原生处理扩展",
+    "evidence": [
+      "M:101_0_11_14",
+      "D:452/3036",
+      "D:487/3036"
+    ],
+    "architecture_question": "外部运行时和管线约束",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F042",
+    "category": "画面参数与处理",
+    "feature": "GPU 超分辨率与 RTX Video HDR",
+    "candidate_group": "GPU 增强",
+    "evidence": [
+      "D:355/3055",
+      "D:355/3056"
+    ],
+    "architecture_question": "平台可用性与原生 GPU 资源；不是 DLSS 5",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F043",
+    "category": "画面参数与处理",
+    "feature": "选择视频流与视频变换滤镜策略",
+    "candidate_group": "高级视频",
+    "evidence": [
+      "M:101_0_11_0",
+      "M:101_0_11_4"
+    ],
+    "architecture_question": "轨道切换、能力和启用条件",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F044",
+    "category": "几何与立体显示",
+    "feature": "条件缩放、目标尺寸和算法参数",
+    "candidate_group": "画面几何",
+    "evidence": [
+      "M:101_0_11_6",
+      "D:369/3289"
+    ],
+    "architecture_question": "像素尺寸与窗口尺寸分离",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F045",
+    "category": "几何与立体显示",
+    "feature": "裁剪、扩边及内容位置移动",
+    "candidate_group": "画面几何",
+    "evidence": [
+      "M:101_0_11_8"
+    ],
+    "architecture_question": "源坐标、处理后坐标",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F046",
+    "category": "几何与立体显示",
+    "feature": "水平垂直翻转与旋转",
+    "candidate_group": "画面几何",
+    "evidence": [
+      "M:101_0_11_10_0",
+      "M:101_0_11_10_1",
+      "M:101_0_11_11"
+    ],
+    "architecture_question": "变换组合、字幕位置",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F047",
+    "category": "几何与立体显示",
+    "feature": "宽高比与自定义比例",
+    "candidate_group": "画面几何",
+    "evidence": [
+      "M:101_0_18",
+      "M:115_0_7"
+    ],
+    "architecture_question": "显示规则和同命令多入口",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F048",
+    "category": "几何与立体显示",
+    "feature": "帧位、画面平移拉伸与边距",
+    "candidate_group": "画面几何",
+    "evidence": [
+      "M:101_0_17",
+      "D:416/3041"
+    ],
+    "architecture_question": "布局与视频视口边界",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F049",
+    "category": "几何与立体显示",
+    "feature": "字幕底部留白",
+    "candidate_group": "画面几何/字幕",
+    "evidence": [
+      "M:101_0_11_9",
+      "M:101_0_18_22"
+    ],
+    "architecture_question": "跨插件布局协作",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F050",
+    "category": "几何与立体显示",
+    "feature": "立体输入、输出、左右眼及 3D 字幕",
+    "candidate_group": "立体播放",
+    "evidence": [
+      "M:101_0_11_3",
+      "M:101_0_10_12"
+    ],
+    "architecture_question": "立体布局、后端支持",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F051",
+    "category": "音频",
+    "feature": "选择音轨、左右声道及外部音频",
+    "candidate_group": "音轨管理",
+    "evidence": [
+      "M:101_0_12_0",
+      "M:101_0_1_24"
+    ],
+    "architecture_question": "轨道状态、多入口",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F052",
+    "category": "音频",
+    "feature": "音量、静音、预放大及独立音量",
+    "candidate_group": "音频控制",
+    "evidence": [
+      "M:101_0_12_8",
+      "M:101_0_12_10",
+      "M:101_0_12_11",
+      "M:101_0_12_12"
+    ],
+    "architecture_question": "用户音量与后端增益",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F053",
+    "category": "音频",
+    "feature": "系统主音量和 Wave 音量",
+    "candidate_group": "桌面音频集成",
+    "evidence": [
+      "M:101_0_12_9"
+    ],
+    "architecture_question": "系统权限、平台适配",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F054",
+    "category": "音频",
+    "feature": "均衡器与预设",
+    "candidate_group": "音频处理",
+    "evidence": [
+      "M:101_0_12_14",
+      "M:101_0_12_15",
+      "D:363/3287"
+    ],
+    "architecture_question": "连续参数、预设与恢复",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F055",
+    "category": "音频",
+    "feature": "响度规范化、混响、降噪与增强",
+    "candidate_group": "音频处理",
+    "evidence": [
+      "M:101_0_12_18_0",
+      "M:101_0_12_18_1",
+      "M:101_0_12_18_2",
+      "M:101_0_12_18_3",
+      "D:387/3385"
+    ],
+    "architecture_question": "DSP 链及多个处理者组合",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F056",
+    "category": "音频",
+    "feature": "人声消除、突出人声与交换声道",
+    "candidate_group": "音频处理",
+    "evidence": [
+      "M:101_0_12_18_4",
+      "M:101_0_12_18_5",
+      "M:101_0_12_18_6"
+    ],
+    "architecture_question": "样本布局与处理所有权",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F057",
+    "category": "音频",
+    "feature": "音频延迟与保持策略",
+    "candidate_group": "音频控制",
+    "evidence": [
+      "M:101_0_12_17",
+      "D:441/3286"
+    ],
+    "architecture_question": "同步参数和持久化",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F058",
+    "category": "音频",
+    "feature": "输出设备、直通与第二设备",
+    "candidate_group": "音频输出设置",
+    "evidence": [
+      "M:101_0_12_1",
+      "M:101_0_12_2",
+      "M:101_0_12_3",
+      "D:356/3286"
+    ],
+    "architecture_question": "设备枚举、热插拔、双输出",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F059",
+    "category": "音频",
+    "feature": "声道混合、LFE、输出格式与重采样",
+    "candidate_group": "音频处理/输出设置",
+    "evidence": [
+      "M:101_0_12_4",
+      "M:101_0_12_5",
+      "M:101_0_12_6",
+      "D:356/3391"
+    ],
+    "architecture_question": "后端配置与 DSP 边界",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F060",
+    "category": "音频",
+    "feature": "交叉衰减及播放启停跳转渐变",
+    "candidate_group": "音频处理",
+    "evidence": [
+      "D:431/3034",
+      "D:431/3212"
+    ],
+    "architecture_question": "多会话混合和时间调度",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F061",
+    "category": "音频",
+    "feature": "耳机 crossfeed 与额外立体声",
+    "candidate_group": "音频处理",
+    "evidence": [
+      "D:388/3393",
+      "D:388/3395"
+    ],
+    "architecture_question": "声道布局、处理顺序",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F062",
+    "category": "音频",
+    "feature": "Winamp DSP 插件接入",
+    "candidate_group": "原生处理扩展",
+    "evidence": [
+      "D:365/3381"
+    ],
+    "architecture_question": "外部 ABI、格式转换；不承诺兼容",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F063",
+    "category": "音频",
+    "feature": "音频独占、bitexact 与暂停释放设备",
+    "candidate_group": "音频输出设置",
+    "evidence": [
+      "D:469/3034",
+      "D:469/3035",
+      "D:469/3036"
+    ],
+    "architecture_question": "设备生命周期",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F064",
+    "category": "字幕",
+    "feature": "加载、添加、合并、重载与切换字幕",
+    "candidate_group": "字幕管理",
+    "evidence": [
+      "M:101_0_1_18",
+      "M:101_0_1_19",
+      "M:101_0_1_20",
+      "M:101_0_1_21",
+      "M:101_0_10_0"
+    ],
+    "architecture_question": "同功能跨菜单、轨道生命周期",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F065",
+    "category": "字幕",
+    "feature": "显示隐藏与字幕渲染方式",
+    "candidate_group": "字幕呈现",
+    "evidence": [
+      "M:101_0_10_1",
+      "M:101_0_10_5",
+      "M:101_0_10_6",
+      "M:101_0_10_8"
+    ],
+    "architecture_question": "合成阶段和后端支持",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F066",
+    "category": "字幕",
+    "feature": "字体、字号、对齐、位置与间距",
+    "candidate_group": "字幕呈现",
+    "evidence": [
+      "M:101_0_10_9"
+    ],
+    "architecture_question": "样式组合、UI 和渲染分离",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F067",
+    "category": "字幕",
+    "feature": "同步偏移与 FPS 转换",
+    "candidate_group": "字幕同步",
+    "evidence": [
+      "M:101_0_10_10"
+    ],
+    "architecture_question": "时间映射、可逆变换",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F068",
+    "category": "字幕",
+    "feature": "浏览编辑、输入及复制当前字幕",
+    "candidate_group": "字幕编辑",
+    "evidence": [
+      "M:101_0_10_2",
+      "M:101_0_10_3",
+      "M:101_0_10_15"
+    ],
+    "architecture_question": "文本模型、焦点、剪贴板",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F069",
+    "category": "字幕",
+    "feature": "保存字幕与应用同步/保存译文",
+    "candidate_group": "字幕编辑",
+    "evidence": [
+      "M:101_0_10_11"
+    ],
+    "architecture_question": "文件 I/O 与时间轴导出",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F070",
+    "category": "字幕",
+    "feature": "搜索、下载和上传字幕",
+    "candidate_group": "在线字幕",
+    "evidence": [
+      "M:101_0_10_13"
+    ],
+    "architecture_question": "网络提供者、后台任务",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F071",
+    "category": "字幕",
+    "feature": "字幕路径、语言选择与第二字幕",
+    "candidate_group": "字幕管理",
+    "evidence": [
+      "D:368/3381",
+      "D:442/3062"
+    ],
+    "architecture_question": "自动发现、优先级、双字幕",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F072",
+    "category": "字幕",
+    "feature": "ASS/SSA、淡入淡出及画面内外位置",
+    "candidate_group": "字幕呈现",
+    "evidence": [
+      "M:101_0_10_16",
+      "M:101_0_10_17",
+      "M:101_0_10_18",
+      "M:101_0_10_19",
+      "M:101_0_10_21"
+    ],
+    "architecture_question": "渲染器能力与局部状态",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F073",
+    "category": "字幕",
+    "feature": "在线字幕翻译与语言条件",
+    "candidate_group": "字幕翻译",
+    "evidence": [
+      "D:493/3318",
+      "D:493/3321",
+      "D:493/3385"
+    ],
+    "architecture_question": "多提供者、取消和缓存",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F074",
+    "category": "字幕",
+    "feature": "语音生成字幕与实时生成",
+    "candidate_group": "语音字幕",
+    "evidence": [
+      "S:4791",
+      "S:4794",
+      "S:4795",
+      "S:4810",
+      "D:508/3047",
+      "D:509/3302"
+    ],
+    "architecture_question": "模型依赖、后台任务、流式时间戳",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F075",
+    "category": "字幕",
+    "feature": "内置 AI 翻译设置",
+    "candidate_group": "AI 翻译",
+    "evidence": [
+      "S:5026",
+      "S:5027",
+      "D:510/3381"
+    ],
+    "architecture_question": "提示词、模型与任务生命周期",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F076",
+    "category": "截图录制与信息",
+    "feature": "原始帧和显示帧复制/保存",
+    "candidate_group": "截图",
+    "evidence": [
+      "M:101_0_11_12_8",
+      "M:101_0_11_12_9",
+      "M:101_0_11_12_12",
+      "M:101_0_11_12_13"
+    ],
+    "architecture_question": "处理链取样位置",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F077",
+    "category": "截图录制与信息",
+    "feature": "连续截图、缩略图拼图与存储规则",
+    "candidate_group": "截图",
+    "evidence": [
+      "M:101_0_11_12_0",
+      "M:101_0_11_12_2",
+      "M:101_0_11_12_4",
+      "M:101_0_11_12_20"
+    ],
+    "architecture_question": "任务进度、命名与文件输出",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F078",
+    "category": "截图录制与信息",
+    "feature": "截图格式、字幕与宽高比处理",
+    "candidate_group": "截图",
+    "evidence": [
+      "M:101_0_11_12_16",
+      "M:101_0_11_12_17",
+      "M:101_0_11_12_18",
+      "M:101_0_11_12_23",
+      "M:101_0_11_12_24",
+      "S:4776"
+    ],
+    "architecture_question": "源帧与合成帧、编码能力",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F079",
+    "category": "截图录制与信息",
+    "feature": "流录制和视频录制",
+    "candidate_group": "录制导出",
+    "evidence": [
+      "M:101_0_11_13"
+    ],
+    "architecture_question": "转封装与重编码区别、后台任务",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F080",
+    "category": "截图录制与信息",
+    "feature": "音频录制和存储位置",
+    "candidate_group": "录制导出",
+    "evidence": [
+      "M:101_0_12_19"
+    ],
+    "architecture_question": "音频管线取样、任务清理",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F081",
+    "category": "截图录制与信息",
+    "feature": "媒体、资源、系统与网络信息",
+    "candidate_group": "诊断信息",
+    "evidence": [
+      "M:101_0_26",
+      "D:424/3024",
+      "D:424/3025",
+      "D:424/3026",
+      "D:433/3196"
+    ],
+    "architecture_question": "状态只读接口、诊断快照",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F082",
+    "category": "截图录制与信息",
+    "feature": "播放信息 OSD 与分级显示",
+    "candidate_group": "OSD 信息",
+    "evidence": [
+      "M:101_0_15_16",
+      "M:101_0_15_17",
+      "M:101_0_15_18"
+    ],
+    "architecture_question": "叠加层、更新频率",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F083",
+    "category": "采集电视与光盘",
+    "feature": "屏幕、窗口和摄像头采集",
+    "candidate_group": "采集来源",
+    "evidence": [
+      "M:101_0_1_7",
+      "M:101_0_1_8",
+      "D:454/3034"
+    ],
+    "architecture_question": "设备/权限、新来源、音视频生产",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F084",
+    "category": "采集电视与光盘",
+    "feature": "画中画采集区域与光标采集",
+    "candidate_group": "采集来源",
+    "evidence": [
+      "M:101_0_2_7",
+      "M:101_0_2_8",
+      "M:101_0_2_11",
+      "M:101_0_2_12",
+      "D:309/3034"
+    ],
+    "architecture_question": "多画面、区域管理",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F085",
+    "category": "采集电视与光盘",
+    "feature": "模拟/数字电视、频道与时移",
+    "candidate_group": "电视来源",
+    "evidence": [
+      "M:101_0_1_9",
+      "M:101_0_1_10",
+      "M:101_0_7",
+      "D:381/3040"
+    ],
+    "architecture_question": "硬件、直播时间轴",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F086",
+    "category": "采集电视与光盘",
+    "feature": "DVD/Blu-ray 文件与光盘打开",
+    "candidate_group": "光盘来源",
+    "evidence": [
+      "M:101_0_1_13",
+      "M:101_0_1_14",
+      "M:101_0_1_15",
+      "M:101_0_1_16"
+    ],
+    "architecture_question": "导航型来源、后端支持",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F087",
+    "category": "采集电视与光盘",
+    "feature": "DVD 菜单、章节、角度、音轨和字幕",
+    "candidate_group": "光盘导航",
+    "evidence": [
+      "M:101_0_8"
+    ],
+    "architecture_question": "交互输入、菜单状态机",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F088",
+    "category": "采集电视与光盘",
+    "feature": "广播窗口、聊天与播出控制",
+    "candidate_group": "广播服务",
+    "evidence": [
+      "M:101_0_2_0",
+      "M:101_0_2_1",
+      "M:101_0_2_2",
+      "M:101_0_2_3"
+    ],
+    "architecture_question": "服务依赖；文本存在不代表服务仍可用",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F089",
+    "category": "采集电视与光盘",
+    "feature": "广播标记、字幕和 logo 叠加",
+    "candidate_group": "广播效果",
+    "evidence": [
+      "M:101_0_2_17"
+    ],
+    "architecture_question": "叠加层、录制合成",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F090",
+    "category": "界面与桌面",
+    "feature": "可视化、封面与幻灯片",
+    "candidate_group": "音频可视化",
+    "evidence": [
+      "M:101_0_6"
+    ],
+    "architecture_question": "音频观察、独立画面来源",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F091",
+    "category": "界面与桌面",
+    "feature": "皮肤、logo、主题和透明度",
+    "candidate_group": "外观",
+    "evidence": [
+      "M:101_0_14_1",
+      "M:101_0_14_2",
+      "M:101_0_14_3",
+      "M:101_0_14_4"
+    ],
+    "architecture_question": "外观资源与功能插件边界",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F092",
+    "category": "界面与桌面",
+    "feature": "屏幕控制栏、自动隐藏与模式记忆",
+    "candidate_group": "控制界面",
+    "evidence": [
+      "M:101_0_14_5",
+      "M:101_0_14_7",
+      "M:101_0_14_11"
+    ],
+    "architecture_question": "界面生命周期、全屏、焦点",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F093",
+    "category": "界面与桌面",
+    "feature": "窗口尺寸、位置、全屏及桌面模式",
+    "candidate_group": "窗口控制",
+    "evidence": [
+      "M:101_0_19",
+      "M:101_0_20",
+      "M:101_0_21",
+      "D:490/3292"
+    ],
+    "architecture_question": "宿主窗口能力与用户策略",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F094",
+    "category": "界面与桌面",
+    "feature": "置顶与多显示器全屏",
+    "candidate_group": "窗口控制",
+    "evidence": [
+      "M:101_0_15_3",
+      "D:456/3103"
+    ],
+    "architecture_question": "平台适配、状态恢复",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F095",
+    "category": "界面与桌面",
+    "feature": "快捷键和多媒体键映射",
+    "candidate_group": "输入配置",
+    "evidence": [
+      "D:367/3381",
+      "D:367/3382",
+      "M:101_0_15_12"
+    ],
+    "architecture_question": "共享命令、冲突和上下文",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F096",
+    "category": "界面与桌面",
+    "feature": "鼠标、触摸及手柄输入",
+    "candidate_group": "输入配置",
+    "evidence": [
+      "D:366/3035",
+      "D:447/3035",
+      "D:479/3035",
+      "D:458/3381"
+    ],
+    "architecture_question": "焦点、输入事件和设备能力",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F097",
+    "category": "界面与桌面",
+    "feature": "字幕与提示文字朗读",
+    "candidate_group": "无障碍",
+    "evidence": [
+      "D:468/3057",
+      "D:468/3058",
+      "D:468/3059"
+    ],
+    "architecture_question": "TTS、音频并发和可选能力",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F098",
+    "category": "界面与桌面",
+    "feature": "语言、配置预设、导出与复位",
+    "candidate_group": "设置与预设",
+    "evidence": [
+      "M:101_0_15_0",
+      "M:101_0_15_2",
+      "D:324/3035",
+      "D:324/3042"
+    ],
+    "architecture_question": "设置 schema、作用域、持久化",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F099",
+    "category": "界面与桌面",
+    "feature": "播放结束动作与定时任务",
+    "candidate_group": "播放自动化",
+    "evidence": [
+      "M:101_0_15_4",
+      "M:101_0_15_8",
+      "M:101_0_15_9",
+      "M:101_0_15_10"
+    ],
+    "architecture_question": "事件、任务取消、系统动作",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F100",
+    "category": "界面与桌面",
+    "feature": "防屏保、播放屏保与隐藏光标",
+    "candidate_group": "桌面行为",
+    "evidence": [
+      "M:101_0_9_16",
+      "M:101_0_9_17",
+      "D:485/3292"
+    ],
+    "architecture_question": "系统资源占用与卸载撤销",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F101",
+    "category": "界面与桌面",
+    "feature": "任务栏、系统媒体控制、多实例",
+    "candidate_group": "桌面集成",
+    "evidence": [
+      "D:354/3336",
+      "D:354/3337",
+      "D:354/3293"
+    ],
+    "architecture_question": "平台媒体会话与多窗口",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F102",
+    "category": "界面与桌面",
+    "feature": "更新检查与扩展安装管理",
+    "candidate_group": "扩展管理",
+    "evidence": [
+      "M:101_0_15_21",
+      "D:496/3037",
+      "D:496/3038"
+    ],
+    "architecture_question": "管理基础设施、可替换服务策略",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F103",
+    "category": "后端与扩展",
+    "feature": "来源分离器、音视频解码器与过滤器选择",
+    "candidate_group": "后端设置",
+    "evidence": [
+      "M:101_0_13",
+      "D:350/3311",
+      "D:360/3311",
+      "D:361/3311"
+    ],
+    "architecture_question": "后端能力和设置映射",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F104",
+    "category": "后端与扩展",
+    "feature": "DXVA/D3D11 硬解与 codec 策略",
+    "candidate_group": "后端设置",
+    "evidence": [
+      "D:423/3036",
+      "D:423/3038",
+      "D:423/3223"
+    ],
+    "architecture_question": "平台、设备、格式能力",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F105",
+    "category": "后端与扩展",
+    "feature": "视频渲染器、HDR、10-bit 与呈现模式",
+    "candidate_group": "输出设置",
+    "evidence": [
+      "M:101_0_11_1",
+      "D:355/3054",
+      "D:355/3062"
+    ],
+    "architecture_question": "渲染资源、窗口后端边界",
+    "status": "static-resource-evidence"
+  },
+  {
+    "id": "F106",
+    "category": "后端与扩展",
+    "feature": "外部过滤器、脚本扩展及账号",
+    "candidate_group": "原生/服务扩展",
+    "evidence": [
+      "D:351/3031",
+      "D:496/3034",
+      "D:501/3292"
+    ],
+    "architecture_question": "进程边界、依赖、服务凭据",
+    "status": "static-resource-evidence"
+  }
+]

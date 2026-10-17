@@ -1,0 +1,22 @@
+{
+  "id": "capture-export",
+  "name": "截图与片段导出（实验）",
+  "experimental": true,
+  "entry": "index.ts",
+  "commands": [
+    { "id": "capture-raw", "title": "原始画面截图", "menu": ["视频", "截图"] },
+    {
+      "id": "capture-processed",
+      "title": "处理后画面截图",
+      "menu": ["视频", "截图"]
+    },
+    { "id": "capture-burst", "title": "连续截图", "menu": ["工具", "导出"] },
+    { "id": "export-clip", "title": "导出当前片段", "menu": ["工具", "导出"] },
+    { "id": "cancel", "title": "取消导出", "menu": ["工具", "导出"] }
+  ],
+  "ui": {
+    "file": "ui.slint",
+    "component": "CaptureExportPanel",
+    "global": "CaptureExportState"
+  }
+}

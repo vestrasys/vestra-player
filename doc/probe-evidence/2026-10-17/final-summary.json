@@ -1,0 +1,32 @@
+{
+  "passed": true,
+  "nodeTests": 52,
+  "rustBackendTests": 1,
+  "guiSteps": 67,
+  "sourceFiles": 95,
+  "sourceFingerprint": "5952e7da3c9ac1124b30c5f7ecb531e21be94c6e02f57c98ad799c73fa97fbae",
+  "binarySha256": "fcae029117a6d3d8e00aeab01a4e179c3a12e8c8f975bc5eb3f6495805c6e949",
+  "maintainerSharedFingerprint": "2d5b9999b64c002dbb85449e4a2de420f82e43c608ab256976e92d2ac7701f29",
+  "baselineFileHashesVerified": 74,
+  "initialSourceKind": "none",
+  "remainingTemporaryEntries": [
+    "node-compile-cache"
+  ],
+  "remainingOwnedTemporaryResources": 0,
+  "gui": {
+    "experimental": true,
+    "passed": true,
+    "panelSwitchRecompiled": false,
+    "nesReleasedRgb": [
+      188,
+      25,
+      0
+    ],
+    "nesPressedRgb": [
+      60,
+      171,
+      255
+    ],
+    "scope": "six probes plus Pi-generated plugin in one native window; callback input, not physical keyboard"
+  }
+}

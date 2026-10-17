@@ -1,0 +1,510 @@
+{
+  "evidence_id": "ev_06d4f6459b8bdc86ea0ff21480188583c3d30865d91b882511679da9ba2b782d",
+  "operation": "inspect_pe_resources",
+  "artifact": {
+    "file": "PotPlayer64.dll",
+    "sha256": "157feac17a2d31a51202c76e3fb1823c632dbaea45f5fbd6c30520b7a1fad78d",
+    "bytes": 30030352
+  },
+  "coverage": {
+    "status": "complete",
+    "examined_entries": 1528,
+    "resources": 757
+  },
+  "resource_type_counts": {
+    "2": 2,
+    "3": 21,
+    "4": 10,
+    "5": 186,
+    "6": 183,
+    "9": 2,
+    "14": 11,
+    "16": 1,
+    "24": 1,
+    "AFX_DIALOG_LAYOUT": 86,
+    "D3D11_SHADER": 2,
+    "PNG": 249,
+    "SKIN": 2,
+    "TYPELIB": 1
+  },
+  "limitations": [
+    "Static PE32/PE32+ type/name/language resource inventory; payloads other than RT_GROUP_ICON remain opaque.",
+    "Icon candidates are resource-table relationships. Language fallback, image decoding and actual shell/window loading are not observed.",
+    "Exact shared byte ranges are retained; non-identical overlapping resource structures or payloads are rejected."
+  ],
+  "resources": [
+    {
+      "index": 363,
+      "type": {
+        "kind": "id",
+        "id": 4
+      },
+      "name": {
+        "kind": "id",
+        "id": 100
+      },
+      "language": {
+        "kind": "id",
+        "id": 1042
+      },
+      "entry_locations": [
+        {
+          "offset": 28466248,
+          "bytes": 8
+        },
+        {
+          "offset": 28469336,
+          "bytes": 8
+        },
+        {
+          "offset": 28481312,
+          "bytes": 8
+        }
+      ],
+      "data_entry_location": {
+        "offset": 28496560,
+        "bytes": 16
+      },
+      "code_page": 0,
+      "reserved": 0,
+      "payload": {
+        "rva": 29387736,
+        "location": {
+          "offset": 28723160,
+          "bytes": 18
+        },
+        "sha256": "b45b6f03248835b4f70c2e661ce52ed99850b3937cc050d8551a0c977148a65c"
+      }
+    },
+    {
+      "index": 364,
+      "type": {
+        "kind": "id",
+        "id": 4
+      },
+      "name": {
+        "kind": "id",
+        "id": 101
+      },
+      "language": {
+        "kind": "id",
+        "id": 1042
+      },
+      "entry_locations": [
+        {
+          "offset": 28466248,
+          "bytes": 8
+        },
+        {
+          "offset": 28469344,
+          "bytes": 8
+        },
+        {
+          "offset": 28481336,
+          "bytes": 8
+        }
+      ],
+      "data_entry_location": {
+        "offset": 28496576,
+        "bytes": 16
+      },
+      "code_page": 0,
+      "reserved": 0,
+      "payload": {
+        "rva": 29362824,
+        "location": {
+          "offset": 28698248,
+          "bytes": 24908
+        },
+        "sha256": "7a1dcdc9bd19f1d0fefe96806293afbef308b27c35ddec3935fc0f2940022a10"
+      }
+    },
+    {
+      "index": 365,
+      "type": {
+        "kind": "id",
+        "id": 4
+      },
+      "name": {
+        "kind": "id",
+        "id": 102
+      },
+      "language": {
+        "kind": "id",
+        "id": 1042
+      },
+      "entry_locations": [
+        {
+          "offset": 28466248,
+          "bytes": 8
+        },
+        {
+          "offset": 28469352,
+          "bytes": 8
+        },
+        {
+          "offset": 28481360,
+          "bytes": 8
+        }
+      ],
+      "data_entry_location": {
+        "offset": 28496592,
+        "bytes": 16
+      },
+      "code_page": 0,
+      "reserved": 0,
+      "payload": {
+        "rva": 29387760,
+        "location": {
+          "offset": 28723184,
+          "bytes": 168
+        },
+        "sha256": "4cee205318ca4ad4ce3fc1f3acedaca93c11d2fd3bc4064a95f96bf089d832d2"
+      }
+    },
+    {
+      "index": 366,
+      "type": {
+        "kind": "id",
+        "id": 4
+      },
+      "name": {
+        "kind": "id",
+        "id": 105
+      },
+      "language": {
+        "kind": "id",
+        "id": 1042
+      },
+      "entry_locations": [
+        {
+          "offset": 28466248,
+          "bytes": 8
+        },
+        {
+          "offset": 28469360,
+          "bytes": 8
+        },
+        {
+          "offset": 28481384,
+          "bytes": 8
+        }
+      ],
+      "data_entry_location": {
+        "offset": 28496608,
+        "bytes": 16
+      },
+      "code_page": 0,
+      "reserved": 0,
+      "payload": {
+        "rva": 29387928,
+        "location": {
+          "offset": 28723352,
+          "bytes": 186
+        },
+        "sha256": "98da8b5e6f746c88ba2957bb1271f0a787d552c93b066f02f54edea63c423bdf"
+      }
+    },
+    {
+      "index": 367,
+      "type": {
+        "kind": "id",
+        "id": 4
+      },
+      "name": {
+        "kind": "id",
+        "id": 106
+      },
+      "language": {
+        "kind": "id",
+        "id": 1042
+      },
+      "entry_locations": [
+        {
+          "offset": 28466248,
+          "bytes": 8
+        },
+        {
+          "offset": 28469368,
+          "bytes": 8
+        },
+        {
+          "offset": 28481408,
+          "bytes": 8
+        }
+      ],
+      "data_entry_location": {
+        "offset": 28496624,
+        "bytes": 16
+      },
+      "code_page": 0,
+      "reserved": 0,
+      "payload": {
+        "rva": 29388120,
+        "location": {
+          "offset": 28723544,
+          "bytes": 98
+        },
+        "sha256": "3103bd37dce0cc1b258b4ec460bc4c736d50049019f2e764e08fd2019170ef1e"
+      }
+    },
+    {
+      "index": 368,
+      "type": {
+        "kind": "id",
+        "id": 4
+      },
+      "name": {
+        "kind": "id",
+        "id": 107
+      },
+      "language": {
+        "kind": "id",
+        "id": 1042
+      },
+      "entry_locations": [
+        {
+          "offset": 28466248,
+          "bytes": 8
+        },
+        {
+          "offset": 28469376,
+          "bytes": 8
+        },
+        {
+          "offset": 28481432,
+          "bytes": 8
+        }
+      ],
+      "data_entry_location": {
+        "offset": 28496640,
+        "bytes": 16
+      },
+      "code_page": 0,
+      "reserved": 0,
+      "payload": {
+        "rva": 29388224,
+        "location": {
+          "offset": 28723648,
+          "bytes": 196
+        },
+        "sha256": "13f55eef2918b364d5b9f21170f3508806432c814c3495c003a4d764258c4513"
+      }
+    },
+    {
+      "index": 369,
+      "type": {
+        "kind": "id",
+        "id": 4
+      },
+      "name": {
+        "kind": "id",
+        "id": 111
+      },
+      "language": {
+        "kind": "id",
+        "id": 1042
+      },
+      "entry_locations": [
+        {
+          "offset": 28466248,
+          "bytes": 8
+        },
+        {
+          "offset": 28469384,
+          "bytes": 8
+        },
+        {
+          "offset": 28481456,
+          "bytes": 8
+        }
+      ],
+      "data_entry_location": {
+        "offset": 28496656,
+        "bytes": 16
+      },
+      "code_page": 0,
+      "reserved": 0,
+      "payload": {
+        "rva": 29388424,
+        "location": {
+          "offset": 28723848,
+          "bytes": 1994
+        },
+        "sha256": "4a7e2b6df3aeb0b416a981789f20fd1bf3ad734730c46595c71fc482cb314388"
+      }
+    },
+    {
+      "index": 370,
+      "type": {
+        "kind": "id",
+        "id": 4
+      },
+      "name": {
+        "kind": "id",
+        "id": 115
+      },
+      "language": {
+        "kind": "id",
+        "id": 1042
+      },
+      "entry_locations": [
+        {
+          "offset": 28466248,
+          "bytes": 8
+        },
+        {
+          "offset": 28469392,
+          "bytes": 8
+        },
+        {
+          "offset": 28481480,
+          "bytes": 8
+        }
+      ],
+      "data_entry_location": {
+        "offset": 28496672,
+        "bytes": 16
+      },
+      "code_page": 0,
+      "reserved": 0,
+      "payload": {
+        "rva": 29390424,
+        "location": {
+          "offset": 28725848,
+          "bytes": 616
+        },
+        "sha256": "89d749f1a9ae527e9fff14d65f330ef23d7ab169044ad981675fa097407d98f3"
+      }
+    },
+    {
+      "index": 371,
+      "type": {
+        "kind": "id",
+        "id": 4
+      },
+      "name": {
+        "kind": "id",
+        "id": 449
+      },
+      "language": {
+        "kind": "id",
+        "id": 1042
+      },
+      "entry_locations": [
+        {
+          "offset": 28466248,
+          "bytes": 8
+        },
+        {
+          "offset": 28469400,
+          "bytes": 8
+        },
+        {
+          "offset": 28481504,
+          "bytes": 8
+        }
+      ],
+      "data_entry_location": {
+        "offset": 28496688,
+        "bytes": 16
+      },
+      "code_page": 0,
+      "reserved": 0,
+      "payload": {
+        "rva": 29391040,
+        "location": {
+          "offset": 28726464,
+          "bytes": 60
+        },
+        "sha256": "45291c8518198f41ceba23bf4f089785c1077155b1c80b6ac90ea0b889fd6977"
+      }
+    },
+    {
+      "index": 372,
+      "type": {
+        "kind": "id",
+        "id": 4
+      },
+      "name": {
+        "kind": "id",
+        "id": 450
+      },
+      "language": {
+        "kind": "id",
+        "id": 1042
+      },
+      "entry_locations": [
+        {
+          "offset": 28466248,
+          "bytes": 8
+        },
+        {
+          "offset": 28469408,
+          "bytes": 8
+        },
+        {
+          "offset": 28481528,
+          "bytes": 8
+        }
+      ],
+      "data_entry_location": {
+        "offset": 28496704,
+        "bytes": 16
+      },
+      "code_page": 0,
+      "reserved": 0,
+      "payload": {
+        "rva": 29391104,
+        "location": {
+          "offset": 28726528,
+          "bytes": 136
+        },
+        "sha256": "3998ffc376a6606a8c561143a4155be0187bc55a61e929f8ba14ec0d00cf6a7c"
+      }
+    },
+    {
+      "index": 755,
+      "type": {
+        "kind": "id",
+        "id": 16
+      },
+      "name": {
+        "kind": "id",
+        "id": 1
+      },
+      "language": {
+        "kind": "id",
+        "id": 1042
+      },
+      "entry_locations": [
+        {
+          "offset": 28466288,
+          "bytes": 8
+        },
+        {
+          "offset": 28472552,
+          "bytes": 8
+        },
+        {
+          "offset": 28490720,
+          "bytes": 8
+        }
+      ],
+      "data_entry_location": {
+        "offset": 28502832,
+        "bytes": 16
+      },
+      "code_page": 0,
+      "reserved": 0,
+      "payload": {
+        "rva": 29567416,
+        "location": {
+          "offset": 28902840,
+          "bytes": 868
+        },
+        "sha256": "e36c98dcaf25fec36a72cc05ad7be44bfd9e0a8ae8ca959050a39649d31801d4"
+      }
+    }
+  ]
+}

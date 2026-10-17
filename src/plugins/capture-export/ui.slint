@@ -1,0 +1,53 @@
+// 实验界面：使用原生 Slint；最终 API、布局与产品可能相差很大。
+import { Button, CheckBox, Slider } from "std-widgets.slint";
+
+export global CaptureExportState {
+    in-out property <bool> include-subtitles: true;
+    in-out property <bool> busy: false;
+    in-out property <float> burst-count: 5;
+    in-out property <float> burst-interval: 0.5;
+    in-out property <float> clip-duration: 5;
+    in-out property <float> progress: 0;
+    in-out property <float> operation-id: 0;
+    in-out property <float> completed-count: 0;
+    in-out property <string> status: "准备中";
+    in-out property <string> job-id;
+    in-out property <string> job-state;
+    in-out property <string> output-path;
+    in-out property <string> source;
+    in-out property <string> source-session;
+    callback action(string, float);
+}
+
+export component CaptureExportPanel inherits Rectangle {
+    background: #202a36;
+    VerticalLayout {
+        padding: 12px;
+        spacing: 8px;
+        HorizontalLayout {
+            spacing: 8px;
+            Button { text: "原始截图"; enabled: !CaptureExportState.busy; clicked => { CaptureExportState.action("capture-raw", 0); } }
+            Button { text: "处理后截图"; enabled: !CaptureExportState.busy; clicked => { CaptureExportState.action("capture-processed", 0); } }
+            CheckBox { checked: CaptureExportState.include-subtitles; toggled => { CaptureExportState.action("include-subtitles", self.checked ? 1 : 0); } }
+            Text { text: "包含字幕"; color: #dce5ef; vertical-alignment: center; }
+            Button { text: "取消任务"; enabled: CaptureExportState.busy; clicked => { CaptureExportState.action("cancel", 0); } }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            Text { text: "截图数量：" + CaptureExportState.burst-count; color: #dce5ef; }
+            Slider { minimum: 1; maximum: 100; value: CaptureExportState.burst-count; changed(value) => { CaptureExportState.action("burst-count", round(value)); } }
+            Text { text: "间隔：" + CaptureExportState.burst-interval + " 秒"; color: #dce5ef; }
+            Slider { minimum: 0.1; maximum: 5; value: CaptureExportState.burst-interval; changed(value) => { CaptureExportState.action("burst-interval", round(value * 10) / 10); } }
+            Button { text: "连续截图"; enabled: !CaptureExportState.busy; clicked => { CaptureExportState.action("capture-burst", 0); } }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            Text { text: "片段：" + CaptureExportState.clip-duration + " 秒"; color: #dce5ef; }
+            Slider { minimum: 0.1; maximum: 60; value: CaptureExportState.clip-duration; changed(value) => { CaptureExportState.action("clip-duration", round(value * 10) / 10); } }
+            Button { text: "导出 MP4"; enabled: !CaptureExportState.busy; clicked => { CaptureExportState.action("export-clip", 0); } }
+            Text { text: "进度 " + round(CaptureExportState.progress * 100) + "%"; color: #dce5ef; }
+        }
+        Text { text: CaptureExportState.status; color: #dce5ef; }
+        Text { text: CaptureExportState.output-path; color: #aebdce; overflow: elide; }
+    }
+}

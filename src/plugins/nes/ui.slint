@@ -1,0 +1,28 @@
+// 实验原生 GUI；与最终插件 API、挂载布局可能相差很大。
+import { Button } from "std-widgets.slint";
+export global NesState {
+    in-out property <string> status: "请选择自备合法 NES ROM";
+    in-out property <bool> loaded: false;
+    in-out property <bool> paused: false;
+    in-out property <float> frames: 0;
+    callback action(string, float);
+}
+export component NesPanel inherits Rectangle {
+    preferred-width: 260px;
+    min-width: 220px;
+    background: #202a36;
+    VerticalLayout {
+        padding: 12px;
+        spacing: 8px;
+        Text { text: "NES 模拟器（实验）"; color: white; }
+        Button { text: "打开 ROM…"; clicked => { NesState.action("open-rom", 0); } }
+        Button { text: NesState.paused ? "恢复" : "暂停"; enabled: NesState.loaded; clicked => { NesState.action("toggle-pause", 0); } }
+        Button { text: "保存状态…"; enabled: NesState.loaded; clicked => { NesState.action("save-state", 0); } }
+        Button { text: "恢复状态…"; enabled: NesState.loaded; clicked => { NesState.action("load-state", 0); } }
+        Button { text: "关闭 ROM"; enabled: NesState.loaded; clicked => { NesState.action("close-rom", 0); } }
+        Text { text: "点击视频后：方向键移动；Z=A，X=B，Enter=Start，Shift=Select"; color: white; wrap: word-wrap; }
+        Text { text: NesState.status; color: #dce5ef; wrap: word-wrap; }
+        Text { text: "执行帧数：" + NesState.frames; color: #dce5ef; }
+        Rectangle { vertical-stretch: 1; }
+    }
+}

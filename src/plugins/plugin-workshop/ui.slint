@@ -1,0 +1,32 @@
+// 实验原生 Slint 工坊；最终插件 API 和交互方式可能差异很大。
+import { Button } from "std-widgets.slint";
+export global WorkshopState {
+    in-out property <string> status: "正在接入 Pi";
+    in-out property <string> phase: "idle";
+    in-out property <string> request: "生成一个有加一按钮的计数器";
+    in-out property <string> diagnostics: "";
+    in-out property <string> report: "";
+    in-out property <string> installed: "";
+    in-out property <float> turns: 0;
+    in-out property <bool> busy: false;
+    callback action(string, float);
+}
+export component WorkshopPanel inherits Rectangle {
+    background: #253040;
+    VerticalLayout {
+        padding: 10px; spacing: 6px;
+        Text { text: "AI 插件工坊 · Pi Agent / mock 模型 · 实验"; color: white; }
+        Text { text: WorkshopState.request; color: #c8d5e8; }
+        HorizontalLayout {
+            Button { text: "读取需求 JSON"; enabled: !WorkshopState.busy; clicked => { WorkshopState.action("request-file", 0); } }
+            Button { text: "生成 +1 插件"; enabled: !WorkshopState.busy; clicked => { WorkshopState.action("generate", 1); } }
+            Button { text: "生成 +2 版本"; enabled: !WorkshopState.busy; clicked => { WorkshopState.action("generate", 2); } }
+            Button { text: "取消"; enabled: WorkshopState.busy; clicked => { WorkshopState.action("cancel", 0); } }
+            Button { text: "回退"; enabled: !WorkshopState.busy; clicked => { WorkshopState.action("rollback", 0); } }
+        }
+        Text { text: WorkshopState.status; color: white; wrap: word-wrap; }
+        Text { text: "阶段：" + WorkshopState.phase + " · 模型轮次：" + WorkshopState.turns; color: #c8d5e8; }
+        Text { text: WorkshopState.diagnostics; color: #ffd493; wrap: word-wrap; }
+        Text { text: "证据：" + WorkshopState.report; color: #9eb4cf; wrap: word-wrap; }
+    }
+}

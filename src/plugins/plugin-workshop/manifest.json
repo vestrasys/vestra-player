@@ -1,0 +1,29 @@
+{
+  "id": "plugin-workshop",
+  "name": "AI 插件工坊（实验 mock）",
+  "experimental": true,
+  "entry": "index.ts",
+  "ui": {
+    "file": "ui.slint",
+    "component": "WorkshopPanel",
+    "global": "WorkshopState"
+  },
+  "commands": [
+    {
+      "id": "generate",
+      "title": "生成计数器插件（Pi mock）",
+      "menu": ["工具", "插件工坊"]
+    },
+    {
+      "id": "request-file",
+      "title": "读取工坊需求 JSON",
+      "menu": ["工具", "插件工坊"]
+    },
+    { "id": "cancel", "title": "取消生成", "menu": ["工具", "插件工坊"] },
+    {
+      "id": "rollback",
+      "title": "回退上一个生成版本",
+      "menu": ["工具", "插件工坊"]
+    }
+  ]
+}

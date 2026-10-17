@@ -2,6 +2,8 @@
 
 > **这是实验版本，不是产品实现。所有接口、目录结构、进程安排和布局组合方式都是临时设计，与最终成品 API 可能相差很大；不提供兼容性承诺。**
 
+代码已移至仓库根目录 [src](../../src/README.md)，本文保留实验说明和历史证据。下文命令均从 `src/` 执行，插件路径和生成样本路径也相对于 `src/`。
+
 本实验只评估 Slint：一个由 Rust 拥有的窗口，通过右键菜单添加插件。文件播放插件提供打开 MP4、播放/暂停与跳转；高斯模糊插件提供启停和强度设置。通过这两个实际插件，观察界面写法、跨语言通信和接入成本。
 
 ## 当前运行条件
@@ -15,9 +17,10 @@
 
 ## 启动与操作
 
-在本目录执行：
+从仓库根目录进入 `src/` 后执行：
 
 ```sh
+cd src
 ./scripts/run.sh
 ```
 
@@ -113,7 +116,7 @@ export async function activate(ctx: PluginContext) {
 }
 ```
 
-实际可阅读的两个插件是本实验的主要评估对象：[文件播放](plugins/file-playback/index.ts)、[高斯模糊](plugins/gaussian-blur/index.ts)。Slint 字段、回调和实验 SDK 的准确约定以源文件为准。
+实际可阅读的插件是本实验的主要评估对象：[文件播放](../../src/plugins/file-playback/index.ts)、[高斯模糊](../../src/plugins/gaussian-blur/index.ts)、[播放列表](../../src/plugins/playlist/index.ts)。Slint 字段、回调和实验 SDK 的准确约定以源文件为准。
 
 插件进程拥有 Node 的运行时权限；独立进程用于分开运行与故障处理，本实验没有实现权限沙箱。TS 可以使用 Node 文件系统等通用能力，但视频帧不经 TS。
 

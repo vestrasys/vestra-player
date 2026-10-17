@@ -1,0 +1,43 @@
+{
+  "output": "../../../../.cache/probe-evidence/capture-export-gui",
+  "steps": [
+    {
+      "op": "load",
+      "manifest": "../../../plugins/capture-export/manifest.json"
+    },
+    {
+      "op": "wait-property",
+      "plugin": "capture-export",
+      "name": "status",
+      "value": "截图与导出就绪"
+    },
+    { "op": "panel", "plugin": "capture-export" },
+    {
+      "op": "action",
+      "plugin": "capture-export",
+      "name": "include-subtitles",
+      "value": 0
+    },
+    {
+      "op": "wait-property",
+      "plugin": "capture-export",
+      "name": "include-subtitles",
+      "value": false
+    },
+    {
+      "op": "action",
+      "plugin": "capture-export",
+      "name": "burst-count",
+      "value": 7
+    },
+    {
+      "op": "wait-property",
+      "plugin": "capture-export",
+      "name": "burst-count",
+      "value": 7
+    },
+    { "op": "menu", "plugin": "capture-export", "command": "cancel" },
+    { "op": "delay", "milliseconds": 300 },
+    { "op": "snapshot", "name": "capture-panel" }
+  ]
+}

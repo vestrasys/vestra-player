@@ -1,0 +1,11 @@
+{
+  "id": "gaussian-blur",
+  "name": "高斯模糊（实验）",
+  "experimental": true,
+  "entry": "index.ts",
+  "ui": {
+    "file": "ui.slint",
+    "component": "GaussianBlurPanel",
+    "global": "GaussianBlurState"
+  }
+}
