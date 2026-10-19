@@ -14,7 +14,7 @@ export function clamp(value: unknown, min: number, max: number) {
 }
 export function nodes(value: Settings) {
   return [
-    ...bands.flatMap((frequency, i) => value.gains[i] === 0 ? [] : [{ kind: 'equalizer' as const, frequency, q: 1 as const, gainDb: clamp(value.gains[i], -12, 12) }]),
+    ...bands.flatMap((frequency, i) => value.gains[i] === 0 ? [] : [{ kind: 'equalizer' as const, frequency, q: 1 as const, gainDb: clamp(value.gains[i], -6, 6) }]),
     ...(value.clarity === 0 ? [] : [{ kind: 'treble' as const, frequency: 3000 as const, slope: 0.5 as const, gainDb: clamp(value.clarity, 0, 6) }]),
     ...(value.normalize ? [{ kind: 'dynaudnorm' as const, enabled: true, maxGain: 4, peak: 0.9 }] : []),
   ];

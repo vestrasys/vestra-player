@@ -1,0 +1,32 @@
+import { ListView } from "std-widgets.slint";
+
+export struct Row {
+    rowId: string,
+    label: string,
+}
+
+export global Bridge {
+    in-out property <[Row]> rows;
+    in-out property <string> selected: "Select a row";
+    callback select-row(string);
+}
+
+export component RowsSidebar inherits Rectangle {
+    min-width: 220px;
+    background: #283746;
+    VerticalLayout {
+        padding: 12px;
+        spacing: 8px;
+        Text { text: "Independent rows"; color: white; }
+        Text { text: Bridge.selected; color: #cad1dd; wrap: word-wrap; }
+        ListView {
+            vertical-stretch: 1;
+            for row in Bridge.rows: Rectangle {
+                height: 32px;
+                background: touch.has-hover ? #36485a : transparent;
+                Text { x: 8px; text: row.label; color: white; vertical-alignment: center; }
+                touch := TouchArea { clicked => { Bridge.select-row(row.rowId); } }
+            }
+        }
+    }
+}

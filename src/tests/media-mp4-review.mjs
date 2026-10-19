@@ -1,137 +1,1608 @@
 /** Independent M3 MP4 preparation. --prepare makes only own fixtures/references.
  * No host run until the real consumer and final binary are explicitly frozen.
  */
-import assert from 'node:assert/strict';
-import {spawnSync} from 'node:child_process';
-import {mkdtemp,mkdir,readFile,writeFile,cp,copyFile} from 'node:fs/promises';
-import {createHash} from 'node:crypto';
-import {tmpdir} from 'node:os';
-import {resolve} from 'node:path';
-const ffmpeg='/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg';
-const ffprobe='/opt/homebrew/opt/ffmpeg-full/bin/ffprobe';
-export const sampleRate=48000,duration=12,clip={start:4,end:8};
-export const audioRecipe='volume=0.5011872336272722,dynaudnorm=framelen=100:gausssize=5:maxgain=4:peak=0.9';
-export const plannedWireQuestions=['Frozen trackId/real demux streamIndex, selected and none behavior','Half-open time range, real AAC priming/tail padding, 48kHz/channel layout','DSP source0 preroll, signed offset after DSP and zero-pad/crop rule','Raw excludes all audio DSP/offset/device output gain; includeSubtitles false CAS'];
-function pcmBuffer(values){const bytes=Buffer.alloc(values.length*4);for(let i=0;i<values.length;i++)bytes.writeFloatLE(values[i],i*4);return bytes;}
-export function pcmRead(bytes){assert.equal(bytes.length%4,0);const values=new Float64Array(bytes.length/4);for(let i=0;i<values.length;i++){values[i]=bytes.readFloatLE(i*4);assert.ok(Number.isFinite(values[i]));}return values;}
-export function clipShift(values,start,end,offsetMs=0,sourceDuration=duration){const count=Math.round((end-start)*sampleRate),output=new Float64Array(count),first=Math.round((start-offsetMs/1000)*sampleRate),sourceEnd=Math.min(values.length,Math.round(sourceDuration*sampleRate));for(let i=0;i<count;i++){const index=first+i;if(index>=0&&index<sourceEnd)output[i]=values[index];}return output;}
-export function rms(values,start=0,end=values.length){let sum=0;for(let i=start;i<end;i++)sum+=values[i]**2;return Math.sqrt(sum/Math.max(1,end-start));}
-export function toneAmplitude(values,frequency,start=0,end=values.length){let real=0,imaginary=0;for(let i=start;i<end;i++){const angle=2*Math.PI*frequency*i/sampleRate;real+=values[i]*Math.cos(angle);imaginary+=values[i]*Math.sin(angle);}return 2*Math.hypot(real,imaginary)/Math.max(1,end-start);}
-export function difference(actual,reference,start=0,end=Math.min(actual.length,reference.length)){let squared=0,absolute=0,max=0,dot=0,aa=0,rr=0;for(let i=start;i<end;i++){const a=actual[i],r=reference[i],d=a-r;squared+=d*d;absolute+=Math.abs(d);max=Math.max(max,Math.abs(d));dot+=a*r;aa+=a*a;rr+=r*r;}const n=Math.max(1,end-start);return{samples:n,rmse:Math.sqrt(squared/n),nrmse:Math.sqrt(squared/Math.max(rr,1e-30)),mae:absolute/n,maxAbsDiff:max,correlation:dot/Math.max(Math.sqrt(aa*rr),1e-30),gain:dot/Math.max(rr,1e-30)};}
-export function makeSignal(track,frequency){const values=new Float64Array(sampleRate*duration),pulseTimes=track===0?[.75,2.25,4.12,5,6.4,8.1,10.1]:[1.25,2.75,4.12,5.5,6.9,8.6,10.6];for(let i=0;i<values.length;i++){const t=i/sampleRate;let amplitude;if(track===0)amplitude=t<2.5?.025:t<4?.58:t<4.6?.035:t<6?.08:t<8?.33:t<10?.055:.4;else amplitude=t<1?.35:t<2.5?.025:t<4?.7:t<4.6?.025:t<6?.06:t<8?.24:t<10?.045:.32;let pulse=0;for(const at of pulseTimes){const d=Math.abs(t-at);if(d<.012)pulse+=.22*(1-d/.012)*Math.sin(2*Math.PI*(track===0?2200:3300)*t);}values[i]=Math.max(-.95,Math.min(.95,amplitude*Math.sin(2*Math.PI*frequency*t)+pulse));}return values;}
-async function prepare(){
- const work=await mkdtemp(resolve(tmpdir(),'vestra-media-mp4-prepare-')),commands=[];for(const d of ['fixtures','references','analysis'])await mkdir(resolve(work,d));
- async function execute(binary,args,options={}){const result=spawnSync(binary,args,{encoding:'utf8',...options});const record={binary,args,exitCode:result.status,signal:result.signal,stderr:typeof result.stderr==='string'?result.stderr:result.stderr?.toString()};commands.push(record);await writeFile(resolve(work,'commands.json'),JSON.stringify(commands,null,2));assert.equal(result.status,0,record.stderr);return result;}
- try{
-  const signals={};for(const[source,frequencies]of [['a',[440,880]],['b',[660,1320]]]){
-   for(let track=0;track<2;track++){const values=makeSignal(track,frequencies[track]),path=resolve(work,'fixtures',`${source}-track${track}.f32`);await writeFile(path,pcmBuffer(values));signals[`${source}-${track}`]={frequency:frequencies[track],rawPath:path,samples:values.length,rms:rms(values)};}
-   const color=source==='a'?'red':'blue',video=`testsrc2=size=320x180:rate=30,drawbox=x=0:y=0:w=64:h=64:color=${color}:t=fill,drawbox=x=140:y=10:w=40:h=40:color=white:t=fill:enable='between(t,4,4.2)'`;
-   await execute(ffmpeg,['-v','error','-f','lavfi','-i',video,'-f','f32le','-ar',String(sampleRate),'-ac','1','-i',signals[`${source}-0`].rawPath,'-f','f32le','-ar',String(sampleRate),'-ac','1','-i',signals[`${source}-1`].rawPath,'-map','0:v:0','-map','1:a:0','-map','2:a:0','-metadata:s:a:0',`title=${frequencies[0]}Hz First`,'-metadata:s:a:0','language=eng','-metadata:s:a:1',`title=${frequencies[1]}Hz Second`,'-metadata:s:a:1','language=zho','-disposition:a:0','default','-disposition:a:1','0','-t',String(duration),'-c:v','libx264','-preset','ultrafast','-c:a','aac','-b:a','192k','-ar',String(sampleRate),'-ac','1',resolve(work,'fixtures',source+'.mp4')]);
-   const probe=await execute(ffprobe,['-v','error','-show_streams','-show_format','-of','json',resolve(work,'fixtures',source+'.mp4')]);await writeFile(resolve(work,'fixtures',source+'-probe.json'),probe.stdout);const streams=JSON.parse(probe.stdout).streams,audio=streams.filter(s=>s.codec_type==='audio');assert.equal(audio.length,2);assert.equal(audio[0].sample_rate,'48000');assert.equal(audio[1].sample_rate,'48000');
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  writeFile,
+  cp,
+  copyFile,
+} from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+const ffmpeg = "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg";
+const ffprobe = "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe";
+export const sampleRate = 48000,
+  duration = 12,
+  clip = { start: 4, end: 8 };
+export const audioRecipe =
+  "volume=0.5011872336272722,dynaudnorm=framelen=100:gausssize=5:maxgain=4:peak=0.9";
+export const plannedWireQuestions = [
+  "Frozen trackId/real demux streamIndex, selected and none behavior",
+  "Half-open time range, real AAC priming/tail padding, 48kHz/channel layout",
+  "DSP source0 preroll, signed offset after DSP and zero-pad/crop rule",
+  "Raw excludes all audio DSP/offset/device output gain; includeSubtitles false CAS",
+];
+function pcmBuffer(values) {
+  const bytes = Buffer.alloc(values.length * 4);
+  for (let i = 0; i < values.length; i++) bytes.writeFloatLE(values[i], i * 4);
+  return bytes;
+}
+export function pcmRead(bytes) {
+  assert.equal(bytes.length % 4, 0);
+  const values = new Float64Array(bytes.length / 4);
+  for (let i = 0; i < values.length; i++) {
+    values[i] = bytes.readFloatLE(i * 4);
+    assert.ok(Number.isFinite(values[i]));
   }
-  const decoded=[];for(let track=0;track<2;track++){const dest=resolve(work,'references',`a-source-aac-track${track}.f32`);await execute(ffmpeg,['-v','error','-i',resolve(work,'fixtures/a.mp4'),'-map',`0:a:${track}`,'-vn','-ac','1','-ar',String(sampleRate),'-f','f32le',dest]);const values=pcmRead(await readFile(dest));const window=[Math.round(4.7*sampleRate),Math.round(5.3*sampleRate)];const row={track,sourceDecodedSamples:values.length,sourceDecodedSeconds:values.length/sampleRate,rms:rms(values,...window),amplitude440:toneAmplitude(values,440,...window),amplitude880:toneAmplitude(values,880,...window)};assert.ok(track===0?row.amplitude440>row.amplitude880*10:row.amplitude880>row.amplitude440*10,'source AAC decoded spectrum distinguishes actual tracks');decoded.push(row);await writeFile(resolve(work,'references',`raw-track${track}-4to8.f32`),pcmBuffer(clipShift(values,clip.start,clip.end)));}
-  const full=resolve(work,'references/processed-full-source0-track1.f32'),wrong=resolve(work,'references/processed-wrong-start4-track1.f32');
-  await execute(ffmpeg,['-v','error','-threads','1','-filter_threads','1','-i',resolve(work,'fixtures/a.mp4'),'-map','0:a:1','-vn','-af',audioRecipe,'-ar',String(sampleRate),'-ac','1','-f','f32le',full]);
-  await execute(ffmpeg,['-v','error','-threads','1','-filter_threads','1','-ss','4','-i',resolve(work,'fixtures/a.mp4'),'-map','0:a:1','-vn','-af',audioRecipe,'-t','4','-ar',String(sampleRate),'-ac','1','-f','f32le',wrong]);
-  const fullPcm=pcmRead(await readFile(full)),wrongPcm=pcmRead(await readFile(wrong)),correct=clipShift(fullPcm,4,8),offsetReferences={};
-  for(const offsetMs of [0,250,-250]){const pcm=clipShift(fullPcm,4,8,offsetMs);const name=`processed-source0-track1-4to8-offset${offsetMs}.f32`;await writeFile(resolve(work,'references',name),pcmBuffer(pcm));offsetReferences[offsetMs]={name,samples:pcm.length,vsNoOffset:difference(pcm,correct)};}
-  const prefix=clipShift(fullPcm,0,1,250),tail=clipShift(fullPcm,11.4,12,-250);await writeFile(resolve(work,'references/positive250-prefix-zero.f32'),pcmBuffer(prefix));await writeFile(resolve(work,'references/negative250-tail-zero.f32'),pcmBuffer(tail));assert.equal(rms(prefix,0,12000),0);assert.equal(rms(tail,Math.round(.35*sampleRate)),0);
-  const preroll={fullVsWrongFirst300ms:difference(correct,wrongPcm,0,Math.round(.3*sampleRate)),fullVsWrongWhole:difference(correct,wrongPcm)};assert.ok(preroll.fullVsWrongFirst300ms.nrmse>.05,'fixture must distinguish source0 dynamic history from start4 filter reset');
-  const roundTripInput=resolve(work,'references/processed-source0-track1-4to8-offset0.f32'),roundTripAac=resolve(work,'references/reference-roundtrip.m4a'),roundTripDecoded=resolve(work,'references/reference-roundtrip-decoded.f32');
-  await execute(ffmpeg,['-v','error','-f','f32le','-ar',String(sampleRate),'-ac','1','-i',roundTripInput,'-c:a','aac','-b:a','192k',roundTripAac]);await execute(ffmpeg,['-v','error','-i',roundTripAac,'-vn','-ar',String(sampleRate),'-ac','1','-f','f32le',roundTripDecoded]);const rt=pcmRead(await readFile(roundTripDecoded));const rtProbe=await execute(ffprobe,['-v','error','-show_streams','-show_format','-of','json',roundTripAac]);await writeFile(resolve(work,'references/reference-roundtrip-probe.json'),rtProbe.stdout);
-  const result={prepared:true,hostRun:false,work,sourceDuration:duration,sampleRate,clip,signals,decoded,preroll,offsetReferences,zeroPadding:{positivePrefixSamples:12000,positivePrefixRms:rms(prefix,0,12000),negativeTailStartSample:Math.round(.35*sampleRate),negativeTailRms:rms(tail,Math.round(.35*sampleRate))},aacCalibration:{decodedSamples:rt.length,decodedSeconds:rt.length/sampleRate,vsPreEncode:difference(rt,correct),boundaryFirst300ms:difference(rt,correct,0,Math.round(.3*sampleRate))},referenceAudioRecipe:audioRecipe,limits:['Preparation only: no host, public audio selection or MP4 job behavior tested.','Source references start from actual decoded source AAC; generated pre-AAC f32 is not the raw-export ground truth.','Offset references are independently indexed PCM with explicit zero pads, not a copy of candidate asetpts/aresample filter chain.','AAC priming/padding/sample counts preserved; no claim of exact sample or realtime DSP-history parity.']};await writeFile(resolve(work,'analysis/preparation-result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify({prepared:true,hostRun:false,work,preroll,aacCalibration:result.aacCalibration}));
- }catch(error){await writeFile(resolve(work,'analysis/preparation-failure.json'),JSON.stringify({prepared:false,hostRun:false,error:String(error),stack:error.stack},null,2));console.log(JSON.stringify({work,prepared:false,hostRun:false}));throw error;}
+  return values;
 }
-if(process.argv.includes('--prepare'))await prepare();
-
-
-
-async function mp4Consumer(host){
- const assert=(await import('node:assert/strict')).default,fs=await import('node:fs/promises'),path=await import('node:path'),{execFileSync}=await import('node:child_process');
- const work=process.env.VESTRA_MP4_REVIEW,outputs=[],checks={},events=[],wait=ms=>new Promise(r=>setTimeout(r,ms));let op=0,audioRevision=0,subtitleOp=0;
- async function ready(source){const opened=await host.source.submit({kind:'open',source:path.join(work,'fixtures',source+'.mp4'),startPaused:true}),end=Date.now()+5000;let state;while(Date.now()<end){state=await host.source.state();if(state.phase==='ready'&&state.stamp.generation===opened.ticket.stamp.generation)break;await wait(20);}assert.equal(state.phase,'ready');await wait(350);return host.source.state();}
- async function snap(mode,time=4,audio={kind:'track',trackId:checks.second.trackId},includeSubtitles=true){const source=await host.source.state(),processing=await host.processing.state(),subtitle=await host.subtitles.state(),payload={operationId:++op,expected:source.stamp,time,audio,...(mode==='processed'?{mode,expectedProcessingRevision:processing.configurationRevision,includeSubtitles,...(includeSubtitles?{expectedSubtitle:{selection:subtitle.selection.stamp,presentationRevision:subtitle.presentation.revision}}:{})}:{})};const frozen=await host.snapshot.capture(payload);assert.equal(frozen.videoStreamIndex,0,'actual single-video fixture ff-index is 0');if(audio.kind==='none')assert.equal(frozen.audio,null);else assert.equal(frozen.audio.streamIndex,audio.kind==='selected'?checks.selected.streamIndex:checks.second.streamIndex);if(mode==='processed')assert.equal(frozen.preroll,'source-zero-to-start');return frozen;}
- async function run(snapshot,name,end=8){const kind=snapshot.kind==='raw'?'rawMp4':'processedMp4',destination=path.join(work,'outputs',name+'.mp4'),job=await host.jobs.start({operationId:++op,snapshotId:snapshot.snapshotId,kind,destination,end}),observed=[];let state;const limit=Date.now()+16000;while(Date.now()<limit){state=await host.jobs.state(job.jobId);observed.push(state);if(['completed','failed','cancelled'].includes(state.status))break;await wait(25);}assert.equal(state.status,'completed',JSON.stringify(state));assert.equal(state.facts.descriptorVersion,'vestra-finite/1');assert.ok(state.facts.ffmpegVersion);assert.ok(state.facts.libavfilterVersion);assert.equal(state.facts.videoStreamIndex,snapshot.videoStreamIndex);assert.equal(state.facts.range.start,snapshot.time);assert.equal(state.facts.range.end,end);assert.equal(state.facts.hasAudio,snapshot.audio!==null);assert.ok(state.facts.output.streams);outputs.push({name,snapshot,end,job,terminal:state,observed,destination});return state;}
- async function once(mode,name,{time=4,end=8,audio,includeSubtitles=true}={}){const x=await snap(mode,time,audio,includeSubtitles);await run(x,name,end);await host.snapshot.release(x.snapshotId,++op);return x;}
- async function offset(ms){const source=await host.source.state();await host.processing.replace({stage:'audio',resourceId:'offset-only',revision:++audioRevision,expectedGeneration:source.stamp.generation,nodes:[],offsetMs:ms});}
- function children(){return execFileSync('ps',['-axo','pid=,ppid=,command='],{encoding:'utf8'}).split('\n').map(l=>/^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(l)).filter(m=>m&&+m[2]===process.ppid&&m[3].includes('/dev/fd/0')&&/ffmpeg/.test(m[3])).map(m=>({pid:+m[1],command:m[3]}));}
- try{
-  for(const event of ['source.state','playback.backend','host.error'])await host.events.subscribe(event,data=>events.push({event,data}));
-  const a=await ready('a');assert.equal(a.audioTracks.length,2);checks.second=a.audioTracks.find(t=>t.streamIndex===2);checks.selected=a.audioTracks.find(t=>t.selected);assert.ok(checks.second);assert.equal(checks.selected.streamIndex,1);assert.notEqual(checks.second.trackId,checks.selected.trackId);
-  await host.plugins.load(path.join(work,'helper'));const helperEnd=Date.now()+5000;let helper;while(Date.now()<helperEnd){try{helper=JSON.parse(await fs.readFile(path.join(work,'helper-ready.json'),'utf8'));break;}catch(e){if(e.code!=='ENOENT')throw e;}await wait(10);}assert.ok(helper);checks.helper=helper;
-  await host.playback.set('volume',17);await host.playback.set('muted',true);const muted=await host.source.state();assert.equal(muted.output.muted,true);assert.equal(muted.output.volume,17);checks.deviceLow=muted.output;
-  await once('raw','raw-second-low-muted');await once('raw','raw-selected',{audio:{kind:'selected'}});await once('raw','raw-none',{audio:{kind:'none'}});
-  await host.playback.set('volume',91);await host.playback.set('muted',false);const loud=await host.source.state();assert.equal(loud.output.muted,false);assert.equal(loud.output.volume,91);checks.deviceHigh=loud.output;await once('raw','raw-second-high');
-  const old=await snap('processed');assert.equal(old.processing.audioOffsetMs,250);assert.equal(old.audio.streamIndex,2);assert.ok(old.processing.audio.some(r=>r.manifestId==='review.mp4-helper'&&r.nodes.some(n=>n.kind==='dynaudnorm'&&n.enabled)));assert.ok(old.subtitle.canonical.digest);assert.ok(old.subtitle.font.digest);checks.oldSnapshot=old;
-  await run(old,'processed-old-before');
-  await once('processed','positive-prefix',{time:0,end:1,includeSubtitles:false});
-  await offset(-250);const zero=await once('processed','processed-zero',{includeSubtitles:false});assert.equal(zero.audioOffsetMs,0);
-  await offset(-500);const negative=await once('processed','processed-negative',{includeSubtitles:false});assert.equal(negative.audioOffsetMs,-250);await once('processed','negative-tail',{time:11.4,end:12,includeSubtitles:false});await offset(0);
-  await host.plugins.disable('review.mp4-helper');const source=await host.source.state();await host.processing.replace({stage:'audio',resourceId:'new-audio',revision:1,expectedGeneration:source.stamp.generation,nodes:[{kind:'volume',gainDb:-12}],offsetMs:-250});await host.processing.replace({stage:'video',resourceId:'new-video',revision:1,expectedGeneration:source.stamp.generation,nodes:[{kind:'eq',brightness:-.12,contrast:1,saturation:1,gamma:1}]});
-  const newBytes=Buffer.from('1\n00:00:03,500 --> 00:00:08,500\nMP4 新字幕 CURRENT\n\n'),newState=await host.subtitles.state();await host.subtitles.begin(1,newState.source.generation,newBytes.length);await host.subtitles.append(1,0,newBytes.toString('base64'));const newSubtitle=await host.subtitles.commit({operationId:++subtitleOp,uploadId:1,sha256:(await import('node:crypto')).createHash('sha256').update(newBytes).digest('hex'),resourceId:'current',revision:1,expected:newState.selection.stamp});await host.subtitles.style({operationId:++subtitleOp,revision:1,expected:newSubtitle.selection.stamp,style:{fontId:newSubtitle.presentation.fonts[0].id,fontSize:36,color:'cyan',outline:0,marginPercent:10,offsetMs:500}});checks.changedSubtitle=await host.subtitles.state();
-  await ready('b');await run(old,'processed-old-after-switch-disable');assert.deepEqual(await host.snapshot.state(old.snapshotId),old);await host.snapshot.release(old.snapshotId,++op);
-  checks.endpoints=[];
-  for(const mode of ['raw','processed']){
-   for(const end of [4.32,4.38]){
-    const snapshot=await snap(mode,4.31,{kind:'none'},false),name=`endpoint-${mode}-${end===4.32?'empty':'two'}`,destination=path.join(work,'outputs',name+'.mp4'),job=await host.jobs.start({operationId:++op,snapshotId:snapshot.snapshotId,kind:mode==='raw'?'rawMp4':'processedMp4',end,destination});let terminal;const limit=Date.now()+10000;while(Date.now()<limit){terminal=await host.jobs.state(job.jobId);if(['completed','failed','cancelled'].includes(terminal.status))break;await wait(20);}
-    if(end===4.32){assert.equal(terminal.status,'failed','no source frame in [4.31,4.32)');assert.equal(terminal.publicationStarted,false);await assert.rejects(fs.stat(destination),{code:'ENOENT'});}
-    else{assert.equal(terminal.status,'completed');outputs.push({name,snapshot,end,job,terminal,observed:[terminal],destination});}
-    checks.endpoints.push({mode,start:4.31,end,expectedFrames:end===4.32?0:2,snapshot,job,terminal});await host.snapshot.release(snapshot.snapshotId,++op);
-   }
+export function clipShift(
+  values,
+  start,
+  end,
+  offsetMs = 0,
+  sourceDuration = duration,
+) {
+  const count = Math.round((end - start) * sampleRate),
+    output = new Float64Array(count),
+    first = Math.round((start - offsetMs / 1000) * sampleRate),
+    sourceEnd = Math.min(
+      values.length,
+      Math.round(sourceDuration * sampleRate),
+    );
+  for (let i = 0; i < count; i++) {
+    const index = first + i;
+    if (index >= 0 && index < sourceEnd) output[i] = values[index];
   }
-  // MP4-specific no-clobber and accepted cancel use current source, no old green suite.
-  const current=await host.source.state(),currentSnap=await host.snapshot.capture({operationId:++op,expected:current.stamp,time:0,audio:{kind:'none'}}),existing=path.join(work,'outputs/existing.mp4'),before=await fs.readFile(existing),collision=await host.jobs.start({operationId:++op,snapshotId:currentSnap.snapshotId,kind:'rawMp4',destination:existing,end:1});let collisionState;const collisionEnd=Date.now()+8000;while(Date.now()<collisionEnd){collisionState=await host.jobs.state(collision.jobId);if(['failed','completed','cancelled'].includes(collisionState.status))break;await wait(20);}assert.equal(collisionState.status,'failed');assert.equal(collisionState.publicationStarted,true);assert.deepEqual(await fs.readFile(existing),before);checks.noClobber=collisionState;
-  const cancelled=await host.jobs.start({operationId:++op,snapshotId:currentSnap.snapshotId,kind:'rawMp4',destination:path.join(work,'cancelled/cancelled.mp4'),end:12}),cancel=await host.jobs.cancel(cancelled.jobId,++op);let cancelState;const cancelEnd=Date.now()+8000;while(Date.now()<cancelEnd){cancelState=await host.jobs.state(cancelled.jobId);if(['failed','completed','cancelled'].includes(cancelState.status))break;await wait(20);}if(cancel.cancel==='requested'){assert.equal(cancelState.status,'cancelled');assert.deepEqual(await fs.readdir(path.join(work,'cancelled')),[]);}checks.cancel={request:cancel,terminal:cancelState,covered:cancel.cancel==='requested'};
-  await host.snapshot.release(currentSnap.snapshotId,++op);const cleanEnd=Date.now()+4000;let ps;while(Date.now()<cleanEnd){ps=children();if(!ps.length)break;await wait(20);}assert.deepEqual(ps,[]);assert.ok(!(await fs.readdir(path.join(work,'outputs'))).some(x=>x.startsWith('.tmp')));checks.cleanup={children:ps,entries:await fs.readdir(path.join(work,'outputs'))};const final=await host.source.state();assert.equal(final.paused,true);assert.equal(final.position,0);
-  await fs.writeFile(path.join(work,'consumer-result.json'),JSON.stringify({pass:true,outputs,checks,events,final},null,2));console.error('MEDIA_MP4_REVIEW_DONE');
- }catch(error){await fs.writeFile(path.join(work,'consumer-failure.json'),JSON.stringify({pass:false,error:String(error),stack:error.stack,outputs,checks,events},null,2));throw error;}
+  return output;
 }
-async function mp4Helper(host){
- const fs=await import('node:fs/promises'),path=await import('node:path'),{createHash}=await import('node:crypto'),work=process.env.VESTRA_MP4_REVIEW,state=await host.source.state();
- const audio=await host.processing.replace({stage:'audio',resourceId:'old-audio',revision:1,expectedGeneration:state.stamp.generation,nodes:[{kind:'volume',gainDb:-6},{kind:'dynaudnorm',enabled:true,maxGain:4,peak:.9}],offsetMs:250});const video=await host.processing.replace({stage:'video',resourceId:'old-video',revision:1,expectedGeneration:state.stamp.generation,nodes:[{kind:'eq',brightness:.12,contrast:1,saturation:1,gamma:1}]});
- const bytes=Buffer.from('1\n00:00:03,500 --> 00:00:08,500\nMP4 旧字幕 <b>字面</b> \\N\n\n'),s=host.subtitles,initial=await s.state();await s.begin(1,state.stamp.generation,bytes.length);await s.append(1,0,bytes.toString('base64'));const selected=await s.commit({operationId:1,uploadId:1,sha256:createHash('sha256').update(bytes).digest('hex'),resourceId:'old',revision:1,expected:initial.selection.stamp});const style=await s.style({operationId:2,revision:1,expected:selected.selection.stamp,style:{fontId:selected.presentation.fonts[0].id,fontSize:72,color:'yellow',outline:1,marginPercent:5,offsetMs:0}});await fs.writeFile(path.join(work,'helper-ready.json'),JSON.stringify({audio,video,selected,style},null,2));
+export function rms(values, start = 0, end = values.length) {
+  let sum = 0;
+  for (let i = start; i < end; i++) sum += values[i] ** 2;
+  return Math.sqrt(sum / Math.max(1, end - start));
 }
-async function decodeMp4(file,dir,execute){
- const probe=await execute(ffprobe,['-v','error','-show_streams','-show_format','-of','json',file]);const parsed=JSON.parse(probe.stdout);await writeFile(resolve(dir,'probe.json'),probe.stdout);
- await execute(ffmpeg,['-v','error','-i',file,'-map','0:v:0','-f','framemd5',resolve(dir,'video-framemd5.txt')]);
- const audio=parsed.streams.filter(s=>s.codec_type==='audio');let pcm=null;if(audio.length){await execute(ffmpeg,['-v','error','-i',file,'-map','0:a:0','-ar','48000','-ac','1','-f','f32le',resolve(dir,'audio.f32')]);pcm=pcmRead(await readFile(resolve(dir,'audio.f32')));}
- return{probe:parsed,pcm};
+export function toneAmplitude(
+  values,
+  frequency,
+  start = 0,
+  end = values.length,
+) {
+  let real = 0,
+    imaginary = 0;
+  for (let i = start; i < end; i++) {
+    const angle = (2 * Math.PI * frequency * i) / sampleRate;
+    real += values[i] * Math.cos(angle);
+    imaginary += values[i] * Math.sin(angle);
+  }
+  return (2 * Math.hypot(real, imaginary)) / Math.max(1, end - start);
 }
-const runIndex=process.argv.indexOf('--run-work');
-if(runIndex>=0){
- const prepared=resolve(process.argv[runIndex+1]),work=await mkdtemp(resolve(tmpdir(),'vestra-media-mp4-review-'));await cp(resolve(prepared,'fixtures'),resolve(work,'fixtures'),{recursive:true});await cp(resolve(prepared,'references'),resolve(work,'references'),{recursive:true});await copyFile(resolve(prepared,'analysis/preparation-result.json'),resolve(work,'preparation-result.json'));
- for(const d of ['outputs','cancelled','consumer','helper','analysis','fonts'])await mkdir(resolve(work,d));await writeFile(resolve(work,'outputs/existing.mp4'),Buffer.from('MP4 INDEPENDENT NO-CLOBBER\n'));await copyFile(resolve(import.meta.dirname,'../assets/fonts/noto-cjk/NotoSansCJKsc-Regular.otf'),resolve(work,'fonts/NotoSansCJKsc-Regular.otf'));
- for(const[name,fn]of [['consumer',mp4Consumer],['helper',mp4Helper]]){await writeFile(resolve(work,name,'manifest.json'),JSON.stringify({id:name==='helper'?'review.mp4-helper':'review.mp4-consumer',apiVersion:'vestra.experimental/0.1',entry:'main.mjs',capabilities:['playback.read','processing.video','processing.audio','subtitles.read','subtitles.control',...(name==='consumer'?['playback.control','media.read','media.control','events','plugins.manage']:[])]}));await writeFile(resolve(work,name,'main.mjs'),`export const activate=${fn.toString()};\n`);}
- const args=['--headless','--silent','--seconds','30','--plugin',resolve(work,'consumer')],child=spawnSync(resolve(import.meta.dirname,'../host/target/debug/vestra-host'),args,{encoding:'utf8',timeout:40000,env:{...process.env,VESTRA_MP4_REVIEW:work}});await writeFile(resolve(work,'host.stdout.log'),child.stdout??'');await writeFile(resolve(work,'host.stderr.log'),child.stderr??'');await writeFile(resolve(work,'command.json'),JSON.stringify({work,prepared,args,exitCode:child.status,signal:child.signal},null,2));console.log(JSON.stringify({work,exitCode:child.status}));assert.equal(child.status,0,child.stderr);assert.match(child.stderr,/MEDIA_MP4_REVIEW_DONE/);
- const commands=[];async function execute(binary,args){const r=spawnSync(binary,args,{encoding:'utf8'});commands.push({binary,args,exitCode:r.status,stderr:r.stderr});await writeFile(resolve(work,'analysis/commands.json'),JSON.stringify(commands,null,2));assert.equal(r.status,0,r.stderr);return r;}
- const c=JSON.parse(await readFile(resolve(work,'consumer-result.json'),'utf8')),decoded={},analysis={};
- try{
-  for(const out of c.outputs){const dir=resolve(work,'analysis',out.name);await mkdir(dir);const value=await decodeMp4(out.destination,dir,execute),video=value.probe.streams.filter(s=>s.codec_type==='video'),audio=value.probe.streams.filter(s=>s.codec_type==='audio');assert.equal(video.length,1);assert.equal(video[0].codec_name,'h264');assert.equal(video[0].pix_fmt,'yuv420p');assert.equal(audio.length,out.snapshot.audio?1:0);if(audio.length){assert.equal(audio[0].codec_name,'aac');assert.equal(audio[0].sample_rate,'48000');assert.equal(audio[0].channels,1);}const frameRows=(await readFile(resolve(dir,'video-framemd5.txt'),'utf8')).split('\n').filter(line=>line&&!line.startsWith('#')),expectedVideoFrames=Math.ceil(out.end*30-1e-7)-Math.ceil(out.snapshot.time*30-1e-7);assert.equal(frameRows.length,expectedVideoFrames,'half-open absolute source PTS frame count '+out.name);analysis[out.name]={probe:value.probe,decodedSamples:value.pcm?.length??0,decodedVideoFrames:frameRows.length,expectedVideoFrames};decoded[out.name]=value;}
-  const expected={};for(const[name,ref]of Object.entries({'raw-second-low-muted':'raw-track1-4to8.f32','raw-second-high':'raw-track1-4to8.f32','raw-selected':'raw-track0-4to8.f32','processed-old-before':'processed-source0-track1-4to8-offset250.f32','processed-old-after-switch-disable':'processed-source0-track1-4to8-offset250.f32','processed-zero':'processed-source0-track1-4to8-offset0.f32','processed-negative':'processed-source0-track1-4to8-offset-250.f32','positive-prefix':'positive250-prefix-zero.f32','negative-tail':'negative250-tail-zero.f32'}))expected[name]=pcmRead(await readFile(resolve(work,'references',ref)));
-  const comparisons={};for(const[name,reference]of Object.entries(expected)){const actual=decoded[name].pcm;assert.ok(actual);assert.ok(Math.abs(actual.length-reference.length)<=1024,'AAC sample count only bounded codec tail');const n=Math.min(actual.length,reference.length),whole=difference(actual,reference,0,n),prefix=difference(actual,reference,0,Math.min(14400,n));comparisons[name]={actualSamples:actual.length,expectedSamples:reference.length,whole,first300ms:prefix};assert.ok(whole.nrmse<=.06,`${name} whole NRMSE ${whole.nrmse}`);assert.ok(prefix.nrmse<=.06,`${name} first300ms NRMSE ${prefix.nrmse}`);}
-  comparisons.zeroVsWrongPreroll=difference(decoded['processed-zero'].pcm,pcmRead(await readFile(resolve(work,'references/processed-wrong-start4-track1.f32'))),0,14400);assert.ok(comparisons.zeroVsWrongPreroll.nrmse>.2,'actual whole-prefix DSP must distinguish wrong start4 reset');
-  comparisons.deviceInvariant=difference(decoded['raw-second-low-muted'].pcm,decoded['raw-second-high'].pcm);assert.equal(comparisons.deviceInvariant.maxAbsDiff,0);comparisons.oldFrozenPcm=difference(decoded['processed-old-before'].pcm,decoded['processed-old-after-switch-disable'].pcm);assert.equal(comparisons.oldFrozenPcm.maxAbsDiff,0);
-  const beforeMd5=(await readFile(resolve(work,'analysis/processed-old-before/video-framemd5.txt'),'utf8')).split('\n').filter(l=>l&&!l.startsWith('#'));const afterMd5=(await readFile(resolve(work,'analysis/processed-old-after-switch-disable/video-framemd5.txt'),'utf8')).split('\n').filter(l=>l&&!l.startsWith('#'));assert.deepEqual(beforeMd5,afterMd5,'old decoded video remains exact after source/config/owner changes');
-  const spectra={};for(const name of ['raw-selected','raw-second-low-muted']){const pcm=decoded[name].pcm;spectra[name]={amplitude440:toneAmplitude(pcm,440,24000,48000),amplitude880:toneAmplitude(pcm,880,24000,48000)};}assert.ok(spectra['raw-selected'].amplitude440>spectra['raw-selected'].amplitude880*10);assert.ok(spectra['raw-second-low-muted'].amplitude880>spectra['raw-second-low-muted'].amplitude440*10);
-  const prefix=decoded['positive-prefix'].pcm,tail=decoded['negative-tail'].pcm,silence={positivePrefix:{rms:rms(prefix,0,9600),max:Math.max(...prefix.slice(0,9600).map(Math.abs))},negativeTail:{rms:rms(tail,19200,28800),max:Math.max(...tail.slice(19200,28800).map(Math.abs))}};for(const part of Object.values(silence)){assert.ok(part.rms<=1e-4);assert.ok(part.max<=1e-3);}
-  // Fresh MP4-specific independent video recipe, not reused PNG business assumptions.
-  const oldText='MP4 旧字幕 <b>字面</b> \\N';
-  const oldSrt=`1\n00:00:03,500 --> 00:00:08,500\n${oldText}\n\n`,oldVtt=`WEBVTT\n\n1\n00:00:03.500 --> 00:00:08.500\n${oldText.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')}\n\n`;
-  await writeFile(resolve(work,'references/mp4-old.srt'),oldSrt);await writeFile(resolve(work,'references/mp4-old.vtt'),oldVtt);
-  const oldSnapshot=c.checks.oldSnapshot,hash=x=>createHash('sha256').update(x).digest('hex');assert.equal(oldSnapshot.subtitle.canonical.digest,hash(oldSrt));assert.equal(oldSnapshot.subtitle.derived.digest,hash(oldVtt));assert.equal(oldSnapshot.subtitle.font.digest,hash(await readFile(resolve(work,'fonts/NotoSansCJKsc-Regular.otf'))));assert.equal(oldSnapshot.subtitle.font.faceIndex,0);assert.equal(oldSnapshot.subtitle.coverageValidated,true);
-  const force='FontName=Noto Sans CJK SC,FontSize=12,PrimaryColour=&H0000FFFF,SecondaryColour=&H0000FFFF,OutlineColour=&H00000000,BackColour=&H00000000,BorderStyle=1,Outline=0.16666666666666666,Shadow=0,Alignment=2,MarginL=4,MarginR=4,MarginV=9,Bold=0,Italic=0,Spacing=0,ScaleX=1,ScaleY=1,PlayResX=320,PlayResY=180,ScaledBorderAndShadow=yes';
-  const base="eq=brightness=0.12:contrast=1:saturation=1:gamma=1,scale=w='max(1,round(iw*sar))':h=ih,setsar=1";
-  for(const withSubtitle of [true,false]){const filter=base+(withSubtitle?`,subtitles=filename='${resolve(work,'references/mp4-old.vtt')}':fontsdir='${resolve(work,'fonts')}':force_style='${force}'`:'')+',trim=start=4:end=8,setpts=PTS-STARTPTS,pad=ceil(iw/2)*2:ceil(ih/2)*2:color=black';await execute(ffmpeg,['-v','error','-threads','1','-filter_threads','1','-i',resolve(work,'fixtures/a.mp4'),'-map','0:v:0','-vf',filter,'-an','-c:v','libx264','-preset','veryfast','-crf','18','-pix_fmt','yuv420p','-threads','1',resolve(work,'references',withSubtitle?'old-video-subtitled.mp4':'old-video-no-subtitle.mp4')]);}
-  function videoRgb(file){const r=spawnSync(ffmpeg,['-v','error','-i',file,'-map','0:v:0','-pix_fmt','rgb24','-f','rawvideo','-'],{maxBuffer:64*1024*1024});assert.equal(r.status,0,r.stderr?.toString());assert.equal(r.stdout.length%(320*180*3),0);return r.stdout;}
-  const oldVideo=videoRgb(resolve(work,'outputs/processed-old-before.mp4')),videoReference=videoRgb(resolve(work,'references/old-video-subtitled.mp4')),withoutGlyphs=videoRgb(resolve(work,'references/old-video-no-subtitle.mp4'));assert.equal(oldVideo.length,videoReference.length);assert.equal(oldVideo.length,withoutGlyphs.length);let videoSum=0,glyphSum=0,glyphSamples=0,glyphPixels=0;
-  for(let i=0;i<oldVideo.length;i++)videoSum+=Math.abs(oldVideo[i]-videoReference[i]);
-  for(let frame=0;frame<oldVideo.length/(320*180*3);frame++)for(let y=120;y<180;y++)for(let x=20;x<300;x++){const i=(frame*320*180+y*320+x)*3;let changed=false;for(let k=0;k<3;k++)if(Math.abs(videoReference[i+k]-withoutGlyphs[i+k])>30)changed=true;if(changed){glyphPixels++;for(let k=0;k<3;k++){glyphSum+=Math.abs(oldVideo[i+k]-videoReference[i+k]);glyphSamples++;}}}
-  const videoComparison={frames:oldVideo.length/(320*180*3),fullRgbMae:videoSum/oldVideo.length,glyphMaskPixels:glyphPixels,glyphRgbMae:glyphSum/Math.max(1,glyphSamples)};assert.ok(videoComparison.fullRgbMae<=2);assert.ok(glyphPixels>100);assert.ok(videoComparison.glyphRgbMae<=3);
-  function bandPeak(values,start,end){const half=240,step=96;let peak={sample:0,amplitude:-1};for(let center=Math.round(start*48000)+half;center<Math.min(values.length-half,Math.round(end*48000));center+=step){const amplitude=toneAmplitude(values,3300,center-half,center+half);if(amplitude>peak.amplitude)peak={sample:center,amplitude};}return{...peak,time:peak.sample/48000};}
-  const rawPeak=bandPeak(decoded['raw-second-low-muted'].pcm,0,.6),positivePeak=bandPeak(decoded['processed-old-before'].pcm,0,.7),expectedPositivePeak=bandPeak(expected['processed-old-before'],0,.7),rawLaterPeak=bandPeak(decoded['raw-second-low-muted'].pcm,1.35,1.7),negativePeak=bandPeak(decoded['processed-negative'].pcm,1.1,1.4),expectedNegativePeak=bandPeak(expected['processed-negative'],1.1,1.4);
-  assert.ok(Math.abs(positivePeak.time-expectedPositivePeak.time)<=.02);assert.ok(Math.abs((positivePeak.time-rawPeak.time)-.25)<=.03);assert.ok(Math.abs(negativePeak.time-expectedNegativePeak.time)<=.02);assert.ok(Math.abs((negativePeak.time-rawLaterPeak.time)+.25)<=.03);
-  function flashFrames(rgb){const hits=[];for(let f=0;f<rgb.length/(320*180*3);f++){let sum=0,n=0;for(let y=18;y<42;y++)for(let x=148;x<172;x++){const i=(f*320*180+y*320+x)*3;sum+=Math.min(rgb[i],rgb[i+1],rgb[i+2]);n++;}if(sum/n>220)hits.push(f);}return hits;}
-  const rawVideo=videoRgb(resolve(work,'outputs/raw-second-low-muted.mp4')),rawFlash=flashFrames(rawVideo),processedFlash=flashFrames(oldVideo);assert.ok(rawFlash.includes(0));assert.ok(processedFlash.includes(0));assert.ok(rawFlash.every(f=>f<=7));assert.ok(processedFlash.every(f=>f<=7));const sync={rawPeak,positivePeak,expectedPositivePeak,rawLaterPeak,negativePeak,expectedNegativePeak,rawFlashFrames:rawFlash,processedFlashFrames:processedFlash,videoFrameRate:30,limits:'Finite source4.12s pulse vs video4.0-4.2s marker; AAC/30fps tolerance, no device AV latency claim.'};
-  const result={pass:true,comparisons,spectra,silence,videoComparison,sync,analysis,checks:c.checks,thresholds:{wholeNrmse:.06,first300msNrmse:.06,first300msSamples:14400,sampleRate:48000,channels:1,aacCountTolerance:1024,silentRms:1e-4,silentMax:1e-3},limits:['Finite H264/AAC MP4 only; public selected stream mapping and complete independent decode.','No per-output lag or gain fitting; actual AAC sample counts/PTS/padding retained. No realtime DSP internal-history parity.','Original source0 DSP reference and independently indexed offsets, not copied candidate aresample chain.','Independent old-recipe glyph/video and finite AV pulse/frame markers checked; FFmpeg/libass provider exclusivity/any-script shaping and physical AV latency are not proved.']};await writeFile(resolve(work,'result.json'),JSON.stringify(result,null,2));console.log(JSON.stringify({pass:true,work}));
- }catch(error){await writeFile(resolve(work,'analysis-failure.json'),JSON.stringify({pass:false,error:String(error),stack:error.stack,analysis,consumer:c},null,2));throw error;}
+export function difference(
+  actual,
+  reference,
+  start = 0,
+  end = Math.min(actual.length, reference.length),
+) {
+  let squared = 0,
+    absolute = 0,
+    max = 0,
+    dot = 0,
+    aa = 0,
+    rr = 0;
+  for (let i = start; i < end; i++) {
+    const a = actual[i],
+      r = reference[i],
+      d = a - r;
+    squared += d * d;
+    absolute += Math.abs(d);
+    max = Math.max(max, Math.abs(d));
+    dot += a * r;
+    aa += a * a;
+    rr += r * r;
+  }
+  const n = Math.max(1, end - start);
+  return {
+    samples: n,
+    rmse: Math.sqrt(squared / n),
+    nrmse: Math.sqrt(squared / Math.max(rr, 1e-30)),
+    mae: absolute / n,
+    maxAbsDiff: max,
+    correlation: dot / Math.max(Math.sqrt(aa * rr), 1e-30),
+    gain: dot / Math.max(rr, 1e-30),
+  };
+}
+export function makeSignal(track, frequency) {
+  const values = new Float64Array(sampleRate * duration),
+    pulseTimes =
+      track === 0
+        ? [0.75, 2.25, 4.12, 5, 6.4, 8.1, 10.1]
+        : [1.25, 2.75, 4.12, 5.5, 6.9, 8.6, 10.6];
+  for (let i = 0; i < values.length; i++) {
+    const t = i / sampleRate;
+    let amplitude;
+    if (track === 0)
+      amplitude =
+        t < 2.5
+          ? 0.025
+          : t < 4
+            ? 0.58
+            : t < 4.6
+              ? 0.035
+              : t < 6
+                ? 0.08
+                : t < 8
+                  ? 0.33
+                  : t < 10
+                    ? 0.055
+                    : 0.4;
+    else
+      amplitude =
+        t < 1
+          ? 0.35
+          : t < 2.5
+            ? 0.025
+            : t < 4
+              ? 0.7
+              : t < 4.6
+                ? 0.025
+                : t < 6
+                  ? 0.06
+                  : t < 8
+                    ? 0.24
+                    : t < 10
+                      ? 0.045
+                      : 0.32;
+    let pulse = 0;
+    for (const at of pulseTimes) {
+      const d = Math.abs(t - at);
+      if (d < 0.012)
+        pulse +=
+          0.22 *
+          (1 - d / 0.012) *
+          Math.sin(2 * Math.PI * (track === 0 ? 2200 : 3300) * t);
+    }
+    values[i] = Math.max(
+      -0.95,
+      Math.min(0.95, amplitude * Math.sin(2 * Math.PI * frequency * t) + pulse),
+    );
+  }
+  return values;
+}
+async function prepare() {
+  const work = await mkdtemp(resolve(tmpdir(), "vestra-media-mp4-prepare-")),
+    commands = [];
+  for (const d of ["fixtures", "references", "analysis"])
+    await mkdir(resolve(work, d));
+  async function execute(binary, args, options = {}) {
+    const result = spawnSync(binary, args, { encoding: "utf8", ...options });
+    const record = {
+      binary,
+      args,
+      exitCode: result.status,
+      signal: result.signal,
+      stderr:
+        typeof result.stderr === "string"
+          ? result.stderr
+          : result.stderr?.toString(),
+    };
+    commands.push(record);
+    await writeFile(
+      resolve(work, "commands.json"),
+      JSON.stringify(commands, null, 2),
+    );
+    assert.equal(result.status, 0, record.stderr);
+    return result;
+  }
+  try {
+    const signals = {};
+    for (const [source, frequencies] of [
+      ["a", [440, 880]],
+      ["b", [660, 1320]],
+    ]) {
+      for (let track = 0; track < 2; track++) {
+        const values = makeSignal(track, frequencies[track]),
+          path = resolve(work, "fixtures", `${source}-track${track}.f32`);
+        await writeFile(path, pcmBuffer(values));
+        signals[`${source}-${track}`] = {
+          frequency: frequencies[track],
+          rawPath: path,
+          samples: values.length,
+          rms: rms(values),
+        };
+      }
+      const color = source === "a" ? "red" : "blue",
+        video = `testsrc2=size=320x180:rate=30,drawbox=x=0:y=0:w=64:h=64:color=${color}:t=fill,drawbox=x=140:y=10:w=40:h=40:color=white:t=fill:enable='between(t,4,4.2)'`;
+      await execute(ffmpeg, [
+        "-v",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        video,
+        "-f",
+        "f32le",
+        "-ar",
+        String(sampleRate),
+        "-ac",
+        "1",
+        "-i",
+        signals[`${source}-0`].rawPath,
+        "-f",
+        "f32le",
+        "-ar",
+        String(sampleRate),
+        "-ac",
+        "1",
+        "-i",
+        signals[`${source}-1`].rawPath,
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
+        "-map",
+        "2:a:0",
+        "-metadata:s:a:0",
+        `title=${frequencies[0]}Hz First`,
+        "-metadata:s:a:0",
+        "language=eng",
+        "-metadata:s:a:1",
+        `title=${frequencies[1]}Hz Second`,
+        "-metadata:s:a:1",
+        "language=zho",
+        "-disposition:a:0",
+        "default",
+        "-disposition:a:1",
+        "0",
+        "-t",
+        String(duration),
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-ar",
+        String(sampleRate),
+        "-ac",
+        "1",
+        resolve(work, "fixtures", source + ".mp4"),
+      ]);
+      const probe = await execute(ffprobe, [
+        "-v",
+        "error",
+        "-show_streams",
+        "-show_format",
+        "-of",
+        "json",
+        resolve(work, "fixtures", source + ".mp4"),
+      ]);
+      await writeFile(
+        resolve(work, "fixtures", source + "-probe.json"),
+        probe.stdout,
+      );
+      const streams = JSON.parse(probe.stdout).streams,
+        audio = streams.filter((s) => s.codec_type === "audio");
+      assert.equal(audio.length, 2);
+      assert.equal(audio[0].sample_rate, "48000");
+      assert.equal(audio[1].sample_rate, "48000");
+    }
+    const decoded = [];
+    for (let track = 0; track < 2; track++) {
+      const dest = resolve(
+        work,
+        "references",
+        `a-source-aac-track${track}.f32`,
+      );
+      await execute(ffmpeg, [
+        "-v",
+        "error",
+        "-i",
+        resolve(work, "fixtures/a.mp4"),
+        "-map",
+        `0:a:${track}`,
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        String(sampleRate),
+        "-f",
+        "f32le",
+        dest,
+      ]);
+      const values = pcmRead(await readFile(dest));
+      const window = [
+        Math.round(4.7 * sampleRate),
+        Math.round(5.3 * sampleRate),
+      ];
+      const row = {
+        track,
+        sourceDecodedSamples: values.length,
+        sourceDecodedSeconds: values.length / sampleRate,
+        rms: rms(values, ...window),
+        amplitude440: toneAmplitude(values, 440, ...window),
+        amplitude880: toneAmplitude(values, 880, ...window),
+      };
+      assert.ok(
+        track === 0
+          ? row.amplitude440 > row.amplitude880 * 10
+          : row.amplitude880 > row.amplitude440 * 10,
+        "source AAC decoded spectrum distinguishes actual tracks",
+      );
+      decoded.push(row);
+      await writeFile(
+        resolve(work, "references", `raw-track${track}-4to8.f32`),
+        pcmBuffer(clipShift(values, clip.start, clip.end)),
+      );
+    }
+    const full = resolve(work, "references/processed-full-source0-track1.f32"),
+      wrong = resolve(work, "references/processed-wrong-start4-track1.f32");
+    await execute(ffmpeg, [
+      "-v",
+      "error",
+      "-threads",
+      "1",
+      "-filter_threads",
+      "1",
+      "-i",
+      resolve(work, "fixtures/a.mp4"),
+      "-map",
+      "0:a:1",
+      "-vn",
+      "-af",
+      audioRecipe,
+      "-ar",
+      String(sampleRate),
+      "-ac",
+      "1",
+      "-f",
+      "f32le",
+      full,
+    ]);
+    await execute(ffmpeg, [
+      "-v",
+      "error",
+      "-threads",
+      "1",
+      "-filter_threads",
+      "1",
+      "-ss",
+      "4",
+      "-i",
+      resolve(work, "fixtures/a.mp4"),
+      "-map",
+      "0:a:1",
+      "-vn",
+      "-af",
+      audioRecipe,
+      "-t",
+      "4",
+      "-ar",
+      String(sampleRate),
+      "-ac",
+      "1",
+      "-f",
+      "f32le",
+      wrong,
+    ]);
+    const fullPcm = pcmRead(await readFile(full)),
+      wrongPcm = pcmRead(await readFile(wrong)),
+      correct = clipShift(fullPcm, 4, 8),
+      offsetReferences = {};
+    for (const offsetMs of [0, 250, -250]) {
+      const pcm = clipShift(fullPcm, 4, 8, offsetMs);
+      const name = `processed-source0-track1-4to8-offset${offsetMs}.f32`;
+      await writeFile(resolve(work, "references", name), pcmBuffer(pcm));
+      offsetReferences[offsetMs] = {
+        name,
+        samples: pcm.length,
+        vsNoOffset: difference(pcm, correct),
+      };
+    }
+    const prefix = clipShift(fullPcm, 0, 1, 250),
+      tail = clipShift(fullPcm, 11.4, 12, -250);
+    await writeFile(
+      resolve(work, "references/positive250-prefix-zero.f32"),
+      pcmBuffer(prefix),
+    );
+    await writeFile(
+      resolve(work, "references/negative250-tail-zero.f32"),
+      pcmBuffer(tail),
+    );
+    assert.equal(rms(prefix, 0, 12000), 0);
+    assert.equal(rms(tail, Math.round(0.35 * sampleRate)), 0);
+    const preroll = {
+      fullVsWrongFirst300ms: difference(
+        correct,
+        wrongPcm,
+        0,
+        Math.round(0.3 * sampleRate),
+      ),
+      fullVsWrongWhole: difference(correct, wrongPcm),
+    };
+    assert.ok(
+      preroll.fullVsWrongFirst300ms.nrmse > 0.05,
+      "fixture must distinguish source0 dynamic history from start4 filter reset",
+    );
+    const roundTripInput = resolve(
+        work,
+        "references/processed-source0-track1-4to8-offset0.f32",
+      ),
+      roundTripAac = resolve(work, "references/reference-roundtrip.m4a"),
+      roundTripDecoded = resolve(
+        work,
+        "references/reference-roundtrip-decoded.f32",
+      );
+    await execute(ffmpeg, [
+      "-v",
+      "error",
+      "-f",
+      "f32le",
+      "-ar",
+      String(sampleRate),
+      "-ac",
+      "1",
+      "-i",
+      roundTripInput,
+      "-c:a",
+      "aac",
+      "-b:a",
+      "192k",
+      roundTripAac,
+    ]);
+    await execute(ffmpeg, [
+      "-v",
+      "error",
+      "-i",
+      roundTripAac,
+      "-vn",
+      "-ar",
+      String(sampleRate),
+      "-ac",
+      "1",
+      "-f",
+      "f32le",
+      roundTripDecoded,
+    ]);
+    const rt = pcmRead(await readFile(roundTripDecoded));
+    const rtProbe = await execute(ffprobe, [
+      "-v",
+      "error",
+      "-show_streams",
+      "-show_format",
+      "-of",
+      "json",
+      roundTripAac,
+    ]);
+    await writeFile(
+      resolve(work, "references/reference-roundtrip-probe.json"),
+      rtProbe.stdout,
+    );
+    const result = {
+      prepared: true,
+      hostRun: false,
+      work,
+      sourceDuration: duration,
+      sampleRate,
+      clip,
+      signals,
+      decoded,
+      preroll,
+      offsetReferences,
+      zeroPadding: {
+        positivePrefixSamples: 12000,
+        positivePrefixRms: rms(prefix, 0, 12000),
+        negativeTailStartSample: Math.round(0.35 * sampleRate),
+        negativeTailRms: rms(tail, Math.round(0.35 * sampleRate)),
+      },
+      aacCalibration: {
+        decodedSamples: rt.length,
+        decodedSeconds: rt.length / sampleRate,
+        vsPreEncode: difference(rt, correct),
+        boundaryFirst300ms: difference(
+          rt,
+          correct,
+          0,
+          Math.round(0.3 * sampleRate),
+        ),
+      },
+      referenceAudioRecipe: audioRecipe,
+      limits: [
+        "Preparation only: no host, public audio selection or MP4 job behavior tested.",
+        "Source references start from actual decoded source AAC; generated pre-AAC f32 is not the raw-export ground truth.",
+        "Offset references are independently indexed PCM with explicit zero pads, not a copy of candidate asetpts/aresample filter chain.",
+        "AAC priming/padding/sample counts preserved; no claim of exact sample or realtime DSP-history parity.",
+      ],
+    };
+    await writeFile(
+      resolve(work, "analysis/preparation-result.json"),
+      JSON.stringify(result, null, 2),
+    );
+    console.log(
+      JSON.stringify({
+        prepared: true,
+        hostRun: false,
+        work,
+        preroll,
+        aacCalibration: result.aacCalibration,
+      }),
+    );
+  } catch (error) {
+    await writeFile(
+      resolve(work, "analysis/preparation-failure.json"),
+      JSON.stringify(
+        {
+          prepared: false,
+          hostRun: false,
+          error: String(error),
+          stack: error.stack,
+        },
+        null,
+        2,
+      ),
+    );
+    console.log(JSON.stringify({ work, prepared: false, hostRun: false }));
+    throw error;
+  }
+}
+if (process.argv.includes("--prepare")) await prepare();
+
+async function mp4Consumer(host) {
+  const assert = (await import("node:assert/strict")).default,
+    fs = await import("node:fs/promises"),
+    path = await import("node:path"),
+    { execFileSync } = await import("node:child_process");
+  const work = process.env.VESTRA_MP4_REVIEW,
+    outputs = [],
+    checks = {},
+    events = [],
+    wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  let op = 0,
+    audioRevision = 0,
+    subtitleOp = 0;
+  async function ready(source) {
+    const opened = await host.source.submit({
+        kind: "open",
+        source: path.join(work, "fixtures", source + ".mp4"),
+        startPaused: true,
+      }),
+      end = Date.now() + 5000;
+    let state;
+    while (Date.now() < end) {
+      state = await host.source.state();
+      if (
+        state.phase === "ready" &&
+        state.stamp.generation === opened.ticket.stamp.generation
+      )
+        break;
+      await wait(20);
+    }
+    assert.equal(state.phase, "ready");
+    await wait(350);
+    return host.source.state();
+  }
+  async function snap(
+    mode,
+    time = 4,
+    audio = { kind: "track", trackId: checks.second.trackId },
+    includeSubtitles = true,
+  ) {
+    const source = await host.source.state(),
+      processing = await host.processing.state(),
+      subtitle = await host.subtitles.state(),
+      payload = {
+        operationId: ++op,
+        expected: source.stamp,
+        time,
+        audio,
+        ...(mode === "processed"
+          ? {
+              mode,
+              expectedProcessingRevision: processing.configurationRevision,
+              includeSubtitles,
+              ...(includeSubtitles
+                ? {
+                    expectedSubtitle: {
+                      selection: subtitle.selection.stamp,
+                      presentationRevision: subtitle.presentation.revision,
+                    },
+                  }
+                : {}),
+            }
+          : {}),
+      };
+    const frozen = await host.snapshot.capture(payload);
+    assert.equal(
+      frozen.videoStreamIndex,
+      0,
+      "actual single-video fixture ff-index is 0",
+    );
+    if (audio.kind === "none") assert.equal(frozen.audio, null);
+    else
+      assert.equal(
+        frozen.audio.streamIndex,
+        audio.kind === "selected"
+          ? checks.selected.streamIndex
+          : checks.second.streamIndex,
+      );
+    if (mode === "processed")
+      assert.equal(frozen.preroll, "source-zero-to-start");
+    return frozen;
+  }
+  async function run(snapshot, name, end = 8) {
+    const kind = snapshot.kind === "raw" ? "rawMp4" : "processedMp4",
+      destination = path.join(work, "outputs", name + ".mp4"),
+      job = await host.jobs.start({
+        operationId: ++op,
+        snapshotId: snapshot.snapshotId,
+        kind,
+        destination,
+        end,
+      }),
+      observed = [];
+    let state;
+    const limit = Date.now() + 16000;
+    while (Date.now() < limit) {
+      state = await host.jobs.state(job.jobId);
+      observed.push(state);
+      if (["completed", "failed", "cancelled"].includes(state.status)) break;
+      await wait(25);
+    }
+    assert.equal(state.status, "completed", JSON.stringify(state));
+    assert.equal(state.facts.descriptorVersion, "vestra-finite/1");
+    assert.ok(state.facts.ffmpegVersion);
+    assert.ok(state.facts.libavfilterVersion);
+    assert.equal(state.facts.videoStreamIndex, snapshot.videoStreamIndex);
+    assert.equal(state.facts.range.start, snapshot.time);
+    assert.equal(state.facts.range.end, end);
+    assert.equal(state.facts.hasAudio, snapshot.audio !== null);
+    assert.ok(state.facts.output.streams);
+    outputs.push({
+      name,
+      snapshot,
+      end,
+      job,
+      terminal: state,
+      observed,
+      destination,
+    });
+    return state;
+  }
+  async function once(
+    mode,
+    name,
+    { time = 4, end = 8, audio, includeSubtitles = true } = {},
+  ) {
+    const x = await snap(mode, time, audio, includeSubtitles);
+    await run(x, name, end);
+    await host.snapshot.release(x.snapshotId, ++op);
+    return x;
+  }
+  async function offset(ms) {
+    const source = await host.source.state();
+    await host.processing.replace({
+      stage: "audio",
+      resourceId: "offset-only",
+      revision: ++audioRevision,
+      expectedGeneration: source.stamp.generation,
+      nodes: [],
+      offsetMs: ms,
+    });
+  }
+  function children() {
+    return execFileSync("ps", ["-axo", "pid=,ppid=,command="], {
+      encoding: "utf8",
+    })
+      .split("\n")
+      .map((l) => /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(l))
+      .filter(
+        (m) =>
+          m &&
+          +m[2] === process.ppid &&
+          m[3].includes("/dev/fd/0") &&
+          /ffmpeg/.test(m[3]),
+      )
+      .map((m) => ({ pid: +m[1], command: m[3] }));
+  }
+  try {
+    for (const event of ["source.state", "playback.backend", "host.error"])
+      await host.events.subscribe(event, (data) =>
+        events.push({ event, data }),
+      );
+    const a = await ready("a");
+    assert.equal(a.audioTracks.length, 2);
+    checks.second = a.audioTracks.find((t) => t.streamIndex === 2);
+    checks.selected = a.audioTracks.find((t) => t.selected);
+    assert.ok(checks.second);
+    assert.equal(checks.selected.streamIndex, 1);
+    assert.notEqual(checks.second.trackId, checks.selected.trackId);
+    await host.plugins.load(path.join(work, "helper"));
+    const helperEnd = Date.now() + 5000;
+    let helper;
+    while (Date.now() < helperEnd) {
+      try {
+        helper = JSON.parse(
+          await fs.readFile(path.join(work, "helper-ready.json"), "utf8"),
+        );
+        break;
+      } catch (e) {
+        if (e.code !== "ENOENT") throw e;
+      }
+      await wait(10);
+    }
+    assert.ok(helper);
+    checks.helper = helper;
+    await host.playback.set("volume", 17);
+    await host.playback.set("muted", true);
+    const muted = await host.source.state();
+    assert.equal(muted.output.muted, true);
+    assert.equal(muted.output.volume, 17);
+    checks.deviceLow = muted.output;
+    await once("raw", "raw-second-low-muted");
+    await once("raw", "raw-selected", { audio: { kind: "selected" } });
+    await once("raw", "raw-none", { audio: { kind: "none" } });
+    await host.playback.set("volume", 91);
+    await host.playback.set("muted", false);
+    const loud = await host.source.state();
+    assert.equal(loud.output.muted, false);
+    assert.equal(loud.output.volume, 91);
+    checks.deviceHigh = loud.output;
+    await once("raw", "raw-second-high");
+    const old = await snap("processed");
+    assert.equal(old.processing.audioOffsetMs, 250);
+    assert.equal(old.audio.streamIndex, 2);
+    assert.ok(
+      old.processing.audio.some(
+        (r) =>
+          r.manifestId === "review.mp4-helper" &&
+          r.nodes.some((n) => n.kind === "dynaudnorm" && n.enabled),
+      ),
+    );
+    assert.ok(old.subtitle.canonical.digest);
+    assert.ok(old.subtitle.font.digest);
+    checks.oldSnapshot = old;
+    await run(old, "processed-old-before");
+    await once("processed", "positive-prefix", {
+      time: 0,
+      end: 1,
+      includeSubtitles: false,
+    });
+    await offset(-250);
+    const zero = await once("processed", "processed-zero", {
+      includeSubtitles: false,
+    });
+    assert.equal(zero.audioOffsetMs, 0);
+    await offset(-500);
+    const negative = await once("processed", "processed-negative", {
+      includeSubtitles: false,
+    });
+    assert.equal(negative.audioOffsetMs, -250);
+    await once("processed", "negative-tail", {
+      time: 11.4,
+      end: 12,
+      includeSubtitles: false,
+    });
+    await offset(0);
+    await host.plugins.disable("review.mp4-helper");
+    const source = await host.source.state();
+    await host.processing.replace({
+      stage: "audio",
+      resourceId: "new-audio",
+      revision: 1,
+      expectedGeneration: source.stamp.generation,
+      nodes: [{ kind: "volume", gainDb: -12 }],
+      offsetMs: -250,
+    });
+    await host.processing.replace({
+      stage: "video",
+      resourceId: "new-video",
+      revision: 1,
+      expectedGeneration: source.stamp.generation,
+      nodes: [
+        { kind: "eq", brightness: -0.12, contrast: 1, saturation: 1, gamma: 1 },
+      ],
+    });
+    const newBytes = Buffer.from(
+        "1\n00:00:03,500 --> 00:00:08,500\nMP4 新字幕 CURRENT\n\n",
+      ),
+      newState = await host.subtitles.state();
+    await host.subtitles.begin(1, newState.source.generation, newBytes.length);
+    await host.subtitles.append(1, 0, newBytes.toString("base64"));
+    const newSubtitle = await host.subtitles.commit({
+      operationId: ++subtitleOp,
+      uploadId: 1,
+      sha256: (await import("node:crypto"))
+        .createHash("sha256")
+        .update(newBytes)
+        .digest("hex"),
+      resourceId: "current",
+      revision: 1,
+      expected: newState.selection.stamp,
+    });
+    await host.subtitles.style({
+      operationId: ++subtitleOp,
+      revision: 1,
+      expected: newSubtitle.selection.stamp,
+      style: {
+        fontId: newSubtitle.presentation.fonts[0].id,
+        fontSize: 36,
+        color: "cyan",
+        outline: 0,
+        marginPercent: 10,
+        offsetMs: 500,
+      },
+    });
+    checks.changedSubtitle = await host.subtitles.state();
+    await ready("b");
+    await run(old, "processed-old-after-switch-disable");
+    assert.deepEqual(await host.snapshot.state(old.snapshotId), old);
+    await host.snapshot.release(old.snapshotId, ++op);
+    checks.endpoints = [];
+    for (const mode of ["raw", "processed"]) {
+      for (const end of [4.32, 4.38]) {
+        const snapshot = await snap(mode, 4.31, { kind: "none" }, false),
+          name = `endpoint-${mode}-${end === 4.32 ? "empty" : "two"}`,
+          destination = path.join(work, "outputs", name + ".mp4"),
+          job = await host.jobs.start({
+            operationId: ++op,
+            snapshotId: snapshot.snapshotId,
+            kind: mode === "raw" ? "rawMp4" : "processedMp4",
+            end,
+            destination,
+          });
+        let terminal;
+        const limit = Date.now() + 10000;
+        while (Date.now() < limit) {
+          terminal = await host.jobs.state(job.jobId);
+          if (["completed", "failed", "cancelled"].includes(terminal.status))
+            break;
+          await wait(20);
+        }
+        if (end === 4.32) {
+          assert.equal(
+            terminal.status,
+            "failed",
+            "no source frame in [4.31,4.32)",
+          );
+          assert.equal(terminal.publicationStarted, false);
+          await assert.rejects(fs.stat(destination), { code: "ENOENT" });
+        } else {
+          assert.equal(terminal.status, "completed");
+          outputs.push({
+            name,
+            snapshot,
+            end,
+            job,
+            terminal,
+            observed: [terminal],
+            destination,
+          });
+        }
+        checks.endpoints.push({
+          mode,
+          start: 4.31,
+          end,
+          expectedFrames: end === 4.32 ? 0 : 2,
+          snapshot,
+          job,
+          terminal,
+        });
+        await host.snapshot.release(snapshot.snapshotId, ++op);
+      }
+    }
+    // MP4-specific no-clobber and accepted cancel use current source, no old green suite.
+    const current = await host.source.state(),
+      currentSnap = await host.snapshot.capture({
+        operationId: ++op,
+        expected: current.stamp,
+        time: 0,
+        audio: { kind: "none" },
+      }),
+      existing = path.join(work, "outputs/existing.mp4"),
+      before = await fs.readFile(existing),
+      collision = await host.jobs.start({
+        operationId: ++op,
+        snapshotId: currentSnap.snapshotId,
+        kind: "rawMp4",
+        destination: existing,
+        end: 1,
+      });
+    let collisionState;
+    const collisionEnd = Date.now() + 8000;
+    while (Date.now() < collisionEnd) {
+      collisionState = await host.jobs.state(collision.jobId);
+      if (["failed", "completed", "cancelled"].includes(collisionState.status))
+        break;
+      await wait(20);
+    }
+    assert.equal(collisionState.status, "failed");
+    assert.equal(collisionState.publicationStarted, true);
+    assert.deepEqual(await fs.readFile(existing), before);
+    checks.noClobber = collisionState;
+    const cancelled = await host.jobs.start({
+        operationId: ++op,
+        snapshotId: currentSnap.snapshotId,
+        kind: "rawMp4",
+        destination: path.join(work, "cancelled/cancelled.mp4"),
+        end: 12,
+      }),
+      cancel = await host.jobs.cancel(cancelled.jobId, ++op);
+    let cancelState;
+    const cancelEnd = Date.now() + 8000;
+    while (Date.now() < cancelEnd) {
+      cancelState = await host.jobs.state(cancelled.jobId);
+      if (["failed", "completed", "cancelled"].includes(cancelState.status))
+        break;
+      await wait(20);
+    }
+    if (cancel.cancel === "requested") {
+      assert.equal(cancelState.status, "cancelled");
+      assert.deepEqual(await fs.readdir(path.join(work, "cancelled")), []);
+    }
+    checks.cancel = {
+      request: cancel,
+      terminal: cancelState,
+      covered: cancel.cancel === "requested",
+    };
+    await host.snapshot.release(currentSnap.snapshotId, ++op);
+    const cleanEnd = Date.now() + 4000;
+    let ps;
+    while (Date.now() < cleanEnd) {
+      ps = children();
+      if (!ps.length) break;
+      await wait(20);
+    }
+    assert.deepEqual(ps, []);
+    assert.ok(
+      !(await fs.readdir(path.join(work, "outputs"))).some((x) =>
+        x.startsWith(".tmp"),
+      ),
+    );
+    checks.cleanup = {
+      children: ps,
+      entries: await fs.readdir(path.join(work, "outputs")),
+    };
+    const final = await host.source.state();
+    assert.equal(final.paused, true);
+    assert.equal(final.position, 0);
+    await fs.writeFile(
+      path.join(work, "consumer-result.json"),
+      JSON.stringify({ pass: true, outputs, checks, events, final }, null, 2),
+    );
+    console.error("MEDIA_MP4_REVIEW_DONE");
+  } catch (error) {
+    await fs.writeFile(
+      path.join(work, "consumer-failure.json"),
+      JSON.stringify(
+        {
+          pass: false,
+          error: String(error),
+          stack: error.stack,
+          outputs,
+          checks,
+          events,
+        },
+        null,
+        2,
+      ),
+    );
+    throw error;
+  }
+}
+async function mp4Helper(host) {
+  const fs = await import("node:fs/promises"),
+    path = await import("node:path"),
+    { createHash } = await import("node:crypto"),
+    work = process.env.VESTRA_MP4_REVIEW,
+    state = await host.source.state();
+  const audio = await host.processing.replace({
+    stage: "audio",
+    resourceId: "old-audio",
+    revision: 1,
+    expectedGeneration: state.stamp.generation,
+    nodes: [
+      { kind: "volume", gainDb: -6 },
+      { kind: "dynaudnorm", enabled: true, maxGain: 4, peak: 0.9 },
+    ],
+    offsetMs: 250,
+  });
+  const video = await host.processing.replace({
+    stage: "video",
+    resourceId: "old-video",
+    revision: 1,
+    expectedGeneration: state.stamp.generation,
+    nodes: [
+      { kind: "eq", brightness: 0.12, contrast: 1, saturation: 1, gamma: 1 },
+    ],
+  });
+  const bytes = Buffer.from(
+      "1\n00:00:03,500 --> 00:00:08,500\nMP4 旧字幕 <b>字面</b> \\N\n\n",
+    ),
+    s = host.subtitles,
+    initial = await s.state();
+  await s.begin(1, state.stamp.generation, bytes.length);
+  await s.append(1, 0, bytes.toString("base64"));
+  const selected = await s.commit({
+    operationId: 1,
+    uploadId: 1,
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+    resourceId: "old",
+    revision: 1,
+    expected: initial.selection.stamp,
+  });
+  const style = await s.style({
+    operationId: 2,
+    revision: 1,
+    expected: selected.selection.stamp,
+    style: {
+      fontId: selected.presentation.fonts[0].id,
+      fontSize: 72,
+      color: "yellow",
+      outline: 1,
+      marginPercent: 5,
+      offsetMs: 0,
+    },
+  });
+  await fs.writeFile(
+    path.join(work, "helper-ready.json"),
+    JSON.stringify({ audio, video, selected, style }, null, 2),
+  );
+}
+async function decodeMp4(file, dir, execute) {
+  const probe = await execute(ffprobe, [
+    "-v",
+    "error",
+    "-show_streams",
+    "-show_format",
+    "-of",
+    "json",
+    file,
+  ]);
+  const parsed = JSON.parse(probe.stdout);
+  await writeFile(resolve(dir, "probe.json"), probe.stdout);
+  await execute(ffmpeg, [
+    "-v",
+    "error",
+    "-i",
+    file,
+    "-map",
+    "0:v:0",
+    "-f",
+    "framemd5",
+    resolve(dir, "video-framemd5.txt"),
+  ]);
+  const audio = parsed.streams.filter((s) => s.codec_type === "audio");
+  let pcm = null;
+  if (audio.length) {
+    await execute(ffmpeg, [
+      "-v",
+      "error",
+      "-i",
+      file,
+      "-map",
+      "0:a:0",
+      "-ar",
+      "48000",
+      "-ac",
+      "1",
+      "-f",
+      "f32le",
+      resolve(dir, "audio.f32"),
+    ]);
+    pcm = pcmRead(await readFile(resolve(dir, "audio.f32")));
+  }
+  return { probe: parsed, pcm };
+}
+const runIndex = process.argv.indexOf("--run-work");
+if (runIndex >= 0) {
+  const prepared = resolve(process.argv[runIndex + 1]),
+    work = await mkdtemp(resolve(tmpdir(), "vestra-media-mp4-review-"));
+  await cp(resolve(prepared, "fixtures"), resolve(work, "fixtures"), {
+    recursive: true,
+  });
+  await cp(resolve(prepared, "references"), resolve(work, "references"), {
+    recursive: true,
+  });
+  await copyFile(
+    resolve(prepared, "analysis/preparation-result.json"),
+    resolve(work, "preparation-result.json"),
+  );
+  for (const d of [
+    "outputs",
+    "cancelled",
+    "consumer",
+    "helper",
+    "analysis",
+    "fonts",
+  ])
+    await mkdir(resolve(work, d));
+  await writeFile(
+    resolve(work, "outputs/existing.mp4"),
+    Buffer.from("MP4 INDEPENDENT NO-CLOBBER\n"),
+  );
+  await copyFile(
+    resolve(
+      import.meta.dirname,
+      "../assets/fonts/noto-cjk/NotoSansCJKsc-Regular.otf",
+    ),
+    resolve(work, "fonts/NotoSansCJKsc-Regular.otf"),
+  );
+  for (const [name, fn] of [
+    ["consumer", mp4Consumer],
+    ["helper", mp4Helper],
+  ]) {
+    await writeFile(
+      resolve(work, name, "manifest.json"),
+      JSON.stringify({
+        id: name === "helper" ? "review.mp4-helper" : "review.mp4-consumer",
+        apiVersion: "vestra.experimental/0.1",
+        entry: "main.mjs",
+        capabilities: [
+          "playback.read",
+          "processing.video",
+          "processing.audio",
+          "subtitles.read",
+          "subtitles.control",
+          ...(name === "consumer"
+            ? [
+                "playback.control",
+                "media.read",
+                "media.control",
+                "events",
+                "plugins.manage",
+              ]
+            : []),
+        ],
+      }),
+    );
+    await writeFile(
+      resolve(work, name, "main.mjs"),
+      `export const activate=${fn.toString()};\n`,
+    );
+  }
+  const args = [
+      "--headless",
+      "--silent",
+      "--seconds",
+      "30",
+      "--plugin",
+      resolve(work, "consumer"),
+    ],
+    child = spawnSync(
+      resolve(import.meta.dirname, "../host/target/debug/vestra-host"),
+      args,
+      {
+        encoding: "utf8",
+        timeout: 40000,
+        env: { ...process.env, VESTRA_MP4_REVIEW: work },
+      },
+    );
+  await writeFile(resolve(work, "host.stdout.log"), child.stdout ?? "");
+  await writeFile(resolve(work, "host.stderr.log"), child.stderr ?? "");
+  await writeFile(
+    resolve(work, "command.json"),
+    JSON.stringify(
+      { work, prepared, args, exitCode: child.status, signal: child.signal },
+      null,
+      2,
+    ),
+  );
+  console.log(JSON.stringify({ work, exitCode: child.status }));
+  assert.equal(child.status, 0, child.stderr);
+  assert.match(child.stderr, /MEDIA_MP4_REVIEW_DONE/);
+  const commands = [];
+  async function execute(binary, args) {
+    const r = spawnSync(binary, args, { encoding: "utf8" });
+    commands.push({ binary, args, exitCode: r.status, stderr: r.stderr });
+    await writeFile(
+      resolve(work, "analysis/commands.json"),
+      JSON.stringify(commands, null, 2),
+    );
+    assert.equal(r.status, 0, r.stderr);
+    return r;
+  }
+  const c = JSON.parse(
+      await readFile(resolve(work, "consumer-result.json"), "utf8"),
+    ),
+    decoded = {},
+    analysis = {};
+  try {
+    for (const out of c.outputs) {
+      const dir = resolve(work, "analysis", out.name);
+      await mkdir(dir);
+      const value = await decodeMp4(out.destination, dir, execute),
+        video = value.probe.streams.filter((s) => s.codec_type === "video"),
+        audio = value.probe.streams.filter((s) => s.codec_type === "audio");
+      assert.equal(video.length, 1);
+      assert.equal(video[0].codec_name, "h264");
+      assert.equal(video[0].pix_fmt, "yuv420p");
+      assert.equal(audio.length, out.snapshot.audio ? 1 : 0);
+      if (audio.length) {
+        assert.equal(audio[0].codec_name, "aac");
+        assert.equal(audio[0].sample_rate, "48000");
+        assert.equal(audio[0].channels, 1);
+      }
+      const frameRows = (
+          await readFile(resolve(dir, "video-framemd5.txt"), "utf8")
+        )
+          .split("\n")
+          .filter((line) => line && !line.startsWith("#")),
+        expectedVideoFrames =
+          Math.ceil(out.end * 30 - 1e-7) -
+          Math.ceil(out.snapshot.time * 30 - 1e-7);
+      assert.equal(
+        frameRows.length,
+        expectedVideoFrames,
+        "half-open absolute source PTS frame count " + out.name,
+      );
+      analysis[out.name] = {
+        probe: value.probe,
+        decodedSamples: value.pcm?.length ?? 0,
+        decodedVideoFrames: frameRows.length,
+        expectedVideoFrames,
+      };
+      decoded[out.name] = value;
+    }
+    const expected = {};
+    for (const [name, ref] of Object.entries({
+      "raw-second-low-muted": "raw-track1-4to8.f32",
+      "raw-second-high": "raw-track1-4to8.f32",
+      "raw-selected": "raw-track0-4to8.f32",
+      "processed-old-before": "processed-source0-track1-4to8-offset250.f32",
+      "processed-old-after-switch-disable":
+        "processed-source0-track1-4to8-offset250.f32",
+      "processed-zero": "processed-source0-track1-4to8-offset0.f32",
+      "processed-negative": "processed-source0-track1-4to8-offset-250.f32",
+      "positive-prefix": "positive250-prefix-zero.f32",
+      "negative-tail": "negative250-tail-zero.f32",
+    }))
+      expected[name] = pcmRead(
+        await readFile(resolve(work, "references", ref)),
+      );
+    const comparisons = {};
+    for (const [name, reference] of Object.entries(expected)) {
+      const actual = decoded[name].pcm;
+      assert.ok(actual);
+      assert.ok(
+        Math.abs(actual.length - reference.length) <= 1024,
+        "AAC sample count only bounded codec tail",
+      );
+      const n = Math.min(actual.length, reference.length),
+        whole = difference(actual, reference, 0, n),
+        prefix = difference(actual, reference, 0, Math.min(14400, n));
+      comparisons[name] = {
+        actualSamples: actual.length,
+        expectedSamples: reference.length,
+        whole,
+        first300ms: prefix,
+      };
+      assert.ok(whole.nrmse <= 0.06, `${name} whole NRMSE ${whole.nrmse}`);
+      assert.ok(
+        prefix.nrmse <= 0.06,
+        `${name} first300ms NRMSE ${prefix.nrmse}`,
+      );
+    }
+    comparisons.zeroVsWrongPreroll = difference(
+      decoded["processed-zero"].pcm,
+      pcmRead(
+        await readFile(
+          resolve(work, "references/processed-wrong-start4-track1.f32"),
+        ),
+      ),
+      0,
+      14400,
+    );
+    assert.ok(
+      comparisons.zeroVsWrongPreroll.nrmse > 0.2,
+      "actual whole-prefix DSP must distinguish wrong start4 reset",
+    );
+    comparisons.deviceInvariant = difference(
+      decoded["raw-second-low-muted"].pcm,
+      decoded["raw-second-high"].pcm,
+    );
+    assert.equal(comparisons.deviceInvariant.maxAbsDiff, 0);
+    comparisons.oldFrozenPcm = difference(
+      decoded["processed-old-before"].pcm,
+      decoded["processed-old-after-switch-disable"].pcm,
+    );
+    assert.equal(comparisons.oldFrozenPcm.maxAbsDiff, 0);
+    const beforeMd5 = (
+      await readFile(
+        resolve(work, "analysis/processed-old-before/video-framemd5.txt"),
+        "utf8",
+      )
+    )
+      .split("\n")
+      .filter((l) => l && !l.startsWith("#"));
+    const afterMd5 = (
+      await readFile(
+        resolve(
+          work,
+          "analysis/processed-old-after-switch-disable/video-framemd5.txt",
+        ),
+        "utf8",
+      )
+    )
+      .split("\n")
+      .filter((l) => l && !l.startsWith("#"));
+    assert.deepEqual(
+      beforeMd5,
+      afterMd5,
+      "old decoded video remains exact after source/config/owner changes",
+    );
+    const spectra = {};
+    for (const name of ["raw-selected", "raw-second-low-muted"]) {
+      const pcm = decoded[name].pcm;
+      spectra[name] = {
+        amplitude440: toneAmplitude(pcm, 440, 24000, 48000),
+        amplitude880: toneAmplitude(pcm, 880, 24000, 48000),
+      };
+    }
+    assert.ok(
+      spectra["raw-selected"].amplitude440 >
+        spectra["raw-selected"].amplitude880 * 10,
+    );
+    assert.ok(
+      spectra["raw-second-low-muted"].amplitude880 >
+        spectra["raw-second-low-muted"].amplitude440 * 10,
+    );
+    const prefix = decoded["positive-prefix"].pcm,
+      tail = decoded["negative-tail"].pcm,
+      silence = {
+        positivePrefix: {
+          rms: rms(prefix, 0, 9600),
+          max: Math.max(...prefix.slice(0, 9600).map(Math.abs)),
+        },
+        negativeTail: {
+          rms: rms(tail, 19200, 28800),
+          max: Math.max(...tail.slice(19200, 28800).map(Math.abs)),
+        },
+      };
+    for (const part of Object.values(silence)) {
+      assert.ok(part.rms <= 1e-4);
+      assert.ok(part.max <= 1e-3);
+    }
+    // Fresh MP4-specific independent video recipe, not reused PNG business assumptions.
+    const oldText = "MP4 旧字幕 <b>字面</b> \\N";
+    const oldSrt = `1\n00:00:03,500 --> 00:00:08,500\n${oldText}\n\n`,
+      oldVtt = `WEBVTT\n\n1\n00:00:03.500 --> 00:00:08.500\n${oldText.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")}\n\n`;
+    await writeFile(resolve(work, "references/mp4-old.srt"), oldSrt);
+    await writeFile(resolve(work, "references/mp4-old.vtt"), oldVtt);
+    const oldSnapshot = c.checks.oldSnapshot,
+      hash = (x) => createHash("sha256").update(x).digest("hex");
+    assert.equal(oldSnapshot.subtitle.canonical.digest, hash(oldSrt));
+    assert.equal(oldSnapshot.subtitle.derived.digest, hash(oldVtt));
+    assert.equal(
+      oldSnapshot.subtitle.font.digest,
+      hash(await readFile(resolve(work, "fonts/NotoSansCJKsc-Regular.otf"))),
+    );
+    assert.equal(oldSnapshot.subtitle.font.faceIndex, 0);
+    assert.equal(oldSnapshot.subtitle.coverageValidated, true);
+    const force =
+      "FontName=Noto Sans CJK SC,FontSize=12,PrimaryColour=&H0000FFFF,SecondaryColour=&H0000FFFF,OutlineColour=&H00000000,BackColour=&H00000000,BorderStyle=1,Outline=0.16666666666666666,Shadow=0,Alignment=2,MarginL=4,MarginR=4,MarginV=9,Bold=0,Italic=0,Spacing=0,ScaleX=1,ScaleY=1,PlayResX=320,PlayResY=180,ScaledBorderAndShadow=yes";
+    const base =
+      "eq=brightness=0.12:contrast=1:saturation=1:gamma=1,scale=w='max(1,round(iw*sar))':h=ih,setsar=1";
+    for (const withSubtitle of [true, false]) {
+      const filter =
+        base +
+        (withSubtitle
+          ? `,subtitles=filename='${resolve(work, "references/mp4-old.vtt")}':fontsdir='${resolve(work, "fonts")}':force_style='${force}'`
+          : "") +
+        ",trim=start=4:end=8,setpts=PTS-STARTPTS,pad=ceil(iw/2)*2:ceil(ih/2)*2:color=black";
+      await execute(ffmpeg, [
+        "-v",
+        "error",
+        "-threads",
+        "1",
+        "-filter_threads",
+        "1",
+        "-i",
+        resolve(work, "fixtures/a.mp4"),
+        "-map",
+        "0:v:0",
+        "-vf",
+        filter,
+        "-an",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "18",
+        "-pix_fmt",
+        "yuv420p",
+        "-threads",
+        "1",
+        resolve(
+          work,
+          "references",
+          withSubtitle
+            ? "old-video-subtitled.mp4"
+            : "old-video-no-subtitle.mp4",
+        ),
+      ]);
+    }
+    function videoRgb(file) {
+      const r = spawnSync(
+        ffmpeg,
+        [
+          "-v",
+          "error",
+          "-i",
+          file,
+          "-map",
+          "0:v:0",
+          "-pix_fmt",
+          "rgb24",
+          "-f",
+          "rawvideo",
+          "-",
+        ],
+        { maxBuffer: 64 * 1024 * 1024 },
+      );
+      assert.equal(r.status, 0, r.stderr?.toString());
+      assert.equal(r.stdout.length % (320 * 180 * 3), 0);
+      return r.stdout;
+    }
+    const oldVideo = videoRgb(
+        resolve(work, "outputs/processed-old-before.mp4"),
+      ),
+      videoReference = videoRgb(
+        resolve(work, "references/old-video-subtitled.mp4"),
+      ),
+      withoutGlyphs = videoRgb(
+        resolve(work, "references/old-video-no-subtitle.mp4"),
+      );
+    assert.equal(oldVideo.length, videoReference.length);
+    assert.equal(oldVideo.length, withoutGlyphs.length);
+    let videoSum = 0,
+      glyphSum = 0,
+      glyphSamples = 0,
+      glyphPixels = 0;
+    for (let i = 0; i < oldVideo.length; i++)
+      videoSum += Math.abs(oldVideo[i] - videoReference[i]);
+    for (let frame = 0; frame < oldVideo.length / (320 * 180 * 3); frame++)
+      for (let y = 120; y < 180; y++)
+        for (let x = 20; x < 300; x++) {
+          const i = (frame * 320 * 180 + y * 320 + x) * 3;
+          let changed = false;
+          for (let k = 0; k < 3; k++)
+            if (Math.abs(videoReference[i + k] - withoutGlyphs[i + k]) > 30)
+              changed = true;
+          if (changed) {
+            glyphPixels++;
+            for (let k = 0; k < 3; k++) {
+              glyphSum += Math.abs(oldVideo[i + k] - videoReference[i + k]);
+              glyphSamples++;
+            }
+          }
+        }
+    const videoComparison = {
+      frames: oldVideo.length / (320 * 180 * 3),
+      fullRgbMae: videoSum / oldVideo.length,
+      glyphMaskPixels: glyphPixels,
+      glyphRgbMae: glyphSum / Math.max(1, glyphSamples),
+    };
+    assert.ok(videoComparison.fullRgbMae <= 2);
+    assert.ok(glyphPixels > 100);
+    assert.ok(videoComparison.glyphRgbMae <= 3);
+    function bandPeak(values, start, end) {
+      const half = 240,
+        step = 96;
+      let peak = { sample: 0, amplitude: -1 };
+      for (
+        let center = Math.round(start * 48000) + half;
+        center < Math.min(values.length - half, Math.round(end * 48000));
+        center += step
+      ) {
+        const amplitude = toneAmplitude(
+          values,
+          3300,
+          center - half,
+          center + half,
+        );
+        if (amplitude > peak.amplitude) peak = { sample: center, amplitude };
+      }
+      return { ...peak, time: peak.sample / 48000 };
+    }
+    const rawPeak = bandPeak(decoded["raw-second-low-muted"].pcm, 0, 0.6),
+      positivePeak = bandPeak(decoded["processed-old-before"].pcm, 0, 0.7),
+      expectedPositivePeak = bandPeak(expected["processed-old-before"], 0, 0.7),
+      rawLaterPeak = bandPeak(decoded["raw-second-low-muted"].pcm, 1.35, 1.7),
+      negativePeak = bandPeak(decoded["processed-negative"].pcm, 1.1, 1.4),
+      expectedNegativePeak = bandPeak(expected["processed-negative"], 1.1, 1.4);
+    assert.ok(Math.abs(positivePeak.time - expectedPositivePeak.time) <= 0.02);
+    assert.ok(Math.abs(positivePeak.time - rawPeak.time - 0.25) <= 0.03);
+    assert.ok(Math.abs(negativePeak.time - expectedNegativePeak.time) <= 0.02);
+    assert.ok(Math.abs(negativePeak.time - rawLaterPeak.time + 0.25) <= 0.03);
+    function flashFrames(rgb) {
+      const hits = [];
+      for (let f = 0; f < rgb.length / (320 * 180 * 3); f++) {
+        let sum = 0,
+          n = 0;
+        for (let y = 18; y < 42; y++)
+          for (let x = 148; x < 172; x++) {
+            const i = (f * 320 * 180 + y * 320 + x) * 3;
+            sum += Math.min(rgb[i], rgb[i + 1], rgb[i + 2]);
+            n++;
+          }
+        if (sum / n > 220) hits.push(f);
+      }
+      return hits;
+    }
+    const rawVideo = videoRgb(
+        resolve(work, "outputs/raw-second-low-muted.mp4"),
+      ),
+      rawFlash = flashFrames(rawVideo),
+      processedFlash = flashFrames(oldVideo);
+    assert.ok(rawFlash.includes(0));
+    assert.ok(processedFlash.includes(0));
+    assert.ok(rawFlash.every((f) => f <= 7));
+    assert.ok(processedFlash.every((f) => f <= 7));
+    const sync = {
+      rawPeak,
+      positivePeak,
+      expectedPositivePeak,
+      rawLaterPeak,
+      negativePeak,
+      expectedNegativePeak,
+      rawFlashFrames: rawFlash,
+      processedFlashFrames: processedFlash,
+      videoFrameRate: 30,
+      limits:
+        "Finite source4.12s pulse vs video4.0-4.2s marker; AAC/30fps tolerance, no device AV latency claim.",
+    };
+    const result = {
+      pass: true,
+      comparisons,
+      spectra,
+      silence,
+      videoComparison,
+      sync,
+      analysis,
+      checks: c.checks,
+      thresholds: {
+        wholeNrmse: 0.06,
+        first300msNrmse: 0.06,
+        first300msSamples: 14400,
+        sampleRate: 48000,
+        channels: 1,
+        aacCountTolerance: 1024,
+        silentRms: 1e-4,
+        silentMax: 1e-3,
+      },
+      limits: [
+        "Finite H264/AAC MP4 only; public selected stream mapping and complete independent decode.",
+        "No per-output lag or gain fitting; actual AAC sample counts/PTS/padding retained. No realtime DSP internal-history parity.",
+        "Original source0 DSP reference and independently indexed offsets, not copied candidate aresample chain.",
+        "Independent old-recipe glyph/video and finite AV pulse/frame markers checked; FFmpeg/libass provider exclusivity/any-script shaping and physical AV latency are not proved.",
+      ],
+    };
+    await writeFile(
+      resolve(work, "result.json"),
+      JSON.stringify(result, null, 2),
+    );
+    console.log(JSON.stringify({ pass: true, work }));
+  } catch (error) {
+    await writeFile(
+      resolve(work, "analysis-failure.json"),
+      JSON.stringify(
+        {
+          pass: false,
+          error: String(error),
+          stack: error.stack,
+          analysis,
+          consumer: c,
+        },
+        null,
+        2,
+      ),
+    );
+    throw error;
+  }
 }

@@ -8,6 +8,7 @@ pub mod font_carrier;
 mod media_jobs;
 mod media_tracks;
 mod media_worker;
+mod menu;
 mod native_subtitle;
 mod offline_audio;
 mod offline_descriptor;
@@ -88,6 +89,7 @@ struct Reply {
 }
 enum MenuAction {
     Invoke(String),
+    Hover(usize, String),
     Reset,
     Back,
     Dismiss,
@@ -495,40 +497,36 @@ impl Host {
                         let result = self.refresh_menu();
                         self.report_menu(result);
                     }
-                    MenuAction::Dismiss => {
-                        self.menu_open = false;
-                        if let Some(shell) = &self.shell {
-                            let result = shell
-                                .invoke("close-menu", &[])
-                                .map(|_| ())
-                                .map_err(anyhow::Error::from);
+                    MenuAction::Dismiss => self.close_menu(),
+                    MenuAction::Hover(level, token) => {
+                        let mut path = match menu::parse_token(&token) {
+                            Some(menu::Token::Group(path)) => path,
+                            Some(menu::Token::Command { .. }) => {
+                                self.menu_path.iter().take(level).cloned().collect()
+                            }
+                            None => return,
+                        };
+                        path.truncate(level + 1);
+                        if path != self.menu_path {
+                            self.menu_path = path;
+                            let result = self.refresh_menu();
                             self.report_menu(result);
                         }
                     }
-                    MenuAction::Invoke(token) => {
-                        if let Some(group) = token.strip_prefix("g:") {
-                            if let Ok(path) = serde_json::from_str::<Vec<String>>(group) {
-                                self.menu_path = path;
-                                let result = self.refresh_menu();
-                                self.report_menu(result);
-                            }
-                        } else if let Some(command) = token.strip_prefix("c:")
-                            && let Some((owner, id)) = command.split_once(':')
-                            && let Ok(owner) = owner.parse::<u64>()
-                        {
-                            self.menu_open = false;
-                            if let Some(shell) = &self.shell {
-                                let result = shell
-                                    .invoke("close-menu", &[])
-                                    .map(|_| ())
-                                    .map_err(anyhow::Error::from);
-                                self.report_menu(result);
-                            }
-                            if let Err(error) = self.execute_command(owner, id) {
+                    MenuAction::Invoke(token) => match menu::parse_token(&token) {
+                        Some(menu::Token::Group(path)) => {
+                            self.menu_path = path;
+                            let result = self.refresh_menu();
+                            self.report_menu(result);
+                        }
+                        Some(menu::Token::Command { owner, id }) => {
+                            self.close_menu();
+                            if let Err(error) = self.execute_command(owner, &id) {
                                 eprintln!("menu execute: {:?}", error);
                             }
                         }
-                    }
+                        None => (),
+                    },
                 }
             }
             Event::Reply(reply, result) => self.respond(reply, result),
@@ -784,6 +782,21 @@ impl Host {
             slint_interpreter::Value::Void
         })?;
         let events = self.events.clone();
+        window.set_callback("menu-hover", move |args| {
+            if let [
+                slint_interpreter::Value::Number(level),
+                slint_interpreter::Value::String(token),
+            ] = args
+                && *level >= 0.
+            {
+                let _ = events.send(Event::MenuAction(
+                    generation,
+                    MenuAction::Hover(*level as usize, token.to_string()),
+                ));
+            }
+            slint_interpreter::Value::Void
+        })?;
+        let events = self.events.clone();
         window.set_callback("menu-invoke", move |args| {
             if let Some(slint_interpreter::Value::String(token)) = args.first() {
                 let _ = events.send(Event::MenuAction(
@@ -805,25 +818,33 @@ impl Host {
                 slint_interpreter::Value::Void
             })?;
         }
-        window.set_property(
-            "menu-entries",
-            menu_values(&self.commands.snapshot().roots, &self.menu_path)?,
+        let roots = self.commands.snapshot().roots;
+        set_menu_model(
+            window,
+            menu_levels(window, &roots, &mut self.menu_path.clone())?,
         )?;
-        window.set_property("menu-can-back", (!self.menu_path.is_empty()).into())?;
         if let Some(image) = &self.last_image {
             window.set_property("video-frame", image.clone().into())?;
         }
         Ok(())
     }
-    fn refresh_menu(&self) -> Result<()> {
+    fn refresh_menu(&mut self) -> Result<()> {
         if let Some(shell) = &self.shell {
-            set_menu_model(
-                shell,
-                menu_values(&self.commands.snapshot().roots, &self.menu_path)?,
-            )?;
-            shell.set_property("menu-can-back", (!self.menu_path.is_empty()).into())?;
+            let roots = self.commands.snapshot().roots;
+            set_menu_model(shell, menu_levels(shell, &roots, &mut self.menu_path)?)?;
         }
         Ok(())
+    }
+    fn close_menu(&mut self) {
+        self.menu_open = false;
+        self.menu_path.clear();
+        if let Some(shell) = &self.shell {
+            let result = shell
+                .invoke("close-menu", &[])
+                .map(|_| ())
+                .map_err(anyhow::Error::from);
+            self.report_menu(result);
+        }
     }
     fn prepare_mount_tick(&mut self) {
         if self.preparing.is_none() {
@@ -1516,41 +1537,39 @@ impl Host {
         Ok(Some(value))
     }
 }
-/// Registry revisions include changes outside this visible layer and identical
-/// state publications. Keep the live model on equal projection, so pointer and
-/// keyboard focus are not discarded on every playback state event. A genuinely
-/// changed menu layer still replaces the model and resets its cursor normally.
+/// Projects the open chain at the origin the view recorded for this opening.
+fn menu_levels(
+    window: &slint_interpreter::ComponentInstance,
+    roots: &[commands::MenuNode],
+    path: &mut Vec<String>,
+) -> Result<slint_interpreter::Value> {
+    *path = menu::valid_path(roots, path);
+    let number = |name: &str| match window.get_property(name) {
+        Ok(slint_interpreter::Value::Number(value)) if value.is_finite() => value,
+        _ => 0.,
+    };
+    let origin = menu::Point {
+        x: number("menu-origin-x"),
+        y: number("menu-origin-y"),
+    };
+    let size = menu::Point {
+        x: number("logical-width"),
+        y: number("logical-height"),
+    };
+    ui_values::from_json(&menu::levels(roots, path, origin, size))
+}
+/// Registry revisions include changes outside the open levels and identical
+/// state publications. Reconcile in place so unchanged panels keep their live
+/// elements; a changed level replaces only that level's row.
 fn set_menu_model(
     window: &slint_interpreter::ComponentInstance,
     next: slint_interpreter::Value,
 ) -> Result<()> {
-    let current = window.get_property("menu-entries")?;
-    if ui_values::to_json(&current)? != ui_values::to_json(&next)? {
-        window.set_property("menu-entries", next)?;
+    let current = window.get_property("menu-levels")?;
+    if !ui_values::reconcile(&current, &next)? {
+        window.set_property("menu-levels", next)?;
     }
     Ok(())
-}
-fn menu_values(roots: &[commands::MenuNode], path: &[String]) -> Result<slint_interpreter::Value> {
-    let mut nodes = roots;
-    for title in path {
-        nodes = nodes
-            .iter()
-            .find_map(|n| match n {
-                commands::MenuNode::Group { title: t, children } if t == title => {
-                    Some(children.as_slice())
-                }
-                _ => None,
-            })
-            .unwrap_or(&[]);
-    }
-    let output=nodes.iter().map(|node|match node {
-        commands::MenuNode::Group{title,..}=>{
-            let mut next=path.to_vec(); next.push(title.clone());
-            json!({"token":format!("g:{}",json!(next)),"title":title,"enabled":true,"checked":false,"busy":false,"reason":"","has-children":true})
-        }
-        commands::MenuNode::Command{entry}=>json!({"token":format!("c:{}:{}",entry.key.owner,entry.key.local_id),"title":entry.declaration.title,"enabled":entry.state.enabled,"checked":entry.state.checked.unwrap_or(false),"busy":entry.state.busy,"reason":entry.state.reason.clone().unwrap_or_default(),"has-children":false})
-    }).collect::<Vec<_>>();
-    ui_values::from_json(&json!(output))
 }
 fn string<'a>(params: &'a Value, key: &str) -> std::result::Result<&'a str, RpcError> {
     params[key]
@@ -1761,13 +1780,11 @@ fn main() -> Result<()> {
                 host.window_tick();
                 host.activation_tick();
                 host.package_tick();
-                if let Some(window) = host.shell.as_ref() {
-                    let snapshot = host.commands.snapshot();
-                    if snapshot.revision != menu_revision {
-                        menu_revision = snapshot.revision;
-                        if let Err(error) = menu_values(&snapshot.roots, &host.menu_path)
-                            .and_then(|value| set_menu_model(window, value))
-                        {
+                if host.shell.is_some() {
+                    let revision = host.commands.snapshot().revision;
+                    if revision != menu_revision {
+                        menu_revision = revision;
+                        if let Err(error) = host.refresh_menu() {
                             host.broadcast(
                                 "host.error",
                                 json!({"code":"menu-projection","message":error.to_string()}),

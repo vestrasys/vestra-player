@@ -139,6 +139,8 @@ impl Backend {
                 let mut sources = crate::source_backend::Sources::default();
                 let mut geometry = crate::source_geometry::Geometry::new(publish_gate.clone());
                 let mut geometry_error = false;
+                #[cfg(feature = "producer-audio-probe")]
+                let mut producer_was_active = false;
                 let mut processing = crate::processing::Processing::default();
                 let mut subtitles = crate::subtitle_backend::Subtitles::new(fonts);
                 let mut jobs = crate::media_jobs::Jobs::default();
@@ -363,6 +365,18 @@ impl Backend {
                                 sequence,
                             });
                         }
+                        // A stopped producer must not leave its last frame on the canvas.
+                        let producer_active = sources.provider_active();
+                        if producer_was_active && !producer_active {
+                            let sequence = sequence.fetch_add(1, Ordering::Relaxed) + 1;
+                            *out_frame.lock().unwrap() = Some(Frame {
+                                pixels: vec![0; WIDTH * HEIGHT * 3],
+                                width: WIDTH as u32,
+                                height: HEIGHT as u32,
+                                sequence,
+                            });
+                        }
+                        producer_was_active = producer_active;
                     }
                     if last_state.elapsed() >= Duration::from_millis(100) {
                         let source_snapshot = sources.snapshot(&mpv);

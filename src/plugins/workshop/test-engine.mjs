@@ -11,7 +11,8 @@ for (const [version,step] of [['1.0.0',1],['1.1.0',3]]) {
  // Test generated production JS only through its ordinary Host contract, no private counter import.
  const callbacks=[];const properties=[];
  const host={ui:{onCallback:f=>{callbacks.push(f);return ()=>{};},open:async()=>{},set:async(...a)=>properties.push(a),close:async()=>{}}};
- const plugin=await import(path.join(result.directory,'main.js'));const dispose=await plugin.activate(host);
+ const plugin=await import(path.join(result.directory,'main.js')); // boundary-reviewed: generated candidate under test
+ const dispose=await plugin.activate(host);
  for(const callback of ['increase','increase','reset']){callbacks[0]({view:'counter',callback,args:[]});await new Promise(resolve=>setImmediate(resolve));}
  assert.deepEqual(properties.map(p=>p[2]),[String(step),String(step*2),'0']);await dispose();
  const resultReport={version,step,actions:result.actions,turns:result.turns,diagnostics:result.reports.map(r=>({code:r.code,stdout:r.stdout})),ordinaryHostCallbackBehavior:properties.map(p=>p[2]),scope:'real Pi Agent and real TypeScript; generated JS ordinary Host contract test; Slint/managed host not tested'};

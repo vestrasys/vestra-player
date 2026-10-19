@@ -2,6 +2,27 @@
 
 工作基线：`development-2026-10-18.1`，2026-10-18已发布；wire仍`vestra.experimental/0.1`。本表计产品代码及验收，不把能力探针算插件完成。
 
+## 2026-10-20 当前状态（覆盖下方 2026-10-18 旧表）
+
+依据：2026-10-19 对新构建宿主的真实 GUI 走查（十个插件同包运行，CGEvent 鼠标键盘 + 截图），以及 2026-10-20 针对修复项的复测。这是作者/维护者实测，不等于独立验收者结论；独立验收仍为 0/10。
+
+| 产品 | 目录 | 实测状态（2026-10-19/20） | 已知缺口 |
+| --- | --- | --- | --- |
+| 基础播放/播放栏 | src/plugins/playback | 打开/播放/暂停/拖动跳转/恢复通过；菜单“文件→打开媒体…”2026-10-20 复测通过 | — |
+| 播放列表 | src/plugins/playlist | 添加文件、选播、播完提示、外部来源切换提示通过 | 网络条目经公共来源，未单独复测 |
+| 画面调节含高斯 | src/plugins/video | 亮度/对比度/高斯实际作用于画面、复位、调节不打断播放 | — |
+| 音频工作台 | src/plugins/audio | 2026-10-20 复测：拖动后点预设滑块与数值同步，复位生效，状态不再卡在“待确认”；播放不中断 | 增益范围按宿主收敛为 ±6 dB，延迟 10 ms 步进 |
+| 字幕工作台 | src/plugins/subtitles | 外部 SRT 载入，中英混排显示 | — |
+| 截图与导出 | src/plugins/capture | raw PNG 与源帧逐像素一致；2026-10-20 复测确认行完整可见并可启动导出 | 连拍/MP4 本轮未复测 |
+| NES | src/plugins/nes | 2026-10-20：默认构建即可运行（producer 特性已设为默认）；Stop 后画布清空 | 键盘/存档按用户范围暂缓 |
+| Pi 插件工坊 | src/plugins/workshop | 生成→校验→安装→计数器可用 | 升级/回退未实测 |
+| YouTube | src/plugins/youtube | 真实公开视频播放 | 下载未在 GUI 复测 |
+| Bilibili | src/plugins/bilibili | 真实公开视频播放 | — |
+
+宿主共享 GUI（见 [final-host-ui-fixes](final-host-ui-fixes.md)）：紧凑右键级联菜单与 ICU4X 日志问题已于 2026-10-20 修复并实测；静态检查（cargo build/clippy/fmt/test、tsc、prettier、boundaries）全绿。迁移出 iCloud 时丢失的历史证据见 [migration-loss-2026-10-20](migration-loss-2026-10-20.md)。
+
+## 2026-10-18 旧表（历史记录）
+
 | 产品 | 责任与目录 | 当前状态 | 下一可观察交付 |
 | --- | --- | --- | --- |
 | 基础播放/播放栏 | product_playback，src/plugins/playback | 已落TS/Slint及dist；首真实Compiler失败待修 | 修conditional编辑区ID作用域，再真实激活底栏/播放路径 |

@@ -97,13 +97,6 @@ export component CaptureWindow inherits Window {
                         Button { text: "Save MP4…"; enabled: !root.form-busy; clicked => { root.export-clip(root.start-time, root.end-time, root.processed, root.audio-track, root.subtitles); } }
                     }
                 }
-                if root.confirming: VerticalBox {
-                    Text { text: root.confirmation; wrap: word-wrap; }
-                    HorizontalBox {
-                        Button { text: "确认启动 / Confirm start"; clicked => { root.confirm-start(); } }
-                        Button { text: "Back"; clicked => { root.reject-start(); } }
-                    }
-                }
                 if root.section == "Export tasks": VerticalBox {
                     Text { text: "Each row retains its original source. Cancelled bursts keep confirmed PNGs. Failed input is retained for up to five minutes for explicit retry."; wrap: word-wrap; }
                     for task in root.task-rows: VerticalBox {
@@ -119,6 +112,16 @@ export component CaptureWindow inherits Window {
                         }
                     }
                 }
+            }
+        }
+        // Outside the ScrollView so the decision buttons can never be scrolled or clipped away.
+        if root.confirming: VerticalBox {
+            padding: 0px;
+            Text { text: root.confirmation; wrap: word-wrap; }
+            HorizontalBox {
+                padding: 0px;
+                Button { text: "确认启动 / Confirm start"; clicked => { root.confirm-start(); } }
+                Button { text: "Back"; clicked => { root.reject-start(); } }
             }
         }
         Text { text: root.status; wrap: word-wrap; max-height: 85px; }

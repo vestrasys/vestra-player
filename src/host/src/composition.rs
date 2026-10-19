@@ -365,7 +365,7 @@ mod tests {
         for preserved in [
             "video-frame",
             "diagnostic",
-            "menu-entries",
+            "menu-levels",
             "menu-invoke",
             "if root.menu-open: Rectangle",
             "export component HostWindow",

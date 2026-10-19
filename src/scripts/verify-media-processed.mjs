@@ -120,7 +120,9 @@ async function activate(host) {
       resourceId: "eq",
       revision: 2,
       expectedGeneration: source.stamp.generation,
-      nodes: [{kind: "eq", brightness: 0, contrast: 1, saturation: 1, gamma: 1}],
+      nodes: [
+        { kind: "eq", brightness: 0, contrast: 1, saturation: 1, gamma: 1 },
+      ],
     });
     await host.subtitles.style({
       operationId: 3,

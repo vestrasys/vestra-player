@@ -58,7 +58,9 @@ export class AudioController {
       this.notify();
       try {
         const result = await this.host.processing.operation(flight.change);
-        if (result.status !== 'completed' && result.status !== 'failed') {
+        // 'unknown': the ordered RPC pipe already delivered the replace, so it was rejected
+        // before admission and definitely did not execute.
+        if (result.status !== 'completed' && result.status !== 'failed' && result.status !== 'unknown') {
           this.failed = true;
           this.status = '结果尚未确认，请稍后再次检查';
           return;
@@ -66,8 +68,8 @@ export class AudioController {
         this.unresolved = null;
         this.failed = false;
         if (flight.epoch === this.epoch) {
-          this.status = result.status === 'failed' ? result.error.message : '已应用';
-          if (result.status === 'failed') this.queued ??= clone(this.settings);
+          this.status = result.status === 'failed' ? result.error.message : result.status === 'unknown' ? '操作未被执行，正在重新提交' : '已应用';
+          if (result.status !== 'completed') this.queued ??= clone(this.settings);
         }
       } catch (error) { this.failed = true; this.status = `检查失败：${message(error)}`; }
       finally { this.busy = false; this.notify(); }
@@ -97,6 +99,9 @@ export class AudioController {
             this.status = result.error.message;
             this.queued ??= clone(settings);
           }
+        } else if (result.status === 'unknown') {
+          // Never admitted (rejected during validation), so it definitely did not execute.
+          if (flight.epoch === this.epoch) { this.failed = true; this.status = message(error); }
         } else {
           // An unresolved operation is a resource barrier even after a source/track change.
           this.unresolved = flight;

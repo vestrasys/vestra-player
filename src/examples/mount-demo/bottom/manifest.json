@@ -1,0 +1,12 @@
+{
+  "id": "example.mount-bar",
+  "apiVersion": "vestra.experimental/0.1",
+  "entry": "main.ts",
+  "capabilities": [
+    "playback.read",
+    "playback.control",
+    "events",
+    "commands",
+    "ui.mount"
+  ]
+}

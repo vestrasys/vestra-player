@@ -13,9 +13,36 @@ import { resolve } from "node:path";
 const work = await mkdtemp(resolve(tmpdir(), "vestra-media-origin-author-"));
 await mkdir(resolve(work, "consumer"));
 const ff = "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg";
-await writeFile(resolve(work,"text.srt"),"1\n00:00:01,000 --> 00:00:04,000\nORIGIN 中文\n");
-const generated=spawnSync(ff,["-v","error","-f","lavfi","-i","testsrc2=size=320x180:rate=30:duration=8","-i",resolve(work,"text.srt"),"-map","0:v","-map","1:s","-c:v","ffv1","-c:s","srt","-disposition:s:0","default",resolve(work,"zero.mkv")],{encoding:"utf8"});
-assert.equal(generated.status,0,generated.stderr);
+await writeFile(
+  resolve(work, "text.srt"),
+  "1\n00:00:01,000 --> 00:00:04,000\nORIGIN 中文\n",
+);
+const generated = spawnSync(
+  ff,
+  [
+    "-v",
+    "error",
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc2=size=320x180:rate=30:duration=8",
+    "-i",
+    resolve(work, "text.srt"),
+    "-map",
+    "0:v",
+    "-map",
+    "1:s",
+    "-c:v",
+    "ffv1",
+    "-c:s",
+    "srt",
+    "-disposition:s:0",
+    "default",
+    resolve(work, "zero.mkv"),
+  ],
+  { encoding: "utf8" },
+);
+assert.equal(generated.status, 0, generated.stderr);
 const made = spawnSync(
   ff,
   [
@@ -125,33 +152,51 @@ async function activate(host) {
             break;
           await wait(20);
         }
-        assert.equal(
-          terminal.status,
-          "completed",
-          JSON.stringify(terminal),
-        );
+        assert.equal(terminal.status, "completed", JSON.stringify(terminal));
         assert.equal(
           terminal.facts.sourceTimeline.containerStartTime,
           name === "zero" ? 0 : 2,
         );
-        assert.equal(terminal.facts.sourceTimeline.validation,"normalized-origin-matched");
+        assert.equal(
+          terminal.facts.sourceTimeline.validation,
+          "normalized-origin-matched",
+        );
         assert.ok((await fs.readFile(destination)).length > 8);
-        if(name==="offset") assert.deepEqual(await fs.readFile(destination),await fs.readFile(path.join(work,"zero-"+mode+".png")),"normalized PNG source/字幕时轴应相同");
+        if (name === "offset")
+          assert.deepEqual(
+            await fs.readFile(destination),
+            await fs.readFile(path.join(work, "zero-" + mode + ".png")),
+            "normalized PNG source/字幕时轴应相同",
+          );
         results.push({ name, mode, source, snapshot, terminal });
       }
     }
     // Container duration remains metadata (10), while the normalized video ends at 8.
-    const source=await host.source.state();
-    const snapshot=await host.snapshot.capture({operationId:++op,expected:source.stamp,time:7.5});
-    const destination=path.join(work,"past-actual-end.mp4");
-    const started=await host.jobs.start({operationId:++op,snapshotId:snapshot.snapshotId,kind:"rawMp4",end:9,destination});
+    const source = await host.source.state();
+    const snapshot = await host.snapshot.capture({
+      operationId: ++op,
+      expected: source.stamp,
+      time: 7.5,
+    });
+    const destination = path.join(work, "past-actual-end.mp4");
+    const started = await host.jobs.start({
+      operationId: ++op,
+      snapshotId: snapshot.snapshotId,
+      kind: "rawMp4",
+      end: 9,
+      destination,
+    });
     let terminal;
-    for(let i=0;i<250;i++){terminal=await host.jobs.state(started.jobId);if(["failed","completed","cancelled"].includes(terminal.status))break;await wait(20);}
-    assert.equal(terminal.status,"failed",JSON.stringify(terminal));
-    assert.match(terminal.outcome.error.message,/shorter than requested/);
-    assert.equal(terminal.publicationStarted,false);
-    await assert.rejects(fs.readFile(destination),{code:"ENOENT"});
-    results.push({case:"actual-video-tail",snapshot,terminal});
+    for (let i = 0; i < 250; i++) {
+      terminal = await host.jobs.state(started.jobId);
+      if (["failed", "completed", "cancelled"].includes(terminal.status)) break;
+      await wait(20);
+    }
+    assert.equal(terminal.status, "failed", JSON.stringify(terminal));
+    assert.match(terminal.outcome.error.message, /shorter than requested/);
+    assert.equal(terminal.publicationStarted, false);
+    await assert.rejects(fs.readFile(destination), { code: "ENOENT" });
+    results.push({ case: "actual-video-tail", snapshot, terminal });
     await fs.writeFile(
       path.join(work, "consumer-result.json"),
       JSON.stringify({ pass: true, results }, null, 2),
