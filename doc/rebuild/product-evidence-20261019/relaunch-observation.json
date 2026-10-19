@@ -1,0 +1,6 @@
+{
+  "pid": 54532,
+  "observedCommand": "  PID  PPID ELAPSED COMMAND\n54532     1   00:53 /private/tmp/vestra-current-candidates-x3gEIU/Vestra Current Candidates.app/Contents/MacOS/host\n",
+  "action": "SIGTERM of separately observed no-argument same-app relaunch after original SIGABRT",
+  "observedAt": 1792425269.626047
+}

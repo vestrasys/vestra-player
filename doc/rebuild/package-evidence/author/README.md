@@ -1,0 +1,9 @@
+# Finite package author evidence
+
+2026-10-18. Current new implementation only. `headless-result.json` and `native-result.json` report the real production-JavaScript lifecycle: staged digest/manifest/Slint compilation, trial readiness and acknowledged stop, install 1.0, failed activation with old version ready, install 1.1, rollback to 1.0, exact request replay, tooLate cancellation and precommit cancellation with recovery. Both outer Node scripts exited 0. Both hosts were deliberately terminated with SIGTERM after results and their close receipts were awaited; this is not a natural host exit 0.
+
+Native run used the self-contained temporary `.app` path in `native-command.json` with copied binary/SDK/runtime/UI and an independent store. It exercised actual Slint window construction/ready/cleanup. No visible button/menu clicking, focus, or screenshot acceptance was performed. The counters' private count was not inspected. Independent evidence separately checks public commands and manager independence.
+
+`source-hashes.json` describes the lifecycle-tested source/binary before the later generic input-reason cleanup and formatting. `final-source-hashes.json` will identify the final working baseline. The generated consumers are the exact executed source; the script snapshot can be a later formatting/native-staging revision. `first-check-diagnostic-excerpt.txt` preserves an explicitly labelled transcript excerpt because the initial failed check log was overwritten by the successful check. `tests.log` records the initial Store tests including the former eviction policy; `capacity.log` records the deliberately changed hard-cap policy test. The final hard cap rejects new operations at 512 without forgetting prior request IDs.
+
+Known limits: trusted Node, no filesystem/network sandbox; single-writer package store; no visible UI-click or injected fsync/crash-boundary acceptance. This is a finite lifecycle development gate, not full product acceptance.

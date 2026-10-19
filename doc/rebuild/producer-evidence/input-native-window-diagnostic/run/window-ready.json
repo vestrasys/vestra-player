@@ -1,0 +1,32 @@
+{
+  "at": 1792276829318,
+  "window": {
+    "canvasAvailableHeight": 642,
+    "canvasAvailableWidth": 1084,
+    "dialogOpen": false,
+    "fullscreen": false,
+    "logicalHeight": 720,
+    "logicalWidth": 1100,
+    "menuOpen": false,
+    "nativeActive": false,
+    "nativeUnavailable": null,
+    "shellGeneration": 1,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": null,
+      "fullscreen": false,
+      "nextDeadlineMs": null,
+      "sidebar": null,
+      "sidebarWidth": 0
+    }
+  },
+  "sourceTicket": {
+    "cycle": 1,
+    "owner": 1,
+    "stamp": {
+      "generation": 1,
+      "intentVersion": 1
+    }
+  },
+  "note": "raw public window facts, not proof of CUA binding, visibility, native association or screen pixels"
+}

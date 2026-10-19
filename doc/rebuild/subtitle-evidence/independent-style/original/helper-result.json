@@ -1,0 +1,104 @@
+{
+  "confirmation": "applied",
+  "error": null,
+  "presentation": {
+    "actualFont": null,
+    "confirmation": "applied",
+    "effective": {
+      "manifestId": "review.subtitle-style-z",
+      "owner": 2,
+      "revision": 1,
+      "style": {
+        "color": "cyan",
+        "fontId": "local-arial-unicode",
+        "fontSize": 72,
+        "marginPercent": 5,
+        "offsetMs": 0,
+        "outline": 2
+      }
+    },
+    "fonts": [
+      {
+        "family": "Arial Unicode MS",
+        "id": "local-arial-unicode",
+        "resolution": "requestedFamily",
+        "snapshotEligible": false
+      }
+    ],
+    "layers": [
+      {
+        "manifestId": "review.subtitle-style-a",
+        "owner": 1,
+        "revision": 4,
+        "style": {
+          "color": "yellow",
+          "fontId": "local-arial-unicode",
+          "fontSize": 72,
+          "marginPercent": 5,
+          "offsetMs": 0,
+          "outline": 2
+        }
+      },
+      {
+        "manifestId": "review.subtitle-style-z",
+        "owner": 2,
+        "revision": 1,
+        "style": {
+          "color": "cyan",
+          "fontId": "local-arial-unicode",
+          "fontSize": 72,
+          "marginPercent": 5,
+          "offsetMs": 0,
+          "outline": 2
+        }
+      }
+    ],
+    "referenceHeight": 1080,
+    "snapshotEligible": false
+  },
+  "resources": [
+    {
+      "cues": 1,
+      "derived": {
+        "digest": "554344613a022dabcab93d91b7a3f795a159a0355beaaef1a37402522fc19d23",
+        "format": "webvtt"
+      },
+      "digest": "c362301a0a7e3a556c66f13dcb5993e6079165287e4f3bc9087f1118a5606e3f",
+      "format": "srt",
+      "owner": 1,
+      "resourceId": "sample",
+      "revision": 1,
+      "sizeBytes": 46
+    }
+  ],
+  "selection": {
+    "stamp": {
+      "generation": 1,
+      "revision": 1
+    },
+    "target": {
+      "contentRevision": 1,
+      "kind": "external",
+      "owner": 1,
+      "resourceId": "sample"
+    }
+  },
+  "source": {
+    "generation": 1,
+    "phase": "ready"
+  },
+  "tracks": [
+    {
+      "language": "",
+      "styleReason": null,
+      "styleSupported": true,
+      "target": {
+        "contentRevision": 1,
+        "kind": "external",
+        "owner": 1,
+        "resourceId": "sample"
+      },
+      "title": "vestra-subtitle-2rvlBt.vtt"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "revision": "playlist-site01-2026-10-19.1",
+  "productionVersion": "0.1.0",
+  "checkCommand": "VESTRA_TYPESCRIPT=/tmp/vestra-rebuild-toolchain-20261018/node_modules/typescript/lib/_tsc.js VESTRA_TYPE_ROOTS=/tmp/vestra-rebuild-toolchain-20261018/node_modules/@types VESTRA_SDK=/tmp/vestra-current-runtime-cache/sdk node /tmp/vestra-current-products/playlist/build.mjs 0.1.0",
+  "typecheckExit": 0,
+  "affectedTests": {
+    "passed": 6,
+    "failed": 0
+  },
+  "buildExit": 0,
+  "artifactImport": "ordinary JS dynamic import exposes activate; no SDK/TS runtime imports",
+  "invalidVersionsRejected": [
+    "01.2.3",
+    "1.2.3-beta",
+    "4294967296.0.0"
+  ],
+  "nativeAndSitePlayback": "not run by author; shared acceptance pending",
+  "hashes": {
+    "main.js": "655c820583cd05174881f5a686bdf2a54c5691aa7fb2e394f65bebb26bb7c94e",
+    "manifest.json": "b3107a0eb09f6fd488d43d7a05ce954bcef7836e499514b51f645e0240d7f826",
+    "package.json": "1239d4d885dcad42201a27ed9324f8f0f760b78700d8db9ced39a511cffe7eae",
+    "projection.js": "5358012168c8849759c1d1daf803ca91297df14837a25d5f0626df04a6b946ef",
+    "queue.js": "5fd0c806e0776efecc8e16fdae43ff3754106c1b5900a9773dbcb38c0cb326cc",
+    "ui/link.slint": "294bf0347c40661327b91f1e53a8f79d50d8015d1756dbfe48841f21062122ce",
+    "ui/sidebar.slint": "9cbc8ed7f88197513d06be728392925c6bf58f6c4a770c35894c4d808392b05e"
+  }
+}

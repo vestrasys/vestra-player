@@ -1,0 +1,818 @@
+{
+  "passed": true,
+  "trace": [
+    {
+      "apiVersion": "vestra.experimental/0.1",
+      "checks": [
+        "manifest",
+        "digest",
+        "productionJavaScript",
+        "slintCompile"
+      ],
+      "digest": "430f0773fdfc7001a1e1f4743379f629295c27b677bb1d2ca1168c84c5701e05",
+      "manifest": {
+        "apiVersion": "vestra.experimental/0.1",
+        "capabilities": [
+          "commands"
+        ],
+        "entry": "main.mjs",
+        "id": "community.counter",
+        "version": "1.0.0"
+      },
+      "token": "candidate-1-430f0773fdfc7001a1e1f4743379f629295c27b677bb1d2ca1168c84c5701e05",
+      "trustedExecution": true
+    },
+    {
+      "apiVersion": "vestra.experimental/0.1",
+      "checks": [
+        "manifest",
+        "digest",
+        "productionJavaScript",
+        "slintCompile"
+      ],
+      "digest": "1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428",
+      "manifest": {
+        "apiVersion": "vestra.experimental/0.1",
+        "capabilities": [
+          "commands"
+        ],
+        "entry": "main.mjs",
+        "id": "community.counter",
+        "version": "1.1.0"
+      },
+      "token": "candidate-2-1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428",
+      "trustedExecution": true
+    },
+    {
+      "apiVersion": "vestra.experimental/0.1",
+      "checks": [
+        "manifest",
+        "digest",
+        "productionJavaScript",
+        "slintCompile"
+      ],
+      "digest": "d18180ddd10425656c8c15cd3ffeb6e5b8cc24244f15e212cf81ecdef61067d9",
+      "manifest": {
+        "apiVersion": "vestra.experimental/0.1",
+        "capabilities": [
+          "commands"
+        ],
+        "entry": "main.mjs",
+        "id": "community.counter",
+        "version": "1.2.0"
+      },
+      "token": "candidate-3-d18180ddd10425656c8c15cd3ffeb6e5b8cc24244f15e212cf81ecdef61067d9",
+      "trustedExecution": true
+    },
+    {
+      "activation": {
+        "activation": {
+          "pendingUi": 0,
+          "runtimeReady": false,
+          "status": "pending"
+        },
+        "id": "community.counter.trial.2",
+        "owner": 2,
+        "running": true
+      },
+      "cleanupConfirmed": false,
+      "status": "pending",
+      "trialId": 2
+    },
+    {
+      "activation": {
+        "activation": {
+          "pendingUi": 0,
+          "runtimeReady": false,
+          "status": "pending"
+        },
+        "id": "community.counter.trial.2",
+        "owner": 2,
+        "running": true
+      },
+      "cleanupConfirmed": false,
+      "status": "pending",
+      "trialId": 2
+    },
+    {
+      "activation": {
+        "activation": {
+          "pendingUi": 0,
+          "runtimeReady": false,
+          "status": "pending"
+        },
+        "id": "community.counter.trial.2",
+        "owner": 2,
+        "running": true
+      },
+      "cleanupConfirmed": false,
+      "status": "pending",
+      "trialId": 2
+    },
+    {
+      "activation": {
+        "activation": {
+          "pendingUi": 0,
+          "runtimeReady": false,
+          "status": "pending"
+        },
+        "id": "community.counter.trial.2",
+        "owner": 2,
+        "running": true
+      },
+      "cleanupConfirmed": false,
+      "status": "pending",
+      "trialId": 2
+    },
+    {
+      "activation": {
+        "activation": {
+          "pendingUi": 0,
+          "runtimeReady": false,
+          "status": "pending"
+        },
+        "id": "community.counter.trial.2",
+        "owner": 2,
+        "running": true
+      },
+      "cleanupConfirmed": false,
+      "status": "pending",
+      "trialId": 2
+    },
+    {
+      "activation": {
+        "activation": {
+          "status": "ready"
+        },
+        "id": "community.counter.trial.2",
+        "owner": 2,
+        "running": true
+      },
+      "cleanupConfirmed": false,
+      "status": "ready",
+      "trialId": 2
+    },
+    {
+      "activation": {
+        "activation": {
+          "status": "ready"
+        },
+        "id": "community.counter.trial.2",
+        "owner": 2,
+        "running": false
+      },
+      "cleanupConfirmed": false,
+      "status": "stopping",
+      "trialId": 2
+    },
+    {
+      "activation": {
+        "activation": {
+          "status": "ready"
+        },
+        "id": "community.counter.trial.2",
+        "owner": 2,
+        "running": false
+      },
+      "cleanupConfirmed": true,
+      "status": "stopped",
+      "trialId": 2
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "install-one",
+      "owner": 3,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 0,
+          "requestId": "install-one",
+          "token": "candidate-1-430f0773fdfc7001a1e1f4743379f629295c27b677bb1d2ca1168c84c5701e05"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "install-one",
+      "owner": 3,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 0,
+          "requestId": "install-one",
+          "token": "candidate-1-430f0773fdfc7001a1e1f4743379f629295c27b677bb1d2ca1168c84c5701e05"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "install-one",
+      "owner": 3,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 0,
+          "requestId": "install-one",
+          "token": "candidate-1-430f0773fdfc7001a1e1f4743379f629295c27b677bb1d2ca1168c84c5701e05"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "install-one",
+      "owner": 3,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 0,
+          "requestId": "install-one",
+          "token": "candidate-1-430f0773fdfc7001a1e1f4743379f629295c27b677bb1d2ca1168c84c5701e05"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "install-one",
+      "owner": 3,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 0,
+          "requestId": "install-one",
+          "token": "candidate-1-430f0773fdfc7001a1e1f4743379f629295c27b677bb1d2ca1168c84c5701e05"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "installed": {
+        "current": {
+          "digest": "430f0773fdfc7001a1e1f4743379f629295c27b677bb1d2ca1168c84c5701e05",
+          "directory": "/private/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-packages-UMsFMb/store/packages/430f0773fdfc7001a1e1f4743379f629295c27b677bb1d2ca1168c84c5701e05",
+          "manifest": {
+            "apiVersion": "vestra.experimental/0.1",
+            "capabilities": [
+              "commands"
+            ],
+            "entry": "main.mjs",
+            "id": "community.counter",
+            "version": "1.0.0"
+          }
+        },
+        "previous": null,
+        "revision": 1
+      },
+      "operationId": "install-one",
+      "owner": 3,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 0,
+          "requestId": "install-one",
+          "token": "candidate-1-430f0773fdfc7001a1e1f4743379f629295c27b677bb1d2ca1168c84c5701e05"
+        }
+      },
+      "status": "committed"
+    },
+    {
+      "fingerprint": {
+        "action": "packages.install",
+        "digest": "d18180ddd10425656c8c15cd3ffeb6e5b8cc24244f15e212cf81ecdef61067d9",
+        "expectedRevision": 1,
+        "packageId": "community.counter"
+      },
+      "operationId": "bad-upgrade",
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 1,
+          "requestId": "bad-upgrade",
+          "token": "candidate-3-d18180ddd10425656c8c15cd3ffeb6e5b8cc24244f15e212cf81ecdef61067d9"
+        }
+      },
+      "status": "preparing"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "bad-upgrade",
+      "owner": 4,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 1,
+          "requestId": "bad-upgrade",
+          "token": "candidate-3-d18180ddd10425656c8c15cd3ffeb6e5b8cc24244f15e212cf81ecdef61067d9"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "bad-upgrade",
+      "owner": 4,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 1,
+          "requestId": "bad-upgrade",
+          "token": "candidate-3-d18180ddd10425656c8c15cd3ffeb6e5b8cc24244f15e212cf81ecdef61067d9"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "bad-upgrade",
+      "owner": 4,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 1,
+          "requestId": "bad-upgrade",
+          "token": "candidate-3-d18180ddd10425656c8c15cd3ffeb6e5b8cc24244f15e212cf81ecdef61067d9"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "bad-upgrade",
+      "owner": 4,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 1,
+          "requestId": "bad-upgrade",
+          "token": "candidate-3-d18180ddd10425656c8c15cd3ffeb6e5b8cc24244f15e212cf81ecdef61067d9"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "bad-upgrade",
+      "owner": 4,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 1,
+          "requestId": "bad-upgrade",
+          "token": "candidate-3-d18180ddd10425656c8c15cd3ffeb6e5b8cc24244f15e212cf81ecdef61067d9"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "bad-upgrade",
+      "owner": 4,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 1,
+          "requestId": "bad-upgrade",
+          "token": "candidate-3-d18180ddd10425656c8c15cd3ffeb6e5b8cc24244f15e212cf81ecdef61067d9"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "bad-upgrade",
+      "owner": 4,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 1,
+          "requestId": "bad-upgrade",
+          "token": "candidate-3-d18180ddd10425656c8c15cd3ffeb6e5b8cc24244f15e212cf81ecdef61067d9"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "bad-upgrade",
+      "owner": 4,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 1,
+          "requestId": "bad-upgrade",
+          "token": "candidate-3-d18180ddd10425656c8c15cd3ffeb6e5b8cc24244f15e212cf81ecdef61067d9"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "bad-upgrade",
+      "owner": 4,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 1,
+          "requestId": "bad-upgrade",
+          "token": "candidate-3-d18180ddd10425656c8c15cd3ffeb6e5b8cc24244f15e212cf81ecdef61067d9"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "message": "activation failed: {\"activation\":{\"message\":\"{\\\"code\\\":\\\"activationFailed\\\",\\\"message\\\":\\\"Error: intentional bad activation\\\"}\",\"status\":\"failed\"},\"id\":\"community.counter\",\"owner\":4,\"running\":false}",
+      "operationId": "bad-upgrade",
+      "owner": 5,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 1,
+          "requestId": "bad-upgrade",
+          "token": "candidate-3-d18180ddd10425656c8c15cd3ffeb6e5b8cc24244f15e212cf81ecdef61067d9"
+        }
+      },
+      "restored": true,
+      "status": "failed"
+    },
+    {
+      "fingerprint": {
+        "action": "packages.install",
+        "digest": "1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428",
+        "expectedRevision": 1,
+        "packageId": "community.counter"
+      },
+      "operationId": "install-two",
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 1,
+          "requestId": "install-two",
+          "token": "candidate-2-1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428"
+        }
+      },
+      "status": "preparing"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "install-two",
+      "owner": 6,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 1,
+          "requestId": "install-two",
+          "token": "candidate-2-1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "install-two",
+      "owner": 6,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 1,
+          "requestId": "install-two",
+          "token": "candidate-2-1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "install-two",
+      "owner": 6,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 1,
+          "requestId": "install-two",
+          "token": "candidate-2-1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "install-two",
+      "owner": 6,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 1,
+          "requestId": "install-two",
+          "token": "candidate-2-1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "installed": {
+        "current": {
+          "digest": "1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428",
+          "directory": "/private/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-packages-UMsFMb/store/packages/1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428",
+          "manifest": {
+            "apiVersion": "vestra.experimental/0.1",
+            "capabilities": [
+              "commands"
+            ],
+            "entry": "main.mjs",
+            "id": "community.counter",
+            "version": "1.1.0"
+          }
+        },
+        "previous": {
+          "digest": "430f0773fdfc7001a1e1f4743379f629295c27b677bb1d2ca1168c84c5701e05",
+          "directory": "/private/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-packages-UMsFMb/store/packages/430f0773fdfc7001a1e1f4743379f629295c27b677bb1d2ca1168c84c5701e05",
+          "manifest": {
+            "apiVersion": "vestra.experimental/0.1",
+            "capabilities": [
+              "commands"
+            ],
+            "entry": "main.mjs",
+            "id": "community.counter",
+            "version": "1.0.0"
+          }
+        },
+        "revision": 2
+      },
+      "operationId": "install-two",
+      "owner": 6,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 1,
+          "requestId": "install-two",
+          "token": "candidate-2-1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428"
+        }
+      },
+      "status": "committed"
+    },
+    {
+      "fingerprint": {
+        "action": "packages.rollback",
+        "digest": "430f0773fdfc7001a1e1f4743379f629295c27b677bb1d2ca1168c84c5701e05",
+        "expectedRevision": 2,
+        "packageId": "community.counter"
+      },
+      "operationId": "back-one",
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.rollback",
+        "params": {
+          "expectedRevision": 2,
+          "id": "community.counter",
+          "requestId": "back-one"
+        }
+      },
+      "status": "preparing"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "back-one",
+      "owner": 7,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.rollback",
+        "params": {
+          "expectedRevision": 2,
+          "id": "community.counter",
+          "requestId": "back-one"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "back-one",
+      "owner": 7,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.rollback",
+        "params": {
+          "expectedRevision": 2,
+          "id": "community.counter",
+          "requestId": "back-one"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "back-one",
+      "owner": 7,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.rollback",
+        "params": {
+          "expectedRevision": 2,
+          "id": "community.counter",
+          "requestId": "back-one"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "cancelRequested": false,
+      "operationId": "back-one",
+      "owner": 7,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.rollback",
+        "params": {
+          "expectedRevision": 2,
+          "id": "community.counter",
+          "requestId": "back-one"
+        }
+      },
+      "status": "activating"
+    },
+    {
+      "installed": {
+        "current": {
+          "digest": "430f0773fdfc7001a1e1f4743379f629295c27b677bb1d2ca1168c84c5701e05",
+          "directory": "/private/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-packages-UMsFMb/store/packages/430f0773fdfc7001a1e1f4743379f629295c27b677bb1d2ca1168c84c5701e05",
+          "manifest": {
+            "apiVersion": "vestra.experimental/0.1",
+            "capabilities": [
+              "commands"
+            ],
+            "entry": "main.mjs",
+            "id": "community.counter",
+            "version": "1.0.0"
+          }
+        },
+        "previous": {
+          "digest": "1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428",
+          "directory": "/private/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-packages-UMsFMb/store/packages/1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428",
+          "manifest": {
+            "apiVersion": "vestra.experimental/0.1",
+            "capabilities": [
+              "commands"
+            ],
+            "entry": "main.mjs",
+            "id": "community.counter",
+            "version": "1.1.0"
+          }
+        },
+        "revision": 3
+      },
+      "operationId": "back-one",
+      "owner": 7,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.rollback",
+        "params": {
+          "expectedRevision": 2,
+          "id": "community.counter",
+          "requestId": "back-one"
+        }
+      },
+      "status": "committed"
+    },
+    {
+      "fingerprint": {
+        "action": "packages.install",
+        "digest": "1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428",
+        "expectedRevision": 3,
+        "packageId": "community.counter"
+      },
+      "operationId": "cancel-upgrade",
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 3,
+          "requestId": "cancel-upgrade",
+          "token": "candidate-2-1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428"
+        }
+      },
+      "status": "preparing"
+    },
+    {
+      "fingerprint": {
+        "action": "packages.install",
+        "digest": "1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428",
+        "expectedRevision": 3,
+        "packageId": "community.counter"
+      },
+      "operationId": "cancel-upgrade",
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 3,
+          "requestId": "cancel-upgrade",
+          "token": "candidate-2-1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428"
+        }
+      },
+      "status": "preparing"
+    },
+    {
+      "fingerprint": {
+        "action": "packages.install",
+        "digest": "1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428",
+        "expectedRevision": 3,
+        "packageId": "community.counter"
+      },
+      "operationId": "cancel-upgrade",
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 3,
+          "requestId": "cancel-upgrade",
+          "token": "candidate-2-1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428"
+        }
+      },
+      "status": "preparing"
+    },
+    {
+      "fingerprint": {
+        "action": "packages.install",
+        "digest": "1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428",
+        "expectedRevision": 3,
+        "packageId": "community.counter"
+      },
+      "operationId": "cancel-upgrade",
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 3,
+          "requestId": "cancel-upgrade",
+          "token": "candidate-2-1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428"
+        }
+      },
+      "status": "preparing"
+    },
+    {
+      "fingerprint": {
+        "action": "packages.install",
+        "digest": "1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428",
+        "expectedRevision": 3,
+        "packageId": "community.counter"
+      },
+      "operationId": "cancel-upgrade",
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 3,
+          "requestId": "cancel-upgrade",
+          "token": "candidate-2-1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428"
+        }
+      },
+      "status": "preparing"
+    },
+    {
+      "message": null,
+      "operationId": "cancel-upgrade",
+      "owner": 8,
+      "packageId": "community.counter",
+      "request": {
+        "method": "packages.install",
+        "params": {
+          "expectedRevision": 3,
+          "requestId": "cancel-upgrade",
+          "token": "candidate-2-1401d6ab7e6d2cc674e2b9ad8248cedd85111c4da43d97aa890ee1414934d428"
+        }
+      },
+      "restored": true,
+      "status": "cancelled"
+    }
+  ],
+  "limits": [
+    "Author protocol lifecycle proof, not visible button/menu interaction.",
+    "Production JS and real Slint compiler; headless run does not show native windows.",
+    "Node candidates are trusted, not sandboxed."
+  ]
+}

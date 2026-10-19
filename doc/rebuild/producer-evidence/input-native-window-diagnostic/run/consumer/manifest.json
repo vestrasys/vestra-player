@@ -1,0 +1,1 @@
+{"id":"author.producer-input-native","apiVersion":"vestra.experimental/0.1","entry":"main.mjs","capabilities":["producer.av","playback.read","playback.control","events","commands","ui.window"]}

@@ -1,0 +1,98 @@
+{
+  "style": {
+    "confirmation": "applied",
+    "error": null,
+    "presentation": {
+      "actualFont": {
+        "digest": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+        "faceIndex": 0,
+        "family": "Noto Sans CJK SC",
+        "fontId": "noto-cjk-sc-regular-2.004",
+        "postscript": "NotoSansCJKsc-Regular",
+        "sizeBytes": 16437364
+      },
+      "confirmation": "applied",
+      "coverageCheckedOnCapture": true,
+      "effective": {
+        "manifestId": "review.native-helper",
+        "owner": 2,
+        "revision": 1,
+        "style": {
+          "color": "yellow",
+          "fontId": "noto-cjk-sc-regular-2.004",
+          "fontSize": 72,
+          "marginPercent": 5,
+          "offsetMs": 250,
+          "outline": 2
+        }
+      },
+      "fonts": [
+        {
+          "digest": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+          "faceIndex": 0,
+          "family": "Noto Sans CJK SC",
+          "id": "noto-cjk-sc-regular-2.004",
+          "resolution": "fixedFace",
+          "snapshotEligible": true
+        }
+      ],
+      "layers": [
+        {
+          "manifestId": "review.native-helper",
+          "owner": 2,
+          "revision": 1,
+          "style": {
+            "color": "yellow",
+            "fontId": "noto-cjk-sc-regular-2.004",
+            "fontSize": 72,
+            "marginPercent": 5,
+            "offsetMs": 250,
+            "outline": 2
+          }
+        }
+      ],
+      "referenceHeight": 1080,
+      "revision": 1,
+      "snapshotEligible": true
+    },
+    "resources": [],
+    "selection": {
+      "stamp": {
+        "generation": 1,
+        "revision": 0
+      },
+      "target": {
+        "id": 1,
+        "kind": "embedded"
+      }
+    },
+    "source": {
+      "generation": 1,
+      "phase": "ready"
+    },
+    "tracks": [
+      {
+        "language": "zho",
+        "styleReason": null,
+        "styleSupported": true,
+        "target": {
+          "id": 1,
+          "kind": "embedded"
+        },
+        "title": "Subtitle 1"
+      }
+    ]
+  },
+  "video": {
+    "generation": 1,
+    "revision": 1,
+    "stage": "video",
+    "status": "applied"
+  },
+  "audio": {
+    "generation": 1,
+    "revision": 1,
+    "stage": "audio",
+    "status": "applied"
+  }
+}

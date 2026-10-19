@@ -1,0 +1,1 @@
+{"id":"review.processing-operation-consumer","apiVersion":"vestra.experimental/0.1","entry":"main.mjs","capabilities":["playback.read","processing.video","playback.control","events","plugins.manage"]}

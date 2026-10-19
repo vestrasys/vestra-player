@@ -1,0 +1,39 @@
+{
+  "callbackCount": 153,
+  "channels": 2,
+  "cpal": "0.18.2",
+  "device": "MacBook Air Speakers",
+  "deviceErrors": 0,
+  "errorDetails": [],
+  "expectedFirst64SampleSignatures": [
+    5547696763341114577,
+    13380826962402805797,
+    11284718281072112709
+  ],
+  "first64SampleSignatures": [
+    5547696763341114577,
+    13380826962402805797,
+    11284718281072112709
+  ],
+  "limits": [
+    "Callback-filled buffers and counters, not acoustic output/latency/continuity proof.",
+    "Preloaded bounded decoded PCM; binary transport/backpressure/host source switching are not implemented.",
+    "Pause writes zero and stops source consumption; new epoch resets the callback cursor after acknowledgement, not a hardware drain fence."
+  ],
+  "maxCallbackGapMs": 10.775666,
+  "oldEpochConsumedWhilePaused": false,
+  "pass": true,
+  "phaseFrames": [
+    29184,
+    19968,
+    29184
+  ],
+  "phaseNonzeroSamples": [
+    58270,
+    0,
+    58172
+  ],
+  "sampleFormat": "f32",
+  "sampleRate": 48000,
+  "wallSeconds": 1.708780125
+}

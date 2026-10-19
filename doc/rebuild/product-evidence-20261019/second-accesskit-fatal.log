@@ -1,0 +1,106 @@
+ No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+
+thread 'main' (38913131) panicked at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/accesskit_consumer-0.32.0/src/tree.rs:34:13:
+Focused ID #589826 is not in the node list
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'main' (38913131) panicked at /rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/panicking.rs:225:5:
+panic in a function that cannot unwind
+stack backtrace:
+   0:        0x10649d4d8 - <<std[dfa21a03f581504]::sys::backtrace::BacktraceLock>::print::DisplayBacktrace as core[6d4585c07e7ffcab]::fmt::Display>::fmt
+   1:        0x1064b49c8 - core[6d4585c07e7ffcab]::fmt::write
+   2:        0x1064a2e74 - <std[dfa21a03f581504]::sys::stdio::unix::Stderr as core[6d4585c07e7ffcab]::io::write::Write>::write_fmt
+   3:        0x10647f700 - std[dfa21a03f581504]::panicking::default_hook::{closure#0}
+   4:        0x106495bfc - std[dfa21a03f581504]::panicking::default_hook
+   5:        0x1064960b4 - std[dfa21a03f581504]::panicking::panic_with_hook
+   6:        0x10647f7b0 - std[dfa21a03f581504]::panicking::panic_handler::{closure#0}
+   7:        0x106476a8c - std[dfa21a03f581504]::sys::backtrace::__rust_end_short_backtrace::<std[dfa21a03f581504]::panicking::panic_handler::{closure#0}, !>
+   8:        0x1064801d0 - __rustc[e817ac23f81d3874]::rust_begin_unwind
+   9:        0x106516ad8 - core[6d4585c07e7ffcab]::panicking::panic_nounwind_fmt
+  10:        0x106516a24 - core[6d4585c07e7ffcab]::panicking::panic_nounwind
+  11:        0x106516bb4 - core[6d4585c07e7ffcab]::panicking::panic_cannot_unwind
+  12:        0x10528ebc8 - <winit[f373577263943816]::platform_impl::macos::view::WinitView>::mouse_down
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-0.5.3/src/macros/declare_class.rs:981:25
+  13:        0x19399b7b4 - <unknown>
+  14:        0x19399862c - <unknown>
+  15:        0x1939980bc - <unknown>
+  16:        0x1936d0860 - <unknown>
+  17:        0x10529c4d4 - winit[f373577263943816]::platform_impl::macos::app::send_event
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/winit-0.30.13/src/platform_impl/macos/app.rs:50:5
+  18:        0x1931686f4 - <unknown>
+  19:        0x192bff7a8 - <unknown>
+  20:        0x10530bb80 - <() as objc2[f52fc8abd89266db]::encode::EncodeArguments>::__invoke::<()>
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-0.5.3/src/encode.rs:437:26
+  21:        0x10530ab48 - objc2[f52fc8abd89266db]::runtime::message_receiver::msg_send_primitive::send::<(), ()>
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-0.5.3/src/runtime/message_receiver.rs:173:18
+  22:        0x105304248 - <*mut objc2[f52fc8abd89266db]::runtime::AnyObject as objc2[f52fc8abd89266db]::runtime::message_receiver::MessageReceiver>::send_message::<(), ()>
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-0.5.3/src/runtime/message_receiver.rs:433:38
+  23:        0x10530028c - <&objc2_app_kit[59e2630b4351285f]::generated::__NSApplication::NSApplication as objc2[f52fc8abd89266db]::__macro_helpers::msg_send::MsgSend>::send_message::<(), ()>
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-0.5.3/src/__macro_helpers/msg_send.rs:27:31
+  24:        0x105300580 - <objc2_app_kit[59e2630b4351285f]::generated::__NSApplication::NSApplication>::run
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-0.5.3/src/macros/extern_methods.rs:247:14
+  25:        0x10502cbcc - <winit[f373577263943816]::platform_impl::macos::event_loop::EventLoop<i_slint_backend_winit[3697c3d86f8d5ed]::SlintEvent>>::run_on_demand::<<winit[f373577263943816]::event_loop::EventLoop<i_slint_backend_winit[3697c3d86f8d5ed]::SlintEvent> as winit[f373577263943816]::platform::run_on_demand::EventLoopExtRunOnDemand>::run_app_on_demand<i_slint_backend_winit[3697c3d86f8d5ed]::event_loop::EventLoopState>::{closure#0}>::{closure#0}::{closure#0}
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/winit-0.30.13/src/platform_impl/macos/event_loop.rs:299:35
+  26:        0x105088300 - objc2[f52fc8abd89266db]::rc::autorelease::autoreleasepool::<(), <winit[f373577263943816]::platform_impl::macos::event_loop::EventLoop<i_slint_backend_winit[3697c3d86f8d5ed]::SlintEvent>>::run_on_demand<<winit[f373577263943816]::event_loop::EventLoop<i_slint_backend_winit[3697c3d86f8d5ed]::SlintEvent> as winit[f373577263943816]::platform::run_on_demand::EventLoopExtRunOnDemand>::run_app_on_demand<i_slint_backend_winit[3697c3d86f8d5ed]::event_loop::EventLoopState>::{closure#0}>::{closure#0}::{closure#0}>
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/objc2-0.5.3/src/rc/autorelease.rs:438:15
+  27:        0x10502bfb0 - <winit[f373577263943816]::platform_impl::macos::event_loop::EventLoop<i_slint_backend_winit[3697c3d86f8d5ed]::SlintEvent>>::run_on_demand::<<winit[f373577263943816]::event_loop::EventLoop<i_slint_backend_winit[3697c3d86f8d5ed]::SlintEvent> as winit[f373577263943816]::platform::run_on_demand::EventLoopExtRunOnDemand>::run_app_on_demand<i_slint_backend_winit[3697c3d86f8d5ed]::event_loop::EventLoopState>::{closure#0}>::{closure#0}
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/winit-0.30.13/src/platform_impl/macos/event_loop.rs:285:13
+  28:        0x104fb3b0c - <winit[f373577263943816]::platform_impl::macos::event_handler::EventHandler>::set::<(), winit[f373577263943816]::platform_impl::macos::event_loop::map_user_event<i_slint_backend_winit[3697c3d86f8d5ed]::SlintEvent, <winit[f373577263943816]::event_loop::EventLoop<i_slint_backend_winit[3697c3d86f8d5ed]::SlintEvent> as winit[f373577263943816]::platform::run_on_demand::EventLoopExtRunOnDemand>::run_app_on_demand<i_slint_backend_winit[3697c3d86f8d5ed]::event_loop::EventLoopState>::{closure#0}>::{closure#0}, <winit[f373577263943816]::platform_impl::macos::event_loop::EventLoop<i_slint_backend_winit[3697c3d86f8d5ed]::SlintEvent>>::run_on_demand<<winit[f373577263943816]::event_loop::EventLoop<i_slint_backend_winit[3697c3d86f8d5ed]::SlintEvent> as winit[f373577263943816]::platform::run_on_demand::EventLoopExtRunOnDemand>::run_app_on_demand<i_slint_backend_winit[3697c3d86f8d5ed]::event_loop::EventLoopState>::{closure#0}>::{closure#0}>
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/winit-0.30.13/src/platform_impl/macos/event_handler.rs:98:9
+  29:        0x105062b70 - <winit[f373577263943816]::platform_impl::macos::app_state::ApplicationDelegate>::set_event_handler::<(), winit[f373577263943816]::platform_impl::macos::event_loop::map_user_event<i_slint_backend_winit[3697c3d86f8d5ed]::SlintEvent, <winit[f373577263943816]::event_loop::EventLoop<i_slint_backend_winit[3697c3d86f8d5ed]::SlintEvent> as winit[f373577263943816]::platform::run_on_demand::EventLoopExtRunOnDemand>::run_app_on_demand<i_slint_backend_winit[3697c3d86f8d5ed]::event_loop::EventLoopState>::{closure#0}>::{closure#0}, <winit[f373577263943816]::platform_impl::macos::event_loop::EventLoop<i_slint_backend_winit[3697c3d86f8d5ed]::SlintEvent>>::run_on_demand<<winit[f373577263943816]::event_loop::EventLoop<i_slint_backend_winit[3697c3d86f8d5ed]::SlintEvent> as winit[f373577263943816]::platform::run_on_demand::EventLoopExtRunOnDemand>::run_app_on_demand<i_slint_backend_winit[3697c3d86f8d5ed]::event_loop::EventLoopState>::{closure#0}>::{closure#0}>
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/winit-0.30.13/src/platform_impl/macos/app_state.rs:193:36
+  30:        0x105021840 - <winit[f373577263943816]::platform_impl::macos::event_loop::EventLoop<i_slint_backend_winit[3697c3d86f8d5ed]::SlintEvent>>::run_on_demand::<<winit[f373577263943816]::event_loop::EventLoop<i_slint_backend_winit[3697c3d86f8d5ed]::SlintEvent> as winit[f373577263943816]::platform::run_on_demand::EventLoopExtRunOnDemand>::run_app_on_demand<i_slint_backend_winit[3697c3d86f8d5ed]::event_loop::EventLoopState>::{closure#0}>
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/winit-0.30.13/src/platform_impl/macos/event_loop.rs:284:23
+  31:        0x10505025c - <winit[f373577263943816]::event_loop::EventLoop<i_slint_backend_winit[3697c3d86f8d5ed]::SlintEvent> as winit[f373577263943816]::platform::run_on_demand::EventLoopExtRunOnDemand>::run_on_demand::<<winit[f373577263943816]::event_loop::EventLoop<i_slint_backend_winit[3697c3d86f8d5ed]::SlintEvent> as winit[f373577263943816]::platform::run_on_demand::EventLoopExtRunOnDemand>::run_app_on_demand<i_slint_backend_winit[3697c3d86f8d5ed]::event_loop::EventLoopState>::{closure#0}>
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/winit-0.30.13/src/platform/run_on_demand.rs:89:25
+  32:        0x1050503d4 - <winit[f373577263943816]::event_loop::EventLoop<i_slint_backend_winit[3697c3d86f8d5ed]::SlintEvent> as winit[f373577263943816]::platform::run_on_demand::EventLoopExtRunOnDemand>::run_app_on_demand::<i_slint_backend_winit[3697c3d86f8d5ed]::event_loop::EventLoopState>
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/winit-0.30.13/src/platform/run_on_demand.rs:75:14
+  33:        0x104fc7eec - <i_slint_backend_winit[3697c3d86f8d5ed]::event_loop::EventLoopState>::run
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/i-slint-backend-winit-1.16.1/event_loop.rs:680:22
+  34:        0x104fcd990 - <i_slint_backend_winit[3697c3d86f8d5ed]::Backend as i_slint_core[af216a6cf83ef3d9]::platform::Platform>::run_event_loop
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/i-slint-backend-winit-1.16.1/lib.rs:839:36
+  35:        0x104e8db58 - slint_interpreter[c3dd0cab50b19d96]::api::run_event_loop::{closure#0}
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/slint-interpreter-1.16.1/api.rs:1775:51
+  36:        0x104f5d6a4 - i_slint_backend_selector[116a574f5c05f4de]::with_platform::<(), slint_interpreter[c3dd0cab50b19d96]::api::run_event_loop::{closure#0}>::{closure#0}
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/i-slint-backend-selector-1.16.1/lib.rs:154:31
+  37:        0x104e45b98 - i_slint_core[af216a6cf83ef3d9]::context::with_global_context::<core[6d4585c07e7ffcab]::result::Result<(), i_slint_core[af216a6cf83ef3d9]::api::PlatformError>, i_slint_backend_selector[116a574f5c05f4de]::with_global_context<core[6d4585c07e7ffcab]::result::Result<(), i_slint_core[af216a6cf83ef3d9]::api::PlatformError>, i_slint_backend_selector[116a574f5c05f4de]::with_platform<(), slint_interpreter[c3dd0cab50b19d96]::api::run_event_loop::{closure#0}>::{closure#0}>::{closure#0}, i_slint_backend_selector[116a574f5c05f4de]::with_platform<(), slint_interpreter[c3dd0cab50b19d96]::api::run_event_loop::{closure#0}>::{closure#0}>::{closure#0}
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/i-slint-core-1.16.1/context.rs:151:25
+  38:        0x104ea9d64 - <std[dfa21a03f581504]::thread::local::LocalKey<once_cell[58d5bb3371c31f95]::unsync::OnceCell<i_slint_core[af216a6cf83ef3d9]::context::SlintContext>>>::try_with::<i_slint_core[af216a6cf83ef3d9]::context::with_global_context<core[6d4585c07e7ffcab]::result::Result<(), i_slint_core[af216a6cf83ef3d9]::api::PlatformError>, i_slint_backend_selector[116a574f5c05f4de]::with_global_context<core[6d4585c07e7ffcab]::result::Result<(), i_slint_core[af216a6cf83ef3d9]::api::PlatformError>, i_slint_backend_selector[116a574f5c05f4de]::with_platform<(), slint_interpreter[c3dd0cab50b19d96]::api::run_event_loop::{closure#0}>::{closure#0}>::{closure#0}, i_slint_backend_selector[116a574f5c05f4de]::with_platform<(), slint_interpreter[c3dd0cab50b19d96]::api::run_event_loop::{closure#0}>::{closure#0}>::{closure#0}, core[6d4585c07e7ffcab]::result::Result<core[6d4585c07e7ffcab]::result::Result<(), i_slint_core[af216a6cf83ef3d9]::api::PlatformError>, i_slint_core[af216a6cf83ef3d9]::api::PlatformError>>
+                               at /opt/homebrew/Cellar/rust/1.99.1/lib/rustlib/src/rust/library/std/src/thread/local.rs:463:12
+  39:        0x104ea9b14 - <std[dfa21a03f581504]::thread::local::LocalKey<once_cell[58d5bb3371c31f95]::unsync::OnceCell<i_slint_core[af216a6cf83ef3d9]::context::SlintContext>>>::with::<i_slint_core[af216a6cf83ef3d9]::context::with_global_context<core[6d4585c07e7ffcab]::result::Result<(), i_slint_core[af216a6cf83ef3d9]::api::PlatformError>, i_slint_backend_selector[116a574f5c05f4de]::with_global_context<core[6d4585c07e7ffcab]::result::Result<(), i_slint_core[af216a6cf83ef3d9]::api::PlatformError>, i_slint_backend_selector[116a574f5c05f4de]::with_platform<(), slint_interpreter[c3dd0cab50b19d96]::api::run_event_loop::{closure#0}>::{closure#0}>::{closure#0}, i_slint_backend_selector[116a574f5c05f4de]::with_platform<(), slint_interpreter[c3dd0cab50b19d96]::api::run_event_loop::{closure#0}>::{closure#0}>::{closure#0}, core[6d4585c07e7ffcab]::result::Result<core[6d4585c07e7ffcab]::result::Result<(), i_slint_core[af216a6cf83ef3d9]::api::PlatformError>, i_slint_core[af216a6cf83ef3d9]::api::PlatformError>>
+                               at /opt/homebrew/Cellar/rust/1.99.1/lib/rustlib/src/rust/library/std/src/thread/local.rs:427:20
+  40:        0x104e3df28 - i_slint_core[af216a6cf83ef3d9]::context::with_global_context::<core[6d4585c07e7ffcab]::result::Result<(), i_slint_core[af216a6cf83ef3d9]::api::PlatformError>, i_slint_backend_selector[116a574f5c05f4de]::with_global_context<core[6d4585c07e7ffcab]::result::Result<(), i_slint_core[af216a6cf83ef3d9]::api::PlatformError>, i_slint_backend_selector[116a574f5c05f4de]::with_platform<(), slint_interpreter[c3dd0cab50b19d96]::api::run_event_loop::{closure#0}>::{closure#0}>::{closure#0}, i_slint_backend_selector[116a574f5c05f4de]::with_platform<(), slint_interpreter[c3dd0cab50b19d96]::api::run_event_loop::{closure#0}>::{closure#0}>
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/i-slint-core-1.16.1/context.rs:150:20
+  41:        0x104f471a0 - i_slint_backend_selector[116a574f5c05f4de]::with_global_context::<core[6d4585c07e7ffcab]::result::Result<(), i_slint_core[af216a6cf83ef3d9]::api::PlatformError>, i_slint_backend_selector[116a574f5c05f4de]::with_platform<(), slint_interpreter[c3dd0cab50b19d96]::api::run_event_loop::{closure#0}>::{closure#0}>
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/i-slint-backend-selector-1.16.1/lib.rs:161:18
+  42:        0x104f470b4 - i_slint_backend_selector[116a574f5c05f4de]::with_platform::<(), slint_interpreter[c3dd0cab50b19d96]::api::run_event_loop::{closure#0}>
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/i-slint-backend-selector-1.16.1/lib.rs:154:5
+  43:        0x104e918a4 - slint_interpreter[c3dd0cab50b19d96]::api::run_event_loop
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/slint-interpreter-1.16.1/api.rs:1775:5
+  44:        0x104ea91a4 - <slint_interpreter[c3dd0cab50b19d96]::api::ComponentInstance as i_slint_core[af216a6cf83ef3d9]::api::ComponentHandle>::run
+                               at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/slint-interpreter-1.16.1/api.rs:1701:9
+  45:        0x10471f688 - vestra_host[1541f37436943280]::main
+                               at /Users/ziyang/Documents/vestra-player/src/host/src/main.rs:1831:16
+  46:        0x1049df4d8 - <fn() -> core[6d4585c07e7ffcab]::result::Result<(), anyhow[c7629a09aefcffd3]::Error> as core[6d4585c07e7ffcab]::ops::function::FnOnce<()>>::call_once
+                               at /opt/homebrew/Cellar/rust/1.99.1/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5
+  47:        0x104679f84 - std[dfa21a03f581504]::sys::backtrace::__rust_begin_short_backtrace::<fn() -> core[6d4585c07e7ffcab]::result::Result<(), anyhow[c7629a09aefcffd3]::Error>, core[6d4585c07e7ffcab]::result::Result<(), anyhow[c7629a09aefcffd3]::Error>>
+                               at /opt/homebrew/Cellar/rust/1.99.1/lib/rustlib/src/rust/library/std/src/sys/backtrace.rs:166:18
+  48:        0x10467a31c - std[dfa21a03f581504]::rt::lang_start::<core[6d4585c07e7ffcab]::result::Result<(), anyhow[c7629a09aefcffd3]::Error>>::{closure#0}
+                               at /opt/homebrew/Cellar/rust/1.99.1/lib/rustlib/src/rust/library/std/src/rt.rs:206:18
+  49:        0x106494830 - std[dfa21a03f581504]::rt::lang_start_internal
+  50:        0x104679f60 - std[dfa21a03f581504]::rt::lang_start::<core[6d4585c07e7ffcab]::result::Result<(), anyhow[c7629a09aefcffd3]::Error>>
+                               at /opt/homebrew/Cellar/rust/1.99.1/lib/rustlib/src/rust/library/std/src/rt.rs:205:5
+  51:        0x1047429ec - _main
+thread caused non-unwinding panic. aborting.
+HostError: plugin is stopping
+    at Object.request (file:///private/tmp/vestra-current-candidates-P2K25p/Vestra%20Current%20Candidates.app/Contents/Resources/runtime/runner.ts:32:29)
+    at Object.dispose (file:///private/tmp/vestra-current-candidates-P2K25p/Vestra%20Current%20Candidates.app/Contents/Resources/sdk/source-resolvers.ts:64:27)
+    at file:///private/tmp/vestra-current-candidates-P2K25p/store/packages/49aead502d497c64b4b1a19eacf092a06269f972c2affd0a06edf09b34ea1044/main.js:94:24
+    at stop (file:///private/tmp/vestra-current-ca

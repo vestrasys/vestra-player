@@ -1,0 +1,2 @@
+Observed tool-output excerpt, not the original overwritten raw log:
+First cargo check exit 101: package_manager.rs node --check .output()? lacked From<std::io::Error> for RpcError; serde_json::to_value(...)? lacked From<serde_json::Error> for RpcError. Both converted through anyhow::Error. Subsequent check exited 0.

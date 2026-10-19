@@ -1,0 +1,105 @@
+{
+  "revision": "1.1.0",
+  "created": "2026-10-19",
+  "typecheck": "exit 0",
+  "behaviorTests": "9 passed",
+  "build": "exit 0",
+  "native": "pending maintainer",
+  "files": [
+    {
+      "path": "API_REQUESTS.md",
+      "bytes": 1316,
+      "sha256": "8e29cf161f84c112ac9c1af9d0cd318f9a5421192e4202dc7882b19520f22a98"
+    },
+    {
+      "path": "README.md",
+      "bytes": 2384,
+      "sha256": "ed20813187dce74ae32d87799a91cc63a9a64d827d7aecf88b0badf30e3fdf63"
+    },
+    {
+      "path": "build.mjs",
+      "bytes": 1268,
+      "sha256": "a3fa9529ca6b296c8da69ab94f09d0f75ca4b8739e47bbcc4bbfd8019672c6f4"
+    },
+    {
+      "path": "check.mjs",
+      "bytes": 1031,
+      "sha256": "1e7f27e973db01bafd4f9805886be4fe9b96e00781ef0b7d83b678bf069e6592"
+    },
+    {
+      "path": "controller.ts",
+      "bytes": 5042,
+      "sha256": "d6b733c6dd0a3ff190844b14ded8528d5a81379b8b759e62a802fccee78a544b"
+    },
+    {
+      "path": "dist/controller.js",
+      "bytes": 5042,
+      "sha256": "0de8e51501112aea5c00fc82e6e115e77fb560109c1b6349c792b13a77b0fab8"
+    },
+    {
+      "path": "dist/main.js",
+      "bytes": 4731,
+      "sha256": "55576a5381eb8ee45cfc9f2a352596dda74bf946d0c0cd70712209957d838557"
+    },
+    {
+      "path": "dist/manifest.json",
+      "bytes": 223,
+      "sha256": "aeb2264d110b087d63baf60e867e7ee8022452d8724db277e023fdc1d1b949c0"
+    },
+    {
+      "path": "dist/model.js",
+      "bytes": 1322,
+      "sha256": "8627b7c464f7b1bc32f7f63bedf4661f65daca9aa44540fa8bc6cc5b9a3fad37"
+    },
+    {
+      "path": "dist/package.json",
+      "bytes": 18,
+      "sha256": "1239d4d885dcad42201a27ed9324f8f0f760b78700d8db9ced39a511cffe7eae"
+    },
+    {
+      "path": "dist/ui/workbench.slint",
+      "bytes": 3921,
+      "sha256": "414220e48be09447d5c30cb77fd46d86c78b65a7ea3afeb13455b14d29dcc5c2"
+    },
+    {
+      "path": "main.ts",
+      "bytes": 4731,
+      "sha256": "8926a8d8d36ba6c13bed04baae8faf92215d83057a63d9225f8bb94a03028e2a"
+    },
+    {
+      "path": "manifest.json",
+      "bytes": 156,
+      "sha256": "53daff6c28abea0983bb0d2a241251ee5c7a9d550aa932bb6aa61244a040717b"
+    },
+    {
+      "path": "model.ts",
+      "bytes": 1322,
+      "sha256": "611398a85b88886e812c2d41c52b92e7faeb8fd50b18d376d86621b83b7d4958"
+    },
+    {
+      "path": "package.json",
+      "bytes": 202,
+      "sha256": "96b3905b960774d5708398240e89914c54c25f54639d68b7d51379cca659c1aa"
+    },
+    {
+      "path": "tests/controller.test.ts",
+      "bytes": 5077,
+      "sha256": "c0f6672723e38ce9d55aa56c28f235e8d97cbbe1db2284c83cd1e57502e3145f"
+    },
+    {
+      "path": "tests/model.test.ts",
+      "bytes": 784,
+      "sha256": "4e47e69f9a30af3353db0da8b0136ef4d03d5e05e22cc601e348b07f9c32dfaf"
+    },
+    {
+      "path": "tsconfig.json",
+      "bytes": 281,
+      "sha256": "e318e80fd2357c85e2e6a3da23e2c0c3c7fd15447a644ac650ce38c3fc249969"
+    },
+    {
+      "path": "ui/workbench.slint",
+      "bytes": 3921,
+      "sha256": "414220e48be09447d5c30cb77fd46d86c78b65a7ea3afeb13455b14d29dcc5c2"
+    }
+  ]
+}

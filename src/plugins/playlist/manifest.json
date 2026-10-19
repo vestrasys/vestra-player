@@ -1,12 +1,14 @@
 {
-  "id": "playlist",
-  "name": "播放列表侧栏（实验）",
-  "experimental": true,
-  "entry": "index.ts",
-  "ui": {
-    "file": "ui.slint",
-    "component": "PlaylistPanel",
-    "global": "PlaylistState",
-    "region": "sidebar"
-  }
+  "id": "vestra.playlist",
+  "apiVersion": "vestra.experimental/0.1",
+  "entry": "main.ts",
+  "capabilities": [
+    "playback.read",
+    "playback.control",
+    "events",
+    "commands",
+    "ui.mount",
+    "ui.dialog",
+    "ui.window"
+  ]
 }

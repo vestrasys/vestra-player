@@ -1,0 +1,9 @@
+source geometry prepare entry=1 generation=1 cycle=1 decoder=320x180 rotate=0 filter=@vestra-orientation:lavfi=[null,sidedata=mode=delete:type=DISPLAYMATRIX]
+source geometry ready entry=1 generation=1 cycle=1 output=320x180 rotate=0
+libmpv sub/ass: Loading font file '/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-font-OzPk6I/NotoSansCJKsc-Regular.otf'
+runtime 2 runtime.ready: null
+libmpv sub/ass: Loading font file '/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-font-OzPk6I/NotoSansCJKsc-Regular.otf'
+source geometry prepare entry=2 generation=2 cycle=2 decoder=320x180 rotate=0 filter=@vestra-orientation:lavfi=[null,sidedata=mode=delete:type=DISPLAYMATRIX]
+source geometry ready entry=2 generation=2 cycle=2 output=320x180 rotate=0
+MEDIA_MP4_REVIEW_DONE
+runtime 1 runtime.ready: null

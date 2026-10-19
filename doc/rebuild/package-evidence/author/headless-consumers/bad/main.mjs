@@ -1,0 +1,1 @@
+export async function activate(host){let count=0;const increase=()=>{count+=4;};await host.commands.register("increase",1,{title:"Increase 1.2.0",path:["插件","Package counter","Increase"],shortcut:null},{enabled:true,checked:null,busy:false,reason:null});host.commands.onExecute(increase);throw Error("intentional bad activation");}

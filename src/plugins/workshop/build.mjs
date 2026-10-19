@@ -1,0 +1,2 @@
+import { build } from 'esbuild';
+await build({entryPoints:[new URL('./main.ts',import.meta.url).pathname],bundle:true,platform:'node',format:'esm',target:'node22',external:['./vendor/typescript/lib/typescript.js'],banner:{js:'import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);'},outfile:new URL('./main.js',import.meta.url).pathname,metafile:true});

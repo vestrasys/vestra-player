@@ -1,0 +1,16 @@
+{
+  "mask": "bottom-half yellow R>180,G>180,B<100",
+  "yellowPixels": 652,
+  "glyphColorBbox": {
+    "x0": 517,
+    "y0": 323,
+    "x1": 763,
+    "y1": 339
+  },
+  "roiVsIndependentRecipe": {
+    "mae": 0.0,
+    "exactDiffChannels": 0,
+    "maxAbsDiff": 0
+  },
+  "limit": "Finite actual glyph-region pixel equivalence, not exclusive FFmpeg font-provider/face selection evidence."
+}

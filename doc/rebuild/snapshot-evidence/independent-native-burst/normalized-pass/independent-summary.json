@@ -1,0 +1,203 @@
+{
+  "pass": true,
+  "work": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-burst-review-HsHXOs",
+  "hostExitCode": 0,
+  "pngCount": 13,
+  "allPngExactRgb": true,
+  "mp4Frames": 60,
+  "mp4ExactRgb": true,
+  "activeCancel": {
+    "partialStop": {
+      "observedWallMs": 1792272835970,
+      "observedUtc": "2026-10-17T21:33:55.970000+00:00",
+      "hostPid": 5819,
+      "encoderPid": 5941,
+      "command": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg -nostdin -v error -threads 1 -filter_threads 1 -filter_complex_threads 1 -i /dev/fd/0 -map 0:0 -frames:v 1 -an -vf eq@n0=brightness=0.05:contrast=1:saturation=1:gamma=1,scale=w='max(1,round(iw*sar))':h=ih,setsar=1,settb=AVTB,setpts=PTS-(0.25)/TB,subtitles=filename='/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-subtitle-qe0cAM.vtt':fontsdir='/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-font-pZ9TfM':force_style='FontName=Noto Sans CJK SC,FontSize=48,PrimaryColour=&H0000FFFF,SecondaryColour=&H0000FFFF,OutlineColour=&H00000000,BackColour=&H00000000,BorderStyle=1,Outline=1.3333333333333333,Shadow=0,Alignment=2,MarginL=19,MarginR=19,MarginV=36,Bold=0,Italic=0,Spacing=0,ScaleX=1,ScaleY=1,PlayResX=1280,PlayResY=720,ScaledBorderAndShadow=yes',setpts=PTS+(0.25)/TB,trim=start=4.5,setpts=PTS-STARTPTS -pix_fmt rgb24 -c:v png -threads 1 -f image2 -update 1 -y /private/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-burst-review-HsHXOs/outputs/.tmpSJAZOA",
+      "requestAt": 1792272835970,
+      "cancel": {
+        "cancel": "requested",
+        "jobId": 9
+      },
+      "terminalStatus": "cancelled",
+      "publicationStarted": false,
+      "matchingChildrenAfter": []
+    },
+    "activeMp4Cancel": {
+      "observedWallMs": 1792272843008,
+      "observedUtc": "2026-10-17T21:34:03.008000+00:00",
+      "hostPid": 5819,
+      "encoderPid": 6043,
+      "command": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg -nostdin -v error -threads 1 -filter_threads 1 -filter_complex_threads 1 -i /dev/fd/0 -filter_complex [0:0]scale=w='max(1,round(iw*sar))':h=ih,setsar=1,settb=AVTB,trim=start=0:end=8,setpts=PTS-STARTPTS,pad=ceil(iw/2)*2:ceil(ih/2)*2:color=black[v] -map [v] -an -t 8 -c:v libx264 -preset veryfast -crf 18 -pix_fmt yuv420p -threads 1 -movflags +faststart -f mp4 -y /private/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-burst-review-HsHXOs/outputs/.tmpSiwmnQ",
+      "requestAt": 1792272843008,
+      "cancel": {
+        "cancel": "requested",
+        "jobId": 20
+      },
+      "terminalStatus": "cancelled",
+      "publicationStarted": false,
+      "matchingChildrenAfter": []
+    }
+  },
+  "tailFailures": {
+    "png": {
+      "facts": {
+        "audioTiming": "not applicable: no audio output",
+        "descriptorVersion": "vestra-finite/1",
+        "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+        "hasAudio": false,
+        "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+        "nativeSubtitle": {
+          "canonical": {
+            "digest": "5b296070c3fb044d4c8020f546aedd1bcf98bd572913964bad3633e0aaf6d161",
+            "format": "srt"
+          },
+          "codec": "subrip",
+          "coverageValidated": true,
+          "cueCount": 3,
+          "derived": {
+            "digest": "50981e204b4cc05b3edc51a8c0833ae8e4a6cd1782a833716a9bf306059025ae",
+            "format": "webvtt"
+          },
+          "streamIndex": 1
+        },
+        "preroll": "source-zero-to-start",
+        "processed": true,
+        "range": {
+          "end": null,
+          "interval": "half-open; first video PTS >= start",
+          "start": 8.5
+        },
+        "sourceTimeline": {
+          "containerStartTime": 2,
+          "domain": "mpv-media",
+          "expectedContainerStartTime": 2,
+          "validation": "normalized-origin-matched"
+        },
+        "videoStreamIndex": 0
+      },
+      "jobId": 17,
+      "outcome": {
+        "error": {
+          "code": "export-failed",
+          "message": "encoder output is not a valid PNG: unexpected end of file"
+        }
+      },
+      "publicationStarted": false,
+      "status": "failed"
+    },
+    "rawMp4": {
+      "facts": {
+        "audioTiming": "not applicable: no audio output",
+        "descriptorVersion": "vestra-finite/1",
+        "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+        "hasAudio": false,
+        "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+        "output": {
+          "format": {
+            "duration": "0.500000"
+          },
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "h264",
+              "codec_type": "video",
+              "duration": "0.500000",
+              "height": 720,
+              "index": 0,
+              "r_frame_rate": "30/1",
+              "width": 1280
+            }
+          ]
+        },
+        "preroll": "source-zero-to-start",
+        "processed": false,
+        "range": {
+          "end": 9,
+          "interval": "half-open; first video PTS >= start",
+          "start": 7.5
+        },
+        "sourceTimeline": {
+          "containerStartTime": 2,
+          "domain": "mpv-media",
+          "expectedContainerStartTime": 2,
+          "validation": "normalized-origin-matched"
+        },
+        "videoStreamIndex": 0
+      },
+      "jobId": 18,
+      "outcome": {
+        "error": {
+          "code": "export-failed",
+          "message": "source-unavailable: encoded video covers 0.5s, shorter than requested 1.5s beyond one frame (0.033433333333333336s)"
+        }
+      },
+      "publicationStarted": false,
+      "status": "failed"
+    },
+    "processedMp4": {
+      "facts": {
+        "audioTiming": "not applicable: no audio output",
+        "descriptorVersion": "vestra-finite/1",
+        "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+        "hasAudio": false,
+        "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+        "nativeSubtitle": {
+          "canonical": {
+            "digest": "5b296070c3fb044d4c8020f546aedd1bcf98bd572913964bad3633e0aaf6d161",
+            "format": "srt"
+          },
+          "codec": "subrip",
+          "coverageValidated": true,
+          "cueCount": 3,
+          "derived": {
+            "digest": "50981e204b4cc05b3edc51a8c0833ae8e4a6cd1782a833716a9bf306059025ae",
+            "format": "webvtt"
+          },
+          "streamIndex": 1
+        },
+        "output": {
+          "format": {
+            "duration": "0.500000"
+          },
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "h264",
+              "codec_type": "video",
+              "duration": "0.500000",
+              "height": 720,
+              "index": 0,
+              "r_frame_rate": "30/1",
+              "width": 1280
+            }
+          ]
+        },
+        "preroll": "source-zero-to-start",
+        "processed": true,
+        "range": {
+          "end": 9,
+          "interval": "half-open; first video PTS >= start",
+          "start": 7.5
+        },
+        "sourceTimeline": {
+          "containerStartTime": 2,
+          "domain": "mpv-media",
+          "expectedContainerStartTime": 2,
+          "validation": "normalized-origin-matched"
+        },
+        "videoStreamIndex": 0
+      },
+      "jobId": 19,
+      "outcome": {
+        "error": {
+          "code": "export-failed",
+          "message": "source-unavailable: encoded video covers 0.5s, shorter than requested 1.5s beyond one frame (0.033433333333333336s)"
+        }
+      },
+      "publicationStarted": false,
+      "status": "failed"
+    }
+  }
+}

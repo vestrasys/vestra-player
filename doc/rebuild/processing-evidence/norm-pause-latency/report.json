@@ -1,0 +1,79 @@
+{
+  "mode": "norm-pause-isolation",
+  "records": [
+    {
+      "command": [
+        "vf",
+        "set",
+        "@video:lavfi=[eq@tone=brightness=0:contrast=1:saturation=1:gamma=1,gblur@blur=sigma=0.01:steps=3]"
+      ],
+      "ms": 22.405916,
+      "phase": "setup",
+      "result": "Ok(())"
+    },
+    {
+      "command": [
+        "af",
+        "set",
+        "@audio:lavfi=[volume@protect=volume=1,equalizer@band=frequency=1000:width_type=q:width=1:gain=0,treble@high=frequency=3000:width_type=s:width=0.5:gain=0,dynaudnorm@norm=framelen=100:gausssize=5:peak=0.9:maxgain=2]"
+      ],
+      "ms": 4.208625,
+      "phase": "setup",
+      "result": "Ok(())"
+    },
+    {
+      "after": {
+        "frames": 52,
+        "paused": true,
+        "position": 1.633,
+        "wall": 3.308043792
+      },
+      "before": {
+        "frames": 52,
+        "paused": true,
+        "position": 1.633,
+        "wall": 2.10174025
+      },
+      "command": [
+        "vf-command",
+        "video",
+        "brightness",
+        "-0.3",
+        "eq@tone"
+      ],
+      "commandWall": 2.102052834,
+      "firstPixelChangeMs": null,
+      "initialMae": 0.0,
+      "ms": 1.037,
+      "phase": "runtime-brightness",
+      "pixelMae": 0.0,
+      "result": "Ok(())"
+    },
+    {
+      "after": {
+        "frames": 54,
+        "paused": true,
+        "position": 1.633,
+        "wall": 4.558473292
+      },
+      "before": {
+        "frames": 52,
+        "paused": true,
+        "position": 1.633,
+        "wall": 2.10174025
+      },
+      "command": [
+        "vf",
+        "add",
+        "@video:lavfi=[eq@tone=brightness=-0.3:contrast=1:saturation=1:gamma=1,gblur@blur=sigma=2:steps=3]"
+      ],
+      "commandWall": 3.350923084,
+      "firstPixelChangeMs": 109.45758299999974,
+      "initialMae": 48.49208188657408,
+      "ms": 1.114417,
+      "phase": "local-vf-refresh",
+      "pixelMae": 48.49208188657408,
+      "result": "Ok(())"
+    }
+  ]
+}

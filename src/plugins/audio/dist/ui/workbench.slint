@@ -1,0 +1,79 @@
+import { Button, CheckBox, Slider } from "std-widgets.slint";
+component Band inherits Rectangle {
+    in property <string> caption;
+    in property <float> gain;
+    in property <bool> available;
+    callback edited(float);
+    height: 46px;
+    background: #242831;
+    border-radius: 6px;
+    HorizontalLayout {
+        padding: 10px;
+        spacing: 12px;
+        Text { text: root.caption; color: #d4d9e4; width: 68px; }
+        Slider { minimum: -12; maximum: 12; value: root.gain; enabled: root.available; changed(value) => { root.edited(value); } }
+        Text { text: round(root.gain * 10) / 10 + " dB"; color: #d4d9e4; width: 70px; horizontal-alignment: right; }
+    }
+}
+export component AudioWorkbench inherits Window {
+    title: "音频工作台";
+    preferred-width: 660px;
+    preferred-height: 720px;
+    min-width: 620px;
+    min-height: 680px;
+    background: #191c23;
+    in property <string> status-text: "等待音频来源…";
+    in property <bool> source-ready;
+    in property <bool> is-busy;
+    in property <bool> has-error;
+    in property <[float]> gain-values: [0, 0, 0, 0, 0, 0];
+    in property <float> delay-ms;
+    in property <bool> normalize-enabled;
+    in property <float> clarity-db;
+    callback gain-changed(int, float);
+    callback delay-changed(float);
+    callback normalize-changed(bool);
+    callback clarity-changed(float);
+    callback preset-selected(int);
+    callback reset-requested();
+    callback retry-requested();
+    VerticalLayout {
+        padding: 22px;
+        spacing: 10px;
+        Text { text: "音频工作台"; color: #f2f4fa; font-size: 24px; font-weight: 600; }
+        Text { text: "均衡器 · 同步 · 动态处理"; color: #929eb1; }
+        HorizontalLayout {
+            spacing: 8px;
+            Button { text: "平直"; enabled: root.source-ready; clicked => { root.preset-selected(0); } }
+            Button { text: "人声"; enabled: root.source-ready; clicked => { root.preset-selected(1); } }
+            Button { text: "音乐"; enabled: root.source-ready; clicked => { root.preset-selected(2); } }
+            Button { text: "影院"; enabled: root.source-ready; clicked => { root.preset-selected(3); } }
+        }
+        for value[index] in root.gain-values: Band {
+            caption: ["60 Hz", "170 Hz", "350 Hz", "1 kHz", "3.5 kHz", "10 kHz"][index];
+            gain: value;
+            available: root.source-ready;
+            edited(gain) => { root.gain-changed(index, gain); }
+        }
+        HorizontalLayout {
+            spacing: 12px;
+            Text { text: "音频延迟"; color: #d4d9e4; width: 100px; }
+            Slider { minimum: -2000; maximum: 2000; value: root.delay-ms; enabled: root.source-ready; changed(value) => { root.delay-changed(value); } }
+            Text { text: round(root.delay-ms) + " ms"; color: #d4d9e4; width: 80px; }
+        }
+        Text { text: "正值使音频更晚播放。"; color: #929eb1; font-size: 12px; }
+        CheckBox { text: "响度规范化"; checked: root.normalize-enabled; enabled: root.source-ready; toggled => { root.normalize-changed(self.checked); } }
+        HorizontalLayout {
+            spacing: 12px;
+            Text { text: "清晰度增强"; color: #d4d9e4; width: 100px; }
+            Slider { minimum: 0; maximum: 6; value: root.clarity-db; enabled: root.source-ready; changed(value) => { root.clarity-changed(value); } }
+            Text { text: round(root.clarity-db * 10) / 10 + " dB"; color: #d4d9e4; width: 80px; }
+        }
+        HorizontalLayout {
+            spacing: 12px;
+            Button { text: "全部复位"; enabled: root.source-ready; clicked => { root.reset-requested(); } }
+            Button { text: "检查 / 重试"; visible: root.has-error; enabled: !root.is-busy; clicked => { root.retry-requested(); } }
+        }
+        Text { text: root.status-text; color: root.has-error ? #ffb4a8 : #a6c4ff; wrap: word-wrap; }
+    }
+}

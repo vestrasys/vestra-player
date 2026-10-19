@@ -1,0 +1,49 @@
+{
+  "recordedAt": "2026-10-19T15:54:07.873991+00:00",
+  "bundleId": "local.vestra.current-candidates-vestra-current-candidates-x3gEIU",
+  "originalPid": 53885,
+  "productionPackages": 8,
+  "debugPackages": [
+    "playback",
+    "playlist"
+  ],
+  "observations": [
+    {
+      "kind": "continuous-playback",
+      "source": "/tmp/vestra-continuity-media/continuous-900s.mp4",
+      "session": 1,
+      "positionFrom": 673.9,
+      "positionTo": 798.69,
+      "frameFrom": 6902,
+      "frameTo": 10644,
+      "scope": "Native Host AX observations while menu navigation; no acoustic verification (--silent)."
+    },
+    {
+      "kind": "menu-defect",
+      "observed": "Down navigation returned to first row; some AX and physical clicks did not execute intended command. Repeated physical click eventually opened audio workbench.",
+      "hypothesis": "Maintainer reports repeated registry projections replace visible row model and reset cursor; not yet fixed or reverified."
+    },
+    {
+      "kind": "audio-workbench",
+      "observed": "Opened separate native window. Human voice preset accepted: [-3,-2,1,3,2,-1] dB. Audio delay setValue accepted 120 ms. Loudness normalization on. Status ready.",
+      "limitations": "Does not prove audible DSP or continuous dragging."
+    },
+    {
+      "kind": "render-defect",
+      "observed": "Main window Chinese menu and playback labels visible; separate audio window screenshot has missing Chinese body and button labels despite complete AX text. Latin numeric frequency and gain labels visible.",
+      "scope": "Host/native Slint rendering defect remains."
+    },
+    {
+      "kind": "drag-not-verified",
+      "observed": "After attempted slider drag, AX showed bare Starting libmpv Host; original PID missing in direct ps query.",
+      "limitations": "Exit reason not yet verified; do not claim drag passed or caused crash."
+    },
+    {
+      "kind": "verified-crash",
+      "observed": "Maintainer owning process reports original PID 53885 terminal SIGABRT. First fatal accesskit_consumer 0.32 tree.rs:34: Focused ID #21430274 is not in the node list, followed by cannot unwind and winit macOS mouse_down stack.",
+      "scope": "Actual native process crash; not timeout. A later no-argument PID 54532 is distinct from original test instance.",
+      "nextAction": "Generic Host projection stability fix then real native menu and dragging revalidation; no plugin identity special case."
+    }
+  ],
+  "status": "partial; goal unfinished"
+}

@@ -1,0 +1,15 @@
+import { readFile, writeFile, copyFile, mkdir } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const ts = require(process.argv[2] || 'typescript');
+const root = new URL('./', import.meta.url);
+const source = await readFile(new URL('main.ts', root), 'utf8');
+const result = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 }, reportDiagnostics: true });
+if (result.diagnostics?.some(d => d.category === ts.DiagnosticCategory.Error)) throw new Error('TypeScript emit failed');
+await mkdir(new URL('dist/', root), { recursive: true });
+await writeFile(new URL('dist/main.js', root), result.outputText);
+await copyFile(new URL('capture.slint', root), new URL('dist/capture.slint', root));
+await copyFile(new URL('capture-error.slint', root), new URL('dist/capture-error.slint', root));
+const manifest = JSON.parse(await readFile(new URL('manifest.json', root), 'utf8'));
+await writeFile(new URL('dist/manifest.json', root), JSON.stringify({ ...manifest, version: '1.0.0', entry: 'main.js' }, null, 2) + '\n');
+console.log('capture production JS + Slint + manifest emitted; run strict tsc separately');

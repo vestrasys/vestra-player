@@ -1,0 +1,25 @@
+{
+  "before": {
+    "duration": 24,
+    "paused": false,
+    "position": 0.7666666666666666,
+    "rate": 1,
+    "session": 1,
+    "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-stage-a-Wen50f/clock.mp4",
+    "videoFrames": 24,
+    "volume": 100
+  },
+  "after": {
+    "duration": 24,
+    "paused": false,
+    "position": 2.3,
+    "rate": 1,
+    "session": 1,
+    "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-stage-a-Wen50f/clock.mp4",
+    "videoFrames": 70,
+    "volume": 100
+  },
+  "controlsMs": 1495.6340409999998,
+  "states": 42,
+  "pass": true
+}

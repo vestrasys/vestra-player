@@ -1,0 +1,36 @@
+{
+  "pass": false,
+  "hostExitCode": 0,
+  "consumerFailure": "AssertionError [ERR_ASSERTION]: Error: expected unsupported\n+ actual - expected\n\n+ undefined\n- 'unsupported'\n",
+  "completedJobNames": [
+    "burst-0",
+    "burst-1",
+    "burst-2",
+    "burst-3",
+    "burst-4",
+    "partial-0",
+    "partial-1",
+    "partial-2",
+    "native-old-mp4",
+    "raw-excludes-native",
+    "explicit-exclude-native"
+  ],
+  "checksReached": [
+    "helper",
+    "legacyBrightness",
+    "legacySubtitleDelay",
+    "frozen",
+    "selectionBeforeChanges",
+    "currentAfterChanges",
+    "partialStop",
+    "exactDuration",
+    "markup",
+    "unsupportedCodec"
+  ],
+  "pixelAnalysisExecuted": false,
+  "activeMp4CancelReached": false,
+  "origin2Sha256": "46cb50bd91b0022a4a7308a8ae773d8bed6dfc25972d9cda355d5c3f17068228",
+  "origin2Probe": "origin2-independent-postfailure-ffprobe.json",
+  "unexpectedCaptureResultSaved": false,
+  "mpvDemuxerStartTimeSaved": false
+}

@@ -1,0 +1,13 @@
+{
+  "headless": [
+    "node",
+    "src/scripts/verify-packages.mjs"
+  ],
+  "headlessOuterExitCode": 0,
+  "hostExit": {
+    "code": null,
+    "signal": "SIGTERM"
+  },
+  "root": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-packages-UMsFMb",
+  "note": "The script snapshot here is the later native-staging version. Exact headless generated consumer source is archived separately. check.log is the subsequent successful check, not the first failed check."
+}

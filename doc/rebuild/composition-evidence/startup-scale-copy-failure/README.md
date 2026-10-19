@@ -1,0 +1,7 @@
+# 换壳初始尺寸复制反例（V11，未交GUI）
+
+本轮作者启动的唯一V11实例PID88451，未交给CUA或独立操作者；发现后精确TERM，没有重跑坏路径。实际launch/stdout/stderr和从原日志提取的window-states.json保留于此。
+
+根已改preferred1100×720/min720×480、底栏约束已正确占60；但换壳后根高度809（canvas671），未保旧720。旧实现将已显示旧窗PhysicalSize传给尚未显示、scale可能仍1的新窗；锁版winit适配器resize_window对未创建窗先以当前scale转logical，后创建于retina屏，导致错误初始请求/屏幕裁限。修正只用公开LogicalSize(oldPhysical/oldScale)恢复客户端大小。position不同：官方set_position直接保留Physical枚举入winit attributes，未做同样的预先Logical转换，故保原PhysicalPosition；不据此声称跨屏已验证。
+
+修后V12实际启动日志根1100×720、canvas1084×582（60px底栏）。V12独立原生验证另记录，此处只证明作者日志尺寸对照，不证明截图/FS已正确。修后Compiler测试0/build0工具会话56757，原工具输出未重定向，未伪造为完整stdio。

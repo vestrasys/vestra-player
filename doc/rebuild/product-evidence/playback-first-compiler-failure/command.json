@@ -1,0 +1,15 @@
+{
+  "binary": "/tmp/vestra-product-slices-UXVLl0/Vestra Product Slices.app/Contents/MacOS/host",
+  "binarySha256": "de89edb85a6b867df869a124d637ddc0e85b41e9ae908bdd0b7e4a7aad70d296",
+  "args": [
+    "--silent",
+    "--seconds",
+    "65",
+    "--plugin",
+    "/tmp/vestra-product-slices-UXVLl0/manager"
+  ],
+  "env": {
+    "VESTRA_SLICE_ROOT": "/tmp/vestra-product-slices-UXVLl0",
+    "VESTRA_PACKAGE_STORE": "/tmp/vestra-product-slices-UXVLl0/store"
+  }
+}

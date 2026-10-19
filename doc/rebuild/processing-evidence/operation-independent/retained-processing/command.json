@@ -1,0 +1,13 @@
+{
+  "work": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-review-IEvZYw",
+  "args": [
+    "--headless",
+    "--silent",
+    "--seconds",
+    "14",
+    "--plugin",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-review-IEvZYw/consumer"
+  ],
+  "exitCode": 0,
+  "signal": null
+}

@@ -1,0 +1,12 @@
+HELPER_STARTED
+runtime 2 runtime.ready: null
+HELPER_DISPOSED
+plugin transport: plugin output backpressure/disconnected: sending on a full channel
+Warning: Detected unsettled top-level await at file:///Users/ziyang/Documents/vestra-player/src/runtime/runner.ts:123
+  dispose = await plugin.activate(host);
+            ^
+
+
+
+SESSION_INTEGRATION_PASS {"before":{"duration":24,"paused":false,"position":0.8333333333333334,"rate":1,"session":1,"source":"/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-stage-a-6bVt11/clock.mp4","videoFrames":25,"volume":100},"after":{"duration":24,"paused":false,"position":2.2666666666666666,"rate":1,"session":1,"source":"/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-stage-a-6bVt11/clock.mp4","videoFrames":69,"volume":100},"controlsMs":1526.766916,"states":42,"pass":true}
+runtime 1 runtime.ready: null

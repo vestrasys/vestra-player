@@ -1,0 +1,16 @@
+{
+  "work": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-style-review-3VrS1P",
+  "mode": "replay",
+  "args": [
+    "--headless",
+    "--silent",
+    "--seconds",
+    "7",
+    "--frame-evidence-dir",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-style-review-3VrS1P/replay/frames",
+    "--plugin",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-style-review-3VrS1P/consumer"
+  ],
+  "exitCode": 0,
+  "signal": null
+}

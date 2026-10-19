@@ -1,0 +1,20 @@
+{
+  "root": "/tmp/vestra-current-candidates-2MG47W",
+  "bundleId": "local.vestra.current-candidates-vestra-current-candidates-2MG47W",
+  "binary": "/tmp/vestra-current-candidates-2MG47W/Vestra Current Candidates.app/Contents/MacOS/host",
+  "pid": 55373,
+  "args": [
+    "--silent",
+    "--seconds",
+    "50",
+    "--plugin",
+    "/tmp/vestra-current-candidates-2MG47W/manager"
+  ],
+  "env": {
+    "VESTRA_SLICE_ROOT": "/tmp/vestra-current-candidates-2MG47W",
+    "VESTRA_PACKAGE_STORE": "/tmp/vestra-current-candidates-2MG47W/store"
+  },
+  "cache": "/tmp/vestra-current-runtime-cache",
+  "binarySha256": "48d11ccdd755a669e3992007b0f1ce1a2916c029fa38f9f3571acc84299f9720",
+  "note": "Current local candidate snapshots; cache provenance is recorded separately. No historical-hash access prerequisite."
+}

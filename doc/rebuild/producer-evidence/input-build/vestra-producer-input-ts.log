@@ -1,0 +1,11 @@
+src/sdk/producer.ts(35,124): error TS2345: Argument of type '{ notice: ProducerInputNotice; }' is not assignable to parameter of type 'Json | undefined'.
+  Types of property 'notice' are incompatible.
+    Type 'ProducerInputNotice' is not assignable to type 'Json | undefined'.
+      Type 'ProducerInputNotice' is not assignable to type '{ [key: string]: Json; }'.
+        Property 'scope' is incompatible with index signature.
+          Type 'ProducerInputScope' is not assignable to type 'Json'.
+            Type 'ProducerInputScope' is not assignable to type '{ [key: string]: Json; }'.
+              Property 'ticket' is incompatible with index signature.
+                Type 'SourceTicket' is not assignable to type 'Json'.
+                  Type 'SourceTicket' is not assignable to type '{ [key: string]: Json; }'.
+                    Index signature for type 'string' is missing in type 'SourceTicket'.

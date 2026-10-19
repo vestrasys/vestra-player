@@ -1,0 +1,197 @@
+{
+  "pass": true,
+  "coverage": "sameSourceProgressObserved",
+  "snapshot": {
+    "container": "mov,mp4,m4a,3gp,3g2,mj2",
+    "kind": "raw",
+    "sizeBytes": 22031403,
+    "snapshotId": 1,
+    "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-jobs-same-source-yzlXEi/a.mp4",
+    "sourceStamp": {
+      "generation": 1,
+      "intentVersion": 1
+    },
+    "time": 12
+  },
+  "pngs": [
+    {
+      "filename": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-jobs-same-source-yzlXEi/artifacts/same-a-0.png",
+      "sha256": "51d640fbe2e4f1a827f513317c239d8497eb19ce83fc0a0536109b6d5642e394",
+      "sizeBytes": 163791,
+      "width": 1280,
+      "height": 720,
+      "markerRGB": [
+        254,
+        0,
+        0
+      ],
+      "vs12": {
+        "mae": 0,
+        "exactDiffChannels": 0,
+        "maxAbsDiff": 0
+      }
+    },
+    {
+      "filename": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-jobs-same-source-yzlXEi/artifacts/same-a-1.png",
+      "sha256": "51d640fbe2e4f1a827f513317c239d8497eb19ce83fc0a0536109b6d5642e394",
+      "sizeBytes": 163791,
+      "width": 1280,
+      "height": 720,
+      "markerRGB": [
+        254,
+        0,
+        0
+      ],
+      "vs12": {
+        "mae": 0,
+        "exactDiffChannels": 0,
+        "maxAbsDiff": 0
+      }
+    }
+  ],
+  "interval": {
+    "sameChildPids": [
+      97143
+    ],
+    "elapsedMs": 106,
+    "before": {
+      "wallMs": 1792268719831,
+      "jobs": [
+        {
+          "jobId": 1,
+          "outcome": null,
+          "publicationStarted": false,
+          "status": "running"
+        },
+        {
+          "jobId": 2,
+          "outcome": null,
+          "publicationStarted": false,
+          "status": "running"
+        }
+      ],
+      "source": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true,
+          "snapshotSource": true
+        },
+        "container": "mov,mp4,m4a,3gp,3g2,mj2",
+        "cycle": 1,
+        "duration": 24,
+        "eventSequence": 6,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.06666666666666667,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-jobs-same-source-yzlXEi/a.mp4",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      },
+      "render": {
+        "duration": 24,
+        "paused": false,
+        "position": 0.06666666666666667,
+        "rate": 1,
+        "session": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-jobs-same-source-yzlXEi/a.mp4",
+        "videoFrames": 2,
+        "volume": 100
+      },
+      "children": [
+        {
+          "pid": 97143,
+          "ppid": 97128,
+          "command": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg -nostdin -v error -ss 12 -i /dev/fd/0 -frames:v 1 -an -vf scale=w='max(1,round(iw*sar))':h=ih,setsar=1 -pix_fmt rgb24 -c:v png -f image2 -update 1 -y /private/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-jobs-same-source-yzlXEi/artifacts/.tmpapMVzz"
+        }
+      ]
+    },
+    "after": {
+      "wallMs": 1792268719937,
+      "jobs": [
+        {
+          "jobId": 1,
+          "outcome": null,
+          "publicationStarted": false,
+          "status": "running"
+        },
+        {
+          "jobId": 2,
+          "outcome": null,
+          "publicationStarted": false,
+          "status": "running"
+        }
+      ],
+      "source": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true,
+          "snapshotSource": true
+        },
+        "container": "mov,mp4,m4a,3gp,3g2,mj2",
+        "cycle": 1,
+        "duration": 24,
+        "eventSequence": 9,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.16666666666666666,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-jobs-same-source-yzlXEi/a.mp4",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      },
+      "render": {
+        "duration": 24,
+        "paused": false,
+        "position": 0.16666666666666666,
+        "rate": 1,
+        "session": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-jobs-same-source-yzlXEi/a.mp4",
+        "videoFrames": 5,
+        "volume": 100
+      },
+      "children": [
+        {
+          "pid": 97143,
+          "ppid": 97128,
+          "command": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg -nostdin -v error -ss 12 -i /dev/fd/0 -frames:v 1 -an -vf scale=w='max(1,round(iw*sar))':h=ih,setsar=1 -pix_fmt rgb24 -c:v png -f image2 -update 1 -y /private/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-jobs-same-source-yzlXEi/artifacts/.tmpapMVzz"
+        }
+      ]
+    }
+  },
+  "cleanup": {
+    "entries": [
+      "existing.png",
+      "same-a-0.png",
+      "same-a-1.png"
+    ],
+    "children": []
+  },
+  "limits": [
+    "One finite same-object A playback/worker trial; actual same FFmpeg PID at interval endpoints and public source/render counters.",
+    "No read-system-call trace or long stress/device-audio guarantee; no proof against in-place adversarial file writes.",
+    "Raw time12 output independently decoded/reference checked; no processed export/font/subtitle snapshot or atomic PTS fence."
+  ]
+}

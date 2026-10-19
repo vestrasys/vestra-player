@@ -1,0 +1,186 @@
+{
+  "processing": {
+    "generation": 1,
+    "revision": 1,
+    "stage": "video",
+    "status": "applied"
+  },
+  "subtitle": {
+    "confirmation": "applied",
+    "error": null,
+    "presentation": {
+      "actualFont": {
+        "digest": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+        "faceIndex": 0,
+        "family": "Noto Sans CJK SC",
+        "fontId": "noto-cjk-sc-regular-2.004",
+        "postscript": "NotoSansCJKsc-Regular",
+        "sizeBytes": 16437364
+      },
+      "confirmation": "applied",
+      "coverageCheckedOnCapture": true,
+      "effective": null,
+      "fonts": [
+        {
+          "digest": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+          "faceIndex": 0,
+          "family": "Noto Sans CJK SC",
+          "id": "noto-cjk-sc-regular-2.004",
+          "resolution": "fixedFace",
+          "snapshotEligible": true
+        }
+      ],
+      "layers": [],
+      "referenceHeight": 1080,
+      "revision": 0,
+      "snapshotEligible": true
+    },
+    "resources": [
+      {
+        "cues": 1,
+        "derived": {
+          "digest": "7b2b6ffdd01fec8ef43993d46ca262c525b301774b8c8b7a0dc2b42e6bfebd7b",
+          "format": "webvtt"
+        },
+        "digest": "e273a6722cc4987131939db1db65002840ac4447589bcfc7e4a80875db0d59a3",
+        "format": "srt",
+        "owner": 2,
+        "resourceId": "old",
+        "revision": 1,
+        "sizeBytes": 70
+      }
+    ],
+    "selection": {
+      "stamp": {
+        "generation": 1,
+        "revision": 1
+      },
+      "target": {
+        "contentRevision": 1,
+        "kind": "external",
+        "owner": 2,
+        "resourceId": "old"
+      }
+    },
+    "source": {
+      "generation": 1,
+      "phase": "ready"
+    },
+    "tracks": [
+      {
+        "language": null,
+        "styleReason": null,
+        "styleSupported": true,
+        "target": {
+          "contentRevision": 1,
+          "kind": "external",
+          "owner": 2,
+          "resourceId": "old"
+        },
+        "title": "vestra-subtitle-GRDvJE.vtt"
+      }
+    ]
+  },
+  "style": {
+    "confirmation": "applied",
+    "error": null,
+    "presentation": {
+      "actualFont": {
+        "digest": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+        "faceIndex": 0,
+        "family": "Noto Sans CJK SC",
+        "fontId": "noto-cjk-sc-regular-2.004",
+        "postscript": "NotoSansCJKsc-Regular",
+        "sizeBytes": 16437364
+      },
+      "confirmation": "applied",
+      "coverageCheckedOnCapture": true,
+      "effective": {
+        "manifestId": "review.processed-helper",
+        "owner": 2,
+        "revision": 1,
+        "style": {
+          "color": "yellow",
+          "fontId": "noto-cjk-sc-regular-2.004",
+          "fontSize": 72,
+          "marginPercent": 5,
+          "offsetMs": 250,
+          "outline": 1
+        }
+      },
+      "fonts": [
+        {
+          "digest": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+          "faceIndex": 0,
+          "family": "Noto Sans CJK SC",
+          "id": "noto-cjk-sc-regular-2.004",
+          "resolution": "fixedFace",
+          "snapshotEligible": true
+        }
+      ],
+      "layers": [
+        {
+          "manifestId": "review.processed-helper",
+          "owner": 2,
+          "revision": 1,
+          "style": {
+            "color": "yellow",
+            "fontId": "noto-cjk-sc-regular-2.004",
+            "fontSize": 72,
+            "marginPercent": 5,
+            "offsetMs": 250,
+            "outline": 1
+          }
+        }
+      ],
+      "referenceHeight": 1080,
+      "revision": 1,
+      "snapshotEligible": true
+    },
+    "resources": [
+      {
+        "cues": 1,
+        "derived": {
+          "digest": "7b2b6ffdd01fec8ef43993d46ca262c525b301774b8c8b7a0dc2b42e6bfebd7b",
+          "format": "webvtt"
+        },
+        "digest": "e273a6722cc4987131939db1db65002840ac4447589bcfc7e4a80875db0d59a3",
+        "format": "srt",
+        "owner": 2,
+        "resourceId": "old",
+        "revision": 1,
+        "sizeBytes": 70
+      }
+    ],
+    "selection": {
+      "stamp": {
+        "generation": 1,
+        "revision": 1
+      },
+      "target": {
+        "contentRevision": 1,
+        "kind": "external",
+        "owner": 2,
+        "resourceId": "old"
+      }
+    },
+    "source": {
+      "generation": 1,
+      "phase": "ready"
+    },
+    "tracks": [
+      {
+        "language": null,
+        "styleReason": null,
+        "styleSupported": true,
+        "target": {
+          "contentRevision": 1,
+          "kind": "external",
+          "owner": 2,
+          "resourceId": "old"
+        },
+        "title": "vestra-subtitle-GRDvJE.vtt"
+      }
+    ]
+  }
+}

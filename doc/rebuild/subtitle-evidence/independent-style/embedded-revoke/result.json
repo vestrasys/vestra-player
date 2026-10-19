@@ -1,0 +1,273 @@
+{
+  "pass": true,
+  "runs": {
+    "embedded-control": {
+      "pass": true,
+      "analysis": {
+        "b-control-default": [
+          {
+            "changedPixels": 0,
+            "exactDiffPixels": 0,
+            "exactDiffChannels": 0,
+            "maxAbsDiff": 0,
+            "exactWithinSubtitleROI": true,
+            "yellowPixels": 0,
+            "cyanPixels": 0,
+            "mae": 0,
+            "bbox": null
+          },
+          {
+            "changedPixels": 0,
+            "exactDiffPixels": 0,
+            "exactDiffChannels": 0,
+            "maxAbsDiff": 0,
+            "exactWithinSubtitleROI": true,
+            "yellowPixels": 0,
+            "cyanPixels": 0,
+            "mae": 0,
+            "bbox": null
+          },
+          {
+            "changedPixels": 0,
+            "exactDiffPixels": 0,
+            "exactDiffChannels": 0,
+            "maxAbsDiff": 0,
+            "exactWithinSubtitleROI": true,
+            "yellowPixels": 0,
+            "cyanPixels": 0,
+            "mae": 0,
+            "bbox": null
+          }
+        ]
+      },
+      "comparisons": {},
+      "stability": {
+        "b-control-default": [
+          {
+            "changedPixels": 0,
+            "exactDiffPixels": 0,
+            "exactDiffChannels": 0,
+            "maxAbsDiff": 0,
+            "exactWithinSubtitleROI": true,
+            "yellowPixels": 0,
+            "cyanPixels": 0,
+            "mae": 0,
+            "bbox": null
+          },
+          {
+            "changedPixels": 0,
+            "exactDiffPixels": 0,
+            "exactDiffChannels": 0,
+            "maxAbsDiff": 0,
+            "exactWithinSubtitleROI": true,
+            "yellowPixels": 0,
+            "cyanPixels": 0,
+            "mae": 0,
+            "bbox": null
+          }
+        ]
+      },
+      "limits": [
+        "Actual settled software RGB, no exact font identity or physical display fence.",
+        "Pure validation/stale failures preserve pixels; no actual partial-backend rollback injected.",
+        "Ready replay uses no new subtitle mutation after restart/B Ready; B default embedded fixture is observed independently via blue marker.",
+        "frameSourceAssociation none; public source snapshots and repeated softwareSequence are not PTS/source fences."
+      ]
+    },
+    "embedded-test": {
+      "pass": true,
+      "analysis": {
+        "b-yellow": [
+          {
+            "changedPixels": 0,
+            "exactDiffPixels": 0,
+            "exactDiffChannels": 0,
+            "maxAbsDiff": 0,
+            "exactWithinSubtitleROI": true,
+            "yellowPixels": 963,
+            "cyanPixels": 0,
+            "mae": 0,
+            "bbox": null
+          },
+          {
+            "changedPixels": 0,
+            "exactDiffPixels": 0,
+            "exactDiffChannels": 0,
+            "maxAbsDiff": 0,
+            "exactWithinSubtitleROI": true,
+            "yellowPixels": 963,
+            "cyanPixels": 0,
+            "mae": 0,
+            "bbox": null
+          },
+          {
+            "changedPixels": 0,
+            "exactDiffPixels": 0,
+            "exactDiffChannels": 0,
+            "maxAbsDiff": 0,
+            "exactWithinSubtitleROI": true,
+            "yellowPixels": 963,
+            "cyanPixels": 0,
+            "mae": 0,
+            "bbox": null
+          }
+        ],
+        "b-revoked-default": [
+          {
+            "changedPixels": 3938,
+            "exactDiffPixels": 4122,
+            "exactDiffChannels": 12188,
+            "maxAbsDiff": 255,
+            "exactWithinSubtitleROI": false,
+            "yellowPixels": 0,
+            "cyanPixels": 0,
+            "mae": 0.7304468878600823,
+            "bbox": {
+              "x0": 379,
+              "y0": 486,
+              "x1": 580,
+              "y1": 511
+            }
+          },
+          {
+            "changedPixels": 3938,
+            "exactDiffPixels": 4122,
+            "exactDiffChannels": 12188,
+            "maxAbsDiff": 255,
+            "exactWithinSubtitleROI": false,
+            "yellowPixels": 0,
+            "cyanPixels": 0,
+            "mae": 0.7304468878600823,
+            "bbox": {
+              "x0": 379,
+              "y0": 486,
+              "x1": 580,
+              "y1": 511
+            }
+          }
+        ]
+      },
+      "comparisons": {
+        "control-default -> b-yellow": [
+          {
+            "changedPixels": 3938,
+            "exactDiffPixels": 4122,
+            "exactDiffChannels": 12188,
+            "maxAbsDiff": 255,
+            "exactWithinSubtitleROI": false,
+            "yellowPixels": 963,
+            "cyanPixels": 0,
+            "mae": 0.7304468878600823,
+            "bbox": {
+              "x0": 379,
+              "y0": 486,
+              "x1": 580,
+              "y1": 511
+            }
+          },
+          {
+            "changedPixels": 3938,
+            "exactDiffPixels": 4122,
+            "exactDiffChannels": 12188,
+            "maxAbsDiff": 255,
+            "exactWithinSubtitleROI": false,
+            "yellowPixels": 963,
+            "cyanPixels": 0,
+            "mae": 0.7304468878600823,
+            "bbox": {
+              "x0": 379,
+              "y0": 486,
+              "x1": 580,
+              "y1": 511
+            }
+          },
+          {
+            "changedPixels": 3938,
+            "exactDiffPixels": 4122,
+            "exactDiffChannels": 12188,
+            "maxAbsDiff": 255,
+            "exactWithinSubtitleROI": false,
+            "yellowPixels": 963,
+            "cyanPixels": 0,
+            "mae": 0.7304468878600823,
+            "bbox": {
+              "x0": 379,
+              "y0": 486,
+              "x1": 580,
+              "y1": 511
+            }
+          }
+        ],
+        "control-default -> b-revoked-default": [
+          {
+            "changedPixels": 0,
+            "exactDiffPixels": 0,
+            "exactDiffChannels": 0,
+            "maxAbsDiff": 0,
+            "exactWithinSubtitleROI": true,
+            "yellowPixels": 0,
+            "cyanPixels": 0,
+            "mae": 0,
+            "bbox": null
+          },
+          {
+            "changedPixels": 0,
+            "exactDiffPixels": 0,
+            "exactDiffChannels": 0,
+            "maxAbsDiff": 0,
+            "exactWithinSubtitleROI": true,
+            "yellowPixels": 0,
+            "cyanPixels": 0,
+            "mae": 0,
+            "bbox": null
+          }
+        ]
+      },
+      "stability": {
+        "b-yellow": [
+          {
+            "changedPixels": 0,
+            "exactDiffPixels": 0,
+            "exactDiffChannels": 0,
+            "maxAbsDiff": 0,
+            "exactWithinSubtitleROI": true,
+            "yellowPixels": 963,
+            "cyanPixels": 0,
+            "mae": 0,
+            "bbox": null
+          },
+          {
+            "changedPixels": 0,
+            "exactDiffPixels": 0,
+            "exactDiffChannels": 0,
+            "maxAbsDiff": 0,
+            "exactWithinSubtitleROI": true,
+            "yellowPixels": 963,
+            "cyanPixels": 0,
+            "mae": 0,
+            "bbox": null
+          }
+        ],
+        "b-revoked-default": [
+          {
+            "changedPixels": 0,
+            "exactDiffPixels": 0,
+            "exactDiffChannels": 0,
+            "maxAbsDiff": 0,
+            "exactWithinSubtitleROI": true,
+            "yellowPixels": 0,
+            "cyanPixels": 0,
+            "mae": 0,
+            "bbox": null
+          }
+        ]
+      },
+      "limits": [
+        "Actual settled software RGB, no exact font identity or physical display fence.",
+        "Pure validation/stale failures preserve pixels; no actual partial-backend rollback injected.",
+        "Ready replay uses no new subtitle mutation after restart/B Ready; B default embedded fixture is observed independently via blue marker.",
+        "frameSourceAssociation none; public source snapshots and repeated softwareSequence are not PTS/source fences."
+      ]
+    }
+  }
+}

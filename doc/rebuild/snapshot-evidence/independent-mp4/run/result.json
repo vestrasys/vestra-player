@@ -1,0 +1,2694 @@
+{
+  "pass": true,
+  "comparisons": {
+    "raw-second-low-muted": {
+      "actualSamples": 192000,
+      "expectedSamples": 192000,
+      "whole": {
+        "samples": 192000,
+        "rmse": 0.00018579490559407713,
+        "nrmse": 0.0015062489204101632,
+        "mae": 0.0001018877942304601,
+        "maxAbsDiff": 0.005159875610843301,
+        "correlation": 0.9999988972459086,
+        "gain": 0.9997462416036278
+      },
+      "first300ms": {
+        "samples": 14400,
+        "rmse": 0.0005053188430848269,
+        "nrmse": 0.01634520939111001,
+        "mae": 0.00015891345177281992,
+        "maxAbsDiff": 0.005159875610843301,
+        "correlation": 0.9998664691080845,
+        "gain": 1.0000820751749127
+      }
+    },
+    "raw-second-high": {
+      "actualSamples": 192000,
+      "expectedSamples": 192000,
+      "whole": {
+        "samples": 192000,
+        "rmse": 0.00018579490559407713,
+        "nrmse": 0.0015062489204101632,
+        "mae": 0.0001018877942304601,
+        "maxAbsDiff": 0.005159875610843301,
+        "correlation": 0.9999988972459086,
+        "gain": 0.9997462416036278
+      },
+      "first300ms": {
+        "samples": 14400,
+        "rmse": 0.0005053188430848269,
+        "nrmse": 0.01634520939111001,
+        "mae": 0.00015891345177281992,
+        "maxAbsDiff": 0.005159875610843301,
+        "correlation": 0.9998664691080845,
+        "gain": 1.0000820751749127
+      }
+    },
+    "raw-selected": {
+      "actualSamples": 192000,
+      "expectedSamples": 192000,
+      "whole": {
+        "samples": 192000,
+        "rmse": 0.000195516383656355,
+        "nrmse": 0.0011566005840629317,
+        "mae": 0.00010499247914474082,
+        "maxAbsDiff": 0.005738759413361549,
+        "correlation": 0.9999993459078019,
+        "gain": 0.9998268165797632
+      },
+      "first300ms": {
+        "samples": 14400,
+        "rmse": 0.0005323579356136705,
+        "nrmse": 0.015026654962747197,
+        "mae": 0.0001583696317016366,
+        "maxAbsDiff": 0.005738759413361549,
+        "correlation": 0.9998871188074132,
+        "gain": 0.999999427925142
+      }
+    },
+    "processed-old-before": {
+      "actualSamples": 192000,
+      "expectedSamples": 192000,
+      "whole": {
+        "samples": 192000,
+        "rmse": 0.004907234524226435,
+        "nrmse": 0.01904620738803585,
+        "mae": 0.00041034346924546223,
+        "maxAbsDiff": 0.17457298934459686,
+        "correlation": 0.9998187311214126,
+        "gain": 1.0001405115070399
+      },
+      "first300ms": {
+        "samples": 14400,
+        "rmse": 0.017910633255236272,
+        "nrmse": 0.03420085158062236,
+        "mae": 0.004066670809754392,
+        "maxAbsDiff": 0.17457298934459686,
+        "correlation": 0.9994167634396871,
+        "gain": 1.0007209641575165
+      }
+    },
+    "processed-old-after-switch-disable": {
+      "actualSamples": 192000,
+      "expectedSamples": 192000,
+      "whole": {
+        "samples": 192000,
+        "rmse": 0.004907234524226435,
+        "nrmse": 0.01904620738803585,
+        "mae": 0.00041034346924546223,
+        "maxAbsDiff": 0.17457298934459686,
+        "correlation": 0.9998187311214126,
+        "gain": 1.0001405115070399
+      },
+      "first300ms": {
+        "samples": 14400,
+        "rmse": 0.017910633255236272,
+        "nrmse": 0.03420085158062236,
+        "mae": 0.004066670809754392,
+        "maxAbsDiff": 0.17457298934459686,
+        "correlation": 0.9994167634396871,
+        "gain": 1.0007209641575165
+      }
+    },
+    "processed-zero": {
+      "actualSamples": 192000,
+      "expectedSamples": 192000,
+      "whole": {
+        "samples": 192000,
+        "rmse": 0.00022299803569641468,
+        "nrmse": 0.0009706952996128664,
+        "mae": 0.00012342503623065474,
+        "maxAbsDiff": 0.006345089757815003,
+        "correlation": 0.9999995390399973,
+        "gain": 0.9998564957167837
+      },
+      "first300ms": {
+        "samples": 14400,
+        "rmse": 0.0006147977710076912,
+        "nrmse": 0.015753984303251988,
+        "mae": 0.00019009026272783953,
+        "maxAbsDiff": 0.006345089757815003,
+        "correlation": 0.9998759474947281,
+        "gain": 0.9994382616379421
+      }
+    },
+    "processed-negative": {
+      "actualSamples": 192000,
+      "expectedSamples": 192000,
+      "whole": {
+        "samples": 192000,
+        "rmse": 0.00017138289194698337,
+        "nrmse": 0.0007450179433712003,
+        "mae": 0.00011754621661726554,
+        "maxAbsDiff": 0.006425999104976654,
+        "correlation": 0.9999997342245941,
+        "gain": 0.9998461676493408
+      },
+      "first300ms": {
+        "samples": 14400,
+        "rmse": 0.0003279159313047885,
+        "nrmse": 0.009825132534891801,
+        "mae": 0.0001110474512337747,
+        "maxAbsDiff": 0.006425999104976654,
+        "correlation": 0.9999518366214786,
+        "gain": 1.0003605912124072
+      }
+    },
+    "positive-prefix": {
+      "actualSamples": 48000,
+      "expectedSamples": 48000,
+      "whole": {
+        "samples": 48000,
+        "rmse": 0.0001763710538753978,
+        "nrmse": 0.0005685740714528857,
+        "mae": 0.00011013579012082412,
+        "maxAbsDiff": 0.0019989758729934692,
+        "correlation": 0.9999998568049235,
+        "gain": 0.9998076553006602
+      },
+      "first300ms": {
+        "samples": 14400,
+        "rmse": 0.00018304091112637217,
+        "nrmse": 0.003564986499629997,
+        "mae": 0.00005289956695075186,
+        "maxAbsDiff": 0.0019989758729934692,
+        "correlation": 0.9999940068869531,
+        "gain": 0.9991377609653079
+      }
+    },
+    "negative-tail": {
+      "actualSamples": 28800,
+      "expectedSamples": 28800,
+      "whole": {
+        "samples": 28800,
+        "rmse": 0.008247125147299932,
+        "nrmse": 0.03571321724329518,
+        "mae": 0.0013515041965150567,
+        "maxAbsDiff": 0.13398656249046326,
+        "correlation": 0.9993680209915453,
+        "gain": 0.9952925683595137
+      },
+      "first300ms": {
+        "samples": 14400,
+        "rmse": 0.011662898954633334,
+        "nrmse": 0.036208505692117254,
+        "mae": 0.002678840922833897,
+        "maxAbsDiff": 0.13398656249046326,
+        "correlation": 0.9993504908977989,
+        "gain": 0.9951738886306161
+      }
+    },
+    "zeroVsWrongPreroll": {
+      "samples": 14400,
+      "rmse": 0.018096714438859112,
+      "nrmse": 0.8226928571443468,
+      "mae": 0.010888336013198123,
+      "maxAbsDiff": 0.14497753977775574,
+      "correlation": 0.9777866440355667,
+      "gain": 1.7339390207423715
+    },
+    "deviceInvariant": {
+      "samples": 192000,
+      "rmse": 0,
+      "nrmse": 0,
+      "mae": 0,
+      "maxAbsDiff": 0,
+      "correlation": 1,
+      "gain": 1
+    },
+    "oldFrozenPcm": {
+      "samples": 192000,
+      "rmse": 0,
+      "nrmse": 0,
+      "mae": 0,
+      "maxAbsDiff": 0,
+      "correlation": 1,
+      "gain": 1
+    }
+  },
+  "spectra": {
+    "raw-selected": {
+      "amplitude440": 0.07091423327803953,
+      "amplitude880": 0.00007461403594072258
+    },
+    "raw-second-low-muted": {
+      "amplitude440": 8.778093284580631e-7,
+      "amplitude880": 0.052934080333844065
+    }
+  },
+  "silence": {
+    "positivePrefix": {
+      "rms": 0,
+      "max": 0
+    },
+    "negativeTail": {
+      "rms": 0,
+      "max": 0
+    }
+  },
+  "videoComparison": {
+    "frames": 120,
+    "fullRgbMae": 0,
+    "glyphMaskPixels": 79924,
+    "glyphRgbMae": 0
+  },
+  "sync": {
+    "rawPeak": {
+      "sample": 5808,
+      "amplitude": 0.17236293707798733,
+      "time": 0.121
+    },
+    "positivePeak": {
+      "sample": 17808,
+      "amplitude": 0.21016237900521623,
+      "time": 0.371
+    },
+    "expectedPositivePeak": {
+      "sample": 17808,
+      "amplitude": 0.2100905902766515,
+      "time": 0.371
+    },
+    "rawLaterPeak": {
+      "sample": 72048,
+      "amplitude": 0.17193468155198105,
+      "time": 1.501
+    },
+    "negativePeak": {
+      "sample": 60048,
+      "amplitude": 0.33319396778865734,
+      "time": 1.251
+    },
+    "expectedNegativePeak": {
+      "sample": 60048,
+      "amplitude": 0.33305579410563035,
+      "time": 1.251
+    },
+    "rawFlashFrames": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "processedFlashFrames": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "videoFrameRate": 30,
+    "limits": "Finite source4.12s pulse vs video4.0-4.2s marker; AAC/30fps tolerance, no device AV latency claim."
+  },
+  "analysis": {
+    "raw-second-low-muted": {
+      "probe": {
+        "streams": [
+          {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+            "profile": "High",
+            "codec_type": "video",
+            "codec_tag_string": "avc1",
+            "codec_tag": "0x31637661",
+            "mime_codec_string": "avc1.64000d",
+            "width": 320,
+            "height": 180,
+            "coded_width": 320,
+            "coded_height": 180,
+            "has_b_frames": 2,
+            "sample_aspect_ratio": "1:1",
+            "display_aspect_ratio": "16:9",
+            "pix_fmt": "yuv420p",
+            "level": 13,
+            "chroma_location": "left",
+            "field_order": "progressive",
+            "is_avc": "true",
+            "nal_length_size": "4",
+            "id": "0x1",
+            "r_frame_rate": "30/1",
+            "avg_frame_rate": "30/1",
+            "time_base": "1/15360",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 61440,
+            "duration": "4.000000",
+            "bit_rate": "377862",
+            "bits_per_raw_sample": "8",
+            "nb_frames": "120",
+            "extradata_size": 46,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "VideoHandler",
+              "encoder": "Lavc63.1.102 libx264"
+            }
+          },
+          {
+            "index": 1,
+            "codec_name": "aac",
+            "codec_long_name": "AAC (Advanced Audio Coding)",
+            "profile": "LC",
+            "codec_type": "audio",
+            "codec_tag_string": "mp4a",
+            "codec_tag": "0x6134706d",
+            "mime_codec_string": "mp4a.40.2",
+            "sample_fmt": "fltp",
+            "sample_rate": "48000",
+            "channels": 1,
+            "channel_layout": "mono",
+            "bits_per_sample": 0,
+            "initial_padding": 1024,
+            "id": "0x2",
+            "r_frame_rate": "0/0",
+            "avg_frame_rate": "0/0",
+            "time_base": "1/48000",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 192000,
+            "duration": "4.000000",
+            "bit_rate": "118925",
+            "nb_frames": "189",
+            "extradata_size": 5,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "SoundHandler"
+            }
+          }
+        ],
+        "format": {
+          "filename": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/raw-second-low-muted.mp4",
+          "nb_streams": 2,
+          "nb_programs": 0,
+          "nb_stream_groups": 0,
+          "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+          "format_long_name": "QuickTime / MOV",
+          "start_time": "0.000000",
+          "duration": "4.000000",
+          "size": "254518",
+          "bit_rate": "509036",
+          "probe_score": 100,
+          "tags": {
+            "major_brand": "isom",
+            "minor_version": "512",
+            "compatible_brands": "isomiso2avc1mp41",
+            "encoder": "Lavf63.1.102"
+          }
+        }
+      },
+      "decodedSamples": 192000,
+      "decodedVideoFrames": 120,
+      "expectedVideoFrames": 120
+    },
+    "raw-selected": {
+      "probe": {
+        "streams": [
+          {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+            "profile": "High",
+            "codec_type": "video",
+            "codec_tag_string": "avc1",
+            "codec_tag": "0x31637661",
+            "mime_codec_string": "avc1.64000d",
+            "width": 320,
+            "height": 180,
+            "coded_width": 320,
+            "coded_height": 180,
+            "has_b_frames": 2,
+            "sample_aspect_ratio": "1:1",
+            "display_aspect_ratio": "16:9",
+            "pix_fmt": "yuv420p",
+            "level": 13,
+            "chroma_location": "left",
+            "field_order": "progressive",
+            "is_avc": "true",
+            "nal_length_size": "4",
+            "id": "0x1",
+            "r_frame_rate": "30/1",
+            "avg_frame_rate": "30/1",
+            "time_base": "1/15360",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 61440,
+            "duration": "4.000000",
+            "bit_rate": "377862",
+            "bits_per_raw_sample": "8",
+            "nb_frames": "120",
+            "extradata_size": 46,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "VideoHandler",
+              "encoder": "Lavc63.1.102 libx264"
+            }
+          },
+          {
+            "index": 1,
+            "codec_name": "aac",
+            "codec_long_name": "AAC (Advanced Audio Coding)",
+            "profile": "LC",
+            "codec_type": "audio",
+            "codec_tag_string": "mp4a",
+            "codec_tag": "0x6134706d",
+            "mime_codec_string": "mp4a.40.2",
+            "sample_fmt": "fltp",
+            "sample_rate": "48000",
+            "channels": 1,
+            "channel_layout": "mono",
+            "bits_per_sample": 0,
+            "initial_padding": 1024,
+            "id": "0x2",
+            "r_frame_rate": "0/0",
+            "avg_frame_rate": "0/0",
+            "time_base": "1/48000",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 192000,
+            "duration": "4.000000",
+            "bit_rate": "130054",
+            "nb_frames": "189",
+            "extradata_size": 5,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "SoundHandler"
+            }
+          }
+        ],
+        "format": {
+          "filename": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/raw-selected.mp4",
+          "nb_streams": 2,
+          "nb_programs": 0,
+          "nb_stream_groups": 0,
+          "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+          "format_long_name": "QuickTime / MOV",
+          "start_time": "0.000000",
+          "duration": "4.000000",
+          "size": "260112",
+          "bit_rate": "520224",
+          "probe_score": 100,
+          "tags": {
+            "major_brand": "isom",
+            "minor_version": "512",
+            "compatible_brands": "isomiso2avc1mp41",
+            "encoder": "Lavf63.1.102"
+          }
+        }
+      },
+      "decodedSamples": 192000,
+      "decodedVideoFrames": 120,
+      "expectedVideoFrames": 120
+    },
+    "raw-none": {
+      "probe": {
+        "streams": [
+          {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+            "profile": "High",
+            "codec_type": "video",
+            "codec_tag_string": "avc1",
+            "codec_tag": "0x31637661",
+            "mime_codec_string": "avc1.64000d",
+            "width": 320,
+            "height": 180,
+            "coded_width": 320,
+            "coded_height": 180,
+            "has_b_frames": 2,
+            "sample_aspect_ratio": "1:1",
+            "display_aspect_ratio": "16:9",
+            "pix_fmt": "yuv420p",
+            "level": 13,
+            "chroma_location": "left",
+            "field_order": "progressive",
+            "is_avc": "true",
+            "nal_length_size": "4",
+            "id": "0x1",
+            "r_frame_rate": "30/1",
+            "avg_frame_rate": "30/1",
+            "time_base": "1/15360",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 61440,
+            "duration": "4.000000",
+            "bit_rate": "377862",
+            "bits_per_raw_sample": "8",
+            "nb_frames": "120",
+            "extradata_size": 46,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "VideoHandler",
+              "encoder": "Lavc63.1.102 libx264"
+            }
+          }
+        ],
+        "format": {
+          "filename": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/raw-none.mp4",
+          "nb_streams": 1,
+          "nb_programs": 0,
+          "nb_stream_groups": 0,
+          "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+          "format_long_name": "QuickTime / MOV",
+          "start_time": "0.000000",
+          "duration": "4.000000",
+          "size": "191221",
+          "bit_rate": "382442",
+          "probe_score": 100,
+          "tags": {
+            "major_brand": "isom",
+            "minor_version": "512",
+            "compatible_brands": "isomiso2avc1mp41",
+            "encoder": "Lavf63.1.102"
+          }
+        }
+      },
+      "decodedSamples": 0,
+      "decodedVideoFrames": 120,
+      "expectedVideoFrames": 120
+    },
+    "raw-second-high": {
+      "probe": {
+        "streams": [
+          {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+            "profile": "High",
+            "codec_type": "video",
+            "codec_tag_string": "avc1",
+            "codec_tag": "0x31637661",
+            "mime_codec_string": "avc1.64000d",
+            "width": 320,
+            "height": 180,
+            "coded_width": 320,
+            "coded_height": 180,
+            "has_b_frames": 2,
+            "sample_aspect_ratio": "1:1",
+            "display_aspect_ratio": "16:9",
+            "pix_fmt": "yuv420p",
+            "level": 13,
+            "chroma_location": "left",
+            "field_order": "progressive",
+            "is_avc": "true",
+            "nal_length_size": "4",
+            "id": "0x1",
+            "r_frame_rate": "30/1",
+            "avg_frame_rate": "30/1",
+            "time_base": "1/15360",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 61440,
+            "duration": "4.000000",
+            "bit_rate": "377862",
+            "bits_per_raw_sample": "8",
+            "nb_frames": "120",
+            "extradata_size": 46,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "VideoHandler",
+              "encoder": "Lavc63.1.102 libx264"
+            }
+          },
+          {
+            "index": 1,
+            "codec_name": "aac",
+            "codec_long_name": "AAC (Advanced Audio Coding)",
+            "profile": "LC",
+            "codec_type": "audio",
+            "codec_tag_string": "mp4a",
+            "codec_tag": "0x6134706d",
+            "mime_codec_string": "mp4a.40.2",
+            "sample_fmt": "fltp",
+            "sample_rate": "48000",
+            "channels": 1,
+            "channel_layout": "mono",
+            "bits_per_sample": 0,
+            "initial_padding": 1024,
+            "id": "0x2",
+            "r_frame_rate": "0/0",
+            "avg_frame_rate": "0/0",
+            "time_base": "1/48000",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 192000,
+            "duration": "4.000000",
+            "bit_rate": "118925",
+            "nb_frames": "189",
+            "extradata_size": 5,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "SoundHandler"
+            }
+          }
+        ],
+        "format": {
+          "filename": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/raw-second-high.mp4",
+          "nb_streams": 2,
+          "nb_programs": 0,
+          "nb_stream_groups": 0,
+          "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+          "format_long_name": "QuickTime / MOV",
+          "start_time": "0.000000",
+          "duration": "4.000000",
+          "size": "254518",
+          "bit_rate": "509036",
+          "probe_score": 100,
+          "tags": {
+            "major_brand": "isom",
+            "minor_version": "512",
+            "compatible_brands": "isomiso2avc1mp41",
+            "encoder": "Lavf63.1.102"
+          }
+        }
+      },
+      "decodedSamples": 192000,
+      "decodedVideoFrames": 120,
+      "expectedVideoFrames": 120
+    },
+    "processed-old-before": {
+      "probe": {
+        "streams": [
+          {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+            "profile": "High",
+            "codec_type": "video",
+            "codec_tag_string": "avc1",
+            "codec_tag": "0x31637661",
+            "mime_codec_string": "avc1.64000d",
+            "width": 320,
+            "height": 180,
+            "coded_width": 320,
+            "coded_height": 180,
+            "has_b_frames": 2,
+            "sample_aspect_ratio": "1:1",
+            "display_aspect_ratio": "16:9",
+            "pix_fmt": "yuv420p",
+            "level": 13,
+            "chroma_location": "left",
+            "field_order": "progressive",
+            "is_avc": "true",
+            "nal_length_size": "4",
+            "id": "0x1",
+            "r_frame_rate": "30/1",
+            "avg_frame_rate": "30/1",
+            "time_base": "1/15360",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 61440,
+            "duration": "4.000000",
+            "bit_rate": "392026",
+            "bits_per_raw_sample": "8",
+            "nb_frames": "120",
+            "extradata_size": 46,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "VideoHandler",
+              "encoder": "Lavc63.1.102 libx264"
+            }
+          },
+          {
+            "index": 1,
+            "codec_name": "aac",
+            "codec_long_name": "AAC (Advanced Audio Coding)",
+            "profile": "LC",
+            "codec_type": "audio",
+            "codec_tag_string": "mp4a",
+            "codec_tag": "0x6134706d",
+            "mime_codec_string": "mp4a.40.2",
+            "sample_fmt": "fltp",
+            "sample_rate": "48000",
+            "channels": 1,
+            "channel_layout": "mono",
+            "bits_per_sample": 0,
+            "initial_padding": 1024,
+            "id": "0x2",
+            "r_frame_rate": "0/0",
+            "avg_frame_rate": "0/0",
+            "time_base": "1/48000",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 192000,
+            "duration": "4.000000",
+            "bit_rate": "129598",
+            "nb_frames": "189",
+            "extradata_size": 5,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "SoundHandler"
+            }
+          }
+        ],
+        "format": {
+          "filename": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/processed-old-before.mp4",
+          "nb_streams": 2,
+          "nb_programs": 0,
+          "nb_stream_groups": 0,
+          "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+          "format_long_name": "QuickTime / MOV",
+          "start_time": "0.000000",
+          "duration": "4.000000",
+          "size": "266949",
+          "bit_rate": "533898",
+          "probe_score": 100,
+          "tags": {
+            "major_brand": "isom",
+            "minor_version": "512",
+            "compatible_brands": "isomiso2avc1mp41",
+            "encoder": "Lavf63.1.102"
+          }
+        }
+      },
+      "decodedSamples": 192000,
+      "decodedVideoFrames": 120,
+      "expectedVideoFrames": 120
+    },
+    "positive-prefix": {
+      "probe": {
+        "streams": [
+          {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+            "profile": "High",
+            "codec_type": "video",
+            "codec_tag_string": "avc1",
+            "codec_tag": "0x31637661",
+            "mime_codec_string": "avc1.64000d",
+            "width": 320,
+            "height": 180,
+            "coded_width": 320,
+            "coded_height": 180,
+            "has_b_frames": 2,
+            "sample_aspect_ratio": "1:1",
+            "display_aspect_ratio": "16:9",
+            "pix_fmt": "yuv420p",
+            "level": 13,
+            "chroma_location": "left",
+            "field_order": "progressive",
+            "is_avc": "true",
+            "nal_length_size": "4",
+            "id": "0x1",
+            "r_frame_rate": "30/1",
+            "avg_frame_rate": "30/1",
+            "time_base": "1/15360",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 15360,
+            "duration": "1.000000",
+            "bit_rate": "331976",
+            "bits_per_raw_sample": "8",
+            "nb_frames": "30",
+            "extradata_size": 46,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "VideoHandler",
+              "encoder": "Lavc63.1.102 libx264"
+            }
+          },
+          {
+            "index": 1,
+            "codec_name": "aac",
+            "codec_long_name": "AAC (Advanced Audio Coding)",
+            "profile": "LC",
+            "codec_type": "audio",
+            "codec_tag_string": "mp4a",
+            "codec_tag": "0x6134706d",
+            "mime_codec_string": "mp4a.40.2",
+            "sample_fmt": "fltp",
+            "sample_rate": "48000",
+            "channels": 1,
+            "channel_layout": "mono",
+            "bits_per_sample": 0,
+            "initial_padding": 1024,
+            "id": "0x2",
+            "r_frame_rate": "0/0",
+            "avg_frame_rate": "0/0",
+            "time_base": "1/48000",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 48000,
+            "duration": "1.000000",
+            "bit_rate": "100997",
+            "nb_frames": "48",
+            "extradata_size": 5,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "SoundHandler"
+            }
+          }
+        ],
+        "format": {
+          "filename": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/positive-prefix.mp4",
+          "nb_streams": 2,
+          "nb_programs": 0,
+          "nb_stream_groups": 0,
+          "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+          "format_long_name": "QuickTime / MOV",
+          "start_time": "0.000000",
+          "duration": "1.000000",
+          "size": "56910",
+          "bit_rate": "455280",
+          "probe_score": 100,
+          "tags": {
+            "major_brand": "isom",
+            "minor_version": "512",
+            "compatible_brands": "isomiso2avc1mp41",
+            "encoder": "Lavf63.1.102"
+          }
+        }
+      },
+      "decodedSamples": 48000,
+      "decodedVideoFrames": 30,
+      "expectedVideoFrames": 30
+    },
+    "processed-zero": {
+      "probe": {
+        "streams": [
+          {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+            "profile": "High",
+            "codec_type": "video",
+            "codec_tag_string": "avc1",
+            "codec_tag": "0x31637661",
+            "mime_codec_string": "avc1.64000d",
+            "width": 320,
+            "height": 180,
+            "coded_width": 320,
+            "coded_height": 180,
+            "has_b_frames": 2,
+            "sample_aspect_ratio": "1:1",
+            "display_aspect_ratio": "16:9",
+            "pix_fmt": "yuv420p",
+            "level": 13,
+            "chroma_location": "left",
+            "field_order": "progressive",
+            "is_avc": "true",
+            "nal_length_size": "4",
+            "id": "0x1",
+            "r_frame_rate": "30/1",
+            "avg_frame_rate": "30/1",
+            "time_base": "1/15360",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 61440,
+            "duration": "4.000000",
+            "bit_rate": "379396",
+            "bits_per_raw_sample": "8",
+            "nb_frames": "120",
+            "extradata_size": 46,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "VideoHandler",
+              "encoder": "Lavc63.1.102 libx264"
+            }
+          },
+          {
+            "index": 1,
+            "codec_name": "aac",
+            "codec_long_name": "AAC (Advanced Audio Coding)",
+            "profile": "LC",
+            "codec_type": "audio",
+            "codec_tag_string": "mp4a",
+            "codec_tag": "0x6134706d",
+            "mime_codec_string": "mp4a.40.2",
+            "sample_fmt": "fltp",
+            "sample_rate": "48000",
+            "channels": 1,
+            "channel_layout": "mono",
+            "bits_per_sample": 0,
+            "initial_padding": 1024,
+            "id": "0x2",
+            "r_frame_rate": "0/0",
+            "avg_frame_rate": "0/0",
+            "time_base": "1/48000",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 192000,
+            "duration": "4.000000",
+            "bit_rate": "127470",
+            "nb_frames": "189",
+            "extradata_size": 5,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "SoundHandler"
+            }
+          }
+        ],
+        "format": {
+          "filename": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/processed-zero.mp4",
+          "nb_streams": 2,
+          "nb_programs": 0,
+          "nb_stream_groups": 0,
+          "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+          "format_long_name": "QuickTime / MOV",
+          "start_time": "0.000000",
+          "duration": "4.000000",
+          "size": "259580",
+          "bit_rate": "519160",
+          "probe_score": 100,
+          "tags": {
+            "major_brand": "isom",
+            "minor_version": "512",
+            "compatible_brands": "isomiso2avc1mp41",
+            "encoder": "Lavf63.1.102"
+          }
+        }
+      },
+      "decodedSamples": 192000,
+      "decodedVideoFrames": 120,
+      "expectedVideoFrames": 120
+    },
+    "processed-negative": {
+      "probe": {
+        "streams": [
+          {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+            "profile": "High",
+            "codec_type": "video",
+            "codec_tag_string": "avc1",
+            "codec_tag": "0x31637661",
+            "mime_codec_string": "avc1.64000d",
+            "width": 320,
+            "height": 180,
+            "coded_width": 320,
+            "coded_height": 180,
+            "has_b_frames": 2,
+            "sample_aspect_ratio": "1:1",
+            "display_aspect_ratio": "16:9",
+            "pix_fmt": "yuv420p",
+            "level": 13,
+            "chroma_location": "left",
+            "field_order": "progressive",
+            "is_avc": "true",
+            "nal_length_size": "4",
+            "id": "0x1",
+            "r_frame_rate": "30/1",
+            "avg_frame_rate": "30/1",
+            "time_base": "1/15360",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 61440,
+            "duration": "4.000000",
+            "bit_rate": "379396",
+            "bits_per_raw_sample": "8",
+            "nb_frames": "120",
+            "extradata_size": 46,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "VideoHandler",
+              "encoder": "Lavc63.1.102 libx264"
+            }
+          },
+          {
+            "index": 1,
+            "codec_name": "aac",
+            "codec_long_name": "AAC (Advanced Audio Coding)",
+            "profile": "LC",
+            "codec_type": "audio",
+            "codec_tag_string": "mp4a",
+            "codec_tag": "0x6134706d",
+            "mime_codec_string": "mp4a.40.2",
+            "sample_fmt": "fltp",
+            "sample_rate": "48000",
+            "channels": 1,
+            "channel_layout": "mono",
+            "bits_per_sample": 0,
+            "initial_padding": 1024,
+            "id": "0x2",
+            "r_frame_rate": "0/0",
+            "avg_frame_rate": "0/0",
+            "time_base": "1/48000",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 192000,
+            "duration": "4.000000",
+            "bit_rate": "129031",
+            "nb_frames": "189",
+            "extradata_size": 5,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "SoundHandler"
+            }
+          }
+        ],
+        "format": {
+          "filename": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/processed-negative.mp4",
+          "nb_streams": 2,
+          "nb_programs": 0,
+          "nb_stream_groups": 0,
+          "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+          "format_long_name": "QuickTime / MOV",
+          "start_time": "0.000000",
+          "duration": "4.000000",
+          "size": "260365",
+          "bit_rate": "520730",
+          "probe_score": 100,
+          "tags": {
+            "major_brand": "isom",
+            "minor_version": "512",
+            "compatible_brands": "isomiso2avc1mp41",
+            "encoder": "Lavf63.1.102"
+          }
+        }
+      },
+      "decodedSamples": 192000,
+      "decodedVideoFrames": 120,
+      "expectedVideoFrames": 120
+    },
+    "negative-tail": {
+      "probe": {
+        "streams": [
+          {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+            "profile": "High",
+            "codec_type": "video",
+            "codec_tag_string": "avc1",
+            "codec_tag": "0x31637661",
+            "mime_codec_string": "avc1.64000d",
+            "width": 320,
+            "height": 180,
+            "coded_width": 320,
+            "coded_height": 180,
+            "has_b_frames": 2,
+            "sample_aspect_ratio": "1:1",
+            "display_aspect_ratio": "16:9",
+            "pix_fmt": "yuv420p",
+            "level": 13,
+            "chroma_location": "left",
+            "field_order": "progressive",
+            "is_avc": "true",
+            "nal_length_size": "4",
+            "id": "0x1",
+            "r_frame_rate": "30/1",
+            "avg_frame_rate": "30/1",
+            "time_base": "1/15360",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 9216,
+            "duration": "0.600000",
+            "bit_rate": "378146",
+            "bits_per_raw_sample": "8",
+            "nb_frames": "18",
+            "extradata_size": 46,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "VideoHandler",
+              "encoder": "Lavc63.1.102 libx264"
+            }
+          },
+          {
+            "index": 1,
+            "codec_name": "aac",
+            "codec_long_name": "AAC (Advanced Audio Coding)",
+            "profile": "LC",
+            "codec_type": "audio",
+            "codec_tag_string": "mp4a",
+            "codec_tag": "0x6134706d",
+            "mime_codec_string": "mp4a.40.2",
+            "sample_fmt": "fltp",
+            "sample_rate": "48000",
+            "channels": 1,
+            "channel_layout": "mono",
+            "bits_per_sample": 0,
+            "initial_padding": 1024,
+            "id": "0x2",
+            "r_frame_rate": "0/0",
+            "avg_frame_rate": "0/0",
+            "time_base": "1/48000",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 28800,
+            "duration": "0.600000",
+            "bit_rate": "81630",
+            "nb_frames": "30",
+            "extradata_size": 5,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "SoundHandler"
+            }
+          }
+        ],
+        "format": {
+          "filename": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/negative-tail.mp4",
+          "nb_streams": 2,
+          "nb_programs": 0,
+          "nb_stream_groups": 0,
+          "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+          "format_long_name": "QuickTime / MOV",
+          "start_time": "0.000000",
+          "duration": "0.600000",
+          "size": "36788",
+          "bit_rate": "490506",
+          "probe_score": 100,
+          "tags": {
+            "major_brand": "isom",
+            "minor_version": "512",
+            "compatible_brands": "isomiso2avc1mp41",
+            "encoder": "Lavf63.1.102"
+          }
+        }
+      },
+      "decodedSamples": 28800,
+      "decodedVideoFrames": 18,
+      "expectedVideoFrames": 18
+    },
+    "processed-old-after-switch-disable": {
+      "probe": {
+        "streams": [
+          {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+            "profile": "High",
+            "codec_type": "video",
+            "codec_tag_string": "avc1",
+            "codec_tag": "0x31637661",
+            "mime_codec_string": "avc1.64000d",
+            "width": 320,
+            "height": 180,
+            "coded_width": 320,
+            "coded_height": 180,
+            "has_b_frames": 2,
+            "sample_aspect_ratio": "1:1",
+            "display_aspect_ratio": "16:9",
+            "pix_fmt": "yuv420p",
+            "level": 13,
+            "chroma_location": "left",
+            "field_order": "progressive",
+            "is_avc": "true",
+            "nal_length_size": "4",
+            "id": "0x1",
+            "r_frame_rate": "30/1",
+            "avg_frame_rate": "30/1",
+            "time_base": "1/15360",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 61440,
+            "duration": "4.000000",
+            "bit_rate": "392026",
+            "bits_per_raw_sample": "8",
+            "nb_frames": "120",
+            "extradata_size": 46,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "VideoHandler",
+              "encoder": "Lavc63.1.102 libx264"
+            }
+          },
+          {
+            "index": 1,
+            "codec_name": "aac",
+            "codec_long_name": "AAC (Advanced Audio Coding)",
+            "profile": "LC",
+            "codec_type": "audio",
+            "codec_tag_string": "mp4a",
+            "codec_tag": "0x6134706d",
+            "mime_codec_string": "mp4a.40.2",
+            "sample_fmt": "fltp",
+            "sample_rate": "48000",
+            "channels": 1,
+            "channel_layout": "mono",
+            "bits_per_sample": 0,
+            "initial_padding": 1024,
+            "id": "0x2",
+            "r_frame_rate": "0/0",
+            "avg_frame_rate": "0/0",
+            "time_base": "1/48000",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 192000,
+            "duration": "4.000000",
+            "bit_rate": "129598",
+            "nb_frames": "189",
+            "extradata_size": 5,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "SoundHandler"
+            }
+          }
+        ],
+        "format": {
+          "filename": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/processed-old-after-switch-disable.mp4",
+          "nb_streams": 2,
+          "nb_programs": 0,
+          "nb_stream_groups": 0,
+          "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+          "format_long_name": "QuickTime / MOV",
+          "start_time": "0.000000",
+          "duration": "4.000000",
+          "size": "266949",
+          "bit_rate": "533898",
+          "probe_score": 100,
+          "tags": {
+            "major_brand": "isom",
+            "minor_version": "512",
+            "compatible_brands": "isomiso2avc1mp41",
+            "encoder": "Lavf63.1.102"
+          }
+        }
+      },
+      "decodedSamples": 192000,
+      "decodedVideoFrames": 120,
+      "expectedVideoFrames": 120
+    },
+    "endpoint-raw-two": {
+      "probe": {
+        "streams": [
+          {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+            "profile": "High",
+            "codec_type": "video",
+            "codec_tag_string": "avc1",
+            "codec_tag": "0x31637661",
+            "mime_codec_string": "avc1.64000d",
+            "width": 320,
+            "height": 180,
+            "coded_width": 320,
+            "coded_height": 180,
+            "has_b_frames": 2,
+            "sample_aspect_ratio": "1:1",
+            "display_aspect_ratio": "16:9",
+            "pix_fmt": "yuv420p",
+            "level": 13,
+            "chroma_location": "left",
+            "field_order": "progressive",
+            "is_avc": "true",
+            "nal_length_size": "4",
+            "id": "0x1",
+            "r_frame_rate": "30/1",
+            "avg_frame_rate": "30/1",
+            "time_base": "1/15360",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 1024,
+            "duration": "0.066667",
+            "bit_rate": "742800",
+            "bits_per_raw_sample": "8",
+            "nb_frames": "2",
+            "extradata_size": 46,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "VideoHandler",
+              "encoder": "Lavc63.1.102 libx264"
+            }
+          }
+        ],
+        "format": {
+          "filename": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/endpoint-raw-two.mp4",
+          "nb_streams": 1,
+          "nb_programs": 0,
+          "nb_stream_groups": 0,
+          "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+          "format_long_name": "QuickTime / MOV",
+          "start_time": "0.000000",
+          "duration": "0.066667",
+          "size": "7056",
+          "bit_rate": "846715",
+          "probe_score": 100,
+          "tags": {
+            "major_brand": "isom",
+            "minor_version": "512",
+            "compatible_brands": "isomiso2avc1mp41",
+            "encoder": "Lavf63.1.102"
+          }
+        }
+      },
+      "decodedSamples": 0,
+      "decodedVideoFrames": 2,
+      "expectedVideoFrames": 2
+    },
+    "endpoint-processed-two": {
+      "probe": {
+        "streams": [
+          {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+            "profile": "High",
+            "codec_type": "video",
+            "codec_tag_string": "avc1",
+            "codec_tag": "0x31637661",
+            "mime_codec_string": "avc1.64000d",
+            "width": 320,
+            "height": 180,
+            "coded_width": 320,
+            "coded_height": 180,
+            "has_b_frames": 2,
+            "sample_aspect_ratio": "1:1",
+            "display_aspect_ratio": "16:9",
+            "pix_fmt": "yuv420p",
+            "level": 13,
+            "chroma_location": "left",
+            "field_order": "progressive",
+            "is_avc": "true",
+            "nal_length_size": "4",
+            "id": "0x1",
+            "r_frame_rate": "30/1",
+            "avg_frame_rate": "30/1",
+            "time_base": "1/15360",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 1024,
+            "duration": "0.066667",
+            "bit_rate": "742920",
+            "bits_per_raw_sample": "8",
+            "nb_frames": "2",
+            "extradata_size": 46,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "VideoHandler",
+              "encoder": "Lavc63.1.102 libx264"
+            }
+          }
+        ],
+        "format": {
+          "filename": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/endpoint-processed-two.mp4",
+          "nb_streams": 1,
+          "nb_programs": 0,
+          "nb_stream_groups": 0,
+          "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+          "format_long_name": "QuickTime / MOV",
+          "start_time": "0.000000",
+          "duration": "0.066667",
+          "size": "7057",
+          "bit_rate": "846835",
+          "probe_score": 100,
+          "tags": {
+            "major_brand": "isom",
+            "minor_version": "512",
+            "compatible_brands": "isomiso2avc1mp41",
+            "encoder": "Lavf63.1.102"
+          }
+        }
+      },
+      "decodedSamples": 0,
+      "decodedVideoFrames": 2,
+      "expectedVideoFrames": 2
+    }
+  },
+  "checks": {
+    "second": {
+      "codec": "aac",
+      "external": false,
+      "language": "zho",
+      "selected": false,
+      "streamIndex": 2,
+      "title": null,
+      "trackId": 2
+    },
+    "selected": {
+      "codec": "aac",
+      "external": false,
+      "language": "eng",
+      "selected": true,
+      "streamIndex": 1,
+      "title": null,
+      "trackId": 1
+    },
+    "helper": {
+      "audio": {
+        "generation": 1,
+        "revision": 1,
+        "stage": "audio",
+        "status": "applied"
+      },
+      "video": {
+        "generation": 1,
+        "revision": 1,
+        "stage": "video",
+        "status": "applied"
+      },
+      "selected": {
+        "confirmation": "applied",
+        "error": null,
+        "presentation": {
+          "actualFont": {
+            "digest": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+            "faceIndex": 0,
+            "family": "Noto Sans CJK SC",
+            "fontId": "noto-cjk-sc-regular-2.004",
+            "postscript": "NotoSansCJKsc-Regular",
+            "sizeBytes": 16437364
+          },
+          "confirmation": "applied",
+          "coverageCheckedOnCapture": true,
+          "effective": null,
+          "fonts": [
+            {
+              "digest": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+              "faceIndex": 0,
+              "family": "Noto Sans CJK SC",
+              "id": "noto-cjk-sc-regular-2.004",
+              "resolution": "fixedFace",
+              "snapshotEligible": true
+            }
+          ],
+          "layers": [],
+          "referenceHeight": 1080,
+          "revision": 0,
+          "snapshotEligible": true
+        },
+        "resources": [
+          {
+            "cues": 1,
+            "derived": {
+              "digest": "768456e14cedfd803f5fae7d26b76caeb740f7d603988b9b2139ed5b56bc0d4f",
+              "format": "webvtt"
+            },
+            "digest": "088e80d7e60b531f8720dd8cbd70433c619655df9354f42e9985458764371565",
+            "format": "srt",
+            "owner": 2,
+            "resourceId": "old",
+            "revision": 1,
+            "sizeBytes": 64
+          }
+        ],
+        "selection": {
+          "stamp": {
+            "generation": 1,
+            "revision": 1
+          },
+          "target": {
+            "contentRevision": 1,
+            "kind": "external",
+            "owner": 2,
+            "resourceId": "old"
+          }
+        },
+        "source": {
+          "generation": 1,
+          "phase": "ready"
+        },
+        "tracks": [
+          {
+            "language": null,
+            "styleReason": null,
+            "styleSupported": true,
+            "target": {
+              "contentRevision": 1,
+              "kind": "external",
+              "owner": 2,
+              "resourceId": "old"
+            },
+            "title": "vestra-subtitle-SB0pgQ.vtt"
+          }
+        ]
+      },
+      "style": {
+        "confirmation": "applied",
+        "error": null,
+        "presentation": {
+          "actualFont": {
+            "digest": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+            "faceIndex": 0,
+            "family": "Noto Sans CJK SC",
+            "fontId": "noto-cjk-sc-regular-2.004",
+            "postscript": "NotoSansCJKsc-Regular",
+            "sizeBytes": 16437364
+          },
+          "confirmation": "applied",
+          "coverageCheckedOnCapture": true,
+          "effective": {
+            "manifestId": "review.mp4-helper",
+            "owner": 2,
+            "revision": 1,
+            "style": {
+              "color": "yellow",
+              "fontId": "noto-cjk-sc-regular-2.004",
+              "fontSize": 72,
+              "marginPercent": 5,
+              "offsetMs": 0,
+              "outline": 1
+            }
+          },
+          "fonts": [
+            {
+              "digest": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+              "faceIndex": 0,
+              "family": "Noto Sans CJK SC",
+              "id": "noto-cjk-sc-regular-2.004",
+              "resolution": "fixedFace",
+              "snapshotEligible": true
+            }
+          ],
+          "layers": [
+            {
+              "manifestId": "review.mp4-helper",
+              "owner": 2,
+              "revision": 1,
+              "style": {
+                "color": "yellow",
+                "fontId": "noto-cjk-sc-regular-2.004",
+                "fontSize": 72,
+                "marginPercent": 5,
+                "offsetMs": 0,
+                "outline": 1
+              }
+            }
+          ],
+          "referenceHeight": 1080,
+          "revision": 1,
+          "snapshotEligible": true
+        },
+        "resources": [
+          {
+            "cues": 1,
+            "derived": {
+              "digest": "768456e14cedfd803f5fae7d26b76caeb740f7d603988b9b2139ed5b56bc0d4f",
+              "format": "webvtt"
+            },
+            "digest": "088e80d7e60b531f8720dd8cbd70433c619655df9354f42e9985458764371565",
+            "format": "srt",
+            "owner": 2,
+            "resourceId": "old",
+            "revision": 1,
+            "sizeBytes": 64
+          }
+        ],
+        "selection": {
+          "stamp": {
+            "generation": 1,
+            "revision": 1
+          },
+          "target": {
+            "contentRevision": 1,
+            "kind": "external",
+            "owner": 2,
+            "resourceId": "old"
+          }
+        },
+        "source": {
+          "generation": 1,
+          "phase": "ready"
+        },
+        "tracks": [
+          {
+            "language": null,
+            "styleReason": null,
+            "styleSupported": true,
+            "target": {
+              "contentRevision": 1,
+              "kind": "external",
+              "owner": 2,
+              "resourceId": "old"
+            },
+            "title": "vestra-subtitle-SB0pgQ.vtt"
+          }
+        ]
+      }
+    },
+    "deviceLow": {
+      "muted": true,
+      "volume": 17
+    },
+    "deviceHigh": {
+      "muted": false,
+      "volume": 91
+    },
+    "oldSnapshot": {
+      "audio": {
+        "codec": "aac",
+        "external": false,
+        "language": "zho",
+        "selected": false,
+        "streamIndex": 2,
+        "title": null,
+        "trackId": 2
+      },
+      "audioOffsetMs": 250,
+      "container": "mov,mp4,m4a,3gp,3g2,mj2",
+      "duration": 12,
+      "includeSubtitles": true,
+      "kind": "processed",
+      "preroll": "source-zero-to-start",
+      "presentation": {
+        "height": 180,
+        "width": 320
+      },
+      "processing": {
+        "audio": [
+          {
+            "manifestId": "review.mp4-helper",
+            "nodes": [
+              {
+                "gainDb": -6,
+                "kind": "volume"
+              },
+              {
+                "enabled": true,
+                "kind": "dynaudnorm",
+                "maxGain": 4,
+                "peak": 0.9
+              }
+            ],
+            "resourceId": "old-audio"
+          }
+        ],
+        "audioOffsetMs": 250,
+        "revision": 2,
+        "video": [
+          {
+            "manifestId": "review.mp4-helper",
+            "nodes": [
+              {
+                "brightness": 0.12,
+                "contrast": 1,
+                "gamma": 1,
+                "kind": "eq",
+                "saturation": 1
+              }
+            ],
+            "resourceId": "old-video"
+          }
+        ]
+      },
+      "sizeBytes": 1447611,
+      "snapshotId": 5,
+      "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/fixtures/a.mp4",
+      "sourceStamp": {
+        "generation": 1,
+        "intentVersion": 1
+      },
+      "subtitle": {
+        "canonical": {
+          "digest": "088e80d7e60b531f8720dd8cbd70433c619655df9354f42e9985458764371565",
+          "format": "srt"
+        },
+        "coverageValidated": true,
+        "derived": {
+          "digest": "768456e14cedfd803f5fae7d26b76caeb740f7d603988b9b2139ed5b56bc0d4f",
+          "format": "webvtt"
+        },
+        "font": {
+          "digest": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+          "faceIndex": 0,
+          "family": "Noto Sans CJK SC",
+          "fontId": "noto-cjk-sc-regular-2.004",
+          "postscript": "NotoSansCJKsc-Regular",
+          "sizeBytes": 16437364
+        },
+        "presentationRevision": 1,
+        "selectionStamp": {
+          "generation": 1,
+          "revision": 1
+        },
+        "style": {
+          "color": "yellow",
+          "fontId": "noto-cjk-sc-regular-2.004",
+          "fontSize": 72,
+          "marginPercent": 5,
+          "offsetMs": 0,
+          "outline": 1
+        },
+        "track": {
+          "contentRevision": 1,
+          "kind": "external",
+          "owner": 2,
+          "resourceId": "old"
+        }
+      },
+      "time": 4,
+      "videoStreamIndex": 0
+    },
+    "changedSubtitle": {
+      "confirmation": "applied",
+      "error": null,
+      "presentation": {
+        "actualFont": {
+          "digest": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+          "faceIndex": 0,
+          "family": "Noto Sans CJK SC",
+          "fontId": "noto-cjk-sc-regular-2.004",
+          "postscript": "NotoSansCJKsc-Regular",
+          "sizeBytes": 16437364
+        },
+        "confirmation": "applied",
+        "coverageCheckedOnCapture": true,
+        "effective": {
+          "manifestId": "review.mp4-consumer",
+          "owner": 1,
+          "revision": 1,
+          "style": {
+            "color": "cyan",
+            "fontId": "noto-cjk-sc-regular-2.004",
+            "fontSize": 36,
+            "marginPercent": 10,
+            "offsetMs": 500,
+            "outline": 0
+          }
+        },
+        "fonts": [
+          {
+            "digest": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+            "faceIndex": 0,
+            "family": "Noto Sans CJK SC",
+            "id": "noto-cjk-sc-regular-2.004",
+            "resolution": "fixedFace",
+            "snapshotEligible": true
+          }
+        ],
+        "layers": [
+          {
+            "manifestId": "review.mp4-consumer",
+            "owner": 1,
+            "revision": 1,
+            "style": {
+              "color": "cyan",
+              "fontId": "noto-cjk-sc-regular-2.004",
+              "fontSize": 36,
+              "marginPercent": 10,
+              "offsetMs": 500,
+              "outline": 0
+            }
+          }
+        ],
+        "referenceHeight": 1080,
+        "revision": 3,
+        "snapshotEligible": true
+      },
+      "resources": [
+        {
+          "cues": 1,
+          "derived": {
+            "digest": "e920830912280f5ad94e2286aa924e2f3de83736d413b86dabae9c6e1224f04b",
+            "format": "webvtt"
+          },
+          "digest": "7529f24d1fd90338af667224464e13e29fc5dfc1346fce4ce95d96e9160a2ed0",
+          "format": "srt",
+          "owner": 1,
+          "resourceId": "current",
+          "revision": 1,
+          "sizeBytes": 55
+        }
+      ],
+      "selection": {
+        "stamp": {
+          "generation": 1,
+          "revision": 3
+        },
+        "target": {
+          "contentRevision": 1,
+          "kind": "external",
+          "owner": 1,
+          "resourceId": "current"
+        }
+      },
+      "source": {
+        "generation": 1,
+        "phase": "ready"
+      },
+      "tracks": [
+        {
+          "language": null,
+          "styleReason": null,
+          "styleSupported": true,
+          "target": {
+            "contentRevision": 1,
+            "kind": "external",
+            "owner": 1,
+            "resourceId": "current"
+          },
+          "title": "vestra-subtitle-xSpxoS.vtt"
+        }
+      ]
+    },
+    "endpoints": [
+      {
+        "mode": "raw",
+        "start": 4.31,
+        "end": 4.32,
+        "expectedFrames": 0,
+        "snapshot": {
+          "audio": null,
+          "audioOffsetMs": null,
+          "container": "mov,mp4,m4a,3gp,3g2,mj2",
+          "duration": 12,
+          "includeSubtitles": false,
+          "kind": "raw",
+          "preroll": null,
+          "presentation": null,
+          "processing": null,
+          "sizeBytes": 1441291,
+          "snapshotId": 10,
+          "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/fixtures/b.mp4",
+          "sourceStamp": {
+            "generation": 2,
+            "intentVersion": 2
+          },
+          "subtitle": null,
+          "time": 4.31,
+          "videoStreamIndex": 0
+        },
+        "job": {
+          "jobId": 11,
+          "snapshotId": 10,
+          "status": "queued"
+        },
+        "terminal": {
+          "facts": {
+            "audioTiming": "not applicable: no audio output",
+            "descriptorVersion": "vestra-finite/1",
+            "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+            "hasAudio": false,
+            "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+            "preroll": "source-zero-to-start",
+            "processed": false,
+            "range": {
+              "end": 4.32,
+              "interval": "half-open; first video PTS >= start",
+              "start": 4.31
+            },
+            "videoStreamIndex": 0
+          },
+          "jobId": 11,
+          "outcome": {
+            "error": {
+              "code": "export-failed",
+              "message": "MP4 validation decode failed (exit status: 234): Stream map '' matches no streams.\nTo ignore this, add a trailing '?' to the map.\nFailed to set value '0:v:0' for option 'map': Invalid argument\nError parsing options for output file -.\nError opening output files: Invalid argument\n"
+            }
+          },
+          "publicationStarted": false,
+          "status": "failed"
+        }
+      },
+      {
+        "mode": "raw",
+        "start": 4.31,
+        "end": 4.38,
+        "expectedFrames": 2,
+        "snapshot": {
+          "audio": null,
+          "audioOffsetMs": null,
+          "container": "mov,mp4,m4a,3gp,3g2,mj2",
+          "duration": 12,
+          "includeSubtitles": false,
+          "kind": "raw",
+          "preroll": null,
+          "presentation": null,
+          "processing": null,
+          "sizeBytes": 1441291,
+          "snapshotId": 11,
+          "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/fixtures/b.mp4",
+          "sourceStamp": {
+            "generation": 2,
+            "intentVersion": 2
+          },
+          "subtitle": null,
+          "time": 4.31,
+          "videoStreamIndex": 0
+        },
+        "job": {
+          "jobId": 12,
+          "snapshotId": 11,
+          "status": "queued"
+        },
+        "terminal": {
+          "facts": {
+            "audioTiming": "not applicable: no audio output",
+            "descriptorVersion": "vestra-finite/1",
+            "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+            "hasAudio": false,
+            "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+            "output": {
+              "format": {
+                "duration": "0.066667"
+              },
+              "programs": [],
+              "stream_groups": [],
+              "streams": [
+                {
+                  "codec_name": "h264",
+                  "codec_type": "video",
+                  "duration": "0.066667",
+                  "height": 180,
+                  "index": 0,
+                  "width": 320
+                }
+              ]
+            },
+            "preroll": "source-zero-to-start",
+            "processed": false,
+            "range": {
+              "end": 4.38,
+              "interval": "half-open; first video PTS >= start",
+              "start": 4.31
+            },
+            "videoStreamIndex": 0
+          },
+          "jobId": 12,
+          "outcome": {
+            "destination": "/private/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/endpoint-raw-two.mp4"
+          },
+          "publicationStarted": true,
+          "status": "completed"
+        }
+      },
+      {
+        "mode": "processed",
+        "start": 4.31,
+        "end": 4.32,
+        "expectedFrames": 0,
+        "snapshot": {
+          "audio": null,
+          "audioOffsetMs": -250,
+          "container": "mov,mp4,m4a,3gp,3g2,mj2",
+          "duration": 12,
+          "includeSubtitles": false,
+          "kind": "processed",
+          "preroll": "source-zero-to-start",
+          "presentation": {
+            "height": 180,
+            "width": 320
+          },
+          "processing": {
+            "audio": [
+              {
+                "manifestId": "review.mp4-consumer",
+                "nodes": [
+                  {
+                    "gainDb": -12,
+                    "kind": "volume"
+                  }
+                ],
+                "resourceId": "new-audio"
+              }
+            ],
+            "audioOffsetMs": -250,
+            "revision": 8,
+            "video": [
+              {
+                "manifestId": "review.mp4-consumer",
+                "nodes": [
+                  {
+                    "brightness": -0.12,
+                    "contrast": 1,
+                    "gamma": 1,
+                    "kind": "eq",
+                    "saturation": 1
+                  }
+                ],
+                "resourceId": "new-video"
+              }
+            ]
+          },
+          "sizeBytes": 1441291,
+          "snapshotId": 12,
+          "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/fixtures/b.mp4",
+          "sourceStamp": {
+            "generation": 2,
+            "intentVersion": 2
+          },
+          "subtitle": null,
+          "time": 4.31,
+          "videoStreamIndex": 0
+        },
+        "job": {
+          "jobId": 13,
+          "snapshotId": 12,
+          "status": "queued"
+        },
+        "terminal": {
+          "facts": {
+            "audioTiming": "not applicable: no audio output",
+            "descriptorVersion": "vestra-finite/1",
+            "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+            "hasAudio": false,
+            "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+            "preroll": "source-zero-to-start",
+            "processed": true,
+            "range": {
+              "end": 4.32,
+              "interval": "half-open; first video PTS >= start",
+              "start": 4.31
+            },
+            "videoStreamIndex": 0
+          },
+          "jobId": 13,
+          "outcome": {
+            "error": {
+              "code": "export-failed",
+              "message": "MP4 validation decode failed (exit status: 234): Stream map '' matches no streams.\nTo ignore this, add a trailing '?' to the map.\nFailed to set value '0:v:0' for option 'map': Invalid argument\nError parsing options for output file -.\nError opening output files: Invalid argument\n"
+            }
+          },
+          "publicationStarted": false,
+          "status": "failed"
+        }
+      },
+      {
+        "mode": "processed",
+        "start": 4.31,
+        "end": 4.38,
+        "expectedFrames": 2,
+        "snapshot": {
+          "audio": null,
+          "audioOffsetMs": -250,
+          "container": "mov,mp4,m4a,3gp,3g2,mj2",
+          "duration": 12,
+          "includeSubtitles": false,
+          "kind": "processed",
+          "preroll": "source-zero-to-start",
+          "presentation": {
+            "height": 180,
+            "width": 320
+          },
+          "processing": {
+            "audio": [
+              {
+                "manifestId": "review.mp4-consumer",
+                "nodes": [
+                  {
+                    "gainDb": -12,
+                    "kind": "volume"
+                  }
+                ],
+                "resourceId": "new-audio"
+              }
+            ],
+            "audioOffsetMs": -250,
+            "revision": 8,
+            "video": [
+              {
+                "manifestId": "review.mp4-consumer",
+                "nodes": [
+                  {
+                    "brightness": -0.12,
+                    "contrast": 1,
+                    "gamma": 1,
+                    "kind": "eq",
+                    "saturation": 1
+                  }
+                ],
+                "resourceId": "new-video"
+              }
+            ]
+          },
+          "sizeBytes": 1441291,
+          "snapshotId": 13,
+          "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/fixtures/b.mp4",
+          "sourceStamp": {
+            "generation": 2,
+            "intentVersion": 2
+          },
+          "subtitle": null,
+          "time": 4.31,
+          "videoStreamIndex": 0
+        },
+        "job": {
+          "jobId": 14,
+          "snapshotId": 13,
+          "status": "queued"
+        },
+        "terminal": {
+          "facts": {
+            "audioTiming": "not applicable: no audio output",
+            "descriptorVersion": "vestra-finite/1",
+            "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+            "hasAudio": false,
+            "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+            "output": {
+              "format": {
+                "duration": "0.066667"
+              },
+              "programs": [],
+              "stream_groups": [],
+              "streams": [
+                {
+                  "codec_name": "h264",
+                  "codec_type": "video",
+                  "duration": "0.066667",
+                  "height": 180,
+                  "index": 0,
+                  "width": 320
+                }
+              ]
+            },
+            "preroll": "source-zero-to-start",
+            "processed": true,
+            "range": {
+              "end": 4.38,
+              "interval": "half-open; first video PTS >= start",
+              "start": 4.31
+            },
+            "videoStreamIndex": 0
+          },
+          "jobId": 14,
+          "outcome": {
+            "destination": "/private/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/endpoint-processed-two.mp4"
+          },
+          "publicationStarted": true,
+          "status": "completed"
+        }
+      }
+    ],
+    "noClobber": {
+      "facts": {
+        "audioTiming": "not applicable: no audio output",
+        "descriptorVersion": "vestra-finite/1",
+        "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+        "hasAudio": false,
+        "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+        "output": {
+          "format": {
+            "duration": "1.000000"
+          },
+          "programs": [],
+          "stream_groups": [],
+          "streams": [
+            {
+              "codec_name": "h264",
+              "codec_type": "video",
+              "duration": "1.000000",
+              "height": 180,
+              "index": 0,
+              "width": 320
+            }
+          ]
+        },
+        "preroll": "source-zero-to-start",
+        "processed": false,
+        "range": {
+          "end": 1,
+          "interval": "half-open; first video PTS >= start",
+          "start": 0
+        },
+        "videoStreamIndex": 0
+      },
+      "jobId": 15,
+      "outcome": {
+        "error": {
+          "code": "export-failed",
+          "message": "PNG no-clobber publication failed: File exists (os error 17)"
+        }
+      },
+      "publicationStarted": true,
+      "status": "failed"
+    },
+    "cancel": {
+      "request": {
+        "cancel": "requested",
+        "jobId": 16
+      },
+      "terminal": {
+        "facts": null,
+        "jobId": 16,
+        "outcome": {
+          "cancelled": true
+        },
+        "publicationStarted": false,
+        "status": "cancelled"
+      },
+      "covered": true
+    },
+    "cleanup": {
+      "children": [],
+      "entries": [
+        "endpoint-processed-two.mp4",
+        "endpoint-raw-two.mp4",
+        "existing.mp4",
+        "negative-tail.mp4",
+        "positive-prefix.mp4",
+        "processed-negative.mp4",
+        "processed-old-after-switch-disable.mp4",
+        "processed-old-before.mp4",
+        "processed-zero.mp4",
+        "raw-none.mp4",
+        "raw-second-high.mp4",
+        "raw-second-low-muted.mp4",
+        "raw-selected.mp4"
+      ]
+    }
+  },
+  "thresholds": {
+    "wholeNrmse": 0.06,
+    "first300msNrmse": 0.06,
+    "first300msSamples": 14400,
+    "sampleRate": 48000,
+    "channels": 1,
+    "aacCountTolerance": 1024,
+    "silentRms": 0.0001,
+    "silentMax": 0.001
+  },
+  "limits": [
+    "Finite H264/AAC MP4 only; public selected stream mapping and complete independent decode.",
+    "No per-output lag or gain fitting; actual AAC sample counts/PTS/padding retained. No realtime DSP internal-history parity.",
+    "Original source0 DSP reference and independently indexed offsets, not copied candidate aresample chain.",
+    "Independent old-recipe glyph/video and finite AV pulse/frame markers checked; FFmpeg/libass provider exclusivity/any-script shaping and physical AV latency are not proved."
+  ]
+}

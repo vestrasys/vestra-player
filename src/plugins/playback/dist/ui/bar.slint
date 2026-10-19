@@ -1,0 +1,107 @@
+import { Button, Slider, LineEdit } from "std-widgets.slint";
+
+export global PlaybackBridge {
+    in-out property <string> source-label;
+    in-out property <string> status;
+    in-out property <string> time-label;
+    in-out property <float> progress;
+    in-out property <bool> can-seek;
+    in-out property <bool> can-pause;
+    in-out property <bool> can-open: true;
+    in-out property <string> pause-label: "播放";
+    in-out property <bool> muted;
+    in-out property <float> volume: 100;
+    in-out property <string> volume-label: "100%";
+    in-out property <string> rate-label: "1倍";
+    in-out property <bool> can-rate;
+    in-out property <bool> can-mute: true;
+    in-out property <bool> can-volume: true;
+    in-out property <string> editor;
+    in-out property <string> editor-value;
+    in-out property <bool> can-retry;
+    callback action(string);
+    callback seek-changed(float);
+    callback volume-changed(float);
+    callback volume-released(float);
+    callback seek-cancelled();
+    callback dragging(bool);
+    callback interaction(bool);
+    callback confirm-editor(string);
+    callback cancel-editor();
+    callback retry();
+}
+
+component EditorRow inherits Rectangle {
+    min-height: 32px;
+    callback focus-changed(bool);
+    private property <bool> focused: editor-input.has-focus || confirm-button.has-focus || cancel-button.has-focus;
+    changed focused => { root.focus-changed(root.focused); }
+    HorizontalLayout {
+            spacing: 6px;
+            Text { text: PlaybackBridge.editor == "jump" ? "时间 HH:MM:SS.mmm" : PlaybackBridge.editor == "rate" ? "速度 0.25–4倍" : "音量 0–200%"; color: white; vertical-alignment: center; }
+            editor-input := LineEdit { text <=> PlaybackBridge.editor-value; horizontal-stretch: 1; accepted => { PlaybackBridge.confirm-editor(self.text); } }
+            confirm-button := Button { text: "确认"; clicked => { PlaybackBridge.confirm-editor(PlaybackBridge.editor-value); } }
+            cancel-button := Button { text: "取消"; clicked => { PlaybackBridge.cancel-editor(); } }
+        }
+}
+
+export component PlaybackBar inherits Rectangle {
+    min-height: PlaybackBridge.editor == "" ? 96px : 140px;
+    background: #20242b;
+    private property <bool> editor-focused;
+    private property <bool> editor-open: PlaybackBridge.editor != "";
+    changed editor-open => { if !root.editor-open { root.editor-focused = false; } }
+    private property <bool> focused: open-button.has-focus || pause-button.has-focus || time-button.has-focus || rate-button.has-focus || mute-button.has-focus || volume-slider.has-focus || root.editor-focused;
+    changed focused => { PlaybackBridge.interaction(root.focused); }
+    VerticalLayout {
+        padding: 8px;
+        spacing: 5px;
+        HorizontalLayout {
+            spacing: 8px;
+            Text { text: PlaybackBridge.source-label; color: #d5dbe6; overflow: elide; horizontal-stretch: 1; font-size: 11px; }
+            Text { text: PlaybackBridge.status; color: #b9c8de; overflow: elide; max-width: 320px; font-size: 11px; }
+            if PlaybackBridge.can-retry: Button { text: "重试"; clicked => { PlaybackBridge.retry(); } }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            progress-track := Rectangle {
+                min-width: 100px;
+                horizontal-stretch: 1;
+                height: 14px;
+                background: PlaybackBridge.can-seek ? #47505d : #30353c;
+                border-radius: 7px;
+                Rectangle { x: 0; width: parent.width * min(1, max(0, PlaybackBridge.progress)); height: parent.height; background: #75a8fa; border-radius: 7px; }
+                progress-touch := TouchArea {
+                    enabled: PlaybackBridge.can-seek;
+                    pointer-event(event) => {
+                        if event.kind == PointerEventKind.cancel {
+                            PlaybackBridge.seek-cancelled();
+                        } else if event.button == PointerEventButton.left {
+                            if event.kind == PointerEventKind.down {
+                                PlaybackBridge.dragging(true);
+                                PlaybackBridge.seek-changed(min(1, max(0, self.mouse-x / self.width)));
+                            } else if event.kind == PointerEventKind.up {
+                                PlaybackBridge.seek-changed(min(1, max(0, self.mouse-x / self.width)));
+                                PlaybackBridge.dragging(false);
+                            }
+                        }
+                    }
+                    moved => { if self.pressed { PlaybackBridge.seek-changed(min(1, max(0, self.mouse-x / self.width))); } }
+                }
+            }
+            time-button := Button { text: PlaybackBridge.time-label; enabled: PlaybackBridge.can-seek; clicked => { PlaybackBridge.action("jump"); } }
+        }
+        HorizontalLayout {
+            spacing: 6px;
+            open-button := Button { text: "打开"; enabled: PlaybackBridge.can-open; clicked => { PlaybackBridge.action("open"); } }
+            pause-button := Button { text: PlaybackBridge.pause-label; enabled: PlaybackBridge.can-pause; clicked => { PlaybackBridge.action("toggle-pause"); } }
+            rate-button := Button { text: PlaybackBridge.rate-label; enabled: PlaybackBridge.can-rate; clicked => { PlaybackBridge.action("rate-custom"); } }
+            mute-button := Button { text: PlaybackBridge.muted ? "解除静音" : "静音"; enabled: PlaybackBridge.can-mute; clicked => { PlaybackBridge.action("mute"); } }
+            volume-slider := Slider { enabled: PlaybackBridge.can-volume; minimum: 0; maximum: 200; value: PlaybackBridge.volume; horizontal-stretch: 1; min-width: 80px; changed(value) => { PlaybackBridge.volume-changed(value); } released(value) => { PlaybackBridge.volume-released(value); } }
+            Text { text: PlaybackBridge.volume-label; color: #d5dbe6; min-width: 40px; vertical-alignment: center; }
+        }
+        if PlaybackBridge.editor != "": EditorRow {
+            focus-changed(focused) => { root.editor-focused = focused; }
+        }
+    }
+}

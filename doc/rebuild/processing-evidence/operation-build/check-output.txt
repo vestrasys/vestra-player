@@ -1,0 +1,91 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.32s
+     Running unittests ../experiments/composition-probe/main.rs (src/host/target/debug/deps/composition_probe-18aeed5087932fd8)
+
+running 24 tests
+test composition::tests::missing_or_duplicate_shell_markers_fail_instead_of_guessing_layout ... ok
+test effects::tests::topology_or_unmeasured_options_require_separate_reconfiguration ... ok
+test effects::tests::invalid_numbers_nodes_and_duplicate_keys_are_rejected ... ok
+test effects::tests::updates_target_sorted_node_indices_without_rebuilding_the_chain ... ok
+test effects::tests::stable_owner_then_resource_order_preserves_internal_node_order ... ok
+test processing_operations::tests::invalid_and_out_of_order_revisions_do_not_mutate_admitted_facts ... ok
+test effects::tests::live_and_offline_volume_share_db_conversion_and_norm_stays_present ... ok
+test processing_operations::tests::stages_are_independent_and_same_payload_replays_the_original_result ... ok
+test session::tests::ended_auto_next_loses_to_manual_open_and_restart ... ok
+test session::tests::controls_invalidate_auto_next_without_breaking_real_load_association ... ok
+test processing_operations::tests::pending_capacity_refusal_does_not_advance_revision_or_allocate_new_key ... ok
+test session::tests::late_a_ready_and_error_cannot_overwrite_b_loading ... ok
+test session::tests::pending_pressure_is_bounded_and_refusal_is_idempotent ... ok
+test composition::tests::generated_shell_preserves_shared_menu_video_and_two_owner_globals ... ok
+test session::tests::replay_conflict_and_expiration_never_repeat_side_effects ... ok
+test ui_values::tests::exact_depth_and_array_limits_apply_both_directions ... ok
+test ui_values::tests::rows_preserve_identity_structures_and_own_their_models ... ok
+test ui_values::tests::unsupported_values_nan_and_renamed_fields_fail_explicitly ... ok
+test composition::tests::bounded_json_callbacks_preserve_structs_and_reject_overload ... ok
+test ui_values::tests::nested_containers_share_one_total_node_budget ... ok
+test processing_operations::tests::lifetime_key_limit_bounds_tombstones_even_when_results_are_evicted ... ok
+test processing_operations::tests::terminal_eviction_preserves_high_water_and_cannot_repeat_side_effects ... ok
+test ui_values::tests::strings_field_names_and_total_text_are_bounded ... ok
+test composition::tests::actual_compiler_accepts_shell_imports_models_and_both_mounts_without_a_window ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+
+     Running unittests ../experiments/processing-probe/main.rs (src/host/target/debug/deps/processing_probe-cf1b254f2901cab9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests ../experiments/source-probe/main.rs (src/host/target/debug/deps/source_probe-5ca511b3e6eb1dfe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (src/host/target/debug/deps/vestra_host-ff8f60ee40ebad1f)
+
+running 37 tests
+test commands::tests::top_level_domains_keep_host_order_even_when_reverse_lexical ... ok
+test commands::tests::stopped_owner_cleanup_cannot_remove_replacement_and_path_is_reusable ... ok
+test commands::tests::local_ids_are_namespaced_but_primary_paths_have_one_owner ... ok
+test commands::tests::stale_state_cannot_reenable_a_disabled_command_and_same_tree_exposes_reason ... ok
+test commands::tests::both_leaf_group_collision_directions_fail_without_changing_tree ... ok
+test composition::tests::missing_or_duplicate_shell_markers_fail_instead_of_guessing_layout ... ok
+test effects::tests::stable_owner_then_resource_order_preserves_internal_node_order ... ok
+test effects::tests::topology_or_unmeasured_options_require_separate_reconfiguration ... ok
+test effects::tests::invalid_numbers_nodes_and_duplicate_keys_are_rejected ... ok
+test commands::tests::registration_order_does_not_change_tree_and_limits_reject_new_work ... ok
+test effects::tests::live_and_offline_volume_share_db_conversion_and_norm_stays_present ... ok
+test processing_operations::tests::invalid_and_out_of_order_revisions_do_not_mutate_admitted_facts ... ok
+test effects::tests::updates_target_sorted_node_indices_without_rebuilding_the_chain ... ok
+test processing_operations::tests::stages_are_independent_and_same_payload_replays_the_original_result ... ok
+test session::tests::controls_invalidate_auto_next_without_breaking_real_load_association ... ok
+test session::tests::ended_auto_next_loses_to_manual_open_and_restart ... ok
+test session::tests::late_a_ready_and_error_cannot_overwrite_b_loading ... ok
+test composition::tests::generated_shell_preserves_shared_menu_video_and_two_owner_globals ... ok
+test session::tests::pending_pressure_is_bounded_and_refusal_is_idempotent ... ok
+test processing_operations::tests::pending_capacity_refusal_does_not_advance_revision_or_allocate_new_key ... ok
+test ui_values::tests::exact_depth_and_array_limits_apply_both_directions ... ok
+test ui_values::tests::rows_preserve_identity_structures_and_own_their_models ... ok
+test composition::tests::bounded_json_callbacks_preserve_structs_and_reject_overload ... ok
+test ui_values::tests::unsupported_values_nan_and_renamed_fields_fail_explicitly ... ok
+test window_state::tests::bar_hides_at_three_seconds_without_changing_preference_and_activity_reveals ... ok
+test window_state::tests::each_bar_lock_and_global_obstruction_suppresses_idle ... ok
+test window_state::tests::fullscreen_sidebar_override_is_temporary_and_independent_of_preference ... ok
+test window_state::tests::invalid_geometry_and_extreme_timestamps_do_not_produce_fake_layout ... ok
+test window_state::tests::owner_cleanup_cannot_leave_locks_or_remove_another_generation ... ok
+test window_state::tests::release_activity_starts_a_new_idle_period_but_setters_do_not_invent_time ... ok
+test window_state::tests::responsive_sidebar_preserves_preference_and_canvas_minimum ... ok
+test session::tests::replay_conflict_and_expiration_never_repeat_side_effects ... ok
+test processing_operations::tests::lifetime_key_limit_bounds_tombstones_even_when_results_are_evicted ... ok
+test ui_values::tests::nested_containers_share_one_total_node_budget ... ok
+test processing_operations::tests::terminal_eviction_preserves_high_water_and_cannot_repeat_side_effects ... ok
+test ui_values::tests::strings_field_names_and_total_text_are_bounded ... ok
+test composition::tests::actual_compiler_accepts_shell_imports_models_and_both_mounts_without_a_window ... ok
+
+test result: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+
+    Checking vestra-host v0.1.0 (/Users/ziyang/Documents/vestra-player/src/host)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.49s
+   Compiling vestra-host v0.1.0 (/Users/ziyang/Documents/vestra-player/src/host)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.41s
+

@@ -1,22 +1,18 @@
 {
-  "name": "vestra-slint-experimental1",
+  "name": "vestra-experimental-runtime",
   "private": true,
-  "description": "仅用于 Slint 实验，与最终成品 API 会有很大差异",
   "type": "module",
-  "engines": {
-    "node": ">=22.18.0"
-  },
   "scripts": {
-    "test": "node --test --test-concurrency=1 tests/*.test.ts tests/probes/*/*.test.ts tests/acceptance/*.test.ts tests/functional/*.test.ts tests/interactive/*.test.ts",
-    "typecheck": "tsc --project tsconfig.json",
-    "boundaries": "node tools/check-plugin-boundaries.ts",
-    "format:check": "prettier --check sdk runtime tests plugins tools package.json tsconfig.json",
-    "format": "prettier --write sdk runtime tests plugins tools package.json tsconfig.json",
-    "check": "sh scripts/check.sh"
+    "check": "tsc --noEmit",
+    "start": "cd host && cargo run --",
+    "verify": "node scripts/verify.mjs",
+    "format": "prettier --write \"{sdk,runtime,examples,tests,scripts}/**/*.{ts,mjs}\" package.json tsconfig.json",
+    "format:check": "prettier --check \"{sdk,runtime,examples,tests,scripts}/**/*.{ts,mjs}\" package.json tsconfig.json",
+    "boundaries": "node scripts/check-boundaries.mjs"
   },
   "devDependencies": {
-    "@types/node": "26.6.5",
-    "prettier": "3.8.3",
-    "typescript": "6.0.3"
+    "@types/node": "^25.0.0",
+    "prettier": "^3.9.10",
+    "typescript": "^5.9.0"
   }
 }

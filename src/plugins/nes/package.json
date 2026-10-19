@@ -1,9 +1,1 @@
-{
-  "name": "vestra-nes-probe",
-  "private": true,
-  "type": "module",
-  "description": "Experimental NES source probe; final API may differ greatly",
-  "dependencies": {
-    "jsnes": "2.1.0"
-  }
-}
+{"name":"vestra-nes","private":true,"version":"0.1.0","type":"module","dependencies":{"jsnes":"2.1.0"}}

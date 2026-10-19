@@ -1,0 +1,476 @@
+{
+  "pass": true,
+  "rows": [
+    {
+      "owner": 2,
+      "prior": {
+        "status": "unknown"
+      },
+      "result": {
+        "confirmation": "applied",
+        "error": null,
+        "resources": [
+          {
+            "cues": 1,
+            "derived": {
+              "digest": "1ae1e211b70cf049e38a98d3aec5ded3250e3929497e753933dca5c08eb78b01",
+              "format": "webvtt"
+            },
+            "digest": "8a61f4e3b90d6d2084ec7296e4391d2331cc3b9d4ddff4c16b0b33fbae049979",
+            "format": "srt",
+            "owner": 1,
+            "resourceId": "shared",
+            "revision": 1,
+            "sizeBytes": 48
+          },
+          {
+            "cues": 1,
+            "derived": {
+              "digest": "6115b3745f28e56cad624c25fd646b82eff1a9dea83ab1bb9344be5fe6741ff4",
+              "format": "webvtt"
+            },
+            "digest": "f3f2e06e8fdb2db1c199736905bd6aebe93bfcc48c1041810497d7a821d05098",
+            "format": "srt",
+            "owner": 2,
+            "resourceId": "shared",
+            "revision": 1,
+            "sizeBytes": 40
+          }
+        ],
+        "selection": {
+          "stamp": {
+            "generation": 2,
+            "revision": 2
+          },
+          "target": {
+            "contentRevision": 1,
+            "kind": "external",
+            "owner": 2,
+            "resourceId": "shared"
+          }
+        },
+        "source": {
+          "generation": 2,
+          "phase": "ready"
+        },
+        "tracks": [
+          {
+            "language": null,
+            "styleReason": null,
+            "styleSupported": true,
+            "target": {
+              "contentRevision": 1,
+              "kind": "external",
+              "owner": 1,
+              "resourceId": "shared"
+            },
+            "title": "vestra-subtitle-QCkkAE.vtt"
+          },
+          {
+            "language": null,
+            "styleReason": null,
+            "styleSupported": true,
+            "target": {
+              "contentRevision": 1,
+              "kind": "external",
+              "owner": 2,
+              "resourceId": "shared"
+            },
+            "title": "vestra-subtitle-VIelRE.vtt"
+          }
+        ]
+      },
+      "query": {
+        "result": {
+          "confirmation": "applied",
+          "error": null,
+          "resources": [
+            {
+              "cues": 1,
+              "derived": {
+                "digest": "1ae1e211b70cf049e38a98d3aec5ded3250e3929497e753933dca5c08eb78b01",
+                "format": "webvtt"
+              },
+              "digest": "8a61f4e3b90d6d2084ec7296e4391d2331cc3b9d4ddff4c16b0b33fbae049979",
+              "format": "srt",
+              "owner": 1,
+              "resourceId": "shared",
+              "revision": 1,
+              "sizeBytes": 48
+            },
+            {
+              "cues": 1,
+              "derived": {
+                "digest": "6115b3745f28e56cad624c25fd646b82eff1a9dea83ab1bb9344be5fe6741ff4",
+                "format": "webvtt"
+              },
+              "digest": "f3f2e06e8fdb2db1c199736905bd6aebe93bfcc48c1041810497d7a821d05098",
+              "format": "srt",
+              "owner": 2,
+              "resourceId": "shared",
+              "revision": 1,
+              "sizeBytes": 40
+            }
+          ],
+          "selection": {
+            "stamp": {
+              "generation": 2,
+              "revision": 2
+            },
+            "target": {
+              "contentRevision": 1,
+              "kind": "external",
+              "owner": 2,
+              "resourceId": "shared"
+            }
+          },
+          "source": {
+            "generation": 2,
+            "phase": "ready"
+          },
+          "tracks": [
+            {
+              "language": null,
+              "styleReason": null,
+              "styleSupported": true,
+              "target": {
+                "contentRevision": 1,
+                "kind": "external",
+                "owner": 1,
+                "resourceId": "shared"
+              },
+              "title": "vestra-subtitle-QCkkAE.vtt"
+            },
+            {
+              "language": null,
+              "styleReason": null,
+              "styleSupported": true,
+              "target": {
+                "contentRevision": 1,
+                "kind": "external",
+                "owner": 2,
+                "resourceId": "shared"
+              },
+              "title": "vestra-subtitle-VIelRE.vtt"
+            }
+          ]
+        },
+        "status": "completed"
+      }
+    },
+    {
+      "owner": 3,
+      "prior": {
+        "status": "unknown"
+      },
+      "result": {
+        "confirmation": "applied",
+        "error": null,
+        "resources": [
+          {
+            "cues": 1,
+            "derived": {
+              "digest": "1ae1e211b70cf049e38a98d3aec5ded3250e3929497e753933dca5c08eb78b01",
+              "format": "webvtt"
+            },
+            "digest": "8a61f4e3b90d6d2084ec7296e4391d2331cc3b9d4ddff4c16b0b33fbae049979",
+            "format": "srt",
+            "owner": 1,
+            "resourceId": "shared",
+            "revision": 1,
+            "sizeBytes": 48
+          },
+          {
+            "cues": 1,
+            "derived": {
+              "digest": "6115b3745f28e56cad624c25fd646b82eff1a9dea83ab1bb9344be5fe6741ff4",
+              "format": "webvtt"
+            },
+            "digest": "f3f2e06e8fdb2db1c199736905bd6aebe93bfcc48c1041810497d7a821d05098",
+            "format": "srt",
+            "owner": 3,
+            "resourceId": "shared",
+            "revision": 1,
+            "sizeBytes": 40
+          }
+        ],
+        "selection": {
+          "stamp": {
+            "generation": 2,
+            "revision": 4
+          },
+          "target": {
+            "contentRevision": 1,
+            "kind": "external",
+            "owner": 3,
+            "resourceId": "shared"
+          }
+        },
+        "source": {
+          "generation": 2,
+          "phase": "ready"
+        },
+        "tracks": [
+          {
+            "language": null,
+            "styleReason": null,
+            "styleSupported": true,
+            "target": {
+              "contentRevision": 1,
+              "kind": "external",
+              "owner": 1,
+              "resourceId": "shared"
+            },
+            "title": "vestra-subtitle-QCkkAE.vtt"
+          },
+          {
+            "language": null,
+            "styleReason": null,
+            "styleSupported": true,
+            "target": {
+              "contentRevision": 1,
+              "kind": "external",
+              "owner": 3,
+              "resourceId": "shared"
+            },
+            "title": "vestra-subtitle-sGlAYX.vtt"
+          }
+        ]
+      },
+      "query": {
+        "result": {
+          "confirmation": "applied",
+          "error": null,
+          "resources": [
+            {
+              "cues": 1,
+              "derived": {
+                "digest": "1ae1e211b70cf049e38a98d3aec5ded3250e3929497e753933dca5c08eb78b01",
+                "format": "webvtt"
+              },
+              "digest": "8a61f4e3b90d6d2084ec7296e4391d2331cc3b9d4ddff4c16b0b33fbae049979",
+              "format": "srt",
+              "owner": 1,
+              "resourceId": "shared",
+              "revision": 1,
+              "sizeBytes": 48
+            },
+            {
+              "cues": 1,
+              "derived": {
+                "digest": "6115b3745f28e56cad624c25fd646b82eff1a9dea83ab1bb9344be5fe6741ff4",
+                "format": "webvtt"
+              },
+              "digest": "f3f2e06e8fdb2db1c199736905bd6aebe93bfcc48c1041810497d7a821d05098",
+              "format": "srt",
+              "owner": 3,
+              "resourceId": "shared",
+              "revision": 1,
+              "sizeBytes": 40
+            }
+          ],
+          "selection": {
+            "stamp": {
+              "generation": 2,
+              "revision": 4
+            },
+            "target": {
+              "contentRevision": 1,
+              "kind": "external",
+              "owner": 3,
+              "resourceId": "shared"
+            }
+          },
+          "source": {
+            "generation": 2,
+            "phase": "ready"
+          },
+          "tracks": [
+            {
+              "language": null,
+              "styleReason": null,
+              "styleSupported": true,
+              "target": {
+                "contentRevision": 1,
+                "kind": "external",
+                "owner": 1,
+                "resourceId": "shared"
+              },
+              "title": "vestra-subtitle-QCkkAE.vtt"
+            },
+            {
+              "language": null,
+              "styleReason": null,
+              "styleSupported": true,
+              "target": {
+                "contentRevision": 1,
+                "kind": "external",
+                "owner": 3,
+                "resourceId": "shared"
+              },
+              "title": "vestra-subtitle-sGlAYX.vtt"
+            }
+          ]
+        },
+        "status": "completed"
+      }
+    },
+    {
+      "owner": 4,
+      "prior": {
+        "status": "unknown"
+      },
+      "result": {
+        "confirmation": "applied",
+        "error": null,
+        "resources": [
+          {
+            "cues": 1,
+            "derived": {
+              "digest": "1ae1e211b70cf049e38a98d3aec5ded3250e3929497e753933dca5c08eb78b01",
+              "format": "webvtt"
+            },
+            "digest": "8a61f4e3b90d6d2084ec7296e4391d2331cc3b9d4ddff4c16b0b33fbae049979",
+            "format": "srt",
+            "owner": 1,
+            "resourceId": "shared",
+            "revision": 1,
+            "sizeBytes": 48
+          },
+          {
+            "cues": 1,
+            "derived": {
+              "digest": "6115b3745f28e56cad624c25fd646b82eff1a9dea83ab1bb9344be5fe6741ff4",
+              "format": "webvtt"
+            },
+            "digest": "f3f2e06e8fdb2db1c199736905bd6aebe93bfcc48c1041810497d7a821d05098",
+            "format": "srt",
+            "owner": 4,
+            "resourceId": "shared",
+            "revision": 1,
+            "sizeBytes": 40
+          }
+        ],
+        "selection": {
+          "stamp": {
+            "generation": 2,
+            "revision": 6
+          },
+          "target": {
+            "contentRevision": 1,
+            "kind": "external",
+            "owner": 4,
+            "resourceId": "shared"
+          }
+        },
+        "source": {
+          "generation": 2,
+          "phase": "ready"
+        },
+        "tracks": [
+          {
+            "language": null,
+            "styleReason": null,
+            "styleSupported": true,
+            "target": {
+              "contentRevision": 1,
+              "kind": "external",
+              "owner": 1,
+              "resourceId": "shared"
+            },
+            "title": "vestra-subtitle-QCkkAE.vtt"
+          },
+          {
+            "language": null,
+            "styleReason": null,
+            "styleSupported": true,
+            "target": {
+              "contentRevision": 1,
+              "kind": "external",
+              "owner": 4,
+              "resourceId": "shared"
+            },
+            "title": "vestra-subtitle-khWqXT.vtt"
+          }
+        ]
+      },
+      "query": {
+        "result": {
+          "confirmation": "applied",
+          "error": null,
+          "resources": [
+            {
+              "cues": 1,
+              "derived": {
+                "digest": "1ae1e211b70cf049e38a98d3aec5ded3250e3929497e753933dca5c08eb78b01",
+                "format": "webvtt"
+              },
+              "digest": "8a61f4e3b90d6d2084ec7296e4391d2331cc3b9d4ddff4c16b0b33fbae049979",
+              "format": "srt",
+              "owner": 1,
+              "resourceId": "shared",
+              "revision": 1,
+              "sizeBytes": 48
+            },
+            {
+              "cues": 1,
+              "derived": {
+                "digest": "6115b3745f28e56cad624c25fd646b82eff1a9dea83ab1bb9344be5fe6741ff4",
+                "format": "webvtt"
+              },
+              "digest": "f3f2e06e8fdb2db1c199736905bd6aebe93bfcc48c1041810497d7a821d05098",
+              "format": "srt",
+              "owner": 4,
+              "resourceId": "shared",
+              "revision": 1,
+              "sizeBytes": 40
+            }
+          ],
+          "selection": {
+            "stamp": {
+              "generation": 2,
+              "revision": 6
+            },
+            "target": {
+              "contentRevision": 1,
+              "kind": "external",
+              "owner": 4,
+              "resourceId": "shared"
+            }
+          },
+          "source": {
+            "generation": 2,
+            "phase": "ready"
+          },
+          "tracks": [
+            {
+              "language": null,
+              "styleReason": null,
+              "styleSupported": true,
+              "target": {
+                "contentRevision": 1,
+                "kind": "external",
+                "owner": 1,
+                "resourceId": "shared"
+              },
+              "title": "vestra-subtitle-QCkkAE.vtt"
+            },
+            {
+              "language": null,
+              "styleReason": null,
+              "styleSupported": true,
+              "target": {
+                "contentRevision": 1,
+                "kind": "external",
+                "owner": 4,
+                "resourceId": "shared"
+              },
+              "title": "vestra-subtitle-khWqXT.vtt"
+            }
+          ]
+        },
+        "status": "completed"
+      }
+    }
+  ]
+}

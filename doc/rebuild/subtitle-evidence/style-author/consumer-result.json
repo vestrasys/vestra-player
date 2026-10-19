@@ -1,0 +1,756 @@
+{
+  "pass": true,
+  "phases": [
+    {
+      "name": "gray",
+      "first": 3,
+      "last": 6,
+      "source": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 18,
+        "eventSequence": 15,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-style-9Fl3jn/gray.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      },
+      "subtitle": {
+        "confirmation": "applied",
+        "error": null,
+        "presentation": {
+          "actualFont": null,
+          "confirmation": "applied",
+          "effective": null,
+          "fonts": [
+            {
+              "family": "Arial Unicode MS",
+              "id": "local-arial-unicode",
+              "resolution": "requestedFamily",
+              "snapshotEligible": false
+            }
+          ],
+          "layers": [],
+          "referenceHeight": 1080,
+          "snapshotEligible": false
+        },
+        "resources": [],
+        "selection": {
+          "stamp": {
+            "generation": 1,
+            "revision": 0
+          },
+          "target": null
+        },
+        "source": {
+          "generation": 1,
+          "phase": "ready"
+        },
+        "tracks": []
+      }
+    },
+    {
+      "name": "default",
+      "first": 9,
+      "last": 12,
+      "source": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 18,
+        "eventSequence": 33,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-style-9Fl3jn/gray.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      },
+      "subtitle": {
+        "confirmation": "applied",
+        "error": null,
+        "presentation": {
+          "actualFont": null,
+          "confirmation": "applied",
+          "effective": null,
+          "fonts": [
+            {
+              "family": "Arial Unicode MS",
+              "id": "local-arial-unicode",
+              "resolution": "requestedFamily",
+              "snapshotEligible": false
+            }
+          ],
+          "layers": [],
+          "referenceHeight": 1080,
+          "snapshotEligible": false
+        },
+        "resources": [
+          {
+            "cues": 1,
+            "derived": {
+              "digest": "554344613a022dabcab93d91b7a3f795a159a0355beaaef1a37402522fc19d23",
+              "format": "webvtt"
+            },
+            "digest": "c362301a0a7e3a556c66f13dcb5993e6079165287e4f3bc9087f1118a5606e3f",
+            "format": "srt",
+            "owner": 1,
+            "resourceId": "sample",
+            "revision": 1,
+            "sizeBytes": 46
+          }
+        ],
+        "selection": {
+          "stamp": {
+            "generation": 1,
+            "revision": 1
+          },
+          "target": {
+            "contentRevision": 1,
+            "kind": "external",
+            "owner": 1,
+            "resourceId": "sample"
+          }
+        },
+        "source": {
+          "generation": 1,
+          "phase": "ready"
+        },
+        "tracks": [
+          {
+            "language": null,
+            "styleReason": null,
+            "styleSupported": true,
+            "target": {
+              "contentRevision": 1,
+              "kind": "external",
+              "owner": 1,
+              "resourceId": "sample"
+            },
+            "title": "vestra-subtitle-IYEYkB.vtt"
+          }
+        ]
+      }
+    },
+    {
+      "name": "small-white",
+      "first": 14,
+      "last": 18,
+      "source": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 18,
+        "eventSequence": 52,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-style-9Fl3jn/gray.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      },
+      "subtitle": {
+        "confirmation": "applied",
+        "error": null,
+        "presentation": {
+          "actualFont": null,
+          "confirmation": "applied",
+          "effective": {
+            "manifestId": "verify.subtitle-style",
+            "owner": 1,
+            "revision": 1,
+            "style": {
+              "color": "white",
+              "fontId": "local-arial-unicode",
+              "fontSize": 16,
+              "marginPercent": 5,
+              "offsetMs": 0,
+              "outline": 0
+            }
+          },
+          "fonts": [
+            {
+              "family": "Arial Unicode MS",
+              "id": "local-arial-unicode",
+              "resolution": "requestedFamily",
+              "snapshotEligible": false
+            }
+          ],
+          "layers": [
+            {
+              "manifestId": "verify.subtitle-style",
+              "owner": 1,
+              "revision": 1,
+              "style": {
+                "color": "white",
+                "fontId": "local-arial-unicode",
+                "fontSize": 16,
+                "marginPercent": 5,
+                "offsetMs": 0,
+                "outline": 0
+              }
+            }
+          ],
+          "referenceHeight": 1080,
+          "snapshotEligible": false
+        },
+        "resources": [
+          {
+            "cues": 1,
+            "derived": {
+              "digest": "554344613a022dabcab93d91b7a3f795a159a0355beaaef1a37402522fc19d23",
+              "format": "webvtt"
+            },
+            "digest": "c362301a0a7e3a556c66f13dcb5993e6079165287e4f3bc9087f1118a5606e3f",
+            "format": "srt",
+            "owner": 1,
+            "resourceId": "sample",
+            "revision": 1,
+            "sizeBytes": 46
+          }
+        ],
+        "selection": {
+          "stamp": {
+            "generation": 1,
+            "revision": 1
+          },
+          "target": {
+            "contentRevision": 1,
+            "kind": "external",
+            "owner": 1,
+            "resourceId": "sample"
+          }
+        },
+        "source": {
+          "generation": 1,
+          "phase": "ready"
+        },
+        "tracks": [
+          {
+            "language": "",
+            "styleReason": null,
+            "styleSupported": true,
+            "target": {
+              "contentRevision": 1,
+              "kind": "external",
+              "owner": 1,
+              "resourceId": "sample"
+            },
+            "title": "vestra-subtitle-IYEYkB.vtt"
+          }
+        ]
+      }
+    },
+    {
+      "name": "large-yellow",
+      "first": 20,
+      "last": 23,
+      "source": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 18,
+        "eventSequence": 69,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-style-9Fl3jn/gray.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      },
+      "subtitle": {
+        "confirmation": "applied",
+        "error": null,
+        "presentation": {
+          "actualFont": null,
+          "confirmation": "applied",
+          "effective": {
+            "manifestId": "verify.subtitle-style",
+            "owner": 1,
+            "revision": 2,
+            "style": {
+              "color": "yellow",
+              "fontId": "local-arial-unicode",
+              "fontSize": 72,
+              "marginPercent": 5,
+              "offsetMs": 0,
+              "outline": 2
+            }
+          },
+          "fonts": [
+            {
+              "family": "Arial Unicode MS",
+              "id": "local-arial-unicode",
+              "resolution": "requestedFamily",
+              "snapshotEligible": false
+            }
+          ],
+          "layers": [
+            {
+              "manifestId": "verify.subtitle-style",
+              "owner": 1,
+              "revision": 2,
+              "style": {
+                "color": "yellow",
+                "fontId": "local-arial-unicode",
+                "fontSize": 72,
+                "marginPercent": 5,
+                "offsetMs": 0,
+                "outline": 2
+              }
+            }
+          ],
+          "referenceHeight": 1080,
+          "snapshotEligible": false
+        },
+        "resources": [
+          {
+            "cues": 1,
+            "derived": {
+              "digest": "554344613a022dabcab93d91b7a3f795a159a0355beaaef1a37402522fc19d23",
+              "format": "webvtt"
+            },
+            "digest": "c362301a0a7e3a556c66f13dcb5993e6079165287e4f3bc9087f1118a5606e3f",
+            "format": "srt",
+            "owner": 1,
+            "resourceId": "sample",
+            "revision": 1,
+            "sizeBytes": 46
+          }
+        ],
+        "selection": {
+          "stamp": {
+            "generation": 1,
+            "revision": 1
+          },
+          "target": {
+            "contentRevision": 1,
+            "kind": "external",
+            "owner": 1,
+            "resourceId": "sample"
+          }
+        },
+        "source": {
+          "generation": 1,
+          "phase": "ready"
+        },
+        "tracks": [
+          {
+            "language": "",
+            "styleReason": null,
+            "styleSupported": true,
+            "target": {
+              "contentRevision": 1,
+              "kind": "external",
+              "owner": 1,
+              "resourceId": "sample"
+            },
+            "title": "vestra-subtitle-IYEYkB.vtt"
+          }
+        ]
+      }
+    },
+    {
+      "name": "delayed-hidden",
+      "first": 26,
+      "last": 29,
+      "source": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 18,
+        "eventSequence": 87,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-style-9Fl3jn/gray.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      },
+      "subtitle": {
+        "confirmation": "applied",
+        "error": null,
+        "presentation": {
+          "actualFont": null,
+          "confirmation": "applied",
+          "effective": {
+            "manifestId": "verify.subtitle-style",
+            "owner": 1,
+            "revision": 3,
+            "style": {
+              "color": "yellow",
+              "fontId": "local-arial-unicode",
+              "fontSize": 72,
+              "marginPercent": 5,
+              "offsetMs": 3000,
+              "outline": 2
+            }
+          },
+          "fonts": [
+            {
+              "family": "Arial Unicode MS",
+              "id": "local-arial-unicode",
+              "resolution": "requestedFamily",
+              "snapshotEligible": false
+            }
+          ],
+          "layers": [
+            {
+              "manifestId": "verify.subtitle-style",
+              "owner": 1,
+              "revision": 3,
+              "style": {
+                "color": "yellow",
+                "fontId": "local-arial-unicode",
+                "fontSize": 72,
+                "marginPercent": 5,
+                "offsetMs": 3000,
+                "outline": 2
+              }
+            }
+          ],
+          "referenceHeight": 1080,
+          "snapshotEligible": false
+        },
+        "resources": [
+          {
+            "cues": 1,
+            "derived": {
+              "digest": "554344613a022dabcab93d91b7a3f795a159a0355beaaef1a37402522fc19d23",
+              "format": "webvtt"
+            },
+            "digest": "c362301a0a7e3a556c66f13dcb5993e6079165287e4f3bc9087f1118a5606e3f",
+            "format": "srt",
+            "owner": 1,
+            "resourceId": "sample",
+            "revision": 1,
+            "sizeBytes": 46
+          }
+        ],
+        "selection": {
+          "stamp": {
+            "generation": 1,
+            "revision": 1
+          },
+          "target": {
+            "contentRevision": 1,
+            "kind": "external",
+            "owner": 1,
+            "resourceId": "sample"
+          }
+        },
+        "source": {
+          "generation": 1,
+          "phase": "ready"
+        },
+        "tracks": [
+          {
+            "language": "",
+            "styleReason": null,
+            "styleSupported": true,
+            "target": {
+              "contentRevision": 1,
+              "kind": "external",
+              "owner": 1,
+              "resourceId": "sample"
+            },
+            "title": "vestra-subtitle-IYEYkB.vtt"
+          }
+        ]
+      }
+    },
+    {
+      "name": "delay-restored",
+      "first": 31,
+      "last": 35,
+      "source": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 18,
+        "eventSequence": 104,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-style-9Fl3jn/gray.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      },
+      "subtitle": {
+        "confirmation": "applied",
+        "error": null,
+        "presentation": {
+          "actualFont": null,
+          "confirmation": "applied",
+          "effective": {
+            "manifestId": "verify.subtitle-style",
+            "owner": 1,
+            "revision": 4,
+            "style": {
+              "color": "yellow",
+              "fontId": "local-arial-unicode",
+              "fontSize": 72,
+              "marginPercent": 5,
+              "offsetMs": 0,
+              "outline": 2
+            }
+          },
+          "fonts": [
+            {
+              "family": "Arial Unicode MS",
+              "id": "local-arial-unicode",
+              "resolution": "requestedFamily",
+              "snapshotEligible": false
+            }
+          ],
+          "layers": [
+            {
+              "manifestId": "verify.subtitle-style",
+              "owner": 1,
+              "revision": 4,
+              "style": {
+                "color": "yellow",
+                "fontId": "local-arial-unicode",
+                "fontSize": 72,
+                "marginPercent": 5,
+                "offsetMs": 0,
+                "outline": 2
+              }
+            }
+          ],
+          "referenceHeight": 1080,
+          "snapshotEligible": false
+        },
+        "resources": [
+          {
+            "cues": 1,
+            "derived": {
+              "digest": "554344613a022dabcab93d91b7a3f795a159a0355beaaef1a37402522fc19d23",
+              "format": "webvtt"
+            },
+            "digest": "c362301a0a7e3a556c66f13dcb5993e6079165287e4f3bc9087f1118a5606e3f",
+            "format": "srt",
+            "owner": 1,
+            "resourceId": "sample",
+            "revision": 1,
+            "sizeBytes": 46
+          }
+        ],
+        "selection": {
+          "stamp": {
+            "generation": 1,
+            "revision": 1
+          },
+          "target": {
+            "contentRevision": 1,
+            "kind": "external",
+            "owner": 1,
+            "resourceId": "sample"
+          }
+        },
+        "source": {
+          "generation": 1,
+          "phase": "ready"
+        },
+        "tracks": [
+          {
+            "language": "",
+            "styleReason": null,
+            "styleSupported": true,
+            "target": {
+              "contentRevision": 1,
+              "kind": "external",
+              "owner": 1,
+              "resourceId": "sample"
+            },
+            "title": "vestra-subtitle-IYEYkB.vtt"
+          }
+        ]
+      }
+    },
+    {
+      "name": "revoked-default",
+      "first": 37,
+      "last": 40,
+      "source": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 18,
+        "eventSequence": 122,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-style-9Fl3jn/gray.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      },
+      "subtitle": {
+        "confirmation": "applied",
+        "error": null,
+        "presentation": {
+          "actualFont": null,
+          "confirmation": "applied",
+          "effective": null,
+          "fonts": [
+            {
+              "family": "Arial Unicode MS",
+              "id": "local-arial-unicode",
+              "resolution": "requestedFamily",
+              "snapshotEligible": false
+            }
+          ],
+          "layers": [],
+          "referenceHeight": 1080,
+          "snapshotEligible": false
+        },
+        "resources": [
+          {
+            "cues": 1,
+            "derived": {
+              "digest": "554344613a022dabcab93d91b7a3f795a159a0355beaaef1a37402522fc19d23",
+              "format": "webvtt"
+            },
+            "digest": "c362301a0a7e3a556c66f13dcb5993e6079165287e4f3bc9087f1118a5606e3f",
+            "format": "srt",
+            "owner": 1,
+            "resourceId": "sample",
+            "revision": 1,
+            "sizeBytes": 46
+          }
+        ],
+        "selection": {
+          "stamp": {
+            "generation": 1,
+            "revision": 1
+          },
+          "target": {
+            "contentRevision": 1,
+            "kind": "external",
+            "owner": 1,
+            "resourceId": "sample"
+          }
+        },
+        "source": {
+          "generation": 1,
+          "phase": "ready"
+        },
+        "tracks": [
+          {
+            "language": "",
+            "styleReason": null,
+            "styleSupported": true,
+            "target": {
+              "contentRevision": 1,
+              "kind": "external",
+              "owner": 1,
+              "resourceId": "sample"
+            },
+            "title": "vestra-subtitle-IYEYkB.vtt"
+          }
+        ]
+      }
+    }
+  ]
+}

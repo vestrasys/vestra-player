@@ -1,0 +1,43 @@
+{
+  "prior": {
+    "status": "unknown"
+  },
+  "snapshot": {
+    "container": "mov,mp4,m4a,3gp,3g2,mj2",
+    "kind": "raw",
+    "sizeBytes": 22038545,
+    "snapshotId": 3,
+    "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-jobs-review-ZKvAA3/user.mp4",
+    "sourceStamp": {
+      "generation": 2,
+      "intentVersion": 2
+    },
+    "time": 20
+  },
+  "jobs": [
+    {
+      "jobId": 5,
+      "snapshotId": 3,
+      "status": "queued"
+    },
+    {
+      "jobId": 6,
+      "snapshotId": 3,
+      "status": "queued"
+    }
+  ],
+  "states": [
+    {
+      "jobId": 5,
+      "outcome": null,
+      "publicationStarted": false,
+      "status": "running"
+    },
+    {
+      "jobId": 6,
+      "outcome": null,
+      "publicationStarted": false,
+      "status": "running"
+    }
+  ]
+}

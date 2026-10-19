@@ -1,0 +1,29 @@
+import { Button, LineEdit } from "std-widgets.slint";
+
+export global Bridge {
+    in-out property <string> source-label: "No source";
+    in-out property <bool> paused: false;
+    in-out property <bool> can-pause: false;
+    in-out property <bool> busy: false;
+    in-out property <string> status: "";
+    callback set-paused(bool);
+    callback interaction(bool, bool, bool);
+}
+
+export component SourceBar inherits Rectangle {
+    min-height: 60px;
+    background: #202b36;
+    private property <bool> focused: pause-button.has-focus || focus-test.has-focus;
+    changed focused => { Bridge.interaction(root.focused, false, false); }
+    HorizontalLayout {
+        padding: 8px; spacing: 10px;
+        pause-button := Button {
+            text: Bridge.paused ? "Play" : "Pause";
+            enabled: Bridge.can-pause && !Bridge.busy;
+            clicked => { Bridge.set-paused(!Bridge.paused); }
+        }
+        Text { text: Bridge.source-label; color: white; horizontal-stretch: 1; }
+        focus-test := LineEdit { width: 140px; placeholder-text: "Bar focus lock"; }
+        Text { text: Bridge.status; color: #cad1dd; }
+    }
+}

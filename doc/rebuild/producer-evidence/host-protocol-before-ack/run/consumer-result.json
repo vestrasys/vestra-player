@@ -1,0 +1,1246 @@
+{
+  "pass": true,
+  "prepared": {
+    "audioCapacityFrames": 9600,
+    "channels": 2,
+    "epoch": 1,
+    "maxAudioFrames": 4800,
+    "producerId": 1,
+    "sampleFormat": "f32le",
+    "sampleRate": 48000,
+    "socket": "/tmp/vestra-av-RmffyE/av.sock",
+    "videoCapacity": 8,
+    "videoFormat": "rgba8"
+  },
+  "ready": {
+    "acknowledged": true,
+    "active": false,
+    "buffer": {
+      "actualFrames": 1024,
+      "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+      "device": "MacBook Air Speakers",
+      "oneBufferMilliseconds": 21.333333333333332,
+      "requestedFrames": 1024,
+      "supported": "Range { min: 15, max: 4096 }"
+    },
+    "consumedFrames": 0,
+    "deviceErrors": 0,
+    "epoch": 1,
+    "error": null,
+    "errorDetails": [],
+    "errorOverflow": 0,
+    "hasVideo": true,
+    "paused": true,
+    "producerId": 1,
+    "receivedFrames": 2048,
+    "underrunFrames": 0
+  },
+  "live": {
+    "audioTracks": null,
+    "capabilities": {
+      "close": true,
+      "pause": true,
+      "rate": false,
+      "restart": false,
+      "seek": false,
+      "snapshotSource": false
+    },
+    "container": null,
+    "cycle": 2,
+    "duration": null,
+    "eventSequence": 9,
+    "kind": "producer",
+    "loadingOwner": null,
+    "output": {
+      "muted": false,
+      "volume": 100
+    },
+    "paused": false,
+    "phase": "ready",
+    "position": 0,
+    "rate": 1,
+    "source": "producer://1",
+    "stamp": {
+      "generation": 2,
+      "intentVersion": 2
+    },
+    "terminalReason": null
+  },
+  "paused": {
+    "acknowledged": true,
+    "active": true,
+    "buffer": {
+      "actualFrames": 1024,
+      "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+      "device": "MacBook Air Speakers",
+      "oneBufferMilliseconds": 21.333333333333332,
+      "requestedFrames": 1024,
+      "supported": "Range { min: 15, max: 4096 }"
+    },
+    "consumedFrames": 31744,
+    "deviceErrors": 1,
+    "epoch": 2,
+    "error": null,
+    "errorDetails": [
+      "epoch=1 paused=false Xrun: A buffer underrun or overrun occurred."
+    ],
+    "errorOverflow": 0,
+    "hasVideo": false,
+    "paused": true,
+    "producerId": 1,
+    "receivedFrames": 0,
+    "underrunFrames": 0
+  },
+  "held": {
+    "acknowledged": true,
+    "active": true,
+    "buffer": {
+      "actualFrames": 1024,
+      "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+      "device": "MacBook Air Speakers",
+      "oneBufferMilliseconds": 21.333333333333332,
+      "requestedFrames": 1024,
+      "supported": "Range { min: 15, max: 4096 }"
+    },
+    "consumedFrames": 31744,
+    "deviceErrors": 1,
+    "epoch": 2,
+    "error": null,
+    "errorDetails": [
+      "epoch=1 paused=false Xrun: A buffer underrun or overrun occurred."
+    ],
+    "errorOverflow": 0,
+    "hasVideo": false,
+    "paused": true,
+    "producerId": 1,
+    "receivedFrames": 0,
+    "underrunFrames": 0
+  },
+  "output": {
+    "audioTracks": null,
+    "capabilities": {
+      "close": true,
+      "pause": true,
+      "rate": false,
+      "restart": false,
+      "seek": false,
+      "snapshotSource": false
+    },
+    "container": null,
+    "cycle": 2,
+    "duration": null,
+    "eventSequence": 35,
+    "kind": "producer",
+    "loadingOwner": null,
+    "output": {
+      "muted": true,
+      "volume": 17
+    },
+    "paused": false,
+    "phase": "ready",
+    "position": 1.3226666666666667,
+    "rate": 1,
+    "source": "producer://1",
+    "stamp": {
+      "generation": 2,
+      "intentVersion": 4
+    },
+    "terminalReason": null
+  },
+  "gone": {
+    "code": "unavailable",
+    "message": "HostError: producer absent"
+  },
+  "unused": {
+    "audioCapacityFrames": 9600,
+    "channels": 2,
+    "epoch": 1,
+    "maxAudioFrames": 4800,
+    "producerId": 2,
+    "sampleFormat": "f32le",
+    "sampleRate": 48000,
+    "socket": "/tmp/vestra-av-Qf6oPL/av.sock",
+    "videoCapacity": 8,
+    "videoFormat": "rgba8"
+  },
+  "releasedCandidate": {
+    "code": "unavailable",
+    "message": "HostError: producer absent"
+  },
+  "again": {
+    "audioCapacityFrames": 9600,
+    "channels": 2,
+    "epoch": 1,
+    "maxAudioFrames": 4800,
+    "producerId": 3,
+    "sampleFormat": "f32le",
+    "sampleRate": 48000,
+    "socket": "/tmp/vestra-av-XwY4oE/av.sock",
+    "videoCapacity": 8,
+    "videoFormat": "rgba8"
+  },
+  "secondLive": {
+    "audioTracks": null,
+    "capabilities": {
+      "close": true,
+      "pause": true,
+      "rate": false,
+      "restart": false,
+      "seek": false,
+      "snapshotSource": false
+    },
+    "container": null,
+    "cycle": 3,
+    "duration": null,
+    "eventSequence": 40,
+    "kind": "producer",
+    "loadingOwner": null,
+    "output": {
+      "muted": false,
+      "volume": 100
+    },
+    "paused": false,
+    "phase": "ready",
+    "position": 0.021333333333333333,
+    "rate": 1,
+    "source": "producer://3",
+    "stamp": {
+      "generation": 3,
+      "intentVersion": 6
+    },
+    "terminalReason": null
+  },
+  "secondRun": {
+    "nextAudio": 22528,
+    "nextVideo": 21600,
+    "state": {
+      "acknowledged": true,
+      "active": true,
+      "buffer": {
+        "actualFrames": 1024,
+        "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+        "device": "MacBook Air Speakers",
+        "oneBufferMilliseconds": 21.333333333333332,
+        "requestedFrames": 1024,
+        "supported": "Range { min: 15, max: 4096 }"
+      },
+      "consumedFrames": 20480,
+      "deviceErrors": 0,
+      "epoch": 1,
+      "error": null,
+      "errorDetails": [],
+      "errorOverflow": 0,
+      "hasVideo": false,
+      "paused": false,
+      "producerId": 3,
+      "receivedFrames": 22528,
+      "underrunFrames": 0
+    }
+  },
+  "fileSwitchGone": {
+    "code": "unavailable",
+    "message": "HostError: producer absent"
+  },
+  "reopened": {
+    "audioTracks": [],
+    "capabilities": {
+      "close": true,
+      "pause": true,
+      "rate": true,
+      "restart": true,
+      "seek": true,
+      "snapshotSource": true
+    },
+    "container": "mov,mp4,m4a,3gp,3g2,mj2",
+    "cycle": 4,
+    "duration": 8,
+    "eventSequence": 48,
+    "kind": "media",
+    "loadingOwner": null,
+    "output": {
+      "muted": false,
+      "volume": 100
+    },
+    "paused": false,
+    "phase": "ready",
+    "position": 0.06666699999999999,
+    "rate": 1,
+    "snapshotProfile": {
+      "fileOriginValidation": "deferred-worker-origin-match-required",
+      "timeDomain": "mpv-media"
+    },
+    "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-producer-author-tmP43M/source.mp4",
+    "stamp": {
+      "generation": 4,
+      "intentVersion": 7
+    },
+    "terminalReason": null
+  },
+  "movingFile": {
+    "duration": 8,
+    "paused": false,
+    "position": 0.16666699999999998,
+    "rate": 1,
+    "session": 4,
+    "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-producer-author-tmP43M/source.mp4",
+    "videoFrames": 91,
+    "volume": 100
+  },
+  "observations": [
+    {
+      "label": "ordinary file ready",
+      "state": {
+        "audioTracks": [],
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true,
+          "snapshotSource": true
+        },
+        "container": "mov,mp4,m4a,3gp,3g2,mj2",
+        "cycle": 1,
+        "duration": 8,
+        "eventSequence": 3,
+        "kind": "media",
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.06666699999999999,
+        "rate": 1,
+        "snapshotProfile": {
+          "fileOriginValidation": "deferred-worker-origin-match-required",
+          "timeDomain": "mpv-media"
+        },
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-producer-author-tmP43M/source.mp4",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "label": "not ready preserves ordinary source",
+      "error": {
+        "code": "unavailable",
+        "message": "HostError: Backend(\"unavailable: producer first AV buffers are preparing\")"
+      },
+      "operation": {
+        "error": {
+          "backend": "unavailable: producer first AV buffers are preparing"
+        },
+        "status": "failed"
+      }
+    },
+    {
+      "label": "candidate callback epoch acknowledged",
+      "state": {
+        "acknowledged": true,
+        "active": false,
+        "buffer": {
+          "actualFrames": 1024,
+          "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+          "device": "MacBook Air Speakers",
+          "oneBufferMilliseconds": 21.333333333333332,
+          "requestedFrames": 1024,
+          "supported": "Range { min: 15, max: 4096 }"
+        },
+        "consumedFrames": 0,
+        "deviceErrors": 0,
+        "epoch": 1,
+        "error": null,
+        "errorDetails": [],
+        "errorOverflow": 0,
+        "hasVideo": false,
+        "paused": true,
+        "producerId": 1,
+        "receivedFrames": 0,
+        "underrunFrames": 0
+      }
+    },
+    {
+      "label": "actual prefilled AV candidate",
+      "state": {
+        "acknowledged": true,
+        "active": false,
+        "buffer": {
+          "actualFrames": 1024,
+          "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+          "device": "MacBook Air Speakers",
+          "oneBufferMilliseconds": 21.333333333333332,
+          "requestedFrames": 1024,
+          "supported": "Range { min: 15, max: 4096 }"
+        },
+        "consumedFrames": 0,
+        "deviceErrors": 0,
+        "epoch": 1,
+        "error": null,
+        "errorDetails": [],
+        "errorOverflow": 0,
+        "hasVideo": true,
+        "paused": true,
+        "producerId": 1,
+        "receivedFrames": 2048,
+        "underrunFrames": 0
+      }
+    },
+    {
+      "label": "producer public source ready",
+      "state": {
+        "audioTracks": null,
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": false,
+          "restart": false,
+          "seek": false,
+          "snapshotSource": false
+        },
+        "container": null,
+        "cycle": 2,
+        "duration": null,
+        "eventSequence": 9,
+        "kind": "producer",
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "producer://1",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "label": "producer unpaused callback ack",
+      "state": {
+        "acknowledged": true,
+        "active": true,
+        "buffer": {
+          "actualFrames": 1024,
+          "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+          "device": "MacBook Air Speakers",
+          "oneBufferMilliseconds": 21.333333333333332,
+          "requestedFrames": 1024,
+          "supported": "Range { min: 15, max: 4096 }"
+        },
+        "consumedFrames": 1024,
+        "deviceErrors": 1,
+        "epoch": 1,
+        "error": null,
+        "errorDetails": [
+          "epoch=1 paused=false Xrun: A buffer underrun or overrun occurred."
+        ],
+        "errorOverflow": 0,
+        "hasVideo": false,
+        "paused": false,
+        "producerId": 1,
+        "receivedFrames": 2048,
+        "underrunFrames": 0
+      }
+    },
+    {
+      "label": "producer video frame counter advances",
+      "state": {
+        "duration": null,
+        "paused": false,
+        "position": 0.576,
+        "rate": 1,
+        "session": 2,
+        "source": "producer://1",
+        "videoFrames": 32,
+        "volume": 100
+      }
+    },
+    {
+      "label": "feed",
+      "start": {
+        "acknowledged": true,
+        "active": true,
+        "buffer": {
+          "actualFrames": 1024,
+          "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+          "device": "MacBook Air Speakers",
+          "oneBufferMilliseconds": 21.333333333333332,
+          "requestedFrames": 1024,
+          "supported": "Range { min: 15, max: 4096 }"
+        },
+        "consumedFrames": 1024,
+        "deviceErrors": 1,
+        "epoch": 1,
+        "error": null,
+        "errorDetails": [
+          "epoch=1 paused=false Xrun: A buffer underrun or overrun occurred."
+        ],
+        "errorOverflow": 0,
+        "hasVideo": false,
+        "paused": false,
+        "producerId": 1,
+        "receivedFrames": 2048,
+        "underrunFrames": 0
+      },
+      "last": {
+        "acknowledged": true,
+        "active": true,
+        "buffer": {
+          "actualFrames": 1024,
+          "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+          "device": "MacBook Air Speakers",
+          "oneBufferMilliseconds": 21.333333333333332,
+          "requestedFrames": 1024,
+          "supported": "Range { min: 15, max: 4096 }"
+        },
+        "consumedFrames": 30720,
+        "deviceErrors": 1,
+        "epoch": 1,
+        "error": null,
+        "errorDetails": [
+          "epoch=1 paused=false Xrun: A buffer underrun or overrun occurred."
+        ],
+        "errorOverflow": 0,
+        "hasVideo": false,
+        "paused": false,
+        "producerId": 1,
+        "receivedFrames": 32768,
+        "underrunFrames": 0
+      },
+      "firstFrame": {
+        "duration": 8,
+        "paused": false,
+        "position": 0.23333299999999998,
+        "rate": 1,
+        "session": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-producer-author-tmP43M/source.mp4",
+        "videoFrames": 4,
+        "volume": 100
+      },
+      "finalFrame": {
+        "duration": null,
+        "paused": false,
+        "position": 0.576,
+        "rate": 1,
+        "session": 2,
+        "source": "producer://1",
+        "videoFrames": 32,
+        "volume": 100
+      },
+      "nextAudio": 32768,
+      "nextVideo": 32000
+    },
+    {
+      "label": "unsupported seek",
+      "error": {
+        "code": "unsupported",
+        "message": "HostError: Backend(\"unsupported: producer seek/rate/restart unsupported\")"
+      },
+      "operation": {
+        "error": {
+          "backend": "unsupported: producer seek/rate/restart unsupported"
+        },
+        "status": "failed"
+      }
+    },
+    {
+      "label": "unsupported rate",
+      "error": {
+        "code": "unsupported",
+        "message": "HostError: Backend(\"unsupported: producer seek/rate/restart unsupported\")"
+      },
+      "operation": {
+        "error": {
+          "backend": "unsupported: producer seek/rate/restart unsupported"
+        },
+        "status": "failed"
+      }
+    },
+    {
+      "label": "new pause epoch acknowledged",
+      "state": {
+        "acknowledged": true,
+        "active": true,
+        "buffer": {
+          "actualFrames": 1024,
+          "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+          "device": "MacBook Air Speakers",
+          "oneBufferMilliseconds": 21.333333333333332,
+          "requestedFrames": 1024,
+          "supported": "Range { min: 15, max: 4096 }"
+        },
+        "consumedFrames": 31744,
+        "deviceErrors": 1,
+        "epoch": 2,
+        "error": null,
+        "errorDetails": [
+          "epoch=1 paused=false Xrun: A buffer underrun or overrun occurred."
+        ],
+        "errorOverflow": 0,
+        "hasVideo": false,
+        "paused": true,
+        "producerId": 1,
+        "receivedFrames": 0,
+        "underrunFrames": 0
+      }
+    },
+    {
+      "label": "host pause epoch isolation (not provider frame-bound ack)",
+      "paused": {
+        "acknowledged": true,
+        "active": true,
+        "buffer": {
+          "actualFrames": 1024,
+          "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+          "device": "MacBook Air Speakers",
+          "oneBufferMilliseconds": 21.333333333333332,
+          "requestedFrames": 1024,
+          "supported": "Range { min: 15, max: 4096 }"
+        },
+        "consumedFrames": 31744,
+        "deviceErrors": 1,
+        "epoch": 2,
+        "error": null,
+        "errorDetails": [
+          "epoch=1 paused=false Xrun: A buffer underrun or overrun occurred."
+        ],
+        "errorOverflow": 0,
+        "hasVideo": false,
+        "paused": true,
+        "producerId": 1,
+        "receivedFrames": 0,
+        "underrunFrames": 0
+      },
+      "held": {
+        "acknowledged": true,
+        "active": true,
+        "buffer": {
+          "actualFrames": 1024,
+          "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+          "device": "MacBook Air Speakers",
+          "oneBufferMilliseconds": 21.333333333333332,
+          "requestedFrames": 1024,
+          "supported": "Range { min: 15, max: 4096 }"
+        },
+        "consumedFrames": 31744,
+        "deviceErrors": 1,
+        "epoch": 2,
+        "error": null,
+        "errorDetails": [
+          "epoch=1 paused=false Xrun: A buffer underrun or overrun occurred."
+        ],
+        "errorOverflow": 0,
+        "hasVideo": false,
+        "paused": true,
+        "producerId": 1,
+        "receivedFrames": 0,
+        "underrunFrames": 0
+      },
+      "pausedSource": {
+        "audioTracks": null,
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": false,
+          "restart": false,
+          "seek": false,
+          "snapshotSource": false
+        },
+        "container": null,
+        "cycle": 2,
+        "duration": null,
+        "eventSequence": 21,
+        "kind": "producer",
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0.6613333333333333,
+        "rate": 1,
+        "source": "producer://1",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 3
+        },
+        "terminalReason": null
+      },
+      "heldSource": {
+        "audioTracks": null,
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": false,
+          "restart": false,
+          "seek": false,
+          "snapshotSource": false
+        },
+        "container": null,
+        "cycle": 2,
+        "duration": null,
+        "eventSequence": 25,
+        "kind": "producer",
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0.6613333333333333,
+        "rate": 1,
+        "source": "producer://1",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 3
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "label": "new pause epoch prefilled",
+      "state": {
+        "acknowledged": true,
+        "active": true,
+        "buffer": {
+          "actualFrames": 1024,
+          "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+          "device": "MacBook Air Speakers",
+          "oneBufferMilliseconds": 21.333333333333332,
+          "requestedFrames": 1024,
+          "supported": "Range { min: 15, max: 4096 }"
+        },
+        "consumedFrames": 31744,
+        "deviceErrors": 1,
+        "epoch": 2,
+        "error": null,
+        "errorDetails": [
+          "epoch=1 paused=false Xrun: A buffer underrun or overrun occurred."
+        ],
+        "errorOverflow": 0,
+        "hasVideo": true,
+        "paused": true,
+        "producerId": 1,
+        "receivedFrames": 2048,
+        "underrunFrames": 0
+      }
+    },
+    {
+      "label": "same epoch resume acknowledged",
+      "state": {
+        "acknowledged": true,
+        "active": true,
+        "buffer": {
+          "actualFrames": 1024,
+          "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+          "device": "MacBook Air Speakers",
+          "oneBufferMilliseconds": 21.333333333333332,
+          "requestedFrames": 1024,
+          "supported": "Range { min: 15, max: 4096 }"
+        },
+        "consumedFrames": 32768,
+        "deviceErrors": 1,
+        "epoch": 2,
+        "error": null,
+        "errorDetails": [
+          "epoch=1 paused=false Xrun: A buffer underrun or overrun occurred."
+        ],
+        "errorOverflow": 0,
+        "hasVideo": false,
+        "paused": false,
+        "producerId": 1,
+        "receivedFrames": 2048,
+        "underrunFrames": 0
+      }
+    },
+    {
+      "label": "producer video frame counter advances",
+      "state": {
+        "duration": null,
+        "paused": false,
+        "position": 1.2373333333333334,
+        "rate": 1,
+        "session": 2,
+        "source": "producer://1",
+        "videoFrames": 63,
+        "volume": 100
+      }
+    },
+    {
+      "label": "feed",
+      "start": {
+        "acknowledged": true,
+        "active": true,
+        "buffer": {
+          "actualFrames": 1024,
+          "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+          "device": "MacBook Air Speakers",
+          "oneBufferMilliseconds": 21.333333333333332,
+          "requestedFrames": 1024,
+          "supported": "Range { min: 15, max: 4096 }"
+        },
+        "consumedFrames": 32768,
+        "deviceErrors": 1,
+        "epoch": 2,
+        "error": null,
+        "errorDetails": [
+          "epoch=1 paused=false Xrun: A buffer underrun or overrun occurred."
+        ],
+        "errorOverflow": 0,
+        "hasVideo": false,
+        "paused": false,
+        "producerId": 1,
+        "receivedFrames": 2048,
+        "underrunFrames": 0
+      },
+      "last": {
+        "acknowledged": true,
+        "active": true,
+        "buffer": {
+          "actualFrames": 1024,
+          "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+          "device": "MacBook Air Speakers",
+          "oneBufferMilliseconds": 21.333333333333332,
+          "requestedFrames": 1024,
+          "supported": "Range { min: 15, max: 4096 }"
+        },
+        "consumedFrames": 62464,
+        "deviceErrors": 1,
+        "epoch": 2,
+        "error": null,
+        "errorDetails": [
+          "epoch=1 paused=false Xrun: A buffer underrun or overrun occurred."
+        ],
+        "errorOverflow": 0,
+        "hasVideo": false,
+        "paused": false,
+        "producerId": 1,
+        "receivedFrames": 32768,
+        "underrunFrames": 0
+      },
+      "firstFrame": {
+        "duration": null,
+        "paused": true,
+        "position": 0.6613333333333333,
+        "rate": 1,
+        "session": 2,
+        "source": "producer://1",
+        "videoFrames": 36,
+        "volume": 100
+      },
+      "finalFrame": {
+        "duration": null,
+        "paused": false,
+        "position": 1.2373333333333334,
+        "rate": 1,
+        "session": 2,
+        "source": "producer://1",
+        "videoFrames": 63,
+        "volume": 100
+      },
+      "nextAudio": 64512,
+      "nextVideo": 63744
+    },
+    {
+      "label": "public output controls confirmed",
+      "state": {
+        "audioTracks": null,
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": false,
+          "restart": false,
+          "seek": false,
+          "snapshotSource": false
+        },
+        "container": null,
+        "cycle": 2,
+        "duration": null,
+        "eventSequence": 35,
+        "kind": "producer",
+        "loadingOwner": null,
+        "output": {
+          "muted": true,
+          "volume": 17
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 1.3226666666666667,
+        "rate": 1,
+        "source": "producer://1",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 4
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "label": "shared output state (not audible measurement)",
+      "source": {
+        "audioTracks": null,
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": false,
+          "restart": false,
+          "seek": false,
+          "snapshotSource": false
+        },
+        "container": null,
+        "cycle": 2,
+        "duration": null,
+        "eventSequence": 35,
+        "kind": "producer",
+        "loadingOwner": null,
+        "output": {
+          "muted": true,
+          "volume": 17
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 1.3226666666666667,
+        "rate": 1,
+        "source": "producer://1",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 4
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "label": "producer source closed",
+      "state": {
+        "audioTracks": null,
+        "capabilities": {
+          "close": false,
+          "pause": false,
+          "rate": false,
+          "restart": false,
+          "seek": false,
+          "snapshotSource": false
+        },
+        "container": null,
+        "cycle": 2,
+        "duration": null,
+        "eventSequence": 37,
+        "kind": "media",
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "empty",
+        "position": null,
+        "rate": 1,
+        "snapshotProfile": {
+          "fileOriginValidation": "deferred-worker-origin-match-required",
+          "timeDomain": "mpv-media"
+        },
+        "source": null,
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 5
+        },
+        "terminalReason": "stopped"
+      }
+    },
+    {
+      "label": "explicit release of never-activated candidate",
+      "unused": {
+        "audioCapacityFrames": 9600,
+        "channels": 2,
+        "epoch": 1,
+        "maxAudioFrames": 4800,
+        "producerId": 2,
+        "sampleFormat": "f32le",
+        "sampleRate": 48000,
+        "socket": "/tmp/vestra-av-Qf6oPL/av.sock",
+        "videoCapacity": 8,
+        "videoFormat": "rgba8"
+      },
+      "releasedCandidate": {
+        "code": "unavailable",
+        "message": "HostError: producer absent"
+      }
+    },
+    {
+      "label": "second candidate ack",
+      "state": {
+        "acknowledged": true,
+        "active": false,
+        "buffer": {
+          "actualFrames": 1024,
+          "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+          "device": "MacBook Air Speakers",
+          "oneBufferMilliseconds": 21.333333333333332,
+          "requestedFrames": 1024,
+          "supported": "Range { min: 15, max: 4096 }"
+        },
+        "consumedFrames": 0,
+        "deviceErrors": 0,
+        "epoch": 1,
+        "error": null,
+        "errorDetails": [],
+        "errorOverflow": 0,
+        "hasVideo": false,
+        "paused": true,
+        "producerId": 3,
+        "receivedFrames": 0,
+        "underrunFrames": 0
+      }
+    },
+    {
+      "label": "second candidate AV ready",
+      "state": {
+        "acknowledged": true,
+        "active": false,
+        "buffer": {
+          "actualFrames": 1024,
+          "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+          "device": "MacBook Air Speakers",
+          "oneBufferMilliseconds": 21.333333333333332,
+          "requestedFrames": 1024,
+          "supported": "Range { min: 15, max: 4096 }"
+        },
+        "consumedFrames": 0,
+        "deviceErrors": 0,
+        "epoch": 1,
+        "error": null,
+        "errorDetails": [],
+        "errorOverflow": 0,
+        "hasVideo": true,
+        "paused": true,
+        "producerId": 3,
+        "receivedFrames": 2048,
+        "underrunFrames": 0
+      }
+    },
+    {
+      "label": "old source CAS cannot activate ready candidate",
+      "error": {
+        "code": "stale",
+        "message": "HostError: Stale"
+      },
+      "operation": {
+        "error": "stale",
+        "status": "failed"
+      }
+    },
+    {
+      "label": "second producer actually active",
+      "state": {
+        "audioTracks": null,
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": false,
+          "restart": false,
+          "seek": false,
+          "snapshotSource": false
+        },
+        "container": null,
+        "cycle": 3,
+        "duration": null,
+        "eventSequence": 40,
+        "kind": "producer",
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.021333333333333333,
+        "rate": 1,
+        "source": "producer://3",
+        "stamp": {
+          "generation": 3,
+          "intentVersion": 6
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "label": "second producer running callback ack",
+      "state": {
+        "acknowledged": true,
+        "active": true,
+        "buffer": {
+          "actualFrames": 1024,
+          "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+          "device": "MacBook Air Speakers",
+          "oneBufferMilliseconds": 21.333333333333332,
+          "requestedFrames": 1024,
+          "supported": "Range { min: 15, max: 4096 }"
+        },
+        "consumedFrames": 1024,
+        "deviceErrors": 0,
+        "epoch": 1,
+        "error": null,
+        "errorDetails": [],
+        "errorOverflow": 0,
+        "hasVideo": false,
+        "paused": false,
+        "producerId": 3,
+        "receivedFrames": 2048,
+        "underrunFrames": 0
+      }
+    },
+    {
+      "label": "producer video frame counter advances",
+      "state": {
+        "duration": null,
+        "paused": false,
+        "position": 0.384,
+        "rate": 1,
+        "session": 3,
+        "source": "producer://3",
+        "videoFrames": 86,
+        "volume": 100
+      }
+    },
+    {
+      "label": "feed",
+      "start": {
+        "acknowledged": true,
+        "active": true,
+        "buffer": {
+          "actualFrames": 1024,
+          "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+          "device": "MacBook Air Speakers",
+          "oneBufferMilliseconds": 21.333333333333332,
+          "requestedFrames": 1024,
+          "supported": "Range { min: 15, max: 4096 }"
+        },
+        "consumedFrames": 1024,
+        "deviceErrors": 0,
+        "epoch": 1,
+        "error": null,
+        "errorDetails": [],
+        "errorOverflow": 0,
+        "hasVideo": false,
+        "paused": false,
+        "producerId": 3,
+        "receivedFrames": 2048,
+        "underrunFrames": 0
+      },
+      "last": {
+        "acknowledged": true,
+        "active": true,
+        "buffer": {
+          "actualFrames": 1024,
+          "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+          "device": "MacBook Air Speakers",
+          "oneBufferMilliseconds": 21.333333333333332,
+          "requestedFrames": 1024,
+          "supported": "Range { min: 15, max: 4096 }"
+        },
+        "consumedFrames": 20480,
+        "deviceErrors": 0,
+        "epoch": 1,
+        "error": null,
+        "errorDetails": [],
+        "errorOverflow": 0,
+        "hasVideo": false,
+        "paused": false,
+        "producerId": 3,
+        "receivedFrames": 22528,
+        "underrunFrames": 0
+      },
+      "firstFrame": {
+        "duration": null,
+        "paused": false,
+        "position": null,
+        "rate": 1,
+        "session": 2,
+        "source": null,
+        "videoFrames": 67,
+        "volume": 100
+      },
+      "finalFrame": {
+        "duration": null,
+        "paused": false,
+        "position": 0.384,
+        "rate": 1,
+        "session": 3,
+        "source": "producer://3",
+        "videoFrames": 86,
+        "volume": 100
+      },
+      "nextAudio": 22528,
+      "nextVideo": 21600
+    },
+    {
+      "label": "ordinary file ready",
+      "state": {
+        "audioTracks": [],
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true,
+          "snapshotSource": true
+        },
+        "container": "mov,mp4,m4a,3gp,3g2,mj2",
+        "cycle": 4,
+        "duration": 8,
+        "eventSequence": 48,
+        "kind": "media",
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.06666699999999999,
+        "rate": 1,
+        "snapshotProfile": {
+          "fileOriginValidation": "deferred-worker-origin-match-required",
+          "timeDomain": "mpv-media"
+        },
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-producer-author-tmP43M/source.mp4",
+        "stamp": {
+          "generation": 4,
+          "intentVersion": 7
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "label": "ordinary file frames resume",
+      "state": {
+        "duration": 8,
+        "paused": false,
+        "position": 0.16666699999999998,
+        "rate": 1,
+        "session": 4,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-producer-author-tmP43M/source.mp4",
+        "videoFrames": 91,
+        "volume": 100
+      }
+    }
+  ],
+  "limits": [
+    "Author public API smoke; not independent acceptance or NES execution.",
+    "Epoch acknowledged is host audio-callback acknowledgement, not provider frame-bound pause acknowledgement.",
+    "videoFrames is a host presentation counter, not a screenshot/pixel fence.",
+    "No acoustic output, device drain/latency, physical GUI/input, owner-death cleanup acknowledgement or non-Unix coverage."
+  ]
+}

@@ -1,0 +1,112 @@
+{
+  "work": "/tmp/vestra-source-lease-nh8how4a",
+  "pass": true,
+  "checks": {
+    "regularFileAccepted": true,
+    "pathNowDifferentObject": true,
+    "heldObjectHasNoRemainingPath": true,
+    "heldContentMetadataStable": true,
+    "bothExportsSucceeded": true,
+    "leaseStillReadsOriginalRed": true,
+    "pathReadsReplacementBlue": true,
+    "duplicateSharesCursor": true
+  },
+  "accepted": {
+    "device": 16777230,
+    "inode": 47882606,
+    "bytes": 4112,
+    "mtimeNs": 1792265959016972511,
+    "links": 1,
+    "regular": true
+  },
+  "heldBeforeExport": {
+    "device": 16777230,
+    "inode": 47882606,
+    "bytes": 4112,
+    "mtimeNs": 1792265959016972511,
+    "links": 0,
+    "regular": true
+  },
+  "heldAfterExport": {
+    "device": 16777230,
+    "inode": 47882606,
+    "bytes": 4112,
+    "mtimeNs": 1792265959016972511,
+    "links": 0,
+    "regular": true
+  },
+  "replacementPath": {
+    "device": 16777230,
+    "inode": 47882607,
+    "bytes": 4112,
+    "mtimeNs": 1792265959051491897,
+    "links": 1,
+    "regular": true
+  },
+  "pixelCentersRGB": {
+    "leased": [
+      254,
+      0,
+      0
+    ],
+    "path": [
+      0,
+      0,
+      255
+    ]
+  },
+  "commands": [
+    {
+      "command": [
+        "ffmpeg",
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-ss",
+        "0.5",
+        "-i",
+        "/dev/fd/0",
+        "-frames:v",
+        "1",
+        "-n",
+        "/tmp/vestra-source-lease-nh8how4a/leased.png"
+      ],
+      "stdin": "held regular file",
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "ffmpeg",
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-ss",
+        "0.5",
+        "-i",
+        "/tmp/vestra-source-lease-nh8how4a/source.mp4",
+        "-frames:v",
+        "1",
+        "-n",
+        "/tmp/vestra-source-lease-nh8how4a/path.png"
+      ],
+      "stdin": "default",
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "duplicateCursor": {
+    "before": 4112,
+    "afterDuplicateSeek": 7
+  },
+  "limits": [
+    "Python/POSIX CLI behavior only, not a Rust source lease or job implementation.",
+    "Does not protect against in-place content mutation; metadata guards/publication remain required.",
+    "Duplicated handles share a cursor; this is NOT evidence for concurrent workers on cloned handles.",
+    "No effects/subtitles/audio, job cancellation or atomic no-overwrite publication is tested."
+  ]
+}

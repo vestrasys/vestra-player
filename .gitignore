@@ -1,3 +1,15 @@
 # Local tools and logs are not project source.
 .cache/
 node_modules/
+
+# Raw evidence media stays on disk; screenshots, logs and JSON are committed.
+doc/**/*.ppm
+doc/**/*.mkv
+doc/**/*.mp4
+doc/**/*.otf
+doc/**/*.f32
+doc/**/*.f32le
+doc/**/*.rgba
+doc/**/*.wav
+doc/**/*.gz
+doc/**/*.tgz

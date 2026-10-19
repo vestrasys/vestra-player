@@ -1,0 +1,68 @@
+{
+  "version": "0.1.2",
+  "provenance": "new current-author revision; repairs real 0.1.1 Slint ComboBox string-to-int failures",
+  "publishedAt": "2026-10-19T07:22:17.860380+00:00",
+  "sourceAuthority": "/Users/ziyang/Documents/vestra-player/src/plugins/subtitles",
+  "readableCandidate": "/tmp/vestra-current-products/subtitles",
+  "strictTypecheck": "exit 0",
+  "build": "exit 0",
+  "behaviorTests": "6 passed; exit 0",
+  "nativeCompilerActivation": "0.1.1 failed XD1UR6/result.json offsets2038/3587/3761; 0.1.2 pending recheck",
+  "files": [
+    {
+      "path": "API_REQUESTS.md",
+      "size": 1518,
+      "sha256": "1fe4a66224e0fa8bb626b8d31e542e0ddfe8c1af7fdd64967399d35b55cf2d95"
+    },
+    {
+      "path": "README.md",
+      "size": 4824,
+      "sha256": "e80e71d7aa433cc47d0735f477af8a6936ad07c3c7ad4692e69f18e8f16e53dc"
+    },
+    {
+      "path": "build.mjs",
+      "size": 2276,
+      "sha256": "82e0ffa2fe2dec4e88d27f57a5671480bd7bcff2a0801f21c0196d0b3894b8cb"
+    },
+    {
+      "path": "dist/main.js",
+      "size": 18216,
+      "sha256": "54b98842c6e5c34c5717a690152aefbf88938b8dca84e6abddb9dc8c488841e3"
+    },
+    {
+      "path": "dist/manifest.json",
+      "size": 253,
+      "sha256": "0d0bc97bf7773b5970fa221ab4029d5fd69c31fc87707fef6ebc501e010b7497"
+    },
+    {
+      "path": "dist/ui/workbench.slint",
+      "size": 4091,
+      "sha256": "2077950640ad49ec4c8965debb5f25829731b2876ae0428e081e612515411372"
+    },
+    {
+      "path": "main.ts",
+      "size": 16254,
+      "sha256": "48a80b2166d69091ed3e1491b9e3ce636d455fbf22036a5073128ea01a18d146"
+    },
+    {
+      "path": "manifest.json",
+      "size": 253,
+      "sha256": "d27ac08ad8e0457a5d31f79c09fd6d9138f64585d1fc1693335a094e4622ca7f"
+    },
+    {
+      "path": "package.json",
+      "size": 202,
+      "sha256": "d2f0fdc91fe5a15f5c8b71f005efc9c2446ef021ab79f179605b5f1c71734321"
+    },
+    {
+      "path": "tests/behavior.test.mjs",
+      "size": 7287,
+      "sha256": "b117711517d0247189884ba13cc242586b59427e8e002c517312e817e2c445e7"
+    },
+    {
+      "path": "ui/workbench.slint",
+      "size": 4091,
+      "sha256": "2077950640ad49ec4c8965debb5f25829731b2876ae0428e081e612515411372"
+    }
+  ]
+}

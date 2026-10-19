@@ -1,0 +1,16 @@
+{
+  "work": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-rotation-review-YtSdxK",
+  "mode": "main",
+  "args": [
+    "--headless",
+    "--silent",
+    "--seconds",
+    "12",
+    "--frame-evidence-dir",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-rotation-review-YtSdxK/main/frames",
+    "--plugin",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-rotation-review-YtSdxK/consumer"
+  ],
+  "exitCode": 0,
+  "signal": null
+}

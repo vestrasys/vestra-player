@@ -1,0 +1,16 @@
+{
+  "binary": "/Users/ziyang/Documents/vestra-player/src/host/target/debug/vestra-host",
+  "args": [
+    "--headless",
+    "--silent",
+    "--seconds",
+    "24",
+    "--plugin",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-controls-e4Qo9X/provider",
+    "--plugin",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-controls-e4Qo9X/controller"
+  ],
+  "work": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-controls-e4Qo9X",
+  "exitCode": 0,
+  "signal": null
+}

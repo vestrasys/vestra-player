@@ -1,0 +1,1 @@
+export async function activate(host){await host.commands.register("activation-proof",1,{title:"a",path:["插件","Activation experiment","a"],shortcut:null},{enabled:true,checked:null,busy:false,reason:null});await Promise.resolve();}

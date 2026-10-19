@@ -1,0 +1,1 @@
+{"compilerOptions":{"target":"ES2022","module":"NodeNext","moduleResolution":"NodeNext","strict":true,"skipLibCheck":true,"outDir":"dist","rootDir":".","types":["node"],"typeRoots":["/tmp/vestra-rebuild-toolchain-20261018/node_modules/@types"],"rewriteRelativeImportExtensions":true},"include":["*.ts"]}

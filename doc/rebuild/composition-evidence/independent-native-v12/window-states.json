@@ -1,0 +1,1140 @@
+[
+  {
+    "canvasAvailableHeight": 582.0,
+    "canvasAvailableWidth": 1084.0,
+    "dialogOpen": false,
+    "fullscreen": false,
+    "logicalHeight": 720.0,
+    "logicalWidth": 1100.0,
+    "menuOpen": false,
+    "nativeActive": null,
+    "nativeUnavailable": "no newly visible native window was created",
+    "shellGeneration": 2,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": false,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": false,
+      "nextDeadlineMs": null,
+      "sidebar": null,
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 582.0,
+    "canvasAvailableWidth": 1084.0,
+    "dialogOpen": false,
+    "fullscreen": false,
+    "logicalHeight": 720.0,
+    "logicalWidth": 1100.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 2,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": false,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": false,
+      "nextDeadlineMs": null,
+      "sidebar": null,
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 582.0,
+    "canvasAvailableWidth": 1084.0,
+    "dialogOpen": false,
+    "fullscreen": false,
+    "logicalHeight": 720.0,
+    "logicalWidth": 1100.0,
+    "menuOpen": false,
+    "nativeActive": null,
+    "nativeUnavailable": "no newly visible native window was created",
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": false,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": false,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": true,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": null
+      },
+      "sidebarWidth": 280.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 582.0,
+    "canvasAvailableWidth": 1084.0,
+    "dialogOpen": false,
+    "fullscreen": false,
+    "logicalHeight": 720.0,
+    "logicalWidth": 1100.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": false,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": false,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": true,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": null
+      },
+      "sidebarWidth": 280.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 353.0,
+    "canvasAvailableWidth": 752.0,
+    "dialogOpen": false,
+    "fullscreen": false,
+    "logicalHeight": 491.0,
+    "logicalWidth": 768.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": false,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": false,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": false,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": "space"
+      },
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 581.0,
+    "canvasAvailableWidth": 1083.0,
+    "dialogOpen": false,
+    "fullscreen": false,
+    "logicalHeight": 719.0,
+    "logicalWidth": 1099.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": false,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": false,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": true,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": null
+      },
+      "sidebarWidth": 280.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 581.0,
+    "canvasAvailableWidth": 1083.0,
+    "dialogOpen": false,
+    "fullscreen": false,
+    "logicalHeight": 719.0,
+    "logicalWidth": 1099.0,
+    "menuOpen": true,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": false,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": false,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": true,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": null
+      },
+      "sidebarWidth": 280.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 581.0,
+    "canvasAvailableWidth": 1083.0,
+    "dialogOpen": false,
+    "fullscreen": false,
+    "logicalHeight": 719.0,
+    "logicalWidth": 1099.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": false,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": false,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": true,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": null
+      },
+      "sidebarWidth": 280.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 581.0,
+    "canvasAvailableWidth": 1083.0,
+    "dialogOpen": false,
+    "fullscreen": true,
+    "logicalHeight": 719.0,
+    "logicalWidth": 1099.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": true,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": true,
+      "nextDeadlineMs": 80644,
+      "sidebar": {
+        "effective": false,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": "fullscreen"
+      },
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 923.0,
+    "canvasAvailableWidth": 1470.0,
+    "dialogOpen": false,
+    "fullscreen": true,
+    "logicalHeight": 923.0,
+    "logicalWidth": 1470.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": true,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": true,
+      "nextDeadlineMs": 80644,
+      "sidebar": {
+        "effective": false,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": "fullscreen"
+      },
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 923.0,
+    "canvasAvailableWidth": 1470.0,
+    "dialogOpen": false,
+    "fullscreen": true,
+    "logicalHeight": 923.0,
+    "logicalWidth": 1470.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": false,
+        "overlay": true,
+        "owner": 2,
+        "preferred": true,
+        "reason": "idle"
+      },
+      "fullscreen": true,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": false,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": "fullscreen"
+      },
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 923.0,
+    "canvasAvailableWidth": 1470.0,
+    "dialogOpen": false,
+    "fullscreen": true,
+    "logicalHeight": 923.0,
+    "logicalWidth": 1470.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": true,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": true,
+      "nextDeadlineMs": 88771,
+      "sidebar": {
+        "effective": false,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": "fullscreen"
+      },
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 923.0,
+    "canvasAvailableWidth": 1470.0,
+    "dialogOpen": false,
+    "fullscreen": true,
+    "logicalHeight": 923.0,
+    "logicalWidth": 1470.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": false,
+        "overlay": true,
+        "owner": 2,
+        "preferred": true,
+        "reason": "idle"
+      },
+      "fullscreen": true,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": false,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": "fullscreen"
+      },
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 923.0,
+    "canvasAvailableWidth": 1470.0,
+    "dialogOpen": false,
+    "fullscreen": true,
+    "logicalHeight": 923.0,
+    "logicalWidth": 1470.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": true,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": true,
+      "nextDeadlineMs": 99103,
+      "sidebar": {
+        "effective": false,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": "fullscreen"
+      },
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 923.0,
+    "canvasAvailableWidth": 1470.0,
+    "dialogOpen": false,
+    "fullscreen": true,
+    "logicalHeight": 923.0,
+    "logicalWidth": 1470.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": false,
+        "overlay": true,
+        "owner": 2,
+        "preferred": true,
+        "reason": "idle"
+      },
+      "fullscreen": true,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": false,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": "fullscreen"
+      },
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 923.0,
+    "canvasAvailableWidth": 1470.0,
+    "dialogOpen": false,
+    "fullscreen": true,
+    "logicalHeight": 923.0,
+    "logicalWidth": 1470.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": true,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": true,
+      "nextDeadlineMs": 103756,
+      "sidebar": {
+        "effective": false,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": "fullscreen"
+      },
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 923.0,
+    "canvasAvailableWidth": 1470.0,
+    "dialogOpen": false,
+    "fullscreen": true,
+    "logicalHeight": 923.0,
+    "logicalWidth": 1470.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": true,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": true,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": false,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": "fullscreen"
+      },
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 923.0,
+    "canvasAvailableWidth": 1470.0,
+    "dialogOpen": false,
+    "fullscreen": true,
+    "logicalHeight": 923.0,
+    "logicalWidth": 1470.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": true,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": true,
+      "nextDeadlineMs": 127980,
+      "sidebar": {
+        "effective": false,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": "fullscreen"
+      },
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 923.0,
+    "canvasAvailableWidth": 1470.0,
+    "dialogOpen": false,
+    "fullscreen": true,
+    "logicalHeight": 923.0,
+    "logicalWidth": 1470.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": false,
+        "overlay": true,
+        "owner": 2,
+        "preferred": true,
+        "reason": "idle"
+      },
+      "fullscreen": true,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": false,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": "fullscreen"
+      },
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 923.0,
+    "canvasAvailableWidth": 1470.0,
+    "dialogOpen": false,
+    "fullscreen": true,
+    "logicalHeight": 923.0,
+    "logicalWidth": 1470.0,
+    "menuOpen": true,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": true,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": true,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": false,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": "fullscreen"
+      },
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 923.0,
+    "canvasAvailableWidth": 1470.0,
+    "dialogOpen": false,
+    "fullscreen": true,
+    "logicalHeight": 923.0,
+    "logicalWidth": 1470.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": true,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": true,
+      "nextDeadlineMs": 160064,
+      "sidebar": {
+        "effective": false,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": "fullscreen"
+      },
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 923.0,
+    "canvasAvailableWidth": 1470.0,
+    "dialogOpen": false,
+    "fullscreen": true,
+    "logicalHeight": 923.0,
+    "logicalWidth": 1470.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": true,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": true,
+      "nextDeadlineMs": 160064,
+      "sidebar": {
+        "effective": true,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": null
+      },
+      "sidebarWidth": 280.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 923.0,
+    "canvasAvailableWidth": 1470.0,
+    "dialogOpen": false,
+    "fullscreen": true,
+    "logicalHeight": 923.0,
+    "logicalWidth": 1470.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": false,
+        "overlay": true,
+        "owner": 2,
+        "preferred": true,
+        "reason": "idle"
+      },
+      "fullscreen": true,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": true,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": null
+      },
+      "sidebarWidth": 280.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 923.0,
+    "canvasAvailableWidth": 1470.0,
+    "dialogOpen": false,
+    "fullscreen": true,
+    "logicalHeight": 923.0,
+    "logicalWidth": 1470.0,
+    "menuOpen": true,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": true,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": true,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": true,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": null
+      },
+      "sidebarWidth": 280.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 923.0,
+    "canvasAvailableWidth": 1470.0,
+    "dialogOpen": false,
+    "fullscreen": true,
+    "logicalHeight": 923.0,
+    "logicalWidth": 1470.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": true,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": true,
+      "nextDeadlineMs": 183080,
+      "sidebar": {
+        "effective": true,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": null
+      },
+      "sidebarWidth": 280.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 923.0,
+    "canvasAvailableWidth": 1470.0,
+    "dialogOpen": false,
+    "fullscreen": true,
+    "logicalHeight": 923.0,
+    "logicalWidth": 1470.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": true,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": true,
+      "nextDeadlineMs": 183080,
+      "sidebar": {
+        "effective": true,
+        "overlay": false,
+        "owner": 3,
+        "preferred": false,
+        "reason": null
+      },
+      "sidebarWidth": 280.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 923.0,
+    "canvasAvailableWidth": 1470.0,
+    "dialogOpen": false,
+    "fullscreen": true,
+    "logicalHeight": 923.0,
+    "logicalWidth": 1470.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": false,
+        "overlay": true,
+        "owner": 2,
+        "preferred": true,
+        "reason": "idle"
+      },
+      "fullscreen": true,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": true,
+        "overlay": false,
+        "owner": 3,
+        "preferred": false,
+        "reason": null
+      },
+      "sidebarWidth": 280.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 923.0,
+    "canvasAvailableWidth": 1470.0,
+    "dialogOpen": false,
+    "fullscreen": false,
+    "logicalHeight": 923.0,
+    "logicalWidth": 1470.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": false,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": false,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": false,
+        "overlay": false,
+        "owner": 3,
+        "preferred": false,
+        "reason": "userHidden"
+      },
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 581.0,
+    "canvasAvailableWidth": 1083.0,
+    "dialogOpen": false,
+    "fullscreen": false,
+    "logicalHeight": 719.0,
+    "logicalWidth": 1099.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": false,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": false,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": false,
+        "overlay": false,
+        "owner": 3,
+        "preferred": false,
+        "reason": "userHidden"
+      },
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 581.0,
+    "canvasAvailableWidth": 1083.0,
+    "dialogOpen": false,
+    "fullscreen": false,
+    "logicalHeight": 719.0,
+    "logicalWidth": 1099.0,
+    "menuOpen": true,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": false,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": false,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": false,
+        "overlay": false,
+        "owner": 3,
+        "preferred": false,
+        "reason": "userHidden"
+      },
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 581.0,
+    "canvasAvailableWidth": 1083.0,
+    "dialogOpen": false,
+    "fullscreen": false,
+    "logicalHeight": 719.0,
+    "logicalWidth": 1099.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": false,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": false,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": false,
+        "overlay": false,
+        "owner": 3,
+        "preferred": false,
+        "reason": "userHidden"
+      },
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 581.0,
+    "canvasAvailableWidth": 1083.0,
+    "dialogOpen": false,
+    "fullscreen": false,
+    "logicalHeight": 719.0,
+    "logicalWidth": 1099.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": {
+      "status": "alreadyFits"
+    },
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": false,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": false,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": true,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": null
+      },
+      "sidebarWidth": 280.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 581.0,
+    "canvasAvailableWidth": 1083.0,
+    "dialogOpen": false,
+    "fullscreen": false,
+    "logicalHeight": 719.0,
+    "logicalWidth": 1099.0,
+    "menuOpen": true,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": {
+      "status": "alreadyFits"
+    },
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": false,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": false,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": true,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": null
+      },
+      "sidebarWidth": 280.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 581.0,
+    "canvasAvailableWidth": 1083.0,
+    "dialogOpen": false,
+    "fullscreen": false,
+    "logicalHeight": 719.0,
+    "logicalWidth": 1099.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": {
+      "status": "alreadyFits"
+    },
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": false,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": false,
+      "nextDeadlineMs": null,
+      "sidebar": {
+        "effective": true,
+        "overlay": false,
+        "owner": 3,
+        "preferred": true,
+        "reason": null
+      },
+      "sidebarWidth": 280.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 581.0,
+    "canvasAvailableWidth": 1083.0,
+    "dialogOpen": false,
+    "fullscreen": false,
+    "logicalHeight": 719.0,
+    "logicalWidth": 1099.0,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": {
+      "status": "alreadyFits"
+    },
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": false,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": false,
+      "nextDeadlineMs": null,
+      "sidebar": null,
+      "sidebarWidth": 0.0
+    }
+  },
+  {
+    "canvasAvailableHeight": 581.0,
+    "canvasAvailableWidth": 1083.0,
+    "dialogOpen": false,
+    "fullscreen": false,
+    "logicalHeight": 719.0,
+    "logicalWidth": 1099.0,
+    "menuOpen": false,
+    "nativeActive": false,
+    "nativeUnavailable": null,
+    "shellGeneration": 3,
+    "sidebarResize": {
+      "status": "alreadyFits"
+    },
+    "slots": {
+      "bottom": {
+        "effective": true,
+        "overlay": false,
+        "owner": 2,
+        "preferred": true,
+        "reason": null
+      },
+      "fullscreen": false,
+      "nextDeadlineMs": null,
+      "sidebar": null,
+      "sidebarWidth": 0.0
+    }
+  }
+]

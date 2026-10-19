@@ -1,0 +1,11 @@
+{
+  "operator": "rebuild_bootstrap_review",
+  "bundleId": "local.vestra.rebuild.shared-ui-v8",
+  "originalHostPid": 84720,
+  "sourceWork": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-shared-ooy7Ae",
+  "guiActions": "CUA only; session screenshots emitted by tool, not persisted as repository images",
+  "normalClose": true,
+  "originalPidAbsentConfirmed": true,
+  "postCloseCuaObservationRelaunchPid": 84906,
+  "relaunchCleanup": "root independently confirmed exact staged pid and sent TERM; no new getApp/AX"
+}

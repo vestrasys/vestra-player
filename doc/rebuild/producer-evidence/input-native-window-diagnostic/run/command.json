@@ -1,0 +1,25 @@
+{
+  "command": [
+    "open",
+    "-n",
+    "/tmp/vestra-producer-input-native-PjXeX5/Vestra Producer Input.app",
+    "--env",
+    "VESTRA_PRODUCER_INPUT_NATIVE=/tmp/vestra-producer-input-native-PjXeX5",
+    "--env",
+    "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+    "--stdout",
+    "/tmp/vestra-producer-input-native-PjXeX5/host.stdout.log",
+    "--stderr",
+    "/tmp/vestra-producer-input-native-PjXeX5/host.stderr.log",
+    "--args",
+    "--silent",
+    "--seconds",
+    "315",
+    "--plugin",
+    "/tmp/vestra-producer-input-native-PjXeX5/Vestra Producer Input.app/Contents/Resources/consumer"
+  ],
+  "exitCode": 0,
+  "signal": null,
+  "error": "",
+  "note": "open exits before the host; inspect host logs/result.json separately"
+}

@@ -1,0 +1,21 @@
+libmpv sub/ass: Loading font file '/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-font-pZ9TfM/NotoSansCJKsc-Regular.otf'
+source geometry prepare entry=1 generation=1 cycle=1 decoder=1280x720 rotate=0 filter=@vestra-orientation:lavfi=[null,sidedata=mode=delete:type=DISPLAYMATRIX]
+source geometry ready entry=1 generation=1 cycle=1 output=1280x720 rotate=0
+runtime 2 runtime.ready: null
+libmpv sub/ass: Loading font file '/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-font-pZ9TfM/NotoSansCJKsc-Regular.otf'
+source geometry prepare entry=2 generation=2 cycle=2 decoder=1280x720 rotate=0 filter=@vestra-orientation:lavfi=[null,sidedata=mode=delete:type=DISPLAYMATRIX]
+source geometry ready entry=2 generation=2 cycle=2 output=1280x720 rotate=0
+source geometry prepare entry=3 generation=3 cycle=3 decoder=1280x720 rotate=0 filter=@vestra-orientation:lavfi=[null,sidedata=mode=delete:type=DISPLAYMATRIX]
+source geometry ready entry=3 generation=3 cycle=3 output=1280x720 rotate=0
+libmpv sub/ass: Loading font file '/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-font-pZ9TfM/NotoSansCJKsc-Regular.otf'
+libmpv sub/ass: Loading font file '/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-font-pZ9TfM/NotoSansCJKsc-Regular.otf'
+source geometry prepare entry=4 generation=4 cycle=4 decoder=1280x720 rotate=0 filter=@vestra-orientation:lavfi=[null,sidedata=mode=delete:type=DISPLAYMATRIX]
+source geometry ready entry=4 generation=4 cycle=4 output=1280x720 rotate=0
+libmpv sub/ass: Loading font file '/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-font-pZ9TfM/NotoSansCJKsc-Regular.otf'
+source geometry prepare entry=5 generation=5 cycle=5 decoder=1280x720 rotate=0 filter=@vestra-orientation:lavfi=[null,sidedata=mode=delete:type=DISPLAYMATRIX]
+source geometry ready entry=5 generation=5 cycle=5 output=1280x720 rotate=0
+libmpv sub/ass: Loading font file '/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-font-pZ9TfM/NotoSansCJKsc-Regular.otf'
+source geometry prepare entry=6 generation=6 cycle=6 decoder=1280x720 rotate=0 filter=@vestra-orientation:lavfi=[null,sidedata=mode=delete:type=DISPLAYMATRIX]
+source geometry ready entry=6 generation=6 cycle=6 output=1280x720 rotate=0
+MEDIA_NATIVE_BURST_REVIEW_DONE
+runtime 1 runtime.ready: null

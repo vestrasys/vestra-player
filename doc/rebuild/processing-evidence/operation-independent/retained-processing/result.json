@@ -1,0 +1,1029 @@
+{
+  "pass": true,
+  "checks": {
+    "serdeAndOwnedDescriptors": {
+      "audio": [
+        {
+          "owner": 1,
+          "resource": {
+            "manifestId": "review.processing-consumer",
+            "nodes": [
+              {
+                "gainDb": -6,
+                "kind": "volume"
+              },
+              {
+                "frequency": 1000,
+                "gainDb": 2,
+                "kind": "equalizer",
+                "q": 1
+              },
+              {
+                "frequency": 3000,
+                "gainDb": 1,
+                "kind": "treble",
+                "slope": 0.5
+              },
+              {
+                "enabled": true,
+                "kind": "dynaudnorm",
+                "maxGain": 2,
+                "peak": 0.9
+              }
+            ],
+            "resourceId": "same-local-id"
+          },
+          "revision": 1
+        }
+      ],
+      "backendUncertain": {},
+      "source": {
+        "generation": 1,
+        "load": {
+          "cycle": 1,
+          "entry": 1,
+          "generation": 1
+        },
+        "phase": "ready",
+        "stages": {
+          "audio": {
+            "error": null,
+            "status": "applied"
+          },
+          "video": {
+            "error": null,
+            "status": "applied"
+          }
+        }
+      },
+      "video": [
+        {
+          "owner": 1,
+          "resource": {
+            "manifestId": "review.processing-consumer",
+            "nodes": [
+              {
+                "brightness": 0.1,
+                "contrast": 1,
+                "gamma": 1,
+                "kind": "eq",
+                "saturation": 1
+              },
+              {
+                "kind": "gblur",
+                "sigma": 0.5,
+                "steps": 3
+              }
+            ],
+            "resourceId": "same-local-id"
+          },
+          "revision": 1
+        }
+      ]
+    },
+    "ownerCleanup": {
+      "combined": {
+        "audio": [
+          {
+            "owner": 1,
+            "resource": {
+              "manifestId": "review.processing-consumer",
+              "nodes": [
+                {
+                  "gainDb": -6,
+                  "kind": "volume"
+                },
+                {
+                  "frequency": 1000,
+                  "gainDb": 2,
+                  "kind": "equalizer",
+                  "q": 1
+                },
+                {
+                  "frequency": 3000,
+                  "gainDb": 1,
+                  "kind": "treble",
+                  "slope": 0.5
+                },
+                {
+                  "enabled": true,
+                  "kind": "dynaudnorm",
+                  "maxGain": 2,
+                  "peak": 0.9
+                }
+              ],
+              "resourceId": "same-local-id"
+            },
+            "revision": 1
+          },
+          {
+            "owner": 2,
+            "resource": {
+              "manifestId": "review.processing-helper",
+              "nodes": [
+                {
+                  "gainDb": -3,
+                  "kind": "volume"
+                }
+              ],
+              "resourceId": "same-local-id"
+            },
+            "revision": 1
+          }
+        ],
+        "backendUncertain": {},
+        "source": {
+          "generation": 1,
+          "load": {
+            "cycle": 1,
+            "entry": 1,
+            "generation": 1
+          },
+          "phase": "ready",
+          "stages": {
+            "audio": {
+              "error": null,
+              "status": "applied"
+            },
+            "video": {
+              "error": null,
+              "status": "applied"
+            }
+          }
+        },
+        "video": [
+          {
+            "owner": 1,
+            "resource": {
+              "manifestId": "review.processing-consumer",
+              "nodes": [
+                {
+                  "brightness": 0.1,
+                  "contrast": 1,
+                  "gamma": 1,
+                  "kind": "eq",
+                  "saturation": 1
+                },
+                {
+                  "kind": "gblur",
+                  "sigma": 0.5,
+                  "steps": 3
+                }
+              ],
+              "resourceId": "same-local-id"
+            },
+            "revision": 1
+          },
+          {
+            "owner": 2,
+            "resource": {
+              "manifestId": "review.processing-helper",
+              "nodes": [
+                {
+                  "brightness": -0.05,
+                  "contrast": 1,
+                  "gamma": 1,
+                  "kind": "eq",
+                  "saturation": 1
+                }
+              ],
+              "resourceId": "same-local-id"
+            },
+            "revision": 1
+          }
+        ]
+      },
+      "remaining": {
+        "audio": [
+          {
+            "owner": 1,
+            "resource": {
+              "manifestId": "review.processing-consumer",
+              "nodes": [
+                {
+                  "gainDb": -6,
+                  "kind": "volume"
+                },
+                {
+                  "frequency": 1000,
+                  "gainDb": 2,
+                  "kind": "equalizer",
+                  "q": 1
+                },
+                {
+                  "frequency": 3000,
+                  "gainDb": 1,
+                  "kind": "treble",
+                  "slope": 0.5
+                },
+                {
+                  "enabled": true,
+                  "kind": "dynaudnorm",
+                  "maxGain": 2,
+                  "peak": 0.9
+                }
+              ],
+              "resourceId": "same-local-id"
+            },
+            "revision": 1
+          }
+        ],
+        "backendUncertain": {},
+        "source": {
+          "generation": 1,
+          "load": {
+            "cycle": 1,
+            "entry": 1,
+            "generation": 1
+          },
+          "phase": "ready",
+          "stages": {
+            "audio": {
+              "error": null,
+              "status": "applied"
+            },
+            "video": {
+              "error": null,
+              "status": "applied"
+            }
+          }
+        },
+        "video": [
+          {
+            "owner": 1,
+            "resource": {
+              "manifestId": "review.processing-consumer",
+              "nodes": [
+                {
+                  "brightness": 0.1,
+                  "contrast": 1,
+                  "gamma": 1,
+                  "kind": "eq",
+                  "saturation": 1
+                },
+                {
+                  "kind": "gblur",
+                  "sigma": 0.5,
+                  "steps": 3
+                }
+              ],
+              "resourceId": "same-local-id"
+            },
+            "revision": 1
+          }
+        ]
+      }
+    },
+    "rejectedCandidatesPreservePublicResources": {
+      "audio": [
+        {
+          "owner": 1,
+          "resource": {
+            "manifestId": "review.processing-consumer",
+            "nodes": [
+              {
+                "gainDb": -6,
+                "kind": "volume"
+              },
+              {
+                "frequency": 1000,
+                "gainDb": 2,
+                "kind": "equalizer",
+                "q": 1
+              },
+              {
+                "frequency": 3000,
+                "gainDb": 1,
+                "kind": "treble",
+                "slope": 0.5
+              },
+              {
+                "enabled": true,
+                "kind": "dynaudnorm",
+                "maxGain": 2,
+                "peak": 0.9
+              }
+            ],
+            "resourceId": "same-local-id"
+          },
+          "revision": 1
+        }
+      ],
+      "backendUncertain": {},
+      "source": {
+        "generation": 1,
+        "load": {
+          "cycle": 1,
+          "entry": 1,
+          "generation": 1
+        },
+        "phase": "ready",
+        "stages": {
+          "audio": {
+            "error": null,
+            "status": "applied"
+          },
+          "video": {
+            "error": null,
+            "status": "applied"
+          }
+        }
+      },
+      "video": [
+        {
+          "owner": 1,
+          "resource": {
+            "manifestId": "review.processing-consumer",
+            "nodes": [
+              {
+                "brightness": 0.1,
+                "contrast": 1,
+                "gamma": 1,
+                "kind": "eq",
+                "saturation": 1
+              },
+              {
+                "kind": "gblur",
+                "sigma": 0.5,
+                "steps": 3
+              }
+            ],
+            "resourceId": "same-local-id"
+          },
+          "revision": 1
+        }
+      ]
+    },
+    "parameterCommits": {
+      "before": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 18,
+        "eventSequence": 28,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.3,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-review-IEvZYw/clock.mp4",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      },
+      "after": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 18,
+        "eventSequence": 68,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 1.233333,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-review-IEvZYw/clock.mp4",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      },
+      "frameBefore": {
+        "duration": 18,
+        "paused": false,
+        "position": 0.266667,
+        "rate": 1,
+        "session": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-review-IEvZYw/clock.mp4",
+        "videoFrames": 10,
+        "volume": 100
+      },
+      "frameAfter": {
+        "duration": 18,
+        "paused": false,
+        "position": 1.166667,
+        "rate": 1,
+        "session": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-review-IEvZYw/clock.mp4",
+        "videoFrames": 38,
+        "volume": 100
+      },
+      "ms": 915,
+      "final": {
+        "audio": [
+          {
+            "owner": 1,
+            "resource": {
+              "manifestId": "review.processing-consumer",
+              "nodes": [
+                {
+                  "gainDb": -6,
+                  "kind": "volume"
+                },
+                {
+                  "frequency": 1000,
+                  "gainDb": 2,
+                  "kind": "equalizer",
+                  "q": 1
+                },
+                {
+                  "frequency": 3000,
+                  "gainDb": 1,
+                  "kind": "treble",
+                  "slope": 0.5
+                },
+                {
+                  "enabled": true,
+                  "kind": "dynaudnorm",
+                  "maxGain": 2,
+                  "peak": 0.9
+                }
+              ],
+              "resourceId": "same-local-id"
+            },
+            "revision": 1
+          }
+        ],
+        "backendUncertain": {},
+        "source": {
+          "generation": 1,
+          "load": {
+            "cycle": 1,
+            "entry": 1,
+            "generation": 1
+          },
+          "phase": "ready",
+          "stages": {
+            "audio": {
+              "error": null,
+              "status": "applied"
+            },
+            "video": {
+              "error": null,
+              "status": "applied"
+            }
+          }
+        },
+        "video": [
+          {
+            "owner": 1,
+            "resource": {
+              "manifestId": "review.processing-consumer",
+              "nodes": [
+                {
+                  "brightness": 0.08,
+                  "contrast": 1,
+                  "gamma": 1,
+                  "kind": "eq",
+                  "saturation": 1
+                },
+                {
+                  "kind": "gblur",
+                  "sigma": 0.5,
+                  "steps": 3
+                }
+              ],
+              "resourceId": "same-local-id"
+            },
+            "revision": 32
+          }
+        ]
+      }
+    }
+  },
+  "events": [
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "StartFile { playlist_entry_id: 1 }"
+      }
+    },
+    {
+      "name": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": false,
+          "rate": false,
+          "restart": true,
+          "seek": false
+        },
+        "cycle": 1,
+        "duration": null,
+        "eventSequence": 1,
+        "loadingOwner": 1,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "loading",
+        "position": null,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-review-IEvZYw/clock.mp4",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "AudioReconfig"
+      }
+    },
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "AudioReconfig"
+      }
+    },
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "FileLoaded"
+      }
+    },
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "AudioReconfig"
+      }
+    },
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "VideoReconfig"
+      }
+    },
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "VideoReconfig"
+      }
+    },
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "PlaybackRestart"
+      }
+    },
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "VideoReconfig"
+      }
+    },
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "VideoReconfig"
+      }
+    },
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "AudioReconfig"
+      }
+    },
+    {
+      "name": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 18,
+        "eventSequence": 11,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.13333333333333333,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-review-IEvZYw/clock.mp4",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "VideoReconfig"
+      }
+    },
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "VideoReconfig"
+      }
+    },
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "AudioReconfig"
+      }
+    },
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "Seek"
+      }
+    },
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "PlaybackRestart"
+      }
+    },
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "VideoReconfig"
+      }
+    },
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "AudioReconfig"
+      }
+    },
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "VideoReconfig"
+      }
+    },
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "Seek"
+      }
+    },
+    {
+      "name": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 18,
+        "eventSequence": 18,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.266667,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-review-IEvZYw/clock.mp4",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "name": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "PlaybackRestart"
+      }
+    },
+    {
+      "name": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 18,
+        "eventSequence": 32,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.36666699999999997,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-review-IEvZYw/clock.mp4",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "name": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 18,
+        "eventSequence": 37,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.466667,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-review-IEvZYw/clock.mp4",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "name": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 18,
+        "eventSequence": 42,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.5666669999999999,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-review-IEvZYw/clock.mp4",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "name": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 18,
+        "eventSequence": 47,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.666667,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-review-IEvZYw/clock.mp4",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "name": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 18,
+        "eventSequence": 53,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.766667,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-review-IEvZYw/clock.mp4",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "name": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 18,
+        "eventSequence": 58,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.866667,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-review-IEvZYw/clock.mp4",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "name": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 18,
+        "eventSequence": 63,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.9666669999999999,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-review-IEvZYw/clock.mp4",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "name": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 18,
+        "eventSequence": 66,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 1.066667,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-review-IEvZYw/clock.mp4",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "name": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 18,
+        "eventSequence": 67,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 1.166667,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-review-IEvZYw/clock.mp4",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    }
+  ],
+  "limits": [
+    "Public typed descriptors, backend acceptance and source/render progress only; no pixel/PCM or device audio proof.",
+    "Invalid/stale requests fail before backend changes. This does not exercise partial backend failure rollback or preservation of actual old effects/DSP history.",
+    "processing.state collection order is not used as proof of actual backend filter order."
+  ]
+}

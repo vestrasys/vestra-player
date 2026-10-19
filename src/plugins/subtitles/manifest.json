@@ -1,0 +1,14 @@
+{
+  "id": "vestra.subtitles",
+  "version": "0.1.2",
+  "apiVersion": "vestra.experimental/0.1",
+  "entry": "main.ts",
+  "capabilities": [
+    "subtitles.read",
+    "subtitles.control",
+    "commands",
+    "events",
+    "ui.window",
+    "ui.dialog"
+  ]
+}

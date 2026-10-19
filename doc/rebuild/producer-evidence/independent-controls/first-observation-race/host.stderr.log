@@ -1,0 +1,40 @@
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
++ actual - expected
+
+  {
+    generation: 1,
++   intentVersion: 2
+-   intentVersion: 1
+  }
+
+    at Module.provider (file:///private/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-controls-GfFTgC/provider/main.mjs:29:69)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async file:///Users/ziyang/Documents/vestra-player/src/runtime/runner.ts:130:13 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: [Object],
+  expected: [Object],
+  operator: 'deepStrictEqual',
+  diff: 'simple'
+}
+runtime 1 runtime.failed: "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  {\n    generation: 1,\n+   intentVersion: 2\n-   intentVersion: 1\n  }\n"
+plugin 1: plugin stdin: Broken pipe (os error 32)
+host.error {"code":"producer-failed","generation":1,"message":"producer transport closed"}
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
++ actual - expected
+
++ 'failed'
+- 'completed'
+
+    at Module.controller (file:///private/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-controls-GfFTgC/controller/main.mjs:16:48)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async file:///Users/ziyang/Documents/vestra-player/src/runtime/runner.ts:130:13 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: 'failed',
+  expected: 'completed',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+runtime 2 runtime.failed: "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'failed'\n- 'completed'\n"
+plugin 2: plugin stdin: Broken pipe (os error 32)

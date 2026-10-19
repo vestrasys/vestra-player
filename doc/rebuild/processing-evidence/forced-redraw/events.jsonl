@@ -1,0 +1,179 @@
+{"event":"Unknown(11)","phase":"loading","wall":0.065875959}
+{"event":"StartFile { playlist_entry_id: 1 }","phase":"loading","wall":0.066031292}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"Waiting for scripts...\\n\", log_level: 50 })","phase":"loading","wall":0.066083542}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"Done loading scripts.\\n\", log_level: 50 })","phase":"loading","wall":0.066175875}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"Running hook: auto_profiles/on_before_start_file\\n\", log_level: 50 })","phase":"loading","wall":0.066257334}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"Failed sending hook command auto_profiles/on_before_start_file. Removing hook.\\n\", log_level: 50 })","phase":"loading","wall":0.066334167}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"Running hook: auto_profiles/on_load\\n\", log_level: 50 })","phase":"loading","wall":0.066417167}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"Failed sending hook command auto_profiles/on_load. Removing hook.\\n\", log_level: 50 })","phase":"loading","wall":0.066500792}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"Running hook: ytdl_hook/on_load\\n\", log_level: 50 })","phase":"loading","wall":0.066579667}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"Running hook: ytdl_hook/on_load\\n\", log_level: 50 })","phase":"loading","wall":0.066656709}
+{"event":"LogMessage(LogMessage { prefix: \"ytdl_hook\", level: \"v\", text: \"playlist hook\\n\", log_level: 50 })","phase":"loading","wall":0.066730959}
+{"event":"LogMessage(LogMessage { prefix: \"bdmv/bluray\", level: \"v\", text: \"Opening /tmp/vestra-processing-source.mkv\\n\", log_level: 50 })","phase":"loading","wall":0.06681925}
+{"event":"LogMessage(LogMessage { prefix: \"file\", level: \"v\", text: \"Opening /tmp/vestra-processing-source.mkv\\n\", log_level: 50 })","phase":"loading","wall":0.066909959}
+{"event":"LogMessage(LogMessage { prefix: \"demux\", level: \"v\", text: \"Trying demuxers for level=normal.\\n\", log_level: 50 })","phase":"loading","wall":0.066994375}
+{"event":"LogMessage(LogMessage { prefix: \"mkv\", level: \"v\", text: \"Deferring reading cues.\\n\", log_level: 50 })","phase":"loading","wall":0.074072}
+{"event":"LogMessage(LogMessage { prefix: \"mkv\", level: \"v\", text: \"All headers are parsed!\\n\", log_level: 50 })","phase":"loading","wall":0.074156}
+{"event":"LogMessage(LogMessage { prefix: \"demux\", level: \"v\", text: \"Detected file format: Matroska\\n\", log_level: 50 })","phase":"loading","wall":0.074226875}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"Opening done: /tmp/vestra-processing-source.mkv\\n\", log_level: 50 })","phase":"loading","wall":0.074297334}
+{"event":"LogMessage(LogMessage { prefix: \"find_files\", level: \"v\", text: \"Loading external files in /tmp/\\n\", log_level: 50 })","phase":"loading","wall":0.074368209}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"Running hook: auto_profiles/on_preloaded\\n\", log_level: 50 })","phase":"loading","wall":0.074438584}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"Failed sending hook command auto_profiles/on_preloaded. Removing hook.\\n\", log_level: 50 })","phase":"loading","wall":0.07450875}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"Running hook: ytdl_hook/on_preloaded\\n\", log_level: 50 })","phase":"loading","wall":0.074592917}
+{"event":"LogMessage(LogMessage { prefix: \"mkv\", level: \"v\", text: \"select track 0\\n\", log_level: 50 })","phase":"loading","wall":0.074692417}
+{"event":"LogMessage(LogMessage { prefix: \"mkv\", level: \"v\", text: \"select track 1\\n\", log_level: 50 })","phase":"loading","wall":0.074781959}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"info\", text: \"● Video  --vid=1  (h264 640x360 30 fps)\\n\", log_level: 40 })","phase":"loading","wall":0.074871667}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"info\", text: \"● Audio  --aid=1  (pcm_s16le 1ch 48000 Hz)\\n\", log_level: 40 })","phase":"loading","wall":0.074946125}
+{"event":"LogMessage(LogMessage { prefix: \"vd\", level: \"v\", text: \"Container reported FPS: 30.000000\\n\", log_level: 50 })","phase":"loading","wall":0.075007417}
+{"event":"LogMessage(LogMessage { prefix: \"vd\", level: \"v\", text: \"Codec list:\\n\", log_level: 50 })","phase":"loading","wall":0.081419959}
+{"event":"LogMessage(LogMessage { prefix: \"vd\", level: \"v\", text: \"    h264 - H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\\n\", log_level: 50 })","phase":"loading","wall":0.08147875}
+{"event":"LogMessage(LogMessage { prefix: \"vd\", level: \"v\", text: \"Opening decoder h264\\n\", log_level: 50 })","phase":"loading","wall":0.081548792}
+{"event":"LogMessage(LogMessage { prefix: \"vd\", level: \"v\", text: \"No hardware decoding requested.\\n\", log_level: 50 })","phase":"loading","wall":0.081602584}
+{"event":"LogMessage(LogMessage { prefix: \"vd\", level: \"v\", text: \"Using software decoding.\\n\", log_level: 50 })","phase":"loading","wall":0.081657}
+{"event":"LogMessage(LogMessage { prefix: \"vd\", level: \"v\", text: \"Detected 8 logical cores.\\n\", log_level: 50 })","phase":"loading","wall":0.081722209}
+{"event":"LogMessage(LogMessage { prefix: \"vd\", level: \"v\", text: \"Requesting 9 threads for decoding.\\n\", log_level: 50 })","phase":"loading","wall":0.081776417}
+{"event":"AudioReconfig","phase":"loading","wall":0.089337125}
+{"event":"AudioReconfig","phase":"loading","wall":0.089385584}
+{"event":"FileLoaded","phase":"loading","wall":0.089423917}
+{"event":"LogMessage(LogMessage { prefix: \"vd\", level: \"v\", text: \"DR failed - disabling.\\n\", log_level: 50 })","phase":"loading","wall":0.089463}
+{"event":"LogMessage(LogMessage { prefix: \"vd\", level: \"v\", text: \"Selected decoder: h264 - H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\\n\", log_level: 50 })","phase":"loading","wall":0.089523209}
+{"event":"LogMessage(LogMessage { prefix: \"vf\", level: \"v\", text: \"User filter list:\\n\", log_level: 50 })","phase":"loading","wall":0.089581542}
+{"event":"LogMessage(LogMessage { prefix: \"vf\", level: \"v\", text: \"  (empty)\\n\", log_level: 50 })","phase":"loading","wall":0.089643542}
+{"event":"LogMessage(LogMessage { prefix: \"ad\", level: \"v\", text: \"Codec list:\\n\", log_level: 50 })","phase":"loading","wall":0.089714334}
+{"event":"LogMessage(LogMessage { prefix: \"ad\", level: \"v\", text: \"    pcm_s16le - PCM signed 16-bit little-endian\\n\", log_level: 50 })","phase":"loading","wall":0.089784834}
+{"event":"LogMessage(LogMessage { prefix: \"ad\", level: \"v\", text: \"Opening decoder pcm_s16le\\n\", log_level: 50 })","phase":"loading","wall":0.08984375}
+{"event":"LogMessage(LogMessage { prefix: \"ad\", level: \"v\", text: \"Requesting 1 threads for decoding.\\n\", log_level: 50 })","phase":"loading","wall":0.089902}
+{"event":"LogMessage(LogMessage { prefix: \"ad\", level: \"v\", text: \"Selected decoder: pcm_s16le - PCM signed 16-bit little-endian\\n\", log_level: 50 })","phase":"loading","wall":0.089967125}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"User filter list:\\n\", log_level: 50 })","phase":"loading","wall":0.090027959}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"  (empty)\\n\", log_level: 50 })","phase":"loading","wall":0.090091209}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"Starting playback...\\n\", log_level: 50 })","phase":"loading","wall":0.090151834}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"[in] 48000Hz mono 1ch s16\\n\", log_level: 50 })","phase":"loading","wall":0.090211584}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"[userspeed] 48000Hz mono 1ch s16\\n\", log_level: 50 })","phase":"loading","wall":0.09040075}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"[userspeed] (disabled)\\n\", log_level: 50 })","phase":"loading","wall":0.090482584}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"[convert] 48000Hz mono 1ch s16\\n\", log_level: 50 })","phase":"loading","wall":0.09054725}
+{"event":"LogMessage(LogMessage { prefix: \"vd\", level: \"v\", text: \"Using software decoding.\\n\", log_level: 50 })","phase":"loading","wall":0.090604209}
+{"event":"LogMessage(LogMessage { prefix: \"vd\", level: \"v\", text: \"Decoder format: 640x360 yuv420p auto/auto/auto/auto/auto CL=mpeg2/4/h264 crop=640x360+0+0 A=none\\n\", log_level: 50 })","phase":"loading","wall":0.090661375}
+{"event":"LogMessage(LogMessage { prefix: \"vd\", level: \"v\", text: \"Using container aspect ratio.\\n\", log_level: 50 })","phase":"loading","wall":0.090720334}
+{"event":"LogMessage(LogMessage { prefix: \"vf\", level: \"v\", text: \"[in] 640x360 yuv420p bt.601/bt.709/bt.1886/limited/display CL=mpeg2/4/h264 crop=640x360+0+0 A=none\\n\", log_level: 50 })","phase":"loading","wall":0.090776875}
+{"event":"LogMessage(LogMessage { prefix: \"vf\", level: \"v\", text: \"[userdeint] 640x360 yuv420p bt.601/bt.709/bt.1886/limited/display CL=mpeg2/4/h264 crop=640x360+0+0 A=none\\n\", log_level: 50 })","phase":"loading","wall":0.090835667}
+{"event":"AudioReconfig","phase":"loading","wall":0.090917}
+{"event":"VideoReconfig","phase":"loading","wall":0.090966709}
+{"event":"LogMessage(LogMessage { prefix: \"vf\", level: \"v\", text: \"[userdeint] (disabled)\\n\", log_level: 50 })","phase":"loading","wall":0.0910085}
+{"event":"LogMessage(LogMessage { prefix: \"vf\", level: \"v\", text: \"[autovflip] 640x360 yuv420p bt.601/bt.709/bt.1886/limited/display CL=mpeg2/4/h264 crop=640x360+0+0 A=none\\n\", log_level: 50 })","phase":"loading","wall":0.091067209}
+{"event":"VideoReconfig","phase":"loading","wall":0.091126834}
+{"event":"LogMessage(LogMessage { prefix: \"vf\", level: \"v\", text: \"[autovflip] (disabled)\\n\", log_level: 50 })","phase":"loading","wall":0.09116275}
+{"event":"LogMessage(LogMessage { prefix: \"vf\", level: \"v\", text: \"[autorotate] 640x360 yuv420p bt.601/bt.709/bt.1886/limited/display CL=mpeg2/4/h264 crop=640x360+0+0 A=none\\n\", log_level: 50 })","phase":"loading","wall":0.091218459}
+{"event":"LogMessage(LogMessage { prefix: \"vf\", level: \"v\", text: \"[autorotate] (disabled)\\n\", log_level: 50 })","phase":"loading","wall":0.091348875}
+{"event":"LogMessage(LogMessage { prefix: \"vf\", level: \"v\", text: \"[convert] 640x360 yuv420p bt.601/bt.709/bt.1886/limited/display CL=mpeg2/4/h264 crop=640x360+0+0 A=none\\n\", log_level: 50 })","phase":"loading","wall":0.091409334}
+{"event":"LogMessage(LogMessage { prefix: \"vf\", level: \"v\", text: \"[convert] (disabled)\\n\", log_level: 50 })","phase":"loading","wall":0.091468417}
+{"event":"LogMessage(LogMessage { prefix: \"vf\", level: \"v\", text: \"[out] 640x360 yuv420p bt.601/bt.709/bt.1886/limited/display CL=mpeg2/4/h264 crop=640x360+0+0 A=none\\n\", log_level: 50 })","phase":"loading","wall":0.091524834}
+{"event":"LogMessage(LogMessage { prefix: \"ao\", level: \"v\", text: \"Trying audio driver 'null'\\n\", log_level: 50 })","phase":"loading","wall":0.091583}
+{"event":"LogMessage(LogMessage { prefix: \"ao/null\", level: \"v\", text: \"requested format: 48000 Hz, mono channels, s16\\n\", log_level: 50 })","phase":"loading","wall":0.091638917}
+{"event":"LogMessage(LogMessage { prefix: \"ao/null\", level: \"v\", text: \"Channel layouts:\\n\", log_level: 50 })","phase":"loading","wall":0.091695167}
+{"event":"LogMessage(LogMessage { prefix: \"ao/null\", level: \"v\", text: \" - anything\\n\", log_level: 50 })","phase":"loading","wall":0.091750084}
+{"event":"LogMessage(LogMessage { prefix: \"ao/null\", level: \"v\", text: \"result: mono\\n\", log_level: 50 })","phase":"loading","wall":0.09181225}
+{"event":"LogMessage(LogMessage { prefix: \"ao/null\", level: \"v\", text: \"device buffer: 9472 samples.\\n\", log_level: 50 })","phase":"loading","wall":0.091867584}
+{"event":"LogMessage(LogMessage { prefix: \"ao/null\", level: \"v\", text: \"using soft-buffer of 9472 samples.\\n\", log_level: 50 })","phase":"loading","wall":0.09192275}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"info\", text: \"AO: [null] 48000Hz mono 1ch s16\\n\", log_level: 40 })","phase":"loading","wall":0.091988625}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"AO: Description: Null audio output\\n\", log_level: 50 })","phase":"loading","wall":0.092044875}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"[convert] (disabled)\\n\", log_level: 50 })","phase":"loading","wall":0.0921005}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"[out] 48000Hz mono 1ch s16\\n\", log_level: 50 })","phase":"loading","wall":0.092155375}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"info\", text: \"VO: [libmpv] 640x360 yuv420p\\n\", log_level: 40 })","phase":"loading","wall":0.092214917}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"VO: Description: render API for libmpv\\n\", log_level: 50 })","phase":"loading","wall":0.0922725}
+{"event":"LogMessage(LogMessage { prefix: \"vo/libmpv\", level: \"v\", text: \"reconfig to 640x360 yuv420p bt.601/bt.709/bt.1886/limited/display CL=mpeg2/4/h264 crop=640x360+0+0 A=none\\n\", log_level: 50 })","phase":"loading","wall":0.092332875}
+{"event":"LogMessage(LogMessage { prefix: \"libmpv_render\", level: \"v\", text: \"Window size: 640x360 (Borders: l=0 t=0 r=0 b=0)\\n\", log_level: 50 })","phase":"loading","wall":0.092392417}
+{"event":"PlaybackRestart","phase":"loading","wall":0.092449917}
+{"event":"LogMessage(LogMessage { prefix: \"libmpv_render\", level: \"v\", text: \"Video source: 640x360 (1:1)\\n\", log_level: 50 })","phase":"loading","wall":0.092504709}
+{"event":"LogMessage(LogMessage { prefix: \"libmpv_render\", level: \"v\", text: \"Video display: (0, 0) 640x360 -> (0, 0) 640x360\\n\", log_level: 50 })","phase":"loading","wall":0.092577792}
+{"event":"LogMessage(LogMessage { prefix: \"libmpv_render\", level: \"v\", text: \"Video scale: 1.000000/1.000000\\n\", log_level: 50 })","phase":"loading","wall":0.092716084}
+{"event":"LogMessage(LogMessage { prefix: \"libmpv_render\", level: \"v\", text: \"OSD borders: l=0 t=0 r=0 b=0\\n\", log_level: 50 })","phase":"loading","wall":0.09292475}
+{"event":"LogMessage(LogMessage { prefix: \"libmpv_render\", level: \"v\", text: \"Video borders: l=0 t=0 r=0 b=0\\n\", log_level: 50 })","phase":"loading","wall":0.093146875}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"first video frame after restart shown\\n\", log_level: 50 })","phase":"loading","wall":0.093222084}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"audio ready\\n\", log_level: 50 })","phase":"loading","wall":0.0932855}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"delaying audio start 0.000000 vs. 0.000000, diff=0.000000\\n\", log_level: 50 })","phase":"loading","wall":0.093340792}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"playback restart complete @ 0.000000, audio=ready, video=playing\\n\", log_level: 50 })","phase":"loading","wall":0.093407959}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"starting audio playback\\n\", log_level: 50 })","phase":"loading","wall":0.093465709}
+{"event":"LogMessage(LogMessage { prefix: \"ao/null\", level: \"v\", text: \"starting AO\\n\", log_level: 50 })","phase":"loading","wall":0.093525459}
+{"event":"LogMessage(LogMessage { prefix: \"osd/libass\", level: \"v\", text: \"libass API version: 0x1705000\\n\", log_level: 50 })","phase":"loading","wall":0.138620959}
+{"event":"LogMessage(LogMessage { prefix: \"osd/libass\", level: \"v\", text: \"libass source: tarball: 0.17.5\\n\", log_level: 50 })","phase":"loading","wall":0.138701167}
+{"event":"LogMessage(LogMessage { prefix: \"osd/libass\", level: \"v\", text: \"Shaper: FriBidi 1.0.16 (SIMPLE) HarfBuzz-ng 14.5.1 (COMPLEX)\\n\", log_level: 50 })","phase":"loading","wall":0.138760625}
+{"event":"LogMessage(LogMessage { prefix: \"osd/libass\", level: \"v\", text: \"Setting up fonts...\\n\", log_level: 50 })","phase":"loading","wall":0.138822084}
+{"event":"LogMessage(LogMessage { prefix: \"osd/libass\", level: \"v\", text: \"Using font provider coretext\\n\", log_level: 50 })","phase":"loading","wall":0.146421875}
+{"event":"LogMessage(LogMessage { prefix: \"osd/libass\", level: \"v\", text: \"Done.\\n\", log_level: 50 })","phase":"loading","wall":0.146501542}
+{"event":"VideoReconfig","phase":"settle","wall":0.900681709}
+{"event":"AudioReconfig","phase":"settle","wall":0.901163459}
+{"event":"VideoReconfig","phase":"settle","wall":0.901344625}
+{"event":"LogMessage(LogMessage { prefix: \"user_filter_wrapper\", level: \"v\", text: \"Setting option 'graph' = 'eq@tone=brightness=0:contrast=1:saturation=1:gamma=1,gblur@blur=sigma=0.01:steps=3' (flags = 0)\\n\", log_level: 50 })","phase":"settle","wall":0.901514}
+{"event":"LogMessage(LogMessage { prefix: \"vf\", level: \"v\", text: \"User filter list:\\n\", log_level: 50 })","phase":"settle","wall":0.901824917}
+{"event":"LogMessage(LogMessage { prefix: \"vf\", level: \"v\", text: \"  lavfi (video)\\n\", log_level: 50 })","phase":"settle","wall":0.902085167}
+{"event":"LogMessage(LogMessage { prefix: \"vf\", level: \"v\", text: \"[lavfi] 640x360 yuv420p bt.601/bt.709/bt.1886/limited/display CL=mpeg2/4/h264 crop=640x360+0+0 A=none\\n\", log_level: 50 })","phase":"settle","wall":0.902342709}
+{"event":"LogMessage(LogMessage { prefix: \"user_filter_wrapper\", level: \"v\", text: \"Setting option 'graph' = 'volume@protect=volume=1,equalizer@band=frequency=1000:width_type=q:width=1:gain=0,treble@high=frequency=3000:width_type=s:width=0.5:gain=0,dynaudnorm@norm=framelen=100:gausssize=5:peak=0.9:maxgain=2' (flags = 0)\\n\", log_level: 50 })","phase":"settle","wall":0.902700375}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"User filter list:\\n\", log_level: 50 })","phase":"settle","wall":0.903009125}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"  lavfi (audio)\\n\", log_level: 50 })","phase":"settle","wall":0.903278}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"[lavfi] 48000Hz mono 1ch s16\\n\", log_level: 50 })","phase":"settle","wall":0.911109}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"[userspeed] 48000Hz mono 1ch doublep\\n\", log_level: 50 })","phase":"settle","wall":0.946419}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"[convert] 48000Hz mono 1ch doublep\\n\", log_level: 50 })","phase":"settle","wall":0.946782459}
+{"event":"LogMessage(LogMessage { prefix: \"autoconvert\", level: \"v\", text: \"inserting resampler\\n\", log_level: 50 })","phase":"settle","wall":0.947067084}
+{"event":"LogMessage(LogMessage { prefix: \"swresample\", level: \"v\", text: \"format change, reinitializing resampler\\n\", log_level: 50 })","phase":"settle","wall":0.947383334}
+{"event":"LogMessage(LogMessage { prefix: \"swresample\", level: \"v\", text: \"48000Hz mono doublep -> 48000Hz mono s16\\n\", log_level: 50 })","phase":"settle","wall":0.947654875}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"[convert] (enabled)\\n\", log_level: 50 })","phase":"settle","wall":0.947921125}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"Set property: pause=true -> 1\\n\", log_level: 50 })","phase":"pause-stable","wall":8.526014542}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"Set property: brightness=35.000000 -> 1\\n\", log_level: 50 })","phase":"paused-property","wall":9.363549834}
+{"event":"VideoReconfig","phase":"paused-local-reconfigure","wall":9.78421725}
+{"event":"LogMessage(LogMessage { prefix: \"user_filter_wrapper\", level: \"v\", text: \"Setting option 'graph' = 'eq@tone=brightness=-0.3:contrast=1.2:saturation=0.3:gamma=1.2,gblur@blur=sigma=2:sigmaV=2:steps=3' (flags = 0)\\n\", log_level: 50 })","phase":"paused-local-reconfigure","wall":9.784340542}
+{"event":"LogMessage(LogMessage { prefix: \"vf\", level: \"v\", text: \"User filter list:\\n\", log_level: 50 })","phase":"paused-local-reconfigure","wall":9.784496959}
+{"event":"LogMessage(LogMessage { prefix: \"vf\", level: \"v\", text: \"  lavfi (video)\\n\", log_level: 50 })","phase":"paused-local-reconfigure","wall":9.784625}
+{"event":"Seek","phase":"paused-local-reconfigure","wall":9.784761834}
+{"event":"LogMessage(LogMessage { prefix: \"mkv\", level: \"v\", text: \"queuing seek to 7.933000\\n\", log_level: 50 })","phase":"paused-local-reconfigure","wall":9.784825792}
+{"event":"LogMessage(LogMessage { prefix: \"mkv\", level: \"v\", text: \"execute seek (to 7.933000 flags 32)\\n\", log_level: 50 })","phase":"paused-local-reconfigure","wall":9.784923625}
+{"event":"LogMessage(LogMessage { prefix: \"mkv\", level: \"v\", text: \"Seeking to 10183150 to read header element 0x1c53bb6b.\\n\", log_level: 50 })","phase":"paused-local-reconfigure","wall":9.785019125}
+{"event":"LogMessage(LogMessage { prefix: \"file\", level: \"v\", text: \"stream level seek from 3538944 to 10183150\\n\", log_level: 50 })","phase":"paused-local-reconfigure","wall":9.785114334}
+{"event":"LogMessage(LogMessage { prefix: \"mkv\", level: \"v\", text: \"Parsing cues...\\n\", log_level: 50 })","phase":"paused-local-reconfigure","wall":9.785206}
+{"event":"LogMessage(LogMessage { prefix: \"file\", level: \"v\", text: \"stream level seek from 10183238 to 748\\n\", log_level: 50 })","phase":"paused-local-reconfigure","wall":9.785301417}
+{"event":"LogMessage(LogMessage { prefix: \"mkv\", level: \"v\", text: \"seek done\\n\", log_level: 50 })","phase":"paused-local-reconfigure","wall":9.785392459}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"hr-seek, skipping to 8.433000 (no framedrop)\\n\", log_level: 50 })","phase":"paused-local-reconfigure","wall":9.785488625}
+{"event":"VideoReconfig","phase":"paused-local-reconfigure","wall":9.793100459}
+{"event":"LogMessage(LogMessage { prefix: \"vd\", level: \"v\", text: \"Decoder format: 640x360 yuv420p auto/auto/auto/auto/auto CL=mpeg2/4/h264 crop=640x360+0+0 A=none\\n\", log_level: 50 })","phase":"paused-local-reconfigure","wall":9.793222084}
+{"event":"LogMessage(LogMessage { prefix: \"vd\", level: \"v\", text: \"Using container aspect ratio.\\n\", log_level: 50 })","phase":"paused-local-reconfigure","wall":9.793317584}
+{"event":"LogMessage(LogMessage { prefix: \"vf\", level: \"v\", text: \"[lavfi] 640x360 yuv420p bt.601/bt.709/bt.1886/limited/display CL=mpeg2/4/h264 crop=640x360+0+0 A=none\\n\", log_level: 50 })","phase":"paused-local-reconfigure","wall":9.793398959}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"Set property: pause=false -> 1\\n\", log_level: 50 })","phase":"resume","wall":10.20078475}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"first video frame after restart shown\\n\", log_level: 50 })","phase":"resume","wall":10.307411959}
+{"event":"PlaybackRestart","phase":"resume","wall":10.315025792}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"audio ready\\n\", log_level: 50 })","phase":"resume","wall":10.31507675}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"starting audio playback\\n\", log_level: 50 })","phase":"resume","wall":10.315129667}
+{"event":"LogMessage(LogMessage { prefix: \"ao/null\", level: \"v\", text: \"starting AO\\n\", log_level: 50 })","phase":"resume","wall":10.315182}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"playback restart complete @ 8.433000, audio=playing, video=playing\\n\", log_level: 50 })","phase":"resume","wall":10.315233834}
+{"event":"AudioReconfig","phase":"topology","wall":10.607336}
+{"event":"LogMessage(LogMessage { prefix: \"user_filter_wrapper\", level: \"v\", text: \"Setting option 'graph' = 'volume=0.8' (flags = 0)\\n\", log_level: 50 })","phase":"topology","wall":10.608130959}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"User filter list:\\n\", log_level: 50 })","phase":"topology","wall":10.608525375}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"  lavfi (audio)\\n\", log_level: 50 })","phase":"topology","wall":10.608932834}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"  lavfi (local)\\n\", log_level: 50 })","phase":"topology","wall":10.609207334}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"[lavfi] 48000Hz mono 1ch doublep\\n\", log_level: 50 })","phase":"topology","wall":10.609468625}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"[userspeed] 48000Hz mono 1ch floatp\\n\", log_level: 50 })","phase":"topology","wall":10.610504125}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"[convert] 48000Hz mono 1ch floatp\\n\", log_level: 50 })","phase":"topology","wall":10.610800459}
+{"event":"LogMessage(LogMessage { prefix: \"autoconvert\", level: \"v\", text: \"inserting resampler\\n\", log_level: 50 })","phase":"topology","wall":10.611118792}
+{"event":"LogMessage(LogMessage { prefix: \"swresample\", level: \"v\", text: \"format change, reinitializing resampler\\n\", log_level: 50 })","phase":"topology","wall":10.611386625}
+{"event":"LogMessage(LogMessage { prefix: \"swresample\", level: \"v\", text: \"48000Hz mono floatp -> 48000Hz mono s16\\n\", log_level: 50 })","phase":"topology","wall":10.611653375}
+{"event":"AudioReconfig","phase":"topology","wall":11.011609292}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"User filter list:\\n\", log_level: 50 })","phase":"topology","wall":11.011912}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"  lavfi (audio)\\n\", log_level: 50 })","phase":"topology","wall":11.0122075}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"[userspeed] 48000Hz mono 1ch doublep\\n\", log_level: 50 })","phase":"topology","wall":11.11775375}
+{"event":"LogMessage(LogMessage { prefix: \"af\", level: \"v\", text: \"[convert] 48000Hz mono 1ch doublep\\n\", log_level: 50 })","phase":"topology","wall":11.118184875}
+{"event":"LogMessage(LogMessage { prefix: \"autoconvert\", level: \"v\", text: \"inserting resampler\\n\", log_level: 50 })","phase":"topology","wall":11.126002084}
+{"event":"LogMessage(LogMessage { prefix: \"swresample\", level: \"v\", text: \"format change, reinitializing resampler\\n\", log_level: 50 })","phase":"topology","wall":11.126281042}
+{"event":"LogMessage(LogMessage { prefix: \"swresample\", level: \"v\", text: \"48000Hz mono doublep -> 48000Hz mono s16\\n\", log_level: 50 })","phase":"topology","wall":11.126488875}
+{"event":"LogMessage(LogMessage { prefix: \"user_filter_wrapper\", level: \"v\", text: \"Setting option 'graph' = 'not_a_real_filter' (flags = 0)\\n\", log_level: 50 })","phase":"topology","wall":11.421894292}
+{"event":"LogMessage(LogMessage { prefix: \"ffmpeg\", level: \"error\", text: \"AVFilterGraph: No such filter: 'not_a_real_filter'\\n\", log_level: 20 })","phase":"topology","wall":11.422216459}
+{"event":"LogMessage(LogMessage { prefix: \"ffmpeg\", level: \"error\", text: \"AVFilterGraph: Error creating filters\\n\", log_level: 20 })","phase":"topology","wall":11.422438125}
+{"event":"LogMessage(LogMessage { prefix: \"lavfi\", level: \"fatal\", text: \"parsing the filter graph failed\\n\", log_level: 10 })","phase":"topology","wall":11.422642292}
+{"event":"LogMessage(LogMessage { prefix: \"user_filter_wrapper\", level: \"error\", text: \"Creating filter 'lavfi' failed.\\n\", log_level: 20 })","phase":"topology","wall":11.422833584}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"error\", text: \"Audio filter initialized failed!\\n\", log_level: 20 })","phase":"topology","wall":11.423023959}
+{"event":"AudioReconfig","phase":"stop","wall":12.037878167}
+{"event":"VideoReconfig","phase":"stop","wall":12.038095542}
+{"event":"EndFile { reason: Stop, error: None, playlist_entry_id: 1, playlist_insert_id: 0, playlist_insert_num_entries: 0 }","phase":"stop","wall":12.038186084}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"EOF code: 4  \\n\", log_level: 50 })","phase":"stop","wall":12.038299292}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"finished playback, success (reason 2)\\n\", log_level: 50 })","phase":"stop","wall":12.038722917}
+{"event":"LogMessage(LogMessage { prefix: \"cplayer\", level: \"v\", text: \"Running hook: ytdl_hook/on_after_end_file\\n\", log_level: 50 })","phase":"stop","wall":12.039101875}
+{"event":"AudioReconfig","phase":"stop","wall":12.054296375}
+{"event":"VideoReconfig","phase":"stop","wall":12.054459875}
+{"event":"Unknown(11)","phase":"stop","wall":12.054575291999999}

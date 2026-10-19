@@ -1,0 +1,65 @@
+{
+  "mode": "pause-isolation",
+  "records": [
+    {
+      "command": [
+        "vf",
+        "set",
+        "@video:lavfi=[eq@tone=brightness=0:contrast=1:saturation=1:gamma=1,gblur@blur=sigma=0.01:steps=3]"
+      ],
+      "ms": 10.543000000000001,
+      "phase": "setup",
+      "result": "Ok(())"
+    },
+    {
+      "after": {
+        "frames": 53,
+        "paused": true,
+        "position": 1.633,
+        "wall": 3.329213333
+      },
+      "before": {
+        "frames": 53,
+        "paused": true,
+        "position": 1.633,
+        "wall": 2.122265958
+      },
+      "command": [
+        "vf-command",
+        "video",
+        "brightness",
+        "-0.3",
+        "eq@tone"
+      ],
+      "initialMae": 0.0,
+      "ms": 0.1325,
+      "phase": "runtime-brightness",
+      "pixelMae": 0.0,
+      "result": "Ok(())"
+    },
+    {
+      "after": {
+        "frames": 55,
+        "paused": true,
+        "position": 1.633,
+        "wall": 4.588369042
+      },
+      "before": {
+        "frames": 53,
+        "paused": true,
+        "position": 1.633,
+        "wall": 2.122265958
+      },
+      "command": [
+        "vf",
+        "add",
+        "@video:lavfi=[eq@tone=brightness=-0.3:contrast=1:saturation=1:gamma=1,gblur@blur=sigma=2:steps=3]"
+      ],
+      "initialMae": 48.49208188657408,
+      "ms": 1.179083,
+      "phase": "local-vf-refresh",
+      "pixelMae": 48.49208188657408,
+      "result": "Ok(())"
+    }
+  ]
+}

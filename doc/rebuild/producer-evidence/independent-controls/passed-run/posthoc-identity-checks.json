@@ -1,0 +1,29 @@
+{
+  "pass": true,
+  "hostRerun": false,
+  "checks": [
+    {
+      "operationId": 101,
+      "stampCyclePauseProducerMatch": true,
+      "baseSampleMatchesObservedPosition": true,
+      "baseSample": 2048,
+      "epoch": 2
+    },
+    {
+      "operationId": 102,
+      "stampCyclePauseProducerMatch": true,
+      "baseSampleMatchesObservedPosition": true,
+      "baseSample": 2048,
+      "epoch": 2
+    },
+    {
+      "operationId": 103,
+      "stampCyclePauseProducerMatch": true,
+      "baseSampleMatchesObservedPosition": true,
+      "baseSample": 4410,
+      "epoch": 3
+    }
+  ],
+  "normalTerminalTicketsPreserved": true,
+  "pauseEpochIncreasesResumeEpochPreserved": true
+}

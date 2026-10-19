@@ -1,0 +1,80 @@
+{
+  "revision": "capture-open-callback-fix-20261019.5",
+  "syncedAt": "2026-10-19T07:13:50.168Z",
+  "authority": "/Users/ziyang/Documents/vestra-player/src/plugins/capture",
+  "source": "Current author revision, local cache and src identical at synchronization; no claim about evicted earlier revisions",
+  "checks": {
+    "build": 0,
+    "strictTypeScriptCurrentSdkCache": 0,
+    "contractTests": 0,
+    "slint": "new revision awaiting maintainer compiler",
+    "nativeMediaAcceptance": "not performed by author"
+  },
+  "files": {
+    "main.ts": {
+      "size": 28729,
+      "sha256": "c99c14cf3da1c8161619255e279833f4c7ef83f6fe7d529a58ce8778e4315d5a",
+      "srcVerifiedImmediately": true
+    },
+    "capture.slint": {
+      "size": 7708,
+      "sha256": "518586219c94d23938dc7c6d8bb462270ff8cebc5406098aa92323c56474b849",
+      "srcVerifiedImmediately": true
+    },
+    "capture-error.slint": {
+      "size": 448,
+      "sha256": "b7408c565ec1e655ea8813271af720dccdc055360fba821785e6671a6b2c2c11",
+      "srcVerifiedImmediately": true
+    },
+    "manifest.json": {
+      "size": 269,
+      "sha256": "acc2b2c9b756b02d0c3a2ddaa0acc23bda9c47d2e80623eee4a4711ec95a8b60",
+      "srcVerifiedImmediately": true
+    },
+    "behavior.test.mjs": {
+      "size": 8273,
+      "sha256": "bc0061c02f299746702b470ef98d6cdebc9516355e099551681f80c6d0b01720",
+      "srcVerifiedImmediately": true
+    },
+    "build.mjs": {
+      "size": 1229,
+      "sha256": "9f34f9bf9986fc80877db4193371e0ec9a927126a8f9730bb0d39df0fd20dc51",
+      "srcVerifiedImmediately": true
+    },
+    "publish.mjs": {
+      "size": 1931,
+      "sha256": "a5af62d3de1edf436678110904ad85d726009d7f8d79b29a3248a4a337a56e8a",
+      "srcVerifiedImmediately": true
+    },
+    "README.md": {
+      "size": 8859,
+      "sha256": "f3801e8e9c113620d1807db7c424729352ce1877292fcf33b7d61a4266432567",
+      "srcVerifiedImmediately": true
+    },
+    "API_REQUESTS.md": {
+      "size": 2671,
+      "sha256": "b65a297436cdd92fd8efe05257b32de57a9aab2f3a4d1038faef7eeac2c7dedc",
+      "srcVerifiedImmediately": true
+    },
+    "dist/main.js": {
+      "size": 31203,
+      "sha256": "98d869c97ef6bda18a5375058a28c62ec97b7d0c6a218bd1f4542ce8c046b1bd",
+      "srcVerifiedImmediately": true
+    },
+    "dist/manifest.json": {
+      "size": 286,
+      "sha256": "df4793c35eee706cae550206fa7311586b4d12cc98e557dc99dff867189919d1",
+      "srcVerifiedImmediately": true
+    },
+    "dist/capture.slint": {
+      "size": 7708,
+      "sha256": "518586219c94d23938dc7c6d8bb462270ff8cebc5406098aa92323c56474b849",
+      "srcVerifiedImmediately": true
+    },
+    "dist/capture-error.slint": {
+      "size": 448,
+      "sha256": "b7408c565ec1e655ea8813271af720dccdc055360fba821785e6671a6b2c2c11",
+      "srcVerifiedImmediately": true
+    }
+  }
+}

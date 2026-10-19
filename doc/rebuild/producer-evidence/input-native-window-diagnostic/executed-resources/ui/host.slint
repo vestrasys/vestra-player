@@ -1,0 +1,87 @@
+import { Button } from "std-widgets.slint";
+import { MenuView, MenuRow } from "menu-view.slint";
+export component HostWindow inherits Window {
+    title: "Vestra · experimental host";
+    preferred-width: 1100px; preferred-height: 720px;
+    min-width: 720px; min-height: 480px;
+    background: #111318;
+    default-font-family: "Arial Unicode MS";
+    in-out property <image> video-frame;
+    in property <string> diagnostic: "Starting libmpv…";
+    in property <[MenuRow]> menu-entries;
+    in property <bool> menu-can-back: false;
+    callback menu-invoke(string);
+    callback menu-reset();
+    callback menu-back();
+    callback menu-dismiss();
+    in property <bool> host-fullscreen: false;
+    in property <bool> menu-open: false;
+    in property <bool> input-blocked: false;
+    out property <bool> canvas-focused: canvas.has-focus;
+    in property <float> sidebar-width: 280;
+    out property <float> logical-width: root.width / 1px;
+    out property <float> logical-height: root.height / 1px;
+    out property <float> canvas-space-width: canvas-row.width / 1px;
+    out property <float> canvas-space-height: canvas-row.height / 1px;
+    callback window-input(string);
+    callback close-menu();
+    close-menu => { canvas.focus(); }
+    // VESTRA-MOUNT-PROPERTIES
+    VerticalLayout {
+        padding: root.host-fullscreen ? 0px : 8px;
+        HorizontalLayout {
+            visible: !root.host-fullscreen; min-height: root.host-fullscreen ? 0px : 36px; max-height: root.host-fullscreen ? 0px : 36px;
+            Button { text: "Commands"; clicked => { root.menu-reset(); } }
+            Text { text: "Shared command tree · right-click video"; color: #cad1dd; }
+        }
+        // VESTRA-MOUNT-CANVAS-BEGIN
+        canvas := FocusScope {
+            changed has-focus => { if !self.has-focus { root.window-input("canvasFocusLost"); } }
+            key-pressed(event) => {
+                if event.text == Key.F11 { root.window-input("toggleFullscreen"); return accept; }
+                if event.text == Key.Escape { root.window-input("escape"); return accept; }
+                root.window-input("activity");
+                reject
+            }
+            Rectangle {
+                width: parent.width; height: parent.height;
+                background: #111318;
+                Image { width: parent.width; height: parent.height; source: root.video-frame; image-fit: contain; }
+                TouchArea {
+                    changed mouse-x => { root.window-input("activity"); }
+                    changed mouse-y => { root.window-input("activity"); }
+                    pointer-event(event) => {
+                    if event.kind == PointerEventKind.down {
+                        canvas.focus(); root.window-input("activity");
+                        if event.button == PointerEventButton.left { root.window-input("capture"); }
+                    }
+                    if event.button == PointerEventButton.right && event.kind == PointerEventKind.down {
+                        root.menu-reset();
+                    }
+                } }
+            }
+        }
+        // VESTRA-MOUNT-CANVAS-END
+        Text { text: root.diagnostic; color: #cad1dd; visible: !root.host-fullscreen; min-height: root.host-fullscreen ? 0px : 26px; max-height: root.host-fullscreen ? 0px : 26px; }
+        // VESTRA-MOUNT-BOTTOM
+    }
+    if root.menu-open: Rectangle {
+        width: root.width; height: root.height;
+        background: transparent;
+        TouchArea {
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.down { root.menu-dismiss(); }
+            }
+        }
+        MenuView {
+            x: 8px; y: 40px;
+            width: min(500px, root.width - 16px);
+            height: min(400px, root.height - 48px);
+            rows: root.menu-entries;
+            can-go-back: root.menu-can-back;
+            activated(token) => { root.menu-invoke(token); }
+            back => { root.menu-back(); }
+            dismissed => { root.menu-dismiss(); }
+        }
+    }
+}

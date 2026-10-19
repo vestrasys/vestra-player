@@ -1,0 +1,49 @@
+{
+  "status": "fixed-font candidate; backend selection, coverage and lease not yet validated",
+  "upstreamRepository": "https://github.com/notofonts/noto-cjk",
+  "upstreamCommit": "f8d157532fbfaeda587e826d4cd5b21a49186f7c",
+  "font": {
+    "file": "NotoSansCJKsc-Regular.otf",
+    "upstreamPath": "Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf",
+    "upstreamUrl": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf",
+    "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+    "sizeBytes": 16437364,
+    "format": "OpenType/CFF",
+    "faceIndex": 0,
+    "isCollection": false,
+    "isVariable": false,
+    "nameTable": {
+      "0": [
+        "© 2014-2021 Adobe (http://www.adobe.com/)."
+      ],
+      "1": [
+        "Noto Sans CJK SC"
+      ],
+      "2": [
+        "Regular"
+      ],
+      "4": [
+        "Noto Sans CJK SC"
+      ],
+      "5": [
+        "Version 2.004;hotconv 1.0.118;makeotfexe 2.5.65603"
+      ],
+      "6": [
+        "NotoSansCJKsc-Regular"
+      ]
+    }
+  },
+  "license": {
+    "spdxId": "OFL-1.1",
+    "file": "LICENSE",
+    "upstreamUrl": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/LICENSE",
+    "sha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2",
+    "sizeBytes": 4301
+  },
+  "verification": {
+    "method": "Python standard-library SHA-256 and direct sfnt name-table inspection; no renderer or font selection invoked",
+    "glyphCoverageChecked": false,
+    "backendFontSelected": false,
+    "fontLeaseImplemented": false
+  }
+}
