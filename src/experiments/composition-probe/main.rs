@@ -53,6 +53,8 @@ mod source_backend;
 mod source_geometry;
 #[path = "../../host/src/source_lease.rs"]
 pub mod source_lease;
+#[path = "../../host/src/source_resolvers.rs"]
+mod source_resolvers;
 #[path = "../../host/src/subtitle_backend.rs"]
 mod subtitle_backend;
 #[path = "../../host/src/subtitle_format.rs"]
@@ -98,6 +100,8 @@ struct Reply {
 enum Event {
     Reply(Reply, std::result::Result<Value, RpcError>),
     Broadcast(String, Value),
+    PluginMessage(u64, String, Value),
+    BackendCleaned(u64),
 }
 fn main() -> Result<()> {
     let args: Vec<_> = std::env::args().collect();
@@ -163,6 +167,10 @@ fn main() -> Result<()> {
                             eprintln!("{name}: {data}")
                         }
                     }
+                    Event::PluginMessage(owner, name, data) => {
+                        eprintln!("plugin message {owner} {name}: {data}")
+                    }
+                    Event::BackendCleaned(owner) => eprintln!("backend cleaned {owner}"),
                 }
             }
             if let Some(window) = weak.upgrade() {

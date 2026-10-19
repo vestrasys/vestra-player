@@ -58,8 +58,8 @@ export async function activate(host      ) {
       if (event.callback === 'gain-changed') {
         const index = event.args[0];
         if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index >= settings.gains.length) return;
-        settings.gains[index] = Math.round(clamp(event.args[1], -12, 12) * 10) / 10;
-      } else if (event.callback === 'delay-changed') settings.delayMs = Math.round(clamp(event.args[0], -2000, 2000));
+        settings.gains[index] = Math.round(clamp(event.args[1], -6, 6) * 10) / 10;
+      } else if (event.callback === 'delay-changed') settings.delayMs = Math.round(clamp(event.args[0], -2000, 2000) / 10) * 10;
       else if (event.callback === 'normalize-changed') settings.normalize = event.args[0] === true;
       else if (event.callback === 'clarity-changed') settings.clarity = Math.round(clamp(event.args[0], 0, 6) * 10) / 10;
       else if (event.callback === 'preset-selected') { preset(Number(event.args[0])); return; }

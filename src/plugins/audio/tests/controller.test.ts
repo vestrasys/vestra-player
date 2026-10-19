@@ -4,7 +4,7 @@ import type { Host } from '../../../sdk/index.ts';
 import { AudioController } from '../controller.ts';
 import { neutral } from '../model.ts';
 type Source = Awaited<ReturnType<Host['source']['state']>>;
-type Change = Parameters<Host['processing']['replace']>[0];
+type Change = Extract<Parameters<Host['processing']['replace']>[0], { stage: 'audio' }>;
 const source = (generation=1, track=1, eventSequence=1) => ({stamp:{generation,intentVersion:1},phase:'ready',eventSequence,audioTracks:[{trackId:track,selected:true}]}) as Source;
 const tick = () => new Promise(resolve=>setImmediate(resolve));
 function rig() {
@@ -57,4 +57,11 @@ test('old unknown operation failure after track change unblocks current neutral 
 });
 test('stale event sequences cannot restore an older source',()=>{
  const r=rig();r.controller.source(source(3,1,20));r.controller.source(source(2,1,19));r.controller.edit({...neutral(),delayMs:100});assert.equal(r.calls[0]!.expectedGeneration,3);
+});
+test('never-admitted (unknown) rejection reports the error and does not block later edits',async()=>{
+ const r=rig();r.outcome({status:'unknown'});r.controller.edit({...neutral(),delayMs:105});r.pending[0]!.reject();await tick();
+ assert.equal(r.controller.failed,true);assert.equal(r.controller.status,'transport timeout');r.controller.source(source(1,1,2));
+ assert.notEqual(r.controller.status,'上一操作结果待确认，请检查状态');
+ void r.controller.retry();await tick();assert.equal(r.calls.length,2);
+ r.pending[1]!.resolve();await tick();r.controller.edit({...neutral(),delayMs:200});assert.equal(r.calls.length,3);assert.equal(r.calls[2]!.offsetMs,200);
 });

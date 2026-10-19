@@ -23,6 +23,10 @@ pub struct Manifest {
     pub capabilities: Vec<String>,
     /// Production packages carry a version; direct debug loading ignores it.
     #[serde(default, skip_serializing)]
+    #[allow(
+        dead_code,
+        reason = "accepted for deny_unknown_fields; not read by the runtime"
+    )]
     pub version: Option<String>,
 }
 /// Bounded per-plugin output queue. Source state alone emits ~10 events/s while playing,

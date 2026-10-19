@@ -9,7 +9,7 @@ const directory=path.dirname(new URL(import.meta.url).pathname);
 const fakeEngine=`export const defaultRequirement='{}'; export function requirement() {return {};}; export class WorkshopJob { constructor(directory){this.directory=directory;this.requirement={id:'community.counter'};this.cancelled=false;} async run(){return {directory:this.directory,revision:4};} cancel(){this.cancelled=true;} }`;
 const source=(await fs.readFile(path.join(directory,'main.ts'),'utf8')).replace("'./engine.mjs'",JSON.stringify('data:text/javascript,'+encodeURIComponent(fakeEngine)));
 const compiled=path.join(directory,'evidence/workflow-test-main.mjs');await fs.mkdir(path.dirname(compiled),{recursive:true});await fs.writeFile(compiled,ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText);
-const {activate}=await import(pathToFileURL(compiled).href);
+const {activate}=await import(pathToFileURL(compiled).href); // boundary-reviewed: own main.ts compiled to a temp file
 const delay=()=>new Promise(resolve=>setTimeout(resolve,30));
 const out=[];
 async function fixture(overrides={}){

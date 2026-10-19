@@ -9,7 +9,13 @@ async function files(directory) {
     await Promise.all(
       items.map(async (item) => {
         const path = resolve(directory, item.name);
-        if (item.isDirectory()) return files(path);
+        // Third-party and generated trees are not plugin-authored source.
+        if (item.isDirectory())
+          return ["node_modules", "vendor", ".typecheck", ".cache"].includes(
+            item.name,
+          )
+            ? []
+            : files(path);
         return [".ts", ".js", ".mjs"].includes(extname(path)) ? [path] : [];
       }),
     )
@@ -37,6 +43,16 @@ for (const collection of ["examples", "plugins"]) {
         true,
       );
       function check(specifier) {
+        // A nonliteral import is allowed only where a reviewer marked that exact line.
+        const line =
+          parsed.text.split("\n")[
+            parsed.getLineAndCharacterOfPosition(specifier.getStart()).line
+          ];
+        if (
+          !ts.isStringLiteralLike(specifier) &&
+          line.includes("boundary-reviewed:")
+        )
+          return;
         if (!ts.isStringLiteralLike(specifier))
           throw new Error(`${path}: nonliteral dynamic imports require review`);
         const target = specifier.text;

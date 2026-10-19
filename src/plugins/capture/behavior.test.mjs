@@ -5,7 +5,7 @@ const slint = await readFile(new URL('./dist/capture.slint', import.meta.url), '
 const declaredCallbacks = new Set([...slint.matchAll(/callback\s+([\w-]+)\s*\(/g)].map(match=>match[1]));
 const code = await readFile(new URL('./dist/main.js', import.meta.url), 'utf8');
 assert.doesNotMatch(code, /from\s+["'].*sdk/);
-const {activate,sameStamp,parseRange}=await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const {activate,sameStamp,parseRange}=await import('./dist/main.js');
 assert.equal(sameStamp({generation:1,intentVersion:2},{generation:1,intentVersion:3}),false);
 assert.equal(sameStamp({generation:1,intentVersion:2},{generation:2,intentVersion:2}),false);
 assert.equal(sameStamp({generation:1,intentVersion:2},{generation:1,intentVersion:2}),true);
@@ -30,7 +30,7 @@ console.log('capture range, generation/intent, production import, async duplicat
 const { mkdtemp,writeFile,rm } = await import('node:fs/promises');
 const { join } = await import('node:path');
 const { tmpdir } = await import('node:os');
-const full = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const full = await import('./dist/main.js?fresh');
 assert.deepEqual(full.sampleTimes(1,5,.5,10),[1,1.5,2,2.5,3]);
 for(const v of [[0,1,1,10],[0,21,1,100],[0,5,.01,10],[9,2,1,10]])assert.throws(()=>full.sampleTimes(...v));
 const folder = await mkdtemp(join(tmpdir(),'capture-author-fs-'));

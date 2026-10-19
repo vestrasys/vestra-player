@@ -8,9 +8,11 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true,
-    "types": [
-      "node"
-    ]
+    "types": ["node"],
+    "skipLibCheck": true,
+    "paths": {
+      "jsnes": ["./plugins/nes/node_modules/jsnes/src/nes.d.ts"]
+    }
   },
   "include": [
     "sdk/**/*.ts",
@@ -18,5 +20,6 @@
     "examples/**/*.ts",
     "plugins/**/*.ts",
     "tests/**/*.ts"
-  ]
+  ],
+  "exclude": ["**/node_modules/**", "**/vendor/**", "**/dist/**"]
 }
