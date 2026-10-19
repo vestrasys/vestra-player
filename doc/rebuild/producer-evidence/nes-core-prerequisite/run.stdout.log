@@ -1,0 +1,3 @@
+(node:11749) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"pass":true,"warmup":{"frames":360,"audioFrames":287534,"peak":0.762664794921875,"nonzero":1630,"distinctFrames":4},"stateBytes":1060977,"frameSequenceExact":true,"audioCountsExact":true,"audioSamplesExact":true,"wallSeconds":0.683334458}

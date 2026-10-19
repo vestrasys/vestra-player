@@ -1,0 +1,12 @@
+{
+  "binary": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-packages-sflrUc/frozen/Contents/MacOS/host",
+  "sha256": "918bbc7a4766b29c370aafc8820c5b6bca935efe55a4e73664b4404784c92450",
+  "consumerSha256": "aaedb61aa2134aeac4b3b1f145ddf4cb7cf91dd64599367fbf3a8c3db6bb7921",
+  "harnessSha256": "330a8a23c32f84897115e29002bc22512cf9336503ba963eec2763b9c447ac65",
+  "limits": [
+    "Headless: no native window/button/focus claims.",
+    "Slint file compilation only.",
+    "No crash recovery/failure injection/fsync fault coverage.",
+    "Finite 512 retained request receipts is an explicit experimental capacity."
+  ]
+}

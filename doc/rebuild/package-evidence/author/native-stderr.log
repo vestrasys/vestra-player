@@ -1,0 +1,13 @@
+runtime 2 runtime.ready: null
+runtime 3 runtime.ready: null
+Error: intentional bad activation
+    at Module.activate (file:///private/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-packages-DQ91KP/store/packages/b4acdaf10538edb4a08b1e4698ac51d78a1fa484dd87362037eb3ae2e8d5719d/main.mjs:1:433)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async file:///private/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-packages-DQ91KP/Package%20Proof.app/Contents/Resources/runtime/runner.ts:130:13
+runtime 4 runtime.failed: {"code":"activationFailed","message":"Error: intentional bad activation"}
+plugin 4: plugin stdin: Broken pipe (os error 32)
+runtime 5 runtime.ready: null
+runtime 6 runtime.ready: null
+runtime 7 runtime.ready: null
+runtime 8 runtime.ready: null
+runtime 1 runtime.ready: null

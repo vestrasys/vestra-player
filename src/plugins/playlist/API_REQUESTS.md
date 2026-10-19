@@ -1,0 +1,7 @@
+# Playlist public API consumption
+
+SITE-01 consumer revision, 2026-10-19: the public source registry is now available. The former local hardcoded "provider unavailable" branch is removed. `main.ts` `openRow` submits the stored original URL with `kind:"open"`, `startPaused:false`, a stable numeric operation ID, and the natural-next `expected` stamp when applicable. Only file rows enter filesystem realpath identity checks. Both local and URL opens consume the same public ticket/state/recovery path.
+
+The host owns resolver matching, operation/ticket association, cancellation, public source identity and expected-stamp validation through final media submission. Providers own extraction/media descriptions. This package owns queue/order/selection and preserves entered URLs; it never reads another plugin, calls a site command, or receives/stores private CDN URLs, headers or cookies. Missing-provider/error results come from public source failure, retaining the row for explicit retry. Timeout recovery queries the same operation ID, with one recovery request in flight.
+
+No new public API request for this revision. The maintainer/root reports controlled shared resolver split-AV/headers/CAS checks separately; package mock tests do not establish real site playback. Production combined loading, actual URL/provider playback, native focus/scroll and continuity remain integration/acceptance work.

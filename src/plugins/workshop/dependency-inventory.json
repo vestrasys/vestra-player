@@ -1,0 +1,36 @@
+[
+  {
+    "name": "typebox",
+    "version": "1.3.27",
+    "license": "MIT",
+    "licenseFiles": [
+      "license"
+    ]
+  },
+  {
+    "name": "@earendil-works/pi-ai",
+    "version": "1.3.0",
+    "license": "MIT",
+    "licenseFiles": [
+      "LICENSE"
+    ],
+    "licenseProvenance": "official upstream v1.3.0 license, copied from current prerequisite experiment"
+  },
+  {
+    "name": "partial-json",
+    "version": "0.1.7",
+    "license": "MIT",
+    "licenseFiles": [
+      "LICENSE"
+    ]
+  },
+  {
+    "name": "@earendil-works/pi-agent-core",
+    "version": "1.3.0",
+    "license": "MIT",
+    "licenseFiles": [
+      "LICENSE"
+    ],
+    "licenseProvenance": "official upstream v1.3.0 license, copied from current prerequisite experiment"
+  }
+]

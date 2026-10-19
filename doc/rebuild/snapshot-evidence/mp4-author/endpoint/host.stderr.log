@@ -1,0 +1,4 @@
+source geometry prepare entry=1 generation=1 cycle=1 decoder=320x180 rotate=0 filter=@vestra-orientation:lavfi=[null,sidedata=mode=delete:type=DISPLAYMATRIX]
+source geometry ready entry=1 generation=1 cycle=1 output=320x180 rotate=0
+MEDIA_RANGE_DONE
+runtime 1 runtime.ready: null

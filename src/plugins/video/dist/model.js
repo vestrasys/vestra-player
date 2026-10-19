@@ -1,0 +1,32 @@
+export const defaults = { brightness: 0, contrast: 0, saturation: 0, gamma: 0, blurEnabled: false, blurStrength: 3 };
+export const presets = { original: { ...defaults }, vivid: { ...defaults, contrast: 15, saturation: 20 }, cinema: { ...defaults, contrast: 8, saturation: -12, gamma: -5 }, soft: { ...defaults, contrast: -8, blurEnabled: true, blurStrength: 1.5 } };
+export const clamp = (n, min, max) => Math.min(max, Math.max(min, Number.isFinite(n) ? n : min));
+export function nodesFor(p) { const nodes = [{ kind: 'eq', brightness: clamp(p.brightness, -100, 100) / 100, contrast: 2 ** (clamp(p.contrast, -100, 100) / 100), saturation: 1 + clamp(p.saturation, -100, 100) / 100, gamma: 2 ** (clamp(p.gamma, -100, 100) / 100) }]; if (p.blurEnabled && p.blurStrength > 0)
+    nodes.push({ kind: 'gblur', sigma: clamp(p.blurStrength, 0, 20), steps: 3 }); return nodes; }
+export class Latest {
+    pending;
+    running = false;
+    stopped = false;
+    apply;
+    failed;
+    constructor(apply, failed) { this.apply = apply; this.failed = failed; }
+    submit(value) { if (this.stopped)
+        return; this.pending = { value }; if (!this.running)
+        void this.drain(); }
+    stop() { this.stopped = true; this.pending = undefined; }
+    async drain() { this.running = true; try {
+        while (this.pending && !this.stopped) {
+            const { value } = this.pending;
+            this.pending = undefined;
+            try {
+                await this.apply(value);
+            }
+            catch (e) {
+                this.failed(e);
+            }
+        }
+    }
+    finally {
+        this.running = false;
+    } }
+}

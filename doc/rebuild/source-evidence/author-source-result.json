@@ -1,0 +1,168 @@
+{
+  "pass": true,
+  "failed": {
+    "capabilities": {
+      "close": true,
+      "pause": false,
+      "rate": false,
+      "restart": true,
+      "seek": false
+    },
+    "cycle": 1,
+    "duration": null,
+    "eventSequence": 2,
+    "loadingOwner": null,
+    "output": {
+      "muted": false,
+      "volume": 100
+    },
+    "paused": false,
+    "phase": "error",
+    "position": null,
+    "rate": 1,
+    "source": "/tmp/vestra-no-such-file",
+    "stamp": {
+      "generation": 1,
+      "intentVersion": 1
+    },
+    "terminalReason": {
+      "failed": "Some(LoadingFailed)"
+    }
+  },
+  "ready": {
+    "capabilities": {
+      "close": true,
+      "pause": true,
+      "rate": true,
+      "restart": true,
+      "seek": true
+    },
+    "cycle": 3,
+    "duration": 0.7,
+    "eventSequence": 6,
+    "loadingOwner": null,
+    "output": {
+      "muted": false,
+      "volume": 100
+    },
+    "paused": false,
+    "phase": "ready",
+    "position": 0.06699999999999999,
+    "rate": 1,
+    "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-source-sTUkjl/short.mkv",
+    "stamp": {
+      "generation": 3,
+      "intentVersion": 3
+    },
+    "terminalReason": null
+  },
+  "ended": {
+    "capabilities": {
+      "close": true,
+      "pause": true,
+      "rate": true,
+      "restart": true,
+      "seek": true
+    },
+    "cycle": 3,
+    "duration": 0.7,
+    "eventSequence": 47,
+    "loadingOwner": null,
+    "output": {
+      "muted": false,
+      "volume": 100
+    },
+    "paused": false,
+    "phase": "ended",
+    "position": 0.6669999999999999,
+    "rate": 1,
+    "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-source-sTUkjl/short.mkv",
+    "stamp": {
+      "generation": 3,
+      "intentVersion": 3
+    },
+    "terminalReason": "natural"
+  },
+  "restarted": {
+    "capabilities": {
+      "close": true,
+      "pause": true,
+      "rate": true,
+      "restart": true,
+      "seek": true
+    },
+    "cycle": 4,
+    "duration": 0.7,
+    "eventSequence": 51,
+    "loadingOwner": null,
+    "output": {
+      "muted": false,
+      "volume": 100
+    },
+    "paused": false,
+    "phase": "ready",
+    "position": 0.06699999999999999,
+    "rate": 1,
+    "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-source-sTUkjl/short.mkv",
+    "stamp": {
+      "generation": 3,
+      "intentVersion": 4
+    },
+    "terminalReason": null
+  },
+  "paused": {
+    "capabilities": {
+      "close": true,
+      "pause": true,
+      "rate": true,
+      "restart": true,
+      "seek": true
+    },
+    "cycle": 4,
+    "duration": 0.7,
+    "eventSequence": 53,
+    "loadingOwner": null,
+    "output": {
+      "muted": false,
+      "volume": 100
+    },
+    "paused": true,
+    "phase": "ready",
+    "position": 0.06699999999999999,
+    "rate": 1,
+    "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-source-sTUkjl/short.mkv",
+    "stamp": {
+      "generation": 3,
+      "intentVersion": 5
+    },
+    "terminalReason": null
+  },
+  "empty": {
+    "capabilities": {
+      "close": false,
+      "pause": false,
+      "rate": false,
+      "restart": false,
+      "seek": false
+    },
+    "cycle": 4,
+    "duration": null,
+    "eventSequence": 57,
+    "loadingOwner": null,
+    "output": {
+      "muted": false,
+      "volume": 100
+    },
+    "paused": true,
+    "phase": "empty",
+    "position": null,
+    "rate": 1,
+    "source": null,
+    "stamp": {
+      "generation": 3,
+      "intentVersion": 6
+    },
+    "terminalReason": "stopped"
+  },
+  "events": 9
+}

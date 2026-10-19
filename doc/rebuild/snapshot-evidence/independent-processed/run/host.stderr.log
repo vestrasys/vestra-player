@@ -1,0 +1,12 @@
+source geometry prepare entry=1 generation=1 cycle=1 decoder=640x360 rotate=0 filter=@vestra-orientation:lavfi=[null,sidedata=mode=delete:type=DISPLAYMATRIX]
+source geometry ready entry=1 generation=1 cycle=1 output=640x360 rotate=0
+libmpv sub/ass: Loading font file '/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-font-EJ8mp8/NotoSansCJKsc-Regular.otf'
+runtime 2 runtime.ready: null
+libmpv sub/ass: Loading font file '/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-font-EJ8mp8/NotoSansCJKsc-Regular.otf'
+source geometry prepare entry=2 generation=2 cycle=2 decoder=640x360 rotate=0 filter=@vestra-orientation:lavfi=[null,sidedata=mode=delete:type=DISPLAYMATRIX]
+source geometry ready entry=2 generation=2 cycle=2 output=640x360 rotate=0
+libmpv sub/ass: Loading font file '/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-font-EJ8mp8/NotoSansCJKsc-Regular.otf'
+libmpv sub/ass: Loading font file '/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-font-EJ8mp8/NotoSansCJKsc-Regular.otf'
+libmpv sub/ass: Loading font file '/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-subtitle-font-EJ8mp8/NotoSansCJKsc-Regular.otf'
+MEDIA_PROCESSED_REVIEW_DONE
+runtime 1 runtime.ready: null

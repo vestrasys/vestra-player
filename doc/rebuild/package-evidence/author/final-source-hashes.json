@@ -1,0 +1,20 @@
+{
+  "baseline": "development-2026-10-18.1",
+  "wire": "vestra.experimental/0.1",
+  "sha256": {
+    "src/host/src/main.rs": "a89f58099294bb905acdd9a1178206ba410f43476ee02e5327f63393539951f5",
+    "src/host/src/backend.rs": "108a835cfeb8c0af61eba9d3fa12c178c8414540edffeac62edaf5607750f56b",
+    "src/host/src/plugins.rs": "e4163a6ed7abd5c1323e40d7a8347e367f047a1705be4f50bfbc6f8ec23e24f3",
+    "src/host/src/package_manager.rs": "b47edf24e80d28a7ad2a41143da2f7b37c0b1314c9ff8e5c51becee9374a5a97",
+    "src/host/src/package_store.rs": "4ad3d44984767a7e6d8cf98665ddb32c4d833dc8c3ea897930316cbe347df1dd",
+    "src/host/src/package_stage.rs": "da7500d0c6ca99e6619d424eea3303118f9d1f7e23c49569cfe3693330c139e0",
+    "src/host/src/package_activation.rs": "65cb77da64fb9aed6f836babea639b85850f7701abff144cc1ed91adaa7ec709",
+    "src/host/src/producer_input.rs": "f89d148a7f1df56e6a3517b7a6df824b030a9d1cb0b2d688a52819bf491b70c9",
+    "src/sdk/index.ts": "1c03bee260ae537a8da38cd66e304c1b8f19573ff8f7b66c14424a056bfc6cb7",
+    "src/sdk/producer.ts": "4adeac37344e9522a4fd21d5a8094fc4e6808fcd17a0157accdaef72b7da0781",
+    "src/runtime/runner.ts": "9b38159617211c347a4f0fb44d4308721815b7a61c522d3d95fba198eb6fbbcc",
+    "src/scripts/verify-packages.mjs": "c0f9295945ad129521c810afb654ea77e054aef27199ce3b3f866ce9137e5e22",
+    "src/tsconfig.json": "52e6b89640f654194ae89ae1f385d95fc5fb8889842542449a0921cd45e4c5f7",
+    "src/host/target/debug/vestra-host": "3379c2ddf7b2afafdaa9dd21b472a53f04d0265a933870c72de2a7c4f1bb9cef"
+  }
+}

@@ -1,0 +1,21 @@
+[
+  {
+    "directory": "/tmp/vestra-product-slices-UXVLl0/packages/0",
+    "source": "/Users/ziyang/Documents/vestra-player/src/plugins/playback/dist",
+    "manifest": {
+      "id": "vestra.playback",
+      "apiVersion": "vestra.experimental/0.1",
+      "entry": "main.js",
+      "capabilities": [
+        "ui.mount",
+        "ui.window",
+        "ui.dialog",
+        "playback.read",
+        "playback.control",
+        "events",
+        "commands"
+      ],
+      "version": "0.1.0"
+    }
+  }
+]

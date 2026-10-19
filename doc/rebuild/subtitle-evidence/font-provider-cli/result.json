@@ -1,0 +1,204 @@
+{
+  "command": [
+    "mpv",
+    "--sub-font-provider=none",
+    "--embeddedfonts=no",
+    "--sub-font=Arial",
+    "--sub-fonts-dir=/tmp/vestra-vtt-literal-tt4a0jj9/fonts",
+    "--log-file=/tmp/vestra-vtt-literal-tt4a0jj9/mpv-internal.log",
+    "--msg-level=all=v",
+    "--no-config",
+    "--no-terminal",
+    "--pause=yes",
+    "--keep-open=yes",
+    "--sub-auto=no",
+    "--vo=null",
+    "--ao=null",
+    "--sub-file=/tmp/vestra-vtt-literal-tt4a0jj9/literal.vtt",
+    "--input-ipc-server=/tmp/vestra-vtt-literal-tt4a0jj9/ipc",
+    "/Users/ziyang/Documents/vestra-player/doc/rebuild/subtitle-evidence/backend-cli/fixture.mkv"
+  ],
+  "work": "/tmp/vestra-vtt-literal-tt4a0jj9",
+  "exitCode": 0,
+  "expectedLiteral": "literal <b>B</b> {\\b1}X{\\b0} \\N END",
+  "encodedText": "literal &lt;b&gt;B&lt;/b&gt; {\\b1}X{\\b0} \\N END",
+  "observations": {
+    "pause": {
+      "data": true,
+      "request_id": 3,
+      "error": "success"
+    },
+    "time-pos": {
+      "data": 0.0,
+      "request_id": 4,
+      "error": "success"
+    },
+    "sid": {
+      "data": 1,
+      "request_id": 5,
+      "error": "success"
+    },
+    "track-list": {
+      "data": [
+        {
+          "id": 1,
+          "type": "video",
+          "src-id": 1,
+          "image": false,
+          "albumart": false,
+          "default": false,
+          "forced": false,
+          "dependent": false,
+          "visual-impaired": false,
+          "hearing-impaired": false,
+          "external": false,
+          "selected": true,
+          "main-selection": 0,
+          "ff-index": 0,
+          "decoder": "h264",
+          "decoder-desc": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+          "codec": "h264",
+          "codec-desc": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+          "codec-profile": "High",
+          "demux-w": 640,
+          "demux-h": 360,
+          "demux-fps": 30.0,
+          "demux-par": 1.0,
+          "metadata": {
+            "ENCODER": "Lavc63.1.102 libx264",
+            "DURATION": "00:00:08.000000000"
+          }
+        },
+        {
+          "id": 1,
+          "type": "audio",
+          "src-id": 2,
+          "audio-channels": 1,
+          "image": false,
+          "albumart": false,
+          "default": false,
+          "forced": false,
+          "dependent": false,
+          "visual-impaired": false,
+          "hearing-impaired": false,
+          "external": false,
+          "selected": true,
+          "main-selection": 0,
+          "ff-index": 1,
+          "decoder": "aac",
+          "decoder-desc": "AAC (Advanced Audio Coding)",
+          "codec": "aac",
+          "codec-desc": "AAC (Advanced Audio Coding)",
+          "codec-profile": "LC",
+          "demux-channel-count": 1,
+          "demux-channels": "mono",
+          "demux-samplerate": 44100,
+          "metadata": {
+            "ENCODER": "Lavc63.1.102 aac",
+            "DURATION": "00:00:08.023000000"
+          }
+        },
+        {
+          "id": 1,
+          "type": "sub",
+          "title": "literal.vtt",
+          "image": false,
+          "albumart": false,
+          "default": false,
+          "forced": false,
+          "dependent": false,
+          "visual-impaired": false,
+          "hearing-impaired": false,
+          "external": true,
+          "selected": true,
+          "main-selection": 0,
+          "external-filename": "/tmp/vestra-vtt-literal-tt4a0jj9/literal.vtt",
+          "ff-index": 0,
+          "decoder": "webvtt",
+          "decoder-desc": "WebVTT subtitle",
+          "codec": "webvtt",
+          "codec-desc": "WebVTT subtitle",
+          "codec-profile": "Advanced Sub Station Alpha"
+        }
+      ],
+      "request_id": 6,
+      "error": "success"
+    },
+    "sub-text": {
+      "data": "literal <b>B</b> \\\\\u2060b1}X\\\\\u2060b0} \\\u2060N END",
+      "request_id": 7,
+      "error": "success"
+    },
+    "sub-text-ass": {
+      "data": "literal <b>B</b> \\{{}\\\u2060b1}X\\{{}\\\u2060b0} \\\u2060N END",
+      "request_id": 8,
+      "error": "success"
+    },
+    "sub-font-provider": {
+      "data": "none",
+      "request_id": 9,
+      "error": "success"
+    },
+    "embeddedfonts": {
+      "data": false,
+      "request_id": 10,
+      "error": "success"
+    },
+    "sub-font": {
+      "data": "Arial",
+      "request_id": 11,
+      "error": "success"
+    },
+    "sub-fonts-dir": {
+      "data": "/tmp/vestra-vtt-literal-tt4a0jj9/fonts",
+      "request_id": 12,
+      "error": "success"
+    },
+    "screenshot": {
+      "data": null,
+      "request_id": 13,
+      "error": "success"
+    },
+    "quit": {
+      "data": null,
+      "request_id": 14,
+      "error": "success"
+    }
+  },
+  "literalTextPropertyMatches": false,
+  "limits": [
+    "A matching text property alone is not a visual fidelity fence.",
+    "Standalone CLI only; no actual host/SDK integration.",
+    "No immutable font lease or cross-renderer pixel parity established.",
+    "FFmpeg fontsdir adds fonts; its standard filter still uses automatic system fallback."
+  ],
+  "font": {
+    "path": "/System/Library/Fonts/Supplemental/Arial.ttf",
+    "sha256": "525979822591a3447cfc49d943d6f7683508e25543407871c0ed8fed05fd2bd9",
+    "size": 773236,
+    "distribution": "System font symlink only; not copied"
+  },
+  "offline": {
+    "command": [
+      "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+      "-hide_banner",
+      "-loglevel",
+      "verbose",
+      "-i",
+      "/Users/ziyang/Documents/vestra-player/doc/rebuild/subtitle-evidence/backend-cli/fixture.mkv",
+      "-vf",
+      "subtitles=filename=/tmp/vestra-vtt-literal-tt4a0jj9/literal.vtt:fontsdir=/tmp/vestra-vtt-literal-tt4a0jj9/fonts:force_style='FontName=Arial'",
+      "-frames:v",
+      "1",
+      "-y",
+      "/tmp/vestra-vtt-literal-tt4a0jj9/offline.png"
+    ],
+    "exitCode": 0,
+    "fontSelection": [
+      "[Parsed_subtitles_0 @ 0x75f00e580] fontselect: (Arial, 400, 0) -> ArialMT, 0, ArialMT"
+    ]
+  },
+  "mpvFontSelection": [
+    "[   0.340][v][sub/ass] fontselect: (Arial, 400, 0) -> ArialMT, 0, ArialMT"
+  ]
+}

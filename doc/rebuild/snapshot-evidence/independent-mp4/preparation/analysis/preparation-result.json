@@ -1,0 +1,151 @@
+{
+  "prepared": true,
+  "hostRun": false,
+  "work": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-prepare-vv4LJI",
+  "sourceDuration": 12,
+  "sampleRate": 48000,
+  "clip": {
+    "start": 4,
+    "end": 8
+  },
+  "signals": {
+    "a-0": {
+      "frequency": 440,
+      "rawPath": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-prepare-vv4LJI/fixtures/a-track0.f32",
+      "samples": 576000,
+      "rms": 0.21039818871552218
+    },
+    "a-1": {
+      "frequency": 880,
+      "rawPath": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-prepare-vv4LJI/fixtures/a-track1.f32",
+      "samples": 576000,
+      "rms": 0.22273047789068687
+    },
+    "b-0": {
+      "frequency": 660,
+      "rawPath": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-prepare-vv4LJI/fixtures/b-track0.f32",
+      "samples": 576000,
+      "rms": 0.21039832242747533
+    },
+    "b-1": {
+      "frequency": 1320,
+      "rawPath": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-prepare-vv4LJI/fixtures/b-track1.f32",
+      "samples": 576000,
+      "rms": 0.2227305181152524
+    }
+  },
+  "decoded": [
+    {
+      "track": 0,
+      "sourceDecodedSamples": 576000,
+      "sourceDecodedSeconds": 12,
+      "rms": 0.05931790138518794,
+      "amplitude440": 0.07995338528971985,
+      "amplitude880": 5.16420326031423e-7
+    },
+    {
+      "track": 1,
+      "sourceDecodedSamples": 576000,
+      "sourceDecodedSeconds": 12,
+      "rms": 0.04239537560309494,
+      "amplitude440": 8.318516022889345e-8,
+      "amplitude880": 0.05995597711088337
+    }
+  ],
+  "preroll": {
+    "fullVsWrongFirst300ms": {
+      "samples": 14400,
+      "rmse": 0.01811137570020491,
+      "nrmse": 0.8233593712249369,
+      "mae": 0.01089644805981477,
+      "maxAbsDiff": 0.1454581320285797,
+      "correlation": 0.9778258530121204,
+      "gain": 1.7347679288120172
+    },
+    "fullVsWrongWhole": {
+      "samples": 192000,
+      "rmse": 0.0049686122887184474,
+      "nrmse": 0.02164460803407905,
+      "mae": 0.000858231308526919,
+      "maxAbsDiff": 0.1454581320285797,
+      "correlation": 0.9997662283449329,
+      "gain": 1.000532475502924
+    }
+  },
+  "offsetReferences": {
+    "0": {
+      "name": "processed-source0-track1-4to8-offset0.f32",
+      "samples": 192000,
+      "vsNoOffset": {
+        "samples": 192000,
+        "rmse": 0,
+        "nrmse": 0,
+        "mae": 0,
+        "maxAbsDiff": 0,
+        "correlation": 1,
+        "gain": 1
+      }
+    },
+    "250": {
+      "name": "processed-source0-track1-4to8-offset250.f32",
+      "samples": 192000,
+      "vsNoOffset": {
+        "samples": 192000,
+        "rmse": 0.15536656564274398,
+        "nrmse": 0.6763001051350972,
+        "mae": 0.05921921106200252,
+        "maxAbsDiff": 1.0330165475606918,
+        "correlation": 0.8026742728991098,
+        "gain": 0.9002218246069433
+      }
+    },
+    "-250": {
+      "name": "processed-source0-track1-4to8-offset-250.f32",
+      "samples": 192000,
+      "vsNoOffset": {
+        "samples": 192000,
+        "rmse": 0.09833690406391637,
+        "nrmse": 0.4280538626953462,
+        "mae": 0.04342570018300633,
+        "maxAbsDiff": 0.41910870373249054,
+        "correlation": 0.9085086680344491,
+        "gain": 0.909728286630688
+      }
+    }
+  },
+  "zeroPadding": {
+    "positivePrefixSamples": 12000,
+    "positivePrefixRms": 0,
+    "negativeTailStartSample": 16800,
+    "negativeTailRms": 0
+  },
+  "aacCalibration": {
+    "decodedSamples": 192000,
+    "decodedSeconds": 4,
+    "vsPreEncode": {
+      "samples": 192000,
+      "rmse": 0.00022299803569641468,
+      "nrmse": 0.0009706952996128664,
+      "mae": 0.00012342503623065474,
+      "maxAbsDiff": 0.006345089757815003,
+      "correlation": 0.9999995390399973,
+      "gain": 0.9998564957167837
+    },
+    "boundaryFirst300ms": {
+      "samples": 14400,
+      "rmse": 0.0006147977710076912,
+      "nrmse": 0.015753984303251988,
+      "mae": 0.00019009026272783953,
+      "maxAbsDiff": 0.006345089757815003,
+      "correlation": 0.9998759474947281,
+      "gain": 0.9994382616379421
+    }
+  },
+  "referenceAudioRecipe": "volume=0.5011872336272722,dynaudnorm=framelen=100:gausssize=5:maxgain=4:peak=0.9",
+  "limits": [
+    "Preparation only: no host, public audio selection or MP4 job behavior tested.",
+    "Source references start from actual decoded source AAC; generated pre-AAC f32 is not the raw-export ground truth.",
+    "Offset references are independently indexed PCM with explicit zero pads, not a copy of candidate asetpts/aresample filter chain.",
+    "AAC priming/padding/sample counts preserved; no claim of exact sample or realtime DSP-history parity."
+  ]
+}

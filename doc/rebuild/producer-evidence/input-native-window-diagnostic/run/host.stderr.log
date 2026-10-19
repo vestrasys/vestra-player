@@ -1,0 +1,5 @@
+(node:16069) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+PRODUCER_INPUT_NATIVE_READY /tmp/vestra-producer-input-native-PjXeX5
+PRODUCER_INPUT_NATIVE_STOPPED {"work":"/tmp/vestra-producer-input-native-PjXeX5","outcome":"stopped"}
+runtime 1 runtime.ready: null

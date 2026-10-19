@@ -1,0 +1,119 @@
+{
+  "pass": true,
+  "snapshot": {
+    "audioOffsetMs": 0,
+    "container": "mkv",
+    "kind": "processed",
+    "presentation": {
+      "height": 360,
+      "width": 640
+    },
+    "processing": {
+      "audio": [],
+      "revision": 1,
+      "video": [
+        {
+          "manifestId": "author.media-processed",
+          "nodes": [
+            {
+              "brightness": 0.15,
+              "contrast": 1,
+              "gamma": 1,
+              "kind": "eq",
+              "saturation": 1
+            },
+            {
+              "kind": "gblur",
+              "sigma": 0.8,
+              "steps": 3
+            }
+          ],
+          "resourceId": "eq"
+        }
+      ]
+    },
+    "sizeBytes": 164511,
+    "snapshotId": 1,
+    "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-processed-author-LvQxtZ/a.mkv",
+    "sourceStamp": {
+      "generation": 1,
+      "intentVersion": 1
+    },
+    "subtitle": {
+      "canonical": {
+        "digest": "ace572a5e46e6e94bad50a1f2f31aa19e21d06b951b43836968ee4a0ceafc09d",
+        "format": "srt"
+      },
+      "coverageValidated": true,
+      "derived": {
+        "digest": "411bfe40070fe4b75c197fc69cc02b605da16098ae5ce603d47717f1198a062e",
+        "format": "webvtt"
+      },
+      "font": {
+        "digest": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+        "faceIndex": 0,
+        "family": "Noto Sans CJK SC",
+        "fontId": "noto-cjk-sc-regular-2.004",
+        "postscript": "NotoSansCJKsc-Regular",
+        "sizeBytes": 16437364
+      },
+      "presentationRevision": 1,
+      "selectionStamp": {
+        "generation": 1,
+        "revision": 1
+      },
+      "style": {
+        "color": "yellow",
+        "fontId": "noto-cjk-sc-regular-2.004",
+        "fontSize": 72,
+        "marginPercent": 5,
+        "offsetMs": 0,
+        "outline": 2
+      },
+      "track": {
+        "contentRevision": 1,
+        "kind": "external",
+        "owner": 1,
+        "resourceId": "cue"
+      }
+    },
+    "time": 1
+  },
+  "terminal": {
+    "jobId": 1,
+    "outcome": {
+      "destination": "/private/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-processed-author-LvQxtZ/processed.png"
+    },
+    "publicationStarted": true,
+    "status": "completed"
+  },
+  "after": {
+    "capabilities": {
+      "close": true,
+      "pause": true,
+      "rate": true,
+      "restart": true,
+      "seek": true,
+      "snapshotSource": true
+    },
+    "container": "mkv",
+    "cycle": 2,
+    "duration": 8,
+    "eventSequence": 28,
+    "loadingOwner": null,
+    "output": {
+      "muted": false,
+      "volume": 100
+    },
+    "paused": true,
+    "phase": "ready",
+    "position": 0,
+    "rate": 1,
+    "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-processed-author-LvQxtZ/b.mkv",
+    "stamp": {
+      "generation": 2,
+      "intentVersion": 2
+    },
+    "terminalReason": null
+  }
+}

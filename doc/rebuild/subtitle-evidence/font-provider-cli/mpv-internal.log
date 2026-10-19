@@ -1,0 +1,362 @@
+[   0.006][v][cplayer] mpv v0.41.0 Copyright © 2000-2025 mpv/MPlayer/mplayer2 projects
+[   0.007][v][cplayer] libplacebo version: v7.360.1
+[   0.010][v][cplayer] FFmpeg version: 9.0.2
+[   0.010][v][cplayer] FFmpeg library versions:
+[   0.010][v][cplayer]    libavcodec      63.1.102
+[   0.010][v][cplayer]    libavdevice     63.1.102
+[   0.010][v][cplayer]    libavfilter     12.1.102
+[   0.010][v][cplayer]    libavformat     63.1.102
+[   0.010][v][cplayer]    libavutil       61.1.102
+[   0.010][v][cplayer]    libswresample   7.1.102
+[   0.010][v][cplayer]    libswscale      10.1.102
+[   0.010][v][cplayer] Configuration: -Dbuildtype=release -Dsysconfdir=/opt/homebrew/etc -Dbuild-date=false -Dhtml-build=enabled -Djavascript=enabled -Dlibmpv=true -Dlua=luajit -Dlibarchive=enabled -Duchardet=enabled -Dvulkan=enabled -Dprefix=/opt/homebrew/Cellar/mpv/0.41.0_10 -Dlibdir=lib -Dwrap_mode=nofallback
+[   0.010][v][cplayer] List of enabled features: avfoundation bsd-fstatfs cocoa coreaudio cplugins darwin ffmpeg gl gl-cocoa glob glob-posix gpl iconv javascript jpeg lcms2 libarchive libass libavdevice libbluray libdl libplacebo luajit mac-thread-name macos-10-15-4-features macos-11-3-features macos-11-features macos-12-features macos-cocoa-cb macos-media-player macos-touchbar posix posix-shm rubberband rubberband-3 swift uchardet vapoursynth vector videotoolbox-gl videotoolbox-pl vk-khr-display vulkan zimg zimg-st428 zlib
+[   0.010][v][cplayer] Command line options: '--sub-font-provider=none' '--embeddedfonts=no' '--sub-font=Arial' '--sub-fonts-dir=/tmp/vestra-vtt-literal-tt4a0jj9/fonts' '--log-file=/tmp/vestra-vtt-literal-tt4a0jj9/mpv-internal.log' '--msg-level=all=v' '--no-config' '--no-terminal' '--pause=yes' '--keep-open=yes' '--sub-auto=no' '--vo=null' '--ao=null' '--sub-file=/tmp/vestra-vtt-literal-tt4a0jj9/literal.vtt' '--input-ipc-server=/tmp/vestra-vtt-literal-tt4a0jj9/ipc' '/Users/ziyang/Documents/vestra-player/doc/rebuild/subtitle-evidence/backend-cli/fixture.mkv'
+[   0.010][v][cplayer] mpv v0.41.0 Copyright © 2000-2025 mpv/MPlayer/mplayer2 projects
+[   0.010][v][cplayer] libplacebo version: v7.360.1
+[   0.010][v][cplayer] FFmpeg version: 9.0.2
+[   0.010][v][cplayer] FFmpeg library versions:
+[   0.010][v][cplayer]    libavcodec      63.1.102
+[   0.010][v][cplayer]    libavdevice     63.1.102
+[   0.010][v][cplayer]    libavfilter     12.1.102
+[   0.010][v][cplayer]    libavformat     63.1.102
+[   0.010][v][cplayer]    libavutil       61.1.102
+[   0.010][v][cplayer]    libswresample   7.1.102
+[   0.010][v][cplayer]    libswscale      10.1.102
+[   0.010][v][cplayer] Configuration: -Dbuildtype=release -Dsysconfdir=/opt/homebrew/etc -Dbuild-date=false -Dhtml-build=enabled -Djavascript=enabled -Dlibmpv=true -Dlua=luajit -Dlibarchive=enabled -Duchardet=enabled -Dvulkan=enabled -Dprefix=/opt/homebrew/Cellar/mpv/0.41.0_10 -Dlibdir=lib -Dwrap_mode=nofallback
+[   0.010][v][cplayer] List of enabled features: avfoundation bsd-fstatfs cocoa coreaudio cplugins darwin ffmpeg gl gl-cocoa glob glob-posix gpl iconv javascript jpeg lcms2 libarchive libass libavdevice libbluray libdl libplacebo luajit mac-thread-name macos-10-15-4-features macos-11-3-features macos-11-features macos-12-features macos-cocoa-cb macos-media-player macos-touchbar posix posix-shm rubberband rubberband-3 swift uchardet vapoursynth vector videotoolbox-gl videotoolbox-pl vk-khr-display vulkan zimg zimg-st428 zlib
+[   0.011][d][global] home path: '' -> '-'
+[   0.011][d][global] user path: '~~home/' -> ''
+[   0.011][d][global] user path: '~~old_home/' -> ''
+[   0.011][v][cplayer] Setting option 'sub-font-provider' = 'none' (flags = 8)
+[   0.011][v][cplayer] Setting option 'embeddedfonts' = 'no' (flags = 8)
+[   0.011][v][cplayer] Setting option 'sub-font' = 'Arial' (flags = 8)
+[   0.011][v][cplayer] Setting option 'sub-fonts-dir' = '/tmp/vestra-vtt-literal-tt4a0jj9/fonts' (flags = 8)
+[   0.011][v][cplayer] Setting option 'log-file' = '/tmp/vestra-vtt-literal-tt4a0jj9/mpv-internal.log' (flags = 8)
+[   0.011][v][cplayer] Setting option 'msg-level' = 'all=v' (flags = 8)
+[   0.011][v][cplayer] Setting option 'config' = 'no' (flags = 8)
+[   0.011][v][cplayer] Setting option 'terminal' = 'no' (flags = 8)
+[   0.011][v][cplayer] Setting option 'pause' = 'yes' (flags = 8)
+[   0.011][v][cplayer] Setting option 'keep-open' = 'yes' (flags = 8)
+[   0.011][v][cplayer] Setting option 'sub-auto' = 'no' (flags = 8)
+[   0.011][v][cplayer] Setting option 'vo' = 'null' (flags = 8)
+[   0.011][v][cplayer] Setting option 'ao' = 'null' (flags = 8)
+[   0.011][v][cplayer] Setting option 'sub-files-append' = '/tmp/vestra-vtt-literal-tt4a0jj9/literal.vtt' (flags = 8)
+[   0.011][v][cplayer] Setting option 'input-ipc-server' = '/tmp/vestra-vtt-literal-tt4a0jj9/ipc' (flags = 8)
+[   0.017][d][osc] Loading lua script @osc.lua...
+[   0.017][d][ytdl_hook] Loading lua script @ytdl_hook.lua...
+[   0.017][d][stats] Loading lua script @stats.lua...
+[   0.017][d][console] Loading lua script @console.lua...
+[   0.017][d][auto_profiles] Loading lua script @auto_profiles.lua...
+[   0.017][d][select] Loading lua script @select.lua...
+[   0.017][d][positioning] Loading lua script @positioning.lua...
+[   0.017][d][commands] Loading lua script @commands.lua...
+[   0.017][d][context_menu] Loading lua script @context_menu.lua...
+[   0.017][v][clipboard] Initialized mac clipboard backend.
+[   0.020][d][context_menu] loading mp.defaults
+[   0.020][d][positioning] loading mp.defaults
+[   0.020][d][positioning] loading @positioning.lua
+[   0.020][d][select] loading mp.defaults
+[   0.020][d][stats] loading mp.defaults
+[   0.020][d][osc] loading mp.defaults
+[   0.020][d][commands] loading mp.defaults
+[   0.020][d][console] loading mp.defaults
+[   0.020][d][auto_profiles] loading mp.defaults
+[   0.020][d][stats] loading @stats.lua
+[   0.020][d][osc] loading @osc.lua
+[   0.020][d][select] loading @select.lua
+[   0.020][d][ytdl_hook] loading mp.defaults
+[   0.020][d][commands] loading @commands.lua
+[   0.020][d][context_menu] loading @context_menu.lua
+[   0.021][d][auto_profiles] loading @auto_profiles.lua
+[   0.021][d][ytdl_hook] loading @ytdl_hook.lua
+[   0.021][d][console] loading @console.lua
+[   0.021][d][positioning] reading options for positioning
+[   0.021][d][positioning] script-opts/positioning.conf not found.
+[   0.021][d][positioning] lua-settings/positioning.conf not found.
+[   0.021][d][context_menu] reading options for context_menu
+[   0.021][d][context_menu] script-opts/context_menu.conf not found.
+[   0.021][d][context_menu] lua-settings/context_menu.conf not found.
+[   0.021][d][select] reading options for select
+[   0.021][d][select] script-opts/select.conf not found.
+[   0.021][d][select] lua-settings/select.conf not found.
+[   0.022][d][ytdl_hook] reading options for ytdl_hook
+[   0.022][d][ytdl_hook] script-opts/ytdl_hook.conf not found.
+[   0.022][d][ytdl_hook] lua-settings/ytdl_hook.conf not found.
+[   0.023][d][stats] reading options for stats
+[   0.023][d][stats] script-opts/stats.conf not found.
+[   0.023][d][stats] lua-settings/stats.conf not found.
+[   0.291][v][mac/app] AppHub functionality initialised
+[   0.291][v][ipc] Starting IPC master
+[   0.291][v][cplayer] Waiting for scripts...
+[   0.291][v][ipc] Listening to IPC socket.
+[   0.292][d][commands] reading options for commands
+[   0.292][d][commands] script-opts/commands.conf not found.
+[   0.292][d][commands] lua-settings/commands.conf not found.
+[   0.292][d][console] reading options for console
+[   0.293][d][console] script-opts/console.conf not found.
+[   0.293][d][console] lua-settings/console.conf not found.
+[   0.293][d][cplayer] Run command: define-section, flags=64, args=[name="input_console", contents="", flags="default"]
+[   0.293][d][cplayer] Run command: define-section, flags=64, args=[name="input_commands", contents="", flags="default"]
+[   0.293][d][cplayer] Run command: enable-section, flags=64, args=[name="input_commands", flags="allow-hide-cursor+allow-vo-dragging"]
+[   0.293][d][cplayer] Run command: define-section, flags=64, args=[name="input_forced_commands", contents="", flags="force"]
+[   0.293][d][cplayer] Run command: enable-section, flags=64, args=[name="input_forced_commands", flags="allow-hide-cursor+allow-vo-dragging"]
+[   0.293][d][cplayer] Run command: define-section, flags=64, args=[name="input_stats", contents="", flags="default"]
+[   0.293][d][cplayer] Run command: enable-section, flags=64, args=[name="input_stats", flags="allow-hide-cursor+allow-vo-dragging"]
+[   0.293][d][cplayer] Run command: define-section, flags=64, args=[name="input_forced_stats", contents="", flags="force"]
+[   0.293][d][cplayer] Run command: enable-section, flags=64, args=[name="input_forced_stats", flags="allow-hide-cursor+allow-vo-dragging"]
+[   0.293][d][cplayer] Run command: define-section, flags=64, args=[name="showhide", contents="mouse_move script-binding osc/__keybinding1\nmouse_leave script-binding osc/__keybinding2\n", flags="force"]
+[   0.293][d][cplayer] Run command: define-section, flags=64, args=[name="showhide_wc", contents="mouse_move script-binding osc/__keybinding3\nmouse_leave script-binding osc/__keybinding4\n", flags="force"]
+[   0.293][d][cplayer] Run command: enable-section, flags=64, args=[name="showhide", flags="allow-hide-cursor+allow-vo-dragging"]
+[   0.293][d][cplayer] Run command: enable-section, flags=64, args=[name="showhide_wc", flags="allow-hide-cursor+allow-vo-dragging"]
+[   0.293][d][cplayer] Run command: enable-section, flags=64, args=[name="input_console", flags="allow-hide-cursor+allow-vo-dragging"]
+[   0.293][d][cplayer] Run command: define-section, flags=64, args=[name="input_forced_console", contents="", flags="force"]
+[   0.293][d][cplayer] Run command: define-section, flags=64, args=[name="input", contents="mbtn_left script-binding osc/__keybinding5\nmbtn_mid script-binding osc/__keybinding6\nmbtn_right script-binding osc/__keybinding7\nshift+mbtn_left script-binding osc/__keybinding8\nwheel_up script-binding osc/__keybinding9\nwheel_down script-binding osc/__keybinding10\nmbtn_left_dbl ignore\nshift+mbtn_left_dbl ignore\nmbtn_right_dbl ignore\n", flags="force"]
+[   0.293][d][cplayer] Run command: enable-section, flags=64, args=[name="input_forced_console", flags="allow-hide-cursor+allow-vo-dragging"]
+[   0.293][d][cplayer] Run command: enable-section, flags=64, args=[name="input", flags=""]
+[   0.294][d][cplayer] Run command: define-section, flags=64, args=[name="input_positioning", contents="", flags="default"]
+[   0.294][d][cplayer] Run command: enable-section, flags=64, args=[name="input_positioning", flags="allow-hide-cursor+allow-vo-dragging"]
+[   0.294][d][cplayer] Run command: define-section, flags=64, args=[name="input_forced_positioning", contents="", flags="force"]
+[   0.294][d][cplayer] Run command: enable-section, flags=64, args=[name="input_forced_positioning", flags="allow-hide-cursor+allow-vo-dragging"]
+[   0.294][d][cplayer] Run command: define-section, flags=64, args=[name="input_select", contents="", flags="default"]
+[   0.294][d][cplayer] Run command: enable-section, flags=64, args=[name="input_select", flags="allow-hide-cursor+allow-vo-dragging"]
+[   0.294][d][cplayer] Run command: define-section, flags=64, args=[name="input_forced_select", contents="", flags="force"]
+[   0.294][d][cplayer] Run command: enable-section, flags=64, args=[name="input_forced_select", flags="allow-hide-cursor+allow-vo-dragging"]
+[   0.294][d][cplayer] Run command: define-section, flags=64, args=[name="window-controls", contents="mbtn_left script-binding osc/__keybinding11\n", flags="force"]
+[   0.294][d][cplayer] Run command: enable-section, flags=64, args=[name="window-controls", flags=""]
+[   0.294][d][auto_profiles] Destroying client handle...
+[   0.294][d][osc] reading options for osc
+[   0.294][d][osc] script-opts/osc.conf not found.
+[   0.294][d][osc] lua-settings/osc.conf not found.
+[   0.294][v][cplayer] Set property: user-data/osc/visibility="auto" -> 1
+[   0.294][d][cplayer] Run command: disable-section, flags=64, args=[name="input"]
+[   0.294][d][cplayer] Run command: disable-section, flags=64, args=[name="window-controls"]
+[   0.294][v][cplayer] Set property: user-data/osc/margins={"t":0,"r":0,"b":0,"l":0} -> 1
+[   0.294][v][cplayer] Done loading scripts.
+[   0.294][d][global] state path: 'watch_later' -> '-'
+[   0.294][v][cplayer] Running hook: auto_profiles/on_before_start_file
+[   0.294][v][cplayer] Failed sending hook command auto_profiles/on_before_start_file. Removing hook.
+[   0.294][d][global] state path: 'watch_later' -> '-'
+[   0.294][v][cplayer] Running hook: auto_profiles/on_load
+[   0.294][v][cplayer] Failed sending hook command auto_profiles/on_load. Removing hook.
+[   0.294][v][cplayer] Running hook: ytdl_hook/on_load
+[   0.295][v][cplayer] Running hook: ytdl_hook/on_load
+[   0.295][v][ytdl_hook] playlist hook
+[   0.295][v][bdmv/bluray] Opening /Users/ziyang/Documents/vestra-player/doc/rebuild/subtitle-evidence/backend-cli/fixture.mkv
+[   0.295][v][cplayer] Set property: user-data/osc/margins={"t":0,"r":0,"b":0,"l":0} -> 1
+[   0.295][d][osc] osc_init
+[   0.295][v][file] Opening /Users/ziyang/Documents/vestra-player/doc/rebuild/subtitle-evidence/backend-cli/fixture.mkv
+[   0.295][d][file] resize stream to 131072 bytes, drop 0 bytes
+[   0.295][d][file] Stream opened successfully.
+[   0.295][v][demux] Trying demuxers for level=normal.
+[   0.295][d][demux] Trying demuxer: directory (force-level: normal)
+[   0.295][v][cplayer] Set property: user-data/osc/margins={"t":0,"r":0,"b":0,"l":0} -> 1
+[   0.295][d][osd/libass] ASS library version: 0x1705000 (runtime 0x1705000)
+[   0.296][v][osd/libass] libass API version: 0x1705000
+[   0.296][v][osd/libass] libass source: tarball: 0.17.5
+[   0.296][d][demux] Trying demuxer: disc (force-level: normal)
+[   0.296][d][demux] Trying demuxer: edl (force-level: normal)
+[   0.296][d][demux] Trying demuxer: cue (force-level: normal)
+[   0.296][d][demux] Trying demuxer: rawaudio (force-level: normal)
+[   0.296][d][demux] Trying demuxer: rawvideo (force-level: normal)
+[   0.296][d][demux] Trying demuxer: mkv (force-level: normal)
+[   0.296][d][mkv] Found the head...
+[   0.296][d][mkv] + a segment...
+[   0.296][d][mkv] Parsing seek head...
+[   0.296][d][mkv] |+ segment information...
+[   0.296][d][mkv] float 8023.000000
+[   0.296][d][mkv] | + muxing app: Lavf63.1.102
+[   0.296][d][mkv] | + writing app: Lavf63.1.102
+[   0.296][d][mkv] | + timecode scale: 1000000
+[   0.296][d][mkv] | + duration: 8.023s
+[   0.296][d][mkv] | + segment uid 4d 8e b1 29 25 80 e0 8d 5d 18 5b d5 24 13 f3 f5
+[   0.296][d][mkv] |+ segment tracks...
+[   0.296][d][mkv] float 44100.000000
+[   0.296][d][mkv] | + a track...
+[   0.296][d][mkv] |  + Track number: 1
+[   0.296][d][mkv] |  + Track type: Video
+[   0.296][d][mkv] |  + Video track
+[   0.296][d][mkv] |   + Pixel width: 640
+[   0.296][d][mkv] |   + Pixel height: 360
+[   0.296][d][mkv] |    + Levels: limited
+[   0.296][d][mkv] |  + Codec ID: V_MPEG4/ISO/AVC
+[   0.296][d][mkv] |  + CodecPrivate, length 47
+[   0.296][d][mkv] |  + Language: und
+[   0.296][d][mkv] |  + Default flag: 0
+[   0.296][d][mkv] |  + Default duration: 33.333ms ( = 30.000 fps)
+[   0.296][d][mkv] | + a track...
+[   0.296][d][mkv] |  + Track number: 2
+[   0.296][d][mkv] |  + Track type: Audio
+[   0.296][d][mkv] |  + Audio track
+[   0.296][d][mkv] |   + Sampling frequency: 44100.000000
+[   0.296][d][mkv] |   + Bit depth: 32
+[   0.296][d][mkv] |   + Channels: 1
+[   0.296][d][mkv] |  + Codec ID: A_AAC
+[   0.296][d][mkv] |  + CodecPrivate, length 5
+[   0.296][d][mkv] |  + Language: und
+[   0.296][d][mkv] |  + Default flag: 0
+[   0.296][d][mkv] |  + Default duration: 23.220ms ( = 43.066 fps)
+[   0.296][d][mkv] |+ found cluster
+[   0.296][v][mkv] Deferring reading cues.
+[   0.296][v][mkv] All headers are parsed!
+[   0.296][v][demux] Detected file format: Matroska
+[   0.296][v][cplayer] Opening done: /Users/ziyang/Documents/vestra-player/doc/rebuild/subtitle-evidence/backend-cli/fixture.mkv
+[   0.300][v][osd/libass] Shaper: FriBidi 1.0.16 (SIMPLE) HarfBuzz-ng 14.5.1 (COMPLEX)
+[   0.300][v][osd/libass] Setting up fonts...
+[   0.301][v][osd/libass] Using font provider coretext
+[   0.301][v][osd/libass] Done.
+[   0.301][v][bdmv/bluray] Opening /tmp/vestra-vtt-literal-tt4a0jj9/literal.vtt
+[   0.301][d][cplayer] Run command: define-section, flags=64, args=[name="input_osc", contents="", flags="default"]
+[   0.301][d][cplayer] Run command: enable-section, flags=64, args=[name="input_osc", flags="allow-hide-cursor+allow-vo-dragging"]
+[   0.301][d][cplayer] Run command: define-section, flags=64, args=[name="input_forced_osc", contents="", flags="force"]
+[   0.301][d][cplayer] Run command: enable-section, flags=64, args=[name="input_forced_osc", flags="allow-hide-cursor+allow-vo-dragging"]
+[   0.301][v][file] Opening /tmp/vestra-vtt-literal-tt4a0jj9/literal.vtt
+[   0.301][d][file] resize stream to 131072 bytes, drop 0 bytes
+[   0.301][d][file] Stream opened successfully.
+[   0.301][v][demux] Trying demuxers for level=normal.
+[   0.301][d][demux] Trying demuxer: directory (force-level: normal)
+[   0.302][d][demux] Trying demuxer: disc (force-level: normal)
+[   0.302][d][demux] Trying demuxer: edl (force-level: normal)
+[   0.302][d][demux] Trying demuxer: cue (force-level: normal)
+[   0.302][d][demux] Trying demuxer: rawaudio (force-level: normal)
+[   0.302][d][demux] Trying demuxer: rawvideo (force-level: normal)
+[   0.302][d][demux] Trying demuxer: mkv (force-level: normal)
+[   0.302][d][demux] Trying demuxer: libarchive (force-level: normal)
+[   0.303][d][demux] Trying demuxer: lavf (force-level: normal)
+[   0.308][v][lavf] Found 'webvtt' at score=100 size=87.
+[   0.308][v][lavf] avformat_find_stream_info() finished after 87 bytes.
+[   0.308][v][lavf] demuxer read all data; closing stream
+[   0.308][v][demux] Detected file format: webvtt (libavformat)
+[   0.312][v][ipc_0] Client connected
+[   0.314][v][find_files] Loading external files in /Users/ziyang/Documents/vestra-player/doc/rebuild/subtitle-evidence/backend-cli/
+[   0.314][v][cplayer] Running hook: auto_profiles/on_preloaded
+[   0.314][v][cplayer] Failed sending hook command auto_profiles/on_preloaded. Removing hook.
+[   0.314][v][cplayer] Running hook: ytdl_hook/on_preloaded
+[   0.314][v][mkv] select track 0
+[   0.314][v][mkv] select track 1
+[   0.314][v][lavf] select track 0
+[   0.314][v][lavf] refresh track 0 (sub)
+[   0.314][v][lavf] refresh seek to -10.000000
+[   0.314][i][cplayer] ● Video  --vid=1  (h264 640x360 30 fps)
+[   0.314][i][cplayer] ● Audio  --aid=1  (aac 1ch 44100 Hz)
+[   0.314][i][cplayer] ● Subs   --sid=1  'literal.vtt' (webvtt) [external]
+[   0.314][v][vd] Container reported FPS: 30.000000
+[   0.315][v][vd] Codec list:
+[   0.315][v][vd]     h264 - H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10
+[   0.315][v][vd] Opening decoder h264
+[   0.316][v][vd] No hardware decoding requested.
+[   0.316][v][vd] Using software decoding.
+[   0.316][v][vd] Detected 8 logical cores.
+[   0.316][v][vd] Requesting 9 threads for decoding.
+[   0.318][d][ffmpeg/video] h264: Reinit context to 640x368, pix_fmt: yuv420p
+[   0.319][d][vd] DR parameter change to 640x386 yuv420p align=64
+[   0.319][d][vd] Allocating new (host-cached) DR image...
+[   0.319][d][vd] ...failed..
+[   0.319][v][vd] DR failed - disabling.
+[   0.320][v][vd] Selected decoder: h264 - H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10
+[   0.320][v][vf] User filter list:
+[   0.320][v][vf]   (empty)
+[   0.320][v][ad] Codec list:
+[   0.320][v][ad]     aac - AAC (Advanced Audio Coding)
+[   0.320][v][ad]     aac_fixed (aac) - AAC (Advanced Audio Coding)
+[   0.320][v][ad]     aac_at (aac) - aac (AudioToolbox)
+[   0.320][v][ad] Opening decoder aac
+[   0.320][v][ad] Requesting 1 threads for decoding.
+[   0.322][v][ad] Selected decoder: aac - AAC (Advanced Audio Coding)
+[   0.322][v][af] User filter list:
+[   0.322][v][af]   (empty)
+[   0.322][v][sub/ass] Using subtitle decoder webvtt
+[   0.322][d][sub/ass] ASS library version: 0x1705000 (runtime 0x1705000)
+[   0.322][v][sub/ass] libass API version: 0x1705000
+[   0.322][v][sub/ass] libass source: tarball: 0.17.5
+[   0.322][v][sub/ass] Shaper: FriBidi 1.0.16 (SIMPLE) HarfBuzz-ng 14.5.1 (COMPLEX)
+[   0.322][v][sub/ass] Setting up fonts...
+[   0.323][v][sub/ass] Loading font file '/tmp/vestra-vtt-literal-tt4a0jj9/fonts/Arial.ttf'
+[   0.323][v][sub/ass] Done.
+[   0.323][v][cplayer] Starting playback...
+[   0.323][v][lavf] queuing seek to 0.000000 (cascade)
+[   0.323][v][lavf] execute seek (to 0.000000 flags 0)
+[   0.323][v][lavf] seek done
+[   0.323][v][lavf] EOF reached.
+[   0.324][v][af] [in] 44100Hz mono 1ch floatp
+[   0.324][v][af] [userspeed] 44100Hz mono 1ch floatp
+[   0.324][v][af] [userspeed] (disabled)
+[   0.324][v][af] [convert] 44100Hz mono 1ch floatp
+[   0.324][d][ffmpeg/video] h264: Reinit context to 640x368, pix_fmt: yuv420p
+[   0.325][v][vd] Using software decoding.
+[   0.325][v][vd] Decoder format: 640x360 yuv420p auto/auto/auto/auto/auto CL=mpeg2/4/h264 crop=640x360+0+0 A=none
+[   0.325][v][vd] Using container aspect ratio.
+[   0.326][v][vf] [in] 640x360 yuv420p bt.601/bt.709/bt.1886/limited/display CL=mpeg2/4/h264 crop=640x360+0+0 A=none
+[   0.326][v][vf] [userdeint] 640x360 yuv420p bt.601/bt.709/bt.1886/limited/display CL=mpeg2/4/h264 crop=640x360+0+0 A=none
+[   0.326][v][vf] [userdeint] (disabled)
+[   0.326][v][vf] [autovflip] 640x360 yuv420p bt.601/bt.709/bt.1886/limited/display CL=mpeg2/4/h264 crop=640x360+0+0 A=none
+[   0.326][v][vf] [autovflip] (disabled)
+[   0.326][v][vf] [autorotate] 640x360 yuv420p bt.601/bt.709/bt.1886/limited/display CL=mpeg2/4/h264 crop=640x360+0+0 A=none
+[   0.326][v][vf] [autorotate] (disabled)
+[   0.326][v][vf] [convert] 640x360 yuv420p bt.601/bt.709/bt.1886/limited/display CL=mpeg2/4/h264 crop=640x360+0+0 A=none
+[   0.326][v][vf] [convert] (disabled)
+[   0.326][v][vf] [out] 640x360 yuv420p bt.601/bt.709/bt.1886/limited/display CL=mpeg2/4/h264 crop=640x360+0+0 A=none
+[   0.326][d][osc] osc_init
+[   0.326][v][ao] Trying audio driver 'null'
+[   0.326][v][ao/null] requested format: 44100 Hz, mono channels, floatp
+[   0.326][v][ao/null] Channel layouts:
+[   0.326][v][ao/null]  - anything
+[   0.326][v][ao/null] result: mono
+[   0.326][v][ao/null] device buffer: 8704 samples.
+[   0.326][v][ao/null] using soft-buffer of 8820 samples.
+[   0.326][i][cplayer] AO: [null] 44100Hz mono 1ch floatp
+[   0.326][v][cplayer] AO: Description: Null audio output
+[   0.326][v][af] [convert] (disabled)
+[   0.326][v][af] [out] 44100Hz mono 1ch floatp
+[   0.326][i][cplayer] VO: [null] 640x360 yuv420p
+[   0.326][v][cplayer] VO: Description: Null video output
+[   0.326][v][vo/null] reconfig to 640x360 yuv420p bt.601/bt.709/bt.1886/limited/display CL=mpeg2/4/h264 crop=640x360+0+0 A=none
+[   0.326][v][cplayer] first video frame after restart shown
+[   0.327][v][cplayer] audio ready
+[   0.327][d][cplayer] starting video playback
+[   0.327][v][cplayer] starting audio playback
+[   0.327][v][cplayer] playback restart complete @ 0.000000, audio=playing, video=playing (paused)
+[   0.327][v][cplayer] Set property: user-data/osc/margins={"t":0,"r":0,"b":0,"l":0} -> 1
+[   0.339][w][cplayer] Warning: property 'sub-text-ass' was replaced with 'sub-text/ass' and might be removed in the future.
+[   0.340][d][cplayer] Run command: screenshot-to-file, flags=64, args=[filename="/tmp/vestra-vtt-literal-tt4a0jj9/literal.png", flags="subtitles"]
+[   0.340][v][screenshot] Falling back to software screenshot.
+[   0.340][v][sub/ass] fontselect: (Arial, 400, 0) -> ArialMT, 0, ArialMT
+[   0.346][v][cplayer] Starting screenshot: '/tmp/vestra-vtt-literal-tt4a0jj9/literal.png'
+[   0.346][v][screenshot] input: 640x360 yuv420p bt.601/bt.709/bt.1886/limited/display CL=mpeg2/4/h264 crop=640x360+0+0 A=none
+[   0.346][v][screenshot] converted: 640x360 rgb24 rgb/bt.709/bt.1886/full/display CL=mpeg1/jpeg crop=640x360+0+0 A=none
+[   0.346][v][screenshot] using 5 threads for scaling
+[   0.347][v][screenshot] Using zimg.
+[   0.347][v][screenshot] Using encoder png
+[   0.347][d][screenshot] mapped color params:
+[   0.347][d][screenshot]   trc = bt709
+[   0.347][d][screenshot]   primaries = bt709
+[   0.347][d][screenshot]   range = pc
+[   0.347][d][screenshot]   colorspace = gbr
+[   0.347][d][screenshot]   chroma_location = center
+[   0.348][d][osc] osc_init
+[   0.348][v][cplayer] Set property: user-data/osc/margins={"t":0,"r":0,"b":0,"l":0} -> 1
+[   0.359][i][cplayer] Screenshot: '/tmp/vestra-vtt-literal-tt4a0jj9/literal.png'
+[   0.359][d][cplayer] Run command: quit, flags=64, args=[code="0"]
+[   0.359][v][cplayer] EOF code: 5  
+[   0.359][d][ad] Uninit decoder.
+[   0.359][d][vd] Uninit decoder.
+[   0.360][d][cplayer] Terminating demuxers...
+[   0.360][d][cplayer] Done terminating demuxers.
+[   0.360][v][cplayer] finished playback, success (reason 3)
+[   0.360][v][cplayer] Running hook: ytdl_hook/on_after_end_file
+[   0.360][d][cplayer] Run command: del, flags=64, args=[name="user-data/mpv/ytdl/json-subprocess-result"]
+[   0.360][i][cplayer] Exiting... (Quit)
+[   0.361][d][mac] Destroying client handle...
+[   0.361][d][cplayer] Run command: del, flags=64, args=[name="user-data/osc"]
+[   0.361][d][select] Destroying client handle...
+[   0.361][d][positioning] Destroying client handle...
+[   0.361][d][ytdl_hook] Destroying client handle...
+[   0.361][d][stats] Destroying client handle...
+[   0.361][d][ipc_0] Destroying client handle...
+[   0.361][d][commands] Destroying client handle...
+[   0.361][d][cplayer] Run command: del, flags=64, args=[name="user-data/mpv/console"]
+[   0.361][d][context_menu] Destroying client handle...
+[   0.361][d][console] Destroying client handle...
+[   0.361][d][osc] Destroying client handle...
+[   0.361][v][mac/app] Initialising Input
+[   0.361][v][mac/app] Stopping RemoteCommandCenter

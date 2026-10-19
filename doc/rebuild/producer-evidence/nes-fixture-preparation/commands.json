@@ -1,0 +1,184 @@
+[
+  {
+    "argv": [
+      "git",
+      "clone",
+      "--depth",
+      "1",
+      "https://github.com/pinobatch/thwaite-nes.git",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-fixture-h6caz5u4/source"
+    ],
+    "cwd": null,
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": "Cloning into '/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-fixture-h6caz5u4/source'...\n"
+  },
+  {
+    "argv": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "cwd": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-fixture-h6caz5u4/source",
+    "exitCode": 0,
+    "stdout": "00e36745188bc165990f60eed6b093c3ce6ad0e3\n",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "/usr/bin/make",
+      "--version"
+    ],
+    "exitCode": 0,
+    "stdout": "GNU Make 3.81\nCopyright (C) 2006  Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.\nThere is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A\nPARTICULAR PURPOSE.\n\nThis program built for i386-apple-darwin11.3.0\n",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "/usr/bin/cc",
+      "--version"
+    ],
+    "exitCode": 0,
+    "stdout": "Apple clang version 17.0.0 (clang-1700.4.4.1)\nTarget: arm64-apple-darwin25.2.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "git",
+      "ls-remote",
+      "https://github.com/cc65/cc65.git",
+      "HEAD"
+    ],
+    "exitCode": 0,
+    "stdout": "6bd01e8a5b0e86389734fe22c679792214c01dc6\tHEAD\n",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "git",
+      "clone",
+      "--depth",
+      "1",
+      "https://github.com/cc65/cc65.git",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65"
+    ],
+    "cwd": null,
+    "exitCode": 0,
+    "stdout": "cc65-clone.stdout.log",
+    "stderr": "cc65-clone.stderr.log"
+  },
+  {
+    "argv": [
+      "git",
+      "fetch",
+      "--depth",
+      "1",
+      "origin",
+      "6bd01e8a5b0e86389734fe22c679792214c01dc6"
+    ],
+    "cwd": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65",
+    "exitCode": 0,
+    "stdout": "cc65-fetch-fixed.stdout.log",
+    "stderr": "cc65-fetch-fixed.stderr.log"
+  },
+  {
+    "argv": [
+      "git",
+      "checkout",
+      "--detach",
+      "6bd01e8a5b0e86389734fe22c679792214c01dc6"
+    ],
+    "cwd": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65",
+    "exitCode": 0,
+    "stdout": "cc65-checkout-fixed.stdout.log",
+    "stderr": "cc65-checkout-fixed.stderr.log"
+  },
+  {
+    "argv": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "cwd": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65",
+    "exitCode": 0,
+    "stdout": "cc65-current-revision.stdout.log",
+    "stderr": "cc65-current-revision.stderr.log"
+  },
+  {
+    "argv": [
+      "/usr/bin/make",
+      "-C",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65/src",
+      "-j2",
+      "ca65",
+      "ld65"
+    ],
+    "cwd": null,
+    "exitCode": 0,
+    "stdout": "cc65-local-build.stdout.log",
+    "stderr": "cc65-local-build.stderr.log"
+  },
+  {
+    "argv": [
+      "/usr/bin/make",
+      "thwaite.nes",
+      "AS65=/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65/bin/ca65",
+      "LD65=/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65/bin/ld65",
+      "PY=/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
+    ],
+    "cwd": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/thwaite",
+    "exitCode": 2,
+    "stdout": "rom-first-build.stdout.log",
+    "stderr": "rom-first-build.stderr.log"
+  },
+  {
+    "argv": [
+      "/usr/bin/cc",
+      "-std=gnu99",
+      "-Wall",
+      "-Wextra",
+      "-DNDEBUG",
+      "-Os",
+      "-o",
+      "tools/dte",
+      "tools/dte.c"
+    ],
+    "cwd": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/thwaite",
+    "exitCode": 0,
+    "stdout": "dte-local-dynamic.stdout.log",
+    "stderr": "dte-local-dynamic.stderr.log"
+  },
+  {
+    "argv": [
+      "/usr/bin/make",
+      "thwaite.nes",
+      "AS65=/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65/bin/ca65",
+      "LD65=/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65/bin/ld65",
+      "PY=/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
+    ],
+    "cwd": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/thwaite",
+    "exitCode": 0,
+    "stdout": "rom-final-build.stdout.log",
+    "stderr": "rom-final-build.stderr.log"
+  },
+  {
+    "argv": [
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65/bin/ca65",
+      "--version"
+    ],
+    "cwd": null,
+    "exitCode": 0,
+    "stdout": "ca65-version.stdout.log",
+    "stderr": "ca65-version.stderr.log"
+  },
+  {
+    "argv": [
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65/bin/ld65",
+      "--version"
+    ],
+    "cwd": null,
+    "exitCode": 0,
+    "stdout": "ld65-version.stdout.log",
+    "stderr": "ld65-version.stderr.log"
+  }
+]

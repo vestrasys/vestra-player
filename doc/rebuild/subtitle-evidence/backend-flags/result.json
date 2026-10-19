@@ -1,0 +1,1400 @@
+{
+  "work": "/tmp/vestra-subtitle-flags-_tzv4zpz",
+  "command": [
+    "mpv",
+    "--no-config",
+    "--no-terminal",
+    "--idle=yes",
+    "--pause=yes",
+    "--keep-open=yes",
+    "--sub-auto=no",
+    "--vo=null",
+    "--ao=null",
+    "--input-ipc-server=/tmp/vestra-subtitle-flags-_tzv4zpz/ipc"
+  ],
+  "exitCode": 0,
+  "literal": "literal <b>B</b> {\\b1}X{\\b0} \\N END",
+  "entityEncodedSrtText": "literal &lt;b&gt;B&lt;/b&gt; &#123;&#92;b1&#125;X&#123;&#92;b0&#125; &#92;N END",
+  "observations": {
+    "load": {
+      "data": {
+        "playlist_entry_id": 1
+      },
+      "request_id": 1,
+      "error": "success"
+    },
+    "baselineShot": {
+      "data": null,
+      "request_id": 4,
+      "error": "success"
+    },
+    "one-auto": {
+      "add": {
+        "data": null,
+        "request_id": 5,
+        "error": "success"
+      },
+      "state": {
+        "pause": {
+          "data": true,
+          "request_id": 6,
+          "error": "success"
+        },
+        "time-pos": {
+          "data": 0.0,
+          "request_id": 7,
+          "error": "success"
+        },
+        "sid": {
+          "data": false,
+          "request_id": 8,
+          "error": "success"
+        },
+        "track-list": {
+          "data": [
+            {
+              "id": 1,
+              "type": "video",
+              "src-id": 1,
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": false,
+              "selected": true,
+              "main-selection": 0,
+              "ff-index": 0,
+              "decoder": "h264",
+              "decoder-desc": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "codec": "h264",
+              "codec-desc": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "codec-profile": "High",
+              "demux-w": 640,
+              "demux-h": 360,
+              "demux-fps": 30.0,
+              "demux-par": 1.0,
+              "metadata": {
+                "ENCODER": "Lavc63.1.102 libx264",
+                "DURATION": "00:00:08.000000000"
+              }
+            },
+            {
+              "id": 1,
+              "type": "audio",
+              "src-id": 2,
+              "audio-channels": 1,
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": false,
+              "selected": true,
+              "main-selection": 0,
+              "ff-index": 1,
+              "decoder": "aac",
+              "decoder-desc": "AAC (Advanced Audio Coding)",
+              "codec": "aac",
+              "codec-desc": "AAC (Advanced Audio Coding)",
+              "codec-profile": "LC",
+              "demux-channel-count": 1,
+              "demux-channels": "mono",
+              "demux-samplerate": 44100,
+              "metadata": {
+                "ENCODER": "Lavc63.1.102 aac",
+                "DURATION": "00:00:08.023000000"
+              }
+            },
+            {
+              "id": 1,
+              "type": "sub",
+              "title": "one.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": false,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/one.srt",
+              "ff-index": 0,
+              "codec": "subrip"
+            }
+          ],
+          "request_id": 9,
+          "error": "success"
+        },
+        "sub-text": {
+          "request_id": 10,
+          "error": "property unavailable"
+        },
+        "sub-text-ass": {
+          "request_id": 11,
+          "error": "property unavailable"
+        }
+      },
+      "off": {
+        "request_id": 12,
+        "error": "success"
+      }
+    },
+    "two-cached": {
+      "add": {
+        "data": null,
+        "request_id": 13,
+        "error": "success"
+      },
+      "state": {
+        "pause": {
+          "data": true,
+          "request_id": 14,
+          "error": "success"
+        },
+        "time-pos": {
+          "data": 0.0,
+          "request_id": 15,
+          "error": "success"
+        },
+        "sid": {
+          "data": 2,
+          "request_id": 16,
+          "error": "success"
+        },
+        "track-list": {
+          "data": [
+            {
+              "id": 1,
+              "type": "video",
+              "src-id": 1,
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": false,
+              "selected": true,
+              "main-selection": 0,
+              "ff-index": 0,
+              "decoder": "h264",
+              "decoder-desc": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "codec": "h264",
+              "codec-desc": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "codec-profile": "High",
+              "demux-w": 640,
+              "demux-h": 360,
+              "demux-fps": 30.0,
+              "demux-par": 1.0,
+              "metadata": {
+                "ENCODER": "Lavc63.1.102 libx264",
+                "DURATION": "00:00:08.000000000"
+              }
+            },
+            {
+              "id": 1,
+              "type": "audio",
+              "src-id": 2,
+              "audio-channels": 1,
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": false,
+              "selected": true,
+              "main-selection": 0,
+              "ff-index": 1,
+              "decoder": "aac",
+              "decoder-desc": "AAC (Advanced Audio Coding)",
+              "codec": "aac",
+              "codec-desc": "AAC (Advanced Audio Coding)",
+              "codec-profile": "LC",
+              "demux-channel-count": 1,
+              "demux-channels": "mono",
+              "demux-samplerate": 44100,
+              "metadata": {
+                "ENCODER": "Lavc63.1.102 aac",
+                "DURATION": "00:00:08.023000000"
+              }
+            },
+            {
+              "id": 1,
+              "type": "sub",
+              "title": "one.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": false,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/one.srt",
+              "ff-index": 0,
+              "codec": "subrip"
+            },
+            {
+              "id": 2,
+              "type": "sub",
+              "title": "two.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": true,
+              "main-selection": 0,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/two.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            }
+          ],
+          "request_id": 17,
+          "error": "success"
+        },
+        "sub-text": {
+          "data": "PLAIN TWO",
+          "request_id": 18,
+          "error": "success"
+        },
+        "sub-text-ass": {
+          "data": "PLAIN TWO",
+          "request_id": 19,
+          "error": "success"
+        }
+      },
+      "off": {
+        "request_id": 20,
+        "error": "success"
+      }
+    },
+    "one-cached": {
+      "add": {
+        "data": null,
+        "request_id": 21,
+        "error": "success"
+      },
+      "state": {
+        "pause": {
+          "data": true,
+          "request_id": 22,
+          "error": "success"
+        },
+        "time-pos": {
+          "data": 0.0,
+          "request_id": 23,
+          "error": "success"
+        },
+        "sid": {
+          "data": 1,
+          "request_id": 24,
+          "error": "success"
+        },
+        "track-list": {
+          "data": [
+            {
+              "id": 1,
+              "type": "video",
+              "src-id": 1,
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": false,
+              "selected": true,
+              "main-selection": 0,
+              "ff-index": 0,
+              "decoder": "h264",
+              "decoder-desc": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "codec": "h264",
+              "codec-desc": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "codec-profile": "High",
+              "demux-w": 640,
+              "demux-h": 360,
+              "demux-fps": 30.0,
+              "demux-par": 1.0,
+              "metadata": {
+                "ENCODER": "Lavc63.1.102 libx264",
+                "DURATION": "00:00:08.000000000"
+              }
+            },
+            {
+              "id": 1,
+              "type": "audio",
+              "src-id": 2,
+              "audio-channels": 1,
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": false,
+              "selected": true,
+              "main-selection": 0,
+              "ff-index": 1,
+              "decoder": "aac",
+              "decoder-desc": "AAC (Advanced Audio Coding)",
+              "codec": "aac",
+              "codec-desc": "AAC (Advanced Audio Coding)",
+              "codec-profile": "LC",
+              "demux-channel-count": 1,
+              "demux-channels": "mono",
+              "demux-samplerate": 44100,
+              "metadata": {
+                "ENCODER": "Lavc63.1.102 aac",
+                "DURATION": "00:00:08.023000000"
+              }
+            },
+            {
+              "id": 1,
+              "type": "sub",
+              "title": "one.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": true,
+              "main-selection": 0,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/one.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            },
+            {
+              "id": 2,
+              "type": "sub",
+              "title": "two.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": false,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/two.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            }
+          ],
+          "request_id": 25,
+          "error": "success"
+        },
+        "sub-text": {
+          "data": "PLAIN ONE",
+          "request_id": 26,
+          "error": "success"
+        },
+        "sub-text-ass": {
+          "data": "PLAIN ONE",
+          "request_id": 27,
+          "error": "success"
+        }
+      },
+      "off": {
+        "request_id": 28,
+        "error": "success"
+      }
+    },
+    "literal": {
+      "add": {
+        "data": null,
+        "request_id": 29,
+        "error": "success"
+      },
+      "shot": {
+        "data": null,
+        "request_id": 30,
+        "error": "success"
+      },
+      "state": {
+        "pause": {
+          "data": true,
+          "request_id": 31,
+          "error": "success"
+        },
+        "time-pos": {
+          "data": 0.0,
+          "request_id": 32,
+          "error": "success"
+        },
+        "sid": {
+          "data": 3,
+          "request_id": 33,
+          "error": "success"
+        },
+        "track-list": {
+          "data": [
+            {
+              "id": 1,
+              "type": "video",
+              "src-id": 1,
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": false,
+              "selected": true,
+              "main-selection": 0,
+              "ff-index": 0,
+              "decoder": "h264",
+              "decoder-desc": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "codec": "h264",
+              "codec-desc": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "codec-profile": "High",
+              "demux-w": 640,
+              "demux-h": 360,
+              "demux-fps": 30.0,
+              "demux-par": 1.0,
+              "metadata": {
+                "ENCODER": "Lavc63.1.102 libx264",
+                "DURATION": "00:00:08.000000000"
+              }
+            },
+            {
+              "id": 1,
+              "type": "audio",
+              "src-id": 2,
+              "audio-channels": 1,
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": false,
+              "selected": true,
+              "main-selection": 0,
+              "ff-index": 1,
+              "decoder": "aac",
+              "decoder-desc": "AAC (Advanced Audio Coding)",
+              "codec": "aac",
+              "codec-desc": "AAC (Advanced Audio Coding)",
+              "codec-profile": "LC",
+              "demux-channel-count": 1,
+              "demux-channels": "mono",
+              "demux-samplerate": 44100,
+              "metadata": {
+                "ENCODER": "Lavc63.1.102 aac",
+                "DURATION": "00:00:08.023000000"
+              }
+            },
+            {
+              "id": 1,
+              "type": "sub",
+              "title": "one.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": false,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/one.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            },
+            {
+              "id": 2,
+              "type": "sub",
+              "title": "two.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": false,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/two.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            },
+            {
+              "id": 3,
+              "type": "sub",
+              "title": "literal.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": true,
+              "main-selection": 0,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/literal.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            }
+          ],
+          "request_id": 34,
+          "error": "success"
+        },
+        "sub-text": {
+          "data": "literal B X \n END",
+          "request_id": 35,
+          "error": "success"
+        },
+        "sub-text-ass": {
+          "data": "literal {\\b1}B{\\b0} X \\N END",
+          "request_id": 36,
+          "error": "success"
+        }
+      }
+    },
+    "entities": {
+      "add": {
+        "data": null,
+        "request_id": 37,
+        "error": "success"
+      },
+      "shot": {
+        "data": null,
+        "request_id": 38,
+        "error": "success"
+      },
+      "state": {
+        "pause": {
+          "data": true,
+          "request_id": 39,
+          "error": "success"
+        },
+        "time-pos": {
+          "data": 0.0,
+          "request_id": 40,
+          "error": "success"
+        },
+        "sid": {
+          "data": 4,
+          "request_id": 41,
+          "error": "success"
+        },
+        "track-list": {
+          "data": [
+            {
+              "id": 1,
+              "type": "video",
+              "src-id": 1,
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": false,
+              "selected": true,
+              "main-selection": 0,
+              "ff-index": 0,
+              "decoder": "h264",
+              "decoder-desc": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "codec": "h264",
+              "codec-desc": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "codec-profile": "High",
+              "demux-w": 640,
+              "demux-h": 360,
+              "demux-fps": 30.0,
+              "demux-par": 1.0,
+              "metadata": {
+                "ENCODER": "Lavc63.1.102 libx264",
+                "DURATION": "00:00:08.000000000"
+              }
+            },
+            {
+              "id": 1,
+              "type": "audio",
+              "src-id": 2,
+              "audio-channels": 1,
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": false,
+              "selected": true,
+              "main-selection": 0,
+              "ff-index": 1,
+              "decoder": "aac",
+              "decoder-desc": "AAC (Advanced Audio Coding)",
+              "codec": "aac",
+              "codec-desc": "AAC (Advanced Audio Coding)",
+              "codec-profile": "LC",
+              "demux-channel-count": 1,
+              "demux-channels": "mono",
+              "demux-samplerate": 44100,
+              "metadata": {
+                "ENCODER": "Lavc63.1.102 aac",
+                "DURATION": "00:00:08.023000000"
+              }
+            },
+            {
+              "id": 1,
+              "type": "sub",
+              "title": "one.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": false,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/one.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            },
+            {
+              "id": 2,
+              "type": "sub",
+              "title": "two.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": false,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/two.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            },
+            {
+              "id": 3,
+              "type": "sub",
+              "title": "literal.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": false,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/literal.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            },
+            {
+              "id": 4,
+              "type": "sub",
+              "title": "entities.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": true,
+              "main-selection": 0,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/entities.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            }
+          ],
+          "request_id": 42,
+          "error": "success"
+        },
+        "sub-text": {
+          "data": "literal &lt;b&gt;B&lt;/b&gt; &#123;&#92;b1&#125;X&#123;&#92;b0&#125; &#92;N END",
+          "request_id": 43,
+          "error": "success"
+        },
+        "sub-text-ass": {
+          "data": "literal &lt;b&gt;B&lt;/b&gt; &#123;&#92;b1&#125;X&#123;&#92;b0&#125; &#92;N END",
+          "request_id": 44,
+          "error": "success"
+        }
+      }
+    },
+    "style": {
+      "fontSize": {
+        "request_id": 45,
+        "error": "success"
+      },
+      "color": {
+        "request_id": 46,
+        "error": "success"
+      },
+      "shot": {
+        "data": null,
+        "request_id": 47,
+        "error": "success"
+      },
+      "state": {
+        "pause": {
+          "data": true,
+          "request_id": 48,
+          "error": "success"
+        },
+        "time-pos": {
+          "data": 0.0,
+          "request_id": 49,
+          "error": "success"
+        },
+        "sid": {
+          "data": 4,
+          "request_id": 50,
+          "error": "success"
+        },
+        "track-list": {
+          "data": [
+            {
+              "id": 1,
+              "type": "video",
+              "src-id": 1,
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": false,
+              "selected": true,
+              "main-selection": 0,
+              "ff-index": 0,
+              "decoder": "h264",
+              "decoder-desc": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "codec": "h264",
+              "codec-desc": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "codec-profile": "High",
+              "demux-w": 640,
+              "demux-h": 360,
+              "demux-fps": 30.0,
+              "demux-par": 1.0,
+              "metadata": {
+                "ENCODER": "Lavc63.1.102 libx264",
+                "DURATION": "00:00:08.000000000"
+              }
+            },
+            {
+              "id": 1,
+              "type": "audio",
+              "src-id": 2,
+              "audio-channels": 1,
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": false,
+              "selected": true,
+              "main-selection": 0,
+              "ff-index": 1,
+              "decoder": "aac",
+              "decoder-desc": "AAC (Advanced Audio Coding)",
+              "codec": "aac",
+              "codec-desc": "AAC (Advanced Audio Coding)",
+              "codec-profile": "LC",
+              "demux-channel-count": 1,
+              "demux-channels": "mono",
+              "demux-samplerate": 44100,
+              "metadata": {
+                "ENCODER": "Lavc63.1.102 aac",
+                "DURATION": "00:00:08.023000000"
+              }
+            },
+            {
+              "id": 1,
+              "type": "sub",
+              "title": "one.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": false,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/one.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            },
+            {
+              "id": 2,
+              "type": "sub",
+              "title": "two.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": false,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/two.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            },
+            {
+              "id": 3,
+              "type": "sub",
+              "title": "literal.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": false,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/literal.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            },
+            {
+              "id": 4,
+              "type": "sub",
+              "title": "entities.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": true,
+              "main-selection": 0,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/entities.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            }
+          ],
+          "request_id": 51,
+          "error": "success"
+        },
+        "sub-text": {
+          "data": "literal &lt;b&gt;B&lt;/b&gt; &#123;&#92;b1&#125;X&#123;&#92;b0&#125; &#92;N END",
+          "request_id": 52,
+          "error": "success"
+        },
+        "sub-text-ass": {
+          "data": "literal &lt;b&gt;B&lt;/b&gt; &#123;&#92;b1&#125;X&#123;&#92;b0&#125; &#92;N END",
+          "request_id": 53,
+          "error": "success"
+        }
+      }
+    },
+    "delay": {
+      "set": {
+        "request_id": 54,
+        "error": "success"
+      },
+      "shot": {
+        "data": null,
+        "request_id": 55,
+        "error": "success"
+      },
+      "state": {
+        "pause": {
+          "data": true,
+          "request_id": 56,
+          "error": "success"
+        },
+        "time-pos": {
+          "data": 0.0,
+          "request_id": 57,
+          "error": "success"
+        },
+        "sid": {
+          "data": 4,
+          "request_id": 58,
+          "error": "success"
+        },
+        "track-list": {
+          "data": [
+            {
+              "id": 1,
+              "type": "video",
+              "src-id": 1,
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": false,
+              "selected": true,
+              "main-selection": 0,
+              "ff-index": 0,
+              "decoder": "h264",
+              "decoder-desc": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "codec": "h264",
+              "codec-desc": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "codec-profile": "High",
+              "demux-w": 640,
+              "demux-h": 360,
+              "demux-fps": 30.0,
+              "demux-par": 1.0,
+              "metadata": {
+                "ENCODER": "Lavc63.1.102 libx264",
+                "DURATION": "00:00:08.000000000"
+              }
+            },
+            {
+              "id": 1,
+              "type": "audio",
+              "src-id": 2,
+              "audio-channels": 1,
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": false,
+              "selected": true,
+              "main-selection": 0,
+              "ff-index": 1,
+              "decoder": "aac",
+              "decoder-desc": "AAC (Advanced Audio Coding)",
+              "codec": "aac",
+              "codec-desc": "AAC (Advanced Audio Coding)",
+              "codec-profile": "LC",
+              "demux-channel-count": 1,
+              "demux-channels": "mono",
+              "demux-samplerate": 44100,
+              "metadata": {
+                "ENCODER": "Lavc63.1.102 aac",
+                "DURATION": "00:00:08.023000000"
+              }
+            },
+            {
+              "id": 1,
+              "type": "sub",
+              "title": "one.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": false,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/one.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            },
+            {
+              "id": 2,
+              "type": "sub",
+              "title": "two.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": false,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/two.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            },
+            {
+              "id": 3,
+              "type": "sub",
+              "title": "literal.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": false,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/literal.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            },
+            {
+              "id": 4,
+              "type": "sub",
+              "title": "entities.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": true,
+              "main-selection": 0,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/entities.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            }
+          ],
+          "request_id": 59,
+          "error": "success"
+        },
+        "sub-text": {
+          "data": "",
+          "request_id": 60,
+          "error": "success"
+        },
+        "sub-text-ass": {
+          "data": "",
+          "request_id": 61,
+          "error": "success"
+        }
+      }
+    },
+    "resetDelay": {
+      "set": {
+        "request_id": 62,
+        "error": "success"
+      },
+      "shot": {
+        "data": null,
+        "request_id": 63,
+        "error": "success"
+      },
+      "state": {
+        "pause": {
+          "data": true,
+          "request_id": 64,
+          "error": "success"
+        },
+        "time-pos": {
+          "data": 0.0,
+          "request_id": 65,
+          "error": "success"
+        },
+        "sid": {
+          "data": 4,
+          "request_id": 66,
+          "error": "success"
+        },
+        "track-list": {
+          "data": [
+            {
+              "id": 1,
+              "type": "video",
+              "src-id": 1,
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": false,
+              "selected": true,
+              "main-selection": 0,
+              "ff-index": 0,
+              "decoder": "h264",
+              "decoder-desc": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "codec": "h264",
+              "codec-desc": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+              "codec-profile": "High",
+              "demux-w": 640,
+              "demux-h": 360,
+              "demux-fps": 30.0,
+              "demux-par": 1.0,
+              "metadata": {
+                "ENCODER": "Lavc63.1.102 libx264",
+                "DURATION": "00:00:08.000000000"
+              }
+            },
+            {
+              "id": 1,
+              "type": "audio",
+              "src-id": 2,
+              "audio-channels": 1,
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": false,
+              "selected": true,
+              "main-selection": 0,
+              "ff-index": 1,
+              "decoder": "aac",
+              "decoder-desc": "AAC (Advanced Audio Coding)",
+              "codec": "aac",
+              "codec-desc": "AAC (Advanced Audio Coding)",
+              "codec-profile": "LC",
+              "demux-channel-count": 1,
+              "demux-channels": "mono",
+              "demux-samplerate": 44100,
+              "metadata": {
+                "ENCODER": "Lavc63.1.102 aac",
+                "DURATION": "00:00:08.023000000"
+              }
+            },
+            {
+              "id": 1,
+              "type": "sub",
+              "title": "one.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": false,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/one.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            },
+            {
+              "id": 2,
+              "type": "sub",
+              "title": "two.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": false,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/two.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            },
+            {
+              "id": 3,
+              "type": "sub",
+              "title": "literal.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": false,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/literal.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            },
+            {
+              "id": 4,
+              "type": "sub",
+              "title": "entities.srt",
+              "image": false,
+              "albumart": false,
+              "default": false,
+              "forced": false,
+              "dependent": false,
+              "visual-impaired": false,
+              "hearing-impaired": false,
+              "external": true,
+              "selected": true,
+              "main-selection": 0,
+              "external-filename": "/tmp/vestra-subtitle-flags-_tzv4zpz/entities.srt",
+              "ff-index": 0,
+              "decoder": "srt",
+              "decoder-desc": "SubRip subtitle",
+              "codec": "subrip",
+              "codec-desc": "SubRip subtitle",
+              "codec-profile": "Advanced Sub Station Alpha"
+            }
+          ],
+          "request_id": 67,
+          "error": "success"
+        },
+        "sub-text": {
+          "data": "literal &lt;b&gt;B&lt;/b&gt; &#123;&#92;b1&#125;X&#123;&#92;b0&#125; &#92;N END",
+          "request_id": 68,
+          "error": "success"
+        },
+        "sub-text-ass": {
+          "data": "literal &lt;b&gt;B&lt;/b&gt; &#123;&#92;b1&#125;X&#123;&#92;b0&#125; &#92;N END",
+          "request_id": 69,
+          "error": "success"
+        }
+      }
+    },
+    "quit": {
+      "data": null,
+      "request_id": 70,
+      "error": "success"
+    }
+  },
+  "pixelComparisons": {
+    "baseline:literal": {
+      "equal": false,
+      "changedPixels": 1151,
+      "meanAbsDifference": 0.34336226851851853
+    },
+    "literal:entities": {
+      "equal": false,
+      "changedPixels": 7776,
+      "meanAbsDifference": 2.3274450231481483
+    },
+    "entities:style": {
+      "equal": false,
+      "changedPixels": 33416,
+      "meanAbsDifference": 9.113440393518518
+    },
+    "baseline:delay": {
+      "equal": true,
+      "changedPixels": 0,
+      "meanAbsDifference": 0.0
+    },
+    "style:reset-delay": {
+      "equal": true,
+      "changedPixels": 0,
+      "meanAbsDifference": 0.0
+    }
+  },
+  "decodedPixelHashes": {
+    "baseline": "83ae63eec1b04c8611a83fc5fa7c4d023230379e8ddecbc5753f3bb31a93194f",
+    "literal": "4f3d5177baebe23617b4755d481a5bdde754f698a3c59e1db68fbc584e8c4a51",
+    "entities": "1c22aaadb7808ba1f8226d251c84dfa2aa7bc3e13606fff8e3d805a4160f9979",
+    "style": "4ddc32cdbb0e172ce754caf35d88be73898e2806a40154d15aa0da2c1b6c7fde",
+    "delay": "83ae63eec1b04c8611a83fc5fa7c4d023230379e8ddecbc5753f3bb31a93194f",
+    "reset-delay": "4ddc32cdbb0e172ce754caf35d88be73898e2806a40154d15aa0da2c1b6c7fde"
+  },
+  "limits": [
+    "Standalone CLI screenshots only, not host/SDK/Slint acceptance.",
+    "Text properties do not alone prove visual escaping semantics.",
+    "Null audio output, no physical audio continuity proof."
+  ]
+}

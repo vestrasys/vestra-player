@@ -1,0 +1,26 @@
+[
+  {
+    "file": "@earendil-works/pi-agent-core/dist/types.d.ts",
+    "sha256": "298f599e6b24c0cfeb5f6e593cbe1a85b373b04ebc221491cb178b941dbef584"
+  },
+  {
+    "file": "@earendil-works/pi-agent-core/dist/agent.d.ts",
+    "sha256": "1ae9fb28e132a7d0c545c96b69bca5a69db1374695853d12921bc623709a7589"
+  },
+  {
+    "file": "@earendil-works/pi-agent-core/dist/agent-loop.js",
+    "sha256": "4d56e5352826e0dbe324eedd2b632d19867aff8844d1f010b3cdcd34069da7fb"
+  },
+  {
+    "file": "@earendil-works/pi-ai/dist/types.d.ts",
+    "sha256": "4e76c0f67e2cb7243321059dbe212b676835c98ccc78344b3e2b052521e6803e"
+  },
+  {
+    "file": "@earendil-works/pi-ai/dist/utils/event-stream.js",
+    "sha256": "fe0d774b75db25ff0149d4267884bc4fd34db82d53c26843758d0eda2467ce65"
+  },
+  {
+    "file": "@earendil-works/pi-ai/dist/utils/event-stream.d.ts",
+    "sha256": "e26941ca8943d32b168550b06e29ae79e3c1f500ca812996357426fe800ec176"
+  }
+]

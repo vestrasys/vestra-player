@@ -1,0 +1,166 @@
+{
+  "elapsedMs": 151449,
+  "core": {
+    "generatedFrames": 9392,
+    "generatedAudioCursor": 7501449,
+    "frameEvents": 9392,
+    "frameSamples": 799,
+    "peak": 0.762664794921875,
+    "nonzeroFrames": 5552631,
+    "epoch": 1,
+    "sendCursor": 7070148,
+    "pressedButtons": [],
+    "lastFrameSha256": "77555cc7670b52ba8be2e4d6d66594707f802a3192c5c843f3820eaba267bdfe",
+    "pcmSha256": "204ea680e0644e222fe1acf5597cb7dc12ffb22ea6f460599f977c4bcd08ca92",
+    "frameSequenceSha256": "afcb13571b353cd0e1a6d77973faf6cb64e6b0911964567a481a04eb5b9c8b10"
+  },
+  "producer": {
+    "acknowledged": true,
+    "active": true,
+    "buffer": {
+      "actualFrames": 1024,
+      "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+      "device": "MacBook Air Speakers",
+      "oneBufferMilliseconds": 21.333333333333332,
+      "requestedFrames": 1024,
+      "supported": "Range { min: 15, max: 4096 }"
+    },
+    "consumedFrames": 7067507,
+    "deviceChangeEvents": 0,
+    "deviceErrors": 0,
+    "epoch": 1,
+    "error": null,
+    "errorDetails": [],
+    "errorOverflow": 0,
+    "hasVideo": false,
+    "health": "ok",
+    "input": {
+      "keys": [
+        "ArrowUp",
+        "ArrowDown",
+        "ArrowLeft",
+        "ArrowRight",
+        "KeyX",
+        "KeyZ",
+        "Enter",
+        "ShiftLeft",
+        "ShiftRight"
+      ],
+      "pending": null,
+      "state": {
+        "captured": false,
+        "pressed": [],
+        "reason": null,
+        "scope": {
+          "inputEpoch": 1,
+          "owner": 1,
+          "producerId": 1,
+          "ticket": {
+            "cycle": 1,
+            "owner": 1,
+            "stamp": {
+              "generation": 1,
+              "intentVersion": 1
+            }
+          }
+        },
+        "sequence": 0
+      }
+    },
+    "paused": false,
+    "pendingControl": null,
+    "producerId": 1,
+    "receivedFrames": 7070148,
+    "underrunFrames": 208013,
+    "xrunEvents": 0
+  },
+  "source": {
+    "audioHealth": {
+      "buffer": {
+        "actualFrames": 1024,
+        "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+        "device": "MacBook Air Speakers",
+        "oneBufferMilliseconds": 21.333333333333332,
+        "requestedFrames": 1024,
+        "supported": "Range { min: 15, max: 4096 }"
+      },
+      "deviceChangeEvents": 0,
+      "deviceErrors": 0,
+      "errorDetails": [],
+      "errorOverflow": 0,
+      "status": "ok",
+      "xrunEvents": 0
+    },
+    "audioTracks": null,
+    "capabilities": {
+      "close": true,
+      "pause": true,
+      "rate": false,
+      "restart": false,
+      "seek": false,
+      "snapshotSource": false
+    },
+    "container": null,
+    "controlPending": false,
+    "cycle": 1,
+    "duration": null,
+    "eventSequence": 1642,
+    "kind": "producer",
+    "loadingOwner": null,
+    "output": {
+      "muted": false,
+      "volume": 100
+    },
+    "paused": false,
+    "phase": "ready",
+    "position": 147.28239583333334,
+    "rate": 1,
+    "source": "producer://1",
+    "stamp": {
+      "generation": 1,
+      "intentVersion": 1
+    },
+    "terminalReason": null
+  },
+  "window": {
+    "canvasAvailableHeight": 642,
+    "canvasAvailableWidth": 1084,
+    "dialogOpen": false,
+    "fullscreen": false,
+    "logicalHeight": 720,
+    "logicalWidth": 1100,
+    "menuOpen": false,
+    "nativeActive": false,
+    "nativeUnavailable": null,
+    "shellGeneration": 1,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": null,
+      "fullscreen": false,
+      "nextDeadlineMs": null,
+      "sidebar": null,
+      "sidebarWidth": 0
+    }
+  },
+  "windowEventsRecorded": 0,
+  "windowEventsOmitted": 0,
+  "timing": {
+    "producerPolls": 4247,
+    "inputPolls": 4245,
+    "maxInputPollGapMs": 591.0482080000002,
+    "maxStateRpcMs": 538.302208000001,
+    "batches": 4219,
+    "maxBatchWallMs": 81.38837500000227,
+    "maxBatchCoreMs": 79.16420800000924
+  },
+  "lastPollTiming": {
+    "at": 1792276980734,
+    "rpcMs": 29.37045799999032,
+    "coreFrame": 9392,
+    "generatedAudioCursor": 7501449,
+    "consumedFrames": 7067507,
+    "inputPendingSequence": null
+  },
+  "appliedReceipts": 0,
+  "replayedReceipts": 0
+}

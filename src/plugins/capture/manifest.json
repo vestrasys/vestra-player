@@ -1,0 +1,15 @@
+{
+  "id": "vestra.capture",
+  "apiVersion": "vestra.experimental/0.1",
+  "entry": "dist/main.js",
+  "capabilities": [
+    "commands",
+    "events",
+    "ui.window",
+    "ui.dialog",
+    "media.read",
+    "media.control",
+    "playback.read",
+    "subtitles.read"
+  ]
+}

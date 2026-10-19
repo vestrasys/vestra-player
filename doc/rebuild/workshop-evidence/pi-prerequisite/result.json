@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "actions": 6,
+  "repairs": 1,
+  "modelTurns": 3,
+  "durationMs": 984,
+  "finalStopReason": "stop",
+  "sourceSha256": "00f822dbee23490a33dbb640400a2bbef687a66449631ae61c522519a23858fa",
+  "emittedSha256": "395398fc8d371137375bc3e63e38965d26c7f2ed8cf3abda9f4ceb1bbad85b72",
+  "counterBehavior": [
+    1,
+    2,
+    0
+  ],
+  "pendingChild": false,
+  "scope": "real Pi loop + standalone TS only; not product/plugin/Slint/trial/install"
+}

@@ -1,0 +1,604 @@
+[
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-show_streams",
+      "-show_format",
+      "-of",
+      "json",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/raw-second-low-muted.mp4"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/raw-second-low-muted.mp4",
+      "-map",
+      "0:v:0",
+      "-f",
+      "framemd5",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/raw-second-low-muted/video-framemd5.txt"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/raw-second-low-muted.mp4",
+      "-map",
+      "0:a:0",
+      "-ar",
+      "48000",
+      "-ac",
+      "1",
+      "-f",
+      "f32le",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/raw-second-low-muted/audio.f32"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-show_streams",
+      "-show_format",
+      "-of",
+      "json",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/raw-selected.mp4"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/raw-selected.mp4",
+      "-map",
+      "0:v:0",
+      "-f",
+      "framemd5",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/raw-selected/video-framemd5.txt"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/raw-selected.mp4",
+      "-map",
+      "0:a:0",
+      "-ar",
+      "48000",
+      "-ac",
+      "1",
+      "-f",
+      "f32le",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/raw-selected/audio.f32"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-show_streams",
+      "-show_format",
+      "-of",
+      "json",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/raw-none.mp4"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/raw-none.mp4",
+      "-map",
+      "0:v:0",
+      "-f",
+      "framemd5",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/raw-none/video-framemd5.txt"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-show_streams",
+      "-show_format",
+      "-of",
+      "json",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/raw-second-high.mp4"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/raw-second-high.mp4",
+      "-map",
+      "0:v:0",
+      "-f",
+      "framemd5",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/raw-second-high/video-framemd5.txt"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/raw-second-high.mp4",
+      "-map",
+      "0:a:0",
+      "-ar",
+      "48000",
+      "-ac",
+      "1",
+      "-f",
+      "f32le",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/raw-second-high/audio.f32"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-show_streams",
+      "-show_format",
+      "-of",
+      "json",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/processed-old-before.mp4"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/processed-old-before.mp4",
+      "-map",
+      "0:v:0",
+      "-f",
+      "framemd5",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/processed-old-before/video-framemd5.txt"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/processed-old-before.mp4",
+      "-map",
+      "0:a:0",
+      "-ar",
+      "48000",
+      "-ac",
+      "1",
+      "-f",
+      "f32le",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/processed-old-before/audio.f32"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-show_streams",
+      "-show_format",
+      "-of",
+      "json",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/positive-prefix.mp4"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/positive-prefix.mp4",
+      "-map",
+      "0:v:0",
+      "-f",
+      "framemd5",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/positive-prefix/video-framemd5.txt"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/positive-prefix.mp4",
+      "-map",
+      "0:a:0",
+      "-ar",
+      "48000",
+      "-ac",
+      "1",
+      "-f",
+      "f32le",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/positive-prefix/audio.f32"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-show_streams",
+      "-show_format",
+      "-of",
+      "json",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/processed-zero.mp4"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/processed-zero.mp4",
+      "-map",
+      "0:v:0",
+      "-f",
+      "framemd5",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/processed-zero/video-framemd5.txt"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/processed-zero.mp4",
+      "-map",
+      "0:a:0",
+      "-ar",
+      "48000",
+      "-ac",
+      "1",
+      "-f",
+      "f32le",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/processed-zero/audio.f32"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-show_streams",
+      "-show_format",
+      "-of",
+      "json",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/processed-negative.mp4"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/processed-negative.mp4",
+      "-map",
+      "0:v:0",
+      "-f",
+      "framemd5",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/processed-negative/video-framemd5.txt"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/processed-negative.mp4",
+      "-map",
+      "0:a:0",
+      "-ar",
+      "48000",
+      "-ac",
+      "1",
+      "-f",
+      "f32le",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/processed-negative/audio.f32"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-show_streams",
+      "-show_format",
+      "-of",
+      "json",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/negative-tail.mp4"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/negative-tail.mp4",
+      "-map",
+      "0:v:0",
+      "-f",
+      "framemd5",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/negative-tail/video-framemd5.txt"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/negative-tail.mp4",
+      "-map",
+      "0:a:0",
+      "-ar",
+      "48000",
+      "-ac",
+      "1",
+      "-f",
+      "f32le",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/negative-tail/audio.f32"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-show_streams",
+      "-show_format",
+      "-of",
+      "json",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/processed-old-after-switch-disable.mp4"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/processed-old-after-switch-disable.mp4",
+      "-map",
+      "0:v:0",
+      "-f",
+      "framemd5",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/processed-old-after-switch-disable/video-framemd5.txt"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/processed-old-after-switch-disable.mp4",
+      "-map",
+      "0:a:0",
+      "-ar",
+      "48000",
+      "-ac",
+      "1",
+      "-f",
+      "f32le",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/processed-old-after-switch-disable/audio.f32"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-show_streams",
+      "-show_format",
+      "-of",
+      "json",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/endpoint-raw-two.mp4"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/endpoint-raw-two.mp4",
+      "-map",
+      "0:v:0",
+      "-f",
+      "framemd5",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/endpoint-raw-two/video-framemd5.txt"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-show_streams",
+      "-show_format",
+      "-of",
+      "json",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/endpoint-processed-two.mp4"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/outputs/endpoint-processed-two.mp4",
+      "-map",
+      "0:v:0",
+      "-f",
+      "framemd5",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/analysis/endpoint-processed-two/video-framemd5.txt"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-threads",
+      "1",
+      "-filter_threads",
+      "1",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/fixtures/a.mp4",
+      "-map",
+      "0:v:0",
+      "-vf",
+      "eq=brightness=0.12:contrast=1:saturation=1:gamma=1,scale=w='max(1,round(iw*sar))':h=ih,setsar=1,subtitles=filename='/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/references/mp4-old.vtt':fontsdir='/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/fonts':force_style='FontName=Noto Sans CJK SC,FontSize=12,PrimaryColour=&H0000FFFF,SecondaryColour=&H0000FFFF,OutlineColour=&H00000000,BackColour=&H00000000,BorderStyle=1,Outline=0.16666666666666666,Shadow=0,Alignment=2,MarginL=4,MarginR=4,MarginV=9,Bold=0,Italic=0,Spacing=0,ScaleX=1,ScaleY=1,PlayResX=320,PlayResY=180,ScaledBorderAndShadow=yes',trim=start=4:end=8,setpts=PTS-STARTPTS,pad=ceil(iw/2)*2:ceil(ih/2)*2:color=black",
+      "-an",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "18",
+      "-pix_fmt",
+      "yuv420p",
+      "-threads",
+      "1",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/references/old-video-subtitled.mp4"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-v",
+      "error",
+      "-threads",
+      "1",
+      "-filter_threads",
+      "1",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/fixtures/a.mp4",
+      "-map",
+      "0:v:0",
+      "-vf",
+      "eq=brightness=0.12:contrast=1:saturation=1:gamma=1,scale=w='max(1,round(iw*sar))':h=ih,setsar=1,trim=start=4:end=8,setpts=PTS-STARTPTS,pad=ceil(iw/2)*2:ceil(ih/2)*2:color=black",
+      "-an",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "18",
+      "-pix_fmt",
+      "yuv420p",
+      "-threads",
+      "1",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-review-kgTUpq/references/old-video-no-subtitle.mp4"
+    ],
+    "exitCode": 0,
+    "stderr": ""
+  }
+]

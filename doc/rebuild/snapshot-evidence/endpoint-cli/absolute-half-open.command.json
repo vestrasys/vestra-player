@@ -1,0 +1,17 @@
+[
+  "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+  "-hide_banner",
+  "-v",
+  "info",
+  "-f",
+  "lavfi",
+  "-i",
+  "testsrc2=size=64x64:rate=30:duration=1",
+  "-vf",
+  "trim=start=0.31:end=0.32,setpts=PTS-STARTPTS,showinfo",
+  "-fps_mode",
+  "passthrough",
+  "-f",
+  "null",
+  "-"
+]

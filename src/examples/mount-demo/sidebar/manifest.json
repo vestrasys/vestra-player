@@ -1,0 +1,9 @@
+{
+  "id": "example.mount-list",
+  "apiVersion": "vestra.experimental/0.1",
+  "entry": "main.ts",
+  "capabilities": [
+    "ui.mount",
+    "commands"
+  ]
+}

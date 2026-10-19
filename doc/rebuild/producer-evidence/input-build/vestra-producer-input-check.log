@@ -1,0 +1,127 @@
+   Compiling i-slint-backend-selector v1.16.1
+    Checking slint-interpreter v1.16.1
+    Checking slint v1.16.1
+    Checking vestra-host v0.1.0 (/Users/ziyang/Documents/vestra-player/src/host)
+error[E0432]: unresolved import `crate::producer_input_delivery`
+   --> ../experiments/composition-probe/../../host/src/source_backend.rs:119:20
+    |
+119 |         use crate::producer_input_delivery::Error;
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^ could not find `producer_input_delivery` in the crate root
+
+error[E0433]: cannot find `producer_input` in the crate root
+  --> ../experiments/composition-probe/../../host/src/backend.rs:37:40
+   |
+37 |     pub input: Arc<Mutex<Option<crate::producer_input::Routing>>>,
+   |                                        ^^^^^^^^^^^^^^ could not find `producer_input` in the crate root
+
+error[E0433]: cannot find `producer_input_delivery` in the crate root
+   --> ../experiments/composition-probe/../../host/src/source_backend.rs:113:22
+    |
+113 |     delivery: crate::producer_input_delivery::Delivery,
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^ could not find `producer_input_delivery` in the crate root
+
+error[E0433]: cannot find `producer_input_delivery` in the crate root
+   --> ../experiments/composition-probe/../../host/src/source_backend.rs:118:34
+    |
+118 |     fn input_error(error: crate::producer_input_delivery::Error) -> RpcError {
+    |                                  ^^^^^^^^^^^^^^^^^^^^^^^ could not find `producer_input_delivery` in the crate root
+
+error[E0433]: cannot find `producer_input` in the crate root
+   --> ../experiments/composition-probe/../../host/src/source_backend.rs:132:50
+    |
+132 |     pub fn input_routing(&self) -> Option<crate::producer_input::Routing> {
+    |                                                  ^^^^^^^^^^^^^^ could not find `producer_input` in the crate root
+
+error[E0433]: cannot find `producer_input` in the crate root
+   --> ../experiments/composition-probe/../../host/src/source_backend.rs:136:20
+    |
+136 |             crate::producer_input::Routing {
+    |                    ^^^^^^^^^^^^^^ could not find `producer_input` in the crate root
+
+error[E0433]: cannot find `producer_input` in the crate root
+   --> ../experiments/composition-probe/../../host/src/source_backend.rs:167:35
+    |
+167 |                 let scope: crate::producer_input::Scope =
+    |                                   ^^^^^^^^^^^^^^ could not find `producer_input` in the crate root
+
+error[E0433]: cannot find `producer_input` in the crate root
+   --> ../experiments/composition-probe/../../host/src/source_backend.rs:575:44
+    |
+575 |                         .any(|key| !crate::producer_input::supported_code(key))
+    |                                            ^^^^^^^^^^^^^^ could not find `producer_input` in the crate root
+
+error[E0433]: cannot find `producer_input` in the crate root
+   --> ../experiments/composition-probe/../../host/src/source_backend.rs:601:40
+    |
+601 |                     let state = crate::producer_input::State::new(
+    |                                        ^^^^^^^^^^^^^^ could not find `producer_input` in the crate root
+
+error[E0433]: cannot find `producer_input` in the crate root
+   --> ../experiments/composition-probe/../../host/src/source_backend.rs:602:32
+    |
+602 |                         crate::producer_input::Scope {
+    |                                ^^^^^^^^^^^^^^ could not find `producer_input` in the crate root
+
+error[E0433]: cannot find `producer_input_delivery` in the crate root
+   --> ../experiments/composition-probe/../../host/src/source_backend.rs:612:42
+    |
+612 |                         delivery: crate::producer_input_delivery::Delivery::new(state),
+    |                                          ^^^^^^^^^^^^^^^^^^^^^^^ could not find `producer_input_delivery` in the crate root
+
+error[E0433]: cannot find `producer_input` in the crate root
+   --> ../experiments/composition-probe/../../host/src/source_backend.rs:972:52
+    |
+972 | ...                   .revoke(crate::producer_input::RevokeReason::Pause, now)
+    |                                      ^^^^^^^^^^^^^^ could not find `producer_input` in the crate root
+
+error[E0433]: cannot find `producer_input_delivery` in the crate root
+   --> ../experiments/composition-probe/../../host/src/source_backend.rs:209:24
+    |
+209 |                 crate::producer_input_delivery::Error::TimedOut
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^ could not find `producer_input_delivery` in the crate root
+    |
+help: consider importing one of these items
+    |
+  2 + use crate::producer_binary::Error;
+    |
+  2 + use crate::producer_controls::Error;
+    |
+  2 + use crate::subtitle_state::Error;
+    |
+  2 + use crate::subtitle_style::Error;
+    |
+    = and 6 other candidates
+help: if you import `Error`, refer to it directly
+    |
+209 -                 crate::producer_input_delivery::Error::TimedOut
+209 +                 Error::TimedOut
+    |
+
+error[E0433]: cannot find `producer_input_delivery` in the crate root
+   --> ../experiments/composition-probe/../../host/src/source_backend.rs:210:30
+    |
+210 |                     | crate::producer_input_delivery::Error::Exhausted
+    |                              ^^^^^^^^^^^^^^^^^^^^^^^ could not find `producer_input_delivery` in the crate root
+    |
+help: consider importing one of these items
+    |
+  2 + use crate::producer_binary::Error;
+    |
+  2 + use crate::producer_controls::Error;
+    |
+  2 + use crate::subtitle_state::Error;
+    |
+  2 + use crate::subtitle_style::Error;
+    |
+    = and 6 other candidates
+help: if you import `Error`, refer to it directly
+    |
+210 -                     | crate::producer_input_delivery::Error::Exhausted
+210 +                     | Error::Exhausted
+    |
+
+Some errors have detailed explanations: E0432, E0433.
+For more information about an error, try `rustc --explain E0432`.
+error: could not compile `vestra-host` (bin "composition-probe") due to 14 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `vestra-host` (bin "composition-probe" test) due to 14 previous errors

@@ -1,0 +1,13 @@
+{
+  "args": [
+    "--headless",
+    "--silent",
+    "--seconds",
+    "8",
+    "--plugin",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-source-ended-review-eenyh1/consumer"
+  ],
+  "exitCode": 0,
+  "signal": null,
+  "work": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-source-ended-review-eenyh1"
+}

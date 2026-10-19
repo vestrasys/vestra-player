@@ -1,0 +1,15 @@
+{
+  "work": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-U6Oqhd",
+  "args": [
+    "--headless",
+    "--silent",
+    "--seconds",
+    "10",
+    "--frame-evidence-dir",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-U6Oqhd/frames",
+    "--plugin",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-U6Oqhd/consumer"
+  ],
+  "exitCode": 0,
+  "signal": null
+}

@@ -1,0 +1,96 @@
+{
+  "bugs": {
+    "url": "https://github.com/bfirsh/jsnes/issues"
+  },
+  "dist": {
+    "shasum": "3abe3b1261accc7b3d9c4e4763cd58a8e4660e4f",
+    "tarball": "https://registry.npmjs.org/jsnes/-/jsnes-2.1.0.tgz",
+    "fileCount": 56,
+    "integrity": "sha512-LUa++E5Dfs1A6ZYB5HiSOR4JrUzrZEXGLZ5Imczhu9lkg7f+94SqnLZ/MXwGa7oc02+j/xYyHR0azGQ6LCU68g==",
+    "signatures": [
+      {
+        "sig": "MEQCIETOHZMwSvPovFVtiC5iKATqYK9oNkQVieA01CtfRIFzAiALIqD7PUd4JK7ZMDKiY6zBPH+WwSnlrwG3r0lF9ot+GA==",
+        "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+      }
+    ],
+    "attestations": {
+      "url": "https://registry.npmjs.org/-/npm/v1/attestations/jsnes@2.1.0",
+      "provenance": {
+        "predicateType": "https://slsa.dev/provenance/v1"
+      }
+    },
+    "unpackedSize": 2026719
+  },
+  "main": "dist/jsnes.js",
+  "name": "jsnes",
+  "type": "module",
+  "author": {
+    "name": "Ben Firshman",
+    "email": "ben@firshman.com"
+  },
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./src/index.js",
+      "default": "./src/index.js",
+      "require": "./dist/jsnes.js"
+    }
+  },
+  "gitHead": "cbad9f1db57dfb275b90ffa26f9c479c355d8d5c",
+  "license": "Apache-2.0",
+  "scripts": {
+    "test": "npm run typecheck && prettier --check '**/*.{js,jsx,css}' && node --test ./test/*.spec.js",
+    "build": "webpack",
+    "format": "prettier --write '**/*.{js,jsx,css}'",
+    "typecheck": "tsc --noEmit",
+    "test:watch": "node --test --watch ./test/*.spec.js",
+    "prepublishOnly": "npm run build"
+  },
+  "_npmUser": {
+    "name": "GitHub Actions",
+    "email": "npm-oidc-no-reply@github.com",
+    "trustedPublisher": {
+      "id": "github",
+      "oidcConfigId": "oidc:2bdd02aa-6123-40e5-8334-b48689471b75"
+    }
+  },
+  "homepage": "https://github.com/bfirsh/jsnes",
+  "overrides": {
+    "eslint-webpack-plugin": {
+      "eslint": "$eslint"
+    }
+  },
+  "repository": {
+    "url": "git://github.com/bfirsh/jsnes.git",
+    "type": "git"
+  },
+  "_npmVersion": "11.11.0",
+  "description": "A JavaScript NES emulator",
+  "directories": {},
+  "maintainers": [
+    {
+      "name": "bfirsh",
+      "email": "ben@firshman.com"
+    }
+  ],
+  "_nodeVersion": "24.14.1",
+  "_hasShrinkwrap": false,
+  "devDependencies": {
+    "eslint": "^10.0.2",
+    "webpack": "^5.100.2",
+    "prettier": "^3.6.2",
+    "@eslint/js": "^10.0.1",
+    "typescript": "^6.0.2",
+    "@types/node": "^25.0.2",
+    "webpack-cli": "^7.0.2",
+    "eslint-webpack-plugin": "^6.0.0",
+    "terser-webpack-plugin": "^5.3.10",
+    "eslint-config-prettier": "^10.1.8"
+  },
+  "_npmOperationalInternal": {
+    "tmp": "tmp/jsnes_2.1.0_1775951731470_0.9338587693136804",
+    "host": "s3://npm-registry-packages-npm-production"
+  },
+  "_id": "jsnes@2.1.0",
+  "version": "2.1.0"
+}

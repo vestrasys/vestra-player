@@ -1,0 +1,7 @@
+# Trial request recovery increment (2026-10-19)
+
+Wire remains `vestra.experimental/0.1`. `packages.trial(token, requestId?)` accepts an optional 1–128-byte string. `packages.trialStateByRequest(requestId)` recovers a lost initial reply in the same calling plugin instance. Matching request and candidate digest returns the original trial, including stopping/stopped states; another digest returns `conflict`. Requests are scoped to the caller, and unknown queries return `missing` without executing code.
+
+The existing host-lifetime limit is 16 retained trial records, including stopped records. Full capacity rejects new trials; records are never evicted and replayed as new work. Trials are not persistent across host restart. Old callers omitting requestId retain the previous behavior. `stopTrial(trialId)` still requires actual child reap and backend cleanup acknowledgements before `cleanupConfirmed`.
+
+Actual native-host public-RPC evidence: `/tmp/vestra-current-candidates-DiY2ld/result.json`, first seven observations pass: lost-reply lookup, exact replay, digest conflict, ready, confirmed stop, stopped replay, missing lookup. The combined run exits 1 because an additional capture bridge probe incorrectly required the error text to name its callback; its actual rejection is `host: no such callback`. This failure is retained. Host cleanup was awaited SIGTERM, not natural exit 0. Build with producer-audio-probe and strict SDK TypeScript check both exit 0. No crash persistence or exhaustive capacity claim.

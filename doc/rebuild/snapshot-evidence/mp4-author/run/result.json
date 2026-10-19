@@ -1,0 +1,25 @@
+{
+  "pass": true,
+  "work": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-mp4-author-nGMVaR",
+  "analyses": {
+    "processed": {
+      "nrmse": 0.015689811558098544,
+      "decodedSamples": 192000,
+      "referenceSamples": 192000
+    },
+    "negative": {
+      "nrmse": 0.015676016366194413,
+      "decodedSamples": 192000,
+      "referenceSamples": 192000
+    },
+    "raw": {
+      "nrmse": 0.015676016366194413,
+      "decodedSamples": 192000,
+      "referenceSamples": 192000
+    }
+  },
+  "limits": [
+    "Author only, no live audio/device continuity or partial backend failure evidence.",
+    "Native subtitle freezing and full M3 remain incomplete."
+  ]
+}

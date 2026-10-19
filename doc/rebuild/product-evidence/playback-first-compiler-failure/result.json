@@ -1,0 +1,79 @@
+{
+  "passed": false,
+  "observations": [
+    {
+      "id": "vestra.playback",
+      "source": "/Users/ziyang/Documents/vestra-player/src/plugins/playback/dist",
+      "mode": "productionManaged",
+      "trace": [],
+      "passed": false,
+      "error": {
+        "code": "slint",
+        "message": "HostError: [Diagnostic { message: \"Cannot access id 'editor-input'\", span: SourceLocation { source_file: Some(\"/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-package-stage-9xcocJ/ui/bar.slint\"), span: Span { offset: 1373, length: 23 } }, level: Error }, Diagnostic { message: \"Cannot access id 'confirm-button'\", span: SourceLocation { source_file: Some(\"/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-package-stage-9xcocJ/ui/bar.slint\"), span: Span { offset: 1399, length: 25 } }, level: Error }, Diagnostic { message: \"Cannot access id 'cancel-button'\", span: SourceLocation { source_file: Some(\"/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-package-stage-9xcocJ/ui/bar.slint\"), span: Span { offset: 1427, length: 23 } }, level: Error }, Diagnostic { message: \"Exported component 'PlaybackBar' doesn't inherit Window. This is deprecated\", span: SourceLocation { source_file: Some(\"/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-package-stage-9xcocJ/ui/bar.slint\"), span: Span { offset: 1065, length: 11 } }, level: Warning }]"
+      }
+    }
+  ],
+  "commands": {
+    "revision": 0,
+    "roots": []
+  },
+  "window": {
+    "canvasAvailableHeight": 642,
+    "canvasAvailableWidth": 1084,
+    "dialogOpen": false,
+    "fullscreen": false,
+    "logicalHeight": 720,
+    "logicalWidth": 1100,
+    "menuOpen": false,
+    "nativeActive": true,
+    "nativeUnavailable": null,
+    "shellGeneration": 1,
+    "sidebarResize": null,
+    "slots": {
+      "bottom": null,
+      "fullscreen": false,
+      "nextDeadlineMs": null,
+      "sidebar": null,
+      "sidebarWidth": 0
+    }
+  },
+  "source": {
+    "audioTracks": null,
+    "capabilities": {
+      "close": false,
+      "pause": false,
+      "rate": false,
+      "restart": false,
+      "seek": false,
+      "snapshotSource": false
+    },
+    "container": null,
+    "cycle": 0,
+    "duration": null,
+    "eventSequence": 0,
+    "kind": "media",
+    "loadingOwner": null,
+    "output": {
+      "muted": false,
+      "volume": 100
+    },
+    "paused": false,
+    "phase": "empty",
+    "position": null,
+    "rate": 1,
+    "snapshotProfile": {
+      "fileOriginValidation": "deferred-worker-origin-match-required",
+      "timeDomain": "mpv-media"
+    },
+    "source": null,
+    "stamp": {
+      "generation": 0,
+      "intentVersion": 0
+    },
+    "terminalReason": null
+  },
+  "limits": [
+    "Actual product JS/TS activation and Slint preparation only. No visible clicking or product feature acceptance.",
+    "Production packages use the real managed API in an independent temporary store."
+  ]
+}

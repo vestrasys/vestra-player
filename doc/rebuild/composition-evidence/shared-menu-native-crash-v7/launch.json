@@ -1,0 +1,33 @@
+{
+  "work": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-shared-6On0Vx",
+  "bundle": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-shared-6On0Vx/Vestra Shared UI.app",
+  "id": "local.vestra.rebuild.shared-ui-v7",
+  "command": [
+    "open",
+    "-n",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-shared-6On0Vx/Vestra Shared UI.app",
+    "--env",
+    "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+    "--env",
+    "VESTRA_DEMO_MEDIA=/tmp/vestra-mount-shared-20261017.mp4",
+    "--env",
+    "VESTRA_TRACE=1",
+    "--env",
+    "VESTRA_SIDEBAR_PACKAGE=/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-shared-6On0Vx/Vestra Shared UI.app/Contents/Resources/examples/mount-demo/sidebar",
+    "--env",
+    "VESTRA_BAD_MOUNT_PLUGIN=/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-shared-6On0Vx/Vestra Shared UI.app/Contents/Resources/examples/bad-mount",
+    "--stdout",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-shared-6On0Vx/stdout.log",
+    "--stderr",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-shared-6On0Vx/stderr.log",
+    "--args",
+    "--plugin",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-shared-6On0Vx/Vestra Shared UI.app/Contents/Resources/examples/host-ui-demo",
+    "--plugin",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-shared-6On0Vx/Vestra Shared UI.app/Contents/Resources/examples/mount-demo/bottom",
+    "--plugin",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-shared-6On0Vx/Vestra Shared UI.app/Contents/Resources/examples/mount-demo/sidebar",
+    "--seconds",
+    "600"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "work": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-jobs-review-ZKvAA3",
+  "args": [
+    "--headless",
+    "--silent",
+    "--seconds",
+    "18",
+    "--frame-evidence-dir",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-jobs-review-ZKvAA3/frames",
+    "--plugin",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-jobs-review-ZKvAA3/consumer"
+  ],
+  "exitCode": 0,
+  "signal": null
+}

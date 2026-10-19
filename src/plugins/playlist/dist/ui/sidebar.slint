@@ -1,0 +1,77 @@
+import { Button, ListView } from "std-widgets.slint";
+export struct PlaylistRow { rowId: string, label: string, status: string, selected: bool, current: bool }
+export global PlaylistBridge {
+    in-out property <[PlaylistRow]> rows;
+    in-out property <string> message;
+    in-out property <string> details;
+    in-out property <bool> can-add: true;
+    in-out property <bool> can-play;
+    in-out property <bool> can-previous;
+    in-out property <bool> can-next;
+    in-out property <bool> can-remove;
+    in-out property <bool> can-up;
+    in-out property <bool> can-down;
+    in-out property <bool> can-clear;
+    callback action(string);
+    callback select-row(string);
+    callback play-row(string);
+    callback select-step(int);
+    callback hide();
+    callback focus-changed(bool);
+}
+export component PlaylistSidebar inherits Rectangle {
+    min-width: 240px;
+    preferred-width: 280px;
+    background: #202631;
+    list-focus := FocusScope {
+        changed has-focus => { PlaylistBridge.focus-changed(self.has-focus); }
+        key-pressed(event) => {
+            if event.text == Key.UpArrow { PlaylistBridge.select-step(-1); return accept; }
+            if event.text == Key.DownArrow { PlaylistBridge.select-step(1); return accept; }
+            if event.text == Key.Return { PlaylistBridge.action("play"); return accept; }
+            if event.text == Key.Delete { PlaylistBridge.action("remove"); return accept; }
+            return reject;
+        }
+        VerticalLayout {
+            padding: 10px; spacing: 7px;
+            HorizontalLayout {
+                Text { text: "播放列表"; color: #f3f5fa; font-size: 16px; vertical-alignment: center; horizontal-stretch: 1; }
+                Button { text: "×"; clicked => { PlaylistBridge.hide(); } }
+            }
+            HorizontalLayout {
+                Button { text: "添加文件…"; enabled: PlaylistBridge.can-add; clicked => { PlaylistBridge.action("add"); } }
+                Button { text: "添加链接…"; clicked => { PlaylistBridge.action("link"); } }
+            }
+            HorizontalLayout {
+                Button { text: "上一项"; enabled: PlaylistBridge.can-previous; clicked => { PlaylistBridge.action("previous"); } }
+                Button { text: "播放"; enabled: PlaylistBridge.can-play; clicked => { PlaylistBridge.action("play"); } }
+                Button { text: "下一项"; enabled: PlaylistBridge.can-next; clicked => { PlaylistBridge.action("next"); } }
+            }
+            ListView {
+                vertical-stretch: 1;
+                for row in PlaylistBridge.rows: Rectangle {
+                    height: 54px;
+                    background: row.selected ? #365478 : #29313f;
+                    border-radius: 4px;
+                    VerticalLayout {
+                        padding: 7px; spacing: 2px;
+                        Text { text: (row.current ? "▶ " : "") + row.label; color: #f3f5fa; overflow: elide; }
+                        Text { text: row.status; color: #b7c7df; font-size: 11px; }
+                    }
+                    TouchArea {
+                        clicked => { list-focus.focus(); PlaylistBridge.select-row(row.rowId); }
+                        double-clicked => { list-focus.focus(); PlaylistBridge.play-row(row.rowId); }
+                    }
+                }
+            }
+            HorizontalLayout {
+                Button { text: "移除"; enabled: PlaylistBridge.can-remove; clicked => { PlaylistBridge.action("remove"); } }
+                Button { text: "上移"; enabled: PlaylistBridge.can-up; clicked => { PlaylistBridge.action("move-up"); } }
+                Button { text: "下移"; enabled: PlaylistBridge.can-down; clicked => { PlaylistBridge.action("move-down"); } }
+                Button { text: "清空"; enabled: PlaylistBridge.can-clear; clicked => { PlaylistBridge.action("clear"); } }
+            }
+            Text { text: PlaylistBridge.details; color: #bcc7d8; wrap: word-wrap; max-height: 66px; overflow: elide; font-size: 11px; }
+            Text { text: PlaylistBridge.message; color: #dfebff; wrap: word-wrap; max-height: 55px; overflow: elide; font-size: 12px; }
+        }
+    }
+}

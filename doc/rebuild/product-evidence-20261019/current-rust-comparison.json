@@ -1,0 +1,202 @@
+[
+  {
+    "file": "source_lease.rs",
+    "sha256": "9e261a8dbfc762bc2abfa670cf6eb91cb114d454ace4119210610876ba6ed1a5",
+    "cacheSame": true
+  },
+  {
+    "file": "session.rs",
+    "sha256": "06ce6c65a7b63315871b02b8449d17e87c77724911b8861ca7d2452e5ae70cae",
+    "cacheSame": true
+  },
+  {
+    "file": "producer.rs",
+    "sha256": "b27f1a50ae1334f0808adcdc25a6a1d0cc69dc0d248d6e391cfbb5fba3a87a65",
+    "cacheSame": true
+  },
+  {
+    "file": "ui.rs",
+    "sha256": "8e81f434b8ff94bed8d4c0ded0dec6b61658df65038371deb5dcc486da74a446",
+    "cacheSame": true
+  },
+  {
+    "file": "platform_window.rs",
+    "sha256": "a373cdc150c9488e6a73211f0ef924fc5fd600031438a208eae6d9aebe776ab8",
+    "cacheSame": true
+  },
+  {
+    "file": "producer_controls.rs",
+    "sha256": "d704251cb8c95d28861e4a0a906d9080573e83c6e47395d5fa29892c2c3f5b98",
+    "cacheSame": true
+  },
+  {
+    "file": "package_manager.rs",
+    "sha256": "0f79e9b058161a6e0a7bd596f9f568f44b8cc7d0c5daabb7a056dc4904bb3ad8",
+    "cacheSame": true
+  },
+  {
+    "file": "package_store.rs",
+    "sha256": "4ad3d44984767a7e6d8cf98665ddb32c4d833dc8c3ea897930316cbe347df1dd",
+    "cacheSame": true
+  },
+  {
+    "file": "backend.rs",
+    "sha256": "00194bab4a4909257255dd1a90790c8b7f526e06b8f0bd99b4b650cb3f74f3b4",
+    "cacheSame": true
+  },
+  {
+    "file": "media_jobs.rs",
+    "sha256": "7319be175b29eb4ffa3ecf7d930093c9e836df70f0025deef029dd528d3e0e51",
+    "cacheSame": true
+  },
+  {
+    "file": "effects.rs",
+    "sha256": "a2175816ae3dbef55c787e98c3ce39ba2a141140e59628d7b4007787118c7e01",
+    "cacheSame": true
+  },
+  {
+    "file": "plugins.rs",
+    "sha256": "268f15ceb1322934869f9e67f32abe57a2bd33310509c2ec89c1bd47b101d38c",
+    "cacheSame": true
+  },
+  {
+    "file": "subtitle_state.rs",
+    "sha256": "bf8978956554ddd1fa3d21055f18a9f5be4c59303aad72cd4b1dacf65c408f16",
+    "cacheSame": true
+  },
+  {
+    "file": "producer_input_delivery.rs",
+    "sha256": "c2a8af9ee8caf0e151b2ce20877ba5c74eac1c84be1994cfe8d2f1df4a5d4e0c",
+    "cacheSame": true
+  },
+  {
+    "file": "source_geometry.rs",
+    "sha256": "fd65f102463698eb854256bfc2c988729c8dbf47a1708151c5421077c83f2f98",
+    "cacheSame": true
+  },
+  {
+    "file": "package_activation.rs",
+    "sha256": "65cb77da64fb9aed6f836babea639b85850f7701abff144cc1ed91adaa7ec709",
+    "cacheSame": true
+  },
+  {
+    "file": "native_subtitle.rs",
+    "sha256": "19f4531cd0055bd11c056150e5d198f52ee64767b06fe53dc411ef60d0af6fb3",
+    "cacheSame": true
+  },
+  {
+    "file": "source_backend.rs",
+    "sha256": "e25e2ca42f48060201e021aba5a1e59a0def39f68d0b9d62774ca0a23ded27a3",
+    "cacheSame": true
+  },
+  {
+    "file": "commands.rs",
+    "sha256": "167070d61c59c86be05c7878dfc059e30a6205486dca59a3c1d72f50f22b15d9",
+    "cacheSame": true
+  },
+  {
+    "file": "font_carrier.rs",
+    "sha256": "01310f01b24762ecca337f3967b19b5908a56fe556a37d55b808194b68193fc5",
+    "cacheSame": true
+  },
+  {
+    "file": "package_stage.rs",
+    "sha256": "da7500d0c6ca99e6619d424eea3303118f9d1f7e23c49569cfe3693330c139e0",
+    "cacheSame": true
+  },
+  {
+    "file": "subtitle_backend.rs",
+    "sha256": "feac90f8f2276fa20c137b08681efbf6fe726df7108692fdca47481f213b0e16",
+    "cacheSame": true
+  },
+  {
+    "file": "offline_audio.rs",
+    "sha256": "9c72d6f2e241c52af589715d24a399e4d04ffd501f86e9132eb1e09def0a5f55",
+    "cacheSame": true
+  },
+  {
+    "file": "producer_input.rs",
+    "sha256": "f89d148a7f1df56e6a3517b7a6df824b030a9d1cb0b2d688a52819bf491b70c9",
+    "cacheSame": true
+  },
+  {
+    "file": "media_tracks.rs",
+    "sha256": "921d5323fa18cbbc364f0edfb9f919f6c5f60172ee652156c67161c9cad3959a",
+    "cacheSame": true
+  },
+  {
+    "file": "processing.rs",
+    "sha256": "a7296bfdcd1e3a0d3927e1a754a94abc6d49e5952447d480f148d11bf8713144",
+    "cacheSame": true
+  },
+  {
+    "file": "subtitle_style.rs",
+    "sha256": "adf660ba067863c839ed99acdd64dd7e92c0b5e7f1302c9d6a92d5084c633ab1",
+    "cacheSame": true
+  },
+  {
+    "file": "subtitle_format.rs",
+    "sha256": "35d2cabfc42a12ef6dd111ad6dcd6b473a4cd8323017dae31829db1569ce3936",
+    "cacheSame": true
+  },
+  {
+    "file": "media_worker.rs",
+    "sha256": "3289422e7e1f385d764438b45b9640ed3080f12553a1c5f7db72f9734b45701f",
+    "cacheSame": true
+  },
+  {
+    "file": "window_state.rs",
+    "sha256": "eb1c913196d8a11d5c671dd8f85bc0c2faf178ffcb480e9986e3447489121246",
+    "cacheSame": true
+  },
+  {
+    "file": "composition.rs",
+    "sha256": "b326e3b90f8d83a48238733dafa887097b59dc9d21f1ec3445010779b6738295",
+    "cacheSame": true
+  },
+  {
+    "file": "ui_values.rs",
+    "sha256": "edf73c1e0b7e970ad376624d05178fb21741694daea473d2a2d4f39c9db745a7",
+    "cacheSame": false
+  },
+  {
+    "file": "main.rs",
+    "sha256": "81f8f6b5a66a98a49875712b368ec9bac7d3e4da0117543c5347e613cdb07852",
+    "cacheSame": false
+  },
+  {
+    "file": "processing_operations.rs",
+    "sha256": "fe2f303e31ac38bc4a7c9ec916445c2093027a55a7085e88ade325536f36aaad",
+    "cacheSame": true
+  },
+  {
+    "file": "producer_binary.rs",
+    "sha256": "fa403c176a3f9cd7c723408293e8150010116bc5ffd2b7e625061cfead1cda31",
+    "cacheSame": true
+  },
+  {
+    "file": "source_resolvers.rs",
+    "sha256": "fd352d4267f30436935478a8b2ebb8855a18be533656d5b49458305169caae8b",
+    "cacheSame": true
+  },
+  {
+    "file": "font_asset.rs",
+    "sha256": "bc266cf14133ae62c24edc3b2326f29f1999430da4b167b0b3adbf62f0eb35f1",
+    "cacheSame": true
+  },
+  {
+    "file": "offline_descriptor.rs",
+    "sha256": "908f7312ab89767aa34a3b31756753ae42abc32ff595df1773dd8cfd8215148a",
+    "cacheSame": true
+  },
+  {
+    "file": "producer_audio.rs",
+    "sha256": "e9dd591527e62600f23798fc538ceded1de40bac7a81203e49287af86d3b446c",
+    "cacheSame": true
+  },
+  {
+    "file": "subtitle_upload.rs",
+    "sha256": "503c74a700ff86ec1d571288f3be8b7c99aaacb8dc758037a5fda228501f2c27",
+    "cacheSame": true
+  }
+]

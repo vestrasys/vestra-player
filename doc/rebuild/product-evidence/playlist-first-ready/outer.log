@@ -1,0 +1,2 @@
+{"root":"/tmp/vestra-product-slices-N0c8xH","packages":[{"id":"vestra.playlist","source":"/Users/ziyang/Documents/vestra-player/src/plugins/playlist","version":null}]}
+{"root":"/tmp/vestra-product-slices-N0c8xH","passed":true,"observations":[{"id":"vestra.playlist","passed":true}],"hostExit":{"code":null,"signal":"SIGTERM"}}

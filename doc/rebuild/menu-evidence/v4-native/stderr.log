@@ -1,0 +1,193 @@
+rpc request commands.register 1
+rpc receive {"id":1,"result":{"revision":1}}
+rpc request commands.register 2
+rpc receive {"id":2,"result":{"revision":2}}
+rpc request commands.register 3
+rpc receive {"id":3,"result":{"revision":3}}
+rpc request commands.register 4
+rpc receive {"id":4,"result":{"revision":4}}
+rpc request source.submit 5
+rpc receive {"id":5,"result":{"status":"completed","ticket":{"cycle":1,"owner":1,"stamp":{"generation":1,"intentVersion":1}}}}
+runtime 1 runtime.ready: null
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+rpc receive {"data":{"id":"open","revision":1},"event":"commands.execute"}
+rpc request dialogs.open 6
+rpc receive {"id":6,"result":{"cancelled":true,"paths":[]}}
+native dialog { cancelled: true, paths: [] }
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+rpc receive {"data":{"id":"open","revision":1},"event":"commands.execute"}
+rpc request dialogs.open 7
+rpc receive {"id":7,"result":{"cancelled":false,"paths":["/private/tmp/vestra-bootstrap-long.mp4"]}}
+native dialog {
+  cancelled: false,
+  paths: [ '/private/tmp/vestra-bootstrap-long.mp4' ]
+}
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+rpc receive {"data":{"id":"workbench","revision":1},"event":"commands.execute"}
+rpc request ui.open 8
+rpc receive {"id":8,"result":null}
+rpc receive {"data":{"args":[0.4000000059604645],"callback":"brightness","view":"processing"},"event":"ui.callback"}
+rpc request source.state 9
+rpc receive {"id":9,"result":{"capabilities":{"close":true,"pause":true,"rate":true,"restart":true,"seek":true},"cycle":1,"duration":240.1921875,"eventSequence":1185,"loadingOwner":null,"output":{"muted":false,"volume":100.0},"paused":false,"phase":"ready","position":119.55208333333333,"rate":1.0,"source":"/tmp/vestra-bootstrap-long.mp4","stamp":{"generation":1,"intentVersion":1},"terminalReason":null}}
+rpc request processing.replace 10
+rpc receive {"id":10,"result":{"generation":1,"revision":1,"stage":"video","status":"applied"}}
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+rpc receive {"data":{"id":"pause","revision":1},"event":"commands.execute"}
+rpc request source.state 11
+rpc receive {"id":11,"result":{"capabilities":{"close":true,"pause":true,"rate":true,"restart":true,"seek":true},"cycle":1,"duration":240.1921875,"eventSequence":1392,"loadingOwner":null,"output":{"muted":false,"volume":100.0},"paused":false,"phase":"ready","position":140.240104,"rate":1.0,"source":"/tmp/vestra-bootstrap-long.mp4","stamp":{"generation":1,"intentVersion":1},"terminalReason":null}}
+rpc request source.submit 12
+rpc receive {"id":12,"result":{"status":"completed","ticket":{"cycle":1,"owner":1,"stamp":{"generation":1,"intentVersion":2}}}}
+rpc request commands.update 13
+rpc receive {"id":13,"result":{"revision":5}}
+rpc receive {"data":{"args":[-0.30000001192092896],"callback":"brightness","view":"processing"},"event":"ui.callback"}
+rpc request source.state 14
+rpc receive {"id":14,"result":{"capabilities":{"close":true,"pause":true,"rate":true,"restart":true,"seek":true},"cycle":1,"duration":240.1921875,"eventSequence":1463,"loadingOwner":null,"output":{"muted":false,"volume":100.0},"paused":true,"phase":"ready","position":140.306771,"rate":1.0,"source":"/tmp/vestra-bootstrap-long.mp4","stamp":{"generation":1,"intentVersion":2},"terminalReason":null}}
+rpc request processing.replace 15
+rpc receive {"id":15,"result":{"generation":1,"revision":2,"stage":"video","status":"applied"}}
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+rpc receive {"data":{"id":"pause","revision":2},"event":"commands.execute"}
+rpc request source.state 16
+rpc receive {"id":16,"result":{"capabilities":{"close":true,"pause":true,"rate":true,"restart":true,"seek":true},"cycle":1,"duration":240.1921875,"eventSequence":1731,"loadingOwner":null,"output":{"muted":false,"volume":100.0},"paused":true,"phase":"ready","position":140.306771,"rate":1.0,"source":"/tmp/vestra-bootstrap-long.mp4","stamp":{"generation":1,"intentVersion":2},"terminalReason":null}}
+rpc request source.submit 17
+rpc receive {"id":17,"result":{"status":"completed","ticket":{"cycle":1,"owner":1,"stamp":{"generation":1,"intentVersion":3}}}}
+rpc request commands.update 18
+rpc receive {"id":18,"result":{"revision":6}}
+rpc receive {"data":{"args":[4.410891056060791],"callback":"audio-gain","view":"processing"},"event":"ui.callback"}
+rpc request source.state 19
+rpc receive {"id":19,"result":{"capabilities":{"close":true,"pause":true,"rate":true,"restart":true,"seek":true},"cycle":1,"duration":240.1921875,"eventSequence":1789,"loadingOwner":null,"output":{"muted":false,"volume":100.0},"paused":false,"phase":"ready","position":145.894792,"rate":1.0,"source":"/tmp/vestra-bootstrap-long.mp4","stamp":{"generation":1,"intentVersion":3},"terminalReason":null}}
+rpc request processing.replace 20
+rpc receive {"id":20,"result":{"generation":1,"revision":1,"stage":"audio","status":"applied"}}
+rpc receive {"data":{"args":[-4.5742573738098145],"callback":"audio-gain","view":"processing"},"event":"ui.callback"}
+rpc request source.state 21
+rpc receive {"id":21,"result":{"capabilities":{"close":true,"pause":true,"rate":true,"restart":true,"seek":true},"cycle":1,"duration":240.1921875,"eventSequence":1823,"loadingOwner":null,"output":{"muted":false,"volume":100.0},"paused":false,"phase":"ready","position":149.16145799999998,"rate":1.0,"source":"/tmp/vestra-bootstrap-long.mp4","stamp":{"generation":1,"intentVersion":3},"terminalReason":null}}
+rpc request processing.replace 22
+rpc receive {"id":22,"result":{"generation":1,"revision":2,"stage":"audio","status":"applied"}}
+rpc receive {"data":{"args":[4.93069314956665],"callback":"audio-gain","view":"processing"},"event":"ui.callback"}
+rpc request source.state 23
+rpc receive {"id":23,"result":{"capabilities":{"close":true,"pause":true,"rate":true,"restart":true,"seek":true},"cycle":1,"duration":240.1921875,"eventSequence":1889,"loadingOwner":null,"output":{"muted":false,"volume":100.0},"paused":false,"phase":"ready","position":155.59479199999998,"rate":1.0,"source":"/tmp/vestra-bootstrap-long.mp4","stamp":{"generation":1,"intentVersion":3},"terminalReason":null}}
+rpc request processing.replace 24
+rpc receive {"id":24,"result":{"generation":1,"revision":3,"stage":"audio","status":"applied"}}
+rpc receive {"data":{"args":[-3.089108943939209],"callback":"audio-gain","view":"processing"},"event":"ui.callback"}
+rpc request source.state 25
+rpc receive {"id":25,"result":{"capabilities":{"close":true,"pause":true,"rate":true,"restart":true,"seek":true},"cycle":1,"duration":240.1921875,"eventSequence":1936,"loadingOwner":null,"output":{"muted":false,"volume":100.0},"paused":false,"phase":"ready","position":160.12812499999998,"rate":1.0,"source":"/tmp/vestra-bootstrap-long.mp4","stamp":{"generation":1,"intentVersion":3},"terminalReason":null}}
+rpc request processing.replace 26
+rpc receive {"id":26,"result":{"generation":1,"revision":4,"stage":"audio","status":"applied"}}
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+rpc receive {"data":{"id":"workbench","revision":1},"event":"commands.execute"}
+rpc request ui.show 27
+rpc receive {"id":27,"result":null}
+rpc receive {"data":null,"event":"runtime.stop"}

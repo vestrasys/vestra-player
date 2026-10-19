@@ -1,0 +1,90 @@
+{
+  "error": "HostError: Backend(\"unavailable: producer first AV buffers are preparing\")",
+  "code": "unavailable",
+  "stack": "HostError: Backend(\"unavailable: producer first AV buffers are preparing\")\n    at Interface.<anonymous> (file:///Users/ziyang/Documents/vestra-player/src/runtime/runner.ts:106:11)\n    at Interface.emit (node:events:514:20)\n    at [_onLine] [as _onLine] (node:internal/readline/interface:477:12)\n    at [_normalWrite] [as _normalWrite] (node:internal/readline/interface:675:18)\n    at Socket.ondata (node:internal/readline/interface:271:23)\n    at Socket.emit (node:events:514:20)\n    at addChunk (node:internal/streams/readable:605:12)\n    at readableAddChunkPushByteMode (node:internal/streams/readable:556:3)\n    at Readable.push (node:internal/streams/readable:436:5)\n    at Pipe.onStreamRead (node:internal/stream_base_commons:194:23)",
+  "observations": [
+    {
+      "label": "ordinary file ready",
+      "state": {
+        "audioTracks": [],
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true,
+          "snapshotSource": true
+        },
+        "container": "mov,mp4,m4a,3gp,3g2,mj2",
+        "cycle": 1,
+        "duration": 8,
+        "eventSequence": 3,
+        "kind": "media",
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.06666699999999999,
+        "rate": 1,
+        "snapshotProfile": {
+          "fileOriginValidation": "deferred-worker-origin-match-required",
+          "timeDomain": "mpv-media"
+        },
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-producer-author-DxvGP0/source.mp4",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "label": "not ready preserves ordinary source",
+      "error": {
+        "code": "unavailable",
+        "message": "HostError: Backend(\"unavailable: producer first AV buffers are preparing\")"
+      },
+      "operation": {
+        "error": {
+          "backend": "unavailable: producer first AV buffers are preparing"
+        },
+        "status": "failed"
+      }
+    },
+    {
+      "label": "candidate callback epoch acknowledged",
+      "state": {
+        "acknowledged": true,
+        "active": false,
+        "consumedFrames": 0,
+        "deviceErrors": 1,
+        "epoch": 1,
+        "error": null,
+        "hasVideo": false,
+        "paused": true,
+        "producerId": 1,
+        "receivedFrames": 0,
+        "underrunFrames": 0
+      }
+    },
+    {
+      "label": "actual prefilled AV candidate",
+      "state": {
+        "acknowledged": true,
+        "active": false,
+        "consumedFrames": 0,
+        "deviceErrors": 1,
+        "epoch": 1,
+        "error": null,
+        "hasVideo": true,
+        "paused": true,
+        "producerId": 1,
+        "receivedFrames": 2048,
+        "underrunFrames": 0
+      }
+    }
+  ]
+}

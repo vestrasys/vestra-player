@@ -1,0 +1,154 @@
+[
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-show_streams",
+      "-show_format",
+      "-count_frames",
+      "-of",
+      "json",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-audio-tail-21xTnp/outputs/raw-valid.mp4"
+    ],
+    "name": "raw-valid-probe",
+    "exitCode": 0,
+    "signal": null,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-select_streams",
+      "v:0",
+      "-show_frames",
+      "-of",
+      "json",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-audio-tail-21xTnp/outputs/raw-valid.mp4"
+    ],
+    "name": "raw-valid-frames",
+    "exitCode": 0,
+    "signal": null,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-nostdin",
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-audio-tail-21xTnp/outputs/raw-valid.mp4",
+      "-map",
+      "0:v:0",
+      "-map",
+      "0:a:0",
+      "-f",
+      "null",
+      "-"
+    ],
+    "name": "raw-valid-full-decode",
+    "exitCode": 0,
+    "signal": null,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-nostdin",
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-audio-tail-21xTnp/outputs/raw-valid.mp4",
+      "-map",
+      "0:a:0",
+      "-c:a",
+      "pcm_f32le",
+      "-f",
+      "f32le",
+      "-"
+    ],
+    "name": "raw-valid-audio",
+    "exitCode": 0,
+    "signal": null,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-show_streams",
+      "-show_format",
+      "-count_frames",
+      "-of",
+      "json",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-audio-tail-21xTnp/outputs/processed-valid.mp4"
+    ],
+    "name": "processed-valid-probe",
+    "exitCode": 0,
+    "signal": null,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-select_streams",
+      "v:0",
+      "-show_frames",
+      "-of",
+      "json",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-audio-tail-21xTnp/outputs/processed-valid.mp4"
+    ],
+    "name": "processed-valid-frames",
+    "exitCode": 0,
+    "signal": null,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-nostdin",
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-audio-tail-21xTnp/outputs/processed-valid.mp4",
+      "-map",
+      "0:v:0",
+      "-map",
+      "0:a:0",
+      "-f",
+      "null",
+      "-"
+    ],
+    "name": "processed-valid-full-decode",
+    "exitCode": 0,
+    "signal": null,
+    "stderr": ""
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-nostdin",
+      "-v",
+      "error",
+      "-i",
+      "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-audio-tail-21xTnp/outputs/processed-valid.mp4",
+      "-map",
+      "0:a:0",
+      "-c:a",
+      "pcm_f32le",
+      "-f",
+      "f32le",
+      "-"
+    ],
+    "name": "processed-valid-audio",
+    "exitCode": 0,
+    "signal": null,
+    "stderr": ""
+  }
+]

@@ -1,0 +1,2220 @@
+{
+  "phases": [
+    {
+      "name": "a-baseline",
+      "first": 4,
+      "last": 7,
+      "source": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 20,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 1.4,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      },
+      "processing": {
+        "audio": [
+          {
+            "owner": 1,
+            "resource": {
+              "manifestId": "review.processing-replay",
+              "nodes": [
+                {
+                  "enabled": true,
+                  "kind": "dynaudnorm",
+                  "maxGain": 2,
+                  "peak": 0.9
+                }
+              ],
+              "resourceId": "norm"
+            },
+            "revision": 1
+          }
+        ],
+        "backendUncertain": {},
+        "source": {
+          "generation": 1,
+          "load": {
+            "cycle": 1,
+            "entry": 1,
+            "generation": 1
+          },
+          "phase": "ready",
+          "stages": {
+            "audio": {
+              "error": null,
+              "status": "applied"
+            },
+            "video": {
+              "error": null,
+              "status": "applied"
+            }
+          }
+        },
+        "video": [
+          {
+            "owner": 1,
+            "resource": {
+              "manifestId": "review.processing-replay",
+              "nodes": [
+                {
+                  "brightness": 0,
+                  "contrast": 1,
+                  "gamma": 1,
+                  "kind": "eq",
+                  "saturation": 1
+                }
+              ],
+              "resourceId": "tone"
+            },
+            "revision": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "a-runtime-bright",
+      "first": 11,
+      "last": 14,
+      "source": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 36,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 2.767,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      },
+      "processing": {
+        "audio": [
+          {
+            "owner": 1,
+            "resource": {
+              "manifestId": "review.processing-replay",
+              "nodes": [
+                {
+                  "enabled": true,
+                  "kind": "dynaudnorm",
+                  "maxGain": 2,
+                  "peak": 0.9
+                }
+              ],
+              "resourceId": "norm"
+            },
+            "revision": 1
+          }
+        ],
+        "backendUncertain": {},
+        "source": {
+          "generation": 1,
+          "load": {
+            "cycle": 1,
+            "entry": 1,
+            "generation": 1
+          },
+          "phase": "ready",
+          "stages": {
+            "audio": {
+              "error": null,
+              "status": "applied"
+            },
+            "video": {
+              "error": null,
+              "status": "applied"
+            }
+          }
+        },
+        "video": [
+          {
+            "owner": 1,
+            "resource": {
+              "manifestId": "review.processing-replay",
+              "nodes": [
+                {
+                  "brightness": 0.2,
+                  "contrast": 1,
+                  "gamma": 1,
+                  "kind": "eq",
+                  "saturation": 1
+                }
+              ],
+              "resourceId": "tone"
+            },
+            "revision": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "b-paused-replay",
+      "first": 17,
+      "last": 20,
+      "source": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 55,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      },
+      "processing": {
+        "audio": [
+          {
+            "owner": 1,
+            "resource": {
+              "manifestId": "review.processing-replay",
+              "nodes": [
+                {
+                  "enabled": true,
+                  "kind": "dynaudnorm",
+                  "maxGain": 2,
+                  "peak": 0.9
+                }
+              ],
+              "resourceId": "norm"
+            },
+            "revision": 1
+          }
+        ],
+        "backendUncertain": {},
+        "source": {
+          "generation": 2,
+          "load": {
+            "cycle": 2,
+            "entry": 2,
+            "generation": 2
+          },
+          "phase": "ready",
+          "stages": {
+            "audio": {
+              "error": null,
+              "status": "applied"
+            },
+            "video": {
+              "error": null,
+              "status": "applied"
+            }
+          }
+        },
+        "video": [
+          {
+            "owner": 1,
+            "resource": {
+              "manifestId": "review.processing-replay",
+              "nodes": [
+                {
+                  "brightness": 0.2,
+                  "contrast": 1,
+                  "gamma": 1,
+                  "kind": "eq",
+                  "saturation": 1
+                }
+              ],
+              "resourceId": "tone"
+            },
+            "revision": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "b-paused-with-norm-adjust",
+      "first": 24,
+      "last": 27,
+      "source": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 71,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      },
+      "processing": {
+        "audio": [
+          {
+            "owner": 1,
+            "resource": {
+              "manifestId": "review.processing-replay",
+              "nodes": [
+                {
+                  "enabled": true,
+                  "kind": "dynaudnorm",
+                  "maxGain": 2,
+                  "peak": 0.9
+                }
+              ],
+              "resourceId": "norm"
+            },
+            "revision": 1
+          }
+        ],
+        "backendUncertain": {},
+        "source": {
+          "generation": 2,
+          "load": {
+            "cycle": 2,
+            "entry": 2,
+            "generation": 2
+          },
+          "phase": "ready",
+          "stages": {
+            "audio": {
+              "error": null,
+              "status": "applied"
+            },
+            "video": {
+              "error": null,
+              "status": "applied"
+            }
+          }
+        },
+        "video": [
+          {
+            "owner": 1,
+            "resource": {
+              "manifestId": "review.processing-replay",
+              "nodes": [
+                {
+                  "brightness": 0.3,
+                  "contrast": 1,
+                  "gamma": 1,
+                  "kind": "eq",
+                  "saturation": 1
+                }
+              ],
+              "resourceId": "tone"
+            },
+            "revision": 3
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "StartFile { playlist_entry_id: 1 }"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "AudioReconfig"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "AudioReconfig"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "FileLoaded"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "AudioReconfig"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "VideoReconfig"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "VideoReconfig"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "PlaybackRestart"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "VideoReconfig"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "VideoReconfig"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 1,
+        "event": "AudioReconfig"
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 6,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.09999999999999999,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 7,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.19999999999999998,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 8,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.33299999999999996,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 9,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.433,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 10,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.5,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 11,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.6,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 12,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.7,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 13,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.7999999999999999,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 14,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.9329999999999999,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 15,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 1,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 16,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 1.0999999999999999,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 17,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 1.2,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 18,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 1.3,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 19,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 1.4,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 23,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 1.5,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 24,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 1.633,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 25,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 1.7,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 26,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 1.7999999999999998,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 27,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 1.9329999999999998,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 28,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 2.033,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 29,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 2.133,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 30,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 2.1999999999999997,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 31,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 2.3,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 32,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 2.433,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 33,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 2.533,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 34,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 2.633,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 1,
+        "duration": 16,
+        "eventSequence": 35,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 2.733,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/a.mkv",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 2,
+        "event": "AudioReconfig"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 2,
+        "event": "VideoReconfig"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 2,
+        "event": "EndFile { reason: Stop, error: None, playlist_entry_id: 1, playlist_insert_id: 0, playlist_insert_num_entries: 0 }"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 2,
+        "event": "StartFile { playlist_entry_id: 2 }"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 2,
+        "event": "AudioReconfig"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 2,
+        "event": "AudioReconfig"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 2,
+        "event": "FileLoaded"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 2,
+        "event": "VideoReconfig"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 2,
+        "event": "PlaybackRestart"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 2,
+        "event": "VideoReconfig"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 2,
+        "event": "Seek"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 2,
+        "event": "AudioReconfig"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 2,
+        "event": "VideoReconfig"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 2,
+        "event": "PlaybackRestart"
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 41,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 42,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 43,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 44,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 45,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 46,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 47,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 48,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 49,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 50,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 51,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 52,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 53,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 54,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 2,
+        "event": "VideoReconfig"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 2,
+        "event": "Seek"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 2,
+        "event": "VideoReconfig"
+      }
+    },
+    {
+      "event": "playback.backend",
+      "data": {
+        "currentSession": 2,
+        "event": "PlaybackRestart"
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 58,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 59,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 60,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 61,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 62,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 63,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 64,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 65,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 66,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 67,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 68,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 69,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "event": "source.state",
+      "data": {
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": true,
+          "restart": true,
+          "seek": true
+        },
+        "cycle": 2,
+        "duration": 16,
+        "eventSequence": 70,
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "ready",
+        "position": 0,
+        "rate": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+        "stamp": {
+          "generation": 2,
+          "intentVersion": 2
+        },
+        "terminalReason": null
+      }
+    }
+  ],
+  "final": {
+    "capabilities": {
+      "close": true,
+      "pause": true,
+      "rate": true,
+      "restart": true,
+      "seek": true
+    },
+    "cycle": 2,
+    "duration": 16,
+    "eventSequence": 73,
+    "loadingOwner": null,
+    "output": {
+      "muted": false,
+      "volume": 100
+    },
+    "paused": true,
+    "phase": "ready",
+    "position": 0,
+    "rate": 1,
+    "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-processing-replay-review-jcUDYT/b.mkv",
+    "stamp": {
+      "generation": 2,
+      "intentVersion": 2
+    },
+    "terminalReason": null
+  }
+}

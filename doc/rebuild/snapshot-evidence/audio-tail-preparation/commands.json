@@ -1,0 +1,228 @@
+[
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-version"
+    ],
+    "exitCode": 0,
+    "stdout": "ffmpeg-version.stdout.log",
+    "stderr": "ffmpeg-version.stderr.log"
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-version"
+    ],
+    "exitCode": 0,
+    "stdout": "ffprobe-version.stdout.log",
+    "stderr": "ffprobe-version.stderr.log"
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-nostdin",
+      "-v",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "testsrc2=size=320x180:rate=30:duration=2",
+      "-f",
+      "lavfi",
+      "-i",
+      "sine=frequency=660:sample_rate=48000:duration=4",
+      "-map",
+      "0:v:0",
+      "-map",
+      "1:a:0",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "ultrafast",
+      "-pix_fmt",
+      "yuv420p",
+      "-c:a",
+      "pcm_s16le",
+      "/Users/ziyang/Documents/vestra-player/doc/rebuild/snapshot-evidence/audio-tail-preparation/source-video2-audio4.mkv"
+    ],
+    "exitCode": 0,
+    "stdout": "generate-source.stdout.log",
+    "stderr": "generate-source.stderr.log"
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-show_streams",
+      "-show_format",
+      "-count_frames",
+      "-of",
+      "json",
+      "/Users/ziyang/Documents/vestra-player/doc/rebuild/snapshot-evidence/audio-tail-preparation/source-video2-audio4.mkv"
+    ],
+    "exitCode": 0,
+    "stdout": "source-probe.stdout.log",
+    "stderr": "source-probe.stderr.log"
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-select_streams",
+      "v:0",
+      "-show_frames",
+      "-of",
+      "json",
+      "/Users/ziyang/Documents/vestra-player/doc/rebuild/snapshot-evidence/audio-tail-preparation/source-video2-audio4.mkv"
+    ],
+    "exitCode": 0,
+    "stdout": "source-video-frames.stdout.log",
+    "stderr": "source-video-frames.stderr.log"
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-select_streams",
+      "a:0",
+      "-show_packets",
+      "-of",
+      "json",
+      "/Users/ziyang/Documents/vestra-player/doc/rebuild/snapshot-evidence/audio-tail-preparation/source-video2-audio4.mkv"
+    ],
+    "exitCode": 0,
+    "stdout": "source-audio-packets.stdout.log",
+    "stderr": "source-audio-packets.stderr.log"
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-nostdin",
+      "-v",
+      "error",
+      "-i",
+      "/Users/ziyang/Documents/vestra-player/doc/rebuild/snapshot-evidence/audio-tail-preparation/source-video2-audio4.mkv",
+      "-filter_complex",
+      "[0:v:0]settb=AVTB,trim=start=1.5:end=3,setpts=PTS-STARTPTS[v];[0:a:0]atrim=start=1.5:end=3,asetpts=PTS-STARTPTS[a]",
+      "-map",
+      "[v]",
+      "-map",
+      "[a]",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "18",
+      "-pix_fmt",
+      "yuv420p",
+      "-c:a",
+      "aac",
+      "-b:a",
+      "192k",
+      "-ar",
+      "48000",
+      "-movflags",
+      "+faststart",
+      "/Users/ziyang/Documents/vestra-player/doc/rebuild/snapshot-evidence/audio-tail-preparation/clip-1.5-3.mp4"
+    ],
+    "exitCode": 0,
+    "stdout": "independent-clip.stdout.log",
+    "stderr": "independent-clip.stderr.log"
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-show_streams",
+      "-show_format",
+      "-count_frames",
+      "-of",
+      "json",
+      "/Users/ziyang/Documents/vestra-player/doc/rebuild/snapshot-evidence/audio-tail-preparation/clip-1.5-3.mp4"
+    ],
+    "exitCode": 0,
+    "stdout": "clip-probe.stdout.log",
+    "stderr": "clip-probe.stderr.log"
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe",
+    "args": [
+      "-v",
+      "error",
+      "-select_streams",
+      "v:0",
+      "-show_frames",
+      "-of",
+      "json",
+      "/Users/ziyang/Documents/vestra-player/doc/rebuild/snapshot-evidence/audio-tail-preparation/clip-1.5-3.mp4"
+    ],
+    "exitCode": 0,
+    "stdout": "clip-video-frames.stdout.log",
+    "stderr": "clip-video-frames.stderr.log"
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-nostdin",
+      "-v",
+      "error",
+      "-i",
+      "/Users/ziyang/Documents/vestra-player/doc/rebuild/snapshot-evidence/audio-tail-preparation/clip-1.5-3.mp4",
+      "-map",
+      "0:v:0",
+      "-map",
+      "0:a:0",
+      "-f",
+      "null",
+      "-"
+    ],
+    "exitCode": 0,
+    "stdout": "clip-full-decode.stdout.log",
+    "stderr": "clip-full-decode.stderr.log"
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-nostdin",
+      "-v",
+      "error",
+      "-i",
+      "/Users/ziyang/Documents/vestra-player/doc/rebuild/snapshot-evidence/audio-tail-preparation/source-video2-audio4.mkv",
+      "-map",
+      "0:a:0",
+      "-f",
+      "f32le",
+      "-c:a",
+      "pcm_f32le",
+      "-"
+    ],
+    "exitCode": 0,
+    "stdout": "source-audio-decoded.f32le",
+    "stderr": "source-audio-decode.stderr.log"
+  },
+  {
+    "binary": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "args": [
+      "-nostdin",
+      "-v",
+      "error",
+      "-i",
+      "/Users/ziyang/Documents/vestra-player/doc/rebuild/snapshot-evidence/audio-tail-preparation/clip-1.5-3.mp4",
+      "-map",
+      "0:a:0",
+      "-f",
+      "f32le",
+      "-c:a",
+      "pcm_f32le",
+      "-"
+    ],
+    "exitCode": 0,
+    "stdout": "clip-audio-decoded.f32le",
+    "stderr": "clip-audio-decode.stderr.log"
+  }
+]

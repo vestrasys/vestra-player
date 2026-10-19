@@ -1,0 +1,1907 @@
+{
+  "pass": true,
+  "hostRerun": false,
+  "fixtureSha": "848339a163c67cca4d5900591365122b219ab6b8bb07663272926f5b41a54545",
+  "failedJobs": [
+    {
+      "name": "raw-video-short",
+      "invalidTail": true,
+      "capture": {
+        "operationId": 1,
+        "expected": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "time": 1.5,
+        "audio": {
+          "kind": "selected"
+        }
+      },
+      "snapshot": {
+        "audio": {
+          "codec": "pcm_s16le",
+          "external": false,
+          "language": null,
+          "selected": true,
+          "streamIndex": 1,
+          "title": null,
+          "trackId": 1
+        },
+        "audioOffsetMs": null,
+        "container": "matroska,webm",
+        "duration": 4,
+        "includeSubtitles": false,
+        "kind": "raw",
+        "preroll": null,
+        "presentation": null,
+        "processing": null,
+        "sizeBytes": 565024,
+        "snapshotId": 1,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-audio-tail-21xTnp/source-video2-audio4.mkv",
+        "sourceStamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "subtitle": null,
+        "time": 1.5,
+        "timeline": {
+          "containerStartTime": 0,
+          "domain": "mpv-media",
+          "validation": "pending-worker-origin-match"
+        },
+        "videoStreamIndex": 0
+      },
+      "request": {
+        "operationId": 2,
+        "snapshotId": 1,
+        "kind": "rawMp4",
+        "end": 3,
+        "destination": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-audio-tail-21xTnp/outputs/raw-video-short.mp4"
+      },
+      "receipt": {
+        "jobId": 1,
+        "snapshotId": 1,
+        "status": "queued"
+      },
+      "terminal": {
+        "facts": {
+          "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+          "descriptorVersion": "vestra-finite/1",
+          "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+          "hasAudio": true,
+          "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+          "output": {
+            "format": {
+              "duration": "1.500000"
+            },
+            "programs": [],
+            "stream_groups": [],
+            "streams": [
+              {
+                "codec_name": "h264",
+                "codec_type": "video",
+                "duration": "0.500000",
+                "height": 180,
+                "index": 0,
+                "r_frame_rate": "30/1",
+                "width": 320
+              },
+              {
+                "channel_layout": "mono",
+                "channels": 1,
+                "codec_name": "aac",
+                "codec_type": "audio",
+                "duration": "1.500000",
+                "index": 1,
+                "r_frame_rate": "0/0",
+                "sample_rate": "48000"
+              }
+            ]
+          },
+          "preroll": "source-zero-to-start",
+          "processed": false,
+          "range": {
+            "end": 3,
+            "interval": "half-open; first video PTS >= start",
+            "start": 1.5
+          },
+          "sourceTimeline": {
+            "containerStartTime": 0,
+            "domain": "mpv-media",
+            "expectedContainerStartTime": 0,
+            "validation": "normalized-origin-matched"
+          },
+          "videoStreamIndex": 0
+        },
+        "jobId": 1,
+        "outcome": {
+          "error": {
+            "code": "export-failed",
+            "message": "source-unavailable: encoded video covers 0.5s, shorter than requested 1.5s beyond one frame (0.033433333333333336s)"
+          }
+        },
+        "publicationStarted": false,
+        "status": "failed"
+      },
+      "states": [
+        {
+          "at": 1792276376152,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376170,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376188,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376206,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376224,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376242,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376261,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376279,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376297,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376316,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376334,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376353,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376371,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376392,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376409,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376428,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376446,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376464,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376483,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376501,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376518,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376536,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376555,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376573,
+          "state": {
+            "facts": null,
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376592,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": false,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376610,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": false,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376628,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": false,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376648,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": false,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376668,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": false,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376689,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": false,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376709,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": false,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376726,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": false,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376746,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": false,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376765,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": false,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376782,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": false,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376801,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": false,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376821,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": false,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376841,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": false,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376859,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": false,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376877,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": false,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376898,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": false,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376915,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": false,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 1,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276376934,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "output": {
+                "format": {
+                  "duration": "1.500000"
+                },
+                "programs": [],
+                "stream_groups": [],
+                "streams": [
+                  {
+                    "codec_name": "h264",
+                    "codec_type": "video",
+                    "duration": "0.500000",
+                    "height": 180,
+                    "index": 0,
+                    "r_frame_rate": "30/1",
+                    "width": 320
+                  },
+                  {
+                    "channel_layout": "mono",
+                    "channels": 1,
+                    "codec_name": "aac",
+                    "codec_type": "audio",
+                    "duration": "1.500000",
+                    "index": 1,
+                    "r_frame_rate": "0/0",
+                    "sample_rate": "48000"
+                  }
+                ]
+              },
+              "preroll": "source-zero-to-start",
+              "processed": false,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 1,
+            "outcome": {
+              "error": {
+                "code": "export-failed",
+                "message": "source-unavailable: encoded video covers 0.5s, shorter than requested 1.5s beyond one frame (0.033433333333333336s)"
+              }
+            },
+            "publicationStarted": false,
+            "status": "failed"
+          }
+        }
+      ],
+      "actualVideoShortDespiteAudioAndContainer": true
+    },
+    {
+      "name": "processed-video-short",
+      "invalidTail": true,
+      "capture": {
+        "operationId": 7,
+        "expected": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "time": 1.5,
+        "audio": {
+          "kind": "selected"
+        },
+        "mode": "processed",
+        "includeSubtitles": false,
+        "expectedProcessingRevision": 0
+      },
+      "snapshot": {
+        "audio": {
+          "codec": "pcm_s16le",
+          "external": false,
+          "language": null,
+          "selected": true,
+          "streamIndex": 1,
+          "title": null,
+          "trackId": 1
+        },
+        "audioOffsetMs": 0,
+        "container": "matroska,webm",
+        "duration": 4,
+        "includeSubtitles": false,
+        "kind": "processed",
+        "preroll": "source-zero-to-start",
+        "presentation": {
+          "height": 180,
+          "width": 320
+        },
+        "processing": {
+          "audio": [],
+          "audioOffsetMs": 0,
+          "revision": 0,
+          "video": []
+        },
+        "sizeBytes": 565024,
+        "snapshotId": 3,
+        "source": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-audio-tail-21xTnp/source-video2-audio4.mkv",
+        "sourceStamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "subtitle": null,
+        "time": 1.5,
+        "timeline": {
+          "containerStartTime": 0,
+          "domain": "mpv-media",
+          "validation": "pending-worker-origin-match"
+        },
+        "videoStreamIndex": 0
+      },
+      "request": {
+        "operationId": 8,
+        "snapshotId": 3,
+        "kind": "processedMp4",
+        "end": 3,
+        "destination": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-audio-tail-21xTnp/outputs/processed-video-short.mp4"
+      },
+      "receipt": {
+        "jobId": 3,
+        "snapshotId": 3,
+        "status": "queued"
+      },
+      "terminal": {
+        "facts": {
+          "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+          "descriptorVersion": "vestra-finite/1",
+          "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+          "hasAudio": true,
+          "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+          "output": {
+            "format": {
+              "duration": "1.500000"
+            },
+            "programs": [],
+            "stream_groups": [],
+            "streams": [
+              {
+                "codec_name": "h264",
+                "codec_type": "video",
+                "duration": "0.500000",
+                "height": 180,
+                "index": 0,
+                "r_frame_rate": "30/1",
+                "width": 320
+              },
+              {
+                "channel_layout": "mono",
+                "channels": 1,
+                "codec_name": "aac",
+                "codec_type": "audio",
+                "duration": "1.500000",
+                "index": 1,
+                "r_frame_rate": "0/0",
+                "sample_rate": "48000"
+              }
+            ]
+          },
+          "preroll": "source-zero-to-start",
+          "processed": true,
+          "range": {
+            "end": 3,
+            "interval": "half-open; first video PTS >= start",
+            "start": 1.5
+          },
+          "sourceTimeline": {
+            "containerStartTime": 0,
+            "domain": "mpv-media",
+            "expectedContainerStartTime": 0,
+            "validation": "normalized-origin-matched"
+          },
+          "videoStreamIndex": 0
+        },
+        "jobId": 3,
+        "outcome": {
+          "error": {
+            "code": "export-failed",
+            "message": "source-unavailable: encoded video covers 0.5s, shorter than requested 1.5s beyond one frame (0.033433333333333336s)"
+          }
+        },
+        "publicationStarted": false,
+        "status": "failed"
+      },
+      "states": [
+        {
+          "at": 1792276377360,
+          "state": {
+            "facts": null,
+            "jobId": 3,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276377377,
+          "state": {
+            "facts": null,
+            "jobId": 3,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276377395,
+          "state": {
+            "facts": null,
+            "jobId": 3,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276377416,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": true,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 3,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276377435,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": true,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 3,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276377455,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": true,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 3,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276377473,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": true,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 3,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276377492,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": true,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 3,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276377510,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": true,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 3,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276377531,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": true,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 3,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276377551,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": true,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 3,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276377569,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": true,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 3,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276377587,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": true,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 3,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276377605,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": true,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 3,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276377624,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": true,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 3,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276377642,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": true,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 3,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276377662,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": true,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 3,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276377680,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "preroll": "source-zero-to-start",
+              "processed": true,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 3,
+            "outcome": null,
+            "publicationStarted": false,
+            "status": "running"
+          }
+        },
+        {
+          "at": 1792276377700,
+          "state": {
+            "facts": {
+              "audioTiming": "DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded",
+              "descriptorVersion": "vestra-finite/1",
+              "ffmpegVersion": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers",
+              "hasAudio": true,
+              "libavfilterVersion": "libavfilter    12.  1.102 / 12.  1.102",
+              "output": {
+                "format": {
+                  "duration": "1.500000"
+                },
+                "programs": [],
+                "stream_groups": [],
+                "streams": [
+                  {
+                    "codec_name": "h264",
+                    "codec_type": "video",
+                    "duration": "0.500000",
+                    "height": 180,
+                    "index": 0,
+                    "r_frame_rate": "30/1",
+                    "width": 320
+                  },
+                  {
+                    "channel_layout": "mono",
+                    "channels": 1,
+                    "codec_name": "aac",
+                    "codec_type": "audio",
+                    "duration": "1.500000",
+                    "index": 1,
+                    "r_frame_rate": "0/0",
+                    "sample_rate": "48000"
+                  }
+                ]
+              },
+              "preroll": "source-zero-to-start",
+              "processed": true,
+              "range": {
+                "end": 3,
+                "interval": "half-open; first video PTS >= start",
+                "start": 1.5
+              },
+              "sourceTimeline": {
+                "containerStartTime": 0,
+                "domain": "mpv-media",
+                "expectedContainerStartTime": 0,
+                "validation": "normalized-origin-matched"
+              },
+              "videoStreamIndex": 0
+            },
+            "jobId": 3,
+            "outcome": {
+              "error": {
+                "code": "export-failed",
+                "message": "source-unavailable: encoded video covers 0.5s, shorter than requested 1.5s beyond one frame (0.033433333333333336s)"
+              }
+            },
+            "publicationStarted": false,
+            "status": "failed"
+          }
+        }
+      ],
+      "actualVideoShortDespiteAudioAndContainer": true
+    }
+  ],
+  "analysis": {
+    "raw-valid": {
+      "probe": {
+        "streams": [
+          {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+            "profile": "High",
+            "codec_type": "video",
+            "codec_tag_string": "avc1",
+            "codec_tag": "0x31637661",
+            "mime_codec_string": "avc1.64000d",
+            "width": 320,
+            "height": 180,
+            "coded_width": 320,
+            "coded_height": 192,
+            "has_b_frames": 2,
+            "sample_aspect_ratio": "1:1",
+            "display_aspect_ratio": "16:9",
+            "pix_fmt": "yuv420p",
+            "level": 13,
+            "chroma_location": "left",
+            "field_order": "progressive",
+            "refs": 4,
+            "is_avc": "true",
+            "nal_length_size": "4",
+            "id": "0x1",
+            "r_frame_rate": "30/1",
+            "avg_frame_rate": "30/1",
+            "time_base": "1/15360",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 15360,
+            "duration": "1.000000",
+            "bit_rate": "374792",
+            "bits_per_raw_sample": "8",
+            "nb_frames": "30",
+            "nb_read_frames": "30",
+            "extradata_size": 46,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "VideoHandler",
+              "encoder": "Lavc63.1.102 libx264"
+            }
+          },
+          {
+            "index": 1,
+            "codec_name": "aac",
+            "codec_long_name": "AAC (Advanced Audio Coding)",
+            "profile": "LC",
+            "codec_type": "audio",
+            "codec_tag_string": "mp4a",
+            "codec_tag": "0x6134706d",
+            "mime_codec_string": "mp4a.40.2",
+            "sample_fmt": "fltp",
+            "sample_rate": "48000",
+            "channels": 1,
+            "channel_layout": "mono",
+            "bits_per_sample": 0,
+            "initial_padding": 1024,
+            "id": "0x2",
+            "r_frame_rate": "0/0",
+            "avg_frame_rate": "0/0",
+            "time_base": "1/48000",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 48000,
+            "duration": "1.000000",
+            "bit_rate": "158020",
+            "nb_frames": "48",
+            "nb_read_frames": "47",
+            "extradata_size": 5,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "SoundHandler"
+            }
+          }
+        ],
+        "format": {
+          "filename": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-audio-tail-21xTnp/outputs/raw-valid.mp4",
+          "nb_streams": 2,
+          "nb_programs": 0,
+          "nb_stream_groups": 0,
+          "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+          "format_long_name": "QuickTime / MOV",
+          "start_time": "0.000000",
+          "duration": "1.000000",
+          "size": "69534",
+          "bit_rate": "556272",
+          "probe_score": 100,
+          "tags": {
+            "major_brand": "isom",
+            "minor_version": "512",
+            "compatible_brands": "isomiso2avc1mp41",
+            "encoder": "Lavf63.1.102"
+          }
+        }
+      },
+      "videoFrames": 30,
+      "firstVideoPts": 0,
+      "lastVideoPts": 0.966667,
+      "decodedMonoSamples": 48000,
+      "decodedAudioSeconds": 1,
+      "sha256": "535a5d30c8231557f082b2f74d485b6b58a91b40f5d4c470118ce6ce2cb43854",
+      "fullDecodeExitCode": 0
+    },
+    "processed-valid": {
+      "probe": {
+        "streams": [
+          {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_long_name": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+            "profile": "High",
+            "codec_type": "video",
+            "codec_tag_string": "avc1",
+            "codec_tag": "0x31637661",
+            "mime_codec_string": "avc1.64000d",
+            "width": 320,
+            "height": 180,
+            "coded_width": 320,
+            "coded_height": 192,
+            "has_b_frames": 2,
+            "sample_aspect_ratio": "1:1",
+            "display_aspect_ratio": "16:9",
+            "pix_fmt": "yuv420p",
+            "level": 13,
+            "chroma_location": "left",
+            "field_order": "progressive",
+            "refs": 4,
+            "is_avc": "true",
+            "nal_length_size": "4",
+            "id": "0x1",
+            "r_frame_rate": "30/1",
+            "avg_frame_rate": "30/1",
+            "time_base": "1/15360",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 15360,
+            "duration": "1.000000",
+            "bit_rate": "374792",
+            "bits_per_raw_sample": "8",
+            "nb_frames": "30",
+            "nb_read_frames": "30",
+            "extradata_size": 46,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "VideoHandler",
+              "encoder": "Lavc63.1.102 libx264"
+            }
+          },
+          {
+            "index": 1,
+            "codec_name": "aac",
+            "codec_long_name": "AAC (Advanced Audio Coding)",
+            "profile": "LC",
+            "codec_type": "audio",
+            "codec_tag_string": "mp4a",
+            "codec_tag": "0x6134706d",
+            "mime_codec_string": "mp4a.40.2",
+            "sample_fmt": "fltp",
+            "sample_rate": "48000",
+            "channels": 1,
+            "channel_layout": "mono",
+            "bits_per_sample": 0,
+            "initial_padding": 1024,
+            "id": "0x2",
+            "r_frame_rate": "0/0",
+            "avg_frame_rate": "0/0",
+            "time_base": "1/48000",
+            "start_pts": 0,
+            "start_time": "0.000000",
+            "duration_ts": 48000,
+            "duration": "1.000000",
+            "bit_rate": "158020",
+            "nb_frames": "48",
+            "nb_read_frames": "47",
+            "extradata_size": 5,
+            "disposition": {
+              "default": 1,
+              "dub": 0,
+              "original": 0,
+              "comment": 0,
+              "lyrics": 0,
+              "karaoke": 0,
+              "forced": 0,
+              "hearing_impaired": 0,
+              "visual_impaired": 0,
+              "clean_effects": 0,
+              "attached_pic": 0,
+              "timed_thumbnails": 0,
+              "non_diegetic": 0,
+              "captions": 0,
+              "descriptions": 0,
+              "metadata": 0,
+              "dependent": 0,
+              "still_image": 0,
+              "multilayer": 0
+            },
+            "tags": {
+              "language": "und",
+              "handler_name": "SoundHandler"
+            }
+          }
+        ],
+        "format": {
+          "filename": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-audio-tail-21xTnp/outputs/processed-valid.mp4",
+          "nb_streams": 2,
+          "nb_programs": 0,
+          "nb_stream_groups": 0,
+          "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+          "format_long_name": "QuickTime / MOV",
+          "start_time": "0.000000",
+          "duration": "1.000000",
+          "size": "69534",
+          "bit_rate": "556272",
+          "probe_score": 100,
+          "tags": {
+            "major_brand": "isom",
+            "minor_version": "512",
+            "compatible_brands": "isomiso2avc1mp41",
+            "encoder": "Lavf63.1.102"
+          }
+        }
+      },
+      "videoFrames": 30,
+      "firstVideoPts": 0,
+      "lastVideoPts": 0.966667,
+      "decodedMonoSamples": 48000,
+      "decodedAudioSeconds": 1,
+      "sha256": "535a5d30c8231557f082b2f74d485b6b58a91b40f5d4c470118ce6ce2cb43854",
+      "fullDecodeExitCode": 0
+    }
+  },
+  "limits": [
+    "Finite source with actual two-second video and four-second mono audio; no assertion based on container duration alone.",
+    "Negative worker facts show actual audio/container coverage while video is short; final failure and no-publication observed.",
+    "Valid files decoded completely; this is not acoustic output, arbitrary timestamp/codec coverage or full M3 acceptance."
+  ]
+}

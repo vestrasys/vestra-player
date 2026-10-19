@@ -1,0 +1,16 @@
+/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65/bin/ca65 -g src/nrom256.s -o obj/nes/nrom256.o
+/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65/bin/ca65 -g src/popslide16.s -o obj/nes/popslide16.o
+/Library/Frameworks/Python.framework/Versions/3.13/bin/python3 tools/pilbmp2nes.py tilesets/maingfx.png obj/nes/maingfx.chr
+/Library/Frameworks/Python.framework/Versions/3.13/bin/python3 tools/pilbmp2nes.py tilesets/cuthouses.png obj/nes/cuthouses.chr
+/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65/bin/ca65 -g src/main.s -o obj/nes/main.o
+/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65/bin/ca65 -g src/random.s -o obj/nes/random.o
+/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65/bin/ca65 -g src/levels.s -o obj/nes/levels.o
+/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65/bin/ca65 -g src/smoke.s -o obj/nes/smoke.o
+/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65/bin/ca65 -g src/bg.s -o obj/nes/bg.o
+/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65/bin/ca65 -g src/missiles.s -o obj/nes/missiles.o
+/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65/bin/ca65 -g src/explosion.s -o obj/nes/explosion.o
+/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65/bin/ca65 -g src/scurry.s -o obj/nes/scurry.o
+/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65/bin/ca65 -g src/title.s -o obj/nes/title.o
+/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65/bin/ca65 -g src/practice.s -o obj/nes/practice.o
+/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-nes-local-build-5xyrxkfp/cc65/bin/ca65 -g src/cutscene.s -o obj/nes/cutscene.o
+gcc -static -std=gnu99 -Wall -Wextra -DNDEBUG -Os -o tools/dte tools/dte.c

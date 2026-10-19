@@ -1,0 +1,9 @@
+{
+  "thwaite.nes": "ee51cd9562f28195ba015d9857c6c4fc9bf67cdfb213e95f655e586b92195173",
+  "map.txt": "0f33bbed6d1a4df36be7c2abb1522764e010fb0138bff964e027d76f5b43daf3",
+  "thwaite.dbg": "c70d582429a1473a0ec294afbf5fccae2b2c59bf00f79eebd35588741f9667b6",
+  "cc65-source.tar.gz": "86c77bb860b9dc6444ab9c27c773d113cc7fd10c8a708326a5bfab80b0e5f7ba",
+  "cc65-LICENSE": "8e87ae93bbc45dbe3def75c8b20ba2905b052ddf766fe61d55b8e16a807d57f3",
+  "local-tools/ca65": "bcbeb2ce28f6042d94c1cce0ee66690d0eb6edc7598cb871479634945528f3bc",
+  "local-tools/ld65": "d51fdb8801f3c6870cd16571ac44894cbc24e05ce47ec43134ad2baecb940632"
+}

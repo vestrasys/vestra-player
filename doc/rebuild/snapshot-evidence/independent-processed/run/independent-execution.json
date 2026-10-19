@@ -1,0 +1,17 @@
+{
+  "hostConsumer": {
+    "command": "node src/tests/media-processed-review.mjs --run",
+    "session": 29674,
+    "driverExitCode": 1,
+    "hostExitCode": 0,
+    "reason": "PATH ffmpeg has no subtitles filter; reference-only failure after all public consumer outputs"
+  },
+  "analysisOnly": {
+    "command": "node src/tests/media-processed-review.mjs --analyze-work /var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-processed-review-BagMMp",
+    "session": 80077,
+    "exitCode": 0,
+    "ffmpeg": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "hostRerun": false,
+    "assertionsLowered": false
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "work": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-shared-nbzINR",
+  "bundle": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-shared-nbzINR/Vestra Shared UI.app",
+  "id": "local.vestra.rebuild.shared-ui-v4",
+  "command": [
+    "open",
+    "-n",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-shared-nbzINR/Vestra Shared UI.app",
+    "--env",
+    "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+    "--env",
+    "VESTRA_DEMO_MEDIA=/tmp/vestra-bootstrap-long.mp4",
+    "--env",
+    "VESTRA_TRACE=1",
+    "--stdout",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-shared-nbzINR/stdout.log",
+    "--stderr",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-shared-nbzINR/stderr.log",
+    "--args",
+    "--plugin",
+    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-shared-nbzINR/Vestra Shared UI.app/Contents/Resources/examples/host-ui-demo",
+    "--seconds",
+    "300"
+  ]
+}

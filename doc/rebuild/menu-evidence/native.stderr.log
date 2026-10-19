@@ -1,0 +1,35 @@
+rpc request commands.register 1
+rpc receive {"id":1,"result":{"revision":1}}
+rpc request commands.register 2
+rpc receive {"id":2,"result":{"revision":2}}
+rpc request commands.register 3
+rpc receive {"id":3,"result":{"revision":3}}
+rpc request commands.register 4
+rpc receive {"id":4,"result":{"revision":4}}
+rpc request source.submit 5
+rpc receive {"id":5,"result":{"status":"completed","ticket":{"cycle":1,"owner":1,"stamp":{"generation":1,"intentVersion":1}}}}
+runtime 1 runtime.ready: null
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+
+thread 'main' (37472379) panicked at /Users/ziyang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/slint-interpreter-1.16.1/eval.rs:2162:14:
+accessing deleted parent (issue #6426)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

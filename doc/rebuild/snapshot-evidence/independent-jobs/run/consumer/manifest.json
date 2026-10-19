@@ -1,0 +1,1 @@
+{"id":"review.media-jobs-consumer","apiVersion":"vestra.experimental/0.1","entry":"main.mjs","capabilities":["playback.read","media.read","media.control","playback.control","events","plugins.manage"]}

@@ -1,0 +1,217 @@
+{
+  "command": [
+    "mpv",
+    "--sub-ass-override=force",
+    "--sub-scale-by-window=yes",
+    "--sub-scale-with-window=no",
+    "--sub-use-margins=no",
+    "--sub-align-x=center",
+    "--sub-align-y=bottom",
+    "--sub-font-size=48.0",
+    "--sub-border-size=1.3333333333333333",
+    "--sub-margin-y=36",
+    "--sub-color=#FFFFFF00",
+    "--sub-border-color=#FF000000",
+    "--sub-shadow-offset=0",
+    "--sub-font-provider=none",
+    "--embeddedfonts=no",
+    "--sub-font=Noto Sans CJK SC",
+    "--sub-fonts-dir=/tmp/vestra-vtt-literal-di8gm8y6/fonts",
+    "--log-file=/tmp/vestra-vtt-literal-di8gm8y6/mpv-internal.log",
+    "--msg-level=all=v",
+    "--no-config",
+    "--no-terminal",
+    "--pause=yes",
+    "--keep-open=yes",
+    "--sub-auto=no",
+    "--vo=null",
+    "--ao=null",
+    "--sub-file=/tmp/vestra-vtt-literal-di8gm8y6/literal.vtt",
+    "--input-ipc-server=/tmp/vestra-vtt-literal-di8gm8y6/ipc",
+    "/Users/ziyang/Documents/vestra-player/doc/rebuild/subtitle-evidence/backend-cli/fixture.mkv"
+  ],
+  "work": "/tmp/vestra-vtt-literal-di8gm8y6",
+  "exitCode": 0,
+  "expectedLiteral": "\u4e2d\u6587\u5b57\u5e55 \u6d4b\u8bd5 <b>\u539f\u6837</b> {\\b1} \\N END",
+  "encodedText": "\u4e2d\u6587\u5b57\u5e55 \u6d4b\u8bd5 &lt;b&gt;\u539f\u6837&lt;/b&gt; {\\b1} \\N END",
+  "observations": {
+    "pause": {
+      "data": true,
+      "request_id": 3,
+      "error": "success"
+    },
+    "time-pos": {
+      "data": 0.0,
+      "request_id": 4,
+      "error": "success"
+    },
+    "sid": {
+      "data": 1,
+      "request_id": 5,
+      "error": "success"
+    },
+    "track-list": {
+      "data": [
+        {
+          "id": 1,
+          "type": "video",
+          "src-id": 1,
+          "image": false,
+          "albumart": false,
+          "default": false,
+          "forced": false,
+          "dependent": false,
+          "visual-impaired": false,
+          "hearing-impaired": false,
+          "external": false,
+          "selected": true,
+          "main-selection": 0,
+          "ff-index": 0,
+          "decoder": "h264",
+          "decoder-desc": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+          "codec": "h264",
+          "codec-desc": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+          "codec-profile": "High",
+          "demux-w": 640,
+          "demux-h": 360,
+          "demux-fps": 30.0,
+          "demux-par": 1.0,
+          "metadata": {
+            "ENCODER": "Lavc63.1.102 libx264",
+            "DURATION": "00:00:08.000000000"
+          }
+        },
+        {
+          "id": 1,
+          "type": "audio",
+          "src-id": 2,
+          "audio-channels": 1,
+          "image": false,
+          "albumart": false,
+          "default": false,
+          "forced": false,
+          "dependent": false,
+          "visual-impaired": false,
+          "hearing-impaired": false,
+          "external": false,
+          "selected": true,
+          "main-selection": 0,
+          "ff-index": 1,
+          "decoder": "aac",
+          "decoder-desc": "AAC (Advanced Audio Coding)",
+          "codec": "aac",
+          "codec-desc": "AAC (Advanced Audio Coding)",
+          "codec-profile": "LC",
+          "demux-channel-count": 1,
+          "demux-channels": "mono",
+          "demux-samplerate": 44100,
+          "metadata": {
+            "ENCODER": "Lavc63.1.102 aac",
+            "DURATION": "00:00:08.023000000"
+          }
+        },
+        {
+          "id": 1,
+          "type": "sub",
+          "title": "literal.vtt",
+          "image": false,
+          "albumart": false,
+          "default": false,
+          "forced": false,
+          "dependent": false,
+          "visual-impaired": false,
+          "hearing-impaired": false,
+          "external": true,
+          "selected": true,
+          "main-selection": 0,
+          "external-filename": "/tmp/vestra-vtt-literal-di8gm8y6/literal.vtt",
+          "ff-index": 0,
+          "decoder": "webvtt",
+          "decoder-desc": "WebVTT subtitle",
+          "codec": "webvtt",
+          "codec-desc": "WebVTT subtitle",
+          "codec-profile": "Advanced Sub Station Alpha"
+        }
+      ],
+      "request_id": 6,
+      "error": "success"
+    },
+    "sub-text": {
+      "data": "\u4e2d\u6587\u5b57\u5e55 \u6d4b\u8bd5 <b>\u539f\u6837</b> \\\\\u2060b1} \\\u2060N END",
+      "request_id": 7,
+      "error": "success"
+    },
+    "sub-text-ass": {
+      "data": "\u4e2d\u6587\u5b57\u5e55 \u6d4b\u8bd5 <b>\u539f\u6837</b> \\{{}\\\u2060b1} \\\u2060N END",
+      "request_id": 8,
+      "error": "success"
+    },
+    "sub-font-provider": {
+      "data": "none",
+      "request_id": 9,
+      "error": "success"
+    },
+    "embeddedfonts": {
+      "data": false,
+      "request_id": 10,
+      "error": "success"
+    },
+    "sub-font": {
+      "data": "Noto Sans CJK SC",
+      "request_id": 11,
+      "error": "success"
+    },
+    "sub-fonts-dir": {
+      "data": "/tmp/vestra-vtt-literal-di8gm8y6/fonts",
+      "request_id": 12,
+      "error": "success"
+    },
+    "screenshot": {
+      "data": null,
+      "request_id": 13,
+      "error": "success"
+    },
+    "quit": {
+      "data": null,
+      "request_id": 14,
+      "error": "success"
+    }
+  },
+  "literalTextPropertyMatches": false,
+  "limits": [
+    "A matching text property alone is not a visual fidelity fence.",
+    "Standalone CLI only; no actual host/SDK integration.",
+    "No immutable font lease or cross-renderer pixel parity established.",
+    "FFmpeg fontsdir adds fonts; its standard filter still uses automatic system fallback."
+  ],
+  "font": {
+    "path": "/Users/ziyang/Documents/vestra-player/src/assets/fonts/noto-cjk/NotoSansCJKsc-Regular.otf",
+    "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+    "size": 16437364,
+    "family": "Noto Sans CJK SC",
+    "distribution": "Existing font symlink only; font bytes not copied into evidence"
+  },
+  "offline": {
+    "command": [
+      "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+      "-hide_banner",
+      "-loglevel",
+      "verbose",
+      "-i",
+      "/Users/ziyang/Documents/vestra-player/doc/rebuild/subtitle-evidence/backend-cli/fixture.mkv",
+      "-vf",
+      "subtitles=filename=/tmp/vestra-vtt-literal-di8gm8y6/literal.vtt:fontsdir=/tmp/vestra-vtt-literal-di8gm8y6/fonts:force_style='FontName=Noto Sans CJK SC,PlayResX=1920,PlayResY=1080,ScaledBorderAndShadow=yes,FontSize=72,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV=54,MarginL=0,MarginR=0,Bold=0,Italic=0,ScaleX=100,ScaleY=100,Spacing=0'",
+      "-frames:v",
+      "1",
+      "-y",
+      "/tmp/vestra-vtt-literal-di8gm8y6/offline.png"
+    ],
+    "exitCode": 0,
+    "fontSelection": [
+      "[Parsed_subtitles_0 @ 0x7ad029ec0] fontselect: (Noto Sans CJK SC, 400, 0) -> NotoSansCJKsc-Regular, 0, NotoSansCJKsc-Regular"
+    ]
+  },
+  "mpvFontSelection": [
+    "[   0.080][v][sub/ass] fontselect: (Noto Sans CJK SC, 400, 0) -> NotoSansCJKsc-Regular, 0, NotoSansCJKsc-Regular"
+  ]
+}

@@ -1,0 +1,3 @@
+# Homebrew libmpv; other platforms should configure their own libmpv search path.
+[target.aarch64-apple-darwin]
+rustflags = ["-L", "native=/opt/homebrew/lib"]

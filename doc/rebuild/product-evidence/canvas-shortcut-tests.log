@@ -1,0 +1,9 @@
+   Compiling vestra-host v0.1.0 (/Users/ziyang/Documents/vestra-player/src/host)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.43s
+     Running unittests src/main.rs (src/host/target/debug/deps/vestra_host-994e91e420f296f9)
+
+running 1 test
+test commands::tests::canvas_shortcut_uses_current_command_state_and_releases_with_owner ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 136 filtered out; finished in 0.00s
+

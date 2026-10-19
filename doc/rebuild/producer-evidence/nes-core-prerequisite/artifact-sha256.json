@@ -1,0 +1,11 @@
+{
+  "verify.mjs": "e0bd1af4e41a7480afc682de317f39df475757454b256b86606a9fbc813cd740",
+  "verify-game.mjs": "0741977e8195608fc91d814424a513fbed9e2bdaa28d738bb4312a4993217008",
+  "extract.py": "20c3b0d17737ba0e2107002799e2c0b03acad15476f8c85cd11def7aaf4a6471",
+  "jsnes-LICENSE": "530136cec696ac1fcdeb792a77472cb273f9f814ad0ed795dccdc95db7423e0a",
+  "jsnes-2.1.0.tgz": "167081846a907e19bdd7cba75c648d827d49ea50e0fb58c079ad1a6613dee3c1",
+  "result.json": "afe688cf5763e8e936b80834ad990bb188d1e638ff61288efa056243133fccd3",
+  "active-game-run/result.json": "bd8095b19830277df7aac589d0deedf0fac408e8b8c1c46ede470712d51ec6f0",
+  "active-game-run/game.png": "9874a50eee80287fd52b7556d8af8fd7dc6e05622b48c499bed5be16d43e5cef",
+  "active-game-run/state.json": "601bd2734272926c765f0d5ff40b609055e0e4e202a51b4e7c3359ce223911ec"
+}

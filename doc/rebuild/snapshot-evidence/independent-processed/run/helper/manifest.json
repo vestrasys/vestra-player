@@ -1,0 +1,1 @@
+{"id":"review.processed-helper","apiVersion":"vestra.experimental/0.1","entry":"main.mjs","capabilities":["playback.read","subtitles.read","subtitles.control","processing.video"]}

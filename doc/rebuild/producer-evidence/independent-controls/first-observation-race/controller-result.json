@@ -1,0 +1,363 @@
+{
+  "pass": false,
+  "pid": 12907,
+  "events": [
+    {
+      "at": 1792275422764,
+      "event": "source.state",
+      "data": {
+        "audioTracks": null,
+        "capabilities": {
+          "close": false,
+          "pause": false,
+          "rate": false,
+          "restart": false,
+          "seek": false,
+          "snapshotSource": false
+        },
+        "container": null,
+        "cycle": 0,
+        "duration": null,
+        "eventSequence": 0,
+        "kind": "media",
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "empty",
+        "position": null,
+        "rate": 1,
+        "snapshotProfile": {
+          "fileOriginValidation": "deferred-worker-origin-match-required",
+          "timeDomain": "mpv-media"
+        },
+        "source": null,
+        "stamp": {
+          "generation": 0,
+          "intentVersion": 0
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "at": 1792275422864,
+      "event": "source.state",
+      "data": {
+        "audioHealth": {
+          "buffer": {
+            "actualFrames": 1024,
+            "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+            "device": "MacBook Air Speakers",
+            "oneBufferMilliseconds": 21.333333333333332,
+            "requestedFrames": 1024,
+            "supported": "Range { min: 15, max: 4096 }"
+          },
+          "deviceChangeEvents": 0,
+          "deviceErrors": 0,
+          "errorDetails": [],
+          "errorOverflow": 0,
+          "status": "ok",
+          "xrunEvents": 0
+        },
+        "audioTracks": null,
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": false,
+          "restart": false,
+          "seek": false,
+          "snapshotSource": false
+        },
+        "container": null,
+        "controlPending": false,
+        "cycle": 1,
+        "duration": null,
+        "eventSequence": 8,
+        "kind": "producer",
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.042666666666666665,
+        "rate": 1,
+        "source": "producer://1",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      }
+    },
+    {
+      "at": 1792275422929,
+      "event": "host.error",
+      "data": {
+        "code": "producer-failed",
+        "generation": 1,
+        "message": "producer transport closed"
+      }
+    }
+  ],
+  "operations": [
+    {
+      "id": 101,
+      "paused": true,
+      "at": 1792275422864,
+      "before": {
+        "audioHealth": {
+          "buffer": {
+            "actualFrames": 1024,
+            "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+            "device": "MacBook Air Speakers",
+            "oneBufferMilliseconds": 21.333333333333332,
+            "requestedFrames": 1024,
+            "supported": "Range { min: 15, max: 4096 }"
+          },
+          "deviceChangeEvents": 0,
+          "deviceErrors": 0,
+          "errorDetails": [],
+          "errorOverflow": 0,
+          "status": "ok",
+          "xrunEvents": 0
+        },
+        "audioTracks": null,
+        "capabilities": {
+          "close": true,
+          "pause": true,
+          "rate": false,
+          "restart": false,
+          "seek": false,
+          "snapshotSource": false
+        },
+        "container": null,
+        "controlPending": false,
+        "cycle": 1,
+        "duration": null,
+        "eventSequence": 7,
+        "kind": "producer",
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": false,
+        "phase": "ready",
+        "position": 0.042666666666666665,
+        "rate": 1,
+        "source": "producer://1",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 1
+        },
+        "terminalReason": null
+      },
+      "receipt": {
+        "status": "pending",
+        "ticket": {
+          "cycle": 1,
+          "owner": 2,
+          "stamp": {
+            "generation": 1,
+            "intentVersion": 2
+          }
+        }
+      },
+      "initial": {
+        "status": "pending",
+        "ticket": {
+          "cycle": 1,
+          "owner": 2,
+          "stamp": {
+            "generation": 1,
+            "intentVersion": 2
+          }
+        }
+      },
+      "terminal": {
+        "error": {
+          "backend": "producer transport closed"
+        },
+        "status": "failed"
+      },
+      "observations": [
+        {
+          "at": 1792275422873,
+          "op": {
+            "status": "pending",
+            "ticket": {
+              "cycle": 1,
+              "owner": 2,
+              "stamp": {
+                "generation": 1,
+                "intentVersion": 2
+              }
+            }
+          }
+        },
+        {
+          "at": 1792275422933,
+          "op": {
+            "error": {
+              "backend": "producer transport closed"
+            },
+            "status": "failed"
+          }
+        }
+      ],
+      "source": {
+        "audioHealth": {
+          "buffer": {
+            "actualFrames": 1024,
+            "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+            "device": "MacBook Air Speakers",
+            "oneBufferMilliseconds": 21.333333333333332,
+            "requestedFrames": 1024,
+            "supported": "Range { min: 15, max: 4096 }"
+          },
+          "deviceChangeEvents": 0,
+          "deviceErrors": 0,
+          "errorDetails": [],
+          "errorOverflow": 0,
+          "status": "ok",
+          "xrunEvents": 0
+        },
+        "audioTracks": null,
+        "capabilities": {
+          "close": true,
+          "pause": false,
+          "rate": false,
+          "restart": false,
+          "seek": false,
+          "snapshotSource": false
+        },
+        "container": null,
+        "controlPending": false,
+        "cycle": 1,
+        "duration": null,
+        "eventSequence": 12,
+        "kind": "producer",
+        "loadingOwner": null,
+        "output": {
+          "muted": false,
+          "volume": 100
+        },
+        "paused": true,
+        "phase": "error",
+        "position": 0.042666666666666665,
+        "rate": 1,
+        "source": "producer://1",
+        "stamp": {
+          "generation": 1,
+          "intentVersion": 2
+        },
+        "terminalReason": {
+          "failed": "producer transport closed"
+        }
+      },
+      "finishedAt": 1792275422936
+    }
+  ],
+  "initial": {
+    "audioHealth": {
+      "buffer": {
+        "actualFrames": 1024,
+        "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+        "device": "MacBook Air Speakers",
+        "oneBufferMilliseconds": 21.333333333333332,
+        "requestedFrames": 1024,
+        "supported": "Range { min: 15, max: 4096 }"
+      },
+      "deviceChangeEvents": 0,
+      "deviceErrors": 0,
+      "errorDetails": [],
+      "errorOverflow": 0,
+      "status": "ok",
+      "xrunEvents": 0
+    },
+    "audioTracks": null,
+    "capabilities": {
+      "close": true,
+      "pause": true,
+      "rate": false,
+      "restart": false,
+      "seek": false,
+      "snapshotSource": false
+    },
+    "container": null,
+    "controlPending": false,
+    "cycle": 1,
+    "duration": null,
+    "eventSequence": 2,
+    "kind": "producer",
+    "loadingOwner": null,
+    "output": {
+      "muted": false,
+      "volume": 100
+    },
+    "paused": false,
+    "phase": "ready",
+    "position": null,
+    "rate": 1,
+    "source": "producer://1",
+    "stamp": {
+      "generation": 1,
+      "intentVersion": 1
+    },
+    "terminalReason": null
+  },
+  "progressBefore": {
+    "audioHealth": {
+      "buffer": {
+        "actualFrames": 1024,
+        "defaultConfig": "SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 15, max: 4096 }, sample_format: F32 }",
+        "device": "MacBook Air Speakers",
+        "oneBufferMilliseconds": 21.333333333333332,
+        "requestedFrames": 1024,
+        "supported": "Range { min: 15, max: 4096 }"
+      },
+      "deviceChangeEvents": 0,
+      "deviceErrors": 0,
+      "errorDetails": [],
+      "errorOverflow": 0,
+      "status": "ok",
+      "xrunEvents": 0
+    },
+    "audioTracks": null,
+    "capabilities": {
+      "close": true,
+      "pause": true,
+      "rate": false,
+      "restart": false,
+      "seek": false,
+      "snapshotSource": false
+    },
+    "container": null,
+    "controlPending": false,
+    "cycle": 1,
+    "duration": null,
+    "eventSequence": 6,
+    "kind": "producer",
+    "loadingOwner": null,
+    "output": {
+      "muted": false,
+      "volume": 100
+    },
+    "paused": false,
+    "phase": "ready",
+    "position": 0.042666666666666665,
+    "rate": 1,
+    "source": "producer://1",
+    "stamp": {
+      "generation": 1,
+      "intentVersion": 1
+    },
+    "terminalReason": null
+  },
+  "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'failed'\n- 'completed'\n",
+  "stack": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'failed'\n- 'completed'\n\n    at Module.controller (file:///private/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-independent-controls-GfFTgC/controller/main.mjs:16:48)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///Users/ziyang/Documents/vestra-player/src/runtime/runner.ts:130:13"
+}

@@ -1,0 +1,127 @@
+import { Button, CheckBox, LineEdit, VerticalBox, HorizontalBox, ScrollView } from "std-widgets.slint";
+export struct CaptureTask {
+    id: string,
+    summary: string,
+    cancellable: bool,
+    retryable: bool,
+    retained: bool,
+    openable: bool,
+}
+export component CaptureWindow inherits Window {
+    title: "截图与导出";
+    preferred-width: 680px;
+    preferred-height: 560px;
+    min-width: 520px;
+    min-height: 400px;
+    in property <string> source-label: "No source";
+    in property <string> status: "Choose capture options. Exports use independent offline decoding.";
+    in property <bool> form-busy: false;
+    in property <string> tracks: "No audio tracks";
+    in property <string> queue-count: "0/5 accepted";
+    in property <[CaptureTask]> task-rows;
+    in property <string> confirmation: "";
+    in property <bool> confirming: false;
+    in-out property <string> section: "Screenshot";
+    in-out property <string> start-time: "0";
+    in-out property <string> end-time: "10";
+    in-out property <string> burst-count: "5";
+    in-out property <string> burst-step: "1";
+    in-out property <string> audio-track: "selected";
+    in-out property <bool> current-time: true;
+    in-out property <bool> processed: false;
+    in-out property <bool> subtitles: false;
+    callback mark-start();
+    callback mark-end();
+    callback export-image(string, bool, bool, bool);
+    callback export-burst(string, string, string, bool, bool, bool);
+    callback export-clip(string, string, bool, string, bool);
+    callback confirm-start();
+    callback reject-start();
+    callback cancel-form();
+    callback cancel-task(string);
+    callback query-task(string);
+    callback open-output(string);
+    callback retry-retained(string);
+    callback retry-current(string);
+    VerticalBox {
+        padding: 14px;
+        spacing: 8px;
+        Text { text: root.source-label; overflow: elide; }
+        HorizontalBox {
+            Button { text: "保存当前画面"; clicked => { root.section = "Screenshot"; } }
+            Button { text: "连拍"; clicked => { root.section = "Burst"; } }
+            Button { text: "导出片段"; clicked => { root.section = "Video clip"; } }
+            Button { text: "任务"; clicked => { root.section = "Export tasks"; } }
+        }
+        Text { text: root.queue-count; }
+        ScrollView {
+            VerticalBox {
+                spacing: 10px;
+                if root.section != "Export tasks": VerticalBox {
+                    spacing: 8px;
+                    CheckBox { text: "处理后 / Apply confirmed processing"; checked <=> root.processed; enabled: !root.form-busy; }
+                    Text { text: root.processed ? "SDR 8-bit output. Freezes confirmed video/audio processing." : "原始：不含效果和字幕 / Raw: no effects or subtitles"; wrap: word-wrap; }
+                    CheckBox { text: "Include subtitles"; checked <=> root.subtitles; enabled: root.processed && !root.form-busy; }
+                    if root.section != "Video clip": CheckBox { text: "Fix current time when accepted"; checked <=> root.current-time; enabled: !root.form-busy; }
+                    HorizontalBox {
+                        Text { text: root.section == "Video clip" ? "Start (seconds)" : "Sample start (seconds)"; }
+                        LineEdit { text <=> root.start-time; enabled: !root.form-busy && (root.section == "Video clip" || !root.current-time); }
+                        Button { text: "Use current"; enabled: !root.form-busy; clicked => { root.mark-start(); } }
+                    }
+                    if root.section == "Screenshot": Button {
+                        text: "Save PNG…"; enabled: !root.form-busy;
+                        clicked => { root.export-image(root.start-time, root.processed, root.subtitles, root.current-time); }
+                    }
+                    if root.section == "Burst": VerticalBox {
+                        HorizontalBox {
+                            Text { text: "Count (2–20)"; }
+                            LineEdit { text <=> root.burst-count; enabled: !root.form-busy; }
+                            Text { text: "Spacing (.1–10s)"; }
+                            LineEdit { text <=> root.burst-step; enabled: !root.form-busy; }
+                        }
+                        Text { text: "Samples follow media time t0 + i × spacing. The final confirmation lists expected sample times; no playback seek occurs."; wrap: word-wrap; }
+                        Button { text: "Choose output parent…"; enabled: !root.form-busy; clicked => { root.export-burst(root.start-time, root.burst-count, root.burst-step, root.processed, root.subtitles, root.current-time); } }
+                    }
+                    if root.section == "Video clip": VerticalBox {
+                        HorizontalBox {
+                            Text { text: "End (seconds)"; }
+                            LineEdit { text <=> root.end-time; enabled: !root.form-busy; }
+                            Button { text: "Use current"; enabled: !root.form-busy; clicked => { root.mark-end(); } }
+                        }
+                        Text { text: root.tracks; wrap: word-wrap; }
+                        HorizontalBox {
+                            Text { text: "Audio ID / selected / none"; }
+                            LineEdit { text <=> root.audio-track; enabled: !root.form-busy; }
+                        }
+                        Text { text: "One source audio track. Device volume/mute are excluded. Processed dynamic normalization may decode from source time zero before the selected range."; wrap: word-wrap; }
+                        Button { text: "Save MP4…"; enabled: !root.form-busy; clicked => { root.export-clip(root.start-time, root.end-time, root.processed, root.audio-track, root.subtitles); } }
+                    }
+                }
+                if root.confirming: VerticalBox {
+                    Text { text: root.confirmation; wrap: word-wrap; }
+                    HorizontalBox {
+                        Button { text: "确认启动 / Confirm start"; clicked => { root.confirm-start(); } }
+                        Button { text: "Back"; clicked => { root.reject-start(); } }
+                    }
+                }
+                if root.section == "Export tasks": VerticalBox {
+                    Text { text: "Each row retains its original source. Cancelled bursts keep confirmed PNGs. Failed input is retained for up to five minutes for explicit retry."; wrap: word-wrap; }
+                    for task in root.task-rows: VerticalBox {
+                        Text { text: task.summary; wrap: word-wrap; }
+                        HorizontalBox {
+                            Button { text: "Query"; clicked => { root.query-task(task.id); } }
+                            Button { text: "Cancel"; enabled: task.cancellable; clicked => { root.cancel-task(task.id); } }
+                            Button { text: "Open output"; enabled: task.openable; clicked => { root.open-output(task.id); } }
+                        }
+                        HorizontalBox {
+                            Button { text: "Retry retained input…"; enabled: task.retryable && task.retained; clicked => { root.retry-retained(task.id); } }
+                            Button { text: "Retry current source…"; enabled: task.retryable; clicked => { root.retry-current(task.id); } }
+                        }
+                    }
+                }
+            }
+        }
+        Text { text: root.status; wrap: word-wrap; max-height: 85px; }
+        Button { text: "Cancel preparation / confirmation"; enabled: root.form-busy; clicked => { root.cancel-form(); } }
+    }
+}

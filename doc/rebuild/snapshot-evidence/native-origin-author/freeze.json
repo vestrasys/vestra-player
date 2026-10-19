@@ -1,0 +1,10 @@
+{
+  "src/host/src/source_backend.rs": "920372a65130f5b9fa4e1af806f5075a8e5468277efa7090d2db809ca01157fe",
+  "src/host/src/media_jobs.rs": "7319be175b29eb4ffa3ecf7d930093c9e836df70f0025deef029dd528d3e0e51",
+  "src/host/src/media_worker.rs": "3289422e7e1f385d764438b45b9640ed3080f12553a1c5f7db72f9734b45701f",
+  "src/host/src/native_subtitle.rs": "19f4531cd0055bd11c056150e5d198f52ee64767b06fe53dc411ef60d0af6fb3",
+  "src/host/src/subtitle_backend.rs": "feac90f8f2276fa20c137b08681efbf6fe726df7108692fdca47481f213b0e16",
+  "src/sdk/media.ts": "5958881e174feddbf4bc1c2276f9325927d1f76adf524cdcd7cec8f9909d2188",
+  "src/sdk/source.ts": "244aed238f9320b01d1902669ed33915365b97038d41bf8b8f876597b4db5968",
+  "src/host/target/debug/vestra-host": "105df08ecec79e85114e45f276d44910aaa5a0bd49a2359ad016237bfee9f447"
+}

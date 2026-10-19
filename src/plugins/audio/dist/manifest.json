@@ -1,0 +1,13 @@
+{
+  "id": "audio",
+  "apiVersion": "vestra.experimental/0.1",
+  "entry": "main.js",
+  "capabilities": [
+    "commands",
+    "playback.read",
+    "events",
+    "processing.audio",
+    "ui.window"
+  ],
+  "version": "1.1.0"
+}

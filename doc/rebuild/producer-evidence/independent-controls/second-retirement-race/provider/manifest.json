@@ -1,0 +1,1 @@
+{"id":"independent.controls.provider","apiVersion":"vestra.experimental/0.1","entry":"main.mjs","capabilities":["events","playback.read","playback.control","producer.av"]}

@@ -1,0 +1,20 @@
+import { Button, VerticalBox, HorizontalBox } from "std-widgets.slint";
+export component NesWindow inherits Window {
+    title: "NES";
+    width: 420px;
+    height: 220px;
+    in property <string> status: "Choose an iNES ROM to start.";
+    in property <bool> running: false;
+    callback open-rom();
+    callback stop();
+    VerticalBox {
+        padding: 20px;
+        spacing: 16px;
+        Text { text: "NES"; font-size: 24px; font-weight: 700; }
+        Text { text: root.status; wrap: word-wrap; vertical-stretch: 1; }
+        HorizontalBox {
+            Button { text: "Open ROM…"; clicked => { root.open-rom(); } }
+            Button { text: "Stop"; enabled: root.running; clicked => { root.stop(); } }
+        }
+    }
+}

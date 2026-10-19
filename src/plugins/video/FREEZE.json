@@ -1,0 +1,72 @@
+{
+  "revision": "1.0.1-reconstructed-20261019",
+  "provenance": "New author reconstruction; no byte-identity claim to cloud-only previous revision",
+  "files": {
+    "API_REQUESTS.md": {
+      "size": 813,
+      "sha256": "147b179ae4b2e61ef2385a5f8cc5060c2809cf6582ee184dd57572e15471261f"
+    },
+    "README.md": {
+      "size": 2353,
+      "sha256": "766ad245c5c8cd64826be666eb9ba91769a3cb2e1561e55eeb4b560b867dcd45"
+    },
+    "build.log": {
+      "size": 68,
+      "sha256": "d259aa75c8352febdb7bdd8682abbb377964781f8df1699c7841941cd38da3c3"
+    },
+    "build.mjs": {
+      "size": 2284,
+      "sha256": "11926ca8e9198159ff4329af22fd056b666bf751ce0cb10aba9f9fd2eeda57da"
+    },
+    "dist/main.js": {
+      "size": 7294,
+      "sha256": "0ea4575e0262e1923a4b24a0f360ec5ec6cedffe0eaace3bf833f65b664c7c1d"
+    },
+    "dist/manifest.json": {
+      "size": 230,
+      "sha256": "6988e077c0b5b627cecff225f6e4398ba8b9209c52db117fe44c7e15eb6a59c7"
+    },
+    "dist/model.js": {
+      "size": 1627,
+      "sha256": "5e269aefa132ca2f6e159ca89b92757f82ab0321f40114824cf4cef318bd0c5a"
+    },
+    "dist/package.json": {
+      "size": 18,
+      "sha256": "1239d4d885dcad42201a27ed9324f8f0f760b78700d8db9ced39a511cffe7eae"
+    },
+    "dist/picture.slint": {
+      "size": 2543,
+      "sha256": "8486f017c75d576c155e7695ac1fc77453fdebe726a0a03222e653b0b6466dad"
+    },
+    "main.ts": {
+      "size": 5747,
+      "sha256": "d7b2e9a9ba13055fa018049185f21f83bd32efb8e8d5a9c0317e2339815c863c"
+    },
+    "manifest.json": {
+      "size": 163,
+      "sha256": "b8c7b5e6625a09a1ca44fea104d4228d331cd5b73e8418735c80ec0565490470"
+    },
+    "model.ts": {
+      "size": 1704,
+      "sha256": "c8346f3bd15c571fbcd7ec7093b7c1c12936ee582813c41a528263a77a9bdb7e"
+    },
+    "picture.slint": {
+      "size": 2543,
+      "sha256": "8486f017c75d576c155e7695ac1fc77453fdebe726a0a03222e653b0b6466dad"
+    },
+    "tests/video.test.mjs": {
+      "size": 4531,
+      "sha256": "7c941301a9fb5c5f53648389a9dc91c51b20a99366c3fc54b9a5e0883a451391"
+    },
+    "tests.log": {
+      "size": 556,
+      "sha256": "fd63826fde40098a5918ad3bfb3df88924fa80d915ccdbfaece5ee2519cbd891"
+    }
+  },
+  "checks": {
+    "typescript": "exit 0; build.log",
+    "tests": "5 pass; tests.log",
+    "runtime": "ESM dist/package.json, no runtime SDK imports"
+  },
+  "native": "pending maintainer Compiler/activation"
+}

@@ -1,0 +1,14 @@
+{
+  "audio.f32": {
+    "bytes": 384000,
+    "sha256": "98854f30999aa71b0647a40a64f1a745a48d908202eaabe7497634aae8c0c77f"
+  },
+  "video.rgba": {
+    "bytes": 1966080,
+    "sha256": "49a7244c535d77bf8592802618479dc82afd154863fd3bc0254411a74acefb60"
+  },
+  "source.mp4": {
+    "bytes": 252513,
+    "sha256": "13e5a490ca106cc4b949f41b9c1c2369b606bbf0b63d1e51d063887be346a6dc"
+  }
+}

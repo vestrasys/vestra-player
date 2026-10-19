@@ -1,0 +1,23 @@
+{
+  "command": [
+    "open",
+    "-n",
+    "/tmp/vestra-producer-input-native-V7OZ1P/Vestra Producer Input.app",
+    "--env",
+    "VESTRA_PRODUCER_INPUT_NATIVE=/tmp/vestra-producer-input-native-V7OZ1P",
+    "--env",
+    "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+    "--stdout",
+    "/tmp/vestra-producer-input-native-V7OZ1P/host.stdout.log",
+    "--stderr",
+    "/tmp/vestra-producer-input-native-V7OZ1P/host.stderr.log",
+    "--args",
+    "--silent",
+    "--seconds",
+    "315",
+    "--plugin",
+    "/tmp/vestra-producer-input-native-V7OZ1P/Vestra Producer Input.app/Contents/Resources/consumer"
+  ],
+  "exitCode": 0,
+  "durationOverride": "maintainer bounded CUA window 300s, host315s; original script default120s"
+}

@@ -1,0 +1,626 @@
+Modules list:
+-------------
+nrom256.o:
+    INESHDR           Offs=000000  Size=000008  Align=00001  Fill=0000
+popslide16.o:
+    BSS               Offs=000000  Size=000004  Align=00002  Fill=0000
+    LIBCODE           Offs=000000  Size=0000F2  Align=00100  Fill=0000
+main.o:
+    CODE              Offs=000000  Size=0003DE  Align=00001  Fill=0000
+    RODATA            Offs=000000  Size=00001A  Align=00001  Fill=0000
+    ZEROPAGE          Offs=000000  Size=00002F  Align=00001  Fill=0000
+    VECTORS           Offs=000000  Size=000006  Align=00001  Fill=0000
+    CHR               Offs=000000  Size=002000  Align=00001  Fill=0000
+random.o:
+    CODE              Offs=0003DE  Size=000052  Align=00001  Fill=0000
+    RODATA            Offs=00001A  Size=00000C  Align=00001  Fill=0000
+    ZEROPAGE          Offs=00002F  Size=000010  Align=00001  Fill=0000
+    LIBCODE           Offs=0000F2  Size=000026  Align=00001  Fill=0000
+levels.o:
+    CODE              Offs=000430  Size=00005A  Align=00001  Fill=0000
+    RODATA            Offs=000026  Size=00013B  Align=00001  Fill=0000
+    BSS               Offs=000004  Size=000008  Align=00001  Fill=0000
+smoke.o:
+    CODE              Offs=00048A  Size=000090  Align=00001  Fill=0000
+    BSS               Offs=00000C  Size=0000C0  Align=00001  Fill=0000
+bg.o:
+    CODE              Offs=00051A  Size=000414  Align=00001  Fill=0000
+    RODATA            Offs=000161  Size=00006D  Align=00001  Fill=0000
+    BSS               Offs=0000CC  Size=00001E  Align=00001  Fill=0000
+missiles.o:
+    CODE              Offs=00092E  Size=0007E6  Align=00001  Fill=0000
+    RODATA            Offs=0001CE  Size=00001B  Align=00001  Fill=0000
+    BSS               Offs=0000EA  Size=000106  Align=00001  Fill=0000
+explosion.o:
+    CODE              Offs=001114  Size=0001C0  Align=00001  Fill=0000
+    RODATA            Offs=0001E9  Size=000059  Align=00001  Fill=0000
+    BSS               Offs=0001F0  Size=000018  Align=00001  Fill=0000
+scurry.o:
+    CODE              Offs=0012D4  Size=000238  Align=00001  Fill=0000
+    BSS               Offs=000208  Size=00002D  Align=00001  Fill=0000
+title.o:
+    CODE              Offs=00150C  Size=0002FA  Align=00001  Fill=0000
+    RODATA            Offs=000242  Size=000079  Align=00001  Fill=0000
+    LIBCODE           Offs=000118  Size=000043  Align=00001  Fill=0000
+practice.o:
+    CODE              Offs=001806  Size=00021D  Align=00001  Fill=0000
+    ZEROPAGE          Offs=00003F  Size=000004  Align=00001  Fill=0000
+cutscene.o:
+    CODE              Offs=001A23  Size=00046F  Align=00001  Fill=0000
+    RODATA            Offs=0002BB  Size=00016B  Align=00001  Fill=0000
+    BSS               Offs=000235  Size=000009  Align=00001  Fill=0000
+    ZEROPAGE          Offs=000043  Size=000008  Align=00001  Fill=0000
+dtescripts.o:
+    RODATA            Offs=000426  Size=000B8E  Align=00001  Fill=0000
+math.o:
+    LIBCODE           Offs=00015B  Size=0000F9  Align=00001  Fill=0000
+    LIBDATA           Offs=000000  Size=00003C  Align=00001  Fill=0000
+bcd.o:
+    LIBCODE           Offs=000254  Size=000035  Align=00001  Fill=0000
+kinematics.o:
+    LIBCODE           Offs=000289  Size=000083  Align=00001  Fill=0000
+undte.o:
+    LIBCODE           Offs=00030C  Size=00004C  Align=00001  Fill=0000
+pads.o:
+    LIBCODE           Offs=000358  Size=00003E  Align=00001  Fill=0000
+mouse.o:
+    ZEROPAGE          Offs=00004B  Size=000004  Align=00001  Fill=0000
+    LIBCODE           Offs=000396  Size=00003B  Align=00001  Fill=0000
+ppuclear.o:
+    LIBCODE           Offs=0003D1  Size=00004C  Align=00001  Fill=0000
+nstripe.o:
+    CODE              Offs=001E92  Size=000066  Align=00001  Fill=0000
+paldetect.o:
+    LIBCODE           Offs=000420  Size=00001F  Align=00020  Fill=0003
+pentlysound.o:
+    BSS               Offs=00023E  Size=000040  Align=00001  Fill=0000
+    PENTLYCODE        Offs=000000  Size=000117  Align=00001  Fill=0000
+pentlymusic.o:
+    PENTLYDATA        Offs=000000  Size=00000E  Align=00001  Fill=0000
+    PENTLYCODE        Offs=000117  Size=00021E  Align=00001  Fill=0000
+musicseq.o:
+    PENTLYDATA        Offs=00000E  Size=0003D7  Align=00001  Fill=0000
+ntscPeriods.o:
+    PENTLYDATA        Offs=0003E5  Size=000080  Align=00001  Fill=0000
+
+
+Segment list:
+-------------
+Name                   Start     End    Size  Align
+----------------------------------------------------
+CHR                   000000  001FFF  002000  00001
+INESHDR               000000  000007  000008  00001
+ZEROPAGE              000010  00005E  00004F  00001
+BSS                   000300  00057D  00027E  00002
+CODE                  008000  009EF7  001EF8  00001
+RODATA                009F00  00AEB3  000FB4  00001
+LIBCODE               00C000  00C43E  00043F  00100
+LIBDATA               00C440  00C47B  00003C  00001
+PENTLYCODE            00C47C  00C7B0  000335  00001
+PENTLYDATA            00C7B1  00CC15  000465  00001
+VECTORS               00FFFA  00FFFF  000006  00001
+
+
+Exports list by name:
+---------------------
+NUM_MADE_DAYS             000007 REZ    SKIP_TO_DAY               000000 REZ    
+accelBrakeLimit           00C289 RLA    actor_paranoid            000537 REA    
+addScore                  0088AB RLA    bcd8bit                   00C254 RLA    
+bgDirty                   0003E3 RLA    blitBGUpdate              00886C RLA    
+buildBGUpdate             0085B5 RLA    buildHouseRebuiltBar      008847 RLA    
+buildLevelRewardBar       0087E0 RLA    buildingsDestroyedThisLevel 0003D8 RLA    
+character_name0           00A2BF RLA    character_name_offset     00A2B1 RLA    
+chooseRandomTarget        0083DE RLA    clearAllMissiles          00892E RLA    
+clearAllSmoke             00850F RLA    clearExplosions           009114 RLA    
+countHousesLeft           008918 RLA    crosshairXHi              0004E0 RLA    
+crosshairYHi              0004E4 RLA    curTip                    0003E4 RLA    
+cur_keys                  000034 RLZ    cut_choose_villagers      009E0B RLA    
+cut_scripts               00A426 RLA    debugHex1                 000032 RLZ    
+debugHex2                 000033 RLZ    display_textfile          00C118 RLA    
+doStateNewLevel           0081A5 RLA    drawCrosshairPlayerX      008ECD RLA    
+drumSFX                   00C8C7 RLA    dte_replacements          00A326 RLA    
+enemyMissilesLeft         000305 RLA    findRandomDestroyedHouse  008408 RLA    
+firePlayerMissile         00902A RLA    firstDestroyedHouse       0003E8 RLA    
+gameDay                   0003DD RLA    gameHour                  0003DE RLA    
+gameState                 000038 RLZ    gameSubTenth              0003E2 RLA    
+gameTenthSecond           0003E1 RLA    getAngle                  00C187 RLA    
+getSlope1                 00C170 RLA    getTVSystem               00C420 RLA    
+hiscore100s               0003DB RLA    hiscore1s                 0003DC RLA    
+houseShape                00A06D RLA    houseToRebuild            0003E9 RLA    
+houseX                    00A061 RLA    housesStanding            0003CC RLA    
+incGameClock              0088D0 RLA    initRandomTarget          0083FC RLA    
+initVillagers             0092D4 RLA    instrumentTable           00C8CD RLA    
+isPractice                00004F RLZ    levelMissileSpeed         000304 RLA    
+levelReleasePeriod        000306 RLA    levelSalvoSizes           000308 RLA    
+loadLevel                 008430 RLA    load_cutscene             009BC8 RLA    
+makeExplosion             009121 RLA    makeSmoke                 00848A RLA    
+measureFromSilo           00C215 RLA    missileCosine             00C45C RLA    
+missileDYHi               000462 RLA    missileDYLo               000476 RLA    
+missileSine               00C454 RLA    missileTarget             0004B2 RLA    
+missileType               00049E RLA    missileXHi                0003EA RLA    
+missileYHi                000412 RLA    mouseEnabled              00003B RLZ    
+mouse_change_sensitivity  00C3C3 RLA    mouse_to_vel              008EF1 RLA    
+moveCrosshairPlayerX      008F56 RLA    mul8                      00C15B RLA    
+musicPatternTable         00C8F7 RLA    music_playing             00057D REA    
+newGame                   008884 RLA    new_keys                  000036 RLZ    
+new_mbuttons              00005D RLZ    nmis                      000030 RLZ    
+nstripe_append            009EE8 RLA    numPlayers                000039 RLZ    
+oam_used                  000031 RLZ    pently_init               00C47C RLA    
+pently_start_music        00C593 RLA    pently_start_sound        00C4BB RLA    
+pently_stop_music         00C5E3 RLA    pently_update             00C50B RLA    
+periodTableHi             00CBD6 RLA    periodTableLo             00CB96 RLA    
+popslide_blit             00C0E8 RLA    popslide_init             00C0CC RLA    
+popslide_terminate_blit   00C0DC RLA    popslide_used             000303 RLA    
+ppu_clear_nt              00C3D1 RLA    ppu_clear_oam             00C3F3 RLA    
+ppu_screen_on             00C403 RLA    practiceSide              000050 RLZ    
+practice_menu             009806 RLA    practice_txt              00AD72 RLA    
+psg_sfx_state             000010 RLZ    psg_sound_table           00C7BF RLA    
+rand0                     00003F RLZ    rand1                     000040 RLZ    
+rand2                     000041 RLZ    rand3                     000042 RLZ    
+random                    00C0F2 RLA    read_mouse                00C396 RLA    
+read_pads                 00C358 RLA    score100s                 0003D9 RLA    
+score1s                   0003DA RLA    setupGameBG               00851A RLA    
+siloMissilesLeft          0003E6 RLA    songTable                 00C8E9 RLA    
+soundBSS                  00053E RLA    testMissileThreats        0094E8 RLA    
+tipTexts                  00ABE0 RLA    tipTimeLeft               0003E5 RLA    
+titleScreen               00956B RLA    todo_txt                  00ADDB RLA    
+tvSystem                  00003A RLZ    undte_line0               00C310 RLA    
+updateAllExplosions       0092AB RLA    updateMissiles            008A0F RLA    
+updateSmoke               0084C1 RLA    updateVillagers           009329 RLA    
+update_music              00C5E9 RLA    update_music_ch           00C75C RLA    
+villagersGoHome           00947B RLA    warpVillagersToTargets    00948C RLA    
+
+
+
+Exports list by value:
+----------------------
+SKIP_TO_DAY               000000 REZ    NUM_MADE_DAYS             000007 REZ    
+psg_sfx_state             000010 RLZ    nmis                      000030 RLZ    
+oam_used                  000031 RLZ    debugHex1                 000032 RLZ    
+debugHex2                 000033 RLZ    cur_keys                  000034 RLZ    
+new_keys                  000036 RLZ    gameState                 000038 RLZ    
+numPlayers                000039 RLZ    tvSystem                  00003A RLZ    
+mouseEnabled              00003B RLZ    rand0                     00003F RLZ    
+rand1                     000040 RLZ    rand2                     000041 RLZ    
+rand3                     000042 RLZ    isPractice                00004F RLZ    
+practiceSide              000050 RLZ    new_mbuttons              00005D RLZ    
+popslide_used             000303 RLA    levelMissileSpeed         000304 RLA    
+enemyMissilesLeft         000305 RLA    levelReleasePeriod        000306 RLA    
+levelSalvoSizes           000308 RLA    housesStanding            0003CC RLA    
+buildingsDestroyedThisLevel 0003D8 RLA    score100s                 0003D9 RLA    
+score1s                   0003DA RLA    hiscore100s               0003DB RLA    
+hiscore1s                 0003DC RLA    gameDay                   0003DD RLA    
+gameHour                  0003DE RLA    gameTenthSecond           0003E1 RLA    
+gameSubTenth              0003E2 RLA    bgDirty                   0003E3 RLA    
+curTip                    0003E4 RLA    tipTimeLeft               0003E5 RLA    
+siloMissilesLeft          0003E6 RLA    firstDestroyedHouse       0003E8 RLA    
+houseToRebuild            0003E9 RLA    missileXHi                0003EA RLA    
+missileYHi                000412 RLA    missileDYHi               000462 RLA    
+missileDYLo               000476 RLA    missileType               00049E RLA    
+missileTarget             0004B2 RLA    crosshairXHi              0004E0 RLA    
+crosshairYHi              0004E4 RLA    actor_paranoid            000537 REA    
+soundBSS                  00053E RLA    music_playing             00057D REA    
+doStateNewLevel           0081A5 RLA    chooseRandomTarget        0083DE RLA    
+initRandomTarget          0083FC RLA    findRandomDestroyedHouse  008408 RLA    
+loadLevel                 008430 RLA    makeSmoke                 00848A RLA    
+updateSmoke               0084C1 RLA    clearAllSmoke             00850F RLA    
+setupGameBG               00851A RLA    buildBGUpdate             0085B5 RLA    
+buildLevelRewardBar       0087E0 RLA    buildHouseRebuiltBar      008847 RLA    
+blitBGUpdate              00886C RLA    newGame                   008884 RLA    
+addScore                  0088AB RLA    incGameClock              0088D0 RLA    
+countHousesLeft           008918 RLA    clearAllMissiles          00892E RLA    
+updateMissiles            008A0F RLA    drawCrosshairPlayerX      008ECD RLA    
+mouse_to_vel              008EF1 RLA    moveCrosshairPlayerX      008F56 RLA    
+firePlayerMissile         00902A RLA    clearExplosions           009114 RLA    
+makeExplosion             009121 RLA    updateAllExplosions       0092AB RLA    
+initVillagers             0092D4 RLA    updateVillagers           009329 RLA    
+villagersGoHome           00947B RLA    warpVillagersToTargets    00948C RLA    
+testMissileThreats        0094E8 RLA    titleScreen               00956B RLA    
+practice_menu             009806 RLA    load_cutscene             009BC8 RLA    
+cut_choose_villagers      009E0B RLA    nstripe_append            009EE8 RLA    
+houseX                    00A061 RLA    houseShape                00A06D RLA    
+character_name_offset     00A2B1 RLA    character_name0           00A2BF RLA    
+dte_replacements          00A326 RLA    cut_scripts               00A426 RLA    
+tipTexts                  00ABE0 RLA    practice_txt              00AD72 RLA    
+todo_txt                  00ADDB RLA    popslide_init             00C0CC RLA    
+popslide_terminate_blit   00C0DC RLA    popslide_blit             00C0E8 RLA    
+random                    00C0F2 RLA    display_textfile          00C118 RLA    
+mul8                      00C15B RLA    getSlope1                 00C170 RLA    
+getAngle                  00C187 RLA    measureFromSilo           00C215 RLA    
+bcd8bit                   00C254 RLA    accelBrakeLimit           00C289 RLA    
+undte_line0               00C310 RLA    read_pads                 00C358 RLA    
+read_mouse                00C396 RLA    mouse_change_sensitivity  00C3C3 RLA    
+ppu_clear_nt              00C3D1 RLA    ppu_clear_oam             00C3F3 RLA    
+ppu_screen_on             00C403 RLA    getTVSystem               00C420 RLA    
+missileSine               00C454 RLA    missileCosine             00C45C RLA    
+pently_init               00C47C RLA    pently_start_sound        00C4BB RLA    
+pently_update             00C50B RLA    pently_start_music        00C593 RLA    
+pently_stop_music         00C5E3 RLA    update_music              00C5E9 RLA    
+update_music_ch           00C75C RLA    psg_sound_table           00C7BF RLA    
+drumSFX                   00C8C7 RLA    instrumentTable           00C8CD RLA    
+songTable                 00C8E9 RLA    musicPatternTable         00C8F7 RLA    
+periodTableLo             00CB96 RLA    periodTableHi             00CBD6 RLA    
+
+
+
+Imports list:
+-------------
+NUM_MADE_DAYS (levels.o):
+    main.o                    src/global.inc:144
+SKIP_TO_DAY (levels.o):
+    bg.o                      src/global.inc:144
+accelBrakeLimit (kinematics.o):
+    missiles.o                src/global.inc:193
+actor_paranoid (cutscene.o):
+    main.o                    src/global.inc:182
+addScore (bg.o):
+    main.o                    src/global.inc:96
+bcd8bit (bcd.o):
+    title.o                   src/global.inc:141
+    bg.o                      src/global.inc:141
+bgDirty (bg.o):
+    practice.o                src/global.inc:90
+    missiles.o                src/global.inc:90
+    levels.o                  src/global.inc:90
+    main.o                    src/global.inc:90
+blitBGUpdate (bg.o):
+    practice.o                src/global.inc:94
+    main.o                    src/global.inc:94
+buildBGUpdate (bg.o):
+    practice.o                src/global.inc:94
+    main.o                    src/global.inc:94
+buildHouseRebuiltBar (bg.o):
+    main.o                    src/global.inc:95
+buildLevelRewardBar (bg.o):
+    main.o                    src/global.inc:94
+buildingsDestroyedThisLevel (bg.o):
+    missiles.o                src/global.inc:91
+    main.o                    src/global.inc:91
+character_name0 (cutscene.o):
+    bg.o                      src/global.inc:181
+character_name_offset (cutscene.o):
+    bg.o                      src/global.inc:181
+chooseRandomTarget (random.o):
+    missiles.o                src/global.inc:70
+clearAllMissiles (missiles.o):
+    practice.o                src/global.inc:122
+    main.o                    src/global.inc:122
+clearAllSmoke (smoke.o):
+    explosion.o               src/global.inc:133
+clearExplosions (explosion.o):
+    missiles.o                src/global.inc:130
+countHousesLeft (bg.o):
+    main.o                    src/global.inc:96
+crosshairXHi (missiles.o):
+    practice.o                src/global.inc:112
+    title.o                   src/global.inc:112
+    main.o                    src/global.inc:112
+crosshairYHi (missiles.o):
+    practice.o                src/global.inc:113
+    title.o                   src/global.inc:113
+    main.o                    src/global.inc:113
+curTip (bg.o):
+    practice.o                src/global.inc:90
+    missiles.o                src/global.inc:90
+    levels.o                  src/global.inc:90
+    main.o                    src/global.inc:90
+cur_keys (main.o):
+    pads.o                    src/pads.s:11
+    title.o                   src/global.inc:50
+    missiles.o                src/global.inc:50
+cut_choose_villagers (cutscene.o):
+    main.o                    src/global.inc:184
+cut_scripts (dtescripts.o):
+    cutscene.o                src/cutscene.s:26
+debugHex1 (main.o):
+    explosion.o               src/global.inc:41
+debugHex2 (main.o):
+    explosion.o               src/global.inc:41
+display_textfile (title.o):
+    practice.o                src/global.inc:62
+doStateNewLevel (main.o):
+    practice.o                src/global.inc:44
+drawCrosshairPlayerX (missiles.o):
+    practice.o                src/global.inc:123
+    main.o                    src/global.inc:123
+drumSFX (musicseq.o):
+    pentlymusic.o             src/pentlyseq.inc:8
+dte_replacements (dtescripts.o):
+    undte.o                   src/undte.s:2
+enemyMissilesLeft (levels.o):
+    missiles.o                src/global.inc:146
+    bg.o                      src/global.inc:146
+    main.o                    src/global.inc:146
+findRandomDestroyedHouse (random.o):
+    main.o                    src/global.inc:71
+firePlayerMissile (missiles.o):
+    main.o                    src/global.inc:124
+firstDestroyedHouse (bg.o):
+    missiles.o                src/global.inc:91
+    main.o                    src/global.inc:91
+gameDay (bg.o):
+    practice.o                src/global.inc:89
+    main.o                    src/global.inc:89
+gameHour (bg.o):
+    practice.o                src/global.inc:89
+    main.o                    src/global.inc:89
+gameState (main.o):
+    cutscene.o                src/global.inc:42
+    practice.o                src/global.inc:42
+gameSubTenth (bg.o):
+    scurry.o                  src/global.inc:89
+    missiles.o                src/global.inc:89
+    main.o                    src/global.inc:89
+gameTenthSecond (bg.o):
+    scurry.o                  src/global.inc:89
+    missiles.o                src/global.inc:89
+getAngle (math.o):
+    missiles.o                src/global.inc:138
+getSlope1 (math.o):
+    missiles.o                src/global.inc:138
+getTVSystem (paldetect.o):
+    main.o                    src/global.inc:164
+hiscore100s (bg.o):
+    title.o                   src/global.inc:88
+    main.o                    src/global.inc:88
+hiscore1s (bg.o):
+    title.o                   src/global.inc:88
+    main.o                    src/global.inc:88
+houseShape (bg.o):
+    cutscene.o                src/global.inc:87
+houseToRebuild (bg.o):
+    cutscene.o                src/global.inc:91
+    missiles.o                src/global.inc:91
+    main.o                    src/global.inc:91
+houseX (bg.o):
+    cutscene.o                src/global.inc:87
+    scurry.o                  src/global.inc:87
+    missiles.o                src/global.inc:87
+housesStanding (bg.o):
+    cutscene.o                src/global.inc:87
+    practice.o                src/global.inc:87
+    scurry.o                  src/global.inc:87
+    explosion.o               src/global.inc:87
+    missiles.o                src/global.inc:87
+    random.o                  src/global.inc:87
+    main.o                    src/global.inc:87
+incGameClock (bg.o):
+    main.o                    src/global.inc:96
+initRandomTarget (random.o):
+    main.o                    src/global.inc:70
+initVillagers (scurry.o):
+    main.o                    src/global.inc:154
+instrumentTable (musicseq.o):
+    pentlymusic.o             src/pentlyseq.inc:9
+isPractice (practice.o):
+    levels.o                  src/global.inc:196
+    main.o                    src/global.inc:196
+levelMissileSpeed (levels.o):
+    missiles.o                src/global.inc:146
+    bg.o                      src/global.inc:146
+levelReleasePeriod (levels.o):
+    missiles.o                src/global.inc:146
+    bg.o                      src/global.inc:146
+levelSalvoSizes (levels.o):
+    practice.o                src/global.inc:147
+    missiles.o                src/global.inc:147
+loadLevel (levels.o):
+    main.o                    src/global.inc:149
+load_cutscene (cutscene.o):
+    main.o                    src/global.inc:184
+makeExplosion (explosion.o):
+    missiles.o                src/global.inc:130
+makeSmoke (smoke.o):
+    missiles.o                src/global.inc:133
+measureFromSilo (math.o):
+    missiles.o                src/global.inc:138
+missileCosine (math.o):
+    missiles.o                src/global.inc:136
+missileDYHi (missiles.o):
+    scurry.o                  src/global.inc:115
+missileDYLo (missiles.o):
+    scurry.o                  src/global.inc:115
+missileSine (math.o):
+    missiles.o                src/global.inc:136
+missileTarget (missiles.o):
+    scurry.o                  src/global.inc:116
+    explosion.o               src/global.inc:116
+missileType (missiles.o):
+    explosion.o               src/global.inc:116
+missileXHi (missiles.o):
+    explosion.o               src/global.inc:114
+missileYHi (missiles.o):
+    scurry.o                  src/global.inc:114
+    explosion.o               src/global.inc:114
+    main.o                    src/global.inc:114
+mouseEnabled (main.o):
+    cutscene.o                src/global.inc:40
+    title.o                   src/global.inc:40
+    missiles.o                src/global.inc:40
+mouse_change_sensitivity (mouse.o):
+    title.o                   src/global.inc:57
+mouse_to_vel (missiles.o):
+    practice.o                src/global.inc:123
+    main.o                    src/global.inc:123
+moveCrosshairPlayerX (missiles.o):
+    practice.o                src/global.inc:123
+    main.o                    src/global.inc:123
+mul8 (math.o):
+    scurry.o                  src/global.inc:138
+    missiles.o                src/global.inc:138
+musicPatternTable (musicseq.o):
+    pentlymusic.o             src/pentlyseq.inc:9
+music_playing (pentlymusic.o):
+    pentlysound.o             src/pentlysound.s:25
+newGame (bg.o):
+    main.o                    src/global.inc:96
+new_keys (main.o):
+    pads.o                    src/pads.s:11
+    cutscene.o                src/global.inc:50
+    practice.o                src/global.inc:50
+    title.o                   src/global.inc:50
+    missiles.o                src/global.inc:50
+new_mbuttons (mouse.o):
+    cutscene.o                src/global.inc:55
+    title.o                   src/global.inc:55
+    missiles.o                src/global.inc:55
+nmis (main.o):
+    paldetect.o               src/paldetect.s:11
+    ppuclear.o                src/global.inc:40
+    cutscene.o                src/global.inc:40
+    practice.o                src/global.inc:40
+    title.o                   src/global.inc:40
+    explosion.o               src/global.inc:40
+    missiles.o                src/global.inc:40
+    smoke.o                   src/global.inc:40
+nstripe_append (nstripe.o):
+    title.o                   src/popslide.inc:30
+numPlayers (main.o):
+    practice.o                src/global.inc:40
+    title.o                   src/global.inc:40
+    missiles.o                src/global.inc:40
+    levels.o                  src/global.inc:40
+oam_used (main.o):
+    practice.o                src/global.inc:40
+    scurry.o                  src/global.inc:40
+    explosion.o               src/global.inc:40
+    missiles.o                src/global.inc:40
+    smoke.o                   src/global.inc:40
+pently_init (pentlysound.o):
+    main.o                    src/global.inc:177
+pently_start_music (pentlymusic.o):
+    cutscene.o                src/global.inc:178
+    main.o                    src/global.inc:178
+pently_start_sound (pentlysound.o):
+    pentlymusic.o             src/pentlymusic.s:13
+    scurry.o                  src/global.inc:177
+    explosion.o               src/global.inc:177
+    missiles.o                src/global.inc:177
+pently_stop_music (pentlymusic.o):
+    cutscene.o                src/global.inc:178
+    main.o                    src/global.inc:178
+pently_update (pentlysound.o):
+    cutscene.o                src/global.inc:177
+    practice.o                src/global.inc:177
+    title.o                   src/global.inc:177
+    main.o                    src/global.inc:177
+periodTableHi (ntscPeriods.o):
+    pentlysound.o             src/pentlysound.s:23
+periodTableLo (ntscPeriods.o):
+    pentlysound.o             src/pentlysound.s:23
+popslide_blit (popslide16.o):
+    bg.o                      src/popslide.inc:16
+popslide_init (popslide16.o):
+    cutscene.o                src/popslide.inc:17
+    title.o                   src/popslide.inc:17
+    bg.o                      src/popslide.inc:17
+popslide_terminate_blit (popslide16.o):
+    cutscene.o                src/popslide.inc:18
+    title.o                   src/popslide.inc:18
+popslide_used (popslide16.o):
+    nstripe.o                 src/popslide.inc:13
+    cutscene.o                src/popslide.inc:13
+ppu_clear_nt (ppuclear.o):
+    cutscene.o                src/global.inc:47
+    title.o                   src/global.inc:47
+ppu_clear_oam (ppuclear.o):
+    cutscene.o                src/global.inc:47
+    practice.o                src/global.inc:47
+    title.o                   src/global.inc:47
+    main.o                    src/global.inc:47
+ppu_screen_on (ppuclear.o):
+    cutscene.o                src/global.inc:47
+    title.o                   src/global.inc:47
+    main.o                    src/global.inc:47
+practiceSide (practice.o):
+    main.o                    src/global.inc:196
+practice_menu (practice.o):
+    main.o                    src/global.inc:198
+practice_txt (dtescripts.o):
+    practice.o                src/practice.s:25
+psg_sfx_state (main.o):
+    pentlymusic.o             src/pentlymusic.s:11
+    pentlysound.o             src/pentlysound.s:24
+psg_sound_table (musicseq.o):
+    pentlysound.o             src/pentlysound.s:25
+rand0 (random.o):
+    main.o                    src/global.inc:68
+rand1 (random.o):
+    title.o                   src/global.inc:68
+    main.o                    src/global.inc:68
+rand2 (random.o):
+    main.o                    src/global.inc:68
+rand3 (random.o):
+    cutscene.o                src/global.inc:68
+    title.o                   src/global.inc:68
+    missiles.o                src/global.inc:68
+    main.o                    src/global.inc:68
+random (random.o):
+    cutscene.o                src/global.inc:70
+    title.o                   src/global.inc:70
+    missiles.o                src/global.inc:70
+read_mouse (mouse.o):
+    cutscene.o                src/global.inc:57
+    title.o                   src/global.inc:57
+    missiles.o                src/global.inc:57
+read_pads (pads.o):
+    cutscene.o                src/global.inc:52
+    practice.o                src/global.inc:52
+    title.o                   src/global.inc:52
+    main.o                    src/global.inc:52
+score100s (bg.o):
+    title.o                   src/global.inc:88
+    main.o                    src/global.inc:88
+score1s (bg.o):
+    title.o                   src/global.inc:88
+    main.o                    src/global.inc:88
+setupGameBG (bg.o):
+    practice.o                src/global.inc:94
+    main.o                    src/global.inc:94
+siloMissilesLeft (bg.o):
+    missiles.o                src/global.inc:125
+    main.o                    src/global.inc:125
+songTable (musicseq.o):
+    pentlymusic.o             src/pentlyseq.inc:9
+soundBSS (pentlysound.o):
+    pentlymusic.o             src/pentlymusic.s:12
+testMissileThreats (scurry.o):
+    main.o                    src/global.inc:155
+tipTexts (dtescripts.o):
+    bg.o                      src/bg.s:454
+tipTimeLeft (bg.o):
+    missiles.o                src/global.inc:90
+    levels.o                  src/global.inc:90
+    main.o                    src/global.inc:90
+titleScreen (title.o):
+    main.o                    src/global.inc:62
+todo_txt (dtescripts.o):
+    title.o                   src/title.s:28
+tvSystem (main.o):
+    pentlymusic.o             src/pentlymusic.s:22
+    scurry.o                  src/global.inc:40
+    explosion.o               src/global.inc:40
+    missiles.o                src/global.inc:40
+    bg.o                      src/global.inc:40
+    levels.o                  src/global.inc:40
+undte_line0 (undte.o):
+    cutscene.o                src/global.inc:207
+    title.o                   src/global.inc:207
+    bg.o                      src/global.inc:207
+updateAllExplosions (explosion.o):
+    main.o                    src/global.inc:130
+updateMissiles (missiles.o):
+    main.o                    src/global.inc:122
+updateSmoke (smoke.o):
+    main.o                    src/global.inc:133
+updateVillagers (scurry.o):
+    main.o                    src/global.inc:154
+update_music (pentlymusic.o):
+    pentlysound.o             src/pentlysound.s:25
+update_music_ch (pentlymusic.o):
+    pentlysound.o             src/pentlysound.s:25
+villagersGoHome (scurry.o):
+    main.o                    src/global.inc:156
+warpVillagersToTargets (scurry.o):
+    main.o                    src/global.inc:156
+

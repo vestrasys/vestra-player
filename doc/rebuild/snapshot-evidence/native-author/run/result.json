@@ -1,0 +1,30 @@
+{
+  "pass": true,
+  "work": "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-native-author-8gKYz3",
+  "analysis": [
+    {
+      "index": 0,
+      "yellow": 6008
+    },
+    {
+      "index": 1,
+      "yellow": 4417
+    },
+    {
+      "index": 2,
+      "yellow": 6520
+    },
+    {
+      "index": 3,
+      "yellow": 6008
+    },
+    {
+      "index": 4,
+      "yellow": 6008
+    }
+  ],
+  "limits": [
+    "Author smoke; native only plain subrip/srt, zero-origin lavf.",
+    "No active validation-stage cancel, arbitrary native formatting or full M3 claim."
+  ]
+}

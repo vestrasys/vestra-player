@@ -1,0 +1,5 @@
+# 第二run：provider跨RPC回收竞态，未总通过
+
+3aNsmX，host exit0、controller全部原断言pass，但provider未完成。provider先读source仍Ready，紧接producer.state返回unavailable（超时控制轮询已将producer撤销），owned消费者错误地当非预期抛错。宿主Error/回收事实符合目标，迟到ACK未执行，不能宣布整套通过。
+
+仅拟修withheld第三Notice后producer unavailable的预期回收：记录原错误及之前source样本，继续公开source观察，直到controller的新media Ready再发送原未ACK Notice并断言拒绝/不变。其余原目标不改，state unavailable/socket删除仍须验证。不自动再次run，等待root授权及binary时段。

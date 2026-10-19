@@ -1,0 +1,1 @@
+{"name":"vestra-workshop","version":"1.0.0","private":true,"type":"module","dependencies":{"@earendil-works/pi-agent-core":"1.3.0","@earendil-works/pi-ai":"1.3.0","typescript":"5.9.3"},"devDependencies":{"@types/node":"25.9.9","esbuild":"0.25.12"}}

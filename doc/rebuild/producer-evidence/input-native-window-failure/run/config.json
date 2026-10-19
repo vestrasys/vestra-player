@@ -1,0 +1,6 @@
+{
+  "duration": 300,
+  "assetRoot": "/tmp/vestra-producer-input-native-V7OZ1P/Vestra Producer Input.app/Contents/Resources",
+  "stopFile": "/tmp/vestra-producer-input-native-V7OZ1P/stop",
+  "withholdFile": "/tmp/vestra-producer-input-native-V7OZ1P/withhold-input-ack"
+}
