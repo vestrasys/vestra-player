@@ -43,7 +43,7 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 
 ## 4. Slint 组合与输入
 
-- 编译：宿主、面板、工具窗口、包校验共用一个编译配置（`ui.rs` 的 `compiler()`）：库路径 `vestra` → `ui/vestra/`（`@vestra/theme.slint`、`@vestra/widgets.slint`），风格 `fluent-dark`。默认字体不强制指定，由 Slint 1.16 的 parley + fontique 按系统字体逐字回退（macOS 上走 CoreText 的回退链，中文可显示）；设环境变量 `VESTRA_FONT_FALLBACK=hiragino` 时改为导入系统自带的 Hiragino Sans GB 并设为默认字体（实测中文显示异常时的备用方案）。
+- 编译：宿主、面板、工具窗口、包校验共用一个编译配置（`ui.rs` 的 `compiler()`）：库路径 `vestra` → `ui/vestra/`（`@vestra/theme.slint`、`@vestra/widgets.slint`），风格 `fluent-dark`。默认字体是系统自带的 Hiragino Sans GB（按文件导入并设为各窗口的默认字体）：GUI 实测（2026-10-20）不指定字体时插件窗口的中文显示为空白，Slint 1.16 在这里没有按文字回退。`VESTRA_FONT_FALLBACK=system` 可关闭，用于检验以后 Slint 版本自身的回退。主题的 `font-mono`（Menlo）只含西文，含中文的文字不要用它。
 - 工具窗口：插件 `.slint` 文件恰好导出一个组件；宿主用 slint-interpreter 编译，按 SDK 登记的回调白名单转发回调。
 - 面板：文件导出一个 component 和一个 global（属性与回调的桥接对象）；宿主按 owner 别名把它导入主界面（`host.slint` 的插入标记），转发 global 上的全部回调。主窗口外壳：视频列（视频 + 底栏）在左，3px 分隔条与全高侧栏在右；全屏时底栏覆盖在视频底部并按 `window_state::Policy` 的空闲规则隐藏。
 - 浮动面板（C14）：分离时宿主另外编译一个窗口，导入同一个组件与桥接 global；global 每个窗口实例一份，所以宿主用保存的 `Mount.properties` 初始化浮动窗口，之后每次 `ui.setMount` 同时写主窗口与浮动窗口，两边回调都以 `$mount` 转发。附着时只关闭浮动窗口，主窗口不重建。
