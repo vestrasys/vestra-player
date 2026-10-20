@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /**
  * Shared plugin tool: `node scripts/plugin.mjs <check|build|test> <name...|--all>`.
+ * A name is a directory under plugins/; a name with a slash is a path relative
+ * to src/ (for example `examples/bookmark`). `--all` covers plugins/ only.
  *
  *   check   strict type check of the plugin's .ts files (and its tests) with
  *           the repository compiler and tsconfig
@@ -76,7 +78,9 @@ async function json(path, fallback) {
 }
 
 async function plugin(name) {
-  const directory = join(pluginsRoot, name);
+  const directory = name.includes("/")
+    ? resolve(source, name)
+    : join(pluginsRoot, name);
   if (!existsSync(join(directory, "manifest.json")))
     fail(`${name}: no manifest.json in ${directory}`);
   const manifest = await json(join(directory, "manifest.json"));

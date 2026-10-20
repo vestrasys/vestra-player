@@ -37,7 +37,7 @@
 
 ## P1 记录（维护者）
 
-交付：`src/sdk/plugin/`（句柄式 SDK v2 与测试用 `TestHost`/`startPlugin`）、`src/tests/sdk/`（36 项）、`src/scripts/plugin.mjs`（公共构建工具：`npm run plugin -- check|build|test <name>`、`plugins:build`、`test:sdk`）、`runtime/runner.ts`（默认导出走 v2、命名导出 `activate` 走旧 API；v2 去掉客户端 10 秒超时）、文档 `sdk-v2.md`、`sdk-v2-usage.md`、`sdk-v2-migration-guide.md`、画面调节参考迁移（6.4 grep 为空，测试 6/6）。宿主未改。
+交付：`src/sdk/plugin/`（句柄式 SDK v2 与测试用 `TestHost`/`startPlugin`）、`src/tests/sdk/`（36 项）、`src/scripts/plugin.mjs`（公共构建工具：`npm run plugin -- check|build|test <name>`、`plugins:build`、`test:sdk`）、`runtime/runner.ts`（默认导出走 v2、命名导出 `activate` 走旧 API；v2 去掉客户端 10 秒超时）、文档 `sdk-v2.md`、`doc/plugins/examples.md`、`sdk-v2-migration-guide.md`、画面调节参考迁移（6.4 grep 为空，测试 6/6）。宿主未改。
 
 协调者复核：tsc 0 错误、prettier、boundaries 通过；`test:sdk` 36/36；`plugin test video` 6/6；video `main.ts` 无协议字段。
 

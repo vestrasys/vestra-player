@@ -90,7 +90,7 @@
 交付物：
 
 1. `doc/rebuild/sdk-v2.md`：设计说明——模块与句柄一览、生命周期与释放规则、协议细节如何被吸收（逐条对应 4.2）、显式条件提交的使用方式、错误模型、与旧 API 的对照表。
-2. `doc/rebuild/sdk-v2-usage.md`：usage examples，至少覆盖：
+2. `doc/plugins/examples.md`：usage examples，至少覆盖：
    - 画面调节（连续控制 + 处理资源 + 工具窗口）；
    - 基础播放栏（来源控制、拖动跳转、命令启用状态随播放状态变化、挂载到底栏）；
    - 播放列表（侧栏列表模型、选中、自动推进）；
@@ -108,7 +108,7 @@ P1 完成条件：`npm run check`（tsc）、prettier、boundaries、SDK 单元�
 
 ### P2 设计审查关口（协调者）
 
-协调者对照第 4 节逐条审查 P1 交付，重点看 `sdk-v2-usage.md` 是否美观易读（用户最关心这一点；用户本轮不参与中途审查，会在结束后查看最终结果）。审查结论写入 `sdk-v2-progress.md`：通过 / 需修改（列出具体条目，退回维护者）。**未通过前不分派插件迁移。**
+协调者对照第 4 节逐条审查 P1 交付，重点看 `doc/plugins/examples.md` 是否美观易读（用户最关心这一点；用户本轮不参与中途审查，会在结束后查看最终结果）。审查结论写入 `sdk-v2-progress.md`：通过 / 需修改（列出具体条目，退回维护者）。**未通过前不分派插件迁移。**
 
 设计参考：借鉴 VS Code 的 Disposable、句柄对象、事件绑定与“声明和处理放在一起”这几个模式即可，不要照搬 activation events、contribution points、Extension Host 等整套机制。决定 API 形态的依据是本仓库的宿主协议与 10 个插件的实际需求。
 
@@ -139,7 +139,7 @@ P1 完成条件：`npm run check`（tsc）、prettier、boundaries、SDK 单元�
 ### 6.1 开工前必须阅读
 
 1. 本文全文。
-2. `doc/rebuild/sdk-v2.md`、`doc/rebuild/sdk-v2-usage.md`、`doc/rebuild/sdk-v2-migration-guide.md`。
+2. `doc/rebuild/sdk-v2.md`、`doc/plugins/examples.md`、`doc/rebuild/sdk-v2-migration-guide.md`。
 3. 参考迁移：`src/plugins/video/` 的新版本。
 4. 自己插件的现有代码、测试和 `README.md`，以及 `doc/design/plugins/<对应设计>.md`（若存在），用于确认现有行为。
 

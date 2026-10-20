@@ -16,3 +16,4 @@ doc/**/*.tgz
 
 # Plugin builds are produced by `npm run plugin -- build <name>` (src/scripts/plugin.mjs).
 src/plugins/*/dist/
+src/examples/*/dist/
