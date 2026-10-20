@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -193,7 +193,6 @@ test("A12 记录播放历史 off: nothing new is recorded, existing records stay
     saved.items.map((i: { key: string; kind: string }) => [i.key, i.kind]),
     [[a, "file"]],
   );
-  assert.equal(statSync(join(data, "recent.json")).mode & 0o777, 0o600);
   await stop();
 });
 
@@ -486,7 +485,6 @@ test("B25 the playing position is saved every tick, so a forced quit loses littl
   assert.equal(saved.items[a].position, 300);
   assert.equal(saved.items[a].duration, 600);
   assert.equal(saved.items[a].size, 10);
-  assert.equal(statSync(join(data, "positions.json")).mode & 0o777, 0o600);
   await stop();
 
   // Restarted while the same source plays: tracked, not resumed.
@@ -515,4 +513,19 @@ test("B25 stopping the plugin remembers the last position", async () => {
   assert.deepEqual(pluginSeeks(next.host), [121]);
   assert.equal(next.host.osd.at(-1), "从 02:03 继续播放");
   await next.stop();
+});
+
+test("storage: a damaged file is kept as .bad-<time> and the defaults apply; one bad field keeps the rest", async () => {
+  const data = mkdtempSync(join(scratch, "data-"));
+  writeFileSync(join(data, "recent.json"), "{ not json");
+  writeFileSync(join(data, "positions.json"), JSON.stringify({ version: 1, mode: "sometimes", audio: true, items: { "/x.mkv": { position: "bad" } } }));
+  const { host, stop } = await start(undefined, data);
+  assert.deepEqual(records(host), ["（无记录）"]);
+  assert.equal(host.command("recent.enabled").state.checked, true);
+  assert.equal(host.command("resume.auto").state.checked, true, "an unknown mode falls back to 自动继续");
+  assert.equal(host.command("resume.audio").state.checked, true, "the valid field is kept");
+  await stop();
+  const names = readdirSync(data);
+  assert.ok(names.some((name) => /^recent\.json\.bad-\d+$/.test(name)), names.join());
+  assert.ok(!names.some((name) => name.startsWith("positions.json.bad")), "an object with bad fields is not discarded");
 });

@@ -141,6 +141,7 @@ test("the chosen capture folder is kept in the data directory and restored on th
   const restart = new TestHost();
   ready(restart);
   try {
+    await host.settle(350); // plugin.storage writes 300 ms after the last change
     assert.deepEqual(JSON.parse(await readFile(join(data, "settings.json"), "utf8")), {
       folder, format: "png", quality: 90, screenSubtitles: true, besideMedia: false,
     });

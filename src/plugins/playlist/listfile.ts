@@ -1,3 +1,4 @@
+import { renameSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { extensionOf } from "./media.ts";
@@ -105,6 +106,13 @@ export function parseList(text: string, ext: string, base: string): { entries: L
 
 /** What a saved row needs. */
 export type SavedRow = { kind: "file" | "url"; source: string; title: string; duration: number | null };
+
+/** Write a list file the user chose atomically (temporary file, then rename). */
+export function writeAtomic(path: string, data: string | Uint8Array) {
+  const temporary = `${path}.tmp-${process.pid}`;
+  writeFileSync(temporary, data);
+  renameSync(temporary, path);
+}
 
 /** The list format for a chosen file name: `.m3u8`, `.m3u` or `.pls`; anything else gets `.m3u8` appended. */
 export function savePath(path: string) {

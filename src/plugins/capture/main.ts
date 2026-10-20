@@ -5,8 +5,8 @@ import { ClipboardError, clipboard } from "./copy.ts";
 import { capturer } from "./form.ts";
 import { audioChoices, extensionOf, FORMAT_LABEL, FORMATS, formatOfName, frameName, message, parseRange, quality, usable } from "./model.ts";
 import type { Format, Spec } from "./model.ts";
-import { loadSettings, saver } from "./settings.ts";
-import { reveal, Tasks, terminal } from "./tasks.ts";
+import { openSettings } from "./settings.ts";
+import { Tasks, terminal } from "./tasks.ts";
 import type { Task } from "./tasks.ts";
 
 /** A local file path (not a URL) whose folder can hold captures. */
@@ -22,15 +22,7 @@ const fit = (prefix: string, path: string) =>
  */
 export default async function activate(plugin: Plugin) {
   const { player, osd } = plugin;
-  const data = (() => {
-    try {
-      return plugin.dataDirectory;
-    } catch {
-      return null; // no data directory: the folder is kept for this session only
-    }
-  })();
-  const settings = await loadSettings(data);
-  const save = saver(data);
+  const { settings, save } = openSettings(plugin);
   const ui = { burstBusy: false, clipBusy: false, stillBusy: false, burstStatus: "", clipStatus: "", tasksStatus: "" };
   const say = (text: string) => void osd.show(text.slice(0, 200)).catch(() => {});
   const tasks = new Tasks(plugin, finished);
@@ -61,7 +53,7 @@ export default async function activate(plugin: Plugin) {
   }
 
   // ---------------------------------------------------------------- settings
-  const store = () => void save({ ...settings });
+  const store = save;
   /** F07/F09: the playing file's folder when 储存到播放文件夹 is on and the source is local; the capture folder otherwise. */
   const shownFolder = (source: string | null) => (settings.besideMedia && localFolder(source)) || settings.folder;
   /** The folder captures go to now: falls back to the capture folder when the media folder cannot be written. */
@@ -148,8 +140,13 @@ export default async function activate(plugin: Plugin) {
     store();
     say(fit("截图文件夹：", chosen));
   }
-  /** F09: the folder captures go to now, created when missing. */
-  const openFolder = async () => reveal(await targetFolder(player.state.source));
+  /** F09: the folder captures go to now, created when missing, opened in Finder. */
+  const openFolder = async () => {
+    const folder = await targetFolder(player.state.source);
+    await plugin.system.openPath(folder).catch(() => {
+      throw new Error("无法打开文件夹。");
+    });
+  };
   const openFolderSaying = () => openFolder().catch((error) => say(message(error)));
 
   // ---------------------------------------------------------------- 截图设置

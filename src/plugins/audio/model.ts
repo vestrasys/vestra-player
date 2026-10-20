@@ -1,10 +1,26 @@
-import type { AudioNode } from "../../sdk/plugin/index.ts";
+import type { AudioNode, AudioTrack } from "../../sdk/plugin/index.ts";
 
 export const bands = [60, 170, 350, 1000, 3500, 10000] as const;
 /** 晶化 (reference player crystalizer, our 3 kHz treble shelf): a switch plus a remembered strength. */
 export type Clarity = { on: boolean; db: number };
+/** G05 声道: routing on a stereo mix; `stereo` leaves the track as it is. */
+export const channelModes = [
+  { id: "stereo", label: "立体声" },
+  { id: "left", label: "左声道" },
+  { id: "right", label: "右声道" },
+  { id: "mono", label: "单声道混合" },
+  { id: "swap", label: "左右互换" },
+] as const;
+export type ChannelMode = (typeof channelModes)[number]["id"];
 /** `equalizer: false` bypasses the bands but keeps their gains (参考播放器均衡器 Shift+E). */
-export type Settings = { equalizer: boolean; gains: number[]; delayMs: number; normalize: boolean; clarity: Clarity };
+export type Settings = {
+  equalizer: boolean;
+  gains: number[];
+  delayMs: number;
+  normalize: boolean;
+  clarity: Clarity;
+  channels: ChannelMode;
+};
 export const presets = [
   { label: "平直", gains: [0, 0, 0, 0, 0, 0] },
   { label: "人声", gains: [-3, -2, 1, 3, 2, -1] },
@@ -19,6 +35,7 @@ export const neutral = (): Settings => ({
   delayMs: 0,
   normalize: false,
   clarity: neutralClarity(),
+  channels: "stereo",
 });
 
 /** 声音同步 ▶ keep mode: reset per source, keep for this run, or keep across restarts. */
@@ -28,7 +45,7 @@ export const syncKeeps = [
   { id: "always", label: "始终保持" },
 ] as const;
 export type SyncKeep = (typeof syncKeeps)[number]["id"];
-export const DELAY_LIMIT = 2000;
+export const DELAY_LIMIT = 10000;
 export const SYNC_STEP_MS = 50;
 
 /** Rejects non-finite input (the edit is ignored), otherwise clamps. */
@@ -36,7 +53,7 @@ export function clamp(value: unknown, min: number, max: number) {
   if (typeof value !== "number" || !Number.isFinite(value)) throw new TypeError("Expected finite numeric value");
   return Math.min(max, Math.max(min, value));
 }
-/** The host takes delays in 10 ms steps within ±2000 ms. */
+/** The host takes delays in 10 ms steps within ±10 000 ms. */
 export const delay = (value: unknown) => Math.round(clamp(value, -DELAY_LIMIT, DELAY_LIMIT) / 10) * 10;
 export const tenth = (value: unknown, min: number, max: number) => Math.round(clamp(value, min, max) * 10) / 10;
 
@@ -50,9 +67,14 @@ export const matches = (settings: Settings, index: number) =>
 /** Index of the preset the gains equal, or -1 for custom gains. */
 export const presetOf = (settings: Settings) => presets.findIndex((_, index) => matches(settings, index));
 
-/** Neutral or bypassed bands and effects are left out, so neutral settings are an empty chain. */
-export function nodes(value: Settings): AudioNode[] {
+/**
+ * Neutral or bypassed bands and effects are left out, so neutral settings are an empty chain.
+ * Order: channels → equalizer × 6 → treble (晶化) → dynaudnorm (规格化). A mono track keeps
+ * the channel mode but gets no channels node.
+ */
+export function nodes(value: Settings, track: { mono: boolean } = { mono: false }): AudioNode[] {
   return [
+    ...(value.channels === "stereo" || track.mono ? [] : [{ kind: "channels", mode: value.channels } as const]),
     ...bands.flatMap((frequency, i): AudioNode[] =>
       !value.equalizer || value.gains[i] === 0 ? [] : [{ kind: "equalizer", frequency, q: 1, gainDb: clamp(value.gains[i], -6, 6) }],
     ),
@@ -67,11 +89,13 @@ export function nodes(value: Settings): AudioNode[] {
 export type Stored = {
   settings: Settings;
   syncKeep: SyncKeep;
+  /** A11: load same-named audio files next to a local source (not selected). */
+  autoLoad: boolean;
   tab: number;
   extra: Record<string, unknown>;
 };
 export const TABS = 3;
-const KNOWN = new Set(["version", "equalizer", "gains", "normalize", "clarity", "syncKeep", "syncMs", "tab"]);
+const KNOWN = new Set(["version", "equalizer", "gains", "normalize", "clarity", "channels", "autoLoadExternal", "syncKeep", "syncMs", "tab"]);
 
 const number = (value: unknown, fallback: number, read: (value: unknown) => number) => {
   try {
@@ -101,20 +125,22 @@ export function parse(raw: unknown): Stored {
     clarity = { on: c.on === true, db: number(c.db, CLARITY_DB, (v) => tenth(v, 0, 6)) };
   }
   const syncKeep = syncKeeps.find((k) => k.id === value.syncKeep)?.id ?? "none";
+  const channels = value.channels && typeof value.channels === "object" ? (value.channels as Record<string, unknown>).mode : undefined;
   const settings: Settings = {
     equalizer: value.equalizer !== false,
     gains,
     normalize: value.normalize === true,
     clarity,
     delayMs: syncKeep === "always" ? number(value.syncMs, 0, delay) : 0,
+    channels: channelModes.find((m) => m.id === channels)?.id ?? "stereo",
   };
   const tab = typeof value.tab === "number" && Number.isInteger(value.tab) && value.tab >= 0 && value.tab < TABS ? value.tab : 0;
   const extra = Object.fromEntries(Object.entries(value).filter(([key]) => !KNOWN.has(key)));
-  return { settings, syncKeep, tab, extra };
+  return { settings, syncKeep, autoLoad: value.autoLoadExternal === true, tab, extra };
 }
 
 /** The JSON written back; `syncMs` only while 始终保持. */
-export function serialize({ settings, syncKeep, tab, extra }: Stored) {
+export function serialize({ settings, syncKeep, autoLoad, tab, extra }: Stored) {
   return {
     ...extra,
     version: 1,
@@ -122,8 +148,42 @@ export function serialize({ settings, syncKeep, tab, extra }: Stored) {
     gains: settings.gains,
     normalize: settings.normalize,
     clarity: { ...settings.clarity },
+    channels: { mode: settings.channels },
+    autoLoadExternal: autoLoad,
     syncKeep,
     ...(syncKeep === "always" ? { syncMs: settings.delayMs } : {}),
     tab,
   };
+}
+
+// ---------------------------------------------------------------- tracks (G03, G04) and external audio (A11)
+
+/** "1. 日语 [jpn] (aac)", "3. movie.ac3 (ac3)（外部）", "音轨 2 (opus)"; at most 60 characters. */
+export function trackLabel(track: AudioTrack, index: number) {
+  const n = index + 1;
+  const title = track.title?.trim() || null;
+  const language = track.language ? `[${track.language}]` : null;
+  const codec = track.codec ? `(${track.codec})` : null;
+  const head = title || language ? [`${n}.`, title, language] : [`音轨 ${n}`];
+  const text = [...head, codec].filter(Boolean).join(" ") + (track.external ? "（外部）" : "");
+  return [...text].length > 60 ? `${[...text].slice(0, 59).join("")}…` : text;
+}
+
+/** Audio file extensions A11 offers and the same-name scan picks up. */
+export const AUDIO_EXTENSIONS = ["mka", "m4a", "aac", "ac3", "eac3", "dts", "flac", "mp3", "ogg", "opus", "wav", "mp2", "wma", "aiff", "aif", "thd", "mlp"];
+export const AUTO_LOAD_LIMIT = 8;
+const extension = (name: string) => (name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : "");
+
+/**
+ * Same-folder files that start with the source's name and have an audio extension
+ * (`movie.mkv` → `movie.ac3`, `movie.jpn.mka`), sorted, at most 8. An audio source gets none.
+ */
+export function companions(sourceName: string, names: readonly string[]) {
+  const dot = sourceName.lastIndexOf(".");
+  if (dot <= 0 || AUDIO_EXTENSIONS.includes(extension(sourceName))) return [];
+  const stem = sourceName.slice(0, dot).toLowerCase();
+  return names
+    .filter((name) => name !== sourceName && name.toLowerCase().startsWith(`${stem}.`) && AUDIO_EXTENSIONS.includes(extension(name)))
+    .sort()
+    .slice(0, AUTO_LOAD_LIMIT);
 }

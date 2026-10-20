@@ -3,7 +3,7 @@ import { basename, dirname, extname, join, resolve } from "node:path";
 import type { ExportJob, JobState, Scope, Snapshot } from "../../sdk/plugin/index.ts";
 import { clock, extensionOf, KIND_LABEL, message, uniqueFile } from "./model.ts";
 import type { Spec } from "./model.ts";
-import { system } from "./system.ts";
+import { sips } from "./sips.ts";
 
 /** An accepted export: one frozen snapshot, one or more sequential jobs. */
 export interface Task {
@@ -60,9 +60,6 @@ export function jobError(error: { code: string; message: string }) {
   }
 }
 
-/** Open a file or folder with the system opener. */
-export const reveal = (path: string) => system.reveal(path);
-
 /** Whether a path is free (nothing, not even a dangling link, is there). */
 async function free(path: string) {
   return lstat(path).then(
@@ -84,7 +81,7 @@ export async function convert(published: string, final: string, spec: Spec): Pro
   let target: string | undefined;
   try {
     target = (await free(final)) ? final : await uniqueFile(final);
-    await system.convertImage(published, target, format, spec.quality ?? 90);
+    await sips.convert(published, target, format, spec.quality ?? 90);
     // sips reports some failures only on stderr with exit status 0: check the result.
     if (!(await stat(target).catch(() => null))?.size) throw new Error("no output");
     await rm(published, { force: true });
@@ -266,7 +263,7 @@ export class Tasks {
     }
   }
 
-  /** Open the confirmed output (a burst opens its folder) with the system opener. */
+  /** Open the confirmed output (a burst opens its folder) with its default application. */
   async open(task: Task) {
     const output = task.outputs.at(-1);
     if (!output) throw new Error("这个任务还没有输出文件。");
@@ -274,7 +271,9 @@ export class Tasks {
     const confirmed =
       state.status === "completed" && !!state.outcome && "destination" in state.outcome && resolve(state.outcome.destination) === resolve(output.published);
     if (!confirmed || !(await stat(output.path).catch(() => null))?.isFile()) throw new Error("输出文件已不存在。");
-    await reveal(resolve(task.directory ?? output.path));
+    await this.#plugin.system.openPath(resolve(task.directory ?? output.path)).catch(() => {
+      throw new Error("无法打开文件夹。");
+    });
   }
 
   /** Deactivation: the SDK cancels jobs and releases snapshots; remove empty owned folders. */

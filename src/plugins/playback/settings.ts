@@ -1,61 +1,91 @@
-import { readFileSync, renameSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import type { JsonStore, Scope } from "../../sdk/plugin/index.ts";
+
+export type SeekSteps = [number, number, number, number];
 
 export type Settings = {
   openUrl: { pasteFromClipboard: boolean };
   preventSleep: boolean;
   hoverTime: boolean;
+  /** B06: seconds of the four relative-seek tiers (← →, Ctrl, Shift, Ctrl+Alt). */
+  seekSteps: SeekSteps;
 };
 
-const defaults = (): Settings => ({ openUrl: { pasteFromClipboard: true }, preventSleep: true, hoverTime: true });
+export const DEFAULT_STEPS: SeekSteps = [5, 30, 60, 300];
 
-/** Read `file` as JSON; `null` when missing or unreadable. */
-export function readJson(file: string): unknown {
+/** 0.1–3600 seconds with at most one decimal. */
+export const validStep = (value: unknown): value is number =>
+  typeof value === "number" &&
+  Number.isFinite(value) &&
+  value >= 0.1 &&
+  value <= 3600 &&
+  Math.abs(Math.round(value * 10) - value * 10) < 1e-9;
+
+const defaults = (): Settings => ({
+  openUrl: { pasteFromClipboard: true },
+  preventSleep: true,
+  hoverTime: true,
+  seekSteps: [...DEFAULT_STEPS],
+});
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * `name.json` in the plugin's data directory (`plugin.storage.json`). Without a
+ * data directory the value lives for this run only.
+ */
+export function openStore<T>(
+  scope: Scope,
+  name: string,
+  options: { defaults: T; validate?: (value: unknown) => value is T; debounceMs?: number },
+): JsonStore<T> {
   try {
-    return JSON.parse(readFileSync(file, "utf8"));
+    return scope.storage.json(name, options);
   } catch {
-    return null;
+    let value = options.defaults;
+    return {
+      get value() {
+        return value;
+      },
+      save: (next) => void (value = next),
+      flush: async () => {},
+      dispose: async () => {},
+    };
   }
 }
 
-/** Write through a temporary file and a rename, so a crash never leaves half a file. */
-export function writeJson(file: string, value: unknown) {
-  const temporary = `${file}.${process.pid}.tmp`;
-  writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`);
-  renameSync(temporary, file);
-}
-
-/** `settings.json` in the plugin's data directory; bad or missing fields fall back to the defaults. */
+/**
+ * `settings.json`: a file that is not an object is set aside by the store;
+ * single bad or missing fields fall back to their defaults.
+ */
 export class SettingsStore {
-  readonly value: Settings;
-  readonly #file: string | null;
+  readonly #store: JsonStore<Record<string, unknown>>;
+  #value: Settings;
 
-  constructor(directory: () => string) {
-    let file: string | null = null;
-    try {
-      file = join(directory(), "settings.json");
-    } catch {
-      // No data directory: settings live for this run only.
-    }
-    this.#file = file;
-    this.value = defaults();
-    const raw = (file ? readJson(file) : null) as Record<string, unknown> | null;
-    if (!raw || typeof raw !== "object") return;
-    const openUrl = raw.openUrl as Record<string, unknown> | undefined;
-    if (typeof openUrl?.pasteFromClipboard === "boolean")
-      this.value.openUrl.pasteFromClipboard = openUrl.pasteFromClipboard;
-    if (typeof raw.preventSleep === "boolean") this.value.preventSleep = raw.preventSleep;
-    if (typeof raw.hoverTime === "boolean") this.value.hoverTime = raw.hoverTime;
+  constructor(scope: Scope) {
+    this.#store = openStore<Record<string, unknown>>(scope, "settings", { defaults: {}, validate: isObject });
+    const raw = this.#store.value;
+    this.#value = defaults();
+    const openUrl = raw.openUrl;
+    if (isObject(openUrl) && typeof openUrl.pasteFromClipboard === "boolean")
+      this.#value.openUrl.pasteFromClipboard = openUrl.pasteFromClipboard;
+    if (typeof raw.preventSleep === "boolean") this.#value.preventSleep = raw.preventSleep;
+    if (typeof raw.hoverTime === "boolean") this.#value.hoverTime = raw.hoverTime;
+    // A wrong length or any value out of range: the whole set falls back.
+    const steps = raw.seekSteps;
+    if (Array.isArray(steps) && steps.length === 4 && steps.every(validStep))
+      this.#value.seekSteps = [...steps] as SeekSteps;
   }
 
-  /** Apply `change` and save; a failed write keeps the value for this run. */
+  get value(): Readonly<Settings> {
+    return this.#value;
+  }
+
+  /** Apply `change` to a copy and save it (written shortly after; a failed write keeps it for this run). */
   update(change: (settings: Settings) => void) {
-    change(this.value);
-    if (!this.#file) return;
-    try {
-      writeJson(this.#file, this.value);
-    } catch {
-      // Unwritable directory: the choice still holds until the plugin stops.
-    }
+    const next = structuredClone(this.#value);
+    change(next);
+    this.#value = next;
+    this.#store.save(next);
   }
 }

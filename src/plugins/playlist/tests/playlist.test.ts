@@ -4,9 +4,10 @@ import { mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Json } from "../../../sdk/plugin/index.ts";
-import { startPlugin } from "../../../sdk/plugin/testing.ts";
+import { HostError, startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
 import activate from "../main.ts";
-import type { ProbeRunner } from "../probe.ts";
+import { Prober, type ProbeRunner } from "../probe.ts";
+import { Queue } from "../queue.ts";
 
 type ViewRow = {
   rowId: string;
@@ -21,19 +22,16 @@ type ViewRow = {
 type Intent = { kind: string; source?: string; startPaused?: boolean; expected?: Json };
 const pause = (ms = 10) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** A fake ffprobe (`path` is the probed file's name): each call waits until the test answers or the signal aborts it. */
+/** A fake ffprobe behind `host.tools` (`path` is the probed file's name): each call waits until the test answers. */
 function fakeProbe() {
-  const calls: { args: string[]; path: string; signal: AbortSignal; answer: (seconds: number) => void; fail: () => void }[] = [];
-  const runner: ProbeRunner = (args, { signal, timeoutMs }) =>
-    new Promise((resolve, reject) => {
-      assert.equal(timeoutMs, 10_000);
-      signal.addEventListener("abort", () => reject(new Error("cancelled")), { once: true });
+  const calls: { args: string[]; path: string; answer: (seconds: number) => void; fail: () => void }[] = [];
+  const handler = (args: string[]) =>
+    new Promise<{ stdout: string }>((resolve, reject) => {
       calls.push({
         args,
         path: basename(args.at(-1)!),
-        signal,
-        answer: (seconds) => resolve(JSON.stringify({ format: { duration: String(seconds) } })),
-        fail: () => reject(new Error("spawn ffprobe ENOENT")),
+        answer: (seconds) => resolve({ stdout: JSON.stringify({ format: { duration: String(seconds) } }) }),
+        fail: () => reject(new HostError("failed", "ffprobe failed")),
       });
     });
   const call = (name: string) => {
@@ -47,7 +45,7 @@ function fakeProbe() {
     await pause(5);
     return calls.map((c) => c.path).sort();
   };
-  return { runner, calls, call, started };
+  return { handler, calls, call, started };
 }
 
 async function start(probe = fakeProbe()) {
@@ -58,9 +56,9 @@ async function start(probe = fakeProbe()) {
     alias = join(directory, "alias.mp4");
   for (const file of [a, b, c]) await writeFile(file, "plugin test, no media decode claim");
   await symlink(a, alias);
-  const { host, stop } = await startPlugin((plugin) => activate(plugin, probe.runner), {
-    directory: new URL("..", import.meta.url),
-  });
+  const host = new TestHost();
+  host.tools.handle("ffprobe", probe.handler);
+  const { stop } = await startPlugin((plugin) => activate(plugin), { directory: new URL("..", import.meta.url), host });
   const panel = host.mounted();
   const app = {
     host,
@@ -146,6 +144,7 @@ test("menu positions follow the round allocation table; list keys only work with
       ["播放/播放列表/打开文件时/仅打开该文件", 239, "open-mode", "", ""],
       ["播放/播放列表/打开文件时/加入相似文件", 240, "open-mode", "", ""],
       ["播放/播放列表/打开文件时/加入同文件夹全部文件", 241, "open-mode", "", ""],
+      ["播放/播放列表/快速推进到下一个", 242, "options", "", ""],
       ["播放/播放列表/记住列表", 243, "options", "", ""],
       ["(播放)", 0, "domain", "Enter P", "panel"],
       ["(添加文件…)", 0, "domain", "Ctrl+I", "panel"],
@@ -871,12 +870,13 @@ test("removing a row or clearing the list aborts its probe", async () => {
     await app.addFiles([app.a, app.b, app.c]);
     assert.deepEqual(await app.probe.started(3), ["a.mp4", "b.mp4"]);
     await app.press("Delete"); // a is selected
-    assert.equal(app.probe.call("a.mp4").signal.aborted, true);
-    assert.equal(app.probe.call("b.mp4").signal.aborted, false);
     assert.deepEqual(await app.probe.started(3), ["a.mp4", "b.mp4", "c.mp4"], "the freed slot goes to the next row");
+    app.probe.call("a.mp4").answer(10); // a late answer for a removed row is dropped
     await app.run("clear");
-    assert.ok(app.probe.calls.every((call) => call.signal.aborted));
+    for (const call of app.probe.calls) call.answer(5);
+    await app.host.settle();
     assert.equal(app.rows().length, 0);
+    assert.equal(app.prop("total"), "");
   } finally {
     await app.close();
   }
@@ -907,12 +907,37 @@ test("at most two ffprobe processes run at once", async () => {
     assert.deepEqual(await app.probe.started(3), ["a.mp4", "b.mp4"], "the third waits for a slot");
     app.probe.call("b.mp4").answer(10);
     assert.deepEqual(await app.probe.started(3), ["a.mp4", "b.mp4", "c.mp4"]);
-    assert.equal(app.probe.calls.filter((call) => !call.signal.aborted).length, 3);
     app.probe.call("a.mp4").answer(20);
     app.probe.call("c.mp4").answer(30);
     await app.host.settle();
     assert.equal(app.prop("total"), "01:00");
   } finally {
     await app.close();
+  }
+});
+
+test("Prober: ffprobe runs with a 10 s timeout and removal aborts the run", async () => {
+  const queue = new Queue();
+  const runs: { args: string[]; signal: AbortSignal; timeoutMs: number }[] = [];
+  const runner: ProbeRunner = (args, { signal, timeoutMs }) =>
+    new Promise((_, reject) => {
+      runs.push({ args, signal, timeoutMs });
+      signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+    });
+  const directory = await mkdtemp(join(tmpdir(), "vestra-playlist-probe-"));
+  try {
+    const file = join(directory, "a.mp4");
+    await writeFile(file, "x");
+    await queue.addFiles([file]);
+    const prober = new Prober(queue, runner, () => {});
+    prober.scan();
+    for (let i = 0; i < 200 && !runs.length; i++) await pause(1);
+    assert.equal(runs[0]!.timeoutMs, 10_000);
+    assert.deepEqual(runs[0]!.args.slice(0, -1), ["-v", "error", "-show_entries", "format=duration", "-of", "json"]);
+    prober.cancel(queue.rows[0]!.rowId);
+    assert.equal(runs[0]!.signal.aborted, true);
+    assert.equal(prober.active, 0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
 });

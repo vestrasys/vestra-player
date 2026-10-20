@@ -1,6 +1,6 @@
 {
   "id": "vestra.subtitles",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "apiVersion": "vestra.experimental/0.1",
   "entry": "main.ts",
   "capabilities": [
@@ -10,6 +10,8 @@
     "events",
     "ui.window",
     "ui.dialog",
-    "ui.osd"
+    "ui.osd",
+    "playback.read",
+    "playback.control"
   ]
 }

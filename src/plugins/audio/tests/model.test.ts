@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bands, clamp, matches, neutral, nodes, parse, presetOf, presets, serialize, syncText } from "../model.ts";
+import { bands, clamp, companions, matches, neutral, nodes, parse, presetOf, presets, serialize, syncText, trackLabel } from "../model.ts";
 
 test("reset clears the owned chain and preset gains stay inside the ±6 dB EQ range", () => {
   assert.deepEqual(nodes(neutral()), []);
@@ -33,25 +33,31 @@ test("a bypassed equalizer drops only the bands; presetOf names the matching pre
 });
 
 test("settings parse leniently; a legacy numeric clarity migrates to the 晶化 switch", () => {
-  assert.deepEqual(parse(null), { settings: neutral(), syncKeep: "none", tab: 0, extra: {} });
+  assert.deepEqual(parse(null), { settings: neutral(), syncKeep: "none", autoLoad: false, tab: 0, extra: {} });
   assert.deepEqual(parse({ clarity: 2.5 }).settings.clarity, { on: true, db: 2.5 });
   assert.deepEqual(parse({ clarity: 0 }).settings.clarity, { on: false, db: 3 });
   assert.deepEqual(parse({ clarity: { on: true, db: 9 } }).settings.clarity, { on: true, db: 6 });
   assert.deepEqual(parse({ gains: [1, "x", 9, 0, 0, 0] }).settings.gains, [1, 0, 6, 0, 0, 0]);
   assert.deepEqual(parse({ gains: [1, 2] }).settings.gains, [0, 0, 0, 0, 0, 0]);
   assert.equal(parse({ syncKeep: "session", syncMs: 500 }).settings.delayMs, 0, "only 始终保持 restores the delay");
-  assert.equal(parse({ syncKeep: "always", syncMs: 5003 }).settings.delayMs, 2000);
+  assert.equal(parse({ syncKeep: "always", syncMs: 5003 }).settings.delayMs, 5000);
+  assert.equal(parse({ syncKeep: "always", syncMs: -25000 }).settings.delayMs, -10000, "G09: ±10 000 ms");
   assert.equal(parse({ syncKeep: "bogus" }).syncKeep, "none");
   assert.equal(parse({ tab: 7 }).tab, 0);
-  const stored = parse({ version: 1, channels: { mode: "left" }, syncKeep: "always", syncMs: 120 });
-  assert.deepEqual(stored.extra, { channels: { mode: "left" } }, "later fields are kept");
+  assert.equal(parse({ channels: { mode: "sideways" } }).settings.channels, "stereo");
+  const stored = parse({ version: 1, device: "usb", channels: { mode: "left" }, autoLoadExternal: true, syncKeep: "always", syncMs: 120 });
+  assert.deepEqual(stored.extra, { device: "usb" }, "later fields are kept");
+  assert.equal(stored.settings.channels, "left");
+  assert.equal(stored.autoLoad, true);
   assert.deepEqual(serialize(stored), {
-    channels: { mode: "left" },
+    device: "usb",
     version: 1,
     equalizer: true,
     gains: [0, 0, 0, 0, 0, 0],
     normalize: false,
     clarity: { on: false, db: 3 },
+    channels: { mode: "left" },
+    autoLoadExternal: true,
     syncKeep: "always",
     syncMs: 120,
     tab: 0,
@@ -60,4 +66,34 @@ test("settings parse leniently; a legacy numeric clarity migrates to the 晶化 
   assert.equal(syncText(-50), "音频同步: -0.05秒");
   assert.equal(syncText(300), "音频同步: +0.3秒");
   assert.equal(syncText(0), "音频同步: 0秒");
+});
+
+test("G05: the channels node comes first, only off stereo and never on a mono track", () => {
+  const value = { ...neutral(), channels: "swap" as const, gains: [2, 0, 0, 0, 0, 0], normalize: true };
+  assert.deepEqual(
+    nodes(value).map((n) => n.kind),
+    ["channels", "equalizer", "dynaudnorm"],
+  );
+  assert.deepEqual(nodes(value)[0], { kind: "channels", mode: "swap" });
+  assert.deepEqual(nodes(value, { mono: true }).map((n) => n.kind), ["equalizer", "dynaudnorm"]);
+  assert.deepEqual(nodes({ ...neutral(), channels: "stereo" }), []);
+});
+
+test("G03 track labels: number, title, language, codec, external", () => {
+  const t = (fields: Partial<Parameters<typeof trackLabel>[0]>) => ({
+    id: 1, selected: false, external: false, exportable: true, codec: null, title: null, language: null, ...fields,
+  });
+  assert.equal(trackLabel(t({ title: "日语", language: "jpn", codec: "aac" }), 0), "1. 日语 [jpn] (aac)");
+  assert.equal(trackLabel(t({ title: "movie.ac3", codec: "ac3", external: true }), 2), "3. movie.ac3 (ac3)（外部）");
+  assert.equal(trackLabel(t({ codec: "opus" }), 1), "音轨 2 (opus)");
+  assert.equal(trackLabel(t({ language: "eng" }), 0), "1. [eng]");
+  assert.equal([...trackLabel(t({ title: "长".repeat(80) }), 0)].length, 60);
+});
+
+test("A11 same-name scan: audio files that start with the video's name, at most 8", () => {
+  const names = ["movie.mkv", "movie.ac3", "movie.jpn.mka", "Movie.ENG.FLAC", "movie2.ac3", "movie.srt", "other.mp3", "movie"];
+  assert.deepEqual(companions("movie.mkv", names), ["Movie.ENG.FLAC", "movie.ac3", "movie.jpn.mka"]);
+  assert.deepEqual(companions("song.mp3", ["song.mp3", "song.flac"]), [], "an audio source loads nothing");
+  const many = Array.from({ length: 12 }, (_, i) => `a.${String(i).padStart(2, "0")}.mp3`);
+  assert.equal(companions("a.mp4", many).length, 8);
 });

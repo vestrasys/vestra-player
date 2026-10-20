@@ -1,17 +1,21 @@
 import type { CommandState, Scope } from "../../sdk/plugin/index.ts";
 import type { Playback } from "./controller.ts";
 import { type CopyKind, copyTarget } from "./copy.ts";
+import type { Keyframes } from "./keyframes.ts";
 import type { OpenUrl } from "./open-url.ts";
 import type { Prompt } from "./prompt.ts";
 import type { Reopener } from "./reopen.ts";
-import type { SettingsStore } from "./settings.ts";
-import type { SleepGuard } from "./sleep.ts";
+import type { SeekSteps, SettingsStore } from "./settings.ts";
+import { stepText, type TimeJump } from "./time-jump.ts";
 
-/** The round-1 features (doc/product/feature-requirements.md, 播放控制). */
+/** The 播放控制 chapter's features (doc/product/feature-requirements.md). */
 export type Features = {
   openUrl: OpenUrl;
   reopener: Reopener;
-  sleep: SleepGuard;
+  keyframes: Keyframes;
+  timeJump: TimeJump;
+  /** B29: pass the switch to the host. */
+  sleep: () => void;
   settings: SettingsStore;
   copy: (kind: CopyKind) => Promise<void>;
   jumpToStart: () => Promise<void>;
@@ -40,41 +44,53 @@ const ready = (enabled = true, checked: boolean | null = null, busy = false, rea
   reason: enabled ? null : reason,
 });
 
-function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): Entry[] {
-  const seek = (id: string, title: string, order: number, delta: number, bindings: string[], repeat = false): Entry => ({
-    id,
-    path: ["播放", "跳转", title],
-    order,
-    bindings,
-    repeat,
-    action: () => p.seekBy(delta),
-    state: () => ready(p.canStep()),
+/**
+ * Tiers 2–4 of the relative seeks (B06). Tier 1 (← →) is the core's
+ * `seek-backward` / `seek-forward`, given its step with `player.setStepSeek`.
+ */
+function seekEntries(p: Playback, steps: SeekSteps): Entry[] {
+  const tiers: [number, string, string][] = [
+    [2, "Ctrl+ArrowLeft", "Ctrl+ArrowRight"],
+    [3, "Shift+ArrowLeft", "Shift+ArrowRight"],
+    [4, "Ctrl+Alt+ArrowLeft", "Ctrl+Alt+ArrowRight"],
+  ];
+  return tiers.flatMap(([tier, back, forward]) => {
+    const seconds = steps[tier - 1]!;
+    const order = 210 + (tier - 1) * 2;
+    const seek = (id: string, title: string, at: number, delta: number, binding: string): Entry => ({
+      id,
+      path: ["播放", "跳转", `${title}${stepText(seconds)}秒`],
+      order: at,
+      group: "step",
+      bindings: [binding],
+      action: () => p.seekBy(delta),
+      state: () => ready(p.canStep()),
+    });
+    return [
+      seek(`backward-${tier}`, "后退", order, -seconds, back),
+      seek(`forward-${tier}`, "前进", order + 1, seconds, forward),
+    ];
   });
-  const rate = (id: string, title: string, order: number, value: number, bindings?: string[]): Entry => ({
+}
+
+function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): Entry[] {
+  const rate = (id: string, title: string, order: number, value: number): Entry => ({
     id,
     path: ["播放", "速度", title],
     order,
     radio: true,
-    bindings,
     action: () => p.setRate(value),
     state: () => ready(p.can("rate"), p.state.rate === value, p.rateBusy),
   });
-  const rateStep = (id: string, title: string, order: number, delta: number, binding: string): Entry => ({
+  const keyframe = (id: string, title: string, order: number, direction: "backward" | "forward", binding: string): Entry => ({
     id,
-    path: ["播放", "速度", title],
+    path: ["播放", "跳转", title],
     order,
+    group: "frame",
     bindings: [binding],
-    action: () => p.stepRate(delta),
-    state: () => ready(p.can("rate"), null, p.rateBusy),
-  });
-  const volume = (id: string, title: string, order: number, delta: number, bindings: string[]): Entry => ({
-    id,
-    path: ["声音", title],
-    order,
-    bindings,
     repeat: true,
-    action: () => p.volumeBy(delta),
-    state: () => ready(true, null, p.outputBusy),
+    action: () => f.keyframes.run(direction),
+    state: () => f.keyframes.state(),
   });
   const copy = (id: string, title: string, order: number, kind: CopyKind): Entry => ({
     id,
@@ -106,15 +122,6 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
       state: () => ready(!p.selecting, null, p.selecting),
     },
     {
-      id: "close-source",
-      path: ["关闭"],
-      order: 120,
-      group: "open",
-      bindings: ["F4"],
-      action: () => p.closeSource(),
-      state: () => ready(p.can("close")),
-    },
-    {
       id: "open-url",
       path: ["打开", "打开链接…"],
       order: 110,
@@ -136,47 +143,8 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
     copy("copy-name", "文件名", 125, "name"),
     copy("copy-folder", "文件夹路径", 126, "folder"),
     copy("copy-path", "完整路径", 127, "path"),
-    {
-      id: "toggle-pause",
-      path: ["播放", "播放/暂停"],
-      order: 201,
-      bindings: ["Space"],
-      action: () => p.togglePause(),
-      state: () => ready(p.canToggle(), p.state.phase === "ready" ? p.state.paused : null, p.pauseBusy),
-    },
-    {
-      id: "previous",
-      path: ["播放", "上一个"],
-      order: 202,
-      bindings: ["PageUp", "Mouse:X1"],
-      action: () => p.step("previous"),
-      state: () => ready(p.state.can.previous, null, false, "没有上一个"),
-    },
-    {
-      id: "next",
-      path: ["播放", "下一个"],
-      order: 203,
-      bindings: ["PageDown", "Mouse:X2"],
-      action: () => p.step("next"),
-      state: () => ready(p.state.can.next, null, false, "没有下一个"),
-    },
-    seek("backward-5", "后退5秒", 210, -5, ["ArrowLeft"], true),
-    seek("forward-5", "前进5秒", 211, 5, ["ArrowRight"], true),
-    seek("backward-30", "后退30秒", 212, -30, ["Ctrl+ArrowLeft"]),
-    seek("forward-30", "前进30秒", 213, 30, ["Ctrl+ArrowRight"]),
-    seek("backward-60", "后退60秒", 214, -60, ["Shift+ArrowLeft"]),
-    seek("forward-60", "前进60秒", 215, 60, ["Shift+ArrowRight"]),
-    seek("backward-300", "后退300秒", 216, -300, ["Ctrl+Alt+ArrowLeft"]),
-    seek("forward-300", "前进300秒", 217, 300, ["Ctrl+Alt+ArrowRight"]),
-    {
-      id: "jump-start",
-      path: ["播放", "跳转", "跳到开头"],
-      order: 219,
-      group: "points",
-      bindings: ["Backspace"],
-      action: () => f.jumpToStart(),
-      state: () => ready(p.canRestart(), null, p.pauseBusy),
-    },
+    keyframe("keyframe-back", "上一关键帧", 206, "backward", "Ctrl+Shift+ArrowLeft"),
+    keyframe("keyframe-forward", "下一关键帧", 207, "forward", "Ctrl+Shift+ArrowRight"),
     {
       id: "jump",
       path: ["播放", "跳转到…"],
@@ -185,9 +153,23 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
       action: () => jump.show(),
       state: () => ready(p.canSeek()),
     },
-    rate("rate-10", "正常", 220, 1, ["Z"]),
-    rateStep("rate-down", "减速 0.1", 221, -0.1, "X"),
-    rateStep("rate-up", "加速 0.1", 222, 0.1, "C"),
+    {
+      id: "jump-start",
+      path: ["播放", "跳转", "跳到开头"],
+      order: 219,
+      group: "points",
+      bindings: ["Backspace"],
+      action: () => f.jumpToStart(),
+      state: () => ready(p.canRestart(), null, p.restartBusy),
+    },
+    {
+      id: "time-jump",
+      path: ["播放", "跳转", "时间跨度设置…"],
+      order: 223,
+      group: "jump-settings",
+      action: () => f.timeJump.show(),
+      state: () => ready(),
+    },
     rate("rate-05", "0.5倍", 223, 0.5),
     rate("rate-15", "1.5倍", 224, 1.5),
     rate("rate-20", "2倍", 225, 2),
@@ -202,7 +184,7 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
       f.settings.update((s) => {
         s.preventSleep = !s.preventSleep;
       });
-      f.sleep.sync();
+      f.sleep();
       p.notify(`播放时禁止屏保: ${f.settings.value.preventSleep ? "开" : "关"}`);
     }),
     option("hover-time", "进度条悬停显示时间", 242, () => f.settings.value.hoverTime, () => {
@@ -211,31 +193,12 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
       });
       p.notify(`进度条悬停显示时间: ${f.settings.value.hoverTime ? "开" : "关"}`);
     }),
-    volume("volume-up", "音量 +", 501, 5, ["ArrowUp", "Mouse:WheelUp"]),
-    volume("volume-down", "音量 −", 502, -5, ["ArrowDown", "Mouse:WheelDown"]),
-    {
-      id: "mute",
-      path: ["声音", "静音"],
-      order: 503,
-      bindings: ["M"],
-      action: () => p.toggleMute(),
-      state: () => ready(true, p.state.muted, p.outputBusy || p.volumeDraft !== null),
-    },
   ];
 }
 
-/**
- * Register every menu command and return `run(id)`, which the bar's buttons
- * use too. The bar bypasses the host's enabled check, so `run` repeats it.
- */
-export function addCommands(scope: Scope, playback: Playback, jump: Prompt, customRate: Prompt, features: Features) {
-  const table = entries(playback, jump, customRate, features);
-  const run = async (id: string) => {
-    const command = table.find((each) => each.id === id);
-    if (!command?.state().enabled) return;
-    await command.action();
-  };
-  for (const { id, path, order, group, radio, bindings, repeat, state } of table)
+/** Register `table` in `scope`; the host checks `enabled`, `run` checks it again for late runs. */
+function register(scope: Scope, table: Entry[]) {
+  for (const { id, path, order, group, radio, bindings, repeat, state, action } of table)
     scope.commands.add({
       id,
       path,
@@ -248,7 +211,26 @@ export function addCommands(scope: Scope, playback: Playback, jump: Prompt, cust
       checked: () => state().checked,
       busy: () => state().busy,
       reason: () => state().reason,
-      run: () => run(id),
+      run: async () => {
+        if (state().enabled) await action();
+      },
     });
-  return run;
+}
+
+/**
+ * Register the menu commands. The tier 2–4 seeks live in a child scope: a title
+ * cannot change in place, so `setSteps` disposes them and adds them again with
+ * the new seconds (same ids, orders and bindings).
+ */
+export function addCommands(scope: Scope, playback: Playback, jump: Prompt, customRate: Prompt, features: Features) {
+  register(scope, entries(playback, jump, customRate, features));
+  let seeks = scope.scope();
+  register(seeks, seekEntries(playback, features.settings.value.seekSteps));
+  return {
+    async setSteps(steps: SeekSteps) {
+      await seeks.dispose();
+      seeks = scope.scope();
+      register(seeks, seekEntries(playback, steps));
+    },
+  };
 }

@@ -16,16 +16,18 @@ export const MIN_RATE = 0.25;
 export const MAX_RATE = 4;
 
 /**
- * The bar's local state and every playback action. Facts come from
+ * The bar's local state and the playback actions the plugin still owns (the
+ * basic ones are core actions run through `host.run`). Facts come from
  * `player.state`; this object only keeps busy flags, drafts and the drag gesture.
  * Feedback (results and failures) goes to the on-screen display.
  */
 export class Playback {
   selecting = false;
-  pauseBusy = false;
+  /** 跳到开头 is replaying an ended source. */
+  restartBusy = false;
   rateBusy = false;
-  /** A mute toggle is in flight. */
-  outputBusy = false;
+  /** The bar's mute (a core action) is in flight: the volume slider waits. */
+  muteBusy = false;
   dragging = false;
   /** Position shown while seeking, and the newest requested target. */
   draft: number | null = null;
@@ -58,7 +60,7 @@ export class Playback {
     const { duration } = this.state;
     return this.can("seek") && duration !== null && duration > 0;
   }
-  /** Relative seeks need a known position. */
+  /** Relative seeks (tiers 2–4) need a known position. */
   canStep() {
     return this.can("seek") && this.state.position !== null;
   }
@@ -125,7 +127,7 @@ export class Playback {
     );
     return target;
   }
-  /** Relative seeks accumulate from the newest pending target. */
+  /** Relative seeks (tiers 2–4) accumulate from the newest pending target. */
   seekBy(delta: number) {
     const target = this.seek((this.seekTarget ?? this.state.position ?? 0) + delta);
     if (target !== null)
@@ -147,32 +149,16 @@ export class Playback {
       this.selecting = false;
     }
   }
-  async closeSource() {
-    this.clearSeek();
-    await source(this.#player.close());
-  }
-  async togglePause() {
-    if (this.pauseBusy || !this.canToggle()) return;
-    this.clearSeek();
-    this.pauseBusy = true;
-    try {
-      const { phase, paused } = this.state;
-      await source(phase === "ended" ? this.#player.restart() : this.#player.setPaused(!paused));
-      this.notify(phase !== "ended" && !paused ? "已暂停" : "播放");
-    } finally {
-      this.pauseBusy = false;
-    }
-  }
   /** B09: back to 0:00, keeping pause or play; after the end, replay like Space. */
   async jumpToStart() {
-    if (!this.canRestart() || this.pauseBusy) return;
+    if (!this.canRestart() || this.restartBusy) return;
     if (this.state.phase === "ended") {
       this.clearSeek();
-      this.pauseBusy = true;
+      this.restartBusy = true;
       try {
         await source(this.#player.restart());
       } finally {
-        this.pauseBusy = false;
+        this.restartBusy = false;
       }
     } else if (this.seek(0) === null) return;
     this.notify("定位: 开始处");
@@ -189,25 +175,9 @@ export class Playback {
       this.rateBusy = false;
     }
   }
-  /** Z/X/C: ±0.1 from the current rate, kept inside 0.25–4. */
-  stepRate(delta: number) {
-    const next = Math.round((this.state.rate + delta) * 100) / 100;
-    return this.setRate(Math.max(MIN_RATE, Math.min(MAX_RATE, next)));
-  }
-  async toggleMute() {
-    if (this.outputBusy || this.volumeDraft !== null) return;
-    this.outputBusy = true;
-    const muted = !this.state.muted;
-    try {
-      await this.#player.setOutput({ muted });
-      this.notify(muted ? "静音: 开" : "静音: 关");
-    } finally {
-      this.outputBusy = false;
-    }
-  }
   /** Latest value wins; the target volume is applied before unmuting, never an old loud one. */
   setVolume(value: number, announce = false) {
-    if (this.outputBusy || !Number.isFinite(value)) return;
+    if (this.muteBusy || !Number.isFinite(value)) return;
     const volume = (this.volumeDraft = Math.max(0, Math.min(200, Math.round(value))));
     if (announce) this.notify(`音量: ${volume}%`);
     const request = ++this.#volumeRequest;
@@ -223,12 +193,5 @@ export class Playback {
         this.report(error);
       },
     );
-  }
-  /** ↑/↓ and the wheel: ±5 from the newest pending volume. */
-  volumeBy(delta: number) {
-    this.setVolume((this.volumeDraft ?? this.state.volume) + delta, true);
-  }
-  async step(direction: "next" | "previous") {
-    await source(direction === "next" ? this.#player.next() : this.#player.previous());
   }
 }

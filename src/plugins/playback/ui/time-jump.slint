@@ -1,0 +1,135 @@
+// 时间跨度设置 (B06): four rows of seconds for the relative-seek tiers.
+// Each row: label → input (60px) → 秒 → [默认值]; an invalid row is marked on
+// its right. [确定] [取消] at the bottom; Esc cancels, Enter in an input confirms.
+import { LineEdit } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button } from "@vestra/widgets.slint";
+
+component StepRow inherits HorizontalLayout {
+    in property <string> label;
+    in property <bool> invalid;
+    in-out property <string> value;
+    callback reset();
+    callback accepted();
+    spacing: 6px;
+    alignment: start;
+    Text {
+        width: 150px;
+        text: root.label;
+        color: Theme.text;
+        font-size: Theme.font-body;
+        vertical-alignment: center;
+    }
+    LineEdit {
+        width: 60px;
+        height: Theme.input-height;
+        font-size: Theme.font-body;
+        text <=> root.value;
+        accepted => { root.accepted(); }
+    }
+    Text {
+        text: "秒";
+        color: Theme.text;
+        font-size: Theme.font-body;
+        vertical-alignment: center;
+    }
+    Button {
+        text: "默认值";
+        small: true;
+        clicked => { root.reset(); }
+    }
+    Text {
+        width: 10px;
+        text: root.invalid ? "!" : "";
+        color: Theme.accent;
+        font-size: Theme.font-body;
+        vertical-alignment: center;
+    }
+}
+
+export component TimeJumpWindow inherits Window {
+    in property <string> message;
+    in property <bool> invalid1;
+    in property <bool> invalid2;
+    in property <bool> invalid3;
+    in property <bool> invalid4;
+    in-out property <string> value1;
+    in-out property <string> value2;
+    in-out property <string> value3;
+    in-out property <string> value4;
+    callback confirm(string, string, string, string);
+    callback cancel();
+    callback reset(int);
+    title: "时间跨度设置";
+    preferred-width: 357px;
+    background: Theme.bg-bar;
+    function submit() {
+        root.confirm(root.value1, root.value2, root.value3, root.value4);
+    }
+    FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                root.cancel();
+                return accept;
+            }
+            return reject;
+        }
+        VerticalLayout {
+            padding: Theme.dialog-padding;
+            spacing: 6px;
+            Text {
+                text: "可设置播放时以时间为单位的移动跨度。";
+                color: Theme.text;
+                font-size: Theme.font-body;
+                height: Theme.label-height;
+            }
+            StepRow {
+                label: "左/右 方向键：";
+                invalid: root.invalid1;
+                value <=> root.value1;
+                reset => { root.reset(0); }
+                accepted => { root.submit(); }
+            }
+            StepRow {
+                label: "Ctrl + 左/右 方向键：";
+                invalid: root.invalid2;
+                value <=> root.value2;
+                reset => { root.reset(1); }
+                accepted => { root.submit(); }
+            }
+            StepRow {
+                label: "Shift + 左/右 方向键：";
+                invalid: root.invalid3;
+                value <=> root.value3;
+                reset => { root.reset(2); }
+                accepted => { root.submit(); }
+            }
+            StepRow {
+                label: "Ctrl + Alt + 左/右 方向键：";
+                invalid: root.invalid4;
+                value <=> root.value4;
+                reset => { root.reset(3); }
+                accepted => { root.submit(); }
+            }
+            Text {
+                text: root.message;
+                color: root.message == "" ? Theme.text-dim : Theme.accent;
+                font-size: Theme.font-body;
+                min-height: Theme.label-height;
+                wrap: word-wrap;
+            }
+            HorizontalLayout {
+                alignment: end;
+                spacing: 6px;
+                Button {
+                    text: "确定";
+                    clicked => { root.submit(); }
+                }
+                Button {
+                    text: "取消";
+                    clicked => { root.cancel(); }
+                }
+            }
+        }
+    }
+}

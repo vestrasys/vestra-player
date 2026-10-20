@@ -1,4 +1,5 @@
 import type { PlaybackStats, PlayerState, Plugin } from "../../sdk/plugin/index.ts";
+import { propertiesWindow } from "./dialog.ts";
 
 /** "mm:ss", or "h:mm:ss" from one hour. */
 function clock(seconds: number | null) {
@@ -117,7 +118,7 @@ const BRIEF_MS = 3000;
 
 /**
  * Playback information: Tab toggles the full overlay; Shift+Tab shows the
- * short information for three seconds. Both share this plugin's one panel,
+ * short information for three seconds; Ctrl+F1 opens 播放属性 (I05). Both share this plugin's one panel,
  * short first, a blank line between; each refreshes every second while shown.
  */
 export default async function activate(plugin: Plugin) {
@@ -180,6 +181,15 @@ export default async function activate(plugin: Plugin) {
       if (shown && stats) draw(); // the overlay's stats are at most a second old: show at once
       refresh();
     },
+  });
+  const showProperties = propertiesWindow(plugin, (text) => void plugin.osd.show(text).catch(() => {}));
+  plugin.commands.add({
+    id: "info.properties",
+    path: ["播放属性…"],
+    order: 811,
+    group: "windows",
+    bindings: ["Ctrl+F1"],
+    run: showProperties,
   });
   plugin.onDispose(() => {
     clearInterval(timer);

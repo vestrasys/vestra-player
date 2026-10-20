@@ -4,7 +4,6 @@ import { join } from "node:path";
 import type { PlayerState, Scope, Snapshot } from "../../sdk/plugin/index.ts";
 import { captureError } from "./form.ts";
 import { usable } from "./model.ts";
-import { system } from "./system.ts";
 import { jobError } from "./tasks.ts";
 
 /** The clipboard write failed (not the capture): shown without the 截图失败 prefix. */
@@ -13,7 +12,8 @@ export class ClipboardError extends Error {}
 /**
  * F03: copy the current frame to the clipboard as PNG. Not an export task:
  * the snapshot is taken now (conditional on `seen`), exported into a private
- * temporary folder, put on the clipboard, then the file and snapshot go.
+ * temporary folder, put on the clipboard (`plugin.clipboard.writeImage`),
+ * then the file and snapshot go.
  */
 export function clipboard(plugin: Scope) {
   const directory = join(tmpdir(), `vestra-capture-${process.pid}`);
@@ -34,7 +34,8 @@ export function clipboard(plugin: Scope) {
         if (state.status === "failed")
           throw new Error(state.outcome && "error" in state.outcome ? jobError(state.outcome.error) : "导出失败");
         if (state.status !== "completed" || !state.outcome || !("destination" in state.outcome)) throw new Error("已取消。");
-        await system.copyImage(state.outcome.destination).catch(() => {
+        await plugin.clipboard.writeImage(state.outcome.destination).catch((error) => {
+          console.error(`[capture] clipboard: ${(error as Error).message}`);
           throw new ClipboardError("无法写入剪贴板");
         });
       } finally {

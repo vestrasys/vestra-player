@@ -1,0 +1,158 @@
+// 字幕下载 (D16; reference player dialogs 462): 560×360, at least 480×280. Title field
+// and searches on top, result list in the middle, actions and a status line below.
+import { CheckBox, LineEdit, ListView } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button } from "@vestra/widgets.slint";
+
+export struct ResultRow {
+    checked: bool,
+    language: string,
+    release: string,
+    format: string,
+    fps: string,
+    downloads: string,
+    match: string,
+    source: string,
+}
+
+component Cell inherits Text {
+    color: Theme.text-list;
+    font-size: Theme.font-body;
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+export component SubtitleDownload inherits Window {
+    title: "字幕下载";
+    preferred-width: 560px;
+    preferred-height: 360px;
+    min-width: 480px;
+    min-height: 280px;
+    background: Theme.bg-panel;
+    in-out property <string> title-text: "";
+    in property <[ResultRow]> rows: [];
+    in-out property <int> selected-index: -1;
+    in property <bool> busy: false;
+    in property <bool> privacy-pending: false;
+    in property <string> privacy-text: "";
+    in property <bool> can-load: false;
+    in property <bool> can-more: false;
+    in property <bool> has-checked: false;
+    in property <string> status-text: "";
+    callback search-title(string);
+    callback search-again();
+    callback accept-privacy();
+    callback toggle-row(int, bool);
+    callback select-row(int);
+    callback open-row(int);
+    callback open-selected();
+    callback add-checked();
+    callback save-checked();
+    callback save-as();
+    callback more();
+    callback open-settings();
+    callback cancel();
+
+    VerticalLayout {
+        padding: 8px;
+        spacing: 6px;
+        HorizontalLayout {
+            spacing: 5px;
+            Text {
+                text: "标题：";
+                color: Theme.text;
+                font-size: Theme.font-body;
+                vertical-alignment: center;
+            }
+            LineEdit {
+                height: Theme.input-height;
+                font-size: Theme.font-body;
+                text <=> root.title-text;
+                enabled: !root.busy;
+                accepted => { root.search-title(self.text); }
+            }
+            Button { text: "按标题搜索"; enabled: !root.busy; clicked => { root.search-title(root.title-text); } }
+            Button { text: "再次搜索"; enabled: !root.busy; clicked => { root.search-again(); } }
+        }
+        if root.privacy-pending: HorizontalLayout {
+            spacing: 5px;
+            Text {
+                text: root.privacy-text;
+                color: Theme.text;
+                font-size: Theme.font-body;
+                vertical-alignment: center;
+                wrap: word-wrap;
+                horizontal-stretch: 1;
+            }
+            Button { text: "同意并搜索"; clicked => { root.accept-privacy(); } }
+        }
+        Rectangle {
+            vertical-stretch: 1;
+            background: Theme.bg-list;
+            border-width: 1px;
+            border-color: Theme.line;
+            VerticalLayout {
+                padding: 1px;
+                HorizontalLayout {
+                    height: 20px;
+                    padding-left: 4px;
+                    padding-right: 4px;
+                    spacing: 4px;
+                    Rectangle { width: 20px; }
+                    Cell { width: 60px; text: "语言"; color: Theme.text-dim; }
+                    Cell { horizontal-stretch: 1; text: "版本名"; color: Theme.text-dim; }
+                    Cell { width: 40px; text: "格式"; color: Theme.text-dim; }
+                    Cell { width: 50px; text: "FPS"; color: Theme.text-dim; }
+                    Cell { width: 60px; text: "下载数"; color: Theme.text-dim; }
+                    Cell { width: 40px; text: "匹配"; color: Theme.text-dim; }
+                    Cell { width: 80px; text: "来源"; color: Theme.text-dim; }
+                }
+                ListView {
+                    vertical-stretch: 1;
+                    for row[index] in root.rows: Rectangle {
+                        height: 20px;
+                        background: index == root.selected-index ? Theme.selected-bg : transparent;
+                        touch := TouchArea {
+                            clicked => { root.selected-index = index; root.select-row(index); }
+                            double-clicked => { root.selected-index = index; root.open-row(index); }
+                        }
+                        HorizontalLayout {
+                            padding-left: 4px;
+                            padding-right: 4px;
+                            spacing: 4px;
+                            CheckBox {
+                                width: 20px;
+                                checked: row.checked;
+                                toggled => { root.toggle-row(index, self.checked); }
+                            }
+                            Cell { width: 60px; text: row.language; color: index == root.selected-index ? Theme.text : Theme.text-list; }
+                            Cell { horizontal-stretch: 1; text: row.release; color: index == root.selected-index ? Theme.text : Theme.text-list; }
+                            Cell { width: 40px; text: row.format; }
+                            Cell { width: 50px; text: row.fps; }
+                            Cell { width: 60px; text: row.downloads; horizontal-alignment: right; }
+                            Cell { width: 40px; text: row.match; color: row.match == "哈希" ? Theme.accent : Theme.text-list; }
+                            Cell { width: 80px; text: row.source; }
+                        }
+                    }
+                }
+            }
+        }
+        HorizontalLayout {
+            spacing: 5px;
+            Button { height: Theme.button-height; text: "打开字幕"; enabled: root.can-load && root.selected-index >= 0 && !root.busy; clicked => { root.open-selected(); } }
+            Button { height: Theme.button-height; text: "添加字幕"; enabled: root.can-load && root.has-checked && !root.busy; clicked => { root.add-checked(); } }
+            Button { height: Theme.button-height; text: "直接保存"; enabled: root.has-checked && !root.busy; clicked => { root.save-checked(); } }
+            Button { height: Theme.button-height; text: "另存为…"; enabled: root.selected-index >= 0 && !root.busy; clicked => { root.save-as(); } }
+            Button { height: Theme.button-height; text: "更多"; enabled: root.can-more && !root.busy; clicked => { root.more(); } }
+            Rectangle { horizontal-stretch: 1; }
+            if root.busy: Button { height: Theme.button-height; text: "取消"; clicked => { root.cancel(); } }
+            Button { height: Theme.button-height; text: "设置…"; clicked => { root.open-settings(); } }
+        }
+        Text {
+            text: root.status-text;
+            color: Theme.text-list;
+            font-size: Theme.font-body;
+            overflow: elide;
+        }
+    }
+}

@@ -1,0 +1,399 @@
+// Orchestration against the SDK test host with a fake `fetch`; no real network or keychain.
+import assert from "node:assert/strict";
+import { mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+import { deflateRawSync } from "node:zlib";
+import { startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
+import activate from "../main.ts";
+
+process.env.VESTRA_SUBTITLE_ONLINE_KEYCHAIN = "off";
+const directory = new URL("..", import.meta.url);
+const pause = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
+const SRT = "1\n00:00:01,000 --> 00:00:02,000\n你好\n";
+
+type Call = { url: string; method: string; headers: Record<string, string>; body: string | null };
+/** Replace `fetch` for one test: `routes` answers by URL prefix; every call is recorded. */
+function fakeFetch(routes: Record<string, (call: Call) => Response | Promise<Response>>) {
+  const calls: Call[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL, init: RequestInit = {}) => {
+    const url = String(input);
+    const call = { url, method: init.method ?? "GET", headers: { ...(init.headers as Record<string, string>) }, body: (init.body as string) ?? null };
+    calls.push(call);
+    const route = Object.keys(routes).filter((prefix) => url.startsWith(prefix)).sort((a, b) => b.length - a.length)[0];
+    if (!route) throw new TypeError("fetch failed");
+    const answer = routes[route]!(call);
+    return new Promise<Response>((resolve, reject) => {
+      init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+      Promise.resolve(answer).then(resolve, reject);
+    });
+  }) as typeof fetch;
+  return { calls, restore: () => void (globalThis.fetch = original) };
+}
+const jsonResponse = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
+const OS = "https://api.opensubtitles.com/api/v1";
+function osResult(fileId: number, language: string, release: string, extra: Record<string, unknown> = {}) {
+  return {
+    id: String(fileId), type: "subtitle",
+    attributes: { language, release, download_count: 100 + fileId, fps: 23.976, url: `https://www.opensubtitles.com/s/${fileId}`, files: [{ file_id: fileId, file_name: `${release}.srt` }], ...extra },
+  };
+}
+
+async function setup(options: { key?: boolean; privacy?: boolean; settings?: Record<string, unknown> } = {}) {
+  const folder = await mkdtemp(join(tmpdir(), "vestra-online-"));
+  const data = join(folder, "data");
+  const video = join(folder, "The.Movie.2019.1080p.BluRay.x264-GRP.mkv");
+  await writeFile(video, Buffer.alloc(200 * 1024, 7));
+  const { mkdir } = await import("node:fs/promises");
+  await mkdir(data);
+  if (options.key !== false) await writeFile(join(data, "secrets.json"), JSON.stringify({ "opensubtitles-api-key": "KEY" }));
+  await writeFile(join(data, "settings.json"), JSON.stringify({ privacyAccepted: options.privacy !== false, ...options.settings }));
+  const host = new TestHost();
+  host.openElsewhere(video);
+  host.subtitles.selection = { stamp: { generation: 1, revision: 1 }, target: null };
+  const { stop } = await startPlugin(activate, { directory, host, dataDirectory: data });
+  return { host, folder, data, video, stop, cleanup: () => rm(folder, { recursive: true, force: true }) };
+}
+/** The window binds exactly the callbacks its Slint file declares. */
+async function sameCallbacks(host: TestHost, id: string, file: string) {
+  const slint = await readFile(new URL(`../ui/${file}.slint`, import.meta.url), "utf8");
+  const callbacks = [...slint.matchAll(/callback\s+([\w-]+)\s*\(/g)].map((m) => m[1]!);
+  assert.deepEqual([...host.window(id).callbacks].sort(), callbacks.sort(), file);
+}
+const waitFor = async (check: () => boolean, what: string) => {
+  const ok = () => {
+    try {
+      return check();
+    } catch {
+      return false; // e.g. a window that is not open yet
+    }
+  };
+  for (let i = 0; i < 100 && !ok(); i++) await pause(10);
+  assert.ok(ok(), what);
+};
+
+test("menu: two items under 字幕 ▶ 在线字幕 without shortcuts; windows bind their Slint callbacks", async () => {
+  const fetch = fakeFetch({});
+  const t = await setup({ key: false });
+  try {
+    const declared = [...t.host.commands.values()].map(({ declaration: d }) => [d.path.join(" > "), d.order, d.group, d.bindings.join(",")]);
+    assert.deepEqual(declared, [
+      ["字幕 > 在线字幕 > 搜索与下载字幕…", 360, "subtitle-online", ""],
+      ["字幕 > 在线字幕 > 在线字幕设置…", 361, "subtitle-online", ""],
+    ]);
+    await t.host.command("search").run();
+    await t.host.settle();
+    assert.equal(t.host.window("subtitle-online-settings").visible, true, "no key: the settings window opens instead");
+    assert.match(String(t.host.window("subtitle-online-settings").props["status-text"]), /API 密钥/);
+    assert.equal(fetch.calls.length, 0, "nothing is sent without a key");
+    for (const [id, file] of [["subtitle-online-settings", "settings"]] as const) {
+      const slint = await readFile(new URL(`../ui/${file}.slint`, import.meta.url), "utf8");
+      const callbacks = [...slint.matchAll(/callback\s+([\w-]+)\s*\(/g)].map((m) => m[1]!);
+      assert.deepEqual([...t.host.window(id).callbacks].sort(), callbacks.sort(), file);
+    }
+  } finally {
+    await t.stop();
+    fetch.restore();
+    await t.cleanup();
+  }
+});
+
+test("keys are saved outside settings.json (secrets.json, mode 0600 when the keychain is off)", async () => {
+  const fetch = fakeFetch({ [`${OS}/infos/formats`]: () => jsonResponse({ data: {} }) });
+  const t = await setup({ key: false });
+  try {
+    await t.host.command("settings").run();
+    const settings = t.host.window("subtitle-online-settings");
+    settings.emit("service-settings");
+    await t.host.settle();
+    const service = t.host.window("subtitle-online-service");
+    assert.equal(service.props["service-name"], "OpenSubtitles");
+    await sameCallbacks(t.host, "subtitle-online-service", "service");
+    service.emit("test", "SECRET", "", "");
+    await t.host.settle();
+    await waitFor(() => service.props["status-text"] === "密钥有效（未登录，匿名下载次数较少）", "test result");
+    assert.equal(fetch.calls[0]!.headers["Api-Key"], "SECRET");
+    assert.equal(fetch.calls[0]!.headers["User-Agent"], "Vestra v0.1.0");
+    service.emit("save", "SECRET", "me", "pw");
+    await t.host.settle();
+    await waitFor(() => String(service.props["status-text"]).startsWith("已保存"), "saved");
+    const secrets = JSON.parse(await readFile(join(t.data, "secrets.json"), "utf8"));
+    assert.deepEqual(secrets, { "opensubtitles-api-key": "SECRET", "opensubtitles-password": "pw" });
+    assert.equal((await stat(join(t.data, "secrets.json"))).mode & 0o777, 0o600);
+    await t.stop();
+    const saved = await readFile(join(t.data, "settings.json"), "utf8");
+    assert.doesNotMatch(saved, /SECRET|pw/);
+    assert.equal(JSON.parse(saved).username, "me");
+  } finally {
+    fetch.restore();
+    await t.cleanup();
+  }
+});
+
+test("search sends hash + keywords + languages once privacy is accepted; hash matches rank first", async () => {
+  const fetch = fakeFetch({
+    [`${OS}/subtitles`]: () =>
+      jsonResponse({
+        page: 1, total_pages: 2,
+        data: [
+          osResult(1, "en", "Movie.EN", { moviehash_match: false }),
+          osResult(2, "zh-CN", "Movie.MT", { moviehash_match: true, machine_translated: true }),
+          osResult(3, "en", "Movie.Hash.EN", { moviehash_match: true }),
+          osResult(4, "zh-CN", "Movie.Hash.CN", { moviehash_match: true, hearing_impaired: true }),
+        ],
+      }),
+  });
+  const t = await setup({ privacy: false });
+  try {
+    await t.host.command("search").run();
+    await t.host.settle();
+    const window = t.host.window("subtitle-download");
+    assert.equal(window.props["privacy-pending"], true);
+    assert.equal(fetch.calls.length, 0, "nothing is sent before the user agrees");
+    window.emit("accept-privacy");
+    await waitFor(() => String(window.props["status-text"]).startsWith("找到"), "results");
+    const url = new URL(fetch.calls[0]!.url);
+    assert.equal(url.searchParams.get("languages"), "en,zh-cn,zh-tw");
+    assert.match(url.searchParams.get("moviehash")!, /^[0-9a-f]{16}$/);
+    assert.equal(url.searchParams.get("query"), "the movie 2019");
+    assert.deepEqual([...url.searchParams.keys()], ["languages", "moviehash", "query"], "sorted parameters");
+    assert.equal(window.props["title-text"], "The Movie 2019");
+    const rows = window.props["rows"] as { release: string; match: string; language: string }[];
+    assert.deepEqual(rows.map((r) => r.release), ["Movie.Hash.CN [HI]", "Movie.Hash.EN", "Movie.MT [机翻]", "Movie.EN"]);
+    assert.equal(rows[0]!.match, "哈希");
+    assert.equal(rows[0]!.language, "简体中文");
+    assert.equal(window.props["can-more"], true);
+    window.emit("more");
+    await waitFor(() => fetch.calls.length === 2, "page 2");
+    assert.equal(new URL(fetch.calls[1]!.url).searchParams.get("page"), "2");
+    await t.stop();
+    assert.equal(JSON.parse(await readFile(join(t.data, "settings.json"), "utf8")).privacyAccepted, true);
+  } finally {
+    fetch.restore();
+    await t.cleanup();
+  }
+});
+
+/** A search that returns one OpenSubtitles result, and its download. */
+function searchAndDownload(file: Buffer | string = SRT, name = "Movie.CN.srt") {
+  return fakeFetch({
+    [`${OS}/subtitles`]: () => jsonResponse({ page: 1, total_pages: 1, data: [osResult(7, "zh-CN", "Movie.CN", { moviehash_match: true }), osResult(8, "en", "Movie.EN")] }),
+    [`${OS}/download`]: (call) => jsonResponse({ link: `https://dl.example/${JSON.parse(call.body!).file_id}`, file_name: name, remaining: 4 }),
+    "https://dl.example/": () => new Response(typeof file === "string" ? file : new Uint8Array(file)),
+  });
+}
+
+test("double-click downloads, loads and selects the subtitle, and saves <视频名>.zh.srt beside the video", async () => {
+  const fetch = searchAndDownload();
+  const t = await setup();
+  try {
+    await t.host.command("search").run();
+    const window = t.host.window("subtitle-download");
+    await waitFor(() => (window.props["rows"] as unknown[])?.length === 2, "results");
+    window.emit("open-row", 0);
+    await waitFor(() => t.host.subtitleLoads.length === 1, "loaded");
+    await t.host.settle();
+    assert.deepEqual(t.host.subtitleLoads.map((l) => [l.format, l.title, l.select, l.bytes.toString()]), [["srt", "简体中文 · Movie.CN", "primary", SRT]]);
+    assert.equal(JSON.parse(fetch.calls.find((c) => c.url.endsWith("/download"))!.body!).file_id, 7);
+    assert.equal(t.host.osd.at(-1), "打开字幕：简体中文 · Movie.CN");
+    const files = await readdir(t.folder);
+    assert.ok(files.includes("The.Movie.2019.1080p.BluRay.x264-GRP.zh.srt"), files.join());
+    window.emit("open-row", 0);
+    await waitFor(() => t.host.subtitleLoads.length === 2, "loaded again");
+    await t.host.settle();
+    assert.ok((await readdir(t.folder)).includes("The.Movie.2019.1080p.BluRay.x264-GRP.zh (1).srt"), "never overwrites");
+  } finally {
+    await t.stop();
+    fetch.restore();
+    await t.cleanup();
+  }
+});
+
+test("添加字幕 adds the checked results without selecting them; 直接保存 only saves", async () => {
+  const fetch = searchAndDownload();
+  const t = await setup({ settings: { saveLocation: "data" } });
+  try {
+    await t.host.command("search").run();
+    const window = t.host.window("subtitle-download");
+    await waitFor(() => (window.props["rows"] as unknown[])?.length === 2, "results");
+    window.emit("toggle-row", 0, true);
+    window.emit("toggle-row", 1, true);
+    await t.host.settle();
+    assert.equal(window.props["has-checked"], true);
+    window.emit("add-checked");
+    await waitFor(() => t.host.osd.at(-1) === "已添加 2 条字幕", "added");
+    assert.deepEqual(t.host.subtitleLoads.map((l) => l.select), ["none", "none"]);
+    assert.equal(t.host.subtitles.selection.target, null);
+    window.emit("save-checked");
+    await waitFor(() => String(window.props["status-text"]).startsWith("已保存 2 个字幕"), "saved");
+    assert.equal(t.host.subtitleLoads.length, 2, "直接保存 does not load");
+    assert.equal((await readdir(join(t.data, "downloads"))).length, 4, "two from 添加字幕, two from 直接保存");
+  } finally {
+    await t.stop();
+    fetch.restore();
+    await t.cleanup();
+  }
+});
+
+test("quota, bad key and network failures are explained; other services' results still show", async () => {
+  let mode: "quota" | "auth" | "offline" = "quota";
+  const fetch = fakeFetch({
+    [`${OS}/subtitles`]: () => (mode === "auth" ? jsonResponse({ message: "nope" }, 401) : jsonResponse({ data: [osResult(7, "zh-CN", "Movie.CN")] })),
+    [`${OS}/download`]: () => jsonResponse({ remaining: 0, message: "quota", reset_time: "23 小时" }, 406),
+  });
+  const t = await setup();
+  try {
+    await t.host.command("search").run();
+    const window = t.host.window("subtitle-download");
+    await waitFor(() => (window.props["rows"] as unknown[])?.length === 1, "results");
+    window.emit("open-row", 0);
+    await waitFor(() => /重置/.test(String(window.props["status-text"])), "quota");
+    assert.equal(t.host.osd.at(-1), "今日下载次数已用完（OpenSubtitles）。登录账号可获得更多次数");
+    assert.match(String(window.props["status-text"]), /23 小时 重置/);
+    assert.equal(t.host.subtitleLoads.length, 0);
+    mode = "auth";
+    window.emit("search-again");
+    await waitFor(() => window.props["status-text"] === "API 密钥无效，请在在线字幕设置中检查", "auth");
+    fetch.restore();
+    const offline = fakeFetch({});
+    window.emit("search-title", "Movie");
+    await waitFor(() => window.props["status-text"] === "无法连接 OpenSubtitles", "offline");
+    offline.restore();
+  } finally {
+    await t.stop();
+    fetch.restore();
+    await t.cleanup();
+  }
+});
+
+test("a source change during the download aborts it; nothing is loaded into the new source", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const fetch = fakeFetch({
+    [`${OS}/subtitles`]: () => jsonResponse({ data: [osResult(7, "zh-CN", "Movie.CN")] }),
+    [`${OS}/download`]: async () => {
+      await gate;
+      return jsonResponse({ link: "https://dl.example/7", file_name: "a.srt" });
+    },
+    "https://dl.example/": () => new Response(SRT),
+  });
+  const t = await setup();
+  try {
+    await t.host.command("search").run();
+    const window = t.host.window("subtitle-download");
+    await waitFor(() => (window.props["rows"] as unknown[])?.length === 1, "results");
+    window.emit("open-row", 0);
+    await waitFor(() => fetch.calls.some((c) => c.url.endsWith("/download")), "download started");
+    t.host.openElsewhere("/other.mkv");
+    t.host.subtitles.selection.stamp = { generation: 2, revision: 1 };
+    await t.host.settle();
+    release();
+    await pause(50);
+    await t.host.settle();
+    assert.equal(t.host.subtitleLoads.length, 0);
+    assert.equal(window.props["status-text"], "媒体已切换，未载入字幕。");
+    assert.deepEqual(window.props["rows"], [], "results of the old source are dropped");
+  } finally {
+    await t.stop();
+    fetch.restore();
+    await t.cleanup();
+  }
+});
+
+/** A zip with stored and deflated entries. */
+function zip(files: Record<string, string>) {
+  const locals: Buffer[] = [], centrals: Buffer[] = [];
+  let offset = 0;
+  for (const [index, [name, text]] of Object.entries(files).entries()) {
+    const raw = Buffer.from(text), deflate = index % 2 === 1;
+    const data = deflate ? deflateRawSync(raw) : raw;
+    const nameBytes = Buffer.from(name);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(0x800, 6);
+    local.writeUInt16LE(deflate ? 8 : 0, 8);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(raw.length, 22);
+    local.writeUInt16LE(nameBytes.length, 26);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(0x800, 8);
+    central.writeUInt16LE(deflate ? 8 : 0, 10);
+    central.writeUInt32LE(data.length, 20);
+    central.writeUInt32LE(raw.length, 24);
+    central.writeUInt16LE(nameBytes.length, 28);
+    central.writeUInt32LE(offset, 42);
+    locals.push(local, nameBytes, data);
+    centrals.push(central, nameBytes);
+    offset += 30 + nameBytes.length + data.length;
+  }
+  const directory = Buffer.concat(centrals);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(Object.keys(files).length, 8);
+  end.writeUInt16LE(Object.keys(files).length, 10);
+  end.writeUInt32LE(directory.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, directory, end]);
+}
+
+test("a zip with several subtitle files asks which one to load; rar is refused with a reason", async () => {
+  const archive = zip({ "readme.txt": "hi", "a.chs.srt": SRT, "b.cht.ass": "[Script Info]\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,繁體\n" });
+  let body: Buffer = archive;
+  const routed = fakeFetch({
+    [`${OS}/subtitles`]: () => jsonResponse({ data: [osResult(7, "zh-TW", "Pack")] }),
+    [`${OS}/download`]: () => jsonResponse({ link: "https://dl.example/7", file_name: "pack.zip" }),
+    "https://dl.example/": () => new Response(new Uint8Array(body)),
+  });
+  const t = await setup();
+  try {
+    await t.host.command("search").run();
+    const window = t.host.window("subtitle-download");
+    await waitFor(() => (window.props["rows"] as unknown[])?.length === 1, "results");
+    window.emit("open-row", 0);
+    await waitFor(() => t.host.window("subtitle-online-choose").visible === true, "chooser");
+    const chooser = t.host.window("subtitle-online-choose");
+    assert.deepEqual(chooser.props["names"], ["a.chs.srt", "b.cht.ass"]);
+    await sameCallbacks(t.host, "subtitle-online-choose", "choose");
+    await sameCallbacks(t.host, "subtitle-download", "download");
+    chooser.emit("choose", 1);
+    await waitFor(() => t.host.subtitleLoads.length === 1, "loaded");
+    assert.equal(t.host.subtitleLoads[0]!.format, "ass");
+    assert.match(t.host.subtitleLoads[0]!.bytes.toString(), /繁體/);
+    body = Buffer.from("Rar!\u001a\u0007\u0000");
+    window.emit("open-row", 0);
+    await waitFor(() => /rar/.test(String(window.props["status-text"])), "rar refused");
+    assert.equal(t.host.subtitleLoads.length, 1);
+  } finally {
+    await t.stop();
+    routed.restore();
+    await t.cleanup();
+  }
+});
+
+test("automatic search: a hash match in the first language is loaded when a video without subtitles opens", async () => {
+  const fetch = searchAndDownload();
+  const t = await setup({ settings: { autoSearch: "no-subtitles", afterSearch: "load-best" } });
+  try {
+    assert.equal(fetch.calls.length, 0, "the source open at start is left alone");
+    t.host.openElsewhere(t.video);
+    t.host.subtitles.selection.stamp = { generation: 2, revision: 1 };
+    await waitFor(() => t.host.osd.at(-1)?.startsWith("已自动载入在线字幕") === true, "auto loaded");
+    assert.equal(t.host.osd.at(-1), "已自动载入在线字幕：简体中文 · Movie.CN");
+    assert.equal(t.host.subtitleLoads[0]!.select, "primary");
+    // A video that already has a text track is not searched.
+    const before = fetch.calls.length;
+    t.host.subtitles.tracks.push({ target: { kind: "embedded", id: 1 }, title: "x", language: null, styleSupported: true, styleReason: null, codec: "subrip", text: true, streamIndex: 2 });
+    t.host.openElsewhere(t.video);
+    t.host.subtitles.selection.stamp = { generation: 3, revision: 1 };
+    await pause(100);
+    await t.host.settle();
+    assert.equal(fetch.calls.length, before);
+  } finally {
+    await t.stop();
+    fetch.restore();
+    await t.cleanup();
+  }
+});

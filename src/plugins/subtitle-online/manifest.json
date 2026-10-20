@@ -1,0 +1,16 @@
+{
+  "id": "vestra.subtitle-online",
+  "version": "0.1.0",
+  "apiVersion": "vestra.experimental/0.1",
+  "entry": "main.ts",
+  "capabilities": [
+    "commands",
+    "events",
+    "ui.window",
+    "ui.dialog",
+    "ui.osd",
+    "playback.read",
+    "subtitles.read",
+    "subtitles.control"
+  ]
+}

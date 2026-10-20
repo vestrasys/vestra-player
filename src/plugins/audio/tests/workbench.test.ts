@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -63,7 +63,10 @@ test("menu under 声音 follows the allocation, and editing commands wait for a 
   assert.deepEqual(
     [...host.commands.values()].map(({ declaration: d }) => [d.path.join(" ▶ "), d.order, d.group, d.bindings.join(","), d.radio, d.repeat]),
     [
+      ["打开 ▶ 载入外部音频…", 114, "open", "", false, false],
       ["声音 ▶ 音频工作台…", 510, "audio-tools", "", false, false],
+      ["声音 ▶ 音轨 ▶ 按序切换", 512, "audio-track-cycle", "Alt+A", false, false],
+      ...["立体声", "左声道", "右声道", "单声道混合", "左右互换"].map((label) => [`声音 ▶ 音轨 ▶ ${label}`, 512, "audio-channels", "", true, false]),
       ["声音 ▶ 均衡器", 513, "audio-eq", "Shift+E", false, false],
       ...presets.map((p) => [`声音 ▶ 预设 ▶ ${p.label}`, 514, "audio-eq", "", true, false]),
       ["声音 ▶ 声音同步 ▶ 超前 50 毫秒", 515, "audio-eq", ">", false, true],
@@ -75,8 +78,12 @@ test("menu under 声音 follows the allocation, and editing commands wait for a 
       ["声音 ▶ 声音处理 ▶ 规格化", 516, "audio-eq", "Shift+N", false, false],
       ["声音 ▶ 声音处理 ▶ 晶化", 516, "audio-eq", "Shift+C", false, false],
       ["声音 ▶ 复位", 517, "audio-eq", "", false, false],
+      ["声音 ▶ 音轨 ▶ 没有音轨", 511, "audio-tools", "", false, false],
     ],
   );
+  assert.equal(host.command("audio.track.none").state.enabled, false);
+  assert.equal(host.command("audio.load").state.reason, "没有正在播放的文件");
+  assert.equal(host.command("audio.track.cycle").state.reason, "没有音轨");
   assert.deepEqual(host.conflicts, []);
   assert.deepEqual(host.command("audio.workbench").state, { enabled: true, checked: null, busy: false, reason: null });
   assert.deepEqual(host.command("audio.reset").state, {
@@ -137,9 +144,9 @@ test("edits round like the host: EQ ±6 dB in 0.1 dB, delay to 10 ms, 晶化 0�
   window.emit("delay-changed", 105);
   await host.settle();
   assert.equal(own(host)?.offsetMs, 110);
-  window.emit("delay-changed", -5000);
+  window.emit("delay-changed", -15000);
   await host.settle();
-  assert.equal(own(host)?.offsetMs, -2000);
+  assert.equal(own(host)?.offsetMs, -10000, "G09: ±10 000 ms");
   assert.equal(window.props["status-text"], "已应用");
   assert.equal(host.sent("playback.set").length + host.sent("source.submit").length, 0, "no volume, mute or transport");
   await stop();
@@ -379,7 +386,7 @@ test("headless: a missing on-screen display does not break the menu commands", a
   await stop();
 });
 
-test("G09: > < ? step the audio sync by 50 ms with OSD, stop at ±2000 ms and move the window slider", async () => {
+test("G09: > < ? step the audio sync by 50 ms with OSD, stop at ±10 000 ms and move the window slider", async () => {
   const { host, window, stop } = await open();
   await host.press(">");
   assert.equal(host.osd.at(-1), "音频同步: -0.05秒");
@@ -395,12 +402,12 @@ test("G09: > < ? step the audio sync by 50 ms with OSD, stop at ±2000 ms and mo
   assert.equal(host.osd.at(-1), "音频同步: 0秒");
   await host.settle();
   assert.equal(own(host)?.offsetMs, 0);
-  window.emit("delay-changed", 1980);
+  window.emit("delay-changed", 9980);
   await host.press("<");
   await host.press("<");
-  assert.equal(host.osd.at(-1), "音频同步: +2秒", "the edge keeps the value and still reports it");
+  assert.equal(host.osd.at(-1), "音频同步: +10秒", "the edge keeps the value and still reports it");
   await host.settle();
-  assert.equal(own(host)?.offsetMs, 2000);
+  assert.equal(own(host)?.offsetMs, 10000);
   window.emit("delay-reset");
   await host.settle();
   assert.equal(own(host)?.offsetMs, 0);
@@ -549,15 +556,215 @@ test("global settings and the last page survive a restart", async () => {
   }
 });
 
-test("a broken settings file reads as the defaults", async () => {
+test("a broken settings file is kept aside and reads as the defaults", async () => {
   const data = await mkdtemp(join(tmpdir(), "vestra-audio-"));
   try {
     await writeFile(join(data, "settings.json"), "{ not json");
     const { host, stop } = await startPlugin(activate, { directory, dataDirectory: data });
     assert.equal(host.command("audio.preset.0").state.checked, true);
     assert.equal(host.command("audio.sync.keep.none").state.checked, true);
+    assert.ok((await readdir(data)).some((name) => name.startsWith("settings.json.bad-")));
     await stop();
   } finally {
+    await rm(data, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------- round 2: tracks, channels, external audio
+
+const titled = (trackId: number, title: string, language: string | null, selected: boolean) => ({
+  ...track(trackId, selected),
+  title,
+  language,
+});
+
+test("G03: the 音轨 menu lists the tracks, follows the list and switches with OSD; stale is silent", async () => {
+  const host = new TestHost();
+  host.openElsewhere("/movie.mkv");
+  host.setSource({ audioTracks: [titled(1, "日语", "jpn", true), titled(2, "English", "eng", false)] });
+  const { stop } = await startPlugin(activate, { directory, host });
+  await host.settle();
+  const items = () =>
+    [...host.commands.values()]
+      .filter(({ declaration: d }) => d.path[1] === "音轨" && d.order === 511)
+      .map(({ declaration: d }) => d.path[2]);
+  assert.deepEqual(items(), ["1. 日语 [jpn] (aac)", "2. English [eng] (aac)"]);
+  assert.equal(host.command("audio.track.1").state.checked, true);
+  assert.equal(host.command("audio.track.1").declaration.radio, true);
+  await host.command("audio.track.2").run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "音轨: 2. English [eng] (aac)");
+  assert.equal(host.command("audio.track.2").state.checked, true);
+  assert.equal(host.command("audio.track.1").state.checked, false);
+  const sent = host.sent("audio.selectTrack").length;
+  await host.command("audio.track.2").run();
+  assert.equal(host.sent("audio.selectTrack").length, sent, "the selected track sends nothing");
+  host.handle("audio.selectTrack", () => {
+    throw new HostError("stale", "source changed");
+  });
+  const osd = host.osd.length;
+  await host.command("audio.track.1").run();
+  assert.equal(host.osd.length, osd, "stale says nothing");
+  host.reset("audio.selectTrack");
+  // A new source rebuilds the list; while it loads the menu says so.
+  host.openElsewhere("/next.mkv", "loading");
+  host.setSource({ audioTracks: null });
+  await host.settle();
+  assert.deepEqual(items(), ["正在载入…"]);
+  assert.equal(host.command("audio.track.cycle").state.reason, "正在载入");
+  host.setSource({ phase: "ready", audioTracks: [] });
+  await host.settle();
+  assert.deepEqual(items(), ["没有音轨"]);
+  await stop();
+});
+
+test("G04: Alt+A cycles in list order and wraps; one track says so", async () => {
+  const host = new TestHost();
+  host.openElsewhere("/movie.mkv");
+  host.setSource({ audioTracks: [track(1, true), track(2, false), track(3, false)] });
+  const { stop } = await startPlugin(activate, { directory, host });
+  await host.settle();
+  for (let i = 0; i < 3; i++) {
+    await host.press("Alt+A");
+    await host.settle();
+  }
+  assert.deepEqual(host.osd, ["音轨: 音轨 2 (aac)", "音轨: 音轨 3 (aac)", "音轨: 音轨 1 (aac)"]);
+  assert.deepEqual(host.sent("audio.selectTrack").map((p) => p.id), [2, 3, 1]);
+  host.setSource({ audioTracks: [track(1, true)] });
+  await host.settle();
+  await host.press("Alt+A");
+  assert.equal(host.osd.at(-1), "只有一条音轨");
+  assert.equal(host.sent("audio.selectTrack").length, 3);
+  await stop();
+});
+
+test("G05: channel modes route a stereo mix, are global, and wait on a mono track", async () => {
+  const host = new TestHost();
+  host.stats = { ...host.stats, audio: { codec: "aac", sampleRate: 48000, channels: 6, decoder: "aac", format: "floatp", channelLayout: "5.1", bitrate: null } };
+  const { window, stop } = await open(host);
+  await host.settle();
+  await host.command("audio.channels.left").run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "声道: 左声道（已混为立体声）");
+  assert.deepEqual(own(host)?.nodes, [{ kind: "channels", mode: "left" }]);
+  assert.equal(window.props["channel-index"], 1);
+  assert.equal(host.command("audio.channels.left").state.checked, true);
+  window.emit("gain-changed", 0, 2);
+  window.emit("channel-selected", 4);
+  await host.settle();
+  assert.deepEqual((own(host)?.nodes as { kind: string }[]).map((n) => n.kind), ["channels", "equalizer"]);
+  assert.deepEqual((own(host)?.nodes as unknown[])[0], { kind: "channels", mode: "swap" });
+  // Another source keeps the mode; a mono track keeps it but sends no node.
+  host.stats = { ...host.stats, audio: { ...host.stats.audio!, channels: 1 } };
+  host.openElsewhere("/mono.wav");
+  host.setSource({ audioTracks: [track(1)] });
+  await host.settle(20);
+  assert.deepEqual((own(host)?.nodes as { kind: string }[]).map((n) => n.kind), ["equalizer"]);
+  assert.equal(host.command("audio.channels.mono").state.enabled, false);
+  assert.equal(host.command("audio.channels.mono").state.reason, "当前音轨是单声道");
+  assert.equal(window.props["channels-available"], false);
+  assert.equal(window.props["channel-tip"], "当前音轨是单声道");
+  assert.equal(window.props["channel-index"], 4, "the setting is kept");
+  host.stats = { ...host.stats, audio: { ...host.stats.audio!, channels: 2 } };
+  host.setSource({ audioTracks: [track(1, false), track(2)] });
+  await host.settle(20);
+  assert.deepEqual((own(host)?.nodes as unknown[])[0], { kind: "channels", mode: "swap" });
+  await host.command("audio.channels.stereo").run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "声道: 立体声");
+  assert.deepEqual((own(host)?.nodes as { kind: string }[]).map((n) => n.kind), ["equalizer"]);
+  await stop();
+});
+
+test("A11: 载入外部音频… adds and selects the file once; failures and a changed source are reported", async () => {
+  const host = new TestHost();
+  host.openElsewhere("/movie.mkv");
+  host.setSource({ audioTracks: [track(1)] });
+  const { stop } = await startPlugin(activate, { directory, host });
+  await host.command("audio.workbench").run();
+  const window = host.window("audio-workbench");
+  assert.equal(host.command("audio.load").state.enabled, true);
+  assert.equal(window.props["can-load"], true);
+  host.dialogAnswers.push(null); // cancelled: nothing happens
+  await host.command("audio.load").run();
+  await host.settle();
+  assert.equal(host.sent("audio.addTrack").length, 0);
+  host.dialogAnswers.push(["/music/movie.jpn.mka"]);
+  window.emit("load-requested");
+  await host.settle();
+  assert.equal(host.osd.at(-1), "已载入音频: movie.jpn.mka");
+  assert.deepEqual(host.sent("audio.addTrack").at(-1)!.path, "/music/movie.jpn.mka");
+  assert.equal(host.sent("audio.addTrack").at(-1)!.select, true, "selected");
+  assert.deepEqual(window.props["track-names"], ["音轨 1 (aac)", "2. movie.jpn.mka（外部）"]);
+  assert.equal(window.props["track-index"], 1);
+  assert.equal(host.command("audio.track.2").state.checked, true);
+  host.dialogAnswers.push(["/music/movie.jpn.mka"]);
+  await host.command("audio.load").run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "该音频已载入");
+  assert.equal(host.sent("audio.addTrack").length, 1);
+  host.handle("audio.addTrack", () => {
+    throw new HostError("backend", "unrecognized file format");
+  });
+  host.dialogAnswers.push(["/music/notes.txt"]);
+  await host.command("audio.load").run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "无法载入音频: unrecognized file format");
+  host.reset("audio.addTrack");
+  // The source changes while the dialog is open.
+  host.handle("dialogs.open", () => {
+    host.openElsewhere("/next.mkv");
+    host.setSource({ audioTracks: [track(1)] });
+    return { cancelled: false, paths: ["/music/next.mp3"] };
+  });
+  await host.command("audio.load").run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "来源已改变，未载入音频");
+  assert.deepEqual(host.source.audioTracks?.map((t) => t.trackId), [1]);
+  host.reset("dialogs.open");
+  host.openElsewhere("/later.mkv", "loading");
+  await host.settle();
+  assert.equal(host.command("audio.load").state.reason, "正在载入");
+  assert.equal(window.props["can-load"], false);
+  await stop();
+});
+
+test("A11: 自动载入同名音频文件 adds same-named audio next to a local file without selecting it", async () => {
+  const folder = await mkdtemp(join(tmpdir(), "vestra-audio-media-"));
+  const data = await mkdtemp(join(tmpdir(), "vestra-audio-"));
+  try {
+    await mkdir(join(folder, "sub"));
+    for (const name of ["film.mkv", "film.ac3", "film.jpn.mka", "film.srt", "other.mp3", "sub/film.flac"]) await writeFile(join(folder, name), "");
+    const host = new TestHost();
+    host.openElsewhere(join(folder, "film.mkv"));
+    host.setSource({ audioTracks: [track(1)] });
+    let started = await startPlugin(activate, { directory, host, dataDirectory: data });
+    await host.settle();
+    assert.equal(host.sent("audio.addTrack").length, 0, "off by default");
+    await host.command("audio.workbench").run();
+    host.window("audio-workbench").emit("auto-load-changed", true);
+    await host.settle(20);
+    assert.deepEqual(host.sent("audio.addTrack").map((p) => [p.path, p.select]), [
+      [join(folder, "film.ac3"), false],
+      [join(folder, "film.jpn.mka"), false],
+    ]);
+    assert.equal(host.source.audioTracks?.find((t) => t.selected)?.trackId, 1, "the selection is kept");
+    assert.deepEqual(host.osd, [], "silent");
+    await started.stop();
+    // Remembered: the next local file is scanned when it is ready; a URL is not.
+    const next = new TestHost();
+    next.openElsewhere("https://example.com/film.mkv");
+    next.setSource({ audioTracks: [track(1)] });
+    started = await startPlugin(activate, { directory, host: next, dataDirectory: data });
+    await next.settle(20);
+    assert.equal(next.sent("audio.addTrack").length, 0);
+    next.openElsewhere(join(folder, "film.mkv"));
+    next.setSource({ audioTracks: [track(1)] });
+    await next.settle(20);
+    assert.equal(next.sent("audio.addTrack").length, 2);
+    await started.stop();
+  } finally {
+    await rm(folder, { recursive: true, force: true });
     await rm(data, { recursive: true, force: true });
   }
 });

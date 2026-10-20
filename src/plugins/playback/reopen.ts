@@ -1,6 +1,10 @@
-import { basename, join } from "node:path";
-import type { PlayerState, Scope } from "../../sdk/plugin/index.ts";
-import { readJson, writeJson } from "./settings.ts";
+import { basename } from "node:path";
+import type { JsonStore, PlayerState, Scope } from "../../sdk/plugin/index.ts";
+import { openStore } from "./settings.ts";
+
+type Last = { source: string | null; openedAt?: string };
+const isLast = (value: unknown): value is Last =>
+  typeof value === "object" && value !== null && typeof (value as Last).source === "string";
 
 /** A local path shows its file name; a link is shown whole. */
 export const displayName = (source: string) => (source.startsWith("/") ? basename(source) : source);
@@ -14,22 +18,16 @@ export class Reopener {
   busy = false;
   last: string | null = null;
   readonly #scope: Scope;
-  readonly #file: string | null;
+  readonly #store: JsonStore<Last>;
   readonly #osd: (text: string) => void;
   #recorded: number | null = null;
 
-  constructor(scope: Scope, directory: () => string, osd: (text: string) => void) {
+  constructor(scope: Scope, osd: (text: string) => void) {
     this.#scope = scope;
     this.#osd = osd;
-    let file: string | null = null;
-    try {
-      file = join(directory(), "last.json");
-    } catch {
-      // No data directory: only the current source can be reopened.
-    }
-    this.#file = file;
-    const saved = (file ? readJson(file) : null) as { source?: unknown } | null;
-    if (typeof saved?.source === "string" && saved.source) this.last = saved.source;
+    // `last.json`; without a data directory only the current source can be reopened.
+    this.#store = openStore<Last>(scope, "last", { defaults: { source: null }, validate: isLast });
+    if (this.#store.value.source) this.last = this.#store.value.source;
   }
 
   /** Remember a media source (whoever opened it) the first time it becomes ready. */
@@ -38,12 +36,10 @@ export class Reopener {
     if (this.#recorded === state.sourceId) return;
     this.#recorded = state.sourceId;
     this.last = state.source;
-    if (!this.#file) return;
-    try {
-      writeJson(this.#file, { source: state.source, openedAt: new Date().toISOString() });
-    } catch {
-      // Unwritable: still remembered for this run.
-    }
+    // Written now rather than debounced: the player may be quit right after.
+    // An unwritable directory still remembers it for this run.
+    this.#store.save({ source: state.source, openedAt: new Date().toISOString() });
+    this.#store.flush().catch(() => {});
   }
 
   /** The current source when it can be reloaded (a plugin stream cannot). */

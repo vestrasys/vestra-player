@@ -1,0 +1,179 @@
+// 在线字幕设置 (D16; reference player dialogs 460): 420 wide. 服务 (order, on/off,
+// keys, test), 搜索 (languages, automatic search, filters), 保存 (location).
+import { CheckBox, ComboBox, LineEdit } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button } from "@vestra/widgets.slint";
+
+export struct ServiceRow {
+    name: string,
+    enabled: bool,
+    state: string,
+}
+
+component Heading inherits Text {
+    color: Theme.text;
+    font-size: Theme.font-tab;
+    font-weight: 700;
+}
+
+component RowLabel inherits Text {
+    width: 90px;
+    color: Theme.text;
+    font-size: Theme.font-body;
+    horizontal-alignment: right;
+    vertical-alignment: center;
+}
+
+export component OnlineSettings inherits Window {
+    title: "在线字幕设置";
+    width: 420px;
+    background: Theme.bg-panel;
+    in property <[ServiceRow]> services: [];
+    in-out property <int> selected-service: 0;
+    in-out property <string> languages-text: "";
+    in property <int> auto-index: 0;
+    in property <int> after-index: 0;
+    in-out property <bool> exact-only: false;
+    in-out property <string> exclude-text: "";
+    in property <int> save-index: 0;
+    in property <string> note-text: "";
+    in property <string> status-text: "";
+    in property <bool> busy: false;
+    changed auto-index => { auto-combo.current-index = root.auto-index; }
+    changed after-index => { after-combo.current-index = root.after-index; }
+    changed save-index => { save-combo.current-index = root.save-index; }
+    callback select-service(int);
+    callback toggle-service(int, bool);
+    callback move-service(int);
+    callback service-settings();
+    callback test-service();
+    callback change-languages(string);
+    callback change-auto(int);
+    callback change-after(int);
+    callback change-exact(bool);
+    callback change-exclude(string);
+    callback change-save(int);
+
+    VerticalLayout {
+        padding: Theme.dialog-padding;
+        spacing: 5px;
+        Heading { text: "服务"; }
+        HorizontalLayout {
+            spacing: 6px;
+            Rectangle {
+                height: 48px;
+                background: Theme.bg-list;
+                border-width: 1px;
+                border-color: Theme.line;
+                VerticalLayout {
+                    padding: 2px;
+                    for service[index] in root.services: Rectangle {
+                        height: 22px;
+                        background: index == root.selected-service ? Theme.selected-bg : transparent;
+                        TouchArea { clicked => { root.selected-service = index; root.select-service(index); } }
+                        HorizontalLayout {
+                            padding-left: 4px;
+                            spacing: 4px;
+                            CheckBox {
+                                width: 20px;
+                                checked: service.enabled;
+                                toggled => { root.toggle-service(index, self.checked); }
+                            }
+                            Text { text: service.name; color: Theme.text; font-size: Theme.font-body; vertical-alignment: center; width: 110px; }
+                            Text { text: service.state; color: Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+                        }
+                    }
+                }
+            }
+            VerticalLayout {
+                spacing: 2px;
+                HorizontalLayout {
+                    spacing: 3px;
+                    Button { small: true; text: "上移"; enabled: root.selected-service > 0; clicked => { root.move-service(-1); } }
+                    Button { small: true; text: "下移"; enabled: root.selected-service < root.services.length - 1; clicked => { root.move-service(1); } }
+                }
+                HorizontalLayout {
+                    spacing: 3px;
+                    Button { small: true; text: "设置…"; clicked => { root.service-settings(); } }
+                    Button { small: true; text: "测试"; enabled: !root.busy; clicked => { root.test-service(); } }
+                }
+            }
+        }
+        Heading { text: "搜索"; }
+        HorizontalLayout {
+            spacing: 5px;
+            RowLabel { text: "首选语言"; }
+            LineEdit {
+                height: Theme.input-height;
+                font-size: Theme.font-body;
+                placeholder-text: "zh-CN, zh-TW, en";
+                text <=> root.languages-text;
+                accepted => { root.change-languages(self.text); }
+                edited => { root.change-languages(self.text); }
+            }
+        }
+        HorizontalLayout {
+            spacing: 5px;
+            RowLabel { text: "自动搜索"; }
+            auto-combo := ComboBox {
+                height: 22px;
+                model: ["不使用", "打开没有字幕的视频时"];
+                current-index: root.auto-index;
+                selected(value) => { root.change-auto(self.current-index); }
+            }
+        }
+        HorizontalLayout {
+            spacing: 5px;
+            RowLabel { text: "搜索后"; }
+            after-combo := ComboBox {
+                height: 22px;
+                model: ["显示下载窗口", "自动载入最佳结果"];
+                current-index: root.after-index;
+                selected(value) => { root.change-after(self.current-index); }
+            }
+        }
+        HorizontalLayout {
+            padding-left: 95px;
+            CheckBox {
+                height: Theme.checkbox-row-height;
+                text: "仅查找与文件完全匹配（哈希）的字幕";
+                checked <=> root.exact-only;
+                toggled => { root.change-exact(self.checked); }
+            }
+        }
+        HorizontalLayout {
+            spacing: 5px;
+            RowLabel { text: "排除关键字"; }
+            LineEdit {
+                height: Theme.input-height;
+                font-size: Theme.font-body;
+                placeholder-text: "用逗号或空格分隔";
+                text <=> root.exclude-text;
+                edited => { root.change-exclude(self.text); }
+            }
+        }
+        Heading { text: "保存"; }
+        HorizontalLayout {
+            spacing: 5px;
+            RowLabel { text: "保存位置"; }
+            save-combo := ComboBox {
+                height: 22px;
+                model: ["尽可能保存在视频同目录", "插件数据目录"];
+                current-index: root.save-index;
+                selected(value) => { root.change-save(self.current-index); }
+            }
+        }
+        Text {
+            text: root.note-text;
+            color: Theme.text-dim;
+            font-size: Theme.font-body;
+            wrap: word-wrap;
+        }
+        Text {
+            text: root.status-text;
+            color: Theme.text-list;
+            font-size: Theme.font-body;
+            overflow: elide;
+        }
+    }
+}

@@ -1,5 +1,4 @@
-import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import type { JsonStore, Scope } from "../../sdk/plugin/index.ts";
 import type { OpenMode } from "./follow.ts";
 import { lengthOf, ROW_LIMIT, type Queue, type Repeat, type SortKey } from "./queue.ts";
 
@@ -9,7 +8,7 @@ export type Settings = {
   repeat: Repeat;
   shuffle: boolean;
   openMode: OpenMode;
-  /** B26 (not implemented yet); kept so a saved value survives. */
+  /** B26 "快速推进到下一个" (the key keeps the name of the original gapless item). */
   gapless: boolean;
   /** A03: clear the list before "打开文件夹" adds (no menu entry). */
   clearOnOpenFolder: boolean;
@@ -20,7 +19,7 @@ type SavedList = {
   selected: number[];
   rows: { kind: "file" | "url"; source: string; title: string | null; duration: number | null }[];
 };
-type Saved = { version: 1; settings: Settings; list?: SavedList };
+export type Saved = { version: 1; settings: Settings; list?: SavedList };
 
 export const defaults = (): Settings => ({
   remember: true,
@@ -35,13 +34,6 @@ const REPEATS = ["none", "all", "one"];
 const MODES = ["only", "similar", "folder"];
 const SORT_KEYS = ["title", "filename", "extension", "size", "duration", "date", "folder", "path"];
 
-/** Write `data` atomically (temporary file, then rename). */
-export function writeAtomic(path: string, data: string | Uint8Array) {
-  const temporary = `${path}.tmp-${process.pid}`;
-  writeFileSync(temporary, data);
-  renameSync(temporary, path);
-}
-
 function readSettings(raw: Partial<Settings> | undefined): Settings {
   const settings = defaults();
   if (!raw || typeof raw !== "object") return settings;
@@ -54,31 +46,38 @@ function readSettings(raw: Partial<Settings> | undefined): Settings {
   return settings;
 }
 
-/** `playlists.json` and `probe-cache.json` in the plugin's data directory. */
+const isSaved = (value: unknown): value is Saved =>
+  !!value && typeof value === "object" && (value as Saved).version === 1;
+const isCache = (value: unknown): value is unknown[] => Array.isArray(value);
+/** C17: a change is written within a second (the stores debounce). */
+export const SAVE_DELAY_MS = 1000;
+
+/**
+ * `playlists.json` and `probe-cache.json` in the plugin's data directory
+ * (`plugin.storage`): a file that does not parse or has an unknown version is
+ * kept as `.bad-<time>` and defaults are used.
+ */
 export class Store {
-  readonly file: string;
-  readonly cacheFile: string;
-  constructor(directory: string) {
-    this.file = join(directory, "playlists.json");
-    this.cacheFile = join(directory, "probe-cache.json");
+  readonly lists: JsonStore<Saved>;
+  readonly cache: JsonStore<unknown[]>;
+  constructor(scope: Scope) {
+    this.lists = scope.storage.json<Saved>("playlists", {
+      defaults: { version: 1, settings: defaults() },
+      validate: isSaved,
+      debounceMs: SAVE_DELAY_MS,
+    });
+    this.cache = scope.storage.json<unknown[]>("probe-cache", {
+      defaults: [],
+      validate: isCache,
+      debounceMs: SAVE_DELAY_MS,
+    });
   }
 
-  /** Read the saved state; a damaged file is kept as `.bad-<time>` and defaults are used. */
+  /** The saved state, field by field: a bad field falls back to its default. */
   load(): { settings: Settings; list: SavedList | null } {
-    if (!existsSync(this.file)) return { settings: defaults(), list: null };
-    try {
-      const saved = JSON.parse(readFileSync(this.file, "utf8")) as Saved;
-      if (saved?.version !== 1) throw new Error("unknown version");
-      const list = saved.list && Array.isArray(saved.list.rows) ? saved.list : null;
-      return { settings: readSettings(saved.settings), list };
-    } catch {
-      try {
-        renameSync(this.file, `${this.file}.bad-${Date.now()}`);
-      } catch {
-        /* keep going with defaults */
-      }
-      return { settings: defaults(), list: null };
-    }
+    const saved = this.lists.value;
+    const list = saved.list && Array.isArray(saved.list.rows) ? saved.list : null;
+    return { settings: readSettings(saved.settings), list };
   }
 
   /** Rebuild the queue from a saved list (no file checks; nothing is opened). */
@@ -110,9 +109,9 @@ export class Store {
       }
   }
 
-  /** The JSON saved for `settings` and (when remembered) the queue. */
-  static snapshot(queue: Queue, settings: Settings): string {
-    const saved: Saved = { version: 1, settings };
+  /** What is saved for `settings` and (when remembered) the queue. */
+  static snapshot(queue: Queue, settings: Settings): Saved {
+    const saved: Saved = { version: 1, settings: { ...settings } };
     if (settings.remember) {
       const index = new Map(queue.rows.map((row, i) => [row.rowId, i]));
       saved.list = {
@@ -127,20 +126,6 @@ export class Store {
         })),
       };
     }
-    return JSON.stringify(saved);
-  }
-
-  save(json: string) {
-    writeAtomic(this.file, json);
-  }
-  loadCache(): unknown {
-    try {
-      return JSON.parse(readFileSync(this.cacheFile, "utf8"));
-    } catch {
-      return [];
-    }
-  }
-  saveCache(entries: unknown) {
-    writeAtomic(this.cacheFile, JSON.stringify(entries));
+    return saved;
   }
 }

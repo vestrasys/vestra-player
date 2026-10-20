@@ -19,7 +19,7 @@
 - 身份（`identity.ts`）：本地文件用 realpath（失败用原路径），链接去掉 `#` 片段；已有的移到最前。最多 100 条，菜单显示 20 条。
 - 菜单文字：`1`–`9`、`0` 序号 + 显示名（文件名；链接为 `主机 › 最后一段`，解码、最长 60 字符、不含账户），有记忆点时后接 `（12:34）`，最长 80 字符。第 11 条以后同名的记录加 ` (2)` 区分（菜单路径不能重复）。
 - 点击：本地文件先 `fs.access`，不存在时 OSD「文件不存在：<文件名>」且保留记录；打开被拒或载入失败 OSD「无法打开：<原因>」。
-- `recent.json`：`{ version: 1, enabled, items: [{ key, source, kind, openedAt }] }`，变化后 1 秒合并写入。
+- `recent.json`：`{ version: 1, enabled, items: [{ key, source, kind, openedAt }] }`，最后一次变化后 1 秒写入。
 
 ## B25 记忆播放位置（`resume.ts`、`ui/resume.slint`）
 
@@ -28,9 +28,9 @@
 - 恢复（自动继续）：新来源第一次 ready 且时长已知时 `seek(记忆点 − 2, { ifCurrent: ready 状态 })`，OSD「从 12:34 继续播放」；`stale`（ready 后有人跳转、暂停、换来源）静默放弃。重播（同一 `sourceId`）不恢复；插件启动时已在播放的来源不恢复。
 - 每次询问：照常从头播放并打开 300×110 的小窗「之前有未播放完的。接着播放吗？（12:34）」[接着播放]（Enter）[从头播放]（Esc）。10 秒无操作或换来源时关闭，视为从头播放。等待回答期间不覆盖记忆点。
 - 不记忆：不读不写，已有记忆点保留。容量 1000 条，按最后更新时间淘汰。
-- `positions.json`：`{ version: 1, mode, audio, items: { [key]: { position, duration, size, updatedAt } } }`，最多每 5 秒写一次，停用时立即写。
+- `positions.json`：`{ version: 1, mode, audio, items: { [key]: { position, duration, size, updatedAt } } }`，记忆点每 5 秒更新一次，变化后 300 ms 写入，停用时立即写。
 
-两个文件都写临时文件再改名，权限 0600。读不到或读坏时用默认值；没有数据目录时只在本次运行内有效。
+两个文件都用 `plugin.storage.json`（`store.ts`）读写：临时文件加改名，停用时写完。读坏（不是 JSON 对象）的文件由 SDK 改名为 `<名字>.json.bad-<时间戳>` 并用默认值；字段无效时逐项丢弃，其余保留。没有数据目录时只在本次运行内有效。文件权限随系统默认（数据目录位于只有本用户可进入的 `~/Library` 下）。
 
 ## 开发
 
