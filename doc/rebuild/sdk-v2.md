@@ -1,6 +1,6 @@
 # SDK v2 设计说明
 
-状态：P1 交付（2026-10-20，API 维护者）。任务依据见 [sdk-v2-migration.md](sdk-v2-migration.md)，示例见 [sdk-v2-usage.md](sdk-v2-usage.md)，迁移步骤见 [sdk-v2-migration-guide.md](sdk-v2-migration-guide.md)。
+状态：P1 交付，P4 删除旧 API 后为唯一插件 API（2026-10-20，API 维护者）。任务依据见 [sdk-v2-migration.md](sdk-v2-migration.md)，示例见 [sdk-v2-usage.md](sdk-v2-usage.md)，迁移步骤见 [sdk-v2-migration-guide.md](sdk-v2-migration-guide.md)。
 
 代码：`src/sdk/plugin/`（公共类型在 `types.ts`，入口 `index.ts`），测试宿主 `src/sdk/plugin/testing.ts`，单元测试 `src/tests/sdk/`，运行器 `src/runtime/runner.ts`，构建工具 `src/scripts/plugin.mjs`。参考迁移：`src/plugins/video/`。
 
@@ -100,7 +100,7 @@ export default async function activate(plugin: Plugin) {
 2. **宿主对每个请求都答复**，或者停止该插件进程（此时运行器拒绝全部挂起请求，插件也不再需要结论）。
 3. 宿主的拒绝（RPC error，如 `stale`、`busy`、`unsupported`）是**确定**结果：请求未执行，或其失败已被记录。
 
-因此 v2 的运行器**不再给请求设客户端超时**（旧扁平 API 仍保留 10 秒超时，见第 8 节）。超时是此前“结果未知”的主要来源：客户端到点放弃等待，却无法知道宿主是否执行。现在请求超过 10 秒只写一条日志并继续等待真实答复。
+因此运行器**不给请求设客户端超时**。超时是此前“结果未知”的主要来源：客户端到点放弃等待，却无法知道宿主是否执行。现在请求超过 10 秒只写一条日志并继续等待真实答复。
 
 SDK 仍然处理“答复丢失”（非宿主错误的拒绝，或客户端 `timeout`），规则如下：
 
@@ -140,30 +140,31 @@ SDK 仍然处理“答复丢失”（非宿主错误的拒绝，或客户端 `ti
 
 ## 7. 错误模型
 
-- 失败一律以普通 `Error` reject/抛出，带稳定的 `code`（类型 `PluginError`）：宿主错误码原样保留（`stale`、`busy`、`unsupported`、`unavailable`、`conflict`、`invalid`…），来源操作失败的 `{ backend }` 映射为 `code: "backend"`、`message` 为后端文本；SDK 自己的码：`replaced`、`failed`、`ended`（`media.ready`），`aborted`（`AbortError`），`backend-uncertain`，`unknown`/`rejected`/`expired`（见 5.1）。
+- 失败一律以普通 `Error` reject/抛出，带稳定的 `code`（类型 `PluginError`）：宿主错误码原样保留（`stale`、`busy`、`unsupported`、`unavailable`、`conflict`、`invalid`…），来源操作失败的 `{ backend }` 映射为 `code: "backend"`、`message` 为后端文本；SDK 自己的码：`cleanup`（`trial.stop()`：宿主停止了试载但未确认清理；再次调用 `stop()` 会重新向宿主发送停止）、`replaced`、`failed`、`ended`（`media.ready`），`aborted`（`AbortError`），`backend-uncertain`，`unknown`/`rejected`/`expired`（见 5.1）。
 - `player.open()` / `openStream()` 的错误 code：`stale`（带 `ifCurrent` 时来源已变化，什么都没做）；`replaced`（宿主已接受，但在完成前被另一个来源替换或撤销，例如 URL 仍在解析时用户打开了别的文件；与 `media.ready()` 的 `replaced` 同义，不是这一项的失败）；`backend`（载入/解析失败，`message` 为后端文本）；`invalid`、`busy`、`conflict`、`unavailable`、`unsupported`（宿主拒绝接纳，未执行）；`aborted`（`AbortError`，`signal` 中止，已接受的会被关闭）。`openStream` 另有 `stream`（producer 报错，`message` 为宿主原因）、`device`（音频设备未就绪）、`timeout`（类型 `StreamStartError`，`error.stage` 为 `"prefill"`：首批音视频缓冲未在 10 秒内备好，或 `"activation"`：宿主选中后 10 秒内未激活；按 `stage` 区分，不要按消息文本）。`openStream` 被 `signal` 中止时，若选中请求已发出，SDK 先等宿主答复拿到来源代次，只关闭这一代来源，再释放 producer。
 - SDK 调用的处理函数里抛出的错误（包括 async 处理函数的 reject）交给所在作用域的 `onError`；没有监听就上交父作用域，最终写入插件日志。插件不需要到处写 `.catch(report)`。
 - 滤镜这类持续目标用状态表达失败：`filter.status`（`waiting`/`applying`/`applied`/`failed`）。`failed` 之后不会自动重试，直到 `set()`、`retry()` 或来源变化。
 - SDK v2 插件在运行器中有 `unhandledRejection` 兜底（只记日志），忘记 `await` 的 promise 不会让插件进程崩溃。
 
-## 8. 与旧 API 共存及删除步骤
+## 8. 旧 API 的删除（P4 已完成）
 
-运行器按入口模块的导出区分：
+迁移期间运行器按入口导出区分新旧插件；P4（10 个插件全部迁移后）已删除旧路径：
 
-- `export default function activate(plugin)` → SDK v2：传入 `Plugin`，请求无客户端超时，激活等待注册完成，停用时自动释放。
-- `export function activate(host)` → 旧扁平 `Host`：行为与之前完全相同（含 10 秒超时、返回的清理函数）。
+- 运行器只接受默认导出的 `activate(plugin)`；命名导出 `activate(host)` 以 `runtime.failed`（“plugin entry must default-export activate(plugin)”）拒绝。旧 API 的 10 秒客户端超时随之删除，所有请求等待真实答复。
+- `src/sdk/index.ts`（导出 `createSdk`/`Host`/`PluginModule`）改为内部模块 `src/sdk/wire.ts`（`createWire`/`Wire`），只保留 SDK v2 用到的 wire 方法；`commands.ts` 去掉 `snapshot`/`execute`/`onExecute`。插件只从 `src/sdk/plugin/index.ts` 导入类型。
+- 插件工坊的 `vendor/sdk` 与 `src/sdk` 同步（含 `wire.ts`，去掉 `index.ts`）；工坊生成的计数器插件已使用 v2。
+- 删除了使用旧 API 的示例与历史验证脚本（下表）。它们是阶段 A–D 的作者/独立验收工具，所验证的宿主行为由宿主 `cargo test`（110 + 143 项）、SDK 单元测试（`TestHost`）、各插件测试与 P5 GUI 测试覆盖；原文件与运行证据保留在 git 历史和 `doc/rebuild/*-evidence/` 中。若需要新的真实宿主集成测试，应以 v2 插件为夹具重新编写。
 
-两者共用同一条管道和事件分发，但一个插件只会是其中一种，因此各自的操作计数器不会冲突。旧 API 不再新增任何东西。
+| 删除 | 原用途 |
+| --- | --- |
+| `src/examples/capability-demo/`、`src/examples/host-ui-demo/` | 阶段 A/D 的 API 演示与宿主 UI 样本（直接调用 `playback.open`、`plugins.load` 等 v2 不提供的 wire 方法），已被产品插件取代 |
+| `src/examples/mount-demo/{bottom,sidebar}/main.ts` 与 `manifest.json` | 面板样本插件；`.slint` 文件保留为 `host/src/composition.rs` 单元测试的夹具 |
+| `src/scripts/verify.mjs`、`verify-*.mjs`（15 个）、`run-product-slices.mjs`、`stage-native-evidence.mjs` 及 `npm run verify` | 以内嵌旧 API 插件驱动真实宿主的作者自检与取证打包 |
+| `src/tests/*-review.mjs`（15 个）、`src/tests/session.ts`、`src/tests/source-session.ts` | 以旧 API 夹具插件驱动冻结宿主的独立审查脚本 |
 
-P4 删除步骤：
+保留：`src/examples/composition-demo/`（纯 Slint，宿主组合层说明）、`src/examples/mount-demo/*.slint`。
 
-1. 确认 `grep -rn "export async function activate\|export function activate" src/plugins` 无结果（全部改为默认导出），且 `src/examples/` 已迁移或标注为宿主测试用底层示例。
-2. 运行器删除 `module.activate` 分支和 `deadline` 参数（只保留无超时请求）。
-3. `src/sdk/index.ts`：不再导出 `createSdk`/`Host`/`PluginModule` 给插件；扁平客户端（`commands.ts`、`processing.ts`、`source.ts`、`subtitles.ts`、`media.ts`、`producer.ts`、`source-resolvers.ts`）保留为 `sdk/plugin/` 的内部实现，类型中仅保留插件需要的节点/样式等定义（`VideoNode`、`AudioNode`、`SubtitleStyle`、`ResolvedMedia`、`MediaJob`），由 `sdk/plugin/index.ts` 再导出。可考虑把 `sdk/plugin/index.ts` 提升为 `sdk/index.ts`，届时插件的导入路径统一修改一次。
-4. 插件工坊生成的计数器插件目前使用旧 API（见第 11 节），必须在删除前改为 v2。
-5. 更新 `doc/rebuild/api.md`。
-
-## 9. 旧 API 对照表
+## 9. 旧 API 对照表（迁移记录）
 
 | 旧（扁平 Host） | 新（SDK v2） |
 | --- | --- |
@@ -214,14 +215,16 @@ P4 删除步骤：
 - `test`：`node --test tests/*.test.{ts,mjs}`。
 - `dist/` 已加入根 `.gitignore`（`src/plugins/*/dist/`）；各插件迁移时 `git rm -r --cached src/plugins/<name>/dist`。
 
-## 12. 建议的宿主改动（本轮未做，供协调者决定）
+## 12. 建议的宿主改动（P4 评估，未实施）
 
-SDK 已用现有 RPC 正确实现以下各项；这些改动只会让实现更简单或更省请求，不影响插件 API：
+SDK 已用现有 RPC 正确实现以下各项；改动只会简化实现或减少请求，不改变插件 API。
 
-1. **`commands.unregister`**：目前释放子作用域里的命令只能禁用、无法从菜单移除。影响：仅 SDK `commands.ts`；需补 `commands.rs` 测试。
-2. **`processing.state` / 字幕状态事件**：SDK 现在在来源阶段变化时读 `processing.state`，字幕在来源变化或 `playback.backend` 事件时重读。若宿主广播 `processing.state` 与 `subtitles.state` 事件，可去掉这些读取与插件侧的字幕轮询（subtitles 插件窗口打开时每 1.5 秒刷新，这一行为本轮由插件保留）。
-3. **`source.operation` 区分 `unknown`**：从未见过的 id 现在返回 `unknown-expired` 错误，与“已被淘汰”混在一起；处理资源的操作簿已区分。依据有序管道，SDK 目前把它当作确定失败，实际不可达。
-4. **窗口回调全转发**：若 `ui.open` 像面板一样转发根组件的全部回调，SDK 可取消“首次 `show()` 前绑定”的限制。
+| 改动 | 现状与影响 | 建议 |
+| --- | --- | --- |
+| `commands.unregister` | 子作用域释放命令时只能禁用，菜单项保留；当前没有插件在运行期间释放命令（全部在停用时由宿主按 owner 移除）。宿主 `commands.rs` 已有按 owner 移除，加单项移除很小，需补测试 | **低优先**：等第一个需要运行期移除命令的插件出现再做 |
+| `processing.state` / 字幕状态事件广播 | SDK 在来源阶段变化时读一次 `processing.state`（开销小）；字幕需在来源变化与 `playback.backend` 事件时重读，subtitles 插件窗口打开时还每 1.5 秒轮询 | **中优先**：先做**字幕状态事件**（可去掉插件轮询与 SDK 重读，用户可见的确认状态更及时）；处理状态事件收益小，暂不做 |
+| `source.operation` 区分 `unknown` 与 `unknownExpired` | 从未见过的 id 现在返回 `unknown-expired` 错误；依据有序管道，SDK 中该分支实际不可达 | **低优先**：为与处理资源操作簿一致可顺手做（`session.rs` 查询按 high-water 区分，改动很小），不急 |
+| `ui.open` 转发根组件全部回调 | SDK 要求窗口回调在首次 `show()` 前绑定，否则抛错；迁移中所有插件都满足，但这是一个容易踩的约束 | **中优先**：宿主用 slint_interpreter 的组件定义列举根回调即可，与面板行为一致；做完后 SDK 删除该限制（向后兼容） |
 
 ## 13. 已知限制与有意的细微差异
 
