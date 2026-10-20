@@ -310,6 +310,12 @@ plugin.power.preventSleep(mode: "off" | "playing"): Promise<void>;
 
 诊断开关：`VESTRA_DEBUG_KEYS=1` 时宿主向 stderr 打印每个 winit 键盘事件（`keys: winit Pressed|Released synthetic=… physical=… logical=… text=… repeat=… modifiers=…`）、`ModifiersChanged`（`keys: winit modifiers …`）、死键解析结果，以及每次 Slint `key-input`（`keys: slint scope=… text=… control/alt/shift/meta=… physical=… → 解析结果 bound=是否有绑定`）。实测若仍不触发，按这几行判断：没有 `keys: winit` 行 = 钩子没收到；有 winit 行没有 slint 行 = 事件被焦点控件或 IME 吃掉；slint 行解析正确但 `bound=false` = 绑定表里没有该输入（检查插件声明或用户覆盖层）。
 
+#### 裁决：`power.preventSleep` 断言启动失败的语义（作者 A 报告）
+
+问题：`preventSleep` 只登记要求，`caffeinate` 在播放条件满足时才由宿主启动，启动失败只写宿主日志，插件收不到，需求 B29 第 5 条「无法阻止屏保」提示无从实现。
+
+结论（§4.3 保守原则）：**不加通知事件，写明失败语义**。参考文档 §16.2 增加：启动失败只写宿主日志（`host.error power …`），不通知插件，同条件不重试、条件变化再试。理由：`/usr/bin/caffeinate` 是系统自带程序，启动失败在受支持的 macOS 上实际不会发生，不满足「需要宿主内部状态的通用能力缺口」的门槛；为一个几乎不出现的失败增加一条事件通道（订阅、退订、作用域、TestHost 模拟）不值得。作者 A 据此把 B29 第 5 条降级（删除「无法阻止屏保」提示），并在需求文档对应小节注明。若以后出现可复现的失败场景，再按 §4.1 带证据提出。
+
 ### 6.3 作者交付
 
 （各作者完成时填写：完成项、未完成项与原因、删除的自制实现、API 请求）
