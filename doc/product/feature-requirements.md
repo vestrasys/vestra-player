@@ -2709,18 +2709,18 @@ manifest 能力从 `commands, playback.read, events, ui.osd` 增加为：`+ ui.w
 
 ## 窗口（`window`）
 
-**位置**：`src/plugins/window/`（新插件，待创建）
+**位置**：`src/plugins/window/`（第 3a 轮新建，实现说明见该目录 README）
 
 ### 定位
 
-window 插件负责主窗口在桌面上的状态：按视频尺寸倍数设置窗口、适应视频比例、画中画、置顶，以及窗口模式下播放时隐藏鼠标指针。它保存这些偏好并在启动时恢复，并按播放状态切换置顶（「播放时置顶」）。
+window 插件负责主窗口在桌面上的状态：按视频尺寸倍数设置窗口、适应视频比例、画中画（3a 先做迷你尺寸）、置顶，以及窗口模式下播放时隐藏鼠标指针。它保存这些偏好并在启动时恢复，并按播放状态切换置顶（「播放时置顶」）。
 
 边界：
 - 窗口本身（NSWindow 层级、尺寸、指针、全屏、画中画）由 Rust 核心持有，插件只发请求。本章需要一组 `plugin.window` 接口，用新能力 `window.control` 开放。
 - 普通「全屏」（Enter / F11 / 双击）仍是宿主命令，本插件不重复注册。
 - 窗口尺寸与位置的跨启动保存仍由核心（C8，`ui-state.json`）负责；本插件只保存置顶、指针两项偏好。
 - 视频画面的宽高比、裁剪、缩放属于视频领域（其他章节），本章只改窗口，不改画面比例。
-- 不读取其他插件的任何状态；视频尺寸来自核心的 `player.state`。
+- 不读取其他插件的任何状态；视频尺寸来自核心（3a：`player.stats()` 的 `video.displayWidth/Height`，见 H03 第 1 条）。
 
 manifest 能力：`commands`、`events`、`playback.read`、`ui.osd`、`window.control`（新）。
 
@@ -2728,21 +2728,21 @@ manifest 能力：`commands`、`events`、`playback.read`、`ui.osd`、`window.c
 
 | 编号 | 功能 | 当前 | 依赖核心新增 |
 | --- | --- | --- | --- |
-| B30 | 播放时隐藏鼠标指针（窗口模式） | ◐ | 是（`window.setCursorAutoHide`） |
-| H03 | 窗口 0.5 / 1 / 1.5 / 2 倍视频尺寸 | ✗ | 是（`window.setVideoArea`、`PlayerState.videoSize`） |
-| H04 | 适应视频比例 | ✗ | 是（同上） |
-| H05 | 置顶：总是 / 播放时（全屏时见该节） | ✗ | 是（`window.setAlwaysOnTop`） |
-| H07 | 画中画（替代迷你尺寸） | ✗ | 是（`window.setPictureInPicture`；宿主实现画中画帧输出） |
+| B30 | 播放时隐藏鼠标指针（窗口模式） | ✓（3a） | 是（`window.setCursorAutoHide`） |
+| H03 | 窗口 0.5 / 1 / 1.5 / 2 倍视频尺寸 | ✓（3a） | 是（`window.setVideoArea`；尺寸用 `stats()`，`PlayerState.videoSize` 未进 3a） |
+| H04 | 适应视频比例 | ✓（3a） | 是（同上） |
+| H05 | 置顶：总是 / 播放时（全屏时见该节） | ✓（3a） | 是（`window.setAlwaysOnTop`） |
+| H07 | 画中画（替代迷你尺寸） | ◐（3a 为迷你尺寸形态，画中画 4a） | 是（`window.setPictureInPicture`；宿主实现画中画帧输出）；迷你尺寸只用 W2 + W3 |
 
 ### 菜单与快捷键
 
 | 菜单路径 | order / group | 默认快捷键 | 说明 |
 | --- | --- | --- | --- |
-| 屏幕 ▶ 画中画（勾选） | 710 / screen-size | `` ` `` | 子菜单整体在宿主「全屏」(700) 之后、窗口入口组 (800) 之前 |
+| 屏幕 ▶ 迷你尺寸（勾选；4a 起改为「画中画」，同一 order 与按键） | 710 / screen | `` ` `` | 子菜单整体在宿主「全屏」(700) 之后、窗口入口组 (800) 之前；第一项用 group `screen`，子菜单与「全屏」之间不画分隔线 |
 | 屏幕 ▶ 0.5倍 · 1倍 · 1.5倍 · 2倍（单选，按当前尺寸显示圆点） | 711–714 / screen-size | 1 · 2 · 3 · 4 | |
 | 屏幕 ▶ 适应视频比例 | 715 / screen-size | 8 | |
 | 屏幕 ▶ 置顶 ▶ 切换置顶方式 | 725 / screen-top | Ctrl+T | |
-| 屏幕 ▶ 置顶 ▶ 不置顶 · 总是置顶 · 播放时置顶（单选） | 726–728 / screen-top | — | |
+| 屏幕 ▶ 置顶 ▶ 不置顶 · 总是置顶 · 播放时置顶（单选） | 726–728 / screen-top-mode | — | 与「切换置顶方式」之间画分隔线 |
 | 播放 ▶ 播放时隐藏鼠标指针（勾选） | 241 / playback-options | — | 按参考播放器放在播放领域，与 playback 的 240、242、243 同组 |
 
 冲突检查：1、2、3、4、8、`` ` ``、Ctrl+T 现在都没有命令占用。在 macOS 上 Ctrl 绑定按 ⌘ 也能触发：⌘T 不和系统快捷键冲突。⌘`（切换同一应用的窗口）不受影响，因为画中画绑定的是不带修饰键的 `` ` ``。数字键 1–4、8 是全局绑定，以后若有别的领域（例如宽高比预设）想用数字键，需要在 menus.md 统一分配。
@@ -2769,7 +2769,7 @@ manifest 能力：`commands`、`events`、`playback.read`、`ui.osd`、`window.c
 5. 切换时提示「播放时隐藏鼠标: 开 / 关」。
 6. 插件停用时，核心恢复为只在全屏时隐藏。
 
-**持久化**：`plugin.dataDirectory/settings.json` 的 `hideCursorWhilePlaying: boolean`，默认 `false`。激活时调用一次 `setCursorAutoHide`。
+**持久化**：`plugin.dataDirectory/settings.json` 的 `hideCursorWhilePlaying: boolean`，默认 `false`。激活时调用一次 `setCursorAutoHide`（3a 实现：只在开着时调用，默认值不发送，避免覆盖别的插件最后写入的值）。
 
 **核心依赖**【核心新增】：
 
@@ -2796,17 +2796,20 @@ window.setCursorAutoHide(mode: "fullscreen" | "playing"): Promise<void>
 
 **行为细节**
 1. 视频显示尺寸取 `player.state.videoSize`：考虑容器宽高比和旋转后的显示宽高；插件模拟器流取 `openStream` 的宽高。
+   - 3a 实现：裁决没有给 `PlayerState.videoSize`，改用 `player.stats()` 的 `video.displayWidth/Height`（mpv `video-out-params/dw`、`dh`，宽高比校正与滤镜之后），没有时用 `video.width/height`。来源第一次 `ready` 时读取，mpv 还没给出时每 500 ms 重读、最多 10 次；每次执行前再读一次（画面可能已被旋转）。`video` 为 `null` 或尺寸为空即「没有视频」。
 2. 1 倍 = 一个视频像素对应一个逻辑点（Retina 上一个点是 2 个物理像素，观感与非 Retina 的 1:1 相同；macOS 上 QuickTime 的「实际大小」也是这种做法）。
 3. 目标是**视频区**，不是整个窗口。核心自动加上底栏（62px）和附着侧栏（含 3px 分隔条）。
 4. 保持窗口左上角不动。放不下时：
    - 先把窗口挪回屏幕可见区（不含菜单栏和 Dock）。
    - 仍放不下就按比例缩小视频区到能放下为止，提示「窗口: 2倍（已按屏幕缩小）」。
+   - 按最小尺寸放大时（第 5 条）提示「窗口: 0.5倍（已按最小尺寸放大）」。两者都由返回的 `clamped` 与实际尺寸判断。
 5. 小于最小尺寸（视频区宽 318 / 窗口宽 320、视频高 120）时，核心按最小值放大；附着侧栏放不下时按现有规则隐藏（`reason: "space"`）。
 6. 单选圆点：视频区与某个倍数相差 ≤ 1 点时，该项显示圆点；否则都不显示。
 7. 不可用（禁用并给原因）：
    - 没有视频（空、纯音频）：「没有视频」。
    - 全屏中：「全屏时不可用」。不自动退出全屏，避免误按数字键时画面突然变化。
 8. 提示「窗口: 1.5倍」。
+9. 调整进行中再按：命令忙碌（原因「正在调整窗口」），不排队。核心拒绝时提示「无法调整窗口：<原因>」。
 
 **核心依赖**【核心新增】：
 
@@ -2864,6 +2867,8 @@ readonly videoSize: { width: number; height: number } | null;  // 显示尺寸�
 6. 「全屏时置顶」不提供。macOS 全屏使用独立的空间（Space），主窗口在那里本来就在最前，这个选项在 macOS 上没有可见效果。如果以后宿主改用不切换空间的全屏，再补这个选项。
 
 **持久化**：`settings.json` 的 `onTop: "never" | "always" | "playing"`，默认 `"never"`。
+
+**3a 实现**：实际置顶 = 迷你尺寸开着 或 总是 或（播放时 且 正在播放）；只在这个值变化时调用 `setAlwaysOnTop`，激活时值为「不置顶」就不发送（不覆盖别的插件最后写入的值）。
 
 **核心依赖**【核心新增】：
 
@@ -2936,6 +2941,19 @@ readonly pictureInPicture: { supported: boolean; active: boolean };
 - 停用 window 插件时浮窗关闭。
 
 **参考播放器参考**：menu-tree `屏幕 ▶ 迷你尺寸 ```（`101_0_19_1`，CmdID 10231）；strings.json「窗口尺寸：迷你尺寸」。差异：参考播放器把主窗口缩到最小尺寸；我们改用 macOS 系统画中画，沿用同一个快捷键 `` ` ``，不再提供缩小主窗口的功能。
+
+#### 3a 形态：迷你尺寸（作者 A 决定，2026-10-21）
+
+画中画（W5、宿主 H8）推到 4a。3a 先用已有的 W2（`setVideoArea`）与 W3（`setAlwaysOnTop`）提供迷你尺寸，占用画中画以后的菜单位置与按键；4a 交付画中画时整项替换为上面的画中画，不同时保留两项。
+
+- 入口：「屏幕 ▶ 迷你尺寸」（勾选），`` ` ``，order 710 / group `screen`。
+- 进入：视频区缩到能放进 400×300 的最大同比例尺寸（16:9 → 400×225、4:3 → 400×300；竖屏 9:16 → 169×300，核心按最小宽度 318 放大，有黑边），保持窗口左上角；同时置顶。提示「迷你尺寸: 开」。
+- 退出：再按一次，视频区回到进入前的尺寸，置顶回到 H05 所选方式；提示「迷你尺寸: 关」。全屏中无法恢复尺寸时只结束迷你尺寸。
+- 自动结束（不恢复旧尺寸，置顶回到所选方式，不提示）：用户拖动改变窗口（视频区与迷你尺寸相差超过 1 点）、进入全屏、执行 H03 倍数或 H04 适应比例。
+- 不可用：全屏「全屏时不可用」；没有视频「没有视频」（已在迷你尺寸时仍可退出）；调整进行中忙碌。
+- 不保存，重启后不处于迷你尺寸。插件停用时核心取消置顶，窗口保持当时的尺寸。
+
+验收：1080p 片源按 `` ` ``，视频区 400×225 并浮在 Finder 之上；再按回到原尺寸、不再置顶（「总是置顶」时仍置顶）；迷你尺寸中拖大窗口后勾选消失、不再置顶。
 
 ### 本章核心 API 请求汇总
 
@@ -3077,42 +3095,42 @@ manifest 能力：`playback.read`、`playback.control`、`events`、`commands`�
 
 ## 章节、书签与区段（`marks`）
 
-**位置**：`src/plugins/marks/`（新插件，待创建）
+**位置**：`src/plugins/marks/`（第 3a 轮新建：B21、B23；B22 在 3b）
 
 ### 定位
 
 marks 插件负责播放时间轴上的「点」和「段」：媒体自带的章节（只读）、用户的书签（增删改、按文件持久化）、A-B 区段循环。它提供菜单、快捷键和「章节/书签」列表窗口。
 
 边界：
-- **章节数据**来自媒体，由核心从 mpv 读出后放进 `PlayerState`（【核心新增】）。
+- **章节数据**来自媒体，由核心从 mpv 读出；第 3a 轮实现为按需读取的 `player.chapters()`（不进 `PlayerState`），marks 在每个来源第一次就绪时读一次。
 - **A-B 循环**由核心执行（mpv `ab-loop-a/b`）。插件保存起点、止点和开关，决定什么时候提交给核心。
 - **进度条标记（B22）**：进度条属于 playback 插件，marks 不能直接画上去，也不能调用 playback。本文选择**核心提供通用的「时间轴标记层」**：每个插件可以向核心发布一层标记，核心合并后公开给所有插件读取。marks 发布章节和书签标记，playback 读取合并结果画在进度条上。理由见 B22。
 
-manifest 能力：`commands`、`playback.read`、`events`、`playback.control`、`ui.window`、`ui.osd`、`timeline.marks`（新能力）。
+manifest 能力：`commands`、`playback.read`、`events`、`playback.control`、`ui.window`、`ui.osd`、`ui.dialog`（清空书签确认）；3b 加 `timeline.marks`（新能力）。
 
 ### 功能一览
 
 | 编号 | 功能 | 当前 | 依赖核心新增 |
 | --- | --- | --- | --- |
-| B21 | 章节 / 书签菜单与跳转、书签管理 | ✗ | `PlayerState.chapters` |
+| B21 | 章节 / 书签菜单与跳转、书签管理 | ✓ 3a | `player.chapters()`（3a 已有） |
 | B22 | 进度条上的章节 / 书签标记 | ✗ | 时间轴标记层 `plugin.timeline.*`；playback 配合绘制 |
-| B23 | A-B 区段循环（设点、微调、开关、当前区段循环） | ✗ | `player.setLoop()`、`PlayerState.loop` |
+| B23 | A-B 区段循环（设点、微调、开关、当前区段循环） | ✓ 3a | `player.setLoop()`、`PlayerState.loop`（3a 已有） |
 
 ### 菜单与快捷键
 
-「播放」子菜单内的新增项。playback 已用 201–226，playlist 已用 230–249，marks 用 250–289。
+「播放」子菜单内的新增项。playback 已用 201–226，playlist 已用 230–249，window 用 241，history 用 250–254（播放 ▶ 记忆播放位置），marks 用 260–289。
 
 | 菜单路径 | order | group | 默认绑定 | 编号 |
 | --- | --- | --- | --- | --- |
-| 播放 ▶ 章节/书签 ▶ 章节/书签列表… | 250 | marks-list | H | B21 |
-| 播放 ▶ 章节/书签 ▶ 添加书签 | 251 | marks-edit | P | B21 |
-| 播放 ▶ 章节/书签 ▶ 上一书签/章节 | 252 | marks-edit | Shift+PageUp | B21 |
-| 播放 ▶ 章节/书签 ▶ 下一书签/章节 | 253 | marks-edit | Shift+PageDown | B21 |
-| 播放 ▶ 章节/书签 ▶ 上一章节 | 254 | marks-edit | Ctrl+PageUp | B21 |
-| 播放 ▶ 章节/书签 ▶ 下一章节 | 255 | marks-edit | Ctrl+PageDown | B21 |
+| 播放 ▶ 章节/书签 ▶ 章节/书签列表… | 260 | marks-list | H | B21 |
+| 播放 ▶ 章节/书签 ▶ 添加书签 | 261 | marks-edit | P | B21 |
+| 播放 ▶ 章节/书签 ▶ 上一书签/章节 | 262 | marks-edit | Shift+PageUp | B21 |
+| 播放 ▶ 章节/书签 ▶ 下一书签/章节 | 263 | marks-edit | Shift+PageDown | B21 |
+| 播放 ▶ 章节/书签 ▶ 上一章节 | 264 | marks-edit | Ctrl+PageUp | B21 |
+| 播放 ▶ 章节/书签 ▶ 下一章节 | 265 | marks-edit | Ctrl+PageDown | B21 |
 | 播放 ▶ 章节/书签 ▶ （动态）章节 1…N（radio，当前章节为选中） | 10000 + i（子菜单内部编号，见 B21） | marks-chapters | | B21 |
 | 播放 ▶ 章节/书签 ▶ （动态）书签 1…N | 20000 + i | marks-bookmarks | | B21 |
-| 播放 ▶ 章节/书签 ▶ 在进度条上显示标记（勾选） | 30000 | marks-option | | B22 |
+| 播放 ▶ 章节/书签 ▶ 在进度条上显示标记（勾选） | 30000 | marks-option | | B22（3b） |
 | 播放 ▶ A-B 区段循环 ▶ 设定起点 | 270 | ab-a | `[` | B23 |
 | 播放 ▶ A-B 区段循环 ▶ 解除起点 | 271 | ab-a | `{`（Shift+[） | B23 |
 | 播放 ▶ A-B 区段循环 ▶ 起点后退 0.1 秒 | 272 | ab-a | Ctrl+[ | B23 |
@@ -3164,7 +3182,7 @@ manifest 能力：`commands`、`playback.read`、`events`、`playback.control`�
 
 **界面**：「章节/书签」窗口 380×420，最小 320×300。顶部搜索框（21px）；列表三列（类型 16px 图标 / 时间 70px 等宽数字 / 标题），行高 18px；选中书签时，下方编辑区显示「时间」和「标题」两个输入框（21px，行距 26px）；底部按钮行 `添加书签` `移除` `清空书签`（21px）。章节行用 `text-dim` 色，表示只读。
 
-**持久化**：`<dataDirectory>/bookmarks.json`：`{ "version": 1, "media": { "<标识>": { "size": 123, "items": [{ "time": 83.4, "title": "书签 1", "created": "…" }] } } }`。每次修改后 500 ms 去抖写入（临时文件加改名）。媒体条目超过 2000 个时淘汰最久未修改的条目。
+**持久化**：`<dataDirectory>/bookmarks.json`（`plugin.storage.json`）：`{ "version": 1, "media": { "<标识>": { "size": 123, "modified": "<ISO>", "items": [{ "time": 83.4, "title": "书签 1", "created": "…" }] } } }`。每次修改后 500 ms 去抖写入（临时文件加改名）。媒体条目超过 2000 个时按 `modified` 淘汰最久未修改的条目；没有书签的文件不留条目。文件大小变了时提示保留，之后编辑该文件的书签即采用新大小。
 
 **核心依赖**：现有 `player.seek`、`windows.create`、`osd.show`；【核心新增】
 
@@ -3184,6 +3202,11 @@ interface Chapter { index: number; title: string | null; start: number }   // st
 - 窗口中把「书签 1」改名为「高潮」，菜单 1 秒内更新。
 - 直播流中 P 不可用，菜单项显示禁用原因。
 - 播放列表获得焦点时按 P，播放所选项，不添加书签；视频获得焦点时按 P 添加书签。
+
+**第 3a 轮实现说明**
+- 菜单路径每段最多 80 字节（宿主限制）：章节、书签的菜单文字按字节截短加 `…`，重名加 ` (2)`；菜单溢出项分为「更多章节…（共 N 项）」「更多书签…（共 N 项）」。
+- 窗口的标题与时间编辑在列表下方的编辑区（回车或离开输入框时提交），不是列表行内编辑；时间超出时长、格式不对时在状态行提示，不提交。
+- Ctrl+PgUp/PgDn 没有可跳的章节时提示 `没有上一个章节` / `没有下一个章节`。
 
 **参考播放器参考**：M:`101_0_9_5`「章节/书签」H；S:1797「添加书签 P」、S:1798/1799「上一/下一 书签/章节 Shift+PgUp/PgDn」、S:3630/3631「上一/下一章节 Ctrl+PgUp/PgDn」、S:1803「书签编辑器」；D:`Dialog(408)` 包含 添加书签 / 上移 / 下移 / 移除 / 全体编辑 / 清空 / 批量编辑时间 / 检查书签 / 时间 / 标题 / 搜索 / 过滤。差异：我们没有「上移 / 下移」（书签按时间排序）、「批量编辑时间」、「检查书签」；不做 S:3622「书签保存为视频旁的 .pbf 文件」（P2，可以作为导出选项再议）；H 打开的是窗口，不是弹出菜单（核心没有在任意位置为插件弹出菜单的能力，本轮不为此新增）。
 
@@ -3306,6 +3329,12 @@ interface Chapter { index: number; title: string | null; start: number }   // st
 - 换下一个文件后，循环和 A、B 都被清除，进度条上没有区间。
 - Alt+[、Alt+]、Alt+\ 在 macOS 上实机触发（见全局约定）。
 - 单元测试：TestHost 记录 `player.setLoop` 的参数；`[`、`]`、`\` 序列产生 `{a:10,b:20}` → `null` → `{a:10,b:20}`。
+
+**第 3a 轮实现说明**
+- 循环次数直接作为核心的 `count`（回跳次数）：选「2 次」= 区段共播 3 遍。核心不报告剩余次数（`PlayerState.loop` 没有 `remaining`）。
+- 约束统一为 `B − A ≥ 0.2`（正好 0.2 允许）。
+- 只设了 A 时的进度条 A 标记随 B22 在 3b 实现；Alt+\ 的区段用 marks 自己的章节与书签（3a 没有 `timeline.marks`）。
+- 解除起点/止点时：循环在开着则提示 `解除区段循环`，否则 `已解除起点` / `已解除止点`；只有 A 或只有 B 时的微调提示 `A-B 起点：…` / `A-B 止点：…`；Alt+\ 区段短于 0.2 秒时提示 `区段太短，无法循环`。
 
 **参考播放器参考**：M:`101_0_9_10` AB 区段循环：设定起点 `[`、解除起点 Shift+[、起点步退/步进 0.1 秒 Ctrl+[ / Alt+[、设定止点 `]`、解除止点 Shift+]、止点步退/步进 Ctrl+] / Alt+]、循环区步退/步进 Ctrl+Alt+[ / ]、当前章节/标记/书签区段循环 Alt+\、区段循环 开|关 `\`、编辑 AB 区段循环列表 Shift+\。D:`Dialog(503)` 有循环次数、开始/结束校正时间、延迟时间。差异：不做区段列表（Shift+\）、「循环结束时的延迟」、校正时间。
 

@@ -5,8 +5,6 @@ import { filePage, isUrl, message, pageText, playbackPage, remotePage, saveName,
 import type { Row, SystemFacts } from "./properties.ts";
 import { sysinfo } from "./sysinfo.ts";
 
-/** The protocol version in manifest.json (the 插件 API 版本 row). */
-const API_VERSION = "vestra.experimental/0.1";
 const TABS = 3;
 const PROBE_ARGS = ["-v", "error", "-show_format", "-show_streams", "-show_chapters", "-of", "json"];
 
@@ -30,7 +28,8 @@ function probeError(error: unknown) {
  * I05 播放属性: a tool window with three pages. 播放信息 follows `player.stats()`
  * every second while the window is open; 文件信息 is read once per source with
  * ffprobe (`plugin.tools`, aborted when the source changes); 系统信息 once per
- * opening from macOS commands. Copy and save take the current page's text.
+ * opening from macOS commands. Closing the window (its 关闭 button or the
+ * title bar, `onClose`) stops the polling. Copy and save take the current page's text.
  */
 export function propertiesWindow(plugin: Plugin, say: (text: string) => void) {
   const { player } = plugin;
@@ -54,7 +53,7 @@ export function propertiesWindow(plugin: Plugin, say: (text: string) => void) {
   const page = (): Row[] => {
     const state = player.state;
     if (tab === 0) return playbackPage(state, stats);
-    if (tab === 2) return systemPage(API_VERSION, facts);
+    if (tab === 2) return systemPage(plugin.app, facts);
     if (!state.source) return message("未打开媒体");
     if (isUrl(state.source)) return remotePage(state, stats);
     return file?.sourceId === state.sourceId ? file.rows : message("正在读取…");
@@ -172,6 +171,8 @@ export function propertiesWindow(plugin: Plugin, say: (text: string) => void) {
     stop();
     await window.close();
   });
+  // Closed with the title bar: stop the 1-second stats polling and any read (reopening starts them again).
+  window.onClose(stop);
 
   player.onChange((state) => {
     if (state.sourceId === sourceId) return;

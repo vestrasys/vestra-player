@@ -28,10 +28,14 @@ movie.mp4
 
 - 播放信息：`player.stats()` 的扩展字段（解码器、输入格式、源 → 显示尺寸、帧率、码率、采样格式、声道布局、音画同步偏差、缓冲时长），窗口打开期间每秒刷新。「硬件解码」固定「未使用」（播放器固定软件解码）。
 - 文件信息：本地文件用 `plugin.tools.run("ffprobe", ["-v", "error", "-show_format", "-show_streams", "-show_chapters", "-of", "json", 路径])`（超时 10 秒），每个来源读一次，「刷新」重读，换来源时中止旧的读取；列出来源（路径、大小、修改时间）、容器、逐条流、章节数、元数据、内嵌资源（附件文件名与 MIME、封面）。缺少 ffprobe 显示「无法读取文件信息（未找到 ffprobe）」。网络来源不调用 ffprobe，只列播放器报告的信息。
-- 系统信息：插件 API 版本；Vestra、mpv、FFmpeg 版本显示「未知」（等第 3a 轮的 `plugin.app`）；macOS 版本、机型、CPU（`sw_vers`、`sysctl`，`sysinfo.ts`）、内存总量与可用量（Node `os`）、显示器（`system_profiler SPDisplaysDataType -json`）。
+- 系统信息：Vestra 版本（`plugin.app.version` 与构建哈希，如「0.1.0（构建 289b26b）」）、插件 API 版本、mpv 版本（`plugin.app.components.mpv`）、FFmpeg 版本（`components.libav`：libmpv 报告的 `ffmpeg-version`，有其它 `libav*` 键时依次列出），核心不知道的显示「未知」；macOS 版本、机型、CPU（`sw_vers`、`sysctl`，`sysinfo.ts`）、内存总量与可用量（Node `os`）、显示器（`system_profiler SPDisplaysDataType -json`）。
 
 底部「复制到剪贴板」（`plugin.clipboard.writeText`，提示「已复制播放信息」，失败时状态行「复制失败」）、「保存为…」（默认名 `<文件名> 信息.txt`，临时文件加改名）、「关闭」。复制和保存的都是当前页签的纯文本：分组标题一行，`键：值` 一行一条，分组之间空行；每个值最多 512 字符。
 
-已知限制：用窗口标题栏的关闭按钮关掉窗口时插件收不到通知，「播放信息」的每秒刷新会继续到下次用「关闭」按钮或插件停用（每秒一次 `stats()`）。
+窗口用「关闭」按钮或标题栏关闭（`Window.onClose`）时，「播放信息」的每秒 `stats()` 轮询和进行中的 ffprobe / 系统信息读取都停止；再次打开时重新开始。
 
-用到的接口：`plugin.osd.panel()`（能力 `ui.osd`）、`plugin.player.stats()`（`playback.read`）、命令 `bindings`；I05 另用 `windows.create`（`ui.window`）、`dialogs.saveFile`（`ui.dialog`）、`clipboard.writeText`（`clipboard`）、`tools.run`、`storage.json`。信息层的底色、字体与位置由宿主决定。
+关于 Vestra（I09）：右键菜单顶层「关于 Vestra…」（`windows` 组 order 880）或 F1 打开工具窗口 `ui/about.slint`（固定 360×420），已打开时再按只带到前面。内容：logo（`ui/logo.png`，由 `src/assets/brand/logo.png` 缩成 192×192，编译期 `@image-url`）、「Vestra」、版本行「版本 0.1.0（构建 289b26b）」；组件版本：插件 API、mpv、FFmpeg、Slint（`plugin.app`）、Node（插件进程的 `process.versions.node`），拿不到的显示「未知」；已加载插件列表（id、版本、来源、状态，按 id 排序，行高 18、显示 8 行、超出滚动）。底部「复制信息」（全部文字放进剪贴板，提示「已复制版本信息」，失败时状态行「复制失败」）、「关闭」。
+
+已知限制：插件列表要用核心的 `packages.list` / `onChange`（第 3a 轮批次 2，尚未交付），现在列表区只显示「未知（播放器尚未提供插件列表）」，复制的文字里也是这一行。格式化（`pluginRows`）已写好并有测试，接上后只需在 `about.ts` 里读列表并订阅变化。
+
+用到的接口：`plugin.osd.panel()`（能力 `ui.osd`）、`plugin.player.stats()`（`playback.read`）、命令 `bindings`；I05、I09 另用 `windows.create`（`ui.window`）、`plugin.app`、`dialogs.saveFile`（`ui.dialog`）、`clipboard.writeText`（`clipboard`）、`tools.run`、`storage.json`。信息层的底色、字体与位置由宿主决定。

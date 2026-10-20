@@ -427,6 +427,7 @@ test("the list menu, ADD and SORT popups list this plugin's commands; sorting re
     assert.deepEqual(app.names(), ["a.mp4", "b.mp4", "c.mp4"]);
     await app.run("sort-reverse");
     assert.deepEqual(app.names(), ["c.mp4", "b.mp4", "a.mp4"]);
+    app.host.dialogAnswers.push({ confirmed: true, checked: false });
     await app.run("clear");
     assert.equal(app.rows().length, 0);
   } finally {
@@ -776,6 +777,7 @@ test("removing the current row and clearing keep the public media playing", asyn
     assert.equal(app.osd(), "当前媒体已移出列表");
     assert.equal(app.rows().length, 1);
     assert.equal(app.rows()[0].selected, true);
+    app.host.dialogAnswers.push({ confirmed: true, checked: false });
     await app.run("clear");
     assert.equal(app.osd(), "列表已清空，当前媒体继续");
     assert.equal(app.rows().length, 0);
@@ -872,6 +874,7 @@ test("removing a row or clearing the list aborts its probe", async () => {
     await app.press("Delete"); // a is selected
     assert.deepEqual(await app.probe.started(3), ["a.mp4", "b.mp4", "c.mp4"], "the freed slot goes to the next row");
     app.probe.call("a.mp4").answer(10); // a late answer for a removed row is dropped
+    app.host.dialogAnswers.push({ confirmed: true, checked: false });
     await app.run("clear");
     for (const call of app.probe.calls) call.answer(5);
     await app.host.settle();

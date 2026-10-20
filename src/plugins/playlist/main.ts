@@ -1,7 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname } from "node:path";
-import type { Command, CommandOptions, Plugin, PluginError } from "../../sdk/plugin/index.ts";
-import { confirmWindow } from "./confirm.ts";
+import type { Command, CommandOptions, ConfirmOptions, Plugin, PluginError } from "../../sdk/plugin/index.ts";
 import { follower, type OpenMode } from "./follow.ts";
 import { linkDialog } from "./link.ts";
 import {
@@ -72,7 +71,6 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   let follow: ReturnType<typeof follower> | null = null;
   const player = playback(plugin, queue, () => void follow?.check());
   const link = linkDialog(plugin, queue);
-  const confirm = confirmWindow(plugin);
   const list = plugin.panels.mount("sidebar", "ui/sidebar.slint", { title: "播放列表" });
   const sidebar = plugin.panels.sidebar;
   const stop = new AbortController();
@@ -150,6 +148,39 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       queue.notice("正在打开的媒体已移出列表");
     }
   };
+
+  /**
+   * A system confirmation (`dialogs.confirm`). Another dialog still open
+   * (`busy`) is a notice and counts as cancelled; other failures go to `guard`.
+   */
+  const ask = async (options: ConfirmOptions) => {
+    try {
+      return await plugin.dialogs.confirm(options);
+    } catch (error) {
+      if ((error as PluginError).code !== "busy") throw error;
+      queue.notice("请先关闭另一个对话框");
+      return { confirmed: false, checked: false };
+    }
+  };
+  /** At most `max` characters of a name shown in a confirmation (its message is 1–200 characters). */
+  const fitName = (name: string, max = 120) => ([...name].length > max ? `${[...name].slice(0, max - 1).join("")}…` : name);
+
+  /** 移除全部: asks first unless 「不再询问」 was ticked on a confirmed clear (saved with the settings). */
+  const clearAll = guard(async () => {
+    if (!queue.rows.length) return;
+    if (settings.confirmClear) {
+      const answer = await ask({
+        message: `移除播放列表中的全部 ${queue.rows.length} 项？`,
+        detail: "正在播放的媒体继续播放。",
+        confirm: "移除全部",
+        destructive: true,
+        checkbox: "不再询问",
+      });
+      if (!answer.confirmed) return;
+      if (answer.checked) settings.confirmClear = false;
+    }
+    removing(() => queue.clear());
+  });
 
   const addFiles = guard(async () => {
     if (adding) return;
@@ -338,7 +369,11 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       } catch (error) {
         return queue.notice(`无法打开列表：${errorText(error)}`);
       }
-      if (queue.rows.length && !(await confirm.ask(`用 ${basename(path)} 替换当前列表？`))) return;
+      if (
+        queue.rows.length &&
+        !(await ask({ message: `用 ${fitName(basename(path))} 替换当前列表？`, confirm: "替换" })).confirmed
+      )
+        return;
       const entries = parsed.entries.slice(0, LIST_ENTRY_LIMIT);
       removing(() => queue.clear());
       const result = await queue.addEntries(
@@ -507,7 +542,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   const removeInvalidCommand = listCommand("remove-invalid", "移除无效项", hasRows, removeInvalid, ["Ctrl+T"], {
     busy: () => checking,
   });
-  const removeAll = listCommand("clear", "移除全部", hasRows, guard(() => removing(() => queue.clear())), ["Alt+Delete"]);
+  const removeAll = listCommand("clear", "移除全部", hasRows, clearAll, ["Alt+Delete"]);
   const hasLocal = () => queue.marked().some((row) => row.kind === "file");
   const revealCommand = listCommand("reveal", "在 Finder 中显示", hasLocal, revealSelected, ["Ctrl+F"], {
     reason: () => (hasLocal() ? null : queue.selection.size ? "链接没有本地位置" : "当前没有可操作项"),

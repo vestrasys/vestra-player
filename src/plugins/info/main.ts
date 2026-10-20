@@ -1,4 +1,5 @@
 import type { PlaybackStats, PlayerState, Plugin } from "../../sdk/plugin/index.ts";
+import { aboutWindow } from "./about.ts";
 import { propertiesWindow } from "./dialog.ts";
 
 /** "mm:ss", or "h:mm:ss" from one hour. */
@@ -118,8 +119,9 @@ const BRIEF_MS = 3000;
 
 /**
  * Playback information: Tab toggles the full overlay; Shift+Tab shows the
- * short information for three seconds; Ctrl+F1 opens 播放属性 (I05). Both share this plugin's one panel,
+ * short information for three seconds. Both share this plugin's one panel,
  * short first, a blank line between; each refreshes every second while shown.
+ * Ctrl+F1 opens 播放属性 (I05) and F1 关于 Vestra (I09), tool windows.
  */
 export default async function activate(plugin: Plugin) {
   const panel = plugin.osd.panel();
@@ -190,6 +192,14 @@ export default async function activate(plugin: Plugin) {
     group: "windows",
     bindings: ["Ctrl+F1"],
     run: showProperties,
+  });
+  plugin.commands.add({
+    id: "info.about",
+    path: ["关于 Vestra…"],
+    order: 880,
+    group: "windows",
+    bindings: ["F1"],
+    run: aboutWindow(plugin, (text) => void plugin.osd.show(text).catch(() => {})),
   });
   plugin.onDispose(() => {
     clearInterval(timer);

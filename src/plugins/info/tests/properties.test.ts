@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { HostError, startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
 import activate from "../main.ts";
-import { cut, filePage, pageText, sampleFormat, saveName, VALUE_MAX } from "../properties.ts";
+import { cut, filePage, pageText, sampleFormat, saveName, systemPage, VALUE_MAX } from "../properties.ts";
 import type { Probe, Row } from "../properties.ts";
 import { parseDisplays, sysinfo } from "../sysinfo.ts";
 
@@ -55,8 +55,9 @@ const rows = (host: TestHost) => host.window("properties").props.rows as Shown[]
 const value = (host: TestHost, label: string) => rows(host).find((r) => r.label === label && !r.heading)?.value;
 const headings = (host: TestHost) => rows(host).filter((r) => r.heading).map((r) => r.label);
 
-async function start(source: string | null = "/videos/movie.mkv", dataDirectory?: string) {
+async function start(source: string | null = "/videos/movie.mkv", dataDirectory?: string, app?: TestHost["app"]) {
   const host = new TestHost();
+  if (app) host.app = app;
   host.stats = stats;
   if (source) {
     host.openElsewhere(source);
@@ -227,16 +228,16 @@ test("I05 文件信息: a network source shows what the player reports, without 
   await stop();
 });
 
-test("I05 系统信息: sw_vers, sysctl and system_profiler; Vestra, mpv and FFmpeg versions 未知 until plugin.app", async () => {
+test("I05 系统信息: sw_vers, sysctl and system_profiler; Vestra, mpv and FFmpeg versions from plugin.app", async () => {
   commands.length = 0;
   const { host, stop } = await start();
   await host.command("info.properties").run();
   host.window("properties").emit("tab-changed", 2);
   await until(() => value(host, "macOS 版本") === "15.2（24C101）");
-  assert.equal(value(host, "Vestra 版本"), "未知");
+  assert.equal(value(host, "Vestra 版本"), "0.1.0（构建 test）");
   assert.equal(value(host, "插件 API 版本"), "vestra.experimental/0.1");
-  assert.equal(value(host, "mpv 版本"), "未知");
-  assert.equal(value(host, "FFmpeg 版本"), "未知");
+  assert.equal(value(host, "mpv 版本"), "mpv 0.41.0");
+  assert.equal(value(host, "FFmpeg 版本"), "7.1");
   assert.equal(value(host, "机型"), "Mac14,2");
   assert.match(value(host, "CPU")!, /^Apple M2（\d+ 核）$/);
   assert.match(value(host, "内存总量")!, /^\d+\.\d GB$/);
@@ -324,4 +325,36 @@ test("I05 pure rules: values cut at 512, sample formats, save names, displays, e
   const page = filePage("/a.mkv", null, {});
   assert.deepEqual(page.filter((r) => r.heading).map((r) => r.label), ["来源", "容器"]);
   assert.equal(pageText([{ label: "A", value: "", heading: true }, { label: "k", value: "v", heading: false }, { label: "B", value: "", heading: true }, { label: "", value: "m", heading: false }]), "A\nk：v\n\nB\nm\n");
+});
+
+test("I05 系统信息: versions the core does not know show 未知; no build hash, extra libav libraries", () => {
+  const page = systemPage({ version: "0.2.0", build: null, components: { mpv: null, libav: {}, slint: "1.16.1" } }, null);
+  const row = (label: string) => page.find((r) => r.label === label)?.value;
+  assert.equal(row("Vestra 版本"), "0.2.0");
+  assert.equal(row("mpv 版本"), "未知");
+  assert.equal(row("FFmpeg 版本"), "未知");
+  const more = systemPage(
+    { version: "0.2.0", build: "abc1234", components: { mpv: "mpv v0.41.0", libav: { ffmpeg: "9.0.2", libavcodec: "62.11.100" }, slint: "1.16.1" } },
+    null,
+  );
+  assert.equal(more.find((r) => r.label === "Vestra 版本")?.value, "0.2.0（构建 abc1234）");
+  assert.equal(more.find((r) => r.label === "FFmpeg 版本")?.value, "9.0.2 · libavcodec 62.11.100");
+});
+
+test("I05: closing the window with the title bar stops the 1-second polling (onClose); reopening starts it again", async () => {
+  const { host, stop } = await start();
+  await host.command("info.properties").run();
+  await host.settle(1100);
+  const polled = () => host.sent("playback.stats").length;
+  assert.ok(polled() >= 2, "polling while open");
+  host.window("properties").userClose();
+  await host.settle();
+  const after = polled();
+  await host.settle(2200);
+  assert.equal(polled(), after, "no stats reads after a title-bar close");
+  await host.press("Ctrl+F1");
+  await host.settle(1100);
+  assert.equal(host.window("properties").visible, true);
+  assert.ok(polled() >= after + 2, "polling again after reopening");
+  await stop();
 });
