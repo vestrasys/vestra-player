@@ -305,6 +305,16 @@ plugin.dialogs.confirm(options: { message: string; detail?: string; confirm: str
 
 - **Round 3a fix: Option + 命名键改由宿主转交 Slint**（协调者实测：⌥⌦ 交给 Slint 后既不到达焦点链、又让面板的指针事件停住，直到下一个普通按键）。winit 钩子把 Option + 命名键（⌦、⌫、方向键、Home/End、PageUp/Down、Enter、Tab、Esc、Insert、F1–F24；⌥Space 除外，它打出不换行空格）的按下、重复、松开都不交给 Slint，改由主循环以普通的 `KeyPressed` / `KeyPressRepeated` / `KeyReleased` 重新派发，并先记下按下时的物理键与 winit 修饰键；于是事件走 Slint 正常的焦点链，作用域由焦点决定（列表焦点下 `panel:sidebar`），`from_key` 解析为 `Alt+Delete`。`VESTRA_DEBUG_KEYS` 打印 `keys: inject to slint …`。
 
+#### 待真实键盘验证：⌥⌦ 与之后的面板右键（协调者裁决）
+
+- **现象**（System Events 合成 `key code 117 using option down`，播放列表行已选中、列表有焦点）：winit 收到 `Pressed/Released physical=Delete logical=Named(Delete) text=None modifiers=ALT`，但 Slint 一侧没有任何 `keys: slint` 行，`Alt+Delete`「移除全部」不触发；之后在列表上右键，播放列表不发 `ui.menu`，菜单不出现，直到按一次 Esc（Esc 正常经 `panel:sidebar` 到达）后恢复。不按 ⌥ 时一切正常；德语 ⌥5 / ⌥⇧7 等 Option 符号（`0e3dfbc`）实测通过。
+- **三次修复**：
+  1. `0e3dfbc`：命名键按物理键解析（⌥⌦ 无 text 也是 `Alt+Delete`）；winit `ModifiersChanged` 报告修饰键释放而 Slint 没收到时补发 `KeyReleased`。实测：补发已送达（`release to slint ['\u{12}', '\u{13}'] window=3 live=true`），问题仍在。
+  2. `bc879c1`：只加诊断（修饰键补发、`ui.menu` 请求与拒绝）。确认右键时插件根本没有调用 `ui.menu`。
+  3. `bcc372b`：Option + 命名键不交给 Slint，改由主循环以普通 `KeyPressed/KeyReleased` 重新派发（`inject to slint '\u{7f}' Pressed/Released window=3` 已出现），仍没有 `keys: slint` 行。保留：单元测试通过，不影响其它按键路径。
+- **当前状态**：待真实键盘验证。协调者按工作流 §3「同一路径第二次失败」裁决不再追加探针、不阻塞 3a。判断：System Events 的合成事件不发送独立的 Option 键按下/释放，Slint 内部的修饰与按键状态无法用合成事件校正；真实键盘可能不复现。
+- **若用户用真实键盘复现，下一步方案**：对 Option + 命名键完全绕开 Slint，在宿主侧直接按焦点作用域触发绑定。宿主需要知道焦点所在的作用域：在 `composition.rs` 生成的底栏、侧栏外层 FocusScope 上记录焦点进入/离开（或在面板与视频区的指针按下时记下最后获得焦点的区域），winit 钩子据此用 `table.resolve(Alt+<键>, panel)` 并 `fire`，命中则 `PreventDefault`。另查右键：在插件 TouchArea 的 `pointer-event` 是否仍被调用（Slint 指针抓取 / `pressed` 状态是否残留），必要时在钩子里对 Option + 命名键之后补发一次指针 `Exit`。
+
 #### 裁决：作者 D 的三条（次字幕、音频输出）
 
 1. **主字幕为 PGS 时设置次字幕位置**：改核心（小改，不加接口）。`secondaryPosition` 仍是 `SubtitleStyle` 的字段；宿主原来在主字幕不可设样式时拒绝整个 `setStyle`（`unsupported`），现在在选了次字幕时接受（样式作用于文本次字幕，对图形主字幕无效）。没有次字幕时仍 `unsupported`。理由：不为一个字段拆出独立接口（保守），而原来的拒绝规则在有次字幕时没有道理。
