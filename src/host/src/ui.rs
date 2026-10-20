@@ -33,13 +33,13 @@ pub fn compiler() -> Compiler {
 
 const HIRAGINO: &str = "/System/Library/Fonts/Hiragino Sans GB.ttc";
 
-/// Default UI font. Slint 1.16 lays text out with parley and falls back per
-/// script through fontique (CoreText's cascade on macOS), so by default no
-/// family is forced and the system UI font plus its CJK fallback are used.
-/// `VESTRA_FONT_FALLBACK=hiragino` instead imports the system Hiragino Sans GB
-/// file and makes it the default family (the approved fallback, §18 Q12).
+/// Default UI font. Without a forced family Slint 1.16 renders CJK text in
+/// plugin windows as blank (no per-script fallback here, GUI-verified
+/// 2026-10-20), so the system Hiragino Sans GB file is imported and made the
+/// default family whenever it exists (§18 Q12). `VESTRA_FONT_FALLBACK=system`
+/// opts out, for checking a future Slint's own fallback.
 pub fn font() -> Option<(&'static str, &'static str)> {
-    (std::env::var("VESTRA_FONT_FALLBACK").as_deref() == Ok("hiragino")
+    (std::env::var("VESTRA_FONT_FALLBACK").as_deref() != Ok("system")
         && Path::new(HIRAGINO).is_file())
     .then_some(("Hiragino Sans GB", HIRAGINO))
 }
