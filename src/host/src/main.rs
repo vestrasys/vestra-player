@@ -568,7 +568,15 @@ impl Host {
                         match self.dispatch(&reply, &request.method, &request.params) {
                             Ok(None) => (),
                             Ok(Some(value)) => self.respond(reply, Ok(value)),
-                            Err(error) => self.respond(reply, Err(error)),
+                            Err(error) => {
+                                if debug_keys() && request.method == "ui.menu" {
+                                    eprintln!(
+                                        "keys: ui.menu refused {}: {}",
+                                        error.code, error.message
+                                    );
+                                }
+                                self.respond(reply, Err(error))
+                            }
                         }
                     }
                     Err(error) => {
@@ -705,6 +713,13 @@ impl Host {
                 self.send(owner, json!({"event":"ui.callback","data":data}))
             }
             Event::ModifiersReleased(generation, keys) => {
+                if debug_keys() {
+                    eprintln!(
+                        "keys: release to slint {keys:?} window={generation} live={} shell={}",
+                        self.window_for(generation).is_some(),
+                        self.shell_generation
+                    );
+                }
                 if let Some(window) = self.window_for(generation) {
                     for key in keys {
                         window
@@ -2360,6 +2375,15 @@ impl Host {
                 Value::Null
             }
             "ui.menu" => {
+                if debug_keys() {
+                    eprintln!(
+                        "keys: ui.menu owner={} menu_open={} dialog={} sidebar_effective={}",
+                        reply.owner,
+                        self.menu_open,
+                        self.dialog_busy,
+                        self.window_facts["slots"]["sidebar"]["effective"]
+                    );
+                }
                 let mount = self
                     .mounts
                     .get(&reply.owner)
