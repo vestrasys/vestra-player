@@ -219,8 +219,6 @@ struct Host {
     power: power::Power,
     /// When the shell last received a video frame (`power` keeps the display awake).
     last_frame: Option<Instant>,
-    /// `VESTRA_CORE_ACTIONS=1`: register the 14 core playback actions (R-H1).
-    core_actions: bool,
     /// Core actions in flight that drop a repeated trigger.
     actions_busy: std::collections::BTreeSet<String>,
     /// `player.setStepSeek` per owner: (write sequence, seconds); the newest wins.
@@ -1532,7 +1530,7 @@ impl Host {
                 .map_err(|e| anyhow::anyhow!("{e}"))?;
         }
         self.host_revision = 1;
-        if self.core_actions {
+        {
             for (id, declaration) in core_actions::declarations(self.step_seconds()) {
                 self.register_core_action(id, declaration)?;
             }
@@ -1575,7 +1573,7 @@ impl Host {
     /// The seek menu titles carry the step: re-register them when it changes.
     fn step_seek_changed(&mut self, before: f64) {
         let after = self.step_seconds();
-        if !self.core_actions || after == before {
+        if after == before {
             return;
         }
         for (id, declaration) in core_actions::declarations(after) {
@@ -1596,9 +1594,6 @@ impl Host {
     }
     /// Publish changed enabled/checked/busy states of the registered actions.
     fn core_action_states(&mut self) {
-        if !self.core_actions {
-            return;
-        }
         let facts = self.core_facts();
         for id in core_actions::ACTIONS {
             let state = core_actions::state(id, &facts, self.actions_busy.contains(id));
@@ -2837,7 +2832,6 @@ fn main() -> Result<()> {
         cleanup: Default::default(),
         power: power::Power::system(),
         last_frame: None,
-        core_actions: std::env::var_os("VESTRA_CORE_ACTIONS").is_some_and(|v| v == "1"),
         actions_busy: Default::default(),
         step_seek: BTreeMap::new(),
         step_writes: 0,
@@ -2845,7 +2839,7 @@ fn main() -> Result<()> {
     };
     host.register_host_commands()?;
     {
-        if host.core_actions && core_actions::migrate_overlay(&mut host.ui_state.state.bindings) {
+        if core_actions::migrate_overlay(&mut host.ui_state.state.bindings) {
             // Old playback-plugin keys now name the core actions; saved once.
             let now = host.now_ms();
             host.ui_state.touch(now);
