@@ -296,6 +296,20 @@ plugin.power.preventSleep(mode: "off" | "playing"): Promise<void>;
 7. 样式新字段：`bold: true`、`shadow: 3` 可见粗体与阴影；`box: 60` 出现半透明黑色背景框（阴影消失）；`box: null` 恢复描边加阴影。
 8. 底栏不裁切：底栏组件里放一个负 `y` 的元素，窗口与全屏模式都画在视频区上方，侧栏展开时被侧栏盖住。
 
+#### P1a 修复：Option / Ctrl 组合在实机不触发（协调者 GUI 实测反馈）
+
+现象：System Events 发送的 ⌥O、⌥H、⌃Y 不触发（单测通过）。
+
+原因（对照 Slint 1.16.1 与 winit 0.30.13 源码自查）：
+
+- 钩子挂载：`bind_shell` 在主界面每次重建（插件面板挂载）后对新实例重新调用，钩子在；浮动侧栏另由 `observe_keys` 挂。不是原因。
+- 先后顺序：winit 的 `on_winit_window_event` 过滤器在同一次 `KeyboardInput` 分派中先于 Slint 的 `process_key_input` 运行，`key-input` 回调同步发生在其后；`physical.take()` 只在 `key-input` 里取，松键和合成事件不覆盖。假设成立。
+- **根因：修饰键状态的来源。** Slint 不处理 winit 的 `ModifiersChanged`，它只根据「修饰键本身的按下/松开事件」维护 `event.modifiers`。System Events 的 `keystroke … using option/control down` 把修饰标志放在按键事件上，不发修饰键自身的按下事件（实体键盘会发），于是 Slint 报 `alt = false` / `meta = false`：⌥O 成了打出的 `ø`，⌃Y 的 `\u{19}` 在无 Ctrl 时按规则是 Shift+Tab。winit 在 `keyDown` 里先按事件自带标志发 `ModifiersChanged`，再发 `KeyboardInput`，所以 winit 的修饰状态是对的。
+
+修复：钩子把按键时 winit 的修饰状态记进 `bindings::Physical.mods`，`from_key` 有它时以它为准、不用 Slint 的标志；单测 `window_system_modifiers_win_over_missing_slint_flags`（Slint 标志全为假、winit 报 Alt / Ctrl）。
+
+诊断开关：`VESTRA_DEBUG_KEYS=1` 时宿主向 stderr 打印每个 winit 键盘事件（`keys: winit Pressed|Released synthetic=… physical=… logical=… text=… repeat=… modifiers=…`）、`ModifiersChanged`（`keys: winit modifiers …`）、死键解析结果，以及每次 Slint `key-input`（`keys: slint scope=… text=… control/alt/shift/meta=… physical=… → 解析结果 bound=是否有绑定`）。实测若仍不触发，按这几行判断：没有 `keys: winit` 行 = 钩子没收到；有 winit 行没有 slint 行 = 事件被焦点控件或 IME 吃掉；slint 行解析正确但 `bound=false` = 绑定表里没有该输入（检查插件声明或用户覆盖层）。
+
 ### 6.3 作者交付
 
 （各作者完成时填写：完成项、未完成项与原因、删除的自制实现、API 请求）

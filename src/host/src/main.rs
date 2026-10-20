@@ -1215,9 +1215,24 @@ impl Host {
             // The press this callback reports was recorded just before by
             // the window's winit hook, in the same event dispatch.
             let physical = input.borrow_mut().physical.take();
-            let Some(event) =
-                bindings::from_key(text, flag(0), flag(1), flag(2), flag(3), physical.as_ref())
-            else {
+            let resolved =
+                bindings::from_key(text, flag(0), flag(1), flag(2), flag(3), physical.as_ref());
+            if debug_keys() {
+                eprintln!(
+                    "keys: slint scope={:?} text={:?} control={} alt={} shift={} meta={} repeat={} physical={physical:?} → {resolved:?} bound={}",
+                    scope.as_str(),
+                    text.as_str(),
+                    flag(0),
+                    flag(1),
+                    flag(2),
+                    flag(3),
+                    flag(4),
+                    resolved
+                        .as_ref()
+                        .is_some_and(|event| input.borrow().table.resolve(event, None).is_some())
+                );
+            }
+            let Some(event) = resolved else {
                 return SValue::Bool(false);
             };
             let panel = {
@@ -2350,14 +2365,33 @@ fn observe_key(
     };
     match event {
         WindowEvent::ModifiersChanged(state) => {
+            // winit sends this from the key event's own flags too (before the
+            // KeyboardInput), so it is right even without modifier key events.
             modifiers.set(state.state());
+            if debug_keys() {
+                eprintln!("keys: winit modifiers {:?}", state.state());
+            }
             None
         }
         WindowEvent::KeyboardInput {
             event,
-            is_synthetic: false,
+            is_synthetic,
             ..
-        } if event.state == ElementState::Pressed => {
+        } => {
+            if debug_keys() {
+                eprintln!(
+                    "keys: winit {:?} synthetic={is_synthetic} physical={:?} logical={:?} text={:?} repeat={} modifiers={:?}",
+                    event.state,
+                    event.physical_key,
+                    event.logical_key,
+                    event.text,
+                    event.repeat,
+                    modifiers.get()
+                );
+            }
+            if *is_synthetic || event.state != ElementState::Pressed {
+                return None;
+            }
             let PhysicalKey::Code(code) = event.physical_key else {
                 input.borrow_mut().physical = None;
                 return None;
@@ -2366,27 +2400,33 @@ fn observe_key(
                 Key::Character(text) if text.chars().count() == 1 => text.chars().next(),
                 _ => None,
             };
+            let state = modifiers.get();
             let physical = bindings::Physical {
                 code: format!("{code:?}"),
                 base,
+                mods: Some(bindings::Mods {
+                    ctrl: state.control_key(),
+                    alt: state.alt_key(),
+                    shift: state.shift_key(),
+                    cmd: state.super_key(),
+                }),
             };
-            let state = modifiers.get();
             let dead = (matches!(event.logical_key, Key::Dead(_)) && state.alt_key())
-                .then(|| {
-                    // Slint's flag order: `control` is ⌘ and `meta` is ⌃ on macOS.
-                    let (control, meta) = if cfg!(target_os = "macos") {
-                        (state.super_key(), state.control_key())
-                    } else {
-                        (state.control_key(), state.super_key())
-                    };
-                    bindings::from_key("", control, true, state.shift_key(), meta, Some(&physical))
-                })
+                .then(|| bindings::from_key("", false, false, false, false, Some(&physical)))
                 .flatten();
+            if debug_keys() && matches!(event.logical_key, Key::Dead(_)) {
+                eprintln!("keys: dead key → {dead:?}");
+            }
             input.borrow_mut().physical = Some(physical);
             dead.map(|input| (input, event.repeat))
         }
         _ => None,
     }
+}
+/// `VESTRA_DEBUG_KEYS=1`: log every key event and how it resolved to stderr.
+fn debug_keys() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("VESTRA_DEBUG_KEYS").is_some_and(|v| v == "1"))
 }
 /// Resolve a bound input on the UI thread; true = bound (Slint stops propagating).
 /// Auto-repeats fire only commands that declared `repeat`.
