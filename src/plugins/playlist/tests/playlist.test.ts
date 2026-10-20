@@ -93,11 +93,14 @@ test("menus, sidebar and initial state are declared like before", async () => {
     assert.equal(app.command("visibility").state.checked, true);
     // The close button and the menu change the user's preference.
     await app.emit("hide");
-    assert.equal(app.host.mounted().visibility.preferred, false);
+    assert.equal(app.host.layout.sidebar?.preferred, false);
     assert.equal(app.command("visibility").state.checked, false);
     await app.command("visibility").run();
-    assert.equal(app.host.mounted().visibility.preferred, true);
+    assert.equal(app.host.layout.sidebar?.preferred, true);
     assert.equal(app.command("visibility").state.checked, true);
+    assert.equal(app.host.sent("ui.mount")[0]!.title, "播放列表");
+    const orders = [...app.host.commands.values()].map(({ declaration: d }) => ("order" in d ? d.order : null));
+    assert.deepEqual(orders, [208, 209, 207, 203, 205, 211, 204, 206, 210, 501]);
     await app.emit("focus-changed", true);
     assert.deepEqual(app.host.mounted().locks, { focused: true, dragging: false, popupOpen: false });
   } finally {
@@ -129,6 +132,25 @@ test("adding files dedups by realpath, never plays, and plays only on request wi
     app.host.setSource({ paused: true });
     await app.host.settle();
     assert.equal(app.rows()[0].status, "已暂停");
+  } finally {
+    await app.close();
+  }
+});
+
+test("the playlist provides next/previous to other plugins with the same rules as its menu", async () => {
+  const app = await start();
+  try {
+    assert.deepEqual(app.host.sequence, { canNext: false, canPrevious: false });
+    await app.addFiles([app.a, app.b]);
+    await app.action("play");
+    app.host.setSource({ phase: "ready" });
+    await app.host.settle();
+    assert.deepEqual(app.host.sequence, { canNext: true, canPrevious: false });
+    assert.equal(app.host.source.sequence?.next, true, "the host merges the flags into the source state");
+    await app.host.step("next");
+    await app.host.settle();
+    assert.deepEqual(app.opens().at(-1), { kind: "open", source: app.b, startPaused: false });
+    await assert.rejects(app.host.step("next"), { code: "unavailable" });
   } finally {
     await app.close();
   }

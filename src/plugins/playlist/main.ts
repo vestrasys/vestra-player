@@ -16,6 +16,19 @@ const titles = {
   visibility: "显示播放列表",
 } as const;
 type Action = keyof typeof titles;
+/** Menu positions; they reproduce the order of the old fixed-domain menu. */
+const orders: Record<Action, number> = {
+  previous: 203,
+  "move-up": 204,
+  next: 205,
+  "move-down": 206,
+  play: 207,
+  add: 208,
+  link: 209,
+  clear: 210,
+  remove: 211,
+  visibility: 501,
+};
 const actions = Object.keys(titles) as Action[];
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -23,7 +36,8 @@ export default async function activate(plugin: Plugin) {
   const queue = new Queue();
   const player = playback(plugin, queue);
   const link = linkDialog(plugin, queue);
-  const list = plugin.panels.mount("sidebar", "ui/sidebar.slint");
+  const list = plugin.panels.mount("sidebar", "ui/sidebar.slint", { title: "播放列表" });
+  const sidebar = plugin.panels.sidebar;
   let adding = false;
 
   const enabled = (action: Action) => {
@@ -93,7 +107,7 @@ export default async function activate(plugin: Plugin) {
           queue.clear();
           break;
         case "visibility":
-          await list.toggle();
+          await sidebar.toggle();
           break;
       }
     } catch (error) {
@@ -131,19 +145,28 @@ export default async function activate(plugin: Plugin) {
     return action("play");
   });
   list.on("selectStep", (step: number) => queue.selectNeighbor(step < 0 ? -1 : 1));
-  list.on("hide", () => list.setVisible(false));
+  list.on("hide", () => sidebar.setVisible(false));
+
+  // Other plugins step through the list with player.next() / previous().
+  plugin.player.provideSequence({
+    canNext: () => enabled("next"),
+    canPrevious: () => enabled("previous"),
+    next: () => action("next"),
+    previous: () => action("previous"),
+  });
   list.on("focusChanged", (focused: boolean) => list.setInteraction({ focused }));
 
   for (const name of actions)
     plugin.commands.add({
       id: `playlist.${name}`,
       path: name === "visibility" ? ["视图", titles[name]] : ["文件", "播放列表", titles[name]],
+      order: orders[name],
       enabled: () => enabled(name),
-      checked: () => (name === "visibility" ? (list.visibility?.preferred ?? true) : null),
+      checked: () => (name === "visibility" ? (sidebar.state?.preferred ?? true) : null),
       busy: () =>
         name === "add" ? adding : ["play", "next", "previous"].includes(name) && player.busy(),
       reason: () =>
-        name === "visibility" && list.visibility?.reason === "space"
+        name === "visibility" && sidebar.state?.reason === "space"
           ? "空间不足，放大窗口后可显示"
           : !enabled(name)
             ? player.busy()

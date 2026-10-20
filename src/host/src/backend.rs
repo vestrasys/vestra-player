@@ -32,7 +32,6 @@ pub struct Command {
 pub struct Backend {
     pub commands: mpsc::Sender<Command>,
     pub frame: Arc<Mutex<Option<Frame>>>,
-    pub state: Arc<Mutex<Value>>,
     #[cfg(feature = "producer-audio")]
     pub input: Arc<Mutex<Option<crate::producer_input::Routing>>>,
     stop: mpsc::Sender<()>,
@@ -43,11 +42,7 @@ impl Backend {
         let (commands, receiver) = mpsc::channel::<Command>();
         let (stop, stopping) = mpsc::channel();
         let frame = Arc::new(Mutex::new(None));
-        let state = Arc::new(Mutex::new(
-            json!({"session":0,"source":null,"paused":false,"position":null,"duration":null,"videoFrames":0}),
-        ));
         let out_frame = frame.clone();
-        let out_state = state.clone();
         #[cfg(feature = "producer-audio")]
         let input = Arc::new(Mutex::new(None));
         #[cfg(feature = "producer-audio")]
@@ -252,6 +247,12 @@ impl Backend {
                             let _ = events.send(Event::Reply(command.reply, result));
                             continue;
                         }
+                        if command.method == "playback.stats" {
+                            let stats =
+                                stats(&mpv, sources.generation(), sequence.load(Ordering::Relaxed));
+                            let _ = events.send(Event::Reply(command.reply, Ok(stats)));
+                            continue;
+                        }
                         let starts_source = command.method == "source.submit"
                             && matches!(
                                 command.params["intent"]["kind"].as_str(),
@@ -368,19 +369,8 @@ impl Backend {
                         let source_snapshot = sources.snapshot(&mpv);
                         processing.note_source(sources.generation(), sources.phase());
                         subtitles.note_source(sources.generation(), sources.phase());
-                        let _ = events.send(Event::Broadcast(
-                            "source.state".into(),
-                            source_snapshot.clone(),
-                        ));
-                        let snapshot = json!({"session": sources.generation(), "source":sources.source(),
-                            "paused":source_snapshot["paused"],
-                            "position":source_snapshot["position"],
-                            "duration":source_snapshot["duration"],
-                            "volume":mpv.get_property::<f64>("volume").unwrap_or(100.0),
-                            "rate":mpv.get_property::<f64>("speed").unwrap_or(1.0),
-                            "videoFrames":sequence.load(Ordering::Relaxed)});
-                        // Shell diagnostic overlay only; not a plugin event.
-                        *out_state.lock().unwrap() = snapshot;
+                        let _ =
+                            events.send(Event::Broadcast("source.state".into(), source_snapshot));
                         last_state = Instant::now();
                     }
                     thread::sleep(Duration::from_millis(2));
@@ -408,7 +398,6 @@ impl Backend {
         Ok(Self {
             commands,
             frame,
-            state,
             #[cfg(feature = "producer-audio")]
             input,
             stop,
@@ -423,6 +412,30 @@ impl Drop for Backend {
             let _ = worker.join();
         }
     }
+}
+/// `playback.stats` (C10): what the playback information overlay shows.
+fn stats(mpv: &Mpv, session: u64, frames: u64) -> Value {
+    let text = |name: &str| {
+        mpv.get_property::<String>(name)
+            .ok()
+            .filter(|s| !s.is_empty())
+    };
+    let int = |name: &str| mpv.get_property::<i64>(name).ok();
+    let float = |name: &str| {
+        mpv.get_property::<f64>(name)
+            .ok()
+            .filter(|v| v.is_finite() && *v > 0.)
+    };
+    let video = text("video-codec").map(|codec| {
+        json!({"codec":codec,"width":int("video-params/w"),"height":int("video-params/h"),
+            "fps":float("estimated-vf-fps").or_else(|| float("container-fps"))})
+    });
+    let audio = text("audio-codec-name").map(|codec| {
+        json!({"codec":codec,"sampleRate":int("audio-params/samplerate"),
+            "channels":int("audio-params/channel-count")})
+    });
+    json!({"backend":"libmpv · 软件渲染","session":session,"framesShown":frames,
+        "framesDropped":int("frame-drop-count"),"video":video,"audio":audio})
 }
 fn number(params: &Value, key: &str) -> std::result::Result<f64, RpcError> {
     params[key]

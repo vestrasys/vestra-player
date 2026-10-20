@@ -1,0 +1,31 @@
+import { Theme } from "@vestra/theme.slint";
+import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
+
+export component ThemeDemo inherits Window {
+    title: "主题控件";
+    width: 301px;
+    background: Theme.bg-panel;
+    in-out property <float> level;
+    in property <string> label;
+    callback level-changed(float);
+    callback reset();
+    VerticalLayout {
+        padding: Theme.dialog-padding;
+        spacing: 12px;
+        HorizontalLayout {
+            spacing: 8px;
+            ToolTipArea {
+                text: "拖动滑块，或按「默认」复位";
+                width: 65px;
+                Text { text: root.label; color: Theme.text; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
+            }
+            Slider { panel: true; value <=> root.level; changed(value) => { root.level-changed(value); } }
+            Button { text: "默认"; small: true; clicked => { root.reset(); } }
+        }
+        Slider { value <=> root.level; changed(value) => { root.level-changed(value); } }
+        HorizontalLayout {
+            alignment: end;
+            Button { text: "确定"; clicked => { root.reset(); } }
+        }
+    }
+}
