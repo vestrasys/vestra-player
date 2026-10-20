@@ -66,7 +66,7 @@
 | playlist | 完成 | 906→约 590 | 19/19 | 通过：SDK 补充后 19/19，6.4 grep 为空 |
 | capture | 完成 | 526→737（旧 main.ts 为超长行，字节数实际减少；拆为 4 模块） | 11/11 | 通过：SDK 修复后 11/11，6.4 grep 为空 |
 | nes | 完成 | 274→133 | 11/11 | 通过：SDK 修复后 11/11，6.4 grep 为空 |
-| workshop | 进行中 | 289→ | | |
+| workshop | 完成 | 289→319（旧代码多为单行长语句，协议轮询全删） | 17/17 | 通过：17/17，6.4 grep（含生成的计数器源码）为空，`npm ci` 成功 |
 
 ## 迁移阻塞与裁决
 
@@ -85,3 +85,5 @@
 - **capture：同 playback 的属性覆盖缺陷**（`section`、`start-time`、`end-time` 等 in-out 属性在用户修改后被任意回调重发覆盖；插件做了部分缓解，标签页切换和“Use current”组合仍会被重置）。另报告 SDK 风险：窗口 `ui.set` 持续失败时，在 `onError` 中写状态会触发不断重试。裁决：与 playback 一并退回维护者修复。文案差异（不再显示 intent 版本、快照 id、任务 id）接受。遗留：`MediaJob` 无数值进度、无编码器预检查询。
   - nes 已修复（维护者）：`openStream` 中止时先等选中请求答复、只关闭这一代来源、再释放 producer；超时错误带 `stage: "prefill" | "activation"`；NES 改按 `stage` 映射文案。`test:sdk` 44/44。
   - 属性覆盖已修复（维护者）：回调不再触发重发；`bind` 值只在变化时发送；`set()` 同值也发送一次（显式“拉回模型值”）；写入失败不循环（绑定值待变化、`set` 值退避重试、连续失败只报一次）。playback/capture 删除变通代码、恢复旧语义并补测试。`test:sdk` 46/46。已知边角：取整后恰等于上次发送值时滑块停在用户拖到的位置（旧扁平 API 下同样存在），subtitles 的字号/延迟滑块属此情况。
+- **workshop：试载中间状态、包操作 id、“结果未知”文案无法表达**。裁决：接受（迁移指南明确协议细节由 SDK 接管）。试载首答复与恢复查询都丢失后允许用新 requestId 再试：接受。`vendor/sdk` 副本由 `tests/vendor-sdk.test.mjs` 逐字节比对守护：接受。
+- **workshop 报告的 SDK 缺陷：`TrialHandle.stop()` 缓存首次结果**，清理未确认失败后再次停止不会重新向宿主发起；失败文案为英文。裁决：P4 由维护者修复（失败后允许重试，文案中文化或给出 code 由插件映射），同步 vendor/sdk。迁移者担心的 `requirement-text` 回写已由属性覆盖修复解决（回调不再重发），P5 GUI 留意。

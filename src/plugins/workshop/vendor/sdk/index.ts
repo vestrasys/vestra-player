@@ -4,6 +4,12 @@ import { subtitleClient } from "./subtitles.ts";
 import { mediaClients } from "./media.ts";
 import { producerClient } from "./producer.ts";
 import { sourceClient } from "./source.ts";
+import { sourceResolverClient } from "./source-resolvers.ts";
+export type {
+  ResolvedMedia,
+  ResolvedResource,
+  SourceResolverDeclaration,
+} from "./source-resolvers.ts";
 /** Working contract. Trusted plugin runtime, not a permissions sandbox. */
 export const API_VERSION = "vestra.experimental/0.1" as const;
 export type Json =
@@ -151,6 +157,7 @@ export function createSdk(transport: Transport) {
   >();
   return {
     source: sourceClient(transport),
+    sourceResolvers: sourceResolverClient(transport),
     producer: producerClient(transport),
     subtitles: subtitleClient(transport),
     ...mediaClients(transport),
@@ -291,7 +298,9 @@ export function createSdk(transport: Transport) {
           ...(requestId === undefined ? {} : { requestId }),
         }),
       trialStateByRequest: (requestId: string) =>
-        transport.request<PackageTrial>("packages.trialStateByRequest", { requestId }),
+        transport.request<PackageTrial>("packages.trialStateByRequest", {
+          requestId,
+        }),
       trialState: (trialId: number) =>
         transport.request<PackageTrial>("packages.trialState", { trialId }),
       stopTrial: (trialId: number) =>

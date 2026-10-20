@@ -1,1 +1,1 @@
-{"id":"vestra.workshop","version":"1.0.0","apiVersion":"vestra.experimental/0.1","entry":"main.js","capabilities":["commands","plugins.manage","ui.window","ui.dialog"]}
+{"id":"vestra.workshop","version":"1.0.0","apiVersion":"vestra.experimental/0.1","entry":"main.ts","capabilities":["commands","plugins.manage","ui.window","ui.dialog"]}
