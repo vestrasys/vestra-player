@@ -23,7 +23,93 @@ pub enum VideoNode {
         gamma: f64,
     },
     /// Isotropic sigma in pixels; the same sigma is written to sigmaV.
-    Gblur { sigma: f64, steps: u8 },
+    Gblur {
+        sigma: f64,
+        steps: u8,
+    },
+    /// Hue rotation in degrees (FFmpeg `hue=h`), changeable while playing.
+    Hue {
+        degrees: f64,
+    },
+    /// `unsharp` luma amount with a 3x3 (`small`) or 7x7 (`large`) matrix.
+    Sharpen {
+        amount: f64,
+        size: SharpenSize,
+    },
+    /// `hqdn3d` strengths.
+    Denoise {
+        luma_spatial: f64,
+        chroma_spatial: f64,
+        luma_temporal: f64,
+        chroma_temporal: f64,
+    },
+    Deblock {
+        strength: DeblockStrength,
+    },
+    /// `deband` threshold (all planes) and range in pixels.
+    Deband {
+        threshold: f64,
+        range: f64,
+    },
+    /// Applied after the host's own source orientation.
+    Transform {
+        rotate: u16,
+        flip_h: bool,
+        flip_v: bool,
+    },
+    /// Always BWDIF.
+    Deinterlace {
+        when: DeinterlaceWhen,
+        output: DeinterlaceOutput,
+    },
+    /// Crop to, or pad out to, a display aspect; `x`/`y` place the window
+    /// (-1 left/top, 0 centre, 1 right/bottom).
+    Reframe {
+        mode: ReframeMode,
+        aspect: f64,
+        x: f64,
+        y: f64,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SharpenSize {
+    Small,
+    Large,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DeblockStrength {
+    Weak,
+    Strong,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DeinterlaceWhen {
+    Interlaced,
+    All,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DeinterlaceOutput {
+    Frame,
+    Field,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ReframeMode {
+    Crop,
+    Pad,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ChannelMode {
+    Stereo,
+    Left,
+    Right,
+    Mono,
+    Swap,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -55,6 +141,10 @@ pub enum AudioNode {
         enabled: bool,
         max_gain: f64,
         peak: f64,
+    },
+    /// Channel routing on a stereo downmix: one side only, mono, swapped.
+    Channels {
+        mode: ChannelMode,
     },
 }
 
@@ -126,11 +216,39 @@ fn range(name: &str, value: f64, min: f64, max: f64) -> Result<()> {
     Ok(())
 }
 
+/// One FFmpeg filter of a node. Most nodes are one filter; transform, reframe
+/// and channels compose several. An empty parameter name is positional.
+struct Filter {
+    name: &'static str,
+    parameters: Vec<Parameter>,
+}
+
+fn filter(name: &'static str, parameters: Vec<Parameter>) -> Filter {
+    Filter { name, parameters }
+}
+
 /// A finite internal adapter; public callers cannot add filter/option strings.
 trait Node {
     fn validate(&self) -> Result<()>;
     fn name(&self) -> &'static str;
     fn parameters(&self) -> Vec<Parameter>;
+    fn filters(&self) -> Vec<Filter> {
+        vec![filter(self.name(), self.parameters())]
+    }
+}
+
+fn integer(name: &str, value: f64, min: f64, max: f64) -> Result<()> {
+    range(name, value, min, max)?;
+    if value.fract() != 0.0 {
+        return Err(ValidationError(format!("{name} must be an integer")));
+    }
+    Ok(())
+}
+
+/// hqdn3d replaces a 0 strength with a derived default, so an explicit 0 is
+/// sent as a strength too small to change any pixel.
+fn strength(value: f64) -> f64 {
+    if value == 0.0 { 0.001 } else { value }
 }
 
 impl Node for VideoNode {
@@ -156,12 +274,110 @@ impl Node for VideoNode {
                 }
                 Ok(())
             }
+            Self::Hue { degrees } => range("degrees", *degrees, -180.0, 180.0),
+            Self::Sharpen { amount, .. } => range("amount", *amount, 0.0, 2.0),
+            Self::Denoise {
+                luma_spatial,
+                chroma_spatial,
+                luma_temporal,
+                chroma_temporal,
+            } => {
+                range("lumaSpatial", *luma_spatial, 0.0, 20.0)?;
+                range("chromaSpatial", *chroma_spatial, 0.0, 20.0)?;
+                range("lumaTemporal", *luma_temporal, 0.0, 20.0)?;
+                range("chromaTemporal", *chroma_temporal, 0.0, 20.0)
+            }
+            Self::Deblock { .. } | Self::Deinterlace { .. } => Ok(()),
+            Self::Deband {
+                threshold,
+                range: pixels,
+            } => {
+                range("threshold", *threshold, 0.003, 0.5)?;
+                integer("range", *pixels, 1.0, 64.0)
+            }
+            Self::Transform { rotate, .. } => {
+                if ![0, 90, 180, 270].contains(rotate) {
+                    return Err(ValidationError("rotate must be 0, 90, 180 or 270".into()));
+                }
+                Ok(())
+            }
+            Self::Reframe { aspect, x, y, .. } => {
+                range("aspect", *aspect, 0.25, 4.0)?;
+                range("x", *x, -1.0, 1.0)?;
+                range("y", *y, -1.0, 1.0)
+            }
         }
     }
     fn name(&self) -> &'static str {
         match self {
             Self::Eq { .. } => "eq",
             Self::Gblur { .. } => "gblur",
+            Self::Hue { .. } => "hue",
+            Self::Sharpen { .. } => "unsharp",
+            Self::Denoise { .. } => "hqdn3d",
+            Self::Deblock { .. } => "deblock",
+            Self::Deband { .. } => "deband",
+            Self::Transform { .. } => "transform",
+            Self::Deinterlace { .. } => "bwdif",
+            Self::Reframe { .. } => "reframe",
+        }
+    }
+    fn filters(&self) -> Vec<Filter> {
+        match self {
+            Self::Transform {
+                rotate,
+                flip_h,
+                flip_v,
+            } => {
+                // Rotate, then mirror the rotated picture. 180 degrees is both
+                // flips, so flips cancel in pairs.
+                let (turn, half) = match rotate {
+                    90 => (Some("clock"), false),
+                    270 => (Some("cclock"), false),
+                    180 => (None, true),
+                    _ => (None, false),
+                };
+                let mut filters = Vec::new();
+                if let Some(dir) = turn {
+                    filters.push(filter("transpose", vec![parameter("dir", dir, false)]));
+                }
+                if *flip_h != half {
+                    filters.push(filter("hflip", vec![]));
+                }
+                if *flip_v != half {
+                    filters.push(filter("vflip", vec![]));
+                }
+                if filters.is_empty() {
+                    filters.push(filter("null", vec![]));
+                }
+                filters
+            }
+            Self::Reframe { mode, aspect, x, y } => {
+                // Display aspect is pixel width times sar. Even sizes keep
+                // 4:2:0 chroma planes whole.
+                let (name, pick, round, dx, dy) = match mode {
+                    ReframeMode::Crop => ("crop", "min", "trunc", "(iw-ow)", "(ih-oh)"),
+                    ReframeMode::Pad => ("pad", "max", "ceil", "(ow-iw)", "(oh-ih)"),
+                };
+                vec![filter(
+                    name,
+                    vec![
+                        parameter(
+                            "w",
+                            format!("'2*{round}({pick}(iw,ih*{aspect}/sar)/2)'"),
+                            false,
+                        ),
+                        parameter(
+                            "h",
+                            format!("'2*{round}({pick}(ih,iw*sar/{aspect})/2)'"),
+                            false,
+                        ),
+                        parameter("x", format!("'{dx}*(1+({x}))/2'"), false),
+                        parameter("y", format!("'{dy}*(1+({y}))/2'"), false),
+                    ],
+                )]
+            }
+            _ => vec![filter(self.name(), self.parameters())],
         }
     }
     fn parameters(&self) -> Vec<Parameter> {
@@ -182,6 +398,63 @@ impl Node for VideoNode {
                 parameter("sigmaV", sigma, true),
                 parameter("steps", steps, false),
             ],
+            Self::Hue { degrees } => vec![parameter("h", degrees, true)],
+            Self::Sharpen { amount, size } => {
+                let matrix = match size {
+                    SharpenSize::Small => 3,
+                    SharpenSize::Large => 7,
+                };
+                vec![
+                    parameter("lx", matrix, false),
+                    parameter("ly", matrix, false),
+                    parameter("la", amount, false),
+                ]
+            }
+            Self::Denoise {
+                luma_spatial,
+                chroma_spatial,
+                luma_temporal,
+                chroma_temporal,
+            } => vec![
+                parameter("luma_spatial", strength(*luma_spatial), false),
+                parameter("chroma_spatial", strength(*chroma_spatial), false),
+                parameter("luma_tmp", strength(*luma_temporal), false),
+                parameter("chroma_tmp", strength(*chroma_temporal), false),
+            ],
+            Self::Deblock { strength } => vec![parameter(
+                "filter",
+                match strength {
+                    DeblockStrength::Weak => "weak",
+                    DeblockStrength::Strong => "strong",
+                },
+                false,
+            )],
+            Self::Deband { threshold, range } => vec![
+                parameter("1thr", threshold, false),
+                parameter("2thr", threshold, false),
+                parameter("3thr", threshold, false),
+                parameter("4thr", threshold, false),
+                parameter("r", range, false),
+            ],
+            Self::Deinterlace { when, output } => vec![
+                parameter(
+                    "mode",
+                    match output {
+                        DeinterlaceOutput::Frame => "send_frame",
+                        DeinterlaceOutput::Field => "send_field",
+                    },
+                    false,
+                ),
+                parameter(
+                    "deint",
+                    match when {
+                        DeinterlaceWhen::Interlaced => "interlaced",
+                        DeinterlaceWhen::All => "all",
+                    },
+                    false,
+                ),
+            ],
+            Self::Transform { .. } | Self::Reframe { .. } => Vec::new(),
         }
     }
 }
@@ -212,6 +485,7 @@ impl Node for AudioNode {
                 range("max_gain", *max_gain, 1.0, 4.0)?;
                 range("peak", *peak, 0.5, 0.95)
             }
+            Self::Channels { .. } => Ok(()),
         }
     }
     fn name(&self) -> &'static str {
@@ -220,7 +494,29 @@ impl Node for AudioNode {
             Self::Equalizer { .. } => "equalizer",
             Self::Treble { .. } => "treble",
             Self::Dynaudnorm { .. } => "dynaudnorm",
+            Self::Channels { .. } => "channels",
         }
+    }
+    fn filters(&self) -> Vec<Filter> {
+        let Self::Channels { mode } = self else {
+            return vec![filter(self.name(), self.parameters())];
+        };
+        let routing = match mode {
+            ChannelMode::Stereo => return vec![filter("anull", vec![])],
+            ChannelMode::Left => "stereo|c0=c0|c1=c0",
+            ChannelMode::Right => "stereo|c0=c1|c1=c1",
+            ChannelMode::Mono => "stereo|c0=0.5*c0+0.5*c1|c1=0.5*c0+0.5*c1",
+            ChannelMode::Swap => "stereo|c0=c1|c1=c0",
+        };
+        // Mix to stereo first (the graph inserts the resampler), so the
+        // routing always sees exactly two channels.
+        vec![
+            filter(
+                "aformat",
+                vec![parameter("channel_layouts", "stereo", false)],
+            ),
+            filter("pan", vec![parameter("", routing, false)]),
+        ]
     }
     fn parameters(&self) -> Vec<Parameter> {
         match self {
@@ -256,6 +552,7 @@ impl Node for AudioNode {
                 parameter("peak", peak, true),
                 parameter("enable", u8::from(*enabled), true),
             ],
+            Self::Channels { .. } => Vec::new(),
         }
     }
 }
@@ -313,20 +610,45 @@ pub fn validate(descriptors: &Descriptors) -> Result<()> {
     Ok(())
 }
 
+/// `name@n3` for a node's first filter, `name@n3x1` for the following ones.
+fn label(name: &str, prefix: &str, index: usize, part: usize) -> String {
+    if part == 0 {
+        format!("{name}@{prefix}{index}")
+    } else {
+        format!("{name}@{prefix}{index}x{part}")
+    }
+}
+
 fn render<N: Node>(resources: &[Resource<N>], prefix: &str, empty: &str) -> Result<String> {
     let resources = ordered(resources)?;
     let filters: Vec<_> = resources
         .into_iter()
         .flat_map(|r| &r.nodes)
         .enumerate()
-        .map(|(index, node)| {
-            let parameters = node
-                .parameters()
+        .flat_map(|(index, node)| {
+            node.filters()
                 .into_iter()
-                .map(|p| format!("{}={}", p.name, p.value))
-                .collect::<Vec<_>>()
-                .join(":");
-            format!("{}@{prefix}{index}={parameters}", node.name())
+                .enumerate()
+                .map(move |(part, filter)| {
+                    let parameters = filter
+                        .parameters
+                        .iter()
+                        .map(|p| {
+                            if p.name.is_empty() {
+                                p.value.clone()
+                            } else {
+                                format!("{}={}", p.name, p.value)
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join(":");
+                    let label = label(filter.name, prefix, index, part);
+                    if parameters.is_empty() {
+                        label
+                    } else {
+                        format!("{label}={parameters}")
+                    }
+                })
         })
         .collect();
     Ok(if filters.is_empty() {
@@ -363,20 +685,22 @@ fn updates<N: Node>(old: &[Resource<N>], new: &[Resource<N>], prefix: &str) -> R
             return Ok(UpdatePlan::NeedsReconfigure);
         }
         for (old, new) in old.nodes.iter().zip(&new.nodes) {
-            if old.name() != new.name() {
+            let (old, new) = (old.filters(), new.filters());
+            if old.len() != new.len() || old.iter().zip(&new).any(|(a, b)| a.name != b.name) {
                 return Ok(UpdatePlan::NeedsReconfigure);
             }
-            let filter_name = new.name();
-            for (old, new) in old.parameters().into_iter().zip(new.parameters()) {
-                if old.value != new.value {
-                    if !new.runtime {
-                        return Ok(UpdatePlan::NeedsReconfigure);
+            for (part, (old, new)) in old.into_iter().zip(new).enumerate() {
+                for (old, parameter) in old.parameters.into_iter().zip(new.parameters) {
+                    if old.value != parameter.value {
+                        if !parameter.runtime {
+                            return Ok(UpdatePlan::NeedsReconfigure);
+                        }
+                        commands.push(RuntimeCommand {
+                            target: label(new.name, prefix, index, part),
+                            option: parameter.name,
+                            value: parameter.value,
+                        });
                     }
-                    commands.push(RuntimeCommand {
-                        target: format!("{}@{prefix}{index}", filter_name),
-                        option: new.name,
-                        value: new.value,
-                    });
                 }
             }
             index += 1;
@@ -386,7 +710,8 @@ fn updates<N: Node>(old: &[Resource<N>], new: &[Resource<N>], prefix: &str) -> R
 }
 
 /// Only the locally exercised command families are planned: eq controls,
-/// gblur sigma/sigmaV, volume, EQ/treble gain, and norm maxgain/peak/enable.
+/// gblur sigma/sigmaV, hue h, volume, EQ/treble gain, and norm
+/// maxgain/peak/enable.
 /// Other option changes conservatively require reconfiguration even when a
 /// particular FFmpeg build advertises additional runtime commands.
 pub fn runtime_commands(old: &Descriptors, new: &Descriptors) -> Result<UpdatePlan> {
@@ -527,6 +852,235 @@ mod tests {
             runtime_commands(&eq(1000.0), &eq(2000.0)).unwrap(),
             UpdatePlan::NeedsReconfigure
         );
+    }
+
+    fn video(nodes: Vec<VideoNode>) -> String {
+        render_lavfi(&Descriptors::Video(vec![resource("a", "r", nodes)])).unwrap()
+    }
+
+    #[test]
+    fn round_two_video_nodes_render_fixed_ffmpeg_filters() {
+        let graph = video(vec![
+            VideoNode::Hue { degrees: -30.0 },
+            VideoNode::Sharpen {
+                amount: 1.5,
+                size: SharpenSize::Large,
+            },
+            VideoNode::Denoise {
+                luma_spatial: 4.0,
+                chroma_spatial: 3.0,
+                luma_temporal: 6.0,
+                chroma_temporal: 0.0,
+            },
+            VideoNode::Deblock {
+                strength: DeblockStrength::Strong,
+            },
+            VideoNode::Deband {
+                threshold: 0.02,
+                range: 16.0,
+            },
+            VideoNode::Deinterlace {
+                when: DeinterlaceWhen::Interlaced,
+                output: DeinterlaceOutput::Field,
+            },
+        ]);
+        assert_eq!(
+            graph,
+            "hue@n0=h=-30,unsharp@n1=lx=7:ly=7:la=1.5,\
+             hqdn3d@n2=luma_spatial=4:chroma_spatial=3:luma_tmp=6:chroma_tmp=0.001,\
+             deblock@n3=filter=strong,deband@n4=1thr=0.02:2thr=0.02:3thr=0.02:4thr=0.02:r=16,\
+             bwdif@n5=mode=send_field:deint=interlaced"
+        );
+        let crop = video(vec![VideoNode::Reframe {
+            mode: ReframeMode::Crop,
+            aspect: 2.35,
+            x: 0.0,
+            y: -1.0,
+        }]);
+        assert_eq!(
+            crop,
+            "crop@n0=w='2*trunc(min(iw,ih*2.35/sar)/2)':h='2*trunc(min(ih,iw*sar/2.35)/2)':\
+             x='(iw-ow)*(1+(0))/2':y='(ih-oh)*(1+(-1))/2'"
+        );
+        let pad = video(vec![VideoNode::Reframe {
+            mode: ReframeMode::Pad,
+            aspect: 1.0,
+            x: 0.5,
+            y: 0.0,
+        }]);
+        assert!(pad.starts_with("pad@n0=w='2*ceil(max(iw,ih*1/sar)/2)'"));
+        assert!(pad.contains("x='(ow-iw)*(1+(0.5))/2'"));
+    }
+
+    #[test]
+    fn transform_composes_rotation_then_mirroring_and_cancels_flip_pairs() {
+        let transform = |rotate, flip_h, flip_v| {
+            video(vec![VideoNode::Transform {
+                rotate,
+                flip_h,
+                flip_v,
+            }])
+        };
+        assert_eq!(transform(0, false, false), "null@n0");
+        assert_eq!(transform(90, false, false), "transpose@n0=dir=clock");
+        assert_eq!(
+            transform(270, true, false),
+            "transpose@n0=dir=cclock,hflip@n0x1"
+        );
+        assert_eq!(transform(180, false, false), "hflip@n0,vflip@n0x1");
+        assert_eq!(transform(180, true, false), "vflip@n0");
+        assert_eq!(transform(180, true, true), "null@n0");
+        assert_eq!(transform(0, false, true), "vflip@n0");
+        let rejected = Descriptors::Video(vec![resource(
+            "a",
+            "r",
+            vec![VideoNode::Transform {
+                rotate: 45,
+                flip_h: false,
+                flip_v: false,
+            }],
+        )]);
+        assert!(validate(&rejected).is_err());
+        // Later nodes keep their own index after a multi-filter node.
+        let chain = video(vec![
+            VideoNode::Transform {
+                rotate: 180,
+                flip_h: false,
+                flip_v: false,
+            },
+            VideoNode::Hue { degrees: 10.0 },
+        ]);
+        assert_eq!(chain, "hflip@n0,vflip@n0x1,hue@n1=h=10");
+    }
+
+    /// The owned chain runs after the host's orientation filter, so a 90°
+    /// transform on a container-rotated (90°) 1920x1080 source shows 1920x1080.
+    #[test]
+    fn transform_applies_after_source_orientation() {
+        let size = |rotate: u16, (w, h): (u32, u32)| {
+            if rotate % 180 == 90 { (h, w) } else { (w, h) }
+        };
+        let oriented = size(90, (1920, 1080));
+        assert_eq!(oriented, (1080, 1920));
+        assert_eq!(size(90, oriented), (1920, 1080));
+        assert_eq!(size(180, oriented), (1080, 1920));
+        assert!(
+            crate::source_geometry::INITIAL_FILTERS.starts_with("@vestra-orientation:"),
+            "the orientation stage is installed before any owned `vf add`"
+        );
+    }
+
+    #[test]
+    fn hue_changes_in_place_and_other_new_options_reconfigure() {
+        let hue = |degrees| {
+            Descriptors::Video(vec![resource("a", "r", vec![VideoNode::Hue { degrees }])])
+        };
+        let UpdatePlan::Commands(commands) = runtime_commands(&hue(0.0), &hue(45.0)).unwrap()
+        else {
+            panic!("hue is a runtime option")
+        };
+        assert_eq!(commands.len(), 1);
+        assert_eq!(commands[0].target, "hue@n0");
+        assert_eq!(commands[0].option, "h");
+        assert_eq!(commands[0].value, "45");
+        for range in [-180.5, 180.5, f64::NAN] {
+            assert!(validate(&hue(range)).is_err());
+        }
+        let sharpen = |amount| {
+            Descriptors::Video(vec![resource(
+                "a",
+                "r",
+                vec![VideoNode::Sharpen {
+                    amount,
+                    size: SharpenSize::Small,
+                }],
+            )])
+        };
+        assert_eq!(
+            runtime_commands(&sharpen(0.5), &sharpen(1.0)).unwrap(),
+            UpdatePlan::NeedsReconfigure
+        );
+        assert!(validate(&sharpen(2.1)).is_err());
+        let deband = |threshold, range| {
+            Descriptors::Video(vec![resource(
+                "a",
+                "r",
+                vec![VideoNode::Deband { threshold, range }],
+            )])
+        };
+        assert!(validate(&deband(0.003, 1.0)).is_ok());
+        assert!(validate(&deband(0.5, 64.0)).is_ok());
+        assert!(validate(&deband(0.002, 16.0)).is_err());
+        assert!(validate(&deband(0.02, 16.5)).is_err());
+        assert!(validate(&deband(0.02, 65.0)).is_err());
+        let reframe = |aspect, x| {
+            Descriptors::Video(vec![resource(
+                "a",
+                "r",
+                vec![VideoNode::Reframe {
+                    mode: ReframeMode::Crop,
+                    aspect,
+                    x,
+                    y: 0.0,
+                }],
+            )])
+        };
+        assert!(validate(&reframe(0.25, -1.0)).is_ok());
+        assert!(validate(&reframe(0.2, 0.0)).is_err());
+        assert!(validate(&reframe(4.0, 1.1)).is_err());
+        let wire: VideoNode = serde_json::from_str(
+            r#"{"kind":"denoise","lumaSpatial":1,"chromaSpatial":2,"lumaTemporal":3,"chromaTemporal":4}"#,
+        )
+        .unwrap();
+        assert!(
+            matches!(wire, VideoNode::Denoise { chroma_temporal, .. } if chroma_temporal == 4.0)
+        );
+        assert!(
+            serde_json::from_str::<VideoNode>(
+                r#"{"kind":"transform","rotate":90,"flipH":false,"flipV":true}"#
+            )
+            .is_ok()
+        );
+        assert!(
+            serde_json::from_str::<VideoNode>(
+                r#"{"kind":"deinterlace","when":"bob","output":"frame"}"#
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn channel_modes_route_a_stereo_mix() {
+        let channels = |mode| {
+            render_lavfi(&Descriptors::Audio(vec![resource(
+                "a",
+                "r",
+                vec![
+                    AudioNode::Volume { gain_db: 0.0 },
+                    AudioNode::Channels { mode },
+                ],
+            )]))
+            .unwrap()
+        };
+        assert_eq!(channels(ChannelMode::Stereo), "volume@n0=volume=1,anull@n1");
+        assert_eq!(
+            channels(ChannelMode::Left),
+            "volume@n0=volume=1,aformat@n1=channel_layouts=stereo,pan@n1x1=stereo|c0=c0|c1=c0"
+        );
+        assert!(channels(ChannelMode::Swap).ends_with("pan@n1x1=stereo|c0=c1|c1=c0"));
+        assert!(channels(ChannelMode::Mono).contains("c0=0.5*c0+0.5*c1"));
+        assert!(channels(ChannelMode::Right).ends_with("stereo|c0=c1|c1=c1"));
+        let audio =
+            |mode| Descriptors::Audio(vec![resource("a", "r", vec![AudioNode::Channels { mode }])]);
+        assert_eq!(
+            runtime_commands(&audio(ChannelMode::Left), &audio(ChannelMode::Right)).unwrap(),
+            UpdatePlan::NeedsReconfigure
+        );
+        assert_eq!(
+            runtime_commands(&audio(ChannelMode::Stereo), &audio(ChannelMode::Left)).unwrap(),
+            UpdatePlan::NeedsReconfigure
+        );
+        assert!(serde_json::from_str::<AudioNode>(r#"{"kind":"channels","mode":"swap"}"#).is_ok());
     }
 
     #[test]

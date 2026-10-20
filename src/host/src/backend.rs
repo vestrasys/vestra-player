@@ -139,7 +139,7 @@ impl Backend {
                 let mut processing = crate::processing::Processing::default();
                 let mut subtitles = crate::subtitle_backend::Subtitles::new(fonts);
                 let mut jobs = crate::media_jobs::Jobs::default();
-                let mut last_state = Instant::now() - Duration::from_secs(1);
+                let mut push = StatePush::new();
                 loop {
                     if stopping.try_recv().is_ok() {
                         break;
@@ -365,13 +365,16 @@ impl Backend {
                         }
                         producer_was_active = producer_active;
                     }
-                    if last_state.elapsed() >= Duration::from_millis(100) {
+                    // A phase change from the commands and events above goes
+                    // out in this iteration; otherwise every 100 ms.
+                    if push.due(sources.generation(), sources.phase(), Instant::now()) {
                         let source_snapshot = sources.snapshot(&mpv);
                         processing.note_source(sources.generation(), sources.phase());
                         subtitles.note_source(sources.generation(), sources.phase());
+                        // Natural EOF is found by the snapshot itself and is in it.
+                        push.seen(sources.generation(), sources.phase());
                         let _ =
                             events.send(Event::Broadcast("source.state".into(), source_snapshot));
-                        last_state = Instant::now();
                     }
                     thread::sleep(Duration::from_millis(2));
                 }
@@ -426,17 +429,64 @@ fn stats(mpv: &Mpv, session: u64, frames: u64) -> Value {
             .ok()
             .filter(|v| v.is_finite() && *v > 0.)
     };
+    // Signed or zero values (A/V sync, cache) are passed through as read.
+    let signed = |name: &str| mpv.get_property::<f64>(name).ok().filter(|v| v.is_finite());
     let video = text("video-codec").map(|codec| {
         json!({"codec":codec,"width":int("video-params/w"),"height":int("video-params/h"),
-            "fps":float("estimated-vf-fps").or_else(|| float("container-fps"))})
+            "fps":float("estimated-vf-fps").or_else(|| float("container-fps")),
+            "decoder":text("current-tracks/video/decoder"),
+            "pixelFormat":text("video-params/pixelformat"),
+            "colorspace":text("video-params/colormatrix"),
+            "displayWidth":int("video-out-params/dw"),"displayHeight":int("video-out-params/dh"),
+            "displayFps":float("estimated-display-fps"),
+            "bitrate":float("video-bitrate")})
     });
     let audio = text("audio-codec-name").map(|codec| {
         json!({"codec":codec,"sampleRate":int("audio-params/samplerate"),
-            "channels":int("audio-params/channel-count")})
+            "channels":int("audio-params/channel-count"),
+            "decoder":text("current-tracks/audio/decoder"),
+            "format":text("audio-params/format"),
+            "channelLayout":text("audio-params/hr-channels"),
+            "bitrate":float("audio-bitrate")})
     });
     json!({"backend":"libmpv · 软件渲染","session":session,"framesShown":frames,
-        "framesDropped":int("frame-drop-count"),"video":video,"audio":audio})
+        "framesDropped":int("frame-drop-count"),"video":video,"audio":audio,
+        "avSyncMs":signed("avsync").map(|seconds| seconds * 1000.),
+        "cacheSeconds":signed("demuxer-cache-duration")})
 }
+
+/// When to publish `source.state`: every 100 ms, and at once when the source
+/// phase (or source) changes, so `ready → ended` does not wait for the timer.
+pub struct StatePush {
+    last: Option<(u64, crate::session::Phase)>,
+    sent: Option<Instant>,
+}
+impl StatePush {
+    pub const PERIOD: Duration = Duration::from_millis(100);
+    pub fn new() -> Self {
+        Self {
+            last: None,
+            sent: None,
+        }
+    }
+    /// True when a broadcast is due now; records it as sent.
+    pub fn due(&mut self, generation: u64, phase: crate::session::Phase, now: Instant) -> bool {
+        let changed = self.last != Some((generation, phase));
+        let periodic = self
+            .sent
+            .is_none_or(|sent| now.duration_since(sent) >= Self::PERIOD);
+        if changed || periodic {
+            self.last = Some((generation, phase));
+            self.sent = Some(now);
+        }
+        changed || periodic
+    }
+    /// The phase the published state carries.
+    pub fn seen(&mut self, generation: u64, phase: crate::session::Phase) {
+        self.last = Some((generation, phase));
+    }
+}
+
 fn number(params: &Value, key: &str) -> std::result::Result<f64, RpcError> {
     params[key]
         .as_f64()
@@ -473,4 +523,31 @@ fn execute(mpv: &Mpv, method: &str, params: &Value) -> std::result::Result<Value
     result
         .map(|_| Value::Null)
         .map_err(|e| RpcError::new("backend", e.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session::Phase;
+    #[test]
+    fn a_phase_change_is_pushed_without_waiting_for_the_period() {
+        let start = Instant::now();
+        let mut push = StatePush::new();
+        assert!(push.due(1, Phase::Ready, start));
+        let soon = start + Duration::from_millis(5);
+        assert!(!push.due(1, Phase::Ready, soon));
+        assert!(
+            push.due(1, Phase::Ended, soon),
+            "ready → ended goes out at once"
+        );
+        assert!(!push.due(1, Phase::Ended, soon + Duration::from_millis(1)));
+        assert!(
+            push.due(2, Phase::Ended, soon + Duration::from_millis(2)),
+            "new source"
+        );
+        assert!(
+            push.due(2, Phase::Ended, soon + Duration::from_millis(102)),
+            "periodic"
+        );
+    }
 }

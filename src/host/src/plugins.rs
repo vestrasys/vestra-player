@@ -50,6 +50,7 @@ pub const CAPABILITIES: &[&str] = &[
     "media.read",
     "media.control",
     "ui.osd",
+    "clipboard",
 ];
 pub struct Plugin {
     pub manifest: Manifest,

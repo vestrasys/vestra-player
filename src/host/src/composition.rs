@@ -506,6 +506,15 @@ mod tests {
         assert!(source.contains("bottom-content := Owner10View"));
         assert!(source.contains("visible: root.bottom-visible"));
         assert!(!source.contains("// VESTRA-"));
+        // Reference §6.3: bottom-bar content may draw above its slot (negative
+        // y) over the video; nothing between it and the window clips it.
+        let bottom = &source[..source.find("bottom-content := Owner10View").unwrap()];
+        let wrapper = &bottom[bottom.rfind("Rectangle {").unwrap()..];
+        assert!(
+            !wrapper.contains("clip"),
+            "bottom bar wrapper clips: {wrapper}"
+        );
+        assert!(!include_str!("../ui/host.slint").contains("clip"));
     }
 
     #[test]

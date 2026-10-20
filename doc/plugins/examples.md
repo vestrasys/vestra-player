@@ -566,3 +566,61 @@ export component Picture inherits Window {
 
 不改代码的插件也会变成深色：播放器用 `fluent-dark` 风格编译所有插件 Slint。新写的界面用 `Theme` 的令牌，不要写死颜色。
 
+## 18. 外部工具：用 ffprobe 读文件信息
+
+```ts
+export default async function activate(plugin: Plugin) {
+  plugin.commands.add({
+    id: "probe", path: ["视频", "文件信息…"], order: 420,
+    enabled: () => !!plugin.player.state.source && !plugin.player.state.source.includes("://"),
+    async run() {
+      if (!(await plugin.tools.available("ffprobe")))
+        return plugin.osd.show("没有找到 ffprobe");
+      const { stdout } = await plugin.tools.run(
+        "ffprobe",
+        ["-v", "error", "-print_format", "json", "-show_streams", plugin.player.state.source!],
+        { timeoutMs: 15_000 },
+      );
+      const streams = JSON.parse(new TextDecoder().decode(stdout)).streams;
+      await plugin.osd.show(`${streams.length} 路流`);
+    },
+  });
+}
+```
+
+超时、`signal`、插件停用都会结束子进程；失败时 `code` 为 `timeout` / `failed`（`message` 是 stderr 最后一行）/ `unavailable`。测试里用 `host.tools.handle("ffprobe", (args) => ({ stdout: "{…}" }))` 注入结果。
+
+## 19. 设置文件：读、改、自动保存
+
+```ts
+type Settings = { folder: string | null; step: number };
+const isSettings = (v: unknown): v is Settings =>
+  typeof (v as Settings)?.step === "number";
+
+export default async function activate(plugin: Plugin) {
+  const settings = plugin.storage.json<Settings>("settings", {
+    defaults: { folder: null, step: 5 },
+    validate: isSettings,
+  });
+  plugin.commands.add({
+    id: "step-10", path: ["播放", "步长 10 秒"], order: 260, radio: true,
+    checked: () => settings.value.step === 10,
+    run: () => settings.save({ ...settings.value, step: 10 }),
+  });
+}
+```
+
+`save` 立即更新 `value`，300 ms 后写入（临时文件 + 改名）；插件停用前自动写完。读坏的文件改名为 `settings.json.bad-<时间戳>` 留给用户，插件拿到默认值。
+
+## 20. 剪贴板、阻止休眠、在 Finder 中显示
+
+```ts
+await plugin.clipboard.writeText(basename(plugin.player.state.source!)); // 需要 clipboard
+const link = await plugin.clipboard.readText();                        // 预填「打开链接」
+await plugin.clipboard.writeImage("/Users/me/Pictures/shot.png");     // PNG/JPEG
+await plugin.power.preventSleep("playing");                            // 需要 playback.control
+await plugin.system.reveal("/Users/me/Movies/a.mkv");                  // 在 Finder 中选中
+```
+
+`host.run`（执行核心动作）在第 2 轮批次 B 交付，届时补示例。
+

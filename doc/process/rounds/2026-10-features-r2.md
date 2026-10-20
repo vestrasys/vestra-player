@@ -233,7 +233,68 @@ plugin.power.preventSleep(mode: "off" | "playing"): Promise<void>;
 
 ### 6.2 维护者交付与签名调整
 
-（P1a、P1b、P3 完成时填写；签名与裁决不同的条目写明原因）
+#### P1a 批次 A（2026-10-20，维护者）
+
+**实现清单**（每项：宿主 + SDK 类型与封装 + TestHost + 参考文档 + 单元测试）
+
+| 任务单 | 内容 | 宿主 | SDK / TestHost |
+| --- | --- | --- | --- |
+| §3.2 | `PlaybackStats` 扩展（R-P6、R-P7） | `backend.rs::stats` 透传 mpv 属性 | 线上新字段可选，`player.stats()` 补 `null`；`host.stats` 旧写法照常 |
+| §3.2 | 阶段变化立即推送 | `backend.rs::StatePush`：阶段或来源变化当轮发 `source.state`，周期 100 ms 不变；单测不依赖计时 | 无契约变化 |
+| §3.3 | `addAudioTrack`、`selectAudioTrack`（R-T1、R-T2） | `source_backend.rs::audio_track`，线上方法 `audio.addTrack` / `audio.selectTrack`（`playback.control`） | 默认以 `player.state` 为条件；TestHost 默认处理 |
+| §3.3 | `subtitles.load` 的 `format`、`title`、`select`（R-T4） | `subtitle_format::validate_ass`（UTF-8、≤ 2 MiB、两节、1–20 000 行 Dialogue）；ASS 原样写 `.ass` 临时文件；`select: "none"` 只登记不选中；`title` 进 `sub-add` | 默认值不上线；`host.subtitleLoads` |
+| §3.3 | `SubtitleTrack.codec`、`text`、`streamIndex`（R-T6） | `streamIndex` 仅内嵌轨且 `current-demuxer == lavf` 且 `path` 为 `fd://`（宿主租约路径，即 media_tracks 的 lavf 条件） | 线上字段可选 |
+| §3.3 | `SubtitleStyle.bold/shadow/box/assOverride`、`offsetMs` ±600 000（R-T7、R-T8） | `subtitle_style.rs`；离线截图 `force_style` 同步 Bold/Shadow/BorderStyle | 类型 |
+| §3.3 | R-H12 | 启动默认 `sub-ass-override=scale`（keep） | 变更说明 |
+| §3.4 | 8 种视频节点 + `channels`、`delayMs` ±10 000（R-V1–R-V7、R-A1、R-A5） | `effects.rs` 节点可展开为多个滤镜（标签 `name@nK`、`name@nKxJ`）；只有 `hue.h` 为运行时参数；`processing.rs` / `offline_audio.rs` 预算放宽 | `nodeProblem` 校验，TestHost `processing.replace` 用同一规则 |
+| §3.5 | R-H5、R-H4、Ctrl 控制码 | `bindings::from_key` + winit 钩子记录物理键（`observe_key`）；死键在钩子里直接解析 | `NAMED` 增加小键盘名 |
+| §3.6 | 剪贴板 | `clipboard.rs`（`objc2-app-kit` `NSPasteboard` 安全方法，新增 `objc2-foundation` 依赖，已在 lock 中）；能力 `clipboard`（宿主 `plugins.rs` 与构建工具两处） | `host.clipboard` |
+| §3.6 | 阻止休眠 | `power.rs`（可注入启动器的状态机）；`/usr/bin/caffeinate [-d] -i -w <pid>`；「有视频」= 1 秒内收到过视频帧 | `host.power` |
+| §3.6 | `tools`、`storage`、`system`（runtime） | 无 | `sdk/plugin/local.ts`（真实子进程）、`services.ts`；TestHost 通过 `Transport.local` 注入假实现 |
+| §3.7 | 文档 | `composition.rs` 测试断言底栏外层无 `clip` | 参考文档 §2、§3、§4.1、§5、§6.3、§8、§9、§13、§14、§16（新）、§17 变更说明；示例 §18–§20 |
+
+协调者追加的缺陷（Ctrl+Y 被识别为 Shift+Tab）已并入 §3.5：有 Ctrl/⌘ 时控制码一律按 Ctrl+字母（0x1b 为 `Ctrl+[`），无修饰时才映射 Tab/Backspace/Enter/Escape/Shift+Tab；有物理键时按物理键（Ctrl+Tab 仍是 Tab，单按修饰键不算输入）。单测 `control_codes_are_ctrl_letters_only_with_ctrl` 覆盖五个码有/无修饰。
+
+**签名调整与实现取舍**（签名均与裁决一致，以下是行为细节）
+
+1. `box`：任务单写「`sub-border-style=opaque-box` + `sub-back-color`」。mpv 0.41 文档中 opaque-box 的框颜色取 `sub-outline-color`、且逐行包裹，`sub-back-color` 只给阴影框上色；改用 `background-box`（颜色取 `sub-back-color`、边距取 `sub-shadow-offset`，libass 扩展 BorderStyle=4）。因此有框时 `shadow` 不生效（两者共用 `sub-shadow-offset`），已写进参考文档 §9。
+2. `channels` 的下混用 `aformat=channel_layouts=stereo`（滤镜图自动插入重采样）代替 `aresample=ochl=stereo`，效果相同、不依赖 swr 选项名；`"stereo"` 渲染为 `anull`（不改声道）。
+3. `denoise` 某项为 0 时发送 0.001：hqdn3d 把 0 当作「按其它项推导默认值」。
+4. `deband` 四个平面用同一阈值（任务单只写了 `1thr`）。
+5. `reframe` 的宽高比按显示宽高比（像素宽 × sar），尺寸取偶数。
+6. `PlaybackStats.video.decoder` 取 `current-tracks/video/decoder`（短名 `h264`）；原有 `codec` 已是 `video-codec` 的描述串。实测 `estimated-display-fps` 在 libmpv 软件渲染下为 `null`，`video-bitrate` 开播约 1 秒内为 `null`，已在参考文档注明。
+7. TS 线上类型（`sdk/wire.ts` 的 `PlaybackStats`、`sdk/subtitles.ts` 的轨道）把新字段设为可选：插件测试直接构造这些线上对象（info、subtitles 的测试），设为必选会让现有插件 `check` 失败；公开类型（`types.ts`）字段是完整的。
+8. 线上方法名：`audio.addTrack`、`audio.selectTrack`、`clipboard.readText|writeText|writeImage`、`power.preventSleep`。
+9. 构建工具原本不校验能力名；按「两边同步」加了一张与 `plugins.rs` 相同的表（`plugin -- check/build/test` 遇到未知能力失败）。
+
+**已知缺口**
+
+- 死键组合（⌥E、⌥N、⌥U、⌥I、⌥\`）只在主窗口视频区获得焦点时触发（winit 钩子里拿不到 Slint 焦点控件；输入框里需要正常组字）；浮动侧栏窗口里不触发死键组合。非死键的 Option 组合在任何焦点下都按物理键解析。
+- `Alt+Shift+数字/符号` 按美式键位换算出符号名；字母取当前布局（`key_without_modifiers`）。
+- ASS 外部轨不能进入「含字幕」截图（`unsupported`），与内嵌 ASS 现状一致。
+- 外部音轨在换来源前保留；停用插件不撤销（裁决如此）。
+- 阻止休眠的「有视频」判断基于 1 秒内是否收到渲染帧：封面图类音频只渲染一帧，按纯音频处理。
+- 插件载入的 SRT 不传 `title` 时，轨道标题仍是临时文件名（原有行为）。
+- workshop 的 `vendor/sdk` 镜像测试因 SDK 新增 `local.ts`、`services.ts` 及改动失败（1/17），按该测试文件开头的命令同步后通过；不在维护者可写范围，请协调者同步（前几轮同样处理）。
+- capture 的「one running and four queued」与 subtitles 的「host refusal of the upload」在机器负载高时各偶发失败一次，单独重跑通过（与本批改动无关的计时敏感用例）。
+
+**检查**（worktree 内实际执行）
+
+- `src/`：`npm run check` 0；`format:check` 0；`boundaries` 0；`test:sdk` 66/66（新增 `tests/sdk/round2.test.ts` 12 条）；`plugins:build` 0；插件测试 audio 15、bilibili 15、capture 13、info 4、nes 11、playback 21、playlist 35、subtitles 19、video 10、youtube 14 全过；workshop 16/17（上条 vendor 镜像）。
+- `src/host/`：`cargo fmt --check` 0；`cargo clippy --locked --all-targets -- -D warnings` 0；`cargo test --locked` 176/176；`cargo check --no-default-features` 0。
+- 无界面实测（`--headless` + 临时探针插件，未进仓库）：`stats` 新字段有值；`addAudioTrack`（外部 mp3）返回 `{ id: 2, external, exportable: false }` 并选中，`selectAudioTrack(1)` 切回；ASS `load({ format: "ass", title, select: "none" })` 成功且不改选择；八种视频节点同时应用 `applied`，transform 90° + pad 1:1 后 `displayWidth/Height` 为 640×640；`hue` 连续改值走 `vf-command`；`channels swap` + `delayMs −5000` `applied`；无界面剪贴板 `unavailable`。另用 mpv 0.41 命令行逐个验证节点滤镜图被接受、`vf-command … h … hue@n0` 成功而 `unsharp` 的 `la` 不能运行时修改。
+- 宿主 Rust 净增：`src/host/src/*.rs` 22 770 → 24 785 行（+2 015，含测试）；SDK 与运行器 `src/sdk/plugin/*.ts` + `src/runtime/` 4 812 → 5 565 行（+753），另 `src/sdk/*.ts` 线上类型与节点校验 +192。
+
+**给协调者的 GUI 实测要点**
+
+1. 阻止休眠：临时插件或后续 playback 迁移调 `power.preventSleep("playing")` 后播放视频，终端 `pmset -g assertions | grep -i caffeinate` 应看到 `PreventUserIdleDisplaySleep` 与 `PreventUserIdleSystemSleep`（进程 caffeinate，`-w` 为播放器 pid）；暂停后约 16 ms 内断言消失；播放纯音频（mp3/flac）只有 `PreventUserIdleSystemSleep`；退出播放器后 `pgrep caffeinate` 无残留。
+2. 剪贴板：`clipboard.writeText("中文文件名.mkv")` 后在「文本编辑」⌘V 粘贴正确；`writeImage(<截图 png>)` 后在「预览 ▶ 文件 ▶ 从剪贴板新建」得到同一图片；在别的应用复制一段文字后 `readText()` 返回它；复制图片后 `readText()` 为 `null`。
+3. Option 键：视频区获得焦点时按 ⌥O、⌥H、⌥B、⌥K、⌥A、⌃⌥Y 分别触发声明为 `Alt+O` 等的命令（subtitles 的 `Alt+H` 现成可测）；⌥E、⌥N、⌥U、⌥I、⌥\` 死键触发 `Alt+E` 等；在 playlist 搜索框等输入框里按 ⌥E 再按 e 仍打出 é，不触发命令。
+4. Ctrl 控制码：⌃Y（playback「重开当前/最后文件」）、playlist 列表焦点下 ⌃I（添加文件）按键触发；Tab、Esc、回车、退格单按仍是原功能；⌃[ 触发声明为 `Ctrl+[` 的命令。
+5. 小键盘：给一个命令声明 `Numpad5`、另一个声明 `5`，分别按小键盘 5 与主键盘 5 各自只触发自己的命令；小键盘回车不再触发「全屏」（`Enter`），菜单快捷键文字显示 `Num5`。
+6. ASS 默认保留样式（R-H12）：打开带内嵌 ASS（含 `\pos`、`\fad`、彩色样式）的 mkv，字幕按脚本位置与颜色显示；subtitles 插件设置样式后 ASS 仍保留原样式，SRT 轨按插件样式显示；传 `assOverride: "force"` 后 ASS 改为插件样式。
+7. 样式新字段：`bold: true`、`shadow: 3` 可见粗体与阴影；`box: 60` 出现半透明黑色背景框（阴影消失）；`box: null` 恢复描边加阴影。
+8. 底栏不裁切：底栏组件里放一个负 `y` 的元素，窗口与全屏模式都画在视频区上方，侧栏展开时被侧栏盖住。
 
 ### 6.3 作者交付
 
