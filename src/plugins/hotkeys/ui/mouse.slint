@@ -1,0 +1,203 @@
+// 鼠标动作 (J02): modifier radios, then one 26px row per mouse input:
+// label (140, right aligned) | command picker (320×21) | 默认 (41×18).
+// The picker opens a filterable command list over the rows (the list has
+// over a hundred commands, more than a drop-down fits in the window).
+// 540×410: 10 + 140 + 6 + 320 + 6 + 41 + 10 = 533.
+import { LineEdit, ListView } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button } from "@vestra/widgets.slint";
+import { Cell, Label, Radio } from "parts.slint";
+
+export struct MouseRow {
+    label: string,
+    command: string,
+    bound: bool,
+    resettable: bool,
+}
+
+export struct PickItem {
+    key: string,
+    text: string,
+    selected: bool,
+}
+
+component Picker {
+    in property <string> text;
+    in property <bool> bound;
+    callback clicked();
+    height: 21px;
+    Rectangle {
+        border-radius: Theme.radius-control;
+        background: touch.pressed ? Theme.button-press : touch.has-hover ? Theme.button-hover : Theme.button-bg;
+    }
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 5px;
+        spacing: 2px;
+        Cell {
+            horizontal-stretch: 1;
+            text: root.text;
+            color: root.bound ? Theme.text : Theme.text-dim;
+        }
+        Text { text: "▾"; color: Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; }
+    }
+    touch := TouchArea { clicked => { root.clicked(); } }
+}
+
+component PickLine inherits Rectangle {
+    in property <PickItem> item;
+    callback picked();
+    height: 18px;
+    background: touch.has-hover ? Theme.hover-bg : root.item.selected ? Theme.selected-bg : transparent;
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 6px;
+        Cell {
+            text: root.item.text;
+            color: root.item.selected ? Theme.accent : Theme.text-list;
+        }
+    }
+    touch := TouchArea { clicked => { root.picked(); } }
+}
+
+export component MouseWindow inherits Window {
+    title: "鼠标动作";
+    preferred-width: 540px;
+    preferred-height: 410px;
+    min-width: 540px;
+    min-height: 410px;
+    background: Theme.bg-panel;
+
+    in property <[string]> modifiers;
+    in property <int> modifier;
+    in property <[MouseRow]> rows;
+    in property <bool> picking;
+    in property <string> pick-title;
+    in property <[PickItem]> pick-items;
+    in-out property <string> pick-filter;
+    in property <string> message;
+    in property <bool> message-warn;
+    callback set-modifier(int);
+    callback pick(int);
+    callback filter(string);
+    callback choose(string);
+    callback cancel-pick();
+    callback set-default(int);
+    callback close();
+
+    changed picking => {
+        if root.picking { filter-input.focus(); }
+    }
+
+    VerticalLayout {
+        padding: 10px;
+        spacing: 6px;
+        HorizontalLayout {
+            height: Theme.button-height;
+            spacing: 14px;
+            Label { width: 40px; text: "修饰键"; color: Theme.text-list; }
+            for name[index] in root.modifiers: Radio {
+                horizontal-stretch: 0;
+                text: name;
+                checked: index == root.modifier;
+                clicked => { root.set-modifier(index); }
+            }
+            Rectangle { horizontal-stretch: 1; }
+        }
+        Rectangle {
+            height: 11 * 26px;
+            VerticalLayout {
+                visible: !root.picking;
+                for row[index] in root.rows: HorizontalLayout {
+                    height: 26px;
+                    spacing: 6px;
+                    Label {
+                        width: 140px;
+                        text: row.label;
+                        horizontal-alignment: right;
+                        color: Theme.text-list;
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Picker {
+                            width: 320px;
+                            text: row.command;
+                            bound: row.bound;
+                            clicked => { root.pick(index); }
+                        }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Button {
+                            horizontal-stretch: 0;
+                            height: Theme.button-small-height;
+                            small: true;
+                            text: "默认";
+                            enabled: row.resettable;
+                            clicked => { root.set-default(index); }
+                        }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                }
+            }
+            Rectangle {
+                visible: root.picking;
+                background: Theme.bg-panel;
+                VerticalLayout {
+                    spacing: 6px;
+                    HorizontalLayout {
+                        height: Theme.input-height;
+                        spacing: 6px;
+                        Label { text: root.pick-title; overflow: elide; horizontal-stretch: 1; }
+                        filter-input := LineEdit {
+                            width: 200px;
+                            height: Theme.input-height;
+                            font-size: Theme.font-body;
+                            placeholder-text: "输入文字过滤";
+                            text <=> root.pick-filter;
+                            edited(text) => { root.filter(text); }
+                        }
+                        Button { horizontal-stretch: 0; text: "取消"; clicked => { root.cancel-pick(); } }
+                    }
+                    Rectangle {
+                        vertical-stretch: 1;
+                        background: Theme.bg-list;
+                        border-width: 1px;
+                        border-color: Theme.line;
+                        ListView {
+                            x: 1px;
+                            y: 1px;
+                            width: parent.width - 2px;
+                            height: parent.height - 2px;
+                            for item in root.pick-items: PickLine {
+                                item: item;
+                                picked => { root.choose(item.key); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Text {
+            height: 18px;
+            text: "左键单击：绑定后单击要等过系统双击间隔才生效，响应会稍慢。右键固定打开菜单。";
+            color: Theme.text-dim;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+        Text {
+            height: 18px;
+            text: root.message;
+            color: root.message-warn ? Theme.accent : Theme.text-dim;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+        HorizontalLayout {
+            height: Theme.button-height;
+            Rectangle { horizontal-stretch: 1; }
+            Button { horizontal-stretch: 0; text: "关闭"; clicked => { root.close(); } }
+        }
+    }
+}

@@ -1,0 +1,196 @@
+// Compact controls shared by the two hotkeys windows (reference player geometry:
+// 11px text, 21px controls, 18px rows). std-widgets' fluent ComboBox has a
+// 160px minimum, so the drop-down here is our own.
+import { ListView } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+
+export component Label inherits Text {
+    color: Theme.text;
+    font-size: Theme.font-body;
+    vertical-alignment: center;
+}
+
+// One 18px line of a list: text that elides.
+export component Cell inherits Text {
+    font-size: Theme.font-body;
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+component ChoiceItem {
+    in property <string> text;
+    in property <bool> selected;
+    callback picked();
+    height: 20px;
+    Rectangle { background: touch.has-hover ? Theme.press-bg : transparent; }
+    HorizontalLayout {
+        padding-left: 5px;
+        padding-right: 5px;
+        spacing: 4px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 6px;
+                height: 6px;
+                border-radius: 3px;
+                background: root.selected ? Theme.playing : transparent;
+            }
+        }
+        Text {
+            text: root.text;
+            color: touch.has-hover ? Theme.accent : Theme.text-list;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+    touch := TouchArea { clicked => { root.picked(); } }
+}
+
+// 21px drop-down with an 11px label. The list opens below and scrolls past
+// `popup-height` (long lists such as plugin ids stay inside the window).
+export component Choice {
+    in property <[string]> model;
+    in-out property <int> current-index;
+    in property <bool> enabled: true;
+    in property <length> popup-height: 200px;
+    callback selected(int);
+    height: 21px;
+    accessible-role: combobox;
+    accessible-enabled: root.enabled;
+    accessible-value: root.current-index >= 0 && root.current-index < root.model.length ? root.model[root.current-index] : "";
+    Rectangle {
+        border-radius: Theme.radius-control;
+        background: !root.enabled ? Theme.button-disabled
+            : touch.pressed ? Theme.button-press
+            : touch.has-hover ? Theme.button-hover : Theme.button-bg;
+    }
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 5px;
+        spacing: 2px;
+        Text {
+            horizontal-stretch: 1;
+            text: root.current-index >= 0 && root.current-index < root.model.length ? root.model[root.current-index] : "";
+            color: root.enabled ? Theme.text-list : Theme.text-dim;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+        Text { text: "▾"; color: root.enabled ? Theme.text-dim : Theme.icon-disabled; font-size: Theme.font-body; vertical-alignment: center; }
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { list.show(); }
+    }
+    list := PopupWindow {
+        x: 0;
+        y: root.height;
+        width: max(root.width, 120px);
+        height: min(root.model.length * 20px + 2px, root.popup-height);
+        Rectangle {
+            background: Theme.bg-list;
+            border-color: Theme.line;
+            border-width: 1px;
+            ListView {
+                x: 1px;
+                y: 1px;
+                width: parent.width - 2px;
+                height: parent.height - 2px;
+                for name[index] in root.model: ChoiceItem {
+                    text: name;
+                    selected: index == root.current-index;
+                    picked => {
+                        root.current-index = index;
+                        root.selected(index);
+                        list.close();
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 14px check box with a label; the plugin owns the state (`clicked` asks it).
+export component Check {
+    in property <string> text;
+    in property <bool> checked;
+    in property <bool> enabled: true;
+    callback clicked();
+    height: Theme.checkbox-row-height;
+    accessible-role: checkbox;
+    accessible-label: root.text;
+    accessible-checkable: true;
+    accessible-checked: root.checked;
+    HorizontalLayout {
+        spacing: 5px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 13px;
+                height: 13px;
+                border-radius: 2px;
+                border-width: 1px;
+                border-color: touch.has-hover && root.enabled ? Theme.accent : Theme.text-dim;
+                background: root.checked ? Theme.accent : Theme.bg-list;
+                if root.checked: Path {
+                    width: 9px;
+                    height: 9px;
+                    viewbox-width: 9;
+                    viewbox-height: 9;
+                    commands: "M 1 4.5 L 3.5 7 L 8 1.5";
+                    stroke: Theme.text;
+                    stroke-width: 1.5px;
+                }
+            }
+        }
+        Text {
+            text: root.text;
+            color: root.enabled ? Theme.text-list : Theme.text-dim;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+        }
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Radio choice (the J02 modifier row).
+export component Radio {
+    in property <string> text;
+    in property <bool> checked;
+    callback clicked();
+    height: Theme.checkbox-row-height;
+    accessible-role: radio-button;
+    accessible-label: root.text;
+    accessible-checked: root.checked;
+    HorizontalLayout {
+        spacing: 4px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 12px;
+                height: 12px;
+                border-radius: 6px;
+                border-width: 1px;
+                border-color: touch.has-hover ? Theme.accent : Theme.text-dim;
+                background: Theme.bg-list;
+                Rectangle {
+                    width: 6px;
+                    height: 6px;
+                    border-radius: 3px;
+                    background: root.checked ? Theme.accent : transparent;
+                }
+            }
+        }
+        Text {
+            text: root.text;
+            color: root.checked ? Theme.text : Theme.text-list;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+        }
+    }
+    touch := TouchArea { clicked => { root.clicked(); } }
+}
