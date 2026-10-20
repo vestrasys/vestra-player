@@ -49,10 +49,6 @@ pub struct Declaration {
     pub focus: Option<Focus>,
     #[serde(default)]
     pub repeat: bool,
-    /// Migration window only (P4 removes): the old display/canvas shortcut,
-    /// treated as one more default binding.
-    #[serde(default)]
-    pub shortcut: Option<String>,
 }
 
 impl Declaration {
@@ -66,18 +62,7 @@ impl Declaration {
             bindings: Vec::new(),
             focus: None,
             repeat: false,
-            shortcut: None,
         }
-    }
-    /// Default bindings, including the legacy `shortcut`.
-    pub fn all_bindings(&self) -> Vec<String> {
-        let mut bindings = self.bindings.clone();
-        if let Some(shortcut) = &self.shortcut
-            && !bindings.contains(shortcut)
-        {
-            bindings.push(shortcut.clone());
-        }
-        bindings
     }
 }
 
@@ -289,8 +274,8 @@ impl Registry {
                 "order must be within ±1000000".into(),
             ));
         }
-        for binding in declaration.all_bindings() {
-            crate::bindings::parse(&binding).map_err(CommandError::Invalid)?;
+        for binding in &declaration.bindings {
+            crate::bindings::parse(binding).map_err(CommandError::Invalid)?;
         }
         state_valid(&state)?;
         let key = CommandKey {

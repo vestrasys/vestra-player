@@ -21,7 +21,7 @@
 
 - C1、C8、C9 没有插件接口，只是宿主行为。
 - wire 方法只服务于 SDK（[架构总览](README.md) §3）。新增：`layout.state`、`layout.set`、`ui.menu`、`osd.show`、`osd.panel`、`playback.stats`、`sequence.set`、`sequence.step`；宿主推给插件的新事件：`sequence.step`（只发给序列提供者，不需订阅）。删除：`ui.mountState`、`ui.showMount`。改变：`commands.register` 的 `declaration`、`ui.mount` 的参数、`source.state`（数据加 `sequence` 字段）。
-- 迁移期间（P1b–P3）旧字段与新字段**并存**：宿主同时接受 `declaration.shortcut` 和 `bindings`（`shortcut` 等于多一条绑定），SDK 同时保留 `Panel` 的旧可见性方法（`ui.showMount`/`ui.mountState` 仍可用）。SDK 对**没用任何新字段**的命令仍发旧形状 `{ title, path, shortcut }`，未迁移插件的测试不受影响；用了任一新字段（迁移后的插件都写 `order`）就发完整形状。P4 一次删除（§16），届时 SDK 总发完整形状。
+- 迁移期间（P1b–P3，已于 P4 结束，见 §19）旧字段与新字段**并存**：宿主同时接受 `declaration.shortcut` 和 `bindings`（`shortcut` 等于多一条绑定），SDK 同时保留 `Panel` 的旧可见性方法（`ui.showMount`/`ui.mountState` 仍可用）。SDK 对**没用任何新字段**的命令仍发旧形状 `{ title, path, shortcut }`，未迁移插件的测试不受影响；用了任一新字段（迁移后的插件都写 `order`）就发完整形状。P4 一次删除（§16），届时 SDK 总发完整形状。
 
 ## 1. C1 主窗口外壳
 
@@ -964,4 +964,13 @@ SDK 与运行器（`src/sdk/`）：
 - **滚轮步长**：每 40 逻辑像素一步（`WHEEL_STEP`），需按触控板与鼠标实测调整。
 - **删除提前做了的部分**（因为外壳已换，旧代码不再有调用者）：`host.slint` 写死的 Space/←/→/F11/Esc 路由、`Host::canvas_shortcut`、`WindowInput` 的 `shortcut:`/`toggleFullscreen`/`escape` 分支、`Registry::resolve_shortcut`、领域列表、`diagnostic` 及后端为它维护的状态快照、`sidebar_resize*`（Q7）、Arial Unicode 字体。§16 其余项（`shortcut` 字段、旧面板可见性接口与 wire、`reveal_sidebar_in_fullscreen`、测试宿主旧字段）留到 P4。
 - **迁移期菜单顺序**：未迁移插件的命令 `order` 为 0，P3 完成前它们在 GUI 里排在已迁移命令之前；按插件比较的菜单快照不受影响。
+
+### P4 删除（2026-10-20）
+
+§16 的清单已全部完成，迁移期的并存代码一并删除：
+
+- SDK：`CommandOptions.shortcut`；`sdk/commands.ts` 的 `LegacyCommandDeclaration` 与旧声明形状（SDK 现在总发完整声明，未写的字段为默认值）；`Panel.visibility`、`onVisibility`、`setVisible`、`toggle` 与类型 `PanelVisibility`，以及 `PanelHandle` 里读取 `ui.mountState`、订阅 `window.state` 的代码（面板挂载后改为刷新 `panels.<位置>` 的状态）；wire 的 `ui.showMount`、`ui.mountState`、`MountVisibility`。测试宿主：`ui.showMount`、`ui.mountState` 假实现、面板假对象的 `visibility`、按 `shortcut` 查绑定的兼容分支；`FakeCommand.declaration` 只有完整形状。
+- 宿主：`commands::Declaration.shortcut` 与 `all_bindings()`；`ui.mountState`、`ui.showMount` 的路由与能力表条目（含 `scope: "presentation"`）；试载时清空 `shortcut`；`window_state` 的 `reveal_sidebar_in_fullscreen`、`sidebar_override`（全屏时附着的侧栏总是隐藏，浮动窗口不受影响）。菜单行里的快捷键文字字段改名为 `keys`（与已删除的 `shortcut` 字段区分，含义不变）。
+- 测试：SDK 测试与 playback 测试改读完整声明和 `host.layout`；`window_state` 的全屏覆盖测试换成「全屏隐藏附着侧栏、保留偏好与浮动窗口」。
+- 文档：`doc/plugins/reference.md` 去掉两条迁移期说明；`doc/plugins/` 中不再出现已删除的接口。workshop 的 `vendor/sdk` 按其测试开头的命令重新同步（协调者授权）。
 

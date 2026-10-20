@@ -1618,8 +1618,8 @@ impl Host {
             method if method.starts_with("packages.") => Some("plugins.manage"),
             method if method.starts_with("sourceResolvers.") => Some("source.resolve"),
             "dialogs.open" => Some("ui.dialog"),
-            "ui.mount" | "ui.setMount" | "ui.showMount" | "ui.unmount" | "ui.mountState"
-            | "ui.interaction" | "ui.menu" | "layout.state" | "layout.set" => Some("ui.mount"),
+            "ui.mount" | "ui.setMount" | "ui.unmount" | "ui.interaction" | "ui.menu"
+            | "layout.state" | "layout.set" => Some("ui.mount"),
             "osd.show" | "osd.panel" => Some("ui.osd"),
             "playback.stats" => Some("playback.read"),
             "sequence.set" | "sequence.step" => Some("playback.control"),
@@ -1863,25 +1863,6 @@ impl Host {
                 );
                 Value::Null
             }
-            "ui.mountState" => {
-                let mount = self
-                    .mounts
-                    .get(&reply.owner)
-                    .ok_or_else(|| RpcError::new("missing", "owner has no ready mount"))?;
-                let slot = match mount.spec.slot {
-                    composition::Slot::Bottom => "bottom",
-                    composition::Slot::Sidebar => "sidebar",
-                };
-                if self.window_facts["shellGeneration"].as_u64() != Some(self.shell_generation)
-                    || self.window_facts["slots"][slot]["owner"].as_u64() != Some(reply.owner)
-                {
-                    return Err(RpcError::new(
-                        "pending",
-                        "current shell layout is not yet confirmed",
-                    ));
-                }
-                self.window_facts["slots"][slot].clone()
-            }
             "ui.interaction" => {
                 let mount = self
                     .mounts
@@ -1984,7 +1965,7 @@ impl Host {
                 });
                 return Ok(None);
             }
-            "ui.setMount" | "ui.showMount" => {
+            "ui.setMount" => {
                 let mount = self
                     .mounts
                     .get_mut(&reply.owner)
@@ -1993,42 +1974,19 @@ impl Host {
                     .shell
                     .as_ref()
                     .ok_or_else(|| RpcError::new("unavailable", "native shell unavailable"))?;
-                if method == "ui.setMount" {
-                    let property = string(params, "property")?;
-                    composition::set_json_global(shell, &mount.spec, property, &params["value"])?;
-                    if let Some(floating) =
-                        self.floating.as_ref().filter(|f| f.owner == reply.owner)
-                    {
-                        composition::set_json_global(
-                            &floating.instance,
-                            &mount.spec,
-                            property,
-                            &params["value"],
-                        )?;
-                    }
-                    mount
-                        .properties
-                        .insert(property.into(), params["value"].clone());
-                } else {
-                    let visible = params["visible"]
-                        .as_bool()
-                        .ok_or_else(|| RpcError::invalid("visible boolean required"))?;
-                    let slot = match mount.spec.slot {
-                        composition::Slot::Bottom => window_state::Slot::Bottom,
-                        composition::Slot::Sidebar => window_state::Slot::Sidebar,
-                    };
-                    if params["scope"] == "presentation" {
-                        self.policy
-                            .reveal_sidebar_in_fullscreen(reply.owner, visible)
-                            .map_err(anyhow::Error::from)?;
-                    } else {
-                        self.policy
-                            .set_preferred(slot, reply.owner, visible)
-                            .map_err(anyhow::Error::from)?;
-                        mount.visible = visible;
-                        self.remember_panel(reply.owner);
-                    }
+                let property = string(params, "property")?;
+                composition::set_json_global(shell, &mount.spec, property, &params["value"])?;
+                if let Some(floating) = self.floating.as_ref().filter(|f| f.owner == reply.owner) {
+                    composition::set_json_global(
+                        &floating.instance,
+                        &mount.spec,
+                        property,
+                        &params["value"],
+                    )?;
                 }
+                mount
+                    .properties
+                    .insert(property.into(), params["value"].clone());
                 Value::Null
             }
             "dialogs.open" => {
@@ -2107,10 +2065,9 @@ impl Host {
                             *leaf = format!("试载 {} · {leaf}", reply.owner);
                         }
                         declaration.bindings.clear();
-                        declaration.shortcut = None;
                     }
                     let manifest = plugin.manifest.id.clone();
-                    let bindings = declaration.all_bindings();
+                    let bindings = declaration.bindings.clone();
                     let panel = declaration.focus == Some(commands::Focus::Panel);
                     let repeat = declaration.repeat;
                     self.commands

@@ -189,7 +189,6 @@ interface Command extends Disposable {
 - 菜单项右侧的快捷键文字由绑定表生成（第一个生效的键盘绑定）。
 - 状态字段为函数时，每轮更新重新求值，变化才发送。
 - 命令禁用或忙碌时，播放器不会调用 `run`（绑定的按键被接住但不执行）。`run` 抛出的错误交给 `onError`。
-- 迁移期（P4 删除）：旧字段 `shortcut` 仍被接受，等同于多一条绑定。
 
 ### 4.1 绑定
 
@@ -435,7 +434,6 @@ interface SlotState {
 - `showMenu`：在面板当前所在的窗口弹出单层菜单，列出本插件的命令（`null` 为分隔线），样式、勾选、快捷键文字与主菜单相同；选择一项等于执行该命令。`at` 是窗口坐标，在 Slint 里取 `self.absolute-position.x / 1px + self.mouse-x / 1px`（y 同理）。命令不属于本插件以 `missing` 失败，面板未显示以 `unavailable` 失败，最多 32 项。
 - `setInteraction`：用户正在操作面板（输入框聚焦、拖动、弹出菜单打开）时设为 `true`，防止底栏自动隐藏。合并写入，最后写入生效。
 - 面板转发 global 上的所有回调，没有「先绑定再显示」的限制。
-- 迁移期（P4 删除）：`Panel.visibility`、`onVisibility`、`setVisible`、`toggle` 仍可用，等同于对本插件所在位置调用 `panels.<位置>` 的同名方法。
 
 ### 6.4 Slint 文件规则
 

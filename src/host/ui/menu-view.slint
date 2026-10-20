@@ -17,7 +17,7 @@ export struct MenuRow {
     reason: string,
     has-children: bool,
     open: bool,
-    shortcut: string,
+    keys: string,
     // A separator line is drawn above this row.
     separator: bool,
     // Row top inside its panel, in logical px.
@@ -77,8 +77,8 @@ component MenuItem inherits Rectangle {
             vertical-alignment: center;
             overflow: elide;
         }
-        if root.item.shortcut != "": Text {
-            text: root.item.shortcut;
+        if root.item.keys != "": Text {
+            text: root.item.keys;
             color: #777777;
             font-size: 12px;
             vertical-alignment: center;
