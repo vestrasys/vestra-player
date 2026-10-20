@@ -1,7 +1,8 @@
 //! Experimental current-application native window observation, not a final API.
 //! All rectangles are Cocoa logical points, with a lower-left origin in the
 //! global screen coordinate system (secondary screens may have negative origins).
-//! No backing-pixel conversion, resize, activation or external-app access occurs.
+//! No backing-pixel conversion, activation or external-app access occurs;
+//! `plugin.window` resizes the host window and sets the level of its windows.
 #![forbid(unsafe_code)]
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,7 +89,7 @@ mod native {
         Ok(HostWindowId(first.windowNumber() as i64))
     }
 
-    pub fn screen_for(id: HostWindowId) -> Result<ScreenFacts> {
+    fn window(id: HostWindowId) -> Result<objc2::rc::Retained<objc2_app_kit::NSWindow>> {
         let windows = app()?.windows();
         let mut matches = windows
             .iter()
@@ -99,6 +100,69 @@ mod native {
         if matches.next().is_some() {
             return Err(Unavailable("native window identity is not unique"));
         }
+        Ok(window)
+    }
+
+    /// The host window itself, for sheets attached to it.
+    pub fn ns_window(id: HostWindowId) -> Result<objc2::rc::Retained<objc2_app_kit::NSWindow>> {
+        window(id)
+    }
+
+    /// Every ordinary window of this application floats above other apps'
+    /// windows (or returns to the normal level). Panels and other levels are
+    /// left alone. Returns how many windows the application has.
+    pub fn set_floating(on: bool) -> Result<usize> {
+        use objc2_app_kit::{NSFloatingWindowLevel, NSNormalWindowLevel};
+        let windows = app()?.windows();
+        let (from, to) = if on {
+            (NSNormalWindowLevel, NSFloatingWindowLevel)
+        } else {
+            (NSFloatingWindowLevel, NSNormalWindowLevel)
+        };
+        for window in windows.iter() {
+            if window.level() == from {
+                window.setLevel(to);
+            }
+        }
+        Ok(windows.count())
+    }
+
+    pub fn window_count() -> usize {
+        app().map_or(0, |app| app.windows().count())
+    }
+
+    /// Resize the content to `width`×`height` points keeping the top-left
+    /// corner, then move the frame back inside the screen's visible area.
+    pub fn resize_content(id: HostWindowId, width: f64, height: f64) -> Result<()> {
+        use objc2_foundation::{NSPoint, NSRect, NSSize};
+        let window = window(id)?;
+        let screen = window
+            .screen()
+            .ok_or(Unavailable("associated native window has no screen"))?;
+        let visible = screen.visibleFrame();
+        let content = window.contentRectForFrameRect(window.frame());
+        let top = content.origin.y + content.size.height;
+        let wanted = NSRect::new(
+            NSPoint::new(content.origin.x, top - height),
+            NSSize::new(width, height),
+        );
+        let mut frame = window.frameRectForContentRect(wanted);
+        let right = visible.origin.x + visible.size.width;
+        let ceiling = visible.origin.y + visible.size.height;
+        if frame.origin.x + frame.size.width > right {
+            frame.origin.x = right - frame.size.width;
+        }
+        frame.origin.x = frame.origin.x.max(visible.origin.x);
+        if frame.origin.y + frame.size.height > ceiling {
+            frame.origin.y = ceiling - frame.size.height;
+        }
+        frame.origin.y = frame.origin.y.max(visible.origin.y);
+        window.setFrame_display(frame, true);
+        Ok(())
+    }
+
+    pub fn screen_for(id: HostWindowId) -> Result<ScreenFacts> {
+        let window = window(id)?;
         let screen = window
             .screen()
             .ok_or(Unavailable("associated native window has no screen"))?;
@@ -163,7 +227,10 @@ mod native {
 /// depends on a unique creation interval; concurrent creation is explicitly an
 /// error. Native IDs are process/lifetime facts, never persistent identifiers.
 #[cfg(target_os = "macos")]
-pub use native::{associate_new, capture_windows, screen_for};
+pub use native::{
+    associate_new, capture_windows, ns_window, resize_content, screen_for, set_floating,
+    window_count,
+};
 
 #[cfg(not(target_os = "macos"))]
 pub fn capture_windows() -> Result<NativeSnapshot> {
@@ -184,4 +251,31 @@ pub fn screen_for(_id: HostWindowId) -> Result<ScreenFacts> {
     Err(Unavailable(
         "native screen facts are unavailable on this platform",
     ))
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn set_floating(_on: bool) -> Result<usize> {
+    Err(Unavailable(
+        "window levels are unavailable on this platform",
+    ))
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn window_count() -> usize {
+    0
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn resize_content(_id: HostWindowId, _width: f64, _height: f64) -> Result<()> {
+    Err(Unavailable(
+        "window resizing is unavailable on this platform",
+    ))
+}
+
+/// The largest content size that fits the visible area of the window's screen.
+pub fn max_content(facts: &ScreenFacts) -> (f64, f64) {
+    (
+        facts.visible_frame.width - (facts.native_frame.width - facts.content_rect.width),
+        facts.visible_frame.height - (facts.native_frame.height - facts.content_rect.height),
+    )
 }

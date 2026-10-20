@@ -32,8 +32,9 @@ unsafe_code = "forbid"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "=0.6.5"
-objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSApplication", "NSWindow", "NSResponder", "NSScreen", "NSPasteboard"] }
-objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSString", "NSData"] }
+block2 = "=0.6.2"
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "block2", "NSApplication", "NSWindow", "NSResponder", "NSScreen", "NSPasteboard", "NSAlert", "NSButton", "NSControl", "NSView", "NSCell"] }
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSString", "NSData", "NSGeometry"] }
 
 # ICU4X prints every data-fallback warning with eprintln! when debug_assertions are on.
 # Parley segments CJK text without the optional CJ dictionary on each layout (line
