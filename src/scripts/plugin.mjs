@@ -45,6 +45,28 @@ const source = resolve(import.meta.dirname, "..");
 const pluginsRoot = join(source, "plugins");
 const tsc = join(source, "node_modules/typescript/lib/tsc.js");
 
+/** Manifest capabilities; the same list as the host's `plugins.rs`. */
+const CAPABILITIES = new Set([
+  "producer.av",
+  "playback.read",
+  "playback.control",
+  "source.resolve",
+  "events",
+  "commands",
+  "ui.window",
+  "ui.mount",
+  "ui.dialog",
+  "plugins.manage",
+  "processing.video",
+  "processing.audio",
+  "subtitles.read",
+  "subtitles.control",
+  "media.read",
+  "media.control",
+  "ui.osd",
+  "clipboard",
+]);
+
 /** Never part of a production package. */
 const SKIP_DIRS = new Set([
   "dist",
@@ -84,6 +106,11 @@ async function plugin(name) {
   if (!existsSync(join(directory, "manifest.json")))
     fail(`${name}: no manifest.json in ${directory}`);
   const manifest = await json(join(directory, "manifest.json"));
+  const unknown = (manifest.capabilities ?? []).filter(
+    (capability) => !CAPABILITIES.has(capability),
+  );
+  if (unknown.length)
+    fail(`${name}: unknown capabilities ${unknown.join(", ")}`);
   const packageJson = await json(join(directory, "package.json"), {});
   return {
     name,

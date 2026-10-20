@@ -90,8 +90,28 @@ fn subtitle_filter(subtitle: &Subtitle<'_>) -> Result<String> {
     // These integer ASS fields truncate as mpv's ASS_Style integer assignment.
     let margin_x = (19.0 * height / 720.0) as u32;
     let margin_v = margin_v as u32;
+    // Same shadow/box rule as the realtime mapping. ASS alpha is inverted
+    // (00 opaque); BorderStyle=4 is libass's background box.
+    let (border_style, back_colour, shadow) = match subtitle.style.box_opacity {
+        Some(opacity) => (
+            4,
+            format!("&H{:02X}000000", 255 - subtitle_style::box_alpha(opacity)),
+            subtitle_style::BOX_MARGIN,
+        ),
+        None => (
+            1,
+            "&H80000000".into(),
+            f64::from(subtitle.style.shadow.unwrap_or(0)),
+        ),
+    };
+    let shadow = shadow * height / 1080.0;
+    let bold = if subtitle.style.bold == Some(true) {
+        -1
+    } else {
+        0
+    };
     let force_style = format!(
-        "FontName={family},FontSize={size},PrimaryColour={},SecondaryColour={},OutlineColour=&H00000000,BackColour=&H00000000,BorderStyle=1,Outline={outline},Shadow=0,Alignment=2,MarginL={margin_x},MarginR={margin_x},MarginV={margin_v},Bold=0,Italic=0,Spacing=0,ScaleX=1,ScaleY=1,PlayResX={width},PlayResY={},ScaledBorderAndShadow=yes",
+        "FontName={family},FontSize={size},PrimaryColour={},SecondaryColour={},OutlineColour=&H00000000,BackColour={back_colour},BorderStyle={border_style},Outline={outline},Shadow={shadow},Alignment=2,MarginL={margin_x},MarginR={margin_x},MarginV={margin_v},Bold={bold},Italic=0,Spacing=0,ScaleX=1,ScaleY=1,PlayResX={width},PlayResY={},ScaledBorderAndShadow=yes",
         ass_color(subtitle.style.color),
         ass_color(subtitle.style.color),
         subtitle.display_height
@@ -189,6 +209,14 @@ mod tests {
         let graph = video(&[], Some(subtitle), 0.0).unwrap();
         assert!(graph.contains("FontSize=12,"));
         assert!(graph.contains("MarginL=9,MarginR=9,MarginV=18,"));
+        style.bold = Some(true);
+        style.shadow = Some(2);
+        let graph = video(&[], Some(descriptor(&style)), 0.0).unwrap();
+        assert!(graph.contains("BackColour=&H80000000,BorderStyle=1,Outline=2,Shadow=2,"));
+        assert!(graph.contains("Bold=-1,"));
+        style.box_opacity = Some(100);
+        let graph = video(&[], Some(descriptor(&style)), 0.0).unwrap();
+        assert!(graph.contains("BackColour=&H00000000,BorderStyle=4,Outline=2,Shadow=6,"));
     }
 
     #[test]

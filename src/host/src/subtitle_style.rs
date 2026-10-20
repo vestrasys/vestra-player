@@ -16,6 +16,15 @@ pub enum Color {
     Cyan,
 }
 
+/// Whether the user style replaces an ASS script's own styling (`force`) or
+/// leaves ASS styling alone apart from scaling (`keep`, the default).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AssOverride {
+    Keep,
+    Force,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Style {
@@ -25,7 +34,20 @@ pub struct Style {
     pub outline: u8,
     pub margin_percent: u8,
     pub offset_ms: i32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bold: Option<bool>,
+    /// Shadow offset 0..=4 at the 1080p reference height.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shadow: Option<u8>,
+    /// Background box opacity 0..=100; `None` (JSON null) draws no box.
+    #[serde(default, rename = "box", skip_serializing_if = "Option::is_none")]
+    pub box_opacity: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ass_override: Option<AssOverride>,
 }
+
+/// The background box margin at the 1080p reference height.
+pub const BOX_MARGIN: f64 = 6.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
@@ -53,6 +75,10 @@ pub fn default_for(font_id: String) -> Style {
         outline: 2,
         margin_percent: 5,
         offset_ms: 0,
+        bold: None,
+        shadow: None,
+        box_opacity: None,
+        ass_override: None,
     }
 }
 
@@ -62,7 +88,9 @@ fn validate_fields(style: &Style) -> Result<()> {
         || !(16..=72).contains(&style.font_size)
         || style.outline > 4
         || !(2..=15).contains(&style.margin_percent)
-        || !(-10_000..=10_000).contains(&style.offset_ms)
+        || !(-600_000..=600_000).contains(&style.offset_ms)
+        || style.shadow.is_some_and(|shadow| shadow > 4)
+        || style.box_opacity.is_some_and(|opacity| opacity > 100)
     {
         return Err(Error::Invalid);
     }
@@ -100,8 +128,29 @@ pub fn mpv_properties(style: &Style, resolved_family: &str) -> Result<Vec<(&'sta
         Color::Yellow => "#FFFFFF00",
         Color::Cyan => "#FF00FFFF",
     };
+    // A box replaces the shadow: background-box takes its colour from
+    // sub-back-color and its margin from sub-shadow-offset.
+    let (border_style, back_color, shadow) = match style.box_opacity {
+        Some(opacity) => (
+            "background-box",
+            format!("#{:02X}000000", box_alpha(opacity)),
+            BOX_MARGIN,
+        ),
+        None => (
+            "outline-and-shadow",
+            "#80000000".into(),
+            f64::from(style.shadow.unwrap_or(0)),
+        ),
+    };
     Ok(vec![
-        ("sub-ass-override", "force".into()),
+        (
+            "sub-ass-override",
+            match style.ass_override.unwrap_or(AssOverride::Keep) {
+                AssOverride::Keep => "scale",
+                AssOverride::Force => "force",
+            }
+            .into(),
+        ),
         ("sub-scale-by-window", "yes".into()),
         ("sub-scale-with-window", "no".into()),
         ("sub-use-margins", "no".into()),
@@ -127,8 +176,24 @@ pub fn mpv_properties(style: &Style, resolved_family: &str) -> Result<Vec<(&'sta
         ),
         ("sub-color", color.into()),
         ("sub-border-color", "#FF000000".into()),
-        ("sub-shadow-offset", "0".into()),
+        (
+            "sub-bold",
+            if style.bold == Some(true) {
+                "yes"
+            } else {
+                "no"
+            }
+            .into(),
+        ),
+        ("sub-border-style", border_style.into()),
+        ("sub-back-color", back_color),
+        ("sub-shadow-offset", (shadow * 720.0 / 1080.0).to_string()),
     ])
+}
+
+/// Box opacity percent as an 8-bit alpha (255 = opaque).
+pub fn box_alpha(opacity: u8) -> u8 {
+    (f64::from(opacity.min(100)) * 255.0 / 100.0).round() as u8
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -190,7 +255,7 @@ mod tests {
     #[test]
     fn all_numeric_endpoints_and_exact_font_membership_are_enforced() {
         let mut candidate = style();
-        for (size, outline, margin, offset) in [(16, 0, 2, -10_000), (72, 4, 15, 10_000)] {
+        for (size, outline, margin, offset) in [(16, 0, 2, -600_000), (72, 4, 15, 600_000)] {
             candidate.font_size = size;
             candidate.outline = outline;
             candidate.margin_percent = margin;
@@ -203,8 +268,8 @@ mod tests {
             (36, 5, 5, 0),
             (36, 2, 1, 0),
             (36, 2, 16, 0),
-            (36, 2, 5, -10_001),
-            (36, 2, 5, 10_001),
+            (36, 2, 5, -600_001),
+            (36, 2, 5, 600_001),
         ] {
             candidate = style();
             candidate.font_size = size;
@@ -283,13 +348,61 @@ mod tests {
         assert_eq!(number("sub-margin-y") / 720.0, 0.05);
         assert_eq!(number("sub-delay"), -1.25);
         assert_eq!(properties["sub-font"], "Verified Family");
-        assert_eq!(properties["sub-ass-override"], "force");
+        assert_eq!(properties["sub-ass-override"], "scale");
+        assert_eq!(properties["sub-bold"], "no");
+        assert_eq!(properties["sub-border-style"], "outline-and-shadow");
         assert_eq!(properties["sub-scale-by-window"], "yes");
         assert_eq!(properties["sub-scale-with-window"], "no");
         assert_eq!(properties["sub-use-margins"], "no");
         assert_eq!(properties["sub-align-x"], "center");
         assert_eq!(properties["sub-align-y"], "bottom");
         assert_eq!(number("sub-shadow-offset"), 0.0);
+    }
+
+    #[test]
+    fn bold_shadow_box_and_ass_override_map_to_mpv_and_stay_optional_on_the_wire() {
+        let mut style = style();
+        style.bold = Some(true);
+        style.shadow = Some(3);
+        style.ass_override = Some(AssOverride::Force);
+        let properties: std::collections::BTreeMap<_, _> = mpv_properties(&style, "Family")
+            .unwrap()
+            .into_iter()
+            .collect();
+        assert_eq!(properties["sub-bold"], "yes");
+        assert_eq!(properties["sub-ass-override"], "force");
+        assert_eq!(properties["sub-border-style"], "outline-and-shadow");
+        assert_eq!(properties["sub-back-color"], "#80000000");
+        assert_eq!(properties["sub-shadow-offset"].parse::<f64>().unwrap(), 2.0);
+        style.box_opacity = Some(50);
+        let properties: std::collections::BTreeMap<_, _> = mpv_properties(&style, "Family")
+            .unwrap()
+            .into_iter()
+            .collect();
+        assert_eq!(properties["sub-border-style"], "background-box");
+        assert_eq!(properties["sub-back-color"], "#80000000");
+        assert_eq!(properties["sub-shadow-offset"].parse::<f64>().unwrap(), 4.0);
+        for (shadow, opacity) in [(Some(5), None), (None, Some(101))] {
+            let mut bad = self::style();
+            bad.shadow = shadow;
+            bad.box_opacity = opacity;
+            assert_eq!(validate(&bad, &fonts()), Err(Error::Invalid));
+        }
+        let encoded = serde_json::to_value(&style).unwrap();
+        assert_eq!(encoded["box"], json!(50));
+        assert_eq!(encoded["assOverride"], json!("force"));
+        let parsed: Style = serde_json::from_value(json!({"fontId":"verified-font","fontSize":36,
+            "color":"white","outline":2,"marginPercent":5,"offsetMs":0,"box":null}))
+        .unwrap();
+        assert_eq!(parsed, self::style());
+        assert!(
+            serde_json::to_value(self::style())
+                .unwrap()
+                .get("bold")
+                .is_none()
+        );
+        assert_eq!(box_alpha(100), 255);
+        assert_eq!(box_alpha(0), 0);
     }
 
     #[test]

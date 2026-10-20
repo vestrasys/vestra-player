@@ -121,6 +121,12 @@ enum Mutation {
         revision: u64,
         expected: Stamp,
         input_origin: Option<Target>,
+        #[serde(default)]
+        format: Format,
+        #[serde(default)]
+        title: Option<String>,
+        #[serde(default)]
+        select: Selection,
     },
     #[serde(rename = "subtitles.select")]
     Select {
@@ -135,12 +141,45 @@ enum Mutation {
         expected: Stamp,
     },
 }
+/// Uploaded subtitle formats: SRT is carried to mpv as WebVTT, ASS as is.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum Format {
+    #[default]
+    Srt,
+    Ass,
+}
+impl Format {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Srt => "srt",
+            Self::Ass => "ass",
+        }
+    }
+}
+/// Whether a commit also selects the new track.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum Selection {
+    #[default]
+    Primary,
+    None,
+}
 #[derive(Clone)]
 struct Asset {
     track: i64,
     binding: NativeLoad,
     file: Arc<tempfile::NamedTempFile>,
     digest: String,
+    format: Format,
+    title: Option<String>,
+}
+/// Codecs whose cues are text (searchable, styleable), as opposed to bitmaps.
+fn text_codec(codec: Option<&str>) -> bool {
+    matches!(
+        codec,
+        Some("subrip" | "ass" | "ssa" | "webvtt" | "mov_text" | "text")
+    )
 }
 struct NativeTrack {
     id: i64,
@@ -351,6 +390,7 @@ impl Subtitles {
         file: Arc<tempfile::NamedTempFile>,
         digest: String,
         owner: u64,
+        (format, title): (Format, Option<String>),
     ) -> Result<Asset, RpcError> {
         let binding = self
             .active_load
@@ -360,7 +400,12 @@ impl Subtitles {
         let url = path
             .to_str()
             .ok_or_else(|| failure("subtitle path is not UTF-8"))?;
-        let command = mpv.command(&["sub-add", url, "auto"]).map_err(failure);
+        // `auto` adds without selecting; selection always goes through `sid`.
+        let command = match &title {
+            Some(title) => mpv.command(&["sub-add", url, "auto", title]),
+            None => mpv.command(&["sub-add", url, "auto"]),
+        }
+        .map_err(failure);
         let after = tracks(mpv);
         let candidates = after.as_ref().ok().map(|tracks| {
             tracks
@@ -375,6 +420,8 @@ impl Subtitles {
                 binding,
                 file,
                 digest,
+                format,
+                title,
             });
         }
         let command_ok = command.is_ok();
@@ -459,8 +506,13 @@ impl Subtitles {
                 .map_err(model_error)?;
             mpv.set_property("sid", "no").map_err(failure)?;
             for (key, asset) in self.assets.clone() {
-                let current =
-                    self.add_file(mpv, asset.file.clone(), asset.digest.clone(), key.0)?;
+                let current = self.add_file(
+                    mpv,
+                    asset.file.clone(),
+                    asset.digest.clone(),
+                    key.0,
+                    (asset.format, asset.title.clone()),
+                )?;
                 self.assets.insert(key, current);
             }
             set_target(
@@ -479,11 +531,23 @@ impl Subtitles {
     pub fn state(&self, mpv: &Mpv) -> Value {
         let snapshot = self.registry.state();
         let native = tracks(mpv).unwrap_or_default();
+        // Container stream numbers are trusted only where ff-index is: the
+        // leased local loads that force the lavf demuxer (media_tracks.rs).
+        let indexed = mpv
+            .get_property::<String>("current-demuxer")
+            .ok()
+            .as_deref()
+            == Some("lavf")
+            && mpv
+                .get_property::<String>("path")
+                .is_ok_and(|path| path.starts_with("fd://"));
         let tracks=native.into_iter().map(|native| {
    let managed=self.assets.iter().find(|(_,a)|a.binding==self.active_load.unwrap_or(a.binding)&&self.active_load.is_some()&&a.track==native.id).map(|((owner,id,revision),_)|Track::External{owner:*owner,resource_id:id.clone(),content_revision:*revision});
-   json!({"target":target(&managed.unwrap_or(Track::Embedded(native.id))),"title":native.title,"language":native.language,"styleSupported":native.style_supported,"styleReason":if native.style_supported{None}else{Some("bitmap or unsupported subtitle codec")}})
+   let stream_index = if managed.is_none() && !native.external && indexed { native.stream_index } else { None };
+   json!({"target":target(&managed.unwrap_or(Track::Embedded(native.id))),"title":native.title,"language":native.language,"styleSupported":native.style_supported,"styleReason":if native.style_supported{None}else{Some("bitmap or unsupported subtitle codec")},
+     "codec":native.codec,"text":text_codec(native.codec.as_deref()),"streamIndex":stream_index})
   }).collect::<Vec<_>>();
-        let resources=snapshot.resources.iter().map(|r|{let asset=self.assets.get(&(r.owner,r.resource_id.clone(),r.revision));json!({"owner":r.owner,"resourceId":r.resource_id,"revision":r.revision,"format":"srt","digest":r.content.digest,"sizeBytes":r.content.bytes.len(),"cues":r.content.cues,"derived":{"format":"webvtt","digest":asset.map(|a|a.digest.clone())}})}).collect::<Vec<_>>();
+        let resources=snapshot.resources.iter().map(|r|{let asset=self.assets.get(&(r.owner,r.resource_id.clone(),r.revision));let format=asset.map_or(Format::Srt,|a|a.format);json!({"owner":r.owner,"resourceId":r.resource_id,"revision":r.revision,"format":format.name(),"digest":r.content.digest,"sizeBytes":r.content.bytes.len(),"cues":r.content.cues,"derived":{"format":if format==Format::Ass{"ass"}else{"webvtt"},"digest":asset.map(|a|a.digest.clone())}})}).collect::<Vec<_>>();
         json!({"source":{"generation":self.generation,"phase":match self.phase{Phase::Empty=>"empty",Phase::Loading=>"loading",Phase::Ready=>"ready",Phase::Ended=>"ended",Phase::Error=>"error"}},"confirmation":if self.uncertain.is_some(){"uncertain"}else if self.confirmed{"applied"}else{"waiting"},"error":self.uncertain,"selection":{"stamp":{"generation":snapshot.stamp.generation,"revision":snapshot.stamp.revision},"target":snapshot.selected.as_ref().map(target)},"tracks":tracks,"resources":resources,"presentation":self.presentation_state()})
     }
     fn restore(
@@ -716,6 +780,12 @@ impl Subtitles {
             .ok_or_else(|| {
                 RpcError::new("unavailable", "selected carrier is not bound to this load")
             })?;
+        if asset.format == Format::Ass {
+            return Err(RpcError::new(
+                "unsupported",
+                "ASS subtitles are not flattened into processed snapshots",
+            ));
+        }
         let validated =
             subtitle_format::validate(resource.content.bytes.clone()).map_err(failure)?;
         let text = validated
@@ -1058,6 +1128,7 @@ impl Subtitles {
                 upload_id,
                 revision,
                 input_origin,
+                title,
                 ..
             } => {
                 if *upload_id == 0
@@ -1066,6 +1137,14 @@ impl Subtitles {
                     || *revision > operations::Book::MAX_REVISION
                 {
                     return Err(RpcError::invalid("safe uploadId and revision required"));
+                }
+                if title.as_ref().is_some_and(|title| {
+                    !(1..=200).contains(&title.chars().count())
+                        || title.chars().any(char::is_control)
+                }) {
+                    return Err(RpcError::invalid(
+                        "subtitle title needs 1..200 characters without control characters",
+                    ));
                 }
                 if let Some(origin) = input_origin {
                     origin.validate()?;
@@ -1170,6 +1249,9 @@ impl Subtitles {
                 revision,
                 expected,
                 input_origin,
+                format,
+                title,
+                select,
                 ..
             } => {
                 if expected.generation != self.generation || expected.model() != before.stamp {
@@ -1200,34 +1282,67 @@ impl Subtitles {
                     .uploads
                     .complete(owner, upload_id, self.generation)
                     .map_err(upload_error)?;
-                let validated = subtitle_format::validate(bytes)
-                    .map_err(|e| RpcError::invalid(e.to_string()))?;
-                if validated.digest != sha256 {
-                    return Err(RpcError::invalid("SRT sha256 mismatch"));
+                // SRT goes to mpv as WebVTT; ASS/SSA is handed over byte for byte.
+                let (content, carrier, suffix) = match format {
+                    Format::Srt => {
+                        let validated = subtitle_format::validate(bytes)
+                            .map_err(|e| RpcError::invalid(e.to_string()))?;
+                        let vtt = validated.webvtt();
+                        (
+                            model::Content {
+                                cues: validated.document.subtitles.len() as u32,
+                                bytes: validated.source,
+                                digest: validated.digest,
+                            },
+                            vtt.into_bytes(),
+                            ".vtt",
+                        )
+                    }
+                    Format::Ass => {
+                        let validated = subtitle_format::validate_ass(bytes)
+                            .map_err(|e| RpcError::invalid(e.to_string()))?;
+                        (
+                            model::Content {
+                                cues: validated.dialogues,
+                                bytes: validated.source.clone(),
+                                digest: validated.digest,
+                            },
+                            validated.source.to_vec(),
+                            ".ass",
+                        )
+                    }
+                };
+                if content.digest != sha256 {
+                    return Err(RpcError::invalid("subtitle sha256 mismatch"));
                 }
-                let vtt = validated.webvtt();
-                let digest = format!("{:x}", Sha256::digest(vtt.as_bytes()));
-                next.register_and_select(
-                    owner,
-                    resource_id.clone(),
-                    revision,
-                    model::Content {
-                        bytes: validated.source,
-                        digest: validated.digest,
-                        cues: validated.document.subtitles.len() as u32,
-                    },
-                    expected.model(),
-                )
+                let digest = format!("{:x}", Sha256::digest(&carrier));
+                match select {
+                    Selection::Primary => next.register_and_select(
+                        owner,
+                        resource_id.clone(),
+                        revision,
+                        content,
+                        expected.model(),
+                    ),
+                    Selection::None => next.register(
+                        owner,
+                        resource_id.clone(),
+                        revision,
+                        content,
+                        expected.generation,
+                    ),
+                }
                 .map_err(model_error)?;
                 let mut file = tempfile::Builder::new()
                     .prefix("vestra-subtitle-")
-                    .suffix(".vtt")
+                    .suffix(suffix)
                     .tempfile()
                     .map_err(failure)?;
-                file.write_all(vtt.as_bytes()).map_err(failure)?;
+                file.write_all(&carrier).map_err(failure)?;
                 file.flush().map_err(failure)?;
                 set_target(mpv, self.active_load, &before.selected, &self.assets)?;
-                let asset = match self.add_file(mpv, Arc::new(file), digest, owner) {
+                let asset = match self.add_file(mpv, Arc::new(file), digest, owner, (format, title))
+                {
                     Ok(asset) => asset,
                     Err(error) => {
                         return Err(self.restore(

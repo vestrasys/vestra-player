@@ -210,7 +210,7 @@ impl Registry {
             || revision == 0
             || revision > Self::MAX_REVISION
             || content.bytes.len() > Self::MAX_CONTENT_BYTES
-            || !(1..=10_000).contains(&content.cues)
+            || !(1..=20_000).contains(&content.cues)
             || std::str::from_utf8(&content.bytes).is_err()
             || content.digest.len() != 64
             || !content
@@ -621,7 +621,7 @@ mod tests {
         let mut zero_cues = content();
         zero_cues.cues = 0;
         let mut many_cues = content();
-        many_cues.cues = 10_001;
+        many_cues.cues = 20_001;
         let mut uppercase_digest = content();
         uppercase_digest.digest = "A".repeat(64);
         for content in [

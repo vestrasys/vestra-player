@@ -278,6 +278,57 @@ impl Sources {
     pub fn phase(&self) -> Phase {
         self.session.state().phase
     }
+    /// `audio.addTrack { path, select, expected? }` → the new track;
+    /// `audio.selectTrack { id, expected? }` → null. Both act on the current
+    /// media load only, conditional on the source stamp like other controls.
+    fn audio_track(&mut self, mpv: &Mpv, method: &str, params: &Value) -> Result<Value, RpcError> {
+        if !params["expected"].is_null() {
+            let expected: crate::session::SourceStamp =
+                serde_json::from_value(params["expected"].clone())
+                    .map_err(|e| RpcError::invalid(e.to_string()))?;
+            if expected != self.session.state().stamp {
+                return Err(RpcError::new("stale", "source changed"));
+            }
+        }
+        #[cfg(feature = "producer-audio")]
+        let producer = self.provider_ticket.is_some();
+        #[cfg(not(feature = "producer-audio"))]
+        let producer = false;
+        if producer || self.presentation_load().is_none() {
+            return Err(RpcError::new(
+                "unavailable",
+                "audio tracks need ready media",
+            ));
+        }
+        let listed = |mpv: &Mpv| {
+            crate::media_tracks::audio_tracks(mpv)
+                .map_err(|e| RpcError::new("backend", e.to_string()))
+        };
+        if method == "audio.selectTrack" {
+            let id = params["id"]
+                .as_i64()
+                .ok_or_else(|| RpcError::invalid("id requires an integer"))?;
+            if !listed(mpv)?.iter().any(|track| track.track_id == id) {
+                return Err(RpcError::invalid("no such audio track"));
+            }
+            mpv.set_property("aid", id)
+                .map_err(|e| RpcError::new("backend", e.to_string()))?;
+            return Ok(Value::Null);
+        }
+        let path = params["path"]
+            .as_str()
+            .ok_or_else(|| RpcError::invalid("path requires a string"))?;
+        if !Path::new(path).is_absolute() || path.contains("://") || !Path::new(path).is_file() {
+            return Err(RpcError::invalid("path must be an existing absolute file"));
+        }
+        let select = params["select"].as_bool().unwrap_or(true);
+        let before = listed(mpv)?;
+        mpv.command(&["audio-add", path, if select { "select" } else { "auto" }])
+            .map_err(|e| RpcError::new("backend", e.to_string()))?;
+        let added = added_external(&before, &listed(mpv)?)
+            .ok_or_else(|| RpcError::new("backend", "mpv did not list the added audio track"))?;
+        Ok(json!(added))
+    }
     /// Only call after an accepted actual FileLoaded event. Not a frame fence.
     pub fn ready_load(&self) -> Option<(i64, IntentTicket)> {
         self.active.filter(|(_, ticket)| {
@@ -698,6 +749,9 @@ impl Sources {
     ) -> Result<Option<Value>, RpcError> {
         if method.starts_with("sourceResolvers.") {
             return self.resolver_dispatch(mpv, owner, method, params).map(Some);
+        }
+        if matches!(method, "audio.addTrack" | "audio.selectTrack") {
+            return self.audio_track(mpv, method, params).map(Some);
         }
         #[cfg(feature = "producer-audio")]
         {
@@ -1214,6 +1268,17 @@ impl Sources {
         Ok(Some(json!(status)))
     }
 }
+/// The one external track `audio-add` created, if exactly one appeared.
+fn added_external(
+    before: &[crate::media_tracks::AudioTrack],
+    after: &[crate::media_tracks::AudioTrack],
+) -> Option<crate::media_tracks::AudioTrack> {
+    let mut new = after
+        .iter()
+        .filter(|track| track.external && !before.iter().any(|old| old.track_id == track.track_id));
+    let first = new.next()?.clone();
+    new.next().is_none().then_some(first)
+}
 fn load(mpv: &Mpv, source: &str, paused: bool) -> Result<i64, String> {
     load_with_options(mpv, source, paused, "")
 }
@@ -1284,5 +1349,37 @@ mod input_adapter_tests {
         input.delivery.ack(1, &release, 1).unwrap();
         assert!(input.delivery.pending().is_none());
         assert!(input.delivery.notice().pressed.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod audio_track_tests {
+    use super::*;
+    use crate::media_tracks::AudioTrack;
+    fn track(track_id: i64, external: bool) -> AudioTrack {
+        AudioTrack {
+            track_id,
+            stream_index: None,
+            selected: false,
+            external,
+            codec: Some("mp3".into()),
+            title: None,
+            language: None,
+        }
+    }
+    #[test]
+    fn only_one_new_external_track_counts_as_the_added_one() {
+        let before = [track(1, false)];
+        assert_eq!(
+            added_external(&before, &[track(1, false), track(2, true)])
+                .unwrap()
+                .track_id,
+            2
+        );
+        assert!(added_external(&before, &[track(1, false)]).is_none());
+        assert!(added_external(&before, &[track(1, false), track(2, false)]).is_none());
+        assert!(
+            added_external(&before, &[track(1, false), track(2, true), track(3, true)]).is_none()
+        );
     }
 }
