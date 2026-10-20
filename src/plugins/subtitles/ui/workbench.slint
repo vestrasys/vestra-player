@@ -21,6 +21,17 @@ export component SubtitleWorkbench inherits Window {
     in property <float> outline-size: 2;
     in property <float> margin-percent: 5;
     in property <int> selected-color: 0;
+    // A user drag writes Slider.value and drops the binding; re-push model changes.
+    changed delay-ms => { delay-slider.value = root.delay-ms; }
+    changed font-size => { size-slider.value = root.font-size; }
+    changed outline-size => { outline-slider.value = root.outline-size; }
+    changed margin-percent => { margin-slider.value = root.margin-percent; }
+    // A user pick or a model change detaches ComboBox.current-index; re-push model changes.
+    changed track-labels => { track-combo.current-index = root.selected-track; }
+    changed selected-track => { track-combo.current-index = root.selected-track; }
+    changed font-labels => { font-combo.current-index = root.selected-font; }
+    changed selected-font => { font-combo.current-index = root.selected-font; }
+    changed selected-color => { color-combo.current-index = root.selected-color; }
     callback load-file();
     callback refresh();
     callback cancel();
@@ -43,30 +54,30 @@ export component SubtitleWorkbench inherits Window {
             Button { text: "取消操作"; enabled: root.busy; clicked => { root.cancel(); } }
         }
         Text { text: "字幕轨"; font-weight: 600; }
-        ComboBox { model: root.track-labels; current-index: root.selected-track; enabled: !root.busy; selected(value) => { root.select-track(self.current-index); } }
+        track-combo := ComboBox { model: root.track-labels; current-index: root.selected-track; enabled: !root.busy; selected(value) => { root.select-track(self.current-index); } }
         Button { text: "移除选中的外部字幕"; enabled: root.can-remove && !root.busy; clicked => { root.remove-selected(); } }
         Text { text: root.style-reason; wrap: word-wrap; }
         HorizontalBox {
             Text { text: "延迟 " + round(root.delay-ms) + " ms"; min-width: 170px; }
-            Slider { minimum: -10000; maximum: 10000; value: root.delay-ms; enabled: root.can-style; changed(value) => { root.change-delay(value); } }
+            delay-slider := Slider { minimum: -10000; maximum: 10000; value: root.delay-ms; enabled: root.can-style; changed(value) => { root.change-delay(value); } }
         }
         Text { text: "正值晚出现，负值提前。"; }
         HorizontalBox {
             Text { text: "字号 " + round(root.font-size); min-width: 170px; }
-            Slider { minimum: 12; maximum: 96; value: root.font-size; enabled: root.can-style; changed(value) => { root.change-size(value); } }
+            size-slider := Slider { minimum: 12; maximum: 96; value: root.font-size; enabled: root.can-style; changed(value) => { root.change-size(value); } }
         }
         HorizontalBox {
             Text { text: "描边 " + round(root.outline-size); min-width: 170px; }
-            Slider { minimum: 0; maximum: 8; value: root.outline-size; enabled: root.can-style; changed(value) => { root.change-outline(value); } }
+            outline-slider := Slider { minimum: 0; maximum: 8; value: root.outline-size; enabled: root.can-style; changed(value) => { root.change-outline(value); } }
         }
         HorizontalBox {
             Text { text: "底部边距 " + round(root.margin-percent) + "%"; min-width: 170px; }
-            Slider { minimum: 0; maximum: 30; value: root.margin-percent; enabled: root.can-style; changed(value) => { root.change-margin(value); } }
+            margin-slider := Slider { minimum: 0; maximum: 30; value: root.margin-percent; enabled: root.can-style; changed(value) => { root.change-margin(value); } }
         }
         HorizontalBox {
             Text { text: "字体"; }
-            ComboBox { model: root.font-labels; current-index: root.selected-font; enabled: root.can-style; selected(value) => { root.change-font(self.current-index); } }
-            ComboBox { model: ["白色", "黄色", "青色"]; current-index: root.selected-color; enabled: root.can-style; selected(value) => { root.change-color(self.current-index); } }
+            font-combo := ComboBox { model: root.font-labels; current-index: root.selected-font; enabled: root.can-style; selected(value) => { root.change-font(self.current-index); } }
+            color-combo := ComboBox { model: ["白色", "黄色", "青色"]; current-index: root.selected-color; enabled: root.can-style; selected(value) => { root.change-color(self.current-index); } }
         }
         Button { text: "撤销本插件的样式与延迟"; enabled: !root.busy; clicked => { root.reset-style(); } }
         Text { text: root.confirmation-text; wrap: word-wrap; }

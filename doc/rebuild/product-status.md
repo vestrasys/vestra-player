@@ -2,6 +2,10 @@
 
 工作基线：`development-2026-10-18.1`，2026-10-18已发布；wire仍`vestra.experimental/0.1`。本表计产品代码及验收，不把能力探针算插件完成。
 
+## 2026-10-20 SDK v2 迁移
+
+十个插件已全部改用 SDK v2（handle 式 API，`export default function activate(plugin)`），旧扁平 Host API 已删除。迁移后全量 GUI 复测 12 项全部通过，期间修复 5 个插件 UI/打包缺陷，详见 [sdk-v2-progress](sdk-v2-progress.md) P5 记录；仍开放条目见 [api-requests](api-requests.md) 末节。下表为迁移前状态，迁移后行为保持不变。
+
 ## 2026-10-20 当前状态（覆盖下方 2026-10-18 旧表）
 
 依据：2026-10-19 对新构建宿主的真实 GUI 走查（十个插件同包运行，CGEvent 鼠标键盘 + 截图），以及 2026-10-20 针对修复项的复测。这是作者/维护者实测，不等于独立验收者结论；独立验收仍为 0/10。
