@@ -13,4 +13,4 @@
 - `src/examples/bookmark/`：教程中的书签插件（含测试）。
 - `src/plugins/`：10 个产品插件。最短的是 `video/`（画面调节），可作为第一个参考。
 
-设计取舍（为什么这样设计）见 [sdk-v2.md](../rebuild/sdk-v2.md)，其中也记录了 SDK v2 之前的旧 API 对照。
+设计取舍（为什么这样设计）见 [SDK 设计说明](../architecture/sdk-design.md)。

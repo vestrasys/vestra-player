@@ -1,9 +1,0 @@
-{
-  work: '/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-range-author-ZHNoEN',
-  status: 0
-}
-{
-  pass: true,
-  work: '/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-media-range-author-ZHNoEN',
-  counts: { raw: 2, processed: 2 }
-}

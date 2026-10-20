@@ -24,28 +24,11 @@ cpal = { version = "=0.18.2", optional = true }
 rtrb = { version = "=0.4.0", optional = true }
 
 [features]
-default = ["producer-audio-probe"]
-producer-audio-probe = ["dep:cpal", "dep:rtrb"]
+default = ["producer-audio"]
+producer-audio = ["dep:cpal", "dep:rtrb"]
 
 [lints.rust]
 unsafe_code = "forbid"
-
-[[bin]]
-name = "processing-probe"
-path = "../experiments/processing-probe/main.rs"
-
-[[bin]]
-name = "source-probe"
-path = "../experiments/source-probe/main.rs"
-
-[[bin]]
-name = "composition-probe"
-path = "../experiments/composition-probe/main.rs"
-
-[[bin]]
-name = "producer-audio-probe"
-path = "../experiments/producer-audio-probe/main.rs"
-required-features = ["producer-audio-probe"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "=0.6.5"

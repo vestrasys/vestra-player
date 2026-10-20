@@ -81,19 +81,6 @@ impl Processing {
                 "current source processing is not confirmed",
             ));
         }
-        for property in ["brightness", "contrast", "saturation", "gamma"] {
-            let value = mpv
-                .get_property::<f64>(property)
-                .map_err(|e| RpcError::new("unsupported", e.to_string()))?;
-            if !value.is_finite() || value.abs() > 0.000001 {
-                return Err(RpcError::new(
-                    "unsupported",
-                    format!(
-                        "legacy {property} must be reset to default before freezing typed processing"
-                    ),
-                ));
-            }
-        }
         let audio_offset_ms = combined_offset(&self.audio_offsets)?;
         confirm_offset(mpv, audio_offset_ms)?;
         Ok(FrozenProcessing {
@@ -107,9 +94,6 @@ impl Processing {
                 .map(|(_, r)| r.clone())
                 .collect(),
         })
-    }
-    pub fn owns_audio(&self) -> bool {
-        !self.audio.is_empty()
     }
     pub fn note_source(&mut self, generation: u64, phase: crate::session::Phase) {
         let name = match phase {

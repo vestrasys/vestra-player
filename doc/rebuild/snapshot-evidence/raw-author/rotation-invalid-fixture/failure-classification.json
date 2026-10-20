@@ -1,3 +1,0 @@
-{
-  "classification": "Invalid fixture: legacy rotate metadata option produced no display matrix; PNG 320x180 correct for actual unrotated source. Outer width assertion failed, not a backend rotation failure."
-}

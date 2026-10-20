@@ -1,7 +1,0 @@
-{
-  "pid": 55777,
-  "observed": "  PID  PPID ELAPSED COMMAND\n55777     1   03:14 /private/tmp/vestra-current-candidates-P2K25p/Vestra Current Candidates.app/Contents/MacOS/host\n",
-  "action": "SIGTERM",
-  "after": "",
-  "verifiedGone": true
-}

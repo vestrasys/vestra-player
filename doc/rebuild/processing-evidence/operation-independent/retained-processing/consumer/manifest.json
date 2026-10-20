@@ -1,1 +1,0 @@
-{"id":"review.processing-consumer","apiVersion":"vestra.experimental/0.1","entry":"main.ts","capabilities":["playback.read","processing.video","processing.audio","playback.control","events","plugins.manage"]}

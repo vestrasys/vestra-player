@@ -1,9 +1,0 @@
-   Compiling vestra-host v0.1.0 (/Users/ziyang/Documents/vestra-player/src/host)
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.51s
-     Running unittests src/main.rs (src/host/target/debug/deps/vestra_host-994e91e420f296f9)
-
-running 1 test
-test package_store::tests::full_receipt_history_rejects_new_requests_and_preserves_existing ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 133 filtered out; finished in 0.03s
-

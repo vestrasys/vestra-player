@@ -1,1 +1,0 @@
-export async function activate(host){await host.commands.register("activation-proof",1,{title:"d",path:["插件","Activation experiment","d"],shortcut:null},{enabled:true,checked:null,busy:false,reason:null});void host.ui.mount({slot:"bottom",file:"invalid.slint",component:"Broken",global:"Bridge",properties:{}}).catch(()=>{});}

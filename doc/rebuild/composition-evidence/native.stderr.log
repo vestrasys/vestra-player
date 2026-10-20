@@ -1,8 +1,0 @@
-reply 1.1: Ok(Object {"session": Number(1)})
-native callback: CallbackEvent { owner: 2, callback: "select-row", args: Ok([String("example-row")]) }
-native callback: CallbackEvent { owner: 1, callback: "toggle-sidebar", args: Ok([]) }
-native callback: CallbackEvent { owner: 1, callback: "toggle-sidebar", args: Ok([]) }
-native callback: CallbackEvent { owner: 1, callback: "set-paused", args: Ok([Bool(true)]) }
-reply 1.2: Ok(Null)
-native callback: CallbackEvent { owner: 1, callback: "set-paused", args: Ok([Bool(false)]) }
-reply 1.3: Ok(Null)

@@ -1,8 +1,0 @@
-{
-  "passed": false,
-  "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n'error' !== 'stop'\n\n    at file:///private/tmp/vestra-pi-prerequisite.i7h3VL/experiment.mjs:110:48",
-  "actions": 3,
-  "repairs": 0,
-  "modelTurns": 2,
-  "durationMs": 543
-}

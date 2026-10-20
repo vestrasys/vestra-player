@@ -1,6 +1,0 @@
-host.error {"code":"producer-failed","generation":1,"message":"provider frame-bound control timed out"}
-source geometry ready entry=1 generation=2 cycle=2 no selected video
-INDEPENDENT_CONTROLS_PROVIDER_DONE
-runtime 1 runtime.ready: null
-INDEPENDENT_CONTROLS_CONTROLLER_DONE
-runtime 2 runtime.ready: null

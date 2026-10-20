@@ -208,15 +208,6 @@ impl Jobs {
         if method == "jobs.state" {
             return self.job_state(owner, id(params, "jobId")?);
         }
-        if method == "jobs.list" {
-            return Ok(json!(
-                self.jobs
-                    .iter()
-                    .filter(|(_, j)| j.owner == owner)
-                    .map(|(id, _)| self.job_state(owner, *id).unwrap())
-                    .collect::<Vec<_>>()
-            ));
-        }
         if method == "snapshot.state" {
             let id = id(params, "snapshotId")?;
             return self

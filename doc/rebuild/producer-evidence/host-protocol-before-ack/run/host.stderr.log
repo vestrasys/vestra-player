@@ -1,6 +1,0 @@
-source geometry prepare entry=1 generation=1 cycle=1 decoder=320x180 rotate=0 filter=@vestra-orientation:lavfi=[null,sidedata=mode=delete:type=DISPLAYMATRIX]
-source geometry ready entry=1 generation=1 cycle=1 output=320x180 rotate=0
-source geometry prepare entry=2 generation=4 cycle=4 decoder=320x180 rotate=0 filter=@vestra-orientation:lavfi=[null,sidedata=mode=delete:type=DISPLAYMATRIX]
-source geometry ready entry=2 generation=4 cycle=4 output=320x180 rotate=0
-PRODUCER_SMOKE_DONE
-runtime 1 runtime.ready: null

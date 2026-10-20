@@ -33,7 +33,7 @@ pub struct Backend {
     pub commands: mpsc::Sender<Command>,
     pub frame: Arc<Mutex<Option<Frame>>>,
     pub state: Arc<Mutex<Value>>,
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     pub input: Arc<Mutex<Option<crate::producer_input::Routing>>>,
     stop: mpsc::Sender<()>,
     worker: Option<thread::JoinHandle<()>>,
@@ -48,9 +48,9 @@ impl Backend {
         ));
         let out_frame = frame.clone();
         let out_state = state.clone();
-        #[cfg(feature = "producer-audio-probe")]
+        #[cfg(feature = "producer-audio")]
         let input = Arc::new(Mutex::new(None));
-        #[cfg(feature = "producer-audio-probe")]
+        #[cfg(feature = "producer-audio")]
         let out_input = input.clone();
         let (ready, initialized) = mpsc::sync_channel(1);
         let worker = thread::spawn(move || {
@@ -139,7 +139,7 @@ impl Backend {
                 let mut sources = crate::source_backend::Sources::default();
                 let mut geometry = crate::source_geometry::Geometry::new(publish_gate.clone());
                 let mut geometry_error = false;
-                #[cfg(feature = "producer-audio-probe")]
+                #[cfg(feature = "producer-audio")]
                 let mut producer_was_active = false;
                 let mut processing = crate::processing::Processing::default();
                 let mut subtitles = crate::subtitle_backend::Subtitles::new(fonts);
@@ -157,7 +157,7 @@ impl Backend {
                     subtitles.note_source(sources.generation(), sources.phase());
                     // Bound work per iteration so continuous controls cannot starve video.
                     for command in receiver.try_iter().take(32) {
-                        #[cfg(feature = "producer-audio-probe")]
+                        #[cfg(feature = "producer-audio")]
                         if command.method == "host.physicalInput" {
                             if let Err(error) = sources.host_input(&command.params)
                                 && !matches!(error.code.as_str(), "unavailable" | "stale" | "busy")
@@ -252,25 +252,11 @@ impl Backend {
                             let _ = events.send(Event::Reply(command.reply, result));
                             continue;
                         }
-                        if command.method == "playback.set"
-                            && command.params["property"] == "audio-delay"
-                            && processing.owns_audio()
-                        {
-                            let _ = events.send(Event::Reply(
-                                command.reply,
-                                Err(RpcError::new(
-                                    "conflict",
-                                    "audio-delay is controlled by owned audio resources",
-                                )),
-                            ));
-                            continue;
-                        }
-                        let starts_source = command.method == "playback.open"
-                            || (command.method == "source.submit"
-                                && matches!(
-                                    command.params["intent"]["kind"].as_str(),
-                                    Some("open" | "openProvider" | "restart")
-                                ));
+                        let starts_source = command.method == "source.submit"
+                            && matches!(
+                                command.params["intent"]["kind"].as_str(),
+                                Some("open" | "openProvider" | "restart")
+                            );
                         let previous_publish =
                             starts_source.then(|| publish_gate.swap(false, Ordering::AcqRel));
                         let result = match sources.dispatch(
@@ -284,9 +270,9 @@ impl Backend {
                             Err(error) => Err(error),
                         };
                         if let Some(previous) = previous_publish {
-                            #[cfg(feature = "producer-audio-probe")]
+                            #[cfg(feature = "producer-audio")]
                             let is_provider = sources.provider_active();
-                            #[cfg(not(feature = "producer-audio-probe"))]
+                            #[cfg(not(feature = "producer-audio"))]
                             let is_provider = false;
                             if result.is_ok() && is_provider {
                                 publish_gate.store(false, Ordering::Release);
@@ -343,7 +329,7 @@ impl Backend {
                         geometry_error = true;
                         let _ = events.send(Event::Broadcast("host.error".into(),json!({"code":"source-geometry","message":error.message,"generation":sources.generation()})));
                     }
-                    #[cfg(feature = "producer-audio-probe")]
+                    #[cfg(feature = "producer-audio")]
                     {
                         if let Some(error) = sources.producer_failure() {
                             let _=events.send(Event::Broadcast("host.error".into(),json!({"code":"producer-failed","message":error,"generation":sources.generation()})));
@@ -393,8 +379,8 @@ impl Backend {
                             "volume":mpv.get_property::<f64>("volume").unwrap_or(100.0),
                             "rate":mpv.get_property::<f64>("speed").unwrap_or(1.0),
                             "videoFrames":sequence.load(Ordering::Relaxed)});
-                        *out_state.lock().unwrap() = snapshot.clone();
-                        let _ = events.send(Event::Broadcast("playback.state".into(), snapshot));
+                        // Shell diagnostic overlay only; not a plugin event.
+                        *out_state.lock().unwrap() = snapshot;
                         last_state = Instant::now();
                     }
                     thread::sleep(Duration::from_millis(2));
@@ -423,7 +409,7 @@ impl Backend {
             commands,
             frame,
             state,
-            #[cfg(feature = "producer-audio-probe")]
+            #[cfg(feature = "producer-audio")]
             input,
             stop,
             worker: Some(worker),
@@ -444,39 +430,34 @@ fn number(params: &Value, key: &str) -> std::result::Result<f64, RpcError> {
         .filter(|n| n.is_finite())
         .ok_or_else(|| RpcError::invalid(format!("{key} must be a finite number")))
 }
+/// `playback.set` covers only the shared device output (volume, mute); source
+/// intent (pause, seek, rate) goes through `source.submit`.
 fn execute(mpv: &Mpv, method: &str, params: &Value) -> std::result::Result<Value, RpcError> {
-    let result = match method {
-        "playback.set" => {
-            let property = params["property"].as_str().unwrap_or("");
-            if matches!(property, "pause" | "muted") {
-                mpv.set_property(
-                    if property == "muted" { "mute" } else { "pause" },
-                    params["value"]
-                        .as_bool()
-                        .ok_or_else(|| RpcError::invalid("pause/muted requires boolean"))?,
-                )
-                .map(|_| Value::Null)
-            } else {
-                let value = number(params, "value")?;
-                let range = match property {
-                    "volume" => (0.0, 200.0),
-                    "speed" => (0.05, 10.0),
-                    "brightness" | "contrast" | "saturation" | "gamma" => (-100.0, 100.0),
-                    "audio-delay" | "sub-delay" => (-60.0, 60.0),
-                    _ => {
-                        return Err(RpcError::new(
-                            "unsupported",
-                            "property is not exposed by this host",
-                        ));
-                    }
-                };
-                if value < range.0 || value > range.1 {
-                    return Err(RpcError::invalid("property value outside published range"));
-                }
-                mpv.set_property(property, value).map(|_| Value::Null)
+    if method != "playback.set" {
+        return Err(RpcError::new("unsupported", "unknown playback method"));
+    }
+    let result = match params["property"].as_str().unwrap_or("") {
+        "muted" => mpv.set_property(
+            "mute",
+            params["value"]
+                .as_bool()
+                .ok_or_else(|| RpcError::invalid("muted requires boolean"))?,
+        ),
+        "volume" => {
+            let value = number(params, "value")?;
+            if !(0.0..=200.0).contains(&value) {
+                return Err(RpcError::invalid("volume must be 0..200"));
             }
+            mpv.set_property("volume", value)
         }
-        _ => return Err(RpcError::new("unsupported", "unknown playback method")),
+        _ => {
+            return Err(RpcError::new(
+                "unsupported",
+                "only volume and muted are settable",
+            ));
+        }
     };
-    result.map_err(|e| RpcError::new("backend", e.to_string()))
+    result
+        .map(|_| Value::Null)
+        .map_err(|e| RpcError::new("backend", e.to_string()))
 }

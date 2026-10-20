@@ -1,1 +1,0 @@
-export async function activate(host){await host.commands.register("activation-proof",1,{title:"b",path:["插件","Activation experiment","b"],shortcut:null},{enabled:true,checked:null,busy:false,reason:null});throw Error("intentional activation throw after command");}

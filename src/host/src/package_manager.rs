@@ -116,7 +116,6 @@ impl Host {
             method: "owner.registered".into(),
             params: json!({"manifestId":id}),
         })?;
-        self.broadcast("plugins.changed", self.plugin_list());
         Ok(owner)
     }
     fn package_status(&mut self, owner: u64) -> String {

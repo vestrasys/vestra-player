@@ -1,5 +1,0 @@
-# 首次run：消费者观察顺序错误，未通过
-
-GfFTgC，host exit0，外层exit1，provider/controller均failed，原始材料不改。provider在读producer.state pendingControl之前先读source.state，分别获得旧intent1和新intent2，却作不成立的原子等值断言。其自身抛错/关binary socket后，host正确报告producer transport closed，controller原op随后failed。该次不用于证明正常ACK/5秒超时/NES或设备通过，也不把消费者错误归为宿主bug。
-
-修消费者只将等值比较改为拿到Notice后、ACK前重新读公开source；controller此时仍等同一原op，后续不存在已确认ACK后新意图。harness事后Notice对controller原ticket exact、原owner/操作/暂停/超时/迟到ACK断言保留。等待维护者重新确认binary冻结和时段后才复跑。

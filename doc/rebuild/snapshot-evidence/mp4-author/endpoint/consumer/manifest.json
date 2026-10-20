@@ -1,1 +1,0 @@
-{"id":"author.media-range","apiVersion":"vestra.experimental/0.1","entry":"main.mjs","capabilities":["playback.read","playback.control","media.read","media.control"]}

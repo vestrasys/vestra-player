@@ -1,3 +1,0 @@
-Exit prior to config file resolving
-cause
-double-loading config "/tmp/vestra-pi-prerequisite.i7h3VL/empty.npmrc" as "global", previously loaded as "user"
