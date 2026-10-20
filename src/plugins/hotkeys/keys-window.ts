@@ -128,7 +128,13 @@ export class KeysWindow {
     });
     window.on("resetAll", () => this.#resetAll());
     window.on("export", () => this.#export());
-    window.on("toggleIgnore", () => ignore.toggle());
+    window.on("toggleIgnore", async () => {
+      try {
+        await ignore.toggle();
+      } finally {
+        this.#raise();
+      }
+    });
     window.on("close", () => window.close());
     window.onClose(() => this.#leave());
     window.bind(() => this.#props());
@@ -150,6 +156,11 @@ export class KeysWindow {
   async show() {
     await this.#model.reload().catch((error) => this.#say(failureText(error), true));
     await this.#window.show();
+  }
+
+  /** The confirm alert is a sheet on the main window: bring this window back over it. */
+  #raise() {
+    if (this.#window.opened) void this.#window.show().catch(() => {});
   }
 
   #leave() {
@@ -452,6 +463,8 @@ export class KeysWindow {
       });
     } catch (error) {
       return this.#say(`无法确认：${(error as Error).message}`, true);
+    } finally {
+      this.#raise();
     }
     if (!answer.confirmed) return;
     this.#pending = null;

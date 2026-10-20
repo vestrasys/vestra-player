@@ -271,7 +271,15 @@ export class PluginsWindow {
     } catch (error) {
       this.#say(`无法确认：${(error as Error).message}`, true);
       return null;
+    } finally {
+      // The alert is a sheet on the main window, which comes to the front;
+      // bring this window back over it.
+      this.#raise();
     }
+  }
+
+  #raise() {
+    if (this.#window.opened) void this.#window.show().catch(() => {});
   }
 
   async #openData() {

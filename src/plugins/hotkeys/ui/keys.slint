@@ -44,9 +44,17 @@ component Row inherits Rectangle {
         Cell { width: 120px; text: root.item.source; color: root.ink; }
         Cell { width: 50px; text: root.item.status; color: root.ink; }
     }
+    // ToolTipArea has no size of its own: without the explicit 100% it was
+    // 0×0 and the row could not be clicked.
     ToolTipArea {
+        width: 100%;
+        height: 100%;
         text: root.item.tip;
-        TouchArea { clicked => { root.select(); } }
+        TouchArea {
+            width: 100%;
+            height: 100%;
+            clicked => { root.select(); }
+        }
     }
 }
 
