@@ -172,6 +172,34 @@ fn numpad(code: &str) -> Option<String> {
     })
 }
 
+/// Input name of a named key by its winit `KeyCode` (`Delete` is ⌦, on
+/// laptops fn+⌫; `Backspace` is ⌫).
+fn named_key(code: &str) -> Option<String> {
+    let named = matches!(
+        code,
+        "Space"
+            | "Enter"
+            | "Tab"
+            | "Escape"
+            | "Backspace"
+            | "Delete"
+            | "Insert"
+            | "Home"
+            | "End"
+            | "PageUp"
+            | "PageDown"
+            | "ArrowLeft"
+            | "ArrowRight"
+            | "ArrowUp"
+            | "ArrowDown"
+    );
+    let function = code
+        .strip_prefix('F')
+        .and_then(|n| n.parse::<u8>().ok())
+        .is_some_and(|n| (1..=24).contains(&n));
+    (named || function).then(|| code.to_owned())
+}
+
 /// The unshifted US-layout character of a character key.
 fn us_character(code: &str) -> Option<char> {
     if let Some(letter) = code.strip_prefix("Key")
@@ -262,6 +290,54 @@ pub fn from_slint_key(
     from_key(text, control, alt, shift, meta, None)
 }
 
+/// The character an Option combination typed, as an input of its own: on
+/// layouts where Option is how a symbol is typed (German ⌥5 = `[`, ⌥7 = `|`,
+/// ⌥⇧7 = `\`), a binding for the symbol is meant. Tried before the physical
+/// `Alt+…` form; letters (⌥O, ⌥H) only resolve physically. Ctrl and ⌘ stay.
+pub fn typed_with_option(
+    text: &str,
+    control: bool,
+    meta: bool,
+    physical: Option<&Physical>,
+) -> Option<Input> {
+    let physical = physical?;
+    let (ctrl, cmd) = if cfg!(target_os = "macos") {
+        (meta, control)
+    } else {
+        (control, meta)
+    };
+    let mods = physical.mods.unwrap_or(Mods {
+        ctrl,
+        alt: true,
+        shift: false,
+        cmd,
+    });
+    let mut chars = text.chars();
+    let typed = chars.next()?;
+    if !mods.alt
+        || !chars.as_str().is_empty()
+        || us_character(&physical.code).is_none()
+        || typed.is_alphanumeric()
+        || typed.is_whitespace()
+        || typed.is_control()
+        || ('\u{F700}'..='\u{F8FF}').contains(&typed)
+    {
+        return None;
+    }
+    Some(Input {
+        mods: Mods {
+            alt: false,
+            shift: false,
+            ..mods
+        },
+        name: if typed == '+' {
+            "Plus".into()
+        } else {
+            typed.to_string()
+        },
+    })
+}
+
 /// Like `from_slint_key`, with the physical key when the window saw it:
 /// keypad keys, Option combinations and Ctrl control codes resolve by key.
 pub fn from_key(
@@ -290,6 +366,11 @@ pub fn from_key(
             return None;
         }
         if let Some(name) = numpad(&physical.code) {
+            return Some(Input { mods, name });
+        }
+        // Named keys go by key: with Option, macOS may give them no text
+        // (⌥⌦ would otherwise be lost).
+        if let Some(name) = named_key(&physical.code) {
             return Some(Input { mods, name });
         }
         let control_code = text.chars().count() == 1
@@ -1150,5 +1231,135 @@ mod tests {
         assert!(!table.has_wheel(true));
         assert_eq!(label(&key("Ctrl+ArrowLeft")), "Ctrl+←");
         assert_eq!(label(&key("PageDown")), "PgDn");
+    }
+
+    #[test]
+    fn symbols_typed_with_option_are_tried_before_the_physical_key() {
+        let option = |code: &str, base: char, shift: bool| Physical {
+            code: code.into(),
+            base: Some(base),
+            mods: Some(Mods {
+                alt: true,
+                shift,
+                ..Mods::default()
+            }),
+        };
+        // German layout: ⌥5 types "[", ⌥7 "|", ⌥⇧7 "\".
+        let five = option("Digit5", '5', false);
+        assert_eq!(
+            typed_with_option("[", false, false, Some(&five)),
+            Some(key("["))
+        );
+        assert_eq!(
+            from_key("[", false, true, false, false, Some(&five)),
+            Some(key("Alt+5"))
+        );
+        let seven = option("Digit7", '7', false);
+        assert_eq!(
+            typed_with_option("|", false, false, Some(&seven)),
+            Some(key("|"))
+        );
+        let shifted = option("Digit7", '7', true);
+        assert_eq!(
+            typed_with_option("\\", false, false, Some(&shifted)),
+            Some(key("\\"))
+        );
+        // Letters keep their physical meaning: ⌥O is Alt+O, not "ø".
+        let o = option("KeyO", 'o', false);
+        assert_eq!(typed_with_option("ø", false, false, Some(&o)), None);
+        // Without Option, or for a non-character key, there is no alternative.
+        let plain = Physical {
+            mods: Some(Mods::default()),
+            ..five.clone()
+        };
+        assert_eq!(typed_with_option("5", false, false, Some(&plain)), None);
+        assert_eq!(typed_with_option("[", false, false, None), None);
+        // US layout: ⌥[ types "“", which nothing binds, so Alt+[ still wins.
+        let mut table = Table::default();
+        table
+            .declare(1, "a", "m", &["Alt+[".into(), "[".into()], false, false)
+            .unwrap();
+        let bracket = option("BracketLeft", '[', false);
+        let typed = typed_with_option("“", false, false, Some(&bracket)).unwrap();
+        assert!(table.resolve(&typed, None).is_none());
+        assert!(
+            table
+                .resolve(
+                    &from_key("“", false, true, false, false, Some(&bracket)).unwrap(),
+                    None
+                )
+                .is_some()
+        );
+        // German ⌥5 reaches a "[" binding.
+        assert!(table.resolve(&key("["), None).is_some());
+    }
+
+    #[test]
+    fn named_keys_resolve_by_key_even_without_text() {
+        let press = |code: &str, alt: bool, shift: bool| Physical {
+            code: code.into(),
+            base: None,
+            mods: Some(Mods {
+                alt,
+                shift,
+                ..Mods::default()
+            }),
+        };
+        // ⌥⌦ (fn+⌫ on laptops) arrives without text.
+        assert_eq!(
+            from_key(
+                "",
+                false,
+                true,
+                false,
+                false,
+                Some(&press("Delete", true, false))
+            ),
+            Some(key("Alt+Delete"))
+        );
+        assert_eq!(
+            from_key(
+                "",
+                false,
+                true,
+                false,
+                false,
+                Some(&press("ArrowLeft", true, false))
+            ),
+            Some(key("Alt+ArrowLeft"))
+        );
+        assert_eq!(
+            from_key(
+                "\u{8}",
+                false,
+                true,
+                false,
+                false,
+                Some(&press("Backspace", true, false))
+            ),
+            Some(key("Alt+Backspace"))
+        );
+        assert_eq!(
+            from_key(
+                "\u{19}",
+                false,
+                false,
+                true,
+                false,
+                Some(&press("Tab", false, true))
+            ),
+            Some(key("Shift+Tab"))
+        );
+        assert_eq!(
+            from_key(
+                "",
+                false,
+                false,
+                false,
+                false,
+                Some(&press("F11", false, false))
+            ),
+            Some(key("F11"))
+        );
     }
 }
