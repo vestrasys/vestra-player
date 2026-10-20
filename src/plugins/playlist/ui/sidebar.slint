@@ -183,6 +183,8 @@ export component PlaylistSidebar inherits Rectangle {
                         height: root.row-height;
                         background: row.selected ? root.selected-bg : transparent;
                         ToolTipArea {
+                            width: parent.width;
+                            height: parent.height;
                             text: row.tooltip;
                             HorizontalLayout {
                                 width: 100%;

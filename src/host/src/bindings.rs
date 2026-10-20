@@ -186,6 +186,10 @@ pub fn from_slint_key(
                 name: format!("F{}", c as u32 - 0xF704 + 1),
             });
         }
+        // Slint's own codes for the modifier keys themselves (Shift, Control,
+        // Alt, AltGr, CapsLock, ShiftR, ControlR, Meta, MetaR). Pressing ⌘
+        // alone arrives as '\u{11}' with cmd set and must not read as Ctrl+Q.
+        '\u{10}'..='\u{18}' => return None,
         // Ctrl+letter may arrive as the ASCII control code.
         c @ '\u{1}'..='\u{1a}' if mods.ctrl || mods.cmd => {
             return Some(Input {
@@ -486,6 +490,19 @@ mod tests {
 
     fn key(text: &str) -> Input {
         parse(text).unwrap()
+    }
+
+    #[test]
+    fn modifier_keys_alone_are_not_inputs() {
+        // Pressing ⌘ alone on macOS: Slint's Control code with cmd held.
+        for code in '\u{10}'..='\u{18}' {
+            let text = code.to_string();
+            assert_eq!(from_slint_key(&text, true, false, false, false), None);
+            assert_eq!(from_slint_key(&text, false, false, false, true), None);
+        }
+        // A real ASCII control code for a letter still maps.
+        let ctrl_e = from_slint_key("\u{5}", false, false, false, true).unwrap();
+        assert_eq!(ctrl_e.name, "E");
     }
 
     #[test]

@@ -70,6 +70,7 @@ export component WorkshopWindow inherits Window {
         TextEdit { font-size: Theme.font-body; text: root.log-text; read-only: true; vertical-stretch: 1; }
         HorizontalLayout {
             spacing: 6px;
+            vertical-stretch: 0;
             Button { text: "试载"; enabled: root.can-trial; clicked => { root.start-trial(); } }
             Button { text: "查询试载"; enabled: root.can-recover; clicked => { root.recover-trial(); } }
             Button { text: "停止试载"; enabled: root.can-stop; clicked => { root.stop-trial(); } }
