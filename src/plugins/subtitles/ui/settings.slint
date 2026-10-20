@@ -1,6 +1,6 @@
 // 字幕设置: font, colour, outline and margin (ui-alignment §7.4, UI-TOOL-08).
 // Changes apply at once; every row has its own 默认 (UI-TOOL-04).
-import { ComboBox } from "std-widgets.slint";
+import { CheckBox, ComboBox } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button, Slider } from "@vestra/widgets.slint";
 
@@ -25,9 +25,13 @@ export component SubtitleSettings inherits Window {
     in property <int> selected-color: 0;
     in-out property <float> outline-size: 2;
     in-out property <float> margin-percent: 5;
+    in property <[string]> sync-step-labels: [];
+    in property <int> sync-step-index: 3;
+    in-out property <bool> auto-reload: false;
     changed font-labels => { font-combo.current-index = root.selected-font; }
     changed selected-font => { font-combo.current-index = root.selected-font; }
     changed selected-color => { color-combo.current-index = root.selected-color; }
+    changed sync-step-index => { step-combo.current-index = root.sync-step-index; }
     callback change-font(int);
     callback change-color(int);
     callback change-outline(float);
@@ -36,6 +40,8 @@ export component SubtitleSettings inherits Window {
     callback slider-released();
     callback reset-field(string);
     callback reset-style();
+    callback change-sync-step(int);
+    callback change-auto-reload(bool);
 
     VerticalLayout {
         padding: 10px;
@@ -87,6 +93,27 @@ export component SubtitleSettings inherits Window {
                 released => { root.slider-released(); }
             }
             Button { width: 41px; height: 22px; text: "默认"; enabled: root.can-style; clicked => { root.reset-field("margin"); } }
+        }
+        // Not style fields: they work without a selected track.
+        HorizontalLayout {
+            spacing: 3px;
+            RowLabel { text: "同步单位"; }
+            step-combo := ComboBox {
+                height: 22px;
+                model: root.sync-step-labels;
+                current-index: root.sync-step-index;
+                selected(value) => { root.change-sync-step(self.current-index); }
+            }
+            Button { width: 41px; height: 22px; text: "默认"; clicked => { root.change-sync-step(3); } }
+        }
+        HorizontalLayout {
+            padding-left: 68px;
+            CheckBox {
+                height: Theme.checkbox-row-height;
+                text: "字幕文件改动后自动重载";
+                checked <=> root.auto-reload;
+                toggled => { root.change-auto-reload(self.checked); }
+            }
         }
         HorizontalLayout {
             spacing: 3px;

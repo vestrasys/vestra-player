@@ -39,6 +39,7 @@ export component SubtitleTune inherits Window {
     callback reset-field(string);
     callback remove-selected();
     callback open-settings();
+    callback open-sync();
 
     VerticalLayout {
         padding: 10px;
@@ -77,10 +78,18 @@ export component SubtitleTune inherits Window {
         }
         HorizontalLayout {
             spacing: 3px;
+            // The value opens 手动调整同步 (D05).
             ToolTipArea {
-                text: "单位：秒。正值字幕滞后，负值超前。";
+                text: "单位：秒。正值字幕滞后，负值超前。点击输入数值。";
                 width: 65px;
-                RowLabel { text: root.sync-text; }
+                RowLabel {
+                    text: root.sync-text;
+                    color: sync-touch.has-hover ? Theme.accent : Theme.text;
+                }
+                sync-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.open-sync(); }
+                }
             }
             Button { width: 69px; height: 22px; text: "慢"; enabled: root.can-style; clicked => { root.sync-step(1); } }
             Button { width: 69px; height: 22px; text: "快"; enabled: root.can-style; clicked => { root.sync-step(-1); } }

@@ -3,6 +3,10 @@ import test from "node:test";
 import { HostError, startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
 import activate from "../main.ts";
 import { parseTime, rateText, time } from "../format.ts";
+import { fakeSystem } from "./fakes.ts";
+
+// No real caffeinate, pbcopy or pbpaste while testing.
+fakeSystem();
 
 const directory = new URL("..", import.meta.url);
 const start = (host = new TestHost()) => startPlugin(activate, { directory, host });
@@ -53,7 +57,11 @@ test("menu follows the allocation table: positions, groups, radio items, binding
     [
       ["open", "打开文件…", 100, "open", false, ["Ctrl+O", "F3"], false],
       ["close-source", "关闭", 120, "open", false, ["F4"], false],
-      ["reopen", "重新打开", 121, "open", false, [], false],
+      ["open-url", "打开/打开链接…", 110, "open", false, ["Ctrl+U"], false],
+      ["reopen", "重开当前/最后文件", 121, "open", false, ["Ctrl+Y"], false],
+      ["copy-name", "复制到剪贴板/文件名", 125, "open", false, [], false],
+      ["copy-folder", "复制到剪贴板/文件夹路径", 126, "open", false, [], false],
+      ["copy-path", "复制到剪贴板/完整路径", 127, "open", false, [], false],
       ["toggle-pause", "播放/播放/暂停", 201, "domain", false, ["Space"], false],
       ["previous", "播放/上一个", 202, "domain", false, ["PageUp", "Mouse:X1"], false],
       ["next", "播放/下一个", 203, "domain", false, ["PageDown", "Mouse:X2"], false],
@@ -65,6 +73,7 @@ test("menu follows the allocation table: positions, groups, radio items, binding
       ["forward-60", "播放/跳转/前进60秒", 215, "domain", false, ["Shift+ArrowRight"], false],
       ["backward-300", "播放/跳转/后退300秒", 216, "domain", false, ["Ctrl+Alt+ArrowLeft"], false],
       ["forward-300", "播放/跳转/前进300秒", 217, "domain", false, ["Ctrl+Alt+ArrowRight"], false],
+      ["jump-start", "播放/跳转/跳到开头", 219, "points", false, ["Backspace"], false],
       ["jump", "播放/跳转到…", 218, "domain", false, ["G"], false],
       ["rate-10", "播放/速度/正常", 220, "domain", true, ["Z"], false],
       ["rate-down", "播放/速度/减速 0.1", 221, "domain", false, ["X"], false],
@@ -73,6 +82,8 @@ test("menu follows the allocation table: positions, groups, radio items, binding
       ["rate-15", "播放/速度/1.5倍", 224, "domain", true, [], false],
       ["rate-20", "播放/速度/2倍", 225, "domain", true, [], false],
       ["rate-custom", "播放/速度/自定义…", 226, "domain", false, [], false],
+      ["prevent-sleep", "播放/播放时禁止屏保", 240, "playback-options", false, [], false],
+      ["hover-time", "播放/进度条悬停显示时间", 242, "playback-options", false, [], false],
       ["volume-up", "声音/音量 +", 501, "domain", false, ["ArrowUp", "Mouse:WheelUp"], true],
       ["volume-down", "声音/音量 −", 502, "domain", false, ["ArrowDown", "Mouse:WheelDown"], true],
       ["mute", "声音/静音", 503, "domain", false, ["M"], false],
@@ -80,13 +91,19 @@ test("menu follows the allocation table: positions, groups, radio items, binding
   );
   assert.deepEqual(host.conflicts, []);
   const reason = "当前来源不支持此操作";
-  for (const id of ["close-source", "toggle-pause", "jump", "backward-5", "forward-300", "rate-05", "rate-up", "rate-custom"])
+  for (const id of ["close-source", "toggle-pause", "jump", "jump-start", "backward-5", "forward-300", "rate-05", "rate-up", "rate-custom"])
     assert.deepEqual([host.command(id).state.enabled, host.command(id).state.reason], [false, reason], id);
   assert.deepEqual([host.command("previous").state.enabled, host.command("previous").state.reason], [false, "没有上一个"]);
   assert.deepEqual([host.command("next").state.enabled, host.command("next").state.reason], [false, "没有下一个"]);
-  assert.equal(host.command("reopen").state.enabled, false);
+  // First run: nothing played yet, so nothing to reopen.
+  assert.deepEqual([host.command("reopen").state.enabled, host.command("reopen").state.reason], [false, "没有可重开的文件"]);
+  for (const id of ["copy-name", "copy-folder", "copy-path"])
+    assert.deepEqual([host.command(id).state.enabled, host.command(id).state.reason], [false, "没有打开的文件"], id);
   assert.equal(host.command("rate-10").state.checked, true);
-  for (const id of ["open", "mute", "volume-up", "volume-down"]) assert.equal(host.command(id).state.enabled, true, id);
+  assert.equal(host.command("prevent-sleep").state.checked, true);
+  assert.equal(host.command("hover-time").state.checked, true);
+  for (const id of ["open", "open-url", "mute", "volume-up", "volume-down", "prevent-sleep", "hover-time"])
+    assert.equal(host.command(id).state.enabled, true, id);
 
   const bar = host.mounted();
   assert.equal(host.sent("ui.mount")[0]!.component, "PlaybackBar");
@@ -99,6 +116,8 @@ test("menu follows the allocation table: positions, groups, radio items, binding
   for (const flag of ["can-pause", "can-stop", "can-step", "can-previous", "can-next", "playing", "has-sidebar"])
     assert.equal(bar.props[flag], false, flag);
   assert.equal(bar.props["can-open"], true);
+  assert.equal(bar.props.duration, 0);
+  assert.equal(bar.props["hover-time"], true);
   // The bar's buttons bypass the host's enabled check, so the plugin checks it.
   bar.emit("action", "toggle-pause");
   bar.emit("action", "previous");
@@ -135,7 +154,7 @@ test("open asks for a file (Ctrl+O, F3), is busy while selecting, and cancelling
   await stop();
 });
 
-test("play/pause follows the player with OSD; ended offers replay; a failed load is announced and reopened from the menu", async () => {
+test("play/pause follows the player with OSD; ended offers replay; a failed load is announced and reopened (Ctrl+Y)", async () => {
   const { host, stop } = await start(withMedia());
   const bar = host.mounted();
   assert.equal(bar.props.playing, true);
@@ -171,10 +190,10 @@ test("play/pause follows the player with OSD; ended offers replay; a failed load
   await host.settle();
   assert.equal(host.osd.length, announced);
   assert.equal(host.command("reopen").state.enabled, true);
-  await host.command("reopen").run();
+  await host.press("Ctrl+Y");
   const retry = host.sent("source.submit").at(-1)!.intent as Record<string, unknown>;
   assert.deepEqual([retry.kind, retry.source], ["open", "/movie.mp4"]);
-  assert.equal(host.command("reopen").state.enabled, false);
+  assert.equal(lastOsd(host), "重新打开: movie.mp4");
   await stop();
 });
 

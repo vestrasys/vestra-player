@@ -1,6 +1,7 @@
 import type { Panel, Player, SidebarSlot } from "../../sdk/plugin/index.ts";
 import type { Playback } from "./controller.ts";
 import { time } from "./format.ts";
+import type { SettingsStore } from "./settings.ts";
 
 /** Project the playback state onto `ui/bar.slint` and route its callbacks. */
 export function wireBar(
@@ -9,6 +10,7 @@ export function wireBar(
   sidebar: SidebarSlot,
   playback: Playback,
   run: (id: string) => Promise<void>,
+  settings: SettingsStore,
 ) {
   const p = playback;
   /** The time label shows the remaining time instead of the elapsed one (UI-BAR-07). */
@@ -25,6 +27,9 @@ export function wireBar(
       totalLabel: time(state.duration),
       progress: state.duration && position !== null ? position / state.duration : 0,
       canSeek: p.canSeek(),
+      // I06: the bar computes the hover time from these, without a round trip.
+      duration: state.duration ?? 0,
+      hoverTime: settings.value.hoverTime,
       canPause: p.canToggle() && !p.pauseBusy,
       playing: state.phase === "ready" && !state.paused,
       canStop: p.can("close"),

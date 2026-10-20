@@ -1,0 +1,25 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { parse, parseSync, serialize } from "../model.ts";
+
+test("settings parse leniently and keep fields a later version adds", () => {
+  assert.deepEqual(parse(null), { syncStepMs: 500, autoReload: false, extra: {} });
+  assert.deepEqual(parse({ syncStepMs: 100, autoReload: true }), { syncStepMs: 100, autoReload: true, extra: {} });
+  assert.equal(parse({ syncStepMs: 123 }).syncStepMs, 500, "only the listed steps");
+  assert.equal(parse({ autoReload: "yes" }).autoReload, false);
+  assert.deepEqual(serialize(parse({ version: 1, secondary: "top", syncStepMs: 50 })), {
+    secondary: "top",
+    version: 1,
+    syncStepMs: 50,
+    autoReload: false,
+  });
+});
+
+test("typed sync values are whole milliseconds within the host range", () => {
+  assert.deepEqual(parseSync("1250"), { value: 1250 });
+  assert.deepEqual(parseSync(" +40 "), { value: 40 });
+  assert.deepEqual(parseSync("−300"), { value: -300 });
+  assert.deepEqual(parseSync("-10000"), { value: -10000 });
+  for (const bad of ["", "abc", "1.5", "1e3", "--1"]) assert.ok("error" in parseSync(bad), bad);
+  assert.deepEqual(parseSync("10001"), { error: "同步值须在 −10000 至 10000 毫秒之间" });
+});

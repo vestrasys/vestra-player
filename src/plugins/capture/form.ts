@@ -8,7 +8,7 @@ import type { Task, Tasks } from "./tasks.ts";
 const CHANGED = "播放内容已变化，未开始。";
 
 /** A host refusal of the snapshot in one Chinese sentence. */
-function captureError(error: unknown) {
+export function captureError(error: unknown) {
   switch ((error as { code?: string }).code) {
     case undefined:
       return error;

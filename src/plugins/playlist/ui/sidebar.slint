@@ -26,6 +26,12 @@ export global PlaylistBridge {
     in property <bool> can-up;
     in property <bool> can-down;
     in property <bool> can-bottom;
+    // Drag reorder is off while a search filters (C21).
+    in property <bool> can-drag: true;
+    // A search filters the rows (shows "无匹配项" when none match).
+    in property <bool> filtering;
+    // Incremented by "搜索" (Ctrl+S): focus the search box and select its text.
+    in property <int> focus-search;
     // (row, Ctrl/Cmd held, Shift held)
     callback select-row(string, bool, bool);
     callback play-row(string);
@@ -44,6 +50,11 @@ export global PlaylistBridge {
     callback toggle-detached();
     callback focus-changed(bool);
     callback dragging(bool);
+    // C21 search box: text edited, focus, Enter, ↓ (Esc clears and reports "")
+    callback search-changed(string);
+    callback search-focus(bool);
+    callback search-accept();
+    callback search-down();
 }
 
 // Icon button drawn with a Path, coloured like the @vestra Button icon state.
@@ -105,6 +116,33 @@ export component PlaylistSidebar inherits Rectangle {
     private property <color> selected-bg: Theme.selected-bg;
     private property <bool> dragging;
     private property <int> drop-index: -1;
+
+    changed focus-search-request => { root.open-search(); }
+    private property <int> focus-search-request: PlaylistBridge.focus-search;
+    // Bottom bar (coordinator ruling): when the room after the controls holds an 80px search box
+    // plus the total, both are shown. Otherwise the search box folds into a magnifier icon next to
+    // the total; clicking it or Ctrl+S unfolds the box over the total (the total hides) until the
+    // box is empty and loses focus (or Esc clears it). A search term keeps it unfolded.
+    // Left edge of the search area: the measured controls plus a 4px gap.
+    private property <length> bar-fixed: controls.preferred-width + 4px;
+    // Gap before the total plus its width.
+    private property <length> total-width: PlaylistBridge.total == "" ? 0px : total-measure.preferred-width + 4px;
+    private property <length> search-room: bar.width - root.bar-fixed - 6px;
+    private property <bool> roomy: root.search-room - root.total-width >= 80px;
+    // Folded into the icon (only when there is not enough room).
+    private property <bool> unfolded;
+    // A term or focus keeps the box open, also when the bar narrows while typing.
+    private property <bool> folded: !root.roomy && !root.unfolded && search.text == "" && !search.has-focus;
+    private property <bool> show-total: PlaylistBridge.total != "" && (root.roomy || root.folded);
+    private property <length> search-width: root.roomy ? root.search-room - root.total-width : root.search-room;
+    function open-search() {
+        root.unfolded = true;
+        search.focus();
+        search.select-all();
+    }
+    function fold-search() {
+        if search.text == "" && !search.has-focus { root.unfolded = false; }
+    }
 
     list-focus := FocusScope {
         changed has-focus => { PlaylistBridge.focus-changed(self.has-focus); }
@@ -255,7 +293,7 @@ export component PlaylistSidebar inherits Rectangle {
                                 }
                                 moved => {
                                     if !self.pressed { return; }
-                                    if !root.dragging && abs(self.mouse-y - press-y) > 4px {
+                                    if !root.dragging && PlaylistBridge.can-drag && abs(self.mouse-y - press-y) > 4px {
                                         root.dragging = true;
                                         PlaylistBridge.dragging(true);
                                     }
@@ -279,10 +317,19 @@ export component PlaylistSidebar inherits Rectangle {
                         }
                     }
                 }
+                if PlaylistBridge.filtering && PlaylistBridge.rows.length == 0: Text {
+                    width: 100%;
+                    height: 100%;
+                    text: "无匹配项";
+                    color: Theme.text-dim;
+                    font-size: Theme.font-tab;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
             }
 
-            // Bottom bar: move icons | ADD DEL SORT | total duration.
-            Rectangle {
+            // Bottom bar: move icons | ADD DEL SORT | search | total duration (hidden first when narrow).
+            bar := Rectangle {
                 height: 35px;
                 background: Theme.bg-panel;
                 Rectangle {
@@ -292,9 +339,12 @@ export component PlaylistSidebar inherits Rectangle {
                     height: 1px;
                     background: Theme.line;
                 }
-                HorizontalLayout {
+                // The fixed part is a layout; the search box and the total are placed by hand so
+                // hiding the total never feeds back into the sidebar's layout.
+                controls := HorizontalLayout {
+                    x: 0;
+                    width: self.preferred-width;
                     padding-left: 6px;
-                    padding-right: 6px;
                     padding-top: 1px;
                     IconButton {
                         tip: "置顶 (Ctrl+Home)";
@@ -338,13 +388,93 @@ export component PlaylistSidebar inherits Rectangle {
                         enabled: PlaylistBridge.can-sort;
                         clicked(x, y) => { PlaylistBridge.sort-menu(x, y); }
                     }
-                    Rectangle { horizontal-stretch: 1; }
-                    Text {
-                        text: PlaylistBridge.total;
-                        color: Theme.text-list;
-                        font-size: Theme.font-body;
-                        vertical-alignment: center;
+                }
+                // C21 search box: about 24px high on #282828; width from `search-width`.
+                // The folded search box: a magnifier icon the size of the bar's other icons.
+                if root.folded: ToolTipArea {
+                    x: root.bar-fixed;
+                    y: 1px;
+                    width: 25px;
+                    height: parent.height - 1px;
+                    text: "搜索 (Ctrl+S)";
+                    Button {
+                        width: 100%;
+                        height: 100%;
+                        stroked: true;
+                        icon-width: 14px;
+                        icon-height: 12px;
+                        icon: "M 9 5 A 4 4 0 1 1 1 5 A 4 4 0 1 1 9 5 Z M 8 8 L 12 11.5";
+                        clicked => { root.open-search(); }
                     }
+                }
+                search-keys := FocusScope {
+                    visible: !root.folded;
+                    x: root.bar-fixed;
+                    y: (parent.height - self.height) / 2 + 0.5px;
+                    width: root.search-width;
+                    height: 24px;
+                    capture-key-pressed(event) => {
+                        if event.text == Key.Escape {
+                            search.text = "";
+                            PlaylistBridge.search-changed("");
+                            list-focus.focus();
+                            root.fold-search();
+                            return accept;
+                        }
+                        if event.text == Key.DownArrow {
+                            PlaylistBridge.search-down();
+                            list-focus.focus();
+                            return accept;
+                        }
+                        if event.text == Key.UpArrow { return accept; }
+                        return reject;
+                    }
+                    Rectangle {
+                        background: #282828;
+                        border-radius: Theme.radius-control;
+                        clip: true;
+                        search := TextInput {
+                            x: 6px;
+                            width: parent.width - 12px;
+                            height: 100%;
+                            vertical-alignment: center;
+                            single-line: true;
+                            color: Theme.text;
+                            selection-background-color: Theme.selected-bg;
+                            font-size: Theme.font-body;
+                            edited => { PlaylistBridge.search-changed(self.text); }
+                            accepted => { PlaylistBridge.search-accept(); }
+                            changed has-focus => {
+                                PlaylistBridge.search-focus(self.has-focus);
+                                root.fold-search();
+                            }
+                        }
+                        if search.text == "" && root.search-width >= 56px: Text {
+                            x: 6px;
+                            height: 100%;
+                            text: "搜索";
+                            color: Theme.text-dim;
+                            font-size: Theme.font-body;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+                Text {
+                    visible: root.show-total;
+                    x: parent.width - 6px - self.width;
+                    y: 0;
+                    width: total-measure.preferred-width;
+                    height: parent.height;
+                    text: PlaylistBridge.total;
+                    color: Theme.text-list;
+                    font-size: Theme.font-body;
+                    vertical-alignment: center;
+                    horizontal-alignment: right;
+                }
+                total-measure := Text {
+                    visible: false;
+                    text: PlaylistBridge.total;
+                    font-size: Theme.font-body;
                 }
             }
         }

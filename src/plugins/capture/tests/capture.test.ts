@@ -72,19 +72,30 @@ test("menu per the allocation table; each dialog binds exactly its Slint callbac
   const { stop } = await start(host);
   const declared = [...host.commands.values()].map(({ declaration: d }) => [d.path.join(" > "), d.order, d.group, d.bindings.join(",")]);
   assert.deepEqual(declared, [
-    ["视频 > 截图 > 保存当前画面", 420, "domain", "Ctrl+E"],
-    ["视频 > 截图 > 当前画面另存为…", 421, "domain", ""],
-    ["视频 > 截图 > 截图文件夹…", 422, "domain", ""],
-    ["视频 > 截图 > 连拍…", 423, "capture-export", "Ctrl+G"],
-    ["视频 > 截图 > 导出片段…", 424, "capture-export", ""],
-    ["视频 > 截图 > 导出任务…", 425, "capture-export", ""],
+    ["视频 > 截图 > 保存当前画面", 420, "capture-source", "Ctrl+E"],
+    ["视频 > 截图 > 当前画面另存为…", 421, "capture-source", ""],
+    ["视频 > 截图 > 复制当前画面", 422, "capture-source", "Ctrl+C"],
+    ["视频 > 截图 > 保存实际画面", 423, "capture-screen", "Ctrl+Alt+E"],
+    ["视频 > 截图 > 实际画面另存为…", 424, "capture-screen", ""],
+    ["视频 > 截图 > 复制实际画面", 425, "capture-screen", "Ctrl+Alt+C"],
+    ["视频 > 截图 > 连拍…", 426, "capture-export", "Ctrl+G"],
+    ["视频 > 截图 > 导出片段…", 428, "capture-export", ""],
+    ["视频 > 截图 > 导出任务…", 429, "capture-export", ""],
+    ["视频 > 截图 > 截取为 PNG", 430, "capture-format", ""],
+    ["视频 > 截图 > 截取为 JPEG", 431, "capture-format", ""],
+    ["视频 > 截图 > 截取为 BMP", 432, "capture-format", ""],
+    ["视频 > 截图 > 实际画面包含字幕", 435, "capture-name", ""],
+    ["视频 > 截图 > 截图设置…", 436, "capture-name", ""],
+    ["视频 > 截图 > 截图文件夹…", 437, "capture-folder", ""],
+    ["视频 > 截图 > 打开截图文件夹", 438, "capture-folder", ""],
   ]);
   assert.deepEqual(host.conflicts, []);
   await host.press("Ctrl+G");
   await host.command("capture.clip").run();
   await host.command("capture.tasks").run();
-  assert.deepEqual(host.sent("ui.open").map((o) => o.file), ["ui/burst.slint", "ui/clip.slint", "ui/tasks.slint"]);
-  for (const name of ["burst", "clip", "tasks"]) {
+  await host.command("capture.settings").run();
+  assert.deepEqual(host.sent("ui.open").map((o) => o.file), ["ui/burst.slint", "ui/clip.slint", "ui/tasks.slint", "ui/settings.slint"]);
+  for (const name of ["burst", "clip", "tasks", "settings"]) {
     const slint = await readFile(new URL(`../ui/${name}.slint`, import.meta.url), "utf8");
     const callbacks = [...slint.matchAll(/callback\s+([\w-]+)\s*\(/g)].map((m) => m[1]!);
     assert.deepEqual([...host.window(name).callbacks].sort(), callbacks.sort(), name);
@@ -130,7 +141,9 @@ test("the chosen capture folder is kept in the data directory and restored on th
   const restart = new TestHost();
   ready(restart);
   try {
-    assert.deepEqual(JSON.parse(await readFile(join(data, "settings.json"), "utf8")), { folder });
+    assert.deepEqual(JSON.parse(await readFile(join(data, "settings.json"), "utf8")), {
+      folder, format: "png", quality: 90, screenSubtitles: true, besideMedia: false,
+    });
     assert.deepEqual((await readdir(data)).sort(), ["settings.json"], "no temporary file left behind");
     await first.stop();
     const second = await startPlugin(activate, { directory, host: restart, dataDirectory: data });
@@ -261,6 +274,7 @@ test("one running and four queued; the sixth is refused; queued input keeps its 
     assert.equal(host.sent("jobs.start")[1]!.snapshotId, 3, "skips the cancelled task and uses the third frozen input");
     assert.equal((host.snapshots.get(3) as { sourceStamp: { generation: number } }).sourceStamp.generation, 1, "queued input not refreshed");
     assert.equal(host.snapshots.has(1), false, "a completed task releases its input");
+    await until(() => rows(host).find((row) => row.id === "1")!.detail.endsWith("已完成")); // the row update may trail the job start
     const first = rows(host).find((row) => row.id === "1")!;
     assert.deepEqual([first.title, first.detail], ["截图 · source-one_00.02.000.png", "00:02.000 · 已完成"]);
     assert.equal(rows(host).find((row) => row.id === "3")!.title, "截图 · source-one_00.02.000 (2).png", "queued frames never share a name");

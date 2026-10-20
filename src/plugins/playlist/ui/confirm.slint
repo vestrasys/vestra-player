@@ -1,0 +1,24 @@
+// C18: "用 <列表文件名> 替换当前列表？" [替换] [取消]
+import { Theme } from "@vestra/theme.slint";
+import { Button } from "@vestra/widgets.slint";
+
+export component ConfirmReplace inherits Window {
+    title: "打开播放列表文件";
+    preferred-width: 360px;
+    min-width: 300px;
+    background: Theme.bg-panel;
+    in property <string> message;
+    callback accept();
+    callback cancel();
+    VerticalLayout {
+        padding: Theme.dialog-padding;
+        spacing: 12px;
+        Text { text: root.message; color: Theme.text; font-size: Theme.font-body; wrap: word-wrap; }
+        HorizontalLayout {
+            alignment: end;
+            spacing: 6px;
+            Button { text: "替换"; clicked => { root.accept(); } }
+            Button { text: "取消"; clicked => { root.cancel(); } }
+        }
+    }
+}

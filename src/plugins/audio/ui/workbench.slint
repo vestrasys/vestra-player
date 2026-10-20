@@ -1,4 +1,5 @@
 import { Theme } from "@vestra/theme.slint";
+import { ComboBox } from "std-widgets.slint";
 import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
 
 // 14px box + 11px text (reference player panel switch).
@@ -113,8 +114,9 @@ component Band {
     }
 }
 
-// Label 65 (right, 11px) + panel slider 154 + value, 24px pitch.
-component ValueRow {
+// Effect row (UI-TOOL-04): label 56 (right, 11px) + panel slider 100 + value 54 + 默认 41, 4px apart:
+// 263px, inside the 285px the 301px window leaves after its 8px padding.
+component EffectRow {
     in property <string> label;
     in property <string> shown;
     in property <bool> available;
@@ -122,12 +124,14 @@ component ValueRow {
     in property <float> minimum;
     in property <float> maximum;
     callback edited(float);
+    callback reset();
     height: 24px;
     HorizontalLayout {
-        spacing: 6px;
-        Text { width: 65px; text: root.label; color: Theme.text; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
+        spacing: 4px;
+        alignment: start;
+        Text { width: 56px; text: root.label; color: root.available ? Theme.text : Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
         Slider {
-            width: 154px;
+            width: 100px;
             panel: true;
             minimum: root.minimum;
             maximum: root.maximum;
@@ -135,8 +139,32 @@ component ValueRow {
             value <=> root.value;
             changed(v) => { root.edited(v); }
         }
-        Text { text: root.shown; color: Theme.text-list; font-size: Theme.font-body; vertical-alignment: center; }
+        Text { width: 54px; text: root.shown; color: Theme.text-list; font-size: Theme.font-body; vertical-alignment: center; }
+        VerticalLayout {
+            alignment: center;
+            Button { width: 41px; text: "默认"; small: true; enabled: root.available; clicked => { root.reset(); } }
+        }
     }
+}
+
+// One 74×31 page tab of the strip (same strip as the playlist sidebar).
+component Tab {
+    in property <string> text;
+    in property <bool> selected;
+    callback picked();
+    width: 74px;
+    height: 31px;
+    accessible-role: tab;
+    accessible-label: root.text;
+    Rectangle { background: root.selected ? Theme.bg-panel : touch.has-hover ? Theme.hover-bg : transparent; }
+    Text {
+        text: root.text;
+        color: root.selected ? Theme.text : Theme.text-dim;
+        font-size: Theme.font-tab;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea { clicked => { root.picked(); } }
 }
 
 // One popup row: radio dot for the current preset, menu-style hover.
@@ -171,122 +199,203 @@ component PresetItem {
 export component AudioWorkbench inherits Window {
     title: "音频工作台";
     width: 301px;
+    height: 260px;
     background: Theme.bg-panel;
     in property <string> status-text;
     in property <bool> source-ready;
     in property <bool> is-busy;
     in property <bool> has-error;
     in property <string> error-detail;
+    in-out property <int> tab-index: 0;
     in property <bool> equalizer-enabled: true;
     in property <int> preset-index: 0;
     in property <[float]> gain-values: [0, 0, 0, 0, 0, 0];
     in property <float> delay-ms;
     in property <bool> normalize-enabled;
-    in property <float> clarity-db;
+    in property <bool> clarity-enabled;
+    in property <float> clarity-db: 3;
+    in property <int> sync-keep-index: 0;
+    callback tab-changed(int);
     callback gain-changed(int, float);
     callback equalizer-changed(bool);
     callback delay-changed(float);
+    callback delay-reset();
     callback normalize-changed(bool);
+    callback clarity-toggled(bool);
     callback clarity-changed(float);
+    callback clarity-reset();
+    callback sync-keep-selected(int);
     callback preset-selected(int);
     callback reset-requested();
     callback retry-requested();
     private property <[string]> preset-names: ["平直", "人声", "音乐", "影院"];
+    private property <[string]> tab-names: ["均衡器", "效果", "声道与输出"];
     changed delay-ms => { delay.value = root.delay-ms; }
     changed clarity-db => { clarity.value = root.clarity-db; }
     changed normalize-enabled => { norm.checked = root.normalize-enabled; }
+    changed clarity-enabled => { clarity-check.checked = root.clarity-enabled; }
     changed equalizer-enabled => { eq.checked = root.equalizer-enabled; }
+    changed sync-keep-index => { keep-combo.current-index = root.sync-keep-index; }
     VerticalLayout {
-        padding: 8px;
-        spacing: 6px;
-        HorizontalLayout {
-            height: 22px;
-            spacing: 6px;
-            eq := Check {
-                width: 82px;
-                text: "均衡器";
-                checked: root.equalizer-enabled;
-                enabled: root.source-ready;
-                toggled(on) => { root.equalizer-changed(on); }
+        // Page tabs, 31px; the last picked page is remembered by the plugin.
+        Rectangle {
+            height: 31px;
+            background: Theme.bg-bar;
+            HorizontalLayout {
+                for name[index] in root.tab-names: Tab {
+                    text: name;
+                    selected: index == root.tab-index;
+                    picked => {
+                        root.tab-index = index;
+                        root.tab-changed(index);
+                    }
+                }
+                Rectangle { horizontal-stretch: 1; }
             }
-            preset-button := Button {
-                width: 97px;
-                enabled: root.source-ready;
-                text: (root.preset-index >= 0 ? root.preset-names[root.preset-index] : "自定义") + " ▾";
-                clicked => { presets.show(); }
-            }
-            VerticalLayout {
-                alignment: center;
-                Button { text: "复位"; small: true; enabled: root.source-ready; clicked => { root.reset-requested(); } }
-            }
-            Rectangle { }
-        }
-        HorizontalLayout {
-            padding-left: 3px;
-            spacing: 0px;
-            for value[index] in root.gain-values: Band {
-                caption: ["60", "170", "350", "1k", "3.5k", "10k"][index];
-                gain: value;
-                available: root.source-ready;
-                edited(gain) => { root.gain-changed(index, gain); }
-            }
-            VerticalLayout {
-                padding-left: 6px;
-                padding-top: 11px;
-                padding-bottom: 13px;
-                Text { text: "+6 dB"; color: Theme.text-dim; font-size: Theme.font-xs; vertical-alignment: top; }
-                Text { text: "0"; color: Theme.text-dim; font-size: Theme.font-xs; vertical-alignment: center; }
-                Text { text: "-6 dB"; color: Theme.text-dim; font-size: Theme.font-xs; vertical-alignment: bottom; }
-            }
-            Rectangle { }
         }
         VerticalLayout {
-            spacing: 0px;
-            delay := ValueRow {
-                label: "延迟";
-                shown: round(root.delay-ms) + " ms";
-                minimum: -2000;
-                maximum: 2000;
-                value: root.delay-ms;
-                available: root.source-ready;
-                edited(v) => { root.delay-changed(v); }
-            }
-            clarity := ValueRow {
-                label: "清晰度";
-                shown: round(root.clarity-db * 10) / 10 + " dB";
-                minimum: 0;
-                maximum: 6;
-                value: root.clarity-db;
-                available: root.source-ready;
-                edited(v) => { root.clarity-changed(v); }
+            padding: 8px;
+            spacing: 6px;
+            Rectangle {
+                vertical-stretch: 1;
+                VerticalLayout {
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+                    visible: root.tab-index == 0;
+                    spacing: 6px;
+                    HorizontalLayout {
+                        height: 22px;
+                        spacing: 6px;
+                        eq := Check {
+                            width: 82px;
+                            text: "均衡器";
+                            checked: root.equalizer-enabled;
+                            enabled: root.source-ready;
+                            toggled(on) => { root.equalizer-changed(on); }
+                        }
+                        preset-button := Button {
+                            width: 97px;
+                            enabled: root.source-ready;
+                            text: (root.preset-index >= 0 ? root.preset-names[root.preset-index] : "自定义") + " ▾";
+                            clicked => { presets.show(); }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Button { text: "复位"; small: true; enabled: root.source-ready; clicked => { root.reset-requested(); } }
+                        }
+                        Rectangle { }
+                    }
+                    HorizontalLayout {
+                        padding-left: 3px;
+                        spacing: 0px;
+                        for value[index] in root.gain-values: Band {
+                            caption: ["60", "170", "350", "1k", "3.5k", "10k"][index];
+                            gain: value;
+                            available: root.source-ready;
+                            edited(gain) => { root.gain-changed(index, gain); }
+                        }
+                        VerticalLayout {
+                            padding-left: 6px;
+                            padding-top: 11px;
+                            padding-bottom: 13px;
+                            Text { text: "+6 dB"; color: Theme.text-dim; font-size: Theme.font-xs; vertical-alignment: top; }
+                            Text { text: "0"; color: Theme.text-dim; font-size: Theme.font-xs; vertical-alignment: center; }
+                            Text { text: "-6 dB"; color: Theme.text-dim; font-size: Theme.font-xs; vertical-alignment: bottom; }
+                        }
+                        Rectangle { }
+                    }
+                    Rectangle { }
+                }
+                VerticalLayout {
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+                    visible: root.tab-index == 1;
+                    spacing: 0px;
+                    delay := EffectRow {
+                        label: "声音同步";
+                        shown: round(root.delay-ms) + " ms";
+                        minimum: -2000;
+                        maximum: 2000;
+                        value: root.delay-ms;
+                        available: root.source-ready;
+                        edited(v) => { root.delay-changed(v); }
+                        reset => { root.delay-reset(); }
+                    }
+                    HorizontalLayout {
+                        height: 24px;
+                        norm := Check {
+                            width: 56px;
+                            text: "规格化";
+                            checked: root.normalize-enabled;
+                            enabled: root.source-ready;
+                            toggled(on) => { root.normalize-changed(on); }
+                        }
+                        Rectangle { }
+                    }
+                    HorizontalLayout {
+                        height: 24px;
+                        spacing: 4px;
+                        alignment: start;
+                        clarity-check := Check {
+                            width: 56px;
+                            text: "晶化";
+                            checked: root.clarity-enabled;
+                            enabled: root.source-ready;
+                            toggled(on) => { root.clarity-toggled(on); }
+                        }
+                        // Off keeps the strength but greys the slider out.
+                        clarity := Slider {
+                            width: 100px;
+                            panel: true;
+                            minimum: 0;
+                            maximum: 6;
+                            value: root.clarity-db;
+                            enabled: root.source-ready && root.clarity-enabled;
+                            changed(v) => { root.clarity-changed(v); }
+                        }
+                        Text { width: 54px; text: round(root.clarity-db * 10) / 10 + " dB"; color: root.clarity-enabled ? Theme.text-list : Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; }
+                        VerticalLayout {
+                            alignment: center;
+                            Button { width: 41px; text: "默认"; small: true; enabled: root.source-ready; clicked => { root.clarity-reset(); } }
+                        }
+                    }
+                    Rectangle { }
+                }
+                VerticalLayout {
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+                    visible: root.tab-index == 2;
+                    spacing: 4px;
+                    HorizontalLayout {
+                        height: 24px;
+                        spacing: 6px;
+                        Text { width: 65px; text: "同步保持"; color: Theme.text; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
+                        keep-combo := ComboBox {
+                            width: 154px;
+                            height: 22px;
+                            model: ["不保持", "本次运行内保持", "始终保持"];
+                            current-index: root.sync-keep-index;
+                            selected(value) => { root.sync-keep-selected(self.current-index); }
+                        }
+                        Rectangle { }
+                    }
+                    Rectangle { }
+                }
             }
             HorizontalLayout {
-                height: 22px;
-                padding-left: 71px;
-                norm := Check {
-                    text: "响度规范化";
-                    checked: root.normalize-enabled;
-                    enabled: root.source-ready;
-                    toggled(on) => { root.normalize-changed(on); }
+                height: 20px;
+                spacing: 6px;
+                ToolTipArea {
+                    text: root.error-detail;
+                    Text {
+                        text: root.status-text;
+                        color: root.has-error ? Theme.accent : Theme.text-dim;
+                        font-size: Theme.font-body;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
                 }
-            }
-        }
-        HorizontalLayout {
-            height: 20px;
-            spacing: 6px;
-            ToolTipArea {
-                text: root.error-detail;
-                Text {
-                    text: root.status-text;
-                    color: root.has-error ? Theme.accent : Theme.text-dim;
-                    font-size: Theme.font-body;
-                    vertical-alignment: center;
-                    overflow: elide;
+                if root.has-error: VerticalLayout {
+                    alignment: center;
+                    Button { text: "重试"; small: true; enabled: !root.is-busy; clicked => { root.retry-requested(); } }
                 }
-            }
-            if root.has-error: VerticalLayout {
-                alignment: center;
-                Button { text: "重试"; small: true; enabled: !root.is-busy; clicked => { root.retry-requested(); } }
             }
         }
     }

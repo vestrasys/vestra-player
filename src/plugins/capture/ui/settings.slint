@@ -1,0 +1,81 @@
+// 截图设置 (F07, F04): format and quality, where captures go; reference player dialog 337 「格式设置」.
+import { CheckBox, ComboBox, LineEdit } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button, Slider } from "@vestra/widgets.slint";
+import { FormLabel, Group, Note } from "parts.slint";
+
+export component CaptureSettings inherits Window {
+    title: "截图设置";
+    width: 360px;
+    background: Theme.bg-panel;
+    in property <string> folder;
+    in-out property <int> format-index: 0;
+    in-out property <float> quality: 90;
+    in-out property <bool> beside-media: false;
+    in-out property <bool> screen-subtitles: true;
+    callback choose-format(int);
+    callback set-quality(int);
+    callback pick-folder();
+    callback set-beside-media(bool);
+    callback set-screen-subtitles(bool);
+
+    VerticalLayout {
+        padding: Theme.dialog-padding;
+        spacing: 5px;
+        Group {
+            title: "格式";
+            HorizontalLayout {
+                spacing: 4px;
+                FormLabel { width: 60px; text: "格式："; }
+                ComboBox {
+                    height: Theme.input-height;
+                    model: ["PNG", "JPEG", "BMP"];
+                    current-index <=> root.format-index;
+                    selected => { root.choose-format(self.current-index); }
+                }
+            }
+            HorizontalLayout {
+                spacing: 4px;
+                FormLabel { width: 60px; text: "质量："; }
+                Slider {
+                    minimum: 1;
+                    maximum: 100;
+                    value <=> root.quality;
+                    enabled: root.format-index == 1;
+                    released(v) => { root.set-quality(round(v)); }
+                }
+                Note { width: 30px; text: round(root.quality); horizontal-alignment: right; }
+            }
+            Note { text: "质量只用于 JPEG；复制到剪贴板总是 PNG。"; color: Theme.text-dim; }
+        }
+        Group {
+            title: "保存位置";
+            HorizontalLayout {
+                spacing: 4px;
+                LineEdit { height: Theme.input-height; font-size: Theme.font-body; text: root.folder; read-only: true; }
+                Button { width: 30px; height: Theme.input-height; text: "…"; clicked => { root.pick-folder(); } }
+            }
+            CheckBox {
+                height: Theme.checkbox-row-height;
+                text: "条件允许时储存到播放文件夹";
+                checked <=> root.beside-media;
+                toggled => { root.set-beside-media(self.checked); }
+            }
+        }
+        Group {
+            title: "实际画面";
+            CheckBox {
+                height: Theme.checkbox-row-height;
+                text: "包含字幕";
+                checked <=> root.screen-subtitles;
+                toggled => { root.set-screen-subtitles(self.checked); }
+            }
+            Text {
+                text: "实际画面由离线渲染生成：包含插件画面效果，字幕按插件样式重新绘制并始终画在画面内，与屏幕上的像素不完全相同；屏幕提示不包含在内。";
+                color: Theme.text-dim;
+                font-size: Theme.font-body;
+                wrap: word-wrap;
+            }
+        }
+    }
+}

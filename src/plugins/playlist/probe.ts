@@ -8,6 +8,8 @@ export type ProbeRunner = (args: string[], options: { signal: AbortSignal; timeo
 export const PROBE_ARGS = ["-v", "error", "-show_entries", "format=duration", "-of", "json"];
 export const PROBE_LIMIT = 2;
 export const PROBE_TIMEOUT_MS = 10_000;
+/** C17: entries kept in `probe-cache.json` (least recently used dropped first). */
+export const CACHE_LIMIT = 20_000;
 
 /** `VESTRA_FFPROBE` or `ffprobe` on PATH; no shell, bounded output and time. */
 export function createProbeRunner(executable = process.env.VESTRA_FFPROBE || "ffprobe"): ProbeRunner {
@@ -51,8 +53,10 @@ export function parseDuration(output: string): number | null {
  * Failures only mark the row unknown (`--:--`); they are never announced.
  */
 export class Prober {
-  /** realpath + mtime -> seconds (null: ffprobe answered without a duration). */
+  /** realpath + mtime -> seconds (null: ffprobe answered without a duration); insertion order = LRU order. */
   private cache = new Map<string, number | null>();
+  /** The cache changed since the last `export()`. */
+  dirty = false;
   private waiting: string[] = [];
   private running = new Map<string, AbortController>();
 
@@ -85,6 +89,23 @@ export class Prober {
     for (const controller of this.running.values()) controller.abort();
     this.running.clear();
   }
+  /** The cache as saved in `probe-cache.json`. */
+  export(): [string, number | null][] {
+    this.dirty = false;
+    return [...this.cache];
+  }
+  import(entries: unknown) {
+    if (!Array.isArray(entries)) return;
+    for (const entry of entries.slice(-CACHE_LIMIT))
+      if (Array.isArray(entry) && typeof entry[0] === "string" && (entry[1] === null || typeof entry[1] === "number"))
+        this.cache.set(entry[0], entry[1]);
+  }
+  private remember(key: string, value: number | null) {
+    this.cache.delete(key);
+    this.cache.set(key, value);
+    while (this.cache.size > CACHE_LIMIT) this.cache.delete(this.cache.keys().next().value!);
+    this.dirty = true;
+  }
   /** Processes currently running (for tests). */
   get active() {
     return this.running.size;
@@ -108,22 +129,28 @@ export class Prober {
     let value: number | null;
     try {
       const real = await realpath(row.source);
+      // Restored rows (C17) learn their realpath here.
+      if (!signal.aborted && !this.queue.rows.some((other) => other !== row && other.kind === "file" && other.key === real))
+        row.key = real;
       const key = `${real}\n${(await stat(real)).mtimeMs}`;
       const cached = this.cache.get(key);
-      if (cached !== undefined) value = cached;
-      else {
+      if (cached !== undefined) {
+        value = cached;
+        this.remember(key, cached);
+      } else {
         if (signal.aborted) return;
         const output = await this.runner([...PROBE_ARGS, real], { signal, timeoutMs: PROBE_TIMEOUT_MS });
         value = parseDuration(output);
         // Only answers ffprobe gave are cached; a missing tool or timeout is retried on the next add.
-        this.cache.set(key, value);
+        this.remember(key, value);
       }
     } catch {
       value = null;
     }
     if (signal.aborted) return;
-    row.probed = value;
-    row.probe = value === null ? "failed" : "done";
+    // A length from a list file or the last run (C17/C18) stays when ffprobe has none.
+    if (value !== null) row.probed = value;
+    row.probe = row.probed === null ? "failed" : "done";
     this.changed();
   }
 }
