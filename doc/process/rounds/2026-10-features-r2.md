@@ -316,6 +316,50 @@ plugin.power.preventSleep(mode: "off" | "playing"): Promise<void>;
 
 结论（§4.3 保守原则）：**不加通知事件，写明失败语义**。参考文档 §16.2 增加：启动失败只写宿主日志（`host.error power …`），不通知插件，同条件不重试、条件变化再试。理由：`/usr/bin/caffeinate` 是系统自带程序，启动失败在受支持的 macOS 上实际不会发生，不满足「需要宿主内部状态的通用能力缺口」的门槛；为一个几乎不出现的失败增加一条事件通道（订阅、退订、作用域、TestHost 模拟）不值得。作者 A 据此把 B29 第 5 条降级（删除「无法阻止屏保」提示），并在需求文档对应小节注明。若以后出现可复现的失败场景，再按 §4.1 带证据提出。
 
+#### 裁决：`system.reveal` 接受多个路径（作者 B，playlist C23）
+
+请求：`system.reveal(path | path[])`，一次 `/usr/bin/open -R a b c`；全部不存在 `missing`，部分不存在跳过。证据：同一文件夹选中 3 个文件按 Ctrl+F，单路径接口只能高亮 1 个（逐个调用会开多个 Finder 窗口或只留最后一个），原 `open -R a b c` 能全部高亮——用户可见的功能缺失，替代方案做不到。
+
+结论：**接受**（兼容扩展，只在 runtime 层，不加宿主协议）。签名 `reveal(paths: string | string[]): Promise<void>`；最多 256 个；路径先转绝对路径（避免以 `-` 开头被当成 `open` 的选项）并去重；不存在的跳过，全部不存在 `missing`。`openPath` 不变。TestHost 的 `host.system.revealed` 按顺序记录每个被显示的路径（原有断言不受影响）。随批次 B 提交实现，参考文档 §16.5 已更新。
+
+#### P1b 批次 B（维护者）
+
+**实现清单**
+
+| 项 | 宿主 | SDK / TestHost |
+| --- | --- | --- |
+| 14 个核心动作（R-H1） | `core_actions.rs`：声明（路径、order、group、绑定、重复与 playback 现状一致；新增 `frame-back/forward` 204/205 group `frame`，第 1 档跳转 group `step`，`rate-normal` 单选）、启用/勾选/原因、执行计划与 OSD 文案（从 `controller.ts` 逐条搬来）；`backend.rs::CoreActions` 在控制线程按顺序执行（宿主自己的操作簿 owner 0）；`main.rs` 注册、状态随 `source.state` 与序列标志更新、`ActionDone` 显示 OSD | `host.run` |
+| 开关 `VESTRA_CORE_ACTIONS=1` | 关闭（默认）时不注册 14 条命令；`host.run`、`player.step`、`setStepSeek` 始终可用 | `new TestHost({ coreActions: true })`、`host.coreAction(id)`、`host.coreRuns` |
+| `player.step`（R-P1、R-P2） | 线上方法 `player.step`（`playback.control`）；`frame` → `frame-step` / `frame-back-step`，`keyframe` → `seek ±0.001 relative+keyframes`；无活动视频（`source.state.hasVideo`，新增内部字段：选中的非封面视频轨）、生成流、后退时不可跳转 → `unsupported` | `host.steps` |
+| `player.setStepSeek`（R-P3） | 按插件记录、最后写入生效，插件停用后回退；值变化时重新注册两条跳转命令（标题「后退 N秒」） | `host.stepSeek` |
+| `host.run`（R-P4） | 线上方法 `host.run`（`commands`）；未知 id `invalid`；禁用 `unavailable`（原因作 message）；执行完才答复；同一独占动作在途时丢弃重复并直接答复 | 执行后刷新 `player.state` |
+| 覆盖层迁移 | 开关打开时启动即把 12 个 `vestra.playback/<旧 id>` 改写为 `host/<新 id>` 并保存；新键已存在则保留新键 | — |
+| 文档 | — | 参考 §5.2（`step`、`setStepSeek`）、§5.5（新，核心动作表）、§4.1、§17 批次 B 变更说明（旧→新 id 表、迁移例子、开关）；示例 §21 |
+
+**签名调整与实现取舍**（签名与裁决一致）
+
+1. 关键帧：任务单写「`seek ±0 relative+keyframes`，实测不成立时改用 `seek <当前 ± 0.001> absolute+keyframes`」。mpv 0.41 实测（H.264 片源，关键帧 8.333/16.667/24.021/32.355 …）：`seek 0 relative+keyframes` 前进时反而回到更早的关键帧；`absolute+keyframes`（当前 ± 0.001）同样不对；**`seek ±0.001 relative+keyframes` 两个方向都严格越过当前关键帧**（21.5 → 24.021 → 32.355 …；56.376 → 48.043 → 40.688 …），采用它。
+2. `frame-back/forward` 在核心动作里不显示 OSD（playback 现有命令里没有对应项，需求未定文案）。
+3. 相对跳转的「最新未完成目标」：上一次核心跳转在同一来源、且 mpv `seeking` 为真或距今 < 300 ms 时，以它的目标为基准累加，否则以当前位置为基准。
+4. 核心动作执行失败（来源拒绝等）把 message 显示在视频上（与底栏一致）；`host.run` 的失败返回给调用的插件，不显示。
+5. 音量 ±5 以控制线程上当前 mpv 音量为基准（请求在同一线程顺序执行，等价于 playback 的草稿值规则）。
+
+**检查**
+
+- `src/`：`check`、`format:check`、`boundaries`、`plugins:build` 0；`test:sdk` 69/69（新增 `tests/sdk/core-actions.test.ts` 3 条）；插件测试 audio 22、bilibili 15、capture 22、info 9、nes 11、playback 37、playlist 56、subtitles 30、video 10、youtube 14 全过；workshop 16/17（SDK 又有变化，`vendor/sdk` 需按测试开头的命令重新同步，协调者处理）。
+- `src/host/`：`cargo fmt --check`、`clippy --all-targets -D warnings` 0；`cargo test` 183/183（`core_actions.rs` 6 条：声明与 playback 菜单一致、启用条件与原因、计划与 OSD 文案及钳制/累加、`step` 四种组合与 `unsupported`、步长校验与格式、覆盖层迁移）；`--no-default-features` 编译通过。
+- 无界面实测（`VESTRA_CORE_ACTIONS=1 --headless` + 临时探针插件）：`play-pause` 暂停；连续两次 `seek-forward` 0.5 → 10.5（累加）；`setStepSeek(10)` 后 `seek-backward` 10.5 → 0.5；`frame-forward` / `step("frame")` 每次 +1/30 s，`step("frame","backward")` −1/30 s；`step("keyframe","forward")` 两次 0.53 → 8.333 → 16.667，`backward` → 8.333；`rate-up` 1.1、`rate-normal` 1、`volume-up` 105、`mute` 开；没有序列提供者时 `next` → `unavailable 没有下一个`；`stop` 后 `play-pause` → `unavailable`、`step` → `unsupported`。
+- 宿主 Rust：`src/host/src/*.rs` 24 785 → 26 032（批次 B 及修复 +1 247，第 2 轮累计 +3 262，超过约 3 000 的预算约 9%，主要是测试；P3 删除开关会减少少量代码）；SDK 与运行器 5 565 → 5 977。
+
+**给协调者的 GUI 实测要点**（以 `VESTRA_CORE_ACTIONS=1` 启动，不加载 playback，或加载迁移后的 playback）
+
+1. 菜单：「关闭」(F4)、播放 ▶ 播放/暂停 (Space)、上一个/下一个、跳转 ▶ 上一帧 (D) / 下一帧 (F) / 后退5秒 (←) / 前进5秒 (→)、速度 ▶ 正常 (Z) / 减速 0.1 (X) / 加速 0.1 (C)、声音 ▶ 音量 + (↑) / 音量 − (↓) / 静音 (M) 都在，位置与移交前一致。
+2. 不加载 playback：Space、←/→（按住连续）、D/F、↑/↓、M、PageUp/PageDown（有 playlist 时）、X/C/Z、F4 可用，OSD 文字与 playback 时一致（「已暂停」「前进 5秒: 00:37 / 01:40」「播放速度: 1.1x」「音量: 85%」「静音: 开」）。
+3. 逐帧：播放中按 F 暂停并前进一帧；连按 D 五次回退约 5/fps；纯音频（mp3）时「上一帧/下一帧」菜单灰。
+4. 关键帧：H.264 片源调 `player.step("keyframe","forward")` 十次，时间单调增加，与 `ffprobe -v error -skip_frame nokey -select_streams v:0 -show_entries frame=pts_time -of csv=p=0 <文件>` 的关键帧时间一致。
+5. 步长：插件 `setStepSeek({ seconds: 10 })` 后菜单变为「后退10秒/前进10秒」，← 后退 10 秒；停用该插件后恢复「5秒」。
+6. 覆盖层迁移：在界面状态文件的 `bindings` 里放 `"vestra.playback/toggle-pause": ["P"]`，以开关启动后文件里变成 `"host/play-pause": ["P"]`，按 P 播放/暂停。
+
 ### 6.3 作者交付
 
 （各作者完成时填写：完成项、未完成项与原因、删除的自制实现、API 请求）

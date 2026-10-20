@@ -4,6 +4,7 @@ mod bindings;
 mod clipboard;
 mod commands;
 pub mod composition;
+mod core_actions;
 mod effects;
 pub mod font_asset;
 pub mod font_carrier;
@@ -110,6 +111,8 @@ enum Event {
     MenuAction(u64, MenuAction),
     Request(u64, Value),
     Reply(Reply, std::result::Result<Value, RpcError>),
+    /// A core action finished on the control worker: (requester, action, `{ osd }`).
+    ActionDone(Reply, String, std::result::Result<Value, RpcError>),
     Broadcast(String, Value),
     UiCallback(u64, Value),
     PluginMessage(u64, String, Value),
@@ -216,6 +219,13 @@ struct Host {
     power: power::Power,
     /// When the shell last received a video frame (`power` keeps the display awake).
     last_frame: Option<Instant>,
+    /// `VESTRA_CORE_ACTIONS=1`: register the 14 core playback actions (R-H1).
+    core_actions: bool,
+    /// Core actions in flight that drop a repeated trigger.
+    actions_busy: std::collections::BTreeSet<String>,
+    /// `player.setStepSeek` per owner: (write sequence, seconds); the newest wins.
+    step_seek: BTreeMap<u64, (u64, f64)>,
+    step_writes: u64,
 }
 impl Host {
     fn activation(&mut self, owner: u64) -> Result<Value> {
@@ -367,6 +377,10 @@ impl Host {
         }
         self.policy.remove_owner(owner);
         self.power.remove_owner(owner);
+        let step = self.step_seconds();
+        if self.step_seek.remove(&owner).is_some() {
+            self.step_seek_changed(step);
+        }
         self.mount_queue.retain(|c| c.reply.owner != owner);
         if self
             .preparing
@@ -567,6 +581,7 @@ impl Host {
                     },
                 }
             }
+            Event::ActionDone(reply, action, result) => self.action_done(reply, &action, result),
             Event::Reply(reply, mut result) => {
                 if self.source_state_replies.remove(&(reply.owner, reply.id))
                     && let Ok(state) = &mut result
@@ -580,6 +595,7 @@ impl Host {
                     self.patch_source(&mut data);
                     self.last_source = data.clone();
                     self.update_title();
+                    self.core_action_states();
                 }
                 self.broadcast(&event, data)
             }
@@ -1516,7 +1532,166 @@ impl Host {
                 .map_err(|e| anyhow::anyhow!("{e}"))?;
         }
         self.host_revision = 1;
+        if self.core_actions {
+            for (id, declaration) in core_actions::declarations(self.step_seconds()) {
+                self.register_core_action(id, declaration)?;
+            }
+            self.core_action_states();
+        }
         Ok(())
+    }
+    fn register_core_action(&mut self, id: &str, declaration: commands::Declaration) -> Result<()> {
+        self.input
+            .borrow_mut()
+            .table
+            .declare(
+                bindings::HOST,
+                id,
+                "host",
+                &declaration.bindings,
+                false,
+                declaration.repeat,
+            )
+            .map_err(anyhow::Error::msg)?;
+        let state = core_actions::state(id, &core_actions::Facts::default(), false);
+        self.commands
+            .register(
+                bindings::HOST,
+                "host",
+                id.into(),
+                self.host_revision.max(1),
+                declaration,
+                state,
+            )
+            .map_err(|e| anyhow::anyhow!("{e}"))
+    }
+    /// The first-tier relative seek: the newest `setStepSeek`, else 5 seconds.
+    fn step_seconds(&self) -> f64 {
+        self.step_seek
+            .values()
+            .max_by_key(|(sequence, _)| *sequence)
+            .map_or(core_actions::DEFAULT_STEP, |(_, seconds)| *seconds)
+    }
+    /// The seek menu titles carry the step: re-register them when it changes.
+    fn step_seek_changed(&mut self, before: f64) {
+        let after = self.step_seconds();
+        if !self.core_actions || after == before {
+            return;
+        }
+        for (id, declaration) in core_actions::declarations(after) {
+            if id == "seek-backward" || id == "seek-forward" {
+                let _ = self.commands.remove(bindings::HOST, id);
+                if let Err(error) = self.register_core_action(id, declaration) {
+                    eprintln!("host.error core action {id}: {error}");
+                }
+            }
+        }
+        self.core_action_states();
+    }
+    /// The last source state with the sequence flags merged in.
+    fn core_facts(&self) -> core_actions::Facts {
+        let mut state = self.last_source.clone();
+        self.patch_source(&mut state);
+        core_actions::Facts::from_state(&state)
+    }
+    /// Publish changed enabled/checked/busy states of the registered actions.
+    fn core_action_states(&mut self) {
+        if !self.core_actions {
+            return;
+        }
+        let facts = self.core_facts();
+        for id in core_actions::ACTIONS {
+            let state = core_actions::state(id, &facts, self.actions_busy.contains(id));
+            if self
+                .commands
+                .get(bindings::HOST, id)
+                .is_some_and(|entry| entry.state != state)
+            {
+                self.host_revision += 1;
+                let _ = self
+                    .commands
+                    .update(bindings::HOST, id, self.host_revision, state);
+            }
+        }
+    }
+    /// Run a core action for a binding, the menu or `host.run`. `reply` (a
+    /// plugin's `host.run`) is answered when it finished; `Ok(true)` means it
+    /// was answered already. A disabled action is `unavailable`.
+    fn run_core_action(
+        &mut self,
+        action: &str,
+        reply: Option<&Reply>,
+    ) -> std::result::Result<bool, RpcError> {
+        let facts = self.core_facts();
+        let state = core_actions::state(action, &facts, false);
+        if !state.enabled {
+            return Err(RpcError::new(
+                "unavailable",
+                state.reason.unwrap_or_else(|| "unavailable".into()),
+            ));
+        }
+        if matches!(action, "previous" | "next") {
+            let (provider, ..) = self
+                .sequence
+                .ok_or_else(|| RpcError::new("unavailable", "no sequence provider"))?;
+            self.send(
+                provider,
+                json!({"event":"sequence.step","data":{"direction":action}}),
+            );
+            return Ok(true);
+        }
+        if core_actions::exclusive(action) && !self.actions_busy.insert(action.to_owned()) {
+            // The same action is still running: this trigger is dropped.
+            return Ok(true);
+        }
+        self.core_action_states();
+        let reply = reply.cloned().unwrap_or(Reply {
+            owner: bindings::HOST,
+            id: 0,
+        });
+        self.backend
+            .commands
+            .send(Command {
+                reply,
+                method: "host.action".into(),
+                params: json!({"action":action,"step":self.step_seconds(),
+                    "sequence":{"next":facts.next,"previous":facts.previous}}),
+            })
+            .map_err(|_| RpcError::new("backend", "playback worker stopped"))?;
+        Ok(false)
+    }
+    fn action_done(
+        &mut self,
+        reply: Reply,
+        action: &str,
+        result: std::result::Result<Value, RpcError>,
+    ) {
+        self.actions_busy.remove(action);
+        match &result {
+            Ok(value) => {
+                if let Some(text) = value["osd"].as_str() {
+                    self.show_osd(text);
+                }
+            }
+            // Failures show on the video, like the playback bar did.
+            Err(error) if reply.owner == bindings::HOST => self.show_osd(&error.message),
+            Err(_) => {}
+        }
+        self.core_action_states();
+        if reply.owner != bindings::HOST {
+            self.respond(reply, result.map(|_| Value::Null));
+        }
+    }
+    /// One OSD line; nothing without a window.
+    fn show_osd(&mut self, text: &str) {
+        let text: String = text.replace(['\n', '\r'], " ").chars().take(200).collect();
+        if let Some(shell) = &self.shell
+            && !text.trim().is_empty()
+        {
+            let _ = shell.set_property("osd-text", SValue::String(text.as_str().into()));
+            let _ = shell.set_property("osd-visible", true.into());
+            self.osd_until = Some(self.now_ms() + OSD_MS);
+        }
     }
     fn host_command_states(&mut self, fullscreen: bool) {
         let checked = self
@@ -1552,6 +1727,12 @@ impl Host {
         );
     }
     fn host_command(&mut self, id: &str) {
+        if core_actions::ACTIONS.contains(&id) {
+            if let Err(error) = self.run_core_action(id, None) {
+                eprintln!("core action {id}: {}", error.message);
+            }
+            return;
+        }
         let Some(shell) = &self.shell else { return };
         let window = shell.window();
         match id {
@@ -1581,6 +1762,7 @@ impl Host {
             self.patch_source(&mut state);
             self.last_source = state.clone();
             self.broadcast("source.state", state);
+            self.core_action_states();
         }
     }
     /// C9: "<source name> - Vestra", or "Vestra" without a source.
@@ -1695,7 +1877,8 @@ impl Host {
             "clipboard.readText" | "clipboard.writeText" | "clipboard.writeImage" => {
                 Some("clipboard")
             }
-            "power.preventSleep" => Some("playback.control"),
+            "power.preventSleep" | "player.setStepSeek" | "player.step" => Some("playback.control"),
+            "host.run" => Some("commands"),
             "playback.stats" => Some("playback.read"),
             "sequence.set" | "sequence.step" => Some("playback.control"),
             "commands.register" | "commands.update" | "commands.unregister" => Some("commands"),
@@ -1756,6 +1939,28 @@ impl Host {
                     ));
                 }
                 clipboard::dispatch(method, params)?
+            }
+            "host.run" => {
+                let action = string(params, "action")?;
+                if !core_actions::ACTIONS.contains(&action) {
+                    return Err(RpcError::invalid(format!("unknown host action {action}")));
+                }
+                if !self.run_core_action(action, Some(reply))? {
+                    return Ok(None);
+                }
+                Value::Null
+            }
+            "player.setStepSeek" => {
+                let seconds = params["seconds"]
+                    .as_f64()
+                    .filter(|s| core_actions::valid_step(*s))
+                    .ok_or_else(|| RpcError::invalid("seconds must be 0.1..3600 in tenths"))?;
+                let before = self.step_seconds();
+                self.step_writes += 1;
+                self.step_seek
+                    .insert(reply.owner, (self.step_writes, seconds));
+                self.step_seek_changed(before);
+                Value::Null
             }
             "power.preventSleep" => {
                 self.power
@@ -2203,6 +2408,7 @@ impl Host {
             | "playback.set"
             | "audio.addTrack"
             | "audio.selectTrack"
+            | "player.step"
             | "source.state"
             | "source.operation"
             | "source.submit"
@@ -2631,10 +2837,20 @@ fn main() -> Result<()> {
         cleanup: Default::default(),
         power: power::Power::system(),
         last_frame: None,
+        core_actions: std::env::var_os("VESTRA_CORE_ACTIONS").is_some_and(|v| v == "1"),
+        actions_busy: Default::default(),
+        step_seek: BTreeMap::new(),
+        step_writes: 0,
         commands: commands::Registry::new(),
     };
     host.register_host_commands()?;
     {
+        if host.core_actions && core_actions::migrate_overlay(&mut host.ui_state.state.bindings) {
+            // Old playback-plugin keys now name the core actions; saved once.
+            let now = host.now_ms();
+            host.ui_state.touch(now);
+            host.ui_state.flush();
+        }
         let overlay = host.ui_state.state.bindings.clone();
         host.input.borrow_mut().table.set_overlay(overlay);
         if let Some(sidebar) = &host.ui_state.state.sidebar {

@@ -120,6 +120,21 @@ pub fn audio_tracks(mpv: &Mpv) -> Result<Vec<AudioTrack>> {
     parse(mpv.get_property::<Node>("track-list")?)
 }
 
+/// A selected video track that is not cover art: frames to step through.
+pub fn moving_video(node: &Node) -> bool {
+    let Node::Array(tracks) = node else {
+        return false;
+    };
+    tracks.iter().any(|track| {
+        let Node::Map(fields) = track else {
+            return false;
+        };
+        matches!(field(fields, "type"), Some(Node::String(kind)) if kind == "video")
+            && matches!(field(fields, "selected"), Some(Node::Flag(true)))
+            && !matches!(field(fields, "albumart"), Some(Node::Flag(true)))
+    })
+}
+
 fn selected_video_stream(node: Node, demuxer: &str) -> Result<u32> {
     ensure!(
         demuxer == "lavf",

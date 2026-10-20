@@ -539,12 +539,21 @@ impl Sources {
         let mut result = serde_json::to_value(self.session.state()).unwrap();
         result["kind"] = json!("media");
         result["container"] = json!(container);
-        result["audioTracks"] = match self.presentation_load() {
+        let tracks = self
+            .presentation_load()
+            .and_then(|_| mpv.get_property::<Node>("track-list").ok());
+        result["audioTracks"] = match &tracks {
             Some(_) => crate::media_tracks::audio_tracks(mpv)
                 .map(|tracks| json!(tracks))
                 .unwrap_or(Value::Null),
             None => Value::Null,
         };
+        // Frame stepping needs moving pictures (not audio with cover art).
+        result["hasVideo"] = json!(
+            tracks
+                .as_ref()
+                .is_some_and(crate::media_tracks::moving_video)
+        );
         let ready = matches!(self.session.state().phase, Phase::Ready | Phase::Ended);
         result["capabilities"] = json!({"pause":ready,"seek":ready&&mpv.get_property::<bool>("seekable").unwrap_or(false),"rate":ready,"restart":self.session.state().source.is_some(),"close":self.session.state().source.is_some()});
         result["output"] = json!({"volume":mpv.get_property::<f64>("volume").unwrap_or(100.),"muted":mpv.get_property::<bool>("mute").unwrap_or(false)});

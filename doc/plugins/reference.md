@@ -73,13 +73,13 @@ interface Disposable { dispose(): Promise<void> }
 
 | capability | 开放的 API |
 | --- | --- |
-| `commands` | `commands.add` |
+| `commands` | `commands.add`、`host.run` |
 | `ui.window` | `windows.create` |
 | `ui.mount` | `panels.mount`、`panels.bottom` / `panels.sidebar`（任何插件读写两个面板位置） |
 | `ui.dialog` | `dialogs.*` |
 | `playback.read` | `player.state` 启动时读取、`player.refresh`、`player.stats`；滤镜读取处理状态 |
 | `events` | `player.state` / `onChange` 实时更新、面板可见性、字幕状态刷新 |
-| `playback.control` | `player.open`、`setPaused`、`seek`、`setRate`、`restart`、`close`、`scrub`、`setOutput`、`provideSequence`、`next`、`previous`、`addAudioTrack`、`selectAudioTrack`；`power.preventSleep` |
+| `playback.control` | `player.open`、`setPaused`、`seek`、`setRate`、`restart`、`close`、`scrub`、`setOutput`、`provideSequence`、`next`、`previous`、`addAudioTrack`、`selectAudioTrack`、`step`、`setStepSeek`；`power.preventSleep` |
 | `producer.av` | `player.openStream` |
 | `processing.video` | `video.filter`（另需 `playback.read`） |
 | `processing.audio` | `audio.filter`（另需 `playback.read`） |
@@ -120,7 +120,7 @@ interface Disposable { dispose(): Promise<void> }
 interface Scope extends Disposable {
   readonly commands, windows, panels, dialogs, player, video, audio,
            subtitles, media, resolvers, packages, osd,
-           clipboard, power, tools, storage, system;
+           host, clipboard, power, tools, storage, system;
   scope(): Scope;
   add<T extends Disposable>(item: T): T;
   onDispose(cleanup: () => void | Promise<void>): Disposable;
@@ -245,7 +245,7 @@ binding  = { 修饰键 "+" } 输入          修饰键按 Ctrl、Alt、Shift、C
 - 作用范围：默认全局（主窗口或浮动面板窗口获得焦点、且按键没被焦点控件吃掉时，例如输入框里的空格不会触发）；`focus: "panel"` 只在本插件面板（附着或浮动）获得焦点时生效，此时先于全局查找。工具窗口里不触发绑定。
 - 菜单或系统对话框打开时绑定暂停。默认只在按下时触发；`repeat: true` 时按住会重复触发。
 - 冲突（同一输入、同一范围被两个命令声明）不报错：用户覆盖层优先，其次宿主自己的命令，再次先加载的插件；被压下的绑定写一行宿主日志，赢家停用后自动生效。测试里用 `host.conflicts` 检查。
-- 宿主自己的命令：「全屏」（`Enter`、`F11`、`Mouse:LeftDoubleClick`）、「退出全屏」（`Escape`，不在菜单）、「退出」（`Cmd+Q`）。
+- 宿主自己的命令：「全屏」（`Enter`、`F11`、`Mouse:LeftDoubleClick`）、「退出全屏」（`Escape`，不在菜单）、「退出」（`Cmd+Q`），以及 14 个基础播放动作（§5.5）。
 - 用户覆盖层保存在界面状态文件（[架构总览 §6](../architecture/README.md)），本轮没有改绑界面。
 
 ## 5. 播放器 `plugin.player`
@@ -305,6 +305,8 @@ interface AudioTrack {
 | `openStream(options)` → `Promise<Stream>` | 由插件生成画面和声音的来源（模拟器等） |
 | `addAudioTrack(path, { select?, ifCurrent? })` → `Promise<AudioTrack>` | 给当前媒体加一条外部音频文件（本地绝对路径），默认同时选中（`select: false` 只添加）。返回新音轨（`external: true`、`exportable: false`），它保留到换来源。路径不合法 `invalid`，没有就绪的媒体（含生成流）`unavailable`，载入失败 `backend` |
 | `selectAudioTrack(id, opts?)` → `Promise<PlayerState>` | 选中 `state.audioTracks` 中的一条；id 不存在 `invalid` |
+| `step(unit, direction, opts?)` | `unit`：`"frame"`（一帧，前进时暂停在下一帧）或 `"keyframe"`（严格越过当前关键帧到下一个/上一个）；`direction`：`"backward"` \| `"forward"`。没有活动视频（纯音频、只有封面）、生成流、或后退/关键帧需要但来源不可跳转时 `unsupported`；只执行一步，连按的去重由调用方决定（核心的「上一帧/下一帧」会丢弃在途时的重复触发） |
+| `setStepSeek({ seconds })` | 核心第 1 档相对跳转（`seek-backward` / `seek-forward`，← / →）的步长：0.1–3600，一位小数，默认 5；菜单标题随之变为「后退 N秒」。所有插件最后写入的生效，该插件停用后回到上一个仍有效的值（都没有则 5） |
 
 `opts` 为 `{ ifCurrent?: PlayerState }`。
 
@@ -414,6 +416,39 @@ interface PlaybackStats {
 - `canNext` / `canPrevious` 每轮更新重新求值，变化才发送；任何插件从 `player.state.can.next/previous` 读到。
 - `next()` / `previous()`：没有提供者或标志为假时以 `unavailable` 失败；否则宿主把请求交给提供者，在它的作用域里调用 `next` / `previous`。
 - `stats()` 需要 `playback.read`；没有来源时 `video`、`audio` 为 `null`。
+
+### 5.5 核心动作 `plugin.host.run`
+
+需要 `commands`。
+
+```ts
+type HostAction =
+  | "play-pause" | "stop" | "previous" | "next"
+  | "frame-back" | "frame-forward"
+  | "seek-backward" | "seek-forward"
+  | "rate-down" | "rate-up" | "rate-normal"
+  | "volume-up" | "volume-down" | "mute";
+plugin.host.run(action: HostAction): Promise<void>;
+```
+
+基础播放动作由播放器自己注册为菜单命令（所有者 `host`），与「全屏」「退出」相同；任何插件停用或不存在时它们照常可用。`host.run` 等价于执行该命令：同样的启用判断、同样的屏幕提示。插件的按钮（如底栏的播放/暂停）应调用它，而不是自己重新实现。
+
+| 动作 | 菜单路径 | order / group | 默认绑定 | 行为与提示 |
+| --- | --- | --- | --- | --- |
+| `stop` | 关闭 | 120 / open | F4 | 关闭来源；没有来源时禁用 |
+| `play-pause` | 播放 ▶ 播放/暂停 | 201 | Space | 暂停/继续，播完后重播；「已暂停」/「播放」；勾选 = 已暂停 |
+| `previous` / `next` | 播放 ▶ 上一个 / 下一个 | 202 / 203 | PageUp、Mouse:X1 / PageDown、Mouse:X2 | 交给播放序列提供者（§5.4）；不可用时原因「没有上一个」/「没有下一个」 |
+| `frame-back` / `frame-forward` | 播放 ▶ 跳转 ▶ 上一帧 / 下一帧 | 204 / 205，frame | D / F（按住重复） | `player.step("frame", …)`；在途时丢弃重复触发；没有活动视频时禁用 |
+| `seek-backward` / `seek-forward` | 播放 ▶ 跳转 ▶ 后退/前进 N秒 | 210 / 211，step | ← / →（按住重复） | 从最新未完成的目标累加，夹在 0 与时长之间；「前进 5秒: 00:37 / 01:40」；N 见 `setStepSeek` |
+| `rate-normal` | 播放 ▶ 速度 ▶ 正常（单选） | 220 | Z | 1 倍；「播放速度: 1x」 |
+| `rate-down` / `rate-up` | 播放 ▶ 速度 ▶ 减速 0.1 / 加速 0.1 | 221 / 222 | X / C | ±0.1，取两位小数，夹在 0.25–4；「播放速度: 1.1x」 |
+| `volume-up` / `volume-down` | 声音 ▶ 音量 + / 音量 − | 501 / 502 | ↑、滚轮上 / ↓、滚轮下（按住重复） | ±5，夹在 0–200，先设音量再取消静音；「音量: 85%」 |
+| `mute` | 声音 ▶ 静音（勾选） | 503 | M | 「静音: 开」/「静音: 关」 |
+
+- 禁用时 `run` 以 `unavailable` 失败（`message` 为原因），未知 id 为 `invalid`。动作执行完才 resolve（之后 `player.state` 已刷新）；同一动作在途时的重复调用被丢弃并直接 resolve（相对跳转与音量除外，它们排队累加）。
+- 执行失败（如来源拒绝）显示在视频上。
+- 用户覆盖层的键为 `host/<动作 id>`。
+- 迁移期：播放器以 `VESTRA_CORE_ACTIONS=1` 启动时才注册这 14 条命令（见 §17）；`host.run`、`player.step`、`setStepSeek` 不受此开关影响。
 
 ## 6. 窗口与面板
 
@@ -884,11 +919,12 @@ interface JsonStore<T> extends Disposable {
 ### 16.5 Finder `plugin.system`
 
 ```ts
-system.reveal(path: string): Promise<void>;   // 在 Finder 中选中（/usr/bin/open -R）
+system.reveal(paths: string | string[]): Promise<void>; // 在 Finder 中选中（一次 /usr/bin/open -R a b c）
 system.openPath(path: string): Promise<void>; // 用默认应用打开文件或文件夹（/usr/bin/open）
 ```
 
-- 路径不存在 `missing`；`open` 超过 10 秒 `timeout`，失败 `failed`。
+- `reveal`：最多 256 个路径，一次调用全部选中（同一文件夹的多个文件在同一窗口高亮）；不存在的路径跳过，全部不存在时 `missing`。路径先转为绝对路径。
+- `openPath` 路径不存在 `missing`；两者 `open` 超过 10 秒 `timeout`，失败 `failed`。
 
 ## 17. 变更说明
 
@@ -905,4 +941,34 @@ system.openPath(path: string): Promise<void>; // 用默认应用打开文件或�
 - **Option 与 Ctrl 组合按键名识别**：`Alt+字母` 在 macOS 上可用；⌃Y、⌃I、⌃H、⌃M、⌃[ 不再被识别成 Shift+Tab、Tab、Backspace、Enter、Escape。
 - **来源阶段变化立即推送**：`source.state` 在阶段变化（如 `ready → ended`、新来源就绪）时立即发出，不再等 100 ms 周期；周期推送不变。`media.onEnd` 之后打开下一项会更快。
 
-基础播放动作移交核心（`host.run`、`player.step`、`setStepSeek`、14 个核心动作）在批次 B 交付，迁移说明届时补在本节。
+### 第 2 轮批次 B：基础播放动作移交核心（2026-10）
+
+新增：`plugin.host.run`（§5.5）、`player.step`、`player.setStepSeek`（§5.2）；`source.state` 增加内部字段 `hasVideo`（SDK 不对外暴露）。
+
+**破坏性变更，集中切换**：核心动作与 playback 现有命令占用同样的菜单路径与按键，两者同时注册会冲突（`conflict`）。迁移期内，播放器只在环境变量 `VESTRA_CORE_ACTIONS=1` 时注册核心动作；默认（关）时 playback 照旧。playback 迁移与删除开关在同一次合并中落地，之后核心动作总是注册。
+
+| 旧 id（`vestra.playback/…`） | 新 id（`host/…`） |
+| --- | --- |
+| `toggle-pause` | `play-pause` |
+| `close-source` | `stop` |
+| `previous` / `next` | `previous` / `next` |
+| `backward-5` / `forward-5` | `seek-backward` / `seek-forward` |
+| `rate-down` / `rate-up` | `rate-down` / `rate-up` |
+| `rate-10` | `rate-normal` |
+| `volume-up` / `volume-down` | `volume-up` / `volume-down` |
+| `mute` | `mute` |
+
+用户覆盖层中旧键的绑定在开关打开时一次性改写为新键并保存；新键已存在时保留新键、丢弃旧键。
+
+迁移写法：
+
+```ts
+// 之前：playback 自己注册命令，底栏按钮调用控制器
+plugin.commands.add({ id: "toggle-pause", path: ["播放", "播放/暂停"], order: 201, bindings: ["Space"], run: () => controller.togglePause() });
+bar.on("playPause", () => controller.togglePause());
+// 之后：命令由核心注册，底栏按钮执行核心动作
+bar.on("playPause", () => plugin.host.run("play-pause"));
+await plugin.player.setStepSeek({ seconds: settings.value.step }); // 第 1 档步长
+```
+
+测试：`new TestHost({ coreActions: true })` 注册同样的 14 条核心命令（`host.coreAction(id)` 取得命令，`.run()` 执行，`.state` 为启用/勾选状态，`host.press` 也会命中核心绑定）；不论是否打开，`host.run` 都按同样规则执行并把提示写入 `host.osd`，`host.coreRuns` 记录执行过的动作，`host.stepSeek`、`host.steps` 记录 `setStepSeek` 与 `step`。插件仍声明旧命令时，`host.conflicts` 会列出与核心动作的冲突。

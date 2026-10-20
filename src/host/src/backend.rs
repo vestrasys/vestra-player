@@ -140,6 +140,7 @@ impl Backend {
                 let mut subtitles = crate::subtitle_backend::Subtitles::new(fonts);
                 let mut jobs = crate::media_jobs::Jobs::default();
                 let mut push = StatePush::new();
+                let mut actions = CoreActions::default();
                 loop {
                     if stopping.try_recv().is_ok() {
                         break;
@@ -253,39 +254,26 @@ impl Backend {
                             let _ = events.send(Event::Reply(command.reply, Ok(stats)));
                             continue;
                         }
-                        let starts_source = command.method == "source.submit"
-                            && matches!(
-                                command.params["intent"]["kind"].as_str(),
-                                Some("open" | "openProvider" | "restart")
-                            );
-                        let previous_publish =
-                            starts_source.then(|| publish_gate.swap(false, Ordering::AcqRel));
-                        let result = match sources.dispatch(
-                            &mpv,
-                            command.reply.owner,
-                            &command.method,
-                            &command.params,
-                        ) {
-                            Ok(Some(value)) => Ok(value),
-                            Ok(None) => execute(&mpv, &command.method, &command.params),
-                            Err(error) => Err(error),
+                        let mut context = SourceContext {
+                            mpv: &mpv,
+                            sources: &mut sources,
+                            geometry: &mut geometry,
+                            geometry_error: &mut geometry_error,
+                            publish_gate: &publish_gate,
                         };
-                        if let Some(previous) = previous_publish {
-                            #[cfg(feature = "producer-audio")]
-                            let is_provider = sources.provider_active();
-                            #[cfg(not(feature = "producer-audio"))]
-                            let is_provider = false;
-                            if result.is_ok() && is_provider {
-                                publish_gate.store(false, Ordering::Release);
-                            } else if result.is_ok()
-                                && sources.phase() == crate::session::Phase::Loading
-                            {
-                                geometry.begin();
-                                geometry_error = false;
-                            } else {
-                                publish_gate.store(previous, Ordering::Release);
-                            }
+                        if command.method == "host.action" {
+                            let result = actions.run(&mut context, &command.params);
+                            processing.note_source(sources.generation(), sources.phase());
+                            subtitles.note_source(sources.generation(), sources.phase());
+                            let action = command.params["action"].as_str().unwrap_or("").to_owned();
+                            let _ = events.send(Event::ActionDone(command.reply, action, result));
+                            continue;
                         }
+                        let result = if command.method == "player.step" {
+                            actions.step(&mut context, &command.params)
+                        } else {
+                            context.call(command.reply.owner, &command.method, &command.params)
+                        };
                         processing.note_source(sources.generation(), sources.phase());
                         subtitles.note_source(sources.generation(), sources.phase());
                         let _ = events.send(Event::Reply(command.reply, result));
@@ -453,6 +441,166 @@ fn stats(mpv: &Mpv, session: u64, frames: u64) -> Value {
         "framesDropped":int("frame-drop-count"),"video":video,"audio":audio,
         "avSyncMs":signed("avsync").map(|seconds| seconds * 1000.),
         "cacheSeconds":signed("demuxer-cache-duration")})
+}
+
+/// What a source request touches on the control worker.
+struct SourceContext<'a> {
+    mpv: &'a Mpv,
+    sources: &'a mut crate::source_backend::Sources,
+    geometry: &'a mut crate::source_geometry::Geometry,
+    geometry_error: &'a mut bool,
+    publish_gate: &'a AtomicBool,
+}
+impl SourceContext<'_> {
+    /// One source/playback request; a new load closes the publish gate until
+    /// its orientation is prepared.
+    fn call(&mut self, owner: u64, method: &str, params: &Value) -> Result<Value, RpcError> {
+        let starts_source = method == "source.submit"
+            && matches!(
+                params["intent"]["kind"].as_str(),
+                Some("open" | "openProvider" | "restart")
+            );
+        let previous_publish =
+            starts_source.then(|| self.publish_gate.swap(false, Ordering::AcqRel));
+        let result = match self.sources.dispatch(self.mpv, owner, method, params) {
+            Ok(Some(value)) => Ok(value),
+            Ok(None) => execute(self.mpv, method, params),
+            Err(error) => Err(error),
+        };
+        if let Some(previous) = previous_publish {
+            #[cfg(feature = "producer-audio")]
+            let is_provider = self.sources.provider_active();
+            #[cfg(not(feature = "producer-audio"))]
+            let is_provider = false;
+            if result.is_ok() && is_provider {
+                self.publish_gate.store(false, Ordering::Release);
+            } else if result.is_ok() && self.sources.phase() == crate::session::Phase::Loading {
+                self.geometry.begin();
+                *self.geometry_error = false;
+            } else {
+                self.publish_gate.store(previous, Ordering::Release);
+            }
+        }
+        result
+    }
+}
+
+/// The core's own playback actions (`core_actions.rs`) and `player.step`,
+/// executed here in order with every other source request.
+#[derive(Default)]
+struct CoreActions {
+    /// The host's own operation ids in the source operation book.
+    operation: u64,
+    /// The newest relative-seek target: (source generation, target, when).
+    seek: Option<(u64, f64, Instant)>,
+}
+impl CoreActions {
+    fn submit(&mut self, context: &mut SourceContext, intent: Value) -> Result<(), RpcError> {
+        self.operation += 1;
+        context
+            .call(
+                crate::bindings::HOST,
+                "source.submit",
+                &json!({"operationId":self.operation,"intent":intent}),
+            )
+            .map(|_| ())
+    }
+    /// `host.action { action, step }` → `{ osd }`; refused with `unavailable`.
+    fn run(&mut self, context: &mut SourceContext, params: &Value) -> Result<Value, RpcError> {
+        use crate::core_actions::{Facts, Plan, plan};
+        let action = params["action"].as_str().unwrap_or("");
+        let step = params["step"]
+            .as_f64()
+            .unwrap_or(crate::core_actions::DEFAULT_STEP);
+        let state = context.sources.snapshot(context.mpv);
+        let mut facts = Facts::from_state(&state);
+        facts.next = params["sequence"]["next"].as_bool().unwrap_or(false);
+        facts.previous = params["sequence"]["previous"].as_bool().unwrap_or(false);
+        let generation = context.sources.generation();
+        // Presses while the previous relative seek is still going add up.
+        let pending = self.seek.filter(|(seen, _, at)| {
+            *seen == generation
+                && (context.mpv.get_property::<bool>("seeking").unwrap_or(false)
+                    || at.elapsed() < Duration::from_millis(300))
+        });
+        let (plan, osd) = plan(action, &facts, step, pending.map(|(_, target, _)| target))
+            .map_err(|reason| RpcError::new("unavailable", reason))?;
+        match plan {
+            Plan::Restart => self.submit(context, json!({"kind":"restart"}))?,
+            Plan::Pause(paused) => self.submit(
+                context,
+                json!({"kind":"control","control":{"kind":"pause","paused":paused}}),
+            )?,
+            Plan::Seek(seconds) => {
+                self.submit(
+                    context,
+                    json!({"kind":"control","control":{"kind":"seek","seconds":seconds}}),
+                )?;
+                self.seek = Some((generation, seconds, Instant::now()));
+            }
+            Plan::Rate(rate) => self.submit(
+                context,
+                json!({"kind":"control","control":{"kind":"rate","rate":rate}}),
+            )?,
+            Plan::Close => self.submit(context, json!({"kind":"close"}))?,
+            Plan::Output { volume, muted } => {
+                if let Some(volume) = volume {
+                    execute(
+                        context.mpv,
+                        "playback.set",
+                        &json!({"property":"volume","value":volume}),
+                    )?;
+                }
+                execute(
+                    context.mpv,
+                    "playback.set",
+                    &json!({"property":"muted","value":muted}),
+                )?;
+            }
+            Plan::Frame { forward } => {
+                self.step(
+                    context,
+                    &json!({"unit":"frame","direction":if forward {"forward"} else {"backward"}}),
+                )?;
+            }
+            Plan::Sequence { .. } => {
+                return Err(RpcError::new(
+                    "unsupported",
+                    "the host routes next/previous",
+                ));
+            }
+        }
+        Ok(json!({ "osd": osd }))
+    }
+    /// `player.step { unit, direction, expected? }`.
+    fn step(&mut self, context: &mut SourceContext, params: &Value) -> Result<Value, RpcError> {
+        let state = context.sources.snapshot(context.mpv);
+        if !params["expected"].is_null() && params["expected"] != state["stamp"] {
+            return Err(RpcError::new("stale", "source changed"));
+        }
+        let facts = crate::core_actions::Facts::from_state(&state);
+        let command = crate::core_actions::step_command(
+            &facts,
+            facts.can_seek,
+            params["unit"].as_str().unwrap_or(""),
+            params["direction"].as_str().unwrap_or(""),
+        )
+        .map_err(|code| {
+            RpcError::new(
+                code,
+                if code == "invalid" {
+                    "unit is frame or keyframe, direction backward or forward"
+                } else {
+                    "this source cannot step (no video, a generated stream, or not seekable)"
+                },
+            )
+        })?;
+        context
+            .mpv
+            .command(&command)
+            .map_err(|e| RpcError::new("backend", e.to_string()))?;
+        Ok(Value::Null)
+    }
 }
 
 /// When to publish `source.state`: every 100 ms, and at once when the source
