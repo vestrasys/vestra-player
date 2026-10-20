@@ -57,6 +57,17 @@ test("independent window with the Slint callbacks only and complete Chinese menu
   await stop();
 });
 
+test("style values stay within the host's accepted ranges", async () => {
+  const { host, window, stop } = await open();
+  window.emit("change-size", 96);
+  window.emit("change-outline", 8);
+  window.emit("change-margin", 0);
+  await host.settle(170);
+  const style = host.sent("subtitles.style").at(-1)!.style as Record<string, number>;
+  assert.deepEqual([style.fontSize, style.outline, style.marginPercent], [72, 4, 2]);
+  await stop();
+});
+
 test("a slider burst is merged into one style write with the latest values", async () => {
   const { host, window, stop } = await open();
   window.emit("change-delay", 200);

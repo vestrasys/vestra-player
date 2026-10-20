@@ -64,15 +64,15 @@ export component SubtitleWorkbench inherits Window {
         Text { text: "正值晚出现，负值提前。"; }
         HorizontalBox {
             Text { text: "字号 " + round(root.font-size); min-width: 170px; }
-            size-slider := Slider { minimum: 12; maximum: 96; value: root.font-size; enabled: root.can-style; changed(value) => { root.change-size(value); } }
+            size-slider := Slider { minimum: 16; maximum: 72; value: root.font-size; enabled: root.can-style; changed(value) => { root.change-size(value); } }
         }
         HorizontalBox {
             Text { text: "描边 " + round(root.outline-size); min-width: 170px; }
-            outline-slider := Slider { minimum: 0; maximum: 8; value: root.outline-size; enabled: root.can-style; changed(value) => { root.change-outline(value); } }
+            outline-slider := Slider { minimum: 0; maximum: 4; value: root.outline-size; enabled: root.can-style; changed(value) => { root.change-outline(value); } }
         }
         HorizontalBox {
             Text { text: "底部边距 " + round(root.margin-percent) + "%"; min-width: 170px; }
-            margin-slider := Slider { minimum: 0; maximum: 30; value: root.margin-percent; enabled: root.can-style; changed(value) => { root.change-margin(value); } }
+            margin-slider := Slider { minimum: 2; maximum: 15; value: root.margin-percent; enabled: root.can-style; changed(value) => { root.change-margin(value); } }
         }
         HorizontalBox {
             Text { text: "字体"; }
