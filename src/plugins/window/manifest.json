@@ -1,0 +1,13 @@
+{
+  "id": "vestra.window",
+  "version": "0.1.0",
+  "apiVersion": "vestra.experimental/0.1",
+  "entry": "main.ts",
+  "capabilities": [
+    "commands",
+    "events",
+    "playback.read",
+    "ui.osd",
+    "window.control"
+  ]
+}

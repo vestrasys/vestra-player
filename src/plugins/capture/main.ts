@@ -296,7 +296,11 @@ export default async function activate(plugin: Plugin) {
   entry("capture.saveScreen", "保存实际画面", 423, () => saveFrame(true), { bindings: ["Ctrl+Alt+E"], ...screen });
   entry("capture.saveScreenAs", "实际画面另存为…", 424, () => saveFrameAs(true), screen);
   entry("capture.copyScreen", "复制实际画面", 425, () => copyFrame(true), { bindings: ["Ctrl+Alt+C"], ...screen });
-  entry("capture.burst", "连拍…", 426, () => show(burst, startAtNow(burst, false)), { bindings: ["Ctrl+G"], group: "capture-export" });
+  // Checked while the dialog is open; closing it with the title bar (`onClose`) clears the mark at once.
+  entry("capture.burst", "连拍…", 426, () => show(burst, startAtNow(burst, false)), {
+    bindings: ["Ctrl+G"], group: "capture-export", checked: () => burst.opened,
+  });
+  burst.onClose(() => plugin.update());
   entry("capture.clip", "导出片段…", 428, () => show(clip, startAtNow(clip, true)), { group: "capture-export" });
   entry("capture.tasks", "导出任务…", 429, () => show(list), { group: "capture-export" });
   FORMATS.forEach((format, index) =>

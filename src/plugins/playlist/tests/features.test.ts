@@ -306,6 +306,7 @@ test("C17: the list, titles, selection and settings come back after a restart; n
       openMode: "folder",
       gapless: false,
       clearOnOpenFolder: false,
+      confirmClear: true,
     });
     assert.deepEqual(saved.list.rows, [
       { kind: "file", source: b, title: "Named B", duration: 12 },
@@ -399,7 +400,7 @@ test("C18: opening an m3u8 resolves relative paths, file URLs, titles and links;
   }
 });
 
-test("C18: a non-empty list is replaced only after confirmation", async () => {
+test("C18: a non-empty list is replaced only after the system confirmation", async () => {
   const app = await start();
   try {
     const [a, b] = await app.files(["a.mp4", "b.mp4"]);
@@ -408,27 +409,66 @@ test("C18: a non-empty list is replaced only after confirmation", async () => {
     await app.press("Enter");
     app.host.setSource({ phase: "ready" });
     await app.host.settle();
-    app.host.dialogAnswers.push([join(app.root, "x.m3u")]);
-    const opening = app.command("open-list").run();
-    await app.host.settle(20);
-    const confirm = app.host.window("playlist-confirm");
-    assert.equal(confirm.visible, true);
-    assert.equal(confirm.props.message, "用 x.m3u 替换当前列表？");
-    confirm.emit("cancel");
-    await opening;
-    await app.host.settle();
+    app.host.dialogAnswers.push([join(app.root, "x.m3u")], { confirmed: false, checked: false });
+    await app.run("open-list");
+    assert.deepEqual(app.host.confirms.at(-1), { message: "用 x.m3u 替换当前列表？", confirm: "替换" });
     assert.deepEqual(app.names(), ["a.mp4"]);
-    app.host.dialogAnswers.push([join(app.root, "x.m3u")]);
-    const again = app.command("open-list").run();
-    await app.host.settle(20);
-    confirm.emit("accept");
-    await again;
-    await app.host.settle();
+    app.host.dialogAnswers.push([join(app.root, "x.m3u")], { confirmed: true, checked: false });
+    await app.run("open-list");
+    assert.equal(app.host.confirms.length, 2);
     assert.deepEqual(app.names(), ["b.mp4"]);
     assert.equal(app.host.source.phase, "ready", "the playing media continues");
     assert.equal(app.rows()[0]!.current, false);
+    // Another dialog still open: a notice, nothing replaced.
+    app.host.dialogAnswers.push([join(app.root, "x.m3u")]);
+    app.host.handle("dialogs.confirm", () => {
+      throw new HostError("busy", "a dialog is open");
+    });
+    await writeFile(join(app.root, "x.m3u"), `${a}\n`);
+    await app.run("open-list");
+    assert.equal(app.osd(), "请先关闭另一个对话框");
+    assert.deepEqual(app.names(), ["b.mp4"]);
   } finally {
     await app.close();
+  }
+});
+
+test("移除全部 asks with the system confirmation; 「不再询问」 on a confirmed clear is remembered", async () => {
+  const data = await mkdtemp(join(tmpdir(), "vestra-playlist-data-"));
+  let app = await start({ data });
+  try {
+    const [a, b] = await app.files(["a.mp4", "b.mp4"]);
+    await app.addFiles([a!, b!]);
+    // Cancelled (even with the box ticked): nothing is removed, nothing remembered.
+    app.host.dialogAnswers.push({ confirmed: false, checked: true });
+    await app.press("Alt+Delete");
+    assert.deepEqual(app.host.confirms.at(-1), {
+      message: "移除播放列表中的全部 2 项？",
+      detail: "正在播放的媒体继续播放。",
+      confirm: "移除全部",
+      destructive: true,
+      checkbox: "不再询问",
+    });
+    assert.deepEqual(app.names(), ["a.mp4", "b.mp4"]);
+    // Confirmed with 「不再询问」: cleared, and the next clear does not ask.
+    app.host.dialogAnswers.push({ confirmed: true, checked: true });
+    await app.run("clear");
+    assert.equal(app.rows().length, 0);
+    await app.addFiles([a!]);
+    await app.run("clear");
+    assert.equal(app.rows().length, 0);
+    assert.equal(app.host.confirms.length, 2);
+    await app.host.settle(1100); // the debounced save
+    await app.stop();
+    app = await start({ data });
+    await app.addFiles([b!]);
+    await app.run("clear");
+    assert.equal(app.rows().length, 0);
+    assert.equal(app.host.confirms.length, 0, "remembered across a restart");
+    assert.equal(JSON.parse(await readFile(join(data, "playlists.json"), "utf8")).settings.confirmClear, false);
+  } finally {
+    await app.close();
+    await rm(data, { recursive: true, force: true });
   }
 });
 
@@ -471,12 +511,8 @@ test("C18: GBK .m3u, PLS round trip, DPL; saving adds .m3u8 and writes relative 
     const first = await readFile(join(app.root, "one.pls"), "utf8");
     assert.match(first, /^\[playlist\]\nFile1=媒体\/a\.mp4\nTitle1=a\.mp4\nLength1=61\n/);
     assert.match(first, /NumberOfEntries=3\nVersion=2\n$/);
-    app.host.dialogAnswers.push([join(app.root, "one.pls")]);
-    const opening = app.command("open-list").run();
-    await app.host.settle(20);
-    app.host.window("playlist-confirm").emit("accept");
-    await opening;
-    await app.host.settle(20);
+    app.host.dialogAnswers.push([join(app.root, "one.pls")], { confirmed: true, checked: false });
+    await app.run("open-list");
     assert.deepEqual(app.names(), ["a.mp4", "far.mp4", "https://example.org/v"]);
     app.host.dialogAnswers.push([join(app.root, "two.pls")]);
     await app.run("save-list");
@@ -492,12 +528,8 @@ test("C18: GBK .m3u, PLS round trip, DPL; saving adds .m3u8 and writes relative 
       join(app.root, "pot.dpl"),
       `DAUMPLAYLIST\n2*file*${far}\n1*file*${a}\n1*title*Pot A\n1*duration2*5000\n`,
     );
-    app.host.dialogAnswers.push([join(app.root, "pot.dpl")]);
-    const dpl = app.command("open-list").run();
-    await app.host.settle(20);
-    app.host.window("playlist-confirm").emit("accept");
-    await dpl;
-    await app.host.settle(20);
+    app.host.dialogAnswers.push([join(app.root, "pot.dpl")], { confirmed: true, checked: false });
+    await app.run("open-list");
     assert.deepEqual(app.names(), ["Pot A", "far.mp4"]);
     await rm(outside, { recursive: true, force: true });
   } finally {

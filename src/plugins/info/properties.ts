@@ -1,5 +1,6 @@
 import { basename, extname } from "node:path";
-import type { PlaybackStats, PlayerState } from "../../sdk/plugin/index.ts";
+import type { AppInfo, PlaybackStats, PlayerState } from "../../sdk/plugin/index.ts";
+import { API_VERSION, ffmpegVersion, vestraVersion } from "./about.ts";
 
 /**
  * I05 播放属性: the rows of the three pages and their plain text. A row is a
@@ -235,15 +236,15 @@ export interface SystemFacts {
   displays: string[];
 }
 
-/** 系统信息. Vestra, mpv and FFmpeg versions need the core (`plugin.app`, round 3a): 未知 until then. */
-export function systemPage(apiVersion: string, facts: SystemFacts | null): Row[] {
+/** 系统信息. Vestra, mpv and FFmpeg versions come from the core (`plugin.app`); one it does not know shows 未知. */
+export function systemPage(app: AppInfo, facts: SystemFacts | null): Row[] {
   const gb = (n: number | null) => (n === null ? null : `${(n / 1024 ** 3).toFixed(1)} GB`);
   return rows([
     ["播放器", [
-      ["Vestra 版本", "未知"],
-      ["插件 API 版本", apiVersion],
-      ["mpv 版本", "未知"],
-      ["FFmpeg 版本", "未知"],
+      ["Vestra 版本", vestraVersion(app)],
+      ["插件 API 版本", API_VERSION],
+      ["mpv 版本", app.components.mpv || "未知"],
+      ["FFmpeg 版本", ffmpegVersion(app)],
     ]],
     ["系统", facts ? [
       ["macOS 版本", facts.macos],

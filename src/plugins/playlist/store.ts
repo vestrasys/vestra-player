@@ -12,6 +12,8 @@ export type Settings = {
   gapless: boolean;
   /** A03: clear the list before "打开文件夹" adds (no menu entry). */
   clearOnOpenFolder: boolean;
+  /** 移除全部 asks first; turned off by the confirmation's 「不再询问」. */
+  confirmClear: boolean;
 };
 type SavedList = {
   sort: { key: Exclude<SortKey, "shuffle" | "reverse">; descending: boolean } | null;
@@ -28,6 +30,7 @@ export const defaults = (): Settings => ({
   openMode: "only",
   gapless: false,
   clearOnOpenFolder: false,
+  confirmClear: true,
 });
 
 const REPEATS = ["none", "all", "one"];
@@ -43,6 +46,7 @@ function readSettings(raw: Partial<Settings> | undefined): Settings {
   if (MODES.includes(raw.openMode as string)) settings.openMode = raw.openMode!;
   if (typeof raw.gapless === "boolean") settings.gapless = raw.gapless;
   if (typeof raw.clearOnOpenFolder === "boolean") settings.clearOnOpenFolder = raw.clearOnOpenFolder;
+  if (typeof raw.confirmClear === "boolean") settings.confirmClear = raw.confirmClear;
   return settings;
 }
 

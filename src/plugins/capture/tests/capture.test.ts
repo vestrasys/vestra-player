@@ -387,3 +387,26 @@ test("times the user changed survive other callbacks", async () => {
     await stop();
   }
 });
+
+test("连拍… is checked while its dialog is open; a title-bar close clears it (onClose)", async () => {
+  const host = new TestHost();
+  ready(host);
+  const { stop } = await start(host);
+  try {
+    const burst = host.command("capture.burst");
+    assert.equal(burst.state.checked, false);
+    await host.press("Ctrl+G");
+    await host.settle();
+    assert.equal(burst.state.checked, true);
+    host.window("burst").userClose();
+    await host.settle();
+    assert.equal(host.windows.has("burst"), false);
+    assert.equal(burst.state.checked, false);
+    await burst.run(); // opens again, checked again
+    await host.settle();
+    assert.equal(host.window("burst").visible, true);
+    assert.equal(burst.state.checked, true);
+  } finally {
+    await stop();
+  }
+});

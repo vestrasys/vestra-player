@@ -1,0 +1,185 @@
+// 章节/书签 (B21): search box, the chapter (read only, dim) and bookmark rows
+// by time, the selected bookmark's time and title inputs, and the bottom
+// buttons. 380×420, at least 320×300.
+import { LineEdit, ListView } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button } from "@vestra/widgets.slint";
+
+export struct MarkRow {
+    rowId: string,
+    chapter: bool,
+    time: string,
+    title: string,
+    selected: bool,
+}
+
+component Label inherits Text {
+    color: Theme.text;
+    font-size: Theme.font-body;
+    vertical-alignment: center;
+}
+
+// One row: type icon (16px) | time (70px, monospace digits) | title.
+component Row inherits Rectangle {
+    in property <MarkRow> mark;
+    callback select();
+    callback activate();
+    height: 18px;
+    background: root.mark.selected ? Theme.selected-bg : transparent;
+    HorizontalLayout {
+        padding-left: 4px;
+        padding-right: 6px;
+        spacing: 4px;
+        Rectangle {
+            width: 16px;
+            Path {
+                width: 12px;
+                height: 12px;
+                viewbox-width: 12;
+                viewbox-height: 12;
+                // Chapter: a flag on a pole; bookmark: a ribbon.
+                commands: root.mark.chapter ? "M 2.5 0.5 L 2.5 11.5 M 2.5 1 L 10 1 L 8.2 3.7 L 10 6.4 L 2.5 6.4" : "M 3 0.5 L 9 0.5 L 9 11.5 L 6 8.8 L 3 11.5 Z";
+                fill: root.mark.chapter ? transparent : Theme.accent;
+                stroke: root.mark.chapter ? Theme.text-dim : transparent;
+                stroke-width: root.mark.chapter ? 1.2px : 0px;
+            }
+        }
+        Text {
+            width: 70px;
+            text: root.mark.time;
+            color: root.mark.chapter ? Theme.text-dim : Theme.text-list;
+            font-family: Theme.font-mono;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+        }
+        Text {
+            horizontal-stretch: 1;
+            text: root.mark.title;
+            color: root.mark.chapter ? Theme.text-dim : Theme.text;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+    TouchArea {
+        clicked => { root.select(); }
+        double-clicked => { root.activate(); }
+    }
+}
+
+export component MarksWindow inherits Window {
+    title: "章节/书签";
+    preferred-width: 380px;
+    preferred-height: 420px;
+    min-width: 320px;
+    min-height: 300px;
+    background: Theme.bg-panel;
+
+    in property <[MarkRow]> rows;
+    in property <bool> media;
+    in property <string> note;
+    in property <bool> filtering;
+    in property <bool> can-add;
+    in property <bool> can-remove;
+    in property <bool> can-clear;
+    in property <bool> editing;
+    in property <string> status;
+    in-out property <string> search-text;
+    in-out property <string> edit-time;
+    in-out property <string> edit-title;
+    callback select(string);
+    callback activate(string);
+    callback search(string);
+    callback commit-time(string);
+    callback commit-title(string);
+    callback add();
+    callback remove();
+    callback clear();
+
+    VerticalLayout {
+        padding: 10px;
+        spacing: 6px;
+        LineEdit {
+            height: Theme.input-height;
+            font-size: Theme.font-body;
+            placeholder-text: "按标题搜索";
+            text <=> root.search-text;
+            edited(text) => { root.search(text); }
+        }
+        if root.note != "" && root.media: Label {
+            height: Theme.label-height;
+            text: root.note;
+            color: Theme.accent;
+        }
+        Rectangle {
+            vertical-stretch: 1;
+            background: Theme.bg-list;
+            border-width: 1px;
+            border-color: Theme.line;
+            ListView {
+                x: 1px;
+                y: 1px;
+                width: parent.width - 2px;
+                height: parent.height - 2px;
+                for row in root.rows: Row {
+                    mark: row;
+                    select => { root.select(row.rowId); }
+                    activate => { root.activate(row.rowId); }
+                }
+            }
+            if root.rows.length == 0: Label {
+                width: 100%;
+                height: 100%;
+                horizontal-alignment: center;
+                color: Theme.text-dim;
+                text: !root.media ? "未打开媒体" : root.filtering ? "无匹配项" : "没有章节或书签";
+            }
+        }
+        if root.editing: VerticalLayout {
+            spacing: Theme.form-row-gap - Theme.input-height;
+            HorizontalLayout {
+                spacing: 6px;
+                Label { width: 28px; text: "时间"; }
+                time-input := LineEdit {
+                    width: 100px;
+                    height: Theme.input-height;
+                    font-size: Theme.font-body;
+                    placeholder-text: "h:mm:ss.d";
+                    text <=> root.edit-time;
+                    accepted(text) => { root.commit-time(text); }
+                    changed has-focus => {
+                        if !self.has-focus { root.commit-time(self.text); }
+                    }
+                }
+                Rectangle { horizontal-stretch: 1; }
+            }
+            HorizontalLayout {
+                spacing: 6px;
+                Label { width: 28px; text: "标题"; }
+                LineEdit {
+                    horizontal-stretch: 1;
+                    height: Theme.input-height;
+                    font-size: Theme.font-body;
+                    text <=> root.edit-title;
+                    accepted(text) => { root.commit-title(text); }
+                    changed has-focus => {
+                        if !self.has-focus { root.commit-title(self.text); }
+                    }
+                }
+            }
+        }
+        Label {
+            height: Theme.label-height;
+            text: root.status;
+            color: Theme.text-dim;
+        }
+        HorizontalLayout {
+            height: Theme.button-height;
+            spacing: 6px;
+            Button { text: "添加书签"; enabled: root.can-add; clicked => { root.add(); } }
+            Button { text: "移除"; enabled: root.can-remove; clicked => { root.remove(); } }
+            Button { text: "清空书签"; enabled: root.can-clear; clicked => { root.clear(); } }
+            Rectangle { horizontal-stretch: 1; }
+        }
+    }
+}
