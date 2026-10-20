@@ -123,6 +123,14 @@ input.on("line", (line) => {
 input.on("close", () => {
   void stop();
 });
+/** `plugin.app`: the player hands its version and components over at start. */
+function appInfo(): unknown {
+  try {
+    return JSON.parse(process.env.VESTRA_APP_INFO ?? "null");
+  } catch {
+    return null;
+  }
+}
 try {
   const module = (await import(
     pathToFileURL(resolve(directory, manifest.entry)).href
@@ -139,6 +147,7 @@ try {
     manifest,
     directory,
     process.env.VESTRA_PLUGIN_DATA_DIR || undefined,
+    appInfo(),
   );
   dispose = () => instance.dispose();
   await module.default(instance.plugin);

@@ -229,6 +229,17 @@ impl Policy {
         self.dialog_open = dialog_open;
     }
 
+    /// No activity for 3 seconds and nothing holding the bar (menu, dialog,
+    /// panel interaction): the same rule that hides the fullscreen bar.
+    pub fn idle(&self, now_ms: u64) -> bool {
+        now_ms.saturating_sub(self.last_activity_ms) >= IDLE_MS
+            && !self.menu_open
+            && !self.dialog_open
+            && !self
+                .bottom
+                .is_some_and(|attachment| attachment.locks.active())
+    }
+
     pub fn evaluate(&self, viewport: Viewport, now_ms: u64) -> Result<Snapshot> {
         if !viewport.width.is_finite()
             || viewport.width < 0.0

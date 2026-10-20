@@ -51,7 +51,13 @@ pub const CAPABILITIES: &[&str] = &[
     "media.control",
     "ui.osd",
     "clipboard",
+    "window.control",
 ];
+/// `plugin.app` as JSON, set once at start-up and given to every plugin.
+static APP_INFO: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+pub fn set_app_info(info: &Value) {
+    let _ = APP_INFO.set(info.to_string());
+}
 pub struct Plugin {
     pub manifest: Manifest,
     pub directory: PathBuf,
@@ -115,6 +121,9 @@ impl Plugin {
         let mut command = Command::new("node");
         if let Some(dir) = &data_directory {
             command.env("VESTRA_PLUGIN_DATA_DIR", dir);
+        }
+        if let Some(info) = APP_INFO.get() {
+            command.env("VESTRA_APP_INFO", info);
         }
         let mut child = command
             .arg(runner)

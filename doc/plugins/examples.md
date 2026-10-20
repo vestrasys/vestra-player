@@ -642,3 +642,66 @@ export default async function activate(plugin: Plugin) {
 
 命令本身由播放器注册（菜单、快捷键、用户改绑都归核心），插件停用后 Space、←/→ 照常可用。
 
+## 22. 主窗口：按视频尺寸调整窗口、置顶
+
+```ts
+export default async function activate(plugin: Plugin) { // window.control、playback.read、commands、ui.osd
+  for (const scale of [1, 2]) {
+    plugin.commands.add({
+      id: `size-${scale}`, path: ["屏幕", `${scale}倍`], order: 710 + scale,
+      bindings: [scale === 1 ? "2" : "4"],
+      enabled: () => !plugin.window.state.fullscreen && plugin.player.state.phase === "ready",
+      reason: () => (plugin.window.state.fullscreen ? "全屏时不可用" : "没有视频"),
+      async run() {
+        const { video } = await plugin.player.stats();
+        if (!video?.displayWidth || !video.displayHeight) return;
+        const applied = await plugin.window.setVideoArea({
+          width: video.displayWidth * scale,
+          height: video.displayHeight * scale,
+        });
+        await plugin.osd.show(`窗口: ${scale}倍${applied.clamped ? "（已按屏幕缩小）" : ""}`);
+      },
+    });
+  }
+  await plugin.window.setAlwaysOnTop(true); // 插件停用时播放器自动取消
+}
+```
+
+`window.state` 不需要能力，命令的启用条件可以直接读它；全屏时 `setVideoArea` 以 `unavailable` 失败。
+
+## 23. 确认框：清空前询问，记住「不再询问」
+
+```ts
+const ask = plugin.storage.json("confirm", { defaults: { clear: true } });
+plugin.commands.add({
+  id: "clear", path: ["播放列表", "清空"], order: 840,
+  async run() {
+    if (ask.value.clear) {
+      const { confirmed, checked } = await plugin.dialogs.confirm({
+        message: "清空播放列表？", detail: "列表中的全部项目将被移除。",
+        confirm: "清空", destructive: true, checkbox: "不再询问",
+      });
+      if (!confirmed) return;
+      if (checked) ask.save({ clear: false });
+    }
+    queue.clear();
+  },
+});
+```
+
+测试里先 `host.dialogAnswers.push({ confirmed: true, checked: false })` 再执行命令；`host.confirms` 是发出的选项。
+
+## 24. 章节与 A-B 循环
+
+```ts
+const { chapters } = await plugin.player.chapters();         // playback.read，按需读取
+chapters.forEach((chapter, i) =>
+  menu.commands.add({
+    id: `chapter.${i}`, path: ["播放", "章节", chapter.title ?? `章节 ${i + 1}`],
+    order: 260 + i, run: () => plugin.player.seek(chapter.start),
+  }));
+await plugin.player.setLoop({ a: 12.5, b: 30, count: 3 });   // playback.control
+plugin.player.state.loop;                                    // { a: 12.5, b: 30, count: 3 }
+await plugin.player.setLoop(null);                           // 取消；换文件时播放器也会清除
+```
+
