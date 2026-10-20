@@ -238,7 +238,7 @@ binding  = { 修饰键 "+" } 输入          修饰键按 Ctrl、Alt、Shift、C
 
 - 字母按键名匹配（与大小写锁无关），`Shift+E` 是 Shift 加 E。符号键按打出的字符写、不写 Shift：`">"`，不是 `"Shift+."`；`+` 写成 `Plus`；`"Shift+1"` 非法，写 `"!"`。
 - 小键盘是独立的输入名：`"5"` 只认主键盘的 5，`"Numpad5"` 只认小键盘的 5；`"Enter"` 不认小键盘回车（写 `"NumpadEnter"`）。菜单里显示为 `Num5`、`Num+`、`NumEnter`。
-- Option（`Alt`）组合按物理键识别：`Alt+O` 按 ⌥O 触发，不看 ⌥O 打出的 `ø`；⌥E、⌥N、⌥U、⌥I、⌥\` 这类死键同样触发（死键只在视频区获得焦点时生效，输入框里照常组字）。字母取当前键盘布局的字母；`Alt+Shift+符号` 按美式键位换算（⌥⇧. 是 `Alt+>`）。
+- Option（`Alt`）组合按物理键识别：`Alt+O` 按 ⌥O 触发，不看 ⌥O 打出的 `ø`；⌥E、⌥N、⌥U、⌥I、⌥\` 这类死键同样触发（死键只在视频区获得焦点时生效，输入框里照常组字）。键盘布局：Option 与 Ctrl 组合的字母和符号取当前布局不带修饰时的字符（德语 QWERTZ 上标着 Y 的键是 `Ctrl+Y`，与键帽一致）；`Alt+Shift+数字/符号` 时系统不报告该布局 Shift 后的字符，按美式键位换算（⌥⇧. 是 `Alt+>`，即使该布局 Shift+. 打出 `:`），美式键位上没有的符号键（如德语的 ß、´）与 Option+Shift 同按时不匹配任何绑定。小键盘名与布局无关。
 - Ctrl 组合即使系统以 ASCII 控制码送达也按键名识别：⌃Y 是 `Ctrl+Y`（不是 Shift+Tab），⌃I、⌃H、⌃M、⌃[ 分别是 `Ctrl+I`、`Ctrl+H`、`Ctrl+M`、`Ctrl+[`。
 - macOS 上 `Ctrl+X` 按 ⌃X 或 ⌘X 都触发，`Cmd+X` 只认 ⌘X。
 - 鼠标绑定只在视频区生效，可带修饰键；`:LeftHalf` / `:RightHalf` 按双击位置区分左右半边，带区的绑定优先于不带区的。滚轮按累计位移计步。右键保留给菜单。
@@ -448,7 +448,7 @@ plugin.host.run(action: HostAction): Promise<void>;
 - 禁用时 `run` 以 `unavailable` 失败（`message` 为原因），未知 id 为 `invalid`。动作执行完才 resolve（之后 `player.state` 已刷新）；同一动作在途时的重复调用被丢弃并直接 resolve（相对跳转与音量除外，它们排队累加）。
 - 执行失败（如来源拒绝）显示在视频上。
 - 用户覆盖层的键为 `host/<动作 id>`。
-- 迁移期：播放器以 `VESTRA_CORE_ACTIONS=1` 启动时才注册这 14 条命令（见 §17）；`host.run`、`player.step`、`setStepSeek` 不受此开关影响。
+- 用户覆盖层的旧键 `vestra.playback/<旧 id>` 在播放器启动时一次性改写为 `host/<新 id>`（§17）。
 
 ## 6. 窗口与面板
 
@@ -823,7 +823,8 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 | 模拟来源 | `host.openElsewhere(path, phase?)`（另一个插件打开了媒体）；`host.setSource({ phase, position, duration, … })` |
 | 断言 | `host.window(id).props`（kebab-case 名）、`.visible`；`host.command(id).state`、`.declaration`；`host.conflicts`（`[绑定, 赢家, ...被压下]`）；`host.layout.bottom` / `.sidebar`（可直接改后 `host.emit("window.state", {})` 模拟别处的变化）；`host.osd`（显示过的提示）、`host.osdPanel`；`host.sequence`（提供者的标志）；`host.menus`（`showMenu` 记录）；`host.sent(method)`；`host.source`；`host.processing`、`host.subtitles`、`host.snapshots`、`host.jobs`、`host.producers` |
 | 模拟数据 | `host.stats`（`player.stats()` 的返回值，第 2 轮新增字段可省略，SDK 补 `null`）；`host.dataDirectory`（`plugin.dataDirectory`，`storage.json` 直接读写其中的真实文件）；`host.setSource({ audioTracks })`（`addAudioTrack` / `selectAudioTrack` 有默认处理，可用 `host.handle("audio.addTrack" \| "audio.selectTrack", …)` 注入失败）；`host.subtitles.tracks` 的条目可带 `codec`、`text`、`streamIndex` |
-| 通用能力 | `host.clipboard`（`{ text, images }`，预置 `text` 测 `readText`）；`host.power`（合并后的 `"off"` / `"playing"`）；`host.tools.handle(tool, (args) => ({ stdout, stderr }))`（未注入的工具 `unavailable`；抛 `HostError` 模拟失败），`host.tools.calls`；`host.system.revealed`、`.opened`；`host.subtitleLoads`（每次 `load` 的 `format`、`title`、`select` 与字节） |
+| 通用能力 | `host.clipboard`（`{ text, images }`，预置 `text` 测 `readText`）；`host.power`（合并后的 `"off"` / `"playing"`）；`host.tools.handle(tool, (args) => ({ stdout, stderr }))`（未注入的工具 `unavailable`；抛 `HostError` 模拟失败），`host.tools.calls`；`host.system.revealed`、`.opened`；`host.subtitleLoads`（每次 `load` 的 `format`、`title`、`select` 与字节）；`host.system.urls`（`system.openUrl`） |
+| 核心动作 | `host.coreAction(id)`、`host.coreCommands`（播放器的 14 条核心命令，§5.5；`press` 先匹配它们）；`host.coreRuns`；`host.stepSeek`；`host.steps` |
 | 注入故障 | `host.handle(method, fn)`：抛 `new HostError(code, message)` 模拟播放器拒绝，抛普通 `Error` 模拟答复丢失；`host.reset(method)` 恢复 |
 | 同步 | `await host.settle(ms?)`：等到没有在途请求（可额外等待计时器） |
 | 结束 | `await stop()` |
@@ -916,15 +917,18 @@ interface JsonStore<T> extends Disposable {
 - 写入：临时文件 + 改名，按调用顺序一次一个，最后一次 `save` 的值最后落盘。
 - `dispose()` 与插件停用时先写完待写的值。只有 `save` 会写入：原地修改 `value` 的属性不会保存。
 
-### 16.5 Finder `plugin.system`
+### 16.5 Finder 与浏览器 `plugin.system`
 
 ```ts
 system.reveal(paths: string | string[]): Promise<void>; // 在 Finder 中选中（一次 /usr/bin/open -R a b c）
 system.openPath(path: string): Promise<void>; // 用默认应用打开文件或文件夹（/usr/bin/open）
+system.openUrl(url: string): Promise<void>;   // 用默认浏览器打开 http(s) 地址（/usr/bin/open）
 ```
 
 - `reveal`：最多 256 个路径，一次调用全部选中（同一文件夹的多个文件在同一窗口高亮）；不存在的路径跳过，全部不存在时 `missing`。路径先转为绝对路径。
-- `openPath` 路径不存在 `missing`；两者 `open` 超过 10 秒 `timeout`，失败 `failed`。
+- `openPath` 路径不存在 `missing`。
+- `openUrl` 只接受 `http:` / `https:` 地址（按 WHATWG URL 解析并规范化，≤ 8192 字符），其它协议或格式不对为 `invalid`；不检查网址能否访问。
+- 三者 `open` 超过 10 秒 `timeout`，失败 `failed`。
 
 ## 17. 变更说明
 
@@ -945,7 +949,7 @@ system.openPath(path: string): Promise<void>; // 用默认应用打开文件或�
 
 新增：`plugin.host.run`（§5.5）、`player.step`、`player.setStepSeek`（§5.2）；`source.state` 增加内部字段 `hasVideo`（SDK 不对外暴露）。
 
-**破坏性变更，集中切换**：核心动作与 playback 现有命令占用同样的菜单路径与按键，两者同时注册会冲突（`conflict`）。迁移期内，播放器只在环境变量 `VESTRA_CORE_ACTIONS=1` 时注册核心动作；默认（关）时 playback 照旧。playback 迁移与删除开关在同一次合并中落地，之后核心动作总是注册。
+**破坏性变更，集中切换**：核心动作与 playback 原有命令占用同样的菜单路径与按键。迁移期内播放器只在 `VESTRA_CORE_ACTIONS=1` 时注册核心动作；P3（与 playback 迁移同一次合并）删除了该开关，核心动作总是注册。仍注册旧路径或旧按键的插件，菜单注册以 `conflict` 失败，按键被核心动作压下。
 
 | 旧 id（`vestra.playback/…`） | 新 id（`host/…`） |
 | --- | --- |
@@ -958,7 +962,7 @@ system.openPath(path: string): Promise<void>; // 用默认应用打开文件或�
 | `volume-up` / `volume-down` | `volume-up` / `volume-down` |
 | `mute` | `mute` |
 
-用户覆盖层中旧键的绑定在开关打开时一次性改写为新键并保存；新键已存在时保留新键、丢弃旧键。
+用户覆盖层中旧键的绑定在播放器启动时一次性改写为新键并保存；新键已存在时保留新键、丢弃旧键。
 
 迁移写法：
 
@@ -971,4 +975,4 @@ bar.on("playPause", () => plugin.host.run("play-pause"));
 await plugin.player.setStepSeek({ seconds: settings.value.step }); // 第 1 档步长
 ```
 
-测试：`new TestHost({ coreActions: true })` 注册同样的 14 条核心命令（`host.coreAction(id)` 取得命令，`.run()` 执行，`.state` 为启用/勾选状态，`host.press` 也会命中核心绑定）；不论是否打开，`host.run` 都按同样规则执行并把提示写入 `host.osd`，`host.coreRuns` 记录执行过的动作，`host.stepSeek`、`host.steps` 记录 `setStepSeek` 与 `step`。插件仍声明旧命令时，`host.conflicts` 会列出与核心动作的冲突。
+测试：`TestHost` 像播放器一样注册这 14 条核心命令，放在 `host.coreCommands`（不进 `host.commands`，插件自己的命令断言不受影响）；`host.coreAction(id)` 取得命令，`.run()` 执行，`.state` 为启用/勾选状态；`host.press` 先匹配核心绑定（核心赢得冲突）；`host.run` 按同样规则执行并把提示写入 `host.osd`，`host.coreRuns` 记录执行过的动作，`host.stepSeek`、`host.steps` 记录 `setStepSeek` 与 `step`。插件仍声明旧命令时，`host.conflicts` 会列出与核心动作的冲突。

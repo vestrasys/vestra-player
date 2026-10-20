@@ -360,6 +360,23 @@ plugin.power.preventSleep(mode: "off" | "playing"): Promise<void>;
 5. 步长：插件 `setStepSeek({ seconds: 10 })` 后菜单变为「后退10秒/前进10秒」，← 后退 10 秒；停用该插件后恢复「5秒」。
 6. 覆盖层迁移：在界面状态文件的 `bindings` 里放 `"vestra.playback/toggle-pause": ["P"]`，以开关启动后文件里变成 `"host/play-pause": ["P"]`，按 P 播放/暂停。
 
+#### 裁决：`system.openUrl`（作者 C，subtitle-online「网页中打开」）
+
+请求：`plugin.system.openUrl(url)`，只接受 http/https，默认浏览器打开；不需要能力。证据：`openPath` 先检查路径存在，网址必然 `missing`；参考 §16 要求插件不再自己调用 `open`，插件没有合规的替代做法。
+
+结论：**接受**（runtime 层兼容扩展，不加宿主协议）。满足 §4.3 第 4 条第四款：打开网页是通用基础能力（帮助链接、关于页、更新页都会用），各插件自己 spawn `open` 会重复且行为不一致。签名 `openUrl(url: string): Promise<void>`；按 WHATWG URL 解析并规范化，只允许 `http:` / `https:`、≤ 8192 字符，否则 `invalid`；`/usr/bin/open <规范化地址>`，10 秒 `timeout`、失败 `failed`；不检查网址可达。TestHost 记录在 `host.system.urls`。随 P3 提交实现，参考 §16.5 已更新。
+
+#### 键盘布局（协调者实测反馈：德语 QWERTZ）
+
+确认：Option 与 Ctrl 组合的字母、符号取 winit `key_without_modifiers`（当前布局不带修饰的字符），所以 QWERTZ 上 ⌃Y（物理 KeyZ）是 `Ctrl+Y`、⌥Z（物理 KeyY）是 `Alt+Z`，与键帽一致；单测覆盖。`Alt+Shift+数字/符号`：macOS 在按住 Option 时不报告该布局 Shift 后的字符，只能按美式键位换算（QWERTZ 上 ⌥⇧. 是 `Alt+>`，虽然该布局 Shift+. 打出 `:`）；美式键位没有的符号键（ß、´ 等）与 Option+Shift 同按时不匹配。这是已知取舍，参考 §4.1 已写明「键盘布局」一段。
+
+#### P3 删除开关（维护者）
+
+- 宿主：删除 `VESTRA_CORE_ACTIONS` 与 `Host.core_actions`；14 个核心动作总是注册，覆盖层迁移在每次启动时执行（已迁移的覆盖层不再变化）。
+- TestHost：删除 `new TestHost({ coreActions })` 选项，核心命令总是注册，放在新的 `host.coreCommands`（不放进 `host.commands`：audio、capture、info、nes、video、youtube 的测试按 `host.commands` 枚举并断言自己的菜单，放进去会让它们全部失败）；`host.press` 与 `host.conflicts` 把核心命令排在前面（核心赢得冲突，与绑定表一致）。
+- 文档：参考 §5.5、§14、§17 去掉开关说明；§17 写明「仍注册旧路径或旧按键的插件，菜单注册 `conflict`、按键被核心压下」。
+- 影响面（在合并前的插件代码上实测）：除 playback 外的 10 个插件测试全部通过；**playback 2 条失败**（「menu follows the allocation table」：`host.conflicts` 出现 F4、Space 等与核心动作的冲突；「previous/next go through the player sequence」：PageUp/PageDown 被核心动作接住），这正是作者 A 的迁移要删除的旧命令，须与 playback 迁移同批合并。真实宿主上未迁移的 playback 会因菜单路径冲突激活失败。
+
 ### 6.3 作者交付
 
 （各作者完成时填写：完成项、未完成项与原因、删除的自制实现、API 请求）

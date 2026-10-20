@@ -861,6 +861,23 @@ mod tests {
             press("o", "KeyO", 'o', Mods::default()).as_deref(),
             Some("O")
         );
+        // German QWERTZ: the key in the US Z position types y. Letters follow
+        // the layout, so ⌃Y and ⌥Z are what the keycaps say.
+        assert_eq!(
+            press("\u{19}", "KeyZ", 'y', ctrl).as_deref(),
+            Some("Ctrl+Y")
+        );
+        assert_eq!(press("Ω", "KeyY", 'z', alt).as_deref(), Some("Alt+Z"));
+        // Option+Shift+digit/symbol: the layout's shifted character is not
+        // reported with Option held, so it is named by the US shift table
+        // (on QWERTZ, ⌥⇧. is Alt+> although Shift+. types : there).
+        let alt_shift = Mods { shift: true, ..alt };
+        assert_eq!(
+            press("÷", "Period", '.', alt_shift).as_deref(),
+            Some("Alt+>")
+        );
+        // A layout symbol without a US position keeps its own character.
+        assert_eq!(press("•", "Backquote", '^', alt).as_deref(), Some("Alt+^"));
     }
 
     #[test]
