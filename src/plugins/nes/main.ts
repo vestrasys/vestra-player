@@ -8,7 +8,7 @@ export default async function activate(plugin: Plugin) {
   const window = plugin.windows.create("nes.slint");
   let stream: Stream | undefined;
   let opening: AbortController | undefined;
-  let status = "Choose an iNES ROM to start.";
+  let status = "请选择 iNES ROM 文件。";
   window.bind(() => ({ status, running: !!stream?.running }));
 
   async function openRom() {
@@ -17,11 +17,11 @@ export default async function activate(plugin: Plugin) {
     const { signal } = attempt;
     try {
       await window.show();
-      const path = await plugin.dialogs.openFile({ title: "Open NES ROM" });
+      const path = await plugin.dialogs.openFile({ title: "打开 NES ROM" });
       if (!path || signal.aborted) return;
       const bytes = await readFile(path);
       if (signal.aborted) return;
-      if (bytes.byteLength > 16 * 1024 * 1024) throw new Error("ROM exceeds the 16 MiB limit");
+      if (bytes.byteLength > 16 * 1024 * 1024) throw new Error("ROM 超过 16 MiB 上限。");
       const core = new NesCore(bytes);
       await stream?.stop(); // a bad ROM keeps the running game
       if (signal.aborted) return;
@@ -29,7 +29,7 @@ export default async function activate(plugin: Plugin) {
       const next = await plugin.player.openStream({ width: 256, height: 240, frame: () => core.frame(), signal });
       stream = next;
       next.onStop((error) => (status = stopText(error)));
-      status = `Running ${basename(path)} · 256 × 240 · stereo 48 kHz`;
+      status = `正在运行 ${basename(path)} · 256×240 · 48 kHz 立体声`;
     } catch (error) {
       if (!signal.aborted) status = failureText(error); // Stop cancels silently
     } finally {
@@ -40,37 +40,40 @@ export default async function activate(plugin: Plugin) {
     opening?.abort(); // a pending open never selects its stream afterwards
     await stream?.stop(); // closes the source only if it is still ours
     stream = undefined;
-    status = "Stopped.";
+    status = "已停止。";
   }
 
   window.on("openRom", openRom);
   window.on("stop", stop);
-  plugin.onError((error) => (status = String(error)));
+  plugin.onError((error) => (status = failureText(error)));
   plugin.onDispose(() => opening?.abort());
-  plugin.commands.add({ id: "nes.open", path: ["模拟器", "打开 NES ROM…"], order: 563, run: openRom });
-  plugin.commands.add({ id: "nes.window", path: ["模拟器", "NES 工具"], order: 561, run: () => window.show() });
-  plugin.commands.add({ id: "nes.stop", path: ["模拟器", "停止 NES"], order: 562, run: stop });
+  // 模拟器 ▶ (domain 601–619, round allocation table): open, stop, then the window.
+  plugin.commands.add({ id: "nes.open", path: ["模拟器", "打开 NES ROM…"], order: 601, run: openRom });
+  plugin.commands.add({ id: "nes.stop", path: ["模拟器", "停止 NES"], order: 602, run: stop });
+  plugin.commands.add({ id: "nes.window", path: ["模拟器", "NES 工具…"], order: 603, run: () => window.show() });
 }
+
+/** Status text is one line (UI-TOOL-05). */
+const oneLine = (text: string) => {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > 160 ? `${flat.slice(0, 159)}…` : flat;
+};
 
 function stopText(error: PluginError | null) {
-  if (!error) return "NES source replaced.";
-  if (error.code === "stream") return error.message; // the host's own reason
-  return `NES stopped: ${String(error)}`;
+  if (!error) return "已被其他媒体源替换。";
+  return `模拟器已停止：${oneLine(error.message)}`; // the host's own reason
 }
 
-/** The plugin's original start-up wording; the SDK words these failures generically. */
+/** Start-up failures in Chinese; the SDK words these generically. */
 const timeouts: Record<StreamStartError["stage"], string> = {
-  prefill: "Timed out preparing first NES AV buffers",
-  activation: "Timed out waiting for NES source activation",
-};
-const startup: Record<string, string> = {
-  "producer epoch changed before activation": "Producer epoch changed before activation",
+  prefill: "准备首批音视频缓冲超时。",
+  activation: "等待模拟器来源启用超时。",
 };
 
 function failureText(error: unknown) {
   const { code, message } = error as PluginError;
-  if (code === "timeout") return `Error: ${timeouts[(error as StreamStartError).stage] ?? message}`;
-  if (code === "stream" || code === "device")
-    return `Error: ${startup[message] ?? message.replace(/^audio device/, "Audio device")}`;
-  return String(error);
+  if (code === "timeout") return `错误：${timeouts[(error as StreamStartError).stage] ?? "启动超时。"}`;
+  if (code === "device") return "错误：音频设备未就绪。";
+  if (code === "stream" && message === "producer epoch changed before activation") return "错误：启动期间来源已变化，请重试。";
+  return `错误：${oneLine(error instanceof Error ? error.message : String(error))}`;
 }

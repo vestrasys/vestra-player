@@ -155,6 +155,8 @@ export component W inherits Window {
         Slider { panel: true; value: 0.5; }
         Slider { value: 0.2; }
         Button { text: "默认"; small: true; }
+        Button { icon: "M 3 2.5 L 11 10.5 M 11 2.5 L 3 10.5"; stroked: true; checked: true; width: 25px; }
+        Button { icon: "M 0 0 L 12 7 L 0 14 Z"; icon-width: 12px; icon-height: 14px; }
         StdButton { text: "std"; }
     }
 }"#;

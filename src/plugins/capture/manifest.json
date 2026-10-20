@@ -11,6 +11,7 @@
     "media.read",
     "media.control",
     "playback.read",
-    "subtitles.read"
+    "subtitles.read",
+    "ui.osd"
   ]
 }

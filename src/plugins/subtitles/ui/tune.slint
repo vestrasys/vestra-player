@@ -1,0 +1,103 @@
+// 字幕微调: reference player control-box subtitle page (ui-alignment §7.4, UI-TOOL-08).
+// Changes apply at once; every row has its own 默认 (UI-TOOL-04).
+import { ComboBox } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button, ToolTipArea } from "@vestra/widgets.slint";
+
+component RowLabel inherits Text {
+    width: 65px;
+    color: Theme.text;
+    font-size: Theme.font-body;
+    horizontal-alignment: right;
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+export component SubtitleTune inherits Window {
+    title: "字幕微调";
+    width: 301px;
+    background: Theme.bg-panel;
+    in property <[string]> track-labels: ["关闭字幕"];
+    in property <int> selected-track: 0;
+    in property <bool> busy: false;
+    in property <bool> can-style: false;
+    in property <bool> can-remove: false;
+    in property <string> style-reason: "";
+    in property <string> size-text: "字号 36";
+    in property <string> position-text: "位置 5%";
+    in property <string> sync-text: "同步 0";
+    in property <string> status-text: "";
+    // A user pick or a model change detaches ComboBox.current-index; re-push model changes.
+    changed track-labels => { track-combo.current-index = root.selected-track; }
+    changed selected-track => { track-combo.current-index = root.selected-track; }
+    callback select-track(int);
+    callback load-file();
+    callback cancel();
+    callback size-step(int);
+    callback position-step(int);
+    callback sync-step(int);
+    callback reset-field(string);
+    callback remove-selected();
+    callback open-settings();
+
+    VerticalLayout {
+        padding: 10px;
+        spacing: 4px;
+        HorizontalLayout {
+            spacing: 3px;
+            track-combo := ComboBox {
+                height: 22px;
+                model: root.track-labels;
+                current-index: root.selected-track;
+                enabled: !root.busy;
+                selected(value) => { root.select-track(self.current-index); }
+            }
+            // While an operation runs the same button cancels it.
+            Button {
+                width: 51px; height: 22px;
+                text: root.busy ? "取消" : "载入…";
+                clicked => { if root.busy { root.cancel(); } else { root.load-file(); } }
+            }
+        }
+        HorizontalLayout {
+            spacing: 3px;
+            RowLabel { text: root.size-text; }
+            Button { width: 51px; height: 22px; text: "−"; enabled: root.can-style; clicked => { root.size-step(-1); } }
+            Button { width: 51px; height: 22px; text: "+"; enabled: root.can-style; clicked => { root.size-step(1); } }
+            Rectangle { }
+            Button { width: 41px; height: 22px; text: "默认"; enabled: root.can-style; clicked => { root.reset-field("size"); } }
+        }
+        HorizontalLayout {
+            spacing: 3px;
+            RowLabel { text: root.position-text; }
+            Button { width: 51px; height: 22px; text: "上"; enabled: root.can-style; clicked => { root.position-step(1); } }
+            Button { width: 51px; height: 22px; text: "下"; enabled: root.can-style; clicked => { root.position-step(-1); } }
+            Rectangle { }
+            Button { width: 41px; height: 22px; text: "默认"; enabled: root.can-style; clicked => { root.reset-field("position"); } }
+        }
+        HorizontalLayout {
+            spacing: 3px;
+            ToolTipArea {
+                text: "单位：秒。正值字幕滞后，负值超前。";
+                width: 65px;
+                RowLabel { text: root.sync-text; }
+            }
+            Button { width: 69px; height: 22px; text: "慢"; enabled: root.can-style; clicked => { root.sync-step(1); } }
+            Button { width: 69px; height: 22px; text: "快"; enabled: root.can-style; clicked => { root.sync-step(-1); } }
+            Button { width: 69px; height: 22px; text: "默认"; enabled: root.can-style; clicked => { root.reset-field("sync"); } }
+        }
+        HorizontalLayout {
+            spacing: 3px;
+            Text {
+                text: root.status-text != "" ? root.status-text : root.style-reason;
+                color: Theme.text-list;
+                font-size: Theme.font-body;
+                vertical-alignment: center;
+                overflow: elide;
+                horizontal-stretch: 1;
+            }
+            Button { height: 22px; text: "移除"; small: true; enabled: root.can-remove && !root.busy; clicked => { root.remove-selected(); } }
+            Button { height: 22px; text: "设置…"; small: true; clicked => { root.open-settings(); } }
+        }
+    }
+}

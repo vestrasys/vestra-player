@@ -26,12 +26,12 @@ for (const [boundary, matches] of Object.entries(pending)) {
       void host.command('nes.open').run();
       await until(() => reached, boundary);
       window().emit('stop');
-      await until(() => window().props.status === 'Stopped.', 'Stopped.');
+      await until(() => window().props.status === '已停止。', '已停止。');
       blocked.open();
       await until(() => host.producers.get(1)?.released, 'release');
       await host.settle(30);
-      assert.equal(String(window().props.status).startsWith('Running '), false);
-      assert.equal(window().props.status, 'Stopped.');
+      assert.equal(String(window().props.status).startsWith('正在运行 '), false);
+      assert.equal(window().props.status, '已停止。');
       assert.equal(window().props.running, false);
       assert.notEqual(host.source.kind === 'producer' && host.source.phase !== 'empty', true, 'the cancelled stream must not stay selected');
       const intents = host.sent('source.submit').map(p => p.intent.kind);

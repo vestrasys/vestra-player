@@ -54,7 +54,7 @@ export default async function activate(plugin: Plugin) {
 
 | 句柄 | 释放 |
 | --- | --- |
-| Command | 不再分发；宿主没有注销 RPC，命令保持在菜单中但置为禁用（reason “已停用”） |
+| Command | 不再分发；`commands.unregister` 从菜单与绑定表删除（同 id 的再次注册排在删除之后） |
 | Window | `ui.close` |
 | Panel | `ui.unmount` |
 | 序列提供者（`provideSequence`） | `sequence.set(null)` |

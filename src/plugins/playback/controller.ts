@@ -1,4 +1,5 @@
 import type { Conditional, Dialogs, Player, Scrub } from "../../sdk/plugin/index.ts";
+import { rateText, time } from "./format.ts";
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -11,9 +12,13 @@ async function source<T>(work: Promise<T>): Promise<T> {
   }
 }
 
+export const MIN_RATE = 0.25;
+export const MAX_RATE = 4;
+
 /**
  * The bar's local state and every playback action. Facts come from
  * `player.state`; this object only keeps busy flags, drafts and the drag gesture.
+ * Feedback (results and failures) goes to the on-screen display.
  */
 export class Playback {
   selecting = false;
@@ -21,8 +26,6 @@ export class Playback {
   rateBusy = false;
   /** A mute toggle is in flight. */
   outputBusy = false;
-  /** Shown instead of the playback status until the next action clears it. */
-  error = "";
   dragging = false;
   /** Position shown while seeking, and the newest requested target. */
   draft: number | null = null;
@@ -35,11 +38,13 @@ export class Playback {
   readonly #player: Player;
   readonly #dialogs: Dialogs;
   readonly #update: () => void;
+  readonly #osd: (text: string) => void;
 
-  constructor(player: Player, dialogs: Dialogs, update: () => void) {
+  constructor(player: Player, dialogs: Dialogs, update: () => void, osd: (text: string) => void) {
     this.#player = player;
     this.#dialogs = dialogs;
     this.#update = update;
+    this.#osd = osd;
   }
 
   get state() {
@@ -53,6 +58,10 @@ export class Playback {
     const { duration } = this.state;
     return this.can("seek") && duration !== null && duration > 0;
   }
+  /** Relative seeks need a known position. */
+  canStep() {
+    return this.can("seek") && this.state.position !== null;
+  }
   /** Pause/resume when ready, or replay after the end. */
   canToggle() {
     return this.can("pause") || (this.state.phase === "ended" && this.state.can.restart);
@@ -61,20 +70,18 @@ export class Playback {
   get gestureLost() {
     return !!this.#scrub && !this.#scrub.active;
   }
-  status() {
-    const { phase, paused, error } = this.state;
-    if (this.error) return this.error;
-    if (phase === "loading") return "正在打开";
-    if (phase === "error") return `打开失败：${error}`;
-    if (phase === "ended") return "已结束";
-    if (this.seekTarget !== null) return "跳转中";
-    if (phase === "empty") return "未打开媒体";
-    return paused ? "已暂停" : "播放中";
+  /** One line on the video; headless hosts refuse it, which is not a failure of the action. */
+  notify(text: string) {
+    this.#osd(text);
   }
-  /** For failures outside a handler the SDK invoked (detached seeks and volume). */
+  /** For failures of any action: shown on the video. */
   report(error: unknown) {
-    this.error = message(error);
+    this.notify(message(error));
     this.#update();
+  }
+  /** `00:37 / 01:40` for seek feedback. */
+  positionText(seconds: number) {
+    return `${time(seconds)} / ${time(this.state.duration)}`;
   }
 
   clearSeek() {
@@ -89,12 +96,11 @@ export class Playback {
     this.clearSeek();
     this.#scrub = this.#player.scrub();
   }
-  /** Seek within the current gesture (a new one when none is active). */
-  seek(seconds: number) {
-    if (!this.can("seek")) return;
+  /** Seek within the current gesture (a new one when none is active); returns the clamped target. */
+  seek(seconds: number): number | null {
+    if (!this.can("seek")) return null;
     const target = Math.max(0, Math.min(this.state.duration ?? Infinity, seconds));
     this.draft = this.seekTarget = target;
-    this.error = "";
     if (!this.#scrub?.active) this.#scrub = this.#player.scrub();
     const scrub = this.#scrub;
     source(scrub.seek(target)).then(
@@ -112,16 +118,18 @@ export class Playback {
         this.report(error);
       },
     );
+    return target;
   }
   /** Relative seeks accumulate from the newest pending target. */
   seekBy(delta: number) {
-    this.seek((this.seekTarget ?? this.state.position ?? 0) + delta);
+    const target = this.seek((this.seekTarget ?? this.state.position ?? 0) + delta);
+    if (target !== null)
+      this.notify(`${delta < 0 ? "后退" : "前进"} ${Math.abs(delta)}秒: ${this.positionText(target)}`);
   }
 
   async open() {
     if (this.selecting) return;
     this.selecting = true;
-    this.error = "";
     try {
       const path = await this.#dialogs.openFile({
         title: this.state.phase === "empty" ? "打开媒体" : "打开媒体（将替换当前来源）",
@@ -134,7 +142,7 @@ export class Playback {
       this.selecting = false;
     }
   }
-  /** Reopen the failed source (the bar's "重试"). */
+  /** Reopen the failed source (menu "重新打开"). */
   async retry() {
     const { phase, source: path } = this.state;
     if (phase === "error" && path) await source(this.#player.open(path));
@@ -147,38 +155,47 @@ export class Playback {
     if (this.pauseBusy || !this.canToggle()) return;
     this.clearSeek();
     this.pauseBusy = true;
-    this.error = "";
     try {
       const { phase, paused } = this.state;
       await source(phase === "ended" ? this.#player.restart() : this.#player.setPaused(!paused));
+      this.notify(phase !== "ended" && !paused ? "已暂停" : "播放");
     } finally {
       this.pauseBusy = false;
     }
   }
   async setRate(rate: number, options?: Conditional) {
     if (!this.can("rate") || this.rateBusy) return;
-    if (!Number.isFinite(rate) || rate < 0.25 || rate > 4) throw new Error("速度范围为0.25–4倍");
+    if (!Number.isFinite(rate) || rate < MIN_RATE || rate > MAX_RATE) throw new Error("速度范围为0.25–4倍");
     this.clearSeek();
     this.rateBusy = true;
     try {
       await source(this.#player.setRate(rate, options));
+      this.notify(`播放速度: ${rateText(rate)}x`);
     } finally {
       this.rateBusy = false;
     }
   }
+  /** Z/X/C: ±0.1 from the current rate, kept inside 0.25–4. */
+  stepRate(delta: number) {
+    const next = Math.round((this.state.rate + delta) * 100) / 100;
+    return this.setRate(Math.max(MIN_RATE, Math.min(MAX_RATE, next)));
+  }
   async toggleMute() {
     if (this.outputBusy || this.volumeDraft !== null) return;
     this.outputBusy = true;
+    const muted = !this.state.muted;
     try {
-      await this.#player.setOutput({ muted: !this.state.muted });
+      await this.#player.setOutput({ muted });
+      this.notify(muted ? "静音: 开" : "静音: 关");
     } finally {
       this.outputBusy = false;
     }
   }
   /** Latest value wins; the target volume is applied before unmuting, never an old loud one. */
-  setVolume(value: number) {
+  setVolume(value: number, announce = false) {
     if (this.outputBusy || !Number.isFinite(value)) return;
-    const volume = (this.volumeDraft = Math.max(0, Math.min(200, value)));
+    const volume = (this.volumeDraft = Math.max(0, Math.min(200, Math.round(value))));
+    if (announce) this.notify(`音量: ${volume}%`);
     const request = ++this.#volumeRequest;
     this.#player.setOutput({ volume, muted: false }).then(
       (applied) => {
@@ -192,5 +209,12 @@ export class Playback {
         this.report(error);
       },
     );
+  }
+  /** ↑/↓ and the wheel: ±5 from the newest pending volume. */
+  volumeBy(delta: number) {
+    this.setVolume((this.volumeDraft ?? this.state.volume) + delta, true);
+  }
+  async step(direction: "next" | "previous") {
+    await source(direction === "next" ? this.#player.next() : this.#player.previous());
   }
 }

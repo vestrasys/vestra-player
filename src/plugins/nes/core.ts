@@ -2,7 +2,7 @@ import { NES } from 'jsnes';
 
 /** JSNES returns 0x00BBGGRR pixels; the public producer uses byte-order RGBA. */
 export function rgbaFrame(pixels: Uint32Array): Uint8Array {
-  if (pixels.length !== 256 * 240) throw new Error('Invalid NES frame dimensions');
+  if (pixels.length !== 256 * 240) throw new Error('模拟器画面尺寸无效。');
   const rgba = new Uint8Array(pixels.length * 4);
   for (let i = 0; i < pixels.length; i++) {
     const pixel = pixels[i]!;
@@ -20,7 +20,7 @@ export class NesCore {
   readonly nes: NES;
   constructor(rom: Uint8Array) {
     if (rom.length < 16 || rom[0] !== 78 || rom[1] !== 69 || rom[2] !== 83 || rom[3] !== 26)
-      throw new Error('Choose an iNES .nes ROM file');
+      throw new Error('请选择 iNES 格式的 .nes ROM 文件。');
     this.nes = new NES({ sampleRate: 48000, emulateSound: true,
       onFrame: pixels => { this.video = rgbaFrame(pixels); },
       onAudioSample: (left, right) => {
@@ -34,7 +34,7 @@ export class NesCore {
     this.nes.frame();
     const audio = Float32Array.from(this.samples);
     if (audio.length === 0 || audio.some(value => !Number.isFinite(value)))
-      throw new Error('NES core produced invalid audio');
+      throw new Error('模拟器音频数据无效。');
     return { video: this.video, audio };
   }
 }

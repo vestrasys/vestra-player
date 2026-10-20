@@ -1,10 +1,9 @@
 import { lstat } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
-import type { Json, PlayerState } from "../../sdk/plugin/index.ts";
+import type { PlayerState } from "../../sdk/plugin/index.ts";
 
-/** Pure capture rules: form parsing, validation, ranges and file naming. */
+/** Pure capture rules: parsing, validation, ranges and file naming. */
 export type Kind = "image" | "burst" | "clip";
-export type Section = "Screenshot" | "Burst" | "Video clip" | "Export tasks";
 export interface Spec {
   kind: Kind;
   start: number;
@@ -19,31 +18,34 @@ export interface Spec {
   current: boolean;
 }
 
+export const KIND_LABEL: Record<Kind, string> = { image: "截图", burst: "连拍", clip: "片段" };
+
 export const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 export function parseRange(start: unknown, end?: unknown) {
   const a = Number(String(start).trim());
   const b = end === undefined ? undefined : Number(String(end).trim());
   if (String(start).trim() === "" || !Number.isFinite(a) || a < 0 || (b !== undefined && (!Number.isFinite(b) || b <= a)))
-    throw new Error("Enter valid seconds; end must be after start.");
+    throw new Error("请输入有效的秒数，终点须晚于起点。");
   return { start: a, end: b };
 }
 
 export function sampleTimes(start: number, count: number, step: number, duration: number) {
   if (!Number.isInteger(count) || count < 2 || count > 20 || !Number.isFinite(step) || step < 0.1 || step > 10 || !Number.isFinite(duration) || duration <= 0 || !Number.isFinite(start) || start < 0)
-    throw new Error("Burst requires 2–20 images, 0.1–10s spacing and a finite source duration.");
+    throw new Error("连拍需要 2–20 张、间隔 0.1–10 秒，且媒体时长已知。");
   const result = Array.from({ length: count }, (_, index) => start + index * step);
-  if (result[result.length - 1]! >= duration) throw new Error("Burst exceeds source duration. Reduce count or spacing.");
+  if (result[result.length - 1]! >= duration) throw new Error("连拍超出媒体时长，请减少张数或间隔。");
   return result;
 }
 
-/** The first unused `name (n).ext` next to `path`; existing files are never chosen. */
-export async function uniqueFile(path: string) {
+/** The first unused `name (n).ext` next to `path`; existing files and `taken` paths are never chosen. */
+export async function uniqueFile(path: string, taken: ReadonlySet<string> = new Set()) {
   const absolute = resolve(path);
   const extension = extname(absolute);
   const stem = basename(absolute, extension);
   for (let i = 0; i < 1000; i++) {
     const candidate = i ? join(dirname(absolute), `${stem} (${i})${extension}`) : absolute;
+    if (taken.has(candidate)) continue;
     try {
       await lstat(candidate);
     } catch (error) {
@@ -51,42 +53,33 @@ export async function uniqueFile(path: string) {
       throw error;
     }
   }
-  throw new Error("No available filename among the next 1000 suffixes.");
+  throw new Error("找不到可用的文件名。");
 }
 
-/** Callback arguments, in the order `capture.slint` passes them. */
-export function parseSpec(kind: Kind, args: Json[]): Spec {
-  const range = parseRange(args[0], kind === "clip" ? args[1] : undefined);
-  return {
-    kind,
-    start: range.start,
-    end: range.end,
-    count: kind === "burst" ? Number(args[1]) : 1,
-    step: kind === "burst" ? Number(args[2]) : 1,
-    processed: args[kind === "burst" ? 3 : kind === "clip" ? 2 : 1] === true,
-    subtitles: args[kind === "burst" ? 4 : kind === "clip" ? 4 : 2] === true,
-    track: kind === "clip" ? String(args[3] ?? "none").trim() : "none",
-    current: kind !== "clip" && args[kind === "burst" ? 5 : 3] === true,
-  };
+/** `1:02:03.450` style time for file names and rows (no hours below one hour). */
+export function clock(seconds: number, separator = ":") {
+  const ms = Math.max(0, Math.round(seconds * 1000));
+  const h = Math.floor(ms / 3_600_000), m = Math.floor(ms / 60_000) % 60, s = Math.floor(ms / 1000) % 60;
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${h ? `${h}${separator}` : ""}${two(m)}${separator}${two(s)}.${String(ms % 1000).padStart(3, "0")}`;
 }
 
-/** The arguments that recreate `spec` from the form ("retry current source"). */
-export function argsOf(spec: Spec): Json[] {
-  if (spec.kind === "clip") return [String(spec.start), String(spec.end), spec.processed, spec.track, spec.subtitles];
-  if (spec.kind === "burst") return [String(spec.start), String(spec.count), String(spec.step), spec.processed, spec.subtitles, false];
-  return [String(spec.start), spec.processed, spec.subtitles, false];
+/** `movie_01.02.450.png`: source name plus media time. */
+export function frameName(source: string | null, seconds: number, extension: string) {
+  const stem = source ? basename(source.split(/[?#]/)[0]!, extname(source.split(/[?#]/)[0]!)) || "capture" : "capture";
+  return `${stem.replace(/[\\/:*?"<>|]/g, "_")}_${clock(seconds, ".")}${extension}`;
 }
 
 export const usable = (state: PlayerState) =>
   state.kind === "media" && (state.phase === "ready" || state.phase === "ended") && state.can.snapshot;
 
 export function validate(spec: Spec, state: PlayerState) {
-  if (!usable(state)) throw new Error("This source cannot be captured. Open a finite video file.");
+  if (!usable(state)) throw new Error("当前画面无法截取，请先打开本地视频文件。");
   const { duration } = state;
-  if (spec.kind !== "image" && (duration === null || !Number.isFinite(duration))) throw new Error("Burst and clip export require known finite duration.");
+  if (spec.kind !== "image" && (duration === null || !Number.isFinite(duration))) throw new Error("连拍和导出片段需要已知的媒体时长。");
   const start = spec.current ? (state.position ?? 0) : spec.start;
   if (spec.kind === "burst") sampleTimes(start, spec.count, spec.step, duration!);
-  if (duration !== null && (start >= duration || (spec.end !== undefined && spec.end > duration))) throw new Error("The selected range exceeds the source duration.");
+  if (duration !== null && (start >= duration || (spec.end !== undefined && spec.end > duration))) throw new Error("所选范围超出媒体时长。");
 }
 
 /** One source-internal audio track for a clip, or none. */
@@ -95,12 +88,15 @@ export function chooseAudio(spec: Spec, state: PlayerState): number | "none" {
   const tracks = state.audioTracks;
   const track = spec.track === "selected" ? tracks?.find((t) => t.selected) : tracks?.find((t) => t.id === Number(spec.track));
   if (!track && spec.track === "selected" && !tracks?.length) return "none";
-  if (!track || !track.exportable) throw new Error("Choose a source internal audio track ID or none.");
+  if (!track || !track.exportable) throw new Error("所选音轨无法导出，请换一条音轨或选择无声音。");
   return track.id;
 }
 
-export const sourceLabel = (state: PlayerState) =>
-  usable(state) ? `${state.source} · generation ${state.sourceId}` : "Open a finite, independently readable video source.";
-
-export const trackList = (state: PlayerState) =>
-  state.audioTracks?.map((t) => `${t.id}: ${t.title ?? t.language ?? t.codec ?? "audio"}${t.selected ? " (selected)" : ""}`).join("; ") || "No audio tracks";
+/** Clip audio choices: index 0 none, 1 the selected track, then each track. */
+export function audioChoices(state: PlayerState) {
+  const tracks = state.audioTracks ?? [];
+  return {
+    labels: ["无声音", "当前音轨", ...tracks.map((t) => `音轨 ${t.id}${t.title || t.language ? ` · ${t.title ?? t.language}` : ""}`)],
+    values: ["none", "selected", ...tracks.map((t) => String(t.id))],
+  };
+}

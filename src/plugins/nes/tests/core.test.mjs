@@ -33,7 +33,7 @@ test('pixel channel conversion and malformed ROM errors', () => {
   const pixels = new Uint32Array(256 * 240);
   pixels[0] = 0x00563412;
   assert.deepEqual([...rgbaFrame(pixels).slice(0, 4)], [0x12, 0x34, 0x56, 255]);
-  assert.throws(() => rgbaFrame(new Uint32Array(1)), /dimensions/);
+  assert.throws(() => rgbaFrame(new Uint32Array(1)), /尺寸无效/);
   assert.throws(() => new NesCore(new Uint8Array(100)), /iNES/);
   const unsupported = homebrew();
   unsupported[6] = 0xf0;

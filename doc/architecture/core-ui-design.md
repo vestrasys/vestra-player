@@ -105,7 +105,10 @@ export component ToolTipArea {           // 包住任意内容；悬停 600 ms �
 }
 export component Button {                // 参考播放器对话框按钮
     in property <string> text;
-    in property <image> icon;            // 有图标且 text 为空 = 图标按钮
+    in property <string> icon;           // Path 路径数据；text 为空、icon 非空 = 图标按钮（step 2 R2）
+    in property <length> icon-width: 14px;   // 同时是 viewbox 尺寸
+    in property <length> icon-height: 12px;
+    in property <bool> stroked;          // 画 1.5px 线而不填充
     in property <bool> enabled: true;
     in property <bool> small;            // false：21px 高、最小 66px 宽；true：18px 高、最小 41px 宽
     in property <bool> checked;          // 图标按钮的开启态（图标变 Theme.accent）
@@ -123,7 +126,7 @@ export component Slider {                // 2px 线滑块
 }
 ```
 
-样式：ToolTipArea 底 `Theme.bg-panel`、1px `Theme.line` 边框、`Theme.font-body`、`Theme.text`，用 `PopupWindow` 显示，指针移出或按下即消失。Button 文字按钮底 `Theme.button-bg`（悬停 `button-hover`、按下 `button-press`、禁用 `button-disabled`），文字 `Theme.text-list` 11px；图标按钮无底色，图标 `colorize` 常态 `Theme.text-dim`、悬停与开启 `Theme.accent`、禁用 `Theme.icon-disabled`。Slider 的 thumb 常态 `Theme.text`，控制栏样式悬停 `Theme.accent`、按下 `Theme.accent-press`；未填充部分控制栏样式为 `Theme.line`。
+样式：ToolTipArea 底 `Theme.bg-panel`、1px `Theme.line` 边框、`Theme.font-body`、`Theme.text`，用 `PopupWindow` 显示，指针移出或按下即消失。Button 文字按钮底 `Theme.button-bg`（悬停 `button-hover`、按下 `button-press`、禁用 `button-disabled`），文字 `Theme.text-list` 11px；图标按钮无底色，Path 常态 `Theme.text-dim`、悬停与开启 `Theme.accent`、按下 `Theme.accent-press`、禁用 `Theme.icon-disabled`。Slider 的 thumb 常态 `Theme.text`，控制栏样式悬停 `Theme.accent`、按下 `Theme.accent-press`；未填充部分控制栏样式为 `Theme.line`。
 
 ### 2.2 宿主怎么做
 
@@ -974,3 +977,12 @@ SDK 与运行器（`src/sdk/`）：
 - 测试：SDK 测试与 playback 测试改读完整声明和 `host.layout`；`window_state` 的全屏覆盖测试换成「全屏隐藏附着侧栏、保留偏好与浮动窗口」。
 - 文档：`doc/plugins/reference.md` 去掉两条迁移期说明；`doc/plugins/` 中不再出现已删除的接口。workshop 的 `vendor/sdk` 按其测试开头的命令重新同步（协调者授权）。
 
+
+## 20. 第二步的接口变更（2026-10-20，按请求）
+
+| 请求 | 决定 | 变更 |
+| --- | --- | --- |
+| R1 播放列表：不打开文件读时长 | 拒绝 | 插件内调用 ffprobe（`VESTRA_FFPROBE` → `VESTRA_FFMPEG` 同目录 → PATH），限并发、超时、可中止，只探测本地文件，失败显示 `--:--` |
+| R2 控件：Path 图标、滑块回调 | Button 接受，Slider 拒绝 | `Button.icon` 由 `image` 改为 Path 路径数据，新增 `icon-width`、`icon-height`（默认 14×12，同时是 viewbox）、`stroked`；原 `image` 图标没有使用者。底栏专用按钮与进度条留在 playback 插件内 |
+| R3 菜单项改标题 / 隐藏 | 只做「释放即删除」 | wire `commands.unregister`；`Command.dispose()` 从菜单与绑定表删除，id 可再用（SDK 让同 id 的再次注册排在删除之后）。可变列表用子作用域释放后重建；不做可变 `title` |
+| R4 每插件数据目录 | 接受 | `plugin.dataDirectory`：`plugin-data/<manifest id>/`，宿主启动插件前创建并经 `VESTRA_PLUGIN_DATA_DIR` 交给运行器；试载用独立 id，停止时删除；无目录时读取抛 `unavailable`；测试宿主给临时目录，`startPlugin({ dataDirectory })` 可复用目录 |

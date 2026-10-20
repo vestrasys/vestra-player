@@ -48,7 +48,7 @@ test("realpath deduplicates same batch and symlink while inaccessible rows remai
     assert.equal(queue.binding, null);
     assert.match(queue.rows[1].error, /文件不存在/);
     assert.equal(queue.rows[1].status, "待重试");
-    assert.match(queue.message, /新增 2 项，跳过 2 个重复，1 项待重试/);
+    assert.match(queue.message, /已添加 2 项，跳过 2 个重复，1 项暂不可读/);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -78,7 +78,7 @@ test("failed navigation anchor survives a different selection, movement uses sta
   assert.equal(queue.row(d.rowId), d);
   assert.equal(queue.neighbor(1)?.rowId, d.rowId);
   queue.select(b.rowId);
-  queue.remove();
+  queue.removeSelected();
   assert.equal(queue.failed, null);
   assert.equal(queue.selected, d.rowId);
 });
@@ -127,7 +127,7 @@ test("removing current and clearing revoke progression without requesting public
   queue.select(queue.rows[1].rowId);
   queue.bind({ rowId: queue.selected!, media: media() });
   const epoch = queue.epoch;
-  queue.remove();
+  queue.removeSelected();
   assert.equal(queue.binding, null);
   assert.ok(queue.epoch > epoch);
   assert.equal(queue.selected, queue.rows[1].rowId);
@@ -136,4 +136,83 @@ test("removing current and clearing revoke progression without requesting public
   assert.equal(queue.rows.length, 0);
   assert.equal(queue.selected, null);
   assert.match(queue.message, /当前媒体继续/);
+});
+
+const names = (queue: Queue) => queue.rows.map((row) => row.source.slice(-1));
+
+test("multi-select: Ctrl toggles, Shift extends from the anchor, select-all keeps the cursor", () => {
+  const queue = fixture();
+  const [a, b, c, d] = queue.rows.map((row) => row.rowId);
+  queue.select(b);
+  queue.extend(d);
+  assert.deepEqual([...queue.selection].sort(), [b, c, d]);
+  assert.equal(queue.selected, d);
+  queue.toggle(c);
+  assert.deepEqual(queue.marked().map((row) => row.rowId), [b, d]);
+  queue.select(a);
+  queue.selectNeighbor(2, true);
+  assert.deepEqual(queue.marked().map((row) => row.rowId), [a, b, c]);
+  queue.selectAll();
+  assert.equal(queue.selection.size, 4);
+  assert.equal(queue.selected, c);
+});
+
+test("placement moves the marked block and keeps its order; drop inserts before an index", () => {
+  const queue = fixture();
+  const [a, , c] = queue.rows.map((row) => row.rowId);
+  queue.select(a);
+  queue.toggle(c);
+  assert.equal(queue.canPlace("up"), true, "c can still move up");
+  queue.place("up");
+  assert.deepEqual(names(queue), ["a", "c", "b", "d"]);
+  queue.place("bottom");
+  assert.deepEqual(names(queue), ["b", "d", "a", "c"]);
+  assert.equal(queue.canPlace("down"), false);
+  queue.place("top");
+  assert.deepEqual(names(queue), ["a", "c", "b", "d"]);
+  queue.place("down");
+  assert.deepEqual(names(queue), ["b", "a", "c", "d"]);
+  // Dragging a marked row moves the whole selection; an unmarked row moves alone.
+  queue.drop(a, 0);
+  assert.deepEqual(names(queue), ["a", "c", "b", "d"]);
+  queue.drop(queue.rows[2].rowId, 4);
+  assert.deepEqual(names(queue), ["a", "c", "d", "b"]);
+  assert.deepEqual(queue.marked().map((row) => row.source.slice(-1)), ["b"]);
+  queue.sort("reverse");
+  assert.deepEqual(names(queue), ["b", "d", "c", "a"]);
+  queue.sort("title");
+  assert.deepEqual(names(queue), ["a", "b", "c", "d"]);
+});
+
+test("removing a multi-selection leaves the cursor after it; repeat-all wraps manual steps", () => {
+  const queue = fixture();
+  const [, b, c, d] = queue.rows.map((row) => row.rowId);
+  queue.select(b);
+  queue.extend(c);
+  queue.removeSelected();
+  assert.deepEqual(names(queue), ["a", "d"]);
+  assert.equal(queue.selected, d);
+  assert.equal(queue.neighbor(1), undefined);
+  queue.repeat = "all";
+  assert.equal(queue.neighbor(1)?.source.slice(-1), "a");
+  assert.equal(queue.neighbor(-1)?.source.slice(-1), "a");
+});
+
+test("shuffle picks each row once per round; repeat-all starts a new round", () => {
+  const queue = fixture();
+  queue.setShuffle(true);
+  queue.select(queue.rows[0].rowId);
+  queue.played(queue.rows[0].rowId);
+  const seen = new Set([queue.rows[0].rowId]);
+  let anchor = queue.rows[0].rowId;
+  for (let i = 0; i < 3; i++) {
+    const next = queue.candidates(anchor);
+    assert.ok(next.every((row) => !seen.has(row.rowId)));
+    anchor = next[0].rowId;
+    seen.add(anchor);
+    queue.played(anchor);
+  }
+  assert.equal(queue.candidates(anchor).length, 0, "the round is over");
+  queue.repeat = "all";
+  assert.equal(queue.candidates(anchor).length, 3);
 });

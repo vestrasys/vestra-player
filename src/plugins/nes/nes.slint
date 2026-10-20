@@ -1,20 +1,35 @@
-import { Button, VerticalBox, HorizontalBox } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button, ToolTipArea } from "@vestra/widgets.slint";
+
 export component NesWindow inherits Window {
     title: "NES";
-    width: 420px;
-    height: 220px;
-    in property <string> status: "Choose an iNES ROM to start.";
+    width: 320px;
+    height: 71px;
+    background: Theme.bg-panel;
+    in property <string> status: "请选择 iNES ROM 文件。";
     in property <bool> running: false;
     callback open-rom();
     callback stop();
-    VerticalBox {
-        padding: 20px;
-        spacing: 16px;
-        Text { text: "NES"; font-size: 24px; font-weight: 700; }
-        Text { text: root.status; wrap: word-wrap; vertical-stretch: 1; }
-        HorizontalBox {
-            Button { text: "Open ROM…"; clicked => { root.open-rom(); } }
-            Button { text: "Stop"; enabled: root.running; clicked => { root.stop(); } }
+    VerticalLayout {
+        padding: Theme.dialog-padding;
+        spacing: 8px;
+        // One line; the full text is in the tooltip.
+        ToolTipArea {
+            height: Theme.label-height;
+            text: root.status;
+            Text {
+                text: root.status;
+                color: Theme.text-list;
+                font-size: Theme.font-body;
+                overflow: elide;
+                vertical-alignment: center;
+            }
+        }
+        HorizontalLayout {
+            spacing: 6px;
+            Rectangle { horizontal-stretch: 1; }
+            Button { text: "打开 ROM…"; clicked => { root.open-rom(); } }
+            Button { text: "停止"; enabled: root.running; clicked => { root.stop(); } }
         }
     }
 }

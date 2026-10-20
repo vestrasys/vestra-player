@@ -35,44 +35,60 @@ export component ToolTipArea {
     }
 }
 
-// Dialog button: text (21px, or 18px when `small`) or an icon button when only `icon` is set.
+// Dialog button: text (21px, or 18px when `small`), or an icon button when
+// `text` is empty and `icon` holds Path data drawn in an icon-width × icon-height
+// viewbox (filled, or 1.5px lines when `stroked`). The caller sizes icon buttons.
 export component Button {
     in property <string> text;
-    in property <image> icon;
+    in property <string> icon;
+    in property <length> icon-width: 14px;
+    in property <length> icon-height: 12px;
+    in property <bool> stroked;
     in property <bool> enabled: true;
     in property <bool> small;
     // Icon buttons: the "on" state, drawn in the accent colour.
     in property <bool> checked;
     callback clicked();
-    private property <bool> icon-only: root.text == "";
-    min-height: root.icon-only ? 0px : root.small ? Theme.button-small-height : Theme.button-height;
-    min-width: root.icon-only ? 0px : root.small ? Theme.button-small-min-width : Theme.button-min-width;
+    private property <bool> icon-only: root.text == "" && root.icon != "";
+    private property <color> tint: !root.enabled ? Theme.icon-disabled
+        : touch.pressed ? Theme.accent-press
+        : (touch.has-hover || root.checked) ? Theme.accent : Theme.text-dim;
+    min-height: root.icon-only ? root.icon-height : root.small ? Theme.button-small-height : Theme.button-height;
+    min-width: root.icon-only ? root.icon-width : root.small ? Theme.button-small-min-width : Theme.button-min-width;
     preferred-height: self.min-height;
     accessible-role: button;
     accessible-label: root.text;
     accessible-enabled: root.enabled;
+    accessible-checkable: root.icon-only;
+    accessible-checked: root.checked;
     accessible-action-default => { if root.enabled { root.clicked(); } }
-    Rectangle {
-        background: root.icon-only ? transparent
-            : !root.enabled ? Theme.button-disabled
+    if !root.icon-only: Rectangle {
+        background: !root.enabled ? Theme.button-disabled
             : touch.pressed ? Theme.button-press
             : touch.has-hover ? Theme.button-hover : Theme.button-bg;
         HorizontalLayout {
-            padding-left: root.icon-only ? 0px : Theme.button-padding;
-            padding-right: root.icon-only ? 0px : Theme.button-padding;
+            padding-left: Theme.button-padding;
+            padding-right: Theme.button-padding;
             alignment: center;
-            if root.icon-only: Image {
-                source: root.icon;
-                colorize: !root.enabled ? Theme.icon-disabled
-                    : (touch.has-hover || root.checked) ? Theme.accent : Theme.text-dim;
-            }
-            if !root.icon-only: Text {
+            Text {
                 text: root.text;
                 color: root.enabled ? Theme.text-list : Theme.text-dim;
                 font-size: Theme.font-body;
                 vertical-alignment: center;
             }
         }
+    }
+    if root.icon-only: Path {
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        width: root.icon-width;
+        height: root.icon-height;
+        viewbox-width: root.icon-width / 1px;
+        viewbox-height: root.icon-height / 1px;
+        commands: root.icon;
+        fill: root.stroked ? transparent : root.tint;
+        stroke: root.stroked ? root.tint : transparent;
+        stroke-width: root.stroked ? 1.5px : 0px;
     }
     touch := TouchArea {
         enabled: root.enabled;

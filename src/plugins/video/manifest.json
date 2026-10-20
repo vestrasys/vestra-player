@@ -1,1 +1,1 @@
-{"id":"vestra.video","version":"1.0.1","apiVersion":"vestra.experimental/0.1","entry":"main.ts","capabilities":["commands","playback.read","events","processing.video","ui.window"]}
+{"id":"vestra.video","version":"1.0.1","apiVersion":"vestra.experimental/0.1","entry":"main.ts","capabilities":["commands","playback.read","events","processing.video","ui.window","ui.osd"]}

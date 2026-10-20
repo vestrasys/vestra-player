@@ -134,7 +134,12 @@ try {
   process.on("unhandledRejection", (error) =>
     console.error("unhandled rejection:", error),
   );
-  const instance = await createPlugin({ request, on }, manifest, directory);
+  const instance = await createPlugin(
+    { request, on },
+    manifest,
+    directory,
+    process.env.VESTRA_PLUGIN_DATA_DIR || undefined,
+  );
   dispose = () => instance.dispose();
   await module.default(instance.plugin);
   await instance.activated();

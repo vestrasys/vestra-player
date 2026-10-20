@@ -1,6 +1,6 @@
 // Orchestration against the SDK test host only. No native parsing or rendering assertions.
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -21,8 +21,12 @@ function sourceHost() {
 }
 async function open(host = sourceHost()) {
   const started = await startPlugin(activate, { directory, host });
-  await host.command("workbench").run();
-  return { ...started, window: host.window("subtitle-workbench") };
+  await host.command("tune").run();
+  return { ...started, window: host.window("subtitle-tune") };
+}
+async function openSettings(host: TestHost) {
+  await host.command("settings").run();
+  return host.window("subtitle-settings");
 }
 /** Simulate another source being opened: the subtitle state moves to generation 2. */
 function switchSource(host: TestHost) {
@@ -36,36 +40,62 @@ async function srtFile(text: string | Buffer) {
   return { path, cleanup: () => rm(folder, { recursive: true, force: true }) };
 }
 
-test("independent window with the Slint callbacks only and complete Chinese menu paths", async () => {
+test("menu per the allocation table; windows bind exactly their Slint callbacks", async () => {
   const { host, window, stop } = await open();
-  assert.deepEqual(
-    [...host.commands.values()].map((c) => c.declaration.path),
-    [["字幕", "字幕工作台…"], ["字幕", "加载外部 SRT…"], ["字幕", "关闭字幕"], ["字幕", "刷新字幕轨"]],
-  );
-  assert.deepEqual(
-    [...host.commands.values()].map(({ declaration: d }) => ("order" in d ? d.order : null)),
-    [444, 443, 441, 442],
-  );
-  const opened = host.sent("ui.open");
-  assert.equal(opened.length, 1);
-  assert.equal(opened[0]!.file, "ui/workbench.slint");
-  assert.deepEqual([...window.callbacks].sort(), [
-    "cancel", "change-color", "change-delay", "change-font", "change-margin", "change-outline",
-    "change-size", "load-file", "refresh", "remove-selected", "reset-style", "select-track",
+  const declared = [...host.commands.values()]
+    .map(({ declaration: d }) => [d.path.join(" > "), d.order, d.group, d.bindings.join(",")] as const)
+    .sort((a, b) => a[1] - b[1]);
+  assert.deepEqual(declared, [
+    ["打开 > 打开字幕…", 113, "open", "Alt+O"],
+    ["字幕 > 显示字幕", 301, "domain", "Alt+H"],
+    ["字幕 > 选择字幕轨 > 不显示", 302, "subtitle-track", ""],
+    ["字幕 > 选择字幕轨 > English · en", 303, "subtitle-track", ""],
+    ["字幕 > 同步 > 超前 0.5 秒", 311, "subtitle-sync", ">"],
+    ["字幕 > 同步 > 滞后 0.5 秒", 312, "subtitle-sync", "<"],
+    ["字幕 > 同步 > 复位", 313, "subtitle-sync", "/"],
+    ["字幕 > 刷新字幕轨", 314, "subtitle-tools", ""],
+    ["字幕 > 字幕微调…", 315, "subtitle-tools", ""],
+    ["字幕 > 字幕设置…", 316, "subtitle-tools", ""],
   ]);
-  assert.equal(window.props["status-text"], "字幕工作台已就绪。");
+  assert.deepEqual(host.conflicts, []);
+  const settings = await openSettings(host);
+  assert.deepEqual(host.sent("ui.open").map((o) => o.file), ["ui/tune.slint", "ui/settings.slint"]);
+  for (const [name, view] of [["tune", window], ["settings", settings]] as const) {
+    const slint = await readFile(new URL(`../ui/${name}.slint`, import.meta.url), "utf8");
+    const callbacks = [...slint.matchAll(/callback\s+([\w-]+)\s*\(/g)].map((m) => m[1]!);
+    assert.deepEqual([...view.callbacks].sort(), callbacks.sort(), name);
+  }
   assert.deepEqual(window.props["track-labels"], ["关闭字幕", "English · en"]);
   assert.equal(window.props["selected-track"], 1);
   assert.equal(window.props["can-style"], true);
-  assert.equal(window.props["source-text"], "媒体版本 1 · ready · 1 条字幕轨");
+  assert.equal(window.props["sync-text"], "同步 0");
+  assert.equal(host.command("show").state.checked, true);
+  assert.equal(host.command("track-1").state.checked, true);
+  assert.equal(host.commands.has("track-2"), false, "one item per real track");
+  await stop();
+});
+
+test("window text is short Chinese with no debug strings", async () => {
+  const { host, window, stop } = await open();
+  const settings = await openSettings(host);
+  for (const view of [window, settings])
+    for (const [name, value] of Object.entries(view.props))
+      if (typeof value === "string" && name !== "track-labels")
+        assert.doesNotMatch(value, /generation|revision|applied|waiting|uncertain|ready|媒体版本|\n/, name);
+  for (const file of ["tune", "settings"]) {
+    const slint = await readFile(new URL(`../ui/${file}.slint`, import.meta.url), "utf8");
+    assert.doesNotMatch(slint, /#[0-9a-f]{3,8}\b/i, `${file}: colours come from Theme`);
+    assert.doesNotMatch(slint, /font-size:\s*\d/, `${file}: font sizes come from Theme`);
+  }
   await stop();
 });
 
 test("style values stay within the host's accepted ranges", async () => {
   const { host, window, stop } = await open();
-  window.emit("change-size", 96);
-  window.emit("change-outline", 8);
-  window.emit("change-margin", 0);
+  const settings = await openSettings(host);
+  for (let i = 0; i < 30; i++) window.emit("size-step", 1);
+  settings.emit("change-outline", 8);
+  settings.emit("change-margin", 0);
   await host.settle(170);
   const style = host.sent("subtitles.style").at(-1)!.style as Record<string, number>;
   assert.deepEqual([style.fontSize, style.outline, style.marginPercent], [72, 4, 2]);
@@ -74,27 +104,29 @@ test("style values stay within the host's accepted ranges", async () => {
 
 test("a slider burst is merged into one style write with the latest values", async () => {
   const { host, window, stop } = await open();
-  window.emit("change-delay", 200);
-  window.emit("change-delay", 650);
-  window.emit("change-size", 52);
+  window.emit("sync-step", 1);
+  window.emit("sync-step", 1);
+  window.emit("size-step", 1);
+  window.emit("position-step", 1);
   await host.settle();
-  assert.equal(window.props["delay-ms"], 650); // shown before the host confirms
+  assert.equal(window.props["sync-text"], "同步 +1"); // shown before the host confirms
+  assert.equal(window.props["size-text"], "字号 38");
   await host.settle(170);
   const styles = host.sent("subtitles.style");
   assert.equal(styles.length, 1);
-  assert.deepEqual(styles[0]!.style, { fontId: "sans", fontSize: 52, color: "white", outline: 2, marginPercent: 5, offsetMs: 650 });
-  assert.equal(window.props["status-text"], "字幕样式：applied。");
-  assert.equal(host.subtitles.presentation.effective?.style.offsetMs, 650);
+  assert.deepEqual(styles[0]!.style, { fontId: "sans", fontSize: 38, color: "white", outline: 2, marginPercent: 6, offsetMs: 1000 });
+  assert.equal(window.props["status-text"], "字幕样式已更新");
+  assert.equal(host.subtitles.presentation.effective?.style.offsetMs, 1000);
   await stop();
 });
 
 test("a style edit only applies to the selection it began on", async () => {
   const { host, window, stop } = await open();
-  window.emit("change-size", 60);
+  window.emit("size-step", 1);
   host.subtitles.selection.stamp.revision++; // another plugin changes the selection meanwhile
   await host.settle(170);
   assert.equal(host.subtitles.presentation.effective, null);
-  assert.equal(window.props["status-text"], "字幕轨已变化，请在当前轨道重新调整。");
+  assert.equal(window.props["status-text"], "字幕轨已变化，请重新调整。");
   await stop();
 });
 
@@ -104,7 +136,7 @@ test("file picker cancellation never begins an upload", async () => {
   window.emit("load-file");
   await host.settle();
   assert.equal(host.sent("subtitles.upload.begin").length, 0);
-  assert.match(String(window.props["status-text"]), /已取消选择/);
+  assert.match(String(window.props["status-text"]), /未选择字幕文件/);
   await stop();
 });
 
@@ -138,12 +170,12 @@ test("a track list from the old source cannot select the matching embedded id in
 
 test("source replacement and disposal cancel pending drag writes", async () => {
   const { host, window, stop } = await open();
-  window.emit("change-delay", 900);
+  window.emit("sync-step", 1);
   switchSource(host);
   await host.settle(140);
   assert.equal(host.sent("subtitles.style").length, 0);
   assert.match(String(window.props["status-text"]), /媒体已切换/);
-  window.emit("change-size", 40);
+  window.emit("size-step", -1);
   await host.settle();
   await stop();
   await pause(140);
@@ -172,14 +204,15 @@ test("real file bytes are uploaded; a lost commit reply is resolved by the SDK a
     assert.deepEqual(commits[0]!.expected, { generation: 1, revision: 1 });
     assert.equal(host.sent("subtitles.operation")[0]!.operationId, commits[0]!.operationId);
     assert.equal(host.sent("subtitles.upload.discard").length, 0);
-    assert.equal(window.props["status-text"], `SRT 已加载（${bytes.length} 字节），轨道：applied。`);
+    assert.equal(window.props["status-text"], "已载入字幕 actual.srt");
+    assert.equal(host.osd.at(-1), "已载入字幕 actual.srt", "the menu entry reports on screen");
     assert.equal(window.props["selected-track"], 2);
     assert.equal(window.props["can-remove"], true);
 
     window.emit("remove-selected");
     await host.settle();
     assert.equal(host.subtitles.tracks.length, 1);
-    assert.equal(window.props["status-text"], "外部字幕已移除。");
+    assert.equal(window.props["status-text"], "已移除外部字幕。");
     assert.equal(window.props["can-remove"], false);
   } finally {
     await stop();
@@ -194,11 +227,11 @@ test("non-SRT and invalid UTF-8 files are refused before any upload", async () =
     host.dialogAnswers.push(["/tmp/movie.ass"]);
     window.emit("load-file");
     await host.settle();
-    assert.equal(window.props["status-text"], "请选择 UTF-8 .srt 字幕文件。");
+    assert.equal(window.props["status-text"], "请选择 .srt 字幕文件。");
     host.dialogAnswers.push([bad.path]);
     window.emit("load-file");
     await host.settle();
-    assert.match(String(window.props["status-text"]), /encoded data was not valid/);
+    assert.equal(window.props["status-text"], "字幕文件不是 UTF-8 编码。");
     assert.equal(host.sent("subtitles.upload.begin").length, 0);
   } finally {
     await stop();
@@ -206,7 +239,7 @@ test("non-SRT and invalid UTF-8 files are refused before any upload", async () =
   }
 });
 
-test("a host refusal of the upload (e.g. over its 2 MiB limit) is shown as the host's message", async () => {
+test("a host refusal of the upload (e.g. over its 2 MiB limit) is shown as one Chinese sentence", async () => {
   const file = await srtFile(Buffer.alloc(2 * 1024 * 1024 + 1, 0x41));
   const { host, window, stop } = await open();
   host.handle("subtitles.upload.begin", (p) => {
@@ -218,7 +251,7 @@ test("a host refusal of the upload (e.g. over its 2 MiB limit) is shown as the h
     host.dialogAnswers.push([file.path]);
     window.emit("load-file");
     await host.settle();
-    assert.equal(window.props["status-text"], "invalid upload ID, byte count or chunk bounds");
+    assert.equal(window.props["status-text"], "播放器拒绝了该字幕（文件过大或内容无效）。");
     assert.equal(host.sent("subtitles.commit").length, 0);
   } finally {
     await stop();
@@ -226,21 +259,126 @@ test("a host refusal of the upload (e.g. over its 2 MiB limit) is shown as the h
   }
 });
 
-test("disable, refresh and reset style act on the current selection", async () => {
+test("settings, per-field defaults, reset style, hide and refresh act on the current selection", async () => {
   const { host, window, stop } = await open();
-  window.emit("change-color", 1);
+  const settings = await openSettings(host);
+  settings.emit("change-color", 1);
+  settings.emit("change-outline", 3.4);
   await host.settle(170);
   assert.equal(host.subtitles.presentation.effective?.style.color, "yellow");
-  window.emit("reset-style");
+  assert.equal(host.subtitles.presentation.effective?.style.outline, 3);
+  settings.emit("slider-released");
+  await host.settle();
+  assert.equal(settings.props["outline-size"], 3, "a released slider snaps to the applied value");
+  settings.emit("reset-field", "color");
+  await host.settle(170);
+  assert.equal(host.subtitles.presentation.effective?.style.color, "white");
+  assert.equal(host.subtitles.presentation.effective?.style.outline, 3);
+  settings.emit("reset-style");
   await host.settle();
   assert.equal(host.subtitles.presentation.effective, null);
-  assert.equal(window.props["status-text"], "本插件的样式与延迟已撤销。");
-  await host.command("disable").run();
+  assert.equal(settings.props["status-text"], "已恢复默认样式。");
+  await host.command("track-off").run();
+  await host.settle();
   assert.equal(host.subtitles.selection.target, null);
-  assert.equal(window.props["status-text"], "字幕已关闭。");
+  assert.equal(window.props["status-text"], "隐藏字幕");
   assert.equal(window.props["selected-track"], 0);
+  assert.equal(window.props["can-style"], false);
+  assert.equal(window.props["style-reason"], "请先选择字幕轨。");
   await host.command("refresh").run();
-  assert.equal(window.props["status-text"], "字幕状态已刷新。");
+  await host.settle();
+  assert.equal(window.props["status-text"], "字幕轨已刷新。");
+  await stop();
+});
+
+test("Alt+H hides and brings back the last shown track, with OSD and the check mark", async () => {
+  const host = sourceHost();
+  host.subtitles.tracks.push({ target: { kind: "embedded", id: 2 }, title: "中文", language: "zh", styleSupported: true, styleReason: null });
+  host.subtitles.selection.target = { kind: "embedded", id: 2 };
+  const { stop } = await startPlugin(activate, { directory, host });
+  assert.equal(host.command("show").state.checked, true);
+  assert.equal(host.command("track-2").state.checked, true);
+  await host.press("Alt+H");
+  await host.settle();
+  assert.equal(host.subtitles.selection.target, null);
+  assert.equal(host.command("show").state.checked, false);
+  assert.equal(host.command("track-off").state.checked, true);
+  assert.equal(host.osd.at(-1), "隐藏字幕");
+  await host.press("Alt+H");
+  await host.settle();
+  assert.deepEqual(host.subtitles.selection.target, { kind: "embedded", id: 2 }, "the last shown track, not the first");
+  assert.equal(host.command("show").state.checked, true);
+  assert.equal(host.osd.at(-1), "显示字幕");
+  await host.command("track-1").run();
+  await host.settle();
+  assert.deepEqual(host.subtitles.selection.target, embedded);
+  assert.equal(host.osd.at(-1), "字幕：English · en");
+  await stop();
+});
+
+test("the track menu follows the real track list: names, loads and source changes", async () => {
+  const bytes = Buffer.from("1\n00:00:00,000 --> 00:00:01,000\nHello\n");
+  const file = await srtFile(bytes);
+  const host = sourceHost();
+  host.subtitles.tracks.push({ target: { kind: "embedded", id: 2 }, title: "English", language: "en", styleSupported: true, styleReason: null });
+  const { stop } = await startPlugin(activate, { directory, host });
+  const titles = () =>
+    [...host.commands.values()].filter((c) => c.declaration.group === "subtitle-track").sort((a, b) => a.declaration.order - b.declaration.order).map((c) => c.declaration.path.at(-1));
+  try {
+    assert.deepEqual(titles(), ["不显示", "English · en", "English · en (2)"], "equal names stay distinct paths");
+    host.dialogAnswers.push([file.path]);
+    await host.command("load").run();
+    await host.settle();
+    assert.equal(titles().length, 4);
+    assert.equal(host.command("track-3").state.checked, true, "the loaded track is selected");
+    switchSource(host);
+    host.subtitles.tracks.length = 0;
+    host.subtitles.selection.target = null;
+    await host.command("refresh").run();
+    await host.settle();
+    assert.deepEqual(titles(), ["不显示"], "items of the old source are removed, not disabled");
+    assert.equal(host.command("track-off").state.checked, true);
+  } finally {
+    await stop();
+    await file.cleanup();
+  }
+});
+
+test("> < / shift the subtitle sync by half a second with OSD", async () => {
+  const host = sourceHost();
+  const { stop } = await startPlugin(activate, { directory, host });
+  await host.press(">");
+  assert.equal(host.osd.at(-1), "字幕同步: 超前 0.5 秒");
+  await host.press(">");
+  assert.equal(host.osd.at(-1), "字幕同步: 超前 1 秒");
+  await host.press("<");
+  await host.press("<");
+  await host.press("<");
+  assert.equal(host.osd.at(-1), "字幕同步: 滞后 0.5 秒");
+  await host.settle(170);
+  assert.equal(host.sent("subtitles.style").length, 1, "key repeats merge into one write");
+  assert.equal(host.subtitles.presentation.effective?.style.offsetMs, 500);
+  await host.press("/");
+  assert.equal(host.osd.at(-1), "字幕同步: 0 秒");
+  await host.settle(170);
+  assert.equal(host.subtitles.presentation.effective?.style.offsetMs, 0);
+  await stop();
+});
+
+test("sync on a track without style support explains why on screen and writes nothing", async () => {
+  const host = sourceHost();
+  host.subtitles.tracks[0]!.styleSupported = false;
+  host.subtitles.tracks[0]!.styleReason = "图形字幕不支持调整。";
+  const { stop } = await startPlugin(activate, { directory, host });
+  await host.press(">");
+  await host.settle(170);
+  assert.equal(host.osd.at(-1), "图形字幕不支持调整。");
+  assert.equal(host.sent("subtitles.style").length, 0);
+  host.subtitles.selection.target = null;
+  await host.command("refresh").run();
+  await host.settle();
+  await host.press("<");
+  assert.equal(host.osd.at(-1), "请先选择字幕轨。");
   await stop();
 });
 

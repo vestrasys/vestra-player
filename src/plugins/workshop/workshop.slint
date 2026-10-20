@@ -1,33 +1,88 @@
-import { Button, LineEdit, TextEdit, VerticalBox, HorizontalBox, ScrollView } from "std-widgets.slint";
+import { TextEdit } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button, ToolTipArea } from "@vestra/widgets.slint";
+
+component Label inherits Text {
+    color: Theme.text;
+    font-size: Theme.font-body;
+    vertical-alignment: center;
+}
+
 export component WorkshopWindow inherits Window {
- title: "插件工坊"; preferred-width: 820px; preferred-height: 640px; min-width: 640px; min-height: 460px;
- in-out property <string> requirement-text;
- in property <string> log-text;
- in property <string> status-text;
- in property <string> workspace-text;
- in property <bool> busy;
- in property <bool> can-trial;
- in property <bool> can-stop;
- in property <bool> can-recover;
- in property <bool> can-install;
- callback choose-workspace(); callback choose-requirement(); callback generate(); callback cancel-task();
- callback start-trial(); callback stop-trial(); callback recover-trial(); callback install-candidate(); callback rollback-version(); callback draft-changed(string);
- VerticalBox { padding: 16px; spacing: 10px;
-  Text { text: "插件工坊  ·  模型：本地确定性 mock；Pi工具与校验真实执行"; font-size: 18px; }
-  HorizontalBox { Button { text: "选择工作区…"; enabled: !root.busy; clicked => { root.choose-workspace(); } } Text { text: root.workspace-text; overflow: elide; } }
-  HorizontalBox { Text { text: "计数器需求JSON"; } Button { text: "选择需求JSON…"; clicked => { root.choose-requirement(); } } }
-  TextEdit { text <=> root.requirement-text; height: 90px; edited => { root.draft-changed(self.text); } }
-  Text { text: "1.0.0：step=1；1.1.0：step=3。生成不会自动安装。"; }
-  HorizontalBox { Button { text: "生成 / 重新诊断修复"; enabled: !root.busy; clicked => { root.generate(); } } Text { text: root.busy ? "任务运行中" : "等待操作"; } }
-  Text { text: "Pi工具动作 / 真实诊断 / 宿主校验与事务"; }
-  TextEdit { text: root.log-text; read-only: true; vertical-stretch: 1; }
-  HorizontalBox {
-   Button { text: "试载"; enabled: root.can-trial; clicked => { root.start-trial(); } }
-   Button { text: "查询试载"; enabled: root.can-recover; clicked => { root.recover-trial(); } }
-   Button { text: "停止试载"; enabled: root.can-stop; clicked => { root.stop-trial(); } }
-   Button { text: "安装此版本"; enabled: root.can-install; clicked => { root.install-candidate(); } }
-   Button { text: "回退上一版本"; enabled: !root.busy; clicked => { root.rollback-version(); } }
-  }
-  HorizontalBox { Text { text: root.status-text; wrap: word-wrap; horizontal-stretch: 1; } Button { text: "取消任务"; clicked => { root.cancel-task(); } } }
- }
+    title: "插件工坊";
+    preferred-width: 560px;
+    preferred-height: 440px;
+    min-width: 480px;
+    min-height: 360px;
+    background: Theme.bg-panel;
+    in-out property <string> requirement-text;
+    in property <string> log-text;
+    in property <string> status-text;
+    in property <string> workspace-text;
+    in property <bool> busy;
+    in property <bool> can-trial;
+    in property <bool> can-stop;
+    in property <bool> can-recover;
+    in property <bool> can-install;
+    callback choose-workspace();
+    callback choose-requirement();
+    callback generate();
+    callback cancel-task();
+    callback start-trial();
+    callback stop-trial();
+    callback recover-trial();
+    callback install-candidate();
+    callback rollback-version();
+    callback draft-changed(string);
+    VerticalLayout {
+        padding: Theme.dialog-padding;
+        spacing: 8px;
+        HorizontalLayout {
+            spacing: 6px;
+            Button { text: "选择工作区…"; enabled: !root.busy; clicked => { root.choose-workspace(); } }
+            ToolTipArea {
+                text: root.workspace-text;
+                Label { text: root.workspace-text; color: Theme.text-list; overflow: elide; }
+            }
+        }
+        HorizontalLayout {
+            spacing: 6px;
+            Label { text: "计数器需求 JSON"; horizontal-stretch: 1; }
+            Button { text: "选择需求文件…"; clicked => { root.choose-requirement(); } }
+        }
+        TextEdit {
+            height: 72px;
+            font-size: Theme.font-body;
+            text <=> root.requirement-text;
+            edited => { root.draft-changed(self.text); }
+        }
+        HorizontalLayout {
+            spacing: 6px;
+            Label {
+                text: "1.0.0：步长 1；1.1.0：步长 3。生成不会自动安装；模型为本地 mock，不联网。";
+                color: Theme.text-dim;
+                horizontal-stretch: 1;
+                overflow: elide;
+            }
+            Button { text: "生成"; enabled: !root.busy; clicked => { root.generate(); } }
+        }
+        Label { text: "工具动作与诊断"; height: Theme.label-height; }
+        TextEdit { font-size: Theme.font-body; text: root.log-text; read-only: true; vertical-stretch: 1; }
+        HorizontalLayout {
+            spacing: 6px;
+            Button { text: "试载"; enabled: root.can-trial; clicked => { root.start-trial(); } }
+            Button { text: "查询试载"; enabled: root.can-recover; clicked => { root.recover-trial(); } }
+            Button { text: "停止试载"; enabled: root.can-stop; clicked => { root.stop-trial(); } }
+            Button { text: "安装此版本"; enabled: root.can-install; clicked => { root.install-candidate(); } }
+            Button { text: "回退上一版本"; enabled: !root.busy; clicked => { root.rollback-version(); } }
+            Rectangle { horizontal-stretch: 1; }
+            Button { text: "取消任务"; clicked => { root.cancel-task(); } }
+        }
+        // One line; the full text is in the tooltip.
+        ToolTipArea {
+            height: Theme.label-height;
+            text: root.status-text;
+            Label { text: root.status-text; color: Theme.text-list; overflow: elide; }
+        }
+    }
 }

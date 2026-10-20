@@ -55,20 +55,19 @@ function hold(host: TestHost, then: (params: Record<string, unknown>) => unknown
   };
 }
 
-test("menu entries keep their paths, and editing commands wait for a selected track", async () => {
+test("menu under 声音 follows the allocation, and editing commands wait for a selected track", async () => {
   const { host, stop } = await startPlugin(activate, { directory });
   assert.deepEqual(
-    [...host.commands.values()].map((c) => c.declaration.path),
+    [...host.commands.values()].map(({ declaration: d }) => [d.path.join(" ▶ "), d.order, d.bindings.join(","), d.radio]),
     [
-      ["音频", "音频工作台…"],
-      ["音频", "复位音频处理"],
-      ...presets.map((p) => ["音频", "均衡器预设", p.label]),
+      ["声音 ▶ 音频工作台…", 510, "", false],
+      ["声音 ▶ 均衡器", 511, "Shift+E", false],
+      ...presets.map((p, i) => [`声音 ▶ 预设 ▶ ${p.label}`, 512 + i, "", true]),
+      ["声音 ▶ 复位", 516, "", false],
     ],
   );
-  assert.deepEqual(
-    [...host.commands.values()].map(({ declaration: d }) => ("order" in d ? d.order : null)),
-    [388, 385, 382, 381, 384, 383],
-  );
+  assert.ok([...host.commands.values()].every(({ declaration: d }) => d.group === "audio"));
+  assert.deepEqual(host.conflicts, []);
   assert.deepEqual(host.command("audio.workbench").state, { enabled: true, checked: null, busy: false, reason: null });
   assert.deepEqual(host.command("audio.reset").state, {
     enabled: false,
@@ -76,6 +75,8 @@ test("menu entries keep their paths, and editing commands wait for a selected tr
     busy: false,
     reason: "没有选中的音轨",
   });
+  assert.equal(host.command("audio.equalizer").state.enabled, false);
+  await assert.rejects(host.press("Shift+E"));
   assert.equal(host.command("audio.preset.0").state.checked, true);
   await host.command("audio.workbench").run();
   const window = host.window("audio-workbench");
@@ -236,15 +237,17 @@ test("a host validation refusal is shown, never sticks, and retry or the next ed
   window.emit("delay-changed", 105);
   await host.settle();
   assert.equal(window.props["has-error"], true);
-  assert.equal(window.props["status-text"], "offset out of range");
+  assert.equal(window.props["status-text"], "音频处理失败");
+  assert.equal(window.props["error-detail"], "offset out of range");
   assert.equal(host.command("audio.reset").state.busy, false);
   host.setSource({ position: 3 }); // ordinary source updates keep the error, nothing "pending"
   await host.settle();
-  assert.equal(window.props["status-text"], "offset out of range");
+  assert.equal(window.props["status-text"], "音频处理失败");
   host.reset("processing.replace");
   window.emit("retry-requested");
   await host.settle();
   assert.equal(window.props["has-error"], false);
+  assert.equal(window.props["error-detail"], "");
   assert.equal(own(host)?.offsetMs, 110);
   host.handle("processing.replace", () => {
     throw new HostError("invalid", "refused again");
@@ -301,5 +304,58 @@ test("an out-of-order older source event cannot restore an older source", async 
   await host.settle();
   assert.equal(latest(host).expectedGeneration, 2);
   assert.equal(own(host)?.offsetMs, 100);
+  await stop();
+});
+
+test("Shift+E bypasses the bands but keeps their gains; presets and band edits turn it back on", async () => {
+  const { host, window, stop } = await open();
+  window.emit("gain-changed", 0, 3);
+  window.emit("clarity-changed", 2);
+  await host.settle();
+  assert.equal(window.props["preset-index"], -1);
+  await host.press("Shift+E");
+  await host.settle();
+  assert.equal(host.osd.at(-1), "均衡器: 关");
+  assert.equal(host.command("audio.equalizer").state.checked, false);
+  assert.equal(window.props["equalizer-enabled"], false);
+  assert.deepEqual(window.props["gain-values"], [3, 0, 0, 0, 0, 0]);
+  assert.deepEqual(own(host)?.nodes, [{ kind: "treble", frequency: 3000, slope: 0.5, gainDb: 2 }]);
+  await host.press("Shift+E");
+  await host.settle();
+  assert.equal(host.osd.at(-1), "均衡器: 开");
+  assert.equal((own(host)?.nodes as { kind: string }[]).length, 2);
+  window.emit("equalizer-changed", false);
+  await host.settle();
+  assert.equal(host.command("audio.equalizer").state.checked, false);
+  window.emit("gain-changed", 1, -2);
+  await host.settle();
+  assert.equal(window.props["equalizer-enabled"], true);
+  window.emit("equalizer-changed", false);
+  await host.command("audio.preset.1").run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "均衡器预设: 人声");
+  assert.equal(window.props["equalizer-enabled"], true);
+  assert.equal(window.props["preset-index"], 1);
+  assert.equal(host.command("audio.preset.1").state.checked, true);
+  await host.command("audio.reset").run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "音频处理已复位");
+  assert.deepEqual(own(host)?.nodes, []);
+  assert.equal(window.props["preset-index"], 0);
+  assert.equal(host.osd.length, 4, "window edits give no on-screen text");
+  await stop();
+});
+
+test("headless: a missing on-screen display does not break the menu commands", async () => {
+  const host = new TestHost();
+  host.handle("osd.show", () => {
+    throw new HostError("unavailable", "headless");
+  });
+  const { window, stop } = await open(host);
+  await host.press("Shift+E");
+  await host.command("audio.preset.2").run();
+  await host.settle();
+  assert.deepEqual(window.props["gain-values"], [...presets[2].gains]);
+  assert.equal(window.props["has-error"], false);
   await stop();
 });

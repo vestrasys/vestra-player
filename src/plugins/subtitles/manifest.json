@@ -9,6 +9,7 @@
     "commands",
     "events",
     "ui.window",
-    "ui.dialog"
+    "ui.dialog",
+    "ui.osd"
   ]
 }
