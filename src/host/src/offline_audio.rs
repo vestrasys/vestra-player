@@ -22,8 +22,8 @@ pub fn audio(
     end: f64,
 ) -> Result<String> {
     ensure!(
-        (-2000..=2000).contains(&offset_ms),
-        "audio offset must be within -2000..=2000 milliseconds"
+        (-10_000..=10_000).contains(&offset_ms),
+        "audio offset must be within -10000..=10000 milliseconds"
     );
     ensure!(
         start.is_finite() && end.is_finite() && 0.0 <= start && start < end && end <= 86400.0,
@@ -96,8 +96,9 @@ mod tests {
         ] {
             assert!(audio(&[], 0, start, end).is_err());
         }
-        assert!(audio(&[], -2001, 0.0, 1.0).is_err());
-        assert!(audio(&[], 2001, 0.0, 1.0).is_err());
+        assert!(audio(&[], -10_010, 0.0, 1.0).is_err());
+        assert!(audio(&[], 10_001, 0.0, 1.0).is_err());
+        assert!(audio(&[], -10_000, 0.0, 1.0).is_ok());
         assert!(audio(&[], 0, 0.0, 86400.0).is_ok());
         for gain_db in [f64::NAN, 1.0, -60.1] {
             assert!(audio(&[resource("a", AudioNode::Volume { gain_db })], 0, 0.0, 1.0).is_err());

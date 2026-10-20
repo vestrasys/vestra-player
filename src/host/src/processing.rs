@@ -288,10 +288,10 @@ impl Processing {
             ),
         };
         if let Change::Audio { offset_ms, .. } = &change
-            && (!(-2000..=2000).contains(offset_ms) || offset_ms % 10 != 0)
+            && (!(-10_000..=10_000).contains(offset_ms) || offset_ms % 10 != 0)
         {
             return Err(RpcError::invalid(
-                "audio offsetMs must be -2000..2000 in 10ms increments",
+                "audio offsetMs must be -10000..10000 in 10ms increments",
             ));
         }
         // Bound typed data BEFORE retaining it. Unknown fields and arbitrary JSON
@@ -581,9 +581,9 @@ fn combined_offset(offsets: &BTreeMap<(u64, String), i32>) -> Result<i32, RpcErr
         .filter(|v| **v < 0)
         .map(|v| -i64::from(*v))
         .sum();
-    if positive > 2000 || negative > 2000 {
+    if positive > 10_000 || negative > 10_000 {
         return Err(RpcError::invalid(
-            "positive and negative audio offset contribution budgets must each be <=2000ms so owner removal remains representable",
+            "positive and negative audio offset contribution budgets must each be <=10000ms so owner removal remains representable",
         ));
     }
     Ok((positive - negative) as i32)
@@ -713,13 +713,13 @@ mod offset_tests {
     #[test]
     fn any_owner_subset_remains_representable() {
         let mut offsets = BTreeMap::new();
-        offsets.insert((1, "a".into()), 2000);
-        offsets.insert((2, "b".into()), -2000);
+        offsets.insert((1, "a".into()), 10_000);
+        offsets.insert((2, "b".into()), -10_000);
         assert_eq!(combined_offset(&offsets).unwrap(), 0);
-        offsets.insert((3, "c".into()), 2000);
+        offsets.insert((3, "c".into()), 10);
         assert!(combined_offset(&offsets).is_err());
         offsets.remove(&(3, "c".into()));
         offsets.remove(&(2, "b".into()));
-        assert_eq!(combined_offset(&offsets).unwrap(), 2000);
+        assert_eq!(combined_offset(&offsets).unwrap(), 10_000);
     }
 }

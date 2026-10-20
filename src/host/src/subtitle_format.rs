@@ -77,6 +77,53 @@ pub fn validate(source: Arc<[u8]>) -> Result<Validated> {
     })
 }
 
+/// A bounded ASS/SSA script, kept byte for byte (libass renders it).
+pub struct ValidatedAss {
+    pub source: Arc<[u8]>,
+    pub digest: String,
+    pub dialogues: u32,
+}
+
+/// UTF-8, at most 2 MiB, `[Script Info]` and `[Events]` sections, and
+/// 1..=20000 `Dialogue:` lines. SSA scripts pass the same check.
+pub fn validate_ass(source: Arc<[u8]>) -> Result<ValidatedAss> {
+    if source.is_empty() || source.len() > 2 * 1024 * 1024 {
+        bail!("ASS must contain 1..2097152 bytes");
+    }
+    let text = std::str::from_utf8(&source)?;
+    if text.contains('\0') {
+        bail!("ASS must not contain NUL bytes");
+    }
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let (mut info, mut events, mut dialogues) = (false, false, 0_u32);
+    for line in text.lines() {
+        let line = line.trim();
+        if line.eq_ignore_ascii_case("[Script Info]") {
+            info = true;
+        } else if line.eq_ignore_ascii_case("[Events]") {
+            events = true;
+        } else if events
+            && line
+                .get(..9)
+                .is_some_and(|head| head.eq_ignore_ascii_case("Dialogue:"))
+        {
+            dialogues += 1;
+        }
+    }
+    if !info || !events {
+        bail!("ASS requires [Script Info] and [Events] sections");
+    }
+    if !(1..=20_000).contains(&dialogues) {
+        bail!("ASS must contain 1..20000 Dialogue lines");
+    }
+    let digest = format!("{:x}", Sha256::digest(&source));
+    Ok(ValidatedAss {
+        source,
+        digest,
+        dialogues,
+    })
+}
+
 /// Standard WebVTT adapter. FFmpeg's mature WebVTT decoder protects ASS braces
 /// and backslashes; only WebVTT's three text entities are encoded here.
 impl Validated {
@@ -125,6 +172,31 @@ mod tests {
         assert_eq!(result.document.subtitles[0].text[0], "<b>B</b> {\\b1}X \\N");
         assert_eq!(result.digest.len(), 64);
     }
+    #[test]
+    fn ass_scripts_are_bounded_by_sections_and_dialogue_count() {
+        let script = "\u{feff}[Script Info]\r\nScriptType: v4.00+\r\n\r\n[V4+ Styles]\r\nFormat: Name\r\n\r\n[Events]\r\nFormat: Layer, Start, End, Style, Text\r\nDialogue: 0,0:00:00.00,0:00:01.00,Default,{\\pos(10,10)}Hi\r\ndialogue: 0,0:00:01.00,0:00:02.00,Default,Two\r\n";
+        let checked = validate_ass(Arc::from(script.as_bytes())).unwrap();
+        assert_eq!(checked.dialogues, 2);
+        assert_eq!(&*checked.source, script.as_bytes());
+        assert_eq!(checked.digest.len(), 64);
+        let ssa = "[Script Info]\nScriptType: v4.00\n[Events]\nDialogue: Marked=0,0:00:00.00,0:00:01.00,Default,,0,0,0,,X\n";
+        assert!(validate_ass(Arc::from(ssa.as_bytes())).is_ok());
+        for bad in [
+            "[Events]\nDialogue: 0,0:00:00.00,0:00:01.00,Default,X\n",
+            "[Script Info]\nDialogue: 0,0:00:00.00,0:00:01.00,Default,X\n",
+            "[Script Info]\n[Events]\nFormat: Text\n",
+            "1\n00:00:00,000 --> 00:00:01,000\nX\n",
+        ] {
+            assert!(validate_ass(Arc::from(bad.as_bytes())).is_err(), "{bad:?}");
+        }
+        assert!(validate_ass(Arc::from(&b"[Script Info]\n[Events]\n\xff"[..])).is_err());
+        let many = format!(
+            "[Script Info]\n[Events]\n{}",
+            "Dialogue: 0,0:00:00.00,0:00:01.00,Default,X\n".repeat(20_001)
+        );
+        assert!(validate_ass(Arc::from(many.as_bytes())).is_err());
+    }
+
     #[test]
     fn invalid_ranges_order_and_encoding_are_rejected() {
         for bad in [
