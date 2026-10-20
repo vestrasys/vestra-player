@@ -1,0 +1,7602 @@
+{
+"CMD_VIEWER_CHAT_CONTENT": [
+[
+28504,
+"0x1804f9295"
+]
+],
+"CMD_BROAD_CHAT_CONTENT": [
+[
+28505,
+"0x1804f92ae"
+]
+],
+"CMD_REPLY_CONTENT": [
+[
+28506,
+"0x1804f92c7"
+]
+],
+"CMD_PLAY_LIST": [
+[
+28508,
+"0x1804f92e0"
+]
+],
+"CMD_PLAY_LIST_ALBUM_TAB": [
+[
+28509,
+"0x1804f92f9"
+]
+],
+"CMD_PLAY_LIST_ALBUM_COMBO": [
+[
+28510,
+"0x1804f9312"
+]
+],
+"CMD_PLAY_LIST_SEARCH": [
+[
+28511,
+"0x1804f932b"
+]
+],
+"CMD_BROADCAST_LIST": [
+[
+28512,
+"0x1804f9344"
+]
+],
+"CMD_BROADCAST_TOOL": [
+[
+28513,
+"0x1804f935d"
+]
+],
+"CMD_CHAT_TOGGLE": [
+[
+28514,
+"0x1804f9376"
+]
+],
+"CMD_PLAYLIST_TOGGLE": [
+[
+28515,
+"0x1804f938f"
+]
+],
+"CMD_BROADCAST_TOGGLE": [
+[
+28516,
+"0x1804f93a8"
+]
+],
+"CMD_CHAT_BROADCAST_TOGGLE": [
+[
+28517,
+"0x1804f93c1"
+]
+],
+"CMD_CHAT_PLAYLIST_TOGGLE": [
+[
+28518,
+"0x1804f93da"
+]
+],
+"CMD_PLAYLIST_BROADCAST_TOGGLE": [
+[
+28519,
+"0x1804f93f3"
+]
+],
+"CMD_CHAT_PLAYLIST_BROADCAST_TOGGLE": [
+[
+28520,
+"0x1804f940c"
+]
+],
+"CMD_CHAT_HOLDER": [
+[
+28521,
+"0x1804f9425"
+]
+],
+"CMD_PLAYLIST_HOLDER": [
+[
+28522,
+"0x1804f943e"
+]
+],
+"CMD_BROADCAST_HOLDER": [
+[
+28523,
+"0x1804f9457"
+]
+],
+"CMD_POPUP_WINDOW": [
+[
+28524,
+"0x1804f9470"
+]
+],
+"CMD_WEB_CONTROL": [
+[
+28526,
+"0x1804f9489"
+]
+],
+"CMD_COVER_IMAGE": [
+[
+131072,
+"0x1804f94a2"
+]
+],
+"CMD_MEDIA_PAUSE": [
+[
+20000,
+"0x1804f94bb"
+]
+],
+"CMD_MEDIA_PLAY": [
+[
+20001,
+"0x1804f94d4"
+]
+],
+"CMD_MEDIA_CLOSE": [
+[
+20002,
+"0x1804f94ed"
+]
+],
+"CMD_FULL_WINDOW": [
+[
+20003,
+"0x1804f9506"
+]
+],
+"CMD_MAX_WINDOW": [
+[
+20005,
+"0x1804f951f"
+]
+],
+"CMD_RESTORE_WINDOW": [
+[
+20006,
+"0x1804f9538"
+]
+],
+"CMD_MIN_WINDOW": [
+[
+20004,
+"0x1804f9551"
+]
+],
+"CMD_SERVER_CHAT_MODE": [
+[
+20007,
+"0x1804f956a"
+]
+],
+"CMD_CLIENT_CHAT_MODE": [
+[
+20008,
+"0x1804f9583"
+]
+],
+"CMD_SPEED_RESET": [
+[
+20010,
+"0x1804f959c"
+]
+],
+"CMD_MAIN_MENU": [
+[
+20011,
+"0x1804f95b5"
+]
+],
+"CMD_GOOD_BROADCAST": [
+[
+20012,
+"0x1804f95ce"
+]
+],
+"CMD_BAD_BROADCAST": [
+[
+20013,
+"0x1804f95e7"
+]
+],
+"CMD_PLUS_FRIEND": [
+[
+20014,
+"0x1804f9600"
+]
+],
+"CMD_BOOKMARK_BROADCAST": [
+[
+20015,
+"0x1804f9619"
+]
+],
+"CMD_COPY_BROADCAST": [
+[
+20016,
+"0x1804f9632"
+]
+],
+"CMD_ATTACH_CHAT": [
+[
+20017,
+"0x1804f964b"
+]
+],
+"CMD_ATTACH_PLAYLIST": [
+[
+20018,
+"0x1804f9664"
+]
+],
+"CMD_ATTACH_BROADCAST": [
+[
+20019,
+"0x1804f967d"
+]
+],
+"CMD_ATTACH_MODE_ALL": [
+[
+20020,
+"0x1804f9696"
+]
+],
+"CMD_ATTACH_MODE_PLAYER": [
+[
+20021,
+"0x1804f96af"
+]
+],
+"CMD_ATTACH_MODE_CHAT": [
+[
+20022,
+"0x1804f96c8"
+]
+],
+"CMD_ATTACH_MODE_LIST": [
+[
+20023,
+"0x1804f96e1"
+]
+],
+"CMD_ATTACH_MODE_NONE": [
+[
+20024,
+"0x1804f96fa"
+]
+],
+"CMD_CHAT_WINDOW_OPEN": [
+[
+20025,
+"0x1804f9713"
+]
+],
+"CMD_CHAT_WINDOW_CLOSE": [
+[
+20026,
+"0x1804f972c"
+]
+],
+"CMD_BROADCAST_LIST_WINDOW_OPEN": [
+[
+20027,
+"0x1804f9745"
+]
+],
+"CMD_BROADCAST_LIST_WINDOW_CLOSE": [
+[
+20028,
+"0x1804f975e"
+]
+],
+"CMD_PLAYLIST_WINDOW_OPEN": [
+[
+20029,
+"0x1804f9777"
+]
+],
+"CMD_PLAYLIST_WINDOW_CLOSE": [
+[
+20030,
+"0x1804f9790"
+]
+],
+"CMD_KIDS_FULL_SCREEN": [
+[
+20031,
+"0x1804f97a9"
+]
+],
+"CMD_SELECT_PAGE": [
+[
+20034,
+"0x1804f97c2"
+]
+],
+"CMD_WDM_NUM_0": [
+[
+20035,
+"0x1804f97db"
+]
+],
+"CMD_WDM_NUM_1": [
+[
+20036,
+"0x1804f97f4"
+]
+],
+"CMD_WDM_NUM_2": [
+[
+20037,
+"0x1804f980d"
+]
+],
+"CMD_WDM_NUM_3": [
+[
+20038,
+"0x1804f9826"
+]
+],
+"CMD_WDM_NUM_4": [
+[
+20039,
+"0x1804f983f"
+]
+],
+"CMD_WDM_NUM_5": [
+[
+20040,
+"0x1804f9858"
+]
+],
+"CMD_WDM_NUM_6": [
+[
+20041,
+"0x1804f9871"
+]
+],
+"CMD_WDM_NUM_7": [
+[
+20042,
+"0x1804f988a"
+]
+],
+"CMD_WDM_NUM_8": [
+[
+20043,
+"0x1804f98a3"
+]
+],
+"CMD_WDM_NUM_9": [
+[
+20044,
+"0x1804f98bc"
+]
+],
+"CMD_WDM_NUM_ENTER": [
+[
+20045,
+"0x1804f98d5"
+]
+],
+"CMD_POPUP_USER_MENU": [
+[
+20046,
+"0x1804f98ee"
+]
+],
+"CMD_ATTACH_WINDOW_OPEN": [
+[
+20048,
+"0x1804f9907"
+]
+],
+"CMD_ATTACH_WINDOW_CLOSE": [
+[
+20049,
+"0x1804f9920"
+]
+],
+"CMD_BROADCAST_LIST_TAB_SELECT": [
+[
+20050,
+"0x1804f9939"
+]
+],
+"CMD_CHAT_TAB_SELECT": [
+[
+20051,
+"0x1804f9952"
+]
+],
+"CMD_PLAYLIST_TAB_SELECT": [
+[
+20052,
+"0x1804f996b"
+]
+],
+"CMD_COLOR_OFFSET_DEFAULT": [
+[
+20053,
+"0x1804f9984"
+]
+],
+"CMD_COLOR_GAIN_DEFAULT": [
+[
+20054,
+"0x1804f999d"
+]
+],
+"CMD_COLOR_HUE_DEFAULT": [
+[
+20055,
+"0x1804f99b6"
+]
+],
+"CMD_COLOR_SAT_DEFAULT": [
+[
+20056,
+"0x1804f99cf"
+]
+],
+"CMD_LOAD_SKIN_XML": [
+[
+20057,
+"0x1804f99e8"
+]
+],
+"CMD_SET_SKIN_STYLE": [
+[
+20058,
+"0x1804f9a01"
+]
+],
+"CMD_RESET_SKIN_STYLE": [
+[
+20059,
+"0x1804f9a1a"
+]
+],
+"CMD_EXPLORER_URL": [
+[
+20060,
+"0x1804f9a33"
+]
+],
+"CMD_PROC_PRE_SHADER": [
+[
+20061,
+"0x1804f9a4c"
+]
+],
+"CMD_PROC_POST_SHADER": [
+[
+20062,
+"0x1804f9a65"
+]
+],
+"CMD_TOUCH_LOCK": [
+[
+20065,
+"0x1804f9a7e"
+]
+],
+"CMD_TOPMOST_WINDOW": [
+[
+20066,
+"0x1804f9a97"
+]
+],
+"CMD_USE_EXPLORER": [
+[
+20069,
+"0x1804f9ab0"
+]
+],
+"CMD_RUN_HOT_KEY": [
+[
+20070,
+"0x1804f9ac9"
+]
+],
+"CMD_CAPTURE1ST_SELECT_ON": [
+[
+23000,
+"0x1804f9ae2"
+]
+],
+"CMD_CAPTURE2ND_SELECT_ON": [
+[
+23001,
+"0x1804f9afb"
+]
+],
+"CMD_CAPTURE1ST_SELECT_OFF": [
+[
+23002,
+"0x1804f9b14"
+]
+],
+"CMD_CAPTURE2ND_SELECT_OFF": [
+[
+23003,
+"0x1804f9b2d"
+]
+],
+"CMD_CAPTURE1ST_FINDWND": [
+[
+23012,
+"0x1804f9b46"
+]
+],
+"CMD_CAPTURE2ND_FINDWND": [
+[
+23013,
+"0x1804f9b5f"
+]
+],
+"CMD_CAPTURE1ST_FULLSCREEN": [
+[
+23014,
+"0x1804f9b78"
+]
+],
+"CMD_CAPTURE2ND_FULLSCREEN": [
+[
+23015,
+"0x1804f9b91"
+]
+],
+"CMD_CAPTURE1ST_NORMALSCREEN": [
+[
+23016,
+"0x1804f9baa"
+]
+],
+"CMD_CAPTURE2ND_NORMALSCREEN": [
+[
+23017,
+"0x1804f9bc3"
+]
+],
+"CMD_CAPTURE1ST_PRIMARY_ON": [
+[
+23008,
+"0x1804f9bdc"
+]
+],
+"CMD_CAPTURE1ST_PRIMARY_OFF": [
+[
+23009,
+"0x1804f9bf5"
+]
+],
+"CMD_CAPTURE2ND_PRIMARY_ON": [
+[
+23010,
+"0x1804f9c0e"
+]
+],
+"CMD_CAPTURE2ND_PRIMARY_OFF": [
+[
+23011,
+"0x1804f9c27"
+]
+],
+"CMD_CAPTURE1ST_SHOW": [
+[
+23004,
+"0x1804f9c40"
+]
+],
+"CMD_CAPTURE2ND_SHOW": [
+[
+23005,
+"0x1804f9c59"
+]
+],
+"CMD_CAPTURE1ST_HIDE": [
+[
+23006,
+"0x1804f9c72"
+]
+],
+"CMD_CAPTURE2ND_HIDE": [
+[
+23007,
+"0x1804f9c8b"
+]
+],
+"CMD_CAPTURE1ST_OPTIMIZE_SIZE": [
+[
+23018,
+"0x1804f9ca4"
+]
+],
+"CMD_CAPTURE2ND_OPTIMIZE_SIZE": [
+[
+23019,
+"0x1804f9cbd"
+]
+],
+"CMD_CAPTURE_PIP_SETTING": [
+[
+23020,
+"0x1804f9cd6"
+]
+],
+"CMD_CAST_SEND_CASH": [
+[
+23021,
+"0x1804f9cef"
+]
+],
+"CMD_CAST_VIEW_CASH": [
+[
+23022,
+"0x1804f9d08"
+]
+],
+"CMD_CAPTURE1ST_TOP_MOST": [
+[
+23026,
+"0x1804f9d21"
+]
+],
+"CMD_CAPTURE2ND_TOP_MOST": [
+[
+23027,
+"0x1804f9d3a"
+]
+],
+"CMD_CLIP_LIKE": [
+[
+23028,
+"0x1804f9d53"
+]
+],
+"CMD_CLIP_REPORT": [
+[
+23029,
+"0x1804f9d6c"
+]
+],
+"CMD_PLAYLIST_MENU_ALBUM": [
+[
+27013,
+"0x1804f9d85"
+]
+],
+"CMD_PLAYLIST_MENU_ADD": [
+[
+27014,
+"0x1804f9d9e"
+]
+],
+"CMD_PLAYLIST_ADD": [
+[
+27014,
+"0x1804f9db7"
+]
+],
+"CMD_PLAYLIST_MENU_DEL": [
+[
+27015,
+"0x1804f9dd0"
+]
+],
+"CMD_PLAYLIST_DEL": [
+[
+27015,
+"0x1804f9de9"
+]
+],
+"CMD_PLAYLIST_MENU_SORT": [
+[
+27016,
+"0x1804f9e02"
+]
+],
+"CMD_PLAYLIST_MENU_SEL": [
+[
+27017,
+"0x1804f9e1b"
+]
+],
+"CMD_PLAYLIST_MENU_PL": [
+[
+27018,
+"0x1804f9e34"
+]
+],
+"CMD_PLAYLIST_MENU_QUEUE": [
+[
+27019,
+"0x1804f9e4d"
+]
+],
+"CMD_PLAYLIST_UP": [
+[
+27020,
+"0x1804f9e66"
+]
+],
+"CMD_PLAYLIST_DOWN": [
+[
+27021,
+"0x1804f9e7f"
+]
+],
+"CMD_PLAYLIST_TOP": [
+[
+27022,
+"0x1804f9e98"
+]
+],
+"CMD_PLAYLIST_BOTTOM": [
+[
+27023,
+"0x1804f9eb1"
+]
+],
+"CMD_PLAYLIST_CURRENT": [
+[
+27025,
+"0x1804f9eca"
+]
+],
+"CMD_PLAYLIST_PLAY": [
+[
+27024,
+"0x1804f9ee3"
+]
+],
+"CMD_PLAYLIST_PGUP": [
+[
+27026,
+"0x1804f9efc"
+]
+],
+"CMD_PLAYLIST_PGDN": [
+[
+27027,
+"0x1804f9f15"
+]
+],
+"CMD_BROADCAST_GUIDE": [
+[
+28000,
+"0x1804f9f2e"
+]
+],
+"CMD_BROADCAST_DEVICE": [
+[
+28001,
+"0x1804f9f47"
+]
+],
+"CMD_BROADCAST_INFO": [
+[
+28002,
+"0x1804f9f60"
+]
+],
+"CMD_BROADCAST_EFFECT": [
+[
+28003,
+"0x1804f9f79"
+]
+],
+"CMD_BROADCAST_SAVE": [
+[
+28004,
+"0x1804f9f92"
+]
+],
+"CMD_BROADCAST_UPDATE": [
+[
+28005,
+"0x1804f9fab"
+]
+],
+"CMD_BROADCAST_START": [
+[
+28006,
+"0x1804f9fc4"
+]
+],
+"CMD_BROADCAST_STOP": [
+[
+28007,
+"0x1804f9fdd"
+]
+],
+"CMD_BROADCAST_PREVIEW": [
+[
+28008,
+"0x1804f9ff6"
+]
+],
+"CMD_BROADCAST_ADV": [
+[
+28009,
+"0x1804fa00f"
+]
+],
+"CMD_CAST_ADULT": [
+[
+28010,
+"0x1804fa028"
+]
+],
+"CMD_CAST_TOUGH": [
+[
+28011,
+"0x1804fa041"
+]
+],
+"CMD_CAST_PD_TYPE": [
+[
+28012,
+"0x1804fa05a"
+]
+],
+"CMD_POPUP_WINDOW_ON": [
+[
+28013,
+"0x1804fa073"
+]
+],
+"CMD_POPUP_WINDOW_OFF": [
+[
+28014,
+"0x1804fa08c"
+]
+],
+"CMD_POPUP_MENU_ON": [
+[
+28015,
+"0x1804fa0a5"
+]
+],
+"CMD_POPUP_MENU_OFF": [
+[
+28016,
+"0x1804fa0be"
+]
+],
+"CMD_ANIMATION": [
+[
+28019,
+"0x1804fa0d7"
+]
+],
+"CMD_CLIP_PD_TYPE": [
+[
+28020,
+"0x1804fa0f0"
+]
+],
+"CMD_VOLUME_CTRL": [
+[
+24000,
+"0x1804fa109"
+]
+],
+"CMD_SPEED_CTRL": [
+[
+24002,
+"0x1804fa122"
+]
+],
+"CMD_TIMEBAR_CTRL": [
+[
+24001,
+"0x1804fa13b"
+]
+],
+"CMD_TRANS_MAIN": [
+[
+24004,
+"0x1804fa154"
+]
+],
+"CMD_TRANS_PL": [
+[
+24005,
+"0x1804fa16d"
+]
+],
+"CMD_TRANS_CB": [
+[
+24006,
+"0x1804fa186"
+]
+],
+"CMD_TRANS_BR": [
+[
+24007,
+"0x1804fa19f"
+]
+],
+"CMD_TRANS_BT": [
+[
+24008,
+"0x1804fa1b8"
+]
+],
+"CMD_TRANS_CH": [
+[
+24009,
+"0x1804fa1d1"
+]
+],
+"CMD_COLOR_OFFSET": [
+[
+24010,
+"0x1804fa1ea"
+]
+],
+"CMD_COLOR_GAIN": [
+[
+24011,
+"0x1804fa203"
+]
+],
+"CMD_COLOR_HUE": [
+[
+24012,
+"0x1804fa21c"
+]
+],
+"CMD_COLOR_SAT": [
+[
+24013,
+"0x1804fa235"
+]
+],
+"CMD_EQULIZER_0": [
+[
+24014,
+"0x1804fa24e"
+]
+],
+"CMD_EQULIZER_1": [
+[
+24015,
+"0x1804fa267"
+]
+],
+"CMD_EQULIZER_2": [
+[
+24016,
+"0x1804fa280"
+]
+],
+"CMD_EQULIZER_3": [
+[
+24017,
+"0x1804fa299"
+]
+],
+"CMD_EQULIZER_4": [
+[
+24018,
+"0x1804fa2b2"
+]
+],
+"CMD_EQULIZER_5": [
+[
+24019,
+"0x1804fa2cb"
+]
+],
+"CMD_EQULIZER_6": [
+[
+24020,
+"0x1804fa2e4"
+]
+],
+"CMD_EQULIZER_7": [
+[
+24021,
+"0x1804fa2fd"
+]
+],
+"CMD_EQULIZER_8": [
+[
+24022,
+"0x1804fa316"
+]
+],
+"CMD_EQULIZER_9": [
+[
+24023,
+"0x1804fa32f"
+]
+],
+"CMD_MASTER_VOLUME": [
+[
+24024,
+"0x1804fa348"
+]
+],
+"CMD_WAVE_VOLUME": [
+[
+24025,
+"0x1804fa361"
+]
+],
+"CMD_TITLE_MESSAGE": [
+[
+25000,
+"0x1804fa37a"
+]
+],
+"CMD_STATUS_MESSAGE": [
+[
+25001,
+"0x1804fa393"
+]
+],
+"CMD_TITLE_WITH_MESSAGE": [
+[
+25002,
+"0x1804fa3ac"
+]
+],
+"CMD_CAPTION_MESSAGE": [
+[
+25003,
+"0x1804fa3c5"
+]
+],
+"CMD_CAPTION_WITH_MESSAGE": [
+[
+25004,
+"0x1804fa3de"
+]
+],
+"CMD_EQ_PRESET_MESSAGE": [
+[
+25005,
+"0x1804fa3f7"
+]
+],
+"CMD_REPEAT_START_MESSAGE": [
+[
+25006,
+"0x1804fa410"
+]
+],
+"CMD_REPEAT_END_MESSAGE": [
+[
+25007,
+"0x1804fa429"
+]
+],
+"CMD_MEDIATIME_MESSAGE": [
+[
+25008,
+"0x1804fa442"
+]
+],
+"CMD_CURRENTTIME_MESSAGE": [
+[
+25009,
+"0x1804fa45b"
+]
+],
+"CMD_TOTALTIME_MESSAGE": [
+[
+25010,
+"0x1804fa474"
+]
+],
+"CMD_LEFTTIME_MESSAGE": [
+[
+25011,
+"0x1804fa48d"
+]
+],
+"CMD_REPEAT_START_MIN_MESSAGE": [
+[
+25012,
+"0x1804fa4a6"
+]
+],
+"CMD_REPEAT_END_MIN_MESSAGE": [
+[
+25013,
+"0x1804fa4bf"
+]
+],
+"CMD_MEDIATIME_MIN_MESSAGE": [
+[
+25014,
+"0x1804fa4d8"
+]
+],
+"CMD_CURRENTTIME_MIN_MESSAGE": [
+[
+25015,
+"0x1804fa4f1"
+]
+],
+"CMD_TOTALTIME_MIN_MESSAGE": [
+[
+25016,
+"0x1804fa50a"
+]
+],
+"CMD_LEFTTIME_MIN_MESSAGE": [
+[
+25017,
+"0x1804fa523"
+]
+],
+"CMD_REPEAT_START_MAX_MESSAGE": [
+[
+25018,
+"0x1804fa53c"
+]
+],
+"CMD_REPEAT_END_MAX_MESSAGE": [
+[
+25019,
+"0x1804fa555"
+]
+],
+"CMD_MEDIATIME_MAX_MESSAGE": [
+[
+25020,
+"0x1804fa56e"
+]
+],
+"CMD_CURRENTTIME_MAX_MESSAGE": [
+[
+25021,
+"0x1804fa587"
+]
+],
+"CMD_TOTALTIME_MAX_MESSAGE": [
+[
+25022,
+"0x1804fa5a0"
+]
+],
+"CMD_LEFTTIME_MAX_MESSAGE": [
+[
+25023,
+"0x1804fa5b9"
+]
+],
+"CMD_PERCENTTIME_MESSAGE": [
+[
+25024,
+"0x1804fa5d2"
+]
+],
+"CMD_AUDIO_CODEC_TYPE_MESSAGE": [
+[
+25025,
+"0x1804fa5eb"
+]
+],
+"CMD_AUDIO_CODEC_TAG_MESSAGE": [
+[
+25026,
+"0x1804fa604"
+]
+],
+"CMD_AUDIO_BIT_RATE_MESSAGE": [
+[
+25027,
+"0x1804fa61d"
+]
+],
+"CMD_AUDIO_IN_SAMPLE_RATE_MESSAGE": [
+[
+25028,
+"0x1804fa636"
+]
+],
+"CMD_AUDIO_IN_SAMPLE_RATE_K_MESSAGE": [
+[
+25029,
+"0x1804fa64f"
+]
+],
+"CMD_AUDIO_IN_NUM_CHANNEL_MESSAGE": [
+[
+25030,
+"0x1804fa668"
+]
+],
+"CMD_AUDIO_OUT_SAMPLE_RATE_MESSAGE": [
+[
+25031,
+"0x1804fa681"
+]
+],
+"CMD_AUDIO_OUT_SAMPLE_RATE_K_MESSAGE": [
+[
+25032,
+"0x1804fa69a"
+]
+],
+"CMD_AUDIO_OUT_NUM_CHANNEL_MESSAGE": [
+[
+25033,
+"0x1804fa6b3"
+]
+],
+"CMD_VIDEO_CODEC_FOURCC_MESSAGE": [
+[
+25034,
+"0x1804fa6cc"
+]
+],
+"CMD_VIDEO_CODEC_FPS_MESSAGE": [
+[
+25035,
+"0x1804fa6e5"
+]
+],
+"CMD_VIDEO_BIT_RATE_MESSAGE": [
+[
+25036,
+"0x1804fa6fe"
+]
+],
+"CMD_VIDEO_CODEC_SIZE_MESSAGE": [
+[
+25037,
+"0x1804fa717"
+]
+],
+"CMD_VIDEO_CODEC_WIDTH_MESSAGE": [
+[
+25038,
+"0x1804fa730"
+]
+],
+"CMD_VIDEO_CODEC_HEIGHT_MESSAGE": [
+[
+25039,
+"0x1804fa749"
+]
+],
+"CMD_VIDEO_CODEC_HEIGHT_PI_MESSAGE": [
+[
+25040,
+"0x1804fa762"
+]
+],
+"CMD_VIDEO_OUT_FOURCC_MESSAGE": [
+[
+25041,
+"0x1804fa77b"
+]
+],
+"CMD_VIDEO_OUT_FPS_MESSAGE": [
+[
+25042,
+"0x1804fa794"
+]
+],
+"CMD_VIDEO_OUT_SIZE_MESSAGE": [
+[
+25043,
+"0x1804fa7ad"
+]
+],
+"CMD_VIDEO_OUT_WIDTH_MESSAGE": [
+[
+25044,
+"0x1804fa7c6"
+]
+],
+"CMD_VIDEO_OUT_HEIGHT_MESSAGE": [
+[
+25045,
+"0x1804fa7df"
+]
+],
+"CMD_VIDEO_OUT_HEIGHT_PI_MESSAGE": [
+[
+25046,
+"0x1804fa7f8"
+]
+],
+"CMD_VIDEO_OUT_HW_SW_MESSAGE": [
+[
+25047,
+"0x1804fa811"
+]
+],
+"CMD_VIDEO_RENDER_FPS_MESSAGE": [
+[
+25048,
+"0x1804fa82a"
+]
+],
+"CMD_VIDEO_CURRENT_FRAME_MESSAGE": [
+[
+25049,
+"0x1804fa843"
+]
+],
+"CMD_VIDEO_TOTAL_FRAME_MESSAGE": [
+[
+25050,
+"0x1804fa85c"
+]
+],
+"CMD_VIDEO_FRAME_MESSAGE": [
+[
+25051,
+"0x1804fa875"
+]
+],
+"CMD_WDM_CHANNEL_MESSAGE": [
+[
+25052,
+"0x1804fa88e"
+]
+],
+"CMD_WDM_VIDEO_TYPE_MESSAGE": [
+[
+25053,
+"0x1804fa8a7"
+]
+],
+"CMD_WDM_AUDIO_TYPE_MESSAGE": [
+[
+25054,
+"0x1804fa8c0"
+]
+],
+"CMD_WDM_SIGNAL_MESSAGE": [
+[
+25055,
+"0x1804fa8d9"
+]
+],
+"CMD_CAPTION_FONT_MESSAGE": [
+[
+25056,
+"0x1804fa8f2"
+]
+],
+"CMD_CAPTION_SIZE_MESSAGE": [
+[
+25057,
+"0x1804fa90b"
+]
+],
+"CMD_CAPTION_HORZ_MESSAGE": [
+[
+25058,
+"0x1804fa924"
+]
+],
+"CMD_CAPTION_VERT_MESSAGE": [
+[
+25059,
+"0x1804fa93d"
+]
+],
+"CMD_CAPTION_SYNC_MESSAGE": [
+[
+25060,
+"0x1804fa956"
+]
+],
+"CMD_SYSTEM_TIME_MESSAGE": [
+[
+25061,
+"0x1804fa96f"
+]
+],
+"CMD_CPU_USAGE_SELF_MESSAGE": [
+[
+25062,
+"0x1804fa988"
+]
+],
+"CMD_CPU_USAGE_SYSTEM_MESSAGE": [
+[
+25063,
+"0x1804fa9a1"
+]
+],
+"CMD_AUDIO_VOLUME_MESSAGE": [
+[
+25064,
+"0x1804fa9ba"
+]
+],
+"CMD_PLAY_SPEED_MESSAGE": [
+[
+25065,
+"0x1804fa9d3"
+]
+],
+"CMD_PLAY_SYNC_MESSAGE": [
+[
+25066,
+"0x1804fa9ec"
+]
+],
+"CMD_RESV_COOKIE_MESSAGE": [
+[
+25101,
+"0x1804faa05"
+]
+],
+"CMD_VIEWER_NUM_MESSAGE": [
+[
+25103,
+"0x1804faa1e"
+]
+],
+"CMD_SUM_NUM_MESSAGE": [
+[
+25105,
+"0x1804faa37"
+]
+],
+"CMD_GOOD_NUM_MESSAGE": [
+[
+25104,
+"0x1804faa50"
+]
+],
+"CMD_BAD_NUM_MESSAGE": [
+[
+25106,
+"0x1804faa69"
+]
+],
+"CMD_DESC_MESSAGE": [
+[
+25107,
+"0x1804faa82"
+]
+],
+"CMD_ALBUM_NAME_MESSAGE": [
+[
+25109,
+"0x1804faa9b"
+]
+],
+"CMD_WEB_VOD_QUALITY_MESSAGE": [
+[
+25110,
+"0x1804faab4"
+]
+],
+"CMD_WEB_VOD_AUTHOR_MESSAGE": [
+[
+25111,
+"0x1804faacd"
+]
+],
+"CMD_WEB_VOD_CONTENT_MESSAGE": [
+[
+25112,
+"0x1804faae6"
+]
+],
+"CMD_PLAYLIST_TOTAL_TIME_MESSAGE": [
+[
+25113,
+"0x1804faaff"
+]
+],
+"CMD_FILE_TYPE_MESSAGE": [
+[
+25114,
+"0x1804fab18"
+]
+],
+"CMD_FILE_EXT_MESSAGE": [
+[
+25115,
+"0x1804fab31"
+]
+],
+"CMD_CONFIG_MESSAGE": [
+[
+25117,
+"0x1804fab4a"
+]
+],
+"CMD_AUDIO_SEL_MESSAGE": [
+[
+25118,
+"0x1804fab63"
+]
+],
+"CMD_VIDEO_SEL_MESSAGE": [
+[
+25119,
+"0x1804fab7c"
+]
+],
+"CMD_CAPTION_SEL_MESSAGE": [
+[
+25120,
+"0x1804fab95"
+]
+],
+"CMD_SCREEN_FIT_MESSAGE": [
+[
+25121,
+"0x1804fabae"
+]
+],
+"CMD_SCREEN_RATIO_MESSAGE": [
+[
+25122,
+"0x1804fabc7"
+]
+],
+"CMD_LOADING_MESSAGE": [
+[
+25123,
+"0x1804fabe0"
+]
+],
+"CMD_COLOR_OFFSET_MESSAGE": [
+[
+25124,
+"0x1804fabf9"
+]
+],
+"CMD_COLOR_GAIN_MESSAGE": [
+[
+25125,
+"0x1804fac12"
+]
+],
+"CMD_COLOR_HUE_MESSAGE": [
+[
+25126,
+"0x1804fac2b"
+]
+],
+"CMD_COLOR_SAT_MESSAGE": [
+[
+25127,
+"0x1804fac44"
+]
+],
+"CMD_SEEK_5_MESSAGE": [
+[
+25128,
+"0x1804fac5d"
+]
+],
+"CMD_SEEK_30_MESSAGE": [
+[
+25129,
+"0x1804fac76"
+]
+],
+"CMD_SEEK_60_MESSAGE": [
+[
+25130,
+"0x1804fac8f"
+]
+],
+"CMD_SEEK_300_MESSAGE": [
+[
+25131,
+"0x1804faca8"
+]
+],
+"CMD_MASTER_VOLUME_MESSAGE": [
+[
+25132,
+"0x1804facc1"
+]
+],
+"CMD_WAVE_VOLUME_MESSAGE": [
+[
+25133,
+"0x1804facda"
+]
+],
+"CMD_POWER_SCHEME_MESSAGE": [
+[
+25134,
+"0x1804facf3"
+]
+],
+"CMD_BATTERY_PERCENT_MESSAGE": [
+[
+25135,
+"0x1804fad0c"
+]
+],
+"CMD_PLAY_NUM_MESSAGE": [
+[
+25136,
+"0x1804fad25"
+]
+],
+"CMD_CLIP_PLAY_MESSAGE": [
+[
+25137,
+"0x1804fad3e"
+]
+],
+"CMD_CLIP_LIKE_MESSAGE": [
+[
+25138,
+"0x1804fad57"
+]
+],
+"CMD_CLIP_DATE_MESSAGE": [
+[
+25139,
+"0x1804fad70"
+]
+],
+"CMD_SKIN_NAME_MESSAGE": [
+[
+25140,
+"0x1804fad89"
+]
+],
+"CMD_SKIN_STYLE_MESSAGE": [
+[
+25141,
+"0x1804fada2"
+]
+],
+"CMD_FILE_SIZE_MESSAGE": [
+[
+25142,
+"0x1804fadbb"
+]
+],
+"CMD_COLOR_THEME_MESSAGE": [
+[
+25143,
+"0x1804fadd4"
+]
+],
+"CMD_DOWNLOAD_RATE_MESSAGE": [
+[
+25146,
+"0x1804faded"
+]
+],
+"CMD_BOOKMARK_MESSAGE": [
+[
+25147,
+"0x1804fae06"
+]
+],
+"CMD_SMALL_FILETYPE_ICON": [
+[
+25150,
+"0x1804fae1f"
+]
+],
+"CMD_LARGE_FILETYPE_ICON": [
+[
+25151,
+"0x1804fae38"
+]
+],
+"CMD_FILE_EXT_ICON": [
+[
+25152,
+"0x1804fae51"
+]
+],
+"CMD_BROADCAST_NAME": [
+[
+25154,
+"0x1804fae6a"
+]
+],
+"CMD_PD_NICK_NAME": [
+[
+25155,
+"0x1804fae83"
+]
+],
+"CMD_CHANNEL_NAME": [
+[
+25156,
+"0x1804fae9c"
+]
+],
+"CMD_BROADCAST_ON": [
+[
+26000,
+"0x1804faeb5"
+]
+],
+"CMD_BROADCAST_OFF": [
+[
+26001,
+"0x1804faece"
+]
+],
+"CMD_VIEWER_ON": [
+[
+26002,
+"0x1804faee7"
+]
+],
+"CMD_VIEWER_OFF": [
+[
+26003,
+"0x1804faf00"
+]
+],
+"CMD_CHAT_WINDOW_ON": [
+[
+26004,
+"0x1804faf19"
+]
+],
+"CMD_CHAT_WINDOW_OFF": [
+[
+26005,
+"0x1804faf32"
+]
+],
+"CMD_PLAYLIST_WINDOW_ON": [
+[
+26006,
+"0x1804faf4b"
+]
+],
+"CMD_PLAYLIST_WINDOW_OFF": [
+[
+26007,
+"0x1804faf64"
+]
+],
+"CMD_BROADCAST_LIST_WINDOW_ON": [
+[
+26008,
+"0x1804faf7d"
+]
+],
+"CMD_BROADCAST_LIST_WINDOW_OFF": [
+[
+26009,
+"0x1804faf96"
+]
+],
+"CMD_BROADCAST_TOOL_WINDOW_ON": [
+[
+26010,
+"0x1804fafaf"
+]
+],
+"CMD_BROADCAST_TOOL_WINDOW_OFF": [
+[
+26011,
+"0x1804fafc8"
+]
+],
+"CMD_CONTROL_BOX_WINDOW_ON": [
+[
+26012,
+"0x1804fafe1"
+]
+],
+"CMD_CONTROL_BOX_WINDOW_OFF": [
+[
+26013,
+"0x1804faffa"
+]
+],
+"CMD_BRPADCAST_CATEGORY": [
+[
+26018,
+"0x1804fb013"
+]
+],
+"CMD_PLAY_FILE_TYPE": [
+[
+26019,
+"0x1804fb02c"
+]
+],
+"CMD_CHAT_TITLE_CHAT": [
+[
+26020,
+"0x1804fb045"
+]
+],
+"CMD_CHAT_TITLE_REPLY": [
+[
+26021,
+"0x1804fb05e"
+]
+],
+"CMD_ATTACH_MODE_ALL_ON": [
+[
+26024,
+"0x1804fb077"
+]
+],
+"CMD_ATTACH_MODE_ALL_OFF": [
+[
+26025,
+"0x1804fb090"
+]
+],
+"CMD_ATTACH_MODE_PLAYER_ON": [
+[
+26026,
+"0x1804fb0a9"
+]
+],
+"CMD_ATTACH_MODE_PLAYER_OFF": [
+[
+26027,
+"0x1804fb0c2"
+]
+],
+"CMD_ATTACH_MODE_CHAT_ON": [
+[
+26028,
+"0x1804fb0db"
+]
+],
+"CMD_ATTACH_MODE_CHAT_OFF": [
+[
+26029,
+"0x1804fb0f4"
+]
+],
+"CMD_ATTACH_MODE_LIST_ON": [
+[
+26030,
+"0x1804fb10d"
+]
+],
+"CMD_ATTACH_MODE_LIST_OFF": [
+[
+26031,
+"0x1804fb126"
+]
+],
+"CMD_ATTACH_MODE_NONE_ON": [
+[
+26032,
+"0x1804fb13f"
+]
+],
+"CMD_ATTACH_MODE_NONE_OFF": [
+[
+26033,
+"0x1804fb158"
+]
+],
+"CMD_ATTACH_CHAT_ON": [
+[
+26034,
+"0x1804fb171"
+]
+],
+"CMD_ATTACH_CHAT_OFF": [
+[
+26035,
+"0x1804fb18a"
+]
+],
+"CMD_ATTACH_PLAYLIST_ON": [
+[
+26036,
+"0x1804fb1a3"
+]
+],
+"CMD_ATTACH_PLAYLIST_OFF": [
+[
+26037,
+"0x1804fb1bc"
+]
+],
+"CMD_ATTACH_BROADCAST_ON": [
+[
+26038,
+"0x1804fb1d5"
+]
+],
+"CMD_ATTACH_BROADCAST_OFF": [
+[
+26039,
+"0x1804fb1ee"
+]
+],
+"CMD_PLAYBACK_REPEAT_ON": [
+[
+26040,
+"0x1804fb207"
+]
+],
+"CMD_PLAYBACK_REPEAT_OFF": [
+[
+26041,
+"0x1804fb220"
+]
+],
+"CMD_PLAYBACK_SHUFFLE_ON": [
+[
+26042,
+"0x1804fb239"
+]
+],
+"CMD_PLAYBACK_SHUFFLE_OFF": [
+[
+26043,
+"0x1804fb252"
+]
+],
+"CMD_OPTION_WINDOW_ON": [
+[
+26044,
+"0x1804fb26b"
+]
+],
+"CMD_OPTION_WINDOW_OFF": [
+[
+26045,
+"0x1804fb284"
+]
+],
+"CMD_CHAT_BROADCAST_TOGGLE_ON": [
+[
+26046,
+"0x1804fb29d"
+]
+],
+"CMD_CHAT_BROADCAST_TOGGLE_OFF": [
+[
+26047,
+"0x1804fb2b6"
+]
+],
+"CMD_CHAT_PLAYLIST_TOGGLE_ON": [
+[
+26048,
+"0x1804fb2cf"
+]
+],
+"CMD_CHAT_PLAYLIST_TOGGLE_OFF": [
+[
+26049,
+"0x1804fb2e8"
+]
+],
+"CMD_PLAYLIST_BROADCAST_TOGGLE_ON": [
+[
+26050,
+"0x1804fb301"
+]
+],
+"CMD_PLAYLIST_BROADCAST_TOGGLE_OFF": [
+[
+26051,
+"0x1804fb31a"
+]
+],
+"CMD_POPUPMENU_OPEN": [
+[
+21000,
+"0x1804fb333"
+]
+],
+"CMD_POPUPMENU_OPEN_TYPE": [
+[
+21105,
+"0x1804fb34c"
+]
+],
+"CMD_POPUPMENU_OPEN_SIMPLE": [
+[
+21001,
+"0x1804fb365"
+]
+],
+"CMD_POPUPMENU_FAVORITE": [
+[
+21002,
+"0x1804fb37e"
+]
+],
+"CMD_POPUPMENU_VISUAL": [
+[
+21003,
+"0x1804fb397"
+]
+],
+"CMD_POPUPMENU_TV": [
+[
+21004,
+"0x1804fb3b0"
+]
+],
+"CMD_POPUPMENU_TV_CH": [
+[
+21005,
+"0x1804fb3c9"
+]
+],
+"CMD_POPUPMENU_TV_AUDIO": [
+[
+21112,
+"0x1804fb3e2"
+]
+],
+"CMD_POPUPMENU_DVD": [
+[
+21006,
+"0x1804fb3fb"
+]
+],
+"CMD_POPUPMENU_DVD_MOVE": [
+[
+21007,
+"0x1804fb414"
+]
+],
+"CMD_POPUPMENU_DVD_AUDIO": [
+[
+21008,
+"0x1804fb42d"
+]
+],
+"CMD_POPUPMENU_DVD_CAPTION": [
+[
+21009,
+"0x1804fb446"
+]
+],
+"CMD_POPUPMENU_DVD_ANGLE": [
+[
+21010,
+"0x1804fb45f"
+]
+],
+"CMD_POPUPMENU_DVD_SPEED": [
+[
+21011,
+"0x1804fb478"
+]
+],
+"CMD_POPUPMENU_PLAY": [
+[
+21012,
+"0x1804fb491"
+]
+],
+"CMD_POPUPMENU_PLAY_GOTO": [
+[
+21013,
+"0x1804fb4aa"
+]
+],
+"CMD_POPUPMENU_PLAY_BOOKMARK": [
+[
+21014,
+"0x1804fb4c3"
+]
+],
+"CMD_POPUPMENU_PLAY_SPEED": [
+[
+21015,
+"0x1804fb4dc"
+]
+],
+"CMD_POPUPMENU_PLAY_SKIP": [
+[
+21016,
+"0x1804fb4f5"
+]
+],
+"CMD_POPUPMENU_PLAY_REPEAT": [
+[
+21018,
+"0x1804fb50e"
+]
+],
+"CMD_POPUPMENU_PLAY_LIST": [
+[
+21017,
+"0x1804fb527"
+]
+],
+"CMD_POPUPMENU_PLAY_LIST_ALBUM": [
+[
+21113,
+"0x1804fb540"
+]
+],
+"CMD_POPUPMENU_PLAY_LIST_LIST": [
+[
+21114,
+"0x1804fb559"
+]
+],
+"CMD_POPUPMENU_PLAY_LIST_QUEUE": [
+[
+21115,
+"0x1804fb572"
+]
+],
+"CMD_POPUPMENU_PLAY_LIST_EDIT": [
+[
+21116,
+"0x1804fb58b"
+]
+],
+"CMD_POPUPMENU_PLAY_LIST_DEL": [
+[
+21117,
+"0x1804fb5a4"
+]
+],
+"CMD_POPUPMENU_PLAY_LIST_SORT": [
+[
+21118,
+"0x1804fb5bd"
+]
+],
+"CMD_POPUPMENU_PLAY_LIST_SEL": [
+[
+21119,
+"0x1804fb5d6"
+]
+],
+"CMD_POPUPMENU_PLAY_LIST_VIEW": [
+[
+21120,
+"0x1804fb5ef"
+]
+],
+"CMD_POPUPMENU_PLAY_REPEAT2": [
+[
+21019,
+"0x1804fb608"
+]
+],
+"CMD_POPUPMENU_PLAY_SEAMLESS": [
+[
+21020,
+"0x1804fb621"
+]
+],
+"CMD_POPUPMENU_CAPTION": [
+[
+21021,
+"0x1804fb63a"
+]
+],
+"CMD_POPUPMENU_CAPTION_LANG": [
+[
+21022,
+"0x1804fb653"
+]
+],
+"CMD_POPUPMENU_CAPTION_LANG_SEC": [
+[
+21103,
+"0x1804fb66c"
+]
+],
+"CMD_POPUPMENU_CAPTION_LANG_CHARSET": [
+[
+21106,
+"0x1804fb685"
+]
+],
+"CMD_POPUPMENU_CAPTION_RENDER": [
+[
+21023,
+"0x1804fb69e"
+]
+],
+"CMD_POPUPMENU_CAPTION_FONT": [
+[
+21023,
+"0x1804fb6b7"
+]
+],
+"CMD_POPUPMENU_CAPTION_STYLE": [
+[
+21024,
+"0x1804fb6d0"
+]
+],
+"CMD_POPUPMENU_CAPTION_SYNC": [
+[
+21025,
+"0x1804fb6e9"
+]
+],
+"CMD_POPUPMENU_CAPTION_SAVE": [
+[
+21026,
+"0x1804fb702"
+]
+],
+"CMD_POPUPMENU_CAPTION_STEREO": [
+[
+21027,
+"0x1804fb71b"
+]
+],
+"CMD_POPUPMENU_CAPTION_ONLINE": [
+[
+21028,
+"0x1804fb734"
+]
+],
+"CMD_POPUPMENU_CAPTION_TRANS": [
+[
+21029,
+"0x1804fb74d"
+]
+],
+"CMD_POPUPMENU_CAPTION_WHISPER": [
+[
+21122,
+"0x1804fb766"
+]
+],
+"CMD_POPUPMENU_CAPTION_WHISPER_ENGINE": [
+[
+21123,
+"0x1804fb77f"
+]
+],
+"CMD_POPUPMENU_CAPTION_WHISPER_MODEL": [
+[
+21124,
+"0x1804fb798"
+]
+],
+"CMD_POPUPMENU_CAPTION_WHISPER_LANG": [
+[
+21125,
+"0x1804fb7b1"
+]
+],
+"CMD_POPUPMENU_CAPTION_WHISPER2": [
+[
+21126,
+"0x1804fb7ca"
+]
+],
+"CMD_POPUPMENU_CAPTION_WHISPER2_ENGINE": [
+[
+21127,
+"0x1804fb7e3"
+]
+],
+"CMD_POPUPMENU_CAPTION_WHISPER2_MODEL": [
+[
+21128,
+"0x1804fb7fc"
+]
+],
+"CMD_POPUPMENU_CAPTION_WHISPER2_LANG": [
+[
+21129,
+"0x1804fb815"
+]
+],
+"CMD_POPUPMENU_VIDEO": [
+[
+21030,
+"0x1804fb82e"
+]
+],
+"CMD_POPUPMENU_VIDEO_STREAM": [
+[
+21031,
+"0x1804fb847"
+]
+],
+"CMD_POPUPMENU_VIDEO_DEVICE": [
+[
+21032,
+"0x1804fb860"
+]
+],
+"CMD_POPUPMENU_VIDEO_SHADER": [
+[
+21033,
+"0x1804fb879"
+]
+],
+"CMD_POPUPMENU_VIDEO_SHADER_PRE": [
+[
+21034,
+"0x1804fb892"
+]
+],
+"CMD_POPUPMENU_VIDEO_SHADER_POST": [
+[
+21035,
+"0x1804fb8ab"
+]
+],
+"CMD_POPUPMENU_VIDEO_3D": [
+[
+21036,
+"0x1804fb8c4"
+]
+],
+"CMD_POPUPMENU_VIDEO_3D_DST": [
+[
+21037,
+"0x1804fb8dd"
+]
+],
+"CMD_POPUPMENU_VIDEO_3D_CAPTION": [
+[
+21038,
+"0x1804fb8f6"
+]
+],
+"CMD_POPUPMENU_VIDEO_TRANS": [
+[
+21039,
+"0x1804fb90f"
+]
+],
+"CMD_POPUPMENU_VIDEO_RESIZE": [
+[
+21040,
+"0x1804fb928"
+]
+],
+"CMD_POPUPMENU_VIDEO_DEINTERLACE": [
+[
+21041,
+"0x1804fb941"
+]
+],
+"CMD_POPUPMENU_VIDEO_EXTEND": [
+[
+21042,
+"0x1804fb95a"
+]
+],
+"CMD_POPUPMENU_VIDEO_MARGIN": [
+[
+21043,
+"0x1804fb973"
+]
+],
+"CMD_POPUPMENU_VIDEO_FILTER": [
+[
+21044,
+"0x1804fb98c"
+]
+],
+"CMD_POPUPMENU_VIDEO_AVISYNTH": [
+[
+21048,
+"0x1804fb9a5"
+]
+],
+"CMD_POPUPMENU_VIDEO_ROTATE": [
+[
+21045,
+"0x1804fb9be"
+]
+],
+"CMD_POPUPMENU_VIDEO_CAPTURE": [
+[
+21046,
+"0x1804fb9d7"
+]
+],
+"CMD_POPUPMENU_VIDEO_MOVIE": [
+[
+21047,
+"0x1804fb9f0"
+]
+],
+"CMD_POPUPMENU_VIDEO_VAPOURSYNTH": [
+[
+21102,
+"0x1804fba09"
+]
+],
+"CMD_POPUPMENU_VIDEO_360VR": [
+[
+21104,
+"0x1804fba22"
+]
+],
+"CMD_POPUPMENU_AUDIO": [
+[
+21049,
+"0x1804fba3b"
+]
+],
+"CMD_POPUPMENU_AUDIO_LANG": [
+[
+21050,
+"0x1804fba54"
+]
+],
+"CMD_POPUPMENU_AUDIO_DEVICE": [
+[
+21051,
+"0x1804fba6d"
+]
+],
+"CMD_POPUPMENU_AUDIO_DEVICE_SPDIF": [
+[
+21052,
+"0x1804fba86"
+]
+],
+"CMD_POPUPMENU_AUDIO_DEVICE_SECOND": [
+[
+21053,
+"0x1804fba9f"
+]
+],
+"CMD_POPUPMENU_AUDIO_CHANNEL": [
+[
+21054,
+"0x1804fbab8"
+]
+],
+"CMD_POPUPMENU_AUDIO_SAMPLE": [
+[
+21055,
+"0x1804fbad1"
+]
+],
+"CMD_POPUPMENU_AUDIO_OUTPUT": [
+[
+21056,
+"0x1804fbaea"
+]
+],
+"CMD_POPUPMENU_AUDIO_VOL_MODE": [
+[
+21057,
+"0x1804fbb03"
+]
+],
+"CMD_POPUPMENU_AUDIO_SYS_VOL": [
+[
+21058,
+"0x1804fbb1c"
+]
+],
+"CMD_POPUPMENU_AUDIO_EQULIZER": [
+[
+21059,
+"0x1804fbb35"
+]
+],
+"CMD_POPUPMENU_AUDIO_SYNC": [
+[
+21060,
+"0x1804fbb4e"
+]
+],
+"CMD_POPUPMENU_AUDIO_FILTER": [
+[
+21061,
+"0x1804fbb67"
+]
+],
+"CMD_POPUPMENU_AUDIO_CAPTURE": [
+[
+21062,
+"0x1804fbb80"
+]
+],
+"CMD_POPUPMENU_AUDIO_PITCH": [
+[
+21108,
+"0x1804fbb99"
+]
+],
+"CMD_POPUPMENU_FILTER": [
+[
+21063,
+"0x1804fbbb2"
+]
+],
+"CMD_POPUPMENU_SKIN": [
+[
+21064,
+"0x1804fbbcb"
+]
+],
+"CMD_POPUPMENU_SKIN_LOGO": [
+[
+21065,
+"0x1804fbbe4"
+]
+],
+"CMD_POPUPMENU_SKIN_LOADING_LOGO": [
+[
+21066,
+"0x1804fbbfd"
+]
+],
+"CMD_POPUPMENU_SKIN_COLOR": [
+[
+21067,
+"0x1804fbc16"
+]
+],
+"CMD_POPUPMENU_SKIN_TRANS": [
+[
+21068,
+"0x1804fbc2f"
+]
+],
+"CMD_POPUPMENU_SKIN_TRANS_MAIN": [
+[
+21069,
+"0x1804fbc48"
+]
+],
+"CMD_POPUPMENU_SKIN_TRANS_PL": [
+[
+21070,
+"0x1804fbc61"
+]
+],
+"CMD_POPUPMENU_SKIN_TRANS_CB": [
+[
+21071,
+"0x1804fbc7a"
+]
+],
+"CMD_POPUPMENU_SKIN_TRANS_BL": [
+[
+21072,
+"0x1804fbc93"
+]
+],
+"CMD_POPUPMENU_SKIN_TRANS_CL": [
+[
+21073,
+"0x1804fbcac"
+]
+],
+"CMD_POPUPMENU_SKIN_TRANS_BT": [
+[
+21074,
+"0x1804fbcc5"
+]
+],
+"CMD_POPUPMENU_SKIN_OSC": [
+[
+21075,
+"0x1804fbcde"
+]
+],
+"CMD_POPUPMENU_SKIN_TOUCH": [
+[
+21101,
+"0x1804fbcf7"
+]
+],
+"CMD_POPUPMENU_SKIN_STYLE": [
+[
+21107,
+"0x1804fbd10"
+]
+],
+"CMD_POPUPMENU_SKIN_TYPE": [
+[
+21109,
+"0x1804fbd29"
+]
+],
+"CMD_POPUPMENU_SKIN_DRAW": [
+[
+21111,
+"0x1804fbd42"
+]
+],
+"CMD_POPUPMENU_ETC": [
+[
+21076,
+"0x1804fbd5b"
+]
+],
+"CMD_POPUPMENU_ETC_LANG": [
+[
+21077,
+"0x1804fbd74"
+]
+],
+"CMD_POPUPMENU_ETC_ONTOP": [
+[
+21078,
+"0x1804fbd8d"
+]
+],
+"CMD_POPUPMENU_ETC_COMPLETE": [
+[
+21079,
+"0x1804fbda6"
+]
+],
+"CMD_POPUPMENU_ETC_SAMEOPEN": [
+[
+21080,
+"0x1804fbdbf"
+]
+],
+"CMD_POPUPMENU_ETC_ETC": [
+[
+21081,
+"0x1804fbdd8"
+]
+],
+"CMD_POPUPMENU_PANSCAN": [
+[
+21082,
+"0x1804fbdf1"
+]
+],
+"CMD_POPUPMENU_PANSCAN_PRESET": [
+[
+21083,
+"0x1804fbe0a"
+]
+],
+"CMD_POPUPMENU_RATIO": [
+[
+21084,
+"0x1804fbe23"
+]
+],
+"CMD_POPUPMENU_RATIO_DEV": [
+[
+21085,
+"0x1804fbe3c"
+]
+],
+"CMD_POPUPMENU_RATIO_MARGIN": [
+[
+21086,
+"0x1804fbe55"
+]
+],
+"CMD_POPUPMENU_SIZE": [
+[
+21087,
+"0x1804fbe6e"
+]
+],
+"CMD_POPUPMENU_SIZE_MOVE": [
+[
+21088,
+"0x1804fbe87"
+]
+],
+"CMD_POPUPMENU_BROADCAST": [
+[
+21089,
+"0x1804fbea0"
+]
+],
+"CMD_POPUPMENU_BROADCAST_EFFECT": [
+[
+21090,
+"0x1804fbeb9"
+]
+],
+"CMD_POPUPMENU_BROADCAST_EFFECT_LOGO": [
+[
+21091,
+"0x1804fbed2"
+]
+],
+"CMD_POPUPMENU_EQULIZER_PRESET": [
+[
+21092,
+"0x1804fbeeb"
+]
+],
+"CMD_POPUPMENU_VOD_QUALITY": [
+[
+21093,
+"0x1804fbf04"
+]
+],
+"CMD_POPUPMENU_ALBUM": [
+[
+21094,
+"0x1804fbf1d"
+]
+],
+"CMD_POPUPMENU_SCREEN_FIT": [
+[
+21095,
+"0x1804fbf36"
+]
+],
+"CMD_POPUPMENU_SCREEN_RATIO": [
+[
+21096,
+"0x1804fbf4f"
+]
+],
+"CMD_POPUPMENU_SEEK_5": [
+[
+21097,
+"0x1804fbf68"
+]
+],
+"CMD_POPUPMENU_SEEK_30": [
+[
+21098,
+"0x1804fbf81"
+]
+],
+"CMD_POPUPMENU_SEEK_60": [
+[
+21099,
+"0x1804fbf9a"
+]
+],
+"CMD_POPUPMENU_SEEK_300": [
+[
+21100,
+"0x1804fbfb3"
+]
+],
+"CMD_POPUPMENU_STREAM_SELECT": [
+[
+21130,
+"0x1804fbfcc"
+]
+],
+"ID_APP_ABOUT": [
+[
+57664,
+"0x1804fbfe5"
+]
+],
+"ID_APP_EXIT": [
+[
+57665,
+"0x1804fbffe"
+]
+],
+"ID_AUDIO_NORMALIZE": [
+[
+10009,
+"0x1804fc017"
+]
+],
+"ID_OPTION_WINDOW": [
+[
+10010,
+"0x1804fc030"
+]
+],
+"ID_PLAYLIST_WINDOW": [
+[
+10011,
+"0x1804fc049"
+]
+],
+"ID_CHAT_WINDOW": [
+[
+10012,
+"0x1804fc062"
+]
+],
+"ID_FULLSCREEN": [
+[
+10013,
+"0x1804fc07b"
+]
+],
+"ID_PLAY_PAUSE": [
+[
+10014,
+"0x1804fc094"
+]
+],
+"ID_AUTO_RATIO": [
+[
+10015,
+"0x1804fc0ad"
+]
+],
+"ID_SOURCE_RATIO": [
+[
+10016,
+"0x1804fc0c6"
+]
+],
+"ID_4_3_RATIO": [
+[
+10017,
+"0x1804fc0df"
+]
+],
+"ID_16_9_RATIO": [
+[
+10018,
+"0x1804fc0f8"
+]
+],
+"ID_16_10_RATIO": [
+[
+10019,
+"0x1804fc111"
+]
+],
+"ID_185_1_RATIO": [
+[
+10020,
+"0x1804fc12a"
+]
+],
+"ID_235_1_RATIO": [
+[
+10021,
+"0x1804fc143"
+]
+],
+"ID_USER_DEF_RATIO": [
+[
+10022,
+"0x1804fc15c"
+]
+],
+"ID_WDM_CABLE": [
+[
+10023,
+"0x1804fc175"
+]
+],
+"ID_WDM_ANTENA": [
+[
+10024,
+"0x1804fc18e"
+]
+],
+"ID_WDM_FIRST_CH": [
+[
+10025,
+"0x1804fc1a7"
+]
+],
+"ID_WDM_PREV_CH": [
+[
+10026,
+"0x1804fc1c0"
+]
+],
+"ID_WDM_NEXT_CH": [
+[
+10027,
+"0x1804fc1d9"
+]
+],
+"ID_WDM_END_CH": [
+[
+10028,
+"0x1804fc1f2"
+]
+],
+"ID_WDM_FORCE_PREV_CH": [
+[
+10029,
+"0x1804fc20b"
+]
+],
+"ID_WDM_FORCE_NEXT_CH": [
+[
+10030,
+"0x1804fc224"
+]
+],
+"ID_WDM_LAST_CH": [
+[
+10031,
+"0x1804fc23d"
+]
+],
+"ID_WDM_INPUT_CH": [
+[
+10032,
+"0x1804fc256"
+]
+],
+"ID_DESKTOP_VIEW": [
+[
+10033,
+"0x1804fc26f"
+]
+],
+"ID_PLAYBACK_REPEAT": [
+[
+10034,
+"0x1804fc288"
+]
+],
+"ID_AUDIO_VOLUMEUP": [
+[
+10035,
+"0x1804fc2a1"
+]
+],
+"ID_AUDIO_VOLUMEDOWN": [
+[
+10036,
+"0x1804fc2ba"
+]
+],
+"ID_AUDIO_MUTE": [
+[
+10037,
+"0x1804fc2d3"
+]
+],
+"ID_ETC_ALLWAYSONTOP": [
+[
+10038,
+"0x1804fc2ec"
+]
+],
+"ID_ETC_PLAYINGONTOP": [
+[
+10039,
+"0x1804fc305"
+]
+],
+"ID_AR_INSIDE_RATIO": [
+[
+10040,
+"0x1804fc31e"
+]
+],
+"ID_AR_OUTSIDE_RATIO": [
+[
+10041,
+"0x1804fc337"
+]
+],
+"ID_FIT_RATIO": [
+[
+10042,
+"0x1804fc350"
+]
+],
+"ID_05_FIXED_SIZE": [
+[
+10043,
+"0x1804fc369"
+]
+],
+"ID_10_FIXED_SIZE": [
+[
+10044,
+"0x1804fc382"
+]
+],
+"ID_15_FIXED_SIZE": [
+[
+10045,
+"0x1804fc39b"
+]
+],
+"ID_20_FIXED_SIZE": [
+[
+10046,
+"0x1804fc3b4"
+]
+],
+"ID_PANSCAN_INCSIZE": [
+[
+10047,
+"0x1804fc3cd"
+]
+],
+"ID_PANSCAN_DECSIZE": [
+[
+10048,
+"0x1804fc3e6"
+]
+],
+"ID_PANSCAN_INCWIDTH": [
+[
+10049,
+"0x1804fc3ff"
+]
+],
+"ID_PANSCAN_DECWIDTH": [
+[
+10050,
+"0x1804fc418"
+]
+],
+"ID_PANSCAN_INCHEIGHT": [
+[
+10051,
+"0x1804fc431"
+]
+],
+"ID_PANSCAN_DECHEIGHT": [
+[
+10052,
+"0x1804fc44a"
+]
+],
+"ID_PANSCAN_MOVERIGHT": [
+[
+10053,
+"0x1804fc463"
+]
+],
+"ID_PANSCAN_MOVELEFT": [
+[
+10054,
+"0x1804fc47c"
+]
+],
+"ID_PANSCAN_MOVEUP": [
+[
+10055,
+"0x1804fc495"
+]
+],
+"ID_PANSCAN_MOVEDOWN": [
+[
+10056,
+"0x1804fc4ae"
+]
+],
+"ID_PANSCAN_CENTER": [
+[
+10057,
+"0x1804fc4c7"
+]
+],
+"ID_PANSCAN_RESET": [
+[
+10058,
+"0x1804fc4e0"
+]
+],
+"ID_PLAYBACK_5SEC_BACK": [
+[
+10059,
+"0x1804fc4f9"
+]
+],
+"ID_PLAYBACK_5SEC_FORW": [
+[
+10060,
+"0x1804fc512"
+]
+],
+"ID_PLAYBACK_30SEC_BACK": [
+[
+10061,
+"0x1804fc52b"
+]
+],
+"ID_PLAYBACK_30SEC_FORW": [
+[
+10062,
+"0x1804fc544"
+]
+],
+"ID_PLAYBACK_1MIN_BACK": [
+[
+10063,
+"0x1804fc55d"
+]
+],
+"ID_PLAYBACK_1MIN_FORW": [
+[
+10064,
+"0x1804fc576"
+]
+],
+"ID_PLAYBACK_5MIN_BACK": [
+[
+10065,
+"0x1804fc58f"
+]
+],
+"ID_PLAYBACK_5MIN_FORW": [
+[
+10066,
+"0x1804fc5a8"
+]
+],
+"ID_PLAYBACK_PREV": [
+[
+10067,
+"0x1804fc5c1"
+]
+],
+"ID_PLAYBACK_NEXT": [
+[
+10068,
+"0x1804fc5da"
+]
+],
+"ID_PLAYBACK_SHUFFLE": [
+[
+10069,
+"0x1804fc5f3"
+]
+],
+"ID_VIDEO_V_FLIP": [
+[
+10070,
+"0x1804fc60c"
+]
+],
+"ID_VIDEO_H_FLIP": [
+[
+10071,
+"0x1804fc625"
+]
+],
+"ID_VIDEO_ROTATE": [
+[
+10072,
+"0x1804fc63e"
+]
+],
+"ID_VIDEO_EXTEND_NOT_USE": [
+[
+10073,
+"0x1804fc657"
+]
+],
+"ID_VIDEO_EXTEND_4_3": [
+[
+10074,
+"0x1804fc670"
+]
+],
+"ID_VIDEO_EXTEND_16_9": [
+[
+10075,
+"0x1804fc689"
+]
+],
+"ID_VIDEO_EXTEND_16_10": [
+[
+10076,
+"0x1804fc6a2"
+]
+],
+"ID_VIDEO_EXTEND_185_1": [
+[
+10077,
+"0x1804fc6bb"
+]
+],
+"ID_VIDEO_EXTEND_235_1": [
+[
+10078,
+"0x1804fc6d4"
+]
+],
+"ID_VIDEO_CROP_4_3": [
+[
+10079,
+"0x1804fc6ed"
+]
+],
+"ID_VIDEO_CROP_16_9": [
+[
+10080,
+"0x1804fc706"
+]
+],
+"ID_VIDEO_CROP_16_10": [
+[
+10081,
+"0x1804fc71f"
+]
+],
+"ID_VIDEO_CROP_185_1": [
+[
+10082,
+"0x1804fc738"
+]
+],
+"ID_VIDEO_CROP_235_1": [
+[
+10083,
+"0x1804fc751"
+]
+],
+"ID_VIDEO_EXTEND_CROP_PIXEL": [
+[
+10084,
+"0x1804fc76a"
+]
+],
+"ID_VIDEO_RESET_PROPERTY": [
+[
+10085,
+"0x1804fc783"
+]
+],
+"ID_VIDEO_DEC_LUMOFF": [
+[
+10088,
+"0x1804fc79c"
+]
+],
+"ID_VIDEO_INC_LUMOFF": [
+[
+10089,
+"0x1804fc7b5"
+]
+],
+"ID_VIDEO_DEC_LUMGAIN": [
+[
+10086,
+"0x1804fc7ce"
+]
+],
+"ID_VIDEO_INC_LUMGAIN": [
+[
+10087,
+"0x1804fc7e7"
+]
+],
+"ID_VIDEO_DEC_HUE": [
+[
+10090,
+"0x1804fc800"
+]
+],
+"ID_VIDEO_INC_HUE": [
+[
+10091,
+"0x1804fc819"
+]
+],
+"ID_VIDEO_DEC_SAT": [
+[
+10092,
+"0x1804fc832"
+]
+],
+"ID_VIDEO_INC_SAT": [
+[
+10093,
+"0x1804fc84b"
+]
+],
+"ID_AUDIO_EQ_EDIT": [
+[
+10094,
+"0x1804fc864"
+]
+],
+"ID_AUDIO_EQULIZER": [
+[
+10095,
+"0x1804fc87d"
+]
+],
+"ID_AUDIO_FREEVERB": [
+[
+10096,
+"0x1804fc896"
+]
+],
+"ID_CHAT_UNDO": [
+[
+10097,
+"0x1804fc8af"
+]
+],
+"ID_CHAT_COPY": [
+[
+10098,
+"0x1804fc8c8"
+]
+],
+"ID_CHAT_CUT": [
+[
+10099,
+"0x1804fc8e1"
+]
+],
+"ID_CHAT_PASTE": [
+[
+10100,
+"0x1804fc8fa"
+]
+],
+"ID_CHAT_ERASE": [
+[
+10101,
+"0x1804fc913"
+]
+],
+"ID_CHAT_SELECT_ALL": [
+[
+10102,
+"0x1804fc92c"
+]
+],
+"ID_DVDCONTROL_MOVE": [
+[
+10103,
+"0x1804fc945"
+]
+],
+"ID_DVDCONTROL_SEL_AUDIO": [
+[
+10104,
+"0x1804fc95e"
+]
+],
+"ID_DVDCONTROL_SEL_CAPTION": [
+[
+10105,
+"0x1804fc977"
+]
+],
+"ID_DVDCONTROL_SEL_ANGLE": [
+[
+10106,
+"0x1804fc990"
+]
+],
+"ID_DVD_PREV_CHAPTER": [
+[
+10107,
+"0x1804fc9a9"
+]
+],
+"ID_DVD_NEXT_CHAPTER": [
+[
+10108,
+"0x1804fc9c2"
+]
+],
+"ID_DVD_RESUME": [
+[
+10109,
+"0x1804fc9db"
+]
+],
+"ID_DVD_ROOT_MENU": [
+[
+10110,
+"0x1804fc9f4"
+]
+],
+"ID_DVD_TITLE_MENU": [
+[
+10111,
+"0x1804fca0d"
+]
+],
+"ID_DVD_CHAPTER_MENU": [
+[
+10112,
+"0x1804fca26"
+]
+],
+"ID_DVD_AUDIO_MENU": [
+[
+10113,
+"0x1804fca3f"
+]
+],
+"ID_DVD_CAPTION_MENU": [
+[
+10114,
+"0x1804fca58"
+]
+],
+"ID_DVD_ANGLE_MENU": [
+[
+10115,
+"0x1804fca71"
+]
+],
+"ID_ETC_CLOSE_PROGRAM_FILE": [
+[
+10116,
+"0x1804fca8a"
+]
+],
+"ID_ETC_CLOSE_PROGRAM_LIST": [
+[
+10117,
+"0x1804fcaa3"
+]
+],
+"ID_ETC_CLOSE_SYSTEM_FILE": [
+[
+10118,
+"0x1804fcabc"
+]
+],
+"ID_ETC_CLOSE_SYSTEM_LIST": [
+[
+10119,
+"0x1804fcad5"
+]
+],
+"ID_ETC_CLOSE_PAUSE": [
+[
+10120,
+"0x1804fcaee"
+]
+],
+"ID_PLAYBACK_REMEMBER_POS": [
+[
+10419,
+"0x1804fcb07"
+]
+],
+"ID_PLAYBACK_HIDE_CURSOR": [
+[
+10121,
+"0x1804fcb20"
+]
+],
+"ID_PLAYBACK_PREVENT_SCREENSAVE": [
+[
+10122,
+"0x1804fcb39"
+]
+],
+"ID_PLAYBACK_CLOSE_MEDIA": [
+[
+10445,
+"0x1804fcb52"
+]
+],
+"ID_PROCESS_PREV": [
+[
+10123,
+"0x1804fcb6b"
+]
+],
+"ID_PROCESS_NEXT": [
+[
+10124,
+"0x1804fcb84"
+]
+],
+"ID_CAPTION_LANG_SELECT": [
+[
+10125,
+"0x1804fcb9d"
+]
+],
+"ID_CAPTION_VISIBLE": [
+[
+10126,
+"0x1804fcbb6"
+]
+],
+"ID_CAPTION_RESET_POS": [
+[
+10127,
+"0x1804fcbcf"
+]
+],
+"ID_CAPTION_MOVE_UP": [
+[
+10128,
+"0x1804fcbe8"
+]
+],
+"ID_CAPTION_MOVE_DOWN": [
+[
+10129,
+"0x1804fcc01"
+]
+],
+"ID_CAPTION_MOVE_LEFT": [
+[
+10130,
+"0x1804fcc1a"
+]
+],
+"ID_CAPTION_MOVE_RIGHT": [
+[
+10131,
+"0x1804fcc33"
+]
+],
+"ID_CAPTION_INC_HMARGIN": [
+[
+10132,
+"0x1804fcc4c"
+]
+],
+"ID_CAPTION_DEC_HMARGIN": [
+[
+10133,
+"0x1804fcc65"
+]
+],
+"ID_CAPTION_INC_VMARGIN": [
+[
+10134,
+"0x1804fcc7e"
+]
+],
+"ID_CAPTION_DEC_VMARGIN": [
+[
+10135,
+"0x1804fcc97"
+]
+],
+"ID_CAPTION_BOLD": [
+[
+10136,
+"0x1804fccb0"
+]
+],
+"ID_CAPTION_INC_SIZE": [
+[
+10137,
+"0x1804fccc9"
+]
+],
+"ID_CAPTION_DEC_SIZE": [
+[
+10138,
+"0x1804fcce2"
+]
+],
+"ID_CAPTION_FONT_SELECT": [
+[
+10139,
+"0x1804fccfb"
+]
+],
+"ID_CAPTION_FAST_SYNC": [
+[
+10140,
+"0x1804fcd14"
+]
+],
+"ID_CAPTION_SLOW_SYNC": [
+[
+10141,
+"0x1804fcd2d"
+]
+],
+"ID_CAPTION_RESET_SYNC": [
+[
+10142,
+"0x1804fcd46"
+]
+],
+"ID_CAPTION_ALIGN_LEFT": [
+[
+10143,
+"0x1804fcd5f"
+]
+],
+"ID_CAPTION_ALIGN_CENTER": [
+[
+10144,
+"0x1804fcd78"
+]
+],
+"ID_CAPTION_ALIGN_RIGHT": [
+[
+10145,
+"0x1804fcd91"
+]
+],
+"ID_CAPTION_OPEN": [
+[
+10146,
+"0x1804fcdaa"
+]
+],
+"ID_CAPTION_APPEND": [
+[
+10147,
+"0x1804fcdc3"
+]
+],
+"ID_VIDEO_RESET_MOVE": [
+[
+10148,
+"0x1804fcddc"
+]
+],
+"ID_VIDEO_LEFT_MOVE": [
+[
+10149,
+"0x1804fcdf5"
+]
+],
+"ID_VIDEO_RIGHT_MOVE": [
+[
+10150,
+"0x1804fce0e"
+]
+],
+"ID_VIDEO_UP_MOVE": [
+[
+10151,
+"0x1804fce27"
+]
+],
+"ID_VIDEO_DOWN_MOVE": [
+[
+10152,
+"0x1804fce40"
+]
+],
+"ID_VIDEO_RESIZE_NOTUSE": [
+[
+10153,
+"0x1804fce59"
+]
+],
+"ID_VIDEO_RESIZE_LOW_CONDI": [
+[
+10154,
+"0x1804fce72"
+]
+],
+"ID_VIDEO_RESIZE_HIGH_CONDI": [
+[
+10155,
+"0x1804fce8b"
+]
+],
+"ID_VIDEO_RESIZE_USE": [
+[
+10156,
+"0x1804fcea4"
+]
+],
+"ID_START_BROADCAST": [
+[
+10157,
+"0x1804fcebd"
+]
+],
+"ID_OPEN_FILE": [
+[
+10158,
+"0x1804fced6"
+]
+],
+"ID_OPEN_URL": [
+[
+10159,
+"0x1804fceef"
+]
+],
+"ID_OPEN_FOLDER": [
+[
+10160,
+"0x1804fcf08"
+]
+],
+"ID_OPEN_SCREEN_CAPTURE": [
+[
+10161,
+"0x1804fcf21"
+]
+],
+"ID_OPEN_CAM": [
+[
+10162,
+"0x1804fcf3a"
+]
+],
+"ID_OPEN_WDM": [
+[
+10163,
+"0x1804fcf53"
+]
+],
+"ID_OPEN_BDA": [
+[
+10164,
+"0x1804fcf6c"
+]
+],
+"ID_OPEN_DVD": [
+[
+10165,
+"0x1804fcf85"
+]
+],
+"ID_OPEN_BLURAY": [
+[
+10795,
+"0x1804fcf9e"
+]
+],
+"ID_STOP_BROADCAST": [
+[
+10166,
+"0x1804fcfb7"
+]
+],
+"ID_CLOSE_MEDIA": [
+[
+10167,
+"0x1804fcfd0"
+]
+],
+"ID_OPEN_CLIPBOARD": [
+[
+10168,
+"0x1804fcfe9"
+]
+],
+"ID_CYCLE_RATIO_MODE": [
+[
+10171,
+"0x1804fd002"
+]
+],
+"ID_CAPTION_SELECT_MENU": [
+[
+10172,
+"0x1804fd01b"
+]
+],
+"ID_AUDIO_SELECT_MENU": [
+[
+10173,
+"0x1804fd034"
+]
+],
+"ID_EQULIZER_ADD": [
+[
+10181,
+"0x1804fd04d"
+]
+],
+"ID_EQULIZER_SAVE": [
+[
+10182,
+"0x1804fd066"
+]
+],
+"ID_EQULIZER_DEL": [
+[
+10183,
+"0x1804fd07f"
+]
+],
+"ID_EQULIZER_RESET": [
+[
+10184,
+"0x1804fd098"
+]
+],
+"ID_BROADCAST_LIST_WINDOW": [
+[
+10185,
+"0x1804fd0b1"
+]
+],
+"ID_BROADCAST_TOOL_WINDOW": [
+[
+10186,
+"0x1804fd0ca"
+]
+],
+"ID_LOGIN_MENU": [
+[
+10187,
+"0x1804fd0e3"
+]
+],
+"ID_CAM1_OPEN": [
+[
+10188,
+"0x1804fd0fc"
+]
+],
+"ID_CAM1_CAPTURE": [
+[
+10189,
+"0x1804fd115"
+]
+],
+"ID_CAM1_CLOSE": [
+[
+10190,
+"0x1804fd12e"
+]
+],
+"ID_CAM2_OPEN": [
+[
+10191,
+"0x1804fd147"
+]
+],
+"ID_CAM2_CAPTURE": [
+[
+10192,
+"0x1804fd160"
+]
+],
+"ID_CAM2_CLOSE": [
+[
+10193,
+"0x1804fd179"
+]
+],
+"ID_PIP_SETTING": [
+[
+10194,
+"0x1804fd192"
+]
+],
+"ID_PLAYINFO_WINDOW": [
+[
+10195,
+"0x1804fd1ab"
+]
+],
+"ID_PLAYLIST_FILE_ADD": [
+[
+10196,
+"0x1804fd1c4"
+]
+],
+"ID_PLAYLIST_FOLDER_ADD": [
+[
+10197,
+"0x1804fd1dd"
+]
+],
+"ID_PLAYLIST_URL_ADD": [
+[
+10198,
+"0x1804fd1f6"
+]
+],
+"ID_PLAYLIST_PLAY": [
+[
+10199,
+"0x1804fd20f"
+]
+],
+"ID_PLAYLIST_DEL": [
+[
+10200,
+"0x1804fd228"
+]
+],
+"ID_PLAYLIST_DEL_ALL": [
+[
+10201,
+"0x1804fd241"
+]
+],
+"ID_PLAYLIST_SORT": [
+[
+10202,
+"0x1804fd25a"
+]
+],
+"ID_PLAYLIST_SORT_INV": [
+[
+10203,
+"0x1804fd273"
+]
+],
+"ID_PLAYLIST_SORT_TITLE": [
+[
+10980,
+"0x1804fd28c"
+]
+],
+"ID_PLAYLIST_SORT_NAME": [
+[
+10981,
+"0x1804fd2a5"
+]
+],
+"ID_PLAYLIST_SORT_EXT": [
+[
+10982,
+"0x1804fd2be"
+]
+],
+"ID_PLAYLIST_SORT_SIZE": [
+[
+10983,
+"0x1804fd2d7"
+]
+],
+"ID_PLAYLIST_SORT_DURATION": [
+[
+10984,
+"0x1804fd2f0"
+]
+],
+"ID_PLAYLIST_SORT_TIME": [
+[
+10985,
+"0x1804fd309"
+]
+],
+"ID_PLAYLIST_SORT_RANDOM": [
+[
+10988,
+"0x1804fd322"
+]
+],
+"ID_PLAYLIST_SELECT_ALL": [
+[
+10204,
+"0x1804fd33b"
+]
+],
+"ID_PLAYLIST_SELECT_INV": [
+[
+10205,
+"0x1804fd354"
+]
+],
+"ID_PLAYLIST_OPEN": [
+[
+10000,
+"0x1804fd36d"
+]
+],
+"ID_PLAYLIST_SAVE": [
+[
+10206,
+"0x1804fd386"
+]
+],
+"ID_PLAYLIST_FIND_FILE": [
+[
+10207,
+"0x1804fd39f"
+]
+],
+"ID_PLAYLIST_DEL_CAP": [
+[
+10209,
+"0x1804fd3b8"
+]
+],
+"ID_PLAYLIST_DEL_PLAYED": [
+[
+10208,
+"0x1804fd3d1"
+]
+],
+"ID_PLAYLIST_DEL_CHECK": [
+[
+10210,
+"0x1804fd3ea"
+]
+],
+"ID_PLAYLIST_EDIT": [
+[
+10211,
+"0x1804fd403"
+]
+],
+"ID_PLAYLIST_DEL_UNSEL": [
+[
+10212,
+"0x1804fd41c"
+]
+],
+"ID_PLAYLIST_DEL_FILE": [
+[
+10213,
+"0x1804fd435"
+]
+],
+"ID_PLAYLIST_MOVE_FILE": [
+[
+10215,
+"0x1804fd44e"
+]
+],
+"ID_PLAYLIST_MOVE_CAP": [
+[
+10216,
+"0x1804fd467"
+]
+],
+"ID_PLAYLIST_PERSIST": [
+[
+10411,
+"0x1804fd480"
+]
+],
+"ID_PLAYLIST_ALBUM_FOLDER": [
+[
+10410,
+"0x1804fd499"
+]
+],
+"ID_PLAYLIST_COPY": [
+[
+10007,
+"0x1804fd4b2"
+]
+],
+"ID_PLAYLIST_COPY_PATH": [
+[
+11365,
+"0x1804fd4cb"
+],
+[
+11365,
+"0x180500cc0"
+]
+],
+"ID_PLAYLIST_PASTE": [
+[
+10008,
+"0x1804fd4e4"
+]
+],
+"ID_PLAYLIST_PASTE_POS": [
+[
+11364,
+"0x1804fd4fd"
+],
+[
+11364,
+"0x180500ca7"
+]
+],
+"ID_PLAYLIST_PASTE_HISTORY": [
+[
+10948,
+"0x1804fd516"
+],
+[
+10948,
+"0x1805002b1"
+]
+],
+"ID_PLAYLIST_FOLDER_SORT": [
+[
+10001,
+"0x1804fd52f"
+]
+],
+"ID_PLAYLIST_ALBUM_NEW": [
+[
+10002,
+"0x1804fd548"
+]
+],
+"ID_PLAYLIST_ALBUM_RENAME": [
+[
+10003,
+"0x1804fd561"
+]
+],
+"ID_PLAYLIST_ALBUM_DEL": [
+[
+10004,
+"0x1804fd57a"
+]
+],
+"ID_PLAYLIST_QUEUE_ADD": [
+[
+10005,
+"0x1804fd593"
+]
+],
+"ID_PLAYLIST_QUEUE_RESET": [
+[
+10006,
+"0x1804fd5ac"
+]
+],
+"ID_BROADCAST_HOME": [
+[
+10217,
+"0x1804fd5c5"
+]
+],
+"ID_VIDEO_POSTPROC": [
+[
+10218,
+"0x1804fd5de"
+]
+],
+"ID_CAPTION_IMAGE": [
+[
+10220,
+"0x1804fd5f7"
+]
+],
+"ID_CAPTION_OVERLAY": [
+[
+10221,
+"0x1804fd610"
+]
+],
+"ID_VIDEO_ADV_CAPTURE": [
+[
+10222,
+"0x1804fd629"
+]
+],
+"ID_VIDEO_IMAGE_COPY": [
+[
+10223,
+"0x1804fd642"
+]
+],
+"ID_VIDEO_IMAGE_CAPTURE": [
+[
+10224,
+"0x1804fd65b"
+]
+],
+"ID_VIDEO_OPEN_FOLDER": [
+[
+10225,
+"0x1804fd674"
+]
+],
+"ID_AUDIO_CAPTURE": [
+[
+10226,
+"0x1804fd68d"
+]
+],
+"ID_AUDIO_OPEN_FOLDER": [
+[
+10227,
+"0x1804fd6a6"
+]
+],
+"ID_CAPTION_EXPLORER": [
+[
+10228,
+"0x1804fd6bf"
+]
+],
+"ID_PANSCAN_EDIT": [
+[
+10229,
+"0x1804fd6d8"
+]
+],
+"ID_MINSCREEN": [
+[
+10230,
+"0x1804fd6f1"
+]
+],
+"ID_SCREENSIZE_MIN": [
+[
+10231,
+"0x1804fd70a"
+]
+],
+"ID_SCREENSIZE_0_5X": [
+[
+10232,
+"0x1804fd723"
+]
+],
+"ID_SCREENSIZE_1_0X": [
+[
+10233,
+"0x1804fd73c"
+]
+],
+"ID_SCREENSIZE_1_5X": [
+[
+10234,
+"0x1804fd755"
+]
+],
+"ID_SCREENSIZE_2_0X": [
+[
+10235,
+"0x1804fd76e"
+]
+],
+"ID_SCREENSIZE_FITTODESKTOP": [
+[
+10236,
+"0x1804fd787"
+]
+],
+"ID_SCREENSIZE_MAX": [
+[
+10237,
+"0x1804fd7a0"
+]
+],
+"ID_SCREENSIZE_MAX_FULL": [
+[
+10238,
+"0x1804fd7b9"
+]
+],
+"ID_PLAYBACK_SKIP_USE": [
+[
+10239,
+"0x1804fd7d2"
+]
+],
+"ID_PLAYBACK_SKIP_SET": [
+[
+10240,
+"0x1804fd7eb"
+]
+],
+"ID_PLAY_NEXT_FRAME": [
+[
+10241,
+"0x1804fd804"
+]
+],
+"ID_PLAY_PREV_FRAME": [
+[
+10242,
+"0x1804fd81d"
+]
+],
+"ID_PLAYBACK_FIRST": [
+[
+10243,
+"0x1804fd836"
+]
+],
+"ID_PLAYBACK_MID": [
+[
+10619,
+"0x1804fd84f"
+]
+],
+"ID_PLAYBACK_LAST": [
+[
+10620,
+"0x1804fd868"
+]
+],
+"ID_PLAYBACK_PREV_CAP": [
+[
+10244,
+"0x1804fd881"
+]
+],
+"ID_PLAYBACK_NEXT_CAP": [
+[
+10245,
+"0x1804fd89a"
+]
+],
+"ID_PLAY_SPEED_NORMAL": [
+[
+10246,
+"0x1804fd8b3"
+]
+],
+"ID_PLAY_SPEED_SLOWER": [
+[
+10247,
+"0x1804fd8cc"
+]
+],
+"ID_PLAY_SPEED_FASTER": [
+[
+10248,
+"0x1804fd8e5"
+]
+],
+"ID_PLAY_REPEAT_START_SET": [
+[
+10249,
+"0x1804fd8fe"
+]
+],
+"ID_PLAY_REPEAT_STOP_SET": [
+[
+10250,
+"0x1804fd917"
+]
+],
+"ID_PLAY_REPEAT_START_RESET": [
+[
+10251,
+"0x1804fd930"
+]
+],
+"ID_PLAY_REPEAT_STOP_RESET": [
+[
+10252,
+"0x1804fd949"
+]
+],
+"ID_PLAY_REPEAT_RESET": [
+[
+10253,
+"0x1804fd962"
+]
+],
+"ID_PLAY_REPEAT_PERSIST": [
+[
+10777,
+"0x1804fd97b"
+]
+],
+"ID_PLAY_REPEAT_EDIT": [
+[
+10778,
+"0x1804fd994"
+]
+],
+"ID_PLAY_REPEAT_PREV_PREVENT": [
+[
+10780,
+"0x1804fd9ad"
+]
+],
+"ID_PLAY_REPEAT_TOGGLE": [
+[
+10781,
+"0x1804fd9c6"
+]
+],
+"ID_PLAY_REPEAT_SET": [
+[
+10782,
+"0x1804fd9df"
+]
+],
+"ID_VIDEO_SHARPEN": [
+[
+10256,
+"0x1804fd9f8"
+]
+],
+"ID_VIDEO_BLUR": [
+[
+10257,
+"0x1804fda11"
+]
+],
+"ID_VIDEO_DENOISE_D": [
+[
+10425,
+"0x1804fda2a"
+]
+],
+"ID_VIDEO_DENOISE_T": [
+[
+10427,
+"0x1804fda43"
+]
+],
+"ID_VIDEO_FIX_LEVEL": [
+[
+10260,
+"0x1804fda5c"
+]
+],
+"ID_NEXT_RATIO": [
+[
+10261,
+"0x1804fda75"
+]
+],
+"ID_MANAGE_FILTER": [
+[
+10264,
+"0x1804fda8e"
+]
+],
+"ID_KEYFRAME_MOVE": [
+[
+10265,
+"0x1804fdaa7"
+]
+],
+"ID_CAPTION_INPUT": [
+[
+10266,
+"0x1804fdac0"
+]
+],
+"ID_AUDIO_MASTER_VOLUP": [
+[
+10267,
+"0x1804fdad9"
+]
+],
+"ID_AUDIO_MASTER_VOLDOWN": [
+[
+10268,
+"0x1804fdaf2"
+]
+],
+"ID_AUDIO_MASTER_MUTE": [
+[
+10269,
+"0x1804fdb0b"
+]
+],
+"ID_AUDIO_WAVE_VOLUP": [
+[
+10270,
+"0x1804fdb24"
+]
+],
+"ID_AUDIO_WAVE_VOLDOWN": [
+[
+10271,
+"0x1804fdb3d"
+]
+],
+"ID_AUDIO_WAVE_MUTE": [
+[
+10272,
+"0x1804fdb56"
+]
+],
+"ID_MONITOR_OUT": [
+[
+10273,
+"0x1804fdb6f"
+]
+],
+"ID_43TV_OUT": [
+[
+10274,
+"0x1804fdb88"
+]
+],
+"ID_169TV_OUT": [
+[
+10275,
+"0x1804fdba1"
+]
+],
+"ID_AUTODEV_OUT": [
+[
+10276,
+"0x1804fdbba"
+]
+],
+"ID_ETC_ONLY_OPEN": [
+[
+10277,
+"0x1804fdbd3"
+]
+],
+"ID_ETC_SAME_OPEN": [
+[
+10278,
+"0x1804fdbec"
+]
+],
+"ID_ETC_ALL_OPEN": [
+[
+10279,
+"0x1804fdc05"
+]
+],
+"ID_BROADCAST_START_STOP": [
+[
+10280,
+"0x1804fdc1e"
+]
+],
+"ID_SCREEN_CAPTURE1_SHOW": [
+[
+10281,
+"0x1804fdc37"
+]
+],
+"ID_SCREEN_CAPTURE2_SHOW": [
+[
+10282,
+"0x1804fdc50"
+]
+],
+"ID_SCREEN_CAPTURE1_SELECT": [
+[
+10283,
+"0x1804fdc69"
+]
+],
+"ID_SCREEN_CAPTURE2_SELECT": [
+[
+10284,
+"0x1804fdc82"
+]
+],
+"ID_SCREEN_CAPTURE_SETUP": [
+[
+10285,
+"0x1804fdc9b"
+]
+],
+"ID_BROADCAST_SAVE_START": [
+[
+10286,
+"0x1804fdcb4"
+]
+],
+"ID_VIDEO_PS_COMBINE_EDIT": [
+[
+10287,
+"0x1804fdccd"
+]
+],
+"ID_VIDEO_PS_FOLDER_OPEN": [
+[
+10288,
+"0x1804fdce6"
+]
+],
+"ID_VIDEO_PS_RELOAD": [
+[
+10289,
+"0x1804fdcff"
+]
+],
+"ID_VIDEO_PS_TOGGLE": [
+[
+10290,
+"0x1804fdd18"
+]
+],
+"ID_VIDEO_PS_POST_TOGGLE": [
+[
+10654,
+"0x1804fdd31"
+]
+],
+"ID_VIDEO_PS_COMBINE_POST_EDIT": [
+[
+10655,
+"0x1804fdd4a"
+]
+],
+"ID_AUDIO_SLOWER": [
+[
+10291,
+"0x1804fdd63"
+]
+],
+"ID_AUDIO_FASTER": [
+[
+10292,
+"0x1804fdd7c"
+]
+],
+"ID_AUDIO_NORMAL": [
+[
+10293,
+"0x1804fdd95"
+]
+],
+"ID_AUDIO_SYNC_KEEPING_NO": [
+[
+10625,
+"0x1804fddae"
+]
+],
+"ID_AUDIO_SYNC_KEEPING_FILE": [
+[
+10626,
+"0x1804fddc7"
+]
+],
+"ID_AUDIO_SYNC_KEEPING_ALL": [
+[
+10627,
+"0x1804fdde0"
+]
+],
+"ID_VIDEO_DEV_AUTO": [
+[
+10294,
+"0x1804fddf9"
+]
+],
+"ID_VIDEO_DEV_VIDEO": [
+[
+10295,
+"0x1804fde12"
+]
+],
+"ID_VIDEO_DEV_OVERLAY": [
+[
+10296,
+"0x1804fde2b"
+]
+],
+"ID_VIDEO_DEV_VMR7W": [
+[
+10297,
+"0x1804fde44"
+]
+],
+"ID_VIDEO_DEV_VMR7R": [
+[
+10298,
+"0x1804fde5d"
+]
+],
+"ID_VIDEO_DEV_VMR9W": [
+[
+10299,
+"0x1804fde76"
+]
+],
+"ID_VIDEO_DEV_VMR9R": [
+[
+10300,
+"0x1804fde8f"
+]
+],
+"ID_VIDEO_DEV_EVRW": [
+[
+10301,
+"0x1804fdea8"
+]
+],
+"ID_VIDEO_DEV_EVRR": [
+[
+10302,
+"0x1804fdec1"
+]
+],
+"ID_VIDEO_DEV_HAALI": [
+[
+10303,
+"0x1804fdeda"
+]
+],
+"ID_VIDEO_DEV_MADVR": [
+[
+10304,
+"0x1804fdef3"
+]
+],
+"ID_VIDEO_CAPTURE_CAPTION": [
+[
+10305,
+"0x1804fdf0c"
+]
+],
+"ID_VIDEO_DEC_FILTER": [
+[
+10306,
+"0x1804fdf25"
+]
+],
+"ID_VIDEO_DEC_USE": [
+[
+10450,
+"0x1804fdf3e"
+]
+],
+"ID_VIDEO_DEC_USECHECK": [
+[
+10451,
+"0x1804fdf57"
+]
+],
+"ID_VIDEO_DEC_NOTUSE": [
+[
+10452,
+"0x1804fdf70"
+]
+],
+"ID_WDM_MANAGE_CH": [
+[
+10307,
+"0x1804fdf89"
+]
+],
+"ID_FULL_FIT_SCREEN": [
+[
+10308,
+"0x1804fdfa2"
+]
+],
+"ID_FULL_MAX_SCREEN": [
+[
+10309,
+"0x1804fdfbb"
+]
+],
+"ID_FAV_CURRENT_FILE_ADD": [
+[
+10310,
+"0x1804fdfd4"
+]
+],
+"ID_FAV_CURRENT_FOLDER_ADD": [
+[
+10311,
+"0x1804fdfed"
+]
+],
+"ID_FAV_SETTING": [
+[
+10312,
+"0x1804fe006"
+]
+],
+"ID_WDM_SAVE_STREAM": [
+[
+10313,
+"0x1804fe01f"
+]
+],
+"ID_WDM_SAVE_STREAM_DIRECT": [
+[
+10502,
+"0x1804fe038"
+],
+[
+10502,
+"0x1804fed99"
+]
+],
+"ID_BROADCAST_PREVIEW": [
+[
+10314,
+"0x1804fe051"
+]
+],
+"ID_PLAYLIST_SETTING": [
+[
+10315,
+"0x1804fe06a"
+]
+],
+"ID_VISUAL_SETTING": [
+[
+10316,
+"0x1804fe083"
+]
+],
+"ID_VISUAL_TYPE1": [
+[
+10317,
+"0x1804fe09c"
+]
+],
+"ID_VISUAL_TYPE2": [
+[
+10318,
+"0x1804fe0b5"
+]
+],
+"ID_VISUAL_TYPE3": [
+[
+10319,
+"0x1804fe0ce"
+]
+],
+"ID_VISUAL_TYPE4": [
+[
+10320,
+"0x1804fe0e7"
+]
+],
+"ID_VIDEO_RESIZE_SETTING": [
+[
+10321,
+"0x1804fe100"
+]
+],
+"ID_VIDEO_EXTEND_CROP_SETTING": [
+[
+10323,
+"0x1804fe119"
+]
+],
+"ID_CHAPTER_SEL_MENU": [
+[
+10324,
+"0x1804fe132"
+]
+],
+"ID_GOTO_PLAY": [
+[
+10325,
+"0x1804fe14b"
+]
+],
+"ID_SCENE_EXPLORER": [
+[
+10416,
+"0x1804fe164"
+]
+],
+"ID_CHAPTER_EXPLORER": [
+[
+10802,
+"0x1804fe17d"
+]
+],
+"ID_CAPTION_SCENE_EXPLORER": [
+[
+10962,
+"0x1804fe196"
+]
+],
+"ID_BOOKMARK_ADD": [
+[
+10326,
+"0x1804fe1af"
+]
+],
+"ID_BOOKMARK_PREV": [
+[
+10327,
+"0x1804fe1c8"
+]
+],
+"ID_BOOKMARK_NEXT": [
+[
+10328,
+"0x1804fe1e1"
+]
+],
+"ID_BOOKMARK_CLEAR": [
+[
+10329,
+"0x1804fe1fa"
+]
+],
+"ID_BOOKMARK_EDIT": [
+[
+10330,
+"0x1804fe213"
+]
+],
+"ID_SIMPLE_FILE_OPEN": [
+[
+10331,
+"0x1804fe22c"
+]
+],
+"ID_SIMPLE_MENU_OPEN": [
+[
+10447,
+"0x1804fe245"
+]
+],
+"ID_SIMPLE_CAPTION_OPEN": [
+[
+10332,
+"0x1804fe25e"
+]
+],
+"ID_VIDEO_SELECT_FOLDER": [
+[
+10334,
+"0x1804fe277"
+]
+],
+"ID_AUDIO_SELECT_FOLDER": [
+[
+10335,
+"0x1804fe290"
+]
+],
+"ID_ETC_CLOSE_MODE_CYCLE": [
+[
+10336,
+"0x1804fe2a9"
+]
+],
+"ID_ETC_NEXTONTOP": [
+[
+10337,
+"0x1804fe2c2"
+]
+],
+"ID_DEVICE_SETTING": [
+[
+10338,
+"0x1804fe2db"
+]
+],
+"ID_ETC_DISABLE_SHORTKEY": [
+[
+10339,
+"0x1804fe2f4"
+]
+],
+"ID_SKIN_AUTO_ADJ": [
+[
+10340,
+"0x1804fe30d"
+]
+],
+"ID_RATIO_BY_SIZE": [
+[
+10341,
+"0x1804fe326"
+]
+],
+"ID_BOTTOM_MARGIN_CYCLE": [
+[
+10342,
+"0x1804fe33f"
+]
+],
+"ID_BOTTOM_MARGIN_NONE": [
+[
+10343,
+"0x1804fe358"
+]
+],
+"ID_BOTTOM_MARGIN_5": [
+[
+10344,
+"0x1804fe371"
+]
+],
+"ID_BOTTOM_MARGIN_10": [
+[
+10345,
+"0x1804fe38a"
+]
+],
+"ID_BOTTOM_MARGIN_15": [
+[
+10346,
+"0x1804fe3a3"
+]
+],
+"ID_BOTTOM_MARGIN_20": [
+[
+10347,
+"0x1804fe3bc"
+]
+],
+"ID_BOTTOM_MARGIN_25": [
+[
+10348,
+"0x1804fe3d5"
+]
+],
+"ID_BOTTOM_MARGIN_30": [
+[
+10349,
+"0x1804fe3ee"
+]
+],
+"ID_BOTTOM_MARGIN_CAPTION": [
+[
+10350,
+"0x1804fe407"
+]
+],
+"ID_PLAYINFO_OSD": [
+[
+10351,
+"0x1804fe420"
+]
+],
+"ID_VIDEO_CTL_LEVEL": [
+[
+10352,
+"0x1804fe439"
+]
+],
+"ID_VIDEO_IMAGE_THUMBNAIL": [
+[
+10353,
+"0x1804fe452"
+]
+],
+"ID_VIDEO_IMAGE_BMP": [
+[
+10354,
+"0x1804fe46b"
+]
+],
+"ID_VIDEO_IMAGE_JPEG": [
+[
+10355,
+"0x1804fe484"
+]
+],
+"ID_VIDEO_IMAGE_PNG": [
+[
+10356,
+"0x1804fe49d"
+]
+],
+"ID_VIDEO_IMAGE_CAPTURE_PROMPT": [
+[
+10357,
+"0x1804fe4b6"
+]
+],
+"ID_DEF_OPEN_MODE_FILE": [
+[
+10358,
+"0x1804fe4cf"
+]
+],
+"ID_DEF_OPEN_MODE_URL": [
+[
+10359,
+"0x1804fe4e8"
+]
+],
+"ID_DEF_OPEN_MODE_FOLDER": [
+[
+10360,
+"0x1804fe501"
+]
+],
+"ID_DEF_OPEN_MODE_SIMPLE": [
+[
+10361,
+"0x1804fe51a"
+]
+],
+"ID_CAPTION_SAVEAS": [
+[
+10362,
+"0x1804fe533"
+]
+],
+"ID_VIDEO_RENDERER_SET": [
+[
+10363,
+"0x1804fe54c"
+]
+],
+"ID_USER_DEF_RATIO_SETTING": [
+[
+10364,
+"0x1804fe565"
+]
+],
+"ID_VIDEO_CAPTURE_MENU": [
+[
+10365,
+"0x1804fe57e"
+]
+],
+"ID_VIDEO_STREAM_MENU": [
+[
+10366,
+"0x1804fe597"
+]
+],
+"ID_VIDEO_SHADER_MENU": [
+[
+10367,
+"0x1804fe5b0"
+]
+],
+"ID_VIDEO_3D_MENU": [
+[
+10765,
+"0x1804fe5c9"
+]
+],
+"ID_SKIN_AUTO_HIDE": [
+[
+10369,
+"0x1804fe5e2"
+]
+],
+"ID_SAVE_MOVIE": [
+[
+10370,
+"0x1804fe5fb"
+]
+],
+"ID_WINDOW_SIZE_INC": [
+[
+10371,
+"0x1804fe614"
+]
+],
+"ID_WINDOW_SIZE_DEC": [
+[
+10372,
+"0x1804fe62d"
+]
+],
+"ID_WINDOW_MOVE_LEFT": [
+[
+10373,
+"0x1804fe646"
+]
+],
+"ID_WINDOW_MOVE_RIGHT": [
+[
+10374,
+"0x1804fe65f"
+]
+],
+"ID_WINDOW_MOVE_UP": [
+[
+10375,
+"0x1804fe678"
+]
+],
+"ID_WINDOW_MOVE_DOWN": [
+[
+10376,
+"0x1804fe691"
+]
+],
+"ID_WINDOW_MOVE_CENTER": [
+[
+10377,
+"0x1804fe6aa"
+]
+],
+"ID_WINDOW_MOVE_TL": [
+[
+10378,
+"0x1804fe6c3"
+]
+],
+"ID_WINDOW_MOVE_TR": [
+[
+10379,
+"0x1804fe6dc"
+]
+],
+"ID_WINDOW_MOVE_BL": [
+[
+10380,
+"0x1804fe6f5"
+]
+],
+"ID_WINDOW_MOVE_BR": [
+[
+10381,
+"0x1804fe70e"
+]
+],
+"ID_WDM_CH_SEL_MENU": [
+[
+10382,
+"0x1804fe727"
+]
+],
+"ID_CONTROL_BOX_WINDOW": [
+[
+10383,
+"0x1804fe740"
+]
+],
+"ID_SKIN_CONFIG": [
+[
+10384,
+"0x1804fe759"
+]
+],
+"ID_REOPEN": [
+[
+10385,
+"0x1804fe772"
+]
+],
+"ID_COLOR_THEME_HSB": [
+[
+10387,
+"0x1804fe78b"
+]
+],
+"ID_COLOR_THEME_RGB": [
+[
+10388,
+"0x1804fe7a4"
+]
+],
+"ID_AUDIO_CRYSTALITY": [
+[
+10389,
+"0x1804fe7bd"
+]
+],
+"ID_AUDIO_DENOISE": [
+[
+10390,
+"0x1804fe7d6"
+]
+],
+"ID_AUDIO_OUT_SETTING": [
+[
+10391,
+"0x1804fe7ef"
+]
+],
+"ID_OPEN_HOME_PAGE": [
+[
+10386,
+"0x1804fe808"
+]
+],
+"ID_CHECK_FOR_UPDATE": [
+[
+10392,
+"0x1804fe821"
+]
+],
+"ID_VOLUME_CTL_NORMAL": [
+[
+10393,
+"0x1804fe83a"
+]
+],
+"ID_VOLUME_CTL_WAVE": [
+[
+10394,
+"0x1804fe853"
+]
+],
+"ID_VOLUME_CTL_MASTER": [
+[
+10395,
+"0x1804fe86c"
+]
+],
+"ID_AUDIO_SPEED_16": [
+[
+10396,
+"0x1804fe885"
+]
+],
+"ID_AUDIO_SPEED_32": [
+[
+10397,
+"0x1804fe89e"
+]
+],
+"ID_AUDIO_SPEED_PITCH": [
+[
+10398,
+"0x1804fe8b7"
+]
+],
+"ID_AUDIO_ADV_VOLUME": [
+[
+10437,
+"0x1804fe8d0"
+]
+],
+"ID_OPEN_EXT_AUDIO": [
+[
+10400,
+"0x1804fe8e9"
+]
+],
+"ID_CAPTION_SAVE_SYNC": [
+[
+10401,
+"0x1804fe902"
+]
+],
+"ID_DEFAULT_START": [
+[
+10402,
+"0x1804fe91b"
+]
+],
+"ID_SCREEN_SIZE_USER": [
+[
+10404,
+"0x1804fe934"
+]
+],
+"ID_WDM_USE_NUMKEY": [
+[
+10405,
+"0x1804fe94d"
+]
+],
+"ID_VIDEO_MARGIN": [
+[
+10406,
+"0x1804fe966"
+]
+],
+"ID_OPEN_IFO": [
+[
+10412,
+"0x1804fe97f"
+]
+],
+"ID_VIDEO_DENOISE_G": [
+[
+10426,
+"0x1804fe998"
+]
+],
+"ID_VIDEO_OFFSET": [
+[
+10428,
+"0x1804fe9b1"
+]
+],
+"ID_VIDEO_ADV_CAPTURE_START": [
+[
+10431,
+"0x1804fe9ca"
+]
+],
+"ID_SAVE_MOVIE_START": [
+[
+10430,
+"0x1804fe9e3"
+]
+],
+"ID_VIDEO_IMAGE_COPY_SIZE": [
+[
+10432,
+"0x1804fe9fc"
+]
+],
+"ID_VIDEO_IMAGE_CAPTURE_SIZE": [
+[
+10433,
+"0x1804fea15"
+]
+],
+"ID_VIDEO_IMAGE_CAPTURE_PROMPT_SIZE": [
+[
+10434,
+"0x1804fea2e"
+]
+],
+"ID_BASE_OPEN": [
+[
+10443,
+"0x1804fea47"
+]
+],
+"ID_VISUAL_ONOFF": [
+[
+10413,
+"0x1804fea60"
+]
+],
+"ID_VISUAL_PREV": [
+[
+10414,
+"0x1804fea79"
+]
+],
+"ID_VISUAL_NEXT": [
+[
+10415,
+"0x1804fea92"
+]
+],
+"ID_LOGO_CONFIG": [
+[
+10440,
+"0x1804feaab"
+]
+],
+"ID_PLAYINFO_MSG": [
+[
+10442,
+"0x1804feac4"
+]
+],
+"ID_WDM_ETC": [
+[
+10407,
+"0x1804feadd"
+]
+],
+"ID_VIDEO_DEINTERLACE_CYCLE": [
+[
+10420,
+"0x1804feaf6"
+]
+],
+"ID_VIDEO_DEINTERLACE_AUTO": [
+[
+10421,
+"0x1804feb0f"
+]
+],
+"ID_VIDEO_DEINTERLACE_FORCE_USE": [
+[
+10422,
+"0x1804feb28"
+]
+],
+"ID_VIDEO_DEINTERLACE_NOT_USE": [
+[
+10423,
+"0x1804feb41"
+]
+],
+"ID_VIDEO_DEINTERLACE_SETTING": [
+[
+10424,
+"0x1804feb5a"
+]
+],
+"ID_BOOKMARK_USE_THUMBNAIL": [
+[
+10455,
+"0x1804feb73"
+]
+],
+"ID_BOOKMARK_AUTO_DELETE": [
+[
+10456,
+"0x1804feb8c"
+]
+],
+"ID_BOOKMARK_SAVE_EXTERNAL": [
+[
+10457,
+"0x1804feba5"
+]
+],
+"ID_BOOKMARK_PROMPT_ADD": [
+[
+10459,
+"0x1804febbe"
+]
+],
+"ID_BOOKMARK_SHOW_LIST": [
+[
+10460,
+"0x1804febd7"
+]
+],
+"ID_DVD_SPEED_B1X": [
+[
+10469,
+"0x1804febf0"
+]
+],
+"ID_DVD_SPEED_B2X": [
+[
+10470,
+"0x1804fec09"
+]
+],
+"ID_DVD_SPEED_B4X": [
+[
+10471,
+"0x1804fec22"
+]
+],
+"ID_DVD_SPEED_B8X": [
+[
+10472,
+"0x1804fec3b"
+]
+],
+"ID_DVD_SPEED_F1X": [
+[
+10473,
+"0x1804fec54"
+]
+],
+"ID_DVD_SPEED_F2X": [
+[
+10474,
+"0x1804fec6d"
+]
+],
+"ID_DVD_SPEED_F4X": [
+[
+10475,
+"0x1804fec86"
+]
+],
+"ID_DVD_SPEED_F8X": [
+[
+10476,
+"0x1804fec9f"
+]
+],
+"ID_ETC_CLOSE_SYSTEM_TIME": [
+[
+10479,
+"0x1804fecb8"
+]
+],
+"ID_ETC_CLOSE_TIME_SET": [
+[
+10480,
+"0x1804fecd1"
+]
+],
+"ID_CAPTION_SAVE_MOVIE": [
+[
+10485,
+"0x1804fecea"
+]
+],
+"ID_CAPTION_REOPEN": [
+[
+10488,
+"0x1804fed03"
+]
+],
+"ID_PLAYLIST_SEARCH_FILE": [
+[
+10490,
+"0x1804fed1c"
+]
+],
+"ID_PLAYBACK_REPEAT_NONE": [
+[
+10495,
+"0x1804fed35"
+]
+],
+"ID_PLAYBACK_REPEAT_ALL": [
+[
+10496,
+"0x1804fed4e"
+]
+],
+"ID_PLAYBACK_REPEAT_ONE": [
+[
+10497,
+"0x1804fed67"
+]
+],
+"ID_AUTO_CAPTION_MARGIN": [
+[
+10500,
+"0x1804fed80"
+]
+],
+"ID_PLAYLIST_FILE_INFO": [
+[
+10505,
+"0x1804fedb2"
+]
+],
+"ID_PLAYLIST_SNAPSHOT": [
+[
+10800,
+"0x1804fedcb"
+]
+],
+"ID_PLAYLIST_DEL_FILE_MAIN": [
+[
+10417,
+"0x1804fede4"
+]
+],
+"ID_PLAYLIST_DEL_CAP_MAIN": [
+[
+10418,
+"0x1804fedfd"
+]
+],
+"ID_SKIN_OSC_NONE": [
+[
+10514,
+"0x1804fee16"
+]
+],
+"ID_SKIN_OSC_3D": [
+[
+10515,
+"0x1804fee2f"
+]
+],
+"ID_SKIN_OSC_LAYERED": [
+[
+10516,
+"0x1804fee48"
+]
+],
+"ID_SKIN_OSC_3D11": [
+[
+10517,
+"0x1804fee61"
+]
+],
+"ID_SKIN_OSC_OPENGL": [
+[
+10518,
+"0x1804fee7a"
+]
+],
+"ID_SKIN_OSC_SETTING": [
+[
+10519,
+"0x1804fee93"
+]
+],
+"ID_VOLUME_MASTER_INC": [
+[
+10520,
+"0x1804feeac"
+]
+],
+"ID_VOLUME_MASTER_DEC": [
+[
+10521,
+"0x1804feec5"
+]
+],
+"ID_VOLUME_AC3DTS_AMP": [
+[
+10436,
+"0x1804feede"
+]
+],
+"ID_VOLUME_AC3DTS_INC": [
+[
+10522,
+"0x1804feef7"
+]
+],
+"ID_VOLUME_AC3DTS_DEC": [
+[
+10523,
+"0x1804fef10"
+]
+],
+"ID_COLOR_THEME_USER_SET": [
+[
+10527,
+"0x1804fef29"
+]
+],
+"ID_VIDEO_SETTING": [
+[
+10529,
+"0x1804fef42"
+]
+],
+"ID_VIDEO_MOTIONBLUR": [
+[
+10531,
+"0x1804fef5b"
+]
+],
+"ID_VIDEO_AVISYNTH": [
+[
+10770,
+"0x1804fef74"
+]
+],
+"ID_VIDEO_AVISYNTH_CONFIG": [
+[
+10773,
+"0x1804fef8d"
+]
+],
+"ID_VIDEO_AVISYNTH_OPEN": [
+[
+10775,
+"0x1804fefa6"
+]
+],
+"ID_PLAY_REPEAT_START_DEC": [
+[
+10533,
+"0x1804fefbf"
+]
+],
+"ID_PLAY_REPEAT_START_INC": [
+[
+10535,
+"0x1804fefd8"
+]
+],
+"ID_PLAY_REPEAT_STOP_DEC": [
+[
+10537,
+"0x1804feff1"
+]
+],
+"ID_PLAY_REPEAT_STOP_INC": [
+[
+10539,
+"0x1804ff00a"
+]
+],
+"ID_PLAY_REPEAT_DEC": [
+[
+10541,
+"0x1804ff023"
+]
+],
+"ID_PLAY_REPEAT_INC": [
+[
+10543,
+"0x1804ff03c"
+]
+],
+"ID_ETC_CLOSE_PERSIST": [
+[
+10553,
+"0x1804ff055"
+]
+],
+"ID_VIDEO_CAPTURE_NOW_TIME": [
+[
+10556,
+"0x1804ff06e"
+]
+],
+"ID_VIDEO_CAPTURE_PLAY_TIME": [
+[
+10557,
+"0x1804ff087"
+]
+],
+"ID_VIDEO_DEV_DIRECT3D9": [
+[
+10560,
+"0x1804ff0a0"
+]
+],
+"ID_VIDEO_DEV_OPENGL": [
+[
+10561,
+"0x1804ff0b9"
+]
+],
+"ID_VIDEO_DEV_NULL_COMP": [
+[
+10562,
+"0x1804ff0d2"
+]
+],
+"ID_VIDEO_DEV_NULL_UNCOMP": [
+[
+10563,
+"0x1804ff0eb"
+]
+],
+"ID_VIDEO_DEV_DIRECT3D11": [
+[
+10564,
+"0x1804ff104"
+]
+],
+"ID_CAPTION_STEREO_NONE": [
+[
+10633,
+"0x1804ff11d"
+]
+],
+"ID_CAPTION_STEREO_SBS": [
+[
+10634,
+"0x1804ff136"
+]
+],
+"ID_CAPTION_STEREO_TNB": [
+[
+10635,
+"0x1804ff14f"
+]
+],
+"ID_CAPTION_STEREO_AFTER": [
+[
+10570,
+"0x1804ff168"
+]
+],
+"ID_CAPTION_STEREO_BEFORE": [
+[
+10571,
+"0x1804ff181"
+]
+],
+"ID_CAPTION_STEREO_UP": [
+[
+10572,
+"0x1804ff19a"
+]
+],
+"ID_CAPTION_STEREO_DOWN": [
+[
+10573,
+"0x1804ff1b3"
+]
+],
+"ID_CAPTION_STEREO_LEFT": [
+[
+10574,
+"0x1804ff1cc"
+]
+],
+"ID_CAPTION_STEREO_RIGHT": [
+[
+10575,
+"0x1804ff1e5"
+]
+],
+"ID_CAPTION_STEREO_CENTER": [
+[
+10576,
+"0x1804ff1fe"
+]
+],
+"ID_BOTTOM_MARGIN_PAN_SCAN": [
+[
+10577,
+"0x1804ff217"
+]
+],
+"ID_DEFAULT_SKIN_ONLY": [
+[
+10578,
+"0x1804ff230"
+]
+],
+"ID_PLAYBACK_SKIP_OPENING": [
+[
+10579,
+"0x1804ff249"
+]
+],
+"ID_PLAYBACK_SKIP_ENDING": [
+[
+10580,
+"0x1804ff262"
+]
+],
+"ID_PLAYBACK_SKIP_CHAPTER": [
+[
+10581,
+"0x1804ff27b"
+]
+],
+"ID_PLAYBACK_CUR_CAP": [
+[
+10582,
+"0x1804ff294"
+]
+],
+"ID_PLAYLIST_RENAME_FILE": [
+[
+10583,
+"0x1804ff2ad"
+]
+],
+"ID_VIDEO_CAPTURE_ARCORRECT": [
+[
+10587,
+"0x1804ff2c6"
+]
+],
+"ID_PLAY_REPEAT_PREV_CAPTION": [
+[
+10591,
+"0x1804ff2df"
+]
+],
+"ID_PLAY_REPEAT_CAPTION": [
+[
+10592,
+"0x1804ff2f8"
+]
+],
+"ID_PLAY_REPEAT_NEXT_CAPTION": [
+[
+10593,
+"0x1804ff311"
+]
+],
+"ID_PLAY_REPEAT_DEC_COUNT": [
+[
+10594,
+"0x1804ff32a"
+]
+],
+"ID_PLAY_REPEAT_INC_COUNT": [
+[
+10595,
+"0x1804ff343"
+]
+],
+"ID_PLAYBACK_SEAMLESS_NONE": [
+[
+10602,
+"0x1804ff35c"
+]
+],
+"ID_PLAYBACK_SEAMLESS_PRELOAD": [
+[
+10603,
+"0x1804ff375"
+]
+],
+"ID_PLAYBACK_SEAMLESS_MIX": [
+[
+10604,
+"0x1804ff38e"
+]
+],
+"ID_PLAYBACK_SEAMLESS_SETTING": [
+[
+10605,
+"0x1804ff3a7"
+]
+],
+"ID_VIDEO_ROTATE_CYCLE": [
+[
+10612,
+"0x1804ff3c0"
+]
+],
+"ID_VIDEO_ROTATE_NONE": [
+[
+10613,
+"0x1804ff3d9"
+]
+],
+"ID_VIDEO_ROTATE_90": [
+[
+10614,
+"0x1804ff3f2"
+]
+],
+"ID_VIDEO_ROTATE_180": [
+[
+10615,
+"0x1804ff40b"
+]
+],
+"ID_VIDEO_ROTATE_270": [
+[
+10616,
+"0x1804ff424"
+]
+],
+"ID_CAPTION_COPY_CLIPBOARD": [
+[
+10624,
+"0x1804ff43d"
+]
+],
+"ID_CAPTION_SYNC_KEEPING": [
+[
+10629,
+"0x1804ff456"
+]
+],
+"ID_PLAYLIST_DETECT": [
+[
+10640,
+"0x1804ff46f"
+]
+],
+"ID_ETC_CONFIG_MAG": [
+[
+10644,
+"0x1804ff488"
+]
+],
+"ID_AUDIO_VOICE_REMOVE": [
+[
+10438,
+"0x1804ff4a1"
+]
+],
+"ID_AUDIO_VOICE_EMPHASIS": [
+[
+10439,
+"0x1804ff4ba"
+]
+],
+"ID_AUDIO_SWAP_STEREO": [
+[
+10660,
+"0x1804ff4d3"
+]
+],
+"ID_AUDIO_CROSS_FEED": [
+[
+10661,
+"0x1804ff4ec"
+]
+],
+"ID_SCREEN_SIZE_DEF": [
+[
+10664,
+"0x1804ff505"
+]
+],
+"ID_SCREEN_CAPTURE1_SIZE": [
+[
+10666,
+"0x1804ff51e"
+]
+],
+"ID_SCREEN_CAPTURE2_SIZE": [
+[
+10667,
+"0x1804ff537"
+]
+],
+"ID_OPEN_FTP": [
+[
+10668,
+"0x1804ff550"
+]
+],
+"ID_SCREEN_RATIO_SETTING": [
+[
+10671,
+"0x1804ff569"
+]
+],
+"ID_CAPTION_MARGIN_1": [
+[
+10677,
+"0x1804ff582"
+]
+],
+"ID_CAPTION_MARGIN_2": [
+[
+10678,
+"0x1804ff59b"
+]
+],
+"ID_CAPTION_MARGIN_3": [
+[
+10679,
+"0x1804ff5b4"
+]
+],
+"ID_CAPTION_MARGIN_MAX": [
+[
+10680,
+"0x1804ff5cd"
+]
+],
+"ID_CAPTION_MARGIN_FULL": [
+[
+10681,
+"0x1804ff5e6"
+]
+],
+"ID_VIDEO_3D_NONE": [
+[
+10682,
+"0x1804ff5ff"
+]
+],
+"ID_VIDEO_3D_USE": [
+[
+10683,
+"0x1804ff618"
+]
+],
+"ID_VIDEO_3D_AUTO": [
+[
+10684,
+"0x1804ff631"
+]
+],
+"ID_VIDEO_3D_FLIP": [
+[
+10700,
+"0x1804ff64a"
+]
+],
+"ID_VIDEO_3D_SRC0": [
+[
+10714,
+"0x1804ff663"
+]
+],
+"ID_VIDEO_3D_SRC1": [
+[
+10715,
+"0x1804ff67c"
+]
+],
+"ID_VIDEO_3D_SRC2": [
+[
+10716,
+"0x1804ff695"
+]
+],
+"ID_VIDEO_3D_SRC_FULL": [
+[
+10717,
+"0x1804ff6ae"
+]
+],
+"ID_VIDEO_3D_SRC_SWAP": [
+[
+10718,
+"0x1804ff6c7"
+]
+],
+"ID_VIDEO_3D_DST0": [
+[
+10719,
+"0x1804ff6e0"
+]
+],
+"ID_VIDEO_3D_DST1": [
+[
+10720,
+"0x1804ff6f9"
+]
+],
+"ID_VIDEO_3D_DST2": [
+[
+10721,
+"0x1804ff712"
+]
+],
+"ID_VIDEO_3D_DST3": [
+[
+10722,
+"0x1804ff72b"
+]
+],
+"ID_VIDEO_3D_DST4": [
+[
+10723,
+"0x1804ff744"
+]
+],
+"ID_VIDEO_3D_DST5": [
+[
+10724,
+"0x1804ff75d"
+]
+],
+"ID_VIDEO_3D_DST6": [
+[
+10725,
+"0x1804ff776"
+]
+],
+"ID_VIDEO_3D_DST7": [
+[
+10726,
+"0x1804ff78f"
+]
+],
+"ID_VIDEO_3D_DST8": [
+[
+10727,
+"0x1804ff7a8"
+]
+],
+"ID_VIDEO_3D_DST9": [
+[
+10728,
+"0x1804ff7c1"
+]
+],
+"ID_VIDEO_3D_DST10": [
+[
+10729,
+"0x1804ff7da"
+]
+],
+"ID_VIDEO_3D_DST11": [
+[
+10730,
+"0x1804ff7f3"
+]
+],
+"ID_VIDEO_3D_DST12": [
+[
+10731,
+"0x1804ff80c"
+]
+],
+"ID_VIDEO_3D_DST13": [
+[
+10732,
+"0x1804ff825"
+]
+],
+"ID_VIDEO_3D_DST14": [
+[
+10733,
+"0x1804ff83e"
+]
+],
+"ID_VIDEO_3D_DST15": [
+[
+10734,
+"0x1804ff857"
+]
+],
+"ID_VIDEO_3D_DST16": [
+[
+10735,
+"0x1804ff870"
+]
+],
+"ID_VIDEO_3D_DST17": [
+[
+10736,
+"0x1804ff889"
+]
+],
+"ID_VIDEO_3D_DST18": [
+[
+10737,
+"0x1804ff8a2"
+]
+],
+"ID_VIDEO_3D_DST19": [
+[
+10738,
+"0x1804ff8bb"
+]
+],
+"ID_VIDEO_3D_DST20": [
+[
+10739,
+"0x1804ff8d4"
+]
+],
+"ID_VIDEO_3D_SETTING": [
+[
+10742,
+"0x1804ff8ed"
+]
+],
+"ID_VIDEO_3D_MVC": [
+[
+10744,
+"0x1804ff906"
+]
+],
+"ID_VIDEO_3D_FROM_NAME": [
+[
+10743,
+"0x1804ff91f"
+]
+],
+"ID_PLAY_REPEAT_PREV_CHAPTER": [
+[
+10745,
+"0x1804ff938"
+]
+],
+"ID_PLAY_REPEAT_CHAPTER": [
+[
+10746,
+"0x1804ff951"
+]
+],
+"ID_PLAY_REPEAT_NEXT_CHAPTER": [
+[
+10747,
+"0x1804ff96a"
+]
+],
+"ID_AUDIO_ETC_SET": [
+[
+10756,
+"0x1804ff983"
+]
+],
+"ID_PLAYBACK_SET": [
+[
+10757,
+"0x1804ff99c"
+]
+],
+"ID_PLAYBACK_SEEK_SET": [
+[
+10758,
+"0x1804ff9b5"
+]
+],
+"ID_PLAYBACK_PLAYLIST_SET": [
+[
+10759,
+"0x1804ff9ce"
+]
+],
+"ID_CAPTION_SET": [
+[
+10760,
+"0x1804ff9e7"
+]
+],
+"ID_CAPTION_STYLE_SET": [
+[
+10761,
+"0x1804ffa00"
+]
+],
+"ID_CAPTION_ETC_SET": [
+[
+10762,
+"0x1804ffa19"
+]
+],
+"ID_CHAPTER_PREV": [
+[
+10763,
+"0x1804ffa32"
+]
+],
+"ID_CHAPTER_NEXT": [
+[
+10764,
+"0x1804ffa4b"
+]
+],
+"ID_ETC_CLOSE_STANDBY": [
+[
+10767,
+"0x1804ffa64"
+]
+],
+"ID_PLAY_REPEAT_MENU": [
+[
+10776,
+"0x1804ffa7d"
+]
+],
+"ID_BOOKMARK_CHECK": [
+[
+10779,
+"0x1804ffa96"
+]
+],
+"ID_ETC_CLOSE_DELAY_TIME": [
+[
+10784,
+"0x1804ffaaf"
+]
+],
+"ID_PLAY_PREV_KEY_FRAME": [
+[
+10786,
+"0x1804ffac8"
+]
+],
+"ID_PLAY_NEXT_KEY_FRAME": [
+[
+10787,
+"0x1804ffae1"
+]
+],
+"ID_PLAYLIST_MULTI": [
+[
+10788,
+"0x1804ffafa"
+]
+],
+"ID_PLAYLIST_SEAMLESS1": [
+[
+10789,
+"0x1804ffb13"
+]
+],
+"ID_PLAYLIST_SEAMLESS2": [
+[
+10790,
+"0x1804ffb2c"
+]
+],
+"ID_PLAYLIST_EXECUTE": [
+[
+10792,
+"0x1804ffb45"
+]
+],
+"ID_AUDIO_CAPTURE_START": [
+[
+10798,
+"0x1804ffb5e"
+]
+],
+"ID_ETC_SHOW_HISTROY": [
+[
+10807,
+"0x1804ffb77"
+]
+],
+"ID_ETC_TOUCH_SUPPORT": [
+[
+10809,
+"0x1804ffb90"
+]
+],
+"ID_ETC_MOUSE_MOVE_TITLE": [
+[
+10810,
+"0x1804ffba9"
+]
+],
+"ID_PLAYBACK_SHOW_TIME": [
+[
+10812,
+"0x1804ffbc2"
+]
+],
+"ID_PLAYBACK_SHOW_THUMBNAIL": [
+[
+10813,
+"0x1804ffbdb"
+]
+],
+"ID_PLAYBACK_SHOW_CHAPTER": [
+[
+10814,
+"0x1804ffbf4"
+]
+],
+"ID_CAPTION_FONT_AUTO": [
+[
+10817,
+"0x1804ffc0d"
+]
+],
+"ID_CAPTION_FONT_GDI": [
+[
+10818,
+"0x1804ffc26"
+]
+],
+"ID_CAPTION_FONT_FREETYPE": [
+[
+10819,
+"0x1804ffc3f"
+]
+],
+"ID_CAPTION_FONT_DIRECTWRITE": [
+[
+10820,
+"0x1804ffc58"
+]
+],
+"ID_CAPTION_TEXT_INSIDE": [
+[
+10822,
+"0x1804ffc71"
+]
+],
+"ID_CAPTION_IMAGE_EXTEND": [
+[
+10823,
+"0x1804ffc8a"
+]
+],
+"ID_CAPTION_BOTTOM_VIDEO": [
+[
+10824,
+"0x1804ffca3"
+]
+],
+"ID_CAPTION_ANIMATION": [
+[
+10825,
+"0x1804ffcbc"
+]
+],
+"ID_CAPTION_BACKGROUND": [
+[
+10826,
+"0x1804ffcd5"
+]
+],
+"ID_CAPTION_FADING": [
+[
+10827,
+"0x1804ffcee"
+]
+],
+"ID_CAPTION_SMOOTH": [
+[
+10828,
+"0x1804ffd07"
+]
+],
+"ID_VIDEO_DEBAND": [
+[
+10837,
+"0x1804ffd20"
+]
+],
+"ID_VISUAL_COVER": [
+[
+10840,
+"0x1804ffd39"
+]
+],
+"ID_SCREENSIZE_RATIO": [
+[
+10841,
+"0x1804ffd52"
+]
+],
+"ID_CAPTION_FPS_CONV_12": [
+[
+10844,
+"0x1804ffd6b"
+]
+],
+"ID_CAPTION_FPS_CONV_15": [
+[
+10845,
+"0x1804ffd84"
+]
+],
+"ID_CAPTION_FPS_CONV_23": [
+[
+10846,
+"0x1804ffd9d"
+]
+],
+"ID_CAPTION_FPS_CONV_24": [
+[
+10847,
+"0x1804ffdb6"
+]
+],
+"ID_CAPTION_FPS_CONV_25": [
+[
+10848,
+"0x1804ffdcf"
+]
+],
+"ID_CAPTION_FPS_CONV_29": [
+[
+10849,
+"0x1804ffde8"
+]
+],
+"ID_CAPTION_FPS_CONV_30": [
+[
+10850,
+"0x1804ffe01"
+]
+],
+"ID_CAPTION_FPS_CONV_USER": [
+[
+10851,
+"0x1804ffe1a"
+]
+],
+"ID_CAPTION_DOWNLOAD": [
+[
+10863,
+"0x1804ffe33"
+]
+],
+"ID_CAPTION_UPLOAD": [
+[
+10864,
+"0x1804ffe4c"
+]
+],
+"ID_CAPTION_PROMPT_SYNC": [
+[
+10865,
+"0x1804ffe65"
+]
+],
+"ID_CHAT_FONT_SELF": [
+[
+10866,
+"0x1804ffe7e"
+]
+],
+"ID_CHAT_FONT_75": [
+[
+10869,
+"0x1804ffe97"
+]
+],
+"ID_CHAT_FONT_100": [
+[
+10870,
+"0x1804ffeb0"
+]
+],
+"ID_CHAT_FONT_125": [
+[
+10871,
+"0x1804ffec9"
+]
+],
+"ID_CHAT_FONT_150": [
+[
+10872,
+"0x1804ffee2"
+]
+],
+"ID_CHAT_FONT_175": [
+[
+10873,
+"0x1804ffefb"
+]
+],
+"ID_CHAT_FONT_200": [
+[
+10874,
+"0x1804fff14"
+]
+],
+"ID_CHAT_FONT_VIEW": [
+[
+10875,
+"0x1804fff2d"
+]
+],
+"ID_AUDIO_PROMPT_SYNC": [
+[
+10878,
+"0x1804fff46"
+]
+],
+"ID_LANGUAGE_SELECT_MENU": [
+[
+10881,
+"0x1804fff5f"
+]
+],
+"ID_CAST_EFFECT_INFO": [
+[
+10890,
+"0x1804fff78"
+]
+],
+"ID_CAST_EFFECT_SIGNPEN": [
+[
+10891,
+"0x1804fff91"
+]
+],
+"ID_CAST_EFFECT_MODULATION": [
+[
+10892,
+"0x1804fffaa"
+]
+],
+"ID_CAST_EFFECT_FIXED": [
+[
+10893,
+"0x1804fffc3"
+]
+],
+"ID_CAST_EFFECT_HORI": [
+[
+10894,
+"0x1804fffdc"
+]
+],
+"ID_CAST_EFFECT_VERT": [
+[
+10895,
+"0x1804ffff5"
+]
+],
+"ID_CAST_EFFECT_LOGO": [
+[
+10896,
+"0x18050000e"
+]
+],
+"ID_PLAYLIST_VIEW0": [
+[
+10900,
+"0x180500027"
+]
+],
+"ID_PLAYLIST_VIEW1": [
+[
+10901,
+"0x180500040"
+]
+],
+"ID_PLAYLIST_VIEW2": [
+[
+10902,
+"0x180500059"
+]
+],
+"ID_PLAYLIST_VIEW3": [
+[
+10903,
+"0x180500072"
+]
+],
+"ID_PLAYLIST_VIEW4": [
+[
+10904,
+"0x18050008b"
+]
+],
+"ID_PLAYLIST_VIEW5": [
+[
+10905,
+"0x1805000a4"
+]
+],
+"ID_PLAYLIST_VIEW6": [
+[
+10906,
+"0x1805000bd"
+]
+],
+"ID_PLAYLIST_THUMB_REFRESH": [
+[
+10908,
+"0x1805000d6"
+]
+],
+"ID_MOVIE_SELECT_FOLDER": [
+[
+10909,
+"0x1805000ef"
+]
+],
+"ID_MOVIE_OPEN_FOLDER": [
+[
+10910,
+"0x180500108"
+]
+],
+"ID_MOVIE_CAPTURE_FOLDER": [
+[
+10912,
+"0x180500121"
+]
+],
+"ID_VIDEO_CAPTURE_FOLDER": [
+[
+10913,
+"0x18050013a"
+]
+],
+"ID_AUDIO_CAPTURE_FOLDER": [
+[
+10915,
+"0x180500153"
+]
+],
+"ID_VIDEO_PS_COLOR_CONTROL": [
+[
+10917,
+"0x18050016c"
+]
+],
+"ID_VIDEO_PS_VIDEO_AREA": [
+[
+10918,
+"0x180500185"
+]
+],
+"ID_SKIN_SAVE_INV": [
+[
+10919,
+"0x18050019e"
+]
+],
+"ID_VIDEO_PS_SETTING": [
+[
+10920,
+"0x1805001b7"
+]
+],
+"ID_PLAYBACK_DELETE_MEDIA": [
+[
+10921,
+"0x1805001d0"
+]
+],
+"ID_ETC_CLIPBOARD_NAME": [
+[
+10926,
+"0x1805001e9"
+]
+],
+"ID_ETC_CLIPBOARD_FOLDER": [
+[
+10927,
+"0x180500202"
+]
+],
+"ID_ETC_CLIPBOARD_PATH": [
+[
+10928,
+"0x18050021b"
+]
+],
+"ID_CAPTION_MERGE": [
+[
+10940,
+"0x180500234"
+]
+],
+"ID_ETC_CLIPBOARD_CURRENT": [
+[
+10924,
+"0x18050024d"
+]
+],
+"ID_ETC_CLIPBOARD_TOTAL": [
+[
+10925,
+"0x180500266"
+]
+],
+"ID_ETC_CLEAR_HISTORY": [
+[
+10944,
+"0x18050027f"
+]
+],
+"ID_PLAYLIST_ALBUM_PLAY": [
+[
+10946,
+"0x180500298"
+]
+],
+"ID_CAPTION_FAST_MID_SYNC": [
+[
+10950,
+"0x1805002ca"
+]
+],
+"ID_CAPTION_FAST_MORE_SYNC": [
+[
+10951,
+"0x1805002e3"
+]
+],
+"ID_CAPTION_SLOW_MID_SYNC": [
+[
+10952,
+"0x1805002fc"
+]
+],
+"ID_CAPTION_SLOW_MORE_SYNC": [
+[
+10953,
+"0x180500315"
+]
+],
+"ID_CAPTION_PREV_SYNC": [
+[
+10954,
+"0x18050032e"
+]
+],
+"ID_CAPTION_NEXT_SYNC": [
+[
+10955,
+"0x180500347"
+]
+],
+"ID_CAPTION_CURRENT_SYNC": [
+[
+10958,
+"0x180500360"
+]
+],
+"ID_CHAT_BLACKCHAT_REG": [
+[
+10963,
+"0x180500379"
+]
+],
+"ID_CAPTION_STEREO_FILE": [
+[
+10965,
+"0x180500392"
+]
+],
+"ID_CAPTION_STEREO_SET": [
+[
+10966,
+"0x1805003ab"
+]
+],
+"ID_ETC_FULLSCREENONTOP": [
+[
+10968,
+"0x1805003c4"
+]
+],
+"ID_EPG_EXPLORER": [
+[
+10969,
+"0x1805003dd"
+]
+],
+"ID_BASIC_SETTING": [
+[
+10970,
+"0x1805003f6"
+]
+],
+"ID_AUDIO_SPDIF": [
+[
+10971,
+"0x18050040f"
+]
+],
+"ID_VIDEO_DXVA": [
+[
+10972,
+"0x180500428"
+]
+],
+"ID_CLOSED_CAPTION": [
+[
+10973,
+"0x180500441"
+]
+],
+"ID_EPG_SUPPORT": [
+[
+10974,
+"0x18050045a"
+]
+],
+"ID_CAPTION_DEF_SIZE": [
+[
+10975,
+"0x180500473"
+]
+],
+"ID_RESTORE_PROGRAM": [
+[
+10977,
+"0x18050048c"
+]
+],
+"ID_CAPTION_SECOND_SWAP": [
+[
+45249,
+"0x1805004a5"
+]
+],
+"ID_CAPTION_SECOND_HIDE": [
+[
+29200,
+"0x1805004be"
+]
+],
+"ID_CAPTION_SECOND_CYCLE": [
+[
+29398,
+"0x1805004d7"
+]
+],
+"ID_CAPTION_SECOND_APPEND": [
+[
+29399,
+"0x1805004f0"
+]
+],
+"ID_SKIN_TYPE_TOUCH_NO": [
+[
+10989,
+"0x180500509"
+]
+],
+"ID_SKIN_TYPE_TOUCH_AUTO": [
+[
+10990,
+"0x180500522"
+]
+],
+"ID_SKIN_TYPE_TOUCH_USE": [
+[
+10991,
+"0x18050053b"
+]
+],
+"ID_VIDEO_VAPOURSYNTH": [
+[
+10995,
+"0x180500554"
+]
+],
+"ID_VIDEO_VAPOURSYNTH_OPEN": [
+[
+10996,
+"0x18050056d"
+]
+],
+"ID_VIDEO_VAPOURSYNTH_CONFIG": [
+[
+10997,
+"0x180500586"
+]
+],
+"ID_VIDEO_360VR_NONE": [
+[
+11000,
+"0x18050059f"
+]
+],
+"ID_VIDEO_360VR_AUTO": [
+[
+11002,
+"0x1805005b8"
+]
+],
+"ID_VIDEO_360VR_FORCE": [
+[
+11001,
+"0x1805005d1"
+]
+],
+"ID_VIDEO_360VR_PREVIEW": [
+[
+11003,
+"0x1805005ea"
+]
+],
+"ID_CAST_SHARE": [
+[
+11008,
+"0x180500603"
+]
+],
+"ID_CAST_REPORT": [
+[
+11010,
+"0x18050061c"
+]
+],
+"ID_COPY_BROADCAST": [
+[
+11011,
+"0x180500635"
+]
+],
+"ID_BAD_BROADCAST": [
+[
+11012,
+"0x18050064e"
+]
+],
+"ID_FULL_DIV_SCREEN": [
+[
+11013,
+"0x180500667"
+]
+],
+"ID_AUDIO_SPEED_FFMPEG": [
+[
+11014,
+"0x180500680"
+]
+],
+"ID_AUDIO_DEC_FILTER": [
+[
+10454,
+"0x180500699"
+]
+],
+"ID_SIMPLE_URL_OPEN": [
+[
+11017,
+"0x1805006b2"
+]
+],
+"ID_SIMPLE_FTP_OPEN": [
+[
+11018,
+"0x1805006cb"
+]
+],
+"ID_SIMPLE_ALBUM_OPEN": [
+[
+11019,
+"0x1805006e4"
+]
+],
+"ID_SIMPLE_BOOKMARK_OPEN": [
+[
+11020,
+"0x1805006fd"
+]
+],
+"ID_SIMPLE_CAST_OPEN": [
+[
+11021,
+"0x180500716"
+]
+],
+"ID_SIMPLE_NOW_PLAY": [
+[
+11022,
+"0x18050072f"
+]
+],
+"ID_SIMPLE_SETTING": [
+[
+11023,
+"0x180500748"
+]
+],
+"ID_VIDEO_PS_YCGCO": [
+[
+11025,
+"0x180500761"
+]
+],
+"ID_VIDEO_PS_SMPTE_2086": [
+[
+11026,
+"0x18050077a"
+]
+],
+"ID_VIDEO_PS_SMPTE_2084": [
+[
+11027,
+"0x180500793"
+]
+],
+"ID_VIDEO_MARGIN_TOP_DEC": [
+[
+11030,
+"0x1805007ac"
+]
+],
+"ID_VIDEO_MARGIN_TOP_INC": [
+[
+11031,
+"0x1805007c5"
+]
+],
+"ID_VIDEO_MARGIN_LEFT_DEC": [
+[
+11032,
+"0x1805007de"
+]
+],
+"ID_VIDEO_MARGIN_LEFT_INC": [
+[
+11033,
+"0x1805007f7"
+]
+],
+"ID_VIDEO_MARGIN_BOTTOM_DEC": [
+[
+11034,
+"0x180500810"
+]
+],
+"ID_VIDEO_MARGIN_BOTTOM_INC": [
+[
+11035,
+"0x180500829"
+]
+],
+"ID_VIDEO_MARGIN_RIGHT_DEC": [
+[
+11036,
+"0x180500842"
+]
+],
+"ID_VIDEO_MARGIN_RIGHT_INC": [
+[
+11037,
+"0x18050085b"
+]
+],
+"ID_VIDEO_MARGIN_FULL": [
+[
+11038,
+"0x180500874"
+]
+],
+"ID_VIDEO_MARGIN_PERSIST": [
+[
+11039,
+"0x18050088d"
+]
+],
+"ID_VIDEO_EXTEND_USER": [
+[
+11040,
+"0x1805008a6"
+]
+],
+"ID_VIDEO_CROP_USER": [
+[
+11041,
+"0x1805008bf"
+]
+],
+"ID_VIDEO_CAPTURE_DELETE": [
+[
+11046,
+"0x1805008d8"
+]
+],
+"ID_FAV_CHECK": [
+[
+11047,
+"0x1805008f1"
+]
+],
+"ID_SCREENSIZE_SETTING": [
+[
+11048,
+"0x18050090a"
+]
+],
+"ID_SCREENSIZE_MONITOR0": [
+[
+11050,
+"0x180500923"
+]
+],
+"ID_SCREENSIZE_MONITOR1": [
+[
+11051,
+"0x18050093c"
+]
+],
+"ID_SCREENSIZE_MONITOR2": [
+[
+11052,
+"0x180500955"
+]
+],
+"ID_SCREENSIZE_MONITOR3": [
+[
+11053,
+"0x18050096e"
+]
+],
+"ID_SCREENSIZE_MONITOR4": [
+[
+11053,
+"0x180500987"
+]
+],
+"ID_VIDEO_3D_DEC_FORMAT0": [
+[
+11055,
+"0x1805009a0"
+]
+],
+"ID_VIDEO_3D_DEC_FORMAT1": [
+[
+11056,
+"0x1805009b9"
+]
+],
+"ID_VIDEO_3D_DEC_FORMAT2": [
+[
+11057,
+"0x1805009d2"
+]
+],
+"ID_VIDEO_3D_DEC_FORMAT3": [
+[
+11058,
+"0x1805009eb"
+]
+],
+"ID_VIDEO_3D_DEC_FORMAT4": [
+[
+11059,
+"0x180500a04"
+]
+],
+"ID_VIDEO_360VR_FMT_AUTO": [
+[
+11090,
+"0x180500a1d"
+]
+],
+"ID_VIDEO_360VR_FMT_EQUI": [
+[
+11091,
+"0x180500a36"
+]
+],
+"ID_VIDEO_360VR_FMT_DFE": [
+[
+11092,
+"0x180500a4f"
+]
+],
+"ID_VIDEO_360VR_FMT_CUBE": [
+[
+11093,
+"0x180500a68"
+]
+],
+"ID_VIDEO_360VR_FMT_EAC32": [
+[
+11094,
+"0x180500a81"
+]
+],
+"ID_VIDEO_360VR_FMT_EAC23": [
+[
+11095,
+"0x180500a9a"
+]
+],
+"ID_AUDIO_PITCH_LOW": [
+[
+11110,
+"0x180500ab3"
+]
+],
+"ID_AUDIO_PITCH_HIGH": [
+[
+11111,
+"0x180500acc"
+]
+],
+"ID_AUDIO_PITCH_DEF": [
+[
+11112,
+"0x180500ae5"
+]
+],
+"ID_CAPTION_TRANS_NO": [
+[
+11114,
+"0x180500afe"
+]
+],
+"ID_CAPTION_TRANS_ALL": [
+[
+11115,
+"0x180500b17"
+]
+],
+"ID_CAPTION_TRANS_LANG": [
+[
+11116,
+"0x180500b30"
+]
+],
+"ID_CAPTION_TRANS_ENG": [
+[
+11117,
+"0x180500b49"
+]
+],
+"ID_CAPTION_TRANS_ONLY": [
+[
+11120,
+"0x180500b62"
+]
+],
+"ID_CAPTION_TRANS_TOP": [
+[
+11121,
+"0x180500b7b"
+]
+],
+"ID_CAPTION_TRANS_BOTTOM": [
+[
+11122,
+"0x180500b94"
+]
+],
+"ID_CAPTION_TRANS_START": [
+[
+11125,
+"0x180500bad"
+]
+],
+"ID_CAPTION_TRANS_END": [
+[
+11149,
+"0x180500bc6"
+]
+],
+"ID_CAPTION_TRANS_SRC_START": [
+[
+12000,
+"0x180500bdf"
+]
+],
+"ID_CAPTION_TRANS_SRC_END": [
+[
+12199,
+"0x180500bf8"
+]
+],
+"ID_CAPTION_TRANS_DST_START": [
+[
+12200,
+"0x180500c11"
+]
+],
+"ID_CAPTION_TRANS_DST_END": [
+[
+12399,
+"0x180500c2a"
+]
+],
+"ID_CAPTION_TRANS_DST_SETTING": [
+[
+12400,
+"0x180500c43"
+]
+],
+"ID_SIMPLE_MENU_THUMB": [
+[
+11360,
+"0x180500c5c"
+]
+],
+"ID_SIMPLE_MENU_LARGE": [
+[
+11361,
+"0x180500c75"
+]
+],
+"ID_PANSCAN_PERSIST": [
+[
+11363,
+"0x180500c8e"
+]
+],
+"ID_PLAYLIST_ADD_CONTAIN": [
+[
+11367,
+"0x180500cd9"
+]
+],
+"ID_PLAYLIST_COPY_FILE": [
+[
+11368,
+"0x180500cf2"
+]
+],
+"ID_PLAYLIST_COPY_CAP": [
+[
+11369,
+"0x180500d0b"
+]
+],
+"ID_CAPTION_WHISPER_DLG": [
+[
+11370,
+"0x180500d24"
+]
+],
+"ID_CAPTION_WHISPER_DOING": [
+[
+11371,
+"0x180500d3d"
+]
+],
+"ID_CAPTION_WHISPER_AUTO_NONE": [
+[
+11373,
+"0x180500d56"
+]
+],
+"ID_CAPTION_WHISPER_AUTO_ALL": [
+[
+11374,
+"0x180500d6f"
+]
+],
+"ID_CAPTION_WHISPER_AUTO_COND": [
+[
+11375,
+"0x180500d88"
+]
+],
+"ID_CAPTION_WHISPER_SAVE": [
+[
+11379,
+"0x180500da1"
+]
+],
+"ID_CAPTION_WHISPER2_USE_NONE": [
+[
+11600,
+"0x180500dba"
+]
+],
+"ID_CAPTION_WHISPER2_USE_ALL": [
+[
+11601,
+"0x180500dd3"
+]
+],
+"ID_CAPTION_WHISPER2_USE_COND": [
+[
+11602,
+"0x180500dec"
+]
+],
+"ID_CAPTION_WHISPER2_DLG": [
+[
+11604,
+"0x180500e05"
+]
+],
+"ID_SUBTITLE_STREAM_CYCLE": [
+[
+29199,
+"0x180500e1e"
+]
+],
+"ID_AUDIO_STREAM_CYCLE": [
+[
+36799,
+"0x180500e37"
+]
+],
+"ID_VIDEO_STREAM_CYCLE": [
+[
+44699,
+"0x180500e50"
+]
+]
+}
