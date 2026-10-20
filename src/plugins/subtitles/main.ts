@@ -191,9 +191,10 @@ export default async function activate(plugin: Plugin) {
     window.on(name, (value: number) => Number.isFinite(value) && apply(value));
   const clamp = (value: number, min: number, max: number) => Math.round(Math.max(min, Math.min(max, value)));
   slider("changeDelay", (v) => styleChange("offsetMs", clamp(v, -10000, 10000)));
-  slider("changeSize", (v) => styleChange("fontSize", clamp(v, 12, 96)));
-  slider("changeOutline", (v) => styleChange("outline", clamp(v, 0, 8)));
-  slider("changeMargin", (v) => styleChange("marginPercent", clamp(v, 0, 30)));
+  // Ranges are the host's accepted style limits; anything wider fails as `invalid`.
+  slider("changeSize", (v) => styleChange("fontSize", clamp(v, 16, 72)));
+  slider("changeOutline", (v) => styleChange("outline", clamp(v, 0, 4)));
+  slider("changeMargin", (v) => styleChange("marginPercent", clamp(v, 2, 15)));
   slider("changeFont", (v) => {
     const font = Number.isInteger(v) ? subtitles.state?.fonts[v] : undefined;
     if (font) styleChange("fontId", font.id);
