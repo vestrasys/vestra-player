@@ -3388,6 +3388,13 @@ manifest 能力：`commands`、`ui.window`、`ui.osd`、`bindings.manage`（新�
 
 hotkeys 自己不设默认快捷键，避免和任何插件冲突；如果用户误操作，可以从菜单找回。J04 方案 A 落地后，「快捷键…」「鼠标…」改为 `plugin.settings.show("hotkeys.keyboard" | "hotkeys.mouse")`，在首选项窗口中打开对应页面；未落地时打开本插件自己的工具窗口。两种形态的布局相同。
 
+### 第 3a 轮实现说明
+
+- J03 按裁决 R-K2 的替代方案实现：没有 `ignoreDefaults` / `setIgnoreDefaults`，也没有 `ui-state.json` 的 `ignoreDefaultBindings`。hotkeys 对仍按默认运行的命令写空覆盖，在 `<dataDirectory>/ignore-defaults.json` 记录自己写过的条目，关闭时只还原这些；新加载的插件在 `bindings.onChange` 后补写（一次往返的窗口）。下文 J03「核心依赖」「持久化」两节以此为准。
+- J01、J02 是两个独立的工具窗口（J04 挂载在第 3b 轮）：快捷键 600×460（最小 520×380），鼠标 540×410。J02 的命令选择点开后在表格位置显示可过滤的列表，而不是下拉框（全局命令一百多条，下拉框放不下）。
+- J01 的状态多一种「已忽略」（J03 写下的空覆盖），快捷键列用括号显示被忽略的默认键（Slint 文本没有删除线）。
+- 捕获拿不到物理键：小键盘捕获为主键盘名；⌃P–⌃X 用 ⌘ 捕获（`Ctrl+` 绑定 ⌘ 与 ⌃ 都触发）。详见插件 README。
+
 ### J01 快捷键设置
 
 **需求**
@@ -3786,6 +3793,12 @@ manifest 能力：`commands`、`ui.window`、`ui.osd`、`plugins.manage`（现�
 | 设置 ▶ 插件管理… | 836 | settings-plugins | （无） |
 
 方案 A 落地后，也在首选项「插件」分类注册「插件管理」页面，内容与窗口相同。
+
+### 第 3a 轮实现说明
+
+- `PluginInfo` 按裁决 R-G1 去掉了 `dataDirectory` 与 `self`：数据目录按 `dirname(plugin.dataDirectory)/<id>` 推出，自身按 `info.id === plugin.id` 判断；`list` / `onChange` 不需要能力。下文「核心依赖」中的类型草案以参考文档 §12 为准。
+- 核心不为停用插件预先创建数据目录：「打开数据目录」在目录不存在时提示「数据目录不存在」，不由插件创建别的插件的目录。
+- 自身那一行的「重新加载」「回退到上一版本」也禁用（回退或重载自身会让管理窗口在操作中途重启）。
 
 ### J07 插件管理
 
