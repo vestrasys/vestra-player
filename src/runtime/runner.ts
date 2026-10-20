@@ -2,8 +2,8 @@ import { createInterface } from "node:readline";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createSdk, HostError } from "../sdk/index.ts";
-import type { Json, PluginModule, Transport } from "../sdk/index.ts";
+import { HostError } from "../sdk/wire.ts";
+import type { Json, Transport } from "../sdk/wire.ts";
 import { createPlugin } from "../sdk/plugin/index.ts";
 import type { Plugin } from "../sdk/plugin/index.ts";
 
@@ -30,40 +30,24 @@ const send = (message: unknown) =>
   process.stdout.write(`${JSON.stringify(message)}\n`);
 /**
  * Requests on the ordered pipe. The host replies to every request or stops
- * this process, so SDK v2 waits for the real reply: a client deadline cannot
- * know whether the host executed the request and only manufactures "unknown"
- * outcomes. The flat legacy API keeps its 10 second deadline until removed.
+ * this process, so the runner waits for the real reply: a client deadline
+ * cannot know whether the host executed the request and would only
+ * manufacture "unknown" outcomes. A slow request is logged, not abandoned.
  */
-function request<T>(
-  method: string,
-  params: Json,
-  deadline: boolean,
-): Promise<T> {
+function request<T>(method: string, params: Json = {}): Promise<T> {
   if (stopping)
     return Promise.reject(new HostError("disabled", "plugin is stopping"));
   const id = ++nextId;
   if (process.env.VESTRA_TRACE) console.error("rpc request", method, id);
   return new Promise<T>((resolve, reject) => {
-    // Native interaction has no duration limit. It ends with selection/cancel
-    // or the existing owner-stop path rejects and removes it.
+    // Native dialogs have no duration limit: they end with selection/cancel.
     const timer =
       method === "dialogs.open"
         ? undefined
-        : deadline
-          ? setTimeout(() => {
-              pending.delete(id);
-              reject(
-                new HostError(
-                  "timeout",
-                  `${method} exceeded 10 seconds; backend outcome may be unknown`,
-                ),
-              );
-            }, 10_000)
-          : setTimeout(
-              () =>
-                console.error(`rpc ${method} still waiting after 10 seconds`),
-              10_000,
-            );
+        : setTimeout(
+            () => console.error(`rpc ${method} still waiting after 10 seconds`),
+            10_000,
+          );
     pending.set(id, {
       resolve: (value) => resolve(value as T),
       reject,
@@ -80,7 +64,7 @@ const on: Transport["on"] = (event, listener) => {
     group.delete(listener);
   };
 };
-let dispose: void | (() => void | Promise<void>);
+let dispose: (() => Promise<void>) | undefined;
 let stopping = false;
 async function stop() {
   if (stopping) return;
@@ -142,36 +126,18 @@ input.on("close", () => {
 try {
   const module = (await import(
     pathToFileURL(resolve(directory, manifest.entry)).href
-  )) as Partial<PluginModule> & {
-    default?: (plugin: Plugin) => void | Promise<void>;
-  };
-  if (typeof module.default === "function") {
-    // SDK v2: `export default async function activate(plugin)`.
-    // A forgotten promise must not take the whole plugin down.
-    process.on("unhandledRejection", (error) =>
-      console.error("unhandled rejection:", error),
-    );
-    const instance = await createPlugin(
-      {
-        request: <T>(method: string, params: Json = {}) =>
-          request<T>(method, params, false),
-        on,
-      },
-      manifest,
-      directory,
-    );
-    dispose = () => instance.dispose();
-    await module.default(instance.plugin);
-    await instance.activated();
-  } else if (typeof module.activate === "function") {
-    // Legacy flat API, kept until every plugin has migrated.
-    const host = createSdk({
-      request: <T>(method: string, params: Json = {}) =>
-        request<T>(method, params, true),
-      on,
-    });
-    dispose = await module.activate(host);
-  } else throw new Error("plugin entry exports no activate function");
+  )) as { default?: (plugin: Plugin) => void | Promise<void> };
+  // `export default async function activate(plugin)`; see doc/rebuild/sdk-v2.md.
+  if (typeof module.default !== "function")
+    throw new Error("plugin entry must default-export activate(plugin)");
+  // A forgotten promise must not take the whole plugin down.
+  process.on("unhandledRejection", (error) =>
+    console.error("unhandled rejection:", error),
+  );
+  const instance = await createPlugin({ request, on }, manifest, directory);
+  dispose = () => instance.dispose();
+  await module.default(instance.plugin);
+  await instance.activated();
   send({ event: "runtime.ready" });
 } catch (error) {
   console.error(error);

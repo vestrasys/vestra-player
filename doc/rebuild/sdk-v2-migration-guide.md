@@ -1,5 +1,7 @@
 # SDK v2 迁移指南（插件迁移者）
 
+> P4 后旧扁平 `Host` API 已删除，全部插件已迁移；本指南保留为迁移记录，也适用于把外部旧插件改到 v2。
+
 先读：[sdk-v2-migration.md](sdk-v2-migration.md)（第 6、7 节）、[sdk-v2.md](sdk-v2.md)（尤其第 2、4、6、9 节）、[sdk-v2-usage.md](sdk-v2-usage.md)，以及参考迁移 `src/plugins/video/`（`main.ts` 75 行、测试 `tests/video.test.ts`）。
 
 目标只有一个：**行为不变，代码只剩业务**。菜单路径与标题、窗口与控件、回调效果、错误提示语义都保持；协议细节交给 SDK。

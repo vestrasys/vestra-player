@@ -5,8 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import test from "node:test";
-import { HostError } from "../../sdk/index.ts";
-import { startPlugin } from "../../sdk/plugin/testing.ts";
+import { HostError, startPlugin } from "../../sdk/plugin/testing.ts";
 import type { Plugin } from "../../sdk/plugin/index.ts";
 
 const runner = resolve(import.meta.dirname, "../../runtime/runner.ts");
@@ -46,7 +45,7 @@ async function run(
   return { event, methods };
 }
 
-test("the runner activates default-export (v2) and named activate (legacy) plugins", async () => {
+test("the runner activates a default-exported plugin and refuses the removed flat API", async () => {
   const v2 = await run(
     "export default async function activate(plugin) { plugin.commands.add({ id: 'a', path: ['文件', 'A'], run() {} }); }",
   );
@@ -55,12 +54,9 @@ test("the runner activates default-export (v2) and named activate (legacy) plugi
     methods: ["commands.register"],
   });
   const legacy = await run(
-    "export async function activate(host) { await host.commands.register('a', 1, { title: 'A', path: ['文件', 'A'], shortcut: null }, { enabled: true, checked: null, busy: false, reason: null }); }",
+    "export async function activate(host) { await host.commands.register('a', 1, {}, {}); }",
   );
-  assert.deepEqual(legacy, {
-    event: "runtime.ready",
-    methods: ["commands.register"],
-  });
+  assert.deepEqual(legacy, { event: "runtime.failed", methods: [] });
 });
 
 test("a v2 plugin is not ready until its registrations succeeded", async () => {
@@ -129,7 +125,6 @@ test("packages: trial waits for start, install follows the operation to its end"
     host.sent("packages.operation")[0]!.operationId,
     install.requestId,
   );
-  void HostError;
   await stop();
 });
 
@@ -142,5 +137,51 @@ test("plugin id and update are available to plugin code", async () => {
     { id: "demo.id" },
   );
   assert.equal(id, "demo.id");
+  await stop();
+});
+
+test("packages: an unconfirmed trial cleanup fails with code cleanup and a retry re-sends stop", async () => {
+  const { host, plugin, stop } = await startPlugin(() => {}, {
+    capabilities: ["plugins.manage"],
+  });
+  host.handle("packages.validate", () => ({
+    token: "t",
+    digest: "d",
+    apiVersion: "vestra.experimental/0.1",
+    manifest: {
+      id: "community.counter",
+      version: "1.0.0",
+      apiVersion: "vestra.experimental/0.1",
+      entry: "main.js",
+      capabilities: [],
+    },
+    checks: [],
+    trustedExecution: true,
+  }));
+  host.handle("packages.trial", () => ({ trialId: 9, status: "running" }));
+  let confirmed = false;
+  host.handle("packages.stopTrial", () => ({
+    trialId: 9,
+    status: "failed",
+    cleanupConfirmed: confirmed,
+  }));
+  const trial = await (await plugin.packages.validate("/tmp/c")).trial();
+  await assert.rejects(
+    trial.stop(),
+    (error: HostError) => error.code === "cleanup",
+  );
+  confirmed = true;
+  await trial.stop();
+  assert.equal(
+    host.sent("packages.stopTrial").length,
+    2,
+    "the second stop asked the host again",
+  );
+  await trial.stop();
+  assert.equal(
+    host.sent("packages.stopTrial").length,
+    2,
+    "a confirmed stop is final",
+  );
   await stop();
 });

@@ -1,4 +1,4 @@
-import type { PackageCandidate, PackageChange, PackageTrial, Plugin } from "../../sdk/plugin/index.ts";
+import type { PackageCandidate, PackageChange, PackageTrial, Plugin, PluginError } from "../../sdk/plugin/index.ts";
 import { WorkshopJob, defaultRequirement, requirement } from "./engine.mjs";
 import * as fs from "node:fs/promises";
 import path from "node:path";
@@ -77,7 +77,13 @@ export default async function activate(plugin: Plugin) {
 
   const stopTrial = async () => {
     if (!trial) return;
-    await trial.stop(); // waits until the host confirmed cleanup
+    try {
+      await trial.stop(); // waits until the host confirmed cleanup
+    } catch (error) {
+      // Keep the trial: stopping again re-asks the host.
+      if ((error as PluginError).code === "cleanup") throw Error(`试载清理未确认：${trial.status}`);
+      throw error;
+    }
     await trial.dispose();
     trial = undefined;
     show("试载已清理");

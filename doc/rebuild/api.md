@@ -1,87 +1,61 @@
-# 初版公共 API：vestra.experimental/0.1
+# 插件 API：SDK v2 on `vestra.experimental/0.1`
 
-> 本页保留阶段A范围，不能作为当前完整SDK清单。后续新增能力与待发布状态见[开发工作基线](development-baseline.md)，实际方法以当前SDK为准。
-
-状态：阶段 A 工作版，供交互设计评估；没有发布为全部插件并行开发的稳定基线。SDK 位于 `src/sdk/index.ts`，宿主路由在 `src/host/src/main.rs`；这份文档只描述已实现能力。
+状态：SDK v2 是插件唯一的 API（2026-10-20 P4 起；旧扁平 `Host` API 已删除）。设计说明见 [sdk-v2.md](sdk-v2.md)，示例见 [sdk-v2-usage.md](sdk-v2-usage.md)，公共类型在 `src/sdk/plugin/types.ts`，入口 `src/sdk/plugin/index.ts`，运行器 `src/runtime/runner.ts`，宿主路由 `src/host/src/main.rs`。wire 协议版本不变：`vestra.experimental/0.1`。
 
 ## 包与生命周期
 
 ```json
-{"id":"community.sample","apiVersion":"vestra.experimental/0.1","entry":"main.ts","capabilities":["playback.read","playback.control","events","ui.window"]}
+{"id":"community.sample","version":"1.0.0","apiVersion":"vestra.experimental/0.1","entry":"main.ts","capabilities":["commands","ui.window"]}
 ```
 
-manifest 拒绝未知字段、错误版本、未知 capability、空/非法 ID；entry 与 UI 文件必须是相对包路径，canonicalize 后仍在包目录内（包括符号链接）。重复运行 ID 被拒绝。此检查是包完整性约束，不是安全沙箱。插件可信，可使用 Node/fs/网络与成熟依赖；生产分发可带已构建 JS，用户不需要 Rust 编译器。
-
 ```ts
-import type { Host } from "../../sdk/index.ts";
-export async function activate(host: Host) {
-  const caps = await host.capabilities();
-  const off = await host.events.subscribe("playback.state", state => console.error(state));
-  // 文件选择属于随后设计的产品插件；此处仅演示公开播放设施。
-  await host.playback.open("/absolute/path/movie.mp4");
-  await host.playback.set("pause", false);
-  return async () => { /* 释放插件自己的 Node 资源 */ };
+import type { Plugin } from "../../sdk/plugin/index.ts";
+
+export default async function activate(plugin: Plugin) {
+  const window = plugin.windows.create("sample.slint");
+  plugin.commands.add({ id: "sample.open", path: ["插件", "示例…"], run: () => window.show() });
 }
 ```
 
-宿主每加载一个包启动一个 Node 进程。activate 可返回 dispose。加载返回 manifest 代表进程已启动；不等于 activate 已完成，也不是产品安装/升级成功。runtime.ready / runtime.failed 当前写宿主诊断，尚无稳定的激活状态公共模型。若在 activate 尚未返回时停用，进程会终止，尚未返回的 dispose 无法调用；插件应在激活期间自行约束外部资源副作用。正常退出、协议错误、停用都会释放该实例的窗口与订阅；每次运行拥有新的 generation，旧进程回包/回调不能路由给重新加载后的同名包。
+- manifest 拒绝未知字段、错误版本、未知 capability、空/非法 ID；`entry` 与 UI 文件必须是相对包路径，规范化后仍在包目录内（含符号链接）。这是包完整性约束，不是安全沙箱：插件可信，可使用 Node、文件系统、网络与 npm 依赖。`version` 为生产包版本（三段 u32），由构建工具写入 `dist/manifest.json`。
+- 入口必须**默认导出** `activate(plugin)`。命名导出 `activate(host)` 的旧插件会以 `runtime.failed` 拒绝。插件代码只能 `import type` SDK；运行器提供插件对象，生产包没有对本仓库的运行时依赖（构建工具检查）。
+- 宿主每加载一个包启动一个 Node 进程（`runtime/runner.ts`）。运行器读取来源状态（有 `playback.read` 时）、订阅需要的事件、调用 `activate`，等待激活期间发起的注册（命令、面板、解析器、订阅）全部成功后发送 `runtime.ready`；`activate` 抛错或任一注册失败则发送 `runtime.failed`。
+- 停用：宿主发送 `runtime.stop`，按 owner 撤销该插件的全部宿主资源（菜单、窗口、面板、处理资源、字幕资源、快照、任务、解析器、producer）；运行器拒绝新请求、使挂起请求以 `disabled` 失败、释放插件的全部句柄（只做本地清理），300 ms 后仍未退出则被结束。插件不返回清理函数。每次运行拥有新的 owner 代次，旧进程的回包/回调不会路由给重新加载的同名包。
+- 请求没有客户端超时：管道有序，宿主对每个请求都答复或停止插件；超过 10 秒的请求只写日志（[sdk-v2.md §5.1](sdk-v2.md#51-结果不确定的处理与依据)）。
 
-停用从运行列表中移除并在后台请求 dispose，300ms 后仍未退出则 kill + wait。运行时停止后拒绝新 RPC、使未完成 Promise 以 disabled 失败；dispose 应只释放插件自有资源，不能依赖新的宿主请求。宿主窗口/订阅清理由 Rust 保证，不能依赖插件配合。全局播放设置和媒体会话不因停用而复位；可撤销处理资源还未设计。
+## 能力与模块
 
-## 能力与方法
+请求所需 capability 必须在 manifest 中声明（契约诊断，不是防越权边界）。
 
-| capability | 已实现方法与行为 |
-|---|---|
-| 无需声明 | `capabilities()`：契约版本、公开能力、backend 名、UI 是否可用 |
-| playback.read | `playback.state()`：最近约100ms快照；无媒体的 position/duration 为 null |
-| playback.control | `open(source)`、`seek(seconds)`、`set(property,value)`，走同一长期 libmpv |
-| events | 订阅 playback.state、playback.backend、plugins.changed、host.error；返回 async unsubscribe |
-| ui.window | `ui.open/set/show/close` 和 `onCallback`；独立 Slint 原生窗口 |
-| plugins.manage | `plugins.list/load(directory)/disable(id)`；运行生命周期，尚非持久安装库 |
+| capability | SDK v2 模块 |
+| --- | --- |
+| commands | `plugin.commands.add` |
+| ui.window | `plugin.windows.create` |
+| ui.mount | `plugin.panels.mount("bottom" \| "sidebar", …)` |
+| ui.dialog | `plugin.dialogs.openFile/openFiles/openDirectory/saveFile` |
+| playback.read | `plugin.player.state`（初读）、`refresh`；滤镜读取处理状态 |
+| events | 实时 `player.state` / `onChange`、面板可见性、字幕刷新 |
+| playback.control | `player.open`、`setPaused`、`seek`、`setRate`、`restart`、`close`、`scrub`、`setOutput` |
+| producer.av | `player.openStream` |
+| processing.video / processing.audio | `plugin.video.filter` / `plugin.audio.filter`（另需 playback.read） |
+| subtitles.read / subtitles.control | `plugin.subtitles.*` |
+| media.read / media.control | `plugin.media.capture` → `Snapshot.export` → `ExportJob` |
+| source.resolve | `plugin.resolvers.add` |
+| plugins.manage | `plugin.packages.validate` → `trial` / `install`；`packages.rollback` |
 
-capabilities 列出宿主支持的能力，不代表每个插件都已获声明。请求方法须由该插件 manifest 声明对应能力；这是契约诊断，不是防恶意越权的安全边界。
+宿主仍实现但 SDK v2 不提供给插件的 wire 方法：`host.capabilities`、`playback.state/open/seek`、`playback.set` 中除 `volume`/`muted` 外的属性、`window.state/setFullscreen`、`commands.snapshot/execute`、`plugins.list/load/disable/activation`、`processing.*` 与 `subtitles.*` 的原始操作查询，以及事件 `playback.state`、`plugins.changed`、`host.error`。它们供宿主自测与历史验证使用；若插件确有需要，按常规流程提 API 请求。
 
-播放状态包含 `session:number`、`source:string|null`、`paused:boolean`、`position:number|null`、`duration:number|null`、`volume?:number`、`rate?:number`、`videoFrames:number`。session 从0开始，每个接受的 open 增长，调参/seek/pause 不增长。videoFrames 是宿主软件 renderer 完成帧的累计计数，不能当作屏幕实际呈现帧数。多个消费者共享该状态。
+## Slint
 
-open Promise 在 mpv 接受 loadfile 后返回 session。文件实际读取/解码成功、失败是异步结果；初版通过 playback.backend 提供 mpv 事件诊断字符串（currentSession 只是 poll 时的当前会话，不是事件来源关联；连续 open 时旧事件可能在新会话期间排出，不能用它完成异步结果隔离）（`event` 的 Debug 文本不是稳定解析协议），阶段 B/C 需要更明确的产品 loading/error 状态。state 可能仍有上一轮约100ms快照，调用方不能立即把旧快照当新会话结果。seek 使用非负秒数，mpv absolute+exact。它是后端接受语义，不能当帧已显示的 fence。
+- 工具窗口：`.slint` 必须恰好导出一个 Window 组件。属性与回调在 TS 中用 camelCase，SDK 转换为 kebab-case；窗口回调须在首次 `show()` 前绑定。
+- 面板：文件导出一个 component 与一个 global（桥接属性与回调都在 global 上），宿主按 owner 别名导入；组件名与 global 名由 SDK 从文件推断。
+- `bind` 的值只在变化时发送，`set` 的值总会发送一次；用户修改的 in-out 属性在其它回调后保留（[sdk-v2.md §4](sdk-v2.md#4-状态同步值绑定与更新轮)）。
+- 回调参数与属性值限于 JSON 可表示的基本类型、数组与结构体（有界）；回调必须返回 void。
 
-| set property | 类型/范围 | 单位 |
-|---|---|---|
-| pause | boolean | 暂停 |
-| volume | 0..200 | mpv百分比 |
-| speed | 0.05..10 | 倍速 |
-| brightness / contrast / saturation / gamma | -100..100 | mpv视频参数 |
-| audio-delay / sub-delay | -60..60 | 秒 |
+## 错误
 
-set 在 mpv 同步设置完成后答复，视频实际显示的生效时刻仍由 renderer 决定。数值须有限，范围外为 invalid。没有按插件名/探针名分支，也没有直接给 TS 任意 mpv 命令入口。连续提交不重载文件；控制线程与渲染线程分离，不能将同步普通 mpv 调用和 render 放回同一等待链。
+失败以带稳定 `code` 的 `Error` 表示（`PluginError`）：宿主错误码原样保留，SDK 自己的码见 [sdk-v2.md §7](sdk-v2.md#7-错误模型)。处理函数中的错误交给 `scope.onError`。
 
-## Slint 接入例子
+## 工具
 
-包内 `sample.slint` 必须恰好导出一个 Window 组件（多export会被拒绝），使用 Slint 自有 widgets/layout。示例 `src/examples/capability-demo` 是完整可运行消费端；只演示 API，不形成产品布局约束。
-
-```ts
-await host.ui.open("sample", "sample.slint", { status: "Ready" }, ["toggle", "adjust"]);
-const off = host.ui.onCallback(({view, callback, args}) => {
-  if (view === "sample" && callback === "adjust") {
-    void host.playback.set("brightness", Number(args[0])).catch(console.error);
-  }
-});
-await host.ui.set("sample", "status", "Playing");
-await host.ui.show("sample", false); // 隐藏；组件仍存活
-await host.ui.show("sample", true);
-await host.ui.close("sample");       // 释放组件；之后可同 ID 重新 open
-```
-
-properties 支持 string/number/boolean；callbacks 为返回 void、参数为这些 primitive 的导出回调。其他参数目前不能视为可用；复杂 model、image、嵌入 slot、菜单、快捷键和关闭通知尚未暴露。view ID 在插件实例内唯一，其他插件不能寻址它；停用时释放。用户关闭工具窗口仅隐藏 Slint 窗口，插件进程和播放会话继续，当前缺少公共关闭通知。不要把工具关闭当作卸载。
-
-首次编译 .slint 在 UI 线程发生，可能短暂停帧；set/show 不重新编译，也不暂停/seek。该限制需在产品设计阶段处理，尚不能宣布“打开所有工具无卡顿”通过。
-
-## 通信、错误与取消
-
-Node stdout 专用于 UTF-8 JSONL，console.log/info/debug 重定向 stderr。请求 `{id,method,params}`，答复 `{id,result}` 或 `{id,error:{code,message}}`；事件 `{event,data}`。包应通过 SDK 使用，避免耦合私有 runtime 诊断。宿主出站队列每实例最多64条，独立writer线程写管道；队列满时停用该实例，UI不等待其stdin。单行最大1MiB；无效JSON/结构导致实例停用。不要把大图像/音频样本塞入这条控制信道。
-
-HostError.code：invalid（参数）、unsupported（未暴露的方法/属性）、capability（manifest缺能力）、unavailable（headless UI）、missing（不存在的资源）、conflict（view重复）、backend（mpv失败）、host/ui（宿主/Slint错误）；客户端另有 timeout/disabled。错误包含 message。10秒 timeout 表示结果未知，不能推定后端操作已撤销。
-
-本版没有长任务和 AbortSignal/任务取消 API。已接受的瞬时播放操作不支持回滚式取消；停用插件会结束其待答请求和拥有的 UI/订阅，不能撤销已经提交的全局播放改变。导出/翻译/生成任务须后续另设任务所有权、取消和会话隔离，不用 timeout 冒充取消。
-
-SDK 对同一事件的多个本地监听者计数，只在最后一个 unsubscribe 后解除宿主订阅。订阅无历史重放，初始状态用 playback.state 主动读取。
+`npm run plugin -- check|build|test <name>`、`npm run plugins:build`、`npm run test:sdk`；插件测试用 `src/sdk/plugin/testing.ts` 的 `startPlugin` / `TestHost`。
