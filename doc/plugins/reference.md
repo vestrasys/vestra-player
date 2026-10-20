@@ -79,7 +79,7 @@ interface Disposable { dispose(): Promise<void> }
 | `ui.dialog` | `dialogs.*` |
 | `playback.read` | `player.state` 启动时读取、`player.refresh`、`player.stats`；滤镜读取处理状态 |
 | `events` | `player.state` / `onChange` 实时更新、面板可见性、字幕状态刷新 |
-| `playback.control` | `player.open`、`setPaused`、`seek`、`setRate`、`restart`、`close`、`scrub`、`setOutput`、`provideSequence`、`next`、`previous` |
+| `playback.control` | `player.open`、`setPaused`、`seek`、`setRate`、`restart`、`close`、`scrub`、`setOutput`、`provideSequence`、`next`、`previous`、`addAudioTrack`、`selectAudioTrack`；`power.preventSleep` |
 | `producer.av` | `player.openStream` |
 | `processing.video` | `video.filter`（另需 `playback.read`） |
 | `processing.audio` | `audio.filter`（另需 `playback.read`） |
@@ -89,6 +89,9 @@ interface Disposable { dispose(): Promise<void> }
 | `source.resolve` | `resolvers.add` |
 | `plugins.manage` | `packages.*` |
 | `ui.osd` | `osd.show`、`osd.panel` |
+| `clipboard` | `clipboard.readText`、`writeText`、`writeImage` |
+
+`tools`、`storage`、`system`（§16）在插件进程内执行，不需要能力。
 
 没有 `events` 时，`player.state` 只在启动和操作完成后更新，`onChange` 不会因外部变化触发。
 
@@ -116,7 +119,8 @@ interface Disposable { dispose(): Promise<void> }
 ```ts
 interface Scope extends Disposable {
   readonly commands, windows, panels, dialogs, player, video, audio,
-           subtitles, media, resolvers, packages, osd;
+           subtitles, media, resolvers, packages, osd,
+           clipboard, power, tools, storage, system;
   scope(): Scope;
   add<T extends Disposable>(item: T): T;
   onDispose(cleanup: () => void | Promise<void>): Disposable;
@@ -151,6 +155,8 @@ interface Plugin extends Scope {
 | `Stream` | 停止生成；若仍是当前来源则关闭 |
 | `Resolver` | 注销并中止进行中的解析 |
 | `PackageTrial` | 停止试载并等待清理确认 |
+| `JsonStore` | 写完待写的值 |
+| 进行中的 `tools.run` | 结束子进程（以 `aborted` 失败） |
 | 监听（`on`、`bind`、`onChange`…） | 退订 |
 | `Media` | **不**关闭媒体；需要时显式 `media.close()` |
 
@@ -160,7 +166,8 @@ interface Plugin extends Scope {
 
 - 位置：`~/Library/Application Support/Vestra/plugin-data/<manifest id>/`（环境变量 `VESTRA_PLUGIN_DATA` 可改根目录），播放器在启动插件前创建。插件停用、重新加载、升级、回退时都保留。
 - 试载的插件拿到一个临时目录，试载停止时删除，不会碰正式安装版本的数据。
-- 存什么、什么格式由插件决定。写文件时先写临时文件再改名（`writeFileSync(tmp)` → `renameSync(tmp, path)`），播放器中途退出也不会留下写了一半的文件；读不到或读坏时用默认值。
+- JSON 设置文件用 `plugin.storage.json`（§16.4），它已处理默认值、读坏改名、去抖与原子写入。
+- 存什么、什么格式由插件决定。自己写文件时先写临时文件再改名（`writeFileSync(tmp)` → `renameSync(tmp, path)`），播放器中途退出也不会留下写了一半的文件；读不到或读坏时用默认值。
 - 播放器没能提供目录时（例如创建失败），读取这个属性抛出 `code: "unavailable"`。
 - 测试：`TestHost` 为每个测试提供一个空的临时目录（`host.dataDirectory`，`stop()` 时删除）；要测试「重启后恢复」，给 `startPlugin` 传 `{ dataDirectory }` 指定同一个目录。
 
@@ -223,11 +230,16 @@ binding  = { 修饰键 "+" } 输入          修饰键按 Ctrl、Alt、Shift、C
 输入     = A–Z | 0–9 | F1–F24 | Space | Enter | Tab | Escape | Backspace | Delete | Insert
          | Home | End | PageUp | PageDown | ArrowLeft | ArrowRight | ArrowUp | ArrowDown
          | Plus | 其它单个符号（> < / , . ; ' [ ] \ - = ` …）
+         | Numpad0–Numpad9 | NumpadPlus | NumpadMinus | NumpadMultiply | NumpadDivide
+         | NumpadEnter | NumpadDecimal
          | Mouse:LeftDoubleClick[:LeftHalf | :RightHalf] | Mouse:MiddleClick | Mouse:X1 | Mouse:X2
          | Mouse:WheelUp | Mouse:WheelDown | Mouse:WheelLeft | Mouse:WheelRight
 ```
 
 - 字母按键名匹配（与大小写锁无关），`Shift+E` 是 Shift 加 E。符号键按打出的字符写、不写 Shift：`">"`，不是 `"Shift+."`；`+` 写成 `Plus`；`"Shift+1"` 非法，写 `"!"`。
+- 小键盘是独立的输入名：`"5"` 只认主键盘的 5，`"Numpad5"` 只认小键盘的 5；`"Enter"` 不认小键盘回车（写 `"NumpadEnter"`）。菜单里显示为 `Num5`、`Num+`、`NumEnter`。
+- Option（`Alt`）组合按物理键识别：`Alt+O` 按 ⌥O 触发，不看 ⌥O 打出的 `ø`；⌥E、⌥N、⌥U、⌥I、⌥\` 这类死键同样触发（死键只在视频区获得焦点时生效，输入框里照常组字）。字母取当前键盘布局的字母；`Alt+Shift+符号` 按美式键位换算（⌥⇧. 是 `Alt+>`）。
+- Ctrl 组合即使系统以 ASCII 控制码送达也按键名识别：⌃Y 是 `Ctrl+Y`（不是 Shift+Tab），⌃I、⌃H、⌃M、⌃[ 分别是 `Ctrl+I`、`Ctrl+H`、`Ctrl+M`、`Ctrl+[`。
 - macOS 上 `Ctrl+X` 按 ⌃X 或 ⌘X 都触发，`Cmd+X` 只认 ⌘X。
 - 鼠标绑定只在视频区生效，可带修饰键；`:LeftHalf` / `:RightHalf` 按双击位置区分左右半边，带区的绑定优先于不带区的。滚轮按累计位移计步。右键保留给菜单。
 - 作用范围：默认全局（主窗口或浮动面板窗口获得焦点、且按键没被焦点控件吃掉时，例如输入框里的空格不会触发）；`focus: "panel"` 只在本插件面板（附着或浮动）获得焦点时生效，此时先于全局查找。工具窗口里不触发绑定。
@@ -291,6 +303,8 @@ interface AudioTrack {
 | `scrub()` → `Scrub` | 开始一次拖动手势 |
 | `setOutput({ volume?, muted? })` → `Promise<boolean>` | 设备音量（0–200）/静音。最后写入生效，先设音量再设静音；`true` 表示本次已生效，`false` 表示被更新的值取代 |
 | `openStream(options)` → `Promise<Stream>` | 由插件生成画面和声音的来源（模拟器等） |
+| `addAudioTrack(path, { select?, ifCurrent? })` → `Promise<AudioTrack>` | 给当前媒体加一条外部音频文件（本地绝对路径），默认同时选中（`select: false` 只添加）。返回新音轨（`external: true`、`exportable: false`），它保留到换来源。路径不合法 `invalid`，没有就绪的媒体（含生成流）`unavailable`，载入失败 `backend` |
+| `selectAudioTrack(id, opts?)` → `Promise<PlayerState>` | 选中 `state.audioTracks` 中的一条；id 不存在 `invalid` |
 
 `opts` 为 `{ ifCurrent?: PlayerState }`。
 
@@ -371,10 +385,30 @@ interface Player {
 }
 interface PlaybackStats {
   backend: string; session: number; framesShown: number; framesDropped: number | null;
-  video: { codec; width; height; fps } | null;          // 字段可为 null
-  audio: { codec; sampleRate; channels } | null;
+  video: { codec; width; height; fps;                   // 字段都可为 null
+           decoder; pixelFormat; colorspace; displayWidth; displayHeight; displayFps; bitrate } | null;
+  audio: { codec; sampleRate; channels; decoder; format; channelLayout; bitrate } | null;
+  avSyncMs: number | null;      // 最近一次音画差（毫秒，有正负）
+  cacheSeconds: number | null;  // 解复用器已缓冲的秒数
 }
 ```
+
+新字段原样取自 mpv 0.41 属性，读不到为 `null`，不做换算：
+
+| 字段 | mpv 属性 | 说明 |
+| --- | --- | --- |
+| `video.decoder` / `audio.decoder` | `current-tracks/video/decoder` / `current-tracks/audio/decoder` | 短解码器名，如 `h264`、`aac` |
+| `video.pixelFormat` | `video-params/pixelformat` | 如 `yuv420p` |
+| `video.colorspace` | `video-params/colormatrix` | 如 `bt.709` |
+| `video.displayWidth` / `displayHeight` | `video-out-params/dw` / `dh` | 宽高比校正与滤镜之后的尺寸 |
+| `video.displayFps` | `estimated-display-fps` | 只在显示同步模式下有值；本播放器的渲染方式下实测通常为 `null` |
+| `video.bitrate` / `audio.bitrate` | `video-bitrate` / `audio-bitrate` | 比特/秒；视频按关键帧更新，刚开始播放时可能为 `null` |
+| `audio.format` | `audio-params/format` | 采样格式，如 `floatp` |
+| `audio.channelLayout` | `audio-params/hr-channels` | 如 `stereo`、`5.1(side)` |
+| `avSyncMs` | `avsync` × 1000 | 无音频或无视频时为 `null` |
+| `cacheSeconds` | `demuxer-cache-duration` | |
+
+不提供硬件解码状态（本播放器固定软件解码）。
 
 - 同时只能有一个提供者（例如播放列表）；另一个插件再登记以 `conflict` 失败（激活期间 = 激活失败）。`dispose` 或插件停用时撤销。
 - `canNext` / `canPrevious` 每轮更新重新求值，变化才发送；任何插件从 `player.state.can.next/previous` 读到。
@@ -460,6 +494,7 @@ interface SlotState {
 - `showMenu`：在面板当前所在的窗口弹出单层菜单，列出本插件的命令（`null` 为分隔线），样式、勾选、快捷键文字与主菜单相同；选择一项等于执行该命令。`at` 是窗口坐标，在 Slint 里取 `self.absolute-position.x / 1px + self.mouse-x / 1px`（y 同理）。命令不属于本插件以 `missing` 失败，面板未显示以 `unavailable` 失败，最多 32 项。
 - `setInteraction`：用户正在操作面板（输入框聚焦、拖动、弹出菜单打开）时设为 `true`，防止底栏自动隐藏。合并写入，最后写入生效。
 - 面板转发 global 上的所有回调，没有「先绑定再显示」的限制。
+- 底栏面板的内容可以画到槽位上方的视频区（负 `y`），宿主不裁切；侧栏与浮动窗口在其上层。进度条悬停时间提示这类内容可以直接画在底栏组件里（宿主的组合测试保证底栏外层不带 `clip`）。
 
 ### 6.4 Slint 文件规则
 
@@ -527,15 +562,29 @@ type FilterStatus =
 
 节点类型与取值范围（超出范围以 `invalid` 失败）：
 
-| 节点 | 字段与范围 |
-| --- | --- |
-| `{ kind: "eq", brightness, contrast, saturation, gamma }` | brightness −1–1，contrast 0–2，saturation 0–2，gamma 0.5–2 |
-| `{ kind: "gblur", sigma, steps: 3 }` | sigma 0–10 |
-| `{ kind: "volume", gainDb }` | −60–0 |
-| `{ kind: "equalizer", frequency, q: 1, gainDb }` | frequency 20–20000，gainDb −6–6 |
-| `{ kind: "treble", frequency: 3000, slope: 0.5, gainDb }` | gainDb 0–6 |
-| `{ kind: "dynaudnorm", enabled, maxGain, peak }` | maxGain 1–4，peak 0.5–0.95 |
-| 音频 `delayMs` | −2000–2000，10 的倍数 |
+| 节点 | 字段与范围 | FFmpeg | 播放中原地修改的字段 |
+| --- | --- | --- | --- |
+| `{ kind: "eq", brightness, contrast, saturation, gamma }` | brightness −1–1，contrast 0–2，saturation 0–2，gamma 0.5–2 | `eq` | 全部 |
+| `{ kind: "gblur", sigma, steps: 3 }` | sigma 0–10 | `gblur` | sigma |
+| `{ kind: "hue", degrees }` | −180–180 | `hue=h` | degrees |
+| `{ kind: "sharpen", amount, size }` | amount 0–2；size `"small"`（3×3）\| `"large"`（7×7） | `unsharp`（亮度） | — |
+| `{ kind: "denoise", lumaSpatial, chromaSpatial, lumaTemporal, chromaTemporal }` | 各 0–20（0 = 不处理） | `hqdn3d` | — |
+| `{ kind: "deblock", strength }` | `"weak"` \| `"strong"` | `deblock` | — |
+| `{ kind: "deband", threshold, range }` | threshold 0.003–0.5（四个平面相同），range 1–64 的整数 | `deband` | — |
+| `{ kind: "transform", rotate, flipH, flipV }` | rotate 0 \| 90 \| 180 \| 270（顺时针），先旋转再翻转 | `transpose` / `hflip` / `vflip` | — |
+| `{ kind: "deinterlace", when, output }` | when `"interlaced"`（只处理标记为隔行的帧）\| `"all"`；output `"frame"` \| `"field"`（帧率加倍） | `bwdif` | — |
+| `{ kind: "reframe", mode, aspect, x, y }` | mode `"crop"` \| `"pad"`；aspect（显示宽高比）0.25–4；x、y −1–1（−1 左/上、0 居中、1 右/下） | `crop` / `pad`（黑边） | — |
+| `{ kind: "volume", gainDb }` | −60–0 | `volume` | gainDb |
+| `{ kind: "equalizer", frequency, q: 1, gainDb }` | frequency 20–20000，gainDb −6–6 | `equalizer` | gainDb |
+| `{ kind: "treble", frequency: 3000, slope: 0.5, gainDb }` | gainDb 0–6 | `treble` | gainDb |
+| `{ kind: "dynaudnorm", enabled, maxGain, peak }` | maxGain 1–4，peak 0.5–0.95 | `dynaudnorm` | 全部 |
+| `{ kind: "channels", mode }` | `"stereo"`（不改）\| `"left"` \| `"right"` \| `"mono"` \| `"swap"`；多于两声道时先混成立体声 | `aformat` + `pan` | — |
+| 音频 `delayMs` | −10000–10000，10 的倍数；全部插件的正、负延迟各自合计不超过 10000 | — | — |
+
+- 「—」的字段改值时宿主重建本阶段的处理链（画面可能停顿一帧，音频处理状态复位）；拖动滑块的控件用表中可原地修改的字段。
+- 画面节点作用于宿主的方向处理（容器旋转标记）之后：竖拍视频先被摆正，`transform` 再在摆正后的画面上旋转。
+- 所有插件合计最多 64 个节点。video 插件同时打开全部效果时的最长链：eq、hue、sharpen、denoise、deblock、deband、deinterlace、transform、reframe、gblur 各一个，共 10 个节点（transform 最多展开为 3 个 FFmpeg 滤镜）。
+- 「含效果」截图与导出（§10）使用同一条链，与播放画面一致。
 
 ## 9. 字幕 `plugin.subtitles`
 
@@ -547,7 +596,8 @@ interface Subtitles {
   onChange(listener: (s: SubtitlesState) => void): Disposable;
   refresh(): Promise<SubtitlesState>;
   select(track: SubtitleTrack | null, opts?): Promise<SubtitlesState>; // null = 关闭字幕
-  load(srt: Uint8Array, opts?: { ifCurrent?; signal? }): Promise<SubtitleTrack>;
+  load(bytes: Uint8Array, opts?: { format?: "srt" | "ass"; title?: string;
+       select?: "primary" | "none"; ifCurrent?; signal? }): Promise<SubtitleTrack>;
   remove(track: SubtitleTrack, opts?): Promise<SubtitlesState>;       // 只能删本插件载入的
   setStyle(style: SubtitleStyle | null, opts?): Promise<SubtitlesState>; // null = 撤销本插件的样式层
 }
@@ -571,6 +621,9 @@ interface SubtitleTrack {
   title: string; language: string | null;
   styleSupported: boolean; styleReason: string | null;
   owned: boolean;          // 由本插件载入，可以 remove
+  codec: string | null;    // 后端的编解码器名，如 "subrip"、"ass"、"hdmv_pgs_subtitle"
+  text: boolean;           // 文本字幕（见下表），否则为图形字幕
+  streamIndex: number | null; // 内嵌轨在容器中的流号（ffmpeg -map 0:<n>）
 }
 
 type SubtitleStyle = {
@@ -579,13 +632,24 @@ type SubtitleStyle = {
   color: "white" | "yellow" | "cyan";
   outline: number;         // 0–4
   marginPercent: number;   // 2–15
-  offsetMs: number;        // −10000–10000
+  offsetMs: number;        // −600000–600000
+  bold?: boolean;          // 默认 false
+  shadow?: number;         // 阴影偏移 0–4（1080p 参考），50% 黑；默认 0
+  box?: number | null;     // 背景框不透明度 0–100；null/省略 = 无框
+  assOverride?: "keep" | "force"; // 默认 "keep"
 };
 ```
 
 - `select`、`remove`、`setStyle` 默认以提交前读到的当前选择为条件；`opts.ifCurrent` 传入 `SubtitlesState` 可绑定到更早的选择。
-- `load` 上传 UTF-8 SRT 的字节、校验、提交并选中。`signal` 在提交之前中止会丢弃上传并以 `AbortError` reject；提交发出后不再中止。
-- 样式按 1080p 参考高度缩放。
+- `load` 上传字幕文件的字节、校验、提交，默认选中（`select: "none"` 只加入轨道列表，选择不变）。`signal` 在提交之前中止会丢弃上传并以 `AbortError` reject；提交发出后不再中止。
+  - `format: "srt"`（默认）：UTF-8 SRT，≤ 2 MiB，≤ 10 000 条。
+  - `format: "ass"`：ASS 或 SSA 脚本原样交给渲染器（保留 `\pos`、`\fad` 等标签与脚本样式）；校验 UTF-8、≤ 2 MiB、含 `[Script Info]` 与 `[Events]`、1–20 000 行 `Dialogue:`。ASS 外部轨暂不能进入「含字幕」截图（`media.capture` 以 `unsupported` 失败）。
+  - `title`：1–200 个字符，作为轨道标题；省略时由播放器命名。
+  - VTT、SAMI 等其它格式由插件自己转换成 SRT 再载入。
+- `text` 判定：`codec` 为 `subrip`、`ass`、`ssa`、`webvtt`、`mov_text`、`text` 时为 `true`，其余（含 `null`）为 `false`。插件载入的 SRT 在后端是 `webvtt`。
+- `streamIndex`：只有内嵌轨、且播放器能确认 FFmpeg 流号时才有值（本地文件经宿主的 lavf 读取路径打开时）；外部轨、网络来源与其它情况一律 `null`。可直接用于 `tools.run("ffmpeg", ["-i", 源路径, "-map", \`0:${streamIndex}\`, …])`。
+- 样式按 1080p 参考高度缩放。`box` 有值时画背景框，阴影不生效；`shadow` 只在没有框时生效。
+- `assOverride`：`"keep"`（默认）时 ASS 字幕保留脚本自己的字体、颜色、位置，只按窗口缩放，样式只作用于 SRT 等文本字幕；`"force"` 时样式强制覆盖 ASS 脚本样式。
 
 ## 10. 截图与导出 `plugin.media`
 
@@ -688,16 +752,16 @@ interface PackageChange {
 | code | 含义 |
 | --- | --- |
 | `stale` | 条件不再成立（来源或字幕选择已被改变），**什么都没做** |
-| `missing` | 面板位置为空；`showMenu` 的命令不属于本插件 |
+| `missing` | 面板位置为空；`showMenu` 的命令不属于本插件；`system.reveal` / `openPath` 的路径不存在；`clipboard.writeImage` 的文件不存在 |
 | `capability` | manifest 未声明所需能力 |
 | `invalid` | 参数不合法（如滤镜值超出范围） |
 | `busy`、`conflict`、`unavailable`、`unsupported` | 播放器拒绝接纳，未执行（`conflict` 也用于已有别的播放序列提供者；`unavailable` 也用于 `next`/`previous` 不可用、面板未显示、无界面模式） |
 | `backend` | 载入或解析失败，`message` 为后端原因 |
 | `disabled` | 插件正在停用 |
 | `replaced` | 已被接受，但完成前被另一个来源替换（`open`、`openStream`、`media.ready`） |
-| `failed`、`ended` | `media.ready()`：载入失败 / 已播完 |
+| `failed`、`ended` | `media.ready()`：载入失败 / 已播完。`failed` 也用于 `tools.run` 非零退出（`message` 为 stderr 最后一行）、`system.*` 打开失败、剪贴板被系统拒绝写入 |
 | `aborted` | `signal` 中止（`error.name === "AbortError"`） |
-| `timeout` | `openStream` 启动超时；`error.stage` 为 `"prefill"`（首批缓冲未在 10 秒内备好）或 `"activation"`（选中后 10 秒内未激活） |
+| `timeout` | `openStream` 启动超时；`error.stage` 为 `"prefill"`（首批缓冲未在 10 秒内备好）或 `"activation"`（选中后 10 秒内未激活）。`tools.run` 超过 `timeoutMs`；`system.*` 超过 10 秒 |
 | `stream`、`device` | `openStream`：生成端报错 / 音频设备未就绪 |
 | `backend-uncertain` | 滤镜阶段被播放器后端阻塞，`filter.retry()` 重新检查 |
 | `cleanup` | `trial.stop()` 未确认清理，可再次调用 |
@@ -723,12 +787,13 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 | 操作 | `host.command(id).run()`（禁用或忙碌时同样拒绝）；`host.press(binding, { panel? })`（按绑定表执行，`panel: true` 模拟面板有焦点）；`host.window(id).emit(callback, ...args)`；`host.mounted().emit(...)`；`host.dialogAnswers.push([path] \| null)`；`host.step("next" \| "previous")`（模拟别的插件调用 `player.next()`） |
 | 模拟来源 | `host.openElsewhere(path, phase?)`（另一个插件打开了媒体）；`host.setSource({ phase, position, duration, … })` |
 | 断言 | `host.window(id).props`（kebab-case 名）、`.visible`；`host.command(id).state`、`.declaration`；`host.conflicts`（`[绑定, 赢家, ...被压下]`）；`host.layout.bottom` / `.sidebar`（可直接改后 `host.emit("window.state", {})` 模拟别处的变化）；`host.osd`（显示过的提示）、`host.osdPanel`；`host.sequence`（提供者的标志）；`host.menus`（`showMenu` 记录）；`host.sent(method)`；`host.source`；`host.processing`、`host.subtitles`、`host.snapshots`、`host.jobs`、`host.producers` |
-| 模拟数据 | `host.stats`（`player.stats()` 的返回值）；`host.dataDirectory`（`plugin.dataDirectory`） |
+| 模拟数据 | `host.stats`（`player.stats()` 的返回值，第 2 轮新增字段可省略，SDK 补 `null`）；`host.dataDirectory`（`plugin.dataDirectory`，`storage.json` 直接读写其中的真实文件）；`host.setSource({ audioTracks })`（`addAudioTrack` / `selectAudioTrack` 有默认处理，可用 `host.handle("audio.addTrack" \| "audio.selectTrack", …)` 注入失败）；`host.subtitles.tracks` 的条目可带 `codec`、`text`、`streamIndex` |
+| 通用能力 | `host.clipboard`（`{ text, images }`，预置 `text` 测 `readText`）；`host.power`（合并后的 `"off"` / `"playing"`）；`host.tools.handle(tool, (args) => ({ stdout, stderr }))`（未注入的工具 `unavailable`；抛 `HostError` 模拟失败），`host.tools.calls`；`host.system.revealed`、`.opened`；`host.subtitleLoads`（每次 `load` 的 `format`、`title`、`select` 与字节） |
 | 注入故障 | `host.handle(method, fn)`：抛 `new HostError(code, message)` 模拟播放器拒绝，抛普通 `Error` 模拟答复丢失；`host.reset(method)` 恢复 |
 | 同步 | `await host.settle(ms?)`：等到没有在途请求（可额外等待计时器） |
 | 结束 | `await stop()` |
 
-语义是简化的：没有解码，没有 Slint 渲染，导出任务每次查询前进一步。
+语义是简化的：没有解码，没有 Slint 渲染，导出任务每次查询前进一步。处理节点与音频延迟按播放器的同一套范围校验（越界的 `set` 以 `invalid` 进入 `failed`）。
 
 ## 15. 构建工具
 
@@ -747,3 +812,96 @@ npm run plugins:build                   # 构建 src/plugins/ 下全部插件
   - `"bundle": true` 或 `{ "external": [...] }`：用插件自己的 esbuild（devDependency）把入口及依赖打包成一个文件。**有运行时依赖就必须打包**，否则安装后找不到依赖包。
   - `"assets": ["vendor"]`：原样复制额外的文件或目录。
 - 开发时不需要构建：`cargo run --bin vestra-host -- --plugin <插件目录>`（在 `src/host/` 下，可重复 `--plugin`）直接运行 `main.ts`。
+- `check` 也检查 manifest 的能力名（与宿主同一张表，§2）。
+
+## 16. 通用能力
+
+很多插件都需要、行为应当一致的基础能力。剪贴板与阻止休眠由播放器提供；外部工具、设置文件、Finder 由 SDK 在插件进程里实现，不经过播放器。插件里不要再用 `pbcopy`、`caffeinate`、`open` 等命令自己实现。
+
+### 16.1 剪贴板 `plugin.clipboard`
+
+需要 `clipboard`。
+
+```ts
+clipboard.readText(): Promise<string | null>;      // 没有文本为 null
+clipboard.writeText(text: string): Promise<void>;  // ≤ 1 MiB（UTF-8）
+clipboard.writeImage(path: string): Promise<void>; // PNG/JPEG（按文件内容判断），≤ 16 MB，绝对路径
+```
+
+- 写入替换剪贴板的全部内容。文本以 `public.utf8-plain-text`、图片以 `public.png` / `public.jpeg` 写入系统剪贴板，可在文本编辑、预览等应用中粘贴。
+- 失败：`invalid`（类型、大小、非绝对路径、不是 PNG/JPEG）、`missing`（图片文件不存在）、`unavailable`（无界面模式）、`failed`（系统拒绝写入）。
+
+### 16.2 阻止休眠 `plugin.power`
+
+需要 `playback.control`。
+
+```ts
+power.preventSleep(mode: "off" | "playing"): Promise<void>;
+```
+
+- 任一插件要求 `"playing"` 即生效；插件改回 `"off"` 或停用时撤销它自己的要求。
+- 生效期间，来源阶段为 `ready` 且未暂停（含生成流）时，播放器持有系统断言：正在显示视频帧时阻止显示器睡眠（`caffeinate -d -i`），纯音频只阻止系统睡眠（`-i`）；暂停、播完、关闭来源时释放。断言绑定播放器进程，播放器退出时随之结束。
+- 可用 `pmset -g assertions` 查看。
+
+### 16.3 外部工具 `plugin.tools`
+
+```ts
+tools.run(tool: "ffmpeg" | "ffprobe", args: string[],
+          options: { timeoutMs: number; maxOutput?: number; signal?: AbortSignal }):
+  Promise<{ stdout: Uint8Array; stderr: string }>;
+tools.available(tool: "ffmpeg" | "ffprobe"): Promise<boolean>;
+```
+
+- 可执行文件按环境变量 `VESTRA_FFMPEG` / `VESTRA_FFPROBE`（绝对路径），再按 `PATH` 查找；找到的结果在本插件内缓存，找不到时下次重新查找。
+- 不经 shell：参数原样传给程序，路径里的空格、引号不需要转义。
+- 超过 `timeoutMs`、`signal` 中止、所在作用域释放（含插件停用）都会结束子进程：先 SIGTERM，300 ms 后仍在则 SIGKILL。
+- `stdout` 最多 `maxOutput` 字节（默认 16 MiB），超出时结束进程并以 `invalid` 失败；`stderr` 保留最后 64 KiB。
+- 失败：`unavailable`（找不到）、`timeout`、`failed`（非零退出，`message` 为 stderr 最后一行）、`invalid`、`aborted`。
+- 调用方按工作量给超时；没有固定上限。
+
+### 16.4 设置文件 `plugin.storage`
+
+```ts
+storage.json<T>(name: string, options: {
+  defaults: T;
+  validate?: (value: unknown) => value is T;
+  debounceMs?: number;            // 默认 300
+}): JsonStore<T>;
+
+interface JsonStore<T> extends Disposable {
+  readonly value: T;
+  save(next: T): void;            // 立即更新 value，debounceMs 后写入
+  flush(): Promise<void>;         // 立即写入待写的值
+}
+```
+
+- 文件为 `dataDirectory/<name>.json`；`name` 只能是 1–64 个 `a-z`、`0-9`、`-`，否则 `invalid`。
+- 创建时同步读取。文件不存在用 `defaults`；解析失败或 `validate` 返回 `false` 时，把原文件改名为 `<name>.json.bad-<毫秒时间戳>` 留给用户，并用 `defaults`。
+- 写入：临时文件 + 改名，按调用顺序一次一个，最后一次 `save` 的值最后落盘。
+- `dispose()` 与插件停用时先写完待写的值。只有 `save` 会写入：原地修改 `value` 的属性不会保存。
+
+### 16.5 Finder `plugin.system`
+
+```ts
+system.reveal(path: string): Promise<void>;   // 在 Finder 中选中（/usr/bin/open -R）
+system.openPath(path: string): Promise<void>; // 用默认应用打开文件或文件夹（/usr/bin/open）
+```
+
+- 路径不存在 `missing`；`open` 超过 10 秒 `timeout`，失败 `failed`。
+
+## 17. 变更说明
+
+### 第 2 轮批次 A（2026-10）
+
+兼容扩展：`PlaybackStats` 新字段；`player.addAudioTrack`、`selectAudioTrack`；`subtitles.load` 的 `format`、`title`、`select`；`SubtitleTrack.codec`、`text`、`streamIndex`；`SubtitleStyle.bold`、`shadow`、`box`、`assOverride`；8 种视频节点与 `channels` 音频节点；`clipboard`、`power`、`tools`、`storage`、`system`；绑定的小键盘名。
+
+范围放宽：`SubtitleStyle.offsetMs` −600 000–600 000；音频 `delayMs` −10 000–10 000（正、负合计各 10 000）。
+
+默认行为变化（不改签名，但效果可见）：
+
+- **ASS 字幕默认保留脚本样式**：宿主不再在启动时设置 `sub-ass-override=force`，默认是 `keep`（mpv `scale`）。内嵌或外部 ASS 字幕按脚本自己的字体、颜色、位置显示；设置了字幕样式的插件若需要覆盖 ASS，传 `assOverride: "force"`。SRT 等文本字幕不受影响。
+- **小键盘与主键盘分开**：小键盘的数字、加减号、回车不再匹配 `"5"`、`"Plus"`、`"Enter"` 等主键盘绑定。
+- **Option 与 Ctrl 组合按键名识别**：`Alt+字母` 在 macOS 上可用；⌃Y、⌃I、⌃H、⌃M、⌃[ 不再被识别成 Shift+Tab、Tab、Backspace、Enter、Escape。
+- **来源阶段变化立即推送**：`source.state` 在阶段变化（如 `ready → ended`、新来源就绪）时立即发出，不再等 100 ms 周期；周期推送不变。`media.onEnd` 之后打开下一项会更快。
+
+基础播放动作移交核心（`host.run`、`player.step`、`setStepSeek`、14 个核心动作）在批次 B 交付，迁移说明届时补在本节。

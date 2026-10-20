@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 mod backend;
 mod bindings;
+mod clipboard;
 mod commands;
 pub mod composition;
 mod effects;
@@ -19,6 +20,7 @@ pub mod package_stage;
 pub mod package_store;
 pub mod platform_window;
 mod plugins;
+mod power;
 mod processing;
 pub mod processing_operations;
 #[cfg(feature = "producer-audio")]
@@ -148,6 +150,8 @@ struct InputShared {
     sidebar: Option<u64>,
     blocked: bool,
     wheel: (f64, f64),
+    /// The key press being dispatched, recorded by the window's winit hook.
+    physical: Option<bindings::Physical>,
 }
 /// Which window shows the open menu, and what it lists.
 #[derive(Clone, PartialEq)]
@@ -209,6 +213,9 @@ struct Host {
     activation_receipts: std::collections::VecDeque<Value>,
     packages: package_manager::Manager,
     cleanup: BTreeMap<u64, (bool, bool)>,
+    power: power::Power,
+    /// When the shell last received a video frame (`power` keeps the display awake).
+    last_frame: Option<Instant>,
 }
 impl Host {
     fn activation(&mut self, owner: u64) -> Result<Value> {
@@ -359,6 +366,7 @@ impl Host {
             self.close_menu();
         }
         self.policy.remove_owner(owner);
+        self.power.remove_owner(owner);
         self.mount_queue.retain(|c| c.reply.owner != owner);
         if self
             .preparing
@@ -847,6 +855,7 @@ impl Host {
             composition::set_json_global(&instance, &mount.spec, name, value)?;
         }
         self.bind_menu(&instance, generation, false)?;
+        self.observe_keys(&instance);
         self.bind_keys(&instance, generation)?;
         let events = self.events.clone();
         instance.window().on_close_requested(move || {
@@ -955,14 +964,28 @@ impl Host {
         window: &slint_interpreter::ComponentInstance,
         generation: u64,
     ) -> Result<()> {
-        #[cfg(feature = "producer-audio")]
         {
             use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
             let events = self.events.clone();
+            #[cfg(feature = "producer-audio")]
             let routing = self.backend.input.clone();
             let input = self.input.clone();
             let weak = window.as_weak();
+            let modifiers = std::cell::Cell::new(winit::keyboard::ModifiersState::empty());
             window.window().on_winit_window_event(move |_, event| {
+                if let Some((dead, repeat)) = observe_key(&input, &modifiers, event) {
+                    // Slint drops a dead key (it has no text), so its Option
+                    // binding resolves here, only while the video area has
+                    // focus: a focused text field composes with the dead key.
+                    let focused = weak.upgrade().is_some_and(|shell| {
+                        matches!(shell.get_property("canvas-focused"), Ok(SValue::Bool(true)))
+                            && !matches!(shell.get_property("menu-open"), Ok(SValue::Bool(true)))
+                    });
+                    if focused && fire(&input, &events, generation, &dead, repeat, None) {
+                        return EventResult::PreventDefault;
+                    }
+                }
+                #[cfg(feature = "producer-audio")]
                 match event {
                     winit::event::WindowEvent::Focused(false) | winit::event::WindowEvent::Occluded(true) | winit::event::WindowEvent::Destroyed => {
                         let _=events.send(Event::PhysicalInput(generation,json!({"kind":"revoke","reason":"focusLost"})));
@@ -1165,6 +1188,17 @@ impl Host {
         }
         Ok(())
     }
+    /// A window that forwards keys to the binding table records each press's
+    /// physical key first (see `observe_key`).
+    fn observe_keys(&self, window: &slint_interpreter::ComponentInstance) {
+        use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
+        let input = self.input.clone();
+        let modifiers = std::cell::Cell::new(winit::keyboard::ModifiersState::empty());
+        window.window().on_winit_window_event(move |_, event| {
+            let _ = observe_key(&input, &modifiers, event);
+            EventResult::Propagate
+        });
+    }
     /// Key forwarding: `key-input(scope, text, control, alt, shift, meta, repeat)`.
     fn bind_keys(
         &self,
@@ -1178,7 +1212,11 @@ impl Host {
                 return SValue::Bool(false);
             };
             let flag = |i: usize| matches!(rest.get(i), Some(SValue::Bool(true)));
-            let Some(event) = bindings::from_slint_key(text, flag(0), flag(1), flag(2), flag(3))
+            // The press this callback reports was recorded just before by
+            // the window's winit hook, in the same event dispatch.
+            let physical = input.borrow_mut().physical.take();
+            let Some(event) =
+                bindings::from_key(text, flag(0), flag(1), flag(2), flag(3), physical.as_ref())
             else {
                 return SValue::Bool(false);
             };
@@ -1561,6 +1599,20 @@ impl Host {
             }
         }
     }
+    /// Keep the sleep assertion in line with what is playing: ready and not
+    /// paused (media or stream), video when a frame arrived within a second.
+    fn power_tick(&mut self) {
+        let source = &self.last_source;
+        let playback = power::Playback {
+            playing: source["phase"] == "ready" && source["paused"] == false,
+            video: self
+                .last_frame
+                .is_some_and(|at| at.elapsed() < Duration::from_secs(1)),
+        };
+        if let Some(error) = self.power.update(playback) {
+            eprintln!("host.error power {error}");
+        }
+    }
     fn show_info_panels(&self) {
         if let Some(shell) = &self.shell
             && let Ok(value) =
@@ -1625,11 +1677,17 @@ impl Host {
             "ui.mount" | "ui.setMount" | "ui.unmount" | "ui.interaction" | "ui.menu"
             | "layout.state" | "layout.set" => Some("ui.mount"),
             "osd.show" | "osd.panel" => Some("ui.osd"),
+            "clipboard.readText" | "clipboard.writeText" | "clipboard.writeImage" => {
+                Some("clipboard")
+            }
+            "power.preventSleep" => Some("playback.control"),
             "playback.stats" => Some("playback.read"),
             "sequence.set" | "sequence.step" => Some("playback.control"),
             "commands.register" | "commands.update" | "commands.unregister" => Some("commands"),
             "source.state" | "source.operation" | "processing.state" => Some("playback.read"),
-            "playback.set" | "source.submit" => Some("playback.control"),
+            "playback.set" | "source.submit" | "audio.addTrack" | "audio.selectTrack" => {
+                Some("playback.control")
+            }
             "producer.prepare"
             | "producer.state"
             | "producer.release"
@@ -1675,6 +1733,22 @@ impl Host {
             return Ok(None);
         }
         let value = match method {
+            "clipboard.readText" | "clipboard.writeText" | "clipboard.writeImage" => {
+                if self.headless {
+                    return Err(RpcError::new(
+                        "unavailable",
+                        "the clipboard is unavailable in headless mode",
+                    ));
+                }
+                clipboard::dispatch(method, params)?
+            }
+            "power.preventSleep" => {
+                self.power
+                    .request(reply.owner, params["mode"].as_str().unwrap_or(""))
+                    .map_err(RpcError::invalid)?;
+                self.power_tick();
+                Value::Null
+            }
             "layout.state" => self.layout_state()?,
             "layout.set" => {
                 if self.headless {
@@ -2112,6 +2186,8 @@ impl Host {
             | "sourceResolvers.unregister"
             | "sourceResolvers.respond"
             | "playback.set"
+            | "audio.addTrack"
+            | "audio.selectTrack"
             | "source.state"
             | "source.operation"
             | "source.submit"
@@ -2257,6 +2333,59 @@ fn slint_mods(control: bool, meta: bool) -> (bool, bool) {
         (meta, control)
     } else {
         (control, meta)
+    }
+}
+/// Record a key press's physical key for the `key-input` callback that Slint
+/// runs right after this hook. Returns the input of a dead key with Option
+/// (no text, so Slint never reports it) and whether it is an auto-repeat.
+fn observe_key(
+    input: &Rc<RefCell<InputShared>>,
+    modifiers: &std::cell::Cell<slint::winit_030::winit::keyboard::ModifiersState>,
+    event: &slint::winit_030::winit::event::WindowEvent,
+) -> Option<(bindings::Input, bool)> {
+    use slint::winit_030::winit::{
+        event::{ElementState, WindowEvent},
+        keyboard::{Key, PhysicalKey},
+        platform::modifier_supplement::KeyEventExtModifierSupplement,
+    };
+    match event {
+        WindowEvent::ModifiersChanged(state) => {
+            modifiers.set(state.state());
+            None
+        }
+        WindowEvent::KeyboardInput {
+            event,
+            is_synthetic: false,
+            ..
+        } if event.state == ElementState::Pressed => {
+            let PhysicalKey::Code(code) = event.physical_key else {
+                input.borrow_mut().physical = None;
+                return None;
+            };
+            let base = match event.key_without_modifiers() {
+                Key::Character(text) if text.chars().count() == 1 => text.chars().next(),
+                _ => None,
+            };
+            let physical = bindings::Physical {
+                code: format!("{code:?}"),
+                base,
+            };
+            let state = modifiers.get();
+            let dead = (matches!(event.logical_key, Key::Dead(_)) && state.alt_key())
+                .then(|| {
+                    // Slint's flag order: `control` is ⌘ and `meta` is ⌃ on macOS.
+                    let (control, meta) = if cfg!(target_os = "macos") {
+                        (state.super_key(), state.control_key())
+                    } else {
+                        (state.control_key(), state.super_key())
+                    };
+                    bindings::from_key("", control, true, state.shift_key(), meta, Some(&physical))
+                })
+                .flatten();
+            input.borrow_mut().physical = Some(physical);
+            dead.map(|input| (input, event.repeat))
+        }
+        _ => None,
     }
 }
 /// Resolve a bound input on the UI thread; true = bound (Slint stops propagating).
@@ -2460,6 +2589,8 @@ fn main() -> Result<()> {
         activation_receipts: Default::default(),
         packages: package_manager::Manager::open()?,
         cleanup: Default::default(),
+        power: power::Power::system(),
+        last_frame: None,
         commands: commands::Registry::new(),
     };
     host.register_host_commands()?;
@@ -2492,6 +2623,7 @@ fn main() -> Result<()> {
                 Err(_) => break,
             }
             host.activation_tick();
+            host.power_tick();
             host.package_tick();
             if let Some(evidence) = evidence.as_mut() {
                 evidence.sample(&host.backend, &observed_source, start)?;
@@ -2532,6 +2664,7 @@ fn main() -> Result<()> {
                 host.prepare_mount_tick();
                 host.window_tick();
                 host.activation_tick();
+                host.power_tick();
                 host.package_tick();
                 if host.shell.is_some() {
                     let revision = host.commands.snapshot().revision;
@@ -2555,6 +2688,7 @@ fn main() -> Result<()> {
                     );
                     let image = slint::Image::from_rgb8(buffer);
                     host.last_image = Some(image.clone());
+                    host.last_frame = Some(Instant::now());
                     let _ = window.set_property("video-frame", image.into());
                 }
                 if seconds.is_some_and(|seconds| start.elapsed().as_secs_f64() >= seconds) {

@@ -42,6 +42,22 @@ const NAMED: &[&str] = &[
     "ArrowUp",
     "ArrowDown",
     "Plus",
+    "Numpad0",
+    "Numpad1",
+    "Numpad2",
+    "Numpad3",
+    "Numpad4",
+    "Numpad5",
+    "Numpad6",
+    "Numpad7",
+    "Numpad8",
+    "Numpad9",
+    "NumpadPlus",
+    "NumpadMinus",
+    "NumpadMultiply",
+    "NumpadDivide",
+    "NumpadEnter",
+    "NumpadDecimal",
 ];
 const MOUSE: &[&str] = &[
     "LeftDoubleClick",
@@ -130,14 +146,127 @@ pub fn parse(text: &str) -> Result<Input, String> {
     })
 }
 
+/// The physical key of the key press being handled (winit `KeyCode` name, e.g.
+/// `KeyO`, `Numpad5`, `BracketLeft`) and its layout character without any
+/// modifier, when the platform reports one.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Physical {
+    pub code: String,
+    pub base: Option<char>,
+}
+
+/// Input name of a numeric-keypad key; keypad keys never match main-keyboard
+/// names and vice versa.
+fn numpad(code: &str) -> Option<String> {
+    let rest = code.strip_prefix("Numpad")?;
+    Some(match rest {
+        "Add" => "NumpadPlus".into(),
+        "Subtract" => "NumpadMinus".into(),
+        "Multiply" | "Divide" | "Enter" | "Decimal" => code.into(),
+        digit if digit.len() == 1 && digit.as_bytes()[0].is_ascii_digit() => code.into(),
+        _ => return None,
+    })
+}
+
+/// The unshifted US-layout character of a character key.
+fn us_character(code: &str) -> Option<char> {
+    if let Some(letter) = code.strip_prefix("Key")
+        && letter.len() == 1
+    {
+        return letter.chars().next().filter(char::is_ascii_uppercase);
+    }
+    if let Some(digit) = code.strip_prefix("Digit")
+        && digit.len() == 1
+    {
+        return digit.chars().next().filter(char::is_ascii_digit);
+    }
+    Some(match code {
+        "Minus" => '-',
+        "Equal" => '=',
+        "BracketLeft" => '[',
+        "BracketRight" => ']',
+        "Backslash" => '\\',
+        "Semicolon" => ';',
+        "Quote" => '\'',
+        "Comma" => ',',
+        "Period" => '.',
+        "Slash" => '/',
+        "Backquote" => '`',
+        _ => return None,
+    })
+}
+
+/// What Shift makes of a digit or symbol on a US layout.
+fn us_shifted(c: char) -> Option<char> {
+    let (plain, shifted) = ("1234567890-=[]\\;',./`", "!@#$%^&*()_+{}|:\"<>?~");
+    plain
+        .chars()
+        .position(|p| p == c)
+        .and_then(|i| shifted.chars().nth(i))
+}
+
+/// The input a character key names when its typed text cannot be used: with
+/// Option (macOS composes another character, or a dead key), or with Ctrl
+/// (an ASCII control code). Letters come from the layout without modifiers.
+fn from_physical(physical: &Physical, mut mods: Mods) -> Option<Input> {
+    let base = physical
+        .base
+        .filter(|c| !c.is_control() && !c.is_whitespace())
+        .map(|c| c.to_ascii_uppercase())
+        .or_else(|| us_character(&physical.code))?;
+    let name = if base.is_ascii_alphabetic() {
+        base.to_string()
+    } else if mods.shift {
+        mods.shift = false;
+        match us_shifted(base)? {
+            '+' => "Plus".into(),
+            c => c.to_string(),
+        }
+    } else {
+        base.to_string()
+    };
+    Some(Input { mods, name })
+}
+
+fn modifier_key(code: &str) -> bool {
+    matches!(
+        code,
+        "ShiftLeft"
+            | "ShiftRight"
+            | "ControlLeft"
+            | "ControlRight"
+            | "AltLeft"
+            | "AltRight"
+            | "SuperLeft"
+            | "SuperRight"
+            | "Meta"
+            | "CapsLock"
+            | "Fn"
+    )
+}
+
 /// Map a Slint key event to an input. On Apple platforms Slint reports ⌘ as
 /// `control` and ⌃ as `meta`; this swaps them back.
+#[cfg(test)]
 pub fn from_slint_key(
     text: &str,
     control: bool,
     alt: bool,
     shift: bool,
     meta: bool,
+) -> Option<Input> {
+    from_key(text, control, alt, shift, meta, None)
+}
+
+/// Like `from_slint_key`, with the physical key when the window saw it:
+/// keypad keys, Option combinations and Ctrl control codes resolve by key.
+pub fn from_key(
+    text: &str,
+    control: bool,
+    alt: bool,
+    shift: bool,
+    meta: bool,
+    physical: Option<&Physical>,
 ) -> Option<Input> {
     let apple = cfg!(target_os = "macos");
     let (ctrl, cmd) = if apple {
@@ -151,10 +280,48 @@ pub fn from_slint_key(
         shift,
         cmd,
     };
+    if let Some(physical) = physical {
+        if modifier_key(&physical.code) {
+            return None;
+        }
+        if let Some(name) = numpad(&physical.code) {
+            return Some(Input { mods, name });
+        }
+        let control_code = text.chars().count() == 1
+            && text
+                .chars()
+                .next()
+                .is_some_and(|c| c < ' ' || c == '\u{7f}');
+        let character_key = us_character(&physical.code).is_some();
+        if character_key && (alt || ((ctrl || cmd) && (control_code || text.is_empty()))) {
+            return from_physical(physical, mods);
+        }
+        if text.is_empty() {
+            return None;
+        }
+    }
     let mut chars = text.chars();
     let first = chars.next()?;
     if !chars.as_str().is_empty() {
         return None;
+    }
+    // Without the physical key: with Ctrl or ⌘, an ASCII control code is
+    // Ctrl+letter (0x1b is Ctrl+[), never the Tab/Backspace/Enter/Escape it
+    // shares a code with. 0x10..=0x18 stay ambiguous with Slint's codes for
+    // the modifier keys themselves, which the physical key resolves.
+    if physical.is_none() && (mods.ctrl || mods.cmd) {
+        let name = match first {
+            c @ '\u{1}'..='\u{1a}' if !('\u{10}'..='\u{18}').contains(&c) => {
+                char::from(b'A' + (c as u8 - 1)).to_string()
+            }
+            '\u{1b}' => "[".into(),
+            '\u{1c}' => "\\".into(),
+            '\u{1d}' => "]".into(),
+            _ => String::new(),
+        };
+        if !name.is_empty() {
+            return Some(Input { mods, name });
+        }
     }
     let named = match first {
         ' ' => "Space",
@@ -190,13 +357,6 @@ pub fn from_slint_key(
         // Alt, AltGr, CapsLock, ShiftR, ControlR, Meta, MetaR). Pressing ⌘
         // alone arrives as '\u{11}' with cmd set and must not read as Ctrl+Q.
         '\u{10}'..='\u{18}' => return None,
-        // Ctrl+letter may arrive as the ASCII control code.
-        c @ '\u{1}'..='\u{1a}' if mods.ctrl || mods.cmd => {
-            return Some(Input {
-                mods,
-                name: char::from(b'A' + (c as u8 - 1)).to_string(),
-            });
-        }
         c if c.is_control() || ('\u{F700}'..='\u{F8FF}').contains(&c) => return None,
         c if c.is_ascii_alphabetic() => {
             return Some(Input {
@@ -242,8 +402,21 @@ pub fn label(input: &Input) -> String {
         "PageDown" => "PgDn",
         "Delete" => "Del",
         "Plus" => "+",
+        "NumpadPlus" => "Num+",
+        "NumpadMinus" => "Num-",
+        "NumpadMultiply" => "Num*",
+        "NumpadDivide" => "Num/",
+        "NumpadEnter" => "NumEnter",
+        "NumpadDecimal" => "Num.",
         other => other,
     });
+    if let Some(digit) = input.name.strip_prefix("Numpad")
+        && digit.len() == 1
+    {
+        text.truncate(text.len() - input.name.len());
+        text.push_str("Num");
+        text.push_str(digit);
+    }
     text
 }
 
@@ -503,6 +676,229 @@ mod tests {
         // A real ASCII control code for a letter still maps.
         let ctrl_e = from_slint_key("\u{5}", false, false, false, true).unwrap();
         assert_eq!(ctrl_e.name, "E");
+    }
+
+    /// Slint flags in its own order (`control` is ⌘ on macOS, `meta` is ⌃).
+    fn ctrl() -> (bool, bool) {
+        if cfg!(target_os = "macos") {
+            (false, true)
+        } else {
+            (true, false)
+        }
+    }
+    fn typed(
+        text: &str,
+        ctrl_held: bool,
+        alt: bool,
+        shift: bool,
+        code: Option<(&str, Option<char>)>,
+    ) -> Option<String> {
+        let (control, meta) = if ctrl_held { ctrl() } else { (false, false) };
+        let physical = code.map(|(code, base)| Physical {
+            code: code.into(),
+            base,
+        });
+        from_key(text, control, alt, shift, meta, physical.as_ref())
+            .map(|input| label_canonical(&input))
+    }
+    fn label_canonical(input: &Input) -> String {
+        let mut text = String::new();
+        for (on, name) in [
+            (input.mods.ctrl, "Ctrl+"),
+            (input.mods.alt, "Alt+"),
+            (input.mods.shift, "Shift+"),
+            (input.mods.cmd, "Cmd+"),
+        ] {
+            if on {
+                text.push_str(name);
+            }
+        }
+        text + &input.name
+    }
+
+    #[test]
+    fn control_codes_are_ctrl_letters_only_with_ctrl() {
+        for (code, plain, with_ctrl) in [
+            ("\u{19}", "Shift+Tab", "Ctrl+Y"),
+            ("\t", "Tab", "Ctrl+I"),
+            ("\u{8}", "Backspace", "Ctrl+H"),
+            ("\r", "Enter", "Ctrl+M"),
+            ("\u{1b}", "Escape", "Ctrl+["),
+        ] {
+            assert_eq!(
+                typed(code, false, false, false, None).as_deref(),
+                Some(plain),
+                "{code:?}"
+            );
+            assert_eq!(
+                typed(code, true, false, false, None).as_deref(),
+                Some(with_ctrl),
+                "{code:?}"
+            );
+        }
+        // With the physical key, Ctrl+Tab stays Tab and Ctrl+[ is the bracket.
+        assert_eq!(
+            typed("\t", true, false, false, Some(("Tab", None))).as_deref(),
+            Some("Ctrl+Tab")
+        );
+        assert_eq!(
+            typed(
+                "\u{1b}",
+                true,
+                false,
+                false,
+                Some(("BracketLeft", Some('[')))
+            )
+            .as_deref(),
+            Some("Ctrl+[")
+        );
+        assert_eq!(
+            typed("\u{1b}", true, false, false, Some(("Escape", None))).as_deref(),
+            Some("Ctrl+Escape")
+        );
+        // Ctrl+P..X share codes with Slint's modifier keys: the physical key decides.
+        assert_eq!(
+            typed("\u{10}", true, false, false, Some(("KeyP", Some('p')))).as_deref(),
+            Some("Ctrl+P")
+        );
+        assert_eq!(
+            typed("\u{11}", true, false, false, Some(("SuperLeft", None))),
+            None
+        );
+        assert_eq!(
+            typed("\u{19}", true, false, false, Some(("KeyY", Some('y')))).as_deref(),
+            Some("Ctrl+Y")
+        );
+    }
+
+    #[test]
+    fn option_combinations_resolve_by_physical_key_including_dead_keys() {
+        // ⌥O types "ø", ⌥E is a dead key with no text.
+        assert_eq!(
+            typed("ø", false, true, false, Some(("KeyO", Some('o')))).as_deref(),
+            Some("Alt+O")
+        );
+        assert_eq!(
+            typed("", false, true, false, Some(("KeyE", Some('e')))).as_deref(),
+            Some("Alt+E")
+        );
+        assert_eq!(
+            typed("", false, true, true, Some(("KeyN", None))).as_deref(),
+            Some("Alt+Shift+N")
+        );
+        assert_eq!(
+            typed("¥", true, true, false, Some(("KeyY", Some('y')))).as_deref(),
+            Some("Ctrl+Alt+Y")
+        );
+        // A layout letter wins over the US position (AZERTY: physical KeyQ is A).
+        assert_eq!(
+            typed("æ", false, true, false, Some(("KeyQ", Some('a')))).as_deref(),
+            Some("Alt+A")
+        );
+        assert_eq!(
+            typed("", false, true, false, Some(("Backquote", Some('`')))).as_deref(),
+            Some("Alt+`")
+        );
+        assert_eq!(
+            typed("≥", false, true, false, Some(("Period", Some('.')))).as_deref(),
+            Some("Alt+.")
+        );
+        assert_eq!(
+            typed("˘", false, true, true, Some(("Period", Some('.')))).as_deref(),
+            Some("Alt+>")
+        );
+        assert_eq!(
+            typed("±", false, true, true, Some(("Equal", Some('=')))).as_deref(),
+            Some("Alt+Plus")
+        );
+        // Without Option the typed text is used as before.
+        assert_eq!(
+            typed("?", false, false, true, Some(("Slash", Some('/')))).as_deref(),
+            Some("?")
+        );
+        assert_eq!(
+            typed("", false, false, false, Some(("KeyE", Some('e')))),
+            None
+        );
+        assert_eq!(typed("", false, true, false, Some(("AltLeft", None))), None);
+    }
+
+    #[test]
+    fn keypad_keys_are_separate_from_the_main_keyboard() {
+        assert_eq!(
+            typed("5", false, false, false, Some(("Numpad5", Some('5')))).as_deref(),
+            Some("Numpad5")
+        );
+        assert_eq!(
+            typed("5", false, false, false, Some(("Digit5", Some('5')))).as_deref(),
+            Some("5")
+        );
+        assert_eq!(
+            typed("+", false, false, false, Some(("NumpadAdd", None))).as_deref(),
+            Some("NumpadPlus")
+        );
+        assert_eq!(
+            typed("-", false, false, false, Some(("NumpadSubtract", None))).as_deref(),
+            Some("NumpadMinus")
+        );
+        assert_eq!(
+            typed("\r", false, false, false, Some(("NumpadEnter", None))).as_deref(),
+            Some("NumpadEnter")
+        );
+        assert_eq!(
+            typed(".", true, false, false, Some(("NumpadDecimal", None))).as_deref(),
+            Some("Ctrl+NumpadDecimal")
+        );
+        for name in [
+            "Numpad0",
+            "Numpad9",
+            "NumpadPlus",
+            "NumpadMinus",
+            "NumpadMultiply",
+            "NumpadDivide",
+            "NumpadEnter",
+            "NumpadDecimal",
+            "Shift+Numpad5",
+        ] {
+            assert!(parse(name).is_ok(), "{name}");
+        }
+        assert!(parse("Numpad10").is_err());
+        assert!(parse("NumpadAdd").is_err());
+        let mut table = Table::default();
+        table
+            .declare(1, "five", "m", &["5".into()], false, false)
+            .unwrap();
+        table
+            .declare(1, "pad", "m", &["Numpad5".into()], false, false)
+            .unwrap();
+        let pad = from_key(
+            "5",
+            false,
+            false,
+            false,
+            false,
+            Some(&Physical {
+                code: "Numpad5".into(),
+                base: None,
+            }),
+        )
+        .unwrap();
+        let main = from_key(
+            "5",
+            false,
+            false,
+            false,
+            false,
+            Some(&Physical {
+                code: "Digit5".into(),
+                base: None,
+            }),
+        )
+        .unwrap();
+        assert_eq!(table.resolve(&pad, None).unwrap().id, "pad");
+        assert_eq!(table.resolve(&main, None).unwrap().id, "five");
+        assert_eq!(label(&parse("Numpad5").unwrap()), "Num5");
+        assert_eq!(label(&parse("Ctrl+NumpadPlus").unwrap()), "Ctrl+Num+");
     }
 
     #[test]
