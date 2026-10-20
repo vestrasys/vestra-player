@@ -273,7 +273,7 @@ export default async function activate(plugin: Plugin) {
 }
 ```
 
-`subtitles.state` 在来源变化与后端事件后由 SDK 刷新，操作的结果状态也会立即生效；比较字幕轨用 `track.id`，`track.owned` 表示可由本插件移除（`subtitles.remove(track)`）。
+`subtitles.state` 在来源变化与后端事件后由 SDK 刷新，操作的结果状态也会立即生效；比较字幕轨用 `track.id`，内嵌轨的轨道号是 `track.embeddedId`，`track.owned` 表示可由本插件移除（`subtitles.remove(track)`）。`load(bytes, { signal })` 可在上传途中取消（丢弃上传、不提交）。
 
 ## 8. 音频工作台：带延迟的音频处理、按音轨复位
 

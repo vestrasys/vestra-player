@@ -1,88 +1,160 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { activate } from '../dist/main.js';
-import { homebrew } from './homebrew.mjs';
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-const waitFor = async predicate => {
-  const deadline = Date.now() + 2000;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error('Timed out waiting for lifecycle boundary');
-    await delay(2);
-  }
-};
+import { roms, start, until } from './harness.mjs';
 
-test('initial AV prefill precedes source selection; later ACK gates streaming and stale cleanup preserves newer ROM', async () => {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'nes-homebrew-'));
-  const rom = path.join(directory, 'test.nes');
-  await fs.writeFile(rom, homebrew());
-  let execute, generation = 0, operationPolls = 0;
-  const calls = [], closed = [], released = [];
-  const primed = new Map();
-  const host = {
-    ui: { open: async () => {}, show: async () => {}, set: async () => {}, close: async () => {}, onCallback: () => () => {} },
-    dialogs: { open: async () => ({ cancelled: false, paths: [rom] }) },
-    commands: { register: async () => {}, onExecute: fn => { execute = fn; return () => {}; } },
-    source: {
-      submit: async intent => {
-        if (intent.kind === 'openProvider') {
-          const buffers = primed.get(intent.producerId);
-          assert.ok(buffers.frames >= 2048, 'Source selection requires initial PCM');
-          assert.ok(buffers.videoAtZero, 'Paused initial producer needs video at sample zero');
-          generation++; operationPolls = 0; calls.push(`submit:${generation}`);
-          return { status: 'pending', ticket: { stamp: { generation, intentVersion: 1 } } };
-        }
-        calls.push(`close:${generation}`); return { status: 'completed' };
-      },
-      operation: async () => { operationPolls++; calls.push(`operation:${generation}`); return { status: 'completed', ticket: { stamp: { generation, intentVersion: 1 } } }; },
-      state: async () => ({ kind: 'producer', stamp: { generation, intentVersion: 1 } }),
-    },
-    producer: {
-      prepare: async () => { const id = generation + 1; primed.set(id, { frames: 0, videoAtZero: false }); return { producerId: id, epoch: id }; },
-      connect: async prepared => ({
-        video: async time => { primed.get(prepared.producerId).videoAtZero ||= time.sampleTime === 0; calls.push(`video:${prepared.producerId}`); },
-        audio: async (_time, samples) => { primed.get(prepared.producerId).frames += samples.length / 2; calls.push(`audio:${prepared.producerId}`); },
-        close: () => { closed.push(prepared.producerId); },
-      }),
-      state: async id => ({ active: generation >= id && operationPolls > 0, acknowledged: generation < id || operationPolls > 0,
-        health: 'ok', receivedFrames: primed.get(id).frames, hasVideo: primed.get(id).videoAtZero,
-        epoch: id, error: null, paused: false, consumedFrames: 0,
-        pendingControl: generation >= id && operationPolls === 0 ? { epoch: id, baseSample: 0, paused: false } : null }),
-      ack: async control => { calls.push(`ack:${control.epoch}`); },
-      release: async id => { released.push(id); },
-    },
-  };
-  const cleanup = await activate(host);
+const running = name => `Running ${name} · 256 × 240 · stereo 48 kHz`;
+
+test('menu entries and window keep their paths, initial status and callbacks', async () => {
+  const { host, stop, window } = await start();
+  assert.deepEqual([...host.commands].map(([id, c]) => [id, c.declaration.title, c.declaration.path]), [
+    ['nes.open', '打开 NES ROM…', ['模拟器', '打开 NES ROM…']],
+    ['nes.window', 'NES 工具', ['模拟器', 'NES 工具']],
+    ['nes.stop', '停止 NES', ['模拟器', '停止 NES']],
+  ]);
+  assert.ok([...host.commands.values()].every(c => c.state.enabled));
+  await host.command('nes.window').run();
+  assert.equal(window().file, 'nes.slint');
+  assert.deepEqual(window().props, { status: 'Choose an iNES ROM to start.', running: false });
+  assert.deepEqual(window().callbacks.sort(), ['open-rom', 'stop']);
+  await stop();
+});
+
+test('initial AV prefill precedes source selection; the ROM then streams paced frames', async () => {
+  const files = await roms();
+  const order = [];
+  const { host, stop, window } = await start(async (method, params, next) => {
+    if (method === 'source.submit' && params.intent.kind === 'openProvider') {
+      const producer = host.producers.get(Number(params.intent.producerId));
+      order.push({ submit: producer.receivedFrames, video: producer.videoFrames });
+    }
+    if (method === 'producer.ack') order.push('ack');
+    return next();
+  });
   try {
-    execute({ id: 'nes.open' });
-    await waitFor(() => calls.filter(call => call === 'audio:1').length >= 4);
-    assert.ok(calls.indexOf('video:1') < calls.indexOf('submit:1'));
-    assert.ok(calls.indexOf('audio:1') < calls.indexOf('submit:1'));
-    assert.ok(calls.indexOf('submit:1') < calls.indexOf('ack:1'));
-    assert.ok(calls.indexOf('ack:1') < calls.indexOf('operation:1'));
-    assert.ok(calls.includes('audio:1'));
-    // Make the old pump queue a deferred stop and trigger a new open in its
-    // error-report continuation, before that timer can run.
-    let replacementTriggered = false;
-    host.ui.set = async (_view, property, value) => {
-      if (!replacementTriggered && property === 'status' && value === 'NES source replaced.') {
-        replacementTriggered = true;
-        execute({ id: 'nes.open' });
-      }
-    };
-    const originalState = host.producer.state;
-    host.producer.state = async id => id === 1 ? { active: false, error: null } : originalState(id);
-    await waitFor(() => generation === 2 && calls.filter(call => call === 'audio:2').length >= 4);
-    assert.equal(generation, 2);
-    assert.ok(calls.includes('video:2'));
-    assert.deepEqual(released, [1]);
-    assert.deepEqual(closed, [1]);
+    host.dialogAnswers.push([files.blue]);
+    void host.command('nes.open').run();
+    await until(() => window().props.status === running('blue.nes') && window().props.running === true, 'running');
+    assert.equal(host.sent('dialogs.open')[0].title, 'Open NES ROM');
+    const [submit, ack] = order;
+    assert.ok(submit.submit >= 1024 && submit.video > 0, 'selection needs buffered PCM and a frame');
+    assert.equal(ack, 'ack', 'the start control is acknowledged after selection');
+    assert.equal(host.source.kind, 'producer');
+    const producer = host.producers.get(1);
+    const before = producer.receivedFrames;
+    await until(() => producer.receivedFrames > before + 4800, 'paced frames');
+    assert.equal(producer.released, false);
   } finally {
-    await cleanup();
-    await fs.rm(directory, { recursive: true, force: true });
+    await stop();
+    await files.remove();
   }
-  assert.deepEqual(released, [1, 2]);
-  assert.deepEqual(closed, [1, 2]);
+  assert.equal(host.producers.get(1).released, true, 'deactivation releases the stream');
+});
+
+test('replacement by another source shows the old wording; a newer ROM is never torn down by the old one', async () => {
+  const files = await roms();
+  const { host, stop, window } = await start();
+  try {
+    host.dialogAnswers.push([files.blue]);
+    void host.command('nes.open').run();
+    await until(() => window().props.running === true, 'first ROM');
+    host.openElsewhere('/movie.mp4');
+    await until(() => window().props.status === 'NES source replaced.', 'replacement');
+    assert.equal(window().props.running, false);
+    assert.equal(host.producers.get(1).released, true);
+    assert.equal(host.sent('source.submit').some(p => p.intent.kind === 'close'), false, 'never closes a source it no longer owns');
+    assert.equal(host.source.source, '/movie.mp4');
+
+    host.dialogAnswers.push([files.red]);
+    window().emit('open-rom');
+    await until(() => window().props.status === running('red.nes'), 'second ROM');
+    await host.settle(30);
+    assert.equal(host.producers.get(2).released, false);
+    assert.equal(window().props.running, true);
+    assert.equal(host.source.source, 'producer://2');
+  } finally {
+    await stop();
+    await files.remove();
+  }
+});
+
+test('opening another ROM replaces our own stream; a bad ROM keeps the running game', async () => {
+  const files = await roms();
+  const { host, stop, window } = await start();
+  try {
+    host.dialogAnswers.push([files.blue]);
+    void host.command('nes.open').run();
+    await until(() => window().props.running === true, 'first ROM');
+
+    host.dialogAnswers.push([files.bad]);
+    await host.command('nes.open').run();
+    assert.equal(window().props.status, 'Error: Choose an iNES .nes ROM file');
+    assert.equal(window().props.running, true);
+    assert.equal(host.producers.get(1).released, false);
+
+    host.dialogAnswers.push(null); // cancelled picker changes nothing
+    await host.command('nes.open').run();
+    assert.equal(window().props.status, 'Error: Choose an iNES .nes ROM file');
+
+    host.dialogAnswers.push([files.red]);
+    void host.command('nes.open').run();
+    await until(() => window().props.status === running('red.nes'), 'second ROM');
+    assert.equal(host.producers.get(1).released, true);
+    assert.equal(host.source.source, 'producer://2');
+  } finally {
+    await stop();
+    await files.remove();
+  }
+});
+
+test('Stop closes our own source, releases it and says so', async () => {
+  const files = await roms();
+  const { host, stop, window } = await start();
+  try {
+    host.dialogAnswers.push([files.blue]);
+    void host.command('nes.open').run();
+    await until(() => window().props.running === true, 'ROM');
+    await host.command('nes.stop').run();
+    assert.equal(window().props.status, 'Stopped.');
+    assert.equal(window().props.running, false);
+    assert.equal(host.producers.get(1).released, true);
+    assert.equal(host.sent('source.submit').at(-1).intent.kind, 'close');
+    assert.equal(host.source.phase, 'empty');
+    window().emit('stop'); // nothing running: still reports Stopped.
+    await host.settle();
+    assert.equal(window().props.status, 'Stopped.');
+  } finally {
+    await stop();
+    await files.remove();
+  }
+});
+
+test('start-up and stream failures keep the plugin wording', async () => {
+  const files = await roms();
+  let health = 'deviceLost';
+  let lost = null;
+  const { host, stop, window } = await start(async (method, params, next) => {
+    const result = await next();
+    if (method !== 'producer.state') return result;
+    return { ...result, health: result.active ? result.health : health, error: lost };
+  });
+  try {
+    host.dialogAnswers.push([files.blue]);
+    await until(() => host.commands.size === 3);
+    void host.command('nes.open').run();
+    await until(() => window().props.status === 'Error: Audio device is not ready: deviceLost', 'device failure');
+    assert.equal(host.producers.get(1).released, true);
+    assert.equal(host.sent('source.submit').length, 0);
+
+    health = 'ok';
+    host.dialogAnswers.push([files.blue]);
+    window().emit('open-rom');
+    await until(() => window().props.running === true, 'ROM');
+    lost = 'audio output lost';
+    await until(() => window().props.status === 'audio output lost', 'stream error');
+    assert.equal(window().props.running, false);
+    assert.equal(host.producers.get(2).released, true);
+  } finally {
+    await stop();
+    await files.remove();
+  }
 });

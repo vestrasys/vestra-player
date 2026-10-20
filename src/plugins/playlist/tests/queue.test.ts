@@ -3,46 +3,34 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Media, PlayerState } from "../../../sdk/plugin/index.ts";
 import { Queue } from "../queue.ts";
-import type { SourceState, SourceTicket } from "../../../sdk/source.ts";
 
-const ticket: SourceTicket = {
-  stamp: { generation: 4, intentVersion: 7 },
-  cycle: 1,
-  owner: 12,
-};
-function state(overrides: Partial<SourceState> = {}): SourceState {
+function state(overrides: Partial<PlayerState> = {}): PlayerState {
   return {
+    sourceId: 4,
     kind: "media",
-    container: null,
-    audioTracks: [],
-    stamp: ticket.stamp,
-    cycle: 1,
-    eventSequence: 5,
     phase: "ready",
     source: "/a",
-    loadingOwner: null,
-    terminalReason: null,
     paused: false,
     position: 0,
     duration: 2,
-    capabilities: {
-      pause: true,
-      seek: true,
-      rate: true,
-      restart: true,
-      close: true,
-      snapshotSource: true,
-    },
-    output: { volume: 100, muted: false },
     rate: 1,
+    volume: 100,
+    muted: false,
+    endReason: null,
+    error: null,
+    can: { pause: true, seek: true, rate: true, restart: true, close: true, snapshot: true },
+    audioTracks: null,
     ...overrides,
   };
 }
+function media(current = true): Media & { current: boolean } {
+  return { current, ready: async () => {}, onEnd: () => ({ dispose: async () => {} }), close: async () => {} };
+}
 function fixture() {
   const queue = new Queue();
-  for (const name of ["a", "b", "c", "d"])
-    queue.addUrl(`https://example.org/${name}`);
+  for (const name of ["a", "b", "c", "d"]) queue.addUrl(`https://example.org/${name}`);
   return queue;
 }
 
@@ -59,7 +47,8 @@ test("realpath deduplicates same batch and symlink while inaccessible rows remai
     assert.equal(queue.selected, queue.rows[0].rowId);
     assert.equal(queue.binding, null);
     assert.match(queue.rows[1].error, /文件不存在/);
-    assert.match(queue.message, /新增 2 项，跳过 2 个重复/);
+    assert.equal(queue.rows[1].status, "待重试");
+    assert.match(queue.message, /新增 2 项，跳过 2 个重复，1 项待重试/);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -73,8 +62,10 @@ test("link addition preserves original URL, selects without binding, and rejects
   assert.equal(queue.binding, null);
   queue.addUrl("https://example.org/a?x=1");
   assert.equal(queue.rows.length, 1);
-  assert.throws(() => queue.addUrl("file:///tmp/a"));
-  assert.throws(() => queue.addUrl("https://user:password@example.org/a"));
+  assert.equal(queue.message, "已选择已有链接");
+  assert.throws(() => queue.addUrl("file:///tmp/a"), /只接受不含账户密码的 HTTP\(S\) 链接/);
+  assert.throws(() => queue.addUrl("https://user:password@example.org/a"), /只接受/);
+  assert.throws(() => queue.addUrl("not a url"), /请输入完整 HTTP\(S\) 链接/);
 });
 
 test("failed navigation anchor survives a different selection, movement uses stable IDs", () => {
@@ -92,59 +83,49 @@ test("failed navigation anchor survives a different selection, movement uses sta
   assert.equal(queue.selected, d.rowId);
 });
 
-test("natural end once per cycle; restart invalidates old token and renews end eligibility", () => {
+test("bound row follows ready, paused, loading, ended, error and closed states", () => {
   const queue = fixture(),
     row = queue.rows[0];
-  queue.binding = { rowId: row.rowId, ticket, endedCycle: null };
-  const first = queue.observe(
-    state({ phase: "ended", terminalReason: "natural" }),
-  );
-  assert.ok(first);
-  assert.equal(
-    queue.observe(state({ phase: "ended", terminalReason: "natural" })),
-    null,
-  );
-  const restarted = { generation: 4, intentVersion: 8 };
-  queue.observe(state({ stamp: restarted, cycle: 2 }));
-  assert.notEqual(queue.epoch, first.epoch);
-  const second = queue.observe(
-    state({
-      stamp: restarted,
-      cycle: 2,
-      phase: "ended",
-      terminalReason: "natural",
-    }),
-  );
-  assert.ok(second);
-  assert.equal(second.cycle, 2);
+  queue.bind({ rowId: row.rowId, media: media() });
+  queue.observe(state({ phase: "loading" }));
+  assert.equal(row.status, "正在打开");
+  queue.observe(state({ paused: true }));
+  assert.equal(row.status, "已暂停");
+  assert.equal(queue.message, "已暂停");
+  queue.observe(state());
+  assert.equal(row.status, "播放中");
+  queue.observe(state({ phase: "ended", endReason: "natural" }));
+  assert.equal(row.status, "已结束");
+  assert.equal(queue.binding?.rowId, row.rowId, "the natural end itself is handled by media.onEnd");
+  queue.observe(state({ phase: "error", error: "broken" }));
+  assert.equal(row.status, "失败");
+  assert.equal(row.error, "broken");
+  assert.equal(queue.failed, row.rowId);
+  assert.equal(queue.binding, null);
+
+  queue.bind({ rowId: row.rowId, media: media() });
+  queue.observe(state({ phase: "empty" }));
+  assert.equal(queue.binding, null);
+  assert.equal(queue.message, "当前来源已关闭");
 });
 
-test("error/replacement/stopped never auto advance; external same path is detached by stamp", () => {
-  for (const reason of ["stopped", "replaced", { failed: "broken" }] as const) {
-    const queue = fixture();
-    queue.binding = { rowId: queue.rows[0].rowId, ticket, endedCycle: null };
-    assert.equal(
-      queue.observe(
-        state({
-          phase: reason === "stopped" ? "ended" : "error",
-          terminalReason: reason,
-        }),
-      ),
-      null,
-    );
-  }
+test("another source, even of the same path, detaches the row and releases its end listener", () => {
   const queue = fixture();
-  queue.binding = { rowId: queue.rows[0].rowId, ticket, endedCycle: null };
-  queue.observe(
-    state({ stamp: { generation: 5, intentVersion: 9 }, source: "/a" }),
-  );
+  let released = false;
+  const replaced = media();
+  queue.bind({ rowId: queue.rows[0].rowId, media: replaced, end: { dispose: async () => void (released = true) } });
+  replaced.current = false;
+  queue.observe(state({ sourceId: 5, source: "/a" }));
   assert.equal(queue.binding, null);
+  assert.equal(queue.rows[0].status, "已切换");
+  assert.equal(queue.message, "已切换到列表外来源");
+  assert.equal(released, true);
 });
 
 test("removing current and clearing revoke progression without requesting public media changes", () => {
   const queue = fixture();
   queue.select(queue.rows[1].rowId);
-  queue.binding = { rowId: queue.selected!, ticket, endedCycle: null };
+  queue.bind({ rowId: queue.selected!, media: media() });
   const epoch = queue.epoch;
   queue.remove();
   assert.equal(queue.binding, null);

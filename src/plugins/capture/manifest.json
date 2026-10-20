@@ -1,7 +1,8 @@
 {
   "id": "vestra.capture",
+  "version": "1.0.0",
   "apiVersion": "vestra.experimental/0.1",
-  "entry": "dist/main.js",
+  "entry": "main.ts",
   "capabilities": [
     "commands",
     "events",

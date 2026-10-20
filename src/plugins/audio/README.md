@@ -1,17 +1,9 @@
-# 音频工作台 — revision 1.1.0
+# 音频工作台（audio）
 
-This is a new author reconstruction of the current audio product, written locally on 2026-10-19 because the previous workspace files became FileProvider dataless. It is not claimed to be byte-identical to revision 1.0.0.
+功能：六段均衡器（60 Hz–10 kHz，±6 dB，步长 0.1 dB）、四个均衡器预设（只改均衡器）、音频延迟（±2000 ms，按 10 ms 取整，正值使音频更晚）、响度规范化（dynaudnorm）、清晰度增强（treble 0–6 dB）与全部复位，作用于本插件自有的音频处理链 `workbench`。设置属于“一次载入的来源 + 一条选中的音轨”，任一变化即复位为中性。
 
-The independent nonmodal Window opens at **音频 → 音频工作台…**. The Audio domain also contains EQ presets and reset; every command path includes its leaf. Menu and window share TypeScript settings. No bottom/sidebar mount is used, and no pause, restart, device volume or mute action is issued.
+入口：`音频 → 音频工作台…` 打开独立窗口（`ui/workbench.slint`）；`音频 → 复位音频处理`、`音频 → 均衡器预设 → 平直/人声/音乐/影院` 与窗口按钮作用相同，没有选中的音轨时禁用。处理失败时窗口显示原因与“检查 / 重试”按钮。
 
-Six EQ bands support ±12 dB; presets change EQ only. Audio delay supports ±2000 ms; positive values delay audio. Loudness normalization uses a typed dynaudnorm node and clarity uses typed treble gain (0–6 dB). Reset clears all settings by replacing this plugin's owned `workbench` resource with an empty chain and zero offset. Host revocation owns resource cleanup.
+限制：不负责基础音量、静音与播放控制（属于播放栏）；“已应用”表示宿主接受，不保证已听到效果；插件停用时宿主撤销本插件的处理资源。
 
-One request runs at a time; subsequent edits retain only the latest queued settings. Every request has a fixed increasing revision and current source generation. A source or selected-track change advances a local epoch and queues neutral settings. All success/failure UI outcomes use the epoch, so even same-generation track changes cannot let an old failure block the new neutral update. Unknown outcomes remain a resource barrier and are checked using the exact original token; confirmed old failures release the barrier without restoring old edits.
-
-Commands:
-
-- `node --test tests/*.test.ts` runs the behavior suite.
-- `node check.mjs` checks with this session's local TypeScript toolchain/current SDK cache and removes its temporary `.typecheck` directory afterward.
-- `node build.mjs [1.1.0]` generates a self-contained production `dist/` with strict three-part u32 version, main.js and Slint UI. No runtime repository SDK import or typecheck symlink is packaged.
-
-Actual checks on 2026-10-19: TypeScript check exit 0; nine model/controller tests passed; production build exit 0. Native Slint Compiler/activation is handed to the runtime maintainer. Native callback behavior, audible EQ/dynamics/delay effect, device behavior, close/reopen, and disable cleanup have not been verified by this author. Full design document recheck remains unavailable because those files are dataless; this revision follows the current task and SDK contract.
+开发（在 `src/` 下）：`npm run plugin -- check audio`、`build audio`（生成 `dist/`，版本取自 `manifest.json`）、`test audio`。

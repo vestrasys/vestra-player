@@ -1,15 +1,9 @@
-# Playback list
+# 播放列表（vestra.playlist）
 
-Development entry: `activate(host)` in `main.ts`; the source manifest has no production version. The sidebar uses only the public sidebar slot. No other product implementation is imported.
+功能：右侧栏播放列表。多文件添加（`realpath` 去重，不可读的文件保留待重试）、添加 HTTP(S) 链接（只选中、不播放）、选中/播放、上一项/下一项、移除、上移/下移、清空；行使用稳定的 `rowId`，排序后仍对应同一项。自然播完后按当时的列表顺序推进一次，末项显示“列表已播完”；若播完后来源被别处改动（另开文件、重播），自动推进以“自动推进已过期，保留较新的来源”放弃。另开的来源（即使路径相同）显示“已切换到列表外来源”，不接管。
 
-文件→播放列表 and the sidebar share multi-file addition, selection/play, previous/next, move/remove/clear and HTTP(S) link actions. 视图→显示播放列表 and the close button update public preferred visibility. Adding files does not play; adding links only selects. Local files use realpath deduplication; inaccessible paths remain retryable. Stable row IDs survive reordering.
+入口：`文件 → 播放列表 → …`（9 项）与侧栏按钮共用同一组动作和启用状态；`视图 → 显示播放列表` 与侧栏 × 改变侧栏的显示偏好。链接对话框是独立窗口 `ui/link.slint`，侧栏是 `ui/sidebar.slint`。
 
-URL playback now submits the entered original URL through the same public `source.submit({kind:"open",source,startPaused:false},operationId)` route as local playback. SITE-01 public routing selects any registered provider. Missing providers and resolver failures are reported from the host, with the row retained for retry. This package does not extract media, import site plugins, call their commands, or store signed media URLs/headers/cookies. Consumer routing is implemented; actual YouTube/Bilibili playback still requires provider and shared host acceptance.
+限制：链接由站点插件注册的公共来源解析器打开，本插件不解析、不读取任何站点插件，也不保存解析出的媒体地址；没有可用解析器时显示宿主给出的失败原因，行保留可重试。队列只在本次运行内存在；移除/清空和插件停用都不关闭当前媒体。
 
-Rows become ready/error only through public source tickets and typed state. Natural ending advances once using the current list order and the ended stamp as the atomic expected condition. External replacement and stale rejection do not claim ownership. Removing/clearing rows leaves public media running. A timeout queries the same operation ID without resubmitting; only one recovery query runs at a time. Source clock updates do not rebuild unchanged models; one active projection and one dirty refresh bound UI backlog.
-
-Run `node src/plugins/playlist/build.mjs 0.1.0` in a normal repository checkout. The build uses existing root dependencies, typechecks source plus package consumer tests, runs those tests, and emits ordinary JS, Slint, a type-module package marker, and a strict MAJOR.MINOR.PATCH manifest into `dist`. All SDK imports are type-only; the production package has no repository SDK imports, symlinks or Rust compiler dependency. Standalone current-source snapshots may supply `VESTRA_TYPESCRIPT`, `VESTRA_TYPE_ROOTS` and `VESTRA_SDK` paths. The build copies SDK types into a temporary check tree, not into distribution.
-
-2026-10-19 consumer revision: build/typecheck exit 0 and six affected consumer/projection tests pass. The tests cover original-URL submission, pending→ready, missing-provider failure/retry, late replies/removal, timeout recovery with the same operation ID, local dedup/play, CAS natural-next and 1000 clock events without model retransmission. These mocks are consumer checks, not actual URL playback evidence. See `CHECKS.json` for exact commands and production artifact checks.
-
-The earlier current-source native snapshot compiled and activated successfully (`/tmp/vestra-product-slices-N0c8xH/result.json`). This revision changes TS routing/recovery/build, leaving that Slint layout intact. Native mouse/keyboard, system panels, focus restoration, selection scrolling, audio/video continuity, and this production revision's real URL-provider combination remain shared acceptance work. Host menu/font behavior is handled centrally, with no plugin workaround.
+开发（在 `src/` 下）：`npm run plugin -- check playlist`、`build playlist`（生成 `dist/`，版本取自 `manifest.json`）、`test playlist`。只用 `import type` 引用 SDK v2。

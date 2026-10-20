@@ -71,6 +71,10 @@ plugin.commands.add({
 - 打开时用期望属性做初始属性；`show()` 可重复调用（已打开则显示）；`hide()` 保留状态；`close()` 后再 `show()` 重新打开。
 - 回调名与属性名可以照抄 `.slint` 的 kebab-case，也可以写 camelCase。回调参数类型直接写在处理函数上：`(index: number, value: number) => …`。宿主按 `.slint` 声明的类型传参，旧代码里的 `typeof value !== "number"` 检查在声明类型相符时可以去掉；值域检查（clamp、整数、有限数）保留。
 
+### 用户可编辑的 in-out 属性
+
+`bind` 只在期望值变化时发送，回调不会触发重发，用户在输入框、标签页里的修改会保留。插件需要主动写入（打开编辑器时填初始值、“标记起点”写当前时间、菜单入口切到某个标签页）时用 `window.set({...})` / `panel.set({...})`：即使值与上次相同也会发送。不要为了“防止被覆盖”而把用户输入同步回插件状态。
+
 ### 面板（底栏、侧栏）
 
 - `const bar = plugin.panels.mount("bottom", "ui/bar.slint")`；组件名和桥接 global 从文件推断（文件只导出一个 component 和一个 global 时）。
@@ -91,6 +95,33 @@ await media.close();                                      // 仍是自己的来�
 ```
 
 超时用 `AbortSignal.timeout(ms)` 与自己的 `AbortController` 组合（`AbortSignal.any`）；中止时 SDK 关闭这个媒体。
+
+### 网络媒体超时：是否关闭媒体
+
+`open`/`ready` 的 `signal` 一旦中止，SDK 会关闭这个媒体（若仍是当前来源）。因此超时有两种写法，按旧行为选：
+
+- **超时即取消并关闭**（bilibili 旧行为：超时后 `close`）：把超时合入 signal。
+
+  ```ts
+  const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]);
+  const media = await plugin.player.open(url, { signal });
+  await media.ready({ signal }); // 超时 → 关闭媒体并以 AbortError 失败；用 controller.signal.aborted 区分用户取消
+  ```
+
+- **超时只停止等待、媒体继续载入**（youtube 旧行为）：signal 只放用户取消，用计时器与 `open`/`ready` 竞速。
+
+  ```ts
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("仍未确认就绪；未重新提交")), 120_000);
+  });
+  try {
+    const media = await Promise.race([plugin.player.open(url, { signal: controller.signal }), timeout]);
+    await Promise.race([media.ready({ signal: controller.signal }), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+  ```
 
 ### 来源控制与条件提交
 
