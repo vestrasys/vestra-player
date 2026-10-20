@@ -12,6 +12,7 @@
     "media.control",
     "playback.read",
     "subtitles.read",
-    "ui.osd"
+    "ui.osd",
+    "clipboard"
   ]
 }

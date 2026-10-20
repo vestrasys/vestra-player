@@ -1,5 +1,5 @@
-import { spawn } from "node:child_process";
 import { realpath, stat } from "node:fs/promises";
+import type { Tools } from "../../sdk/plugin/index.ts";
 import type { Queue, Row } from "./queue.ts";
 
 /** Runs ffprobe with `args` and resolves its stdout; rejects on failure, timeout or abort. */
@@ -8,38 +8,18 @@ export type ProbeRunner = (args: string[], options: { signal: AbortSignal; timeo
 export const PROBE_ARGS = ["-v", "error", "-show_entries", "format=duration", "-of", "json"];
 export const PROBE_LIMIT = 2;
 export const PROBE_TIMEOUT_MS = 10_000;
+/** ffprobe's JSON for one duration is tiny; more than this is not an answer. */
+export const PROBE_OUTPUT_LIMIT = 64 * 1024;
 /** C17: entries kept in `probe-cache.json` (least recently used dropped first). */
 export const CACHE_LIMIT = 20_000;
 
-/** `VESTRA_FFPROBE` or `ffprobe` on PATH; no shell, bounded output and time. */
-export function createProbeRunner(executable = process.env.VESTRA_FFPROBE || "ffprobe"): ProbeRunner {
-  return (args, { signal, timeoutMs }) =>
-    new Promise((resolve, reject) => {
-      if (signal.aborted) return reject(new Error("cancelled"));
-      const child = spawn(executable, args, { shell: false, stdio: ["ignore", "pipe", "ignore"] });
-      let stdout = "",
-        failure: Error | undefined;
-      const stop = (error: Error) => {
-        failure ??= error;
-        child.kill("SIGKILL");
-      };
-      const cancel = () => stop(new Error("cancelled"));
-      signal.addEventListener("abort", cancel, { once: true });
-      const timeout = setTimeout(() => stop(new Error("ffprobe timed out")), timeoutMs);
-      child.stdout.on("data", (chunk: Buffer) => {
-        stdout += chunk.toString("utf8");
-        if (stdout.length > 64 * 1024) stop(new Error("ffprobe output exceeded the limit"));
-      });
-      child.on("error", (error) => (failure ??= error));
-      child.on("close", (code) => {
-        clearTimeout(timeout);
-        signal.removeEventListener("abort", cancel);
-        if (failure) reject(failure);
-        else if (code !== 0) reject(new Error(`ffprobe exited with ${code}`));
-        else resolve(stdout);
-      });
-    });
-}
+/** ffprobe through `plugin.tools` (lookup, no shell, timeout, abort and output bound). */
+export const toolRunner =
+  (tools: Tools): ProbeRunner =>
+  async (args, { signal, timeoutMs }) => {
+    const { stdout } = await tools.run("ffprobe", args, { signal, timeoutMs, maxOutput: PROBE_OUTPUT_LIMIT });
+    return Buffer.from(stdout).toString("utf8");
+  };
 
 /** Seconds from ffprobe's JSON, or null when it reports none. */
 export function parseDuration(output: string): number | null {
@@ -81,8 +61,11 @@ export class Prober {
   /** The row left the list: drop it from the wait list and kill its process. */
   cancel(rowId: string) {
     this.waiting = this.waiting.filter((id) => id !== rowId);
-    this.running.get(rowId)?.abort();
+    const running = this.running.get(rowId);
+    running?.abort();
     this.running.delete(rowId);
+    // The slot is free now, not when the ended process is reaped.
+    if (running) this.pump();
   }
   cancelAll() {
     this.waiting = [];

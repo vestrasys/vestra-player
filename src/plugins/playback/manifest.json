@@ -11,6 +11,7 @@
     "playback.control",
     "events",
     "commands",
-    "ui.osd"
+    "ui.osd",
+    "clipboard"
   ]
 }

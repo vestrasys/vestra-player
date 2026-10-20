@@ -5,41 +5,35 @@ import { mkdir, mkdtemp, readdir, readFile, realpath, rm, symlink, utimes, write
 import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Json } from "../../../sdk/plugin/index.ts";
-import { startPlugin } from "../../../sdk/plugin/testing.ts";
+import { HostError, startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
 import activate from "../main.ts";
-import type { ProbeRunner } from "../probe.ts";
 
 type ViewRow = { rowId: string; label: string; duration: string; tooltip: string; selected: boolean; current: boolean };
 type Intent = { kind: string; source?: string; expected?: Json };
 const pause = (ms = 10) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** ffprobe answers from a table of seconds by file name; unknown names fail. */
-const probeTable =
-  (seconds: Record<string, number> = {}): ProbeRunner =>
-  async (args) => {
-    const name = basename(args.at(-1)!);
-    if (!(name in seconds)) throw new Error("no duration");
-    return JSON.stringify({ format: { duration: String(seconds[name]) } });
-  };
+/** ffprobe (through `plugin.tools`) answers from a table of seconds by file name; unknown names fail. */
+const probeTable = (seconds: Record<string, number> = {}) => (args: string[]) => {
+  const name = basename(args.at(-1)!);
+  if (!(name in seconds)) throw new HostError("failed", "no duration");
+  return { stdout: JSON.stringify({ format: { duration: String(seconds[name]) } }) };
+};
 
 async function start(
   options: { data?: string; durations?: Record<string, number>; random?: () => number } = {},
 ) {
   const root = await realpath(await mkdtemp(join(tmpdir(), "vestra-playlist-features-")));
-  const reveals: string[][] = [];
-  const { host, stop } = await startPlugin(
-    (plugin) =>
-      activate(plugin, probeTable(options.durations), {
-        open: async (args) => void reveals.push(args),
-        random: options.random ?? (() => 0),
-      }),
-    { directory: new URL("..", import.meta.url), ...(options.data ? { dataDirectory: options.data } : {}) },
-  );
+  const host = new TestHost();
+  host.tools.handle("ffprobe", probeTable(options.durations));
+  const { stop } = await startPlugin((plugin) => activate(plugin, { random: options.random ?? (() => 0) }), {
+    directory: new URL("..", import.meta.url),
+    host,
+    ...(options.data ? { dataDirectory: options.data } : {}),
+  });
   const panel = host.mounted();
   const app = {
     host,
     root,
-    reveals,
     rows: () => (panel.props.rows ?? []) as unknown as ViewRow[],
     names: () => app.rows().map((row) => row.label.replace(/^\d+\. /, "")),
     prop: (name: string) => panel.props[name],
@@ -597,21 +591,23 @@ test("C21: Ctrl+Delete under a filter removes only shown unselected rows; the to
   }
 });
 
-test("C23: Ctrl+F reveals selected files per folder; a missing file shows its folder; links are disabled", async () => {
+test("C23: Ctrl+F reveals the first selected file of each folder; a missing file shows its folder; links are disabled", async () => {
   const app = await start();
   try {
     const [a, b, c] = await app.files(["one/a.mp4", "one/b.mp4", "two/c.mp4"]);
     await app.addFiles([a!, b!, c!]);
     await app.press("Ctrl+A");
     await app.press("Ctrl+F");
-    assert.deepEqual(app.reveals, [
-      ["-R", a, b],
-      ["-R", c],
-    ]);
+    assert.deepEqual(app.host.system.revealed, [a, c], "one Finder window per folder");
+    await rm(a!);
+    await app.click(0);
+    await app.click(1, { ctrl: true });
+    await app.press("Ctrl+F");
+    assert.deepEqual(app.host.system.revealed.at(-1), b, "a missing file gives way to the next one in its folder");
     await rm(c!);
     await app.click(2);
     await app.press("Ctrl+F");
-    assert.deepEqual(app.reveals.at(-1), [join(app.root, "two")]);
+    assert.deepEqual(app.host.system.opened, [join(app.root, "two")]);
     await rm(join(app.root, "two"), { recursive: true });
     await app.press("Ctrl+F");
     assert.equal(app.osd(), "找不到文件：c.mp4");
@@ -633,7 +629,7 @@ test("C23: only the first 20 selected files are shown", async () => {
     await app.addFiles(paths);
     await app.press("Ctrl+A");
     await app.press("Ctrl+F");
-    assert.equal(app.reveals[0]!.length, 21);
+    assert.deepEqual(app.host.system.revealed, [paths[0]]);
     assert.equal(app.osd(), "只显示前 20 个文件");
   } finally {
     await app.close();
@@ -741,5 +737,119 @@ test("C17: a list above 20 000 rows is refused", async () => {
   } finally {
     await app.close();
     await rm(data, { recursive: true, force: true });
+  }
+});
+
+test("B26: \"快速推进到下一个\" is off by default, toggles with a notice and is remembered", async () => {
+  const data = await mkdtemp(join(tmpdir(), "vestra-playlist-data-"));
+  let app = await start({ data });
+  try {
+    assert.equal(app.command("fast-advance").state.checked, false);
+    assert.deepEqual(app.command("fast-advance").declaration.path, ["播放", "播放列表", "快速推进到下一个"]);
+    await app.run("fast-advance");
+    assert.equal(app.command("fast-advance").state.checked, true);
+    assert.equal(app.osd(), "快速推进到下一个：开");
+    await app.stop();
+    assert.equal(JSON.parse(await readFile(join(data, "playlists.json"), "utf8")).settings.gapless, true);
+    app = await start({ data });
+    assert.equal(app.command("fast-advance").state.checked, true);
+  } finally {
+    await app.close();
+    await rm(data, { recursive: true, force: true });
+  }
+});
+
+test("B26: on, the natural end opens the prepared next row at once, without reading the file again", async () => {
+  for (const fast of [false, true]) {
+    const app = await start();
+    try {
+      const [a, b] = await app.files(["a.mp4", "b.mp4"]);
+      await app.addFiles([a!, b!]);
+      if (fast) await app.run("fast-advance");
+      await app.click(0);
+      await app.press("Enter");
+      app.host.setSource({ phase: "ready" });
+      await app.host.settle(30); // the next row is prepared while this one plays
+      // b turns into an alias of a after that: only a fresh file check notices.
+      await rm(b!);
+      await symlink(a!, b!);
+      const ended = { ...app.host.source.stamp };
+      app.end();
+      await app.host.settle(30);
+      if (fast) {
+        assert.equal(app.opens().length, 2);
+        assert.deepEqual(app.opens()[1], { kind: "open", source: b, startPaused: false, expected: ended });
+      } else {
+        assert.equal(app.opens().length, 1, "the usual path checks the file at the end");
+        assert.equal(app.osd(), "文件规范路径与已有项重复，已选择已有项");
+      }
+    } finally {
+      await app.close();
+    }
+  }
+});
+
+test("B26: the prepared row follows list changes; a next file that is gone is skipped with a notice", async () => {
+  const app = await start();
+  try {
+    const [a, b, c, d] = await app.files(["a.mp4", "b.mp4", "c.mp4", "d.mp4"]);
+    await app.addFiles([a!, b!, c!, d!]);
+    await app.run("fast-advance");
+    await app.click(0);
+    await app.press("Enter");
+    app.host.setSource({ phase: "ready" });
+    await app.host.settle(30);
+    // Moving b to the bottom makes c the next row: a, c, d, b.
+    await app.click(1);
+    await app.press("Ctrl+End");
+    assert.deepEqual(app.names(), ["a.mp4", "c.mp4", "d.mp4", "b.mp4"]);
+    await rm(d!); // gone before c starts, so c's next row is checked without it
+    await app.host.settle(30);
+    let ended = { ...app.host.source.stamp };
+    app.end();
+    await app.host.settle(30);
+    assert.deepEqual(app.opens().at(-1), { kind: "open", source: c, startPaused: false, expected: ended });
+
+    // The end of c skips d and opens b.
+    app.host.setSource({ phase: "ready" });
+    await app.host.settle(30);
+    ended = { ...app.host.source.stamp };
+    app.end();
+    await app.host.settle(30);
+    assert.ok(app.host.osd.includes("无法打开 d.mp4：文件不存在"));
+    assert.deepEqual(app.opens().at(-1), { kind: "open", source: b, startPaused: false, expected: ended });
+    assert.equal(app.opens().length, 3, "nothing was submitted for d");
+    app.host.setSource({ phase: "ready" });
+    await app.host.settle();
+    assert.equal((app.rows()[2] as ViewRow & { failed: boolean }).failed, true);
+    assert.equal(app.rows()[3]!.current, true);
+  } finally {
+    await app.close();
+  }
+});
+
+test("C17: ffprobe answers are kept in probe-cache.json and reused after a restart", async () => {
+  const data = await mkdtemp(join(tmpdir(), "vestra-playlist-data-"));
+  let app = await start({ data, durations: { "a.mp4": 61 } });
+  let first = "";
+  try {
+    await app.run("remember"); // no saved list: the length can only come from the cache
+    const [a] = await app.files(["a.mp4"]);
+    await app.addFiles([a!]);
+    await app.host.settle(30);
+    assert.equal(app.rows()[0]!.duration, "01:01");
+    await app.stop();
+    first = app.root;
+    const cache = JSON.parse(await readFile(join(data, "probe-cache.json"), "utf8"));
+    assert.deepEqual(cache.map((entry: [string, number]) => entry[1]), [61]);
+    app = await start({ data, durations: {} });
+    await app.addFiles([a!]);
+    await app.host.settle(30);
+    assert.equal(app.rows()[0]!.duration, "01:01");
+    assert.equal(app.host.tools.calls.length, 0, "answered from the cache");
+  } finally {
+    await app.close();
+    await rm(data, { recursive: true, force: true });
+    if (first) await rm(first, { recursive: true, force: true });
   }
 });

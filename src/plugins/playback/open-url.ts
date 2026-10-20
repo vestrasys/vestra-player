@@ -1,7 +1,6 @@
 import { fileURLToPath } from "node:url";
 import type { Scope, Window } from "../../sdk/plugin/index.ts";
 import type { SettingsStore } from "./settings.ts";
-import { system } from "./system.ts";
 
 const SCHEMES = new Set(["http", "https", "rtsp", "rtmp", "rtmps", "mms", "ftp"]);
 export const INVALID = "不是有效的链接";
@@ -112,7 +111,9 @@ export class OpenUrl {
     let value = this.lastInput;
     let selectAll = false;
     if (this.#settings.value.openUrl.pasteFromClipboard) {
-      const first = lines(await system.readClipboard().catch(() => ""))[0];
+      // No text, or no access: nothing to fill in, and nothing to report.
+      const text = await this.#scope.clipboard.readText().catch(() => null);
+      const first = lines(text ?? "")[0];
       if (first !== undefined && parseAddress(first) !== null) [value, selectAll] = [first, true];
     }
     this.message = "";

@@ -1,8 +1,8 @@
-import { existsSync } from "node:fs";
-import { readFile, rename, stat, writeFile } from "node:fs/promises";
+import { existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { FORMATS, message, quality } from "./model.ts";
+import type { Scope } from "../../sdk/plugin/index.ts";
+import { FORMATS, quality } from "./model.ts";
 import type { Format } from "./model.ts";
 
 /** Everything kept in `settings.json`; every field applies to all image outputs. */
@@ -23,46 +23,37 @@ export const defaultFolder = () => {
   return existsSync(pictures) ? pictures : homedir();
 };
 
-const defaults = (): Settings => ({ folder: defaultFolder(), format: "png", quality: 90, screenSubtitles: true, besideMedia: false });
-
-/** The saved settings; a missing, damaged or partly invalid file falls back field by field. */
-export async function loadSettings(dataDirectory: string | null): Promise<Settings> {
-  const settings = defaults();
-  if (!dataDirectory) return settings;
-  let saved: Record<string, unknown>;
+const isObject = (value: unknown): value is Partial<Settings> => typeof value === "object" && value !== null && !Array.isArray(value);
+const isFolder = (path: unknown) => {
   try {
-    saved = JSON.parse(await readFile(join(dataDirectory, "settings.json"), "utf8")) ?? {};
+    return typeof path === "string" && !!path && statSync(path).isDirectory();
   } catch {
-    return settings; // first start or damaged file
+    return false;
   }
-  const { folder, format, quality: q, screenSubtitles, besideMedia } = saved;
-  if (typeof folder === "string" && folder && (await stat(folder).catch(() => null))?.isDirectory()) settings.folder = folder;
-  if (FORMATS.includes(format as Format)) settings.format = format as Format;
-  if (q !== undefined) settings.quality = quality(q);
-  if (typeof screenSubtitles === "boolean") settings.screenSubtitles = screenSubtitles;
-  if (typeof besideMedia === "boolean") settings.besideMedia = besideMedia;
-  return settings;
-}
+};
 
 /**
- * Saves run one after another; each writes a temporary file, then renames it
- * over `settings.json`, so a crash never leaves half a file.
+ * The settings in `<dataDirectory>/settings.json` (`plugin.storage`): a damaged
+ * file is set aside by the SDK; a partly invalid one falls back field by field,
+ * and a folder that no longer exists falls back to Pictures. `save()` writes the
+ * current values (debounced, and on deactivation). Without a data directory
+ * they are kept for this session only.
  */
-export function saver(dataDirectory: string | null) {
-  let chain = Promise.resolve();
-  return (settings: Settings) => {
-    if (!dataDirectory) return chain; // no data directory: kept for this session only
-    const text = `${JSON.stringify(settings, null, 2)}\n`;
-    chain = chain.then(async () => {
-      const file = join(dataDirectory, "settings.json");
-      const temporary = `${file}.${process.pid}.tmp`;
-      try {
-        await writeFile(temporary, text);
-        await rename(temporary, file);
-      } catch (error) {
-        console.error(`[capture] cannot save settings: ${message(error)}`);
-      }
-    });
-    return chain;
+export function openSettings(plugin: Scope) {
+  const fallback = { folder: defaultFolder(), format: "png" as Format, quality: 90, screenSubtitles: true, besideMedia: false };
+  let store: { value: Partial<Settings>; save(next: Settings): void } | null = null;
+  try {
+    store = plugin.storage.json<Partial<Settings>>("settings", { defaults: {}, validate: isObject });
+  } catch {
+    // no data directory
+  }
+  const { folder, format, quality: q, screenSubtitles, besideMedia } = store?.value ?? {};
+  const settings: Settings = {
+    folder: isFolder(folder) ? folder! : fallback.folder,
+    format: FORMATS.includes(format as Format) ? format! : fallback.format,
+    quality: q === undefined ? fallback.quality : quality(q),
+    screenSubtitles: typeof screenSubtitles === "boolean" ? screenSubtitles : fallback.screenSubtitles,
+    besideMedia: typeof besideMedia === "boolean" ? besideMedia : fallback.besideMedia,
   };
+  return { settings, save: () => store?.save({ ...settings }) };
 }

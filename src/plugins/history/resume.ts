@@ -1,10 +1,10 @@
-import { join } from "node:path";
-import type { Player, PlayerState, Plugin, Window } from "../../sdk/plugin/index.ts";
+import type { JsonStore, Player, PlayerState, Plugin, Window } from "../../sdk/plugin/index.ts";
 import { clock, fileSize, keyOf, mediaKind } from "./identity.ts";
-import { JsonFile, readJson, timing } from "./store.ts";
+import { jsonStore, timing } from "./store.ts";
 
 export type Mode = "off" | "auto" | "ask";
 export type Memo = { position: number; duration: number; size: number | null; updatedAt: number };
+type Saved = { version: 1; mode: Mode; audio: boolean; items: Record<string, Memo> };
 
 export const CAPACITY = 1000;
 /** Shorter sources are not remembered. */
@@ -52,42 +52,35 @@ export class Resume {
   readonly #player: Player;
   readonly #osd: (text: string) => void;
   readonly #update: () => void;
-  readonly #file: JsonFile;
+  readonly #store: JsonStore<Saved>;
   readonly #window: Window;
   readonly #listeners: (() => void)[] = [];
   #track: Track | null = null;
   #ask: { track: Track; memo: Memo; timer: ReturnType<typeof setTimeout> } | null = null;
   #message = "";
 
-  constructor(plugin: Plugin, directory: string | null, osd: (text: string) => void) {
+  constructor(plugin: Plugin, osd: (text: string) => void) {
     this.#player = plugin.player;
     this.#osd = osd;
     this.#update = () => plugin.update();
-    const file = directory ? join(directory, "positions.json") : null;
-    this.#file = new JsonFile(file, "throttle", () => timing.positionsWrite, () => ({
-      version: 1,
-      mode: this.mode,
-      audio: this.audio,
-      items: Object.fromEntries(this.items),
-    }));
-    const saved = readJson(file) as { mode?: unknown; audio?: unknown; items?: unknown } | null;
-    if (saved && typeof saved === "object") {
-      if (saved.mode === "off" || saved.mode === "auto" || saved.mode === "ask") this.mode = saved.mode;
-      if (typeof saved.audio === "boolean") this.audio = saved.audio;
-      if (saved.items && typeof saved.items === "object")
-        Object.entries(saved.items as Record<string, Memo>)
-          .filter(
-            ([, memo]) =>
-              !!memo &&
-              Number.isFinite(memo.position) &&
-              Number.isFinite(memo.duration) &&
-              (memo.size === null || Number.isFinite(memo.size)) &&
-              Number.isFinite(memo.updatedAt),
-          )
-          .sort(([, a], [, b]) => a.updatedAt - b.updatedAt) // oldest first: the LRU order
-          .slice(-CAPACITY)
-          .forEach(([key, memo]) => this.items.set(key, memo));
-    }
+    // Created before the onDispose below, so it is released after it and writes the last position.
+    this.#store = jsonStore<Saved>(plugin, "positions", { version: 1, mode: "auto", audio: false, items: {} }, timing.positionsWrite);
+    const saved = this.#store.value as { mode?: unknown; audio?: unknown; items?: unknown };
+    if (saved.mode === "off" || saved.mode === "auto" || saved.mode === "ask") this.mode = saved.mode;
+    if (typeof saved.audio === "boolean") this.audio = saved.audio;
+    if (saved.items && typeof saved.items === "object")
+      Object.entries(saved.items as Record<string, Memo>)
+        .filter(
+          ([, memo]) =>
+            !!memo &&
+            Number.isFinite(memo.position) &&
+            Number.isFinite(memo.duration) &&
+            (memo.size === null || Number.isFinite(memo.size)) &&
+            Number.isFinite(memo.updatedAt),
+        )
+        .sort(([, a], [, b]) => a.updatedAt - b.updatedAt) // oldest first: the LRU order
+        .slice(-CAPACITY)
+        .forEach(([key, memo]) => this.items.set(key, memo));
 
     this.#window = plugin.windows.create("ui/resume.slint");
     this.#window.bind(() => ({ message: this.#message }));
@@ -101,8 +94,7 @@ export class Resume {
     plugin.onDispose(() => {
       clearInterval(tick);
       this.#closeAsk();
-      if (this.#track) this.#record(this.#track, true);
-      this.#file.flush();
+      if (this.#track) this.#record(this.#track, true); // the store, released next, writes it
     });
   }
 
@@ -120,18 +112,18 @@ export class Resume {
     if (mode === this.mode) return;
     this.mode = mode;
     if (mode !== "ask") this.#closeAsk();
-    this.#file.touch();
+    this.#save();
   }
 
   setAudio(audio: boolean) {
     if (audio === this.audio) return;
     this.audio = audio;
-    this.#file.touch();
+    this.#save();
   }
 
   clear() {
     this.items.clear();
-    this.#file.touch();
+    this.#save();
     this.#changed();
   }
 
@@ -275,14 +267,18 @@ export class Resume {
     this.items.delete(track.key); // insertion order is the LRU order
     this.items.set(track.key, { position, duration, size: track.size, updatedAt: Date.now() });
     while (this.items.size > CAPACITY) this.items.delete(this.items.keys().next().value!);
-    if (before?.position !== position) this.#file.touch();
+    if (before?.position !== position) this.#save();
     if (settled || !before) this.#changed();
   }
 
   #forget(track: Track) {
     if (this.mode === "off" || !this.items.delete(track.key)) return;
-    this.#file.touch();
+    this.#save();
     this.#changed();
+  }
+
+  #save() {
+    this.#store.save({ version: 1, mode: this.mode, audio: this.audio, items: Object.fromEntries(this.items) });
   }
 
   #changed() {

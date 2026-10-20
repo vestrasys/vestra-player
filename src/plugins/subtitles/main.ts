@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
-import { watch, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { watch } from "node:fs";
 import type { FSWatcher } from "node:fs";
 import { stat } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname } from "node:path";
 import type {
   CommandOptions,
   Plugin,
@@ -11,8 +11,24 @@ import type {
   SubtitleTrack,
   SubtitlesState,
 } from "../../sdk/plugin/index.ts";
-import { readSrt } from "./srt.ts";
-import { SYNC_LIMIT, SYNC_STEPS, parse, parseSync, serialize, stepSeconds } from "./model.ts";
+import { ENCODINGS, convert, cuesOf, parseSrt, readFileBytes } from "./formats.ts";
+import type { Cue, Converted, Encoding } from "./formats.ts";
+import {
+  DEFAULT_BOX,
+  DEFAULT_SHADOW,
+  SYNC_LIMIT,
+  SYNC_STEPS,
+  clock,
+  dialogueTarget,
+  isObject,
+  parse,
+  parseStyle,
+  parseSync,
+  saveable,
+  serialize,
+  stepSeconds,
+} from "./model.ts";
+import type { Jump, SavedStyle, StyleFile } from "./model.ts";
 
 const COLORS = ["white", "yellow", "cyan"] as const;
 /** 字幕 ▶ 选择字幕轨 lists at most this many tracks (orders 303–310); the rest are in 字幕微调. */
@@ -20,7 +36,16 @@ const MENU_TRACKS = 8;
 const SIZE_STEP = 2;
 /** Titles the track items must not take: the fixed items of 选择字幕轨 ▶. */
 const RESERVED = new Set(["不显示", "依次切换"]);
-const BASE = { fontSize: 36, color: "white", outline: 2, marginPercent: 5, offsetMs: 0 } as const;
+/** A style with every optional field filled in. */
+type FullStyle = Required<SubtitleStyle>;
+const BASE_FIELDS: Pick<FullStyle, "bold" | "shadow" | "box" | "assOverride"> = {
+  bold: false, shadow: 0, box: null, assOverride: "keep",
+};
+const BASE = { fontSize: 36, color: "white", outline: 2, marginPercent: 5, offsetMs: 0, ...BASE_FIELDS } as const;
+const NO_TEXT = "没有可用的文本字幕";
+const NO_SEEK = "当前媒体不能跳转";
+const ASS_NOTE = "ASS 原样式开启时：字体按字幕文件（缺失字体用默认字体），颜色、描边、粗体、阴影、背景框、位置无效。";
+const isRemote = (source: string) => /^[a-z][a-z0-9+.-]*:\/\//i.test(source) && !/^file:\/\//i.test(source);
 const CANCELLED = "操作已取消或媒体已切换。";
 const STALE = "字幕轨已变化，请重新调整。";
 
@@ -57,8 +82,11 @@ const confirmation = (state: "waiting" | "applied" | "uncertain" | undefined) =>
 const clamp = (value: number, min: number, max: number) => Math.round(Math.max(min, Math.min(max, value)));
 
 type Action = (ticket: number) => Promise<void>;
-/** A track this plugin loaded: where it came from, to reload it (A09). Memory only. */
-type Loaded = { path: string; hash: string };
+/**
+ * A track this plugin loaded: where it came from, to reload it (A09), and its
+ * cues for B11. `part` is its place among the tracks of the file (SAMI languages). Memory only.
+ */
+type Loaded = { path: string; part: number; hash: string; cues: Cue[] };
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
 /** Subtitles: 字幕微调 and 字幕设置 windows, 字幕 ▶ menu, serialized subtitle operations. */
@@ -67,18 +95,20 @@ export default async function activate(plugin: Plugin) {
   const tune = plugin.windows.create("ui/tune.slint", { id: "subtitle-tune" });
   const settings = plugin.windows.create("ui/settings.slint", { id: "subtitle-settings" });
   const syncWindow = plugin.windows.create("ui/sync.slint", { id: "subtitle-sync" });
-  const file = settingsFile(plugin);
-  const stored = parse(readJson(file));
+  const settingsStore = store<Record<string, unknown>>(plugin, "settings", {});
+  const stored = parse(settingsStore.value);
   let syncStep = stored.syncStepMs;
   let autoReload = stored.autoReload;
-  const save = () => {
-    if (!file) return;
-    try {
-      writeFileSync(`${file}.tmp`, JSON.stringify(serialize({ ...stored, syncStepMs: syncStep, autoReload }), null, 2));
-      renameSync(`${file}.tmp`, file);
-    } catch (e) {
-      console.error(`[subtitles] settings not saved: ${(e as Error).message}`);
-    }
+  let fallbackEncoding: Encoding = stored.fallbackEncoding;
+  const save = () => settingsStore.save(serialize({ ...stored, syncStepMs: syncStep, autoReload, fallbackEncoding }));
+  // style.json (D09): the style without the sync, restored once a stylable track is selected.
+  const styleStore = store<Record<string, unknown>>(plugin, "style", {});
+  const fontBase = (): SavedStyle => saveable({ fontId: subtitles.state?.fonts[0]?.id ?? "", ...BASE });
+  let styleFile: StyleFile = parseStyle(styleStore.value, fontBase());
+  let restorePending = styleFile.style !== null;
+  const saveStyleFile = (next: Partial<StyleFile>) => {
+    styleFile = { ...styleFile, ...next };
+    styleStore.save({ version: 1, ...styleFile });
   };
   /** Tracks this plugin loaded on the current source, by track id. */
   const loaded = new Map<string, Loaded>();
@@ -151,6 +181,15 @@ export default async function activate(plugin: Plugin) {
       desired = undefined;
       status = track ? `字幕：${label(track)}${confirmation(subtitles.state?.trackConfirmation)}` : "隐藏字幕";
     };
+  /** The video frame rate for MicroDVD files, when the player knows it. */
+  const videoFps = () =>
+    plugin.player
+      .stats()
+      .then((stats) => stats.video?.fps ?? null, () => null);
+  /** Read and convert a subtitle file (D18). */
+  const readSubtitle = async (path: string) => convert(await readFileBytes(path), { fallback: fallbackEncoding, fps: await videoFps() });
+  const trackTitle = (path: string, part: Converted) =>
+    `${basename(path)}${part.language ? ` · ${part.language}` : ""}`.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 200);
   const load: Action = async (ticket) => {
     const signal = aborter.signal;
     const initial = await subtitles.refresh();
@@ -158,16 +197,24 @@ export default async function activate(plugin: Plugin) {
     const path = await plugin.dialogs.openFile({ title: "打开字幕" });
     guard(ticket, initial.sourceId);
     if (!path) return void (status = "未选择字幕文件。");
-    const bytes = await readSrt(path);
+    const converted = await readSubtitle(path);
     guard(ticket, initial.sourceId);
-    const s = await subtitles.refresh();
-    guard(ticket, initial.sourceId);
-    guard(ticket, s.sourceId);
-    const track = await subtitles.load(bytes, { ifCurrent: s, signal }); // uploads, commits and selects
-    guard(ticket, s.sourceId);
-    remember(track.id, { path, hash: sha256(bytes) });
+    let first: SubtitleTrack | null = null;
+    for (const [part, item] of converted.tracks.entries()) {
+      const s = await subtitles.refresh();
+      guard(ticket, initial.sourceId);
+      guard(ticket, s.sourceId);
+      // Uploads and commits; the first track of the file is also selected.
+      const track = await subtitles.load(item.bytes, {
+        format: item.format, title: trackTitle(path, item), select: first ? "none" : "primary", ifCurrent: s, signal,
+      });
+      guard(ticket, s.sourceId);
+      first ??= track;
+      remember(track.id, { path, part, hash: sha256(item.bytes), cues: cuesOf(item.format, item.bytes) });
+    }
     desired = undefined;
-    status = `已载入字幕 ${basename(path)}${confirmation(subtitles.state?.trackConfirmation)}`;
+    const count = converted.tracks.length > 1 ? `（${converted.tracks.length} 条轨）` : "";
+    status = [`打开字幕：${basename(path)}${count}${confirmation(subtitles.state?.trackConfirmation)}`, ...converted.notes].join("。");
   };
   /** 显示字幕 (Alt+H): hide the selection, or bring back the last shown track. */
   const toggleShown: Action = async (ticket) => {
@@ -225,19 +272,23 @@ export default async function activate(plugin: Plugin) {
       const found = await stat(record.path).then((info) => info.isFile(), () => false);
       guard(ticket, s.sourceId);
       if (!found) return void (status = `无法重载：找不到字幕文件 ${name}`);
-      const bytes = await readSrt(record.path).catch((e: Error) => {
+      const converted = await readSubtitle(record.path).catch((e: Error) => {
         throw new Error(`无法重载：${e.message}`);
       });
       guard(ticket, s.sourceId);
-      const hash = sha256(bytes);
+      const item = converted.tracks[record.part];
+      if (!item) return void (status = `无法重载：字幕文件 ${name} 的内容已变化`);
+      const hash = sha256(item.bytes);
       if (hash === record.hash) return void (status = "字幕未改变");
       const before = await subtitles.refresh();
       guard(ticket, s.sourceId);
       const previous = before.selected;
-      const track = await subtitles.load(bytes, { ifCurrent: before, signal });
+      const track = await subtitles.load(item.bytes, {
+        format: item.format, title: target.title || trackTitle(record.path, item), ifCurrent: before, signal,
+      });
       guard(ticket, s.sourceId);
       forget(target.id);
-      remember(track.id, { path: record.path, hash });
+      remember(track.id, { path: record.path, part: record.part, hash, cues: cuesOf(item.format, item.bytes) });
       if (previous?.id !== target.id) {
         const now = await subtitles.refresh();
         guard(ticket, s.sourceId);
@@ -308,9 +359,10 @@ export default async function activate(plugin: Plugin) {
     if (!s.fonts[0]) return "没有可用的字幕字体。";
     return null;
   }
-  const current = () => {
+  /** The style in effect (or being edited), with every optional field filled in. */
+  const current = (): FullStyle => {
     const s = subtitles.state;
-    return desired ?? s?.style ?? { fontId: s?.fonts[0]?.id ?? "", ...BASE };
+    return { ...BASE_FIELDS, ...(desired ?? s?.style ?? { fontId: s?.fonts[0]?.id ?? "", ...BASE }) } as FullStyle;
   };
   /**
    * Edits merge for 100 ms and apply only to the track selected when the edit
@@ -325,6 +377,8 @@ export default async function activate(plugin: Plugin) {
     }
     const base = current();
     desired = { ...base, ...patch(base) };
+    saveStyleFile({ style: saveable(desired) });
+    restorePending = false;
     editing ??= s;
     const requested = { ...desired }, pinned = editing;
     clearTimeout(styleTimer);
@@ -354,6 +408,10 @@ export default async function activate(plugin: Plugin) {
     margin: () => ({ marginPercent: BASE.marginPercent }),
     color: () => ({ color: BASE.color }),
     font: () => ({ fontId: subtitles.state?.fonts[0]?.id ?? "" }),
+    bold: () => ({ bold: false }),
+    shadow: () => ({ shadow: 0 }),
+    box: () => ({ box: null }),
+    boxOpacity: (s) => (s.box === null || s.box === undefined ? {} : { box: DEFAULT_BOX }),
   };
   const resetStyle = () => {
     if (busy) return;
@@ -363,6 +421,8 @@ export default async function activate(plugin: Plugin) {
       await subtitles.setStyle(null, { ifCurrent: s });
       guard(ticket, s.sourceId);
       desired = undefined;
+      saveStyleFile({ style: null, shadowLast: DEFAULT_SHADOW, boxOpacity: DEFAULT_BOX });
+      restorePending = false;
       status = "已恢复默认样式。";
     });
   };
@@ -390,8 +450,17 @@ export default async function activate(plugin: Plugin) {
   }));
   settings.bind(() => {
     const s = subtitles.state, style = current();
+    const ass = /^(ass|ssa)$/.test(s?.selected?.codec ?? "") && style.assOverride !== "force";
     return {
       ...common(),
+      fontNote: ass ? ASS_NOTE : "",
+      bold: style.bold === true,
+      shadowSize: style.shadow ?? 0,
+      boxOn: style.box !== null && style.box !== undefined,
+      boxOpacity: style.box ?? styleFile.boxOpacity,
+      assIndex: assMode() === "force" ? 1 : 0,
+      encodingLabels: ENCODINGS.map((e) => e.label),
+      encodingIndex: Math.max(0, ENCODINGS.findIndex((e) => e.id === fallbackEncoding)),
       fontLabels: s?.fonts.map((f) => f.family) ?? [],
       selectedFont: Math.max(0, s?.fonts.findIndex((f) => f.id === style.fontId) ?? 0),
       selectedColor: Math.max(0, COLORS.indexOf(style.color)),
@@ -445,8 +514,33 @@ export default async function activate(plugin: Plugin) {
   settings.on("changeMargin", number((v) => styleChange(() => ({ marginPercent: clamp(v, 2, 15) }))));
   settings.on("sliderReleased", () => {
     const style = current();
-    settings.set({ outlineSize: style.outline, marginPercent: style.marginPercent });
+    settings.set({
+      outlineSize: style.outline, marginPercent: style.marginPercent,
+      shadowSize: style.shadow ?? 0, boxOpacity: style.box ?? styleFile.boxOpacity,
+    });
   });
+  // D09, D11, D17: the same edits as the menu toggles.
+  settings.on("changeBold", (on: boolean) => styleChange(() => ({ bold: on === true })));
+  settings.on("changeShadow", number((v) => {
+    const shadow = clamp(v, 0, 4);
+    if (shadow > 0) saveStyleFile({ shadowLast: shadow });
+    styleChange(() => ({ shadow }));
+  }));
+  settings.on("changeBox", (on: boolean) => styleChange(() => ({ box: on === true ? styleFile.boxOpacity : null })));
+  settings.on("changeBoxOpacity", number((v) => {
+    const opacity = clamp(Math.round(v / 5) * 5, 0, 100);
+    saveStyleFile({ boxOpacity: opacity });
+    if (current().box !== null) styleChange(() => ({ box: opacity }));
+  }));
+  settings.on("changeAssOverride", number((v) => {
+    if (v === 0 || v === 1) setAssOverride(v === 0 ? "keep" : "force");
+  }));
+  settings.on("changeEncoding", number((v) => {
+    const encoding = Number.isInteger(v) ? ENCODINGS[v]?.id : undefined;
+    if (!encoding || encoding === fallbackEncoding) return;
+    fallbackEncoding = encoding;
+    save();
+  }));
   settings.on("changeFont", number((v) => {
     const font = Number.isInteger(v) ? subtitles.state?.fonts[v] : undefined;
     if (font) styleChange(() => ({ fontId: font.id }));
@@ -567,12 +661,13 @@ export default async function activate(plugin: Plugin) {
   // 字幕样式 ▶ (D06, D07): same edits as the 字幕微调 buttons, reported on screen.
   /** Key-driven style edits: never blocked by a running operation, so held keys keep repeating. */
   const styleKey = (scope: Scope, id: string, path: string[], order: number, group: string,
-    binding: string, apply: () => SubtitleStyle | null, text: (style: SubtitleStyle) => string, repeat = true) =>
+    binding: string | null, apply: () => SubtitleStyle | null, text: (style: FullStyle) => string, repeat = true,
+    checked?: () => boolean) =>
     scope.commands.add({
-      id, path, order, group, bindings: [binding], repeat,
+      id, path, order, group, bindings: binding ? [binding] : [], repeat, ...(checked ? { checked } : {}),
       run: () => {
         const style = apply();
-        say(style ? text(style) : status);
+        say(style ? text({ ...BASE_FIELDS, ...style } as FullStyle) : status);
         plugin.update();
       },
     });
@@ -586,6 +681,147 @@ export default async function activate(plugin: Plugin) {
     (s) => `字幕位置：下移(${s.marginPercent}%)`);
   styleKey(plugin, "move-reset", ["字幕", "字幕样式", "复位位置"], 334, "style-move", "Alt+Home",
     () => styleChange(() => ({ marginPercent: BASE.marginPercent })), (s) => `字幕位置：默认(${s.marginPercent}%)`, false);
+  // D09 粗体, D11 阴影 / 字幕边框不透明 (toggles; the window has the sliders).
+  styleKey(plugin, "bold", ["字幕", "字幕样式", "粗体"], 324, "style-font", "Alt+B",
+    () => styleChange((s) => ({ bold: !s.bold })), (s) => (s.bold ? "粗体字幕" : "禁用粗体字幕"), false,
+    () => current().bold);
+  styleKey(plugin, "shadow", ["字幕", "字幕样式", "阴影"], 335, "style-box", null,
+    () => styleChange((s) => ({ shadow: (s.shadow ?? 0) > 0 ? 0 : styleFile.shadowLast })),
+    (s) => (s.shadow > 0 ? `字幕阴影：开(${s.shadow})` : "字幕阴影：关"), false, () => current().shadow > 0);
+  styleKey(plugin, "box", ["字幕", "字幕样式", "字幕边框不透明"], 336, "style-box", null,
+    () => styleChange((s) => ({ box: s.box === null || s.box === undefined ? styleFile.boxOpacity : null })),
+    (s) => (s.box !== null ? "字幕边框不透明：开" : "字幕边框不透明：关"), false, () => current().box !== null);
+  // D17 开启 ASS/SSA 原样式: the player's ASS override, a style field. Without a stylable
+  // track the choice is kept and applied with the remembered style later.
+  function setAssOverride(mode: "keep" | "force") {
+    if (!styleChange(() => ({ assOverride: mode }))) {
+      saveStyleFile({ style: { ...(styleFile.style ?? saveable(current())), assOverride: mode } });
+      restorePending = true;
+    }
+    say(mode === "keep" ? "ASS/SSA 动态字幕：开" : "ASS/SSA 动态字幕：关");
+    plugin.update();
+  }
+  /** The ASS choice in effect, or the one waiting to be applied. */
+  const assMode = () => (restorePending && styleFile.style ? styleFile.style.assOverride : current().assOverride);
+  plugin.commands.add({
+    id: "ass-original", path: ["字幕", "开启 ASS/SSA 原样式"], order: 337, group: "subtitle-render",
+    checked: () => assMode() !== "force",
+    run: () => setAssOverride(assMode() === "force" ? "keep" : "force"),
+  });
+  /** Apply the remembered style (style.json) once a stylable track is selected. */
+  function restoreStyle() {
+    const saved = styleFile.style;
+    if (!restorePending || !saved || styleBlocked()) return;
+    const fonts = subtitles.state?.fonts ?? [];
+    styleChange((s) => ({ ...saved, fontId: fonts.some((f) => f.id === saved.fontId) ? saved.fontId : s.fontId, offsetMs: s.offsetMs }));
+  }
+
+  // B11 上一句 / 下一句对白 / 当前字幕起点: cues of the selected text track. Tracks this
+  // plugin loaded are parsed from the uploaded bytes; embedded ones are read with ffmpeg.
+  let cueCache: { key: string; cues: Cue[] } | null = null;
+  let cueReading = false;
+  /**
+   * Jumps run one after another, each from the position its predecessor's seek
+   * left (the SDK refreshes the state after a seek). A held key repeats faster
+   * than seeks land: one press may wait behind the running jump, further ones are dropped.
+   */
+  let jumps = Promise.resolve();
+  let waiting = 0;
+  const cueKey = (s: SubtitlesState, track: SubtitleTrack) => `${s.sourceId}:${track.id}`;
+  function dialogueBlocked() {
+    const p = plugin.player.state;
+    if (!p.source || !p.can.seek) return NO_SEEK;
+    const s = subtitles.state, track = s?.selected;
+    if (!s || !track) return NO_TEXT;
+    const own = loaded.get(track.id);
+    if (own) return own.cues.length ? null : NO_TEXT;
+    if (!track.text || track.kind !== "embedded" || track.streamIndex === null || isRemote(p.source)) return NO_TEXT;
+    if (cueCache?.key === cueKey(s, track) && !cueCache.cues.length) return NO_TEXT;
+    return null;
+  }
+  async function readCues(s: SubtitlesState, track: SubtitleTrack, source: string): Promise<Cue[]> {
+    const own = loaded.get(track.id);
+    if (own) return own.cues;
+    const key = cueKey(s, track);
+    if (cueCache?.key === key) return cueCache.cues;
+    const size = await stat(source).then((info) => info.size, () => 0);
+    // About 1 s per 100 MB of media (ffmpeg reads the whole file), at least 15 s.
+    const timeoutMs = Math.max(15_000, Math.ceil(size / 100_000_000) * 1000);
+    const slow = setTimeout(() => say("正在读取字幕…"), 500);
+    cueReading = true; // the jump commands show busy meanwhile
+    plugin.update();
+    try {
+      const { stdout } = await plugin.tools.run(
+        "ffmpeg",
+        ["-v", "error", "-nostdin", "-i", source, "-map", `0:${track.streamIndex}`, "-f", "srt", "pipe:1"],
+        { timeoutMs, signal: aborter.signal },
+      );
+      const cues = parseSrt(new TextDecoder().decode(stdout));
+      if (subtitles.state?.sourceId === s.sourceId) cueCache = { key, cues };
+      return cues;
+    } finally {
+      clearTimeout(slow);
+      cueReading = false;
+      plugin.update();
+    }
+  }
+  const cueError = (e: unknown) => {
+    const error = e as { code?: string; name?: string };
+    if (error?.name === "AbortError" || error?.code === "aborted") return null;
+    if (error?.code === "unavailable") return "需要 ffmpeg 才能读取内嵌字幕";
+    if (error?.code === "timeout") return "读取内嵌字幕超时";
+    return "无法读取内嵌字幕";
+  };
+  const JUMP_TEXT: Record<Jump, [string, string]> = {
+    previous: ["定位：上一对白位置", "没有上一句对白"],
+    next: ["定位：下一对白位置", "没有下一句对白"],
+    current: ["定位：当前对白起点", "没有可跳转的对白"],
+  };
+  function jump(kind: Jump) {
+    if (waiting >= 2) return; // one running, one waiting
+    waiting++;
+    jumps = jumps.then(() => jumpOnce(kind)).finally(() => void waiting--);
+    return jumps;
+  }
+  async function jumpOnce(kind: Jump) {
+    const blocked = dialogueBlocked();
+    if (blocked) return say(blocked);
+    const s = subtitles.state!, track = s.selected!, p = plugin.player.state;
+    let cues: Cue[];
+    try {
+      cues = await readCues(s, track, p.source!);
+    } catch (e) {
+      const text = cueError(e);
+      if (text) say(text);
+      return;
+    }
+    if (plugin.player.state.sourceId !== p.sourceId) return; // the media changed while reading
+    if (!cues.length) return say(NO_TEXT);
+    // Start from where the previous jump's seek landed, not an event that has not arrived yet.
+    const now = await plugin.player.refresh().catch(() => plugin.player.state);
+    if (now.sourceId !== p.sourceId) return;
+    const target = dialogueTarget(cues, now.position ?? 0, current().offsetMs, kind);
+    const [done, none] = JUMP_TEXT[kind];
+    if (target === null) return say(none);
+    say(`${done} ${clock(target)}`);
+    // A little before the start, so decoding does not land on the second half of the cue.
+    await plugin.player.seek(Math.max(0, target - 0.05)).catch((e: { code?: string }) => {
+      if (e?.code !== "stale") say(errorText(e)); // someone changed the source meanwhile: no retry
+    });
+  }
+  const dialogue = { enabled: () => !cueReading && !dialogueBlocked(), busy: () => cueReading, reason: () => (cueReading ? "正在读取字幕…" : dialogueBlocked()) };
+  plugin.commands.add({
+    id: "dialogue-previous", path: ["播放", "跳转", "上一句对白"], order: 217, group: "jump-subtitle",
+    bindings: ["Home"], repeat: true, ...dialogue, run: () => jump("previous"),
+  });
+  plugin.commands.add({
+    id: "dialogue-next", path: ["播放", "跳转", "下一句对白"], order: 217, group: "jump-subtitle",
+    bindings: ["End"], repeat: true, ...dialogue, run: () => jump("next"),
+  });
+  plugin.commands.add({
+    id: "dialogue-current", path: ["播放", "跳转", "当前字幕起点"], order: 217, group: "jump-subtitle",
+    bindings: ["Ctrl+Home"], ...dialogue, run: () => jump("current"),
+  });
 
   // 同步 ▶: the 超前 / 滞后 titles show the 同步单位, so they live in a child scope rebuilt when it changes.
   let syncMenu = plugin.scope();
@@ -628,6 +864,7 @@ export default async function activate(plugin: Plugin) {
     for (const id of [...loaded.keys()]) if (!s.tracks.some((t) => t.id === id)) forget(id);
     seen = s;
     syncTrackMenu(s);
+    restoreStyle();
   });
   // The host has no subtitle event; an open window also re-reads every 1.5 s.
   const poll = setInterval(() => {
@@ -644,23 +881,17 @@ export default async function activate(plugin: Plugin) {
     for (const id of [...watchers.keys()]) unwatch(id);
   });
   syncTrackMenu(await subtitles.refresh());
+  restoreStyle();
   await rebuilding;
   await syncRebuild;
 }
 
-function settingsFile(plugin: Plugin) {
+/** A JSON file in the data directory; without one, settings last for this run only. */
+function store<T extends Record<string, unknown>>(plugin: Plugin, name: string, defaults: T) {
   try {
-    return join(plugin.dataDirectory, "settings.json");
+    return plugin.storage.json<T>(name, { defaults, validate: (v): v is T => isObject(v) });
   } catch {
-    return null; // no data directory: settings last for this run only
-  }
-}
-/** A missing or broken file reads as the defaults. */
-function readJson(file: string | null): unknown {
-  if (!file) return null;
-  try {
-    return JSON.parse(readFileSync(file, "utf8"));
-  } catch {
-    return null;
+    let value = defaults;
+    return { get value() { return value; }, save(next: T) { value = next; } };
   }
 }

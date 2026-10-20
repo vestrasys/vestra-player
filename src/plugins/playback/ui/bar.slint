@@ -25,6 +25,7 @@ export global PlaybackBridge {
     in-out property <bool> can-volume: true;
     in-out property <bool> has-sidebar;
     in-out property <bool> sidebar-on;
+    // A core action id (`host.run`), or "open".
     callback action(string);
     callback seek-changed(float);
     callback seek-cancelled();
@@ -254,25 +255,25 @@ export component PlaybackBar inherits Rectangle {
             BarButton {
                 icon: PlaybackBridge.playing ? "pause" : "play";
                 enabled: PlaybackBridge.can-pause;
-                clicked => { PlaybackBridge.action("toggle-pause"); }
+                clicked => { PlaybackBridge.action("play-pause"); }
             }
             BarButton {
                 icon: "stop";
                 enabled: PlaybackBridge.can-stop;
-                clicked => { PlaybackBridge.action("close-source"); }
+                clicked => { PlaybackBridge.action("stop"); }
             }
             BarButton {
                 icon: "back";
                 enabled: PlaybackBridge.can-step;
                 right-enabled: PlaybackBridge.can-previous;
-                clicked => { PlaybackBridge.action("backward-5"); }
+                clicked => { PlaybackBridge.action("seek-backward"); }
                 right-clicked => { PlaybackBridge.action("previous"); }
             }
             BarButton {
                 icon: "forward";
                 enabled: PlaybackBridge.can-step;
                 right-enabled: PlaybackBridge.can-next;
-                clicked => { PlaybackBridge.action("forward-5"); }
+                clicked => { PlaybackBridge.action("seek-forward"); }
                 right-clicked => { PlaybackBridge.action("next"); }
             }
             BarButton {

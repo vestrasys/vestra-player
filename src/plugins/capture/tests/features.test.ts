@@ -5,9 +5,9 @@ import { basename, dirname, join } from "node:path";
 import test from "node:test";
 import { startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
 import activate from "../main.ts";
-import { fakeSystem } from "./fakes.ts";
+import { fakeSips, watchHost } from "./fakes.ts";
 
-const fakes = fakeSystem();
+const fakes = fakeSips();
 const directory = new URL("..", import.meta.url);
 const tick = () => new Promise((done) => setTimeout(done, 5));
 async function until(predicate: () => boolean) {
@@ -37,8 +37,8 @@ function publishingJobs(host: TestHost) {
 
 /** A started plugin with a ready local source, a temporary capture folder and data directory. */
 async function setup(path = "/contract/source-one.mp4") {
-  Object.assign(fakes, { revealed: [], copied: [], converted: [], failReveal: false, failCopy: false, failConvert: null, hold: null });
   const host = new TestHost();
+  watchHost(host, fakes);
   host.openElsewhere(path);
   host.setSource({ position: 2, duration: 30 });
   publishingJobs(host);
@@ -71,6 +71,7 @@ test("F03: Ctrl+C copies the raw frame as PNG through a temporary file that is t
     assert.deepEqual(capture.expected, host.source.stamp);
     const [copied] = fakes.copied;
     assert.equal(copied!.existed, true, "the PNG existed when it went to the clipboard");
+    assert.deepEqual(host.clipboard.images, [copied!.path], "written through plugin.clipboard.writeImage");
     assert.equal(basename(dirname(copied!.path)), `vestra-capture-${process.pid}`);
     assert.match(copied!.path, /clip-1\.png$/);
     assert.equal(await exists(copied!.path), false, "temporary file removed");
@@ -176,6 +177,7 @@ test("F07: JPEG goes through a hidden PNG and sips; quality and format persist; 
     assert.deepEqual(fakes.converted[0], { source: staged, target: join(folder, "source-one_00.02.000.jpg"), format: "jpeg", quality: 80 });
     assert.equal(lastOsd(host), `帧已保存为 ${join(folder, "source-one_00.02.000.jpg")}`);
     assert.deepEqual(await readdir(folder), ["source-one_00.02.000.jpg"], "temporary PNG removed");
+    await host.settle(350); // plugin.storage writes 300 ms after the last change
     assert.deepEqual(JSON.parse(await readFile(join(data, "settings.json"), "utf8")), {
       folder, format: "jpeg", quality: 80, screenSubtitles: true, besideMedia: false,
     });
@@ -267,7 +269,7 @@ test("F09: 打开截图文件夹 reveals the folder, recreating it; the media fo
   try {
     await host.command("capture.openFolder").run();
     await host.settle();
-    assert.deepEqual(fakes.revealed, [folder]);
+    assert.deepEqual(fakes.opened, [folder]);
     await rm(folder, { recursive: true });
     await host.command("capture.openFolder").run();
     await host.settle();
@@ -277,7 +279,7 @@ test("F09: 打开截图文件夹 reveals the folder, recreating it; the media fo
     await host.settle();
     await host.command("capture.openFolder").run();
     await host.settle();
-    assert.equal(fakes.revealed.at(-1), media);
+    assert.equal(fakes.opened.at(-1), media);
     await host.press("Ctrl+E");
     await until(() => lastOsd(host).startsWith("帧已保存为"));
     assert.equal(host.sent("jobs.start").at(-1)!.destination, join(media, "movie_00.02.000.png"), "saved beside the media");
@@ -285,13 +287,61 @@ test("F09: 打开截图文件夹 reveals the folder, recreating it; the media fo
     await host.settle();
     await host.command("capture.openFolder").run();
     await host.settle();
-    assert.equal(fakes.revealed.at(-1), folder, "a URL source uses the capture folder");
-    fakes.failReveal = true;
+    assert.equal(fakes.opened.at(-1), folder, "a URL source uses the capture folder");
+    fakes.failOpen = true;
     await host.command("capture.openFolder").run();
     await host.settle();
     assert.equal(lastOsd(host), "无法打开文件夹。");
   } finally {
     await stop();
     await rm(media, { recursive: true, force: true });
+  }
+});
+
+test("F09: 导出任务「打开」opens the confirmed output with system.openPath; a burst opens its folder", async () => {
+  const { host, folder, stop } = await setup();
+  try {
+    await host.press("Ctrl+E");
+    await until(() => lastOsd(host).startsWith("帧已保存为"));
+    await host.command("capture.tasks").run();
+    host.window("tasks").emit("open-output", "1");
+    await until(() => fakes.opened.length === 1);
+    assert.deepEqual(fakes.opened, [join(folder, "source-one_00.02.000.png")]);
+    await host.press("Ctrl+G");
+    host.window("burst").emit("start-burst", "1", "2", "0.5", false, false, false);
+    await until(() => host.window("burst").props.progress === "已完成 · 2/2");
+    host.window("tasks").emit("open-output", "2");
+    await until(() => fakes.opened.length === 2);
+    const [burstFolder] = (await readdir(folder)).filter((name) => name.startsWith("Capture-"));
+    assert.equal(fakes.opened[1], join(folder, burstFolder!));
+    fakes.failOpen = true;
+    host.window("tasks").emit("open-output", "1");
+    await until(() => host.window("tasks").props.status === "无法打开文件夹。");
+  } finally {
+    await stop();
+  }
+});
+
+test("settings: a damaged settings.json is set aside as .bad-<time>; a partly invalid one falls back field by field", async () => {
+  const data = await mkdtemp(join(tmpdir(), "capture-data-"));
+  const folder = await mkdtemp(join(tmpdir(), "capture-folder-"));
+  try {
+    await writeFile(join(data, "settings.json"), "{ broken");
+    let started = await startPlugin(activate, { directory, host: new TestHost(), dataDirectory: data });
+    assert.equal(started.host.command("capture.format.png").state.checked, true);
+    await started.stop();
+    assert.ok((await readdir(data)).some((name) => /^settings\.json\.bad-\d+$/.test(name)));
+    await writeFile(join(data, "settings.json"), JSON.stringify({ folder, format: "gif", quality: 250, screenSubtitles: "yes", besideMedia: true }));
+    started = await startPlugin(activate, { directory, host: new TestHost(), dataDirectory: data });
+    const { host } = started;
+    assert.equal(host.command("capture.format.png").state.checked, true, "unknown format → PNG");
+    assert.equal(host.command("capture.screenSubtitles").state.checked, true, "not a boolean → default");
+    await host.command("capture.settings").run();
+    const props = host.window("settings").props;
+    assert.deepEqual([props.folder, props.quality, props["beside-media"]], [folder, 100, true]);
+    await started.stop();
+  } finally {
+    await rm(data, { recursive: true, force: true });
+    await rm(folder, { recursive: true, force: true });
   }
 });

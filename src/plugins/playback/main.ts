@@ -5,15 +5,19 @@ import { Playback } from "./controller.ts";
 import { copyToClipboard } from "./copy.ts";
 import { parseTime, rateText, time } from "./format.ts";
 import { OpenUrl } from "./open-url.ts";
+import { Keyframes } from "./keyframes.ts";
 import { Prompt } from "./prompt.ts";
 import { Reopener } from "./reopen.ts";
-import { SettingsStore } from "./settings.ts";
-import { SleepGuard } from "./sleep.ts";
+import { DEFAULT_STEPS, type SeekSteps, SettingsStore } from "./settings.ts";
+import { TimeJump } from "./time-jump.ts";
 
 /**
- * Basic playback: the bottom bar, the open/close, 播放 and 声音 commands, the
- * 跳转到 window, and the 播放控制 chapter's features (打开链接, 重开当前/最后文件,
- * 复制到剪贴板, 跳到开头, 播放时禁止屏保, 进度条悬停显示时间).
+ * Playback: the bottom bar and the commands around the core's basic actions
+ * (play/pause, stop, ±N seconds, frames, previous/next, speed ±, volume and
+ * mute are the player's own, run from the bar with `host.run`): open, the
+ * 跳转到 and custom speed windows, and the 播放控制 chapter's features (打开链接,
+ * 重开当前/最后文件, 复制到剪贴板, 关键帧, 跳转秒数, 跳到开头, 播放时禁止屏保,
+ * 进度条悬停显示时间).
  */
 export default async function activate(plugin: Plugin) {
   const { player } = plugin;
@@ -43,25 +47,38 @@ export default async function activate(plugin: Plugin) {
     (value) => playback.setRate(value.trim() ? Number(value) : Number.NaN),
   );
 
-  const dataDirectory = () => plugin.dataDirectory;
-  const settings = new SettingsStore(dataDirectory);
-  const reopener = new Reopener(plugin, dataDirectory, osd);
-  const sleep = new SleepGuard(plugin, settings, osd);
+  const settings = new SettingsStore(plugin);
+  const reopener = new Reopener(plugin, osd);
   const openUrl = new OpenUrl(plugin, settings, osd);
+  const keyframes = new Keyframes(plugin, playback, () => plugin.update());
+  // B29: the host holds the assertion while playing; a failed start is only in its log.
+  const sleep = () => plugin.power.preventSleep(settings.value.preventSleep ? "playing" : "off");
+  // B06: tier 1 is the core's ← / →; the plugin gives it the step and keeps tiers 2–4.
+  const stepSeek = (seconds: number) => player.setStepSeek({ seconds }).catch((error) => playback.report(error));
+  let commands: { setSteps(steps: SeekSteps): Promise<void> } | null = null;
+  const timeJump = new TimeJump(plugin, settings, async (steps) => {
+    await stepSeek(steps[0]);
+    await commands?.setSteps(steps);
+  });
 
-  const run = addCommands(plugin, playback, jump, customRate, {
+  commands = addCommands(plugin, playback, jump, customRate, {
     openUrl,
     reopener,
-    sleep,
+    keyframes,
+    timeJump,
+    sleep: () => void sleep().catch((error) => playback.report(error)),
     settings,
-    copy: (kind) => copyToClipboard(player.state, kind, osd),
+    copy: (kind) => copyToClipboard(plugin.clipboard, player.state, kind, osd),
     jumpToStart: () => playback.jumpToStart(),
   });
-  wireBar(bar, player, plugin.panels.sidebar, playback, run, settings);
+  wireBar(bar, plugin, playback, settings);
   plugin.onError((error) => playback.report(error));
 
   reopener.observe(player.state);
-  sleep.sync();
+  keyframes.observe(player.state);
+  if (settings.value.preventSleep) void sleep().catch((error) => playback.report(error));
+  // The core's step is 5 until someone sets it; it returns to 5 when this plugin stops.
+  if (settings.value.seekSteps[0] !== DEFAULT_STEPS[0]) void stepSeek(settings.value.seekSteps[0]);
 
   // Another source, or anyone else's change during a drag, ends the gesture;
   // further pointer moves wait for the next press. A failed load is announced once.
@@ -73,7 +90,7 @@ export default async function activate(plugin: Plugin) {
     sourceId = state.sourceId;
     phase = state.phase;
     reopener.observe(state);
-    sleep.sync();
+    keyframes.observe(state);
     await Promise.resolve(); // the drag gesture observes the same change first
     if (replaced || playback.gestureLost) {
       playback.clearSeek();
@@ -87,3 +104,4 @@ export default async function activate(plugin: Plugin) {
     }
   });
 }
+

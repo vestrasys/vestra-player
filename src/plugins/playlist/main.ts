@@ -1,8 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname } from "node:path";
-import type { Command, CommandOptions, Plugin } from "../../sdk/plugin/index.ts";
+import type { Command, CommandOptions, Plugin, PluginError } from "../../sdk/plugin/index.ts";
 import { confirmWindow } from "./confirm.ts";
-import { reveal, runOpen, type OpenRunner } from "./finder.ts";
 import { follower, type OpenMode } from "./follow.ts";
 import { linkDialog } from "./link.ts";
 import {
@@ -13,12 +12,13 @@ import {
   listName,
   parseList,
   savePath,
+  writeAtomic,
 } from "./listfile.ts";
 import { extensionOf, folderError, LIST_FILES, SCAN_LIMIT, scanFolder } from "./media.ts";
 import { playback } from "./playback.ts";
-import { createProbeRunner, Prober, type ProbeRunner } from "./probe.ts";
+import { Prober, toolRunner } from "./probe.ts";
 import { clock, lengthOf, Queue, type Placement, type Repeat, type Row, type SortKey } from "./queue.ts";
-import { defaults, Store, writeAtomic } from "./store.ts";
+import { defaults, Store, type Saved } from "./store.ts";
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const repeats: [Repeat, string][] = [
@@ -46,10 +46,11 @@ const sortKeys: [SortKey, string, string | null][] = [
 ];
 const STAT_LIMIT = 8;
 const SEARCH_DEBOUNCE_MS = 150;
-const SAVE_DELAY_MS = 1000;
+/** C23: at most this many selected files are shown in Finder. */
+export const REVEAL_LIMIT = 20;
 
-/** Injected in tests: Finder (`open`) and the shuffle's random source. */
-export type Tools = { open: OpenRunner; random: () => number };
+/** Injected in tests: the sort's shuffle source. */
+export type Options = { random: () => number };
 
 /** Run `work` over `items`, at most `limit` at a time. */
 async function pool<T>(items: T[], limit: number, work: (item: T) => Promise<void>) {
@@ -61,16 +62,11 @@ async function pool<T>(items: T[], limit: number, work: (item: T) => Promise<voi
   );
 }
 
-export default async function activate(
-  plugin: Plugin,
-  runner: ProbeRunner = createProbeRunner(),
-  tools: Partial<Tools> = {},
-) {
-  const open = tools.open ?? runOpen,
-    random = tools.random ?? Math.random;
+export default async function activate(plugin: Plugin, options: Partial<Options> = {}) {
+  const random = options.random ?? Math.random;
   const queue = new Queue();
   queue.say = (text) => void plugin.osd.show(text.slice(0, 200)).catch(() => {});
-  const prober = new Prober(queue, runner, () => plugin.update());
+  const prober = new Prober(queue, toolRunner(plugin.tools), () => plugin.update());
   queue.removed = (rowId) => prober.cancel(rowId);
   plugin.onDispose(() => prober.cancelAll());
   let follow: ReturnType<typeof follower> | null = null;
@@ -85,7 +81,7 @@ export default async function activate(
   // C17: restore the settings and (when remembered) the list; nothing is opened.
   let store: Store | null = null;
   try {
-    store = new Store(plugin.dataDirectory);
+    store = new Store(plugin);
   } catch {
     /* no data directory: nothing is remembered */
   }
@@ -94,33 +90,34 @@ export default async function activate(
   queue.repeat = settings.repeat;
   queue.setShuffle(settings.shuffle);
   if (settings.remember && loaded.list) Store.restore(queue, loaded.list);
-  prober.import(store?.loadCache());
-  const snapshot = () => {
+  prober.import(store?.cache.value);
+  player.setFast(settings.gapless);
+  const snapshot = (): [Saved, string] => {
     settings.repeat = queue.repeat;
     settings.shuffle = queue.shuffle;
-    return Store.snapshot(queue, settings);
+    const value = Store.snapshot(queue, settings);
+    return [value, JSON.stringify(value)];
   };
-  let saved = snapshot();
-  let saveTimer: ReturnType<typeof setTimeout> | null = null;
-  const flush = () => {
-    if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = null;
+  let saved = snapshot()[1];
+  /** Hand changes to the stores; they write within a second (C17). */
+  const persist = () => {
     if (!store) return;
+    const [value, json] = snapshot();
+    if (json !== saved) store.lists.save(value);
+    saved = json;
+    if (prober.dirty) store.cache.save(prober.export());
+  };
+  /** Write now (turning "记住列表" off removes the saved list at once). */
+  const flush = async () => {
+    persist();
     try {
-      const json = snapshot();
-      if (json !== saved) store.save(json);
-      saved = json;
-      if (prober.dirty) store.saveCache(prober.export());
+      await Promise.all([store?.lists.flush(), store?.cache.flush()]);
     } catch (error) {
       queue.message = `无法保存列表：${errorText(error)}`;
     }
   };
-  /** Called every update round: schedule one write within a second of a change. */
-  const persist = () => {
-    if (!store || saveTimer) return;
-    if (snapshot() !== saved || prober.dirty) saveTimer = setTimeout(flush, SAVE_DELAY_MS);
-  };
-  plugin.onDispose(flush);
+  // Registered after the stores: disposal runs it first, then the stores write what it handed them.
+  plugin.onDispose(persist);
   prober.scan();
 
   let adding = false,
@@ -290,10 +287,38 @@ export default async function activate(
       return sortBy(queue.sortKey ?? "title")();
     });
 
-  /** C23: the selected local files (not links), in list order. */
+  /**
+   * C23: the selected local files (not links, at most 20), one Finder window per
+   * folder showing its first file that still exists; else the folder itself.
+   */
   const revealSelected = guard(async () => {
     const paths = queue.marked().filter((row) => row.kind === "file").map((row) => row.source);
-    const notices = await reveal(paths, open);
+    const notices: string[] = [];
+    if (paths.length > REVEAL_LIMIT) notices.push(`只显示前 ${REVEAL_LIMIT} 个文件`);
+    const folders = new Map<string, string[]>();
+    for (const path of paths.slice(0, REVEAL_LIMIT)) folders.set(dirname(path), [...(folders.get(dirname(path)) ?? []), path]);
+    const missing = (error: unknown) => {
+      if ((error as PluginError).code !== "missing") throw error;
+    };
+    for (const [dir, files] of folders) {
+      let shown = false;
+      for (const file of files) {
+        try {
+          await plugin.system.reveal(file);
+          shown = true;
+          break;
+        } catch (error) {
+          missing(error);
+        }
+      }
+      if (shown) continue;
+      try {
+        await plugin.system.openPath(dir);
+      } catch (error) {
+        missing(error);
+        notices.push(`找不到文件：${basename(files[0]!)}`);
+      }
+    }
     if (notices.length) queue.notice(notices.join("；"));
   });
 
@@ -442,12 +467,21 @@ export default async function activate(
       },
     }),
   );
+  playlistMenu("fast-advance", ["快速推进到下一个"], 242, {
+    group: "options",
+    checked: () => settings.gapless,
+    run: () => {
+      settings.gapless = !settings.gapless;
+      player.setFast(settings.gapless);
+      queue.notice(settings.gapless ? "快速推进到下一个：开" : "快速推进到下一个：关");
+    },
+  });
   playlistMenu("remember", ["记住列表"], 243, {
     group: "options",
     checked: () => settings.remember,
     run: () => {
       settings.remember = !settings.remember;
-      flush(); // turning it off removes the saved list at once
+      void flush();
       queue.notice(settings.remember ? "将记住列表" : "不再记住列表");
     },
   });
@@ -520,6 +554,7 @@ export default async function activate(
 
   list.bind(() => {
     persist();
+    player.prepare();
     const shown = queue.visible();
     const index = new Map(queue.rows.map((row, i) => [row.rowId, i]));
     const known = shown.map(lengthOf).filter((seconds): seconds is number => seconds !== null);

@@ -159,13 +159,13 @@ playback 负责底栏（进度条行 22px + 按钮行 40px）、「打开 / 关�
 | A02 | 打开链接（通用 URL） | ◐ | 否 |
 | A10 | 重开当前 / 最后一个文件 | ◐ | 否 |
 | B06 | 跳转秒数可设置 | ✗ | 移交后要（`player.setStepSeek`） |
-| B07 | 上一帧 / 下一帧 | ✗ | 是（`player.stepFrame`） |
-| B08 | 上一关键帧 / 下一关键帧 | ✗ | 是（`player.stepKeyframe`） |
+| B07 | 上一帧 / 下一帧 | ✗ | 是（核心动作 `frame-back` / `frame-forward`，`player.step`） |
+| B08 | 上一关键帧 / 下一关键帧 | ✗ | 是（`player.step("keyframe", …)`） |
 | B09 | 跳到开头 | ✗ | 否 |
-| B29 | 播放时禁止屏保 / 休眠 | ✗ | 否（插件调用 `/usr/bin/caffeinate`） |
+| B29 | 播放时禁止屏保 / 休眠 | ✗ | 是（通用能力 `plugin.power`） |
 | I06 | 进度条悬停显示时间 | ✗ | 否 |
 | I07 | 进度条悬停显示缩略图 | ✗ | 是（面板属性传图片） |
-| I08 | 复制文件名 / 路径 | ✗ | 否（插件调用 `/usr/bin/pbcopy`） |
+| I08 | 复制文件名 / 路径 | ✗ | 是（通用能力 `plugin.clipboard`） |
 | — | 基础播放动作移交核心 | — | 是（核心注册动作 + `plugin.host.run`） |
 
 ### 菜单与快捷键
@@ -204,7 +204,7 @@ playback 负责底栏（进度条行 22px + 按钮行 40px）、「打开 / 关�
 **入口**：菜单「打开 ▶ 打开链接…」，Ctrl+U。
 
 **行为细节**
-1. 打开窗口时按以下顺序决定输入框内容：剪贴板（开关打开且首行有效）→ 本次运行上一次输入的文本 → 空。读剪贴板用 `execFile("/usr/bin/pbpaste")`，超时 1 秒，失败当作没有内容，不提示。
+1. 打开窗口时按以下顺序决定输入框内容：剪贴板（开关打开且首行有效）→ 本次运行上一次输入的文本 → 空。读剪贴板用 `plugin.clipboard.readText()`，没有文本或读取失败都当作没有内容，不提示。
 2. 确认时，取第一行非空文本，去掉首尾空白。
    - 有多行时只打开第一行，窗口内提示「只打开第一行；多个链接请用播放列表的「添加链接…」」（只提示，不阻止）。
    - 地址无效：窗口内显示「不是有效的链接」，窗口不关。
@@ -228,7 +228,7 @@ playback 负责底栏（进度条行 22px + 按钮行 40px）、「打开 / 关�
 
 **持久化**：`plugin.dataDirectory/settings.json` 的 `openUrl.pasteFromClipboard`（布尔，默认 `true`）。输入内容不落盘。
 
-**核心依赖**：`player.open`、`windows.create`、Node `child_process`。不需要核心新增。
+**核心依赖**：`player.open`、`windows.create`、`plugin.clipboard`（通用能力，第 2 轮）。
 
 **验收**
 - 剪贴板里有 `https://…/a.mp4` 时按 Ctrl+U：输入框已填好并全选，按回车开始播放，窗口关闭。
@@ -354,16 +354,7 @@ player.setStepSeek(options: { seconds: number }): Promise<void>
    - 已播完（`phase: ended`）：上一帧可用，回到最后一帧之前；下一帧禁用。
 6. 拖动进度条的手势进行中触发逐帧：先结束手势（与现有「任何外部变化结束手势」规则一致）。
 
-**核心依赖**【核心新增】：
-
-```ts
-player.stepFrame(direction: "backward" | "forward", opts?: Conditional): Promise<void>
-// PlayerState.can 增加
-can.frameStep: boolean      // 有视频轨且能解码下一帧
-can.frameBackStep: boolean  // 另需可跳转
-```
-
-理由：逐帧是 mpv 命令，插件拿不到 mpv。移交后由核心注册「上一帧 / 下一帧」基础动作并显示提示；移交前由 playback 注册命令，调用同一个 API。
+**核心依赖**：核心动作 `frame-back` / `frame-forward`（参考文档 §5.5），内部调用 `player.step("frame", …)`（裁决 R-P1，改写后接受：不加 `can.*`）。移交后这两条命令完全由核心注册和执行，playback 不注册、底栏也没有对应按钮。
 
 **验收**
 - 播放中按 F：暂停，画面前进一帧，提示时间约增加 1/fps。
@@ -386,17 +377,11 @@ can.frameBackStep: boolean  // 另需可跳转
 4. 屏幕提示「定位: 下一关键帧 00:12:03 / 01:40:00」。
 5. 边界：
    - 不可跳转的来源：命令禁用，原因沿用「当前来源不支持此操作」。
-   - 纯音频：几乎每个包都是关键帧，照常执行，效果接近细粒度跳转。
+   - 纯音频（降级）：命令禁用，原因「没有视频」。`player.step` 对没有活动视频的来源返回 `unsupported`；有没有视频由 playback 在每个来源第一次就绪时查一次 `stats()` 缓存（裁决 R-P1）。插件模拟器流同样禁用。
    - 已在第一个关键帧时按「上一」：跳到 0，提示「定位: 开始处」。
    - 已在最后一个关键帧之后按「下一」：不动，提示「已是最后一个关键帧」。
 
-**核心依赖**【核心新增】：
-
-```ts
-player.stepKeyframe(direction: "backward" | "forward", opts?: Conditional): Promise<void>
-```
-
-理由：要有「严格越过当前关键帧」的语义。插件只有精确 `seek`，不知道关键帧在哪里，无法可靠实现；核心可以直接用 mpv 的 `seek <±> relative+keyframes`。
+**核心依赖**：`player.step("keyframe", direction, { ifCurrent })`（裁决 R-P2 并入 R-P1；核心用 mpv `seek ±0.001 relative+keyframes`，两个方向都严格越过当前关键帧）。
 
 **验收**：H.264 片源上连按 Ctrl+Shift+→ 十次，每次的时间都增加，间隔和 GOP 一致（可用 `ffprobe -skip_frame nokey` 列出关键帧时间核对）；在关键帧上按 Ctrl+Shift+← 会跳到前一个关键帧，不会停在原地。
 
@@ -429,20 +414,17 @@ player.stepKeyframe(direction: "backward" | "forward", opts?: Conditional): Prom
 
 **行为细节**
 1. 「正在播放」指 `phase === "ready" && !paused`，包括插件模拟器流。
-2. 进入播放时启动 `spawn("/usr/bin/caffeinate", args)`，参数按有无视频区分：
-   - 有视频（`stats().video` 非空，或 `kind: "stream"`）：`-d -i -w <插件进程 pid>`。同时阻止显示器睡眠（屏保随之不启动）和系统空闲睡眠。
-   - 纯音频：`-i -w <pid>`。只阻止系统睡眠，显示器可以关。
-3. 暂停、播完、关闭、出错、换来源（重新判断有无视频）、关闭开关、插件停用（`onDispose`）时结束子进程。`-w` 保证插件进程被强制结束时 caffeinate 也随之退出，不会残留。
-4. 只在状态变化时启停，同一时间最多一个子进程。来回暂停不做防抖：启动 caffeinate 的开销可以忽略。
-5. 启动失败（文件不存在、`spawn` 报错）时提示一次「无法阻止屏保：<原因>」，开关保持勾选，下次进入播放时再试。
-6. 切换时提示「播放时禁止屏保: 开 / 关」。
-7. 这只是电源断言，不阻止用户手动锁屏，也不阻止盒盖睡眠。
+2. 开关打开时 playback 调用 `plugin.power.preventSleep("playing")`，关闭时 `"off"`（启动时按保存的值调用一次）。断言由播放器持有，参数按有无视频区分：
+   - 正在显示视频帧（含插件模拟器流）：`caffeinate -d -i -w <播放器 pid>`。同时阻止显示器睡眠（屏保随之不启动）和系统空闲睡眠。
+   - 纯音频：`-i -w <播放器 pid>`。只阻止系统睡眠，显示器可以关。
+3. 暂停、播完、关闭、出错、换来源时由播放器释放或重新判断；关闭开关或 playback 停用时撤销它的要求。断言绑定播放器进程，不会残留。
+4. 切换时提示「播放时禁止屏保: 开 / 关」。
+5. 这只是电源断言，不阻止用户手动锁屏，也不阻止盒盖睡眠。
+6. （降级）启动 `caffeinate` 失败只写播放器日志，插件收不到，不提示（参考文档 §16.2 的失败语义）。原第 5 条「无法阻止屏保：<原因>」已删除。
 
 **持久化**：`settings.json` 的 `preventSleep: boolean`，默认 `true`。
 
-**核心依赖**：`player.onChange`、`player.stats()`、Node `child_process`。不需要核心新增。
-
-为什么不放核心：功能表原写「核心」。mpv 的 `stop-screensaver` 只对它自己的视频输出有效，我们用 `vo=libmpv`，由宿主渲染，所以不生效。macOS 自带的 `caffeinate` 由插件调用就能创建同样的系统电源断言，不需要宿主权限。
+**核心依赖**：`plugin.power.preventSleep`（通用能力，第 2 轮）。mpv 的 `stop-screensaver` 只对它自己的视频输出有效，我们用 `vo=libmpv`，由宿主渲染，所以不生效；改由播放器按播放状态持有 `caffeinate` 断言，各插件不再自己启动子进程。
 
 **验收**
 - 播放视频时 `pmset -g assertions` 里有 caffeinate 的 `PreventUserIdleDisplaySleep` 和 `PreventUserIdleSystemSleep`。
@@ -470,7 +452,7 @@ player.stepKeyframe(direction: "backward" | "forward", opts?: Conditional): Prom
 **界面**
 - 桥接 global 增加 `in-out property <float> duration`、`in-out property <bool> hover-time`。
 - 提示框：`Theme.bg-panel` 底、1px `Theme.line` 边、内边距 5×2、字号 `font-body` 11px、`Theme.text`。
-- 用 Slint `PopupWindow` 画到面板外，与 `ToolTipArea` 同一机制，每次移动时更新位置。如果实现时发现弹出层不能跟随指针或被面板裁切，需要向核心提「面板可以画到自身边界之外」的请求；这是条件性请求，见本章汇总。
+- 提示框是底栏组件里的普通元素，用负 `y` 画到底栏上方的视频区，每次移动时更新位置（裁决 R-U4：宿主组合不裁切底栏，参考文档 §6.3）。不用 `PopupWindow`。
 
 **持久化**：`settings.json` 的 `hoverTime: boolean`，默认 `true`。
 
@@ -540,10 +522,10 @@ type PropValue = Json | ImageRef;         // ImageRef 是不透明值，只能�
    - 完整路径：原样。
 2. 网络来源：只有「完整路径」可用，复制原始链接。「文件名」「文件夹路径」禁用，原因「网络来源没有文件名」。
 3. 没有来源、或模拟器流（`source` 为空）：三项都禁用，原因「没有打开的文件」。
-4. 写剪贴板：`spawn("/usr/bin/pbcopy")` 后把文本写到 stdin，环境变量设 `LANG=en_US.UTF-8`，保证中文路径不乱码。超时 2 秒。
+4. 写剪贴板：`plugin.clipboard.writeText(text)`（以 UTF-8 文本写入系统剪贴板，中文路径不乱码）。
 5. 屏幕提示「已复制: <文本>」。文本超过 60 个字符时中间省略（保留开头 20、结尾 37 个字符），满足 OSD 200 字符上限。失败时提示「复制失败：<原因>」。
 
-**核心依赖**：`player.state.source`、Node `child_process`。不需要核心新增（功能表原写「核心（剪贴板文本）」，macOS 自带 `pbcopy` 就够）。
+**核心依赖**：`player.state.source`、`plugin.clipboard`（通用能力，第 2 轮）。
 
 **验收**：播放「/Users/x/电影/a b.mkv」时，三项分别粘贴出「a b.mkv」「/Users/x/电影」「/Users/x/电影/a b.mkv」，中文正确；YouTube 来源时只有完整路径可用；关闭来源后三项灰色。
 
@@ -620,12 +602,12 @@ player.setStepSeek(options: { seconds: number }): Promise<void>
 
 | 签名 | 理由 | 来源 |
 | --- | --- | --- |
-| `player.stepFrame(direction: "backward" \| "forward", opts?: Conditional): Promise<void>`，以及 `PlayerState.can.frameStep` / `can.frameBackStep` | 逐帧是 mpv 命令，插件拿不到 | B07 |
-| `player.stepKeyframe(direction: "backward" \| "forward", opts?: Conditional): Promise<void>` | 「严格越过当前关键帧」只能在核心用 mpv 的 keyframes 方向 seek 实现 | B08 |
+| ~~`player.stepFrame(…)`、`can.frameStep` / `can.frameBackStep`~~ → 已合并为 `player.step(unit, direction, opts?)`，不加 `can.*`（裁决 R-P1） | 逐帧是 mpv 命令，插件拿不到 | B07 |
+| ~~`player.stepKeyframe(…)`~~ → `player.step("keyframe", …)`（裁决 R-P2） | 「严格越过当前关键帧」只能在核心用 mpv 的 keyframes 方向 seek 实现 | B08 |
 | `plugin.ui.image(path: string): ImageRef`，属性值可为 `ImageRef`（dataDirectory 下的 PNG/JPEG） | 界面桥只收 JSON，插件无法显示自己生成的图片 | I07 |
 | `plugin.host.run(action: HostAction): Promise<void>` | 底栏按钮调用核心基础动作，按钮与快捷键共用一套行为 | 移交 |
 | `player.setStepSeek({ seconds }): Promise<void>` | 第 1 档 ←/→ 移交核心后仍可设置步长 | B06、移交 |
-| （条件性）面板内 `PopupWindow` 可越出面板边界并跟随指针 | 仅当实现时发现悬停提示被面板裁切才提出 | I06、I07 |
+| ~~（条件性）面板内 `PopupWindow` 可越出面板边界并跟随指针~~ | 不需要：底栏不裁切，提示用负 `y` 画到视频区（裁决 R-U4，参考文档 §6.3） | I06、I07 |
 
 基础动作移交本身（核心注册上述 14 个动作）是核心职责调整，建议与快捷键接口（J01）合成一轮，按自上而下的流程做。
 
@@ -637,9 +619,9 @@ player.setStepSeek(options: { seconds: number }): Promise<void>
 
 ### 定位
 
-playlist 是侧栏播放列表与播放序列提供者（`player.provideSequence`）。现在已有：多文件添加、添加链接、多选、拖动排序、置顶/上下移/置底、按名称/路径/倒序排序、循环、随机、ffprobe 时长、列表右键菜单。本轮把它补齐成 PotPlayer 列表的日常功能：从文件夹、列表文件、拖放加入条目；更多排序、移除未选/无效项；搜索、在 Finder 中显示；重启后恢复列表；「打开文件时加入同文件夹/相似文件」；无缝播放（预读下一项）。列表仍是单个列表（不做多页签）。
+playlist 是侧栏播放列表与播放序列提供者（`player.provideSequence`）。现在已有：多文件添加、添加链接、多选、拖动排序、置顶/上下移/置底、按名称/路径/倒序排序、循环、随机、ffprobe 时长、列表右键菜单。本轮把它补齐成 PotPlayer 列表的日常功能：从文件夹、列表文件、拖放加入条目；更多排序、移除未选/无效项；搜索、在 Finder 中显示；重启后恢复列表；「打开文件时加入同文件夹/相似文件」；快速推进到下一个（B26，原「无缝播放」按裁决 R-P5 降级）。列表仍是单个列表（不做多页签）。
 
-边界：playlist 只通过核心协作。它不调用 history、playback 的命令，也不读它们的数据。别的插件打开的来源，playlist 只能从 `player.state` 看到（路径、`sourceId`、阶段）。所以「打开文件时加入同文件夹」由 playlist 观察来源变化自己完成（A13），history 等插件不需要知道 playlist 存在。需要核心新增的只有两项：窗口拖放事件（A15）、预读下一来源（B26）。文件扫描、列表文件解析、ffprobe、Finder 都由插件用 Node 和系统命令完成。
+边界：playlist 只通过核心协作。它不调用 history、playback 的命令，也不读它们的数据。别的插件打开的来源，playlist 只能从 `player.state` 看到（路径、`sourceId`、阶段）。所以「打开文件时加入同文件夹」由 playlist 观察来源变化自己完成（A13），history 等插件不需要知道 playlist 存在。需要核心新增的只有窗口拖放事件（A15）；预读下一来源（B26 原方案）被裁决 R-P5 拒绝。文件扫描、列表文件解析由插件用 Node 完成；ffprobe、Finder、设置文件用 SDK 通用能力（`plugin.tools`、`plugin.system`、`plugin.storage`，第 2 轮迁移）。
 
 ### 功能一览
 
@@ -648,7 +630,7 @@ playlist 是侧栏播放列表与播放序列提供者（`player.provideSequence
 | A03 | 打开文件夹（加入并播放） | ✗ | 否 |
 | A13 | 打开文件时加入同文件夹 / 相似文件 | ✗ | 否 |
 | A15 | 拖放文件到窗口打开 | ✗ | **是**：窗口拖放事件（`drops.provide`、`Panel.onDrop`） |
-| B26 | 无缝播放（预读下一个） | ✗ | **是**：`player.preload` |
+| B26 | 快速推进到下一个（原「无缝播放」，R-P5 降级） | ✗ | 否（受益于宿主「阶段变化立即推送」） |
 | C04 | 添加文件夹 | ✗ | 否 |
 | C07 | 移除未选 / 移除无效项 | ✗ | 否 |
 | C11 | 更多排序方式 | ◐（名称/路径/倒序） | 否 |
@@ -672,7 +654,7 @@ playlist 是侧栏播放列表与播放序列提供者（`player.provideSequence
 | **播放 ▶ 播放列表 ▶ 打开列表文件…** | 237 | list | | C18 |
 | **播放 ▶ 播放列表 ▶ 保存列表…** | 238 | list | | C18 |
 | **播放 ▶ 播放列表 ▶ 打开文件时 ▶ 仅打开该文件 / 加入相似文件 / 加入同文件夹全部文件** | 239–241 | open-mode | | A13，radio，默认「仅打开该文件」 |
-| **播放 ▶ 播放列表 ▶ 无缝播放（预读下一个）** | 242 | options | | B26，勾选，默认关 |
+| **播放 ▶ 播放列表 ▶ 快速推进到下一个** | 242 | options | | B26，勾选，默认关 |
 | **播放 ▶ 播放列表 ▶ 记住列表** | 243 | options | | C17，勾选，默认开 |
 | 播放列表（勾选） | 800 | windows | F6 | 现有 |
 
@@ -838,52 +820,38 @@ interface Panel {
 
 **PotPlayer 参考**：基本设置 Dialog(354) 3340「拖拽文件播放时显示界面选项」；列表设置 Dialog(373) 3118「添加到鼠标拖放时指向的位置」、3128「对下拉列表中的文件排序」。差异：PotPlayer 的「拖拽时显示界面选项」（弹出选择播放/加入的浮层）不做，用 Option 键区分；拖入文件不再排序，保持 Finder 顺序。
 
-### B26 无缝播放（预读下一个）
+### B26 快速推进到下一个
 
-**需求**：开启后，列表自然推进到下一项时没有黑屏和静音间隙（专辑连续曲目、分段视频）。
+> 第 2 轮降级（裁决 R-P5）：原「无缝播放（预读下一个）」需要 `player.preload`，被拒绝。实测（协商记录 R-P5）在现有宿主上，自然结束 → 打开下一项的切换，同格式约 5–115 ms，采样率变化约 60–165 ms；宿主已改为来源阶段变化立即推送，去掉了其中 0–100 ms 的周期等待。本条改为把插件这一侧的推进路径缩到最短，不承诺无间隙：连续波形上 5–10 ms 的断开也能听到一声咔嗒，现场专辑、古典乐的「真正无缝」这次放弃。以后要再提，需带录音波形证据。
 
-**入口**：「播放 ▶ 播放列表 ▶ 无缝播放（预读下一个）」勾选，默认关。
+**需求**：开启后，列表自然推进到下一项时尽快开始播放（专辑连续曲目、分段视频），同格式文件之间的切换 < 150 ms。
+
+**入口**：「播放 ▶ 播放列表 ▶ 快速推进到下一个」勾选，默认关。
 
 **行为细节**：
 
-1. 开启时，当前行由本插件打开且进入 `ready` 后，playlist 计算「自然播完后的下一项」（同推进规则：循环/随机/顺序），对它调用 `player.preload(next.source, { after: media })`。
-2. 随机模式下下一项需要预先选定：选定后记为 `plannedNext`，推进时使用它，不再重新抽取。
-3. 「下一项」发生变化时（重排、移除、切换循环/随机、编辑列表），释放旧的预读并对新的下一项重新预读；变化在 300 ms 内合并为一次。
-4. 「单个循环」、列表末尾且「不循环」、下一项是需要站点解析的链接（核心以 `unsupported` 拒绝）时，不预读；推进时按普通 `open`。
-5. 推进：预读成功时，核心在当前文件结束时直接切换，`preload` 句柄的 `started` 给出新的 `Media`；playlist 把它绑定到下一行（与普通打开后的绑定相同：`onEnd`、状态投影、OSD 显示标题）。`media.onEnd` 仍然先收到旧来源的自然结束，此时 playlist 看到有已生效或进行中的预读，就**不再** `open`。
-6. 失败回退：预读以 `failed` 结束（下一文件坏、不存在）时，在该行尾显示警示图标（悬停提示原因），推进时跳过它到再下一项，并 OSD「无法打开 <标题>：<原因>」。以 `replaced` 结束（别人打开了别的来源）时什么都不做。
-7. 用户手动「下一个」、双击别的行：释放预读，按普通打开。
-8. 关闭开关：立即释放预读。
-9. 预读不改变当前播放、不改变 `player.state`；只增加内存与读盘。
+1. 开启时，当前行由本插件打开（或按 A13 接管）后，playlist 立即计算「自然播完后的下一项」（同推进规则：循环/随机/顺序），并对本地文件提前做 `realpath` 与 `fs.stat`，记为计划下一项。
+2. 随机模式下下一项预先抽定，只要它仍可选（未在本轮播过、仍在列表中），推进时就用它，不再重新抽取。
+3. 「下一项」发生变化时（重排、移除、切换循环/随机、编辑列表），在下一次界面刷新时重新计算并重新 `stat`；未变化时不重复读盘。
+4. 推进：`media.onEnd` 回调里，计划下一项仍是推进目标且文件检查已完成时，直接调用一次 `player.open(next, { ifCurrent: ended })`，不再读盘（`realpath` 结果与重复检查用提前算好的）。计划未就绪或已过期时按普通推进（先 `realpath` 再 `open`）。
+5. 提前检查发现文件已不存在：推进时不打开它，屏幕提示「无法打开 <标题>：文件不存在」，该行标为失败（警示图标），推进到再下一项（普通推进）。检查之后才被删除的文件按普通打开失败处理。
+6. 「单个循环」、列表末尾且「不循环」时没有计划下一项；推进规则不变（重播 / 「列表已播完」）。链接行没有文件检查，推进时同样只做一次 `open`。
+7. 用户手动「下一个」、双击别的行：按普通打开；新行开始后重新计算计划下一项。
+8. 关闭开关：立即丢弃计划，之后按普通推进。
+9. 计划不改变当前播放、不改变 `player.state`，只读一次文件元数据。
 
-**持久化**：`settings.gapless`（布尔，见 C17）。
+**持久化**：`settings.gapless`（布尔，见 C17；键名沿用原条目）。
 
-**核心依赖**：【核心新增】`player.preload`。插件做不到的原因：间隙来自「当前文件结束 → 插件收到事件 → 发起新 `open` → mpv 重新初始化解码与音频输出」这一来回，只有在 mpv 内部把下一来源放进其播放序列（`loadfile … append` + `prefetch-playlist=yes`、`gapless-audio=weak`）才能消除；而且本地文件在宿主里以 `fd://` 租约打开（`source_backend.rs`），预读也必须由宿主事先建立租约。
-
-```ts
-// 【核心新增】需要 playback.control
-interface Player {
-  /** 登记 `after` 自然播完后紧接着播放的来源，并提前读取。同一时间只有一个预读；再次调用替换旧的（旧的以 replaced 结束）。 */
-  preload(source: string, options: { after: Media; signal?: AbortSignal }): Preload;
-}
-interface Preload extends Disposable {
-  readonly source: string;
-  /** `after` 自然结束、核心已切换到本来源时 resolve 为新来源的 Media；
-   *  failed（预读失败，after 照常结束）/ replaced（来源被别人替换或被新预读取代）/ aborted / 已释放 时 reject。 */
-  readonly started: Promise<Media>;
-}
-```
-
-宿主约束：切换时先发出旧来源 `phase: "ended", endReason: "natural"` 的状态，再发出新 `sourceId`；任何插件以旧的 ended 状态做 `ifCurrent` 的提交都会 `stale`。`after` 不是当前来源、或 `source` 需要解析器时立即以 `unsupported` / `stale` 失败。
+**核心依赖**：无。受益于第 2 轮宿主行为「来源阶段变化立即推送」（`ready → ended` 不再等 100 ms 周期）。
 
 **验收**：
-- 开启后播放两段无缝相接的测试音频（正弦波切成两个 flac）：切换处没有可听见的静音（录音波形间隙 < 20 ms）。
-- 关闭时同一测试：存在间隙（对照）。
-- 预读后把下一行移到别处：推进到新的下一行。
-- 下一项文件已删除：推进时跳过并 OSD 提示，该行显示警示图标。
-- 预读期间在外部打开 URL：不推进，不报错。
+- 开启后播放两段同格式（同采样率）的测试音频（如两段 44.1 kHz flac）：自然结束到下一项开始的切换 < 150 ms。测量：以 `VESTRA_PLAYLIST_TIMING=1` 启动宿主，stderr 每次自动推进打印「结束→open 被接受」「结束→新来源 ready」毫秒数，取「结束→ready」；或用屏幕录制 / 录音对比上一首最后一帧与下一首第一帧。
+- 关闭时同一测试作对照（多一次 `realpath`，差异在毫秒级）。
+- 播放中把下一行移到别处：推进到新的下一行。
+- 下一项文件在当前项开始前已删除：推进时跳过并屏幕提示，该行显示警示图标。
+- 播放中在外部打开 URL：不推进，不报错（`ifCurrent` 过期）。
 
-**PotPlayer 参考**：menu-tree：播放 ▶ 无缝播放 `101_0_9_12`：不使用(推荐) 10602 / 预读下一文件播放 10603 / 合并多个文件播放 10604 / 无缝播放设置 10605；Dialog(379)「无缝播放」3292、「同时读取数」3308、说明 3312。差异：「合并多个文件播放」和「同时读取数」不做；只预读一个。
+**PotPlayer 参考**：menu-tree：播放 ▶ 无缝播放 `101_0_9_12`：不使用(推荐) 10602 / 预读下一文件播放 10603 / 合并多个文件播放 10604 / 无缝播放设置 10605；Dialog(379)「无缝播放」3292、「同时读取数」3308、说明 3312。差异：没有预读与无缝切换（R-P5），只缩短推进路径；「合并多个文件播放」和「同时读取数」不做。
 
 ### C04 添加文件夹
 
@@ -943,7 +911,7 @@ interface Preload extends Disposable {
 2. 稳定排序：比较相等时保持原有相对顺序。
 3. 原「倒序排列」改名「倒置当前顺序」，保留原行为（直接反转，不依赖排序键）。
 4. 需要 `stat` 的键（大小、日期）：异步并发 8 个读取，读取期间 SORT 菜单项忙碌；结果在本次排序后丢弃（不缓存，文件可能变化）。
-5. 排序作用于列表的全部行（即使搜索过滤生效），不改变选中、当前行、B26 的计划下一项（但会触发重新预读）。
+5. 排序作用于列表的全部行（即使搜索过滤生效），不改变选中、当前行；B26 开启时按新顺序重新准备下一项。
 6. 列表少于 2 行时禁用（现有规则）。
 
 **持久化**：上次排序键与方向（`list.sort`，见 C17）。
@@ -1074,7 +1042,7 @@ interface Preload extends Disposable {
 | `Panel.onDrop(listener: (e: DropEvent) => unknown): Disposable` | 拖到面板上需要落点坐标以插入到指定位置；Slint 插件组件收不到系统拖放（A15） |
 | `Panel.onDragOver(listener: (at: { x: number; y: number } \| null) => void): Disposable` | 拖动悬停时画插入线（A15） |
 | `interface DropEvent { paths: string[]; at: { x; y }; modifiers: { alt; shift; cmd } }` | 上面三项的事件类型 |
-| `player.preload(source: string, options: { after: Media; signal?: AbortSignal }): Preload`；`interface Preload extends Disposable { readonly source: string; readonly started: Promise<Media> }` | 消除切换间隙只能在 mpv 内部预读并直接切换，且本地文件需宿主事先建立 fd 租约（B26） |
+| ~~`player.preload(source: string, options: { after: Media; signal?: AbortSignal }): Preload`~~ | 裁决 R-P5 拒绝（实测同格式切换低于 150 ms 门槛）；B26 降级为「快速推进到下一个」，不需要核心新增 |
 
 ---
 
@@ -1099,17 +1067,17 @@ manifest 需新增能力 `playback.read`（读位置、帧率、片源路径）�
 
 | 编号 | 功能 | 当前 | 依赖核心新增 |
 | --- | --- | --- | --- |
-| A08 | 次字幕（双字幕同时显示） | ✗ | 是：`subtitles.selectSecondary`、`state.secondary`、`load` 的 `select` 选项 |
+| A08 | 次字幕（双字幕同时显示） | ✗ | 是：`subtitles.select` 的 `role`、`state.secondary`、`load` 的 `select: "secondary"`（裁决 R-T3：第 3a 轮） |
 | A09 | 重载字幕（重新读取文件） | ◐ | 否（本插件载入的轨由插件重新上传） |
-| B11 | 上一句 / 下一句对白、当前字幕起点 | ✗ | 是：`subtitles.cues` |
+| B11 | 上一句 / 下一句对白、当前字幕起点 | ✗ | 否（裁决 R-T5 拒绝 `subtitles.cues`：插件自己解析，内嵌轨用 `tools.run("ffmpeg")` 与 `SubtitleTrack.streamIndex`） |
 | D02 | 依次切换字幕轨 | ✗ | 否 |
-| D05 | 手动输入同步值 | ◐ | 可选：放宽 `offsetMs` 范围 |
+| D05 | 手动输入同步值 | ◐ | `offsetMs` 范围放宽到 ±600 000（R-T8，第 2 轮已提供） |
 | D06 | 字号快捷键 | ◐ | 否 |
 | D07 | 字幕位置快捷键 | ◐ | 否 |
 | D09 | 粗体 | ✗ | 是：样式字段 `bold` |
-| D11 | 阴影、背景框 | ✗ | 是：样式字段 `shadow`、`box`、`boxOpacity` |
+| D11 | 阴影、背景框 | ✗ | 是：样式字段 `shadow`、`box`（一个数字字段 = 不透明度，`null` 无框；R-T7） |
 | D17 | 外部 ASS 字幕（保留特效） | ◐ | 是：`load` 的 `format`；样式字段 `assOverride` |
-| D18 | ASS/VTT 等外部格式 | ✗ | 是：`load` 的 `format`；`SubtitleTrack.codec/text` |
+| D18 | ASS/VTT 等外部格式 | ✗ | 是：`load` 的 `format: "srt" \| "ass"`、`title`；`SubtitleTrack.codec/text`（VTT 在插件内转 SRT，R-T4） |
 
 ### 菜单与快捷键
 
@@ -1148,6 +1116,8 @@ manifest 需新增能力 `playback.read`（读位置、帧率、片源路径）�
 - **字幕同步改键**：美式键盘上 Shift+. = `>`、Shift+, = `<`、Shift+/ = `?`。PotPlayer 的声音同步用 Shift+. / Shift+, / Shift+/，即我们的 `>` `<` `?`（audio 章 G09）；PotPlayer 的字幕同步标注为「> or .」「< or ,」（menu-tree `101_0_10_10_1/2`）。因此字幕同步改用 `.` 超前、`,` 滞后、`/` 复位，`>` `<` 让给音频。`.` `,` 目前没有其它绑定。核心对旧的用户覆盖绑定不做迁移（目前没有改绑界面）。
 
 ### A08 次字幕（双字幕同时显示）
+
+> **排期（第 2 轮裁决）**：次字幕整体推到第 3a 轮（R-T3、`load` 的 `select: "secondary"`、`secondaryPosition`）。下文按 3a 的接口执行；第 2 轮的「打开 ▶ 添加次字幕…」「字幕 ▶ 次字幕 ▶」不出现。
 
 **需求**：同时显示两条字幕轨：主字幕在底部，次字幕在顶部或紧贴主字幕上方。次字幕可以是任一已有文本轨（内嵌或外部），也可以从文件添加。
 
@@ -1231,30 +1201,26 @@ manifest 需新增能力 `playback.read`（读位置、帧率、片源路径）�
 **入口**：`播放 ▶ 跳转 ▶ 上一句对白`（Home）、`下一句对白`（End）、`当前字幕起点`（Ctrl+Home）。放在 playback 的跳转子菜单内（order 217，独立分组，画分隔线），因为 PotPlayer 也放在「定位」里；命令仍属字幕插件。
 
 **行为细节**：
-1. 依据当前**主字幕**轨的逐句时间表（`subtitles.cues`）。显示时间 = 句子时间 + 同步值（`style.offsetMs`，正值滞后）。
-2. 时间表按轨缓存：首次按键时读取，之后同一轨直接用；换轨、换片源、重载后失效。读取中再次按键忽略（菜单显示忙碌）。大文件读取超过 0.5 秒时 OSD「正在读取字幕…」。
+1. 依据当前**主字幕**轨的逐句时间表，由插件自己得到（裁决 R-T5，核心不提供 `cues`）：本插件载入的外部轨解析上传的字节（SRT 或 ASS）；内嵌文本轨用 `plugin.tools.run("ffmpeg", ["-v","error","-nostdin","-i",<片源>,"-map","0:<streamIndex>","-f","srt","pipe:1"])` 抽成 SRT 再解析（ASS 内嵌轨同样可抽）。显示时间 = 句子时间 + 同步值（`style.offsetMs`，正值滞后）。
+2. 时间表按轨缓存：首次按键时读取，之后同一轨直接用；换轨、换片源、重载后失效。ffmpeg 读取中菜单显示忙碌、按键忽略；超时按片源大小约每 100 MB 1 秒、至少 15 秒；超过 0.5 秒时 OSD「正在读取字幕…」。没有 ffmpeg 时 OSD「需要 ffmpeg 才能读取内嵌字幕」，超时「读取内嵌字幕超时」。
 3. 上一句：取显示开始时间 < 当前位置 − 0.5 秒的最后一句。这样在一句开头 0.5 秒内按 Home 会去上一句，而不是原地重复。
 4. 下一句：取显示开始时间 > 当前位置 + 0.05 秒的第一句。
 5. 当前字幕起点：当前位置所在句（开始 ≤ 位置 < 结束）的开始；不在任何句内时取最近一句已结束的句子。
 6. 跳转用 `player.seek(t)`，`t` 取句子开始 − 0.05 秒（防止解码定位到句子后半帧），下限 0。
 7. 没有可跳的句子：OSD「没有上一句对白」/「没有下一句对白」。
-8. 未选字幕、主字幕是图形轨或时间表为空：命令禁用，原因「没有可用的文本字幕」。
+8. 未选字幕、主字幕是图形轨或时间表为空：命令禁用，原因「没有可用的文本字幕」。下列情况同样禁用（插件拿不到时间表）：内嵌轨的 `streamIndex` 为 `null`（非 lavf 读取）、网络来源、其它插件载入的外部轨（如 subtitle-online 载入的轨）。
 9. 无媒体、`can.seek` 为假（直播流）：禁用，原因「当前媒体不能跳转」。
-10. 按住不放：`repeat: true`，连续按句子跳。连按时以上一次跳转目标为起点（而不是还没刷新的位置），避免停在同一句。
+10. 按住不放：`repeat: true`，连续按句子跳。跳转逐个执行，每次从上一次跳转落点（跳转完成后重新读取的位置）算起，避免停在同一句；按键比跳转快时最多排队一次，其余丢弃。
 11. OSD：`定位：上一对白位置 00:12:03.450`、`定位：下一对白位置 …`、`定位：当前对白起点 …`（strings 1150/1151）。
 12. `seek` 以 `stale` 失败（期间别人改了来源）时不重试，不提示。
 
 **核心依赖**：
-- 现有：`player.seek`、`player.refresh`、`subtitles.state.style.offsetMs`。
-- 【核心新增】
-  ```ts
-  subtitles.cues(track: SubtitleTrack, opts?: { signal?: AbortSignal }): Promise<SubtitleCue[]>
-  interface SubtitleCue { start: number; end: number; text: string }   // 秒，来源时间（未加同步值）；text 为纯文本，ASS 覆盖标签已去除，换行为 \n
-  ```
-  理由：内嵌字幕的逐句内容只有宿主能可靠拿到（宿主才知道 mpv 轨号与容器流的对应，宿主已有提取实现）。只对文本轨，图形轨以 `unsupported` 失败；最多返回 20 000 句，超过以 `invalid` 失败。对本插件载入的外部轨，插件也可以自己解析，但统一走 `cues` 以免两套解析结果不一致。
+- 现有：`player.seek`、`player.refresh`、`subtitles.state.style.offsetMs`；第 2 轮新增的 `SubtitleTrack.text`、`streamIndex`（R-T6）与 `plugin.tools.run`。
+- 不新增核心接口（裁决 R-T5：拒绝 `subtitles.cues`，替代方案为插件内 ffmpeg 抽取）。manifest 增加 `playback.read`、`playback.control`。
 
 **验收**：
 - 有 3 句（10–12 s、20–22 s、30–32 s）、同步 0 时：位置 25 s 按 End → 30 s；按 Home → 20 s；位置 20.3 s 按 Home → 10 s。
+- 内嵌文本轨（本地 mkv）首次按键调用一次 ffmpeg，之后同一轨不再调用；网络来源禁用。
 - 同步 +1000 ms 时按 End 从 25 s 跳到 31 s。
 - 无字幕时命令禁用并显示原因；直播流禁用。
 - 按住 End 连续跳句，不在同一句停住。
@@ -1292,7 +1258,7 @@ manifest 需新增能力 `playback.read`（读位置、帧率、片源路径）�
 **入口**：`字幕 ▶ 同步 ▶ 手动调整同步…`（打开小窗口）；字幕微调窗口的同步数字可点击打开同一窗口；字幕设置窗口新增「同步单位」行。
 
 **行为细节**：
-1. 输入框接受整数毫秒，可带正负号；正值字幕滞后，负值超前（与现有一致，提示文字写明）。范围 −600 000 至 600 000（见核心依赖；在核心放宽前为 −10 000 至 10 000）。
+1. 输入框接受整数毫秒，可带正负号；正值字幕滞后，负值超前（与现有一致，提示文字写明）。范围 −600 000 至 600 000（核心第 2 轮已放宽，R-T8）。
 2. 打开窗口时填入当前值。按 Enter 或「应用」生效；超出范围时输入框保持原值，状态行「同步值须在 −600000 至 600000 毫秒之间」。
 3. 输入框获得焦点时上下方向键 ±步长（不触发全局快捷键，焦点控件吃掉按键）。
 4. 应用后 OSD `字幕同步：滞后 1.25 秒`（沿用现有 `syncText`），窗口不关闭。
@@ -1305,7 +1271,7 @@ manifest 需新增能力 `playback.read`（读位置、帧率、片源路径）�
 
 **核心依赖**：
 - 现有：`subtitles.setStyle({ offsetMs })`。
-- 【核心新增·可选】把 `SubtitleStyle.offsetMs` 范围放宽到 −600 000–600 000。理由：不同版本片源的片头差异常见 1–3 分钟，±10 秒不够；mpv `sub-delay` 本身无此限制。若核心不放宽，本功能照常做，范围按 ±10 000 校验。
+- 【核心第 2 轮已提供】`SubtitleStyle.offsetMs` 范围 −600 000–600 000（R-T8）。理由：不同版本片源的片头差异常见 1–3 分钟，±10 秒不够；mpv `sub-delay` 本身无此限制。
 
 **验收**：输入 1250 应用 → `style.offsetMs === 1250`，OSD 正确；输入 abc 或 99999999 不生效并有状态提示；步长改 0.1 秒后按 `.` 每次 −100 ms，菜单标题改为「超前 0.1 秒」；按 `>` 不再改变字幕同步（改由音频同步使用）。
 
@@ -1385,7 +1351,7 @@ manifest 需新增能力 `playback.read`（读位置、帧率、片源路径）�
 
 **持久化**：`style.json`（见 D09）。
 
-**核心依赖**：【核心新增】`SubtitleStyle.shadow?: number`（0–4，mpv `sub-shadow-offset` 按 1080p 缩放，当前宿主写死 0）、`SubtitleStyle.box?: boolean`、`SubtitleStyle.boxOpacity?: number`（0–100；mpv `sub-border-style=opaque-box` 或 `background-box` + `sub-back-color`）。
+**核心依赖**：【核心第 2 轮已提供，R-T7 改写】`SubtitleStyle.shadow?: number`（0–4，mpv `sub-shadow-offset` 按 1080p 缩放）、`SubtitleStyle.box?: number | null`（一个字段：不透明度 0–100，`null` 无框；宿主用 `background-box` + `sub-back-color`）。开关与不透明度合并为一个字段后，插件自己记住关框前的不透明度（`style.json` 的 `boxOpacity`）与上次的阴影距离（`shadowLast`）。宿主的背景框与阴影共用 `sub-shadow-offset`，**开框时阴影不生效**，设置窗口的阴影滑块随之置灰，复选框写明「背景框（替代描边与阴影）」。
 
 **验收**：开启背景框后字幕下出现半透明黑框；不透明度 100 时框全黑；阴影 4 时阴影明显；菜单与窗口状态一致。
 
@@ -1411,7 +1377,7 @@ manifest 需新增能力 `playback.read`（读位置、帧率、片源路径）�
 **持久化**：`style.json` 的 `assOverride`。
 
 **核心依赖**：
-- 【核心新增】`subtitles.load(bytes, { format: "ass" | "ssa" })`（宿主对 ASS 做有界校验：UTF-8、≤ 2 MiB、有 `[Script Info]` 与 `[Events]`、Dialogue 行数 ≤ 20 000）。
+- 【核心第 2 轮已提供，R-T4】`subtitles.load(bytes, { format: "ass" })`（SSA 也用 `"ass"`；宿主对 ASS 做有界校验：UTF-8、≤ 2 MiB、有 `[Script Info]` 与 `[Events]`、Dialogue 行数 ≤ 20 000）。插件把 UTF-16 等编码转为 UTF-8 后上传。外部 ASS 轨不能进入「含字幕」截图（宿主限制）。
 - 【核心新增】`SubtitleStyle.assOverride?: "keep" | "force"`（默认 keep；mpv `sub-ass-override=scale` / `force`）。理由：覆盖策略是 mpv 全局属性，只有宿主能设；现在的 force 写死在宿主里。
 
 **验收**：载入带 `\pos` 与 `\fad` 的 ASS，开关开启时字幕出现在指定位置并淡入；关闭后变为底部白字；内嵌 ASS 同样受开关控制；带 [Fonts] 段的 3 MiB 文件能载入。
@@ -1425,8 +1391,8 @@ manifest 需新增能力 `playback.read`（读位置、帧率、片源路径）�
 | 格式 | 扩展名 | 处理 |
 | --- | --- | --- |
 | SubRip | .srt | 原样上传（现有） |
-| ASS / SSA | .ass、.ssa | 上传 `format: "ass"/"ssa"`（D17） |
-| WebVTT | .vtt | 上传 `format: "vtt"`；`::cue` 样式与 `<c>` 类标签由渲染器忽略 |
+| ASS / SSA | .ass、.ssa | 上传 `format: "ass"`（D17；SSA 同样用 `"ass"`） |
+| WebVTT | .vtt | 插件转为 SRT（裁决 R-T4 不加 `"vtt"`）：去掉 `STYLE`、`REGION`、`NOTE` 块与 cue 设置，去掉 `<c>`、`<v>`、`<lang>`、`<ruby>` 与卡拉 OK 时间标签，保留 `<b>` `<i>` `<u>`；subtitles 与 subtitle-online 各带一份同样的转换代码 |
 | SAMI | .smi、.sami | 插件转为 SRT（按 `<SYNC Start=>` 分句；一个文件含多语言 class 时每种语言生成一条轨，标题带语言） |
 | MicroDVD | .sub（文本，`{start}{end}` 行） | 插件按视频帧率转为 SRT；帧率未知时用文件首行 `{1}{1}23.976` 声明，否则 23.976 并提示 |
 | 纯文本时间轴 | .txt | 不支持，提示「无法识别的字幕格式」 |
@@ -1444,7 +1410,7 @@ manifest 需新增能力 `playback.read`（读位置、帧率、片源路径）�
 **持久化**：`settings.json` 的 `fallbackEncoding`。
 
 **核心依赖**：
-- 【核心新增】`subtitles.load` 的 `format`（`"srt" | "ass" | "ssa" | "vtt"`）与 `title`。理由：宿主现在只用 SRT 解析器校验；接受 ASS/VTT 字节需要宿主侧的有界校验与正确的临时文件扩展名（mpv 按内容/扩展名选解码器）。SAMI、MicroDVD 在插件里转 SRT，不加核心格式。
+- 【核心第 2 轮已提供，R-T4 改写】`subtitles.load` 的 `format`（`"srt" | "ass"`）与 `title`。VTT、SAMI、MicroDVD 在插件里转 SRT，不加核心格式。
 - 【核心新增】`SubtitleTrack.codec: string | null`、`SubtitleTrack.text: boolean`（宿主已从 mpv 读到 `codec`，只需开放）。用于区分文本与图形轨（A08、B11 要用）。
 
 **验收**：GB18030 编码的 SRT、UTF-16LE 的 ASS、VTT、含中英两种 class 的 SMI、MicroDVD 各载入成功并显示正确文字；VobSub 给出明确提示；`state.tracks` 中新轨标题为文件名。
@@ -1452,6 +1418,8 @@ manifest 需新增能力 `playback.read`（读位置、帧率、片源路径）�
 **PotPlayer 参考**：dialogs 336「选择字幕扩展名」；dialogs 353「SMI字幕自动添加<BR>换行标签」「适当调节 SMI 字幕时间」（SAMI 是 PotPlayer 主要支持格式之一）。
 
 ### 本章核心 API 请求汇总
+
+> **裁决结果（第 2 轮）**：`load` 的 `format`（`"srt" | "ass"`）、`title`、`select: "primary" | "none"`，`SubtitleTrack.codec/text/streamIndex`，样式字段 `bold`、`shadow`、`box`（单个数字字段）、`assOverride`，`offsetMs` ±600 000 已提供；`subtitles.cues` 拒绝（插件内 ffmpeg 替代）；次字幕（`select` 的 `role`、`select: "secondary"`、`secondaryPosition`）排第 3a 轮；不加 `"vtt"`、`"ssa"` 格式。下表保留原始请求。
 
 | 接口 | 理由 | 使用编号 |
 | --- | --- | --- |
@@ -1487,18 +1455,18 @@ manifest 能力在现有基础上增加：`ui.dialog`（E17 选择着色器文�
 | 编号 | 功能 | 当前 | 依赖核心新增 |
 | --- | --- | --- | --- |
 | E02 | 色调 ±1% | ✗ | 是：`hue` 节点 |
-| E04 | 锐化、边缘锐化 | ✗ | 是：`sharpen`、`cas` 节点 |
-| E05 | 降噪（3D / 瞬态 / 渐进） | ✗ | 是：`denoise3d`、`temporalDenoise` 节点 |
+| E04 | 锐化、边缘锐化 | ✗ | 是：`sharpen` 节点（small / large，裁决 R-V2，不加 `cas`） |
+| E05 | 降噪（3D / 瞬态 / 渐进） | ✗ | 是：`denoise` 节点（hqdn3d，三种为插件内预设，裁决 R-V3） |
 | E06 | 去块 / 消色带 | ✗ | 是：`deblock`、`deband` 节点 |
-| E08 | 上下 / 左右翻转 | ✗ | 是：`flip` 节点 |
-| E09 | 旋转 90 / 180 / 270 | ✗ | 是：`transpose` 节点 |
-| E10 | 反交错（自动 / 开 / 关） | ✗ | 是：`deinterlace` 节点 |
-| E11 | 宽高比与显示模式 | ✗ | 是：`video.view()`；C-SIZE |
-| E12 | 拉伸（加边）/ 裁剪到指定比例 | ✗ | 是：`crop`、`pad` 节点 |
-| E13 | 画面缩放与平移（帧位） | ✗ | 是：`video.view()`；小键盘绑定名 |
-| E16 | HDR 自动校正 / 色调映射 | ✗ | 是：C-GPU + `video.render()` |
-| E17 | 像素着色器（自定义 GLSL） | ✗ | 是：C-GPU + `video.render()` |
-| E18 | 倍帧 / 运动补偿 | ✗ | 倍帧：`frameBlend` 节点；运动补偿：C-GPU + `video.render()` |
+| E08 | 上下 / 左右翻转 | ✗ | 是：`transform` 节点（裁决 R-V5） |
+| E09 | 旋转 90 / 180 / 270 | ✗ | 是：`transform` 节点（裁决 R-V5） |
+| E10 | 反交错（自动 / 开 / 关） | ✗ | 是：`deinterlace` 节点（固定 BWDIF，裁决 R-V6） |
+| E11 | 宽高比与显示模式 | ✗ | 是：`video.view()`；C-SIZE（第 4a 轮，裁决 R-V9） |
+| E12 | 拉伸（加边）/ 裁剪到指定比例 | ✗ | 是：`reframe` 节点（裁决 R-V7） |
+| E13 | 画面缩放与平移（帧位） | ✗ | 是：`video.view()`（第 4a 轮，裁决 R-V9）；小键盘绑定名（第 2 轮已提供） |
+| E16 | HDR 自动校正 / 色调映射 | ✗ | 是：C-GPU + `video.render()`（第 4b 轮） |
+| E17 | 像素着色器（自定义 GLSL） | ✗ | 是：C-GPU + `video.render()`（第 4b 轮） |
+| E18 | 倍帧 / 运动补偿 | ✗ | 倍帧：`frameBlend` 节点（第 4a 轮，裁决 R-V8）；运动补偿：C-GPU + `video.render()`（第 4b 轮） |
 
 **菜单与快捷键**
 
@@ -1509,10 +1477,10 @@ manifest 能力在现有基础上增加：`ui.dialog`（E17 选择着色器文�
 | 菜单路径 | order | group | 默认快捷键 | 编号 |
 | --- | --- | --- | --- | --- |
 | 视频 ▶ 像素着色 ▶ 使用着色器（勾选）· 着色器列表… · 打开着色器文件夹 · 重新载入着色器 · —— · HDR 色调映射 ▶（单选：自动 / 关 / 各算法）· HDR 设置… | 402 | video-source | 使用着色器 Shift+P | E16、E17 |
-| 视频 ▶ 反交错 ▶ 按序切换 · 自动 · 总是使用 · 不使用（单选）· —— · 方式 ▶ BWDIF / YADIF（单选）· 输出 ▶ 按帧 / 按场（倍帧率）（单选） | 403 | video-source | 按序切换 Ctrl+I | E10 |
+| 视频 ▶ 反交错 ▶ 按序切换 · 自动 · 总是使用 · 不使用（单选）· —— · 输出 ▶ 按帧 / 按场（倍帧率）（单选） | 403 | video-source | 按序切换 Ctrl+I | E10 |
 | 视频 ▶ 比例 ▶ 保持宽高比 · 不保持宽高比 · 填满窗口（裁去多余）（单选）· —— · 依次切换比例 · 默认（按来源）· 4:3 · 16:9 · 16:10 · 1.85:1 · 2.35:1 · 自定义（x:y）（单选）· 自定义比例… | 404 | video-display | 依次切换比例 Ctrl+F6 | E11 |
 | 视频 ▶ 裁剪/拉伸 ▶ 不使用 · 按 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1 拉伸 · 按 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1 裁剪（单选）· —— · 位置复位 · 左移 · 右移 · 上移 · 下移 | 405 | video-display | 无（PotPlayer 的 Ctrl+Q 不用，见下） | E12 |
-| 视频 ▶ 帧位 ▶ 帧位复位 · 全帧 + · 全帧 − · 帧宽 + · 帧宽 − · 帧高 + · 帧高 − · —— · 偏移 → · 偏移 ← · 偏移 ↑ · 偏移 ↓ · 帧位居中 | 406 | video-display | 见下表 | E13 |
+| 视频 ▶ 帧位 ▶ 帧位复位 · 全帧 + · 全帧 − · —— · 偏移 → · 偏移 ← · 偏移 ↑ · 偏移 ↓ · 帧位居中 | 406 | video-display | 见下表 | E13 |
 | 视频 ▶ 图像处理 ▶ 上下翻转 · 左右翻转 · —— · 高斯模糊 · 锐化 · 边缘锐化 · —— · 去块 · 消色带 · 3D 降噪 · 渐进降噪 · 瞬态降噪 · —— · 倍帧 · 运动补偿（全部勾选） | 408 | video-effects | Ctrl+P · Ctrl+Z · Ctrl+B · Ctrl+R · — · Ctrl+H · — · Ctrl+N · — · Ctrl+M | E04–E06、E08、E18 |
 | 视频 ▶ 图像旋转 ▶ 按序切换 · 不旋转 · 90° · 180° · 270°（单选） | 409 | video-effects | 按序切换 Alt+K | E09 |
 | 视频 ▶ 截图 ▶ …（capture，不变） | 420 | — | — | — |
@@ -1521,14 +1489,14 @@ manifest 能力在现有基础上增加：`ui.dialog`（E17 选择着色器文�
 | 视频 ▶ 亮度 −1% / +1%，对比度，饱和度 | 442–447 | video-color | W/E、R/T、Y/U | 现有 |
 | 视频 ▶ 色调 −1% / +1% | 448 / 449 | video-color | I / O（`repeat`） | E02 |
 
+> **第 2 轮实现范围**：「像素着色 ▶」只有禁用的「使用着色器」（Shift+P）与「HDR 色调映射」两项（原因「需要 GPU 渲染，当前版本不支持」）；「图像处理 ▶ 倍帧」「运动补偿」显示为禁用并给出原因（倍帧第 4a 轮、运动补偿 C-GPU）；「比例 ▶」（E11）与「帧位 ▶」（E13）在第 4a 轮 `video.view()` 提供后才出现。其余各行按上表实现。
+
 帧位快捷键（E13）。绑定语法现在没有小键盘按键名（reference §4.1 的输入只有 `0–9`），PotPlayer 的小键盘键需要核心新增 `Numpad0`–`Numpad9`。Mac 笔记本没有小键盘，所以同时给一组 mpv 风格的备用键：
 
 | 命令 | PotPlayer 键（需核心新增 Numpad） | 备用键（现有语法） |
 | --- | --- | --- |
 | 帧位复位 | Numpad5 | Alt+Backspace |
 | 全帧 + / − | Numpad9 / Numpad1 | Alt+Plus / Alt+- |
-| 帧宽 + / − | Numpad6 / Numpad4 | — |
-| 帧高 + / − | Numpad8 / Numpad2 | — |
 | 偏移 → ← ↑ ↓ | Ctrl+Numpad6 / 4 / 8 / 2 | Alt+ArrowRight / Left / Up / Down |
 | 帧位居中 | Ctrl+Numpad5 | — |
 
@@ -1536,7 +1504,7 @@ manifest 能力在现有基础上增加：`ui.dialog`（E17 选择着色器文�
 
 - I、O、Ctrl+R、Ctrl+N、Ctrl+M、Ctrl+H、Ctrl+P、Ctrl+Z、Ctrl+I、Ctrl+F6、Alt+K、Shift+P、Alt+Plus、Alt+-、Alt+方向键、Alt+Backspace 目前都没人用。playback 只用了 Ctrl / Shift / Ctrl+Alt + ←/→，没用单独的 Alt + 方向键。
 - macOS 上 `Ctrl+X` 按 ⌃X 和 ⌘X 都会触发（reference §4.1）。**Ctrl+Q 不绑**，因为 ⌘Q 是退出；PotPlayer 的「图像缩放设置… Ctrl+Q」改为画面调节窗口里的页面，不设快捷键。Ctrl+H 和 Ctrl+M 的 ⌘ 版本分别是系统的「隐藏」「最小化」，系统先接走时只有 ⌃H、⌃M 生效。这是可以接受的取舍，验收时按 ⌃ 键测。
-- PotPlayer 的 `V`（弹出选择图像菜单）、`S`（弹出像素着色菜单）是弹出子菜单的按键，我们没有弹出主菜单子菜单的能力，本轮不绑（`S` 对应的可选核心请求 `commands.popup` 见章末汇总；「选择图像」本轮不做，`V` 不再需要）。
+- PotPlayer 的 `V`（弹出选择图像菜单）、`S`（弹出像素着色菜单）是弹出子菜单的按键，我们没有弹出主菜单子菜单的能力，不绑（`commands.popup` 被裁决拒绝；「选择图像」不做，`V` 不再需要）。
 
 **画面调节窗口：分页组织**
 
@@ -1545,19 +1513,21 @@ manifest 能力在现有基础上增加：`ui.dialog`（E17 选择着色器文�
 | 页签 | 行（自上而下） | 编号 |
 | --- | --- | --- |
 | **色彩** | 亮度、对比度、饱和度、色调、Gamma（5 行滑块）；预设按钮行：原始 / 鲜艳 / 电影 / 柔和（69×22） | 现有 + E02 |
-| **效果** | 每行是「复选 + 强度滑块 + 默认」：高斯模糊、锐化、边缘锐化、降噪（复选后跟 60 宽的模式下拉 3D / 瞬态 / 渐进，滑块缩到 90）、去块、消色带；第 7 行：倍帧（复选）+ 运动补偿（复选，C-GPU 前禁用） | E03、E04、E05、E06、E18 |
-| **画面** | 翻转：〔上下〕〔左右〕两个开关按钮 51×22；旋转：〔0°〕〔90°〕〔180°〕〔270°〕四个单选按钮 51×22；宽高比：下拉 154（默认 / 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1 / 自定义）+「…」按钮 21×21 打开自定义输入；显示：下拉 154（保持宽高比 / 不保持 / 填满）；裁剪/拉伸：下拉 154（不使用 / 拉伸 ×5 / 裁剪 ×5）；缩放：滑块 25%–400% + 默认（同时复位平移） | E08、E09、E11、E12、E13 |
-| **高级** | 反交错：下拉 90（自动 / 开 / 关）+ 下拉 60（BWDIF / YADIF）；HDR：下拉 90（色调映射算法）+ 目标亮度小滑块；着色器：复选「启用」+ 文字「3 个着色器」+〔列表…〕按钮 | E10、E16、E17 |
+| **效果** | 每行是「复选 + 强度滑块 + 默认」：高斯模糊、锐化、边缘锐化、降噪（复选后跟 60 宽的模式下拉 3D / 渐进 / 瞬态，滑块缩到 88）、去块、消色带；第 7 行：倍帧（复选，第 4a 轮前禁用）+ 运动补偿（复选，C-GPU 前禁用） | E03、E04、E05、E06、E18 |
+| **画面** | 翻转：〔上下〕〔左右〕两个开关按钮 51×22；旋转：〔0°〕〔90°〕〔180°〕〔270°〕四个单选按钮 51×22；裁剪/拉伸：方式下拉 72（不使用 / 拉伸 / 裁剪）+ 比例下拉 76（4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1）；宽高比：下拉 154 +「…」按钮 21×21；显示：下拉 154；缩放：滑块 154 + 默认（宽高比、显示、缩放三行在第 4a 轮 `video.view()` 之前置灰，悬停提示原因） | E08、E09、E11、E12、E13 |
+| **高级** | 反交错：模式下拉 90（自动 / 总是使用 / 不使用）+ 输出下拉 104（按帧 / 按场（倍帧率））；HDR：下拉 90（色调映射算法）+ 目标亮度小滑块；着色器：复选「启用」+ 文字「3 个着色器」+〔列表…〕按钮 | E10、E16、E17 |
 
-C-GPU 完成之前，「高级」页的 HDR、着色器两行和「效果」页的运动补偿控件置灰，悬停提示「需要 GPU 渲染，当前版本不支持」。
+C-GPU 完成之前，「高级」页的 HDR、着色器两行和「效果」页的运动补偿控件置灰，悬停提示「需要 GPU 渲染，当前版本不支持」。第 4a 轮之前，「效果」页的倍帧与「画面」页的宽高比、显示、缩放三行同样置灰，悬停提示原因。窗口高 245（页签 31 + 上边距 10 + 内容 168 + 间距 6 + 状态行 22 + 下边距 8）。
 
 **处理链顺序与持久化（全章共用）**
 
-本插件每次重算出一条完整的节点链，顺序固定，用户不能调：`deinterlace` → `crop` / `pad` → `flip` → `transpose` → `denoise3d` / `temporalDenoise` → `deblock` → `deband` → `eq` → `hue` → `sharpen` → `cas` → `gblur` → `frameBlend`。理由：反交错要在一切空间滤镜之前；裁剪和加边要在旋转之前（比例相对于源画面）；先降噪再锐化；倍帧放最后。
+本插件每次重算出一条完整的节点链，顺序固定，用户不能调：`deinterlace` → `reframe`（裁剪/加边）→ `transform`（翻转与旋转）→ `denoise`（3D → 渐进 → 瞬态）→ `deblock` → `deband` → `eq` → `hue` → `sharpen`（锐化，small）→ `sharpen`（边缘锐化，large）→ `gblur`（第 4a 轮再在最后加 `frameBlend`）。最长 13 个节点。理由：反交错要在一切空间滤镜之前；裁剪和加边要在旋转之前（比例相对于源画面）；先降噪再锐化；倍帧放最后。
 
 没开的效果不出现在链里；中性值（例如色调 0）也不产生节点（与现有 `nodesFor` 的做法一致）。开关一个效果会改变链的结构，核心会重建滤镜图（`UpdatePlan::NeedsReconfigure`），这是一次滤镜重配置，不是重启播放会话。拖动已开启效果的强度滑块时，如果该参数核心能在运行时修改（下表标「运行时」），只发运行时命令；如果不能，插件**只在滑块松开时提交**（`Slider.released`，`@vestra/widgets.slint` 已提供），拖动过程中不发，避免连续重建造成画面卡顿（interaction-requirements.md §3）。
 
-设置写入 `plugin.dataDirectory/settings.json`（先写临时文件再改名；读不到或损坏时用默认值），启动时读入。分两类：
+> 第 2 轮（裁决 R-V1–R-V7）：核心只把 `eq`、`hue`、`gblur` 的参数标为运行时可改；其余节点（锐化、降噪、去块、消色带、裁剪/加边、翻转旋转、反交错）改参数都会重建滤镜，所以这些强度滑块一律只在松开时提交，下文各节写「运行时」「拖动时连续提交」的地方以此为准。
+
+设置通过 `plugin.storage.json("settings")` 写入 `plugin.dataDirectory/settings.json`（SDK 负责去抖、临时文件加改名；读坏的文件改名为 `settings.json.bad-<时间戳>` 并用默认值），启动时读入。分两类：
 
 - **跨文件、跨重启保留**：色彩五项、所有「效果」页设置、反交错模式、宽高比与显示模式、裁剪/拉伸选择与位置、HDR 算法与目标亮度、着色器列表与开关、上次的页签。PotPlayer 也是这样，这些是全局画面设置，不跟文件走。
 - **换片源时复位**：翻转、旋转、帧位（缩放、帧宽高、平移）。它们通常只针对某一个文件，留到下一个文件上会让人以为片源有问题。复位时不显示 OSD。
@@ -1598,6 +1568,8 @@ C-GPU 完成之前，「高级」页的 HDR、着色器两行和「效果」页�
 
 ### E04 锐化（含边缘锐化）
 
+> 第 2 轮降级（裁决 R-V2）：只有一个节点 `{ kind: "sharpen"; amount: 0–2; size: "small" | "large" }`（unsharp 3×3 / 7×7），不加 `cas`。「锐化」= `small`，`amount` = 强度 × 1.5 / 100；「边缘锐化」= `large`，`amount` = 强度 / 100。两者都不是运行时参数，强度滑块只在松开时提交。下文的 `luma`/`chroma`、CAS 以此为准。
+
 **需求**：
 - 「锐化」：开关 + 强度 0–100，默认关、强度 50。对应亮度锐化系数 0–1.5（线性映射），色度锐化固定为亮度系数的 1/3。
 - 「边缘锐化」：开关 + 强度 0–100，默认关、强度 50。用对比度自适应锐化（CAS），强度直接映射到 0–1。PotPlayer 的「边缘锐化」（WarpSharp）在 E06 的编号说明里，因为同属锐化，放在本节一起写。
@@ -1630,6 +1602,8 @@ C-GPU 完成之前，「高级」页的 HDR、着色器两行和「效果」页�
 **PotPlayer 参考**：menu-tree「视频 ▶ 图像处理 ▶ 锐化 Ctrl+R」`101_0_11_10_4`、「边缘锐化」`101_0_11_10_12`；dialogs 386「锐化 - 对比度：%d 鲜明度：%d」「边缘锐化 - 级别：%d 阀值：%d」；strings 1132「画面锐化：%s」、2022「边缘锐化：%s」。差异：PotPlayer 每种锐化有两个参数，我们只给一个强度（第二个参数固定），这样窗口每行一个滑块就够。
 
 ### E05 降噪（3D / 瞬态 / 渐进）
+
+> 第 2 轮降级（裁决 R-V3）：只有一个节点 `{ kind: "denoise"; lumaSpatial; chromaSpatial; lumaTemporal; chromaTemporal }`（hqdn3d，各 0–20），不加 `temporalDenoise`（atadenoise）。三种降噪是插件内预设，每点强度 s 的权重（空间亮度 / 空间色度 / 时间亮度 / 时间色度）：3D 0.1 / 0.075 / 0.15 / 0.1125（s = 40 即 hqdn3d 默认值）；渐进（中等平衡）0.06 / 0.045 / 0.06 / 0.045；瞬态（时间为主、少量空间）0.02 / 0.015 / 0.2 / 0.15。串联顺序 3D → 渐进 → 瞬态。参数不是运行时的，强度滑块松开时提交。窗口下拉顺序为 3D / 渐进 / 瞬态。
 
 **需求**：三种降噪，各自独立开关，共用一个强度设置位置：
 - **3D 降噪**：空间 + 时间降噪（hqdn3d）。强度 0–100，默认 40；映射为亮度空间 = s×0.1，色度空间 = s×0.075，亮度时间 = s×0.15，色度时间 = s×0.1125（s 为强度，即 hqdn3d 默认比例 4:3:6:4.5 的 s/40 倍）。
@@ -1665,6 +1639,8 @@ C-GPU 完成之前，「高级」页的 HDR、着色器两行和「效果」页�
 
 ### E06 去块 / 消色带
 
+> 第 2 轮：`deband` 的阈值不是运行时参数（裁决 R-V4 只有 `hue` 是），消色带滑块也只在松开时提交；去块仍是松开且强弱档位变化时才提交。
+
 **需求**（边缘锐化见 E04）：
 - **去块**：消除低码率视频的方块。开关 + 强度两档：弱 / 强（窗口里用滑块 0–100，小于 50 为弱、50 及以上为强），默认关、弱。
 - **消色带**：消除渐变区域的色阶条带。开关 + 强度 0–100，默认关、40；映射为阈值 0.005–0.05（线性），半径固定 16。
@@ -1693,6 +1669,8 @@ C-GPU 完成之前，「高级」页的 HDR、着色器两行和「效果」页�
 
 ### E08 上下翻转 / 左右翻转
 
+> 第 2 轮（裁决 R-V5）：翻转与旋转合成一个节点 `{ kind: "transform"; rotate; flipH; flipV }`，核心先转后翻；插件为保持「先翻后转」，在 90° / 270° 时交换两个翻转轴后发送。
+
 **需求**：两个独立开关，默认都关。两个都开等于旋转 180°。
 
 **入口**：「视频 ▶ 图像处理 ▶ 上下翻转」（勾选，Ctrl+P）、「左右翻转」（勾选，Ctrl+Z）；窗口「画面」页第 1 行〔上下〕〔左右〕开关按钮（按下态表示开启，用 `Button` 的 `checked`）。
@@ -1719,6 +1697,8 @@ C-GPU 完成之前，「高级」页的 HDR、着色器两行和「效果」页�
 **PotPlayer 参考**：menu-tree「上下翻转 Ctrl+P」`101_0_11_10_0`、「左右翻转 Ctrl+Z」`101_0_11_10_1`；dialogs 386「上下翻转 / 左右翻转」。PotPlayer 另有「旋转(水平|垂直 切换)」`101_0_11_10_2`，与 E09 重复，不单独做。
 
 ### E09 旋转 90 / 180 / 270
+
+> 第 2 轮（裁决 R-V5）：节点为 `transform`（见 E08）。「按宽高比自动旋转」本轮未做：`player.stats().video.width/height` 是解码输出尺寸，未经宿主的方向处理，竖拍片源判断会错；留待有「摆正后尺寸」的数据再做。
 
 **需求**：顺时针旋转 0° / 90° / 180° / 270°，单选，默认 0°。按序切换的顺序为 0 → 90 → 180 → 270 → 0。可选的「按宽高比自动旋转」：竖屏片源（高 > 宽）自动转 90° 横过来显示，默认关。
 
@@ -1749,6 +1729,8 @@ C-GPU 完成之前，「高级」页的 HDR、着色器两行和「效果」页�
 **PotPlayer 参考**：menu-tree「图像旋转 ▶ 按序选择旋转方式 Alt+K / 不旋转 / 旋转90° / 180° / 270° / 按图像的宽高比而自动旋转 0/90°、180/270°」`101_0_11_11_*`；strings 3510–3514。差异：PotPlayer 的两种自动旋转（0/90 与 180/270）合并为一个开关，固定转 90°。
 
 ### E10 反交错（自动 / 开 / 关）
+
+> 第 2 轮降级（裁决 R-V6）：节点 `{ kind: "deinterlace"; when: "interlaced" | "all"; output: "frame" | "field" }`，算法固定 BWDIF。删除「方式 ▶ BWDIF / YADIF」单选与窗口里的算法下拉；窗口「高级」页反交错行改为模式下拉 + 输出下拉。持久化为 `deinterlace = { mode, output }`。下文的 `method`、YADIF 不再适用。
 
 **需求**：
 - 模式三选一：**自动**（只处理带隔行标记的帧）/ **总是使用**（所有帧）/ **不使用**。默认自动。
@@ -1783,6 +1765,8 @@ C-GPU 完成之前，「高级」页的 HDR、着色器两行和「效果」页�
 **PotPlayer 参考**：menu-tree「反交错 ▶ 切换反交错方式 Ctrl+I / 自动选择 / 总是使用 / 不使用 / 反交错设置...」`101_0_11_7_*`；dialogs 385「有反交错标识：/ 无反交错标识：/ 场序」；strings 2119/2120「动态适应 / 动态适应(2× 帧)」、3544/3545。差异：硬件反交错（H/W）和场序设置不做，场序由滤镜自动检测。
 
 ### E11 宽高比与显示模式
+
+> 排期（裁决 R-V9）：`plugin.video.view()` 第 4a 轮提供（单一拥有者，去掉 `scaleX` / `scaleY`），C-SIZE 同批。第 2 轮窗口「画面」页的宽高比、显示两行置灰并悬停提示原因，「比例 ▶」菜单不出现。
 
 **需求**：
 - **宽高比**（单选）：默认（按来源）/ 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1 / 自定义。自定义输入「宽:高」两个正数（例如 21:9），或一个小数（例如 2.39），范围 0.25–4.0。默认为「按来源」。
@@ -1834,6 +1818,8 @@ C-GPU 完成之前，「高级」页的 HDR、着色器两行和「效果」页�
 
 ### E12 拉伸（加边）/ 裁剪到指定比例
 
+> 第 2 轮（裁决 R-V7）：一个节点 `{ kind: "reframe"; mode: "crop" | "pad"; aspect: 0.25–4; x; y: −1–1 }`，插件把位置 0%–100% 映射为 −1–1。窗口里改为「方式」「比例」两个下拉（列表短，弹出框留在窗口内）。
+
 **需求**：改变画面**内容**本身的比例（像素处理，与 E11 只改显示不同）。单选：
 - **不使用**（默认）。
 - **按 X 拉伸**（X = 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1）：在画面周围补黑边，使画面整体比例变为 X，原画面不变形。例如 16:9 片源「按 4:3 拉伸」会在上下补黑边，字幕可以显示在黑边里，截图也带黑边。
@@ -1870,6 +1856,8 @@ C-GPU 完成之前，「高级」页的 HDR、着色器两行和「效果」页�
 
 ### E13 画面缩放与平移（帧位）
 
+> 排期与降级（裁决 R-V9）：第 4a 轮提供 `video.view()`，去掉 `scaleX` / `scaleY`，所以删除「帧宽 + / −」「帧高 + / −」四条命令（菜单表与快捷键表已删）。第 2 轮窗口「画面」页的缩放行置灰，「帧位 ▶」菜单不出现。小键盘绑定名已在第 2 轮提供。
+
 **需求**：
 - **全帧 + / −**：整体缩放，倍数范围 0.25–4.0，每步乘或除以 1.05，默认 1.0。
 - **帧宽 + / −**、**帧高 + / −**：单独缩放宽或高，范围 0.25–4.0，每步 ×/÷ 1.05，默认 1.0。
@@ -1903,6 +1891,8 @@ C-GPU 完成之前，「高级」页的 HDR、着色器两行和「效果」页�
 **PotPlayer 参考**：menu-tree「帧位 ▶ 帧位 之前/复位 Numpad 5 / 全帧 + Numpad 9 / 全帧 - Numpad 1 / 帧宽 ± Numpad 6/4 / 帧高 ± Numpad 8/2 / 偏移 →←↑↓ Ctrl+Numpad 6/4/8/2 / 帧位居中 Ctrl+Numpad 5」`101_0_17_*`；strings 1032–1043。差异：「预置」编辑和屏幕边距（`101_0_17_16–25`）不在本编号内，不做；PotPlayer 的「帧位 之前/复位」会在复位和上次值之间切换，我们只做复位。
 
 ### E16 HDR 校正 / 色调映射
+
+> 排期：C-GPU 与 `video.render()` 在第 4b 轮。第 2 轮菜单「像素着色 ▶ HDR 色调映射」禁用，窗口「高级」页 HDR 行置灰，原因「需要 GPU 渲染，当前版本不支持」。
 
 **需求**（C-GPU 完成后）：
 - 「HDR 色调映射」单选：**自动**（默认：片源是 HDR（PQ / HLG）且显示器是 SDR 时做色调映射）/ **关**（不处理，PQ 内容会显得发灰或过暗）/ 算法：BT.2390（默认算法）/ Hable / Mobius / Reinhard / 裁剪。
@@ -1952,6 +1942,8 @@ C-GPU 完成之前，「高级」页的 HDR、着色器两行和「效果」页�
 
 ### E17 像素着色器（自定义 GLSL）
 
+> 排期：第 4b 轮。第 2 轮菜单只有禁用的「像素着色 ▶ 使用着色器」（Shift+P），窗口「高级」页着色器行置灰；`S` 键弹出子菜单的说明删除（`commands.popup` 被拒绝）。
+
 **需求**（C-GPU 完成后）：
 - 用户可以加载 mpv 格式的 GLSL 用户着色器（`.glsl`，带 `//!HOOK` 声明，例如 FSRCNNX、Anime4K、KrigBilateral），按列表顺序叠加执行，最多 16 个。
 - 总开关「使用着色器」（默认关），关闭时保留列表。
@@ -1984,6 +1976,8 @@ C-GPU 完成之前，「高级」页的 HDR、着色器两行和「效果」页�
 **PotPlayer 参考**：menu-tree「像素着色 S ▶ 调整尺寸前的着色切换 Shift+P / 调整尺寸前的着色集 / 调整尺寸后的着色切换 Ctrl+Alt+P / 调整尺寸后的着色集 / 组合编辑... / 重载着色文件 / 打开着色文件夹」`101_0_11_2_*`；dialogs 505「像素着色器设置 / 缩放前 / 缩放后 / 编辑组合」；strings 1720–1723。差异：PotPlayer 用 HLSL，分「缩放前 / 缩放后」两组；mpv 着色器用 `//!HOOK` 自己声明作用阶段，所以只需要一个列表、一个开关（Shift+P），Ctrl+Alt+P 不用。
 
 ### E18 倍帧 / 运动补偿
+
+> 排期（裁决 R-V8）：倍帧（`frameBlend`）推到第 4a 轮，与 C-SIZE 的渲染节奏改动同批验证；运动补偿第 4b 轮。第 2 轮两项的菜单与窗口复选都显示为禁用并给出原因。
 
 **需求**：
 - **倍帧**（软件，现在就能做）：把帧率提高到 2 倍（上限 60 fps），中间帧由前后两帧混合生成，使低帧率画面的运动更平滑（会有轻微的运动模糊）。开关，默认关。原帧率已不低于 50 fps 时不处理。
@@ -2034,7 +2028,7 @@ C-GPU 完成之前，「高级」页的 HDR、着色器两行和「效果」页�
 | 宿主行为 C-GPU：libmpv 改 GPU 渲染（OpenGL/Metal + gpu-next） | E16、E17、E18 运动补偿的前提；软件渲染器不支持这三项 |
 | `plugin.video.render(): RenderOptions`，`set(Partial<{ toneMapping; targetPeak; peakDetect; shaders; interpolation }>)` | E16、E17、E18 运动补偿，对应 mpv GPU 渲染属性 |
 | `PlaybackStats.video.transfer: "sdr" \| "pq" \| "hlg" \| null` | E16 判断片源是否为 HDR |
-| （可选）`plugin.commands.popup(path: string[]): Promise<void>` | E17 的 S 键弹出「像素着色」子菜单；不做时 S 不绑 |
+| ~~（可选）`plugin.commands.popup(path: string[]): Promise<void>`~~ | 裁决拒绝；S 不绑 |
 
 每个新节点都要同时支持实时 mpv 图和离线导出图（`render_lavfi` 共用）；节点总数仍受现有的「全部插件合计 64 个节点」上限约束。本插件最坏情况下约 15 个节点。
 
@@ -2062,12 +2056,12 @@ manifest 能力增加：`playback.control`（切换音轨、载入外部音轨�
 | 编号 | 功能 | 当前 | 依赖核心新增 |
 | --- | --- | --- | --- |
 | A11 | 载入外部音频轨 | ✗ | 是：`player.addAudioTrack` |
-| G03 | 选择音轨 | ✗ | 是：`player.selectTrack` |
+| G03 | 选择音轨 | ✗ | 是：`player.selectAudioTrack`（裁决 R-T2） |
 | G04 | 依次切换音轨 | ✗ | 同 G03 |
 | G05 | 声道选择（立体声 / 左 / 右 / 单声道混合 / 左右互换） | ✗ | 是：`channels` 节点 |
-| G09 | 声音同步快捷键 | ◐ | 否（可选：延迟范围放宽） |
+| G09 | 声音同步快捷键 | ◐ | 否（延迟范围放宽到 ±10 000，裁决 R-A5，第 2 轮已提供） |
 | G11 | 晶化快捷键 | ◐ | 否 |
-| G16 | 音频输出设备选择 | ✗ | 是：`player.audioDevices`、`player.setAudioDevice` |
+| G16 | 音频输出设备选择 | ✗ | 是：`player.audioDevices`、`player.setAudioDevice`（第 3a 轮，裁决 R-A2–R-A4） |
 
 **菜单与快捷键**
 
@@ -2079,7 +2073,7 @@ manifest 能力增加：`playback.control`（切换音轨、载入外部音轨�
 | 声音 ▶ 音量 + / 音量 − / 静音（playback，不变） | 501–503 | domain | ↑ / ↓ / M | — |
 | 声音 ▶ 音频工作台… | 510 | audio-tools | | 现有 |
 | 声音 ▶ 音轨 ▶ 〔各音轨，单选〕· —— · 按序切换 · —— · 立体声 · 左声道 · 右声道 · 单声道混合 · 左右互换（单选） | 511 | audio-tools | 按序切换 Alt+A | G03、G04、G05 |
-| 声音 ▶ 输出设备 ▶ 系统默认 · 〔各设备〕（单选） | 512 | audio-tools | | G16 |
+| 声音 ▶ 输出设备 ▶ 系统默认 · 〔各设备〕（单选）（第 3a 轮） | 512 | audio-tools | | G16 |
 | 声音 ▶ 均衡器（勾选） | 513 | audio-eq | Shift+E | 现有 |
 | 声音 ▶ 预设 ▶ 平直 / 人声 / 音乐 / 影院（单选） | 514 | audio-eq | | 现有 |
 | 声音 ▶ 声音同步 ▶ 超前 50 毫秒 · 滞后 50 毫秒 · 复位 · —— · 不保持 · 本次运行内保持 · 始终保持（单选） | 515 | audio-eq | `>` / `<` / `?`（见下） | G09 |
@@ -2100,8 +2094,8 @@ manifest 能力增加：`playback.control`（切换音轨、载入外部音轨�
 | 页签 | 内容 | 编号 |
 | --- | --- | --- |
 | **均衡器** | 现有的「均衡器」开关、预设弹出按钮与 6 段竖滑块，不变 | 现有 |
-| **效果** | 每行「标签 65 + 滑块 154 + 默认 41」或「复选 65 + 滑块 + 默认」：声音同步（−2000…+2000 毫秒，右侧显示数值，现有）、规格化（复选，现有）、晶化（复选 + 0–6 dB 滑块，即现有「清晰度」） | G09、G11 |
-| **声道与输出** | 音轨：下拉 154 + 〔载入…〕按钮 41×21；声道：下拉 154（立体声 / 左声道 / 右声道 / 单声道混合 / 左右互换）；输出设备：下拉 200；复选「自动载入同名音频文件」；声音同步保持方式：下拉 154（不保持 / 本次运行内保持 / 始终保持） | A11、G03、G05、G16、G09 |
+| **效果** | 每行「标签 65 + 滑块 154 + 默认 41」或「复选 65 + 滑块 + 默认」：声音同步（−10000…+10000 毫秒，右侧显示数值，现有）、规格化（复选，现有）、晶化（复选 + 0–6 dB 滑块，即现有「清晰度」） | G09、G11 |
+| **声道与输出** | 音轨：下拉 154 + 〔载入…〕按钮 50×18（「载入…」在 41 宽里放不下）；声道：下拉 154（立体声 / 左声道 / 右声道 / 单声道混合 / 左右互换）；输出设备：下拉 200（第 3a 轮前置灰，悬停提示原因）；复选「自动载入同名音频文件」；声音同步保持方式：下拉 154（不保持 / 本次运行内保持 / 始终保持） | A11、G03、G05、G16、G09 |
 
 页签条占 31 高，所以把现有的「延迟 / 规范化 / 清晰度」三行从均衡器下面移到「效果」页，均衡器页只放均衡器。
 
@@ -2109,11 +2103,13 @@ manifest 能力增加：`playback.control`（切换音轨、载入外部音轨�
 
 链顺序固定：`channels` → `equalizer`×6 → `treble`（晶化）→ `dynaudnorm`（规格化）。理由：先确定声道，再做频响修正，规格化最后，用来兜住响度。
 
-设置写入 `plugin.dataDirectory/settings.json`（先写临时文件再改名，读坏时用默认值，带 `version`）：`{ version: 1, equalizer, gains[6], normalize, clarity: { on, db }, channels: { mode }, autoLoadExternal, syncKeep, syncMs?, device, tab }`。
+设置通过 `plugin.storage.json("settings")` 写入 `plugin.dataDirectory/settings.json`（SDK 负责去抖、临时文件加改名；读坏的文件改名为 `settings.json.bad-<时间戳>` 并用默认值，带 `version`）：`{ version: 1, equalizer, gains[6], normalize, clarity: { on, db }, channels: { mode }, autoLoadExternal, syncKeep, syncMs?, tab }`（`device` 第 3a 轮加入）。
 
 没开的效果不产生节点，中性设置仍然是空链（现有原则）。开关效果会改变链结构，核心会重建音频滤镜图（可能有一次很短的断音，不是重启会话）。
 
 ### A11 载入外部音频轨
+
+> 第 2 轮：`player.addAudioTrack` 已提供。外部音轨换来源前一直保留，停用插件不撤销（核心如此）。
 
 **需求**：
 - 为当前播放的视频载入一个外部音频文件（.mka / .m4a / .aac / .ac3 / .eac3 / .dts / .flac / .mp3 / .ogg / .opus / .wav 等，以核心能解码为准），作为一条新音轨加入并立即选中。
@@ -2152,6 +2148,8 @@ player.addAudioTrack(path: string, opts?: { select?: boolean; ifCurrent?: Player
 **PotPlayer 参考**：menu-tree「打开 ▶ 载入音频... / Load External Audio...」`101_0_1_24`；dialogs 358「自动加载外部音频」。
 
 ### G03 选择音轨
+
+> 第 2 轮（裁决 R-T2）：接口为 `player.selectAudioTrack(id, { ifCurrent })`。「音轨 ▶」子菜单里，音轨列表随 `audioTracks` 重建（order 511），按序切换与五种声道固定在其后（order 512，分组分隔）。
 
 **需求**：列出当前来源的所有音轨（含外部载入的），单选切换。每项显示「序号. 标题 [语言] (编码)」，外部音轨加「（外部）」，缺失字段省略，例如「1. 日语 [jpn] (aac)」「3. movie.ac3 (ac3)（外部）」；没有标题和语言时显示「音轨 2 (opus)」。
 
@@ -2209,6 +2207,8 @@ player.selectTrack(kind: "audio", id: number, opts?: { ifCurrent?: PlayerState }
 
 ### G05 声道选择（立体声 / 左 / 右 / 单声道混合 / 左右互换）
 
+> 第 2 轮（裁决 R-A1）：节点 `{ kind: "channels"; mode }`，核心用 `pan`，多于两声道先下混为立体声（`aformat`）。模式参数不是运行时的：切换声道会重建音频滤镜（可能有极短断音），下文「运行时可调」「没有明显断音」以此为准。声道数在来源就绪与换轨后读 `player.stats().audio.channels`，1 秒后再读一次（解码器换轨有延迟）。
+
 **需求**：单选，默认「立体声」：
 - **立体声**：原样输出。
 - **左声道**：两个扬声器都播放左声道。
@@ -2247,7 +2247,7 @@ player.selectTrack(kind: "audio", id: number, opts?: { ifCurrent?: PlayerState }
 **现状**：窗口里有延迟滑块（±2000 ms，按 10 ms 取整，正值使音频更晚），没有菜单命令和快捷键；延迟随来源和音轨变化复位。
 
 **需求**（只写缺口）：
-- 菜单命令：「超前 50 毫秒」（延迟 −50，声音提前）、「滞后 50 毫秒」（延迟 +50，声音推后）、「复位」（延迟 0），按住时自动重复。步长 50 ms，范围沿用 ±2000 ms。
+- 菜单命令：「超前 50 毫秒」（延迟 −50，声音提前）、「滞后 50 毫秒」（延迟 +50，声音推后）、「复位」（延迟 0），按住时自动重复。步长 50 ms，范围 ±10 000 ms（第 2 轮核心放宽，裁决 R-A5）。
 - 保持方式（单选，默认「不保持」）：
   - **不保持**：每次换来源延迟归 0（与现在一样）。
   - **本次运行内保持**：换来源时保留延迟，退出播放器后归 0。
@@ -2258,7 +2258,7 @@ player.selectTrack(kind: "audio", id: number, opts?: { ifCurrent?: PlayerState }
 
 **行为细节**：
 - OSD 沿用 PotPlayer 文案：「音频同步: -0.05秒」「音频同步: +0.3秒」「音频同步: 0秒」（strings 1724「音频同步：%g秒」）。
-- 到 ±2000 ms 边界时值不变，OSD 照常显示当前值。
+- 到 ±10 000 ms 边界时值不变，OSD 照常显示当前值。
 - 没有选中音轨时命令禁用，原因「没有选中的音轨」（与现有编辑命令一致）。
 - 延迟通过现有的 `filter.set({ nodes, delayMs })` 提交，不改变节点链，不会重建滤镜图。
 - 外部音轨（A11）同样适用。
@@ -2301,6 +2301,8 @@ player.selectTrack(kind: "audio", id: number, opts?: { ifCurrent?: PlayerState }
 **PotPlayer 参考**：menu-tree「声音处理 ▶ 晶化 Shift+C」`101_0_12_18_1`；dialogs 388「晶化(仅支持16位) / 带宽扩展 / 谐波助推」；strings 1900。差异：PotPlayer 的晶化有多个参数（带宽扩展、谐波助推），我们只有一个强度。
 
 ### G16 音频输出设备选择
+
+> 排期（裁决 R-A2–R-A4）：推到第 3a 轮（核心体积预算）。第 2 轮不出现「输出设备 ▶」菜单；窗口「声道与输出」页输出设备下拉置灰，悬停提示「输出设备选择需要核心接口，后续版本提供」。第 3a 轮的接口去掉 `devicesRevision`，窗口打开时每 5 秒轮询 `audioDevices()`，设备选择由插件跨启动保存。
 
 **需求**：
 - 列出系统的音频输出设备（内置扬声器、耳机、AirPods、HDMI 显示器、USB 声卡、虚拟设备等），单选。第一项是「系统默认」（默认值，跟随 macOS「声音」设置中的输出设备，系统里切换时自动跟着切）。
@@ -2349,12 +2351,12 @@ interface PlayerState {
 | 接口 | 理由 |
 | --- | --- |
 | `player.addAudioTrack(path: string, opts?: { select?: boolean; ifCurrent?: PlayerState }): Promise<AudioTrack>` | A11。往播放会话里加轨道是播放器内部操作（mpv `audio-add`） |
-| `player.selectTrack(kind: "audio", id: number, opts?: { ifCurrent?: PlayerState }): Promise<PlayerState>` | G03、G04。切换音轨是播放器内部操作（mpv `aid`） |
+| `player.selectAudioTrack(id: number, opts?: { ifCurrent?: PlayerState }): Promise<PlayerState>`（裁决 R-T2 改写：去掉 `kind`） | G03、G04。切换音轨是播放器内部操作（mpv `aid`） |
 | `AudioNode` 增加 `{ kind: "channels"; mode: "stereo" \| "left" \| "right" \| "mono" \| "swap" }` | G05。核心负责多声道下混；插件不能自己加滤镜 |
 | `player.audioDevices(): Promise<AudioDevice[]>` | G16。设备列表来自播放器音频输出 |
 | `player.setAudioDevice(id: string \| null): Promise<void>` | G16。同时覆盖 mpv 和生成流（cpal）两条音频路径 |
-| `PlayerState.audioOutput: { requested: string \| null; active: string \| null; devicesRevision: number }` | G16。插件据此显示回退状态，并在插拔后重读设备列表 |
-| （可选）音频 `delayMs` 放宽到 −10000–10000 | G09 / A11。外部音轨偏差常超过 2 秒 |
+| `PlayerState.audioOutput: { requested: string \| null; active: string \| null }`（裁决 R-A4：去掉 `devicesRevision`，第 3a 轮） | G16。插件据此显示回退状态；窗口打开时每 5 秒重读设备列表 |
+| 音频 `delayMs` 放宽到 −10000–10000（第 2 轮已提供） | G09 / A11。外部音轨偏差常超过 2 秒 |
 
 不需要核心改动的：G09 的快捷键，G11 的快捷键，A11 的同名自动载入（Node 扫描文件夹）。
 
@@ -2368,19 +2370,19 @@ interface PlayerState {
 
 边界与取舍：
 - 取帧一律用核心快照（`media.capture` + `Snapshot.export`），保证与现有截图一致的冻结与条件提交语义。
-- 图片后处理在插件内完成，不加核心：JPEG/BMP 转换用 macOS 自带 `sips`；复制到剪贴板用 `osascript`。这些工具在 macOS 上都自带。
+- JPEG/BMP 转换在插件内用 macOS 自带 `sips`（只有本插件需要，不进核心）。复制到剪贴板用 `plugin.clipboard.writeImage`，打开文件夹用 `plugin.system.openPath`，设置文件用 `plugin.storage.json`（第 2 轮通用能力，替换原来的 `osascript`、`open` 与自写的设置读写）。
 - 截图设置（格式、质量）对所有图片输出统一生效：单张、另存为、连拍。
 
-manifest 不变（已有 `media.read`、`media.control`、`playback.read`、`subtitles.read`）。
+manifest 增加能力 `clipboard`（F03）；其余已有（`media.read`、`media.control`、`playback.read`、`subtitles.read`）。
 
 ### 功能一览
 
 | 编号 | 功能 | 当前 | 依赖核心新增 |
 | --- | --- | --- | --- |
-| F03 | 复制当前画面到剪贴板 | ✗ | 否（`osascript`） |
+| F03 | 复制当前画面到剪贴板 | ✗ | 否（通用能力 `plugin.clipboard`） |
 | F04 | 单张截图带效果与字幕 | ◐ | 否 |
 | F07 | JPEG/BMP 格式与质量 | ◐ | 否（`sips`；可选核心直出 JPEG） |
-| F09 | 打开截图文件夹 | ◐ | 否 |
+| F09 | 打开截图文件夹 | ◐ | 否（通用能力 `plugin.system`） |
 
 ### 菜单与快捷键
 
@@ -2412,14 +2414,14 @@ manifest 不变（已有 `media.read`、`media.control`、`playback.read`、`sub
 **入口**：`视频 ▶ 截图 ▶ 复制当前画面`（Ctrl+C）、`复制实际画面`（Ctrl+Alt+C）。
 
 **行为细节**：
-1. 流程：`player.refresh()` 记下 `seen` → `media.capture({ ifCurrent: seen, processed })` → `export({ format: "png", destination: <临时目录>/clip-<n>.png })` → 等待完成 → `osascript -e 'set the clipboard to (read (POSIX file "<路径>") as «class PNGf»)'` → 删除临时文件、释放快照。
+1. 流程：`player.refresh()` 记下 `seen` → `media.capture({ ifCurrent: seen, processed })` → `export({ format: "png", destination: <临时目录>/clip-<n>.png })` → 等待完成 → `plugin.clipboard.writeImage(<路径>)` → 删除临时文件、释放快照。
 2. 临时目录：`os.tmpdir()/vestra-capture-<pid>/`，插件停用时清空。
 3. 剪贴板只放 PNG（不受截图格式设置影响），保留原始分辨率。
 4. 与 Ctrl+E 共用「一次只做一张」的互斥：上一张未完成时再按，OSD「上一张截图仍在处理」，不排队。理由：剪贴板只有一个，排队没有意义。
-5. 成功 OSD：`画面截图：复制到剪贴板`（strings 1138）。失败：截图失败沿用现有文案（`截图失败：…`）；`osascript` 失败「无法写入剪贴板」。
+5. 成功 OSD：`画面截图：复制到剪贴板`（strings 1138）。失败：截图失败沿用现有文案（`截图失败：…`）；剪贴板写入失败「无法写入剪贴板」。
 6. 不可截图（无媒体、网络流、`can.snapshot` 为假）：禁用，原因「没有可截取的画面」（现有 `canCapture`）。
 
-**核心依赖**：现有 `media.capture`、`Snapshot.export`。剪贴板用 macOS `osascript`，不需要核心。（如果以后核心提供通用剪贴板接口，再替换。）
+**核心依赖**：现有 `media.capture`、`Snapshot.export`；第 2 轮通用能力 `plugin.clipboard.writeImage`（能力 `clipboard`，替换原来的 `osascript`）。
 
 **验收**：播放中按 Ctrl+C，在「预览」中「从剪贴板新建」得到与 Ctrl+E 同尺寸的图像；临时文件已删除；无媒体时命令禁用；连按两次第二次给出提示。
 
@@ -2464,7 +2466,7 @@ manifest 不变（已有 `media.read`、`media.control`、`playback.read`、`sub
 
 **界面**：「截图设置」窗口（360 宽）：分组「格式」：格式下拉、质量滑块 + 数值（仅 JPEG 可用）；分组「保存位置」：截图文件夹（只读 + 「…」）、「条件允许时储存到播放文件夹」复选（默认关）。
 
-**持久化**：`settings.json` 增加 `format`、`quality`（与现有 `folder` 同文件，原子写入）。
+**持久化**：`settings.json` 增加 `format`、`quality`（与现有 `folder` 同文件），用 `plugin.storage.json("settings")` 读写：读坏的文件改名为 `settings.json.bad-<时间戳>`，单个字段无效时只有该字段用默认值。
 
 **核心依赖**：现有 PNG 导出 + macOS `sips`。【核心新增·可选】`Snapshot.export({ format: "jpeg"; destination; quality?: number; sampleTime? })`：离线 ffmpeg 直接编码，省一次转换；不做也不影响功能。
 
@@ -2481,7 +2483,7 @@ manifest 不变（已有 `media.read`、`media.control`、`playback.read`、`sub
 **入口**：`视频 ▶ 截图 ▶ 打开截图文件夹`。
 
 **行为细节**：
-1. 用现有 `reveal(folder)`（`open -- <folder>`）。文件夹不存在时先创建（与现有 `openFolder` 一致）。
+1. 用 `plugin.system.openPath(folder)`。文件夹不存在时先创建（与现有 `openFolder` 一致）。「导出任务」里的「打开」同样用 `openPath`。
 2. 「条件允许时储存到播放文件夹」（F07 设置）开启且当前是本地文件时，打开的是视频所在文件夹。
 3. 失败 OSD「无法打开文件夹。」（现有文案）。
 4. 无媒体也可用。
@@ -2498,7 +2500,7 @@ manifest 不变（已有 `media.read`、`media.control`、`playback.read`、`sub
 | --- | --- | --- |
 | `Snapshot.export(options: { format: "jpeg"; destination: string; quality?: number; sampleTime?: number })`（可选） | 省去一次 `sips` 转换；不做不影响功能 | F07 |
 
-明确不请求核心：剪贴板图像（`osascript`）、JPEG/BMP 转换（`sips`）、打开文件夹。
+明确不请求核心：JPEG/BMP 转换（`sips`）。剪贴板图像、打开文件夹、设置文件改用第 2 轮通用能力（`clipboard`、`system`、`storage`）。
 
 ## 播放信息（`info`）
 
@@ -2508,17 +2510,17 @@ manifest 不变（已有 `media.read`、`media.control`、`playback.read`、`sub
 
 info 插件负责把播放状态以只读方式展示给用户。它现在只有 I02：Tab 打开的完整信息叠加层。本轮增加三项：简要信息（I03）、播放属性对话框（I05）、关于（I09）。
 
-边界：info 只读，不控制播放，不调用别的插件。I05 和 I09 里「核心才知道」的数据（实时解码统计、mpv/FFmpeg 版本、已加载插件列表）都要由核心提供。文件级信息（容器、码率、标签、附件）插件用 ffprobe 自己读。复制到剪贴板用 macOS 的 `pbcopy` 子进程，不需要核心。
+边界：info 只读，不控制播放，不调用别的插件。I05 和 I09 里「核心才知道」的数据（实时解码统计、mpv/FFmpeg 版本、已加载插件列表）都要由核心提供。文件级信息（容器、码率、标签、附件）插件用 ffprobe 自己读（`plugin.tools.run`）。复制到剪贴板用 `plugin.clipboard.writeText`。
 
 ### 功能一览
 
 | 编号 | 功能 | 当前 | 依赖核心新增 |
 | --- | --- | --- | --- |
 | I03 | 简要信息（文件名、时间、编码），按一次显示 3 秒 | ✗ | 无 |
-| I05 | 播放属性对话框（播放 / 文件 / 系统三页，复制、保存） | ✗ | `PlaybackStats` 扩展字段；`plugin.app.info()` |
-| I09 | 关于（版本、mpv/FFmpeg 版本、已加载插件） | ✗ | `plugin.app.info()`；图片属性（显示 logo 可用编译期 `@image-url`，不必新增） |
+| I05 | 播放属性对话框（播放 / 文件 / 系统三页，复制、保存） | ✗ | `PlaybackStats` 扩展字段（第 2 轮）；版本行等 `plugin.app.info()`（3a） |
+| I09 | 关于（版本、mpv/FFmpeg 版本、已加载插件）——推到 3a | ✗ | `plugin.app.info()`；图片属性（显示 logo 可用编译期 `@image-url`，不必新增） |
 
-manifest 能力从 `commands, playback.read, events, ui.osd` 增加为：`+ ui.window`（I05、I09 窗口）、`+ ui.dialog`（I05「保存为」）。
+manifest 能力从 `commands, playback.read, events, ui.osd` 增加为：`+ ui.window`（I05、I09 窗口）、`+ ui.dialog`（I05「保存为」）、`+ clipboard`（I05、I09 复制）。
 
 ### 菜单与快捷键
 
@@ -2567,10 +2569,12 @@ manifest 能力从 `commands, playback.read, events, ui.osd` 增加为：`+ ui.w
 
 ### I05 播放属性对话框
 
+> 第 2 轮降级（裁决 R-P7、R-W6 排期）：`PlaybackStats` 不加 `hwdec`，「播放信息」页单列一行「硬件解码」，固定显示「未使用」（播放器固定软件解码），等 C-GPU 再接；`plugin.app` 在 3a 交付，「系统信息」页的 Vestra、mpv、FFmpeg 版本暂显示「未知」（行保留）。系统信息里的 macOS、机型、CPU、显示器由插件用 `sw_vers`、`sysctl`、`system_profiler` 读取，内存用 Node `os`。
+
 **需求**
 - 工具窗口「播放属性」，三个页签：
   1. **播放信息**（实时，每秒刷新）
-     - 视频组：解码器（含硬件/软件）、输入格式（编码、像素格式、色彩空间）、尺寸（源尺寸 → 显示尺寸）、源帧率、当前帧率、视频码率。
+     - 视频组：解码器、硬件解码（本轮固定「未使用」）、输入格式（编码、像素格式、色彩空间）、尺寸（源尺寸 → 显示尺寸）、源帧率、当前帧率、视频码率。
      - 音频组：解码器、采样率、采样位数（采样格式）、声道数（含布局）、音频码率。
      - 其它：后端、会话、已显示帧、丢帧、音画同步偏差（毫秒）、缓冲时长（秒）。
   2. **文件信息**（打开时读取一次，有「刷新」按钮）
@@ -2590,9 +2594,9 @@ manifest 能力从 `commands, playback.read, events, ui.osd` 增加为：`+ ui.w
 - 窗口打开后保持显示，可以和播放并存，不暂停播放（交互要求 §3）。再按 Ctrl+F1 时，如果窗口已打开，就把它带到前面，不关闭。
 - 没有媒体时，「播放信息」和「文件信息」页显示一行「未打开媒体」，「系统信息」页照常。
 - 「文件信息」只读本地文件。来源是 URL 时显示「网络来源：只显示播放器报告的信息」，并列出 `player.state.source` 与 `stats()` 中能得到的项。
-- ffprobe 参数：`-v error -show_format -show_streams -show_chapters -of json <路径>`，不经 shell，超时 10 秒。失败或缺少 ffprobe 时，页内显示「无法读取文件信息（未找到 ffprobe）」或「无法读取文件信息：<一句原因>」。
+- ffprobe 用 `plugin.tools.run("ffprobe", …)`，参数：`-v error -show_format -show_streams -show_chapters -of json <路径>`，超时 10 秒。失败或缺少 ffprobe 时，页内显示「无法读取文件信息（未找到 ffprobe）」或「无法读取文件信息：<一句原因>」。
 - 换片源（`sourceId` 变化）时：「播放信息」自动跟随；「文件信息」自动重新读取，旧的 ffprobe 进程被中止。
-- 「复制到剪贴板」通过 `pbcopy` 子进程（stdin 写入 UTF-8）完成。成功时屏幕提示 `已复制播放信息`，失败时页内状态行显示「复制失败」。
+- 「复制到剪贴板」用 `plugin.clipboard.writeText`。成功时屏幕提示 `已复制播放信息`，失败时页内状态行显示「复制失败」。
 - 「保存为…」调 `dialogs.saveFile({ fileName: "<文件名> 信息.txt" })`，用临时文件加改名的方式写入。成功时提示 `已保存到 <文件名>`。目标文件已存在时由系统对话框确认覆盖。
 - 每个值不超过 512 字符，超出部分截断并加「…」。属性总文本受 64 KB 字符串上限约束，按流分行。
 
@@ -2632,10 +2636,10 @@ manifest 能力从 `commands, playback.read, events, ui.osd` 增加为：`+ ui.w
   ```
 
   理由：这些是播放器解码时才有的实时状态（硬解是否生效、当前帧率、音画同步、缓冲）。ffprobe 只能看到文件，看不到正在解码的会话。这些值只有 mpv 有，只能由核心转发。
-- 【核心新增】`plugin.app.info(): Promise<AppInfo>`（定义见 I09）。「系统信息」页的 Vestra、mpv、FFmpeg 版本来自它；macOS、CPU、内存由插件通过 Node `os` 模块和 `sw_vers`、`sysctl`、`system_profiler` 子进程读取。
+- 【核心新增·3a】`plugin.app.info(): Promise<AppInfo>`（定义见 I09）。「系统信息」页的 Vestra、mpv、FFmpeg 版本来自它，3a 之前显示「未知」；macOS、CPU、内存由插件通过 Node `os` 模块和 `sw_vers`、`sysctl`、`system_profiler` 子进程读取。
 
 **验收**
-- 播放 1080p H.264 + AAC 文件，按 Ctrl+F1，「播放信息」页显示解码器、1920×1080、帧率、采样率；硬解开启时「解码器」写明硬件解码。
+- 播放 1080p H.264 + AAC 文件，按 Ctrl+F1，「播放信息」页显示解码器、1920×1080、帧率、采样率；「硬件解码」一行为「未使用」。
 - 「文件信息」页列出全部流。带章节的 MKV 显示正确章节数；带字体附件的 MKV 在「内嵌资源」列出字体文件名。
 - 播放中打开窗口不暂停、不卡顿；拖动进度条时「播放信息」页照常每秒刷新。
 - 「复制到剪贴板」之后在文本编辑器粘贴，得到与页签一致的纯文本。
@@ -2645,6 +2649,8 @@ manifest 能力从 `commands, playback.read, events, ui.osd` 增加为：`+ ui.w
 **PotPlayer 参考**：M:`101_0_26`「属性… / Playback/System Info…」Ctrl+F1。D:`Dialog(424)` 有页签 文件信息 / 媒体内嵌资源 / 系统信息 / 在线信息，按钮「复制到剪贴板」「保存为其他名称」。D:`Dialog(326)` 是视频信息组（解码器、输入/输出格式、源帧率、尺寸、当前帧率）、音频信息组（解码器、采样率、采样位数、声道数）和码率。差异：我们把「媒体内嵌资源」并入「文件信息」页；不做「在线信息」；「播放信息」页是我们独立出来的一页，内容取自 Dialog(326)。
 
 ### I09 关于
+
+> 第 2 轮不做，推到 3a（依赖 `plugin.app.info` / `onChange`、`packages.list`）。
 
 **需求**
 - 工具窗口「关于 Vestra」，内容：
@@ -2696,7 +2702,7 @@ manifest 能力从 `commands, playback.read, events, ui.osd` 增加为：`+ ui.w
 
 | 接口 | 理由 |
 | --- | --- |
-| `PlaybackStats` 扩展字段（`decoder`、`hwdec`、`pixelFormat`、`colorspace`、`displayFps`、`bitrate`、`avSyncMs`、`cacheSeconds` 等） | 实时解码状态只在 mpv 里，ffprobe 看不到 |
+| `PlaybackStats` 扩展字段（`decoder`、`pixelFormat`、`colorspace`、`displayFps`、`bitrate`、`avSyncMs`、`cacheSeconds` 等；`hwdec` 未采纳，裁决 R-P7） | 实时解码状态只在 mpv 里，ffprobe 看不到（第 2 轮已交付） |
 | `plugin.app.info(): Promise<AppInfo>`；`plugin.app.onChange(listener)` | 宿主链接的库的版本、已加载插件列表是核心状态 |
 
 ---
@@ -3010,7 +3016,7 @@ manifest 能力：`playback.read`、`playback.control`、`events`、`commands`�
 9. **记录播放历史**（默认开）：关闭后不再新增记录，已有记录保留；菜单仍显示已有记录。隐私：记录文件只在本机数据目录。
 10. 没有记录时子菜单显示一个禁用项「（无记录）」。
 
-**持久化**：`<dataDirectory>/recent.json`：`{ version: 1, enabled: true, items: [{ key, source, kind: "file"|"url", openedAt }] }`，变化后 1 秒合并写入，写临时文件再改名，文件权限 0600。
+**持久化**：`<dataDirectory>/recent.json`：`{ version: 1, enabled: true, items: [{ key, source, kind: "file"|"url", openedAt }] }`，用 `plugin.storage.json("recent")` 读写，最后一次变化后 1 秒写入（临时文件加改名）。文件权限随系统默认（第 2 轮迁移到 `storage` 后不再单独设 0600；数据目录位于只有本用户能进入的 `~/Library` 下）。读坏的文件改名为 `.bad-<时间戳>`。
 
 **核心依赖**：现有 `player.state`、`player.onChange`、`player.open`、`commands.add` + 子作用域重建。
 
@@ -3048,7 +3054,7 @@ manifest 能力：`playback.read`、`playback.control`、`events`、`commands`�
 8. 已知限制：恢复是在 ready 之后跳转，开头可能闪过约一帧画面和极短声音；B26 无缝切换到下一项后若该项有记忆点，会在切换后跳转（无缝效果被打断，但位置正确）。
 9. A12 菜单项上的 `（12:34）` 取自本表。
 
-**持久化**：`<dataDirectory>/positions.json`：`{ version: 1, mode: "auto"|"ask"|"off", audio: false, items: { [key]: { position, duration, size, updatedAt } } }`；每 5 秒最多写一次（内容变化时），写法同 A12。
+**持久化**：`<dataDirectory>/positions.json`：`{ version: 1, mode: "auto"|"ask"|"off", audio: false, items: { [key]: { position, duration, size, updatedAt } } }`；用 `plugin.storage.json("positions")` 读写；记忆点每 5 秒更新一次，内容变化后 300 ms 写入，插件停用时写完。
 
 **核心依赖**：现有 `player.onChange`（`position`、`duration`、`phase`、`endReason`、`sourceId`）、`player.seek({ ifCurrent })`、`player.stats()`、`windows.create`、`osd.show`、`plugin.dataDirectory`。新增无：恢复以 ready 状态为条件跳转，与其它插件的操作冲突时由 `stale` 自然让位。
 
@@ -4065,6 +4071,8 @@ manifest：`commands`、`events`、`ui.window`、`ui.dialog`、`ui.osd`、`playb
 
 推荐 (a)，体验接近 PotPlayer「内置 OpenSubtitles」（strings 4600）。在维护者完成注册前按 (b) 实现：没有密钥时「搜索与下载字幕…」打开设置窗口并说明如何申请。两种情况都允许用户填写自己的密钥覆盖。
 
+**第 2 轮实现（裁决未定 (a)）**：按 (b) 实现。插件不随附任何密钥；没有用户填写的密钥或 token 时不发出任何网络请求。
+
 #### 入口
 
 - `字幕 ▶ 在线字幕 ▶ 搜索与下载字幕…`：打开「字幕下载」窗口并立即用当前视频搜索。
@@ -4083,9 +4091,9 @@ manifest：`commands`、`events`、`ui.window`、`ui.dialog`、`ui.osd`、`playb
    - 勾选多条后「添加字幕」：逐条下载并载入，`select: "none"`（只加入轨列表），完成后 OSD「已添加 3 条字幕」。
    - 「直接保存」：下载勾选项保存到保存位置，不载入。
    - 「另存为…」：保存所选到用户选择的位置。
-   - 「网页中打开」：用 `open` 打开该字幕的网页。
+   - 「网页中打开」：打开该字幕的网页。**第 2 轮未实现**：通用能力 `plugin.system.openPath` 只接受存在的本地路径，插件不得再自己调用 `open`；已提请求「`plugin.system.openUrl(url)`」，接受后补上按钮。
 4. **保存位置**（设置，默认「尽可能保存在视频同目录」）：本地视频时保存为 `<视频名>.<语言>.<扩展名>`，不覆盖（`(1)` 规则）；目录不可写或网络来源时保存到 `<插件数据目录>/downloads/`。载入使用下载到的字节，不依赖保存成功；保存失败 OSD「字幕已载入，但无法保存到视频所在文件夹」。
-5. **压缩包**（assrt 常见）：zip 用插件内的解压（依赖打包进插件）；包内多个字幕文件时列出让用户选；rar/7z 不支持，提示「此压缩格式暂不支持，已在浏览器打开下载页」并打开网页。
+5. **压缩包**（assrt 常见）：zip 用插件内的解压（Node `zlib`，无需 npm 依赖）；包内多个字幕文件时列出让用户选；rar/7z 不支持，提示「此压缩格式暂不支持（rar、7z），请下载 zip 或单个字幕文件。」（打开网页待 `system.openUrl`，见上）。
 6. **配额与失败**：
    - 配额用尽（OpenSubtitles 406/429 + `remaining: 0`）：OSD「今日下载次数已用完（OpenSubtitles）。登录账号可获得更多次数」；窗口状态行显示重置时间（响应中的 `reset_time`）。
    - 401/403：「API 密钥无效，请在在线字幕设置中检查」。

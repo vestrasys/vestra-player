@@ -1,10 +1,10 @@
 import { access } from "node:fs/promises";
-import { join } from "node:path";
-import type { PlayerState } from "../../sdk/plugin/index.ts";
+import type { JsonStore, PlayerState, Scope } from "../../sdk/plugin/index.ts";
 import { isLocal, keyOf } from "./identity.ts";
-import { JsonFile, readJson, timing } from "./store.ts";
+import { jsonStore, timing } from "./store.ts";
 
 export type RecentItem = { key: string; source: string; kind: "file" | "url"; openedAt: string };
+type Saved = { version: 1; enabled: boolean; items: RecentItem[] };
 
 /** Records kept in recent.json; the menu shows the first MENU_ITEMS. */
 export const CAPACITY = 100;
@@ -17,19 +17,13 @@ export const MENU_ITEMS = 20;
 export class Recent {
   enabled = true;
   items: RecentItem[] = [];
-  readonly #file: JsonFile;
+  readonly #store: JsonStore<Saved>;
   readonly #listeners: (() => void)[] = [];
   #recorded: number | null = null;
 
-  constructor(directory: string | null) {
-    const file = directory ? join(directory, "recent.json") : null;
-    this.#file = new JsonFile(file, "merge", () => timing.recentWrite, () => ({
-      version: 1,
-      enabled: this.enabled,
-      items: this.items,
-    }));
-    const saved = readJson(file) as { enabled?: unknown; items?: unknown } | null;
-    if (!saved || typeof saved !== "object") return;
+  constructor(plugin: Scope) {
+    this.#store = jsonStore<Saved>(plugin, "recent", { version: 1, enabled: true, items: [] }, timing.recentWrite);
+    const saved = this.#store.value as { enabled?: unknown; items?: unknown };
     if (typeof saved.enabled === "boolean") this.enabled = saved.enabled;
     if (Array.isArray(saved.items))
       this.items = saved.items
@@ -90,12 +84,8 @@ export class Recent {
     return gone.size;
   }
 
-  flush() {
-    this.#file.flush();
-  }
-
   #changed() {
-    this.#file.touch();
+    this.#store.save({ version: 1, enabled: this.enabled, items: this.items });
     for (const listener of this.#listeners) listener();
   }
 }

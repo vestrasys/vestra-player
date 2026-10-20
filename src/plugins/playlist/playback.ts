@@ -1,11 +1,28 @@
-import { realpath } from "node:fs/promises";
+import { realpath, stat } from "node:fs/promises";
 import type {
   Media,
   PlayerState,
   PluginError,
   Scope,
 } from "../../sdk/plugin/index.ts";
-import type { Binding, Queue } from "./queue.ts";
+import type { Binding, Queue, Row } from "./queue.ts";
+
+/**
+ * B26: the row a natural end will open, worked out while the current one plays:
+ * its realpath and whether it still exists, so the end only has to `open`.
+ */
+type Plan = {
+  rowId: string;
+  /** realpath; null when it could not be read (the advance then takes the usual path). */
+  key: string | null;
+  /** The file is gone: the advance skips the row. */
+  missing: boolean;
+  /** The file checks finished. */
+  ready: boolean;
+};
+
+/** `VESTRA_PLAYLIST_TIMING=1`: print each automatic advance's timings to stderr (GUI measurement). */
+const timing = !!process.env.VESTRA_PLAYLIST_TIMING;
 
 /**
  * Opening rows and following the media they became: row status, the failed
@@ -13,6 +30,11 @@ import type { Binding, Queue } from "./queue.ts";
  */
 export function playback(scope: Scope, queue: Queue, settled: () => void = () => {}) {
   const { player } = scope;
+  // B26 "快速推进到下一个" is on; `plan` is the row prepared for the next natural end.
+  let fast = false;
+  let plan: Plan | null = null;
+  // GUI measurement of the last automatic advance (see `timing`).
+  let advancing: { at: number; title: string; opened?: number; sourceId?: number } | null = null;
   // Sources this plugin opened (A13 only adopts sources other plugins opened).
   const own = new Set<number>();
   // An adopted row's natural end was handled for the current playthrough.
@@ -25,6 +47,14 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
   let failedSource: number | null = null;
 
   const observe = (state: PlayerState) => {
+    if (advancing?.sourceId === state.sourceId && state.phase !== "loading") {
+      const now = performance.now();
+      console.error(
+        `[playlist] advance to ${advancing.title}: end→open accepted ${(advancing.opened! - advancing.at).toFixed(1)} ms, ` +
+          `end→${state.phase} ${(now - advancing.at).toFixed(1)} ms`,
+      );
+      advancing = null;
+    }
     if (queue.failed && failedSource !== null && state.sourceId !== failedSource) {
       queue.failed = null;
       failedSource = null;
@@ -48,11 +78,60 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
   const advance = (binding: Binding, ended: PlayerState): Promise<void> | undefined => {
     if (busy() || queue.binding !== binding) return;
     if (!queue.row(queue.binding.rowId)) return;
+    if (timing) advancing = { at: performance.now(), title: "" };
     if (queue.repeat === "one") return replay(ended);
-    const next = queue.neighbor(1);
+    const prepared = planned();
+    plan = null;
+    if (prepared?.plan.missing) {
+      // B26: the next file is gone; say so and go on to the one after it.
+      queue.fail(prepared.row.rowId, "文件不存在");
+      failedSource = player.state.sourceId;
+      const after = queue.neighbor(1);
+      return after && after.rowId !== prepared.row.rowId ? play(after.rowId, ended) : undefined;
+    }
+    const next = prepared?.row ?? queue.neighbor(1);
     if (!next) queue.notice("列表已播完");
-    else return play(next.rowId, ended);
+    else return play(next.rowId, ended, { key: prepared?.plan.key ?? undefined });
   };
+
+  /** The anchor `queue.neighbor` steps from. */
+  const anchor = () => queue.failed ?? queue.binding?.rowId ?? queue.selected;
+  /** The row a natural end would open now (shuffle: the planned pick while it is still allowed). */
+  function upcoming(): Row | undefined {
+    if (!queue.binding || queue.repeat === "one") return undefined;
+    if (!queue.shuffle) return queue.neighbor(1);
+    const kept = plan && queue.candidates(anchor()).find((row) => row.rowId === plan!.rowId);
+    return kept || queue.neighbor(1);
+  }
+  /** The prepared plan when it is still what a natural end would open. */
+  function planned(): { row: Row; plan: Plan } | undefined {
+    if (!fast || !plan?.ready) return undefined;
+    const row = upcoming();
+    return row && row.rowId === plan.rowId ? { row, plan } : undefined;
+  }
+  /**
+   * B26: keep the plan in step with the list (called every update round and on
+   * each bind): reorder, removal, repeat or shuffle changes prepare the new next row.
+   */
+  function prepare() {
+    if (!fast) return void (plan = null);
+    const row = upcoming();
+    if (!row) return void (plan = null);
+    if (plan?.rowId === row.rowId) return;
+    const mine: Plan = { rowId: row.rowId, key: null, missing: false, ready: row.kind === "url" };
+    plan = mine;
+    if (row.kind !== "file") return;
+    void (async () => {
+      try {
+        const key = await realpath(row.source);
+        if ((await stat(key)).isFile()) mine.key = key;
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        mine.missing = code === "ENOENT" || code === "ENOTDIR";
+      }
+      mine.ready = true;
+    })();
+  }
 
   /** Repeat one: replay the same media; the row stays bound and its end listener stays armed. */
   async function replay(ended: PlayerState) {
@@ -64,8 +143,16 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
     }
   }
 
-  /** Open a row; `ifCurrent` makes it an automatic advance from that ended state; `quiet` keeps the current notice. */
-  async function play(rowId: string, ifCurrent?: PlayerState, options: { quiet?: boolean } = {}): Promise<void> {
+  /**
+   * Open a row; `ifCurrent` makes it an automatic advance from that ended state;
+   * `quiet` keeps the current notice; `key` is a realpath read ahead (B26): the
+   * open is then sent at once, with no file access first.
+   */
+  async function play(
+    rowId: string,
+    ifCurrent?: PlayerState,
+    options: { quiet?: boolean; key?: string } = {},
+  ): Promise<void> {
     const row = queue.row(rowId);
     if (busy() || !row) return;
     const request = { rowId, epoch: queue.begin(rowId) };
@@ -75,7 +162,7 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
       // Only local paths take part in filesystem identity; a URL row keeps the entered URL.
       if (row.kind === "file") {
         try {
-          const key = await realpath(row.source);
+          const key = options.key ?? (await realpath(row.source));
           if (!valid()) return;
           const duplicate = queue.rows.find(
             (other) => other.rowId !== rowId && other.kind === "file" && other.key === key,
@@ -114,6 +201,11 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
       }
       if (opening !== request) return;
       opening = null;
+      if (advancing && ifCurrent) {
+        advancing.opened = performance.now();
+        advancing.title = row.title;
+        advancing.sourceId = player.state.sourceId;
+      }
       if (request.epoch !== queue.epoch || !queue.row(rowId)) {
         queue.message = "当前媒体已移出列表";
         return;
@@ -126,6 +218,7 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
       if (!options.quiet) queue.say(row.title);
       if (media.current) loading = { rowId, sourceId: player.state.sourceId };
       observe(player.state);
+      prepare();
       // It may already have ended before the reply arrived.
       const now = player.state;
       if (media.current && now.phase === "ended" && now.endReason === "natural") return advance(binding, now);
@@ -144,6 +237,7 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
     queue.bind({ rowId, media: null, sourceId: state.sourceId });
     queue.played(rowId);
     observe(state);
+    prepare();
   }
 
   /** An open is unsettled: no second open until it is. */
@@ -154,6 +248,16 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
     play,
     busy,
     adopt,
+    prepare,
+    /** B26: turn "快速推进到下一个" on or off (off drops the plan). */
+    setFast(on: boolean) {
+      fast = on;
+      prepare();
+    },
+    /** B26 (tests): the row prepared for the next natural end, once its checks finished. */
+    get planned() {
+      return planned()?.row.rowId ?? null;
+    },
     /** Whether this plugin opened the source `sourceId`. */
     owns: (sourceId: number) => own.has(sourceId),
     /** The row whose open is unsettled. */

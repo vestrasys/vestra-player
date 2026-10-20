@@ -1,6 +1,5 @@
 import { basename, dirname } from "node:path";
-import type { PlayerState } from "../../sdk/plugin/index.ts";
-import { system } from "./system.ts";
+import type { Clipboard, PlayerState } from "../../sdk/plugin/index.ts";
 
 export type CopyKind = "name" | "folder" | "path";
 
@@ -18,11 +17,16 @@ export function shorten(text: string) {
   return chars.length > 60 ? `${chars.slice(0, 20).join("")}…${chars.slice(-37).join("")}` : text;
 }
 
-export async function copyToClipboard(state: PlayerState, kind: CopyKind, osd: (text: string) => void) {
+export async function copyToClipboard(
+  clipboard: Clipboard,
+  state: PlayerState,
+  kind: CopyKind,
+  osd: (text: string) => void,
+) {
   const target = copyTarget(state, kind);
   if ("reason" in target) return;
   try {
-    await system.writeClipboard(target.text);
+    await clipboard.writeText(target.text);
   } catch (error) {
     osd(`复制失败：${error instanceof Error ? error.message : String(error)}`);
     return;

@@ -51,15 +51,22 @@ test("menu per the allocation table; windows bind exactly their Slint callbacks"
     .sort((a, b) => a[1] - b[1]);
   assert.deepEqual(declared, [
     ["打开 > 打开字幕…", 113, "open", "Alt+O"],
+    ["播放 > 跳转 > 上一句对白", 217, "jump-subtitle", "Home"],
+    ["播放 > 跳转 > 下一句对白", 217, "jump-subtitle", "End"],
+    ["播放 > 跳转 > 当前字幕起点", 217, "jump-subtitle", "Ctrl+Home"],
     ["字幕 > 显示字幕", 301, "domain", "Alt+H"],
     ["字幕 > 选择字幕轨 > 不显示", 302, "subtitle-track", ""],
     ["字幕 > 选择字幕轨 > English · en", 303, "subtitle-track", ""],
     ["字幕 > 选择字幕轨 > 依次切换", 311, "subtitle-cycle", "Alt+L"],
+    ["字幕 > 字幕样式 > 粗体", 324, "style-font", "Alt+B"],
     ["字幕 > 字幕样式 > 字号 +", 325, "style-font", "Alt+PageUp"],
     ["字幕 > 字幕样式 > 字号 −", 326, "style-font", "Alt+PageDown"],
     ["字幕 > 字幕样式 > 上移", 330, "style-move", "Alt+ArrowUp"],
     ["字幕 > 字幕样式 > 下移", 331, "style-move", "Alt+ArrowDown"],
     ["字幕 > 字幕样式 > 复位位置", 334, "style-move", "Alt+Home"],
+    ["字幕 > 字幕样式 > 阴影", 335, "style-box", ""],
+    ["字幕 > 字幕样式 > 字幕边框不透明", 336, "style-box", ""],
+    ["字幕 > 开启 ASS/SSA 原样式", 337, "subtitle-render", ""],
     ["字幕 > 同步 > 超前 0.5 秒", 339, "subtitle-sync", "."],
     ["字幕 > 同步 > 滞后 0.5 秒", 340, "subtitle-sync", ","],
     ["字幕 > 同步 > 复位", 341, "subtitle-sync", "/"],
@@ -128,7 +135,10 @@ test("a slider burst is merged into one style write with the latest values", asy
   await host.settle(170);
   const styles = host.sent("subtitles.style");
   assert.equal(styles.length, 1);
-  assert.deepEqual(styles[0]!.style, { fontId: "sans", fontSize: 38, color: "white", outline: 2, marginPercent: 6, offsetMs: 1000 });
+  assert.deepEqual(styles[0]!.style, {
+    fontId: "sans", fontSize: 38, color: "white", outline: 2, marginPercent: 6, offsetMs: 1000,
+    bold: false, shadow: 0, box: null, assOverride: "keep",
+  });
   assert.equal(window.props["status-text"], "字幕样式已更新");
   assert.equal(host.subtitles.presentation.effective?.style.offsetMs, 1000);
   await stop();
@@ -218,8 +228,9 @@ test("real file bytes are uploaded; a lost commit reply is resolved by the SDK a
     assert.deepEqual(commits[0]!.expected, { generation: 1, revision: 1 });
     assert.equal(host.sent("subtitles.operation")[0]!.operationId, commits[0]!.operationId);
     assert.equal(host.sent("subtitles.upload.discard").length, 0);
-    assert.equal(window.props["status-text"], "已载入字幕 actual.srt");
-    assert.equal(host.osd.at(-1), "已载入字幕 actual.srt", "the menu entry reports on screen");
+    assert.equal(window.props["status-text"], "打开字幕：actual.srt");
+    assert.equal(host.osd.at(-1), "打开字幕：actual.srt", "the menu entry reports on screen");
+    assert.deepEqual(host.subtitleLoads.map((l) => [l.format, l.title, l.select]), [["srt", "actual.srt", "primary"]]);
     assert.equal(window.props["selected-track"], 2);
     assert.equal(window.props["can-remove"], true);
 
@@ -234,39 +245,40 @@ test("real file bytes are uploaded; a lost commit reply is resolved by the SDK a
   }
 });
 
-test("non-SRT and invalid UTF-8 files are refused before any upload", async () => {
-  const bad = await srtFile(Buffer.from([0x31, 0x0a, 0xff, 0xfe]));
+test("unreadable, unknown, graphic and oversized files are refused before any upload", async () => {
+  const unknown = await srtFile(Buffer.from([0x31, 0x0a, 0xff, 0xfe]));
+  const sup = await srtFile(Buffer.from("PG\u0000\u0000\u0000\u0000"));
+  const large = await srtFile(Buffer.from(`1\n00:00:00,000 --> 00:00:01,000\n${"A".repeat(2 * 1024 * 1024)}\n`));
   const { host, window, stop } = await open();
   try {
-    host.dialogAnswers.push(["/tmp/movie.ass"]);
-    window.emit("load-file");
-    await host.settle();
-    assert.equal(window.props["status-text"], "请选择 .srt 字幕文件。");
-    host.dialogAnswers.push([bad.path]);
-    window.emit("load-file");
-    await host.settle();
-    assert.equal(window.props["status-text"], "字幕文件不是 UTF-8 编码。");
+    for (const [path, text] of [
+      ["/tmp/missing.ass", "无法读取字幕文件。"],
+      [unknown.path, "无法识别的字幕格式"],
+      [sup.path, "暂不支持图形字幕文件"],
+      [large.path, "字幕文件超过 2 MiB"],
+    ] as const) {
+      host.dialogAnswers.push([path]);
+      window.emit("load-file");
+      for (let i = 0; i < 100 && window.props["status-text"] !== text; i++) await host.settle(20);
+      assert.equal(window.props["status-text"], text);
+    }
     assert.equal(host.sent("subtitles.upload.begin").length, 0);
   } finally {
     await stop();
-    await bad.cleanup();
+    for (const file of [unknown, sup, large]) await file.cleanup();
   }
 });
 
-test("a host refusal of the upload (e.g. over its 2 MiB limit) is shown as one Chinese sentence", async () => {
-  const file = await srtFile(Buffer.alloc(2 * 1024 * 1024 + 1, 0x41));
+test("a host refusal of the upload is shown as one Chinese sentence", async () => {
+  const file = await srtFile("1\n00:00:00,000 --> 00:00:01,000\nHello\n");
   const { host, window, stop } = await open();
-  host.handle("subtitles.upload.begin", (p) => {
-    if (Number(p.expectedBytes) > 2 * 1024 * 1024)
-      throw new HostError("invalid", "invalid upload ID, byte count or chunk bounds");
-    return {};
+  host.handle("subtitles.upload.begin", () => {
+    throw new HostError("invalid", "invalid upload ID, byte count or chunk bounds");
   });
   try {
     host.dialogAnswers.push([file.path]);
     window.emit("load-file");
-    // Reading 2 MiB is not a host request, so settle() alone can return before the upload begins.
-    const pending = () => ["", "请选择字幕文件…"].includes(String(window.props["status-text"]));
-    for (let i = 0; i < 100 && pending(); i++) await host.settle(20);
+    await host.settle();
     assert.equal(window.props["status-text"], "播放器拒绝了该字幕（文件过大或内容无效）。");
     assert.equal(host.sent("subtitles.commit").length, 0);
   } finally {
@@ -400,7 +412,8 @@ test("sync on a track without style support explains why on screen and writes no
 });
 
 test("cancelling during the upload stops it, discards and never commits", async () => {
-  const file = await srtFile(Buffer.alloc(100 * 1024, 0x41)); // four 32 KiB chunks
+  // An SRT of about 100 KiB: four 32 KiB chunks.
+  const file = await srtFile(`1\n00:00:00,000 --> 00:00:01,000\n${"A".repeat(100 * 1024)}\n`);
   const { host, window, stop } = await open();
   host.handle("subtitles.upload.append", (params) => {
     host.reset("subtitles.upload.append");
@@ -530,7 +543,7 @@ test("D05: typed sync values apply in whole ms; bad input reverts with a reason"
   assert.equal(sync.props["value-text"], "-300", "the field goes back to the value in effect");
   sync.emit("apply", "99999999");
   await host.settle();
-  assert.equal(sync.props["status-text"], "同步值须在 −10000 至 10000 毫秒之间");
+  assert.equal(sync.props["status-text"], "同步值须在 −600000 至 600000 毫秒之间");
   assert.equal(host.subtitles.presentation.effective?.style.offsetMs, -300);
   sync.emit("nudge", "-300", 1);
   await host.settle(170);
@@ -576,6 +589,17 @@ test("D05: the 同步单位 changes the step and the menu titles, and is saved",
   }
 });
 
+/** A storage file once its debounced write landed. */
+async function savedJson(path: string) {
+  for (let i = 0; i < 50; i++) {
+    try {
+      return JSON.parse(await readFile(path, "utf8"));
+    } catch {
+      await pause(20);
+    }
+  }
+  throw new Error(`${path} was not written`);
+}
 /** Load `path` through 打开字幕… and return the new track's id. */
 async function loadFile(host: TestHost, path: string) {
   host.dialogAnswers.push([path]);
@@ -642,7 +666,7 @@ test("A09: with 自动重载 on, rewriting a loaded file reloads it after the ch
     settings.emit("change-auto-reload", true);
     await host.settle();
     assert.equal(settings.props["auto-reload"], true);
-    assert.equal(JSON.parse(await readFile(join(data, "settings.json"), "utf8")).autoReload, true);
+    assert.equal((await savedJson(join(data, "settings.json"))).autoReload, true);
     await loadFile(host, file.path);
     await pause(200); // let the folder watch start before the edit
     await writeFile(file.path, "1\n00:00:00,000 --> 00:00:01,000\nChanged\n");

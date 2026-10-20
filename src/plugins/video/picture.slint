@@ -1,15 +1,32 @@
 import { Theme } from "@vestra/theme.slint";
 import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
 
-// 14px box + 11px text, sized like PotPlayer's 51×13 panel switches.
+// Widths (window 301, content 285 after the 8px side padding; totals include the 6px spacing):
+//   色彩 / 效果 rows   label or check 65 + slider 154 + 默认 41            = 272
+//   降噪 row           check 65 + mode 60 + slider 88 + 默认 41            = 272
+//   翻转 row           label 65 + 2 × toggle 51 (3 apart)                  = 176
+//   旋转 row           label 65 + 4 × toggle 51 (3 apart)                  = 284
+//   裁剪/拉伸 row      label 65 + mode 72 + ratio 76                        = 225
+//   宽高比 row         label 65 + choice 154 + … 21                         = 252
+//   缩放 row           label 65 + slider 154 + 默认 41                      = 272
+//   反交错 row         label 65 + mode 90 + output 104                      = 271
+//   HDR row            label 65 + choice 90 + slider 100                    = 267
+//   着色器 row         label 65 + check 50 + count 70 + 列表… 50            = 253
+//   presets row        4 × 69 (3 apart)                                     = 285
+//   tab strip          4 × 74 (no padding)                                  = 296 of 301
+// Height: tabs 31 + padding 10 + pages 168 (7 × 24) + 6 + status 22 + padding 8 = 245.
+
+// 12px box + 11px text, sized like PotPlayer's 51×13 panel switches.
 component Check {
     in-out property <bool> checked;
     in property <string> text;
+    in property <bool> enabled: true;
     callback toggled(bool);
     min-height: Theme.checkbox-row-height;
     accessible-role: checkbox;
     accessible-checked: root.checked;
     accessible-label: root.text;
+    accessible-enabled: root.enabled;
     HorizontalLayout {
         spacing: 4px;
         alignment: start;
@@ -19,18 +36,24 @@ component Check {
                 width: 12px;
                 height: 12px;
                 background: Theme.bg-bar;
-                border-color: touch.has-hover ? Theme.text-list : Theme.text-dim;
+                border-color: !root.enabled ? Theme.icon-disabled : touch.has-hover ? Theme.text-list : Theme.text-dim;
                 border-width: 1px;
                 if root.checked: Rectangle {
                     width: 6px;
                     height: 6px;
-                    background: Theme.playing;
+                    background: root.enabled ? Theme.playing : Theme.icon-disabled;
                 }
             }
         }
-        Text { text: root.text; color: Theme.text; font-size: Theme.font-body; vertical-alignment: center; }
+        Text {
+            text: root.text;
+            color: root.enabled ? Theme.text : Theme.text-dim;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+        }
     }
     touch := TouchArea {
+        enabled: root.enabled;
         clicked => {
             root.checked = !root.checked;
             root.toggled(root.checked);
@@ -38,25 +61,151 @@ component Check {
     }
 }
 
-// PotPlayer control-panel row: label 65 (right, 11px) + panel slider 154 + 默认 41×18, 24px pitch.
+// Right-aligned 65px row label.
+component Label inherits Text {
+    width: 65px;
+    color: Theme.text;
+    font-size: Theme.font-body;
+    horizontal-alignment: right;
+    vertical-alignment: center;
+}
+
+// 51×22 switch button; `checked` is the pressed (on) state.
+component Toggle {
+    in property <string> text;
+    in property <bool> checked;
+    in property <bool> enabled: true;
+    callback clicked();
+    width: 51px;
+    height: 22px;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-checkable: true;
+    accessible-checked: root.checked;
+    accessible-enabled: root.enabled;
+    Rectangle {
+        border-radius: Theme.radius-control;
+        border-width: root.checked ? 1px : 0px;
+        border-color: Theme.playing;
+        background: !root.enabled ? Theme.button-disabled
+            : root.checked ? Theme.selected-bg
+            : touch.pressed ? Theme.button-press
+            : touch.has-hover ? Theme.button-hover : Theme.button-bg;
+    }
+    Text {
+        text: root.text;
+        color: !root.enabled ? Theme.text-dim : root.checked ? Theme.text : Theme.text-list;
+        font-size: Theme.font-body;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+// One popup row of a Choice: radio dot for the current item, menu-style hover.
+component ChoiceItem {
+    in property <string> text;
+    in property <bool> selected;
+    callback picked();
+    height: 20px;
+    Rectangle { background: touch.has-hover ? Theme.press-bg : transparent; }
+    HorizontalLayout {
+        padding-left: 5px;
+        spacing: 4px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 6px;
+                height: 6px;
+                border-radius: 3px;
+                background: root.selected ? Theme.playing : transparent;
+            }
+        }
+        Text {
+            text: root.text;
+            color: touch.has-hover ? Theme.accent : Theme.text-list;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+    touch := TouchArea { clicked => { root.picked(); } }
+}
+
+// Compact 21px drop-down with an 11px label; the list opens below it (short lists only,
+// so it stays inside the window).
+component Choice {
+    in property <[string]> model;
+    in-out property <int> current-index;
+    in property <bool> enabled: true;
+    callback selected(int);
+    height: 21px;
+    accessible-role: combobox;
+    accessible-enabled: root.enabled;
+    accessible-value: root.current-index >= 0 && root.current-index < root.model.length ? root.model[root.current-index] : "";
+    Rectangle {
+        border-radius: Theme.radius-control;
+        background: !root.enabled ? Theme.button-disabled
+            : touch.pressed ? Theme.button-press
+            : touch.has-hover ? Theme.button-hover : Theme.button-bg;
+    }
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 5px;
+        spacing: 2px;
+        Text {
+            horizontal-stretch: 1;
+            text: root.current-index >= 0 && root.current-index < root.model.length ? root.model[root.current-index] : "";
+            color: root.enabled ? Theme.text-list : Theme.text-dim;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+        Text { text: "▾"; color: root.enabled ? Theme.text-dim : Theme.icon-disabled; font-size: Theme.font-body; vertical-alignment: center; }
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { list.show(); }
+    }
+    list := PopupWindow {
+        x: 0;
+        y: root.height;
+        width: root.width;
+        Rectangle {
+            background: Theme.bg-list;
+            border-color: Theme.line;
+            border-width: 1px;
+            VerticalLayout {
+                padding: 1px;
+                for name[index] in root.model: ChoiceItem {
+                    text: name;
+                    selected: index == root.current-index;
+                    picked => {
+                        root.current-index = index;
+                        root.selected(index);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Colour row: label 65 (right, 11px) + panel slider 154 + 默认 41×18, 24px pitch.
 component ColorRow {
     in property <string> label;
     in-out property <float> value;
     in property <float> minimum: -100;
     in property <float> maximum: 100;
     callback edited(float);
+    callback committed(float);
     callback reset();
     height: 24px;
     HorizontalLayout {
         spacing: 6px;
-        Text {
-            width: 65px;
-            text: root.label;
-            color: Theme.text;
-            font-size: Theme.font-body;
-            horizontal-alignment: right;
-            vertical-alignment: center;
-        }
+        Label { text: root.label; }
         Slider {
             width: 154px;
             panel: true;
@@ -64,6 +213,7 @@ component ColorRow {
             maximum: root.maximum;
             value <=> root.value;
             changed(v) => { root.edited(v); }
+            released(v) => { root.committed(v); }
         }
         VerticalLayout {
             alignment: center;
@@ -72,89 +222,469 @@ component ColorRow {
     }
 }
 
-export component PictureWindow inherits Window {
-    title: "画面调节";
-    width: 301px;
-    background: Theme.bg-panel;
-    in-out property <float> brightness: 0;
-    in-out property <float> contrast: 0;
-    in-out property <float> saturation: 0;
-    in-out property <float> gamma: 0;
-    in-out property <float> blur-strength: 3;
-    in-out property <bool> blur-enabled: false;
-    in-out property <bool> effect-enabled: true;
-    in property <bool> failed;
-    in property <string> status;
-    in property <string> detail;
-    callback adjust(string, float);
-    callback reset-field(string);
-    callback preset(string);
-    callback toggle-effect(bool);
-    callback toggle-blur(bool);
-    callback retry();
-    VerticalLayout {
-        padding: 8px;
-        padding-top: 10px;
-        spacing: 0px;
-        ColorRow { label: "亮度"; value <=> root.brightness; edited(v) => { root.adjust("brightness", v); } reset => { root.reset-field("brightness"); } }
-        ColorRow { label: "对比度"; value <=> root.contrast; edited(v) => { root.adjust("contrast", v); } reset => { root.reset-field("contrast"); } }
-        ColorRow { label: "饱和度"; value <=> root.saturation; edited(v) => { root.adjust("saturation", v); } reset => { root.reset-field("saturation"); } }
-        ColorRow { label: "Gamma"; value <=> root.gamma; edited(v) => { root.adjust("gamma", v); } reset => { root.reset-field("gamma"); } }
+// Effect row: switch 65 + strength slider 154 (greyed while off) + 默认 41. `tip` explains on hover.
+component EffectRow {
+    in property <string> label;
+    in property <string> tip;
+    in-out property <bool> checked;
+    in-out property <float> value;
+    in property <float> maximum: 100;
+    callback toggled(bool);
+    callback edited(float);
+    callback committed(float);
+    callback reset();
+    height: 24px;
+    ToolTipArea {
+        width: 100%;
+        height: 100%;
+        text: root.tip;
         HorizontalLayout {
-            height: 24px;
             spacing: 6px;
+            alignment: start;
             Check {
                 width: 65px;
-                text: "高斯模糊";
-                checked <=> root.blur-enabled;
-                toggled(on) => { root.toggle-blur(on); }
+                text: root.label;
+                checked <=> root.checked;
+                toggled(on) => { root.toggled(on); }
             }
             Slider {
                 width: 154px;
                 panel: true;
                 minimum: 0;
-                maximum: 10;
-                enabled: root.blur-enabled;
-                value <=> root.blur-strength;
-                changed(v) => { root.adjust("blurStrength", v); }
+                maximum: root.maximum;
+                enabled: root.checked;
+                value <=> root.value;
+                changed(v) => { root.edited(v); }
+                released(v) => { root.committed(v); }
             }
             VerticalLayout {
                 alignment: center;
-                Button { text: "默认"; small: true; width: 41px; clicked => { root.reset-field("blurStrength"); } }
+                Button { text: "默认"; small: true; width: 41px; clicked => { root.reset(); } }
             }
         }
-        Rectangle { height: 8px; }
-        HorizontalLayout {
-            spacing: 3px;
-            alignment: center;
-            Button { text: "原始"; width: 69px; clicked => { root.preset("original"); } }
-            Button { text: "鲜艳"; width: 69px; clicked => { root.preset("vivid"); } }
-            Button { text: "电影"; width: 69px; clicked => { root.preset("cinema"); } }
-            Button { text: "柔和"; width: 69px; clicked => { root.preset("soft"); } }
+    }
+}
+
+// One 74×31 page tab of the strip (same strip as the audio workbench).
+component Tab {
+    in property <string> text;
+    in property <bool> selected;
+    callback picked();
+    width: 74px;
+    height: 31px;
+    accessible-role: tab;
+    accessible-label: root.text;
+    Rectangle { background: root.selected ? Theme.bg-panel : touch.has-hover ? Theme.hover-bg : transparent; }
+    Text {
+        text: root.text;
+        color: root.selected ? Theme.text : Theme.text-dim;
+        font-size: Theme.font-tab;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea { clicked => { root.picked(); } }
+}
+
+export component PictureWindow inherits Window {
+    title: "画面调节";
+    width: 301px;
+    height: 245px;
+    background: Theme.bg-panel;
+    // 色彩
+    in-out property <float> brightness: 0;
+    in-out property <float> contrast: 0;
+    in-out property <float> saturation: 0;
+    in-out property <float> hue: 0;
+    in-out property <float> gamma: 0;
+    // 效果
+    in-out property <bool> blur-enabled: false;
+    in-out property <float> blur-strength: 3;
+    in-out property <bool> sharpen-enabled;
+    in-out property <float> sharpen-strength: 50;
+    in-out property <bool> edge-enabled;
+    in-out property <float> edge-strength: 50;
+    in-out property <int> denoise-index: 0;
+    in-out property <bool> denoise-enabled;
+    in-out property <float> denoise-strength: 40;
+    in-out property <bool> deblock-enabled;
+    in-out property <float> deblock-strength: 25;
+    in-out property <bool> deband-enabled;
+    in-out property <float> deband-strength: 40;
+    // 画面
+    in-out property <bool> flip-v;
+    in-out property <bool> flip-h;
+    in-out property <int> rotate-index: 0;
+    in-out property <int> reframe-index: 0;
+    in-out property <int> ratio-index: 1;
+    // 高级
+    in-out property <int> deinterlace-index: 0;
+    in-out property <int> output-index: 0;
+    // shared
+    in-out property <int> tab-index: 0;
+    in-out property <bool> effect-enabled: true;
+    in property <bool> failed;
+    in property <string> status;
+    in property <string> detail;
+    callback adjust(string, float);
+    callback commit(string, float);
+    callback reset-field(string);
+    callback preset(string);
+    callback toggle-effect(bool);
+    callback toggle(string, bool);
+    callback choose(string, int);
+    callback tab-changed(int);
+    callback retry();
+    private property <[string]> tab-names: ["色彩", "效果", "画面", "高级"];
+    private property <string> gpu: "需要 GPU 渲染，当前版本不支持";
+    private property <string> view: "需要核心的显示层接口，后续版本提供";
+    VerticalLayout {
+        // Page tabs, 31px; the last picked page is remembered by the plugin.
+        Rectangle {
+            height: 31px;
+            background: Theme.bg-bar;
+            HorizontalLayout {
+                for name[index] in root.tab-names: Tab {
+                    text: name;
+                    selected: index == root.tab-index;
+                    picked => {
+                        root.tab-index = index;
+                        root.tab-changed(index);
+                    }
+                }
+                Rectangle { horizontal-stretch: 1; }
+            }
         }
-        Rectangle { height: 6px; }
-        HorizontalLayout {
-            height: 22px;
+        VerticalLayout {
+            padding: 8px;
+            padding-top: 10px;
             spacing: 6px;
-            Check {
-                text: "启用画面效果";
-                checked <=> root.effect-enabled;
-                toggled(on) => { root.toggle-effect(on); }
-            }
-            ToolTipArea {
-                text: root.detail;
-                Text {
-                    text: root.status;
-                    color: Theme.accent;
-                    font-size: Theme.font-body;
-                    horizontal-alignment: right;
-                    vertical-alignment: center;
-                    overflow: elide;
+            Rectangle {
+                height: 168px;
+                // 色彩
+                VerticalLayout {
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+                    visible: root.tab-index == 0;
+                    ColorRow { label: "亮度"; value <=> root.brightness; edited(v) => { root.adjust("brightness", v); } committed(v) => { root.commit("brightness", v); } reset => { root.reset-field("brightness"); } }
+                    ColorRow { label: "对比度"; value <=> root.contrast; edited(v) => { root.adjust("contrast", v); } committed(v) => { root.commit("contrast", v); } reset => { root.reset-field("contrast"); } }
+                    ColorRow { label: "饱和度"; value <=> root.saturation; edited(v) => { root.adjust("saturation", v); } committed(v) => { root.commit("saturation", v); } reset => { root.reset-field("saturation"); } }
+                    ColorRow { label: "色调"; value <=> root.hue; edited(v) => { root.adjust("hue", v); } committed(v) => { root.commit("hue", v); } reset => { root.reset-field("hue"); } }
+                    ColorRow { label: "Gamma"; value <=> root.gamma; edited(v) => { root.adjust("gamma", v); } committed(v) => { root.commit("gamma", v); } reset => { root.reset-field("gamma"); } }
+                    Rectangle { height: 8px; }
+                    HorizontalLayout {
+                        spacing: 3px;
+                        alignment: center;
+                        Button { text: "原始"; width: 69px; clicked => { root.preset("original"); } }
+                        Button { text: "鲜艳"; width: 69px; clicked => { root.preset("vivid"); } }
+                        Button { text: "电影"; width: 69px; clicked => { root.preset("cinema"); } }
+                        Button { text: "柔和"; width: 69px; clicked => { root.preset("soft"); } }
+                    }
+                    Rectangle { }
+                }
+                // 效果
+                VerticalLayout {
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+                    visible: root.tab-index == 1;
+                    EffectRow {
+                        label: "高斯模糊";
+                        maximum: 10;
+                        checked <=> root.blur-enabled;
+                        value <=> root.blur-strength;
+                        toggled(on) => { root.toggle("blur", on); }
+                        edited(v) => { root.adjust("blurStrength", v); }
+                        committed(v) => { root.commit("blurStrength", v); }
+                        reset => { root.reset-field("blurStrength"); }
+                    }
+                    EffectRow {
+                        label: "锐化";
+                        checked <=> root.sharpen-enabled;
+                        value <=> root.sharpen-strength;
+                        toggled(on) => { root.toggle("sharpen", on); }
+                        edited(v) => { root.adjust("sharpen", v); }
+                        committed(v) => { root.commit("sharpen", v); }
+                        reset => { root.reset-field("sharpen"); }
+                    }
+                    EffectRow {
+                        label: "边缘锐化";
+                        tip: "大范围锐化，主要增强轮廓";
+                        checked <=> root.edge-enabled;
+                        value <=> root.edge-strength;
+                        toggled(on) => { root.toggle("edge", on); }
+                        edited(v) => { root.adjust("edge", v); }
+                        committed(v) => { root.commit("edge", v); }
+                        reset => { root.reset-field("edge"); }
+                    }
+                    HorizontalLayout {
+                        height: 24px;
+                        spacing: 6px;
+                        alignment: start;
+                        Check {
+                            width: 65px;
+                            text: "降噪";
+                            checked <=> root.denoise-enabled;
+                            toggled(on) => { root.toggle("denoise", on); }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Choice {
+                                width: 60px;
+                                model: ["3D", "渐进", "瞬态"];
+                                current-index <=> root.denoise-index;
+                                selected(i) => { root.choose("denoiseMode", i); }
+                            }
+                        }
+                        Slider {
+                            width: 88px;
+                            panel: true;
+                            minimum: 0;
+                            maximum: 100;
+                            enabled: root.denoise-enabled;
+                            value <=> root.denoise-strength;
+                            changed(v) => { root.adjust("denoise", v); }
+                            released(v) => { root.commit("denoise", v); }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Button { text: "默认"; small: true; width: 41px; clicked => { root.reset-field("denoise"); } }
+                        }
+                    }
+                    EffectRow {
+                        label: "去块";
+                        tip: "小于 50 为弱、50 及以上为强；对低码率 MPEG-2/MPEG-4 效果最明显";
+                        checked <=> root.deblock-enabled;
+                        value <=> root.deblock-strength;
+                        toggled(on) => { root.toggle("deblock", on); }
+                        edited(v) => { root.adjust("deblock", v); }
+                        committed(v) => { root.commit("deblock", v); }
+                        reset => { root.reset-field("deblock"); }
+                    }
+                    EffectRow {
+                        label: "消色带";
+                        checked <=> root.deband-enabled;
+                        value <=> root.deband-strength;
+                        toggled(on) => { root.toggle("deband", on); }
+                        edited(v) => { root.adjust("deband", v); }
+                        committed(v) => { root.commit("deband", v); }
+                        reset => { root.reset-field("deband"); }
+                    }
+                    HorizontalLayout {
+                        height: 24px;
+                        spacing: 6px;
+                        alignment: start;
+                        ToolTipArea {
+                            width: 65px;
+                            text: "倍帧需要核心的 frameBlend 节点，后续版本提供";
+                            Check { width: 100%; height: 100%; text: "倍帧"; enabled: false; }
+                        }
+                        ToolTipArea {
+                            width: 100px;
+                            text: root.gpu;
+                            Check { width: 100%; height: 100%; text: "运动补偿"; enabled: false; }
+                        }
+                    }
+                }
+                // 画面
+                VerticalLayout {
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+                    visible: root.tab-index == 2;
+                    HorizontalLayout {
+                        height: 24px;
+                        spacing: 6px;
+                        alignment: start;
+                        Label { text: "翻转"; }
+                        HorizontalLayout {
+                            spacing: 3px;
+                            padding-top: 1px;
+                            padding-bottom: 1px;
+                            Toggle {
+                                text: "上下";
+                                checked: root.flip-v;
+                                clicked => {
+                                    root.flip-v = !root.flip-v;
+                                    root.toggle("flipV", root.flip-v);
+                                }
+                            }
+                            Toggle {
+                                text: "左右";
+                                checked: root.flip-h;
+                                clicked => {
+                                    root.flip-h = !root.flip-h;
+                                    root.toggle("flipH", root.flip-h);
+                                }
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        height: 24px;
+                        spacing: 6px;
+                        alignment: start;
+                        Label { text: "旋转"; }
+                        HorizontalLayout {
+                            spacing: 3px;
+                            padding-top: 1px;
+                            padding-bottom: 1px;
+                            for name[index] in ["0°", "90°", "180°", "270°"]: Toggle {
+                                text: name;
+                                checked: index == root.rotate-index;
+                                clicked => {
+                                    root.rotate-index = index;
+                                    root.choose("rotate", index);
+                                }
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        height: 24px;
+                        spacing: 6px;
+                        alignment: start;
+                        Label { text: "裁剪/拉伸"; }
+                        VerticalLayout {
+                            alignment: center;
+                            Choice {
+                                width: 72px;
+                                model: ["不使用", "拉伸", "裁剪"];
+                                current-index <=> root.reframe-index;
+                                selected(i) => { root.choose("reframe", i); }
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Choice {
+                                width: 76px;
+                                model: ["4:3", "16:9", "16:10", "1.85:1", "2.35:1"];
+                                current-index <=> root.ratio-index;
+                                selected(i) => { root.choose("ratio", i); }
+                            }
+                        }
+                    }
+                    ToolTipArea {
+                        height: 24px;
+                        text: root.view;
+                        HorizontalLayout {
+                            spacing: 6px;
+                            alignment: start;
+                            Label { text: "宽高比"; color: Theme.text-dim; }
+                            VerticalLayout {
+                                alignment: center;
+                                Choice { width: 154px; enabled: false; model: ["默认（按来源）"]; current-index: 0; }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                Toggle { text: "…"; width: 21px; height: 21px; enabled: false; }
+                            }
+                        }
+                    }
+                    ToolTipArea {
+                        height: 24px;
+                        text: root.view;
+                        HorizontalLayout {
+                            spacing: 6px;
+                            alignment: start;
+                            Label { text: "显示"; color: Theme.text-dim; }
+                            VerticalLayout {
+                                alignment: center;
+                                Choice { width: 154px; enabled: false; model: ["保持宽高比"]; current-index: 0; }
+                            }
+                        }
+                    }
+                    ToolTipArea {
+                        height: 24px;
+                        text: root.view;
+                        HorizontalLayout {
+                            spacing: 6px;
+                            alignment: start;
+                            Label { text: "缩放"; color: Theme.text-dim; }
+                            Slider { width: 154px; panel: true; enabled: false; minimum: 0; maximum: 1; value: 0.5; }
+                            VerticalLayout {
+                                alignment: center;
+                                Button { text: "默认"; small: true; width: 41px; enabled: false; }
+                            }
+                        }
+                    }
+                    Rectangle { }
+                }
+                // 高级
+                VerticalLayout {
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+                    visible: root.tab-index == 3;
+                    HorizontalLayout {
+                        height: 24px;
+                        spacing: 6px;
+                        alignment: start;
+                        Label { text: "反交错"; }
+                        VerticalLayout {
+                            alignment: center;
+                            Choice {
+                                width: 90px;
+                                model: ["自动", "总是使用", "不使用"];
+                                current-index <=> root.deinterlace-index;
+                                selected(i) => { root.choose("deinterlace", i); }
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Choice {
+                                width: 104px;
+                                model: ["按帧", "按场（倍帧率）"];
+                                current-index <=> root.output-index;
+                                selected(i) => { root.choose("output", i); }
+                            }
+                        }
+                    }
+                    ToolTipArea {
+                        height: 24px;
+                        text: root.gpu;
+                        HorizontalLayout {
+                            spacing: 6px;
+                            alignment: start;
+                            Label { text: "HDR"; color: Theme.text-dim; }
+                            VerticalLayout {
+                                alignment: center;
+                                Choice { width: 90px; enabled: false; model: ["自动"]; current-index: 0; }
+                            }
+                            Slider { width: 100px; panel: true; enabled: false; minimum: 100; maximum: 400; value: 203; }
+                        }
+                    }
+                    ToolTipArea {
+                        height: 24px;
+                        text: root.gpu;
+                        HorizontalLayout {
+                            spacing: 6px;
+                            alignment: start;
+                            Label { text: "着色器"; color: Theme.text-dim; }
+                            Check { width: 50px; text: "启用"; enabled: false; }
+                            Text { width: 70px; text: "0 个着色器"; color: Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; }
+                            VerticalLayout {
+                                alignment: center;
+                                Button { text: "列表…"; small: true; width: 50px; enabled: false; }
+                            }
+                        }
+                    }
+                    Rectangle { }
                 }
             }
-            if root.failed: VerticalLayout {
-                alignment: center;
-                Button { text: "重试"; small: true; clicked => { root.retry(); } }
+            HorizontalLayout {
+                height: 22px;
+                spacing: 6px;
+                Check {
+                    text: "启用画面效果";
+                    checked <=> root.effect-enabled;
+                    toggled(on) => { root.toggle-effect(on); }
+                }
+                ToolTipArea {
+                    text: root.detail;
+                    Text {
+                        text: root.status;
+                        color: Theme.accent;
+                        font-size: Theme.font-body;
+                        horizontal-alignment: right;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                }
+                if root.failed: VerticalLayout {
+                    alignment: center;
+                    Button { text: "重试"; small: true; width: 41px; clicked => { root.retry(); } }
+                }
             }
         }
     }

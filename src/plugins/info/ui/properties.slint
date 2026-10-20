@@ -1,0 +1,141 @@
+// 播放属性 (I05): three read-only pages, PotPlayer Dialog(424) / Dialog(326).
+// Widths at the minimum window width 400 (content 380 after the 10px side padding):
+//   tab strip       3 × 74                                              = 222 of 400
+//   table row       label 120 + 8 + value ≥ 240 (scroll bar 12 inside)  = 380
+//   button row      status ≥ 50 + 刷新 66 + 复制到剪贴板 84 + 保存为… 66 + 关闭 66 + 4 × 4 = 348 of 380
+// Height at the minimum 320: tabs 31 + 10 + table ≥ 237 + 10 + buttons 21 + 10 = 319.
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button } from "@vestra/widgets.slint";
+
+export struct PropertyRow {
+    label: string,
+    value: string,
+    heading: bool,
+}
+
+// One 74×31 page tab (same strip as the picture and audio workbenches).
+component Tab {
+    in property <string> text;
+    in property <bool> selected;
+    callback picked();
+    width: 74px;
+    height: 31px;
+    accessible-role: tab;
+    accessible-label: root.text;
+    Rectangle { background: root.selected ? Theme.bg-panel : touch.has-hover ? Theme.hover-bg : transparent; }
+    Text {
+        text: root.text;
+        color: root.selected ? Theme.text : Theme.text-dim;
+        font-size: Theme.font-tab;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea { clicked => { root.picked(); } }
+}
+
+export component PropertiesWindow inherits Window {
+    title: "播放属性";
+    preferred-width: 460px;
+    preferred-height: 420px;
+    min-width: 400px;
+    min-height: 320px;
+    background: Theme.bg-panel;
+    in-out property <int> tab-index: 0;
+    in property <[PropertyRow]> rows;
+    in property <string> status;
+    in property <bool> can-refresh;
+    callback tab-changed(int);
+    callback refresh();
+    callback copy-page();
+    callback save-page();
+    callback close-window();
+    private property <[string]> tab-names: ["播放信息", "文件信息", "系统信息"];
+
+    VerticalLayout {
+        Rectangle {
+            height: 31px;
+            background: Theme.bg-bar;
+            HorizontalLayout {
+                for name[index] in root.tab-names: Tab {
+                    text: name;
+                    selected: index == root.tab-index;
+                    picked => {
+                        root.tab-index = index;
+                        root.tab-changed(index);
+                    }
+                }
+                Rectangle { horizontal-stretch: 1; }
+            }
+        }
+        VerticalLayout {
+            padding: 10px;
+            spacing: 10px;
+            Rectangle {
+                vertical-stretch: 1;
+                background: Theme.bg-list;
+                border-width: 1px;
+                border-color: Theme.line;
+                scroll := ScrollView {
+                    x: 1px;
+                    y: 1px;
+                    width: parent.width - 2px;
+                    height: parent.height - 2px;
+                    VerticalLayout {
+                        width: scroll.visible-width;
+                        padding: 6px;
+                        padding-right: 8px;
+                        spacing: 2px;
+                        for row in root.rows: VerticalLayout {
+                            if row.heading: Text {
+                                height: 20px;
+                                text: row.label;
+                                color: Theme.text;
+                                font-size: Theme.font-body;
+                                font-weight: 700;
+                                vertical-alignment: bottom;
+                            }
+                            if !row.heading: HorizontalLayout {
+                                spacing: row.label == "" ? 0px : 8px;
+                                Text {
+                                    width: row.label == "" ? 0px : 120px;
+                                    text: row.label;
+                                    color: Theme.text-dim;
+                                    font-size: Theme.font-body;
+                                    horizontal-alignment: right;
+                                    overflow: elide;
+                                }
+                                TextInput {
+                                    horizontal-stretch: 1;
+                                    text: row.value;
+                                    read-only: true;
+                                    single-line: false;
+                                    wrap: char-wrap;
+                                    color: Theme.text;
+                                    font-size: Theme.font-body;
+                                    selection-background-color: Theme.selected-bg;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            HorizontalLayout {
+                spacing: 4px;
+                Text {
+                    horizontal-stretch: 1;
+                    min-width: 50px;
+                    text: root.status;
+                    color: Theme.text-list;
+                    font-size: Theme.font-body;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+                Button { width: 66px; text: "刷新"; enabled: root.can-refresh; clicked => { root.refresh(); } }
+                Button { width: 84px; text: "复制到剪贴板"; clicked => { root.copy-page(); } }
+                Button { width: 66px; text: "保存为…"; clicked => { root.save-page(); } }
+                Button { width: 66px; text: "关闭"; clicked => { root.close-window(); } }
+            }
+        }
+    }
+}
