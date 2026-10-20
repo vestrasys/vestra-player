@@ -103,6 +103,12 @@ enum MenuAction {
     Back,
     Dismiss,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Injected {
+    Pressed,
+    Repeated,
+    Released,
+}
 enum Event {
     #[cfg(feature = "producer-audio")]
     PhysicalInput(u64, Value),
@@ -125,6 +131,9 @@ enum Event {
     Reaped(u64),
     BackendCleaned(u64),
     DialogDone(Reply, Option<Vec<PathBuf>>),
+    /// An Option + named key handed to Slint again: (window generation, Slint
+    /// key code, pressed, the press's physical key).
+    InjectKey(u64, char, Injected, Option<bindings::Physical>),
     /// winit saw these Slint modifier keys released: (window generation, key codes).
     ModifiersReleased(u64, Vec<char>),
     /// `dialogs.confirm` answered: (requester, confirmed, checked).
@@ -712,6 +721,27 @@ impl Host {
             Event::UiCallback(owner, data) => {
                 self.send(owner, json!({"event":"ui.callback","data":data}))
             }
+            Event::InjectKey(generation, key, kind, physical) => {
+                if debug_keys() {
+                    eprintln!("keys: inject to slint {key:?} {kind:?} window={generation}");
+                }
+                if let Some(window) = self.window_for(generation) {
+                    let window = window.clone_strong();
+                    if kind != Injected::Released {
+                        self.input.borrow_mut().physical = physical;
+                    }
+                    let text = key.into();
+                    window.window().dispatch_event(match kind {
+                        Injected::Pressed => slint::platform::WindowEvent::KeyPressed { text },
+                        Injected::Repeated => {
+                            slint::platform::WindowEvent::KeyPressRepeated { text }
+                        }
+                        Injected::Released => slint::platform::WindowEvent::KeyReleased { text },
+                    });
+                    // The press was resolved (or not) by now.
+                    self.input.borrow_mut().physical = None;
+                }
+            }
             Event::ModifiersReleased(generation, keys) => {
                 if debug_keys() {
                     eprintln!(
@@ -1142,6 +1172,9 @@ impl Host {
             window.window().on_winit_window_event(move |_, event| {
                 let dead = observe_key(&input, &modifiers, event);
                 release_modifiers(&input, &events, generation);
+                if inject_option_key(&input, &modifiers, &events, generation, event) {
+                    return EventResult::PreventDefault;
+                }
                 if let Some((dead, repeat)) = dead {
                     // Slint drops a dead key (it has no text), so its Option
                     // binding resolves here, only while the video area has
@@ -1402,6 +1435,9 @@ impl Host {
         window.window().on_winit_window_event(move |_, event| {
             let _ = observe_key(&input, &modifiers, event);
             release_modifiers(&input, &events, generation);
+            if inject_option_key(&input, &modifiers, &events, generation, event) {
+                return EventResult::PreventDefault;
+            }
             EventResult::Propagate
         });
     }
@@ -3020,6 +3056,56 @@ fn observe_key(
         }
         _ => None,
     }
+}
+/// Option + a named key (⌥⌦, ⌥←): macOS delivers it in a form Slint does not
+/// route to the focused item, and its input handling then stalls until the
+/// next ordinary key. Such a press and release are kept from Slint and handed
+/// to it again as plain key events from the host loop, with the press's
+/// physical key and window modifiers recorded, so the binding resolves in the
+/// focused scope (`Alt+Delete` in the playlist panel) like any other key.
+fn inject_option_key(
+    input: &Rc<RefCell<InputShared>>,
+    modifiers: &std::cell::Cell<slint::winit_030::winit::keyboard::ModifiersState>,
+    events: &mpsc::Sender<Event>,
+    generation: u64,
+    event: &slint::winit_030::winit::event::WindowEvent,
+) -> bool {
+    use slint::winit_030::winit::{
+        event::{ElementState, WindowEvent},
+        keyboard::PhysicalKey,
+    };
+    let WindowEvent::KeyboardInput {
+        event,
+        is_synthetic: false,
+        ..
+    } = event
+    else {
+        return false;
+    };
+    let PhysicalKey::Code(code) = event.physical_key else {
+        return false;
+    };
+    // ⌥Space types a character (no-break space): Slint gets it as it is.
+    let code = format!("{code:?}");
+    let Some(key) = bindings::slint_key(&code).filter(|_| code != "Space") else {
+        return false;
+    };
+    if !modifiers.get().alt_key() {
+        return false;
+    }
+    let pressed = event.state == ElementState::Pressed;
+    let physical = if pressed {
+        input.borrow_mut().physical.take()
+    } else {
+        None
+    };
+    let kind = match (pressed, event.repeat) {
+        (false, _) => Injected::Released,
+        (true, false) => Injected::Pressed,
+        (true, true) => Injected::Repeated,
+    };
+    let _ = events.send(Event::InjectKey(generation, key, kind, physical));
+    true
 }
 /// Hand modifier releases Slint missed to the window, outside winit's dispatch.
 fn release_modifiers(
