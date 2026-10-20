@@ -1,0 +1,160 @@
+//! `plugin.bindings` (`bindings.manage`): list every command's bindings, write
+//! the user overlay, and tell managing plugins when anything changed.
+#![forbid(unsafe_code)]
+use super::*;
+
+/// A command as plugins name it: manifest id (`host` for the player) and command id.
+fn reference(params: &Value) -> std::result::Result<(String, String), RpcError> {
+    let plugin = string(params, "plugin")?;
+    let command = string(params, "command")?;
+    let valid = |text: &str| {
+        !text.is_empty()
+            && text.len() <= 128
+            && text
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b".-_".contains(&b))
+    };
+    if !valid(plugin) || !valid(command) {
+        return Err(RpcError::invalid("plugin and command must be identifiers"));
+    }
+    Ok((plugin.into(), command.into()))
+}
+
+fn json_ref(manifest: &str, id: &str) -> Value {
+    json!({"plugin":manifest,"command":id})
+}
+
+impl Host {
+    pub(super) fn bindings_dispatch(
+        &mut self,
+        method: &str,
+        params: &Value,
+    ) -> std::result::Result<Value, RpcError> {
+        match method {
+            "bindings.list" => Ok(self.bindings_list()),
+            "bindings.set" => {
+                let (plugin, command) = reference(params)?;
+                let inputs: Vec<String> = serde_json::from_value(params["inputs"].clone())
+                    .map_err(|_| RpcError::invalid("inputs must be a list of bindings"))?;
+                if inputs.len() > 16 {
+                    return Err(RpcError::invalid("at most 16 bindings per command"));
+                }
+                let inputs = bindings::Table::canonical(&inputs).map_err(RpcError::invalid)?;
+                let key = format!("{plugin}/{command}");
+                if !self.input.borrow().table.declares(&plugin, &command)
+                    && !self.ui_state.state.bindings.contains_key(&key)
+                {
+                    return Err(RpcError::new("missing", format!("no command {key}")));
+                }
+                self.ui_state.state.bindings.insert(key, inputs);
+                self.overlay_changed();
+                Ok(Value::Null)
+            }
+            "bindings.reset" => {
+                if params["plugin"].is_null() && params["command"].is_null() {
+                    self.ui_state.state.bindings.clear();
+                } else {
+                    let (plugin, command) = reference(params)?;
+                    let key = format!("{plugin}/{command}");
+                    if self.ui_state.state.bindings.remove(&key).is_none()
+                        && !self.input.borrow().table.declares(&plugin, &command)
+                    {
+                        return Err(RpcError::new("missing", format!("no command {key}")));
+                    }
+                }
+                self.overlay_changed();
+                Ok(Value::Null)
+            }
+            _ => Err(RpcError::new("unsupported", "unknown bindings method")),
+        }
+    }
+    /// The overlay is kept in the interface state file (debounced save).
+    fn overlay_changed(&mut self) {
+        let overlay = self.ui_state.state.bindings.clone();
+        self.input.borrow_mut().table.set_overlay(overlay);
+        let now = self.now_ms();
+        self.ui_state.touch(now);
+        if self.menu_open {
+            let result = self.refresh_menu();
+            self.report_menu(result);
+        }
+    }
+    fn bindings_list(&self) -> Value {
+        let table = &self.input.borrow().table;
+        let texts =
+            |inputs: &[bindings::Input]| inputs.iter().map(bindings::text).collect::<Vec<_>>();
+        let commands = table
+            .infos()
+            .into_iter()
+            .filter_map(|info| {
+                let declaration = &self.commands.get(info.owner, &info.id)?.declaration;
+                Some(json!({
+                    "plugin":info.manifest,"command":info.id,
+                    "title":declaration.title,
+                    "path":(!declaration.path.is_empty()).then_some(&declaration.path),
+                    "scope":if info.panel {"panel"} else {"global"},
+                    "defaults":texts(&info.defaults),"current":texts(&info.current),
+                    "overridden":info.overridden,
+                    "shadowed":info.shadowed.iter().map(|(input, manifest, id)| {
+                        json!({"input":bindings::text(input),"by":json_ref(manifest, id)})
+                    }).collect::<Vec<_>>(),
+                    "labels":info.current.iter().map(bindings::label).collect::<Vec<_>>(),
+                }))
+            })
+            .collect::<Vec<_>>();
+        let orphans = table
+            .orphans()
+            .into_iter()
+            .filter_map(|(key, inputs)| {
+                let (manifest, id) = key.split_once('/')?;
+                Some(json!({"ref":json_ref(manifest, id),"inputs":inputs}))
+            })
+            .collect::<Vec<_>>();
+        json!({"commands":commands,"orphans":orphans})
+    }
+    /// `bindings.changed` (declarations or overlay) and `packages.changed`
+    /// (the plugin list) to the plugins that subscribed; at most every 200 ms.
+    pub(super) fn notify_tick(&mut self) {
+        let now = self.now_ms();
+        if now < self.notified_at + 200 {
+            return;
+        }
+        self.notified_at = now;
+        let revision = self.input.borrow().table.revision();
+        if revision != self.bindings_sent {
+            self.bindings_sent = revision;
+            self.broadcast("bindings.changed", Value::Null);
+        }
+        if self
+            .plugins
+            .values()
+            .any(|plugin| plugin.subscriptions.contains("packages.changed"))
+        {
+            let list = self.package_list();
+            if list != self.packages_sent {
+                self.packages_sent = list.clone();
+                self.broadcast("packages.changed", list);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn references_are_identifiers() {
+        assert_eq!(
+            reference(&json!({"plugin":"host","command":"play-pause"})).unwrap(),
+            ("host".into(), "play-pause".into())
+        );
+        for bad in [
+            json!({"plugin":"a/b","command":"x"}),
+            json!({"plugin":"","command":"x"}),
+            json!({"plugin":"a"}),
+        ] {
+            assert_eq!(reference(&bad).unwrap_err().code, "invalid");
+        }
+    }
+}

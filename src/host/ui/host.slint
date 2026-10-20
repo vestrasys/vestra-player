@@ -41,6 +41,10 @@ export component HostWindow inherits Window {
     // Bindings (C3): true when the input is bound, so Slint stops propagating it.
     callback key-input(string, string, bool, bool, bool, bool, bool) -> bool;
     callback mouse-input(string, bool, bool, bool, bool) -> bool;
+    // A left press on the video (x, y, modifiers): the host decides single clicks.
+    callback left-press(float, float, bool, bool, bool, bool);
+    out property <float> pointer-x: mouse.mouse-x / 1px;
+    out property <float> pointer-y: mouse.mouse-y / 1px;
     callback wheel-input(float, float, bool, bool, bool, bool) -> bool;
     callback sidebar-resized(float);
     callback close-menu();
@@ -83,7 +87,13 @@ export component HostWindow inherits Window {
                                 self.mods = event.modifiers;
                                 if event.kind == PointerEventKind.down {
                                     canvas.focus(); root.window-input("activity");
-                                    if event.button == PointerEventButton.left { root.window-input("capture"); }
+                                    if event.button == PointerEventButton.left {
+                                        root.window-input("capture");
+                                        if !root.menu-open {
+                                            root.left-press(self.mouse-x / 1px, self.mouse-y / 1px, event.modifiers.control,
+                                                event.modifiers.alt, event.modifiers.shift, event.modifiers.meta);
+                                        }
+                                    }
                                     if event.button == PointerEventButton.middle {
                                         root.mouse-input("MiddleClick", event.modifiers.control, event.modifiers.alt, event.modifiers.shift, event.modifiers.meta);
                                     }

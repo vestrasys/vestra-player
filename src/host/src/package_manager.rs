@@ -413,8 +413,227 @@ impl Host {
                 }
                 Ok(operation.result.clone())
             }
+            "packages.list" => Ok(self.package_list()),
+            "packages.setEnabled" => {
+                let enabled = params["enabled"]
+                    .as_bool()
+                    .ok_or_else(|| RpcError::invalid("enabled requires a boolean"))?;
+                self.set_enabled(caller, string(params, "id")?, enabled)?;
+                Ok(Value::Null)
+            }
+            "packages.uninstall" => self.uninstall(caller, params),
             _ => Err(RpcError::new("unsupported", "unknown package method")),
         }
+    }
+    fn running(&self, id: &str) -> Option<u64> {
+        self.plugins
+            .iter()
+            .find(|(_, plugin)| plugin.manifest.id == id)
+            .map(|(owner, _)| *owner)
+    }
+    fn operation_pending(&self, id: &str) -> bool {
+        self.packages.operations.values().any(|op| {
+            op.package == id
+                && !matches!(
+                    op.phase.as_str(),
+                    "committed" | "failed" | "cancelled" | "failedDegraded"
+                )
+        })
+    }
+    /// `packages.list`: running plugins, installed packages and this run's
+    /// development loads, by id.
+    pub(super) fn package_list(&mut self) -> Value {
+        let now = self.now_ms();
+        let mut list = BTreeMap::<String, Value>::new();
+        let owners = self.plugins.keys().copied().collect::<Vec<_>>();
+        for owner in owners {
+            let trial = self.packages.is_trial(owner);
+            let status = self.activations.status(owner, now).ok();
+            let plugin = &self.plugins[&owner];
+            let id = plugin.manifest.id.clone();
+            let stored = self.packages.store.get(&id);
+            let installed = !trial
+                && stored
+                    .current
+                    .as_ref()
+                    .is_some_and(|current| current.directory == plugin.directory);
+            let (state, error) = match status {
+                Some(package_activation::Status::Pending { .. }) => ("starting", None),
+                Some(package_activation::Status::Failed { message }) => ("failed", Some(message)),
+                Some(package_activation::Status::TimedOut) => {
+                    ("failed", Some("activation timed out".to_owned()))
+                }
+                _ => ("running", None),
+            };
+            let origin = match (trial, installed) {
+                (true, _) => "trial",
+                (_, true) => "installed",
+                _ => "development",
+            };
+            let previous = installed
+                .then(|| stored.previous.map(|p| p.manifest.version))
+                .flatten();
+            list.insert(id.clone(), json!({"id":id,"version":plugin.manifest.version,
+                "origin":origin,"state":state,"error":error,"capabilities":plugin.manifest.capabilities,
+                "directory":plugin.directory,"previousVersion":previous}));
+        }
+        let stopped = |disabled: bool, failure: Option<&String>| {
+            if disabled {
+                ("disabled", None)
+            } else if let Some(failure) = failure {
+                ("failed", Some(failure.clone()))
+            } else {
+                ("stopped", None)
+            }
+        };
+        for (id, record) in self.packages.store.installed() {
+            let Some(current) = record.current.filter(|_| !list.contains_key(&id)) else {
+                continue;
+            };
+            let (state, error) = if self.operation_pending(&id) {
+                ("starting", None)
+            } else {
+                stopped(
+                    self.packages.store.disabled().contains(&id),
+                    self.failures.get(&id),
+                )
+            };
+            list.insert(
+                id.clone(),
+                json!({"id":id,"version":current.manifest.version,
+                "origin":"installed","state":state,"error":error,
+                "capabilities":current.manifest.capabilities,"directory":current.directory,
+                "previousVersion":record.previous.map(|p| p.manifest.version)}),
+            );
+        }
+        for (id, (directory, manifest)) in &self.development {
+            if list.contains_key(id) {
+                continue;
+            }
+            let (state, error) = stopped(self.dev_disabled.contains(id), self.failures.get(id));
+            list.insert(
+                id.clone(),
+                json!({"id":id,"version":manifest.version,
+                "origin":"development","state":state,"error":error,
+                "capabilities":manifest.capabilities,"directory":directory,"previousVersion":null}),
+            );
+        }
+        Value::Array(list.into_values().collect())
+    }
+    /// `packages.setEnabled`: disabling stops it (and keeps it stopped across
+    /// launches when installed); enabling starts it again.
+    fn set_enabled(
+        &mut self,
+        caller: u64,
+        id: &str,
+        enabled: bool,
+    ) -> std::result::Result<(), RpcError> {
+        if !enabled && self.plugins[&caller].manifest.id == id {
+            return Err(RpcError::invalid("a plugin cannot disable itself"));
+        }
+        let running = self.running(id);
+        if running.is_some_and(|owner| self.packages.is_trial(owner)) {
+            return Err(RpcError::new(
+                "unsupported",
+                "a trial is stopped with its trial handle",
+            ));
+        }
+        if self.operation_pending(id) {
+            return Err(RpcError::new("busy", "the package is being installed"));
+        }
+        let installed = self.packages.store.get(id).current;
+        let development = self.development.get(id).cloned();
+        if installed.is_none() && development.is_none() {
+            return Err(RpcError::new("missing", format!("no plugin {id}")));
+        }
+        if installed.is_some() {
+            self.packages.store.set_disabled(id, !enabled)?;
+        } else if enabled {
+            self.dev_disabled.remove(id);
+        } else {
+            self.dev_disabled.insert(id.into());
+        }
+        if !enabled {
+            if let Some(owner) = running {
+                self.disable(owner);
+            }
+            self.failures.remove(id);
+            return Ok(());
+        }
+        if running.is_some() {
+            return Ok(());
+        }
+        self.failures.remove(id);
+        match (installed, development) {
+            (Some(current), _) => {
+                self.load_package(&current.directory, &current.manifest, false)?;
+            }
+            (None, Some((directory, _))) => self.load(&directory, 120_000)?,
+            (None, None) => unreachable!("checked above"),
+        }
+        Ok(())
+    }
+    /// `packages.uninstall { id, removeData, expectedRevision, requestId }`:
+    /// stop it, remove it from the library (one catalog replacement), and
+    /// delete its data directory once its process is gone when asked.
+    fn uninstall(&mut self, caller: u64, params: &Value) -> std::result::Result<Value, RpcError> {
+        let request = string(params, "requestId")?.to_owned();
+        if request.is_empty() || request.len() > 128 {
+            return Err(RpcError::invalid("requestId must contain 1..128 bytes"));
+        }
+        let spec = json!({"method":"packages.uninstall","params":params});
+        if let Some(receipt) = self.packages.receipts.get(&request) {
+            if receipt["request"] != spec {
+                return Err(RpcError::new(
+                    "conflict",
+                    "requestId was used with different arguments",
+                ));
+            }
+            return Ok(receipt.clone());
+        }
+        let id = string(params, "id")?.to_owned();
+        if self.plugins[&caller].manifest.id == id {
+            return Err(RpcError::invalid("a plugin cannot uninstall itself"));
+        }
+        let installed = self.packages.store.get(&id);
+        if installed.current.is_none() {
+            return Err(
+                if self.development.contains_key(&id) || self.running(&id).is_some() {
+                    RpcError::new("unsupported", "only installed plugins can be uninstalled")
+                } else {
+                    RpcError::new("missing", format!("no plugin {id}"))
+                },
+            );
+        }
+        if params["expectedRevision"].as_u64() != Some(installed.revision) {
+            return Err(RpcError::new(
+                "revisionConflict",
+                "installed revision changed",
+            ));
+        }
+        if self.operation_pending(&id) {
+            return Err(RpcError::new("busy", "the package is being installed"));
+        }
+        let data = (params["removeData"] == true)
+            .then(|| plugins::data_root().map(|root| root.join(&id)))
+            .flatten();
+        let receipt =
+            json!({"operationId":request,"packageId":id,"status":"committed","request":spec});
+        if let Some(owner) = self.running(&id) {
+            self.disable(owner);
+            // Delete the data after the process is gone (it flushes on stop).
+            if let Some(directory) = data.clone() {
+                self.data_removals.insert(owner, directory);
+            }
+        } else if let Some(directory) = &data {
+            let _ = std::fs::remove_dir_all(directory);
+        }
+        self.packages
+            .store
+            .uninstall(&id, &request, receipt.clone())?;
+        self.packages.receipts = self.packages.store.operations();
+        self.failures.remove(&id);
+        Ok(receipt)
     }
     pub(super) fn package_tick(&mut self) {
         if !self.packages.booted {
@@ -458,7 +677,9 @@ impl Host {
                 .collect::<Vec<_>>();
             let installed = self.packages.store.installed();
             for (id, record) in installed {
+                // R-H10: a package the user disabled stays stopped.
                 if !pending.contains(&id)
+                    && !self.packages.store.disabled().contains(&id)
                     && let Some(current) = record.current
                     && let Err(error) =
                         self.load_package(&current.directory, &current.manifest, false)

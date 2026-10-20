@@ -293,6 +293,7 @@ impl Backend {
                         subtitles.note_source(sources.generation(), sources.phase());
                         let _ = events.send(Event::Reply(command.reply, result));
                     }
+                    sources.follow_device(&mpv);
                     if let Some((done, result)) = actions.poll(&mpv) {
                         done.send(&events, result);
                     }

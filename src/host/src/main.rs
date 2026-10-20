@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 mod backend;
+mod binding_manager;
 mod bindings;
 mod clipboard;
 mod commands;
@@ -165,7 +166,19 @@ struct InputShared {
     physical: Option<bindings::Physical>,
     /// Slint modifier key codes winit saw released, to hand to Slint.
     released: Vec<char>,
+    /// A left press on the video waiting to become `Mouse:LeftClick` (R-H11).
+    click: Option<PendingClick>,
 }
+#[derive(Clone, Copy)]
+struct PendingClick {
+    at: Instant,
+    x: f64,
+    y: f64,
+    mods: bindings::Mods,
+    generation: u64,
+}
+/// A click moves at most this far (logical px) or it is a drag.
+const CLICK_SLOP: f64 = 4.;
 /// Which window shows the open menu, and what it lists.
 #[derive(Clone, PartialEq)]
 enum MenuMode {
@@ -241,6 +254,18 @@ struct Host {
     on_top_applied: Option<(bool, usize)>,
     /// `window.setVideoArea` answered once the video area shows the target.
     area_replies: Vec<AreaReply>,
+    /// Development loads of this run (`--plugin`, or re-enabled): directory, manifest.
+    development: BTreeMap<String, (PathBuf, plugins::Manifest)>,
+    /// Development loads the user disabled (this run only).
+    dev_disabled: std::collections::BTreeSet<String>,
+    /// Why a plugin last stopped on its own, by id.
+    failures: BTreeMap<String, String>,
+    /// `uninstall({ removeData })`: data directories to delete once reaped.
+    data_removals: BTreeMap<u64, PathBuf>,
+    /// What `bindings.changed` / `packages.changed` last announced.
+    bindings_sent: u64,
+    packages_sent: Value,
+    notified_at: u64,
 }
 struct AreaReply {
     reply: Reply,
@@ -297,6 +322,11 @@ impl Host {
                 package_activation::Status::Failed { .. } | package_activation::Status::TimedOut
             );
             if terminal_failure {
+                let message = match status {
+                    package_activation::Status::Failed { message } => message,
+                    _ => "activation timed out".into(),
+                };
+                self.record_failure(owner, &message);
                 self.disable(owner);
             }
         }
@@ -350,6 +380,12 @@ impl Host {
             }
         };
         let manifest_id = plugin.manifest.id.clone();
+        // `packages.list` keeps this run's development loads after they stop.
+        self.development.insert(
+            manifest_id.clone(),
+            (plugin.directory.clone(), plugin.manifest.clone()),
+        );
+        self.failures.remove(&manifest_id);
         self.plugins.insert(self.next_generation, plugin);
         self.backend.commands.send(Command {
             reply: Reply {
@@ -692,10 +728,17 @@ impl Host {
                     Ok(json!({"cancelled":paths.is_none(),"paths":paths.unwrap_or_default()})),
                 );
             }
-            Event::Exited(owner) => self.disable(owner),
+            Event::Exited(owner) => {
+                // Still running: the process ended without being stopped.
+                self.record_failure(owner, "plugin process exited");
+                self.disable(owner)
+            }
             Event::Reaped(owner) => {
                 if let Some(cleanup) = self.cleanup.get_mut(&owner) {
                     cleanup.0 = true;
+                }
+                if let Some(directory) = self.data_removals.remove(&owner) {
+                    let _ = std::fs::remove_dir_all(directory);
                 }
             }
             Event::BackendCleaned(owner) => {
@@ -709,8 +752,21 @@ impl Host {
                 let _ =
                     self.activations
                         .runtime_failed(owner, error.chars().take(512).collect(), now);
+                self.record_failure(owner, &error);
                 self.disable(owner);
             }
+        }
+    }
+    /// Why a plugin stopped on its own (`packages.list` state `failed`).
+    fn record_failure(&mut self, owner: u64, message: &str) {
+        if self.packages.is_trial(owner) {
+            return;
+        }
+        if let Some(plugin) = self.plugins.get(&owner) {
+            self.failures.insert(
+                plugin.manifest.id.clone(),
+                message.chars().take(512).collect(),
+            );
         }
     }
     fn now_ms(&self) -> u64 {
@@ -778,6 +834,31 @@ impl Host {
         };
         let video = (number("video-width"), number("video-height"));
         self.apply_on_top();
+        // R-H11: a left press with no second press within the double-click
+        // interval, and the pointer still within 4 px, is a single click.
+        let due = self
+            .input
+            .borrow()
+            .click
+            .filter(|click| click.at.elapsed() >= double_click_interval());
+        if let Some(click) = due {
+            self.input.borrow_mut().click = None;
+            let moved = (number("pointer-x") - click.x).hypot(number("pointer-y") - click.y);
+            if click.generation == self.shell_generation && moved <= CLICK_SLOP {
+                let input = bindings::Input {
+                    mods: click.mods,
+                    name: "Mouse:LeftClick".into(),
+                };
+                fire(
+                    &self.input,
+                    &self.events,
+                    click.generation,
+                    &input,
+                    false,
+                    None,
+                );
+            }
+        }
         if self.measured_shell != Some(self.shell_generation)
             && (viewport.width <= 0. || viewport.height <= 0.)
         {
@@ -1138,6 +1219,41 @@ impl Host {
                 name: format!("Mouse:{name}"),
             };
             SValue::Bool(fire(&input, &events, generation, &event, false, None))
+        })?;
+        let input = self.input.clone();
+        window.set_callback("left-press", move |args| {
+            let number = |i: usize| match args.get(i) {
+                Some(SValue::Number(n)) if n.is_finite() => *n,
+                _ => 0.,
+            };
+            let flag = |i: usize| matches!(args.get(i), Some(SValue::Bool(true)));
+            let (ctrl, cmd) = slint_mods(flag(2), flag(5));
+            let mut shared = input.borrow_mut();
+            if !shared.table.has_left_click() {
+                shared.click = None;
+                return SValue::Void;
+            }
+            let (x, y) = (number(0), number(1));
+            // A second press within the double-click interval is a double click.
+            let second = shared.click.take().is_some_and(|first| {
+                first.at.elapsed() < double_click_interval()
+                    && (first.x - x).hypot(first.y - y) <= CLICK_SLOP
+            });
+            if !second {
+                shared.click = Some(PendingClick {
+                    at: Instant::now(),
+                    x,
+                    y,
+                    mods: bindings::Mods {
+                        ctrl,
+                        alt: flag(3),
+                        shift: flag(4),
+                        cmd,
+                    },
+                    generation,
+                });
+            }
+            SValue::Void
         })?;
         let input = self.input.clone();
         let events = self.events.clone();
@@ -2022,6 +2138,14 @@ impl Host {
             .get(&reply.owner)
             .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
         let capability = match method {
+            "packages.list" => None,
+            "bindings.list" | "bindings.set" | "bindings.reset" => Some("bindings.manage"),
+            // Plugin and binding changes have their own (or no) capability.
+            "events.subscribe" | "events.unsubscribe" => match params["event"].as_str() {
+                Some("packages.changed") => None,
+                Some("bindings.changed") => Some("bindings.manage"),
+                _ => Some("events"),
+            },
             method if method.starts_with("packages.") => Some("plugins.manage"),
             method if method.starts_with("sourceResolvers.") => Some("source.resolve"),
             "dialogs.open" | "dialogs.confirm" => Some("ui.dialog"),
@@ -2029,8 +2153,8 @@ impl Host {
             "window.setVideoArea" | "window.setAlwaysOnTop" | "window.setCursorAutoHide" => {
                 Some("window.control")
             }
-            "player.chapters" => Some("playback.read"),
-            "player.setLoop" => Some("playback.control"),
+            "player.chapters" | "player.audioDevices" => Some("playback.read"),
+            "player.setLoop" | "player.setAudioDevice" => Some("playback.control"),
             "ui.mount" | "ui.setMount" | "ui.unmount" | "ui.interaction" | "ui.menu"
             | "layout.state" | "layout.set" => Some("ui.mount"),
             "osd.show" | "osd.panel" => Some("ui.osd"),
@@ -2063,7 +2187,6 @@ impl Host {
             } else {
                 "processing.audio"
             }),
-            "events.subscribe" | "events.unsubscribe" => Some("events"),
             "ui.open" | "ui.set" | "ui.show" | "ui.close" => Some("ui.window"),
             _ => return Err(RpcError::new("unsupported", "unknown method")),
         };
@@ -2075,6 +2198,9 @@ impl Host {
         }
         if method.starts_with("packages.") {
             return self.package_dispatch(reply.owner, method, params).map(Some);
+        }
+        if method.starts_with("bindings.") {
+            return self.bindings_dispatch(method, params).map(Some);
         }
         if method.starts_with("subtitles.")
             || method.starts_with("snapshot.")
@@ -2622,6 +2748,8 @@ impl Host {
             | "player.step"
             | "player.chapters"
             | "player.setLoop"
+            | "player.audioDevices"
+            | "player.setAudioDevice"
             | "source.state"
             | "source.operation"
             | "source.submit"
@@ -2650,7 +2778,15 @@ impl Host {
             }
             "events.subscribe" | "events.unsubscribe" => {
                 let event = string(params, "event")?;
-                if !["playback.backend", "source.state", "window.state"].contains(&event) {
+                if ![
+                    "playback.backend",
+                    "source.state",
+                    "window.state",
+                    "packages.changed",
+                    "bindings.changed",
+                ]
+                .contains(&event)
+                {
                     return Err(RpcError::new("unsupported", "unknown event"));
                 }
                 let plugin = self.plugins.get_mut(&reply.owner).unwrap();
@@ -2871,6 +3007,18 @@ fn release_modifiers(
     if !released.is_empty() {
         let _ = events.send(Event::ModifiersReleased(generation, released));
     }
+}
+/// The system double-click interval (0.5 s where the system has none).
+fn double_click_interval() -> Duration {
+    #[cfg(target_os = "macos")]
+    let seconds = objc2_app_kit::NSEvent::doubleClickInterval();
+    #[cfg(not(target_os = "macos"))]
+    let seconds = 0.5;
+    Duration::from_secs_f64(if (0.05..=5.).contains(&seconds) {
+        seconds
+    } else {
+        0.5
+    })
 }
 /// `VESTRA_DEBUG_KEYS=1`: log every key event and how it resolved to stderr.
 fn debug_keys() -> bool {
@@ -3094,6 +3242,13 @@ fn main() -> Result<()> {
         cursor_playing: window_control::LastWrite::new(false),
         on_top_applied: None,
         area_replies: Vec::new(),
+        development: BTreeMap::new(),
+        dev_disabled: Default::default(),
+        failures: BTreeMap::new(),
+        data_removals: BTreeMap::new(),
+        bindings_sent: 0,
+        packages_sent: Value::Null,
+        notified_at: 0,
         commands: commands::Registry::new(),
     };
     host.register_host_commands()?;
@@ -3134,6 +3289,7 @@ fn main() -> Result<()> {
             host.activation_tick();
             host.power_tick();
             host.package_tick();
+            host.notify_tick();
             if let Some(evidence) = evidence.as_mut() {
                 evidence.sample(&host.backend, &observed_source, start)?;
             }
@@ -3175,6 +3331,7 @@ fn main() -> Result<()> {
                 host.activation_tick();
                 host.power_tick();
                 host.package_tick();
+                host.notify_tick();
                 if host.shell.is_some() {
                     let revision = host.commands.snapshot().revision;
                     if revision != menu_revision {

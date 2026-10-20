@@ -54,6 +54,9 @@ struct Catalog {
     // One successful commit receipt per package makes a lost commit reply
     // retry harmless; full request deduplication belongs to the manager.
     last_commit: BTreeMap<String, String>,
+    /// Installed packages the user disabled (R-H10): not started at launch.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    disabled: BTreeSet<String>,
 }
 
 pub struct Store {
@@ -376,6 +379,8 @@ impl Store {
         insert_receipt(&mut next, operation_id, receipt)?;
         next.installed.insert(id.into(), installed.clone());
         next.last_commit.insert(id.into(), operation_id.into());
+        // Installing or rolling back is asking for the package to run.
+        next.disabled.remove(id);
         self.publish(next)?;
         Ok(installed)
     }
@@ -468,6 +473,52 @@ impl Store {
 
     pub fn operations(&self) -> BTreeMap<String, Value> {
         self.catalog.operations.clone()
+    }
+
+    pub fn disabled(&self) -> &BTreeSet<String> {
+        &self.catalog.disabled
+    }
+
+    /// Record whether an installed package stays stopped across launches.
+    pub fn set_disabled(&mut self, id: &str, disabled: bool) -> Result<()> {
+        identifier(id)?;
+        ensure!(
+            !disabled || self.catalog.installed.contains_key(id),
+            "only installed packages can be disabled"
+        );
+        if self.catalog.disabled.contains(id) == disabled {
+            return Ok(());
+        }
+        let mut next = self.catalog.clone();
+        if disabled {
+            next.disabled.insert(id.into());
+        } else {
+            next.disabled.remove(id);
+        }
+        self.publish(next)
+    }
+
+    /// Remove an installed package (current and previous) in one catalog
+    /// replacement with its receipt, then collect its unreferenced files.
+    pub fn uninstall(&mut self, id: &str, operation_id: &str, receipt: Value) -> Result<()> {
+        identifier(id)?;
+        identifier(operation_id)?;
+        check_receipt(&receipt)?;
+        ensure!(
+            self.catalog.installed.contains_key(id),
+            "package is not installed"
+        );
+        ensure!(
+            !self.catalog.pending.contains_key(id),
+            "package transaction already pending"
+        );
+        let mut next = self.catalog.clone();
+        next.installed.remove(id);
+        next.disabled.remove(id);
+        next.last_commit.remove(id);
+        insert_receipt(&mut next, operation_id, receipt)?;
+        self.publish(next)?;
+        self.gc()
     }
 }
 
@@ -577,6 +628,36 @@ mod tests {
         assert_eq!(installed.current.unwrap().manifest.version, "1.0.0");
         assert_eq!(installed.previous.unwrap().manifest.version, "1.1.0");
         assert_eq!(store.operations()["back"]["status"], "completed");
+    }
+
+    #[test]
+    fn disabled_set_persists_and_uninstall_removes_files_and_flag() {
+        let root = tempfile::tempdir().unwrap();
+        let (_, first) = candidate("1.0.0");
+        let mut store = Store::open(root.path().into()).unwrap();
+        let first = store.stage(&first).unwrap();
+        assert!(
+            store.set_disabled("counter", true).is_err(),
+            "not installed"
+        );
+        store.prepare("counter", 0, &first, "one").unwrap();
+        store.commit("counter", "one").unwrap();
+        store.set_disabled("counter", true).unwrap();
+        drop(store);
+        let mut store = Store::open(root.path().into()).unwrap();
+        assert!(store.disabled().contains("counter"));
+        store
+            .uninstall("counter", "gone", serde_json::json!({"status":"committed"}))
+            .unwrap();
+        assert!(store.get("counter").current.is_none());
+        assert!(store.disabled().is_empty());
+        assert!(!first.directory.exists(), "files collected");
+        assert_eq!(store.operations()["gone"]["status"], "committed");
+        assert!(
+            store
+                .uninstall("counter", "again", serde_json::json!({}))
+                .is_err()
+        );
     }
 
     #[test]

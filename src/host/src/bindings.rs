@@ -60,6 +60,7 @@ const NAMED: &[&str] = &[
     "NumpadDecimal",
 ];
 const MOUSE: &[&str] = &[
+    "LeftClick",
     "LeftDoubleClick",
     "LeftDoubleClick:LeftHalf",
     "LeftDoubleClick:RightHalf",
@@ -465,6 +466,22 @@ pub fn from_key(
     })
 }
 
+/// The canonical binding string (`parse` round-trips it): `Ctrl+Shift+A`.
+pub fn text(input: &Input) -> String {
+    let mut text = String::new();
+    for (on, name) in [
+        (input.mods.ctrl, "Ctrl+"),
+        (input.mods.alt, "Alt+"),
+        (input.mods.shift, "Shift+"),
+        (input.mods.cmd, "Cmd+"),
+    ] {
+        if on {
+            text.push_str(name);
+        }
+    }
+    text + &input.name
+}
+
 /// Menu text: `Ctrl+O`, arrows as ← → ↑ ↓, Esc, PgUp/PgDn, Del.
 pub fn label(input: &Input) -> String {
     let mut text = String::new();
@@ -535,7 +552,29 @@ pub struct Table {
     overlay: BTreeMap<String, Vec<String>>,
     active: BTreeMap<(Scope, Input), Target>,
     conflicts: Vec<String>,
+    /// Inputs a command claims but another command holds: (input, winner).
+    shadowed: Shadows,
     next: u64,
+    /// Advances on every rebuild (declarations or overlay changed).
+    revision: u64,
+}
+
+/// Per command: inputs it claims that another command holds, and the winner.
+type Shadows = BTreeMap<(Owner, String), Vec<(Input, Owner, String)>>;
+
+/// One command's bindings for `plugin.bindings.list`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Info {
+    pub owner: Owner,
+    pub id: String,
+    pub manifest: String,
+    pub panel: bool,
+    pub defaults: Vec<Input>,
+    /// The user overlay's inputs when overridden, else the defaults.
+    pub current: Vec<Input>,
+    pub overridden: bool,
+    /// (input, winning manifest, winning command id).
+    pub shadowed: Vec<(Input, String, String)>,
 }
 
 impl Table {
@@ -592,6 +631,86 @@ impl Table {
         self.rebuild();
     }
 
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    /// The overlay inputs a command (or an orphan key) would get: each one
+    /// parsed and canonical, no repeats.
+    pub fn canonical(inputs: &[String]) -> Result<Vec<String>, String> {
+        let mut seen = Vec::new();
+        for text in inputs {
+            let input = parse(text)?;
+            if seen.contains(&input) {
+                return Err(format!("binding {text} is listed twice"));
+            }
+            seen.push(input);
+        }
+        Ok(seen.iter().map(self::text).collect())
+    }
+
+    /// Whether `<manifest>/<id>` is a declared command.
+    pub fn declares(&self, manifest: &str, id: &str) -> bool {
+        self.declared
+            .iter()
+            .any(|((_, each), declared)| each == id && declared.manifest == manifest)
+    }
+
+    /// Every declared command, in owner and id order.
+    pub fn infos(&self) -> Vec<Info> {
+        self.declared
+            .iter()
+            .map(|((owner, id), declared)| {
+                let key = format!("{}/{id}", declared.manifest);
+                let overridden = self.overlay.get(&key);
+                Info {
+                    owner: *owner,
+                    id: id.clone(),
+                    manifest: declared.manifest.clone(),
+                    panel: declared.panel,
+                    defaults: declared.defaults.clone(),
+                    current: overridden.map_or_else(
+                        || declared.defaults.clone(),
+                        |texts| texts.iter().filter_map(|t| parse(t).ok()).collect(),
+                    ),
+                    overridden: overridden.is_some(),
+                    shadowed: self
+                        .shadowed
+                        .get(&(*owner, id.clone()))
+                        .into_iter()
+                        .flatten()
+                        .map(|(input, winner, winner_id)| {
+                            let manifest = self.declared[&(*winner, winner_id.clone())]
+                                .manifest
+                                .clone();
+                            (input.clone(), manifest, winner_id.clone())
+                        })
+                        .collect(),
+                }
+            })
+            .collect()
+    }
+
+    /// Overlay entries whose command is not declared (its plugin is stopped
+    /// or uninstalled): kept, and applied again when it returns.
+    pub fn orphans(&self) -> Vec<(String, Vec<String>)> {
+        self.overlay
+            .iter()
+            .filter(|(key, _)| {
+                key.split_once('/')
+                    .is_none_or(|(manifest, id)| !self.declares(manifest, id))
+            })
+            .map(|(key, inputs)| (key.clone(), inputs.clone()))
+            .collect()
+    }
+
+    /// `Mouse:LeftClick` is bound (the shell then waits out a double click).
+    pub fn has_left_click(&self) -> bool {
+        self.active
+            .keys()
+            .any(|(_, input)| input.name == "Mouse:LeftClick")
+    }
+
     /// Recompute from declarations: user overlay first, then defaults by owner
     /// generation (host 0 first, earlier-loaded plugins next), then declaration.
     fn rebuild(&mut self) {
@@ -626,12 +745,20 @@ impl Table {
         claims.sort();
         let mut active: BTreeMap<(Scope, Input), (bool, Target)> = BTreeMap::new();
         let mut conflicts = Vec::new();
+        let mut shadowed: Shadows = BTreeMap::new();
         for (default, owner, _, scope, input, id) in claims {
             let target = Target {
                 owner,
                 id: id.clone(),
                 repeat: self.declared[&(owner, id.clone())].repeat,
             };
+            if let Some((_, winner)) = active.get(&(scope, input.clone())) {
+                shadowed.entry((owner, id.clone())).or_default().push((
+                    input.clone(),
+                    winner.owner,
+                    winner.id.clone(),
+                ));
+            }
             match active.get(&(scope, input.clone())) {
                 None => {
                     active.insert((scope, input), (default, target));
@@ -660,6 +787,8 @@ impl Table {
             }
         }
         self.conflicts = conflicts;
+        self.shadowed = shadowed;
+        self.revision += 1;
         self.active = active
             .into_iter()
             .map(|(key, (_, target))| (key, target))
@@ -1361,5 +1490,83 @@ mod tests {
             ),
             Some(key("F11"))
         );
+    }
+
+    #[test]
+    fn management_lists_current_shadowed_and_orphan_bindings() {
+        let mut table = Table::default();
+        let strings = |list: &[&str]| list.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        table
+            .declare(
+                HOST,
+                "play-pause",
+                "host",
+                &strings(&["Space"]),
+                false,
+                false,
+            )
+            .unwrap();
+        table
+            .declare(
+                4,
+                "toggle",
+                "a.plugin",
+                &strings(&["Space", "P"]),
+                false,
+                false,
+            )
+            .unwrap();
+        let before = table.revision();
+        let infos = table.infos();
+        let toggle = infos.iter().find(|i| i.id == "toggle").unwrap();
+        assert_eq!(
+            toggle.shadowed,
+            vec![(key("Space"), "host".into(), "play-pause".into())]
+        );
+        assert!(!toggle.overridden);
+        // The user moves play/pause to K and keeps a binding of a stopped plugin.
+        let mut overlay = BTreeMap::new();
+        overlay.insert("host/play-pause".into(), strings(&["K"]));
+        overlay.insert("gone.plugin/x".into(), strings(&["Mouse:LeftClick"]));
+        table.set_overlay(overlay);
+        assert!(table.revision() > before);
+        let infos = table.infos();
+        let play = infos.iter().find(|i| i.id == "play-pause").unwrap();
+        assert!(play.overridden);
+        assert_eq!(play.current, vec![key("K")]);
+        assert_eq!(play.defaults, vec![key("Space")]);
+        assert!(
+            infos
+                .iter()
+                .find(|i| i.id == "toggle")
+                .unwrap()
+                .shadowed
+                .is_empty()
+        );
+        assert_eq!(table.resolve(&key("Space"), None).unwrap().id, "toggle");
+        assert_eq!(
+            table.orphans(),
+            vec![("gone.plugin/x".into(), strings(&["Mouse:LeftClick"]))]
+        );
+        assert!(!table.has_left_click(), "an orphan binds nothing");
+        assert!(table.declares("host", "play-pause") && !table.declares("host", "toggle"));
+        assert_eq!(
+            Table::canonical(&strings(&["Ctrl+Shift+A", "Mouse:LeftClick"])).unwrap(),
+            strings(&["Ctrl+Shift+A", "Mouse:LeftClick"])
+        );
+        assert!(Table::canonical(&strings(&["K", "K"])).is_err());
+        assert!(Table::canonical(&strings(&["Shift+Ctrl+A"])).is_err());
+        table
+            .declare(
+                4,
+                "click",
+                "a.plugin",
+                &strings(&["Mouse:LeftClick"]),
+                false,
+                false,
+            )
+            .unwrap();
+        assert!(table.has_left_click());
+        assert_eq!(text(&key("Alt+Shift+Cmd+F5")), "Alt+Shift+Cmd+F5");
     }
 }

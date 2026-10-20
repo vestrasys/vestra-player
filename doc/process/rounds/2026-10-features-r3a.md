@@ -254,6 +254,55 @@ plugin.dialogs.confirm(options: { message: string; detail?: string; confirm: str
 5. `plugin.app`：与终端 `mpv --version` 第一行、`ffmpeg -version`（同一 Homebrew 库时）一致。
 6. 章节与循环：带章节的 mkv `chapters()` 与 `mpv --term-playing-msg='${chapter-list}'` 一致；A-B 循环在 B 点回到 A（误差约一帧）；换文件后不再回跳。
 
+#### 插队修复（协调者 GUI 实测反馈）
+
+- **Round 2 fix: subtitle state after external load**（`80aac8a`，基于 `289b26b`，供 cherry-pick 到 `rebuild/features-r2`；本分支为 `26336bc`）。根因在 SDK：新来源加载期间宿主仍报告旧来源的选择戳（外部字幕载入后 revision 为 2），新来源就绪后选择从新代数的 revision 0 开始；`SubtitleService.accept` 按「同一来源代数、revision 变小」把就绪状态全部丢弃，插件停在 `loading`，`expected()` 又带着旧代数的戳，于是所有修改 `stale`。改为只在同一选择代数内比较 revision。回归测试在 `tests/sdk/round2.test.ts`；无界面复现脚本（载入 SRT / ASS、载入后移除、B 为 mkv / 无字幕 mp4）均在 1 秒内 `ready` 且 `select` 成功。
+- **Round 3a fix: Option 符号、Option+命名键、Slint 修饰键残留**（`0e3dfbc`）。① Option 打出非字母数字字符时（德语 ⌥5 = `[`、⌥7 = `|`、⌥⇧7 = `\`、⌥L = `@`）先按该字符匹配，再按物理键 `Alt+…`，都有绑定时字符优先；字母仍按物理键；美式 ⌥[ 仍是 `Alt+[`。② 命名键（Delete、Backspace、方向键、Home/End、PageUp/Down、Enter、Tab、Escape、Space、Insert、F1–F24）按物理键识别，⌥⌦ 没有 text 时也是 `Alt+Delete`。③ Slint 只从修饰键自身的按键事件跟踪修饰状态；winit `ModifiersChanged` 报告某修饰键释放而 Slint 没收到时，宿主在主循环里向该窗口补发 `KeyReleased`，避免 ⌥ 残留影响之后的右键菜单。参考 §4.1 已写明布局规则与 `Delete` 对应的物理键；`VESTRA_DEBUG_KEYS` 多打印 `typed=`。
+
+#### P1 批次 2（2026-10-21，维护者）：绑定管理、插件管理、音频输出、次字幕
+
+**实现清单**
+
+| 任务单 | 内容 | 宿主 | SDK / TestHost / 文档 |
+| --- | --- | --- | --- |
+| §3.4 | `plugin.bindings.*`（R-K1，能力 `bindings.manage`） | `bindings::Table`：`infos()`（defaults / current / overridden / 由 `rebuild()` 记录的 shadowed）、`orphans()`、`canonical()`、`revision`；`binding_manager.rs`：`bindings.list/set/reset`，覆盖层写 `ui_state`（去抖保存）后 `set_overlay`；`labels` 用菜单文字的同一个 `bindings::label` | `sdk/plugin/bindings.ts` 的 `bindingsApi`；`host.bindings.overlay`（`press` 按覆盖层匹配） |
+| §3.4 | `bindings.changed` | 绑定表修订号变化后（每 200 ms 至多一次）推送；`events.subscribe` 对该事件要求 `bindings.manage` 而不是 `events` | `Runtime.on(event, listener, needs)` |
+| §3.4 | `Mouse:LeftClick`（R-K3、R-H11） | 输入名（宿主与 SDK 两处）；`host.slint` 的视频区左键按下调用 `left-press(x, y, 修饰键)`，只在有生效绑定时登记；`window_tick` 在系统双击间隔（`NSEvent::doubleClickInterval`）后、指针移动 ≤ 4 点时触发；间隔内第二次按下取消（双击照常） | `host.press("Mouse:LeftClick")` |
+| §3.3 | `packages.list` / `onChange`（R-G1） | `package_manager::package_list`：运行表（激活状态 → starting / running / failed）+ 安装库（current / previous、停用集合）+ 本次运行的开发加载；`failures` 记录激活失败、运行故障、进程意外退出；`packages.changed` 每 200 ms 比较一次、有订阅者时才计算；该事件不需要能力 | `host.packages`、`host.setPackages` |
+| §3.3 | `setEnabled`（R-G2）、R-H10 | 停用 = `disable(owner)`；已安装的写进 catalog `disabled`（同一次原子替换），启动时跳过；开发加载只记在本次运行；启用 = `load_package` / `load`；停用自己 `invalid`、试载 `unsupported`、未知 `missing`、安装中 `busy`；安装或回退的提交清除停用标记 | `host.packageCalls` |
+| §3.3 | `uninstall`（R-G3） | 只对已安装插件；先停用，`Store::uninstall` 一次 catalog 替换删除记录与回执，再 `gc`；`removeData` 在进程回收（`Reaped`）后删除 `<数据根>/<id>`；覆盖层不动（orphan）；复用 `requestId` 回执去重与 `PackageChange` | SDK 复用 `change()`（期望修订号 + 请求 id） |
+| §3.5 | `audioDevices` / `setAudioDevice` / `audioOutput`（R-A2–A4） | `source_backend`：`audio-device-list`（去掉 `auto`，有 `coreaudio/` 时只列它们，macOS 另有重复的 `avfoundation/`）；每秒检查请求的设备是否在列表中，在则 `audio-device = <id>`，不在则 `auto`，重新接入后切回；`source.state.audioOutput = { requested, active }` | `host.audioDevices`；`setAudioDevice` 更新 `host.source.audioOutput` |
+| §3.5 | R-H9 生成流跟随设备 | cpal CoreAudio 的 `DeviceId` 就是设备 UID，与 mpv `coreaudio/<UID>` 一一对应（`device_by_id`）。`producer_audio::Audio`：渲染状态放进 `Arc<Mutex<Callback>>`，数据回调只 `try_lock`（只有换设备的那一刻有竞争，输出一个静音缓冲）；`retarget()` 暂停旧流、在新设备上建流并播放，队列、时钟、暂停状态不变；所选设备上的 `DeviceNotAvailable` 不再致命，由每秒的跟随改回默认 | 参考 §5.2 |
+| §3.7 | 次字幕（R-T3、R-T7 余项） | `subtitle_state` 增加 `secondary` 选择槽：`select_secondary`、`register_as_secondary`，主次互斥（两个方向 `invalid`），资源移除、所属插件停用、内嵌轨消失、换来源时清空；`subtitle_backend`：`subtitles.select` 的 `role`、`commit` 的 `select: "secondary"`，图形轨作次字幕 `invalid`，`set_target` 依次设 `secondary-sid=no`、`sid`、`secondary-sid` 并逐一确认；新来源就绪时 `secondary-sid=no`；`SubtitleStyle.secondaryPosition` → `secondary-sub-pos` | `SubtitlesState.secondary`；`host.subtitles.selection.secondary` |
+| §3.9 | 文档 | — | 参考 §2、§3.4（数据目录规则）、§4.1、§4.2（新）、§5.1、§5.2、§9、§12、§14、§17 批次 2；示例 §25（快捷键设置）、§26（插件管理与音频输出） |
+
+**签名调整与实现取舍**（签名均与裁决一致）
+
+1. `PlayerState.audioOutput` 与批次 1 的 `loop` 一样在 `types.ts` 里写成可选，SDK 总是给出。
+2. `setAudioDevice` 接受当前不存在的 id（`active: null`，接入后生效）：audio 插件在激活时恢复保存的设备，那时设备可能还没插上。格式不对（空、超过 512、控制字符）为 `invalid`。
+3. `audioDevices` 只列 `coreaudio/` 设备（有的话）：mpv 在 macOS 上把每个设备在 `avfoundation/` 下再列一次，同一设备出现两次对用户没有意义。
+4. `packages.list` / `onChange` 不需要能力，`setEnabled` / `uninstall` 需要 `plugins.manage`：宿主的能力表原来把 `packages.*` 全部归 `plugins.manage`，现在 `packages.list` 单独放开，`packages.changed` 事件的订阅也不要求 `events`。
+5. `PluginInfo.version` 对没有 `version` 字段的开发加载为 `null`。`directory` 是包目录（规范路径），数据目录按 `<数据根>/<id>` 推出，参考 §3.4 写明「数据根 = `dirname(plugin.dataDirectory)`」。
+6. `uninstall` 同步完成：返回的 `PackageChange` 一开始就是 `committed`；`removeData` 的删除在插件进程退出之后（它停用时可能还在写设置文件）。
+7. `secondaryPosition: "aboveMain"` 用估算值：`secondary-sub-pos = 100 − 底边距% − 两行主字幕高度%`（字号按 1080p 参考，行高 1.25）；字号 36、边距 5% 时为 87。主字幕实际只有一行时次字幕会离主字幕多一行，GUI 实测确认观感。
+8. 「含字幕」截图（`media.capture({ processed })`）只含主字幕。
+9. TestHost 的 `packages.installed` 新增了默认处理（返回修订号 1/0），只为让 `uninstall` 的期望修订号在测试里可用；已有测试用 `host.handle` 覆盖不受影响。
+
+**检查**
+
+- `src/`：`check`、`format:check`、`boundaries`、`plugins:build` 0；`test:sdk` 81/81（`round3a.test.ts` 新增 4 条：绑定、插件管理、音频输出、次字幕）；插件测试 audio 30、bilibili 15、capture 24、history 22、info 20、nes 11、playback 45、playlist 61、subtitle-online 13、subtitles 46、video 22、workshop 17、youtube 14 全过（workshop `vendor/sdk` 已重同步）。`test:sdk` 有一次 1 条计时用例偶发失败，重跑通过。
+- `src/host/`：`cargo fmt --check`、`clippy --locked --all-targets -D warnings`（含 `--no-default-features`）0；`cargo test --locked` 195/195（批次 2 新增：绑定表管理 1、引用校验 1、安装库停用与卸载 1、设备列表 1、次字幕选择槽 1、次字幕位置 1）。
+- 无界面实测（两个开发加载的探针插件）：`bindings.list` 18 条命令，插件的 Space 显示被 `host/play-pause` 占用；`set(host/play-pause, ["K","Mouse:LeftClick"])` 后 `current`、`labels` 更新、冲突消失；不存在的命令 `missing`；`reset()` 后恢复；`onChange` 合并为 2 次。`packages.list` 两个开发加载为 `running`；停用自己 `invalid`；停用另一个后 `packages.changed` 推送 `disabled`，启用后回到 `running`；卸载开发加载 `unsupported`。`audioDevices` → `[{coreaudio/BuiltInSpeakerDevice, MacBook Air Speakers}]`；选中后 `audioOutput` 为 `{requested, active}` 同值，选一个不存在的 id 时 `active: null`。次字幕：`load({ select: "secondary" })` 后 `secondary` 为该轨、`trackConfirmation: applied`；再把内嵌轨设为次字幕成功；`secondaryPosition: "aboveMain"` 进入生效样式；换来源后 `secondary: null`。
+- 宿主 Rust：`src/host/src/*.rs` 27 068 → 28 577（批次 2 +1 241，插队按键修复 +268）；本轮累计 26 306 → 28 577 = **+2 271**，另 `build.rs` 40 行，在约 3 000 行的预算内。SDK 与运行器（`src/sdk/plugin/*.ts` + `src/runtime/`）本轮累计 +882，`src/sdk/*.ts` 线上类型 +117。
+
+**给协调者的 GUI 实测要点**
+
+1. 绑定：用 hotkeys 插件或探针把「播放/暂停」改为 K：K 生效、Space 不再触发，菜单右侧显示 K；重启播放器后仍是 K（界面状态文件 `bindings` 里有 `host/play-pause`）；`reset` 后恢复 Space；冲突的命令在 `list` 的 `shadowed` 里写明占用者。
+2. 左键单击：给「播放/暂停」加 `Mouse:LeftClick`：视频上单击约 0.25–0.5 秒后切换（系统「双击速度」设置决定）；双击仍是全屏、且不额外触发单击；按下后拖动超过 4 点不触发；去掉绑定后单击无延迟、只聚焦。
+3. 插件管理：停用 video 后其菜单消失、画面效果撤销；重启播放器后 video 仍停用（安装的插件；`--plugin` 开发加载重启后会再加载）；启用后恢复；工坊安装的插件卸载后列表里消失，`removeData: true` 时 `~/Library/Application Support/Vestra/plugin-data/<id>/` 被删除；停用自己时 `invalid`。
+4. 音频输出：设备列表与「系统设置 ▶ 声音」一致（每个设备一次）；选耳机后声音从耳机出；拔掉耳机约 1 秒内回到扬声器、`active` 变为 `null`，插回后约 1 秒切回；NES 播放时同样跟随（拔插瞬间可能有一个缓冲的静音），拔掉所选设备时 NES 不会停止。
+5. 次字幕：中英两条内嵌轨，主中文、次英文同时显示；`secondaryPosition` `top` 在画面顶部、`aboveMain` 在主字幕上方（观察间距是否合适）；把次字幕选成主字幕那条 `invalid`；PGS 轨不能作次字幕；换文件后次字幕消失。
+
 ### 6.3 作者交付
 
 （各作者完成时填写）

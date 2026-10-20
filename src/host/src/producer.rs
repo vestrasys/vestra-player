@@ -53,6 +53,8 @@ pub struct Producers {
     active: Option<u64>,
     next: u64,
     retiring: Vec<JoinHandle<()>>,
+    /// The output device generated streams play on (`None` = system default).
+    device: Option<String>,
 }
 fn failure(message: impl ToString) -> RpcError {
     RpcError::new("producer", message.to_string())
@@ -99,7 +101,7 @@ impl Producers {
             let path = directory.path().join("av.sock");
             let listener = UnixListener::bind(&path).map_err(failure)?;
             listener.set_nonblocking(true).map_err(failure)?;
-            let (audio, writer) = Audio::open().map_err(failure)?;
+            let (audio, writer) = Audio::open(self.device.as_deref()).map_err(failure)?;
             audio.reset(1, true, 0).map_err(failure)?;
             let shared = Arc::new(Shared::default());
             shared.desired_epoch.store(1, Ordering::Release);
@@ -192,6 +194,15 @@ impl Producers {
         p.audio.set_paused(p.epoch, paused).map_err(failure)?;
         self.active = Some(id);
         Ok(())
+    }
+    /// R-H9: every stream moves to the chosen output device (or the default).
+    pub fn follow_device(&mut self, device: Option<&str>) {
+        self.device = device.map(str::to_owned);
+        for p in self.items.values_mut() {
+            if let Err(error) = p.audio.retarget(device) {
+                eprintln!("host.error producer audio device: {error:#}");
+            }
+        }
     }
     pub fn output(&mut self, volume: f64, muted: bool) {
         for p in self.items.values() {

@@ -705,3 +705,43 @@ plugin.player.state.loop;                                    // { a: 12.5, b: 30
 await plugin.player.setLoop(null);                           // 取消；换文件时播放器也会清除
 ```
 
+## 25. 快捷键设置：列出、改绑、冲突、恢复
+
+```ts
+export default async function activate(plugin: Plugin) { // bindings.manage、ui.window
+  const keys = plugin.windows.create("ui/keys.slint");
+  let rows: Json[] = [];
+  const reload = async () => {
+    const { commands } = await plugin.bindings.list();
+    rows = commands.map((c) => ({
+      plugin: c.plugin, command: c.command, title: c.title,
+      keys: c.labels.join(", "),
+      conflict: c.shadowed.map((s) => `${s.input} 被 ${s.by.plugin}/${s.by.command} 占用`).join("；"),
+    }));
+  };
+  keys.bind(() => ({ rows }));
+  plugin.bindings.onChange(reload);                         // 插件加载、停用、改绑后
+  keys.on("rebind", (plugin_: string, command: string, input: string) =>
+    plugin.bindings.set({ plugin: plugin_, command }, [input])); // "host" 是播放器自己的命令
+  keys.on("unbind", (plugin_: string, command: string) =>
+    plugin.bindings.set({ plugin: plugin_, command }, []));
+  keys.on("resetAll", () => plugin.bindings.reset());
+  await reload();
+}
+```
+
+`set` 写入用户覆盖层（跨启动保存），立即生效并优先于所有默认绑定；输入写法同 §4.1，可以是 `Mouse:LeftClick`。测试里 `host.bindings.overlay` 是覆盖层，`host.press` 按它匹配。
+
+## 26. 插件管理与音频输出
+
+```ts
+const list = await plugin.packages.list();                 // 不需要能力
+plugin.packages.onChange((plugins) => render(plugins));
+await plugin.packages.setEnabled("vestra.video", false);    // plugins.manage；重启后仍停用
+const change = await plugin.packages.uninstall("community.counter", { removeData: true });
+await change.done;                                         // "committed"
+const devices = await plugin.player.audioDevices();         // [{ id: "coreaudio/…", name: "耳机" }]
+await plugin.player.setAudioDevice(devices[1]!.id);         // 拔出时回到系统默认，插回后切回
+plugin.player.state.audioOutput;                            // { requested, active }
+```
+
