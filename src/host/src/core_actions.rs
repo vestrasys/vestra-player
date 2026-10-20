@@ -101,9 +101,6 @@ impl Facts {
     fn can_rate(&self) -> bool {
         self.can_rate && self.phase_ready
     }
-    fn can_frame(&self) -> bool {
-        self.phase_ready && self.media && self.video
-    }
 }
 
 /// JavaScript's `String(n)` for the values used here: `5`, `0.5`, `10.5`.
@@ -271,7 +268,10 @@ pub fn state(action: &str, facts: &Facts, busy: bool) -> CommandState {
         ),
         "previous" => ready(facts.previous, None, false, "没有上一个"),
         "next" => ready(facts.next, None, false, "没有下一个"),
-        "frame-back" | "frame-forward" => ready(facts.can_frame(), None, busy, UNSUPPORTED),
+        "frame-back" | "frame-forward" => match frame_check(facts, action == "frame-forward") {
+            Ok(()) => ready(true, None, busy, UNSUPPORTED),
+            Err(reason) => ready(false, None, busy, reason),
+        },
         "seek-backward" | "seek-forward" => ready(facts.can_step_seek(), None, false, UNSUPPORTED),
         "rate-normal" => ready(facts.can_rate(), Some(facts.rate == 1.0), busy, UNSUPPORTED),
         "rate-down" | "rate-up" => ready(facts.can_rate(), None, busy, UNSUPPORTED),
@@ -391,33 +391,112 @@ pub fn valid_step(seconds: f64) -> bool {
         && ((seconds * 10.0).round() - seconds * 10.0).abs() < 1e-9
 }
 
-/// The mpv command for `player.step`, or why it cannot step.
-pub fn step_command(
+pub const NO_VIDEO: &str = "没有视频";
+pub const NO_FRAME_BACK: &str = "当前来源不支持逐帧后退";
+pub const LAST_FRAME: &str = "已是最后一帧";
+pub const FIRST_FRAME: &str = "已是第一帧";
+
+/// Whether one frame that way is possible now (B07), or the reason. Forward
+/// needs playing-ready media with moving video (a live stream can step
+/// forward); backward also works after the end but needs a seekable source.
+pub fn frame_check(facts: &Facts, forward: bool) -> Result<(), &'static str> {
+    if facts.phase_empty || !(facts.phase_ready || facts.phase_ended) {
+        return Err(UNSUPPORTED);
+    }
+    if !facts.media {
+        return Err(if forward { UNSUPPORTED } else { NO_FRAME_BACK });
+    }
+    if !facts.video {
+        return Err(NO_VIDEO);
+    }
+    if forward && !facts.phase_ready {
+        return Err(UNSUPPORTED);
+    }
+    if !forward && !facts.can_seek {
+        return Err(NO_FRAME_BACK);
+    }
+    Ok(())
+}
+
+/// What `player.step` does.
+#[derive(Clone, Debug, PartialEq)]
+pub enum StepPlan {
+    /// An mpv command, then wait for the new position.
+    Command(Vec<&'static str>),
+    /// After the end: an exact source seek one frame before the position.
+    FromEnd,
+    /// Already on the first frame: nothing moves.
+    AtStart,
+}
+
+/// The plan for `player.step`, or `(code, reason)`.
+pub fn step_plan(
     facts: &Facts,
-    seekable: bool,
     unit: &str,
     direction: &str,
-) -> Result<Vec<&'static str>, &'static str> {
+) -> Result<StepPlan, (&'static str, &'static str)> {
     let forward = match direction {
         "forward" => true,
         "backward" => false,
-        _ => return Err("invalid"),
+        _ => return Err(("invalid", "direction is backward or forward")),
     };
-    if !matches!(unit, "frame" | "keyframe") {
-        return Err("invalid");
+    match unit {
+        "frame" => {
+            frame_check(facts, forward).map_err(|reason| ("unsupported", reason))?;
+            if !forward && facts.position.is_some_and(|p| p <= 0.001) {
+                return Ok(StepPlan::AtStart);
+            }
+            Ok(if forward {
+                StepPlan::Command(vec!["frame-step"])
+            } else if facts.phase_ended {
+                StepPlan::FromEnd
+            } else {
+                StepPlan::Command(vec!["frame-back-step"])
+            })
+        }
+        "keyframe" => {
+            if !(facts.phase_ready && facts.media && facts.video && facts.can_seek) {
+                return Err((
+                    "unsupported",
+                    if facts.video { UNSUPPORTED } else { NO_VIDEO },
+                ));
+            }
+            // Measured with mpv 0.41: `seek ±0 relative+keyframes` lands on
+            // the current or an earlier keyframe; ±1 ms with keyframes
+            // strictly passes the current one in either direction.
+            Ok(StepPlan::Command(if forward {
+                vec!["seek", "0.001", "relative+keyframes"]
+            } else {
+                vec!["seek", "-0.001", "relative+keyframes"]
+            }))
+        }
+        _ => Err(("invalid", "unit is frame or keyframe")),
     }
-    if !facts.can_frame() || (!forward && !seekable) || (unit == "keyframe" && !seekable) {
-        return Err("unsupported");
+}
+
+/// `HH:MM:SS.mmm`.
+pub fn precise_time(seconds: f64) -> String {
+    let millis = (seconds.max(0.0) * 1000.0).round() as u64;
+    format!(
+        "{:02}:{:02}:{:02}.{:03}",
+        millis / 3_600_000,
+        millis / 60_000 % 60,
+        millis / 1000 % 60,
+        millis % 1000
+    )
+}
+
+/// The frame-step notice once it settled: where it is, or the boundary.
+pub fn frame_notice(forward: bool, moved: bool, position: Option<f64>) -> String {
+    match (moved, position) {
+        (true, Some(position)) => format!(
+            "定位: {} {}",
+            if forward { "下一帧" } else { "上一帧" },
+            precise_time(position)
+        ),
+        _ if forward => LAST_FRAME.into(),
+        _ => FIRST_FRAME.into(),
     }
-    // Measured with mpv 0.41: `seek ±0 relative+keyframes` lands on the
-    // current or an earlier keyframe; ±1 ms with keyframes strictly passes
-    // the current one in either direction.
-    Ok(match (unit, forward) {
-        ("frame", true) => vec!["frame-step"],
-        ("frame", false) => vec!["frame-back-step"],
-        (_, true) => vec!["seek", "0.001", "relative+keyframes"],
-        (_, false) => vec!["seek", "-0.001", "relative+keyframes"],
-    })
 }
 
 /// Old playback-plugin overlay keys and the core action that replaces each.
@@ -684,57 +763,99 @@ mod tests {
     }
 
     #[test]
-    fn step_needs_moving_video_and_seekable_backwards() {
+    fn frame_steps_follow_b07_directions_reasons_and_notices() {
         let facts = playing();
+        let plan = |facts: &Facts, unit, direction| step_plan(facts, unit, direction);
         assert_eq!(
-            step_command(&facts, true, "frame", "forward").unwrap(),
-            ["frame-step"]
+            plan(&facts, "frame", "forward").unwrap(),
+            StepPlan::Command(vec!["frame-step"])
         );
         assert_eq!(
-            step_command(&facts, true, "frame", "backward").unwrap(),
-            ["frame-back-step"]
+            plan(&facts, "frame", "backward").unwrap(),
+            StepPlan::Command(vec!["frame-back-step"])
         );
         assert_eq!(
-            step_command(&facts, true, "keyframe", "forward").unwrap()[1],
-            "0.001"
+            plan(&facts, "keyframe", "forward").unwrap(),
+            StepPlan::Command(vec!["seek", "0.001", "relative+keyframes"])
         );
         assert_eq!(
-            step_command(&facts, true, "keyframe", "backward").unwrap()[1],
-            "-0.001"
+            plan(&facts, "keyframe", "backward").unwrap(),
+            StepPlan::Command(vec!["seek", "-0.001", "relative+keyframes"])
         );
+        // A live stream (not seekable) steps forward only.
+        let live = Facts {
+            can_seek: false,
+            ..facts
+        };
+        assert!(frame_check(&live, true).is_ok());
+        assert_eq!(frame_check(&live, false), Err(NO_FRAME_BACK));
         assert_eq!(
-            step_command(&facts, false, "frame", "forward").unwrap(),
-            ["frame-step"]
+            plan(&live, "keyframe", "forward").unwrap_err().0,
+            "unsupported"
         );
+        // After the end only backwards, by an exact seek.
+        let ended = Facts {
+            phase_ready: false,
+            phase_ended: true,
+            ..facts
+        };
+        assert_eq!(frame_check(&ended, true), Err(UNSUPPORTED));
         assert_eq!(
-            step_command(&facts, false, "frame", "backward"),
-            Err("unsupported")
+            plan(&ended, "frame", "backward").unwrap(),
+            StepPlan::FromEnd
         );
-        assert_eq!(
-            step_command(&facts, false, "keyframe", "forward"),
-            Err("unsupported")
-        );
+        // Audio only, a generated stream, nothing open.
         let audio = Facts {
             video: false,
             ..facts
         };
-        assert_eq!(
-            step_command(&audio, true, "frame", "forward"),
-            Err("unsupported")
-        );
+        assert_eq!(frame_check(&audio, true), Err(NO_VIDEO));
+        assert_eq!(frame_check(&audio, false), Err(NO_VIDEO));
         let stream = Facts {
             media: false,
             ..facts
         };
+        assert_eq!(frame_check(&stream, false), Err(NO_FRAME_BACK));
+        assert_eq!(frame_check(&stream, true), Err(UNSUPPORTED));
+        let empty = Facts::from_state(&json!({"phase":"empty","capabilities":{}}));
+        assert_eq!(frame_check(&empty, true), Err(UNSUPPORTED));
+        // The first frame does not move.
+        let start = Facts {
+            position: Some(0.0),
+            ..facts
+        };
         assert_eq!(
-            step_command(&stream, true, "frame", "forward"),
-            Err("unsupported")
+            plan(&start, "frame", "backward").unwrap(),
+            StepPlan::AtStart
+        );
+        assert_eq!(plan(&facts, "second", "forward").unwrap_err().0, "invalid");
+        assert_eq!(plan(&facts, "frame", "up").unwrap_err().0, "invalid");
+        // Command states carry the same reasons.
+        assert_eq!(
+            state("frame-back", &audio, false).reason.as_deref(),
+            Some(NO_VIDEO)
+        );
+        assert!(state("frame-back", &ended, false).enabled);
+        assert_eq!(
+            state("frame-forward", &ended, false).reason.as_deref(),
+            Some(UNSUPPORTED)
         );
         assert_eq!(
-            step_command(&facts, true, "second", "forward"),
-            Err("invalid")
+            state("frame-back", &live, false).reason.as_deref(),
+            Some(NO_FRAME_BACK)
         );
-        assert_eq!(step_command(&facts, true, "frame", "up"), Err("invalid"));
+        assert!(state("frame-forward", &live, false).enabled);
+        // Notices.
+        assert_eq!(
+            frame_notice(true, true, Some(83.456)),
+            "定位: 下一帧 00:01:23.456"
+        );
+        assert_eq!(
+            frame_notice(false, true, Some(3723.004)),
+            "定位: 上一帧 01:02:03.004"
+        );
+        assert_eq!(frame_notice(true, false, Some(10.0)), LAST_FRAME);
+        assert_eq!(frame_notice(false, false, Some(0.0)), FIRST_FRAME);
     }
 
     #[test]

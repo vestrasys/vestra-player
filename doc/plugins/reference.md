@@ -305,7 +305,7 @@ interface AudioTrack {
 | `openStream(options)` → `Promise<Stream>` | 由插件生成画面和声音的来源（模拟器等） |
 | `addAudioTrack(path, { select?, ifCurrent? })` → `Promise<AudioTrack>` | 给当前媒体加一条外部音频文件（本地绝对路径），默认同时选中（`select: false` 只添加）。返回新音轨（`external: true`、`exportable: false`），它保留到换来源。路径不合法 `invalid`，没有就绪的媒体（含生成流）`unavailable`，载入失败 `backend` |
 | `selectAudioTrack(id, opts?)` → `Promise<PlayerState>` | 选中 `state.audioTracks` 中的一条；id 不存在 `invalid` |
-| `step(unit, direction, opts?)` | `unit`：`"frame"`（一帧，前进时暂停在下一帧）或 `"keyframe"`（严格越过当前关键帧到下一个/上一个）；`direction`：`"backward"` \| `"forward"`。没有活动视频（纯音频、只有封面）、生成流、或后退/关键帧需要但来源不可跳转时 `unsupported`；只执行一步，连按的去重由调用方决定（核心的「上一帧/下一帧」会丢弃在途时的重复触发） |
+| `step(unit, direction, opts?)` | `unit`：`"frame"`（一帧，前进时暂停在下一帧）或 `"keyframe"`（严格越过当前关键帧到下一个/上一个）；`direction`：`"backward"` \| `"forward"`。可用条件与核心「上一帧/下一帧」相同（§5.5，`message` 为其原因），关键帧另需就绪且可跳转，否则 `unsupported`。**resolve 时新位置已生效**：宿主等到位置变化且没有在途的跳转（或 1.5 秒内不动 = 已到边界）才答复，SDK 随后刷新，之后读 `player.state.position` 就是新位置。同一时间只有一步在途，第二个调用以 `busy` 失败；连按的去重由调用方决定 |
 | `setStepSeek({ seconds })` | 核心第 1 档相对跳转（`seek-backward` / `seek-forward`，← / →）的步长：0.1–3600，一位小数，默认 5；菜单标题随之变为「后退 N秒」。所有插件最后写入的生效，该插件停用后回到上一个仍有效的值（都没有则 5） |
 
 `opts` 为 `{ ifCurrent?: PlayerState }`。
@@ -438,7 +438,7 @@ plugin.host.run(action: HostAction): Promise<void>;
 | `stop` | 关闭 | 120 / open | F4 | 关闭来源；没有来源时禁用 |
 | `play-pause` | 播放 ▶ 播放/暂停 | 201 | Space | 暂停/继续，播完后重播；「已暂停」/「播放」；勾选 = 已暂停 |
 | `previous` / `next` | 播放 ▶ 上一个 / 下一个 | 202 / 203 | PageUp、Mouse:X1 / PageDown、Mouse:X2 | 交给播放序列提供者（§5.4）；不可用时原因「没有上一个」/「没有下一个」 |
-| `frame-back` / `frame-forward` | 播放 ▶ 跳转 ▶ 上一帧 / 下一帧 | 204 / 205，frame | D / F（按住重复） | `player.step("frame", …)`；在途时丢弃重复触发；没有活动视频时禁用 |
+| `frame-back` / `frame-forward` | 播放 ▶ 跳转 ▶ 上一帧 / 下一帧 | 204 / 205，frame | D / F（按住重复） | `player.step("frame", …)`；在途时丢弃重复触发；完成后提示「定位: 下一帧 00:01:23.456」/「定位: 上一帧 …」（完成后的位置，精确到毫秒），没动时「已是最后一帧」/「已是第一帧」。两个方向分别判断：没有视频轨（纯音频、只有封面）禁用，原因「没有视频」；下一帧需要就绪（直播也可以，播完后不可）；上一帧播完后也可用，需要可跳转（生成流、不可跳转的直播原因「当前来源不支持逐帧后退」） |
 | `seek-backward` / `seek-forward` | 播放 ▶ 跳转 ▶ 后退/前进 N秒 | 210 / 211，step | ← / →（按住重复） | 从最新未完成的目标累加，夹在 0 与时长之间；「前进 5秒: 00:37 / 01:40」；N 见 `setStepSeek` |
 | `rate-normal` | 播放 ▶ 速度 ▶ 正常（单选） | 220 | Z | 1 倍；「播放速度: 1x」 |
 | `rate-down` / `rate-up` | 播放 ▶ 速度 ▶ 减速 0.1 / 加速 0.1 | 221 / 222 | X / C | ±0.1，取两位小数，夹在 0.25–4；「播放速度: 1.1x」 |
@@ -483,9 +483,11 @@ interface Window extends View, Disposable {
   hide(): Promise<void>;
   close(): Promise<void>; // 关闭；之后 show() 用最新属性重新打开
   readonly opened: boolean;
+  onClose(listener: () => unknown): Disposable; // 用户用标题栏关闭了窗口
 }
 ```
 
+- 用户点标题栏的关闭按钮时，播放器关闭该窗口（等同 `close()`），`opened` 变为 `false`，然后调用 `onClose` 的监听；之后 `show()` 用最新属性重新打开。插件自己调用 `close()` / `dispose()` 不触发 `onClose`。轮询之类的工作在 `onClose` 里停掉。测试里用 `host.window(id).userClose()` 模拟。
 - `create` 不会打开窗口。第一次 `show()` 时，用当前绑定的属性作为初始值打开，不会先闪一下默认值。
 - **回调必须在第一次 `show()` 之前用 `on` 绑定**，之后再绑定新的回调名会抛错。
 - 窗口 id 默认取文件名（`ui/picture.slint` → `picture`）；同一插件用同一文件开多个窗口时，用 `options.id` 区分，id 重复会抛错。
@@ -914,7 +916,7 @@ interface JsonStore<T> extends Disposable {
 
 - 文件为 `dataDirectory/<name>.json`；`name` 只能是 1–64 个 `a-z`、`0-9`、`-`，否则 `invalid`。
 - 创建时同步读取。文件不存在用 `defaults`；解析失败或 `validate` 返回 `false` 时，把原文件改名为 `<name>.json.bad-<毫秒时间戳>` 留给用户，并用 `defaults`。
-- 写入：临时文件 + 改名，按调用顺序一次一个，最后一次 `save` 的值最后落盘。
+- 写入：临时文件 + 改名，按调用顺序一次一个，最后一次 `save` 的值最后落盘。文件权限 0600（只有当前用户可读写），设置里常有私人路径与播放记录。
 - `dispose()` 与插件停用时先写完待写的值。只有 `save` 会写入：原地修改 `value` 的属性不会保存。
 
 ### 16.5 Finder 与浏览器 `plugin.system`

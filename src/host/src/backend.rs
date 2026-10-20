@@ -262,21 +262,34 @@ impl Backend {
                             publish_gate: &publish_gate,
                         };
                         if command.method == "host.action" {
-                            let result = actions.run(&mut context, &command.params);
+                            let action = command.params["action"].as_str().unwrap_or("").to_owned();
+                            let done = Completion::Action(command.reply, action);
+                            let result = actions.run(&mut context, &command.params, done);
                             processing.note_source(sources.generation(), sources.phase());
                             subtitles.note_source(sources.generation(), sources.phase());
-                            let action = command.params["action"].as_str().unwrap_or("").to_owned();
-                            let _ = events.send(Event::ActionDone(command.reply, action, result));
+                            if let Some((done, result)) = result {
+                                done.send(&events, result);
+                            }
                             continue;
                         }
-                        let result = if command.method == "player.step" {
-                            actions.step(&mut context, &command.params)
-                        } else {
-                            context.call(command.reply.owner, &command.method, &command.params)
-                        };
+                        if command.method == "player.step" {
+                            let done = Completion::Step(command.reply);
+                            let result = actions.step(&mut context, &command.params, done);
+                            processing.note_source(sources.generation(), sources.phase());
+                            subtitles.note_source(sources.generation(), sources.phase());
+                            if let Some((done, result)) = result {
+                                done.send(&events, result);
+                            }
+                            continue;
+                        }
+                        let result =
+                            context.call(command.reply.owner, &command.method, &command.params);
                         processing.note_source(sources.generation(), sources.phase());
                         subtitles.note_source(sources.generation(), sources.phase());
                         let _ = events.send(Event::Reply(command.reply, result));
+                    }
+                    if let Some((done, result)) = actions.poll(&mpv) {
+                        done.send(&events, result);
                     }
                     while let Some(event) = mpv.poll_event() {
                         if let rsmpv::Event::LogMessage(message) = &event {
@@ -493,6 +506,8 @@ struct CoreActions {
     operation: u64,
     /// The newest relative-seek target: (source generation, target, when).
     seek: Option<(u64, f64, Instant)>,
+    /// The one step waiting for its new position.
+    stepping: Option<Stepping>,
 }
 impl CoreActions {
     fn submit(&mut self, context: &mut SourceContext, intent: Value) -> Result<(), RpcError> {
@@ -506,7 +521,22 @@ impl CoreActions {
             .map(|_| ())
     }
     /// `host.action { action, step }` → `{ osd }`; refused with `unavailable`.
-    fn run(&mut self, context: &mut SourceContext, params: &Value) -> Result<Value, RpcError> {
+    fn run(
+        &mut self,
+        context: &mut SourceContext,
+        params: &Value,
+        done: Completion,
+    ) -> Option<(Completion, Result<Value, RpcError>)> {
+        let mut done = Some(done);
+        let result = self.run_now(context, params, &mut done);
+        finished(done, result)
+    }
+    fn run_now(
+        &mut self,
+        context: &mut SourceContext,
+        params: &Value,
+        done: &mut Option<Completion>,
+    ) -> Result<Option<Value>, RpcError> {
         use crate::core_actions::{Facts, Plan, plan};
         let action = params["action"].as_str().unwrap_or("");
         let step = params["step"]
@@ -558,10 +588,9 @@ impl CoreActions {
                 )?;
             }
             Plan::Frame { forward } => {
-                self.step(
-                    context,
-                    &json!({"unit":"frame","direction":if forward {"forward"} else {"backward"}}),
-                )?;
+                let params =
+                    json!({"unit":"frame","direction":if forward {"forward"} else {"backward"}});
+                return self.step_now(context, &params, done);
             }
             Plan::Sequence { .. } => {
                 return Err(RpcError::new(
@@ -570,37 +599,135 @@ impl CoreActions {
                 ));
             }
         }
-        Ok(json!({ "osd": osd }))
+        Ok(Some(json!({ "osd": osd })))
     }
-    /// `player.step { unit, direction, expected? }`.
-    fn step(&mut self, context: &mut SourceContext, params: &Value) -> Result<Value, RpcError> {
+    /// `player.step { unit, direction, expected? }`: answered once the new
+    /// position is in place (see `poll`), so the caller's next state read has it.
+    fn step(
+        &mut self,
+        context: &mut SourceContext,
+        params: &Value,
+        done: Completion,
+    ) -> Option<(Completion, Result<Value, RpcError>)> {
+        let mut done = Some(done);
+        let result = self.step_now(context, params, &mut done);
+        finished(done, result)
+    }
+    /// Takes `done` only when the step waits for its position.
+    fn step_now(
+        &mut self,
+        context: &mut SourceContext,
+        params: &Value,
+        done: &mut Option<Completion>,
+    ) -> Result<Option<Value>, RpcError> {
+        use crate::core_actions::{FIRST_FRAME, Facts, StepPlan, step_plan};
+        if self.stepping.is_some() {
+            return Err(RpcError::new("busy", "the previous step is still running"));
+        }
         let state = context.sources.snapshot(context.mpv);
         if !params["expected"].is_null() && params["expected"] != state["stamp"] {
             return Err(RpcError::new("stale", "source changed"));
         }
-        let facts = crate::core_actions::Facts::from_state(&state);
-        let command = crate::core_actions::step_command(
-            &facts,
-            facts.can_seek,
-            params["unit"].as_str().unwrap_or(""),
-            params["direction"].as_str().unwrap_or(""),
-        )
-        .map_err(|code| {
-            RpcError::new(
-                code,
-                if code == "invalid" {
-                    "unit is frame or keyframe, direction backward or forward"
-                } else {
-                    "this source cannot step (no video, a generated stream, or not seekable)"
-                },
-            )
-        })?;
-        context
-            .mpv
-            .command(&command)
-            .map_err(|e| RpcError::new("backend", e.to_string()))?;
-        Ok(Value::Null)
+        let facts = Facts::from_state(&state);
+        let unit = params["unit"].as_str().unwrap_or("");
+        let forward = params["direction"] == "forward";
+        let plan = step_plan(&facts, unit, params["direction"].as_str().unwrap_or(""))
+            .map_err(|(code, reason)| RpcError::new(code, reason))?;
+        let before = context.mpv.get_property::<f64>("time-pos").ok();
+        match plan {
+            StepPlan::AtStart => {
+                return Ok(Some(json!({ "osd": FIRST_FRAME })));
+            }
+            StepPlan::Command(command) => context
+                .mpv
+                .command(&command)
+                .map_err(|e| RpcError::new("backend", e.to_string()))?,
+            StepPlan::FromEnd => {
+                let fps = ["estimated-vf-fps", "container-fps"]
+                    .iter()
+                    .find_map(|name| {
+                        context
+                            .mpv
+                            .get_property::<f64>(name)
+                            .ok()
+                            .filter(|fps| fps.is_finite() && *fps > 0.)
+                    })
+                    .unwrap_or(30.);
+                let target = (before.or(facts.position).unwrap_or(0.) - 1. / fps).max(0.);
+                self.submit(
+                    context,
+                    json!({"kind":"control","control":{"kind":"seek","seconds":target}}),
+                )?;
+            }
+        }
+        self.stepping = Some(Stepping {
+            done: done.take().expect("a completion for each step"),
+            forward,
+            notice: unit == "frame",
+            before,
+            started: Instant::now(),
+        });
+        Ok(None)
     }
+    /// Finish a step once the position moved and no seek is running, mpv hit
+    /// the end, or 1.5 s passed (nothing moved: a boundary).
+    fn poll(&mut self, mpv: &Mpv) -> Option<(Completion, Result<Value, RpcError>)> {
+        let stepping = self.stepping.as_ref()?;
+        let position = mpv.get_property::<f64>("time-pos").ok();
+        let seeking = mpv.get_property::<bool>("seeking").unwrap_or(false);
+        let moved = match (stepping.before, position) {
+            (Some(before), Some(now)) => (now - before).abs() > 0.0001,
+            _ => false,
+        };
+        let at_end = stepping.forward && mpv.get_property::<bool>("eof-reached").unwrap_or(false);
+        if !(moved && !seeking)
+            && !at_end
+            && stepping.started.elapsed() < Duration::from_millis(1500)
+        {
+            return None;
+        }
+        let stepping = self.stepping.take()?;
+        let osd = stepping
+            .notice
+            .then(|| crate::core_actions::frame_notice(stepping.forward, moved, position));
+        Some((stepping.done, Ok(json!({ "osd": osd }))))
+    }
+}
+
+/// An immediate outcome goes back with its completion; `None` is deferred.
+fn finished(
+    done: Option<Completion>,
+    result: Result<Option<Value>, RpcError>,
+) -> Option<(Completion, Result<Value, RpcError>)> {
+    match result {
+        Ok(None) => None,
+        Ok(Some(value)) => done.map(|done| (done, Ok(value))),
+        Err(error) => done.map(|done| (done, Err(error))),
+    }
+}
+
+/// Who waits for a deferred step.
+pub enum Completion {
+    /// A core action (`ActionDone` shows its notice).
+    Action(Reply, String),
+    /// A plugin's `player.step`.
+    Step(Reply),
+}
+impl Completion {
+    pub fn send(self, events: &mpsc::Sender<Event>, result: Result<Value, RpcError>) {
+        let _ = events.send(match self {
+            Self::Action(reply, action) => Event::ActionDone(reply, action, result),
+            Self::Step(reply) => Event::Reply(reply, result.map(|_| Value::Null)),
+        });
+    }
+}
+struct Stepping {
+    done: Completion,
+    forward: bool,
+    /// Frame steps show where they landed; keyframe steps are plugin calls.
+    notice: bool,
+    before: Option<f64>,
+    started: Instant,
 }
 
 /// When to publish `source.state`: every 100 ms, and at once when the source
