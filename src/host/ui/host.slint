@@ -1,17 +1,19 @@
-import { Button } from "std-widgets.slint";
+// Main window shell (core-ui-design.md §1). composition.rs replaces the
+// insertion markers with the mounted panels; without mounts it is the bare shell.
 import { MenuView, MenuLevel } from "menu-view.slint";
+import { Theme } from "@vestra/theme.slint";
 export component HostWindow inherits Window {
-    title: "Vestra · experimental host";
-    preferred-width: 1100px; preferred-height: 720px;
-    min-width: 720px; min-height: 480px;
-    background: #111318;
-    default-font-family: "Arial Unicode MS";
+    in property <string> window-title: "Vestra";
+    title: root.window-title;
+    preferred-width: 780px; preferred-height: 671px;
+    min-width: 320px; min-height: 182px;
+    background: Theme.bg-video;
+    // VESTRA-FONT
     in-out property <image> video-frame;
-    in property <string> diagnostic: "Starting libmpv…";
     in property <[MenuLevel]> menu-levels;
     // Where the menu opens, in window coordinates; the host reads it on menu-reset.
-    out property <float> menu-origin-x: 8;
-    out property <float> menu-origin-y: 40;
+    in-out property <float> menu-origin-x: 8;
+    in-out property <float> menu-origin-y: 8;
     callback menu-invoke(string);
     callback menu-hover(int, string);
     callback menu-reset();
@@ -20,78 +22,125 @@ export component HostWindow inherits Window {
     in property <bool> host-fullscreen: false;
     in property <bool> menu-open: false;
     in property <bool> input-blocked: false;
+    in property <bool> cursor-hidden: false;
     out property <bool> canvas-focused: canvas.has-focus;
-    in property <float> sidebar-width: 280;
+    // The user's sidebar width (dragging writes it; the host restores it).
+    in-out property <float> sidebar-width: 317;
+    // Video at least 318px, splitter 3px, sidebar at least 317px.
+    out property <float> sidebar-actual: clamp(root.sidebar-width, 317, max(317, root.width / 1px - 321));
     out property <float> logical-width: root.width / 1px;
     out property <float> logical-height: root.height / 1px;
-    out property <float> canvas-space-width: canvas-row.width / 1px;
-    out property <float> canvas-space-height: canvas-row.height / 1px;
+    // On-screen display (C5) and information blocks (C10).
+    in property <string> osd-text;
+    in property <bool> osd-visible: false;
+    in property <[string]> info-panels;
     callback window-input(string);
+    // Bindings (C3): true when the input is bound, so Slint stops propagating it.
+    callback key-input(string, string, bool, bool, bool, bool, bool) -> bool;
+    callback mouse-input(string, bool, bool, bool, bool) -> bool;
+    callback wheel-input(float, float, bool, bool, bool, bool) -> bool;
+    callback sidebar-resized(float);
     callback close-menu();
     close-menu => { canvas.focus(); }
+    // Keys reach the binding table only when something in the window has focus.
+    init => { canvas.focus(); }
     // VESTRA-MOUNT-PROPERTIES
-    VerticalLayout {
-        padding: root.host-fullscreen ? 0px : 8px;
+    keys := FocusScope {
+        key-pressed(event) => {
+            if root.key-input("", event.text, event.modifiers.control, event.modifiers.alt,
+                    event.modifiers.shift, event.modifiers.meta, event.repeat) {
+                return accept;
+            }
+            root.window-input("activity");
+            reject
+        }
         HorizontalLayout {
-            visible: !root.host-fullscreen; min-height: root.host-fullscreen ? 0px : 36px; max-height: root.host-fullscreen ? 0px : 36px;
-            commands-button := Button {
-                text: "Commands";
-                clicked => {
-                    root.menu-origin-x = self.absolute-position.x / 1px;
-                    root.menu-origin-y = (self.absolute-position.y + self.height) / 1px;
-                    root.menu-reset();
+            spacing: 0px;
+            VerticalLayout {
+                horizontal-stretch: 1;
+                min-width: 318px;
+                canvas := FocusScope {
+                    vertical-stretch: 1;
+                    changed has-focus => { if !self.has-focus { root.window-input("canvasFocusLost"); } }
+                    Rectangle {
+                        background: Theme.bg-video;
+                        Image { width: parent.width; height: parent.height; source: root.video-frame; image-fit: contain; }
+                        mouse := TouchArea {
+                            private property <KeyboardModifiers> mods;
+                            mouse-cursor: root.cursor-hidden ? MouseCursor.none : MouseCursor.default;
+                            changed mouse-x => { root.window-input("activity"); }
+                            changed mouse-y => { root.window-input("activity"); }
+                            double-clicked => {
+                                if !root.menu-open {
+                                    root.mouse-input(self.mouse-x < self.width / 2 ? "LeftDoubleClick:LeftHalf" : "LeftDoubleClick:RightHalf",
+                                        self.mods.control, self.mods.alt, self.mods.shift, self.mods.meta);
+                                }
+                            }
+                            pointer-event(event) => {
+                                self.mods = event.modifiers;
+                                if event.kind == PointerEventKind.down {
+                                    canvas.focus(); root.window-input("activity");
+                                    if event.button == PointerEventButton.left { root.window-input("capture"); }
+                                    if event.button == PointerEventButton.middle {
+                                        root.mouse-input("MiddleClick", event.modifiers.control, event.modifiers.alt, event.modifiers.shift, event.modifiers.meta);
+                                    }
+                                    if event.button == PointerEventButton.back {
+                                        root.mouse-input("X1", event.modifiers.control, event.modifiers.alt, event.modifiers.shift, event.modifiers.meta);
+                                    }
+                                    if event.button == PointerEventButton.forward {
+                                        root.mouse-input("X2", event.modifiers.control, event.modifiers.alt, event.modifiers.shift, event.modifiers.meta);
+                                    }
+                                }
+                                if event.button == PointerEventButton.right && event.kind == PointerEventKind.down {
+                                    root.menu-origin-x = (self.absolute-position.x + self.mouse-x) / 1px;
+                                    root.menu-origin-y = (self.absolute-position.y + self.mouse-y) / 1px;
+                                    root.menu-reset();
+                                }
+                            }
+                            scroll-event(event) => {
+                                root.window-input("activity");
+                                if root.wheel-input(event.delta-x / 1px, event.delta-y / 1px, event.modifiers.control,
+                                        event.modifiers.alt, event.modifiers.shift, event.modifiers.meta) {
+                                    return accept;
+                                }
+                                reject
+                            }
+                        }
+                        osd := Text {
+                            x: 10px; y: 10px;
+                            text: root.osd-text;
+                            font-size: 16px; font-weight: 700;
+                            color: #ffffff;
+                            stroke: #000000; stroke-width: 1px; stroke-style: outside;
+                            opacity: 0;
+                            states [
+                                shown when root.osd-visible: {
+                                    opacity: 1;
+                                    out {
+                                        animate opacity { duration: 300ms; }
+                                    }
+                                }
+                            ]
+                        }
+                        VerticalLayout {
+                            x: 10px; y: 36px;
+                            width: min(self.preferred-width, parent.width - 20px);
+                            height: self.preferred-height;
+                            spacing: 4px;
+                            for text in root.info-panels: Rectangle {
+                                background: #000000b0;
+                                HorizontalLayout {
+                                    padding: 6px;
+                                    Text { text: text; font-family: Theme.font-mono; font-size: Theme.font-body; color: Theme.text; }
+                                }
+                            }
+                        }
+                    }
                 }
+                // VESTRA-MOUNT-BOTTOM
             }
-            Text { text: "Shared command tree · right-click video"; color: #cad1dd; }
+            // VESTRA-MOUNT-SIDEBAR
         }
-        // VESTRA-MOUNT-CANVAS-BEGIN
-        canvas := FocusScope {
-            changed has-focus => { if !self.has-focus { root.window-input("canvasFocusLost"); } }
-            key-pressed(event) => {
-                if event.text == Key.F11 { root.window-input("toggleFullscreen"); return accept; }
-                if event.text == Key.Escape { root.window-input("escape"); return accept; }
-                if !root.input-blocked && !root.menu-open
-                    && !event.modifiers.control && !event.modifiers.alt
-                    && !event.modifiers.shift && !event.modifiers.meta {
-                    if event.text == " " {
-                        if !event.repeat { root.window-input("shortcut:Space"); }
-                        return accept;
-                    }
-                    if event.text == Key.LeftArrow {
-                        if !event.repeat { root.window-input("shortcut:ArrowLeft"); }
-                        return accept;
-                    }
-                    if event.text == Key.RightArrow {
-                        if !event.repeat { root.window-input("shortcut:ArrowRight"); }
-                        return accept;
-                    }
-                }
-                root.window-input("activity");
-                reject
-            }
-            Rectangle {
-                width: parent.width; height: parent.height;
-                background: #111318;
-                Image { width: parent.width; height: parent.height; source: root.video-frame; image-fit: contain; }
-                TouchArea {
-                    changed mouse-x => { root.window-input("activity"); }
-                    changed mouse-y => { root.window-input("activity"); }
-                    pointer-event(event) => {
-                    if event.kind == PointerEventKind.down {
-                        canvas.focus(); root.window-input("activity");
-                        if event.button == PointerEventButton.left { root.window-input("capture"); }
-                    }
-                    if event.button == PointerEventButton.right && event.kind == PointerEventKind.down {
-                        root.menu-origin-x = (self.absolute-position.x + self.mouse-x) / 1px;
-                        root.menu-origin-y = (self.absolute-position.y + self.mouse-y) / 1px;
-                        root.menu-reset();
-                    }
-                } }
-            }
-        }
-        // VESTRA-MOUNT-CANVAS-END
-        Text { text: root.diagnostic; color: #cad1dd; visible: !root.host-fullscreen; min-height: root.host-fullscreen ? 0px : 26px; max-height: root.host-fullscreen ? 0px : 26px; }
-        // VESTRA-MOUNT-BOTTOM
     }
     if root.menu-open: Rectangle {
         width: root.width; height: root.height;

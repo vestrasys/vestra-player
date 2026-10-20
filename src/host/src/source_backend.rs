@@ -400,9 +400,6 @@ impl Sources {
     pub fn producer_output(&mut self, volume: f64, muted: bool) {
         self.producers.output(volume, muted);
     }
-    pub fn source(&self) -> Option<String> {
-        self.session.state().source.clone()
-    }
     pub fn snapshot(&mut self, mpv: &Mpv) -> Value {
         #[cfg(feature = "producer-audio")]
         if let Some(ticket) = self.provider_ticket {

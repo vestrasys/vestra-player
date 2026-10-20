@@ -10,7 +10,7 @@ export default async function activate(plugin: Plugin) {
   const bar = plugin.panels.mount("bottom", "ui/bar.slint");
   const playback = new Playback(player, plugin.dialogs, () => plugin.update());
   const editor = new Editor(playback, player, bar);
-  const run = addCommands(plugin, playback, editor, bar);
+  const run = addCommands(plugin, playback, editor);
   wireBar(bar, player, playback, editor, run);
   plugin.onError((error) => playback.report(error));
 

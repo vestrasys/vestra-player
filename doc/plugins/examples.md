@@ -98,7 +98,8 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "toggle-pause",
     path: ["播放", "播放/暂停"],
-    shortcut: "Space",
+    order: 263,
+    bindings: ["Space"],
     enabled: () => player.state.can.pause || player.state.phase === "ended",
     checked: () => (player.state.phase === "ready" ? player.state.paused : null),
     // 以插件看到的状态为条件：若刚被别处改变，以 code "stale" 失败且什么都不做
@@ -107,6 +108,7 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "open",
     path: ["文件", "打开媒体…"],
+    order: 202,
     run: async () => {
       const path = await plugin.dialogs.openFile({ title: "打开媒体" });
       if (path) await player.open(path);
@@ -115,14 +117,15 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "bar-visible",
     path: ["视图", "显示播放栏"],
-    checked: () => bar.visibility?.preferred ?? true,
-    run: () => bar.toggle(),
+    order: 502,
+    checked: () => plugin.panels.bottom.state?.preferred ?? true,
+    run: () => plugin.panels.bottom.toggle(),
   });
   bar.on("volumeChanged", (volume: number) => void player.setOutput({ volume, muted: false }));
 }
 ```
 
-命令的 `enabled`/`checked`/`busy`/`reason` 可以是值或函数；函数在每个更新轮重新求值，变化才发给宿主（修订号由 SDK 维护）。`setOutput` 连续调用时只保留最新值，并保证先设音量再取消静音。
+`order` 决定菜单里的位置（同级升序，子菜单跟着它最靠前的命令），`bindings` 是默认快捷键，菜单里的快捷键文字由它生成。命令的 `enabled`/`checked`/`busy`/`reason` 可以是值或函数；函数在每个更新轮重新求值，变化才发给宿主（修订号由 SDK 维护）。`setOutput` 连续调用时只保留最新值，并保证先设音量再取消静音。
 
 ## 4. 播放列表：侧栏列表模型、选中、自动推进
 
@@ -444,3 +447,122 @@ test("a refused change is shown and can be retried", async () => {
 ```
 
 `startPlugin` 读取插件目录的 `manifest.json`，用内存中的 `TestHost` 运行真实的 SDK 逻辑；更多控制见 [API 参考 §14](reference.md#14-测试工具)。
+
+## 13. 菜单结构与快捷键：顶层命令、分组、单选、按住重复、不进菜单的命令
+
+完整代码见 `src/examples/core-ui/`。
+
+```ts
+import type { Plugin } from "../../sdk/plugin/index.ts";
+
+export default async function activate(plugin: Plugin) {
+  const { player } = plugin;
+  plugin.commands.add({ id: "open", path: ["打开文件…"], group: "open", order: 100,
+    bindings: ["Ctrl+O", "F3"], run: () => openFile() });          // 顶层直接命令
+  for (const [i, rate] of [0.5, 1, 2].entries())
+    plugin.commands.add({ id: `rate-${rate}`, path: ["播放", "速度", `${rate}倍`], order: 230 + i,
+      radio: true, checked: () => player.state.rate === rate, run: () => player.setRate(rate) });
+  plugin.commands.add({ id: "volume-up", path: ["声音", "音量 +"], bindings: ["ArrowUp", "Mouse:WheelUp"],
+    repeat: true, run: () => player.setOutput({ volume: Math.min(200, player.state.volume + 5) }) });
+  plugin.commands.add({ id: "select-all", title: "全选", focus: "panel", bindings: ["Ctrl+A"],
+    run: () => selectAll() });                                      // 不进主菜单，只在面板有焦点时
+}
+```
+
+相邻两项 `group` 不同时菜单画分隔线；推荐的顶层分组与编号段见 [API 参考 §4](reference.md#4-命令-plugincommands)。同一输入被两个命令声明时先加载的插件生效，另一个写日志（测试里看 `host.conflicts`）。
+
+## 14. 屏幕提示与信息层
+
+播放信息插件 `src/plugins/info/` 的核心：
+
+```ts
+export default async function activate(plugin: Plugin) {
+  const panel = plugin.osd.panel();                 // 视频左上角的只读文字块
+  let shown = false, timer: ReturnType<typeof setInterval> | undefined;
+  const render = async () => {
+    const stats = await plugin.player.stats();      // 编码、分辨率、帧数、丢帧……
+    if (shown) panel.set(`${stats.video?.codec ?? "-"} · 帧 ${stats.framesShown}`);
+  };
+  plugin.commands.add({ id: "info.toggle", path: ["视图", "播放信息"], order: 503, bindings: ["Tab"],
+    checked: () => shown,
+    run: () => {
+      shown = !shown; clearInterval(timer);
+      if (!shown) return panel.set(null);
+      void render(); timer = setInterval(() => void render(), 1000);
+    } });
+  plugin.onDispose(() => clearInterval(timer));
+}
+```
+
+一次性的操作反馈用 `await plugin.osd.show("音量: 85%")`：一行，2 秒后淡出，新的替换旧的。两者都需要能力 `ui.osd`。
+
+## 15. 播放序列：一个插件提供「下一个/上一个」，任何插件调用
+
+```ts
+// 播放列表：登记为提供者（同时只能有一个）
+plugin.player.provideSequence({
+  canNext: () => !!queue.neighbor(1),
+  canPrevious: () => !!queue.neighbor(-1),
+  next: () => playNeighbor(1),
+  previous: () => playNeighbor(-1),
+});
+
+// 任何插件（例如底栏的右键「下一个」、PgDn）
+plugin.commands.add({ id: "next", path: ["播放", "下一个"], bindings: ["PageDown", "Mouse:X2"],
+  enabled: () => plugin.player.state.can.next, run: () => plugin.player.next() });
+```
+
+插件之间不直接调用对方的命令；`next()` 由播放器转给提供者。没有提供者时 `can.next` 为 `false`，调用以 `unavailable` 失败。
+
+## 16. 侧栏：任何插件开关、分离为浮动窗口；面板右键菜单
+
+```ts
+// 任何插件：读取与切换侧栏（不需要知道是谁挂的）
+const sidebar = plugin.panels.sidebar;
+bar.bind(() => ({ listShown: sidebar.state?.preferred ?? false }));
+bar.on("toggleList", () => sidebar.toggle());
+bar.on("detachList", () => sidebar.setDetached(!sidebar.state?.detached));
+
+// 挂载侧栏的插件：title 是浮动窗口标题；右键弹出本插件命令
+const list = plugin.panels.mount("sidebar", "ui/sidebar.slint", { title: "播放列表" });
+const play = plugin.commands.add({ id: "play", title: "播放", focus: "panel", bindings: ["Enter"], run: playSelected });
+const remove = plugin.commands.add({ id: "remove", title: "移除所选", focus: "panel", bindings: ["Delete"], run: removeSelected });
+list.on("contextMenu", (x: number, y: number) => list.showMenu([play, null, remove], { x, y }));
+```
+
+```slint
+// ui/sidebar.slint 中，右键位置换成窗口坐标交给插件
+TouchArea {
+    pointer-event(event) => {
+        if event.button == PointerEventButton.right && event.kind == PointerEventKind.down {
+            Bridge.context-menu((self.absolute-position.x + self.mouse-x) / 1px,
+                                (self.absolute-position.y + self.mouse-y) / 1px);
+        }
+    }
+}
+```
+
+分离后浮动窗口里是同一个面板组件，属性和回调不变。完整示例见 `src/examples/panel-menu/`（面板菜单、面板焦点按键、序列提供者）和 `src/examples/core-ui/`（侧栏开关与分离）。
+
+## 17. 主题与控件
+
+```slint
+import { Theme } from "@vestra/theme.slint";
+import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
+
+export component Picture inherits Window {
+    width: 301px; background: Theme.bg-panel;
+    in-out property <float> brightness;
+    callback reset();
+    HorizontalLayout {
+        padding: Theme.dialog-padding; spacing: 8px;
+        ToolTipArea { text: "−100 到 100"; width: 65px;
+            Text { text: "亮度"; color: Theme.text; font-size: Theme.font-body; } }
+        Slider { panel: true; minimum: -1; maximum: 1; value <=> root.brightness; }
+        Button { text: "默认"; small: true; clicked => { root.reset(); } }
+    }
+}
+```
+
+不改代码的插件也会变成深色：播放器用 `fluent-dark` 风格编译所有插件 Slint。新写的界面用 `Theme` 的令牌，不要写死颜色。
+

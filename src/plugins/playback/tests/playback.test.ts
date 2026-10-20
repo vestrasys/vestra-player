@@ -38,22 +38,28 @@ test("explicit time input rejects malformed and negative values", () => {
 test("menu commands keep their paths, shortcuts and reasons; empty player disables source actions", async () => {
   const { host, stop } = await start();
   assert.deepEqual(
-    [...host.commands].map(([id, c]) => [id, c.declaration.path.join("/"), c.declaration.title, c.declaration.shortcut]),
+    [...host.commands].map(([id, { declaration: d }]) => [
+      id,
+      d.path.join("/"),
+      d.title,
+      "bindings" in d ? d.bindings : null,
+      "order" in d ? d.order : null,
+    ]),
     [
-      ["open", "文件/打开媒体…", "打开媒体…", null],
-      ["close-source", "文件/关闭当前来源", "关闭当前来源", null],
-      ["toggle-pause", "播放/播放/暂停", "播放/暂停", "Space"],
-      ["jump", "播放/跳转到…", "跳转到…", null],
-      ["backward-5", "播放/后退5秒", "后退5秒", "ArrowLeft"],
-      ["forward-5", "播放/前进5秒", "前进5秒", "ArrowRight"],
-      ["rate-05", "播放/速度/0.5倍", "0.5倍", null],
-      ["rate-10", "播放/速度/正常速度", "正常速度", null],
-      ["rate-15", "播放/速度/1.5倍", "1.5倍", null],
-      ["rate-20", "播放/速度/2倍", "2倍", null],
-      ["rate-custom", "播放/速度/自定义…", "自定义…", null],
-      ["mute", "音频/静音", "静音", null],
-      ["volume", "音频/音量…", "音量…", null],
-      ["bar-visible", "视图/显示播放栏", "显示播放栏", null],
+      ["open", "文件/打开媒体…", "打开媒体…", [], 202],
+      ["close-source", "文件/关闭当前来源", "关闭当前来源", [], 201],
+      ["toggle-pause", "播放/播放/暂停", "播放/暂停", ["Space"], 263],
+      ["jump", "播放/跳转到…", "跳转到…", [], 264],
+      ["backward-5", "播放/后退5秒", "后退5秒", ["ArrowLeft"], 262],
+      ["forward-5", "播放/前进5秒", "前进5秒", ["ArrowRight"], 261],
+      ["rate-05", "播放/速度/0.5倍", "0.5倍", [], 265],
+      ["rate-10", "播放/速度/正常速度", "正常速度", [], 268],
+      ["rate-15", "播放/速度/1.5倍", "1.5倍", [], 266],
+      ["rate-20", "播放/速度/2倍", "2倍", [], 267],
+      ["rate-custom", "播放/速度/自定义…", "自定义…", [], 269],
+      ["mute", "音频/静音", "静音", [], 386],
+      ["volume", "音频/音量…", "音量…", [], 387],
+      ["bar-visible", "视图/显示播放栏", "显示播放栏", [], 502],
     ],
   );
   const reason = "当前来源不支持此操作";

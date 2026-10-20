@@ -6,7 +6,7 @@ use std::{collections::BTreeSet, path::PathBuf, sync::mpsc};
 
 use anyhow::{Context, Result, bail};
 use serde_json::Value as Json;
-use slint_interpreter::{Compiler, ComponentDefinition, ComponentInstance, Value};
+use slint_interpreter::{ComponentDefinition, ComponentInstance, Value};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Slot {
@@ -76,6 +76,47 @@ pub fn global_alias(owner: u64) -> String {
     format!("Owner{owner}Bridge")
 }
 
+/// Slint handler body that forwards a key event to the host binding table.
+fn key_forward(scope: &str) -> String {
+    format!(
+        "key-pressed(event) => {{ if root.key-input(\"{scope}\", event.text, event.modifiers.control, event.modifiers.alt, event.modifiers.shift, event.modifiers.meta, event.repeat) {{ return accept; }} reject }}"
+    )
+}
+
+fn import_path(spec: &CompileSpec) -> Result<String> {
+    let path = spec
+        .file
+        .canonicalize()
+        .context("composition file unavailable")?;
+    let path = path.to_str().context("Slint import path must be UTF-8")?;
+    if path.chars().any(char::is_control) {
+        bail!("control character in Slint import path");
+    }
+    Ok(path.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+fn import_spec(source: &mut String, spec: &CompileSpec, path: &str) -> Result<()> {
+    identifier(&spec.component)?;
+    source.push_str(&format!(
+        "import {{ {} as Owner{}View }} from \"{}\";\n",
+        spec.component, spec.owner, path
+    ));
+    if let Some(global) = &spec.global {
+        identifier(global)?;
+        let alias = global_alias(spec.owner);
+        source.push_str(&format!(
+            "import {{ {global} as {alias} }} from \"{path}\";\nexport {{ {alias} }}\n"
+        ));
+    }
+    Ok(())
+}
+
+fn font_property() -> String {
+    crate::ui::font()
+        .map(|(family, _)| format!("default-font-family: \"{family}\";"))
+        .unwrap_or_default()
+}
+
 /// Generated source is ordinary Slint, not a layout protocol. Imports use
 /// canonical files; package containment is the package loader's responsibility.
 /// Aliases prevent exported-name collisions, but are not a sandbox. Slint globals
@@ -85,65 +126,112 @@ pub fn shell_source(specs: &[CompileSpec]) -> Result<String> {
     let mut owners = BTreeSet::new();
     let mut slots = BTreeSet::new();
     let mut files = BTreeSet::new();
-    let mut source = String::new();
-    #[cfg(target_os = "macos")]
-    if std::path::Path::new("/System/Library/Fonts/Supplemental/Arial Unicode.ttf").is_file() {
-        source.push_str("import \"/System/Library/Fonts/Supplemental/Arial Unicode.ttf\";\n");
-    }
+    let mut source = crate::ui::font_import();
     for spec in specs {
-        identifier(&spec.component)?;
         if !owners.insert(spec.owner) || !slots.insert(spec.slot) {
             bail!("this shell requires unique owners and at most one component per slot");
         }
-        let path = spec
-            .file
-            .canonicalize()
-            .context("composition file unavailable")?;
-        if !files.insert(path.clone()) {
+        if !files.insert(
+            spec.file
+                .canonicalize()
+                .context("composition file unavailable")?,
+        ) {
             bail!("independent composition owners require distinct Slint files");
         }
-        let path = path.to_str().context("Slint import path must be UTF-8")?;
-        if path.chars().any(char::is_control) {
-            bail!("control character in Slint import path");
-        }
-        let path = path.replace('\\', "\\\\").replace('"', "\\\"");
-        source.push_str(&format!(
-            "import {{ {} as Owner{}View }} from \"{}\";\n",
-            spec.component, spec.owner, path
-        ));
-        if let Some(global) = &spec.global {
-            identifier(global)?;
-            let alias = global_alias(spec.owner);
-            source.push_str(&format!(
-                "import {{ {global} as {alias} }} from \"{path}\";\nexport {{ {alias} }}\n"
-            ));
-        }
+        let path = import_path(spec)?;
+        import_spec(&mut source, spec, &path)?;
     }
     let mut shell = include_str!("../ui/host.slint").to_owned();
+    replace_marker(&mut shell, "// VESTRA-FONT", &font_property())?;
     let properties = "in property <bool> bottom-visible: true;\n\
                       in property <bool> sidebar-visible: true;";
     replace_marker(&mut shell, "// VESTRA-MOUNT-PROPERTIES", properties)?;
-    replace_marker(
-        &mut shell,
-        "// VESTRA-MOUNT-CANVAS-BEGIN",
-        "canvas-row := HorizontalLayout { spacing: 0px; vertical-stretch: 1;",
-    )?;
-    let sidebar = specs.iter().find(|spec| spec.slot == Slot::Sidebar).map(|spec| {
-        format!("if root.sidebar-visible: Owner{}View {{ width: root.sidebar-width * 1px; horizontal-stretch: 0; }}\n}}", spec.owner)
-    }).unwrap_or_else(|| "}".into());
-    replace_marker(&mut shell, "// VESTRA-MOUNT-CANVAS-END", &sidebar)?;
+    let sidebar = specs
+        .iter()
+        .find(|spec| spec.slot == Slot::Sidebar)
+        .map(|spec| {
+            format!(
+                "if root.sidebar-visible: Rectangle {{ width: 3px; horizontal-stretch: 0; background: Theme.line; \
+                 TouchArea {{ mouse-cursor: MouseCursor.ew-resize; \
+                 moved => {{ if self.pressed {{ root.sidebar-width = clamp(root.width / 1px - (self.absolute-position.x + self.mouse-x) / 1px - 1.5, 317, max(317, root.width / 1px - 321)); }} }} \
+                 pointer-event(event) => {{ if event.kind == PointerEventKind.up {{ root.sidebar-resized(root.sidebar-actual); }} }} }} }}\n\
+                 if root.sidebar-visible: FocusScope {{ width: root.sidebar-actual * 1px; horizontal-stretch: 0; {} \
+                 Owner{}View {{ width: parent.width; height: parent.height; }} }}",
+                key_forward("panel:sidebar"),
+                spec.owner
+            )
+        })
+        .unwrap_or_default();
+    replace_marker(&mut shell, "// VESTRA-MOUNT-SIDEBAR", &sidebar)?;
     let bottom = specs
         .iter()
         .find(|spec| spec.slot == Slot::Bottom)
         .map(|spec| {
             format!(
-                "Rectangle {{ height: root.host-fullscreen || !root.bottom-visible ? 0px : min(bottom-content.max-height, max(bottom-content.min-height, bottom-content.preferred-height)); vertical-stretch: 0; bottom-content := Owner{}View {{ visible: root.bottom-visible; y: root.host-fullscreen ? -self.height : 0px; height: min(self.max-height, max(self.min-height, self.preferred-height)); width: parent.width; }} }}",
+                "Rectangle {{ height: root.host-fullscreen || !root.bottom-visible ? 0px : bottom-keys.height; vertical-stretch: 0; \
+                 bottom-keys := FocusScope {{ visible: root.bottom-visible; width: parent.width; \
+                 height: min(bottom-content.max-height, max(bottom-content.min-height, bottom-content.preferred-height)); \
+                 y: root.host-fullscreen ? -self.height : 0px; {} \
+                 bottom-content := Owner{}View {{ width: parent.width; height: parent.height; }} }} }}",
+                key_forward("panel:bottom"),
                 spec.owner
             )
         })
         .unwrap_or_default();
     replace_marker(&mut shell, "// VESTRA-MOUNT-BOTTOM", &bottom)?;
     source.push_str(&shell);
+    Ok(source)
+}
+
+/// The detached sidebar (C14): the same component and bridge global in a
+/// window of its own, with the shell's key forwarding and menu layer.
+pub fn floating_source(spec: &CompileSpec, title: &str) -> Result<String> {
+    let mut source = crate::ui::font_import();
+    let path = import_path(spec)?;
+    import_spec(&mut source, spec, &path)?;
+    let title = serde_json::to_string(title)?;
+    source.push_str(&format!(
+        r#"import {{ MenuView, MenuLevel }} from "menu-view.slint";
+import {{ Theme }} from "@vestra/theme.slint";
+export component FloatingPanel inherits Window {{
+    title: {title};
+    min-width: 300px; min-height: 250px;
+    preferred-width: 300px; preferred-height: 408px;
+    background: Theme.bg-list;
+    {font}
+    in property <[MenuLevel]> menu-levels;
+    in property <bool> menu-open: false;
+    in-out property <float> menu-origin-x;
+    in-out property <float> menu-origin-y;
+    out property <float> logical-width: root.width / 1px;
+    out property <float> logical-height: root.height / 1px;
+    callback menu-invoke(string);
+    callback menu-hover(int, string);
+    callback menu-back();
+    callback menu-dismiss();
+    callback key-input(string, string, bool, bool, bool, bool, bool) -> bool;
+    FocusScope {{
+        {keys}
+        Owner{owner}View {{ width: parent.width; height: parent.height; }}
+    }}
+    if root.menu-open: Rectangle {{
+        width: root.width; height: root.height;
+        TouchArea {{ pointer-event(event) => {{ if event.kind == PointerEventKind.down {{ root.menu-dismiss(); }} }} }}
+        MenuView {{
+            width: root.width; height: root.height;
+            levels: root.menu-levels;
+            hovered(level, token) => {{ root.menu-hover(level, token); }}
+            activated(token) => {{ root.menu-invoke(token); }}
+            back => {{ root.menu-back(); }}
+            dismissed => {{ root.menu-dismiss(); }}
+        }}
+    }}
+}}
+"#,
+        font = font_property(),
+        keys = key_forward("panel:sidebar"),
+        owner = spec.owner,
+    ));
     Ok(source)
 }
 
@@ -155,17 +243,9 @@ fn replace_marker(source: &mut String, marker: &str, replacement: &str) -> Resul
     Ok(())
 }
 
-fn compile_definition(specs: &[CompileSpec]) -> Result<ComponentDefinition> {
-    let source = shell_source(specs)?;
-    let compiler = Compiler::default();
-    let packaged = std::env::current_exe()?
-        .parent()
-        .and_then(std::path::Path::parent)
-        .map(|p| p.join("Resources/ui/host.slint"));
-    let base = packaged
-        .filter(|p| p.parent().is_some_and(|d| d.is_dir()))
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("ui/host.slint"));
-    let result = pollster::block_on(compiler.build_from_source(source, base));
+fn build(source: String, component: &str) -> Result<ComponentDefinition> {
+    let base = crate::ui::ui_dir().join("host.slint");
+    let result = pollster::block_on(crate::ui::compiler().build_from_source(source, base));
     if result
         .diagnostics()
         .any(|d| d.level() == slint_interpreter::DiagnosticLevel::Error)
@@ -175,12 +255,16 @@ fn compile_definition(specs: &[CompileSpec]) -> Result<ComponentDefinition> {
             result.diagnostics().collect::<Vec<_>>()
         );
     }
-    result.component("HostWindow").ok_or_else(|| {
+    result.component(component).ok_or_else(|| {
         anyhow::anyhow!(
             "composition compilation: {:?}",
             result.diagnostics().collect::<Vec<_>>()
         )
     })
+}
+
+fn compile_definition(specs: &[CompileSpec]) -> Result<ComponentDefinition> {
+    build(shell_source(specs)?, "HostWindow")
 }
 
 /// Call on the UI thread. Returns an unshown instance, letting the caller keep
@@ -312,6 +396,41 @@ pub fn compile_json(
     Ok(instance)
 }
 
+/// Compile and bind the floating panel window; not shown. Bridge callbacks
+/// arrive tagged with `generation`, like a shell generation.
+pub fn compile_floating(
+    spec: &CompileSpec,
+    title: &str,
+    events: mpsc::SyncSender<JsonCallback>,
+    generation: u64,
+) -> Result<ComponentInstance> {
+    let definition = build(floating_source(spec, title)?, "FloatingPanel")?;
+    let instance = definition.create()?;
+    let alias = global_alias(spec.owner);
+    crate::ui_values::own_default_models(&instance, Some(&alias))?;
+    let callbacks = definition
+        .global_callbacks(&alias)
+        .with_context(|| format!("composition global unavailable: {alias}"))?;
+    for callback in callbacks {
+        let sender = events.clone();
+        let owner = spec.owner;
+        let name = callback.clone();
+        instance.set_global_callback(&alias, &callback, move |args| {
+            deliver_json(
+                &sender,
+                JsonCallback {
+                    shell_generation: generation,
+                    owner,
+                    callback: name.clone(),
+                    args: json_args(args),
+                },
+            );
+            Value::Void
+        })?;
+    }
+    Ok(instance)
+}
+
 pub fn set_json_global(
     instance: &ComponentInstance,
     spec: &CompileSpec,
@@ -364,20 +483,29 @@ mod tests {
         let source = shell_source(&specs).unwrap();
         for preserved in [
             "video-frame",
-            "diagnostic",
             "menu-levels",
             "menu-invoke",
+            "key-input",
             "if root.menu-open: Rectangle",
             "export component HostWindow",
         ] {
             assert!(source.contains(preserved), "missing {preserved}");
         }
+        for removed in [
+            "diagnostic",
+            "Commands",
+            "Arial Unicode",
+            "padding: root.host-fullscreen ? 0px : 8px",
+        ] {
+            assert!(!source.contains(removed), "still has {removed}");
+        }
         assert!(source.contains("Bridge as Owner10Bridge"));
         assert!(source.contains("Bridge as Owner20Bridge"));
-        assert!(source.contains("if root.sidebar-visible: Owner20View"));
+        assert!(source.contains("Owner20View { width: parent.width; height: parent.height; }"));
+        assert!(source.contains("key-input(\"panel:sidebar\""));
         assert!(source.contains("bottom-content := Owner10View"));
         assert!(source.contains("visible: root.bottom-visible"));
-        assert!(!source.contains("// VESTRA-MOUNT-"));
+        assert!(!source.contains("// VESTRA-"));
     }
 
     #[test]
@@ -402,6 +530,11 @@ mod tests {
         // ComponentDefinition only: no create(), Window, event loop or GUI.
         compile_definition(&[]).unwrap();
         compile_definition(&specs).unwrap();
+        build(
+            floating_source(&specs[1], "播放列表").unwrap(),
+            "FloatingPanel",
+        )
+        .unwrap();
     }
 
     #[test]

@@ -20,7 +20,7 @@ function state(overrides: Partial<PlayerState> = {}): PlayerState {
     muted: false,
     endReason: null,
     error: null,
-    can: { pause: true, seek: true, rate: true, restart: true, close: true, snapshot: true },
+    can: { pause: true, seek: true, rate: true, restart: true, close: true, snapshot: true, next: false, previous: false },
     audioTracks: null,
     ...overrides,
   };

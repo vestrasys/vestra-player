@@ -1,0 +1,45 @@
+// Vestra theme tokens (doc/product/ui-alignment.md §2.1–2.3). Import from any
+// plugin or host Slint file:  import { Theme } from "@vestra/theme.slint";
+// All values are constants, so sharing this global between plugins is safe.
+
+export global Theme {
+    // §2.1 colours
+    out property <color> bg-bar: #1e1e1e;
+    out property <color> bg-video: #101010;
+    out property <color> bg-list: #3b3b3b;
+    out property <color> bg-panel: #333333;
+    out property <color> line: #000000;
+    out property <color> hover-bg: #272727;
+    out property <color> press-bg: #181818;
+    out property <color> text: #f0f0f0;
+    out property <color> text-dim: #777777;
+    out property <color> text-list: #aeaeae;
+    out property <color> text-played: #888888;
+    out property <color> accent: #fae100;
+    out property <color> accent-press: #c8b400;
+    out property <color> accent-disabled: #7d7000;
+    out property <color> icon-disabled: #3b3b3b;
+    out property <color> playing: #2282f2;
+    out property <color> button-bg: #555555;
+    out property <color> button-hover: #5c5c5c;
+    out property <color> button-press: #444444;
+    out property <color> button-disabled: #2a2a2a;
+    // §2.2 fonts; the host sets each window's default-font-family to the system UI font.
+    out property <string> font-mono: "Menlo";
+    out property <length> font-xs: 9px;
+    out property <length> font-body: 11px;
+    out property <length> font-tab: 12px;
+    out property <length> font-title: 13px;
+    // §2.3 control sizes
+    out property <length> button-height: 21px;
+    out property <length> button-min-width: 66px;
+    out property <length> button-padding: 8px;
+    out property <length> button-primary-height: 24px;
+    out property <length> button-small-height: 18px;
+    out property <length> button-small-min-width: 41px;
+    out property <length> input-height: 21px;
+    out property <length> checkbox-row-height: 18px;
+    out property <length> label-height: 14px;
+    out property <length> form-row-gap: 26px;
+    out property <length> dialog-padding: 14px;
+}

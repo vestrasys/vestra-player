@@ -3,25 +3,64 @@ use crate::Event;
 use anyhow::{Result, bail};
 use serde_json::{Value as Json, json};
 use slint_interpreter::{Compiler, ComponentHandle, ComponentInstance, Value};
-use std::{collections::BTreeMap, path::Path, sync::mpsc};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+    sync::mpsc,
+};
+
+/// Host-shipped Slint directory: `Resources/ui` in a bundle, else the source tree.
+pub fn ui_dir() -> PathBuf {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| Some(exe.parent()?.parent()?.join("Resources/ui")))
+        .filter(|dir| dir.join("host.slint").is_file())
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("ui"))
+}
+
+/// The one Slint compiler configuration for the shell, panels, tool windows and
+/// package validation: `@vestra/...` imports and the dark std-widgets style.
+pub fn compiler() -> Compiler {
+    let mut compiler = Compiler::default();
+    compiler.set_library_paths(
+        [("vestra".to_owned(), ui_dir().join("vestra"))]
+            .into_iter()
+            .collect(),
+    );
+    compiler.set_style("fluent-dark".into());
+    compiler
+}
+
+const HIRAGINO: &str = "/System/Library/Fonts/Hiragino Sans GB.ttc";
+
+/// Default UI font. Slint 1.16 lays text out with parley and falls back per
+/// script through fontique (CoreText's cascade on macOS), so by default no
+/// family is forced and the system UI font plus its CJK fallback are used.
+/// `VESTRA_FONT_FALLBACK=hiragino` instead imports the system Hiragino Sans GB
+/// file and makes it the default family (the approved fallback, §18 Q12).
+pub fn font() -> Option<(&'static str, &'static str)> {
+    (std::env::var("VESTRA_FONT_FALLBACK").as_deref() == Ok("hiragino")
+        && Path::new(HIRAGINO).is_file())
+    .then_some(("Hiragino Sans GB", HIRAGINO))
+}
+
+/// Source prefix that makes the forced font available (empty by default).
+pub fn font_import() -> String {
+    font()
+        .map(|(_, path)| format!("import \"{path}\";\n"))
+        .unwrap_or_default()
+}
+
 pub fn compile(path: &Path) -> Result<ComponentInstance> {
     compile_source(std::fs::read_to_string(path)?, path)
 }
 pub fn compile_source(mut source: String, path: &Path) -> Result<ComponentInstance> {
-    let compiler = Compiler::default();
-    // Slint's documented font import is stable; the runtime Fontique adapter is
-    // explicitly unstable in 1.16 and is deliberately not used here.
-    #[cfg(target_os = "macos")]
-    if Path::new("/System/Library/Fonts/Supplemental/Arial Unicode.ttf").is_file() {
-        // Plugin tool windows do not inherit the main window's family; without it the
-        // renderer's default face has no CJK glyphs and Chinese labels render blank.
-        if !source.contains("default-font-family") {
-            source = with_window_font(&source, "Arial Unicode MS");
-        }
-        source =
-            format!("import \"/System/Library/Fonts/Supplemental/Arial Unicode.ttf\";\n{source}");
+    if let Some((family, _)) = font()
+        && !source.contains("default-font-family")
+    {
+        source = format!("{}{}", font_import(), with_window_font(&source, family));
     }
-    let result = pollster::block_on(compiler.build_from_source(source, path.to_owned()));
+    let result = pollster::block_on(compiler().build_from_source(source, path.to_owned()));
     if result.components().count() > 1 {
         bail!("Slint file must export exactly one component");
     }
@@ -34,7 +73,6 @@ pub fn compile_source(mut source: String, path: &Path) -> Result<ComponentInstan
     definition.create().map_err(Into::into)
 }
 /// Insert a default font family into the exported root Window, if there is one.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn with_window_font(source: &str, family: &str) -> String {
     let Some(start) = source.find("export component ") else {
         return source.to_owned();
@@ -96,4 +134,70 @@ pub fn open(
     }
     instance.show()?;
     Ok(View { instance })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plugin_files_import_the_vestra_library_and_compile_dark() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("w.slint");
+        let source = r#"
+import { Button as StdButton } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
+export component W inherits Window {
+    background: Theme.bg-panel;
+    VerticalLayout {
+        ToolTipArea { text: "tip"; Text { text: "亮度"; color: Theme.text; } }
+        Slider { panel: true; value: 0.5; }
+        Slider { value: 0.2; }
+        Button { text: "默认"; small: true; }
+        StdButton { text: "std"; }
+    }
+}"#;
+        let result = pollster::block_on(compiler().build_from_source(source.into(), file));
+        let errors: Vec<_> = result
+            .diagnostics()
+            .filter(|d| d.level() == slint_interpreter::DiagnosticLevel::Error)
+            .collect();
+        assert!(errors.is_empty(), "{errors:?}");
+        assert!(result.component("W").is_some());
+    }
+
+    /// Every plugin and example Slint file compiles with the host's configuration.
+    #[test]
+    fn all_plugin_and_example_slint_files_compile() {
+        fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+            for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+                let path = entry.path();
+                let name = entry.file_name();
+                if path.is_dir() {
+                    if !["dist", "node_modules", "vendor", "tests"]
+                        .contains(&name.to_str().unwrap_or(""))
+                    {
+                        walk(&path, out);
+                    }
+                } else if path.extension().is_some_and(|e| e == "slint") {
+                    out.push(path);
+                }
+            }
+        }
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+        let mut files = Vec::new();
+        walk(&root.join("plugins"), &mut files);
+        walk(&root.join("examples"), &mut files);
+        assert!(files.len() >= 15, "found {files:?}");
+        for file in files {
+            let result = pollster::block_on(compiler().build_from_path(&file));
+            let errors: Vec<_> = result
+                .diagnostics()
+                .filter(|d| d.level() == slint_interpreter::DiagnosticLevel::Error)
+                .map(|d| d.to_string())
+                .collect();
+            assert!(errors.is_empty(), "{}: {errors:?}", file.display());
+        }
+    }
 }

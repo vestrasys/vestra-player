@@ -27,7 +27,7 @@
 - **开发加载**：`vestra-host --plugin <目录>`（可多次），直接运行入口 `.ts`（Node ≥ 22.18 去类型执行）。
 - **托管安装**：`packages.validate` → `trial`/`install`/`rollback`，包存放在 `VESTRA_PACKAGE_STORE`。只接受构建产物（`dist/`，入口为 `.js`，manifest 带 `version`）。
 - **激活**：宿主启动 `node runner.ts <包目录>` → 运行器读取 manifest、按能力读初始状态和订阅事件 → 调用默认导出的 `activate(plugin)` → 激活期间的注册全部成功后发送 `runtime.ready`，否则 `runtime.failed`。
-- **停用**：宿主按 owner 撤销该插件的全部资源（菜单、窗口、面板、处理资源、字幕层、快照、任务、解析器、producer），发送 `runtime.stop`；运行器释放句柄，300 ms 内未退出则被结束。每次运行有新的 owner 代次，旧进程的迟到消息不会路由给重新加载的同名插件。
+- **停用**：宿主按 owner 撤销该插件的全部资源（菜单与绑定、窗口、面板与浮动面板窗口、处理资源、字幕层、快照、任务、解析器、producer、播放序列提供者、屏幕信息块），发送 `runtime.stop`；运行器释放句柄，300 ms 内未退出则被结束。每次运行有新的 owner 代次，旧进程的迟到消息不会路由给重新加载的同名插件。
 
 manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力)。能力是契约声明，宿主据此拒绝未声明的调用（`code: "capability"`），不是安全沙箱。
 
@@ -37,14 +37,19 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 - 管道有序；宿主对每个请求都答复，或者停止该插件。所以运行器不设客户端超时（超过 10 秒只写日志）。
 - 协议细节（修订号、来源代次、操作 id、事件序号等）全部由 SDK 吸收，插件看不到，见 [sdk-design.md §5](sdk-design.md#5-协议细节如何被吸收)。
 - wire 方法只服务于 SDK。SDK 不再调用的方法应从宿主删除，不为假想的调用方保留（2026-10-20 已删除旧接口：`host.capabilities`、`playback.state/open/seek`、`playback.set` 中除音量/静音外的属性、`window.state`（RPC）/`setFullscreen`、`commands.snapshot/execute`（RPC）、`plugins.list/load/activation/disable`、`jobs.list`、`subtitles.upload.status`，以及 `playback.state`、`plugins.changed`、`host.error` 事件）。
-- 插件可订阅的事件只有 `source.state`、`playback.backend`、`window.state`。
+- 插件可订阅的事件只有 `source.state`、`playback.backend`、`window.state`。宿主不经订阅直接推给某个插件的事件：`commands.execute`（菜单或绑定触发了它的命令）、`ui.callback`、`sequence.step`（它是播放序列提供者时）等。
+- `source.state`（事件与 RPC 答复）的数据由宿主并入 `sequence: { next, previous }`（播放序列提供者的标志）；标志变化时宿主以相同 `eventSequence` 重发一次当前来源状态，SDK 接受「序号相同、内容不同」的状态。
 - `producer.declareInput` 与物理输入子系统保留：SDK 尚未暴露键盘输入，但这是模拟器键盘输入的现成能力。
 
-## 4. Slint 组合
+## 4. Slint 组合与输入
 
+- 编译：宿主、面板、工具窗口、包校验共用一个编译配置（`ui.rs` 的 `compiler()`）：库路径 `vestra` → `ui/vestra/`（`@vestra/theme.slint`、`@vestra/widgets.slint`），风格 `fluent-dark`。默认字体不强制指定，由 Slint 1.16 的 parley + fontique 按系统字体逐字回退（macOS 上走 CoreText 的回退链，中文可显示）；设环境变量 `VESTRA_FONT_FALLBACK=hiragino` 时改为导入系统自带的 Hiragino Sans GB 并设为默认字体（实测中文显示异常时的备用方案）。
 - 工具窗口：插件 `.slint` 文件恰好导出一个组件；宿主用 slint-interpreter 编译，按 SDK 登记的回调白名单转发回调。
-- 面板：文件导出一个 component 和一个 global（属性与回调的桥接对象）；宿主按 owner 别名把它导入主界面的底栏或侧栏，转发 global 上的全部回调。
-- 插件界面默认使用宿主内置的 CJK 字体，保证中文显示。
+- 面板：文件导出一个 component 和一个 global（属性与回调的桥接对象）；宿主按 owner 别名把它导入主界面（`host.slint` 的插入标记），转发 global 上的全部回调。主窗口外壳：视频列（视频 + 底栏）在左，3px 分隔条与全高侧栏在右；全屏时底栏覆盖在视频底部并按 `window_state::Policy` 的空闲规则隐藏。
+- 浮动面板（C14）：分离时宿主另外编译一个窗口，导入同一个组件与桥接 global；global 每个窗口实例一份，所以宿主用保存的 `Mount.properties` 初始化浮动窗口，之后每次 `ui.setMount` 同时写主窗口与浮动窗口，两边回调都以 `$mount` 转发。附着时只关闭浮动窗口，主窗口不重建。
+- 输入：主窗口最外层、两个面板各包一层 FocusScope。Slint 的按键先给焦点控件，未接受的逐级冒泡；面板那一层以「面板 + 全局」查表，最外层以全局查表（`bindings.rs`）。查表在 UI 线程上同步进行（`Rc<RefCell<InputShared>>`，不借用 Host），绑定了就返回 accept 并发 `Event::Binding`，主循环再按注册表检查启用状态后执行。视频区鼠标（双击、中键、侧键、滚轮）同理。全屏、退出全屏、退出是宿主自己的命令（owner 0），和插件命令在同一张表与同一棵菜单树里。
+- 菜单：`commands.rs` 按 `order`（子菜单取其最前的命令）建树，`menu.rs` 投影为面板列表（分隔线、单选、快捷键文字、行位置），`menu-view.slint` 只负责绘制。面板右键菜单（C11）复用同一投影的单层形式，弹在面板当前所在的窗口。
+- 模拟器输入捕获（`producer.declareInput`）在 winit 层先拦截按键；绑定在宿主命令上的键（全屏等）放行。
 
 ## 5. 代码地图
 
@@ -57,7 +62,10 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 | `src/host/src/subtitle_*.rs`、`native_subtitle.rs` | 字幕上传、选择、样式层 |
 | `src/host/src/media_*.rs`、`offline_*.rs` | 快照与离线导出工作进程 |
 | `src/host/src/producer*.rs` | 插件生成的音视频流（NES） |
-| `src/host/src/composition.rs`、`ui.rs`、`menu.rs`、`ui/*.slint` | 界面组合、插件窗口编译、共享右键菜单 |
+| `src/host/src/composition.rs`、`ui.rs`、`menu.rs`、`ui/*.slint` | 界面组合（主窗口、浮动面板窗口）、编译配置、插件窗口、共享右键菜单 |
+| `src/host/src/commands.rs`、`bindings.rs` | 命令注册表与菜单树、输入绑定表（解析、作用范围、冲突、菜单快捷键文字） |
+| `src/host/src/window_state.rs`、`ui_state.rs` | 底栏/侧栏显示规则（宽度、空闲隐藏、分离）、界面状态持久化 |
+| `src/host/ui/vestra/` | 插件可导入的主题与控件（`@vestra/theme.slint`、`@vestra/widgets.slint`） |
 | `src/runtime/runner.ts` | 插件运行器 |
 | `src/sdk/plugin/` | 插件 API（公共类型 `types.ts`，测试宿主 `testing.ts`） |
 | `src/sdk/*.ts` | wire 客户端（SDK 内部使用） |
@@ -65,3 +73,8 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 | `src/tests/sdk/` | SDK 单元测试 |
 | `src/plugins/` | 10 个产品插件 |
 | `src/examples/bookmark/` | 教程示例插件 |
+| `src/examples/core-ui/`、`src/examples/panel-menu/` | 核心界面接口的演示插件（菜单、绑定、屏幕提示、播放序列、侧栏状态与分离、面板右键菜单、主题控件） |
+
+## 6. 界面状态文件
+
+`$VESTRA_UI_STATE`，默认 `~/Library/Application Support/Vestra/ui-state.json`；无界面模式不读不写。内容：主窗口位置与尺寸、侧栏宽度、按 manifest id 记录的侧栏面板显示/分离状态与浮动窗口位置、用户绑定覆盖层（`"<manifest id>/<命令 id>": [绑定…]`，`[]` 为解绑；本轮只读）。变化后 1 秒合并写入（临时文件 + 改名），退出时再写一次；读不了的文件改名为 `ui-state.json.bad` 后用默认值。格式见 [core-ui-design.md §8](core-ui-design.md#8-c8-界面状态持久化)。

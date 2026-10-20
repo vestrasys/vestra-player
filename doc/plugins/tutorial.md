@@ -119,6 +119,18 @@ export component BookmarkWindow inherits Window {
 
 **会被代码修改的输入控件用双向绑定。** 滑块、勾选框、下拉框被用户操作后，单向绑定 `value: root.x` 会断开：之后插件再改 `x`，控件不再跟着动。这类控件写成 `value <=> root.x`（属性要声明为 `in-out property`）。本例只有按钮，不涉及。
 
+### 外观
+
+播放器以深色风格（`fluent-dark`）编译插件界面，默认字体是系统界面字体，所以上面的窗口不写颜色和字体也是深色、中文正常。要和播放器其它界面保持一致（PotPlayer 的配色与尺寸），从主题取值、用播放器提供的控件：
+
+```slint
+import { Theme } from "@vestra/theme.slint";                 // 颜色、字号、控件尺寸
+import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
+// Rectangle { background: Theme.bg-panel; }  Text { color: Theme.text; font-size: Theme.font-body; }
+```
+
+编辑器的 Slint 插件需要知道 `@vestra` 在哪：把语言服务的 `libraryPaths` 设为 `{ "vestra": "<仓库>/src/host/ui/vestra" }`。
+
 ## 5. `main.ts`：插件的逻辑
 
 ```ts
@@ -208,12 +220,14 @@ export default async function activate(plugin: Plugin) {
 ### 菜单入口
 
 ```ts
-  plugin.commands.add({ id: "bookmark.open", path: ["播放", "书签…"], run: () => window.show() });
+  plugin.commands.add({ id: "bookmark.open", path: ["播放", "书签…"], order: 270, run: () => window.show() });
 ```
 
 - `id`：命令在本插件内的名字。
-- `path`：在右键菜单中的位置，最后一项是菜单项文字。同名的上级分组会和其他插件合并。
+- `path`：在右键菜单中的位置，最后一项是菜单项文字。同名的上级分组会和其他插件合并。只写一段就是顶层的直接命令。
+- `order`：同一级里的位置，小的在前；子菜单「播放」排在它里面最靠前的命令的位置。顶层各段的编号见 [doc/product/menus.md](../product/menus.md)。
 - `run`：被点击时执行，这里是弹出窗口。
+- 想加快捷键，写 `bindings: ["Ctrl+B"]`；菜单项右侧会自动显示「Ctrl+B」。语法和冲突规则见 [API 参考 §4.1](reference.md#41-绑定)。
 
 ## 6. 一次点击的完整过程
 
@@ -330,6 +344,11 @@ npm run plugin -- build examples/bookmark   # 生成 dist/，安装的就是这�
 | 网络视频解析 | `resolvers.add` | [示例 9](examples.md) |
 | 自己生成画面和声音（模拟器） | `player.openStream` | [示例 6](examples.md) |
 | 把大插件拆成模块 | `plugin.scope()` | [示例 11](examples.md) |
+| 菜单分组、单选、快捷键 | `commands.add` 的 `group`、`radio`、`bindings` | [示例 13](examples.md) |
+| 画面上的提示、信息层 | `osd.show`、`osd.panel` | [示例 14](examples.md) |
+| 下一个/上一个 | `player.provideSequence`、`player.next` | [示例 15](examples.md) |
+| 开关或分离侧栏、面板右键菜单 | `panels.sidebar`、`panel.showMenu` | [示例 16](examples.md) |
+| 深色主题与 PotPlayer 样式控件 | `@vestra/theme.slint`、`@vestra/widgets.slint` | [示例 17](examples.md) |
 
 两个常见坑：
 

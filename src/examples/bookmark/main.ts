@@ -16,6 +16,7 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "bookmark.open",
     path: ["播放", "书签…"],
+    order: 270,
     run: () => window.show(),
   });
 }

@@ -1,0 +1,290 @@
+{
+  "playback": [
+    {
+      "id": "open",
+      "path": [
+        "文件",
+        "打开媒体…"
+      ],
+      "title": "打开媒体…",
+      "shortcut": null,
+      "bindings": [],
+      "order": 202
+    },
+    {
+      "id": "close-source",
+      "path": [
+        "文件",
+        "关闭当前来源"
+      ],
+      "title": "关闭当前来源",
+      "shortcut": null,
+      "bindings": [],
+      "order": 201
+    },
+    {
+      "id": "toggle-pause",
+      "path": [
+        "播放",
+        "播放/暂停"
+      ],
+      "title": "播放/暂停",
+      "shortcut": "Space",
+      "bindings": [
+        "Space"
+      ],
+      "order": 263
+    },
+    {
+      "id": "jump",
+      "path": [
+        "播放",
+        "跳转到…"
+      ],
+      "title": "跳转到…",
+      "shortcut": null,
+      "bindings": [],
+      "order": 264
+    },
+    {
+      "id": "backward-5",
+      "path": [
+        "播放",
+        "后退5秒"
+      ],
+      "title": "后退5秒",
+      "shortcut": "ArrowLeft",
+      "bindings": [
+        "ArrowLeft"
+      ],
+      "order": 262
+    },
+    {
+      "id": "forward-5",
+      "path": [
+        "播放",
+        "前进5秒"
+      ],
+      "title": "前进5秒",
+      "shortcut": "ArrowRight",
+      "bindings": [
+        "ArrowRight"
+      ],
+      "order": 261
+    },
+    {
+      "id": "rate-05",
+      "path": [
+        "播放",
+        "速度",
+        "0.5倍"
+      ],
+      "title": "0.5倍",
+      "shortcut": null,
+      "bindings": [],
+      "order": 265
+    },
+    {
+      "id": "rate-10",
+      "path": [
+        "播放",
+        "速度",
+        "正常速度"
+      ],
+      "title": "正常速度",
+      "shortcut": null,
+      "bindings": [],
+      "order": 268
+    },
+    {
+      "id": "rate-15",
+      "path": [
+        "播放",
+        "速度",
+        "1.5倍"
+      ],
+      "title": "1.5倍",
+      "shortcut": null,
+      "bindings": [],
+      "order": 266
+    },
+    {
+      "id": "rate-20",
+      "path": [
+        "播放",
+        "速度",
+        "2倍"
+      ],
+      "title": "2倍",
+      "shortcut": null,
+      "bindings": [],
+      "order": 267
+    },
+    {
+      "id": "rate-custom",
+      "path": [
+        "播放",
+        "速度",
+        "自定义…"
+      ],
+      "title": "自定义…",
+      "shortcut": null,
+      "bindings": [],
+      "order": 269
+    },
+    {
+      "id": "mute",
+      "path": [
+        "音频",
+        "静音"
+      ],
+      "title": "静音",
+      "shortcut": null,
+      "bindings": [],
+      "order": 386
+    },
+    {
+      "id": "volume",
+      "path": [
+        "音频",
+        "音量…"
+      ],
+      "title": "音量…",
+      "shortcut": null,
+      "bindings": [],
+      "order": 387
+    },
+    {
+      "id": "bar-visible",
+      "path": [
+        "视图",
+        "显示播放栏"
+      ],
+      "title": "显示播放栏",
+      "shortcut": null,
+      "bindings": [],
+      "order": 502
+    }
+  ],
+  "playlist": [
+    {
+      "id": "playlist.add",
+      "path": [
+        "文件",
+        "播放列表",
+        "添加文件…"
+      ],
+      "title": "添加文件…",
+      "shortcut": null,
+      "bindings": [],
+      "order": 208
+    },
+    {
+      "id": "playlist.link",
+      "path": [
+        "文件",
+        "播放列表",
+        "添加链接…"
+      ],
+      "title": "添加链接…",
+      "shortcut": null,
+      "bindings": [],
+      "order": 209
+    },
+    {
+      "id": "playlist.play",
+      "path": [
+        "文件",
+        "播放列表",
+        "播放选中项"
+      ],
+      "title": "播放选中项",
+      "shortcut": null,
+      "bindings": [],
+      "order": 207
+    },
+    {
+      "id": "playlist.previous",
+      "path": [
+        "文件",
+        "播放列表",
+        "上一项"
+      ],
+      "title": "上一项",
+      "shortcut": null,
+      "bindings": [],
+      "order": 203
+    },
+    {
+      "id": "playlist.next",
+      "path": [
+        "文件",
+        "播放列表",
+        "下一项"
+      ],
+      "title": "下一项",
+      "shortcut": null,
+      "bindings": [],
+      "order": 205
+    },
+    {
+      "id": "playlist.remove",
+      "path": [
+        "文件",
+        "播放列表",
+        "移除选中项"
+      ],
+      "title": "移除选中项",
+      "shortcut": null,
+      "bindings": [],
+      "order": 211
+    },
+    {
+      "id": "playlist.move-up",
+      "path": [
+        "文件",
+        "播放列表",
+        "上移"
+      ],
+      "title": "上移",
+      "shortcut": null,
+      "bindings": [],
+      "order": 204
+    },
+    {
+      "id": "playlist.move-down",
+      "path": [
+        "文件",
+        "播放列表",
+        "下移"
+      ],
+      "title": "下移",
+      "shortcut": null,
+      "bindings": [],
+      "order": 206
+    },
+    {
+      "id": "playlist.clear",
+      "path": [
+        "文件",
+        "播放列表",
+        "清空列表"
+      ],
+      "title": "清空列表",
+      "shortcut": null,
+      "bindings": [],
+      "order": 210
+    },
+    {
+      "id": "playlist.visibility",
+      "path": [
+        "视图",
+        "显示播放列表"
+      ],
+      "title": "显示播放列表",
+      "shortcut": null,
+      "bindings": [],
+      "order": 501
+    }
+  ]
+}

@@ -49,6 +49,7 @@ pub const CAPABILITIES: &[&str] = &[
     "subtitles.control",
     "media.read",
     "media.control",
+    "ui.osd",
 ];
 pub struct Plugin {
     pub manifest: Manifest,

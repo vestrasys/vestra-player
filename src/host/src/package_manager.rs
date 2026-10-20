@@ -176,7 +176,7 @@ impl Host {
                 let mut files = vec![];
                 slint_files(candidate.directory(), &mut files)?;
                 for path in files {
-                    let compiler = slint_interpreter::Compiler::default();
+                    let compiler = crate::ui::compiler();
                     let result = pollster::block_on(compiler.build_from_path(path));
                     if result.has_errors() {
                         return Err(RpcError::new(

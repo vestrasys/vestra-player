@@ -75,11 +75,11 @@ interface Disposable { dispose(): Promise<void> }
 | --- | --- |
 | `commands` | `commands.add` |
 | `ui.window` | `windows.create` |
-| `ui.mount` | `panels.mount` |
+| `ui.mount` | `panels.mount`、`panels.bottom` / `panels.sidebar`（任何插件读写两个面板位置） |
 | `ui.dialog` | `dialogs.*` |
-| `playback.read` | `player.state` 启动时读取、`player.refresh`；滤镜读取处理状态 |
+| `playback.read` | `player.state` 启动时读取、`player.refresh`、`player.stats`；滤镜读取处理状态 |
 | `events` | `player.state` / `onChange` 实时更新、面板可见性、字幕状态刷新 |
-| `playback.control` | `player.open`、`setPaused`、`seek`、`setRate`、`restart`、`close`、`scrub`、`setOutput` |
+| `playback.control` | `player.open`、`setPaused`、`seek`、`setRate`、`restart`、`close`、`scrub`、`setOutput`、`provideSequence`、`next`、`previous` |
 | `producer.av` | `player.openStream` |
 | `processing.video` | `video.filter`（另需 `playback.read`） |
 | `processing.audio` | `audio.filter`（另需 `playback.read`） |
@@ -88,6 +88,7 @@ interface Disposable { dispose(): Promise<void> }
 | `media.read` / `media.control` | `media.capture`、`Snapshot.export`、`ExportJob`（`processed` 截图另需 `playback.read`、`subtitles.read`） |
 | `source.resolve` | `resolvers.add` |
 | `plugins.manage` | `packages.*` |
+| `ui.osd` | `osd.show`、`osd.panel` |
 
 没有 `events` 时，`player.state` 只在启动和操作完成后更新，`onChange` 不会因外部变化触发。
 
@@ -115,7 +116,7 @@ interface Disposable { dispose(): Promise<void> }
 ```ts
 interface Scope extends Disposable {
   readonly commands, windows, panels, dialogs, player, video, audio,
-           subtitles, media, resolvers, packages;
+           subtitles, media, resolvers, packages, osd;
   scope(): Scope;
   add<T extends Disposable>(item: T): T;
   onDispose(cleanup: () => void | Promise<void>): Disposable;
@@ -159,9 +160,14 @@ commands.add(options: CommandOptions): Command
 
 interface CommandOptions {
   id: string;                         // 插件内唯一
-  path: string[];                     // 菜单路径，最后一项是菜单项
-  title?: string;                     // 菜单文字，默认取 path 最后一项
-  shortcut?: string;
+  path?: string[];                    // 菜单路径，1–8 段，最后一项是菜单项；1 段 = 顶层直接命令；省略 = 不进主菜单
+  title?: string;                     // 菜单文字，默认取 path 最后一项；省略 path 时必填
+  order?: number;                     // 同级排序，小的在前；整数，±1 000 000 内，默认 0
+  group?: string;                     // 分组名，相邻两项分组不同时画分隔线；默认 "domain"
+  radio?: boolean;                    // checked 画成单选圆点而不是 ✓
+  bindings?: string[];                // 默认按键/鼠标绑定，见 4.1
+  focus?: "panel";                    // 绑定只在本插件面板获得焦点时生效
+  repeat?: boolean;                   // 按住不放时随系统自动重复触发；默认 false
   enabled?: Bindable<boolean>;        // 默认 true
   checked?: Bindable<boolean | null>; // null：无勾选标记（默认）
   busy?: Bindable<boolean>;           // 默认 false
@@ -177,10 +183,33 @@ interface Command extends Disposable {
 }
 ```
 
-- `path` 中同名的上级分组与其他插件合并，组成共享的右键菜单。顶层分组惯例：文件、播放、视频、音频、字幕、视图、模拟器、插件。
-- `shortcut`：`Space`、`ArrowLeft`、`ArrowRight` 会在视频画面获得焦点时触发命令；其他值只在菜单中显示。
+- 菜单排序：同级按 `order` 升序；子菜单（路径中间的一段）排在它下面最靠前的命令的位置，并取该命令的 `group`。`order` 相同时按插件 id、再按同一插件的声明顺序，**不按标题排序**。`group` 只决定分隔线，不参与排序：一个分组要连在一起，它的 `order` 也要连续。
+- 推荐顶层骨架（[doc/product/menus.md](../product/menus.md) 维护顶层编号）：`open` 100–199（打开、关闭）、`domain` 200–699（播放、字幕、视频、声音、模拟器等子菜单）、`screen` 700–799（宿主「全屏」700）、`windows` 800–899（播放列表、播放信息等窗口入口）、`exit` 900–999（宿主「退出」990）。
+- 同一路径不能注册两次，也不能既是菜单项又是子菜单（`conflict`）。路径、`order`、`group`、绑定格式不合法时 `commands.add` 立即抛出 `invalid`。
+- 菜单项右侧的快捷键文字由绑定表生成（第一个生效的键盘绑定）。
 - 状态字段为函数时，每轮更新重新求值，变化才发送。
-- 命令禁用或忙碌时，播放器不会调用 `run`。`run` 抛出的错误交给 `onError`。
+- 命令禁用或忙碌时，播放器不会调用 `run`（绑定的按键被接住但不执行）。`run` 抛出的错误交给 `onError`。
+- 迁移期（P4 删除）：旧字段 `shortcut` 仍被接受，等同于多一条绑定。
+
+### 4.1 绑定
+
+```text
+binding  = { 修饰键 "+" } 输入          修饰键按 Ctrl、Alt、Shift、Cmd 的顺序，各至多一次
+输入     = A–Z | 0–9 | F1–F24 | Space | Enter | Tab | Escape | Backspace | Delete | Insert
+         | Home | End | PageUp | PageDown | ArrowLeft | ArrowRight | ArrowUp | ArrowDown
+         | Plus | 其它单个符号（> < / , . ; ' [ ] \ - = ` …）
+         | Mouse:LeftDoubleClick[:LeftHalf | :RightHalf] | Mouse:MiddleClick | Mouse:X1 | Mouse:X2
+         | Mouse:WheelUp | Mouse:WheelDown | Mouse:WheelLeft | Mouse:WheelRight
+```
+
+- 字母按键名匹配（与大小写锁无关），`Shift+E` 是 Shift 加 E。符号键按打出的字符写、不写 Shift：`">"`，不是 `"Shift+."`；`+` 写成 `Plus`；`"Shift+1"` 非法，写 `"!"`。
+- macOS 上 `Ctrl+X` 按 ⌃X 或 ⌘X 都触发，`Cmd+X` 只认 ⌘X。
+- 鼠标绑定只在视频区生效，可带修饰键；`:LeftHalf` / `:RightHalf` 按双击位置区分左右半边，带区的绑定优先于不带区的。滚轮按累计位移计步。右键保留给菜单。
+- 作用范围：默认全局（主窗口或浮动面板窗口获得焦点、且按键没被焦点控件吃掉时，例如输入框里的空格不会触发）；`focus: "panel"` 只在本插件面板（附着或浮动）获得焦点时生效，此时先于全局查找。工具窗口里不触发绑定。
+- 菜单或系统对话框打开时绑定暂停。默认只在按下时触发；`repeat: true` 时按住会重复触发。
+- 冲突（同一输入、同一范围被两个命令声明）不报错：用户覆盖层优先，其次宿主自己的命令，再次先加载的插件；被压下的绑定写一行宿主日志，赢家停用后自动生效。测试里用 `host.conflicts` 检查。
+- 宿主自己的命令：「全屏」（`Enter`、`F11`、`Mouse:LeftDoubleClick`）、「退出全屏」（`Escape`，不在菜单）、「退出」（`Cmd+Q`）。
+- 用户覆盖层保存在界面状态文件（[架构总览 §6](../architecture/README.md)），本轮没有改绑界面。
 
 ## 5. 播放器 `plugin.player`
 
@@ -208,7 +237,7 @@ interface PlayerState {
   readonly muted: boolean;
   readonly endReason: "natural" | "stopped" | "replaced" | "unknown" | null;
   readonly error: string | null;     // phase 为 error 时的原因
-  readonly can: { pause; seek; rate; restart; close; snapshot: boolean };
+  readonly can: { pause; seek; rate; restart; close; snapshot; next; previous: boolean };
   readonly audioTracks: AudioTrack[] | null;
 }
 
@@ -220,7 +249,7 @@ interface AudioTrack {
 }
 ```
 
-`PlayerState` 是不可变快照，可以保存下来，用作之后操作的条件（§5.3）。
+`PlayerState` 是不可变快照，可以保存下来，用作之后操作的条件（§5.3）。`can.next` / `can.previous` 来自播放序列提供者（§5.4），没有提供者时为 `false`。
 
 ### 5.2 控制
 
@@ -303,6 +332,30 @@ await plugin.media.capture({ ifCurrent: seen });
 
 只判断不提交时用 `player.isCurrent(state)`。
 
+### 5.4 播放序列与统计
+
+```ts
+interface Player {
+  provideSequence(provider: {
+    next(): unknown; previous(): unknown;
+    canNext: Bindable<boolean>; canPrevious: Bindable<boolean>;
+  }): Disposable;
+  next(): Promise<void>;       // 交给提供者，不等它执行完
+  previous(): Promise<void>;
+  stats(): Promise<PlaybackStats>;
+}
+interface PlaybackStats {
+  backend: string; session: number; framesShown: number; framesDropped: number | null;
+  video: { codec; width; height; fps } | null;          // 字段可为 null
+  audio: { codec; sampleRate; channels } | null;
+}
+```
+
+- 同时只能有一个提供者（例如播放列表）；另一个插件再登记以 `conflict` 失败（激活期间 = 激活失败）。`dispose` 或插件停用时撤销。
+- `canNext` / `canPrevious` 每轮更新重新求值，变化才发送；任何插件从 `player.state.can.next/previous` 读到。
+- `next()` / `previous()`：没有提供者或标志为假时以 `unavailable` 失败；否则宿主把请求交给提供者，在它的作用域里调用 `next` / `previous`。
+- `stats()` 需要 `playback.read`；没有来源时 `video`、`audio` 为 `null`。
+
 ## 6. 窗口与面板
 
 ### 6.1 共同接口 `View`
@@ -349,27 +402,40 @@ interface Window extends View, Disposable {
 
 ```ts
 panels.mount(slot: "bottom" | "sidebar", file: string,
-             options?: { component?: string; global?: string }): Panel
+             options?: { component?: string; global?: string; title?: string }): Panel
+panels.bottom: PanelSlot          // 底栏位置
+panels.sidebar: SidebarSlot       // 侧栏位置
 
 interface Panel extends View, Disposable {
   readonly ready: Promise<void>;                 // 已挂载
-  readonly visibility: PanelVisibility | null;
-  onVisibility(listener: (v: PanelVisibility) => void): Disposable;
-  setVisible(visible: boolean): Promise<void>;  // 设置用户偏好
-  toggle(): Promise<void>;                       // 按播放器当前值翻转偏好
   setInteraction(locks: Partial<{ focused; dragging; popupOpen: boolean }>): void;
+  showMenu(items: (Command | null)[], at: { x: number; y: number }): Promise<void>;
 }
 
-interface PanelVisibility {
-  preferred: boolean;   // 用户的选择
-  effective: boolean;   // 现在是否显示
+interface PanelSlot {
+  readonly state: SlotState | null;              // null：该位置没有面板
+  onChange(listener: (state: SlotState | null) => void): Disposable;
+  setVisible(visible: boolean): Promise<void>;   // 设置用户偏好
+  toggle(): Promise<void>;                       // 按播放器当前值翻转偏好
+}
+interface SidebarSlot extends PanelSlot {
+  setDetached(detached: boolean): Promise<void>; // 分离为浮动窗口 / 附着回主窗口
+}
+interface SlotState {
+  preferred: boolean;   // 用户的选择（菜单勾选）
+  effective: boolean;   // 现在是否显示（附着或在浮动窗口里）
   reason: "userHidden" | "space" | "fullscreen" | "idle" | null;
+  detached: boolean;    // 侧栏为浮动窗口；底栏总为 false
 }
 ```
 
-- 面板文件导出**一个 component 和一个 global**。属性和回调声明在 global 上（桥接对象），component 负责布局。名字由 SDK 从文件推断；文件导出多个时用 `options` 指定。
+- 面板文件导出**一个 component 和一个 global**。属性和回调声明在 global 上（桥接对象），component 负责布局。名字由 SDK 从文件推断；文件导出多个时用 `options` 指定。`title` 是侧栏分离后浮动窗口的标题。
+- `panels.bottom` / `panels.sidebar` 不属于挂载者：任何插件都能读取和切换（例如底栏按钮开关播放列表）。位置为空时 `setVisible` 等以 `missing` 失败；对底栏 `setDetached` 是 `invalid`。没有 `events` 时 `state` 只在本插件自己改动后刷新。侧栏的显示、宽度、分离状态与浮动窗口位置由播放器跨启动记住。
+- 侧栏占视频右侧全高，用户可拖动分隔条改宽度（侧栏至少 317、视频至少 318）；窗口窄到放不下时先压缩视频，再不够才隐藏（`reason: "space"`，偏好不变）。分离后浮动窗口默认 300×408、最小 300×250，显示同一个面板组件，插件的属性和回调不变；点浮动窗口的关闭按钮等于 `setVisible(false)`。
+- `showMenu`：在面板当前所在的窗口弹出单层菜单，列出本插件的命令（`null` 为分隔线），样式、勾选、快捷键文字与主菜单相同；选择一项等于执行该命令。`at` 是窗口坐标，在 Slint 里取 `self.absolute-position.x / 1px + self.mouse-x / 1px`（y 同理）。命令不属于本插件以 `missing` 失败，面板未显示以 `unavailable` 失败，最多 32 项。
 - `setInteraction`：用户正在操作面板（输入框聚焦、拖动、弹出菜单打开）时设为 `true`，防止底栏自动隐藏。合并写入，最后写入生效。
 - 面板转发 global 上的所有回调，没有「先绑定再显示」的限制。
+- 迁移期（P4 删除）：`Panel.visibility`、`onVisibility`、`setVisible`、`toggle` 仍可用，等同于对本插件所在位置调用 `panels.<位置>` 的同名方法。
 
 ### 6.4 Slint 文件规则
 
@@ -377,6 +443,25 @@ interface PanelVisibility {
 - 插件 → 界面用 `in` / `in-out property`，界面 → 插件用 `callback`。回调参数和属性值必须能用 JSON 表示（基本类型、数组、结构体），回调返回 `void`。
 - 会被插件改值的输入控件用双向绑定（`value <=> root.x`、`checked <=> root.x`）。单向的 `value: root.x` 在用户操作控件后会断开，之后插件改值，控件不会跟着动。属性须为 `in-out`。
 - `in` 属性只能单向绑定时，用 `changed x => { slider.value = root.x; }` 在模型变化时回推。
+- 主题与控件：`import { Theme } from "@vestra/theme.slint";` 提供颜色（`bg-bar`、`bg-panel`、`text`、`accent`、`playing`…）、字号（`font-xs` 9px、`font-body` 11px、`font-tab` 12px、`font-title` 13px、`font-mono`）和控件尺寸（`button-height` 21px、`input-height`、`form-row-gap`、`dialog-padding`…），完整列表见 `src/host/ui/vestra/theme.slint`。`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";` 提供 PotPlayer 样式的按钮（`small`、图标按钮 `icon` + `checked`）、2px 线滑块（`panel: true` 为面板样式）和悬停提示。
+- 所有插件 Slint 都以 `fluent-dark` 风格编译：std-widgets 的控件默认是深色。默认字体是系统 UI 字体（含中文回退），插件不需要自己设字体。
+- 编辑器里要让 `@vestra/...` 导入可解析，给 Slint 语言服务设 `libraryPaths`：`{ "vestra": "<仓库>/src/host/ui/vestra" }`。
+
+### 6.5 屏幕提示 `plugin.osd`
+
+需要 `ui.osd`。
+
+```ts
+osd.show(text: string): Promise<void>   // 视频左上角一行，2 秒后淡出；新提示替换旧提示
+osd.panel(): OsdPanel                   // 本插件的只读信息块，每个插件一个
+interface OsdPanel extends Disposable {
+  set(text: string | null): void;       // 多行文字；null 隐藏；最后写入生效
+}
+```
+
+- 提示：1–200 个字符，换行替换为空格；粗体 16px 白字黑描边，左/上边距 10px。插件停用时已显示的提示照常到时消失。
+- 信息块：位于提示一行之下，半透明黑底、11px 等宽字，不接收输入，最多 32 行、4096 字节；多个插件各一块时从上到下排列。`dispose` 或插件停用时移除。第二次调用 `panel()` 抛错。
+- 无界面模式下以 `unavailable` 失败（`panel().set` 的失败交给 `onError`）。
 
 ## 7. 文件对话框 `plugin.dialogs`
 
@@ -579,9 +664,10 @@ interface PackageChange {
 | code | 含义 |
 | --- | --- |
 | `stale` | 条件不再成立（来源或字幕选择已被改变），**什么都没做** |
+| `missing` | 面板位置为空；`showMenu` 的命令不属于本插件 |
 | `capability` | manifest 未声明所需能力 |
 | `invalid` | 参数不合法（如滤镜值超出范围） |
-| `busy`、`conflict`、`unavailable`、`unsupported` | 播放器拒绝接纳，未执行 |
+| `busy`、`conflict`、`unavailable`、`unsupported` | 播放器拒绝接纳，未执行（`conflict` 也用于已有别的播放序列提供者；`unavailable` 也用于 `next`/`previous` 不可用、面板未显示、无界面模式） |
 | `backend` | 载入或解析失败，`message` 为后端原因 |
 | `disabled` | 插件正在停用 |
 | `replaced` | 已被接受，但完成前被另一个来源替换（`open`、`openStream`、`media.ready`） |
@@ -610,9 +696,10 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 
 | 类别 | 成员 |
 | --- | --- |
-| 操作 | `host.command(id).run()`（禁用或忙碌时同样拒绝）；`host.window(id).emit(callback, ...args)`；`host.mounted().emit(...)`；`host.dialogAnswers.push([path] \| null)` |
+| 操作 | `host.command(id).run()`（禁用或忙碌时同样拒绝）；`host.press(binding, { panel? })`（按绑定表执行，`panel: true` 模拟面板有焦点）；`host.window(id).emit(callback, ...args)`；`host.mounted().emit(...)`；`host.dialogAnswers.push([path] \| null)`；`host.step("next" \| "previous")`（模拟别的插件调用 `player.next()`） |
 | 模拟来源 | `host.openElsewhere(path, phase?)`（另一个插件打开了媒体）；`host.setSource({ phase, position, duration, … })` |
-| 断言 | `host.window(id).props`（kebab-case 名）、`.visible`；`host.command(id).state`；`host.sent(method)`；`host.source`；`host.processing`、`host.subtitles`、`host.snapshots`、`host.jobs`、`host.producers` |
+| 断言 | `host.window(id).props`（kebab-case 名）、`.visible`；`host.command(id).state`、`.declaration`；`host.conflicts`（`[绑定, 赢家, ...被压下]`）；`host.layout.bottom` / `.sidebar`（可直接改后 `host.emit("window.state", {})` 模拟别处的变化）；`host.osd`（显示过的提示）、`host.osdPanel`；`host.sequence`（提供者的标志）；`host.menus`（`showMenu` 记录）；`host.sent(method)`；`host.source`；`host.processing`、`host.subtitles`、`host.snapshots`、`host.jobs`、`host.producers` |
+| 模拟数据 | `host.stats`（`player.stats()` 的返回值） |
 | 注入故障 | `host.handle(method, fn)`：抛 `new HostError(code, message)` 模拟播放器拒绝，抛普通 `Error` 模拟答复丢失；`host.reset(method)` 恢复 |
 | 同步 | `await host.settle(ms?)`：等到没有在途请求（可额外等待计时器） |
 | 结束 | `await stop()` |

@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 mod backend;
+mod bindings;
 mod commands;
 pub mod composition;
 mod effects;
@@ -44,6 +45,7 @@ pub mod subtitle_state;
 pub mod subtitle_style;
 pub mod subtitle_upload;
 mod ui;
+mod ui_state;
 mod ui_values;
 pub mod window_state;
 use anyhow::{Result, bail};
@@ -52,6 +54,7 @@ use plugins::Plugin;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use slint::ComponentHandle;
+use slint_interpreter::Value as SValue;
 use std::{
     cell::RefCell,
     collections::BTreeMap,
@@ -98,6 +101,10 @@ enum Event {
     #[cfg(feature = "producer-audio")]
     PhysicalInput(u64, Value),
     WindowInput(u64, String),
+    /// A bound input fired: (window generation, owner, command id).
+    Binding(u64, u64, String),
+    SidebarResized(u64, f64),
+    FloatingClosed(u64),
     MenuAction(u64, MenuAction),
     Request(u64, Value),
     Reply(Reply, std::result::Result<Value, RpcError>),
@@ -123,7 +130,35 @@ struct Mount {
     spec: composition::CompileSpec,
     properties: BTreeMap<String, Value>,
     visible: bool,
+    detached: bool,
+    title: String,
+    manifest: String,
 }
+/// The detached sidebar's own window (C14).
+struct Floating {
+    instance: slint_interpreter::ComponentInstance,
+    owner: u64,
+    generation: u64,
+}
+/// Read synchronously by the shell's key/mouse callbacks, without borrowing Host.
+#[derive(Default)]
+struct InputShared {
+    table: bindings::Table,
+    bottom: Option<u64>,
+    sidebar: Option<u64>,
+    blocked: bool,
+    wheel: (f64, f64),
+}
+/// Which window shows the open menu, and what it lists.
+#[derive(Clone, PartialEq)]
+enum MenuMode {
+    Main,
+    /// A panel menu (C11): owner and its command ids, `None` = separator.
+    Panel(u64, Vec<Option<String>>),
+}
+/// One wheel step per this many logical pixels of accumulated scroll.
+const WHEEL_STEP: f64 = 40.;
+const OSD_MS: u64 = 2000;
 struct MountChange {
     reply: Reply,
     contribution: Option<Mount>,
@@ -155,8 +190,20 @@ struct Host {
     native_window: Option<platform_window::HostWindowId>,
     native_before: Option<platform_window::NativeSnapshot>,
     native_unavailable: Option<String>,
-    sidebar_resize_requested: bool,
-    sidebar_resize: Value,
+    input: Rc<RefCell<InputShared>>,
+    ui_state: ui_state::Store,
+    osd_until: Option<u64>,
+    info_panels: BTreeMap<u64, String>,
+    /// The sequence provider: owner, can-next, can-previous (C6).
+    sequence: Option<(u64, bool, bool)>,
+    last_source: Value,
+    source_state_replies: std::collections::BTreeSet<(u64, u64)>,
+    floating: Option<Floating>,
+    menu_mode: MenuMode,
+    /// Window generation the open menu belongs to (shell or floating).
+    menu_generation: u64,
+    host_revision: u64,
+    window_title: String,
     activations: package_activation::Book,
     activation_ui: std::collections::BTreeSet<(u64, u64)>,
     activation_receipts: std::collections::VecDeque<Value>,
@@ -285,6 +332,32 @@ impl Host {
         }
         self.archive_activation(owner, "plugin disabled before activation completed");
         let _ = self.commands.remove_owner(owner);
+        {
+            let mut input = self.input.borrow_mut();
+            input.table.remove_owner(owner);
+            if input.bottom == Some(owner) {
+                input.bottom = None;
+            }
+            if input.sidebar == Some(owner) {
+                input.sidebar = None;
+            }
+        }
+        if self
+            .sequence
+            .is_some_and(|(provider, ..)| provider == owner)
+        {
+            self.sequence = None;
+            self.rebroadcast_source();
+        }
+        if self.info_panels.remove(&owner).is_some() {
+            self.show_info_panels();
+        }
+        if self.floating.as_ref().is_some_and(|f| f.owner == owner) {
+            self.close_floating();
+        }
+        if matches!(&self.menu_mode, MenuMode::Panel(menu_owner, _) if *menu_owner == owner) {
+            self.close_menu();
+        }
         self.policy.remove_owner(owner);
         self.mount_queue.retain(|c| c.reply.owner != owner);
         if self
@@ -433,32 +506,13 @@ impl Host {
                 if generation != self.shell_generation {
                     return;
                 }
+                let _ = kind;
                 self.policy.activity(self.now_ms());
-                if let Some(shortcut) = kind.strip_prefix("shortcut:") {
-                    self.canvas_shortcut(shortcut);
-                    return;
-                }
-                if (kind == "toggleFullscreen" || kind == "escape")
-                    && let Some(shell) = &self.shell
-                {
-                    if kind == "toggleFullscreen" {
-                        shell
-                            .window()
-                            .set_fullscreen(!shell.window().is_fullscreen());
-                    } else if self.menu_open {
-                        let result = shell
-                            .invoke("close-menu", &[])
-                            .map(|_| ())
-                            .map_err(anyhow::Error::from);
-                        self.report_menu(result);
-                        self.menu_open = false;
-                    } else {
-                        shell.window().set_fullscreen(false);
-                    }
-                }
             }
             Event::MenuAction(generation, action) => {
-                if generation != self.shell_generation {
+                if !self.window_generation_live(generation)
+                    || (!matches!(action, MenuAction::Reset) && generation != self.menu_generation)
+                {
                     return;
                 }
                 self.policy.activity(self.now_ms());
@@ -466,10 +520,7 @@ impl Host {
                     MenuAction::Reset => {
                         #[cfg(feature = "producer-audio")]
                         self.physical_revoke(producer_input::RevokeReason::Menu);
-                        self.menu_open = true;
-                        self.menu_path.clear();
-                        let result = self.refresh_menu();
-                        self.report_menu(result);
+                        self.open_menu(generation, MenuMode::Main);
                     }
                     MenuAction::Back => {
                         self.menu_path.pop();
@@ -508,8 +559,56 @@ impl Host {
                     },
                 }
             }
-            Event::Reply(reply, result) => self.respond(reply, result),
-            Event::Broadcast(event, data) => self.broadcast(&event, data),
+            Event::Reply(reply, mut result) => {
+                if self.source_state_replies.remove(&(reply.owner, reply.id))
+                    && let Ok(state) = &mut result
+                {
+                    self.patch_source(state);
+                }
+                self.respond(reply, result)
+            }
+            Event::Broadcast(event, mut data) => {
+                if event == "source.state" {
+                    self.patch_source(&mut data);
+                    self.last_source = data.clone();
+                    self.update_title();
+                }
+                self.broadcast(&event, data)
+            }
+            Event::Binding(generation, owner, id) => {
+                if !self.window_generation_live(generation) {
+                    return;
+                }
+                self.policy.activity(self.now_ms());
+                if let Err(error) = self.execute_command(owner, &id) {
+                    eprintln!("binding execute: {error:?}");
+                }
+            }
+            Event::SidebarResized(generation, width) => {
+                if generation != self.shell_generation {
+                    return;
+                }
+                self.policy.set_sidebar_width(width);
+                self.ui_state.state.sidebar = Some(ui_state::Sidebar { width });
+                self.ui_state.touch(self.now_ms());
+            }
+            Event::FloatingClosed(generation) => {
+                if let Some(owner) = self
+                    .floating
+                    .as_ref()
+                    .filter(|f| f.generation == generation)
+                    .map(|f| f.owner)
+                {
+                    let _ = self
+                        .policy
+                        .set_preferred(window_state::Slot::Sidebar, owner, false);
+                    if let Some(mount) = self.mounts.get_mut(&owner) {
+                        mount.visible = false;
+                    }
+                    self.remember_panel(owner);
+                    self.close_floating();
+                }
+            }
             Event::PluginMessage(owner, event, data) => {
                 self.send(owner, json!({"event":event,"data":data}))
             }
@@ -569,107 +668,85 @@ impl Host {
         let native = self
             .native_window
             .and_then(|id| platform_window::screen_for(id).ok());
-        if native.is_some_and(|facts| !facts.active) && self.menu_open {
-            self.menu_open = false;
-            let result = shell
-                .invoke("close-menu", &[])
-                .map(|_| ())
-                .map_err(Into::into);
-            self.report_menu(result);
+        if native.is_some_and(|facts| !facts.active)
+            && self.menu_open
+            && self.menu_generation == self.shell_generation
+        {
+            self.close_menu();
             self.policy.activity(now);
         }
         self.policy.set_fullscreen(fullscreen, now);
         self.policy
             .set_obstructions(self.menu_open, self.dialog_busy);
+        #[cfg(feature = "producer-audio")]
+        let captured = self
+            .backend
+            .input
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .is_some_and(|routing| routing.captured);
+        #[cfg(not(feature = "producer-audio"))]
+        let captured = false;
+        self.input.borrow_mut().blocked = self.menu_open || self.dialog_busy || captured;
         if let Err(error) =
             shell.set_property("input-blocked", (self.menu_open || self.dialog_busy).into())
         {
             eprintln!("host.error physical-input bridge: {error}");
         }
+        if self.osd_until.is_some_and(|until| now >= until) {
+            self.osd_until = None;
+            let _ = shell.set_property("osd-visible", false.into());
+        }
+        self.host_command_states(fullscreen);
         let number = |name: &str| match shell.get_property(name) {
             Ok(slint_interpreter::Value::Number(n)) => n,
             _ => 0.,
         };
         let viewport = window_state::Viewport {
-            canvas_available_width: number("canvas-space-width"),
-            canvas_available_height: number("canvas-space-height"),
+            width: number("logical-width"),
+            height: number("logical-height"),
         };
-        if self.sidebar_resize_requested {
-            self.sidebar_resize_requested = false;
-            let size = shell.window().size();
-            let scale = shell.window().scale_factor() as f64;
-            let width = size.width as f64 / scale;
-            let height = size.height as f64 / scale;
-            if viewport.canvas_available_width >= 880. && viewport.canvas_available_height >= 360. {
-                self.sidebar_resize = json!({"status":"alreadyFits"});
-            } else if fullscreen {
-                self.sidebar_resize = json!({"status":"screenLimit"});
-            } else if let Some(facts) = native {
-                if (scale - facts.backing_scale_factor).abs() > 0.01 {
-                    self.sidebar_resize = json!({"status":"screenLimitUnavailable","reason":"native/Slint scale mismatch"});
-                } else {
-                    let chrome_w = facts.native_frame.width - facts.content_rect.width;
-                    let chrome_h = facts.native_frame.height - facts.content_rect.height;
-                    let desired_w = width.max(880. + width - viewport.canvas_available_width);
-                    let desired_h = height.max(360. + height - viewport.canvas_available_height);
-                    let target_w = desired_w.min(facts.visible_frame.width - chrome_w);
-                    let target_h = desired_h.min(facts.visible_frame.height - chrome_h);
-                    if target_w > 0. && target_h > 0. {
-                        let outer_w = target_w + chrome_w;
-                        let outer_h = target_h + chrome_h;
-                        let x = facts.native_frame.x.clamp(
-                            facts.visible_frame.x,
-                            facts.visible_frame.x + facts.visible_frame.width - outer_w,
-                        );
-                        let y = facts.native_frame.y.clamp(
-                            facts.visible_frame.y,
-                            facts.visible_frame.y + facts.visible_frame.height - outer_h,
-                        );
-                        let old = shell.window().position();
-                        let dx = (x - facts.native_frame.x) * scale;
-                        let dy = (facts.native_frame.y + facts.native_frame.height - y - outer_h)
-                            * scale;
-                        shell.window().set_size(slint::PhysicalSize::new(
-                            (target_w * scale).round() as u32,
-                            (target_h * scale).round() as u32,
-                        ));
-                        shell.window().set_position(slint::PhysicalPosition::new(
-                            old.x.saturating_add(dx.round() as i32),
-                            old.y.saturating_add(dy.round() as i32),
-                        ));
-                        self.sidebar_resize = json!({"status":"requested","limited":target_w<desired_w || target_h<desired_h,"targetLogicalWidth":target_w,"targetLogicalHeight":target_h});
-                    } else {
-                        self.sidebar_resize = json!({"status":"screenLimit"});
-                    }
-                }
-            } else {
-                self.sidebar_resize = json!({"status":"screenLimitUnavailable","reason":"host native screen association unavailable"});
-            }
-        }
         if self.measured_shell != Some(self.shell_generation)
-            && (viewport.canvas_available_width <= 0. || viewport.canvas_available_height <= 0.)
+            && (viewport.width <= 0. || viewport.height <= 0.)
         {
             return;
+        }
+        if !fullscreen && !self.headless {
+            self.remember_window(&shell);
         }
         let result = (|| -> Result<Value> {
             let snapshot = self.policy.evaluate(viewport, now)?;
             shell.set_property("host-fullscreen", fullscreen.into())?;
-            shell.set_property("menu-open", self.menu_open.into())?;
             shell.set_property(
-                "bottom-visible",
-                snapshot.bottom.is_some_and(|s| s.effective).into(),
+                "menu-open",
+                (self.menu_open && self.menu_generation == self.shell_generation).into(),
             )?;
+            let bottom = snapshot.bottom.is_some_and(|s| s.effective);
+            shell.set_property("bottom-visible", bottom.into())?;
             shell.set_property(
                 "sidebar-visible",
-                snapshot.sidebar.is_some_and(|s| s.effective).into(),
+                snapshot
+                    .sidebar
+                    .is_some_and(|s| s.effective && !s.detached)
+                    .into(),
             )?;
-            shell.set_property("sidebar-width", snapshot.sidebar_width.into())?;
+            let playing =
+                self.last_source["phase"] == "ready" && self.last_source["paused"] == false;
+            // UI-SHELL-09: the pointer hides with the idle fullscreen bar while playing.
+            let idle = snapshot
+                .bottom
+                .is_some_and(|s| s.reason == Some(window_state::Reason::Idle));
+            shell.set_property("cursor-hidden", (fullscreen && idle && playing).into())?;
             Ok(
-                json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"logicalWidth":number("logical-width"),"logicalHeight":number("logical-height"),"canvasAvailableWidth":viewport.canvas_available_width,"canvasAvailableHeight":viewport.canvas_available_height,"menuOpen":self.menu_open,"dialogOpen":self.dialog_busy,"sidebarResize":self.sidebar_resize,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot}),
+                json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"menuOpen":self.menu_open,"dialogOpen":self.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot}),
             )
         })();
         match result {
             Ok(facts) => {
+                let detached = facts["slots"]["sidebar"]["effective"] == true
+                    && facts["slots"]["sidebar"]["detached"] == true;
+                self.sync_floating(detached);
                 if facts != self.window_facts {
                     self.measured_shell = Some(self.shell_generation);
                     self.window_facts = facts.clone();
@@ -680,6 +757,189 @@ impl Host {
                 "host.error",
                 json!({"code":"window-policy","message":error.to_string()}),
             ),
+        }
+        self.ui_state.save_if_due(now);
+    }
+    /// Record the main window frame (logical px) for the next launch.
+    fn remember_window(&mut self, shell: &slint_interpreter::ComponentInstance) {
+        let window = shell.window();
+        let scale = window.scale_factor() as f64;
+        let (size, position) = (window.size(), window.position());
+        if size.width == 0 || size.height == 0 || scale <= 0. {
+            return;
+        }
+        let frame = ui_state::Frame {
+            x: position.x as f64 / scale,
+            y: position.y as f64 / scale,
+            width: size.width as f64 / scale,
+            height: size.height as f64 / scale,
+        };
+        if self.ui_state.state.window != Some(frame) {
+            self.ui_state.state.window = Some(frame);
+            self.ui_state.touch(self.now_ms());
+        }
+    }
+    /// Keep the sidebar owner's persisted preferences current.
+    fn remember_panel(&mut self, owner: u64) {
+        let Some(mount) = self.mounts.get(&owner) else {
+            return;
+        };
+        if mount.spec.slot != composition::Slot::Sidebar {
+            return;
+        }
+        let floating = self
+            .ui_state
+            .state
+            .panels
+            .get(&mount.manifest)
+            .and_then(|p| p.floating);
+        let prefs = ui_state::PanelPrefs {
+            visible: mount.visible,
+            detached: mount.detached,
+            floating,
+        };
+        self.ui_state
+            .state
+            .panels
+            .insert(mount.manifest.clone(), prefs);
+        self.ui_state.touch(self.now_ms());
+    }
+    /// Open or close the floating window so it matches the policy.
+    fn sync_floating(&mut self, want: bool) {
+        let owner = self
+            .mounts
+            .values()
+            .find(|m| m.spec.slot == composition::Slot::Sidebar)
+            .map(|m| m.spec.owner);
+        match (&self.floating, want, owner) {
+            (Some(floating), true, Some(owner)) if floating.owner == owner => {
+                self.remember_floating();
+            }
+            (None, true, Some(owner)) => {
+                if let Err(error) = self.open_floating(owner) {
+                    eprintln!("floating panel: {error:#}");
+                    self.send(owner, json!({"event":"ui.error","data":{"message":format!("ui-prepare: {error:#}")}}));
+                    let _ = self.policy.set_detached(owner, false);
+                    if let Some(mount) = self.mounts.get_mut(&owner) {
+                        mount.detached = false;
+                    }
+                }
+            }
+            (Some(_), _, _) => self.close_floating(),
+            _ => {}
+        }
+    }
+    fn open_floating(&mut self, owner: u64) -> Result<()> {
+        let mount = self
+            .mounts
+            .get(&owner)
+            .ok_or_else(|| anyhow::anyhow!("no sidebar mount"))?
+            .clone();
+        self.next_shell_generation += 1;
+        let generation = self.next_shell_generation;
+        let instance = composition::compile_floating(
+            &mount.spec,
+            &mount.title,
+            self.mount_events.clone(),
+            generation,
+        )?;
+        for (name, value) in &mount.properties {
+            composition::set_json_global(&instance, &mount.spec, name, value)?;
+        }
+        self.bind_menu(&instance, generation, false)?;
+        self.bind_keys(&instance, generation)?;
+        let events = self.events.clone();
+        instance.window().on_close_requested(move || {
+            let _ = events.send(Event::FloatingClosed(generation));
+            slint::CloseRequestResponse::KeepWindowShown
+        });
+        let frame = self
+            .ui_state
+            .state
+            .panels
+            .get(&mount.manifest)
+            .and_then(|p| p.floating)
+            .unwrap_or(ui_state::Frame {
+                x: 438.,
+                y: 100.,
+                width: 300.,
+                height: 408.,
+            });
+        instance.window().set_size(slint::LogicalSize::new(
+            frame.width.max(300.) as f32,
+            frame.height.max(250.) as f32,
+        ));
+        instance
+            .window()
+            .set_position(slint::LogicalPosition::new(frame.x as f32, frame.y as f32));
+        instance.show()?;
+        self.floating = Some(Floating {
+            instance,
+            owner,
+            generation,
+        });
+        Ok(())
+    }
+    fn remember_floating(&mut self) {
+        let Some(floating) = &self.floating else {
+            return;
+        };
+        let window = floating.instance.window();
+        let scale = window.scale_factor() as f64;
+        let (size, position) = (window.size(), window.position());
+        if size.width == 0 || scale <= 0. {
+            return;
+        }
+        let frame = ui_state::Frame {
+            x: position.x as f64 / scale,
+            y: position.y as f64 / scale,
+            width: size.width as f64 / scale,
+            height: size.height as f64 / scale,
+        };
+        let Some(manifest) = self.mounts.get(&floating.owner).map(|m| m.manifest.clone()) else {
+            return;
+        };
+        let prefs = self
+            .ui_state
+            .state
+            .panels
+            .entry(manifest)
+            .or_insert(ui_state::PanelPrefs {
+                visible: true,
+                detached: true,
+                floating: None,
+            });
+        if prefs.floating != Some(frame) {
+            prefs.floating = Some(frame);
+            self.ui_state.touch(self.now_ms());
+        }
+    }
+    fn close_floating(&mut self) {
+        if let Some(floating) = self.floating.take() {
+            if self.menu_open && self.menu_generation == floating.generation {
+                self.menu_open = false;
+                self.menu_path.clear();
+                self.menu_mode = MenuMode::Main;
+            }
+            let _ = floating.instance.hide();
+        }
+    }
+    /// Shell or floating window generation still alive.
+    fn window_generation_live(&self, generation: u64) -> bool {
+        generation == self.shell_generation
+            || self
+                .floating
+                .as_ref()
+                .is_some_and(|f| f.generation == generation)
+    }
+    fn window_for(&self, generation: u64) -> Option<&slint_interpreter::ComponentInstance> {
+        if generation == self.shell_generation {
+            self.shell.as_ref()
+        } else {
+            self.floating
+                .as_ref()
+                .filter(|f| f.generation == generation)
+                .map(|f| &f.instance)
         }
     }
     fn report_menu(&mut self, result: Result<()>) {
@@ -700,6 +960,7 @@ impl Host {
             use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
             let events = self.events.clone();
             let routing = self.backend.input.clone();
+            let input = self.input.clone();
             let weak = window.as_weak();
             window.window().on_winit_window_event(move |_, event| {
                 match event {
@@ -715,7 +976,8 @@ impl Host {
                         let Some(routing) = routing.filter(|routing| routing.captured) else { return EventResult::Propagate; };
                         if let winit::keyboard::PhysicalKey::Code(code) = event.physical_key {
                             let code = format!("{code:?}");
-                            if matches!(code.as_str(), "F11" | "Escape") {return EventResult::Propagate;}
+                            // Keys bound to the host's own commands (fullscreen, exit fullscreen) pass.
+                            if host_key(&input, &code) {return EventResult::Propagate;}
                             if routing.keys.contains(&code) {
                                 if !event.repeat {
                                     let _=events.send(Event::PhysicalInput(generation,json!({"kind":"key","scope":routing.scope,"code":code,"down":event.state==winit::event::ElementState::Pressed})));
@@ -760,12 +1022,112 @@ impl Host {
             }
             slint_interpreter::Value::Void
         })?;
+        self.bind_menu(window, generation, true)?;
+        self.bind_keys(window, generation)?;
+        let input = self.input.clone();
+        let events = self.events.clone();
+        window.set_callback("mouse-input", move |args| {
+            let [SValue::String(name), mods @ ..] = args else {
+                return SValue::Bool(false);
+            };
+            let flag = |i: usize| matches!(mods.get(i), Some(SValue::Bool(true)));
+            let (ctrl, cmd) = slint_mods(flag(0), flag(3));
+            let event = bindings::Input {
+                mods: bindings::Mods {
+                    ctrl,
+                    alt: flag(1),
+                    shift: flag(2),
+                    cmd,
+                },
+                name: format!("Mouse:{name}"),
+            };
+            SValue::Bool(fire(&input, &events, generation, &event, false, None))
+        })?;
+        let input = self.input.clone();
+        let events = self.events.clone();
+        window.set_callback("wheel-input", move |args| {
+            let number = |i: usize| match args.get(i) {
+                Some(SValue::Number(n)) if n.is_finite() => *n,
+                _ => 0.,
+            };
+            let flag = |i: usize| matches!(args.get(i), Some(SValue::Bool(true)));
+            let (ctrl, cmd) = slint_mods(flag(2), flag(5));
+            let mods = bindings::Mods {
+                ctrl,
+                alt: flag(3),
+                shift: flag(4),
+                cmd,
+            };
+            let (dx, dy) = (number(0), number(1));
+            let (vertical, horizontal) = {
+                let shared = input.borrow();
+                (shared.table.has_wheel(true), shared.table.has_wheel(false))
+            };
+            if !vertical && !horizontal {
+                return SValue::Bool(false);
+            }
+            let mut steps = Vec::new();
+            {
+                let mut shared = input.borrow_mut();
+                shared.wheel.0 += dx;
+                shared.wheel.1 += dy;
+                while shared.wheel.1.abs() >= WHEEL_STEP {
+                    let up = shared.wheel.1 > 0.;
+                    shared.wheel.1 -= WHEEL_STEP.copysign(shared.wheel.1);
+                    steps.push(if up { "WheelUp" } else { "WheelDown" });
+                }
+                while shared.wheel.0.abs() >= WHEEL_STEP {
+                    let left = shared.wheel.0 > 0.;
+                    shared.wheel.0 -= WHEEL_STEP.copysign(shared.wheel.0);
+                    steps.push(if left { "WheelLeft" } else { "WheelRight" });
+                }
+            }
+            for step in steps {
+                let event = bindings::Input {
+                    mods,
+                    name: format!("Mouse:{step}"),
+                };
+                fire(&input, &events, generation, &event, false, None);
+            }
+            SValue::Bool(true)
+        })?;
+        let events = self.events.clone();
+        window.set_callback("sidebar-resized", move |args| {
+            if let Some(SValue::Number(width)) = args.first() {
+                let _ = events.send(Event::SidebarResized(generation, *width));
+            }
+            SValue::Void
+        })?;
+        window.set_property("sidebar-width", self.policy.sidebar_user_width().into())?;
+        window.set_property(
+            "window-title",
+            SValue::String(self.window_title.as_str().into()),
+        )?;
+        window.set_property(
+            "info-panels",
+            ui_values::from_json(&json!(self.info_panels.values().collect::<Vec<_>>()))?,
+        )?;
+        let roots = self.commands.snapshot().roots;
+        let labels = self.labels();
+        set_menu_model(
+            window,
+            menu_levels(window, &roots, &mut self.menu_path.clone(), &labels)?,
+        )?;
+        if let Some(image) = &self.last_image {
+            window.set_property("video-frame", image.clone().into())?;
+        }
+        Ok(())
+    }
+    /// Menu callbacks shared by the shell and the floating window.
+    fn bind_menu(
+        &self,
+        window: &slint_interpreter::ComponentInstance,
+        generation: u64,
+        reset: bool,
+    ) -> Result<()> {
         let events = self.events.clone();
         window.set_callback("menu-hover", move |args| {
-            if let [
-                slint_interpreter::Value::Number(level),
-                slint_interpreter::Value::String(token),
-            ] = args
+            if let [SValue::Number(level), SValue::String(token)] = args
                 && *level >= 0.
             {
                 let _ = events.send(Event::MenuAction(
@@ -773,19 +1135,23 @@ impl Host {
                     MenuAction::Hover(*level as usize, token.to_string()),
                 ));
             }
-            slint_interpreter::Value::Void
+            SValue::Void
         })?;
         let events = self.events.clone();
         window.set_callback("menu-invoke", move |args| {
-            if let Some(slint_interpreter::Value::String(token)) = args.first() {
+            if let Some(SValue::String(token)) = args.first() {
                 let _ = events.send(Event::MenuAction(
                     generation,
                     MenuAction::Invoke(token.to_string()),
                 ));
             }
-            slint_interpreter::Value::Void
+            SValue::Void
         })?;
-        for callback in ["menu-reset", "menu-back", "menu-dismiss"] {
+        let mut callbacks = vec!["menu-back", "menu-dismiss"];
+        if reset {
+            callbacks.push("menu-reset");
+        }
+        for callback in callbacks {
             let events = self.events.clone();
             window.set_callback(callback, move |_| {
                 let action = match callback {
@@ -794,29 +1160,98 @@ impl Host {
                     _ => MenuAction::Dismiss,
                 };
                 let _ = events.send(Event::MenuAction(generation, action));
-                slint_interpreter::Value::Void
+                SValue::Void
             })?;
-        }
-        let roots = self.commands.snapshot().roots;
-        set_menu_model(
-            window,
-            menu_levels(window, &roots, &mut self.menu_path.clone())?,
-        )?;
-        if let Some(image) = &self.last_image {
-            window.set_property("video-frame", image.clone().into())?;
         }
         Ok(())
     }
-    fn refresh_menu(&mut self) -> Result<()> {
-        if let Some(shell) = &self.shell {
-            let roots = self.commands.snapshot().roots;
-            set_menu_model(shell, menu_levels(shell, &roots, &mut self.menu_path)?)?;
-        }
+    /// Key forwarding: `key-input(scope, text, control, alt, shift, meta, repeat)`.
+    fn bind_keys(
+        &self,
+        window: &slint_interpreter::ComponentInstance,
+        generation: u64,
+    ) -> Result<()> {
+        let input = self.input.clone();
+        let events = self.events.clone();
+        window.set_callback("key-input", move |args| {
+            let [SValue::String(scope), SValue::String(text), rest @ ..] = args else {
+                return SValue::Bool(false);
+            };
+            let flag = |i: usize| matches!(rest.get(i), Some(SValue::Bool(true)));
+            let Some(event) = bindings::from_slint_key(text, flag(0), flag(1), flag(2), flag(3))
+            else {
+                return SValue::Bool(false);
+            };
+            let panel = {
+                let shared = input.borrow();
+                match scope.as_str() {
+                    "panel:bottom" => shared.bottom,
+                    "panel:sidebar" => shared.sidebar,
+                    _ => None,
+                }
+            };
+            SValue::Bool(fire(&input, &events, generation, &event, flag(4), panel))
+        })?;
         Ok(())
+    }
+    fn labels(&self) -> impl Fn(u64, &str) -> Option<String> + use<> {
+        let input = self.input.clone();
+        move |owner, id| input.borrow().table.label(owner, id)
+    }
+    /// Show the menu in the window of `generation` (shell or floating).
+    fn open_menu(&mut self, generation: u64, mode: MenuMode) {
+        if self.menu_open && self.menu_generation != generation {
+            self.close_menu();
+        }
+        self.menu_open = true;
+        self.menu_generation = generation;
+        self.menu_mode = mode;
+        self.menu_path.clear();
+        if let Some(window) = self.window_for(generation) {
+            let _ = window.set_property("menu-open", true.into());
+        }
+        let result = self.refresh_menu();
+        self.report_menu(result);
+    }
+    fn refresh_menu(&mut self) -> Result<()> {
+        let labels = self.labels();
+        let Some(window) = self
+            .window_for(self.menu_generation)
+            .or(self.shell.as_ref())
+            .map(ComponentHandle::clone_strong)
+        else {
+            return Ok(());
+        };
+        let window = &window;
+        let model = match &self.menu_mode {
+            MenuMode::Main => {
+                let roots = self.commands.snapshot().roots;
+                menu_levels(window, &roots, &mut self.menu_path, &labels)?
+            }
+            MenuMode::Panel(owner, items) => {
+                let entries: Vec<_> = items
+                    .iter()
+                    .map(|id| id.as_deref().and_then(|id| self.commands.get(*owner, id)))
+                    .collect();
+                let (origin, size) = menu_frame(window);
+                ui_values::from_json(&menu::context_level(&entries, origin, size, &labels))?
+            }
+        };
+        set_menu_model(window, model)
     }
     fn close_menu(&mut self) {
         self.menu_open = false;
         self.menu_path.clear();
+        self.menu_mode = MenuMode::Main;
+        for window in [
+            self.shell.as_ref(),
+            self.floating.as_ref().map(|f| &f.instance),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            let _ = window.set_property("menu-open", false.into());
+        }
         if let Some(shell) = &self.shell {
             let result = shell
                 .invoke("close-menu", &[])
@@ -828,12 +1263,6 @@ impl Host {
     fn prepare_mount_tick(&mut self) {
         if self.preparing.is_none() {
             if let Some(change) = self.mount_queue.pop_front() {
-                if let Some(shell) = &self.shell {
-                    let _ = shell.set_property(
-                        "diagnostic",
-                        slint_interpreter::Value::String("Preparing plugin UI…".into()),
-                    );
-                }
                 self.send(
                     change.reply.owner,
                     json!({"event":"ui.preparing","data":{"phase":"preparing"}}),
@@ -872,7 +1301,7 @@ impl Host {
                     composition::Slot::Bottom => "bottom-visible",
                     composition::Slot::Sidebar => "sidebar-visible",
                 };
-                shell.set_property(property, mount.visible.into())?;
+                shell.set_property(property, (mount.visible && !mount.detached).into())?;
             }
             self.bind_shell(&shell, candidate_generation)?;
             if let Some(old) = &self.shell {
@@ -911,7 +1340,9 @@ impl Host {
                             composition::Slot::Bottom => window_state::Slot::Bottom,
                             composition::Slot::Sidebar => window_state::Slot::Sidebar,
                         };
-                        if let Err(error) = self.policy.attach(slot, *id, mount.visible) {
+                        if let Err(error) =
+                            self.policy.attach(slot, *id, mount.visible, mount.detached)
+                        {
                             eprintln!("mount policy attach: {error}");
                         }
                     }
@@ -929,9 +1360,22 @@ impl Host {
                     }
                 }
                 self.policy.activity(self.now_ms());
+                {
+                    let mut input = self.input.borrow_mut();
+                    let owner = |slot| {
+                        next.values()
+                            .find(|m| m.spec.slot == slot)
+                            .map(|m| m.spec.owner)
+                    };
+                    input.bottom = owner(composition::Slot::Bottom);
+                    input.sidebar = owner(composition::Slot::Sidebar);
+                }
+                if self.menu_generation == self.shell_generation {
+                    self.menu_open = false;
+                    self.menu_mode = MenuMode::Main;
+                }
                 self.mounts = next;
                 self.shell_generation = candidate_generation;
-                self.menu_open = false;
                 Ok(
                     json!({"status":"ready","shellGeneration":candidate_generation,"prepareMs":started.elapsed().as_secs_f64()*1000.}),
                 )
@@ -952,7 +1396,7 @@ impl Host {
     }
     fn mount_callbacks(&mut self) {
         for event in self.mount_input.try_iter().take(64).collect::<Vec<_>>() {
-            if event.shell_generation != self.shell_generation
+            if !self.window_generation_live(event.shell_generation)
                 || !self.mounts.contains_key(&event.owner)
             {
                 continue;
@@ -963,40 +1407,181 @@ impl Host {
             }
         }
     }
-    fn canvas_shortcut(&mut self, shortcut: &str) {
-        if self.menu_open
-            || self.dialog_busy
-            || !self.shell.as_ref().is_some_and(|shell| {
-                matches!(
-                    shell.get_property("canvas-focused"),
-                    Ok(slint_interpreter::Value::Bool(true))
-                )
-            })
-        {
-            return;
-        }
-        #[cfg(feature = "producer-audio")]
-        if self
-            .backend
-            .input
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
-            .is_some_and(|routing| routing.captured)
-        {
-            return;
-        }
-        if let Some(execution) = self.commands.resolve_shortcut(shortcut) {
-            let _ = self.execute_command(execution.owner, &execution.local_id);
-        }
-    }
     fn execute_command(&mut self, owner: u64, id: &str) -> std::result::Result<(), RpcError> {
         let execution = self
             .commands
             .resolve_execution(owner, id)
             .map_err(|e| RpcError::new("command", e.to_string()))?;
+        if owner == bindings::HOST {
+            self.host_command(id);
+            return Ok(());
+        }
         self.send(execution.owner,json!({"event":"commands.execute","data":{"id":execution.local_id,"revision":execution.revision}}));
         Ok(())
+    }
+    /// The host's own commands (owner 0): fullscreen, exit fullscreen, quit.
+    fn register_host_commands(&mut self) -> Result<()> {
+        let state = |enabled: bool, checked: Option<bool>| commands::CommandState {
+            enabled,
+            checked,
+            busy: false,
+            reason: None,
+        };
+        let mut fullscreen = commands::Declaration::new("全屏", &["全屏"]);
+        fullscreen.group = "screen".into();
+        fullscreen.order = 700;
+        fullscreen.bindings = vec!["Enter".into(), "F11".into(), "Mouse:LeftDoubleClick".into()];
+        let mut exit = commands::Declaration::new("退出全屏", &[]);
+        exit.bindings = vec!["Escape".into()];
+        let mut quit = commands::Declaration::new("退出", &["退出"]);
+        quit.group = "exit".into();
+        quit.order = 990;
+        quit.bindings = vec!["Cmd+Q".into()];
+        for (id, declaration, state) in [
+            ("fullscreen", fullscreen, state(true, Some(false))),
+            ("exit-fullscreen", exit, state(false, None)),
+            ("quit", quit, state(true, None)),
+        ] {
+            self.input
+                .borrow_mut()
+                .table
+                .declare(
+                    bindings::HOST,
+                    id,
+                    "host",
+                    &declaration.bindings,
+                    false,
+                    false,
+                )
+                .map_err(anyhow::Error::msg)?;
+            self.commands
+                .register(bindings::HOST, "host", id.into(), 1, declaration, state)
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+        }
+        self.host_revision = 1;
+        Ok(())
+    }
+    fn host_command_states(&mut self, fullscreen: bool) {
+        let checked = self
+            .commands
+            .get(bindings::HOST, "fullscreen")
+            .and_then(|entry| entry.state.checked);
+        if checked == Some(fullscreen) {
+            return;
+        }
+        self.host_revision += 1;
+        let revision = self.host_revision;
+        let _ = self.commands.update(
+            bindings::HOST,
+            "fullscreen",
+            revision,
+            commands::CommandState {
+                enabled: true,
+                checked: Some(fullscreen),
+                busy: false,
+                reason: None,
+            },
+        );
+        let _ = self.commands.update(
+            bindings::HOST,
+            "exit-fullscreen",
+            revision,
+            commands::CommandState {
+                enabled: fullscreen,
+                checked: None,
+                busy: false,
+                reason: None,
+            },
+        );
+    }
+    fn host_command(&mut self, id: &str) {
+        let Some(shell) = &self.shell else { return };
+        let window = shell.window();
+        match id {
+            "fullscreen" => window.set_fullscreen(!window.is_fullscreen()),
+            "exit-fullscreen" => window.set_fullscreen(false),
+            "quit" => {
+                self.ui_state.flush();
+                let _ = slint::quit_event_loop();
+            }
+            _ => {}
+        }
+    }
+    /// Merge the sequence provider's flags into a source state (C6).
+    fn patch_source(&self, state: &mut Value) {
+        if state.is_object() {
+            let (next, previous) = self
+                .sequence
+                .map(|(_, next, previous)| (next, previous))
+                .unwrap_or((false, false));
+            state["sequence"] = json!({"next":next,"previous":previous});
+        }
+    }
+    /// Re-send the last source state with the current sequence flags.
+    fn rebroadcast_source(&mut self) {
+        if self.last_source.is_object() {
+            let mut state = self.last_source.clone();
+            self.patch_source(&mut state);
+            self.last_source = state.clone();
+            self.broadcast("source.state", state);
+        }
+    }
+    /// C9: "<source name> - Vestra", or "Vestra" without a source.
+    fn update_title(&mut self) {
+        let source = &self.last_source;
+        let name = match source["source"].as_str() {
+            None => None,
+            Some(_) if source["kind"] == "producer" => None,
+            Some(text) if text.contains("://") => Some(
+                source["title"]
+                    .as_str()
+                    .filter(|t| !t.is_empty())
+                    .unwrap_or(text)
+                    .to_owned(),
+            ),
+            Some(text) => Some(
+                Path::new(text)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| text.to_owned()),
+            ),
+        };
+        let title = name.map_or_else(|| "Vestra".to_owned(), |name| format!("{name} - Vestra"));
+        if title != self.window_title {
+            self.window_title = title;
+            if let Some(shell) = &self.shell {
+                let _ = shell.set_property(
+                    "window-title",
+                    SValue::String(self.window_title.as_str().into()),
+                );
+            }
+        }
+    }
+    fn show_info_panels(&self) {
+        if let Some(shell) = &self.shell
+            && let Ok(value) =
+                ui_values::from_json(&json!(self.info_panels.values().collect::<Vec<_>>()))
+        {
+            let _ = shell.set_property("info-panels", value);
+        }
+    }
+    /// Current layout of both positions, or `pending` until the shell is measured.
+    fn layout_state(&self) -> std::result::Result<Value, RpcError> {
+        if self.window_facts["shellGeneration"].as_u64() != Some(self.shell_generation) {
+            return Err(RpcError::new(
+                "pending",
+                "current shell layout is not yet confirmed",
+            ));
+        }
+        let slot = |name: &str| {
+            let slot = &self.window_facts["slots"][name];
+            if slot.is_null() {
+                return Value::Null;
+            }
+            json!({"owner":slot["owner"],"preferred":slot["preferred"],"effective":slot["effective"],
+                "reason":slot["reason"],"detached":slot["detached"]})
+        };
+        Ok(json!({"bottom":slot("bottom"),"sidebar":slot("sidebar")}))
     }
     fn respond(&mut self, reply: Reply, result: std::result::Result<Value, RpcError>) {
         if self.activation_ui.remove(&(reply.owner, reply.id)) {
@@ -1034,7 +1619,10 @@ impl Host {
             method if method.starts_with("sourceResolvers.") => Some("source.resolve"),
             "dialogs.open" => Some("ui.dialog"),
             "ui.mount" | "ui.setMount" | "ui.showMount" | "ui.unmount" | "ui.mountState"
-            | "ui.interaction" => Some("ui.mount"),
+            | "ui.interaction" | "ui.menu" | "layout.state" | "layout.set" => Some("ui.mount"),
+            "osd.show" | "osd.panel" => Some("ui.osd"),
+            "playback.stats" => Some("playback.read"),
+            "sequence.set" | "sequence.step" => Some("playback.control"),
             "commands.register" | "commands.update" => Some("commands"),
             "source.state" | "source.operation" | "processing.state" => Some("playback.read"),
             "playback.set" | "source.submit" => Some("playback.control"),
@@ -1083,6 +1671,198 @@ impl Host {
             return Ok(None);
         }
         let value = match method {
+            "layout.state" => self.layout_state()?,
+            "layout.set" => {
+                if self.headless {
+                    return Err(RpcError::new(
+                        "unavailable",
+                        "layout requires a native shell",
+                    ));
+                }
+                let slot = match string(params, "slot")? {
+                    "bottom" => composition::Slot::Bottom,
+                    "sidebar" => composition::Slot::Sidebar,
+                    _ => return Err(RpcError::invalid("unknown slot")),
+                };
+                let owner = self
+                    .mounts
+                    .values()
+                    .find(|m| m.spec.slot == slot)
+                    .map(|m| m.spec.owner)
+                    .ok_or_else(|| RpcError::new("missing", "no panel at this position"))?;
+                let policy_slot = match slot {
+                    composition::Slot::Bottom => window_state::Slot::Bottom,
+                    composition::Slot::Sidebar => window_state::Slot::Sidebar,
+                };
+                if let Some(detached) = params.get("detached").filter(|v| !v.is_null()) {
+                    let detached = detached
+                        .as_bool()
+                        .ok_or_else(|| RpcError::invalid("detached boolean required"))?;
+                    if slot == composition::Slot::Bottom {
+                        return Err(RpcError::invalid("the bottom bar cannot be detached"));
+                    }
+                    self.policy
+                        .set_detached(owner, detached)
+                        .map_err(anyhow::Error::from)?;
+                    if let Some(mount) = self.mounts.get_mut(&owner) {
+                        mount.detached = detached;
+                    }
+                }
+                if let Some(visible) = params.get("visible").filter(|v| !v.is_null()) {
+                    let visible = visible
+                        .as_bool()
+                        .ok_or_else(|| RpcError::invalid("visible boolean required"))?;
+                    self.policy
+                        .set_preferred(policy_slot, owner, visible)
+                        .map_err(anyhow::Error::from)?;
+                    if let Some(mount) = self.mounts.get_mut(&owner) {
+                        mount.visible = visible;
+                    }
+                }
+                self.remember_panel(owner);
+                // Answer after the next layout pass so a following layout.state sees it.
+                self.window_tick();
+                Value::Null
+            }
+            "ui.menu" => {
+                let mount = self
+                    .mounts
+                    .get(&reply.owner)
+                    .ok_or_else(|| RpcError::new("missing", "owner has no ready mount"))?;
+                let items = params["items"]
+                    .as_array()
+                    .filter(|items| !items.is_empty() && items.len() <= 32)
+                    .ok_or_else(|| RpcError::invalid("items requires 1..=32 entries"))?;
+                let mut ids = Vec::new();
+                for item in items {
+                    match item {
+                        Value::Null => ids.push(None),
+                        Value::String(id) if self.commands.get(reply.owner, id).is_some() => {
+                            ids.push(Some(id.clone()))
+                        }
+                        _ => {
+                            return Err(RpcError::new(
+                                "missing",
+                                format!("{item} is not a command of this plugin"),
+                            ));
+                        }
+                    }
+                }
+                let number = |key: &str| {
+                    params[key]
+                        .as_f64()
+                        .filter(|v| v.is_finite())
+                        .ok_or_else(|| RpcError::invalid(format!("{key} requires a finite number")))
+                };
+                let (x, y) = (number("x")?, number("y")?);
+                let slot = match mount.spec.slot {
+                    composition::Slot::Bottom => "bottom",
+                    composition::Slot::Sidebar => "sidebar",
+                };
+                let generation = if self
+                    .floating
+                    .as_ref()
+                    .is_some_and(|f| f.owner == reply.owner)
+                {
+                    self.floating.as_ref().unwrap().generation
+                } else if self.window_facts["slots"][slot]["effective"] == true {
+                    self.shell_generation
+                } else {
+                    return Err(RpcError::new("unavailable", "the panel is not shown"));
+                };
+                if let Some(window) = self.window_for(generation) {
+                    window
+                        .set_property("menu-origin-x", x.into())
+                        .map_err(anyhow::Error::from)?;
+                    window
+                        .set_property("menu-origin-y", y.into())
+                        .map_err(anyhow::Error::from)?;
+                }
+                self.open_menu(generation, MenuMode::Panel(reply.owner, ids));
+                Value::Null
+            }
+            "osd.show" => {
+                let text = string(params, "text")?.replace(['\n', '\r'], " ");
+                if text.trim().is_empty() || text.chars().count() > 200 {
+                    return Err(RpcError::invalid("osd text needs 1..=200 characters"));
+                }
+                let shell = self
+                    .shell
+                    .as_ref()
+                    .ok_or_else(|| RpcError::new("unavailable", "native shell unavailable"))?;
+                shell
+                    .set_property("osd-text", SValue::String(text.as_str().into()))
+                    .map_err(anyhow::Error::from)?;
+                shell
+                    .set_property("osd-visible", true.into())
+                    .map_err(anyhow::Error::from)?;
+                self.osd_until = Some(self.now_ms() + OSD_MS);
+                Value::Null
+            }
+            "osd.panel" => {
+                if self.shell.is_none() {
+                    return Err(RpcError::new("unavailable", "native shell unavailable"));
+                }
+                match &params["text"] {
+                    Value::Null => {
+                        self.info_panels.remove(&reply.owner);
+                    }
+                    Value::String(text) => {
+                        if text.len() > 4096 || text.lines().count() > 32 {
+                            return Err(RpcError::invalid("osd panel allows 32 lines, 4096 bytes"));
+                        }
+                        self.info_panels.insert(reply.owner, text.clone());
+                    }
+                    _ => return Err(RpcError::invalid("text requires string or null")),
+                }
+                self.show_info_panels();
+                Value::Null
+            }
+            "sequence.set" => {
+                if let Some((provider, ..)) = self.sequence
+                    && provider != reply.owner
+                {
+                    return Err(RpcError::new(
+                        "conflict",
+                        "another plugin provides the sequence",
+                    ));
+                }
+                let flags = &params["flags"];
+                self.sequence = if flags.is_null() {
+                    None
+                } else {
+                    let flag = |key: &str| {
+                        flags[key]
+                            .as_bool()
+                            .ok_or_else(|| RpcError::invalid(format!("{key} boolean required")))
+                    };
+                    Some((reply.owner, flag("canNext")?, flag("canPrevious")?))
+                };
+                self.rebroadcast_source();
+                Value::Null
+            }
+            "sequence.step" => {
+                let direction = string(params, "direction")?;
+                let (provider, next, previous) = self
+                    .sequence
+                    .ok_or_else(|| RpcError::new("unavailable", "no sequence provider"))?;
+                let allowed = match direction {
+                    "next" => next,
+                    "previous" => previous,
+                    _ => return Err(RpcError::invalid("direction is next or previous")),
+                };
+                if !allowed {
+                    return Err(RpcError::new(
+                        "unavailable",
+                        format!("cannot go {direction}"),
+                    ));
+                }
+                self.send(
+                    provider,
+                    json!({"event":"sequence.step","data":{"direction":direction}}),
+                );
+                Value::Null
+            }
             "ui.mountState" => {
                 let mount = self
                     .mounts
@@ -1168,6 +1948,15 @@ impl Host {
                         params.get("properties").cloned().unwrap_or(json!({})),
                     )
                     .map_err(|e| RpcError::invalid(e.to_string()))?;
+                    let title = params["title"].as_str().unwrap_or("Vestra");
+                    if title.len() > 128 || title.chars().any(char::is_control) {
+                        return Err(RpcError::invalid("title requires 0..=128 bytes"));
+                    }
+                    let manifest = plugin.manifest.id.clone();
+                    // C8: a sidebar panel resumes its last visibility and floating state.
+                    let prefs = (slot == composition::Slot::Sidebar)
+                        .then(|| self.ui_state.state.panels.get(&manifest))
+                        .flatten();
                     Some(Mount {
                         spec: composition::CompileSpec {
                             owner: reply.owner,
@@ -1177,7 +1966,14 @@ impl Host {
                             slot,
                         },
                         properties,
-                        visible: true,
+                        visible: prefs.is_none_or(|p| p.visible),
+                        detached: prefs.is_some_and(|p| p.detached),
+                        title: if title.is_empty() {
+                            "Vestra".into()
+                        } else {
+                            title.into()
+                        },
+                        manifest,
                     })
                 } else {
                     None
@@ -1200,6 +1996,16 @@ impl Host {
                 if method == "ui.setMount" {
                     let property = string(params, "property")?;
                     composition::set_json_global(shell, &mount.spec, property, &params["value"])?;
+                    if let Some(floating) =
+                        self.floating.as_ref().filter(|f| f.owner == reply.owner)
+                    {
+                        composition::set_json_global(
+                            &floating.instance,
+                            &mount.spec,
+                            property,
+                            &params["value"],
+                        )?;
+                    }
                     mount
                         .properties
                         .insert(property.into(), params["value"].clone());
@@ -1220,9 +2026,7 @@ impl Host {
                             .set_preferred(slot, reply.owner, visible)
                             .map_err(anyhow::Error::from)?;
                         mount.visible = visible;
-                        if visible && slot == window_state::Slot::Sidebar {
-                            self.sidebar_resize_requested = true;
-                        }
+                        self.remember_panel(reply.owner);
                     }
                 }
                 Value::Null
@@ -1294,27 +2098,42 @@ impl Host {
                 let state = serde_json::from_value(params["state"].clone())
                     .map_err(|e| RpcError::invalid(e.to_string()))?;
                 if method == "commands.register" {
-                    let mut declaration_json = params["declaration"].clone();
-                    if self.packages.is_trial(reply.owner)
-                        && let Some(path) = declaration_json["path"].as_array_mut()
-                        && path.len() > 1
-                    {
-                        path[1] =
-                            format!("试载 {} · {}", reply.owner, path[1].as_str().unwrap_or(""))
-                                .into();
-                    }
+                    let mut declaration: commands::Declaration =
+                        serde_json::from_value(params["declaration"].clone())
+                            .map_err(|e| RpcError::invalid(e.to_string()))?;
+                    // Trial packages: a marked leaf title and no bindings.
                     if self.packages.is_trial(reply.owner) {
-                        declaration_json["shortcut"] = Value::Null;
+                        if let Some(leaf) = declaration.path.last_mut() {
+                            *leaf = format!("试载 {} · {leaf}", reply.owner);
+                        }
+                        declaration.bindings.clear();
+                        declaration.shortcut = None;
                     }
-                    let declaration = serde_json::from_value(declaration_json)
-                        .map_err(|e| RpcError::invalid(e.to_string()))?;
+                    let manifest = plugin.manifest.id.clone();
+                    let bindings = declaration.all_bindings();
+                    let panel = declaration.focus == Some(commands::Focus::Panel);
+                    let repeat = declaration.repeat;
                     self.commands
-                        .register(reply.owner, id.into(), revision, declaration, state)
+                        .register(
+                            reply.owner,
+                            &manifest,
+                            id.into(),
+                            revision,
+                            declaration,
+                            state,
+                        )
+                        .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
+                    self.input
+                        .borrow_mut()
+                        .table
+                        .declare(reply.owner, id, &manifest, &bindings, panel, repeat)
+                        .map_err(RpcError::invalid)?;
                 } else {
-                    self.commands.update(reply.owner, id, revision, state)
+                    self.commands
+                        .update(reply.owner, id, revision, state)
+                        .map_err(|e| RpcError::new("command", e.to_string()))?;
                 }
-                .map_err(|e| RpcError::new("command", e.to_string()))?;
-                json!({"revision":self.commands.snapshot().revision})
+                json!({"revision":self.commands.revision()})
             }
             "sourceResolvers.register"
             | "sourceResolvers.unregister"
@@ -1331,7 +2150,11 @@ impl Host {
             | "producer.ackInput"
             | "processing.replace"
             | "processing.operation"
-            | "processing.state" => {
+            | "processing.state"
+            | "playback.stats" => {
+                if method == "source.state" {
+                    self.source_state_replies.insert((reply.owner, reply.id));
+                }
                 self.backend
                     .commands
                     .send(Command {
@@ -1432,21 +2255,72 @@ fn menu_levels(
     window: &slint_interpreter::ComponentInstance,
     roots: &[commands::MenuNode],
     path: &mut Vec<String>,
+    labels: &dyn Fn(u64, &str) -> Option<String>,
 ) -> Result<slint_interpreter::Value> {
     *path = menu::valid_path(roots, path);
+    let (origin, size) = menu_frame(window);
+    ui_values::from_json(&menu::levels(roots, path, origin, size, labels))
+}
+/// Where the menu opens and the window it must fit in, in logical px.
+fn menu_frame(window: &slint_interpreter::ComponentInstance) -> (menu::Point, menu::Point) {
     let number = |name: &str| match window.get_property(name) {
         Ok(slint_interpreter::Value::Number(value)) if value.is_finite() => value,
         _ => 0.,
     };
-    let origin = menu::Point {
-        x: number("menu-origin-x"),
-        y: number("menu-origin-y"),
+    (
+        menu::Point {
+            x: number("menu-origin-x"),
+            y: number("menu-origin-y"),
+        },
+        menu::Point {
+            x: number("logical-width"),
+            y: number("logical-height"),
+        },
+    )
+}
+/// Slint reports ⌘ as `control` and ⌃ as `meta` on Apple platforms.
+fn slint_mods(control: bool, meta: bool) -> (bool, bool) {
+    if cfg!(target_os = "macos") {
+        (meta, control)
+    } else {
+        (control, meta)
+    }
+}
+/// Resolve a bound input on the UI thread; true = bound (Slint stops propagating).
+/// Auto-repeats fire only commands that declared `repeat`.
+fn fire(
+    input: &Rc<RefCell<InputShared>>,
+    events: &mpsc::Sender<Event>,
+    generation: u64,
+    event: &bindings::Input,
+    repeat: bool,
+    panel: Option<u64>,
+) -> bool {
+    let shared = input.borrow();
+    if shared.blocked {
+        return false;
+    }
+    let Some(target) = shared.table.resolve(event, panel) else {
+        return false;
     };
-    let size = menu::Point {
-        x: number("logical-width"),
-        y: number("logical-height"),
+    if !repeat || target.repeat {
+        let _ = events.send(Event::Binding(generation, target.owner, target.id.clone()));
+    }
+    true
+}
+/// The producer capture lets keys bound to host commands through (winit key code names).
+#[cfg(feature = "producer-audio")]
+fn host_key(input: &Rc<RefCell<InputShared>>, code: &str) -> bool {
+    let name = match code {
+        "Escape" | "Enter" | "Tab" | "Space" => code.to_owned(),
+        "NumpadEnter" => "Enter".into(),
+        code if code.starts_with('F') && code[1..].parse::<u8>().is_ok() => code.to_owned(),
+        _ => return false,
     };
-    ui_values::from_json(&menu::levels(roots, path, origin, size))
+    input.borrow().table.host_key(&bindings::Input {
+        mods: bindings::Mods::default(),
+        name,
+    })
 }
 /// Registry revisions include changes outside the open levels and identical
 /// state publications. Reconcile in place so unchanged panels keep their live
@@ -1592,29 +2466,37 @@ fn main() -> Result<()> {
         native_window: None,
         native_before: None,
         native_unavailable: None,
-        sidebar_resize_requested: false,
-        sidebar_resize: Value::Null,
+        input: Rc::new(RefCell::new(InputShared::default())),
+        ui_state: if headless {
+            ui_state::Store::disabled()
+        } else {
+            ui_state::Store::open(&ui_state::default_path())
+        },
+        osd_until: None,
+        info_panels: BTreeMap::new(),
+        sequence: None,
+        last_source: Value::Null,
+        source_state_replies: Default::default(),
+        floating: None,
+        menu_mode: MenuMode::Main,
+        menu_generation: 1,
+        host_revision: 0,
+        window_title: "Vestra".into(),
         activations: package_activation::Book::default(),
         activation_ui: Default::default(),
         activation_receipts: Default::default(),
         packages: package_manager::Manager::open()?,
         cleanup: Default::default(),
-        commands: commands::Registry::new(
-            [
-                "文件",
-                "播放",
-                "视频",
-                "音频",
-                "字幕",
-                "视图",
-                "模拟器",
-                "插件",
-            ]
-            .into_iter()
-            .map(String::from)
-            .collect(),
-        )?,
+        commands: commands::Registry::new(),
     };
+    host.register_host_commands()?;
+    {
+        let overlay = host.ui_state.state.bindings.clone();
+        host.input.borrow_mut().table.set_overlay(overlay);
+        if let Some(sidebar) = &host.ui_state.state.sidebar {
+            host.policy.set_sidebar_width(sidebar.width);
+        }
+    }
     for directory in directories {
         host.load(&directory, 120_000)?;
     }
@@ -1645,6 +2527,15 @@ fn main() -> Result<()> {
     } else {
         let native_before = platform_window::capture_windows().ok();
         let window = composition::compile_json(&[], host.mount_events.clone(), 1)?;
+        if let Some(frame) = host.ui_state.state.window {
+            window.window().set_size(slint::LogicalSize::new(
+                frame.width.max(320.) as f32,
+                frame.height.max(182.) as f32,
+            ));
+            window
+                .window()
+                .set_position(slint::LogicalPosition::new(frame.x as f32, frame.y as f32));
+        }
         window.show()?;
         host.native_before = native_before.clone();
         host.native_window = native_before
@@ -1692,21 +2583,6 @@ fn main() -> Result<()> {
                     let image = slint::Image::from_rgb8(buffer);
                     host.last_image = Some(image.clone());
                     let _ = window.set_property("video-frame", image.into());
-                    let state = host.backend.state.lock().unwrap();
-                    let diagnostic = if host.preparing.is_some() {
-                        "Preparing plugin UI…".into()
-                    } else {
-                        format!(
-                            "libmpv · session {} · {:.2}s · embedded frame {}",
-                            state["session"],
-                            state["position"].as_f64().unwrap_or(0.0),
-                            frame.sequence
-                        )
-                    };
-                    let _ = window.set_property(
-                        "diagnostic",
-                        slint_interpreter::Value::String(diagnostic.as_str().into()),
-                    );
                 }
                 if seconds.is_some_and(|seconds| start.elapsed().as_secs_f64() >= seconds) {
                     if let Some(path) = snapshot.as_ref()
@@ -1736,7 +2612,9 @@ fn main() -> Result<()> {
         );
         window.run()?;
         timer.stop();
+        host.borrow_mut().ui_state.flush();
         // Native windows/resources must be released before process teardown.
+        host.borrow_mut().close_floating();
         host.borrow_mut().views.clear();
         host.borrow_mut().shell = None;
     }

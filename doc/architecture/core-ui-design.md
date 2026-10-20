@@ -1,6 +1,6 @@
 # 核心界面与输入能力设计（C1–C11、C14）
 
-日期：2026-10-20。阶段：P1a 设计，交协调者 P2 审查；审查通过前不实现。
+日期：2026-10-20。阶段：P1a 设计，P2 审查已通过（裁决见[本轮任务](../process/rounds/2026-10-core-ui.md) §8「P2 审查」，已并入本文），P1b 按本文实现。
 依据：[本轮任务](../process/rounds/2026-10-core-ui.md) §2、§5，[界面整改文档](../../product/ui-alignment.md) §2、§3、§6、§8、§9、§10。
 现状代码：`src/host/src/{main,commands,menu,composition,window_state,ui,plugins}.rs`、`src/host/ui/*.slint`、`src/sdk/plugin/*.ts`、`src/runtime/runner.ts`。
 
@@ -12,16 +12,16 @@
 
 | 位置 | 新增 / 改变 | 对应 |
 | --- | --- | --- |
-| `CommandOptions` | 新增 `order`、`group`、`radio`、`bindings`、`focus`；删除 `shortcut`；`path` 改为 1–8 段任意内容 | C3、C4 |
+| `CommandOptions` | 新增 `order`、`group`、`radio`、`bindings`、`focus`、`repeat`；删除 `shortcut`；`path` 改为 1–8 段任意内容，可省略（不进主菜单） | C3、C4 |
 | `plugin.panels` | 新增 `panels.bottom`、`panels.sidebar`（位置状态，任何插件可读可切换）；`mount` 选项加 `title`；`Panel` 删除 `visibility`/`onVisibility`/`setVisible`/`toggle`，新增 `showMenu` | C7、C11、C14 |
 | `plugin.player` | 新增 `provideSequence`、`next`、`previous`、`stats`；`PlayerState.can` 加 `next`、`previous` | C6、C10 |
 | `plugin.osd`（新模块） | `show(text)`、`panel()` | C5、C10 |
 | manifest 能力 | 新增 `ui.osd`（`plugin.osd.*`）。其它新接口沿用现有能力 | C5、C10 |
-| Slint | `import { Theme } from "@vestra/theme.slint"`、`import { ToolTipArea } from "@vestra/widgets.slint"`；所有插件 Slint 默认用 `fluent-dark` 风格编译 | C2 |
+| Slint | `import { Theme } from "@vestra/theme.slint"`、`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint"`；所有插件 Slint 默认用 `fluent-dark` 风格编译 | C2 |
 
 - C1、C8、C9 没有插件接口，只是宿主行为。
 - wire 方法只服务于 SDK（[架构总览](README.md) §3）。新增：`layout.state`、`layout.set`、`ui.menu`、`osd.show`、`osd.panel`、`playback.stats`、`sequence.set`、`sequence.step`；宿主推给插件的新事件：`sequence.step`（只发给序列提供者，不需订阅）。删除：`ui.mountState`、`ui.showMount`。改变：`commands.register` 的 `declaration`、`ui.mount` 的参数、`source.state`（数据加 `sequence` 字段）。
-- 迁移期间（P1b–P3）旧字段与新字段**并存**：宿主同时接受 `declaration.shortcut` 和 `bindings`，SDK 同时保留 `Panel` 的旧可见性方法；P4 一次删除（§16）。
+- 迁移期间（P1b–P3）旧字段与新字段**并存**：宿主同时接受 `declaration.shortcut` 和 `bindings`（`shortcut` 等于多一条绑定），SDK 同时保留 `Panel` 的旧可见性方法（`ui.showMount`/`ui.mountState` 仍可用）。SDK 对**没用任何新字段**的命令仍发旧形状 `{ title, path, shortcut }`，未迁移插件的测试不受影响；用了任一新字段（迁移后的插件都写 `order`）就发完整形状。P4 一次删除（§16），届时 SDK 总发完整形状。
 
 ## 1. C1 主窗口外壳
 
@@ -83,8 +83,7 @@ export global Theme {
     out property <color> button-bg: #555555;   out property <color> button-hover: #5c5c5c;
     out property <color> button-press: #444444; out property <color> button-disabled: #2a2a2a;
     // §2.2 字体与字号（只用这几档）
-    out property <string> font-family: "…";    // 宿主写入启动时选定的系统 UI 字体名
-    out property <string> font-mono: "…";
+    out property <string> font-mono: "Menlo";  // 默认字体不在这里：宿主统一设置（§2.2）
     out property <length> font-xs: 9px;  out property <length> font-body: 11px;
     out property <length> font-tab: 12px; out property <length> font-title: 13px;
     // §2.3 控件尺寸
@@ -97,23 +96,41 @@ export global Theme {
 }
 ```
 
-`@vestra/widgets.slint` 本轮只有一个组件：
+`@vestra/widgets.slint` 本轮提供三个组件（P2 裁决 Q13：第二步所有工具窗口与底栏都要用；其它控件不做，用 `fluent-dark` 的 std-widgets）：
 
 ```slint
 export component ToolTipArea {           // 包住任意内容；悬停 600 ms 后在指针旁显示 text
     in property <string> text;
     @children
 }
+export component Button {                // PotPlayer 对话框按钮
+    in property <string> text;
+    in property <image> icon;            // 有图标且 text 为空 = 图标按钮
+    in property <bool> enabled: true;
+    in property <bool> small;            // false：21px 高、最小 66px 宽；true：18px 高、最小 41px 宽
+    in property <bool> checked;          // 图标按钮的开启态（图标变 Theme.accent）
+    callback clicked();
+}
+export component Slider {                // 2px 线滑块
+    in-out property <float> value;
+    in property <float> minimum: 0;
+    in property <float> maximum: 1;
+    in property <bool> enabled: true;
+    in property <bool> panel;            // false：控制栏样式，8px 圆点 thumb，填充 Theme.accent；
+                                         // true：面板样式，14×12 thumb，填充 Theme.playing，轨道 Theme.bg-bar
+    callback changed(float);             // 拖动中连续回调
+    callback released(float);            // 松开
+}
 ```
 
-样式：底 `Theme.bg-panel`、1px `Theme.line` 边框、`Theme.font-body`、`Theme.text`，用 `PopupWindow` 显示，指针移出或按下即消失。
+样式：ToolTipArea 底 `Theme.bg-panel`、1px `Theme.line` 边框、`Theme.font-body`、`Theme.text`，用 `PopupWindow` 显示，指针移出或按下即消失。Button 文字按钮底 `Theme.button-bg`（悬停 `button-hover`、按下 `button-press`、禁用 `button-disabled`），文字 `Theme.text-list` 11px；图标按钮无底色，图标 `colorize` 常态 `Theme.text-dim`、悬停与开启 `Theme.accent`、禁用 `Theme.icon-disabled`。Slider 的 thumb 常态 `Theme.text`，控制栏样式悬停 `Theme.accent`、按下 `Theme.accent-press`；未填充部分控制栏样式为 `Theme.line`。
 
 ### 2.2 宿主怎么做
 
 - **导入机制**：slint-interpreter 1.16 的 `Compiler::set_library_paths` 支持 `@库名/文件` 形式的导入（`i-slint-compiler` `typeloader.rs` 的 `find_file_in_library_path`）。宿主把库名 `vestra` 映射到随附目录（开发时 `src/host/ui/vestra/`，打包后 `Resources/ui/vestra/`，与现在找 `host.slint` 的方式相同）。不需要虚拟文件或改写插件源码。
 - 宿主现在有三处编译 Slint：`ui.rs`（工具窗口）、`composition.rs`（主窗口与面板）、`package_manager.rs`（包校验）。合并成一个 `slint_compiler()`：设库路径，`set_style("fluent-dark")`。因此**不改代码的插件，std-widgets 控件自动变成深色**（Button、Slider、LineEdit、CheckBox、ComboBox、ScrollView），这是预期变化。已核对：现有浅色工具窗口（video、subtitles、capture、nes、youtube、bilibili、workshop、playlist/link、bookmark）的 `.slint` 都没有写死文字颜色，深色下不会出现看不清的文字；audio、playback、playlist 侧栏本来就是自定深色。
 - `Theme` 是只读常量，同一文件被多个插件导入、在主窗口里共享不会互相影响（`composition.rs` 注释里禁止的是**有状态**的共享 global）。
-- **默认字体**：删除强制的 `Arial Unicode MS` 与按文件导入它的代码。宿主启动时选一个系统 UI 字体名写入 `Theme.font-family`，并作为主窗口、浮动面板窗口、工具窗口的 `default-font-family`（工具窗口沿用现有的「插件没写 `default-font-family` 才注入」规则，只是换成新字体名）。候选顺序与 CJK 回退要在 P1b 实测，见 §18 Q12。
+- **默认字体**：删除强制的 `Arial Unicode MS` 与按文件导入它的代码。P1b 查明 Slint 1.16 用 parley 排版、按字符经 fontique 回退（macOS 上走 CoreText 的系统回退链，`i-slint-core` `textlayout/sharedparley.rs`），所以默认**不指定字体**：系统 UI 字体 + 系统 CJK 回退。备用方案已实现但默认关闭：环境变量 `VESTRA_FONT_FALLBACK=hiragino` 时导入系统自带的 `/System/Library/Fonts/Hiragino Sans GB.ttc` 并设为主窗口、浮动窗口、工具窗口的默认字体（工具窗口沿用「插件没写 `default-font-family` 才注入」）。P5 实测中文显示方框时改为默认启用备用方案（§18 Q12）。
 - 宿主自己的界面（`host.slint`、`menu-view.slint`）也改用 `Theme` 令牌；菜单专用颜色（§6.3）留在 `menu-view.slint` 内，不进 `Theme`。
 - 编辑器支持：在 `doc/plugins/tutorial.md` 说明 Slint 语言服务的 `libraryPaths` 设置（`"vestra": "<仓库>/src/host/ui/vestra"`）。
 
@@ -157,6 +174,8 @@ interface CommandOptions {
   bindings?: string[];
   /** "panel"：这些绑定只在本插件的面板（附着或浮动）获得焦点时生效。默认全局。 */
   focus?: "panel";
+  /** true：按住不放时随系统自动重复触发（方向键跳转、音量）。默认 false。 */
+  repeat?: boolean;
 }
 ```
 
@@ -186,8 +205,8 @@ mouse     = "LeftDoubleClick" [ ":LeftHalf" | ":RightHalf" ]
 - **符号键**按实际打出的字符匹配，不能再写 `Shift`：PotPlayer 的字幕同步 `>` 写成 `">"`，不是 `"Shift+."`。`+` 写成 `Plus`。数字同理：`"Shift+1"` 非法，要写 `"!"`。
 - **macOS 的 Ctrl 与 Cmd**：`Ctrl+X` 在 macOS 上按 ⌃X 或 ⌘X 都触发（整改文档 §0）；`Cmd+X` 只认 ⌘X。同一事件先找完全匹配（⌘X 先找 `Cmd+X`），找不到再按 `Ctrl+X` 找。其它平台 `Cmd` 是 Win/Super 键。（Slint 在 macOS 上把 ⌘ 报成 `control`、⌃ 报成 `meta`，宿主在 Rust 里换回来。）
 - **鼠标**只在视频区生效，可带修饰键。`LeftDoubleClick:LeftHalf`/`:RightHalf` 按双击位置在视频左/右半边区分；同时有带区与不带区的绑定时，带区的优先，不算冲突。滚轮按累计位移计步（阈值在 P1b 按触控板和鼠标实测确定），每步触发一次。`X1`/`X2` 是鼠标侧键（Slint `back`/`forward`）。
-- 右键保留给菜单，不能绑定。左键单击、长按、右键双击本轮不做（§18 Q3）。
-- 绑定**只在按下时触发，忽略按住不放的自动重复**（与现在 Space/←/→ 相同；§18 Q6）。
+- 右键保留给菜单，不能绑定。左键单击、长按、右键双击本轮不做（§18 Q3）。宿主默认把 `Mouse:LeftDoubleClick` 绑到全屏。
+- 默认绑定**只在按下时触发，忽略按住不放的自动重复**（与现在 Space/←/→ 相同）；命令声明 `repeat: true` 时，按键的系统自动重复也触发（§18 Q6）。鼠标事件没有重复。
 - 菜单打开或系统对话框打开时，所有绑定暂停（与现在相同）。
 - 被绑定的 `Tab` 会被宿主接住，不再用于主窗口内的焦点切换。
 
@@ -230,7 +249,7 @@ impl Table {
 
 | 命令 | 默认绑定 | 菜单 | 状态 |
 | --- | --- | --- | --- |
-| `host/fullscreen` 全屏 | `Enter`、`F11` | 顶层，`group: "screen"`，`order: 700`，勾选 = 是否全屏 | 总是可用 |
+| `host/fullscreen` 全屏 | `Enter`、`F11`、`Mouse:LeftDoubleClick` | 顶层，`group: "screen"`，`order: 700`，勾选 = 是否全屏 | 总是可用 |
 | `host/exit-fullscreen` 退出全屏 | `Escape` | 不在菜单 | 仅全屏时可用 |
 | `host/quit` 退出 | `Cmd+Q` | 顶层，`group: "exit"`，`order: 990` | 总是可用 |
 
@@ -288,9 +307,9 @@ export default async function activate(plugin: Plugin) {
 ```ts
 interface CommandOptions {
   id: string;
-  /** 菜单路径，1–8 段，最后一段是菜单项。1 段 = 顶层直接命令。 */
-  path: string[];
-  title?: string;               // 默认取 path 最后一段
+  /** 菜单路径，1–8 段，最后一段是菜单项。1 段 = 顶层直接命令。省略 = 不进主菜单。 */
+  path?: string[];
+  title?: string;               // 默认取 path 最后一段；省略 path 时必填
   /** 同级排序，小的在前；默认 0。整数，范围 ±1 000 000。 */
   order?: number;
   /** 同级分组名；相邻两项分组不同时，中间画分隔线。默认 "domain"。 */
@@ -309,7 +328,7 @@ interface CommandOptions {
    - 子菜单（某个路径段）：取它下面**排序最前的那个命令**的 `order` 和 `group`（递归）。子菜单不需要单独声明。
 2. 同级按 `order` 升序；`order` 相同时，先按插件 manifest id，再按同一插件内的注册先后。结果与注册到达的时间无关（现有承诺不变）。**不再按标题字母排序。**
 3. `group` 只决定分隔线：排好序后，相邻两项 `group` 不同就画一条线。`group` 不参与排序，所以一个分组要连在一起，它的 `order` 也要连续。
-4. 路径规则：1–8 段，每段 1–80 字节、无控制字符和首尾空白；同一路径不能被注册两次，也不能既是菜单项又是子菜单（`conflict`，与现在相同）。顶层不再限定领域名。
+4. 路径规则：1–8 段，每段 1–80 字节、无控制字符和首尾空白；同一路径不能被注册两次，也不能既是菜单项又是子菜单（`conflict`，与现在相同）。顶层不再限定领域名。省略 `path` 的命令（P2 裁决 Q9）不进主菜单，`title` 必填，照常参与绑定表并可放进面板右键菜单（C11）；第二步播放列表的列表菜单（全选、排序）与列表内 Del/Enter 用它。
 5. 推荐骨架（宿主文档约定，宿主不强制）：
 
 | 分组 `group` | 顶层 `order` 段 | 内容 |
@@ -330,12 +349,13 @@ interface CommandOptions {
 ```rust
 pub struct Declaration {
     pub title: String,
-    pub path: Vec<String>,          // 1..=8
+    pub path: Vec<String>,          // 0..=8；空 = 不进主菜单
     pub order: i32,                 // 默认 0
     pub group: String,              // 默认 "domain"
     pub radio: bool,
     pub bindings: Vec<String>,      // 原文；解析与生效在 bindings.rs
     pub focus: Option<Focus>,       // Some(Panel)
+    pub repeat: bool,
 }
 pub struct Registry { commands: BTreeMap<CommandKey, CommandSnapshot>, sequence: BTreeMap<CommandKey, u64>, revision: u64 }
 ```
@@ -714,7 +734,7 @@ export component FloatingPanel inherits Window {
 
 - Slint 的 global 是每个窗口实例各一份，所以宿主把同一份属性写入两边：浮动窗口创建时用 `Mount.properties`（宿主已为重建主窗口而保存的全部已设属性）初始化；之后每次 `ui.setMount` 同时写主窗口和浮动窗口。两边的回调都以 `$mount` 转发给同一插件，插件感觉不到窗口换了。附着时关闭浮动窗口，主窗口里的属性本来就是最新的，不需要重建主窗口。
 - 只有用户在 Slint 里改过、但插件没有回写的 in-out 属性（例如滚动位置、输入框里没提交的文字）在分离/附着时不保留——与现在其它插件挂载导致主窗口重建时的行为相同。插件状态（列表行、选中项）在插件里，不丢。
-- 浮动窗口：默认位置 (438, 100)、默认尺寸见 §18 Q1，最小 300×250；位置与尺寸变化时记入 C8。点窗口的关闭按钮 = `setVisible(false)`，仍保持分离；之后再显示时仍是浮动窗口。
+- 浮动窗口：默认位置 (438, 100)、默认尺寸 300×408，最小 300×250；位置与尺寸变化时记入 C8。点窗口的关闭按钮 = `setVisible(false)`，仍保持分离；之后再显示时仍是浮动窗口。
 - 分离时 `effective` 只看 `preferred`（不受主窗口空间、全屏影响）；主窗口里的侧栏位置空出，视频占满。
 - 启动时若持久化记录为分离且显示，面板挂载完成后直接打开浮动窗口。
 - 插件停用：两个实例一起撤销。主窗口重建（别的插件挂载）时浮动窗口不受影响，宿主把它的回调重新指向新的主窗口代次。
@@ -859,12 +879,13 @@ list.on("hide", () => sidebar.setVisible(false));
 ```ts
 // 旧
 assert.deepEqual(host.command("workshop.open").declaration, { title: "插件工坊…", path: ["插件", "插件工坊…"], shortcut: null });
-// 新（测试宿主的 declaration 带全部字段，未写的是默认值）
+// 新（写了 order，测试宿主收到完整形状，未写的字段是默认值）
 assert.deepEqual(host.command("workshop.open").declaration, {
-  title: "插件工坊…", path: ["插件", "插件工坊…"], order: 621, group: "domain", radio: false, bindings: [], focus: null });
+  title: "插件工坊…", path: ["插件", "插件工坊…"], order: 621, group: "domain",
+  radio: false, bindings: [], focus: null, repeat: false });
 ```
 
-测试宿主新增：`host.press("Space")`（按绑定表执行命令，禁用时同样拒绝）、`host.conflicts`、`host.layout`（两个位置的状态，可 `host.layout.sidebar.preferred = false` 后 `host.emit("window.state", {})` 模拟）、`host.osd`（显示过的提示，最新在后）、`host.osdPanel`、`host.sequence`（当前提供者的标志）与 `host.step("next")`、`host.stats`（`player.stats()` 的返回值）、`host.menus`（`showMenu` 的记录）。旧的 `host.mounted().visibility` 删除。
+测试宿主新增：`host.press("Space", { panel? })`（按绑定表执行命令，禁用时同样拒绝；`panel: true` 模拟面板有焦点）、`host.conflicts`、`host.layout`（两个位置的状态，可改后 `host.emit("window.state", {})` 模拟别处的变化）、`host.osd`（显示过的提示，最新在后）、`host.osdPanel`、`host.sequence`（当前提供者的标志）与 `host.step("next")`、`host.stats`（`player.stats()` 的返回值）、`host.menus`（`showMenu` 的记录）。`host.mounted().visibility` 在 P4 删除，迁移后改读 `host.layout`。
 
 ### 15.4 逐插件清单（P3）
 
@@ -873,7 +894,7 @@ assert.deepEqual(host.command("workshop.open").declaration, {
 | playback（维护者参考迁移） | 14 条命令加 `order`；3 处 `shortcut` → `bindings`；`bar.toggle()`/`bar.visibility` → `plugin.panels.bottom` |
 | playlist（维护者参考迁移） | 10 条命令加 `order`；侧栏可见性 → `plugin.panels.sidebar`；`mount` 加 `title: "播放列表"`；登记 `provideSequence`（复用现有 next/previous 逻辑） |
 | video、audio、subtitles、capture、nes、youtube、bilibili | 每条命令加 `order`；测试里 `declaration` 断言改新形状 |
-| workshop | `order: 621`；测试断言；`vendor/sdk` 用新 SDK 重新复制（引擎把它拷给生成的候选插件做类型检查，旧副本里有 `shortcut` 与旧面板接口） |
+| workshop | `order: 621`；测试断言；`vendor/sdk` 用新 SDK 重新复制（`tests/vendor-sdk.test.mjs` 要求逐字节相同，命令写在该测试文件开头；P1b 起这条测试失败，直到复制） |
 | examples/bookmark（维护者） | 「播放 / 书签…」是示例，不在快照里；加 `order: 270` |
 
 ## 16. 删除清单（P4，全部完成后代码中不再出现）
@@ -911,21 +932,36 @@ SDK 与运行器（`src/sdk/`）：
 | `ui-prepare` | 浮动窗口编译失败 |
 | `capability` | 未声明 `ui.osd` 却调用 `plugin.osd.*`，其余同现有规则 |
 
-## 18. 需要协调者决定的问题
+## 18. P2 裁决（2026-10-20）
 
-| # | 问题 | 选项 | 建议 |
-| --- | --- | --- | --- |
-| Q1 | 浮动窗口默认 260×408（推断）比最小宽 300（确认）还窄 | (a) 默认 300×408；(b) 按 260 打开再被最小值撑到 300 | (a)，结果相同但写法不自相矛盾 |
-| Q2 | 宿主「全屏 Enter」「退出 Cmd+Q」本轮是否出现在菜单顶层 | (a) 出现（C4 骨架的画面组、退出组）；(b) 只有绑定，菜单第二步再加 | (a)，属于宿主自身变化，不影响插件菜单快照。P1b 需确认 winit 在 macOS 的默认应用菜单是否已占用 ⌘Q |
-| Q3 | C3 列出的左键单击、长按、右键双击 | (a) 本轮不做；(b) 都做 | (a)：没有使用者；单击要等双击间隔才能触发、会让双击全屏变慢；右键按下即打开菜单，右键双击无法可靠识别。另：双击视频全屏（UI-MOUSE-01）是否本轮作为宿主默认绑定加入——建议加，给鼠标路径一个真实使用者 |
-| Q4 | 插件之间绑定冲突的胜者 | (a) 先加载者胜（§3.5）；(b) 双方都失效 | (a)：结果确定，新装插件不会抢走已有插件的键 |
-| Q5 | 焦点范围 | (a) 只做 `panel`（附着与浮动）；(b) 再加工具窗口范围 | (a)：工具窗口范围没有使用者，且宿主要改写插件窗口源码才能拦截按键 |
-| Q6 | 按住不放的自动重复 | (a) 本轮忽略（同现状）；(b) 加 `repeat` 选项 | (a)；第二步音量 ↑↓、跳转 ←→ 若需要再按 §4 请求 |
-| Q7 | 删除「显示侧栏时窗口太窄就自动放大窗口」 | (a) 删除，只按 UI-SHELL-08 压缩视频；(b) 保留 | (a)：默认 780 宽足够；少一段依赖原生窗口坐标的代码 |
-| Q8 | C11 范围 | (a) 只在面板（附着与浮动）、单层菜单、`null` 分隔；(b) 也支持工具窗口和子菜单 | (a)：唯一使用者是播放列表（UI-PL-18）；其中「排序 ▶」子菜单到第二步可改为平铺或再请求 |
-| Q9 | 允许省略 `path`（只有绑定、或只出现在面板菜单里的命令） | (a) 本轮不做；(b) 做 | (a)：现有插件和本轮都不需要；PotPlayer 的 Ctrl+← 等在菜单里也有入口 |
-| Q10 | 播放信息插件本轮的菜单位置 | (a) 「视图 → 播放信息」（与现有结构一致）；(b) 按 §6.2 放顶层窗口入口组 | (a)；第二步统一改菜单时再移 |
-| Q11 | 菜单里快捷键文字的格式 | (a) `Ctrl+O`、方向键用箭头（PotPlayer 风格）；(b) macOS 风格 `⌘O` | (a)，与整改文档的表格一致 |
-| Q12 | 默认字体 | P1b 实测：先试不设字体名（Slint/fontique 用系统字体并按字形回退）；中文显示方框时改用 `PingFang SC`，仍不行用 `/System/Library/Fonts/Hiragino Sans GB.ttc`（随系统自带，按文件导入） | 实测结果写入本文；若只能按文件导入，等于把强制字体从 Arial Unicode 换成 Hiragino，请确认可接受 |
-| Q13 | C2 是否本轮就提供 PotPlayer 样式的控件（2px 线滑块、21px 按钮等，UI-TOOL-03） | (a) 本轮只提供令牌 + `fluent-dark` 默认风格 + `ToolTipArea`；(b) 本轮再做 `@vestra/widgets.slint` 的 Slider、Button | (a)：本轮插件不改外观，这些控件没有使用者；第二步第一个改版的插件提请求时一次做全 |
-| Q14 | macOS 全屏时浮动面板窗口留在原桌面空间，全屏画面里看不到 | (a) 记为已知限制；(b) 全屏时临时附着 | (a)；PotPlayer 在 Windows 上没有这个问题，等有需求再定 |
+协调者审查通过。下表是最终决定（原问题与选项见 git 历史中的 P1a 版本）。
+
+| # | 问题 | 裁决 |
+| --- | --- | --- |
+| Q1 | 浮动窗口默认尺寸 | 300×408（最小 300×250） |
+| Q2 | 宿主「全屏」「退出」进菜单顶层 | 进（`screen` 组 700、`exit` 组 990）；P1b 确认 ⌘Q 不与 macOS 默认应用菜单重复 |
+| Q3 | 鼠标事件范围 | 左键单击、长按、右键双击不做；`Mouse:LeftDoubleClick` 作为宿主全屏的默认绑定 |
+| Q4 | 插件间绑定冲突 | 先加载者胜（§3.5） |
+| Q5 | 焦点范围 | 只做 `panel` |
+| Q6 | 按住重复 | 命令可声明 `repeat: true`，默认 false（§3.1、§3.2） |
+| Q7 | 自动放大窗口 | 删除 |
+| Q8 | 面板右键菜单 | 单层、只在面板 |
+| Q9 | 省略 `path` | 允许；不进主菜单，`title` 必填（§4.1、§4.2） |
+| Q10 | 播放信息菜单位置 | 「视图 → 播放信息」 |
+| Q11 | 快捷键文字格式 | `Ctrl+O`、箭头 |
+| Q12 | 默认字体 | 按实测顺序；只能按文件导入时用系统自带 Hiragino Sans GB |
+| Q13 | PotPlayer 样式控件 | `@vestra/widgets.slint` 提供 `Slider`、`Button`、`ToolTipArea`（§2.1）；其它控件不做 |
+| Q14 | 全屏时浮动面板 | 已知限制 |
+
+## 19. P1b 实现记录（2026-10-20）
+
+与上文的出入和实现时查明的事实，按需在 P5 验证。
+
+- **代码位置**：宿主新文件 `bindings.rs`（绑定表）、`ui_state.rs`（持久化）、`ui/vestra/theme.slint`、`ui/vestra/widgets.slint`；`commands.rs` 重写为新菜单模型（含 §14 的 46 条命令顺序测试）；`menu.rs` 增加分隔线、单选、快捷键列与单层面板菜单；`host.slint` 重写外壳；`composition.rs` 生成侧栏分隔条、按键转发层与浮动窗口源码。SDK 新文件 `sdk/plugin/bindings.ts`（与宿主同规则的语法检查）、`sdk/plugin/osd.ts`。新插件 `src/plugins/info/`；演示 `src/examples/core-ui/`（菜单分组与单选、`repeat` 绑定、不进菜单的命令、屏幕提示、`next/previous` 调用、侧栏开关与分离、主题控件窗口）与 `src/examples/panel-menu/`（面板右键菜单、面板焦点按键、序列提供者、浮动窗口标题）。
+- **⌘Q**：Slint 1.16 的 winit 后端在 macOS 默认建立应用菜单（muda，含系统「退出 ⌘Q」，`i-slint-backend-winit` `muda.rs` `create_default_app_menu`），⌘Q 由系统菜单先处理，不会到达窗口，所以不会和宿主的 `Cmd+Q` 绑定重复触发；宿主绑定在 macOS 上只提供菜单里的快捷键文字。经系统菜单退出时宿主不经过自己的退出路径，界面状态最多丢失最后 1 秒内未写入的变化（右键菜单「退出」会先写入）。需 P5 实测。
+- **主题令牌**：`Theme.font-family` 未提供（默认字体由宿主统一设置，§2.2）；`font-mono` 为 `Menlo`。
+- **wire 方法**：`playback.stats` 由后端线程读 libmpv；`layout.set` 在答复前跑一次布局，紧接着的 `layout.state` 能看到结果。`ui.menu` 的宿主错误码按 §11.3。
+- **滚轮步长**：每 40 逻辑像素一步（`WHEEL_STEP`），需按触控板与鼠标实测调整。
+- **删除提前做了的部分**（因为外壳已换，旧代码不再有调用者）：`host.slint` 写死的 Space/←/→/F11/Esc 路由、`Host::canvas_shortcut`、`WindowInput` 的 `shortcut:`/`toggleFullscreen`/`escape` 分支、`Registry::resolve_shortcut`、领域列表、`diagnostic` 及后端为它维护的状态快照、`sidebar_resize*`（Q7）、Arial Unicode 字体。§16 其余项（`shortcut` 字段、旧面板可见性接口与 wire、`reveal_sidebar_in_fullscreen`、测试宿主旧字段）留到 P4。
+- **迁移期菜单顺序**：未迁移插件的命令 `order` 为 0，P3 完成前它们在 GUI 里排在已迁移命令之前；按插件比较的菜单快照不受影响。
+

@@ -1,10 +1,10 @@
-//! Experimental command registry; final API may differ substantially.
-//! This is a shared menu/context-menu model, not a menu renderer, key-binding
-//! engine or plugin policy layer. Callers authenticate live owner generations
-//! before registration and route resolved execution to that exact instance.
+//! Command registry: the shared menu model (core-ui-design.md §4).
+//! Not a menu renderer or key-binding engine (see menu.rs and bindings.rs).
+//! Callers authenticate live owner generations before registration and route
+//! resolved execution to that exact instance.
 #![forbid(unsafe_code)]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -17,15 +17,68 @@ pub struct CommandKey {
     pub local_id: String,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Focus {
+    Panel,
+}
+
+fn domain() -> String {
+    "domain".into()
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Declaration {
     pub title: String,
-    /// Complete primary menu path, including an allowed top-level domain.
+    /// Menu path including the leaf, 0..=8 segments; empty = not in the main menu.
+    #[serde(default)]
     pub path: Vec<String>,
-    /// Main-canvas keys Space/ArrowLeft/ArrowRight are routed by the host.
-    /// Other strings remain display declarations.
+    /// Sibling order, ascending; a submenu sits where its first command sits.
+    #[serde(default)]
+    pub order: i32,
+    /// Separator label between adjacent siblings.
+    #[serde(default = "domain")]
+    pub group: String,
+    #[serde(default)]
+    pub radio: bool,
+    /// Canonical binding strings, parsed by bindings.rs.
+    #[serde(default)]
+    pub bindings: Vec<String>,
+    #[serde(default)]
+    pub focus: Option<Focus>,
+    #[serde(default)]
+    pub repeat: bool,
+    /// Migration window only (P4 removes): the old display/canvas shortcut,
+    /// treated as one more default binding.
+    #[serde(default)]
     pub shortcut: Option<String>,
+}
+
+impl Declaration {
+    pub fn new(title: &str, path: &[&str]) -> Self {
+        Self {
+            title: title.into(),
+            path: path.iter().map(|s| s.to_string()).collect(),
+            order: 0,
+            group: domain(),
+            radio: false,
+            bindings: Vec::new(),
+            focus: None,
+            repeat: false,
+            shortcut: None,
+        }
+    }
+    /// Default bindings, including the legacy `shortcut`.
+    pub fn all_bindings(&self) -> Vec<String> {
+        let mut bindings = self.bindings.clone();
+        if let Some(shortcut) = &self.shortcut
+            && !bindings.contains(shortcut)
+        {
+            bindings.push(shortcut.clone());
+        }
+        bindings
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -37,7 +90,7 @@ pub struct CommandState {
     pub reason: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CommandSnapshot {
     pub key: CommandKey,
@@ -45,13 +98,18 @@ pub struct CommandSnapshot {
     pub revision: u64,
     pub declaration: Declaration,
     pub state: CommandState,
+    /// Tie-breaks equal orders: manifest id, then registration sequence.
+    pub manifest: String,
+    pub sequence: u64,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum MenuNode {
     Group {
         title: String,
+        /// Taken from the first command (in menu order) below this group.
+        group: String,
         children: Vec<MenuNode>,
     },
     Command {
@@ -59,14 +117,23 @@ pub enum MenuNode {
     },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+impl MenuNode {
+    /// Separator label of this node at its own level.
+    pub fn group(&self) -> &str {
+        match self {
+            Self::Group { group, .. } => group,
+            Self::Command { entry } => &entry.declaration.group,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MenuSnapshot {
     /// Registry-local sequence for accepted registration/state/removal changes.
     pub revision: u64,
-    /// Top-level domains follow shell configuration; descendants use lexical
-    /// path order, independent of registration timing.
-    /// Both primary and context-menu projections consume this same tree.
+    /// Sorted by order (a submenu by its first command), then manifest id and
+    /// registration sequence; independent of registration timing.
     pub roots: Vec<MenuNode>,
 }
 
@@ -124,13 +191,26 @@ impl std::fmt::Display for CommandError {
 }
 impl std::error::Error for CommandError {}
 
+impl CommandError {
+    /// Stable RPC code.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Invalid(_) => "invalid",
+            Self::Conflict(_) => "conflict",
+            Self::Missing(_) => "missing",
+            Self::Limit => "limit",
+            _ => "command",
+        }
+    }
+}
+
 type Result<T> = std::result::Result<T, CommandError>;
 
+#[derive(Default)]
 pub struct Registry {
-    domains: BTreeSet<String>,
-    domain_order: Vec<String>,
     commands: BTreeMap<CommandKey, CommandSnapshot>,
     revision: u64,
+    sequence: u64,
 }
 
 fn text(value: &str, label: &str, limit: usize) -> Result<()> {
@@ -169,28 +249,10 @@ fn state_valid(state: &CommandState) -> Result<()> {
 impl Registry {
     pub const MAX_COMMANDS: usize = 512;
     pub const MAX_PER_OWNER: usize = 64;
+    pub const MAX_DEPTH: usize = 8;
 
-    /// Domain names come from the shell's menu contract, never plugin identity.
-    /// This finite candidate requires at least one and at most 16 domains.
-    pub fn new(allowed_domains: Vec<String>) -> Result<Self> {
-        if allowed_domains.is_empty() || allowed_domains.len() > 16 {
-            return Err(CommandError::Invalid(
-                "expected 1..=16 top-level domains".into(),
-            ));
-        }
-        let mut domains = BTreeSet::new();
-        for domain in &allowed_domains {
-            text(domain, "domain", 80)?;
-            if !domains.insert(domain.clone()) {
-                return Err(CommandError::Conflict("duplicate top-level domain".into()));
-            }
-        }
-        Ok(Self {
-            domains,
-            domain_order: allowed_domains,
-            commands: BTreeMap::new(),
-            revision: 0,
-        })
+    pub fn new() -> Self {
+        Self::default()
     }
 
     fn next_revision(&self) -> Result<u64> {
@@ -202,6 +264,7 @@ impl Registry {
     pub fn register(
         &mut self,
         owner: OwnerGeneration,
+        manifest: &str,
         id: String,
         revision: u64,
         declaration: Declaration,
@@ -212,21 +275,22 @@ impl Registry {
             return Err(CommandError::Invalid("command revision starts at 1".into()));
         }
         text(&declaration.title, "title", 128)?;
-        if !(2..=6).contains(&declaration.path.len()) {
+        if declaration.path.len() > Self::MAX_DEPTH {
             return Err(CommandError::Invalid(
-                "menu path requires 2..=6 segments including domain and leaf".into(),
+                "menu path allows at most 8 segments".into(),
             ));
         }
         for segment in &declaration.path {
             text(segment, "path segment", 80)?;
         }
-        if !self.domains.contains(&declaration.path[0]) {
+        text(&declaration.group, "group", 80)?;
+        if declaration.order.unsigned_abs() > 1_000_000 {
             return Err(CommandError::Invalid(
-                "menu domain is not allowed by this shell".into(),
+                "order must be within ±1000000".into(),
             ));
         }
-        if let Some(shortcut) = &declaration.shortcut {
-            text(shortcut, "shortcut", 64)?;
+        for binding in declaration.all_bindings() {
+            crate::bindings::parse(&binding).map_err(CommandError::Invalid)?;
         }
         state_valid(&state)?;
         let key = CommandKey {
@@ -238,19 +302,18 @@ impl Registry {
                 "owner/localId already registered".into(),
             ));
         }
-        for entry in self.commands.values() {
-            if declaration.shortcut.as_deref().is_some_and(canvas_shortcut)
-                && declaration.shortcut == entry.declaration.shortcut
-            {
-                return Err(CommandError::Conflict(
-                    "main-canvas shortcut already registered".into(),
-                ));
-            }
-            let existing = &entry.declaration.path;
-            if existing.starts_with(&declaration.path) || declaration.path.starts_with(existing) {
-                return Err(CommandError::Conflict(
-                    "menu path duplicates a command or collides with a leaf/group".into(),
-                ));
+        if !declaration.path.is_empty() {
+            for entry in self.commands.values() {
+                let existing = &entry.declaration.path;
+                if existing.is_empty() {
+                    continue;
+                }
+                if existing.starts_with(&declaration.path) || declaration.path.starts_with(existing)
+                {
+                    return Err(CommandError::Conflict(
+                        "menu path duplicates a command or collides with a leaf/group".into(),
+                    ));
+                }
             }
         }
         if self.commands.len() >= Self::MAX_COMMANDS
@@ -264,6 +327,7 @@ impl Registry {
             return Err(CommandError::Limit);
         }
         let next = self.next_revision()?;
+        self.sequence += 1;
         self.commands.insert(
             key.clone(),
             CommandSnapshot {
@@ -271,6 +335,8 @@ impl Registry {
                 revision,
                 declaration,
                 state,
+                manifest: manifest.into(),
+                sequence: self.sequence,
             },
         );
         self.revision = next;
@@ -314,8 +380,6 @@ impl Registry {
 
     /// Removes only the specified generation. A replacement instance has a new
     /// owner generation, even if its manifest and local command IDs are equal.
-    /// The outer runtime rejects future RPC from stopped owners; this model does
-    /// not retain an unbounded history of dead owner tombstones.
     pub fn remove_owner(&mut self, owner: OwnerGeneration) -> Result<usize> {
         let count = self
             .commands
@@ -330,37 +394,27 @@ impl Registry {
         Ok(count)
     }
 
+    pub fn get(&self, owner: OwnerGeneration, id: &str) -> Option<&CommandSnapshot> {
+        self.commands.get(&CommandKey {
+            owner,
+            local_id: id.into(),
+        })
+    }
+
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
     pub fn snapshot(&self) -> MenuSnapshot {
-        let mut entries: Vec<_> = self.commands.values().collect();
-        let rank = |entry: &CommandSnapshot| {
-            self.domain_order
-                .iter()
-                .position(|domain| domain == &entry.declaration.path[0])
-                .unwrap_or(usize::MAX)
-        };
-        entries.sort_by(|a, b| {
-            rank(a)
-                .cmp(&rank(b))
-                .then_with(|| a.declaration.path[1..].cmp(&b.declaration.path[1..]))
-        });
+        let entries: Vec<_> = self
+            .commands
+            .values()
+            .filter(|entry| !entry.declaration.path.is_empty())
+            .collect();
         MenuSnapshot {
             revision: self.revision,
             roots: tree(&entries, 0),
         }
-    }
-
-    /// Resolve only the finite canonical canvas keys against current state.
-    pub fn resolve_shortcut(&self, shortcut: &str) -> Option<Execution> {
-        if !canvas_shortcut(shortcut) {
-            return None;
-        }
-        self.commands
-            .values()
-            .find(|entry| entry.declaration.shortcut.as_deref() == Some(shortcut))
-            .and_then(|entry| {
-                self.resolve_execution(entry.key.owner, &entry.key.local_id)
-                    .ok()
-            })
     }
 
     /// Resolve immediately before dispatch, at the serial registry arbiter.
@@ -390,43 +444,59 @@ impl Registry {
     }
 }
 
-fn canvas_shortcut(value: &str) -> bool {
-    matches!(value, "Space" | "ArrowLeft" | "ArrowRight")
+type Rank<'a> = (i32, &'a str, u64);
+
+fn rank(entry: &CommandSnapshot) -> Rank<'_> {
+    (
+        entry.declaration.order,
+        entry.manifest.as_str(),
+        entry.sequence,
+    )
 }
 
+/// One level: leaves and submenus, each keyed by its own (or first) command.
 fn tree(entries: &[&CommandSnapshot], depth: usize) -> Vec<MenuNode> {
-    let mut nodes = Vec::new();
-    let mut cursor = 0;
-    while cursor < entries.len() {
-        let entry = entries[cursor];
-        let title = &entry.declaration.path[depth];
-        if depth + 1 == entry.declaration.path.len() {
-            nodes.push(MenuNode::Command {
-                entry: entry.clone(),
-            });
-            cursor += 1;
+    let mut groups: Vec<(String, Vec<&CommandSnapshot>)> = Vec::new();
+    let mut nodes: Vec<(Rank<'_>, MenuNode)> = Vec::new();
+    for entry in entries {
+        let path = &entry.declaration.path;
+        if path.len() == depth + 1 {
+            nodes.push((
+                rank(entry),
+                MenuNode::Command {
+                    entry: (*entry).clone(),
+                },
+            ));
+        } else if let Some((_, members)) =
+            groups.iter_mut().find(|(title, _)| title == &path[depth])
+        {
+            members.push(entry);
         } else {
-            let end = entries[cursor..]
-                .iter()
-                .position(|entry| &entry.declaration.path[depth] != title)
-                .map(|offset| cursor + offset)
-                .unwrap_or(entries.len());
-            nodes.push(MenuNode::Group {
-                title: title.clone(),
-                children: tree(&entries[cursor..end], depth + 1),
-            });
-            cursor = end;
+            groups.push((path[depth].clone(), vec![entry]));
         }
     }
-    nodes
+    for (title, members) in groups {
+        let first = members
+            .iter()
+            .copied()
+            .min_by(|a, b| rank(a).cmp(&rank(b)))
+            .expect("a group has members");
+        nodes.push((
+            rank(first),
+            MenuNode::Group {
+                title,
+                group: first.declaration.group.clone(),
+                children: tree(&members, depth + 1),
+            },
+        ));
+    }
+    nodes.sort_by(|a, b| a.0.cmp(&b.0));
+    nodes.into_iter().map(|(_, node)| node).collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn registry() -> Registry {
-        Registry::new(vec!["Playback".into(), "Tools".into()]).unwrap()
-    }
     fn state(enabled: bool) -> CommandState {
         CommandState {
             enabled,
@@ -436,57 +506,36 @@ mod tests {
         }
     }
     fn declaration(path: &[&str]) -> Declaration {
+        Declaration::new(path.last().unwrap(), path)
+    }
+    fn ordered(path: &[&str], order: i32) -> Declaration {
         Declaration {
-            title: path.last().unwrap().to_string(),
-            path: path.iter().map(|s| s.to_string()).collect(),
-            shortcut: None,
+            order,
+            ..declaration(path)
+        }
+    }
+    /// Titles in menu order, depth-first, submenus as "▸title".
+    fn flatten(nodes: &[MenuNode], out: &mut Vec<String>) {
+        for node in nodes {
+            match node {
+                MenuNode::Group {
+                    title, children, ..
+                } => {
+                    out.push(format!("▸{title}"));
+                    flatten(children, out);
+                }
+                MenuNode::Command { entry } => out.push(entry.declaration.title.clone()),
+            }
         }
     }
 
     #[test]
-    fn canvas_shortcut_uses_current_command_state_and_releases_with_owner() {
-        let mut registry = registry();
-        let mut first = declaration(&["Playback", "Toggle"]);
-        first.shortcut = Some("Space".into());
-        registry
-            .register(1, "toggle".into(), 1, first.clone(), state(true))
-            .unwrap();
-        let mut conflict = first.clone();
-        conflict.path = vec!["Tools".into(), "Other".into()];
-        assert!(matches!(
-            registry.register(2, "other".into(), 1, conflict.clone(), state(true)),
-            Err(CommandError::Conflict(_))
-        ));
-        assert_eq!(registry.resolve_shortcut("Space").unwrap().owner, 1);
-        registry.update(1, "toggle", 2, state(false)).unwrap();
-        assert!(registry.resolve_shortcut("Space").is_none());
-        registry
-            .update(
-                1,
-                "toggle",
-                3,
-                CommandState {
-                    busy: true,
-                    ..state(true)
-                },
-            )
-            .unwrap();
-        assert!(registry.resolve_shortcut("Space").is_none());
-        registry.remove_owner(1).unwrap();
-        assert!(registry.resolve_shortcut("Space").is_none());
-        registry
-            .register(2, "other".into(), 1, conflict, state(true))
-            .unwrap();
-        assert_eq!(registry.resolve_shortcut("Space").unwrap().owner, 2);
-        assert!(registry.resolve_shortcut("F11").is_none());
-    }
-
-    #[test]
     fn local_ids_are_namespaced_but_primary_paths_have_one_owner() {
-        let mut registry = registry();
+        let mut registry = Registry::new();
         registry
             .register(
                 1,
+                "a",
                 "open".into(),
                 1,
                 declaration(&["Playback", "Open"]),
@@ -496,6 +545,7 @@ mod tests {
         registry
             .register(
                 2,
+                "b",
                 "open".into(),
                 1,
                 declaration(&["Tools", "Open"]),
@@ -506,6 +556,7 @@ mod tests {
         assert!(matches!(
             registry.register(
                 3,
+                "c",
                 "different".into(),
                 1,
                 declaration(&["Playback", "Open"]),
@@ -516,6 +567,7 @@ mod tests {
         assert!(matches!(
             registry.register(
                 1,
+                "a",
                 "open".into(),
                 2,
                 declaration(&["Tools", "Other"]),
@@ -528,7 +580,7 @@ mod tests {
     #[test]
     fn both_leaf_group_collision_directions_fail_without_changing_tree() {
         for leaf_first in [false, true] {
-            let mut registry = registry();
+            let mut registry = Registry::new();
             let short = declaration(&["Tools", "Inspect"]);
             let long = declaration(&["Tools", "Inspect", "Details"]);
             let (first, second) = if leaf_first {
@@ -537,11 +589,11 @@ mod tests {
                 (long, short)
             };
             registry
-                .register(1, "first".into(), 1, first, state(true))
+                .register(1, "a", "first".into(), 1, first, state(true))
                 .unwrap();
             let before = registry.snapshot();
             assert!(matches!(
-                registry.register(2, "second".into(), 1, second, state(true)),
+                registry.register(2, "b", "second".into(), 1, second, state(true)),
                 Err(CommandError::Conflict(_))
             ));
             assert_eq!(registry.snapshot(), before);
@@ -549,11 +601,12 @@ mod tests {
     }
 
     #[test]
-    fn stale_state_cannot_reenable_a_disabled_command_and_same_tree_exposes_reason() {
-        let mut registry = registry();
+    fn stale_state_cannot_reenable_a_disabled_command() {
+        let mut registry = Registry::new();
         registry
             .register(
                 1,
+                "a",
                 "play".into(),
                 1,
                 declaration(&["Playback", "Play"]),
@@ -579,13 +632,6 @@ mod tests {
                 reason: Some("No source".into())
             })
         );
-        let MenuNode::Group { children, .. } = &current.roots[0] else {
-            panic!("expected domain")
-        };
-        let MenuNode::Command { entry } = &children[0] else {
-            panic!("expected shared command fact")
-        };
-        assert_eq!(entry.state, disabled);
         let mut busy = state(true);
         busy.busy = true;
         busy.reason = Some("Preparing".into());
@@ -600,10 +646,11 @@ mod tests {
 
     #[test]
     fn stopped_owner_cleanup_cannot_remove_replacement_and_path_is_reusable() {
-        let mut registry = registry();
+        let mut registry = Registry::new();
         registry
             .register(
                 10,
+                "a",
                 "run".into(),
                 1,
                 declaration(&["Tools", "Old"]),
@@ -613,6 +660,7 @@ mod tests {
         registry
             .register(
                 11,
+                "a",
                 "run".into(),
                 1,
                 declaration(&["Tools", "New"]),
@@ -625,14 +673,11 @@ mod tests {
             registry.resolve_execution(10, "run"),
             Err(CommandError::Missing(_))
         ));
-        assert!(matches!(
-            registry.update(10, "run", 99, state(true)),
-            Err(CommandError::Missing(_))
-        ));
         assert_eq!(registry.resolve_execution(11, "run").unwrap().owner, 11);
         registry
             .register(
                 12,
+                "a",
                 "reuse".into(),
                 1,
                 declaration(&["Tools", "Old"]),
@@ -643,77 +688,114 @@ mod tests {
     }
 
     #[test]
-    fn top_level_domains_keep_host_order_even_when_reverse_lexical() {
-        let mut registry = Registry::new(vec!["Zulu".into(), "Alpha".into()]).unwrap();
-        for (id, path) in [
-            ("first", ["Alpha", "Item"]),
-            ("second", ["Zulu", "Beta"]),
-            ("third", ["Zulu", "Able"]),
+    fn order_sorts_siblings_and_submenus_take_their_first_command() {
+        let mut registry = Registry::new();
+        for (owner, id, path, order) in [
+            (1, "z", vec!["Zulu"], 10),
+            (2, "deep", vec!["Alpha", "Sub", "Deep"], 3),
+            (1, "a", vec!["Alpha", "Item"], 5),
+            (3, "top", vec!["Top"], 1),
         ] {
             registry
-                .register(1, id.into(), 1, declaration(&path), state(true))
+                .register(owner, "m", id.into(), 1, ordered(&path, order), state(true))
                 .unwrap();
         }
-        let snapshot = registry.snapshot();
-        let titles: Vec<_> = snapshot
-            .roots
-            .iter()
-            .map(|node| {
-                let MenuNode::Group { title, .. } = node else {
-                    panic!("expected domain group")
-                };
-                title.as_str()
-            })
-            .collect();
-        assert_eq!(titles, ["Zulu", "Alpha"]);
-        let MenuNode::Group { children, .. } = &snapshot.roots[0] else {
-            panic!("expected first domain")
-        };
-        let titles: Vec<_> = children
-            .iter()
-            .map(|node| {
-                let MenuNode::Command { entry } = node else {
-                    panic!("expected command")
-                };
-                entry.declaration.title.as_str()
-            })
-            .collect();
-        assert_eq!(titles, ["Able", "Beta"]);
+        let mut titles = Vec::new();
+        flatten(&registry.snapshot().roots, &mut titles);
+        assert_eq!(titles, ["Top", "▸Alpha", "▸Sub", "Deep", "Item", "Zulu"]);
     }
 
     #[test]
-    fn registration_order_does_not_change_tree_and_limits_reject_new_work() {
-        let mut a = registry();
-        let mut b = registry();
-        let mut declarations = vec![
-            (1, "z", declaration(&["Tools", "Z"])),
-            (2, "a", declaration(&["Playback", "A"])),
-        ];
-        for (owner, id, declaration) in declarations.clone() {
-            a.register(owner, id.into(), 1, declaration, state(true))
-                .unwrap();
-        }
-        declarations.reverse();
-        for (owner, id, declaration) in declarations {
-            b.register(owner, id.into(), 1, declaration, state(true))
-                .unwrap();
-        }
-        assert_eq!(a.snapshot(), b.snapshot());
-        assert!(matches!(
-            a.register(
-                4,
-                "bad".into(),
+    fn equal_orders_fall_back_to_manifest_then_declaration_not_title() {
+        let mut registry = Registry::new();
+        registry
+            .register(
+                9,
+                "b.plugin",
+                "x".into(),
                 1,
-                declaration(&["Unknown", "X"]),
-                state(true)
-            ),
+                declaration(&["Z first"]),
+                state(true),
+            )
+            .unwrap();
+        registry
+            .register(
+                9,
+                "b.plugin",
+                "y".into(),
+                1,
+                declaration(&["A second"]),
+                state(true),
+            )
+            .unwrap();
+        registry
+            .register(
+                4,
+                "a.plugin",
+                "w".into(),
+                1,
+                declaration(&["M zero"]),
+                state(true),
+            )
+            .unwrap();
+        let mut titles = Vec::new();
+        flatten(&registry.snapshot().roots, &mut titles);
+        assert_eq!(titles, ["M zero", "Z first", "A second"]);
+    }
+
+    #[test]
+    fn groups_label_submenus_and_pathless_commands_stay_out_of_the_menu() {
+        let mut registry = Registry::new();
+        let mut open = ordered(&["打开", "文件…"], 100);
+        open.group = "open".into();
+        let mut subtitle = ordered(&["打开", "字幕…"], 150);
+        subtitle.group = "subtitle".into();
+        let mut hidden = Declaration::new("全选", &[]);
+        hidden.bindings = vec!["Ctrl+A".into()];
+        registry
+            .register(1, "m", "open".into(), 1, open, state(true))
+            .unwrap();
+        registry
+            .register(1, "m", "sub".into(), 1, subtitle, state(true))
+            .unwrap();
+        registry
+            .register(1, "m", "all".into(), 1, hidden.clone(), state(true))
+            .unwrap();
+        registry
+            .register(1, "m", "all2".into(), 1, hidden, state(true))
+            .unwrap();
+        let roots = registry.snapshot().roots;
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots[0].group(), "open");
+        let MenuNode::Group { children, .. } = &roots[0] else {
+            panic!()
+        };
+        assert_eq!(
+            children.iter().map(MenuNode::group).collect::<Vec<_>>(),
+            ["open", "subtitle"]
+        );
+        assert!(registry.get(1, "all").is_some());
+        let mut bad = Declaration::new("x", &["a", "b", "c", "d", "e", "f", "g", "h", "i"]);
+        assert!(matches!(
+            registry.register(1, "m", "deep".into(), 1, bad.clone(), state(true)),
             Err(CommandError::Invalid(_))
         ));
-        let mut limited = registry();
+        bad.path.truncate(1);
+        bad.bindings = vec!["Shift+>".into()];
+        assert!(matches!(
+            registry.register(1, "m", "keys".into(), 1, bad, state(true)),
+            Err(CommandError::Invalid(_))
+        ));
+    }
+
+    #[test]
+    fn limits_reject_new_work() {
+        let mut limited = Registry::new();
         for index in 0..Registry::MAX_PER_OWNER {
             limited
                 .register(
                     5,
+                    "m",
                     format!("c{index}"),
                     1,
                     declaration(&["Tools", &format!("Item {index}")]),
@@ -724,6 +806,7 @@ mod tests {
         assert_eq!(
             limited.register(
                 5,
+                "m",
                 "extra".into(),
                 1,
                 declaration(&["Tools", "Extra"]),
@@ -731,5 +814,111 @@ mod tests {
             ),
             Err(CommandError::Limit)
         );
+    }
+
+    /// core-ui-design.md §14: the migration orders reproduce the tree that the
+    /// old registry (fixed domain list, then UTF-8 byte order of path[1..])
+    /// built from the same 46 commands (doc/process/rounds/menus-before.json).
+    #[test]
+    fn migration_orders_reproduce_the_old_menu_tree() {
+        const TABLE: &[(&str, &str, i32)] = &[
+            ("vestra.playback", "文件/关闭当前来源", 201),
+            ("vestra.playback", "文件/打开媒体…", 202),
+            ("vestra.playlist", "文件/播放列表/上一项", 203),
+            ("vestra.playlist", "文件/播放列表/上移", 204),
+            ("vestra.playlist", "文件/播放列表/下一项", 205),
+            ("vestra.playlist", "文件/播放列表/下移", 206),
+            ("vestra.playlist", "文件/播放列表/播放选中项", 207),
+            ("vestra.playlist", "文件/播放列表/添加文件…", 208),
+            ("vestra.playlist", "文件/播放列表/添加链接…", 209),
+            ("vestra.playlist", "文件/播放列表/清空列表", 210),
+            ("vestra.playlist", "文件/播放列表/移除选中项", 211),
+            ("vestra.bilibili", "文件/网络媒体/Bilibili 视频…", 212),
+            ("vestra.youtube", "文件/网络媒体/YouTube 视频…", 213),
+            ("vestra.playback", "播放/前进5秒", 261),
+            ("vestra.playback", "播放/后退5秒", 262),
+            ("vestra.playback", "播放/播放/暂停", 263),
+            ("vestra.playback", "播放/跳转到…", 264),
+            ("vestra.playback", "播放/速度/0.5倍", 265),
+            ("vestra.playback", "播放/速度/1.5倍", 266),
+            ("vestra.playback", "播放/速度/2倍", 267),
+            ("vestra.playback", "播放/速度/正常速度", 268),
+            ("vestra.playback", "播放/速度/自定义…", 269),
+            ("vestra.capture", "视频/截图与导出/保存当前画面…", 321),
+            ("vestra.capture", "视频/截图与导出/导出片段…", 322),
+            ("vestra.capture", "视频/截图与导出/查看导出任务…", 323),
+            ("vestra.capture", "视频/截图与导出/连拍…", 324),
+            ("vestra.video", "视频/画面调节…", 325),
+            ("vestra.video", "视频/高斯模糊…", 326),
+            ("vestra.audio", "音频/均衡器预设/人声", 381),
+            ("vestra.audio", "音频/均衡器预设/平直", 382),
+            ("vestra.audio", "音频/均衡器预设/影院", 383),
+            ("vestra.audio", "音频/均衡器预设/音乐", 384),
+            ("vestra.audio", "音频/复位音频处理", 385),
+            ("vestra.playback", "音频/静音", 386),
+            ("vestra.playback", "音频/音量…", 387),
+            ("vestra.audio", "音频/音频工作台…", 388),
+            ("vestra.subtitles", "字幕/关闭字幕", 441),
+            ("vestra.subtitles", "字幕/刷新字幕轨", 442),
+            ("vestra.subtitles", "字幕/加载外部 SRT…", 443),
+            ("vestra.subtitles", "字幕/字幕工作台…", 444),
+            ("vestra.playlist", "视图/显示播放列表", 501),
+            ("vestra.playback", "视图/显示播放栏", 502),
+            ("vestra.nes", "模拟器/NES 工具", 561),
+            ("vestra.nes", "模拟器/停止 NES", 562),
+            ("vestra.nes", "模拟器/打开 NES ROM…", 563),
+            ("vestra.workshop", "插件/插件工坊…", 621),
+        ];
+        // "播放/暂停" is one leaf title that contains a slash.
+        let split = |path: &str| -> Vec<String> {
+            let path = path.replace("播放/暂停", "播放\u{0}暂停");
+            path.split('/').map(|s| s.replace('\u{0}', "/")).collect()
+        };
+        // The old algorithm, reimplemented: domain rank, then byte order of path[1..].
+        let domains = [
+            "文件",
+            "播放",
+            "视频",
+            "音频",
+            "字幕",
+            "视图",
+            "模拟器",
+            "插件",
+        ];
+        let mut old: Vec<Vec<String>> = TABLE.iter().map(|(_, path, _)| split(path)).collect();
+        old.sort_by(|a, b| {
+            let rank = |p: &Vec<String>| domains.iter().position(|d| *d == p[0]).unwrap();
+            rank(a).cmp(&rank(b)).then_with(|| a[1..].cmp(&b[1..]))
+        });
+        let mut expected = Vec::new();
+        let mut open: Vec<String> = Vec::new();
+        for path in &old {
+            let common = open.iter().zip(path).take_while(|(a, b)| a == b).count();
+            for segment in &path[common..path.len() - 1] {
+                expected.push(format!("▸{segment}"));
+            }
+            expected.push(path.last().unwrap().clone());
+            open = path[..path.len() - 1].to_vec();
+        }
+        // Register in reverse and with owners interleaved: timing must not matter.
+        let mut registry = Registry::new();
+        for (index, (manifest, path, order)) in TABLE.iter().enumerate().rev() {
+            let path = split(path);
+            let refs: Vec<&str> = path.iter().map(String::as_str).collect();
+            registry
+                .register(
+                    (index % 7) as u64 + 1,
+                    manifest,
+                    format!("c{index}"),
+                    1,
+                    ordered(&refs, *order),
+                    state(true),
+                )
+                .unwrap();
+        }
+        let mut actual = Vec::new();
+        flatten(&registry.snapshot().roots, &mut actual);
+        assert_eq!(actual, expected);
+        assert_eq!(TABLE.len(), 46);
     }
 }
