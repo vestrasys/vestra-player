@@ -65,6 +65,7 @@ const CAPABILITIES = new Set([
   "media.control",
   "ui.osd",
   "clipboard",
+  "window.control",
 ]);
 
 /** Never part of a production package. */

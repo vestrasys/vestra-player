@@ -50,8 +50,9 @@ test("the runner activates a default-exported plugin and refuses the removed fla
     "export default async function activate(plugin) { plugin.commands.add({ id: 'a', path: ['文件', 'A'], run() {} }); }",
   );
   assert.deepEqual(v2, {
+    // The window state is read before activation, like the player state.
     event: "runtime.ready",
-    methods: ["commands.register"],
+    methods: ["window.state", "commands.register"],
   });
   const legacy = await run(
     "export async function activate(host) { await host.commands.register('a', 1, {}, {}); }",
@@ -66,7 +67,7 @@ test("a v2 plugin is not ready until its registrations succeeded", async () => {
   );
   assert.deepEqual(failed, {
     event: "runtime.failed",
-    methods: ["commands.register"],
+    methods: ["window.state", "commands.register"],
   });
 });
 
