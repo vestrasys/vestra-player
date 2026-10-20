@@ -132,6 +132,13 @@ pub fn open(
             Value::Void
         })?;
     }
+    // The title bar's close button: the view goes away like `ui.close`, and
+    // its plugin learns that the user closed it.
+    let closed = id.to_owned();
+    instance.window().on_close_requested(move || {
+        let _ = events.send(Event::ViewClosed(owner, closed.clone()));
+        slint::CloseRequestResponse::HideWindow
+    });
     instance.show()?;
     Ok(View { instance })
 }

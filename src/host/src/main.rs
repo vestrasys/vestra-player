@@ -115,6 +115,8 @@ enum Event {
     ActionDone(Reply, String, std::result::Result<Value, RpcError>),
     Broadcast(String, Value),
     UiCallback(u64, Value),
+    /// The user closed a plugin tool window: (owner, view id).
+    ViewClosed(u64, String),
     PluginMessage(u64, String, Value),
     Exited(u64),
     Reaped(u64),
@@ -633,6 +635,12 @@ impl Host {
             }
             Event::PluginMessage(owner, event, data) => {
                 self.send(owner, json!({"event":event,"data":data}))
+            }
+            Event::ViewClosed(owner, id) => {
+                if let Some(view) = self.views.remove(&(owner, id.clone())) {
+                    let _ = view.instance.hide();
+                    self.send(owner, json!({"event":"ui.closed","data":{"view":id}}));
+                }
             }
             Event::UiCallback(owner, data) => {
                 self.send(owner, json!({"event":"ui.callback","data":data}))

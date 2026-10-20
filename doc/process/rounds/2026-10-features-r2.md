@@ -377,6 +377,16 @@ plugin.power.preventSleep(mode: "off" | "playing"): Promise<void>;
 - 文档：参考 §5.5、§14、§17 去掉开关说明；§17 写明「仍注册旧路径或旧按键的插件，菜单注册 `conflict`、按键被核心压下」。
 - 影响面（在合并前的插件代码上实测）：除 playback 外的 10 个插件测试全部通过；**playback 2 条失败**（「menu follows the allocation table」：`host.conflicts` 出现 F4、Space 等与核心动作的冲突；「previous/next go through the player sequence」：PageUp/PageDown 被核心动作接住），这正是作者 A 的迁移要删除的旧命令，须与 playback 迁移同批合并。真实宿主上未迁移的 playback 会因菜单路径冲突激活失败。
 
+#### 裁决：核心逐帧与 B07、`step` 的位置、`Window.onClose`、`storage` 权限（作者 A、D、E）
+
+1. **B07 逐帧（作者 A）：改核心。** 上一帧/下一帧已归核心所有，行为细节（提示、边界、分方向的启用）是需求已定的产品行为，插件无法补（插件不能改核心命令的提示与启用状态）；改动小。实现：
+   - 完成后提示「定位: 下一帧 00:01:23.456」/「定位: 上一帧 …」（完成后的位置，`HH:MM:SS.mmm`）；位置没动时「已是最后一帧」/「已是第一帧」，第一帧上按上一帧直接提示、不发命令。
+   - 两个方向分别判断（`core_actions::frame_check`）：没有视频轨 → 「没有视频」；下一帧需要 `ready`（直播可以，播完后不可）；上一帧 `ready` 或 `ended` 且可跳转，否则「当前来源不支持逐帧后退」（生成流、不可跳转的直播）；播完后的上一帧用一次精确跳转（当前位置 − 1/fps），让来源回到 `ready`。
+   - 在途期间的重复触发丢弃（核心动作在 `ActionDone` 前保持忙碌），满足第 3 条。
+2. **`step` 解决时的位置（作者 A）：已改为保证。** 原实现发出 mpv 命令后立即答复，位置可能还没更新。现在宿主等到 `time-pos` 变化且 `seeking` 为假（或播到结尾、或 1.5 秒不动）才答复，SDK 再刷新状态，所以 `await player.step(...)` 之后 `player.state.position` 就是新位置。同一时间只有一步在途，第二个调用 `busy`。参考 §5.2 已写明。无界面实测：每次 `step` 返回后读到的位置即新位置（0.500 → 0.533 → 0.500；关键帧 8.333 → 16.667 → 8.333）。
+3. **`Window.onClose`（作者 E，info 轮询、capture 连拍窗口；作者 D 第 1 轮同类）：接受，本轮小修。** 这是现有契约的缺陷：用户关窗后 `opened` 仍为 `true`，状态不真实（§4.2 第 1 条按缺陷修），且两个插件需要。实现：宿主拦截工具窗口的关闭请求，关闭视图并向所属插件发 `ui.closed`；SDK 把 `opened` 置为 `false` 并调用 `onClose(listener)`；之后 `show()` 重新打开。插件自己 `close()` 不触发。TestHost：`host.window(id).userClose()`。
+4. **`storage.json` 文件权限（作者 E，history）：接受，默认 0600。** 不加 `mode` 选项（保守）：数据目录本来只属于该插件，设置文件没有给别的用户读的理由；history 这类隐私数据靠默认值就够。临时文件以 0600 创建（并 `chmod`），改名后保持。
+
 ### 6.3 作者交付
 
 （各作者完成时填写：完成项、未完成项与原因、删除的自制实现、API 请求）
