@@ -28,13 +28,8 @@ export function components(app: AppInfo, node: string | null): [string, string][
   ];
 }
 
-/** One row of the loaded-plugin list (`packages.list`, round 3a batch 2). */
-export interface PluginRow {
-  id: string;
-  version: string;
-  origin: string;
-  state: string;
-}
+/** One row of the loaded-plugin list (`packages.list`). */
+export type PluginRow = { id: string; version: string; origin: string; state: string };
 const ORIGINS: Record<string, string> = { installed: "已安装", development: "开发加载", trial: "试载" };
 const STATES: Record<string, string> = {
   starting: "启动中",
@@ -55,11 +50,8 @@ export function pluginRows(plugins: { id: string; version: string | null; origin
     }));
 }
 
-/**
- * What the plugin list shows until the core offers `packages.list` (round 3a
- * batch 2, not delivered yet): one line, kept in the copied text too.
- */
-export const PLUGINS_UNKNOWN = "未知（播放器尚未提供插件列表）";
+/** What the plugin list shows when `packages.list` failed (it is read again on the next opening). */
+export const PLUGINS_UNKNOWN = "未知（无法读取插件列表）";
 
 /** The whole window as plain text, for 复制信息. */
 export function aboutText(app: AppInfo, node: string | null, plugins: PluginRow[] | null) {
@@ -73,14 +65,26 @@ export function aboutText(app: AppInfo, node: string | null, plugins: PluginRow[
 
 /**
  * I09 关于 Vestra: a fixed 360×420 tool window with the logo, the version,
- * component versions (`plugin.app`) and the loaded plugins. F1 opens it, or
+ * component versions (`plugin.app`) and the loaded plugins (`packages.list`,
+ * read on opening and kept current by `packages.onChange`). F1 opens it, or
  * brings the open window to the front.
  */
 export function aboutWindow(plugin: Plugin, say: (text: string) => void) {
   const node = process.versions.node ? `v${process.versions.node}` : null;
-  // packages.list / onChange are not in the SDK yet (round 3a batch 2): the list is unknown.
-  const plugins: PluginRow[] | null = null;
+  let plugins: PluginRow[] | null = null;
   let status = "";
+  /** Read the list now (each opening); a failure shows 未知 until the next read or change. */
+  async function readPlugins() {
+    try {
+      plugins = pluginRows(await plugin.packages.list());
+    } catch (error) {
+      console.error(`[info] packages.list: ${error instanceof Error ? error.message : String(error)}`);
+      plugins = null;
+    }
+    plugin.update();
+  }
+  // Starts, stops, failures, installs and uninstalls arrive here; the open window follows at once.
+  plugin.packages.onChange((list) => void (plugins = pluginRows(list)));
   const window = plugin.windows.create("ui/about.slint");
   window.bind(() => ({
     version: `版本 ${vestraVersion(plugin.app)}`,
@@ -104,6 +108,7 @@ export function aboutWindow(plugin: Plugin, say: (text: string) => void) {
   window.onClose(() => void (status = ""));
   return async function show() {
     status = "";
+    if (!window.opened) await readPlugins();
     await window.show();
   };
 }

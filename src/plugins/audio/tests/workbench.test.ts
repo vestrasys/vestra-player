@@ -60,6 +60,7 @@ function hold(host: TestHost, then: (params: Record<string, unknown>) => unknown
 
 test("menu under 声音 follows the allocation, and editing commands wait for a selected track", async () => {
   const { host, stop } = await startPlugin(activate, { directory });
+  await host.settle();
   assert.deepEqual(
     [...host.commands.values()].map(({ declaration: d }) => [d.path.join(" ▶ "), d.order, d.group, d.bindings.join(","), d.radio, d.repeat]),
     [
@@ -79,8 +80,10 @@ test("menu under 声音 follows the allocation, and editing commands wait for a 
       ["声音 ▶ 声音处理 ▶ 晶化", 516, "audio-eq", "Shift+C", false, false],
       ["声音 ▶ 复位", 517, "audio-eq", "", false, false],
       ["声音 ▶ 音轨 ▶ 没有音轨", 511, "audio-tools", "", false, false],
+      ["声音 ▶ 输出设备 ▶ 没有可用的输出设备", 512, "audio-tools", "", false, false],
     ],
   );
+  assert.equal(host.command("audio.device.none").state.enabled, false);
   assert.equal(host.command("audio.track.none").state.enabled, false);
   assert.equal(host.command("audio.load").state.reason, "没有正在播放的文件");
   assert.equal(host.command("audio.track.cycle").state.reason, "没有音轨");
@@ -767,4 +770,158 @@ test("A11: 自动载入同名音频文件 adds same-named audio next to a local 
     await rm(folder, { recursive: true, force: true });
     await rm(data, { recursive: true, force: true });
   }
+});
+
+// ---------------------------------------------------------------- round 3a: G16 output device
+
+const SPEAKERS = { id: "coreaudio/BuiltInSpeakerDevice", name: "MacBook Air 扬声器" };
+const PHONES = { id: "coreaudio/USB-1", name: "USB 耳机" };
+const deviceItems = (host: TestHost) =>
+  [...host.commands.entries()]
+    .filter(([, { declaration: d }]) => d.path[1] === "输出设备")
+    .map(([id, { declaration: d, state }]) => [d.path[2], d.order, d.group, d.radio, state.enabled, state.checked, state.reason, id] as const);
+const deviceCommand = (host: TestHost, title: string) => host.command(deviceItems(host).find((item) => item[0] === title)![7]);
+const savedJson = async (path: string) => JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
+/** The player noticed a plug or unplug (it checks every second): what `audioOutput` becomes. */
+function plug(host: TestHost, devices: { id: string; name: string }[]) {
+  host.audioDevices = devices;
+  const requested = host.source.audioOutput?.requested ?? null;
+  host.setSource({ audioOutput: { requested, active: requested !== null && devices.some((d) => d.id === requested) ? requested : null } });
+}
+
+test("G16: 输出设备 lists 系统默认 and the devices; choosing one switches, says so and is saved", async () => {
+  const data = await mkdtemp(join(tmpdir(), "vestra-audio-"));
+  try {
+    const host = new TestHost();
+    host.audioDevices = [SPEAKERS, PHONES];
+    const { stop } = await startPlugin(activate, { directory, host, dataDirectory: data });
+    await host.settle();
+    assert.deepEqual(deviceItems(host).map((item) => item.slice(0, 7)), [
+      ["系统默认", 512, "audio-tools", true, true, true, null],
+      ["MacBook Air 扬声器", 512, "audio-tools", true, true, false, null],
+      ["USB 耳机", 512, "audio-tools", true, true, false, null],
+    ]);
+    assert.equal(host.sent("player.setAudioDevice").length, 0, "系统默认 at start sends nothing");
+    await deviceCommand(host, "USB 耳机").run();
+    await host.settle();
+    assert.deepEqual(host.sent("player.setAudioDevice").at(-1), { id: PHONES.id });
+    assert.deepEqual(host.source.audioOutput, { requested: PHONES.id, active: PHONES.id });
+    assert.equal(host.osd.at(-1), "音频输出: USB 耳机");
+    assert.equal(deviceCommand(host, "USB 耳机").state.checked, true);
+    assert.equal(deviceCommand(host, "系统默认").state.checked, false);
+    // No source is needed, and the window shows the same choice.
+    await host.command("audio.workbench").run();
+    const window = host.window("audio-workbench");
+    assert.deepEqual(window.props["device-names"], ["系统默认", "MacBook Air 扬声器", "USB 耳机"]);
+    assert.equal(window.props["device-index"], 2);
+    assert.equal(window.props["devices-available"], true);
+    assert.equal(window.props["devices-tip"], "USB 耳机");
+    window.emit("device-selected", 0);
+    await host.settle();
+    assert.deepEqual(host.sent("player.setAudioDevice").at(-1), { id: null });
+    assert.equal(host.osd.at(-1), "音频输出: 系统默认");
+    assert.equal(window.props["device-index"], 0);
+    window.emit("device-selected", 1);
+    await host.settle(350);
+    assert.equal((await savedJson(join(data, "settings.json"))).device, SPEAKERS.id);
+    assert.equal((await savedJson(join(data, "settings.json"))).deviceName, SPEAKERS.name);
+    // A refused switch keeps the previous device.
+    host.handle("player.setAudioDevice", () => {
+      throw new HostError("busy", "设备被占用");
+    });
+    await deviceCommand(host, "USB 耳机").run();
+    await host.settle();
+    assert.equal(host.osd.at(-1), "无法切换到 USB 耳机: 设备被占用");
+    assert.equal(deviceCommand(host, "MacBook Air 扬声器").state.checked, true);
+    await stop();
+  } finally {
+    await rm(data, { recursive: true, force: true });
+  }
+});
+
+test("G16: unplugging the chosen device falls back with an OSD; plugging it back returns with one", async () => {
+  const host = new TestHost();
+  host.audioDevices = [SPEAKERS, PHONES];
+  const { stop } = await startPlugin(activate, { directory, host });
+  await host.settle();
+  await deviceCommand(host, "USB 耳机").run();
+  await host.settle();
+  plug(host, [SPEAKERS]);
+  await host.settle();
+  assert.equal(host.osd.at(-1), "输出设备已断开，改用系统默认");
+  // The check mark stays on the choice, now disabled and listed after the connected ones.
+  assert.deepEqual(deviceItems(host).map((item) => item.slice(0, 7)), [
+    ["系统默认", 512, "audio-tools", true, true, false, null],
+    ["MacBook Air 扬声器", 512, "audio-tools", true, true, false, null],
+    ["USB 耳机", 512, "audio-tools", true, false, true, "设备未连接"],
+  ]);
+  await host.command("audio.workbench").run();
+  const window = host.window("audio-workbench");
+  assert.deepEqual(window.props["device-names"], ["系统默认", "MacBook Air 扬声器", "USB 耳机（未连接）"]);
+  assert.equal(window.props["device-index"], 2);
+  assert.equal(window.props["devices-tip"], "USB 耳机：设备未连接，正在使用系统默认");
+  const sent = host.sent("player.setAudioDevice").length;
+  window.emit("device-selected", 2); // the disconnected entry cannot be picked
+  await host.settle();
+  assert.equal(host.sent("player.setAudioDevice").length, sent);
+  plug(host, [SPEAKERS, PHONES]);
+  await host.settle();
+  assert.equal(host.osd.at(-1), "音频输出: USB 耳机");
+  assert.equal(deviceCommand(host, "USB 耳机").state.enabled, true);
+  assert.deepEqual(window.props["device-names"], ["系统默认", "MacBook Air 扬声器", "USB 耳机"]);
+  await stop();
+});
+
+test("G16: the saved device is restored at start without an OSD, also while it is not connected", async () => {
+  const data = await mkdtemp(join(tmpdir(), "vestra-audio-"));
+  try {
+    await writeFile(join(data, "settings.json"), JSON.stringify({ version: 1, device: PHONES.id, deviceName: PHONES.name }));
+    let host = new TestHost();
+    host.audioDevices = [SPEAKERS, PHONES];
+    let started = await startPlugin(activate, { directory, host, dataDirectory: data });
+    await host.settle();
+    assert.deepEqual(host.sent("player.setAudioDevice"), [{ id: PHONES.id }]);
+    assert.deepEqual(host.source.audioOutput, { requested: PHONES.id, active: PHONES.id });
+    assert.equal(deviceCommand(host, "USB 耳机").state.checked, true);
+    assert.deepEqual(host.osd, []);
+    await started.stop();
+    // Not plugged in at start: the player uses the default, the menu says why, no OSD.
+    host = new TestHost();
+    host.audioDevices = [SPEAKERS];
+    started = await startPlugin(activate, { directory, host, dataDirectory: data });
+    await host.settle();
+    assert.deepEqual(host.source.audioOutput, { requested: PHONES.id, active: null });
+    assert.deepEqual(deviceItems(host).at(-1)!.slice(0, 7), ["USB 耳机", 512, "audio-tools", true, false, true, "设备未连接"]);
+    assert.deepEqual(host.osd, []);
+    plug(host, [SPEAKERS, PHONES]);
+    await host.settle();
+    assert.equal(host.osd.at(-1), "音频输出: USB 耳机", "plugging it in later is announced");
+    assert.equal((await savedJson(join(data, "settings.json"))).device, PHONES.id, "the choice is never dropped");
+    await started.stop();
+  } finally {
+    await rm(data, { recursive: true, force: true });
+  }
+});
+
+test("G16: a device plugged in later shows up within 5 s; no list means one disabled item", async () => {
+  const host = new TestHost();
+  host.handle("player.audioDevices", () => {
+    throw new HostError("unavailable", "no audio output");
+  });
+  const { stop } = await startPlugin(activate, { directory, host });
+  await host.settle();
+  assert.deepEqual(deviceItems(host).map((item) => item.slice(0, 7)), [
+    ["没有可用的输出设备", 512, "audio-tools", false, false, null, null],
+  ]);
+  await host.command("audio.workbench").run();
+  const window = host.window("audio-workbench");
+  assert.deepEqual(window.props["device-names"], ["没有可用的输出设备"]);
+  assert.equal(window.props["devices-available"], false);
+  host.reset("player.audioDevices");
+  host.audioDevices = [SPEAKERS, PHONES];
+  await host.settle(5200);
+  assert.deepEqual(deviceItems(host).map((item) => item[0]), ["系统默认", "MacBook Air 扬声器", "USB 耳机"]);
+  assert.deepEqual(window.props["device-names"], ["系统默认", "MacBook Air 扬声器", "USB 耳机"]);
+  assert.deepEqual(host.osd, [], "a new device is not announced");
+  await stop();
 });

@@ -176,13 +176,15 @@ component ChoiceItem {
     touch := TouchArea { clicked => { root.picked(); } }
 }
 
-// Compact 21px drop-down with an 11px label; the list opens below it (short lists only,
-// so it stays inside the window).
+// Compact 21px drop-down with an 11px label; the list opens below it. `max-rows` > 0 caps
+// the list's height (it scrolls with the wheel), so a long list stays inside the window.
 component Choice {
     in property <[string]> model;
     in-out property <int> current-index;
     in property <bool> enabled: true;
+    in property <int> max-rows: 0;
     callback selected(int);
+    private property <int> rows: root.max-rows > 0 && root.model.length > root.max-rows ? root.max-rows : root.model.length;
     height: 21px;
     accessible-role: combobox;
     accessible-enabled: root.enabled;
@@ -215,18 +217,26 @@ component Choice {
         x: 0;
         y: root.height;
         width: root.width;
+        height: root.rows * 20px + 2px;
         Rectangle {
             background: Theme.bg-list;
             border-color: Theme.line;
             border-width: 1px;
-            VerticalLayout {
-                padding: 1px;
-                for name[index] in root.model: ChoiceItem {
-                    text: name;
-                    selected: index == root.current-index;
-                    picked => {
-                        root.current-index = index;
-                        root.selected(index);
+            Flickable {
+                x: 1px;
+                y: 1px;
+                width: parent.width - 2px;
+                height: parent.height - 2px;
+                viewport-height: root.model.length * 20px;
+                VerticalLayout {
+                    width: root.width - 2px;
+                    for name[index] in root.model: ChoiceItem {
+                        text: name;
+                        selected: index == root.current-index;
+                        picked => {
+                            root.current-index = index;
+                            root.selected(index);
+                        }
                     }
                 }
             }
@@ -310,6 +320,9 @@ export component AudioWorkbench inherits Window {
     in property <bool> channels-available;
     in property <string> channel-tip;
     in property <bool> auto-load;
+    in property <[string]> device-names: ["系统默认"];
+    in property <int> device-index: 0;
+    in property <bool> devices-available;
     in property <string> devices-tip;
     callback tab-changed(int);
     callback gain-changed(int, float);
@@ -328,6 +341,7 @@ export component AudioWorkbench inherits Window {
     callback load-requested();
     callback channel-selected(int);
     callback auto-load-changed(bool);
+    callback device-selected(int);
     private property <[string]> preset-names: ["平直", "人声", "音乐", "影院"];
     private property <[string]> tab-names: ["均衡器", "效果", "声道与输出"];
     changed delay-ms => { delay.value = root.delay-ms; }
@@ -339,6 +353,8 @@ export component AudioWorkbench inherits Window {
     changed track-index => { track-combo.current-index = root.track-index; }
     changed channel-index => { channel-combo.current-index = root.channel-index; }
     changed auto-load => { auto-check.checked = root.auto-load; }
+    changed device-index => { device-combo.current-index = root.device-index; }
+    changed device-names => { device-combo.current-index = root.device-index; }
     VerticalLayout {
         // Page tabs, 31px; the last picked page is remembered by the plugin.
         Rectangle {
@@ -507,17 +523,25 @@ export component AudioWorkbench inherits Window {
                             }
                         }
                     }
-                    // 输出设备 (G16, later round): 65 + 6 + 190 = 261, greyed with the reason on hover.
+                    // 输出设备 (G16): 65 + 6 + 200 = 271 of 285; the full name on hover. The list
+                    // opens at y ≈ 117 of 260, so 7 rows (142) fit below; longer lists scroll.
                     ToolTipArea {
                         height: 24px;
                         text: root.devices-tip;
                         HorizontalLayout {
                             spacing: 6px;
                             alignment: start;
-                            Text { width: 65px; text: "输出设备"; color: Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
+                            Text { width: 65px; text: "输出设备"; color: root.devices-available ? Theme.text : Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
                             VerticalLayout {
                                 alignment: center;
-                                Choice { width: 190px; enabled: false; model: ["系统默认"]; current-index: 0; }
+                                device-combo := Choice {
+                                    width: 200px;
+                                    max-rows: 7;
+                                    enabled: root.devices-available;
+                                    model: root.device-names;
+                                    current-index: root.device-index;
+                                    selected(i) => { root.device-selected(i); }
+                                }
                             }
                         }
                     }

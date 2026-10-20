@@ -51,6 +51,7 @@ test("menu per the allocation table; windows bind exactly their Slint callbacks"
     .sort((a, b) => a[1] - b[1]);
   assert.deepEqual(declared, [
     ["打开 > 打开字幕…", 113, "open", "Alt+O"],
+    ["打开 > 添加次字幕…", 114, "open", ""],
     ["播放 > 跳转 > 上一句对白", 217, "jump-subtitle", "Home"],
     ["播放 > 跳转 > 下一句对白", 217, "jump-subtitle", "End"],
     ["播放 > 跳转 > 当前字幕起点", 217, "jump-subtitle", "Ctrl+Home"],
@@ -58,6 +59,9 @@ test("menu per the allocation table; windows bind exactly their Slint callbacks"
     ["字幕 > 选择字幕轨 > 不显示", 302, "subtitle-track", ""],
     ["字幕 > 选择字幕轨 > English · en", 303, "subtitle-track", ""],
     ["字幕 > 选择字幕轨 > 依次切换", 311, "subtitle-cycle", "Alt+L"],
+    ["字幕 > 次字幕 > 不显示", 312, "subtitle-second", ""],
+    ["字幕 > 次字幕 > 位置 > 顶部", 321, "subtitle-second-pos", ""],
+    ["字幕 > 次字幕 > 位置 > 主字幕上方", 321, "subtitle-second-pos", ""],
     ["字幕 > 字幕样式 > 粗体", 324, "style-font", "Alt+B"],
     ["字幕 > 字幕样式 > 字号 +", 325, "style-font", "Alt+PageUp"],
     ["字幕 > 字幕样式 > 字号 −", 326, "style-font", "Alt+PageDown"],
@@ -137,7 +141,7 @@ test("a slider burst is merged into one style write with the latest values", asy
   assert.equal(styles.length, 1);
   assert.deepEqual(styles[0]!.style, {
     fontId: "sans", fontSize: 38, color: "white", outline: 2, marginPercent: 6, offsetMs: 1000,
-    bold: false, shadow: 0, box: null, assOverride: "keep",
+    bold: false, shadow: 0, box: null, assOverride: "keep", secondaryPosition: "top",
   });
   assert.equal(window.props["status-text"], "字幕样式已更新");
   assert.equal(host.subtitles.presentation.effective?.style.offsetMs, 1000);

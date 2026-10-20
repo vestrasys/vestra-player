@@ -36,6 +36,6 @@ movie.mp4
 
 关于 Vestra（I09）：右键菜单顶层「关于 Vestra…」（`windows` 组 order 880）或 F1 打开工具窗口 `ui/about.slint`（固定 360×420），已打开时再按只带到前面。内容：logo（`ui/logo.png`，由 `src/assets/brand/logo.png` 缩成 192×192，编译期 `@image-url`）、「Vestra」、版本行「版本 0.1.0（构建 289b26b）」；组件版本：插件 API、mpv、FFmpeg、Slint（`plugin.app`）、Node（插件进程的 `process.versions.node`），拿不到的显示「未知」；已加载插件列表（id、版本、来源、状态，按 id 排序，行高 18、显示 8 行、超出滚动）。底部「复制信息」（全部文字放进剪贴板，提示「已复制版本信息」，失败时状态行「复制失败」）、「关闭」。
 
-已知限制：插件列表要用核心的 `packages.list` / `onChange`（第 3a 轮批次 2，尚未交付），现在列表区只显示「未知（播放器尚未提供插件列表）」，复制的文字里也是这一行。格式化（`pluginRows`）已写好并有测试，接上后只需在 `about.ts` 里读列表并订阅变化。
+插件列表：每次打开窗口读一次 `plugin.packages.list()`（不需要能力），之后由 `packages.onChange` 推送更新（插件启动、停用、失败、安装、卸载时窗口立即刷新）。来源显示为 已安装 / 开发加载 / 试载，状态为 启动中 / 运行中 / 已停用 / 失败 / 已停止。读取失败时列表区显示「未知（无法读取插件列表）」，下次打开再读。
 
-用到的接口：`plugin.osd.panel()`（能力 `ui.osd`）、`plugin.player.stats()`（`playback.read`）、命令 `bindings`；I05、I09 另用 `windows.create`（`ui.window`）、`plugin.app`、`dialogs.saveFile`（`ui.dialog`）、`clipboard.writeText`（`clipboard`）、`tools.run`、`storage.json`。信息层的底色、字体与位置由宿主决定。
+用到的接口：`plugin.osd.panel()`（能力 `ui.osd`）、`plugin.player.stats()`（`playback.read`）、命令 `bindings`；I05、I09 另用 `windows.create`（`ui.window`）、`plugin.app`、`packages.list` / `onChange`、`dialogs.saveFile`（`ui.dialog`）、`clipboard.writeText`（`clipboard`）、`tools.run`、`storage.json`。信息层的底色、字体与位置由宿主决定。
