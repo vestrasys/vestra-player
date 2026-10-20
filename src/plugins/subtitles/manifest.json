@@ -1,6 +1,6 @@
 {
   "id": "vestra.subtitles",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "apiVersion": "vestra.experimental/0.1",
   "entry": "main.ts",
   "capabilities": [

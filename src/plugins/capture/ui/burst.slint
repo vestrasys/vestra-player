@@ -1,5 +1,5 @@
 // 连拍: PotPlayer continuous capture dialog 337 (438 wide, B§6.8; UI-DLG-04).
-import { CheckBox, LineEdit } from "std-widgets.slint";
+import { CheckBox, ComboBox, LineEdit } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
 import { FormLabel, Group, Note } from "parts.slint";
@@ -19,10 +19,13 @@ export component BurstDialog inherits Window {
     in-out property <bool> current-time: true;
     in-out property <bool> processed: false;
     in-out property <bool> subtitles: false;
+    // Shared with 截取为 PNG / JPEG / BMP and 截图设置 (F07).
+    in-out property <int> format-index: 0;
     callback pick-folder();
     callback open-folder();
     callback capture-frame();
     callback mark-start();
+    callback choose-format(int);
     callback start-burst(string, string, string, bool, bool, bool);
 
     VerticalLayout {
@@ -65,7 +68,13 @@ export component BurstDialog inherits Window {
                 HorizontalLayout {
                     spacing: 4px;
                     FormLabel { width: 40px; text: "格式："; }
-                    Note { text: "PNG"; }
+                    ComboBox {
+                        height: Theme.input-height;
+                        model: ["PNG", "JPEG", "BMP"];
+                        current-index <=> root.format-index;
+                        enabled: !root.busy;
+                        selected => { root.choose-format(self.current-index); }
+                    }
                 }
                 CheckBox { height: Theme.checkbox-row-height; text: "包含画面效果"; checked <=> root.processed; enabled: !root.busy; }
                 CheckBox { height: Theme.checkbox-row-height; text: "同时截取字幕"; checked <=> root.subtitles; enabled: root.processed && !root.busy; }

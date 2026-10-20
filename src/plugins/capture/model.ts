@@ -16,6 +16,26 @@ export interface Spec {
   track: string;
   /** Fix the current time when the capture is accepted. */
   current: boolean;
+  /** Image file format for frames and bursts (F07); PNG when absent. Clips are always MP4. */
+  format?: Format;
+  /** JPEG quality 1–100. */
+  quality?: number;
+}
+
+/** F07: the image formats a frame can be saved as. */
+export type Format = "png" | "jpeg" | "bmp";
+export const FORMATS: readonly Format[] = ["png", "jpeg", "bmp"];
+export const FORMAT_LABEL: Record<Format, string> = { png: "PNG", jpeg: "JPEG", bmp: "BMP" };
+export const extensionOf = (format: Format) => (format === "jpeg" ? ".jpg" : `.${format}`);
+/** The format a user-typed file name asks for, or null for any other extension. */
+export function formatOfName(path: string): Format | null {
+  const extension = extname(path).toLowerCase();
+  return extension === ".png" ? "png" : extension === ".jpg" || extension === ".jpeg" ? "jpeg" : extension === ".bmp" ? "bmp" : null;
+}
+/** JPEG quality: an integer 1–100, 90 when unusable. */
+export function quality(value: unknown) {
+  const n = Math.round(Number(value));
+  return Number.isFinite(n) ? Math.min(100, Math.max(1, n)) : 90;
 }
 
 export const KIND_LABEL: Record<Kind, string> = { image: "截图", burst: "连拍", clip: "片段" };

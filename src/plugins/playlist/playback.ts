@@ -5,14 +5,18 @@ import type {
   PluginError,
   Scope,
 } from "../../sdk/plugin/index.ts";
-import type { Queue } from "./queue.ts";
+import type { Binding, Queue } from "./queue.ts";
 
 /**
  * Opening rows and following the media they became: row status, the failed
  * navigation anchor, and advancing once after a natural end.
  */
-export function playback(scope: Scope, queue: Queue) {
+export function playback(scope: Scope, queue: Queue, settled: () => void = () => {}) {
   const { player } = scope;
+  // Sources this plugin opened (A13 only adopts sources other plugins opened).
+  const own = new Set<number>();
+  // An adopted row's natural end was handled for the current playthrough.
+  let adoptedEnded = false;
   // Between the click and the host accepting the open.
   let opening: { rowId: string; epoch: number } | null = null;
   // Accepted, but the media is still loading: opening stays blocked.
@@ -28,12 +32,21 @@ export function playback(scope: Scope, queue: Queue) {
     if (loading && (state.sourceId !== loading.sourceId || state.phase !== "loading")) loading = null;
     queue.observe(state);
     if (queue.failed) failedSource = state.sourceId;
+    // An adopted row (A13) has no Media: its natural end is seen in the state.
+    const binding = queue.binding;
+    if (binding && !binding.media && state.sourceId === binding.sourceId) {
+      const ended = state.phase === "ended" && state.endReason === "natural";
+      if (ended && !adoptedEnded) {
+        adoptedEnded = true;
+        void advance(binding, state);
+      } else if (!ended) adoptedEnded = false;
+    }
   };
   player.onChange(observe);
 
   // Only when nobody changed the source after it ended: otherwise "stale".
-  const advance = (media: Media, ended: PlayerState): Promise<void> | undefined => {
-    if (busy() || queue.binding?.media !== media) return;
+  const advance = (binding: Binding, ended: PlayerState): Promise<void> | undefined => {
+    if (busy() || queue.binding !== binding) return;
     if (!queue.row(queue.binding.rowId)) return;
     if (queue.repeat === "one") return replay(ended);
     const next = queue.neighbor(1);
@@ -51,8 +64,8 @@ export function playback(scope: Scope, queue: Queue) {
     }
   }
 
-  /** Open a row; `ifCurrent` makes it an automatic advance from that ended state. */
-  async function play(rowId: string, ifCurrent?: PlayerState): Promise<void> {
+  /** Open a row; `ifCurrent` makes it an automatic advance from that ended state; `quiet` keeps the current notice. */
+  async function play(rowId: string, ifCurrent?: PlayerState, options: { quiet?: boolean } = {}): Promise<void> {
     const row = queue.row(rowId);
     if (busy() || !row) return;
     const request = { rowId, epoch: queue.begin(rowId) };
@@ -88,6 +101,8 @@ export function playback(scope: Scope, queue: Queue) {
         opening = null;
         if (request.epoch !== queue.epoch || !queue.row(rowId)) return;
         const { code, message } = error as PluginError;
+        // A failed load of this row is still this plugin's source.
+        if (player.state.source === row.source) own.add(player.state.sourceId);
         if (code === "stale") queue.detach("自动推进已过期，保留较新的来源");
         // Accepted, then superseded by another source before it loaded: not a failure of this row.
         else if (code === "replaced") queue.detach("已切换到列表外来源");
@@ -103,17 +118,32 @@ export function playback(scope: Scope, queue: Queue) {
         queue.message = "当前媒体已移出列表";
         return;
       }
-      queue.bind({ rowId, media, end: media.onEnd((ended) => advance(media, ended)) });
+      if (media.current) own.add(player.state.sourceId);
+      const binding: Binding = { rowId, media };
+      binding.end = media.onEnd((ended) => advance(binding, ended));
+      queue.bind(binding);
       queue.played(rowId);
-      queue.say(row.title);
+      if (!options.quiet) queue.say(row.title);
       if (media.current) loading = { rowId, sourceId: player.state.sourceId };
       observe(player.state);
       // It may already have ended before the reply arrived.
       const now = player.state;
-      if (media.current && now.phase === "ended" && now.endReason === "natural") return advance(media, now);
+      if (media.current && now.phase === "ended" && now.endReason === "natural") return advance(binding, now);
     } finally {
       if (opening === request) opening = null;
+      settled();
     }
+  }
+
+  /** A13: follow `rowId` as the row of a source another plugin opened. */
+  function adopt(rowId: string, state: PlayerState) {
+    if (!queue.row(rowId) || busy()) return;
+    queue.detach("已接管");
+    queue.failed = null;
+    adoptedEnded = state.phase === "ended";
+    queue.bind({ rowId, media: null, sourceId: state.sourceId });
+    queue.played(rowId);
+    observe(state);
   }
 
   /** An open is unsettled: no second open until it is. */
@@ -123,6 +153,9 @@ export function playback(scope: Scope, queue: Queue) {
   return {
     play,
     busy,
+    adopt,
+    /** Whether this plugin opened the source `sourceId`. */
+    owns: (sourceId: number) => own.has(sourceId),
     /** The row whose open is unsettled. */
     get pendingRow() {
       return opening?.rowId ?? loading?.rowId ?? null;

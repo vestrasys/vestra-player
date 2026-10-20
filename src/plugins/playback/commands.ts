@@ -1,11 +1,26 @@
 import type { CommandState, Scope } from "../../sdk/plugin/index.ts";
 import type { Playback } from "./controller.ts";
+import { type CopyKind, copyTarget } from "./copy.ts";
+import type { OpenUrl } from "./open-url.ts";
 import type { Prompt } from "./prompt.ts";
+import type { Reopener } from "./reopen.ts";
+import type { SettingsStore } from "./settings.ts";
+import type { SleepGuard } from "./sleep.ts";
+
+/** The round-1 features (doc/product/feature-requirements.md, 播放控制). */
+export type Features = {
+  openUrl: OpenUrl;
+  reopener: Reopener;
+  sleep: SleepGuard;
+  settings: SettingsStore;
+  copy: (kind: CopyKind) => Promise<void>;
+  jumpToStart: () => Promise<void>;
+};
 
 type Entry = {
   id: string;
   path: string[];
-  /** Menu position from the round's allocation table (doc/process/rounds/2026-10-plugin-ui.md §3). */
+  /** Menu position: doc/product/menus.md, and the 播放控制 chapter's 菜单与快捷键 table for new items. */
   order: number;
   group?: string;
   radio?: boolean;
@@ -25,7 +40,7 @@ const ready = (enabled = true, checked: boolean | null = null, busy = false, rea
   reason: enabled ? null : reason,
 });
 
-function entries(p: Playback, jump: Prompt, customRate: Prompt): Entry[] {
+function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): Entry[] {
   const seek = (id: string, title: string, order: number, delta: number, bindings: string[], repeat = false): Entry => ({
     id,
     path: ["播放", "跳转", title],
@@ -61,6 +76,25 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt): Entry[] {
     action: () => p.volumeBy(delta),
     state: () => ready(true, null, p.outputBusy),
   });
+  const copy = (id: string, title: string, order: number, kind: CopyKind): Entry => ({
+    id,
+    path: ["复制到剪贴板", title],
+    order,
+    group: "open",
+    action: () => f.copy(kind),
+    state: () => {
+      const target = copyTarget(p.state, kind);
+      return "reason" in target ? ready(false, null, false, target.reason) : ready();
+    },
+  });
+  const option = (id: string, title: string, order: number, value: () => boolean, toggle: () => void): Entry => ({
+    id,
+    path: ["播放", title],
+    order,
+    group: "playback-options",
+    action: toggle,
+    state: () => ready(true, value()),
+  });
   return [
     {
       id: "open",
@@ -80,15 +114,28 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt): Entry[] {
       action: () => p.closeSource(),
       state: () => ready(p.can("close")),
     },
-    // Not in the allocation table: UI-BAR-11 moves the bar's "重试" here (unused 121 in `open`).
+    {
+      id: "open-url",
+      path: ["打开", "打开链接…"],
+      order: 110,
+      group: "open",
+      bindings: ["Ctrl+U"],
+      action: () => f.openUrl.show(),
+      state: () => ready(),
+    },
+    // A10: the former 重新打开 (only after a failed load), renamed and widened.
     {
       id: "reopen",
-      path: ["重新打开"],
+      path: ["重开当前/最后文件"],
       order: 121,
       group: "open",
-      action: () => p.retry(),
-      state: () => ready(p.state.phase === "error" && p.state.source !== null, null, false, "仅在载入失败后可用"),
+      bindings: ["Ctrl+Y"],
+      action: () => f.reopener.run(),
+      state: () => ready(f.reopener.available(), null, f.reopener.busy, "没有可重开的文件"),
     },
+    copy("copy-name", "文件名", 125, "name"),
+    copy("copy-folder", "文件夹路径", 126, "folder"),
+    copy("copy-path", "完整路径", 127, "path"),
     {
       id: "toggle-pause",
       path: ["播放", "播放/暂停"],
@@ -122,6 +169,15 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt): Entry[] {
     seek("backward-300", "后退300秒", 216, -300, ["Ctrl+Alt+ArrowLeft"]),
     seek("forward-300", "前进300秒", 217, 300, ["Ctrl+Alt+ArrowRight"]),
     {
+      id: "jump-start",
+      path: ["播放", "跳转", "跳到开头"],
+      order: 219,
+      group: "points",
+      bindings: ["Backspace"],
+      action: () => f.jumpToStart(),
+      state: () => ready(p.canRestart(), null, p.pauseBusy),
+    },
+    {
       id: "jump",
       path: ["播放", "跳转到…"],
       order: 218,
@@ -142,6 +198,19 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt): Entry[] {
       action: () => customRate.show(),
       state: () => ready(p.can("rate"), null, p.rateBusy),
     },
+    option("prevent-sleep", "播放时禁止屏保", 240, () => f.settings.value.preventSleep, () => {
+      f.settings.update((s) => {
+        s.preventSleep = !s.preventSleep;
+      });
+      f.sleep.sync();
+      p.notify(`播放时禁止屏保: ${f.settings.value.preventSleep ? "开" : "关"}`);
+    }),
+    option("hover-time", "进度条悬停显示时间", 242, () => f.settings.value.hoverTime, () => {
+      f.settings.update((s) => {
+        s.hoverTime = !s.hoverTime;
+      });
+      p.notify(`进度条悬停显示时间: ${f.settings.value.hoverTime ? "开" : "关"}`);
+    }),
     volume("volume-up", "音量 +", 501, 5, ["ArrowUp", "Mouse:WheelUp"]),
     volume("volume-down", "音量 −", 502, -5, ["ArrowDown", "Mouse:WheelDown"]),
     {
@@ -159,8 +228,8 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt): Entry[] {
  * Register every menu command and return `run(id)`, which the bar's buttons
  * use too. The bar bypasses the host's enabled check, so `run` repeats it.
  */
-export function addCommands(scope: Scope, playback: Playback, jump: Prompt, customRate: Prompt) {
-  const table = entries(playback, jump, customRate);
+export function addCommands(scope: Scope, playback: Playback, jump: Prompt, customRate: Prompt, features: Features) {
+  const table = entries(playback, jump, customRate, features);
   const run = async (id: string) => {
     const command = table.find((each) => each.id === id);
     if (!command?.state().enabled) return;

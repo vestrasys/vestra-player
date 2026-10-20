@@ -1,0 +1,291 @@
+import { join } from "node:path";
+import type { Player, PlayerState, Plugin, Window } from "../../sdk/plugin/index.ts";
+import { clock, fileSize, keyOf, mediaKind } from "./identity.ts";
+import { JsonFile, readJson, timing } from "./store.ts";
+
+export type Mode = "off" | "auto" | "ask";
+export type Memo = { position: number; duration: number; size: number | null; updatedAt: number };
+
+export const CAPACITY = 1000;
+/** Shorter sources are not remembered. */
+export const MIN_DURATION = 60;
+/** Earlier positions count as "from the start". */
+export const MIN_POSITION = 10;
+/** Within this many seconds of the end (or past 95 %) the source counts as finished. */
+export const END_MARGIN = 15;
+/** Resuming goes back this far, to pick the story up again. */
+export const REWIND = 2;
+
+/** The source being watched: its identity and the last facts seen for it. */
+type Track = {
+  sourceId: number;
+  source: string;
+  key: string;
+  size: number | null;
+  /** `null` until known (extension table, then `player.stats()`). */
+  audio: boolean | null;
+  position: number | null;
+  duration: number | null;
+  paused: boolean;
+  /** The first ready state of this source; the condition of the resume seek. */
+  ready: PlayerState | null;
+  /** The resume decision is still open: the position is not recorded meanwhile. */
+  holding: boolean;
+  /** The resume decision has been started (or was not wanted). */
+  decided: boolean;
+  /** Played to the end; recording starts again on a replay. */
+  ended: boolean;
+};
+
+const finished = (position: number, duration: number) =>
+  position > duration - END_MARGIN || position >= duration * 0.95;
+
+/**
+ * B25 记忆播放位置: remembers where a media source was left and, when it is
+ * opened again from anywhere, continues there (or asks first), in
+ * `<dataDirectory>/positions.json`.
+ */
+export class Resume {
+  mode: Mode = "auto";
+  audio = false;
+  items = new Map<string, Memo>();
+  readonly #player: Player;
+  readonly #osd: (text: string) => void;
+  readonly #update: () => void;
+  readonly #file: JsonFile;
+  readonly #window: Window;
+  readonly #listeners: (() => void)[] = [];
+  #track: Track | null = null;
+  #ask: { track: Track; memo: Memo; timer: ReturnType<typeof setTimeout> } | null = null;
+  #message = "";
+
+  constructor(plugin: Plugin, directory: string | null, osd: (text: string) => void) {
+    this.#player = plugin.player;
+    this.#osd = osd;
+    this.#update = () => plugin.update();
+    const file = directory ? join(directory, "positions.json") : null;
+    this.#file = new JsonFile(file, "throttle", () => timing.positionsWrite, () => ({
+      version: 1,
+      mode: this.mode,
+      audio: this.audio,
+      items: Object.fromEntries(this.items),
+    }));
+    const saved = readJson(file) as { mode?: unknown; audio?: unknown; items?: unknown } | null;
+    if (saved && typeof saved === "object") {
+      if (saved.mode === "off" || saved.mode === "auto" || saved.mode === "ask") this.mode = saved.mode;
+      if (typeof saved.audio === "boolean") this.audio = saved.audio;
+      if (saved.items && typeof saved.items === "object")
+        Object.entries(saved.items as Record<string, Memo>)
+          .filter(
+            ([, memo]) =>
+              !!memo &&
+              Number.isFinite(memo.position) &&
+              Number.isFinite(memo.duration) &&
+              (memo.size === null || Number.isFinite(memo.size)) &&
+              Number.isFinite(memo.updatedAt),
+          )
+          .sort(([, a], [, b]) => a.updatedAt - b.updatedAt) // oldest first: the LRU order
+          .slice(-CAPACITY)
+          .forEach(([key, memo]) => this.items.set(key, memo));
+    }
+
+    this.#window = plugin.windows.create("ui/resume.slint");
+    this.#window.bind(() => ({ message: this.#message }));
+    this.#window.on("resume", () => this.#answer(true));
+    this.#window.on("restart", () => this.#answer(false));
+
+    const tick = setInterval(() => {
+      const track = this.#track;
+      if (track && !track.paused && this.#player.state.phase === "ready") this.#record(track, false);
+    }, timing.positionTick);
+    plugin.onDispose(() => {
+      clearInterval(tick);
+      this.#closeAsk();
+      if (this.#track) this.#record(this.#track, true);
+      this.#file.flush();
+    });
+  }
+
+  /** Called when a remembered position appears, moves at a pause or a source change, or disappears. */
+  onChange(listener: () => void) {
+    this.#listeners.push(listener);
+  }
+
+  /** The remembered position for a record key, if any (the A12 menu shows it). */
+  memo(key: string): Memo | undefined {
+    return this.items.get(key);
+  }
+
+  setMode(mode: Mode) {
+    if (mode === this.mode) return;
+    this.mode = mode;
+    if (mode !== "ask") this.#closeAsk();
+    this.#file.touch();
+  }
+
+  setAudio(audio: boolean) {
+    if (audio === this.audio) return;
+    this.audio = audio;
+    this.#file.touch();
+  }
+
+  clear() {
+    this.items.clear();
+    this.#file.touch();
+    this.#changed();
+  }
+
+  /**
+   * Every player state. `initial` is the state at activation: a source that is
+   * already playing is tracked, but not resumed (the plugin was only reloaded).
+   */
+  observe(state: PlayerState, initial = false) {
+    let track = this.#track;
+    if (track && (track.sourceId !== state.sourceId || state.kind !== "media" || !state.source)) {
+      // Replaced or closed: remember where it was last seen (unless it played to the end).
+      if (!track.ended) this.#record(track, true);
+      if (this.#ask?.track === track) this.#closeAsk();
+      this.#track = track = null;
+    }
+    if (state.kind !== "media" || !state.source || state.phase === "empty" || state.phase === "error") return;
+    if (!track) {
+      const kind = mediaKind(state.source);
+      track = this.#track = {
+        sourceId: state.sourceId,
+        source: state.source,
+        key: keyOf(state.source),
+        size: fileSize(state.source),
+        audio: kind === null ? null : kind === "audio",
+        position: null,
+        duration: null,
+        paused: state.paused,
+        ready: null,
+        holding: false,
+        decided: initial && state.phase !== "loading",
+        ended: false,
+      };
+    }
+    const wasPaused = track.paused;
+    if (state.position !== null) track.position = state.position;
+    if (state.duration !== null) track.duration = state.duration;
+    track.paused = state.paused;
+
+    if (state.phase === "ended") {
+      if (!track.ended) {
+        track.ended = true;
+        if (state.endReason === "natural") this.#forget(track);
+        else this.#record(track, true);
+      }
+      return;
+    }
+    if (state.phase !== "ready") return;
+    if (track.ended) track.ended = false; // replayed (e.g. a single-item loop): no resume, recording again
+
+    if (!track.ready) {
+      track.ready = state;
+      if (!track.decided) track.holding = true;
+    }
+    if (!track.decided && track.duration !== null) {
+      track.decided = true;
+      void this.#resume(track);
+    } else if (state.paused && !wasPaused) this.#record(track, true);
+  }
+
+  /** Whether B25 applies to this source; resolves `audio` with `player.stats()` when the extension says nothing. */
+  async #applies(track: Track): Promise<boolean> {
+    if (track.duration === null || track.duration < MIN_DURATION) return false;
+    if (track.audio === null) {
+      try {
+        track.audio = (await this.#player.stats()).video === null;
+      } catch {
+        return false; // unknown for now; asked again at the next decision
+      }
+    }
+    return !track.audio || this.audio;
+  }
+
+  async #resume(track: Track) {
+    try {
+      if (!(await this.#applies(track)) || this.mode === "off") return;
+      const memo = this.items.get(track.key);
+      if (!memo || this.#track !== track) return;
+      if (memo.size !== track.size || memo.position > track.duration! - END_MARGIN) {
+        // The file was replaced or cut shorter: the point no longer means anything.
+        this.#forget(track);
+        return;
+      }
+      // Seeked, paused or replaced since it became ready: their change stands.
+      if (!this.#player.isCurrent(track.ready!)) return;
+      if (this.mode === "ask") {
+        this.#openAsk(track, memo);
+        return;
+      }
+      await this.#seek(track, memo);
+    } finally {
+      if (!this.#ask || this.#ask.track !== track) track.holding = false;
+    }
+  }
+
+  async #seek(track: Track, memo: Memo) {
+    try {
+      await this.#player.seek(Math.max(0, memo.position - REWIND), { ifCurrent: track.ready! });
+      this.#osd(`从 ${clock(memo.position)} 继续播放`);
+    } catch (error) {
+      if ((error as { code?: string }).code !== "stale")
+        this.#osd(`无法继续播放：${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  #openAsk(track: Track, memo: Memo) {
+    this.#closeAsk();
+    this.#message = `之前有未播放完的。接着播放吗？（${clock(memo.position)}）`;
+    const timer = setTimeout(() => this.#answer(false), timing.askTimeout);
+    this.#ask = { track, memo, timer };
+    this.#update();
+    void this.#window.show();
+  }
+
+  #answer(resume: boolean) {
+    const ask = this.#ask;
+    if (!ask) return;
+    this.#closeAsk();
+    ask.track.holding = false;
+    if (resume && this.#track === ask.track) void this.#seek(ask.track, ask.memo);
+  }
+
+  #closeAsk() {
+    const ask = this.#ask;
+    if (!ask) return;
+    clearTimeout(ask.timer);
+    this.#ask = null;
+    ask.track.holding = false;
+    void this.#window.hide().catch(() => {});
+  }
+
+  /** Remember (or, near the start or the end, forget) where `track` is. `settled`: a pause, a change of source, the end. */
+  #record(track: Track, settled: boolean) {
+    if (this.mode === "off" || track.holding || track.position === null) return;
+    const { duration, position } = track;
+    if (duration === null || duration < MIN_DURATION || track.audio === null || (track.audio && !this.audio)) return;
+    if (position < MIN_POSITION || finished(position, duration)) {
+      this.#forget(track);
+      return;
+    }
+    const before = this.items.get(track.key);
+    this.items.delete(track.key); // insertion order is the LRU order
+    this.items.set(track.key, { position, duration, size: track.size, updatedAt: Date.now() });
+    while (this.items.size > CAPACITY) this.items.delete(this.items.keys().next().value!);
+    if (before?.position !== position) this.#file.touch();
+    if (settled || !before) this.#changed();
+  }
+
+  #forget(track: Track) {
+    if (this.mode === "off" || !this.items.delete(track.key)) return;
+    this.#file.touch();
+    this.#changed();
+  }
+
+  #changed() {
+    for (const listener of this.#listeners) listener();
+  }
+}

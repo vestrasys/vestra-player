@@ -1,12 +1,16 @@
 import { realpath } from "node:fs/promises";
-import { basename, resolve } from "node:path";
+import { basename, dirname, extname, resolve } from "node:path";
 import type { Disposable, Media, PlayerState } from "../../sdk/plugin/index.ts";
+import { collator, compareByFolder } from "./media.ts";
 
 export type Row = {
   rowId: string;
   source: string;
   key: string;
+  /** Display title: `named`, else the file name (a link shows its URL). */
   title: string;
+  /** Title given by a list file (C18), kept across restarts (C17). */
+  named: string | null;
   kind: "file" | "url";
   status: string;
   error: string;
@@ -19,13 +23,64 @@ export type Row = {
   /** Started playing at least once (drawn grey when no longer current). */
   played: boolean;
 };
-/** The media this list opened for a row; `end` is its natural-end listener. */
-export type Binding = { rowId: string; media: Media; end?: Disposable };
+/**
+ * The source a row follows: media this list opened (`end` is its natural-end
+ * listener), or an adopted source another plugin opened (A13: `media` null, followed
+ * by `sourceId`).
+ */
+export type Binding = { rowId: string; media: Media | null; sourceId?: number; end?: Disposable };
 export type Repeat = "none" | "all" | "one";
 export type Placement = "top" | "up" | "down" | "bottom";
-export type SortKey = "title" | "path" | "reverse";
+/** C11 keys; `shuffle` and `reverse` reorder without being a key the direction re-applies. */
+export type SortKey =
+  | "title"
+  | "filename"
+  | "extension"
+  | "size"
+  | "duration"
+  | "date"
+  | "shuffle"
+  | "folder"
+  | "path"
+  | "reverse";
+/** One row to add: local file or link; `key` is the realpath when already known. */
+export type Entry = {
+  kind: "file" | "url";
+  source: string;
+  key?: string;
+  named?: string | null;
+  duration?: number | null;
+  /** Error shown when the file cannot be read (instead of the default). */
+  missing?: string;
+};
+export type Added = {
+  /** Per entry: its new or existing row (undefined beyond the size limit). */
+  rows: (Row | undefined)[];
+  /** The rows this batch created, in order. */
+  fresh: Row[];
+  added: number;
+  duplicate: number;
+  invalid: number;
+  /** Entries refused because the list is full. */
+  refused: number;
+};
 
-const collator = new Intl.Collator("zh", { numeric: true, sensitivity: "base" });
+/** C17: the list holds at most this many rows. */
+export const ROW_LIMIT = 20_000;
+const UNREADABLE = "文件不存在或暂不可读取，可重试";
+
+/** C21: NFKC, lower case. */
+export const fold = (text: string) => text.normalize("NFKC").toLowerCase();
+/** A link's last path segment (decoded), else its URL. */
+export function fileNameOf(row: Pick<Row, "kind" | "source">) {
+  if (row.kind === "file") return basename(row.source);
+  try {
+    const last = new URL(row.source).pathname.split("/").filter(Boolean).at(-1);
+    return last ? decodeURIComponent(last) : row.source;
+  } catch {
+    return row.source;
+  }
+}
 
 /** All ordering, selection and source association belong to this instance. */
 export class Queue {
@@ -45,9 +100,36 @@ export class Queue {
   shuffle = false;
   /** Rows played in the current shuffle round. */
   shuffled = new Set<string>();
+  /** C21 search terms (folded); empty = no filter. */
+  terms: string[] = [];
+  /** C11 last sort key and direction. */
+  sortKey: Exclude<SortKey, "shuffle" | "reverse"> | null = null;
+  descending = false;
   private cursor: string | null = null;
   private anchor: string | null = null;
   private nextId = 0;
+
+  get filtering() {
+    return this.terms.length > 0;
+  }
+  matches(row: Row) {
+    if (!this.terms.length) return true;
+    // Title, file name and (for links) the URL; a local file's folders do not match.
+    const text = fold(`${row.title}\n${fileNameOf(row)}${row.kind === "url" ? `\n${row.source}` : ""}`);
+    return this.terms.every((term) => text.includes(term));
+  }
+  /** The rows shown (all of them unless a search filters). */
+  visible() {
+    return this.terms.length ? this.rows.filter((row) => this.matches(row)) : this.rows;
+  }
+  /** C21: filter by the words of `query`; hidden rows lose their selection. */
+  setFilter(query: string) {
+    this.terms = fold(query).split(/\s+/).filter(Boolean);
+    if (!this.terms.length) return;
+    for (const row of this.rows) if (!this.matches(row)) this.selection.delete(row.rowId);
+    if (this.cursor && !this.selection.has(this.cursor) && !this.matches(this.row(this.cursor)!)) this.cursor = null;
+    if (this.anchor && !this.row(this.anchor)) this.anchor = null;
+  }
 
   /** The row keyboard actions and "play" use; setting it selects only that row. */
   get selected() {
@@ -65,7 +147,7 @@ export class Queue {
   row(id: string | null) {
     return this.rows.find((row) => row.rowId === id);
   }
-  private indexOf(id: string | null) {
+  indexOf(id: string | null) {
     return this.rows.findIndex((row) => row.rowId === id);
   }
   select(id: string) {
@@ -81,23 +163,27 @@ export class Queue {
   }
   /** Shift-click or Shift+arrow: the range from the anchor to `id`. */
   extend(id: string) {
-    const to = this.indexOf(id);
+    const rows = this.visible();
+    const to = rows.findIndex((row) => row.rowId === id);
     if (to < 0) return;
-    const from = this.indexOf(this.anchor);
+    const from = rows.findIndex((row) => row.rowId === this.anchor);
     if (from < 0) return this.select(id);
     const [low, high] = from < to ? [from, to] : [to, from];
-    this.selection = new Set(this.rows.slice(low, high + 1).map((row) => row.rowId));
+    this.selection = new Set(rows.slice(low, high + 1).map((row) => row.rowId));
     this.cursor = id;
   }
+  /** Ctrl+A: every shown row. */
   selectAll() {
-    this.selection = new Set(this.rows.map((row) => row.rowId));
-    this.cursor ??= this.rows[0]?.rowId ?? null;
+    const rows = this.visible();
+    this.selection = new Set(rows.map((row) => row.rowId));
+    if (!this.cursor || !this.selection.has(this.cursor)) this.cursor = rows[0]?.rowId ?? null;
     this.anchor ??= this.cursor;
   }
-  /** Move the cursor by `delta` (clamped); `extend` grows the range like Shift+arrow. */
+  /** Move the cursor by `delta` among the shown rows (clamped); `extend` grows the range like Shift+arrow. */
   selectNeighbor(delta: number, extend = false) {
-    const index = this.indexOf(this.cursor);
-    const next = this.rows[index < 0 ? 0 : Math.max(0, Math.min(this.rows.length - 1, index + delta))];
+    const rows = this.visible();
+    const index = rows.findIndex((row) => row.rowId === this.cursor);
+    const next = rows[index < 0 ? 0 : Math.max(0, Math.min(rows.length - 1, index + delta))];
     if (!next) return;
     if (extend) this.extend(next.rowId);
     else this.selected = next.rowId;
@@ -137,34 +223,72 @@ export class Queue {
     this.shuffled = new Set(on && this.binding ? [this.binding.rowId] : []);
   }
 
-  async addFiles(paths: string[]) {
-    let added = 0,
-      duplicate = 0,
-      invalid = 0;
-    const wasEmpty = this.rows.length === 0;
-    let first: string | null = null;
-    for (const path of paths) {
-      const source = resolve(path);
-      let key = source,
+  /** Whether the list can take more rows; announces the limit when it cannot. */
+  get full() {
+    return this.rows.length >= ROW_LIMIT;
+  }
+  /**
+   * Append entries, skipping duplicates (realpath for files, the text for links).
+   * Unreadable files are kept as retryable rows. Beyond `ROW_LIMIT` entries are refused.
+   */
+  async addEntries(entries: Entry[]): Promise<Added> {
+    const result: Added = { rows: [], fresh: [], added: 0, duplicate: 0, invalid: 0, refused: 0 };
+    const files = new Map<string, Row>(),
+      links = new Map<string, Row>();
+    for (const row of this.rows) (row.kind === "file" ? files : links).set(row.key, row);
+    for (const entry of entries) {
+      let key = entry.key ?? (entry.kind === "url" ? this.urlKey(entry.source) : entry.source),
         error = "";
-      try {
-        key = await realpath(source);
-      } catch {
-        error = "文件不存在或暂不可读取，可重试";
+      const source = entry.kind === "file" ? resolve(entry.source) : entry.source;
+      if (entry.kind === "file" && entry.key === undefined) {
+        try {
+          key = await realpath(source);
+        } catch {
+          key = source;
+          error = entry.missing ?? UNREADABLE;
+        }
       }
-      if (this.rows.some((row) => row.kind === "file" && row.key === key)) {
-        duplicate++;
+      const known = (entry.kind === "file" ? files : links).get(key);
+      if (known) {
+        result.duplicate++;
+        result.rows.push(known);
         continue;
       }
-      const row = this.append({ source, key, title: basename(source), kind: "file", error });
-      first ??= row.rowId;
-      added++;
-      if (error) invalid++;
+      if (this.full) {
+        result.refused++;
+        result.rows.push(undefined);
+        continue;
+      }
+      const row = this.append({ source, key, named: entry.named ?? null, kind: entry.kind, error });
+      if (entry.duration) row.probed = entry.duration;
+      (entry.kind === "file" ? files : links).set(key, row);
+      result.rows.push(row);
+      result.fresh.push(row);
+      result.added++;
+      if (error) result.invalid++;
     }
-    if (wasEmpty && first) this.selected = first;
-    this.notice(
-      `已添加 ${added} 项${duplicate ? `，跳过 ${duplicate} 个重复` : ""}${invalid ? `，${invalid} 项暂不可读` : ""}`,
-    );
+    return result;
+  }
+  /** The notice after adding: `已添加 N 项，跳过 M 个重复…`, then the limit when reached. */
+  summary(result: Added, extra = "") {
+    const parts = [`已添加 ${result.added} 项`];
+    if (result.duplicate) parts.push(`跳过 ${result.duplicate} 个重复`);
+    if (result.invalid) parts.push(`${result.invalid} 项暂不可读`);
+    if (extra) parts.push(extra);
+    if (result.refused) parts.push(`列表已达上限 ${ROW_LIMIT} 项`);
+    return parts.join("，");
+  }
+  /** The first row a batch created is selected when the list was empty (as "添加文件"). */
+  selectFirstAdded(result: Added, wasEmpty: boolean) {
+    const first = result.fresh[0];
+    if (wasEmpty && first) this.selected = first.rowId;
+  }
+  async addFiles(paths: string[]) {
+    const wasEmpty = this.rows.length === 0;
+    const result = await this.addEntries(paths.map((source) => ({ kind: "file" as const, source })));
+    this.selectFirstAdded(result, wasEmpty);
+    this.notice(this.summary(result));
+    return result;
   }
   addUrl(input: string) {
     const source = input.trim();
@@ -178,13 +302,31 @@ export class Queue {
       throw new Error("只接受不含账户密码的 HTTP(S) 链接");
     const key = url.href;
     const existing = this.rows.find((row) => row.kind === "url" && row.key === key);
-    const row = existing ?? this.append({ source, key, title: source, kind: "url", error: "" });
+    if (!existing && this.full) throw new Error(`列表已达上限 ${ROW_LIMIT} 项`);
+    const row = existing ?? this.append({ source, key, named: null, kind: "url", error: "" });
     this.selected = row.rowId;
     this.notice(existing ? "已选择已有链接" : "已添加链接");
   }
-  private append(input: Pick<Row, "source" | "key" | "title" | "kind" | "error">) {
+  /** C17: a saved row, trusted as is (its realpath is learnt when probed). */
+  restoreRow(entry: Required<Pick<Entry, "kind" | "source" | "named" | "duration">>) {
+    const key = entry.kind === "url" ? this.urlKey(entry.source) : entry.source;
+    const row = this.append({ source: entry.source, key, named: entry.named, kind: entry.kind, error: "" });
+    row.probed = entry.duration;
+    return row;
+  }
+  /** Links are compared by their normalized HTTP(S) URL, other schemes by their text. */
+  urlKey(source: string) {
+    try {
+      const url = new URL(source);
+      return ["http:", "https:"].includes(url.protocol) ? url.href : source;
+    } catch {
+      return source;
+    }
+  }
+  private append(input: Pick<Row, "source" | "key" | "named" | "kind" | "error">) {
     const row: Row = {
       ...input,
+      title: input.named ?? (input.kind === "file" ? basename(input.source) : input.source),
       rowId: `row-${++this.nextId}`,
       status: input.error ? "待重试" : "待播放",
       duration: null,
@@ -198,6 +340,7 @@ export class Queue {
 
   /** Whether `place` would move any marked row. */
   canPlace(place: Placement) {
+    if (this.filtering) return false;
     const marks = this.rows.map((row) => this.selection.has(row.rowId));
     if (place === "top" || place === "up") return marks.some((mark, i) => mark && i > 0 && !marks[i - 1]);
     return marks.some((mark, i) => mark && i < marks.length - 1 && !marks[i + 1]);
@@ -227,7 +370,7 @@ export class Queue {
    * it) before the row at `index` in the current order; `index = rows.length` is the end.
    */
   drop(rowId: string, index: number) {
-    if (!this.row(rowId)) return;
+    if (!this.row(rowId) || this.filtering) return;
     if (!this.selection.has(rowId)) this.selected = rowId;
     const moving = this.marked();
     const before = this.rows.slice(0, Math.max(0, Math.min(this.rows.length, index)));
@@ -235,9 +378,55 @@ export class Queue {
     const at = before.filter((row) => !this.selection.has(row.rowId)).length;
     this.rows = [...kept.slice(0, at), ...moving, ...kept.slice(at)];
   }
-  sort(key: SortKey) {
-    if (key === "reverse") this.rows.reverse();
-    else this.rows.sort((a, b) => collator.compare(key === "title" ? a.title : a.source, key === "title" ? b.title : b.source));
+  /**
+   * C11: stable sort by `key` in the current direction; rows without a value stay last
+   * in both directions. `values` gives size / date per row (missing = no value);
+   * `shuffle` ignores the direction; `reverse` only reverses the current order.
+   */
+  sort(key: SortKey, options: { values?: Map<string, number>; random?: () => number } = {}) {
+    if (key === "reverse") return void this.rows.reverse();
+    if (key === "shuffle") {
+      const random = options.random ?? Math.random;
+      for (let i = this.rows.length - 1; i > 0; i--) {
+        const j = Math.floor(random() * (i + 1));
+        [this.rows[i], this.rows[j]] = [this.rows[j]!, this.rows[i]!];
+      }
+      return;
+    }
+    this.sortKey = key;
+    const direction = this.descending ? -1 : 1;
+    const name = (row: Row) => fileNameOf(row);
+    const value = (row: Row): string | number | null => {
+      switch (key) {
+        case "title":
+          return row.title;
+        case "filename":
+          return name(row);
+        case "extension":
+          return extname(name(row)).slice(1).toLowerCase();
+        case "size":
+        case "date":
+          return options.values?.get(row.rowId) ?? null;
+        case "duration":
+          return lengthOf(row);
+        case "folder":
+          return row.kind === "file" ? row.source : null;
+        case "path":
+          return row.source;
+      }
+    };
+    const compare = (a: Row, b: Row) => {
+      const x = value(a),
+        y = value(b);
+      if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1;
+      let order: number;
+      if (key === "folder") order = compareByFolder(x as string, y as string);
+      else if (typeof x === "number") order = x - (y as number);
+      else order = collator.compare(x, y as string);
+      if (!order && key === "extension") order = collator.compare(name(a), name(b));
+      return order * direction;
+    };
+    this.rows.sort(compare);
   }
 
   /** Remove the marked rows; the cursor lands on the row after them. */
@@ -247,6 +436,18 @@ export class Queue {
     const first = this.indexOf(marked[0].rowId);
     for (const row of marked) this.removeRow(row.rowId);
     this.selected = this.rows[Math.min(first, this.rows.length - 1)]?.rowId ?? null;
+  }
+  /** C07: remove the shown rows that are not selected; returns how many. */
+  removeUnselected() {
+    const doomed = this.visible().filter((row) => !this.selection.has(row.rowId));
+    for (const row of doomed) this.removeRow(row.rowId);
+    return doomed.length;
+  }
+  /** Whether "移除未选" would remove anything and keep something. */
+  canRemoveUnselected() {
+    const rows = this.visible();
+    const marked = rows.filter((row) => this.selection.has(row.rowId)).length;
+    return marked > 0 && marked < rows.length;
   }
   /** Remove one row without touching the selection of the others. */
   removeRow(rowId: string) {
@@ -300,6 +501,12 @@ export class Queue {
     this.unbind();
     this.binding = binding;
   }
+  /** Whether the bound row still follows the current source. */
+  following(state: PlayerState) {
+    const binding = this.binding;
+    if (!binding) return false;
+    return binding.media ? binding.media.current : state.sourceId === binding.sourceId;
+  }
   private unbind() {
     void this.binding?.end?.dispose();
     this.binding = null;
@@ -312,7 +519,7 @@ export class Queue {
     if (!row) return this.detach("当前媒体已移出列表");
     // Another open (even of the same path) is a new source; a restart is not.
     // UI-PL-20: switching to an outside source is not announced.
-    if (!binding.media.current || state.kind !== "media") {
+    if (!this.following(state) || state.kind !== "media") {
       this.failed = null;
       return this.detach("已切换到列表外来源");
     }

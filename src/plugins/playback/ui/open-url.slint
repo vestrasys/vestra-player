@@ -1,0 +1,97 @@
+// 打开链接 (A02, UI-DLG-02 "输入链接" window): explanation, a multi-line
+// input 397×68, the clipboard option, a message line and [打开] [取消].
+// Enter in the input opens, Shift+Enter starts a new line, Esc cancels.
+import { CheckBox, TextEdit } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button } from "@vestra/widgets.slint";
+
+export component OpenUrlWindow inherits Window {
+    in property <string> message;
+    in property <bool> busy;
+    // The input was filled from the clipboard: select it all when the window opens.
+    in property <bool> select-all;
+    in-out property <string> value;
+    in-out property <bool> paste-from-clipboard: true;
+    callback confirm(string);
+    callback cancel(string);
+    callback paste-changed(bool);
+    title: "打开链接";
+    width: 464px;
+    background: Theme.bg-bar;
+    FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                root.cancel(root.value);
+                return accept;
+            }
+            return reject;
+        }
+        VerticalLayout {
+            padding: Theme.dialog-padding;
+            spacing: 6px;
+            Text {
+                text: "在下方输入您需要播放的文件网址。";
+                color: Theme.text;
+                font-size: Theme.font-body;
+                height: Theme.label-height;
+            }
+            Text {
+                text: "例) https://example.com/video.mp4";
+                color: Theme.text-dim;
+                font-size: Theme.font-body;
+                height: Theme.label-height;
+            }
+            HorizontalLayout {
+                alignment: start;
+                input := TextEdit {
+                    width: 397px;
+                    height: 68px;
+                    font-size: Theme.font-body;
+                    wrap: word-wrap;
+                    text <=> root.value;
+                    key-pressed(event) => {
+                        if event.text == Key.Return && !event.modifiers.shift {
+                            if !root.busy { root.confirm(self.text); }
+                            return accept;
+                        }
+                        if event.text == Key.Escape {
+                            root.cancel(self.text);
+                            return accept;
+                        }
+                        return reject;
+                    }
+                }
+            }
+            CheckBox {
+                height: Theme.checkbox-row-height;
+                text: "默认使用剪贴板中可用地址";
+                checked <=> root.paste-from-clipboard;
+                toggled => { root.paste-changed(self.checked); }
+            }
+            Text {
+                text: root.message;
+                color: Theme.text-dim;
+                font-size: Theme.font-body;
+                min-height: Theme.label-height;
+                wrap: word-wrap;
+            }
+            HorizontalLayout {
+                alignment: end;
+                spacing: 6px;
+                Button {
+                    text: root.busy ? "正在打开…" : "打开";
+                    enabled: !root.busy;
+                    clicked => { root.confirm(root.value); }
+                }
+                Button {
+                    text: "取消";
+                    clicked => { root.cancel(root.value); }
+                }
+            }
+        }
+    }
+    init => {
+        input.focus();
+        if root.select-all { input.select-all(); }
+    }
+}

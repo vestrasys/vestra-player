@@ -66,6 +66,11 @@ export class Playback {
   canToggle() {
     return this.can("pause") || (this.state.phase === "ended" && this.state.can.restart);
   }
+  /** 跳到开头: a seek to 0 while ready, a replay after the end. */
+  canRestart() {
+    const { can, phase } = this.state;
+    return phase === "ready" ? can.seek : phase === "ended" && can.restart;
+  }
   /** Someone else changed the source during the drag, so the gesture stopped. */
   get gestureLost() {
     return !!this.#scrub && !this.#scrub.active;
@@ -142,11 +147,6 @@ export class Playback {
       this.selecting = false;
     }
   }
-  /** Reopen the failed source (menu "重新打开"). */
-  async retry() {
-    const { phase, source: path } = this.state;
-    if (phase === "error" && path) await source(this.#player.open(path));
-  }
   async closeSource() {
     this.clearSeek();
     await source(this.#player.close());
@@ -162,6 +162,20 @@ export class Playback {
     } finally {
       this.pauseBusy = false;
     }
+  }
+  /** B09: back to 0:00, keeping pause or play; after the end, replay like Space. */
+  async jumpToStart() {
+    if (!this.canRestart() || this.pauseBusy) return;
+    if (this.state.phase === "ended") {
+      this.clearSeek();
+      this.pauseBusy = true;
+      try {
+        await source(this.#player.restart());
+      } finally {
+        this.pauseBusy = false;
+      }
+    } else if (this.seek(0) === null) return;
+    this.notify("定位: 开始处");
   }
   async setRate(rate: number, options?: Conditional) {
     if (!this.can("rate") || this.rateBusy) return;

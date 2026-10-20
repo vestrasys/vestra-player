@@ -28,6 +28,10 @@ async function openSettings(host: TestHost) {
   await host.command("settings").run();
   return host.window("subtitle-settings");
 }
+async function openSync(host: TestHost) {
+  await host.command("sync-input").run();
+  return host.window("subtitle-sync");
+}
 /** Simulate another source being opened: the subtitle state moves to generation 2. */
 function switchSource(host: TestHost) {
   host.openElsewhere("/other.mp4");
@@ -50,17 +54,26 @@ test("menu per the allocation table; windows bind exactly their Slint callbacks"
     ["字幕 > 显示字幕", 301, "domain", "Alt+H"],
     ["字幕 > 选择字幕轨 > 不显示", 302, "subtitle-track", ""],
     ["字幕 > 选择字幕轨 > English · en", 303, "subtitle-track", ""],
-    ["字幕 > 同步 > 超前 0.5 秒", 311, "subtitle-sync", ">"],
-    ["字幕 > 同步 > 滞后 0.5 秒", 312, "subtitle-sync", "<"],
-    ["字幕 > 同步 > 复位", 313, "subtitle-sync", "/"],
-    ["字幕 > 刷新字幕轨", 314, "subtitle-tools", ""],
-    ["字幕 > 字幕微调…", 315, "subtitle-tools", ""],
-    ["字幕 > 字幕设置…", 316, "subtitle-tools", ""],
+    ["字幕 > 选择字幕轨 > 依次切换", 311, "subtitle-cycle", "Alt+L"],
+    ["字幕 > 字幕样式 > 字号 +", 325, "style-font", "Alt+PageUp"],
+    ["字幕 > 字幕样式 > 字号 −", 326, "style-font", "Alt+PageDown"],
+    ["字幕 > 字幕样式 > 上移", 330, "style-move", "Alt+ArrowUp"],
+    ["字幕 > 字幕样式 > 下移", 331, "style-move", "Alt+ArrowDown"],
+    ["字幕 > 字幕样式 > 复位位置", 334, "style-move", "Alt+Home"],
+    ["字幕 > 同步 > 超前 0.5 秒", 339, "subtitle-sync", "."],
+    ["字幕 > 同步 > 滞后 0.5 秒", 340, "subtitle-sync", ","],
+    ["字幕 > 同步 > 复位", 341, "subtitle-sync", "/"],
+    ["字幕 > 同步 > 手动调整同步…", 342, "subtitle-sync-input", ""],
+    ["字幕 > 重载字幕", 370, "subtitle-tools", "Ctrl+Alt+Y"],
+    ["字幕 > 刷新字幕轨", 371, "subtitle-tools", ""],
+    ["字幕 > 字幕微调…", 372, "subtitle-tools", ""],
+    ["字幕 > 字幕设置…", 373, "subtitle-tools", ""],
   ]);
   assert.deepEqual(host.conflicts, []);
   const settings = await openSettings(host);
-  assert.deepEqual(host.sent("ui.open").map((o) => o.file), ["ui/tune.slint", "ui/settings.slint"]);
-  for (const [name, view] of [["tune", window], ["settings", settings]] as const) {
+  const sync = await openSync(host);
+  assert.deepEqual(host.sent("ui.open").map((o) => o.file), ["ui/tune.slint", "ui/settings.slint", "ui/sync.slint"]);
+  for (const [name, view] of [["tune", window], ["settings", settings], ["sync", sync]] as const) {
     const slint = await readFile(new URL(`../ui/${name}.slint`, import.meta.url), "utf8");
     const callbacks = [...slint.matchAll(/callback\s+([\w-]+)\s*\(/g)].map((m) => m[1]!);
     assert.deepEqual([...view.callbacks].sort(), callbacks.sort(), name);
@@ -78,11 +91,12 @@ test("menu per the allocation table; windows bind exactly their Slint callbacks"
 test("window text is short Chinese with no debug strings", async () => {
   const { host, window, stop } = await open();
   const settings = await openSettings(host);
-  for (const view of [window, settings])
+  const sync = await openSync(host);
+  for (const view of [window, settings, sync])
     for (const [name, value] of Object.entries(view.props))
       if (typeof value === "string" && name !== "track-labels")
         assert.doesNotMatch(value, /generation|revision|applied|waiting|uncertain|ready|媒体版本|\n/, name);
-  for (const file of ["tune", "settings"]) {
+  for (const file of ["tune", "settings", "sync"]) {
     const slint = await readFile(new URL(`../ui/${file}.slint`, import.meta.url), "utf8");
     assert.doesNotMatch(slint, /#[0-9a-f]{3,8}\b/i, `${file}: colours come from Theme`);
     assert.doesNotMatch(slint, /font-size:\s*\d/, `${file}: font sizes come from Theme`);
@@ -250,7 +264,9 @@ test("a host refusal of the upload (e.g. over its 2 MiB limit) is shown as one C
   try {
     host.dialogAnswers.push([file.path]);
     window.emit("load-file");
-    await host.settle();
+    // Reading 2 MiB is not a host request, so settle() alone can return before the upload begins.
+    const pending = () => ["", "请选择字幕文件…"].includes(String(window.props["status-text"]));
+    for (let i = 0; i < 100 && pending(); i++) await host.settle(20);
     assert.equal(window.props["status-text"], "播放器拒绝了该字幕（文件过大或内容无效）。");
     assert.equal(host.sent("subtitles.commit").length, 0);
   } finally {
@@ -344,16 +360,16 @@ test("the track menu follows the real track list: names, loads and source change
   }
 });
 
-test("> < / shift the subtitle sync by half a second with OSD", async () => {
+test(". , / shift the subtitle sync by half a second with OSD; > and < are left to the audio sync", async () => {
   const host = sourceHost();
   const { stop } = await startPlugin(activate, { directory, host });
-  await host.press(">");
+  await host.press(".");
   assert.equal(host.osd.at(-1), "字幕同步: 超前 0.5 秒");
-  await host.press(">");
+  await host.press(".");
   assert.equal(host.osd.at(-1), "字幕同步: 超前 1 秒");
-  await host.press("<");
-  await host.press("<");
-  await host.press("<");
+  await host.press(",");
+  await host.press(",");
+  await host.press(",");
   assert.equal(host.osd.at(-1), "字幕同步: 滞后 0.5 秒");
   await host.settle(170);
   assert.equal(host.sent("subtitles.style").length, 1, "key repeats merge into one write");
@@ -362,6 +378,7 @@ test("> < / shift the subtitle sync by half a second with OSD", async () => {
   assert.equal(host.osd.at(-1), "字幕同步: 0 秒");
   await host.settle(170);
   assert.equal(host.subtitles.presentation.effective?.style.offsetMs, 0);
+  for (const key of [">", "<", "?"]) await assert.rejects(host.press(key), /nothing is bound/, key);
   await stop();
 });
 
@@ -370,14 +387,14 @@ test("sync on a track without style support explains why on screen and writes no
   host.subtitles.tracks[0]!.styleSupported = false;
   host.subtitles.tracks[0]!.styleReason = "图形字幕不支持调整。";
   const { stop } = await startPlugin(activate, { directory, host });
-  await host.press(">");
+  await host.press(".");
   await host.settle(170);
   assert.equal(host.osd.at(-1), "图形字幕不支持调整。");
   assert.equal(host.sent("subtitles.style").length, 0);
   host.subtitles.selection.target = null;
   await host.command("refresh").run();
   await host.settle();
-  await host.press("<");
+  await host.press(",");
   assert.equal(host.osd.at(-1), "请先选择字幕轨。");
   await stop();
 });
@@ -411,4 +428,258 @@ test("an untitled embedded track is labelled by its track number", async () => {
   const { window, stop } = await open(host);
   assert.deepEqual(window.props["track-labels"], ["关闭字幕", "English · en", "内嵌 3"]);
   await stop();
+});
+
+/** Three stylable embedded tracks, the first selected. */
+function threeTracks() {
+  const host = sourceHost();
+  host.subtitles.tracks.push(
+    { target: { kind: "embedded", id: 2 }, title: "中文", language: "zh", styleSupported: true, styleReason: null },
+    { target: { kind: "embedded", id: 3 }, title: "日本語", language: "ja", styleSupported: true, styleReason: null },
+  );
+  return host;
+}
+const selectedId = (host: TestHost) => (host.subtitles.selection.target as { id: number } | null)?.id ?? null;
+
+test("D02: Alt+L cycles 1 → 2 → 3 → 关闭 → 1 with OSD; a burst ends on the last press", async () => {
+  const host = threeTracks();
+  const { stop } = await startPlugin(activate, { directory, host });
+  const seen: (number | null)[] = [];
+  for (let i = 0; i < 4; i++) {
+    await host.press("Alt+L");
+    await host.settle();
+    seen.push(selectedId(host));
+  }
+  assert.deepEqual(seen, [2, 3, null, 1]);
+  assert.equal(host.osd.at(-1), "字幕：English · en（1/3）");
+  assert.ok(host.osd.includes("字幕：关闭"));
+  assert.ok(host.osd.includes("字幕：中文 · zh（2/3）"));
+  // Five quick presses count from each other, not from the host's (older) selection.
+  const before = host.osd.length;
+  await Promise.all([1, 2, 3, 4, 5].map(() => host.press("Alt+L")));
+  await host.settle();
+  assert.equal(selectedId(host), 2, "1 + 5 steps: 2, 3, 关闭, 1, 2");
+  assert.deepEqual(host.osd.slice(before), ["字幕：中文 · zh（2/3）"], "only the final result is shown");
+  await stop();
+});
+
+test("D02: one track toggles with 关闭; no track disables the command", async () => {
+  const host = sourceHost();
+  const { stop } = await startPlugin(activate, { directory, host });
+  await host.press("Alt+L");
+  await host.settle();
+  assert.equal(selectedId(host), null);
+  await host.press("Alt+L");
+  await host.settle();
+  assert.equal(selectedId(host), 1);
+  host.subtitles.tracks.length = 0;
+  host.subtitles.selection.target = null;
+  await host.command("refresh").run();
+  await host.settle();
+  assert.equal(host.command("track-cycle").state.enabled, false);
+  assert.equal(host.command("track-cycle").state.reason, "没有字幕轨");
+  await stop();
+});
+
+test("D06/D07: size and position keys share the tune window's edits and report on screen", async () => {
+  const { host, window, stop } = await open();
+  await host.press("Alt+PageUp");
+  assert.equal(host.osd.at(-1), "字幕尺寸：增加(38)");
+  assert.equal(window.props["size-text"], "字号 38");
+  await host.settle(170);
+  assert.equal(host.subtitles.presentation.effective?.style.fontSize, 38);
+  await host.press("Alt+PageDown");
+  await host.press("Alt+PageDown");
+  assert.equal(host.osd.at(-1), "字幕尺寸：减小(34)");
+  for (let i = 0; i < 25; i++) await host.press("Alt+PageUp");
+  assert.equal(host.osd.at(-1), "字幕尺寸：增加(72)", "the limit keeps the value and still reports it");
+  for (let i = 0; i < 3; i++) await host.press("Alt+ArrowUp");
+  assert.equal(host.osd.at(-1), "字幕位置：上移(8%)");
+  await host.press("Alt+ArrowDown");
+  assert.equal(host.osd.at(-1), "字幕位置：下移(7%)");
+  await host.settle(170);
+  assert.equal(host.subtitles.presentation.effective?.style.marginPercent, 7);
+  await host.press("Alt+Home");
+  assert.equal(host.osd.at(-1), "字幕位置：默认(5%)");
+  await host.settle(170);
+  assert.equal(host.subtitles.presentation.effective?.style.marginPercent, 5);
+  assert.equal(host.subtitles.presentation.effective?.style.fontSize, 72);
+  await host.command("track-off").run();
+  await host.settle();
+  await host.press("Alt+PageUp");
+  assert.equal(host.osd.at(-1), "请先选择字幕轨。");
+  await stop();
+});
+
+test("D05: typed sync values apply in whole ms; bad input reverts with a reason", async () => {
+  const { host, stop } = await open();
+  const sync = await openSync(host);
+  assert.equal(sync.props["value-text"], "0");
+  assert.equal(sync.props["can-style"], true);
+  sync.emit("apply", "1250");
+  await host.settle(170);
+  assert.equal(host.subtitles.presentation.effective?.style.offsetMs, 1250);
+  assert.equal(host.osd.at(-1), "字幕同步: 滞后 1.25 秒");
+  assert.equal(sync.props["value-text"], "1250");
+  sync.emit("apply", "−300"); // U+2212 minus
+  await host.settle(170);
+  assert.equal(host.subtitles.presentation.effective?.style.offsetMs, -300);
+  sync.emit("apply", "abc");
+  await host.settle();
+  assert.equal(sync.props["status-text"], "请输入整数毫秒，例如 1250 或 -500。");
+  assert.equal(sync.props["value-text"], "-300", "the field goes back to the value in effect");
+  sync.emit("apply", "99999999");
+  await host.settle();
+  assert.equal(sync.props["status-text"], "同步值须在 −10000 至 10000 毫秒之间");
+  assert.equal(host.subtitles.presentation.effective?.style.offsetMs, -300);
+  sync.emit("nudge", "-300", 1);
+  await host.settle(170);
+  assert.equal(host.subtitles.presentation.effective?.style.offsetMs, 200);
+  assert.equal(sync.props["value-text"], "200");
+  await host.press("/");
+  await host.settle(170);
+  assert.equal(sync.props["value-text"], "0", "the field follows key edits");
+  await host.command("track-off").run();
+  await host.settle();
+  assert.equal(sync.props["can-style"], false);
+  assert.equal(sync.props["style-reason"], "请先选择字幕轨。");
+  await stop();
+});
+
+test("D05: the 同步单位 changes the step and the menu titles, and is saved", async () => {
+  const data = await mkdtemp(join(tmpdir(), "vestra-subtitles-data-"));
+  try {
+    let host = sourceHost();
+    let started = await startPlugin(activate, { directory, host, dataDirectory: data });
+    const settings = await openSettings(host);
+    assert.deepEqual(settings.props["sync-step-labels"], ["0.05 秒", "0.1 秒", "0.25 秒", "0.5 秒", "1 秒", "5 秒"]);
+    assert.equal(settings.props["sync-step-index"], 3);
+    settings.emit("change-sync-step", 1);
+    await host.settle();
+    const title = (id: string) => host.command(id).declaration.path.at(-1);
+    assert.equal(title("sync-earlier"), "超前 0.1 秒");
+    assert.equal(title("sync-later"), "滞后 0.1 秒");
+    assert.equal(host.command("sync-earlier").declaration.order, 339);
+    await host.press(".");
+    assert.equal(host.osd.at(-1), "字幕同步: 超前 0.1 秒");
+    await host.settle(170);
+    assert.equal(host.subtitles.presentation.effective?.style.offsetMs, -100);
+    assert.deepEqual(host.conflicts, []);
+    await started.stop();
+    assert.equal(JSON.parse(await readFile(join(data, "settings.json"), "utf8")).syncStepMs, 100);
+    host = sourceHost();
+    started = await startPlugin(activate, { directory, host, dataDirectory: data });
+    assert.equal(host.command("sync-later").declaration.path.at(-1), "滞后 0.1 秒");
+    await started.stop();
+  } finally {
+    await rm(data, { recursive: true, force: true });
+  }
+});
+
+/** Load `path` through 打开字幕… and return the new track's id. */
+async function loadFile(host: TestHost, path: string) {
+  host.dialogAnswers.push([path]);
+  await host.command("load").run();
+  await host.settle();
+}
+const externalCount = (host: TestHost) => host.subtitles.tracks.filter((t) => t.target.kind === "external").length;
+
+test("A09: Ctrl+Alt+Y re-reads a changed file, replaces the track, keeps the sync; unchanged files are not re-sent", async () => {
+  const file = await srtFile("1\n00:00:00,000 --> 00:00:01,000\nHello\n");
+  const { host, window, stop } = await open();
+  try {
+    await loadFile(host, file.path);
+    const firstTarget = structuredClone(host.subtitles.selection.target);
+    await host.press(",");
+    await host.settle(170);
+    await host.press("Ctrl+Alt+Y");
+    await host.settle();
+    assert.equal(host.osd.at(-1), "字幕未改变");
+    assert.equal(host.sent("subtitles.upload.begin").length, 1);
+    await writeFile(file.path, "1\n00:00:00,000 --> 00:00:01,000\nHello again\n");
+    await host.press("Ctrl+Alt+Y");
+    await host.settle();
+    assert.equal(host.osd.at(-1), "已重载字幕 actual.srt");
+    assert.equal(host.sent("subtitles.upload.begin").length, 2);
+    assert.equal(externalCount(host), 1, "the old track is removed");
+    assert.notDeepEqual(host.subtitles.selection.target, firstTarget, "the new track is selected");
+    assert.equal(host.subtitles.selection.target?.kind, "external");
+    assert.equal(host.subtitles.presentation.effective?.style.offsetMs, 500, "sync is unchanged");
+    assert.equal(window.props["can-remove"], true);
+    await rm(file.path);
+    await host.press("Ctrl+Alt+Y");
+    await host.settle();
+    assert.equal(host.osd.at(-1), "无法重载：找不到字幕文件 actual.srt");
+    assert.equal(externalCount(host), 1, "the track stays");
+  } finally {
+    await stop();
+    await file.cleanup();
+  }
+});
+
+test("A09: an embedded track needs no reload; nothing selected says so", async () => {
+  const host = sourceHost();
+  const { stop } = await startPlugin(activate, { directory, host });
+  await host.press("Ctrl+Alt+Y");
+  await host.settle();
+  assert.equal(host.osd.at(-1), "内嵌字幕无需重载");
+  await host.command("track-off").run();
+  await host.settle();
+  await host.press("Ctrl+Alt+Y");
+  await host.settle();
+  assert.equal(host.osd.at(-1), "没有选中的字幕。");
+  assert.equal(host.sent("subtitles.upload.begin").length, 0);
+  await stop();
+});
+
+test("A09: with 自动重载 on, rewriting a loaded file reloads it after the changes stop", async () => {
+  const data = await mkdtemp(join(tmpdir(), "vestra-subtitles-data-"));
+  const file = await srtFile("1\n00:00:00,000 --> 00:00:01,000\nHello\n");
+  const host = sourceHost();
+  const { stop } = await startPlugin(activate, { directory, host, dataDirectory: data });
+  try {
+    const settings = await openSettings(host);
+    settings.emit("change-auto-reload", true);
+    await host.settle();
+    assert.equal(settings.props["auto-reload"], true);
+    assert.equal(JSON.parse(await readFile(join(data, "settings.json"), "utf8")).autoReload, true);
+    await loadFile(host, file.path);
+    await pause(200); // let the folder watch start before the edit
+    await writeFile(file.path, "1\n00:00:00,000 --> 00:00:01,000\nChanged\n");
+    for (let i = 0; i < 60 && host.osd.at(-1) !== "字幕已自动重载"; i++) await pause(100);
+    await host.settle();
+    assert.equal(host.osd.at(-1), "字幕已自动重载");
+    assert.equal(host.sent("subtitles.upload.begin").length, 2);
+    assert.equal(externalCount(host), 1);
+    assert.equal(host.subtitles.selection.target?.kind, "external");
+  } finally {
+    await stop();
+    await file.cleanup();
+    await rm(data, { recursive: true, force: true });
+  }
+});
+
+test("A09: an automatic reload of a track that is not shown keeps the current selection", async () => {
+  const data = await mkdtemp(join(tmpdir(), "vestra-subtitles-data-"));
+  const file = await srtFile("1\n00:00:00,000 --> 00:00:01,000\nHello\n");
+  const host = sourceHost();
+  const { stop } = await startPlugin(activate, { directory, host, dataDirectory: data });
+  try {
+    const settings = await openSettings(host);
+    settings.emit("change-auto-reload", true);
+    await loadFile(host, file.path);
+    await host.command("track-1").run(); // back to the embedded track
+    await host.settle();
+    await pause(200);
+    await writeFile(file.path, "1\n00:00:00,000 --> 00:00:01,000\nChanged\n");
+    for (let i = 0; i < 60 && host.osd.at(-1) !== "字幕已自动重载"; i++) await pause(100);
+    await host.settle();
+    assert.equal(host.osd.at(-1), "字幕已自动重载");
+    assert.deepEqual(host.subtitles.selection.target, embedded);
+    assert.equal(externalCount(host), 1);
+  } finally {
+    await stop();
+    await file.cleanup();
+    await rm(data, { recursive: true, force: true });
+  }
 });

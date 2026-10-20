@@ -9,9 +9,18 @@
 
 菜单与按键（按 doc/process/rounds/2026-10-plugin-ui.md §3 分配表）：
 
-- 顶层：`打开文件…`（Ctrl+O、F3）、`关闭`（F4）、`重新打开`（表外，order 121，载入失败时可用）。
-- `播放 →` 播放/暂停（Space）、上一个（PageUp、鼠标 X1）、下一个（PageDown、鼠标 X2）、`跳转 →` 后退/前进 5 秒（←/→，按住重复）、30 秒（Ctrl+←/→）、60 秒（Shift+←/→）、300 秒（Ctrl+Alt+←/→）、跳转到…（G）、`速度 →` 正常（Z）/ 减速 0.1（X）/ 加速 0.1（C）/ 0.5、1.5、2 倍（单选）/ 自定义…。
+- 顶层：`打开文件…`（Ctrl+O、F3）、`打开 → 打开链接…`（Ctrl+U，110）、`关闭`（F4）、`重开当前/最后文件`（Ctrl+Y，121）、`复制到剪贴板 → 文件名 / 文件夹路径 / 完整路径`（125–127）。
+- `播放 →` 播放/暂停（Space）、上一个（PageUp、鼠标 X1）、下一个（PageDown、鼠标 X2）、`跳转 →` 后退/前进 5 秒（←/→，按住重复）、30 秒（Ctrl+←/→）、60 秒（Shift+←/→）、300 秒（Ctrl+Alt+←/→）、跳到开头（Backspace，219，`points` 组）、跳转到…（G）、`速度 →` 正常（Z）/ 减速 0.1（X）/ 加速 0.1（C）/ 0.5、1.5、2 倍（单选）/ 自定义…；播放时禁止屏保（240，勾选）、进度条悬停显示时间（242，勾选），二者在 `playback-options` 组。
 - `声音 →` 音量 +（↑、滚轮上，重复）/ 音量 −（↓、滚轮下，重复）/ 静音（M，勾选）。
+
+本轮功能（doc/product/feature-requirements.md「播放控制」A02、A10、B09、B29、I06、I08）：
+
+- 打开链接（`open-url.ts` + `ui/open-url.slint`）：http/https/rtsp/rtmp/rtmps/mms/ftp、`file://` 与绝对路径；打开时可取剪贴板首行（`/usr/bin/pbpaste`，1 秒超时），否则用本次运行上次输入的文本。`player.open` 无条件替换当前来源。
+- 重开当前/最后文件（`reopen.ts`）：有媒体来源时按原暂停状态重新载入并跳回原位置；没有来源时打开 `last.json` 记下的最后一个媒体来源（任何插件打开的、第一次就绪时记录；插件流不记）。
+- 播放时禁止屏保（`sleep.ts`）：`phase: ready` 且未暂停时运行 `/usr/bin/caffeinate`（有视频或插件流 `-d -i`，纯音频 `-i`，都带 `-w <插件 pid>`），暂停、播完、关闭、出错、换来源、关开关、停用时结束。
+- 进度条悬停显示时间：`ui/bar.slint` 用 `duration` 在 Slint 内算出指针处的时间，提示框画在底栏上方的视频区（不裁切），不经插件往返。
+- 复制到剪贴板（`copy.ts`）：`/usr/bin/pbcopy`（`LANG=en_US.UTF-8`，2 秒超时）。
+- 设置 `settings.json`：`openUrl.pasteFromClipboard`、`preventSleep`、`hoverTime`，默认都为 `true`。系统命令集中在 `system.ts`，测试替换为假实现（`tests/fakes.ts`）。
 
 结构：`main.ts` 组装；`controller.ts` 播放动作、本地草稿与提示文字；`commands.ts` 菜单命令表；`bar.ts` 底栏属性与回调；`prompt.ts` + `ui/prompt.slint` 跳转到/自定义速度小窗；`format.ts` 时间格式。
 

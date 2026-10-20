@@ -1,0 +1,54 @@
+// B25 每次询问: "之前有未播放完的。接着播放吗？（12:34）" [接着播放] (default, Enter) [从头播放] (Esc).
+import { Theme } from "@vestra/theme.slint";
+import { Button } from "@vestra/widgets.slint";
+
+export component ResumeWindow inherits Window {
+    title: "记忆播放位置";
+    preferred-width: 300px;
+    preferred-height: 110px;
+    min-width: 260px;
+    background: Theme.bg-panel;
+    in property <string> message;
+    callback resume();
+    callback restart();
+    keys := FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Return {
+                root.resume();
+                return accept;
+            }
+            if event.text == Key.Escape {
+                root.restart();
+                return accept;
+            }
+            return reject;
+        }
+        VerticalLayout {
+            padding: Theme.dialog-padding;
+            spacing: 12px;
+            Text {
+                text: root.message;
+                color: Theme.text;
+                font-size: Theme.font-body;
+                wrap: word-wrap;
+                vertical-alignment: center;
+            }
+            HorizontalLayout {
+                alignment: end;
+                spacing: 6px;
+                // The default button: outlined in the accent colour.
+                Rectangle {
+                    border-color: Theme.accent;
+                    border-width: 1px;
+                    border-radius: Theme.radius-control;
+                    HorizontalLayout {
+                        padding: 1px;
+                        Button { text: "接着播放"; clicked => { root.resume(); } }
+                    }
+                }
+                Button { text: "从头播放"; clicked => { root.restart(); } }
+            }
+        }
+    }
+    init => { keys.focus(); }
+}

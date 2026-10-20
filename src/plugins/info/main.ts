@@ -42,16 +42,113 @@ export function describe(state: PlayerState, stats: PlaybackStats) {
   ].join("\n");
 }
 
-/** Playback information: Tab shows a read-only overlay on the video, refreshed every second. */
+/** Short codec names: mpv reports long descriptions such as "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10". */
+const CODECS: [RegExp, string][] = [
+  [/\b(h\.?264|avc1?)\b/i, "H.264"],
+  [/\b(hevc|h\.?265)\b/i, "HEVC"],
+  [/\bav1\b/i, "AV1"],
+  [/\bvp9\b/i, "VP9"],
+  [/\bvp8\b/i, "VP8"],
+  [/\bprores\b/i, "ProRes"],
+  [/\b(vc-?1|wmv3)\b/i, "VC-1"],
+  [/\bmpeg-?4\b|\bmp4v\b/i, "MPEG-4"],
+  [/\bmpeg-?2\b|\bmpeg2video\b/i, "MPEG-2"],
+  [/\bmpeg-?1\b|\bmpeg1video\b/i, "MPEG-1"],
+  [/\btheora\b/i, "Theora"],
+  [/\be-?ac-?3\b/i, "E-AC-3"],
+  [/\bac-?3\b/i, "AC-3"],
+  [/\btruehd\b/i, "TrueHD"],
+  [/\bdts\b/i, "DTS"],
+  [/\baac\b/i, "AAC"],
+  [/\bmp3\b|layer 3/i, "MP3"],
+  [/\bopus\b/i, "Opus"],
+  [/\bvorbis\b/i, "Vorbis"],
+  [/\bflac\b/i, "FLAC"],
+  [/\balac\b/i, "ALAC"],
+  [/\bpcm\b/i, "PCM"],
+];
+export function shortCodec(codec: string | null | undefined) {
+  if (!codec) return null;
+  for (const [pattern, name] of CODECS) if (pattern.test(codec)) return name;
+  // Unknown: the first part of the description, at most 12 characters.
+  const first = codec.split(/\s+\/\s+|\s*\(/)[0]!.trim();
+  return first.length > 12 ? `${first.slice(0, 11)}…` : first || null;
+}
+
+/** I03 lines must fit the narrowest video area (318 px of 11 px monospace): 44 columns, CJK counting two. */
+export const BRIEF_COLUMNS = 44;
+const wide = (char: string) => /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]|[\u{20000}-\u{3fffd}]/u.test(char);
+/** Cut a line to `columns` display columns, ending in "…" when cut. */
+export function fit(line: string, columns = BRIEF_COLUMNS) {
+  const chars = [...line];
+  let width = 0;
+  for (let i = 0; i < chars.length; i++) {
+    width += wide(chars[i]!) ? 2 : 1;
+    if (width > columns) {
+      let kept = chars.slice(0, i);
+      while (kept.length && kept.reduce((sum, c) => sum + (wide(c) ? 2 : 1), 0) > columns - 1) kept = kept.slice(0, -1);
+      return `${kept.join("")}…`;
+    }
+  }
+  return line;
+}
+
+/**
+ * I03 short information, two lines: the file name, then
+ * `01:23 / 45:00 · H.264 1920×1080 · AAC 2 声道`; unknown items are left out,
+ * codecs use short names, and each line fits the video area (cut with "…").
+ */
+export function brief(state: PlayerState, stats: PlaybackStats | null) {
+  if (!state.source) return "未打开媒体";
+  const { video, audio } = stats ?? { video: null, audio: null };
+  const join = (...parts: (string | null | undefined | false)[]) => parts.filter(Boolean).join(" ");
+  const items = [
+    state.position !== null && Number.isFinite(state.position)
+      ? `${clock(state.position)} / ${state.duration === null ? "直播" : clock(state.duration)}`
+      : null,
+    join(shortCodec(video?.codec), !!video?.width && !!video?.height && `${video.width}×${video.height}`),
+    join(shortCodec(audio?.codec), !!audio?.channels && `${audio.channels} 声道`),
+  ].filter(Boolean);
+  const name = fit(fileName(state.source));
+  return items.length ? `${name}\n${fit(items.join(" · "))}` : name;
+}
+
+const BRIEF_MS = 3000;
+
+/**
+ * Playback information: Tab toggles the full overlay; Shift+Tab shows the
+ * short information for three seconds. Both share this plugin's one panel,
+ * short first, a blank line between; each refreshes every second while shown.
+ */
 export default async function activate(plugin: Plugin) {
   const panel = plugin.osd.panel();
   let shown = false;
+  let briefOn = false;
+  let stats: PlaybackStats | null = null; // the last successful read
   let timer: ReturnType<typeof setInterval> | undefined;
+  let briefTimer: ReturnType<typeof setTimeout> | undefined;
+  const briefShown = () => briefOn;
+  /** Write the panel from the last stats; nothing shown hides it. */
+  const draw = () => {
+    const blocks = [
+      briefShown() ? brief(plugin.player.state, stats) : null,
+      shown && stats ? describe(plugin.player.state, stats) : null,
+    ].filter((block): block is string => block !== null);
+    panel.set(blocks.length ? blocks.join("\n\n") : null);
+  };
   const render = async () => {
-    const stats = await plugin.player.stats();
-    if (shown) panel.set(describe(plugin.player.state, stats)); // may have been switched off meanwhile
+    stats = await plugin.player.stats();
+    if (shown || briefShown()) draw(); // may have been switched off meanwhile
   };
   const refresh = () => void render().catch(() => {}); // keep the last text; try again next second
+  /** One 1-second refresh while anything is shown. */
+  const tick = () => {
+    if ((shown || briefShown()) && !timer) timer = setInterval(refresh, 1000);
+    if (!shown && !briefShown()) {
+      clearInterval(timer);
+      timer = undefined;
+    }
+  };
   plugin.commands.add({
     id: "info.toggle",
     path: ["播放信息"],
@@ -61,11 +158,31 @@ export default async function activate(plugin: Plugin) {
     checked: () => shown,
     run: () => {
       shown = !shown;
-      clearInterval(timer);
-      if (!shown) return panel.set(null);
+      tick();
+      if (!shown) return draw();
       refresh();
-      timer = setInterval(refresh, 1000);
     },
   });
-  plugin.onDispose(() => clearInterval(timer));
+  plugin.commands.add({
+    id: "info.brief",
+    title: "简要信息",
+    bindings: ["Shift+Tab"],
+    run: () => {
+      // Each press restarts the three seconds.
+      briefOn = true;
+      clearTimeout(briefTimer);
+      briefTimer = setTimeout(() => {
+        briefOn = false;
+        tick();
+        draw();
+      }, BRIEF_MS);
+      tick();
+      if (shown && stats) draw(); // the overlay's stats are at most a second old: show at once
+      refresh();
+    },
+  });
+  plugin.onDispose(() => {
+    clearInterval(timer);
+    clearTimeout(briefTimer);
+  });
 }

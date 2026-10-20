@@ -9,6 +9,9 @@ export global PlaybackBridge {
     in-out property <string> total-label: "--:--";
     in-out property <float> progress;
     in-out property <bool> can-seek;
+    // I06: source duration in seconds and the 进度条悬停显示时间 option.
+    in-out property <float> duration;
+    in-out property <bool> hover-time: true;
     in-out property <bool> can-pause;
     in-out property <bool> playing;
     in-out property <bool> can-stop;
@@ -87,9 +90,24 @@ component BarButton inherits Rectangle {
 component SeekBar inherits Rectangle {
     private property <float> ratio: clamp(PlaybackBridge.progress, 0, 1);
     private property <length> span: max(1px, root.width - 8px);
+    // I06: the pointer is over the click area (or dragging), and the time under it.
+    out property <bool> pointing: touch.has-hover || touch.pressed;
+    out property <length> pointer-x: touch.mouse-x;
+    out property <string> pointer-time: root.clock(root.fraction(touch.mouse-x) * PlaybackBridge.duration);
     height: 10px;
     function fraction(x: length) -> float {
         return clamp((x - 4px) / root.span, 0, 1);
+    }
+    // `MM:SS`, or `H:MM:SS` from one hour: the same text as the plugin's time labels.
+    pure function two-digits(value: int) -> string {
+        return (value < 10 ? "0" : "") + value;
+    }
+    pure function clock(seconds: float) -> string {
+        let whole: int = Math.floor(Math.max(0, seconds));
+        let s: int = Math.mod(whole, 60);
+        let m: int = Math.mod(Math.floor(whole / 60), 60);
+        let h: int = Math.floor(whole / 3600);
+        return whole >= 3600 ? h + ":" + root.two-digits(m) + ":" + root.two-digits(s) : root.two-digits(m) + ":" + root.two-digits(s);
     }
     Rectangle {
         y: 4px;
@@ -203,7 +221,7 @@ export component PlaybackBar inherits Rectangle {
         height: 22px;
         Rectangle { y: 0; height: 1px; background: Theme.line; }
         Rectangle { y: parent.height - 1px; height: 1px; background: Theme.line; }
-        SeekBar {
+        seek-bar := SeekBar {
             x: 15px;
             y: 6px;
             width: max(0px, root.width - 132px);
@@ -288,6 +306,30 @@ export component PlaybackBar inherits Rectangle {
         if root.width >= 320px: SidebarToggle {
             x: root.width - self.width - 8px;
             y: (parent.height - self.height) / 2;
+        }
+    }
+
+    // I06 hover time: centred on the pointer, 2px inside the bar's edges, its
+    // bottom 4px above the line, so it draws over the video above the bar. It
+    // takes no input and follows the pointer without a plugin round trip.
+    if PlaybackBridge.hover-time && PlaybackBridge.can-seek && PlaybackBridge.duration > 0 && seek-bar.pointing: Rectangle {
+        x: clamp(seek-bar.x + seek-bar.pointer-x - self.width / 2, 2px, max(2px, root.width - self.width - 2px));
+        y: seek-bar.y + 4px - 4px - self.height;
+        width: tip.preferred-width;
+        height: tip.preferred-height;
+        background: Theme.bg-panel;
+        border-color: Theme.line;
+        border-width: 1px;
+        tip := HorizontalLayout {
+            padding-left: 5px;
+            padding-right: 5px;
+            padding-top: 2px;
+            padding-bottom: 2px;
+            Text {
+                text: seek-bar.pointer-time;
+                color: Theme.text;
+                font-size: Theme.font-body;
+            }
         }
     }
 }

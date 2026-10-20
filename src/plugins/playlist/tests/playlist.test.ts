@@ -133,25 +133,63 @@ test("menu positions follow the round allocation table; list keys only work with
     ]);
     assert.deepEqual(declared, [
       ["播放列表", 800, "windows", "F6", ""],
+      ["打开/打开文件夹…", 110, "open", "F2", ""],
       ["播放/播放列表/添加文件…", 230, "domain", "", ""],
       ["播放/播放列表/添加链接…", 231, "domain", "", ""],
-      ["播放/播放列表/循环/不循环", 232, "domain", "", ""],
-      ["播放/播放列表/循环/全部", 233, "domain", "", ""],
-      ["播放/播放列表/循环/单个", 234, "domain", "", ""],
-      ["播放/播放列表/随机", 235, "domain", "", ""],
+      ["播放/播放列表/添加文件夹…", 232, "domain", "", ""],
+      ["播放/播放列表/循环/不循环", 233, "domain", "", ""],
+      ["播放/播放列表/循环/全部", 234, "domain", "", ""],
+      ["播放/播放列表/循环/单个", 235, "domain", "", ""],
+      ["播放/播放列表/随机", 236, "domain", "", ""],
+      ["播放/播放列表/打开列表文件…", 237, "list", "", ""],
+      ["播放/播放列表/保存列表…", 238, "list", "", ""],
+      ["播放/播放列表/打开文件时/仅打开该文件", 239, "open-mode", "", ""],
+      ["播放/播放列表/打开文件时/加入相似文件", 240, "open-mode", "", ""],
+      ["播放/播放列表/打开文件时/加入同文件夹全部文件", 241, "open-mode", "", ""],
+      ["播放/播放列表/记住列表", 243, "options", "", ""],
       ["(播放)", 0, "domain", "Enter P", "panel"],
+      ["(添加文件…)", 0, "domain", "Ctrl+I", "panel"],
+      ["(添加文件夹…)", 0, "domain", "Ctrl+O", "panel"],
+      ["(添加链接…)", 0, "domain", "Ctrl+U", "panel"],
       ["(移除所选)", 0, "domain", "Delete Backspace", "panel"],
-      ["(移除全部)", 0, "domain", "", ""],
+      ["(移除未选)", 0, "domain", "Ctrl+Delete", "panel"],
+      ["(移除无效项)", 0, "domain", "Ctrl+T", "panel"],
+      ["(移除全部)", 0, "domain", "Alt+Delete", "panel"],
+      ["(在 Finder 中显示)", 0, "domain", "Ctrl+F", "panel"],
       ["(置顶)", 0, "domain", "Ctrl+Home", "panel"],
       ["(上移)", 0, "domain", "Ctrl+ArrowUp", "panel"],
       ["(下移)", 0, "domain", "Ctrl+ArrowDown", "panel"],
       ["(置底)", 0, "domain", "Ctrl+End", "panel"],
-      ["(按名称排序)", 0, "domain", "", ""],
+      ["(正序)", 0, "domain", "Ctrl+1", "panel"],
+      ["(反序)", 0, "domain", "Ctrl+2", "panel"],
+      ["(按标题)", 0, "domain", "Ctrl+3", "panel"],
+      ["(按文件名)", 0, "domain", "Ctrl+4", "panel"],
+      ["(按扩展名)", 0, "domain", "Ctrl+5", "panel"],
+      ["(按大小)", 0, "domain", "Ctrl+6", "panel"],
+      ["(按时长)", 0, "domain", "Ctrl+7", "panel"],
+      ["(按日期)", 0, "domain", "Ctrl+8", "panel"],
+      ["(乱序)", 0, "domain", "Ctrl+9", "panel"],
+      ["(按文件夹)", 0, "domain", "Ctrl+0", "panel"],
       ["(按路径排序)", 0, "domain", "", ""],
-      ["(倒序排列)", 0, "domain", "", ""],
+      ["(倒置当前顺序)", 0, "domain", "", ""],
       ["(全选)", 0, "domain", "Ctrl+A", "panel"],
+      ["(搜索)", 0, "domain", "Ctrl+S", "panel"],
+      ["(打开列表文件…)", 0, "domain", "F3", "panel"],
+      ["(保存列表…)", 0, "domain", "F2", "panel"],
       ["(关闭列表)", 0, "domain", "F6", "panel"],
     ]);
+    // Radio groups: repeat (off by default), open mode ("仅打开该文件" by default), sort direction (ascending).
+    for (const [id, on] of [
+      ["open-mode-only", true],
+      ["open-mode-similar", false],
+      ["open-mode-folder", false],
+      ["sort-ascending", true],
+      ["sort-descending", false],
+    ] as const) {
+      assert.equal(app.command(id).declaration.radio, true, id);
+      assert.equal(app.command(id).state.checked, on, id);
+    }
+    assert.equal(app.command("remember").state.checked, true, "记住列表 is on by default");
     assert.deepEqual(app.host.conflicts, []);
     // Repeat is a radio group, off by default; shuffle is a check item, off by default.
     assert.equal(app.command("repeat-none").declaration.radio, true);
@@ -336,21 +374,27 @@ test("the list menu, ADD and SORT popups list this plugin's commands; sorting re
   const app = await start();
   try {
     await app.emit("context-menu", 40, 60);
+    // 13 commands and 6 separators, single level (reference §6.3: at most 32).
     assert.deepEqual(app.host.menus.at(-1), {
       items: [
         "playlist.play",
         null,
-        "playlist.add",
-        "playlist.link",
+        "playlist.list-add",
+        "playlist.list-add-folder",
+        "playlist.list-link",
         null,
         "playlist.remove",
+        "playlist.remove-unselected",
+        "playlist.remove-invalid",
         "playlist.clear",
         null,
-        "playlist.sort-title",
-        "playlist.sort-path",
-        "playlist.sort-reverse",
+        "playlist.reveal",
         null,
         "playlist.select-all",
+        "playlist.search",
+        null,
+        "playlist.list-open-list",
+        "playlist.list-save-list",
         null,
         "playlist.close",
       ],
@@ -358,9 +402,26 @@ test("the list menu, ADD and SORT popups list this plugin's commands; sorting re
       y: 60,
     });
     await app.emit("add-menu", 10, 300);
-    assert.deepEqual(app.host.menus.at(-1), { items: ["playlist.add", "playlist.link"], x: 10, y: 300 });
+    assert.deepEqual(app.host.menus.at(-1), {
+      items: ["playlist.list-add", "playlist.list-add-folder", "playlist.list-link"],
+      x: 10,
+      y: 300,
+    });
     await app.emit("sort-menu", 90, 300);
-    assert.deepEqual(app.host.menus.at(-1)?.items, ["playlist.sort-title", "playlist.sort-path", "playlist.sort-reverse"]);
+    assert.deepEqual(app.host.menus.at(-1)?.items, [
+      "playlist.sort-ascending",
+      "playlist.sort-descending",
+      "playlist.sort-title",
+      "playlist.sort-filename",
+      "playlist.sort-extension",
+      "playlist.sort-size",
+      "playlist.sort-duration",
+      "playlist.sort-date",
+      "playlist.sort-shuffle",
+      "playlist.sort-folder",
+      "playlist.sort-path",
+      "playlist.sort-reverse",
+    ]);
     await app.addFiles([app.c, app.a, app.b]);
     assert.equal(app.prop("can-sort"), true);
     await app.run("sort-title");
