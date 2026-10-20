@@ -57,7 +57,7 @@
 | B22 | 进度条上的章节 / 书签标记 | `marks` |
 | B23 | A-B 区段循环 | `marks` |
 | B25 | 记忆播放位置 | `history` |
-| B26 | 无缝播放（预读下一个） | `playlist` |
+| B26 | 快速推进到下一个（原「无缝播放」，R-P5 降级） | `playlist` |
 | B29 | 播放时禁止屏保 / 休眠 | `playback` |
 | B30 | 播放时隐藏鼠标指针 | `window` |
 | C04 | 添加文件夹 | `playlist` |
@@ -1024,11 +1024,11 @@ interface Panel {
 
 **行为细节**：
 
-1. 对所选本地文件行（最多 20 个）调用 `spawn("open", ["-R", ...paths], { shell: false })`，同一文件夹的文件一次调用，不同文件夹分次调用。
-2. 文件已不存在：显示其所在文件夹（`open <dir>`）；文件夹也不存在时 OSD「找不到文件：<名称>」。
+1. 对所选本地文件行（最多 20 个）调用 `plugin.system.reveal(paths)`（第 2 轮通用能力，接受路径数组），同一文件夹的文件一次调用、全部高亮，不同文件夹分次调用。
+2. 文件已不存在：显示其所在文件夹（`plugin.system.openPath(dir)`）；文件夹也不存在时 OSD「找不到文件：<名称>」。
 3. 选中只有链接行时禁用（原因「链接没有本地位置」）。选中超过 20 个时只处理前 20 个，OSD「只显示前 20 个文件」。
 
-**核心依赖**：无（系统 `open -R`）。
+**核心依赖**：`plugin.system.reveal`、`plugin.system.openPath`（第 2 轮通用能力）。
 
 **验收**：选一个文件按 Ctrl+F，Finder 打开其目录并高亮该文件；对已删除文件的行执行，Finder 打开其目录。
 
@@ -3051,7 +3051,7 @@ manifest 能力：`playback.read`、`playback.control`、`events`、`commands`�
 5. **不记忆**：不读不写；已有记忆点保留（切回模式后继续生效）。
 6. **清除所有记忆点**：清空，OSD「已清除所有记忆点」。
 7. 容量：最多 1000 条，LRU（按最后更新时间）。
-8. 已知限制：恢复是在 ready 之后跳转，开头可能闪过约一帧画面和极短声音；B26 无缝切换到下一项后若该项有记忆点，会在切换后跳转（无缝效果被打断，但位置正确）。
+8. 已知限制：恢复是在 ready 之后跳转，开头可能闪过约一帧画面和极短声音；B26 快速推进到下一项后若该项有记忆点，会在切换后跳转（位置正确）。
 9. A12 菜单项上的 `（12:34）` 取自本表。
 
 **持久化**：`<dataDirectory>/positions.json`：`{ version: 1, mode: "auto"|"ask"|"off", audio: false, items: { [key]: { position, duration, size, updatedAt } } }`；用 `plugin.storage.json("positions")` 读写；记忆点每 5 秒更新一次，内容变化后 300 ms 写入，插件停用时写完。
@@ -4141,6 +4141,8 @@ menu-tree「字幕 ▶ 在线字幕搜索 ▶ 上传字幕…（10864）/ 下载
 
 ## 附录 A：核心 API 请求总表
 
+> **注意**：本表是协商前作者一方的请求草案（社区工作流 §4.3）。每条的最终结论（拒绝并给替代 / 改写后接受 / 接受）、最终签名和所在轮次，以 [协商记录](../process/rounds/2026-10-features-negotiation.md) 第 3 步为准；已实现接口的权威说明在 [API 参考](../plugins/reference.md)。
+
 日期：2026-10-20。来源：本文各章「核心依赖」与「本章核心 API 请求汇总」，已删除功能（A04 A05 A06 A14 B10 B13 B14 B15 B18 B19 B20 B24 B27 B28 C08 C13 C19 C20 C22 C24 C25 C26 D08 D12 D13 D14 D15 D19 D21 E07 E14 E15 F06 F08 F10 F12 G06 G07 G12 G13 G14 H02 H06 H11 I04 J05 J10，以及 files、scenes、timer 三个插件）所需的接口不列入。同一接口被多章使用时只列一次。
 
 列说明：「新能力」指 manifest 需要新增的能力名；写「现有 X」表示沿用已有能力；「—」表示不需要能力。「可选」「条件性」项不做也不影响对应功能上线。
@@ -4326,7 +4328,7 @@ menu-tree「字幕 ▶ 在线字幕搜索 ▶ 上传字幕…（10864）/ 下载
 - ffprobe 用 `VESTRA_FFPROBE`，没设时用 PATH 上的 `ffprobe`；ffmpeg 同理，用 `VESTRA_FFMPEG`。
 - 调用都不经 shell，带超时，插件停用时结束进程。
 - 缺少工具时，只在用到它的功能里提示，不算错误。
-- 插件是受信任的 Node 进程，可以直接用 macOS 自带命令，例如 `pbcopy`、`osascript`、`sips`、`open`、`caffeinate`。这类能力不必经过核心。
+- 剪贴板、阻止休眠、外部工具调用、设置文件读写、在 Finder 中显示和打开路径/网址，统一用第 2 轮的通用能力（`plugin.clipboard`、`plugin.power`、`plugin.tools`、`plugin.storage`、`plugin.system`），插件不再自己调用 `pbcopy`、`caffeinate`、`open` 等。只有一个插件用到的系统命令（如 capture 的 `sips`、subtitle-online 的 `security`）可以留在插件里。
 
 ### B.5 播放列表与文件
 
