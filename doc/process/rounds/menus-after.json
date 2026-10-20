@@ -286,5 +286,273 @@
       "bindings": [],
       "order": 501
     }
+  ],
+  "video": [
+    {
+      "id": "video.picture",
+      "path": [
+        "视频",
+        "画面调节…"
+      ],
+      "title": "画面调节…",
+      "shortcut": null,
+      "bindings": [],
+      "order": 325
+    },
+    {
+      "id": "video.gaussian",
+      "path": [
+        "视频",
+        "高斯模糊…"
+      ],
+      "title": "高斯模糊…",
+      "shortcut": null,
+      "bindings": [],
+      "order": 326
+    }
+  ],
+  "audio": [
+    {
+      "id": "audio.workbench",
+      "path": [
+        "音频",
+        "音频工作台…"
+      ],
+      "title": "音频工作台…",
+      "shortcut": null,
+      "bindings": [],
+      "order": 388
+    },
+    {
+      "id": "audio.reset",
+      "path": [
+        "音频",
+        "复位音频处理"
+      ],
+      "title": "复位音频处理",
+      "shortcut": null,
+      "bindings": [],
+      "order": 385
+    },
+    {
+      "id": "audio.preset.0",
+      "path": [
+        "音频",
+        "均衡器预设",
+        "平直"
+      ],
+      "title": "平直",
+      "shortcut": null,
+      "bindings": [],
+      "order": 382
+    },
+    {
+      "id": "audio.preset.1",
+      "path": [
+        "音频",
+        "均衡器预设",
+        "人声"
+      ],
+      "title": "人声",
+      "shortcut": null,
+      "bindings": [],
+      "order": 381
+    },
+    {
+      "id": "audio.preset.2",
+      "path": [
+        "音频",
+        "均衡器预设",
+        "音乐"
+      ],
+      "title": "音乐",
+      "shortcut": null,
+      "bindings": [],
+      "order": 384
+    },
+    {
+      "id": "audio.preset.3",
+      "path": [
+        "音频",
+        "均衡器预设",
+        "影院"
+      ],
+      "title": "影院",
+      "shortcut": null,
+      "bindings": [],
+      "order": 383
+    }
+  ],
+  "subtitles": [
+    {
+      "id": "workbench",
+      "path": [
+        "字幕",
+        "字幕工作台…"
+      ],
+      "title": "字幕工作台…",
+      "shortcut": null,
+      "bindings": [],
+      "order": 444
+    },
+    {
+      "id": "load",
+      "path": [
+        "字幕",
+        "加载外部 SRT…"
+      ],
+      "title": "加载外部 SRT…",
+      "shortcut": null,
+      "bindings": [],
+      "order": 443
+    },
+    {
+      "id": "disable",
+      "path": [
+        "字幕",
+        "关闭字幕"
+      ],
+      "title": "关闭字幕",
+      "shortcut": null,
+      "bindings": [],
+      "order": 441
+    },
+    {
+      "id": "refresh",
+      "path": [
+        "字幕",
+        "刷新字幕轨"
+      ],
+      "title": "刷新字幕轨",
+      "shortcut": null,
+      "bindings": [],
+      "order": 442
+    }
+  ],
+  "capture": [
+    {
+      "id": "capture.still",
+      "path": [
+        "视频",
+        "截图与导出",
+        "保存当前画面…"
+      ],
+      "title": "保存当前画面…",
+      "shortcut": null,
+      "bindings": [],
+      "order": 321
+    },
+    {
+      "id": "capture.burst",
+      "path": [
+        "视频",
+        "截图与导出",
+        "连拍…"
+      ],
+      "title": "连拍…",
+      "shortcut": null,
+      "bindings": [],
+      "order": 324
+    },
+    {
+      "id": "capture.clip",
+      "path": [
+        "视频",
+        "截图与导出",
+        "导出片段…"
+      ],
+      "title": "导出片段…",
+      "shortcut": null,
+      "bindings": [],
+      "order": 322
+    },
+    {
+      "id": "capture.tasks",
+      "path": [
+        "视频",
+        "截图与导出",
+        "查看导出任务…"
+      ],
+      "title": "查看导出任务…",
+      "shortcut": null,
+      "bindings": [],
+      "order": 323
+    }
+  ],
+  "nes": [
+    {
+      "id": "nes.open",
+      "path": [
+        "模拟器",
+        "打开 NES ROM…"
+      ],
+      "title": "打开 NES ROM…",
+      "shortcut": null,
+      "bindings": [],
+      "order": 563
+    },
+    {
+      "id": "nes.window",
+      "path": [
+        "模拟器",
+        "NES 工具"
+      ],
+      "title": "NES 工具",
+      "shortcut": null,
+      "bindings": [],
+      "order": 561
+    },
+    {
+      "id": "nes.stop",
+      "path": [
+        "模拟器",
+        "停止 NES"
+      ],
+      "title": "停止 NES",
+      "shortcut": null,
+      "bindings": [],
+      "order": 562
+    }
+  ],
+  "youtube": [
+    {
+      "id": "youtube.open",
+      "path": [
+        "文件",
+        "网络媒体",
+        "YouTube 视频…"
+      ],
+      "title": "YouTube 视频…",
+      "shortcut": null,
+      "bindings": [],
+      "order": 213
+    }
+  ],
+  "bilibili": [
+    {
+      "id": "bilibili.open",
+      "path": [
+        "文件",
+        "网络媒体",
+        "Bilibili 视频…"
+      ],
+      "title": "Bilibili 视频…",
+      "shortcut": null,
+      "bindings": [],
+      "order": 212
+    }
+  ],
+  "workshop": [
+    {
+      "id": "workshop.open",
+      "path": [
+        "插件",
+        "插件工坊…"
+      ],
+      "title": "插件工坊…",
+      "shortcut": null,
+      "bindings": [],
+      "order": 621
+    }
   ]
 }

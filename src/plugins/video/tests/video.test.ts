@@ -22,6 +22,10 @@ test("both menu entrances open one tool; hide keeps the effect; disabling clears
     [...host.commands.values()].map((c) => c.declaration.path),
     [["视频", "画面调节…"], ["视频", "高斯模糊…"]],
   );
+  assert.deepEqual(
+    [...host.commands.values()].map(({ declaration: d }) => ("order" in d ? d.order : null)),
+    [325, 326],
+  );
   await host.command("video.picture").run();
   await host.command("video.gaussian").run();
   assert.equal(host.sent("ui.open").length, 1);

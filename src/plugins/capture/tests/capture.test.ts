@@ -69,6 +69,10 @@ test("four menu entrances share one window; every Slint callback is bound before
     ["保存当前画面…", "连拍…", "导出片段…", "查看导出任务…"].map((title) => ["视频", "截图与导出", title]),
   );
   for (const command of host.commands.values()) assert.equal(command.declaration.title, command.declaration.path.at(-1));
+  assert.deepEqual(
+    [...host.commands.values()].map(({ declaration: d }) => ("order" in d ? d.order : null)),
+    [321, 324, 322, 323],
+  );
   await host.command("capture.clip").run();
   await host.command("capture.tasks").run();
   assert.equal(host.sent("ui.open").length, 1);

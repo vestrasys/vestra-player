@@ -47,9 +47,9 @@ export default async function activate(plugin: Plugin) {
   window.on("stop", stop);
   plugin.onError((error) => (status = String(error)));
   plugin.onDispose(() => opening?.abort());
-  plugin.commands.add({ id: "nes.open", path: ["模拟器", "打开 NES ROM…"], run: openRom });
-  plugin.commands.add({ id: "nes.window", path: ["模拟器", "NES 工具"], run: () => window.show() });
-  plugin.commands.add({ id: "nes.stop", path: ["模拟器", "停止 NES"], run: stop });
+  plugin.commands.add({ id: "nes.open", path: ["模拟器", "打开 NES ROM…"], order: 563, run: openRom });
+  plugin.commands.add({ id: "nes.window", path: ["模拟器", "NES 工具"], order: 561, run: () => window.show() });
+  plugin.commands.add({ id: "nes.stop", path: ["模拟器", "停止 NES"], order: 562, run: stop });
 }
 
 function stopText(error: PluginError | null) {

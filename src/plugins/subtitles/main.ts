@@ -205,26 +205,27 @@ export default async function activate(plugin: Plugin) {
   });
   plugin.onError((e) => (status = e.message));
 
-  const menu = (id: string, title: string, text: string, action: Action) =>
+  const menu = (id: string, title: string, order: number, text: string, action: Action) =>
     plugin.commands.add({
       id,
       path: ["字幕", title],
+      order,
       enabled: () => !busy,
       busy: () => busy,
       reason: () => (busy ? "字幕操作进行中" : null),
       run: () => busy || run(text, action),
     });
-  menu("workbench", "字幕工作台…", "正在打开字幕工作台…", async () => {
+  menu("workbench", "字幕工作台…", 444, "正在打开字幕工作台…", async () => {
     await subtitles.refresh();
     await window.show();
     status = "字幕工作台已就绪。";
   });
-  menu("load", "加载外部 SRT…", "请选择 SRT…", async (ticket) => {
+  menu("load", "加载外部 SRT…", 443, "请选择 SRT…", async (ticket) => {
     await window.show();
     await load(ticket);
   });
-  menu("disable", "关闭字幕", "正在关闭字幕…", select(null));
-  menu("refresh", "刷新字幕轨", "正在刷新…", refresh);
+  menu("disable", "关闭字幕", 441, "正在关闭字幕…", select(null));
+  menu("refresh", "刷新字幕轨", 442, "正在刷新…", refresh);
 
   // A new source cancels pending work; a new source or selection drops the unconfirmed style.
   subtitles.onChange((s) => {
