@@ -153,6 +153,10 @@ pub fn parse(text: &str) -> Result<Input, String> {
 pub struct Physical {
     pub code: String,
     pub base: Option<char>,
+    /// Modifiers the window system reported with this press. Preferred over
+    /// Slint's flags, which only follow modifier key events and miss
+    /// modifiers carried by the key event itself (e.g. synthesized input).
+    pub mods: Option<Mods>,
 }
 
 /// Input name of a numeric-keypad key; keypad keys never match main-keyboard
@@ -274,12 +278,13 @@ pub fn from_key(
     } else {
         (control, meta)
     };
-    let mut mods = Mods {
+    let mut mods = physical.and_then(|p| p.mods).unwrap_or(Mods {
         ctrl,
         alt,
         shift,
         cmd,
-    };
+    });
+    let (ctrl, alt, cmd) = (mods.ctrl, mods.alt, mods.cmd);
     if let Some(physical) = physical {
         if modifier_key(&physical.code) {
             return None;
@@ -697,6 +702,7 @@ mod tests {
         let physical = code.map(|(code, base)| Physical {
             code: code.into(),
             base,
+            mods: None,
         });
         from_key(text, control, alt, shift, meta, physical.as_ref())
             .map(|input| label_canonical(&input))
@@ -823,6 +829,40 @@ mod tests {
         assert_eq!(typed("", false, true, false, Some(("AltLeft", None))), None);
     }
 
+    /// Synthesized input (System Events) carries modifiers on the key event
+    /// only; Slint's flags then stay false while winit reports them.
+    #[test]
+    fn window_system_modifiers_win_over_missing_slint_flags() {
+        let press = |text: &str, code: &str, base: char, mods: Mods| {
+            let physical = Physical {
+                code: code.into(),
+                base: Some(base),
+                mods: Some(mods),
+            };
+            from_key(text, false, false, false, false, Some(&physical))
+                .map(|input| label_canonical(&input))
+        };
+        let alt = Mods {
+            alt: true,
+            ..Mods::default()
+        };
+        let ctrl = Mods {
+            ctrl: true,
+            ..Mods::default()
+        };
+        assert_eq!(press("ø", "KeyO", 'o', alt).as_deref(), Some("Alt+O"));
+        assert_eq!(press("˙", "KeyH", 'h', alt).as_deref(), Some("Alt+H"));
+        assert_eq!(
+            press("\u{19}", "KeyY", 'y', ctrl).as_deref(),
+            Some("Ctrl+Y")
+        );
+        assert_eq!(press("\u{9}", "KeyI", 'i', ctrl).as_deref(), Some("Ctrl+I"));
+        assert_eq!(
+            press("o", "KeyO", 'o', Mods::default()).as_deref(),
+            Some("O")
+        );
+    }
+
     #[test]
     fn keypad_keys_are_separate_from_the_main_keyboard() {
         assert_eq!(
@@ -880,6 +920,7 @@ mod tests {
             Some(&Physical {
                 code: "Numpad5".into(),
                 base: None,
+                mods: None,
             }),
         )
         .unwrap();
@@ -892,6 +933,7 @@ mod tests {
             Some(&Physical {
                 code: "Digit5".into(),
                 base: None,
+                mods: None,
             }),
         )
         .unwrap();
