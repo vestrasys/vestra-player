@@ -96,6 +96,8 @@ pub struct Sources {
     /// `player.setAudioDevice` for this run (`None` = system default), the
     /// device in use (`None` = default), and when presence was last checked.
     audio_requested: Option<String>,
+    /// The plugin whose `setAudioDevice` is in effect; its stop reverts it.
+    audio_owner: Option<u64>,
     audio_active: Option<String>,
     audio_checked: Option<std::time::Instant>,
     #[cfg(feature = "producer-audio")]
@@ -390,7 +392,13 @@ impl Sources {
         )
     }
     /// `player.audioDevices` → `[{ id, name }]`; `player.setAudioDevice { id }`.
-    fn audio_device(&mut self, mpv: &Mpv, method: &str, params: &Value) -> Result<Value, RpcError> {
+    fn audio_device(
+        &mut self,
+        mpv: &Mpv,
+        owner: u64,
+        method: &str,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
         if method == "player.audioDevices" {
             return Ok(json!(
                 audio_devices(mpv)
@@ -408,6 +416,7 @@ impl Sources {
             }
             _ => return Err(RpcError::invalid("id must be a device id or null")),
         };
+        self.audio_owner = self.audio_requested.is_some().then_some(owner);
         self.audio_checked = None;
         self.follow_device(mpv);
         Ok(Value::Null)
@@ -885,6 +894,12 @@ impl Sources {
     }
     pub fn disable(&mut self, owner: u64) {
         self.resolvers.disable(owner);
+        // Like the window level: a stopped plugin's device choice goes with it.
+        if self.audio_owner == Some(owner) {
+            self.audio_owner = None;
+            self.audio_requested = None;
+            self.audio_checked = None;
+        }
         #[cfg(feature = "producer-audio")]
         {
             if self.producers.active_owner() == Some(owner) {
@@ -914,7 +929,7 @@ impl Sources {
             return self.audio_track(mpv, method, params).map(Some);
         }
         if matches!(method, "player.audioDevices" | "player.setAudioDevice") {
-            return self.audio_device(mpv, method, params).map(Some);
+            return self.audio_device(mpv, owner, method, params).map(Some);
         }
         if matches!(method, "player.chapters" | "player.setLoop") {
             return self.marks(mpv, method, params).map(Some);

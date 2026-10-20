@@ -303,6 +303,14 @@ plugin.dialogs.confirm(options: { message: string; detail?: string; confirm: str
 4. 音频输出：设备列表与「系统设置 ▶ 声音」一致（每个设备一次）；选耳机后声音从耳机出；拔掉耳机约 1 秒内回到扬声器、`active` 变为 `null`，插回后约 1 秒切回；NES 播放时同样跟随（拔插瞬间可能有一个缓冲的静音），拔掉所选设备时 NES 不会停止。
 5. 次字幕：中英两条内嵌轨，主中文、次英文同时显示；`secondaryPosition` `top` 在画面顶部、`aboveMain` 在主字幕上方（观察间距是否合适）；把次字幕选成主字幕那条 `invalid`；PGS 轨不能作次字幕；换文件后次字幕消失。
 
+#### 裁决：作者 D 的三条（次字幕、音频输出）
+
+1. **主字幕为 PGS 时设置次字幕位置**：改核心（小改，不加接口）。`secondaryPosition` 仍是 `SubtitleStyle` 的字段；宿主原来在主字幕不可设样式时拒绝整个 `setStyle`（`unsupported`），现在在选了次字幕时接受（样式作用于文本次字幕，对图形主字幕无效）。没有次字幕时仍 `unsupported`。理由：不为一个字段拆出独立接口（保守），而原来的拒绝规则在有次字幕时没有道理。
+2. **次字幕字号为主字幕 85%**：拒绝，降级需求。宿主现状：次字幕与主字幕共用同一个样式层（字体、字号、颜色、描边），mpv 0.41 没有次字幕字号选项（只有 `secondary-sub-pos`、`secondary-sub-delay`、`secondary-sub-ass-override`、`secondary-sub-visibility`），宿主做不到与主字幕不同的字号。作者在需求文档对应小节写明「次字幕字号与主字幕相同」。参考 §9 已写明。
+3. **audio 插件停用时恢复系统默认设备**：接受，改核心。与 `setAlwaysOnTop`、`setCursorAutoHide` 一致：设置设备的插件停用时，核心回到系统默认（mpv 与生成流在 1 秒内跟随）。不改签名；参考 §5.2 已写明。
+
+另：TestHost 的 `subtitles.remove` 现在同时清除指向被删外部轨的 `selection.secondary`（与宿主一致），`round3a.test.ts` 覆盖。
+
 ### 6.3 作者交付
 
 （各作者完成时填写）
