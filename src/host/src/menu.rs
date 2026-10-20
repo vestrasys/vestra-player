@@ -68,7 +68,7 @@ fn text_width(text: &str) -> f64 {
         .sum()
 }
 
-/// Shortcut text for a command row (from the binding table).
+/// Key text for a command row (from the binding table).
 pub type Labels<'a> = &'a dyn Fn(u64, &str) -> Option<String>;
 
 fn command_row(entry: &CommandSnapshot, labels: Labels<'_>) -> Value {
@@ -77,7 +77,7 @@ fn command_row(entry: &CommandSnapshot, labels: Labels<'_>) -> Value {
         "checked":entry.state.checked.unwrap_or(false),"radio":entry.declaration.radio,
         "busy":entry.state.busy,"reason":entry.state.reason.clone().unwrap_or_default(),
         "has-children":false,"open":false,
-        "shortcut":labels(entry.key.owner,&entry.key.local_id).unwrap_or_default()})
+        "keys":labels(entry.key.owner,&entry.key.local_id).unwrap_or_default()})
 }
 
 fn row(node: &MenuNode, path: &[String], open: bool, labels: Labels<'_>) -> Value {
@@ -86,7 +86,7 @@ fn row(node: &MenuNode, path: &[String], open: bool, labels: Labels<'_>) -> Valu
             let mut next = path.to_vec();
             next.push(title.clone());
             json!({"token":format!("g:{}",json!(next)),"title":title,"enabled":true,"checked":false,
-                "radio":false,"busy":false,"reason":"","has-children":true,"open":open,"shortcut":""})
+                "radio":false,"busy":false,"reason":"","has-children":true,"open":open,"keys":""})
         }
         MenuNode::Command { entry } => command_row(entry, labels),
     }
@@ -104,8 +104,8 @@ fn panel(mut rows: Vec<Value>, separators: Vec<bool>) -> (Vec<Value>, f64, f64) 
         row["y"] = y.into();
         y += ROW;
         let title = text_width(row["title"].as_str().unwrap_or_default());
-        let shortcut = text_width(row["shortcut"].as_str().unwrap_or_default());
-        widest = widest.max(title + if shortcut > 0. { 24. + shortcut } else { 0. });
+        let keys = text_width(row["keys"].as_str().unwrap_or_default());
+        widest = widest.max(title + if keys > 0. { 24. + keys } else { 0. });
     }
     let width = (widest + 22. + 4. + 14. + 2. * PAD).clamp(MIN_WIDTH, MAX_WIDTH);
     let height = if rows.is_empty() { ROW } else { y - PAD } + 2. * PAD;
@@ -317,7 +317,7 @@ mod tests {
     }
 
     #[test]
-    fn group_changes_insert_separators_and_shortcuts_come_from_labels() {
+    fn group_changes_insert_separators_and_key_labels_come_from_bindings() {
         let nodes = vec![
             MenuNode::Command {
                 entry: command("a", "open"),
@@ -339,7 +339,7 @@ mod tests {
             [false, false, true]
         );
         assert_eq!(rows[2]["y"].as_f64().unwrap(), PAD + 2. * ROW + SEPARATOR);
-        assert_eq!(rows[2]["shortcut"], "Enter");
+        assert_eq!(rows[2]["keys"], "Enter");
         assert_eq!(
             value[0]["height"].as_f64().unwrap(),
             3. * ROW + SEPARATOR + 2. * PAD

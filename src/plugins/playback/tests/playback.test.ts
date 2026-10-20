@@ -35,7 +35,7 @@ test("explicit time input rejects malformed and negative values", () => {
   assert.equal(time(3723), "1:02:03");
 });
 
-test("menu commands keep their paths, shortcuts and reasons; empty player disables source actions", async () => {
+test("menu commands keep their paths, bindings and reasons; empty player disables source actions", async () => {
   const { host, stop } = await start();
   assert.deepEqual(
     [...host.commands].map(([id, { declaration: d }]) => [
@@ -401,10 +401,10 @@ test("focus locks follow the bar; the view command toggles the bar preference", 
   await host.settle();
   assert.deepEqual(bar.locks, { focused: true, dragging: false, popupOpen: false });
   await host.command("bar-visible").run();
-  assert.equal(bar.visibility.preferred, false);
+  assert.equal(host.layout.bottom?.preferred, false);
   assert.equal(host.command("bar-visible").state.checked, false);
   await host.command("bar-visible").run();
-  assert.equal(bar.visibility.preferred, true);
+  assert.equal(host.layout.bottom?.preferred, true);
   assert.equal(host.command("bar-visible").state.checked, true);
   await host.command("close-source").run();
   assert.equal(host.source.phase, "empty");

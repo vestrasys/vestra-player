@@ -87,7 +87,7 @@ pub enum Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::Invalid => "invalid viewport or fullscreen-only request outside fullscreen",
+            Self::Invalid => "invalid viewport",
             Self::Occupied => "visibility slot is already attached",
             Self::MissingOwner => {
                 "visibility slot is absent or belongs to another owner generation"
@@ -111,7 +111,6 @@ pub struct Policy {
     bottom: Option<Attachment>,
     sidebar: Option<Attachment>,
     fullscreen: bool,
-    sidebar_override: Option<bool>,
     last_activity_ms: u64,
     menu_open: bool,
     dialog_open: bool,
@@ -124,7 +123,6 @@ impl Policy {
             bottom: None,
             sidebar: None,
             fullscreen: false,
-            sidebar_override: None,
             last_activity_ms: now_ms,
             menu_open: false,
             dialog_open: false,
@@ -194,7 +192,6 @@ impl Policy {
             .is_some_and(|attachment| attachment.owner == owner)
         {
             self.sidebar = None;
-            self.sidebar_override = None;
         }
     }
 
@@ -210,28 +207,15 @@ impl Policy {
         Ok(())
     }
 
-    /// Repeated observation of the same mode is a no-op. Only a real mode
-    /// transition clears temporary sidebar choices; entering reveals the bar.
+    /// Repeated observation of the same mode is a no-op; entering reveals the bar.
     pub fn set_fullscreen(&mut self, fullscreen: bool, now_ms: u64) {
         if self.fullscreen == fullscreen {
             return;
         }
         self.fullscreen = fullscreen;
-        self.sidebar_override = None;
         if fullscreen {
             self.activity(now_ms);
         }
-    }
-
-    /// Explicit fullscreen-only override, including showing a sidebar whose
-    /// ordinary preference is false. Leaving fullscreen always discards it.
-    pub fn reveal_sidebar_in_fullscreen(&mut self, owner: u64, visible: bool) -> Result<()> {
-        self.owned_mut(Slot::Sidebar, owner)?;
-        if !self.fullscreen {
-            return Err(Error::Invalid);
-        }
-        self.sidebar_override = Some(visible);
-        Ok(())
     }
 
     /// Caller uses a monotonic clock. A backward activity sample cannot rewind
@@ -279,15 +263,14 @@ impl Policy {
         // Compress the video to its minimum before hiding the docked sidebar.
         let has_space = viewport.width >= VIDEO_MIN_WIDTH + SPLITTER_WIDTH + SIDEBAR_MIN_WIDTH;
         let sidebar = self.sidebar.map(|attachment| {
-            let explicit_show = self.fullscreen && self.sidebar_override == Some(true);
-            let reason = if !attachment.preferred && !explicit_show {
+            let reason = if !attachment.preferred {
                 Some(Reason::UserHidden)
             } else if attachment.detached {
                 // A floating window follows only the preference.
                 None
             } else if !has_space {
                 Some(Reason::Space)
-            } else if self.fullscreen && self.sidebar_override != Some(true) {
+            } else if self.fullscreen {
                 Some(Reason::Fullscreen)
             } else {
                 None
@@ -377,24 +360,23 @@ mod tests {
     }
 
     #[test]
-    fn fullscreen_sidebar_override_is_temporary_and_independent_of_preference() {
+    fn fullscreen_hides_the_docked_sidebar_but_keeps_preference_and_floating_window() {
         let mut policy = attached();
-        policy.set_preferred(Slot::Sidebar, 2, false).unwrap();
         policy.set_fullscreen(true, 100);
-        assert_eq!(
+        let docked = policy.evaluate(roomy(), 100).unwrap().sidebar.unwrap();
+        assert_eq!(docked.reason, Some(Reason::Fullscreen));
+        assert!(docked.preferred);
+        policy.set_detached(2, true).unwrap();
+        assert!(
             policy
                 .evaluate(roomy(), 100)
                 .unwrap()
                 .sidebar
                 .unwrap()
-                .reason,
-            Some(Reason::UserHidden)
+                .effective
         );
-        policy.reveal_sidebar_in_fullscreen(2, true).unwrap();
-        let shown = policy.evaluate(roomy(), 100).unwrap().sidebar.unwrap();
-        assert!(shown.effective);
-        assert!(!shown.preferred);
-        policy.set_fullscreen(true, 200); // Repeated mode notification keeps override.
+        policy.set_detached(2, false).unwrap();
+        policy.set_fullscreen(false, 200);
         assert!(
             policy
                 .evaluate(roomy(), 200)
@@ -403,16 +385,8 @@ mod tests {
                 .unwrap()
                 .effective
         );
-        assert_eq!(
-            policy
-                .evaluate(viewport(600.0, 600.0), 200)
-                .unwrap()
-                .sidebar
-                .unwrap()
-                .reason,
-            Some(Reason::Space)
-        );
-        policy.set_fullscreen(false, 300);
+        policy.set_preferred(Slot::Sidebar, 2, false).unwrap();
+        policy.set_fullscreen(true, 300);
         assert_eq!(
             policy
                 .evaluate(roomy(), 300)
@@ -421,21 +395,6 @@ mod tests {
                 .unwrap()
                 .reason,
             Some(Reason::UserHidden)
-        );
-        policy.set_preferred(Slot::Sidebar, 2, true).unwrap();
-        policy.set_fullscreen(true, 400);
-        assert_eq!(
-            policy
-                .evaluate(roomy(), 400)
-                .unwrap()
-                .sidebar
-                .unwrap()
-                .reason,
-            Some(Reason::Fullscreen)
-        );
-        assert_eq!(
-            policy.reveal_sidebar_in_fullscreen(999, true),
-            Err(Error::MissingOwner)
         );
     }
 
@@ -619,7 +578,6 @@ mod tests {
             )
             .unwrap();
         policy.set_fullscreen(true, 0);
-        policy.reveal_sidebar_in_fullscreen(2, true).unwrap();
         policy.remove_owner(1);
         assert!(
             policy
@@ -627,7 +585,7 @@ mod tests {
                 .unwrap()
                 .sidebar
                 .unwrap()
-                .effective
+                .preferred
         );
         policy.attach(Slot::Bottom, 3, true, false).unwrap();
         assert_eq!(
@@ -678,9 +636,6 @@ mod tests {
         assert!(snapshot.bottom.unwrap().effective);
         assert_eq!(snapshot.next_deadline_ms, None); // Unrepresentable future time.
         policy.set_fullscreen(false, u64::MAX);
-        assert_eq!(
-            policy.reveal_sidebar_in_fullscreen(2, true),
-            Err(Error::Invalid)
-        );
+        assert!(!policy.evaluate(roomy(), u64::MAX).unwrap().fullscreen);
     }
 }
