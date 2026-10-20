@@ -127,7 +127,7 @@ try {
   const module = (await import(
     pathToFileURL(resolve(directory, manifest.entry)).href
   )) as { default?: (plugin: Plugin) => void | Promise<void> };
-  // `export default async function activate(plugin)`; see doc/rebuild/sdk-v2.md.
+  // `export default async function activate(plugin)`; see doc/architecture/sdk-design.md.
   if (typeof module.default !== "function")
     throw new Error("plugin entry must default-export activate(plugin)");
   // A forgotten promise must not take the whole plugin down.

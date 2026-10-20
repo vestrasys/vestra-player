@@ -1,6 +1,0 @@
-ui.model-update mode=in-place rows=3
-ui.model-update mode=in-place rows=3
-ui.model-update mode=in-place rows=1
-ui.model-update mode=replace rows=0
-ui.model-update mode=in-place rows=2
-runtime 1 runtime.ready: null

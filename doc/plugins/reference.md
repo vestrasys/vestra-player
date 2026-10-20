@@ -1,6 +1,6 @@
 # 插件 API 参考
 
-本文是插件 API 的权威规格：每个模块、方法的签名、参数、返回值、错误和使用约束。入门请先读 [入门教程](tutorial.md)，按功能找写法看 [插件示例](examples.md)，设计取舍见 [sdk-v2.md](../rebuild/sdk-v2.md)。
+本文是插件 API 的权威规格：每个模块、方法的签名、参数、返回值、错误和使用约束。入门请先读 [入门教程](tutorial.md)，按功能找写法看 [插件示例](examples.md)，设计取舍见 [SDK 设计说明](../architecture/sdk-design.md)。
 
 类型定义的源头是 `src/sdk/plugin/types.ts`。本文与它不一致时以代码为准，并应修正本文。
 
@@ -19,7 +19,7 @@ export default async function activate(plugin: Plugin) {
 }
 ```
 
-- 入口模块必须**默认导出** `activate`。命名导出或旧的 `activate(host)` 写法会被拒绝（`runtime.failed`）。
+- 入口模块必须**默认导出** `activate`。命名导出的 `activate` 会被拒绝（`runtime.failed`）。
 - 插件只能 `import type` SDK。`plugin` 对象由运行器提供，打包后的插件不依赖本仓库代码（构建工具会检查）。
 - 插件不返回清理函数，停用时的清理由 SDK 和播放器完成（§3）。
 

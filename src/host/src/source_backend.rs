@@ -80,42 +80,38 @@ pub struct Sources {
     resolutions: BTreeMap<u64, Resolution>,
     resolution_next: u64,
     resolution_events: Vec<(u64, String, Value)>,
-    books: BTreeMap<(u64, bool), OperationBook>,
+    books: BTreeMap<u64, OperationBook>,
     entries: BTreeMap<i64, IntentTicket>,
     active: Option<(i64, IntentTicket)>,
     loaded: Option<(i64, IntentTicket)>,
-    legacy_id: BTreeMap<u64, u64>,
     eof_rearm: bool,
     local_media: BTreeMap<i64, Arc<LocalMedia>>,
     current_local: Option<(u64, Arc<LocalMedia>)>,
     lease_ready: Option<(i64, u64)>,
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     producers: crate::producer::Producers,
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     provider_ticket: Option<IntentTicket>,
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     provider_health: Option<Value>,
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     controls: crate::producer_controls::Controls,
-    #[cfg(feature = "producer-audio-probe")]
-    pending_legacy: bool,
-    #[cfg(feature = "producer-audio-probe")]
-    awaiting_audio: Option<(crate::producer_controls::Pending, bool)>,
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
+    awaiting_audio: Option<crate::producer_controls::Pending>,
+    #[cfg(feature = "producer-audio")]
     control_origin: Option<std::time::Instant>,
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     pending_error: Option<(IntentTicket, String)>,
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     last_ack: Option<(u64, crate::producer_controls::Notice, Value)>,
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     input: Option<InputBinding>,
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     input_epoch: u64,
 }
 struct Resolution {
     requester: u64,
     operation: u64,
-    legacy: bool,
     resolver: u64,
     resolver_id: String,
     source: String,
@@ -123,12 +119,12 @@ struct Resolution {
     ticket: IntentTicket,
     deadline: std::time::Instant,
 }
-#[cfg(feature = "producer-audio-probe")]
+#[cfg(feature = "producer-audio")]
 struct InputBinding {
     delivery: crate::producer_input_delivery::Delivery,
     keys: Vec<String>,
 }
-#[cfg(feature = "producer-audio-probe")]
+#[cfg(feature = "producer-audio")]
 impl InputBinding {
     fn physical_key(
         &mut self,
@@ -148,7 +144,7 @@ impl InputBinding {
     }
 }
 impl Sources {
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     fn input_error(error: crate::producer_input_delivery::Error) -> RpcError {
         use crate::producer_input_delivery::Error;
         RpcError::new(
@@ -162,7 +158,7 @@ impl Sources {
             format!("producer input: {error:?}"),
         )
     }
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     pub fn input_routing(&self) -> Option<crate::producer_input::Routing> {
         let input = self.input.as_ref()?;
         let notice = input.delivery.notice();
@@ -174,13 +170,13 @@ impl Sources {
             },
         )
     }
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     fn input_facts(&self) -> Value {
         self.input.as_ref().map_or(Value::Null, |input| json!({
             "state": input.delivery.notice(), "pending":input.delivery.pending(), "keys":input.keys,
         }))
     }
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     fn input_failed(&mut self, message: String) {
         if let Some(mut ticket) = self.provider_ticket {
             ticket.stamp = self.session.state().stamp;
@@ -189,7 +185,7 @@ impl Sources {
         }
     }
     /// Called only by the host's native input adapter, never routed from plugins.
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     pub fn host_input(&mut self, params: &Value) -> Result<(), RpcError> {
         let now = self.now_ms();
         let paused = self
@@ -301,7 +297,7 @@ impl Sources {
         self.session.state().stamp.generation
     }
 
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     fn now_ms(&mut self) -> u64 {
         self.control_origin
             .get_or_insert_with(std::time::Instant::now)
@@ -309,27 +305,26 @@ impl Sources {
             .as_millis()
             .min(u64::MAX as u128) as u64
     }
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     fn finish_provider_control(
         &mut self,
         pending: crate::producer_controls::Pending,
-        legacy: bool,
         result: Result<(), String>,
     ) {
-        if let Some(book) = self.books.get_mut(&(pending.requester, legacy)) {
+        if let Some(book) = self.books.get_mut(&pending.requester) {
             let _ = book.finish(pending.operation_id, result);
         }
     }
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     fn cancel_provider_control(&mut self, message: &str) {
         if let Some(p) = self.controls.cancel() {
-            self.finish_provider_control(p, self.pending_legacy, Err(message.into()));
+            self.finish_provider_control(p, Err(message.into()));
         }
-        if let Some((p, legacy)) = self.awaiting_audio.take() {
-            self.finish_provider_control(p, legacy, Err(message.into()));
+        if let Some(p) = self.awaiting_audio.take() {
+            self.finish_provider_control(p, Err(message.into()));
         }
     }
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     pub fn tick_provider_controls(&mut self) {
         let now = self.now_ms();
         if self
@@ -339,11 +334,11 @@ impl Sources {
         {
             self.input_failed("producer physical-input acknowledgement timed out".into());
         }
-        let expired = self.controls.expire(now).map(|p| (p, self.pending_legacy));
+        let expired = self.controls.expire(now);
         let audio_expired = self
             .awaiting_audio
             .as_ref()
-            .is_some_and(|(p, _)| now >= p.deadline_ms);
+            .is_some_and(|p| now >= p.deadline_ms);
         let expired = expired.or_else(|| {
             if audio_expired {
                 self.awaiting_audio.take()
@@ -351,27 +346,23 @@ impl Sources {
                 None
             }
         });
-        if let Some((p, legacy)) = expired {
+        if let Some(p) = expired {
             let ticket = p.ticket;
-            self.finish_provider_control(
-                p,
-                legacy,
-                Err("provider frame-bound control timed out".into()),
-            );
+            self.finish_provider_control(p, Err("provider frame-bound control timed out".into()));
             self.pending_error = Some((ticket, "provider frame-bound control timed out".into()));
         }
-        if let Some((p, _)) = &self.awaiting_audio
+        if let Some(p) = &self.awaiting_audio
             && self.producers.audio_acknowledged(
                 p.notice.producer_id,
                 p.notice.epoch,
                 p.notice.paused,
             )
         {
-            let (p, legacy) = self.awaiting_audio.take().unwrap();
-            self.finish_provider_control(p, legacy, Ok(()));
+            let p = self.awaiting_audio.take().unwrap();
+            self.finish_provider_control(p, Ok(()));
         }
     }
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     pub fn producer_failure(&mut self) -> Option<String> {
         self.tick_provider_controls();
         let error = self
@@ -397,15 +388,15 @@ impl Sources {
         self.input = None;
         Some(error)
     }
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     pub fn producer_frame(&mut self) -> Option<crate::producer::Frame> {
         self.producers.frame()
     }
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     pub fn provider_active(&self) -> bool {
         self.producers.active().is_some()
     }
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     pub fn producer_output(&mut self, volume: f64, muted: bool) {
         self.producers.output(volume, muted);
     }
@@ -413,7 +404,7 @@ impl Sources {
         self.session.state().source.clone()
     }
     pub fn snapshot(&mut self, mpv: &Mpv) -> Value {
-        #[cfg(feature = "producer-audio-probe")]
+        #[cfg(feature = "producer-audio")]
         if let Some(ticket) = self.provider_ticket {
             if let Some((paused, position)) = self.producers.active_facts() {
                 self.session.observe(ticket, paused, Some(position), None);
@@ -576,10 +567,7 @@ impl Sources {
                 message: message.clone(),
             });
         }
-        if let Some(book) = self
-            .books
-            .get_mut(&(resolution.requester, resolution.legacy))
-        {
+        if let Some(book) = self.books.get_mut(&resolution.requester) {
             let _ = book.finish(resolution.operation, result);
         }
     }
@@ -591,7 +579,7 @@ impl Sources {
                 r.deadline <= std::time::Instant::now()
                     || r.ticket.stamp != self.session.state().stamp
                     || r.ticket.cycle != self.session.state().cycle
-                    || !self.books.contains_key(&(r.requester, r.legacy))
+                    || !self.books.contains_key(&r.requester)
                     || !self.resolvers.contains(r.resolver, &r.resolver_id)
             })
             .map(|(&id, _)| id)
@@ -689,7 +677,7 @@ impl Sources {
     }
     pub fn disable(&mut self, owner: u64) {
         self.resolvers.disable(owner);
-        #[cfg(feature = "producer-audio-probe")]
+        #[cfg(feature = "producer-audio")]
         {
             if self.producers.active_owner() == Some(owner) {
                 self.input = None;
@@ -702,8 +690,7 @@ impl Sources {
             }
             self.producers.disable(owner);
         }
-        self.books.retain(|(id, _), _| *id != owner);
-        self.legacy_id.remove(&owner);
+        self.books.remove(&owner);
     }
     pub fn dispatch(
         &mut self,
@@ -715,7 +702,7 @@ impl Sources {
         if method.starts_with("sourceResolvers.") {
             return self.resolver_dispatch(mpv, owner, method, params).map(Some);
         }
-        #[cfg(feature = "producer-audio-probe")]
+        #[cfg(feature = "producer-audio")]
         {
             self.tick_provider_controls();
             match method {
@@ -849,15 +836,11 @@ impl Sources {
                         notice.paused,
                     ) {
                         let ticket = pending.ticket;
-                        self.finish_provider_control(
-                            pending,
-                            self.pending_legacy,
-                            Err(error.message.clone()),
-                        );
+                        self.finish_provider_control(pending, Err(error.message.clone()));
                         self.pending_error = Some((ticket, error.message.clone()));
                         return Err(error);
                     }
-                    self.awaiting_audio = Some((pending, self.pending_legacy));
+                    self.awaiting_audio = Some(pending);
                     let result = json!({"status":"acknowledged","control":notice});
                     self.last_ack = Some((owner, notice, result.clone()));
                     self.tick_provider_controls();
@@ -875,66 +858,23 @@ impl Sources {
                 .ok_or_else(|| RpcError::invalid("operationId requires positive integer"))?;
             let book = self
                 .books
-                .entry((owner, false))
+                .entry(owner)
                 .or_insert_with(|| OperationBook::new(owner));
             return book
                 .query(id)
                 .map(|s| Some(json!(s)))
                 .map_err(|e| RpcError::new("unknown-expired", format!("{e:?}")));
         }
-        let legacy = method != "source.submit";
-        let (id, intent) = if !legacy {
-            let id = params["operationId"]
-                .as_u64()
-                .filter(|id| *id > 0)
-                .ok_or_else(|| RpcError::invalid("operationId requires positive integer"))?;
-            let intent = serde_json::from_value::<SourceIntent>(params["intent"].clone())
-                .map_err(|e| RpcError::invalid(e.to_string()))?;
-            (id, intent)
-        } else {
-            let intent = match method {
-                "playback.open" => SourceIntent::Open {
-                    source: params["source"]
-                        .as_str()
-                        .ok_or_else(|| RpcError::invalid("source requires string"))?
-                        .into(),
-                    start_paused: false,
-                    expected: None,
-                },
-                "playback.seek" => SourceIntent::Control {
-                    control: Control::Seek {
-                        seconds: params["seconds"]
-                            .as_f64()
-                            .ok_or_else(|| RpcError::invalid("seconds requires number"))?,
-                    },
-                    expected: None,
-                },
-                "playback.set" => match params["property"].as_str() {
-                    Some("pause") => SourceIntent::Control {
-                        control: Control::Pause {
-                            paused: params["value"]
-                                .as_bool()
-                                .ok_or_else(|| RpcError::invalid("pause requires boolean"))?,
-                        },
-                        expected: None,
-                    },
-                    Some("speed") => SourceIntent::Control {
-                        control: Control::Rate {
-                            rate: params["value"]
-                                .as_f64()
-                                .ok_or_else(|| RpcError::invalid("speed requires number"))?,
-                        },
-                        expected: None,
-                    },
-                    _ => return Ok(None),
-                },
-                _ => return Ok(None),
-            };
-            let id = self.legacy_id.entry(owner).or_default();
-            *id += 1;
-            (*id, intent)
-        };
-        #[cfg(feature = "producer-audio-probe")]
+        if method != "source.submit" {
+            return Ok(None);
+        }
+        let id = params["operationId"]
+            .as_u64()
+            .filter(|id| *id > 0)
+            .ok_or_else(|| RpcError::invalid("operationId requires positive integer"))?;
+        let intent = serde_json::from_value::<SourceIntent>(params["intent"].clone())
+            .map_err(|e| RpcError::invalid(e.to_string()))?;
+        #[cfg(feature = "producer-audio")]
         let preflight = if matches!(intent, SourceIntent::Control { .. })
             && (self.pending_error.is_some()
                 || self.producers.active_failure().is_some()
@@ -965,7 +905,7 @@ impl Sources {
                 _ => Ok(()),
             }
         };
-        #[cfg(not(feature = "producer-audio-probe"))]
+        #[cfg(not(feature = "producer-audio"))]
         let preflight = if matches!(intent, SourceIntent::OpenProvider { .. }) {
             Err(crate::session::RequestError::Backend(
                 "unsupported: producer not enabled in this build".into(),
@@ -990,7 +930,7 @@ impl Sources {
         });
         let book = self
             .books
-            .entry((owner, legacy))
+            .entry(owner)
             .or_insert_with(|| OperationBook::new(owner));
         let ticket = match self
             .session
@@ -1022,7 +962,7 @@ impl Sources {
                 ));
             }
         };
-        #[cfg(feature = "producer-audio-probe")]
+        #[cfg(feature = "producer-audio")]
         if matches!(
             intent,
             SourceIntent::Open { .. } | SourceIntent::Close { .. }
@@ -1030,7 +970,7 @@ impl Sources {
             self.producers.stop_active();
             self.provider_ticket = None;
         }
-        #[cfg(feature = "producer-audio-probe")]
+        #[cfg(feature = "producer-audio")]
         if matches!(
             intent,
             SourceIntent::Open { .. }
@@ -1055,7 +995,7 @@ impl Sources {
                 let error = error.to_string();
                 let _ = self
                     .books
-                    .get_mut(&(owner, legacy))
+                    .get_mut(&owner)
                     .unwrap()
                     .finish(id, Err(error.clone()));
                 self.session.event(SourceEvent::LoadFailed {
@@ -1079,7 +1019,6 @@ impl Sources {
                 Resolution {
                     requester: owner,
                     operation: id,
-                    legacy,
                     resolver,
                     resolver_id,
                     source,
@@ -1088,11 +1027,7 @@ impl Sources {
                     deadline: std::time::Instant::now() + std::time::Duration::from_secs(30),
                 },
             );
-            return Ok(Some(if legacy {
-                json!({"session":ticket.stamp.generation})
-            } else {
-                json!({"status":"pending","ticket":ticket})
-            }));
+            return Ok(Some(json!({"status":"pending","ticket":ticket})));
         }
         let result: Result<(), String> = match &intent {
             SourceIntent::OpenProvider {
@@ -1100,7 +1035,7 @@ impl Sources {
                 start_paused,
                 ..
             } => {
-                #[cfg(feature = "producer-audio-probe")]
+                #[cfg(feature = "producer-audio")]
                 {
                     self.producers
                         .ready(*producer_id, owner)
@@ -1121,7 +1056,7 @@ impl Sources {
                             self.session.event(SourceEvent::ProviderReady { ticket });
                         })
                 }
-                #[cfg(not(feature = "producer-audio-probe"))]
+                #[cfg(not(feature = "producer-audio"))]
                 {
                     let _ = (producer_id, start_paused);
                     Err("producer support not enabled in this build".into())
@@ -1132,7 +1067,7 @@ impl Sources {
                 start_paused,
                 ..
             } => LocalMedia::open(source).and_then(|media| {
-                #[cfg(feature = "producer-audio-probe")]
+                #[cfg(feature = "producer-audio")]
                 {
                     self.producers.deactivate();
                     self.provider_ticket = None;
@@ -1172,7 +1107,7 @@ impl Sources {
                 })
             }
             SourceIntent::Close { .. } => {
-                #[cfg(feature = "producer-audio-probe")]
+                #[cfg(feature = "producer-audio")]
                 {
                     self.producers.deactivate();
                     self.provider_ticket = None;
@@ -1187,7 +1122,7 @@ impl Sources {
                     .map_err(|e| e.to_string())
             }
             SourceIntent::Control { control, .. } => {
-                #[cfg(feature = "producer-audio-probe")]
+                #[cfg(feature = "producer-audio")]
                 if self.producers.active().is_some() {
                     let Control::Pause { paused } = control else {
                         unreachable!("provider capability preflight");
@@ -1213,7 +1148,7 @@ impl Sources {
                         Err(error) => {
                             let _ = self
                                 .books
-                                .get_mut(&(owner, legacy))
+                                .get_mut(&owner)
                                 .unwrap()
                                 .finish(id, Err(error.message.clone()));
                             self.pending_error = Some((ticket, error.message.clone()));
@@ -1225,17 +1160,14 @@ impl Sources {
                         owner, id, provider, producer, ticket, epoch, base, *paused, now,
                     ) {
                         let message = format!("provider control admission: {error:?}");
-                        let book = self.books.get_mut(&(owner, legacy)).unwrap();
+                        let book = self.books.get_mut(&owner).unwrap();
                         let _ = book.finish(id, Err(message.clone()));
                         self.pending_error = Some((ticket, message.clone()));
                         return Err(RpcError::new("backend", message));
                     }
-                    self.pending_legacy = legacy;
-                    return Ok(Some(if legacy {
-                        Value::Null
-                    } else {
-                        json!(crate::session::OperationStatus::Pending { ticket })
-                    }));
+                    return Ok(Some(json!(crate::session::OperationStatus::Pending {
+                        ticket
+                    })));
                 }
                 match control {
                     Control::Pause { paused } => mpv.set_property("pause", *paused),
@@ -1277,20 +1209,12 @@ impl Sources {
         }
         let status = self
             .books
-            .get_mut(&(owner, legacy))
+            .get_mut(&owner)
             .unwrap()
             .finish(id, result.clone())
             .map_err(|e| RpcError::new("host", format!("{e:?}")))?;
         result.map_err(|e| RpcError::new("backend", e))?;
-        Ok(Some(if legacy {
-            if method == "playback.open" {
-                json!({"session":ticket.stamp.generation})
-            } else {
-                Value::Null
-            }
-        } else {
-            json!(status)
-        }))
+        Ok(Some(json!(status)))
     }
 }
 fn load(mpv: &Mpv, source: &str, paused: bool) -> Result<i64, String> {
@@ -1318,7 +1242,7 @@ fn load_with_options(mpv: &Mpv, source: &str, paused: bool, extra: &str) -> Resu
     Err("libmpv did not return playlist_entry_id; unsupported backend".into())
 }
 
-#[cfg(all(test, feature = "producer-audio-probe"))]
+#[cfg(all(test, feature = "producer-audio"))]
 mod input_adapter_tests {
     use super::*;
     #[test]

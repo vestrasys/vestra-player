@@ -344,18 +344,18 @@ mod tests {
 
     #[test]
     fn generated_shell_preserves_shared_menu_video_and_two_owner_globals() {
-        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../examples/mount-demo");
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
         let specs = [
             CompileSpec {
                 owner: 10,
-                file: base.join("bottom/bar.slint"),
+                file: base.join("bar.slint"),
                 component: "SourceBar".into(),
                 global: Some("Bridge".into()),
                 slot: Slot::Bottom,
             },
             CompileSpec {
                 owner: 20,
-                file: base.join("sidebar/sidebar.slint"),
+                file: base.join("sidebar.slint"),
                 component: "RowsSidebar".into(),
                 global: Some("Bridge".into()),
                 slot: Slot::Sidebar,
@@ -382,18 +382,18 @@ mod tests {
 
     #[test]
     fn actual_compiler_accepts_shell_imports_models_and_both_mounts_without_a_window() {
-        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../examples/mount-demo");
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
         let specs = [
             CompileSpec {
                 owner: 10,
-                file: base.join("bottom/bar.slint"),
+                file: base.join("bar.slint"),
                 component: "SourceBar".into(),
                 global: Some("Bridge".into()),
                 slot: Slot::Bottom,
             },
             CompileSpec {
                 owner: 20,
-                file: base.join("sidebar/sidebar.slint"),
+                file: base.join("sidebar.slint"),
                 component: "RowsSidebar".into(),
                 global: Some("Bridge".into()),
                 slot: Slot::Sidebar,

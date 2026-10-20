@@ -1,9 +1,0 @@
-{
-  "args": [
-    "src/host/target/debug/producer-audio-probe",
-    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-producer-audio-ov_ezf9s/first.f32le",
-    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-producer-audio-ov_ezf9s/second.f32le",
-    "/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-producer-audio-ov_ezf9s/result.json"
-  ],
-  "status": 1
-}

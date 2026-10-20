@@ -1,6 +1,0 @@
-{
-  "pid": 15094,
-  "matchedCommand": "/private/tmp/vestra-producer-input-native-V7OZ1P/Vestra Producer Input.app/Contents/MacOS/host --silent --seconds 315 --plugin /tmp/vestra-producer-input-native-V7OZ1P/Vestra Producer Input.app/Contents/Resources/consumer",
-  "signal": "SIGTERM",
-  "reason": "source.close already completed after explicit stop; original inaccessible native app retired"
-}

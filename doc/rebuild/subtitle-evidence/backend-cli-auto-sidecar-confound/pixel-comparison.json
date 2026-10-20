@@ -1,9 +1,0 @@
-{
-  "width": 640,
-  "height": 360,
-  "changedPixels": 0,
-  "meanAbsDifference": 0.0,
-  "offEqualsBefore": false,
-  "changedBounds": null,
-  "scope": "Decoded CLI screenshot pixels, not the Rust software-rendered Slint canvas."
-}

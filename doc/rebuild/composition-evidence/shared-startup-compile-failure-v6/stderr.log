@@ -1,7 +1,0 @@
-rpc request ui.mount 1
-rpc request ui.mount 1
-rpc request commands.register 1
-rpc receive {"data":null,"event":"runtime.stop"}
-rpc receive {"data":null,"event":"runtime.stop"}
-rpc receive {"data":null,"event":"runtime.stop"}
-Error: composition compilation: [Diagnostic { message: "Cannot link input property", span: SourceLocation { source_file: Some("/private/var/folders/c9/l6fw8b9n69d_4030n4dcj2nh0000gn/T/vestra-native-shared-F3blKZ/Vestra Shared UI.app/Contents/Resources/ui/host.slint"), span: Span { offset: 743, length: 21 } }, level: Error }]

@@ -643,7 +643,7 @@ impl Subtitles {
         {
             return Err(RpcError::new(
                 "unsupported",
-                "legacy sub-delay differs from frozen typed subtitle style",
+                "mpv sub-delay differs from the frozen typed subtitle style",
             ));
         }
         if let Track::Embedded(id) = selected {
@@ -994,11 +994,6 @@ impl Subtitles {
                         .map(upload_json)
                         .map_err(upload_error)
                 }
-                "subtitles.upload.status" => self
-                    .uploads
-                    .status(owner, upload)
-                    .map(upload_json)
-                    .map_err(upload_error),
                 "subtitles.upload.discard" => {
                     self.uploads.discard(owner, upload).map_err(upload_error)?;
                     Ok(Value::Null)

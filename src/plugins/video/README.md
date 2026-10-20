@@ -6,4 +6,4 @@
 
 限制：没有就绪媒体时保留设置，媒体就绪后应用；“已接受”表示后端接受，不保证画面已刷新（暂停时可能在继续播放后才更新）。
 
-开发：`npm run plugin -- check video`、`build video`（生成 `dist/`，版本取自 `manifest.json`）、`test video`。SDK v2 参考迁移，代码只用 `import type` 引用 SDK。
+开发：`npm run plugin -- check video`、`build video`（生成 `dist/`，版本取自 `manifest.json`）、`test video`。代码只用 `import type` 引用 SDK。

@@ -214,6 +214,7 @@ impl Registry {
         }
     }
 
+    #[cfg(test)]
     pub fn status(&self, owner: u64, id: u64) -> Result<Status> {
         Self::valid_id(id)?;
         self.active

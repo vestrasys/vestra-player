@@ -20,18 +20,18 @@ pub mod platform_window;
 mod plugins;
 mod processing;
 pub mod processing_operations;
-#[cfg(feature = "producer-audio-probe")]
+#[cfg(feature = "producer-audio")]
 mod producer;
-#[cfg(feature = "producer-audio-probe")]
+#[cfg(feature = "producer-audio")]
 mod producer_audio;
-#[cfg(feature = "producer-audio-probe")]
+#[cfg(feature = "producer-audio")]
 mod producer_controls;
-#[cfg(feature = "producer-audio-probe")]
+#[cfg(feature = "producer-audio")]
 pub mod producer_input;
-#[cfg(feature = "producer-audio-probe")]
+#[cfg(feature = "producer-audio")]
 mod producer_input_delivery;
 
-#[cfg(feature = "producer-audio-probe")]
+#[cfg(feature = "producer-audio")]
 pub mod producer_binary;
 mod session;
 mod source_backend;
@@ -95,7 +95,7 @@ enum MenuAction {
     Dismiss,
 }
 enum Event {
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     PhysicalInput(u64, Value),
     WindowInput(u64, String),
     MenuAction(u64, MenuAction),
@@ -160,7 +160,6 @@ struct Host {
     activations: package_activation::Book,
     activation_ui: std::collections::BTreeSet<(u64, u64)>,
     activation_receipts: std::collections::VecDeque<Value>,
-    activation_last: BTreeMap<u64, package_activation::Status>,
     packages: package_manager::Manager,
     cleanup: BTreeMap<u64, (bool, bool)>,
 }
@@ -194,7 +193,6 @@ impl Host {
             }
         }
         self.activations.remove(owner);
-        self.activation_last.remove(&owner);
         self.activation_ui
             .retain(|(candidate, _)| *candidate != owner);
     }
@@ -213,18 +211,12 @@ impl Host {
                 status,
                 package_activation::Status::Failed { .. } | package_activation::Status::TimedOut
             );
-            if self.activation_last.get(&owner) != Some(&status) {
-                self.activation_last.insert(owner, status.clone());
-                if let Ok(receipt) = self.activation(owner) {
-                    self.broadcast("plugins.activation", receipt);
-                }
-            }
             if terminal_failure {
                 self.disable(owner);
             }
         }
     }
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     fn physical_input(&self, params: Value) {
         if self
             .backend
@@ -239,11 +231,12 @@ impl Host {
             eprintln!("host.error physical-input backend unavailable");
         }
     }
-    #[cfg(feature = "producer-audio-probe")]
+    #[cfg(feature = "producer-audio")]
     fn physical_revoke(&self, reason: producer_input::RevokeReason) {
         self.physical_input(json!({"kind":"revoke","reason":reason}));
     }
-    fn load(&mut self, directory: &Path, timeout_ms: u64) -> Result<Value> {
+    /// Load a development package (`--plugin DIR`).
+    fn load(&mut self, directory: &Path, timeout_ms: u64) -> Result<()> {
         if !(1_000..=120_000).contains(&timeout_ms) {
             bail!("activation timeout must be 1000..120000ms");
         }
@@ -271,7 +264,6 @@ impl Host {
                 return Err(error);
             }
         };
-        let mut manifest = serde_json::to_value(&plugin.manifest)?;
         let manifest_id = plugin.manifest.id.clone();
         self.plugins.insert(self.next_generation, plugin);
         self.backend.commands.send(Command {
@@ -282,19 +274,7 @@ impl Host {
             method: "owner.registered".into(),
             params: json!({"manifestId":manifest_id}),
         })?;
-        self.broadcast("plugins.changed", self.plugin_list());
-        manifest["owner"] = self.next_generation.into();
-        manifest["accepted"] = true.into();
-        manifest["activation"] = json!({"status":"pending","runtimeReady":false,"pendingUi":0});
-        Ok(manifest)
-    }
-    fn plugin_list(&self) -> Value {
-        json!(
-            self.plugins
-                .values()
-                .map(|p| &p.manifest)
-                .collect::<Vec<_>>()
-        )
+        Ok(())
     }
     fn disable(&mut self, owner: u64) {
         // Process exit commonly follows an explicit disable. The first revoke
@@ -355,7 +335,6 @@ impl Host {
                 let _ = events.send(Event::Reaped(owner));
             });
         }
-        self.broadcast("plugins.changed", self.plugin_list());
     }
     fn send(&mut self, owner: u64, message: Value) {
         let failed = self
@@ -444,7 +423,7 @@ impl Host {
                     }
                 }
             }
-            #[cfg(feature = "producer-audio-probe")]
+            #[cfg(feature = "producer-audio")]
             Event::PhysicalInput(generation, params) => {
                 if generation == self.shell_generation {
                     self.physical_input(params);
@@ -485,7 +464,7 @@ impl Host {
                 self.policy.activity(self.now_ms());
                 match action {
                     MenuAction::Reset => {
-                        #[cfg(feature = "producer-audio-probe")]
+                        #[cfg(feature = "producer-audio")]
                         self.physical_revoke(producer_input::RevokeReason::Menu);
                         self.menu_open = true;
                         self.menu_path.clear();
@@ -716,7 +695,7 @@ impl Host {
         window: &slint_interpreter::ComponentInstance,
         generation: u64,
     ) -> Result<()> {
-        #[cfg(feature = "producer-audio-probe")]
+        #[cfg(feature = "producer-audio")]
         {
             use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
             let events = self.events.clone();
@@ -751,11 +730,11 @@ impl Host {
             });
         }
         let events = self.events.clone();
-        #[cfg(feature = "producer-audio-probe")]
+        #[cfg(feature = "producer-audio")]
         let routing = self.backend.input.clone();
         window.set_callback("window-input", move |args| {
             if let Some(slint_interpreter::Value::String(kind)) = args.first() {
-                #[cfg(feature = "producer-audio-probe")]
+                #[cfg(feature = "producer-audio")]
                 match kind.as_str() {
                     "capture" => {
                         if let Some(routing) = routing
@@ -911,7 +890,7 @@ impl Host {
         };
         let result = match build() {
             Ok(shell) => {
-                #[cfg(feature = "producer-audio-probe")]
+                #[cfg(feature = "producer-audio")]
                 self.physical_revoke(producer_input::RevokeReason::WindowHidden);
                 self.native_before = native_before.clone();
                 self.native_window = native_before
@@ -996,7 +975,7 @@ impl Host {
         {
             return;
         }
-        #[cfg(feature = "producer-audio-probe")]
+        #[cfg(feature = "producer-audio")]
         if self
             .backend
             .input
@@ -1052,28 +1031,20 @@ impl Host {
             .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
         let capability = match method {
             method if method.starts_with("packages.") => Some("plugins.manage"),
-            "host.capabilities" => None,
             method if method.starts_with("sourceResolvers.") => Some("source.resolve"),
             "dialogs.open" => Some("ui.dialog"),
-            "window.state" | "window.setFullscreen" => Some("ui.window"),
             "ui.mount" | "ui.setMount" | "ui.showMount" | "ui.unmount" | "ui.mountState"
             | "ui.interaction" => Some("ui.mount"),
-            "commands.register" | "commands.update" | "commands.snapshot" | "commands.execute" => {
-                Some("commands")
-            }
-            "playback.state" | "source.state" | "source.operation" | "processing.state" => {
-                Some("playback.read")
-            }
-            "playback.open" | "playback.seek" | "playback.set" | "source.submit" => {
-                Some("playback.control")
-            }
+            "commands.register" | "commands.update" => Some("commands"),
+            "source.state" | "source.operation" | "processing.state" => Some("playback.read"),
+            "playback.set" | "source.submit" => Some("playback.control"),
             "producer.prepare"
             | "producer.state"
             | "producer.release"
             | "producer.ack"
             | "producer.declareInput"
             | "producer.ackInput" => Some("producer.av"),
-            "snapshot.state" | "jobs.state" | "jobs.list" | "jobs.operation" => Some("media.read"),
+            "snapshot.state" | "jobs.state" | "jobs.operation" => Some("media.read"),
             method if method.starts_with("snapshot.") || method.starts_with("jobs.") => {
                 Some("media.control")
             }
@@ -1086,9 +1057,6 @@ impl Host {
             }),
             "events.subscribe" | "events.unsubscribe" => Some("events"),
             "ui.open" | "ui.set" | "ui.show" | "ui.close" => Some("ui.window"),
-            "plugins.list" | "plugins.load" | "plugins.disable" | "plugins.activation" => {
-                Some("plugins.manage")
-            }
             _ => return Err(RpcError::new("unsupported", "unknown method")),
         };
         if capability.is_some_and(|capability| !plugin.allows(capability)) {
@@ -1115,22 +1083,6 @@ impl Host {
             return Ok(None);
         }
         let value = match method {
-            "host.capabilities" => {
-                json!({"apiVersion":plugins::API,"experimentalCapabilities":["source.intent/0.1","processing.resources/0.1","processing.operations/0.1","subtitles.resources/0.1","media.raw-jobs/0.1","media.processed-png/0.1","media.clip-mp4/0.1","media.sample-time/0.1","media.native-plain-srt/0.1"],"capabilities":plugins::CAPABILITIES,"backend":"libmpv-software","ui":!self.headless})
-            }
-            "window.state" => self.window_facts.clone(),
-            "window.setFullscreen" => {
-                let fullscreen = params["fullscreen"]
-                    .as_bool()
-                    .ok_or_else(|| RpcError::invalid("fullscreen boolean required"))?;
-                let shell = self
-                    .shell
-                    .as_ref()
-                    .ok_or_else(|| RpcError::new("unavailable", "native shell unavailable"))?;
-                shell.window().set_fullscreen(fullscreen);
-                self.policy.activity(self.now_ms());
-                Value::Null
-            }
             "ui.mountState" => {
                 let mount = self
                     .mounts
@@ -1329,11 +1281,10 @@ impl Host {
                     }
                 }
                 self.dialog_busy = true;
-                #[cfg(feature = "producer-audio-probe")]
+                #[cfg(feature = "producer-audio")]
                 self.physical_revoke(producer_input::RevokeReason::Dialog);
                 return Ok(None);
             }
-            "commands.snapshot" => json!(self.commands.snapshot()),
             "commands.register" | "commands.update" => {
                 let id = string(params, "id")?;
                 let revision = params["revision"]
@@ -1365,16 +1316,9 @@ impl Host {
                 .map_err(|e| RpcError::new("command", e.to_string()))?;
                 json!({"revision":self.commands.snapshot().revision})
             }
-            "commands.execute" => {
-                self.execute_command(reply.owner, string(params, "id")?)?;
-                Value::Null
-            }
-            "playback.state" => self.backend.state.lock().unwrap().clone(),
             "sourceResolvers.register"
             | "sourceResolvers.unregister"
             | "sourceResolvers.respond"
-            | "playback.open"
-            | "playback.seek"
             | "playback.set"
             | "source.state"
             | "source.operation"
@@ -1400,16 +1344,7 @@ impl Host {
             }
             "events.subscribe" | "events.unsubscribe" => {
                 let event = string(params, "event")?;
-                if ![
-                    "playback.state",
-                    "playback.backend",
-                    "source.state",
-                    "plugins.changed",
-                    "host.error",
-                    "window.state",
-                ]
-                .contains(&event)
-                {
+                if !["playback.backend", "source.state", "window.state"].contains(&event) {
                     return Err(RpcError::new("unsupported", "unknown event"));
                 }
                 let plugin = self.plugins.get_mut(&reply.owner).unwrap();
@@ -1418,51 +1353,6 @@ impl Host {
                 } else {
                     plugin.subscriptions.remove(event);
                 }
-                Value::Null
-            }
-            "plugins.list" => self.plugin_list(),
-            "plugins.activation" => self.activation(
-                params["owner"]
-                    .as_u64()
-                    .filter(|owner| *owner > 0 && *owner <= 9_007_199_254_740_991)
-                    .ok_or_else(|| RpcError::invalid("positive safe owner required"))?,
-            )?,
-            "plugins.load" => self.load(
-                Path::new(string(params, "directory")?),
-                params
-                    .get("activationTimeoutMs")
-                    .map_or(Ok(120_000), |value| {
-                        value
-                            .as_u64()
-                            .ok_or_else(|| {
-                                RpcError::invalid("activationTimeoutMs requires integer")
-                            })
-                            .and_then(|timeout| {
-                                if (1_000..=120_000).contains(&timeout) {
-                                    Ok(timeout)
-                                } else {
-                                    Err(RpcError::invalid(
-                                        "activationTimeoutMs must be 1000..120000",
-                                    ))
-                                }
-                            })
-                    })?,
-            )?,
-            "plugins.disable" => {
-                let id = string(params, "id")?;
-                let owner = self
-                    .plugins
-                    .iter()
-                    .find(|(_, plugin)| plugin.manifest.id == id)
-                    .map(|(key, _)| *key)
-                    .ok_or_else(|| RpcError::new("missing", "plugin not running"))?;
-                // Reply to self-disable before severing its pipe.
-                if owner == reply.owner {
-                    self.respond(reply.clone(), Ok(Value::Null));
-                    self.disable(owner);
-                    return Ok(None);
-                }
-                self.disable(owner);
                 Value::Null
             }
             "ui.open" => {
@@ -1707,7 +1597,6 @@ fn main() -> Result<()> {
         activations: package_activation::Book::default(),
         activation_ui: Default::default(),
         activation_receipts: Default::default(),
-        activation_last: Default::default(),
         packages: package_manager::Manager::open()?,
         cleanup: Default::default(),
         commands: commands::Registry::new(

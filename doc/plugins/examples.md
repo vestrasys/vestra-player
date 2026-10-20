@@ -1,6 +1,6 @@
 # 插件示例
 
-按功能分类的完整示例，适合已经读过[入门教程](tutorial.md)、想照着实现某种功能时查阅。每个方法的精确定义见 [API 参考](reference.md)，设计取舍见 [sdk-v2.md](../rebuild/sdk-v2.md)。
+按功能分类的完整示例，适合已经读过[入门教程](tutorial.md)、想照着实现某种功能时查阅。每个方法的精确定义见 [API 参考](reference.md)，设计取舍见 [SDK 设计说明](../architecture/sdk-design.md)。
 
 每个示例都是完整的插件入口（或其中一个模块），只省略插件自己的业务函数（从 `./model.ts` 等导入）。所有示例都经过 `tsc` 严格检查；“画面调节”是 `src/plugins/video/` 的缩写版，完整代码见该目录。
 
@@ -443,4 +443,4 @@ test("a refused change is shown and can be retried", async () => {
 });
 ```
 
-`startPlugin` 读取插件目录的 `manifest.json`，用内存中的 `TestHost` 运行真实的 SDK 逻辑；更多控制见 [sdk-v2.md](../rebuild/sdk-v2.md) 第 10 节。
+`startPlugin` 读取插件目录的 `manifest.json`，用内存中的 `TestHost` 运行真实的 SDK 逻辑；更多控制见 [API 参考 §14](reference.md#14-测试工具)。

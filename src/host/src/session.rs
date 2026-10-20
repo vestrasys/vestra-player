@@ -118,7 +118,7 @@ pub struct SourceState {
 /// with its preceding real StartFile event. `Ready` must not be built from state().
 #[derive(Clone, Debug)]
 pub enum SourceEvent {
-    #[cfg_attr(not(feature = "producer-audio-probe"), allow(dead_code))]
+    #[cfg_attr(not(feature = "producer-audio"), allow(dead_code))]
     ProviderReady {
         ticket: IntentTicket,
     },
@@ -299,7 +299,7 @@ impl SourceSession {
     /// Call at the same serial arbitration point as backend command dispatch.
     /// No effect/style update belongs here: those compare generation + resource
     /// revision separately and must not advance or constrain source intent.
-    #[cfg_attr(not(feature = "producer-audio-probe"), allow(dead_code))]
+    #[cfg_attr(not(feature = "producer-audio"), allow(dead_code))]
     pub fn submit(&mut self, book: &mut OperationBook, id: u64, intent: SourceIntent) -> Admission {
         self.submit_checked(book, id, intent, |_| Ok(()))
     }

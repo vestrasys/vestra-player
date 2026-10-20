@@ -1,1 +1,0 @@
-export async function activate(host){await host.commands.register("activation-proof",1,{title:"invalid-timeout",path:["插件","Activation experiment","invalid-timeout"],shortcut:null},{enabled:true,checked:null,busy:false,reason:null});await Promise.resolve();}

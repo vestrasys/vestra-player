@@ -1,1 +1,0 @@
-{"id":"review.processed-consumer","apiVersion":"vestra.experimental/0.1","entry":"main.mjs","capabilities":["playback.read","subtitles.read","subtitles.control","processing.video","playback.control","events","plugins.manage","media.read","media.control"]}
