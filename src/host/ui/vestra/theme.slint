@@ -3,27 +3,35 @@
 // All values are constants, so sharing this global between plugins is safe.
 
 export global Theme {
-    // §2.1 colours
-    out property <color> bg-bar: #1e1e1e;
-    out property <color> bg-video: #101010;
-    out property <color> bg-list: #3b3b3b;
-    out property <color> bg-panel: #333333;
-    out property <color> line: #000000;
-    out property <color> hover-bg: #272727;
-    out property <color> press-bg: #181818;
-    out property <color> text: #f0f0f0;
-    out property <color> text-dim: #777777;
-    out property <color> text-list: #aeaeae;
-    out property <color> text-played: #888888;
-    out property <color> accent: #fae100;
-    out property <color> accent-press: #c8b400;
-    out property <color> accent-disabled: #7d7000;
-    out property <color> icon-disabled: #3b3b3b;
-    out property <color> playing: #2282f2;
-    out property <color> button-bg: #555555;
-    out property <color> button-hover: #5c5c5c;
-    out property <color> button-press: #444444;
-    out property <color> button-disabled: #2a2a2a;
+    // Colours: Vestra identity drawn from the logo (amber → magenta → violet on a
+    // violet-tinted near-black). Sizes below keep the PotPlayer-derived geometry
+    // (doc/product/ui-alignment.md §2.3); only the look differs (§1 D1, revised).
+    out property <color> bg-bar: #17141c;
+    out property <color> bg-video: #0b0a0f;
+    out property <color> bg-list: #1c1922;
+    out property <color> bg-panel: #221e29;
+    out property <color> line: #07060a;
+    out property <color> hover-bg: #2a2533;
+    out property <color> press-bg: #120f16;
+    out property <color> selected-bg: #2f2938;
+    out property <color> text: #f2eff7;
+    out property <color> text-dim: #8a8496;
+    out property <color> text-list: #b8b2c4;
+    out property <color> text-played: #6f6a7a;
+    out property <color> accent: #fa139c;
+    out property <color> accent-press: #c40f7a;
+    out property <color> accent-disabled: #5c1a42;
+    out property <color> icon-disabled: #3a3542;
+    out property <color> playing: #a24bff;
+    out property <color> button-bg: #322c3b;
+    out property <color> button-hover: #3d3648;
+    out property <color> button-press: #26212e;
+    out property <color> button-disabled: #1d1a23;
+    // Brand gradient for "progress" fills (seek bar, volume, sliders).
+    out property <brush> accent-fill: @linear-gradient(90deg, #fdb506 0%, #fc6f3b 25%, #fa139c 60%, #911efc 100%);
+    // Soft corners echo the logo; PotPlayer is square-cornered.
+    out property <length> radius-control: 3px;
+    out property <length> radius-panel: 6px;
     // §2.2 fonts; the host sets each window's default-font-family to the system UI font.
     out property <string> font-mono: "Menlo";
     out property <length> font-xs: 9px;

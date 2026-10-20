@@ -83,7 +83,7 @@ component BarButton inherits Rectangle {
     }
 }
 
-// Seek line: 10px click area, 2px line (unplayed Theme.line, played Theme.accent), 8px thumb.
+// Seek line: 10px click area, 2px line (unplayed Theme.line, played Theme.accent-fill), 8px thumb.
 component SeekBar inherits Rectangle {
     private property <float> ratio: clamp(PlaybackBridge.progress, 0, 1);
     private property <length> span: max(1px, root.width - 8px);
@@ -101,7 +101,8 @@ component SeekBar inherits Rectangle {
         y: 4px;
         width: 4px + root.ratio * root.span;
         height: 2px;
-        background: PlaybackBridge.can-seek ? Theme.accent : Theme.icon-disabled;
+        border-radius: 1px;
+        background: PlaybackBridge.can-seek ? Theme.accent-fill : Theme.icon-disabled;
     }
     if PlaybackBridge.can-seek: Rectangle {
         x: root.ratio * root.span;
