@@ -842,6 +842,7 @@ power.preventSleep(mode: "off" | "playing"): Promise<void>;
 - 任一插件要求 `"playing"` 即生效；插件改回 `"off"` 或停用时撤销它自己的要求。
 - 生效期间，来源阶段为 `ready` 且未暂停（含生成流）时，播放器持有系统断言：正在显示视频帧时阻止显示器睡眠（`caffeinate -d -i`），纯音频只阻止系统睡眠（`-i`）；暂停、播完、关闭来源时释放。断言绑定播放器进程，播放器退出时随之结束。
 - 可用 `pmset -g assertions` 查看。
+- 失败语义：`preventSleep` 只登记要求（参数不对时 `invalid`），断言在播放条件满足时由播放器持有。启动 `/usr/bin/caffeinate` 失败只写播放器日志（`host.error power …`），不通知插件，相同条件下不重试，条件变化（暂停/继续、有无视频）时再试。插件不能据此提示「无法阻止屏保」。
 
 ### 16.3 外部工具 `plugin.tools`
 
