@@ -88,6 +88,11 @@ pub struct Sources {
     local_media: BTreeMap<i64, Arc<LocalMedia>>,
     current_local: Option<(u64, Arc<LocalMedia>)>,
     lease_ready: Option<(i64, u64)>,
+    /// `player.setLoop`: (a, b, count) as requested; mpv counts down in
+    /// `remaining-ab-loops`, which is not passed on (ruling R-M2).
+    ab_loop: Option<(f64, f64, Option<u64>)>,
+    /// The source generation the A-B loop belongs to (R-H13).
+    loop_generation: u64,
     #[cfg(feature = "producer-audio")]
     producers: crate::producer::Producers,
     #[cfg(feature = "producer-audio")]
@@ -281,7 +286,8 @@ impl Sources {
     /// `audio.addTrack { path, select, expected? }` → the new track;
     /// `audio.selectTrack { id, expected? }` → null. Both act on the current
     /// media load only, conditional on the source stamp like other controls.
-    fn audio_track(&mut self, mpv: &Mpv, method: &str, params: &Value) -> Result<Value, RpcError> {
+    /// A conditional control's `expected` stamp must still be the source's.
+    fn check_expected(&self, params: &Value) -> Result<(), RpcError> {
         if !params["expected"].is_null() {
             let expected: crate::session::SourceStamp =
                 serde_json::from_value(params["expected"].clone())
@@ -290,11 +296,97 @@ impl Sources {
                 return Err(RpcError::new("stale", "source changed"));
             }
         }
+        Ok(())
+    }
+    fn producer(&self) -> bool {
         #[cfg(feature = "producer-audio")]
-        let producer = self.provider_ticket.is_some();
+        return self.provider_ticket.is_some();
         #[cfg(not(feature = "producer-audio"))]
-        let producer = false;
-        if producer || self.presentation_load().is_none() {
+        false
+    }
+    /// `player.chapters` → `{ sourceId, chapters: [{ title, start }] }`;
+    /// `player.setLoop { loop: { a, b, count? } | null, expected? }`.
+    fn marks(&mut self, mpv: &Mpv, method: &str, params: &Value) -> Result<Value, RpcError> {
+        let media = !self.producer() && self.presentation_load().is_some();
+        if method == "player.chapters" {
+            let chapters = match media.then(|| mpv.get_property::<Node>("chapter-list")) {
+                Some(Ok(node)) => chapter_list(node),
+                _ => Vec::new(),
+            };
+            return Ok(json!({"sourceId":self.generation(),"chapters":chapters}));
+        }
+        self.check_expected(params)?;
+        if self.producer() {
+            return Err(RpcError::new(
+                "unsupported",
+                "a generated stream cannot loop",
+            ));
+        }
+        if !media {
+            return Err(RpcError::new("unavailable", "A-B loops need ready media"));
+        }
+        let spec = &params["loop"];
+        if spec.is_null() {
+            self.ab_loop = None;
+            clear_loop(mpv);
+            return Ok(Value::Null);
+        }
+        if !mpv.get_property::<bool>("seekable").unwrap_or(false) {
+            return Err(RpcError::new("unsupported", "the source cannot seek"));
+        }
+        let duration = mpv.get_property::<f64>("duration").unwrap_or(f64::NAN);
+        let (a, b) = (
+            spec["a"].as_f64().unwrap_or(f64::NAN),
+            spec["b"].as_f64().unwrap_or(f64::NAN),
+        );
+        if !(a >= 0. && a < b && b <= duration + 0.001) {
+            return Err(RpcError::invalid("loop needs 0 <= a < b <= duration"));
+        }
+        let count = match &spec["count"] {
+            Value::Null => None,
+            value => Some(
+                value
+                    .as_u64()
+                    .filter(|n| (1..=1_000_000).contains(n))
+                    .ok_or_else(|| RpcError::invalid("count must be 1..1000000"))?,
+            ),
+        };
+        let backend = |e: rsmpv::Error| RpcError::new("backend", e.to_string());
+        mpv.set_property("ab-loop-a", a).map_err(backend)?;
+        mpv.set_property("ab-loop-b", b).map_err(backend)?;
+        match count {
+            Some(n) => mpv.set_property("ab-loop-count", n as i64),
+            None => mpv.set_property("ab-loop-count", "inf"),
+        }
+        .map_err(backend)?;
+        self.ab_loop = Some((a, b, count));
+        self.loop_generation = self.generation();
+        Ok(Value::Null)
+    }
+    /// `PlayerState.loop`. A new source clears the loop points (R-H13); a
+    /// loop whose count mpv has used up ends.
+    fn loop_state(&mut self, mpv: &Mpv) -> Value {
+        if self.loop_generation != self.generation() {
+            self.loop_generation = self.generation();
+            self.ab_loop = None;
+            clear_loop(mpv);
+        }
+        if self.ab_loop.is_some_and(|(.., count)| count.is_some())
+            && mpv
+                .get_property::<i64>("remaining-ab-loops")
+                .is_ok_and(|remaining| remaining == 0)
+        {
+            self.ab_loop = None;
+            clear_loop(mpv);
+        }
+        self.ab_loop.map_or(
+            Value::Null,
+            |(a, b, count)| json!({"a":a,"b":b,"count":count}),
+        )
+    }
+    fn audio_track(&mut self, mpv: &Mpv, method: &str, params: &Value) -> Result<Value, RpcError> {
+        self.check_expected(params)?;
+        if self.producer() || self.presentation_load().is_none() {
             return Err(RpcError::new(
                 "unavailable",
                 "audio tracks need ready media",
@@ -452,6 +544,7 @@ impl Sources {
         self.producers.output(volume, muted);
     }
     pub fn snapshot(&mut self, mpv: &Mpv) -> Value {
+        let ab_loop = self.loop_state(mpv);
         #[cfg(feature = "producer-audio")]
         if let Some(ticket) = self.provider_ticket {
             if let Some((paused, position)) = self.producers.active_facts() {
@@ -477,6 +570,7 @@ impl Sources {
             state["capabilities"] = json!({"pause":ready,"seek":false,"rate":false,"restart":false,"close":true,"snapshotSource":false});
             state["output"] = json!({"volume":mpv.get_property::<f64>("volume").unwrap_or(100.),"muted":mpv.get_property::<bool>("mute").unwrap_or(false)});
             state["rate"] = json!(1.);
+            state["loop"] = Value::Null;
             return state;
         }
         // keep-open preserves the final frame and does not emit EndFile at
@@ -558,6 +652,7 @@ impl Sources {
         result["capabilities"] = json!({"pause":ready,"seek":ready&&mpv.get_property::<bool>("seekable").unwrap_or(false),"rate":ready,"restart":self.session.state().source.is_some(),"close":self.session.state().source.is_some()});
         result["output"] = json!({"volume":mpv.get_property::<f64>("volume").unwrap_or(100.),"muted":mpv.get_property::<bool>("mute").unwrap_or(false)});
         result["rate"] = json!(mpv.get_property::<f64>("speed").unwrap_or(1.));
+        result["loop"] = ab_loop;
         result["capabilities"]["snapshotSource"] = json!(self.lease(self.generation()).is_ok());
         result["snapshotProfile"] = json!({"timeDomain":"mpv-media","fileOriginValidation":"deferred-worker-origin-match-required"});
         result
@@ -761,6 +856,9 @@ impl Sources {
         }
         if matches!(method, "audio.addTrack" | "audio.selectTrack") {
             return self.audio_track(mpv, method, params).map(Some);
+        }
+        if matches!(method, "player.chapters" | "player.setLoop") {
+            return self.marks(mpv, method, params).map(Some);
         }
         #[cfg(feature = "producer-audio")]
         {
@@ -1277,6 +1375,45 @@ impl Sources {
         Ok(Some(json!(status)))
     }
 }
+/// mpv `chapter-list` as `[{ title, start }]` (at most 4096, empty title = null).
+fn chapter_list(node: Node) -> Vec<Value> {
+    let Node::Array(entries) = node else {
+        return Vec::new();
+    };
+    entries
+        .into_iter()
+        .take(4096)
+        .filter_map(|entry| {
+            let Node::Map(fields) = entry else {
+                return None;
+            };
+            let field = |name: &str| fields.iter().find(|(key, _)| key == name).map(|(_, v)| v);
+            let start = match field("time")? {
+                Node::Double(time) if time.is_finite() => *time,
+                Node::Int64(time) => *time as f64,
+                _ => return None,
+            };
+            let title = match field("title") {
+                Some(Node::String(title)) if !title.is_empty() => {
+                    Some(title.chars().take(1024).collect::<String>())
+                }
+                _ => None,
+            };
+            Some(json!({"title":title,"start":start.max(0.)}))
+        })
+        .collect()
+}
+fn clear_loop(mpv: &Mpv) {
+    for (name, value) in [
+        ("ab-loop-a", "no"),
+        ("ab-loop-b", "no"),
+        ("ab-loop-count", "inf"),
+    ] {
+        if let Err(error) = mpv.set_property(name, value) {
+            eprintln!("host.error {name}: {error}");
+        }
+    }
+}
 /// The one external track `audio-add` created, if exactly one appeared.
 fn added_external(
     before: &[crate::media_tracks::AudioTrack],
@@ -1375,6 +1512,31 @@ mod audio_track_tests {
             title: None,
             language: None,
         }
+    }
+    #[test]
+    fn chapters_read_title_and_start() {
+        let chapter = |title: Option<&str>, time: Node| {
+            let mut fields = vec![("time".to_owned(), time)];
+            if let Some(title) = title {
+                fields.push(("title".into(), Node::String(title.into())));
+            }
+            Node::Map(fields)
+        };
+        let list = chapter_list(Node::Array(vec![
+            chapter(Some("Opening"), Node::Double(0.)),
+            chapter(Some(""), Node::Double(90.5)),
+            chapter(None, Node::Int64(300)),
+            chapter(Some("bad"), Node::String("x".into())),
+        ]));
+        assert_eq!(
+            list,
+            vec![
+                json!({"title":"Opening","start":0.0}),
+                json!({"title":null,"start":90.5}),
+                json!({"title":null,"start":300.0}),
+            ]
+        );
+        assert!(chapter_list(Node::None).is_empty());
     }
     #[test]
     fn only_one_new_external_track_counts_as_the_added_one() {

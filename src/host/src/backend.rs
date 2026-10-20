@@ -34,6 +34,8 @@ pub struct Backend {
     pub frame: Arc<Mutex<Option<Frame>>>,
     #[cfg(feature = "producer-audio")]
     pub input: Arc<Mutex<Option<crate::producer_input::Routing>>>,
+    /// `{ mpv, ffmpeg }`: the linked libmpv's `mpv-version` / `ffmpeg-version`.
+    pub versions: Value,
     stop: mpsc::Sender<()>,
     worker: Option<thread::JoinHandle<()>>,
 }
@@ -73,6 +75,9 @@ impl Backend {
                 }
                 let mpv = Arc::new(builder.build()?);
                 mpv.request_log_messages("v")?;
+                let version = |name: &str| mpv.get_property::<String>(name).ok();
+                let versions =
+                    json!({"mpv":version("mpv-version"),"ffmpeg":version("ffmpeg-version")});
                 let sequence = Arc::new(AtomicU64::new(0));
                 let render_stop = Arc::new(AtomicBool::new(false));
                 let publish_gate = Arc::new(AtomicBool::new(true));
@@ -130,7 +135,7 @@ impl Backend {
                     }
                 });
                 render_initialized.recv()?.map_err(anyhow::Error::msg)?;
-                let _ = ready.send(Ok(()));
+                let _ = ready.send(Ok(versions));
                 let mut sources = crate::source_backend::Sources::default();
                 let mut geometry = crate::source_geometry::Geometry::new(publish_gate.clone());
                 let mut geometry_error = false;
@@ -395,13 +400,14 @@ impl Backend {
                 ));
             }
         });
-        initialized
+        let versions = initialized
             .recv()
             .map_err(|_| anyhow::anyhow!("backend initialization channel closed"))?
             .map_err(anyhow::Error::msg)?;
         Ok(Self {
             commands,
             frame,
+            versions,
             #[cfg(feature = "producer-audio")]
             input,
             stop,

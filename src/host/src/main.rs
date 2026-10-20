@@ -4,6 +4,7 @@ mod bindings;
 mod clipboard;
 mod commands;
 pub mod composition;
+mod confirm;
 mod core_actions;
 mod effects;
 pub mod font_asset;
@@ -50,6 +51,7 @@ pub mod subtitle_upload;
 mod ui;
 mod ui_state;
 mod ui_values;
+pub mod window_control;
 pub mod window_state;
 use anyhow::{Result, bail};
 use backend::{Backend, Command};
@@ -122,6 +124,8 @@ enum Event {
     Reaped(u64),
     BackendCleaned(u64),
     DialogDone(Reply, Option<Vec<PathBuf>>),
+    /// `dialogs.confirm` answered: (requester, confirmed, checked).
+    ConfirmDone(Reply, bool, bool),
     RuntimeFault(u64, String),
 }
 #[derive(Deserialize)]
@@ -226,6 +230,19 @@ struct Host {
     /// `player.setStepSeek` per owner: (write sequence, seconds); the newest wins.
     step_seek: BTreeMap<u64, (u64, f64)>,
     step_writes: u64,
+    /// `window.setAlwaysOnTop` and `setCursorAutoHide("playing")` per plugin.
+    on_top: window_control::LastWrite<bool>,
+    cursor_playing: window_control::LastWrite<bool>,
+    /// The level last applied: (floating, window count when applied).
+    on_top_applied: Option<(bool, usize)>,
+    /// `window.setVideoArea` answered once the video area shows the target.
+    area_replies: Vec<AreaReply>,
+}
+struct AreaReply {
+    reply: Reply,
+    video: (f64, f64),
+    result: Value,
+    deadline: u64,
 }
 impl Host {
     fn activation(&mut self, owner: u64) -> Result<Value> {
@@ -377,6 +394,8 @@ impl Host {
         }
         self.policy.remove_owner(owner);
         self.power.remove_owner(owner);
+        self.on_top.remove(owner);
+        self.cursor_playing.remove(owner);
         let step = self.step_seconds();
         if self.step_seek.remove(&owner).is_some() {
             self.step_seek_changed(step);
@@ -645,6 +664,11 @@ impl Host {
             Event::UiCallback(owner, data) => {
                 self.send(owner, json!({"event":"ui.callback","data":data}))
             }
+            Event::ConfirmDone(reply, confirmed, checked) => {
+                self.policy.activity(self.now_ms());
+                self.dialog_busy = false;
+                self.respond(reply, Ok(json!({"confirmed":confirmed,"checked":checked})));
+            }
             Event::DialogDone(reply, paths) => {
                 self.policy.activity(self.now_ms());
                 self.dialog_busy = false;
@@ -737,6 +761,8 @@ impl Host {
             width: number("logical-width"),
             height: number("logical-height"),
         };
+        let video = (number("video-width"), number("video-height"));
+        self.apply_on_top();
         if self.measured_shell != Some(self.shell_generation)
             && (viewport.width <= 0. || viewport.height <= 0.)
         {
@@ -767,11 +793,19 @@ impl Host {
             let idle = snapshot
                 .bottom
                 .is_some_and(|s| s.reason == Some(window_state::Reason::Idle));
-            shell.set_property("cursor-hidden", (fullscreen && idle && playing).into())?;
+            // `setCursorAutoHide("playing")`: in a window too, while it has focus.
+            let windowed = self.cursor_playing.get()
+                && self.policy.idle(now)
+                && (fullscreen || native.is_some_and(|facts| facts.active));
+            shell.set_property(
+                "cursor-hidden",
+                (playing && ((fullscreen && idle) || windowed)).into(),
+            )?;
             Ok(
-                json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"menuOpen":self.menu_open,"dialogOpen":self.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot}),
+                json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"videoArea":{"width":video.0,"height":video.1},"menuOpen":self.menu_open,"dialogOpen":self.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot}),
             )
         })();
+        self.answer_video_area(video, now);
         match result {
             Ok(facts) => {
                 let detached = facts["slots"]["sidebar"]["effective"] == true
@@ -1813,6 +1847,96 @@ impl Host {
             eprintln!("host.error power {error}");
         }
     }
+    /// `window.setAlwaysOnTop`: every ordinary window of the application at
+    /// the floating level, applied again when windows open or close.
+    fn apply_on_top(&mut self) {
+        if self.headless {
+            return;
+        }
+        let want = self.on_top.get();
+        let count = platform_window::window_count();
+        if self.on_top_applied == Some((want, count)) {
+            return;
+        }
+        match platform_window::set_floating(want) {
+            Ok(count) => self.on_top_applied = Some((want, count)),
+            Err(error) => {
+                eprintln!("host.error window level: {error}");
+                self.on_top_applied = Some((want, count));
+            }
+        }
+    }
+    /// `{ fullscreen, videoArea }` of the main window (zero without one).
+    fn window_state(&self) -> Value {
+        let facts = &self.window_facts;
+        json!({"fullscreen":facts["fullscreen"] == true,
+            "videoArea":{"width":facts["videoArea"]["width"].as_f64().unwrap_or(0.),
+                "height":facts["videoArea"]["height"].as_f64().unwrap_or(0.)}})
+    }
+    /// `window.setVideoArea { width, height }`: resize the window so the video
+    /// column gets that size (bars added, fitted to the screen). Answered when
+    /// the layout shows it, or after a second.
+    fn set_video_area(
+        &mut self,
+        reply: &Reply,
+        params: &Value,
+    ) -> std::result::Result<(), RpcError> {
+        let (width, height) = (
+            params["width"].as_f64().unwrap_or(f64::NAN),
+            params["height"].as_f64().unwrap_or(f64::NAN),
+        );
+        if !window_control::valid_size(width, height) {
+            return Err(RpcError::invalid("width and height must be 1..16384"));
+        }
+        let unavailable = |message: &str| RpcError::new("unavailable", message);
+        let shell = self
+            .shell
+            .as_ref()
+            .ok_or_else(|| unavailable("the video area needs a native window"))?;
+        if shell.window().is_fullscreen() {
+            return Err(unavailable("全屏时不可用"));
+        }
+        let number = |name: &str| match shell.get_property(name) {
+            Ok(SValue::Number(n)) if n.is_finite() => n,
+            _ => 0.,
+        };
+        let id = self
+            .native_window
+            .ok_or_else(|| unavailable("the native window is not known"))?;
+        let screen = platform_window::screen_for(id).map_err(|e| unavailable(e.0))?;
+        let sidebar = &self.window_facts["slots"]["sidebar"];
+        let docked = sidebar["preferred"] == true && sidebar["detached"] == false;
+        let frame = window_control::Frame {
+            extra_height: (number("logical-height") - number("video-height")).max(0.),
+            extra_width: if docked {
+                self.policy.sidebar_user_width() + window_state::SPLITTER_WIDTH
+            } else {
+                0.
+            },
+            max_content: platform_window::max_content(&screen),
+        };
+        let fit = window_control::fit(width, height, frame);
+        platform_window::resize_content(id, fit.content.0, fit.content.1)
+            .map_err(|e| unavailable(e.0))?;
+        self.area_replies.push(AreaReply {
+            reply: reply.clone(),
+            video: fit.video,
+            result: json!({"width":fit.video.0,"height":fit.video.1,"clamped":fit.clamped}),
+            deadline: self.now_ms() + 1000,
+        });
+        Ok(())
+    }
+    fn answer_video_area(&mut self, video: (f64, f64), now: u64) {
+        let (done, waiting): (Vec<_>, Vec<_>) = self.area_replies.drain(..).partition(|pending| {
+            now >= pending.deadline
+                || ((video.0 - pending.video.0).abs() <= 1.
+                    && (video.1 - pending.video.1).abs() <= 1.)
+        });
+        self.area_replies = waiting;
+        for pending in done {
+            self.respond(pending.reply, Ok(pending.result));
+        }
+    }
     fn show_info_panels(&self) {
         if let Some(shell) = &self.shell
             && let Ok(value) =
@@ -1873,7 +1997,13 @@ impl Host {
         let capability = match method {
             method if method.starts_with("packages.") => Some("plugins.manage"),
             method if method.starts_with("sourceResolvers.") => Some("source.resolve"),
-            "dialogs.open" => Some("ui.dialog"),
+            "dialogs.open" | "dialogs.confirm" => Some("ui.dialog"),
+            "window.state" => None,
+            "window.setVideoArea" | "window.setAlwaysOnTop" | "window.setCursorAutoHide" => {
+                Some("window.control")
+            }
+            "player.chapters" => Some("playback.read"),
+            "player.setLoop" => Some("playback.control"),
             "ui.mount" | "ui.setMount" | "ui.unmount" | "ui.interaction" | "ui.menu"
             | "layout.state" | "layout.set" => Some("ui.mount"),
             "osd.show" | "osd.panel" => Some("ui.osd"),
@@ -1973,6 +2103,57 @@ impl Host {
                 Value::Null
             }
             "layout.state" => self.layout_state()?,
+            "window.state" => self.window_state(),
+            "window.setVideoArea" => {
+                self.set_video_area(reply, params)?;
+                return Ok(None);
+            }
+            "window.setAlwaysOnTop" => {
+                let on = params["onTop"]
+                    .as_bool()
+                    .ok_or_else(|| RpcError::invalid("onTop requires a boolean"))?;
+                if self.headless {
+                    return Err(RpcError::new("unavailable", "no native window"));
+                }
+                self.on_top.set(reply.owner, on);
+                self.apply_on_top();
+                Value::Null
+            }
+            "window.setCursorAutoHide" => {
+                let playing = match string(params, "mode")? {
+                    "fullscreen" => false,
+                    "playing" => true,
+                    _ => return Err(RpcError::invalid("mode is fullscreen or playing")),
+                };
+                self.cursor_playing.set(reply.owner, playing);
+                Value::Null
+            }
+            "dialogs.confirm" => {
+                if self.headless {
+                    return Err(RpcError::new(
+                        "unavailable",
+                        "native dialogs require a running native window",
+                    ));
+                }
+                if self.dialog_busy {
+                    return Err(RpcError::new("busy", "a native dialog is already open"));
+                }
+                let options = confirm::parse(params)?;
+                let events = self.events.clone();
+                let answer = reply.clone();
+                self.dialog_busy = true;
+                #[cfg(feature = "producer-audio")]
+                self.physical_revoke(producer_input::RevokeReason::Dialog);
+                if let Err(error) =
+                    confirm::show(&options, self.native_window, move |yes, checked| {
+                        let _ = events.send(Event::ConfirmDone(answer.clone(), yes, checked));
+                    })
+                {
+                    self.dialog_busy = false;
+                    return Err(error);
+                }
+                return Ok(None);
+            }
             "layout.set" => {
                 if self.headless {
                     return Err(RpcError::new(
@@ -2412,6 +2593,8 @@ impl Host {
             | "audio.addTrack"
             | "audio.selectTrack"
             | "player.step"
+            | "player.chapters"
+            | "player.setLoop"
             | "source.state"
             | "source.operation"
             | "source.submit"
@@ -2790,6 +2973,13 @@ fn main() -> Result<()> {
     let mut observed_source = Value::Null;
     let (events, receiver) = mpsc::channel();
     let backend = Backend::start(events.clone(), silent)?;
+    // `plugin.app`, handed to every plugin process when it starts.
+    let ffmpeg = &backend.versions["ffmpeg"];
+    plugins::set_app_info(&json!({"version":env!("CARGO_PKG_VERSION"),
+        "build":option_env!("VESTRA_BUILD"),
+        "components":{"mpv":backend.versions["mpv"],
+            "libav":if ffmpeg.is_string() { json!({"ffmpeg":ffmpeg}) } else { json!({}) },
+            "slint":env!("VESTRA_SLINT_VERSION")}}));
     let (mount_events, mount_input) = mpsc::sync_channel(64);
     let mut host = Host {
         backend,
@@ -2843,6 +3033,10 @@ fn main() -> Result<()> {
         actions_busy: Default::default(),
         step_seek: BTreeMap::new(),
         step_writes: 0,
+        on_top: window_control::LastWrite::new(false),
+        cursor_playing: window_control::LastWrite::new(false),
+        on_top_applied: None,
+        area_replies: Vec::new(),
         commands: commands::Registry::new(),
     };
     host.register_host_commands()?;

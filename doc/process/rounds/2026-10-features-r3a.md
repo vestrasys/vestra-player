@@ -209,7 +209,50 @@ plugin.dialogs.confirm(options: { message: string; detail?: string; confirm: str
 
 ### 6.2 维护者交付与签名调整
 
-（P1 完成时填写）
+#### P1 批次 1（2026-10-21，维护者）：窗口、应用信息、确认框、章节与循环
+
+**实现清单**（每项：宿主 + SDK 类型与封装 + TestHost + 参考文档 + 单元测试）
+
+| 任务单 | 内容 | 宿主 | SDK / TestHost / 文档 |
+| --- | --- | --- | --- |
+| §3.1 | `window.state` / `onChange`（R-W1） | `host.slint` 新增 `video-width/height`（`canvas` 尺寸）；`window_tick` 的布局事实加 `videoArea`，随现有 `window.state` 事件变化才推送；新方法 `window.state`（不需要能力） | `sdk/plugin/window.ts`：激活前读一次（与 `player.state` 并行），插件第一次读 `state` / `onChange` 后跟随事件；`host.mainWindow`、`host.setMainWindow` |
+| §3.1 | `setVideoArea`（R-W2） | `window_control::fit`（加底栏与附着侧栏、按比例缩小到屏幕可见区、放大到最小 318×120 / 窗口 320×182）；`platform_window::resize_content`（`NSWindow` `setFrame_display`，保持左上角、挪回可见区）；布局显示目标尺寸（±1）或 1 秒后才答复 | resolve 后刷新 `state`；参考 §6.6 |
+| §3.1 | `setAlwaysOnTop`（R-W3） | `platform_window::set_floating`：本应用所有普通层级窗口 ↔ `NSFloatingWindowLevel`（`setLevel` 安全方法）；窗口数变化（新开工具窗口、浮动侧栏）时重新应用；`window_control::LastWrite` 最后写入生效、插件停用后回退 | `host.mainWindow.onTop` |
+| §3.1 | `setCursorAutoHide`（R-W4） | `cursor-hidden = playing && ((fullscreen && 底栏空闲) \|\| ("playing" && Policy::idle && (fullscreen \|\| 主窗口为活动窗口)))`；`Policy::idle` 与全屏底栏同一空闲与遮挡规则；`LastWrite`，停用回退 `"fullscreen"` | `host.mainWindow.cursorAutoHide` |
+| §3.1 | 能力 `window.control` | `plugins.rs` 与 `scripts/plugin.mjs` 两处 | 参考 §2 |
+| §3.2 | `plugin.app`（R-W6） | 后端启动时读 `mpv-version`、`ffmpeg-version`；`build.rs` 从 `Cargo.lock` 取 Slint 版本、`git rev-parse --short HEAD` 取构建哈希（取不到不设，`build: null`）；`plugins::set_app_info` 后经环境变量 `VESTRA_APP_INFO` 交给每个插件进程（不加 RPC） | `runner.ts` 读环境变量传给 `createPlugin` 第 5 个参数；`host.app`；参考 §3.5 |
+| §3.6 | `player.chapters`（R-M1） | `source_backend::marks`：`chapter-list` → `{ title, start }`（≤ 4096 条，空标题为 `null`）；没有媒体、生成流为空 | `host.chapters` |
+| §3.6 | `setLoop` / `PlayerState.loop`（R-M2） | `ab-loop-a/b/count`；校验 `0 ≤ a < b ≤ duration`（`invalid`）、可跳转（`unsupported`）、就绪媒体（`unavailable`）、生成流 `unsupported`；条件提交复用 `check_expected`；`source.state.loop` 为请求值 | `setLoop` 写 `host.source.loop` |
+| §3.6 | R-H13 | `Sources::loop_state`：来源代数变化时清除 `ab-loop-*` 与请求；`count` 用完（mpv `remaining-ab-loops == 0`）时清除，`state.loop` 变 `null` | TestHost 打开新来源时清除 |
+| §3.8 | `dialogs.confirm`（裁决 3.3） | `confirm.rs`：`NSAlert`（`addButtonWithTitle`、确认按钮 `setHasDestructiveAction`、取消按钮 `setKeyEquivalent("\u{1b}")`、`setShowsSuppressionButton` 作复选框）；有主窗口时 `beginSheetModalForWindow_completionHandler`（`block2::RcBlock`），否则 `runModal`；与文件对话框共用 `dialog_busy`；长度按字符计 | `host.dialogAnswers.push({ confirmed, checked })`、`host.confirms`；参考 §7 |
+| §3.9 | 文档 | — | 参考 §2、§3.3、§3.5（新）、§5.1、§5.2、§6.6（新）、§7、§14、§17 批次 1；示例 §22–§24 |
+
+**签名调整与实现取舍**（签名均与裁决一致）
+
+1. `PlayerState.loop` 在 `types.ts` 写成可选（`loop?: … | null`）：playlist 的测试手写 `PlayerState` 对象（`tests/queue.test.ts`），必选字段会让 `npm run check` 失败，而插件目录不归维护者改。SDK 总是给出该字段（没有循环为 `null`），参考文档已写明。批次 2 的 `audioOutput` 同样处理。
+2. `plugin.app` 放在 `Scope` 上（与其它模块一样子作用域也有），不只在 `Plugin` 根上。
+3. `libav` 只有 `{ ffmpeg: <ffmpeg-version> }`：libmpv 0.41 没有报告 libavcodec 等各库版本的属性；参考 §3.5 写明需要时用 `tools.run("ffmpeg", ["-version"])`。实测值：`mpv: "mpv v0.41.0"`、`libav: { ffmpeg: "9.0.2" }`、`slint: "1.16.1"`、`build: "289b26b"`。
+4. 剩余次数：mpv 0.41 实际有 `remaining-ab-loops` 属性（裁决写「给不出就不提供」）。按裁决签名不对外提供，只在宿主内部用它判断循环结束；以后需要时可作为兼容字段加入。`count` 的语义写明为「回跳次数」（`count: 2` 时 a–b 段共播 3 遍）。
+5. `window.state` 的跟随是惰性的：每个插件激活前读一次，但只有在插件读过 `state` 或注册 `onChange` 后才订阅事件（拖动缩放窗口时每帧都有布局变化，不让所有插件都收到）。
+6. `setVideoArea` 的「附着侧栏」按偏好判断（`preferred && !detached`），不按当前是否显示：窗口变大后侧栏会出现，所以宽度预先算进去；放不下时按现有规则隐藏（`reason: "space"`）。
+7. TestHost 的 `setLoop` 先判断生成流（`unsupported`）再判断条件；宿主先判断条件。只影响两者同时不满足时的错误码。
+8. `runner.test.ts` 的协议顺序断言更新为 `["window.state", "commands.register"]`（新增的激活前读取）。
+
+**检查**（worktree 内实际执行）
+
+- `src/`：`check`、`format:check`、`boundaries`、`plugins:build` 0；`test:sdk` 76/76（新增 `tests/sdk/round3a.test.ts` 4 条）；插件测试 audio 30、bilibili 15、capture 24、history 22、info 20、nes 11、playback 45、playlist 61、subtitle-online 13、subtitles 46、video 22、workshop 17、youtube 14 全过（workshop `vendor/sdk` 已按测试开头的命令重同步，同一提交）。
+- `src/host/`：`cargo fmt --check`、`clippy --locked --all-targets -D warnings`（含 `--no-default-features`）0；`cargo test --locked` 187/187（新增 `window_control` 2 条、`confirm` 1 条、章节解析 1 条）。
+- 无界面实测（`--headless --silent` + 临时探针插件，未进仓库；10 秒带两章的 mkv）：`plugin.app` 如上；`chapters()` → `[{Opening, 0}, {Main, 4}]`；`setLoop({ a: 1, b: 2, count: 2 })` 后位置 1→1.93→1→1.87→1→2.53（回跳两次后继续），之后 `state.loop` 为 `null`；`setLoop({ a: 5, b: 60 })` → `invalid`；重新打开同一文件后 `state.loop` 为 `null`；无界面时 `confirm`、`setAlwaysOnTop`、`setVideoArea` → `unavailable`。
+- 宿主 Rust：`src/host/src/*.rs` 26 306 → 27 068（+762，含测试），另 `build.rs` 40 行；SDK 与运行器 `src/sdk/plugin/*.ts` + `src/runtime/` +330（含 TestHost 120），`src/sdk/*.ts` +41。
+
+**给协调者的 GUI 实测要点**（需要一个调用这些接口的插件：作者 A 的 window、B 的 marks，或临时探针）
+
+1. `setVideoArea({ width: 1280, height: 720 })`：视频区正好 1280×720（截图量），窗口左上角不动；打开侧栏再调用：窗口宽 = 1280 + 3 + 侧栏宽；在 1440×900 屏上要 3840×2160：`clamped: true`，窗口完整在可见区内（不压菜单栏和 Dock），比例 16:9；要 100×50：视频区 318×120（窗口 320×182）且 `clamped`；全屏时 `unavailable`。
+2. `setAlwaysOnTop(true)` 后点 Finder 或别的应用：主窗口、浮动侧栏仍在最上；此时新开一个工具窗口（如播放属性）也在最上；`false` 或停用该插件后恢复普通层级；系统文件对话框照常。
+3. `setCursorAutoHide("playing")`：窗口模式播放时指针在视频上静止 3 秒消失，移动即出现；暂停不消失；指针在底栏上不消失；菜单打开时不消失；切到别的应用（主窗口不是活动窗口）不消失；停用插件后只在全屏时消失。
+4. `dialogs.confirm`：作为主窗口的表单弹出（随窗口移动），回车 = 确认、Esc = 取消；`destructive: true` 时确认按钮为红字；带 `checkbox` 时勾选后 `checked: true`；确认框打开时再调一次 `confirm` 或 `openFile` 得 `busy`；确认框打开期间快捷键不触发。
+5. `plugin.app`：与终端 `mpv --version` 第一行、`ffmpeg -version`（同一 Homebrew 库时）一致。
+6. 章节与循环：带章节的 mkv `chapters()` 与 `mpv --term-playing-msg='${chapter-list}'` 一致；A-B 循环在 B 点回到 A（误差约一帧）；换文件后不再回跳。
 
 ### 6.3 作者交付
 

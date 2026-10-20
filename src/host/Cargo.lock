@@ -4735,6 +4735,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64",
+ "block2 0.6.2",
  "cpal",
  "objc2 0.6.5",
  "objc2-app-kit 0.3.2",

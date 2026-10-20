@@ -76,10 +76,10 @@ interface Disposable { dispose(): Promise<void> }
 | `commands` | `commands.add`、`host.run` |
 | `ui.window` | `windows.create` |
 | `ui.mount` | `panels.mount`、`panels.bottom` / `panels.sidebar`（任何插件读写两个面板位置） |
-| `ui.dialog` | `dialogs.*` |
-| `playback.read` | `player.state` 启动时读取、`player.refresh`、`player.stats`；滤镜读取处理状态 |
+| `ui.dialog` | `dialogs.*`（含 `dialogs.confirm`） |
+| `playback.read` | `player.state` 启动时读取、`player.refresh`、`player.stats`、`player.chapters`；滤镜读取处理状态 |
 | `events` | `player.state` / `onChange` 实时更新、面板可见性、字幕状态刷新 |
-| `playback.control` | `player.open`、`setPaused`、`seek`、`setRate`、`restart`、`close`、`scrub`、`setOutput`、`provideSequence`、`next`、`previous`、`addAudioTrack`、`selectAudioTrack`、`step`、`setStepSeek`；`power.preventSleep` |
+| `playback.control` | `player.open`、`setPaused`、`seek`、`setRate`、`restart`、`close`、`scrub`、`setOutput`、`provideSequence`、`next`、`previous`、`addAudioTrack`、`selectAudioTrack`、`step`、`setStepSeek`、`setLoop`；`power.preventSleep` |
 | `producer.av` | `player.openStream` |
 | `processing.video` | `video.filter`（另需 `playback.read`） |
 | `processing.audio` | `audio.filter`（另需 `playback.read`） |
@@ -90,8 +90,9 @@ interface Disposable { dispose(): Promise<void> }
 | `plugins.manage` | `packages.*` |
 | `ui.osd` | `osd.show`、`osd.panel` |
 | `clipboard` | `clipboard.readText`、`writeText`、`writeImage` |
+| `window.control` | `window.setVideoArea`、`setAlwaysOnTop`、`setCursorAutoHide` |
 
-`tools`、`storage`、`system`（§16）在插件进程内执行，不需要能力。
+`tools`、`storage`、`system`（§16）在插件进程内执行，不需要能力。读取 `window.state` / `onChange`（§6.6）与 `plugin.app`（§3.5）不需要能力。
 
 没有 `events` 时，`player.state` 只在启动和操作完成后更新，`onChange` 不会因外部变化触发。
 
@@ -120,7 +121,8 @@ interface Disposable { dispose(): Promise<void> }
 interface Scope extends Disposable {
   readonly commands, windows, panels, dialogs, player, video, audio,
            subtitles, media, resolvers, packages, osd,
-           host, clipboard, power, tools, storage, system;
+           host, clipboard, power, tools, storage, system, window;
+  readonly app: AppInfo;           // §3.5
   scope(): Scope;
   add<T extends Disposable>(item: T): T;
   onDispose(cleanup: () => void | Promise<void>): Disposable;
@@ -170,6 +172,24 @@ interface Plugin extends Scope {
 - 存什么、什么格式由插件决定。自己写文件时先写临时文件再改名（`writeFileSync(tmp)` → `renameSync(tmp, path)`），播放器中途退出也不会留下写了一半的文件；读不到或读坏时用默认值。
 - 播放器没能提供目录时（例如创建失败），读取这个属性抛出 `code: "unavailable"`。
 - 测试：`TestHost` 为每个测试提供一个空的临时目录（`host.dataDirectory`，`stop()` 时删除）；要测试「重启后恢复」，给 `startPlugin` 传 `{ dataDirectory }` 指定同一个目录。
+
+### 3.5 应用信息 `plugin.app`
+
+```ts
+interface AppInfo {
+  readonly version: string;          // 播放器版本（宿主 Cargo 包版本）
+  readonly build: string | null;     // 构建时的源码短哈希；构建时取不到为 null
+  readonly components: {
+    readonly mpv: string | null;     // libmpv 的 mpv-version，如 "mpv v0.41.0"
+    readonly libav: Record<string, string>; // { ffmpeg: <ffmpeg-version> }
+    readonly slint: string;          // 链接的 Slint 版本，如 "1.16.1"
+  };
+}
+```
+
+- 同步只读、不需要能力，子作用域相同。播放器启动插件进程时随握手交给它（不经请求），整个进程内不变。
+- `libav` 只有 libmpv 报告的 `ffmpeg-version`（键 `ffmpeg`）：libmpv 0.41 不报告 libavcodec 等各库的版本，需要时用 `tools.run("ffmpeg", ["-version"])` 读取。
+- 测试：`host.app` 在 `startPlugin` 之前设置。
 
 ## 4. 命令 `plugin.commands`
 
@@ -276,6 +296,7 @@ interface PlayerState {
   readonly error: string | null;     // phase 为 error 时的原因
   readonly can: { pause; seek; rate; restart; close; snapshot; next; previous: boolean };
   readonly audioTracks: AudioTrack[] | null;
+  readonly loop?: { a: number; b: number; count: number | null } | null; // A-B 循环，§5.2 setLoop
 }
 
 interface AudioTrack {
@@ -286,7 +307,7 @@ interface AudioTrack {
 }
 ```
 
-`PlayerState` 是不可变快照，可以保存下来，用作之后操作的条件（§5.3）。`can.next` / `can.previous` 来自播放序列提供者（§5.4），没有提供者时为 `false`。
+`PlayerState` 是不可变快照，可以保存下来，用作之后操作的条件（§5.3）。`loop` 由 SDK 总是给出（没有循环为 `null`）；类型上写成可选，只是为了让测试里手写的状态对象不必带它。`can.next` / `can.previous` 来自播放序列提供者（§5.4），没有提供者时为 `false`。
 
 ### 5.2 控制
 
@@ -306,6 +327,8 @@ interface AudioTrack {
 | `addAudioTrack(path, { select?, ifCurrent? })` → `Promise<AudioTrack>` | 给当前媒体加一条外部音频文件（本地绝对路径），默认同时选中（`select: false` 只添加）。返回新音轨（`external: true`、`exportable: false`），它保留到换来源。路径不合法 `invalid`，没有就绪的媒体（含生成流）`unavailable`，载入失败 `backend` |
 | `selectAudioTrack(id, opts?)` → `Promise<PlayerState>` | 选中 `state.audioTracks` 中的一条；id 不存在 `invalid` |
 | `step(unit, direction, opts?)` | `unit`：`"frame"`（一帧，前进时暂停在下一帧）或 `"keyframe"`（严格越过当前关键帧到下一个/上一个）；`direction`：`"backward"` \| `"forward"`。可用条件与核心「上一帧/下一帧」相同（§5.5，`message` 为其原因），关键帧另需就绪且可跳转，否则 `unsupported`。**resolve 时新位置已生效**：宿主等到位置变化且没有在途的跳转（或 1.5 秒内不动 = 已到边界）才答复，SDK 随后刷新，之后读 `player.state.position` 就是新位置。同一时间只有一步在途，第二个调用以 `busy` 失败；连按的去重由调用方决定 |
+| `chapters()` → `Promise<{ sourceId, chapters: { title: string \| null; start: number }[] }>` | 当前媒体的章节（mpv `chapter-list`，`start` 为秒），按需读取，不随状态推送；没有媒体、生成流或没有章节时为空数组。`sourceId` 是读取时的来源，与 `player.state.sourceId` 比较可知是否已过期。需要 `playback.read` |
+| `setLoop(loop \| null, opts?)` | A-B 循环：播到 `b` 回到 `a`（秒，`0 ≤ a < b ≤ 时长`），回跳 `count` 次（正整数，≤ 1 000 000；省略 = 无限），`null` 取消。结果在 `state.loop`（`count` 为请求值，不是剩余次数）；最后一次回跳后 `state.loop` 变为 `null`。范围不对 `invalid`；不可跳转的来源、生成流 `unsupported`；没有就绪的媒体 `unavailable`；条件提交同其它控制。来源变化（新的 `sourceId`）时播放器清除循环 |
 | `setStepSeek({ seconds })` | 核心第 1 档相对跳转（`seek-backward` / `seek-forward`，← / →）的步长：0.1–3600，一位小数，默认 5；菜单标题随之变为「后退 N秒」。所有插件最后写入的生效，该插件停用后回到上一个仍有效的值（都没有则 5） |
 
 `opts` 为 `{ ifCurrent?: PlayerState }`。
@@ -559,9 +582,48 @@ interface OsdPanel extends Disposable {
 - 信息块：位于提示一行之下，半透明黑底、11px 等宽字，不接收输入，最多 32 行、4096 字节；多个插件各一块时从上到下排列。`dispose` 或插件停用时移除。第二次调用 `panel()` 抛错。
 - 无界面模式下以 `unavailable` 失败（`panel().set` 的失败交给 `onError`）。
 
-## 7. 文件对话框 `plugin.dialogs`
+### 6.6 主窗口 `plugin.window`
 
-需要 `ui.dialog`。系统原生对话框；没有时长限制，用户选择或取消才结束。
+```ts
+interface MainWindow {
+  readonly state: WindowState;   // 同步只读，启动时已读好
+  onChange(listener: (state: WindowState) => void): Disposable;
+  setVideoArea(size: { width: number; height: number }): Promise<{ width; height; clamped: boolean }>;
+  setAlwaysOnTop(onTop: boolean): Promise<void>;
+  setCursorAutoHide(mode: "fullscreen" | "playing"): Promise<void>;
+}
+interface WindowState {
+  readonly fullscreen: boolean;
+  readonly videoArea: { readonly width: number; readonly height: number }; // 逻辑点
+}
+```
+
+- `state`、`onChange` 不需要能力；三个 `set…` 需要 `window.control`。`videoArea` 是视频区（不含底栏、侧栏、分隔条），全屏时是整个屏幕；无界面模式为 0×0。有 `events` 时随窗口变化更新（从插件第一次读 `state` 或调用 `onChange` 开始跟随），没有 `events` 时只在启动和本插件的 `setVideoArea` 之后更新。
+- `setVideoArea`：把窗口调成视频区为 `width`×`height`（1–16384 逻辑点；1 倍 = 一个视频像素一个点）。播放器加上底栏和附着的侧栏（侧栏宽 + 3），保持窗口左上角，再把窗口挪回屏幕可见区（不含菜单栏和 Dock）。放不下时按比例缩小；小于最小尺寸（视频区宽 318、高 120，窗口 320×182）时放大到最小值（会有黑边）；这两种情况 `clamped: true`。resolve 时布局已是新尺寸（最多等 1 秒），返回实际视频区，`state` 已刷新。全屏时与无界面模式 `unavailable`（`message`「全屏时不可用」）。
+- `setAlwaysOnTop`：`true` 时播放器的普通窗口（主窗口、浮动侧栏、工具窗口，包括之后新开的）浮在其他应用的窗口之上（`NSFloatingWindowLevel`）；系统对话框不受影响。多个插件时最后一次调用生效，该插件停用后回到其余插件中最后的值（都没有则不置顶）。无界面模式 `unavailable`。
+- `setCursorAutoHide`：`"fullscreen"`（默认）只在全屏时隐藏指针；`"playing"` 在窗口模式也隐藏。隐藏条件不变：播放中（就绪且未暂停）、指针在视频区、3 秒内没有指针移动或按键、没有菜单或系统对话框、面板没有在操作；窗口模式另需主窗口是活动窗口。多个插件时最后一次调用生效，该插件停用后回到其余插件中最后的值（都没有则 `"fullscreen"`）。
+- 测试：`host.mainWindow`（`{ fullscreen, videoArea, onTop, cursorAutoHide }`）；`host.setMainWindow({ fullscreen?, videoArea? })` 模拟用户改变窗口并推送。
+
+## 7. 对话框 `plugin.dialogs`
+
+需要 `ui.dialog`。系统原生对话框；没有时长限制，用户选择或取消才结束。同一时间只有一个对话框（文件对话框与确认框共用），第二个以 `busy` 失败；无界面模式 `unavailable`。
+
+```ts
+dialogs.confirm(options: {
+  message: string;        // 1–200 个字符，粗体
+  detail?: string;        // ≤ 2000 个字符，正文
+  confirm: string;        // 确认按钮（默认按钮，回车），1–40 个字符
+  cancel?: string;        // 取消按钮（Esc），1–40 个字符，默认「取消」
+  destructive?: boolean;  // 确认按钮标为破坏性操作（红字）
+  checkbox?: string;      // 文字下方的复选框，1–40 个字符
+}): Promise<{ confirmed: boolean; checked: boolean }>
+```
+
+- 系统提示框（`NSAlert`），以主窗口为父窗口的表单（sheet）；主窗口不可用时为应用模态窗口。`confirmed`：用户点了确认按钮；`checked`：复选框的状态（没有复选框为 `false`，取消时也如实返回）。长度按 Unicode 字符计（一个汉字一个字符），超出 `invalid`。
+- 「不再询问」之类的记忆由插件自己保存（`storage.json`），播放器不记。
+- 测试：`host.dialogAnswers.push({ confirmed, checked })`；`host.confirms` 记录每次的选项。
+
+文件对话框：
 
 | 方法 | 返回 |
 | --- | --- |
@@ -826,6 +888,7 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 | 断言 | `host.window(id).props`（kebab-case 名）、`.visible`；`host.command(id).state`、`.declaration`；`host.conflicts`（`[绑定, 赢家, ...被压下]`）；`host.layout.bottom` / `.sidebar`（可直接改后 `host.emit("window.state", {})` 模拟别处的变化）；`host.osd`（显示过的提示）、`host.osdPanel`；`host.sequence`（提供者的标志）；`host.menus`（`showMenu` 记录）；`host.sent(method)`；`host.source`；`host.processing`、`host.subtitles`、`host.snapshots`、`host.jobs`、`host.producers` |
 | 模拟数据 | `host.stats`（`player.stats()` 的返回值，第 2 轮新增字段可省略，SDK 补 `null`）；`host.dataDirectory`（`plugin.dataDirectory`，`storage.json` 直接读写其中的真实文件）；`host.setSource({ audioTracks })`（`addAudioTrack` / `selectAudioTrack` 有默认处理，可用 `host.handle("audio.addTrack" \| "audio.selectTrack", …)` 注入失败）；`host.subtitles.tracks` 的条目可带 `codec`、`text`、`streamIndex` |
 | 通用能力 | `host.clipboard`（`{ text, images }`，预置 `text` 测 `readText`）；`host.power`（合并后的 `"off"` / `"playing"`）；`host.tools.handle(tool, (args) => ({ stdout, stderr }))`（未注入的工具 `unavailable`；抛 `HostError` 模拟失败），`host.tools.calls`；`host.system.revealed`、`.opened`；`host.subtitleLoads`（每次 `load` 的 `format`、`title`、`select` 与字节）；`host.system.urls`（`system.openUrl`） |
+| 第 3a 轮 | `host.mainWindow`、`host.setMainWindow(patch)`（§6.6）；`host.app`（§3.5）；`host.dialogAnswers.push({ confirmed, checked })`、`host.confirms`（§7）；`host.chapters`（`player.chapters()` 在媒体就绪时返回它）；`setLoop` 写入 `host.source.loop`，打开新来源时清除 |
 | 核心动作 | `host.coreAction(id)`、`host.coreCommands`（播放器的 14 条核心命令，§5.5；`press` 先匹配它们）；`host.coreRuns`；`host.stepSeek`；`host.steps` |
 | 注入故障 | `host.handle(method, fn)`：抛 `new HostError(code, message)` 模拟播放器拒绝，抛普通 `Error` 模拟答复丢失；`host.reset(method)` 恢复 |
 | 同步 | `await host.settle(ms?)`：等到没有在途请求（可额外等待计时器） |
@@ -978,3 +1041,18 @@ await plugin.player.setStepSeek({ seconds: settings.value.step }); // 第 1 档�
 ```
 
 测试：`TestHost` 像播放器一样注册这 14 条核心命令，放在 `host.coreCommands`（不进 `host.commands`，插件自己的命令断言不受影响）；`host.coreAction(id)` 取得命令，`.run()` 执行，`.state` 为启用/勾选状态；`host.press` 先匹配核心绑定（核心赢得冲突）；`host.run` 按同样规则执行并把提示写入 `host.osd`，`host.coreRuns` 记录执行过的动作，`host.stepSeek`、`host.steps` 记录 `setStepSeek` 与 `step`。插件仍声明旧命令时，`host.conflicts` 会列出与核心动作的冲突。
+
+### 第 3a 轮批次 1：窗口、应用信息、确认框、章节与循环（2026-10）
+
+兼容扩展（不用它们的插件不必改）：
+
+- 新模块 `plugin.window`（§6.6）：`state`、`onChange`（不需要能力），`setVideoArea`、`setAlwaysOnTop`、`setCursorAutoHide`（新能力 `window.control`，宿主与构建工具同一张能力表）。
+- `plugin.app`（§3.5）：播放器版本、构建哈希、mpv / FFmpeg / Slint 版本，同步只读。
+- `plugin.dialogs.confirm`（§7，`ui.dialog`）：系统确认框，可带复选框。插件不再需要自制确认窗口。
+- `player.chapters()`、`player.setLoop()`、`PlayerState.loop`（§5.1、§5.2）。
+
+行为说明：
+
+- 所有插件在激活前多读一次 `window.state`（与读 `player.state` 并行），所以 `plugin.window.state` 在 `activate` 里就是真实值。直接对协议计数的测试会看到这个请求。
+- 来源变化（新的 `sourceId`）时播放器清除 A-B 循环（mpv `ab-loop-a/b/count`），之前不清除。
+- `window.state` 事件的数据多了 `videoArea`（内部字段，`panels.*.state` 不变）。
