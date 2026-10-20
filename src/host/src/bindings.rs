@@ -173,6 +173,35 @@ fn numpad(code: &str) -> Option<String> {
     })
 }
 
+/// Slint's key code for a named key (winit `KeyCode` name).
+pub fn slint_key(code: &str) -> Option<char> {
+    let function = code
+        .strip_prefix('F')
+        .and_then(|n| n.parse::<u32>().ok())
+        .filter(|n| (1..=24).contains(n));
+    if let Some(n) = function {
+        return char::from_u32(0xF704 + n - 1);
+    }
+    Some(match code {
+        "Space" => ' ',
+        "Enter" => '\n',
+        "Tab" => '\t',
+        "Escape" => '\u{1b}',
+        "Backspace" => '\u{8}',
+        "Delete" => '\u{7f}',
+        "Insert" => '\u{F727}',
+        "Home" => '\u{F729}',
+        "End" => '\u{F72B}',
+        "PageUp" => '\u{F72C}',
+        "PageDown" => '\u{F72D}',
+        "ArrowUp" => '\u{F700}',
+        "ArrowDown" => '\u{F701}',
+        "ArrowLeft" => '\u{F702}',
+        "ArrowRight" => '\u{F703}',
+        _ => return None,
+    })
+}
+
 /// Input name of a named key by its winit `KeyCode` (`Delete` is ⌦, on
 /// laptops fn+⌫; `Backspace` is ⌫).
 fn named_key(code: &str) -> Option<String> {
@@ -1421,6 +1450,41 @@ mod tests {
         );
         // German ⌥5 reaches a "[" binding.
         assert!(table.resolve(&key("["), None).is_some());
+    }
+
+    #[test]
+    fn named_keys_have_slint_codes_that_resolve_back() {
+        for code in [
+            "Delete",
+            "Backspace",
+            "ArrowLeft",
+            "PageDown",
+            "Home",
+            "F11",
+            "Enter",
+        ] {
+            let key = slint_key(code).unwrap().to_string();
+            let physical = Physical {
+                code: code.into(),
+                base: None,
+                mods: Some(Mods {
+                    alt: true,
+                    ..Mods::default()
+                }),
+            };
+            // The re-dispatched key resolves by its recorded physical key.
+            assert_eq!(
+                from_key(&key, false, false, false, false, Some(&physical)),
+                Some(key_input(&format!("Alt+{code}"))),
+                "{code}"
+            );
+        }
+        assert_eq!(slint_key("F24"), Some('\u{F71B}'));
+        assert_eq!(slint_key("KeyA"), None);
+    }
+
+    fn key_input(text: &str) -> Input {
+        parse(text).unwrap()
     }
 
     #[test]

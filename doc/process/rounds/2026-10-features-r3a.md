@@ -303,6 +303,8 @@ plugin.dialogs.confirm(options: { message: string; detail?: string; confirm: str
 4. 音频输出：设备列表与「系统设置 ▶ 声音」一致（每个设备一次）；选耳机后声音从耳机出；拔掉耳机约 1 秒内回到扬声器、`active` 变为 `null`，插回后约 1 秒切回；NES 播放时同样跟随（拔插瞬间可能有一个缓冲的静音），拔掉所选设备时 NES 不会停止。
 5. 次字幕：中英两条内嵌轨，主中文、次英文同时显示；`secondaryPosition` `top` 在画面顶部、`aboveMain` 在主字幕上方（观察间距是否合适）；把次字幕选成主字幕那条 `invalid`；PGS 轨不能作次字幕；换文件后次字幕消失。
 
+- **Round 3a fix: Option + 命名键改由宿主转交 Slint**（协调者实测：⌥⌦ 交给 Slint 后既不到达焦点链、又让面板的指针事件停住，直到下一个普通按键）。winit 钩子把 Option + 命名键（⌦、⌫、方向键、Home/End、PageUp/Down、Enter、Tab、Esc、Insert、F1–F24；⌥Space 除外，它打出不换行空格）的按下、重复、松开都不交给 Slint，改由主循环以普通的 `KeyPressed` / `KeyPressRepeated` / `KeyReleased` 重新派发，并先记下按下时的物理键与 winit 修饰键；于是事件走 Slint 正常的焦点链，作用域由焦点决定（列表焦点下 `panel:sidebar`），`from_key` 解析为 `Alt+Delete`。`VESTRA_DEBUG_KEYS` 打印 `keys: inject to slint …`。
+
 #### 裁决：作者 D 的三条（次字幕、音频输出）
 
 1. **主字幕为 PGS 时设置次字幕位置**：改核心（小改，不加接口）。`secondaryPosition` 仍是 `SubtitleStyle` 的字段；宿主原来在主字幕不可设样式时拒绝整个 `setStyle`（`unsupported`），现在在选了次字幕时接受（样式作用于文本次字幕，对图形主字幕无效）。没有次字幕时仍 `unsupported`。理由：不为一个字段拆出独立接口（保守），而原来的拒绝规则在有次字幕时没有道理。
