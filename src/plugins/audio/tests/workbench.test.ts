@@ -66,7 +66,7 @@ test("menu under 声音 follows the allocation, and editing commands wait for a 
       ["声音 ▶ 复位", 516, "", false],
     ],
   );
-  assert.ok([...host.commands.values()].every(({ declaration: d }) => d.group === "audio"));
+  assert.ok([...host.commands.values()].every(({ declaration: d }) => d.group === "domain"));
   assert.deepEqual(host.conflicts, []);
   assert.deepEqual(host.command("audio.workbench").state, { enabled: true, checked: null, busy: false, reason: null });
   assert.deepEqual(host.command("audio.reset").state, {

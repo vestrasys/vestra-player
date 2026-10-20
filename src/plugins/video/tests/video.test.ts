@@ -30,7 +30,7 @@ test("menu under 视频 follows the allocation; the window opens once; disabling
     ["视频 ▶ 饱和度 +1%", 408, "U"],
     ["视频 ▶ 高斯模糊", 409, "Ctrl+B"],
   ]);
-  assert.ok([...host.commands.values()].every(({ declaration: d }) => d.group === "picture"));
+  assert.ok([...host.commands.values()].every(({ declaration: d }) => d.group === "domain"));
   assert.deepEqual(host.conflicts, []);
   await host.command("video.picture").run();
   await host.command("video.picture").run();

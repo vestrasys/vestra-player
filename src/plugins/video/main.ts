@@ -76,7 +76,7 @@ export default async function activate(plugin: Plugin) {
   };
 
   // 视频 ▶ 401–419 (round allocation): the window first, then reference player's color keys.
-  const group = "picture";
+  const group = "domain";
   plugin.commands.add({ id: "video.picture", path: ["视频", "画面调节…"], order: 401, group, run: () => window.show() });
   plugin.commands.add({ id: "video.reset", path: ["视频", "复位"], order: 402, group, bindings: ["Q"], run: reset });
   steps.forEach(([label, field, down, up], i) => {

@@ -81,7 +81,7 @@ export default async function activate(plugin: Plugin) {
 
   const editing = { enabled: ready, busy, reason: () => (ready() ? null : "没有选中的音轨") };
   // 声音 ▶ 510–529 (round allocation), after playback's volume items.
-  const group = "audio";
+  const group = "domain";
   plugin.commands.add({
     id: "audio.workbench",
     path: ["声音", "音频工作台…"],
