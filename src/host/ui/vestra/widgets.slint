@@ -63,6 +63,7 @@ export component Button {
     accessible-checked: root.checked;
     accessible-action-default => { if root.enabled { root.clicked(); } }
     if !root.icon-only: Rectangle {
+        border-radius: Theme.radius-control;
         background: !root.enabled ? Theme.button-disabled
             : touch.pressed ? Theme.button-press
             : touch.has-hover ? Theme.button-hover : Theme.button-bg;
@@ -130,14 +131,15 @@ export component Slider {
         height: 2px;
         width: root.thumb-width / 2 + root.ratio * (root.width - root.thumb-width);
         x: 0;
-        background: !root.enabled ? Theme.icon-disabled : root.panel ? Theme.playing : Theme.accent;
+        border-radius: 1px;
+        background: !root.enabled ? Theme.icon-disabled : Theme.accent-fill;
     }
     Rectangle {
         x: root.ratio * (root.width - root.thumb-width);
         y: (parent.height - root.thumb-height) / 2;
         width: root.thumb-width;
         height: root.thumb-height;
-        border-radius: root.panel ? 0px : self.height / 2;
+        border-radius: root.panel ? Theme.radius-control : self.height / 2;
         background: !root.enabled ? Theme.icon-disabled
             : root.panel ? Theme.text
             : touch.pressed ? Theme.accent-press

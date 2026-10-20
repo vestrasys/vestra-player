@@ -102,7 +102,7 @@ export component PlaylistSidebar inherits Rectangle {
     background: Theme.bg-list;
     private property <length> row-height: 20px;
     // reference player's selected-row background (§5.2); the theme has no token for it.
-    private property <color> selected-bg: #2b2b2b;
+    private property <color> selected-bg: Theme.selected-bg;
     private property <bool> dragging;
     private property <int> drop-index: -1;
 
