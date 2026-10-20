@@ -438,6 +438,7 @@ test("移除全部 asks with the system confirmation; 「不再询问」 on a co
   let app = await start({ data });
   try {
     const [a, b] = await app.files(["a.mp4", "b.mp4"]);
+    assert.equal(app.command("confirm-clear").state.checked, true, "asks by default");
     await app.addFiles([a!, b!]);
     // Cancelled (even with the box ticked): nothing is removed, nothing remembered.
     app.host.dialogAnswers.push({ confirmed: false, checked: true });
@@ -466,6 +467,16 @@ test("移除全部 asks with the system confirmation; 「不再询问」 on a co
     assert.equal(app.rows().length, 0);
     assert.equal(app.host.confirms.length, 0, "remembered across a restart");
     assert.equal(JSON.parse(await readFile(join(data, "playlists.json"), "utf8")).settings.confirmClear, false);
+    // 播放 ▶ 播放列表 ▶ 移除全部前确认 turns the question back on.
+    assert.equal(app.command("confirm-clear").state.checked, false);
+    await app.run("confirm-clear");
+    assert.equal(app.command("confirm-clear").state.checked, true);
+    assert.equal(app.osd(), "移除全部前确认：开");
+    await app.addFiles([a!]);
+    app.host.dialogAnswers.push({ confirmed: false, checked: false });
+    await app.run("clear");
+    assert.equal(app.host.confirms.length, 1);
+    assert.deepEqual(app.names(), ["a.mp4"]);
   } finally {
     await app.close();
     await rm(data, { recursive: true, force: true });

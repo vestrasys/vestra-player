@@ -1,0 +1,249 @@
+# 第 3b 轮：界面组合（时间轴标记层、运行时图片、背景层、拖放、主题与外观、设置页、输入链接组件）+ 插件接入
+
+分支：`rebuild/features-r3b`（自第 3a 轮合并到 `main` 之后的提交新建，由协调者创建）。依据：[协商记录](2026-10-features-negotiation.md)「第 3 步：裁决」（下称「裁决」）的 3b 排期、3.2 第 5 条（`ImageRef` 释放）、3.2 第 8 条、3.3「输入链接小窗」，[功能需求](../../product/feature-requirements.md)（下称「需求文档」），[社区工作流](../community-workflow.md) §3、§4、§5，[第 3a 轮任务单](2026-10-features-r3a.md)（下称「r3a」）§1、§4.1 推到本轮的项。
+
+## 1. 范围
+
+只做裁决里标为「3b」的条目；不提前做 4a 以后的条目，不新增裁决之外的接口。签名做不到时维护者在本文 §6.2 记录原因与调整后的签名。需求文档里比裁决宽的写法（附录 A 草案）一律以裁决为准，差异见 §4.3。
+
+| 类别 | 条目 | 新能力 | 需求 |
+| --- | --- | --- | --- |
+| 时间轴 | R-M3 `plugin.timeline.marks` / `onChange` / `layer()` | `timeline.marks` | marks B22（r3a 转入）；playback 绘制 |
+| 运行时图片 | R-U1 `plugin.ui.image(path): ImageRef`、`PropValue = Json \| ImageRef`；裁决 3.2 第 5 条释放规则 | — | playback I07（第 2 轮起待本轮）；visualizer J11、H12 |
+| 背景层 | R-U3 `panels.mount("backdrop", file)`、`panels.backdrop.state` / `onChange` | 现有 `ui.mount` | visualizer J11、H12 |
+| 拖放 | R-U2 `plugin.drops.provide`、`Panel.onDrop`（无 `onDragOver`） | `ui.drop` | playlist A15 |
+| 主题与外观 | R-H6 Theme 颜色 token 宿主可设并下发；R-S2 `plugin.appearance` | `ui.theme`（`set`） | preferences H10 |
+| 设置页 | R-S1 `plugin.settings.page` / `show`；R-H7 选项容器窗口 | `ui.settings` | preferences J04；hotkeys J01、J02、plugins J07、visualizer H12 的页面形态（r3a 推到本轮） |
+| 宿主 UI 库 | `@vestra/widgets.slint` 新增 `UrlInputRow`（裁决 3.3，不加协议） | — | playback A02、playlist「添加链接…」 |
+
+裁决 3.5 对本轮的统计：7 个接口 / 模块（`ui.image`、`drops.provide`、`Panel.onDrop`、`panels.mount("backdrop")`、`settings.*`、`appearance`、`timeline.*`），2 项宿主行为（H6、H7），4 个新能力名（`ui.drop`、`timeline.marks`、`ui.settings`、`ui.theme`），外加 1 个 widgets 组件。本任务单的范围与之一一对应，没有增减。
+
+不在本轮：画中画（R-W5、R-H8、`window.state.pictureInPicture`）、显示层（R-V9）、倍帧（R-V8）、C-SIZE（R-H2）——4a；C-GPU（R-H3）、渲染选项（R-V10）、`transfer`（R-P8）——4b。已拒绝不再提：`onDragOver`（R-U2 改写）、背景层 `mode`（R-U3 改写）、`themes` 列表与 `corners`（R-S2 改写）、面板 `PopupWindow` 越界（R-U4）、`commands.popup`（R-U5）。
+
+## 2. 两条线与顺序
+
+| 阶段 | 执行 | 内容 | 完成条件 |
+| --- | --- | --- | --- |
+| P0 | 协调者 | 建分支；记录基线（§6.1）；确认 r3a 的作者交付已合并（hotkeys、plugins 两个插件存在，本轮 C 要在其上加页面） | 基线写进 §6.1 |
+| P1 | 维护者 | §3 全部核心项（均为兼容扩展；H6 改 `Theme` 为 `in property` 对读取方兼容，见 §3.5） | 静态检查全过；参考文档、TestHost 同步；协调者审查通过 |
+| P2 | 插件作者 | §4 分派 | 各插件 `check/build/test` 全过 |
+| P3 | 协调者 | §5 验收，提交推送，合并到 `main` | — |
+
+P1 分两批交付，作者按依赖开工（§4.2）：
+
+| 批次 | 内容 | 解锁 | 宿主 Rust 估算 |
+| --- | --- | --- | --- |
+| 批次 1：视频区与数据层 | §3.1 时间轴标记层、§3.2 运行时图片、§3.3 背景层、§3.7 `UrlInputRow` | marks B22、playback I07 与标记绘制、A02 组件迁移；visualizer J11、H12；playlist「添加链接…」 | 约 1 100 |
+| 批次 2：输入与界面组合 | §3.4 拖放、§3.5 Theme 下发与外观、§3.6 设置页与选项窗口 | playlist A15；preferences J04、H10；hotkeys、plugins、visualizer 的设置页 | 约 1 900 |
+
+批次 2 内部顺序：§3.5 先于 §3.6（选项窗口是又一个要下发 Theme 的视图，复用 §3.5 的下发路径）；§3.4 与两者独立，可以穿插。
+
+## 3. 维护者清单（P1）
+
+每一项都要同时完成：宿主实现（`src/host/`）、SDK 类型与实现（`src/sdk/`）、TestHost 模拟（`src/sdk/plugin/testing.ts`）、参考文档（`doc/plugins/reference.md`）、单元测试；新增能力名同步 manifest 校验（宿主 `plugins.rs` 与构建工具 `scripts/plugin.mjs`）。第一方 Rust 不得用 `unsafe`。签名以裁决 3.1 / 3.3 为准，下面只写实现要点。
+
+### 3.0 体积预算
+
+宿主 Rust（`src/host/src/*.rs`，含测试）净增约 3 000 行。基线为 r3a 结束时的 28 577 行（P0 复测为准）。
+
+| 项 | 宿主改动点 | 宿主 Rust 估算 | SDK / runtime 估算 |
+| --- | --- | --- | --- |
+| §3.1 时间轴标记层 | 新模块 `timeline.rs`（按所有者分层、校验、合并、来源变化清空）；`plugins.rs` 停用清理；事件 `timeline.changed` | 约 260 | 约 120 |
+| §3.2 运行时图片 | `ui_values.rs`（`PropValue` 转换，面板与窗口两条写入路径）；新模块 `ui_image.rs`（路径校验、PNG/JPEG 头与尺寸、解码缓存、按作用域失效、LRU） | 约 500 | 约 120 |
+| §3.3 背景层 | `composition.rs::shell_source` 新增 `backdrop` 槽；`host.slint` 视频区层次；可见性规则与 `panels.backdrop` 状态事件 | 约 300 | 约 80 |
+| §3.4 拖放 | `main.rs` 的 winit 窗口事件（`HoveredFile` / `DroppedFile`）汇集；落点与修饰键（`NSEvent` 安全类方法）；命中面板或视频区；按扩展名的提供者表 | 约 430 | 约 100 |
+| §3.5 Theme 与外观 | `theme.slint` 颜色 token 改 `in property`；两套配色表（Rust 常量）；对主窗口外壳、浮动侧栏、工具窗口、菜单视图、选项窗口逐实例下发；`ui_state.rs` 的 `appearance`；`appearance.*` 方法与事件 | 约 600 | 约 100 |
+| §3.6 设置页与选项窗口 | 新模块 `settings_window.rs`（页面注册表、分类树、页面组合源码生成、切换、`show`、停用移除、`settings.lastPage`）；复用 `composition.rs` 的编译与回调转发 | 约 850 | 约 180 |
+| §3.7 `UrlInputRow` | 只改 `src/host/ui/vestra/widgets.slint`（约 60 行 Slint，不计入 Rust） | 0 | — |
+| 合计 | | **约 2 940** | **约 700** |
+
+超出处理（工作流 §4.2、裁决 3.5「超过就拆」）：
+
+- 批次 1 交付后若实际净增已超过 1 400 行，或维护者对批次 2 的复估使全轮超过 3 200 行，**把 §3.6（R-S1 + R-H7）拆出为第 3c 轮**，本轮保留 §3.4、§3.5。拆出后：preferences J04 按需求文档「过渡」形态（方案 C：「选项…」打开本插件自己的工具窗口，只含外观页）交付；hotkeys、plugins、visualizer 的设置页推迟。§3.5 不拆：H10 只依赖它，且它是 §3.6 的前置。
+- 拆分决定、实测行数与理由写进 §6.2，并同步修改 §4.1 分派表。不为了压行数削减测试。
+
+### 3.1 时间轴标记层（R-M3，能力 `timeline.marks`）
+
+```ts
+type MarkKind = "chapter" | "bookmark" | "marker";
+interface TimelineMark { time: number; kind: MarkKind; title: string | null; plugin: string /* 发布者 manifest id */ }
+plugin.timeline.marks: readonly TimelineMark[];                       // 同步只读；所有层合并，按 time 升序；需 playback.read
+plugin.timeline.onChange(listener: (marks: readonly TimelineMark[]) => void): Disposable; // 需 events
+plugin.timeline.layer(): TimelineLayer;                               // 每插件一层，第二次调用抛错；需 timeline.marks
+interface TimelineLayer extends Disposable {
+  set(marks: { time: number; kind: MarkKind; title?: string }[], opts?: { ifCurrent?: PlayerState }): void; // 最后写入生效；[] 清空
+}
+```
+
+- 上限（需求文档 B22）：单层 ≤ 1000 个标记，`title` ≤ 100 字符；`time` 在 `[0, duration]`（时长未知时只要求 ≥ 0）；违反为 `invalid`。`set` 返回 `void`，失败交给 `onError`（与 `osd.panel().set` 一致）；`ifCurrent` 不符时丢弃本次写入，不报错。
+- 来源变化（新 `sourceId`）时核心清空**所有**层；插件停用或 `dispose` 时清除该插件的层。`kind` 核心不解释，只供读取方配色。
+- 变化推送新事件 `timeline.changed`（合并后的全量列表，变化才推送，至多每 100 ms 一次）。读取方没有 `events` 时 `marks` 只在启动时读一次。
+- TestHost：`host.timeline`（按插件 id 记录各层、合并结果）；`host.setTimelineLayer(pluginId, marks)` 模拟别的插件发布；打开新来源时清空。
+
+### 3.2 运行时图片（R-U1，裁决 3.2 第 5 条）
+
+```ts
+plugin.ui.image(path: string): ImageRef;   // 同步返回不透明引用；不需要能力
+type PropValue = Json | ImageRef;          // View.set / bind 的属性值；只作为属性的顶层值
+```
+
+- 路径：绝对路径，位于本插件 `dataDirectory` **或本插件包目录**下；规范化后越界、经符号链接越界都拒绝。
+- 校验在宿主**首次使用**该引用时进行：PNG/JPEG（按文件头，不按扩展名）、文件 ≤ 16 MB、≤ 4096×4096；失败作为属性写入错误交给 `onError`（`invalid` 或 `missing`）。
+- 缓存：按（插件、规范路径、文件大小、修改时间）缓存解码结果；每插件解码内存上限 64 MB，LRU 只淘汰**当前没有被任何属性引用**的条目；被淘汰的引用仍然有效，再用时重新解码。宿主不监视文件：内容变了插件重新调用 `ui.image` 取新引用。
+- 生命周期：`ImageRef` 属于创建它的作用域；作用域释放后写入该引用以 `invalid` 失败，属性里已显示的图片保持到被覆盖或视图关闭。
+- wire 形式由维护者定（参考文档写明它是内部细节）。宿主对每次使用都按「该插件 + 路径规则」重新校验，所以插件绕过 SDK 伪造 wire 值也拿不到额外权限。
+- 改动点：`ui_values.rs` 去掉对 image 的拒绝，`Value::Image` 只从 `ImageRef` 生成；面板（`composition.rs::set_json_global`）、工具窗口两条写入路径都要支持；`slint::Image` 从解码后的 RGBA 构造。
+- TestHost：`plugin.ui.image` 返回可比较的引用（`host.images` 记录路径与所属作用域）；视图属性断言可读出引用对应的路径；作用域释放后写入得 `invalid`。
+
+### 3.3 背景层（R-U3，现有能力 `ui.mount`）
+
+```ts
+plugin.panels.mount("backdrop", file): Panel;            // 同一时间只有一个背景层，第二个 conflict
+plugin.panels.backdrop: {
+  readonly state: { effective: boolean } | null;         // null：没有背景层；effective：现在是否显示
+  onChange(listener: (state: { effective: boolean } | null) => void): Disposable;
+};
+```
+
+- 核心只负责「没有视频帧时显示背景层」：来源阶段 `empty`，或 `ready` 且没有视频输出（`stats().video === null`）时 `effective = true`；`loading`、`error` 保持上一状态，不闪烁；有视频帧时 `false`。没有 `mode`：插件用 `player.state.phase` 与 `stats().video` 自己决定画什么（裁决 R-U3）。
+- 关闭来源后视频区不再保留最后一帧（第 1 轮遗留观察）：`empty` 时宿主清空视频图像，没有背景层时为 `Theme.bg-video` 纯色。
+- 层次：画在视频图像位置，铺满视频区；在宿主输入层（TouchArea）**之下**，屏幕提示与信息块**之下**；不接收指针和键盘（双击全屏、右键菜单、滚轮、拖放照常由宿主视频区处理）。
+- 复用面板挂载组合（`composition.rs` 增加 `Slot::Backdrop`，首次挂载时重建外壳，同底栏、侧栏）；组件与 global 推断规则同 `panels.mount`；插件停用时卸载。
+- 已知行为（裁决 3.2 第 8 条）：带封面的音频文件 mpv 会把封面当作视频轨，此时 `effective = false`，显示的是 mpv 渲染的封面。参考文档写明，不算缺陷。
+- TestHost：`host.backdrop`（挂载者、`effective`）；`host.setBackdropEffective(bool)` 或随 `host.source.phase` / `host.stats.video` 推导，二选一写进参考文档。
+
+### 3.4 拖放（R-U2，能力 `ui.drop`）
+
+```ts
+interface DropModifiers { alt: boolean; shift: boolean; cmd: boolean }
+plugin.drops.provide(handler: { extensions: string[]; drop(e: { paths: string[]; modifiers: DropModifiers }): unknown }): Disposable;
+Panel.onDrop(listener: (e: { paths: string[]; at: { x: number; y: number }; modifiers: DropModifiers }) => unknown): Disposable;
+```
+
+- `extensions` 小写、不带点；视频区松手时核心按扩展名把 `paths` 分组（保留 Finder 顺序），每组一次调用交给对应提供者。同一扩展名多个提供者时**先注册的生效**并写日志（与绑定冲突同规则）；没有提供者的扩展名，核心什么也不做。
+- 文件夹：裁决没有写明。维护者定一个不加字段的规则并写进参考文档（建议：目录按保留名 `"folder"` 匹配，与需求文档 A15 一致），在 §6.2 记录。
+- 面板（附着的底栏、侧栏，以及浮动侧栏窗口）上松手：整组交给该面板的 `onDrop`；该面板没有 `onDrop` 监听时按视频区规则分发。`at` 的坐标系在参考文档写明（作者回应按**面板坐标**设计，playlist 用自己回传的滚动位置换算到行）。工具窗口上松手：忽略。
+- 不提供拖动过程中的位置（无 `onDragOver`），拖放期间不暂停、不改变播放。
+- 实现要点：winit 0.30.13 只有 `HoveredFile(PathBuf)` / `DroppedFile(PathBuf)` / `HoveredFileCancelled`，每个路径一个事件，不带位置与修饰键。宿主在同一轮事件循环里收集连续的 `DroppedFile` 为一组；松手时用 `NSEvent::mouseLocation`、`NSEvent::modifierFlags`（`objc2-app-kit` 安全类方法）取位置与修饰键，换算到窗口坐标后命中面板或视频区。若实测分组或位置不可靠，在 §6.2 记录并给出降级（例如只按最后一个 `HoveredFile` 的窗口命中）。
+- TestHost：`host.drop(paths, { target: "video" | "panel", at?, modifiers? })` 按同一规则分发；`host.dropProviders` 列出登记。
+
+### 3.5 Theme 下发与外观（R-H6、R-S2，能力 `ui.theme`）
+
+```ts
+plugin.appearance: {
+  readonly theme: "vestra" | "classic";              // 同步只读，不需要能力
+  onChange(listener: (theme: "vestra" | "classic") => void): Disposable;
+  set(theme: "vestra" | "classic"): Promise<void>;   // 需 ui.theme；其它值 invalid
+};
+```
+
+- `theme.slint`：颜色 token 与 `accent-fill` 由 `out property` 改为 `in property`（默认值为现在的 Vestra 值，未下发时外观不变）；`radius-*`、字号、控件尺寸保持常量。插件 Slint 只读 `Theme`，原有写法不用改；插件不能写 `Theme`（Slint 不允许在 `.slint` 里给 global 的 `in` 属性赋值，SDK 的 `set` / `bind` 只到插件自己的 global）——加一条编译测试断言。
+- 配色表放宿主（Rust 常量，两套各列全部颜色 token）：`vestra` = 现值；`classic` = [ui-alignment](../../product/ui-alignment.md) §2.1 的 经典配色（强调 `#fae100`、正在播放 `#2282f2`、底色 `#1e1e1e` 等），`accent-fill` 用纯色 `#fae100`。
+- 下发：每个视图实例（主窗口外壳含底栏与侧栏、浮动侧栏、工具窗口、菜单视图、背景层、选项窗口）创建时与配色变化时 `set_global_property("Theme", …)`；单个视图失败不影响其它视图，下次刷新重试；切换时不中断正在拖动的滑块与打开的菜单。
+- 选择由核心持久化：`ui-state.json` 的 `appearance.theme`（去抖保存）；preferences 停用后配色保持。变化推送新事件 `appearance.changed`，推送规则同 `window.onChange`（有 `events` 时跟随）。
+- 屏幕提示「配色：…」由调用方插件自己显示，核心不显示。
+- TestHost：`host.appearance`（当前值）、`host.setAppearance(theme)` 模拟别的插件切换。
+
+### 3.6 设置页与选项窗口（R-S1、R-H7，能力 `ui.settings`）
+
+```ts
+type SettingsCategory = "general" | "playback" | "subtitles" | "video" | "audio" | "input" | "appearance" | "plugins" | "other";
+plugin.settings.page(file: string, options: { id: string; category: SettingsCategory; title: string; order?: number }):
+  View & Disposable & { readonly ready: Promise<void> };
+plugin.settings.show(pageId?: string): Promise<void>;   // 只能指定本插件的页面；省略 = 上次的页面
+```
+
+- 页面文件规则、组件与 global 推断同 `panels.mount`，**不加** `component` / `global` 选项，没有 `visible`（裁决 R-S1）。`id` 插件内唯一（`missing` / `invalid` 规则写进参考文档）；`title` 1–24 字符；每插件 ≤ 8 页。回调没有「先绑定再显示」的限制。
+- 容器窗口（H7）由核心创建与拥有，标题「选项」：640×480、最小 600×420、可调整大小；左侧分类树 160 宽（九类固定顺序：常规 / 播放 / 字幕 / 视频 / 声音 / 快捷键与鼠标 / 外观 / 插件 / 其它；空分类不显示；同一分类内按 `order`、再按插件 id 排序）；右侧页面区固定 440 宽，超高时垂直滚动；底部只有「关闭」。几何与颜色按需求文档 J04「界面」。
+- 行为：再次 `show()` 把窗口带到前面并切页；`show(别的插件的页面)` 为 `invalid`；`settings.lastPage` 存 `ui-state.json`，页面不存在时显示第一页；页面所属插件停用时移除该页（正在显示则切到同分类第一页，分类空了切到「常规」第一页，全空显示「没有可设置的项目」），重新启用后随注册恢复；⌘W 关闭；窗口内快捷键不触发（同工具窗口）；打开不影响播放。
+- 组合：复用 `composition.rs` 的编译与回调转发，每个页面一个所有者 global（`global_alias`），属性写入与回调只连到注册它的插件。页面集合变化时窗口重建，页面状态由各插件的 `bind` 恢复。
+- TestHost：`host.settings`（已注册页面、`show` 调用记录、当前页）；页面作为 `View` 可断言属性与触发回调。
+
+### 3.7 输入链接组件 `UrlInputRow`（裁决 3.3，不加协议）
+
+- 在 `src/host/ui/vestra/widgets.slint` 新增 `export component UrlInputRow`：输入框 + 「确定」「取消」，规格按 [ui-alignment](../../product/ui-alignment.md) UI-DLG-02（不做历史列表）。建议接口：`in-out property <string> text`、`in property <string> placeholder`、`in property <string> confirm-text`（默认「打开」）、`in property <bool> enabled`、`callback accepted(string)`（回车或点确定）、`callback cancelled()`（点取消或 Esc）。
+- 只用 `Theme` token，不含业务（不校验 URL，校验由插件做）。
+- 参考文档 §6.4 的控件列表加上它；示例里给一个 ≤ 15 行的用法。
+
+### 3.8 文档
+
+- 参考文档：上述全部接口；§2 能力表加 `ui.drop`、`timeline.marks`、`ui.settings`、`ui.theme`，`ui.mount` 一行加 `"backdrop"`；§6.1 `PropValue` 与 `ImageRef`（释放规则）；§6.3 背景层与 `Panel.onDrop`；§6.4 `Theme` 改为宿主下发（插件只读）、`UrlInputRow`；新增小节：时间轴标记层、拖放、外观、设置页；§14 TestHost 新增项；§17 本轮变更说明（`Theme` 由常量改为宿主下发属于默认行为变化，写明对插件无需改动）。
+- 示例：`ui.image` 显示图片、`timeline.layer().set`、`settings.page` + `show`、`drops.provide` 各一个短例（≤ 30 行）。
+
+## 4. 插件接入分派（P2）
+
+作者规则同第 2 轮（[2026-10-features-r2.md](2026-10-features-r2.md) §4）与 r3a §4：只写自己的插件目录；按需求文档对应小节实现；缺核心能力时按工作流 §4.1 写请求，同时继续不依赖它的部分；本轮核心提供了的自制实现必须删除并改用核心能力，报告列出删除的文件与行数。降级项按裁决实现，同时修改需求文档对应小节（§4.3，协调者合并时审）。
+
+### 4.1 分派表
+
+| 作者 | 插件 | 新功能（编号 → 依赖） | 迁移到核心能力 | 降级与文档 | 工作量 |
+| --- | --- | --- | --- | --- | --- |
+| A | playback | I07 进度条悬停缩略图（`ui.image` + `tools.run("ffmpeg")`，缓存在 `dataDirectory/thumbs/`，提示按 R-U4 用负 `y` 画在视频区）；B22 绘制侧：进度线上画 `timeline.marks`（章节 `Theme.text-dim`、书签 `Theme.accent`）与 `state.loop` 区间（`Theme.playing`），悬停标记 ±3px 时提示「标题  01:23」并与 I06 合并 | A02「打开链接…」窗口改用 `UrlInputRow`（`ui/open-url.slint` 中的自绘输入行删除） | 无 | 中高（批次 1） |
+| B | marks、playlist | marks：B22 发布侧（`timeline.layer()`；「在进度条上显示标记」开关，`marks.json` 的 `showOnSeekbar`；章节 ∪ 书签，带 `ifCurrent`，超 1000 截断）。playlist：A15 拖放（`drops.provide` 登记媒体扩展名、列表文件、文件夹；视频区加入并播放第一项，Option 只加入；`Panel.onDrop` 插到落点所在行之前） | playlist「添加链接…」（`ui/link.slint`）改用 `UrlInputRow`；`ui/sidebar.slint` 的 2 处硬编码颜色改用 `Theme` token（H10 验收要求插件 Slint 无硬编码颜色） | A15 按 §4.3 改写需求文档 | 中（marks 批次 1；playlist 拖放批次 2） |
+| C | hotkeys、plugins | hotkeys：J01、J02 的设置页形态（`settings.page`，分类 `input`，id `hotkeys.keyboard` / `hotkeys.mouse`；「快捷键…」「鼠标…」改为 `settings.show(…)`；J01 按 440 宽重排：命令 220、快捷键 140、状态 60）。plugins：J07 的设置页形态（分类 `plugins`，「插件管理…」改为 `settings.show`） | 两插件原有工具窗口：页面与窗口内容相同，作者决定保留窗口还是只留页面，写进 README | 若 §3.6 拆到 3c（§3.0），本行整体推迟 | 小中（批次 2） |
+| D | visualizer（新） | J11 纯音频专辑封面（`panels.mount("backdrop")` + `ui.image`；封面用 `tools.run("ffmpeg"/"ffprobe")` 提取，或同文件夹 `cover.jpg` 等；标签 ffprobe；缓存 `dataDirectory/cache/covers/`）；H12 空闲徽标（内置 logo 用 `@image-url`；自定义徽标 `dialogs.openFile` → 复制到 `dataDirectory/logo.<ext>` → `ui.image`）；「徽标与专辑封面」设置页（`settings.page`，分类 `appearance`） | — | 无 `mode`：用 `phase` 与 `stats().video` 判断（§4.3）；README 记封面被 mpv 当作视频轨的已知行为 | 高（批次 1；设置页批次 2） |
+| E | preferences（新） | J04 首选项：「设置 ▶ 选项…」（F5，order 830）→ `settings.show()`；本插件「外观」页（`settings.page`，分类 `appearance`）。H10 配色：「设置 ▶ 外观 ▶ Vestra / 经典」（radio，840、841）+ 外观页的配色单选与 120×40 预览块（自己用 Slint 画）+「恢复默认」；`appearance.set` / `onChange`；切换时 OSD「配色：…」 | — | 去掉圆角选项与 `themes` 列表（§4.3）；若 §3.6 拆到 3c，J04 按需求文档「过渡」形态（自己的工具窗口，只含外观页） | 中（批次 2） |
+
+不在本轮的插件条目：window H07（4a）；video E11、E13、E16–E18（4a / 4b）。subtitles「字幕设置…」改为设置页属于需求文档的「以后可以」，本轮不要求。youtube、bilibili 的链接输入小窗（UI-DLG-02 的同一规格）可以顺带改用 `UrlInputRow`（不强制，报告说明）。其余插件没有本轮条目；H10 验收若发现别的插件 Slint 有硬编码颜色，按缺陷退回该插件作者。
+
+### 4.2 准入
+
+- 批次 1（§3.1–§3.3、§3.7）审查通过后：A、B（先做 marks B22 与 playlist 的 `UrlInputRow`、颜色修正）、D 开工。
+- 批次 2（§3.4–§3.6）审查通过后：B 接着做 playlist A15；有空位时依次开工 E（preferences，J04 的验收依赖它）、C（hotkeys、plugins 页面）；D 补设置页。
+- C 的前提：r3a 的 hotkeys、plugins 作者交付已合并（P0 确认）。
+- 作者不等依赖的部分可以先做：界面、菜单、设置保存、TestHost 下的测试（例如 E 先做菜单 radio 与外观页布局，D 先做封面提取与缓存）。
+- 同时运行的作者不超过 3 个（含协调者共 4 个）。建议顺序：A、B、D →（A 完成后）E →（下一个空位）C。
+
+### 4.3 需求文档按裁决改写（作者各改自己的章节）
+
+| 章节 | 需求文档现写法 | 按裁决改为 |
+| --- | --- | --- |
+| playlist A15 | `kinds`；`onDragOver` 画插入线；同扩展名 `conflict`；无处理者时核心 OSD「无法打开拖入的文件」 | `extensions`；无插入线，插到落点所在行之前、空白处追加；先注册的生效；无处理者时核心不做任何事（验收项改为「列表不变、无提示」） |
+| visualizer J11、H12 | `backdrop.state.mode: "idle" \| "audio"` | 只有 `effective`；插件用 `phase` 与 `stats().video` 区分 |
+| preferences J04 | `component?`、`global?` 选项；`SettingsPage.visible` | 去掉；推断规则同 `panels.mount` |
+| preferences H10 | `themes`、`ThemeInfo`、`corners`；圆角选项；`ui-state.json` 的 `corners` | 固定两个 id；圆角跟随配色、不可单独改；只存 `appearance.theme` |
+| playback I07 | 路径只在 `dataDirectory` 下 | `dataDirectory` 或本插件包目录（缩略图仍放 `dataDirectory`，行为不变） |
+| hotkeys J01 | 页面 600×460 | 设置页 440 宽（命令 220、快捷键 140、状态 60）；工具窗口形态若保留仍按原尺寸 |
+
+## 5. 验收
+
+### 5.1 静态检查与测试
+
+工作流 §6.1 全部命令；各插件测试数不减少；新插件（visualizer、preferences）`check/build/test` 通过；菜单快照只多出本轮新增项（`doc/process/rounds/menus-snapshot.test.ts`）；插件 `.slint` 中（主题文件除外）grep 硬编码颜色 `#[0-9a-fA-F]{6}` 结果为 0。
+
+### 5.2 真实 GUI 测试（协调者）
+
+工作流 §6.2 的全部必测场景，加上本轮：
+
+| 范围 | 场景 | 证据 |
+| --- | --- | --- |
+| 时间轴标记 | 5 章 + 2 书签的 mkv：进度条 7 条竖线，书签为强调色，悬停书签显示标题与时间；关闭「在进度条上显示标记」1 秒内消失、再开恢复；切到无章节文件旧标记立即消失；设 A-B 循环后区间与 A、B 竖线可见；停用 marks 后无标记、A-B 区间仍在 | 截图 |
+| 运行时图片 / I07 | 开启悬停缩略图，1080p 本地 mkv 上移动：200 ms 内出现缩略图且与该时间画面一致；同位置再悬停立即显示；YouTube 来源只显示时间；移走 ffmpeg 后菜单灰；快速来回 10 秒 `ps` 中至多 1 个 ffmpeg；长时间悬停宿主内存不持续上涨（活动监视器前后对比） | 截图、`ps`、内存读数 |
+| 背景层 / J11 | 带内嵌封面的 MP3 显示封面与标题 / 艺术家 / 专辑；无封面的 FLAC 文件夹有 `cover.jpg` 时显示它；无封面时半透明 logo 与文件名；双击仍全屏、右键仍出菜单、滚轮仍调音量；音频切到视频 1 秒内显示视频画面；关闭开关为纯色；停用 visualizer 后纯色且播放不中断 | 截图 |
+| 背景层 / H12 | 无参数启动显示 logo 与「Vestra」；打开文件后消失，F4 关闭后重新出现（不残留最后一帧）；窗口拖到最小 logo 64px 不溢出、全屏 256px；自定义 PNG 立即替换，删原文件并重启后仍在，「恢复默认徽标」回到品牌 logo；空闲时双击切换全屏 | 截图 |
+| 拖放 / A15 | 从 Finder 拖 1 个 mkv 到视频区：加入并播放；拖文件夹：按 A03 展开并播放第一项；按住 Option 拖 3 个文件：加入 3 行不播放；拖 2 个文件到列表第 3、4 行之间：插在落点行之前、不播放；拖 `.m3u8`：解析并播放第一项；拖 `.srt` 且无插件登记：无反应、列表不变；侧栏浮动时拖到浮动窗口与附着时相同；侧栏因空间隐藏时拖到视频区仍有效 | 物理拖放记录、截图 |
+| 主题 / H10 | 切到「经典」1 秒内：底栏进度条变黄、菜单选中项变色、已打开的音频工作台窗口与浮动侧栏同步变色；拖动音量滑块时切换，滑块不中断；重启后保持；停用 preferences 后配色不变；切回 Vestra 后与本轮开始前的截图一致 | 截图 |
+| 设置页 / J04 | F5 打开「选项」，分类树至少有「外观」（preferences、visualizer）、「快捷键与鼠标」（hotkeys）、「插件」（plugins）；点页面右侧切换，播放不受影响；停用 hotkeys 后该分类 1 秒内消失，重新启用后恢复；在外观页切换配色，选项窗口自身与主窗口立即变化；关闭再开显示上次页面；⌘W 关闭；窗口内按 Space 不触发播放/暂停；「快捷键…」直接打开对应页面 | 截图 |
+| 输入链接组件 | playback「打开链接…」与 playlist「添加链接…」外观一致（同一组件）；回车 = 确定、Esc = 取消；两者功能与改动前一致 | 截图 |
+
+若 §3.6 拆到 3c，本表「设置页」一行改为过渡形态：F5 打开 preferences 自己的窗口，包含外观页。
+
+缺陷归属同工作流 §6.2。
+
+## 6. 记录
+
+### 6.1 基线
+
+（P0 填写：静态检查、各插件测试数；宿主 Rust `src/host/src/*.rs` 行数——撰写本任务单时为 28 577；SDK 与运行器行数）
+
+### 6.2 维护者交付与签名调整
+
+（P1 每批交付时填写：实现清单、签名调整与实现取舍、检查、宿主 Rust 实测净增、给协调者的 GUI 实测要点。至少要记录：拖放文件夹的匹配规则、`Panel.onDrop` 的坐标系、拖放分组与落点的实测结论、`ImageRef` 的 wire 形式、是否触发 §3.0 的拆分）
+
+### 6.3 作者交付
+
+（各作者完成时填写）
+
+### 6.4 验收结果
+
+（P3 填写）

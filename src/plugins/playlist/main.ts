@@ -520,6 +520,15 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       queue.notice(settings.remember ? "将记住列表" : "不再记住列表");
     },
   });
+  // Turns the 移除全部 question back on after 「不再询问」 (or off).
+  playlistMenu("confirm-clear", ["移除全部前确认"], 244, {
+    group: "options",
+    checked: () => settings.confirmClear,
+    run: () => {
+      settings.confirmClear = !settings.confirmClear;
+      queue.notice(settings.confirmClear ? "移除全部前确认：开" : "移除全部前确认：关");
+    },
+  });
 
   // List commands (context menu, bottom-bar popups and keys while the list has focus).
   const play = listCommand("play", "播放", canPlay, playSelected, ["Enter", "P"], {

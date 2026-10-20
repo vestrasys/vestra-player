@@ -19,6 +19,8 @@ export component SubtitleTune inherits Window {
     background: Theme.bg-panel;
     in property <[string]> track-labels: ["关闭字幕"];
     in property <int> selected-track: 0;
+    in property <[string]> secondary-labels: ["关闭次字幕"];
+    in property <int> selected-secondary: 0;
     in property <bool> busy: false;
     in property <bool> can-style: false;
     in property <bool> can-remove: false;
@@ -30,7 +32,10 @@ export component SubtitleTune inherits Window {
     // A user pick or a model change detaches ComboBox.current-index; re-push model changes.
     changed track-labels => { track-combo.current-index = root.selected-track; }
     changed selected-track => { track-combo.current-index = root.selected-track; }
+    changed secondary-labels => { secondary-combo.current-index = root.selected-secondary; }
+    changed selected-secondary => { secondary-combo.current-index = root.selected-secondary; }
     callback select-track(int);
+    callback select-secondary(int);
     callback load-file();
     callback cancel();
     callback size-step(int);
@@ -59,6 +64,22 @@ export component SubtitleTune inherits Window {
                 text: root.busy ? "取消" : "载入…";
                 clicked => { if root.busy { root.cancel(); } else { root.load-file(); } }
             }
+        }
+        // 次字幕 (A08): as wide as the track list, nothing on the right. The pick shows once
+        // the player has it; a refused one (the primary, a bitmap track) snaps back.
+        HorizontalLayout {
+            spacing: 3px;
+            secondary-combo := ComboBox {
+                height: 22px;
+                model: root.secondary-labels;
+                current-index: root.selected-secondary;
+                enabled: !root.busy;
+                selected(value) => {
+                    root.select-secondary(self.current-index);
+                    self.current-index = root.selected-secondary;
+                }
+            }
+            Rectangle { width: 51px; }
         }
         HorizontalLayout {
             spacing: 3px;

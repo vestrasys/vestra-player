@@ -146,6 +146,7 @@ test("menu positions follow the round allocation table; list keys only work with
       ["播放/播放列表/打开文件时/加入同文件夹全部文件", 241, "open-mode", "", ""],
       ["播放/播放列表/快速推进到下一个", 242, "options", "", ""],
       ["播放/播放列表/记住列表", 243, "options", "", ""],
+      ["播放/播放列表/移除全部前确认", 244, "options", "", ""],
       ["(播放)", 0, "domain", "Enter P", "panel"],
       ["(添加文件…)", 0, "domain", "Ctrl+I", "panel"],
       ["(添加文件夹…)", 0, "domain", "Ctrl+O", "panel"],

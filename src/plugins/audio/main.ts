@@ -1,12 +1,17 @@
 import { readdir } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
-import type { AudioTrack, Plugin, PlayerState, PluginError, Scope } from "../../sdk/plugin/index.ts";
+import type { AudioDevice, AudioTrack, Plugin, PlayerState, PluginError, Scope } from "../../sdk/plugin/index.ts";
 import {
+  DEVICE_POLL_MS,
+  NO_DEVICES,
   SYNC_STEP_MS,
+  SYSTEM_DEFAULT,
   TABS,
   channelModes,
   companions,
   delay,
+  deviceLabel,
+  deviceTitles,
   matches,
   neutral,
   neutralClarity,
@@ -21,8 +26,6 @@ import {
   trackLabel,
 } from "./model.ts";
 import type { ChannelMode, Settings, SyncKeep } from "./model.ts";
-
-const DEVICES_LATER = "输出设备选择需要核心接口，后续版本提供";
 
 /**
  * Audio workbench: one window and one owned audio chain, plus the track menu.
@@ -39,12 +42,14 @@ export default async function activate(plugin: Plugin) {
   let syncKeep: SyncKeep = stored.syncKeep;
   let autoLoad = stored.autoLoad;
   let tab = stored.tab;
+  let device = stored.device;
+  let deviceName = stored.deviceName;
   let source: number | null = null;
   let track = "";
   // A change was requested, or saved settings are in effect: "已应用" then means something.
   let touched = nodes(settings).length > 0 || settings.delayMs !== 0;
   /** Writes after 300 ms; the SDK writes what is pending when the plugin stops. */
-  const persist = () => store.save(serialize({ settings, syncKeep, autoLoad, tab, extra: stored.extra }));
+  const persist = () => store.save(serialize({ settings, syncKeep, autoLoad, tab, device, deviceName, extra: stored.extra }));
 
   // Channel count of the selected track (`stats()`), read when the source or the track changes.
   let channelCount: number | null = null;
@@ -251,6 +256,129 @@ export default async function activate(plugin: Plugin) {
   player.onChange(() => void rebuildTracks());
   void rebuildTracks();
 
+  // ---------------------------------------------------------------- G16 output device
+  // The device list is read at start and every 5 s (the player pushes no list changes);
+  // the choice is saved here and handed to the player at start (it keeps it for one run).
+  let devices: AudioDevice[] | null = null; // null: the player lists none (headless, ao=null)
+  /** The chosen device is not connected: its return gets an OSD, its loss already had one or none. */
+  let lost = false;
+  let switching = 0;
+  let output = player.state.audioOutput ?? { requested: null, active: null };
+  const present = (id: string | null) => id === null || !!devices?.some((d) => d.id === id);
+  const nameOf = (id: string | null) =>
+    id === null ? SYSTEM_DEFAULT : (devices?.find((d) => d.id === id)?.name ?? (id === device ? deviceName : null) ?? "所选设备");
+  /** The menu and window entries: 系统默认, the devices, and the chosen one while it is not connected. */
+  const deviceEntries = () => {
+    if (!devices?.length) return null;
+    const missing = device !== null && !present(device) ? nameOf(device) : null;
+    const titles = deviceTitles(devices, missing);
+    return [
+      { id: null, title: SYSTEM_DEFAULT, name: SYSTEM_DEFAULT, connected: true },
+      ...devices.map((d, i) => ({ id: d.id as string | null, title: titles[i]!, name: d.name, connected: true })),
+      ...(missing === null ? [] : [{ id: device, title: titles.at(-1)!, name: missing, connected: false }]),
+    ];
+  };
+  const readDevices = async () => {
+    let list: AudioDevice[] | null;
+    try {
+      list = await player.audioDevices();
+    } catch {
+      list = null;
+    }
+    devices = list && list.length > 0 ? list : null;
+    // Keep the saved name current, so a disconnected device still shows what it is called.
+    const found = device === null ? undefined : devices?.find((d) => d.id === device);
+    if (found && found.name !== deviceName) {
+      deviceName = found.name;
+      persist();
+    }
+    if (device !== null && !present(device) && output.active !== device) lost = true;
+    void rebuildDevices();
+    plugin.update();
+  };
+  const chooseDevice = async (id: string | null) => {
+    if (switching || (id === device && output.requested === id)) return;
+    if (id !== null && !present(id)) return; // a disconnected entry is disabled
+    const name = nameOf(id);
+    switching++;
+    try {
+      await player.setAudioDevice(id);
+      device = id;
+      deviceName = id === null ? null : name;
+      lost = false;
+      persist();
+      osd(`音频输出: ${name}`);
+    } catch (error) {
+      osd(`无法切换到 ${name}: ${(error as Error).message}`);
+    } finally {
+      switching--;
+      output = player.state.audioOutput ?? output;
+      void rebuildDevices();
+      plugin.update();
+    }
+  };
+  /** Unplugged: the player falls back to the default; plugged back: it returns to the choice. */
+  const followOutput = (state: PlayerState) => {
+    const next = state.audioOutput ?? { requested: null, active: null };
+    const previous = output;
+    output = next;
+    if (switching || next.requested === null || next.requested !== previous.requested || next.active === previous.active) return;
+    if (previous.active === next.requested) {
+      lost = true;
+      osd("输出设备已断开，改用系统默认");
+      void readDevices();
+    } else if (next.active === next.requested && lost) {
+      lost = false;
+      void readDevices().then(() => osd(`音频输出: ${nameOf(next.requested)}`));
+    }
+  };
+  player.onChange(followOutput);
+
+  let deviceScope: Scope = plugin.scope();
+  let deviceKey: string | null = null;
+  let deviceRebuild = Promise.resolve();
+  const rebuildDevices = () =>
+    (deviceRebuild = deviceRebuild.then(async () => {
+      const entries = deviceEntries();
+      const key = JSON.stringify(entries?.map((e) => [e.id, e.title, e.connected]) ?? null);
+      if (key === deviceKey) return;
+      deviceKey = key;
+      await deviceScope.dispose();
+      deviceScope = plugin.scope();
+      const at = { order: 512, group: "audio-tools" } as const;
+      if (!entries) {
+        deviceScope.commands.add({ id: "audio.device.none", path: ["声音", "输出设备", NO_DEVICES], ...at, enabled: false, run: () => undefined });
+        return;
+      }
+      entries.forEach((entry, index) =>
+        deviceScope.commands.add({
+          id: `audio.device.${index}`,
+          path: ["声音", "输出设备", entry.title],
+          ...at,
+          radio: true,
+          enabled: entry.connected,
+          reason: entry.connected ? null : "设备未连接",
+          busy: () => switching > 0,
+          checked: () => device === entry.id,
+          run: () => chooseDevice(entry.id),
+        }),
+      );
+    }));
+  // Hand the saved choice to the player first (it may not be plugged in: no OSD then);
+  // activation does not wait for it.
+  void (async () => {
+    if (device !== null) {
+      switching++;
+      await player.setAudioDevice(device).catch(() => undefined);
+      switching--;
+      output = player.state.audioOutput ?? output;
+    }
+    await readDevices();
+  })();
+  const devicePoll = setInterval(() => void readDevices(), DEVICE_POLL_MS);
+  devicePoll.unref?.();
+  plugin.onDispose(() => clearInterval(devicePoll));
+
   // ---------------------------------------------------------------- window
   window.bind(() => {
     const list = tracks();
@@ -277,7 +405,7 @@ export default async function activate(plugin: Plugin) {
       channelsAvailable: ready() && !mono(),
       channelTip: mono() ? "当前音轨是单声道" : "",
       autoLoad,
-      devicesTip: DEVICES_LATER,
+      ...deviceProps(),
     };
   });
   window.on("tabChanged", (index: number) => {
@@ -320,6 +448,23 @@ export default async function activate(plugin: Plugin) {
     if (mode && !mono()) edit({ ...settings, channels: mode.id });
   });
   window.on("autoLoadChanged", (on: boolean) => setAutoLoad(on === true));
+  window.on("deviceSelected", (index: number) => {
+    const entry = Number.isInteger(index) ? deviceEntries()?.[index] : undefined;
+    if (entry?.connected) void chooseDevice(entry.id);
+  });
+  /** 输出设备 drop-down: names cut with an ellipsis by the control, the full one on hover. */
+  function deviceProps() {
+    const entries = deviceEntries();
+    if (!entries) return { deviceNames: [NO_DEVICES], deviceIndex: 0, devicesAvailable: false, devicesTip: NO_DEVICES };
+    const index = Math.max(0, entries.findIndex((e) => e.id === device));
+    const chosen = entries[index]!;
+    return {
+      deviceNames: entries.map((e) => (e.connected ? deviceLabel(e.name) : `${deviceLabel(e.name)}（未连接）`)),
+      deviceIndex: index,
+      devicesAvailable: switching === 0,
+      devicesTip: chosen.connected ? chosen.name : `${chosen.name}：设备未连接，正在使用系统默认`,
+    };
+  }
 
   // ---------------------------------------------------------------- menu 打开 ▶ 114, 声音 ▶ 510–529
   plugin.commands.add({

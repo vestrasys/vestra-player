@@ -92,10 +92,13 @@ export type Stored = {
   /** A11: load same-named audio files next to a local source (not selected). */
   autoLoad: boolean;
   tab: number;
+  /** G16: the chosen output device id (`null` = 系统默认) and its last known name. */
+  device: string | null;
+  deviceName: string | null;
   extra: Record<string, unknown>;
 };
 export const TABS = 3;
-const KNOWN = new Set(["version", "equalizer", "gains", "normalize", "clarity", "channels", "autoLoadExternal", "syncKeep", "syncMs", "tab"]);
+const KNOWN = new Set(["version", "equalizer", "gains", "normalize", "clarity", "channels", "autoLoadExternal", "syncKeep", "syncMs", "tab", "device", "deviceName"]);
 
 const number = (value: unknown, fallback: number, read: (value: unknown) => number) => {
   try {
@@ -136,11 +139,13 @@ export function parse(raw: unknown): Stored {
   };
   const tab = typeof value.tab === "number" && Number.isInteger(value.tab) && value.tab >= 0 && value.tab < TABS ? value.tab : 0;
   const extra = Object.fromEntries(Object.entries(value).filter(([key]) => !KNOWN.has(key)));
-  return { settings, syncKeep, autoLoad: value.autoLoadExternal === true, tab, extra };
+  const device = deviceId(value.device);
+  const deviceName = device !== null && typeof value.deviceName === "string" && value.deviceName.trim() ? value.deviceName.slice(0, 200) : null;
+  return { settings, syncKeep, autoLoad: value.autoLoadExternal === true, tab, device, deviceName, extra };
 }
 
 /** The JSON written back; `syncMs` only while 始终保持. */
-export function serialize({ settings, syncKeep, autoLoad, tab, extra }: Stored) {
+export function serialize({ settings, syncKeep, autoLoad, tab, device, deviceName, extra }: Stored) {
   return {
     ...extra,
     version: 1,
@@ -153,7 +158,46 @@ export function serialize({ settings, syncKeep, autoLoad, tab, extra }: Stored) 
     syncKeep,
     ...(syncKeep === "always" ? { syncMs: settings.delayMs } : {}),
     tab,
+    device,
+    ...(device !== null && deviceName ? { deviceName } : {}),
   };
+}
+
+// ---------------------------------------------------------------- output device (G16)
+
+export const SYSTEM_DEFAULT = "系统默认";
+export const NO_DEVICES = "没有可用的输出设备";
+export const DEVICE_POLL_MS = 5000;
+/** A saved id the player would accept: 1–512 characters, no control characters. */
+export function deviceId(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 && value.length <= 512 && !/[\u0000-\u001f\u007f]/.test(value) ? value : null;
+}
+const utf8 = new TextEncoder();
+/** At most `bytes` UTF-8 bytes, cut on a character with "…". */
+function fit(text: string, bytes: number) {
+  if (utf8.encode(text).length <= bytes) return text;
+  let out = "";
+  for (const char of text) {
+    if (utf8.encode(`${out}${char}…`).length > bytes) break;
+    out += char;
+  }
+  return `${out}…`;
+}
+/** A device name as a menu item: no control characters or edge spaces, ≤ 72 bytes, never empty. */
+export const deviceLabel = (name: string) => fit(name.replace(/[\u0000-\u001f\u007f]/g, " ").trim(), 72) || "未命名设备";
+/**
+ * Menu titles for `[系统默认, ...devices, missing?]`: distinct (a repeated name gets " (2)"),
+ * never one of the fixed titles. `missing` is the chosen device while it is not connected.
+ */
+export function deviceTitles(devices: readonly { id: string; name: string }[], missing: string | null = null) {
+  const used = new Set([SYSTEM_DEFAULT, NO_DEVICES]);
+  return [...devices.map((d) => d.name), ...(missing === null ? [] : [missing])].map((name) => {
+    const base = deviceLabel(name);
+    let title = base;
+    for (let n = 2; used.has(title); n++) title = `${base} (${n})`;
+    used.add(title);
+    return title;
+  });
 }
 
 // ---------------------------------------------------------------- tracks (G03, G04) and external audio (A11)

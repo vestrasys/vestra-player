@@ -9,8 +9,20 @@ export const DEFAULT_SYNC_STEP = 500;
 /** The host's accepted `offsetMs` range (reference §9). */
 export const SYNC_LIMIT = 600000;
 
-export type Stored = { syncStepMs: number; autoReload: boolean; fallbackEncoding: Encoding; extra: Record<string, unknown> };
-const KNOWN = new Set(["version", "syncStepMs", "autoReload", "fallbackEncoding"]);
+/** A08: where the secondary subtitle sits (`SubtitleStyle.secondaryPosition`). */
+export type SecondaryPosition = "top" | "aboveMain";
+export const SECONDARY_POSITIONS = [
+  { id: "top", label: "顶部" },
+  { id: "aboveMain", label: "主字幕上方" },
+] as const;
+export type Stored = {
+  syncStepMs: number;
+  autoReload: boolean;
+  fallbackEncoding: Encoding;
+  secondaryPosition: SecondaryPosition;
+  extra: Record<string, unknown>;
+};
+const KNOWN = new Set(["version", "syncStepMs", "autoReload", "fallbackEncoding", "secondaryPosition"]);
 export const isObject = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
 
@@ -20,14 +32,16 @@ export function parse(raw: unknown): Stored {
   const syncStepMs = SYNC_STEPS.find((step) => step === value.syncStepMs) ?? DEFAULT_SYNC_STEP;
   const extra = Object.fromEntries(Object.entries(value).filter(([key]) => !KNOWN.has(key)));
   const fallbackEncoding = isEncoding(value.fallbackEncoding) ? value.fallbackEncoding : DEFAULT_ENCODING;
-  return { syncStepMs, autoReload: value.autoReload === true, fallbackEncoding, extra };
+  const secondaryPosition: SecondaryPosition = value.secondaryPosition === "aboveMain" ? "aboveMain" : "top";
+  return { syncStepMs, autoReload: value.autoReload === true, fallbackEncoding, secondaryPosition, extra };
 }
-export const serialize = ({ syncStepMs, autoReload, fallbackEncoding, extra }: Stored) => ({
+export const serialize = ({ syncStepMs, autoReload, fallbackEncoding, secondaryPosition, extra }: Stored) => ({
   ...extra,
   version: 1,
   syncStepMs,
   autoReload,
   fallbackEncoding,
+  secondaryPosition,
 });
 
 /** Seconds for menu titles and the step list: 0.05, 0.5, 5. */
@@ -46,8 +60,8 @@ export function parseSync(text: string): { value: number } | { error: string } {
 }
 
 // ------------------------------------------------------------------ style.json (D09)
-/** A remembered style: every field but `offsetMs` (the sync is not kept). */
-export type SavedStyle = Omit<SubtitleStyle, "offsetMs">;
+/** A remembered style: every field but `offsetMs` (the sync is not kept) and the secondary position (settings.json). */
+export type SavedStyle = Omit<SubtitleStyle, "offsetMs" | "secondaryPosition">;
 export type StyleFile = { style: SavedStyle | null; shadowLast: number; boxOpacity: number };
 export const DEFAULT_SHADOW = 2;
 export const DEFAULT_BOX = 50;
@@ -77,7 +91,7 @@ export function parseStyle(raw: unknown, base: SavedStyle): StyleFile {
   };
 }
 export const saveable = (style: SubtitleStyle): SavedStyle => {
-  const { offsetMs: _sync, ...rest } = style;
+  const { offsetMs: _sync, secondaryPosition: _position, ...rest } = style;
   return { ...rest, bold: rest.bold === true, shadow: rest.shadow ?? 0, box: rest.box ?? null, assOverride: rest.assOverride ?? "keep" };
 };
 

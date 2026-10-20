@@ -19,9 +19,13 @@ async function until(predicate: () => boolean) {
   }
   assert.fail("timed out waiting for condition");
 }
+const entry = (id: string, state: "running" | "disabled" | "failed" = "running") => ({
+  id, version: "0.1.0", origin: "development" as const, state, error: null, capabilities: [], directory: `/plugins/${id}`, previousVersion: null,
+});
 async function start() {
   const host = new TestHost();
   host.app = app;
+  host.packages = [entry("vestra.video"), entry("vestra.audio"), entry("vestra.info")];
   const plugin = await startPlugin(activate, { directory, host });
   return { host, stop: () => plugin.stop() };
 }
@@ -52,9 +56,16 @@ test("I09: top-level 关于 Vestra… (880, windows, F1) opens the about window 
       { label: "Slint", value: "1.16.1" },
       { label: "Node", value: `v${process.versions.node}` },
     ]);
-    // packages.list is not in the SDK yet: the list says so instead of showing nothing.
-    assert.deepEqual(window.props.plugins, []);
-    assert.equal(window.props["plugins-note"], PLUGINS_UNKNOWN);
+    assert.deepEqual(window.props.plugins, [
+      { id: "vestra.audio", version: "0.1.0", origin: "开发加载", state: "运行中" },
+      { id: "vestra.info", version: "0.1.0", origin: "开发加载", state: "运行中" },
+      { id: "vestra.video", version: "0.1.0", origin: "开发加载", state: "运行中" },
+    ]);
+    assert.equal(window.props["plugins-note"], "");
+    // Another plugin stopped: the open window follows packages.onChange at once.
+    host.setPackages([entry("vestra.video"), entry("vestra.audio", "disabled"), entry("vestra.info")]);
+    await host.settle();
+    assert.equal((window.props.plugins as { state: string }[])[0]!.state, "已停用");
     await host.press("F1");
     await host.settle();
     assert.equal(host.window("about").visible, true, "brought to the front, not closed");
@@ -92,7 +103,9 @@ test("I09: 复制信息 copies the whole window as text; a refusal shows 复制�
         `Node：v${process.versions.node}`,
         "",
         "已加载插件",
-        PLUGINS_UNKNOWN,
+        "vestra.audio  0.1.0  开发加载  运行中",
+        "vestra.info  0.1.0  开发加载  运行中",
+        "vestra.video  0.1.0  开发加载  运行中",
         "",
       ].join("\n"),
     );
@@ -101,6 +114,27 @@ test("I09: 复制信息 copies the whole window as text; a refusal shows 复制�
     });
     window.emit("copy-info");
     await until(() => window.props.status === "复制失败");
+  } finally {
+    await stop();
+  }
+});
+
+test("I09: a failed packages.list shows 未知 in the list; the next opening reads it again", async () => {
+  const { host, stop } = await start();
+  try {
+    host.handle("packages.list", () => {
+      throw new HostError("failed", "refused");
+    });
+    await host.command("info.about").run();
+    await host.settle();
+    assert.deepEqual(host.window("about").props.plugins, []);
+    assert.equal(host.window("about").props["plugins-note"], PLUGINS_UNKNOWN);
+    host.reset("packages.list");
+    host.window("about").userClose();
+    await host.command("info.about").run();
+    await host.settle();
+    assert.equal((host.window("about").props.plugins as unknown[]).length, 3);
+    assert.equal(host.window("about").props["plugins-note"], "");
   } finally {
     await stop();
   }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bands, clamp, companions, matches, neutral, nodes, parse, presetOf, presets, serialize, syncText, trackLabel } from "../model.ts";
+import { bands, clamp, companions, deviceId, deviceLabel, deviceTitles, matches, neutral, nodes, parse, presetOf, presets, serialize, syncText, trackLabel } from "../model.ts";
 
 test("reset clears the owned chain and preset gains stay inside the ±6 dB EQ range", () => {
   assert.deepEqual(nodes(neutral()), []);
@@ -33,7 +33,7 @@ test("a bypassed equalizer drops only the bands; presetOf names the matching pre
 });
 
 test("settings parse leniently; a legacy numeric clarity migrates to the 晶化 switch", () => {
-  assert.deepEqual(parse(null), { settings: neutral(), syncKeep: "none", autoLoad: false, tab: 0, extra: {} });
+  assert.deepEqual(parse(null), { settings: neutral(), syncKeep: "none", autoLoad: false, tab: 0, device: null, deviceName: null, extra: {} });
   assert.deepEqual(parse({ clarity: 2.5 }).settings.clarity, { on: true, db: 2.5 });
   assert.deepEqual(parse({ clarity: 0 }).settings.clarity, { on: false, db: 3 });
   assert.deepEqual(parse({ clarity: { on: true, db: 9 } }).settings.clarity, { on: true, db: 6 });
@@ -45,12 +45,12 @@ test("settings parse leniently; a legacy numeric clarity migrates to the 晶化 
   assert.equal(parse({ syncKeep: "bogus" }).syncKeep, "none");
   assert.equal(parse({ tab: 7 }).tab, 0);
   assert.equal(parse({ channels: { mode: "sideways" } }).settings.channels, "stereo");
-  const stored = parse({ version: 1, device: "usb", channels: { mode: "left" }, autoLoadExternal: true, syncKeep: "always", syncMs: 120 });
-  assert.deepEqual(stored.extra, { device: "usb" }, "later fields are kept");
+  const stored = parse({ version: 1, future: "usb", channels: { mode: "left" }, autoLoadExternal: true, syncKeep: "always", syncMs: 120 });
+  assert.deepEqual(stored.extra, { future: "usb" }, "later fields are kept");
   assert.equal(stored.settings.channels, "left");
   assert.equal(stored.autoLoad, true);
   assert.deepEqual(serialize(stored), {
-    device: "usb",
+    future: "usb",
     version: 1,
     equalizer: true,
     gains: [0, 0, 0, 0, 0, 0],
@@ -61,6 +61,7 @@ test("settings parse leniently; a legacy numeric clarity migrates to the 晶化 
     syncKeep: "always",
     syncMs: 120,
     tab: 0,
+    device: null,
   });
   assert.equal("syncMs" in serialize({ ...stored, syncKeep: "session" }), false);
   assert.equal(syncText(-50), "音频同步: -0.05秒");
@@ -96,4 +97,22 @@ test("A11 same-name scan: audio files that start with the video's name, at most 
   assert.deepEqual(companions("song.mp3", ["song.mp3", "song.flac"]), [], "an audio source loads nothing");
   const many = Array.from({ length: 12 }, (_, i) => `a.${String(i).padStart(2, "0")}.mp3`);
   assert.equal(companions("a.mp4", many).length, 8);
+});
+
+test("G16: the saved device is an id the player accepts, kept with its name; titles stay distinct", () => {
+  const stored = parse({ device: "coreaudio/AB-12", deviceName: "AirPods Pro" });
+  assert.equal(stored.device, "coreaudio/AB-12");
+  assert.equal(stored.deviceName, "AirPods Pro");
+  assert.deepEqual(serialize(stored).device, "coreaudio/AB-12");
+  assert.equal(serialize(stored).deviceName, "AirPods Pro");
+  assert.equal(serialize(parse({})).device, null, "系统默认 is saved as null");
+  assert.equal("deviceName" in serialize(parse({})), false);
+  for (const bad of ["", 7, "a\nb", "x".repeat(513)]) assert.equal(parse({ device: bad, deviceName: "n" }).device, null);
+  assert.equal(deviceId("coreaudio/X"), "coreaudio/X");
+  assert.deepEqual(
+    deviceTitles([{ id: "a", name: "USB Audio" }, { id: "b", name: "USB Audio" }, { id: "c", name: "系统默认" }, { id: "d", name: " \t " }], "USB Audio"),
+    ["USB Audio", "USB Audio (2)", "系统默认 (2)", "未命名设备", "USB Audio (3)"],
+  );
+  const long = deviceLabel("扬声器".repeat(40));
+  assert.ok(new TextEncoder().encode(long).length <= 72 && long.endsWith("…"));
 });

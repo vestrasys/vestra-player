@@ -3,9 +3,9 @@ import test from "node:test";
 import { parse, parseSync, serialize } from "../model.ts";
 
 test("settings parse leniently and keep fields a later version adds", () => {
-  assert.deepEqual(parse(null), { syncStepMs: 500, autoReload: false, fallbackEncoding: "gb18030", extra: {} });
+  assert.deepEqual(parse(null), { syncStepMs: 500, autoReload: false, fallbackEncoding: "gb18030", secondaryPosition: "top", extra: {} });
   assert.deepEqual(parse({ syncStepMs: 100, autoReload: true, fallbackEncoding: "big5" }), {
-    syncStepMs: 100, autoReload: true, fallbackEncoding: "big5", extra: {},
+    syncStepMs: 100, autoReload: true, fallbackEncoding: "big5", secondaryPosition: "top", extra: {},
   });
   assert.equal(parse({ fallbackEncoding: "utf-7" }).fallbackEncoding, "gb18030");
   assert.equal(parse({ syncStepMs: 123 }).syncStepMs, 500, "only the listed steps");
@@ -16,7 +16,10 @@ test("settings parse leniently and keep fields a later version adds", () => {
     syncStepMs: 50,
     autoReload: false,
     fallbackEncoding: "gb18030",
+    secondaryPosition: "top",
   });
+  assert.equal(parse({ secondaryPosition: "aboveMain" }).secondaryPosition, "aboveMain", "A08");
+  assert.equal(parse({ secondaryPosition: "middle" }).secondaryPosition, "top");
 });
 
 test("typed sync values are whole milliseconds within the host range", () => {
