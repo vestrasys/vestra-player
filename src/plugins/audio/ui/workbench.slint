@@ -1,5 +1,4 @@
 import { Theme } from "@vestra/theme.slint";
-import { ComboBox } from "std-widgets.slint";
 import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
 
 // 14px box + 11px text (reference player panel switch).
@@ -114,8 +113,8 @@ component Band {
     }
 }
 
-// Effect row (UI-TOOL-04): label 56 (right, 11px) + panel slider 100 + value 64 + 默认 41, 4px apart:
-// 273px, inside the 285px the 301px window leaves after its 8px padding ("-10000 ms" needs ~57).
+// Effect row (UI-TOOL-04): label 56 (right, 11px) + panel slider 100 + value 60 + 默认 41, 4px apart:
+// 269px, inside the 285px the 301px window leaves after its 8px padding ("-10000 ms" needs ~57).
 component EffectRow {
     in property <string> label;
     in property <string> shown;
@@ -139,10 +138,98 @@ component EffectRow {
             value <=> root.value;
             changed(v) => { root.edited(v); }
         }
-        Text { width: 64px; text: root.shown; color: Theme.text-list; font-size: Theme.font-body; vertical-alignment: center; }
+        Text { width: 60px; text: root.shown; color: Theme.text-list; font-size: Theme.font-body; vertical-alignment: center; }
         VerticalLayout {
             alignment: center;
             Button { width: 41px; text: "默认"; small: true; enabled: root.available; clicked => { root.reset(); } }
+        }
+    }
+}
+
+// One popup row of a Choice: radio dot for the current item, menu-style hover.
+component ChoiceItem {
+    in property <string> text;
+    in property <bool> selected;
+    callback picked();
+    height: 20px;
+    Rectangle { background: touch.has-hover ? Theme.press-bg : transparent; }
+    HorizontalLayout {
+        padding-left: 5px;
+        spacing: 4px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 6px;
+                height: 6px;
+                border-radius: 3px;
+                background: root.selected ? Theme.playing : transparent;
+            }
+        }
+        Text {
+            text: root.text;
+            color: touch.has-hover ? Theme.accent : Theme.text-list;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+    touch := TouchArea { clicked => { root.picked(); } }
+}
+
+// Compact 21px drop-down with an 11px label; the list opens below it (short lists only,
+// so it stays inside the window).
+component Choice {
+    in property <[string]> model;
+    in-out property <int> current-index;
+    in property <bool> enabled: true;
+    callback selected(int);
+    height: 21px;
+    accessible-role: combobox;
+    accessible-enabled: root.enabled;
+    accessible-value: root.current-index >= 0 && root.current-index < root.model.length ? root.model[root.current-index] : "";
+    Rectangle {
+        border-radius: Theme.radius-control;
+        background: !root.enabled ? Theme.button-disabled
+            : touch.pressed ? Theme.button-press
+            : touch.has-hover ? Theme.button-hover : Theme.button-bg;
+    }
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 5px;
+        spacing: 2px;
+        Text {
+            horizontal-stretch: 1;
+            text: root.current-index >= 0 && root.current-index < root.model.length ? root.model[root.current-index] : "";
+            color: root.enabled ? Theme.text-list : Theme.text-dim;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+        Text { text: "▾"; color: root.enabled ? Theme.text-dim : Theme.icon-disabled; font-size: Theme.font-body; vertical-alignment: center; }
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { list.show(); }
+    }
+    list := PopupWindow {
+        x: 0;
+        y: root.height;
+        width: root.width;
+        Rectangle {
+            background: Theme.bg-list;
+            border-color: Theme.line;
+            border-width: 1px;
+            VerticalLayout {
+                padding: 1px;
+                for name[index] in root.model: ChoiceItem {
+                    text: name;
+                    selected: index == root.current-index;
+                    picked => {
+                        root.current-index = index;
+                        root.selected(index);
+                    }
+                }
+            }
         }
     }
 }
@@ -367,7 +454,7 @@ export component AudioWorkbench inherits Window {
                             enabled: root.source-ready && root.clarity-enabled;
                             changed(v) => { root.clarity-changed(v); }
                         }
-                        Text { width: 64px; text: round(root.clarity-db * 10) / 10 + " dB"; color: root.clarity-enabled ? Theme.text-list : Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; }
+                        Text { width: 60px; text: round(root.clarity-db * 10) / 10 + " dB"; color: root.clarity-enabled ? Theme.text-list : Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; }
                         VerticalLayout {
                             alignment: center;
                             Button { width: 41px; text: "默认"; small: true; enabled: root.source-ready; clicked => { root.clarity-reset(); } }
@@ -379,7 +466,7 @@ export component AudioWorkbench inherits Window {
                     x: 0; y: 0; width: parent.width; height: parent.height;
                     visible: root.tab-index == 2;
                     spacing: 4px;
-                    // 音轨 (G03) + 载入… (A11): 65 + 6 + 154 + 6 + 50 = 281 of 285.
+                    // 音轨 (G03) + 载入… (A11): 65 + 6 + 140 + 6 + 50 = 267 of 285.
                     HorizontalLayout {
                         height: 24px;
                         spacing: 6px;
@@ -387,13 +474,12 @@ export component AudioWorkbench inherits Window {
                         Text { width: 65px; text: "音轨"; color: Theme.text; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
                         VerticalLayout {
                             alignment: center;
-                            track-combo := ComboBox {
-                                width: 154px;
-                                height: 22px;
+                            track-combo := Choice {
+                                width: 140px;
                                 enabled: root.tracks-available;
                                 model: root.track-names;
                                 current-index: root.track-index;
-                                selected(value) => { root.track-selected(self.current-index); }
+                                selected(i) => { root.track-selected(i); }
                             }
                         }
                         VerticalLayout {
@@ -401,7 +487,7 @@ export component AudioWorkbench inherits Window {
                             Button { width: 50px; text: "载入…"; small: true; enabled: root.can-load; clicked => { root.load-requested(); } }
                         }
                     }
-                    // 声道 (G05): 65 + 6 + 154 = 225.
+                    // 声道 (G05): 65 + 6 + 140 = 211.
                     ToolTipArea {
                         height: 24px;
                         text: root.channel-tip;
@@ -411,18 +497,17 @@ export component AudioWorkbench inherits Window {
                             Text { width: 65px; text: "声道"; color: root.channels-available ? Theme.text : Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
                             VerticalLayout {
                                 alignment: center;
-                                channel-combo := ComboBox {
-                                    width: 154px;
-                                    height: 22px;
+                                channel-combo := Choice {
+                                    width: 140px;
                                     enabled: root.channels-available;
                                     model: ["立体声", "左声道", "右声道", "单声道混合", "左右互换"];
                                     current-index: root.channel-index;
-                                    selected(value) => { root.channel-selected(self.current-index); }
+                                    selected(i) => { root.channel-selected(i); }
                                 }
                             }
                         }
                     }
-                    // 输出设备 (G16, later round): 65 + 6 + 200 = 271, greyed with the reason on hover.
+                    // 输出设备 (G16, later round): 65 + 6 + 190 = 261, greyed with the reason on hover.
                     ToolTipArea {
                         height: 24px;
                         text: root.devices-tip;
@@ -432,7 +517,7 @@ export component AudioWorkbench inherits Window {
                             Text { width: 65px; text: "输出设备"; color: Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
                             VerticalLayout {
                                 alignment: center;
-                                ComboBox { width: 200px; height: 22px; enabled: false; model: ["系统默认"]; current-index: 0; }
+                                Choice { width: 190px; enabled: false; model: ["系统默认"]; current-index: 0; }
                             }
                         }
                     }
@@ -450,12 +535,14 @@ export component AudioWorkbench inherits Window {
                         height: 24px;
                         spacing: 6px;
                         Text { width: 65px; text: "同步保持"; color: Theme.text; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
-                        keep-combo := ComboBox {
-                            width: 154px;
-                            height: 22px;
-                            model: ["不保持", "本次运行内保持", "始终保持"];
-                            current-index: root.sync-keep-index;
-                            selected(value) => { root.sync-keep-selected(self.current-index); }
+                        VerticalLayout {
+                            alignment: center;
+                            keep-combo := Choice {
+                                width: 140px;
+                                model: ["不保持", "本次运行内保持", "始终保持"];
+                                current-index: root.sync-keep-index;
+                                selected(i) => { root.sync-keep-selected(i); }
+                            }
                         }
                         Rectangle { }
                     }

@@ -4,8 +4,8 @@ import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
 // Widths (window 301, content 285 after the 8px side padding; totals include the 6px spacing):
 //   色彩 / 效果 rows   label or check 65 + slider 154 + 默认 41            = 272
 //   降噪 row           check 65 + mode 60 + slider 88 + 默认 41            = 272
-//   翻转 row           label 65 + 2 × toggle 51 (3 apart)                  = 176
-//   旋转 row           label 65 + 4 × toggle 51 (3 apart)                  = 284
+//   翻转 row           label 65 + 2 × toggle 46 (3 apart)                  = 166
+//   旋转 row           label 65 + 4 × toggle 46 (3 apart)                  = 264
 //   裁剪/拉伸 row      label 65 + mode 72 + ratio 76                        = 225
 //   宽高比 row         label 65 + choice 154 + … 21                         = 252
 //   缩放 row           label 65 + slider 154 + 默认 41                      = 272
@@ -70,13 +70,13 @@ component Label inherits Text {
     vertical-alignment: center;
 }
 
-// 51×22 switch button; `checked` is the pressed (on) state.
+// 46×22 switch button; `checked` is the pressed (on) state.
 component Toggle {
     in property <string> text;
     in property <bool> checked;
     in property <bool> enabled: true;
     callback clicked();
-    width: 51px;
+    width: 46px;
     height: 22px;
     accessible-role: button;
     accessible-label: root.text;
