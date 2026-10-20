@@ -42,6 +42,8 @@ pub struct Resource {
 pub struct Snapshot {
     pub stamp: Stamp,
     pub selected: Option<Track>,
+    /// The secondary subtitle (mpv `secondary-sid`), never the same as `selected`.
+    pub secondary: Option<Track>,
     pub resources: Vec<Resource>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -78,6 +80,7 @@ pub struct Registry {
     stamp: Stamp,
     embedded: BTreeSet<i64>,
     selected: Option<Track>,
+    secondary: Option<Track>,
     resources: BTreeMap<Key, Resource>,
     high_water: BTreeMap<Key, u64>,
     baseline: Option<Baseline>,
@@ -106,6 +109,7 @@ impl Registry {
             },
             embedded: BTreeSet::new(),
             selected: None,
+            secondary: None,
             resources: BTreeMap::new(),
             high_water: BTreeMap::new(),
             baseline: None,
@@ -142,6 +146,7 @@ impl Registry {
         self.initialized = true;
         self.embedded = embedded;
         self.selected = selected.map(Track::Embedded);
+        self.secondary = None;
         self.resources.clear();
         self.high_water.clear();
         self.baseline = None;
@@ -172,6 +177,11 @@ impl Registry {
             self.selected = None;
             self.baseline = None;
         }
+        if let Some(Track::Embedded(id)) = self.secondary
+            && !embedded.contains(&id)
+        {
+            self.secondary = None;
+        }
         self.embedded = embedded;
         self.stamp.revision = revision;
         Ok(self.state())
@@ -180,6 +190,7 @@ impl Registry {
         Snapshot {
             stamp: self.stamp,
             selected: self.selected.clone(),
+            secondary: self.secondary.clone(),
             resources: self.resources.values().cloned().collect(),
         }
     }
@@ -368,9 +379,61 @@ impl Registry {
         {
             return Err(Error::Missing);
         }
+        if target.is_some() && target == self.secondary {
+            return Err(Error::Invalid);
+        }
         let next = self.next_revision()?;
         self.commit_selection(owner, target, next);
         Ok(self.state())
+    }
+
+    /// R-T3: the secondary subtitle; not the primary track, and the caller
+    /// checks it is a text track. Advances the selection revision.
+    pub fn select_secondary(&mut self, target: Option<Track>, expected: Stamp) -> Result<Snapshot> {
+        self.expected(expected)?;
+        if let Some(track) = &target {
+            if !self.valid_track(track) {
+                return Err(Error::Missing);
+            }
+            if self.selected.as_ref() == Some(track) {
+                return Err(Error::Invalid);
+            }
+        }
+        self.stamp.revision = self.next_revision()?;
+        self.secondary = target;
+        Ok(self.state())
+    }
+
+    /// Upload and make it the secondary subtitle in one step.
+    pub fn register_as_secondary(
+        &mut self,
+        owner: u64,
+        id: String,
+        revision: u64,
+        content: Content,
+        expected: Stamp,
+    ) -> Result<Snapshot> {
+        self.expected(expected)?;
+        let resource = self.prepare(owner, id, revision, content)?;
+        let next = self.next_revision()?;
+        self.secondary = Some(Track::External {
+            owner,
+            resource_id: resource.resource_id.clone(),
+            content_revision: revision,
+        });
+        self.insert(resource);
+        self.stamp.revision = next;
+        Ok(self.state())
+    }
+
+    /// The secondary goes with its resource.
+    fn drop_secondary(&mut self, gone: impl Fn(&Key) -> bool) -> bool {
+        let gone = matches!(&self.secondary, Some(Track::External { owner, resource_id, .. })
+            if gone(&(*owner, resource_id.clone())));
+        if gone {
+            self.secondary = None;
+        }
+        gone
     }
 
     fn restore_target(&self, owner: u64, revoking_owner: bool) -> Option<Track> {
@@ -394,6 +457,9 @@ impl Registry {
             return Err(Error::Missing);
         }
         let selected = self.selected_key() == Some(key.clone());
+        if self.drop_secondary(|each| *each == key) && !selected {
+            self.stamp.revision = self.next_revision()?;
+        }
         let next = if selected {
             Some(self.next_revision()?)
         } else {
@@ -413,6 +479,9 @@ impl Registry {
     /// history. No other owner's current selection or high-water marks change.
     pub fn remove_owner(&mut self, owner: u64) -> Result<Snapshot> {
         let selected = self.selected_key().is_some_and(|key| key.0 == owner);
+        if self.drop_secondary(|key| key.0 == owner) && !selected {
+            self.stamp.revision = self.next_revision()?;
+        }
         let next = if selected {
             Some(self.next_revision()?)
         } else {
@@ -683,5 +752,50 @@ mod tests {
         );
         registry.reset_source(2, vec![], None).unwrap();
         assert!(registry.high_water.is_empty());
+    }
+
+    #[test]
+    fn secondary_is_never_the_primary_and_goes_with_its_resource_or_source() {
+        let mut registry = fresh_registry(); // embedded 10 (selected), 20
+        let stamp = registry.state().stamp;
+        assert_eq!(
+            registry.select_secondary(Some(Track::Embedded(10)), stamp),
+            Err(Error::Invalid)
+        );
+        let state = registry
+            .select_secondary(Some(Track::Embedded(20)), stamp)
+            .unwrap();
+        assert_eq!(state.secondary, Some(Track::Embedded(20)));
+        assert!(state.stamp.revision > stamp.revision);
+        assert_eq!(
+            registry.select(1, Some(Track::Embedded(20)), registry.state().stamp),
+            Err(Error::Invalid),
+            "the primary cannot take the secondary track"
+        );
+        let state = registry
+            .register_as_secondary(1, "zh".into(), 1, content(), registry.state().stamp)
+            .unwrap();
+        assert_eq!(state.secondary, Some(external(1, "zh", 1)));
+        assert_eq!(state.selected, Some(Track::Embedded(10)));
+        let state = registry
+            .remove_resource(1, "zh", registry.state().stamp)
+            .unwrap();
+        assert_eq!(state.secondary, None);
+        registry
+            .register_as_secondary(2, "en".into(), 1, content(), registry.state().stamp)
+            .unwrap();
+        assert_eq!(registry.remove_owner(2).unwrap().secondary, None);
+        registry
+            .select_secondary(Some(Track::Embedded(20)), registry.state().stamp)
+            .unwrap();
+        assert_eq!(
+            registry.reload_embedded(1, vec![10]).unwrap().secondary,
+            None
+        );
+        registry
+            .select_secondary(None, registry.state().stamp)
+            .unwrap();
+        registry.reset_source(2, vec![1], None).unwrap();
+        assert_eq!(registry.state().secondary, None);
     }
 }

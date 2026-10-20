@@ -77,9 +77,9 @@ interface Disposable { dispose(): Promise<void> }
 | `ui.window` | `windows.create` |
 | `ui.mount` | `panels.mount`、`panels.bottom` / `panels.sidebar`（任何插件读写两个面板位置） |
 | `ui.dialog` | `dialogs.*`（含 `dialogs.confirm`） |
-| `playback.read` | `player.state` 启动时读取、`player.refresh`、`player.stats`、`player.chapters`；滤镜读取处理状态 |
+| `playback.read` | `player.state` 启动时读取、`player.refresh`、`player.stats`、`player.chapters`、`player.audioDevices`；滤镜读取处理状态 |
 | `events` | `player.state` / `onChange` 实时更新、面板可见性、字幕状态刷新 |
-| `playback.control` | `player.open`、`setPaused`、`seek`、`setRate`、`restart`、`close`、`scrub`、`setOutput`、`provideSequence`、`next`、`previous`、`addAudioTrack`、`selectAudioTrack`、`step`、`setStepSeek`、`setLoop`；`power.preventSleep` |
+| `playback.control` | `player.open`、`setPaused`、`seek`、`setRate`、`restart`、`close`、`scrub`、`setOutput`、`provideSequence`、`next`、`previous`、`addAudioTrack`、`selectAudioTrack`、`step`、`setStepSeek`、`setLoop`、`setAudioDevice`；`power.preventSleep` |
 | `producer.av` | `player.openStream` |
 | `processing.video` | `video.filter`（另需 `playback.read`） |
 | `processing.audio` | `audio.filter`（另需 `playback.read`） |
@@ -87,10 +87,11 @@ interface Disposable { dispose(): Promise<void> }
 | `subtitles.control` | `subtitles.select`、`load`、`remove`、`setStyle` |
 | `media.read` / `media.control` | `media.capture`、`Snapshot.export`、`ExportJob`（`processed` 截图另需 `playback.read`、`subtitles.read`） |
 | `source.resolve` | `resolvers.add` |
-| `plugins.manage` | `packages.*` |
+| `plugins.manage` | `packages.validate`、`rollback`、`setEnabled`、`uninstall`（`list`、`onChange` 不需要能力） |
 | `ui.osd` | `osd.show`、`osd.panel` |
 | `clipboard` | `clipboard.readText`、`writeText`、`writeImage` |
 | `window.control` | `window.setVideoArea`、`setAlwaysOnTop`、`setCursorAutoHide` |
+| `bindings.manage` | `bindings.*`（§4.2） |
 
 `tools`、`storage`、`system`（§16）在插件进程内执行，不需要能力。读取 `window.state` / `onChange`（§6.6）与 `plugin.app`（§3.5）不需要能力。
 
@@ -166,7 +167,7 @@ interface Plugin extends Scope {
 
 本插件自己的可写目录（设置、记住的文件夹等），不需要能力。
 
-- 位置：`~/Library/Application Support/Vestra/plugin-data/<manifest id>/`（环境变量 `VESTRA_PLUGIN_DATA` 可改根目录），播放器在启动插件前创建。插件停用、重新加载、升级、回退时都保留。
+- 位置：`~/Library/Application Support/Vestra/plugin-data/<manifest id>/`（环境变量 `VESTRA_PLUGIN_DATA` 可改根目录），播放器在启动插件前创建。插件停用、重新加载、升级、回退时都保留；卸载时只有 `uninstall(id, { removeData: true })` 才删除。别的插件（如插件管理）按同一规则 `<数据根>/<id>` 找到某个插件的数据目录：数据根是 `plugin.dataDirectory` 的上一级（`dirname(plugin.dataDirectory)`）。
 - 试载的插件拿到一个临时目录，试载停止时删除，不会碰正式安装版本的数据。
 - JSON 设置文件用 `plugin.storage.json`（§16.4），它已处理默认值、读坏改名、去抖与原子写入。
 - 存什么、什么格式由插件决定。自己写文件时先写临时文件再改名（`writeFileSync(tmp)` → `renameSync(tmp, path)`），播放器中途退出也不会留下写了一半的文件；读不到或读坏时用默认值。
@@ -252,7 +253,7 @@ binding  = { 修饰键 "+" } 输入          修饰键按 Ctrl、Alt、Shift、C
          | Plus | 其它单个符号（> < / , . ; ' [ ] \ - = ` …）
          | Numpad0–Numpad9 | NumpadPlus | NumpadMinus | NumpadMultiply | NumpadDivide
          | NumpadEnter | NumpadDecimal
-         | Mouse:LeftDoubleClick[:LeftHalf | :RightHalf] | Mouse:MiddleClick | Mouse:X1 | Mouse:X2
+         | Mouse:LeftClick | Mouse:LeftDoubleClick[:LeftHalf | :RightHalf] | Mouse:MiddleClick | Mouse:X1 | Mouse:X2
          | Mouse:WheelUp | Mouse:WheelDown | Mouse:WheelLeft | Mouse:WheelRight
 ```
 
@@ -262,12 +263,39 @@ binding  = { 修饰键 "+" } 输入          修饰键按 Ctrl、Alt、Shift、C
 - Option（`Alt`）组合按物理键识别：`Alt+O` 按 ⌥O 触发，不看 ⌥O 打出的 `ø`；⌥E、⌥N、⌥U、⌥I、⌥\` 这类死键同样触发（死键只在视频区获得焦点时生效，输入框里照常组字）。键盘布局：Option 与 Ctrl 组合的字母和符号取当前布局不带修饰时的字符（德语 QWERTZ 上标着 Y 的键是 `Ctrl+Y`，与键帽一致）；`Alt+Shift+数字/符号` 时系统不报告该布局 Shift 后的字符，按美式键位换算（⌥⇧. 是 `Alt+>`，即使该布局 Shift+. 打出 `:`），美式键位上没有的符号键（如德语的 ß、´）与 Option+Shift 同按时不匹配任何绑定。在需要 Option 才能打出符号的布局上（德语 ⌥5 = `[`、⌥7 = `|`、⌥⇧7 = `\`、⌥L = `@`），Option 组合打出的非字母、非数字字符先按该字符匹配（不带 Alt 与 Shift，绑定写 `"["`、`"@"`），没有这样的绑定时再按物理键匹配（`Alt+5`、`Alt+L`）；两者都有绑定时字符优先。打出的是字母（⌥O 的 `ø`）时只按物理键（`Alt+O`）。美式布局上 ⌥[ 打出 `“`，通常无人绑定，仍是 `Alt+[`。小键盘名与布局无关。
 - Ctrl 组合即使系统以 ASCII 控制码送达也按键名识别：⌃Y 是 `Ctrl+Y`（不是 Shift+Tab），⌃I、⌃H、⌃M、⌃[ 分别是 `Ctrl+I`、`Ctrl+H`、`Ctrl+M`、`Ctrl+[`。
 - macOS 上 `Ctrl+X` 按 ⌃X 或 ⌘X 都触发，`Cmd+X` 只认 ⌘X。
+- `Mouse:LeftClick`（视频区左键单击）：只有它有生效的绑定时，播放器才延迟判定左键按下：系统双击间隔内没有第二次按下、指针移动不超过 4 点，才算单击并触发；第二次按下算双击（`Mouse:LeftDoubleClick` 照常）。没有绑定时左键行为不变（立即聚焦视频区，没有延迟）。
 - 鼠标绑定只在视频区生效，可带修饰键；`:LeftHalf` / `:RightHalf` 按双击位置区分左右半边，带区的绑定优先于不带区的。滚轮按累计位移计步。右键保留给菜单。
 - 作用范围：默认全局（主窗口或浮动面板窗口获得焦点、且按键没被焦点控件吃掉时，例如输入框里的空格不会触发）；`focus: "panel"` 只在本插件面板（附着或浮动）获得焦点时生效，此时先于全局查找。工具窗口里不触发绑定。
 - 菜单或系统对话框打开时绑定暂停。默认只在按下时触发；`repeat: true` 时按住会重复触发。
 - 冲突（同一输入、同一范围被两个命令声明）不报错：用户覆盖层优先，其次宿主自己的命令，再次先加载的插件；被压下的绑定写一行宿主日志，赢家停用后自动生效。测试里用 `host.conflicts` 检查。
 - 宿主自己的命令：「全屏」（`Enter`、`F11`、`Mouse:LeftDoubleClick`）、「退出全屏」（`Escape`，不在菜单）、「退出」（`Cmd+Q`），以及 14 个基础播放动作（§5.5）。
-- 用户覆盖层保存在界面状态文件（[架构总览 §6](../architecture/README.md)），本轮没有改绑界面。
+- 用户覆盖层保存在界面状态文件（[架构总览 §6](../architecture/README.md)），由 `plugin.bindings`（§4.2）读写。
+
+### 4.2 绑定管理 `plugin.bindings`
+
+需要 `bindings.manage`。供快捷键设置这类插件列出、改绑、恢复所有命令（含播放器自己的）的绑定。
+
+```ts
+interface BindingRef { plugin: string /* manifest id；播放器自己的命令为 "host" */; command: string }
+interface BindingInfo extends BindingRef {
+  title: string; path: string[] | null;  // 不进菜单的命令 path 为 null
+  scope: "global" | "panel";
+  defaults: string[];   // 命令自己声明的
+  current: string[];    // 生效的：有覆盖时为覆盖值，否则为 defaults
+  overridden: boolean;
+  shadowed: { input: string; by: BindingRef }[];  // current 中被别的命令占用的
+  labels: string[];     // current 各项的菜单文字（Ctrl+←、Num5）
+}
+bindings.list(): Promise<{ commands: BindingInfo[]; orphans: { ref: BindingRef; inputs: string[] }[] }>;
+bindings.set(ref: BindingRef, inputs: string[]): Promise<void>;  // [] = 解绑
+bindings.reset(ref?: BindingRef): Promise<void>;                 // 省略 = 清空全部覆盖
+bindings.onChange(listener: () => void): Disposable;
+```
+
+- `list`：当前声明的全部命令（运行中的插件与播放器），以及 `orphans`：覆盖层里命令当前不存在的条目（插件停用或卸载）。这些条目保留，插件回来后照常生效。
+- `set`：最多 16 个，语法同 §4.1，按规范写法保存（`Ctrl+Shift+A`），重复或不合法时 `invalid`；命令不存在且也不是 orphan 时 `missing`。覆盖优先于所有默认绑定（§4.1 冲突规则），跨启动保存。改「全屏」之类的宿主命令同样可以。
+- 「忽略默认快捷键」：对要忽略的命令 `set(ref, [])`，自己记下写过哪些，恢复时对它们 `reset(ref)`（裁决 R-K2）。
+- `onChange`：命令声明、注销或覆盖层变化后调用（合并为每 200 ms 至多一次），收到后再 `list()`。只发给声明了 `bindings.manage` 的插件。
 
 ## 5. 播放器 `plugin.player`
 
@@ -297,6 +325,7 @@ interface PlayerState {
   readonly error: string | null;     // phase 为 error 时的原因
   readonly can: { pause; seek; rate; restart; close; snapshot; next; previous: boolean };
   readonly audioTracks: AudioTrack[] | null;
+  readonly audioOutput?: { requested: string | null; active: string | null }; // §5.2 setAudioDevice
   readonly loop?: { a: number; b: number; count: number | null } | null; // A-B 循环，§5.2 setLoop
 }
 
@@ -330,6 +359,8 @@ interface AudioTrack {
 | `step(unit, direction, opts?)` | `unit`：`"frame"`（一帧，前进时暂停在下一帧）或 `"keyframe"`（严格越过当前关键帧到下一个/上一个）；`direction`：`"backward"` \| `"forward"`。可用条件与核心「上一帧/下一帧」相同（§5.5，`message` 为其原因），关键帧另需就绪且可跳转，否则 `unsupported`。**resolve 时新位置已生效**：宿主等到位置变化且没有在途的跳转（或 1.5 秒内不动 = 已到边界）才答复，SDK 随后刷新，之后读 `player.state.position` 就是新位置。同一时间只有一步在途，第二个调用以 `busy` 失败；连按的去重由调用方决定 |
 | `chapters()` → `Promise<{ sourceId, chapters: { title: string \| null; start: number }[] }>` | 当前媒体的章节（mpv `chapter-list`，`start` 为秒），按需读取，不随状态推送；没有媒体、生成流或没有章节时为空数组。`sourceId` 是读取时的来源，与 `player.state.sourceId` 比较可知是否已过期。需要 `playback.read` |
 | `setLoop(loop \| null, opts?)` | A-B 循环：播到 `b` 回到 `a`（秒，`0 ≤ a < b ≤ 时长`），回跳 `count` 次（正整数，≤ 1 000 000；省略 = 无限），`null` 取消。结果在 `state.loop`（`count` 为请求值，不是剩余次数）；最后一次回跳后 `state.loop` 变为 `null`。范围不对 `invalid`；不可跳转的来源、生成流 `unsupported`；没有就绪的媒体 `unavailable`；条件提交同其它控制。来源变化（新的 `sourceId`）时播放器清除循环 |
+| `audioDevices()` → `Promise<{ id: string; name: string }[]>` | 现在接入的音频输出设备（不含「系统默认」项；`id` 如 `coreaudio/<设备 UID>`，`name` 为系统显示的名字）。新接入的设备不推送，需要时再读（如每 5 秒）。需要 `playback.read` |
+| `setAudioDevice(id \| null)` | 在该设备接入期间用它播放，不在时用系统默认，重新接入后切回；`null` = 总是系统默认。`state.audioOutput.requested` 是请求的 id，`active` 是正在用的（`null` = 系统默认），播放器每秒检查一次设备。只在本次运行内记住，不跨启动保存（插件自己保存并在激活时设置）。插件生成的音视频流（`openStream`）同样跟随。不存在的 id 也接受（`active` 为 `null`）；格式不对 `invalid` |
 | `setStepSeek({ seconds })` | 核心第 1 档相对跳转（`seek-backward` / `seek-forward`，← / →）的步长：0.1–3600，一位小数，默认 5；菜单标题随之变为「后退 N秒」。所有插件最后写入的生效，该插件停用后回到上一个仍有效的值（都没有则 5） |
 
 `opts` 为 `{ ifCurrent?: PlayerState }`。
@@ -695,9 +726,9 @@ interface Subtitles {
   readonly state: SubtitlesState | null;  // 首次读取前为 null
   onChange(listener: (s: SubtitlesState) => void): Disposable;
   refresh(): Promise<SubtitlesState>;
-  select(track: SubtitleTrack | null, opts?): Promise<SubtitlesState>; // null = 关闭字幕
+  select(track: SubtitleTrack | null, opts?: { role?: "primary" | "secondary"; ifCurrent? }): Promise<SubtitlesState>; // null = 关闭
   load(bytes: Uint8Array, opts?: { format?: "srt" | "ass"; title?: string;
-       select?: "primary" | "none"; ifCurrent?; signal? }): Promise<SubtitleTrack>;
+       select?: "primary" | "secondary" | "none"; ifCurrent?; signal? }): Promise<SubtitleTrack>;
   remove(track: SubtitleTrack, opts?): Promise<SubtitlesState>;       // 只能删本插件载入的
   setStyle(style: SubtitleStyle | null, opts?): Promise<SubtitlesState>; // null = 撤销本插件的样式层
 }
@@ -707,6 +738,7 @@ interface SubtitlesState {
   readonly phase: string;
   readonly tracks: SubtitleTrack[];
   readonly selected: SubtitleTrack | null;
+  readonly secondary: SubtitleTrack | null; // 次字幕，与 selected 同时显示
   readonly fonts: { id: string; family: string }[];
   readonly style: SubtitleStyle | null;    // 生效的样式（来自最后设置的插件）
   readonly trackConfirmation: "waiting" | "applied" | "uncertain";
@@ -737,6 +769,7 @@ type SubtitleStyle = {
   shadow?: number;         // 阴影偏移 0–4（1080p 参考），50% 黑；默认 0
   box?: number | null;     // 背景框不透明度 0–100；null/省略 = 无框
   assOverride?: "keep" | "force"; // 默认 "keep"
+  secondaryPosition?: "top" | "aboveMain"; // 次字幕位置，默认 "top"
 };
 ```
 
@@ -749,6 +782,8 @@ type SubtitleStyle = {
 - `text` 判定：`codec` 为 `subrip`、`ass`、`ssa`、`webvtt`、`mov_text`、`text` 时为 `true`，其余（含 `null`）为 `false`。插件载入的 SRT 在后端是 `webvtt`。
 - `streamIndex`：只有内嵌轨、且播放器能确认 FFmpeg 流号时才有值（本地文件经宿主的 lavf 读取路径打开时）；外部轨、网络来源与其它情况一律 `null`。可直接用于 `tools.run("ffmpeg", ["-i", 源路径, "-map", \`0:${streamIndex}\`, …])`。
 - 样式按 1080p 参考高度缩放。`box` 有值时画背景框，阴影不生效；`shadow` 只在没有框时生效。
+- 次字幕：`select(track, { role: "secondary" })` 设置（`null` 关闭），`load(bytes, { select: "secondary" })` 载入后作为次字幕。不能与主字幕是同一条（两个方向都 `invalid`），图形字幕不能作次字幕（`invalid`）；共用 `trackConfirmation`；换来源时清空；移除其外部轨时一并清空。「含字幕」截图只含主字幕。
+- `secondaryPosition`：`"top"` 在画面顶部；`"aboveMain"` 在主字幕上方（按底边距加两行主字幕的高度估算，mpv `secondary-sub-pos`）。随生效的样式层（最后设置样式的插件）。
 - `assOverride`：`"keep"`（默认）时 ASS 字幕保留脚本自己的字体、颜色、位置，只按窗口缩放，样式只作用于 SRT 等文本字幕；`"force"` 时样式强制覆盖 ASS 脚本样式。
 
 ## 10. 截图与导出 `plugin.media`
@@ -815,12 +850,25 @@ type ResolvedMedia = {
 
 ## 12. 插件包管理 `plugin.packages`
 
-需要 `plugins.manage`。用于插件工坊这类安装其他插件的插件。
+`validate`、`rollback`、`setEnabled`、`uninstall` 需要 `plugins.manage`（插件工坊、插件管理）；`list`、`onChange` 不需要能力（关于窗口等也可以读）。
 
 ```ts
 interface Packages {
   validate(directory: string): Promise<PackageCandidate>; // 校验目录中的包
   rollback(id: string): Promise<PackageChange>;           // 回退到上一版本
+  list(): Promise<PluginInfo[]>;
+  onChange(listener: (plugins: PluginInfo[]) => void): Disposable;
+  setEnabled(id: string, enabled: boolean): Promise<void>;
+  uninstall(id: string, options?: { removeData?: boolean }): Promise<PackageChange>;
+}
+interface PluginInfo {
+  id: string; version: string | null;
+  origin: "installed" | "development" | "trial";   // 安装库 / --plugin 开发加载 / 试载
+  state: "starting" | "running" | "disabled" | "failed" | "stopped";
+  error: string | null;     // failed 时的原因
+  capabilities: string[];
+  directory: string;        // 包目录；数据目录按 §3.4 规则推出
+  previousVersion: string | null; // 可回退到的版本
 }
 interface PackageCandidate {
   readonly directory: string; readonly digest: string;
@@ -843,6 +891,9 @@ interface PackageChange {
 ```
 
 - 安装和回退从不重复提交：请求 id 与预期修订号由 SDK 处理，答复丢失时只按同一请求查询。
+- `list`：运行中的插件、安装库里的全部插件（含停用、启动失败、未运行的）与本次运行的开发加载，按 id 排序。`onChange` 在列表变化（启动、就绪、停用、失败、安装、卸载）后收到新列表，约每 200 ms 至多一次。
+- `setEnabled(id, false)`：停止该插件（与播放器停用插件相同，§3.2）；已安装的插件写进安装库，之后启动播放器也不再运行，直到 `setEnabled(id, true)`；开发加载只在本次运行有效。`setEnabled(id, true)` 重新加载它。停用自己 `invalid`，试载 `unsupported`（用试载句柄停止），未知 id `missing`，正在安装 `busy`。安装或回退一个停用的插件会让它重新启用。
+- `uninstall`：只对已安装插件（开发加载、试载 `unsupported`；未知 `missing`；自己 `invalid`）。先停止，再从安装库删除（当前与上一版本，一次原子提交），回收它的包文件；`removeData: true` 时在进程结束后删除它的数据目录。用户覆盖层里它的绑定保留（`bindings.list` 的 orphans）。返回的 `PackageChange` 通常已是 `committed`。
 - `trial.stop()` 以 `code: "cleanup"` 失败表示播放器停止了试载但未确认清理；再次调用会重新请求停止。
 
 ## 13. 错误
@@ -889,6 +940,7 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 | 断言 | `host.window(id).props`（kebab-case 名）、`.visible`；`host.command(id).state`、`.declaration`；`host.conflicts`（`[绑定, 赢家, ...被压下]`）；`host.layout.bottom` / `.sidebar`（可直接改后 `host.emit("window.state", {})` 模拟别处的变化）；`host.osd`（显示过的提示）、`host.osdPanel`；`host.sequence`（提供者的标志）；`host.menus`（`showMenu` 记录）；`host.sent(method)`；`host.source`；`host.processing`、`host.subtitles`、`host.snapshots`、`host.jobs`、`host.producers` |
 | 模拟数据 | `host.stats`（`player.stats()` 的返回值，第 2 轮新增字段可省略，SDK 补 `null`）；`host.dataDirectory`（`plugin.dataDirectory`，`storage.json` 直接读写其中的真实文件）；`host.setSource({ audioTracks })`（`addAudioTrack` / `selectAudioTrack` 有默认处理，可用 `host.handle("audio.addTrack" \| "audio.selectTrack", …)` 注入失败）；`host.subtitles.tracks` 的条目可带 `codec`、`text`、`streamIndex` |
 | 通用能力 | `host.clipboard`（`{ text, images }`，预置 `text` 测 `readText`）；`host.power`（合并后的 `"off"` / `"playing"`）；`host.tools.handle(tool, (args) => ({ stdout, stderr }))`（未注入的工具 `unavailable`；抛 `HostError` 模拟失败），`host.tools.calls`；`host.system.revealed`、`.opened`；`host.subtitleLoads`（每次 `load` 的 `format`、`title`、`select` 与字节）；`host.system.urls`（`system.openUrl`） |
+| 第 3a 轮批次 2 | `host.bindings.overlay`（`"<plugin>/<command>"` → 输入，可预置；`bindings.set` 写入，`host.press` 按它匹配，可 `host.press("Mouse:LeftClick")`）；`host.packages`（`packages.list` 的返回值）、`host.setPackages(list)`（推送 `onChange`）、`host.packageCalls`；`host.audioDevices`（`setAudioDevice` 更新 `host.source.audioOutput`）；`host.subtitles.selection.secondary` |
 | 第 3a 轮 | `host.mainWindow`、`host.setMainWindow(patch)`（§6.6）；`host.app`（§3.5）；`host.dialogAnswers.push({ confirmed, checked })`、`host.confirms`（§7）；`host.chapters`（`player.chapters()` 在媒体就绪时返回它）；`setLoop` 写入 `host.source.loop`，打开新来源时清除 |
 | 核心动作 | `host.coreAction(id)`、`host.coreCommands`（播放器的 14 条核心命令，§5.5；`press` 先匹配它们）；`host.coreRuns`；`host.stepSeek`；`host.steps` |
 | 注入故障 | `host.handle(method, fn)`：抛 `new HostError(code, message)` 模拟播放器拒绝，抛普通 `Error` 模拟答复丢失；`host.reset(method)` 恢复 |
@@ -1057,3 +1109,19 @@ await plugin.player.setStepSeek({ seconds: settings.value.step }); // 第 1 档�
 - 所有插件在激活前多读一次 `window.state`（与读 `player.state` 并行），所以 `plugin.window.state` 在 `activate` 里就是真实值。直接对协议计数的测试会看到这个请求。
 - 来源变化（新的 `sourceId`）时播放器清除 A-B 循环（mpv `ab-loop-a/b/count`），之前不清除。
 - `window.state` 事件的数据多了 `videoArea`（内部字段，`panels.*.state` 不变）。
+
+### 第 3a 轮批次 2：绑定管理、插件管理、音频输出、次字幕（2026-10）
+
+兼容扩展：
+
+- `plugin.bindings`（§4.2，新能力 `bindings.manage`）；新输入 `Mouse:LeftClick`（§4.1）。
+- `packages.list`、`onChange`（不需要能力）、`setEnabled`、`uninstall`（§12）；`PluginInfo`。
+- `player.audioDevices`、`setAudioDevice`、`PlayerState.audioOutput`（§5.1、§5.2）。
+- 次字幕：`subtitles.select(…, { role: "secondary" })`、`load({ select: "secondary" })`、`SubtitlesState.secondary`、`SubtitleStyle.secondaryPosition`（§9）。
+
+行为说明：
+
+- 安装库记录停用的插件，启动时跳过它们；安装或回退会清除停用标记。
+- `Mouse:LeftClick` 有绑定时，视频区的左键单击要等过系统双击间隔才触发（约 0.25–0.5 秒），双击照常；没有绑定时左键行为与之前完全相同。
+- 插件生成的流在 `setAudioDevice` 选择的设备上播放并跟随它；所选设备拔出时改用系统默认，不再因设备消失而结束（之前跟随系统默认、所选设备的概念不存在）。
+- 新来源打开时播放器清除 mpv 的 `secondary-sid`（之前不设置，mpv 默认不选次字幕）。

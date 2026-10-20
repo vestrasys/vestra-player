@@ -66,6 +66,7 @@ const CAPABILITIES = new Set([
   "ui.osd",
   "clipboard",
   "window.control",
+  "bindings.manage",
 ]);
 
 /** Never part of a production package. */

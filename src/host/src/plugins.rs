@@ -52,6 +52,7 @@ pub const CAPABILITIES: &[&str] = &[
     "ui.osd",
     "clipboard",
     "window.control",
+    "bindings.manage",
 ];
 /// `plugin.app` as JSON, set once at start-up and given to every plugin.
 static APP_INFO: std::sync::OnceLock<String> = std::sync::OnceLock::new();

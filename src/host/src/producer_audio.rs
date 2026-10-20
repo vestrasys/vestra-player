@@ -1,6 +1,7 @@
 //! Experimental CPAL/rtrb adapter, not a final producer API or acoustic fence.
-//! Fixed 48kHz stereo f32 only. The data callback allocates nothing, takes no
-//! mutex and performs no IO. Device/backend implementation details are outside
+//! Fixed 48kHz stereo f32 only. The data callback allocates nothing, takes only
+//! a try-lock (contended only while R-H9 switches device: one silent buffer)
+//! and performs no IO. Device/backend implementation details are outside
 //! that claim. Reset cannot retract a buffer already handed to the device.
 #![forbid(unsafe_code)]
 
@@ -63,6 +64,8 @@ pub enum Push {
 
 struct Shared {
     alive: AtomicBool,
+    /// The stream plays on a chosen (not the default) device.
+    chosen: AtomicBool,
     // Short control-only lock serializes concurrent reset callers. The callback
     // uses a bounded atomic snapshot and never touches this mutex.
     reset_lock: Mutex<()>,
@@ -101,6 +104,7 @@ impl Shared {
     fn new() -> Self {
         Self {
             alive: AtomicBool::new(true),
+            chosen: AtomicBool::new(false),
             reset_lock: Mutex::new(()),
             version: AtomicU64::new(0),
             desired: AtomicU64::new(1),
@@ -123,6 +127,11 @@ impl Shared {
                 self.xruns.fetch_add(1, Ordering::Relaxed);
             }
             cpal::ErrorKind::DeviceChanged => {
+                self.device_changes.fetch_add(1, Ordering::Relaxed);
+            }
+            // A chosen device went away: the host moves the stream to the
+            // system default (R-H9) instead of ending it.
+            cpal::ErrorKind::DeviceNotAvailable if self.chosen.load(Ordering::Acquire) => {
                 self.device_changes.fetch_add(1, Ordering::Relaxed);
             }
             cpal::ErrorKind::StreamInvalidated => {
@@ -356,9 +365,80 @@ impl Callback {
 type ErrorDiagnostics = (Consumer<(u64, cpal::Error)>, VecDeque<String>);
 pub struct Audio {
     shared: Arc<Shared>,
-    _stream: cpal::Stream,
+    stream: cpal::Stream,
+    /// The render state, shared by the streams of successive devices.
+    callback: Arc<Mutex<Callback>>,
+    /// `player.setAudioDevice` id the stream plays on (`None` = system default).
+    device: Option<String>,
     buffer: serde_json::Value,
     diagnostics: Mutex<ErrorDiagnostics>,
+    errors: Arc<Mutex<rtrb::Producer<(u64, cpal::Error)>>>,
+}
+
+/// An output device by mpv id (`coreaudio/<UID>`: cpal's CoreAudio device id
+/// is the same UID), else the system default; `true` when it is the chosen one.
+fn output_device(id: Option<&str>) -> Result<(cpal::Device, bool)> {
+    let host = cpal::default_host();
+    let wanted = id
+        .and_then(|id| id.strip_prefix("coreaudio/"))
+        .and_then(|uid| host.device_by_id(&cpal::DeviceId::new(host.id(), uid)));
+    match wanted {
+        Some(device) => Ok((device, true)),
+        None => host
+            .default_output_device()
+            .map(|device| (device, false))
+            .context("default audio output unavailable"),
+    }
+}
+
+/// 48 kHz stereo f32 with a 1024 frame buffer on `device`, rendering from `callback`.
+fn build_stream(
+    device: &cpal::Device,
+    shared: &Arc<Shared>,
+    callback: &Arc<Mutex<Callback>>,
+    errors: &Arc<Mutex<rtrb::Producer<(u64, cpal::Error)>>>,
+) -> Result<(cpal::Stream, serde_json::Value)> {
+    let default_config = format!("{:?}", device.default_output_config()?);
+    let supported = device
+        .supported_output_configs()?
+        .filter(|config| {
+            config.channels() == 2 && config.sample_format() == cpal::SampleFormat::F32
+        })
+        .find_map(|config| config.try_with_sample_rate(48_000))
+        .context("output device does not support 48kHz stereo f32")?;
+    let supported_buffer = format!("{:?}", supported.buffer_size());
+    ensure!(
+        matches!(supported.buffer_size(),cpal::SupportedBufferSize::Range{min,max} if *min<=1024 && *max>=1024),
+        "device does not explicitly support the chosen 1024 frame buffer"
+    );
+    let mut config = supported.config();
+    config.buffer_size = cpal::BufferSize::Fixed(1024);
+    let render = callback.clone();
+    let recorded = shared.clone();
+    let queue = errors.clone();
+    let stream = device.build_output_stream(
+        config,
+        // Only the stream being replaced contends for this lock (while the
+        // device switches); a missed lock renders one buffer of silence.
+        move |output: &mut [f32], _| match render.try_lock() {
+            Ok(mut callback) => callback.render(output),
+            Err(_) => output.fill(0.0),
+        },
+        move |error| {
+            recorded.record_error(error.kind());
+            let state = recorded.desired.load(Ordering::SeqCst);
+            let full = queue
+                .lock()
+                .map_or(true, |mut queue| queue.push((state, error)).is_err());
+            if full {
+                recorded.error_overflow.fetch_add(1, Ordering::Relaxed);
+            }
+        },
+        None,
+    )?;
+    let actual_buffer = stream.buffer_size()?;
+    let buffer = serde_json::json!({"device":device.to_string(),"supported":supported_buffer,"defaultConfig":default_config,"requestedFrames":1024,"actualFrames":actual_buffer,"oneBufferMilliseconds":actual_buffer as f64/48.});
+    Ok((stream, buffer))
 }
 pub struct Writer {
     shared: Arc<Shared>,
@@ -368,52 +448,23 @@ pub struct Writer {
 }
 
 impl Audio {
-    pub fn open() -> Result<(Self, Writer)> {
-        let device = cpal::default_host()
-            .default_output_device()
-            .context("default audio output unavailable")?;
-        let default_config = format!("{:?}", device.default_output_config()?);
-        let supported = device
-            .supported_output_configs()?
-            .filter(|config| {
-                config.channels() == 2 && config.sample_format() == cpal::SampleFormat::F32
-            })
-            .find_map(|config| config.try_with_sample_rate(48_000))
-            .context("default output does not support 48kHz stereo f32")?;
-        let supported_buffer = format!("{:?}", supported.buffer_size());
-        ensure!(
-            matches!(supported.buffer_size(),cpal::SupportedBufferSize::Range{min,max} if *min<=1024 && *max>=1024),
-            "device does not explicitly support the chosen 1024 frame buffer"
-        );
-        let mut config = supported.config();
-        config.buffer_size = cpal::BufferSize::Fixed(1024);
+    /// Open on the device `player.setAudioDevice` chose (mpv id), or the
+    /// system default when it is `None` or absent.
+    pub fn open(device: Option<&str>) -> Result<(Self, Writer)> {
         let shared = Arc::new(Shared::new());
         let (ring, consumer) = RingBuffer::new(CAPACITY);
-        let mut callback = Callback {
+        let callback = Arc::new(Mutex::new(Callback {
             ring: consumer,
             shared: shared.clone(),
             epoch: 0,
             clock: 0,
             underrun: 0,
-        };
-        let errors = shared.clone();
-        let (mut error_send, error_receive) = RingBuffer::<(u64, cpal::Error)>::new(8);
-        let stream = device.build_output_stream(
-            config,
-            move |output: &mut [f32], _| callback.render(output),
-            move |error| {
-                errors.record_error(error.kind());
-                if error_send
-                    .push((errors.desired.load(Ordering::SeqCst), error))
-                    .is_err()
-                {
-                    errors.error_overflow.fetch_add(1, Ordering::Relaxed);
-                }
-            },
-            None,
-        )?;
-        let actual_buffer = stream.buffer_size()?;
-        let buffer = serde_json::json!({"device":device.to_string(),"supported":supported_buffer,"defaultConfig":default_config,"requestedFrames":1024,"actualFrames":actual_buffer,"oneBufferMilliseconds":actual_buffer as f64/48.});
+        }));
+        let (error_send, error_receive) = RingBuffer::<(u64, cpal::Error)>::new(8);
+        let errors = Arc::new(Mutex::new(error_send));
+        let (target, chosen) = output_device(device)?;
+        shared.chosen.store(chosen, Ordering::Release);
+        let (stream, buffer) = build_stream(&target, &shared, &callback, &errors)?;
         stream.play()?;
         let writer = Writer {
             shared: shared.clone(),
@@ -424,12 +475,48 @@ impl Audio {
         Ok((
             Self {
                 shared,
-                _stream: stream,
+                stream,
+                callback,
+                device: device.map(str::to_owned),
                 buffer,
                 diagnostics: Mutex::new((error_receive, VecDeque::new())),
+                errors,
             },
             writer,
         ))
+    }
+
+    /// R-H9: move the stream to another device (`None` = system default),
+    /// keeping its queue, clock and pause state. The old stream stops first;
+    /// on failure it plays on.
+    pub fn retarget(&mut self, device: Option<&str>) -> Result<()> {
+        if self.device.as_deref() == device {
+            return Ok(());
+        }
+        let (target, chosen) = output_device(device)?;
+        self.stream.pause()?;
+        match build_stream(&target, &self.shared, &self.callback, &self.errors).and_then(
+            |(stream, buffer)| stream.play().map(|()| (stream, buffer)).map_err(Into::into),
+        ) {
+            Ok((stream, buffer)) => {
+                self.stream = stream;
+                self.buffer = buffer;
+                self.device = device.map(str::to_owned);
+                self.shared.chosen.store(chosen, Ordering::Release);
+                // A lost device does not end a stream that moved on.
+                let _ =
+                    self.shared
+                        .fatal
+                        .compare_exchange(2, 0, Ordering::AcqRel, Ordering::Acquire);
+                Ok(())
+            }
+            Err(error) => {
+                // Stay on the old device; not retried until the choice changes.
+                self.device = device.map(str::to_owned);
+                let _ = self.stream.play();
+                Err(error)
+            }
+        }
     }
 
     pub fn reset(&self, epoch: u64, paused: bool, base_sample: u64) -> Result<()> {

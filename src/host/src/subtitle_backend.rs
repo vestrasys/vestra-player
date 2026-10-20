@@ -133,6 +133,8 @@ enum Mutation {
         operation_id: u64,
         target: Option<Target>,
         expected: Stamp,
+        #[serde(default)]
+        role: Role,
     },
     #[serde(rename = "subtitles.remove")]
     Remove {
@@ -163,7 +165,16 @@ impl Format {
 enum Selection {
     #[default]
     Primary,
+    Secondary,
     None,
+}
+/// Which subtitle `subtitles.select` sets (R-T3).
+#[derive(Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum Role {
+    #[default]
+    Primary,
+    Secondary,
 }
 #[derive(Clone)]
 struct Asset {
@@ -346,40 +357,49 @@ fn tracks(mpv: &Mpv) -> Result<Vec<NativeTrack>, RpcError> {
 fn set_target(
     mpv: &Mpv,
     load: Option<NativeLoad>,
-    selected: &Option<Track>,
+    selection: &model::Snapshot,
     assets: &BTreeMap<AssetKey, Asset>,
 ) -> Result<(), RpcError> {
     let load = load
         .ok_or_else(|| RpcError::new("unavailable", "current subtitle load binding unavailable"))?;
-    let sid = match selected {
-        None => None,
-        Some(Track::Embedded(id)) => Some(*id),
-        Some(Track::External {
-            owner,
-            resource_id,
-            content_revision,
-        }) => Some(
-            assets
-                .get(&(*owner, resource_id.clone(), *content_revision))
-                .filter(|asset| asset.binding == load)
-                .ok_or_else(|| failure("subtitle asset load binding unavailable"))?
-                .track,
-        ),
+    let native = |track: &Option<Track>| -> Result<Option<i64>, RpcError> {
+        Ok(match track {
+            None => None,
+            Some(Track::Embedded(id)) => Some(*id),
+            Some(Track::External {
+                owner,
+                resource_id,
+                content_revision,
+            }) => Some(
+                assets
+                    .get(&(*owner, resource_id.clone(), *content_revision))
+                    .filter(|asset| asset.binding == load)
+                    .ok_or_else(|| failure("subtitle asset load binding unavailable"))?
+                    .track,
+            ),
+        })
     };
-    if let Some(id) = sid {
-        mpv.set_property("sid", id).map_err(failure)?;
-    } else {
-        mpv.set_property("sid", "no").map_err(failure)?;
-    }
-    let actual = mpv.get_property::<Node>("sid").map_err(failure)?;
-    let confirmed = match (sid, actual) {
-        (Some(expected), Node::Int64(actual)) => expected == actual,
-        (None, Node::Flag(false)) => true,
-        (None, Node::String(value)) => value == "no",
-        _ => false,
-    };
-    if !confirmed {
-        return Err(failure("subtitle sid was not confirmed"));
+    // Primary first: mpv refuses a secondary-sid equal to sid.
+    for (property, id) in [
+        ("secondary-sid", None),
+        ("sid", native(&selection.selected)?),
+        ("secondary-sid", native(&selection.secondary)?),
+    ] {
+        match id {
+            Some(id) => mpv.set_property(property, id),
+            None => mpv.set_property(property, "no"),
+        }
+        .map_err(failure)?;
+        let actual = mpv.get_property::<Node>(property).map_err(failure)?;
+        let confirmed = match (id, actual) {
+            (Some(expected), Node::Int64(actual)) => expected == actual,
+            (None, Node::Flag(false)) => true,
+            (None, Node::String(value)) => value == "no",
+            _ => false,
+        };
+        if !confirmed {
+            return Err(failure(format!("subtitle {property} was not confirmed")));
+        }
     }
     Ok(())
 }
@@ -498,6 +518,8 @@ impl Subtitles {
             self.registry
                 .reset_source(self.generation, ids, sid)
                 .map_err(model_error)?;
+            // `secondary-sid` would otherwise carry over to the new file.
+            mpv.set_property("secondary-sid", "no").map_err(failure)?;
             self.assets.clear();
             self.uncertain = None;
         } else {
@@ -515,12 +537,7 @@ impl Subtitles {
                 )?;
                 self.assets.insert(key, current);
             }
-            set_target(
-                mpv,
-                self.active_load,
-                &self.registry.state().selected,
-                &self.assets,
-            )?;
+            set_target(mpv, self.active_load, &self.registry.state(), &self.assets)?;
         }
         let layers = self.styles.values().cloned().collect::<Vec<_>>();
         self.apply_style(mpv, &layers)?;
@@ -548,16 +565,16 @@ impl Subtitles {
      "codec":native.codec,"text":text_codec(native.codec.as_deref()),"streamIndex":stream_index})
   }).collect::<Vec<_>>();
         let resources=snapshot.resources.iter().map(|r|{let asset=self.assets.get(&(r.owner,r.resource_id.clone(),r.revision));let format=asset.map_or(Format::Srt,|a|a.format);json!({"owner":r.owner,"resourceId":r.resource_id,"revision":r.revision,"format":format.name(),"digest":r.content.digest,"sizeBytes":r.content.bytes.len(),"cues":r.content.cues,"derived":{"format":if format==Format::Ass{"ass"}else{"webvtt"},"digest":asset.map(|a|a.digest.clone())}})}).collect::<Vec<_>>();
-        json!({"source":{"generation":self.generation,"phase":match self.phase{Phase::Empty=>"empty",Phase::Loading=>"loading",Phase::Ready=>"ready",Phase::Ended=>"ended",Phase::Error=>"error"}},"confirmation":if self.uncertain.is_some(){"uncertain"}else if self.confirmed{"applied"}else{"waiting"},"error":self.uncertain,"selection":{"stamp":{"generation":snapshot.stamp.generation,"revision":snapshot.stamp.revision},"target":snapshot.selected.as_ref().map(target)},"tracks":tracks,"resources":resources,"presentation":self.presentation_state()})
+        json!({"source":{"generation":self.generation,"phase":match self.phase{Phase::Empty=>"empty",Phase::Loading=>"loading",Phase::Ready=>"ready",Phase::Ended=>"ended",Phase::Error=>"error"}},"confirmation":if self.uncertain.is_some(){"uncertain"}else if self.confirmed{"applied"}else{"waiting"},"error":self.uncertain,"selection":{"stamp":{"generation":snapshot.stamp.generation,"revision":snapshot.stamp.revision},"target":snapshot.selected.as_ref().map(target),"secondary":snapshot.secondary.as_ref().map(target)},"tracks":tracks,"resources":resources,"presentation":self.presentation_state()})
     }
     fn restore(
         &mut self,
         mpv: &Mpv,
-        selected: &Option<Track>,
+        selection: &model::Snapshot,
         assets: &BTreeMap<AssetKey, Asset>,
         original: RpcError,
     ) -> RpcError {
-        match set_target(mpv, self.active_load, selected, assets) {
+        match set_target(mpv, self.active_load, selection, assets) {
             Ok(()) => original,
             Err(error) => {
                 let reason = format!("{}; restore failed: {}", original.message, error.message);
@@ -605,7 +622,7 @@ impl Subtitles {
             .map(|e| e.message)
             .collect::<Vec<_>>();
         if self.active_load.is_some()
-            && let Err(error) = set_target(mpv, self.active_load, &snapshot.selected, &self.assets)
+            && let Err(error) = set_target(mpv, self.active_load, &snapshot, &self.assets)
         {
             failures.push(error.message);
         }
@@ -898,12 +915,7 @@ impl Subtitles {
                 match refreshed {
                     Ok(id) => {
                         self.assets.get_mut(&key).unwrap().track = id;
-                        set_target(
-                            mpv,
-                            self.active_load,
-                            &self.registry.state().selected,
-                            &self.assets,
-                        )?;
+                        set_target(mpv, self.active_load, &self.registry.state(), &self.assets)?;
                     }
                     Err(error) => {
                         self.style_confirmed = false;
@@ -1324,6 +1336,13 @@ impl Subtitles {
                         content,
                         expected.model(),
                     ),
+                    Selection::Secondary => next.register_as_secondary(
+                        owner,
+                        resource_id.clone(),
+                        revision,
+                        content,
+                        expected.model(),
+                    ),
                     Selection::None => next.register(
                         owner,
                         resource_id.clone(),
@@ -1340,27 +1359,38 @@ impl Subtitles {
                     .map_err(failure)?;
                 file.write_all(&carrier).map_err(failure)?;
                 file.flush().map_err(failure)?;
-                set_target(mpv, self.active_load, &before.selected, &self.assets)?;
+                set_target(mpv, self.active_load, &before, &self.assets)?;
                 let asset = match self.add_file(mpv, Arc::new(file), digest, owner, (format, title))
                 {
                     Ok(asset) => asset,
                     Err(error) => {
-                        return Err(self.restore(
-                            mpv,
-                            &before.selected,
-                            &self.assets.clone(),
-                            error,
-                        ));
+                        return Err(self.restore(mpv, &before, &self.assets.clone(), error));
                     }
                 };
                 assets.insert((owner, resource_id, revision), asset);
                 consumed_upload = Some(upload_id);
             }
             Mutation::Select {
-                target, expected, ..
+                target,
+                expected,
+                role,
+                ..
             } => {
-                next.select(owner, target.map(|t| t.track()), expected.model())
-                    .map_err(model_error)?;
+                let target = target.map(|t| t.track());
+                if role == Role::Secondary {
+                    // Bitmap subtitles cannot be the secondary one.
+                    if let Some(Track::Embedded(id)) = &target
+                        && tracks(mpv)?
+                            .iter()
+                            .any(|t| t.id == *id && !text_codec(t.codec.as_deref()))
+                    {
+                        return Err(RpcError::invalid("a bitmap subtitle cannot be secondary"));
+                    }
+                    next.select_secondary(target, expected.model())
+                } else {
+                    next.select(owner, target, expected.model())
+                }
+                .map_err(model_error)?;
             }
             Mutation::Remove {
                 resource_id,
@@ -1372,7 +1402,7 @@ impl Subtitles {
             }
         }
         let after = next.state();
-        if let Err(error) = set_target(mpv, self.active_load, &after.selected, &assets) {
+        if let Err(error) = set_target(mpv, self.active_load, &after, &assets) {
             let added = assets
                 .iter()
                 .filter(|(k, _)| !self.assets.contains_key(*k))
@@ -1385,7 +1415,7 @@ impl Subtitles {
                     self.assets.insert(key, asset);
                 }
             }
-            let restored = self.restore(mpv, &before.selected, &self.assets.clone(), error);
+            let restored = self.restore(mpv, &before, &self.assets.clone(), error);
             if !cleanup.is_empty() {
                 let reason = format!(
                     "{}; new track cleanup failed: {}",
@@ -1411,8 +1441,7 @@ impl Subtitles {
             if let Some(asset) = assets.get(&key)
                 && let Err(error) = mpv.command(&["sub-remove", &asset.track.to_string()])
             {
-                let restored =
-                    self.restore(mpv, &before.selected, &self.assets.clone(), failure(error));
+                let restored = self.restore(mpv, &before, &self.assets.clone(), failure(error));
                 let added = assets
                     .iter()
                     .filter(|(k, _)| !self.assets.contains_key(*k))

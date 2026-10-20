@@ -44,6 +44,32 @@ pub struct Style {
     pub box_opacity: Option<u8>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ass_override: Option<AssOverride>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secondary_position: Option<SecondaryPosition>,
+}
+
+/// Where the secondary subtitle sits (R-T7): the top of the video (default),
+/// or just above the primary subtitle.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SecondaryPosition {
+    Top,
+    AboveMain,
+}
+
+/// mpv `secondary-sub-pos` (percent of the video height from the top where
+/// the secondary line ends). `AboveMain`: above the bottom margin plus two
+/// primary lines at the 1080p reference height.
+pub fn secondary_pos(style: &Style) -> f64 {
+    match style.secondary_position.unwrap_or(SecondaryPosition::Top) {
+        SecondaryPosition::Top => 0.,
+        SecondaryPosition::AboveMain => {
+            let lines = 2. * 1.25 * f64::from(style.font_size) / 1080. * 100.;
+            (100. - f64::from(style.margin_percent) - lines)
+                .clamp(0., 100.)
+                .round()
+        }
+    }
 }
 
 /// The background box margin at the 1080p reference height.
@@ -79,6 +105,7 @@ pub fn default_for(font_id: String) -> Style {
         shadow: None,
         box_opacity: None,
         ass_override: None,
+        secondary_position: None,
     }
 }
 
@@ -188,6 +215,7 @@ pub fn mpv_properties(style: &Style, resolved_family: &str) -> Result<Vec<(&'sta
         ("sub-border-style", border_style.into()),
         ("sub-back-color", back_color),
         ("sub-shadow-offset", (shadow * 720.0 / 1080.0).to_string()),
+        ("secondary-sub-pos", secondary_pos(style).to_string()),
     ])
 }
 
@@ -452,6 +480,28 @@ mod tests {
         assert_eq!(
             validate(&structurally_valid.style, &fonts()),
             Err(Error::UnsupportedFont)
+        );
+    }
+
+    #[test]
+    fn secondary_position_is_top_or_above_the_primary() {
+        let mut style = default_for("sans".into());
+        assert_eq!(secondary_pos(&style), 0.);
+        style.secondary_position = Some(SecondaryPosition::AboveMain);
+        // 36px at 1080p, 5% margin: 100 − 5 − 8.33 ≈ 87.
+        assert_eq!(secondary_pos(&style), 87.);
+        let parsed: Style = serde_json::from_value(json!({"fontId":"sans","fontSize":36,
+            "color":"white","outline":2,"marginPercent":5,"offsetMs":0,
+            "secondaryPosition":"aboveMain"}))
+        .unwrap();
+        assert_eq!(
+            parsed.secondary_position,
+            Some(SecondaryPosition::AboveMain)
+        );
+        assert!(
+            mpv_properties(&parsed, "Sans")
+                .unwrap()
+                .contains(&("secondary-sub-pos", "87".into()))
         );
     }
 }

@@ -93,6 +93,11 @@ pub struct Sources {
     ab_loop: Option<(f64, f64, Option<u64>)>,
     /// The source generation the A-B loop belongs to (R-H13).
     loop_generation: u64,
+    /// `player.setAudioDevice` for this run (`None` = system default), the
+    /// device in use (`None` = default), and when presence was last checked.
+    audio_requested: Option<String>,
+    audio_active: Option<String>,
+    audio_checked: Option<std::time::Instant>,
     #[cfg(feature = "producer-audio")]
     producers: crate::producer::Producers,
     #[cfg(feature = "producer-audio")]
@@ -384,6 +389,54 @@ impl Sources {
             |(a, b, count)| json!({"a":a,"b":b,"count":count}),
         )
     }
+    /// `player.audioDevices` → `[{ id, name }]`; `player.setAudioDevice { id }`.
+    fn audio_device(&mut self, mpv: &Mpv, method: &str, params: &Value) -> Result<Value, RpcError> {
+        if method == "player.audioDevices" {
+            return Ok(json!(
+                audio_devices(mpv)
+                    .into_iter()
+                    .map(|(id, name)| json!({"id":id,"name":name}))
+                    .collect::<Vec<_>>()
+            ));
+        }
+        self.audio_requested = match &params["id"] {
+            Value::Null => None,
+            Value::String(id)
+                if !id.is_empty() && id.len() <= 512 && !id.chars().any(char::is_control) =>
+            {
+                Some(id.clone())
+            }
+            _ => return Err(RpcError::invalid("id must be a device id or null")),
+        };
+        self.audio_checked = None;
+        self.follow_device(mpv);
+        Ok(Value::Null)
+    }
+    /// R-A3/R-H9: play on the requested device while it is present, else on
+    /// the system default; checked every second. mpv and generated streams
+    /// follow the same choice.
+    pub fn follow_device(&mut self, mpv: &Mpv) {
+        if self
+            .audio_checked
+            .is_some_and(|at| at.elapsed() < std::time::Duration::from_secs(1))
+        {
+            return;
+        }
+        self.audio_checked = Some(std::time::Instant::now());
+        let target = self
+            .audio_requested
+            .clone()
+            .filter(|id| audio_devices(mpv).iter().any(|(present, _)| present == id));
+        let wanted = target.as_deref().unwrap_or("auto");
+        if mpv.get_property::<String>("audio-device").ok().as_deref() != Some(wanted)
+            && let Err(error) = mpv.set_property("audio-device", wanted)
+        {
+            eprintln!("host.error audio-device {wanted}: {error}");
+        }
+        #[cfg(feature = "producer-audio")]
+        self.producers.follow_device(target.as_deref());
+        self.audio_active = target;
+    }
     fn audio_track(&mut self, mpv: &Mpv, method: &str, params: &Value) -> Result<Value, RpcError> {
         self.check_expected(params)?;
         if self.producer() || self.presentation_load().is_none() {
@@ -545,6 +598,7 @@ impl Sources {
     }
     pub fn snapshot(&mut self, mpv: &Mpv) -> Value {
         let ab_loop = self.loop_state(mpv);
+        let output = json!({"requested":self.audio_requested,"active":self.audio_active});
         #[cfg(feature = "producer-audio")]
         if let Some(ticket) = self.provider_ticket {
             if let Some((paused, position)) = self.producers.active_facts() {
@@ -571,6 +625,7 @@ impl Sources {
             state["output"] = json!({"volume":mpv.get_property::<f64>("volume").unwrap_or(100.),"muted":mpv.get_property::<bool>("mute").unwrap_or(false)});
             state["rate"] = json!(1.);
             state["loop"] = Value::Null;
+            state["audioOutput"] = output;
             return state;
         }
         // keep-open preserves the final frame and does not emit EndFile at
@@ -653,6 +708,7 @@ impl Sources {
         result["output"] = json!({"volume":mpv.get_property::<f64>("volume").unwrap_or(100.),"muted":mpv.get_property::<bool>("mute").unwrap_or(false)});
         result["rate"] = json!(mpv.get_property::<f64>("speed").unwrap_or(1.));
         result["loop"] = ab_loop;
+        result["audioOutput"] = output;
         result["capabilities"]["snapshotSource"] = json!(self.lease(self.generation()).is_ok());
         result["snapshotProfile"] = json!({"timeDomain":"mpv-media","fileOriginValidation":"deferred-worker-origin-match-required"});
         result
@@ -856,6 +912,9 @@ impl Sources {
         }
         if matches!(method, "audio.addTrack" | "audio.selectTrack") {
             return self.audio_track(mpv, method, params).map(Some);
+        }
+        if matches!(method, "player.audioDevices" | "player.setAudioDevice") {
+            return self.audio_device(mpv, method, params).map(Some);
         }
         if matches!(method, "player.chapters" | "player.setLoop") {
             return self.marks(mpv, method, params).map(Some);
@@ -1403,6 +1462,40 @@ fn chapter_list(node: Node) -> Vec<Value> {
         })
         .collect()
 }
+/// mpv `audio-device-list` as `(id, name)`, without `auto` (the system
+/// default). Where CoreAudio devices are listed, only those: macOS lists the
+/// same device once more under `avfoundation/`.
+fn audio_devices(mpv: &Mpv) -> Vec<(String, String)> {
+    let Ok(Node::Array(entries)) = mpv.get_property::<Node>("audio-device-list") else {
+        return Vec::new();
+    };
+    device_list(entries)
+}
+fn device_list(entries: Vec<Node>) -> Vec<(String, String)> {
+    let all = entries
+        .into_iter()
+        .take(256)
+        .filter_map(|entry| {
+            let Node::Map(fields) = entry else {
+                return None;
+            };
+            let text = |key: &str| match fields.iter().find(|(name, _)| name == key) {
+                Some((_, Node::String(text))) => Some(text.clone()),
+                _ => None,
+            };
+            let id = text("name").filter(|id| id != "auto" && !id.is_empty())?;
+            let name = text("description").unwrap_or_else(|| id.clone());
+            Some((id, name))
+        })
+        .collect::<Vec<_>>();
+    if all.iter().any(|(id, _)| id.starts_with("coreaudio/")) {
+        all.into_iter()
+            .filter(|(id, _)| id.starts_with("coreaudio/"))
+            .collect()
+    } else {
+        all
+    }
+}
 fn clear_loop(mpv: &Mpv) {
     for (name, value) in [
         ("ab-loop-a", "no"),
@@ -1512,6 +1605,35 @@ mod audio_track_tests {
             title: None,
             language: None,
         }
+    }
+    #[test]
+    fn audio_devices_skip_auto_and_duplicate_backends() {
+        let device = |name: &str, description: &str| {
+            Node::Map(vec![
+                ("name".into(), Node::String(name.into())),
+                ("description".into(), Node::String(description.into())),
+            ])
+        };
+        let list = device_list(vec![
+            device("auto", "Autoselect device"),
+            device("coreaudio/BuiltInSpeakerDevice", "MacBook Speakers"),
+            device("avfoundation/BuiltInSpeakerDevice", "MacBook Speakers"),
+            device("coreaudio/USB-DAC", "DAC"),
+        ]);
+        assert_eq!(
+            list,
+            vec![
+                (
+                    "coreaudio/BuiltInSpeakerDevice".into(),
+                    "MacBook Speakers".into()
+                ),
+                ("coreaudio/USB-DAC".into(), "DAC".into()),
+            ]
+        );
+        assert_eq!(
+            device_list(vec![device("pulse/x", "X")]),
+            vec![("pulse/x".into(), "X".into())]
+        );
     }
     #[test]
     fn chapters_read_title_and_start() {
