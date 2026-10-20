@@ -1,1 +1,1 @@
-{"id":"nes","version":"0.1.0","apiVersion":"vestra.experimental/0.1","entry":"dist/main.js","capabilities":["producer.av","commands","events","playback.read","playback.control","ui.window","ui.dialog"]}
+{"id":"nes","version":"0.1.0","apiVersion":"vestra.experimental/0.1","entry":"main.ts","capabilities":["producer.av","commands","events","playback.read","playback.control","ui.window","ui.dialog"]}

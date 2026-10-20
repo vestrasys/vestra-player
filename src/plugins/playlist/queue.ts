@@ -1,10 +1,6 @@
 import { realpath } from "node:fs/promises";
 import { basename, resolve } from "node:path";
-import type {
-  SourceStamp,
-  SourceState,
-  SourceTicket,
-} from "../../sdk/source.ts";
+import type { Disposable, Media, PlayerState } from "../../sdk/plugin/index.ts";
 
 export type Row = {
   rowId: string;
@@ -15,13 +11,8 @@ export type Row = {
   status: string;
   error: string;
 };
-export type Binding = {
-  rowId: string;
-  ticket: SourceTicket;
-  endedCycle: number | null;
-};
-export const sameStamp = (a: SourceStamp, b: SourceStamp) =>
-  a.generation === b.generation && a.intentVersion === b.intentVersion;
+/** The media this list opened for a row; `end` is its natural-end listener. */
+export type Binding = { rowId: string; media: Media; end?: Disposable };
 
 /** All ordering, selection and source association belong to this instance. */
 export class Queue {
@@ -29,7 +20,6 @@ export class Queue {
   selected: string | null = null;
   binding: Binding | null = null;
   failed: string | null = null;
-  revision = 0;
   epoch = 0;
   message = "添加文件或链接；选择后点击播放";
   private nextId = 0;
@@ -55,7 +45,7 @@ export class Queue {
       ];
     if (next) this.selected = next.rowId;
   }
-  async addFiles(paths: string[], stillActive: () => boolean = () => true) {
+  async addFiles(paths: string[]) {
     let added = 0,
       duplicate = 0,
       invalid = 0;
@@ -70,7 +60,6 @@ export class Queue {
       } catch {
         error = "文件不存在或暂不可读取，可重试";
       }
-      if (!stillActive()) return;
       if (this.rows.some((row) => row.kind === "file" && row.key === key)) {
         duplicate++;
         continue;
@@ -122,7 +111,6 @@ export class Queue {
       status: input.error ? "待重试" : "待播放",
     };
     this.rows.push(row);
-    this.revision++;
     return row;
   }
   move(delta: number) {
@@ -130,7 +118,6 @@ export class Queue {
     const other = index + delta;
     if (index < 0 || other < 0 || other >= this.rows.length) return;
     [this.rows[index], this.rows[other]] = [this.rows[other], this.rows[index]];
-    this.revision++;
   }
   remove() {
     const index = this.rows.findIndex((row) => row.rowId === this.selected);
@@ -141,19 +128,17 @@ export class Queue {
     if (removed.rowId === this.failed) this.failed = null;
     this.selected =
       this.rows[Math.min(index, this.rows.length - 1)]?.rowId ?? null;
-    this.revision++;
   }
   clear() {
     this.rows = [];
     this.selected = null;
     this.failed = null;
     this.detach("列表已清空，当前媒体继续");
-    this.revision++;
   }
   detach(message: string) {
     const row = this.row(this.binding?.rowId ?? null);
     if (row) row.status = "已切换";
-    this.binding = null;
+    this.unbind();
     this.epoch++;
     this.message = message;
   }
@@ -173,54 +158,30 @@ export class Queue {
     row.status = "失败";
     row.error = message;
     this.failed = rowId;
-    this.binding = null;
+    this.unbind();
     this.message = message;
   }
-  /** Return a single natural-end token. Caller rechecks it before conditional open. */
-  observe(
-    state: SourceState,
-  ): {
-    rowId: string;
-    stamp: SourceStamp;
-    cycle: number;
-    epoch: number;
-  } | null {
+  bind(binding: Binding) {
+    this.unbind();
+    this.binding = binding;
+  }
+  private unbind() {
+    void this.binding?.end?.dispose();
+    this.binding = null;
+  }
+  /** Project the player state onto the bound row; natural ends arrive via `media.onEnd`. */
+  observe(state: PlayerState) {
     const binding = this.binding;
-    if (!binding) return null;
+    if (!binding) return;
     const row = this.row(binding.rowId);
-    if (!row) {
-      this.detach("当前媒体已移出列表");
-      return null;
-    }
-    if (
-      state.stamp.generation !== binding.ticket.stamp.generation ||
-      state.kind !== "media"
-    ) {
+    if (!row) return this.detach("当前媒体已移出列表");
+    // Another open (even of the same path) is a new source; a restart is not.
+    if (!binding.media.current || state.kind !== "media") {
       this.failed = null;
-      this.detach("已切换到列表外来源");
-      return null;
-    }
-    // Public restart keeps generation but advances cycle/intent. The new cycle
-    // gets fresh end eligibility; old deferred progression fails its stamp check.
-    if (
-      !sameStamp(state.stamp, binding.ticket.stamp) ||
-      state.cycle !== binding.ticket.cycle
-    ) {
-      this.epoch++;
-      binding.ticket = {
-        ...binding.ticket,
-        stamp: state.stamp,
-        cycle: state.cycle,
-      };
-      binding.endedCycle = null;
+      return this.detach("已切换到列表外来源");
     }
     if (state.phase === "error") {
-      this.fail(
-        row.rowId,
-        typeof state.terminalReason === "object" && state.terminalReason
-          ? state.terminalReason.failed
-          : "无法打开此媒体",
-      );
+      this.fail(row.rowId, state.error ?? "无法打开此媒体");
     } else if (state.phase === "ready") {
       row.status = state.paused ? "已暂停" : "播放中";
       row.error = "";
@@ -229,21 +190,8 @@ export class Queue {
       row.status = "正在打开";
     } else if (state.phase === "ended") {
       row.status = "已结束";
-      if (
-        state.terminalReason === "natural" &&
-        binding.endedCycle !== state.cycle
-      ) {
-        binding.endedCycle = state.cycle;
-        return {
-          rowId: row.rowId,
-          stamp: { ...state.stamp },
-          cycle: state.cycle,
-          epoch: this.epoch,
-        };
-      }
     } else if (state.phase === "empty") {
       this.detach("当前来源已关闭");
     }
-    return null;
   }
 }

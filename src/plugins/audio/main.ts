@@ -1,75 +1,94 @@
-import type { Host } from '../../sdk/index.ts';
-import { AudioController } from './controller.ts';
-import { clamp, clone, neutral, presets } from './model.ts';
-const view = 'audio-workbench';
-const callbacks = ['gain-changed', 'delay-changed', 'normalize-changed', 'clarity-changed', 'preset-selected', 'reset-requested', 'retry-requested'];
-export async function activate(host: Host) {
-  let disposed = false;
-  let opened = false;
-  let opening: Promise<void> | null = null;
-  let painting = false;
-  let dirty = false;
-  let revision = 1;
-  const ids = ['audio.workbench', 'audio.reset', ...presets.map((_, i) => `audio.preset.${i}`)];
-  const controller = new AudioController(host, () => { void paint(); });
-  async function paint() {
-    dirty = true;
-    if (painting || disposed) return;
-    painting = true;
-    try {
-      while (dirty && !disposed) {
-        dirty = false;
-        const settings = clone(controller.settings);
-        if (opened) {
-          const values = { 'status-text': controller.status, 'source-ready': controller.ready, 'is-busy': controller.busy, 'has-error': controller.failed, 'gain-values': settings.gains, 'delay-ms': settings.delayMs, 'normalize-enabled': settings.normalize, 'clarity-db': settings.clarity };
-          for (const [key, value] of Object.entries(values)) await host.ui.set(view, key, value);
-        }
-        const currentRevision = ++revision;
-        for (const id of ids.slice(1)) await host.commands.update(id, currentRevision, { enabled: controller.ready, checked: id.startsWith('audio.preset.') ? presets[Number(id.split('.').at(-1))]!.gains.every((gain, i) => gain === settings.gains[i]) : null, busy: controller.busy, reason: controller.ready ? null : '没有选中的音轨' });
-      }
-    } catch (error) { console.error('Audio workbench refresh failed', error); }
-    finally { painting = false; }
-  }
-  async function show() {
-    if (!opened) {
-      opening ??= host.ui.open(view, 'ui/workbench.slint', {}, callbacks);
-      try { await opening; opened = true; } finally { opening = null; }
-    } else await host.ui.show(view, true);
-    await paint();
-  }
-  function preset(index: number) {
-    const selected = presets[index];
-    if (selected) controller.edit({ ...clone(controller.settings), gains: [...selected.gains] });
-  }
-  for (const id of ids) {
-    const index = Number(id.split('.').at(-1));
-    const title = id === 'audio.workbench' ? '音频工作台…' : id === 'audio.reset' ? '复位音频处理' : presets[index]!.label;
-    await host.commands.register(id, 1, { title, path: id.startsWith('audio.preset.') ? ['音频', '均衡器预设', title] : ['音频', title], shortcut: null }, { enabled: id === 'audio.workbench', checked: id.startsWith('audio.preset.') ? index === 0 : null, busy: false, reason: id === 'audio.workbench' ? null : '等待音频来源' });
-  }
-  const offCommands = host.commands.onExecute(event => {
-    if (event.id === 'audio.workbench') void show().catch(error => console.error('Audio window failed', error));
-    else if (event.id === 'audio.reset') controller.edit(neutral());
-    else if (event.id.startsWith('audio.preset.')) preset(Number(event.id.split('.').at(-1)));
+import type { Plugin, PlayerState } from "../../sdk/plugin/index.ts";
+import { clamp, matches, neutral, nodes, presets } from "./model.ts";
+import type { Settings } from "./model.ts";
+
+/** Audio workbench: one window and one owned audio chain for the selected track. */
+export default async function activate(plugin: Plugin) {
+  const { player } = plugin;
+  const filter = plugin.audio.filter("workbench");
+  const window = plugin.windows.create("ui/workbench.slint", { id: "audio-workbench" });
+  let settings = neutral();
+  let track = "";
+  let edited = false; // ever changed: a track change then really resets something
+  let touched = false; // a change was requested for the current track
+
+  const ready = () => {
+    const { phase, audioTracks } = player.state;
+    return phase === "ready" && (audioTracks === null || audioTracks.some((t) => t.selected));
+  };
+  const busy = () => filter.status.state === "applying";
+  const apply = () => filter.set({ nodes: nodes(settings), delayMs: settings.delayMs });
+  /** Menu and window edits are ignored without a selected track, like the disabled controls. */
+  const edit = (next: Settings) => {
+    if (!ready()) return;
+    settings = next;
+    edited = touched = true;
+    apply();
+  };
+  const preset = (index: number) => {
+    const chosen = presets[index];
+    if (chosen) edit({ ...settings, gains: [...chosen.gains] });
+  };
+
+  // Settings belong to one loaded source and one selected track: either change resets to neutral.
+  const follow = (state: PlayerState) => {
+    const current = `${state.sourceId}:${state.audioTracks?.filter((t) => t.selected).map((t) => t.id).join(",") ?? "?"}`;
+    if (current === track) return;
+    track = current;
+    settings = neutral();
+    touched = edited;
+    apply(); // also drops a failure left by the previous track; never-applied neutral sends nothing
+  };
+  player.onChange(follow);
+  follow(player.state);
+
+  window.bind(() => ({
+    statusText: describe(),
+    sourceReady: ready(),
+    isBusy: busy(),
+    hasError: filter.status.state === "failed",
+    gainValues: settings.gains,
+    delayMs: settings.delayMs,
+    normalizeEnabled: settings.normalize,
+    clarityDb: settings.clarity,
+  }));
+  window.on("gainChanged", (index: number, value: number) => {
+    if (!Number.isInteger(index) || index < 0 || index >= settings.gains.length) return;
+    const gains = [...settings.gains];
+    gains[index] = Math.round(clamp(value, -6, 6) * 10) / 10;
+    edit({ ...settings, gains });
   });
-  const offUi = host.ui.onCallback(event => {
-    if (event.view !== view) return;
-    try {
-      const settings = clone(controller.settings);
-      if (event.callback === 'gain-changed') {
-        const index = event.args[0];
-        if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index >= settings.gains.length) return;
-        settings.gains[index] = Math.round(clamp(event.args[1], -6, 6) * 10) / 10;
-      } else if (event.callback === 'delay-changed') settings.delayMs = Math.round(clamp(event.args[0], -2000, 2000) / 10) * 10;
-      else if (event.callback === 'normalize-changed') settings.normalize = event.args[0] === true;
-      else if (event.callback === 'clarity-changed') settings.clarity = Math.round(clamp(event.args[0], 0, 6) * 10) / 10;
-      else if (event.callback === 'preset-selected') { preset(Number(event.args[0])); return; }
-      else if (event.callback === 'reset-requested') { controller.edit(neutral()); return; }
-      else if (event.callback === 'retry-requested') { void controller.retry(); return; }
-      else return;
-      controller.edit(settings);
-    } catch (error) { console.error('Audio input rejected', error); }
+  window.on("delayChanged", (value: number) =>
+    edit({ ...settings, delayMs: Math.round(clamp(value, -2000, 2000) / 10) * 10 }),
+  );
+  window.on("normalizeChanged", (on: boolean) => edit({ ...settings, normalize: on === true }));
+  window.on("clarityChanged", (value: number) =>
+    edit({ ...settings, clarity: Math.round(clamp(value, 0, 6) * 10) / 10 }),
+  );
+  window.on("presetSelected", (index: number) => preset(index));
+  window.on("resetRequested", () => edit(neutral()));
+  window.on("retryRequested", () => {
+    if (ready() && !busy()) filter.retry();
   });
-  const offSource = await host.events.subscribe('source.state', source => controller.source(source as Awaited<ReturnType<Host['source']['state']>>));
-  controller.source(await host.source.state());
-  return async () => { disposed = true; controller.dispose(); offCommands(); offUi(); await offSource(); if (opened) await host.ui.close(view); };
+
+  const editing = { enabled: ready, busy, reason: () => (ready() ? null : "没有选中的音轨") };
+  plugin.commands.add({ id: "audio.workbench", path: ["音频", "音频工作台…"], run: () => window.show() });
+  plugin.commands.add({ id: "audio.reset", path: ["音频", "复位音频处理"], ...editing, run: () => edit(neutral()) });
+  presets.forEach(({ label }, index) =>
+    plugin.commands.add({
+      id: `audio.preset.${index}`,
+      path: ["音频", "均衡器预设", label],
+      ...editing,
+      checked: () => matches(settings, index),
+      run: () => preset(index),
+    }),
+  );
+
+  function describe() {
+    if (!ready()) return player.state.phase === "loading" ? "正在载入音频…" : "没有选中的音轨";
+    const status = filter.status;
+    if (status.state === "applying") return "正在应用…";
+    if (status.state === "failed") return status.error.message;
+    return touched ? (status.state === "applied" ? "已应用" : "正在应用…") : "就绪";
+  }
 }

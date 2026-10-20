@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { NesCore, rgbaFrame } from '../dist/core.js';
+import { NesCore, rgbaFrame } from '../core.ts';
 
 import { homebrew } from './homebrew.mjs';
 

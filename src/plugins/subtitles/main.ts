@@ -1,249 +1,251 @@
-import type { Host } from "../../sdk/index.ts";
-import type { SubtitleState, SubtitleStyle, SubtitleTrack, SubtitleStamp } from "../../sdk/subtitles.ts";
-import { open } from "node:fs/promises";
-import { createHash } from "node:crypto";
+import type {
+  Plugin,
+  SubtitleStyle,
+  SubtitleTrack,
+  SubtitlesState,
+} from "../../sdk/plugin/index.ts";
+import { readSrt } from "./srt.ts";
 
-const VIEW = "subtitle-workbench";
 const COLORS = ["white", "yellow", "cyan"] as const;
-const callbacks = ["load-file", "refresh", "cancel", "select-track", "remove-selected", "reset-style", "change-delay", "change-size", "change-outline", "change-margin", "change-font", "change-color"];
-const menus = [["workbench", "字幕工作台…"], ["load", "加载外部 SRT…"], ["disable", "关闭字幕"], ["refresh", "刷新字幕轨"]] as const;
-const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
-function same(a: SubtitleTrack | null, b: SubtitleTrack | null): boolean {
-  if (!a || !b) return a === b;
-  if (a.kind === "embedded" && b.kind === "embedded") return a.id === b.id;
-  return a.kind === "external" && b.kind === "external" && a.owner === b.owner && a.resourceId === b.resourceId && a.contentRevision === b.contentRevision;
-}
-async function readSrt(path: string) {
-  if (!/\.srt$/i.test(path)) throw new Error("请选择 UTF-8 .srt 字幕文件。");
-  const file = await open(path, "r");
-  try {
-    const max = 8 * 1024 * 1024;
-    const stat = await file.stat();
-    if (!stat.isFile() || stat.size < 1 || stat.size > max) throw new Error("SRT 必须为 1 字节至 8 MiB 的普通文件。");
-    const buffer = Buffer.alloc(max + 1);
-    let length = 0;
-    while (length < buffer.length) {
-      const result = await file.read(buffer, length, buffer.length - length, null);
-      if (!result.bytesRead) break;
-      length += result.bytesRead;
-    }
-    if (length < 1 || length > max) throw new Error("文件为空或读取时超过 8 MiB。");
-    const bytes = buffer.subarray(0, length);
-    new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-    return bytes;
-  } finally { await file.close(); }
-}
-export async function activate(host: Host) {
-  let live = true, opened = false, busy = false, epoch = 0, serial = Date.now();
-  let menuRevision = 1, styleRevision = Date.now(), readRevision = 0, paintRevision = 0;
-  let state: SubtitleState | undefined, generation: number | undefined;
-  let desired: SubtitleStyle | undefined;
+const CANCELLED = "操作已取消或媒体已切换；请刷新当前字幕状态。";
+const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+const label = (t: SubtitleTrack) =>
+  `${t.title || (t.kind === "embedded" ? `内嵌 ${t.embeddedId}` : "外部 SRT")}${t.language ? ` · ${t.language}` : ""}`;
+
+type Action = (ticket: number) => Promise<void>;
+
+/** Subtitle workbench: one window, four menu entries, serialized subtitle operations. */
+export default async function activate(plugin: Plugin) {
+  const { subtitles } = plugin;
+  const window = plugin.windows.create("ui/workbench.slint", { id: "subtitle-workbench" });
   let status = "选择字幕轨或加载 UTF-8 SRT。";
-  let chain = Promise.resolve(), paint = Promise.resolve();
+  let busy = false;
+  let epoch = 0; // bumped by cancel and media switches; stale actions stop at the next guard
+  let aborter = new AbortController(); // aborted together with each epoch bump (stops an upload)
+  let chain = Promise.resolve();
+  let desired: SubtitleStyle | undefined; // edited style shown before the host confirms it
+  let editing: SubtitlesState | null = null; // selection the pending style edit belongs to
   let styleTimer: ReturnType<typeof setTimeout> | undefined;
-  let poll: ReturnType<typeof setInterval> | undefined;
-  const offs: (() => void | Promise<void>)[] = [];
-  const resources = new Set<string>();
-  const id = () => ++serial;
-  const menuState = () => ({ enabled: live && !busy, checked: null, busy, reason: busy ? "字幕操作进行中" : null });
+  let seen: SubtitlesState | null = null;
+
   const guard = (ticket: number, source?: number) => {
-    if (!live || epoch !== ticket || (source !== undefined && source !== generation)) throw new Error("操作已取消或媒体已切换；请刷新当前字幕状态。");
+    if (epoch !== ticket || (source !== undefined && source !== subtitles.state?.sourceId))
+      throw new Error(CANCELLED);
   };
-  function props() {
-    const s = state, selected = s?.selection.target ?? null;
-    const track = s?.tracks.find(t => same(t.target, selected));
-    const style = desired ?? s?.presentation.effective?.style;
-    return {
-      "status-text": status, "source-text": s ? `媒体版本 ${s.source.generation} · ${s.source.phase} · ${s.tracks.length} 条字幕轨` : "尚无字幕状态",
-      "confirmation-text": s ? `轨道：${s.confirmation} · 样式：${s.presentation.confirmation}${s.error ? ` · ${s.error}` : ""}` : "",
-      "track-labels": ["关闭字幕", ...(s?.tracks.map(t => `${t.title || (t.target.kind === "embedded" ? `内嵌 ${t.target.id}` : "外部 SRT")}${t.language ? ` · ${t.language}` : ""}`) ?? [])],
-      "selected-track": selected && s ? Math.max(0, s.tracks.findIndex(t => same(t.target, selected)) + 1) : 0,
-      busy, "can-style": !!track?.styleSupported,
-      "can-remove": selected?.kind === "external" && resources.has(selected.resourceId),
-      "style-reason": track ? (track.styleSupported ? "样式按 1080p 参考高度缩放。" : track.styleReason ?? "此字幕轨不支持样式。") : "选择字幕后可调整样式与延迟。",
-      "font-labels": s?.presentation.fonts.map(f => f.family) ?? [],
-      "selected-font": Math.max(0, s?.presentation.fonts.findIndex(f => f.id === style?.fontId) ?? 0),
-      "delay-ms": style?.offsetMs ?? 0, "font-size": style?.fontSize ?? 36,
-      "outline-size": style?.outline ?? 2, "margin-percent": style?.marginPercent ?? 5,
-      "selected-color": Math.max(0, COLORS.indexOf(style?.color ?? "white")),
-    };
-  }
-  function render() {
-    const revision = ++paintRevision, values = props();
-    paint = paint.catch(() => {}).then(async () => {
-      if (!opened) return;
-      for (const [key, value] of Object.entries(values)) {
-        if (!live || paintRevision !== revision) return;
-        await host.ui.set(VIEW, key, value);
-      }
-    }).catch(e => console.error("subtitle UI:", errorText(e)));
-    return paint;
-  }
-  function accept(s: SubtitleState) {
-    if (generation !== undefined && s.source.generation < generation) return;
-    if (generation !== s.source.generation) { generation = s.source.generation; desired = undefined; }
-    if (state && state.source.generation === s.source.generation && (state.selection.stamp.revision > s.selection.stamp.revision || state.presentation.revision > s.presentation.revision)) return;
-    if (state && !same(state.selection.target, s.selection.target)) desired = undefined;
-    state = s;
-  }
-  async function refresh() {
-    const revision = ++readRevision, s = await host.subtitles.state();
-    if (live && revision === readRevision) { accept(s); await render(); }
-    return s;
-  }
-  async function show() {
-    if (!opened) { await host.ui.open(VIEW, "ui/workbench.slint", props(), callbacks); opened = true; }
-    else await host.ui.show(VIEW, true);
-    await render();
-  }
-  async function updateMenus() {
-    const revision = ++menuRevision;
-    for (const [key] of menus) await host.commands.update(key, revision, menuState());
-  }
-  function run(label: string, action: (ticket: number) => Promise<void>) {
+  /** One operation at a time; the menu shows busy meanwhile. */
+  function run(text: string, action: Action) {
     const ticket = epoch;
-    chain = chain.catch(() => {}).then(async () => {
-      if (!live || epoch !== ticket) return;
-      busy = true; status = label; await render();
-      try { await updateMenus(); await action(ticket); }
-      catch (e) { status = errorText(e); }
-      finally {
+    chain = chain.then(async () => {
+      if (epoch !== ticket) return;
+      busy = true;
+      status = text;
+      plugin.update();
+      try {
+        await action(ticket);
+      } catch (e) {
+        status = errorText(e);
+      } finally {
         busy = false;
-        if (live) { if (!state) await refresh().catch(() => {}); await render(); await updateMenus().catch(e => console.error(errorText(e))); }
+        if (!subtitles.state) await subtitles.refresh().catch(() => {});
+        plugin.update(); // also runs from the style timer, outside any SDK handler
       }
     });
     return chain;
   }
-  async function recover(operationId: number, action: () => Promise<SubtitleState>) {
-    try { return await action(); }
-    catch (e) {
-      if ((e as { code?: string }).code !== "timeout") throw e;
-      for (let n = 0; n < 8 && live; n++) {
-        const result = await host.subtitles.operation(operationId);
-        if (result.status === "completed") return result.result;
-        if (result.status === "failed") throw new Error(`${result.error.code}: ${result.error.message}`);
-        if (result.status !== "pending") break;
-        await new Promise(resolve => setTimeout(resolve, 250));
-      }
-      throw new Error(`操作 ${operationId} 结果尚未确认，请刷新；不会自动重放写操作。`);
-    }
+  function stopStyleTimer() {
+    clearTimeout(styleTimer);
+    styleTimer = undefined;
+    editing = null;
   }
-  async function select(target: SubtitleTrack | null, ticket: number, source?: number) {
-    const s = await refresh(); guard(ticket, source ?? s.source.generation);
-    const operationId = id(), result = await recover(operationId, () => host.subtitles.select(target, s.selection.stamp, operationId));
-    guard(ticket, s.source.generation); accept(result); desired = undefined;
-    status = target ? "字幕轨已选择，请查看宿主确认状态。" : "字幕已关闭。";
+  function cancel() {
+    ++epoch;
+    aborter.abort();
+    aborter = new AbortController();
+    desired = undefined;
+    stopStyleTimer();
+    status = "已请求取消。已交给宿主的操作可能已生效，请刷新确认；系统选择器请在其窗口取消。";
   }
-  async function load(ticket: number) {
-    const initial = await refresh(); guard(ticket, initial.source.generation);
-    const dialog = await host.dialogs.open({ kind: "openFile", title: "加载 UTF-8 SRT 字幕" });
-    guard(ticket, initial.source.generation);
-    if (dialog.cancelled || !dialog.paths[0]) { status = "已取消选择字幕文件。"; return; }
-    const bytes = await readSrt(dialog.paths[0]); guard(ticket, initial.source.generation);
-    const s = await refresh(); guard(ticket, initial.source.generation);
-    if (s.source.generation !== initial.source.generation) throw new Error("媒体已切换，请重新加载字幕。");
-    const uploadId = id(); let commitSubmitted = false;
+
+  const refresh: Action = async () => {
+    await subtitles.refresh();
+    desired = undefined;
+    status = "字幕状态已刷新。";
+  };
+  const select =
+    (track: SubtitleTrack | null, source?: number): Action =>
+    async (ticket) => {
+      const s = await subtitles.refresh();
+      guard(ticket, source ?? s.sourceId);
+      await subtitles.select(track, { ifCurrent: s });
+      guard(ticket, s.sourceId);
+      desired = undefined;
+      status = track ? "字幕轨已选择，请查看宿主确认状态。" : "字幕已关闭。";
+    };
+  const load: Action = async (ticket) => {
+    const signal = aborter.signal;
+    const initial = await subtitles.refresh();
+    guard(ticket, initial.sourceId);
+    const path = await plugin.dialogs.openFile({ title: "加载 UTF-8 SRT 字幕" });
+    guard(ticket, initial.sourceId);
+    if (!path) return void (status = "已取消选择字幕文件。");
+    const bytes = await readSrt(path);
+    guard(ticket, initial.sourceId);
+    const s = await subtitles.refresh();
+    guard(ticket, initial.sourceId);
+    guard(ticket, s.sourceId);
     try {
-      await host.subtitles.begin(uploadId, s.source.generation, bytes.length);
-      for (let offset = 0; offset < bytes.length; offset += 32768) {
-        guard(ticket, s.source.generation);
-        await host.subtitles.append(uploadId, offset, bytes.subarray(offset, offset + 32768).toString("base64"));
-      }
-      guard(ticket, s.source.generation);
-      const operationId = id(), resourceId = `external-${uploadId}`;
-      commitSubmitted = true;
-      const result = await recover(operationId, () => host.subtitles.commit({ operationId, uploadId, resourceId, revision: 1, sha256: createHash("sha256").update(bytes).digest("hex"), expected: s.selection.stamp }));
-      guard(ticket, s.source.generation); resources.add(resourceId); accept(result); desired = undefined;
-      status = `SRT 已加载（${bytes.length} 字节），轨道：${result.confirmation}。`;
-    } finally {
-      // A commit timeout can still complete. Do not discard its upload underneath it.
-      if (!commitSubmitted && live) await host.subtitles.discard(uploadId).catch(() => {});
+      await subtitles.load(bytes, { ifCurrent: s, signal }); // uploads, commits and selects
+    } catch (e) {
+      if ((e as Error).name === "AbortError") throw new Error(CANCELLED); // discarded, never committed
+      throw e;
     }
-  }
-  function styleChange(key: keyof SubtitleStyle, value: SubtitleStyle[keyof SubtitleStyle]) {
-    const s = state, track = s?.tracks.find(t => same(t.target, s.selection.target));
-    if (!s || !track?.styleSupported || !s.presentation.fonts[0]) return;
-    desired = { ...(desired ?? s.presentation.effective?.style ?? { fontId: s.presentation.fonts[0].id, fontSize: 36, color: "white", outline: 2, marginPercent: 5, offsetMs: 0 }), [key]: value } as SubtitleStyle;
-    if (styleTimer) clearTimeout(styleTimer);
-    const requested = { ...desired }, target = s.selection.target, stamp = { ...s.selection.stamp };
-    void render();
+    guard(ticket, s.sourceId);
+    desired = undefined;
+    status = `SRT 已加载（${bytes.length} 字节），轨道：${subtitles.state?.trackConfirmation}。`;
+  };
+
+  /** Slider edits merge for 100 ms and apply only to the track selected when the edit began. */
+  function styleChange<K extends keyof SubtitleStyle>(key: K, value: SubtitleStyle[K]) {
+    const s = subtitles.state;
+    if (!s || !s.selected?.styleSupported || !s.fonts[0]) return;
+    const base = { fontId: s.fonts[0].id, fontSize: 36, color: "white", outline: 2, marginPercent: 5, offsetMs: 0 } as const;
+    desired = { ...(desired ?? s.style ?? base), [key]: value };
+    editing ??= s;
+    const requested = { ...desired }, pinned = editing;
+    clearTimeout(styleTimer);
     styleTimer = setTimeout(() => {
-      styleTimer = undefined;
-      void run("正在应用字幕样式…", async ticket => {
-        const latest = await refresh(); guard(ticket, stamp.generation);
-        if (!same(target, latest.selection.target) || latest.selection.stamp.revision !== stamp.revision) throw new Error("字幕轨已变化，请在当前轨道重新调整。");
-        const operationId = id(), result = await recover(operationId, () => host.subtitles.style({ operationId, revision: ++styleRevision, expected: latest.selection.stamp, style: requested }));
-        guard(ticket, stamp.generation); accept(result); status = `字幕样式：${result.presentation.confirmation}。`;
+      stopStyleTimer();
+      void run("正在应用字幕样式…", async (ticket) => {
+        guard(ticket, pinned.sourceId);
+        try {
+          await subtitles.setStyle(requested, { ifCurrent: pinned });
+        } catch (e) {
+          if ((e as { code?: string }).code === "stale") throw new Error("字幕轨已变化，请在当前轨道重新调整。");
+          throw e;
+        }
+        guard(ticket, pinned.sourceId);
+        status = `字幕样式：${subtitles.state?.styleConfirmation}。`;
       });
     }, 100);
   }
-  function cancel() {
-    ++epoch; ++readRevision; desired = undefined;
-    if (styleTimer) clearTimeout(styleTimer); styleTimer = undefined;
-    status = "已请求取消。已交给宿主的操作可能已生效，请刷新确认；系统选择器请在其窗口取消。"; void render();
-  }
-  offs.push(host.ui.onCallback(event => {
-    if (!live || event.view !== VIEW) return;
-    const name = event.callback, value = event.args[0];
-    if (name === "cancel") { cancel(); return; }
-    if (name === "load-file" && !busy) { void run("请选择 SRT…", load); return; }
-    if (name === "refresh" && !busy) { void run("正在刷新…", async () => { await refresh(); desired = undefined; status = "字幕状态已刷新。"; }); return; }
-    if (name === "select-track" && !busy && typeof value === "number" && Number.isInteger(value)) {
-      const target = value === 0 ? null : state?.tracks[value - 1]?.target, source = state?.source.generation;
-      if (target !== undefined) void run("正在切换字幕轨…", ticket => select(target, ticket, source)); return;
+
+  window.bind(() => {
+    const s = subtitles.state, selected = s?.selected ?? null;
+    const style = desired ?? s?.style ?? undefined;
+    return {
+      statusText: status,
+      sourceText: s ? `媒体版本 ${s.sourceId} · ${s.phase} · ${s.tracks.length} 条字幕轨` : "尚无字幕状态",
+      confirmationText: s ? `轨道：${s.trackConfirmation} · 样式：${s.styleConfirmation}${s.error ? ` · ${s.error}` : ""}` : "",
+      trackLabels: ["关闭字幕", ...(s?.tracks.map(label) ?? [])],
+      selectedTrack: selected && s ? s.tracks.findIndex((t) => t.id === selected.id) + 1 : 0,
+      busy,
+      canStyle: !!selected?.styleSupported,
+      canRemove: !!selected?.owned,
+      styleReason: selected
+        ? selected.styleSupported ? "样式按 1080p 参考高度缩放。" : (selected.styleReason ?? "此字幕轨不支持样式。")
+        : "选择字幕后可调整样式与延迟。",
+      fontLabels: s?.fonts.map((f) => f.family) ?? [],
+      selectedFont: Math.max(0, s?.fonts.findIndex((f) => f.id === style?.fontId) ?? 0),
+      delayMs: style?.offsetMs ?? 0,
+      fontSize: style?.fontSize ?? 36,
+      outlineSize: style?.outline ?? 2,
+      marginPercent: style?.marginPercent ?? 5,
+      selectedColor: Math.max(0, COLORS.indexOf(style?.color ?? "white")),
+    };
+  });
+
+  window.on("cancel", cancel);
+  window.on("loadFile", () => busy || run("请选择 SRT…", load));
+  window.on("refresh", () => busy || run("正在刷新…", refresh));
+  window.on("selectTrack", (index: number) => {
+    const s = subtitles.state;
+    if (busy || !Number.isInteger(index)) return;
+    const track = index === 0 ? null : s?.tracks[index - 1];
+    if (track !== undefined) return run("正在切换字幕轨…", select(track, s?.sourceId));
+  });
+  window.on("removeSelected", () => {
+    const track = subtitles.state?.selected, source = subtitles.state?.sourceId;
+    if (busy || !track?.owned) return;
+    return run("正在移除字幕…", async (ticket) => {
+      const s = await subtitles.refresh();
+      guard(ticket, source);
+      if (s.selected?.id !== track.id) throw new Error("选中的字幕已变化，请重新选择。");
+      await subtitles.remove(track, { ifCurrent: s });
+      guard(ticket, s.sourceId);
+      desired = undefined;
+      status = "外部字幕已移除。";
+    });
+  });
+  window.on("resetStyle", () => {
+    if (busy) return;
+    stopStyleTimer();
+    return run("正在撤销本插件样式…", async (ticket) => {
+      const s = await subtitles.refresh();
+      await subtitles.setStyle(null, { ifCurrent: s });
+      guard(ticket, s.sourceId);
+      desired = undefined;
+      status = "本插件的样式与延迟已撤销。";
+    });
+  });
+  const slider = (name: string, apply: (value: number) => void) =>
+    window.on(name, (value: number) => Number.isFinite(value) && apply(value));
+  const clamp = (value: number, min: number, max: number) => Math.round(Math.max(min, Math.min(max, value)));
+  slider("changeDelay", (v) => styleChange("offsetMs", clamp(v, -10000, 10000)));
+  slider("changeSize", (v) => styleChange("fontSize", clamp(v, 12, 96)));
+  slider("changeOutline", (v) => styleChange("outline", clamp(v, 0, 8)));
+  slider("changeMargin", (v) => styleChange("marginPercent", clamp(v, 0, 30)));
+  slider("changeFont", (v) => {
+    const font = Number.isInteger(v) ? subtitles.state?.fonts[v] : undefined;
+    if (font) styleChange("fontId", font.id);
+  });
+  slider("changeColor", (v) => {
+    const color = Number.isInteger(v) ? COLORS[v] : undefined;
+    if (color) styleChange("color", color);
+  });
+  plugin.onError((e) => (status = e.message));
+
+  const menu = (id: string, title: string, text: string, action: Action) =>
+    plugin.commands.add({
+      id,
+      path: ["字幕", title],
+      enabled: () => !busy,
+      busy: () => busy,
+      reason: () => (busy ? "字幕操作进行中" : null),
+      run: () => busy || run(text, action),
+    });
+  menu("workbench", "字幕工作台…", "正在打开字幕工作台…", async () => {
+    await subtitles.refresh();
+    await window.show();
+    status = "字幕工作台已就绪。";
+  });
+  menu("load", "加载外部 SRT…", "请选择 SRT…", async (ticket) => {
+    await window.show();
+    await load(ticket);
+  });
+  menu("disable", "关闭字幕", "正在关闭字幕…", select(null));
+  menu("refresh", "刷新字幕轨", "正在刷新…", refresh);
+
+  // A new source cancels pending work; a new source or selection drops the unconfirmed style.
+  subtitles.onChange((s) => {
+    if (seen && s.sourceId > seen.sourceId) {
+      cancel();
+      status = "媒体已切换，正在刷新字幕轨…";
     }
-    if (name === "remove-selected" && !busy) {
-      const target = state?.selection.target, source = state?.source.generation;
-      if (target?.kind === "external" && resources.has(target.resourceId)) void run("正在移除字幕…", async ticket => {
-        const s = await refresh(); guard(ticket, source);
-        if (!same(s.selection.target, target)) throw new Error("选中的字幕已变化，请重新选择。");
-        const operationId = id(), result = await recover(operationId, () => host.subtitles.remove(target.resourceId, s.selection.stamp, operationId));
-        guard(ticket, s.source.generation); accept(result); resources.delete(target.resourceId); desired = undefined; status = "外部字幕已移除。";
-      }); return;
-    }
-    if (name === "reset-style" && !busy) {
-      if (styleTimer) clearTimeout(styleTimer); styleTimer = undefined;
-      void run("正在撤销本插件样式…", async ticket => {
-        const s = await refresh(); guard(ticket, s.source.generation); const operationId = id();
-        const result = await recover(operationId, () => host.subtitles.style({ operationId, revision: ++styleRevision, expected: s.selection.stamp, style: null }));
-        guard(ticket, s.source.generation); accept(result); desired = undefined; status = "本插件的样式与延迟已撤销。";
-      }); return;
-    }
-    if (typeof value !== "number" || !Number.isFinite(value)) return;
-    const clamp = (min: number, max: number) => Math.round(Math.max(min, Math.min(max, value)));
-    if (name === "change-delay") styleChange("offsetMs", clamp(-10000, 10000));
-    if (name === "change-size") styleChange("fontSize", clamp(12, 96));
-    if (name === "change-outline") styleChange("outline", clamp(0, 8));
-    if (name === "change-margin") styleChange("marginPercent", clamp(0, 30));
-    if (name === "change-font" && Number.isInteger(value) && state?.presentation.fonts[value]) styleChange("fontId", state.presentation.fonts[value]!.id);
-    if (name === "change-color" && Number.isInteger(value) && COLORS[value]) styleChange("color", COLORS[value]!);
-  }));
-  offs.push(host.commands.onExecute(event => {
-    if (!live || busy) return;
-    if (event.id === "workbench") void run("正在打开字幕工作台…", async () => { await refresh(); await show(); status = "字幕工作台已就绪。"; });
-    if (event.id === "load") void run("请选择 SRT…", async ticket => { await show(); await load(ticket); });
-    if (event.id === "disable") void run("正在关闭字幕…", ticket => select(null, ticket));
-    if (event.id === "refresh") void run("正在刷新…", async () => { await refresh(); desired = undefined; status = "字幕状态已刷新。"; });
-  }));
-  try {
-    for (const [key, title] of menus) await host.commands.register(key, menuRevision, { title, path: ["字幕", title], shortcut: null }, menuState());
-    offs.push(await host.events.subscribe("source.state", data => {
-      const event = data as { stamp?: SubtitleStamp; phase?: string };
-      let changed = event.phase !== state?.source.phase;
-      if (typeof event.stamp?.generation === "number" && generation !== undefined && event.stamp.generation > generation) {
-        cancel(); generation = event.stamp.generation; state = undefined; changed = true;
-        status = "媒体已切换，正在刷新字幕轨…"; void render();
-      }
-      if (changed && !busy) void refresh().catch(e => { status = errorText(e); void render(); });
-    }));
-    offs.push(await host.events.subscribe("playback.backend", () => { if (live && !busy) void refresh().catch(e => { status = errorText(e); void render(); }); }));
-    await refresh();
-    poll = setInterval(() => { if (live && opened && !busy) void refresh().catch(e => { status = errorText(e); void render(); }); }, 1500);
-    poll.unref();
-  } catch (e) { live = false; for (const off of offs) await off(); throw e; }
-  return async () => {
-    live = false; ++epoch; ++readRevision; ++paintRevision;
-    if (styleTimer) clearTimeout(styleTimer); if (poll) clearInterval(poll);
-    for (const off of offs) await off();
-  };
+    if (!seen || s.sourceId !== seen.sourceId || s.selected?.id !== seen.selected?.id) desired = undefined;
+    seen = s;
+  });
+  // The host has no subtitle event; the open workbench also re-reads every 1.5 s.
+  const poll = setInterval(() => {
+    if (window.opened && !busy)
+      subtitles.refresh().catch((e) => {
+        status = errorText(e);
+        plugin.update();
+      });
+  }, 1500);
+  poll.unref();
+  plugin.onDispose(() => {
+    clearInterval(poll);
+    stopStyleTimer();
+  });
+  await subtitles.refresh();
 }

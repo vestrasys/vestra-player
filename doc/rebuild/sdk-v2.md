@@ -31,13 +31,15 @@ export default async function activate(plugin: Plugin) {
 | `dialogs` | `openFile`、`openFiles`、`openDirectory`、`saveFile` | —（返回路径或 `null`） | | playback、playlist、subtitles、capture、nes、youtube、workshop |
 | `player` | `state`、`onChange`、`refresh`、`isCurrent`、`open`、`setPaused`、`seek`、`setRate`、`restart`、`close`、`scrub`、`setOutput`、`openStream` | `Media`、`Scrub`、`Stream` | Media：`current`、`ready`、`onEnd`、`close`；Scrub：`seek`、`active`、`end`；Stream：`running`、`onStop`、`stop` | playback、playlist、audio、capture、nes、bilibili、youtube |
 | `video` / `audio` | `filter(id)` | `VideoFilter` / `AudioFilter` | `set`、`status`、`onStatus`、`retry` | video、audio |
-| `subtitles` | `state`、`onChange`、`refresh`、`select`、`load`、`remove`、`setStyle` | `SubtitleTrack`（值对象） | | subtitles |
+| `subtitles` | `state`、`onChange`、`refresh`、`select`、`load(bytes, { ifCurrent?, signal? })`、`remove`、`setStyle` | `SubtitleTrack`（值对象：`id`、`kind`、`embeddedId?`、`title`、`language`、`styleSupported`、`styleReason`、`owned`） | | subtitles |
 | `media` | `capture({ at?, processed?, subtitles?, audio?, ifCurrent? })` | `Snapshot` → `ExportJob` | Snapshot：`export`、只读描述；Job：`state`、`onChange`、`done`、`cancel`、`refresh` | capture |
 | `resolvers` | `add({ id, schemes, hosts, resolve })` | `Resolver` | `ready` | bilibili、youtube |
 | `packages` | `validate(dir)`、`rollback(id)` | `PackageCandidate` → `PackageTrial` / `PackageChange` | Candidate：`trial`、`install`；Trial：`status`、`stop`；Change：`status`、`message`、`onChange`、`done`、`cancel` | workshop |
 | 作用域 | `scope()`、`add`、`onDispose`、`onError`、`update`、`dispose` | `Scope` | | 全部（`onError`、`update` 按需） |
 
 模块需要的 manifest 能力（宿主按能力授权，SDK 不改变这一点）：`commands` → commands；`windows` → ui.window；`panels` → ui.mount；`dialogs` → ui.dialog；`player.state` 初读与 `refresh` → playback.read，实时更新 → events；`player` 的控制与 `open` → playback.control；`openStream` → producer.av；`video`/`audio` 滤镜 → processing.video / processing.audio 加 playback.read（读处理状态）；`subtitles` → subtitles.read / subtitles.control；`media` → media.read、media.control（`processed` 截图另需 playback.read、subtitles.read）；`resolvers` → source.resolve；`packages` → plugins.manage。没有 events 能力时，`media.ready()` 自动轮询来源状态。
+
+字幕要点：比较字幕轨用 `track.id`（不透明字符串，不要解析其格式）；内嵌轨的轨道号用 `track.embeddedId`（外部轨没有该字段）。`load` 的 `signal` 在分块之间和提交前检查：已中止则 discard 上传并以 `AbortError` 拒绝；提交一旦发出就不再中止（已交给宿主的提交可能已生效，与旧插件语义一致）。上传 id 每个插件实例从 1 开始：宿主每次载入插件分配新的 owner 代次，并在 owner 释放时移除其上传 high-water。
 
 命名取舍：用户可见的领域名词（`player`、`filter`、`panel`、`stream`、`snapshot`、`job`、`resolver`），宿主内部名（`processing`、`producer`、`source`、`mount`、`$mount`）不出现在插件 API 中。没有 `ctx`：插件拿到的对象就叫 `plugin`，一个功能模块拿到的是 `Scope` 或具体句柄。
 
@@ -71,7 +73,8 @@ export default async function activate(plugin: Plugin) {
 - `window.set(props)` / `panel.set(props)`：立即写入期望值。
 - `window.bind(() => props)` / `panel.bind(...)`、命令选项里的函数（`enabled: () => ...`）：**绑定**，在每个更新轮重新求值。
 - **更新轮**：SDK 在以下时机自动安排一轮（同一微任务内多次请求只跑一轮）：SDK 调用的任何插件处理函数（命令 `run`、窗口/面板回调、`onChange`、`onStatus`、`onEnd`、`onStop` 等）同步返回后与其 promise 结束后；播放器、字幕、面板可见性、滤镜状态、导出任务状态变化后。插件在自己的计时器里或长任务的中途改了状态时，调用 `plugin.update()`。
-- 每个目标同一时间只有一个请求在途，期间的变化合并为下一次发送；只发送与宿主当前值不同的属性。窗口/面板收到回调后，SDK 认为用户可能改动了 `in-out` 属性（如滑块），下一轮重发全部属性，宿主侧对相同值不重绘。
+- 每个目标同一时间只有一个请求在途，期间的变化合并为下一次发送。`bind` 的值只在**期望值变化**时发送；`set()` 写入的值总会发送一次（即使与上次相同），所以 `set()` 也是把被用户改动过的控件“拉回模型值”的显式方式。回调本身不会触发重发：用户在 Slint 中修改的 in-out 属性（输入框文字、标签页、滑块位置）在其它回调之后保持不变，与旧插件“只在自己写入时发送”的语义一致。
+- 写入失败：同一失败的绑定值不会自动重发，直到它变化；`set()` 的值在退避后重试（0.25 秒起翻倍，最长 30 秒）；一次连续失败只报告第一次错误。因此 `onError` 里写状态到一个已损坏的窗口不会形成重试循环。
 - 窗口在第一次 `show()` 时用当前期望属性作为初始属性打开，不会先闪默认值；`close()` 后再 `show()` 会用最新属性重开。
 - 名称转换：TS 中用 camelCase（`effectEnabled`、`toggleEffect`），SDK 转为 Slint 的 kebab-case；已是 kebab-case 的名字原样使用。结构体字段（如列表行的 `rowId`）不转换。
 
@@ -138,6 +141,7 @@ SDK 仍然处理“答复丢失”（非宿主错误的拒绝，或客户端 `ti
 ## 7. 错误模型
 
 - 失败一律以普通 `Error` reject/抛出，带稳定的 `code`（类型 `PluginError`）：宿主错误码原样保留（`stale`、`busy`、`unsupported`、`unavailable`、`conflict`、`invalid`…），来源操作失败的 `{ backend }` 映射为 `code: "backend"`、`message` 为后端文本；SDK 自己的码：`replaced`、`failed`、`ended`（`media.ready`），`aborted`（`AbortError`），`backend-uncertain`，`unknown`/`rejected`/`expired`（见 5.1）。
+- `player.open()` / `openStream()` 的错误 code：`stale`（带 `ifCurrent` 时来源已变化，什么都没做）；`replaced`（宿主已接受，但在完成前被另一个来源替换或撤销，例如 URL 仍在解析时用户打开了别的文件；与 `media.ready()` 的 `replaced` 同义，不是这一项的失败）；`backend`（载入/解析失败，`message` 为后端文本）；`invalid`、`busy`、`conflict`、`unavailable`、`unsupported`（宿主拒绝接纳，未执行）；`aborted`（`AbortError`，`signal` 中止，已接受的会被关闭）。`openStream` 另有 `stream`（producer 报错，`message` 为宿主原因）、`device`（音频设备未就绪）、`timeout`（类型 `StreamStartError`，`error.stage` 为 `"prefill"`：首批音视频缓冲未在 10 秒内备好，或 `"activation"`：宿主选中后 10 秒内未激活；按 `stage` 区分，不要按消息文本）。`openStream` 被 `signal` 中止时，若选中请求已发出，SDK 先等宿主答复拿到来源代次，只关闭这一代来源，再释放 producer。
 - SDK 调用的处理函数里抛出的错误（包括 async 处理函数的 reject）交给所在作用域的 `onError`；没有监听就上交父作用域，最终写入插件日志。插件不需要到处写 `.catch(report)`。
 - 滤镜这类持续目标用状态表达失败：`filter.status`（`waiting`/`applying`/`applied`/`failed`）。`failed` 之后不会自动重试，直到 `set()`、`retry()` 或来源变化。
 - SDK v2 插件在运行器中有 `unhandledRejection` 兜底（只记日志），忘记 `await` 的 promise 不会让插件进程崩溃。
