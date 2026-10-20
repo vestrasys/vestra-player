@@ -8,7 +8,10 @@
     "verify": "node scripts/verify.mjs",
     "format": "prettier --write \"{sdk,runtime,examples,tests,scripts}/**/*.{ts,mjs}\" package.json tsconfig.json",
     "format:check": "prettier --check \"{sdk,runtime,examples,tests,scripts}/**/*.{ts,mjs}\" package.json tsconfig.json",
-    "boundaries": "node scripts/check-boundaries.mjs"
+    "boundaries": "node scripts/check-boundaries.mjs",
+    "plugin": "node scripts/plugin.mjs",
+    "plugins:build": "node scripts/plugin.mjs build --all",
+    "test:sdk": "node --test tests/sdk/"
   },
   "devDependencies": {
     "@types/node": "^25.0.0",
