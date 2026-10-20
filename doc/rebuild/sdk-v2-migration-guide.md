@@ -2,7 +2,7 @@
 
 > P4 后旧扁平 `Host` API 已删除，全部插件已迁移；本指南保留为迁移记录，也适用于把外部旧插件改到 v2。
 
-先读：[sdk-v2-migration.md](sdk-v2-migration.md)（第 6、7 节）、[sdk-v2.md](sdk-v2.md)（尤其第 2、4、6、9 节）、[sdk-v2-usage.md](sdk-v2-usage.md)，以及参考迁移 `src/plugins/video/`（`main.ts` 75 行、测试 `tests/video.test.ts`）。
+先读：[sdk-v2-migration.md](sdk-v2-migration.md)（第 6、7 节）、[sdk-v2.md](sdk-v2.md)（尤其第 2、4、6、9 节）、[插件示例](../plugins/examples.md)，以及参考迁移 `src/plugins/video/`（`main.ts` 75 行、测试 `tests/video.test.ts`）。
 
 目标只有一个：**行为不变，代码只剩业务**。菜单路径与标题、窗口与控件、回调效果、错误提示语义都保持；协议细节交给 SDK。
 
@@ -18,7 +18,7 @@
    运行器靠“默认导出”识别 v2。删除返回的清理函数和 `disposed`/`live`/`active` 一类标志：插件停用时 SDK 释放一切，宿主撤销 owner 资源。只从 SDK `import type`；节点、样式等类型也从 `sdk/plugin/index.ts` 导入（`VideoNode`、`AudioNode`、`SubtitleStyle`、`ResolvedMedia`、`Json`）。
 2. **manifest.json**：格式不变。`entry` 指向源码入口（`main.ts`，不要指向 `dist/`）；没有 `version` 的加上现在生产包的版本（见第 5 节表格），构建工具用它生成 `dist/manifest.json`。
 3. **本地导入**：用 `./x.ts`（构建时改写为 `.js`）。`./x.js` 指向 `.ts` 文件的写法在开发清单直接载入 `main.ts` 时会找不到文件。
-4. **逐项替换调用**：按 [sdk-v2.md 第 9 节对照表](sdk-v2.md#9-旧-api-对照表) 和下面第 2 节的模式。
+4. **逐项替换调用**：按 [sdk-v2.md 第 9 节对照表](sdk-v2.md#9-旧-api-对照表迁移记录) 和下面第 2 节的模式。
 5. **删除自制轮子**：合并队列（`Latest`/`LatestValue`/`LatestProjection`/`paint`/`project`/`render` 循环）、结果查询与重试（`recover`、`mutation`、`submitOnce`、`operation()` 轮询、`unresolved` 记录）、过期事件过滤（`eventSequence`、`stamp`/`generation` 比较）、属性名转换与逐属性 `ui.set`、命令修订号与 `last` 缓存、手写清理清单（`offs`、`off.push`）。
 6. **测试**：放到 `tests/*.test.ts`（或 `.test.mjs`），改用 `startPlugin` + `TestHost`（见 usage 第 12 节、sdk-v2.md 第 10 节）。原测试覆盖的行为必须继续覆盖；只测自制轮子本身的用例（例如 `Latest` 队列的单元测试）改为测试同一用户可见行为（例如“连续拖动只保留一个在途请求并以最后值结束”）。测试从 `../main.ts` 导入，不要从 `../dist/` 导入。
 7. **目录清理**（第 7 节清单）：删除 `FREEZE.json`、`CANDIDATE.json`、`freeze-ready.json`、`CHECKS.json`、`PROVENANCE.json`、`publish.mjs`、`*.log`、`download-probe.json`、`real-extraction.json`、`manifest.production.json`、`build.mjs`/`build.cjs`/`check.mjs`、插件内 `tsconfig*.json`、`API_REQUESTS.md`（在报告中摘录仍未解决的条目）；`README.md` 改为简短的“功能、入口、限制”。已提交的构建产物从 git 移除：`git rm -r --cached src/plugins/<name>/dist`（`dist/` 已在根 `.gitignore` 中），然后删掉本地 `dist/` 或让构建重新生成。

@@ -1,6 +1,6 @@
 # SDK v2 设计说明
 
-状态：P1 交付，P4 删除旧 API 后为唯一插件 API（2026-10-20，API 维护者）。任务依据见 [sdk-v2-migration.md](sdk-v2-migration.md)，示例见 [sdk-v2-usage.md](sdk-v2-usage.md)，迁移步骤见 [sdk-v2-migration-guide.md](sdk-v2-migration-guide.md)。
+状态：P1 交付，P4 删除旧 API 后为唯一插件 API（2026-10-20，API 维护者）。任务依据见 [sdk-v2-migration.md](sdk-v2-migration.md)，示例见 [插件示例](../plugins/examples.md)，迁移步骤见 [sdk-v2-migration-guide.md](sdk-v2-migration-guide.md)。
 
 代码：`src/sdk/plugin/`（公共类型在 `types.ts`，入口 `index.ts`），测试宿主 `src/sdk/plugin/testing.ts`，单元测试 `src/tests/sdk/`，运行器 `src/runtime/runner.ts`，构建工具 `src/scripts/plugin.mjs`。参考迁移：`src/plugins/video/`。
 

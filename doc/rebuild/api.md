@@ -1,6 +1,8 @@
 # 插件 API：SDK v2 on `vestra.experimental/0.1`
 
-状态：SDK v2 是插件唯一的 API（2026-10-20 P4 起；旧扁平 `Host` API 已删除）。设计说明见 [sdk-v2.md](sdk-v2.md)，示例见 [sdk-v2-usage.md](sdk-v2-usage.md)，公共类型在 `src/sdk/plugin/types.ts`，入口 `src/sdk/plugin/index.ts`，运行器 `src/runtime/runner.ts`，宿主路由 `src/host/src/main.rs`。wire 协议版本不变：`vestra.experimental/0.1`。
+> 面向插件作者的文档已移到 [doc/plugins/](../plugins/README.md)：[入门教程](../plugins/tutorial.md)、[插件示例](../plugins/examples.md)、[API 参考](../plugins/reference.md)（权威规格）。本页保留为维护者总览。
+
+状态：SDK v2 是插件唯一的 API（2026-10-20 P4 起；旧扁平 `Host` API 已删除）。设计说明见 [sdk-v2.md](sdk-v2.md)，示例见 [插件示例](../plugins/examples.md)，公共类型在 `src/sdk/plugin/types.ts`，入口 `src/sdk/plugin/index.ts`，运行器 `src/runtime/runner.ts`，宿主路由 `src/host/src/main.rs`。wire 协议版本不变：`vestra.experimental/0.1`。
 
 ## 包与生命周期
 
