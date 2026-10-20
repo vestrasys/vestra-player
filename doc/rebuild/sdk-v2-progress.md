@@ -30,10 +30,10 @@
 | P0 准备 | 完成 | 本节 |
 | P1 SDK 设计与实现 | 完成 | 见下文 P1 记录 |
 | P2 审查 | 通过（附裁决） | 见下文 P2 记录 |
-| P3 插件迁移 | 进行中 | 见下文 P3 记录 |
-| P4 收尾 | 未开始 | |
-| P5 GUI 测试 | 未开始 | |
-| P6 提交 | 未开始 | |
+| P3 插件迁移 | 完成 | 见下文 P3 记录（10/10） |
+| P4 收尾 | 完成 | 见下文 P4 记录 |
+| P5 GUI 测试 | 通过（修复 5 项后复测） | 见下文 P5 记录 |
+| P6 提交 | 完成 | `rebuild/sdk-v2` |
 
 ## P1 记录（维护者）
 
@@ -87,3 +87,42 @@
   - 属性覆盖已修复（维护者）：回调不再触发重发；`bind` 值只在变化时发送；`set()` 同值也发送一次（显式“拉回模型值”）；写入失败不循环（绑定值待变化、`set` 值退避重试、连续失败只报一次）。playback/capture 删除变通代码、恢复旧语义并补测试。`test:sdk` 46/46。已知边角：取整后恰等于上次发送值时滑块停在用户拖到的位置（旧扁平 API 下同样存在），subtitles 的字号/延迟滑块属此情况。
 - **workshop：试载中间状态、包操作 id、“结果未知”文案无法表达**。裁决：接受（迁移指南明确协议细节由 SDK 接管）。试载首答复与恢复查询都丢失后允许用新 requestId 再试：接受。`vendor/sdk` 副本由 `tests/vendor-sdk.test.mjs` 逐字节比对守护：接受。
 - **workshop 报告的 SDK 缺陷：`TrialHandle.stop()` 缓存首次结果**，清理未确认失败后再次停止不会重新向宿主发起；失败文案为英文。裁决：P4 由维护者修复（失败后允许重试，文案中文化或给出 code 由插件映射），同步 vendor/sdk。迁移者担心的 `requirement-text` 回写已由属性覆盖修复解决（回调不再重发），P5 GUI 留意。
+
+## P4 记录（维护者，协调者复核）
+
+- 修复 workshop 报告的 SDK 缺陷：`TrialHandle.stop()` 以 `code: "cleanup"` 失败后不再缓存，再次调用重新向宿主发送停止；workshop 映射回原中文文案。`test:sdk` 47/47。
+- 删除旧扁平 `Host` API：`sdk/index.ts` 改为内部 `sdk/wire.ts`；运行器只接受默认导出 `activate(plugin)`，命名导出的旧插件以 `runtime.failed` 拒绝。
+- 删除使用旧 API 的示例与历史验证脚本（`examples/capability-demo`、`host-ui-demo`、`mount-demo` 的插件部分，`scripts/verify*.mjs`、`run-product-slices.mjs`、`stage-native-evidence.mjs`，`tests/*-review.mjs`、`session.ts`、`source-session.ts`），记录见 `sdk-v2.md` §8。裁决：接受。被删的是以旧 API 插件驱动真实宿主的阶段性集成脚本；真实宿主覆盖改由 cargo test、SDK/插件单元测试与 P5 GUI 测试承担；如需真实宿主自动化集成测试，应以 v2 插件为夹具重写（列入遗留）。
+- `api.md` 重写为 v2。宿主改动评估（未实施）：窗口打开即转发全部回调（中）、字幕状态事件广播（中）、`commands.unregister`（低）、`source.operation` unknown/expired 区分（低）。
+- 协调者复核：`npm run check`、`format:check`、`boundaries` 退出 0；`test:sdk` 47/47；`plugins:build` 10/10；cargo fmt/clippy/test 由维护者报告全绿。
+
+## P5 记录（协调者，2026-10-20）
+
+方法：`npm run plugins:build` 产物（dist）经真实 `packages.validate` + `install` 装入同一宿主进程（10/10 committed、activation ready），CGEvent 鼠标键盘 + 截图。测试媒体 `/tmp/vestra-continuity-media/continuous-900s.mp4`、`native-verification.srt` 已于本次重新生成（ffmpeg testsrc2 1280×720 30fps + 440 Hz 正弦；SRT 一条中英混排），原文件被覆盖。截图在会话 scratchpad（g1–g63），不入库。
+
+| 插件 | 场景 | 结果 |
+| --- | --- | --- |
+| 全部 | 10/10 激活；右键级联菜单八个分组、各插件菜单项齐全 | 通过 |
+| 基础播放 | 底栏打开、暂停/播放、拖动跳转（11:16）、倍速编辑框输入 2 → 2倍（编辑中位置刷新不覆盖输入）、静音/解除、音量拖动 43% | 通过（修复 2 项后） |
+| 播放列表 | 添加两项、选播、下一项、上一项、播完“列表已播完”、底栏打开另一文件后“已切换到列表外来源” | 通过 |
+| 画面调节 | 亮度/对比度/高斯实际作用于画面，播放不中断；复位后滑块与勾选复原 | 通过（修复 1 项后复测） |
+| 音频工作台 | 拖动均衡器、预设“人声”滑块同步、全部复位、状态“已应用”，播放不中断 | 通过 |
+| 字幕 | 载入外部 SRT，中英混排显示；轨道下拉显示当前轨；字号拖动后“撤销本插件的样式与延迟”滑块复原 | 通过（修复 1 项后复测） |
+| 截图导出 | 保存当前画面：确认行可见，PNG 1280×720 与源第 4427 帧逐像素一致（平均差 0.0） | 通过 |
+| NES | 打开 ROM 出画面（256×240 stereo 48 kHz），Stop 后画布清空 | 通过（修复 1 项后） |
+| YouTube | `jNQXAC9IVRw` 播放至结束 | 通过 |
+| Bilibili | `BV1xx411c7mD` 播放（34:15） | 通过 |
+| 插件工坊 | 选择空工作区 → 生成（本地 mock）→ 宿主校验通过 → 安装 committed → v2 生成的计数器窗口增加/归零可用 | 通过 |
+| 停用 | 停用画面调节：亮度效果撤销、菜单项消失；字幕与音频均衡保留（“已应用”） | 通过（测试用管理插件经原始管道发送 `plugins.disable`，SDK 不提供该方法） |
+
+P5 发现并修复的缺陷（协调者直接修复：均为插件 Slint/打包的一两行改动，迁移前已存在或属构建配置，未退回迁移者）：
+
+1. **nes 构建产物缺 jsnes**（迁移引入）：`dist/core.js` 以裸包名导入 `jsnes`，安装后激活失败 `ERR_MODULE_NOT_FOUND`。修复：`package.json` 加 `"vestra": {"bundle": true}` 与 esbuild 0.25.12 devDependency。建议公共工具在 `build` 时对未打包的裸包导入报错（遗留）。
+2. **playback 进度条填充居中**（迁移前已存在）：填充矩形未设 `x`，Slint 默认居中，播放初期像一个停在中间的点。修复：`x: 0`。
+3. **滑块/勾选被用户操作后不再跟随模型**（迁移前已存在）：`value: root.x` 单向绑定在用户拖动后被断开，复位只改标签不动控件。修复：video 用 `<=>`（in-out 属性），playback 音量用 `<=>`，subtitles 滑块加 `changed` 回推（同 audio 已有写法）。
+4. **subtitles 轨道下拉不显示当前轨**（迁移前已存在）：模型与索引同时更新时 ComboBox `current-index` 不跟随。修复：`changed track-labels/selected-*` 回推三个 ComboBox。
+5. **playback 音量编辑框显示未取整值**（`42.88524627685547`）。修复：`Math.round`。
+
+修复后 video 6/6、playback 15/15、subtitles 13/13、nes 11/11 测试通过，受影响项已在 GUI 复测。
+
+未修、记入遗留：字幕轨标签显示宿主临时名 `vestra-subtitle-*.vtt` 而非 SRT 原文件名；音频“响度规范化”勾选在深色背景下对比度低；截图窗口连拍页的“Sample start”保留打开时的旧时间。

@@ -36,3 +36,20 @@ UI候选、稳定性边界及验证门槛见[可行性评估](ui-feasibility.md)
 统一待修改责任：playback/playlist同步R1与source intent；video删除零帧绝对门槛并区分applied；audio明确延迟可观测和preroll；capture补processed音频链与no-overwrite一致；subtitles收敛单层仲裁/一份条件baseline与大内容通道；NES改覆盖保护有限替代；workshop保持有限真实Pi/离线工具与事务边界。作者仅修设计，root未下发实现任务。
 
 待技术证据：M1来源+UI，M2实时滤镜更新/失败恢复，M3独立快照产物，M4producer与包事务；详见P1第8节。当前可发布的只有0.1阶段A及其已标注边界，P1不能作为八插件可用基线。
+
+## SDK v2 迁移后仍未解决的条目（2026-10-20）
+
+SDK v2（handle 式插件 API）已取代旧扁平 Host API，见 [sdk-v2](sdk-v2.md)、[sdk-v2-progress](sdk-v2-progress.md)。迁移期间（自上而下）插件不提新能力；下列为迁移报告与 P4 评估中仍开放的条目，下一轮按自下而上流程处理：
+
+| 条目 | 来源 | 建议 |
+|---|---|---|
+| 窗口打开即转发根组件全部回调，取消“回调须在首次 show() 前绑定”限制 | 维护者 P4 评估 | 中 |
+| 宿主广播字幕状态事件，去掉字幕插件 1.5 s 轮询 | 维护者 P4 评估 | 中 |
+| `commands.unregister` | P3 延后 | 低，等有插件需要 |
+| `source.operation` 区分 unknown / unknownExpired | P3 延后 | 低 |
+| `MediaJob` 数值进度、编码器预检查询 | capture 迁移报告 | 待需求 |
+| 字幕上传上限：插件允许 8 MiB、宿主 2 MiB | subtitles 迁移报告 | 统一口径 |
+| PB-K2：Cmd/Ctrl+O 打开媒体快捷键（宿主只路由 Space/←/→） | playback | 待需求 |
+| 插件停用/管理 API（`plugins.disable/list`）在 v2 中未提供 | P5 测试 | 若要做插件管理器再设计 |
+| 公共构建工具对未打包的裸包导入报错 | P5 nes 缺陷 | 工具改进 |
+| 以 v2 插件为夹具重写真实宿主自动化集成测试 | P4 删除旧验证脚本 | 建议 |

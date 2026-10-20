@@ -23,7 +23,7 @@ export component PictureWindow inherits Window {
  VerticalBox {
   padding: 18px; spacing: 10px;
   Text { text: "画面调节"; font-size: 22px; }
-  CheckBox { text: "启用画面效果"; checked: root.effect-enabled; toggled => { root.toggle-effect(self.checked); } }
+  CheckBox { text: "启用画面效果"; checked <=> root.effect-enabled; toggled => { root.toggle-effect(self.checked); } }
   HorizontalBox {
    Button { text: "原始"; clicked => { root.preset("original"); } }
    Button { text: "鲜艳"; clicked => { root.preset("vivid"); } }
@@ -31,16 +31,16 @@ export component PictureWindow inherits Window {
    Button { text: "柔和"; clicked => { root.preset("soft"); } }
   }
   Text { text: "亮度：" + round(root.brightness); }
-  Slider { minimum: -100; maximum: 100; value: root.brightness; changed(value) => { root.adjust("brightness",value); } }
+  Slider { minimum: -100; maximum: 100; value <=> root.brightness; changed(value) => { root.adjust("brightness",value); } }
   Text { text: "对比度：" + round(root.contrast); }
-  Slider { minimum: -100; maximum: 100; value: root.contrast; changed(value) => { root.adjust("contrast",value); } }
+  Slider { minimum: -100; maximum: 100; value <=> root.contrast; changed(value) => { root.adjust("contrast",value); } }
   Text { text: "饱和度：" + round(root.saturation); }
-  Slider { minimum: -100; maximum: 100; value: root.saturation; changed(value) => { root.adjust("saturation",value); } }
+  Slider { minimum: -100; maximum: 100; value <=> root.saturation; changed(value) => { root.adjust("saturation",value); } }
   Text { text: "Gamma：" + round(root.gamma); }
-  Slider { minimum: -100; maximum: 100; value: root.gamma; changed(value) => { root.adjust("gamma",value); } }
-  CheckBox { text: "高斯模糊"; checked: root.blur-enabled; toggled => { root.toggle-blur(self.checked); } }
+  Slider { minimum: -100; maximum: 100; value <=> root.gamma; changed(value) => { root.adjust("gamma",value); } }
+  CheckBox { text: "高斯模糊"; checked <=> root.blur-enabled; toggled => { root.toggle-blur(self.checked); } }
   Text { text: "模糊强度：" + round(root.blur-strength * 10) / 10; }
-  Slider { minimum: 0; maximum: 20; value: root.blur-strength; changed(value) => { root.adjust("blurStrength",value); } }
+  Slider { minimum: 0; maximum: 20; value <=> root.blur-strength; changed(value) => { root.adjust("blurStrength",value); } }
   Text { text: root.status; wrap: word-wrap; }
   HorizontalBox {
    Button { text: "复位"; clicked => { root.reset(); } }

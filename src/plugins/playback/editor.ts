@@ -26,7 +26,7 @@ export class Editor {
     this.kind = kind;
     this.#seen = state;
     this.#playback.error = "";
-    const value = kind === "jump" ? time(state.position) : kind === "rate" ? String(state.rate) : String(state.volume);
+    const value = kind === "jump" ? time(state.position) : kind === "rate" ? String(state.rate) : String(Math.round(state.volume));
     this.#bar.set({ editorValue: value });
     this.#bar.setInteraction({ focused: true, dragging: false, popupOpen: true });
   }
