@@ -170,5 +170,5 @@ export default async function activate(plugin: Plugin) {
     await job?.agent?.waitForIdle();
   });
 
-  plugin.commands.add({ id: "workshop.open", path: ["插件", "插件工坊…"], run: () => window.show() });
+  plugin.commands.add({ id: "workshop.open", path: ["插件", "插件工坊…"], order: 621, run: () => window.show() });
 }

@@ -65,6 +65,10 @@ test("menu entries keep their paths, and editing commands wait for a selected tr
       ...presets.map((p) => ["音频", "均衡器预设", p.label]),
     ],
   );
+  assert.deepEqual(
+    [...host.commands.values()].map(({ declaration: d }) => ("order" in d ? d.order : null)),
+    [388, 385, 382, 381, 384, 383],
+  );
   assert.deepEqual(host.command("audio.workbench").state, { enabled: true, checked: null, busy: false, reason: null });
   assert.deepEqual(host.command("audio.reset").state, {
     enabled: false,

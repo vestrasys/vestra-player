@@ -6,10 +6,10 @@ import { Tasks, terminal } from "./tasks.ts";
 import type { Task } from "./tasks.ts";
 
 const ENTRIES = [
-  ["capture.still", "保存当前画面…", "Screenshot"],
-  ["capture.burst", "连拍…", "Burst"],
-  ["capture.clip", "导出片段…", "Video clip"],
-  ["capture.tasks", "查看导出任务…", "Export tasks"],
+  ["capture.still", "保存当前画面…", "Screenshot", 321],
+  ["capture.burst", "连拍…", "Burst", 324],
+  ["capture.clip", "导出片段…", "Video clip", 322],
+  ["capture.tasks", "查看导出任务…", "Export tasks", 323],
 ] as const;
 
 /** Capture and export: one window, four menu entrances, a queue of frozen exports. */
@@ -97,8 +97,8 @@ export default async function activate(plugin: Plugin) {
       if (window.opened) say(detail);
     }
   }
-  for (const [id, title, section] of ENTRIES)
-    plugin.commands.add({ id, path: ["视频", "截图与导出", title], run: () => open(section).catch(reportOpenError) });
+  for (const [id, title, section, order] of ENTRIES)
+    plugin.commands.add({ id, path: ["视频", "截图与导出", title], order, run: () => open(section).catch(reportOpenError) });
 
   // Closing the window keeps tasks running; deactivation cancels them (the SDK releases jobs and snapshots).
   plugin.onDispose(async () => {

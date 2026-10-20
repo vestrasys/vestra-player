@@ -9,7 +9,16 @@ import { startWorkshop } from "./fixture.mjs";
 
 test("one menu entrance; reopening shows the same window", async () => {
   const w = await startWorkshop();
-  assert.deepEqual(w.host.command("workshop.open").declaration, { title: "插件工坊…", path: ["插件", "插件工坊…"], shortcut: null });
+  assert.deepEqual(w.host.command("workshop.open").declaration, {
+    title: "插件工坊…",
+    path: ["插件", "插件工坊…"],
+    order: 621,
+    group: "domain",
+    radio: false,
+    bindings: [],
+    focus: null,
+    repeat: false,
+  });
   await w.host.command("workshop.open").run();
   assert.equal(w.host.sent("ui.open").length, 1);
   assert.equal(w.window.file, "workshop.slint");

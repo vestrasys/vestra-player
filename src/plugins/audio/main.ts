@@ -3,6 +3,9 @@ import { clamp, matches, neutral, nodes, presets } from "./model.ts";
 import type { Settings } from "./model.ts";
 
 /** Audio workbench: one window and one owned audio chain for the selected track. */
+/** Menu positions of the presets, by preset index (平直, 人声, 音乐, 影院). */
+const presetOrders = [382, 381, 384, 383];
+
 export default async function activate(plugin: Plugin) {
   const { player } = plugin;
   const filter = plugin.audio.filter("workbench");
@@ -72,12 +75,14 @@ export default async function activate(plugin: Plugin) {
   });
 
   const editing = { enabled: ready, busy, reason: () => (ready() ? null : "没有选中的音轨") };
-  plugin.commands.add({ id: "audio.workbench", path: ["音频", "音频工作台…"], run: () => window.show() });
-  plugin.commands.add({ id: "audio.reset", path: ["音频", "复位音频处理"], ...editing, run: () => edit(neutral()) });
+  // Orders reproduce the position in the old fixed-domain menu (presets were sorted by title).
+  plugin.commands.add({ id: "audio.workbench", path: ["音频", "音频工作台…"], order: 388, run: () => window.show() });
+  plugin.commands.add({ id: "audio.reset", path: ["音频", "复位音频处理"], order: 385, ...editing, run: () => edit(neutral()) });
   presets.forEach(({ label }, index) =>
     plugin.commands.add({
       id: `audio.preset.${index}`,
       path: ["音频", "均衡器预设", label],
+      order: presetOrders[index],
       ...editing,
       checked: () => matches(settings, index),
       run: () => preset(index),

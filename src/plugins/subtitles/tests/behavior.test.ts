@@ -42,6 +42,10 @@ test("independent window with the Slint callbacks only and complete Chinese menu
     [...host.commands.values()].map((c) => c.declaration.path),
     [["字幕", "字幕工作台…"], ["字幕", "加载外部 SRT…"], ["字幕", "关闭字幕"], ["字幕", "刷新字幕轨"]],
   );
+  assert.deepEqual(
+    [...host.commands.values()].map(({ declaration: d }) => ("order" in d ? d.order : null)),
+    [444, 443, 441, 442],
+  );
   const opened = host.sent("ui.open");
   assert.equal(opened.length, 1);
   assert.equal(opened[0]!.file, "ui/workbench.slint");

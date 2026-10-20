@@ -54,8 +54,9 @@ export default async function activate(plugin: Plugin) {
   plugin.onError((error) => (problem = `窗口更新失败：${error.message}`));
 
   // Both entrances open the same tool; hiding it keeps the effect.
-  plugin.commands.add({ id: "video.picture", path: ["视频", "画面调节…"], run: () => window.show() });
-  plugin.commands.add({ id: "video.gaussian", path: ["视频", "高斯模糊…"], run: () => window.show() });
+  // Orders reproduce the position in the old fixed-domain menu.
+  plugin.commands.add({ id: "video.picture", path: ["视频", "画面调节…"], order: 325, run: () => window.show() });
+  plugin.commands.add({ id: "video.gaussian", path: ["视频", "高斯模糊…"], order: 326, run: () => window.show() });
   apply();
 }
 
