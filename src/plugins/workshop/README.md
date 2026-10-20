@@ -4,7 +4,7 @@
 
 生成的计数器是独立的 SDK v2 插件（默认导出 `activate(plugin)`，`plugin.windows.create("counter.slint")`）：计数从 0 起，“增加”按步长递增，“归零”复位。它只对 `types/`（`vendor/sdk` 的副本）做类型检查，运行时不引用工坊或仓库 SDK。
 
-**入口**：菜单「插件 → 插件工坊…」。源码 `main.ts`（窗口与包生命周期）、`engine.mjs`（Pi 接入、候选文件工具、离线 tsc，类型见 `engine.d.mts`）、`workshop.slint`。
+**入口**：右键菜单顶层「插件工坊…」（`windows` 组 order 820）。窗口为深色主题（`@vestra/theme.slint`、`@vestra/widgets.slint`），没有内部大标题；底部状态只显示一行中文（完整文字在悬停提示里），日志把 Pi 工具事件与 TypeScript 诊断整理成可读的行，不显示修订号、摘要等内部值。源码 `main.ts`（窗口与包生命周期）、`engine.mjs`（Pi 接入、候选文件工具、离线 tsc，类型见 `engine.d.mts`）、`workshop.slint`。
 
 **限制**：只支持 `{"kind":"native-counter","id":"community.counter","version":"1.0.0","step":1}` 与 `1.1.0` / `step:3`；需求最大 64 KiB，最多 3 轮模型、12 次工具动作、总时限 120 秒；日志窗口只保留最后 16 KB。每次生成写入工作区下新的 `candidate-<uuid>/`。“查询试载”按钮保留但恒为禁用：试载首答复丢失由 SDK 按原请求取回。
 

@@ -1,0 +1,76 @@
+// 导出任务: one two-line row per accepted export (UI-DLG-05).
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button } from "@vestra/widgets.slint";
+import { Note } from "parts.slint";
+
+export struct CaptureTask {
+    id: string,
+    title: string,
+    detail: string,
+    cancellable: bool,
+    retryable: bool,
+    openable: bool,
+}
+
+export component TasksWindow inherits Window {
+    title: "导出任务";
+    width: 438px;
+    preferred-height: 300px;
+    min-height: 160px;
+    background: Theme.bg-panel;
+    in property <[CaptureTask]> task-rows;
+    in property <string> status;
+    callback cancel-task(string);
+    callback open-output(string);
+    callback retry-task(string);
+    callback open-folder();
+
+    VerticalLayout {
+        padding: Theme.dialog-padding;
+        spacing: 5px;
+        Rectangle {
+            vertical-stretch: 1;
+            background: Theme.bg-list;
+            border-width: 1px;
+            border-color: Theme.line;
+            if root.task-rows.length == 0: Note {
+                text: "还没有导出任务。";
+                horizontal-alignment: center;
+                color: Theme.text-dim;
+            }
+            ScrollView {
+                VerticalLayout {
+                    for task in root.task-rows: Rectangle {
+                        height: 40px;
+                        HorizontalLayout {
+                            padding-left: 6px;
+                            padding-right: 6px;
+                            spacing: 3px;
+                            VerticalLayout {
+                                alignment: center;
+                                Note { text: task.title; color: Theme.text; }
+                                Note { text: task.detail; }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                HorizontalLayout {
+                                    spacing: 3px;
+                                    Button { small: true; text: "取消"; enabled: task.cancellable; clicked => { root.cancel-task(task.id); } }
+                                    Button { small: true; text: "打开"; enabled: task.openable; clicked => { root.open-output(task.id); } }
+                                    Button { small: true; text: "重试"; enabled: task.retryable; clicked => { root.retry-task(task.id); } }
+                                }
+                            }
+                        }
+                        Rectangle { y: parent.height - 1px; height: 1px; background: Theme.line; }
+                    }
+                }
+            }
+        }
+        HorizontalLayout {
+            spacing: 4px;
+            Note { text: root.status; horizontal-stretch: 1; }
+            Button { text: "打开存档文件夹"; clicked => { root.open-folder(); } }
+        }
+    }
+}

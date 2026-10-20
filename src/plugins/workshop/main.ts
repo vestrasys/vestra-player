@@ -4,6 +4,49 @@ import * as fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 
+/** Status text is one line (UI-TOOL-05). */
+const oneLine = (text: string) => {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > 160 ? `${flat.slice(0, 159)}…` : flat;
+};
+
+/** Package change states in Chinese, after 「安装」/「回退」. */
+const changeText: Record<string, string> = {
+  preparing: "：正在准备…",
+  activating: "：正在启用…",
+  restoring: "：正在恢复原版本…",
+  committed: "完成。",
+  cancelled: "已取消。",
+  failed: "失败。",
+  failedDegraded: "失败，未能完全恢复原版本。",
+  tooLate: "已无法取消，操作继续。",
+};
+
+const tools: Record<string, string> = {
+  write_candidate: "写入候选文件",
+  read_candidate: "读取候选文件",
+  validate_candidate: "真实TypeScript校验",
+};
+
+/** One readable log line per engine event, without its internal ids, revisions or digests. */
+export function logLine(event: { phase: string; text: string }) {
+  let value: Record<string, unknown>;
+  try {
+    value = JSON.parse(event.text);
+  } catch {
+    return `${event.phase}：${event.text}`;
+  }
+  if (event.phase === "真实TypeScript诊断") {
+    const output = String(value.stdout ?? "").trim();
+    return value.code === 0 ? "真实TypeScript诊断：通过" : `真实TypeScript诊断：未通过\n${output}`;
+  }
+  const name = tools[String(value.toolName)] ?? String(value.toolName);
+  const file = (value.args as { path?: unknown } | undefined)?.path;
+  if (value.type === "tool_execution_start") return `Pi工具：${name}${typeof file === "string" ? ` ${file}` : ""}`;
+  if (value.type === "tool_execution_end") return `Pi工具：${name}${value.isError ? "失败" : "完成"}`;
+  return event.phase;
+}
+
 /** Pi plugin workshop: generate a counter plugin, let the host validate it, trial, install, roll back. */
 export default async function activate(plugin: Plugin) {
   let busy = false;
@@ -15,7 +58,7 @@ export default async function activate(plugin: Plugin) {
   let change: PackageChange | undefined;
   let selectedId = "community.counter";
   let log = "";
-  let status = "选择工作区并输入需求后生成";
+  let status = "选择工作区并输入需求后生成。";
   let workspace = "";
   const idle = () => !busy && !trial;
 
@@ -29,8 +72,9 @@ export default async function activate(plugin: Plugin) {
     plugin.update();
   };
   const fail = (error: unknown) => {
-    show(`错误：${String(error)}`);
-    publish(String(error));
+    const message = error instanceof Error ? error.message : String(error);
+    show(`错误：${oneLine(message)}`);
+    publish(`错误：${message}`);
   };
 
   const window = plugin.windows.create("workshop.slint");
@@ -53,22 +97,21 @@ export default async function activate(plugin: Plugin) {
     busy = true;
     candidate = undefined;
     const current = (job = new WorkshopJob(path.join(workspace, `candidate-${randomUUID()}`), (event) =>
-      publish(`${event.phase}: ${event.text}`),
+      publish(logLine(event)),
     ));
     try {
-      show("Pi Agent运行中 · 模型本地mock · 工具真实执行");
+      show("正在生成候选插件（本地模型，不联网）…");
       const result = await current.run(draft);
       selectedId = current.requirement.id;
-      show("TypeScript通过，宿主验证生产JS/Slint…");
+      show("类型检查通过，正在由播放器校验…");
       const checked = await plugin.packages.validate(result.directory);
       if (current.cancelled) throw Error("任务已取消");
       candidate = checked;
-      const validation = { digest: checked.digest, manifest: checked.manifest, checks: checked.checks };
-      publish(JSON.stringify({ candidate: result.directory, revision: result.revision, validation }));
-      show(`候选已通过宿主校验 ${checked.digest}；可试载或明确安装`);
+      publish(`宿主校验通过：${checked.manifest.id} ${checked.manifest.version}（${checked.checks.join("、")}），位于 ${result.directory}`);
+      show(`候选已通过宿主校验：${checked.manifest.id} ${checked.manifest.version}，可试载或安装。`);
     } catch (error) {
       candidate = undefined;
-      if (current.cancelled) show("生成已取消，子进程已退出");
+      if (current.cancelled) show("生成已取消。");
       else fail(error);
     } finally {
       busy = false;
@@ -81,12 +124,12 @@ export default async function activate(plugin: Plugin) {
       await trial.stop(); // waits until the host confirmed cleanup
     } catch (error) {
       // Keep the trial: stopping again re-asks the host.
-      if ((error as PluginError).code === "cleanup") throw Error(`试载清理未确认：${trial.status}`);
+      if ((error as PluginError).code === "cleanup") throw Error("播放器未确认试载已清理，请再次停止试载。");
       throw error;
     }
     await trial.dispose();
     trial = undefined;
-    show("试载已清理");
+    show("试载已停止并清理。");
   };
 
   /** Install or roll back; only ever on an explicit click, and never resubmitted. */
@@ -94,7 +137,8 @@ export default async function activate(plugin: Plugin) {
     if (!idle()) throw Error("请先等待任务完成并停止试载");
     if (!rollback && !candidate) throw Error("请先生成并通过宿主校验");
     busy = true;
-    publish(`用户明确${rollback ? "回退" : "安装"} ${selectedId}`);
+    const action = rollback ? "回退" : "安装";
+    publish(`用户明确${action} ${selectedId}`);
     let current: PackageChange;
     try {
       current = rollback ? await plugin.packages.rollback(selectedId) : await candidate!.install();
@@ -104,9 +148,9 @@ export default async function activate(plugin: Plugin) {
     }
     change = current;
     const report = () => {
-      const text = `包操作：${current.status}${current.message ? " / " + current.message : ""}`;
-      publish(text);
-      show(text);
+      const text = `${action}${changeText[current.status] ?? "状态未知。"}`;
+      publish(current.message ? `${text}（${current.message}）` : text);
+      show(current.message && current.status.startsWith("failed") ? `${text}原因：${oneLine(current.message)}` : text);
     };
     const listening = current.onChange(report);
     report();
@@ -136,14 +180,14 @@ export default async function activate(plugin: Plugin) {
     const text = await fs.readFile(chosen, "utf8");
     requirement(text);
     draft = text;
-    show("需求已读取，点击生成");
+    show("需求已读取，点击生成。");
   });
   window.on("generate", generate);
   window.on("cancelTask", async () => {
     if (job && busy && !change && !starting) {
       job.cancel();
       await job.agent?.waitForIdle();
-      show("生成取消已请求，等待任务清理");
+      show("正在取消生成…");
     }
     if (trial) await stopTrial();
     if (change) await change.cancel();
@@ -157,8 +201,8 @@ export default async function activate(plugin: Plugin) {
     } finally {
       starting = busy = false;
     }
-    publish(JSON.stringify({ trial: trial.status }));
-    show(`试载：${trial.status}；请在独立计数器窗口测试增加/归零`);
+    publish(`试载已开始：${selectedId}`);
+    show("试载中：请在计数器窗口测试「增加」「归零」。");
   });
   window.on("recoverTrial", () => {}); // kept for the window; the button stays disabled
   window.on("stopTrial", stopTrial);
@@ -170,5 +214,11 @@ export default async function activate(plugin: Plugin) {
     await job?.agent?.waitForIdle();
   });
 
-  plugin.commands.add({ id: "workshop.open", path: ["插件", "插件工坊…"], order: 621, run: () => window.show() });
+  plugin.commands.add({
+    id: "workshop.open",
+    path: ["插件工坊…"],
+    order: 820,
+    group: "windows",
+    run: () => window.show(),
+  });
 }

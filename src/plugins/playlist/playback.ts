@@ -34,12 +34,22 @@ export function playback(scope: Scope, queue: Queue) {
   // Only when nobody changed the source after it ended: otherwise "stale".
   const advance = (media: Media, ended: PlayerState): Promise<void> | undefined => {
     if (busy() || queue.binding?.media !== media) return;
-    const index = queue.rows.findIndex((row) => row.rowId === queue.binding?.rowId);
-    if (index < 0) return;
-    const next = queue.rows[index + 1];
-    if (!next) queue.message = "列表已播完";
+    if (!queue.row(queue.binding.rowId)) return;
+    if (queue.repeat === "one") return replay(ended);
+    const next = queue.neighbor(1);
+    if (!next) queue.notice("列表已播完");
     else return play(next.rowId, ended);
   };
+
+  /** Repeat one: replay the same media; the row stays bound and its end listener stays armed. */
+  async function replay(ended: PlayerState) {
+    try {
+      await player.restart({ ifCurrent: ended });
+    } catch (error) {
+      if ((error as PluginError).code === "stale") queue.detach("自动推进已过期，保留较新的来源");
+      else queue.notice(`无法重播：${(error as PluginError).message}`);
+    }
+  }
 
   /** Open a row; `ifCurrent` makes it an automatic advance from that ended state. */
   async function play(rowId: string, ifCurrent?: PlayerState): Promise<void> {
@@ -58,10 +68,9 @@ export function playback(scope: Scope, queue: Queue) {
             (other) => other.rowId !== rowId && other.kind === "file" && other.key === key,
           );
           if (duplicate) {
-            queue.selected = rowId;
-            queue.remove();
+            queue.removeRow(rowId);
             queue.selected = duplicate.rowId;
-            queue.message = "文件规范路径与已有项重复，已选择已有项";
+            queue.notice("文件规范路径与已有项重复，已选择已有项");
             return;
           }
           row.key = key;
@@ -83,7 +92,7 @@ export function playback(scope: Scope, queue: Queue) {
         // Accepted, then superseded by another source before it loaded: not a failure of this row.
         else if (code === "replaced") queue.detach("已切换到列表外来源");
         else {
-          queue.fail(rowId, `打开失败：${message}`);
+          queue.fail(rowId, message);
           failedSource = player.state.sourceId;
         }
         return;
@@ -95,6 +104,8 @@ export function playback(scope: Scope, queue: Queue) {
         return;
       }
       queue.bind({ rowId, media, end: media.onEnd((ended) => advance(media, ended)) });
+      queue.played(rowId);
+      queue.say(row.title);
       if (media.current) loading = { rowId, sourceId: player.state.sourceId };
       observe(player.state);
       // It may already have ended before the reply arrived.

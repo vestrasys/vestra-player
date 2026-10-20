@@ -379,6 +379,21 @@ impl Registry {
         Ok(count)
     }
 
+    /// Remove one command (its owner disposed it); the local id is free again.
+    pub fn remove(&mut self, owner: OwnerGeneration, id: &str) -> Result<()> {
+        let key = CommandKey {
+            owner,
+            local_id: id.into(),
+        };
+        if !self.commands.contains_key(&key) {
+            return Err(CommandError::Missing(key));
+        }
+        let next = self.next_revision()?;
+        self.commands.remove(&key);
+        self.revision = next;
+        Ok(())
+    }
+
     pub fn get(&self, owner: OwnerGeneration, id: &str) -> Option<&CommandSnapshot> {
         self.commands.get(&CommandKey {
             owner,
@@ -771,6 +786,49 @@ mod tests {
             registry.register(1, "m", "keys".into(), 1, bad, state(true)),
             Err(CommandError::Invalid(_))
         ));
+    }
+
+    #[test]
+    fn removing_a_command_frees_its_id_and_path() {
+        let mut registry = Registry::new();
+        registry
+            .register(
+                3,
+                "m",
+                "track.0".into(),
+                1,
+                declaration(&["字幕", "轨 A"]),
+                state(true),
+            )
+            .unwrap();
+        let before = registry.revision();
+        registry.remove(3, "track.0").unwrap();
+        assert!(registry.revision() > before);
+        assert!(registry.snapshot().roots.is_empty());
+        assert!(matches!(
+            registry.remove(3, "track.0"),
+            Err(CommandError::Missing(_))
+        ));
+        registry
+            .register(
+                3,
+                "m",
+                "track.0".into(),
+                1,
+                declaration(&["字幕", "轨 B"]),
+                state(true),
+            )
+            .unwrap();
+        registry
+            .register(
+                4,
+                "n",
+                "other".into(),
+                1,
+                declaration(&["字幕", "轨 A"]),
+                state(true),
+            )
+            .unwrap();
     }
 
     #[test]

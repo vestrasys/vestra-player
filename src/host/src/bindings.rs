@@ -309,6 +309,13 @@ impl Table {
         Ok(())
     }
 
+    /// One command's bindings go; claims it was shadowing become active.
+    pub fn remove(&mut self, owner: Owner, id: &str) {
+        if self.declared.remove(&(owner, id.to_owned())).is_some() {
+            self.rebuild();
+        }
+    }
+
     pub fn remove_owner(&mut self, owner: Owner) {
         let before = self.declared.len();
         self.declared.retain(|(each, _), _| *each != owner);
@@ -604,8 +611,10 @@ mod tests {
         );
         assert_eq!(table.label(7, "late"), None);
         assert_eq!(table.label(3, "early").as_deref(), Some("Space"));
-        table.remove_owner(3);
+        table.remove(3, "early");
         assert_eq!(table.resolve(&key("Space"), None).unwrap().owner, 7);
+        assert!(table.resolve(&key("ArrowLeft"), None).is_none());
+        table.remove_owner(3);
         assert!(table.conflicts().is_empty());
         assert!(
             table

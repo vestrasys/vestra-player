@@ -1,11 +1,8 @@
 import type { Plugin, PlayerState } from "../../sdk/plugin/index.ts";
-import { clamp, matches, neutral, nodes, presets } from "./model.ts";
+import { clamp, matches, neutral, nodes, presetOf, presets } from "./model.ts";
 import type { Settings } from "./model.ts";
 
 /** Audio workbench: one window and one owned audio chain for the selected track. */
-/** Menu positions of the presets, by preset index (平直, 人声, 音乐, 影院). */
-const presetOrders = [382, 381, 384, 383];
-
 export default async function activate(plugin: Plugin) {
   const { player } = plugin;
   const filter = plugin.audio.filter("workbench");
@@ -28,9 +25,13 @@ export default async function activate(plugin: Plugin) {
     edited = touched = true;
     apply();
   };
+  /** Best-effort feedback: a missing OSD (headless) must not look like a processing failure. */
+  const osd = (text: string) => void plugin.osd.show(text).catch(() => undefined);
+  /** Choosing a preset (like dragging a band) turns the equalizer on. */
   const preset = (index: number) => {
     const chosen = presets[index];
-    if (chosen) edit({ ...settings, gains: [...chosen.gains] });
+    if (chosen) edit({ ...settings, equalizer: true, gains: [...chosen.gains] });
+    return chosen;
   };
 
   // Settings belong to one loaded source and one selected track: either change resets to neutral.
@@ -50,6 +51,9 @@ export default async function activate(plugin: Plugin) {
     sourceReady: ready(),
     isBusy: busy(),
     hasError: filter.status.state === "failed",
+    errorDetail: filter.status.state === "failed" ? filter.status.error.message : "",
+    equalizerEnabled: settings.equalizer,
+    presetIndex: presetOf(settings),
     gainValues: settings.gains,
     delayMs: settings.delayMs,
     normalizeEnabled: settings.normalize,
@@ -59,8 +63,9 @@ export default async function activate(plugin: Plugin) {
     if (!Number.isInteger(index) || index < 0 || index >= settings.gains.length) return;
     const gains = [...settings.gains];
     gains[index] = Math.round(clamp(value, -6, 6) * 10) / 10;
-    edit({ ...settings, gains });
+    edit({ ...settings, equalizer: true, gains });
   });
+  window.on("equalizerChanged", (on: boolean) => edit({ ...settings, equalizer: on === true }));
   window.on("delayChanged", (value: number) =>
     edit({ ...settings, delayMs: Math.round(clamp(value, -2000, 2000) / 10) * 10 }),
   );
@@ -75,25 +80,61 @@ export default async function activate(plugin: Plugin) {
   });
 
   const editing = { enabled: ready, busy, reason: () => (ready() ? null : "没有选中的音轨") };
-  // Orders reproduce the position in the old fixed-domain menu (presets were sorted by title).
-  plugin.commands.add({ id: "audio.workbench", path: ["音频", "音频工作台…"], order: 388, run: () => window.show() });
-  plugin.commands.add({ id: "audio.reset", path: ["音频", "复位音频处理"], order: 385, ...editing, run: () => edit(neutral()) });
+  // 声音 ▶ 510–529 (round allocation), after playback's volume items.
+  const group = "audio";
+  plugin.commands.add({
+    id: "audio.workbench",
+    path: ["声音", "音频工作台…"],
+    order: 510,
+    group,
+    run: () => window.show(),
+  });
+  plugin.commands.add({
+    id: "audio.equalizer",
+    path: ["声音", "均衡器"],
+    order: 511,
+    group,
+    bindings: ["Shift+E"],
+    ...editing,
+    checked: () => settings.equalizer,
+    run: () => {
+      if (!ready()) return;
+      edit({ ...settings, equalizer: !settings.equalizer });
+      osd(`均衡器: ${settings.equalizer ? "开" : "关"}`);
+    },
+  });
   presets.forEach(({ label }, index) =>
     plugin.commands.add({
       id: `audio.preset.${index}`,
-      path: ["音频", "均衡器预设", label],
-      order: presetOrders[index],
+      path: ["声音", "预设", label],
+      order: 512 + index,
+      group,
+      radio: true,
       ...editing,
       checked: () => matches(settings, index),
-      run: () => preset(index),
+      run: () => {
+        if (ready() && preset(index)) osd(`均衡器预设: ${label}`);
+      },
     }),
   );
+  plugin.commands.add({
+    id: "audio.reset",
+    path: ["声音", "复位"],
+    order: 516,
+    group,
+    ...editing,
+    run: () => {
+      if (!ready()) return;
+      edit(neutral());
+      osd("音频处理已复位");
+    },
+  });
 
   function describe() {
     if (!ready()) return player.state.phase === "loading" ? "正在载入音频…" : "没有选中的音轨";
     const status = filter.status;
     if (status.state === "applying") return "正在应用…";
-    if (status.state === "failed") return status.error.message;
+    if (status.state === "failed") return "音频处理失败";
     return touched ? (status.state === "applied" ? "已应用" : "正在应用…") : "就绪";
   }
 }

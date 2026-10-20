@@ -1,71 +1,157 @@
-import type { CommandState, PanelSlot, Scope } from "../../sdk/plugin/index.ts";
+import type { CommandState, Scope } from "../../sdk/plugin/index.ts";
 import type { Playback } from "./controller.ts";
-import type { Editor } from "./editor.ts";
+import type { Prompt } from "./prompt.ts";
 
 type Entry = {
   id: string;
   path: string[];
-  /** Menu position; reproduces the order of the old fixed-domain menu. */
+  /** Menu position from the round's allocation table (doc/process/rounds/2026-10-plugin-ui.md §3). */
   order: number;
+  group?: string;
+  radio?: boolean;
   bindings?: string[];
+  repeat?: boolean;
   state: () => CommandState;
   action: () => unknown;
 };
 
-/** Busy implies disabled; the reason is shown only when the source cannot do it. */
-const ready = (enabled = true, checked: boolean | null = null, busy = false): CommandState => ({
+const UNSUPPORTED = "当前来源不支持此操作";
+
+/** Busy implies disabled; the reason is shown only when it cannot be done. */
+const ready = (enabled = true, checked: boolean | null = null, busy = false, reason = UNSUPPORTED): CommandState => ({
   enabled: enabled && !busy,
   checked,
   busy,
-  reason: enabled ? null : "当前来源不支持此操作",
+  reason: enabled ? null : reason,
 });
 
-function entries(playback: Playback, editor: Editor, bottom: PanelSlot): Entry[] {
-  const p = playback;
-  const entry = (
-    id: string,
-    path: string[],
-    order: number,
-    action: () => unknown,
-    state: () => CommandState,
-    bindings?: string[],
-  ): Entry => ({ id, path, order, action, state, bindings });
+function entries(p: Playback, jump: Prompt, customRate: Prompt): Entry[] {
+  const seek = (id: string, title: string, order: number, delta: number, bindings: string[], repeat = false): Entry => ({
+    id,
+    path: ["播放", "跳转", title],
+    order,
+    bindings,
+    repeat,
+    action: () => p.seekBy(delta),
+    state: () => ready(p.canStep()),
+  });
+  const rate = (id: string, title: string, order: number, value: number, bindings?: string[]): Entry => ({
+    id,
+    path: ["播放", "速度", title],
+    order,
+    radio: true,
+    bindings,
+    action: () => p.setRate(value),
+    state: () => ready(p.can("rate"), p.state.rate === value, p.rateBusy),
+  });
+  const rateStep = (id: string, title: string, order: number, delta: number, binding: string): Entry => ({
+    id,
+    path: ["播放", "速度", title],
+    order,
+    bindings: [binding],
+    action: () => p.stepRate(delta),
+    state: () => ready(p.can("rate"), null, p.rateBusy),
+  });
+  const volume = (id: string, title: string, order: number, delta: number, bindings: string[]): Entry => ({
+    id,
+    path: ["声音", title],
+    order,
+    bindings,
+    repeat: true,
+    action: () => p.volumeBy(delta),
+    state: () => ready(true, null, p.outputBusy),
+  });
   return [
-    entry("open", ["文件", "打开媒体…"], 202, () => p.open(), () => ready(!p.selecting, null, p.selecting)),
-    entry("close-source", ["文件", "关闭当前来源"], 201, () => p.closeSource(), () => ready(p.can("close"))),
-    entry(
-      "toggle-pause",
-      ["播放", "播放/暂停"],
-      263,
-      () => p.togglePause(),
-      () => ready(p.canToggle(), p.state.phase === "ready" ? p.state.paused : null, p.pauseBusy),
-      ["Space"],
-    ),
-    entry("jump", ["播放", "跳转到…"], 264, () => editor.open("jump"), () => ready(p.canSeek())),
-    ...(
-      [
-        ["backward-5", "后退5秒", 262, -5, "ArrowLeft"],
-        ["forward-5", "前进5秒", 261, 5, "ArrowRight"],
-      ] as const
-    ).map(([id, title, order, delta, key]) =>
-      entry(id, ["播放", title], order, () => p.seekBy(delta), () => ready(p.can("seek") && p.state.position !== null), [key]),
-    ),
-    ...(
-      [
-        ["rate-05", "0.5倍", 265, 0.5],
-        ["rate-10", "正常速度", 268, 1],
-        ["rate-15", "1.5倍", 266, 1.5],
-        ["rate-20", "2倍", 267, 2],
-      ] as const
-    ).map(([id, title, order, rate]) =>
-      entry(id, ["播放", "速度", title], order, () => p.setRate(rate), () => ready(p.can("rate"), p.state.rate === rate, p.rateBusy)),
-    ),
-    entry("rate-custom", ["播放", "速度", "自定义…"], 269, () => editor.open("rate"), () => ready(p.can("rate"), null, p.rateBusy)),
-    entry("mute", ["音频", "静音"], 386, () => p.toggleMute(), () =>
-      ready(true, p.state.muted, p.outputBusy || p.volumeDraft !== null),
-    ),
-    entry("volume", ["音频", "音量…"], 387, () => editor.open("volume"), () => ready(true, null, p.outputBusy)),
-    entry("bar-visible", ["视图", "显示播放栏"], 502, () => bottom.toggle(), () => ready(true, bottom.state?.preferred ?? true)),
+    {
+      id: "open",
+      path: ["打开文件…"],
+      order: 100,
+      group: "open",
+      bindings: ["Ctrl+O", "F3"],
+      action: () => p.open(),
+      state: () => ready(!p.selecting, null, p.selecting),
+    },
+    {
+      id: "close-source",
+      path: ["关闭"],
+      order: 120,
+      group: "open",
+      bindings: ["F4"],
+      action: () => p.closeSource(),
+      state: () => ready(p.can("close")),
+    },
+    // Not in the allocation table: UI-BAR-11 moves the bar's "重试" here (unused 121 in `open`).
+    {
+      id: "reopen",
+      path: ["重新打开"],
+      order: 121,
+      group: "open",
+      action: () => p.retry(),
+      state: () => ready(p.state.phase === "error" && p.state.source !== null, null, false, "仅在载入失败后可用"),
+    },
+    {
+      id: "toggle-pause",
+      path: ["播放", "播放/暂停"],
+      order: 201,
+      bindings: ["Space"],
+      action: () => p.togglePause(),
+      state: () => ready(p.canToggle(), p.state.phase === "ready" ? p.state.paused : null, p.pauseBusy),
+    },
+    {
+      id: "previous",
+      path: ["播放", "上一个"],
+      order: 202,
+      bindings: ["PageUp", "Mouse:X1"],
+      action: () => p.step("previous"),
+      state: () => ready(p.state.can.previous, null, false, "没有上一个"),
+    },
+    {
+      id: "next",
+      path: ["播放", "下一个"],
+      order: 203,
+      bindings: ["PageDown", "Mouse:X2"],
+      action: () => p.step("next"),
+      state: () => ready(p.state.can.next, null, false, "没有下一个"),
+    },
+    seek("backward-5", "后退5秒", 210, -5, ["ArrowLeft"], true),
+    seek("forward-5", "前进5秒", 211, 5, ["ArrowRight"], true),
+    seek("backward-30", "后退30秒", 212, -30, ["Ctrl+ArrowLeft"]),
+    seek("forward-30", "前进30秒", 213, 30, ["Ctrl+ArrowRight"]),
+    seek("backward-60", "后退60秒", 214, -60, ["Shift+ArrowLeft"]),
+    seek("forward-60", "前进60秒", 215, 60, ["Shift+ArrowRight"]),
+    seek("backward-300", "后退300秒", 216, -300, ["Ctrl+Alt+ArrowLeft"]),
+    seek("forward-300", "前进300秒", 217, 300, ["Ctrl+Alt+ArrowRight"]),
+    {
+      id: "jump",
+      path: ["播放", "跳转到…"],
+      order: 218,
+      bindings: ["G"],
+      action: () => jump.show(),
+      state: () => ready(p.canSeek()),
+    },
+    rate("rate-10", "正常", 220, 1, ["Z"]),
+    rateStep("rate-down", "减速 0.1", 221, -0.1, "X"),
+    rateStep("rate-up", "加速 0.1", 222, 0.1, "C"),
+    rate("rate-05", "0.5倍", 223, 0.5),
+    rate("rate-15", "1.5倍", 224, 1.5),
+    rate("rate-20", "2倍", 225, 2),
+    {
+      id: "rate-custom",
+      path: ["播放", "速度", "自定义…"],
+      order: 226,
+      action: () => customRate.show(),
+      state: () => ready(p.can("rate"), null, p.rateBusy),
+    },
+    volume("volume-up", "音量 +", 501, 5, ["ArrowUp", "Mouse:WheelUp"]),
+    volume("volume-down", "音量 −", 502, -5, ["ArrowDown", "Mouse:WheelDown"]),
+    {
+      id: "mute",
+      path: ["声音", "静音"],
+      order: 503,
+      bindings: ["M"],
+      action: () => p.toggleMute(),
+      state: () => ready(true, p.state.muted, p.outputBusy || p.volumeDraft !== null),
+    },
   ];
 }
 
@@ -73,20 +159,22 @@ function entries(playback: Playback, editor: Editor, bottom: PanelSlot): Entry[]
  * Register every menu command and return `run(id)`, which the bar's buttons
  * use too. The bar bypasses the host's enabled check, so `run` repeats it.
  */
-export function addCommands(scope: Scope, playback: Playback, editor: Editor) {
-  const table = entries(playback, editor, scope.panels.bottom);
+export function addCommands(scope: Scope, playback: Playback, jump: Prompt, customRate: Prompt) {
+  const table = entries(playback, jump, customRate);
   const run = async (id: string) => {
     const command = table.find((each) => each.id === id);
     if (!command?.state().enabled) return;
-    playback.error = "";
     await command.action();
   };
-  for (const { id, path, order, bindings, state } of table)
+  for (const { id, path, order, group, radio, bindings, repeat, state } of table)
     scope.commands.add({
       id,
       path,
       order,
-      bindings,
+      ...(group ? { group } : {}),
+      ...(radio ? { radio } : {}),
+      ...(bindings ? { bindings } : {}),
+      ...(repeat ? { repeat } : {}),
       enabled: () => state().enabled,
       checked: () => state().checked,
       busy: () => state().busy,

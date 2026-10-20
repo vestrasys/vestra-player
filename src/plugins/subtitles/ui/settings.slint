@@ -1,0 +1,104 @@
+// 字幕设置: font, colour, outline and margin (ui-alignment §7.4, UI-TOOL-08).
+// Changes apply at once; every row has its own 默认 (UI-TOOL-04).
+import { ComboBox } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button, Slider } from "@vestra/widgets.slint";
+
+component RowLabel inherits Text {
+    width: 65px;
+    color: Theme.text;
+    font-size: Theme.font-body;
+    horizontal-alignment: right;
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+export component SubtitleSettings inherits Window {
+    title: "字幕设置";
+    width: 301px;
+    background: Theme.bg-panel;
+    in property <bool> can-style: false;
+    in property <string> style-reason: "";
+    in property <string> status-text: "";
+    in property <[string]> font-labels: [];
+    in property <int> selected-font: 0;
+    in property <int> selected-color: 0;
+    in-out property <float> outline-size: 2;
+    in-out property <float> margin-percent: 5;
+    changed font-labels => { font-combo.current-index = root.selected-font; }
+    changed selected-font => { font-combo.current-index = root.selected-font; }
+    changed selected-color => { color-combo.current-index = root.selected-color; }
+    callback change-font(int);
+    callback change-color(int);
+    callback change-outline(float);
+    callback change-margin(float);
+    // A released slider is snapped back to the whole value the plugin applied.
+    callback slider-released();
+    callback reset-field(string);
+    callback reset-style();
+
+    VerticalLayout {
+        padding: 10px;
+        spacing: 4px;
+        HorizontalLayout {
+            spacing: 3px;
+            RowLabel { text: "字体"; }
+            font-combo := ComboBox {
+                height: 22px;
+                model: root.font-labels;
+                current-index: root.selected-font;
+                enabled: root.can-style;
+                selected(value) => { root.change-font(self.current-index); }
+            }
+            Button { width: 41px; height: 22px; text: "默认"; enabled: root.can-style; clicked => { root.reset-field("font"); } }
+        }
+        HorizontalLayout {
+            spacing: 3px;
+            RowLabel { text: "颜色"; }
+            color-combo := ComboBox {
+                height: 22px;
+                model: ["白色", "黄色", "青色"];
+                current-index: root.selected-color;
+                enabled: root.can-style;
+                selected(value) => { root.change-color(self.current-index); }
+            }
+            Button { width: 41px; height: 22px; text: "默认"; enabled: root.can-style; clicked => { root.reset-field("color"); } }
+        }
+        HorizontalLayout {
+            spacing: 3px;
+            RowLabel { text: "描边 " + round(root.outline-size); }
+            Slider {
+                panel: true; minimum: 0; maximum: 4;
+                value <=> root.outline-size;
+                enabled: root.can-style;
+                changed(value) => { root.change-outline(value); }
+                released => { root.slider-released(); }
+            }
+            Button { width: 41px; height: 22px; text: "默认"; enabled: root.can-style; clicked => { root.reset-field("outline"); } }
+        }
+        HorizontalLayout {
+            spacing: 3px;
+            RowLabel { text: "边距 " + round(root.margin-percent) + "%"; }
+            Slider {
+                panel: true; minimum: 2; maximum: 15;
+                value <=> root.margin-percent;
+                enabled: root.can-style;
+                changed(value) => { root.change-margin(value); }
+                released => { root.slider-released(); }
+            }
+            Button { width: 41px; height: 22px; text: "默认"; enabled: root.can-style; clicked => { root.reset-field("margin"); } }
+        }
+        HorizontalLayout {
+            spacing: 3px;
+            Text {
+                text: root.status-text != "" ? root.status-text : root.style-reason;
+                color: Theme.text-list;
+                font-size: Theme.font-body;
+                vertical-alignment: center;
+                overflow: elide;
+                horizontal-stretch: 1;
+            }
+            Button { height: 22px; text: "全部默认"; clicked => { root.reset-style(); } }
+        }
+    }
+}

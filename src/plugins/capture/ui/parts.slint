@@ -1,0 +1,32 @@
+// Shared dialog parts for the capture windows (PotPlayer group-box dialogs, B§6.8).
+import { Theme } from "@vestra/theme.slint";
+
+// A titled group box: 1px frame, title on the first line.
+export component Group inherits Rectangle {
+    in property <string> title;
+    border-width: 1px;
+    border-color: Theme.line;
+    VerticalLayout {
+        padding: 8px;
+        padding-top: 4px;
+        spacing: 5px;
+        Text { text: root.title; color: Theme.text-dim; font-size: Theme.font-body; height: Theme.label-height; }
+        @children
+    }
+}
+
+// Right-aligned form label (B§2.3 label: 14px, SS_RIGHT).
+export component FormLabel inherits Text {
+    color: Theme.text;
+    font-size: Theme.font-body;
+    horizontal-alignment: right;
+    vertical-alignment: center;
+}
+
+// Plain body text that never wraps.
+export component Note inherits Text {
+    color: Theme.text-list;
+    font-size: Theme.font-body;
+    vertical-alignment: center;
+    overflow: elide;
+}

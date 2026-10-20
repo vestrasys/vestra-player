@@ -109,6 +109,7 @@ impl Host {
                 capabilities: manifest.capabilities.clone(),
                 version: Some(manifest.version.clone()),
             },
+            trial,
         )?;
         self.plugins.insert(owner, plugin);
         self.backend.commands.send(Command {

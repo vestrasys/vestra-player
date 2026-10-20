@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 import { startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
 import activate from "../main.ts";
@@ -11,8 +13,21 @@ test("radio rates, repeat binding, a menu-less command and the osd", async () =>
   const { stop } = await startPlugin(activate, { directory, host });
   const rate = host.command("rate-2").declaration;
   assert.ok("radio" in rate && rate.radio && rate.group === "examples");
+  assert.deepEqual(host.command("last").declaration.path, [
+    "示例",
+    "上次速度：1倍",
+  ]);
   await host.command("rate-2").run();
   assert.equal(host.command("rate-2").state.checked, true);
+  assert.deepEqual(
+    host.command("last").declaration.path,
+    ["示例", "上次速度：2倍"],
+    "rebuilt with the new title",
+  );
+  assert.match(
+    readFileSync(join(host.dataDirectory, "settings.json"), "utf8"),
+    /"speed":2/,
+  );
   assert.equal(host.osd.at(-1), "播放速度: 2x");
   await host.press("Ctrl+Alt+ArrowUp");
   assert.equal(host.osd.at(-1), "音量: 105%");

@@ -54,6 +54,9 @@ pub const CAPABILITIES: &[&str] = &[
 pub struct Plugin {
     pub manifest: Manifest,
     pub directory: PathBuf,
+    /// `plugin.dataDirectory`; a trial's is temporary and removed when it stops.
+    data_directory: Option<PathBuf>,
+    temporary_data: bool,
     pub subscriptions: BTreeSet<String>,
     child: Child,
     outbound: mpsc::SyncSender<Value>,
@@ -63,13 +66,14 @@ impl Plugin {
         let directory = directory.canonicalize().context("plugin directory")?;
         let manifest: Manifest =
             serde_json::from_slice(&std::fs::read(directory.join("manifest.json"))?)?;
-        Self::load_manifest(&directory, generation, events, manifest)
+        Self::load_manifest(&directory, generation, events, manifest, false)
     }
     pub fn load_manifest(
         directory: &Path,
         generation: u64,
         events: mpsc::Sender<Event>,
         manifest: Manifest,
+        trial: bool,
     ) -> Result<Self> {
         let directory = directory.canonicalize()?;
         if manifest.api_version != API {
@@ -98,7 +102,20 @@ impl Plugin {
         let runner = packaged_runner
             .filter(|p| p.is_file())
             .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../runtime/runner.ts"));
-        let mut child = Command::new("node")
+        // Per manifest id (a trial's id is unique per run). Without one the SDK
+        // reports `unavailable`; loading continues.
+        let data_directory = data_root()
+            .map(|root| root.join(&manifest.id))
+            .filter(|dir| {
+                std::fs::create_dir_all(dir)
+                    .map_err(|error| eprintln!("plugin data {}: {error}", dir.display()))
+                    .is_ok()
+            });
+        let mut command = Command::new("node");
+        if let Some(dir) = &data_directory {
+            command.env("VESTRA_PLUGIN_DATA_DIR", dir);
+        }
+        let mut child = command
             .arg(runner)
             .arg(&directory)
             .stdin(Stdio::piped())
@@ -165,6 +182,8 @@ impl Plugin {
         Ok(Self {
             manifest,
             directory,
+            data_directory,
+            temporary_data: trial,
             subscriptions: BTreeSet::new(),
             child,
             outbound,
@@ -184,15 +203,39 @@ impl Drop for Plugin {
     fn drop(&mut self) {
         let _ = self.send(json!({"event":"runtime.stop","data":null}));
         let deadline = Instant::now() + Duration::from_millis(300);
+        let mut exited = false;
         while Instant::now() < deadline {
             if self.child.try_wait().ok().flatten().is_some() {
-                return;
+                exited = true;
+                break;
             }
             thread::sleep(Duration::from_millis(5));
         }
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        if !exited {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+        self.remove_temporary_data();
     }
+}
+impl Plugin {
+    fn remove_temporary_data(&self) {
+        if self.temporary_data
+            && let Some(dir) = &self.data_directory
+        {
+            let _ = std::fs::remove_dir_all(dir);
+        }
+    }
+}
+/// `$VESTRA_PLUGIN_DATA`, else `~/Library/Application Support/Vestra/plugin-data`.
+pub fn data_root() -> Option<PathBuf> {
+    std::env::var_os("VESTRA_PLUGIN_DATA")
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME").map(|home| {
+                PathBuf::from(home).join("Library/Application Support/Vestra/plugin-data")
+            })
+        })
 }
 pub fn package_file(directory: &Path, relative: &str) -> Result<PathBuf> {
     if Path::new(relative).is_absolute() {
@@ -203,4 +246,38 @@ pub fn package_file(directory: &Path, relative: &str) -> Result<PathBuf> {
         bail!("package file must remain inside package directory");
     }
     Ok(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn trial_data_is_removed_and_installed_data_kept() {
+        let root = tempfile::tempdir().unwrap();
+        let manifest = |id: &str| Manifest {
+            id: id.into(),
+            api_version: API.into(),
+            entry: "main.mjs".into(),
+            capabilities: vec![],
+            version: None,
+        };
+        let package = tempfile::tempdir().unwrap();
+        std::fs::write(package.path().join("main.mjs"), "export default () => {}").unwrap();
+        for (id, trial) in [("a.plugin", false), ("a.plugin.trial.9", true)] {
+            let dir = root.path().join(id);
+            std::fs::create_dir_all(&dir).unwrap();
+            let plugin = Plugin {
+                manifest: manifest(id),
+                directory: package.path().into(),
+                data_directory: Some(dir.clone()),
+                temporary_data: trial,
+                subscriptions: BTreeSet::new(),
+                child: Command::new("true").spawn().unwrap(),
+                outbound: mpsc::sync_channel(1).0,
+            };
+            drop(plugin);
+            assert_eq!(dir.exists(), !trial, "{id}");
+        }
+    }
 }

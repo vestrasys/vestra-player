@@ -2,19 +2,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { roms, start, until } from './harness.mjs';
 
-const running = name => `Running ${name} · 256 × 240 · stereo 48 kHz`;
+const running = name => `正在运行 ${name} · 256×240 · 48 kHz 立体声`;
 
 test('menu entries and window keep their paths, initial status and callbacks', async () => {
   const { host, stop, window } = await start();
-  assert.deepEqual([...host.commands].map(([id, c]) => [id, c.declaration.title, c.declaration.path]), [
-    ['nes.open', '打开 NES ROM…', ['模拟器', '打开 NES ROM…']],
-    ['nes.window', 'NES 工具', ['模拟器', 'NES 工具']],
-    ['nes.stop', '停止 NES', ['模拟器', '停止 NES']],
+  assert.deepEqual([...host.commands].map(([id, c]) => [id, c.declaration.path, c.declaration.order, c.declaration.group]), [
+    ['nes.open', ['模拟器', '打开 NES ROM…'], 601, 'domain'],
+    ['nes.stop', ['模拟器', '停止 NES'], 602, 'domain'],
+    ['nes.window', ['模拟器', 'NES 工具…'], 603, 'domain'],
   ]);
   assert.ok([...host.commands.values()].every(c => c.state.enabled));
   await host.command('nes.window').run();
   assert.equal(window().file, 'nes.slint');
-  assert.deepEqual(window().props, { status: 'Choose an iNES ROM to start.', running: false });
+  assert.deepEqual(window().props, { status: '请选择 iNES ROM 文件。', running: false });
   assert.deepEqual(window().callbacks.sort(), ['open-rom', 'stop']);
   await stop();
 });
@@ -34,7 +34,7 @@ test('initial AV prefill precedes source selection; the ROM then streams paced f
     host.dialogAnswers.push([files.blue]);
     void host.command('nes.open').run();
     await until(() => window().props.status === running('blue.nes') && window().props.running === true, 'running');
-    assert.equal(host.sent('dialogs.open')[0].title, 'Open NES ROM');
+    assert.equal(host.sent('dialogs.open')[0].title, '打开 NES ROM');
     const [submit, ack] = order;
     assert.ok(submit.submit >= 1024 && submit.video > 0, 'selection needs buffered PCM and a frame');
     assert.equal(ack, 'ack', 'the start control is acknowledged after selection');
@@ -58,7 +58,7 @@ test('replacement by another source shows the old wording; a newer ROM is never 
     void host.command('nes.open').run();
     await until(() => window().props.running === true, 'first ROM');
     host.openElsewhere('/movie.mp4');
-    await until(() => window().props.status === 'NES source replaced.', 'replacement');
+    await until(() => window().props.status === '已被其他媒体源替换。', 'replacement');
     assert.equal(window().props.running, false);
     assert.equal(host.producers.get(1).released, true);
     assert.equal(host.sent('source.submit').some(p => p.intent.kind === 'close'), false, 'never closes a source it no longer owns');
@@ -87,13 +87,13 @@ test('opening another ROM replaces our own stream; a bad ROM keeps the running g
 
     host.dialogAnswers.push([files.bad]);
     await host.command('nes.open').run();
-    assert.equal(window().props.status, 'Error: Choose an iNES .nes ROM file');
+    assert.equal(window().props.status, '错误：请选择 iNES 格式的 .nes ROM 文件。');
     assert.equal(window().props.running, true);
     assert.equal(host.producers.get(1).released, false);
 
     host.dialogAnswers.push(null); // cancelled picker changes nothing
     await host.command('nes.open').run();
-    assert.equal(window().props.status, 'Error: Choose an iNES .nes ROM file');
+    assert.equal(window().props.status, '错误：请选择 iNES 格式的 .nes ROM 文件。');
 
     host.dialogAnswers.push([files.red]);
     void host.command('nes.open').run();
@@ -114,14 +114,14 @@ test('Stop closes our own source, releases it and says so', async () => {
     void host.command('nes.open').run();
     await until(() => window().props.running === true, 'ROM');
     await host.command('nes.stop').run();
-    assert.equal(window().props.status, 'Stopped.');
+    assert.equal(window().props.status, '已停止。');
     assert.equal(window().props.running, false);
     assert.equal(host.producers.get(1).released, true);
     assert.equal(host.sent('source.submit').at(-1).intent.kind, 'close');
     assert.equal(host.source.phase, 'empty');
-    window().emit('stop'); // nothing running: still reports Stopped.
+    window().emit('stop'); // nothing running: still reports 已停止。
     await host.settle();
-    assert.equal(window().props.status, 'Stopped.');
+    assert.equal(window().props.status, '已停止。');
   } finally {
     await stop();
     await files.remove();
@@ -141,7 +141,7 @@ test('start-up and stream failures keep the plugin wording', async () => {
     host.dialogAnswers.push([files.blue]);
     await until(() => host.commands.size === 3);
     void host.command('nes.open').run();
-    await until(() => window().props.status === 'Error: Audio device is not ready: deviceLost', 'device failure');
+    await until(() => window().props.status === '错误：音频设备未就绪。', 'device failure');
     assert.equal(host.producers.get(1).released, true);
     assert.equal(host.sent('source.submit').length, 0);
 
@@ -150,7 +150,7 @@ test('start-up and stream failures keep the plugin wording', async () => {
     window().emit('open-rom');
     await until(() => window().props.running === true, 'ROM');
     lost = 'audio output lost';
-    await until(() => window().props.status === 'audio output lost', 'stream error');
+    await until(() => window().props.status === '模拟器已停止：audio output lost', 'stream error');
     assert.equal(window().props.running, false);
     assert.equal(host.producers.get(2).released, true);
   } finally {

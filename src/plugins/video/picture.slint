@@ -1,51 +1,161 @@
-import { VerticalBox, HorizontalBox, Slider, Button, CheckBox } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
+
+// 14px box + 11px text, sized like PotPlayer's 51×13 panel switches.
+component Check {
+    in-out property <bool> checked;
+    in property <string> text;
+    callback toggled(bool);
+    min-height: Theme.checkbox-row-height;
+    accessible-role: checkbox;
+    accessible-checked: root.checked;
+    accessible-label: root.text;
+    HorizontalLayout {
+        spacing: 4px;
+        alignment: start;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 12px;
+                height: 12px;
+                background: Theme.bg-bar;
+                border-color: touch.has-hover ? Theme.text-list : Theme.text-dim;
+                border-width: 1px;
+                if root.checked: Rectangle {
+                    width: 6px;
+                    height: 6px;
+                    background: Theme.playing;
+                }
+            }
+        }
+        Text { text: root.text; color: Theme.text; font-size: Theme.font-body; vertical-alignment: center; }
+    }
+    touch := TouchArea {
+        clicked => {
+            root.checked = !root.checked;
+            root.toggled(root.checked);
+        }
+    }
+}
+
+// PotPlayer control-panel row: label 65 (right, 11px) + panel slider 154 + 默认 41×18, 24px pitch.
+component ColorRow {
+    in property <string> label;
+    in-out property <float> value;
+    in property <float> minimum: -100;
+    in property <float> maximum: 100;
+    callback edited(float);
+    callback reset();
+    height: 24px;
+    HorizontalLayout {
+        spacing: 6px;
+        Text {
+            width: 65px;
+            text: root.label;
+            color: Theme.text;
+            font-size: Theme.font-body;
+            horizontal-alignment: right;
+            vertical-alignment: center;
+        }
+        Slider {
+            width: 154px;
+            panel: true;
+            minimum: root.minimum;
+            maximum: root.maximum;
+            value <=> root.value;
+            changed(v) => { root.edited(v); }
+        }
+        VerticalLayout {
+            alignment: center;
+            Button { text: "默认"; small: true; width: 41px; clicked => { root.reset(); } }
+        }
+    }
+}
+
 export component PictureWindow inherits Window {
- title: "画面调节";
- preferred-width: 480px;
- preferred-height: 680px;
- min-width: 440px;
- min-height: 640px;
- in-out property <float> brightness: 0;
- in-out property <float> contrast: 0;
- in-out property <float> saturation: 0;
- in-out property <float> gamma: 0;
- in-out property <float> blur-strength: 3;
- in-out property <bool> blur-enabled: false;
- in-out property <bool> effect-enabled: true;
- in property <string> status: "等待媒体";
- callback adjust(string,float);
- callback preset(string);
- callback reset();
- callback toggle-effect(bool);
- callback toggle-blur(bool);
- callback retry();
- callback hide-tool();
- VerticalBox {
-  padding: 18px; spacing: 10px;
-  Text { text: "画面调节"; font-size: 22px; }
-  CheckBox { text: "启用画面效果"; checked <=> root.effect-enabled; toggled => { root.toggle-effect(self.checked); } }
-  HorizontalBox {
-   Button { text: "原始"; clicked => { root.preset("original"); } }
-   Button { text: "鲜艳"; clicked => { root.preset("vivid"); } }
-   Button { text: "电影"; clicked => { root.preset("cinema"); } }
-   Button { text: "柔和"; clicked => { root.preset("soft"); } }
-  }
-  Text { text: "亮度：" + round(root.brightness); }
-  Slider { minimum: -100; maximum: 100; value <=> root.brightness; changed(value) => { root.adjust("brightness",value); } }
-  Text { text: "对比度：" + round(root.contrast); }
-  Slider { minimum: -100; maximum: 100; value <=> root.contrast; changed(value) => { root.adjust("contrast",value); } }
-  Text { text: "饱和度：" + round(root.saturation); }
-  Slider { minimum: -100; maximum: 100; value <=> root.saturation; changed(value) => { root.adjust("saturation",value); } }
-  Text { text: "Gamma：" + round(root.gamma); }
-  Slider { minimum: -100; maximum: 100; value <=> root.gamma; changed(value) => { root.adjust("gamma",value); } }
-  CheckBox { text: "高斯模糊"; checked <=> root.blur-enabled; toggled => { root.toggle-blur(self.checked); } }
-  Text { text: "模糊强度：" + round(root.blur-strength * 10) / 10; }
-  Slider { minimum: 0; maximum: 20; value <=> root.blur-strength; changed(value) => { root.adjust("blurStrength",value); } }
-  Text { text: root.status; wrap: word-wrap; }
-  HorizontalBox {
-   Button { text: "复位"; clicked => { root.reset(); } }
-   Button { text: "检查状态 / 重试"; clicked => { root.retry(); } }
-   Button { text: "隐藏"; clicked => { root.hide-tool(); } }
-  }
- }
+    title: "画面调节";
+    width: 301px;
+    background: Theme.bg-panel;
+    in-out property <float> brightness: 0;
+    in-out property <float> contrast: 0;
+    in-out property <float> saturation: 0;
+    in-out property <float> gamma: 0;
+    in-out property <float> blur-strength: 3;
+    in-out property <bool> blur-enabled: false;
+    in-out property <bool> effect-enabled: true;
+    in property <bool> failed;
+    in property <string> status;
+    in property <string> detail;
+    callback adjust(string, float);
+    callback reset-field(string);
+    callback preset(string);
+    callback toggle-effect(bool);
+    callback toggle-blur(bool);
+    callback retry();
+    VerticalLayout {
+        padding: 8px;
+        padding-top: 10px;
+        spacing: 0px;
+        ColorRow { label: "亮度"; value <=> root.brightness; edited(v) => { root.adjust("brightness", v); } reset => { root.reset-field("brightness"); } }
+        ColorRow { label: "对比度"; value <=> root.contrast; edited(v) => { root.adjust("contrast", v); } reset => { root.reset-field("contrast"); } }
+        ColorRow { label: "饱和度"; value <=> root.saturation; edited(v) => { root.adjust("saturation", v); } reset => { root.reset-field("saturation"); } }
+        ColorRow { label: "Gamma"; value <=> root.gamma; edited(v) => { root.adjust("gamma", v); } reset => { root.reset-field("gamma"); } }
+        HorizontalLayout {
+            height: 24px;
+            spacing: 6px;
+            Check {
+                width: 65px;
+                text: "高斯模糊";
+                checked <=> root.blur-enabled;
+                toggled(on) => { root.toggle-blur(on); }
+            }
+            Slider {
+                width: 154px;
+                panel: true;
+                minimum: 0;
+                maximum: 10;
+                enabled: root.blur-enabled;
+                value <=> root.blur-strength;
+                changed(v) => { root.adjust("blurStrength", v); }
+            }
+            VerticalLayout {
+                alignment: center;
+                Button { text: "默认"; small: true; width: 41px; clicked => { root.reset-field("blurStrength"); } }
+            }
+        }
+        Rectangle { height: 8px; }
+        HorizontalLayout {
+            spacing: 3px;
+            alignment: center;
+            Button { text: "原始"; width: 69px; clicked => { root.preset("original"); } }
+            Button { text: "鲜艳"; width: 69px; clicked => { root.preset("vivid"); } }
+            Button { text: "电影"; width: 69px; clicked => { root.preset("cinema"); } }
+            Button { text: "柔和"; width: 69px; clicked => { root.preset("soft"); } }
+        }
+        Rectangle { height: 6px; }
+        HorizontalLayout {
+            height: 22px;
+            spacing: 6px;
+            Check {
+                text: "启用画面效果";
+                checked <=> root.effect-enabled;
+                toggled(on) => { root.toggle-effect(on); }
+            }
+            ToolTipArea {
+                text: root.detail;
+                Text {
+                    text: root.status;
+                    color: Theme.accent;
+                    font-size: Theme.font-body;
+                    horizontal-alignment: right;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+            if root.failed: VerticalLayout {
+                alignment: center;
+                Button { text: "重试"; small: true; clicked => { root.retry(); } }
+            }
+        }
+    }
 }

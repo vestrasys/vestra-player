@@ -53,11 +53,11 @@ test("a lost first reply recovers the original trial, which stop then cleans up"
   await w.until(() => w.props.busy === false, "recovery");
   assert.ok(held.requestId);
   assert.deepEqual(queries, [held.requestId]);
-  assert.equal(w.status(), "试载：running；请在独立计数器窗口测试增加/归零");
+  assert.equal(w.status(), "试载中：请在计数器窗口测试「增加」「归零」。");
   assert.deepEqual([w.props["can-stop"], w.props["can-recover"], w.props["can-trial"]], [true, false, false]);
   await w.send("stop-trial");
   assert.deepEqual(stopped, [42]);
-  assert.equal(w.status(), "试载已清理");
+  assert.equal(w.status(), "试载已停止并清理。");
   assert.equal(w.props["can-trial"], true);
   assert.equal(held.count, 1);
   await w.stop();
@@ -72,10 +72,10 @@ test("trial starting phases are waited out; cancel-task stops a running trial", 
   await w.generate();
   await w.send("start-trial");
   await w.until(() => w.props.busy === false, "trial start");
-  assert.equal(w.status(), "试载：running；请在独立计数器窗口测试增加/归零");
+  assert.equal(w.status(), "试载中：请在计数器窗口测试「增加」「归零」。");
   await w.send("cancel-task");
   assert.deepEqual(w.host.sent("packages.stopTrial"), [{ trialId: 5 }]);
-  assert.equal(w.status(), "试载已清理");
+  assert.equal(w.status(), "试载已停止并清理。");
   await w.stop();
 });
 

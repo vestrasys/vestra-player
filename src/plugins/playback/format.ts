@@ -7,10 +7,15 @@ export function time(seconds: number | null): string {
   return whole >= 3600 ? `${Math.floor(whole / 3600)}:${m}:${s}` : `${m}:${s}`;
 }
 
-/** Parse the jump editor's `HH:MM:SS.mmm` (leading parts optional); `null` when malformed. */
+/** Parse the jump window's `HH:MM:SS.mmm` (leading parts optional); `null` when malformed. */
 export function parseTime(value: string): number | null {
   if (!/^\d+(?::[0-5]\d){0,2}(?:\.\d{1,3})?$/.test(value.trim())) return null;
   const parts = value.trim().split(":").map(Number);
   const result = parts.reduce((total, part) => total * 60 + part, 0);
   return Number.isFinite(result) ? result : null;
+}
+
+/** `1`, `1.5`, `1.25`: at most two decimals, no trailing zeros. */
+export function rateText(rate: number): string {
+  return String(Math.round(rate * 100) / 100);
 }

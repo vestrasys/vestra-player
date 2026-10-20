@@ -40,6 +40,6 @@ export function nodesFor(p: Picture): VideoNode[] {
     },
   ];
   if (p.blurEnabled && p.blurStrength > 0)
-    nodes.push({ kind: "gblur", sigma: clamp(p.blurStrength, 0, 20), steps: 3 });
+    nodes.push({ kind: "gblur", sigma: clamp(p.blurStrength, 0, 10), steps: 3 });
   return nodes;
 }

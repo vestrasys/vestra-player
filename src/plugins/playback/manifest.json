@@ -10,6 +10,7 @@
     "playback.read",
     "playback.control",
     "events",
-    "commands"
+    "commands",
+    "ui.osd"
   ]
 }

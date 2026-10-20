@@ -1229,9 +1229,13 @@ impl Host {
                 menu_levels(window, &roots, &mut self.menu_path, &labels)?
             }
             MenuMode::Panel(owner, items) => {
+                // A command removed while its panel menu is open drops out.
                 let entries: Vec<_> = items
                     .iter()
-                    .map(|id| id.as_deref().and_then(|id| self.commands.get(*owner, id)))
+                    .filter_map(|id| match id {
+                        None => Some(None),
+                        Some(id) => self.commands.get(*owner, id).map(Some),
+                    })
                     .collect();
                 let (origin, size) = menu_frame(window);
                 ui_values::from_json(&menu::context_level(&entries, origin, size, &labels))?
@@ -1623,7 +1627,7 @@ impl Host {
             "osd.show" | "osd.panel" => Some("ui.osd"),
             "playback.stats" => Some("playback.read"),
             "sequence.set" | "sequence.step" => Some("playback.control"),
-            "commands.register" | "commands.update" => Some("commands"),
+            "commands.register" | "commands.update" | "commands.unregister" => Some("commands"),
             "source.state" | "source.operation" | "processing.state" => Some("playback.read"),
             "playback.set" | "source.submit" => Some("playback.control"),
             "producer.prepare"
@@ -2046,6 +2050,18 @@ impl Host {
                 #[cfg(feature = "producer-audio")]
                 self.physical_revoke(producer_input::RevokeReason::Dialog);
                 return Ok(None);
+            }
+            "commands.unregister" => {
+                let id = string(params, "id")?;
+                self.commands
+                    .remove(reply.owner, id)
+                    .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
+                self.input.borrow_mut().table.remove(reply.owner, id);
+                if self.menu_open {
+                    let result = self.refresh_menu();
+                    self.report_menu(result);
+                }
+                Value::Null
             }
             "commands.register" | "commands.update" => {
                 let id = string(params, "id")?;

@@ -1,147 +1,92 @@
-import { mkdtemp, rmdir, stat } from "node:fs/promises";
-import { basename, join, resolve } from "node:path";
-import type { Json, PlayerState, Scope, Snapshot } from "../../sdk/plugin/index.ts";
-import { chooseAudio, message, parseSpec, sampleTimes, uniqueFile, validate } from "./model.ts";
-import type { Kind, Spec } from "./model.ts";
+import { mkdtemp, rmdir } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import type { PlayerState, Scope, Snapshot } from "../../sdk/plugin/index.ts";
+import { chooseAudio, sampleTimes, uniqueFile, validate } from "./model.ts";
+import type { Spec } from "./model.ts";
 import type { Task, Tasks } from "./tasks.ts";
 
-/** What the window shows for the form; `main.ts` binds it. */
-export interface FormView {
-  status: string;
-  formBusy: boolean;
-  confirmation: string;
-  confirming: boolean;
+const CHANGED = "播放内容已变化，未开始。";
+
+/** A host refusal of the snapshot in one Chinese sentence. */
+function captureError(error: unknown) {
+  switch ((error as { code?: string }).code) {
+    case undefined:
+      return error;
+    case "stale":
+      return new Error(CHANGED);
+    case "busy":
+      return new Error("播放器忙，请稍后再试。");
+    case "unavailable":
+    case "unsupported":
+      return new Error("当前画面无法截取。");
+    default:
+      console.error(`[capture] snapshot: ${(error as Error).message}`);
+      return new Error("截取画面失败。");
+  }
 }
 
 /**
- * Prepare → choose destination → confirm → freeze. The snapshot is bound to
- * the source the user saw when starting (`ifCurrent`), so a source change
- * while the save panel or confirmation is open fails instead of capturing
- * other media. A retained-input retry reuses the old snapshot and its source.
+ * Freeze the input and queue the export. The snapshot is conditional on the
+ * state the user acted on (`seen`), so a source change while a save panel was
+ * open captures nothing. A retry reuses a retained snapshot when it has one.
  */
-export function captureForm(plugin: Scope, view: FormView, tasks: Tasks) {
+export function capturer(plugin: Scope, tasks: Tasks) {
   const { player } = plugin;
-  let form: { seen: PlayerState | null; cancel: boolean } | null = null;
-  let answer: ((accepted: boolean) => void) | null = null;
   let stopped = false;
-  const say = (text: string) => {
-    view.status = text;
-    plugin.update();
-  };
 
-  player.onChange(() => {
-    if (form?.seen && !player.isCurrent(form.seen)) {
-      form.cancel = true;
-      answer?.(false);
-      say("Source or intent changed while preparing. Recheck the new source; existing queued exports retain their original input.");
-    }
-  });
-
-  async function ensureForm(seen: PlayerState) {
-    await player.refresh();
-    if (stopped || !form || form.cancel || !player.isCurrent(seen)) throw new Error("Capture cancelled or source intent changed. Recheck the source.");
-  }
-
-  async function pickDestination(spec: Spec, previous?: string) {
-    const chosen =
-      spec.kind === "burst"
-        ? await plugin.dialogs.openDirectory({ title: "Choose parent for a unique burst folder" })
-        : await plugin.dialogs.saveFile({ title: "Choose export destination", fileName: previous ? basename(previous) : spec.kind === "clip" ? "capture.mp4" : "capture.png" });
-    if (!chosen) return null;
-    const path = resolve(chosen);
-    if (spec.kind === "burst") {
-      if (!(await stat(path)).isDirectory()) throw new Error("Choose an existing directory.");
-      return path;
-    }
-    const extension = spec.kind === "clip" ? ".mp4" : ".png";
-    if (!path.toLowerCase().endsWith(extension)) throw new Error(`Choose a ${extension} filename.`);
-    const available = await uniqueFile(path);
-    if (available !== path) say(`Existing files are protected. Suggested unused filename: ${available}`);
-    return available;
-  }
-
-  async function confirm(text: string) {
-    const decided = new Promise<boolean>((done) => (answer = done));
-    view.confirmation = text;
-    view.confirming = true;
-    plugin.update();
-    const accepted = await decided;
-    answer = null;
-    view.confirming = false;
-    plugin.update();
-    return accepted;
-  }
-
-  async function submit(kind: Kind, args: Json[], reuse?: Task) {
-    if (view.formBusy || stopped) return;
-    view.formBusy = true; // exclusion before the first await
-    let snapshot: Snapshot | undefined;
+  /** `destination`: the file for an image or clip, the parent of a new `Capture-*` folder for a burst. */
+  async function start(spec: Spec, seen: PlayerState | null, destination: string, reuse?: Snapshot): Promise<Task> {
+    if (tasks.active().length >= 5) throw new Error("已有一个导出在进行、四个在排队，请稍候。");
+    let snapshot = reuse;
     let directory: string | undefined;
     try {
-      if (tasks.active().length >= 5) throw new Error("One running and four queued exports are already accepted. Wait or cancel a queued task.");
-      const spec = reuse ? { ...reuse.spec, current: false } : parseSpec(kind, args);
-      const seen = reuse ? null : await player.refresh();
-      if (seen) validate(spec, seen);
-      form = { seen, cancel: false };
-      plugin.update();
-      const audio = seen ? chooseAudio(spec, seen) : null;
-      const chosen = await pickDestination(spec, reuse?.destination);
-      if (!chosen) return say("Save cancelled. No new export was accepted.");
-      if (seen) await ensureForm(seen);
-      if (reuse && !tasks.retained(reuse)) throw new Error("Retained snapshot expired. Choose retry from current source.");
-      const duration = seen?.duration ?? reuse?.snapshot?.duration ?? 0;
-      const preview = spec.kind === "burst" ? `\nSamples: ${sampleTimes(spec.current ? (seen?.position ?? spec.start) : spec.start, spec.count, spec.step, duration).map((time) => time.toFixed(3)).join(", ")}s` : "";
-      const accepted = await confirm(
-        `Source: ${seen?.source ?? reuse!.source}\nGeneration ${seen?.sourceId ?? reuse!.sourceId}\n${spec.current ? "Current time will be fixed atomically when capture is accepted" : `Time ${spec.start}${spec.end === undefined ? "" : `–${spec.end}`}s`}${preview}\n${spec.processed ? "Processed" : "Raw: no effects/subtitles"}; subtitles ${spec.processed && spec.subtitles ? "on" : "off"}; audio ${typeof audio === "number" ? audio : (reuse?.snapshot?.audioTrack ?? "none")}\n${chosen}${spec.kind === "burst" ? "/Capture-<unique>/" : ""}\nNo overwrite. ${reuse ? "Reuse immutable retained input." : "Freeze current input at acceptance."}`,
-      );
-      if (!accepted || form.cancel) return say("Start cancelled.");
+      let audio: number | "none" = "none";
       if (seen) {
-        await ensureForm(seen);
-        // Explicit condition: freeze only the source the user confirmed.
-        snapshot = await plugin.media.capture({ ifCurrent: seen, processed: spec.processed, subtitles: spec.processed && spec.subtitles, audio: audio!, ...(spec.current ? {} : { at: spec.start }) });
-      } else snapshot = tasks.take(reuse!);
-      if (form.cancel || stopped) throw new Error("Capture was cancelled while input was being fixed.");
-      spec.start = snapshot.time;
-      spec.current = false;
-      if (spec.kind === "burst") {
-        sampleTimes(snapshot.time, spec.count, spec.step, snapshot.duration);
-        directory = await mkdtemp(join(chosen, "Capture-"));
+        validate(spec, seen);
+        audio = chooseAudio(spec, seen);
+        await player.refresh();
+        if (!player.isCurrent(seen)) throw new Error(CHANGED);
+        snapshot = await plugin.media
+          .capture({ ifCurrent: seen, processed: spec.processed, subtitles: spec.processed && spec.subtitles, audio, ...(spec.current ? {} : { at: spec.start }) })
+          .catch((error) => {
+            throw captureError(error);
+          });
       }
-      const task = tasks.add({
-        spec,
-        sourceId: seen?.sourceId ?? reuse!.sourceId,
-        source: snapshot.source,
-        created: new Date().toISOString(),
-        snapshot,
-        destination: directory ?? chosen,
-        directory,
-        detail: `Fixed snapshot at ${snapshot.time.toFixed(3)}s${snapshot.kind === "processed" ? `; processing revision ${snapshot.processingRevision}` : ""}`,
-      });
+      if (!snapshot) throw new Error("保留的画面已过期，请用当前画面重试。");
+      if (stopped) throw new Error("已取消。");
+      const frozen: Spec = { ...spec, start: snapshot.time, current: false };
+      let target: string;
+      if (frozen.kind === "burst") {
+        sampleTimes(snapshot.time, frozen.count, frozen.step, snapshot.duration);
+        target = directory = await mkdtemp(join(destination, "Capture-"));
+      } else target = await uniqueFile(destination, new Set(tasks.list.map((task) => resolve(task.destination))));
+      const task = tasks.add({ spec: frozen, sourceId: seen?.sourceId ?? 0, source: snapshot.source, snapshot, destination: target, directory });
       snapshot = directory = undefined;
-      say(`Accepted #${task.id}: ${task.source} at ${task.spec.start.toFixed(3)}s. Input remains frozen while queued.`);
-    } catch (error) {
-      say(`Export not accepted: ${message(error)}`);
+      return task;
     } finally {
       await snapshot?.dispose();
       if (directory) await rmdir(directory).catch(() => {});
-      form = null;
-      answer = null;
-      view.formBusy = view.confirming = false;
-      plugin.update();
     }
   }
 
+  /** Retry a failed or cancelled task: its retained input if still kept, otherwise the current source. */
+  async function retry(task: Task) {
+    const parent = task.spec.kind === "burst" ? dirname(task.destination) : task.destination;
+    if (tasks.retained(task)) {
+      const snapshot = tasks.take(task);
+      return start({ ...task.spec }, null, parent, snapshot).then((next) => {
+        next.sourceId = task.sourceId;
+        return next;
+      });
+    }
+    return start({ ...task.spec, current: false }, await player.refresh(), parent);
+  }
+
   return {
-    submit,
-    answer: (accepted: boolean) => answer?.(accepted),
-    cancel() {
-      if (form) form.cancel = true;
-      answer?.(false);
-    },
+    start,
+    retry,
     stop() {
       stopped = true;
-      if (form) form.cancel = true;
-      answer?.(false);
     },
   };
 }

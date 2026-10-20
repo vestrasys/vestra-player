@@ -6,13 +6,12 @@ import test from "node:test";
 import type { MediaJob } from "../../../sdk/media.ts";
 import { HostError, startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
 import activate from "../main.ts";
-import { parseRange, sampleTimes, uniqueFile } from "../model.ts";
+import { clock, frameName, parseRange, sampleTimes, uniqueFile } from "../model.ts";
 
 const directory = new URL("..", import.meta.url);
 const start = (host = new TestHost()) => startPlugin(activate, { directory, host });
-type Row = { id: string; summary: string; retained: boolean; openable: boolean };
-const rows = (host: TestHost) => host.window("capture").props["task-rows"] as Row[];
-const props = (host: TestHost) => host.window("capture").props;
+type Row = { id: string; title: string; detail: string; retryable: boolean; openable: boolean };
+const rows = (host: TestHost) => host.window("tasks").props["task-rows"] as Row[];
 const tick = () => new Promise((done) => setTimeout(done, 5));
 async function until(predicate: () => boolean) {
   for (let i = 0; i < 1200; i++) {
@@ -36,19 +35,24 @@ function manualJobs(host: TestHost) {
   });
   return (id: number, patch: Partial<MediaJob>) => Object.assign(host.jobs.get(id)!, patch);
 }
-/** Confirm every final confirmation as soon as it is shown. */
-function autoConfirm(host: TestHost) {
-  const timer = setInterval(() => {
-    if (host.windows.get("capture")?.props.confirming === true) host.window("capture").emit("confirm-start");
-  }, 2);
-  return () => clearInterval(timer);
+/** A temporary capture folder chosen through 截图文件夹…. */
+async function withFolder(host: TestHost) {
+  const folder = await mkdtemp(join(tmpdir(), "capture-folder-"));
+  host.dialogAnswers.push([folder]);
+  await host.command("capture.folder").run();
+  await host.settle();
+  return { folder, cleanup: () => rm(folder, { recursive: true, force: true }) };
 }
 
-test("ranges, burst bounds and unique naming", async () => {
+test("ranges, burst bounds, frame names and unique naming", async () => {
   for (const [a, b] of [["", 1], [-1, 1], ["NaN", 1], [1, 1], [2, 1], [0, "Infinity"]]) assert.throws(() => parseRange(a, b));
   assert.deepEqual(parseRange("0.1", "2.5"), { start: 0.1, end: 2.5 });
   assert.deepEqual(sampleTimes(1, 5, 0.5, 10), [1, 1.5, 2, 2.5, 3]);
   for (const [a, b, c, d] of [[0, 1, 1, 10], [0, 21, 1, 100], [0, 5, 0.01, 10], [9, 2, 1, 10]]) assert.throws(() => sampleTimes(a!, b!, c!, d!));
+  assert.equal(clock(62.5), "01:02.500");
+  assert.equal(clock(3723.004), "1:02:03.004");
+  assert.equal(frameName("/movies/My Film.mkv", 62.5, ".png"), "My Film_01.02.500.png");
+  assert.equal(frameName(null, 0, ".png"), "capture_00.00.000.png");
   const folder = await mkdtemp(join(tmpdir(), "capture-unique-"));
   try {
     const file = join(folder, "capture.png");
@@ -62,106 +66,138 @@ test("ranges, burst bounds and unique naming", async () => {
   }
 });
 
-test("four menu entrances share one window; every Slint callback is bound before it opens", async () => {
-  const { host, stop } = await start();
-  assert.deepEqual(
-    [...host.commands.values()].map((c) => c.declaration.path),
-    ["保存当前画面…", "连拍…", "导出片段…", "查看导出任务…"].map((title) => ["视频", "截图与导出", title]),
-  );
-  for (const command of host.commands.values()) assert.equal(command.declaration.title, command.declaration.path.at(-1));
-  assert.deepEqual(
-    [...host.commands.values()].map(({ declaration: d }) => ("order" in d ? d.order : null)),
-    [321, 324, 322, 323],
-  );
+test("menu per the allocation table; each dialog binds exactly its Slint callbacks", async () => {
+  const host = new TestHost();
+  ready(host);
+  const { stop } = await start(host);
+  const declared = [...host.commands.values()].map(({ declaration: d }) => [d.path.join(" > "), d.order, d.group, d.bindings.join(",")]);
+  assert.deepEqual(declared, [
+    ["视频 > 截图 > 保存当前画面", 420, "domain", "Ctrl+E"],
+    ["视频 > 截图 > 当前画面另存为…", 421, "domain", ""],
+    ["视频 > 截图 > 截图文件夹…", 422, "domain", ""],
+    ["视频 > 截图 > 连拍…", 423, "capture-export", "Ctrl+G"],
+    ["视频 > 截图 > 导出片段…", 424, "capture-export", ""],
+    ["视频 > 截图 > 导出任务…", 425, "capture-export", ""],
+  ]);
+  assert.deepEqual(host.conflicts, []);
+  await host.press("Ctrl+G");
   await host.command("capture.clip").run();
   await host.command("capture.tasks").run();
-  assert.equal(host.sent("ui.open").length, 1);
-  assert.equal(props(host).section, "Export tasks");
-  const slint = await readFile(new URL("../capture.slint", import.meta.url), "utf8");
-  const declared = [...slint.matchAll(/callback\s+([\w-]+)\s*\(/g)].map((m) => m[1]!);
-  assert.deepEqual([...host.window("capture").callbacks].sort(), declared.sort());
+  assert.deepEqual(host.sent("ui.open").map((o) => o.file), ["ui/burst.slint", "ui/clip.slint", "ui/tasks.slint"]);
+  for (const name of ["burst", "clip", "tasks"]) {
+    const slint = await readFile(new URL(`../ui/${name}.slint`, import.meta.url), "utf8");
+    const callbacks = [...slint.matchAll(/callback\s+([\w-]+)\s*\(/g)].map((m) => m[1]!);
+    assert.deepEqual([...host.window(name).callbacks].sort(), callbacks.sort(), name);
+    assert.doesNotMatch(slint, /#[0-9a-f]{3,8}\b/i, `${name}: colours come from Theme`);
+    assert.doesNotMatch(slint, /font-size:\s*\d/, `${name}: font sizes come from Theme`);
+    assert.doesNotMatch(slint, /text:\s*"[^"]*[a-z]{3,}[^"]*"/, `${name}: no English labels (format names like PNG are fine)`);
+  }
+  assert.equal(host.window("clip").props["start-time"], "2");
+  assert.equal(host.window("clip").props["end-time"], "12");
   await stop();
 });
 
-test("the form guard is taken before the first await; a rejected source releases it", async () => {
+test("Ctrl+E saves the raw current frame into the capture folder with no dialog and an OSD", async () => {
+  const host = new TestHost();
+  ready(host);
+  const { stop } = await start(host);
+  const { folder, cleanup } = await withFolder(host);
+  try {
+    assert.equal(host.osd.at(-1), `截图文件夹：${folder}`);
+    const dialogs = host.sent("dialogs.open").length;
+    await host.press("Ctrl+E");
+    await until(() => host.osd.at(-1)?.startsWith("帧已保存为") ?? false);
+    assert.equal(host.sent("dialogs.open").length, dialogs, "no save panel, no confirmation");
+    const capture = host.sent("snapshot.capture")[0]!;
+    assert.equal(capture.mode, "raw");
+    assert.deepEqual(capture.expected, host.source.stamp);
+    const job = host.sent("jobs.start")[0]!;
+    assert.equal(job.destination, join(folder, "source-one_00.02.000.png"));
+    const outcome = host.jobs.get(1)!.outcome as { destination: string };
+    assert.equal(host.osd.at(-1), `帧已保存为 ${outcome.destination}`, "the path the host confirmed");
+  } finally {
+    await stop();
+    await cleanup();
+  }
+});
+
+test("the chosen capture folder is kept in the data directory and restored on the next start", async () => {
+  const data = await mkdtemp(join(tmpdir(), "capture-data-")); // outlives each test host, like the player's
+  const host = new TestHost();
+  ready(host);
+  const first = await startPlugin(activate, { directory, host, dataDirectory: data });
+  const { folder, cleanup } = await withFolder(host);
+  const restart = new TestHost();
+  ready(restart);
+  try {
+    assert.deepEqual(JSON.parse(await readFile(join(data, "settings.json"), "utf8")), { folder });
+    assert.deepEqual((await readdir(data)).sort(), ["settings.json"], "no temporary file left behind");
+    await first.stop();
+    const second = await startPlugin(activate, { directory, host: restart, dataDirectory: data });
+    await restart.press("Ctrl+G");
+    assert.equal(restart.window("burst").props.folder, folder);
+    await second.stop();
+    await rm(folder, { recursive: true, force: true }); // a removed folder falls back to the default
+    const third = await startPlugin(activate, { directory, host: new TestHost(), dataDirectory: data });
+    await third.host.command("capture.burst").run();
+    assert.notEqual(third.host.window("burst").props.folder, folder);
+    await third.stop();
+  } finally {
+    await cleanup();
+    await rm(data, { recursive: true, force: true });
+  }
+});
+
+test("save commands are disabled without a capturable source", async () => {
   const { host, stop } = await start();
-  await host.command("capture.still").run();
-  const reads = host.sent("source.state").length;
-  host.window("capture").emit("export-image", "0", false, false, false);
-  host.window("capture").emit("export-image", "0", false, false, false);
+  assert.equal(host.command("capture.save").state.enabled, false);
+  assert.equal(host.command("capture.save").state.reason, "没有可截取的画面");
+  assert.equal(host.command("capture.saveAs").state.enabled, false);
+  ready(host);
   await host.settle();
-  assert.equal(host.sent("source.state").length - reads, 1, "duplicate entry excluded before the source read");
-  assert.match(String(props(host).status), /^Export not accepted: This source cannot be captured/);
-  assert.equal(props(host)["form-busy"], false);
-  host.window("capture").emit("export-image", "0", false, false, false);
-  await host.settle();
-  assert.equal(host.sent("source.state").length - reads, 2, "guard released after rejection");
-  assert.equal(host.sent("dialogs.open").length, 0);
+  assert.equal(host.command("capture.save").state.enabled, true);
   await stop();
 });
 
-test("a source change while choosing the destination fails as stale and captures nothing", async () => {
+test("另存为 asks for a file; a source change while it is open captures nothing", async () => {
   const host = new TestHost();
   ready(host);
   const { stop } = await start(host);
-  await host.command("capture.still").run();
-  host.handle("dialogs.open", () => {
-    host.openElsewhere("/contract/other.mp4");
-    return { cancelled: false, paths: [join(tmpdir(), "capture-stale.png")] };
-  });
-  host.window("capture").emit("export-image", "0", false, false, true);
-  await host.settle();
-  assert.match(String(props(host).status), /^Export not accepted: Capture cancelled or source intent changed/);
-  assert.equal(host.sent("snapshot.capture").length, 0);
-  assert.equal(props(host).confirming, false);
-  await stop();
+  const folder = await mkdtemp(join(tmpdir(), "capture-as-"));
+  try {
+    host.handle("dialogs.open", () => {
+      host.openElsewhere("/contract/other.mp4");
+      return { cancelled: false, paths: [join(folder, "a.png")] };
+    });
+    await host.command("capture.saveAs").run();
+    await host.settle();
+    assert.equal(host.sent("snapshot.capture").length, 0);
+    assert.equal(host.osd.at(-1), "截图失败：播放内容已变化，未开始。");
+    host.reset("dialogs.open");
+    host.setSource({ position: 5, duration: 30 });
+    host.dialogAnswers.push([join(folder, "named")]);
+    await host.command("capture.saveAs").run();
+    await until(() => host.osd.at(-1)?.startsWith("帧已保存为") ?? false);
+    assert.equal(host.sent("snapshot.capture")[0]!.time, 5, "the frame shown when the command ran");
+    assert.equal(host.sent("jobs.start")[0]!.destination, join(folder, "named.png"));
+  } finally {
+    await stop();
+    await rm(folder, { recursive: true, force: true });
+  }
 });
 
-test("a source change during confirmation cancels the start; Back and cancel-form start nothing", async () => {
-  const host = new TestHost();
-  ready(host);
-  const { stop } = await start(host);
-  await host.command("capture.still").run();
-  const window = host.window("capture");
-  const png = join(tmpdir(), "capture-confirm.png");
-  host.dialogAnswers.push([png], [png], [png], null);
-  window.emit("export-image", "0", false, false, true);
-  await until(() => props(host).confirming === true);
-  assert.match(String(props(host).confirmation), /Source: \/contract\/source-one\.mp4/);
-  window.emit("reject-start");
-  await host.settle();
-  assert.equal(props(host).status, "Start cancelled.");
-  window.emit("export-image", "0", false, false, true);
-  await until(() => props(host).confirming === true);
-  window.emit("cancel-form");
-  await host.settle();
-  assert.equal(props(host).status, "Start cancelled.");
-  window.emit("export-image", "0", false, false, true);
-  await until(() => props(host).confirming === true);
-  host.openElsewhere("/contract/other.mp4");
-  await host.settle();
-  assert.equal(props(host).confirming, false);
-  window.emit("export-image", "0", false, false, true);
-  await host.settle();
-  assert.equal(props(host).status, "Save cancelled. No new export was accepted.");
-  assert.equal(host.sent("snapshot.capture").length, 0);
-  await stop();
-});
-
-test("the snapshot is conditional on the confirmed source and honours the form options", async () => {
+test("clip: the snapshot is conditional on the seen source and honours the dialog options", async () => {
   const host = new TestHost();
   ready(host);
   host.setSource({ audioTracks: [{ trackId: 7, selected: true, external: false, streamIndex: 1, codec: "aac", title: null, language: "en" }] });
   const { stop } = await start(host);
-  const done = autoConfirm(host);
   const folder = await mkdtemp(join(tmpdir(), "capture-options-"));
   try {
     await host.command("capture.clip").run();
-    assert.equal(props(host).tracks, "7: en (selected)");
-    assert.equal(props(host)["start-time"], "2");
-    assert.equal(props(host)["end-time"], "12");
+    const clip = host.window("clip");
+    assert.deepEqual(clip.props["audio-labels"], ["无声音", "当前音轨", "音轨 7 · en"]);
     host.dialogAnswers.push([join(folder, "clip.mp4")]);
-    host.window("capture").emit("export-clip", "1", "4", true, "selected", false);
+    clip.emit("export-clip", "1", "4", true, false, 2);
     await until(() => host.sent("jobs.start").length === 1);
     const capture = host.sent("snapshot.capture")[0]!;
     assert.deepEqual(capture.expected, host.source.stamp);
@@ -170,11 +206,31 @@ test("the snapshot is conditional on the confirmed source and honours the form o
     assert.equal(capture.includeSubtitles, false);
     assert.deepEqual(capture.audio, { kind: "track", trackId: 7 });
     assert.deepEqual({ kind: host.sent("jobs.start")[0]!.kind, end: host.sent("jobs.start")[0]!.end }, { kind: "processedMp4", end: 4 });
+    assert.equal(clip.props.status, "已开始导出，可在导出任务中查看。");
+    await until(() => host.osd.at(-1)?.startsWith("片段已导出为") ?? false);
+    assert.match(String(clip.props.status), /^已导出 /);
   } finally {
-    done();
     await stop();
     await rm(folder, { recursive: true, force: true });
   }
+});
+
+test("the clip guard is taken before the first await; a rejected source releases it", async () => {
+  const { host, stop } = await start();
+  await host.command("capture.clip").run();
+  const clip = host.window("clip");
+  const reads = host.sent("source.state").length;
+  clip.emit("export-clip", "0", "1", false, false, 0);
+  clip.emit("export-clip", "0", "1", false, false, 0);
+  await host.settle();
+  assert.equal(host.sent("source.state").length - reads, 1, "duplicate entry excluded before the source read");
+  assert.equal(clip.props.status, "当前画面无法导出，请先打开本地视频文件。");
+  assert.equal(clip.props.busy, false);
+  clip.emit("export-clip", "0", "1", false, false, 0);
+  await host.settle();
+  assert.equal(host.sent("source.state").length - reads, 2, "guard released after rejection");
+  assert.equal(host.sent("dialogs.open").length, 0);
+  await stop();
 });
 
 test("one running and four queued; the sixth is refused; queued input keeps its source; cancel", async () => {
@@ -182,144 +238,136 @@ test("one running and four queued; the sixth is refused; queued input keeps its 
   ready(host);
   const setJob = manualJobs(host);
   const { stop } = await start(host);
-  const done = autoConfirm(host);
-  const folder = await mkdtemp(join(tmpdir(), "capture-queue-"));
+  const { folder, cleanup } = await withFolder(host);
   try {
-    await host.command("capture.still").run();
     for (let i = 1; i <= 5; i++) {
-      host.dialogAnswers.push([join(folder, "new-export.png")]);
-      host.window("capture").emit("export-image", "0", false, false, false);
-      await until(() => host.sent("snapshot.capture").length === i && props(host)["form-busy"] === false && rows(host).length === i);
+      await host.press("Ctrl+E");
+      await until(() => host.sent("snapshot.capture").length === i);
+      await host.settle();
     }
+    assert.equal(host.osd.at(-1), "截图已排队");
     assert.equal(host.sent("jobs.start").length, 1, "only one accepted task starts its worker");
-    assert.match(String(props(host)["queue-count"]), /^5\/5 accepted/);
-    host.window("capture").emit("export-image", "0", false, false, false);
-    await until(() => String(props(host).status).includes("four queued"));
+    await host.press("Ctrl+E");
+    await host.settle();
+    assert.equal(host.osd.at(-1), "截图失败：已有一个导出在进行、四个在排队，请稍候。");
     assert.equal(host.sent("snapshot.capture").length, 5, "the sixth entry freezes nothing");
-    host.window("capture").emit("cancel-task", "2");
-    await until(() => rows(host).some((row) => row.id === "2" && row.summary.includes("cancelled")));
+    await host.command("capture.tasks").run();
+    host.window("tasks").emit("cancel-task", "2");
+    await until(() => rows(host).some((row) => row.id === "2" && row.detail.endsWith("已取消")));
     assert.equal(host.sent("jobs.cancel").length, 0, "queued cancellation leaves the running worker alone");
     host.openElsewhere("/contract/source-two.mp4");
-    setJob(1, { status: "completed", publicationStarted: true, outcome: { destination: join(folder, "new-export.png") } });
+    setJob(1, { status: "completed", publicationStarted: true, outcome: { destination: join(folder, "source-one_00.02.000.png") } });
     await until(() => host.sent("jobs.start").length === 2);
     assert.equal(host.sent("jobs.start")[1]!.snapshotId, 3, "skips the cancelled task and uses the third frozen input");
     assert.equal((host.snapshots.get(3) as { sourceStamp: { generation: number } }).sourceStamp.generation, 1, "queued input not refreshed");
-    assert.match(rows(host).find((row) => row.id === "1")!.summary, /\/contract\/source-one\.mp4/);
     assert.equal(host.snapshots.has(1), false, "a completed task releases its input");
-    host.window("capture").emit("cancel-task", "3");
-    await until(() => rows(host).some((row) => row.id === "3" && row.summary.includes("cancelled")));
+    const first = rows(host).find((row) => row.id === "1")!;
+    assert.deepEqual([first.title, first.detail], ["截图 · source-one_00.02.000.png", "00:02.000 · 已完成"]);
+    assert.equal(rows(host).find((row) => row.id === "3")!.title, "截图 · source-one_00.02.000 (2).png", "queued frames never share a name");
+    host.window("tasks").emit("cancel-task", "3");
+    await until(() => rows(host).some((row) => row.id === "3" && row.detail.endsWith("已取消")));
     assert.equal(host.sent("jobs.cancel").length, 1, "the active job is cancelled");
-    assert.equal(rows(host).find((row) => row.id === "3")!.retained, true, "cancelled input is retained for retry");
+    assert.equal(rows(host).find((row) => row.id === "3")!.retryable, true);
   } finally {
-    done();
     await stop();
-    await rm(folder, { recursive: true, force: true });
+    await cleanup();
   }
 });
 
-test("burst: unique folder, one snapshot, sample times t0 + i × spacing", async () => {
+test("burst: unique folder under the capture folder, one snapshot, sample times t0 + i × spacing", async () => {
   const host = new TestHost();
   ready(host);
   const { stop } = await start(host);
-  const done = autoConfirm(host);
-  const folder = await mkdtemp(join(tmpdir(), "capture-burst-"));
+  const { folder, cleanup } = await withFolder(host);
   try {
-    await host.command("capture.burst").run();
-    host.dialogAnswers.push([folder]);
-    host.window("capture").emit("export-burst", "1", "3", "0.5", false, false, false);
-    await until(() => rows(host)[0]?.summary.includes("· raw · completed\n") ?? false);
+    await host.press("Ctrl+G");
+    const burst = host.window("burst");
+    assert.equal(burst.props.folder, folder);
+    assert.equal(burst.props["burst-count"], undefined, "the dialog keeps its own defaults");
+    burst.emit("start-burst", "1", "3", "0.5", false, false, false);
+    await until(() => burst.props.progress === "已完成 · 3/3");
     assert.equal(host.sent("snapshot.capture").length, 1);
     const starts = host.sent("jobs.start");
     assert.deepEqual(starts.map((s) => s.sampleTime), [1, 1.5, 2]);
     const [child] = await readdir(folder);
     assert.match(child!, /^Capture-/);
     assert.deepEqual(starts.map((s) => s.destination), ["001-1.000s.png", "002-1.500s.png", "003-2.000s.png"].map((name) => join(folder, child!, name)));
-    host.dialogAnswers.push([folder]);
-    host.window("capture").emit("export-burst", "29", "3", "1", false, false, false);
+    assert.equal(burst.props.status, "已保存 3 张");
+    assert.match(host.osd.at(-1)!, /^连拍已保存 3 张到 /);
+    burst.emit("start-burst", "29", "3", "1", false, false, false);
     await host.settle();
-    assert.match(String(props(host).status), /Burst exceeds source duration/);
+    assert.equal(burst.props.status, "连拍超出媒体时长，请减少张数或间隔。");
+    burst.emit("capture-frame");
+    await until(() => host.osd.at(-1)?.startsWith("帧已保存为") ?? false);
   } finally {
-    done();
     await stop();
-    await rm(folder, { recursive: true, force: true });
+    await cleanup();
   }
 });
 
-test("a failed task keeps its input; retained retry reuses it after the source changed", async () => {
+test("a failed task keeps its input; retry reuses it after the source changed", async () => {
   const host = new TestHost();
   ready(host);
   const setJob = manualJobs(host);
   const { stop } = await start(host);
-  const done = autoConfirm(host);
-  const folder = await mkdtemp(join(tmpdir(), "capture-retry-"));
+  const { folder, cleanup } = await withFolder(host);
   try {
-    await host.command("capture.still").run();
-    host.dialogAnswers.push([join(folder, "a.png")]);
-    host.window("capture").emit("export-image", "5", false, false, false);
+    await host.press("Ctrl+E");
     await until(() => host.sent("jobs.start").length === 1);
     setJob(1, { status: "failed", outcome: { error: { code: "space", message: "disk full" } } });
-    await until(() => rows(host)[0]?.summary.includes("· raw · failed\n") ?? false);
-    assert.match(rows(host)[0]!.summary, /space: disk full/);
-    assert.equal(rows(host)[0]!.retained, true);
+    await until(() => host.osd.at(-1) === "截图失败：磁盘空间不足");
+    await host.command("capture.tasks").run();
+    assert.equal(rows(host)[0]!.detail, "00:02.000 · 失败：磁盘空间不足");
+    assert.equal(rows(host)[0]!.retryable, true);
     host.openElsewhere("/contract/source-two.mp4");
-    host.dialogAnswers.push([join(folder, "b.png")]);
-    host.window("capture").props.section = "Export tasks"; // the user is on the tasks tab
-    host.window("capture").emit("retry-retained", "1");
+    host.window("tasks").emit("retry-task", "1");
     await until(() => host.sent("jobs.start").length === 2 && rows(host).length === 2);
     assert.equal(host.sent("snapshot.capture").length, 1, "no new snapshot");
     assert.equal(host.sent("jobs.start")[1]!.snapshotId, 1);
-    assert.equal(props(host).section, "Export tasks");
-    assert.match(rows(host)[0]!.summary, /^#2 · \/contract\/source-one\.mp4/);
-    assert.equal(rows(host)[1]!.retained, false, "the old task gave its input away");
+    assert.equal(host.window("tasks").props.status, "已重新开始。");
+    assert.equal(host.sent("jobs.start")[1]!.destination, join(folder, "source-one_00.02.000 (1).png"));
   } finally {
-    done();
     await stop();
-    await rm(folder, { recursive: true, force: true });
+    await cleanup();
   }
 });
 
-test("a window that cannot open is reported in a visible error window", async () => {
+test("a dialog that cannot open is reported in a visible error window", async () => {
   const host = new TestHost();
   host.handle("ui.open", (p) => {
-    if (p.id === "capture") throw new HostError("ui", "injected native open rejection");
+    if (p.id === "burst") throw new HostError("ui", "injected native open rejection");
     host.reset("ui.open");
     return host.request("ui.open", p);
   });
   const { stop } = await start(host);
-  await host.command("capture.still").run();
+  await host.command("capture.burst").run();
   await host.settle();
-  const error = host.window("capture-error");
-  assert.equal(error.file, "capture-error.slint");
+  const error = host.window("error");
+  assert.equal(error.file, "ui/error.slint");
   assert.deepEqual(error.callbacks, []);
-  assert.match(String(error.props.message), /injected native open rejection/);
+  assert.equal(error.props.message, "截图窗口无法打开，请关闭此提示后重试。");
   // A later successful open closes the error window.
-  await host.command("capture.still").run();
+  await host.command("capture.burst").run();
   await host.settle();
-  assert.equal(host.windows.has("capture-error"), false);
-  assert.equal(host.window("capture").visible, true);
+  assert.equal(host.windows.has("error"), false);
+  assert.equal(host.window("burst").visible, true);
   await stop();
 });
 
-test("the tab and times the user changed survive other callbacks", async () => {
+test("times the user changed survive other callbacks", async () => {
   const host = new TestHost();
   ready(host);
   const { stop } = await start(host);
   try {
     await host.command("capture.clip").run();
-    assert.equal(props(host).section, "Video clip");
-    assert.equal(props(host)["start-time"], "2");
-    props(host)["start-time"] = "5"; // the user types
-    host.window("capture").emit("mark-end");
+    const clip = host.window("clip");
+    clip.props["start-time"] = "5"; // the user types
+    clip.emit("mark-end");
     await host.settle();
-    assert.equal(props(host)["start-time"], "5");
-    assert.equal(props(host)["end-time"], "2");
-    props(host).section = "Burst"; // the user switches tab
-    host.window("capture").emit("mark-start");
-    await host.settle();
-    assert.equal(props(host).section, "Burst");
-    assert.equal(props(host)["start-time"], "2");
-    await host.command("capture.tasks").run(); // a menu entrance still selects its tab
-    assert.equal(props(host).section, "Export tasks");
+    assert.equal(clip.props["start-time"], "5");
+    assert.equal(clip.props["end-time"], "2");
+    await host.command("capture.clip").run(); // reopening an open dialog keeps what the user typed
+    assert.equal(clip.props["start-time"], "5");
   } finally {
     await stop();
   }

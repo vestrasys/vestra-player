@@ -1,107 +1,292 @@
-import { Button, Slider, LineEdit } from "std-widgets.slint";
+// Bottom control bar (doc/product/ui-alignment.md §4): a 22px seek row and a
+// 40px button row, 62px in total. Icons are drawn with Path; colours and font
+// sizes come from Theme.
+import { Theme } from "@vestra/theme.slint";
+import { Slider } from "@vestra/widgets.slint";
 
 export global PlaybackBridge {
-    in-out property <string> source-label;
-    in-out property <string> status;
-    in-out property <string> time-label;
+    in-out property <string> elapsed-label: "--:--";
+    in-out property <string> total-label: "--:--";
     in-out property <float> progress;
     in-out property <bool> can-seek;
     in-out property <bool> can-pause;
+    in-out property <bool> playing;
+    in-out property <bool> can-stop;
+    in-out property <bool> can-step;
+    in-out property <bool> can-previous;
+    in-out property <bool> can-next;
     in-out property <bool> can-open: true;
-    in-out property <string> pause-label: "播放";
     in-out property <bool> muted;
     in-out property <float> volume: 100;
-    in-out property <string> volume-label: "100%";
-    in-out property <string> rate-label: "1倍";
-    in-out property <bool> can-rate;
     in-out property <bool> can-mute: true;
     in-out property <bool> can-volume: true;
-    in-out property <string> editor;
-    in-out property <string> editor-value;
-    in-out property <bool> can-retry;
+    in-out property <bool> has-sidebar;
+    in-out property <bool> sidebar-on;
     callback action(string);
     callback seek-changed(float);
-    callback volume-changed(float);
-    callback volume-released(float);
     callback seek-cancelled();
     callback dragging(bool);
-    callback interaction(bool);
-    callback confirm-editor(string);
-    callback cancel-editor();
-    callback retry();
+    callback volume-changed(float);
+    callback volume-released(float);
+    callback toggle-time();
+    callback toggle-sidebar();
 }
 
-component EditorRow inherits Rectangle {
-    min-height: 32px;
-    callback focus-changed(bool);
-    private property <bool> focused: editor-input.has-focus || confirm-button.has-focus || cancel-button.has-focus;
-    changed focused => { root.focus-changed(root.focused); }
-    HorizontalLayout {
-            spacing: 6px;
-            Text { text: PlaybackBridge.editor == "jump" ? "时间 HH:MM:SS.mmm" : PlaybackBridge.editor == "rate" ? "速度 0.25–4倍" : "音量 0–200%"; color: white; vertical-alignment: center; }
-            editor-input := LineEdit { text <=> PlaybackBridge.editor-value; horizontal-stretch: 1; accepted => { PlaybackBridge.confirm-editor(self.text); } }
-            confirm-button := Button { text: "确认"; clicked => { PlaybackBridge.confirm-editor(PlaybackBridge.editor-value); } }
-            cancel-button := Button { text: "取消"; clicked => { PlaybackBridge.cancel-editor(); } }
+// 41×40 icon button with a 1px right divider. Right click runs `right-clicked`
+// when `right-enabled` (back/forward: previous/next).
+component BarButton inherits Rectangle {
+    in property <string> icon;
+    in property <bool> enabled: true;
+    in property <bool> right-enabled;
+    callback clicked();
+    callback right-clicked();
+    private property <length> icon-width: root.icon == "back" || root.icon == "forward" || root.icon == "open" ? 14px : 12px;
+    private property <length> icon-height: root.icon == "play" || root.icon == "pause" ? 14px
+        : root.icon == "stop" || root.icon == "open" ? 12px : 10px;
+    width: 41px;
+    height: 40px;
+    background: !root.enabled ? transparent
+        : touch.pressed ? Theme.press-bg
+        : touch.has-hover ? Theme.hover-bg : transparent;
+    accessible-role: button;
+    accessible-label: root.icon;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if root.enabled { root.clicked(); } }
+    Path {
+        x: (root.width - 1px - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        width: root.icon-width;
+        height: root.icon-height;
+        viewbox-width: root.icon-width / 1px;
+        viewbox-height: root.icon-height / 1px;
+        fill: root.enabled ? Theme.text : Theme.icon-disabled;
+        commands: root.icon == "play" ? "M 0 0 L 12 7 L 0 14 Z"
+            : root.icon == "pause" ? "M 0 0 L 4 0 L 4 14 L 0 14 Z M 8 0 L 12 0 L 12 14 L 8 14 Z"
+            : root.icon == "stop" ? "M 0 0 L 12 0 L 12 12 L 0 12 Z"
+            : root.icon == "back" ? "M 7 0 L 7 10 L 0 5 Z M 14 0 L 14 10 L 7 5 Z"
+            : root.icon == "forward" ? "M 0 0 L 7 5 L 0 10 Z M 7 0 L 14 5 L 7 10 Z"
+            : "M 7 0 L 14 7 L 0 7 Z M 0 9 L 14 9 L 14 12 L 0 12 Z";
+    }
+    Rectangle {
+        x: parent.width - 1px;
+        width: 1px;
+        background: Theme.line;
+    }
+    touch := TouchArea {
+        enabled: root.enabled || root.right-enabled;
+        clicked => { if root.enabled { root.clicked(); } }
+        pointer-event(event) => {
+            if event.button == PointerEventButton.right && event.kind == PointerEventKind.up && root.right-enabled {
+                root.right-clicked();
+            }
         }
+    }
+}
+
+// Seek line: 10px click area, 2px line (unplayed Theme.line, played Theme.accent), 8px thumb.
+component SeekBar inherits Rectangle {
+    private property <float> ratio: clamp(PlaybackBridge.progress, 0, 1);
+    private property <length> span: max(1px, root.width - 8px);
+    height: 10px;
+    function fraction(x: length) -> float {
+        return clamp((x - 4px) / root.span, 0, 1);
+    }
+    Rectangle {
+        y: 4px;
+        height: 2px;
+        background: Theme.line;
+    }
+    Rectangle {
+        x: 0;
+        y: 4px;
+        width: 4px + root.ratio * root.span;
+        height: 2px;
+        background: PlaybackBridge.can-seek ? Theme.accent : Theme.icon-disabled;
+    }
+    if PlaybackBridge.can-seek: Rectangle {
+        x: root.ratio * root.span;
+        y: 1px;
+        width: 8px;
+        height: 8px;
+        border-radius: 4px;
+        background: touch.pressed ? Theme.accent-press : touch.has-hover ? Theme.accent : Theme.text;
+    }
+    touch := TouchArea {
+        enabled: PlaybackBridge.can-seek;
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.cancel {
+                PlaybackBridge.seek-cancelled();
+            } else if event.button == PointerEventButton.left {
+                if event.kind == PointerEventKind.down {
+                    PlaybackBridge.dragging(true);
+                    PlaybackBridge.seek-changed(root.fraction(self.mouse-x));
+                } else if event.kind == PointerEventKind.up {
+                    PlaybackBridge.seek-changed(root.fraction(self.mouse-x));
+                    PlaybackBridge.dragging(false);
+                }
+            }
+        }
+        moved => { if self.pressed { PlaybackBridge.seek-changed(root.fraction(self.mouse-x)); } }
+    }
+}
+
+// 13×10 speaker; a cross replaces the waves while muted.
+component MuteButton inherits Rectangle {
+    width: 13px;
+    height: 10px;
+    private property <color> icon-color: !PlaybackBridge.can-mute ? Theme.icon-disabled
+        : touch.pressed ? Theme.accent-press
+        : touch.has-hover ? Theme.accent : Theme.text-dim;
+    accessible-role: button;
+    accessible-label: PlaybackBridge.muted ? "解除静音" : "静音";
+    accessible-action-default => { if PlaybackBridge.can-mute { PlaybackBridge.action("mute"); } }
+    Path {
+        width: 13px;
+        height: 10px;
+        viewbox-width: 13;
+        viewbox-height: 10;
+        fill: root.icon-color;
+        commands: PlaybackBridge.muted ? "M 0 3 L 3 3 L 7 0 L 7 10 L 3 7 L 0 7 Z"
+            : "M 0 3 L 3 3 L 7 0 L 7 10 L 3 7 L 0 7 Z M 9 3 L 10 3 L 10 7 L 9 7 Z M 11.5 1 L 12.5 1 L 12.5 9 L 11.5 9 Z";
+    }
+    if PlaybackBridge.muted: Path {
+        width: 13px;
+        height: 10px;
+        viewbox-width: 13;
+        viewbox-height: 10;
+        stroke: root.icon-color;
+        stroke-width: 1.2px;
+        commands: "M 9 3 L 13 7 M 13 3 L 9 7";
+    }
+    touch := TouchArea {
+        enabled: PlaybackBridge.can-mute;
+        clicked => { PlaybackBridge.action("mute"); }
+    }
+}
+
+// 23×22 toggle for the sidebar (playlist); accent while it is shown.
+component SidebarToggle inherits Rectangle {
+    width: 23px;
+    height: 22px;
+    accessible-role: button;
+    accessible-label: "播放列表";
+    accessible-checked: PlaybackBridge.sidebar-on;
+    accessible-enabled: PlaybackBridge.has-sidebar;
+    accessible-action-default => { if PlaybackBridge.has-sidebar { PlaybackBridge.toggle-sidebar(); } }
+    Path {
+        x: 5px;
+        y: 6px;
+        width: 13px;
+        height: 10px;
+        viewbox-width: 13;
+        viewbox-height: 10;
+        fill: !PlaybackBridge.has-sidebar ? Theme.icon-disabled
+            : touch.pressed ? Theme.accent-press
+            : (touch.has-hover || PlaybackBridge.sidebar-on) ? Theme.accent : Theme.text-dim;
+        commands: "M 0 0 L 13 0 L 13 2 L 0 2 Z M 0 4 L 13 4 L 13 6 L 0 6 Z M 0 8 L 13 8 L 13 10 L 0 10 Z";
+    }
+    touch := TouchArea {
+        enabled: PlaybackBridge.has-sidebar;
+        clicked => { PlaybackBridge.toggle-sidebar(); }
+    }
 }
 
 export component PlaybackBar inherits Rectangle {
-    min-height: PlaybackBridge.editor == "" ? 96px : 140px;
-    background: #20242b;
-    private property <bool> editor-focused;
-    private property <bool> editor-open: PlaybackBridge.editor != "";
-    changed editor-open => { if !root.editor-open { root.editor-focused = false; } }
-    private property <bool> focused: open-button.has-focus || pause-button.has-focus || time-button.has-focus || rate-button.has-focus || mute-button.has-focus || volume-slider.has-focus || root.editor-focused;
-    changed focused => { PlaybackBridge.interaction(root.focused); }
-    VerticalLayout {
-        padding: 8px;
-        spacing: 5px;
-        HorizontalLayout {
-            spacing: 8px;
-            Text { text: PlaybackBridge.source-label; color: #d5dbe6; overflow: elide; horizontal-stretch: 1; font-size: 11px; }
-            Text { text: PlaybackBridge.status; color: #b9c8de; overflow: elide; max-width: 320px; font-size: 11px; }
-            if PlaybackBridge.can-retry: Button { text: "重试"; clicked => { PlaybackBridge.retry(); } }
+    min-height: 62px;
+    max-height: 62px;
+    background: Theme.bg-bar;
+
+    // Seek row: padding 0 10px 0 5px; seek line with 10px margins; mute 13×10; volume 70×10.
+    seek-row := Rectangle {
+        y: 0;
+        height: 22px;
+        Rectangle { y: 0; height: 1px; background: Theme.line; }
+        Rectangle { y: parent.height - 1px; height: 1px; background: Theme.line; }
+        SeekBar {
+            x: 15px;
+            y: 6px;
+            width: max(0px, root.width - 132px);
         }
+        MuteButton {
+            x: root.width - 97px;
+            y: 6px;
+        }
+        Slider {
+            x: root.width - 80px;
+            y: 6px;
+            width: 70px;
+            height: 10px;
+            minimum: 0;
+            maximum: 200;
+            enabled: PlaybackBridge.can-volume;
+            value <=> PlaybackBridge.volume;
+            changed(value) => { PlaybackBridge.volume-changed(value); }
+            released(value) => { PlaybackBridge.volume-released(value); }
+        }
+    }
+
+    // Button row: play/pause, stop, back 5s, forward 5s, open, time; sidebar toggle on the right.
+    Rectangle {
+        y: 22px;
+        height: 40px;
         HorizontalLayout {
-            spacing: 8px;
-            progress-track := Rectangle {
-                min-width: 100px;
-                horizontal-stretch: 1;
-                height: 14px;
-                background: PlaybackBridge.can-seek ? #47505d : #30353c;
-                border-radius: 7px;
-                Rectangle { x: 0; width: parent.width * min(1, max(0, PlaybackBridge.progress)); height: parent.height; background: #75a8fa; border-radius: 7px; }
-                progress-touch := TouchArea {
-                    enabled: PlaybackBridge.can-seek;
-                    pointer-event(event) => {
-                        if event.kind == PointerEventKind.cancel {
-                            PlaybackBridge.seek-cancelled();
-                        } else if event.button == PointerEventButton.left {
-                            if event.kind == PointerEventKind.down {
-                                PlaybackBridge.dragging(true);
-                                PlaybackBridge.seek-changed(min(1, max(0, self.mouse-x / self.width)));
-                            } else if event.kind == PointerEventKind.up {
-                                PlaybackBridge.seek-changed(min(1, max(0, self.mouse-x / self.width)));
-                                PlaybackBridge.dragging(false);
-                            }
-                        }
+            spacing: 0px;
+            alignment: start;
+            BarButton {
+                icon: PlaybackBridge.playing ? "pause" : "play";
+                enabled: PlaybackBridge.can-pause;
+                clicked => { PlaybackBridge.action("toggle-pause"); }
+            }
+            BarButton {
+                icon: "stop";
+                enabled: PlaybackBridge.can-stop;
+                clicked => { PlaybackBridge.action("close-source"); }
+            }
+            BarButton {
+                icon: "back";
+                enabled: PlaybackBridge.can-step;
+                right-enabled: PlaybackBridge.can-previous;
+                clicked => { PlaybackBridge.action("backward-5"); }
+                right-clicked => { PlaybackBridge.action("previous"); }
+            }
+            BarButton {
+                icon: "forward";
+                enabled: PlaybackBridge.can-step;
+                right-enabled: PlaybackBridge.can-next;
+                clicked => { PlaybackBridge.action("forward-5"); }
+                right-clicked => { PlaybackBridge.action("next"); }
+            }
+            BarButton {
+                icon: "open";
+                enabled: PlaybackBridge.can-open;
+                clicked => { PlaybackBridge.action("open"); }
+            }
+            Rectangle {
+                width: time-row.preferred-width;
+                time-row := HorizontalLayout {
+                    padding-left: 10px;
+                    Text {
+                        text: PlaybackBridge.elapsed-label;
+                        color: Theme.text;
+                        font-size: Theme.font-body;
+                        vertical-alignment: center;
                     }
-                    moved => { if self.pressed { PlaybackBridge.seek-changed(min(1, max(0, self.mouse-x / self.width))); } }
+                    Text {
+                        text: " / " + PlaybackBridge.total-label;
+                        color: Theme.text-dim;
+                        font-size: Theme.font-body;
+                        vertical-alignment: center;
+                    }
+                }
+                TouchArea {
+                    clicked => { PlaybackBridge.toggle-time(); }
                 }
             }
-            time-button := Button { text: PlaybackBridge.time-label; enabled: PlaybackBridge.can-seek; clicked => { PlaybackBridge.action("jump"); } }
         }
-        HorizontalLayout {
-            spacing: 6px;
-            open-button := Button { text: "打开"; enabled: PlaybackBridge.can-open; clicked => { PlaybackBridge.action("open"); } }
-            pause-button := Button { text: PlaybackBridge.pause-label; enabled: PlaybackBridge.can-pause; clicked => { PlaybackBridge.action("toggle-pause"); } }
-            rate-button := Button { text: PlaybackBridge.rate-label; enabled: PlaybackBridge.can-rate; clicked => { PlaybackBridge.action("rate-custom"); } }
-            mute-button := Button { text: PlaybackBridge.muted ? "解除静音" : "静音"; enabled: PlaybackBridge.can-mute; clicked => { PlaybackBridge.action("mute"); } }
-            volume-slider := Slider { enabled: PlaybackBridge.can-volume; minimum: 0; maximum: 200; value <=> PlaybackBridge.volume; horizontal-stretch: 1; min-width: 80px; changed(value) => { PlaybackBridge.volume-changed(value); } released(value) => { PlaybackBridge.volume-released(value); } }
-            Text { text: PlaybackBridge.volume-label; color: #d5dbe6; min-width: 40px; vertical-alignment: center; }
-        }
-        if PlaybackBridge.editor != "": EditorRow {
-            focus-changed(focused) => { root.editor-focused = focused; }
+        // Hidden first when the window is narrower than 320px (UI-BAR-10).
+        if root.width >= 320px: SidebarToggle {
+            x: root.width - self.width - 8px;
+            y: (parent.height - self.height) / 2;
         }
     }
 }

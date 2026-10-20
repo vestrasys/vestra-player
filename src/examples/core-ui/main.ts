@@ -1,4 +1,6 @@
-import type { Plugin } from "../../sdk/plugin/index.ts";
+import { readFileSync, renameSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import type { Plugin, Scope } from "../../sdk/plugin/index.ts";
 
 /**
  * Demonstrates the core UI interfaces (doc/architecture/core-ui-design.md):
@@ -12,8 +14,41 @@ export default async function activate(plugin: Plugin) {
   const menu = (title: string) => ["示例", title];
   const say = (text: string) => osd.show(text);
 
+  // plugin.dataDirectory: remembered across restarts; written atomically.
+  const settings = join(plugin.dataDirectory, "settings.json");
+  const load = () => {
+    try {
+      return (
+        (JSON.parse(readFileSync(settings, "utf8")) as { speed?: number })
+          .speed ?? 1
+      );
+    } catch {
+      return 1;
+    }
+  };
+  const save = (value: number) => {
+    writeFileSync(`${settings}.tmp`, JSON.stringify({ speed: value }));
+    renameSync(`${settings}.tmp`, settings);
+  };
+
+  // A menu item whose title changes: dispose it (removed from the menu) and add it again.
+  let last: Scope = plugin.scope();
+  const remember = async (value: number) => {
+    await last.dispose();
+    last = plugin.scope();
+    last.commands.add({
+      id: "last",
+      path: menu(`上次速度：${value}倍`),
+      order: 859,
+      group: "examples",
+      enabled: false,
+      run() {},
+    });
+  };
+
   // Menu: one top-level submenu in its own separator group, radio items.
-  let speed = 1;
+  let speed = load();
+  void remember(speed);
   for (const [index, rate] of [0.5, 1, 2].entries())
     plugin.commands.add({
       id: `rate-${rate}`,
@@ -26,6 +61,8 @@ export default async function activate(plugin: Plugin) {
       run: async () => {
         await player.setRate(rate);
         speed = rate;
+        save(rate);
+        await remember(rate);
         await say(`播放速度: ${rate}x`);
       },
     });

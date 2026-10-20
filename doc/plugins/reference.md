@@ -123,7 +123,10 @@ interface Scope extends Disposable {
   onError(listener: (error: PluginError) => void): Disposable;
   update(): void;
 }
-interface Plugin extends Scope { readonly id: string }   // manifest id
+interface Plugin extends Scope {
+  readonly id: string;             // manifest id
+  readonly dataDirectory: string;  // 本插件可写的数据目录，见 3.4
+}
 ```
 
 | 成员 | 说明 |
@@ -139,7 +142,7 @@ interface Plugin extends Scope { readonly id: string }   // manifest id
 
 | 句柄 | 释放效果 |
 | --- | --- |
-| `Command` | 不再响应；菜单项保留但禁用（原因「已停用」） |
+| `Command` | 从菜单和绑定表中删除；同一个 id 可以再次 `add` |
 | `Window` | 关闭窗口 |
 | `Panel` | 卸载面板 |
 | `VideoFilter` / `AudioFilter` | 若应用过，替换为空链（只撤销自己的效果） |
@@ -150,6 +153,16 @@ interface Plugin extends Scope { readonly id: string }   // manifest id
 | `PackageTrial` | 停止试载并等待清理确认 |
 | 监听（`on`、`bind`、`onChange`…） | 退订 |
 | `Media` | **不**关闭媒体；需要时显式 `media.close()` |
+
+### 3.4 数据目录 `plugin.dataDirectory`
+
+本插件自己的可写目录（设置、记住的文件夹等），不需要能力。
+
+- 位置：`~/Library/Application Support/Vestra/plugin-data/<manifest id>/`（环境变量 `VESTRA_PLUGIN_DATA` 可改根目录），播放器在启动插件前创建。插件停用、重新加载、升级、回退时都保留。
+- 试载的插件拿到一个临时目录，试载停止时删除，不会碰正式安装版本的数据。
+- 存什么、什么格式由插件决定。写文件时先写临时文件再改名（`writeFileSync(tmp)` → `renameSync(tmp, path)`），播放器中途退出也不会留下写了一半的文件；读不到或读坏时用默认值。
+- 播放器没能提供目录时（例如创建失败），读取这个属性抛出 `code: "unavailable"`。
+- 测试：`TestHost` 为每个测试提供一个空的临时目录（`host.dataDirectory`，`stop()` 时删除）；要测试「重启后恢复」，给 `startPlugin` 传 `{ dataDirectory }` 指定同一个目录。
 
 ## 4. 命令 `plugin.commands`
 
@@ -188,6 +201,19 @@ interface Command extends Disposable {
 - 同一路径不能注册两次，也不能既是菜单项又是子菜单（`conflict`）。路径、`order`、`group`、绑定格式不合法时 `commands.add` 立即抛出 `invalid`。
 - 菜单项右侧的快捷键文字由绑定表生成（第一个生效的键盘绑定）。
 - 状态字段为函数时，每轮更新重新求值，变化才发送。
+- `dispose()` 把命令从菜单和绑定表中删除，id 随即可以重新使用（紧接着 `add` 同一个 id 也可以，SDK 会等删除完成再注册）。标题、路径不能原地改变：会变的菜单项（字幕轨列表、预设、单选组）放进一个子作用域，变化时释放整个子作用域再按新内容添加，位置由 `order` 保持不变：
+
+  ```ts
+  let tracks = plugin.scope();
+  plugin.subtitles.onChange(async (state) => {
+    await tracks.dispose();
+    tracks = plugin.scope();
+    state.tracks.forEach((track, i) =>
+      tracks.commands.add({ id: `track.${i}`, path: ["字幕", "选择字幕", track.title], order: 300 + i,
+        radio: true, checked: () => plugin.subtitles.state?.selected?.id === track.id,
+        run: () => plugin.subtitles.select(track) }));
+  });
+  ```
 - 命令禁用或忙碌时，播放器不会调用 `run`（绑定的按键被接住但不执行）。`run` 抛出的错误交给 `onError`。
 
 ### 4.1 绑定
@@ -441,7 +467,7 @@ interface SlotState {
 - 插件 → 界面用 `in` / `in-out property`，界面 → 插件用 `callback`。回调参数和属性值必须能用 JSON 表示（基本类型、数组、结构体），回调返回 `void`。
 - 会被插件改值的输入控件用双向绑定（`value <=> root.x`、`checked <=> root.x`）。单向的 `value: root.x` 在用户操作控件后会断开，之后插件改值，控件不会跟着动。属性须为 `in-out`。
 - `in` 属性只能单向绑定时，用 `changed x => { slider.value = root.x; }` 在模型变化时回推。
-- 主题与控件：`import { Theme } from "@vestra/theme.slint";` 提供颜色（`bg-bar`、`bg-panel`、`text`、`accent`、`playing`…）、字号（`font-xs` 9px、`font-body` 11px、`font-tab` 12px、`font-title` 13px、`font-mono` 等宽（Menlo，只含西文，中文不要用它））和控件尺寸（`button-height` 21px、`input-height`、`form-row-gap`、`dialog-padding`…），完整列表见 `src/host/ui/vestra/theme.slint`。`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";` 提供 PotPlayer 样式的按钮（`small`、图标按钮 `icon` + `checked`）、2px 线滑块（`panel: true` 为面板样式）和悬停提示。
+- 主题与控件：`import { Theme } from "@vestra/theme.slint";` 提供颜色（`bg-bar`、`bg-panel`、`text`、`accent`、`playing`…）、字号（`font-xs` 9px、`font-body` 11px、`font-tab` 12px、`font-title` 13px、`font-mono` 等宽（Menlo，只含西文，中文不要用它））和控件尺寸（`button-height` 21px、`input-height`、`form-row-gap`、`dialog-padding`…），完整列表见 `src/host/ui/vestra/theme.slint`。`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";` 提供 PotPlayer 样式的按钮（文字按钮 21px、`small` 18px；`text` 为空时是图标按钮：`icon` 是 Slint `Path` 的路径数据，画在 `icon-width` × `icon-height`（默认 14×12）的 viewbox 里，`stroked: true` 画 1.5px 线而不填充，`checked` 表示开启态；图标按钮的宽高由调用方设置，悬停提示用 `ToolTipArea` 包住）、2px 线滑块（`panel: true` 为面板样式）和悬停提示。
 - 所有插件 Slint 都以 `fluent-dark` 风格编译：std-widgets 的控件默认是深色。默认字体是系统 UI 字体（含中文回退），插件不需要自己设字体。
 - 编辑器里要让 `@vestra/...` 导入可解析，给 Slint 语言服务设 `libraryPaths`：`{ "vestra": "<仓库>/src/host/ui/vestra" }`。
 
@@ -697,7 +723,7 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 | 操作 | `host.command(id).run()`（禁用或忙碌时同样拒绝）；`host.press(binding, { panel? })`（按绑定表执行，`panel: true` 模拟面板有焦点）；`host.window(id).emit(callback, ...args)`；`host.mounted().emit(...)`；`host.dialogAnswers.push([path] \| null)`；`host.step("next" \| "previous")`（模拟别的插件调用 `player.next()`） |
 | 模拟来源 | `host.openElsewhere(path, phase?)`（另一个插件打开了媒体）；`host.setSource({ phase, position, duration, … })` |
 | 断言 | `host.window(id).props`（kebab-case 名）、`.visible`；`host.command(id).state`、`.declaration`；`host.conflicts`（`[绑定, 赢家, ...被压下]`）；`host.layout.bottom` / `.sidebar`（可直接改后 `host.emit("window.state", {})` 模拟别处的变化）；`host.osd`（显示过的提示）、`host.osdPanel`；`host.sequence`（提供者的标志）；`host.menus`（`showMenu` 记录）；`host.sent(method)`；`host.source`；`host.processing`、`host.subtitles`、`host.snapshots`、`host.jobs`、`host.producers` |
-| 模拟数据 | `host.stats`（`player.stats()` 的返回值） |
+| 模拟数据 | `host.stats`（`player.stats()` 的返回值）；`host.dataDirectory`（`plugin.dataDirectory`） |
 | 注入故障 | `host.handle(method, fn)`：抛 `new HostError(code, message)` 模拟播放器拒绝，抛普通 `Error` 模拟答复丢失；`host.reset(method)` 恢复 |
 | 同步 | `await host.settle(ms?)`：等到没有在途请求（可额外等待计时器） |
 | 结束 | `await stop()` |

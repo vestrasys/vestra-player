@@ -1,0 +1,101 @@
+// 连拍: PotPlayer continuous capture dialog 337 (438 wide, B§6.8; UI-DLG-04).
+import { CheckBox, LineEdit } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button } from "@vestra/widgets.slint";
+import { FormLabel, Group, Note } from "parts.slint";
+
+export component BurstDialog inherits Window {
+    title: "连拍";
+    width: 438px;
+    background: Theme.bg-panel;
+    in property <string> folder;
+    in property <bool> busy;
+    in property <bool> can-capture;
+    in property <string> progress;
+    in property <string> status;
+    in-out property <string> burst-count: "10";
+    in-out property <string> burst-step: "1";
+    in-out property <string> start-time: "0";
+    in-out property <bool> current-time: true;
+    in-out property <bool> processed: false;
+    in-out property <bool> subtitles: false;
+    callback pick-folder();
+    callback open-folder();
+    callback capture-frame();
+    callback mark-start();
+    callback start-burst(string, string, string, bool, bool, bool);
+
+    VerticalLayout {
+        padding: Theme.dialog-padding;
+        spacing: 5px;
+        Group {
+            title: "保存设置";
+            HorizontalLayout {
+                spacing: 4px;
+                LineEdit { height: Theme.input-height; font-size: Theme.font-body; text: root.folder; read-only: true; }
+                Button { width: 30px; height: Theme.input-height; text: "…"; clicked => { root.pick-folder(); } }
+            }
+        }
+        HorizontalLayout {
+            spacing: 9px;
+            Group {
+                title: "截图设置";
+                HorizontalLayout {
+                    spacing: 4px;
+                    FormLabel { width: 60px; text: "数量："; }
+                    LineEdit { width: 65px; height: Theme.input-height; font-size: Theme.font-body; text <=> root.burst-count; enabled: !root.busy; }
+                    Note { text: "张（2–20）"; }
+                }
+                HorizontalLayout {
+                    spacing: 4px;
+                    FormLabel { width: 60px; text: "间隔："; }
+                    LineEdit { width: 65px; height: Theme.input-height; font-size: Theme.font-body; text <=> root.burst-step; enabled: !root.busy; }
+                    Note { text: "秒（0.1–10）"; }
+                }
+                CheckBox { height: Theme.checkbox-row-height; text: "从当前位置开始"; checked <=> root.current-time; enabled: !root.busy; }
+                HorizontalLayout {
+                    spacing: 4px;
+                    FormLabel { width: 60px; text: "起点："; }
+                    LineEdit { width: 65px; height: Theme.input-height; font-size: Theme.font-body; text <=> root.start-time; enabled: !root.busy && !root.current-time; }
+                    Button { small: true; height: Theme.input-height; text: "当前"; enabled: !root.busy && !root.current-time; clicked => { root.mark-start(); } }
+                }
+            }
+            Group {
+                title: "其他设置";
+                HorizontalLayout {
+                    spacing: 4px;
+                    FormLabel { width: 40px; text: "格式："; }
+                    Note { text: "PNG"; }
+                }
+                CheckBox { height: Theme.checkbox-row-height; text: "包含画面效果"; checked <=> root.processed; enabled: !root.busy; }
+                CheckBox { height: Theme.checkbox-row-height; text: "同时截取字幕"; checked <=> root.subtitles; enabled: root.processed && !root.busy; }
+                Rectangle { vertical-stretch: 1; }
+            }
+        }
+        Group {
+            title: "信息";
+            HorizontalLayout {
+                spacing: 4px;
+                FormLabel { width: 60px; text: "进度："; }
+                Note { text: root.progress; }
+            }
+            HorizontalLayout {
+                spacing: 4px;
+                FormLabel { width: 60px; text: "状态："; }
+                Note { text: root.status; }
+            }
+        }
+        Rectangle { height: 2px; background: Theme.line; }
+        HorizontalLayout {
+            spacing: 4px;
+            Button { height: Theme.button-primary-height; text: "打开存档文件夹"; clicked => { root.open-folder(); } }
+            Button { height: Theme.button-primary-height; text: "截取当前画面"; enabled: root.can-capture; clicked => { root.capture-frame(); } }
+            Button {
+                height: Theme.button-primary-height;
+                text: "开始";
+                enabled: root.can-capture && !root.busy;
+                clicked => { root.start-burst(root.start-time, root.burst-count, root.burst-step, root.current-time, root.processed, root.subtitles); }
+            }
+        }
+    }
+}
