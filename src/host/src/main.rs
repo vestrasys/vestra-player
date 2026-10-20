@@ -124,6 +124,8 @@ enum Event {
     Reaped(u64),
     BackendCleaned(u64),
     DialogDone(Reply, Option<Vec<PathBuf>>),
+    /// winit saw these Slint modifier keys released: (window generation, key codes).
+    ModifiersReleased(u64, Vec<char>),
     /// `dialogs.confirm` answered: (requester, confirmed, checked).
     ConfirmDone(Reply, bool, bool),
     RuntimeFault(u64, String),
@@ -161,6 +163,8 @@ struct InputShared {
     wheel: (f64, f64),
     /// The key press being dispatched, recorded by the window's winit hook.
     physical: Option<bindings::Physical>,
+    /// Slint modifier key codes winit saw released, to hand to Slint.
+    released: Vec<char>,
 }
 /// Which window shows the open menu, and what it lists.
 #[derive(Clone, PartialEq)]
@@ -664,6 +668,17 @@ impl Host {
             Event::UiCallback(owner, data) => {
                 self.send(owner, json!({"event":"ui.callback","data":data}))
             }
+            Event::ModifiersReleased(generation, keys) => {
+                if let Some(window) = self.window_for(generation) {
+                    for key in keys {
+                        window
+                            .window()
+                            .dispatch_event(slint::platform::WindowEvent::KeyReleased {
+                                text: key.into(),
+                            });
+                    }
+                }
+            }
             Event::ConfirmDone(reply, confirmed, checked) => {
                 self.policy.activity(self.now_ms());
                 self.dialog_busy = false;
@@ -911,7 +926,7 @@ impl Host {
             composition::set_json_global(&instance, &mount.spec, name, value)?;
         }
         self.bind_menu(&instance, generation, false)?;
-        self.observe_keys(&instance);
+        self.observe_keys(&instance, generation);
         self.bind_keys(&instance, generation)?;
         let events = self.events.clone();
         instance.window().on_close_requested(move || {
@@ -1029,7 +1044,9 @@ impl Host {
             let weak = window.as_weak();
             let modifiers = std::cell::Cell::new(winit::keyboard::ModifiersState::empty());
             window.window().on_winit_window_event(move |_, event| {
-                if let Some((dead, repeat)) = observe_key(&input, &modifiers, event) {
+                let dead = observe_key(&input, &modifiers, event);
+                release_modifiers(&input, &events, generation);
+                if let Some((dead, repeat)) = dead {
                     // Slint drops a dead key (it has no text), so its Option
                     // binding resolves here, only while the video area has
                     // focus: a focused text field composes with the dead key.
@@ -1246,12 +1263,14 @@ impl Host {
     }
     /// A window that forwards keys to the binding table records each press's
     /// physical key first (see `observe_key`).
-    fn observe_keys(&self, window: &slint_interpreter::ComponentInstance) {
+    fn observe_keys(&self, window: &slint_interpreter::ComponentInstance, generation: u64) {
         use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
         let input = self.input.clone();
+        let events = self.events.clone();
         let modifiers = std::cell::Cell::new(winit::keyboard::ModifiersState::empty());
         window.window().on_winit_window_event(move |_, event| {
             let _ = observe_key(&input, &modifiers, event);
+            release_modifiers(&input, &events, generation);
             EventResult::Propagate
         });
     }
@@ -1273,9 +1292,12 @@ impl Host {
             let physical = input.borrow_mut().physical.take();
             let resolved =
                 bindings::from_key(text, flag(0), flag(1), flag(2), flag(3), physical.as_ref());
+            // A symbol typed with Option (German ⌥5 = `[`) is tried first:
+            // the first candidate with a binding fires.
+            let typed = bindings::typed_with_option(text, flag(0), flag(3), physical.as_ref());
             if debug_keys() {
                 eprintln!(
-                    "keys: slint scope={:?} text={:?} control={} alt={} shift={} meta={} repeat={} physical={physical:?} → {resolved:?} bound={}",
+                    "keys: slint scope={:?} text={:?} control={} alt={} shift={} meta={} repeat={} physical={physical:?} → {resolved:?} typed={typed:?} bound={}",
                     scope.as_str(),
                     text.as_str(),
                     flag(0),
@@ -1288,7 +1310,7 @@ impl Host {
                         .is_some_and(|event| input.borrow().table.resolve(event, None).is_some())
                 );
             }
-            let Some(event) = resolved else {
+            let Some(mut event) = resolved else {
                 return SValue::Bool(false);
             };
             let panel = {
@@ -1299,6 +1321,11 @@ impl Host {
                     _ => None,
                 }
             };
+            if let Some(typed) = typed
+                && input.borrow().table.resolve(&typed, panel).is_some()
+            {
+                event = typed;
+            }
             SValue::Bool(fire(&input, &events, generation, &event, flag(4), panel))
         })?;
         Ok(())
@@ -2759,7 +2786,26 @@ fn observe_key(
         WindowEvent::ModifiersChanged(state) => {
             // winit sends this from the key event's own flags too (before the
             // KeyboardInput), so it is right even without modifier key events.
-            modifiers.set(state.state());
+            let (before, after) = (modifiers.get(), state.state());
+            modifiers.set(after);
+            // Slint follows modifiers only through their own key events; a
+            // release it never saw (synthesized input) would leave Option or
+            // Shift held for later pointer and key events. Release them.
+            let mut shared = input.borrow_mut();
+            for (was, now, keys) in [
+                (before.alt_key(), after.alt_key(), ['\u{12}', '\u{13}']),
+                (before.shift_key(), after.shift_key(), ['\u{10}', '\u{15}']),
+                (
+                    before.control_key(),
+                    after.control_key(),
+                    ['\u{11}', '\u{16}'],
+                ),
+                (before.super_key(), after.super_key(), ['\u{17}', '\u{18}']),
+            ] {
+                if was && !now {
+                    shared.released.extend(keys);
+                }
+            }
             if debug_keys() {
                 eprintln!("keys: winit modifiers {:?}", state.state());
             }
@@ -2813,6 +2859,17 @@ fn observe_key(
             dead.map(|input| (input, event.repeat))
         }
         _ => None,
+    }
+}
+/// Hand modifier releases Slint missed to the window, outside winit's dispatch.
+fn release_modifiers(
+    input: &Rc<RefCell<InputShared>>,
+    events: &mpsc::Sender<Event>,
+    generation: u64,
+) {
+    let released = std::mem::take(&mut input.borrow_mut().released);
+    if !released.is_empty() {
+        let _ = events.send(Event::ModifiersReleased(generation, released));
     }
 }
 /// `VESTRA_DEBUG_KEYS=1`: log every key event and how it resolved to stderr.
