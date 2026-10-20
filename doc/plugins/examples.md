@@ -622,5 +622,23 @@ await plugin.power.preventSleep("playing");                            // 需要
 await plugin.system.reveal("/Users/me/Movies/a.mkv");                  // 在 Finder 中选中
 ```
 
-`host.run`（执行核心动作）在第 2 轮批次 B 交付，届时补示例。
+## 21. 核心动作：底栏按钮执行播放器自己的命令
+
+```ts
+export default async function activate(plugin: Plugin) {
+  const bar = plugin.panels.mount("bottom", "ui/bar.slint");
+  bar.on("playPause", () => plugin.host.run("play-pause"));   // 与 Space、菜单同一行为和提示
+  bar.on("back", () => plugin.host.run("seek-backward"));
+  bar.on("forward", () => plugin.host.run("seek-forward"));
+  bar.on("mute", () => plugin.host.run("mute"));
+  bar.on("stop", () => plugin.host.run("stop"));
+  bar.bind(() => ({
+    paused: plugin.player.state.paused,
+    canPlay: plugin.player.state.phase !== "empty",           // 按钮状态仍从 player.state 推出
+  }));
+  await plugin.player.setStepSeek({ seconds: 10 });           // ← / → 一次 10 秒
+}
+```
+
+命令本身由播放器注册（菜单、快捷键、用户改绑都归核心），插件停用后 Space、←/→ 照常可用。
 
