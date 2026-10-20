@@ -24,7 +24,20 @@ export component CounterWindow inherits Window {
  HorizontalBox { Button { text: "增加"; clicked => { root.increase(); } } Button { text: "归零"; clicked => { root.reset(); } } } }
 }`;
 function counterSource(step, broken) {
-  return `import type { Host } from './types/index.ts';\nconst step: number = ${broken ? JSON.stringify(String(step)) : step};\nexport async function activate(host: Host) {\n let count = 0;\n const action = async (name: string) => { count = name === 'increase' ? count + step : 0; await host.ui.set('counter', 'count', String(count)); };\n const off = host.ui.onCallback(e => { if (e.view === 'counter' && (e.callback === 'increase' || e.callback === 'reset')) void action(e.callback); });\n try { await host.ui.open('counter', 'counter.slint', {count: '0'}, ['increase','reset']); } catch (e) { off(); throw e; }\n return async () => { off(); await host.ui.close('counter'); };\n}\n`;
+  // Line 2 carries the deliberate first-draft type error (TS2322 at 2,7).
+  return [
+    "import type { Plugin } from './types/plugin/index.ts';",
+    `const step: number = ${broken ? JSON.stringify(String(step)) : step};`,
+    'export default async function activate(plugin: Plugin) {',
+    ' let count = 0;',
+    " const window = plugin.windows.create('counter.slint');",
+    ' window.bind(() => ({ count: String(count) }));',
+    " window.on('increase', () => { count += step; });",
+    " window.on('reset', () => { count = 0; });",
+    ' await window.show();',
+    '}',
+    '',
+  ].join('\n');
 }
 export class WorkshopJob {
   constructor(directory, publish = () => {}) { this.directory = directory; this.publish = publish; this.revision = 0; this.cancelled = false; this.events = []; this.reports = []; this.child = null; }

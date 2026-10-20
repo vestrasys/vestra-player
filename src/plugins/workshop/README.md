@@ -1,17 +1,11 @@
-# 插件工坊（本轮独立实现）
+# 插件工坊
 
-普通插件，唯一入口为「插件 → 插件工坊…」。不修改Rust、不依赖兄弟插件。
+**功能**：在原生窗口中选择专用工作区、输入或选择计数器需求 JSON，点击生成后由 Pi 官方 Agent（`@earendil-works/pi-agent-core` 1.3.0）真实执行工具循环生成候选插件：模型只是本地确定性 mock（`streamFn`），不读凭据、不调用任何网络或付费模型。第一稿故意含类型错误，只有拿到真实 `TS2322` 诊断（随包分发的 TypeScript 5.9.3）后才修复。候选交宿主校验，之后由用户明确点击试载 / 停止试载 / 安装 / 回退上一版本；“取消任务”中止生成、停止试载或取消包操作。
 
-选择专用工作目录，输入/选择JSON需求，点击生成。仅支持 `{"kind":"native-counter","id":"community.counter","version":"1.0.0","step":1}` 和版本1.1.0/step3。Pi官方Agent 1.3.0真实执行工具；只有模型streamFn为本地确定性mock，无凭据读取、无付费模型调用。第一次故意类型错误，只有真实TS2322 file/line/column诊断后才修复。每次生成独立随机子目录；候选含独立main.js/Slint/manifest及自身Host类型，生产代码不引用工坊或SDK运行实现。
+生成的计数器是独立的 SDK v2 插件（默认导出 `activate(plugin)`，`plugin.windows.create("counter.slint")`）：计数从 0 起，“增加”按步长递增，“归零”复位。它只对 `types/`（`vendor/sdk` 的副本）做类型检查，运行时不引用工坊或仓库 SDK。
 
-固定TypeScript 5.9.3及许可证已随vendor分发，不在运行时安装npm或调用Rust。main.js含Pi及实际用到的依赖bundle，许可证在licenses，registry锁版在package-lock.json；vendor/node类型版本25.9.9。manifest production JS入口。
+**入口**：菜单「插件 → 插件工坊…」。源码 `main.ts`（窗口与包生命周期）、`engine.mjs`（Pi 接入、候选文件工具、离线 tsc，类型见 `engine.d.mts`）、`workshop.slint`。
 
-已验：当前revision4本地strictTS通过；普通Host控制状态回归5项通过（installed异常/timeout释放busy、install/rollback丢答复沿同requestId查询且只提交1次、trial双击只提交1次且unknown不重发）；这些协议stub不是managed验收。真实Pi独立证据：真实Pi 3轮/8工具动作；两版本各经历真实TS2322→clean；独立生成JS通过普通Host callback stub获得1,2,0与3,6,0。证据位于本地 `/tmp/vestra-current-products/workshop/evidence/`（不打包临时证据/工程/node_modules）。这些不是宿主管理或GUI验收。
+**限制**：只支持 `{"kind":"native-counter","id":"community.counter","version":"1.0.0","step":1}` 与 `1.1.0` / `step:3`；需求最大 64 KiB，最多 3 轮模型、12 次工具动作、总时限 120 秒；日志窗口只保留最后 16 KB。每次生成写入工作区下新的 `candidate-<uuid>/`。“查询试载”按钮保留但恒为禁用：试载首答复丢失由 SDK 按原请求取回。
 
-首真实Compiler证据Wb0Qce拒绝width/min-width与height/min-height冲突；revision3改preferred尺寸并保min，原失败保留。待复验：宿主Slint编译、普通独立Window所有按钮/本地菜单、原生文件选择、宿主真实validate/trial/install/rollback/operation/cancel、试载清理、停用工坊后独立插件仍运行、真实鼠标点击和组合媒体连续性。root/maintainer独占Cargo、GUI及音频；本作者未执行这些。
-
-包生命周期只用当前Host.packages API。安装与回退始终用户点击；事务按operationId轮询至terminal；timeout按维护者承诺operationId=requestId恢复查询，不发新安装。试载使用稳定requestId；首答复timeout直接trialStateByRequest查询原试载，查询再timeout时保留unknown并提供「查询试载」，不会再次申请。两项新增普通Host协议回归证明只申请1次、找回原handle并停止；真实托管试载恢复仍待本产品验收。详见API_REQUESTS.md。
-
-关闭窗口由宿主普通Window生命周期处理；再次菜单打开使用show，不重建任务。当前未证明系统关闭后hide/show焦点语义。日志最多16KB显示，生成事件与诊断保留在候选下；生成取消abort Pi并kill编译子进程，waitForIdle后返回。
-
-开发：`npm ci --ignore-scripts`后`node build.mjs`，不要求终端用户执行。源码main.ts仅type import ../../sdk/index.ts，运行时不引用仓库SDK。`node test-engine.mjs`仅开发验真实Pi和TS，生产不自动运行测试。
+**开发**（在 `src/` 下）：`npm run plugin -- check|build|test workshop`。构建用 esbuild 把 Pi 依赖打包进 `dist/main.js`（`package.json` 的 `"vestra"` 配置），`vendor/`（TypeScript、Node 类型、SDK 副本）原样复制；第三方许可证见 `licenses/` 与 `dependency-inventory.json`。`vendor/sdk` 必须与 `src/sdk` 一致（不含 `plugin/testing.ts`），`tests/vendor-sdk.test.mjs` 会在不一致时失败；同步命令见该测试文件开头。测试只写系统临时目录。
