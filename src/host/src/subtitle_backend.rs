@@ -955,7 +955,12 @@ impl Subtitles {
                 "subtitle style revision must increase",
             ));
         }
-        if style.is_some() && self.registry.state().selected.is_some() {
+        // A bitmap primary takes no style; a text secondary still does
+        // (its position and look), so the style is accepted then.
+        if style.is_some()
+            && self.registry.state().selected.is_some()
+            && self.registry.state().secondary.is_none()
+        {
             let selected_id = match &self.registry.state().selected {
                 Some(Track::Embedded(id)) => Some(*id),
                 Some(Track::External {

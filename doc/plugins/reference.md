@@ -360,7 +360,7 @@ interface AudioTrack {
 | `chapters()` → `Promise<{ sourceId, chapters: { title: string \| null; start: number }[] }>` | 当前媒体的章节（mpv `chapter-list`，`start` 为秒），按需读取，不随状态推送；没有媒体、生成流或没有章节时为空数组。`sourceId` 是读取时的来源，与 `player.state.sourceId` 比较可知是否已过期。需要 `playback.read` |
 | `setLoop(loop \| null, opts?)` | A-B 循环：播到 `b` 回到 `a`（秒，`0 ≤ a < b ≤ 时长`），回跳 `count` 次（正整数，≤ 1 000 000；省略 = 无限），`null` 取消。结果在 `state.loop`（`count` 为请求值，不是剩余次数）；最后一次回跳后 `state.loop` 变为 `null`。范围不对 `invalid`；不可跳转的来源、生成流 `unsupported`；没有就绪的媒体 `unavailable`；条件提交同其它控制。来源变化（新的 `sourceId`）时播放器清除循环 |
 | `audioDevices()` → `Promise<{ id: string; name: string }[]>` | 现在接入的音频输出设备（不含「系统默认」项；`id` 如 `coreaudio/<设备 UID>`，`name` 为系统显示的名字）。新接入的设备不推送，需要时再读（如每 5 秒）。需要 `playback.read` |
-| `setAudioDevice(id \| null)` | 在该设备接入期间用它播放，不在时用系统默认，重新接入后切回；`null` = 总是系统默认。`state.audioOutput.requested` 是请求的 id，`active` 是正在用的（`null` = 系统默认），播放器每秒检查一次设备。只在本次运行内记住，不跨启动保存（插件自己保存并在激活时设置）。插件生成的音视频流（`openStream`）同样跟随。不存在的 id 也接受（`active` 为 `null`）；格式不对 `invalid` |
+| `setAudioDevice(id \| null)` | 在该设备接入期间用它播放，不在时用系统默认，重新接入后切回；`null` = 总是系统默认。`state.audioOutput.requested` 是请求的 id，`active` 是正在用的（`null` = 系统默认），播放器每秒检查一次设备。只在本次运行内记住，不跨启动保存（插件自己保存并在激活时设置）；设置它的插件停用时回到系统默认（与 `setAlwaysOnTop` 相同）。插件生成的音视频流（`openStream`）同样跟随。不存在的 id 也接受（`active` 为 `null`）；格式不对 `invalid` |
 | `setStepSeek({ seconds })` | 核心第 1 档相对跳转（`seek-backward` / `seek-forward`，← / →）的步长：0.1–3600，一位小数，默认 5；菜单标题随之变为「后退 N秒」。所有插件最后写入的生效，该插件停用后回到上一个仍有效的值（都没有则 5） |
 
 `opts` 为 `{ ifCurrent?: PlayerState }`。
@@ -783,7 +783,8 @@ type SubtitleStyle = {
 - `streamIndex`：只有内嵌轨、且播放器能确认 FFmpeg 流号时才有值（本地文件经宿主的 lavf 读取路径打开时）；外部轨、网络来源与其它情况一律 `null`。可直接用于 `tools.run("ffmpeg", ["-i", 源路径, "-map", \`0:${streamIndex}\`, …])`。
 - 样式按 1080p 参考高度缩放。`box` 有值时画背景框，阴影不生效；`shadow` 只在没有框时生效。
 - 次字幕：`select(track, { role: "secondary" })` 设置（`null` 关闭），`load(bytes, { select: "secondary" })` 载入后作为次字幕。不能与主字幕是同一条（两个方向都 `invalid`），图形字幕不能作次字幕（`invalid`）；共用 `trackConfirmation`；换来源时清空；移除其外部轨时一并清空。「含字幕」截图只含主字幕。
-- `secondaryPosition`：`"top"` 在画面顶部；`"aboveMain"` 在主字幕上方（按底边距加两行主字幕的高度估算，mpv `secondary-sub-pos`）。随生效的样式层（最后设置样式的插件）。
+- `secondaryPosition`：`"top"` 在画面顶部；`"aboveMain"` 在主字幕上方（按底边距加两行主字幕的高度估算，mpv `secondary-sub-pos`）。随生效的样式层（最后设置样式的插件）。主字幕是图形字幕（`styleSupported: false`）时 `setStyle` 原本以 `unsupported` 失败；选了次字幕时改为接受（样式作用于文本次字幕，对图形主字幕无效）。
+- 次字幕的字体、字号、颜色、描边与主字幕相同（同一个样式层）；mpv 0.41 没有单独的次字幕字号，不提供「次字幕为主字幕 85%」。
 - `assOverride`：`"keep"`（默认）时 ASS 字幕保留脚本自己的字体、颜色、位置，只按窗口缩放，样式只作用于 SRT 等文本字幕；`"force"` 时样式强制覆盖 ASS 脚本样式。
 
 ## 10. 截图与导出 `plugin.media`
