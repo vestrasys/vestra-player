@@ -355,3 +355,51 @@ npm 安装 git 依赖时会克隆仓库，若有 `prepare`（或 `build`、`prep
 - `src/host/`（`CARGO_TARGET_DIR=~/.cache/vestra-target/s1`）：`cargo fmt --check`、`cargo clippy --locked --all-targets -- -D warnings` 通过，`cargo test --locked` 263/263。
 - `portability`：clean；扫描已安装 SDK 的 `dist/`、`bin/`，0 处系统命令，`process.platform` 分支 4 处（与 S0 相同）。
 
+## S3 前半记录（2026-10-21，基础设施）
+
+按 1.6 第 6 条修订：内置插件留在 `src/plugins/`，只有 `youtube`、`bilibili` 带历史迁到插件仓库 `vestrasys/vestra-player-plugins`。只搬家、不改行为，插件文件逐字节不变，**id 不变**（改为 `vestra.youtube`、`vestra.bilibili` 在阶段 4、SDK 1.1.0 之后做）。CI 的打包、Releases、`index.json`、签名、`registry/` 的实现属于 S3 后半，本次没做。
+
+### 历史
+
+- 在全新 clone（`git clone --no-local`，`2e42b17`）上运行 `git filter-repo --path src/plugins/youtube/ --path src/plugins/bilibili/ --path-rename src/plugins/:plugins/ --prune-empty always`，再删掉其它分支（没有标签），只留 `main`。
+- 路径排查：对两个插件的每个文件做 `git log --follow`，没有其它旧路径（不在 `doc/experimental1/plugins/`、`temp/plugins/` 待过）；`doc/design/plugins/youtube.md` 是设计文档，不迁。
+- 结果：7 个迁移来的提交（原仓库 `git rev-list --count 2e42b17 -- src/plugins/youtube src/plugins/bilibili` 也是 7），外加 1 个脚手架提交。不加 `--follow` 也连续：`plugins/youtube` 7 个提交、`plugins/bilibili` 6 个，与原仓库相同，最早都是 `f3ec8ed` 2026-10-19（原 `bcaffba`）。树对象与 `2e42b17:src/plugins/<名字>` 相同：youtube `dfa54ec`，bilibili `d3d7dc6`。
+
+### 插件仓库布局
+
+```text
+plugins/youtube、plugins/bilibili   内容不变
+registry/         README：以后放第三方登记文件 registry/<id>.toml（格式见 1.3a），本阶段不实现
+scripts/          plugin.mjs（按名字或 --all 调用 SDK 的 vestra-plugin）、plugins.mjs、
+                  check-boundaries.mjs（插件只引用自己目录、@vestra-player/sdk 与测试里的 /testing）、
+                  check-portability.mjs（播放器跨平台检查里扫描插件的那一半）
+package.json      devDependencies：@vestra-player/sdk ^1.0.0（npm，lock 锁 1.0.0，与播放器相同）、typescript、@types/node、prettier（与播放器版本相同）
+tsconfig.json     播放器的插件编译设置，没有 jsnes 映射，include 只有 plugins/**/*.ts
+.github/workflows/ci.yml   push 到 main 与 PR：macOS/Linux/Windows × Node 22.18、24：npm ci、check、format:check、boundaries、portability、build、test
+.gitattributes（* text=auto eol=lf）、.gitignore、LICENSE（Apache-2.0，与 SDK 仓库同一份）、README.md（英文，说明本仓库放不随安装包分发的官方插件和第三方登记，内置插件在播放器 src/plugins/）、CONTRIBUTING.md（占位）
+```
+
+`format:check` 只覆盖仓库自己的脚本和配置：插件源码原本就不在播放器的 Prettier 范围内，按「内容不变」不重排。两个插件 README 里「在 `src/` 下：`npm run plugin -- …`」的说法已过时（现在在插件仓库根目录执行，命令本身照旧可用），不影响构建测试，没改。
+
+### 播放器仓库的改动
+
+- 删除 `src/plugins/youtube`、`src/plugins/bilibili`。其余 17 个插件、`scripts/`、`tests/`、`tsconfig.json`、宿主都没改：脚本按目录枚举插件，没有写死这两个名字；宿主测试 `all_plugin_and_example_slint_files_compile` 只要求 ≥ 15 个 Slint 文件。
+- `commands.rs` 的 `migration_orders_reproduce_the_old_menu_tree` 和 `limits_leave_room_for_real_plugins` 仍包含这两个插件的菜单项和命令数：前者是对历史快照 `menus-before.json` 的复现测试，后者是上限的下界估计（用户安装后它们仍会注册命令），都不改。
+- `doc/process/rounds/menus-snapshot.test.ts`：默认列表去掉 `youtube`、`bilibili`；原来的导入指向 S2 已删除的 `src/sdk/plugin/testing.ts` 和主工作区的绝对路径，已改为从 `src/node_modules` 的 SDK 包取 `TestHost`，从本仓库的 `src/plugins` 取插件。重新运行后得到宿主加 17 个插件、311 条命令，不含这两个插件。`menus-before.json`、`menus-after.json` 是核心界面轮次的历史快照（46 条命令，宿主测试引用前者），**没有重新生成**。
+- 文档：根 README（插件说明与加载这两个插件的方法）、`doc/architecture/README.md`、`doc/plugins/README.md`、`doc/plugins/examples.md` §9（完整代码位置）、`doc/status.md`（目录列）、`doc/product/menus.md`（两项注明「安装后出现」）、工作流 §6.1（插件仓库检查命令）和 §6.2「网络视频」（从插件仓库检出加载）。`feature-requirements.md` 里没有这两个插件的源码路径，只有行为描述，不改。轮次记录未改。
+- 开发和 GUI 测试时加载这两个插件：在 `src/host/` 下 `--plugin <插件仓库检出>/plugins/youtube`（检出在播放器仓库旁边时是 `../../../vestra-player-plugins/plugins/youtube`），检出里先 `npm ci`。没有增加 `VESTRA_PLUGINS_DIR` 之类的机制，因为没有检查需要它。
+
+### 检查（本次实际执行）
+
+- 迁移前基线（`wt-plugins2`，`2e42b17`）：youtube 14、bilibili 15；记录两个插件 `dist/`（11 个文件）的 sha256。
+- 插件仓库（本机 Node 26.12 / npm 11.20）：`npm ci`、`check`、`format:check`、`boundaries`、`portability`（0 处系统命令，2 处 `process.platform`）、`build`、`npm test` 全部退出 0；youtube 14/14、bilibili 15/15；`dist/` 与基线逐字节相同。
+- 播放器 worktree：`npm ci`、`check`、`format:check`、`boundaries` 退出 0；`test:sdk` 9/9；`portability`：Windows 目标 OK，0 处系统命令；`plugins:build` 退出 0；17 个插件测试数与迁移前相同（audio 35、capture 25、history 22、hotkeys 17、info 31、marks 24、nes 11、playback 64、playlist 98、plugins 10、preferences 10、subtitle-online 17、subtitles 52、video 39、visualizer 17、window 34、workshop 17），示例 bookmark 1、core-ui 2、panel-menu 1；`menus-snapshot.test.ts` 通过。`src/host/`（`CARGO_TARGET_DIR=~/.cache/vestra-target/s3`）：`cargo fmt --check`、`cargo clippy --locked --all-targets -- -D warnings` 通过，`cargo test --locked` 263/263。
+- 未执行：Node 22.18 和 24、Windows 和 Linux 实机（由插件仓库 CI 覆盖）。
+
+### 给协调者的步骤
+
+1. 审查并提交 `rebuild/plugins-split`。
+2. 插件仓库：远端 `main` 现在是旧版（64 个提交，全部内置插件）。用户同意后 `git -C <插件仓库> push --force -u origin main`（`origin` 已设好）；确认 `CI` 在 3 个系统 × 2 个 Node 版本上通过。
+3. 本机把插件仓库克隆到播放器旁边，`npm ci`。
+4. 真机：内置插件照常加载，再加 `--plugin ../../../vestra-player-plugins/plugins/youtube --plugin ../../../vestra-player-plugins/plugins/bilibili`，按工作流 §6.2 测「网络视频」（公开视频能播放）和「全部」（两项菜单在「打开」下）。
+5. 合并到 `main` 并推送。
