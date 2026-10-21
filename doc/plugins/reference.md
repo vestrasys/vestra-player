@@ -91,7 +91,7 @@ interface Disposable { dispose(): Promise<void> }
 | `plugins.manage` | `packages.validate`、`rollback`、`setEnabled`、`uninstall`（`list`、`onChange` 不需要能力） |
 | `ui.osd` | `osd.show`、`osd.panel` |
 | `clipboard` | `clipboard.readText`、`writeText`、`writeImage` |
-| `window.control` | `window.setVideoArea`、`setAlwaysOnTop`、`setCursorAutoHide` |
+| `window.control` | `window.setVideoArea`、`setAlwaysOnTop`、`setCursorAutoHide`、`setPictureInPicture` |
 | `bindings.manage` | `bindings.*`（§4.2） |
 | `timeline.marks` | `timeline.layer()`（§5.6；读取 `timeline.marks` 只需 `playback.read`） |
 | `ui.drop` | `drops.provide`、`Panel.onDrop`（§6.7） |
@@ -714,18 +714,26 @@ interface MainWindow {
   setVideoArea(size: { width: number; height: number }): Promise<{ width; height; clamped: boolean }>;
   setAlwaysOnTop(onTop: boolean): Promise<void>;
   setCursorAutoHide(mode: "fullscreen" | "playing"): Promise<void>;
+  setPictureInPicture(on: boolean): Promise<void>;
 }
 interface WindowState {
   readonly fullscreen: boolean;
   readonly videoArea: { readonly width: number; readonly height: number }; // 逻辑点
+  readonly pictureInPicture: { readonly supported: boolean; readonly active: boolean };
 }
 ```
 
-- `state`、`onChange` 不需要能力；三个 `set…` 需要 `window.control`。`videoArea` 是视频区（不含底栏、侧栏、分隔条），全屏时是整个屏幕；无界面模式为 0×0。有 `events` 时随窗口变化更新（从插件第一次读 `state` 或调用 `onChange` 开始跟随），没有 `events` 时只在启动和本插件的 `setVideoArea` 之后更新。
+- `state`、`onChange` 不需要能力；四个 `set…` 需要 `window.control`。`videoArea` 是视频区（不含底栏、侧栏、分隔条），全屏时是整个屏幕；无界面模式为 0×0。有 `events` 时随窗口变化更新（从插件第一次读 `state` 或调用 `onChange` 开始跟随），没有 `events` 时只在启动和本插件的 `setVideoArea` 之后更新。
 - `setVideoArea`：把窗口调成视频区为 `width`×`height`（1–16384 逻辑点；1 倍 = 一个视频像素一个点）。播放器加上底栏和附着的侧栏（侧栏宽 + 3），保持窗口左上角，再把窗口挪回屏幕可见区（macOS 不含菜单栏和 Dock；Windows 按整个显示器计算，可能与任务栏重叠）。放不下时按比例缩小；小于最小尺寸（视频区宽 318、高 120，窗口 320×182）时放大到最小值（会有黑边）；这两种情况 `clamped: true`。resolve 时布局已是新尺寸（最多等 1 秒），返回实际视频区，`state` 已刷新。全屏时与无界面模式 `unavailable`（`message`「全屏时不可用」）。
 - `setAlwaysOnTop`：`true` 时播放器的普通窗口（主窗口、浮动侧栏、工具窗口，包括之后新开的）浮在其他应用的窗口之上（macOS `NSFloatingWindowLevel`，Windows 为「总在最前」）；系统对话框不受影响。多个插件时最后一次调用生效，该插件停用后回到其余插件中最后的值（都没有则不置顶）。无界面模式 `unavailable`。
 - `setCursorAutoHide`：`"fullscreen"`（默认）只在全屏时隐藏指针；`"playing"` 在窗口模式也隐藏。隐藏条件不变：播放中（就绪且未暂停）、指针在视频区、3 秒内没有指针移动或按键、没有菜单或系统对话框、面板没有在操作；窗口模式另需主窗口是活动窗口。多个插件时最后一次调用生效，该插件停用后回到其余插件中最后的值（都没有则 `"fullscreen"`）。
-- 测试：`host.mainWindow`（`{ fullscreen, videoArea, onTop, cursorAutoHide }`）；`host.setMainWindow({ fullscreen?, videoArea? })` 模拟用户改变窗口并推送。
+- `setPictureInPicture`：`true` 把视频放进系统画中画小窗播放，`false` 放回主窗口。小窗打开（或关闭）之后才 resolve，这时 `state.pictureInPicture.active` 已更新。小窗里是播放器渲染的画面（含画面效果和 mpv 画的字幕），播放器自己画的屏幕提示、信息块、底栏不在小窗里；画中画期间主窗口视频区显示灰字「正在以画中画播放」。规则：
+  - 全屏时调用 `true`：播放器先退出全屏，再打开小窗。已经打开时再调 `true` 直接 resolve（之后算这个插件打开的）；没打开时调 `false` 直接 resolve。
+  - 小窗的播放 / 暂停按钮和跳转按钮直接控制播放（跳转距离由系统给出）；小窗显示进度条，可以跳转的来源才有，直播或不能跳转的来源只有播放 / 暂停。小窗的「返回」按钮关闭小窗、不暂停；小窗的关闭按钮关闭小窗并暂停（和 Safari、QuickTime 一致）。这两种关闭插件都从 `onChange` 看到 `active` 变为 `false`。
+  - 小窗跟着来源走：换来源时保持；新来源没有视频，或来源被关闭时自动关闭。打开它的插件停用时也关闭。主窗口重建（挂载、卸载界面）不影响小窗。
+  - 错误：系统不支持（`supported` 为 `false`）`unsupported`；没有视频或无界面模式 `unavailable`；上一次调用还没完成 `busy`；系统拒绝或 5 秒内没打开 `failed`（`message` 是原因）。
+  - `supported`：macOS 14 及以后为 `true`；Windows、Linux 和无界面模式为 `false`（以后会由播放器自己做一个无边框置顶小窗，接口不变）。不支持时插件可以用 `setVideoArea` + `setAlwaysOnTop` 做「迷你尺寸」作为退路。
+- 测试：`host.mainWindow`（`{ fullscreen, videoArea, onTop, cursorAutoHide, pictureInPicture }`）；`host.setMainWindow({ fullscreen?, videoArea?, pictureInPicture? })` 模拟用户改变窗口（包括在小窗里关闭画中画）并推送。`TestHost` 的 `setPictureInPicture` 立即切换 `active`（全屏时同时退出全屏）；把 `host.mainWindow.pictureInPicture.supported` 设为 `false` 模拟 Windows、Linux。
 
 ### 6.7 拖放 `plugin.drops`、`Panel.onDrop`
 
@@ -1305,6 +1313,7 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | 确认框 §7 | `NSAlert` 表单，自定义按钮与复选框 | 任务对话框，自定义按钮；复选框改为第二个是/否框 | `unsupported` |
 | 置顶 §6.6 | `NSFloatingWindowLevel` | 总在最前 | `unavailable` |
 | `setVideoArea` §6.6 | 可见区不含菜单栏与 Dock | 按整个显示器 | `unavailable` |
+| 画中画 `setPictureInPicture` §6.6 | 系统画中画（AVKit，macOS 14+） | `unsupported`（以后为播放器自己的置顶小窗） | `unsupported` |
 | 拖放 §6.7 | 指针与 ⌥⇧⌘ | 指针与 Alt、Shift、Ctrl（作 `cmd`） | 只按视频区规则分发 |
 | `system.*` §16.5 | `open`，一个 Finder 窗口选中全部 | Shell，每个文件夹一个窗口 | `unsupported` |
 | 密钥 §16.6 | 登录钥匙串 | 凭据管理器 | `unsupported` |
@@ -1337,6 +1346,16 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 - `plugin.video.render()`（§8.2）：HDR 色调映射、用户着色器、运动补偿；单一拥有者，需要 `processing.video`；软件渲染下 `unsupported`。类型 `RenderSettings`、`RenderOptions`；`Scope.video` 多了 `render`。协议新增 `video.render.set { values }`（返回 `{ state }`）、`video.render.release`，以及播放器推给拥有者的事件 `video.render.status`（`{ state: "failed", error }`）。
 - `PlaybackStats.video.hwdec`、`video.transfer`（§5.4）。旧的测试数据可以不写这两个字段，SDK 补 `null`。
 - `TestHost`：`host.videoRender`、`host.setVideoRenderOwner`、`host.failVideoRender`（§14）。
+
+### 渲染与画中画轮 B：画中画（2026-10）
+
+兼容扩展（不用它的插件不必改）：
+
+- `plugin.window.setPictureInPicture(on)`（§6.6，能力 `window.control`，协商 R-W5）：系统画中画小窗；小窗的播放 / 暂停、跳转按钮回传到播放，关闭按钮同时暂停。
+- `WindowState.pictureInPicture: { supported, active }`（R-W1 的画中画部分）。`window.state` 的回复和事件多了这个字段；旧播放器没有这个字段时 SDK 读作 `{ supported: false, active: false }`。
+- 协议：新请求 `window.setPictureInPicture { on }`。`TestHost.mainWindow` 多了 `pictureInPicture`，`setMainWindow` 接受它。
+
+行为变化：直接对 `window.state` 做 `deepEqual` 的测试会多看到 `pictureInPicture` 字段。
 
 ### 可移植性轮 P1：平台模块、文件与链接由播放器执行、密钥、系统信息、JPEG/BMP 导出（2026-10）
 

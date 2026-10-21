@@ -33,8 +33,6 @@ members = ["unsafe/pip", "unsafe/render", "unsafe/win32"]
 [features]
 default = ["producer-audio"]
 producer-audio = ["dep:cpal", "dep:rtrb"]
-# Prototype (r4a §7.1): code with `unsafe` lives in crates under unsafe/.
-pip = ["dep:vestra-pip"]
 
 [lints.rust]
 unsafe_code = "forbid"
@@ -49,7 +47,8 @@ keyring = { version = "=3.6.3", features = ["apple-native"] }
 # GPU rendering (reference §5.4): libmpv draws with OpenGL into IOSurfaces
 # that Slint's femtovg renderer shows; the `unsafe` stays in unsafe/render.
 vestra-gpu-render = { path = "unsafe/render" }
-vestra-pip = { path = "unsafe/pip", optional = true }
+# Picture-in-picture (window.setPictureInPicture): AVKit, the unsafe part in unsafe/pip.
+vestra-pip = { path = "unsafe/pip" }
 
 # The Windows platform module (src/platform/windows.rs). Safe crates first;
 # the few Win32 calls none of them wraps are in unsafe/win32.
