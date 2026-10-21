@@ -1,6 +1,6 @@
 # Markdown 示例
 
-这是 **核心 Markdown 显示组件** 的演示：*斜体*、~~删除线~~、`行内代码` 和 [Vestra Player 仓库](https://github.com/vestrasys/vestra-player)。点 [本页的「表格」一节](#表格) 只显示屏幕提示。
+这是 **核心 Markdown 显示组件** 的演示：*斜体*、~~删除线~~、`行内代码` 和 [插件 SDK 仓库](https://github.com/vestrasys/vestra-player-sdk)。点 [本页的「表格」一节](#表格) 只显示屏幕提示。
 
 ## 列表
 
@@ -38,9 +38,9 @@ window.set({ doc });
 
 ![图标](assets/icon.png)
 
-远程图片（由 SDK 下载到数据目录后显示）：
+远程图片（vestrasys 组织头像，经 GitHub 重定向；由 SDK 下载到数据目录后显示）：
 
-![Vestra](https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png)
+![Vestra](https://github.com/vestrasys.png?size=128)
 
 不支持的格式显示替代文字：![SVG 徽章](https://img.shields.io/badge/demo-svg-blue.svg)
 

@@ -543,3 +543,17 @@ Slint 1.16.1 已有 `StyledText` 元素（加粗、斜体、删除线、行内�
 
 - 安装库的操作回执上限 512 条（`MAX_OPERATIONS`）从不清理；每次播种升级也会写回执（同一包复用同一回执 id）。长期使用后安装会以「operation history full」失败，需要单独设计回执的淘汰。
 - `npm run portability` 把 Windows 检查的产物写在仓库内 `src/host/target/portability`（已被 `.gitignore` 忽略），与「不在仓库里产生 `target/`」的约定不一致。
+
+### GUI 复测修正（2026-10-21）
+
+协调者真机测试 Markdown 示例发现 5 处问题，已修（宿主 `ui_markdown.rs`、`ui/vestra/markdown.slint`，示例 `sample.md`；SDK `store-1.1.1` 分支提交 `e42a866`，版本 1.1.1，未打标签）：
+
+| 问题 | 原因 | 修正 |
+| --- | --- | --- |
+| 斜体、删除线看不出 | 强制的中文字体（Hiragino Sans GB / Microsoft YaHei）没有斜体，Slint 1.16 的渲染器忽略斜体合成；删除线粗细取自字体，正文字号下不足 1 像素。拉丁文同样受影响（拉丁文也用这个字体） | 保留 `Emphasis`/`Strikethrough` 样式，另用 `<font color>` 着色：斜体琥珀色 `#e8a33d`、删除线灰色 `#8a8496`（格式串里只能写字面颜色，两套配色下都可读） |
+| 含中文的行内代码不显示 | Slint 的 `Code` 样式把字体族换成单一的等宽字体，没有回退 | 代码文字按字符分段：ASCII 段用 `Code`，其它段用正文字体；代码块改为同样分段的 `styled-text`（逐行硬换行，空行与缩进保留），等宽显示 ASCII |
+| 未完成任务显示为缺字方框 | ☐ 不在字体里 | `MarkdownBlock.task`（0/1/2），方框与勾用 Slint 图形绘制；`marker` 对任务项为空 |
+| 表头与正文对齐不一致 | 每行各自按内容分配列宽 | `MarkdownBlock.aligns` 取自 GFM 分隔行；每行列宽相等，表头与正文都按列对齐；短行补空单元格 |
+| 示例的远程图片 400 | Wikimedia 不再接受非标准缩略图尺寸 | 改用 `https://github.com/vestrasys.png?size=128`（本组织头像，302 到 avatars.githubusercontent.com，顺带覆盖重定向路径；已用 SDK 下载器实测取回 PNG）。播放器与插件仓库是私有的，raw.githubusercontent.com 取不到；公开的 SDK 仓库里没有 PNG。SDK 的下载器改为可注入 `fetch`，新增 HTTP 错误、跳到 `http:`、重定向上限、大小上限与 `User-Agent` 的测试 |
+
+结构体 `MarkdownBlock` 新增字段属于控件库内部数据（插件只传递 `plugin.ui.markdown()` 的值），不影响插件。宿主测试 288/288（新增 1 项回归测试；渲染测试增加任务方框的像素检查）；SDK 112/112。

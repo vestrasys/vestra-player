@@ -633,6 +633,7 @@ window.on("openLink", (url: string) => plugin.system.openUrl(url));
 ```
 
 - 播放器解析（pulldown-cmark）并绘制：标题 1–6、段落（粗体、斜体、删除线、行内代码、链接）、无序/有序/任务列表（嵌套 ≤ 4 层）、代码块（等宽、不高亮）、引用（≤ 4 层）、图片、GFM 表格（单元格为纯文本，≤ 16 列 × 500 行）、分隔线。**内嵌 HTML 不显示**；脚注、数学不启用。`MarkdownRef` 只能作为 `[MarkdownBlock]` 属性的整个值，属于创建它的作用域（释放后写入为 `invalid`）。
+- 显示细节：播放器为中文强制使用的系统字体（Hiragino Sans GB、Microsoft YaHei）没有斜体，Slint 也不合成斜体，所以斜体另加琥珀色、删除线另加灰色，保证在任何字体下都看得出；行内代码与代码块中 ASCII 用等宽字体、中文等其它文字用正文字体（等宽字体没有中文字形）；任务列表的方框用图形绘制，不依赖字体字形；表格每行列宽相同，表头与正文都按分隔行的对齐方式（`:--`、`:-:`、`--:`）对齐。
 - 链接：点击时 `MarkdownView` 发出 `link-clicked(url)`，相对地址已按 `base` 解析（`#锚点` 原样）；打开与否由插件决定。
 - `base`：`http(s)` 地址（如 README 自己的地址）或绝对目录；相对链接与图片按它解析。没有 `base` 时相对图片显示替代文字。
 - 图片：PNG/JPEG。本地图片按 `ui.image` 的规则（本插件包目录或数据目录内，≤ 16 MB、4096²，与 `ui.image` 共用每插件 64 MB 的解码缓存）。`https:` 图片由 SDK 在本插件进程里下载到 `<dataDirectory>/.vestra-cache/markdown/`：单张 ≤ 4 MB、10 秒、重定向 ≤ 5 次（只跟随到 `https:`）、同时 4 个、每文档 ≤ 64 张；缓存 32 MB，按最近使用淘汰，同一地址 24 小时内不重新下载。下载失败、`http:`、SVG/GIF 等显示替代文字，`markdown()` 本身不因此失败。`remoteImages: false` 不下载。
