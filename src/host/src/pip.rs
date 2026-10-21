@@ -195,6 +195,18 @@ impl<S: Surface> PictureInPicture<S> {
         });
         Ok(None)
     }
+    /// The user asked for the video back in the main window (IA-CORE-12: a
+    /// double click on its video area): close like the window's "back"
+    /// button, without pausing. Nothing happens unless the window is open.
+    pub fn restore(&mut self) {
+        if !self.active || self.stopping {
+            return;
+        }
+        if let Some(surface) = &self.surface {
+            self.stopping = true;
+            surface.stop();
+        }
+    }
     /// A plugin stopped: if its request is in effect, the window closes.
     pub fn remove_owner(&mut self, owner: u64) {
         if self.owner != Some(owner) {
@@ -626,6 +638,26 @@ mod tests {
         let effects = pip.tick(&FACTS, place(), &PLAYING, 70);
         assert_eq!(responses(&effects), [(3, Ok(()))]);
         assert!(actions(&effects).is_empty());
+    }
+
+    #[test]
+    fn a_double_click_in_the_main_window_restores_without_pausing() {
+        let fake = Fake::default();
+        let mut pip = started(&fake);
+        pip.restore();
+        pip.restore(); // Already closing: asked once.
+        assert_eq!(fake.0.borrow().stopped, 1);
+        fake.emit(PipEvent::Stopped { restored: false });
+        let effects = pip.tick(&FACTS, place(), &PLAYING, 48);
+        assert!(
+            actions(&effects).is_empty(),
+            "the player's own stop never pauses"
+        );
+        assert!(!pip.active() && !pip.feeding());
+        // Not open: nothing to do.
+        let mut idle = PictureInPicture::<Fake>::default();
+        idle.restore();
+        assert!(!idle.active());
     }
 
     #[test]

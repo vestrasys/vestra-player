@@ -235,6 +235,12 @@ pub fn double_click_seconds() -> f64 {
     objc2_app_kit::NSEvent::doubleClickInterval()
 }
 
+/// G-15: macOS has no submenu delay setting; reference player's value under the
+/// Windows default.
+pub fn menu_show_delay_ms() -> u64 {
+    crate::menu::SHOW_DELAY_MS
+}
+
 pub fn screen_for(id: HostWindowId) -> Result<ScreenFacts> {
     let window = window(id)?;
     let screen = window

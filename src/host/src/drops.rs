@@ -231,13 +231,22 @@ impl Host {
                 .native_window
                 .and_then(|id| platform::pointer_in(id).ok());
             let input = self.input.borrow();
-            point.filter(|_| !fullscreen).and_then(|point| {
-                hit(
+            // G-01: in fullscreen only the popped-out sidebar takes drops.
+            let overlay = self.sidebar_popped.then(|| {
+                let width = number("logical-width");
+                width - number("sidebar-pop-width")
+            });
+            point.and_then(|point| match (fullscreen, overlay) {
+                (false, _) => hit(
                     point,
                     (number("video-width"), number("video-height")),
                     input.bottom,
                     input.sidebar,
-                )
+                ),
+                (true, Some(left)) if point.0 > left => input
+                    .sidebar
+                    .map(|owner| (owner, (point.0 - left, point.1))),
+                (true, _) => None,
             })
         } else {
             // A tool window or the options window: ignored.

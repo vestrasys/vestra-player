@@ -12,6 +12,12 @@ const MIN_WIDTH: f64 = 168.;
 const MAX_WIDTH: f64 = 420.;
 /// Neighbouring panels overlap slightly so the pointer can cross between them.
 const OVERLAP: f64 = 2.;
+/// G-03: a level taller than the window scrolls between two arrow bars this
+/// high (must match ui/menu-view.slint).
+pub const ARROW: f64 = 12.;
+/// G-15: submenus open (and switch) after this delay on platforms without a
+/// system setting; Windows reads its own (`platform::menu_show_delay`).
+pub const SHOW_DELAY_MS: u64 = 400;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Point {
@@ -129,14 +135,38 @@ fn place(origin: Point, width: f64, height: f64, window: Point) -> (f64, f64) {
     )
 }
 
+/// G-03: a level's height in a window `available` high, whether it scrolls,
+/// and its scroll offset (`requested`, clamped). A scrolling level fills the
+/// window; its rows show between two arrow bars.
+fn fit(content: f64, available: f64, requested: f64) -> (f64, bool, f64) {
+    if content <= available {
+        return (content, false, 0.);
+    }
+    let height = available.max(2. * ARROW + ROW + 2. * PAD);
+    let visible = height - 2. * ARROW;
+    let offset = if requested.is_finite() {
+        requested.clamp(0., content - visible)
+    } else {
+        0.
+    };
+    (height, true, offset)
+}
+
+/// Where a level's row tops (panel content coordinates) are drawn in the panel.
+fn row_shift(scrolling: bool, offset: f64) -> f64 {
+    if scrolling { ARROW - offset } else { 0. }
+}
+
 /// One panel per open level, root first. `path` must come from `valid_path`.
 /// Panels open at `origin`, cascade to the right of their open row, flip to
-/// the left at the window edge and are clamped inside `window`.
+/// the left at the window edge and are clamped inside `window`. A level
+/// taller than the window scrolls; `scroll[depth]` is its requested offset.
 pub fn levels(
     roots: &[MenuNode],
     path: &[String],
     origin: Point,
     window: Point,
+    scroll: &[f64],
     labels: Labels<'_>,
 ) -> Value {
     let mut output = Vec::new();
@@ -157,7 +187,9 @@ pub fn levels(
             .enumerate()
             .map(|(index, node)| index > 0 && nodes[index - 1].group() != node.group())
             .collect();
-        let (rows, width, height) = panel(rows, separators);
+        let (rows, width, content) = panel(rows, separators);
+        let requested = scroll.get(depth).copied().unwrap_or(0.);
+        let (height, scrolling, offset) = fit(content, window.y, requested);
         let (x, y) = match previous {
             None => place(origin, width, height, window),
             Some((px, py, pw, row_y)) => {
@@ -177,12 +209,13 @@ pub fn levels(
         let open_y = open.and_then(|index| rows[index]["y"].as_f64());
         output.push(
             json!({"rows":rows,"x":x,"y":y,"width":width,"height":height,
-            "open":open.map_or(-1, |index| index as i64)}),
+            "open":open.map_or(-1, |index| index as i64),
+            "scroll":scrolling,"viewport-y":offset}),
         );
         let (Some(open), Some(open_y)) = (open, open_y) else {
             break;
         };
-        previous = Some((x, y, width, open_y));
+        previous = Some((x, y, width, open_y + row_shift(scrolling, offset)));
         nodes = match &nodes[open] {
             MenuNode::Group { children, .. } => children,
             MenuNode::Command { .. } => break,
@@ -196,6 +229,7 @@ pub fn context_level(
     items: &[Option<&CommandSnapshot>],
     origin: Point,
     window: Point,
+    scroll: f64,
     labels: Labels<'_>,
 ) -> Value {
     let mut rows = Vec::new();
@@ -211,9 +245,77 @@ pub fn context_level(
             }
         }
     }
-    let (rows, width, height) = panel(rows, separators);
+    let (rows, width, content) = panel(rows, separators);
+    let (height, scrolling, offset) = fit(content, window.y, scroll);
     let (x, y) = place(origin, width, height, window);
-    json!([{"rows":rows,"x":x,"y":y,"width":width,"height":height,"open":-1}])
+    json!([{"rows":rows,"x":x,"y":y,"width":width,"height":height,"open":-1,
+        "scroll":scrolling,"viewport-y":offset}])
+}
+
+/// The open chain a hover asks for: a group row opens that group (closing
+/// anything deeper); a command row at `level` closes the levels below it.
+pub fn hover_target(current: &[String], level: usize, token: &str) -> Option<Vec<String>> {
+    match parse_token(token)? {
+        Token::Group(mut path) => {
+            path.truncate(level + 1);
+            Some(path)
+        }
+        Token::Command { .. } => Some(current.iter().take(level).cloned().collect()),
+    }
+}
+
+/// G-15: Win32 submenu timing. The pointer resting on a group row opens it
+/// only after the show delay; with another submenu open, hovering a sibling
+/// switches after the same delay, and entering the open submenu meanwhile
+/// cancels the switch (so a diagonal move does not flip submenus). Clicks
+/// and keys open at once (the caller applies their path directly).
+#[derive(Debug, Default)]
+pub struct HoverDelay {
+    pending: Option<PendingHover>,
+}
+
+#[derive(Debug)]
+struct PendingHover {
+    path: Vec<String>,
+    since_ms: u64,
+}
+
+impl HoverDelay {
+    /// The pointer entered a row that asks for `target` (`hover_target`), while
+    /// `current` is open.
+    pub fn hover(&mut self, current: &[String], target: Vec<String>, now_ms: u64) {
+        if target == current {
+            // Back on the open row, or inside the open submenu.
+            self.pending = None;
+            return;
+        }
+        if self
+            .pending
+            .as_ref()
+            .is_some_and(|pending| pending.path == target)
+        {
+            return;
+        }
+        self.pending = Some(PendingHover {
+            path: target,
+            since_ms: now_ms,
+        });
+    }
+
+    /// The path to open now that the delay passed, if any.
+    pub fn due(&mut self, now_ms: u64, delay_ms: u64) -> Option<Vec<String>> {
+        let ready = self
+            .pending
+            .as_ref()
+            .is_some_and(|pending| now_ms.saturating_sub(pending.since_ms) >= delay_ms);
+        ready
+            .then(|| self.pending.take().map(|pending| pending.path))
+            .flatten()
+    }
+
+    pub fn clear(&mut self) {
+        self.pending = None;
+    }
 }
 
 #[cfg(test)]
@@ -265,7 +367,14 @@ mod tests {
     #[test]
     fn open_levels_cascade_beside_their_open_row() {
         let path = vec!["文件".to_owned(), "网络".to_owned()];
-        let value = levels(&tree(), &path, Point { x: 100., y: 50. }, WINDOW, &none);
+        let value = levels(
+            &tree(),
+            &path,
+            Point { x: 100., y: 50. },
+            WINDOW,
+            &[],
+            &none,
+        );
         let levels = value.as_array().unwrap();
         assert_eq!(levels.len(), 3);
         assert_eq!(levels[0]["open"], 0);
@@ -284,7 +393,7 @@ mod tests {
     fn panels_flip_and_clamp_at_window_edges() {
         let path = vec!["文件".to_owned()];
         let origin = Point { x: 990., y: 690. };
-        let value = levels(&tree(), &path, origin, WINDOW, &none);
+        let value = levels(&tree(), &path, origin, WINDOW, &[], &none);
         let levels = value.as_array().unwrap();
         for level in levels {
             let (x, y) = (level["x"].as_f64().unwrap(), level["y"].as_f64().unwrap());
@@ -303,6 +412,7 @@ mod tests {
             &valid_path(&tree(), &path),
             Point { x: 0., y: 0. },
             WINDOW,
+            &[],
             &none,
         );
         let token = value[1]["rows"][1]["token"].as_str().unwrap().to_owned();
@@ -330,7 +440,7 @@ mod tests {
             },
         ];
         let labels = |_: u64, id: &str| (id == "c").then(|| "Enter".to_owned());
-        let value = levels(&nodes, &[], Point { x: 0., y: 0. }, WINDOW, &labels);
+        let value = levels(&nodes, &[], Point { x: 0., y: 0. }, WINDOW, &[], &labels);
         let rows = value[0]["rows"].as_array().unwrap();
         assert_eq!(
             rows.iter()
@@ -349,11 +459,134 @@ mod tests {
             &[None, Some(&a), None, None, Some(&b), None],
             Point { x: 5., y: 5. },
             WINDOW,
+            0.,
             &labels,
         );
         let rows = context[0]["rows"].as_array().unwrap();
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0]["separator"], false);
         assert_eq!(rows[1]["separator"], true);
+    }
+
+    fn commands(count: usize) -> Vec<MenuNode> {
+        (0..count)
+            .map(|index| MenuNode::Command {
+                entry: command(&format!("c{index}"), "g"),
+            })
+            .collect()
+    }
+
+    /// G-03 step 1: 25 rows in a 182-high window; every row can be scrolled
+    /// fully into view between the arrow bars.
+    #[test]
+    fn a_level_taller_than_the_window_scrolls_and_every_row_is_reachable() {
+        let nodes = commands(25);
+        let window = Point { x: 320., y: 182. };
+        let origin = Point { x: 10., y: 100. };
+        let level = |scroll: f64| levels(&nodes, &[], origin, window, &[scroll], &none)[0].clone();
+        let top = level(0.);
+        assert_eq!(top["scroll"], true);
+        assert_eq!(top["height"].as_f64().unwrap(), 182.);
+        assert_eq!(top["y"].as_f64().unwrap(), 0.);
+        let visible = 182. - 2. * ARROW;
+        let content = 25. * ROW + 2. * PAD;
+        let rows = top["rows"].as_array().unwrap().clone();
+        for (index, row) in rows.iter().enumerate() {
+            let row_y = row["y"].as_f64().unwrap();
+            // Scroll so the row's bottom meets the visible bottom.
+            let shown = level(row_y + ROW - visible);
+            let offset = shown["viewport-y"].as_f64().unwrap();
+            assert!(
+                row_y >= offset && row_y + ROW <= offset + visible,
+                "row {index} at {row_y} not visible at offset {offset}"
+            );
+        }
+        // Offsets are clamped to the content.
+        assert_eq!(level(-50.)["viewport-y"].as_f64().unwrap(), 0.);
+        assert_eq!(
+            level(1e6)["viewport-y"].as_f64().unwrap(),
+            content - visible
+        );
+        assert_eq!(level(f64::NAN)["viewport-y"].as_f64().unwrap(), 0.);
+        // A short menu does not scroll.
+        let short = levels(&commands(3), &[], origin, window, &[40.], &none);
+        assert_eq!(short[0]["scroll"], false);
+        assert_eq!(short[0]["viewport-y"].as_f64().unwrap(), 0.);
+        // Panel menus scroll the same way.
+        let entries: Vec<CommandSnapshot> =
+            (0..25).map(|i| command(&format!("p{i}"), "g")).collect();
+        let items: Vec<_> = entries.iter().map(Some).collect();
+        let panel = context_level(&items, origin, Point { x: 300., y: 250. }, 1e6, &none);
+        assert_eq!(panel[0]["scroll"], true);
+        assert_eq!(panel[0]["height"].as_f64().unwrap(), 250.);
+        assert_eq!(
+            panel[0]["viewport-y"].as_f64().unwrap(),
+            content - (250. - 2. * ARROW)
+        );
+    }
+
+    #[test]
+    fn a_submenu_opens_beside_its_row_as_scrolled() {
+        let mut nodes = commands(30);
+        nodes.push(group("更多", vec![group("子", vec![])]));
+        let window = Point { x: 1000., y: 300. };
+        let path = vec!["更多".to_owned()];
+        let value = levels(&nodes, &path, Point { x: 0., y: 0. }, window, &[1e6], &none);
+        let parent = &value[0];
+        let offset = parent["viewport-y"].as_f64().unwrap();
+        let row_y = parent["rows"][30]["y"].as_f64().unwrap();
+        let shown = parent["y"].as_f64().unwrap() + ARROW + row_y - offset;
+        assert_eq!(value[1]["y"].as_f64().unwrap(), shown - PAD);
+    }
+
+    /// G-15: hover timing, without a clock or a view.
+    #[test]
+    fn submenus_open_and_switch_after_the_delay_and_entering_the_open_one_cancels() {
+        let tree = tree(); // 文件 ▶ (播放列表 ▶, 网络 ▶), 播放 ▶
+        let token = |path: &[&str]| format!("g:{}", json!(path));
+        let mut delay = HoverDelay::default();
+        let mut current: Vec<String> = Vec::new();
+        // Resting on 文件 for less than the delay, then leaving: nothing opens.
+        let target = hover_target(&current, 0, &token(&["文件"])).unwrap();
+        delay.hover(&current, target, 0);
+        assert_eq!(delay.due(399, SHOW_DELAY_MS), None);
+        let away = hover_target(&current, 0, "c:3:open").unwrap();
+        delay.hover(&current, away, 200);
+        assert_eq!(delay.due(1000, SHOW_DELAY_MS), None);
+        // Resting long enough opens it.
+        let target = hover_target(&current, 0, &token(&["文件"])).unwrap();
+        delay.hover(&current, target, 1000);
+        assert_eq!(delay.due(1399, SHOW_DELAY_MS), None);
+        current = delay.due(1400, SHOW_DELAY_MS).unwrap();
+        assert_eq!(current, ["文件"]);
+        assert_eq!(valid_path(&tree, &current), current);
+        // Crossing 播放 on the way into the open submenu: no switch.
+        let target = hover_target(&current, 0, &token(&["播放"])).unwrap();
+        delay.hover(&current, target, 2000);
+        let inside = hover_target(&current, 1, "c:3:x").unwrap();
+        delay.hover(&current, inside, 2100);
+        assert_eq!(delay.due(5000, SHOW_DELAY_MS), None);
+        assert_eq!(current, ["文件"]);
+        // Resting on 播放: after the delay 文件 closes and 播放 opens.
+        let target = hover_target(&current, 0, &token(&["播放"])).unwrap();
+        delay.hover(&current, target, 6000);
+        current = delay.due(6400, SHOW_DELAY_MS).unwrap();
+        assert_eq!(current, ["播放"]);
+        // A command row at the top level closes the open submenu after the delay.
+        let target = hover_target(&current, 0, "c:3:open").unwrap();
+        delay.hover(&current, target, 7000);
+        assert_eq!(
+            delay.due(7400, SHOW_DELAY_MS).unwrap(),
+            Vec::<String>::new()
+        );
+        // Repeated hover events of the same row keep the first time.
+        let target = hover_target(&[], 0, &token(&["文件"])).unwrap();
+        delay.hover(&[], target.clone(), 8000);
+        delay.hover(&[], target, 8300);
+        assert!(delay.due(8400, SHOW_DELAY_MS).is_some());
+        delay.hover(&[], vec!["播放".into()], 9000);
+        delay.clear();
+        assert_eq!(delay.due(99_999, SHOW_DELAY_MS), None);
+        assert_eq!(hover_target(&[], 0, "bad"), None);
     }
 }

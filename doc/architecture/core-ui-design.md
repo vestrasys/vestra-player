@@ -48,7 +48,7 @@ HostWindow (默认 780×671，最小 320×182，背景 Theme.bg-video #101010，
   - 侧栏宽 = `min(用户宽度, 内容宽 − 3 − 318)`，且不小于 317；
   - 只有 `内容宽 < 318 + 3 + 317 = 638` 时才隐藏，`reason: "space"`，`preferred` 不变（菜单勾选仍是「显示」）；
   - 不再有高度条件（侧栏全高），删除 640×360、240、280 这组常量。
-- **全屏**（UI-SHELL-09）：底栏覆盖在视频底部，3000 ms 无操作后隐藏（沿用现有 `Policy` 的 idle 逻辑）；同时若正在播放（`!paused`），视频区 `mouse-cursor: none`。侧栏在全屏时照旧隐藏（`reason: "fullscreen"`）。
+- **全屏**（UI-SHELL-09）：底栏覆盖在视频底部，3000 ms 无操作后隐藏（沿用现有 `Policy` 的 idle 逻辑）；同时若正在播放（`!paused`），视频区 `mouse-cursor: none`。侧栏在全屏时收起为右边缘的覆盖层，指针移到右边缘时弹出（交互对齐 G-01，`reason: "fullscreen"` 表示收起）；指针停在底栏或弹出层上时不隐藏（G-04）。
 - 显示侧栏时窗口太窄就自动放大窗口的逻辑（`sidebar_resize_requested`）删除，由上面的压缩规则代替（见 §18 Q7）。
 - 窗口初始尺寸与位置从持久化恢复（C8），没有记录时用 780×671、系统默认位置。
 
@@ -252,7 +252,7 @@ impl Table {
 
 | 命令 | 默认绑定 | 菜单 | 状态 |
 | --- | --- | --- | --- |
-| `host/fullscreen` 全屏 | `Enter`、`F11`、`Mouse:LeftDoubleClick` | 顶层，`group: "screen"`，`order: 700`，勾选 = 是否全屏 | 总是可用 |
+| `host/fullscreen` 全屏 | `Enter`、`Alt+Enter`（交互对齐 IA-CORE-04）、`F11`、`Mouse:LeftDoubleClick` | 顶层，`group: "screen"`，`order: 700`，勾选 = 是否全屏 | 总是可用 |
 | `host/exit-fullscreen` 退出全屏 | `Escape` | 不在菜单 | 仅全屏时可用 |
 | `host/quit` 退出 | `Cmd+Q` | 顶层，`group: "exit"`，`order: 990` | 总是可用 |
 
