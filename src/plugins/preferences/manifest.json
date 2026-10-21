@@ -1,0 +1,13 @@
+{
+  "id": "vestra.preferences",
+  "version": "0.1.0",
+  "apiVersion": "vestra.experimental/0.1",
+  "entry": "main.ts",
+  "capabilities": [
+    "commands",
+    "events",
+    "ui.osd",
+    "ui.settings",
+    "ui.theme"
+  ]
+}
