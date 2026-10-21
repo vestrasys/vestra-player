@@ -87,7 +87,7 @@ const seconds = (value: number) => String(Math.round(value * 10) / 10);
 /** G-07: the bar's tooltips from the current state, keys and first seek tier. */
 export function barTips(
   keys: Keys,
-  state: { playing: boolean; muted: boolean; volume: number; remaining: boolean; step: number },
+  state: { playing: boolean; muted: boolean; volume: number; remaining: boolean; step: number; sidebarHidden: boolean },
 ) {
   return {
     tipPlayPause: keys.label(state.playing ? "暂停" : "播放", "play-pause"),
@@ -98,6 +98,6 @@ export function barTips(
     tipTime: state.remaining ? "点击切换已播放时间" : "点击切换剩余时间",
     tipMute: keys.label(state.muted ? "取消静音" : "静音", "mute"),
     tipVolume: `音量: ${Math.round(state.volume)}%`,
-    tipSidebar: keys.label("播放列表", "sidebar"),
+    tipSidebar: keys.label("播放列表", "sidebar") + (state.sidebarHidden ? "（窗口太窄，放不下播放列表）" : ""),
   };
 }

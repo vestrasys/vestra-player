@@ -134,3 +134,26 @@ test("IA-PB-01 the hover time is off by default; a saved choice is kept", async 
     rmSync(data, { recursive: true, force: true });
   }
 });
+
+// ------------------------------------------------------------------ G-18
+
+test("G-18 the playlist button: half lit only when on but too narrow; fullscreen's collapsed pop-out counts as on", async () => {
+  const host = withMedia();
+  const { stop } = await start(host);
+  const bar = host.mounted();
+  const show = async (slot: { preferred: boolean; effective: boolean; reason: string | null }) => {
+    host.layout.sidebar = { owner: 2, detached: false, ...slot } as never;
+    host.emit("window.state", {});
+    await host.settle();
+    return [bar.props["sidebar-on"], bar.props["sidebar-hidden"], bar.props["tip-sidebar"]];
+  };
+  assert.deepEqual(await show({ preferred: true, effective: true, reason: null }), [true, false, "播放列表"]);
+  assert.deepEqual(await show({ preferred: true, effective: false, reason: "space" }), [
+    true,
+    true,
+    "播放列表（窗口太窄，放不下播放列表）",
+  ]);
+  assert.deepEqual(await show({ preferred: true, effective: false, reason: "fullscreen" }), [true, false, "播放列表"]);
+  assert.deepEqual(await show({ preferred: false, effective: false, reason: null }), [false, false, "播放列表"]);
+  await stop();
+});

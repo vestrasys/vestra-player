@@ -178,7 +178,7 @@ export class Playback {
   /** Latest value wins; the target volume is applied before unmuting, never an old loud one. */
   setVolume(value: number, announce = false) {
     if (this.muteBusy || !Number.isFinite(value)) return;
-    const volume = (this.volumeDraft = Math.max(0, Math.min(200, Math.round(value))));
+    const volume = (this.volumeDraft = Math.max(0, Math.min(100, Math.round(value))));
     if (announce) this.notify(`音量: ${volume}%`);
     const request = ++this.#volumeRequest;
     this.#player.setOutput({ volume, muted: false }).then(

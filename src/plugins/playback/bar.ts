@@ -64,6 +64,7 @@ export function wireBar(bar: Panel, scope: Plugin, playback: Playback, settings:
     const remaining = settings.value.remainingTime;
     const left = remaining && position !== null && state.duration !== null;
     const slot = sidebar.state;
+    const sidebarHidden = !!slot?.preferred && !slot.effective && slot.reason === "space";
     return {
       elapsedLabel: left ? `-${time(state.duration! - position!)}` : time(position),
       totalLabel: time(state.duration),
@@ -89,17 +90,21 @@ export function wireBar(bar: Panel, scope: Plugin, playback: Playback, settings:
       canNext: state.can.next,
       canOpen: !p.selecting,
       muted: state.muted,
-      volume,
+      // G-13b: the slider runs 0–100; a louder volume (set elsewhere) shows at the right end.
+      volume: Math.min(volume, 100),
       canMute: !p.muteBusy && p.volumeDraft === null,
       canVolume: !p.muteBusy,
       hasSidebar: slot !== null,
       sidebarOn: slot?.preferred ?? false,
+      // G-18: on but not shown because the window is too narrow (fullscreen's collapsed pop-out counts as on).
+      sidebarHidden: sidebarHidden,
       ...barTips(keys, {
         playing: state.phase === "ready" && !state.paused,
         muted: state.muted,
         volume,
         remaining,
         step: settings.value.seekSteps[0],
+        sidebarHidden,
       }),
     };
   });

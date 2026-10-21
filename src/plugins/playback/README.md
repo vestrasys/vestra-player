@@ -5,7 +5,7 @@
 控制栏：
 
 - 进度条行 22px：2px 进度线（已播放黄色）+ 8px thumb；最右端静音图标 13×10 + 固定 70px 音量条。
-- 按钮行 40px：播放/暂停（`play-pause`）、停止（`stop`）、后退（`seek-backward`，右键 `previous`）、前进（`seek-forward`，右键 `next`）、打开，五个 41×40 图标按钮；静音图标为 `mute`；音量条要连续值，仍用 `player.setOutput`（规则与核心音量 ± 相同）。按钮可用状态从 `player.state` 推出（Slint `Path` 自绘）；只有当前时间可点（手形指针），点击切换已播放/剩余，选择存入 `settings.json` 的 `remainingTime`（G-14）；右侧 23×22 播放列表开关（`plugin.panels.sidebar`，与谁挂载侧栏无关），窗口窄于 320px 时隐藏。
+- 按钮行 40px：播放/暂停（`play-pause`）、停止（`stop`）、后退（`seek-backward`，右键 `previous`）、前进（`seek-forward`，右键 `next`）、打开，五个 41×40 图标按钮；静音图标为 `mute`；音量条要连续值，仍用 `player.setOutput`，范围 0–100（G-13b，与核心音量键的上限相同；别处设到 100 以上时滑块停在最右）。按钮可用状态从 `player.state` 推出（Slint `Path` 自绘）；只有当前时间可点（手形指针），点击切换已播放/剩余，选择存入 `settings.json` 的 `remainingTime`（G-14）；右侧 23×22 播放列表开关（`plugin.panels.sidebar`，与谁挂载侧栏无关），窗口窄于 320px 时隐藏；开着但因窗口太窄看不见（`reason === "space"`）时半亮，提示说明原因，全屏收起（`"fullscreen"`）按开显示（G-18）。
 - 悬停提示（G-07，宿主 `ToolTipArea`，600 ms）：每个按钮、当前时间、静音、音量条、列表开关都有提示，文字带当前生效的按键（「播放 (Space)」「后退 5 秒 (←)\n右键：播放上一个 (PgUp)」「音量: 85%」…）。按键取自 `plugin.bindings.list()`（能力 `bindings.manage`，只读不写）：命令第一个未被占用的键盘绑定的宿主菜单文字，`bindings.onChange` 时重读，所以改绑后提示随之变化；读不到时用默认键。列表开关没有自己的命令，用顶层菜单项「播放列表」的按键（没人注册时不带按键）。后退/前进的秒数跟随第 1 档跳转秒数。
 
 菜单与按键（按 doc/process/rounds/2026-10-plugin-ui.md §3 分配表）：

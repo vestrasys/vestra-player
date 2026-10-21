@@ -248,9 +248,11 @@ test("F6, the tab-strip close button and the menu check share the sidebar prefer
     assert.equal(app.prop("detached"), true);
     await app.emit("toggle-detached");
     assert.equal(app.host.layout.sidebar?.detached, false);
+    // List focus alone does not lock the panel (G-01: the fullscreen pop-out still collapses); a drag does.
     await app.emit("focus-changed", true);
+    assert.equal((app.host.mounted().locks as { focused?: boolean } | null)?.focused ?? false, false);
     await app.emit("dragging", true);
-    assert.deepEqual(app.host.mounted().locks, { focused: true, dragging: true, popupOpen: false });
+    assert.deepEqual(app.host.mounted().locks, { focused: false, dragging: true, popupOpen: false });
   } finally {
     await app.close();
   }

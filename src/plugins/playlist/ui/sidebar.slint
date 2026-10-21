@@ -232,11 +232,12 @@ export component PlaylistSidebar inherits Rectangle {
                 background: Theme.bg-list;
                 init => { PlaylistBridge.list-area(-list.viewport-y / 1px, self.height / 1px); }
                 changed height => { PlaylistBridge.list-area(-list.viewport-y / 1px, self.height / 1px); }
+                // The list menu opens when the right button is released (as the main menu, G-15).
                 TouchArea {
                     pointer-event(event) => {
-                        if event.kind != PointerEventKind.down { return; }
-                        list-focus.focus();
-                        if event.button == PointerEventButton.right {
+                        if event.kind == PointerEventKind.down {
+                            list-focus.focus();
+                        } else if event.kind == PointerEventKind.up && event.button == PointerEventButton.right {
                             PlaylistBridge.context-menu((self.absolute-position.x + self.mouse-x) / 1px, (self.absolute-position.y + self.mouse-y) / 1px);
                         }
                     }
@@ -307,10 +308,13 @@ export component PlaylistSidebar inherits Rectangle {
                                                 collapse = true;
                                             }
                                         }
-                                        if event.button == PointerEventButton.right {
-                                            if !row.selected { PlaylistBridge.select-row(row.rowId, false, false); }
-                                            PlaylistBridge.context-menu((self.absolute-position.x + self.mouse-x) / 1px, (self.absolute-position.y + self.mouse-y) / 1px);
+                                        // Right press selects; the menu opens on release (G-15).
+                                        if event.button == PointerEventButton.right && !row.selected {
+                                            PlaylistBridge.select-row(row.rowId, false, false);
                                         }
+                                    }
+                                    if event.kind == PointerEventKind.up && event.button == PointerEventButton.right {
+                                        PlaylistBridge.context-menu((self.absolute-position.x + self.mouse-x) / 1px, (self.absolute-position.y + self.mouse-y) / 1px);
                                     }
                                     if event.kind == PointerEventKind.up && event.button == PointerEventButton.left {
                                         if root.dragging {

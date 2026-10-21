@@ -129,7 +129,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     listBusy = false;
   let lastList: string | null = null;
   let focusSearch = 0;
-  const focus = { list: false, search: false };
+  const focus = { search: false };
 
   /** Every action runs through here; failures become a notice. */
   const guard =
@@ -762,11 +762,11 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   );
   list.on("hide", () => sidebar.setVisible(false));
   list.on("toggleDetached", () => sidebar.setDetached(!(sidebar.state?.detached ?? false)));
-  const interact = () => list.setInteraction({ focused: focus.list || focus.search });
-  list.on("focusChanged", (focused: boolean) => {
-    focus.list = focused;
-    interact();
-  });
+  // Only typing in the search box holds the panel (the bar or fullscreen pop-out stays while
+  // the user types); list focus alone does not (G-01 acceptance 4: it collapses when the pointer leaves).
+  const interact = () => list.setInteraction({ focused: focus.search });
+  // List focus alone does not lock the panel (see above).
+  list.on("focusChanged", () => {});
   list.on("dragging", (dragging: boolean) => list.setInteraction({ dragging }));
 
   // C21: the search box filters after 150 ms; Esc (empty text) applies at once.
