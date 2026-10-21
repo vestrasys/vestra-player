@@ -1,4 +1,7 @@
-// The SDK package repeats a few of the player's constants; they must agree.
+// The SDK package (installed from the vestra-player-sdk repository) repeats a
+// few of the player's constants and its Slint library; they must agree with
+// this host. A mismatch means: change the SDK repository, release it and
+// upgrade the dependency here (doc/process/community-workflow.md §1.6).
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
@@ -30,7 +33,7 @@ test("capabilities and apiVersion match the player's manifest rules", () => {
   assert.equal(/pub const API: &str = "([^"]+)";/.exec(rust)?.[1], API_VERSION);
 });
 
-test("the SDK's Slint library copy matches the player's", () => {
+test("the installed SDK's Slint library copy matches the player's", () => {
   // Every file of the library is in the copy (the script lists them).
   const library = readdirSync(
     new URL("../../host/ui/vestra/", import.meta.url),

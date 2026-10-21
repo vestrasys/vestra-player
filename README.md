@@ -5,11 +5,12 @@
 ```text
 src/host/       Rust 宿主
 src/runtime/    插件运行器（每插件一个 Node 进程）
-src/packages/sdk/  插件 SDK：npm 包 @vestra-player/sdk（类型、TestHost、vestra-plugin 命令行）
 src/plugins/    10 个产品插件
 src/examples/   示例插件
 doc/            文档（入口：doc/README.md）
 ```
+
+插件 SDK `@vestra-player/sdk`（类型、TestHost、`vestra-plugin` 命令行）在独立仓库 [vestra-player-sdk](https://github.com/vestrasys/vestra-player-sdk)，本仓库通过 `src/package.json` 依赖它。
 
 ## 运行
 

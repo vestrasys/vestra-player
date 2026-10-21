@@ -6,6 +6,4 @@ node_modules/
 src/plugins/*/dist/
 src/examples/*/dist/
 
-# The SDK package's compiled output (npm run sdk:build; `prepare` on install).
-src/packages/sdk/dist/
 *.tsbuildinfo

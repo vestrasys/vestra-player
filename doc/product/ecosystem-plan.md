@@ -85,10 +85,10 @@
 | 仓库 | 内容 | 发布 |
 | --- | --- | --- |
 | `vestra-player`（现有） | Rust 宿主、runner、SDK 实现的运行时副本、文档 | 播放器安装包 |
-| SDK 仓库（新建） | `@vestra-player/sdk`：类型、TestHost、CLI、Slint 控件库副本、插件模板 | npm |
+| SDK 仓库 [`vestra-player-sdk`](https://github.com/vestrasys/vestra-player-sdk)（S1 建立） | `@vestra-player/sdk`：类型、TestHost、CLI、`./runtime` 实现入口、Slint 控件库副本、插件模板 | npm（`NPM_TOKEN` 就绪前播放器用 git 标签） |
 | 插件仓库（新建） | 官方插件源码，以及第三方插件提交（`manifest.toml`），CI 构建出插件包和 `repo.json` | GitHub Releases（插件包）、GitHub Pages（`repo.json`） |
 
-**SDK 源码的唯一来源**：建议 SDK 仓库作为类型和 CLI 的源头；播放器仓库通过 npm 依赖拿到 SDK 运行时代码，或者在 SDK 仓库里单独导出一个 `runtime` 入口供播放器打包。不要两个仓库各维护一份。具体做法在步骤 S2 里定。
+**SDK 源码的唯一来源**：建议 SDK 仓库作为类型和 CLI 的源头；播放器仓库通过 npm 依赖拿到 SDK 运行时代码，或者在 SDK 仓库里单独导出一个 `runtime` 入口供播放器打包。不要两个仓库各维护一份。具体做法在步骤 S2 里定。**已定（S2）**：SDK 实现也只在 SDK 仓库，经 `./runtime` 入口供播放器使用；播放器仓库删除 `src/packages/sdk`，依赖锁定版本的包，见文末 S1/S2 记录。
 
 **内置插件**：源码迁到插件仓库，播放器打包时从插件仓库的 Releases 取构建好的包，放进安装包。插件更新可以走商城，不必等播放器发版。
 
@@ -230,3 +230,62 @@ Resources/runtime/
 - 迁到 `vestra-player-sdk` 仓库的就是 `src/packages/sdk/` 整个目录（它的 `package.json`、`tsconfig*.json`、`test/` 已能独立运行：`npm run check`、`npm test`、`npm pack`）。保留历史：`git filter-repo --path src/sdk --path src/tests/sdk --path src/packages/sdk --path-rename src/packages/sdk/:` 之类，S0 的第一个提交只做了改名，便于追溯。`src/tests/sdk/runner.test.ts` 是播放器侧的，不迁。
 - Slint 副本的同步方向不变（播放器是源头）：SDK 仓库发布时从对应的播放器版本复制，播放器侧的一致性测试在 S2 改为对比 npm 包里的副本。
 - 发布前要定：许可证、npm 组织 `vestra-player`、`NPM_TOKEN`（第 3 节）。
+
+## S1/S2 记录（2026-10-21，API 维护者）
+
+SDK 源码迁到独立仓库 `vestrasys/vestra-player-sdk`（私有），保留历史；播放器仓库删除 `src/packages/sdk`，改为依赖 SDK 仓库的 `v1.0.0` 标签。SDK 源码只有一份。npm 组织和 `NPM_TOKEN` 还没就绪，**这次没有发布到 npm**，过渡期用 git 依赖。
+
+### S1：SDK 仓库
+
+- **历史**：从播放器仓库 `git filter-repo` 只保留三段路径并改名到仓库根：`src/sdk/` → `src/`，`src/packages/sdk/` → `./`，SDK 自己的 14 个单元测试 `src/tests/sdk/<名>.test.ts` → `test/`（`runner.test.ts`、`host-agreement.test.ts` 留在播放器）。新旧布局一致，`git log` 不加 `--follow` 也连续：例如 `src/wire.ts` 18 个提交，最早到 2026-10-19 的 `22082b3`（原 `src/sdk/wire.ts`）；`test/round2.test.ts` 6 个提交（原 `src/tests/sdk/round2.test.ts`）。其它分支和标签都已删除，只有 `main`。S0 的纯改名提交在新路径下为空，被 filter-repo 去掉。
+- **补齐**：`.gitignore`（`dist/`、`node_modules/`）、`package-lock.json`、`repository`、`publishConfig.access: public`、Prettier 与 `format`/`format:check`；README 增加版本与 `apiVersion` 对应表、git 标签安装、开发与发版步骤、Slint 副本来源。`license` 仍是 `UNLICENSED`，等用户定。
+- **构建改用 `prepare`**（替代 `prepack`），理由见下面「依赖方案」。`npm ci`、`npm pack`、`npm publish` 和 git 安装都会运行它。
+- **CI**：`.github/workflows/ci.yml`（push 到 `main`、PR；macOS/Linux/Windows × Node 22.18/24）：`npm ci`、`check`、`format:check`、`build`、`test`、`npm pack --dry-run`。Windows 行顺带覆盖 S0 提到的 `cli.test.ts` 目录联接。
+- **发布**：`.github/workflows/publish.yml`，推送 `v*` 标签时运行：没有 `secrets.NPM_TOKEN` 就报错退出；标签与 `package.json` 的 `version` 不一致也退出；然后 `npm ci`、`check`、`test`、`npm publish --access public`。不加 `--provenance`：npm 不给私有仓库生成来源证明，仓库公开后可以加上（同时给 `id-token: write`）。
+- 提交 `SDK split S1: standalone repository for @vestra-player/sdk`，带注解的标签 `v1.0.0`。
+
+### S2：播放器依赖 SDK 包
+
+`src/package.json`：
+
+```json
+"dependencies": { "@vestra-player/sdk": "git+https://github.com/vestrasys/vestra-player-sdk.git#v1.0.0" },
+"allowScripts": { "github:vestrasys/vestra-player-sdk": true }
+```
+
+- 去掉 `workspaces`、根 `prepare` 和 `sdk:build`；`check`、`plugin`、`plugins:build`、`start` 不再先构建 SDK。`test:sdk` 只跑播放器侧的 `tests/sdk/`（runner、打包布局、宿主一致性）；SDK 单元测试在 SDK 仓库的 CI 里跑。`tsconfig.json`、`format` 不再包含 SDK 路径。
+- `package-lock.json` 记录 `resolved: git+ssh://git@github.com/vestrasys/vestra-player-sdk.git#73961229…`（`v1.0.0` 指向的提交）。这是真实 git 安装生成的：用 `GIT_CONFIG_*` 的 `url.<本地 SDK 仓库>.insteadOf` 把 GitHub 地址临时指到本地仓库，npm 走的是和远端完全相同的流程（解析标签、克隆、安装依赖、`prepare`、打包）。推送后远端的标签若仍指向同一提交，lock 无需改动；保险起见推送后再 `npm install` 一次。
+- 访问私有仓库：npm 先试 codeload 的 tarball（私有仓库 404），再 `git clone https://…`（走本机 git 凭据 helper，已配置 gh），失败再试 ssh。CI 需要能读 SDK 仓库的凭据（以后改成 npm 依赖后就不需要）。
+- 改到播放器一侧的跨仓库检查：
+  - `scripts/sync-sdk-slint.mjs`：默认校验**已安装** SDK 包里的 `slint/` 与 `host/ui` 逐字节一致；`--write <SDK 仓库目录>` 把 `host/ui` 复制进 SDK 仓库的 `slint/`。副本存放在 SDK 仓库，内容的源头仍是宿主。流程写进 [工作流 §1.6](../process/community-workflow.md)。
+  - `tests/sdk/host-agreement.test.ts`：能力表、`apiVersion`、命令上限（从已安装包的 `./runtime` 读取）与宿主 Rust 源码一致，再跑上面的 Slint 校验。
+  - `scripts/stage-runtime.mjs`：从 `node_modules/@vestra-player/sdk` 复制 `package.json` 和 `dist/`（布局不变）。
+  - `scripts/check-portability.mjs`：扫描已安装包的 `dist/`、`bin/`（原来扫 `packages/sdk/{src,bin,scripts}`）。
+- 插件、示例、runner、插件工坊、`scripts/plugin.mjs` 都按包名解析，代码不变。开发方式下 `src/node_modules/@vestra-player/sdk` 现在是安装出的普通目录，不再是指向源码的链接；要试未发版的 SDK，按工作流 §1.6 临时 `npm install <SDK 仓库目录>`。
+- 宿主 Rust 只改了两处注释（SDK 文件位置）。
+
+### 依赖方案：git 标签 + `prepare`
+
+npm 安装 git 依赖时会克隆仓库，若有 `prepare`（或 `build`、`prepack` 等）就在克隆里装依赖，**但之后只运行 `prepare`**，再按 `files` 打包。S0 的包只有 `prepack`，git 安装会得到没有 `dist/` 的包，所以 S1 改用 `prepare`。
+
+- npm 11 的安装脚本策略（`allowScripts`）把 git 依赖的 `prepare` 算作安装脚本：未登记时只告警（`--strict-allow-scripts` 时报错）。播放器的 `package.json` 用 `allowScripts` 按仓库登记了这个包，`npm ci --strict-allow-scripts` 也通过。以后改成 npm 依赖时这一项可以删掉（从 registry 安装不运行 `prepare`）。
+- 比较过的另一种方案：在 SDK 仓库为每个版本做一个带 `dist/` 的发布标签。它不需要安装时构建，但同一版本会有两个提交、源码标签和安装标签不一致，还要多一套发版步骤。`prepare` 方案只有一个标签，安装结果与 `npm pack` 完全相同（已逐文件比较 `dist/`），所以选它。安装时的构建只用包自己的依赖（TypeScript 5.9），约 1 秒。
+
+### 推送后需要做的（协调者，按顺序）
+
+1. SDK 仓库：`git -C <SDK 仓库> remote add origin https://github.com/vestrasys/vestra-player-sdk.git`，`git push -u origin main`，`git push origin v1.0.0`。
+   - 推送 `v1.0.0` 会触发 `publish.yml`，因为还没有 `NPM_TOKEN` 会**按预期失败**（「Secret NPM_TOKEN is not set」）。不想看到失败的话，先推 `main`、等设好 token 再推标签——但播放器在那之前装不到 `v1.0.0`，所以建议照常推标签、忽略这次失败。
+   - 确认 `CI` 工作流在三个系统上通过（Windows 行是 `cli.test.ts` 目录联接的首次实测）。
+2. 播放器 `rebuild/sdk-repo` 分支：`cd src && rm -rf node_modules && npm ci`，确认 `node_modules/@vestra-player/sdk/dist/` 存在、没有安装脚本错误；若 npm 改写了 `package-lock.json`（远端标签提交与本地不同），提交更新后的 lock。
+3. 跑 §6.1 全部检查，然后按 S0 记录「给协调者的真机验证要点」做开发方式、dist 方式、打包布局、插件工坊的真机验证。
+4. 合并 `rebuild/sdk-repo` 到 `main` 并推送。
+5. 以后（npm 就绪）：建组织 `vestra-player`、配置 `NPM_TOKEN`、定许可证，在 SDK 仓库重新运行 `v1.0.0` 的 Publish（或发 `v1.0.1`），播放器改为 `"@vestra-player/sdk": "1.0.0"`、删掉 `allowScripts`，`npm install` 刷新 lock。
+
+### 检查（本次实际执行）
+
+- SDK 仓库：`npm ci`（`prepare` 生成 `dist/`）、`check`、`format:check`、`build` 退出 0；`npm test` 105/105；`npm pack`：76 个文件（`README.md`、`package.json`、`bin/`、`dist/`、`slint/`），与 S0 相同。在临时项目里 `npm install "git+file://<SDK 仓库>#v1.0.0"` 得到带 `dist/` 的包；不登记 `allowScripts` 时 `--strict-allow-scripts` 报错，登记后通过。
+- 播放器（`rebuild/sdk-repo` worktree，全新 `node_modules`）：`npm install` / `npm ci --strict-allow-scripts`（GitHub 地址经 `insteadOf` 指到本地 SDK 仓库），安装出的 `dist/` 与 SDK 仓库构建的逐文件相同；`check`、`format:check`、`boundaries` 退出 0；`test:sdk` 9/9（`runner.test.ts` 6，含打包布局；`host-agreement.test.ts` 3）；`sdk:sync-slint` 一致，人为改动已安装副本后校验与 `host-agreement` 按预期失败，`--write` 写出 3 个文件。
+- `plugins:build` 退出 0；插件与示例测试与 S0 完全相同：audio 35、bilibili 15、capture 25、history 22、hotkeys 17、info 31、marks 24、nes 11、playback 64、playlist 98、plugins 10、preferences 10、subtitle-online 17、subtitles 52、video 39、visualizer 17、window 34、workshop 17、youtube 14、examples bookmark 1 / core-ui 2 / panel-menu 1；三个示例 `check` 通过。（全新 worktree 里 `check` 要在 `plugins:build` 之后跑：`plugins/nes` 的 `jsnes` 由 CLI 的 `npm ci` 安装，与 S0 相同。）
+- `src/host/`（`CARGO_TARGET_DIR=~/.cache/vestra-target/s1`）：`cargo fmt --check`、`cargo clippy --locked --all-targets -- -D warnings` 通过，`cargo test --locked` 263/263。
+- `portability`：clean；扫描已安装 SDK 的 `dist/`、`bin/`，0 处系统命令，`process.platform` 分支 4 处（与 S0 相同）。
+

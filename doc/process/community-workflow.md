@@ -18,7 +18,7 @@ API 的演进有两种方向，流程不同：
 | 角色 | 可写范围 | 职责 |
 | --- | --- | --- |
 | 协调者（主会话） | 记录文件；git 提交与推送；GUI 测试 | 分派任务、审查交付、裁决阻塞、集成、执行真实 GUI 测试、向用户报告。不代替维护者写 SDK，不代替作者写插件 |
-| API 维护者（1 个） | `src/packages/sdk/`、`src/runtime/`、`src/host/`、`src/scripts/`、`src/tests/`、`doc/plugins/`、`doc/architecture/` | 维护宿主、SDK、wire 协议、manifest 规则、构建工具；处理能力请求；保持 SDK、宿主、文档、示例一致 |
+| API 维护者（1 个） | SDK 仓库 `vestra-player-sdk`、`src/runtime/`、`src/host/`、`src/scripts/`、`src/tests/`、`doc/plugins/`、`doc/architecture/` | 维护宿主、SDK、wire 协议、manifest 规则、构建工具；处理能力请求；保持 SDK、宿主、文档、示例一致 |
 | 插件作者（每插件 1 个） | 只能写 `src/plugins/<自己的目录>/` | 设计并实现自己的插件、写测试；缺能力时提请求 |
 | 交互设计负责人（可由协调者兼任） | `doc/product/` | 维护全局菜单领域与界面规范，审查插件设计的一致性 |
 | 独立验收者（按批次） | 验收记录 | 不参与实现。自己读源码、跑命令、检查产物，不接受「别人说通过了」 |
@@ -42,6 +42,27 @@ Vestra 要同时支持 macOS 和 Windows，以后可能还有 Linux。
 - **系统相关代码只放在宿主的平台模块里**：每个系统一份实现，用 `cfg(target_os)` 分开，公共代码不直接调用系统接口。SDK 和插件运行器（Node 侧）同理：系统差异集中在一个平台文件里，不散落在各处。
 - **插件不直接调用系统命令**：例如 `sips`、`plutil`、`sw_vers`、`security`、`/usr/bin/open`。需要的话，按 §4 提请求，由核心提供跨平台能力；也可以用跨平台的纯 Node 实现。
 - **每次公共改动都要过跨平台检查**：在 Windows 目标下编译宿主，并扫描插件、SDK 中的系统命令。检查脚本在 `src/scripts/`，见 §6.1。
+
+## 1.6 SDK 在独立仓库（2026-10-21）
+
+插件 SDK `@vestra-player/sdk` 的源码只在 [vestra-player-sdk](https://github.com/vestrasys/vestra-player-sdk) 仓库。播放器在 `src/package.json` 里锁定一个版本（npm 组织就绪前是 git 标签：`git+https://github.com/vestrasys/vestra-player-sdk.git#v<版本>`），`npm ci` 装到 `src/node_modules/@vestra-player/sdk`；runner、插件、示例、工坊、打包布局都用这份安装好的包。本仓库没有 SDK 源码，也不要再复制一份进来。
+
+**改 SDK（类型、TestHost、CLI、wire 客户端、`./runtime`）**
+
+1. 先在 SDK 仓库改：代码、测试、README；`npm run check`、`format:check`、`test`、`npm pack --dry-run` 通过。需要宿主配合的改动（新能力、新命令上限、`apiVersion`），宿主和 SDK 各改各的，两边一起发。
+2. SDK 发版：改 `package.json` 的 `version`（插件 API 新增升小版本，破坏性变更升大版本并换 `apiVersion`），提交，打标签 `v<版本>` 并推送；推送标签后 `publish.yml` 发布到 npm（有 `NPM_TOKEN` 之后）。
+3. 再在播放器升级依赖：`src/package.json` 指向新版本（git 标签期间改 URL 的 `#v<版本>`，发布到 npm 后用 `npm install @vestra-player/sdk@<版本>`），`npm install` 刷新 `package-lock.json`，跑 §6.1 全部检查，和宿主改动一起提交。
+4. 本地联调未发版的 SDK：在播放器 `src/` 下临时 `npm install <SDK 仓库目录>`（或 `npm link`），验证后**改回**锁定的版本，不要提交 `file:` 依赖。
+
+**宿主改 Slint 控件库（`src/host/ui/palette.slint`、`src/host/ui/vestra/`）**
+
+SDK 包带一份只读副本给作者的编辑器用，内容以播放器为准。改了控件库：
+
+1. `cd src && node scripts/sync-sdk-slint.mjs --write <SDK 仓库目录>`，把 `host/ui` 的文件复制进 SDK 仓库的 `slint/`；新增库文件时先把它加进脚本的 `SLINT_FILES`。
+2. 按上面的流程给 SDK 发版并在播放器升级依赖。
+3. `npm run sdk:sync-slint`（不带参数）校验已安装 SDK 的副本与 `host/ui` 逐字节一致；`tests/sdk/host-agreement.test.ts`（`npm run test:sdk`）也跑这项，同时检查能力表、`apiVersion`、命令上限与宿主一致。宿主与 SDK 不一致时这项测试失败，不能合并。
+
+SDK 仓库的提交、标签和推送和本仓库一样由协调者做。
 
 ## 2. 插件开发流程
 
@@ -143,13 +164,15 @@ Vestra 要同时支持 macOS 和 Windows，以后可能还有 Linux。
 
 兼容层只在迁移期间存在，退出条件是「全部插件迁移完成」，P4 删除。
 
+SDK 在独立仓库（§1.6）：P1、P4 的 SDK 部分在 SDK 仓库的分支上做；迁移期间播放器依赖该分支的预发布标签（例如 `v2.0.0-rc.1`），P4 之后 SDK 正式发版，播放器改依赖正式版本再进入 P5。
+
 ### 5.2 迁移者的规则
 
 - 行为保持不变：同样的菜单项（路径、标题、启用条件）、窗口与控件、回调效果、错误提示语义。可以改善代码结构，不能增减用户可见功能。
 - 删除插件里已由 SDK 提供的自制轮子（合并更新、结果查询重试、过期事件过滤、名称转换、手写清理清单）。
 - 现有测试改用 SDK 的假宿主，原有覆盖不能减少。
 - **不新增功能、不提新能力请求、不「顺手」修无关行为。** 发现现有 bug 记在报告里，本轮不修。
-- 不改 `src/packages/sdk`、`src/runtime`、`src/host`、`src/scripts` 或兄弟插件，不绕开 SDK 直接调用底层传输。
+- 不改 SDK 仓库、`src/runtime`、`src/host`、`src/scripts` 或兄弟插件，不绕开 SDK 直接调用底层传输。
 - 现有行为用新 SDK **表达不了**时，这是「迁移阻塞」：停下这部分，写明哪个行为、旧代码位置、新 SDK 为什么表达不了、最小复现，然后继续迁移其它部分。由协调者转维护者裁决（补 SDK 或给写法），迁移者不自行发明替代方案。
 
 ### 5.3 迁移完成条件（迁移者自检，协调者复核）
@@ -165,6 +188,7 @@ Vestra 要同时支持 macOS 和 Windows，以后可能还有 Linux。
 
 在 `src/` 下：`npm run check`、`npm run format:check`、`npm run boundaries`、`npm run test:sdk`、`npm run plugins:build`、每个插件 `npm run plugin -- test <名字>`。
 在 `src/host/` 下：`cargo fmt --check`、`cargo clippy --locked --all-targets -- -D warnings`、`cargo test --locked`。
+改了 SDK 时，另在 SDK 仓库下：`npm ci`、`npm run check`、`npm run format:check`、`npm test`、`npm pack --dry-run`（与它的 CI 相同）。
 
 ### 6.2 真实 GUI 测试（协调者）
 
