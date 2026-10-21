@@ -6,9 +6,11 @@ use rsmpv::{
     render::{RenderContext, SwPixelFormat},
 };
 use serde_json::{Value, json};
+#[cfg(feature = "producer-audio")]
+use std::sync::Mutex;
 use std::{
     sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc,
     },
@@ -16,14 +18,12 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub struct Frame {
-    pub width: u32,
-    pub height: u32,
-    pub pixels: Vec<u8>,
-    pub sequence: u64,
-}
-pub const WIDTH: usize = 960;
-pub const HEIGHT: usize = 540;
+pub use crate::render_target::Frame;
+use crate::render_target::{FrameSlot, Redraw, Shared};
+use slint::{Rgb8Pixel, SharedPixelBuffer};
+#[cfg(feature = "producer-audio")]
+/// The cleared canvas a stopped producer leaves behind.
+const CLEAR: (u32, u32) = (960, 540);
 pub struct Command {
     pub reply: Reply,
     pub method: String,
@@ -31,7 +31,10 @@ pub struct Command {
 }
 pub struct Backend {
     pub commands: mpsc::Sender<Command>,
-    pub frame: Arc<Mutex<Option<Frame>>>,
+    /// The newest frame for the video area (C-SIZE / render cadence).
+    pub frame: Arc<FrameSlot>,
+    /// What size the renderer draws at (UI: area; display layer: zoom).
+    pub target: Arc<Shared>,
     #[cfg(feature = "producer-audio")]
     pub input: Arc<Mutex<Option<crate::producer_input::Routing>>>,
     /// `{ mpv, ffmpeg }`: the linked libmpv's `mpv-version` / `ffmpeg-version`.
@@ -43,8 +46,10 @@ impl Backend {
     pub fn start(events: mpsc::Sender<Event>, silent: bool) -> Result<Self> {
         let (commands, receiver) = mpsc::channel::<Command>();
         let (stop, stopping) = mpsc::channel();
-        let frame = Arc::new(Mutex::new(None));
+        let frame = FrameSlot::new();
         let out_frame = frame.clone();
+        let target = Arc::new(Shared::default());
+        let render_target = target.clone();
         #[cfg(feature = "producer-audio")]
         let input = Arc::new(Mutex::new(None));
         #[cfg(feature = "producer-audio")]
@@ -90,35 +95,47 @@ impl Backend {
                 let render_frame = out_frame.clone();
                 let renderer = thread::spawn(move || {
                     let run = || -> Result<()> {
-                        let mut render = RenderContext::new_software(render_core)?;
+                        let mut render = RenderContext::new_software(render_core.clone())?;
                         let (wake, woke) = mpsc::sync_channel(1);
                         // Callback only signals. It never calls into libmpv.
                         render.set_update_callback(move || {
                             let _ = wake.try_send(());
                         });
                         let _ = render_ready.send(Ok(()));
+                        let mut redraw = Redraw::default();
+                        let mut source: Option<(u32, u32)> = None;
+                        let mut source_read: Option<Instant> = None;
                         while !renderer_stop.load(Ordering::Relaxed) {
-                            if render.update() {
-                                let mut pixels = vec![0; WIDTH * HEIGHT * 3];
+                            let update = render.update();
+                            let (revision, request) = render_target.get();
+                            if redraw.due(update, revision) {
+                                // The source display size changes only with a
+                                // new load or filter; read it a few times a second.
+                                if source_read
+                                    .is_none_or(|at| at.elapsed() >= Duration::from_millis(200))
+                                {
+                                    source = source_size(&render_core);
+                                    source_read = Some(Instant::now());
+                                }
+                                let (width, height) = crate::render_target::target(
+                                    request.area,
+                                    source,
+                                    request.zoom,
+                                );
+                                let mut buffer = SharedPixelBuffer::<Rgb8Pixel>::new(width, height);
                                 render.render_software(
-                                    WIDTH as i32,
-                                    HEIGHT as i32,
+                                    width as i32,
+                                    height as i32,
                                     SwPixelFormat::Rgb24,
-                                    WIDTH * 3,
-                                    &mut pixels,
+                                    width as usize * 3,
+                                    buffer.make_mut_bytes(),
                                 )?;
                                 // Consume safe normalized frames offscreen while source
                                 // orientation is prepared; never publish an unrotated preview.
-                                let mut output = render_frame.lock().unwrap();
                                 if renderer_publish.load(Ordering::Acquire) {
                                     let sequence =
                                         render_sequence.fetch_add(1, Ordering::Relaxed) + 1;
-                                    *output = Some(Frame {
-                                        pixels,
-                                        sequence,
-                                        width: WIDTH as u32,
-                                        height: HEIGHT as u32,
-                                    });
+                                    render_frame.put(Frame { buffer, sequence });
                                 }
                             }
                             let _ = woke.recv_timeout(Duration::from_millis(5));
@@ -352,10 +369,13 @@ impl Backend {
                         );
                         if let Some(frame) = sources.producer_frame() {
                             let sequence = sequence.fetch_add(1, Ordering::Relaxed) + 1;
-                            *out_frame.lock().unwrap() = Some(Frame {
-                                pixels: frame.pixels,
-                                width: frame.width,
-                                height: frame.height,
+                            // Generated streams keep their own size.
+                            out_frame.put(Frame {
+                                buffer: SharedPixelBuffer::clone_from_slice(
+                                    &frame.pixels,
+                                    frame.width,
+                                    frame.height,
+                                ),
                                 sequence,
                             });
                         }
@@ -363,10 +383,8 @@ impl Backend {
                         let producer_active = sources.provider_active();
                         if producer_was_active && !producer_active {
                             let sequence = sequence.fetch_add(1, Ordering::Relaxed) + 1;
-                            *out_frame.lock().unwrap() = Some(Frame {
-                                pixels: vec![0; WIDTH * HEIGHT * 3],
-                                width: WIDTH as u32,
-                                height: HEIGHT as u32,
+                            out_frame.put(Frame {
+                                buffer: SharedPixelBuffer::new(CLEAR.0, CLEAR.1),
                                 sequence,
                             });
                         }
@@ -408,6 +426,7 @@ impl Backend {
         Ok(Self {
             commands,
             frame,
+            target,
             versions,
             #[cfg(feature = "producer-audio")]
             input,
@@ -423,6 +442,16 @@ impl Drop for Backend {
             let _ = worker.join();
         }
     }
+}
+/// The source's display size after the filter chain (`video-out-params/dw`, `dh`).
+fn source_size(mpv: &Mpv) -> Option<(u32, u32)> {
+    let read = |name: &str| {
+        mpv.get_property::<i64>(name)
+            .ok()
+            .and_then(|v| u32::try_from(v).ok())
+            .filter(|v| *v > 0)
+    };
+    Some((read("video-out-params/dw")?, read("video-out-params/dh")?))
 }
 /// `playback.stats` (C10): what the playback information overlay shows.
 fn stats(mpv: &Mpv, session: u64, frames: u64) -> Value {

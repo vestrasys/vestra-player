@@ -472,6 +472,8 @@ interface PlaybackStats {
 
 不提供硬件解码状态（本播放器固定软件解码）。
 
+画面按视频区的物理像素渲染（窗口尺寸 × 屏幕缩放，随窗口拖动、全屏与换屏变化），再按来源分辨率封顶：不在 CPU 上渲染比来源更多的像素，余下的放大由界面完成；总像素不超过 3840×2160。`backend` 仍为「libmpv · 软件渲染」，没有新字段。
+
 - 同时只能有一个提供者（例如播放列表）；另一个插件再登记以 `conflict` 失败（激活期间 = 激活失败）。`dispose` 或插件停用时撤销。
 - `canNext` / `canPrevious` 每轮更新重新求值，变化才发送；任何插件从 `player.state.can.next/previous` 读到。
 - `next()` / `previous()`：没有提供者或标志为假时以 `unavailable` 失败；否则宿主把请求交给提供者，在它的作用域里调用 `next` / `previous`。
@@ -809,6 +811,7 @@ type FilterStatus =
 | `{ kind: "transform", rotate, flipH, flipV }` | rotate 0 \| 90 \| 180 \| 270（顺时针），先旋转再翻转 | `transpose` / `hflip` / `vflip` | — |
 | `{ kind: "deinterlace", when, output }` | when `"interlaced"`（只处理标记为隔行的帧）\| `"all"`；output `"frame"` \| `"field"`（帧率加倍） | `bwdif` | — |
 | `{ kind: "reframe", mode, aspect, x, y }` | mode `"crop"` \| `"pad"`；aspect（显示宽高比）0.25–4；x、y −1–1（−1 左/上、0 居中、1 右/下） | `crop` / `pad`（黑边） | — |
+| `{ kind: "frameBlend", fps }` | 24–120 的整数（输出帧率）；全部插件合计最多 1 个 | `framerate=fps=N`（相邻帧混合插帧） | — |
 | `{ kind: "volume", gainDb }` | −60–0 | `volume` | gainDb |
 | `{ kind: "equalizer", frequency, q: 1, gainDb }` | frequency 20–20000，gainDb −6–6 | `equalizer` | gainDb |
 | `{ kind: "treble", frequency: 3000, slope: 0.5, gainDb }` | gainDb 0–6 | `treble` | gainDb |
@@ -819,7 +822,8 @@ type FilterStatus =
 - 「—」的字段改值时宿主重建本阶段的处理链（画面可能停顿一帧，音频处理状态复位）；拖动滑块的控件用表中可原地修改的字段。
 - 画面节点作用于宿主的方向处理（容器旋转标记）之后：竖拍视频先被摆正，`transform` 再在摆正后的画面上旋转。
 - 所有插件合计最多 64 个节点。video 插件同时打开全部效果时的最长链：eq、hue、sharpen、denoise、deblock、deband、deinterlace、transform、reframe、gblur 各一个，共 10 个节点（transform 最多展开为 3 个 FFmpeg 滤镜）。
-- 「含效果」截图与导出（§10）使用同一条链，与播放画面一致。
+- `frameBlend` 不论写在哪个插件、链里哪个位置，播放器都把它放在整条视频图的**最后**（所有插件的链之后），所以降噪、反交错这类时间域滤镜仍在原帧率上工作。帧率只能改一次：第二个 `frameBlend`（同一插件的另一个滤镜，或别的插件）以 `invalid` 失败。打开后 `stats().video.fps`（`estimated-vf-fps`）读到的是输出帧率（如 48）。CPU 成本高（1080p 24 → 60 fps 约多一个核），插件应按 `stats()` 的原帧率决定是否加，并在丢帧时提示。
+- 「含效果」截图与导出（§10）使用同一条链，与播放画面一致；含 `frameBlend` 时导出视频的帧率随之改变。
 
 ## 9. 字幕 `plugin.subtitles`
 
@@ -1045,6 +1049,7 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 | 断言 | `host.window(id).props`（kebab-case 名）、`.visible`；`host.command(id).state`、`.declaration`；`host.conflicts`（`[绑定, 赢家, ...被压下]`）；`host.layout.bottom` / `.sidebar`（可直接改后 `host.emit("window.state", {})` 模拟别处的变化）；`host.osd`（显示过的提示）、`host.osdPanel`；`host.sequence`（提供者的标志）；`host.menus`（`showMenu` 记录）；`host.sent(method)`；`host.source`；`host.processing`、`host.subtitles`、`host.snapshots`、`host.jobs`、`host.producers` |
 | 模拟数据 | `host.stats`（`player.stats()` 的返回值，第 2 轮新增字段可省略，SDK 补 `null`）；`host.dataDirectory`（`plugin.dataDirectory`，`storage.json` 直接读写其中的真实文件）；`host.setSource({ audioTracks })`（`addAudioTrack` / `selectAudioTrack` 有默认处理，可用 `host.handle("audio.addTrack" \| "audio.selectTrack", …)` 注入失败）；`host.subtitles.tracks` 的条目可带 `codec`、`text`、`streamIndex` |
 | 通用能力 | `host.clipboard`（`{ text, images }`，预置 `text` 测 `readText`）；`host.power`（合并后的 `"off"` / `"playing"`）；`host.tools.handle(tool, (args) => ({ stdout, stderr }))`（未注入的工具 `unavailable`；抛 `HostError` 模拟失败），`host.tools.calls`；`host.system.revealed`、`.opened`；`host.subtitleLoads`（每次 `load` 的 `format`、`title`、`select` 与字节）；`host.system.urls`（`system.openUrl`） |
+| 第 4a 轮批次 1 | `frameBlend` 与播放器同一套校验，「全部插件最多一个」按本插件的全部视频滤镜计算（TestHost 只模拟一个插件） |
 | 第 3b 轮批次 2 | `host.drop(paths, options)`、`host.dropProviders`、`host.panelDrops`（§6.7）；`host.appearance`、`host.setAppearance(theme)`（§6.8）；`host.settings`、`host.settingsPage(id)`（§6.9） |
 | 第 3b 轮批次 1 | `host.timeline.layers` / `.marks`、`host.setTimelineLayer(pluginId, marks)`（§5.6）；`host.images`、`host.imagePath(value)`（§6.1）；`host.backdrop`、`host.setBackdropEffective(bool)`（§6.3） |
 | 第 3a 轮批次 2 | `host.bindings.overlay`（`"<plugin>/<command>"` → 输入，可预置；`bindings.set` 写入，`host.press` 按它匹配，可 `host.press("Mouse:LeftClick")`）；`host.packages`（`packages.list` 的返回值）、`host.setPackages(list)`（推送 `onChange`）、`host.packageCalls`；`host.audioDevices`（`setAudioDevice` 更新 `host.source.audioOutput`）；`host.subtitles.selection.secondary` |
@@ -1262,3 +1267,16 @@ await plugin.player.setStepSeek({ seconds: settings.value.step }); // 第 1 档�
 - **`Theme` 的颜色由播放器下发**：颜色 token 与 `accent-fill` 现在绑定到播放器设置的配色（宿主内部的 `ui/palette.slint`），默认仍是 Vestra 原值，未切换配色时外观与之前完全相同。插件 Slint 读 `Theme` 的写法不用改；`Theme` 的颜色仍是 `out` 属性，插件不能赋值（之前也不能）。切到参考播放器配色后，用硬编码颜色的插件界面不会跟着变，请改用 `Theme` token。
 - 每个工具窗口的源码末尾由播放器追加一行导出配色的 `export`（插件文件里不要定义名为 `VestraPalette` 的东西）。
 - `window.state` 的答复多了 `appearance`（内部字段）。
+
+### 第 4a 轮批次 1：渲染尺寸跟随视频区、渲染节奏、`frameBlend`（2026-10）
+
+兼容扩展：
+
+- 视频节点 `{ kind: "frameBlend", fps }`（§8）：倍帧。全部插件最多一个，播放器把它放在整条视频图的最后；导出帧率随之改变。
+
+默认行为变化（契约不变）：
+
+- **渲染尺寸跟随视频区**（C-SIZE，§5.4）：画面不再固定按 960×540 渲染后放大，而是按视频区物理像素、以来源分辨率封顶渲染。所有插件的画面都更清楚；全屏与高分辨率来源下宿主 CPU 占用相应升高（1080p 来源在 Retina 全屏下约多 15 个百分点，4K 来源约多 50 个百分点）。截图与导出走离线 FFmpeg，不受影响。
+- **渲染节奏**：新帧一到就交给界面，不再按 16 ms 轮询，48 / 60 fps 输出不再被跳帧或重复。
+- 生成流（`producer`）的帧照旧按自己的尺寸显示。
+- 画中画（`window.setPictureInPicture`、`window.state.pictureInPicture`）与 GPU 渲染（`video.render()`、`PlaybackStats.video.transfer`）在 Safe Rust 下不可行，等用户裁决（第 4a 轮任务单 §7），在此之前不发布。
