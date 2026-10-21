@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, w
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { HostError, TestHost, startPlugin } from "../../../sdk/plugin/testing.ts";
+import { HostError, TestHost, startPlugin } from "@vestra-player/sdk/testing";
 import { albumLine, CoverCache, fileName, folderCover, limits, parseProbe } from "../covers.ts";
 import { imageInfo, imageProblem } from "../images.ts";
 import { NOT_IMAGE, TOO_LARGE, UNREADABLE } from "../logo.ts";

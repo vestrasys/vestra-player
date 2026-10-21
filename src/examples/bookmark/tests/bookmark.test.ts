@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
+import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 
 test("mark the position, then jump back to it", async () => {

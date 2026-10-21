@@ -1,4 +1,4 @@
-import type { JsonStore, Scope } from "../../sdk/plugin/index.ts";
+import type { JsonStore, Scope } from "@vestra-player/sdk";
 import { fileSize, mediaKey, round1 } from "./format.ts";
 import { jsonStore, timing } from "./store.ts";
 

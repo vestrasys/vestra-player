@@ -1,5 +1,5 @@
 import { realpath, stat } from "node:fs/promises";
-import type { Tools } from "../../sdk/plugin/index.ts";
+import type { Tools } from "@vestra-player/sdk";
 import type { Queue, Row } from "./queue.ts";
 
 /** Runs ffprobe with `args` and resolves its stdout; rejects on failure, timeout or abort. */

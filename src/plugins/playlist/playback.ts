@@ -4,7 +4,7 @@ import type {
   PlayerState,
   PluginError,
   Scope,
-} from "../../sdk/plugin/index.ts";
+} from "@vestra-player/sdk";
 import type { Binding, Queue, Row } from "./queue.ts";
 
 /**

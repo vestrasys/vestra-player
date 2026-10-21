@@ -1,6 +1,6 @@
 import { stat } from "node:fs/promises";
-import { HostError } from "../../../sdk/plugin/testing.ts";
-import type { TestHost } from "../../../sdk/plugin/testing.ts";
+import { HostError } from "@vestra-player/sdk/testing";
+import type { TestHost } from "@vestra-player/sdk/testing";
 
 export type Fakes = {
   /** Paths given to `system.openPath`, newest last. */

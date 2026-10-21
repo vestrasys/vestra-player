@@ -1,0 +1,49 @@
+#!/usr/bin/env node
+/**
+ * Lays out the plugin runtime the way a packaged player ships it
+ * (`Vestra Player.app/Contents/Resources/runtime/`, found by host/src/plugins.rs):
+ *
+ *   runtime/
+ *     runner.ts                              the plugin runner (Node strips its types)
+ *     package.json                           {"type":"module"}
+ *     node_modules/@vestra-player/sdk/
+ *       package.json                         exports map (runner and workshop resolve through it)
+ *       dist/**.js, dist/**.d.ts             SDK implementation; the .d.ts serve the workshop
+ *
+ * The SDK has no run-time dependencies (Node built-ins only), so nothing is
+ * installed. Run `npm run sdk:build` first.
+ *
+ *   node scripts/stage-runtime.mjs <destination>/runtime
+ */
+import { existsSync } from "node:fs";
+import { cp, mkdir, rm, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+
+const source = resolve(import.meta.dirname, "..");
+const sdk = join(source, "packages/sdk");
+
+export async function stageRuntime(destination) {
+  if (!existsSync(join(sdk, "dist/player-runtime.js")))
+    throw new Error("SDK not built: run npm run sdk:build");
+  await rm(destination, { recursive: true, force: true });
+  await mkdir(destination, { recursive: true });
+  await cp(join(source, "runtime/runner.ts"), join(destination, "runner.ts"));
+  await writeFile(
+    join(destination, "package.json"),
+    '{"type":"module","private":true}\n',
+  );
+  const target = join(destination, "node_modules/@vestra-player/sdk");
+  await mkdir(target, { recursive: true });
+  await cp(join(sdk, "package.json"), join(target, "package.json"));
+  await cp(join(sdk, "dist"), join(target, "dist"), { recursive: true });
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === import.meta.filename) {
+  const destination = process.argv[2];
+  if (!destination) {
+    console.error("usage: node scripts/stage-runtime.mjs <destination>");
+    process.exit(2);
+  }
+  await stageRuntime(resolve(destination));
+  console.log(`Plugin runtime staged in ${resolve(destination)}`);
+}

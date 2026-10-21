@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import test from "node:test";
-import { HostError, startPlugin } from "../../sdk/plugin/testing.ts";
-import type { Plugin } from "../../sdk/plugin/index.ts";
+import { HostError, startPlugin } from "@vestra-player/sdk/testing";
+import type { Plugin } from "@vestra-player/sdk";
 
 const runner = resolve(import.meta.dirname, "../../runtime/runner.ts");
 
@@ -14,6 +14,7 @@ const runner = resolve(import.meta.dirname, "../../runtime/runner.ts");
 async function run(
   source: string,
   reply: (method: string) => object = () => ({ result: { revision: 1 } }),
+  runnerPath = runner,
 ) {
   const directory = mkdtempSync(join(tmpdir(), "runner-"));
   writeFileSync(
@@ -25,7 +26,7 @@ async function run(
     }),
   );
   writeFileSync(join(directory, "main.mjs"), source);
-  const child = spawn(process.execPath, [runner, directory], {
+  const child = spawn(process.execPath, [runnerPath, directory], {
     stdio: ["pipe", "pipe", "inherit"],
   });
   const methods: string[] = [];
@@ -58,6 +59,28 @@ test("the runner activates a default-exported plugin and refuses the removed fla
     "export async function activate(host) { await host.commands.register('a', 1, {}, {}); }",
   );
   assert.deepEqual(legacy, { event: "runtime.failed", methods: [] });
+});
+
+test("the packaged runtime layout (runner + SDK package) runs a plugin", async () => {
+  // What a packaged player ships as Resources/runtime (scripts/stage-runtime.mjs),
+  // outside the workspace: the runner resolves the SDK from its own node_modules.
+  const staged = join(mkdtempSync(join(tmpdir(), "runtime-")), "runtime");
+  const stage = spawnSync(
+    process.execPath,
+    [resolve(import.meta.dirname, "../../scripts/stage-runtime.mjs"), staged],
+    { encoding: "utf8" },
+  );
+  assert.equal(stage.status, 0, stage.stderr);
+  const result = await run(
+    "export default async function activate(plugin) { plugin.commands.add({ id: 'a', path: ['文件', 'A'], run() {} }); }",
+    undefined,
+    join(staged, "runner.ts"),
+  );
+  assert.deepEqual(result, {
+    event: "runtime.ready",
+    methods: ["window.state", "commands.register"],
+  });
+  rmSync(staged, { recursive: true, force: true });
 });
 
 test("a v2 plugin is not ready until its registrations succeeded", async () => {

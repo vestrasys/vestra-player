@@ -1,4 +1,4 @@
-import type { Plugin, ThemeId } from "../../sdk/plugin/index.ts";
+import type { Plugin, ThemeId } from "@vestra-player/sdk";
 import { DEFAULT_THEME, isTheme, THEMES, titleOf } from "./themes.ts";
 
 /** 设置 ▶ (选项… 830; 外观 ▶ 840–849, of which the palettes take 840–841). */

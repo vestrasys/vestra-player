@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import type { Scope, Window } from "../../sdk/plugin/index.ts";
+import type { Scope, Window } from "@vestra-player/sdk";
 import type { SettingsStore } from "./settings.ts";
 
 const SCHEMES = new Set(["http", "https", "rtsp", "rtmp", "rtmps", "mms", "ftp"]);

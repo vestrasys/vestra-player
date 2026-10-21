@@ -1,5 +1,5 @@
 import { access } from "node:fs/promises";
-import type { JsonStore, PlayerState, Scope } from "../../sdk/plugin/index.ts";
+import type { JsonStore, PlayerState, Scope } from "@vestra-player/sdk";
 import { isLocal, keyOf } from "./identity.ts";
 import { jsonStore, timing } from "./store.ts";
 

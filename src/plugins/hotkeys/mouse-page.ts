@@ -1,4 +1,4 @@
-import type { BindingInfo, Plugin } from "../../sdk/plugin/index.ts";
+import type { BindingInfo, Plugin } from "@vestra-player/sdk";
 import { commandText, MODIFIERS, MOUSE, refKey, winner } from "./keys.ts";
 import { type BindingsModel, failureText } from "./model.ts";
 

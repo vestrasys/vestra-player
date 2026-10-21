@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
-import type { PlaybackStats, PlayerState } from "../../../sdk/plugin/index.ts";
+import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
+import type { PlaybackStats, PlayerState } from "@vestra-player/sdk";
 import activate, { brief, BRIEF_COLUMNS, briefColumns, currentChapter, fileName, fit, shortCodec, subtitleName } from "../main.ts";
 
 const directory = new URL("..", import.meta.url);

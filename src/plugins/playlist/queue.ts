@@ -1,6 +1,6 @@
 import { realpath } from "node:fs/promises";
 import { basename, dirname, extname, resolve } from "node:path";
-import type { Disposable, Media, PlayerState } from "../../sdk/plugin/index.ts";
+import type { Disposable, Media, PlayerState } from "@vestra-player/sdk";
 import { collator, compareByFolder } from "./media.ts";
 
 export type Row = {

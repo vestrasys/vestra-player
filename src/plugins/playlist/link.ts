@@ -1,4 +1,4 @@
-import type { Scope, Window } from "../../sdk/plugin/index.ts";
+import type { Scope, Window } from "@vestra-player/sdk";
 import type { Queue } from "./queue.ts";
 
 const HINT = "输入 HTTP(S) 链接；添加只选择，不自动播放";

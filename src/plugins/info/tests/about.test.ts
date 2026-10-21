@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { HostError, startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
+import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import { aboutText, components, PLUGINS_UNKNOWN, pluginRows } from "../about.ts";
 import activate from "../main.ts";
 

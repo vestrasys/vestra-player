@@ -1,6 +1,6 @@
 import { mkdtemp, rmdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import type { PlayerState, Scope, Snapshot } from "../../sdk/plugin/index.ts";
+import type { PlayerState, Scope, Snapshot } from "@vestra-player/sdk";
 import { chooseAudio, sampleTimes, uniqueFile, validate } from "./model.ts";
 import type { Spec } from "./model.ts";
 import type { Task, Tasks } from "./tasks.ts";

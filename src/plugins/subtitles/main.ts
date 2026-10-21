@@ -10,7 +10,7 @@ import type {
   SubtitleStyle,
   SubtitleTrack,
   SubtitlesState,
-} from "../../sdk/plugin/index.ts";
+} from "@vestra-player/sdk";
 import { ENCODINGS, convert, cuesOf, parseSrt, readFileBytes } from "./formats.ts";
 import type { Cue, Converted, Encoding } from "./formats.ts";
 import {

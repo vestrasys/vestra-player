@@ -1,5 +1,5 @@
 import { basename } from "node:path";
-import type { JsonStore, PlayerState, Scope } from "../../sdk/plugin/index.ts";
+import type { JsonStore, PlayerState, Scope } from "@vestra-player/sdk";
 import { openStore } from "./settings.ts";
 
 type Last = { source: string | null; openedAt?: string };

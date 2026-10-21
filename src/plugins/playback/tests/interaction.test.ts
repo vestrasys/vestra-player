@@ -4,8 +4,8 @@ import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import type { BindingInfo } from "../../../sdk/plugin/index.ts";
-import { startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
+import type { BindingInfo } from "@vestra-player/sdk";
+import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 import { firstKey } from "../tips.ts";
 

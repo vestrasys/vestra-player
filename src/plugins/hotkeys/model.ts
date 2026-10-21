@@ -1,4 +1,4 @@
-import type { BindingInfo, BindingRef, Plugin } from "../../sdk/plugin/index.ts";
+import type { BindingInfo, BindingRef, Plugin } from "@vestra-player/sdk";
 import { commandText, refKey } from "./keys.ts";
 import { timing } from "./store.ts";
 

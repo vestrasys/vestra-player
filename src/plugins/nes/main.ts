@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
-import type { Plugin, PluginError, Stream, StreamStartError } from "../../sdk/plugin/index.ts";
+import type { Plugin, PluginError, Stream, StreamStartError } from "@vestra-player/sdk";
 import { NesCore } from "./core.ts";
 
 /** NES emulator: one tool window, one generated AV stream, three menu entries. */

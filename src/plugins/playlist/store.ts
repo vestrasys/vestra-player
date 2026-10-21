@@ -1,4 +1,4 @@
-import type { JsonStore, Scope } from "../../sdk/plugin/index.ts";
+import type { JsonStore, Scope } from "@vestra-player/sdk";
 import type { OpenMode } from "./follow.ts";
 import { lengthOf, ROW_LIMIT, type Queue, type Repeat, type SortKey } from "./queue.ts";
 

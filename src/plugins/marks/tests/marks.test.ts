@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { HostError, TestHost, startPlugin } from "../../../sdk/plugin/testing.ts";
+import { HostError, TestHost, startPlugin } from "@vestra-player/sdk/testing";
 import { currentChapter, segmentAt, stepPoint } from "../chapters.ts";
 import { clock, fit, mediaKey, parseTime, precise } from "../format.ts";
 import activate from "../main.ts";

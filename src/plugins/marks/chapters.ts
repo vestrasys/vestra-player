@@ -1,4 +1,4 @@
-import type { Chapter, Player, PlayerState } from "../../sdk/plugin/index.ts";
+import type { Chapter, Player, PlayerState } from "@vestra-player/sdk";
 
 /** The media is open far enough for chapters, bookmarks and seeking to mean something. */
 export const hasMedia = (state: PlayerState) =>

@@ -1,4 +1,4 @@
-import type { Plugin, PlayerState } from "../../sdk/plugin/index.ts";
+import type { Plugin, PlayerState } from "@vestra-player/sdk";
 import { precise, round1 } from "./format.ts";
 import { segmentAt } from "./chapters.ts";
 import { type Count, type Settings, timing } from "./store.ts";

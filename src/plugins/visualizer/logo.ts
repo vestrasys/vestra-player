@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
-import type { ImageRef, Plugin } from "../../sdk/plugin/index.ts";
+import type { ImageRef, Plugin } from "@vestra-player/sdk";
 import { extensionOf, imageInfo, imageProblem, MAX_IMAGE_BYTES } from "./images.ts";
 import type { SettingsStore } from "./settings.ts";
 

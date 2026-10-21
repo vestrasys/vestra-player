@@ -1,4 +1,4 @@
-import type { Plugin } from "../../sdk/plugin/index.ts";
+import type { Plugin } from "@vestra-player/sdk";
 import { wireBar } from "./bar.ts";
 import { addCommands } from "./commands.ts";
 import { Playback } from "./controller.ts";

@@ -4,8 +4,8 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, realpath, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
-import type { Json } from "../../../sdk/plugin/index.ts";
-import { HostError, startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
+import type { Json } from "@vestra-player/sdk";
+import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import { DROP_EXTENSIONS, dropRow } from "../drop.ts";
 import activate from "../main.ts";
 

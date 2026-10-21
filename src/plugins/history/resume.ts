@@ -1,4 +1,4 @@
-import type { JsonStore, Player, PlayerState, Plugin, Window } from "../../sdk/plugin/index.ts";
+import type { JsonStore, Player, PlayerState, Plugin, Window } from "@vestra-player/sdk";
 import { clock, fileSize, keyOf, mediaKind } from "./identity.ts";
 import { jsonStore, timing } from "./store.ts";
 

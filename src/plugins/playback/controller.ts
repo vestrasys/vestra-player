@@ -1,4 +1,4 @@
-import type { Conditional, Dialogs, Player, Scrub } from "../../sdk/plugin/index.ts";
+import type { Conditional, Dialogs, Player, Scrub } from "@vestra-player/sdk";
 import { rateText, time } from "./format.ts";
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));

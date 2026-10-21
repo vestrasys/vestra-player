@@ -1,4 +1,4 @@
-import type { AudioNode, AudioTrack } from "../../sdk/plugin/index.ts";
+import type { AudioNode, AudioTrack } from "@vestra-player/sdk";
 
 export const bands = [60, 170, 350, 1000, 3500, 10000] as const;
 /** 晶化 (PotPlayer crystalizer, our 3 kHz treble shelf): a switch plus a remembered strength. */

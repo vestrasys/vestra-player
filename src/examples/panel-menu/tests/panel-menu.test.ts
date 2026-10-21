@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { startPlugin } from "../../../sdk/plugin/testing.ts";
+import { startPlugin } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 
 test("right-click opens this plugin's commands; panel keys; sequence provider", async () => {

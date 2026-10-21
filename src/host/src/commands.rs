@@ -236,7 +236,7 @@ impl Registry {
     /// real menus: video registers 71 at idle and all plugins plus the host
     /// about 290, so one owner gets 160 and the registry 1024, enough for
     /// track lists and parallel trial packages. Mirrored by
-    /// `COMMAND_LIMITS` in sdk/commands.ts (tests/sdk checks they agree).
+    /// `COMMAND_LIMITS` in packages/sdk/src/commands.ts (tests/sdk/host-agreement.test.ts checks they agree).
     pub const MAX_COMMANDS: usize = 1024;
     pub const MAX_PER_OWNER: usize = 160;
     pub const MAX_DEPTH: usize = 8;

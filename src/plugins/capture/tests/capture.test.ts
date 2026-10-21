@@ -3,10 +3,12 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import type { MediaJob } from "../../../sdk/media.ts";
-import { HostError, startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
+import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 import { clock, frameName, parseRange, sampleTimes, uniqueFile } from "../model.ts";
+
+/** A job as the test host records it. */
+type MediaJob = NonNullable<ReturnType<TestHost["jobs"]["get"]>>;
 
 const directory = new URL("..", import.meta.url);
 const start = (host = new TestHost()) => startPlugin(activate, { directory, host });

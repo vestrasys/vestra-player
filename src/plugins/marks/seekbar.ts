@@ -1,4 +1,4 @@
-import type { Chapter, MarkKind, Plugin, TimelineLayer } from "../../sdk/plugin/index.ts";
+import type { Chapter, MarkKind, Plugin, TimelineLayer } from "@vestra-player/sdk";
 import type { Bookmarks } from "./bookmarks.ts";
 import { chapterName, type Chapters, hasMedia } from "./chapters.ts";
 import type { AbLoop } from "./loop.ts";

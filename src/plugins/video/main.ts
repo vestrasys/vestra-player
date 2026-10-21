@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { copyFile, mkdir, readdir } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
-import type { FilterStatus, Plugin, PluginError } from "../../sdk/plugin/index.ts";
+import type { FilterStatus, Plugin, PluginError } from "@vestra-player/sdk";
 import {
   DEINTERLACE_MODES,
   FITS,

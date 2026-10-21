@@ -1,4 +1,4 @@
-import type { JsonStore, Scope } from "../../sdk/plugin/index.ts";
+import type { JsonStore, Scope } from "@vestra-player/sdk";
 
 /** `<dataDirectory>/visualizer.json` (feature-requirements J11, H12). */
 export interface Settings {

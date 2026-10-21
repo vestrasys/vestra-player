@@ -5,7 +5,7 @@
  * canonical binding with the same rules as the player's `bindings.rs`
  * (API reference §4.1); the player's `bindings.set` stays the judge.
  */
-import type { BindingInfo, BindingRef } from "../../sdk/plugin/index.ts";
+import type { BindingInfo, BindingRef } from "@vestra-player/sdk";
 
 /** What a Slint key event carries (`event.text`, `event.modifiers.*`). */
 export type KeyEvent = { text: string; control: boolean; alt: boolean; shift: boolean; meta: boolean };

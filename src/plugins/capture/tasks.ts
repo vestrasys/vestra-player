@@ -1,6 +1,6 @@
 import { rmdir, stat } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
-import type { ExportJob, JobState, Scope, Snapshot } from "../../sdk/plugin/index.ts";
+import type { ExportJob, JobState, Scope, Snapshot } from "@vestra-player/sdk";
 import { clock, extensionOf, KIND_LABEL } from "./model.ts";
 import type { Spec } from "./model.ts";
 

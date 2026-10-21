@@ -1,4 +1,4 @@
-import type { Plugin, PluginError } from "../../sdk/plugin/index.ts";
+import type { Plugin, PluginError } from "@vestra-player/sdk";
 import type { VideoSize } from "./video-size.ts";
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));

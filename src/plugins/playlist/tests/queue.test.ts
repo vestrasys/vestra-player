@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Media, PlayerState } from "../../../sdk/plugin/index.ts";
+import type { Media, PlayerState } from "@vestra-player/sdk";
 import { Queue } from "../queue.ts";
 
 function state(overrides: Partial<PlayerState> = {}): PlayerState {

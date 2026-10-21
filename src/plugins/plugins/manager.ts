@@ -1,5 +1,5 @@
 import { dirname, join } from "node:path";
-import type { PackageChange, Plugin, PluginInfo } from "../../sdk/plugin/index.ts";
+import type { PackageChange, Plugin, PluginInfo } from "@vestra-player/sdk";
 import { bytes, CAPABILITIES, CHANGE, failureText, ORIGIN, STATE } from "./labels.ts";
 import { directorySize, timing } from "./sizes.ts";
 

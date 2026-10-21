@@ -1,4 +1,4 @@
-import type { Plugin } from "../../sdk/plugin/index.ts";
+import type { Plugin } from "@vestra-player/sdk";
 import { addResumeCommands, RecentMenu } from "./menu.ts";
 import { Recent } from "./recent.ts";
 import { Resume } from "./resume.ts";

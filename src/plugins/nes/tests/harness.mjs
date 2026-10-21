@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { startPlugin, TestHost } from '../../../sdk/plugin/testing.ts';
+import { startPlugin, TestHost } from '@vestra-player/sdk/testing';
 import activate from '../main.ts';
 import { homebrew } from './homebrew.mjs';
 

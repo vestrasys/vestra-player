@@ -3,7 +3,7 @@
 // 0600) in the data directory when the system has none. Never in settings.json.
 import { chmodSync, existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Secrets as Store, SystemInfo } from "../../sdk/plugin/index.ts";
+import type { Secrets as Store, SystemInfo } from "@vestra-player/sdk";
 
 export type SecretName = "opensubtitles-api-key" | "opensubtitles-password" | "assrt-token";
 

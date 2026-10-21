@@ -1,4 +1,4 @@
-import type { Plugin } from "../../sdk/plugin/index.ts";
+import type { Plugin } from "@vestra-player/sdk";
 import { clampNote, fitted, mini, near, scaled, type Size } from "./geometry.ts";
 import type { AutoSize } from "./settings.ts";
 import type { VideoSize } from "./video-size.ts";

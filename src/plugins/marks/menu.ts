@@ -1,4 +1,4 @@
-import type { CommandOptions, Plugin, Scope } from "../../sdk/plugin/index.ts";
+import type { CommandOptions, Plugin, Scope } from "@vestra-player/sdk";
 import type { Actions } from "./actions.ts";
 import type { Bookmarks } from "./bookmarks.ts";
 import { chapterName, type Chapters, currentChapter } from "./chapters.ts";

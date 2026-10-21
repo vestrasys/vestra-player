@@ -1,4 +1,4 @@
-import type { Plugin } from "../../sdk/plugin/index.ts";
+import type { Plugin } from "@vestra-player/sdk";
 
 export default async function activate(plugin: Plugin) {
   const { player } = plugin;
