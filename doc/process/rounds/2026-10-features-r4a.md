@@ -250,7 +250,7 @@ interface ViewSettings {
 
 ### 7.1 画中画（H07 / R-W5 / R-H8）
 
-> **状态（2026-10-21）**：协调者建议 A（只保留迷你尺寸，跟踪上游 D），已向用户说明画中画的用途与代价，等用户最终确认。
+> **用户裁决（2026-10-21）**：先做原型再决定。原型放在独立子包 `src/host/unsafe/pip/`（只有它允许 `unsafe`，宿主主包保持 `#![forbid(unsafe_code)]`，静态检查要求 `unsafe` 只出现在 `src/host/unsafe/` 下，每个 `unsafe` 块写 SAFETY 注释），对外只给安全接口，上限 500 行。原型报回 `unsafe` 块个数与行数，由用户决定是否正式做；否则保留迷你尺寸。
 
 **问题**：macOS 系统画中画只能经 AVKit 的 `AVPictureInPictureController` + `AVSampleBufferDisplayLayer` 实现，而目前可用的 Rust 绑定（objc2 0.3.2 系列）把这条链路上的每个方法、以及 `CMSampleBuffer` / `CVPixelBuffer` / `CMTimebase` 的构造都标成了 `unsafe`（§1.2）。在「第一方 Rust 禁止 `unsafe`」之下做不出来。
 
@@ -267,7 +267,7 @@ interface ViewSettings {
 
 ### 7.2 C-GPU（4b：R-H3、R-V10、R-P8；需求 E16、E17、E18 运动补偿）
 
-> **用户裁决（2026-10-21）**：选 A。HDR 色调映射（E16）、自定义着色器（E17）、运动补偿（E18 的后半）既然要开 `unsafe` 就放弃，4b 轮取消。倍帧（frameBlend）照 4a 做。
+> **用户裁决（2026-10-21，修订）**：GPU 渲染重要（主流 macOS 播放器与参考播放器都支持；还影响 4K 的 CPU 占用与硬件解码零拷贝），改为先做原型：放在独立子包 `src/host/unsafe/render/`，隔离规则同 §7.1，上限 500 行，验证 libmpv OpenGL 渲染到纹理并由 Slint 显示。原型报回：`unsafe` 块个数与行数、4K 播放 CPU 对比软件渲染、能否满足播放连续性（换来源、重建界面不中断）。正式切换时保留软件渲染作为后备。E16/E17/E18 运动补偿视原型结论恢复。
 
 **问题**：GPU 渲染只能走 libmpv 的 OpenGL 渲染接口（mpv 0.41 没有 Metal / Vulkan 嵌入接口）。rsmpv 的 `new_opengl` 有意设计为 `unsafe fn`，Slint 接入外部 GL 纹理（`BorrowedOpenGLTextureBuilder`）也是 `unsafe fn`，GL 调用本身同样需要 `unsafe`（§1.3）。
 
