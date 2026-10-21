@@ -6,7 +6,7 @@
 import { startPlugin, TestHost } from "/Users/ziyang/Develop/vestra-player/src/sdk/plugin/testing.ts";
 import { writeFileSync } from "node:fs";
 import { test } from "node:test";
-const all = ["info", "playback","playlist","video","audio","subtitles","subtitle-online","capture","history","nes","youtube","bilibili","workshop"];
+const all = ["info", "playback","playlist","video","audio","subtitles","subtitle-online","capture","history","nes","youtube","bilibili","workshop","window","marks","hotkeys","plugins","preferences","visualizer"];
 const names = process.env.PLUGINS ? process.env.PLUGINS.split(",") : all;
 type Entry = [string, { declaration: unknown }];
 const row = ([id, c]: Entry) => {
