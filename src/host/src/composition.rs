@@ -156,11 +156,12 @@ pub fn shell_source(specs: &[CompileSpec]) -> Result<String> {
     let mut shell = include_str!("../ui/host.slint").to_owned();
     replace_marker(&mut shell, "// VESTRA-FONT", &font_property())?;
     let properties = "in property <bool> bottom-visible: true;\n\
-                      in property <bool> sidebar-visible: true;";
+                      in property <bool> sidebar-visible: true;\n\
+                      in property <bool> sidebar-overlay: false;\n\
+                      in property <bool> sidebar-popped: false;";
     replace_marker(&mut shell, "// VESTRA-MOUNT-PROPERTIES", properties)?;
-    let sidebar = specs
-        .iter()
-        .find(|spec| spec.slot == Slot::Sidebar)
+    let sidebar_spec = specs.iter().find(|spec| spec.slot == Slot::Sidebar);
+    let sidebar = sidebar_spec
         .map(|spec| {
             format!(
                 "if root.sidebar-visible: Rectangle {{ width: 3px; horizontal-stretch: 0; background: Theme.line; \
@@ -175,16 +176,41 @@ pub fn shell_source(specs: &[CompileSpec]) -> Result<String> {
         })
         .unwrap_or_default();
     replace_marker(&mut shell, "// VESTRA-MOUNT-SIDEBAR", &sidebar)?;
+    // G-01: in fullscreen the attached sidebar is an overlay over the right
+    // of the video, full height; it slides out when popped and back when
+    // collapsed. Its hover area reports to the host (the G-04 mechanism).
+    let overlay = sidebar_spec
+        .map(|spec| {
+            format!(
+                "if root.sidebar-overlay: Rectangle {{ x: root.width; y: 0px; \
+                 width: root.sidebar-pop-width * 1px; height: root.height; \
+                 states [ popped when root.sidebar-popped: {{ x: root.width - self.width; \
+                 in {{ animate x {{ duration: 150ms; easing: ease-out; }} }} \
+                 out {{ animate x {{ duration: 150ms; easing: ease-in; }} }} }} ] \
+                 TouchArea {{ changed has-hover => {{ root.sidebar-hover = self.has-hover; }} \
+                 changed mouse-x => {{ root.window-input(\"activity\"); }} \
+                 changed mouse-y => {{ root.window-input(\"activity\"); }} \
+                 FocusScope {{ {} Owner{}View {{ width: parent.width; height: parent.height; }} }} }} }}",
+                key_forward("panel:sidebar"),
+                spec.owner
+            )
+        })
+        .unwrap_or_default();
+    replace_marker(&mut shell, "// VESTRA-MOUNT-OVERLAY", &overlay)?;
     let bottom = specs
         .iter()
         .find(|spec| spec.slot == Slot::Bottom)
         .map(|spec| {
             format!(
                 "Rectangle {{ height: root.host-fullscreen || !root.bottom-visible ? 0px : bottom-keys.height; vertical-stretch: 0; \
-                 bottom-keys := FocusScope {{ visible: root.bottom-visible; width: parent.width; \
+                 bottom-keys := FocusScope {{ visible: root.bottom-visible; \
+                 width: parent.width - (root.host-fullscreen && root.sidebar-popped ? root.sidebar-pop-width * 1px : 0px); \
                  height: min(bottom-content.max-height, max(bottom-content.min-height, bottom-content.preferred-height)); \
                  y: root.host-fullscreen ? -self.height : 0px; {} \
-                 bottom-content := Owner{}View {{ width: parent.width; height: parent.height; }} }} }}",
+                 TouchArea {{ changed has-hover => {{ root.bottom-hover = self.has-hover; }} \
+                 changed mouse-x => {{ root.window-input(\"activity\"); }} \
+                 changed mouse-y => {{ root.window-input(\"activity\"); }} \
+                 bottom-content := Owner{}View {{ width: parent.width; height: parent.height; }} }} }} }}",
                 key_forward("panel:bottom"),
                 spec.owner
             )
@@ -233,7 +259,8 @@ export component FloatingPanel inherits Window {{
     out property <float> logical-width: root.width / 1px;
     out property <float> logical-height: root.height / 1px;
     callback menu-invoke(string);
-    callback menu-hover(int, string);
+    callback menu-hover(int, string, bool);
+    callback menu-scroll(int, float);
     callback menu-back();
     callback menu-dismiss();
     callback key-input(string, string, bool, bool, bool, bool, bool) -> bool;
@@ -247,7 +274,8 @@ export component FloatingPanel inherits Window {{
         MenuView {{
             width: root.width; height: root.height;
             levels: root.menu-levels;
-            hovered(level, token) => {{ root.menu-hover(level, token); }}
+            hovered(level, token, now) => {{ root.menu-hover(level, token, now); }}
+            scrolled(level, offset) => {{ root.menu-scroll(level, offset); }}
             activated(token) => {{ root.menu-invoke(token); }}
             back => {{ root.menu-back(); }}
             dismissed => {{ root.menu-dismiss(); }}
@@ -264,8 +292,19 @@ export component FloatingPanel inherits Window {{
 
 /// R-U3: whether the video area has no video frame to show. Empty: none;
 /// ready or ended: none unless mpv shows a picture (cover art counts) or a
-/// stream produces frames; loading and error keep the previous answer.
+/// stream produces frames; loading: none (G-16a, the backdrop shows the
+/// loading screen instead of the previous source's last frame); error keeps
+/// the previous answer.
 pub fn no_video(previous: bool, source: &Json) -> bool {
+    match source["phase"].as_str() {
+        Some("loading") => true,
+        _ => video_absent(previous, source),
+    }
+}
+
+/// Whether the source has no video, with loading and error keeping the
+/// previous answer: picture-in-picture stays open while the next source loads.
+pub fn video_absent(previous: bool, source: &Json) -> bool {
     match source["phase"].as_str() {
         Some("empty") | None => true,
         Some("ready" | "ended") => !(source["kind"] == "producer" || source["videoOutput"] == true),
@@ -528,10 +567,16 @@ mod tests {
         assert!(no_video(false, &state("ready", false)));
         assert!(!no_video(true, &state("ready", true)));
         assert!(!no_video(true, &state("ended", true)));
-        // Loading and error keep what is shown.
+        // G-16a: loading shows the backdrop; error keeps what is shown.
         assert!(no_video(true, &state("loading", false)));
-        assert!(!no_video(false, &state("loading", false)));
+        assert!(no_video(false, &state("loading", false)));
         assert!(!no_video(false, &state("error", false)));
+        assert!(no_video(true, &state("error", false)));
+        // For picture-in-picture, loading keeps the previous answer.
+        assert!(!video_absent(false, &state("loading", false)));
+        assert!(video_absent(true, &state("loading", false)));
+        assert!(!video_absent(false, &state("error", false)));
+        assert!(video_absent(false, &state("ready", false)));
         assert!(!no_video(true, &json!({"phase":"ready","kind":"producer"})));
         assert!(no_video(false, &Json::Null));
     }
@@ -590,6 +635,14 @@ mod tests {
         assert!(source.contains("bottom-content := Owner10View"));
         assert!(source.contains("visible: root.bottom-visible"));
         assert!(!source.contains("// VESTRA-"));
+        // G-04: the bar reports hover; G-01: the fullscreen sidebar overlay is
+        // a second instance above the video and the docked layout.
+        assert!(source.contains("root.bottom-hover = self.has-hover"));
+        assert!(source.contains("root.sidebar-hover = self.has-hover"));
+        let overlay = source.find("if root.sidebar-overlay:").unwrap();
+        assert!(overlay > source.find("if root.sidebar-visible: FocusScope").unwrap());
+        assert!(overlay < source.find("if root.menu-open: Rectangle").unwrap());
+        assert_eq!(source.matches("Owner20View {").count(), 2);
         // Reference §6.3: bottom-bar content may draw above its slot (negative
         // y) over the video; nothing between it and the window clips it.
         let bottom = &source[..source.find("bottom-content := Owner10View").unwrap()];

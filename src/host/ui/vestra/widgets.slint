@@ -4,19 +4,40 @@
 import { TextEdit } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 
-// Hover for 600 ms to show `text` beside the pointer.
+// Hover for 600 ms to show `text` beside the pointer. The tip closes when
+// the pointer leaves or presses; it shows again on the next hover.
 export component ToolTipArea {
     in property <string> text;
+    // The tip is showing (read-only).
+    out property <bool> showing;
+    // Shown (or pressed) during this hover: wait for the pointer to leave.
+    // (Never assign the timer's `running`: that drops its binding, and the
+    // tip would show only once.)
+    private property <bool> done;
     area := TouchArea {
         width: 100%; height: 100%;
         @children
-        pointer-event(event) => { if event.kind == PointerEventKind.down { tip.close(); } }
+        changed has-hover => {
+            if !self.has-hover {
+                root.done = false;
+                root.showing = false;
+                tip.close();
+            }
+        }
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                root.done = true;
+                root.showing = false;
+                tip.close();
+            }
+        }
     }
-    hover-timer := Timer {
+    Timer {
         interval: 600ms;
-        running: area.has-hover && root.text != "";
+        running: area.has-hover && root.text != "" && !root.done;
         triggered => {
-            self.running = false;
+            root.done = true;
+            root.showing = true;
             tip.show();
         }
     }

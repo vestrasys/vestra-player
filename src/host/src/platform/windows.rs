@@ -176,6 +176,11 @@ pub fn double_click_seconds() -> f64 {
     f64::from(vestra_win32::double_click_ms()) / 1000.
 }
 
+/// G-15: the system submenu delay (`SPI_GETMENUSHOWDELAY`, 400 ms by default).
+pub fn menu_show_delay_ms() -> u64 {
+    vestra_win32::menu_show_delay_ms().map_or(crate::menu::SHOW_DELAY_MS, u64::from)
+}
+
 pub fn screen_for(id: HostWindowId) -> Result<ScreenFacts> {
     let window = window(id)?;
     let monitor = window

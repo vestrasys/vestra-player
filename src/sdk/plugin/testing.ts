@@ -838,13 +838,15 @@ export class TestHost implements Transport {
       }
       case "volume-up":
       case "volume-down": {
-        const volume = Math.max(
-          0,
-          Math.min(
-            200,
-            Math.round(s.output.volume + (action === "volume-up" ? 5 : -5)),
-          ),
-        );
+        // Like the player: up stops at 100 (a louder volume set through
+        // setOutput stays), down steps by 5 to 0.
+        const volume =
+          action === "volume-up"
+            ? Math.max(
+                s.output.volume,
+                Math.min(100, Math.round(s.output.volume + 5)),
+              )
+            : Math.max(0, Math.min(200, Math.round(s.output.volume - 5)));
         this.setSource({ output: { volume, muted: false } });
         this.osd.push(`音量: ${volume}%`);
         return;
@@ -921,6 +923,9 @@ export class TestHost implements Transport {
       phase: this.source.phase,
     };
     this.emit("source.state", this.source);
+    // Like the player (reference §6.3): loading shows the backdrop.
+    if (patch.phase === "loading" && this.backdrop && !this.backdrop.effective)
+      this.setBackdropEffective(true);
   }
   /** The user changed the main window (resized, fullscreen); broadcast it. */
   setMainWindow(
@@ -930,7 +935,30 @@ export class TestHost implements Transport {
       pictureInPicture: { supported: boolean; active: boolean };
     }>,
   ) {
+    const entering =
+      patch.fullscreen !== undefined &&
+      patch.fullscreen !== this.mainWindow.fullscreen;
     Object.assign(this.mainWindow, patch);
+    // Like the player (reference §6.3): in fullscreen the attached sidebar
+    // starts collapsed at the right edge; leaving fullscreen docks it again.
+    const sidebar = this.layout.sidebar;
+    if (entering && sidebar && sidebar.preferred && !sidebar.detached) {
+      sidebar.effective = !this.mainWindow.fullscreen;
+      sidebar.reason = this.mainWindow.fullscreen ? "fullscreen" : null;
+    }
+    this.emit("window.state", this.#windowFacts());
+  }
+  /**
+   * The pointer reached the right edge in fullscreen (`true`) or left the
+   * popped-out sidebar (`false`): the attached sidebar pops out or collapses
+   * (reference §6.3). No effect outside fullscreen, when hidden or floating.
+   */
+  popSidebar(popped: boolean) {
+    const sidebar = this.layout.sidebar;
+    if (!this.mainWindow.fullscreen || !sidebar?.preferred || sidebar.detached)
+      return;
+    sidebar.effective = popped;
+    sidebar.reason = popped ? null : "fullscreen";
     this.emit("window.state", this.#windowFacts());
   }
   #windowFacts() {

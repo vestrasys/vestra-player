@@ -113,7 +113,11 @@ struct Reply {
 }
 enum MenuAction {
     Invoke(String),
-    Hover(usize, String),
+    /// A row entered: level, token, and whether it acts at once (a click or
+    /// a key) or after the submenu delay (the pointer, G-15).
+    Hover(usize, String, bool),
+    /// G-03: scroll a level to this offset (clamped when projected).
+    Scroll(usize, f64),
     Reset,
     Back,
     Dismiss,
@@ -131,6 +135,8 @@ enum Event {
     /// A bound input fired: (window generation, owner, command id).
     Binding(u64, u64, String),
     SidebarResized(u64, f64),
+    /// IA-CORE-12: a double click on the video during picture-in-picture.
+    PipReturn(u64),
     FloatingClosed(u64),
     MenuAction(u64, MenuAction),
     Request(u64, Value),
@@ -242,11 +248,18 @@ struct Host {
     shell_generation: u64,
     next_shell_generation: u64,
     menu_path: Vec<String>,
+    /// Requested scroll offset of each open menu level (G-03).
+    menu_scroll: Vec<f64>,
+    /// The submenu delay (G-15) and its length.
+    menu_delay: menu::HoverDelay,
+    menu_show_delay_ms: u64,
     policy: window_state::Policy,
     clock: Instant,
     window_facts: Value,
     measured_shell: Option<u64>,
     menu_open: bool,
+    /// G-01: the fullscreen sidebar overlay was popped out at the last tick.
+    sidebar_popped: bool,
     native_window: Option<platform::HostWindowId>,
     native_before: Option<platform::NativeSnapshot>,
     native_unavailable: Option<String>,
@@ -307,6 +320,8 @@ struct Host {
     images: ui_image::Images,
     /// No video frame to show (R-U3): the backdrop is effective.
     no_video: bool,
+    /// The source has no video, loading keeping the previous answer (PiP).
+    video_absent: bool,
     /// GPU rendering: the video area was cleared for this empty phase.
     video_cleared: bool,
     /// A backdrop is mounted, so mpv is told not to show cover art (R-U3).
@@ -679,32 +694,31 @@ impl Host {
                         self.open_menu(generation, MenuMode::Main);
                     }
                     MenuAction::Back => {
-                        self.menu_path.pop();
-                        let result = self.refresh_menu();
-                        self.report_menu(result);
+                        let mut path = self.menu_path.clone();
+                        path.pop();
+                        self.set_menu_path(path);
                     }
                     MenuAction::Dismiss => self.close_menu(),
-                    MenuAction::Hover(level, token) => {
-                        let mut path = match menu::parse_token(&token) {
-                            Some(menu::Token::Group(path)) => path,
-                            Some(menu::Token::Command { .. }) => {
-                                self.menu_path.iter().take(level).cloned().collect()
-                            }
-                            None => return,
+                    MenuAction::Hover(level, token, now) => {
+                        let Some(path) = menu::hover_target(&self.menu_path, level, &token) else {
+                            return;
                         };
-                        path.truncate(level + 1);
-                        if path != self.menu_path {
-                            self.menu_path = path;
+                        if now {
+                            self.set_menu_path(path);
+                        } else {
+                            self.menu_delay.hover(&self.menu_path, path, self.now_ms());
+                        }
+                    }
+                    MenuAction::Scroll(level, offset) => {
+                        if level <= self.menu_path.len() && offset.is_finite() {
+                            self.menu_scroll.resize(level + 1, 0.);
+                            self.menu_scroll[level] = offset;
                             let result = self.refresh_menu();
                             self.report_menu(result);
                         }
                     }
                     MenuAction::Invoke(token) => match menu::parse_token(&token) {
-                        Some(menu::Token::Group(path)) => {
-                            self.menu_path = path;
-                            let result = self.refresh_menu();
-                            self.report_menu(result);
-                        }
+                        Some(menu::Token::Group(path)) => self.set_menu_path(path),
                         Some(menu::Token::Command { owner, id }) => {
                             self.close_menu();
                             if let Err(error) = self.execute_command(owner, &id) {
@@ -752,6 +766,11 @@ impl Host {
                 self.ui_state.state.sidebar = Some(ui_state::Sidebar { width });
                 self.ui_state.touch(self.now_ms());
             }
+            Event::PipReturn(generation) => {
+                if generation == self.shell_generation {
+                    self.pip.restore();
+                }
+            }
             Event::FloatingClosed(generation) => {
                 if let Some(owner) = self
                     .floating
@@ -759,9 +778,10 @@ impl Host {
                     .filter(|f| f.generation == generation)
                     .map(|f| f.owner)
                 {
-                    let _ = self
-                        .policy
-                        .set_preferred(window_state::Slot::Sidebar, owner, false);
+                    let now = self.now_ms();
+                    let _ =
+                        self.policy
+                            .set_preferred(window_state::Slot::Sidebar, owner, false, now);
                     if let Some(mount) = self.mounts.get_mut(&owner) {
                         mount.visible = false;
                     }
@@ -936,7 +956,7 @@ impl Host {
                 .shell
                 .as_ref()
                 .is_some_and(|s| s.window().is_fullscreen()),
-            video: !self.no_video,
+            video: !self.video_absent,
         }
     }
     /// `window.setPictureInPicture { on }` (R-W5): answered once the system
@@ -1135,6 +1155,7 @@ impl Host {
     }
     fn window_tick(&mut self) {
         self.pip_tick();
+        self.menu_tick();
         let Some(shell) = self.shell.as_ref().map(ComponentHandle::clone_strong) else {
             return;
         };
@@ -1243,9 +1264,29 @@ impl Host {
         {
             return;
         }
-        if !fullscreen && !self.headless {
+        // IA-CORE-03: only the normal size is remembered (not fullscreen, not
+        // maximized), and the player always starts at it (`RestoreLastState=0`).
+        if !fullscreen && !shell.window().is_maximized() && !self.headless {
             self.remember_window(&shell);
         }
+        // G-04 / G-01: where the pointer is. A hover counts only while its
+        // panel is showing (Slint keeps `has-hover` until the pointer moves).
+        let flag = |name: &str| matches!(shell.get_property(name), Ok(SValue::Bool(true)));
+        let bottom_hover = flag("bottom-hover") && flag("bottom-visible");
+        self.policy
+            .set_hover(window_state::Slot::Bottom, bottom_hover);
+        self.policy.set_hover(
+            window_state::Slot::Sidebar,
+            flag("sidebar-hover") && self.sidebar_popped,
+        );
+        if flag("video-hover") {
+            self.policy
+                .pointer(number("pointer-x"), viewport.width, now);
+        } else if bottom_hover {
+            // The bar lies left of the popped-out sidebar.
+            self.policy.pointer(0., viewport.width, now);
+        }
+        self.policy.tick(now);
         let result = (|| -> Result<Value> {
             let snapshot = self.policy.evaluate(viewport, now)?;
             shell.set_property("host-fullscreen", fullscreen.into())?;
@@ -1255,13 +1296,20 @@ impl Host {
             )?;
             let bottom = snapshot.bottom.is_some_and(|s| s.effective);
             shell.set_property("bottom-visible", bottom.into())?;
+            let sidebar = snapshot.sidebar.filter(|s| !s.detached);
             shell.set_property(
                 "sidebar-visible",
-                snapshot
-                    .sidebar
-                    .is_some_and(|s| s.effective && !s.detached)
-                    .into(),
+                sidebar.is_some_and(|s| s.effective && !s.overlay).into(),
             )?;
+            // G-01: the fullscreen overlay exists while attached in
+            // fullscreen, and slides out while effective.
+            shell.set_property("sidebar-overlay", sidebar.is_some_and(|s| s.overlay).into())?;
+            let popped = sidebar.is_some_and(|s| s.overlay && s.effective);
+            shell.set_property("sidebar-popped", popped.into())?;
+            if self.sidebar_popped && !popped {
+                let _ = shell.invoke("focus-video", &[]);
+            }
+            self.sidebar_popped = popped;
             let playing =
                 self.last_source["phase"] == "ready" && self.last_source["paused"] == false;
             // UI-SHELL-09: the pointer hides with the idle fullscreen bar while playing.
@@ -1464,6 +1512,8 @@ impl Host {
             if self.menu_open && self.menu_generation == floating.generation {
                 self.menu_open = false;
                 self.menu_path.clear();
+                self.menu_scroll.clear();
+                self.menu_delay.clear();
                 self.menu_mode = MenuMode::Main;
             }
             let _ = floating.instance.hide();
@@ -1610,6 +1660,25 @@ impl Host {
             };
             SValue::Bool(fire(&input, &events, generation, &event, false, None))
         })?;
+        // G-05: dragging the video moves the window; the press is no click.
+        let input = self.input.clone();
+        let weak = window.as_weak();
+        window.set_callback("drag-window", move |_| {
+            input.borrow_mut().click = None;
+            if let Some(window) = weak.upgrade() {
+                use slint::winit_030::WinitWindowAccessor;
+                window.window().with_winit_window(|window| {
+                    // Systems without it (some Linux) refuse; the window stays.
+                    let _ = window.drag_window();
+                });
+            }
+            SValue::Void
+        })?;
+        let events = self.events.clone();
+        window.set_callback("pip-return", move |_| {
+            let _ = events.send(Event::PipReturn(generation));
+            SValue::Void
+        })?;
         let input = self.input.clone();
         window.set_callback("left-press", move |args| {
             let number = |i: usize| match args.get(i) {
@@ -1713,7 +1782,13 @@ impl Host {
         let labels = self.labels();
         set_menu_model(
             window,
-            menu_levels(window, &roots, &mut self.menu_path.clone(), &labels)?,
+            menu_levels(
+                window,
+                &roots,
+                &mut self.menu_path.clone(),
+                &self.menu_scroll,
+                &labels,
+            )?,
         )?;
         if let Some(image) = &self.last_image {
             window.set_property("video-frame", image.clone().into())?;
@@ -1730,12 +1805,28 @@ impl Host {
     ) -> Result<()> {
         let events = self.events.clone();
         window.set_callback("menu-hover", move |args| {
-            if let [SValue::Number(level), SValue::String(token)] = args
+            if let [
+                SValue::Number(level),
+                SValue::String(token),
+                SValue::Bool(now),
+            ] = args
                 && *level >= 0.
             {
                 let _ = events.send(Event::MenuAction(
                     generation,
-                    MenuAction::Hover(*level as usize, token.to_string()),
+                    MenuAction::Hover(*level as usize, token.to_string(), *now),
+                ));
+            }
+            SValue::Void
+        })?;
+        let events = self.events.clone();
+        window.set_callback("menu-scroll", move |args| {
+            if let [SValue::Number(level), SValue::Number(offset)] = args
+                && *level >= 0.
+            {
+                let _ = events.send(Event::MenuAction(
+                    generation,
+                    MenuAction::Scroll(*level as usize, *offset),
                 ));
             }
             SValue::Void
@@ -1856,11 +1947,40 @@ impl Host {
         self.menu_generation = generation;
         self.menu_mode = mode;
         self.menu_path.clear();
+        self.menu_scroll.clear();
+        self.menu_delay.clear();
         if let Some(window) = self.window_for(generation) {
             let _ = window.set_property("menu-open", true.into());
         }
         let result = self.refresh_menu();
         self.report_menu(result);
+    }
+    /// Open this chain of submenus now. Levels that close or change forget
+    /// their scroll offset; a waiting delayed hover is dropped.
+    fn set_menu_path(&mut self, path: Vec<String>) {
+        self.menu_delay.clear();
+        if path == self.menu_path {
+            return;
+        }
+        let common = path
+            .iter()
+            .zip(&self.menu_path)
+            .take_while(|(a, b)| a == b)
+            .count();
+        self.menu_scroll.truncate(common + 1);
+        self.menu_path = path;
+        let result = self.refresh_menu();
+        self.report_menu(result);
+    }
+    /// G-15: apply a hover whose submenu delay has passed.
+    fn menu_tick(&mut self) {
+        if !self.menu_open {
+            return;
+        }
+        let now = self.now_ms();
+        if let Some(path) = self.menu_delay.due(now, self.menu_show_delay_ms) {
+            self.set_menu_path(path);
+        }
     }
     fn refresh_menu(&mut self) -> Result<()> {
         let labels = self.labels();
@@ -1875,7 +1995,13 @@ impl Host {
         let model = match &self.menu_mode {
             MenuMode::Main => {
                 let roots = self.commands.snapshot().roots;
-                menu_levels(window, &roots, &mut self.menu_path, &labels)?
+                menu_levels(
+                    window,
+                    &roots,
+                    &mut self.menu_path,
+                    &self.menu_scroll,
+                    &labels,
+                )?
             }
             MenuMode::Panel(owner, items) => {
                 // A command removed while its panel menu is open drops out.
@@ -1887,7 +2013,13 @@ impl Host {
                     })
                     .collect();
                 let (origin, size) = menu_frame(window);
-                ui_values::from_json(&menu::context_level(&entries, origin, size, &labels))?
+                ui_values::from_json(&menu::context_level(
+                    &entries,
+                    origin,
+                    size,
+                    self.menu_scroll.first().copied().unwrap_or(0.),
+                    &labels,
+                ))?
             }
         };
         set_menu_model(window, model)
@@ -1895,6 +2027,8 @@ impl Host {
     fn close_menu(&mut self) {
         self.menu_open = false;
         self.menu_path.clear();
+        self.menu_scroll.clear();
+        self.menu_delay.clear();
         self.menu_mode = MenuMode::Main;
         for window in [
             self.shell.as_ref(),
@@ -2105,7 +2239,13 @@ impl Host {
         let mut fullscreen = commands::Declaration::new("全屏", &["全屏"]);
         fullscreen.group = "screen".into();
         fullscreen.order = 700;
-        fullscreen.bindings = vec!["Enter".into(), "F11".into(), "Mouse:LeftDoubleClick".into()];
+        // IA-CORE-04: Enter and Alt+Enter as in PotPlayer; F11 is a Vestra extra.
+        fullscreen.bindings = vec![
+            "Enter".into(),
+            "Alt+Enter".into(),
+            "F11".into(),
+            "Mouse:LeftDoubleClick".into(),
+        ];
         let mut exit = commands::Declaration::new("退出全屏", &[]);
         exit.bindings = vec!["Escape".into()];
         let mut quit = commands::Declaration::new("退出", &["退出"]);
@@ -2396,6 +2536,7 @@ impl Host {
         }
     }
     fn backdrop_source(&mut self) {
+        self.video_absent = composition::video_absent(self.video_absent, &self.last_source);
         let next = composition::no_video(self.no_video, &self.last_source);
         let empty = self.last_source["phase"] == "empty";
         let Some(shell) = &self.shell else {
@@ -2869,8 +3010,9 @@ impl Host {
                     let visible = visible
                         .as_bool()
                         .ok_or_else(|| RpcError::invalid("visible boolean required"))?;
+                    let now = self.now_ms();
                     self.policy
-                        .set_preferred(policy_slot, owner, visible)
+                        .set_preferred(policy_slot, owner, visible, now)
                         .map_err(anyhow::Error::from)?;
                     if let Some(mount) = self.mounts.get_mut(&owner) {
                         mount.visible = visible;
@@ -3475,11 +3617,12 @@ fn menu_levels(
     window: &slint_interpreter::ComponentInstance,
     roots: &[commands::MenuNode],
     path: &mut Vec<String>,
+    scroll: &[f64],
     labels: &dyn Fn(u64, &str) -> Option<String>,
 ) -> Result<slint_interpreter::Value> {
     *path = menu::valid_path(roots, path);
     let (origin, size) = menu_frame(window);
-    ui_values::from_json(&menu::levels(roots, path, origin, size, labels))
+    ui_values::from_json(&menu::levels(roots, path, origin, size, scroll, labels))
 }
 /// Where the menu opens and the window it must fit in, in logical px.
 fn menu_frame(window: &slint_interpreter::ComponentInstance) -> (menu::Point, menu::Point) {
@@ -3873,11 +4016,15 @@ fn main() -> Result<()> {
         shell_generation: 1,
         next_shell_generation: 1,
         menu_path: Vec::new(),
+        menu_scroll: Vec::new(),
+        menu_delay: menu::HoverDelay::default(),
+        menu_show_delay_ms: platform::menu_show_delay_ms(),
         policy: window_state::Policy::new(0),
         clock: Instant::now(),
         window_facts: Value::Null,
         measured_shell: None,
         menu_open: false,
+        sidebar_popped: false,
         native_window: None,
         native_before: None,
         native_unavailable: None,
@@ -3924,6 +4071,7 @@ fn main() -> Result<()> {
         timeline: Default::default(),
         images: Default::default(),
         no_video: true,
+        video_absent: true,
         video_cleared: false,
         cover_art_off: false,
         pip: Default::default(),
