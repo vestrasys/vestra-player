@@ -20,7 +20,7 @@
 | 文件 | 谁写 | 内容 |
 | --- | --- | --- |
 | 插件包内的 `manifest.json` | 插件作者 | 插件自己的信息：`id`、`version`、`apiVersion`、`capabilities`、`entry`。另新增可选的显示字段：`name`、`author`、`punchline`（一句话简介）、`description`、`tags`、`icon`（包内 PNG/JPEG 路径）、`readme`（默认 `README.md`）、`changelog`、`sourceUrl`、`license` |
-| 仓库的 `index.json` | 由工具或 CI 生成，一般不手写 | 汇总各插件 manifest 的显示字段，再加上只有仓库才知道的信息：每个版本的 `downloadUrl`、`sha256`、`size`、`published`、`channel`（stable/testing），版本历史，`downloadCount`，图标和 README 的对外 URL，仓库名，`official`，`extensions`，签名 |
+| 仓库的 `index.json` | 由工具或 CI 生成，一般不手写 | 汇总各插件 manifest 的显示字段，再加上只有仓库才知道的信息：每个版本的 `downloadUrl`、`sha256`、`size`、`published`（另带 `apiVersion`、`minPlayerVersion`、`capabilities`，商城过滤和详情页用），版本历史，图标和 README 的对外 URL，仓库名，`official`，`revoked`，`extensions`，签名。没有发布通道，也没有下载次数（1.6 第 8、9 条） |
 
 - 发布到官方仓库的作者只写 `manifest.json`，再在 PR 里添加或修改登记文件 `registry/<插件 id>.toml`（见 1.3a），写明源码仓库、commit 和 owners。
 - 自建仓库的作者用工具生成 `index.json`（`vestra-repo build`，或我们提供的 GitHub Actions 模板）。
@@ -35,19 +35,27 @@
   "official": true,
   "plugins": [
     {
-      "id": "vestra.subtitle-online",
-      "name": "在线字幕", "author": "…", "punchline": "…", "description": "…", "tags": ["字幕"],
-      "iconUrl": "…", "readmeUrl": "…", "changelogUrl": "…", "sourceUrl": "…",
-      "downloadCount": 0,
+      "id": "vestra.youtube",
+      "name": "YouTube", "author": "Vestra Player", "punchline": "…", "description": "…",
+      "tags": ["网络视频"], "license": "Apache-2.0",
+      "iconUrl": null, "readmeUrl": "…", "changelogUrl": "…", "sourceUrl": "…",
       "versions": [
-        { "version": "1.2.0", "apiVersion": "vestra/1", "channel": "stable",
-          "downloadUrl": "…", "sha256": "…", "size": 0, "published": "…" }
+        { "version": "0.2.0", "apiVersion": "vestra/1", "minPlayerVersion": "0.2.0",
+          "capabilities": ["commands", "…"],
+          "downloadUrl": "…", "sha256": "…", "size": 9370, "published": "2026-10-21T…Z" }
       ]
     }
+  ],
+  "revoked": [
+    { "id": "someone.cool-visualizer", "versions": ">=1.0.0 <1.2.0", "reason": "…" }
   ],
   "extensions": {}
 }
 ```
+
+- 插件级字段取自最新版本的 manifest；manifest 没写的字段为 `null`（`tags` 为 `[]`，`name` 为 id）。`versions` 从新到旧。
+- 不带 `channel` 和 `downloadCount`（1.6 第 8、9 条）；以后自建服务器提供的下载统计放在 `extensions` 里。
+- `revoked` 原样复制仓库里手写的 `revoked.json`；`versions` 是精确版本或范围（`<`、`<=`、`>`、`>=`、`=` 比较式用空格连接、`||` 分隔备选、`*`），语法见插件仓库 CONTRIBUTING。
 
 - 完整性由 `sha256` 保证，与托管方无关。
 - 官方仓库的 `index.json` 由 CI 签名，签名单独放在同目录的 `index.json.sig`，不改变 JSON 结构；客户端内置公钥用来校验。
@@ -63,10 +71,10 @@ repository = "https://github.com/someone/cool-visualizer"
 commit = "3f2a9c1…"
 path = "."            # 插件在源码仓库里的子目录
 owners = ["someone"]
-channel = "stable"
 ```
 
 - 作者发新版只改 `commit`，PR 的改动通常只有一行。
+- 没有 `channel`（1.6 第 8 条）；其它未知键一律拒绝。
 - 不叫 `manifest.toml`：它和插件包里的 `manifest.json` 用途完全不同，名字相近容易混淆（Dalamud 用的是 `manifest.toml`）。用 TOML 是因为它由人手写，可以加注释。
 
 三个文件的分工：
@@ -84,7 +92,7 @@ channel = "stable"
 ### 1.4 客户端（播放器）
 
 - 商城是一个插件，扩展现有的 `plugins` 插件，不进核心。
-  - 界面参照 VS Code：左边列表，右边详情。详情页渲染 README，显示下载次数、版本和更新日志。没有图标的插件显示 Vestra Player 的 logo。
+  - 界面参照 VS Code：左边列表，右边详情。详情页渲染 README，显示版本和更新日志（不显示下载次数，见 1.6 第 9 条）。没有图标的插件显示 Vestra Player 的 logo。
   - 用 Node 的 `fetch` 下载，校验 `sha256`，再调用现有的 `plugin.packages.validate(目录).install()` 热安装。热卸载、停用、回退用现有接口。
   - 安装来源：官方仓库、第三方仓库地址（在设置里添加）、插件包链接、拖入插件包文件。
 - 核心只需两处小改动：
@@ -403,3 +411,40 @@ tsconfig.json     播放器的插件编译设置，没有 jsnes 映射，include
 3. 本机把插件仓库克隆到播放器旁边，`npm ci`。
 4. 真机：内置插件照常加载，再加 `--plugin ../../../vestra-player-plugins/plugins/youtube --plugin ../../../vestra-player-plugins/plugins/bilibili`，按工作流 §6.2 测「网络视频」（公开视频能播放）和「全部」（两项菜单在「打开」下）。
 5. 合并到 `main` 并推送。
+
+## S3 后半记录（2026-10-21，基础设施）
+
+插件仓库分支 `s3-index`（基于 `main` `b7f3be3`，未推送）。播放器仓库和 SDK 仓库没有改动；本节和上面 1.2、1.3、1.3a、1.4 的修订由协调者应用。
+
+### 插件
+
+- SDK 依赖升到 `^1.1.1`（lock 锁 1.1.1）。
+- id 改为 `vestra.youtube`、`vestra.bilibili`。插件仓库里依赖 id 的只有 manifest：命令 id（`youtube.open`）、解析器 id、窗口名是插件内部的名字，测试从 `manifest.json` 读 id，都不用改。
+- 两个 manifest 补显示字段（中文，`author: "Vestra Player"`，`license: "Apache-2.0"`，`sourceUrl` 指向插件仓库目录），`minPlayerVersion: "0.2.0"`；版本 youtube 0.1.1 → 0.2.0、bilibili 0.1.0 → 0.2.0。没有图标（商城显示默认 logo）。
+- README 改成面向用户的简短说明（使用、需要、限制），新增 `CHANGELOG.md`；`vestra-plugin build` 把两者打进包。
+
+### 发布流水线
+
+| 文件 | 作用 |
+| --- | --- |
+| `scripts/query-releases.mjs` | 查当前各版本的 Release 是否已存在（只读 manifest，用 token），写 `releases.json` |
+| `scripts/build-index.mjs` | 读 `plugins/*`、`registry/*.toml`、`revoked.json` 和上次发布并已签名的 `index.json`；已发布版本保留，已有 Release 但索引里没有的版本从 Release 恢复（上次签名失败），其余用 `vestra-plugin pack` 打包；写未签名的 `site/index.json`、`site/assets/<id>/<version>/`、`releases/*.vxp`。`--dry-run` 不联网 |
+| `scripts/publish-releases.mjs` | 签名 job 用：把构建产物当不可信数据检查（下见），再 `gh release create` |
+| `scripts/sign-index.mjs`、`verify-index.mjs` | Ed25519（Node 内置 `crypto`），`index.json.sig` 是对 `index.json` 原始字节签名的 base64，无换行 |
+| `scripts/generate-signing-key.mjs` | 生成密钥对，私钥 600 权限、不打印、不许写进仓库 |
+| `scripts/check-registry.mjs` | 校验登记文件和 `revoked.json`；PR 模式按 owner 规则比较 base 与 head |
+| `.github/workflows/publish.yml` | push 到 `main`、手动运行：`build` → `release-and-sign` → `deploy` |
+| `.github/workflows/registry.yml` | `pull_request_target`，用 base 分支的脚本检查登记文件的 owner |
+
+- 地址：Release 标签 `<id>-v<version>`、资产 `<id>-<version>.vxp`；Pages 上 `index.json`、`index.json.sig`、`assets/<id>/<version>/README.md|CHANGELOG.md|icon.<ext>`（只放最新版本的）。默认 Pages 地址 `https://vestrasys.github.io/vestra-player-plugins/`。**前提是仓库公开**。
+- 版本历史从上次发布的 `index.json` 读，读之前用 `keys/index-signing.pub.pem` 验签；Pages 上没有 `index.json` 时，只有仓库一个 Release 都没有（首次发布）才当作空历史，否则失败，防止历史被悄悄丢掉。
+- 构建与签名分开（1.6 第 2 条）：`build` job 跑插件代码（`npm ci`、检查、测试、打包，以后还有第三方源码构建），没有 secret；唯一用 token 的一步（查 Release，只读）在 `npm ci` 之前。`release-and-sign` job（环境 `plugins-index`，secret `VESTRA_INDEX_SIGNING_KEY`）只稀疏检出 `scripts/`、`keys/` 和根目录文件，不跑 `npm ci`、不执行插件代码，脚本只用 Node 内置模块；它检查：索引格式、`revoked` 与 `revoked.json` 相同、已签名索引里的旧版本条目原样保留、新版本的 `downloadUrl` 是规定的 Release 地址、`.vxp` 的 sha256 和大小与索引一致（已有 Release 的与 Release 资产一致）、产物里没有多余的包、资产 URL 指向站点内的文件；通过后才建 Release、签名、验签、上传 Pages 产物。`deploy` job（环境 `github-pages`）只运行 `actions/deploy-pages`：Pages 部署按惯例挂在 `github-pages` 环境上（Pages 的部署分支限制也在这个环境），一个 job 只能有一个环境，所以从签名 job 里拆出来，它不检出代码、不接触 secret。
+- 第三方：`registry/<id>.toml` 的解析与校验已实现（TOML 子集，键 `repository`、`commit`、`path`、`owners`，id 前缀等于源码仓库所有者、不许 `vestra.`、不许与官方 id 重复，新登记的 PR 作者须在 owners 里，修改或删除须由 base 上的 owner 提交）。从源码构建第三方插件还没做：有登记文件时 `build-index` 直接失败，CONTRIBUTING 写明。
+- 撤回：`revoked.json`（`[{ id, versions, reason }]`），格式校验，原样复制进索引。范围语法是精确版本或比较式组合（不支持 `^`、`~`），S5 商城按同一语法实现（`scripts/lib/semver.mjs` 的 `satisfies`）。
+- 索引版本条目比 1.3 原草案多 `minPlayerVersion` 和 `capabilities`：前者是 S4 提案 §6 建议的，后者供商城详情页在下载前列出权限（1.6 第 4、10 条）。
+
+### 检查（本次实际执行）
+
+- 插件仓库（Node 26.12）：`npm ci`、`check`、`format:check`、`boundaries`、`portability`、`registry`、`build`、`npm test` 全部退出 0；youtube 14/14、bilibili 15/15，脚本测试 20/20。
+- 本地全流程：`build-index --dry-run` → `publish-releases --dry-run`（计划创建 2 个 Release）→ 用生成的私钥 `sign-index` → `verify-index` 通过；篡改后的索引验签失败、作为上次索引时 `build-index` 拒绝；以已签名输出为上次索引再跑一次，不重新打包、`index.json` 逐字节相同；在仓库副本里把 youtube 升到 0.2.1，得到 `0.2.1, 0.2.0` 两个版本、只计划创建 `vestra.youtube-v0.2.1`。
+- 未执行：GitHub 上的实际运行（需要仓库公开、环境、secret、Pages）；Node 22.18/24 与 Windows、Linux（由 CI 覆盖）。

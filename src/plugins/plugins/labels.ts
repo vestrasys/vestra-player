@@ -1,4 +1,4 @@
-import type { PackageChange, PluginInfo } from "@vestra-player/sdk";
+import type { PackageChange, PackageSource, PluginInfo } from "@vestra-player/sdk";
 
 /** What each capability lets a plugin do (J07 detail area). */
 export const CAPABILITIES: Record<string, string> = {
@@ -29,6 +29,26 @@ export const ORIGIN: Record<PluginInfo["origin"], string> = {
   development: "开发加载",
   trial: "试载",
 };
+
+/** Where an installed plugin came from (detail 「来源」). */
+export const SOURCE: Record<PackageSource["kind"], string> = {
+  repository: "仓库",
+  link: "链接",
+  file: "本地文件",
+  workshop: "插件工坊",
+  bundled: "内置",
+};
+
+/** 「仓库（https://…/index.json）」; development loads and trials by their origin. */
+export function sourceText(info: PluginInfo): string {
+  const source = info.source;
+  if (!source) return ORIGIN[info.origin] ?? info.origin;
+  const kind = SOURCE[source.kind] ?? source.kind;
+  return "url" in source ? `${kind}（${source.url}）` : kind;
+}
+
+/** The hint on 「卸载…」 for built-in plugins. */
+export const BUILTIN_TIP = "内置插件只能停用";
 
 export const STATE: Record<PluginInfo["state"], string> = {
   running: "运行中",
@@ -67,8 +87,12 @@ export function bytes(size: number | null): string {
 export function failureText(error: unknown, info?: PluginInfo): string {
   const code = (error as { code?: string }).code;
   if (code === "invalid") return "插件管理不能停用或卸载自身";
-  if (code === "unsupported")
-    return info?.origin === "trial" ? "试载中的插件由插件工坊管理" : "开发加载的插件不能卸载或回退";
+  if (code === "unsupported") {
+    if (info?.origin === "trial") return "试载中的插件由插件工坊管理";
+    if (info?.origin === "development") return "开发加载的插件不能卸载或回退";
+    // An installed plugin refused: built in (the list may not have said so yet).
+    return BUILTIN_TIP;
+  }
   if (code === "missing") return "该插件已不存在";
   if (code === "busy") return "正在安装或回退，请稍后再试";
   return (error as Error).message || String(error);

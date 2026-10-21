@@ -1,6 +1,6 @@
 {
   "id": "vestra.playback",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -14,5 +14,15 @@
     "ui.osd",
     "clipboard",
     "bindings.manage"
+  ],
+  "name": "基础播放",
+  "author": "Vestra Player",
+  "punchline": "底部控制栏、打开文件与链接、跳转与速度",
+  "description": "主窗口底部的控制栏（进度条、播放按钮、音量）；打开文件、打开链接、重开最后的文件；多档跳转秒数、关键帧跳转、跳转到指定时间、固定与自定义播放速度；进度条悬停显示时间或缩略图；播放时禁止屏保。",
+  "tags": [
+    "播放",
+    "控制栏",
+    "跳转",
+    "速度"
   ]
 }

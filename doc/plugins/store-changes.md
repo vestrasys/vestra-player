@@ -122,7 +122,7 @@ plugin.commands.add({
 }
 ```
 
-规则见参考 §2。`vestra-plugin check` 会逐项检查，并对没有 `<所有者>.` 前缀的 id 给出提示（不算失败）；`audio`、`nes` 的改名按生态计划 1.5a 在阶段 4 由各自作者做。
+规则见参考 §2。`vestra-plugin check` 会逐项检查，并对没有 `<所有者>.` 前缀的 id 给出提示（不算失败）；`audio`、`nes` 已在阶段 4 改名为 `vestra.audio`、`vestra.nes`（生态计划 1.5a）。
 
 ## 6. 内置插件的版本
 

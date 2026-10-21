@@ -1,1 +1,23 @@
-{"id":"nes","version":"0.1.0","apiVersion":"vestra/1","entry":"main.ts","capabilities":["producer.av","commands","events","playback.read","playback.control","ui.window","ui.dialog"]}
+{
+  "id": "vestra.nes",
+  "version": "0.2.0",
+  "apiVersion": "vestra/1",
+  "entry": "main.ts",
+  "capabilities": [
+    "producer.av",
+    "commands",
+    "events",
+    "playback.read",
+    "playback.control",
+    "ui.window",
+    "ui.dialog"
+  ],
+  "name": "NES 模拟器",
+  "author": "Vestra Player",
+  "punchline": "在播放器里运行 NES 游戏 ROM",
+  "description": "用 JSNES 运行 iNES 格式的 ROM，画面和声音像普通媒体一样在播放器里播放。\n入口在右键菜单「模拟器」。暂不支持键盘操作和存档，不附带游戏。",
+  "tags": [
+    "模拟器",
+    "游戏"
+  ]
+}

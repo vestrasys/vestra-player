@@ -1,6 +1,5 @@
-import { dirname, join } from "node:path";
 import type { PackageChange, Plugin, PluginInfo } from "@vestra-player/sdk";
-import { bytes, CAPABILITIES, CHANGE, failureText, ORIGIN, STATE } from "./labels.ts";
+import { BUILTIN_TIP, bytes, CAPABILITIES, CHANGE, failureText, ORIGIN, sourceText, STATE } from "./labels.ts";
 import { directorySize, timing } from "./sizes.ts";
 
 type Row = { id: string; version: string; origin: string; state: string; size: string; dim: boolean; failed: boolean; selected: boolean };
@@ -16,19 +15,19 @@ const BUSY_TIP = "正在更新";
  * disabled or failed, development loads, trials) from `packages.list`,
  * following `packages.onChange`. The selected plugin can be disabled or
  * enabled, reloaded, rolled back, uninstalled (asks, optionally with its
- * data) and its data folder opened. Its own row cannot be disabled.
+ * data) and its data folder opened. Its own row cannot be disabled;
+ * built-in plugins can be disabled but not uninstalled.
  */
 export class PluginsPage {
   readonly #plugin: Plugin;
   readonly #osd: (text: string) => void;
   readonly #page;
-  /** The data root: `<root>/<id>` is each plugin's data folder (API reference §3.4). */
-  readonly #root: string | null;
   #list: PluginInfo[] = [];
   #selected: string | null = null;
   /** Ids with a call in flight (buttons off, 「正在更新」). */
   readonly #busy = new Set<string>();
   #message = { text: "", warn: false };
+  /** Data directory → bytes (`null`: missing or too slow). Keyed by directory: a replaced plugin gets a new one. */
   readonly #sizes = new Map<string, number | null>();
   #measuring: ReturnType<typeof setTimeout> | null = null;
   #measureRun = 0;
@@ -36,13 +35,6 @@ export class PluginsPage {
   constructor(plugin: Plugin, osd: (text: string) => void) {
     this.#plugin = plugin;
     this.#osd = osd;
-    let root: string | null = null;
-    try {
-      root = dirname(plugin.dataDirectory);
-    } catch {
-      // No data directory from the player: sizes 「—」, 打开数据目录 off.
-    }
-    this.#root = root;
     const page = (this.#page = plugin.settings.page("ui/plugins.slint", {
       id: PLUGINS_PAGE,
       category: "plugins",
@@ -84,16 +76,11 @@ export class PluginsPage {
   }
 
   #accept(list: PluginInfo[]) {
-    const known = new Set(this.#list.map((p) => p.id));
     this.#list = [...list].sort((a, b) => a.id.localeCompare(b.id));
     if (this.#selected && !this.#list.some((p) => p.id === this.#selected)) this.#selected = null;
-    // New plugins (or a changed list) are measured shortly after.
-    if (this.#list.some((p) => !known.has(p.id))) this.#measureSoon(timing.sizeDebounce);
+    // New plugins (or a new data directory) are measured shortly after.
+    if (this.#list.some((p) => p.dataDirectory && !this.#sizes.has(p.dataDirectory))) this.#measureSoon(timing.sizeDebounce);
     this.#plugin.update();
-  }
-
-  dataDirectory(id: string): string | null {
-    return this.#root ? join(this.#root, id) : null;
   }
 
   #measureSoon(delay: number) {
@@ -106,12 +93,11 @@ export class PluginsPage {
   /** Data sizes, one plugin at a time (a newer run abandons an older one). */
   async #measure() {
     const run = ++this.#measureRun;
-    for (const info of this.#list) {
-      if (this.#sizes.has(info.id)) continue;
-      const directory = this.dataDirectory(info.id);
-      const size = directory ? await directorySize(directory) : null;
+    for (const { dataDirectory: directory } of this.#list) {
+      if (!directory || this.#sizes.has(directory)) continue;
+      const size = await directorySize(directory);
       if (run !== this.#measureRun) return;
-      this.#sizes.set(info.id, size);
+      this.#sizes.set(directory, size);
       this.#plugin.update();
     }
   }
@@ -122,6 +108,13 @@ export class PluginsPage {
 
   #info() {
     return this.#list.find((p) => p.id === this.#selected);
+  }
+
+  /** The data size column: 「…」 until measured, 「—」 without a directory. */
+  #size(info: PluginInfo) {
+    const directory = info.dataDirectory;
+    if (!directory) return bytes(null);
+    return this.#sizes.has(directory) ? bytes(this.#sizes.get(directory)!) : "…";
   }
 
   #props() {
@@ -136,9 +129,9 @@ export class PluginsPage {
         (p): Row => ({
           id: p.id,
           version: p.version ?? "开发",
-          origin: ORIGIN[p.origin] ?? p.origin,
+          origin: p.builtin ? "内置" : (ORIGIN[p.origin] ?? p.origin),
           state: STATE[p.state] ?? p.state,
-          size: this.#sizes.has(p.id) ? bytes(this.#sizes.get(p.id)!) : "…",
+          size: this.#size(p),
           dim: p.state === "disabled",
           failed: p.state === "failed",
           selected: p.id === this.#selected,
@@ -151,9 +144,17 @@ export class PluginsPage {
       toggleTip: self ? SELF_TIP : busy ? BUSY_TIP : "",
       canReload: canAct && !self && info.state !== "disabled",
       canRollback: canAct && !self && installed && !!info.previousVersion,
-      canUninstall: canAct && !self && installed,
-      uninstallTip: self ? SELF_TIP : busy ? BUSY_TIP : info && !installed ? "只能卸载已安装的插件" : "",
-      canOpen: !!info && !!this.#root && !trial,
+      canUninstall: canAct && !self && installed && !info.builtin,
+      uninstallTip: self
+        ? SELF_TIP
+        : busy
+          ? BUSY_TIP
+          : info?.builtin
+            ? BUILTIN_TIP
+            : info && !installed
+              ? "只能卸载已安装的插件"
+              : "",
+      canOpen: !!info?.dataDirectory && !trial,
       message: this.#message.text,
       messageWarn: this.#message.warn,
     };
@@ -166,9 +167,11 @@ export class PluginsPage {
     if (info.origin === "development") line("说明", "开发加载：停用只在本次运行有效；不能卸载或回退");
     if (info.origin === "trial") line("说明", "试载中的插件由插件工坊管理");
     if (info.id === this.#plugin.id) line("说明", SELF_TIP);
+    else if (info.builtin) line("说明", "内置插件：随播放器安装和更新，只能停用，不能卸载");
+    line("来源", sourceText(info));
     if (info.previousVersion) line("上一版本", info.previousVersion);
     line("包目录", info.directory);
-    line("数据目录", this.dataDirectory(info.id) ?? "不可用");
+    line("数据目录", info.dataDirectory ?? "不可用");
     info.capabilities.forEach((capability, i) =>
       line(i === 0 ? "能力" : "", `${capability}  ${CAPABILITIES[capability] ?? ""}`.trimEnd()),
     );
@@ -185,9 +188,20 @@ export class PluginsPage {
       await action();
     } catch (error) {
       this.#say(failureText(error, info), true);
+      // The list may be out of date (a plugin gone, or built in after all): read it again.
+      const code = (error as { code?: string }).code;
+      if (code === "unsupported" || code === "missing") await this.#relist();
     } finally {
       this.#busy.delete(info.id);
       this.#plugin.update();
+    }
+  }
+
+  async #relist() {
+    try {
+      this.#accept(await this.#plugin.packages.list());
+    } catch {
+      // Keep the old list; packages.onChange brings the next one.
     }
   }
 
@@ -244,7 +258,7 @@ export class PluginsPage {
 
   async #uninstall() {
     const info = this.#info();
-    if (!info || info.origin !== "installed" || info.id === this.#plugin.id) return;
+    if (!info || info.origin !== "installed" || info.builtin || info.id === this.#plugin.id) return;
     const answer = await this.#ask({
       message: `卸载 ${info.id}？`,
       detail: "将从安装库移除它的当前版本与上一版本。它的快捷键修改会保留，重新安装后恢复。",
@@ -258,7 +272,7 @@ export class PluginsPage {
       const status = await this.#follow(change, `卸载 ${info.id}`);
       if (status !== "committed")
         return this.#say(`卸载 ${info.id}：${CHANGE[status] ?? status}${change.message ? `（${change.message}）` : ""}`, true);
-      this.#sizes.delete(info.id);
+      if (info.dataDirectory) this.#sizes.delete(info.dataDirectory);
       if (this.#selected === info.id) this.#selected = null;
       this.#done(`已卸载 ${info.id}`);
     });
@@ -287,8 +301,8 @@ export class PluginsPage {
 
   async #openData() {
     const info = this.#info();
-    const directory = info && this.dataDirectory(info.id);
-    if (!directory) return;
+    const directory = info?.dataDirectory;
+    if (!directory || info?.origin === "trial") return;
     try {
       await this.#plugin.system.openPath(directory);
       this.#say("");

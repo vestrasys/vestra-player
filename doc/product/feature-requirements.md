@@ -2047,7 +2047,7 @@ manifest 能力在现有基础上增加：`ui.dialog`（E17 选择着色器文�
 
 ## 音频工作台（`audio`）
 
-**位置**：`src/plugins/audio/`（现有插件，manifest id `audio`）
+**位置**：`src/plugins/audio/`（现有插件，manifest id `vestra.audio`）
 
 **定位**
 

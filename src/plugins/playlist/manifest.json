@@ -1,6 +1,6 @@
 {
   "id": "vestra.playlist",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -14,5 +14,14 @@
     "ui.osd",
     "ui.drop",
     "ui.settings"
+  ],
+  "name": "播放列表",
+  "author": "Vestra Player",
+  "punchline": "侧栏播放列表：添加、排序、循环与随机",
+  "description": "右侧栏播放列表：添加文件、文件夹和链接，拖放加入，排序与搜索，循环与随机播放，打开文件时自动加入同文件夹的相似文件；读写 M3U、M3U8、PLS 列表文件，重启后恢复列表。\n入口：右键菜单「播放列表」（F6）与「播放 ▶ 播放列表」。",
+  "tags": [
+    "播放列表",
+    "打开",
+    "拖放"
   ]
 }

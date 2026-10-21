@@ -1,1 +1,13 @@
-{"id":"vestra.workshop","version":"1.0.0","apiVersion":"vestra/1","entry":"main.ts","capabilities":["commands","plugins.manage","ui.window","ui.dialog"]}
+{
+  "id": "vestra.workshop",
+  "version": "1.1.0",
+  "apiVersion": "vestra/1",
+  "entry": "main.ts",
+  "capabilities": ["commands", "plugins.manage", "ui.window", "ui.dialog"],
+  "name": "插件工坊",
+  "author": "Vestra Player",
+  "punchline": "用本地模型生成一个计数器插件，校验、试载后再安装（实验性）",
+  "description": "插件工坊演示由 Agent 生成插件的完整流程：选择工作区和需求后，本地模型写出一个计数器插件，根据真实的 TypeScript 诊断修复错误，再交给播放器校验。你可以先试载，确认无误后安装，也可以回退到上一版本。\n\n模型是本地模拟的，不联网，也不调用任何付费服务。目前只能生成计数器插件。",
+  "tags": ["插件开发", "生成", "实验性"],
+  "minPlayerVersion": "0.2.0"
+}
