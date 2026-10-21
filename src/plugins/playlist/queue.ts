@@ -230,8 +230,10 @@ export class Queue {
   /**
    * Append entries, skipping duplicates (realpath for files, the text for links).
    * Unreadable files are kept as retryable rows. Beyond `ROW_LIMIT` entries are refused.
+   * `before` (A15 drop on the list): the new rows go before the row at that index
+   * of the order before adding (`rows.length` or more = the end); duplicates stay put.
    */
-  async addEntries(entries: Entry[]): Promise<Added> {
+  async addEntries(entries: Entry[], options: { before?: number } = {}): Promise<Added> {
     const result: Added = { rows: [], fresh: [], added: 0, duplicate: 0, invalid: 0, refused: 0 };
     const files = new Map<string, Row>(),
       links = new Map<string, Row>();
@@ -266,6 +268,12 @@ export class Queue {
       result.fresh.push(row);
       result.added++;
       if (error) result.invalid++;
+    }
+    if (options.before !== undefined && result.fresh.length) {
+      const fresh = new Set(result.fresh);
+      const others = this.rows.filter((row) => !fresh.has(row));
+      const at = Math.max(0, Math.min(others.length, Math.floor(options.before)));
+      this.rows = [...others.slice(0, at), ...result.fresh, ...others.slice(at)];
     }
     return result;
   }

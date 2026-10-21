@@ -11,6 +11,7 @@
     "ui.mount",
     "ui.dialog",
     "ui.window",
-    "ui.osd"
+    "ui.osd",
+    "ui.drop"
   ]
 }

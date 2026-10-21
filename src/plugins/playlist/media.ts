@@ -35,7 +35,7 @@ const PACKAGES = new Set(
   "app bundle framework plugin kext photoslibrary fcpbundle imovielibrary musiclibrary tvlibrary rtfd pkg xcodeproj xcworkspace"
     .split(" "),
 );
-const isPackage = (name: string) => PACKAGES.has(extensionOf(name));
+export const isPackage = (name: string) => PACKAGES.has(extensionOf(name));
 
 export const SCAN_DEPTH = 8;
 export const SCAN_LIMIT = 5000;
