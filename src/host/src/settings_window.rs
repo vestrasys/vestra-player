@@ -311,11 +311,16 @@ impl Host {
                     global: string(params, "global")?.into(),
                     properties,
                 };
-                // Check that the page compiles on its own, so a broken page
-                // fails its own registration instead of the shared window.
+                // Check that the page compiles and survives its global
+                // properties changing on its own (`ui_probe`), so a broken
+                // page fails its own registration instead of the shared window.
                 let source = source(&[&page])?;
-                composition::build(source, "OptionsWindow")
-                    .map_err(|e| RpcError::new("ui-prepare", format!("{e:#}")))?;
+                crate::ui_probe::check(
+                    source,
+                    crate::ui::ui_dir().join("host.slint"),
+                    Some("OptionsWindow".into()),
+                )
+                .map_err(|e| RpcError::new("ui-prepare", format!("{e:#}")))?;
                 self.settings.pages.push(page);
                 self.settings.stale |= self.settings.open.is_some();
                 Ok(Some(Value::Null))
@@ -721,6 +726,106 @@ mod tests {
                 assert_eq!(pages_h, height - footer, "{label}: page height");
                 assert_eq!(tree, height - footer, "{label}: tree height");
             }
+        }
+    }
+
+    /// 2026-10-21, real machine: opening 选项 or 插件管理 panicked in the event
+    /// loop ("accessing deleted parent (issue #6426)") once the playlist page's
+    /// `ComboBox { current-index <=> PlaylistSettings.repeat; }` saw its global
+    /// change (`ui_probe`). The options window holds every page, so one such
+    /// page took the player down. Now each page is probed at registration as
+    /// `settings.register` does; the window of the accepted built-in pages
+    /// then survives every global property changing on every page.
+    #[test]
+    fn options_window_of_the_builtin_pages_survives_global_changes() {
+        let plugins = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../plugins");
+        let real = [
+            (
+                "preferences/ui/appearance.slint",
+                "AppearancePage",
+                "AppearanceBridge",
+                6,
+            ),
+            (
+                "playlist/ui/settings.slint",
+                "PlaylistSettingsPage",
+                "PlaylistSettings",
+                1,
+            ),
+            ("visualizer/ui/page.slint", "LogoCoverPage", "LogoPage", 6),
+            (
+                "window/ui/page.slint",
+                "WindowSettingsPage",
+                "WindowPage",
+                1,
+            ),
+            ("hotkeys/ui/keys.slint", "KeysPage", "Keys", 5),
+            ("hotkeys/ui/mouse.slint", "MousePage", "Mouse", 5),
+            ("plugins/ui/plugins.slint", "PluginsPage", "Plugins", 7),
+        ];
+        let mut pages = Vec::new();
+        for (i, (file, component, global, category)) in real.into_iter().enumerate() {
+            let page = Page {
+                file: plugins.join(file),
+                component: component.into(),
+                global: global.into(),
+                ..page("built.in", component, category, 0, i as u64 + 1)
+            };
+            let probe = crate::ui_probe::check(
+                source(&[&page]).unwrap(),
+                crate::ui::ui_dir().join("host.slint"),
+                Some("OptionsWindow".into()),
+            );
+            match probe {
+                Ok(()) => pages.push(page),
+                Err(error) => {
+                    assert!(error.to_string().contains("<=>"), "{file}: {error:#}");
+                    eprintln!("refused at registration: {file}");
+                }
+            }
+        }
+        // The pages without the hazard are all there.
+        assert!(pages.len() >= real.len() - 1, "{} accepted", pages.len());
+        let refs = sorted(&pages);
+        let window =
+            slint::platform::software_renderer::MinimalSoftwareWindow::new(Default::default());
+        slint::platform::set_platform(Box::new(Headless(window.clone()))).unwrap();
+        let definition = composition::build(source(&refs).unwrap(), "OptionsWindow").unwrap();
+        let instance = definition.create().unwrap();
+        instance
+            .set_property("rows", ui_values::from_json(&rows(&refs, None)).unwrap())
+            .unwrap();
+        instance
+            .window()
+            .set_size(slint::PhysicalSize::new(640, 480));
+        instance.show().unwrap();
+        let mut buffer = vec![slint::platform::software_renderer::Rgb565Pixel(0); 640 * 480];
+        let mut draw = || {
+            slint::platform::update_timers_and_animations();
+            window.request_redraw();
+            window.draw_if_needed(|r| {
+                r.render(&mut buffer, 640);
+            });
+        };
+        draw();
+        for (index, shown) in refs.iter().enumerate() {
+            instance
+                .set_property("current", (index as f64).into())
+                .unwrap();
+            draw();
+            for page in &refs {
+                let alias = alias(page.serial);
+                for (name, _) in definition.global_properties(&alias).unwrap() {
+                    let changed = match instance.get_global_property(&alias, &name).unwrap() {
+                        SValue::Bool(b) => SValue::Bool(!b),
+                        SValue::Number(n) => SValue::Number(n + 1.),
+                        _ => continue,
+                    };
+                    let _ = instance.set_global_property(&alias, &name, changed);
+                }
+            }
+            draw();
+            eprintln!("shown with every global changed: {}", shown.component);
         }
     }
 }
