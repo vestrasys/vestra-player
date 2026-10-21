@@ -553,3 +553,19 @@ S=/private/tmp/claude-501/-Users-ziyang-Develop-vestra-player/7b0dd90c-cb6e-48be
 - 主窗口标题栏错乱：标题文字压到了红黄绿按钮上。
 
 已转维护者处理。
+
+### 协调者验收（2026-10-21）
+
+**全部检查通过**：check、format、boundaries、test:sdk，19 个插件共 480 个测试，cargo fmt/clippy/test 223 个；`grep -rnw unsafe src/host/src` 为空。
+
+**GUI 实测通过**：
+- 比例：在菜单里选 4:3，画面正确显示为 4:3；Shift+F6 依次切换比例。
+- 帧位：⌥+ 放大，OSD「帧位调整：增加尺寸 (105%)」。
+- C-SIZE：全屏时画面清晰。
+- 封面：背景层挂载期间 mpv 不显示封面。
+
+**当场修复**：
+- ⌥+ 在德语布局下解析为 Plus（891bfa2）。
+- video「依次切换比例」从 Ctrl+F6 改为 Shift+F6：Ctrl+F6 是 macOS 系统快捷键。
+
+**原型**：GPU 渲染与画中画都在 `src/host/unsafe/` 下，默认构建里关闭，结果见 §7.4。
