@@ -31,6 +31,10 @@ import OpenGL.GL
 // Results 2026-10-21 (round render-pip §3.1): normal/covered/child/offscreen/clear/bigframe/grow
 // 640x360, small
 // 160x90, area/gl/childgl 520x292, glresize 840x472, hidden none (no renderSize).
+// Correction (round render-pip §3.5): renderSize only says the layer's size, not that the PiP
+// window shows it right. Looked at (screenshots), every variant, `normal` included, shows the
+// layer one point to one point in the PiP window, not scaled: the panel (about 328x185) shows
+// only the lower-left part of a 640x360 layer. See vestra-pip's crate docs for the fix.
 let variant = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "normal"
 let W = 640, H = 360
 

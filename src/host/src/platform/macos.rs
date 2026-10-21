@@ -116,6 +116,9 @@ impl crate::pip::Surface for PipWindow {
     fn push_rgb(&self, width: usize, height: usize, rgb: &[u8]) -> std::result::Result<(), String> {
         self.0.enqueue(width, height, rgb)
     }
+    fn describe(&self, id: HostWindowId) -> String {
+        window(id).map_or_else(|e| e.to_string(), |window| self.0.describe(&window))
+    }
     /// Zero copy: the GPU renderer's BGRA IOSurface, wrapped as is. The
     /// renderer does not draw into a surface the system still shows.
     fn push_surface(&self, surface: &GpuFrame) -> std::result::Result<(), String> {

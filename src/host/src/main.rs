@@ -313,6 +313,12 @@ struct Host {
     cover_art_off: bool,
     /// `window.setPictureInPicture` (R-W5, R-H8).
     pip: pip::PictureInPicture<platform::PipWindow>,
+    /// The last `VESTRA_PIP_LOG=1` line (printed when it changes).
+    pip_log: Option<String>,
+    /// The physical video area (C-SIZE) and the size last sent to the
+    /// renderers (the area, or the picture's shape while PiP wants frames).
+    render_area: Option<render_target::Size>,
+    render_sent: Option<render_target::Size>,
     /// GPU rendering: PiP wants the renderer's frames (read by its frame
     /// callback on the render thread), and that callback is registered.
     pip_gpu: (Arc<AtomicBool>, bool),
@@ -906,8 +912,8 @@ impl Host {
             return;
         };
         self.shown_size = Some((frame.buffer.width(), frame.buffer.height()));
-        if self.pip.feeding() {
-            let (width, height) = (frame.buffer.width(), frame.buffer.height());
+        let (width, height) = (frame.buffer.width(), frame.buffer.height());
+        if self.pip.feeding() && self.pip_shape((width, height)) {
             self.pip
                 .push(width as usize, height as usize, frame.buffer.as_bytes());
         }
@@ -962,12 +968,17 @@ impl Host {
     /// report playback to the PiP window, run what its buttons ask, and
     /// show the main window's "playing in picture-in-picture" note.
     fn pip_tick(&mut self) {
+        // Switch the renderers to the picture's shape before any frame goes
+        // to PiP (frames of the old shape are not pushed).
+        self.apply_render_size();
         self.pip_gpu_hook();
         if self.pip.needs_frame() {
             if self.pip_gpu_frames() {
                 // Paused playback renders nothing new: start from the newest.
                 self.pip_gpu_frame();
-            } else if let Some(still) = self.last_image.as_ref().and_then(slint::Image::to_rgb8) {
+            } else if let Some(still) = self.last_image.as_ref().and_then(slint::Image::to_rgb8)
+                && self.pip_shape((still.width(), still.height()))
+            {
                 let (width, height) = (still.width() as usize, still.height() as usize);
                 self.pip.push(width, height, still.as_bytes());
             }
@@ -999,6 +1010,32 @@ impl Host {
         };
         let facts = self.pip_facts();
         let now = self.now_ms();
+        if std::env::var_os("VESTRA_PIP_LOG").is_some()
+            && let Some((id, area)) = place
+            && let Some(line) = self.pip.describe(id)
+        {
+            let scale = self
+                .shell
+                .as_ref()
+                .map_or(0., |s| s.window().scale_factor());
+            let line = format!(
+                "pip: video area ({:.1},{:.1} {:.1}x{:.1}) pt, slint scale {scale} | render area {:?} sent {:?} picture {:?} | {line}",
+                area.x,
+                area.y,
+                area.width,
+                area.height,
+                self.render_area,
+                self.render_sent,
+                self.backend
+                    .target
+                    .picture()
+                    .map(|(w, h)| (w.round(), h.round())),
+            );
+            if self.pip_log.as_deref() != Some(line.as_str()) {
+                eprintln!("{line}");
+                self.pip_log = Some(line);
+            }
+        }
         for effect in self.pip.tick(&facts, place, &playback, now) {
             match effect {
                 pip::Effect::Respond(reply, result) => self.respond(reply, result),
@@ -1055,9 +1092,46 @@ impl Host {
         if !self.pip.feeding() || !self.pip_gpu_frames() {
             return;
         }
-        if let Some((sequence, surface)) = self.backend.render.gpu().and_then(|gpu| gpu.latest()) {
+        let Some(gpu) = self.backend.render.gpu() else {
+            return;
+        };
+        if let Some((sequence, surface)) = gpu.latest()
+            && gpu.size().is_some_and(|size| self.pip_shape(size))
+        {
             self.pip.push_surface(sequence, &surface);
         }
+    }
+    /// The size both renderers draw at: the video area, or while PiP wants
+    /// mpv's frames the picture's own shape inside it (no bars, R-H8; the
+    /// PiP window takes the frame's shape). Sent when it changes.
+    fn apply_render_size(&mut self) {
+        let Some(area) = self.render_area else {
+            return;
+        };
+        let picture = self.backend.target.picture();
+        let size = match picture {
+            Some(picture) if self.pip.feeding() && !self.backend.render.producer() => {
+                render_target::fit(area, picture)
+            }
+            _ => area,
+        };
+        if self.render_sent != Some(size) {
+            self.render_sent = Some(size);
+            self.backend.target.set_area(size);
+            if let Some(gpu) = self.backend.render.gpu() {
+                gpu.set_size(size);
+            }
+        }
+    }
+    /// A frame of `size` pixels may go to PiP: it has the shape the renderer
+    /// was last asked for (a frame from before the switch to the picture's
+    /// shape would size the PiP window wrongly). Generated streams' frames
+    /// always may.
+    fn pip_shape(&self, size: (u32, u32)) -> bool {
+        self.backend.render.producer()
+            || self
+                .render_sent
+                .is_none_or(|sent| render_target::same_shape(size, sent))
     }
     fn window_tick(&mut self) {
         self.pip_tick();
@@ -1127,11 +1201,9 @@ impl Host {
             .sizing
             .observe(video, scale, fullscreen, Instant::now())
         {
-            self.backend.target.set_area(area);
-            if let Some(gpu) = self.backend.render.gpu() {
-                gpu.set_size(area);
-            }
+            self.render_area = Some(area);
         }
+        self.apply_render_size();
         if let Some(log) = self.frame_log.as_mut() {
             let (mut counts, mut size) = (self.backend.frame.counts(), self.shown_size);
             if let Some(gpu) = self.backend.render.gpu() {
@@ -3855,6 +3927,9 @@ fn main() -> Result<()> {
         video_cleared: false,
         cover_art_off: false,
         pip: Default::default(),
+        pip_log: None,
+        render_area: None,
+        render_sent: None,
         pip_gpu: Default::default(),
         drops: Default::default(),
         settings: Default::default(),
