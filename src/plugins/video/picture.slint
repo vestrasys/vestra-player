@@ -12,6 +12,7 @@ import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
 //   缩放 row           label 65 + slider 154 + 默认 41                      = 272
 //   反交错 row         label 65 + mode 90 + output 104                      = 271
 //   HDR row            label 65 + choice 90 + slider 100                    = 267
+//   HDR note row       label 65 + note 214                                  = 285
 //   着色器 row         label 65 + check 50 + count 70 + 列表… 50            = 253
 //   presets row        4 × 69 (3 apart)                                     = 285
 //   tab strip          4 × 74 (no padding)                                  = 296 of 301
@@ -332,6 +333,15 @@ export component PictureWindow inherits Window {
     // 高级
     in-out property <int> deinterlace-index: 0;
     in-out property <int> output-index: 0;
+    // GPU render options (高级 HDR / 着色器, 效果 运动补偿); greyed with `render-reason` under software rendering.
+    in property <bool> render-ready: true;
+    in property <string> render-reason;
+    in-out property <int> tone-index: 0;
+    in-out property <float> target-peak: 203;
+    in property <string> hdr-note;
+    in-out property <bool> shaders-enabled;
+    in property <string> shader-count: "0 个着色器";
+    in-out property <bool> interpolation;
     // shared
     in-out property <int> tab-index: 0;
     in-out property <bool> effect-enabled: true;
@@ -348,8 +358,8 @@ export component PictureWindow inherits Window {
     callback tab-changed(int);
     callback retry();
     callback custom-aspect();
+    callback shader-list();
     private property <[string]> tab-names: ["色彩", "效果", "画面", "高级"];
-    private property <string> gpu: "等待 GPU 渲染原型结论";
     VerticalLayout {
         // Page tabs, 31px; the last picked page is remembered by the plugin.
         Rectangle {
@@ -504,8 +514,15 @@ export component PictureWindow inherits Window {
                         }
                         ToolTipArea {
                             width: 100px;
-                            text: root.gpu;
-                            Check { width: 100%; height: 100%; text: "运动补偿"; enabled: false; }
+                            text: root.render-ready ? "GPU 按显示器刷新率插帧；与倍帧互斥" : root.render-reason;
+                            Check {
+                                width: 100%;
+                                height: 100%;
+                                text: "运动补偿";
+                                enabled: root.render-ready;
+                                checked <=> root.interpolation;
+                                toggled(on) => { root.toggle("interpolation", on); }
+                            }
                         }
                     }
                 }
@@ -676,32 +693,70 @@ export component PictureWindow inherits Window {
                             }
                         }
                     }
+                    // E16: tone mapping (only HDR sources are mapped) + 目标亮度 100–400 nits.
                     ToolTipArea {
                         height: 24px;
-                        text: root.gpu;
+                        text: root.render-ready ? "HDR 片源（PQ / HLG）在 SDR 显示器上的色调映射；滑块为目标亮度" : root.render-reason;
                         HorizontalLayout {
                             spacing: 6px;
                             alignment: start;
-                            Label { text: "HDR"; color: Theme.text-dim; }
+                            Label { text: "HDR"; color: root.render-ready ? Theme.text : Theme.text-dim; }
                             VerticalLayout {
                                 alignment: center;
-                                Choice { width: 90px; enabled: false; model: ["自动"]; current-index: 0; }
+                                Choice {
+                                    width: 90px;
+                                    enabled: root.render-ready;
+                                    window-height: root.height;
+                                    model: ["自动", "关", "BT.2390", "Hable", "Mobius", "Reinhard", "裁剪"];
+                                    current-index <=> root.tone-index;
+                                    selected(i) => { root.choose("toneMapping", i); }
+                                }
                             }
-                            Slider { width: 100px; panel: true; enabled: false; minimum: 100; maximum: 400; value: 203; }
+                            Slider {
+                                width: 100px;
+                                panel: true;
+                                enabled: root.render-ready;
+                                minimum: 100;
+                                maximum: 400;
+                                value <=> root.target-peak;
+                                changed(v) => { root.adjust("targetPeak", v); }
+                                released(v) => { root.commit("targetPeak", v); }
+                            }
                         }
                     }
+                    HorizontalLayout {
+                        height: 24px;
+                        spacing: 6px;
+                        alignment: start;
+                        Label { text: ""; }
+                        Text {
+                            width: 214px;
+                            text: root.render-ready ? root.hdr-note : root.render-reason;
+                            color: Theme.text-dim;
+                            font-size: Theme.font-xs;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                    }
+                    // E17: switch + count + the list window (usable without GPU rendering, to arrange it beforehand).
                     ToolTipArea {
                         height: 24px;
-                        text: root.gpu;
+                        text: root.render-ready ? "mpv 用户着色器（.glsl），按列表顺序执行" : root.render-reason;
                         HorizontalLayout {
                             spacing: 6px;
                             alignment: start;
-                            Label { text: "着色器"; color: Theme.text-dim; }
-                            Check { width: 50px; text: "启用"; enabled: false; }
-                            Text { width: 70px; text: "0 个着色器"; color: Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; }
+                            Label { text: "着色器"; color: root.render-ready ? Theme.text : Theme.text-dim; }
+                            Check {
+                                width: 50px;
+                                text: "启用";
+                                enabled: root.render-ready;
+                                checked <=> root.shaders-enabled;
+                                toggled(on) => { root.toggle("shaders", on); }
+                            }
+                            Text { width: 70px; text: root.shader-count; color: Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; overflow: elide; }
                             VerticalLayout {
                                 alignment: center;
-                                Button { text: "列表…"; small: true; width: 50px; enabled: false; }
+                                Button { text: "列表…"; small: true; width: 50px; clicked => { root.shader-list(); } }
                             }
                         }
                     }

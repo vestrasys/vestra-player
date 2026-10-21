@@ -26,7 +26,7 @@ movie.mp4
 
 播放属性（I05）：右键菜单顶层「播放属性…」（`windows` 组 order 811）或 Ctrl+F1 打开工具窗口 `ui/properties.slint`（460×420，最小 400×320），已打开时再按只带到前面。三个页签，上次的页签记在 `info.json`（`plugin.storage`）：
 
-- 播放信息：`player.stats()` 的扩展字段（解码器、输入格式、源 → 显示尺寸、帧率、码率、采样格式、声道布局、音画同步偏差、缓冲时长），窗口打开期间每秒刷新。「硬件解码」固定「未使用」（播放器固定软件解码）。
+- 播放信息：`player.stats()` 的扩展字段（解码器、输入格式、源 → 显示尺寸、帧率、码率、采样格式、声道布局、音画同步偏差、缓冲时长），窗口打开期间每秒刷新。「硬件解码」取 `stats().video.hwdec`：正在用的硬件解码器原样显示（如 `videotoolbox`），`"no"`（软件解码，软件渲染时总是如此）显示「未使用」，播放器没有报告时显示「-」。
 - 文件信息：本地文件用 `plugin.tools.run("ffprobe", ["-v", "error", "-show_format", "-show_streams", "-show_chapters", "-of", "json", 路径])`（超时 10 秒），每个来源读一次，「刷新」重读，换来源时中止旧的读取；列出来源（路径、大小、修改时间）、容器、逐条流、章节数、元数据、内嵌资源（附件文件名与 MIME、封面）。缺少 ffprobe 显示「无法读取文件信息（未找到 ffprobe）」。网络来源不调用 ffprobe，只列播放器报告的信息。
 - 系统信息：Vestra 版本（`plugin.app.version` 与构建哈希，如「0.1.0（构建 289b26b）」）、插件 API 版本、mpv 版本（`plugin.app.components.mpv`）、FFmpeg 版本（`components.libav`：libmpv 报告的 `ffmpeg-version`，有其它 `libav*` 键时依次列出），核心不知道的显示「未知」；系统版本（如「macOS 26.2（25C56）」「Windows 11 23H2（22631.4460）」）、机型、显示器（`plugin.app.system()`，每台一行「名称 · 像素尺寸 · 逻辑尺寸 @ 刷新率」，多台时编号），CPU 型号与核数、内存总量与可用量（Node `os`），`sysinfo.ts`。插件不调用系统命令。
 

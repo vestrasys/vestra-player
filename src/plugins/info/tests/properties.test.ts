@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { HostError, startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
 import activate from "../main.ts";
-import { cut, filePage, pageText, sampleFormat, saveName, systemPage, VALUE_MAX } from "../properties.ts";
+import { cut, filePage, hwdec, pageText, sampleFormat, saveName, systemPage, VALUE_MAX } from "../properties.ts";
 import type { Probe, Row } from "../properties.ts";
 import { displayLine, systemVersion } from "../sysinfo.ts";
 
@@ -15,7 +15,7 @@ const stats = {
   session: 3,
   framesShown: 120,
   framesDropped: 1,
-  video: { codec: "H.264 / AVC", width: 1920, height: 1080, fps: 23.976, decoder: "h264", pixelFormat: "yuv420p", colorspace: "bt.709", displayWidth: 1920, displayHeight: 800, displayFps: null, bitrate: 4_500_000 },
+  video: { codec: "H.264 / AVC", width: 1920, height: 1080, fps: 23.976, decoder: "h264", pixelFormat: "yuv420p", colorspace: "bt.709", displayWidth: 1920, displayHeight: 800, displayFps: null, bitrate: 4_500_000, hwdec: "videotoolbox", transfer: "bt.1886" },
   audio: { codec: "AAC (Advanced Audio Coding)", sampleRate: 48000, channels: 2, decoder: "aac", format: "floatp", channelLayout: "stereo", bitrate: 128_000 },
   avSyncMs: -3.25,
   cacheSeconds: 12.4,
@@ -105,7 +105,15 @@ test("I05: top-level 播放属性… (811, windows, Ctrl+F1) opens the window; a
   await stop();
 });
 
-test("I05 播放信息: the extended stats, hardware decoding fixed to 未使用, refreshed every second", async () => {
+test("I05 hwdec: the decoder in use, 未使用 for software, unknown when not reported", () => {
+  assert.equal(hwdec("videotoolbox"), "videotoolbox");
+  assert.equal(hwdec("d3d11va"), "d3d11va");
+  assert.equal(hwdec("no"), "未使用");
+  assert.equal(hwdec(null), null);
+  assert.equal(hwdec(undefined), null);
+});
+
+test("I05 播放信息: the extended stats, hardware decoding as reported, refreshed every second", async () => {
   const { host, stop } = await start();
   await host.command("info.properties").run();
   await host.settle();
@@ -113,7 +121,7 @@ test("I05 播放信息: the extended stats, hardware decoding fixed to 未使用
   assert.equal(host.window("properties").props["can-refresh"], false);
   assert.deepEqual(headings(host), ["视频", "音频", "其它"]);
   assert.equal(value(host, "解码器"), "h264");
-  assert.equal(value(host, "硬件解码"), "未使用");
+  assert.equal(value(host, "硬件解码"), "videotoolbox");
   assert.equal(value(host, "输入格式"), "H.264 / AVC · yuv420p · bt.709");
   assert.equal(value(host, "尺寸"), "1920×1080 → 1920×800");
   assert.equal(value(host, "源帧率"), "23.976 fps");
@@ -123,9 +131,10 @@ test("I05 播放信息: the extended stats, hardware decoding fixed to 未使用
   assert.equal(value(host, "声道数"), "2（stereo）");
   assert.equal(value(host, "音画同步偏差"), "-3.3 ms");
   assert.equal(value(host, "缓冲时长"), "12.4 秒");
-  host.stats = { ...stats, framesShown: 500 };
+  host.stats = { ...stats, framesShown: 500, video: { ...stats.video, hwdec: "no" } };
   await host.settle(1100);
   assert.equal(value(host, "已显示帧"), "500");
+  assert.equal(value(host, "硬件解码"), "未使用", "software decoding after a fallback");
   await stop();
 });
 
@@ -281,7 +290,7 @@ test("I05: 复制到剪贴板 puts the current page's text on the clipboard; a r
   window.emit("copy-page");
   await until(() => host.osd.at(-1) === "已复制播放信息");
   assert.equal(host.clipboard.text, pageText(rows(host) as Row[]));
-  assert.match(host.clipboard.text!, /^视频\n解码器：h264\n硬件解码：未使用\n/);
+  assert.match(host.clipboard.text!, /^视频\n解码器：h264\n硬件解码：videotoolbox\n/);
   assert.match(host.clipboard.text!, /\n\n音频\n/);
   host.handle("clipboard.writeText", () => {
     throw new HostError("failed", "refused");
