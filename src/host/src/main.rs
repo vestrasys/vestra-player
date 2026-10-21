@@ -247,6 +247,8 @@ struct Host {
     window_facts: Value,
     measured_shell: Option<u64>,
     menu_open: bool,
+    /// G-01: the fullscreen sidebar overlay was popped out at the last tick.
+    sidebar_popped: bool,
     native_window: Option<platform::HostWindowId>,
     native_before: Option<platform::NativeSnapshot>,
     native_unavailable: Option<String>,
@@ -759,9 +761,10 @@ impl Host {
                     .filter(|f| f.generation == generation)
                     .map(|f| f.owner)
                 {
-                    let _ = self
-                        .policy
-                        .set_preferred(window_state::Slot::Sidebar, owner, false);
+                    let now = self.now_ms();
+                    let _ =
+                        self.policy
+                            .set_preferred(window_state::Slot::Sidebar, owner, false, now);
                     if let Some(mount) = self.mounts.get_mut(&owner) {
                         mount.visible = false;
                     }
@@ -1246,6 +1249,24 @@ impl Host {
         if !fullscreen && !self.headless {
             self.remember_window(&shell);
         }
+        // G-04 / G-01: where the pointer is. A hover counts only while its
+        // panel is showing (Slint keeps `has-hover` until the pointer moves).
+        let flag = |name: &str| matches!(shell.get_property(name), Ok(SValue::Bool(true)));
+        let bottom_hover = flag("bottom-hover") && flag("bottom-visible");
+        self.policy
+            .set_hover(window_state::Slot::Bottom, bottom_hover);
+        self.policy.set_hover(
+            window_state::Slot::Sidebar,
+            flag("sidebar-hover") && self.sidebar_popped,
+        );
+        if flag("video-hover") {
+            self.policy
+                .pointer(number("pointer-x"), viewport.width, now);
+        } else if bottom_hover {
+            // The bar lies left of the popped-out sidebar.
+            self.policy.pointer(0., viewport.width, now);
+        }
+        self.policy.tick(now);
         let result = (|| -> Result<Value> {
             let snapshot = self.policy.evaluate(viewport, now)?;
             shell.set_property("host-fullscreen", fullscreen.into())?;
@@ -1255,13 +1276,20 @@ impl Host {
             )?;
             let bottom = snapshot.bottom.is_some_and(|s| s.effective);
             shell.set_property("bottom-visible", bottom.into())?;
+            let sidebar = snapshot.sidebar.filter(|s| !s.detached);
             shell.set_property(
                 "sidebar-visible",
-                snapshot
-                    .sidebar
-                    .is_some_and(|s| s.effective && !s.detached)
-                    .into(),
+                sidebar.is_some_and(|s| s.effective && !s.overlay).into(),
             )?;
+            // G-01: the fullscreen overlay exists while attached in
+            // fullscreen, and slides out while effective.
+            shell.set_property("sidebar-overlay", sidebar.is_some_and(|s| s.overlay).into())?;
+            let popped = sidebar.is_some_and(|s| s.overlay && s.effective);
+            shell.set_property("sidebar-popped", popped.into())?;
+            if self.sidebar_popped && !popped {
+                let _ = shell.invoke("focus-video", &[]);
+            }
+            self.sidebar_popped = popped;
             let playing =
                 self.last_source["phase"] == "ready" && self.last_source["paused"] == false;
             // UI-SHELL-09: the pointer hides with the idle fullscreen bar while playing.
@@ -2869,8 +2897,9 @@ impl Host {
                     let visible = visible
                         .as_bool()
                         .ok_or_else(|| RpcError::invalid("visible boolean required"))?;
+                    let now = self.now_ms();
                     self.policy
-                        .set_preferred(policy_slot, owner, visible)
+                        .set_preferred(policy_slot, owner, visible, now)
                         .map_err(anyhow::Error::from)?;
                     if let Some(mount) = self.mounts.get_mut(&owner) {
                         mount.visible = visible;
@@ -3878,6 +3907,7 @@ fn main() -> Result<()> {
         window_facts: Value::Null,
         measured_shell: None,
         menu_open: false,
+        sidebar_popped: false,
         native_window: None,
         native_before: None,
         native_unavailable: None,
