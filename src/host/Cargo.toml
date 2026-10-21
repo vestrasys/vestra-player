@@ -35,7 +35,6 @@ default = ["producer-audio"]
 producer-audio = ["dep:cpal", "dep:rtrb"]
 # Prototypes (r4a §7): code with `unsafe` lives in crates under unsafe/.
 gpu-render = ["dep:vestra-gpu-render"]
-pip = ["dep:vestra-pip"]
 
 [lints.rust]
 unsafe_code = "forbid"
@@ -48,7 +47,8 @@ objc2-foundation = { version = "=0.3.2", default-features = false, features = ["
 # `plugin.secrets`: generic passwords in the login keychain.
 keyring = { version = "=3.6.3", features = ["apple-native"] }
 vestra-gpu-render = { path = "unsafe/render", optional = true }
-vestra-pip = { path = "unsafe/pip", optional = true }
+# Picture-in-picture (window.setPictureInPicture): AVKit, the unsafe part in unsafe/pip.
+vestra-pip = { path = "unsafe/pip" }
 
 # The Windows platform module (src/platform/windows.rs). Safe crates first;
 # the few Win32 calls none of them wraps are in unsafe/win32.

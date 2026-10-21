@@ -19,6 +19,7 @@
 //! | files and links | `reveal`, `open_path`, `open_url` (blocking, run on a worker thread) |
 //! | secrets | `secret_get`, `secret_set`, `secret_delete` (blocking) |
 //! | facts | `os_facts` (blocking), `displays` (UI thread), `app_data_dir`, `ui_font`, `default_ffmpeg`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD` |
+//! | picture-in-picture | `pip_supported`, `PipWindow` (UI thread; macOS: AVKit through `vestra-pip`; elsewhere `pip_unsupported.rs`: `unsupported`) |
 //!
 //! Window rectangles are logical points. macOS uses the Cocoa lower-left
 //! origin of the global screen space, Windows the top-left origin of the
@@ -38,6 +39,30 @@ mod imp;
 mod imp;
 
 pub use imp::*;
+
+// The system picture-in-picture window exists only on macOS so far; Windows
+// and Linux will get a borderless always-on-top window of the player's own.
+#[cfg(not(target_os = "macos"))]
+#[path = "pip_unsupported.rs"]
+mod pip_imp;
+#[cfg(not(target_os = "macos"))]
+pub use pip_imp::*;
+
+/// What happened in the picture-in-picture window (`PipWindow` events).
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub enum PipEvent {
+    /// Its play (`false`) or pause (`true`) button.
+    Pause(bool),
+    /// Its skip buttons: seconds, negative backwards.
+    Skip(f64),
+    /// The window is showing.
+    Started,
+    /// The window closed; `restored` through its "back" button.
+    Stopped { restored: bool },
+    /// The system refused to open it, with its reason.
+    Failed(String),
+}
 
 /// A native window of this process, for this process's lifetime only.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

@@ -22,6 +22,7 @@ pub mod package_activation;
 mod package_manager;
 pub mod package_stage;
 pub mod package_store;
+mod pip;
 mod platform;
 mod plugins;
 mod power;
@@ -302,9 +303,8 @@ struct Host {
     no_video: bool,
     /// A backdrop is mounted, so mpv is told not to show cover art (R-U3).
     cover_art_off: bool,
-    /// Prototype (r4a §7.1): system PiP for this window; started once.
-    #[cfg(feature = "pip")]
-    pip: Option<(platform::HostWindowId, vestra_pip::Pip, bool)>,
+    /// `window.setPictureInPicture` (R-W5, R-H8).
+    pip: pip::PictureInPicture<platform::PipWindow>,
     /// File drops (R-U2).
     drops: drops::Drops,
     /// Settings pages and the options window (R-S1, R-H7).
@@ -489,6 +489,7 @@ impl Host {
         self.settings.remove_owner(owner);
         self.on_top.remove(owner);
         self.cursor_playing.remove(owner);
+        self.pip.remove_owner(owner);
         let step = self.step_seconds();
         if self.step_seek.remove(&owner).is_some() {
             self.step_seek_changed(step);
@@ -886,69 +887,108 @@ impl Host {
             return;
         };
         self.shown_size = Some((frame.buffer.width(), frame.buffer.height()));
-        #[cfg(feature = "pip")]
-        if let Some((_, pip, _)) = &self.pip {
-            let (width, height) = (
-                frame.buffer.width() as usize,
-                frame.buffer.height() as usize,
-            );
-            if let Err(error) = pip.enqueue(width, height, frame.buffer.as_bytes()) {
-                eprintln!("pip: {error}");
-            }
+        if self.pip.feeding() {
+            let (width, height) = (frame.buffer.width(), frame.buffer.height());
+            self.pip
+                .push(width as usize, height as usize, frame.buffer.as_bytes());
         }
         let image = slint::Image::from_rgb8(frame.buffer);
         self.last_image = Some(image.clone());
         self.last_frame = Some(Instant::now());
         let _ = window.set_property("video-frame", image.into());
     }
-    /// Prototype (r4a §7.1, `VESTRA_PIP=1`): put the video into the system
-    /// picture-in-picture window as soon as AVKit allows it; its play/pause
-    /// and skip buttons run the core actions. A rebuilt window starts over.
-    #[cfg(feature = "pip")]
-    fn pip_tick(&mut self) {
-        let Some(id) = self
-            .native_window
-            .filter(|_| std::env::var_os("VESTRA_PIP").is_some())
-        else {
-            return;
-        };
-        if self
+    /// What `window.setPictureInPicture` and the PiP window depend on.
+    fn pip_facts(&self) -> pip::Facts {
+        pip::Facts {
+            window: !self.headless && self.native_window.is_some(),
+            supported: !self.headless && platform::pip_supported(),
+            fullscreen: self
+                .shell
+                .as_ref()
+                .is_some_and(|s| s.window().is_fullscreen()),
+            video: !self.no_video,
+        }
+    }
+    /// `window.setPictureInPicture { on }` (R-W5): answered once the system
+    /// window has opened or closed. From fullscreen the player leaves
+    /// fullscreen first.
+    fn set_picture_in_picture(
+        &mut self,
+        reply: &Reply,
+        params: &Value,
+    ) -> std::result::Result<Option<Value>, RpcError> {
+        let on = params["on"]
+            .as_bool()
+            .ok_or_else(|| RpcError::invalid("on requires a boolean"))?;
+        let facts = self.pip_facts();
+        let now = self.now_ms();
+        let answer = self
             .pip
-            .as_ref()
-            .is_none_or(|(current, _, _)| *current != id)
+            .request(reply.clone(), on, &facts, now, platform::PipWindow::new)?;
+        if on
+            && answer.is_none()
+            && facts.fullscreen
+            && let Some(shell) = &self.shell
         {
-            self.pip = platform::ns_window(id)
-                .ok()
-                .and_then(|window| {
-                    let overlay = std::env::var_os("VESTRA_PIP_OVERLAY").is_some();
-                    vestra_pip::Pip::new(&window, overlay)
-                })
-                .map(|pip| (id, pip, false));
-            if self.pip.is_some() {
-                eprintln!("pip: ready (supported: {})", vestra_pip::Pip::supported());
+            shell.window().set_fullscreen(false);
+        }
+        Ok(answer)
+    }
+    /// Each UI tick (R-H8): keep the PiP source layer on the video area,
+    /// report playback to the PiP window, run what its buttons ask, and
+    /// show the main window's "playing in picture-in-picture" note.
+    fn pip_tick(&mut self) {
+        if self.pip.needs_frame()
+            && let Some(still) = self.last_image.as_ref().and_then(slint::Image::to_rgb8)
+        {
+            let (width, height) = (still.width() as usize, still.height() as usize);
+            self.pip.push(width, height, still.as_bytes());
+        }
+        let place = self
+            .shell
+            .as_ref()
+            .zip(self.native_window)
+            .map(|(shell, id)| {
+                let number = |name: &str| match shell.get_property(name) {
+                    Ok(SValue::Number(n)) => n,
+                    _ => 0.,
+                };
+                let area = platform::Rect {
+                    x: number("video-x"),
+                    y: number("video-y"),
+                    width: number("video-width"),
+                    height: number("video-height"),
+                };
+                (id, area)
+            });
+        let source = &self.last_source;
+        let seconds = |key: &str| source[key].as_f64().filter(|n| n.is_finite());
+        let playback = pip::Playback {
+            paused: source["paused"] == true,
+            position: seconds("position"),
+            duration: seconds("duration").filter(|_| source["capabilities"]["seek"] == true),
+            rate: seconds("rate").unwrap_or(1.),
+        };
+        let facts = self.pip_facts();
+        let now = self.now_ms();
+        for effect in self.pip.tick(&facts, place, &playback, now) {
+            match effect {
+                pip::Effect::Respond(reply, result) => self.respond(reply, result),
+                pip::Effect::Action(action, step) => {
+                    if let Err(error) = self.run_core_action_with(action, None, step) {
+                        eprintln!("pip: {action}: {}", error.message);
+                    }
+                }
             }
         }
-        let Some((_, pip, started)) = &mut self.pip else {
-            return;
-        };
-        pip.set_paused(self.last_source["paused"] == true);
-        if !*started && pip.start() {
-            eprintln!("pip: possible, starting");
-            *started = true;
-        }
-        let paused = self.last_source["paused"] == true;
-        for request in pip.requests() {
-            let action = match request {
-                vestra_pip::Request::Pause(pause) if pause == paused => continue,
-                vestra_pip::Request::Pause(_) => "play-pause",
-                vestra_pip::Request::Skip(seconds) if seconds < 0. => "seek-backward",
-                vestra_pip::Request::Skip(_) => "seek-forward",
-            };
-            let _ = self.run_core_action(action, None);
+        if let Some(shell) = &self.shell {
+            let active = self.pip.active();
+            if shell.get_property("picture-in-picture").ok() != Some(active.into()) {
+                let _ = shell.set_property("picture-in-picture", active.into());
+            }
         }
     }
     fn window_tick(&mut self) {
-        #[cfg(feature = "pip")]
         self.pip_tick();
         let Some(shell) = self.shell.as_ref().map(ComponentHandle::clone_strong) else {
             return;
@@ -1090,7 +1130,7 @@ impl Host {
                 (playing && ((fullscreen && idle) || windowed)).into(),
             )?;
             Ok(
-                json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"videoArea":{"width":video.0,"height":video.1},"menuOpen":self.menu_open,"dialogOpen":self.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot,"backdrop":self.backdrop_state()}),
+                json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"videoArea":{"width":video.0,"height":video.1},"menuOpen":self.menu_open,"dialogOpen":self.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot,"backdrop":self.backdrop_state(),"pictureInPicture":self.pip_state()}),
             )
         })();
         self.answer_video_area(video, now);
@@ -2035,6 +2075,16 @@ impl Host {
         action: &str,
         reply: Option<&Reply>,
     ) -> std::result::Result<bool, RpcError> {
+        self.run_core_action_with(action, reply, None)
+    }
+    /// `run_core_action` with a seek step other than the user's (the PiP
+    /// window's skip interval).
+    fn run_core_action_with(
+        &mut self,
+        action: &str,
+        reply: Option<&Reply>,
+        step: Option<f64>,
+    ) -> std::result::Result<bool, RpcError> {
         let facts = self.core_facts();
         let state = core_actions::state(action, &facts, false);
         if !state.enabled {
@@ -2067,7 +2117,7 @@ impl Host {
             .send(Command {
                 reply,
                 method: "host.action".into(),
-                params: json!({"action":action,"step":self.step_seconds(),
+                params: json!({"action":action,"step":step.unwrap_or_else(|| self.step_seconds()),
                     "sequence":{"next":facts.next,"previous":facts.previous}}),
             })
             .map_err(|_| RpcError::new("backend", "playback worker stopped"))?;
@@ -2278,13 +2328,20 @@ impl Host {
             }
         }
     }
-    /// `{ fullscreen, videoArea }` of the main window (zero without one).
+    /// `{ fullscreen, videoArea, pictureInPicture }` of the main window
+    /// (zero without one).
     fn window_state(&self) -> Value {
         let facts = &self.window_facts;
         json!({"fullscreen":facts["fullscreen"] == true,
             "videoArea":{"width":facts["videoArea"]["width"].as_f64().unwrap_or(0.),
                 "height":facts["videoArea"]["height"].as_f64().unwrap_or(0.)},
+            "pictureInPicture":self.pip_state(),
             "appearance":self.theme()})
+    }
+    /// `WindowState.pictureInPicture`: offered here, and the window showing.
+    fn pip_state(&self) -> Value {
+        let facts = self.pip_facts();
+        json!({"supported":facts.window && facts.supported,"active":self.pip.active()})
     }
     /// `window.setVideoArea { width, height }`: resize the window so the video
     /// column gets that size (bars added, fitted to the screen). Answered when
@@ -2431,9 +2488,10 @@ impl Host {
             method if method.starts_with("sourceResolvers.") => Some("source.resolve"),
             "dialogs.open" | "dialogs.confirm" => Some("ui.dialog"),
             "window.state" => None,
-            "window.setVideoArea" | "window.setAlwaysOnTop" | "window.setCursorAutoHide" => {
-                Some("window.control")
-            }
+            "window.setVideoArea"
+            | "window.setAlwaysOnTop"
+            | "window.setCursorAutoHide"
+            | "window.setPictureInPicture" => Some("window.control"),
             "player.chapters" | "player.audioDevices" | "timeline.marks" => Some("playback.read"),
             "timeline.set" => Some("timeline.marks"),
             "drops.provide" | "drops.withdraw" | "drops.listen" => Some("ui.drop"),
@@ -2575,6 +2633,10 @@ impl Host {
                 self.apply_on_top();
                 Value::Null
             }
+            "window.setPictureInPicture" => match self.set_picture_in_picture(reply, params)? {
+                Some(answer) => answer,
+                None => return Ok(None),
+            },
             "window.setCursorAutoHide" => {
                 let playing = match string(params, "mode")? {
                     "fullscreen" => false,
@@ -3696,8 +3758,7 @@ fn main() -> Result<()> {
         images: Default::default(),
         no_video: true,
         cover_art_off: false,
-        #[cfg(feature = "pip")]
-        pip: None,
+        pip: Default::default(),
         drops: Default::default(),
         settings: Default::default(),
         settings_category: None,
