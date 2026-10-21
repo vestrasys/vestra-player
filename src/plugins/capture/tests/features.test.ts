@@ -5,9 +5,9 @@ import { basename, dirname, join } from "node:path";
 import test from "node:test";
 import { startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
 import activate from "../main.ts";
-import { fakeSips, watchHost } from "./fakes.ts";
+import { newFakes, stills, watchHost } from "./fakes.ts";
 
-const fakes = fakeSips();
+const fakes = newFakes();
 const directory = new URL("..", import.meta.url);
 const tick = () => new Promise((done) => setTimeout(done, 5));
 async function until(predicate: () => boolean) {
@@ -20,7 +20,7 @@ async function until(predicate: () => boolean) {
 const exists = (path: string) => stat(path).then(() => true, () => false);
 const lastOsd = (host: TestHost) => host.osd.at(-1) ?? "";
 
-/** Jobs publish a real file at the requested destination (like the worker), so conversions and copies see it. */
+/** Jobs publish a real file at the requested destination (like the worker), so copies and the task list see it. */
 function publishingJobs(host: TestHost) {
   host.handle("jobs.state", async (p) => {
     const job = host.jobs.get(Number(p.jobId))!;
@@ -75,7 +75,7 @@ test("F03: Ctrl+C copies the raw frame as PNG through a temporary file that is t
     assert.equal(basename(dirname(copied!.path)), `vestra-capture-${process.pid}`);
     assert.match(copied!.path, /clip-1\.png$/);
     assert.equal(await exists(copied!.path), false, "temporary file removed");
-    assert.equal(fakes.converted.length, 0, "always PNG");
+    assert.deepEqual(host.exports.map((job) => job.kind), ["rawPng"], "always PNG");
     assert.equal(host.snapshots.size, 0, "snapshot released");
     assert.deepEqual(await readdir(folder), [], "nothing saved in the capture folder");
     assert.equal(host.sent("jobs.start").length, 1);
@@ -155,7 +155,7 @@ test("F04: 保存实际画面 includes effects and, unless unticked, subtitles; 
   }
 });
 
-test("F07: JPEG goes through a hidden PNG and sips; quality and format persist; BMP too", async () => {
+test("F07: JPEG is exported by the player with the chosen quality; quality and format persist; BMP too", async () => {
   const { host, folder, data, stop } = await setup();
   try {
     const jpeg = host.command("capture.format.jpeg");
@@ -172,11 +172,11 @@ test("F07: JPEG goes through a hidden PNG and sips; quality and format persist; 
     assert.equal(settings.props.quality, 80);
     await host.press("Ctrl+E");
     await until(() => lastOsd(host).startsWith("帧已保存为"));
-    const staged = join(folder, ".source-one_00.02.000.vestra-tmp.png");
-    assert.equal(host.sent("jobs.start")[0]!.destination, staged);
-    assert.deepEqual(fakes.converted[0], { source: staged, target: join(folder, "source-one_00.02.000.jpg"), format: "jpeg", quality: 80 });
-    assert.equal(lastOsd(host), `帧已保存为 ${join(folder, "source-one_00.02.000.jpg")}`);
-    assert.deepEqual(await readdir(folder), ["source-one_00.02.000.jpg"], "temporary PNG removed");
+    const target = join(folder, "source-one_00.02.000.jpg");
+    const [first] = host.exports;
+    assert.deepEqual([first!.kind, first!.destination, first!.quality, first!.sampleTime], ["rawJpeg", target, 80, 2]);
+    assert.equal(lastOsd(host), `帧已保存为 ${target}`);
+    assert.deepEqual(await readdir(folder), ["source-one_00.02.000.jpg"], "only the final file, no temporary PNG");
     await host.settle(350); // plugin.storage writes 300 ms after the last change
     assert.deepEqual(JSON.parse(await readFile(join(data, "settings.json"), "utf8")), {
       folder, format: "jpeg", quality: 80, screenSubtitles: true, besideMedia: false,
@@ -185,35 +185,41 @@ test("F07: JPEG goes through a hidden PNG and sips; quality and format persist; 
     await host.settle();
     assert.equal(host.command("capture.format.bmp").state.checked, true);
     await host.press("Ctrl+E");
-    await until(() => fakes.converted.length === 2 && lastOsd(host).endsWith(".bmp"));
-    assert.equal(fakes.converted[1]!.format, "bmp");
-    assert.equal(fakes.converted[1]!.target, join(folder, "source-one_00.02.000.bmp"));
+    await until(() => host.exports.length === 2 && lastOsd(host).endsWith(".bmp"));
+    const second = host.exports[1]!;
+    assert.deepEqual([second.kind, second.destination, "quality" in second], ["rawBmp", join(folder, "source-one_00.02.000.bmp"), false]);
     // Restart: the format and quality come back.
     const restart = new TestHost();
-    const second = await startPlugin(activate, { directory, host: restart, dataDirectory: data });
+    const again = await startPlugin(activate, { directory, host: restart, dataDirectory: data });
     assert.equal(restart.command("capture.format.bmp").state.checked, true);
     await restart.command("capture.settings").run();
     assert.equal(restart.window("settings").props.quality, 80);
-    await second.stop();
+    await again.stop();
   } finally {
     await stop();
   }
 });
 
-test("F07: a failed conversion keeps the PNG under the final name; sips writing nothing counts as failure", async () => {
+test("F07: a failed JPEG export fails the task like a PNG one; nothing is left behind", async () => {
   const { host, folder, stop } = await setup();
   try {
     await host.command("capture.format.jpeg").run();
-    fakes.failConvert = "error";
+    host.handle("jobs.state", (p) => {
+      const job = host.jobs.get(Number(p.jobId))!;
+      const current = structuredClone(job);
+      if (job.status === "queued") job.status = "running";
+      else if (job.status === "running")
+        Object.assign(job, { status: "failed", outcome: { error: { code: "failed", message: "JPEG encoding failed" } } });
+      return current;
+    });
     await host.press("Ctrl+E");
-    await until(() => lastOsd(host) === "无法转换为 JPEG，已保存为 PNG");
-    assert.deepEqual(await readdir(folder), ["source-one_00.02.000.png"]);
-    fakes.failConvert = "silent";
-    const osd = host.osd.length;
-    await host.press("Ctrl+E");
-    await until(() => host.osd.length > osd && lastOsd(host) === "无法转换为 JPEG，已保存为 PNG");
-    assert.equal(fakes.converted.length, 2);
-    assert.deepEqual((await readdir(folder)).sort(), ["source-one_00.02.000 (1).png", "source-one_00.02.000.png"]);
+    await until(() => lastOsd(host) === "截图失败：导出失败");
+    assert.equal(stills(host)[0]!.kind, "rawJpeg");
+    assert.deepEqual(await readdir(folder), []);
+    await host.command("capture.tasks").run();
+    const [row] = host.window("tasks").props["task-rows"] as { detail: string; retryable: boolean }[];
+    assert.match(row!.detail, /失败：导出失败$/);
+    assert.equal(row!.retryable, true);
   } finally {
     await stop();
   }
@@ -228,16 +234,17 @@ test("F07: 另存为 uses the typed extension once; otherwise the current format
     assert.equal(host.sent("dialogs.open").at(-1)!.fileName, "source-one_00.02.000.jpg", "default name carries the format");
     await until(() => lastOsd(host).startsWith("帧已保存为"));
     assert.equal(host.sent("jobs.start").at(-1)!.destination, join(folder, "a.png"));
-    assert.equal(fakes.converted.length, 0);
+    assert.equal(host.exports.at(-1)!.kind, "rawPng");
+    assert.equal(stills(host).length, 0);
     assert.equal(host.command("capture.format.jpeg").state.checked, true, "the setting is unchanged");
     host.dialogAnswers.push([join(folder, "b")]);
     await host.command("capture.saveAs").run();
-    await until(() => fakes.converted.length === 1);
-    assert.equal(fakes.converted[0]!.target, join(folder, "b.jpg"));
+    await until(() => stills(host).length === 1);
+    assert.deepEqual([stills(host)[0]!.kind, stills(host)[0]!.destination], ["rawJpeg", join(folder, "b.jpg")]);
     host.dialogAnswers.push([join(folder, "c.BMP")]);
     await host.command("capture.saveAs").run();
-    await until(() => fakes.converted.length === 2);
-    assert.deepEqual([fakes.converted[1]!.format, fakes.converted[1]!.target], ["bmp", join(folder, "c.BMP")]);
+    await until(() => stills(host).length === 2);
+    assert.deepEqual([stills(host)[1]!.kind, stills(host)[1]!.destination], ["rawBmp", join(folder, "c.BMP")]);
   } finally {
     await stop();
   }
@@ -257,7 +264,8 @@ test("F07: bursts use the shared format; the dialog's combo box changes it", asy
     await until(() => burst.props.progress === "已完成 · 3/3");
     const [child] = await readdir(folder);
     assert.deepEqual((await readdir(join(folder, child!))).sort(), ["001-1.000s.jpg", "002-1.500s.jpg", "003-2.000s.jpg"]);
-    assert.ok(fakes.converted.every((c) => c.format === "jpeg" && c.quality === 90));
+    assert.equal(host.exports.length, 3);
+    assert.ok(host.exports.every((job) => job.kind === "rawJpeg" && job.quality === 90));
   } finally {
     await stop();
   }

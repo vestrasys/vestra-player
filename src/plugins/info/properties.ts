@@ -228,7 +228,8 @@ export function remotePage(state: PlayerState, stats: PlaybackStats | null): Row
 
 /** What `sysinfo.ts` read; every field may be unknown. */
 export interface SystemFacts {
-  macos: string | null;
+  /** `macOS 26.2（25C56）`, `Windows 11 23H2（22631.4460）`. */
+  os: string | null;
   model: string | null;
   cpu: string | null;
   memory: number | null;
@@ -247,7 +248,7 @@ export function systemPage(app: AppInfo, facts: SystemFacts | null): Row[] {
       ["FFmpeg 版本", ffmpegVersion(app)],
     ]],
     ["系统", facts ? [
-      ["macOS 版本", facts.macos],
+      ["系统版本", facts.os],
       ["机型", facts.model],
       ["CPU", facts.cpu],
       ["内存总量", gb(facts.memory)],

@@ -767,23 +767,23 @@ OSD：
 
 > 第 3b 轮按裁决 R-U2 改写：`kinds` → `extensions`；没有 `onDragOver`，不画插入线，插到落点所在行之前；同一扩展名先登记的生效；无处理者时核心什么也不做。
 
-**需求**：从 Finder 把文件、文件夹或列表文件拖到 Vestra 主窗口（视频区）或播放列表侧栏（附着或浮动）上即可打开或加入。
+**需求**：从文件管理器（macOS 访达 Finder、Windows 资源管理器）把文件、文件夹或列表文件拖到 Vestra 主窗口（视频区）或播放列表侧栏（附着或浮动）上即可打开或加入。
 
 **入口**：拖放。无菜单、无快捷键。
 
 **行为细节**：
 
 1. **拖到视频区**（核心按扩展名分组后交给登记者；playlist 用 `drops.provide` 登记媒体扩展名（附录 B.5）、列表文件 `m3u m3u8 pls dpl`、`webloc` 和保留名 `"folder"`）：
-   - 文件夹按 A03 的规则展开（递归、上限 5000；macOS 包如 `.app` 不展开、跳过）；列表文件按 C18 解析成条目；媒体文件直接收。拖入多项时按 Finder 给出的顺序，各自展开后拼接。
+   - 文件夹按 A03 的规则展开（递归、上限 5000；macOS 包如 `.app` 不展开、跳过）；列表文件按 C18 解析成条目；媒体文件直接收。拖入多项时按文件管理器给出的顺序，各自展开后拼接。
    - 结果加入列表末尾（去重），**播放第一个条目**。
-   - 按住 Option（`modifiers.alt`）松手：只加入，不播放（OSD：「已添加 N 项」）。
+   - 按住 Option（Windows 为 Alt；`modifiers.alt`）松手：只加入，不播放（OSD：「已添加 N 项」）。
 2. **拖到播放列表**（`Panel.onDrop`，整组路径交给 playlist，不按扩展名分）：
    - 不播放，只加入。插到松手处所在行**之前**；落在空白处（最后一行之下）、页签条或底部按钮栏上则追加到末尾。没有拖动中的插入线（核心不提供拖动过程中的位置）。
    - 落点是面板坐标；playlist 用侧栏回传的滚动位置与列表区高度（`list-area` 回调）换算到行。搜索筛选时按显示的行换算，插在该行在完整列表中的位置之前。
    - 整组中 playlist 不收的文件（字幕等）跳过，OSD 末尾注明「跳过 N 个不支持的项目」。
 3. 字幕文件（`srt ass ssa vtt …`）、图片、其它类型 playlist 不登记；核心把它们交给登记了对应扩展名的插件（例如字幕插件），没有处理者时核心什么也不做（不提示）。playlist 不处理字幕，不调用字幕插件。
 4. 拖入的条目全部重复：视频区拖放时播放第一个对应的已有行；OSD「已添加 0 项，跳过 N 个重复」。
-5. 网页链接：核心只报告文件路径，不报告浏览器拖来的 URL；Safari/Chrome 拖出的 `.webloc` 文件读取其 plist（XML 或二进制，二进制经 `plutil` 转换）中的 `URL` 字段作为链接行（只接受 HTTP(S)，其它跳过）。
+5. 网页链接：核心只报告文件路径，不报告浏览器拖来的 URL；Safari/Chrome 拖出的 `.webloc` 文件读取其 plist（XML 或二进制 `bplist00`，二进制由插件用纯 JS 解析，不调用系统工具）中的 `URL` 字段作为链接行（只接受 HTTP(S)，其它跳过）。
 6. 播放器正在打开另一个来源（`busy`）时，视频区拖放只加入，OSD 说明「…；正在打开，已加入列表」。
 7. 侧栏因空间不足被隐藏（`reason: "space"`）时，拖到视频区仍然有效。
 8. 拖入的内容一项都不能加入（全不支持、文件夹无法读取）：列表不变，OSD「没有可加入的项目：…」。多次拖放按到达顺序依次处理。
@@ -798,18 +798,18 @@ drops.provide(handler: { extensions: string[] /* 小写、不带点；"folder" =
 Panel.onDrop(listener: (e: { paths: string[]; at: { x: number; y: number } /* 面板坐标 */; modifiers: DropModifiers }) => unknown): Disposable;
 ```
 
-宿主规则：视频区松手时按扩展名把 `paths` 分组（保留 Finder 顺序），每组一次调用交给对应提供者；同一扩展名多个提供者时先登记的生效；无人认领的文件核心什么也不做。面板上松手时整组交给该面板的 `onDrop`；没有监听时按视频区规则处理。拖放期间不暂停、不改变播放。
+宿主规则：视频区松手时按扩展名把 `paths` 分组（保留文件管理器给出的顺序），每组一次调用交给对应提供者；同一扩展名多个提供者时先登记的生效；无人认领的文件核心什么也不做。面板上松手时整组交给该面板的 `onDrop`；没有监听时按视频区规则处理。拖放期间不暂停、不改变播放。
 
 **验收**：
 - 拖 1 个 mkv 到视频区：加入并播放。
 - 拖 1 个文件夹到视频区：按 A03 规则展开并播放第一项。
-- 按住 Option 拖 3 个文件到视频区：加入 3 行，不播放。
+- 按住 Option（Windows 为 Alt）拖 3 个文件到视频区：加入 3 行，不播放。
 - 拖 2 个文件到列表第 3、4 行之间（落在第 4 行上）：两行插在落点所在行（原第 4 行）之前，不播放；落在空白处时追加到末尾。
 - 拖 `.m3u8` 到视频区：解析出的条目加入并播放第一项。
 - 拖 `.srt` 到视频区、且没有插件登记 srt：列表不变、无提示。
 - 侧栏浮动时拖到浮动窗口：与附着时相同；侧栏因空间隐藏时拖到视频区仍有效。
 
-**PotPlayer 参考**：基本设置 Dialog(354) 3340「拖拽文件播放时显示界面选项」；列表设置 Dialog(373) 3118「添加到鼠标拖放时指向的位置」、3128「对下拉列表中的文件排序」。差异：PotPlayer 的「拖拽时显示界面选项」（弹出选择播放/加入的浮层）不做，用 Option 键区分；拖入文件不再排序，保持 Finder 顺序。
+**PotPlayer 参考**：基本设置 Dialog(354) 3340「拖拽文件播放时显示界面选项」；列表设置 Dialog(373) 3118「添加到鼠标拖放时指向的位置」、3128「对下拉列表中的文件排序」。差异：PotPlayer 的「拖拽时显示界面选项」（弹出选择播放/加入的浮层）不做，用 Option（Windows 为 Alt）键区分；拖入文件不再排序，保持文件管理器给出的顺序。
 
 ### B26 快速推进到下一个
 
@@ -872,7 +872,7 @@ Panel.onDrop(listener: (e: { paths: string[]; at: { x: number; y: number } /* �
 
 **核心依赖**：无。
 
-**验收**：5 行选 2 行后 Ctrl+Delete，剩 2 行；把某文件在 Finder 中删掉后 Ctrl+T，该行消失，链接行保留；没有无效项时 OSD「没有无效项」。
+**验收**：5 行选 2 行后 Ctrl+Delete，剩 2 行；把某文件在文件管理器中删掉后 Ctrl+T，该行消失，链接行保留；没有无效项时 OSD「没有无效项」。
 
 **PotPlayer 参考**：menu-tree：PL ▶ 移除 ▶ 移除未选名单 `111_0_7_1` 10212 Ctrl+Del；移除无效名单 `111_0_7_3` 10210 Ctrl+T；移除所有名单 10201 Alt+Del。
 
@@ -1009,19 +1009,19 @@ Panel.onDrop(listener: (e: { paths: string[]; at: { x: number; y: number } /* �
 
 ### C23 在 Finder 中显示
 
-**需求**：在 Finder 中打开所选文件所在的文件夹并选中该文件。
+**需求**：在系统的文件管理器（macOS 访达 Finder、Windows 资源管理器）中打开所选文件所在的文件夹并选中该文件。菜单标题沿用「在 Finder 中显示」（各系统相同）。
 
 **入口**：列表右键菜单「在 Finder 中显示」，列表焦点 Ctrl+F。
 
 **行为细节**：
 
-1. 对所选本地文件行（最多 20 个）调用 `plugin.system.reveal(paths)`（第 2 轮通用能力，接受路径数组），同一文件夹的文件一次调用、全部高亮，不同文件夹分次调用。
+1. 对所选本地文件行（最多 20 个）调用 `plugin.system.reveal(paths)`（第 2 轮通用能力，接受路径数组），同一文件夹的文件一次调用、全部高亮，不同文件夹分次调用。由播放器执行（参考文档 §16.5）：macOS 一个访达窗口选中全部；Windows 每个文件夹一个资源管理器窗口；其它系统 `unsupported`。
 2. 文件已不存在：显示其所在文件夹（`plugin.system.openPath(dir)`）；文件夹也不存在时 OSD「找不到文件：<名称>」。
 3. 选中只有链接行时禁用（原因「链接没有本地位置」）。选中超过 20 个时只处理前 20 个，OSD「只显示前 20 个文件」。
 
 **核心依赖**：`plugin.system.reveal`、`plugin.system.openPath`（第 2 轮通用能力）。
 
-**验收**：选一个文件按 Ctrl+F，Finder 打开其目录并高亮该文件；对已删除文件的行执行，Finder 打开其目录。
+**验收**：选一个文件按 Ctrl+F，文件管理器（macOS 访达、Windows 资源管理器）打开其目录并高亮该文件；对已删除文件的行执行，文件管理器打开其目录。
 
 **PotPlayer 参考**：menu-tree：PL ▶ 添加 编辑 ▶ 查看文件… `111_0_6_5` 10207 Ctrl+F（Open file location of selected item）。
 
@@ -2369,7 +2369,7 @@ interface PlayerState {
 
 边界与取舍：
 - 取帧一律用核心快照（`media.capture` + `Snapshot.export`），保证与现有截图一致的冻结与条件提交语义。
-- JPEG/BMP 转换在插件内用 macOS 自带 `sips`（只有本插件需要，不进核心）。复制到剪贴板用 `plugin.clipboard.writeImage`，打开文件夹用 `plugin.system.openPath`，设置文件用 `plugin.storage.json`（第 2 轮通用能力，替换原来的 `osascript`、`open` 与自写的设置读写）。
+- JPEG/BMP 由核心快照直接导出（`Snapshot.export` 的 `jpeg` / `bmp`，参考文档 §10；可移植性轮 P1 起，替换原来插件内的 macOS `sips` 转换）。复制到剪贴板用 `plugin.clipboard.writeImage`，打开文件夹用 `plugin.system.openPath`，设置文件用 `plugin.storage.json`（第 2 轮通用能力，替换原来的 `osascript`、`open` 与自写的设置读写）。
 - 截图设置（格式、质量）对所有图片输出统一生效：单张、另存为、连拍。
 
 manifest 增加能力 `clipboard`（F03）；其余已有（`media.read`、`media.control`、`playback.read`、`subtitles.read`）。
@@ -2380,7 +2380,7 @@ manifest 增加能力 `clipboard`（F03）；其余已有（`media.read`、`medi
 | --- | --- | --- | --- |
 | F03 | 复制当前画面到剪贴板 | ✗ | 否（通用能力 `plugin.clipboard`） |
 | F04 | 单张截图带效果与字幕 | ◐ | 否 |
-| F07 | JPEG/BMP 格式与质量 | ◐ | 否（`sips`；可选核心直出 JPEG） |
+| F07 | JPEG/BMP 格式与质量 | ◐ | 是（`Snapshot.export` 的 `jpeg` / `bmp`，可移植性轮 P1 已交付） |
 | F09 | 打开截图文件夹 | ◐ | 否（通用能力 `plugin.system`） |
 
 ### 菜单与快捷键
@@ -2422,7 +2422,7 @@ manifest 增加能力 `clipboard`（F03）；其余已有（`media.read`、`medi
 
 **核心依赖**：现有 `media.capture`、`Snapshot.export`；第 2 轮通用能力 `plugin.clipboard.writeImage`（能力 `clipboard`，替换原来的 `osascript`）。
 
-**验收**：播放中按 Ctrl+C，在「预览」中「从剪贴板新建」得到与 Ctrl+E 同尺寸的图像；临时文件已删除；无媒体时命令禁用；连按两次第二次给出提示。
+**验收**：播放中按 Ctrl+C，在图像应用中从剪贴板新建（macOS「预览」、Windows「画图」）得到与 Ctrl+E 同尺寸的图像；临时文件已删除；无媒体时命令禁用；连按两次第二次给出提示。
 
 **PotPlayer 参考**：menu-tree「图像截取 ▶ 复制当前源画面 Ctrl+C（10223）/ 复制当前实画面 Ctrl+Alt+C（10432）」；strings 1138；defaults C§6.5「Ctrl+C 复制到剪贴板，OSD 1138」。
 
@@ -2458,7 +2458,7 @@ manifest 增加能力 `clipboard`（F03）；其余已有（`media.read`、`medi
 
 **行为细节**：
 1. 适用：保存当前画面、另存为、保存实际画面、连拍。复制到剪贴板总是 PNG。
-2. 流程：导出 PNG 到目标旁的临时名 `.<name>.vestra-tmp.png` → `sips -s format jpeg -s formatOptions <质量> <tmp> --out <目标>`（BMP：`-s format bmp`）→ 删除临时 PNG。转换失败时保留 PNG 结果改名为目标 `.png`，OSD「无法转换为 JPEG，已保存为 PNG」。
+2. 流程：直接导出到目标：`export({ format: "jpeg", destination, sampleTime, quality })`、`export({ format: "bmp", destination, sampleTime })`。播放器从校验过的 PNG 转换，转换成功后才发布目标文件，中间文件由播放器删除（参考文档 §10）。转换失败时任务失败，与 PNG 导出失败相同（OSD「截图失败：…」，任务列表可重试），不留下 PNG。
 3. 另存为：对话框默认文件名带当前格式扩展名；用户输入 `.png/.jpg/.jpeg/.bmp` 时按用户扩展名决定本次格式（不改设置）。
 4. 默认 PNG（决定 D3）。质量默认 90（PotPlayer 默认 100；JPEG 100 文件过大且与 PNG 差别不大，故取 90）。
 5. 切换格式 OSD：`截图格式：JPEG`。
@@ -2467,9 +2467,9 @@ manifest 增加能力 `clipboard`（F03）；其余已有（`media.read`、`medi
 
 **持久化**：`settings.json` 增加 `format`、`quality`（与现有 `folder` 同文件），用 `plugin.storage.json("settings")` 读写：读坏的文件改名为 `settings.json.bad-<时间戳>`，单个字段无效时只有该字段用默认值。
 
-**核心依赖**：现有 PNG 导出 + macOS `sips`。【核心新增·可选】`Snapshot.export({ format: "jpeg"; destination; quality?: number; sampleTime? })`：离线 ffmpeg 直接编码，省一次转换；不做也不影响功能。
+**核心依赖**：`Snapshot.export` 的 `jpeg`（`quality` 1–100，默认 90）与 `bmp`（可移植性轮 P1 交付，参考文档 §10）。
 
-**验收**：选 JPEG 质量 80，Ctrl+E 生成 `.jpg`（`sips -g format` 为 jpeg），大小明显小于 PNG；BMP 正常；另存为输入 `a.png` 时即使设置是 JPEG 也得到 PNG；连拍 10 张均为 JPEG。
+**验收**：选 JPEG 质量 80，Ctrl+E 生成 `.jpg`（文件内容是 JPEG，如 `file` 命令报告 JPEG image data），大小明显小于 PNG；截图文件夹里没有残留的临时 PNG；BMP 正常；另存为输入 `a.png` 时即使设置是 JPEG 也得到 PNG；连拍 10 张均为 JPEG。
 
 **PotPlayer 参考**：menu-tree「截取为 BMP（10354）/ JPEG（10355）/ PNG（10356）」单选；B§ 第 6 条（单选辅助函数）；defaults `VideoCaptureFormat=1`（JPEG）、`VideoCaptureQuality=100`；dialogs 337「格式设置：格式、质量」。
 
@@ -2477,7 +2477,7 @@ manifest 增加能力 `clipboard`（F03）；其余已有（`media.read`、`medi
 
 **现状**：能设置并记住截图文件夹；连拍窗口与任务列表里有打开按钮，菜单没有「打开截图文件夹」。
 
-**需求**：菜单一键在 Finder 打开截图文件夹。
+**需求**：菜单一键在系统的文件管理器（macOS 访达、Windows 资源管理器）中打开截图文件夹。
 
 **入口**：`视频 ▶ 截图 ▶ 打开截图文件夹`。
 
@@ -2489,7 +2489,7 @@ manifest 增加能力 `clipboard`（F03）；其余已有（`media.read`、`medi
 
 **核心依赖**：无。
 
-**验收**：执行后 Finder 打开对应文件夹；文件夹被删除后执行会重新创建并打开。
+**验收**：执行后文件管理器打开对应文件夹；文件夹被删除后执行会重新创建并打开。
 
 **PotPlayer 参考**：menu-tree「打开截图存档文件夹…（10225）/ 条件允许时储存到播放文件夹（10913）」；defaults `VideoCaptureFolderSelf=0`。
 
@@ -2497,9 +2497,9 @@ manifest 增加能力 `clipboard`（F03）；其余已有（`media.read`、`medi
 
 | 接口 | 理由 | 使用编号 |
 | --- | --- | --- |
-| `Snapshot.export(options: { format: "jpeg"; destination: string; quality?: number; sampleTime?: number })`（可选） | 省去一次 `sips` 转换；不做不影响功能 | F07 |
+| `Snapshot.export` 的 `{ format: "jpeg"; quality? }` 与 `{ format: "bmp" }`（可移植性轮 P1 已交付） | 插件不调用系统命令转换图片（社区工作流 §1.5）；播放器只发布转换成功的文件，插件不再需要临时 PNG 与回退 | F07 |
 
-明确不请求核心：JPEG/BMP 转换（`sips`）。剪贴板图像、打开文件夹、设置文件改用第 2 轮通用能力（`clipboard`、`system`、`storage`）。
+不请求通用的图片转换接口（可移植性轮裁决 §4.3）。剪贴板图像、打开文件夹、设置文件改用第 2 轮通用能力（`clipboard`、`system`、`storage`）。
 
 ## 播放信息（`info`）
 
@@ -2568,7 +2568,7 @@ manifest 能力从 `commands, playback.read, events, ui.osd` 增加为：`+ ui.w
 
 ### I05 播放属性对话框
 
-> 第 2 轮降级（裁决 R-P7、R-W6 排期）：`PlaybackStats` 不加 `hwdec`，「播放信息」页单列一行「硬件解码」，固定显示「未使用」（播放器固定软件解码），等 C-GPU 再接；`plugin.app` 在 3a 交付，「系统信息」页的 Vestra、mpv、FFmpeg 版本暂显示「未知」（行保留）。系统信息里的 macOS、机型、CPU、显示器由插件用 `sw_vers`、`sysctl`、`system_profiler` 读取，内存用 Node `os`。
+> 第 2 轮降级（裁决 R-P7、R-W6 排期）：`PlaybackStats` 不加 `hwdec`，「播放信息」页单列一行「硬件解码」，固定显示「未使用」（播放器固定软件解码），等 C-GPU 再接；`plugin.app` 在 3a 交付，「系统信息」页的 Vestra、mpv、FFmpeg 版本暂显示「未知」（行保留）。系统信息里的系统版本、机型、显示器当时由插件用 macOS 命令读取；可移植性轮 P1 起改为 `plugin.app.system()`（参考文档 §3.5），CPU 与内存用 Node `os`，插件不再调用系统命令。
 
 **需求**
 - 工具窗口「播放属性」，三个页签：
@@ -2584,7 +2584,7 @@ manifest 能力从 `commands, playback.read, events, ui.osd` 增加为：`+ ui.w
      - 内嵌资源：附件流（字体、封面）的文件名与 MIME 类型。
   3. **系统信息**
      - Vestra 版本、插件 API 版本、mpv 版本、FFmpeg（libavcodec/libavformat）版本。
-     - macOS 版本、机型、CPU、内存总量与可用量、显示器（`system_profiler SPDisplaysDataType` 的分辨率与刷新率）。
+     - 系统版本（如「macOS 26.2（25C56）」「Windows 11 23H2（22631.4460）」）、机型、CPU（型号与核数）、内存总量与可用量、显示器（每台一行：名称 · 像素尺寸 · 逻辑尺寸 @ 刷新率，如「Color LCD · 2940 x 1912 · 1470 x 956 @ 60 Hz」；多台时编号「显示器 1」「显示器 2」）。
 - 底部按钮：`复制到剪贴板`、`保存为…`、`关闭`。复制和保存的是当前页签的纯文本，`键：值` 一行一条，分组之间空行。
 
 **入口**：右键菜单顶层「播放属性…」（811），快捷键 Ctrl+F1。
@@ -2635,7 +2635,7 @@ manifest 能力从 `commands, playback.read, events, ui.osd` 增加为：`+ ui.w
   ```
 
   理由：这些是播放器解码时才有的实时状态（硬解是否生效、当前帧率、音画同步、缓冲）。ffprobe 只能看到文件，看不到正在解码的会话。这些值只有 mpv 有，只能由核心转发。
-- 【核心新增·3a】`plugin.app.info(): Promise<AppInfo>`（定义见 I09）。「系统信息」页的 Vestra、mpv、FFmpeg 版本来自它，3a 之前显示「未知」；macOS、CPU、内存由插件通过 Node `os` 模块和 `sw_vers`、`sysctl`、`system_profiler` 子进程读取。
+- 【核心新增·3a】`plugin.app.info(): Promise<AppInfo>`（定义见 I09）。「系统信息」页的 Vestra、mpv、FFmpeg 版本来自它，3a 之前显示「未知」。系统名称、版本、构建号、机型与显示器来自 `plugin.app.system()`（可移植性轮 P1，参考文档 §3.5，不需要能力；系统不报告的项显示「-」），CPU 与内存由插件用 Node `os` 模块读取。
 
 **验收**
 - 播放 1080p H.264 + AAC 文件，按 Ctrl+F1，「播放信息」页显示解码器、1920×1080、帧率、采样率；「硬件解码」一行为「未使用」。
@@ -4075,7 +4075,7 @@ manifest 能力：`commands`、`playback.read`、`events`、`ui.mount`、`ui.dia
 - 下载到的字幕通过核心 `subtitles.load` 载入为本插件拥有的轨。字幕插件（`subtitles`）从字幕状态看到这些轨，照常选轨、调样式；两插件不通信。
 - 本插件不调用任何付费服务作为默认值。所有需要密钥的服务都要用户自己填写；未配置时功能保持关闭并引导到设置窗口。
 - 网络请求在插件 Node 进程内用 `fetch` 完成，不经核心。
-- 密钥存 macOS 钥匙串（`/usr/bin/security add-generic-password -s vestra.subtitle-online -a <服务>`），钥匙串不可用时退回插件数据目录的 `secrets.json`（权限 0600），设置窗口写明存放位置。
+- 密钥存系统的密钥存储（`plugin.secrets`，参考文档 §16.6：macOS 登录钥匙串，服务名 `vestra.subtitle-online`、账户名为密钥名；Windows 凭据管理器），系统没有可用的存储（`unsupported` / `unavailable`）时退回插件数据目录的 `secrets.json`（权限 0600），没有数据目录时只在本次运行内记住；设置窗口按系统写明存放位置（「macOS 钥匙串」「Windows 凭据管理器」、文件路径或「仅本次运行」）。
 
 manifest：`commands`、`events`、`ui.window`、`ui.dialog`、`ui.osd`、`playback.read`、`subtitles.read`、`subtitles.control`。
 
@@ -4156,7 +4156,7 @@ manifest：`commands`、`events`、`ui.window`、`ui.dialog`、`ui.osd`、`playb
 
 #### 持久化
 
-`<plugin.dataDirectory>/settings.json`：已启用服务及顺序、首选语言、自动搜索、搜索后动作、排除关键字、保存位置、隐私提示已确认。密钥与密码存钥匙串（见定位）。登录得到的 JWT 只存内存，过期重新登录。
+`<plugin.dataDirectory>/settings.json`：已启用服务及顺序、首选语言、自动搜索、搜索后动作、排除关键字、保存位置、隐私提示已确认。密钥与密码存系统的密钥存储（见定位）。登录得到的 JWT 只存内存，过期重新登录。
 
 #### 核心依赖
 
@@ -4234,7 +4234,7 @@ menu-tree「字幕 ▶ 在线字幕搜索 ▶ 上传字幕…（10864）/ 下载
 | V8 | `VideoNode` 增加 `{ kind: "frameBlend"; fps: number }`（24–120） | 现有 `processing.video` | video E18（倍帧） | 混合插帧需要新滤镜节点 |
 | V9 | `plugin.video.view(): VideoView`；`set(Partial<{ aspect: number \| null; fit: "keep" \| "stretch" \| "fill"; zoom; scaleX; scaleY; panX; panY }>)`、`status`、`onStatus` | 现有 `processing.video` | video E11、E13 | 这些是 mpv vo 级属性，处理链表达不了，插件也不能直接写 mpv 属性；插件停用时核心恢复默认 |
 | V10 | `plugin.video.render(): RenderOptions`；`set(Partial<{ toneMapping; targetPeak; peakDetect; shaders: string[]; interpolation: boolean }>)`（C-GPU 前 `status` 恒为 `failed / unsupported`） | 现有 `processing.video` | video E16、E17、E18（运动补偿） | 对应 mpv GPU 渲染属性；前提是宿主行为 H3（C-GPU） |
-| V11 | （可选）`Snapshot.export({ format: "jpeg"; destination; quality?; sampleTime? })` | 现有 `media.control` | capture F07 | 省一次 `sips` 转换；不做不影响功能 |
+| V11 | （可选）`Snapshot.export({ format: "jpeg"; destination; quality?; sampleTime? })` | 现有 `media.control` | capture F07 | 已在可移植性轮 P1 交付（`jpeg`、`bmp`），替代插件内的 macOS `sips` 转换 |
 
 每个新 `VideoNode` 都要同时支持实时 mpv 图和离线导出图（`render_lavfi` 共用），并受「全部插件合计 64 个节点」上限约束；video 插件最坏约 15 个节点。
 
@@ -4373,7 +4373,7 @@ menu-tree「字幕 ▶ 在线字幕搜索 ▶ 上传字幕…（10864）/ 下载
 - ffprobe 用 `VESTRA_FFPROBE`，没设时用 PATH 上的 `ffprobe`；ffmpeg 同理，用 `VESTRA_FFMPEG`。
 - 调用都不经 shell，带超时，插件停用时结束进程。
 - 缺少工具时，只在用到它的功能里提示，不算错误。
-- 剪贴板、阻止休眠、外部工具调用、设置文件读写、在 Finder 中显示和打开路径/网址，统一用第 2 轮的通用能力（`plugin.clipboard`、`plugin.power`、`plugin.tools`、`plugin.storage`、`plugin.system`），插件不再自己调用 `pbcopy`、`caffeinate`、`open` 等。只有一个插件用到的系统命令（如 capture 的 `sips`、subtitle-online 的 `security`）可以留在插件里。
+- 剪贴板、阻止休眠、外部工具调用、设置文件读写、在文件管理器中显示和打开路径/网址、密钥存储、系统信息、截图格式，统一用核心能力（`plugin.clipboard`、`plugin.power`、`plugin.tools`、`plugin.storage`、`plugin.system`、`plugin.secrets`、`plugin.app.system()`、`Snapshot.export`）。插件不直接调用任何系统命令（社区工作流 §1.5），可移植性检查脚本 `npm run portability` 扫描结果须为零。
 
 ### B.5 播放列表与文件
 

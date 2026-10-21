@@ -1,9 +1,8 @@
-import { lstat, rename, rm, rmdir, stat } from "node:fs/promises";
-import { basename, dirname, extname, join, resolve } from "node:path";
+import { rmdir, stat } from "node:fs/promises";
+import { basename, join, resolve } from "node:path";
 import type { ExportJob, JobState, Scope, Snapshot } from "../../sdk/plugin/index.ts";
-import { clock, extensionOf, KIND_LABEL, message, uniqueFile } from "./model.ts";
+import { clock, extensionOf, KIND_LABEL } from "./model.ts";
 import type { Spec } from "./model.ts";
-import { sips } from "./sips.ts";
 
 /** An accepted export: one frozen snapshot, one or more sequential jobs. */
 export interface Task {
@@ -20,10 +19,8 @@ export interface Task {
   error?: string;
   cancel: boolean;
   jobs: ExportJob[];
-  /** `published`: the file the host confirmed; `path`: the final file (differs after a JPEG/BMP conversion). */
-  outputs: { job: ExportJob; path: string; published: string }[];
-  /** F07: a conversion failed and the PNG was kept instead (for the OSD). */
-  fallback?: boolean;
+  /** `path`: the file the host confirmed (JPEG/BMP are converted by the player before it publishes). */
+  outputs: { job: ExportJob; path: string }[];
   active?: ExportJob;
   retainUntil?: number;
   retentionTimer?: ReturnType<typeof setTimeout>;
@@ -59,44 +56,6 @@ export function jobError(error: { code: string; message: string }) {
       return "导出失败";
   }
 }
-
-/** Whether a path is free (nothing, not even a dangling link, is there). */
-async function free(path: string) {
-  return lstat(path).then(
-    () => false,
-    (error: NodeJS.ErrnoException) => {
-      if (error.code === "ENOENT") return true;
-      throw error;
-    },
-  );
-}
-
-/**
- * F07: turn the PNG the host published into the final JPEG/BMP file. On any
- * failure the PNG is kept, renamed to the final name with `.png`.
- */
-export async function convert(published: string, final: string, spec: Spec): Promise<{ path: string; fallback: boolean }> {
-  const format = spec.format ?? "png";
-  if (format === "png") return { path: published, fallback: false };
-  let target: string | undefined;
-  try {
-    target = (await free(final)) ? final : await uniqueFile(final);
-    await sips.convert(published, target, format, spec.quality ?? 90);
-    // sips reports some failures only on stderr with exit status 0: check the result.
-    if (!(await stat(target).catch(() => null))?.size) throw new Error("no output");
-    await rm(published, { force: true });
-    return { path: target, fallback: false };
-  } catch (error) {
-    console.error(`[capture] cannot convert to ${format}: ${message(error)}`);
-    if (target) await rm(target, { force: true }); // a partial file of our own choosing
-    const png = await uniqueFile(join(dirname(final), `${basename(final, extname(final))}.png`));
-    await rename(published, png);
-    return { path: png, fallback: true };
-  }
-}
-
-/** Where the PNG export goes before conversion: a hidden name next to the final file. */
-const staging = (final: string) => uniqueFile(join(dirname(final), `.${basename(final, extname(final))}.vestra-tmp.png`));
 
 /** One running and up to four queued tasks; history of twenty; failed input kept five minutes. */
 export class Tasks {
@@ -193,16 +152,9 @@ export class Tasks {
         try {
           for (let index = 0; index < task.spec.count; index++) {
             if (task.cancel || this.#stopped) break;
-            const { job, state, final } = await this.#run(task, index);
-            if (state.status === "completed" && state.outcome && "destination" in state.outcome) {
-              const published = state.outcome.destination;
-              const { path, fallback } = await convert(published, final, task.spec).catch((error) => {
-                console.error(`[capture] cannot keep the frame: ${message(error)}`);
-                throw new Error("无法保存图片");
-              });
-              if (fallback) task.fallback = true;
-              task.outputs.push({ job, path, published });
-            } else if (state.status === "failed")
+            const { job, state } = await this.#run(task, index);
+            if (state.status === "completed" && state.outcome && "destination" in state.outcome)
+              task.outputs.push({ job, path: state.outcome.destination }); else if (state.status === "failed")
               throw new Error(state.outcome && "error" in state.outcome ? jobError(state.outcome.error) : jobError({ code: "unknown", message: "no error outcome" }));
             else if (state.status === "cancelled") {
               task.cancel = true;
@@ -225,15 +177,21 @@ export class Tasks {
     }
   }
 
-  async #run(task: Task, index: number): Promise<{ job: ExportJob; state: JobState; final: string }> {
+  async #run(task: Task, index: number): Promise<{ job: ExportJob; state: JobState }> {
     if (!task.snapshot) throw new Error("保留的画面已释放。");
     const { spec } = task;
     const sampleTime = spec.start + index * spec.step;
-    const extension = extensionOf(spec.format ?? "png");
-    const final = spec.kind === "burst" ? join(task.destination, `${String(index + 1).padStart(3, "0")}-${sampleTime.toFixed(3)}s${extension}`) : task.destination;
-    // JPEG/BMP: export a PNG under a hidden temporary name, convert after the host confirms it.
-    const destination = spec.kind !== "clip" && extension !== ".png" ? await staging(final) : final;
-    const job = await task.snapshot.export(spec.kind === "clip" ? { format: "mp4", destination, end: spec.end! } : { format: "png", destination, sampleTime });
+    const format = spec.format ?? "png";
+    const destination =
+      spec.kind === "burst" ? join(task.destination, `${String(index + 1).padStart(3, "0")}-${sampleTime.toFixed(3)}s${extensionOf(format)}`) : task.destination;
+    // F07: the player converts JPEG/BMP from its checked PNG and publishes only the converted file.
+    const job = await task.snapshot.export(
+      spec.kind === "clip"
+        ? { format: "mp4", destination, end: spec.end! }
+        : format === "jpeg"
+          ? { format: "jpeg", destination, sampleTime, quality: spec.quality ?? 90 }
+          : { format, destination, sampleTime },
+    );
     task.active = job;
     task.jobs.push(job);
     if (task.cancel || this.#stopped) await job.cancel().catch(() => {});
@@ -243,7 +201,7 @@ export class Tasks {
     show(job.state);
     const watching = job.onChange(show);
     try {
-      return { job, state: await job.done, final };
+      return { job, state: await job.done };
     } finally {
       task.active = undefined;
       await watching.dispose();
@@ -269,7 +227,7 @@ export class Tasks {
     if (!output) throw new Error("这个任务还没有输出文件。");
     const state = await output.job.refresh();
     const confirmed =
-      state.status === "completed" && !!state.outcome && "destination" in state.outcome && resolve(state.outcome.destination) === resolve(output.published);
+      state.status === "completed" && !!state.outcome && "destination" in state.outcome && resolve(state.outcome.destination) === resolve(output.path);
     if (!confirmed || !(await stat(output.path).catch(() => null))?.isFile()) throw new Error("输出文件已不存在。");
     await this.#plugin.system.openPath(resolve(task.directory ?? output.path)).catch(() => {
       throw new Error("无法打开文件夹。");

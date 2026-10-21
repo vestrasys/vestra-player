@@ -46,7 +46,7 @@ const sortKeys: [SortKey, string, string | null][] = [
 ];
 const STAT_LIMIT = 8;
 const SEARCH_DEBOUNCE_MS = 150;
-/** C23: at most this many selected files are shown in Finder. */
+/** C23: at most this many selected files are shown in the file manager. */
 export const REVEAL_LIMIT = 20;
 
 /** Injected in tests: the sort's shuffle source. */
@@ -320,7 +320,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     });
 
   /**
-   * C23: the selected local files (not links, at most 20), one Finder window per
+   * C23: the selected local files (not links, at most 20), one file manager window per
    * folder showing its first file that still exists; else the folder itself.
    */
   const revealSelected = guard(async () => {
@@ -715,7 +715,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     if (first) queue.select(first.rowId);
   });
 
-  // A15: drops from the Finder. On the video area (the player groups by extension): add to
+  // A15: drops from the file manager. On the video area (the player groups by extension): add to
   // the end and play the first item, Option only adds. On the list: insert before the row
   // under the drop point (blank space: the end), never play. One drop at a time, in order.
   let dropping: Promise<void> = Promise.resolve();

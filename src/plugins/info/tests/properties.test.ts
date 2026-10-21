@@ -7,7 +7,7 @@ import { HostError, startPlugin, TestHost } from "../../../sdk/plugin/testing.ts
 import activate from "../main.ts";
 import { cut, filePage, pageText, sampleFormat, saveName, systemPage, VALUE_MAX } from "../properties.ts";
 import type { Probe, Row } from "../properties.ts";
-import { parseDisplays, sysinfo } from "../sysinfo.ts";
+import { displayLine, systemVersion } from "../sysinfo.ts";
 
 const directory = new URL("..", import.meta.url);
 const stats = {
@@ -32,14 +32,17 @@ const probe: Probe = {
   chapters: [{}, {}, {}],
 };
 
-// 系统信息 commands answered in memory.
-const commands: string[] = [];
-sysinfo.run = async (program, args) => {
-  commands.push([program, ...args].join(" "));
-  if (program.endsWith("sw_vers")) return args[0] === "-productVersion" ? "15.2\n" : "24C101\n";
-  if (args.includes("hw.model")) return "Mac14,2\n";
-  if (args.includes("machdep.cpu.brand_string")) return "Apple M2\n";
-  return JSON.stringify({ SPDisplaysDataType: [{ spdisplays_ndrvs: [{ _name: "Color LCD", _spdisplays_pixels: "2940 x 1912", _spdisplays_resolution: "1470 x 956 @ 60.00Hz" }] }] });
+// 系统信息 as the player reports it (`plugin.app.system()`): one macOS and one Windows machine.
+const mac = {
+  os: "macos" as const, name: "macOS", version: "15.2", build: "24C101", model: "Mac14,2", arch: "aarch64",
+  displays: [{ name: "Color LCD", width: 2940, height: 1912, scale: 2, refreshRate: 60, primary: true }],
+};
+const windows = {
+  os: "windows" as const, name: "Windows 11", version: "23H2", build: "22631.4460", model: "Surface Laptop 5", arch: "x86_64",
+  displays: [
+    { name: null, width: 2256, height: 1504, scale: 1.5, refreshRate: 59.94, primary: true },
+    { name: "DELL U2723QE", width: 3840, height: 2160, scale: 1, refreshRate: null, primary: false },
+  ],
 };
 
 const tick = () => new Promise((done) => setTimeout(done, 5));
@@ -58,6 +61,7 @@ const headings = (host: TestHost) => rows(host).filter((r) => r.heading).map((r)
 async function start(source: string | null = "/videos/movie.mkv", dataDirectory?: string, app?: TestHost["app"]) {
   const host = new TestHost();
   if (app) host.app = app;
+  host.systemInfo = structuredClone(mac);
   host.stats = stats;
   if (source) {
     host.openElsewhere(source);
@@ -136,7 +140,7 @@ test("I05: without media 播放信息 and 文件信息 say 未打开媒体; 系�
   assert.deepEqual(rows(host), [{ label: "", value: "未打开媒体", heading: false }]);
   assert.equal(host.tools.calls.length, 0);
   window.emit("tab-changed", 2);
-  await until(() => value(host, "macOS 版本") !== undefined);
+  await until(() => value(host, "系统版本") !== undefined);
   assert.deepEqual(headings(host), ["播放器", "系统"]);
   await stop();
 });
@@ -228,27 +232,44 @@ test("I05 文件信息: a network source shows what the player reports, without 
   await stop();
 });
 
-test("I05 系统信息: sw_vers, sysctl and system_profiler; Vestra, mpv and FFmpeg versions from plugin.app", async () => {
-  commands.length = 0;
+test("I05 系统信息: system name, model and displays from plugin.app.system(); CPU and memory from os; versions from plugin.app", async () => {
   const { host, stop } = await start();
   await host.command("info.properties").run();
   host.window("properties").emit("tab-changed", 2);
-  await until(() => value(host, "macOS 版本") === "15.2（24C101）");
+  await until(() => value(host, "系统版本") === "macOS 15.2（24C101）");
   assert.equal(value(host, "Vestra 版本"), "0.1.0（构建 test）");
   assert.equal(value(host, "插件 API 版本"), "vestra.experimental/0.1");
   assert.equal(value(host, "mpv 版本"), "mpv 0.41.0");
   assert.equal(value(host, "FFmpeg 版本"), "7.1");
   assert.equal(value(host, "机型"), "Mac14,2");
-  assert.match(value(host, "CPU")!, /^Apple M2（\d+ 核）$/);
+  assert.match(value(host, "CPU")!, /^.+（\d+ 核）$/);
   assert.match(value(host, "内存总量")!, /^\d+\.\d GB$/);
-  assert.equal(value(host, "显示器"), "Color LCD · 2940 x 1912 · 1470 x 956 @ 60.00Hz");
-  assert.deepEqual(commands.sort(), [
-    "/usr/bin/sw_vers -buildVersion",
-    "/usr/bin/sw_vers -productVersion",
-    "/usr/sbin/sysctl -n hw.model",
-    "/usr/sbin/sysctl -n machdep.cpu.brand_string",
-    "/usr/sbin/system_profiler SPDisplaysDataType -json",
-  ]);
+  assert.match(value(host, "可用内存")!, /^\d+\.\d GB$/);
+  assert.equal(value(host, "显示器"), "Color LCD · 2940 x 1912 · 1470 x 956 @ 60 Hz");
+  assert.equal(host.sent("app.system").length, 1, "read once per opening");
+  assert.equal(host.tools.calls.length, 0, "no external programs");
+  await stop();
+});
+
+test("I05 系统信息: a Windows machine; several displays are numbered; a failed read leaves the system rows unknown", async () => {
+  const { host, stop } = await start(null);
+  host.systemInfo = structuredClone(windows);
+  await host.command("info.properties").run();
+  const window = host.window("properties");
+  window.emit("tab-changed", 2);
+  await until(() => value(host, "系统版本") === "Windows 11 23H2（22631.4460）");
+  assert.equal(value(host, "机型"), "Surface Laptop 5");
+  assert.equal(value(host, "显示器"), undefined);
+  assert.equal(value(host, "显示器 1"), "2256 x 1504 · 1504 x 1003 @ 59.94 Hz");
+  assert.equal(value(host, "显示器 2"), "DELL U2723QE · 3840 x 2160 · 3840 x 2160");
+  host.handle("app.system", () => {
+    throw new HostError("failed", "registry unreadable");
+  });
+  window.emit("refresh");
+  await until(() => host.sent("app.system").length === 2 && value(host, "系统版本") === "-");
+  assert.equal(value(host, "机型"), "-");
+  assert.equal(value(host, "显示器"), "-");
+  assert.match(value(host, "CPU")!, /核）$/, "CPU still from os");
   await stop();
 });
 
@@ -321,7 +342,9 @@ test("I05 pure rules: values cut at 512, sample formats, save names, displays, e
   assert.equal(saveName("/v/My Film.mkv"), "My Film 信息.txt");
   assert.equal(saveName("https://cdn.test/v/%E8%A7%86%E9%A2%91.mp4?x=1"), "视频 信息.txt");
   assert.equal(saveName(null), "Vestra 信息.txt");
-  assert.deepEqual(parseDisplays("not json"), []);
+  assert.equal(systemVersion({ name: "macOS", version: "26.2", build: "25C56" }), "macOS 26.2（25C56）");
+  assert.equal(systemVersion({ name: "Linux", version: null, build: null }), "Linux");
+  assert.equal(displayLine({ name: "Built-in Retina Display", width: 3024, height: 1964, scale: 2, refreshRate: 120, primary: true }), "Built-in Retina Display · 3024 x 1964 · 1512 x 982 @ 120 Hz");
   const page = filePage("/a.mkv", null, {});
   assert.deepEqual(page.filter((r) => r.heading).map((r) => r.label), ["来源", "容器"]);
   assert.equal(pageText([{ label: "A", value: "", heading: true }, { label: "k", value: "v", heading: false }, { label: "B", value: "", heading: true }, { label: "", value: "m", heading: false }]), "A\nk：v\n\nB\nm\n");

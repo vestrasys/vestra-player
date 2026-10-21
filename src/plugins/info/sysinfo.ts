@@ -1,53 +1,38 @@
-import { execFile } from "node:child_process";
 import { cpus, freemem, totalmem } from "node:os";
+import type { App, DisplayInfo, SystemInfo } from "../../sdk/plugin/index.ts";
 import type { SystemFacts } from "./properties.ts";
 
 /**
- * I05 系统信息 from macOS commands (`sw_vers`, `sysctl`, `system_profiler`):
- * only this plugin needs them, so they stay here (round 2 task list §4). Never
- * through a shell, with a timeout and the caller's signal; a command that
- * fails leaves its fact unknown. Tests replace `sysinfo.run`.
+ * I05 系统信息: the system's name, version, model and displays from the player
+ * (`plugin.app.system()`), CPU and memory from Node's `os`. A failed read
+ * leaves the player's facts unknown.
  */
-export const sysinfo = {
-  run(program: string, args: string[], signal: AbortSignal): Promise<string> {
-    return new Promise((resolve, reject) => {
-      execFile(program, args, { shell: false, timeout: 10_000, signal, encoding: "utf8", maxBuffer: 4 * 1024 * 1024 }, (error, stdout) =>
-        error ? reject(error) : resolve(stdout),
-      );
-    });
-  },
+export async function readFacts(app: Pick<App, "system">): Promise<SystemFacts> {
+  const info = await app.system().catch((error) => {
+    console.error(`[info] app.system: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  });
+  const cpu = cpus();
+  const brand = cpu[0]?.model.trim();
+  return {
+    os: info ? systemVersion(info) : null,
+    model: info?.model ?? null,
+    cpu: brand ? `${brand}${cpu.length ? `（${cpu.length} 核）` : ""}` : null,
+    memory: totalmem(),
+    freeMemory: freemem(),
+    displays: info?.displays.map(displayLine) ?? [],
+  };
+}
 
-  async read(signal: AbortSignal): Promise<SystemFacts> {
-    const text = (program: string, ...args: string[]) =>
-      this.run(program, args, signal).then((out) => out.trim() || null, () => null);
-    const [version, build, model, brand, displays] = await Promise.all([
-      text("/usr/bin/sw_vers", "-productVersion"),
-      text("/usr/bin/sw_vers", "-buildVersion"),
-      text("/usr/sbin/sysctl", "-n", "hw.model"),
-      text("/usr/sbin/sysctl", "-n", "machdep.cpu.brand_string"),
-      text("/usr/sbin/system_profiler", "SPDisplaysDataType", "-json"),
-    ]);
-    const cores = cpus().length;
-    return {
-      macos: version ? `${version}${build ? `（${build}）` : ""}` : null,
-      model,
-      cpu: brand ? `${brand}${cores ? `（${cores} 核）` : ""}` : null,
-      memory: totalmem(),
-      freeMemory: freemem(),
-      displays: parseDisplays(displays),
-    };
-  },
-};
+/** `macOS 26.2（25C56）`, `Windows 11 23H2（22631.4460）`; parts the system does not report are left out. */
+export function systemVersion(info: Pick<SystemInfo, "name" | "version" | "build">) {
+  return `${[info.name, info.version].filter(Boolean).join(" ")}${info.build ? `（${info.build}）` : ""}` || null;
+}
 
-/** `Color LCD · 2940 x 1912 · 1470 x 956 @ 60.00Hz` per display in `system_profiler SPDisplaysDataType -json`. */
-export function parseDisplays(json: string | null): string[] {
-  if (!json) return [];
-  try {
-    const gpus = (JSON.parse(json) as { SPDisplaysDataType?: { spdisplays_ndrvs?: Record<string, string>[] }[] }).SPDisplaysDataType ?? [];
-    return gpus.flatMap((gpu) => gpu.spdisplays_ndrvs ?? []).map((d) =>
-      [d._name, d._spdisplays_pixels, d._spdisplays_resolution].filter(Boolean).join(" · ") || "未知显示器",
-    );
-  } catch {
-    return [];
-  }
+/** `Built-in Retina Display · 3024 x 1964 · 1512 x 982 @ 120 Hz`: pixels, then points. */
+export function displayLine(display: DisplayInfo) {
+  const scale = display.scale > 0 ? display.scale : 1;
+  const points = `${Math.round(display.width / scale)} x ${Math.round(display.height / scale)}`;
+  const rate = display.refreshRate ? ` @ ${Number(display.refreshRate.toFixed(2))} Hz` : "";
+  return [display.name, `${display.width} x ${display.height}`, points + rate].filter(Boolean).join(" · ");
 }
