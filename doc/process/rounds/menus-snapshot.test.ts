@@ -1,12 +1,19 @@
 // Menu snapshot: load each plugin into the test host and record its commands.
+// Default: the built-in plugins in src/plugins (youtube and bilibili moved to the
+// vestra-player-plugins repository in S3 and are not listed).
 //   OUT=<file> [PLUGINS=playback,playlist] node --test doc/process/rounds/menus-snapshot.test.ts
 // `shortcut` keeps the P0 field for a direct diff: the first binding, or null.
 // `bindings` and `order` are the new declaration fields (absent before migration).
 // `host` lists the player's core actions (`host.coreCommands`, round 2 P3 on).
-import { startPlugin, TestHost } from "/Users/ziyang/Develop/vestra-player/src/sdk/plugin/testing.ts";
+// The test host is the SDK package installed in src/node_modules (`npm ci` in src/).
 import { writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { test } from "node:test";
-const all = ["info", "playback","playlist","video","audio","subtitles","subtitle-online","capture","history","nes","youtube","bilibili","workshop","window","marks","hotkeys","plugins","preferences","visualizer"];
+import { pathToFileURL } from "node:url";
+const src = new URL("../../../src/", import.meta.url);
+const testing = createRequire(new URL("package.json", src)).resolve("@vestra-player/sdk/testing");
+const { startPlugin, TestHost } = await import(pathToFileURL(testing).href);
+const all = ["info", "playback","playlist","video","audio","subtitles","subtitle-online","capture","history","nes","workshop","window","marks","hotkeys","plugins","preferences","visualizer"];
 const names = process.env.PLUGINS ? process.env.PLUGINS.split(",") : all;
 type Entry = [string, { declaration: unknown }];
 const row = ([id, c]: Entry) => {
@@ -19,7 +26,7 @@ test("menus", async () => {
   // The player's own commands (core actions, `host/<id>`): the same for every plugin, listed once.
   out.host = [...(new TestHost().coreCommands?.entries() ?? [])].map(row);
   for (const name of names) {
-    const dir = new URL(`file:///Users/ziyang/Develop/vestra-player/src/plugins/${name}/`);
+    const dir = new URL(`plugins/${name}/`, src);
     const { default: activate } = await import(new URL("main.ts", dir).href);
     const host = new TestHost();
     const { stop } = await startPlugin(activate, { directory: dir, host });
