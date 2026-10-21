@@ -3589,7 +3589,7 @@ hotkeys 自己不设默认快捷键，避免和任何插件冲突；如果用户
 
 ## 首选项（`preferences`）
 
-**位置**：`src/plugins/preferences/`（新插件，待创建）
+**位置**：`src/plugins/preferences/`（第 3b 轮创建）
 
 ### 定位
 
@@ -3602,7 +3602,7 @@ preferences 插件提供统一的设置入口：
 
 配色（H10）要求核心的 `Theme` 能在运行时切换。现在 `theme.slint` 中的颜色是 `out property` 常量，取自品牌 logo：琥珀 → 洋红 → 紫，底色是带紫调的近黑。
 
-manifest 能力：`commands`、`ui.window`、`ui.dialog`、`ui.osd`、`ui.settings`（新）、`ui.theme`（新）。
+manifest 能力：`commands`、`events`、`ui.osd`、`ui.settings`、`ui.theme`（方案 A 落地后不再需要自己的工具窗口与对话框）。
 
 ### 功能一览
 
@@ -3669,15 +3669,14 @@ manifest 能力：`commands`、`ui.window`、`ui.dialog`、`ui.osd`、`ui.settin
   ```ts
   type SettingsCategory = "general" | "playback" | "subtitles" | "video" | "audio" | "input" | "appearance" | "plugins" | "other";
   interface Settings {
-    page(file: string, options: { id: string; category: SettingsCategory; title: string; order?: number;
-                                  component?: string; global?: string }): SettingsPage; // 需 ui.settings
+    page(file: string, options: { id: string; category: SettingsCategory; title: string; order?: number }):
+      View & Disposable & { readonly ready: Promise<void> }; // 需 ui.settings
     show(pageId?: string): Promise<void>;  // 打开选项窗口；pageId 只能是本插件的页面
   }
-  interface SettingsPage extends View, Disposable { readonly ready: Promise<void>; readonly visible: boolean }
   // plugin.settings: Settings
   ```
 
-  规则：`id` 在插件内唯一；`title` 1–24 字符；每个插件最多 8 个页面；页面文件规则同面板（导出一个 component 和一个 global）；回调没有「先绑定再显示」的限制。
+  规则：`id` 在插件内唯一；`title` 1–24 字符；每个插件最多 8 个页面；页面文件规则同面板（导出一个 component 和一个 global，名字由 SDK 推断，没有 `component` / `global` 选项；页面没有 `visible`，裁决 R-S1）；回调没有「先绑定再显示」的限制。
   理由：插件不能把别的插件的界面嵌进自己的窗口，只有核心能组合多个插件的 Slint 组件（底栏、侧栏已经这样做）。
 
 **验收**
@@ -3697,9 +3696,9 @@ manifest 能力：`commands`、`ui.window`、`ui.dialog`、`ui.osd`、`ui.settin
   - **经典**：ui-alignment §2.1 的 经典配色，强调色 `#fae100`，正在播放 `#2282f2`，底色 `#1e1e1e` 等。进度填充用纯色 `#fae100`。
 - 只提供深色配色：插件 std-widgets 以 `fluent-dark` 编译，浅色配色会和输入框、下拉框不协调。
 - 「外观」页内容：
-  - 配色单选，每项附一块 120×40 的预览，画出底栏色、强调渐变、文字色；
-  - 圆角选项「圆角（Vestra）/ 直角（参考播放器）」，默认跟随配色，可以单独改；
-  - 「恢复默认」按钮。
+  - 配色单选，每项附一块 120×40 的预览，画出视频区与底栏底色、进度填充（Vestra 渐变 / 参考播放器纯黄）、强调色、文字色；
+  - 「恢复默认」按钮（回到 Vestra，已是默认时置灰）。
+  - 没有圆角选项：圆角、字号与控件尺寸不随配色变化，也不能单独改（裁决 R-S2）。
 
 **入口**：设置 ▶ 外观 ▶ Vestra / 经典（radio）；选项 ▶ 外观。
 
@@ -3707,25 +3706,23 @@ manifest 能力：`commands`、`ui.window`、`ui.dialog`、`ui.osd`、`ui.settin
 - 切换时屏幕提示 `配色：经典`。
 - 选择保存在核心，跨启动保持。preferences 停用时配色保持不变：核心持有当前值，只是暂时没有切换入口。
 - 正在拖动的滑块、打开的菜单在切换时不应中断；如果某个视图更新失败，下次刷新时重试，不影响别的视图。
-- 未来可以开放「自定义强调色」（参考播放器 HSB/RGB 配色），本轮不做，API 预留 `ThemeInfo.custom`。
+- 未来可以开放「自定义强调色」（参考播放器 HSB/RGB 配色），本轮不做；配色 id 固定为 `vestra`、`classic`，没有配色列表接口（裁决 R-S2）。
 
-**持久化**：核心写入 `ui-state.json` 的 `appearance: { theme: "vestra" | "classic", corners: "round" | "square" | null }`。
+**持久化**：核心写入 `ui-state.json` 的 `appearance.theme`（`"vestra"` | `"classic"`），只存这一项。
 
 **核心依赖**
 - 【核心新增】Theme 改为宿主可设的全局。
-  - `theme.slint` 中的颜色、`accent-fill`、`radius-*` 由 `out property` 常量改为 `in property`（带当前 Vestra 默认值），字号与尺寸保持常量；
+  - `theme.slint` 中的颜色、`accent-fill` 改为由宿主下发（带当前 Vestra 默认值），`radius-*`、字号与尺寸保持常量；
   - 宿主在每个窗口、面板、菜单实例创建时，以及配色变化时，对每个实例的 `Theme` 全局调用 `set_global_property`；
   - 配色表放在宿主（`src/host/ui/vestra/palettes/*.json` 或 Rust 常量），两套各列出全部颜色 token；
   - 插件不能写 `Theme`：SDK 的 `set` / `bind` 只作用于插件自己的组件和桥接 global。
 - 【核心新增】
 
   ```ts
-  interface ThemeInfo { id: string; title: string; preview: { bar: string; accent: string[]; text: string }; custom: false }
   interface Appearance {
-    readonly themes: readonly ThemeInfo[];
-    readonly state: { theme: string; corners: "round" | "square" | null };
-    onChange(listener: (state: Appearance["state"]) => void): Disposable;
-    set(state: Partial<{ theme: string; corners: "round" | "square" | null }>): Promise<void>; // 需 ui.theme
+    readonly theme: "vestra" | "classic";                         // 同步只读，不需要能力
+    onChange(listener: (theme: "vestra" | "classic") => void): Disposable;
+    set(theme: "vestra" | "classic"): Promise<void>;              // 需 ui.theme；其它值 invalid
   }
   // plugin.appearance: Appearance（读取无需能力）
   ```
@@ -3747,7 +3744,7 @@ manifest 能力：`commands`、`ui.window`、`ui.dialog`、`ui.osd`、`ui.settin
 | --- | --- |
 | `plugin.settings.page(file, { id, category, title, order? }): SettingsPage`；`plugin.settings.show(pageId?)`；能力 `ui.settings` | 只有核心能把多个插件的 Slint 页面组合进同一个窗口 |
 | `Theme` 颜色 token 改为宿主可设，并在所有视图实例上下发 | Theme 是全局共享的，插件只能改自己的组件 |
-| `plugin.appearance.themes/state/onChange/set`；能力 `ui.theme` | 配色选择是核心状态 |
+| `plugin.appearance.theme/onChange/set`（固定两个 id）；能力 `ui.theme` | 配色选择是核心状态 |
 
 ---
 
