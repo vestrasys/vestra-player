@@ -5,7 +5,7 @@
 ## 1. 用户裁决（2026-10-21）
 
 - **GPU 渲染：锁 OpenGL**，因为要跨平台。libmpv 用 OpenGL 渲染，Slint 锁定 femtovg 渲染器，软件渲染保留作后备，用环境变量或启动失败时自动退回。方案 B（CALayer）只能在 macOS 上用，不采用。
-- **画中画：做**。macOS 用系统画中画（AVKit），按离线复现得出的根因修：显示图层必须和视频区一样大，放在窗口里正常的位置。离线探针是 `scratchpad/pipprobe/probe.swift`：标准设置正常，160×90 的小图层能复现白边。Windows 和 Linux 先返回 `unsupported`，以后由宿主自己做无边框置顶小窗。
+- **画中画：做**。macOS 用系统画中画（AVKit），按离线复现得出的根因修：显示图层必须和视频区一样大，放在窗口里正常的位置。离线探针是 [`assets/pip-probe.swift`](assets/pip-probe.swift)（`swiftc -O pip-probe.swift -o probe && ./probe normal|small`）：标准设置正常，160×90 的小图层能复现白边。Windows 和 Linux 先返回 `unsupported`，以后由宿主自己做无边框置顶小窗。
 - **Windows 缺口**：截图导出、生成流（`openStream`）、确认框按钮文字。这些写在[可移植性任务单](2026-10-portability.md) §4.2，本机只能验证编译通过。
 
 ## 2. 分工
