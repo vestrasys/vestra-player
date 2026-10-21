@@ -69,7 +69,7 @@ export component PlaylistSettingsPage inherits Rectangle {
             }
         }
         Check {
-            text: "拖到画面时追加，不清空列表";
+            text: "打开或拖入时追加，不清空列表";
             checked <=> PlaylistSettings.append-on-open;
             toggled => { PlaylistSettings.set-append-on-open(self.checked); }
         }

@@ -106,13 +106,26 @@ test("A03: F2 opens a folder recursively in folder order, appends and plays the 
     app.host.setSource({ phase: "ready" });
     await app.host.settle();
 
-    // The same folder again: nothing added, the folder's first file's row plays.
+    // IA-PL-01: the same folder again replaces the list (no question) and plays its first file.
+    const [extra] = await app.files(["extra.mp4"]);
+    await app.addFiles([extra!]);
+    app.host.dialogAnswers.push([dir]);
+    await app.run("open-folder");
+    assert.deepEqual(app.names(), ["b1.mp4", "b2.mkv", "b10.mkv", "s1.mp3", "s2.mp3"]);
+    assert.equal(app.osd(), "已添加 5 项");
+    assert.equal(app.host.sent("dialogs.confirm").length, 0);
+    assert.equal(app.opens().length, 2);
+    app.host.setSource({ phase: "ready" });
+    await app.host.settle();
+
+    // 「打开或拖入时追加」: nothing added, the folder's first file's row plays.
+    app.host.settingsPage("playlist").emit("set-append-on-open", true);
     await app.click(3);
     app.host.dialogAnswers.push([dir]);
     await app.run("open-folder");
     assert.equal(app.rows().length, 5);
     assert.equal(app.osd(), "已添加 0 项，跳过 5 个重复");
-    assert.equal(app.opens().length, 2);
+    assert.equal(app.opens().length, 3);
     assert.equal(app.opens().at(-1)?.source, join(dir, "b1.mp4"));
 
     // An empty folder and an unreadable one change nothing.
@@ -126,7 +139,7 @@ test("A03: F2 opens a folder recursively in folder order, appends and plays the 
     app.host.dialogAnswers.push(null); // cancelled
     await app.run("open-folder");
     assert.equal(app.rows().length, 5);
-    assert.equal(app.opens().length, 2);
+    assert.equal(app.opens().length, 3);
   } finally {
     await app.close();
   }
@@ -306,7 +319,6 @@ test("C17: the list, titles, selection and settings come back after a restart; n
       shuffle: false,
       openMode: "folder",
       gapless: false,
-      clearOnOpenFolder: false,
       confirmClear: true,
       appendOnOpen: false,
       dropAtPointer: false,
@@ -682,17 +694,18 @@ test("C23: only the first 20 selected files are shown", async () => {
   }
 });
 
-test("A13: similar files of a file another plugin opened are added and its row adopted; the end advances", async () => {
+test("A13 / IA-PL-01: a file another plugin opened replaces the list with its similar files; its row is adopted; the end advances", async () => {
   const app = await start();
   try {
     const [, a2, a3] = await app.files(["dir/A01.mkv", "dir/A02.mkv", "dir/A03.mkv", "dir/B.mkv", "dir/song.mp3"]);
-    await app.run("open-mode-similar");
-    assert.equal(app.command("open-mode-similar").state.checked, true);
+    await app.addFiles(await app.files(["x.mp4", "y.mp4", "z.mp4"]));
+    assert.equal(app.command("open-mode-similar").state.checked, true, "the default (OpenWithSameName=1)");
     app.host.openElsewhere(a2!);
     await app.host.settle(30);
     assert.deepEqual(app.names(), ["A01.mkv", "A02.mkv", "A03.mkv"]);
     assert.deepEqual(app.rows().map((row) => row.current), [false, true, false]);
-    assert.equal(app.osd(), "已加入同文件夹 3 个文件");
+    assert.equal(app.osd(), "已加入同文件夹 2 个文件");
+    assert.equal(app.host.sent("dialogs.confirm").length, 0);
     assert.deepEqual(app.host.sequence, { canNext: true, canPrevious: true });
     assert.equal(app.opens().length, 0, "this plugin opened nothing");
 
@@ -710,18 +723,21 @@ test("A13: similar files of a file another plugin opened are added and its row a
   }
 });
 
-test("A13: the whole folder; an existing row is adopted without adding; repeat one restarts", async () => {
+test("A13: the whole folder (same group only); with 「追加」 an existing row is adopted without adding; repeat one restarts", async () => {
   const app = await start();
   try {
     const [a1, a2] = await app.files(["dir/A01.mkv", "dir/A02.mkv", "dir/A03.mkv", "dir/B.mkv", "dir/song.mp3"]);
     await app.run("open-mode-folder");
     app.host.openElsewhere(a1!);
     await app.host.settle(30);
-    assert.deepEqual(app.names(), ["A01.mkv", "A02.mkv", "A03.mkv", "B.mkv", "song.mp3"]);
+    assert.deepEqual(app.names(), ["A01.mkv", "A02.mkv", "A03.mkv", "B.mkv"]);
+    assert.equal(app.osd(), "已加入同文件夹 3 个文件");
+    app.host.settingsPage("playlist").emit("set-append-on-open", true);
+    await app.host.settle();
     const notices = app.host.osd.length;
     app.host.openElsewhere(a2!);
     await app.host.settle(30);
-    assert.equal(app.rows().length, 5);
+    assert.equal(app.rows().length, 4);
     assert.equal(app.rows()[1]!.current, true);
     assert.equal(app.host.osd.length, notices, "nothing added, nothing said");
 
@@ -736,20 +752,28 @@ test("A13: the whole folder; an existing row is adopted without adding; repeat o
     app.host.openElsewhere("https://example.org/v");
     await app.host.settle(30);
     assert.equal(app.rows().some((row) => row.current), false);
-    assert.equal(app.rows().length, 5);
+    assert.equal(app.rows().length, 4);
   } finally {
     await app.close();
   }
 });
 
-test("A13: \"仅打开该文件\" (default) neither adds nor adopts, even for a listed file; own opens are not handled", async () => {
+test("A13: \"仅打开该文件\" leaves only that file, adopted; with 「追加」 it neither adds nor adopts; own opens are not handled", async () => {
   const app = await start();
   try {
     const [a1, a2] = await app.files(["dir/A01.mkv", "dir/A02.mkv"]);
-    await app.addFiles([a1!]);
+    await app.addFiles([a2!]);
+    await app.run("open-mode-only");
     app.host.openElsewhere(a1!);
     await app.host.settle(30);
-    assert.equal(app.rows().length, 1);
+    assert.deepEqual(app.names(), ["A01.mkv"]);
+    assert.equal(app.rows()[0]!.current, true);
+
+    app.host.settingsPage("playlist").emit("set-append-on-open", true);
+    await app.host.settle();
+    app.host.openElsewhere(a2!);
+    await app.host.settle(30);
+    assert.deepEqual(app.names(), ["A01.mkv"]);
     assert.equal(app.rows()[0]!.current, false);
     assert.deepEqual(app.host.sequence, { canNext: false, canPrevious: false });
 
@@ -1090,7 +1114,7 @@ test("IA-PL-02: the 播放列表 settings page follows the menu both ways; F5 wi
     assert.equal(page.file, "ui/settings.slint");
     assert.deepEqual(
       [page.props["open-mode"], page.props["append-on-open"], page.props["drop-at-pointer"], page.props.repeat],
-      [0, false, false, 0],
+      [1, false, false, 0],
     );
     assert.deepEqual([page.props.shuffle, page.props["fast-advance"], page.props.remember, page.props["confirm-clear"]], [
       false,

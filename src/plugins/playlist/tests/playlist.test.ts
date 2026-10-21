@@ -104,6 +104,15 @@ async function start(probe = fakeProbe()) {
       host.window("playlist-link").emit("add-link", url);
       await host.settle();
     },
+    /**
+     * The pre-IA-PL-01 behaviour for sources opened elsewhere: 「仅打开该文件」 with
+     * 「打开或拖入时追加」, so they never touch or take over the list (UI-PL-20).
+     */
+    leaveOutsideSources: async () => {
+      host.settingsPage("playlist").emit("set-open-mode", 0);
+      host.settingsPage("playlist").emit("set-append-on-open", true);
+      await host.settle();
+    },
     /** The current source plays to its natural end. */
     end: () => host.setSource({ phase: "ended", terminalReason: "natural" }),
     /** The user replays the current source (same source, new playthrough). */
@@ -179,10 +188,10 @@ test("menu positions follow the round allocation table; list keys only work with
       ["(关闭列表)", 0, "domain", "F6", "panel"],
       ["(播放列表设置…)", 0, "domain", "F5", "panel"],
     ]);
-    // Radio groups: repeat (off by default), open mode ("仅打开该文件" by default), sort direction (ascending).
+    // Radio groups: repeat (off by default), open mode ("加入相似文件" by default, IA-PL-01), sort direction (ascending).
     for (const [id, on] of [
-      ["open-mode-only", true],
-      ["open-mode-similar", false],
+      ["open-mode-only", false],
+      ["open-mode-similar", true],
       ["open-mode-folder", false],
       ["sort-ascending", true],
       ["sort-descending", false],
@@ -656,6 +665,7 @@ test("a replay that wins the race against auto-advance keeps the newer source", 
 test("errors, stops and other sources never advance; another open of the same path is not taken over or announced", async () => {
   const app = await start();
   try {
+    await app.leaveOutsideSources();
     await app.addFiles([app.a, app.b]);
     await app.press("Enter");
     app.host.setSource({ phase: "error", terminalReason: { failed: "broken" } });
@@ -721,6 +731,7 @@ test("a failed open stays on its row, keeps the navigation anchor and can be ret
 test("a late accepted reply cannot reclaim a newer external source or resurrect a removed row", async () => {
   const app = await start();
   try {
+    await app.leaveOutsideSources();
     await app.addFiles([app.a, app.b]);
     // The host accepts our open at once, but the reply arrives after a newer source.
     const deferOpen = () => {
@@ -815,6 +826,7 @@ test("removing the current row and clearing keep the public media playing", asyn
 test("an accepted URL open replaced by another source while resolving is not a row failure", async () => {
   const app = await start();
   try {
+    await app.leaveOutsideSources();
     await app.addUrl("https://example.org/a");
     await app.addUrl("https://example.org/b");
     const [, b] = app.rows().map((row) => row.rowId);

@@ -134,51 +134,134 @@ export function folderError(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
+// ------------------------------------------------------------------ A13 / IA-PL-01 similar files
+// reference player 260819's rule, statically reverse-engineered (doc/product/research/classic-260819/
+// similar-files.md §3–§5; spec in interaction-alignment.md IA-PL-01 「同类文件规则」). The
+// constants and the integer divisions are reference player's and must not be tuned.
+
+/** `T1`: the separators the comparison ignores (12 characters). */
+const T1 = new Set(" _-.(){}[]'\"");
+/** ASCII 0–9 only: full-width and Chinese digits are not digits. */
+const isDigit = (c: string | undefined) => c !== undefined && c >= "0" && c <= "9";
+const half = (s: string) => Math.floor(s.length / 2);
+const third = (s: string) => Math.floor(s.length / 3);
+const stripT1 = (s: string) => [...s].filter((c) => !T1.has(c)).join("");
+
+/** Of the first `n` characters: 100 when any is not a digit, else how many differ. */
+export function digitDiff(x: string, y: string, n: number) {
+  let differ = 0;
+  for (let i = 0; i < n; i++) {
+    if (!isDigit(x[i]) || !isDigit(y[i])) return 100;
+    if (x[i] !== y[i]) differ++;
+  }
+  return differ;
+}
+
 /**
- * A13 "similar" name: no extension, lower case, digit runs as `#`, bracketed parts
- * removed, `._-` and white space folded to one space.
+ * Without `T1`: within the shorter one's first two thirds, at least half the
+ * longer one's length matches; a mismatch of two ASCII characters where one is a
+ * digit stops the count, other mismatches are skipped.
  */
-export function similarName(path: string) {
-  return basename(path, extname(path))
-    .toLowerCase()
-    .replace(/\[[^\]]*\]|\([^)]*\)|【[^】]*】/g, " ")
-    .replace(/\d+/g, "#")
-    .replace(/[._\-\s]+/g, " ")
-    .trim();
-}
-export function isSimilar(a: string, b: string) {
-  if (mediaKind(a) !== mediaKind(b)) return false;
-  const x = similarName(a),
-    y = similarName(b);
-  if (x === y) return true;
-  let common = 0;
-  while (common < x.length && common < y.length && x[common] === y[common]) common++;
-  return common >= 4 && common >= Math.min(x.length, y.length) * 0.5;
+export function loosePrefix(x: string, y: string) {
+  const a = stripT1(x),
+    b = stripT1(y);
+  const longest = Math.max(a.length, b.length);
+  const n = Math.floor((Math.min(a.length, b.length) * 2) / 3);
+  let match = 0;
+  for (let i = 0; i < n; i++) {
+    const p = a[i]!,
+      q = b[i]!;
+    if (p === q) match++;
+    else if (p.charCodeAt(0) < 0x80 && q.charCodeAt(0) < 0x80 && (isDigit(p) || isDigit(q))) break;
+  }
+  return Math.floor(longest / 2) <= match;
 }
 
-export const SIBLING_LIMIT = 1000;
-
-/** A13: media files next to `path` (not recursive), naturally sorted; `path` itself always included. */
-export async function siblings(path: string, mode: "similar" | "folder"): Promise<string[]> {
-  const dir = dirname(path);
-  const entries = await readdir(dir, { withFileTypes: true });
-  const own = basename(path);
-  const found: string[] = [];
-  for (const entry of entries) {
-    if (entry.name.startsWith(".") && entry.name !== own) continue;
-    const full = join(dir, entry.name);
-    if (entry.name !== own) {
-      if (!isMedia(entry.name)) continue;
-      if (!(entry.isFile() || entry.isSymbolicLink())) continue;
-      if (mode === "similar" && !isSimilar(own, entry.name)) continue;
+/** Wildcard `*` (a digit after `mask`) compare; see similar-files.md §5 `maskEq`. */
+export function maskEq(x: string, y: string, n: number, prefix: boolean) {
+  if (!prefix && x.length !== y.length) return false;
+  const length = Math.min(x.length, y.length);
+  for (let i = 0; i < length; i++) {
+    if (x[i] === y[i]) {
+      if (prefix && i >= n) return true;
+      continue;
     }
+    if (x[i] === "*" || y[i] === "*") return false;
+    return i >= n;
+  }
+  return true;
+}
+
+/** `T1` characters to `?`, digits to `*`; same length. */
+export const mask = (s: string) => s.replace(/[\s\S]/g, (c) => (T1.has(c) ? "?" : isDigit(c) ? "*" : c));
+
+/** Only A–Z are lowered (reference player's `_wcslwr_s` in the C locale). */
+const asciiLower = (s: string) => s.replace(/[A-Z]/g, (c) => c.toLowerCase());
+/** What `isSimilar` compares: the lowered name without extension plus `.tmp` (counted in every length). */
+export const similarKey = (stem: string) => `${asciiLower(stem)}.tmp`;
+
+/**
+ * The reference player's four steps S1–S4 on two `similarKey`s (`audio` adds the looser audio
+ * rule): the first step that finds them similar, `null` when none does.
+ */
+export type SimilarStep = "S1" | "S2" | "S3 equal" | "S3 prefix" | "S4 audio" | "S4 mask";
+export function similarStep(a: string, b: string, audio: boolean): SimilarStep | null {
+  if (Math.min(half(a), half(b)) >= 5) {
+    if (loosePrefix(a, b)) return "S1";
+    if (digitDiff(a, b, Math.min(third(a), third(b))) <= 2) return "S1";
+  }
+  const a2 = stripT1(a),
+    b2 = stripT1(b);
+  if (Math.min(half(a2), half(b2)) >= 5 && digitDiff(a2, b2, Math.min(third(a2), third(b2))) <= 2) return "S2";
+  const a3 = a2.replace(/[0-9]/g, ""),
+    b3 = b2.replace(/[0-9]/g, "");
+  if (a3 === b3) return "S3 equal";
+  if (Math.min(half(a3), half(b3)) >= 5 && maskEq(a3, b3, Math.min(third(a3), third(b3), 5), true)) return "S3 prefix";
+  const am = mask(a),
+    bm = mask(b);
+  if (audio && (maskEq(am, bm, 2, false) || maskEq(am, bm, 3, true))) return "S4 audio";
+  if (Math.min(half(am), half(bm)) < 5) return null;
+  return maskEq(am, bm, Math.min(third(am), third(bm), 5), true) ? "S4 mask" : null;
+}
+export const isSimilar = (a: string, b: string, audio: boolean) => similarStep(a, b, audio) !== null;
+
+/** The opened file's group: audio first, then video (whole extension, Appendix B.5); else none. */
+const groupOf = (ext: string): "audio" | "video" | null => (AUDIO.has(ext) ? "audio" : VIDEO.has(ext) ? "video" : null);
+/** 「相似」 needs a space, `-`, `_` or ASCII digit in the name, and two characters at least. */
+export const canHaveSimilar = (stem: string) => stem.length >= 2 && /[ \-_0-9]/.test(stem);
+
+const stemOf = (name: string) => basename(name, extname(name));
+
+/**
+ * A13 / IA-PL-01: the files of `path`'s folder (not recursive) that reference player
+ * would open with it: the same group (video with video, audio with audio), and in
+ * `similar` mode those `isSimilar` to it; `path` included, naturally sorted.
+ * Names starting with `.` are skipped (macOS `._*` files; Vestra's deviation).
+ * More than `SCAN_LIMIT` matches keep the `SCAN_LIMIT` around `path` (`truncated`).
+ */
+export async function siblings(path: string, mode: "similar" | "folder"): Promise<{ paths: string[]; truncated: boolean }> {
+  const own = basename(path);
+  const group = groupOf(extensionOf(own));
+  const alone = { paths: [path], truncated: false };
+  if (!group) return alone;
+  const stem = stemOf(own);
+  if (mode === "similar" && !canHaveSimilar(stem)) return alone;
+  const dir = dirname(path);
+  const key = similarKey(stem);
+  const found = [path];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    if (entry.name.startsWith(".") || entry.name === own) continue;
+    if (groupOf(extensionOf(entry.name)) !== group) continue;
+    const full = join(dir, entry.name);
+    if (entry.isSymbolicLink()) {
+      if (!(await stat(full).catch(() => null))?.isFile()) continue;
+    } else if (!entry.isFile()) continue;
+    if (mode === "similar" && !isSimilar(key, similarKey(stemOf(entry.name)), group === "audio")) continue;
     found.push(full);
   }
-  if (!found.includes(path)) found.push(path);
   found.sort((a, b) => collator.compare(basename(a), basename(b)));
-  if (found.length <= SIBLING_LIMIT) return found;
-  // Keep the opened file within the limit.
+  if (found.length <= SCAN_LIMIT) return { paths: found, truncated: false };
   const at = found.indexOf(path);
-  const start = Math.max(0, Math.min(at - Math.floor(SIBLING_LIMIT / 2), found.length - SIBLING_LIMIT));
-  return found.slice(start, start + SIBLING_LIMIT);
+  const start = Math.max(0, Math.min(at - Math.floor(SCAN_LIMIT / 2), found.length - SCAN_LIMIT));
+  return { paths: found.slice(start, start + SCAN_LIMIT), truncated: true };
 }
