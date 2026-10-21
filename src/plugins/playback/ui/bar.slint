@@ -49,6 +49,8 @@ export global PlaybackBridge {
     in-out property <bool> can-volume: true;
     in-out property <bool> has-sidebar;
     in-out property <bool> sidebar-on;
+    // G-18: on, but hidden because the window is too narrow (drawn at half opacity).
+    in-out property <bool> sidebar-hidden;
     // G-07: tooltips (600 ms, ToolTipArea), with the keys the user has bound.
     in-out property <string> tip-play-pause;
     in-out property <string> tip-stop;
@@ -338,10 +340,12 @@ component MuteButton inherits Rectangle {
     }
 }
 
-// 23×22 toggle for the sidebar (playlist); accent while it is shown.
+// 23×22 toggle for the sidebar (playlist); accent while it is on, at half opacity
+// while on but hidden for want of room (G-18).
 component SidebarToggle inherits Rectangle {
     width: 23px;
     height: 22px;
+    opacity: PlaybackBridge.sidebar-hidden ? 0.5 : 1;
     accessible-role: button;
     accessible-label: "播放列表";
     accessible-checked: PlaybackBridge.sidebar-on;
@@ -400,7 +404,7 @@ export component PlaybackBar inherits Rectangle {
                 width: 100%;
                 height: 100%;
                 minimum: 0;
-                maximum: 200;
+                maximum: 100;
                 enabled: PlaybackBridge.can-volume;
                 value <=> PlaybackBridge.volume;
                 changed(value) => { PlaybackBridge.volume-changed(value); }

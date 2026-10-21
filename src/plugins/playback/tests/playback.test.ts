@@ -457,18 +457,26 @@ test("volume: latest value wins, volume before unmute, mute excluded while pendi
   await stop();
 });
 
-test("the volume slider keeps the core's rules: clamped to 0–200, volume before unmute", async () => {
+test("G-13b the volume slider runs 0–100 (volume before unmute); a louder volume shows at the right end", async () => {
   const { host, stop } = await start(withMedia());
   host.setSource({ output: { volume: 100, muted: true } });
   await host.settle();
   const bar = host.mounted();
   bar.emit("volume-released", 250);
   await host.settle();
-  assert.deepEqual(host.source.output, { volume: 200, muted: false });
-  assert.equal(lastOsd(host), "音量: 200%");
+  assert.deepEqual(host.source.output, { volume: 100, muted: false });
+  assert.equal(lastOsd(host), "音量: 100%");
+  bar.emit("volume-released", 50);
+  await host.settle();
+  assert.equal(lastOsd(host), "音量: 50%");
   bar.emit("volume-released", -3);
   await host.settle();
   assert.equal(host.source.output.volume, 0);
+  // Set above 100 by someone else: the slider sits at its right end, the tooltip tells the truth.
+  host.setSource({ output: { volume: 150, muted: false } });
+  await host.settle();
+  assert.equal(bar.props.volume, 100);
+  assert.equal(bar.props["tip-volume"], "音量: 150%");
   await stop();
 });
 

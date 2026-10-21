@@ -21,7 +21,8 @@ const VIDEO = {
   pixelFormat: "yuv420p",
 } as unknown as PlaybackStats["video"];
 
-async function until(predicate: () => boolean, ms = 1500) {
+// A ceiling, not a delay: generous because the whole suite runs in parallel.
+async function until(predicate: () => boolean, ms = 5000) {
   const deadline = Date.now() + ms;
   while (!predicate()) {
     if (Date.now() > deadline) throw new Error("plugin did not settle");
@@ -218,8 +219,10 @@ test("I07 a resting pointer makes a picture once; the same slot then shows at on
     assert.equal(bar.props["hover-thumbnail"], false); // off by default
     await thumbnailsOn(host);
     assert.equal(bar.props["has-thumbnail"], false);
+    // Callbacks reach the plugin asynchronously and `settle` does not wait for them:
+    // wait for what each one does instead.
     bar.emit("hover-changed", 0.5);
-    await host.settle();
+    await until(() => timers.pending.size === 1);
     // Still settling: one 80 ms timer, no ffmpeg yet.
     assert.deepEqual([...timers.pending.values()].map((t) => t.ms), [SETTLE_MS]);
     assert.equal(ffmpegRuns(host).length, 0);
@@ -235,13 +238,12 @@ test("I07 a resting pointer makes a picture once; the same slot then shows at on
     assert.ok(existsSync(path!));
     // Elsewhere, then back into the same 5 s slot: no second run, shown without waiting.
     bar.emit("hover-changed", 0.1);
-    await host.settle();
+    await until(() => timers.pending.size === 1);
     timers.fire();
     await until(() => ffmpegRuns(host).length === 2);
     await until(() => host.imagePath(bar.props.thumbnail)?.endsWith("/20.jpg") ?? false);
     bar.emit("hover-changed", 0.502);
-    await host.settle();
-    assert.equal(host.imagePath(bar.props.thumbnail), path);
+    await until(() => host.imagePath(bar.props.thumbnail) === path);
     assert.equal(timers.pending.size, 0); // a cache hit does not wait
     assert.equal(ffmpegRuns(host).length, 2);
     bar.emit("hover-ended");
@@ -278,8 +280,7 @@ test("I07 one ffmpeg at a time: a target passed meanwhile is only cached, the ne
     releases.shift()!();
     await until(() => host.imagePath(bar.props.thumbnail)?.endsWith("/120.jpg") ?? false);
     bar.emit("hover-changed", 0.2);
-    await host.settle();
-    assert.ok(host.imagePath(bar.props.thumbnail)?.endsWith("/40.jpg"));
+    await until(() => host.imagePath(bar.props.thumbnail)?.endsWith("/40.jpg") ?? false);
     assert.equal(ffmpegRuns(host).length, 2);
     await stop();
   } finally {

@@ -16,4 +16,6 @@
 
 自动滚动（G-08）：键盘移动光标（↑/↓、Home/End、Shift 扩选、搜索框 ↓、Ctrl+↑/↓/Home/End 移动）后光标行完整可见，按最小距离滚动（在上方时成为第一行，在下方时成为最后一行）；正在播放的行变化时，它不在视野内则滚到居中（被搜索筛掉时不滚），用户 2 秒内滚动过则不动。插件经桥接的 `scroll-to-y` / `scroll-request` 让侧栏设置 `viewport-y`。拖动排序时指针进入列表上 / 下边缘 20px 内，侧栏用 `Timer` 每 50 ms 滚 1 行（越近越快，最多 3 行），不经插件。
 
+面板锁：只有搜索框有焦点时 `setInteraction({ focused: true })`（打字时底栏 / 全屏弹出层不收起）；列表本身有焦点不锁，指针离开全屏弹出层即收起。列表右键菜单在右键松开时弹出（按下时只选中），与主菜单一致（G-15）。
+
 开发（在 `src/` 下）：`npm run plugin -- check playlist`、`build playlist`、`test playlist`。只用 `import type` 引用 SDK。
