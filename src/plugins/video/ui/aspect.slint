@@ -1,0 +1,64 @@
+// 自定义比例… (E11): one 21px input, a format hint under it, 〔确定〕〔取消〕.
+// Width 240: padding 8 + input 224 + padding 8. The plugin checks the text on every edit
+// (`valid`, `error`); 确定 and Return only act on a valid ratio.
+import { LineEdit } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button } from "@vestra/widgets.slint";
+
+export component AspectWindow inherits Window {
+    title: "自定义比例";
+    width: 240px;
+    height: 98px;
+    background: Theme.bg-panel;
+    in-out property <string> value;
+    in property <bool> valid;
+    in property <string> error;
+    callback edited(string);
+    callback confirm(string);
+    callback cancel();
+    FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                root.cancel();
+                return accept;
+            }
+            return reject;
+        }
+        VerticalLayout {
+            padding: 8px;
+            spacing: 4px;
+            Text {
+                text: "宽高比（宽:高 或 小数，0.25–4）";
+                color: Theme.text;
+                font-size: Theme.font-body;
+                height: Theme.label-height;
+            }
+            input := LineEdit {
+                height: Theme.input-height;
+                font-size: Theme.font-body;
+                placeholder-text: "21:9";
+                text <=> root.value;
+                edited(text) => { root.edited(text); }
+                accepted(text) => {
+                    if root.valid {
+                        root.confirm(text);
+                    }
+                }
+            }
+            Text {
+                text: root.error;
+                color: Theme.accent;
+                font-size: Theme.font-body;
+                height: Theme.label-height;
+                overflow: elide;
+            }
+            HorizontalLayout {
+                spacing: 6px;
+                alignment: end;
+                Button { text: "确定"; enabled: root.valid; clicked => { root.confirm(root.value); } }
+                Button { text: "取消"; clicked => { root.cancel(); } }
+            }
+        }
+    }
+    init => { input.focus(); }
+}

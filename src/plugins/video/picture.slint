@@ -7,6 +7,7 @@ import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
 //   翻转 row           label 65 + 2 × toggle 46 (3 apart)                  = 166
 //   旋转 row           label 65 + 4 × toggle 46 (3 apart)                  = 264
 //   裁剪/拉伸 row      label 65 + mode 72 + ratio 76                        = 225
+//   倍帧 row           check 65 + note 84 + check 100                       = 261
 //   宽高比 row         label 65 + choice 154 + … 21                         = 252
 //   缩放 row           label 65 + slider 154 + 默认 41                      = 272
 //   反交错 row         label 65 + mode 90 + output 104                      = 271
@@ -135,13 +136,15 @@ component ChoiceItem {
     touch := TouchArea { clicked => { root.picked(); } }
 }
 
-// Compact 21px drop-down with an 11px label; the list opens below it (short lists only,
-// so it stays inside the window).
+// Compact 21px drop-down with an 11px label; the list opens below it. With `window-height`
+// set, a list that would run past the window's bottom is moved up to end there.
 component Choice {
     in property <[string]> model;
     in-out property <int> current-index;
     in property <bool> enabled: true;
+    in property <length> window-height: 0px;
     callback selected(int);
+    private property <length> list-height: root.model.length * 20px + 2px;
     height: 21px;
     accessible-role: combobox;
     accessible-enabled: root.enabled;
@@ -172,7 +175,9 @@ component Choice {
     }
     list := PopupWindow {
         x: 0;
-        y: root.height;
+        y: root.window-height > 0px
+            ? max(-root.absolute-position.y, min(root.height, root.window-height - root.absolute-position.y - root.list-height))
+            : root.height;
         width: root.width;
         Rectangle {
             background: Theme.bg-list;
@@ -310,12 +315,20 @@ export component PictureWindow inherits Window {
     in-out property <float> deblock-strength: 25;
     in-out property <bool> deband-enabled;
     in-out property <float> deband-strength: 40;
+    in-out property <bool> blend-enabled;
+    in property <string> blend-note;
     // 画面
     in-out property <bool> flip-v;
     in-out property <bool> flip-h;
     in-out property <int> rotate-index: 0;
     in-out property <int> reframe-index: 0;
     in-out property <int> ratio-index: 1;
+    in property <[string]> aspect-names: ["默认（按来源）", "4:3", "16:9", "16:10", "1.85:1", "2.35:1"];
+    in-out property <int> aspect-index: 0;
+    in-out property <int> fit-index: 0;
+    // log2 of the zoom: −2…2 is 25 %…400 %, 0 (the middle) is 100 %.
+    in-out property <float> zoom-level: 0;
+    in property <string> zoom-text: "缩放 100%";
     // 高级
     in-out property <int> deinterlace-index: 0;
     in-out property <int> output-index: 0;
@@ -334,9 +347,9 @@ export component PictureWindow inherits Window {
     callback choose(string, int);
     callback tab-changed(int);
     callback retry();
+    callback custom-aspect();
     private property <[string]> tab-names: ["色彩", "效果", "画面", "高级"];
-    private property <string> gpu: "需要 GPU 渲染，当前版本不支持";
-    private property <string> view: "需要核心的显示层接口，后续版本提供";
+    private property <string> gpu: "等待 GPU 渲染原型结论";
     VerticalLayout {
         // Page tabs, 31px; the last picked page is remembered by the plugin.
         Rectangle {
@@ -472,8 +485,22 @@ export component PictureWindow inherits Window {
                         alignment: start;
                         ToolTipArea {
                             width: 65px;
-                            text: "倍帧需要核心的 frameBlend 节点，后续版本提供";
-                            Check { width: 100%; height: 100%; text: "倍帧"; enabled: false; }
+                            text: "把帧率提高到 2 倍（最高 60），中间帧由前后两帧混合生成";
+                            Check {
+                                width: 100%;
+                                height: 100%;
+                                text: "倍帧";
+                                checked <=> root.blend-enabled;
+                                toggled(on) => { root.toggle("frameBlend", on); }
+                            }
+                        }
+                        Text {
+                            width: 84px;
+                            text: root.blend-note;
+                            color: Theme.text-dim;
+                            font-size: Theme.font-xs;
+                            vertical-alignment: center;
+                            overflow: elide;
                         }
                         ToolTipArea {
                             width: 100px;
@@ -556,47 +583,66 @@ export component PictureWindow inherits Window {
                             }
                         }
                     }
-                    ToolTipArea {
+                    HorizontalLayout {
                         height: 24px;
-                        text: root.view;
-                        HorizontalLayout {
-                            spacing: 6px;
-                            alignment: start;
-                            Label { text: "宽高比"; color: Theme.text-dim; }
-                            VerticalLayout {
-                                alignment: center;
-                                Choice { width: 154px; enabled: false; model: ["默认（按来源）"]; current-index: 0; }
+                        spacing: 6px;
+                        alignment: start;
+                        Label { text: "宽高比"; }
+                        VerticalLayout {
+                            alignment: center;
+                            Choice {
+                                width: 154px;
+                                window-height: root.height;
+                                model: root.aspect-names;
+                                current-index <=> root.aspect-index;
+                                selected(i) => { root.choose("aspect", i); }
                             }
-                            VerticalLayout {
-                                alignment: center;
-                                Toggle { text: "…"; width: 21px; height: 21px; enabled: false; }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            ToolTipArea {
+                                width: 21px;
+                                height: 21px;
+                                text: "自定义比例…";
+                                Toggle { text: "…"; width: 21px; height: 21px; clicked => { root.custom-aspect(); } }
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        height: 24px;
+                        spacing: 6px;
+                        alignment: start;
+                        Label { text: "显示"; }
+                        VerticalLayout {
+                            alignment: center;
+                            Choice {
+                                width: 154px;
+                                window-height: root.height;
+                                model: ["保持宽高比", "不保持宽高比", "填满窗口"];
+                                current-index <=> root.fit-index;
+                                selected(i) => { root.choose("fit", i); }
                             }
                         }
                     }
                     ToolTipArea {
                         height: 24px;
-                        text: root.view;
+                        text: root.zoom-text;
                         HorizontalLayout {
                             spacing: 6px;
                             alignment: start;
-                            Label { text: "显示"; color: Theme.text-dim; }
-                            VerticalLayout {
-                                alignment: center;
-                                Choice { width: 154px; enabled: false; model: ["保持宽高比"]; current-index: 0; }
+                            Label { text: "缩放"; }
+                            Slider {
+                                width: 154px;
+                                panel: true;
+                                minimum: -2;
+                                maximum: 2;
+                                value <=> root.zoom-level;
+                                changed(v) => { root.adjust("zoom", v); }
+                                released(v) => { root.commit("zoom", v); }
                             }
-                        }
-                    }
-                    ToolTipArea {
-                        height: 24px;
-                        text: root.view;
-                        HorizontalLayout {
-                            spacing: 6px;
-                            alignment: start;
-                            Label { text: "缩放"; color: Theme.text-dim; }
-                            Slider { width: 154px; panel: true; enabled: false; minimum: 0; maximum: 1; value: 0.5; }
                             VerticalLayout {
                                 alignment: center;
-                                Button { text: "默认"; small: true; width: 41px; enabled: false; }
+                                Button { text: "默认"; small: true; width: 41px; clicked => { root.reset-field("zoom"); } }
                             }
                         }
                     }
