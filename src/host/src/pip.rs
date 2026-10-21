@@ -30,6 +30,10 @@ pub trait Surface {
     fn stop(&self);
     fn set_playback(&self, playback: &Playback);
     fn events(&self) -> Vec<PipEvent>;
+    /// One line of system geometry for `VESTRA_PIP_LOG=1`.
+    fn describe(&self, _window: HostWindowId) -> String {
+        String::new()
+    }
 }
 
 /// Playback as the PiP window's buttons and scrubber show it.
@@ -120,6 +124,10 @@ impl<S: Surface> PictureInPicture<S> {
                 Err(error) => eprintln!("pip: {error}"),
             }
         }
+    }
+    /// The surface's geometry line (`VESTRA_PIP_LOG=1`); `None` without one.
+    pub fn describe(&self, window: HostWindowId) -> Option<String> {
+        self.surface.as_ref().map(|s| s.describe(window))
     }
     /// The GPU renderer's frame number `sequence` (render thread's frame
     /// callback, or the newest frame when starting paused). A frame already

@@ -1,27 +1,40 @@
 //! macOS system picture-in-picture (`window.setPictureInPicture`, R-W5 /
 //! R-H8), fed with the host's frames.
 //!
-//! **Where the display layer lives.** AVKit renders the PiP window at the size
-//! the source `AVSampleBufferDisplayLayer` has in its window (the delegate's
-//! render size is the layer's on-screen video rectangle): a small layer gives
-//! a small picture in a corner of the PiP window, white around it. So the
-//! layer must be as large as the real video area and sit where the video area
-//! is. The host's content view is drawn by OpenGL into its backing layer's
-//! contents, and every sublayer is composited *above* that, so the layer
-//! cannot go into it without covering the player's overlays. It goes into a
-//! borderless child window ordered just below the main window instead, framed
-//! on the video area's screen rectangle: the real size and position, covered
-//! by the main window's opaque video area. The offline probe
-//! (`doc/process/rounds/assets/pip-probe.swift`, variants `covered`, `child`,
-//! `childgl`) shows the render size equals the video rectangle there, and that
-//! PiP starts although the child window is fully covered. A rebuilt main
-//! window only changes the parent, so PiP survives it.
+//! **AVKit does not scale (macOS 26).** With a sample-buffer content source,
+//! the PiP window (`PIPPanel`, a window of this process) shows the source
+//! layer through a `CALayerHost` mirror *one point to one point*: AVKit's
+//! view inside the panel keeps the source layer's size and is not fitted to
+//! the panel. A layer smaller than the panel leaves white around the picture
+//! (the prototype's white edges); a larger one shows only its lower-left
+//! corner, enlarged relative to the whole (the first integration's crop).
+//! Measured 2026-10-21 with the offline probe, this crate's `check` example
+//! and the host on macOS 26.2; Apple feedback FB22411168 describes the same.
+//! So while the PiP window is open the layer takes the panel's content size
+//! ([`Pip::place`] reads it each tick, so resizing the PiP window follows),
+//! and the frames must have the picture's own shape (no bars, the host's
+//! job): the panel opens with the frame's shape and the layer, of the same
+//! shape, then shows the whole frame filling it.
+//!
+//! **Where the display layer lives.** The PiP window opens from, and closes
+//! back to, the layer's on-screen rectangle, and AVKit's render size is the
+//! layer's video rectangle. The host's content view is drawn by OpenGL into
+//! its backing layer's contents, and every sublayer is composited *above*
+//! that, so the layer cannot go into it without covering the player's
+//! overlays. It goes into a borderless child window ordered just below the
+//! main window instead, framed on the video area's screen rectangle, covered
+//! by the main window's opaque video area (PiP starts although it is fully
+//! covered). A rebuilt main window only changes the parent, so PiP survives
+//! it.
 //!
 //! **Frames.** [`Pip::enqueue`] copies RGB24 into a pooled, IOSurface-backed
 //! BGRA `CVPixelBuffer`; [`Pip::enqueue_surface`] wraps an IOSurface the GPU
 //! renderer drew (no copy). Either is wrapped in a `CMSampleBuffer` marked
 //! "display immediately". The renderer's timebase only tells AVKit's buttons
 //! and scrubber where playback is ([`Pip::set_playback`]).
+//!
+//! `cargo run -p vestra-pip --example check` checks all this without Vestra
+//! (see the example for the host-like options).
 //!
 //! macOS 14+ (the layer's `sampleBufferRenderer`), main thread only. All
 //! `unsafe` stays in this crate; the public API is safe.
@@ -33,7 +46,9 @@ use objc2::runtime::{Bool, NSObject, NSObjectProtocol, ProtocolObject};
 use objc2::{
     AllocAnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send,
 };
-use objc2_app_kit::{NSBackingStoreType, NSColor, NSWindow, NSWindowAnimationBehavior};
+use objc2_app_kit::{
+    NSApplication, NSBackingStoreType, NSColor, NSWindow, NSWindowAnimationBehavior,
+};
 use objc2_app_kit::{NSWindowCollectionBehavior, NSWindowOrderingMode, NSWindowStyleMask};
 use objc2_av_foundation::{AVQueuedSampleBufferRendering, AVSampleBufferDisplayLayer};
 use objc2_av_kit::{AVPictureInPictureController, AVPictureInPictureControllerContentSource};
@@ -188,6 +203,10 @@ pub struct Pip {
     pool: RefCell<Option<Pool>>,
     /// Frames enqueued so far.
     frames: Cell<u64>,
+    /// Of those, IOSurfaces from the GPU renderer ([`Pip::enqueue_surface`]).
+    surfaces: Cell<u64>,
+    /// The size of the last frame enqueued (pixels).
+    frame_size: Cell<(usize, usize)>,
     /// Created once the layer is on screen with real geometry ([`Pip::place`]).
     controller: RefCell<Option<Retained<AVPictureInPictureController>>>,
     delegate: Retained<Delegate>,
@@ -269,6 +288,8 @@ impl Pip {
             rate: Cell::new(1.),
             pool: RefCell::new(None),
             frames: Cell::new(0),
+            surfaces: Cell::new(0),
+            frame_size: Cell::new((0, 0)),
             controller: RefCell::new(None),
             delegate,
         })
@@ -276,8 +297,10 @@ impl Pip {
     /// Put the layer on `area` of `parent`'s content (logical points,
     /// top-left origin): a child window just below `parent` on that screen
     /// rectangle. Call whenever the video area may have moved; a new `parent`
-    /// (a rebuilt main window) takes the child window over. `false` when the
-    /// area is empty or not finite (nothing changed).
+    /// (a rebuilt main window) takes the child window over. While the PiP
+    /// window is open the layer has its content size instead of the area's
+    /// (see the crate docs). `false` when the area is empty or not finite
+    /// (nothing changed).
     pub fn place(&self, parent: &NSWindow, area: NSRect) -> bool {
         let content = parent.contentRectForFrameRect(parent.frame());
         let Some(frame) = screen_frame(content, area) else {
@@ -295,12 +318,19 @@ impl Pip {
         } else if self.window.frame() != frame {
             self.window.setFrame_display(frame, false);
         }
-        if let Some(view) = self.window.contentView()
-            && self.layer.frame() != view.bounds()
+        // While the PiP window is open the layer takes its size (AVKit
+        // mirrors the layer one point to one point, see the crate docs);
+        // otherwise it fills the video area.
+        let target = match self.panel_size().filter(|_| self.active()) {
+            Some(size) => Some(NSRect::new(NSPoint::new(0., 0.), size)),
+            None => self.window.contentView().map(|view| view.bounds()),
+        };
+        if let Some(target) = target
+            && self.layer.frame() != target
         {
             CATransaction::begin();
             CATransaction::setDisableActions(true);
-            self.layer.setFrame(view.bounds());
+            self.layer.setFrame(target);
             CATransaction::commit();
         }
         if self.controller.borrow().is_none() && self.window.isVisible() {
@@ -400,6 +430,44 @@ impl Pip {
     pub fn events(&self) -> Vec<Event> {
         std::mem::take(&mut *self.delegate.ivars().events.borrow_mut())
     }
+    /// One line of geometry for diagnostics (`VESTRA_PIP_LOG=1`): the
+    /// parent's content rectangle, the child window's frame and backing
+    /// scale, the layer's frame in its superlayer's bounds, the last frame's
+    /// size and AVKit's render size. Screen rectangles are Cocoa points
+    /// (lower-left origin).
+    pub fn describe(&self, parent: &NSWindow) -> String {
+        let r = |r: NSRect| {
+            let (o, s) = (r.origin, r.size);
+            format!("({:.1},{:.1} {:.1}x{:.1})", o.x, o.y, s.width, s.height)
+        };
+        let content = parent.contentRectForFrameRect(parent.frame());
+        let superlayer = self.layer.superlayer().map(|l| r(l.bounds())).unwrap_or_default();
+        format!(
+            "parent content {} scale {} | child frame {} scale {} visible {} | layer {} in {} | frame {:?} ({} frames, {} IOSurfaces) | renderSize {:?} | PiP panel {:?} | active {}",
+            r(content),
+            parent.backingScaleFactor(),
+            r(self.window.frame()),
+            self.window.backingScaleFactor(),
+            self.window.isVisible(),
+            r(self.layer.frame()),
+            superlayer,
+            self.frame_size.get(),
+            self.frames.get(),
+            self.surfaces.get(),
+            self.render_size(),
+            self.panel_size().map(|s| (s.width, s.height)),
+            self.active(),
+        )
+    }
+    /// The content size of the system PiP window (AVKit's `PIPPanel`, a
+    /// window of this application), while it is open.
+    fn panel_size(&self) -> Option<NSSize> {
+        let mtm = MainThreadMarker::new()?;
+        let windows = NSApplication::sharedApplication(mtm).windows();
+        let panel = windows.iter().find(|w| w.class().name().to_bytes().ends_with(b"PIPPanel"))?;
+        let size = panel.contentView()?.bounds().size;
+        (size.width >= 1. && size.height >= 1.).then_some(size)
+    }
     /// The PiP window's render size in pixels, once AVKit reported it.
     pub fn render_size(&self) -> (i32, i32) {
         self.delegate.ivars().render_size.get()
@@ -409,12 +477,19 @@ impl Pip {
     pub fn enqueue(&self, width: usize, height: usize, rgb: &[u8]) -> Result<(), String> {
         let pixels = self.pixel_buffer(width, height)?;
         fill(&pixels, width, height, rgb)?;
+        self.frame_size.set((width, height));
         self.enqueue_pixels(&pixels)
     }
     /// Show one frame drawn into `surface` (BGRA), without copying it: the
     /// zero-copy path for the GPU renderer's IOSurfaces.
     pub fn enqueue_surface(&self, surface: &IOSurfaceRef) -> Result<(), String> {
         let pixels = wrap(surface)?;
+        let size = (
+            objc2_core_video::CVPixelBufferGetWidth(&pixels),
+            objc2_core_video::CVPixelBufferGetHeight(&pixels),
+        );
+        self.frame_size.set(size);
+        self.surfaces.set(self.surfaces.get() + 1);
         self.enqueue_pixels(&pixels)
     }
     fn enqueue_pixels(&self, pixels: &CVPixelBuffer) -> Result<(), String> {

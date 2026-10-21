@@ -11,8 +11,8 @@ description = "macOS system picture-in-picture for vestra-host (window.setPictur
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = "=0.6.2"
 objc2 = "=0.6.5"
-objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSColor", "NSGraphics", "NSResponder", "NSView", "NSWindow", "objc2-quartz-core"] }
-objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSError", "NSGeometry", "NSProcessInfo", "NSString"] }
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSApplication", "NSColor", "NSGraphics", "NSResponder", "NSView", "NSWindow", "objc2-core-foundation", "objc2-quartz-core"] }
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSError", "NSGeometry", "NSArray", "NSEnumerator", "NSProcessInfo", "NSString"] }
 objc2-av-foundation = { version = "=0.3.2", default-features = false, features = ["std", "AVAnimation", "AVQueuedSampleBufferRendering", "AVSampleBufferDisplayLayer", "AVSampleBufferVideoRenderer", "objc2-core-media", "objc2-quartz-core"] }
 objc2-av-kit = { version = "=0.3.2", default-features = false, features = ["std", "block2", "AVPictureInPictureController", "AVPictureInPictureController_AVSampleBufferDisplayLayerSupport", "objc2-av-foundation", "objc2-core-media"] }
 objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std", "CFArray", "CFCGTypes", "CFDictionary", "CFNumber", "CFString"] }

@@ -521,6 +521,7 @@ impl Backend {
                     // A phase change from the commands and events above goes
                     // out in this iteration; otherwise every 100 ms.
                     if push.due(sources.generation(), sources.phase(), Instant::now()) {
+                        view_target.set_picture(picture_size(&mpv));
                         let source_snapshot = sources.snapshot(&mpv);
                         processing.note_source(sources.generation(), sources.phase());
                         subtitles.note_source(sources.generation(), sources.phase());
@@ -646,6 +647,21 @@ impl CoverArt {
         self.off = off;
         Ok(())
     }
+}
+/// The picture's size in the last rendered frame: the frame less the
+/// margins mpv left around the video (`osd-dimensions`; both renderers use
+/// `vo=libmpv`, so it describes their last frame). Every display setting
+/// (aspect override, rotation, zoom, panscan) is already in it.
+fn picture_size(mpv: &Mpv) -> Option<(f64, f64)> {
+    let read = |name: &str| {
+        mpv.get_property::<f64>(&format!("osd-dimensions/{name}"))
+            .ok()
+            .filter(|v| v.is_finite())
+    };
+    let (width, height) = (read("w")?, read("h")?);
+    let width = width - read("ml").unwrap_or(0.) - read("mr").unwrap_or(0.);
+    let height = height - read("mt").unwrap_or(0.) - read("mb").unwrap_or(0.);
+    (width >= 1. && height >= 1.).then_some((width, height))
 }
 /// The source's display size after the filter chain (`video-out-params/dw`, `dh`).
 fn source_size(mpv: &Mpv) -> Option<(u32, u32)> {

@@ -139,6 +139,9 @@ pub struct Request {
 pub struct Shared {
     request: Mutex<Request>,
     revision: AtomicU64,
+    /// The picture's size inside the last rendered frame (the frame less
+    /// mpv's margins, `osd-dimensions`), from the control worker.
+    picture: Mutex<Option<(f64, f64)>>,
 }
 impl Default for Shared {
     fn default() -> Self {
@@ -148,6 +151,7 @@ impl Default for Shared {
                 zoom: 1.,
             }),
             revision: AtomicU64::new(0),
+            picture: Mutex::new(None),
         }
     }
 }
@@ -167,11 +171,51 @@ impl Shared {
             self.revision.fetch_add(1, Ordering::AcqRel);
         }
     }
+    /// The control worker: the picture's size in the last rendered frame.
+    pub fn set_picture(&self, picture: Option<(f64, f64)>) {
+        let picture =
+            picture.filter(|(w, h)| w.is_finite() && h.is_finite() && *w >= 1. && *h >= 1.);
+        *self.picture.lock().unwrap_or_else(PoisonError::into_inner) = picture;
+    }
+    pub fn picture(&self) -> Option<(f64, f64)> {
+        *self.picture.lock().unwrap_or_else(PoisonError::into_inner)
+    }
     /// The current request and its revision (bumped by every change).
     pub fn get(&self) -> (u64, Request) {
         let request = *self.request.lock().unwrap_or_else(PoisonError::into_inner);
         (self.revision.load(Ordering::Acquire), request)
     }
+}
+
+/// Picture-in-picture (R-H8): the largest area of the picture's shape inside
+/// the physical video area, so the renderer draws the picture without bars
+/// (the PiP window takes the frame's shape and shows the whole frame).
+/// Rendering at it gives frames without margins, so the measured picture
+/// keeps that shape: stable, and it follows a new source's shape.
+pub fn fit(area: Size, picture: (f64, f64)) -> Size {
+    let (aw, ah) = (f64::from(area.0.max(2)), f64::from(area.1.max(2)));
+    let (pw, ph) = picture;
+    if !(pw.is_finite() && ph.is_finite() && pw >= 1. && ph >= 1.) {
+        return area;
+    }
+    let k = (aw / pw).min(ah / ph);
+    let fitted = (
+        even(pw * k).min(area.0.max(2)),
+        even(ph * k).min(area.1.max(2)),
+    );
+    // Within a pixel or two of the area: the area (no needless resize).
+    if area.0.abs_diff(fitted.0) <= 2 && area.1.abs_diff(fitted.1) <= 2 {
+        area
+    } else {
+        fitted
+    }
+}
+
+/// Whether a frame of `frame` pixels has the shape of the requested `sent`
+/// size (the software renderer may draw smaller, never another shape).
+pub fn same_shape(frame: Size, sent: Size) -> bool {
+    let ratio = |(w, h): Size| f64::from(w.max(1)) / f64::from(h.max(1));
+    (ratio(frame) / ratio(sent) - 1.).abs() < 0.01
 }
 
 /// When the renderer draws: on mpv's update, and also once after the target
@@ -308,6 +352,32 @@ impl FrameLog {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn picture_in_picture_renders_the_picture_shape_inside_the_area() {
+        // A 16:9 picture letterboxed in a 1560×1342 area: render 1560×878.
+        assert_eq!(fit((1560, 1342), (1560., 877.5)), (1560, 878));
+        // Pillarboxed (4:3 in a wide area).
+        assert_eq!(fit((1920, 1080), (1440., 1080.)), (1440, 1080));
+        // Rendering at the fitted size measures the same shape: stable.
+        assert_eq!(fit((1560, 878), (1560., 878.)), (1560, 878));
+        assert_eq!(fit((1560, 1342), (1560., 878.)), (1560, 878));
+        // No margins, or within a pixel: the area itself.
+        assert_eq!(fit((1920, 1080), (1919., 1080.)), (1920, 1080));
+        // Nothing measured yet, or nonsense: the area.
+        assert_eq!(fit((800, 600), (f64::NAN, 1.)), (800, 600));
+        assert_eq!(fit((800, 600), (0., 600.)), (800, 600));
+        // Portrait.
+        assert_eq!(fit((1000, 1000), (1080., 1920.)), (562, 1000));
+        assert!(same_shape((780, 439), (1560, 878)));
+        assert!(!same_shape((1560, 1342), (1560, 878)));
+        let shared = Shared::default();
+        assert_eq!(shared.picture(), None);
+        shared.set_picture(Some((1560., 878.)));
+        assert_eq!(shared.picture(), Some((1560., 878.)));
+        shared.set_picture(Some((0., 878.)));
+        assert_eq!(shared.picture(), None);
+    }
 
     #[test]
     fn the_target_follows_the_physical_area_capped_by_the_source() {

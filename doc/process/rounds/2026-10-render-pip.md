@@ -221,3 +221,43 @@ top -l 21 -s 1 -pid $PID -stats cpu | awk '/^%CPU/{getline v; n++; if(n>1){s+=v;
 | G7 | CPU：4K 播放，GPU 渲染下画中画关 / 开各量 20 秒；软件渲染下再量一次画中画开 | 用 §3.2 的 `top` 命令。期望 GPU 下画中画开、关差别很小（零拷贝，只多一次唤醒和入队）；软件渲染下画中画开会多出 RGB→BGRA 拷贝的开销。三组数字都记下来 |
 
 **检查**（macOS，本机实际执行，三个提交各跑一遍，结果相同，下面是最后一个提交的数字）：`src/`：`npm run check`、`format:check`、`boundaries` 通过；`test:sdk` 107 通过；`plugins:build` 通过；19 个插件测试共 488 通过、0 失败（workshop 的 `vendor/sdk` 与 `src/sdk` 逐字节一致，合并后无须重同步）；`npm run portability`：`OK: the host compiles for Windows`，`portability: clean`。`src/host/`：`cargo fmt --check` 通过；`cargo clippy --locked --all-targets -- -D warnings` 通过（另跑 `-p vestra-pip -p vestra-gpu-render` 也通过）；`cargo test --locked` 250 通过（Windows 缺口提交 243，合并提交 249）；`grep -rnw unsafe src/host/src` 为空。未执行：GUI（协调者做）、Windows 链接与运行。
+
+### 3.5 画中画修正：小窗只显示画面一角（维护者乙，2026-10-21，提交「PiP fix: …」）
+
+**协调者实测 11b467b**（软件渲染，1080p）：小窗竖长（约 205×270 点），只显示画面左上部分（7 条彩条中的前 3 条，放大），下半部分全黑；独立程序 `check` 基本铺满。
+
+**先合并**：在 worktree 里合并 `rebuild/render-pip`（含甲的 GPU 渲染与 0ab8cde「GPU 帧喂画中画」），冲突只在 `main.rs`、`pip.rs`、`platform/macos.rs` 各一处（两边各加了一个字段或方法），两边都保留。
+
+**宿主里打印的数据**（`VESTRA_PIP_LOG=1`，每行变化时打一次：视频区（点）、渲染尺寸、子窗口与图层、帧、renderSize、小窗尺寸）。修正前，780×671 点的视频区、2 倍屏：
+
+```
+video area (0,0 780x671) pt | parent content (335,220 780x671) scale 2 | child frame (335,220 780x671) scale 2
+layer (0,0 780x671) in (0,0 780x671) | frame (1560, 1342) | renderSize (780, 671) | active true
+```
+
+矩形全对：子窗口正好在视频区的屏幕矩形上，没有像素 / 点混淆，没有 y 翻转。问题在别处：
+
+1. **AVKit 不缩放（根因）**。截图对照（`check` 与离线探针都复现，探针的 `normal`，即 Apple 推荐的写法，也一样）：小窗（`PIPPanel`，本进程的窗口，内容约 328×185 点）把源图层按 **1 点对 1 点** 显示，取图层左下角那一块，超出部分裁掉；图层比小窗小时四周是白色（原型的「白边」也是这个原因，§3.1 用 renderSize 判断是错的）。小窗里 AVKit 自己的 `AVPictureInPictureSampleBufferDisplayLayerView` 保持源图层尺寸（780×439），没有跟小窗缩放。试过不生效的：图层 `contentsScale`、图层作为 view 的根图层、.app 包里运行、隐藏 `AVPictureInPictureCALayerHostView`（Apple 论坛 FB22411168 的做法，本机无效）、改 AVKit 视图的 frame/bounds（横向对了，纵向错位）。有效的：**小窗打开期间把源图层设成小窗内容的尺寸**（探针试验：320×180 的图层在 328×185 的小窗里几乎铺满）。
+2. **帧带黑边**。宿主的帧是视频区的尺寸（1560×1342），16:9 画面在里面上下留黑。AVKit 按帧的形状定小窗形状，所以视频区竖长时小窗也竖长、带黑边（协调者看到的竖长小窗）。
+
+**修正**
+
+- `vestra-pip`：`Pip::place` 每个 tick 在本进程的窗口里找 `PIPPanel`，小窗打开期间图层 frame = 小窗内容尺寸（拖动改小窗大小时跟着变），关闭后回到视频区。`describe()` 输出上面那行诊断。
+- 宿主：画中画要帧时，两种渲染器都按**画面自身的形状**渲染，即视频区内最大的同形状矩形（`render_target::fit`），帧里没有黑边。画面形状来自 mpv 的 `osd-dimensions`（上一帧减去四周留白；两种渲染器都是 `vo=libmpv`，旋转、宽高比覆盖、缩放都已算在里面），控制线程每 100 ms 读一次放进 `render_target::Shared`。按这个尺寸渲染出的帧没有留白，测得的形状不变，所以稳定；换来源时自己跟上新形状。形状和上次发给渲染器的尺寸不一致的帧不送画中画（`pip_shape`，避免小窗按旧形状打开）；生成流（NES）的帧不受影响。画中画期间主窗口显示灰字，不显示视频，所以改渲染尺寸看不出来；关闭后回到视频区尺寸。
+- 软件帧与 GPU 帧（IOSurface，零拷贝）都走同一个尺寸规则，不需要裁剪或拷贝。
+
+**修正后的数据**（同一台机器，`check` 与宿主，截图确认小窗铺满、7 条彩条完整、没有黑边或白边，关闭后主窗口正常）：
+
+| 场景 | 渲染尺寸（视频区 → 发送） | 帧 | renderSize | 小窗 / 图层 |
+| --- | --- | --- | --- | --- |
+| 软件渲染，视频区 780×671，播放中 | 1560×1342 → 1560×878 | 1560×878 | 780×439 | 328×185 / 328×185 |
+| GPU 渲染，同上 | 1560×1342 → 1560×878 | 1560×878（229 帧，全是 IOSurface） | 780×439 | 328×185 / 328×185 |
+| 软件渲染，视频区 400×600（竖长），暂停时打开 | 800×1200 → 800×450 | 800×450（暂停时重渲一帧） | 400×225 | 328×185 / 328×185 |
+| GPU 渲染，同上 | 800×1200 → 800×450 | 800×450（IOSurface） | 400×225 | 328×185 / 328×185 |
+| `check -- --frame 1560x878 --area 780x671` | — | 1560×878 | 780×439 | 329×185 / 329×185 |
+
+**`check` 示例**新增 `--frame WxH --area WxH [--still]`：主窗口内容就是视频区，帧按给定尺寸（宿主现在送的是画面形状的帧），打开期间打印诊断行。不带参数时与原来一样。
+
+**给协调者的复测**：重做 P1、P2（拖小窗放大缩小，画面应一直铺满）、P5、P8（视频 → 视频换成不同比例的片源，小窗形状跟着变）、G1、G2、G6；另外打开侧栏让视频区变竖长再开画中画（就是这次的场景）。需要数据时用 `VESTRA_PIP_LOG=1` 启动。
+
+**检查**（本机实际执行）：`src/host/` 下 `cargo fmt --check`、`cargo clippy --locked --all-targets -- -D warnings`、`cargo clippy --locked -p vestra-pip -p vestra-gpu-render --all-targets -- -D warnings` 通过；`cargo test --locked` 251 通过（新增 `render_target::picture_in_picture_renders_the_picture_shape_inside_the_area`）；`cargo test -p vestra-pip` 3 通过；`src/` 下 `npm run portability` clean；`grep -rnw unsafe src/host/src` 为空，`vestra-pip` 25 个 `unsafe` 块都有 `// SAFETY:`。GUI：上表 5 个场景由本机启动截图确认（宿主用一个临时测试插件打开 1080p 彩条片源并开关画中画，未提交）。TS 没有改动。
