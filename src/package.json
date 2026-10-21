@@ -15,7 +15,7 @@
     "portability": "node scripts/check-portability.mjs"
   },
   "dependencies": {
-    "@vestra-player/sdk": "^1.1.1"
+    "@vestra-player/sdk": "^1.1.2"
   },
   "devDependencies": {
     "@types/node": "^25.0.0",
