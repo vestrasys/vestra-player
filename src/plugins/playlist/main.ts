@@ -217,7 +217,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
           clearTimeout(slow);
         }
         if (!scan.files.length) return queue.notice("文件夹中没有可播放的文件");
-        if (play && settings.clearOnOpenFolder && queue.rows.length) queue.clear();
+        // IA-PL-01: 打开文件夹 replaces the list too (not while another source opens; 「追加」 adds).
+        if (play && !settings.appendOnOpen && queue.rows.length && !player.busy()) removing(() => queue.clear(false));
         const wasEmpty = queue.rows.length === 0;
         const result = await queue.addEntries(
           scan.files.map((file) => ({ kind: "file" as const, source: file.path, key: file.key })),
@@ -865,7 +866,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   });
 
   // A13: sources other plugins open (and one already open at start-up, C17).
-  follow = follower(plugin, queue, player, () => settings.openMode, () => {
+  follow = follower(plugin, queue, player, () => settings.openMode, () => settings.appendOnOpen, () => {
     prober.scan();
     plugin.update();
   });

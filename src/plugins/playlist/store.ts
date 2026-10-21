@@ -10,13 +10,12 @@ export type Settings = {
   openMode: OpenMode;
   /** B26 "快速推进到下一个" (the key keeps the name of the original gapless item). */
   gapless: boolean;
-  /** A03: clear the list before "打开文件夹" adds (no menu entry). */
-  clearOnOpenFolder: boolean;
   /** 移除全部 asks first; turned off by the confirmation's 「不再询问」. */
   confirmClear: boolean;
   /**
-   * G-11: a drop on the video area adds to the list instead of replacing it
-   * (PotPlayer `AppendFilePL`, default off). IA-PL-01 will extend it to opening files.
+   * 「打开或拖入时追加，不清空列表」 (PotPlayer `AppendFilePL`, default off): opening a
+   * local file (IA-PL-01), 打开文件夹 and drops on the video area (G-11) add to the
+   * list instead of replacing it. It replaces the old `clearOnOpenFolder` (no menu entry).
    */
   appendOnOpen: boolean;
   /** G-12: a drop on the list goes before the row under the pointer, not to the end (`DropMousePos`, default off). */
@@ -34,9 +33,8 @@ export const defaults = (): Settings => ({
   remember: true,
   repeat: "none",
   shuffle: false,
-  openMode: "only",
+  openMode: "similar",
   gapless: false,
-  clearOnOpenFolder: false,
   confirmClear: true,
   appendOnOpen: false,
   dropAtPointer: false,
@@ -54,7 +52,6 @@ function readSettings(raw: Partial<Settings> | undefined): Settings {
   if (typeof raw.shuffle === "boolean") settings.shuffle = raw.shuffle;
   if (MODES.includes(raw.openMode as string)) settings.openMode = raw.openMode!;
   if (typeof raw.gapless === "boolean") settings.gapless = raw.gapless;
-  if (typeof raw.clearOnOpenFolder === "boolean") settings.clearOnOpenFolder = raw.clearOnOpenFolder;
   if (typeof raw.confirmClear === "boolean") settings.confirmClear = raw.confirmClear;
   if (typeof raw.appendOnOpen === "boolean") settings.appendOnOpen = raw.appendOnOpen;
   if (typeof raw.dropAtPointer === "boolean") settings.dropAtPointer = raw.dropAtPointer;
