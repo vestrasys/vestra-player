@@ -248,6 +248,7 @@ interface Command extends Disposable {
   });
   ```
 - 命令禁用或忙碌时，播放器不会调用 `run`（绑定的按键被接住但不执行）。`run` 抛出的错误交给 `onError`。
+- **数量上限**：每个插件实例同时最多 160 条命令，播放器全部（所有插件加上播放器自己的命令）最多 1024 条；超出时该命令的 `ready` 以 `limit` 失败（在激活期间注册的，激活随之失败），已注册的不受影响，`dispose` 后名额立即释放。试载包是独立实例，单独计数，但占用全部总量。上限只防失控（如按轨道数无限添加），不是产品限制：内置插件里最多的 video 在空闲时注册 71 条，全部插件约 290 条。按媒体内容动态添加的菜单项（轨道、章节、预设列表）请自行设一个合理的显示上限。常量 `COMMAND_LIMITS`（`sdk/commands.ts`，`{ perPlugin, total }`）与播放器一致，`TestHost` 执行同样的上限。
 
 ### 4.1 绑定
 
@@ -1058,6 +1059,7 @@ interface PackageChange {
 | `stream`、`device` | `openStream`：生成端报错 / 音频设备未就绪 |
 | `backend-uncertain` | 滤镜阶段被播放器后端阻塞，`filter.retry()` 重新检查 |
 | `cleanup` | `trial.stop()` 未确认清理，可再次调用 |
+| `limit` | 超出播放器的数量上限（如命令数，§4） |
 | `unknown`、`rejected`、`expired` | 传输异常后 SDK 查询仍无法确认结果（正常情况下不会出现） |
 
 处理函数里抛出的错误交给所在作用域的 `onError`。忘记 `await` 的 promise 被拒绝时只写日志，不会让插件进程崩溃。
@@ -1082,6 +1084,7 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 | 断言 | `host.window(id).props`（kebab-case 名）、`.visible`；`host.command(id).state`、`.declaration`；`host.conflicts`（`[绑定, 赢家, ...被压下]`）；`host.layout.bottom` / `.sidebar`（可直接改后 `host.emit("window.state", {})` 模拟别处的变化）；`host.osd`（显示过的提示）、`host.osdPanel`；`host.sequence`（提供者的标志）；`host.menus`（`showMenu` 记录）；`host.sent(method)`；`host.source`；`host.processing`、`host.subtitles`、`host.snapshots`、`host.jobs`、`host.producers` |
 | 模拟数据 | `host.stats`（`player.stats()` 的返回值，第 2 轮新增字段可省略，SDK 补 `null`）；`host.dataDirectory`（`plugin.dataDirectory`，`storage.json` 直接读写其中的真实文件）；`host.setSource({ audioTracks })`（`addAudioTrack` / `selectAudioTrack` 有默认处理，可用 `host.handle("audio.addTrack" \| "audio.selectTrack", …)` 注入失败）；`host.subtitles.tracks` 的条目可带 `codec`、`text`、`streamIndex` |
 | 通用能力 | `host.clipboard`（`{ text, images }`，预置 `text` 测 `readText`）；`host.power`（合并后的 `"off"` / `"playing"`）；`host.tools.handle(tool, (args) => ({ stdout, stderr }))`（未注入的工具 `unavailable`；抛 `HostError` 模拟失败），`host.tools.calls`；`host.system.revealed`、`.opened`；`host.subtitleLoads`（每次 `load` 的 `format`、`title`、`select` 与字节）；`host.system.urls`（`system.openUrl`） |
+| 上限 | `commands.register` 按播放器的同一套命令上限拒绝（`limit`，§4）：本插件最多 `COMMAND_LIMITS.perPlugin` 条，总量把 `host.coreCommands` 算在内 |
 | 第 4a 轮批次 2 | `host.videoView`（`{ owner, values }`：拥有者插件 id 与播放器持有的值）；`host.setVideoViewOwner(pluginId \| null)`（模拟别的插件先占用显示层，`null` 释放并复位） |
 | 第 4a 轮批次 1 | `frameBlend` 与播放器同一套校验，「全部插件最多一个」按本插件的全部视频滤镜计算（TestHost 只模拟一个插件） |
 | 第 3b 轮批次 2 | `host.drop(paths, options)`、`host.dropProviders`、`host.panelDrops`（§6.7）；`host.appearance`、`host.setAppearance(theme)`（§6.8）；`host.settings`、`host.settingsPage(id)`（§6.9） |
@@ -1322,6 +1325,12 @@ await plugin.player.setStepSeek({ seconds: settings.value.step }); // 第 1 档�
 - `plugin.video.view()`（§8.1）：宽高比、填充方式、缩放、平移；单一拥有者，需要 `processing.video`。
 - `Scope.video` 多了 `view`；`ViewSettings`、`VideoView` 类型。
 - 协议新增 `video.view.set { values }`（返回 `{ state: "applied" | "waiting" }`）与 `video.view.release`。
+
+### 第 4a 轮修正：命令上限（2026-10）
+
+- 命令数量上限从每插件 64 / 全部 512 提到每插件 160 / 全部 1024（§4）。video 插件第 2、4a 轮的参考播放器式菜单已注册 71 条，在真实播放器里激活失败（`command registry limit reached`），而 `TestHost` 没有执行上限，插件测试没有发现。
+- `TestHost` 现在执行与播放器相同的上限；新增常量 `COMMAND_LIMITS`（`sdk/commands.ts`），SDK 测试校验它与播放器一致。
+- 签名不变；超出上限的错误码仍是 `limit`（之前未写入 §13，现补上）。
 
 ### 第 3b 轮修正：背景层与封面（2026-10）
 

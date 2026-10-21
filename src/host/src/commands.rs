@@ -232,8 +232,13 @@ fn state_valid(state: &CommandState) -> Result<()> {
 }
 
 impl Registry {
-    pub const MAX_COMMANDS: usize = 512;
-    pub const MAX_PER_OWNER: usize = 64;
+    /// Runaway guards, not product limits (reference.md §4). Sized from the
+    /// real menus: video registers 71 at idle and all plugins plus the host
+    /// about 290, so one owner gets 160 and the registry 1024, enough for
+    /// track lists and parallel trial packages. Mirrored by
+    /// `COMMAND_LIMITS` in sdk/commands.ts (tests/sdk checks they agree).
+    pub const MAX_COMMANDS: usize = 1024;
+    pub const MAX_PER_OWNER: usize = 160;
     pub const MAX_DEPTH: usize = 8;
 
     pub fn new() -> Self {
@@ -857,6 +862,65 @@ mod tests {
             ),
             Err(CommandError::Limit)
         );
+        // The per-owner cap is per owner: another owner is unaffected.
+        limited
+            .register(
+                6,
+                "n",
+                "other".into(),
+                1,
+                declaration(&["Tools", "Other"]),
+                state(true),
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn registry_total_limit_spans_owners() {
+        let mut full = Registry::new();
+        for index in 0..Registry::MAX_COMMANDS {
+            let owner = (index / Registry::MAX_PER_OWNER) as u64 + 1;
+            full.register(
+                owner,
+                "m",
+                format!("c{index}"),
+                1,
+                Declaration::new("C", &[]),
+                state(true),
+            )
+            .unwrap();
+        }
+        assert_eq!(
+            full.register(
+                999,
+                "fresh",
+                "c".into(),
+                1,
+                Declaration::new("C", &[]),
+                state(true)
+            ),
+            Err(CommandError::Limit)
+        );
+        assert_eq!(full.remove(1, "c0"), Ok(()));
+        full.register(
+            999,
+            "fresh",
+            "c".into(),
+            1,
+            Declaration::new("C", &[]),
+            state(true),
+        )
+        .unwrap();
+    }
+
+    /// The menus of the shipped plugins fit with room to spare
+    /// (doc/process/rounds/menus-snapshot.test.ts: video 71, all ~290).
+    #[test]
+    fn limits_leave_room_for_real_plugins() {
+        const VIDEO_AT_IDLE: usize = 71;
+        const ALL_AT_IDLE: usize = 292;
+        const { assert!(Registry::MAX_PER_OWNER >= 2 * VIDEO_AT_IDLE) };
+        const { assert!(Registry::MAX_COMMANDS >= 3 * ALL_AT_IDLE) };
     }
 
     /// core-ui-design.md §14: the migration orders reproduce the tree that the
