@@ -1,24 +1,32 @@
 [package]
 name = "vestra-pip"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 publish = false
-description = "Prototype: system picture-in-picture from RGB frames (vestra-host feature pip)"
+description = "macOS system picture-in-picture for vestra-host (window.setPictureInPicture)"
 
 # One of the crates under src/host/unsafe/: the only place first-party Rust may
 # use `unsafe`. Every block carries a SAFETY comment; the public API is safe.
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = "=0.6.2"
 objc2 = "=0.6.5"
-objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSGraphics", "NSResponder", "NSView", "NSWindow", "objc2-quartz-core"] }
-objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSGeometry"] }
-objc2-av-foundation = { version = "=0.3.2", default-features = false, features = ["std", "AVQueuedSampleBufferRendering", "AVSampleBufferDisplayLayer", "AVSampleBufferVideoRenderer", "objc2-core-media", "objc2-quartz-core"] }
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSColor", "NSGraphics", "NSResponder", "NSView", "NSWindow", "objc2-quartz-core"] }
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSError", "NSGeometry", "NSProcessInfo", "NSString"] }
+objc2-av-foundation = { version = "=0.3.2", default-features = false, features = ["std", "AVAnimation", "AVQueuedSampleBufferRendering", "AVSampleBufferDisplayLayer", "AVSampleBufferVideoRenderer", "objc2-core-media", "objc2-quartz-core"] }
 objc2-av-kit = { version = "=0.3.2", default-features = false, features = ["std", "block2", "AVPictureInPictureController", "AVPictureInPictureController_AVSampleBufferDisplayLayerSupport", "objc2-av-foundation", "objc2-core-media"] }
 objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std", "CFArray", "CFCGTypes", "CFDictionary", "CFNumber", "CFString"] }
-objc2-core-media = { version = "=0.3.2", default-features = false, features = ["std", "CMBase", "CMFormatDescription", "CMSampleBuffer", "CMTime", "CMTimeRange", "objc2-core-video"] }
-objc2-core-video = { version = "=0.3.2", default-features = false, features = ["std", "CVBase", "CVBuffer", "CVImageBuffer", "CVPixelBuffer", "CVReturn"] }
-objc2-quartz-core = { version = "=0.3.2", default-features = false, features = ["std", "CALayer", "objc2-core-foundation"] }
+objc2-core-media = { version = "=0.3.2", default-features = false, features = ["std", "CMBase", "CMFormatDescription", "CMSampleBuffer", "CMSync", "CMTime", "CMTimeRange", "objc2-core-video"] }
+objc2-core-video = { version = "=0.3.2", default-features = false, features = ["std", "CVBase", "CVBuffer", "CVImageBuffer", "CVPixelBuffer", "CVPixelBufferIOSurface", "CVPixelBufferPool", "CVReturn", "objc2-io-surface"] }
+objc2-core-graphics = { version = "=0.3.2", default-features = false, features = ["std", "CGColor"] }
+objc2-io-surface = { version = "=0.3.2", default-features = false, features = ["std", "IOSurfaceRef", "objc2-core-foundation"] }
+objc2-quartz-core = { version = "=0.3.2", default-features = false, features = ["std", "CALayer", "CATransaction", "objc2-core-foundation", "objc2-core-graphics"] }
+
+# `cargo run -p vestra-pip --example check`: this crate's own PiP check, a
+# standalone program (no Vestra), like the offline probe.
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSApplication", "NSEvent", "NSRunningApplication"] }
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSDate", "NSRunLoop", "NSString"] }
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

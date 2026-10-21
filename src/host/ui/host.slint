@@ -37,6 +37,11 @@ export component HostWindow inherits Window {
     // The video column (without the bottom bar, sidebar and splitter).
     out property <float> video-width: canvas.width / 1px;
     out property <float> video-height: canvas.height / 1px;
+    // Its top-left corner in the window (the PiP source layer sits there).
+    out property <float> video-x: canvas.absolute-position.x / 1px;
+    out property <float> video-y: canvas.absolute-position.y / 1px;
+    // The video plays in the picture-in-picture window (R-H8): the note shows instead.
+    in property <bool> picture-in-picture: false;
     // On-screen display (C5) and information blocks (C10).
     in property <string> osd-text;
     in property <bool> osd-visible: false;
@@ -75,7 +80,16 @@ export component HostWindow inherits Window {
                     changed has-focus => { if !self.has-focus { root.window-input("canvasFocusLost"); } }
                     Rectangle {
                         background: Theme.bg-video;
-                        Image { visible: !root.no-video; width: parent.width; height: parent.height; source: root.video-frame; image-fit: contain; }
+                        Image { visible: !root.no-video && !root.picture-in-picture; width: parent.width; height: parent.height; source: root.video-frame; image-fit: contain; }
+                        if root.picture-in-picture: Text {
+                            width: parent.width;
+                            height: parent.height;
+                            text: "正在以画中画播放";
+                            font-size: 16px;
+                            color: #8c8c8c;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
                         // VESTRA-MOUNT-BACKDROP
                         mouse := TouchArea {
                             private property <KeyboardModifiers> mods;
