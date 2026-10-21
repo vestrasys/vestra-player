@@ -49,7 +49,9 @@ pub mod subtitle_format;
 pub mod subtitle_state;
 pub mod subtitle_style;
 pub mod subtitle_upload;
+mod timeline;
 mod ui;
+mod ui_image;
 mod ui_state;
 mod ui_values;
 pub mod window_control;
@@ -275,6 +277,12 @@ struct Host {
     bindings_sent: u64,
     packages_sent: Value,
     notified_at: u64,
+    /// `plugin.timeline` layers (R-M3).
+    timeline: timeline::Timeline,
+    /// Decoded `plugin.ui.image` files (R-U1).
+    images: ui_image::Images,
+    /// No video frame to show (R-U3): the backdrop is effective.
+    no_video: bool,
 }
 struct AreaReply {
     reply: Reply,
@@ -443,6 +451,8 @@ impl Host {
         }
         self.policy.remove_owner(owner);
         self.power.remove_owner(owner);
+        self.timeline.remove_owner(owner);
+        self.images.release_owner(owner);
         self.on_top.remove(owner);
         self.cursor_playing.remove(owner);
         let step = self.step_seconds();
@@ -458,14 +468,10 @@ impl Host {
             self.preparing = None;
         }
         if let Some(mount) = self.mounts.remove(&owner) {
-            if let Some(shell) = &self.shell {
-                let _ = shell.set_property(
-                    match mount.spec.slot {
-                        composition::Slot::Bottom => "bottom-visible",
-                        composition::Slot::Sidebar => "sidebar-visible",
-                    },
-                    false.into(),
-                );
+            if let Some(shell) = &self.shell
+                && let Some(property) = mount.spec.slot.visible_property()
+            {
+                let _ = shell.set_property(property, false.into());
             }
             self.mount_queue.push_front(MountChange {
                 reply: Reply { owner, id: 0 },
@@ -669,7 +675,9 @@ impl Host {
             Event::Broadcast(event, mut data) => {
                 if event == "source.state" {
                     self.patch_source(&mut data);
-                    self.last_source = data.clone();
+                    let previous = std::mem::replace(&mut self.last_source, data.clone());
+                    self.timeline_source(&previous, &data);
+                    self.backdrop_source();
                     self.update_title();
                     self.core_action_states();
                 }
@@ -715,6 +723,7 @@ impl Host {
             Event::ViewClosed(owner, id) => {
                 if let Some(view) = self.views.remove(&(owner, id.clone())) {
                     let _ = view.instance.hide();
+                    self.images.release_view(owner, &format!("w:{id}"));
                     self.send(owner, json!({"event":"ui.closed","data":{"view":id}}));
                 }
             }
@@ -943,7 +952,7 @@ impl Host {
                 (playing && ((fullscreen && idle) || windowed)).into(),
             )?;
             Ok(
-                json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"videoArea":{"width":video.0,"height":video.1},"menuOpen":self.menu_open,"dialogOpen":self.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot}),
+                json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"videoArea":{"width":video.0,"height":video.1},"menuOpen":self.menu_open,"dialogOpen":self.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot,"backdrop":self.backdrop_state()}),
             )
         })();
         self.answer_video_area(video, now);
@@ -1048,8 +1057,8 @@ impl Host {
             self.mount_events.clone(),
             generation,
         )?;
-        for (name, value) in &mount.properties {
-            composition::set_json_global(&instance, &mount.spec, name, value)?;
+        for (name, value) in self.mount_values(&mount) {
+            composition::set_global_value(&instance, &mount.spec, &name, value)?;
         }
         self.bind_menu(&instance, generation, false)?;
         self.observe_keys(&instance, generation);
@@ -1376,6 +1385,7 @@ impl Host {
         if let Some(image) = &self.last_image {
             window.set_property("video-frame", image.clone().into())?;
         }
+        window.set_property("no-video", self.no_video.into())?;
         Ok(())
     }
     /// Menu callbacks shared by the shell and the floating window.
@@ -1596,19 +1606,21 @@ impl Host {
         self.next_shell_generation += 1;
         let candidate_generation = self.next_shell_generation;
         let native_before = platform_window::capture_windows().ok();
+        let values: Vec<_> = next
+            .values()
+            .map(|mount| self.mount_values(mount))
+            .collect();
         let build = || -> Result<slint_interpreter::ComponentInstance> {
             let specs = next.values().map(|m| m.spec.clone()).collect::<Vec<_>>();
             let shell =
                 composition::compile_json(&specs, self.mount_events.clone(), candidate_generation)?;
-            for mount in next.values() {
-                for (name, value) in &mount.properties {
-                    composition::set_json_global(&shell, &mount.spec, name, value)?;
+            for (mount, values) in next.values().zip(values) {
+                for (name, value) in values {
+                    composition::set_global_value(&shell, &mount.spec, &name, value)?;
                 }
-                let property = match mount.spec.slot {
-                    composition::Slot::Bottom => "bottom-visible",
-                    composition::Slot::Sidebar => "sidebar-visible",
-                };
-                shell.set_property(property, (mount.visible && !mount.detached).into())?;
+                if let Some(property) = mount.spec.slot.visible_property() {
+                    shell.set_property(property, (mount.visible && !mount.detached).into())?;
+                }
             }
             self.bind_shell(&shell, candidate_generation)?;
             if let Some(old) = &self.shell {
@@ -1639,13 +1651,13 @@ impl Host {
                 for old in old_owners {
                     if !next.contains_key(&old) {
                         self.policy.remove_owner(old);
+                        self.images.release_view(old, "$mount");
                     }
                 }
                 for (id, mount) in &next {
                     if !self.mounts.contains_key(id) {
-                        let slot = match mount.spec.slot {
-                            composition::Slot::Bottom => window_state::Slot::Bottom,
-                            composition::Slot::Sidebar => window_state::Slot::Sidebar,
+                        let Some(slot) = policy_slot(mount.spec.slot) else {
+                            continue;
                         };
                         if let Err(error) =
                             self.policy.attach(slot, *id, mount.visible, mount.detached)
@@ -1655,9 +1667,8 @@ impl Host {
                     }
                 }
                 for (id, mount) in &next {
-                    let slot = match mount.spec.slot {
-                        composition::Slot::Bottom => window_state::Slot::Bottom,
-                        composition::Slot::Sidebar => window_state::Slot::Sidebar,
+                    let Some(slot) = policy_slot(mount.spec.slot) else {
+                        continue;
                     };
                     if let Err(error) =
                         self.policy
@@ -1700,6 +1711,24 @@ impl Host {
         } else {
             self.respond(change.reply, result);
         }
+    }
+    /// A mount's properties converted for a new instance; a value that no
+    /// longer converts (an image file removed since) is left out and logged.
+    fn mount_values(&mut self, mount: &Mount) -> Vec<(String, SValue)> {
+        let owner = mount.spec.owner;
+        mount
+            .properties
+            .iter()
+            .filter_map(
+                |(name, value)| match self.prop_value(owner, "$mount", name, value) {
+                    Ok(value) => Some((name.clone(), value)),
+                    Err(error) => {
+                        eprintln!("mount property {owner}/{name}: {}", error.message);
+                        None
+                    }
+                },
+            )
+            .collect()
     }
     fn mount_callbacks(&mut self) {
         for event in self.mount_input.try_iter().take(64).collect::<Vec<_>>() {
@@ -1996,6 +2025,23 @@ impl Host {
             self.core_action_states();
         }
     }
+    /// R-U3: follow the source into `no-video`; an empty source also drops
+    /// the last video frame, so the video area shows the backdrop or plain colour.
+    fn backdrop_source(&mut self) {
+        let next = composition::no_video(self.no_video, &self.last_source);
+        let empty = self.last_source["phase"] == "empty";
+        let Some(shell) = &self.shell else {
+            self.no_video = next;
+            return;
+        };
+        if empty && self.last_image.take().is_some() {
+            let _ = shell.set_property("video-frame", SValue::Image(Default::default()));
+        }
+        if next != self.no_video {
+            self.no_video = next;
+            let _ = shell.set_property("no-video", next.into());
+        }
+    }
     /// C9: "<source name> - Vestra", or "Vestra" without a source.
     fn update_title(&mut self) {
         let source = &self.last_source;
@@ -2155,7 +2201,19 @@ impl Host {
             json!({"owner":slot["owner"],"preferred":slot["preferred"],"effective":slot["effective"],
                 "reason":slot["reason"],"detached":slot["detached"]})
         };
-        Ok(json!({"bottom":slot("bottom"),"sidebar":slot("sidebar")}))
+        Ok(
+            json!({"bottom":slot("bottom"),"sidebar":slot("sidebar"),"backdrop":self.backdrop_state()}),
+        )
+    }
+    /// `panels.backdrop.state`: `{ owner, effective }`, null without a backdrop.
+    fn backdrop_state(&self) -> Value {
+        self.mounts
+            .values()
+            .find(|m| m.spec.slot == composition::Slot::Backdrop)
+            .map_or(
+                Value::Null,
+                |m| json!({"owner":m.spec.owner,"effective":self.no_video}),
+            )
     }
     fn respond(&mut self, reply: Reply, result: std::result::Result<Value, RpcError>) {
         if self.activation_ui.remove(&(reply.owner, reply.id)) {
@@ -2204,7 +2262,8 @@ impl Host {
             "window.setVideoArea" | "window.setAlwaysOnTop" | "window.setCursorAutoHide" => {
                 Some("window.control")
             }
-            "player.chapters" | "player.audioDevices" => Some("playback.read"),
+            "player.chapters" | "player.audioDevices" | "timeline.marks" => Some("playback.read"),
+            "timeline.set" => Some("timeline.marks"),
             "player.setLoop" | "player.setAudioDevice" => Some("playback.control"),
             "ui.mount" | "ui.setMount" | "ui.unmount" | "ui.interaction" | "ui.menu"
             | "layout.state" | "layout.set" => Some("ui.mount"),
@@ -2307,6 +2366,9 @@ impl Host {
                 Value::Null
             }
             "layout.state" => self.layout_state()?,
+            "timeline.marks" | "timeline.set" => {
+                self.timeline_dispatch(reply.owner, method, params)?
+            }
             "window.state" => self.window_state(),
             "window.setVideoArea" => {
                 self.set_video_area(reply, params)?;
@@ -2376,10 +2438,8 @@ impl Host {
                     .find(|m| m.spec.slot == slot)
                     .map(|m| m.spec.owner)
                     .ok_or_else(|| RpcError::new("missing", "no panel at this position"))?;
-                let policy_slot = match slot {
-                    composition::Slot::Bottom => window_state::Slot::Bottom,
-                    composition::Slot::Sidebar => window_state::Slot::Sidebar,
-                };
+                let policy_slot = policy_slot(slot)
+                    .ok_or_else(|| RpcError::invalid("the backdrop has no preference"))?;
                 if let Some(detached) = params.get("detached").filter(|v| !v.is_null()) {
                     let detached = detached
                         .as_bool()
@@ -2453,6 +2513,12 @@ impl Host {
                 let slot = match mount.spec.slot {
                     composition::Slot::Bottom => "bottom",
                     composition::Slot::Sidebar => "sidebar",
+                    composition::Slot::Backdrop => {
+                        return Err(RpcError::new(
+                            "unavailable",
+                            "the backdrop takes no pointer input",
+                        ));
+                    }
                 };
                 let generation = if self
                     .floating
@@ -2574,16 +2640,12 @@ impl Host {
                     popup_open: boolean("popupOpen")?,
                 };
                 self.policy.activity(self.now_ms());
-                self.policy
-                    .set_locks(
-                        match mount.spec.slot {
-                            composition::Slot::Bottom => window_state::Slot::Bottom,
-                            composition::Slot::Sidebar => window_state::Slot::Sidebar,
-                        },
-                        reply.owner,
-                        locks,
-                    )
-                    .map_err(anyhow::Error::from)?;
+                // The backdrop never auto-hides: nothing to lock.
+                if let Some(slot) = policy_slot(mount.spec.slot) {
+                    self.policy
+                        .set_locks(slot, reply.owner, locks)
+                        .map_err(anyhow::Error::from)?;
+                }
                 Value::Null
             }
             "ui.mount" | "ui.unmount" => {
@@ -2617,8 +2679,25 @@ impl Host {
                     let slot = match string(params, "slot")? {
                         "bottom" => composition::Slot::Bottom,
                         "sidebar" => composition::Slot::Sidebar,
+                        "backdrop" => composition::Slot::Backdrop,
                         _ => return Err(RpcError::invalid("unknown mount slot")),
                     };
+                    // R-U3: one backdrop at a time, whoever mounted it.
+                    let backdrop =
+                        |spec: &composition::CompileSpec| spec.slot == composition::Slot::Backdrop;
+                    let queued = self
+                        .mount_queue
+                        .iter()
+                        .chain(self.preparing.as_ref().map(|(_, change)| change))
+                        .any(|c| c.contribution.as_ref().is_some_and(|m| backdrop(&m.spec)));
+                    if slot == composition::Slot::Backdrop
+                        && (queued || self.mounts.values().any(|m| backdrop(&m.spec)))
+                    {
+                        return Err(RpcError::new(
+                            "conflict",
+                            "another plugin shows the backdrop",
+                        ));
+                    }
                     let file = plugins::package_file(&plugin.directory, string(params, "file")?)?;
                     let properties = serde_json::from_value(
                         params.get("properties").cloned().unwrap_or(json!({})),
@@ -2661,27 +2740,35 @@ impl Host {
                 return Ok(None);
             }
             "ui.setMount" => {
-                let mount = self
+                let spec = self
                     .mounts
-                    .get_mut(&reply.owner)
-                    .ok_or_else(|| RpcError::new("missing", "owner has no ready mount"))?;
+                    .get(&reply.owner)
+                    .ok_or_else(|| RpcError::new("missing", "owner has no ready mount"))?
+                    .spec
+                    .clone();
                 let shell = self
                     .shell
                     .as_ref()
+                    .map(ComponentHandle::clone_strong)
                     .ok_or_else(|| RpcError::new("unavailable", "native shell unavailable"))?;
                 let property = string(params, "property")?;
-                composition::set_json_global(shell, &mount.spec, property, &params["value"])?;
-                if let Some(floating) = self.floating.as_ref().filter(|f| f.owner == reply.owner) {
-                    composition::set_json_global(
-                        &floating.instance,
-                        &mount.spec,
-                        property,
-                        &params["value"],
-                    )?;
+                let value = self.prop_value(reply.owner, "$mount", property, &params["value"])?;
+                composition::set_global_value(&shell, &spec, property, value)?;
+                if let Some(floating) = self
+                    .floating
+                    .as_ref()
+                    .filter(|f| f.owner == reply.owner)
+                    .map(|f| f.instance.clone_strong())
+                {
+                    let value =
+                        self.prop_value(reply.owner, "$mount", property, &params["value"])?;
+                    composition::set_global_value(&floating, &spec, property, value)?;
                 }
-                mount
-                    .properties
-                    .insert(property.into(), params["value"].clone());
+                if let Some(mount) = self.mounts.get_mut(&reply.owner) {
+                    mount
+                        .properties
+                        .insert(property.into(), params["value"].clone());
+                }
                 Value::Null
             }
             "dialogs.open" => {
@@ -2844,6 +2931,7 @@ impl Host {
                     "window.state",
                     "packages.changed",
                     "bindings.changed",
+                    "timeline.changed",
                 ]
                 .contains(&event)
                 {
@@ -2869,34 +2957,55 @@ impl Host {
                     return Err(RpcError::new("conflict", "view already exists"));
                 }
                 let path = plugins::package_file(&plugin.directory, string(params, "file")?)?;
-                let properties =
+                let properties: BTreeMap<String, Value> =
                     serde_json::from_value(params.get("properties").cloned().unwrap_or(json!({})))
                         .map_err(|e| RpcError::invalid(e.to_string()))?;
                 let callbacks = serde_json::from_value::<Vec<String>>(
                     params.get("callbacks").cloned().unwrap_or(json!([])),
                 )
                 .map_err(|e| RpcError::invalid(e.to_string()))?;
+                let view_key = format!("w:{id}");
+                let mut values = Vec::new();
+                for (name, value) in &properties {
+                    match self.prop_value(reply.owner, &view_key, name, value) {
+                        Ok(value) => values.push((name.clone(), value)),
+                        Err(error) => {
+                            self.images.release_view(reply.owner, &view_key);
+                            return Err(error);
+                        }
+                    }
+                }
                 let view = ui::open(
                     &path,
                     reply.owner,
                     &id,
-                    &properties,
+                    &values,
                     &callbacks,
                     self.events.clone(),
-                )?;
+                )
+                .inspect_err(|_| self.images.release_view(reply.owner, &view_key))?;
                 self.views.insert((reply.owner, id), view);
                 Value::Null
             }
             "ui.set" | "ui.show" | "ui.close" => {
                 let key = (reply.owner, string(params, "id")?.to_owned());
-                let view = self
-                    .views
-                    .get(&key)
-                    .ok_or_else(|| RpcError::new("missing", "view not found"))?;
+                if !self.views.contains_key(&key) {
+                    return Err(RpcError::new("missing", "view not found"));
+                }
+                let next = match method {
+                    "ui.set" => Some(self.prop_value(
+                        reply.owner,
+                        &format!("w:{}", key.1),
+                        string(params, "property")?,
+                        &params["value"],
+                    )?),
+                    _ => None,
+                };
+                let view = &self.views[&key];
                 match method {
                     "ui.set" => {
                         let name = string(params, "property")?;
-                        let next = ui::from_json(&params["value"])?;
+                        let next = next.unwrap_or_default();
                         let current = view
                             .instance
                             .get_property(name)
@@ -2919,6 +3028,7 @@ impl Host {
                     }
                     _ => {
                         view.instance.hide().map_err(anyhow::Error::from)?;
+                        self.images.release_view(key.0, &format!("w:{}", key.1));
                         self.views.remove(&key);
                     }
                 }
@@ -2927,6 +3037,14 @@ impl Host {
             _ => unreachable!(),
         };
         Ok(Some(value))
+    }
+}
+/// The window policy's slot (the backdrop has no preference or auto-hide).
+fn policy_slot(slot: composition::Slot) -> Option<window_state::Slot> {
+    match slot {
+        composition::Slot::Bottom => Some(window_state::Slot::Bottom),
+        composition::Slot::Sidebar => Some(window_state::Slot::Sidebar),
+        composition::Slot::Backdrop => None,
     }
 }
 /// Projects the open chain at the origin the view recorded for this opening.
@@ -3359,6 +3477,9 @@ fn main() -> Result<()> {
         bindings_sent: 0,
         packages_sent: Value::Null,
         notified_at: 0,
+        timeline: Default::default(),
+        images: Default::default(),
+        no_video: true,
         commands: commands::Registry::new(),
     };
     host.register_host_commands()?;
@@ -3400,6 +3521,7 @@ fn main() -> Result<()> {
             host.power_tick();
             host.package_tick();
             host.notify_tick();
+            host.timeline_tick();
             if let Some(evidence) = evidence.as_mut() {
                 evidence.sample(&host.backend, &observed_source, start)?;
             }
@@ -3442,6 +3564,7 @@ fn main() -> Result<()> {
                 host.power_tick();
                 host.package_tick();
                 host.notify_tick();
+                host.timeline_tick();
                 if host.shell.is_some() {
                     let revision = host.commands.snapshot().revision;
                     if revision != menu_revision {

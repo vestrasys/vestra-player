@@ -1,10 +1,9 @@
 //! Direct Slint interpreter integration, with primitive property and callback transport.
 use crate::Event;
 use anyhow::{Result, bail};
-use serde_json::{Value as Json, json};
+use serde_json::json;
 use slint_interpreter::{Compiler, ComponentHandle, ComponentInstance, Value};
 use std::{
-    collections::BTreeMap,
     path::{Path, PathBuf},
     sync::mpsc,
 };
@@ -89,7 +88,6 @@ fn with_window_font(source: &str, family: &str) -> String {
         &source[brace + 1..]
     )
 }
-pub use crate::ui_values::from_json;
 pub struct View {
     pub instance: ComponentInstance,
 }
@@ -97,14 +95,14 @@ pub fn open(
     path: &Path,
     owner: u64,
     id: &str,
-    properties: &BTreeMap<String, Json>,
+    properties: &[(String, Value)],
     callbacks: &[String],
     events: mpsc::Sender<Event>,
 ) -> Result<View> {
     let instance = compile(path)?;
     crate::ui_values::own_default_models(&instance, None)?;
     for (name, value) in properties {
-        instance.set_property(name, from_json(value)?)?;
+        instance.set_property(name, value.clone())?;
     }
     for callback in callbacks {
         let events = events.clone();
@@ -154,10 +152,19 @@ mod tests {
         let source = r#"
 import { Button as StdButton } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
-import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
+import { Button, Slider, ToolTipArea, UrlInputRow } from "@vestra/widgets.slint";
 export component W inherits Window {
     background: Theme.bg-panel;
+    in-out property <string> url;
+    callback open(string);
+    init => { link.focus-input(); }
     VerticalLayout {
+        link := UrlInputRow {
+            text <=> root.url;
+            placeholder: "https://…";
+            accepted(text) => { root.open(text); }
+            cancelled => { root.url = ""; }
+        }
         ToolTipArea { text: "tip"; Text { text: "亮度"; color: Theme.text; } }
         Slider { panel: true; value: 0.5; }
         Slider { value: 0.2; }

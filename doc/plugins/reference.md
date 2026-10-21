@@ -75,9 +75,9 @@ interface Disposable { dispose(): Promise<void> }
 | --- | --- |
 | `commands` | `commands.add`、`host.run` |
 | `ui.window` | `windows.create` |
-| `ui.mount` | `panels.mount`、`panels.bottom` / `panels.sidebar`（任何插件读写两个面板位置） |
+| `ui.mount` | `panels.mount`（`"bottom"`、`"sidebar"`、`"backdrop"`）、`panels.bottom` / `panels.sidebar`（任何插件读写两个面板位置）、`panels.backdrop` |
 | `ui.dialog` | `dialogs.*`（含 `dialogs.confirm`） |
-| `playback.read` | `player.state` 启动时读取、`player.refresh`、`player.stats`、`player.chapters`、`player.audioDevices`；滤镜读取处理状态 |
+| `playback.read` | `player.state` 启动时读取、`player.refresh`、`player.stats`、`player.chapters`、`player.audioDevices`、`timeline.marks`；滤镜读取处理状态 |
 | `events` | `player.state` / `onChange` 实时更新、面板可见性、字幕状态刷新 |
 | `playback.control` | `player.open`、`setPaused`、`seek`、`setRate`、`restart`、`close`、`scrub`、`setOutput`、`provideSequence`、`next`、`previous`、`addAudioTrack`、`selectAudioTrack`、`step`、`setStepSeek`、`setLoop`、`setAudioDevice`；`power.preventSleep` |
 | `producer.av` | `player.openStream` |
@@ -92,8 +92,9 @@ interface Disposable { dispose(): Promise<void> }
 | `clipboard` | `clipboard.readText`、`writeText`、`writeImage` |
 | `window.control` | `window.setVideoArea`、`setAlwaysOnTop`、`setCursorAutoHide` |
 | `bindings.manage` | `bindings.*`（§4.2） |
+| `timeline.marks` | `timeline.layer()`（§5.6；读取 `timeline.marks` 只需 `playback.read`） |
 
-`tools`、`storage`、`system`（§16）在插件进程内执行，不需要能力。读取 `window.state` / `onChange`（§6.6）与 `plugin.app`（§3.5）不需要能力。
+`tools`、`storage`、`system`（§16）在插件进程内执行，不需要能力。读取 `window.state` / `onChange`（§6.6）、`plugin.app`（§3.5）与 `ui.image`（§6.1）不需要能力。
 
 没有 `events` 时，`player.state` 只在启动和操作完成后更新，`onChange` 不会因外部变化触发。
 
@@ -122,7 +123,8 @@ interface Disposable { dispose(): Promise<void> }
 interface Scope extends Disposable {
   readonly commands, windows, panels, dialogs, player, video, audio,
            subtitles, media, resolvers, packages, osd,
-           host, clipboard, power, tools, storage, system, window;
+           host, clipboard, power, tools, storage, system, window,
+           bindings, ui, timeline;
   readonly app: AppInfo;           // §3.5
   scope(): Scope;
   add<T extends Disposable>(item: T): T;
@@ -505,6 +507,26 @@ plugin.host.run(action: HostAction): Promise<void>;
 - 用户覆盖层的键为 `host/<动作 id>`。
 - 用户覆盖层的旧键 `vestra.playback/<旧 id>` 在播放器启动时一次性改写为 `host/<新 id>`（§17）。
 
+### 5.6 时间轴标记 `plugin.timeline`
+
+进度条上的标记（章节、书签等）由各插件发布、任何插件读取。每个插件一层，播放器合并。
+
+```ts
+type MarkKind = "chapter" | "bookmark" | "marker";
+interface TimelineMark { time: number; kind: MarkKind; title: string | null; plugin: string /* 发布者 manifest id */ }
+timeline.marks: readonly TimelineMark[];      // 所有层合并，按 time 升序；需要 playback.read
+timeline.onChange(listener: (marks: readonly TimelineMark[]) => void): Disposable; // 需要 events
+timeline.layer(): TimelineLayer;              // 本插件的层（timeline.marks 能力）；第二次调用抛错
+interface TimelineLayer extends Disposable {
+  set(marks: { time: number; kind: MarkKind; title?: string }[], opts?: { ifCurrent?: PlayerState }): void;
+}
+```
+
+- `marks` 同步只读：有 `playback.read` 的插件在激活前读一次；有 `events` 时从第一次读 `marks` 或调用 `onChange` 开始跟随（播放器在合并结果变化时推送，至多每 100 ms 一次）；没有 `events` 时只有启动时的值。同一时间的标记按插件、再按各层内的顺序排列。
+- `set`：替换本插件的整层，最后写入生效，`[]` 清空。单层至多 1000 个，`title` 至多 100 个字符，`time` 在 `[0, 时长]`（时长未知时只要求 ≥ 0），`kind` 只能是三者之一；不合法时以 `invalid` 交给 `onError`（`set` 本身不抛错、不返回 promise）。`ifCurrent` 只比较来源（`sourceId`）：写入到达时来源已经换了，丢弃本次写入，不报错；同一来源里的暂停、跳转不影响。
+- 来源变化（新 `sourceId`）时播放器清空**所有**层；`dispose` 或插件停用时清除本插件的层。`kind` 播放器不解释，供读取方配色（建议：章节 `Theme.text-dim`、书签 `Theme.accent`）。
+- 测试：`host.timeline.layers`（插件 id → 标记）、`host.timeline.marks`（合并结果）；`host.setTimelineLayer(pluginId, marks)` 模拟别的插件发布；打开新来源时清空。
+
 ## 6. 窗口与面板
 
 ### 6.1 共同接口 `View`
@@ -515,8 +537,19 @@ interface View {
   set(props: Props): void;
   bind(props: () => Props): Disposable;
 }
-type Props = Record<string, Json>; // Json：null、布尔、数字、字符串、数组、对象
+type Props = Record<string, PropValue>;
+type PropValue = Json | ImageRef;   // Json：null、布尔、数字、字符串、数组、对象
+plugin.ui.image(path: string): ImageRef; // 不需要能力
 ```
+
+**运行时图片**：Slint `image` 属性的值用 `plugin.ui.image(path)` 得到的 `ImageRef`，只能作为属性的**整个值**（不能放进结构体、列表）。工具窗口、面板（含背景层、浮动侧栏）都支持。
+
+- 路径：绝对路径，位于本插件的 `dataDirectory` 或包目录下；规范化后（含符号链接）越界为 `invalid`，不存在为 `missing`。
+- 文件：PNG 或 JPEG（按文件内容判断，不看扩展名），至多 16 MB、4096×4096。`ui.image` 同步返回，不检查文件；播放器在**每次使用**（属性写入、窗口打开、面板重建）时检查，失败作为属性写入错误交给 `onError`（§6.1 的重试规则照常），属性保持原值。
+- 缓存：播放器按（插件、规范路径、文件大小、修改时间）缓存解码结果，每个插件至多 64 MB，超出时先淘汰最久未用、且没有任何属性正在显示的图片；被淘汰的引用仍然可用，再用时重新解码。播放器不监视文件：内容变了就重新调用 `ui.image`（每次调用都是一个新值，所以同一路径也会重新发送）。
+- 释放：`ImageRef` 属于创建它的作用域；作用域释放后再写入它以 `invalid` 失败（SDK 在发送前拒绝），已经显示的图片保持到被覆盖或视图关闭。
+- 线上形式（`{ "$vestraImage": 路径, "ref": n }`）是内部细节，不要自己构造：播放器对每次使用都按「该插件 + 路径规则」重新检查，手写的值不会得到额外的权限。
+- 测试：视图属性里是线上形式，`host.imagePath(host.window(id).props.cover)` 读出路径；`host.images` 记录写入过的图片。
 
 | 方法 | 说明 |
 | --- | --- |
@@ -552,10 +585,14 @@ interface Window extends View, Disposable {
 需要 `ui.mount`。
 
 ```ts
-panels.mount(slot: "bottom" | "sidebar", file: string,
+panels.mount(slot: "bottom" | "sidebar" | "backdrop", file: string,
              options?: { component?: string; global?: string; title?: string }): Panel
 panels.bottom: PanelSlot          // 底栏位置
 panels.sidebar: SidebarSlot       // 侧栏位置
+panels.backdrop: {                // 背景层
+  readonly state: { effective: boolean } | null;  // null：没有背景层
+  onChange(listener: (state: { effective: boolean } | null) => void): Disposable;
+}
 
 interface Panel extends View, Disposable {
   readonly ready: Promise<void>;                 // 已挂载
@@ -587,6 +624,16 @@ interface SlotState {
 - `setInteraction`：用户正在操作面板（输入框聚焦、拖动、弹出菜单打开）时设为 `true`，防止底栏自动隐藏。合并写入，最后写入生效。
 - 面板转发 global 上的所有回调，没有「先绑定再显示」的限制。
 - 底栏面板的内容可以画到槽位上方的视频区（负 `y`），宿主不裁切；侧栏与浮动窗口在其上层。进度条悬停时间提示这类内容可以直接画在底栏组件里（宿主的组合测试保证底栏外层不带 `clip`）。
+- 每个插件至多挂载一个面板（任一位置）。
+
+**背景层**（`"backdrop"`）：没有视频帧时画在视频区（铺满，替代黑色的视频图像），用于专辑封面、空闲徽标。
+
+- 同一时间只有一个背景层，第二个插件挂载以 `conflict` 失败；插件停用时卸载。组件与 global 推断规则同上，`title` 不用。
+- 什么时候显示（`state.effective`）由播放器决定：来源阶段 `empty`，或 `ready` / `ended` 且 mpv 没有输出画面（即 `stats().video === null`）时为 `true`；`loading`、`error` 保持上一状态（换文件时不闪烁）；有画面时为 `false`。画什么由插件按 `player.state.phase` 与 `stats().video` 自己决定（没有 `mode`）。
+- 带封面的音频文件：mpv 把封面当作视频轨显示，此时 `effective` 为 `false`，看到的是 mpv 渲染的封面（已知行为，不算缺陷）。
+- 层次：在视频区的输入层之下、屏幕提示与信息块之下；不接收指针和键盘，双击全屏、右键菜单、滚轮照常由视频区处理。`showMenu` 以 `unavailable` 失败，`setInteraction` 无效果。
+- 关闭来源（`empty`）后视频区不再保留最后一帧：没有背景层时是 `Theme.bg-video` 纯色。
+- 没有 `events` 时 `state` 只在本插件自己挂载后刷新。测试：`host.backdrop`（`{ owner, effective }`，挂载时 `effective: true`）；`host.setBackdropEffective(bool)` 模拟画面出现或消失并推送。
 
 ### 6.4 Slint 文件规则
 
@@ -594,7 +641,7 @@ interface SlotState {
 - 插件 → 界面用 `in` / `in-out property`，界面 → 插件用 `callback`。回调参数和属性值必须能用 JSON 表示（基本类型、数组、结构体），回调返回 `void`。
 - 会被插件改值的输入控件用双向绑定（`value <=> root.x`、`checked <=> root.x`）。单向的 `value: root.x` 在用户操作控件后会断开，之后插件改值，控件不会跟着动。属性须为 `in-out`。
 - `in` 属性只能单向绑定时，用 `changed x => { slider.value = root.x; }` 在模型变化时回推。
-- 主题与控件：`import { Theme } from "@vestra/theme.slint";` 提供颜色（`bg-bar`、`bg-panel`、`text`、`accent`、`playing`…）、字号（`font-xs` 9px、`font-body` 11px、`font-tab` 12px、`font-title` 13px、`font-mono` 等宽（Menlo，只含西文，中文不要用它））和控件尺寸（`button-height` 21px、`input-height`、`form-row-gap`、`dialog-padding`…），完整列表见 `src/host/ui/vestra/theme.slint`。`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";` 提供参考播放器样式的按钮（文字按钮 21px、`small` 18px；`text` 为空时是图标按钮：`icon` 是 Slint `Path` 的路径数据，画在 `icon-width` × `icon-height`（默认 14×12）的 viewbox 里，`stroked: true` 画 1.5px 线而不填充，`checked` 表示开启态；图标按钮的宽高由调用方设置，悬停提示用 `ToolTipArea` 包住）、2px 线滑块（`panel: true` 为面板样式）和悬停提示。
+- 主题与控件：`import { Theme } from "@vestra/theme.slint";` 提供颜色（`bg-bar`、`bg-panel`、`text`、`accent`、`playing`…）、字号（`font-xs` 9px、`font-body` 11px、`font-tab` 12px、`font-title` 13px、`font-mono` 等宽（Menlo，只含西文，中文不要用它））和控件尺寸（`button-height` 21px、`input-height`、`form-row-gap`、`dialog-padding`…），完整列表见 `src/host/ui/vestra/theme.slint`。`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";` 提供参考播放器样式的按钮（文字按钮 21px、`small` 18px；`text` 为空时是图标按钮：`icon` 是 Slint `Path` 的路径数据，画在 `icon-width` × `icon-height`（默认 14×12）的 viewbox 里，`stroked: true` 画 1.5px 线而不填充，`checked` 表示开启态；图标按钮的宽高由调用方设置，悬停提示用 `ToolTipArea` 包住）、2px 线滑块（`panel: true` 为面板样式）和悬停提示，以及输入链接组件 `UrlInputRow`（UI-DLG-02：多行输入 + 「打开」「取消」；`in-out property <string> text`、`placeholder`、`confirm-text`（默认「打开」）、`cancel-text`、`enabled`，`callback accepted(string)`（回车或点确定，Shift+回车换行）、`cancelled()`（Esc 或点取消），`focus-input()`、`select-all()` 两个公共函数；不校验地址，校验由插件做；用法见示例 §29）。
 - 所有插件 Slint 都以 `fluent-dark` 风格编译：std-widgets 的控件默认是深色。默认字体是系统 UI 字体（含中文回退），插件不需要自己设字体。
 - 编辑器里要让 `@vestra/...` 导入可解析，给 Slint 语言服务设 `libraryPaths`：`{ "vestra": "<仓库>/src/host/ui/vestra" }`。
 
@@ -651,7 +698,7 @@ dialogs.confirm(options: {
 }): Promise<{ confirmed: boolean; checked: boolean }>
 ```
 
-- 系统提示框（`NSAlert`），以主窗口为父窗口的表单（sheet）；主窗口不可用时为应用模态窗口。`confirmed`：用户点了确认按钮；`checked`：复选框的状态（没有复选框为 `false`，取消时也如实返回）。长度按 Unicode 字符计（一个汉字一个字符），超出 `invalid`。
+- 系统提示框（`NSAlert`），以当前活动的播放器窗口（发起确认的工具窗口、浮动侧栏，通常就是用户刚点按钮的窗口）为父窗口的表单（sheet），没有活动窗口时挂主窗口；都不可用时为应用模态窗口。`confirmed`：用户点了确认按钮；`checked`：复选框的状态（没有复选框为 `false`，取消时也如实返回）。长度按 Unicode 字符计（一个汉字一个字符），超出 `invalid`。
 - 「不再询问」之类的记忆由插件自己保存（`storage.json`），播放器不记。
 - 测试：`host.dialogAnswers.push({ confirmed, checked })`；`host.confirms` 记录每次的选项。
 
@@ -941,6 +988,7 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 | 断言 | `host.window(id).props`（kebab-case 名）、`.visible`；`host.command(id).state`、`.declaration`；`host.conflicts`（`[绑定, 赢家, ...被压下]`）；`host.layout.bottom` / `.sidebar`（可直接改后 `host.emit("window.state", {})` 模拟别处的变化）；`host.osd`（显示过的提示）、`host.osdPanel`；`host.sequence`（提供者的标志）；`host.menus`（`showMenu` 记录）；`host.sent(method)`；`host.source`；`host.processing`、`host.subtitles`、`host.snapshots`、`host.jobs`、`host.producers` |
 | 模拟数据 | `host.stats`（`player.stats()` 的返回值，第 2 轮新增字段可省略，SDK 补 `null`）；`host.dataDirectory`（`plugin.dataDirectory`，`storage.json` 直接读写其中的真实文件）；`host.setSource({ audioTracks })`（`addAudioTrack` / `selectAudioTrack` 有默认处理，可用 `host.handle("audio.addTrack" \| "audio.selectTrack", …)` 注入失败）；`host.subtitles.tracks` 的条目可带 `codec`、`text`、`streamIndex` |
 | 通用能力 | `host.clipboard`（`{ text, images }`，预置 `text` 测 `readText`）；`host.power`（合并后的 `"off"` / `"playing"`）；`host.tools.handle(tool, (args) => ({ stdout, stderr }))`（未注入的工具 `unavailable`；抛 `HostError` 模拟失败），`host.tools.calls`；`host.system.revealed`、`.opened`；`host.subtitleLoads`（每次 `load` 的 `format`、`title`、`select` 与字节）；`host.system.urls`（`system.openUrl`） |
+| 第 3b 轮批次 1 | `host.timeline.layers` / `.marks`、`host.setTimelineLayer(pluginId, marks)`（§5.6）；`host.images`、`host.imagePath(value)`（§6.1）；`host.backdrop`、`host.setBackdropEffective(bool)`（§6.3） |
 | 第 3a 轮批次 2 | `host.bindings.overlay`（`"<plugin>/<command>"` → 输入，可预置；`bindings.set` 写入，`host.press` 按它匹配，可 `host.press("Mouse:LeftClick")`）；`host.packages`（`packages.list` 的返回值）、`host.setPackages(list)`（推送 `onChange`）、`host.packageCalls`；`host.audioDevices`（`setAudioDevice` 更新 `host.source.audioOutput`）；`host.subtitles.selection.secondary` |
 | 第 3a 轮 | `host.mainWindow`、`host.setMainWindow(patch)`（§6.6）；`host.app`（§3.5）；`host.dialogAnswers.push({ confirmed, checked })`、`host.confirms`（§7）；`host.chapters`（`player.chapters()` 在媒体就绪时返回它）；`setLoop` 写入 `host.source.loop`，打开新来源时清除 |
 | 核心动作 | `host.coreAction(id)`、`host.coreCommands`（播放器的 14 条核心命令，§5.5；`press` 先匹配它们）；`host.coreRuns`；`host.stepSeek`；`host.steps` |
@@ -1126,3 +1174,19 @@ await plugin.player.setStepSeek({ seconds: settings.value.step }); // 第 1 档�
 - `Mouse:LeftClick` 有绑定时，视频区的左键单击要等过系统双击间隔才触发（约 0.25–0.5 秒），双击照常；没有绑定时左键行为与之前完全相同。
 - 插件生成的流在 `setAudioDevice` 选择的设备上播放并跟随它；所选设备拔出时改用系统默认，不再因设备消失而结束（之前跟随系统默认、所选设备的概念不存在）。
 - 新来源打开时播放器清除 mpv 的 `secondary-sid`（之前不设置，mpv 默认不选次字幕）。
+
+### 第 3b 轮批次 1：时间轴标记、运行时图片、背景层、输入链接组件（2026-10）
+
+兼容扩展（不用它们的插件不必改）：
+
+- `plugin.timeline`（§5.6）：`marks`、`onChange`、`layer()`；新能力 `timeline.marks`（宿主与构建工具同一张能力表），新事件 `timeline.changed`。
+- `plugin.ui.image` 与 `PropValue = Json | ImageRef`（§6.1）：`View.set` / `bind` 的属性值可以是图片。`Props` 的类型从 `Record<string, Json>` 放宽为 `Record<string, PropValue>`，原有写法不受影响。
+- `panels.mount("backdrop", file)` 与 `panels.backdrop.state` / `onChange`（§6.3）。
+- `@vestra/widgets.slint` 的 `UrlInputRow`（§6.4）。
+
+行为说明：
+
+- 有 `playback.read` 的插件在激活前多读一次 `timeline.marks`（与 `player.state`、`window.state` 并行）。直接对协议计数的测试会看到这个请求。
+- **关闭来源后视频区不再保留最后一帧**：来源阶段变为 `empty` 时播放器清空视频图像，视频区显示背景层或 `Theme.bg-video` 纯色（之前停在最后一帧）。纯音频文件就绪后同样不显示上一个视频的最后一帧。
+- **确认框挂在活动窗口上**：`dialogs.confirm` 的表单挂在当前活动的播放器窗口（如发起确认的工具窗口），不再总是挂主窗口（之前从工具窗口调用时主窗口被提到前面、工具窗口被盖住）。签名不变；插件里「确认后 `show()` 自己的窗口」的规避写法可以删除。
+- `layout.state` 与 `window.state` 事件的数据多了 `backdrop`（内部字段）。

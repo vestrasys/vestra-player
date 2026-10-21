@@ -83,7 +83,12 @@ pub fn show(
             .is_some_and(|button| button.state() == NSControlStateValueOn);
         done(response == NSAlertFirstButtonReturn, checked);
     };
-    match parent.and_then(|id| crate::platform_window::ns_window(id).ok()) {
+    // The window the user is working in (a tool window that asked, the
+    // floating sidebar), else the main window: the sheet never hides its caller.
+    let key = objc2_app_kit::NSApplication::sharedApplication(marker)
+        .keyWindow()
+        .filter(|window| window.isVisible() && window.attachedSheet().is_none());
+    match key.or_else(|| parent.and_then(|id| crate::platform_window::ns_window(id).ok())) {
         Some(window) => {
             let handler = block2::RcBlock::new(answer);
             alert.beginSheetModalForWindow_completionHandler(&window, Some(&handler));

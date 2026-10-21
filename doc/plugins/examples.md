@@ -745,3 +745,59 @@ await plugin.player.setAudioDevice(devices[1]!.id);         // 拔出时回到�
 plugin.player.state.audioOutput;                            // { requested, active }
 ```
 
+## 27. 运行时图片：封面显示在背景层
+
+```ts
+// ui/art.slint：export global Art { in property <image> cover; in property <string> caption; }
+//              export component Backdrop inherits Rectangle { Image { source: Art.cover; … } }
+export default async function activate(plugin: Plugin) { // ui.mount、playback.read、events
+  const art = plugin.panels.mount("backdrop", "ui/art.slint"); // 没有视频帧时画在视频区
+  const logo = plugin.ui.image(fileURLToPath(new URL("logo.png", import.meta.url))); // 包内文件也可以（固定的图也可在 Slint 里 @image-url）
+  let cover: ImageRef = logo;
+  art.bind(() => ({ cover, caption: plugin.player.state.source ?? "Vestra" }));
+  plugin.player.onChange(async (state) => {
+    const file = join(plugin.dataDirectory, "covers", `${state.sourceId}.jpg`);
+    cover = (await extractCover(state.source, file)) ? plugin.ui.image(file) : logo; // 文件变了就重新调用
+  });
+  plugin.panels.backdrop.onChange((s) => console.log("背景层显示：", s?.effective));
+  art.ready.catch(() => {}); // 第二个背景层：conflict
+}
+```
+
+图片只能作为属性的整个值（不能放进结构体或列表）；文件必须是 PNG/JPEG，在本插件的数据目录或包目录下。读取失败（`invalid` / `missing`）交给 `onError`，属性保持原值。
+
+## 28. 时间轴标记：在进度条上发布书签
+
+```ts
+export default async function activate(plugin: Plugin) { // timeline.marks、playback.read、events
+  const layer = plugin.timeline.layer();                   // 每个插件一层
+  const publish = async () => {
+    const seen = plugin.player.state;
+    const { chapters } = await plugin.player.chapters();
+    layer.set([
+      ...chapters.map((c) => ({ time: c.start, kind: "chapter" as const, title: c.title ?? undefined })),
+      ...bookmarksOf(seen.source).map((b) => ({ time: b.time, kind: "bookmark" as const, title: b.name })),
+    ].slice(0, 1000), { ifCurrent: seen });                // 期间换了来源：丢弃
+  };
+  plugin.player.onChange((state) => { if (state.phase === "ready") void publish(); });
+  // 读取方（底栏）：plugin.timeline.marks / onChange，按 kind 配色
+}
+```
+
+## 29. 输入链接组件 `UrlInputRow`
+
+```slint
+import { Theme } from "@vestra/theme.slint";
+import { UrlInputRow } from "@vestra/widgets.slint";
+export component OpenUrl inherits Window {
+    in-out property <string> url;
+    callback open(string);
+    callback cancel();
+    background: Theme.bg-bar;
+    init => { row.focus-input(); }
+    VerticalLayout {
+        padding: Theme.dialog-padding;
+        row := UrlInputRow { text <=> root.url; placeholder: "https://…"; accepted(text) => { root.open(text); } cancelled => { root.cancel(); } }
+    }
+}
+```

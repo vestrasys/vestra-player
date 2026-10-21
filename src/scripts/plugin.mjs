@@ -67,6 +67,7 @@ const CAPABILITIES = new Set([
   "clipboard",
   "window.control",
   "bindings.manage",
+  "timeline.marks",
 ]);
 
 /** Never part of a production package. */

@@ -122,6 +122,15 @@ pub fn audio_tracks(mpv: &Mpv) -> Result<Vec<AudioTrack>> {
 
 /// A selected video track that is not cover art: frames to step through.
 pub fn moving_video(node: &Node) -> bool {
+    selected_video(node, false)
+}
+
+/// Any selected video track, cover art included: mpv shows a picture (R-U3).
+pub fn any_video(node: &Node) -> bool {
+    selected_video(node, true)
+}
+
+fn selected_video(node: &Node, cover: bool) -> bool {
     let Node::Array(tracks) = node else {
         return false;
     };
@@ -131,7 +140,7 @@ pub fn moving_video(node: &Node) -> bool {
         };
         matches!(field(fields, "type"), Some(Node::String(kind)) if kind == "video")
             && matches!(field(fields, "selected"), Some(Node::Flag(true)))
-            && !matches!(field(fields, "albumart"), Some(Node::Flag(true)))
+            && (cover || !matches!(field(fields, "albumart"), Some(Node::Flag(true))))
     })
 }
 

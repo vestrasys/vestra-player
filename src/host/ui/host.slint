@@ -23,6 +23,8 @@ export component HostWindow inherits Window {
     in property <bool> menu-open: false;
     in property <bool> input-blocked: false;
     in property <bool> cursor-hidden: false;
+    // No video frame to show (R-U3): the backdrop panel, if any, is drawn instead.
+    in property <bool> no-video: true;
     out property <bool> canvas-focused: canvas.has-focus;
     // The user's sidebar width (dragging writes it; the host restores it).
     in-out property <float> sidebar-width: 317;
@@ -71,7 +73,8 @@ export component HostWindow inherits Window {
                     changed has-focus => { if !self.has-focus { root.window-input("canvasFocusLost"); } }
                     Rectangle {
                         background: Theme.bg-video;
-                        Image { width: parent.width; height: parent.height; source: root.video-frame; image-fit: contain; }
+                        Image { visible: !root.no-video; width: parent.width; height: parent.height; source: root.video-frame; image-fit: contain; }
+                        // VESTRA-MOUNT-BACKDROP
                         mouse := TouchArea {
                             private property <KeyboardModifiers> mods;
                             mouse-cursor: root.cursor-hidden ? MouseCursor.none : MouseCursor.default;
