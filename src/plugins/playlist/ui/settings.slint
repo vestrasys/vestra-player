@@ -44,6 +44,10 @@ component Check inherits CheckBox {
 
 export component PlaylistSettingsPage inherits Rectangle {
     background: Theme.bg-panel;
+    private property <int> open-mode: PlaylistSettings.open-mode;
+    private property <int> repeat: PlaylistSettings.repeat;
+    changed open-mode => { open-combo.current-index = self.open-mode; }
+    changed repeat => { repeat-combo.current-index = self.repeat; }
     VerticalLayout {
         padding: Theme.dialog-padding;
         spacing: 6px;
@@ -61,10 +65,10 @@ export component PlaylistSettingsPage inherits Rectangle {
             height: Theme.input-height;
             spacing: 4px;
             Label { text: "打开文件时："; }
-            ComboBox {
+            open-combo := ComboBox {
                 width: 200px;
                 model: ["仅打开该文件", "加入相似文件", "加入同文件夹全部文件"];
-                current-index <=> PlaylistSettings.open-mode;
+                current-index: PlaylistSettings.open-mode;
                 selected => { PlaylistSettings.set-open-mode(self.current-index); }
             }
         }
@@ -84,10 +88,10 @@ export component PlaylistSettingsPage inherits Rectangle {
             height: Theme.input-height;
             spacing: 4px;
             Label { text: "循环："; }
-            ComboBox {
+            repeat-combo := ComboBox {
                 width: 200px;
                 model: ["不循环", "全部", "单个"];
-                current-index <=> PlaylistSettings.repeat;
+                current-index: PlaylistSettings.repeat;
                 selected => { PlaylistSettings.set-repeat(self.current-index); }
             }
         }
