@@ -54,7 +54,9 @@ component IdleScene inherits Rectangle {
     private property <bool> caption: self.height >= 120px;
     private property <length> caption-gap: 12px;
     // Line boxes taller than the font's line height: an elided line whose box is
-    // shorter than one line (CJK fallback fonts are tall) is not drawn at all.
+    // shorter than one line is not drawn at all. (Under Slint 1.16 CJK fallback
+    // fonts raised the line; 1.18 keeps the requested font's line height, the
+    // spare height stays harmless.)
     private property <length> caption-height: 20px;
     private property <length> group: self.side + (self.caption ? self.caption-gap + self.caption-height : 0px);
     private property <length> top: (self.height - self.group) / 2;
@@ -96,8 +98,9 @@ component AudioScene inherits Rectangle {
     private property <bool> full: self.height >= 200px;
     private property <length> gap: 14px;
     // Line boxes: title 24px, artist and album 20px, 2px apart. They must be
-    // taller than one line of the font (CJK fallback fonts are tall): an
-    // elided Text whose box is shorter than one line is not drawn at all.
+    // taller than one line of the font: an elided Text whose box is shorter
+    // than one line is not drawn at all. (The margin was for tall CJK fallback
+    // fonts under Slint 1.16; 1.18 keeps the requested font's line height.)
     private property <length> title-line: 24px;
     private property <length> line: 20px;
     private property <length> line-gap: 2px;

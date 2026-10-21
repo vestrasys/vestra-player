@@ -8,6 +8,17 @@ import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 
 const directory = new URL("..", import.meta.url);
+/**
+ * Runs `action` and waits for the OSD line it ends with. The plugin reads and
+ * parses subtitle files itself (not host calls), so `settle()` alone can
+ * return before the result under load; a new OSD entry means the action ended.
+ */
+async function withOsd(host: TestHost, action: () => Promise<unknown>) {
+  const before = host.osd.length;
+  await action();
+  for (let i = 0; i < 250 && host.osd.length === before; i++) await host.settle(20);
+  await host.settle();
+}
 const pause = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
 const ZH = { kind: "embedded" as const, id: 1 };
 const EN = { kind: "embedded" as const, id: 2 };
@@ -131,8 +142,7 @@ test("A08: 添加次字幕… loads a file as the secondary and leaves the prima
     assert.deepEqual(host.command("load-secondary").declaration.path, ["打开", "添加次字幕…"]);
     assert.equal(host.command("load-secondary").declaration.order, 114);
     host.dialogAnswers.push([file.path]);
-    await host.command("load-secondary").run();
-    await host.settle();
+    await withOsd(host, () => host.command("load-secondary").run());
     assert.deepEqual(host.subtitleLoads.map((l) => [l.format, l.title, l.select]), [["srt", "english.srt", "secondary"]]);
     assert.deepEqual(host.subtitles.selection.target, ZH, "the primary is unchanged");
     assert.equal(secondary(host)?.kind, "external");
@@ -218,8 +228,7 @@ test("A08: an automatic reload of the secondary keeps it the secondary and the p
     await host.command("settings").run();
     host.window("subtitle-settings").emit("change-auto-reload", true);
     host.dialogAnswers.push([file.path]);
-    await host.command("load-secondary").run();
-    await host.settle();
+    await withOsd(host, () => host.command("load-secondary").run());
     const first = structuredClone(secondary(host));
     await pause(200);
     await writeFile(file.path, "1\n00:00:01,000 --> 00:00:02,000\nHello again\n");

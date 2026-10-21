@@ -132,17 +132,17 @@ export component PlaylistSidebar inherits Rectangle {
         : root.drag-y > list.height - 20px ? root.drag-y - (list.height - 20px) : 0px;
     private property <int> edge-rows: min(3, 1 + Math.floor(root.edge-depth / 7px));
 
-    changed scroll-request => { list.viewport-y = -PlaylistBridge.scroll-to-y * 1px; }
+    changed scroll-request => { list.content-y = -PlaylistBridge.scroll-to-y * 1px; }
     private property <int> scroll-request: PlaylistBridge.scroll-request;
     function drop-index-at(y: length) -> int {
-        return clamp(Math.round((y - list.viewport-y) / root.row-height), 0, PlaylistBridge.rows.length);
+        return clamp(Math.round((y - list.content-y) / root.row-height), 0, PlaylistBridge.rows.length);
     }
     edge-timer := Timer {
         interval: 50ms;
         running: root.dragging && root.max-scroll > 0px && root.edge-depth > 0px;
         triggered => {
             let step: length = root.edge-rows * root.row-height;
-            list.viewport-y = clamp(list.viewport-y + (root.drag-y < 20px ? step : -step), -root.max-scroll, 0px);
+            list.content-y = clamp(list.content-y + (root.drag-y < 20px ? step : -step), -root.max-scroll, 0px);
             root.drop-index = root.drop-index-at(root.drag-y);
         }
     }
@@ -230,8 +230,8 @@ export component PlaylistSidebar inherits Rectangle {
             list-area := Rectangle {
                 vertical-stretch: 1;
                 background: Theme.bg-list;
-                init => { PlaylistBridge.list-area(-list.viewport-y / 1px, self.height / 1px); }
-                changed height => { PlaylistBridge.list-area(-list.viewport-y / 1px, self.height / 1px); }
+                init => { PlaylistBridge.list-area(-list.content-y / 1px, self.height / 1px); }
+                changed height => { PlaylistBridge.list-area(-list.content-y / 1px, self.height / 1px); }
                 // The list menu opens when the right button is released (as the main menu, G-15).
                 TouchArea {
                     pointer-event(event) => {
@@ -245,7 +245,7 @@ export component PlaylistSidebar inherits Rectangle {
                 list := ListView {
                     x: 0;
                     y: 0;
-                    changed viewport-y => { PlaylistBridge.list-area(-self.viewport-y / 1px, list-area.height / 1px); }
+                    changed content-y => { PlaylistBridge.list-area(-self.content-y / 1px, list-area.height / 1px); }
                     width: parent.width;
                     height: min(parent.height, PlaylistBridge.rows.length * root.row-height);
                     for row[index] in PlaylistBridge.rows: Rectangle {
@@ -336,7 +336,7 @@ export component PlaylistSidebar inherits Rectangle {
                                         PlaylistBridge.dragging(true);
                                     }
                                     if root.dragging {
-                                        root.drag-y = index * root.row-height + list.viewport-y + self.mouse-y;
+                                        root.drag-y = index * root.row-height + list.content-y + self.mouse-y;
                                         root.drop-index = root.drop-index-at(root.drag-y);
                                     }
                                 }
