@@ -7,7 +7,7 @@ import type { PlaybackStats } from "../../../sdk/plugin/index.ts";
 import { HostError, startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
 import { MAX_MARKS, seekMarks } from "../bar.ts";
 import activate from "../main.ts";
-import { ffmpegArgs, MAX_FAILURES, NEEDS_FFMPEG, slotOf } from "../thumbs.ts";
+import { clock, ffmpegArgs, MAX_FAILURES, NEEDS_FFMPEG, SETTLE_MS, slotOf } from "../thumbs.ts";
 
 const directory = new URL("..", import.meta.url);
 const start = (host = new TestHost(), dataDirectory?: string) =>
@@ -60,6 +60,28 @@ async function thumbnailsOn(host: TestHost) {
 }
 
 const ffmpegRuns = (host: TestHost) => host.tools.calls.filter((c) => c.tool === "ffmpeg");
+
+/** Take over the settle timer: pending timers wait until the test fires them. */
+function manualClock() {
+  const saved = { ...clock };
+  const pending = new Map<number, { run: () => void; ms: number }>();
+  let next = 0;
+  clock.setTimeout = (run, ms) => {
+    pending.set(++next, { run, ms });
+    return next;
+  };
+  clock.clearTimeout = (timer) => void pending.delete(timer as number);
+  return {
+    pending,
+    /** Run every pending timer (the pointer has rested long enough). */
+    fire() {
+      const due = [...pending.values()];
+      pending.clear();
+      for (const timer of due) timer.run();
+    },
+    restore: () => Object.assign(clock, saved),
+  };
+}
 
 // ------------------------------------------------------------------ B22
 
@@ -186,6 +208,7 @@ test("I07 without ffmpeg the option is greyed with 「需要 ffmpeg」; it is of
 
 test("I07 a resting pointer makes a picture once; the same slot then shows at once from the cache", async () => {
   const media = mediaFile();
+  const timers = manualClock();
   try {
     const host = withMedia(new TestHost(), media.file);
     host.stats = { ...host.stats, video: VIDEO };
@@ -196,8 +219,11 @@ test("I07 a resting pointer makes a picture once; the same slot then shows at on
     await thumbnailsOn(host);
     assert.equal(bar.props["has-thumbnail"], false);
     bar.emit("hover-changed", 0.5);
-    await sleep(30);
-    assert.equal(ffmpegRuns(host).length, 0); // still settling (80 ms)
+    await host.settle();
+    // Still settling: one 80 ms timer, no ffmpeg yet.
+    assert.deepEqual([...timers.pending.values()].map((t) => t.ms), [SETTLE_MS]);
+    assert.equal(ffmpegRuns(host).length, 0);
+    timers.fire();
     await until(() => bar.props["has-thumbnail"] === true);
     const runs = ffmpegRuns(host);
     assert.equal(runs.length, 1);
@@ -209,15 +235,19 @@ test("I07 a resting pointer makes a picture once; the same slot then shows at on
     assert.ok(existsSync(path!));
     // Elsewhere, then back into the same 5 s slot: no second run, shown without waiting.
     bar.emit("hover-changed", 0.1);
+    await host.settle();
+    timers.fire();
     await until(() => ffmpegRuns(host).length === 2);
     await until(() => host.imagePath(bar.props.thumbnail)?.endsWith("/20.jpg") ?? false);
     bar.emit("hover-changed", 0.502);
     await host.settle();
     assert.equal(host.imagePath(bar.props.thumbnail), path);
+    assert.equal(timers.pending.size, 0); // a cache hit does not wait
     assert.equal(ffmpegRuns(host).length, 2);
     bar.emit("hover-ended");
     await stop();
   } finally {
+    timers.restore();
     media.done();
   }
 });

@@ -11,6 +11,11 @@ export const MAX_PER_SOURCE = 200;
 /** The pointer rests this long on an uncached position before ffmpeg runs. */
 export const SETTLE_MS = 80;
 export const TIMEOUT_MS = 3000;
+/** The settle timer's clock; tests replace it to fire the timer themselves. */
+export const clock = {
+  setTimeout: (run: () => void, ms: number): unknown => setTimeout(run, ms),
+  clearTimeout: (timer: unknown) => clearTimeout(timer as ReturnType<typeof setTimeout>),
+};
 /** Failures in a row after which a source is not tried again. */
 export const MAX_FAILURES = 5;
 
@@ -77,7 +82,7 @@ export class Thumbnails {
   #seen: number | null = null;
   #source: Source | null = null;
   #target: number | null = null;
-  #timer: ReturnType<typeof setTimeout> | null = null;
+  #timer: unknown = null;
   #running = false;
   readonly #scope: Plugin;
   readonly #settings: SettingsStore;
@@ -165,7 +170,7 @@ export class Thumbnails {
     if (this.#target === index) return;
     this.#target = index; // the previous picture stays until this one is ready
     this.#clearTimer();
-    this.#timer = setTimeout(() => {
+    this.#timer = clock.setTimeout(() => {
       this.#timer = null;
       void this.#pump();
     }, SETTLE_MS);
@@ -190,7 +195,7 @@ export class Thumbnails {
   }
 
   #clearTimer() {
-    if (this.#timer !== null) clearTimeout(this.#timer);
+    if (this.#timer !== null) clock.clearTimeout(this.#timer);
     this.#timer = null;
   }
 
