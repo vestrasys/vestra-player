@@ -1,4 +1,4 @@
-//! Experimental finite offline raw-PNG worker; final API may differ.
+//! Finite offline raw-PNG worker (host-internal).
 //! Run only on a background worker. It never controls the realtime backend.
 //! File leases are metadata-checked, not strong immutable snapshots. Publication
 //! uses tempfile's no-clobber facility, not a universal filesystem transaction or

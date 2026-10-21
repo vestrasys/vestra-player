@@ -6,7 +6,7 @@ import { extname } from "node:path";
 export type ServiceId = "opensubtitles" | "assrt";
 export const SERVICE_IDS: ServiceId[] = ["opensubtitles", "assrt"];
 export const SERVICE_NAMES: Record<ServiceId, string> = { opensubtitles: "OpenSubtitles", assrt: "射手网(伪)" };
-export const USER_AGENT = "Vestra v0.1.0";
+export const USER_AGENT = "Vestra Player v0.1.0";
 export const REQUEST_TIMEOUT = 15_000;
 
 export type Credentials = { apiKey: string; username: string; password: string; token: string };

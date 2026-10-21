@@ -1,4 +1,4 @@
-//! Experimental CPAL/rtrb adapter, not a final producer API or acoustic fence.
+//! CPAL/rtrb adapter (host-internal), not an acoustic fence.
 //! Fixed 48kHz stereo f32 only. The data callback allocates nothing, takes only
 //! a try-lock (contended only while R-H9 switches device: one silent buffer)
 //! and performs no IO. Device/backend implementation details are outside

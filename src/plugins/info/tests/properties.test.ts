@@ -246,8 +246,8 @@ test("I05 系统信息: system name, model and displays from plugin.app.system()
   await host.command("info.properties").run();
   host.window("properties").emit("tab-changed", 2);
   await until(() => value(host, "系统版本") === "macOS 15.2（24C101）");
-  assert.equal(value(host, "Vestra 版本"), "0.1.0（构建 test）");
-  assert.equal(value(host, "插件 API 版本"), "vestra.experimental/0.1");
+  assert.equal(value(host, "Vestra Player 版本"), "0.1.0（构建 test）");
+  assert.equal(value(host, "插件 API 版本"), "vestra/1");
   assert.equal(value(host, "mpv 版本"), "mpv 0.41.0");
   assert.equal(value(host, "FFmpeg 版本"), "7.1");
   assert.equal(value(host, "机型"), "Mac14,2");
@@ -350,7 +350,7 @@ test("I05 pure rules: values cut at 512, sample formats, save names, displays, e
   assert.equal(sampleFormat("weird"), "weird");
   assert.equal(saveName("/v/My Film.mkv"), "My Film 信息.txt");
   assert.equal(saveName("https://cdn.test/v/%E8%A7%86%E9%A2%91.mp4?x=1"), "视频 信息.txt");
-  assert.equal(saveName(null), "Vestra 信息.txt");
+  assert.equal(saveName(null), "Vestra Player 信息.txt");
   assert.equal(systemVersion({ name: "macOS", version: "26.2", build: "25C56" }), "macOS 26.2（25C56）");
   assert.equal(systemVersion({ name: "Linux", version: null, build: null }), "Linux");
   assert.equal(displayLine({ name: "Built-in Retina Display", width: 3024, height: 1964, scale: 2, refreshRate: 120, primary: true }), "Built-in Retina Display · 3024 x 1964 · 1512 x 982 @ 120 Hz");
@@ -362,14 +362,14 @@ test("I05 pure rules: values cut at 512, sample formats, save names, displays, e
 test("I05 系统信息: versions the core does not know show 未知; no build hash, extra libav libraries", () => {
   const page = systemPage({ version: "0.2.0", build: null, components: { mpv: null, libav: {}, slint: "1.16.1" } }, null);
   const row = (label: string) => page.find((r) => r.label === label)?.value;
-  assert.equal(row("Vestra 版本"), "0.2.0");
+  assert.equal(row("Vestra Player 版本"), "0.2.0");
   assert.equal(row("mpv 版本"), "未知");
   assert.equal(row("FFmpeg 版本"), "未知");
   const more = systemPage(
     { version: "0.2.0", build: "abc1234", components: { mpv: "mpv v0.41.0", libav: { ffmpeg: "9.0.2", libavcodec: "62.11.100" }, slint: "1.16.1" } },
     null,
   );
-  assert.equal(more.find((r) => r.label === "Vestra 版本")?.value, "0.2.0（构建 abc1234）");
+  assert.equal(more.find((r) => r.label === "Vestra Player 版本")?.value, "0.2.0（构建 abc1234）");
   assert.equal(more.find((r) => r.label === "FFmpeg 版本")?.value, "9.0.2 · libavcodec 62.11.100");
 });
 

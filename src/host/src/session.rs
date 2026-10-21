@@ -1,4 +1,4 @@
-//! Experimental M1 source arbitration. Final public API names may differ.
+//! M1 source arbitration (host-internal).
 //! Backend adapters must correlate events from real playlist entries and ordered
 //! StartFile/FileLoaded delivery; never label an event using the polled source.
 #![forbid(unsafe_code)]

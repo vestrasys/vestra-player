@@ -1,4 +1,4 @@
-//! Experimental finite subtitle presentation descriptors, not a final SDK API.
+//! Finite subtitle presentation descriptors (host-internal).
 //! Validation and deterministic arbitration are not backend application or
 //! visible-frame confirmation. The finite mpv option mapping below is a candidate
 //! for actual backend/pixel validation; no offline ASS mapping is supplied.

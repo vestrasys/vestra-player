@@ -1,7 +1,7 @@
 import type { AppInfo, Plugin } from "../../sdk/plugin/index.ts";
 
 /** The protocol version in manifest.json (the 插件 API rows of I05 and I09). */
-export const API_VERSION = "vestra.experimental/0.1";
+export const API_VERSION = "vestra/1";
 const UNKNOWN = "未知";
 
 /** `0.1.0（构建 289b26b）`, or the bare version without a build hash. */
@@ -55,7 +55,7 @@ export const PLUGINS_UNKNOWN = "未知（无法读取插件列表）";
 
 /** The whole window as plain text, for 复制信息. */
 export function aboutText(app: AppInfo, node: string | null, plugins: PluginRow[] | null) {
-  const lines = ["Vestra", `版本 ${vestraVersion(app)}`, ""];
+  const lines = ["Vestra Player", `版本 ${vestraVersion(app)}`, ""];
   for (const [label, value] of components(app, node)) lines.push(`${label}：${value}`);
   lines.push("", "已加载插件");
   if (!plugins) lines.push(PLUGINS_UNKNOWN);
@@ -64,7 +64,7 @@ export function aboutText(app: AppInfo, node: string | null, plugins: PluginRow[
 }
 
 /**
- * I09 关于 Vestra: a fixed 360×420 tool window with the logo, the version,
+ * I09 关于 Vestra Player: a fixed 360×420 tool window with the logo, the version,
  * component versions (`plugin.app`) and the loaded plugins (`packages.list`,
  * read on opening and kept current by `packages.onChange`). F1 opens it, or
  * brings the open window to the front.

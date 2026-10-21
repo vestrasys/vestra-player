@@ -4,7 +4,7 @@
 //
 // One component for both scenes (feature-requirements「专辑封面与空闲画面」):
 //   idle   H12: the logo centred, side = 30% of the short edge in 64–256px,
-//               「Vestra」12px below it (hidden under 120px of height).
+//               「Vestra Player」12px below it (hidden under 120px of height).
 //   audio  J11: the cover centred, side = 60% of the short edge up to 480px,
 //               then title / artist / album · year (the last two hidden under
 //               200px of height); text at most 80% of the width, elided.
@@ -75,14 +75,14 @@ component IdleScene inherits Rectangle {
         image-fit: contain;
         opacity: 0.92;
         accessible-role: image;
-        accessible-label: "Vestra";
+        accessible-label: "Vestra Player";
     }
     if root.caption: Text {
         x: 0;
         y: root.top + root.side + root.caption-gap;
         width: root.width;
         height: root.caption-height;
-        text: "Vestra";
+        text: "Vestra Player";
         color: Theme.text-dim;
         font-size: Theme.font-title;
         horizontal-alignment: center;

@@ -13,7 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub const API: &str = "vestra.experimental/0.1";
+pub const API: &str = "vestra/1";
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Manifest {

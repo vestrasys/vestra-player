@@ -1,4 +1,4 @@
-//! Experimental finite offline video mapper; final public API may differ.
+//! Finite offline video mapper (host-internal).
 //! A graph is not font selection, backend acceptance, or pixel parity evidence.
 //! Caller retains immutable source/subtitle/font leases and runs source 0 from
 //! its original timeline with FFmpeg default autorotate. Do not input-seek away

@@ -1,5 +1,5 @@
-//! Experimental package snapshot, not an installer or a sandbox.
-//! Final manifest/API may differ. No code, Slint or import graph is executed or
+//! Package snapshot, not an installer or a sandbox.
+//! No code, Slint or import graph is executed or
 //! validated here. Metadata checks detect ordinary source changes, not hostile
 //! same-size/same-mtime writes by another process with the same OS permissions.
 #![forbid(unsafe_code)]
@@ -20,7 +20,7 @@ const MAX_TOTAL: u64 = 64 * 1024 * 1024;
 const MAX_FILE: u64 = 32 * 1024 * 1024;
 const MAX_PATH: usize = 1024;
 const MAX_DEPTH: usize = 12;
-const DIGEST_DOMAIN: &[u8] = b"vestra.experimental.package-stage/v1\0";
+const DIGEST_DOMAIN: &[u8] = b"vestra.package-stage/v1\0";
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

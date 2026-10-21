@@ -2562,7 +2562,7 @@ impl Host {
             let _ = shell.set_property("no-video", next.into());
         }
     }
-    /// C9: "<source name> - Vestra", or "Vestra" without a source.
+    /// C9: "<source name> - Vestra Player", or "Vestra Player" without a source.
     fn update_title(&mut self) {
         let source = &self.last_source;
         let name = match source["source"].as_str() {
@@ -2582,7 +2582,10 @@ impl Host {
                     .unwrap_or_else(|| text.to_owned()),
             ),
         };
-        let title = name.map_or_else(|| "Vestra".to_owned(), |name| format!("{name} - Vestra"));
+        let title = name.map_or_else(
+            || "Vestra Player".to_owned(),
+            |name| format!("{name} - Vestra Player"),
+        );
         if title != self.window_title {
             self.window_title = title;
             if let Some(shell) = &self.shell {
@@ -3256,7 +3259,7 @@ impl Host {
                         params.get("properties").cloned().unwrap_or(json!({})),
                     )
                     .map_err(|e| RpcError::invalid(e.to_string()))?;
-                    let title = params["title"].as_str().unwrap_or("Vestra");
+                    let title = params["title"].as_str().unwrap_or("Vestra Player");
                     if title.len() > 128 || title.chars().any(char::is_control) {
                         return Err(RpcError::invalid("title requires 0..=128 bytes"));
                     }
@@ -3277,7 +3280,7 @@ impl Host {
                         visible: prefs.is_none_or(|p| p.visible),
                         detached: prefs.is_some_and(|p| p.detached),
                         title: if title.is_empty() {
-                            "Vestra".into()
+                            "Vestra Player".into()
                         } else {
                             title.into()
                         },
@@ -4043,7 +4046,7 @@ fn main() -> Result<()> {
         menu_mode: MenuMode::Main,
         menu_generation: 1,
         host_revision: 0,
-        window_title: "Vestra".into(),
+        window_title: "Vestra Player".into(),
         activations: package_activation::Book::default(),
         activation_ui: Default::default(),
         activation_receipts: Default::default(),

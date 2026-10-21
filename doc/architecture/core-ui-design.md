@@ -600,9 +600,9 @@ bar.on("toggleList", () => sidebar.toggle());
 
 ## 9. C9 窗口标题
 
-宿主行为（无插件接口）：没有来源时标题为 `Vestra`；有来源时为 `<名称> - Vestra`。名称：本地文件取文件名；网络来源取解析器给的 `title`，没有就用 URL；生成流（模拟器）取 `Vestra`。在主循环收到 `source.state` 变化时更新 `shell.window()` 的标题（`HostWindow` 加 `in property <string> window-title`）。
+宿主行为（无插件接口）：没有来源时标题为 `Vestra Player`；有来源时为 `<名称> - Vestra Player`。名称：本地文件取文件名；网络来源取解析器给的 `title`，没有就用 URL；生成流（模拟器）取 `Vestra Player`。在主循环收到 `source.state` 变化时更新 `shell.window()` 的标题（`HostWindow` 加 `in property <string> window-title`）。
 
-删除：`host.slint` 的固定标题 `"Vestra · experimental host"`。迁移：无。
+删除：`host.slint` 原先的固定开发标题。迁移：无。
 
 ## 10. C10 视频信息层与播放统计
 
@@ -716,7 +716,7 @@ list.on("contextMenu", (x: number, y: number) => list.showMenu([play, null, remo
 
 ### 12.1 接口
 
-`plugin.panels.sidebar.setDetached(detached)` 与 `SlotState.detached`（见 C7）；`panels.mount` 的 `title` 选项作为浮动窗口标题（默认空，宿主显示 `Vestra`）。插件的面板句柄、属性、回调**完全不变**。
+`plugin.panels.sidebar.setDetached(detached)` 与 `SlotState.detached`（见 C7）；`panels.mount` 的 `title` 选项作为浮动窗口标题（默认空，宿主显示 `Vestra Player`）。插件的面板句柄、属性、回调**完全不变**。
 
 ### 12.2 宿主行为：同一份面板内容
 

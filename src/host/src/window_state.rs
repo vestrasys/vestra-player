@@ -1,4 +1,4 @@
-//! Experimental finite shell visibility policy; final public API may differ.
+//! Finite shell visibility policy (host-internal).
 //! No OS calls, clocks, resizing, plugin identity, or layout description protocol.
 //! The host supplies monotonic elapsed milliseconds and usable logical pixels.
 #![forbid(unsafe_code)]

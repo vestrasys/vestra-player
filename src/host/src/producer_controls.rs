@@ -1,4 +1,4 @@
-//! Experimental single-source provider control handshake; not a core-state proof.
+//! Single-source provider control handshake; not a core-state proof.
 //! Source operation receipts, owner cleanup, side effects and clock polling stay
 //! in the host adapter. An exact provider echo is distinct from CPAL's buffer ACK.
 #![forbid(unsafe_code)]

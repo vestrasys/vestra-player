@@ -1,4 +1,4 @@
-//! Experimental typed filter adapter. Final public API may differ substantially.
+//! Typed filter adapter (host-internal).
 //! Rendering or planning commands is NOT backend acceptance, frame visibility,
 //! atomic application, rollback, or evidence of runtime algorithm correctness.
 //! The caller owns revisions, source CAS, applied confirmation and restoration.
@@ -277,9 +277,7 @@ impl Node for VideoNode {
             Self::Gblur { sigma, steps } => {
                 range("sigma", *sigma, 0.0, 10.0)?;
                 if *steps != 3 {
-                    return Err(ValidationError(
-                        "steps must be 3 in this experimental adapter".into(),
-                    ));
+                    return Err(ValidationError("steps must be 3 in this adapter".into()));
                 }
                 Ok(())
             }

@@ -1,4 +1,4 @@
-//! Experimental bounded in-memory subtitle byte uploads, not a final public API.
+//! Bounded in-memory subtitle byte uploads (host-internal).
 //! This does not validate SRT, a digest, base64, or rendering. The caller checks
 //! source CAS at begin and authenticates live owner generations. No clocks/files.
 #![forbid(unsafe_code)]

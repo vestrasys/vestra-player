@@ -243,12 +243,12 @@ export interface SystemFacts {
   displays: string[];
 }
 
-/** 系统信息. Vestra, mpv and FFmpeg versions come from the core (`plugin.app`); one it does not know shows 未知. */
+/** 系统信息. Vestra Player, mpv and FFmpeg versions come from the core (`plugin.app`); one it does not know shows 未知. */
 export function systemPage(app: AppInfo, facts: SystemFacts | null): Row[] {
   const gb = (n: number | null) => (n === null ? null : `${(n / 1024 ** 3).toFixed(1)} GB`);
   return rows([
     ["播放器", [
-      ["Vestra 版本", vestraVersion(app)],
+      ["Vestra Player 版本", vestraVersion(app)],
       ["插件 API 版本", API_VERSION],
       ["mpv 版本", app.components.mpv || "未知"],
       ["FFmpeg 版本", ffmpegVersion(app)],
@@ -264,19 +264,19 @@ export function systemPage(app: AppInfo, facts: SystemFacts | null): Row[] {
   ]);
 }
 
-/** `movie 信息.txt`, or `Vestra 信息.txt` without media. */
+/** `movie 信息.txt`, or `Vestra Player 信息.txt` without media. */
 export function saveName(source: string | null) {
-  if (!source) return "Vestra 信息.txt";
+  if (!source) return "Vestra Player 信息.txt";
   let name = source;
   if (isUrl(source)) {
     try {
       name = new URL(source).pathname.split("/").filter(Boolean).at(-1) ?? new URL(source).hostname;
       name = decodeURIComponent(name);
     } catch {
-      name = "Vestra";
+      name = "Vestra Player";
     }
   } else name = basename(source);
-  const stem = basename(name, extname(name)).replace(/[\\/:*?"<>|]/g, "_") || "Vestra";
+  const stem = basename(name, extname(name)).replace(/[\\/:*?"<>|]/g, "_") || "Vestra Player";
   return `${stem} 信息.txt`;
 }
 

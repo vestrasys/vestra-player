@@ -12,5 +12,5 @@ export function exportCsv(lines: Line[]): string {
 /** 导出列表… as plain text: the key list for reading or printing, one command a line. */
 export function exportText(lines: Line[]): string {
   const rows = lines.map((line) => `${line.command}\t${line.keys || "—"}\t${line.scope}\t${line.source}\t${line.status}`);
-  return `Vestra 快捷键列表\n\n${COLUMNS.join("\t")}\n${rows.join("\n")}\n`;
+  return `Vestra Player 快捷键列表\n\n${COLUMNS.join("\t")}\n${rows.join("\n")}\n`;
 }

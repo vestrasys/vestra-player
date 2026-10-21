@@ -1,5 +1,5 @@
-//! Experimental two-slot Slint composition, using the public 1.16.1 interpreter.
-//! This is a source integration candidate, not a validated public SDK contract.
+//! Two-slot Slint composition, using the public 1.16.1 interpreter.
+//! Host-internal: the public contract is the SDK window/panel API.
 #![forbid(unsafe_code)]
 
 use std::{collections::BTreeSet, path::PathBuf, sync::mpsc};

@@ -1,4 +1,4 @@
-//! Experimental local regular-file lease, not a strong immutable snapshot.
+//! Local regular-file lease, not a strong immutable snapshot.
 //! Holding the open file preserves its object across rename/unlink/path replacement;
 //! it does not prevent in-place writes. Length/mtime checks can miss same-length
 //! rewrites with preserved timestamps and cannot defeat adversarial concurrent

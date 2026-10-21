@@ -1,4 +1,4 @@
-//! Experimental software-renderer orientation preparation; final API may differ.
+//! Software-renderer orientation preparation (host-internal).
 //!
 //! The initial metadata filter is a renderer safety prerequisite, not a pixel
 //! rotation. Publication stays blocked until the physical transform is observed

@@ -1,4 +1,4 @@
-//! Experimental single-writer package library, not an activation engine.
+//! Single-writer package library, not an activation engine.
 //! Host owns the sole Store for this root. Journal and installed state share
 //! one atomic catalog replacement; recovery never implies a runtime is ready.
 #![forbid(unsafe_code)]

@@ -1,4 +1,4 @@
-//! Experimental finite subtitle state; final public API may differ substantially.
+//! Finite subtitle state (host-internal).
 //! The caller parses SRT, verifies its SHA-256, authenticates live owners and
 //! applies the backend. This module only checks limits/metadata and arbitrates
 //! immutable resource identity and public selection. No rendering or SRT parsing.

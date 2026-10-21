@@ -1,4 +1,4 @@
-//! Experimental finite physical-input state; final public API may differ.
+//! Finite physical-input state (host-internal).
 //! Key names stay distinct (including both Shift keys). Mapping to game buttons
 //! belongs to the provider. This module neither sends nor acknowledges notices
 //! and does not itself guarantee reliable delivery or native keyboard capture.

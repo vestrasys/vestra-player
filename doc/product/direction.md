@@ -154,7 +154,7 @@ export default async function activate(plugin: Plugin) {
 {
   "id": "example.video-tools",
   "version": "0.1.0",
-  "apiVersion": "vestra.experimental/0.1",
+  "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": ["commands", "playback.control"]
 }

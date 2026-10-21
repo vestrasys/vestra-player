@@ -87,7 +87,7 @@ export class WorkshopJob {
         this.check(options?.signal); if(++turn>3)throw Error('模型轮次超限');
         const call=(name,args)=>({type:'toolCall',id:`${turn}-${name}-${Math.random()}`,name,arguments:args});
         const reports=context.messages.filter(m=>m.role==='toolResult'&&m.toolName==='validate_candidate');
-        if(turn===1)message.content=[call('write_candidate',{path:'manifest.json',text:JSON.stringify({id:r.id,version:r.version,apiVersion:'vestra.experimental/0.1',entry:'main.js',capabilities:['ui.window']},null,2)}),call('write_candidate',{path:'counter.slint',text:counterUi}),call('write_candidate',{path:'main.ts',text:counterSource(r.step,true)}),call('read_candidate',{path:'main.ts'}),call('validate_candidate',{revision:3})];
+        if(turn===1)message.content=[call('write_candidate',{path:'manifest.json',text:JSON.stringify({id:r.id,version:r.version,apiVersion:'vestra/1',entry:'main.js',capabilities:['ui.window']},null,2)}),call('write_candidate',{path:'counter.slint',text:counterUi}),call('write_candidate',{path:'main.ts',text:counterSource(r.step,true)}),call('read_candidate',{path:'main.ts'}),call('validate_candidate',{revision:3})];
         else {
           const report=JSON.parse(reports.at(-1)?.content.map(c=>c.text??'').join('')??'null');
           if(turn===2){

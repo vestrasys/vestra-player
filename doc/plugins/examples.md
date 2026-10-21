@@ -754,7 +754,7 @@ export default async function activate(plugin: Plugin) { // ui.mount、playback.
   const art = plugin.panels.mount("backdrop", "ui/art.slint"); // 没有视频帧时画在视频区
   const logo = plugin.ui.image(fileURLToPath(new URL("logo.png", import.meta.url))); // 包内文件也可以（固定的图也可在 Slint 里 @image-url）
   let cover: ImageRef = logo;
-  art.bind(() => ({ cover, caption: plugin.player.state.source ?? "Vestra" }));
+  art.bind(() => ({ cover, caption: plugin.player.state.source ?? "Vestra Player" }));
   plugin.player.onChange(async (state) => {
     const file = join(plugin.dataDirectory, "covers", `${state.sourceId}.jpg`);
     cover = (await extractCover(state.source, file)) ? plugin.ui.image(file) : logo; // 文件变了就重新调用

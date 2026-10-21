@@ -1,4 +1,4 @@
-//! Experimental source-bound media facts, not a final SDK API. Caller must
+//! Source-bound media facts (host-internal). Caller must
 //! capture these facts with the same source lease/generation used by the worker.
 //! mpv 0.41 track-list/ff-index is only guaranteed here with demuxer=lavf;
 //! track IDs are never treated as FFmpeg stream indexes.

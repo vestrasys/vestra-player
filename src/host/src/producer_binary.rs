@@ -1,4 +1,4 @@
-//! Experimental finite producer packet codec; final public API may differ.
+//! Finite producer packet codec (host-internal).
 //! No IO, buffering, epoch arbitration, scheduling or backend acceptance here.
 //! sample_time is a 48kHz consumed-frame position: audio chunk's first frame,
 //! or video's intended presentation position. Sequence zero is valid.

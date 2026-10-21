@@ -1,4 +1,4 @@
-//! Experimental bounded input delivery; this is not the final plugin API.
+//! Bounded input delivery (host-internal, not the plugin API).
 //! The adapter supplies a monotonic millisecond clock and stops the source on
 //! timeout. This module performs no IO and never silently drops an expired item.
 #![forbid(unsafe_code)]

@@ -1,4 +1,4 @@
-//! Experimental first-activation barrier, not a complete package installer.
+//! First-activation barrier, not a complete package installer.
 //! Callers supply monotonic milliseconds. Runtime readiness and all registered
 //! initial UI work must finish before success; terminal outcomes never reopen.
 #![forbid(unsafe_code)]

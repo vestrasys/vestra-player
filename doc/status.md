@@ -22,7 +22,7 @@
 | 字幕 | `src/plugins/subtitles` | 外部 SRT 载入、中英混排显示、轨道选择、样式与撤销 | 轨道名显示宿主临时名 `vestra-subtitle-*.vtt` 而非原文件名；插件允许 8 MiB SRT，宿主上传上限 2 MiB |
 | 截图与导出 | `src/plugins/capture` | 保存当前画面，PNG 与源帧逐像素一致 | 连拍、MP4 未复测；无数值进度；连拍页「Sample start」保留打开窗口时的时间 |
 | NES | `src/plugins/nes` | 打开 ROM 出画面和声音，停止后清屏 | 键盘输入、存读档按范围暂缓 |
-| 插件工坊 | `src/plugins/workshop` | 生成 → 宿主校验 → 安装 → 生成的计数器可用（本地 mock 模型，无付费调用） | 升级、回退未在 GUI 实测 |
+| 插件工坊（实验性） | `src/plugins/workshop` | 生成 → 宿主校验 → 安装 → 生成的计数器可用（本地 mock 模型，无付费调用） | 升级、回退未在 GUI 实测 |
 | YouTube | `src/plugins/youtube` | 公开视频播放 | 下载未在 GUI 复测 |
 | Bilibili | `src/plugins/bilibili` | 公开视频播放 | — |
 

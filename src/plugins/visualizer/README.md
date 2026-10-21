@@ -42,7 +42,7 @@ mpv 把**内嵌封面**和**同文件夹的 cover.jpg / folder.jpg 等**（mpv �
 
 ## H12 空闲徽标（`logo.ts`）
 
-- 内置徽标：`ui/logo.png`（由 `src/assets/brand/logo.png` 缩到 512×512，Retina 下 256 点仍清晰），Slint `@image-url`，不依赖运行时图片。边长 = 短边 30%，限制 64–256；下方 12px「Vestra」（13px，`Theme.text-dim`），视频区高度 < 120 时隐藏；徽标后有一圈很淡的 `Theme.playing` 径向光晕，徽标 92% 不透明，深色背景上不刺眼。
+- 内置徽标：`ui/logo.png`（由 `src/assets/brand/logo.png` 缩到 512×512，Retina 下 256 点仍清晰），Slint `@image-url`，不依赖运行时图片。边长 = 短边 30%，限制 64–256；下方 12px「Vestra Player」（13px，`Theme.text-dim`），视频区高度 < 120 时隐藏；徽标后有一圈很淡的 `Theme.playing` 径向光晕，徽标 92% 不透明，深色背景上不刺眼。
 - 自定义徽标：`dialogs.openFile` → 扩展名（png/jpg/jpeg）与文件头检查，> 16 MB 或 > 4096×4096 提示「图片过大（最大 4096×4096、16 MB）」，不是 PNG/JPEG 提示「只能使用 PNG 或 JPEG 图片」→ 复制为 `<dataDirectory>/logo.png|jpg`（按真实类型，临时文件加改名，删掉另一种扩展名的旧副本）→ `ui.image`。原文件之后删掉不影响。
 - 启动时自定义徽标读不到或不合格：用品牌徽标，提示一次「徽标图片无法读取，已使用默认徽标」，并把设置改回默认（之后不再提示）。
 

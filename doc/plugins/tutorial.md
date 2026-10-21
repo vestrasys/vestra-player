@@ -44,7 +44,7 @@ src/examples/bookmark/      （你自己的插件放在 src/plugins/<名字>/）
 {
   "id": "community.bookmark",
   "version": "0.1.0",
-  "apiVersion": "vestra.experimental/0.1",
+  "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": ["commands", "ui.window", "playback.read", "events", "playback.control"]
 }
@@ -52,7 +52,7 @@ src/examples/bookmark/      （你自己的插件放在 src/plugins/<名字>/）
 
 - `id`：插件的唯一名字，建议用 `作者或组织.插件名`。
 - `version`：三段数字版本。
-- `apiVersion`：固定写 `vestra.experimental/0.1`。
+- `apiVersion`：固定写 `vestra/1`。
 - `entry`：入口文件。
 - `capabilities`：要用到的播放器能力。用到哪个模块就声明哪个，漏了的话，相关调用会以 `code: "capability"` 失败。
 

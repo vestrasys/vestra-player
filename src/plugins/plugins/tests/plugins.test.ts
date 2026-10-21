@@ -146,7 +146,7 @@ test("J07: disable asks first, enable does not; the list follows the player", as
   assert.deepEqual(host.packageCalls, []);
   host.dialogAnswers.push({ confirmed: true, checked: false });
   await emit(host, "toggle");
-  assert.match(String(host.confirms.at(-1)!.detail), /重启 Vestra 后仍保持停用/);
+  assert.match(String(host.confirms.at(-1)!.detail), /重启 Vestra Player 后仍保持停用/);
   assert.deepEqual(host.packageCalls, [{ method: "setEnabled", id: "vestra.audio", enabled: false }]);
   assert.equal(row(host, "vestra.audio")!.state, "已停用");
   assert.equal(row(host, "vestra.audio")!.dim, true);

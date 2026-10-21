@@ -1,4 +1,4 @@
-//! Experimental fixed-font bytes for subtitle snapshots; not the final SDK API.
+//! Fixed-font bytes for subtitle snapshots (host-internal, not an SDK API).
 //! A cmap check is not shaping, backend font selection, a fallback guarantee, or
 //! a visible-frame fence. Renderers must separately confirm their selected face.
 #![forbid(unsafe_code)]

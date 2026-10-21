@@ -1,4 +1,4 @@
-//! Experimental fixed-font materialization for the host and frozen subtitles.
+//! Fixed-font materialization for the host and frozen subtitles.
 //! This owns a private directory, not a filesystem sandbox or a renderer fence.
 //! Construct once per host; clones keep the same directory alive for snapshots.
 #![forbid(unsafe_code)]

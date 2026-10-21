@@ -270,7 +270,7 @@ pub fn confirm(
         .or_else(|| parent.and_then(|id| window(id).ok()));
     let dialog = |text: String, buttons: MessageButtons, level: MessageLevel| {
         let dialog = AsyncMessageDialog::new()
-            .set_title("Vestra")
+            .set_title("Vestra Player")
             .set_description(text)
             .set_buttons(buttons)
             .set_level(level);
