@@ -335,6 +335,42 @@ interface ViewSettings {
 6. 回归：NES 出画面、停止后清屏；关闭来源后背景层显示、无残留帧；侧栏浮动 / 附着切换后画面正常；打开文件对话框（模态）期间播放的画面在关闭对话框后继续更新（`missed` 补取路径）。
 7. 导出：倍帧打开后「含效果」导出 5 秒，`ffprobe` 48 fps。
 
+#### P1 批次 2（2026-10-21，维护者）：显示层 `plugin.video.view()`
+
+基于批次 1 `bfda2ae`，合并了 `rebuild/features-r3b` 到 `04b2de9`（§7 用户裁决记录与 visualizer 插件）。**未触发 §4.0 的拆分**。
+
+**实现清单**
+
+| 任务单 | 内容 | 宿主 | SDK / TestHost / 文档 |
+| --- | --- | --- | --- |
+| §4.3 | `plugin.video.view()`（R-V9，现有能力 `processing.video`） | 新模块 `video_view.rs`：`Settings`（默认值、合并校验：未知字段与范围外 `invalid` 且不改变任何值）、mpv 属性映射（全部写成 option 字符串）、`View`（拥有者、`set` / `release`；写入失败时尽力恢复之前的五项并以 `backend` 失败）。控制线程处理 `video.view.set { values }` → `{ state: "applied" \| "waiting" }` 与 `video.view.release`，按调用插件判断所有权；`owner.disabled` 时释放并写回默认值；每次处理后把 `zoom` 写进 `render_target::Shared`（C-SIZE 封顶按 zoom 放宽）。`main.rs` 能力表与转发 | `sdk/plugin/view.ts`（`viewProblem` 与宿主同一套规则，`Latest` 只保留最新值，跟随来源 / 阶段变化重发让 `waiting` 变 `applied`）；`Scope.video.view`；`ViewSettings`、`VideoView` 类型；wire `video.viewSet` / `viewRelease`；`host.videoView`、`host.setVideoViewOwner`；参考 §8.1（新）、§14、§17；示例 §33 |
+
+**签名调整与实现取舍**（公开签名与裁决 R-V9 一致）
+
+1. **所有权在 `view()` 调用时取得**：SDK 构造句柄时立即发一次 `video.view.set`（带当前值 = 默认值），宿主在第一次 `set` 时记下拥有者。已被别的插件占用时句柄照常返回、`status` 为 `failed`（`conflict`）并交 `onError`，**不让激活失败**（与 `provideSequence` 不同：video 插件在探针占用期间仍要能激活，GUI 场景「停用探针后 video 可以取得」）。冲突之后不自动重试（避免空转），下一次 `set` 再试；同一插件第二次 `view()` 抛错，`dispose` 后可再调用。
+2. 协议多了一个任务单没写的 `video.view.release`（SDK `dispose` 用）：宿主只对拥有者生效（写回默认值、释放），别的插件调用无效果。停用由宿主的 `owner.disabled` 处理，不依赖它。
+3. **`waiting` 的含义**：mpv 的这五项是跨 `loadfile` 保持的选项，没有媒体时也能写，所以宿主总是立即写入，只是没有就绪媒体时答 `waiting`；SDK 在来源或阶段变化时重发当前值，就绪后变 `applied`。
+4. SDK 每次发送完整的五项（合并后的期望值），宿主仍接受部分字段（合并）。
+5. 换来源保留当前值（宿主不复位）；E13 的复位由插件做，参考 §8.1 与示例 §33 写明。
+6. 不进截图与导出：截图与导出走离线 ffmpeg 图（批次 1 的单测断言离线图里没有这些属性）。
+7. mpv 取值实测（mpv 0.41 CLI，同一选项解析器）：`video-aspect-override=-1` / `1.3333`、`keepaspect=no`、`panscan=1`、`video-zoom=-2`、`video-pan-x=-0.5` 都被接受；`1.3333` 时 `VO: 1920x1080 => 1920x1440`。`video-aspect-override` 改变 `video-out-params/dw`，C-SIZE 的来源封顶随之变化。
+
+**检查**（worktree 内实际执行）
+
+- `src/`：`check`、`format:check`、`boundaries`、`plugins:build` 0；`test:sdk` 90/90（`round4a.test.ts` 新增 2 条：拥有、合并、`invalid` 不发送、`dispose` 复位；冲突与释放后取得）；`plugin -- test --all` 全过：audio 35、bilibili 15、capture 25、history 22、hotkeys 17、info 26、marks 24、nes 11、playback 59、playlist 67、plugins 10、preferences 10、subtitle-online 13、subtitles 52、video 22、visualizer 15（新合并）、window 17、workshop 17、youtube 14；workshop `vendor/sdk` 已重同步。
+- `src/host/`：`cargo fmt --check`、`clippy --locked --all-targets -D warnings`（含 `--no-default-features`）0；`cargo test --locked` 219/219（新增 4：属性映射、范围与未知字段、拥有者与复位、写入失败恢复；`render_target` 暂停重画测试加了 zoom）。
+- `grep -rnw unsafe src/host/src`：空。
+- 未执行：GUI。
+- 宿主 Rust：31 621 → 31 974（**+353**，`video_view.rs` 312）；本轮累计 30 966 → 31 974 = **+1 008**（预算约 1 200）。SDK 与运行器 +约 230（`view.ts` 149、TestHost、类型、wire）。
+
+**给协调者的 GUI 实测要点**（需要作者 A 接入后的 video 插件，或临时探针）
+
+1. 16:9 片源 `set({ aspect: 4/3 })`：左右黑边；`aspect: null` 恢复。窗口拖成接近 1:1 后 `fit: "stretch"`：没有黑边、画面变形；`fit: "fill"`：没有黑边、上下或左右被裁。`VESTRA_FRAME_LOG` 的 `target` 比例始终等于视频区比例。
+2. `zoom: 2` 后画面清楚（日志 `target` 比 zoom 1 时大，直到视频区大小）；`zoom: 4` 再加 `panX: 1`、`panY: -1` 看平移方向；`zoom: 0.5` 四周黑边。
+3. 暂停时改 `aspect` / `zoom`：画面立即重画（批次 1 的 `Redraw` 路径）。
+4. 换来源：值保留（插件自己复位）；含效果截图的尺寸比例与显示层无关。
+5. 所有权：探针先 `view()`，video 的「比例 ▶」失败并显示 `conflict`；停用探针后（宿主写回默认值，画面恢复按来源显示）video 再选一次即生效。停用 video 后恢复默认显示。
+
 ### 8.3 用户裁决
 
 （协调者填写 §7.1、§7.2 的回答与日期；按回答更新需求文档 H07、E16–E18 与 4b 排期）

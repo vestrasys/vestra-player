@@ -155,6 +155,10 @@ impl Shared {
     pub fn set_area(&self, area: Size) {
         self.update(|request| request.area = area);
     }
+    /// The display layer's zoom (R-V9): zooming in renders more pixels.
+    pub fn set_zoom(&self, zoom: f64) {
+        self.update(|request| request.zoom = zoom);
+    }
     fn update(&self, change: impl FnOnce(&mut Request)) {
         let mut request = self.request.lock().unwrap_or_else(PoisonError::into_inner);
         let before = *request;
@@ -425,6 +429,12 @@ mod tests {
             "paused: redrawn at the new size"
         );
         assert!(!redraw.due(false, shared.get().0), "once");
+        shared.set_zoom(2.);
+        assert!(
+            redraw.due(false, shared.get().0),
+            "zoom changes the target too"
+        );
+        assert_eq!(shared.get().1.zoom, 2.);
         assert!(shared.get().0 > revision);
     }
 

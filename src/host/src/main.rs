@@ -58,6 +58,7 @@ mod ui;
 mod ui_image;
 mod ui_state;
 mod ui_values;
+mod video_view;
 pub mod window_control;
 pub mod window_state;
 use anyhow::{Result, bail};
@@ -2367,6 +2368,7 @@ impl Host {
                 "processing.audio"
             }),
             "ui.open" | "ui.set" | "ui.show" | "ui.close" => Some("ui.window"),
+            "video.view.set" | "video.view.release" => Some("processing.video"),
             _ => return Err(RpcError::new("unsupported", "unknown method")),
         };
         if capability.is_some_and(|capability| !plugin.allows(capability)) {
@@ -2384,6 +2386,7 @@ impl Host {
         if method.starts_with("subtitles.")
             || method.starts_with("snapshot.")
             || method.starts_with("jobs.")
+            || method.starts_with("video.view.")
         {
             self.backend
                 .commands
