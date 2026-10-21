@@ -2,17 +2,17 @@
 
 日期：2026-10-21。本文整理目前讨论的结论，并给出实施步骤。插件商城的细节还没最终定稿；SDK 拆分和仓库拆分已经确定。
 
-## 1. 已定结论
+## 1. 结论（1.1–1.5 已定，1.6 待定）
 
 ### 1.1 总体方向
 
 - 采用 Dalamud 的模式：不写后端、不用数据库、不做账号系统。
   - 官方仓库托管在 GitHub 上，作者通过 PR 提交插件，由 CI 构建并发布。
   - 第三方可以自建仓库，用户粘贴仓库地址即可使用。
-- 客户端只认一种静态 JSON 格式（`repo.json`），不关心它托管在哪里。
+- 客户端只认一种静态 JSON 索引 `index.json`（旁边可有签名 `index.json.sig`），不关心它托管在哪里。用户添加仓库时粘贴仓库根地址，客户端自动读取其下的 `index.json`；粘贴 `index.json` 的完整地址也可以。
 - 以后要自建服务器时：
-  - 在同一个地址输出同样的 `repo.json`，客户端不用改；
-  - 额外能力（服务端搜索、下载统计、更新查询）写在 `repo.json` 的 `extensions` 字段里，客户端发现就用，没有就退回静态行为。
+  - 在同一个地址输出同样的 `index.json`，客户端不用改；
+  - 额外能力（服务端搜索、下载统计、更新查询）写在 `index.json` 的 `extensions` 字段里，客户端发现就用，没有就退回静态行为。
 - 作者自助发布、账号、评分都是服务器那一侧的事，到需要时再用 GitHub OAuth 做，不影响客户端协议。
 
 ### 1.2 两种元数据分工
@@ -20,13 +20,13 @@
 | 文件 | 谁写 | 内容 |
 | --- | --- | --- |
 | 插件包内的 `manifest.json` | 插件作者 | 插件自己的信息：`id`、`version`、`apiVersion`、`capabilities`、`entry`。另新增可选的显示字段：`name`、`author`、`punchline`（一句话简介）、`description`、`tags`、`icon`（包内 PNG/JPEG 路径）、`readme`（默认 `README.md`）、`changelog`、`sourceUrl`、`license` |
-| 仓库的 `repo.json` | 由工具或 CI 生成，一般不手写 | 汇总各插件 manifest 的显示字段，再加上只有仓库才知道的信息：每个版本的 `downloadUrl`、`sha256`、`size`、`published`、`channel`（stable/testing），版本历史，`downloadCount`，图标和 README 的对外 URL，仓库名，`official`，`extensions`，签名 |
+| 仓库的 `index.json` | 由工具或 CI 生成，一般不手写 | 汇总各插件 manifest 的显示字段，再加上只有仓库才知道的信息：每个版本的 `downloadUrl`、`sha256`、`size`、`published`、`channel`（stable/testing），版本历史，`downloadCount`，图标和 README 的对外 URL，仓库名，`official`，`extensions`，签名 |
 
-- 发布到官方仓库的作者只写 `manifest.json`，再在 PR 里附一个 `manifest.toml`，写明源码仓库、commit 和 owners。
-- 自建仓库的作者用工具生成 `repo.json`（`vestra-repo build`，或我们提供的 GitHub Actions 模板）。
+- 发布到官方仓库的作者只写 `manifest.json`，再在 PR 里添加或修改登记文件 `registry/<插件 id>.toml`（见 1.3a），写明源码仓库、commit 和 owners。
+- 自建仓库的作者用工具生成 `index.json`（`vestra-repo build`，或我们提供的 GitHub Actions 模板）。
 - 只想发一个包的作者不需要仓库：用户直接粘贴包的链接，或者拖入包文件安装。
 
-### 1.3 `repo.json` 草案（schema 1）
+### 1.3 `index.json` 草案（schema 1）
 
 ```json
 {
@@ -50,8 +50,36 @@
 ```
 
 - 完整性由 `sha256` 保证，与托管方无关。
-- 官方仓库的 `repo.json` 由 CI 签名，客户端内置公钥用来校验。
+- 官方仓库的 `index.json` 由 CI 签名，签名单独放在同目录的 `index.json.sig`，不改变 JSON 结构；客户端内置公钥用来校验。
 - 第三方仓库在界面上标明「非官方」，并显示插件来自哪个仓库。
+
+### 1.3a 官方仓库的登记文件 `registry/<插件 id>.toml`
+
+官方插件仓库里每个插件一个登记文件，文件名就是插件 id。只有官方仓库的 CI 读它，播放器不读。
+
+```toml
+# registry/someone.cool-visualizer.toml
+repository = "https://github.com/someone/cool-visualizer"
+commit = "3f2a9c1…"
+path = "."            # 插件在源码仓库里的子目录
+owners = ["someone"]
+channel = "stable"
+```
+
+- 作者发新版只改 `commit`，PR 的改动通常只有一行。
+- 不叫 `manifest.toml`：它和插件包里的 `manifest.json` 用途完全不同，名字相近容易混淆（Dalamud 用的是 `manifest.toml`）。用 TOML 是因为它由人手写，可以加注释。
+
+三个文件的分工：
+
+| 文件 | 位置 | 谁读 |
+| --- | --- | --- |
+| `manifest.json` | 插件包里 | 播放器 |
+| `registry/<id>.toml` | 官方插件仓库的源码里 | 官方仓库的 CI |
+| `index.json`、`index.json.sig` | 发布出去的仓库地址下 | 商城插件 |
+
+### 1.3b 命名与参照
+
+「静态索引 + 用户添加第三方源」是通用模式，不是 Dalamud 独有：apt/yum 的软件源（索引、校验和、签名、第三方源）、Helm 的 chart 仓库（静态 `index.yaml`，用户输入仓库根地址）、Jellyfin 和 Kodi 的插件仓库、Obsidian 的社区插件列表（作者自己构建）、Flathub 和 Homebrew（官方 CI 从源码构建）。索引文件名参照 Helm 定为 `index.json`；之前草案里的 `repo.json` 容易被理解成仓库配置，已改名。
 
 ### 1.4 客户端（播放器）
 
@@ -71,7 +99,7 @@
 - npm 包的内容：
   - 插件 API 类型；
   - `TestHost`（`@vestra-player/sdk/testing`）；
-  - 命令行工具 `vestra-plugin`（check / build / test / pack）和 `vestra-repo build`（生成 `repo.json`）；
+  - 命令行工具 `vestra-plugin`（check / build / test / pack）和 `vestra-repo build`（生成 `index.json`）；
   - Slint 控件库和主题的只读副本（`@vestra/widgets.slint`、`theme.slint`），供作者在 IDE 里编译和预览。
 - 插件模板：`npm create vestra-plugin`。
 - 版本对齐：`@vestra-player/sdk@1.x` 对应 `apiVersion: "vestra/1"`。破坏性变更时升大版本。
@@ -80,13 +108,24 @@
   - runner、SDK 的实现代码和 `wire.ts`（宿主与插件之间的内部协议）都随播放器分发，不发布到 npm，也不对外承诺。
   - 插件构建产物只引用类型，不包含 SDK 代码，所以拆分不改变运行方式。
 
+### 1.6 待定（2026-10-21）
+
+以下几项还没定，S3 开工前要确认。括号里是目前的建议。
+
+1. 插件包格式（`.vxp`，内容是 zip；宿主或商城插件解压后走现有的目录安装）。
+2. 官方仓库的提交方式：作者上传构建好的包（Obsidian 式），还是由官方 CI 按 `registry/<id>.toml` 从源码构建（Flathub 式）（建议从源码构建：审核看得到源码，产物可复现）。
+3. 签名是否第一版就做（建议做）。
+4. 信任模型：插件是完整的 Node 进程，`capabilities` 只限制宿主 API，挡不住直接读写文件和联网（建议：官方仓库人工审核源码；第三方仓库和侧载在界面上明确警告；沙箱以后再说）。
+5. 更新策略（自动检查、手动确认；manifest 增加可选的 `minPlayerVersion`）。
+6. 内置插件迁到插件仓库、随安装包分发、可经商城单独更新（方向已定，和 2、4、5 一起确认）。
+
 ## 2. 仓库划分（用户将创建）
 
 | 仓库 | 内容 | 发布 |
 | --- | --- | --- |
 | `vestra-player`（现有） | Rust 宿主、runner、SDK 实现的运行时副本、文档 | 播放器安装包 |
 | SDK 仓库 [`vestra-player-sdk`](https://github.com/vestrasys/vestra-player-sdk)（S1 建立） | `@vestra-player/sdk`：类型、TestHost、CLI、`./runtime` 实现入口、Slint 控件库副本、插件模板 | npm（`NPM_TOKEN` 就绪前播放器用 git 标签） |
-| 插件仓库（新建） | 官方插件源码，以及第三方插件提交（`manifest.toml`），CI 构建出插件包和 `repo.json` | GitHub Releases（插件包）、GitHub Pages（`repo.json`） |
+| 插件仓库（新建） | 官方插件源码，以及第三方插件的登记文件（`registry/<id>.toml`），CI 构建出插件包和 `index.json` | GitHub Releases（插件包）、GitHub Pages（`index.json`、`index.json.sig`） |
 
 **SDK 源码的唯一来源**：建议 SDK 仓库作为类型和 CLI 的源头；播放器仓库通过 npm 依赖拿到 SDK 运行时代码，或者在 SDK 仓库里单独导出一个 `runtime` 入口供播放器打包。不要两个仓库各维护一份。具体做法在步骤 S2 里定。**已定（S2）**：SDK 实现也只在 SDK 仓库，经 `./runtime` 入口供播放器使用；播放器仓库删除 `src/packages/sdk`，依赖锁定版本的包，见文末 S1/S2 记录。
 
@@ -98,8 +137,8 @@
 2. **npm**：
    - 确认包名和作用域，建议 `@vestra-player/sdk`，需要先在 npm 上建组织 `vestra-player`；
    - 发布用的 npm token，配置到 SDK 仓库的 Actions secrets，名字例如 `NPM_TOKEN`。我不直接接触 token。
-3. **插件仓库**：启用 GitHub Pages，用来托管 `repo.json`。
-4. **签名密钥**：用来给官方 `repo.json` 签名，私钥放进插件仓库的 Actions secrets。可以由我生成密钥对，把私钥交给你配置，公钥写进播放器。
+3. **插件仓库**：启用 GitHub Pages，用来托管 `index.json`。
+4. **签名密钥**：用来给官方 `index.json` 签名，私钥放进插件仓库的 Actions secrets。可以由我生成密钥对，把私钥交给你配置，公钥写进播放器。
 
 ## 4. 实施步骤
 
@@ -108,7 +147,7 @@
 | S0 | 在本仓库先把 SDK 整理成可独立的 workspace 包（`src/sdk` 改为包结构，插件改用包名引用，CLI 从 `scripts/plugin.mjs` 移进包），在 monorepo 内验证：全量检查，加开发方式和 dist 两种真机运行 | 无，可立即开始 |
 | S1 | SDK 仓库：迁入 S0 的包（保留 git 历史，用 `git subtree split` 或 `git filter-repo`），配置 CI（检查、测试、npm 发布），发布 `@vestra-player/sdk@1.0.0` | SDK 仓库链接、npm 作用域、`NPM_TOKEN` |
 | S2 | 播放器仓库改为依赖 npm 包：删除 `src/sdk` 里对外的部分；runner 和运行时代码的来源按第 2 节确定；打包和开发两条路径真机验证 | S1 |
-| S3 | 插件仓库：迁入内置插件源码（保留历史），改用 npm 上的 SDK；建 CI，包括构建、打包、上传 Releases、生成并签名 `repo.json`、发布到 Pages、统计下载次数；写 `manifest.toml` 的 PR 模板和贡献说明 | 插件仓库链接、Pages、签名密钥 |
+| S3 | 插件仓库：迁入内置插件源码（保留历史），改用 npm 上的 SDK；建 CI，包括构建、打包、上传 Releases、生成并签名 `index.json`、发布到 Pages、统计下载次数；写 `registry/<id>.toml` 的 PR 模板和贡献说明 | 插件仓库链接、Pages、签名密钥 |
 | S4 | 核心改动：manifest 显示字段，内置插件不可卸载；播放器打包时从插件仓库取内置插件 | S2、S3 |
 | S5 | 商城插件：列表和详情界面、安装、更新、第三方仓库、链接与拖入安装、签名校验 | S3、S4 |
 | S6 | 真机验收：从官方仓库安装和更新、第三方仓库、侧载、热卸载、内置插件保护；跨平台检查 | S5 |
@@ -173,7 +212,7 @@ src/packages/sdk/                 npm 包 @vestra-player/sdk（src/package.json 
 
 - 按目录工作（默认当前目录），不再假设仓库路径：类型检查沿用插件目录或上层最近的 `tsconfig.json`（到 `.git` 所在的仓库根为止；本仓库即 `src/tsconfig.json`，`jsnes` 路径映射照旧生效），没有就用内置严格设置；`typeRoots` 收集插件目录往上的各级 `node_modules/@types`，再加 SDK 自带的 `@types/node`。
 - 新检查：manifest 的 `apiVersion` 必须是 `vestra/1`（宿主本来就拒绝其它值）。产物中对 `@vestra-player/sdk`（任何子路径）的运行时引用一律拒绝，改为解析语法树判断，不再用正则（工坊引擎的字符串里含 `from '@vestra-player/sdk'`，正则会误报）；打包（`bundle`）时把 SDK 标为 external，确保这项检查看得到。
-- `pack`：构建后把 `dist/` 打成 `<id>-<version>.zip`（条目排序、固定时间戳，同样输入得到同样字节），输出大小和 sha256，供以后的 `repo.json`。**这是暂定格式**：宿主现在只从目录安装，包格式在 S3/S5 定稿时再确认。`*.zip` 不会被复制进 `dist/`（需要时列入 `assets`）。
+- `pack`：构建后把 `dist/` 打成 `<id>-<version>.zip`（条目排序、固定时间戳，同样输入得到同样字节），输出大小和 sha256，供以后的 `repo.json`（现名 `index.json`，见 1.3）。**这是暂定格式**：宿主现在只从目录安装，包格式在 S3/S5 定稿时再确认。`*.zip` 不会被复制进 `dist/`（需要时列入 `assets`）。
 - Windows：`npm ci` 通过 shell 调用（`npm.cmd`）。
 
 ### 边界检查（check-boundaries）
