@@ -1114,7 +1114,7 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 | 模拟来源 | `host.openElsewhere(path, phase?)`（另一个插件打开了媒体）；`host.setSource({ phase, position, duration, … })` |
 | 断言 | `host.window(id).props`（kebab-case 名）、`.visible`；`host.command(id).state`、`.declaration`；`host.conflicts`（`[绑定, 赢家, ...被压下]`）；`host.layout.bottom` / `.sidebar`（可直接改后 `host.emit("window.state", {})` 模拟别处的变化）；`host.osd`（显示过的提示）、`host.osdPanel`；`host.sequence`（提供者的标志）；`host.menus`（`showMenu` 记录）；`host.sent(method)`；`host.source`；`host.processing`、`host.subtitles`、`host.snapshots`、`host.jobs`、`host.producers` |
 | 模拟数据 | `host.stats`（`player.stats()` 的返回值，第 2 轮新增字段可省略，SDK 补 `null`）；`host.dataDirectory`（`plugin.dataDirectory`，`storage.json` 直接读写其中的真实文件）；`host.setSource({ audioTracks })`（`addAudioTrack` / `selectAudioTrack` 有默认处理，可用 `host.handle("audio.addTrack" \| "audio.selectTrack", …)` 注入失败）；`host.subtitles.tracks` 的条目可带 `codec`、`text`、`streamIndex` |
-| 通用能力 | `host.clipboard`（`{ text, images }`，预置 `text` 测 `readText`）；`host.power`（合并后的 `"off"` / `"playing"`）；`host.tools.handle(tool, (args) => ({ stdout, stderr }))`（未注入的工具 `unavailable`；抛 `HostError` 模拟失败），`host.tools.calls`；`host.system.revealed`、`.opened`（播放器的 `system.*` 请求经 `host.local.open` / `openUrl` 记录，旧测试替换它们仍然有效；新测试请用 `host.handle("system.openPath", …)` 注入失败）；`host.subtitleLoads`（每次 `load` 的 `format`、`title`、`select` 与字节）；`host.system.urls`（`system.openUrl`） |
+| 通用能力 | `host.clipboard`（`{ text, images }`，预置 `text` 测 `readText`）；`host.power`（合并后的 `"off"` / `"playing"`）；`host.tools.handle(tool, (args) => ({ stdout, stderr }))`（未注入的工具 `unavailable`；抛 `HostError` 模拟失败），`host.tools.calls`；`host.system.revealed`、`.opened`（播放器收到的 `system.reveal` / `openPath` 路径；用 `host.handle("system.openPath", …)` 等注入失败）；`host.subtitleLoads`（每次 `load` 的 `format`、`title`、`select` 与字节）；`host.system.urls`（`system.openUrl`） |
 | 可移植性轮 | `host.secrets`（`Map`：名称 → 值，可预置）；`host.systemInfo`（`app.system()` 的返回值）；`host.exports`（每次 `jobs.start` 的参数：`kind` 为 `rawPng`、`rawJpeg`、`rawBmp`、`rawMp4` 或对应的 `processed…`，JPEG 带 `quality`） |
 | 上限 | `commands.register` 按播放器的同一套命令上限拒绝（`limit`，§4）：本插件最多 `COMMAND_LIMITS.perPlugin` 条，总量把 `host.coreCommands` 算在内 |
 | 第 4a 轮批次 2 | `host.videoView`（`{ owner, values }`：拥有者插件 id 与播放器持有的值）；`host.setVideoViewOwner(pluginId \| null)`（模拟别的插件先占用显示层，`null` 释放并复位） |
@@ -1278,7 +1278,7 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 行为变化（签名不变）：
 
 - **`system.reveal` / `openPath` / `openUrl` 由播放器执行**：SDK 不再在插件进程里运行 `/usr/bin/open`，而是发请求 `system.*`，播放器再检查路径与网址，在 macOS 上照旧调用 `/usr/bin/open`（同样的 10 秒超时与错误），在 Windows 上用系统 Shell。参数检查和错误码不变。直接对协议计数的测试会看到这些请求。
-- **兼容期**：`LocalServices.open` / `openUrl` 变为可选并标为废弃，真实运行时不再使用；`TestHost` 仍把 `system.*` 请求交给 `host.local.open` / `openUrl` 处理，所以替换它们的旧测试（capture 的 `tests/fakes.ts`）照常工作。作者迁移后（可移植性轮 P2）删除这两个成员。
+- **已删除（P4）**：兼容期的 `LocalServices.open` / `openUrl` 已移除，`TestHost` 直接把 `system.*` 请求记录到 `host.system`，不再经 `host.local`；替换 `host.local.open` 的测试改用 `host.handle("system.openPath", …)` / `host.handle("system.reveal", …)` 注入失败。
 - `tools.run` 在 Windows 上按 `PATHEXT` 找 `ffmpeg.exe` 等（之前只找无扩展名的 `ffmpeg`）。
 - 宿主的系统相关代码集中到 `src/host/src/platform/`（macOS、Windows、其它各一份）；macOS 的行为不变。Windows 版目前只通过了交叉编译检查。
 
