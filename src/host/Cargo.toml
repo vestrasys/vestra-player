@@ -25,9 +25,15 @@ ttf-parser = "=0.25.1"
 cpal = { version = "=0.18.2", optional = true }
 rtrb = { version = "=0.4.0", optional = true }
 
+# The unsafe/ crates share this lock file; `cargo test` here still runs only the host.
+[workspace]
+members = ["unsafe/render"]
+
 [features]
 default = ["producer-audio"]
 producer-audio = ["dep:cpal", "dep:rtrb"]
+# Prototypes (r4a §7): code with `unsafe` lives in crates under unsafe/.
+gpu-render = ["dep:vestra-gpu-render"]
 
 [lints.rust]
 unsafe_code = "forbid"
@@ -37,6 +43,7 @@ objc2 = "=0.6.5"
 block2 = "=0.6.2"
 objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "block2", "NSApplication", "NSWindow", "NSResponder", "NSScreen", "NSPasteboard", "NSAlert", "NSButton", "NSControl", "NSView", "NSCell", "NSEvent"] }
 objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSString", "NSData", "NSGeometry"] }
+vestra-gpu-render = { path = "unsafe/render", optional = true }
 
 # ICU4X prints every data-fallback warning with eprintln! when debug_assertions are on.
 # Parley segments CJK text without the optional CJ dictionary on each layout (line
