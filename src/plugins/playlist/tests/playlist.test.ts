@@ -177,6 +177,7 @@ test("menu positions follow the round allocation table; list keys only work with
       ["(打开列表文件…)", 0, "domain", "F3", "panel"],
       ["(保存列表…)", 0, "domain", "F2", "panel"],
       ["(关闭列表)", 0, "domain", "F6", "panel"],
+      ["(播放列表设置…)", 0, "domain", "F5", "panel"],
     ]);
     // Radio groups: repeat (off by default), open mode ("仅打开该文件" by default), sort direction (ascending).
     for (const [id, on] of [

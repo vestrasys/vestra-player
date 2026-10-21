@@ -308,6 +308,8 @@ test("C17: the list, titles, selection and settings come back after a restart; n
       gapless: false,
       clearOnOpenFolder: false,
       confirmClear: true,
+      appendOnOpen: false,
+      dropAtPointer: false,
     });
     assert.deepEqual(saved.list.rows, [
       { kind: "file", source: b, title: "Named B", duration: 12 },
@@ -900,7 +902,7 @@ test("C17: ffprobe answers are kept in probe-cache.json and reused after a resta
 
 // ------------------------------------------------------------------ A15 drag and drop
 
-test("A15: drops on the video area add to the end and play the first item; Option only adds", async () => {
+test("A15 / G-11: drops on the video area replace the list and play the first item; Option only adds", async () => {
   const app = await start();
   try {
     const drop = async (paths: string[], alt = false) => {
@@ -933,10 +935,13 @@ test("A15: drops on the video area add to the end and play the first item; Optio
     assert.equal(app.rows().length, 3);
     assert.equal(app.opens().length, 1);
 
-    // All duplicates: the existing row of the first item plays.
+    // G-11: a plain drop replaces the list (no question) and plays the first item.
+    app.host.setSource({ phase: "ready" });
     await drop([c!, b!]);
-    assert.equal(app.osd(), "已添加 0 项，跳过 2 个重复");
+    assert.deepEqual(app.names(), ["c.mp3", "b.mp4"]);
+    assert.equal(app.osd(), "已添加 2 项");
     assert.equal(app.opens().at(-1)?.source, c);
+    assert.equal(app.host.sent("dialogs.confirm").length, 0);
   } finally {
     await app.close();
   }
@@ -960,7 +965,10 @@ test("A15: a dropped folder is scanned as A03, a list file parsed as C18, a .web
     app.host.setSource({ phase: "ready" });
     await app.host.settle();
 
-    await app.host.drop([join(app.root, "l.m3u8"), join(app.root, "page.webloc")], { target: "video", modifiers: { alt: true } });
+    await app.host.drop([join(app.root, "l.m3u8"), join(app.root, "page.webloc")], {
+      target: "video",
+      modifiers: { alt: true },
+    });
     await app.host.settle(30);
     assert.deepEqual(app.names(), ["01.flac", "02.flac", "Named", "https://example.org/v.mp4", "https://example.org/watch?a=1&b=2"]);
     assert.equal(app.opens().length, 1);
@@ -976,12 +984,32 @@ test("A15: a dropped folder is scanned as A03, a list file parsed as C18, a .web
   }
 });
 
-test("A15: drops on the list insert before the row under the point, or append on blank space; never play", async () => {
+test("G-12: drops on the list add to the end by default; never play", async () => {
+  const app = await start();
+  try {
+    const rows = await app.files(["1.mp4", "2.mp4", "3.mp4", "4.mp4", "5.mp4"]);
+    await app.addFiles(rows);
+    const [x, y, srt] = await app.files(["x.mp4", "y.mkv", "y.srt"]);
+    await app.emit("list-area", 0, 200);
+    // On the second row: still the end.
+    await app.host.drop([x!, srt!, y!], { target: "panel", at: { x: 40, y: 55 } });
+    await app.host.settle(30);
+    assert.deepEqual(app.names(), ["1.mp4", "2.mp4", "3.mp4", "4.mp4", "5.mp4", "x.mp4", "y.mkv"]);
+    assert.equal(app.opens().length, 0);
+    assert.equal(app.osd(), "已添加 2 项，跳过 1 个不支持的项目");
+  } finally {
+    await app.close();
+  }
+});
+
+test("G-12: with 「插入到拖放位置」 drops on the list go before the row under the point, or to the end on blank space", async () => {
   const app = await start();
   try {
     const rows = await app.files(["1.mp4", "2.mp4", "3.mp4", "4.mp4"]);
     await app.addFiles(rows);
     const [x, y, z, srt] = await app.files(["x.mp4", "y.mkv", "z.mp3", "z.srt"]);
+    app.host.settingsPage("playlist").emit("set-drop-at-pointer", true);
+    await app.host.settle();
     await app.emit("list-area", 0, 200);
     // Rows start at y 31 (below the tab strip), 20px each: y 75 is the third row.
     await app.host.drop([x!, srt!, y!], { target: "panel", at: { x: 40, y: 75 } });
@@ -1013,4 +1041,158 @@ test("A15: the drop point maps to a shown row; tab strip, bottom bar and blank s
   assert.equal(dropRow(31 + 200, 0, 200, 50), null); // bottom bar
   assert.equal(dropRow(31 + 5 * 20, 0, 200, 5), null); // below the last row
   assert.equal(dropRow(35, 60, 200, 5), 3);
+});
+
+// ------------------------------------------------------------------ interaction round (G-08, G-11, IA-PL-02)
+
+test("G-11: with 「追加」 a drop on the video area adds to the end; while another source opens it only adds", async () => {
+  const app = await start();
+  try {
+    const [a, b, c, d, e] = await app.files(["a.mp4", "b.mp4", "c.mp4", "d.mkv", "e.mkv"]);
+    await app.addFiles([a!, b!, c!]);
+    app.host.settingsPage("playlist").emit("set-append-on-open", true);
+    await app.host.settle();
+    await app.host.drop([d!], { target: "video" });
+    await app.host.settle(30);
+    assert.deepEqual(app.names(), ["a.mp4", "b.mp4", "c.mp4", "d.mkv"]);
+    assert.equal(app.opens().at(-1)?.source, d);
+
+    // Option off again; the first open is still loading: nothing is cleared, only added.
+    app.host.settingsPage("playlist").emit("set-append-on-open", false);
+    await app.host.settle();
+    await app.host.drop([e!], { target: "video" });
+    await app.host.settle(30);
+    assert.deepEqual(app.names(), ["a.mp4", "b.mp4", "c.mp4", "d.mkv", "e.mkv"]);
+    assert.equal(app.osd(), "已添加 1 项；正在打开，已加入列表");
+    assert.equal(app.opens().length, 1);
+
+    // Ready: the next plain drop replaces the list; the playing row's media is replaced by the new one.
+    app.host.setSource({ phase: "ready" });
+    await app.host.settle();
+    assert.equal(app.rows()[3]!.current, true);
+    await app.host.drop([a!], { target: "video" });
+    await app.host.settle(30);
+    assert.deepEqual(app.names(), ["a.mp4"]);
+    assert.equal(app.opens().at(-1)?.source, a);
+    assert.equal(app.host.osd.includes("列表已清空，当前媒体继续"), false);
+  } finally {
+    await app.close();
+  }
+});
+
+test("IA-PL-02: the 播放列表 settings page follows the menu both ways; F5 with list focus opens it", async () => {
+  const data = await mkdtemp(join(tmpdir(), "vestra-playlist-page-"));
+  const app = await start({ data });
+  try {
+    const page = app.host.settingsPage("playlist");
+    assert.equal(page.category, "playback");
+    assert.equal(page.title, "播放列表");
+    assert.equal(page.file, "ui/settings.slint");
+    assert.deepEqual(
+      [page.props["open-mode"], page.props["append-on-open"], page.props["drop-at-pointer"], page.props.repeat],
+      [0, false, false, 0],
+    );
+    assert.deepEqual([page.props.shuffle, page.props["fast-advance"], page.props.remember, page.props["confirm-clear"]], [
+      false,
+      false,
+      true,
+      true,
+    ]);
+
+    // Page → menu.
+    page.emit("set-open-mode", 1);
+    page.emit("set-repeat", 2);
+    page.emit("set-shuffle", true);
+    page.emit("set-confirm-clear", false);
+    await app.host.settle();
+    assert.equal(app.command("open-mode-similar").state.checked, true);
+    assert.equal(app.command("open-mode-only").state.checked, false);
+    assert.equal(app.command("repeat-one").state.checked, true);
+    assert.equal(app.command("shuffle").state.checked, true);
+    assert.equal(app.command("confirm-clear").state.checked, false);
+    // Menu → page.
+    await app.run("fast-advance");
+    await app.run("open-mode-folder");
+    assert.equal(page.props["fast-advance"], true);
+    assert.equal(page.props["open-mode"], 2);
+
+    // F5 with the list focused is this page; without focus it is not the list's.
+    await app.press("F5");
+    assert.deepEqual(app.host.settings.shows, ["playlist"]);
+    // Without list focus the list's F5 is not in force (the player's 选项… takes it).
+    await assert.rejects(app.host.press("F5"), /nothing is bound to F5/);
+    assert.deepEqual(app.host.settings.shows, ["playlist"]);
+
+    // The two drop options are saved with the other settings.
+    page.emit("set-append-on-open", true);
+    page.emit("set-drop-at-pointer", true);
+    await app.host.settle(1100);
+    const saved = JSON.parse(await readFile(join(data, "playlists.json"), "utf8"));
+    assert.equal(saved.settings.appendOnOpen, true);
+    assert.equal(saved.settings.dropAtPointer, true);
+    assert.equal(saved.settings.openMode, "folder");
+  } finally {
+    await app.close();
+    await rm(data, { recursive: true, force: true });
+  }
+});
+
+test("G-08: keyboard moves keep the cursor row in view with the least scroll", async () => {
+  const app = await start();
+  try {
+    const names = Array.from({ length: 200 }, (_, i) => `${String(i + 1).padStart(3, "0")}.mp4`);
+    await app.addFiles(await app.files(names));
+    await app.emit("list-area", 0, 200); // ten rows in view
+    await app.click(0);
+    const request = () => app.prop("scroll-request") as number;
+    const scrolledTo = () => app.prop("scroll-to-y") as number;
+    const before = request();
+    for (let i = 0; i < 9; i++) await app.emit("select-step", 1, false);
+    assert.equal(request(), before, "row 10 is still in view");
+    await app.emit("select-step", 1, false); // row 11: becomes the last row
+    assert.equal(scrolledTo(), 11 * 20 - 200);
+    for (let i = 0; i < 29; i++) await app.emit("select-step", 1, false);
+    assert.equal(scrolledTo(), 40 * 20 - 200, "row 40 is the last row in view");
+    await app.emit("select-step", 1000000, false); // End
+    assert.equal(scrolledTo(), 200 * 20 - 200);
+    await app.emit("select-step", -1000000, false); // Home: the first row on top
+    assert.equal(scrolledTo(), 0);
+    // Ctrl+End moves the row to the bottom and follows it.
+    await app.press("Ctrl+End");
+    assert.equal(scrolledTo(), 200 * 20 - 200);
+  } finally {
+    await app.close();
+  }
+});
+
+test("G-08: a newly playing row out of view is centred, unless the user scrolled within 2 seconds", async () => {
+  const app = await start();
+  try {
+    const names = Array.from({ length: 100 }, (_, i) => `${String(i + 1).padStart(3, "0")}.mp4`);
+    await app.addFiles(await app.files(names));
+    await app.emit("list-area", 0, 200);
+    const request = () => app.prop("scroll-request") as number;
+    // Row 60 plays (double click while scrolled there is not needed: next / auto-advance alike).
+    await app.emit("play-row", app.rows()[59]!.rowId);
+    app.host.setSource({ phase: "ready" });
+    await app.host.settle();
+    assert.equal(app.prop("scroll-to-y"), 59 * 20 + 10 - 100);
+    await app.emit("list-area", 59 * 20 + 10 - 100, 200); // the list reports the scroll it was asked for
+
+    // The next row is in view: no scroll.
+    const asked = request();
+    await app.host.step("next");
+    app.host.setSource({ phase: "ready" });
+    await app.host.settle();
+    assert.equal(request(), asked);
+
+    // The user scrolls to the top; a change right after leaves the list alone.
+    await app.emit("list-area", 0, 200);
+    await app.emit("play-row", app.rows()[89]!.rowId);
+    app.host.setSource({ phase: "ready" });
+    await app.host.settle();
+    assert.equal(request(), asked);
+  } finally {
+    await app.close();
+  }
 });

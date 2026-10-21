@@ -12,6 +12,7 @@
     "events",
     "commands",
     "ui.osd",
-    "clipboard"
+    "clipboard",
+    "bindings.manage"
   ]
 }

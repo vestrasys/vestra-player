@@ -77,8 +77,14 @@ export function shortCodec(codec: string | null | undefined) {
   return first.length > 12 ? `${first.slice(0, 11)}…` : first || null;
 }
 
-/** I03 lines must fit the narrowest video area (318 px of 11 px monospace): 44 columns, CJK counting two. */
+/** I03 lines must fit the narrowest video area (318 px of 11 px text): 44 columns, CJK counting two. */
 export const BRIEF_COLUMNS = 44;
+/**
+ * IA-INFO-01: the columns the info block has in a video area `width` points
+ * wide (10 px margins, 6 px padding, about 6.5 px a column); never fewer than
+ * `BRIEF_COLUMNS` (headless players report 0).
+ */
+export const briefColumns = (width: number) => Math.max(BRIEF_COLUMNS, Math.floor((width - 32) / 6.5));
 const wide = (char: string) => /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]|[\u{20000}-\u{3fffd}]/u.test(char);
 /** Cut a line to `columns` display columns, ending in "…" when cut. */
 export function fit(line: string, columns = BRIEF_COLUMNS) {
@@ -95,12 +101,39 @@ export function fit(line: string, columns = BRIEF_COLUMNS) {
   return line;
 }
 
+/** What the short information adds from other public state (IA-INFO-01); `null` / absent = left out. */
+export interface BriefExtras {
+  /** The current chapter's title (`第 N 章` when it has none). */
+  chapter?: string | null;
+  /** The selected subtitle track's name. */
+  subtitle?: string | null;
+}
+
+/** IA-INFO-01: the chapter playing at `position`: the last one starting at or before it. */
+export function currentChapter(chapters: readonly { title: string | null; start: number }[], position: number | null) {
+  if (position === null || !Number.isFinite(position)) return null;
+  let found = -1;
+  chapters.forEach((chapter, index) => {
+    if (chapter.start <= position + 1e-3) found = index;
+  });
+  if (found < 0) return null;
+  return chapters[found]!.title?.trim() || `第 ${found + 1} 章`;
+}
+
+/** IA-INFO-01: the selected subtitle track's title, else its language, else 「字幕」; `null` when none is selected. */
+export function subtitleName(track: { title: string; language: string | null } | null | undefined) {
+  if (!track) return null;
+  return track.title.trim() || track.language?.trim() || "字幕";
+}
+
 /**
- * I03 short information, two lines: the file name, then
- * `01:23 / 45:00 · H.264 1920×1080 · AAC 2 声道`; unknown items are left out,
- * codecs use short names, and each line fits the video area (cut with "…").
+ * I03 / IA-INFO-01 short information, up to three lines: the file name, then
+ * `01:23 / 45:00 · 第二章 · H.264 1920×1080 · AAC 2 声道`, then the selected
+ * subtitle track's name; unknown items (and the subtitle line without a
+ * selected track) are left out, codecs use short names, and each line fits
+ * the video area (cut with "…").
  */
-export function brief(state: PlayerState, stats: PlaybackStats | null) {
+export function brief(state: PlayerState, stats: PlaybackStats | null, extras: BriefExtras = {}, columns = BRIEF_COLUMNS) {
   if (!state.source) return "未打开媒体";
   const { video, audio } = stats ?? { video: null, audio: null };
   const join = (...parts: (string | null | undefined | false)[]) => parts.filter(Boolean).join(" ");
@@ -108,11 +141,14 @@ export function brief(state: PlayerState, stats: PlaybackStats | null) {
     state.position !== null && Number.isFinite(state.position)
       ? `${clock(state.position)} / ${state.duration === null ? "直播" : clock(state.duration)}`
       : null,
+    extras.chapter,
     join(shortCodec(video?.codec), !!video?.width && !!video?.height && `${video.width}×${video.height}`),
     join(shortCodec(audio?.codec), !!audio?.channels && `${audio.channels} 声道`),
   ].filter(Boolean);
-  const name = fit(fileName(state.source));
-  return items.length ? `${name}\n${fit(items.join(" · "))}` : name;
+  const lines = [fit(fileName(state.source), columns)];
+  if (items.length) lines.push(fit(items.join(" · "), columns));
+  if (extras.subtitle) lines.push(fit(extras.subtitle, columns));
+  return lines.join("\n");
 }
 
 const BRIEF_MS = 3000;
@@ -130,17 +166,40 @@ export default async function activate(plugin: Plugin) {
   let stats: PlaybackStats | null = null; // the last successful read
   let timer: ReturnType<typeof setInterval> | undefined;
   let briefTimer: ReturnType<typeof setTimeout> | undefined;
+  /** IA-INFO-01: the current source's chapters (read once per source) for the short information. */
+  let chapters: { sourceId: number; list: readonly { title: string | null; start: number }[] } | null = null;
   const briefShown = () => briefOn;
+  const extras = (): BriefExtras => {
+    const state = plugin.player.state;
+    return {
+      chapter: chapters?.sourceId === state.sourceId ? currentChapter(chapters.list, state.position) : null,
+      subtitle: state.source ? subtitleName(plugin.subtitles.state?.selected) : null,
+    };
+  };
   /** Write the panel from the last stats; nothing shown hides it. */
   const draw = () => {
     const blocks = [
-      briefShown() ? brief(plugin.player.state, stats) : null,
+      briefShown() ? brief(plugin.player.state, stats, extras(), briefColumns(plugin.window.state.videoArea.width)) : null,
       shown && stats ? describe(plugin.player.state, stats) : null,
     ].filter((block): block is string => block !== null);
     panel.set(blocks.length ? blocks.join("\n\n") : null);
   };
+  /** The chapter list (once per source) and the subtitle selection (no event exists: read each time). */
+  const readExtras = async () => {
+    const sourceId = plugin.player.state.sourceId;
+    await Promise.all([
+      chapters?.sourceId === sourceId
+        ? null
+        : plugin.player.chapters().then((read) => {
+            // A stale reply (the source changed meanwhile) is dropped; the next second reads again.
+            if (read.sourceId === plugin.player.state.sourceId) chapters = { sourceId: read.sourceId, list: read.chapters };
+          }, () => {}),
+      plugin.subtitles.refresh().catch(() => {}),
+    ]);
+  };
   const render = async () => {
-    stats = await plugin.player.stats();
+    const [read] = await Promise.all([plugin.player.stats(), briefShown() ? readExtras() : null]);
+    stats = read;
     if (shown || briefShown()) draw(); // may have been switched off meanwhile
   };
   const refresh = () => void render().catch(() => {}); // keep the last text; try again next second

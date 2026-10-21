@@ -469,13 +469,14 @@ export class Queue {
     if (removed.rowId === this.binding?.rowId) this.detach("当前媒体已移出列表", true);
     if (removed.rowId === this.failed) this.failed = null;
   }
-  clear() {
+  /** `loud`: say that the current media goes on (not when something new plays right after). */
+  clear(loud = true) {
     for (const row of this.rows) this.removed(row.rowId);
     this.rows = [];
     this.selected = null;
     this.failed = null;
     this.shuffled.clear();
-    this.detach("列表已清空，当前媒体继续", true);
+    this.detach("列表已清空，当前媒体继续", loud);
   }
   /** Stop following the bound media; `loud` shows `message` on screen. */
   detach(message: string, loud = false) {

@@ -15,14 +15,15 @@
 
 未打开媒体时文件名为「未打开媒体」，其它未知项为「-」。文件名取路径最后一段；网络地址取路径最后一段，没有则取主机名。
 
-简要信息（I03，无菜单项）：按 Shift+Tab 在同一信息块显示两行，3 秒后消失，显示期间再按重新计时，时间每秒刷新：
+简要信息（I03、IA-INFO-01，无菜单项）：按 Shift+Tab 在同一信息块显示两到三行，3 秒后消失，显示期间再按重新计时，时间每秒刷新：
 
 ```
 movie.mp4
-01:23 / 45:00 · H.264 1920×1080 · AAC 2 声道
+12:34 / 45:00 · 第二章 标题 · H.264 1920×1080 · AAC 2 声道
+简体中文
 ```
 
-编码用简短名称（H.264、HEVC、AV1、AAC 等，不用 mpv 的长描述）；每行最多 44 列（中文算 2 列，按最窄视频区 318px 估算），过长时末尾用「…」省略。未知的项整项省略；直播（时长未知）写「01:23 / 直播」；未打开媒体只显示「未打开媒体」。完整信息开着时两块同时显示，简要信息在上，中间空一行；到时只移除简要信息。
+章节取自 `player.chapters()`（每个来源读一次）：开始时间不晚于当前位置的最后一章，没有标题时「第 N 章」，没有章节时整项省略。第三行是选中的字幕轨名（标题，空则语言，再空则「字幕」），没有选中字幕时没有这一行；字幕选择没有推送事件，显示期间每秒 `subtitles.refresh()` 一次。编码用简短名称（H.264、HEVC、AV1、AAC 等，不用 mpv 的长描述）；每行按视频区宽度截断：列数 = (`window.state.videoArea.width` − 32) / 6.5，至少 44 列（中文算 2 列，44 列对应最窄视频区 318），过长时末尾用「…」省略。未知的项整项省略；直播（时长未知）写「01:23 / 直播」；未打开媒体只显示「未打开媒体」。完整信息开着时两块同时显示，简要信息在上，中间空一行；到时只移除简要信息。
 
 播放属性（I05）：右键菜单顶层「播放属性…」（`windows` 组 order 811）或 Ctrl+F1 打开工具窗口 `ui/properties.slint`（460×420，最小 400×320），已打开时再按只带到前面。三个页签，上次的页签记在 `info.json`（`plugin.storage`）：
 
@@ -38,4 +39,4 @@ movie.mp4
 
 插件列表：每次打开窗口读一次 `plugin.packages.list()`（不需要能力），之后由 `packages.onChange` 推送更新（插件启动、停用、失败、安装、卸载时窗口立即刷新）。来源显示为 已安装 / 开发加载 / 试载，状态为 启动中 / 运行中 / 已停用 / 失败 / 已停止。读取失败时列表区显示「未知（无法读取插件列表）」，下次打开再读。
 
-用到的接口：`plugin.osd.panel()`（能力 `ui.osd`）、`plugin.player.stats()`（`playback.read`）、命令 `bindings`；I05、I09 另用 `windows.create`（`ui.window`）、`plugin.app`（含 `app.system()`）、`packages.list` / `onChange`、`dialogs.saveFile`（`ui.dialog`）、`clipboard.writeText`（`clipboard`）、`tools.run`、`storage.json`。信息层的底色、字体与位置由宿主决定。
+用到的接口：`plugin.osd.panel()`（能力 `ui.osd`）、`plugin.player.stats()` 与 `player.chapters()`（`playback.read`）、`plugin.subtitles.state` / `refresh()`（`subtitles.read`）、`plugin.window.state`（不需要能力）、命令 `bindings`；I05、I09 另用 `windows.create`（`ui.window`）、`plugin.app`（含 `app.system()`）、`packages.list` / `onChange`、`dialogs.saveFile`（`ui.dialog`）、`clipboard.writeText`（`clipboard`）、`tools.run`、`storage.json`。信息层的底色、字体与位置由宿主决定。

@@ -24,6 +24,8 @@ export class VideoSize {
   #probed = -1;
   #timer: ReturnType<typeof setTimeout> | null = null;
   #disposed = false;
+  /** G-02: called once per source, when the probe after its first `ready` finds the video size. */
+  onFirstSize: ((source: number, size: Size) => void) | null = null;
 
   constructor(plugin: Plugin) {
     this.#plugin = plugin;
@@ -69,6 +71,7 @@ export class VideoSize {
     if (size) {
       this.#size = size;
       this.#plugin.update();
+      this.onFirstSize?.(source, size);
     } else if (attempts > 1) {
       this.#timer = setTimeout(() => void this.#probe(source, attempts - 1), timing.probeRetry);
     }
