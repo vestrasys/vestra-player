@@ -301,6 +301,9 @@ struct Host {
     no_video: bool,
     /// A backdrop is mounted, so mpv is told not to show cover art (R-U3).
     cover_art_off: bool,
+    /// Prototype (r4a §7.1): system PiP for this window; started once.
+    #[cfg(feature = "pip")]
+    pip: Option<(platform_window::HostWindowId, vestra_pip::Pip, bool)>,
     /// File drops (R-U2).
     drops: drops::Drops,
     /// Settings pages and the options window (R-S1, R-H7).
@@ -882,12 +885,68 @@ impl Host {
             return;
         };
         self.shown_size = Some((frame.buffer.width(), frame.buffer.height()));
+        #[cfg(feature = "pip")]
+        if let Some((_, pip, _)) = &self.pip {
+            let (width, height) = (
+                frame.buffer.width() as usize,
+                frame.buffer.height() as usize,
+            );
+            if let Err(error) = pip.enqueue(width, height, frame.buffer.as_bytes()) {
+                eprintln!("pip: {error}");
+            }
+        }
         let image = slint::Image::from_rgb8(frame.buffer);
         self.last_image = Some(image.clone());
         self.last_frame = Some(Instant::now());
         let _ = window.set_property("video-frame", image.into());
     }
+    /// Prototype (r4a §7.1, `VESTRA_PIP=1`): put the video into the system
+    /// picture-in-picture window as soon as AVKit allows it; its play/pause
+    /// and skip buttons run the core actions. A rebuilt window starts over.
+    #[cfg(feature = "pip")]
+    fn pip_tick(&mut self) {
+        let Some(id) = self
+            .native_window
+            .filter(|_| std::env::var_os("VESTRA_PIP").is_some())
+        else {
+            return;
+        };
+        if self
+            .pip
+            .as_ref()
+            .is_none_or(|(current, _, _)| *current != id)
+        {
+            self.pip = platform_window::ns_window(id)
+                .ok()
+                .and_then(|window| vestra_pip::Pip::new(&window))
+                .map(|pip| (id, pip, false));
+            if self.pip.is_some() {
+                eprintln!("pip: ready (supported: {})", vestra_pip::Pip::supported());
+            }
+        }
+        let Some((_, pip, started)) = &mut self.pip else {
+            return;
+        };
+        pip.set_paused(self.last_source["paused"] == true);
+        if !*started && pip.possible() {
+            eprintln!("pip: possible, starting");
+            pip.start();
+            *started = true;
+        }
+        let paused = self.last_source["paused"] == true;
+        for request in pip.requests() {
+            let action = match request {
+                vestra_pip::Request::Pause(pause) if pause == paused => continue,
+                vestra_pip::Request::Pause(_) => "play-pause",
+                vestra_pip::Request::Skip(seconds) if seconds < 0. => "seek-backward",
+                vestra_pip::Request::Skip(_) => "seek-forward",
+            };
+            let _ = self.run_core_action(action, None);
+        }
+    }
     fn window_tick(&mut self) {
+        #[cfg(feature = "pip")]
+        self.pip_tick();
         let Some(shell) = self.shell.as_ref().map(ComponentHandle::clone_strong) else {
             return;
         };
@@ -3629,6 +3688,8 @@ fn main() -> Result<()> {
         images: Default::default(),
         no_video: true,
         cover_art_off: false,
+        #[cfg(feature = "pip")]
+        pip: None,
         drops: Default::default(),
         settings: Default::default(),
         settings_category: None,
