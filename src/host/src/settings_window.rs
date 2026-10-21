@@ -153,7 +153,7 @@ export component OptionsWindow inherits Window {{
                 Rectangle {{
                     width: 160px;
                     background: Theme.bg-list;
-                    ScrollView {{
+                    tree := ScrollView {{
                         VerticalLayout {{
                             alignment: start;
                             padding-top: 4px;
@@ -192,11 +192,14 @@ export component OptionsWindow inherits Window {{
                     }}
                 }}
             }}
-            Rectangle {{ height: 1px; background: Theme.line; }}
-            HorizontalLayout {{
+            // Fixed-height footer: every extra pixel goes to the tree and the
+            // page (a Button has no max-height, so a stretchable row grew it).
+            Rectangle {{ height: 1px; vertical-stretch: 0; background: Theme.line; }}
+            buttons := HorizontalLayout {{
+                vertical-stretch: 0;
                 padding: 8px;
                 alignment: end;
-                Button {{ text: "关闭"; clicked => {{ root.close(); }} }}
+                close := Button {{ height: Theme.button-height; text: "关闭"; clicked => {{ root.close(); }} }}
             }}
         }}
     }}
@@ -629,5 +632,93 @@ mod tests {
                 .is_some()
         );
         composition::build(source(&[]).unwrap(), "OptionsWindow").unwrap();
+    }
+
+    /// A windowless platform so the options window can be laid out in a test.
+    struct Headless(std::rc::Rc<slint::platform::software_renderer::MinimalSoftwareWindow>);
+    impl slint::platform::Platform for Headless {
+        fn create_window_adapter(
+            &self,
+        ) -> std::result::Result<
+            std::rc::Rc<dyn slint::platform::WindowAdapter>,
+            slint::PlatformError,
+        > {
+            Ok(self.0.clone())
+        }
+    }
+
+    /// Geometry of the window's parts at a size, as `[tree height, page top,
+    /// page height, close top, close width, close height]` in logical pixels.
+    fn measure(pages: &[&Page], width: f32, height: f32) -> [f32; 6] {
+        thread_local! {
+            static PLATFORM: () = {
+                let window = slint::platform::software_renderer::MinimalSoftwareWindow::new(
+                    Default::default(),
+                );
+                slint::platform::set_platform(Box::new(Headless(window))).unwrap();
+            };
+        }
+        PLATFORM.with(|_| {});
+        // Read the parts back through test-only out properties.
+        let probes = "    callback close();\n\
+            out property <length> t-tree-h: tree.height;\n\
+            out property <length> t-pages-y: pages.absolute-position.y;\n\
+            out property <length> t-pages-h: pages.height;\n\
+            out property <length> t-close-y: close.absolute-position.y;\n\
+            out property <length> t-close-w: close.width;\n\
+            out property <length> t-close-h: close.height;\n";
+        let text = source(pages).unwrap();
+        assert!(text.contains("    callback close();\n"));
+        let text = text.replacen("    callback close();\n", probes, 1);
+        let definition = composition::build(text, "OptionsWindow").unwrap();
+        let instance = definition.create().unwrap();
+        instance
+            .window()
+            .set_size(slint::LogicalSize::new(width, height));
+        let read = |name: &str| match instance.get_property(name).unwrap() {
+            slint_interpreter::Value::Number(n) => n as f32,
+            other => panic!("{name}: {other:?}"),
+        };
+        [
+            read("t-tree-h"),
+            read("t-pages-y"),
+            read("t-pages-h"),
+            read("t-close-y"),
+            read("t-close-w"),
+            read("t-close-h"),
+        ]
+    }
+
+    /// The tree and the page fill everything above a fixed-height footer
+    /// (round 4a fix: the footer used to take half the window and stretch the
+    /// 关闭 button into a 60×200 block).
+    #[test]
+    fn options_window_fills_the_height_above_a_fixed_footer() {
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/settings");
+        let tall = Page {
+            file: base.join("tall.slint"),
+            component: "Tall".into(),
+            ..page("a.plugin", "keys", 5, 0, 1)
+        };
+        let short = page("b.plugin", "look", 6, 0, 2);
+        // Footer: 1px line, 8px padding around a 21px button.
+        let footer = 1.0 + 8.0 + 21.0 + 8.0;
+        for pages in [vec![&tall], vec![&short], vec![]] {
+            for (width, height) in [(600.0, 460.0), (600.0, 420.0), (900.0, 800.0)] {
+                let [tree, pages_y, pages_h, close_y, close_w, close_h] =
+                    measure(&pages, width, height);
+                let label = format!("{} page(s) at {width}x{height}", pages.len());
+                assert_eq!(close_h, 21.0, "{label}: button height");
+                assert!(close_w < 120.0, "{label}: button width {close_w}");
+                assert_eq!(
+                    close_y,
+                    height - 8.0 - 21.0,
+                    "{label}: button at the bottom"
+                );
+                assert_eq!(pages_y, 0.0, "{label}");
+                assert_eq!(pages_h, height - footer, "{label}: page height");
+                assert_eq!(tree, height - footer, "{label}: tree height");
+            }
+        }
     }
 }
