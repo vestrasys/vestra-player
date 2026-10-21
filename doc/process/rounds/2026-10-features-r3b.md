@@ -240,6 +240,55 @@ plugin.settings.show(pageId?: string): Promise<void>;   // 只能指定本插件
 
 （P1 每批交付时填写：实现清单、签名调整与实现取舍、检查、宿主 Rust 实测净增、给协调者的 GUI 实测要点。至少要记录：拖放文件夹的匹配规则、`Panel.onDrop` 的坐标系、拖放分组与落点的实测结论、`ImageRef` 的 wire 形式、是否触发 §3.0 的拆分）
 
+#### P1 批次 1（2026-10-21，维护者）：时间轴标记层、运行时图片、背景层、`UrlInputRow`
+
+基于 `main` `b16f4cf`（第 3a 轮合并后，含按键修复）。
+
+**实现清单**（每项：宿主 + SDK 类型与封装 + TestHost + 参考文档 + 单元测试）
+
+| 任务单 | 内容 | 宿主 | SDK / TestHost / 文档 |
+| --- | --- | --- | --- |
+| §3.1 | `plugin.timeline`（R-M3，能力 `timeline.marks`） | 新模块 `timeline.rs`：按所有者分层、校验（≤ 1000、标题 ≤ 100 字符、`[0, 时长]`、三种 `kind`）、按时间稳定合并；`timeline.marks`（`playback.read`）、`timeline.set`（`timeline.marks`）；`source.state` 广播时比较来源代数，变了清空所有层；`disable` 清除该插件的层；新事件 `timeline.changed`（修订号变化且距上次 ≥ 100 ms 才推） | `sdk/plugin/timeline.ts`：有 `playback.read` 时激活前读一次，第一次读 `marks` / `onChange` 后跟随事件；`layer()` 第二次抛错，`set` 用 `Latest`（最后写入生效）、失败交 `onError`，`dispose` 写 `[]`；`host.timeline`、`host.setTimelineLayer`；参考 §5.6 |
+| §3.2 | `plugin.ui.image`、`PropValue`（R-U1，裁决 3.2 第 5 条） | 新模块 `ui_image.rs`：路径（绝对、规范化后在包目录或数据目录内，含符号链接）、≤ 16 MB、PNG/JPEG 文件头、`image` crate 先读尺寸（≤ 4096×4096）再解码为 RGBA；缓存键（插件、规范路径、大小、修改时间），每插件 64 MB，LRU 只淘汰没有属性在显示的条目（按「插件 + 视图 + 属性」记录正在显示的键）；`Host::prop_value` 是全部写入路径的唯一入口：`ui.open` 初值、`ui.set`、`ui.setMount`（主窗口与浮动侧栏）、外壳重建与浮动窗口打开时的重放；`ui_values::reconcile` 对图片总是重新安装 | `ImageHandle`（`ui.ts`）；`ViewBase` 发送前转线上形式，作用域已释放时 `invalid`（初值里的失效图片被略去并报告）；`Scope.ui`；`host.images`、`host.imagePath`；参考 §6.1 |
+| §3.3 | `panels.mount("backdrop")`、`panels.backdrop`（R-U3） | `composition::Slot::Backdrop`，`host.slint` 新标记 `VESTRA-MOUNT-BACKDROP` 在视频图像之后、`mouse` TouchArea 之前（组合测试断言顺序）；新属性 `no-video`（视频图像 `visible: !no-video`，背景层 `visible: no-video`）；`composition::no_video` 状态规则；`source.state` 新内部字段 `videoOutput`（mpv 有选中的视频轨，含封面）；`empty` 时清空视频图像；第二个背景层 `conflict`（含队列中的挂载）；背景层不进窗口策略（无偏好、无自动隐藏，`setInteraction` 无效、`showMenu` `unavailable`） | `layout.state` 与 `window.state` 多 `backdrop: { owner, effective }`；`LayoutService` 带上它；`host.backdrop`、`host.setBackdropEffective(bool)`（二选一选了显式设置）；参考 §6.3 |
+| §3.7 | `UrlInputRow` | `ui/vestra/widgets.slint`（约 55 行 Slint，放在文件末尾：Slint 要求先声明 `Button`）；`ui.rs` 的库编译测试用到它 | 参考 §6.4；示例 §29 |
+| — | §4.3 请求：确认框挂调用方窗口 | 见下「请求裁决」：`confirm.rs` 改挂 `NSApplication.keyWindow`（安全方法，可见且没有已挂表单时），否则主窗口 | 参考 §7、§17 |
+| §3.8 | 文档 | — | 参考 §2、§3.3、§5.6（新）、§6.1、§6.3、§6.4、§7、§14、§17 批次 1；示例 §27–§29 |
+
+**签名调整与实现取舍**（签名均与裁决一致）
+
+1. **`ImageRef` 的 wire 形式**：`{ "$vestraImage": "<路径>", "ref": <序号> }`，SDK 的 `ImageHandle.toJSON()` 生成。`ref` 让每次 `ui.image` 调用都是新值：否则同一路径的两次调用 JSON 相同，`bind` 的「变化才发送」会吞掉「文件内容变了、重新取引用」这一步。宿主只认恰好这两个键的对象，并且每次使用都重新检查路径，伪造的 wire 值拿不到额外权限。`ImageRef` 类型带 `path`（只读，测试与日志用）和品牌字段 `__vestraImage`。
+2. **作用域释放**由 SDK 判断（宿主看不到 SDK 作用域）：`ImageHandle` 记住创建它的作用域，写入时作用域已释放则 `invalid`，请求不发出。所以 TestHost 的 `host.images` 只记录写入过的图片（路径与序号），不记录作用域；任务单 §3.2 的「`host.images` 记录路径与所属作用域」按此收窄。
+3. **`ifCurrent` 在 `timeline.layer().set` 里只比较来源（`sourceId`）**，不比较整个 `PlayerState` 戳：按其它控制的规则，读章节期间用户暂停一下，标记就会被静默丢弃且不再重试，对标记层没有意义（标记属于来源，不属于暂停状态）。线上为 `timeline.set { marks, sourceId? }`，返回 `{ applied }`（SDK 不对外暴露）。
+4. `timeline.marks` 在激活前读一次（只对有 `playback.read` 的插件），与 `player.state`、`window.state` 并行，让 `activate` 里同步读到真实值；参考 §17 已写明协议计数测试会看到它。
+5. 背景层的「没有视频输出」用 mpv 的 track-list（有选中的视频轨，**含**封面）判断，与 `stats().video !== null` 一致，满足裁决 3.2 第 8 条（封面音频 `effective = false`）；生成流（NES）就绪即算有画面。`ended` 与 `ready` 同规则（keep-open 时最后一帧仍在）。启动时（还没有来源）为 `true`。
+6. 关闭来源后清空视频图像只在阶段变为 `empty` 时做；纯音频就绪时不清空，而是靠 `no-video` 隐藏视频图像，所以从视频切到音频也不会残留上一帧。
+7. 每个插件仍只能挂载一个面板（宿主与 SDK 原有限制，参考 §6.3 补了一句）。visualizer 只挂背景层，不受影响；以后有插件要同时挂底栏与背景层再议。
+8. 图片解码在 UI 线程同步进行（4096² JPEG 约 0.1 s）；缩略图（I07）这类小图无感。缓存命中不读文件内容，只 `stat` 一次。
+9. 新依赖：`image = "=0.25.10"`（`default-features = false`，`png`、`jpeg`），Slint 已经依赖同一版本，`Cargo.lock` 只多一行依赖关系，不新增 crate。
+
+**请求裁决：`dialogs.confirm` 挂到调用方工具窗口**（协调者转来，§4.3；请求者 plugins、hotkeys，以后 preferences）
+
+- 请求：确认框固定挂主窗口表单，从工具窗口调用时主窗口被提到前面、工具窗口被盖住；希望加选项 `{ window?: Window }`。插件目前在确认后 `show()` 自己的窗口规避。
+- 维护者分析：这是现有实现的缺陷（确认框的父窗口应是用户正在操作的窗口），按 §4.2 第 1 条按缺陷修，不加参数。调用确认的工具窗口在用户点按钮时就是应用的活动窗口（key window），宿主改为挂 `NSApplication.keyWindow`（可见、没有已挂的表单时），没有活动窗口时挂主窗口，再没有为应用模态。这样不需要宿主把 SDK 的 `Window` 句柄映射到原生窗口（工具窗口目前没有原生窗口关联，要做需在 `ui.open` 前后各拍一次窗口快照，约 40 行，且多一个参数要维护）。
+- 代价：插件在后台（计时器里、用户正在别的窗口）弹确认框时，它挂在用户当前的窗口上而不是插件的窗口上——对用户而言仍是合理的位置；需要明确父窗口的场景目前没有。
+- 结论：**改写后接受**（不加 `window` 选项，宿主行为修正）。签名不变；参考 §7 与 §17 已更新。plugins、hotkeys 的「确认后 `show()` 自己」规避可以删除（作者在本轮顺带处理，不强制）。
+
+**检查**（worktree 内实际执行）
+
+- `src/`：`check`、`format:check`、`boundaries`、`plugins:build` 0；`test:sdk` 84/84（新增 `tests/sdk/round3b.test.ts` 3 条：时间轴、运行时图片、背景层）；插件测试（`plugin -- test --all`）audio 35、bilibili 15、capture 25、history 22、hotkeys 17、info 26、marks 20、nes 11、playback 45、playlist 62、plugins 10、subtitle-online 13、subtitles 52、video 22、window 17、workshop 17、youtube 14 全过（workshop `vendor/sdk` 已重同步，同一提交）。
+- `src/host/`：`cargo fmt --check`、`clippy --locked --all-targets -D warnings`（含 `--no-default-features`）0；`cargo test --locked` 202/202（新增：标记层合并与推送 1、标记校验 1、图片引用形式 1、图片路径/格式/尺寸 1、图片缓存与淘汰 1、背景层状态规则 1；组合编译测试加背景层 fixture 与层次断言，库编译测试加 `UrlInputRow`）。
+- 未执行：GUI（按要求不操作）。
+- 宿主 Rust：`src/host/src/*.rs` 28 771（`main` `b16f4cf`）→ 29 597（**+826**，含测试；`timeline.rs` 241、`ui_image.rs` 345）。未超过 §3.0 的 1 400 行门槛；批次 2 复估约 1 700 行，全轮约 2 500，**不触发 §3.6 拆分**（批次 2 交付时按实测再确认）。SDK 与运行器（`src/sdk/plugin/*.ts` + `src/runtime/`）+约 470（含 TestHost +140），`src/sdk/wire.ts` +28。
+
+**给协调者的 GUI 实测要点**（需要一个调用这些接口的插件：作者 B 的 marks、D 的 visualizer、A 的 playback，或临时探针）
+
+1. 时间轴：探针发布 3 个标记后 `timeline.marks` 立即包含它们；打开另一个文件后为空（`timeline.changed` 推送空列表）；停用发布者后它的标记消失、其它插件的标记保留。
+2. 运行时图片：数据目录里的 PNG 与 JPEG 都能显示（工具窗口与背景层各一次）；把 `.png` 改名成 `.jpg` 仍能显示（按内容判断）；数据目录外的文件、符号链接指向外部、5000×5000 的图、GIF 都失败并进 `onError`，属性不变；覆盖同名文件后再调用 `ui.image` 显示新内容；侧栏浮动/附着切换、底栏重建后图片仍在。
+3. 背景层：无参数启动视频区显示背景层；打开视频后消失、看到视频；F4 关闭后背景层重新出现、**没有残留最后一帧**；没有背景层插件时 F4 后为纯色；带内嵌封面的 MP3：背景层不显示（mpv 画封面）、无封面的 FLAC：背景层显示；背景层显示时双击仍全屏、右键仍出菜单、滚轮仍调音量；从视频直接切到无封面音频不闪最后一帧。第二个插件挂背景层得 `conflict`。
+4. `UrlInputRow`：回车 = 确定、Shift+回车换行、Esc = 取消；`enabled: false` 时确定灰、回车无效；颜色随 `Theme`。
+5. 确认框：从工具窗口（插件管理「卸载」、快捷键设置「恢复默认」）触发时，表单挂在该工具窗口上，主窗口不被提到前面；从主窗口菜单触发时仍挂主窗口。
+
 ### 6.3 作者交付
 
 （各作者完成时填写）

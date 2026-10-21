@@ -1,7 +1,8 @@
 //! Experimental bounded JSON ↔ Slint 1.16.1 value conversion, not a final SDK API.
 //! Equal values retain live properties; same-length Host-owned models reconcile
 //! changed rows. Structural changes replace models; Rc ownership stays with the view.
-//! This is data conversion only, with no layout, image or model-control protocol.
+//! This is data conversion only, with no layout or model-control protocol; runtime
+//! images (`ui_image.rs`) are converted by the caller and only installed here.
 //! Slint numbers use f64. Struct keys must already have Slint's canonical spelling
 //! so conversion cannot silently rename or merge JSON object fields.
 #![forbid(unsafe_code)]
@@ -118,6 +119,11 @@ pub fn own_default_models(
 /// with stable length update only changed rows, preserving focused repeater items.
 /// False means the caller must install the new value (including structural change).
 pub fn reconcile(current: &Value, next: &Value) -> Result<bool> {
+    // Runtime images (`plugin.ui.image`) are not JSON: always install them,
+    // and replace an image with whatever comes next.
+    if matches!(current, Value::Image(_)) || matches!(next, Value::Image(_)) {
+        return Ok(false);
+    }
     if to_json(current)? == to_json(next)? {
         return Ok(true);
     }

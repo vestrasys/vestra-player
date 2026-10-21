@@ -1,0 +1,12 @@
+import { Theme } from "@vestra/theme.slint";
+
+export global Bridge {
+    in property <image> cover;
+    in property <string> caption;
+}
+
+export component Backdrop inherits Rectangle {
+    background: Theme.bg-video;
+    Image { source: Bridge.cover; width: parent.width; height: parent.height; image-fit: contain; }
+    Text { text: Bridge.caption; color: Theme.text; y: parent.height - 24px; }
+}

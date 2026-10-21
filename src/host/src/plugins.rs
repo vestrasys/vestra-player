@@ -53,6 +53,7 @@ pub const CAPABILITIES: &[&str] = &[
     "clipboard",
     "window.control",
     "bindings.manage",
+    "timeline.marks",
 ];
 /// `plugin.app` as JSON, set once at start-up and given to every plugin.
 static APP_INFO: std::sync::OnceLock<String> = std::sync::OnceLock::new();
@@ -205,6 +206,10 @@ impl Plugin {
             .try_send(message)
             .map_err(|error| anyhow::anyhow!("plugin output backpressure/disconnected: {error}"))?;
         Ok(())
+    }
+    /// `plugin.dataDirectory`, when the player could create it.
+    pub fn data_directory(&self) -> Option<&Path> {
+        self.data_directory.as_deref()
     }
     pub fn allows(&self, capability: &str) -> bool {
         self.manifest.capabilities.iter().any(|c| c == capability)

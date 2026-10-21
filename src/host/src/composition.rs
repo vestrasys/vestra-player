@@ -12,6 +12,19 @@ use slint_interpreter::{ComponentDefinition, ComponentInstance, Value};
 pub enum Slot {
     Bottom,
     Sidebar,
+    /// Behind the host's video input layer, shown while there is no video (R-U3).
+    Backdrop,
+}
+
+impl Slot {
+    /// The shell property showing this slot; the backdrop follows `no-video`.
+    pub fn visible_property(self) -> Option<&'static str> {
+        match self {
+            Self::Bottom => Some("bottom-visible"),
+            Self::Sidebar => Some("sidebar-visible"),
+            Self::Backdrop => None,
+        }
+    }
 }
 
 /// One independent package per owner; this minimal shell allows one component
@@ -179,6 +192,20 @@ pub fn shell_source(specs: &[CompileSpec]) -> Result<String> {
         })
         .unwrap_or_default();
     replace_marker(&mut shell, "// VESTRA-MOUNT-BOTTOM", &bottom)?;
+    // Under the video input layer, the OSD and the information blocks; it
+    // never receives the pointer (the TouchArea above covers it) or focus.
+    let backdrop = specs
+        .iter()
+        .find(|spec| spec.slot == Slot::Backdrop)
+        .map(|spec| {
+            format!(
+                "Rectangle {{ visible: root.no-video; \
+                 Owner{}View {{ width: parent.width; height: parent.height; }} }}",
+                spec.owner
+            )
+        })
+        .unwrap_or_default();
+    replace_marker(&mut shell, "// VESTRA-MOUNT-BACKDROP", &backdrop)?;
     source.push_str(&shell);
     Ok(source)
 }
@@ -233,6 +260,17 @@ export component FloatingPanel inherits Window {{
         owner = spec.owner,
     ));
     Ok(source)
+}
+
+/// R-U3: whether the video area has no video frame to show. Empty: none;
+/// ready or ended: none unless mpv shows a picture (cover art counts) or a
+/// stream produces frames; loading and error keep the previous answer.
+pub fn no_video(previous: bool, source: &Json) -> bool {
+    match source["phase"].as_str() {
+        Some("empty") | None => true,
+        Some("ready" | "ended") => !(source["kind"] == "producer" || source["videoOutput"] == true),
+        _ => previous,
+    }
 }
 
 fn replace_marker(source: &mut String, marker: &str, replacement: &str) -> Result<()> {
@@ -437,10 +475,24 @@ pub fn set_json_global(
     property: &str,
     value: &Json,
 ) -> Result<()> {
+    set_global_value(
+        instance,
+        spec,
+        property,
+        crate::ui_values::from_json(value)?,
+    )
+}
+
+/// Write an already converted value (JSON or a runtime image) to the owner's global.
+pub fn set_global_value(
+    instance: &ComponentInstance,
+    spec: &CompileSpec,
+    property: &str,
+    value: Value,
+) -> Result<()> {
     if spec.global.is_none() {
         bail!("composition contribution has no exported bridge global");
     }
-    let value = crate::ui_values::from_json(value)?;
     let alias = global_alias(spec.owner);
     let current = instance.get_global_property(&alias, property)?;
     if !crate::ui_values::reconcile(&current, &value)? {
@@ -452,6 +504,23 @@ pub fn set_json_global(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn backdrop_follows_the_source_without_flicker() {
+        use serde_json::json;
+        let state =
+            |phase: &str, video: bool| json!({"phase":phase,"kind":"media","videoOutput":video});
+        assert!(no_video(false, &state("empty", false)));
+        assert!(no_video(false, &state("ready", false)));
+        assert!(!no_video(true, &state("ready", true)));
+        assert!(!no_video(true, &state("ended", true)));
+        // Loading and error keep what is shown.
+        assert!(no_video(true, &state("loading", false)));
+        assert!(!no_video(false, &state("loading", false)));
+        assert!(!no_video(false, &state("error", false)));
+        assert!(!no_video(true, &json!({"phase":"ready","kind":"producer"})));
+        assert!(no_video(false, &Json::Null));
+    }
 
     #[test]
     fn missing_or_duplicate_shell_markers_fail_instead_of_guessing_layout() {
@@ -502,6 +571,7 @@ mod tests {
         assert!(source.contains("Bridge as Owner10Bridge"));
         assert!(source.contains("Bridge as Owner20Bridge"));
         assert!(source.contains("Owner20View { width: parent.width; height: parent.height; }"));
+        assert!(source.contains("root.no-video"));
         assert!(source.contains("key-input(\"panel:sidebar\""));
         assert!(source.contains("bottom-content := Owner10View"));
         assert!(source.contains("visible: root.bottom-visible"));
@@ -539,6 +609,19 @@ mod tests {
         // ComponentDefinition only: no create(), Window, event loop or GUI.
         compile_definition(&[]).unwrap();
         compile_definition(&specs).unwrap();
+        let mut with_backdrop = specs.to_vec();
+        with_backdrop.push(CompileSpec {
+            owner: 30,
+            file: base.join("backdrop.slint"),
+            component: "Backdrop".into(),
+            global: Some("Bridge".into()),
+            slot: Slot::Backdrop,
+        });
+        let definition = compile_definition(&with_backdrop).unwrap();
+        // The backdrop sits before the video input layer, so it is drawn under it.
+        let source = shell_source(&with_backdrop).unwrap();
+        assert!(source.find("Owner30View").unwrap() < source.find("mouse := TouchArea").unwrap());
+        assert!(definition.global_properties("Owner30Bridge").is_some());
         build(
             floating_source(&specs[1], "播放列表").unwrap(),
             "FloatingPanel",

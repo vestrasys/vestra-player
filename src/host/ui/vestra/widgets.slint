@@ -1,6 +1,7 @@
 // PotPlayer-style controls built on the Vestra theme (core-ui-design.md §2.1):
-//   import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
+//   import { Button, Slider, ToolTipArea, UrlInputRow } from "@vestra/widgets.slint";
 // Other controls come from std-widgets, which the host compiles as fluent-dark.
+import { TextEdit } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 
 // Hover for 600 ms to show `text` beside the pointer.
@@ -152,5 +153,57 @@ export component Slider {
             if event.button == PointerEventButton.left && event.kind == PointerEventKind.up { root.released(root.value); }
         }
         moved => { if self.pressed { root.set-from(self.mouse-x); } }
+    }
+}
+
+// Link input (UI-DLG-02): a multi-line input and [打开] [取消]. Enter or the
+// confirm button accepts (Shift+Enter starts a new line), Esc or 取消 cancels.
+// No validation here: the plugin checks the address.
+export component UrlInputRow {
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <string> confirm-text: "打开";
+    in property <string> cancel-text: "取消";
+    in property <bool> enabled: true;
+    callback accepted(string);
+    callback cancelled();
+    public function focus-input() { input.focus(); }
+    public function select-all() { input.select-all(); }
+    min-width: 260px;
+    preferred-width: 397px;
+    VerticalLayout {
+        spacing: 6px;
+        input := TextEdit {
+            min-height: 68px;
+            font-size: Theme.font-body;
+            wrap: word-wrap;
+            enabled: root.enabled;
+            placeholder-text: root.placeholder;
+            text <=> root.text;
+            key-pressed(event) => {
+                if event.text == Key.Return && !event.modifiers.shift {
+                    if root.enabled { root.accepted(self.text); }
+                    return accept;
+                }
+                if event.text == Key.Escape {
+                    root.cancelled();
+                    return accept;
+                }
+                return reject;
+            }
+        }
+        HorizontalLayout {
+            alignment: end;
+            spacing: 6px;
+            Button {
+                text: root.confirm-text;
+                enabled: root.enabled;
+                clicked => { root.accepted(root.text); }
+            }
+            Button {
+                text: root.cancel-text;
+                clicked => { root.cancelled(); }
+            }
+        }
     }
 }
