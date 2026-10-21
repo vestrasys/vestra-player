@@ -299,6 +299,8 @@ struct Host {
     images: ui_image::Images,
     /// No video frame to show (R-U3): the backdrop is effective.
     no_video: bool,
+    /// A backdrop is mounted, so mpv is told not to show cover art (R-U3).
+    cover_art_off: bool,
     /// File drops (R-U2).
     drops: drops::Drops,
     /// Settings pages and the options window (R-S1, R-H7).
@@ -932,6 +934,7 @@ impl Host {
             height: number("logical-height"),
         };
         let video = (number("video-width"), number("video-height"));
+        self.backdrop_cover_art();
         let scale = f64::from(shell.window().scale_factor());
         if let Some(area) = self
             .sizing
@@ -2093,6 +2096,25 @@ impl Host {
     }
     /// R-U3: follow the source into `no-video`; an empty source also drops
     /// the last video frame, so the video area shows the backdrop or plain colour.
+    /// A mounted backdrop shows audio files itself: mpv stops picking cover
+    /// art as a video track while one is mounted (from the next file opened).
+    fn backdrop_cover_art(&mut self) {
+        let mounted = self
+            .mounts
+            .values()
+            .any(|m| m.spec.slot == composition::Slot::Backdrop);
+        if mounted != self.cover_art_off {
+            self.cover_art_off = mounted;
+            let _ = self.backend.commands.send(Command {
+                reply: Reply {
+                    owner: bindings::HOST,
+                    id: 0,
+                },
+                method: "host.coverArt".into(),
+                params: json!({ "off": mounted }),
+            });
+        }
+    }
     fn backdrop_source(&mut self) {
         let next = composition::no_video(self.no_video, &self.last_source);
         let empty = self.last_source["phase"] == "empty";
@@ -3579,6 +3601,7 @@ fn main() -> Result<()> {
         timeline: Default::default(),
         images: Default::default(),
         no_video: true,
+        cover_art_off: false,
         drops: Default::default(),
         settings: Default::default(),
         settings_category: None,

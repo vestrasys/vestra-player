@@ -371,6 +371,14 @@ interface ViewSettings {
 4. 换来源：值保留（插件自己复位）；含效果截图的尺寸比例与显示层无关。
 5. 所有权：探针先 `view()`，video 的「比例 ▶」失败并显示 `conflict`；停用探针后（宿主写回默认值，画面恢复按来源显示）video 再选一次即生效。停用 video 后恢复默认显示。
 
+#### 请求裁决：背景层挂载时不显示 mpv 封面（作者 D，visualizer，§4.1；单独提交「Round 3b fix」）
+
+- 请求：挂载 backdrop 时宿主设 mpv `audio-display=no`、`cover-art-auto=no`，卸载时恢复。原因：mpv 把内嵌封面 / 同目录 cover.jpg 当视频轨，`stats().video` 非空、`effective = false`，visualizer 的封面 + 标签界面永远不出现。作者已用 mpv 0.41 CLI 验证。
+- 维护者分析（§4.3 第 2、4 步）：插件内没有替代办法（mpv 属性是宿主独有；插件不能写 mpv 属性，也不能让背景层盖住 mpv 画出的封面）。这是 r3b 裁决 3.2 第 8 条「封面音频 `effective = false`」的副作用：当时把它记为已知行为，前提是「用户看到 mpv 画的封面」，但它让背景层插件的 J11 设计（自己画封面与标签）无法成立。属于背景层行为的修正，不加接口。
+- 结论：**接受**（行为修正，签名不变）。规则：有背景层挂载期间两项为 `no`，最后一个背景层卸载后恢复 mpv 默认（`embedded-first`、`exact`）；mpv 在加载时选轨，所以从挂载后打开的下一个文件起生效。没有背景层的用户（或停用 visualizer 后）仍看到 mpv 画的封面。
+- 实现：`main.rs` 在 `window_tick` 里比较「是否挂着背景层」，变化时给控制线程发内部命令 `host.coverArt { off }`（不在插件协议表里，插件调用得到 `unsupported`）；`backend.rs` 的 `CoverArt` 只在状态变化时写两项。单测 1 条（只在变化时写、恢复默认值）。参考 §6.3 改写、§17 补一条。宿主 Rust 31 974 → 32 060（+86）。
+- GUI 要点：visualizer 启用时打开带内嵌封面的 MP3 → 背景层显示插件封面与三行标签（`stats().video` 为 `null`）；有 cover.jpg 的目录里的 FLAC 同样；停用 visualizer 后再打开同一文件 → mpv 显示封面。
+
 ### 8.3 用户裁决
 
 （协调者填写 §7.1、§7.2 的回答与日期；按回答更新需求文档 H07、E16–E18 与 4b 排期）

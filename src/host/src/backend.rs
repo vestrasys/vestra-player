@@ -161,6 +161,7 @@ impl Backend {
                 let mut producer_was_active = false;
                 let mut processing = crate::processing::Processing::default();
                 let mut view = crate::video_view::View::default();
+                let mut cover_art = CoverArt::default();
                 let mut subtitles = crate::subtitle_backend::Subtitles::new(fonts);
                 let mut jobs = crate::media_jobs::Jobs::default();
                 let mut push = StatePush::new();
@@ -282,6 +283,18 @@ impl Backend {
                                 &command.params,
                             );
                             let _ = events.send(Event::Reply(command.reply, result));
+                            continue;
+                        }
+                        if command.method == "host.coverArt" {
+                            let off = command.params["off"].as_bool().unwrap_or(false);
+                            if let Err(error) = cover_art.set(off, &mut |name, value| {
+                                mpv.set_property(name, value).map_err(|e| e.to_string())
+                            }) {
+                                let _ = events.send(Event::Broadcast(
+                                    "host.error".into(),
+                                    json!({"code":"cover-art","message":error}),
+                                ));
+                            }
                             continue;
                         }
                         if command.method.starts_with("video.view.") {
@@ -469,6 +482,34 @@ impl Drop for Backend {
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
         }
+    }
+}
+/// R-U3: while a backdrop is mounted, mpv does not pick cover art (embedded
+/// pictures or a cover.jpg next to the file) as a video track, so audio files
+/// leave the video area to the backdrop. The defaults come back when it goes.
+/// mpv picks tracks at load, so a change shows from the next file opened.
+#[derive(Default)]
+struct CoverArt {
+    off: bool,
+}
+impl CoverArt {
+    const DEFAULTS: [(&'static str, &'static str); 2] = [
+        ("audio-display", "embedded-first"),
+        ("cover-art-auto", "exact"),
+    ];
+    fn set(
+        &mut self,
+        off: bool,
+        write: &mut dyn FnMut(&str, &str) -> Result<(), String>,
+    ) -> Result<(), String> {
+        if off == self.off {
+            return Ok(());
+        }
+        for (name, default) in Self::DEFAULTS {
+            write(name, if off { "no" } else { default })?;
+        }
+        self.off = off;
+        Ok(())
     }
 }
 /// The source's display size after the filter chain (`video-out-params/dw`, `dh`).
@@ -868,6 +909,28 @@ fn execute(mpv: &Mpv, method: &str, params: &Value) -> std::result::Result<Value
 mod tests {
     use super::*;
     use crate::session::Phase;
+    #[test]
+    fn a_backdrop_turns_cover_art_off_and_back_to_the_defaults() {
+        let mut written = Vec::new();
+        let mut write = |name: &str, value: &str| -> Result<(), String> {
+            written.push(format!("{name}={value}"));
+            Ok(())
+        };
+        let mut cover = CoverArt::default();
+        cover.set(false, &mut write).unwrap();
+        cover.set(true, &mut write).unwrap();
+        cover.set(true, &mut write).unwrap();
+        cover.set(false, &mut write).unwrap();
+        assert_eq!(
+            written,
+            [
+                "audio-display=no",
+                "cover-art-auto=no",
+                "audio-display=embedded-first",
+                "cover-art-auto=exact"
+            ]
+        );
+    }
     #[test]
     fn a_phase_change_is_pushed_without_waiting_for_the_period() {
         let start = Instant::now();
