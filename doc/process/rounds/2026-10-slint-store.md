@@ -39,9 +39,9 @@
 - [x] 1.1 维护者调研：变更日志、绕路方案清单、所有 .slint 扫描（报告：[2026-10-slint-store-research.md](2026-10-slint-store-research.md)，W1–W21 编号以它为准）
 - [x] 1.2 协调者决定清单
 - [x] 1.3 维护者实施（含小问题）：`rebuild/slint-118` d2ae8dd
-- [ ] 1.4 插件 .slint 适配（如需要）
-- [ ] 1.5 SDK slint 适配与发版（如需要）
-- [ ] 1.6 完整检查 + 真机全量回归
+- [x] 1.4 插件 .slint 适配：`rebuild/slint-118-plugins` 021a967（playlist、audio、video、visualizer 升版本；subtitles 测试去抖，并发 52 次 0 失败；nes 版本对齐）
+- [x] 1.5 SDK 1.1.2 已发布，播放器依赖 ^1.1.2（13a8d69）
+- [ ] 1.6 完整检查 + 真机全量回归。合并分支 `rebuild/slint-118`（scratchpad/wt-core，4f19401）：§6.1 全部通过（cargo test 294、17 个插件测试、test:sdk 11/11、portability clean）。**真机回归未做：2026-10-22 01:20 屏幕已锁，协调者不解锁，等用户回来。** 启动脚本 `scratchpad/run18.sh <后缀> [--plugin …]`；回归清单见调研报告 §4.3 加 workflow §6.2；素材在 `scratchpad/media`（hd.mp4、hd.srt、tone.mp3、test.nes 等）
 - [ ] 1.7 合并
 - [ ] 2.1 商城插件作者设计 + API 缺口
 - [ ] 2.2 协调者决定设计
