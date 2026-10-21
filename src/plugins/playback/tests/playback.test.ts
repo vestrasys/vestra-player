@@ -83,7 +83,8 @@ test("menu follows the allocation table: positions, groups, radio items, binding
   for (const id of ["copy-name", "copy-folder", "copy-path"])
     assert.deepEqual([host.command(id).state.enabled, host.command(id).state.reason], [false, "没有打开的文件"], id);
   assert.equal(host.command("prevent-sleep").state.checked, true);
-  assert.equal(host.command("hover-time").state.checked, true);
+  // IA-PB-01: the hover time is off by default (reference player PreviewSeekTime=0).
+  assert.equal(host.command("hover-time").state.checked, false);
   for (const id of ["open", "open-url", "prevent-sleep", "hover-time", "time-jump"])
     assert.equal(host.command(id).state.enabled, true, id);
 
@@ -99,7 +100,7 @@ test("menu follows the allocation table: positions, groups, radio items, binding
     assert.equal(bar.props[flag], false, flag);
   assert.equal(bar.props["can-open"], true);
   assert.equal(bar.props.duration, 0);
-  assert.equal(bar.props["hover-time"], true);
+  assert.equal(bar.props["hover-time"], false);
   // A press on a button the player has just disabled is dropped without a message.
   bar.emit("action", "play-pause");
   bar.emit("action", "previous");

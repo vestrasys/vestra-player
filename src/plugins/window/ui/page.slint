@@ -1,0 +1,131 @@
+// 选项 ▶ 播放 ▶ 窗口: the settings page for G-02, H05 / IA-WIN-03 and B30 / G-06
+// (440 wide, the options window's page area). The same preferences as the menu items.
+// Heights (padding 14, spacing 6): title 24, section 14, radios 18, check 18,
+//   note 28, gap 8, section 14, radios 18, gap 8, section 14, check 18.
+import { CheckBox } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+
+export global WindowPage {
+    in-out property <int> auto-index: 2;
+    in-out property <bool> auto-once: false;
+    in-out property <int> top-index: 3;
+    in-out property <bool> hide-cursor: true;
+    callback set-auto(int);
+    callback set-auto-once(bool);
+    callback set-top(int);
+    callback set-hide-cursor(bool);
+}
+
+component Section inherits Text {
+    height: Theme.label-height;
+    font-size: Theme.font-body;
+    color: Theme.text-dim;
+}
+
+component Radio {
+    in property <string> text;
+    in property <bool> checked;
+    callback clicked();
+    height: Theme.checkbox-row-height;
+    accessible-role: radio-button;
+    accessible-label: root.text;
+    accessible-checked: root.checked;
+    HorizontalLayout {
+        spacing: 4px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 12px;
+                height: 12px;
+                border-radius: 6px;
+                border-width: 1px;
+                border-color: touch.has-hover ? Theme.accent : Theme.text-dim;
+                background: Theme.bg-list;
+                Rectangle {
+                    width: 6px;
+                    height: 6px;
+                    border-radius: 3px;
+                    background: root.checked ? Theme.accent : transparent;
+                }
+            }
+        }
+        Text {
+            text: root.text;
+            color: root.checked ? Theme.text : Theme.text-list;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+        }
+    }
+    touch := TouchArea { clicked => { root.clicked(); } }
+}
+
+// One row of radio choices.
+component Choices {
+    in property <[string]> model;
+    in-out property <int> current;
+    callback picked(int);
+    HorizontalLayout {
+        height: Theme.checkbox-row-height;
+        spacing: 12px;
+        alignment: start;
+        for text[index] in root.model: Radio {
+            text: text;
+            checked: index == root.current;
+            clicked => {
+                root.current = index;
+                root.picked(index);
+            }
+        }
+    }
+}
+
+export component WindowSettingsPage inherits Rectangle {
+    background: Theme.bg-panel;
+    VerticalLayout {
+        padding: Theme.dialog-padding;
+        spacing: 6px;
+        alignment: start;
+        Text {
+            height: 24px;
+            text: "窗口";
+            font-size: Theme.font-title;
+            font-weight: 700;
+            vertical-alignment: center;
+            color: Theme.text;
+        }
+        Section { text: "开始播放时的窗口尺寸"; }
+        Choices {
+            model: ["不调整", "0.5倍", "1倍", "1.5倍", "2倍", "适应视频比例"];
+            current <=> WindowPage.auto-index;
+            picked(index) => { WindowPage.set-auto(index); }
+        }
+        CheckBox {
+            height: Theme.checkbox-row-height;
+            text: "只调整一次（只调整本次运行的第一个视频）";
+            checked <=> WindowPage.auto-once;
+            toggled => { WindowPage.set-auto-once(self.checked); }
+        }
+        Text {
+            height: 28px;
+            text: "每个新文件拿到视频尺寸时调整一次，保持窗口左上角。全屏、迷你尺寸、画中画时不调整；播放中拖动过窗口后，这个文件不再调整。";
+            font-size: Theme.font-body;
+            color: Theme.text-dim;
+            wrap: word-wrap;
+        }
+        Rectangle { height: 8px; }
+        Section { text: "置顶"; }
+        Choices {
+            model: ["不置顶", "总是置顶", "播放时置顶", "全屏播放时置顶"];
+            current <=> WindowPage.top-index;
+            picked(index) => { WindowPage.set-top(index); }
+        }
+        Rectangle { height: 8px; }
+        Section { text: "鼠标指针"; }
+        CheckBox {
+            height: Theme.checkbox-row-height;
+            text: "播放时隐藏鼠标指针";
+            checked <=> WindowPage.hide-cursor;
+            toggled => { WindowPage.set-hide-cursor(self.checked); }
+        }
+    }
+}

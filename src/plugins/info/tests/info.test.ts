@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
 import type { PlaybackStats, PlayerState } from "../../../sdk/plugin/index.ts";
-import activate, { brief, BRIEF_COLUMNS, fileName, fit, shortCodec } from "../main.ts";
+import activate, { brief, BRIEF_COLUMNS, briefColumns, currentChapter, fileName, fit, shortCodec, subtitleName } from "../main.ts";
 
 const directory = new URL("..", import.meta.url);
 const stats = {
@@ -208,4 +208,69 @@ test("I03: short codec names, and lines cut to the video width with an ellipsis"
   assert.equal(fit("a".repeat(BRIEF_COLUMNS)), "a".repeat(BRIEF_COLUMNS));
   const [name] = brief({ ...state, source: `/v/${"很长的文件名".repeat(10)}.mkv` } as unknown as PlayerState, null).split("\n");
   assert.equal(name, `${"很长的文件名".repeat(3)}很长的…`, "the file name line is cut too");
+});
+
+test("IA-INFO-01: the chapter after the time, the subtitle track on a third line", async () => {
+  const host = new TestHost();
+  host.chapters = [
+    { title: "片头", start: 0 },
+    { title: null, start: 60 },
+    { title: "第二章 标题", start: 600 },
+  ];
+  host.subtitles.tracks.push({ target: { kind: "embedded", id: 1 }, title: "简体中文", language: "chi", styleSupported: true, styleReason: null });
+  host.subtitles.selection.target = { kind: "embedded", id: 1 };
+  playing(host);
+  const { stop } = await startPlugin(activate, { directory, host });
+  await host.press("Shift+Tab");
+  await host.settle();
+  assert.equal(host.osdPanel, "movie.mp4\n01:23 / 45:00 · 第 2 章 · H.264 1920×1080 · AAC 2 声道\n简体中文");
+  // The next chapter, and the subtitle turned off by another plugin: read again within a second.
+  host.setSource({ position: 754 });
+  host.subtitles.selection.target = null;
+  host.subtitles.selection.stamp = { ...host.subtitles.selection.stamp, revision: host.subtitles.selection.stamp.revision + 1 };
+  await host.settle(1100);
+  assert.equal(host.osdPanel, "movie.mp4\n12:34 / 45:00 · 第二章 标题 · H.264 1920×1080 · AAC 2 声道");
+  // The narrowest window: the line is cut to the video area.
+  host.setMainWindow({ videoArea: { width: 318, height: 179 } });
+  await host.settle(1100);
+  assert.equal(host.osdPanel, "movie.mp4\n12:34 / 45:00 · 第二章 标题 · H.264 1920×10…");
+  await stop();
+});
+
+test("IA-INFO-01: the chapter list is read once per source", async () => {
+  const host = new TestHost();
+  host.chapters = [{ title: "A", start: 0 }];
+  playing(host);
+  const { stop } = await startPlugin(activate, { directory, host });
+  await host.press("Shift+Tab");
+  await host.settle(2100);
+  assert.equal(host.sent("player.chapters").length, 1);
+  assert.match(String(host.osdPanel), /· A ·/);
+  host.chapters = [];
+  playing(host); // a new source without chapters
+  await host.press("Shift+Tab");
+  await host.settle();
+  assert.equal(host.sent("player.chapters").length, 2);
+  assert.equal(host.osdPanel, "movie.mp4\n01:23 / 45:00 · H.264 1920×1080 · AAC 2 声道");
+  await stop();
+});
+
+test("IA-INFO-01: chapter and subtitle names", () => {
+  const list = [
+    { title: "  ", start: 0 },
+    { title: "Two", start: 10 },
+  ];
+  assert.equal(currentChapter(list, 5), "第 1 章");
+  assert.equal(currentChapter(list, 10), "Two");
+  assert.equal(currentChapter([{ title: "late", start: 30 }], 5), null);
+  assert.equal(currentChapter(list, null), null);
+  assert.equal(currentChapter([], 5), null);
+  assert.equal(subtitleName({ title: "English SDH", language: "en" }), "English SDH");
+  assert.equal(subtitleName({ title: "", language: "en" }), "en");
+  assert.equal(subtitleName({ title: "", language: null }), "字幕");
+  assert.equal(subtitleName(null), null);
+  assert.deepEqual([0, 318, 780, 1920].map(briefColumns), [44, 44, 115, 290]);
+  const state = { source: "/a.mkv", position: 3, duration: 8 } as unknown as PlayerState;
+  assert.equal(brief(state, null, { chapter: "Intro", subtitle: "English" }), "a.mkv\n00:03 / 00:08 · Intro\nEnglish");
+  assert.equal(brief(state, null, { subtitle: "很长的字幕轨名".repeat(5) }).split("\n")[2], `${"很长的字幕轨名".repeat(3)}…`);
 });

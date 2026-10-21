@@ -12,6 +12,7 @@
     "ui.dialog",
     "ui.window",
     "ui.osd",
-    "ui.drop"
+    "ui.drop",
+    "ui.settings"
   ]
 }

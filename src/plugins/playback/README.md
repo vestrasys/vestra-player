@@ -5,7 +5,8 @@
 控制栏：
 
 - 进度条行 22px：2px 进度线（已播放黄色）+ 8px thumb；最右端静音图标 13×10 + 固定 70px 音量条。
-- 按钮行 40px：播放/暂停（`play-pause`）、停止（`stop`）、后退（`seek-backward`，右键 `previous`）、前进（`seek-forward`，右键 `next`）、打开，五个 41×40 图标按钮；静音图标为 `mute`；音量条要连续值，仍用 `player.setOutput`（规则与核心音量 ± 相同）。按钮可用状态从 `player.state` 推出（Slint `Path` 自绘）；时间文字点击切换已播放/剩余；右侧 23×22 播放列表开关（`plugin.panels.sidebar`，与谁挂载侧栏无关），窗口窄于 320px 时隐藏。
+- 按钮行 40px：播放/暂停（`play-pause`）、停止（`stop`）、后退（`seek-backward`，右键 `previous`）、前进（`seek-forward`，右键 `next`）、打开，五个 41×40 图标按钮；静音图标为 `mute`；音量条要连续值，仍用 `player.setOutput`（规则与核心音量 ± 相同）。按钮可用状态从 `player.state` 推出（Slint `Path` 自绘）；只有当前时间可点（手形指针），点击切换已播放/剩余，选择存入 `settings.json` 的 `remainingTime`（G-14）；右侧 23×22 播放列表开关（`plugin.panels.sidebar`，与谁挂载侧栏无关），窗口窄于 320px 时隐藏。
+- 悬停提示（G-07，宿主 `ToolTipArea`，600 ms）：每个按钮、当前时间、静音、音量条、列表开关都有提示，文字带当前生效的按键（「播放 (Space)」「后退 5 秒 (←)\n右键：播放上一个 (PgUp)」「音量: 85%」…）。按键取自 `plugin.bindings.list()`（能力 `bindings.manage`，只读不写）：命令第一个未被占用的键盘绑定的宿主菜单文字，`bindings.onChange` 时重读，所以改绑后提示随之变化；读不到时用默认键。列表开关没有自己的命令，用顶层菜单项「播放列表」的按键（没人注册时不带按键）。后退/前进的秒数跟随第 1 档跳转秒数。
 
 菜单与按键（按 doc/process/rounds/2026-10-plugin-ui.md §3 分配表）：
 
@@ -24,7 +25,7 @@
 - 跳转秒数（`time-jump.ts` + `ui/time-jump.slint`）：四行秒数（0.1–3600，最多一位小数），每行「默认值」；非法行标红、窗口不关。第 1 档用 `player.setStepSeek` 交给核心（插件停用后核心回到 5 秒），第 2–4 档命令放在子作用域里，改值后按新标题重新注册。
 - 关键帧（`keyframes.ts`）：`player.step("keyframe", …)`，以当前状态为条件；每个来源第一次就绪时查一次 `stats()`，缓存有没有视频（纯音频禁用，原因「没有视频」；插件流和不可跳转的来源禁用）；一次只走一步，在途时的重复按键丢弃。提示「定位: 下一关键帧 00:12 / 01:40」、「已是最后一个关键帧」、「定位: 开始处」。
 - 复制到剪贴板（`copy.ts`）：`plugin.clipboard.writeText`（能力 `clipboard`）。
-- 设置 `settings.json`：`openUrl.pasteFromClipboard`、`preventSleep`、`hoverTime`（默认都为 `true`），`hoverThumbnail`（默认 `false`），`seekSteps`（默认 `[5, 30, 60, 300]`，长度不对或有值越界时整组用默认值）；用 `plugin.storage.json` 读写（不是对象的文件改名为 `.bad-<时间戳>`，单个坏字段回到默认值）。测试用 `TestHost` 的核心动作（`coreCommands`、`coreAction(id)`）及 `clipboard`、`power`、`coreRuns`、`stepSeek`、`steps`。
+- 设置 `settings.json`：`openUrl.pasteFromClipboard`、`preventSleep`（默认 `true`），`hoverTime`（IA-PB-01：默认 `false`，参考播放器 `PreviewSeekTime=0`）、`hoverThumbnail`、`remainingTime`（默认 `false`），`seekSteps`（默认 `[5, 30, 60, 300]`，长度不对或有值越界时整组用默认值）；用 `plugin.storage.json` 读写（不是对象的文件改名为 `.bad-<时间戳>`，单个坏字段回到默认值）。测试用 `TestHost` 的核心动作（`coreCommands`、`coreAction(id)`）及 `clipboard`、`power`、`coreRuns`、`stepSeek`、`steps`。
 
 结构：`main.ts` 组装；`controller.ts` 本插件的播放动作（拖动、第 2–4 档跳转、倍率、音量条、跳到开头）、本地草稿与提示文字；`commands.ts` 菜单命令表；`bar.ts` 底栏属性与回调（核心动作走 `host.run`）；`keyframes.ts`、`time-jump.ts` 见上；`prompt.ts` + `ui/prompt.slint` 跳转到/自定义速度小窗；`format.ts` 时间格式。
 

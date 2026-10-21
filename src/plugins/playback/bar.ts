@@ -1,8 +1,9 @@
-import type { HostAction, Json, Panel, Scope, TimelineMark } from "../../sdk/plugin/index.ts";
+import type { HostAction, Json, Panel, Plugin, TimelineMark } from "../../sdk/plugin/index.ts";
 import type { Playback } from "./controller.ts";
 import { time } from "./format.ts";
 import type { SettingsStore } from "./settings.ts";
 import type { Thumbnails } from "./thumbs.ts";
+import { barTips, Keys } from "./tips.ts";
 
 /** The bar finds the hovered mark with a fixed-depth binary search (`bar.slint`): 2^13 marks at most. */
 export const MAX_MARKS = 8192;
@@ -41,8 +42,11 @@ const CORE: ReadonlySet<string> = new Set<HostAction>([
  * core's (`host.run`), except 打开 (this plugin's) and the volume slider, which
  * needs continuous values (`player.setOutput`, the same rules as volume ±).
  */
-export function wireBar(bar: Panel, scope: Scope, playback: Playback, settings: SettingsStore, thumbnails: Thumbnails) {
+export function wireBar(bar: Panel, scope: Plugin, playback: Playback, settings: SettingsStore, thumbnails: Thumbnails) {
   const { player } = scope;
+  // G-07: tooltips name the keys the user has bound (read again when bindings change).
+  const keys = new Keys(scope, () => scope.update());
+  void keys.refresh();
   let drawn: { marks: readonly TimelineMark[]; duration: number | null; rows: Json[] } | null = null;
   const marks = (duration: number | null) => {
     const current = scope.timeline.marks;
@@ -52,13 +56,12 @@ export function wireBar(bar: Panel, scope: Scope, playback: Playback, settings: 
   };
   const sidebar = scope.panels.sidebar;
   const p = playback;
-  /** The time label shows the remaining time instead of the elapsed one (UI-BAR-07). */
-  let remaining = false;
   let volumeDragging = false;
   bar.bind(() => {
     const state = player.state;
     const position = p.draft ?? state.position;
     const volume = p.volumeDraft ?? state.volume;
+    const remaining = settings.value.remainingTime;
     const left = remaining && position !== null && state.duration !== null;
     const slot = sidebar.state;
     return {
@@ -91,6 +94,13 @@ export function wireBar(bar: Panel, scope: Scope, playback: Playback, settings: 
       canVolume: !p.muteBusy,
       hasSidebar: slot !== null,
       sidebarOn: slot?.preferred ?? false,
+      ...barTips(keys, {
+        playing: state.phase === "ready" && !state.paused,
+        muted: state.muted,
+        volume,
+        remaining,
+        step: settings.value.seekSteps[0],
+      }),
     };
   });
   const locks = () =>
@@ -116,9 +126,8 @@ export function wireBar(bar: Panel, scope: Scope, playback: Playback, settings: 
   });
   bar.on("hoverChanged", (fraction: number) => thumbnails.hover(fraction));
   bar.on("hoverEnded", () => thumbnails.hoverEnded());
-  bar.on("toggleTime", () => {
-    remaining = !remaining;
-  });
+  // G-14: the choice is saved (`remainingTime`) and kept across restarts.
+  bar.on("toggleTime", () => settings.update((s) => void (s.remainingTime = !s.remainingTime)));
   bar.on("toggleSidebar", () => sidebar.toggle());
   bar.on("volumeChanged", (value: number) => {
     if (!volumeDragging) {

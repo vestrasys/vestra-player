@@ -200,8 +200,8 @@ test("settings: a bad field falls back to its default; a file that is not an obj
     writeFileSync(join(data, "settings.json"), JSON.stringify({ preventSleep: false, hoverTime: "yes", openUrl: 1 }));
     const first = await start(new TestHost(), data);
     assert.equal(first.host.command("prevent-sleep").state.checked, false);
-    assert.equal(first.host.command("hover-time").state.checked, true);
-    assert.equal(first.host.mounted().props["hover-time"], true);
+    assert.equal(first.host.command("hover-time").state.checked, false);
+    assert.equal(first.host.mounted().props["hover-time"], false);
     await first.stop();
 
     writeFileSync(join(data, "settings.json"), "[1, 2]");
@@ -610,13 +610,13 @@ test("I06 the bar gets the duration and the hover option; the option is saved", 
   const { host, stop } = await start(withMedia());
   const bar = host.mounted();
   assert.equal(bar.props.duration, 100);
-  assert.equal(bar.props["hover-time"], true);
+  assert.equal(bar.props["hover-time"], false);
   await host.command("hover-time").run();
   await host.settle();
-  assert.equal(bar.props["hover-time"], false);
-  assert.equal(host.command("hover-time").state.checked, false);
-  assert.equal(lastOsd(host), "进度条悬停显示时间: 关");
-  await saved(join(host.dataDirectory, "settings.json"), (value) => value.hoverTime === false);
+  assert.equal(bar.props["hover-time"], true);
+  assert.equal(host.command("hover-time").state.checked, true);
+  assert.equal(lastOsd(host), "进度条悬停显示时间: 开");
+  await saved(join(host.dataDirectory, "settings.json"), (value) => value.hoverTime === true);
   host.openElsewhere("/live");
   await host.settle();
   assert.equal(bar.props.duration, 0);

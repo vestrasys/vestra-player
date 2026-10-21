@@ -2,7 +2,7 @@
 // 40px button row, 62px in total. Icons are drawn with Path; colours and font
 // sizes come from Theme.
 import { Theme } from "@vestra/theme.slint";
-import { Slider } from "@vestra/widgets.slint";
+import { Slider, ToolTipArea } from "@vestra/widgets.slint";
 
 // B22: one mark of `timeline.marks`; `at` is the fraction of the duration,
 // `kind` chapter / bookmark / marker, `clock` the mark's time as text.
@@ -26,7 +26,7 @@ export global PlaybackBridge {
     in-out property <bool> can-seek;
     // I06: source duration in seconds and the 进度条悬停显示时间 option.
     in-out property <float> duration;
-    in-out property <bool> hover-time: true;
+    in-out property <bool> hover-time;
     // I07: the picture box (option on, a local file with video) and the picture once made.
     in-out property <bool> hover-thumbnail;
     in-out property <bool> has-thumbnail;
@@ -49,6 +49,16 @@ export global PlaybackBridge {
     in-out property <bool> can-volume: true;
     in-out property <bool> has-sidebar;
     in-out property <bool> sidebar-on;
+    // G-07: tooltips (600 ms, ToolTipArea), with the keys the user has bound.
+    in-out property <string> tip-play-pause;
+    in-out property <string> tip-stop;
+    in-out property <string> tip-back;
+    in-out property <string> tip-forward;
+    in-out property <string> tip-open;
+    in-out property <string> tip-time;
+    in-out property <string> tip-mute;
+    in-out property <string> tip-volume;
+    in-out property <string> tip-sidebar;
     // A core action id (`host.run`), or "open".
     callback action(string);
     callback seek-changed(float);
@@ -64,9 +74,10 @@ export global PlaybackBridge {
 }
 
 // 41×40 icon button with a 1px right divider. Right click runs `right-clicked`
-// when `right-enabled` (back/forward: previous/next).
+// when `right-enabled` (back/forward: previous/next). `tip` is the tooltip (G-07).
 component BarButton inherits Rectangle {
     in property <string> icon;
+    in property <string> tip;
     in property <bool> enabled: true;
     in property <bool> right-enabled;
     callback clicked();
@@ -103,12 +114,17 @@ component BarButton inherits Rectangle {
         width: 1px;
         background: Theme.line;
     }
-    touch := TouchArea {
-        enabled: root.enabled || root.right-enabled;
-        clicked => { if root.enabled { root.clicked(); } }
-        pointer-event(event) => {
-            if event.button == PointerEventButton.right && event.kind == PointerEventKind.up && root.right-enabled {
-                root.right-clicked();
+    ToolTipArea {
+        width: 100%;
+        height: 100%;
+        text: root.tip;
+        touch := TouchArea {
+            enabled: root.enabled || root.right-enabled;
+            clicked => { if root.enabled { root.clicked(); } }
+            pointer-event(event) => {
+                if event.button == PointerEventButton.right && event.kind == PointerEventKind.up && root.right-enabled {
+                    root.right-clicked();
+                }
             }
         }
     }
@@ -311,9 +327,14 @@ component MuteButton inherits Rectangle {
         stroke-width: 1.2px;
         commands: "M 9 3 L 13 7 M 13 3 L 9 7";
     }
-    touch := TouchArea {
-        enabled: PlaybackBridge.can-mute;
-        clicked => { PlaybackBridge.action("mute"); }
+    ToolTipArea {
+        width: 100%;
+        height: 100%;
+        text: PlaybackBridge.tip-mute;
+        touch := TouchArea {
+            enabled: PlaybackBridge.can-mute;
+            clicked => { PlaybackBridge.action("mute"); }
+        }
     }
 }
 
@@ -338,9 +359,14 @@ component SidebarToggle inherits Rectangle {
             : (touch.has-hover || PlaybackBridge.sidebar-on) ? Theme.accent : Theme.text-dim;
         commands: "M 0 0 L 13 0 L 13 2 L 0 2 Z M 0 4 L 13 4 L 13 6 L 0 6 Z M 0 8 L 13 8 L 13 10 L 0 10 Z";
     }
-    touch := TouchArea {
-        enabled: PlaybackBridge.has-sidebar;
-        clicked => { PlaybackBridge.toggle-sidebar(); }
+    ToolTipArea {
+        width: 100%;
+        height: 100%;
+        text: PlaybackBridge.tip-sidebar;
+        touch := TouchArea {
+            enabled: PlaybackBridge.has-sidebar;
+            clicked => { PlaybackBridge.toggle-sidebar(); }
+        }
     }
 }
 
@@ -364,17 +390,22 @@ export component PlaybackBar inherits Rectangle {
             x: root.width - 97px;
             y: 6px;
         }
-        Slider {
+        ToolTipArea {
             x: root.width - 80px;
             y: 6px;
             width: 70px;
             height: 10px;
-            minimum: 0;
-            maximum: 200;
-            enabled: PlaybackBridge.can-volume;
-            value <=> PlaybackBridge.volume;
-            changed(value) => { PlaybackBridge.volume-changed(value); }
-            released(value) => { PlaybackBridge.volume-released(value); }
+            text: PlaybackBridge.tip-volume;
+            Slider {
+                width: 100%;
+                height: 100%;
+                minimum: 0;
+                maximum: 200;
+                enabled: PlaybackBridge.can-volume;
+                value <=> PlaybackBridge.volume;
+                changed(value) => { PlaybackBridge.volume-changed(value); }
+                released(value) => { PlaybackBridge.volume-released(value); }
+            }
         }
     }
 
@@ -387,16 +418,19 @@ export component PlaybackBar inherits Rectangle {
             alignment: start;
             BarButton {
                 icon: PlaybackBridge.playing ? "pause" : "play";
+                tip: PlaybackBridge.tip-play-pause;
                 enabled: PlaybackBridge.can-pause;
                 clicked => { PlaybackBridge.action("play-pause"); }
             }
             BarButton {
                 icon: "stop";
+                tip: PlaybackBridge.tip-stop;
                 enabled: PlaybackBridge.can-stop;
                 clicked => { PlaybackBridge.action("stop"); }
             }
             BarButton {
                 icon: "back";
+                tip: PlaybackBridge.tip-back;
                 enabled: PlaybackBridge.can-step;
                 right-enabled: PlaybackBridge.can-previous;
                 clicked => { PlaybackBridge.action("seek-backward"); }
@@ -404,6 +438,7 @@ export component PlaybackBar inherits Rectangle {
             }
             BarButton {
                 icon: "forward";
+                tip: PlaybackBridge.tip-forward;
                 enabled: PlaybackBridge.can-step;
                 right-enabled: PlaybackBridge.can-next;
                 clicked => { PlaybackBridge.action("seek-forward"); }
@@ -411,28 +446,33 @@ export component PlaybackBar inherits Rectangle {
             }
             BarButton {
                 icon: "open";
+                tip: PlaybackBridge.tip-open;
                 enabled: PlaybackBridge.can-open;
                 clicked => { PlaybackBridge.action("open"); }
             }
-            Rectangle {
-                width: time-row.preferred-width;
-                time-row := HorizontalLayout {
-                    padding-left: 10px;
-                    Text {
+            // G-14: only the current time is clickable (hand pointer); the total is not.
+            HorizontalLayout {
+                padding-left: 10px;
+                ToolTipArea {
+                    width: elapsed.preferred-width;
+                    text: PlaybackBridge.tip-time;
+                    elapsed := Text {
+                        height: 100%;
                         text: PlaybackBridge.elapsed-label;
                         color: Theme.text;
                         font-size: Theme.font-body;
                         vertical-alignment: center;
                     }
-                    Text {
-                        text: " / " + PlaybackBridge.total-label;
-                        color: Theme.text-dim;
-                        font-size: Theme.font-body;
-                        vertical-alignment: center;
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => { PlaybackBridge.toggle-time(); }
                     }
                 }
-                TouchArea {
-                    clicked => { PlaybackBridge.toggle-time(); }
+                Text {
+                    text: " / " + PlaybackBridge.total-label;
+                    color: Theme.text-dim;
+                    font-size: Theme.font-body;
+                    vertical-alignment: center;
                 }
             }
         }

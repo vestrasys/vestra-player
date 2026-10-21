@@ -14,6 +14,13 @@ export type Settings = {
   clearOnOpenFolder: boolean;
   /** 移除全部 asks first; turned off by the confirmation's 「不再询问」. */
   confirmClear: boolean;
+  /**
+   * G-11: a drop on the video area adds to the list instead of replacing it
+   * (The reference player `AppendFilePL`, default off). IA-PL-01 will extend it to opening files.
+   */
+  appendOnOpen: boolean;
+  /** G-12: a drop on the list goes before the row under the pointer, not to the end (`DropMousePos`, default off). */
+  dropAtPointer: boolean;
 };
 type SavedList = {
   sort: { key: Exclude<SortKey, "shuffle" | "reverse">; descending: boolean } | null;
@@ -31,6 +38,8 @@ export const defaults = (): Settings => ({
   gapless: false,
   clearOnOpenFolder: false,
   confirmClear: true,
+  appendOnOpen: false,
+  dropAtPointer: false,
 });
 
 const REPEATS = ["none", "all", "one"];
@@ -47,6 +56,8 @@ function readSettings(raw: Partial<Settings> | undefined): Settings {
   if (typeof raw.gapless === "boolean") settings.gapless = raw.gapless;
   if (typeof raw.clearOnOpenFolder === "boolean") settings.clearOnOpenFolder = raw.clearOnOpenFolder;
   if (typeof raw.confirmClear === "boolean") settings.confirmClear = raw.confirmClear;
+  if (typeof raw.appendOnOpen === "boolean") settings.appendOnOpen = raw.appendOnOpen;
+  if (typeof raw.dropAtPointer === "boolean") settings.dropAtPointer = raw.dropAtPointer;
   return settings;
 }
 

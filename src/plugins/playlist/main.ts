@@ -18,6 +18,7 @@ import { extensionOf, folderError, LIST_FILES, SCAN_LIMIT, scanFolder } from "./
 import { playback } from "./playback.ts";
 import { Prober, toolRunner } from "./probe.ts";
 import { clock, lengthOf, Queue, type Placement, type Repeat, type Row, type SortKey } from "./queue.ts";
+import { centered, ensureVisible, inView, USER_SCROLL_HOLD_MS } from "./scroll.ts";
 import { defaults, Store, type Saved } from "./store.ts";
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -46,6 +47,8 @@ const sortKeys: [SortKey, string, string | null][] = [
 ];
 const STAT_LIMIT = 8;
 const SEARCH_DEBOUNCE_MS = 150;
+/** IA-PL-02: the page id of 选项 ▶ 播放 ▶ 播放列表. */
+export const SETTINGS_PAGE = "playlist";
 /** C23: at most this many selected files are shown in the file manager. */
 export const REVEAL_LIMIT = 20;
 
@@ -283,7 +286,12 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       checking = false;
     }
   });
-  const place = (where: Placement) => () => queue.place(where);
+  /** G-08: the keyboard cursor is scrolled into view at the next update. */
+  let revealCursor = false;
+  const place = (where: Placement) => () => {
+    queue.place(where);
+    revealCursor = true;
+  };
 
   /** C11: size and date need `stat` (8 at a time, not cached). */
   const sortBy = (key: SortKey) =>
@@ -469,22 +477,39 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   playlistMenu("add", ["添加文件…"], 230, { ...addingFiles, run: addFiles });
   playlistMenu("link", ["添加链接…"], 231, { run: guard(() => link.show()) });
   playlistMenu("add-folder", ["添加文件夹…"], 232, { ...scanningFolder, run: addFolderOnly });
+  // The options shared by the menu and the settings page (IA-PL-02).
+  const setRepeat = (mode: Repeat) => {
+    queue.repeat = mode;
+    queue.notice(`循环：${repeats.find(([each]) => each === mode)![1]}`);
+  };
+  const setShuffle = (on: boolean) => {
+    queue.setShuffle(on);
+    queue.notice(queue.shuffle ? "随机播放：开" : "随机播放：关");
+  };
+  const setFast = (on: boolean) => {
+    settings.gapless = on;
+    player.setFast(settings.gapless);
+    queue.notice(settings.gapless ? "快速推进到下一个：开" : "快速推进到下一个：关");
+  };
+  const setRemember = (on: boolean) => {
+    settings.remember = on;
+    void flush();
+    queue.notice(settings.remember ? "将记住列表" : "不再记住列表");
+  };
+  const setConfirmClear = (on: boolean) => {
+    settings.confirmClear = on;
+    queue.notice(settings.confirmClear ? "移除全部前确认：开" : "移除全部前确认：关");
+  };
   repeats.forEach(([mode, title], index) =>
     playlistMenu(`repeat-${mode}`, ["循环", title], 233 + index, {
       radio: true,
       checked: () => queue.repeat === mode,
-      run: () => {
-        queue.repeat = mode;
-        queue.notice(`循环：${title}`);
-      },
+      run: () => setRepeat(mode),
     }),
   );
   playlistMenu("shuffle", ["随机"], 236, {
     checked: () => queue.shuffle,
-    run: () => {
-      queue.setShuffle(!queue.shuffle);
-      queue.notice(queue.shuffle ? "随机播放：开" : "随机播放：关");
-    },
+    run: () => setShuffle(!queue.shuffle),
   });
   playlistMenu("open-list", ["打开列表文件…"], 237, { ...listFile, run: openList });
   playlistMenu("save-list", ["保存列表…"], 238, {
@@ -506,29 +531,18 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   playlistMenu("fast-advance", ["快速推进到下一个"], 242, {
     group: "options",
     checked: () => settings.gapless,
-    run: () => {
-      settings.gapless = !settings.gapless;
-      player.setFast(settings.gapless);
-      queue.notice(settings.gapless ? "快速推进到下一个：开" : "快速推进到下一个：关");
-    },
+    run: () => setFast(!settings.gapless),
   });
   playlistMenu("remember", ["记住列表"], 243, {
     group: "options",
     checked: () => settings.remember,
-    run: () => {
-      settings.remember = !settings.remember;
-      void flush();
-      queue.notice(settings.remember ? "将记住列表" : "不再记住列表");
-    },
+    run: () => setRemember(!settings.remember),
   });
   // Turns the 移除全部 question back on after 「不再询问」 (or off).
   playlistMenu("confirm-clear", ["移除全部前确认"], 244, {
     group: "options",
     checked: () => settings.confirmClear,
-    run: () => {
-      settings.confirmClear = !settings.confirmClear;
-      queue.notice(settings.confirmClear ? "移除全部前确认：开" : "移除全部前确认：关");
-    },
+    run: () => setConfirmClear(!settings.confirmClear),
   });
 
   // List commands (context menu, bottom-bar popups and keys while the list has focus).
@@ -596,11 +610,77 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   });
   // F6 while the list has focus closes it (reference player), shown as "关闭列表" in the list menu.
   const close = listCommand("close", "关闭列表", () => true, () => sidebar.setVisible(false), ["F6"]);
+  // IA-PL-02: F5 while the list has focus opens its settings page (参考播放器播放列表设置);
+  // elsewhere F5 stays the global 选项….
+  listCommand("settings", "播放列表设置…", () => true, guard(() => plugin.settings.show(SETTINGS_PAGE)), ["F5"]);
+
+  // IA-PL-02: 选项 ▶ 播放 ▶ 播放列表, in step with the menu items.
+  const page = plugin.settings.page("ui/settings.slint", {
+    id: SETTINGS_PAGE,
+    category: "playback",
+    title: "播放列表",
+    order: 30,
+  });
+  page.bind(() => ({
+    openMode: openModes.findIndex(([mode]) => mode === settings.openMode),
+    appendOnOpen: settings.appendOnOpen,
+    dropAtPointer: settings.dropAtPointer,
+    repeat: repeats.findIndex(([mode]) => mode === queue.repeat),
+    shuffle: queue.shuffle,
+    fastAdvance: settings.gapless,
+    remember: settings.remember,
+    confirmClear: settings.confirmClear,
+  }));
+  page.on("setOpenMode", (index: number) => {
+    const mode = openModes[index]?.[0];
+    if (mode) settings.openMode = mode;
+  });
+  page.on("setAppendOnOpen", (on: boolean) => void (settings.appendOnOpen = on));
+  page.on("setDropAtPointer", (on: boolean) => void (settings.dropAtPointer = on));
+  page.on("setRepeat", (index: number) => {
+    const mode = repeats[index]?.[0];
+    if (mode && mode !== queue.repeat) setRepeat(mode);
+  });
+  page.on("setShuffle", (on: boolean) => (on !== queue.shuffle ? setShuffle(on) : undefined));
+  page.on("setFastAdvance", (on: boolean) => (on !== settings.gapless ? setFast(on) : undefined));
+  page.on("setRemember", (on: boolean) => (on !== settings.remember ? setRemember(on) : undefined));
+  page.on("setConfirmClear", (on: boolean) => (on !== settings.confirmClear ? setConfirmClear(on) : undefined));
+
+  // G-08: scrolling the list from the plugin (`scroll-to-y` on each `scroll-request`).
+  const listArea = { scroll: 0, height: Number.POSITIVE_INFINITY };
+  const scroller = { request: 0, to: 0, sentAt: Number.NEGATIVE_INFINITY, userAt: Number.NEGATIVE_INFINITY };
+  let lastPlaying: string | null = null;
+  /** The scroll this update asks for: the cursor after a key, else a newly playing row out of view. */
+  const scrollTarget = (shown: Row[]): number | null => {
+    const playing = queue.binding?.rowId ?? null;
+    const playingChanged = playing !== lastPlaying;
+    lastPlaying = playing;
+    const reveal = revealCursor;
+    revealCursor = false;
+    if (!Number.isFinite(listArea.height)) return null;
+    const at = (rowId: string | null) => shown.findIndex((row) => row.rowId === rowId);
+    if (reveal) {
+      const index = at(queue.selected);
+      if (index >= 0) return ensureVisible(index, listArea.scroll, listArea.height, shown.length);
+    }
+    // Not while the user browses (scrolled lately), nor for a row the search hides.
+    if (!playingChanged || !playing || Date.now() - scroller.userAt < USER_SCROLL_HOLD_MS) return null;
+    const index = at(playing);
+    if (index < 0 || inView(index, listArea.scroll, listArea.height)) return null;
+    return centered(index, listArea.height, shown.length);
+  };
 
   list.bind(() => {
     persist();
     player.prepare();
     const shown = queue.visible();
+    const target = scrollTarget(shown);
+    if (target !== null && target !== listArea.scroll) {
+      scroller.request++;
+      scroller.to = target;
+      scroller.sentAt = Date.now();
+      listArea.scroll = target;
+    }
     const index = new Map(queue.rows.map((row, i) => [row.rowId, i]));
     const known = shown.map(lengthOf).filter((seconds): seconds is number => seconds !== null);
     // "+": some row's length is unavailable (ffprobe failed, or a URL that has not played).
@@ -629,6 +709,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       canUp: queue.canPlace("up"),
       canDown: queue.canPlace("down"),
       canBottom: queue.canPlace("bottom"),
+      scrollToY: scroller.to,
+      scrollRequest: scroller.request,
     };
   });
   list.on("selectRow", (rowId: string, toggle: boolean, extend: boolean) => {
@@ -641,9 +723,12 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     queue.select(rowId);
     return playSelected();
   });
-  list.on("selectStep", (delta: number, extend: boolean) => queue.selectNeighbor(delta, extend));
+  list.on("selectStep", (delta: number, extend: boolean) => {
+    queue.selectNeighbor(delta, extend);
+    revealCursor = true;
+  });
   list.on("dropRow", (rowId: string, index: number) => queue.drop(rowId, index));
-  list.on("place", (where: string) => (where in moves ? queue.place(where as Placement) : undefined));
+  list.on("place", (where: string) => (where in moves ? place(where as Placement)() : undefined));
   list.on("remove", () => removeSelected());
   list.on("addMenu", (x: number, y: number) => list.showMenu([add, addFolderCommand, addLink], { x, y }));
   list.on("sortMenu", (x: number, y: number) => list.showMenu(sorts, { x, y }));
@@ -713,18 +798,25 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   list.on("searchDown", () => {
     const first = queue.visible()[0];
     if (first) queue.select(first.rowId);
+    revealCursor = true;
   });
 
-  // A15: drops from the file manager. On the video area (the player groups by extension): add to
-  // the end and play the first item, Option only adds. On the list: insert before the row
-  // under the drop point (blank space: the end), never play. One drop at a time, in order.
-  let dropping: Promise<void> = Promise.resolve();
-  const listArea = { scroll: 0, height: Number.POSITIVE_INFINITY };
+  // The list reports its scroll and height (drops, G-08). A scroll that is not the one just
+  // asked for is the user's (wheel, scroll bar, edge scrolling while dragging).
   list.on("listArea", (scroll: number, height: number) => {
-    listArea.scroll = Number.isFinite(scroll) ? scroll : 0;
+    const next = Number.isFinite(scroll) ? scroll : 0;
+    const ours = Math.abs(next - scroller.to) < 1 && Date.now() - scroller.sentAt < 500;
+    if (Math.abs(next - listArea.scroll) >= 1 && !ours) scroller.userAt = Date.now();
+    listArea.scroll = next;
     listArea.height = Number.isFinite(height) && height > 0 ? height : Number.POSITIVE_INFINITY;
   });
-  const dropped = (paths: string[], how: { play: boolean; at?: { x: number; y: number } }) =>
+
+  // A15: drops from the file manager. On the video area (the player groups by extension): G-11
+  // replace the list (「追加」 option: add to the end) and play the first item; Option only adds.
+  // On the list (G-12): add to the end, or before the row under the drop point with
+  // 「插入到拖放位置」; never play. One drop at a time, in order.
+  let dropping: Promise<void> = Promise.resolve();
+  const dropped = (paths: string[], how: { play: boolean; clear?: boolean; at?: { x: number; y: number } }) =>
     (dropping = dropping.then(
       guard(async () => {
         const expanded = await expandDrop(paths, { signal: stop.signal });
@@ -738,6 +830,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
           const row = dropRow(how.at.y, listArea.scroll, listArea.height, shown.length);
           if (row !== null) before = queue.rows.indexOf(shown[row]!);
         }
+        // G-11: replaced without asking; not while another source opens (only added then).
+        if (how.clear && queue.rows.length && !player.busy()) removing(() => queue.clear(false));
         const wasEmpty = queue.rows.length === 0;
         const result = await queue.addEntries(expanded.entries, before === undefined ? {} : { before });
         prober.scan();
@@ -757,9 +851,10 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     ));
   plugin.drops.provide({
     extensions: DROP_EXTENSIONS,
-    drop: ({ paths, modifiers }) => dropped(paths, { play: !modifiers.alt }),
+    drop: ({ paths, modifiers }) =>
+      dropped(paths, { play: !modifiers.alt, clear: !modifiers.alt && !settings.appendOnOpen }),
   });
-  list.onDrop(({ paths, at }) => dropped(paths, { play: false, at }));
+  list.onDrop(({ paths, at }) => dropped(paths, { play: false, ...(settings.dropAtPointer ? { at } : {}) }));
 
   // Other plugins (the bar, PgUp/PgDn) step through the list with player.next() / previous().
   plugin.player.provideSequence({
