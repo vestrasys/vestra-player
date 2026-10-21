@@ -8,13 +8,17 @@
 //   audio  J11: the cover centred, side = 60% of the short edge up to 480px,
 //               then title / artist / album · year (the last two hidden under
 //               200px of height); text at most 80% of the width, elided.
+//   loading G-16b (reference player CMD_LOADING_LOGO): a 74×74 spinner of 12 ticks,
+//               one step every 50 ms, centred 30px above the middle; under it
+//               「正在打开：<name>」 bold 15px in Theme.text-dim, 30px below the
+//               middle. The ticks are drawn here (no reference player artwork).
 //   none   the switch for the scene is off: plain Theme.bg-video.
 // Scenes cross-fade in 200 ms; a new cover fades in over the placeholder in
 // 300 ms (the Node side never animates).
 import { Theme } from "@vestra/theme.slint";
 
 export global Art {
-    // "idle" | "audio" | "none"
+    // "idle" | "audio" | "loading" | "none"
     in property <string> mode: "idle";
     // A custom idle logo (plugin.ui.image); the brand logo when false.
     in property <bool> custom-logo: false;
@@ -25,6 +29,8 @@ export global Art {
     in property <string> title;
     in property <string> artist;
     in property <string> album;
+    // The source being opened (loading); already cut by the plugin.
+    in property <string> loading;
 }
 
 // The brand mark at 40%, framed like a cover: shown until (or instead of) a cover.
@@ -195,6 +201,53 @@ component AudioScene inherits Rectangle {
     }
 }
 
+component LoadingScene inherits Rectangle {
+    in property <bool> active;
+    private property <int> frame: 0;
+    private property <length> spinner: 74px;
+    private property <length> radius: 28px;
+    private property <length> tick: 7px;
+    private property <length> cx: self.width / 2;
+    private property <length> cy: self.height / 2 - 30px;
+    Timer {
+        interval: 50ms;
+        running: root.active;
+        triggered => { root.frame = Math.mod(root.frame + 1, 12); }
+    }
+    Rectangle {
+        x: root.cx - root.spinner / 2;
+        y: root.cy - root.spinner / 2;
+        width: root.spinner;
+        height: root.spinner;
+        accessible-role: progress-indicator;
+        accessible-label: "正在打开";
+        // Tick i is brightest when it is the current frame, fading behind it.
+        for i in 12: Rectangle {
+            x: root.spinner / 2 + root.radius * Math.cos(i * 30deg - 90deg) - root.tick / 2;
+            y: root.spinner / 2 + root.radius * Math.sin(i * 30deg - 90deg) - root.tick / 2;
+            width: root.tick;
+            height: root.tick;
+            border-radius: root.tick / 2;
+            background: Theme.text-dim;
+            opacity: 1 - Math.mod(root.frame - i + 12, 12) / 13;
+        }
+    }
+    Text {
+        x: root.width * 0.1;
+        y: root.height / 2 + 30px - 12px;
+        width: root.width * 0.8;
+        // Taller than one line: an elided line whose box is shorter is not drawn.
+        height: 24px;
+        text: "正在打开：" + Art.loading;
+        color: Theme.text-dim;
+        font-size: 15px;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+}
+
 export component Backdrop inherits Rectangle {
     background: Theme.bg-video;
     clip: true;
@@ -209,5 +262,12 @@ export component Backdrop inherits Rectangle {
         height: root.height;
         opacity: Art.mode == "audio" ? 1 : 0;
         animate opacity { duration: 200ms; }
+    }
+    // Shown at once (no fade in): a quick local open only flashes it.
+    LoadingScene {
+        width: root.width;
+        height: root.height;
+        active: Art.mode == "loading";
+        visible: Art.mode == "loading";
     }
 }

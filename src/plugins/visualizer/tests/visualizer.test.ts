@@ -7,7 +7,7 @@ import { HostError, TestHost, startPlugin } from "../../../sdk/plugin/testing.ts
 import { albumLine, CoverCache, fileName, folderCover, limits, parseProbe } from "../covers.ts";
 import { imageInfo, imageProblem } from "../images.ts";
 import { NOT_IMAGE, TOO_LARGE, UNREADABLE } from "../logo.ts";
-import activate, { PAGE_ID } from "../main.ts";
+import activate, { loadingName, PAGE_ID } from "../main.ts";
 import { readSettings } from "../settings.ts";
 
 const directory = new URL("..", import.meta.url);
@@ -262,7 +262,7 @@ test("J11: a new source aborts the running ffprobe; its late answer is dropped",
   assert.equal(props(host)["has-cover"], false);
 });
 
-test("loading and error keep the scene; empty is idle again; the idle switch", async () => {
+test("G-16b: loading shows the loading screen with the source name; ready judges again; empty is idle", async () => {
   const host = new TestHost();
   host.tools.handle("ffprobe", () => ({ stdout: PROBE_PLAIN }));
   await start(host);
@@ -271,18 +271,67 @@ test("loading and error keep the scene; empty is idle again; the idle switch", a
   assert.equal(props(host).mode, "audio");
   host.openElsewhere(join(folder({ "b.mp3": "x" }), "b.mp3"), "loading");
   await settle(host);
-  assert.equal(props(host).mode, "audio");
-  assert.equal(props(host).title, "a.mp3");
+  assert.deepEqual([props(host).mode, props(host).loading], ["loading", "b.mp3"]);
+  host.setSource({ phase: "ready" });
+  await settle(host);
+  assert.deepEqual([props(host).mode, props(host).title], ["audio", "b.mp3"]);
+  // A video: the backdrop is not shown once it plays; the plugin draws nothing.
+  host.stats = { ...host.stats, video: VIDEO_STATS };
+  host.openElsewhere("https://cdn.example.com/films/clip.mp4", "loading");
+  await settle(host);
+  assert.deepEqual([props(host).mode, props(host).loading], ["loading", "cdn.example.com/clip.mp4"]);
+  host.setSource({ phase: "ready" });
+  await settle(host);
+  assert.equal(props(host).mode, "none");
+  // The same source loads again (reload): judged again once ready.
+  host.setSource({ phase: "loading" });
+  await settle(host);
+  assert.equal(props(host).mode, "loading");
+  host.setSource({ phase: "ready" });
+  await settle(host);
+  assert.equal(props(host).mode, "none");
   host.setSource({ phase: "empty", source: null });
   await settle(host);
   assert.equal(props(host).mode, "idle");
+  // The loading screen does not depend on the idle switch.
   await host.command("idle-logo").run();
   await host.settle();
   assert.equal(props(host).mode, "none");
   assert.equal(host.osd.at(-1), "空闲时显示徽标：关");
   host.openElsewhere(join(folder({ "c.mp3": "x" }), "c.mp3"), "loading");
   await settle(host);
-  assert.equal(props(host).mode, "none", "loading after idle keeps the idle scene");
+  assert.equal(props(host).mode, "loading");
+});
+
+test("G-16b: an error while loading goes back to what was shown before", async () => {
+  const host = new TestHost();
+  host.tools.handle("ffprobe", () => ({ stdout: PROBE_PLAIN }));
+  await start(host);
+  host.openElsewhere(join(folder({ "a.mp3": "x" }), "a.mp3"));
+  await settle(host);
+  host.openElsewhere("https://broken.example/x.mp3", "loading");
+  await settle(host);
+  assert.equal(props(host).mode, "loading");
+  host.setSource({ phase: "error" });
+  await settle(host);
+  assert.deepEqual([props(host).mode, props(host).title], ["audio", "a.mp3"]);
+  host.setSource({ phase: "empty", source: null });
+  await settle(host);
+  host.openElsewhere("https://broken.example/y.mp3", "loading");
+  await settle(host);
+  host.setSource({ phase: "error" });
+  await settle(host);
+  assert.equal(props(host).mode, "idle");
+});
+
+test("G-16b: loading names: file name, link host and last segment, cut with an ellipsis", () => {
+  assert.equal(loadingName("/media/电影.mkv"), "电影.mkv");
+  assert.equal(loadingName("https://www.example.com/watch/v/%E8%A7%86%E9%A2%91.mp4?x=1"), "www.example.com/视频.mp4");
+  assert.equal(loadingName("https://live.example.com/"), "live.example.com");
+  assert.equal(loadingName(null), "");
+  const long = loadingName(`/m/${"很长".repeat(40)}.mkv`);
+  assert.equal([...long].length, 60);
+  assert.ok(long.endsWith("…"));
 });
 
 test("H12: custom logo is checked, copied, shown, kept over restarts and reset", async () => {

@@ -3952,9 +3952,12 @@ manifest 能力：`commands`、`ui.window`、`ui.osd`、`plugins.manage`（现�
 visualizer 插件负责「视频区没有画面时显示什么」：
 
 - **纯音频播放时**（J11）：显示专辑封面与曲目信息（没有封面时显示占位图）；
-- **空闲时**（H12）：没有打开任何来源时，居中显示品牌 logo。
+- **空闲时**（H12）：没有打开任何来源时，居中显示品牌 logo；
+- **加载中**（interaction-alignment.md G-16b）：来源 `phase === "loading"` 时显示转圈与「正在打开：<来源名>」。
 
-两者都要画在视频区里，而视频区由宿主绘制（`host.slint` 中的 `Image { source: root.video-frame }`），插件现在只能挂载到底栏和侧栏。所以需要核心新增一个「视频区背景层」挂载位：没有视频画面时，核心在视频区显示一个插件面板。另外，封面是运行时取得的图片，需要图片属性 `plugin.ui.image`（playback 章 I07 首次提出）。
+> 加载中的行为已被 [interaction-alignment.md](interaction-alignment.md) G-16a / G-16b 取代：核心在 `loading` 时让背景层生效，visualizer 画加载界面（74×74、12 个刻度、每 50 ms 一格的转圈，中心上移 30 px；下方粗体 15 px `Theme.text-dim` 文字，下移 30 px）；出错时回到加载前的画面；与徽标、封面互斥，不受两个开关影响。下文「`loading` 保持上一状态」「`loading` 期间保持徽标」作废。
+
+这些都要画在视频区里，而视频区由宿主绘制（`host.slint` 中的 `Image { source: root.video-frame }`），插件现在只能挂载到底栏和侧栏。所以需要核心新增一个「视频区背景层」挂载位：没有视频画面时，核心在视频区显示一个插件面板。另外，封面是运行时取得的图片，需要图片属性 `plugin.ui.image`（playback 章 I07 首次提出）。
 
 边界：
 - 背景层只负责显示，不接收鼠标和键盘输入。双击全屏、右键菜单、滚轮、拖放仍由宿主视频区处理。
@@ -4028,7 +4031,7 @@ manifest 能力：`commands`、`playback.read`、`events`、`ui.mount`、`ui.dia
 
   规则：
   - 核心在两种情况下显示背景层：`phase` 为 `empty`（未打开或已关闭）；`ready` / `ended` 且没有视频输出（含封面视频轨时算有输出）。插件用 `phase` 与 `stats().video` 区分空闲与纯音频；
-  - `loading`、`error` 时保持上一状态，不闪烁；
+  - `loading` 时显示（G-16a，原「保持上一状态」作废）；`error` 时保持上一状态；
   - 有视频画面时隐藏，`effective = false`；
   - 背景层画在视频图像所在位置，位于宿主输入层（TouchArea）**之下**，不接收任何指针或键盘事件；
   - 屏幕提示和信息块画在它之上；
@@ -4059,7 +4062,7 @@ manifest 能力：`commands`、`playback.read`、`events`、`ui.mount`、`ui.dia
 **入口**：设置 ▶ 外观 ▶ 空闲时显示徽标 / 选择徽标图片… / 恢复默认徽标；另在选项窗口「外观」分类中注册「徽标与专辑封面」页面（`settings.page`，id `logo-cover`，order 20；含 J11 的开关、徽标预览与选择/恢复、封面缓存大小与清除）。
 
 **行为细节**
-- 何时显示：来源 `phase === "empty"`（插件判断）。`loading` 期间保持徽标，避免黑屏闪烁；来源就绪后由视频画面或 J11 层接替。
+- 何时显示：来源 `phase === "empty"`（插件判断）。`loading` 期间改为加载界面（G-16b，原「保持徽标」作废）；来源就绪后由视频画面或 J11 层接替。
 - **内置 logo**：构建时把 `src/assets/brand/logo.png` 复制进插件包，在 Slint 中用 `@image-url("logo.png")`，不依赖运行时图片能力。H12 的默认形态因此只依赖背景层挂载位。
 - **自定义徽标**：
   - `dialogs.openFile` 选择图片后，校验扩展名与文件头（PNG/JPEG），超过 16 MB 或大于 4096×4096 时拒绝：「图片过大（最大 4096×4096、16 MB）」；
