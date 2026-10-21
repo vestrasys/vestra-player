@@ -172,7 +172,7 @@ test("menu under 视频 follows the chapter's allocation; GPU items are disabled
     ["比例 ▶ 保持宽高比", 404, "video-display", ""],
     ["比例 ▶ 不保持宽高比", 404, "video-display", ""],
     ["比例 ▶ 填满窗口（裁去多余）", 404, "video-display", ""],
-    ["比例 ▶ 依次切换比例", 404, "video-aspect", "Ctrl+F6"],
+    ["比例 ▶ 依次切换比例", 404, "video-aspect", "Shift+F6"],
     ["比例 ▶ 默认（按来源）", 404, "video-aspect", ""],
     ...ratios.map((r) => [`比例 ▶ ${r}`, 404, "video-aspect", ""]),
     ["比例 ▶ 自定义（x:y）", 404, "video-aspect", ""],
@@ -720,7 +720,7 @@ test("E18: an unknown rate blends to 60; no picture adds nothing; 启用画面�
 
 // ---------------------------------------------------------------- E11 宽高比与显示模式
 
-test("E11 model: custom ratios parse as w:h or a decimal in 0.25–4; Ctrl+F6 cycles through the custom ratio once set", () => {
+test("E11 model: custom ratios parse as w:h or a decimal in 0.25–4; Shift+F6 cycles through the custom ratio once set", () => {
   assert.equal(parseAspect("21:9"), 2.3333);
   assert.equal(parseAspect(" 2.39 "), 2.39);
   assert.equal(parseAspect("4：3"), 1.3333);
@@ -743,11 +743,11 @@ test("E11 model: custom ratios parse as w:h or a decimal in 0.25–4; Ctrl+F6 cy
   assert.deepEqual(parse({ version: 1, view: { aspect: 9, fit: "zoom" } }).display, { aspect: null, customAspect: "", fit: "keep" });
 });
 
-test("E11: 比例 menu and Ctrl+F6 set the display layer with reference player's OSD; the chain is untouched", async () => {
+test("E11: 比例 menu and Shift+F6 set the display layer with reference player's OSD; the chain is untouched", async () => {
   const { host, window, stop } = await playing();
   assert.deepEqual(host.videoView.values, { aspect: null, fit: "keep", zoom: 1, panX: 0, panY: 0 });
   const replaced = host.sent("processing.replace").length;
-  await host.press("Ctrl+F6");
+  await host.press("Shift+F6");
   await host.settle();
   assert.equal(host.osd.at(-1), "宽高比：4:3");
   assert.ok(Math.abs(host.videoView.values.aspect! - 4 / 3) < 1e-9);
@@ -771,7 +771,7 @@ test("E11: 比例 menu and Ctrl+F6 set the display layer with reference player's
   assert.equal(host.videoView.owner, null, "released when the plugin stops");
 });
 
-test("E11: 自定义比例… only accepts a valid ratio, joins the menu and the Ctrl+F6 cycle, and is saved", async () => {
+test("E11: 自定义比例… only accepts a valid ratio, joins the menu and the Shift+F6 cycle, and is saved", async () => {
   await withData(async (data) => {
     let { host, stop } = await playing(data);
     await host.command("video.aspect.edit").run();
@@ -798,10 +798,10 @@ test("E11: 自定义比例… only accepts a valid ratio, joins the menu and the
     assert.equal(custom.state.checked, true);
     assert.deepEqual(host.window("picture").props["aspect-names"], ["默认（按来源）", "4:3", "16:9", "16:10", "1.85:1", "2.35:1", "自定义（21:9）"]);
     assert.equal(host.window("picture").props["aspect-index"], 6);
-    await host.press("Ctrl+F6");
+    await host.press("Shift+F6");
     assert.equal(host.osd.at(-1), "宽高比：默认");
     await host.command("video.aspect.4").run();
-    await host.press("Ctrl+F6");
+    await host.press("Shift+F6");
     assert.equal(host.osd.at(-1), "宽高比：自定义 - 21:9");
     await host.command("video.fit.fill").run();
     // Escape / 取消 closes without a change; reopening shows the saved text.

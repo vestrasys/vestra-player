@@ -470,7 +470,7 @@ export default async function activate(plugin: Plugin) {
       checked: () => look.display.fit === id,
       run: () => setFit(id),
     });
-  commands.add({ id: "video.aspect.cycle", path: ["视频", "比例", "依次切换比例"], order: 404, group: "video-aspect", bindings: ["Ctrl+F6"], run: () => setAspect(nextAspect(look.display)) });
+  commands.add({ id: "video.aspect.cycle", path: ["视频", "比例", "依次切换比例"], order: 404, group: "video-aspect", bindings: ["Shift+F6"], run: () => setAspect(nextAspect(look.display)) });
   commands.add({ id: "video.aspect.default", path: ["视频", "比例", "默认（按来源）"], order: 404, group: "video-aspect", radio: true, checked: () => look.display.aspect === null, run: () => setAspect(null) });
   RATIOS.forEach(({ label, aspect }, i) =>
     commands.add({ id: `video.aspect.${i}`, path: ["视频", "比例", label], order: 404, group: "video-aspect", radio: true, checked: () => aspectIndex(look.display) === i + 1, run: () => setAspect(aspect) }),

@@ -188,7 +188,7 @@ export function aspectLabel(display: Display) {
   if (index === 0) return "默认";
   return index <= RATIOS.length ? RATIOS[index - 1]!.label : `自定义 - ${display.customAspect}`;
 }
-/** Ctrl+F6: 默认 → 4:3 → … → 2.35:1 → (自定义, once set) → 默认. */
+/** Shift+F6: 默认 → 4:3 → … → 2.35:1 → (自定义, once set) → 默认. */
 export function nextAspect(display: Display): number | null {
   const custom = parseAspect(display.customAspect);
   const cycle: (number | null)[] = [null, ...RATIOS.map((r) => r.aspect), ...(custom === null ? [] : [custom])];
