@@ -62,6 +62,7 @@ mod timeline;
 mod ui;
 mod ui_image;
 mod ui_markdown;
+mod ui_probe;
 mod ui_state;
 mod ui_values;
 mod video_render;
@@ -2070,10 +2071,12 @@ impl Host {
         let started = Instant::now();
         let mut next = self.mounts.clone();
         let owner = change.reply.owner;
+        let mut probe = None;
         if let Some(mount) = change.contribution {
             if !self.plugins.contains_key(&owner) {
                 return;
             }
+            probe = Some(composition::floating_source(&mount.spec, &mount.title));
             next.insert(owner, mount);
         } else {
             next.remove(&owner);
@@ -2086,6 +2089,15 @@ impl Host {
             .map(|mount| self.mount_values(mount))
             .collect();
         let build = || -> Result<slint_interpreter::ComponentInstance> {
+            // The new panel alone first: a UI that would panic the event
+            // loop fails its own mount (see `ui_probe`).
+            if let Some(source) = probe {
+                ui_probe::check(
+                    source?,
+                    ui::ui_dir().join("host.slint"),
+                    Some("FloatingPanel".into()),
+                )?;
+            }
             let specs = next.values().map(|m| m.spec.clone()).collect::<Vec<_>>();
             let shell =
                 composition::compile_json(&specs, self.mount_events.clone(), candidate_generation)?;
