@@ -11,6 +11,9 @@ import {
   API_VERSION,
   CAPABILITIES,
   COMMAND_LIMITS,
+  MANIFEST_FIELDS,
+  MANIFEST_LIMITS,
+  MARKDOWN_LIMITS,
 } from "@vestra-player/sdk/runtime";
 
 const host = (file: string) =>
@@ -55,4 +58,54 @@ test("the installed SDK's Slint library copy matches the player's", () => {
     { encoding: "utf8" },
   );
   assert.equal(result.status, 0, result.stderr);
+});
+
+test("manifest rules match the player's (host/src/manifest.rs)", () => {
+  const rust = host("src/manifest.rs");
+  const constant = (name: string) => {
+    const match = new RegExp(`pub const ${name}: \\w+ = ([^;]+);`).exec(rust);
+    assert.ok(match, name);
+    return Number(
+      match[1]!
+        .split("*")
+        .map((part) => Number(part.trim().replaceAll("_", "")))
+        .reduce((a, b) => a * b, 1),
+    );
+  };
+  assert.deepEqual(
+    {
+      idBytes: constant("ID_MAX"),
+      name: constant("NAME_MAX"),
+      author: constant("AUTHOR_MAX"),
+      punchline: constant("PUNCHLINE_MAX"),
+      description: constant("DESCRIPTION_MAX"),
+      tags: constant("TAGS_MAX"),
+      tag: constant("TAG_MAX"),
+      license: constant("LICENSE_MAX"),
+      urlBytes: constant("URL_MAX"),
+      iconBytes: constant("ICON_BYTES_MAX"),
+      iconSide: constant("ICON_SIDE_MAX"),
+      documentBytes: constant("DOCUMENT_BYTES_MAX"),
+    },
+    { ...MANIFEST_LIMITS },
+  );
+  // The Rust struct's fields (camelCase) are the fields the SDK accepts.
+  const struct = /pub struct Manifest \{([\s\S]*?)\n\}/.exec(rust);
+  assert.ok(struct, "struct Manifest");
+  const fields = [...struct[1]!.matchAll(/pub (\w+):/g)].map((m) =>
+    m[1]!.replace(/_(\w)/g, (_, c: string) => c.toUpperCase()),
+  );
+  assert.deepEqual([...fields].sort(), [...MANIFEST_FIELDS].sort());
+});
+
+test("Markdown limits match the player's (host/src/ui_markdown.rs)", () => {
+  const text = /pub const MAX_TEXT: usize = ([^;]+);/.exec(
+    host("src/ui_markdown.rs"),
+  )?.[1];
+  assert.ok(text, "MAX_TEXT");
+  const bytes = text
+    .split("*")
+    .map((part) => Number(part.trim()))
+    .reduce((a, b) => a * b, 1);
+  assert.equal(bytes, MARKDOWN_LIMITS.textBytes);
 });

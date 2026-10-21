@@ -2,7 +2,8 @@
 #![forbid(unsafe_code)]
 use super::*;
 use package_stage::Candidate;
-use package_store::{Store, StoredPackage};
+use package_store::{Instance, Source, Store, StoredPackage};
+use plugins::DataKey;
 
 pub struct Manager {
     store: Store,
@@ -24,6 +25,12 @@ struct Operation {
     package: String,
     target: StoredPackage,
     old: Option<StoredPackage>,
+    /// Whose data the target and the old version run with.
+    target_key: DataKey,
+    old_key: Option<DataKey>,
+    /// A data directory this operation's new instance created; removed when
+    /// the operation fails or is cancelled.
+    fresh_data: Option<PathBuf>,
     phase: String,
     owner: Option<u64>,
     waiting: Option<u64>,
@@ -85,8 +92,9 @@ impl Host {
         &mut self,
         directory: &Path,
         manifest: &package_stage::PackageManifest,
-        trial: bool,
+        key: DataKey,
     ) -> Result<u64> {
+        let trial = key == DataKey::Trial;
         self.next_generation += 1;
         let owner = self.next_generation;
         let id = if trial {
@@ -105,12 +113,9 @@ impl Host {
             self.events.clone(),
             plugins::Manifest {
                 id: id.clone(),
-                api_version: manifest.api_version.clone(),
-                entry: manifest.entry.clone(),
-                capabilities: manifest.capabilities.clone(),
-                version: Some(manifest.version.clone()),
+                ..manifest.clone()
             },
-            trial,
+            key,
         )?;
         self.plugins.insert(owner, plugin);
         self.backend.commands.send(Command {
@@ -133,11 +138,20 @@ impl Host {
         params: &Value,
     ) -> std::result::Result<Value, RpcError> {
         match method {
-            "packages.validate" => {
+            "packages.validate" | "packages.validateArchive" => {
                 if self.packages.candidates.len() >= 32 {
                     return Err(RpcError::new("busy", "candidate limit reached"));
                 }
-                let candidate = Candidate::capture(Path::new(string(params, "directory")?))?;
+                let candidate = if method == "packages.validate" {
+                    Candidate::capture(Path::new(string(params, "directory")?))?
+                } else {
+                    let file = Path::new(string(params, "file")?);
+                    package_archive::check_extension(file)
+                        .map_err(|e| RpcError::invalid(e.to_string()))?;
+                    let extracted = package_archive::extract(file)
+                        .map_err(|e| RpcError::invalid(format!("{e:#}")))?;
+                    Candidate::capture(extracted.path())?
+                };
                 if params
                     .get("digest")
                     .is_some_and(|v| v.as_str() != Some(candidate.digest()))
@@ -244,7 +258,8 @@ impl Host {
                 if self.packages.trials.len() >= 16 {
                     return Err(RpcError::new("busy", "trial limit"));
                 }
-                let owner = self.load_package(candidate.directory(), candidate.manifest(), true)?;
+                let owner =
+                    self.load_package(candidate.directory(), candidate.manifest(), DataKey::Trial)?;
                 self.packages.trials.insert(
                     owner,
                     Trial {
@@ -315,6 +330,12 @@ impl Host {
                 if self.packages.operations.len() >= 64 {
                     return Err(RpcError::new("busy", "operation history full"));
                 }
+                let source = if method == "packages.install" {
+                    Some(install_source(params)?)
+                } else {
+                    None
+                };
+                let replace = params.get("replace").is_some_and(|v| v == true);
                 let target = if method == "packages.install" {
                     let token = string(params, "token")?;
                     let candidate = self
@@ -351,40 +372,11 @@ impl Host {
                         "installed revision changed",
                     ));
                 }
-                let result = json!({"operationId":request,"packageId":id,"status":"preparing","request":request_spec,"fingerprint":{"action":method,"packageId":id,"digest":target.digest,"expectedRevision":expected}});
-                self.packages.store.prepare_with_receipt(
-                    &id,
-                    expected,
-                    &target,
-                    &request,
-                    result.clone(),
-                )?;
-                let waiting = self
-                    .plugins
-                    .iter()
-                    .find(|(_, p)| p.manifest.id == id)
-                    .map(|(o, _)| *o);
-                if let Some(owner) = waiting {
-                    self.disable(owner);
-                }
-                self.packages.operations.insert(
-                    request.clone(),
-                    Operation {
-                        id: request,
-                        package: id,
-                        target,
-                        old: before.current,
-                        phase: "preparing".into(),
-                        owner: None,
-                        waiting,
-                        cancel: false,
-                        failure: None,
-                        started: self.now_ms(),
-                        result: result.clone(),
-                        request: request_spec,
-                    },
-                );
-                Ok(result)
+                let (instance, fresh) = match source {
+                    Some(source) => self.install_instance(&id, &before, source, replace)?,
+                    None => (None, false),
+                };
+                self.start_operation(request, request_spec, target, before, instance, fresh)
             }
             "packages.operation" | "packages.cancel" => {
                 let id = string(params, "operationId")?;
@@ -425,6 +417,193 @@ impl Host {
             "packages.uninstall" => self.uninstall(caller, params),
             _ => Err(RpcError::new("unsupported", "unknown package method")),
         }
+    }
+    /// Which instance an install goes into (store proposal §1.3): the same
+    /// source upgrades, another source needs `replace` and reconnects to a
+    /// dormant instance of that source when there is one. Built-ins are only
+    /// upgraded by seeding. `(instance, fresh)`: `fresh` when new data starts.
+    fn install_instance(
+        &self,
+        id: &str,
+        before: &package_store::Installed,
+        source: Source,
+        replace: bool,
+    ) -> std::result::Result<(Option<Instance>, bool), RpcError> {
+        install_instance(&self.packages.store, id, before, source, replace)
+    }
+    /// Journal the install (or rollback) and stop the running version; the
+    /// tick activates the target and commits or restores.
+    fn start_operation(
+        &mut self,
+        request: String,
+        request_spec: Value,
+        target: StoredPackage,
+        before: package_store::Installed,
+        instance: Option<Instance>,
+        fresh: bool,
+    ) -> std::result::Result<Value, RpcError> {
+        let id = target.manifest.id.clone();
+        let result = json!({"operationId":request,"packageId":id,"status":"preparing","request":request_spec,
+            "fingerprint":{"action":request_spec["method"],"packageId":id,"digest":target.digest,"expectedRevision":before.revision}});
+        let target_guid = instance
+            .as_ref()
+            .or(before.instance.as_ref())
+            .map(|i| i.guid.clone())
+            .unwrap_or_else(package_store::new_guid);
+        let old_key = before
+            .instance
+            .as_ref()
+            .map(|i| DataKey::Instance(i.guid.clone()));
+        self.packages.store.prepare_with_receipt(
+            &id,
+            before.revision,
+            &target,
+            &request,
+            result.clone(),
+            instance,
+        )?;
+        let waiting = self.running(&id);
+        if let Some(owner) = waiting {
+            self.disable(owner);
+        }
+        let fresh_data = fresh
+            .then(|| plugins::data_root().map(|root| root.join(&target_guid)))
+            .flatten();
+        self.packages.operations.insert(
+            request.clone(),
+            Operation {
+                id: request,
+                package: id,
+                target,
+                old: before.current,
+                target_key: DataKey::Instance(target_guid),
+                old_key,
+                fresh_data,
+                phase: "preparing".into(),
+                owner: None,
+                waiting,
+                cancel: false,
+                failure: None,
+                started: self.now_ms(),
+                result: result.clone(),
+                request: request_spec,
+            },
+        );
+        Ok(result)
+    }
+    /// The data directory of an installed instance, development load or
+    /// running plugin (`PluginInfo.dataDirectory`).
+    fn data_directory_of(&self, key: &DataKey, id: &str) -> Option<PathBuf> {
+        plugins::data_root().map(|root| key.directory(&root, id))
+    }
+    /// Install or upgrade the built-in plugins the installation ships
+    /// (`Resources/plugins/builtin.json`, or `$VESTRA_BUILTIN_PLUGINS`). A
+    /// built-in is upgraded only when the installation carries a newer
+    /// version than it last seeded, so a user's rollback stays.
+    fn seed_builtins(&mut self) {
+        let Some(directory) = seed::directory() else {
+            return;
+        };
+        let list = match seed::read(&directory) {
+            Ok(list) => list,
+            Err(error) => {
+                eprintln!("built-in plugins: {error:#}");
+                return;
+            }
+        };
+        for entry in list {
+            if let Err(error) = self.seed_one(&directory, &entry) {
+                eprintln!("built-in plugin {}: {error:#}", entry.id);
+            }
+        }
+    }
+    fn seed_one(&mut self, directory: &Path, entry: &seed::Entry) -> Result<()> {
+        if self.development.contains_key(&entry.id) || self.operation_pending(&entry.id) {
+            return Ok(());
+        }
+        let before = self.packages.store.get(&entry.id);
+        let version = crate::manifest::parse_version(&entry.version)
+            .ok_or_else(|| anyhow::anyhow!("invalid version {}", entry.version))?;
+        let instance = match &before.instance {
+            Some(current) if !current.builtin => {
+                eprintln!(
+                    "built-in plugin {}: installed from another source; not seeded",
+                    entry.id
+                );
+                return Ok(());
+            }
+            Some(current) => {
+                let seeded = current
+                    .seeded_version
+                    .as_deref()
+                    .and_then(crate::manifest::parse_version);
+                if seeded.is_some_and(|seeded| seeded >= version) {
+                    return Ok(());
+                }
+                Instance {
+                    seeded_version: Some(entry.version.clone()),
+                    ..current.clone()
+                }
+            }
+            None => Instance {
+                builtin: true,
+                seeded_version: Some(entry.version.clone()),
+                ..Instance::new(Source::Bundled)
+            },
+        };
+        let file = directory.join(&entry.file);
+        anyhow::ensure!(
+            package_archive::sha256(&file)? == entry.sha256,
+            "{} does not match its sha256",
+            entry.file
+        );
+        let extracted = package_archive::extract(&file)?;
+        let candidate = Candidate::capture(extracted.path())?;
+        anyhow::ensure!(
+            candidate.manifest().id == entry.id
+                && candidate.manifest().version.as_deref() == Some(entry.version.as_str()),
+            "{} holds {} {:?}, not {} {}",
+            entry.file,
+            candidate.manifest().id,
+            candidate.manifest().version,
+            entry.id,
+            entry.version
+        );
+        if before
+            .current
+            .as_ref()
+            .is_some_and(|current| current.digest == candidate.digest())
+        {
+            self.packages.store.set_seeded(&entry.id, &entry.version)?;
+            return Ok(());
+        }
+        self.packages.store.gc()?;
+        let target = self.packages.store.stage(&candidate)?;
+        // Seeding runs at start-up, before any installed plugin starts: commit
+        // directly; the start-up loop then starts it like any installed
+        // package (a failure shows as `failed` in the list).
+        let request = format!("seed-{}", &entry.sha256[..32]);
+        let spec = json!({"method":"seed","params":{"id":entry.id,"version":entry.version}});
+        let disabled = self.packages.store.disabled().contains(&entry.id);
+        let store = &mut self.packages.store;
+        store.prepare_with_receipt(
+            &entry.id,
+            before.revision,
+            &target,
+            &request,
+            json!({"operationId":request,"packageId":entry.id,"status":"preparing","request":spec}),
+            Some(instance),
+        )?;
+        store.commit_with_receipt(
+            &entry.id,
+            &request,
+            json!({"operationId":request,"packageId":entry.id,"status":"committed","request":spec}),
+        )?;
+        if disabled {
+            store.set_disabled(&entry.id, true)?;
+        }
+        self.packages.receipts = self.packages.store.operations();
+        Ok(())
     }
     fn running(&self, id: &str) -> Option<u64> {
         self.plugins
@@ -472,11 +651,15 @@ impl Host {
                 _ => "development",
             };
             let previous = installed
-                .then(|| stored.previous.map(|p| p.manifest.version))
+                .then(|| stored.previous.and_then(|p| p.manifest.version))
                 .flatten();
+            let instance = installed.then_some(stored.instance).flatten();
             list.insert(id.clone(), json!({"id":id,"version":plugin.manifest.version,
                 "origin":origin,"state":state,"error":error,"capabilities":plugin.manifest.capabilities,
-                "directory":plugin.directory,"previousVersion":previous}));
+                "directory":plugin.directory,"previousVersion":previous,
+                "builtin":instance.as_ref().is_some_and(|i| i.builtin),
+                "source":instance.map(|i| i.source),
+                "dataDirectory":plugin.data_directory()}));
         }
         let stopped = |disabled: bool, failure: Option<&String>| {
             if disabled {
@@ -499,12 +682,19 @@ impl Host {
                     self.failures.get(&id),
                 )
             };
+            let data = record
+                .instance
+                .as_ref()
+                .and_then(|i| self.data_directory_of(&DataKey::Instance(i.guid.clone()), &id));
             list.insert(
                 id.clone(),
                 json!({"id":id,"version":current.manifest.version,
                 "origin":"installed","state":state,"error":error,
                 "capabilities":current.manifest.capabilities,"directory":current.directory,
-                "previousVersion":record.previous.map(|p| p.manifest.version)}),
+                "previousVersion":record.previous.and_then(|p| p.manifest.version),
+                "builtin":record.instance.as_ref().is_some_and(|i| i.builtin),
+                "source":record.instance.map(|i| i.source),
+                "dataDirectory":data}),
             );
         }
         for (id, (directory, manifest)) in &self.development {
@@ -512,11 +702,13 @@ impl Host {
                 continue;
             }
             let (state, error) = stopped(self.dev_disabled.contains(id), self.failures.get(id));
+            let data = self.data_directory_of(&DataKey::Development(id.clone()), id);
             list.insert(
                 id.clone(),
                 json!({"id":id,"version":manifest.version,
                 "origin":"development","state":state,"error":error,
-                "capabilities":manifest.capabilities,"directory":directory,"previousVersion":null}),
+                "capabilities":manifest.capabilities,"directory":directory,"previousVersion":null,
+                "builtin":false,"source":null,"dataDirectory":data}),
             );
         }
         Value::Array(list.into_values().collect())
@@ -542,12 +734,18 @@ impl Host {
         if self.operation_pending(id) {
             return Err(RpcError::new("busy", "the package is being installed"));
         }
-        let installed = self.packages.store.get(id).current;
+        let record = self.packages.store.get(id);
+        let installed = record.current;
+        let key = record
+            .instance
+            .map(|i| DataKey::Instance(i.guid))
+            .unwrap_or(DataKey::Trial);
         let development = self.development.get(id).cloned();
         if installed.is_none() && development.is_none() {
             return Err(RpcError::new("missing", format!("no plugin {id}")));
         }
-        if installed.is_some() {
+        // A development load of the same id wins over the installed copy.
+        if installed.is_some() && development.is_none() {
             self.packages.store.set_disabled(id, !enabled)?;
         } else if enabled {
             self.dev_disabled.remove(id);
@@ -566,10 +764,10 @@ impl Host {
         }
         self.failures.remove(id);
         match (installed, development) {
-            (Some(current), _) => {
-                self.load_package(&current.directory, &current.manifest, false)?;
+            (_, Some((directory, _))) => self.load(&directory, 120_000)?,
+            (Some(current), None) => {
+                self.load_package(&current.directory, &current.manifest, key)?;
             }
-            (None, Some((directory, _))) => self.load(&directory, 120_000)?,
             (None, None) => unreachable!("checked above"),
         }
         Ok(())
@@ -597,6 +795,12 @@ impl Host {
             return Err(RpcError::invalid("a plugin cannot uninstall itself"));
         }
         let installed = self.packages.store.get(&id);
+        if installed.instance.as_ref().is_some_and(|i| i.builtin) {
+            return Err(RpcError::new(
+                "unsupported",
+                "built-in plugins can be disabled but not uninstalled",
+            ));
+        }
         if installed.current.is_none() {
             return Err(
                 if self.development.contains_key(&id) || self.running(&id).is_some() {
@@ -615,8 +819,14 @@ impl Host {
         if self.operation_pending(&id) {
             return Err(RpcError::new("busy", "the package is being installed"));
         }
-        let data = (params["removeData"] == true)
-            .then(|| plugins::data_root().map(|root| root.join(&id)))
+        let remove_data = params["removeData"] == true;
+        let data = remove_data
+            .then(|| {
+                installed
+                    .instance
+                    .as_ref()
+                    .and_then(|i| self.data_directory_of(&DataKey::Instance(i.guid.clone()), &id))
+            })
             .flatten();
         let receipt =
             json!({"operationId":request,"packageId":id,"status":"committed","request":spec});
@@ -631,7 +841,7 @@ impl Host {
         }
         self.packages
             .store
-            .uninstall(&id, &request, receipt.clone())?;
+            .uninstall(&id, &request, receipt.clone(), !remove_data)?;
         self.packages.receipts = self.packages.store.operations();
         self.failures.remove(&id);
         Ok(receipt)
@@ -648,6 +858,25 @@ impl Host {
                     .unwrap_or(Value::Null);
                 let result = json!({"operationId":recovery.operation_id,"packageId":recovery.id,"status":"restoring","request":request});
                 self.packages.receipts.remove(&recovery.operation_id);
+                let old_key = recovery
+                    .before
+                    .instance
+                    .as_ref()
+                    .map(|i| DataKey::Instance(i.guid.clone()));
+                let target_guid = recovery
+                    .instance
+                    .as_ref()
+                    .or(recovery.before.instance.as_ref())
+                    .map(|i| i.guid.clone())
+                    .unwrap_or_else(package_store::new_guid);
+                let fresh_data = recovery
+                    .instance
+                    .as_ref()
+                    .filter(|i| {
+                        old_key != Some(DataKey::Instance(i.guid.clone()))
+                            && !self.packages.store.dormant().contains_key(&i.guid)
+                    })
+                    .and_then(|i| plugins::data_root().map(|root| root.join(&i.guid)));
                 self.packages.operations.insert(
                     recovery.operation_id.clone(),
                     Operation {
@@ -655,6 +884,9 @@ impl Host {
                         package: recovery.id,
                         target: recovery.target,
                         old: recovery.before.current,
+                        target_key: DataKey::Instance(target_guid),
+                        old_key,
+                        fresh_data,
                         phase: "restoring".into(),
                         owner: None,
                         waiting: None,
@@ -669,6 +901,7 @@ impl Host {
                     },
                 );
             }
+            self.seed_builtins();
             // Start committed packages independently of the authoring plugin.
             let pending = self
                 .packages
@@ -678,14 +911,22 @@ impl Host {
                 .collect::<Vec<_>>();
             let installed = self.packages.store.installed();
             for (id, record) in installed {
-                // R-H10: a package the user disabled stays stopped.
+                // R-H10: a package the user disabled stays stopped; a
+                // development load of the same id runs instead this run.
                 if !pending.contains(&id)
                     && !self.packages.store.disabled().contains(&id)
+                    && !self.development.contains_key(&id)
                     && let Some(current) = record.current
-                    && let Err(error) =
-                        self.load_package(&current.directory, &current.manifest, false)
+                    && let Some(instance) = record.instance
+                    && let Err(error) = self.load_package(
+                        &current.directory,
+                        &current.manifest,
+                        DataKey::Instance(instance.guid),
+                    )
                 {
                     eprintln!("installed package {id} failed to start: {error}");
+                    self.failures
+                        .insert(id.clone(), error.to_string().chars().take(512).collect());
                 }
             }
         }
@@ -758,7 +999,11 @@ impl Host {
             op.waiting = None;
         }
         if op.phase == "preparing" && !op.cancel {
-            match self.load_package(&op.target.directory, &op.target.manifest, false) {
+            match self.load_package(
+                &op.target.directory,
+                &op.target.manifest,
+                op.target_key.clone(),
+            ) {
                 Ok(owner) => {
                     op.owner = Some(owner);
                     op.phase = "activating".into();
@@ -822,7 +1067,8 @@ impl Host {
         if op.phase == "restoring" {
             if let Some(old) = op.old.clone() {
                 if op.owner.is_none() {
-                    op.owner = Some(self.load_package(&old.directory, &old.manifest, false)?);
+                    let key = op.old_key.clone().unwrap_or_else(|| op.target_key.clone());
+                    op.owner = Some(self.load_package(&old.directory, &old.manifest, key)?);
                     return Ok(());
                 }
                 let status = self.package_status(op.owner.unwrap());
@@ -835,6 +1081,10 @@ impl Host {
                 );
             }
             op.phase = if op.cancel { "cancelled" } else { "failed" }.into();
+            // The new instance's data (it ran during activation) goes too.
+            if let Some(directory) = op.fresh_data.take() {
+                let _ = std::fs::remove_dir_all(directory);
+            }
             op.result = json!({"operationId":op.id,"packageId":op.package,"status":op.phase,"message":op.failure,"restored":op.old.is_some(),"owner":op.owner,"request":op.request});
             self.packages
                 .store
@@ -843,5 +1093,400 @@ impl Host {
         }
         op.result = json!({"operationId":op.id,"packageId":op.package,"status":op.phase,"owner":op.owner,"cancelRequested":op.cancel});
         Ok(())
+    }
+}
+
+/// `packages.install`'s `source` (default: a local file). `bundled` is the
+/// player's own; repository and link addresses are http(s), normalized.
+fn install_source(params: &Value) -> std::result::Result<Source, RpcError> {
+    let Some(value) = params.get("source").filter(|v| !v.is_null()) else {
+        return Ok(Source::File);
+    };
+    let source: Source = serde_json::from_value(value.clone())
+        .map_err(|error| RpcError::invalid(format!("source: {error}")))?;
+    let normalize = |url: &str| {
+        let parsed = url::Url::parse(url)
+            .ok()
+            .filter(|u| matches!(u.scheme(), "http" | "https"))
+            .ok_or_else(|| RpcError::invalid("source url must be an http(s) address"))?;
+        let text = parsed.to_string();
+        if text.len() > crate::manifest::URL_MAX {
+            return Err(RpcError::invalid("source url exceeds 2048 bytes"));
+        }
+        Ok(text)
+    };
+    Ok(match source {
+        Source::Bundled => {
+            return Err(RpcError::invalid(
+                "source bundled is reserved for the player",
+            ));
+        }
+        Source::Repository { url } => Source::Repository {
+            url: normalize(&url)?,
+        },
+        Source::Link { url } => Source::Link {
+            url: normalize(&url)?,
+        },
+        other => other,
+    })
+}
+
+/// The installation's built-in plugin list (written by `scripts/stage-plugins.mjs`).
+mod seed {
+    use anyhow::{Context, Result, ensure};
+    use serde::Deserialize;
+    use std::path::{Path, PathBuf};
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct List {
+        schema: u32,
+        plugins: Vec<Entry>,
+    }
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    pub struct Entry {
+        pub id: String,
+        pub version: String,
+        pub file: String,
+        pub sha256: String,
+    }
+
+    /// `$VESTRA_BUILTIN_PLUGINS`, else `Resources/plugins` beside the packaged
+    /// runtime; none when it has no `builtin.json` (a development run).
+    pub fn directory() -> Option<PathBuf> {
+        std::env::var_os("VESTRA_BUILTIN_PLUGINS")
+            .map(PathBuf::from)
+            .or_else(|| {
+                Some(
+                    std::env::current_exe()
+                        .ok()?
+                        .parent()?
+                        .parent()?
+                        .join("Resources/plugins"),
+                )
+            })
+            .filter(|dir| dir.join("builtin.json").is_file())
+    }
+
+    pub fn read(directory: &Path) -> Result<Vec<Entry>> {
+        let bytes = std::fs::read(directory.join("builtin.json")).context("builtin.json")?;
+        ensure!(bytes.len() <= 256 * 1024, "builtin.json is too large");
+        let list: List = serde_json::from_slice(&bytes).context("builtin.json")?;
+        ensure!(
+            list.schema == 1,
+            "builtin.json schema {} is unknown",
+            list.schema
+        );
+        ensure!(
+            list.plugins.len() <= 64,
+            "builtin.json lists too many plugins"
+        );
+        for entry in &list.plugins {
+            ensure!(
+                crate::manifest::valid_id(&entry.id),
+                "invalid id {}",
+                entry.id
+            );
+            ensure!(
+                entry.sha256.len() == 64
+                    && entry
+                        .sha256
+                        .bytes()
+                        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
+                "{}: sha256 must be 64 lowercase hex digits",
+                entry.id
+            );
+            ensure!(
+                !entry.file.contains(['/', '\\']) && entry.file.ends_with(".vxp"),
+                "{}: file must be a .vxp name in the same directory",
+                entry.id
+            );
+        }
+        Ok(list.plugins)
+    }
+}
+
+/// Which instance an install goes into (store proposal §1.3).
+fn install_instance(
+    store: &Store,
+    id: &str,
+    before: &package_store::Installed,
+    source: Source,
+    replace: bool,
+) -> std::result::Result<(Option<Instance>, bool), RpcError> {
+    if let Some(current) = &before.instance {
+        if current.builtin {
+            return Err(RpcError::new(
+                "unsupported",
+                "built-in plugins are updated with the player",
+            ));
+        }
+        if current.source.identity() == source.identity() {
+            return Ok((
+                Some(Instance {
+                    source,
+                    ..current.clone()
+                }),
+                false,
+            ));
+        }
+        if !replace {
+            return Err(RpcError::new(
+                "conflict",
+                format!(
+                    "{id} is installed from another source; install with replace to replace it"
+                ),
+            ));
+        }
+    }
+    Ok(match store.dormant_match(id, &source.identity()) {
+        Some((guid, dormant)) => (
+            Some(Instance {
+                guid,
+                source,
+                builtin: false,
+                installed_at: dormant.installed_at,
+                seeded_version: None,
+            }),
+            false,
+        ),
+        None => (Some(Instance::new(source)), true),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use package_store::Installed;
+
+    fn candidate(dir: &Path, id: &str, version: &str) -> Candidate {
+        std::fs::write(
+            dir.join("manifest.json"),
+            serde_json::to_vec(&json!({"id":id,
+            "apiVersion":plugins::API,"version":version,"entry":"main.js","capabilities":[]}))
+            .unwrap(),
+        )
+        .unwrap();
+        std::fs::write(dir.join("main.js"), format!("// {version}")).unwrap();
+        Candidate::capture(dir).unwrap()
+    }
+    /// Install `version` of `id` into `store` the way the manager does.
+    fn install(
+        store: &mut Store,
+        id: &str,
+        version: &str,
+        source: Source,
+        replace: bool,
+    ) -> std::result::Result<Installed, RpcError> {
+        let dir = tempfile::tempdir().unwrap();
+        let target = store.stage(&candidate(dir.path(), id, version)).unwrap();
+        let before = store.get(id);
+        let (instance, _) = install_instance(store, id, &before, source, replace)?;
+        let op = format!("op-{}", package_store::new_guid());
+        store
+            .prepare_with_receipt(id, before.revision, &target, &op, json!({}), instance)
+            .unwrap();
+        Ok(store.commit(id, &op).unwrap())
+    }
+    fn repo(url: &str) -> Source {
+        Source::Repository { url: url.into() }
+    }
+
+    #[test]
+    fn same_source_upgrades_and_another_source_needs_replace() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = Store::open(root.path().into()).unwrap();
+        let first = install(
+            &mut store,
+            "a.b",
+            "1.0.0",
+            repo("https://one/index.json"),
+            false,
+        )
+        .unwrap();
+        let guid = first.instance.unwrap().guid;
+        let second = install(
+            &mut store,
+            "a.b",
+            "1.1.0",
+            repo("https://one/index.json"),
+            false,
+        )
+        .unwrap();
+        assert_eq!(
+            second.instance.as_ref().unwrap().guid,
+            guid,
+            "upgrade keeps the instance"
+        );
+        assert!(second.previous.is_some(), "rollback within the instance");
+        let error = install(
+            &mut store,
+            "a.b",
+            "2.0.0",
+            repo("https://two/index.json"),
+            false,
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "conflict");
+        assert_eq!(
+            store
+                .get("a.b")
+                .current
+                .unwrap()
+                .manifest
+                .version
+                .as_deref(),
+            Some("1.1.0")
+        );
+        // Replace: a new instance, the old one dormant, no rollback across.
+        let replaced = install(
+            &mut store,
+            "a.b",
+            "2.0.0",
+            repo("https://two/index.json"),
+            true,
+        )
+        .unwrap();
+        let new_guid = replaced.instance.unwrap().guid;
+        assert_ne!(new_guid, guid);
+        assert!(replaced.previous.is_none());
+        assert_eq!(store.dormant()[&guid].version.as_deref(), Some("1.1.0"));
+        // Switching back reconnects to the dormant instance's data.
+        let back = install(
+            &mut store,
+            "a.b",
+            "1.2.0",
+            repo("https://one/index.json"),
+            true,
+        )
+        .unwrap();
+        assert_eq!(back.instance.unwrap().guid, guid);
+        assert!(!store.dormant().contains_key(&guid));
+        assert!(store.dormant().contains_key(&new_guid));
+        drop(store);
+        let store = Store::open(root.path().into()).unwrap();
+        assert_eq!(store.get("a.b").instance.unwrap().guid, guid, "persisted");
+    }
+
+    #[test]
+    fn links_and_files_are_one_manual_source_and_workshop_is_another() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = Store::open(root.path().into()).unwrap();
+        let first = install(
+            &mut store,
+            "x",
+            "1.0.0",
+            Source::Link {
+                url: "https://a/x.vxp".into(),
+            },
+            false,
+        )
+        .unwrap();
+        let next = install(&mut store, "x", "1.1.0", Source::File, false).unwrap();
+        assert_eq!(
+            first.instance.unwrap().guid,
+            next.instance.as_ref().unwrap().guid
+        );
+        assert_eq!(
+            next.instance.unwrap().source,
+            Source::File,
+            "latest source recorded"
+        );
+        assert_eq!(
+            install(&mut store, "x", "1.2.0", Source::Workshop, false)
+                .unwrap_err()
+                .code,
+            "conflict"
+        );
+    }
+
+    #[test]
+    fn built_ins_refuse_every_install() {
+        let root = tempfile::tempdir().unwrap();
+        let store = Store::open(root.path().into()).unwrap();
+        let before = Installed {
+            instance: Some(Instance {
+                builtin: true,
+                ..Instance::new(Source::Bundled)
+            }),
+            ..Default::default()
+        };
+        for (source, replace) in [
+            (Source::File, false),
+            (Source::File, true),
+            (Source::Bundled, false),
+        ] {
+            let error =
+                install_instance(&store, "vestra.video", &before, source, replace).unwrap_err();
+            assert_eq!(error.code, "unsupported");
+        }
+    }
+
+    #[test]
+    fn uninstall_keeping_data_lets_the_same_source_reconnect() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = Store::open(root.path().into()).unwrap();
+        let guid = install(&mut store, "k", "1.0.0", Source::File, false)
+            .unwrap()
+            .instance
+            .unwrap()
+            .guid;
+        store.uninstall("k", "rm", json!({}), true).unwrap();
+        let again = install(&mut store, "k", "1.0.0", Source::File, false).unwrap();
+        assert_eq!(again.instance.unwrap().guid, guid);
+        store.uninstall("k", "rm2", json!({}), false).unwrap();
+        assert!(store.dormant().is_empty());
+        let fresh = install(&mut store, "k", "1.0.0", Source::File, false).unwrap();
+        assert_ne!(fresh.instance.unwrap().guid, guid);
+    }
+
+    #[test]
+    fn install_sources_are_checked_and_normalized() {
+        assert_eq!(install_source(&json!({})).unwrap(), Source::File);
+        assert_eq!(
+            install_source(
+                &json!({"source":{"kind":"repository","url":"HTTPS://Example.com/a/../index.json"}})
+            )
+            .unwrap(),
+            Source::Repository {
+                url: "https://example.com/index.json".into()
+            }
+        );
+        for bad in [
+            json!({"kind":"bundled"}),
+            json!({"kind":"link","url":"file:///x.vxp"}),
+            json!({"kind":"link"}),
+            json!({"kind":"other"}),
+        ] {
+            assert_eq!(
+                install_source(&json!({ "source": bad })).unwrap_err().code,
+                "invalid",
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn builtin_lists_are_strict() {
+        let dir = tempfile::tempdir().unwrap();
+        let write = |value: Value| {
+            std::fs::write(dir.path().join("builtin.json"), value.to_string()).unwrap()
+        };
+        let sha = "a".repeat(64);
+        write(
+            json!({"schema":1,"plugins":[{"id":"vestra.video","version":"1.0.0","file":"vestra.video-1.0.0.vxp","sha256":sha}]}),
+        );
+        assert_eq!(seed::read(dir.path()).unwrap().len(), 1);
+        for bad in [
+            json!({"schema":2,"plugins":[]}),
+            json!({"schema":1,"plugins":[{"id":"v","version":"1.0.0","file":"../v.vxp","sha256":sha}]}),
+            json!({"schema":1,"plugins":[{"id":"v","version":"1.0.0","file":"v.zip","sha256":sha}]}),
+            json!({"schema":1,"plugins":[{"id":"v","version":"1.0.0","file":"v.vxp","sha256":"x"}]}),
+            json!({"schema":1,"plugins":[{"id":"v","version":"1.0.0","file":"v.vxp","sha256":sha,"extra":1}]}),
+        ] {
+            write(bad.clone());
+            assert!(seed::read(dir.path()).is_err(), "{bad}");
+        }
     }
 }

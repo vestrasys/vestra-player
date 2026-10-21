@@ -7,10 +7,12 @@
 | [入门教程](tutorial.md) | 从零写一个「书签」插件，逐行解释 manifest、Slint 界面和 `main.ts`，以及测试、运行、打包 | 第一次写插件 |
 | [插件示例](examples.md) | 12 个按功能分类的完整示例：播放栏、滤镜、播放列表、截图导出、模拟器、字幕、网络视频、插件工坊、拆分模块、测试 | 要实现某种功能，找现成写法 |
 | [API 参考](reference.md) | 每个模块和方法的签名、参数、返回值、取值范围、错误码；能力对照表；测试工具；构建工具 | 查精确定义（权威规格） |
+| [插件商城核心改动（S4）](store-changes.md) | 安装实例与数据目录、安装来源与替换、内置插件、manifest 显示字段、Markdown 组件：变了什么、要做什么 | 维护现有插件、准备发布到商城 |
 
 可以直接运行的代码：
 
 - `src/examples/bookmark/`：教程中的书签插件（含测试）。
+- `src/examples/markdown/`：Markdown 显示组件与 manifest 显示字段的演示。
 - `src/plugins/`：10 个产品插件。最短的是 `video/`（画面调节），可作为第一个参考。
 
 设计取舍（为什么这样设计）见 [SDK 设计说明](../architecture/sdk-design.md)。

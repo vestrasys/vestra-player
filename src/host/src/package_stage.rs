@@ -5,7 +5,6 @@
 #![forbid(unsafe_code)]
 
 use anyhow::{Context, Result, bail, ensure};
-use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File, Metadata, OpenOptions},
@@ -22,15 +21,8 @@ const MAX_PATH: usize = 1024;
 const MAX_DEPTH: usize = 12;
 const DIGEST_DOMAIN: &[u8] = b"vestra.package-stage/v1\0";
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PackageManifest {
-    pub id: String,
-    pub api_version: String,
-    pub entry: String,
-    pub capabilities: Vec<String>,
-    pub version: String,
-}
+/// A package's manifest: the shared structure with `version` required.
+pub use crate::manifest::Manifest as PackageManifest;
 
 #[derive(Clone)]
 pub struct Candidate {
@@ -113,12 +105,12 @@ impl Candidate {
             same_directory(&initial_root, &fs::symlink_metadata(&source)?),
             "package root changed during capture"
         );
-        let manifest: PackageManifest = serde_json::from_reader(
-            File::open(directory.path().join("manifest.json"))
+        let manifest = crate::manifest::parse(
+            &fs::read(directory.path().join("manifest.json"))
                 .context("package manifest missing")?,
-        )
-        .context("candidate manifest")?;
-        validate_manifest(&manifest)?;
+            crate::manifest::player_version(),
+        )?;
+        validate_manifest(&manifest, directory.path())?;
         ensure!(
             directory.path().join(&manifest.entry).is_file(),
             "production entry missing from staged package"
@@ -252,55 +244,11 @@ fn same_directory(a: &Metadata, b: &Metadata) -> bool {
             .is_some_and(|(x, y)| x == y)
 }
 
-fn validate_manifest(manifest: &PackageManifest) -> Result<()> {
+fn validate_manifest(manifest: &PackageManifest, directory: &Path) -> Result<()> {
+    crate::manifest::check(manifest, directory, true)?;
     ensure!(
-        !manifest.id.is_empty()
-            && manifest.id.len() <= 128
-            && manifest
-                .id
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b".-_".contains(&b)),
-        "invalid plugin id"
-    );
-    ensure!(
-        manifest.api_version == crate::plugins::API,
-        "unsupported candidate apiVersion"
-    );
-    ensure!(
-        manifest
-            .capabilities
-            .iter()
-            .all(|c| crate::plugins::CAPABILITIES.contains(&c.as_str())),
-        "unknown required capability"
-    );
-    ensure!(
-        manifest.capabilities.len() <= crate::plugins::CAPABILITIES.len()
-            && manifest
-                .capabilities
-                .iter()
-                .collect::<std::collections::BTreeSet<_>>()
-                .len()
-                == manifest.capabilities.len(),
+        manifest.capabilities.len() <= crate::plugins::CAPABILITIES.len(),
         "candidate capabilities must be unique and bounded"
-    );
-    // Three u32 components need at most 32 ASCII bytes, including two dots.
-    ensure!(
-        manifest.version.len() <= 32,
-        "version exceeds three u32 components"
-    );
-    let parts = manifest.version.split('.').collect::<Vec<_>>();
-    ensure!(
-        parts.len() == 3
-            && parts.iter().all(|p| !p.is_empty()
-                && p.bytes().all(|b| b.is_ascii_digit())
-                && (p.len() == 1 || !p.starts_with('0'))
-                && p.parse::<u32>().is_ok()),
-        "version must be ASCII MAJOR.MINOR.PATCH without leading zeros"
-    );
-    relative_name(Path::new(&manifest.entry))?;
-    ensure!(
-        manifest.entry.ends_with(".js") || manifest.entry.ends_with(".mjs"),
-        "candidate requires a production .js or .mjs entry"
     );
     Ok(())
 }
@@ -317,7 +265,8 @@ mod tests {
                 api_version: crate::plugins::API.into(),
                 entry: "main.js".into(),
                 capabilities: vec![],
-                version: "1.0.0".into(),
+                version: Some("1.0.0".into()),
+                ..Default::default()
             })
             .unwrap(),
         )
@@ -351,7 +300,7 @@ mod tests {
             first.digest(),
             Candidate::capture(root.path()).unwrap().digest()
         );
-        assert_eq!(first.manifest().version, "1.0.0");
+        assert_eq!(first.manifest().version.as_deref(), Some("1.0.0"));
         fs::write(
             root.path().join("main.js"),
             "export async function activate() { return 1; }\n",
