@@ -1,0 +1,15 @@
+{
+  "id": "vestra.visualizer",
+  "version": "0.1.0",
+  "apiVersion": "vestra.experimental/0.1",
+  "entry": "main.ts",
+  "capabilities": [
+    "commands",
+    "playback.read",
+    "events",
+    "ui.mount",
+    "ui.dialog",
+    "ui.osd",
+    "ui.settings"
+  ]
+}

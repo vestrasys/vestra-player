@@ -1,0 +1,206 @@
+// The video-area backdrop (R-U3): drawn by the host where the video image is
+// whenever there is no video frame, under the input layer, the OSD and the
+// information blocks. It never receives the pointer or the keyboard.
+//
+// One component for both scenes (feature-requirements「专辑封面与空闲画面」):
+//   idle   H12: the logo centred, side = 30% of the short edge in 64–256px,
+//               「Vestra」12px below it (hidden under 120px of height).
+//   audio  J11: the cover centred, side = 60% of the short edge up to 480px,
+//               then title / artist / album · year (the last two hidden under
+//               200px of height); text at most 80% of the width, elided.
+//   none   the switch for the scene is off: plain Theme.bg-video.
+// Scenes cross-fade in 200 ms; a new cover fades in over the placeholder in
+// 300 ms (the Node side never animates).
+import { Theme } from "@vestra/theme.slint";
+
+export global Art {
+    // "idle" | "audio" | "none"
+    in property <string> mode: "idle";
+    // A custom idle logo (plugin.ui.image); the brand logo when false.
+    in property <bool> custom-logo: false;
+    in property <image> logo;
+    // The album cover (plugin.ui.image); the placeholder when false.
+    in property <bool> has-cover: false;
+    in property <image> cover;
+    in property <string> title;
+    in property <string> artist;
+    in property <string> album;
+}
+
+// The brand mark at 40%, framed like a cover: shown until (or instead of) a cover.
+component Placeholder inherits Rectangle {
+    border-radius: Theme.radius-panel;
+    background: Theme.bg-list;
+    border-width: 1px;
+    border-color: Theme.line;
+    Image {
+        width: parent.width * 0.62;
+        height: parent.height * 0.62;
+        source: @image-url("logo.png");
+        image-fit: contain;
+        opacity: 0.4;
+    }
+}
+
+component IdleScene inherits Rectangle {
+    private property <length> short: min(self.width, self.height);
+    private property <length> side: clamp(self.short * 0.3, 64px, 256px);
+    private property <bool> caption: self.height >= 120px;
+    private property <length> caption-gap: 12px;
+    private property <length> caption-height: 16px;
+    private property <length> group: self.side + (self.caption ? self.caption-gap + self.caption-height : 0px);
+    private property <length> top: (self.height - self.group) / 2;
+    // A faint brand-violet glow so the mark does not sit on flat black.
+    Rectangle {
+        width: root.side * 2.6;
+        height: self.width;
+        x: (root.width - self.width) / 2;
+        y: root.top + root.side / 2 - self.height / 2;
+        background: @radial-gradient(circle, Theme.playing.with-alpha(0.10) 0%, Theme.playing.with-alpha(0.03) 45%, Theme.playing.with-alpha(0) 70%);
+    }
+    Image {
+        x: (root.width - self.width) / 2;
+        y: root.top;
+        width: root.side;
+        height: root.side;
+        source: Art.custom-logo ? Art.logo : @image-url("logo.png");
+        image-fit: contain;
+        opacity: 0.92;
+        accessible-role: image;
+        accessible-label: "Vestra";
+    }
+    if root.caption: Text {
+        x: 0;
+        y: root.top + root.side + root.caption-gap;
+        width: root.width;
+        height: root.caption-height;
+        text: "Vestra";
+        color: Theme.text-dim;
+        font-size: Theme.font-title;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+}
+
+component AudioScene inherits Rectangle {
+    private property <length> short: min(self.width, self.height);
+    private property <bool> full: self.height >= 200px;
+    private property <length> gap: 14px;
+    // Title 18px; artist and album 16px each with 2px between lines.
+    private property <length> text-height: self.full ? 18px + 2 * (2px + 16px) : 18px;
+    private property <length> margin: 10px;
+    // The cover box: never taller than what is left above the text.
+    private property <length> side: max(24px, min(self.short * 0.6, 480px, self.height - self.text-height - self.gap - 2 * self.margin));
+    private property <float> aspect: Art.has-cover && Art.cover.height > 0 ? Art.cover.width / Art.cover.height : 1;
+    private property <length> box-width: self.aspect >= 1 ? self.side : self.side * self.aspect;
+    private property <length> box-height: self.aspect >= 1 ? self.side / self.aspect : self.side;
+    private property <length> group: self.side + self.gap + self.text-height;
+    private property <length> top: (self.height - self.group) / 2;
+    private property <length> text-width: self.width * 0.8;
+
+    Rectangle {
+        x: (root.width - self.width) / 2;
+        y: root.top;
+        width: root.side;
+        height: root.side;
+        // Hidden under a cover, so a wide or tall cover does not sit on a frame.
+        Placeholder {
+            width: root.side;
+            height: root.side;
+            opacity: Art.has-cover ? 0 : 1;
+            animate opacity { duration: 300ms; }
+        }
+        // The cover keeps its proportions inside the square, centred.
+        art := Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: root.box-width;
+            height: root.box-height;
+            opacity: 0;
+            border-radius: Theme.radius-panel;
+            background: Theme.bg-video;
+            drop-shadow-blur: 18px;
+            drop-shadow-offset-y: 4px;
+            drop-shadow-color: Theme.line.with-alpha(0.8);
+            Rectangle {
+                border-radius: Theme.radius-panel;
+                clip: true;
+                Image {
+                    width: parent.width;
+                    height: parent.height;
+                    source: Art.cover;
+                    image-fit: cover;
+                }
+            }
+            Rectangle {
+                border-radius: Theme.radius-panel;
+                border-width: 1px;
+                border-color: Theme.line;
+            }
+            states [
+                shown when Art.has-cover: {
+                    opacity: 1;
+                    in {
+                        animate opacity { duration: 300ms; easing: ease-out; }
+                    }
+                }
+            ]
+        }
+    }
+    Text {
+        x: (root.width - self.width) / 2;
+        y: root.top + root.side + root.gap;
+        width: root.text-width;
+        height: 18px;
+        text: Art.title;
+        color: Theme.text;
+        font-size: Theme.font-title;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+    if root.full && Art.artist != "": Text {
+        x: (root.width - self.width) / 2;
+        y: root.top + root.side + root.gap + 18px + 2px;
+        width: root.text-width;
+        height: 16px;
+        text: Art.artist;
+        color: Theme.text-list;
+        font-size: Theme.font-body;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+    if root.full && Art.album != "": Text {
+        x: (root.width - self.width) / 2;
+        // Directly under the title when there is no artist line.
+        y: root.top + root.side + root.gap + 18px + 2px + (Art.artist != "" ? 18px : 0px);
+        width: root.text-width;
+        height: 16px;
+        text: Art.album;
+        color: Theme.text-dim;
+        font-size: Theme.font-body;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+}
+
+export component Backdrop inherits Rectangle {
+    background: Theme.bg-video;
+    clip: true;
+    IdleScene {
+        width: root.width;
+        height: root.height;
+        opacity: Art.mode == "idle" ? 1 : 0;
+        animate opacity { duration: 200ms; }
+    }
+    AudioScene {
+        width: root.width;
+        height: root.height;
+        opacity: Art.mode == "audio" ? 1 : 0;
+        animate opacity { duration: 200ms; }
+    }
+}

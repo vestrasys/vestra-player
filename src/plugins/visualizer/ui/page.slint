@@ -1,0 +1,122 @@
+// 选项 ▶ 外观 ▶ 徽标与专辑封面: the settings page for H12 and J11 (440 wide,
+// the options window's page area). The same switches as the menu items.
+// Heights (padding 14): title 24 + 6 + section 14 + 6 + check 18 + 8 + logo row 64
+//   + 6 + note 14 + 14 + section 14 + 6 + check 18 + 6 + note 28 + 8 + cache row 21 = 297 + 28.
+import { CheckBox } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button } from "@vestra/widgets.slint";
+
+export global LogoPage {
+    in-out property <bool> idle-on: true;
+    in-out property <bool> audio-on: true;
+    in property <bool> custom-logo: false;
+    in property <image> logo;
+    in property <string> cache-note;
+    in property <bool> can-clear: false;
+    callback set-idle(bool);
+    callback set-audio(bool);
+    callback choose-logo();
+    callback reset-logo();
+    callback clear-cache();
+}
+
+component Section inherits Text {
+    height: Theme.label-height;
+    font-size: Theme.font-body;
+    color: Theme.text-dim;
+}
+
+export component LogoCoverPage inherits Rectangle {
+    background: Theme.bg-panel;
+    VerticalLayout {
+        padding: Theme.dialog-padding;
+        spacing: 6px;
+        alignment: start;
+        Text {
+            height: 24px;
+            text: "徽标与专辑封面";
+            font-size: Theme.font-title;
+            font-weight: 700;
+            vertical-alignment: center;
+            color: Theme.text;
+        }
+        Section { text: "空闲画面"; }
+        CheckBox {
+            height: Theme.checkbox-row-height;
+            text: "空闲时显示徽标";
+            checked <=> LogoPage.idle-on;
+            toggled => { LogoPage.set-idle(self.checked); }
+        }
+        HorizontalLayout {
+            height: 64px;
+            spacing: 12px;
+            padding-left: 22px;
+            // The logo as the idle screen shows it: on the video background.
+            Rectangle {
+                width: 96px;
+                border-radius: Theme.radius-control;
+                border-width: 1px;
+                border-color: Theme.line;
+                background: Theme.bg-video;
+                Image {
+                    width: 44px;
+                    height: 44px;
+                    source: LogoPage.custom-logo ? LogoPage.logo : @image-url("logo.png");
+                    image-fit: contain;
+                    opacity: LogoPage.idle-on ? 0.92 : 0.35;
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                spacing: 6px;
+                Text {
+                    text: LogoPage.custom-logo ? "当前：自定义图片" : "当前：Vestra 徽标";
+                    font-size: Theme.font-body;
+                    color: Theme.text-list;
+                    overflow: elide;
+                }
+                HorizontalLayout {
+                    spacing: 6px;
+                    alignment: start;
+                    Button { width: 96px; text: "选择图片…"; clicked => { LogoPage.choose-logo(); } }
+                    Button { width: 96px; text: "恢复默认"; enabled: LogoPage.custom-logo; clicked => { LogoPage.reset-logo(); } }
+                }
+            }
+        }
+        Text {
+            height: Theme.label-height;
+            text: "PNG 或 JPEG，最大 4096×4096、16 MB；图片会复制保存，原文件可以移走。";
+            font-size: Theme.font-body;
+            color: Theme.text-dim;
+            overflow: elide;
+        }
+        Rectangle { height: 8px; }
+        Section { text: "纯音频"; }
+        CheckBox {
+            height: Theme.checkbox-row-height;
+            text: "纯音频时显示专辑封面";
+            checked <=> LogoPage.audio-on;
+            toggled => { LogoPage.set-audio(self.checked); }
+        }
+        Text {
+            height: 28px;
+            text: "封面取自文件内嵌图片，或同一文件夹中的 cover、folder、front 图片；没有时显示徽标占位。";
+            font-size: Theme.font-body;
+            color: Theme.text-dim;
+            wrap: word-wrap;
+        }
+        HorizontalLayout {
+            height: Theme.button-height;
+            spacing: 6px;
+            Text {
+                horizontal-stretch: 1;
+                text: LogoPage.cache-note;
+                font-size: Theme.font-body;
+                color: Theme.text-list;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            Button { width: 96px; text: "清除封面缓存"; enabled: LogoPage.can-clear; clicked => { LogoPage.clear-cache(); } }
+        }
+    }
+}

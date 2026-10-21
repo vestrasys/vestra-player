@@ -1882,7 +1882,7 @@ C-GPU 完成之前，「高级」页的 HDR、着色器两行和「效果」页�
 
 ### E16 HDR 校正 / 色调映射
 
-> **不做（用户裁决 2026-10-21）**：需要 GPU 渲染，而 libmpv 与 Slint 的 GPU 接入都只有 `unsafe` 接口，违反「第一方 Rust 禁止 unsafe」。见 [第 4a 轮任务单](../process/rounds/2026-10-features-r4a.md) §7.2。
+> **待定（2026-10-21）**：需要 GPU 渲染，而 libmpv 与 Slint 的 GPU 接入只有 `unsafe` 接口。用户决定先在隔离子包 `src/host/unsafe/render/` 做原型，再决定是否恢复。见 [第 4a 轮任务单](../process/rounds/2026-10-features-r4a.md) §7.2。
 
 > 排期：C-GPU 与 `video.render()` 在第 4b 轮。第 2 轮菜单「像素着色 ▶ HDR 色调映射」禁用，窗口「高级」页 HDR 行置灰，原因「需要 GPU 渲染，当前版本不支持」。
 
@@ -1934,7 +1934,7 @@ C-GPU 完成之前，「高级」页的 HDR、着色器两行和「效果」页�
 
 ### E17 像素着色器（自定义 GLSL）
 
-> **不做（用户裁决 2026-10-21）**：同 E16，需要 GPU 渲染。
+> **待定（2026-10-21）**：同 E16，取决于 GPU 渲染原型。
 
 > 排期：第 4b 轮。第 2 轮菜单只有禁用的「像素着色 ▶ 使用着色器」（Shift+P），窗口「高级」页着色器行置灰；`S` 键弹出子菜单的说明删除（`commands.popup` 被拒绝）。
 
@@ -1971,7 +1971,7 @@ C-GPU 完成之前，「高级」页的 HDR、着色器两行和「效果」页�
 
 ### E18 倍帧 / 运动补偿
 
-> **运动补偿不做（用户裁决 2026-10-21）**：同 E16，需要 GPU 渲染。倍帧（frameBlend，软件）照常在第 4a 轮做。
+> **运动补偿待定（2026-10-21）**：同 E16，取决于 GPU 渲染原型。倍帧（frameBlend，软件）照常在第 4a 轮做。
 
 > 排期（裁决 R-V8）：倍帧（`frameBlend`）推到第 4a 轮，与 C-SIZE 的渲染节奏改动同批验证；运动补偿第 4b 轮。第 2 轮两项的菜单与窗口复选都显示为禁用并给出原因。
 
@@ -3930,8 +3930,8 @@ manifest 能力：`commands`、`playback.read`、`events`、`ui.mount`、`ui.dia
 
 | 编号 | 功能 | 当前 | 依赖核心新增 |
 | --- | --- | --- | --- |
-| J11 | 纯音频时显示专辑封面（无封面时占位） | ✗ | 背景层挂载位 `panels.mount("backdrop")`；图片属性 `plugin.ui.image` |
-| H12 | 空闲时显示徽标 | ✗ | 背景层挂载位（logo 用编译期 `@image-url`；自定义徽标需图片属性） |
+| J11 | 纯音频时显示专辑封面（无封面时占位） | ✓（3b） | 背景层挂载位 `panels.mount("backdrop")`；图片属性 `plugin.ui.image` |
+| H12 | 空闲时显示徽标 | ✓（3b） | 背景层挂载位（logo 用编译期 `@image-url`；自定义徽标需图片属性） |
 
 ### 菜单与快捷键
 
@@ -3957,7 +3957,8 @@ manifest 能力：`commands`、`playback.read`、`events`、`ui.mount`、`ui.dia
 **入口**：「声音 ▶ 纯音频时显示专辑封面」（勾选）。
 
 **行为细节**
-- **何时显示**：由核心判断并通过背景层状态告诉插件：`mode === "audio"`，即来源就绪且后端没有视频输出（`stats().video === null`，或视频轨只是封面）。插件不自己猜测。
+- **何时显示**：背景层是否显示由核心决定（`panels.backdrop.state.effective`）；画什么由插件判断（裁决 R-U3，没有 `mode`）：来源 `ready` / `ended` 且 `stats().video === null` 时画封面。
+- **已知行为**（裁决 3.2 第 8 条）：带内嵌封面、或同文件夹有 mpv 默认会加载的 `cover.jpg` / `folder.jpg` 等的音频，mpv 把封面当作视频轨显示（`stats().video` 非空，`effective = false`），看到的是 mpv 渲染的封面、没有标签文字。本插件的封面画面因此只在没有任何封面的音频上出现（占位图 + 标签）；内嵌与文件夹封面的提取保留，待核心把封面交给背景层后生效。
 - **封面来源**，按顺序取第一个可用的：
   1. 内嵌封面：`ffmpeg -v error -nostdin -i <path> -map 0:v:0 -frames:v 1 -an -f image2 <cache>/cover.jpg`；只有当 ffprobe 显示 `disposition.attached_pic = 1` 时才提取，超时 10 秒；
   2. 同一文件夹中的 `cover.jpg|png`、`folder.jpg|png`、`front.jpg|png`，忽略大小写；
@@ -3983,13 +3984,13 @@ manifest 能力：`commands`、`playback.read`、`events`、`ui.mount`、`ui.dia
   ```ts
   plugin.panels.mount("backdrop", file, options?): Panel           // 需 ui.mount；同一时间只能有一个背景层，第二个以 conflict 失败
   plugin.panels.backdrop: {
-    readonly state: { effective: boolean; mode: "idle" | "audio" | null } | null; // null：没有背景层
+    readonly state: { effective: boolean } | null; // null：没有背景层（裁决 R-U3 去掉了 mode）
     onChange(listener: (state) => void): Disposable;
   }
   ```
 
   规则：
-  - 核心在两种情况下显示背景层：`phase` 为 `empty`（未打开或已关闭）时 `mode = "idle"`；`ready` 且没有视频输出时 `mode = "audio"`；
+  - 核心在两种情况下显示背景层：`phase` 为 `empty`（未打开或已关闭）；`ready` / `ended` 且没有视频输出（含封面视频轨时算有输出）。插件用 `phase` 与 `stats().video` 区分空闲与纯音频；
   - `loading`、`error` 时保持上一状态，不闪烁；
   - 有视频画面时隐藏，`effective = false`；
   - 背景层画在视频图像所在位置，位于宿主输入层（TouchArea）**之下**，不接收任何指针或键盘事件；
@@ -4018,10 +4019,10 @@ manifest 能力：`commands`、`playback.read`、`events`、`ui.mount`、`ui.dia
 - 可以选择自定义徽标图片（PNG/JPEG），恢复默认后回到品牌 logo。
 - 开关「空闲时显示徽标」默认开。关闭时空闲画面为纯色（现状）。
 
-**入口**：设置 ▶ 外观 ▶ 空闲时显示徽标 / 选择徽标图片… / 恢复默认徽标；方案 A 落地后，也在首选项「外观」分类中注册「徽标与专辑封面」页面（含 J11 的开关）。
+**入口**：设置 ▶ 外观 ▶ 空闲时显示徽标 / 选择徽标图片… / 恢复默认徽标；另在选项窗口「外观」分类中注册「徽标与专辑封面」页面（`settings.page`，id `logo-cover`，order 20；含 J11 的开关、徽标预览与选择/恢复、封面缓存大小与清除）。
 
 **行为细节**
-- 何时显示：背景层 `mode === "idle"`。`loading` 期间保持徽标，避免黑屏闪烁；来源就绪后由视频画面或 J11 层接替。
+- 何时显示：来源 `phase === "empty"`（插件判断）。`loading` 期间保持徽标，避免黑屏闪烁；来源就绪后由视频画面或 J11 层接替。
 - **内置 logo**：构建时把 `src/assets/brand/logo.png` 复制进插件包，在 Slint 中用 `@image-url("logo.png")`，不依赖运行时图片能力。H12 的默认形态因此只依赖背景层挂载位。
 - **自定义徽标**：
   - `dialogs.openFile` 选择图片后，校验扩展名与文件头（PNG/JPEG），超过 16 MB 或大于 4096×4096 时拒绝：「图片过大（最大 4096×4096、16 MB）」；
@@ -4032,7 +4033,7 @@ manifest 能力：`commands`、`playback.read`、`events`、`ui.mount`、`ui.dia
 - 菜单切换时提示 `空闲时显示徽标：开/关`。
 - 背景层不接收输入：空闲时双击仍然切换全屏，右键仍然打开菜单。
 
-**界面**：背景层组件中，空闲模式的布局如上；与 J11 共用同一个组件，按 `mode` 切换显示内容，切换时 200 ms 淡入淡出。
+**界面**：背景层组件中，空闲模式的布局如上；与 J11 共用同一个组件，插件按来源阶段切换显示内容，切换时 200 ms 淡入淡出。
 
 **持久化**：`visualizer.json` 的 `idle`：`{ "on": true, "logo": null | "logo.png" }`。
 
@@ -4054,7 +4055,7 @@ manifest 能力：`commands`、`playback.read`、`events`、`ui.mount`、`ui.dia
 
 | 接口 | 理由 |
 | --- | --- |
-| `plugin.panels.mount("backdrop", file, options?)`；`plugin.panels.backdrop.state/onChange`（`mode: "idle" \| "audio"`，不接收输入） | 视频区由宿主绘制，插件无处显示；「有无视频输出」只有核心知道 |
+| `plugin.panels.mount("backdrop", file, options?)`；`plugin.panels.backdrop.state/onChange`（只有 `effective`，不接收输入；第 3b 轮已交付） | 视频区由宿主绘制，插件无处显示；「有无视频输出」只有核心知道 |
 | `plugin.ui.image(path): ImageRef`（同 playback 章 I07） | 显示运行时取得的封面与自定义徽标 |
 
 ---
