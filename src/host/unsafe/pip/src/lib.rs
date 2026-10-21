@@ -1,8 +1,12 @@
 //! Prototype (vestra-host feature `pip`): macOS system picture-in-picture fed
 //! with the host's RGB frames.
 //!
-//! An `AVSampleBufferDisplayLayer` (a 1×1 sublayer of the window's content
-//! view; AVKit only offers PiP for a layer inside a window) receives each frame
+//! An `AVSampleBufferDisplayLayer` receives each frame. AVKit only offers PiP
+//! for a layer inside a window, and lays out its own host view from that
+//! layer's geometry (a bare 1×1 sublayer of the content view crashed it with
+//! "x is NaN"), so the layer backs its own layer-hosting `NSView`, as large as
+//! the content view and placed behind it in the window's frame view: real
+//! geometry, but hidden by the opaque OpenGL content. The layer gets each frame
 //! as a BGRA `CVPixelBuffer` wrapped in a `CMSampleBuffer` marked "display
 //! immediately", so no timebase is needed. An `AVPictureInPictureController`
 //! with a sample-buffer content source moves that layer's picture into the
@@ -19,16 +23,15 @@ use objc2::runtime::{NSObject, NSObjectProtocol, ProtocolObject};
 use objc2::{
     AllocAnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send,
 };
-use objc2_app_kit::NSWindow;
+use objc2_app_kit::{NSAutoresizingMaskOptions, NSView, NSWindow, NSWindowOrderingMode};
 use objc2_av_foundation::{AVQueuedSampleBufferRendering, AVSampleBufferDisplayLayer};
 use objc2_av_kit::AVPictureInPictureSampleBufferPlaybackDelegate;
 use objc2_av_kit::{AVPictureInPictureController, AVPictureInPictureControllerContentSource};
-use objc2_core_foundation::{
-    CFDictionary, CFMutableDictionary, CFRetained, CFString, CGPoint, CGRect, CGSize,
-};
+use objc2_core_foundation::{CFDictionary, CFMutableDictionary, CFRetained, CFString};
 use objc2_core_media::{CMSampleBuffer, CMSampleTimingInfo, CMTime, CMTimeFlags, CMTimeRange};
 use objc2_core_media::{CMVideoDimensions, CMVideoFormatDescription};
 use objc2_core_video::{CVPixelBuffer, CVPixelBufferLockFlags, kCVPixelFormatType_32BGRA};
+use objc2_foundation::{NSPoint, NSRect, NSSize};
 use std::cell::{Cell, RefCell};
 use std::ptr::{NonNull, null, null_mut};
 
@@ -117,7 +120,10 @@ define_class!(
 
 /// System picture-in-picture for one window. Main thread only (`!Send`).
 pub struct Pip {
+    host: Retained<NSView>,
     layer: Retained<AVSampleBufferDisplayLayer>,
+    /// Frames enqueued so far (PiP starts only after a few).
+    frames: Cell<u64>,
     controller: Retained<AVPictureInPictureController>,
     delegate: Retained<Delegate>,
 }
@@ -128,36 +134,60 @@ impl Pip {
         // SAFETY: a class property without arguments or preconditions.
         unsafe { AVPictureInPictureController::isPictureInPictureSupported() }
     }
-    /// Prepare PiP for `window` (its content view gets a 1×1 sublayer).
-    pub fn new(window: &NSWindow) -> Option<Self> {
+    /// Prepare PiP for `window`: a hidden layer-hosting view behind its
+    /// content view, sized and resized with it. `overlay` (diagnosis) puts a
+    /// visible 160×90 view in the content view's corner instead.
+    pub fn new(window: &NSWindow, overlay: bool) -> Option<Self> {
         let mtm = MainThreadMarker::new()?;
-        let view = window.contentView()?;
-        view.setWantsLayer(true);
-        let host_layer = view.layer()?;
+        let content = window.contentView()?;
+        // SAFETY: a plain getter on the main thread; the window retains its
+        // frame view, and the Retained keeps it for this function.
+        let frame_view = unsafe { content.superview() }?;
         let delegate = Delegate::alloc(mtm).set_ivars(State::default());
         // SAFETY: NSObject's designated initializer on a freshly allocated
         // instance whose ivars are set.
         let delegate: Retained<Delegate> = unsafe { msg_send![super(delegate), init] };
-        // SAFETY: plain constructors and setters of AppKit/AVFoundation objects
-        // created here on the main thread; the content source and controller
-        // retain the layer and delegate, and `Pip` keeps them alive as well.
-        let (layer, controller) = unsafe {
-            let layer = AVSampleBufferDisplayLayer::new();
-            layer.setFrame(CGRect::new(CGPoint::new(0., 0.), CGSize::new(1., 1.)));
-            host_layer.addSublayer(&layer);
+        // SAFETY: a plain constructor of an AVFoundation layer on the main thread.
+        let layer = unsafe { AVSampleBufferDisplayLayer::new() };
+        let corner = NSRect::new(NSPoint::new(0., 0.), NSSize::new(160., 90.));
+        let host = NSView::initWithFrame(
+            NSView::alloc(mtm),
+            if overlay { corner } else { content.frame() },
+        );
+        let sizable = NSAutoresizingMaskOptions::ViewWidthSizable;
+        if !overlay {
+            host.setAutoresizingMask(sizable | NSAutoresizingMaskOptions::ViewHeightSizable);
+        }
+        // setLayer before setWantsLayer: a layer-hosting view that AppKit
+        // sizes but never draws into.
+        host.setLayer(Some(&layer));
+        host.setWantsLayer(true);
+        if overlay {
+            content.addSubview(&host);
+        } else {
+            frame_view.addSubview_positioned_relativeTo(
+                &host,
+                NSWindowOrderingMode::Below,
+                Some(&content),
+            );
+        }
+        // SAFETY: initializers of AVKit objects on the main thread, created
+        // only now that the layer is in the window's layer tree with real
+        // bounds; the content source and controller retain the layer and the
+        // delegate, and `Pip` keeps them alive as well.
+        let controller = unsafe {
             let protocol = ProtocolObject::from_ref(&*delegate);
             let source = AVPictureInPictureControllerContentSource::alloc();
             let source = AVPictureInPictureControllerContentSource::initWithSampleBufferDisplayLayer_playbackDelegate(
                 source, &layer, protocol,
             );
             let controller = AVPictureInPictureController::alloc();
-            (
-                layer,
-                AVPictureInPictureController::initWithContentSource(controller, &source),
-            )
+            AVPictureInPictureController::initWithContentSource(controller, &source)
         };
         Some(Self {
+            host,
             layer,
+            frames: Cell::new(0),
             controller,
             delegate,
         })
@@ -172,9 +202,27 @@ impl Pip {
         // SAFETY: as above.
         unsafe { self.controller.isPictureInPictureActive() }
     }
-    pub fn start(&self) {
-        // SAFETY: as above; AVKit ignores the call while PiP is not possible.
-        unsafe { self.controller.startPictureInPicture() }
+    /// Start PiP if it is possible, a few frames are queued, the window is
+    /// visible and the layer's geometry is finite and non-empty; `false` when
+    /// it did not try (call again later).
+    pub fn start(&self) -> bool {
+        let frame = self.host.frame();
+        let numbers = [
+            frame.origin.x,
+            frame.origin.y,
+            frame.size.width,
+            frame.size.height,
+        ];
+        let geometry = numbers.iter().all(|n| n.is_finite()) && frame.size.width >= 1.;
+        let visible = self.host.window().is_some_and(|window| window.isVisible());
+        if !(self.possible() && geometry && frame.size.height >= 1. && visible)
+            || self.frames.get() < 3
+        {
+            return false;
+        }
+        // SAFETY: a method on a live controller, on the main thread.
+        unsafe { self.controller.startPictureInPicture() };
+        true
     }
     pub fn stop(&self) {
         // SAFETY: as above.
@@ -210,13 +258,14 @@ impl Pip {
             }
             renderer.enqueueSampleBuffer(&sample);
         }
+        self.frames.set(self.frames.get() + 1);
         Ok(())
     }
 }
 impl Drop for Pip {
     fn drop(&mut self) {
         self.stop();
-        self.layer.removeFromSuperlayer();
+        self.host.removeFromSuperview();
     }
 }
 

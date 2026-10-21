@@ -340,22 +340,22 @@ GPU 渲染把 4K 的 CPU 从 1.2–1.3 个核降到约 0.13 个核（约 −90%�
 
 #### 7.3.2 原型 2：画中画（`pip`）
 
-**做法**：`AVSampleBufferDisplayLayer` 作为窗口 content view 图层的 1×1 子图层（AVKit 只对在窗口里的图层提供画中画），`AVPictureInPictureController` 用 sample buffer 内容源。宿主 `show_frame` 每拿到一帧软件渲染的 RGB，就拷进一个 IOSurface 支持的 BGRA `CVPixelBuffer`，包成 `CMSampleBuffer`，标上 `DisplayImmediately` 后入队。这样不需要时间基（`CMTimebase`）。播放委托用 `define_class!` 实现：把画中画窗口里的播放 / 暂停、前进 / 后退转成 `Request`，宿主在 `window_tick` 里取出，按核心动作 `play-pause` / `seek-forward` / `seek-backward` 执行。内容报告为直播（时间范围无限），所以画中画窗口没有进度条。`VESTRA_PIP=1` 时，宿主在 AVKit 报告「可以开始」后自动启动画中画，并往 stderr 打 `pip: ready …` / `pip: possible, starting` 两行，方便诊断。
+**做法**：`AVSampleBufferDisplayLayer` 是一个专用 layer-hosting `NSView` 的背景图层。这个 view 和 content view 一样大，跟着 content view 自动改尺寸，放在窗口 frame view 里、content view 的**后面**：几何是真实的，但被不透明的 OpenGL 内容挡住，看不见（修复说明见 §7.3.4）。`AVPictureInPictureController` 用 sample buffer 内容源，在这个 view 进入窗口之后才创建。宿主 `show_frame` 每拿到一帧软件渲染的 RGB，就拷进一个 IOSurface 支持的 BGRA `CVPixelBuffer`，包成 `CMSampleBuffer`，标上 `DisplayImmediately` 后入队。这样不需要时间基（`CMTimebase`）。播放委托用 `define_class!` 实现：把画中画窗口里的播放 / 暂停、前进 / 后退转成 `Request`，宿主在 `window_tick` 里取出，按核心动作 `play-pause` / `seek-forward` / `seek-backward` 执行。内容报告为直播（时间范围无限），所以画中画窗口没有进度条。`VESTRA_PIP=1` 时，宿主在 AVKit 报告「可以开始」后自动启动画中画，并往 stderr 打 `pip: ready …` / `pip: possible, starting` 两行，方便诊断。
 
 **数字**
 
 | 项 | 结果 |
 | --- | --- |
-| crate 行数 | `src/lib.rs` 369 行（含 1 个测试，22 行），`Cargo.toml` 23 行 |
-| `unsafe` 块 | 15 个（其中 1 个在测试里），块内共 119 行（含花括号） |
+| crate 行数 | `src/lib.rs` 418 行（含 1 个测试，22 行），`Cargo.toml` 24 行（§7.3.4 修复后；修复前 369 行） |
+| `unsafe` 块 | 17 个（其中 1 个在测试里），块内共 115 行（含花括号）（修复前 15 个、119 行） |
 | 其它 `unsafe` | `define_class!` 里的 `unsafe impl` 2 个（NSObjectProtocol、播放委托协议），`#[unsafe(super(NSObject))]` 1 处，`#[unsafe(method(…))]` 5 处 |
-| 宿主接入 | `main.rs` +61（全部在 cfg 下） |
+| 宿主接入 | `main.rs` +63（全部在 cfg 下） |
 | 安全接口 | `Pip::supported/new(&NSWindow)/possible/active/start/stop/set_paused/requests/render_size/enqueue(w, h, rgb)` |
 | headless 已验证 | `isPictureInPictureSupported` 在本机返回 `true`；RGB→BGRA 像素缓冲、带 `DisplayImmediately` 的 sample buffer 创建成功（crate 测试） |
 
 **遇到的系统限制**
 
-1. **需要 NSView 宿主层**：显示图层必须在窗口的图层树里，所以原型对 winit 的 content view 调了 `setWantsLayer(true)`，再加子图层。这个 view 同时被 Slint 的 OpenGL 上下文使用，加图层会不会影响 GL 绘制、1×1 的图层能不能让 `isPictureInPicturePossible` 变成 `true`，都只能 GUI 实测。
+1. **需要 NSView 宿主层，而且几何要真实**：显示图层必须在窗口的图层树里，AVKit 启动时还会按这个图层的几何去布局自己的宿主视图。第一版用的是 content view 上 1×1 的裸子图层，结果启动时崩溃（§7.4）。修复后改成专用的 layer-hosting view，放在 content view 后面（§7.3.4）。被挡住的 view 能不能让画中画正常工作，要 GUI 复测；不行就用 `VESTRA_PIP_OVERLAY=1` 对照。
 2. **主线程**：控制器、委托都只能在主线程使用（`MainThreadMarker`）。宿主的帧本来就在 UI 线程（即主线程）交付，所以没有额外的线程跳转。
 3. **系统版本**：sample buffer 画中画要 macOS 12+。原型用了图层的 `sampleBufferRenderer`（macOS 14+），因为 objc2 把图层上旧的 `enqueueSampleBuffer` 标成了已弃用，`clippy -D warnings` 不让用。要支持 12–13，就得允许已弃用 API。
 4. **权限 / 签名**：macOS 上画中画不需要权限弹窗、`Info.plist` 键或额外 entitlement（iOS 才需要后台音频模式）。未签名的开发构建也能编译、创建对象。能不能不经用户点击就自动启动（`startPictureInPicture`）还没验证，这一点决定 R-W5 能不能由插件直接触发。
@@ -364,7 +364,7 @@ GPU 渲染把 4K 的 CPU 从 1.2–1.3 个核降到约 0.13 个核（约 −90%�
 7. **界面重建**：图层挂在旧窗口上，原型的做法是重建后重新创建画中画，这时画中画窗口会关掉再打开。正式版应该把图层移到新窗口。
 8. 前进 / 后退用的是用户设置的跳转步长，不是画中画给的间隔。
 
-**结论与建议：有条件做，先看 GUI 实测。** `unsafe` 的范围比预估小（15 个块、119 行；§7.1 估计约 500 行），对外接口是安全的。是否值得做取决于 GUI 实测：系统画中画能否在这个宿主里启动、出画面、按钮回传。如果第 1 条或第 4 条实测不行（GL view 不能挂图层，或者必须用户点击才能启动但宿主拿不到这个手势），建议按 §7.1 的 A 保留迷你尺寸。如果可行，建议和 C-GPU 一起排期，共用 IOSurface，省掉每帧拷贝。
+**结论与建议：有条件做，先看 GUI 实测。** `unsafe` 的范围比预估小（17 个块、115 行；§7.1 估计约 500 行），对外接口是安全的。是否值得做取决于 GUI 实测：系统画中画能否在这个宿主里启动、出画面、按钮回传。如果第 1 条或第 4 条实测不行（GL view 不能挂图层，或者必须用户点击才能启动但宿主拿不到这个手势），建议按 §7.1 的 A 保留迷你尺寸。如果可行，建议和 C-GPU 一起排期，共用 IOSurface，省掉每帧拷贝。
 
 #### 7.3.3 协调者 GUI 实测步骤
 
@@ -393,7 +393,28 @@ S=/private/tmp/claude-501/-Users-ziyang-Develop-vestra-player/7b0dd90c-cb6e-48be
 | P3 | 主窗口 | 画中画开着时看主窗口的视频区，再关掉画中画 | 主窗口画面正常（GL 绘制没被子图层影响）；关闭后能回到主窗口 |
 | P4 | 画中画 CPU | P1 状态下 `zsh $S/r4/gpu/gui-cpu.sh "pip sw" 20`，和关闭画中画时对比 | 记录每帧拷贝的额外开销 |
 
-如果 P1 没有出现 `pip: possible, starting`，说明 AVKit 一直不认为画中画可用（最可能是 1×1 子图层或 GL view 的图层问题）。如果出现了但没有小窗，说明启动需要用户手势。两种情况都按上面「结论与建议」处理。
+如果 P1 没有出现 `pip: possible, starting`，说明启动条件一直没满足：AVKit 不认为画中画可用，或者窗口不可见、宿主 view 几何无效、入队不足 3 帧。这时按 §7.3.4 的 R2 用 `VESTRA_PIP_OVERLAY=1` 对照。如果出现了但没有小窗，说明启动需要用户手势。两种情况都按上面「结论与建议」处理。
+
+#### 7.3.4 画中画崩溃修复（维护者，2026-10-21）
+
+**定位**：崩溃报告 `host-2026-10-21-100828.ips` 的 `asi` 写着 `Invalid view geometry: x is NaN`。栈是 `-[AVPictureInPictureSampleBufferDisplayLayerHostView _updateGeometryIfNeeded]` → `-[NSView setFrame:]` → `_NSViewValidateGeometry`，发生在主线程的显示周期布局里（`NSDisplayCycleFlush` → `layoutIfNeeded`）。也就是说，`startPictureInPicture` 之后，AVKit 按内容源图层的几何算自己宿主视图的 frame，算出了 NaN。原型第一版的图层是 content view 图层下一个 1×1 的裸子图层：它没有自己的 view，content view 是 winit 的 OpenGL view，图层位置只是手设的 1×1。AVKit 从这里换算不出有效的窗口坐标。线程方面没有问题：委托、控制器和启动调用都在主线程。
+
+**修复**（单独提交「Prototype fix: picture-in-picture layer geometry」）：
+
+1. 显示图层改成一个专用 `NSView` 的背景图层：先 `setLayer` 再 `setWantsLayer(true)`，即 layer-hosting view，由 AppKit 管理尺寸。这个 view 的 frame 等于 content view 的 frame，宽高都跟着自动改尺寸，用 `addSubview:positioned:NSWindowBelow relativeTo:contentView` 放到窗口 frame view 里、content view 的后面。几何真实有效，又被不透明的 GL 内容挡住，不影响画面。不再对 winit 的 view 调 `setWantsLayer`，也不再往它的图层里加东西。
+2. 初始化顺序：先把图层放进窗口的图层树（view 已经在窗口里，bounds 有效），再创建 content source 和控制器。
+3. 启动条件收紧：`Pip::start()` 只在这些条件都满足时才调用 `startPictureInPicture`，否则返回 `false`，宿主下一帧再试：`isPictureInPicturePossible`、窗口可见、宿主 view 的 frame 四个分量都是有限值且宽高 ≥ 1、已经入队 ≥ 3 帧。日志 `pip: possible, starting` 只在真正调用时打印一次。
+4. 诊断开关 `VESTRA_PIP_OVERLAY=1`：改用一个 160×90、放在 content view 左下角**可见**的 view（不自动改尺寸），用来区分「被挡住的 view 不被接受」和其它问题。
+
+检查：默认 feature 下 fmt、clippy `-D warnings`、`cargo test --locked`（223 个）全过；`--features pip` 的 clippy 与 `--features "gpu-render pip"` 的 release 构建通过；`vestra-pip` 测试通过；`grep -rnw unsafe src/host/src` 仍为空；17 个 `unsafe` 块都有 SAFETY 注释。没有操作 GUI，崩溃是否修好要复测。
+
+**复测步骤**（构建同 §7.3.3：`cargo build --locked --release --features "gpu-render pip"`，`$BIN` / `$S` 同上）：
+
+| # | 操作 | 期望 / 记录 |
+| --- | --- | --- |
+| R1 | `VESTRA_PIP=1 VESTRA_SOFTWARE_RENDER=1 zsh $S/launch.sh $BIN`，打开 1080p 片源播放，等 5 秒 | `launch.out` 依次有 `pip: ready (supported: true)`、`pip: possible, starting`；**不崩溃**；系统画中画小窗出现并播放；主窗口画面不变（看不到宿主 view）。如果崩溃，取新的 `~/Library/Logs/DiagnosticReports/host-*.ips`，看 `asi` 和崩溃线程栈 |
+| R2 | 只有 R1 不出现 `pip: possible, starting` 或没有小窗时才做：加 `VESTRA_PIP_OVERLAY=1` 重复 R1 | 主窗口左下角有一块 160×90 的视频，记录这时能不能启动画中画。能启动，说明被挡住的 view 不被 AVKit 接受，正式版要另找放置方式 |
+| R3 | R1 成功后接着做 §7.3.3 的 P2–P4，再改一次窗口尺寸、进出一次全屏 | 按钮回传正常；改尺寸或全屏时不崩溃（宿主 view 跟着改尺寸） |
 
 原型工具（scratchpad，不进仓库）：`r4/gpu/ctxswap`（渲染上下文生命周期探针）、`r4/gpu/gpubench`（无窗口 GPU 基准，依赖仓库里的 `vestra-gpu-render`）、`r4/gpu/cpu.sh`（headless CPU 对比）、`r4/gpu/gui-cpu.sh`（GUI CPU 采样）、`r4/gpu/count_unsafe.py`（统计 `unsafe` 块、行数和 SAFETY 注释）、`r4/gpu/invert.glsl`（E17 探针着色器）。
 
