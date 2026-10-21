@@ -38,7 +38,7 @@
 
 - [x] 1.1 维护者调研：变更日志、绕路方案清单、所有 .slint 扫描（报告：[2026-10-slint-store-research.md](2026-10-slint-store-research.md)，W1–W21 编号以它为准）
 - [x] 1.2 协调者决定清单
-- [ ] 1.3 维护者实施（含小问题）
+- [x] 1.3 维护者实施（含小问题）：`rebuild/slint-118` d2ae8dd
 - [ ] 1.4 插件 .slint 适配（如需要）
 - [ ] 1.5 SDK slint 适配与发版（如需要）
 - [ ] 1.6 完整检查 + 真机全量回归
@@ -65,5 +65,15 @@
 8. 钥匙串：按报告 §5.3 宿主记录密钥名、卸载时删除；每实例上限 256 个名字，超出时 `secrets.set` 失败。理由：没有上限的话插件可以让宿主的索引无限增长；256 远超正常插件用量。错误码优先复用已有的，不新增。用户可推翻（影响：一条 reference 规则和一个测试）。
 9. SDK 发 1.1.2（markdown.slint 同步、`testing.ts` 默认版本、`settle()` 文档）。不新增 `host.until`。
 10. 顺序：维护者先做宿主 + SDK（1.3/1.5），合入后插件作者再在 1.18 上改各自 .slint（1.4，含 playlist、audio、video、subtitles 测试去抖、nes 版本对齐），避免插件在 1.16 宿主上用新属性名。
+
+**2026-10-22，步骤 1.3 审查**
+1. 接受 `ui::settle_layout` 调用私有接口 `WindowInner::ensure_tree_instantiated`（读几何前先实例化 `if`/`for`）。理由：没有公开替代，`show()` 和派发事件都有副作用；Slint 版本是精确钉住的，升级时会被测试 `geometry_is_current_after_a_condition_changes` 拦住。已记在 architecture README。
+2. 主窗口生成源码里 `sidebar-actual` 的绑定环警告（1.16 就有）本轮不修，放进待办：修它会改侧栏布局语义，需单独一轮并真机验证。
+3. 删掉挂载预检后，「主窗口里能编译、单独成浮动窗口却编译失败」的面板要到分离时才失败。接受：失败只影响那个浮动窗口，而且所有面板在主窗口里都已编译过。
+4. SDK 1.1.2 由协调者合并、打标签、推送，CI 发布。
+
+## 待办（本轮之后）
+- 主窗口 `sidebar-actual` 绑定环警告（见上）。
+- reference §6.4「默认字体是系统 UI 字体」与实际强制 Hiragino 不一致，等 W4 决定后一起改。
 
 ## 记录
