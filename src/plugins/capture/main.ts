@@ -38,8 +38,7 @@ export default async function activate(plugin: Plugin) {
   function finished(task: Task) {
     const path = task.outputs[0]?.path ?? task.destination;
     if (task.status === "completed") {
-      if (task.fallback) say(`无法转换为 ${FORMAT_LABEL[task.spec.format ?? "png"]}，已保存为 PNG`);
-      else if (task.spec.kind === "image") say(fit("帧已保存为 ", path));
+      if (task.spec.kind === "image") say(fit("帧已保存为 ", path));
       else if (task.spec.kind === "burst") say(fit(`连拍已保存 ${task.outputs.length} 张到 `, task.destination));
       else say(fit("片段已导出为 ", path));
       if (task.spec.kind === "burst") ui.burstStatus = `已保存 ${task.outputs.length} 张`;
@@ -140,7 +139,7 @@ export default async function activate(plugin: Plugin) {
     store();
     say(fit("截图文件夹：", chosen));
   }
-  /** F09: the folder captures go to now, created when missing, opened in Finder. */
+  /** F09: the folder captures go to now, created when missing, opened in the file manager. */
   const openFolder = async () => {
     const folder = await targetFolder(player.state.source);
     await plugin.system.openPath(folder).catch(() => {

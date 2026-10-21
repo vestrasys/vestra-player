@@ -1,4 +1,3 @@
-import { execFile } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname } from "node:path";
 import { decodeList, LIST_ENTRY_LIMIT, LIST_SIZE_LIMIT, parseList } from "./listfile.ts";
@@ -42,17 +41,72 @@ export type Expanded = {
 
 const HTTP = /^https?:\/\//i;
 
+/**
+ * The `URL` string of a binary property list (`bplist00`) whose top object is
+ * a dictionary; `null` when it has none or the file is malformed. A `.webloc`
+ * holds just that one string, so only dictionaries, ASCII and UTF-16 strings
+ * and the integers giving long lengths are read.
+ */
+export function binaryPlistUrl(bytes: Uint8Array): string | null {
+  const data = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (data.length < 40 || data.toString("latin1", 0, 8) !== "bplist00") return null;
+  const trailer = data.length - 32;
+  const offsetSize = data[trailer + 6]!;
+  const refSize = data[trailer + 7]!;
+  const count = Number(data.readBigUInt64BE(trailer + 8));
+  const top = Number(data.readBigUInt64BE(trailer + 16));
+  const table = Number(data.readBigUInt64BE(trailer + 24));
+  const sized = (n: number) => n >= 1 && n <= 8;
+  if (!sized(offsetSize) || !sized(refSize) || top >= count || table + count * offsetSize > trailer) return null;
+  const span = (at: number, size: number) => {
+    if (at < 8 || at + size > trailer) throw new RangeError("outside the object area");
+    return data.subarray(at, at + size);
+  };
+  const uint = (at: number, size: number) => span(at, size).reduce((value, byte) => value * 256 + byte, 0);
+  const offset = (ref: number) => {
+    if (ref >= count) throw new RangeError("bad object reference");
+    return uint(table + ref * offsetSize, offsetSize);
+  };
+  /** Marker high nibble, element count and where the elements start. */
+  const header = (at: number) => {
+    const marker = uint(at, 1);
+    let length = marker & 0x0f;
+    let start = at + 1;
+    if (length === 0x0f) {
+      const int = uint(start, 1);
+      if (int >> 4 !== 0x1) throw new RangeError("bad length");
+      const size = 1 << (int & 0x0f);
+      length = uint(start + 1, size);
+      start += 1 + size;
+    }
+    return { type: marker >> 4, length, start };
+  };
+  const string = (ref: number) => {
+    const { type, length, start } = header(offset(ref));
+    if (type === 0x5) return span(start, length).toString("latin1");
+    if (type === 0x6) return Buffer.from(span(start, length * 2)).swap16().toString("utf16le");
+    return null;
+  };
+  try {
+    const dict = header(offset(top));
+    if (dict.type !== 0xd) return null;
+    for (let i = 0; i < dict.length; i++)
+      if (string(uint(dict.start + i * refSize, refSize)) === "URL")
+        return string(uint(dict.start + (dict.length + i) * refSize, refSize));
+  } catch {
+    // malformed
+  }
+  return null;
+}
+
 /** The `URL` of a `.webloc` (an XML or binary property list); `null` when it has none. */
 export async function weblocUrl(path: string): Promise<string | null> {
   const bytes = await readFile(path);
-  let text = bytes.toString("utf8");
-  if (text.startsWith("bplist")) {
-    text = await new Promise<string>((resolve, reject) =>
-      execFile("/usr/bin/plutil", ["-convert", "xml1", "-o", "-", path], { timeout: 5000 }, (error, stdout) =>
-        error ? reject(error) : resolve(stdout),
-      ),
-    );
+  if (bytes.toString("latin1", 0, 6) === "bplist") {
+    const url = binaryPlistUrl(bytes)?.trim();
+    return url && HTTP.test(url) ? url : null;
   }
+  const text = bytes.toString("utf8");
   const match = /<key>URL<\/key>\s*<string>([^<]*)<\/string>/.exec(text);
   if (!match) return null;
   const url = match[1]!
@@ -66,7 +120,7 @@ export async function weblocUrl(path: string): Promise<string | null> {
 }
 
 /**
- * A15: the dropped paths as list entries, in Finder order, each expanded:
+ * A15: the dropped paths as list entries, in the file manager's order, each expanded:
  * a folder as A03 (recursive, at most 5000 files, sorted by folder), a list
  * file as C18, a `.webloc` as its HTTP(S) link, a media file as itself.
  */

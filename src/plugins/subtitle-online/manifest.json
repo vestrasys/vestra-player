@@ -11,6 +11,7 @@
     "ui.osd",
     "playback.read",
     "subtitles.read",
-    "subtitles.control"
+    "subtitles.control",
+    "secrets"
   ]
 }

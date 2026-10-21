@@ -3,7 +3,7 @@ import { basename } from "node:path";
 import type { PlaybackStats, PlayerState, Plugin } from "../../sdk/plugin/index.ts";
 import { filePage, isUrl, message, pageText, playbackPage, remotePage, saveName, systemPage } from "./properties.ts";
 import type { Row, SystemFacts } from "./properties.ts";
-import { sysinfo } from "./sysinfo.ts";
+import { readFacts } from "./sysinfo.ts";
 
 const TABS = 3;
 const PROBE_ARGS = ["-v", "error", "-show_format", "-show_streams", "-show_chapters", "-of", "json"];
@@ -28,7 +28,7 @@ function probeError(error: unknown) {
  * I05 播放属性: a tool window with three pages. 播放信息 follows `player.stats()`
  * every second while the window is open; 文件信息 is read once per source with
  * ffprobe (`plugin.tools`, aborted when the source changes); 系统信息 once per
- * opening from macOS commands. Closing the window (its 关闭 button or the
+ * opening (`plugin.app.system()` and Node `os`). Closing the window (its 关闭 button or the
  * title bar, `onClose`) stops the polling. Copy and save take the current page's text.
  */
 export function propertiesWindow(plugin: Plugin, say: (text: string) => void) {
@@ -108,7 +108,7 @@ export function propertiesWindow(plugin: Plugin, say: (text: string) => void) {
     if (again) facts = null;
     plugin.update();
     try {
-      const read = await sysinfo.read(controller.signal);
+      const read = await readFacts(plugin.app);
       if (!controller.signal.aborted) facts = read; // closed meanwhile: read again next time
     } finally {
       if (reading === controller) reading = null;

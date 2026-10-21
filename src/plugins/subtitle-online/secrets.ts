@@ -1,56 +1,67 @@
-// API keys and passwords: the macOS keychain (generic passwords, service
-// `vestra.subtitle-online`), or `secrets.json` (mode 0600) in the data
-// directory when the keychain cannot be used. Never in settings.json.
-import { execFile } from "node:child_process";
+// API keys and passwords: the player's secret store (`plugin.secrets`: the
+// macOS keychain, the Windows Credential Manager), or `secrets.json` (mode
+// 0600) in the data directory when the system has none. Never in settings.json.
 import { chmodSync, existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-
-const SERVICE = "vestra.subtitle-online";
-const SECURITY = "/usr/bin/security";
+import type { Secrets as Store, SystemInfo } from "../../sdk/plugin/index.ts";
 
 export type SecretName = "opensubtitles-api-key" | "opensubtitles-password" | "assrt-token";
 
-function security(args: string[]): Promise<{ ok: boolean; stdout: string }> {
-  return new Promise((resolve) => {
-    execFile(SECURITY, args, { timeout: 10_000 }, (error, stdout) => resolve({ ok: !error, stdout: String(stdout) }));
-  });
-}
+const STORES: Partial<Record<SystemInfo["os"], string>> = {
+  macos: "macOS 钥匙串",
+  windows: "Windows 凭据管理器",
+};
+/** The system has no usable store: fall back to the file (or this run). */
+const noStore = (e: unknown) => {
+  const code = (e as { code?: string })?.code;
+  return code === "unsupported" || code === "unavailable";
+};
 
 export class Secrets {
   readonly #file: string | null;
-  #keychain: boolean;
+  #store: Store | null;
+  readonly #os: SystemInfo["os"];
+  readonly #id: string;
   readonly #memory = new Map<string, string>();
   /**
-   * `useKeychain: false` keeps everything in the file (tests, or
-   * `VESTRA_SUBTITLE_ONLINE_KEYCHAIN=off`). Without a data directory and
-   * without the keychain, secrets last for this run only.
+   * `store` is `plugin.secrets` (`null` without the capability); `os` names
+   * it in `location`. Without a data directory and without a store, secrets
+   * last for this run only.
    */
-  constructor(directory: string | null, useKeychain = process.platform === "darwin" && existsSync(SECURITY)) {
+  constructor(directory: string | null, store: Store | null, os: SystemInfo["os"], id = "vestra.subtitle-online") {
     this.#file = directory ? join(directory, "secrets.json") : null;
-    this.#keychain = useKeychain;
+    this.#os = os;
+    this.#id = id;
+    this.#store = store;
   }
   /** Where secrets are kept, for the settings window. */
   get location() {
-    return this.#keychain ? "macOS 钥匙串（vestra.subtitle-online）" : this.#file ? `${this.#file}（仅本人可读）` : "仅本次运行";
+    if (this.#store) return `${STORES[this.#os] ?? "系统密钥存储"}（${this.#id}）`;
+    return this.#file ? `${this.#file}（仅本人可读）` : "仅本次运行";
   }
   async get(name: SecretName): Promise<string> {
-    if (this.#keychain) {
-      const result = await security(["find-generic-password", "-s", SERVICE, "-a", name, "-w"]);
-      if (result.ok) return result.stdout.replace(/\n$/, "");
+    if (this.#store) {
+      try {
+        const value = await this.#store.get(name);
+        if (value !== null) return value;
+      } catch (e) {
+        if (noStore(e)) this.#store = null;
+      }
     }
     return this.#readFile()[name] ?? this.#memory.get(name) ?? "";
   }
   /** Store `value`; an empty value deletes the secret. */
   async set(name: SecretName, value: string): Promise<void> {
-    if (this.#keychain) {
-      const result = value
-        ? await security(["add-generic-password", "-U", "-s", SERVICE, "-a", name, "-l", `Vestra 在线字幕（${name}）`, "-w", value])
-        : await security(["delete-generic-password", "-s", SERVICE, "-a", name]);
-      if (result.ok || !value) {
+    if (this.#store) {
+      try {
+        if (value) await this.#store.set(name, value);
+        else await this.#store.delete(name);
         this.#writeFile(name, ""); // never leave an older copy in the file
         return;
+      } catch (e) {
+        if (!noStore(e)) throw e;
+        this.#store = null; // no store after all: fall back to the file
       }
-      this.#keychain = false; // the keychain refused: fall back to the file
     }
     this.#writeFile(name, value);
   }

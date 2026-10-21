@@ -1,14 +1,13 @@
-// Orchestration against the SDK test host with a fake `fetch`; no real network or keychain.
+// Orchestration against the SDK test host with a fake `fetch`; no real network or secret store.
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { deflateRawSync } from "node:zlib";
-import { startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
+import { HostError, startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
 import activate from "../main.ts";
 
-process.env.VESTRA_SUBTITLE_ONLINE_KEYCHAIN = "off";
 const directory = new URL("..", import.meta.url);
 const pause = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
 const SRT = "1\n00:00:01,000 --> 00:00:02,000\n你好\n";
@@ -41,16 +40,34 @@ function osResult(fileId: number, language: string, release: string, extra: Reco
   };
 }
 
-async function setup(options: { key?: boolean; privacy?: boolean; settings?: Record<string, unknown> } = {}) {
+type SetupOptions = {
+  key?: boolean;
+  privacy?: boolean;
+  settings?: Record<string, unknown>;
+  /** The player's secret store refuses every call with this code. */
+  store?: "unavailable" | "unsupported" | "failed";
+  os?: "macos" | "windows" | "linux";
+  /** Keys already in `secrets.json` (an older fallback). */
+  file?: Record<string, string>;
+};
+async function setup(options: SetupOptions = {}) {
   const folder = await mkdtemp(join(tmpdir(), "vestra-online-"));
   const data = join(folder, "data");
   const video = join(folder, "The.Movie.2019.1080p.BluRay.x264-GRP.mkv");
   await writeFile(video, Buffer.alloc(200 * 1024, 7));
   const { mkdir } = await import("node:fs/promises");
   await mkdir(data);
-  if (options.key !== false) await writeFile(join(data, "secrets.json"), JSON.stringify({ "opensubtitles-api-key": "KEY" }));
+  if (options.file) await writeFile(join(data, "secrets.json"), JSON.stringify(options.file));
   await writeFile(join(data, "settings.json"), JSON.stringify({ privacyAccepted: options.privacy !== false, ...options.settings }));
   const host = new TestHost();
+  if (options.key !== false) host.secrets.set("opensubtitles-api-key", "KEY");
+  if (options.os) host.systemInfo = { ...host.systemInfo, os: options.os };
+  const code = options.store;
+  if (code)
+    for (const method of ["secrets.get", "secrets.set", "secrets.delete"])
+      host.handle(method, () => {
+        throw new HostError(code, `${method}: ${code}`);
+      });
   host.openElsewhere(video);
   host.subtitles.selection = { stamp: { generation: 1, revision: 1 }, target: null };
   const { stop } = await startPlugin(activate, { directory, host, dataDirectory: data });
@@ -100,7 +117,7 @@ test("menu: two items under 字幕 ▶ 在线字幕 without shortcuts; windows b
   }
 });
 
-test("keys are saved outside settings.json (secrets.json, mode 0600 when the keychain is off)", async () => {
+test("keys are saved in the player's secret store, never in settings.json", async () => {
   const fetch = fakeFetch({ [`${OS}/infos/formats`]: () => jsonResponse({ data: {} }) });
   const t = await setup({ key: false });
   try {
@@ -119,9 +136,13 @@ test("keys are saved outside settings.json (secrets.json, mode 0600 when the key
     service.emit("save", "SECRET", "me", "pw");
     await t.host.settle();
     await waitFor(() => String(service.props["status-text"]).startsWith("已保存"), "saved");
-    const secrets = JSON.parse(await readFile(join(t.data, "secrets.json"), "utf8"));
-    assert.deepEqual(secrets, { "opensubtitles-api-key": "SECRET", "opensubtitles-password": "pw" });
-    assert.equal((await stat(join(t.data, "secrets.json"))).mode & 0o777, 0o600);
+    assert.equal(service.props["status-text"], "已保存（macOS 钥匙串（vestra.subtitle-online））");
+    assert.match(String(service.props["help-text"]), /存放在：macOS 钥匙串（vestra\.subtitle-online）。$/);
+    assert.deepEqual(Object.fromEntries(t.host.secrets), { "opensubtitles-api-key": "SECRET", "opensubtitles-password": "pw" });
+    assert.equal(await stat(join(t.data, "secrets.json")).catch(() => null), null, "nothing in a file");
+    service.emit("save", "SECRET", "me", "");
+    await t.host.settle();
+    await waitFor(() => !t.host.secrets.has("opensubtitles-password"), "an empty password deletes the secret");
     await t.stop();
     const saved = await readFile(join(t.data, "settings.json"), "utf8");
     assert.doesNotMatch(saved, /SECRET|pw/);
@@ -129,6 +150,78 @@ test("keys are saved outside settings.json (secrets.json, mode 0600 when the key
   } finally {
     fetch.restore();
     await t.cleanup();
+  }
+});
+
+/** Open 服务 for OpenSubtitles and save `key` / `password`; the service window. */
+async function saveKey(t: Awaited<ReturnType<typeof setup>>, key: string, password: string) {
+  await t.host.command("settings").run();
+  t.host.window("subtitle-online-settings").emit("service-settings");
+  await t.host.settle();
+  const service = t.host.window("subtitle-online-service");
+  service.emit("save", key, "", password);
+  await t.host.settle();
+  await waitFor(() => /^(已保存|无法保存)/.test(String(service.props["status-text"])), "save finished");
+  return service;
+}
+
+for (const code of ["unavailable", "unsupported"] as const)
+  test(`no secret store (${code}): keys go to secrets.json (0600) in the data directory`, async () => {
+    const fetch = fakeFetch({});
+    const t = await setup({ key: false, store: code });
+    try {
+      const service = await saveKey(t, "SECRET", "pw");
+      const file = join(t.data, "secrets.json");
+      assert.equal(service.props["status-text"], `已保存（${file}（仅本人可读））`);
+      assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { "opensubtitles-api-key": "SECRET", "opensubtitles-password": "pw" });
+      assert.equal((await stat(file)).mode & 0o777, 0o600);
+      assert.equal(t.host.secrets.size, 0);
+    } finally {
+      await t.stop();
+      fetch.restore();
+      await t.cleanup();
+    }
+  });
+
+test("a key left in secrets.json by the fallback is still read; saving to the store removes the copy", async () => {
+  const fetch = fakeFetch({});
+  const t = await setup({ key: false, file: { "opensubtitles-api-key": "OLD", "assrt-token": "TOKEN" } });
+  try {
+    await t.host.command("settings").run();
+    const settings = t.host.window("subtitle-online-settings");
+    await waitFor(() => settings.props.services !== undefined, "settings bound");
+    const states = (settings.props.services as { state: string }[]).map((s) => s.state);
+    assert.deepEqual(states.sort(), ["已填写 token", "已填写密钥"]);
+    await saveKey(t, "NEW", "");
+    assert.equal(t.host.secrets.get("opensubtitles-api-key"), "NEW");
+    assert.deepEqual(JSON.parse(await readFile(join(t.data, "secrets.json"), "utf8")), { "assrt-token": "TOKEN" });
+  } finally {
+    await t.stop();
+    fetch.restore();
+    await t.cleanup();
+  }
+});
+
+test("the store's location is named after the system; a refused save is reported, not moved to a file", async () => {
+  const fetch = fakeFetch({});
+  const windows = await setup({ key: false, os: "windows" });
+  try {
+    const service = await saveKey(windows, "SECRET", "");
+    assert.equal(service.props["status-text"], "已保存（Windows 凭据管理器（vestra.subtitle-online））");
+    assert.match(String(windows.host.window("subtitle-online-settings").props["note-text"]), /Windows 凭据管理器/);
+  } finally {
+    await windows.stop();
+    await windows.cleanup();
+  }
+  const refused = await setup({ key: false, store: "failed" });
+  try {
+    const service = await saveKey(refused, "SECRET", "");
+    assert.equal(service.props["status-text"], "无法保存：secrets.set: failed");
+    assert.equal(await stat(join(refused.data, "secrets.json")).catch(() => null), null);
+  } finally {
+    await refused.stop();
+    fetch.restore();
+    await refused.cleanup();
   }
 });
 

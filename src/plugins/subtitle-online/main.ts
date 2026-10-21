@@ -69,7 +69,8 @@ export default async function activate(plugin: Plugin) {
     store.save(settings);
     plugin.update();
   };
-  const secrets = new Secrets(directory, process.env.VESTRA_SUBTITLE_ONLINE_KEYCHAIN === "off" ? false : undefined);
+  const { os } = await plugin.app.system().catch(() => ({ os: "other" as const }));
+  const secrets = new Secrets(directory, plugin.secrets, os);
   let credentials: Credentials = { apiKey: "", username: settings.username, password: "", token: "" };
   async function loadCredentials() {
     const [apiKey, password, token] = await Promise.all([
