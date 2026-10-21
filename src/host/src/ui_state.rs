@@ -45,6 +45,20 @@ pub struct Sidebar {
     pub width: f64,
 }
 
+/// `plugin.appearance` (R-S2): the palette, kept when the choosing plugin stops.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Appearance {
+    pub theme: String,
+}
+
+/// The options window (R-H7): the page it showed last, `<manifest id>/<page id>`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Settings {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_page: Option<String>,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiState {
@@ -57,6 +71,10 @@ pub struct UiState {
     /// "<manifest id>/<command id>" → bindings; read only this round, kept on save.
     #[serde(default)]
     pub bindings: BTreeMap<String, Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<Appearance>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<Settings>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -100,11 +118,17 @@ impl UiState {
                     .collect()
             })
             .unwrap_or_default();
+        let appearance = serde_json::from_value::<Appearance>(field("appearance"))
+            .ok()
+            .filter(|a| ["vestra", "potplayer"].contains(&a.theme.as_str()));
+        let settings = serde_json::from_value::<Settings>(field("settings")).ok();
         Self {
             window,
             sidebar,
             panels,
             bindings,
+            appearance,
+            settings,
         }
     }
 }
@@ -237,6 +261,12 @@ mod tests {
             .state
             .bindings
             .insert("vestra.playback/toggle-pause".into(), vec!["Space".into()]);
+        store.state.appearance = Some(Appearance {
+            theme: "potplayer".into(),
+        });
+        store.state.settings = Some(Settings {
+            last_page: Some("vestra.preferences/appearance".into()),
+        });
         store.touch(0);
         store.save_if_due(999);
         assert!(!path.exists(), "debounced");
@@ -256,11 +286,12 @@ mod tests {
         assert!(dir.path().join("ui-state.json.bad").exists());
         std::fs::write(
             &path,
-            r#"{"version":1,"window":{"x":"left"},"sidebar":{"width":350},"panels":{"a":{"visible":true},"b":7},"bindings":{"x/y":["F6"],"z":3}}"#,
+            r#"{"version":1,"appearance":{"theme":"pink"},"window":{"x":"left"},"sidebar":{"width":350},"panels":{"a":{"visible":true},"b":7},"bindings":{"x/y":["F6"],"z":3}}"#,
         )
         .unwrap();
         let state = Store::open(&path).state;
         assert_eq!(state.window, None);
+        assert_eq!(state.appearance, None);
         assert_eq!(state.sidebar, Some(Sidebar { width: 350. }));
         assert_eq!(state.panels.len(), 1);
         assert_eq!(state.bindings.len(), 1);

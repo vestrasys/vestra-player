@@ -289,6 +289,46 @@ plugin.settings.show(pageId?: string): Promise<void>;   // 只能指定本插件
 4. `UrlInputRow`：回车 = 确定、Shift+回车换行、Esc = 取消；`enabled: false` 时确定灰、回车无效；颜色随 `Theme`。
 5. 确认框：从工具窗口（插件管理「卸载」、快捷键设置「恢复默认」）触发时，表单挂在该工具窗口上，主窗口不被提到前面；从主窗口菜单触发时仍挂主窗口。
 
+#### P1 批次 2（2026-10-21，维护者）：拖放、Theme 下发与外观、设置页与选项窗口
+
+基于 `rebuild/features-r3b`（批次 1 `82862f4`）。**未触发 §3.0 的拆分**：§3.6 在本批完成（实测见「检查」）。
+
+**实现清单**
+
+| 任务单 | 内容 | 宿主 | SDK / TestHost / 文档 |
+| --- | --- | --- | --- |
+| §3.5 | Theme 下发（R-H6） | 新文件 `ui/palette.slint`（宿主专用 global `VestraPalette`，颜色与 `accent-fill` 为 `in` 属性，默认 Vestra）；`ui/vestra/theme.slint` 的颜色改为绑定到它的 `out` 属性；新模块 `theme.rs`：两套配色表（21 个颜色 token；PotPlayer 的 `accent-fill` 为纯色 `#fae100`），`apply` 用 `set_global_property("VestraPalette", …)`；外壳（`host.slint` 导出 palette）、浮动侧栏、工具窗口（`ui.rs` 在源码末尾追加 `export { VestraPalette } from <绝对路径>`，显示前下发）、选项窗口逐实例下发；失败置 `theme_pending`，下一个 16 ms 周期全部重发 | 参考 §6.4、§6.8、§17 |
+| §3.5 | `plugin.appearance`（R-S2，能力 `ui.theme`） | `appearance.set`（`invalid` 校验）；`ui-state.json` 的 `appearance.theme`（去抖保存，读坏的值丢弃）；变化时广播 `appearance.changed`；`window.state` 答复带 `appearance` | `sdk/plugin/appearance.ts`：初值随激活前的 `window.state` 读取（不加请求），第一次读 `theme` / `onChange` 后跟随事件；`host.appearance`、`host.setAppearance` |
+| §3.6 | `plugin.settings`（R-S1，能力 `ui.settings`）与选项窗口（R-H7） | 新模块 `settings_window.rs`：页面表（校验 id、分类、标题 1–24、`order`、每插件 ≤ 8、注册时单独编译检查）、九类固定顺序的树、窗口源码生成（每页 `Page<序号>View` 与 `Settings<序号>Bridge` 别名，`if current == k` 实例化，右侧 `ScrollView` 440 宽）、属性写入复用 `prop_value`（图片可用）与 `reconcile`、回调经 `ui.callback`（视图 `$settings:<id>`）只发给注册它的插件；`show` 打开或用 winit `focus_window` 带到前面；`settings.lastPage`；停用 / `dispose` 移除并在下一周期重建，按「同分类 → 常规 → 第一页 → 空」回退；⌘W、关闭按钮、标题栏关闭都是隐藏并丢弃实例 | `sdk/plugin/settings.ts`（`ViewBase` 子类，组件与 global 推断复用 `exported`）；`host.settings`、`host.settingsPage`；参考 §6.9；示例 §30 |
+| §3.4 | `plugin.drops.provide`、`Panel.onDrop`（R-U2，能力 `ui.drop`） | 新模块 `drops.rs`：提供者表（先登记生效，冲突写日志）、按扩展名分组、`folder`、30 ms 无新路径即一组；winit `DroppedFile` 在外壳与浮动侧栏的窗口钩子里转为事件；松手时 `platform_window::pointer_in`（`NSWindow::mouseLocationOutsideOfEventStream` + `contentRectForFrameRect`）与 `modifier_keys`（`NSEvent::modifierFlags` 类方法），都是 objc2 安全方法；`drops::hit` 按视频列宽高判定底栏 / 侧栏并换算面板坐标；浮动侧栏打开时关联原生窗口 | `sdk/plugin/drops.ts`（提供者 id 由 SDK 生成；面板监听计数，第一个 `onDrop` 发 `drops.listen(true)`，最后一个撤销）；`host.drop`、`host.dropProviders`、`host.panelDrops`；参考 §6.7；示例 §31 |
+| §3.8 | 文档 | — | 参考 §2、§3.3、§6.3、§6.4、§6.7–§6.9（新）、§14、§17 批次 2；示例 §30、§31 |
+
+**签名调整与实现取舍**（公开签名均与裁决一致）
+
+1. **Theme 的「插件不可写」换了实现方式**：任务单 §3.5 假设「Slint 不允许在 `.slint` 里给 global 的 `in` 属性赋值」，实测 Slint 1.16 允许（`Theme.accent = #ff0000` 编译无诊断）。改为：可写的颜色放在宿主专用的 `VestraPalette`（`ui/palette.slint`，不在 `@vestra` 库目录里），`Theme` 的颜色仍是 `out` 属性、绑定到它。插件照旧 `import { Theme }`，赋值 `Theme.x` 编译失败（`theme.rs` 的编译测试断言）。插件理论上可以按绝对路径导入 palette 自己改色，这属于有意绕过（插件是受信任的，见参考开头）。
+2. 配色表中 PotPlayer 没有对应项的 `selected-bg` 取 `#444444`（按钮按下灰），`button-hover` / `button-press` / `button-disabled` 取 ui-alignment §2.1 注释里的值。Vestra 的 `accent-fill` 渐变从第一个实例读出缓存（Slint 公开 API 不能构造渐变），切回 Vestra 时下发它。
+3. `appearance.theme` 的初值随激活前已有的 `window.state` 读取返回，不增加协议请求；事件 `appearance.changed` 按任务单新增，需要 `events`。
+4. **拖放文件夹规则**：目录（按松手时 `is_dir`）匹配保留名 `"folder"`，不展开；没有扩展名的文件不匹配任何提供者。
+5. **`Panel.onDrop` 的坐标系**：面板坐标 = 相对面板根组件左上角的逻辑点（底栏：`y − 视频列高`；侧栏：`x − 视频列宽 − 3`；浮动侧栏：窗口内容坐标）。
+6. **拖放分组与落点**：winit 0.30 对一次拖放的多个文件在同一批事件里逐个发 `DroppedFile`，宿主以「30 ms 没有新路径」结束一组；位置不取 winit（拖动期间没有 `CursorMoved`），而在结束时问 AppKit（`mouseLocationOutsideOfEventStream`，此时指针就在松手处）。**以上未做 GUI 实测**（按要求不操作 GUI），列入 GUI 要点。若实测不可靠的降级：按窗口命中（落在浮动侧栏窗口 = 面板，主窗口 = 视频区规则）。全屏时底栏浮在视频上，本批一律按视频区处理（记入参考 §6.7）。
+7. 面板没有 `onDrop` 监听时按视频区规则分发（裁决原文）；监听以插件为单位（每插件只有一个面板）。
+8. `settings.show(pageId)`：`pageId` 不是本插件已注册的页面一律 `invalid`（裁决只写了「别的插件的页面」；插件看不到别人的 id，所以本插件不存在的 id 同样处理）。重复 id、超过 8 页、标题与分类不合法也是 `invalid`。
+9. 选项窗口每次页面集合变化都重建（全部页面编在一个实例里，切页只改 `current`，不重建）；重建保持窗口位置大小，属性按最后写入值重放，图片经缓存。页面注册时单独编译一次，坏页面让自己的 `ready` 失败（`ui-prepare`），不会拖垮窗口。
+10. 关闭选项窗口丢弃实例（下次 `show` 重建），页面状态由插件的 `bind` 与播放器记录的属性恢复。
+
+**检查**（worktree 内实际执行）
+
+- `src/`：`check`、`format:check`、`boundaries`、`plugins:build` 0；`test:sdk` 87/87（新增 `tests/sdk/round3b-input.test.ts` 3 条：拖放、外观、设置页）；插件测试（合并 `eda77b8` 作者批次 1 之后，`plugin -- test --all`）audio 35、bilibili 15、capture 25、history 22、hotkeys 17、info 26、marks 24、nes 11、playback 59、playlist 63、plugins 10、subtitle-online 13、subtitles 52、video 22、window 17、workshop 17、youtube 14 全过（workshop `vendor/sdk` 已重同步，同一提交）。第一次全量运行 playback 的「I07 a resting pointer makes a picture once…」超时失败 1 次（并行负载下的计时用例，单独连跑 3 次与第二次全量均通过），转作者 A 留意。
+- `src/host/`：`cargo fmt --check`、`clippy --locked --all-targets -D warnings`（含 `--no-default-features`）0；`cargo test --locked` 208/208（批次 2 新增：配色表与 palette 文件一致 1、插件不能给 Theme 赋值且导出可编译 1、设置树排序与回退 1、选项窗口源码编译（有页 / 无页）1、拖放分组与提供者顺序 1、拖放成组与面板命中 1）。
+- 未执行：GUI。
+- 宿主 Rust：`src/host/src/*.rs` 29 597 → 30 966（批次 2 **+1 369**，`settings_window.rs` 633、`drops.rs` 344、`theme.rs` 234）；本轮累计 28 771 → 30 966 = **+2 195**（预算约 3 000，拆分门槛 3 200）。另 Slint：`ui/palette.slint` 新增 27 行。SDK 与运行器本批 +约 590（`drops.ts` 120、`appearance.ts` 71、`settings.ts` 102、TestHost 约 +150、`types.ts` 约 +110）。
+
+**给协调者的 GUI 实测要点**
+
+1. 配色：探针（或作者 E 的 preferences）`appearance.set("potplayer")` 后 1 秒内：底栏进度条黄色纯色、菜单选中项、已打开的工具窗口（如音频工作台）、浮动侧栏、选项窗口同时变色；拖着音量滑块时切换滑块不中断；重启后仍为 PotPlayer；停用调用者后不变；切回 Vestra 与切换前截图一致（渐变恢复）。
+2. 设置页：两个探针各注册一页（不同分类）后 F5/`show()`：「选项」640×480、树按九类顺序、空分类不显示；点页面切换；窗口内按 Space 不暂停；⌘W 关闭；再开显示上次页面（重启后也是）；停用其中一个插件 1 秒内该页消失（正在显示则切到同类第一页 / 常规 / 「没有可设置的项目」）；启用后恢复；页面里的输入框与滑块可用，回调到达注册它的插件；页面超高时右侧可滚动。
+3. 拖放（物理拖放，**必须实测**）：Finder 拖 1 个 mkv 到视频区 → 提供者收到 1 个路径；同时拖 3 个文件 → 一次调用、顺序与 Finder 一致；拖文件夹 → `folder` 提供者收到目录路径；按住 Option 松手 → `modifiers.alt: true`（Shift、⌘ 同理）；拖到附着侧栏第 3、4 行之间 → `onDrop` 收到的 `at.y` 与面板内行位置一致（与面板里 `mouse-y` 对照）；拖到浮动侧栏窗口 → 同样走 `onDrop`、坐标为窗口内容坐标；拖到底栏 → 底栏插件有监听时收到、否则按扩展名分发；拖 `.srt` 且无提供者 → 无反应；拖到工具窗口 → 无反应；拖放期间播放不暂停。若出现一次拖放被拆成多组或坐标偏一个标题栏高度，按第 6 条降级并告诉维护者。
+
 ### 6.3 作者交付
 
 （各作者完成时填写）

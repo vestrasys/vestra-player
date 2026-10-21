@@ -59,6 +59,11 @@ pub fn compile_source(mut source: String, path: &Path) -> Result<ComponentInstan
     {
         source = format!("{}{}", font_import(), with_window_font(&source, family));
     }
+    // R-H6: the player sets this window's palette (which `Theme` reads).
+    if !source.contains(crate::theme::PALETTE) {
+        source.push('\n');
+        source.push_str(&crate::theme::export_line());
+    }
     let result = pollster::block_on(compiler().build_from_source(source, path.to_owned()));
     if result.components().count() > 1 {
         bail!("Slint file must export exactly one component");
@@ -98,6 +103,8 @@ pub fn open(
     properties: &[(String, Value)],
     callbacks: &[String],
     events: mpsc::Sender<Event>,
+    // Before the window appears (the player's theme colours).
+    prepare: impl FnOnce(&ComponentInstance),
 ) -> Result<View> {
     let instance = compile(path)?;
     crate::ui_values::own_default_models(&instance, None)?;
@@ -137,6 +144,7 @@ pub fn open(
         let _ = events.send(Event::ViewClosed(owner, closed.clone()));
         slint::CloseRequestResponse::HideWindow
     });
+    prepare(&instance);
     instance.show()?;
     Ok(View { instance })
 }
