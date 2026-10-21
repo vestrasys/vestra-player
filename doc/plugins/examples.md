@@ -801,3 +801,48 @@ export component OpenUrl inherits Window {
     }
 }
 ```
+
+## 30. 设置页：在「选项」窗口里放一页，菜单直接打开它
+
+```ts
+// ui/look.slint：export global Look { in-out property <string> theme; callback pick(string); }
+//               export component LookPage inherits Rectangle { height: 120px; … }
+export default async function activate(plugin: Plugin) { // ui.settings、ui.theme、commands、events
+  const page = plugin.settings.page("ui/look.slint", {
+    id: "appearance", category: "appearance", title: "外观", order: 10,
+  });
+  page.bind(() => ({ theme: plugin.appearance.theme }));       // 别的插件切换时也跟着变
+  page.on("pick", (theme: "vestra" | "classic") => plugin.appearance.set(theme));
+  plugin.commands.add({
+    id: "options", path: ["设置", "选项…"], order: 830, bindings: ["F5"],
+    run: () => plugin.settings.show(),                          // 上次的页面
+  });
+  plugin.commands.add({
+    id: "look", path: ["设置", "外观…"], order: 831,
+    run: () => plugin.settings.show("appearance"),              // 本插件的这一页
+  });
+}
+```
+
+页面宽 440；插件停用时这一页从窗口里消失，启用后随注册回来。
+
+## 31. 拖放：视频区按扩展名接收，列表面板接收落点
+
+```ts
+export default async function activate(plugin: Plugin) { // ui.drop、ui.mount、playback.control
+  plugin.drops.provide({
+    extensions: ["mkv", "mp4", "mp3", "flac", "m3u8", "folder"], // 小写、不带点；文件夹用 "folder"
+    drop: async ({ paths, modifiers }) => {
+      const added = await queue.add(paths);                   // 文件夹由自己展开
+      if (!modifiers.alt) await plugin.player.open(added[0]!);  // 按住 Option 只加入
+    },
+  });
+  const list = plugin.panels.mount("sidebar", "ui/sidebar.slint");
+  list.onDrop(({ paths, at }) => {                           // 面板坐标：相对面板左上角
+    const row = Math.floor((at.y - HEADER + scrollY) / ROW);  // scrollY 由面板回调回传
+    return queue.insert(row, paths);                         // 插到落点所在行之前
+  });
+}
+```
+
+同一扩展名先登记的插件生效；没有插件登记的文件拖进来什么也不发生。

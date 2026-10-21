@@ -75,7 +75,7 @@ pub struct CallbackEvent {
     pub args: Result<Vec<Primitive>, String>,
 }
 
-fn identifier(name: &str) -> Result<()> {
+pub(crate) fn identifier(name: &str) -> Result<()> {
     let mut chars = name.chars();
     if !chars.next().is_some_and(|ch| ch.is_ascii_alphabetic())
         || !chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
@@ -96,9 +96,8 @@ fn key_forward(scope: &str) -> String {
     )
 }
 
-fn import_path(spec: &CompileSpec) -> Result<String> {
-    let path = spec
-        .file
+pub(crate) fn import_path(file: &std::path::Path) -> Result<String> {
+    let path = file
         .canonicalize()
         .context("composition file unavailable")?;
     let path = path.to_str().context("Slint import path must be UTF-8")?;
@@ -124,7 +123,7 @@ fn import_spec(source: &mut String, spec: &CompileSpec, path: &str) -> Result<()
     Ok(())
 }
 
-fn font_property() -> String {
+pub(crate) fn font_property() -> String {
     crate::ui::font()
         .map(|(family, _)| format!("default-font-family: \"{family}\";"))
         .unwrap_or_default()
@@ -151,7 +150,7 @@ pub fn shell_source(specs: &[CompileSpec]) -> Result<String> {
         ) {
             bail!("independent composition owners require distinct Slint files");
         }
-        let path = import_path(spec)?;
+        let path = import_path(&spec.file)?;
         import_spec(&mut source, spec, &path)?;
     }
     let mut shell = include_str!("../ui/host.slint").to_owned();
@@ -214,12 +213,13 @@ pub fn shell_source(specs: &[CompileSpec]) -> Result<String> {
 /// window of its own, with the shell's key forwarding and menu layer.
 pub fn floating_source(spec: &CompileSpec, title: &str) -> Result<String> {
     let mut source = crate::ui::font_import();
-    let path = import_path(spec)?;
+    let path = import_path(&spec.file)?;
     import_spec(&mut source, spec, &path)?;
     let title = serde_json::to_string(title)?;
     source.push_str(&format!(
         r#"import {{ MenuView, MenuLevel }} from "menu-view.slint";
 import {{ Theme }} from "@vestra/theme.slint";
+export {{ VestraPalette }} from "palette.slint";
 export component FloatingPanel inherits Window {{
     title: {title};
     min-width: 300px; min-height: 250px;
@@ -281,7 +281,7 @@ fn replace_marker(source: &mut String, marker: &str, replacement: &str) -> Resul
     Ok(())
 }
 
-fn build(source: String, component: &str) -> Result<ComponentDefinition> {
+pub(crate) fn build(source: String, component: &str) -> Result<ComponentDefinition> {
     let base = crate::ui::ui_dir().join("host.slint");
     let result = pollster::block_on(crate::ui::compiler().build_from_source(source, base));
     if result
@@ -363,7 +363,7 @@ pub struct JsonCallback {
     pub args: Result<Vec<Json>, String>,
 }
 
-fn json_args(args: &[Value]) -> Result<Vec<Json>, String> {
+pub(crate) fn json_args(args: &[Value]) -> Result<Vec<Json>, String> {
     if args.len() > crate::ui_values::MAX_ARRAY {
         return Err("composition callback has too many arguments".into());
     }
@@ -481,6 +481,20 @@ pub fn set_json_global(
         property,
         crate::ui_values::from_json(value)?,
     )
+}
+
+/// Write a converted value to a global by alias, keeping equal live values.
+pub fn set_alias_value(
+    instance: &ComponentInstance,
+    alias: &str,
+    property: &str,
+    value: Value,
+) -> Result<()> {
+    let current = instance.get_global_property(alias, property)?;
+    if !crate::ui_values::reconcile(&current, &value)? {
+        instance.set_global_property(alias, property, value)?;
+    }
+    Ok(())
 }
 
 /// Write an already converted value (JSON or a runtime image) to the owner's global.

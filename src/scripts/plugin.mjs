@@ -68,6 +68,9 @@ const CAPABILITIES = new Set([
   "window.control",
   "bindings.manage",
   "timeline.marks",
+  "ui.drop",
+  "ui.settings",
+  "ui.theme",
 ]);
 
 /** Never part of a production package. */

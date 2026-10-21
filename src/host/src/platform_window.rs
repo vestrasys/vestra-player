@@ -161,6 +161,29 @@ mod native {
         Ok(())
     }
 
+    /// The pointer in the window's content, top-left origin (logical points).
+    /// AppKit tracks it during a file drag, when winit reports no motion.
+    pub fn pointer_in(id: HostWindowId) -> Result<(f64, f64)> {
+        let window = window(id)?;
+        let point = window.mouseLocationOutsideOfEventStream();
+        let content = window.contentRectForFrameRect(window.frame());
+        if !point.x.is_finite() || !point.y.is_finite() {
+            return Err(Unavailable("pointer location is unavailable"));
+        }
+        Ok((point.x, content.size.height - point.y))
+    }
+
+    /// Option, Shift and Command held right now (`NSEvent.modifierFlags`).
+    pub fn modifier_keys() -> (bool, bool, bool) {
+        use objc2_app_kit::{NSEvent, NSEventModifierFlags};
+        let flags = NSEvent::modifierFlags_class();
+        (
+            flags.contains(NSEventModifierFlags::Option),
+            flags.contains(NSEventModifierFlags::Shift),
+            flags.contains(NSEventModifierFlags::Command),
+        )
+    }
+
     pub fn screen_for(id: HostWindowId) -> Result<ScreenFacts> {
         let window = window(id)?;
         let screen = window
@@ -228,9 +251,21 @@ mod native {
 /// error. Native IDs are process/lifetime facts, never persistent identifiers.
 #[cfg(target_os = "macos")]
 pub use native::{
-    associate_new, capture_windows, ns_window, resize_content, screen_for, set_floating,
-    window_count,
+    associate_new, capture_windows, modifier_keys, ns_window, pointer_in, resize_content,
+    screen_for, set_floating, window_count,
 };
+
+#[cfg(not(target_os = "macos"))]
+pub fn pointer_in(_id: HostWindowId) -> Result<(f64, f64)> {
+    Err(Unavailable(
+        "pointer location is unavailable on this platform",
+    ))
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn modifier_keys() -> (bool, bool, bool) {
+    (false, false, false)
+}
 
 #[cfg(not(target_os = "macos"))]
 pub fn capture_windows() -> Result<NativeSnapshot> {

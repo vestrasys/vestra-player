@@ -93,6 +93,9 @@ interface Disposable { dispose(): Promise<void> }
 | `window.control` | `window.setVideoArea`、`setAlwaysOnTop`、`setCursorAutoHide` |
 | `bindings.manage` | `bindings.*`（§4.2） |
 | `timeline.marks` | `timeline.layer()`（§5.6；读取 `timeline.marks` 只需 `playback.read`） |
+| `ui.drop` | `drops.provide`、`Panel.onDrop`（§6.7） |
+| `ui.theme` | `appearance.set`（§6.8；读取 `appearance.theme` / `onChange` 不需要能力） |
+| `ui.settings` | `settings.page`、`settings.show`（§6.9） |
 
 `tools`、`storage`、`system`（§16）在插件进程内执行，不需要能力。读取 `window.state` / `onChange`（§6.6）、`plugin.app`（§3.5）与 `ui.image`（§6.1）不需要能力。
 
@@ -124,7 +127,7 @@ interface Scope extends Disposable {
   readonly commands, windows, panels, dialogs, player, video, audio,
            subtitles, media, resolvers, packages, osd,
            host, clipboard, power, tools, storage, system, window,
-           bindings, ui, timeline;
+           bindings, ui, timeline, drops, appearance, settings;
   readonly app: AppInfo;           // §3.5
   scope(): Scope;
   add<T extends Disposable>(item: T): T;
@@ -598,6 +601,7 @@ interface Panel extends View, Disposable {
   readonly ready: Promise<void>;                 // 已挂载
   setInteraction(locks: Partial<{ focused; dragging; popupOpen: boolean }>): void;
   showMenu(items: (Command | null)[], at: { x: number; y: number }): Promise<void>;
+  onDrop(listener: (e: { paths: string[]; at: { x; y }; modifiers: DropModifiers }) => unknown): Disposable; // §6.7
 }
 
 interface PanelSlot {
@@ -641,7 +645,7 @@ interface SlotState {
 - 插件 → 界面用 `in` / `in-out property`，界面 → 插件用 `callback`。回调参数和属性值必须能用 JSON 表示（基本类型、数组、结构体），回调返回 `void`。
 - 会被插件改值的输入控件用双向绑定（`value <=> root.x`、`checked <=> root.x`）。单向的 `value: root.x` 在用户操作控件后会断开，之后插件改值，控件不会跟着动。属性须为 `in-out`。
 - `in` 属性只能单向绑定时，用 `changed x => { slider.value = root.x; }` 在模型变化时回推。
-- 主题与控件：`import { Theme } from "@vestra/theme.slint";` 提供颜色（`bg-bar`、`bg-panel`、`text`、`accent`、`playing`…）、字号（`font-xs` 9px、`font-body` 11px、`font-tab` 12px、`font-title` 13px、`font-mono` 等宽（Menlo，只含西文，中文不要用它））和控件尺寸（`button-height` 21px、`input-height`、`form-row-gap`、`dialog-padding`…），完整列表见 `src/host/ui/vestra/theme.slint`。`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";` 提供参考播放器样式的按钮（文字按钮 21px、`small` 18px；`text` 为空时是图标按钮：`icon` 是 Slint `Path` 的路径数据，画在 `icon-width` × `icon-height`（默认 14×12）的 viewbox 里，`stroked: true` 画 1.5px 线而不填充，`checked` 表示开启态；图标按钮的宽高由调用方设置，悬停提示用 `ToolTipArea` 包住）、2px 线滑块（`panel: true` 为面板样式）和悬停提示，以及输入链接组件 `UrlInputRow`（UI-DLG-02：多行输入 + 「打开」「取消」；`in-out property <string> text`、`placeholder`、`confirm-text`（默认「打开」）、`cancel-text`、`enabled`，`callback accepted(string)`（回车或点确定，Shift+回车换行）、`cancelled()`（Esc 或点取消），`focus-input()`、`select-all()` 两个公共函数；不校验地址，校验由插件做；用法见示例 §29）。
+- 主题与控件：`import { Theme } from "@vestra/theme.slint";` 提供颜色（由播放器按当前配色下发，§6.8；插件只读，不能给 `Theme` 赋值，硬编码颜色不会随配色变化）（`bg-bar`、`bg-panel`、`text`、`accent`、`playing`…）、字号（`font-xs` 9px、`font-body` 11px、`font-tab` 12px、`font-title` 13px、`font-mono` 等宽（Menlo，只含西文，中文不要用它））和控件尺寸（`button-height` 21px、`input-height`、`form-row-gap`、`dialog-padding`…），完整列表见 `src/host/ui/vestra/theme.slint`。`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";` 提供参考播放器样式的按钮（文字按钮 21px、`small` 18px；`text` 为空时是图标按钮：`icon` 是 Slint `Path` 的路径数据，画在 `icon-width` × `icon-height`（默认 14×12）的 viewbox 里，`stroked: true` 画 1.5px 线而不填充，`checked` 表示开启态；图标按钮的宽高由调用方设置，悬停提示用 `ToolTipArea` 包住）、2px 线滑块（`panel: true` 为面板样式）和悬停提示，以及输入链接组件 `UrlInputRow`（UI-DLG-02：多行输入 + 「打开」「取消」；`in-out property <string> text`、`placeholder`、`confirm-text`（默认「打开」）、`cancel-text`、`enabled`，`callback accepted(string)`（回车或点确定，Shift+回车换行）、`cancelled()`（Esc 或点取消），`focus-input()`、`select-all()` 两个公共函数；不校验地址，校验由插件做；用法见示例 §29）。
 - 所有插件 Slint 都以 `fluent-dark` 风格编译：std-widgets 的控件默认是深色。默认字体是系统 UI 字体（含中文回退），插件不需要自己设字体。
 - 编辑器里要让 `@vestra/...` 导入可解析，给 Slint 语言服务设 `libraryPaths`：`{ "vestra": "<仓库>/src/host/ui/vestra" }`。
 
@@ -682,6 +686,59 @@ interface WindowState {
 - `setAlwaysOnTop`：`true` 时播放器的普通窗口（主窗口、浮动侧栏、工具窗口，包括之后新开的）浮在其他应用的窗口之上（`NSFloatingWindowLevel`）；系统对话框不受影响。多个插件时最后一次调用生效，该插件停用后回到其余插件中最后的值（都没有则不置顶）。无界面模式 `unavailable`。
 - `setCursorAutoHide`：`"fullscreen"`（默认）只在全屏时隐藏指针；`"playing"` 在窗口模式也隐藏。隐藏条件不变：播放中（就绪且未暂停）、指针在视频区、3 秒内没有指针移动或按键、没有菜单或系统对话框、面板没有在操作；窗口模式另需主窗口是活动窗口。多个插件时最后一次调用生效，该插件停用后回到其余插件中最后的值（都没有则 `"fullscreen"`）。
 - 测试：`host.mainWindow`（`{ fullscreen, videoArea, onTop, cursorAutoHide }`）；`host.setMainWindow({ fullscreen?, videoArea? })` 模拟用户改变窗口并推送。
+
+### 6.7 拖放 `plugin.drops`、`Panel.onDrop`
+
+需要 `ui.drop`。
+
+```ts
+interface DropModifiers { alt: boolean; shift: boolean; cmd: boolean }
+drops.provide(handler: {
+  extensions: string[];                                          // 小写、不带点；"folder" 匹配文件夹
+  drop(e: { paths: string[]; modifiers: DropModifiers }): unknown;
+}): Disposable;
+Panel.onDrop(listener: (e: { paths: string[]; at: { x: number; y: number }; modifiers: DropModifiers }) => unknown): Disposable;
+```
+
+- **视频区**上松手：播放器按扩展名（不区分大小写）把路径分组，保留 Finder 中的顺序，每个提供者一次调用。文件夹按保留名 `"folder"` 匹配（不展开，展开由提供者做）。同一扩展名有多个提供者时**先登记的生效**，后登记的写一行播放器日志；没有提供者的文件，播放器什么也不做（不提示）。
+- **面板**（附着的底栏、侧栏，以及浮动侧栏窗口）上松手：该面板有 `onDrop` 监听时，整组路径交给它（不按扩展名分）；没有监听时按视频区规则分发。`at` 是**面板坐标**：相对面板组件左上角的逻辑点（面板根组件自己的坐标系；窗口坐标要加上根组件的 `absolute-position`）。滚动列表请用自己回传的滚动位置换算到行。
+- 工具窗口、选项窗口上松手：忽略。全屏时底栏浮在视频上，松手一律按视频区处理。
+- 不提供拖动过程中的位置（没有 `onDragOver`），拖放期间播放不暂停、不变化。
+- `extensions` 1–64 个，每个 1–16 个小写字母或数字；不合法时 `provide` 立即抛出 `invalid`。`dispose` 或插件停用时撤销。
+- 测试：`host.drop(paths, { target: "video" | "panel", at?, modifiers? })` 按同一规则分发（`"folder"` 认存在的目录）；`host.dropProviders` 列出登记，`host.panelDrops` 为面板是否在监听。
+
+### 6.8 外观 `plugin.appearance`
+
+```ts
+appearance.theme: "vestra" | "classic";                       // 同步只读，不需要能力
+appearance.onChange(listener: (theme: "vestra" | "classic") => void): Disposable; // 需要 events
+appearance.set(theme: "vestra" | "classic"): Promise<void>;    // 需要 ui.theme；其它值 invalid
+```
+
+- 两套配色固定：`vestra`（默认）与 `classic`（经典配色，强调色 `#fae100`，`accent-fill` 为纯色）。圆角、字号、控件尺寸不随配色变化，没有单独的圆角选项。
+- 播放器把配色下发到每个视图（主窗口与其中的底栏、侧栏、背景层，浮动侧栏，工具窗口，选项窗口），新开的窗口一开始就是当前配色；`Theme` 的颜色随之变化，插件 Slint 不用改。切换不打断正在拖动的滑块与打开的菜单。单个视图下发失败只写日志，下一个刷新周期重试。
+- 选择由播放器保存（界面状态文件的 `appearance.theme`），调用 `set` 的插件停用后配色保持。`theme` 在激活前随窗口状态读好；有 `events` 时从第一次读 `theme` 或调用 `onChange` 开始跟随别的插件的切换。
+- 屏幕提示「配色：…」由调用方插件自己显示。
+- 测试：`host.appearance`（当前值，可在 `startPlugin` 前设置）、`host.setAppearance(theme)` 模拟别的插件切换。
+
+### 6.9 设置页 `plugin.settings`
+
+需要 `ui.settings`。
+
+```ts
+type SettingsCategory = "general" | "playback" | "subtitles" | "video" | "audio" | "input" | "appearance" | "plugins" | "other";
+settings.page(file: string, options: { id: string; category: SettingsCategory; title: string; order?: number }):
+  View & Disposable & { readonly ready: Promise<void> };
+settings.show(pageId?: string): Promise<void>;
+```
+
+- 页面文件与面板相同：导出一个 component 和一个 global，名字由 SDK 推断（没有 `component` / `global` 选项）；属性与回调在 global 上，回调没有「先绑定再显示」的限制。页面宽 440 逻辑点，高度由组件决定，超高时选项窗口垂直滚动。
+- `id`：本插件内唯一，1–64 个字母、数字、`.`、`-`、`_`；重复或不合法 `invalid`。`title` 1–24 个字符；每个插件至多 8 页（超出 `invalid`）；`order` 整数（±1 000 000），同一分类内小的在前，再按插件 id、页面 id。不合法的 `options` 在 `page()` 时立即抛出；文件编译失败时 `ready` 以 `ui-prepare` 失败（激活期间 = 激活失败）。
+- 选项窗口（标题「选项」，640×480、最小 600×420，可调整大小）由播放器创建：左侧分类树（160 宽，九个分类按上面的固定顺序，标题为 常规 / 播放 / 字幕 / 视频 / 声音 / 快捷键与鼠标 / 外观 / 插件 / 其它，空分类不显示），右侧当前页面，底部「关闭」。窗口内不触发快捷键，⌘W 关闭；打开不影响播放。
+- `show()`：打开窗口或把它带到前面。`pageId` 只能是本插件的页面（别的值 `invalid`）；省略时显示当前页，窗口第一次打开时显示上次的页面（播放器记在界面状态文件 `settings.lastPage`），不存在则第一页。没有界面时 `unavailable`。
+- 页面所属插件停用（或 `dispose`）时页面移除：正在显示的话切到同一分类的第一页，分类空了切到「常规」第一页（再没有则第一页），全空显示「没有可设置的项目」；插件重新启用后随它的注册恢复。页面集合变化时窗口重建，各页面的属性由播放器按最后写入的值恢复（`bind` 照常）。
+- 页面属性可以是运行时图片（§6.1）。
+- 测试：`host.settings.pages`（id → `{ category, title, order, file, component, global, props, emit(callback, ...args) }`）、`host.settingsPage(id)`；`host.settings.shows`（每次 `show` 的页面 id，省略为 `null`）、`host.settings.current`。
 
 ## 7. 对话框 `plugin.dialogs`
 
@@ -988,6 +1045,7 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 | 断言 | `host.window(id).props`（kebab-case 名）、`.visible`；`host.command(id).state`、`.declaration`；`host.conflicts`（`[绑定, 赢家, ...被压下]`）；`host.layout.bottom` / `.sidebar`（可直接改后 `host.emit("window.state", {})` 模拟别处的变化）；`host.osd`（显示过的提示）、`host.osdPanel`；`host.sequence`（提供者的标志）；`host.menus`（`showMenu` 记录）；`host.sent(method)`；`host.source`；`host.processing`、`host.subtitles`、`host.snapshots`、`host.jobs`、`host.producers` |
 | 模拟数据 | `host.stats`（`player.stats()` 的返回值，第 2 轮新增字段可省略，SDK 补 `null`）；`host.dataDirectory`（`plugin.dataDirectory`，`storage.json` 直接读写其中的真实文件）；`host.setSource({ audioTracks })`（`addAudioTrack` / `selectAudioTrack` 有默认处理，可用 `host.handle("audio.addTrack" \| "audio.selectTrack", …)` 注入失败）；`host.subtitles.tracks` 的条目可带 `codec`、`text`、`streamIndex` |
 | 通用能力 | `host.clipboard`（`{ text, images }`，预置 `text` 测 `readText`）；`host.power`（合并后的 `"off"` / `"playing"`）；`host.tools.handle(tool, (args) => ({ stdout, stderr }))`（未注入的工具 `unavailable`；抛 `HostError` 模拟失败），`host.tools.calls`；`host.system.revealed`、`.opened`；`host.subtitleLoads`（每次 `load` 的 `format`、`title`、`select` 与字节）；`host.system.urls`（`system.openUrl`） |
+| 第 3b 轮批次 2 | `host.drop(paths, options)`、`host.dropProviders`、`host.panelDrops`（§6.7）；`host.appearance`、`host.setAppearance(theme)`（§6.8）；`host.settings`、`host.settingsPage(id)`（§6.9） |
 | 第 3b 轮批次 1 | `host.timeline.layers` / `.marks`、`host.setTimelineLayer(pluginId, marks)`（§5.6）；`host.images`、`host.imagePath(value)`（§6.1）；`host.backdrop`、`host.setBackdropEffective(bool)`（§6.3） |
 | 第 3a 轮批次 2 | `host.bindings.overlay`（`"<plugin>/<command>"` → 输入，可预置；`bindings.set` 写入，`host.press` 按它匹配，可 `host.press("Mouse:LeftClick")`）；`host.packages`（`packages.list` 的返回值）、`host.setPackages(list)`（推送 `onChange`）、`host.packageCalls`；`host.audioDevices`（`setAudioDevice` 更新 `host.source.audioOutput`）；`host.subtitles.selection.secondary` |
 | 第 3a 轮 | `host.mainWindow`、`host.setMainWindow(patch)`（§6.6）；`host.app`（§3.5）；`host.dialogAnswers.push({ confirmed, checked })`、`host.confirms`（§7）；`host.chapters`（`player.chapters()` 在媒体就绪时返回它）；`setLoop` 写入 `host.source.loop`，打开新来源时清除 |
@@ -1190,3 +1248,17 @@ await plugin.player.setStepSeek({ seconds: settings.value.step }); // 第 1 档�
 - **关闭来源后视频区不再保留最后一帧**：来源阶段变为 `empty` 时播放器清空视频图像，视频区显示背景层或 `Theme.bg-video` 纯色（之前停在最后一帧）。纯音频文件就绪后同样不显示上一个视频的最后一帧。
 - **确认框挂在活动窗口上**：`dialogs.confirm` 的表单挂在当前活动的播放器窗口（如发起确认的工具窗口），不再总是挂主窗口（之前从工具窗口调用时主窗口被提到前面、工具窗口被盖住）。签名不变；插件里「确认后 `show()` 自己的窗口」的规避写法可以删除。
 - `layout.state` 与 `window.state` 事件的数据多了 `backdrop`（内部字段）。
+
+### 第 3b 轮批次 2：拖放、Theme 下发与外观、设置页与选项窗口（2026-10）
+
+兼容扩展：
+
+- `plugin.drops.provide`、`Panel.onDrop`（§6.7，新能力 `ui.drop`）。
+- `plugin.appearance`（§6.8；`set` 需要新能力 `ui.theme`），新事件 `appearance.changed`。
+- `plugin.settings.page` / `show`（§6.9，新能力 `ui.settings`）与播放器的选项窗口。
+
+默认行为变化（签名不变）：
+
+- **`Theme` 的颜色由播放器下发**：颜色 token 与 `accent-fill` 现在绑定到播放器设置的配色（宿主内部的 `ui/palette.slint`），默认仍是 Vestra 原值，未切换配色时外观与之前完全相同。插件 Slint 读 `Theme` 的写法不用改；`Theme` 的颜色仍是 `out` 属性，插件不能赋值（之前也不能）。切到参考播放器配色后，用硬编码颜色的插件界面不会跟着变，请改用 `Theme` token。
+- 每个工具窗口的源码末尾由播放器追加一行导出配色的 `export`（插件文件里不要定义名为 `VestraPalette` 的东西）。
+- `window.state` 的答复多了 `appearance`（内部字段）。

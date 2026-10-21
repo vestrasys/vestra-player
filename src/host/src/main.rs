@@ -7,6 +7,7 @@ mod commands;
 pub mod composition;
 mod confirm;
 mod core_actions;
+mod drops;
 mod effects;
 pub mod font_asset;
 pub mod font_carrier;
@@ -40,6 +41,7 @@ mod producer_input_delivery;
 #[cfg(feature = "producer-audio")]
 pub mod producer_binary;
 mod session;
+mod settings_window;
 mod source_backend;
 mod source_geometry;
 pub mod source_lease;
@@ -49,6 +51,7 @@ pub mod subtitle_format;
 pub mod subtitle_state;
 pub mod subtitle_style;
 pub mod subtitle_upload;
+mod theme;
 mod timeline;
 mod ui;
 mod ui_image;
@@ -140,6 +143,10 @@ enum Event {
     ModifiersReleased(u64, Vec<char>),
     /// `dialogs.confirm` answered: (requester, confirmed, checked).
     ConfirmDone(Reply, bool, bool),
+    /// A file dropped on a window: (window generation, path).
+    Dropped(u64, PathBuf),
+    /// The options window: (generation, tree index to show, or `None` = close).
+    Settings(u64, Option<usize>),
     RuntimeFault(u64, String),
 }
 #[derive(Deserialize)]
@@ -164,6 +171,8 @@ struct Floating {
     instance: slint_interpreter::ComponentInstance,
     owner: u64,
     generation: u64,
+    /// Its native window, for the pointer at a file drop.
+    native: Option<platform_window::HostWindowId>,
 }
 /// Read synchronously by the shell's key/mouse callbacks, without borrowing Host.
 #[derive(Default)]
@@ -283,6 +292,16 @@ struct Host {
     images: ui_image::Images,
     /// No video frame to show (R-U3): the backdrop is effective.
     no_video: bool,
+    /// File drops (R-U2).
+    drops: drops::Drops,
+    /// Settings pages and the options window (R-S1, R-H7).
+    settings: settings_window::Settings,
+    /// The category of the page the options window last showed.
+    settings_category: Option<usize>,
+    /// Vestra's `accent-fill` gradient, read from the first instance (R-H6).
+    vestra_fill: Option<SValue>,
+    /// A view missed the palette: deliver again on the next tick.
+    theme_pending: bool,
 }
 struct AreaReply {
     reply: Reply,
@@ -453,6 +472,8 @@ impl Host {
         self.power.remove_owner(owner);
         self.timeline.remove_owner(owner);
         self.images.release_owner(owner);
+        self.drops.remove_owner(owner);
+        self.settings.remove_owner(owner);
         self.on_top.remove(owner);
         self.cursor_playing.remove(owner);
         let step = self.step_seconds();
@@ -769,6 +790,8 @@ impl Host {
                     }
                 }
             }
+            Event::Dropped(generation, path) => self.drops.arrived(generation, path),
+            Event::Settings(generation, index) => self.settings_event(generation, index),
             Event::ConfirmDone(reply, confirmed, checked) => {
                 self.policy.activity(self.now_ms());
                 self.dialog_busy = false;
@@ -1087,11 +1110,15 @@ impl Host {
         instance
             .window()
             .set_position(slint::LogicalPosition::new(frame.x as f32, frame.y as f32));
+        self.theme_view(&instance);
+        let before = platform_window::capture_windows().ok();
         instance.show()?;
+        let native = before.and_then(|before| platform_window::associate_new(&before).ok());
         self.floating = Some(Floating {
             instance,
             owner,
             generation,
+            native,
         });
         Ok(())
     }
@@ -1181,6 +1208,9 @@ impl Host {
             window.window().on_winit_window_event(move |_, event| {
                 let dead = observe_key(&input, &modifiers, event);
                 release_modifiers(&input, &events, generation);
+                if let winit::event::WindowEvent::DroppedFile(path) = event {
+                    let _ = events.send(Event::Dropped(generation, path.clone()));
+                }
                 if inject_option_key(&input, &modifiers, &events, generation, event) {
                     return EventResult::PreventDefault;
                 }
@@ -1445,6 +1475,9 @@ impl Host {
         window.window().on_winit_window_event(move |_, event| {
             let _ = observe_key(&input, &modifiers, event);
             release_modifiers(&input, &events, generation);
+            if let winit::event::WindowEvent::DroppedFile(path) = event {
+                let _ = events.send(Event::Dropped(generation, path.clone()));
+            }
             if inject_option_key(&input, &modifiers, &events, generation, event) {
                 return EventResult::PreventDefault;
             }
@@ -1638,6 +1671,7 @@ impl Host {
         };
         let result = match build() {
             Ok(shell) => {
+                self.theme_view(&shell);
                 #[cfg(feature = "producer-audio")]
                 self.physical_revoke(producer_input::RevokeReason::WindowHidden);
                 self.native_before = native_before.clone();
@@ -2111,7 +2145,8 @@ impl Host {
         let facts = &self.window_facts;
         json!({"fullscreen":facts["fullscreen"] == true,
             "videoArea":{"width":facts["videoArea"]["width"].as_f64().unwrap_or(0.),
-                "height":facts["videoArea"]["height"].as_f64().unwrap_or(0.)}})
+                "height":facts["videoArea"]["height"].as_f64().unwrap_or(0.)},
+            "appearance":self.theme()})
     }
     /// `window.setVideoArea { width, height }`: resize the window so the video
     /// column gets that size (bars added, fitted to the screen). Answered when
@@ -2264,6 +2299,9 @@ impl Host {
             }
             "player.chapters" | "player.audioDevices" | "timeline.marks" => Some("playback.read"),
             "timeline.set" => Some("timeline.marks"),
+            "drops.provide" | "drops.withdraw" | "drops.listen" => Some("ui.drop"),
+            method if method.starts_with("settings.") => Some("ui.settings"),
+            "appearance.set" => Some("ui.theme"),
             "player.setLoop" | "player.setAudioDevice" => Some("playback.control"),
             "ui.mount" | "ui.setMount" | "ui.unmount" | "ui.interaction" | "ui.menu"
             | "layout.state" | "layout.set" => Some("ui.mount"),
@@ -2368,6 +2406,13 @@ impl Host {
             "layout.state" => self.layout_state()?,
             "timeline.marks" | "timeline.set" => {
                 self.timeline_dispatch(reply.owner, method, params)?
+            }
+            "drops.provide" | "drops.withdraw" | "drops.listen" => {
+                self.drops_dispatch(reply.owner, method, params)?
+            }
+            "appearance.set" => self.appearance_set(params)?,
+            method if method.starts_with("settings.") => {
+                return self.settings_dispatch(reply, method, params);
             }
             "window.state" => self.window_state(),
             "window.setVideoArea" => {
@@ -2932,6 +2977,7 @@ impl Host {
                     "packages.changed",
                     "bindings.changed",
                     "timeline.changed",
+                    "appearance.changed",
                 ]
                 .contains(&event)
                 {
@@ -2975,6 +3021,8 @@ impl Host {
                         }
                     }
                 }
+                let (theme, fill) = (self.theme().to_owned(), self.vestra_fill.clone());
+                let missed = std::cell::Cell::new(false);
                 let view = ui::open(
                     &path,
                     reply.owner,
@@ -2982,8 +3030,16 @@ impl Host {
                     &values,
                     &callbacks,
                     self.events.clone(),
+                    |instance| {
+                        if theme != "vestra"
+                            && theme::apply(instance, &theme, fill.as_ref()).is_err()
+                        {
+                            missed.set(true);
+                        }
+                    },
                 )
                 .inspect_err(|_| self.images.release_view(reply.owner, &view_key))?;
+                self.theme_pending |= missed.get();
                 self.views.insert((reply.owner, id), view);
                 Value::Null
             }
@@ -3480,6 +3536,11 @@ fn main() -> Result<()> {
         timeline: Default::default(),
         images: Default::default(),
         no_video: true,
+        drops: Default::default(),
+        settings: Default::default(),
+        settings_category: None,
+        vestra_fill: None,
+        theme_pending: false,
         commands: commands::Registry::new(),
     };
     host.register_host_commands()?;
@@ -3545,6 +3606,7 @@ fn main() -> Result<()> {
             .and_then(|before| platform_window::associate_new(before).ok());
         let host = Rc::new(RefCell::new(host));
         host.borrow().bind_shell(&window, 1)?;
+        host.borrow_mut().theme_view(&window);
         host.borrow_mut().shell = Some(window.clone_strong());
         let tick_host = host.clone();
         let timer = slint::Timer::default();
@@ -3565,6 +3627,11 @@ fn main() -> Result<()> {
                 host.package_tick();
                 host.notify_tick();
                 host.timeline_tick();
+                host.drops_tick();
+                host.settings_tick();
+                if host.theme_pending {
+                    host.theme_all();
+                }
                 if host.shell.is_some() {
                     let revision = host.commands.snapshot().revision;
                     if revision != menu_revision {
