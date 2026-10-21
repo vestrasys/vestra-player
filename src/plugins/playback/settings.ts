@@ -6,6 +6,8 @@ export type Settings = {
   openUrl: { pasteFromClipboard: boolean };
   preventSleep: boolean;
   hoverTime: boolean;
+  /** I07: off by default (needs ffmpeg and takes CPU). */
+  hoverThumbnail: boolean;
   /** B06: seconds of the four relative-seek tiers (← →, Ctrl, Shift, Ctrl+Alt). */
   seekSteps: SeekSteps;
 };
@@ -24,6 +26,7 @@ const defaults = (): Settings => ({
   openUrl: { pasteFromClipboard: true },
   preventSleep: true,
   hoverTime: true,
+  hoverThumbnail: false,
   seekSteps: [...DEFAULT_STEPS],
 });
 
@@ -71,6 +74,7 @@ export class SettingsStore {
       this.#value.openUrl.pasteFromClipboard = openUrl.pasteFromClipboard;
     if (typeof raw.preventSleep === "boolean") this.#value.preventSleep = raw.preventSleep;
     if (typeof raw.hoverTime === "boolean") this.#value.hoverTime = raw.hoverTime;
+    if (typeof raw.hoverThumbnail === "boolean") this.#value.hoverThumbnail = raw.hoverThumbnail;
     // A wrong length or any value out of range: the whole set falls back.
     const steps = raw.seekSteps;
     if (Array.isArray(steps) && steps.length === 4 && steps.every(validStep))

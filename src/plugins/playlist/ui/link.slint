@@ -1,30 +1,56 @@
-import { LineEdit } from "std-widgets.slint";
+// 添加链接… (UI-DLG-02 "输入链接" window, the same layout and input row as
+// playback's 打开链接…): explanation, the shared `UrlInputRow` (multi-line
+// input, [添加] [取消]) and a message line. Enter adds, Shift+Enter starts a
+// new line (one link per line), Esc cancels.
 import { Theme } from "@vestra/theme.slint";
-import { Button } from "@vestra/widgets.slint";
+import { UrlInputRow } from "@vestra/widgets.slint";
 
 export component AddLink inherits Window {
-    title: "添加链接到播放列表";
-    preferred-width: 420px;
-    min-width: 360px;
-    background: Theme.bg-panel;
     in-out property <string> message: "输入 HTTP(S) 链接；添加只选择，不自动播放";
     callback add-link(string);
     callback hide();
-    VerticalLayout {
-        padding: Theme.dialog-padding;
-        spacing: 8px;
-        Text { text: "网络内容链接"; color: Theme.text; font-size: Theme.font-body; }
-        url := LineEdit {
-            height: Theme.input-height;
-            placeholder-text: "https://…";
-            accepted => { root.add-link(self.text); }
+    title: "添加链接到播放列表";
+    width: 464px;
+    background: Theme.bg-bar;
+    // Esc also cancels while the focus is outside the input (after clicking a button).
+    FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                root.hide();
+                return accept;
+            }
+            return reject;
         }
-        Text { text: root.message; color: Theme.text-list; font-size: Theme.font-body; wrap: word-wrap; }
-        HorizontalLayout {
-            alignment: end;
+        VerticalLayout {
+            padding: Theme.dialog-padding;
             spacing: 6px;
-            Button { text: "添加"; clicked => { root.add-link(url.text); } }
-            Button { text: "取消"; clicked => { root.hide(); } }
+            Text {
+                text: "在下方输入要加入播放列表的网址，每行一个。";
+                color: Theme.text;
+                font-size: Theme.font-body;
+                height: Theme.label-height;
+            }
+            Text {
+                text: "例) https://example.com/video.mp4";
+                color: Theme.text-dim;
+                font-size: Theme.font-body;
+                height: Theme.label-height;
+            }
+            row := UrlInputRow {
+                placeholder: "https://…";
+                confirm-text: "添加";
+                accepted(text) => { root.add-link(text); }
+                cancelled => { root.hide(); }
+            }
+            Text {
+                text: root.message;
+                color: Theme.text-dim;
+                font-size: Theme.font-body;
+                // One line (the messages are short): a wrapped line would size the window by its zero-width height.
+                height: Theme.label-height;
+                overflow: elide;
+            }
         }
     }
+    init => { row.focus-input(); }
 }

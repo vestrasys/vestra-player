@@ -6,6 +6,7 @@ import type { OpenUrl } from "./open-url.ts";
 import type { Prompt } from "./prompt.ts";
 import type { Reopener } from "./reopen.ts";
 import type { SeekSteps, SettingsStore } from "./settings.ts";
+import type { Thumbnails } from "./thumbs.ts";
 import { stepText, type TimeJump } from "./time-jump.ts";
 
 /** The 播放控制 chapter's features (doc/product/feature-requirements.md). */
@@ -19,6 +20,7 @@ export type Features = {
   settings: SettingsStore;
   copy: (kind: CopyKind) => Promise<void>;
   jumpToStart: () => Promise<void>;
+  thumbnails: Thumbnails;
 };
 
 type Entry = {
@@ -193,6 +195,20 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
       });
       p.notify(`进度条悬停显示时间: ${f.settings.value.hoverTime ? "开" : "关"}`);
     }),
+    // I07: greyed out with 「需要 ffmpeg」 when ffmpeg cannot be found.
+    {
+      id: "hover-thumbnail",
+      path: ["播放", "进度条悬停显示缩略图"],
+      order: 243,
+      group: "playback-options",
+      action: () => {
+        f.settings.update((s) => {
+          s.hoverThumbnail = !s.hoverThumbnail;
+        });
+        p.notify(`进度条悬停显示缩略图: ${f.settings.value.hoverThumbnail ? "开" : "关"}`);
+      },
+      state: () => f.thumbnails.command(),
+    },
   ];
 }
 

@@ -485,15 +485,15 @@ player.setStepSeek(options: { seconds: number }): Promise<void>
 7. 单张生成失败时只显示时间，不提示。连续失败 5 次后，本来源不再尝试。
 8. 插件停用时结束正在运行的 ffmpeg。
 
-**界面**：同 I06 的弹出框，上部 160×90 图片（`image-fit: contain`，`#000` 底），下部时间文字。桥接 global 增加 `in-out property <bool> hover-thumbnail`、`in-out property <image> thumbnail`、`callback hover-changed(float)`、`callback hover-ended()`。
+**界面**：同 I06 的弹出框，上部 160×90 图片（`image-fit: contain`，`Theme.bg-video` 底：插件 Slint 不写硬编码颜色），下部时间文字。桥接 global 增加 `in-out property <bool> hover-thumbnail`、`in-out property <bool> has-thumbnail`（还没有图片时只画底色框）、`in-out property <image> thumbnail`、`callback hover-changed(float)`、`callback hover-ended()`。开关开着但当前来源不能出缩略图（网络、纯音频、连续失败 5 次）时 `hover-thumbnail` 为假，弹出框只有时间。
 
 **持久化**：`settings.json` 的 `hoverThumbnail: boolean`，默认 `false`。
 
-**核心依赖**：现有 `panels.mount`、`bind`、`player.stats()`。【核心新增】：
+**核心依赖**：现有 `panels.mount`、`bind`、`player.stats()`、`tools.run("ffmpeg")`。【核心新增】（第 3b 轮已提供，参考文档 §6.1）：
 
 ```ts
-// 把本插件 dataDirectory 下的图片文件包装成图片引用，作为面板 / 窗口属性值传入；宿主读取文件，转成 Slint image
-plugin.ui.image(path: string): ImageRef   // 绝对路径，PNG/JPEG，≤ 16 MB 且 ≤ 4096×4096，必须在本插件 dataDirectory 下
+// 把本插件 dataDirectory 或包目录下的图片文件包装成图片引用，作为面板 / 窗口属性值传入；宿主读取文件，转成 Slint image
+plugin.ui.image(path: string): ImageRef   // 绝对路径，PNG/JPEG，≤ 16 MB 且 ≤ 4096×4096，在本插件 dataDirectory 或包目录下（缩略图放 dataDirectory）
 type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
 type PropValue = Json | ImageRef;         // ImageRef 是不透明值，只能由 plugin.ui.image 生成
 ```
@@ -3269,6 +3269,12 @@ interface Chapter { index: number; title: string | null; start: number }   // st
 - 切换到没有章节的文件，旧标记立即消失，不残留。
 - 停用 marks 插件后，进度条上没有标记，A-B 区间（如果设过）仍然显示。
 - 单元测试：`host.timeline`（TestHost 需新增）记录发布内容；来源变化后层为空。
+
+**第 3b 轮实现说明（marks 一侧）**
+- 标记的 `title` 是章节名（标题或 `章节 N`）与书签标题本身，不含菜单行里的序号和时间（时间由 playback 的提示显示）。
+- 只设了 A 时一并发布 `{ kind: "marker", title: "A" }`（B23）；它属于本插件的层，所以开关关闭时也不显示。
+- 时间不在 `[0, 时长]` 内的标记（如文件变短后的旧书签）略去不发，避免核心以 `invalid` 拒绝整层；`ifCurrent` 由核心只按来源比较（维护者签名调整第 3 条）。
+- Alt+\（B23）的区段仍只用本插件的章节与书签，不读 `timeline.marks`。
 
 **参考播放器参考**：M:`101_0_9_23`「在进度条上显示书签/章节标记」；D:`Dialog(358)` 播放设置页中的「在进度条上显示书签/章节标记」「在顶部输出书签/章节」；S:3870。差异：参考播放器由程序自己绘制，我们分成「marks 发布、playback 绘制」两段。
 

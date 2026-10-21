@@ -10,6 +10,7 @@
     "events",
     "ui.window",
     "ui.osd",
-    "ui.dialog"
+    "ui.dialog",
+    "timeline.marks"
   ]
 }

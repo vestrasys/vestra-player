@@ -389,7 +389,7 @@ export component PlaylistSidebar inherits Rectangle {
                         clicked(x, y) => { PlaylistBridge.sort-menu(x, y); }
                     }
                 }
-                // C21 search box: about 24px high on #282828; width from `search-width`.
+                // C21 search box: about 24px high on `Theme.hover-bg` (UI-PL-09); width from `search-width`.
                 // The folded search box: a magnifier icon the size of the bar's other icons.
                 if root.folded: ToolTipArea {
                     x: root.bar-fixed;
@@ -430,7 +430,7 @@ export component PlaylistSidebar inherits Rectangle {
                         return reject;
                     }
                     Rectangle {
-                        background: #282828;
+                        background: Theme.hover-bg;
                         border-radius: Theme.radius-control;
                         clip: true;
                         search := TextInput {

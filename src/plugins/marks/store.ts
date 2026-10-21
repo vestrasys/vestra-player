@@ -38,19 +38,34 @@ export function jsonStore<T>(plugin: Scope, name: string, defaults: T, debounceM
 export const COUNTS = [null, 1, 2, 3, 5, 10] as const;
 export type Count = (typeof COUNTS)[number];
 
-type SavedSettings = { version: 1; abCount: Count };
+type SavedSettings = { version: 1; abCount: Count; showOnSeekbar: boolean };
 
-/** marks.json: `{ version: 1, abCount }` (B22's `showOnSeekbar` joins it in round 3b). */
+/** marks.json: `{ version: 1, abCount, showOnSeekbar }` (B23 loop count, B22 seek-bar switch). */
 export class Settings {
   readonly #store: JsonStore<SavedSettings>;
   constructor(plugin: Scope) {
-    this.#store = jsonStore<SavedSettings>(plugin, "marks", { version: 1, abCount: null }, timing.settingsWrite);
+    this.#store = jsonStore<SavedSettings>(
+      plugin,
+      "marks",
+      { version: 1, abCount: null, showOnSeekbar: true },
+      timing.settingsWrite,
+    );
   }
   get abCount(): Count {
     const value = (this.#store.value as { abCount?: unknown }).abCount;
     return (COUNTS as readonly unknown[]).includes(value) ? (value as Count) : null;
   }
   setAbCount(count: Count) {
-    this.#store.save({ version: 1, abCount: count });
+    this.#save({ abCount: count });
+  }
+  /** B22 在进度条上显示标记: on unless saved as `false`. */
+  get showOnSeekbar(): boolean {
+    return (this.#store.value as { showOnSeekbar?: unknown }).showOnSeekbar !== false;
+  }
+  setShowOnSeekbar(show: boolean) {
+    this.#save({ showOnSeekbar: show });
+  }
+  #save(change: Partial<SavedSettings>) {
+    this.#store.save({ version: 1, abCount: this.abCount, showOnSeekbar: this.showOnSeekbar, ...change });
   }
 }

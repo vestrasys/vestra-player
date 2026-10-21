@@ -45,6 +45,11 @@ export class Keyframes {
     this.#update();
   }
 
+  /** Whether the source with this id has video; `null` until `stats()` answered. */
+  video(sourceId: number): boolean | null {
+    return this.#video?.sourceId === sourceId ? this.#video.video : null;
+  }
+
   state(): CommandState {
     const s = this.#scope.player.state;
     let reason: string | null = null;

@@ -1,7 +1,28 @@
-import type { HostAction, Panel, Scope } from "../../sdk/plugin/index.ts";
+import type { HostAction, Json, Panel, Scope, TimelineMark } from "../../sdk/plugin/index.ts";
 import type { Playback } from "./controller.ts";
 import { time } from "./format.ts";
 import type { SettingsStore } from "./settings.ts";
+import type { Thumbnails } from "./thumbs.ts";
+
+/** The bar finds the hovered mark with a fixed-depth binary search (`bar.slint`): 2^13 marks at most. */
+export const MAX_MARKS = 8192;
+
+const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
+
+/**
+ * B22: `timeline.marks` as the seek line draws them, sorted by time (as the
+ * player merges them): `at` is the fraction of the duration, `clock` the
+ * mark's time for the hover tip 「标题  01:23」.
+ */
+export function seekMarks(marks: readonly TimelineMark[], duration: number | null): Json[] {
+  if (!duration || duration <= 0) return [];
+  return marks.slice(0, MAX_MARKS).map((mark) => ({
+    at: clamp01(mark.time / duration),
+    kind: mark.kind,
+    title: mark.title ?? "",
+    clock: time(mark.time),
+  }));
+}
 
 /** The bar's buttons that run core actions (same behaviour and text as the keys). */
 const CORE: ReadonlySet<string> = new Set<HostAction>([
@@ -20,8 +41,15 @@ const CORE: ReadonlySet<string> = new Set<HostAction>([
  * core's (`host.run`), except 打开 (this plugin's) and the volume slider, which
  * needs continuous values (`player.setOutput`, the same rules as volume ±).
  */
-export function wireBar(bar: Panel, scope: Scope, playback: Playback, settings: SettingsStore) {
+export function wireBar(bar: Panel, scope: Scope, playback: Playback, settings: SettingsStore, thumbnails: Thumbnails) {
   const { player } = scope;
+  let drawn: { marks: readonly TimelineMark[]; duration: number | null; rows: Json[] } | null = null;
+  const marks = (duration: number | null) => {
+    const current = scope.timeline.marks;
+    if (drawn?.marks !== current || drawn.duration !== duration)
+      drawn = { marks: current, duration, rows: seekMarks(current, duration) };
+    return drawn.rows;
+  };
   const sidebar = scope.panels.sidebar;
   const p = playback;
   /** The time label shows the remaining time instead of the elapsed one (UI-BAR-07). */
@@ -41,6 +69,15 @@ export function wireBar(bar: Panel, scope: Scope, playback: Playback, settings: 
       // I06: the bar computes the hover time from these, without a round trip.
       duration: state.duration ?? 0,
       hoverTime: settings.value.hoverTime,
+      // I07: the picture box, and the picture once there is one (kept while the next is made).
+      hoverThumbnail: thumbnails.active(state),
+      hasThumbnail: thumbnails.current !== null,
+      ...(thumbnails.current ? { thumbnail: thumbnails.current } : {}),
+      // B22: everyone's marks, and the A-B loop (whoever set it).
+      marks: marks(state.duration),
+      hasLoop: Boolean(state.loop && state.duration),
+      loopA: state.loop && state.duration ? clamp01(state.loop.a / state.duration) : 0,
+      loopB: state.loop && state.duration ? clamp01(state.loop.b / state.duration) : 0,
       canPause: p.canToggle(),
       playing: state.phase === "ready" && !state.paused,
       canStop: p.can("close"),
@@ -77,6 +114,8 @@ export function wireBar(bar: Panel, scope: Scope, playback: Playback, settings: 
       if (id === "mute") p.muteBusy = false;
     }
   });
+  bar.on("hoverChanged", (fraction: number) => thumbnails.hover(fraction));
+  bar.on("hoverEnded", () => thumbnails.hoverEnded());
   bar.on("toggleTime", () => {
     remaining = !remaining;
   });
