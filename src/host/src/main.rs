@@ -301,6 +301,9 @@ struct Host {
     no_video: bool,
     /// A backdrop is mounted, so mpv is told not to show cover art (R-U3).
     cover_art_off: bool,
+    /// Prototype (r4a §7.1): system PiP for this window; started once.
+    #[cfg(feature = "pip")]
+    pip: Option<(platform_window::HostWindowId, vestra_pip::Pip, bool)>,
     /// File drops (R-U2).
     drops: drops::Drops,
     /// Settings pages and the options window (R-S1, R-H7).
@@ -858,6 +861,20 @@ impl Host {
     fn now_ms(&self) -> u64 {
         self.clock.elapsed().as_millis().min(u64::MAX as u128) as u64
     }
+    /// Prototype (r4a §7.2): show the GPU renderer's texture in this window
+    /// (before `show()`, so the rendering notifier sees the setup).
+    #[cfg(feature = "gpu-render")]
+    fn attach_gpu(&self, shell: &slint_interpreter::ComponentInstance) {
+        let Some(gpu) = self.backend.gpu.get() else {
+            return;
+        };
+        let show = |shell: &slint_interpreter::ComponentInstance, image: slint::Image| {
+            let _ = shell.set_property("video-frame", image.into());
+        };
+        if let Err(error) = gpu.attach(shell, show) {
+            eprintln!("gpu-render: attach failed: {error}");
+        }
+    }
     /// Set the newest rendered frame on the video area (no copy: the renderer
     /// drew into this buffer).
     fn show_frame(&mut self) {
@@ -868,12 +885,68 @@ impl Host {
             return;
         };
         self.shown_size = Some((frame.buffer.width(), frame.buffer.height()));
+        #[cfg(feature = "pip")]
+        if let Some((_, pip, _)) = &self.pip {
+            let (width, height) = (
+                frame.buffer.width() as usize,
+                frame.buffer.height() as usize,
+            );
+            if let Err(error) = pip.enqueue(width, height, frame.buffer.as_bytes()) {
+                eprintln!("pip: {error}");
+            }
+        }
         let image = slint::Image::from_rgb8(frame.buffer);
         self.last_image = Some(image.clone());
         self.last_frame = Some(Instant::now());
         let _ = window.set_property("video-frame", image.into());
     }
+    /// Prototype (r4a §7.1, `VESTRA_PIP=1`): put the video into the system
+    /// picture-in-picture window as soon as AVKit allows it; its play/pause
+    /// and skip buttons run the core actions. A rebuilt window starts over.
+    #[cfg(feature = "pip")]
+    fn pip_tick(&mut self) {
+        let Some(id) = self
+            .native_window
+            .filter(|_| std::env::var_os("VESTRA_PIP").is_some())
+        else {
+            return;
+        };
+        if self
+            .pip
+            .as_ref()
+            .is_none_or(|(current, _, _)| *current != id)
+        {
+            self.pip = platform_window::ns_window(id)
+                .ok()
+                .and_then(|window| vestra_pip::Pip::new(&window))
+                .map(|pip| (id, pip, false));
+            if self.pip.is_some() {
+                eprintln!("pip: ready (supported: {})", vestra_pip::Pip::supported());
+            }
+        }
+        let Some((_, pip, started)) = &mut self.pip else {
+            return;
+        };
+        pip.set_paused(self.last_source["paused"] == true);
+        if !*started && pip.possible() {
+            eprintln!("pip: possible, starting");
+            pip.start();
+            *started = true;
+        }
+        let paused = self.last_source["paused"] == true;
+        for request in pip.requests() {
+            let action = match request {
+                vestra_pip::Request::Pause(pause) if pause == paused => continue,
+                vestra_pip::Request::Pause(_) => "play-pause",
+                vestra_pip::Request::Skip(seconds) if seconds < 0. => "seek-backward",
+                vestra_pip::Request::Skip(_) => "seek-forward",
+            };
+            let _ = self.run_core_action(action, None);
+        }
+    }
     fn window_tick(&mut self) {
+        #[cfg(feature = "pip")]
+        self.pip_tick();
         let Some(shell) = self.shell.as_ref().map(ComponentHandle::clone_strong) else {
             return;
         };
@@ -941,6 +1014,10 @@ impl Host {
             .observe(video, scale, fullscreen, Instant::now())
         {
             self.backend.target.set_area(area);
+            #[cfg(feature = "gpu-render")]
+            if let Some(gpu) = self.backend.gpu.get() {
+                gpu.set_size(area);
+            }
         }
         if let Some(log) = self.frame_log.as_mut() {
             log.tick(self.backend.frame.counts(), self.shown_size, Instant::now());
@@ -1701,6 +1778,8 @@ impl Host {
                 shell.window().set_position(old.window().position());
                 shell.window().set_fullscreen(old.window().is_fullscreen());
             }
+            #[cfg(feature = "gpu-render")]
+            self.attach_gpu(&shell);
             shell.show()?;
             Ok(shell)
         };
@@ -3523,6 +3602,13 @@ fn main() -> Result<()> {
     }
     let mut observed_source = Value::Null;
     let (events, receiver) = mpsc::channel();
+    // Prototype (r4a §7.2): GPU rendering needs a window; headless and
+    // `VESTRA_SOFTWARE_RENDER=1` keep the software renderer.
+    #[cfg(feature = "gpu-render")]
+    backend::GPU.store(
+        !headless && std::env::var_os("VESTRA_SOFTWARE_RENDER").is_none(),
+        std::sync::atomic::Ordering::Relaxed,
+    );
     let backend = Backend::start(events.clone(), silent)?;
     // `plugin.app`, handed to every plugin process when it starts.
     let ffmpeg = &backend.versions["ffmpeg"];
@@ -3602,6 +3688,8 @@ fn main() -> Result<()> {
         images: Default::default(),
         no_video: true,
         cover_art_off: false,
+        #[cfg(feature = "pip")]
+        pip: None,
         drops: Default::default(),
         settings: Default::default(),
         settings_category: None,
@@ -3665,6 +3753,8 @@ fn main() -> Result<()> {
                 .window()
                 .set_position(slint::LogicalPosition::new(frame.x as f32, frame.y as f32));
         }
+        #[cfg(feature = "gpu-render")]
+        host.attach_gpu(&window);
         window.show()?;
         host.native_before = native_before.clone();
         host.native_window = native_before

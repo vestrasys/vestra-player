@@ -282,6 +282,121 @@ interface ViewSettings {
 
 需要用户回答的一句话：**C-GPU 选 A（放弃 HDR / 着色器 / 运动补偿）、B（允许隔离的 `unsafe` 渲染模块，先做原型）、C（试 mpv 原生子视图）还是 D（等上游，期间按 A）？**
 
+### 7.3 原型结果（2026-10-21，维护者）
+
+按 §7.1、§7.2 的用户裁决做了两个原型，各自单独提交：`7100e1a`「Prototype: GPU render (feature gpu-render)」、`36bc717`「Prototype: picture-in-picture (feature pip)」。基于 `rebuild/features-r4a` `cf2f448`。
+
+**隔离方式（两个原型相同）**
+
+- `unsafe` 只出现在 `src/host/unsafe/render/`（crate `vestra-gpu-render`）和 `src/host/unsafe/pip/`（crate `vestra-pip`）。两个 crate 都是 `src/host/Cargo.toml` 新增 `[workspace]` 的成员，共用宿主的 `Cargo.lock`。宿主默认的 `cargo test` / `clippy` 仍然只检查宿主包。
+- 宿主主包保持 `unsafe_code = "forbid"`。`grep -rnw unsafe src/host/src` 除 `#![forbid(unsafe_code)]` 行外结果为空。
+- 每个 `unsafe` 块、`unsafe impl` 都带 `// SAFETY:` 注释（脚本逐块检查，没有遗漏）。私有的 `unsafe fn` 写了 `# Safety` 前置条件。两个 crate 对外只有安全类型和函数。
+- 宿主用 cargo feature 接入：`gpu-render`、`pip`，默认都关。宿主里的接入代码全部在 `#[cfg(feature = …)]` 下，默认构建的行为与代码路径不变。
+- 检查：默认 feature 下 `cargo fmt --check`、`cargo clippy --locked --all-targets -- -D warnings`、`cargo test --locked`（220 个）全过；`--features gpu-render`、`--features pip`、`--features "gpu-render pip"` 的 clippy `-D warnings` 与 release 构建全过；两个 crate 自己的测试各 1 个，都通过（`cargo test -p vestra-gpu-render -p vestra-pip`）。
+
+#### 7.3.1 原型 1：GPU 渲染（`gpu-render`）
+
+**做法**：libmpv 在自己的线程、自己的离屏 CGL 上下文（OpenGL 4.1 core）里，经 `rsmpv::new_opengl` 渲染到 3 块 IOSurface 轮转。每个 Slint 窗口在 `set_rendering_notifier` 的 `BeforeRendering` 里（femtovg = OpenGL，每个窗口一个 GL 上下文）用 `CGLTexImageIOSurface2D` 把最新一块绑成纹理，`glBlitFramebuffer` 拷进自己的 2D 纹理，再用 `BorrowedOpenGLTextureBuilder` 设到 `video-frame`。帧到达时用 `upgrade_in_event_loop` 请求重画。渲染线程照旧阻塞到帧的目标显示时间，UI 线程只做 GPU 拷贝。硬件解码默认 `hwdec=auto-safe`（本机实测得到 `videotoolbox`），可用 `VESTRA_HWDEC` 覆盖。headless 与 `VESTRA_SOFTWARE_RENDER=1` 仍走软件渲染，作为后备。
+
+**为什么不直接在 Slint 的上下文里建 mpv 渲染上下文**：探针 `ctxswap`（scratchpad `r4/gpu/ctxswap`）实测，播放中释放 mpv 渲染上下文，**整个播放就停了**：`time-pos` 变成 unavailable，再建一个新的上下文、设 `vid=auto` 都恢复不了，只能重新 `loadfile`。另外，旧上下文还在时建第二个会失败（-20）。宿主每次挂载变化都会重建 shell 窗口，每个窗口是新的 GL 上下文，所以 mpv 渲染上下文不能跟窗口绑在一起。IOSurface 跨上下文共享就是为了这一点：渲染上下文跟播放器同生命周期，窗口只负责显示。
+
+**数字**
+
+| 项 | 结果 |
+| --- | --- |
+| crate 行数 | `src/lib.rs` 500 行（含 1 个测试，46 行），`Cargo.toml` 20 行。`rustfmt.toml` 设了 `use_small_heuristics = "Max"`（宽度仍是 100），按默认格式是 532 行 |
+| `unsafe` 块 | 19 个（其中 1 个在测试里），块内共 131 行（含花括号） |
+| 其它 `unsafe` | `unsafe extern "C"` 1 个（7 个 CGL 函数）、`unsafe impl Send/Sync` 2 个、私有 `unsafe fn` 4 个 |
+| 宿主接入 | `backend.rs` +47、`main.rs` +29（全部在 cfg 下） |
+| 安全接口 | `Renderer::start(Arc<Mpv>, size)`、`Handle::set_size`、`Handle::frames`、`Handle::attach(&component, show)` |
+
+4K 片源 CPU（不开窗口，`/usr/bin/time` 统计整个进程，10 s，`testsrc2` 3840×2160 30 fps H.264，`ao=null`，单位是一个核的百分比；软件列用 §1.1 的 `sizebench`、RGB24；三种方式都稳定 30 fps，没有丢帧）：
+
+| 渲染目标 | 软件渲染（现状） | GPU，`hwdec=no` | GPU，`videotoolbox` |
+| --- | --- | --- | --- |
+| 1920×1080 | 95% | 63% | **16%** |
+| 2560×1440 | 120% | 68% | **13%** |
+| 3840×2160 | 133% | 68% | **12%** |
+
+GPU 渲染把 4K 的 CPU 从 1.2–1.3 个核降到约 0.13 个核（约 −90%）；只换渲染、不开硬件解码，也能省一半。这些数字不含窗口里 Slint 的拷贝和合成（GPU 工作），也不含软件路径里 femtovg 每帧上传纹理的 UI 线程开销（§1.1 风险第 1 条），所以窗口里的实际差距应该更大，要由 GUI 实测确认（下面的步骤）。
+
+**播放连续性**
+
+- 换来源：crate 测试里同一个渲染器连续两次 `loadfile`，第二次之后照常出帧。宿主换来源不碰渲染器。
+- 改尺寸：测试里把渲染尺寸从 64×64 改到 32×16，下一帧就是新尺寸；暂停时改尺寸会重画一帧。
+- 界面重建：mpv 渲染上下文只属于渲染线程，窗口重建不碰它，所以播放不会中断（读代码分析，依据是上面的 `ctxswap` 实测）。新窗口在 `show()` 之前挂上渲染通知；第一次重画时直接拷最新一块 IOSurface，暂停中也能马上显示画面。旧窗口在 Teardown 时只删自己的纹理。帧到达时会请求最近 4 个挂过的窗口重画（已关闭的会忽略），所以即使某次重建失败、旧窗口被保留，它也继续收到帧。这一条还要 GUI 实测。
+- 方向：测试用上白下黑的 lavfi 画面验证，IOSurface 第一行就是画面顶部，对应 Slint 的 `TopLeft`。
+- 附带验证（E17）：在同一测试里设置 mpv `glsl-shaders` 为一个反色着色器，输出的上下颜色反过来了。说明 libmpv 的 OpenGL 渲染路径支持用户 GLSL 着色器。`interpolation=yes` + `video-sync=display-resample` 能设置成功，效果没有验证。HDR 色调映射（E16）没有 HDR 片源，没有验证。
+
+**限制与原型没做的部分**（正式做时要补）
+
+1. 依赖 Slint 的 femtovg（OpenGL）渲染器。如果 Slint 换成 Skia / wgpu，通知里给的就不是 `NativeOpenGL`，原型只会不显示视频，不会出错，这时需要重写显示端。macOS 已弃用 OpenGL（macOS 26 仍可用，最高 4.1）。
+2. 只在 shell 窗口显示视频，浮动窗口不显示。
+3. 没接上软件路径的几处细节：来源方向准备期间的发布门（旋转片源可能闪一帧未旋转的画面）；C-SIZE 的来源封顶和 zoom 放大目标（GPU 直接按物理视频区渲染，mpv 自己缩放）；`VESTRA_FRAME_LOG`、`stats().framesShown`；`stats().backend` 仍写「软件渲染」；生产者（NES）画面在窗口改尺寸时可能被 GPU 图像覆盖。
+4. 同步方式是渲染线程 `glFinish` 加 3 块轮转。窗口落后两帧以上才会读到正在写的一块，理论上可能撕裂，要 GUI 观察。
+5. 截图（`take_snapshot`）是否包含借用纹理没有验证。离线导出不受影响（FFmpeg 独立解码）。
+
+**结论与建议：有条件做。** 换来的收益很大：4K CPU 约 −90%；`videotoolbox` 零拷贝；E17 着色器已经能用；E16、E18 至少有了实现路径。代价是一个 500 行、19 个 `unsafe` 块的隔离 crate，加上对 femtovg 的依赖。条件是：(1) 下面的 GUI 实测通过（画面方向、无撕裂、重建不中断、窗口里 CPU 明显下降）；(2) 用户接受这块 `unsafe` 范围和「锁定 femtovg 渲染器」这个约束；(3) 正式版保留软件渲染作为后备（headless、出错时、用户开关），并补齐上面第 3 条。正式版估计 crate 约 700 行、宿主约 400 行，可以单独做一轮（4b）。
+
+#### 7.3.2 原型 2：画中画（`pip`）
+
+**做法**：`AVSampleBufferDisplayLayer` 作为窗口 content view 图层的 1×1 子图层（AVKit 只对在窗口里的图层提供画中画），`AVPictureInPictureController` 用 sample buffer 内容源。宿主 `show_frame` 每拿到一帧软件渲染的 RGB，就拷进一个 IOSurface 支持的 BGRA `CVPixelBuffer`，包成 `CMSampleBuffer`，标上 `DisplayImmediately` 后入队。这样不需要时间基（`CMTimebase`）。播放委托用 `define_class!` 实现：把画中画窗口里的播放 / 暂停、前进 / 后退转成 `Request`，宿主在 `window_tick` 里取出，按核心动作 `play-pause` / `seek-forward` / `seek-backward` 执行。内容报告为直播（时间范围无限），所以画中画窗口没有进度条。`VESTRA_PIP=1` 时，宿主在 AVKit 报告「可以开始」后自动启动画中画，并往 stderr 打 `pip: ready …` / `pip: possible, starting` 两行，方便诊断。
+
+**数字**
+
+| 项 | 结果 |
+| --- | --- |
+| crate 行数 | `src/lib.rs` 369 行（含 1 个测试，22 行），`Cargo.toml` 23 行 |
+| `unsafe` 块 | 15 个（其中 1 个在测试里），块内共 119 行（含花括号） |
+| 其它 `unsafe` | `define_class!` 里的 `unsafe impl` 2 个（NSObjectProtocol、播放委托协议），`#[unsafe(super(NSObject))]` 1 处，`#[unsafe(method(…))]` 5 处 |
+| 宿主接入 | `main.rs` +61（全部在 cfg 下） |
+| 安全接口 | `Pip::supported/new(&NSWindow)/possible/active/start/stop/set_paused/requests/render_size/enqueue(w, h, rgb)` |
+| headless 已验证 | `isPictureInPictureSupported` 在本机返回 `true`；RGB→BGRA 像素缓冲、带 `DisplayImmediately` 的 sample buffer 创建成功（crate 测试） |
+
+**遇到的系统限制**
+
+1. **需要 NSView 宿主层**：显示图层必须在窗口的图层树里，所以原型对 winit 的 content view 调了 `setWantsLayer(true)`，再加子图层。这个 view 同时被 Slint 的 OpenGL 上下文使用，加图层会不会影响 GL 绘制、1×1 的图层能不能让 `isPictureInPicturePossible` 变成 `true`，都只能 GUI 实测。
+2. **主线程**：控制器、委托都只能在主线程使用（`MainThreadMarker`）。宿主的帧本来就在 UI 线程（即主线程）交付，所以没有额外的线程跳转。
+3. **系统版本**：sample buffer 画中画要 macOS 12+。原型用了图层的 `sampleBufferRenderer`（macOS 14+），因为 objc2 把图层上旧的 `enqueueSampleBuffer` 标成了已弃用，`clippy -D warnings` 不让用。要支持 12–13，就得允许已弃用 API。
+4. **权限 / 签名**：macOS 上画中画不需要权限弹窗、`Info.plist` 键或额外 entitlement（iOS 才需要后台音频模式）。未签名的开发构建也能编译、创建对象。能不能不经用户点击就自动启动（`startPictureInPicture`）还没验证，这一点决定 R-W5 能不能由插件直接触发。
+5. **每帧拷贝**：RGB24 → BGRA 一次 CPU 拷贝，并且每帧新建 `CVPixelBuffer`，没有用池。1560×1000 时约 6 MB/帧。正式版应该用 `CVPixelBufferPool`；如果和 GPU 渲染一起做，可以直接用 `CVPixelBufferCreateWithIOSurface` 包住渲染出的 IOSurface，零拷贝。
+6. **与 GPU 渲染的组合**：开 `gpu-render` 时不会调用 `show_frame`，画中画收不到帧（两个 feature 能一起编译，但不能一起用）。
+7. **界面重建**：图层挂在旧窗口上，原型的做法是重建后重新创建画中画，这时画中画窗口会关掉再打开。正式版应该把图层移到新窗口。
+8. 前进 / 后退用的是用户设置的跳转步长，不是画中画给的间隔。
+
+**结论与建议：有条件做，先看 GUI 实测。** `unsafe` 的范围比预估小（15 个块、119 行；§7.1 估计约 500 行），对外接口是安全的。是否值得做取决于 GUI 实测：系统画中画能否在这个宿主里启动、出画面、按钮回传。如果第 1 条或第 4 条实测不行（GL view 不能挂图层，或者必须用户点击才能启动但宿主拿不到这个手势），建议按 §7.1 的 A 保留迷你尺寸。如果可行，建议和 C-GPU 一起排期，共用 IOSurface，省掉每帧拷贝。
+
+#### 7.3.3 协调者 GUI 实测步骤
+
+构建（同一个二进制含两个 feature，用环境变量切换；也可以只开一个）：
+
+```sh
+cd src/host
+CARGO_TARGET_DIR=/tmp/vestra-review-target/r4-proto-gpu cargo build --locked --release --features "gpu-render pip"
+BIN=/tmp/vestra-review-target/r4-proto-gpu/release/vestra-host
+S=/private/tmp/claude-501/-Users-ziyang-Develop-vestra-player/7b0dd90c-cb6e-48be-9332-6cfbc6f60a9d/scratchpad
+```
+
+片源：`$S/r4/media/t2160-30s.mp4`（3840×2160 30 fps，30 s）、`$S/r4/media/t1080.mp4`。CPU 采样脚本：`zsh $S/r4/gpu/gui-cpu.sh 标签 秒数`。它用 `top` 每秒采一次宿主进程（`host` 或 `vestra-host`，也可以用 `PID=…` 指定），去掉第一个样本，把平均值和最大值追加到 `$S/r4/gpu/gui-cpu.txt`。headless 对照可以重跑 `bash $S/r4/gpu/cpu.sh`。
+
+| # | 场景 | 操作 | 期望 / 记录 |
+| --- | --- | --- | --- |
+| G1 | 软件渲染基线 | `VESTRA_SOFTWARE_RENDER=1 zsh $S/launch.sh $BIN`，打开 4K 片源播放；默认窗口时 `zsh $S/r4/gpu/gui-cpu.sh "sw window" 20`，全屏后 `… "sw fullscreen" 20` | 记录 CPU，参考 §1.1（约 120–130%） |
+| G2 | GPU + videotoolbox | `zsh $S/launch.sh $BIN`，同样的片源和两种窗口状态，标签用 `gpu window` / `gpu fullscreen` | 画面正立、清晰，和 G1 截图一致；屏幕提示、信息块、全屏浮动底栏仍然画在视频上面；CPU 明显低于 G1（headless 是 13%）；`stats().framesDropped` 不增长 |
+| G3 | GPU，不开硬件解码 | `VESTRA_HWDEC=no zsh $S/launch.sh $BIN`，标签 `gpu-nohw …` | 记录 CPU（headless 是 68%） |
+| G4 | 拖动 / 撕裂 | G2 状态下连续拖窗口角 10 秒；1080p 横向平移内容播放 30 秒 | 画面跟着窗口尺寸变化，不变形，没有撕裂或闪烁的上下错位 |
+| G5 | 界面重建不中断 | G2 播放中做一次会重建 shell 的操作（停用再启用一个挂界面的插件，例如 visualizer 或侧栏插件），在暂停和播放两种状态各做一次 | 播放时间连续往前走，不重新加载，不黑屏超过一两帧；暂停时新窗口马上显示静止画面 |
+| G6 | 换来源 | G2 播放中打开另一个文件，再打开第一个 | 每次都出画面；没有残留的旧画面 |
+| G7 | 截图 | G2 下用含效果截图 / 窗口快照 | 记录截图里是否有视频（原型没有验证） |
+| P1 | 画中画启动 | `VESTRA_PIP=1 VESTRA_SOFTWARE_RENDER=1 zsh $S/launch.sh $BIN`，打开 1080p 片源播放；看 `$S/launch.out` 里有没有 `pip: ready (supported: true)` 和 `pip: possible, starting` | 系统画中画小窗出现并播放；记录是否不经点击就自动启动了 |
+| P2 | 画中画按钮 | 在画中画小窗里点暂停 / 播放、前进 / 后退 | 宿主跟着暂停 / 继续，进度跳转；在宿主里暂停时，小窗按钮的状态跟着变 |
+| P3 | 主窗口 | 画中画开着时看主窗口的视频区，再关掉画中画 | 主窗口画面正常（GL 绘制没被子图层影响）；关闭后能回到主窗口 |
+| P4 | 画中画 CPU | P1 状态下 `zsh $S/r4/gpu/gui-cpu.sh "pip sw" 20`，和关闭画中画时对比 | 记录每帧拷贝的额外开销 |
+
+如果 P1 没有出现 `pip: possible, starting`，说明 AVKit 一直不认为画中画可用（最可能是 1×1 子图层或 GL view 的图层问题）。如果出现了但没有小窗，说明启动需要用户手势。两种情况都按上面「结论与建议」处理。
+
+原型工具（scratchpad，不进仓库）：`r4/gpu/ctxswap`（渲染上下文生命周期探针）、`r4/gpu/gpubench`（无窗口 GPU 基准，依赖仓库里的 `vestra-gpu-render`）、`r4/gpu/cpu.sh`（headless CPU 对比）、`r4/gpu/gui-cpu.sh`（GUI CPU 采样）、`r4/gpu/count_unsafe.py`（统计 `unsafe` 块、行数和 SAFETY 注释）、`r4/gpu/invert.glsl`（E17 探针着色器）。
+
 ## 8. 记录
 
 ### 8.1 基线
