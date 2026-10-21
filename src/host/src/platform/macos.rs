@@ -101,19 +101,10 @@ impl PipWindow {
             )
         })
     }
-    /// The zero-copy path for frames the GPU renderer drew into an IOSurface
-    /// (BGRA): the merge point with the GPU render line (round 2026-10
-    /// render-pip §3).
-    #[allow(dead_code)]
-    pub fn push_surface(
-        &self,
-        surface: &vestra_pip::IOSurfaceRef,
-    ) -> std::result::Result<(), String> {
-        self.0.enqueue_surface(surface)
-    }
 }
 
 impl crate::pip::Surface for PipWindow {
+    type Frame = GpuFrame;
     fn place(&self, id: HostWindowId, area: Rect) -> bool {
         use objc2_foundation::{NSPoint, NSRect, NSSize};
         let area = NSRect::new(
@@ -124,6 +115,11 @@ impl crate::pip::Surface for PipWindow {
     }
     fn push_rgb(&self, width: usize, height: usize, rgb: &[u8]) -> std::result::Result<(), String> {
         self.0.enqueue(width, height, rgb)
+    }
+    /// Zero copy: the GPU renderer's BGRA IOSurface, wrapped as is. The
+    /// renderer does not draw into a surface the system still shows.
+    fn push_surface(&self, surface: &GpuFrame) -> std::result::Result<(), String> {
+        self.0.enqueue_surface(surface)
     }
     fn start(&self) -> bool {
         self.0.start()
@@ -543,6 +539,8 @@ pub fn default_ffmpeg() -> PathBuf {
 
 // ---------------------------------------------------------------- rendering
 
+/// A frame the GPU renderer published (`GpuHandle::latest`): a BGRA IOSurface.
+pub use vestra_gpu_render::IOSurfaceRef as GpuFrame;
 /// libmpv draws with OpenGL in its own offscreen CGL context into IOSurfaces;
 /// each Slint (femtovg) window copies the newest one into its own texture.
 /// The raw GL and CGL calls are in the `vestra-gpu-render` crate.

@@ -21,10 +21,14 @@ impl PipWindow {
 }
 
 impl crate::pip::Surface for PipWindow {
+    type Frame = super::GpuFrame;
     fn place(&self, _window: HostWindowId, _area: Rect) -> bool {
         match *self {}
     }
     fn push_rgb(&self, _width: usize, _height: usize, _rgb: &[u8]) -> Result<(), String> {
+        match *self {}
+    }
+    fn push_surface(&self, _frame: &super::GpuFrame) -> Result<(), String> {
         match *self {}
     }
     fn start(&self) -> bool {

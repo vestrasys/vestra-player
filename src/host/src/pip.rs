@@ -15,12 +15,16 @@ pub const TIMEOUT_MS: u64 = 5000;
 
 /// The system PiP window, as the controller uses it.
 pub trait Surface {
+    /// A frame the GPU renderer drew (`platform::GpuFrame`).
+    type Frame: ?Sized;
     /// Keep the source layer on `area` of `window`'s content (logical
     /// points, top-left origin). `false`: not placed (no such window, or an
     /// empty area).
     fn place(&self, window: HostWindowId, area: Rect) -> bool;
     /// One frame of `height` rows of `width` RGB24 pixels.
     fn push_rgb(&self, width: usize, height: usize, rgb: &[u8]) -> Result<(), String>;
+    /// One frame the GPU renderer drew, shown without a copy.
+    fn push_surface(&self, frame: &Self::Frame) -> Result<(), String>;
     /// Ask the system to open the window; `false` when it cannot yet.
     fn start(&self) -> bool;
     fn stop(&self);
@@ -76,6 +80,8 @@ pub struct PictureInPicture<S> {
     asked: bool,
     /// A frame went to the surface since it was made.
     fed: bool,
+    /// The number of the last GPU frame pushed (each goes once).
+    gpu_frame: Option<u64>,
 }
 
 impl<S: Surface> Default for PictureInPicture<S> {
@@ -88,6 +94,7 @@ impl<S: Surface> Default for PictureInPicture<S> {
             stopping: false,
             asked: false,
             fed: false,
+            gpu_frame: None,
         }
     }
 }
@@ -112,6 +119,21 @@ impl<S: Surface> PictureInPicture<S> {
                 Ok(()) => self.fed = true,
                 Err(error) => eprintln!("pip: {error}"),
             }
+        }
+    }
+    /// The GPU renderer's frame number `sequence` (render thread's frame
+    /// callback, or the newest frame when starting paused). A frame already
+    /// pushed is skipped.
+    pub fn push_surface(&mut self, sequence: u64, frame: &S::Frame) {
+        let Some(surface) = &self.surface else {
+            return;
+        };
+        if self.gpu_frame == Some(sequence) {
+            return;
+        }
+        match surface.push_surface(frame) {
+            Ok(()) => (self.fed, self.gpu_frame) = (true, Some(sequence)),
+            Err(error) => eprintln!("pip: {error}"),
         }
     }
     /// `window.setPictureInPicture { on }`. `Ok(Some)`: answered now;
@@ -157,6 +179,7 @@ impl<S: Surface> PictureInPicture<S> {
         self.surface = Some(create()?);
         self.owner = Some(reply.owner);
         (self.stopping, self.asked, self.fed) = (false, false, false);
+        self.gpu_frame = None;
         self.pending = Some(Pending {
             reply,
             on,
@@ -281,6 +304,7 @@ impl<S: Surface> PictureInPicture<S> {
         self.active = false;
         self.owner = None;
         (self.stopping, self.asked, self.fed) = (false, false, false);
+        self.gpu_frame = None;
     }
 }
 
@@ -297,12 +321,15 @@ mod tests {
         started: u32,
         stopped: u32,
         frames: u32,
+        /// GPU frames pushed, by their `u32` stand-in.
+        surfaces: Vec<u32>,
         placed: Option<(HostWindowId, Rect)>,
         playback: Option<Playback>,
     }
     #[derive(Clone, Default)]
     struct Fake(Rc<RefCell<Log>>);
     impl Surface for Fake {
+        type Frame = u32;
         fn place(&self, window: HostWindowId, area: Rect) -> bool {
             self.0.borrow_mut().placed = Some((window, area));
             area.width >= 1. && area.height >= 1.
@@ -310,6 +337,10 @@ mod tests {
         fn push_rgb(&self, width: usize, height: usize, rgb: &[u8]) -> Result<(), String> {
             assert_eq!(rgb.len(), width * height * 3);
             self.0.borrow_mut().frames += 1;
+            Ok(())
+        }
+        fn push_surface(&self, frame: &u32) -> Result<(), String> {
+            self.0.borrow_mut().surfaces.push(*frame);
             Ok(())
         }
         fn start(&self) -> bool {
@@ -491,6 +522,41 @@ mod tests {
         assert_eq!(fake.0.borrow().stopped, 0);
         pip.remove_owner(2);
         assert_eq!(fake.0.borrow().stopped, 1);
+    }
+
+    #[test]
+    fn gpu_frames_feed_the_window_once_each_and_only_while_it_exists() {
+        let fake = Fake::default();
+        let mut pip = PictureInPicture::default();
+        pip.push_surface(1, &10);
+        let made = fake.clone();
+        pip.request(reply(1), true, &FACTS, 0, move || Ok(made))
+            .unwrap();
+        assert!(pip.needs_frame());
+        // The newest frame when starting, then the frame callback's (the
+        // same frame twice goes once).
+        pip.push_surface(4, &40);
+        pip.push_surface(4, &40);
+        assert!(!pip.needs_frame());
+        fake.0.borrow_mut().possible = true;
+        assert!(pip.tick(&FACTS, place(), &PLAYING, 16).is_empty());
+        assert_eq!(fake.0.borrow().started, 1, "a GPU frame counts as fed");
+        pip.push_surface(5, &50);
+        assert_eq!(fake.0.borrow().surfaces, [40, 50]);
+        assert_eq!(fake.0.borrow().frames, 0, "no CPU copy");
+        fake.emit(PipEvent::Started);
+        pip.tick(&FACTS, place(), &PLAYING, 32);
+        fake.emit(PipEvent::Stopped { restored: true });
+        pip.tick(&FACTS, place(), &PLAYING, 48);
+        assert!(!pip.feeding());
+        pip.push_surface(6, &60);
+        assert_eq!(fake.0.borrow().surfaces, [40, 50], "closed: nothing goes");
+        // A new window takes the same frame number again.
+        let made = fake.clone();
+        pip.request(reply(1), true, &FACTS, 100, move || Ok(made))
+            .unwrap();
+        pip.push_surface(5, &50);
+        assert_eq!(fake.0.borrow().surfaces, [40, 50, 50]);
     }
 
     #[test]
