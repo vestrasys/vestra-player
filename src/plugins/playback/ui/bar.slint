@@ -4,6 +4,21 @@
 import { Theme } from "@vestra/theme.slint";
 import { Slider } from "@vestra/widgets.slint";
 
+// B22: one mark of `timeline.marks`; `at` is the fraction of the duration,
+// `kind` chapter / bookmark / marker, `clock` the mark's time as text.
+export struct SeekMark {
+    at: float,
+    kind: string,
+    title: string,
+    clock: string,
+}
+
+// A half-open index range of the binary search over the marks.
+struct MarkRange {
+    lo: int,
+    hi: int,
+}
+
 export global PlaybackBridge {
     in-out property <string> elapsed-label: "--:--";
     in-out property <string> total-label: "--:--";
@@ -12,6 +27,15 @@ export global PlaybackBridge {
     // I06: source duration in seconds and the 进度条悬停显示时间 option.
     in-out property <float> duration;
     in-out property <bool> hover-time: true;
+    // I07: the picture box (option on, a local file with video) and the picture once made.
+    in-out property <bool> hover-thumbnail;
+    in-out property <bool> has-thumbnail;
+    in-out property <image> thumbnail;
+    // B22: marks sorted by time, and the A-B loop, as fractions of the duration.
+    in-out property <[SeekMark]> marks;
+    in-out property <bool> has-loop;
+    in-out property <float> loop-a;
+    in-out property <float> loop-b;
     in-out property <bool> can-pause;
     in-out property <bool> playing;
     in-out property <bool> can-stop;
@@ -30,6 +54,9 @@ export global PlaybackBridge {
     callback seek-changed(float);
     callback seek-cancelled();
     callback dragging(bool);
+    // I07: the hovered fraction, at most every 50 ms while the picture box shows; the pointer left.
+    callback hover-changed(float);
+    callback hover-ended();
     callback volume-changed(float);
     callback volume-released(float);
     callback toggle-time();
@@ -88,6 +115,9 @@ component BarButton inherits Rectangle {
 }
 
 // Seek line: 10px click area, 2px line (unplayed Theme.line, played Theme.accent-fill), 8px thumb.
+// B22: 1×6 marks across the line (chapter Theme.text-dim, bookmark Theme.accent,
+// marker Theme.playing) and the A-B loop: a 2px Theme.playing band under the
+// line with 1×8 ends. Marks take no input: a click seeks as before.
 component SeekBar inherits Rectangle {
     private property <float> ratio: clamp(PlaybackBridge.progress, 0, 1);
     private property <length> span: max(1px, root.width - 8px);
@@ -95,6 +125,11 @@ component SeekBar inherits Rectangle {
     out property <bool> pointing: touch.has-hover || touch.pressed;
     out property <length> pointer-x: touch.mouse-x;
     out property <string> pointer-time: root.clock(root.fraction(touch.mouse-x) * PlaybackBridge.duration);
+    // B22: the mark within 3px of the pointer (-1: none).
+    out property <int> near-mark: root.pointing ? root.nearest(touch.mouse-x) : -1;
+    // I07: the last fraction sent with hover-changed (-1: none since the pointer came).
+    private property <float> sent: -1;
+    private property <float> pointer-fraction: root.fraction(touch.mouse-x);
     height: 10px;
     function fraction(x: length) -> float {
         return clamp((x - 4px) / root.span, 0, 1);
@@ -110,6 +145,76 @@ component SeekBar inherits Rectangle {
         let h: int = Math.floor(whole / 3600);
         return whole >= 3600 ? h + ":" + root.two-digits(m) + ":" + root.two-digits(s) : root.two-digits(m) + ":" + root.two-digits(s);
     }
+    // One step of the lower-bound search: the first mark at or after `at` is in [lo, hi].
+    pure function narrow(r: MarkRange, at: float) -> MarkRange {
+        if r.lo >= r.hi {
+            return r;
+        }
+        let mid: int = Math.floor((r.lo + r.hi) / 2);
+        if PlaybackBridge.marks[mid].at < at {
+            return { lo: mid + 1, hi: r.hi };
+        }
+        return { lo: r.lo, hi: mid };
+    }
+    // 13 steps cover the 8192 marks the plugin sends at most (Slint has no loops).
+    pure function lower-bound(at: float) -> int {
+        let r1 = root.narrow({ lo: 0, hi: PlaybackBridge.marks.length }, at);
+        let r2 = root.narrow(r1, at);
+        let r3 = root.narrow(r2, at);
+        let r4 = root.narrow(r3, at);
+        let r5 = root.narrow(r4, at);
+        let r6 = root.narrow(r5, at);
+        let r7 = root.narrow(r6, at);
+        let r8 = root.narrow(r7, at);
+        let r9 = root.narrow(r8, at);
+        let r10 = root.narrow(r9, at);
+        let r11 = root.narrow(r10, at);
+        let r12 = root.narrow(r11, at);
+        let r13 = root.narrow(r12, at);
+        return r13.lo;
+    }
+    pure function nearest(x: length) -> int {
+        let count: int = PlaybackBridge.marks.length;
+        if count == 0 || !PlaybackBridge.can-seek {
+            return -1;
+        }
+        let at: float = root.fraction(x);
+        let i: int = root.lower-bound(at);
+        let right: length = i < count ? Math.abs(PlaybackBridge.marks[i].at - at) * root.span : 1000px;
+        let left: length = i > 0 ? Math.abs(PlaybackBridge.marks[i - 1].at - at) * root.span : 1000px;
+        if left <= right && left <= 3px {
+            return i - 1;
+        }
+        return right <= 3px ? i : -1;
+    }
+    // I07: send now when the last send is 50 ms old, else when the cooldown ends.
+    function report-hover() {
+        if !PlaybackBridge.hover-thumbnail || !root.pointing || root.pointer-fraction == root.sent {
+            return;
+        }
+        if !cooldown.running {
+            root.sent = root.pointer-fraction;
+            PlaybackBridge.hover-changed(root.sent);
+            cooldown.running = true;
+        }
+    }
+    changed pointer-fraction => { root.report-hover(); }
+    changed pointing => {
+        if self.pointing {
+            root.report-hover();
+        } else if root.sent >= 0 {
+            root.sent = -1;
+            PlaybackBridge.hover-ended();
+        }
+    }
+    cooldown := Timer {
+        interval: 50ms;
+        running: false;
+        triggered => {
+            self.running = false;
+            root.report-hover();
+        }
+    }
     Rectangle {
         y: 4px;
         height: 2px;
@@ -122,6 +227,34 @@ component SeekBar inherits Rectangle {
         height: 2px;
         border-radius: 1px;
         background: PlaybackBridge.can-seek ? Theme.accent-fill : Theme.icon-disabled;
+    }
+    if PlaybackBridge.has-loop: Rectangle {
+        x: 4px + PlaybackBridge.loop-a * root.span;
+        y: 6px;
+        width: max(1px, (PlaybackBridge.loop-b - PlaybackBridge.loop-a) * root.span);
+        height: 2px;
+        background: Theme.playing;
+    }
+    for mark in PlaybackBridge.marks: Rectangle {
+        x: Math.floor((4px + mark.at * root.span) / 1px) * 1px;
+        y: 2px;
+        width: 1px;
+        height: 6px;
+        background: mark.kind == "bookmark" ? Theme.accent : mark.kind == "marker" ? Theme.playing : Theme.text-dim;
+    }
+    if PlaybackBridge.has-loop: Rectangle {
+        x: Math.floor((4px + PlaybackBridge.loop-a * root.span) / 1px) * 1px;
+        y: 1px;
+        width: 1px;
+        height: 8px;
+        background: Theme.playing;
+    }
+    if PlaybackBridge.has-loop: Rectangle {
+        x: Math.floor((4px + PlaybackBridge.loop-b * root.span) / 1px) * 1px;
+        y: 1px;
+        width: 1px;
+        height: 8px;
+        background: Theme.playing;
     }
     if PlaybackBridge.can-seek: Rectangle {
         x: root.ratio * root.span;
@@ -313,7 +446,9 @@ export component PlaybackBar inherits Rectangle {
     // I06 hover time: centred on the pointer, 2px inside the bar's edges, its
     // bottom 4px above the line, so it draws over the video above the bar. It
     // takes no input and follows the pointer without a plugin round trip.
-    if PlaybackBridge.hover-time && PlaybackBridge.can-seek && PlaybackBridge.duration > 0 && seek-bar.pointing: Rectangle {
+    // B22: within 3px of a mark it reads 「标题  01:23」 (the mark's time).
+    // I07: a 160×90 picture above the text (a dark box until one is made).
+    if (PlaybackBridge.hover-time || PlaybackBridge.hover-thumbnail || seek-bar.near-mark >= 0) && PlaybackBridge.can-seek && PlaybackBridge.duration > 0 && seek-bar.pointing: Rectangle {
         x: clamp(seek-bar.x + seek-bar.pointer-x - self.width / 2, 2px, max(2px, root.width - self.width - 2px));
         y: seek-bar.y + 4px - 4px - self.height;
         width: tip.preferred-width;
@@ -321,13 +456,28 @@ export component PlaybackBar inherits Rectangle {
         background: Theme.bg-panel;
         border-color: Theme.line;
         border-width: 1px;
-        tip := HorizontalLayout {
+        tip := VerticalLayout {
             padding-left: 5px;
             padding-right: 5px;
-            padding-top: 2px;
+            padding-top: PlaybackBridge.hover-thumbnail ? 5px : 2px;
             padding-bottom: 2px;
+            spacing: 2px;
+            if PlaybackBridge.hover-thumbnail: Rectangle {
+                width: 160px;
+                height: 90px;
+                background: Theme.bg-video;
+                if PlaybackBridge.has-thumbnail: Image {
+                    width: 160px;
+                    height: 90px;
+                    source: PlaybackBridge.thumbnail;
+                    image-fit: contain;
+                }
+            }
             Text {
-                text: seek-bar.pointer-time;
+                horizontal-alignment: center;
+                text: seek-bar.near-mark < 0 ? seek-bar.pointer-time
+                    : PlaybackBridge.marks[seek-bar.near-mark].title == "" ? PlaybackBridge.marks[seek-bar.near-mark].clock
+                    : PlaybackBridge.marks[seek-bar.near-mark].title + "  " + PlaybackBridge.marks[seek-bar.near-mark].clock;
                 color: Theme.text;
                 font-size: Theme.font-body;
             }

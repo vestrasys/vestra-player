@@ -8,6 +8,7 @@ import { currentChapter, segmentAt, stepPoint } from "../chapters.ts";
 import { clock, fit, mediaKey, parseTime, precise } from "../format.ts";
 import activate from "../main.ts";
 import { bookmarkLines, chapterLines } from "../menu.ts";
+import { LAYER_MAX, seekbarMarks } from "../seekbar.ts";
 import { timing } from "../store.ts";
 
 Object.assign(timing, { bookmarksWrite: 10, settingsWrite: 10, menuRebuild: 10, loopCommit: 30 });
@@ -512,7 +513,7 @@ test("B23: loop count is sent and remembered; when it runs out the switch turns 
   assert.equal(host.osd.at(-1), "区段循环结束");
   assert.equal(host.command("ab.toggle").state.checked, false);
   assert.equal(host.command("ab.toggle").state.enabled, true); // A and B are kept
-  assert.deepEqual(JSON.parse(readFileSync(join(data, "marks.json"), "utf8")), { version: 1, abCount: 2 });
+  assert.deepEqual(JSON.parse(readFileSync(join(data, "marks.json"), "utf8")), { version: 1, abCount: 2, showOnSeekbar: true });
   // Changing the count while looping re-sends the loop.
   await press(host, "\\");
   await host.command("ab.count.endless").run();
@@ -578,6 +579,132 @@ test("B23: a refused loop turns the switch off and says why", async () => {
   assert.equal(host.command("ab.toggle").state.checked, false);
 });
 
+// ------------------------------------------------------------------ B22 seek-bar marks
+
+const layer = (host: TestHost) => host.timeline.layers.get(host.manifestId) ?? [];
+const published = (host: TestHost) => layer(host).map((m) => [m.time, m.kind, m.title]);
+
+test("B22 marks: chapter names, cut titles, times inside the media, the first 1000 by time", () => {
+  const marks = seekbarMarks({
+    chapters: [
+      { title: null, start: 0 },
+      { title: "长".repeat(150), start: 50 },
+      { title: "Past the end", start: 700 },
+    ],
+    bookmarks: [{ time: 50, title: "书签 1" }],
+    a: 20,
+    b: null,
+    duration: 600,
+  });
+  assert.deepEqual(
+    marks.map((m) => [m.time, m.kind, [...m.title].length]),
+    [
+      [0, "chapter", 4],
+      [20, "marker", 1],
+      [50, "chapter", 100],
+      [50, "bookmark", 4],
+    ],
+  );
+  assert.equal(marks[0]!.title, "章节 1");
+  // Only A set gives the marker; with B too the loop span is the player's to draw.
+  assert.equal(seekbarMarks({ chapters: [], bookmarks: [], a: 20, b: 30, duration: null }).length, 0);
+  const many = seekbarMarks({
+    chapters: Array.from({ length: 1200 }, (_, i) => ({ title: `C${i}`, start: 1200 - i })),
+    bookmarks: [],
+    a: null,
+    b: null,
+    duration: null,
+  });
+  assert.equal(many.length, LAYER_MAX);
+  assert.deepEqual([many[0]!.time, many.at(-1)!.time], [1, 1000]);
+});
+
+test("B22: chapters ∪ bookmarks on the seek bar, for the source they belong to", async () => {
+  const host = new TestHost();
+  host.chapters = [
+    { title: "Opening", start: 0 },
+    { title: null, start: 60 },
+  ];
+  await start(host);
+  assert.deepEqual(published(host), []);
+  await play(host, file(), 600, 30);
+  assert.deepEqual(published(host), [
+    [0, "chapter", "Opening"],
+    [60, "chapter", "章节 2"],
+  ]);
+  const writes = host.sent("timeline.set");
+  assert.equal(writes.at(-1)!.sourceId, host.source.stamp.generation); // ifCurrent
+  await press(host, "P");
+  assert.deepEqual(published(host), [
+    [0, "chapter", "Opening"],
+    [30, "bookmark", "书签 1"],
+    [60, "chapter", "章节 2"],
+  ]);
+  // Only A: an `A` marker until B is set.
+  await at(host, 40);
+  await press(host, "[");
+  assert.deepEqual(published(host).at(2), [40, "marker", "A"]);
+  await at(host, 50);
+  await press(host, "]");
+  assert.equal(published(host).some(([, kind]) => kind === "marker"), false);
+  // A file without chapters or bookmarks: nothing left over, nothing re-sent.
+  host.chapters = [];
+  const before = host.sent("timeline.set").length;
+  await play(host, file());
+  assert.deepEqual(published(host), []);
+  assert.equal(host.sent("timeline.set").length, before);
+  // Unchanged updates (the position moving) send nothing.
+  host.chapters = [{ title: "x", start: 5 }];
+  await play(host, file());
+  const count = host.sent("timeline.set").length;
+  await at(host, 100);
+  await at(host, 101);
+  assert.equal(host.sent("timeline.set").length, count);
+});
+
+test("B22: the switch empties the layer, is remembered and brings the marks back", async () => {
+  const data = mkdtempSync(join(scratch, "data-"));
+  const host = new TestHost();
+  host.chapters = [{ title: "Opening", start: 0 }];
+  const media = file();
+  const first = await start(host, data);
+  const option = () => host.command("marks.seekbar");
+  assert.equal(option().state.checked, true);
+  await play(host, media, 600, 10);
+  assert.equal(published(host).length, 1);
+  await option().run();
+  await host.settle(WAIT);
+  assert.deepEqual(published(host), []);
+  assert.equal(option().state.checked, false);
+  assert.equal(host.osd.at(-1), "进度条上显示书签/章节标记：关");
+  assert.equal(JSON.parse(readFileSync(join(data, "marks.json"), "utf8")).showOnSeekbar, false);
+  await first.stop();
+
+  const again = new TestHost();
+  again.chapters = [{ title: "Opening", start: 0 }];
+  await start(again, data);
+  assert.equal(again.command("marks.seekbar").state.checked, false);
+  await play(again, media, 600, 10);
+  assert.deepEqual(published(again), []);
+  await again.command("marks.seekbar").run();
+  await again.settle(WAIT);
+  assert.equal(again.osd.at(-1), "进度条上显示书签/章节标记：开");
+  assert.deepEqual(published(again), [[0, "chapter", "Opening"]]);
+});
+
+test("B22: stopping the plugin clears its layer; other plugins' layers stay", async () => {
+  const host = new TestHost();
+  host.chapters = [{ title: "Opening", start: 0 }];
+  const started = await start(host);
+  await play(host, file(), 600, 10);
+  assert.equal(published(host).length, 1);
+  // Another plugin's layer stays when this one goes.
+  host.setTimelineLayer("vestra.other", [{ time: 5, kind: "marker" }]);
+  await started.stop();
+  assert.deepEqual(published(host), []);
+  assert.deepEqual(host.timeline.marks.map((m) => m.plugin), ["vestra.other"]);
+});
+
 // ------------------------------------------------------------------ menus
 
 test("menu: orders, groups and shortcuts as in the requirements; no binding conflicts", async () => {
@@ -612,6 +739,13 @@ test("menu: orders, groups and shortcuts as in the requirements; no binding conf
     ["A-B 区段循环 ▶ 循环次数 ▶ 3 次", 285, "ab-count", ""],
     ["A-B 区段循环 ▶ 循环次数 ▶ 5 次", 286, "ab-count", ""],
     ["A-B 区段循环 ▶ 循环次数 ▶ 10 次", 287, "ab-count", ""],
+  ]);
+  const option = host.command("marks.seekbar").declaration;
+  assert.deepEqual([option.path.slice(1).join(" ▶ "), option.order, option.group, option.bindings.join(",")], [
+    "章节/书签 ▶ 在进度条上显示标记",
+    30000,
+    "marks-option",
+    "",
   ]);
   for (const id of ["ab.a-back", "ab.a-forward", "ab.b-back", "ab.b-forward", "ab.back", "ab.forward"])
     assert.equal(host.command(id).declaration.repeat, true, id);

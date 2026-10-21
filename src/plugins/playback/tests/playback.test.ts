@@ -64,6 +64,7 @@ test("menu follows the allocation table: positions, groups, radio items, binding
       ["rate-custom", "播放/速度/自定义…", 226, "domain", false, [], false],
       ["prevent-sleep", "播放/播放时禁止屏保", 240, "playback-options", false, [], false],
       ["hover-time", "播放/进度条悬停显示时间", 242, "playback-options", false, [], false],
+      ["hover-thumbnail", "播放/进度条悬停显示缩略图", 243, "playback-options", false, [], false],
       ["backward-2", "播放/跳转/后退30秒", 212, "step", false, ["Ctrl+ArrowLeft"], false],
       ["forward-2", "播放/跳转/前进30秒", 213, "step", false, ["Ctrl+ArrowRight"], false],
       ["backward-3", "播放/跳转/后退60秒", 214, "step", false, ["Shift+ArrowLeft"], false],

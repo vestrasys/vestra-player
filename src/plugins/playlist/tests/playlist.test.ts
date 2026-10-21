@@ -436,6 +436,27 @@ test("the list menu, ADD and SORT popups list this plugin's commands; sorting re
   }
 });
 
+test("添加链接…: one link per line, a bad line stops there and says which", async () => {
+  const app = await start();
+  try {
+    const window = () => app.host.window("playlist-link");
+    await app.addUrl(" https://example.org/a \n\nhttps://example.org/b\r\n");
+    assert.deepEqual(app.names(), ["https://example.org/a", "https://example.org/b"]);
+    assert.equal(window().props.message, "已添加 2 个链接，仅选中；显式播放需可用的来源提供者");
+    assert.equal(window().visible, false);
+    assert.equal(app.rows()[1].selected, true);
+    await app.addUrl("https://example.org/c\nftp://example.org/x\nhttps://example.org/d");
+    assert.equal(window().props.message, "第 2 行：只接受不含账户密码的 HTTP(S) 链接");
+    assert.equal(window().visible, true);
+    assert.equal(app.names().length, 3);
+    await app.addUrl("   ");
+    assert.equal(window().props.message, "请输入完整 HTTP(S) 链接");
+    assert.equal(app.opens().length, 0);
+  } finally {
+    await app.close();
+  }
+});
+
 test("URL rows: adding only selects; the original URL goes to public routing; one open at a time", async () => {
   const app = await start();
   try {

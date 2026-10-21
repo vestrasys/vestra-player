@@ -9,6 +9,7 @@ import { Keyframes } from "./keyframes.ts";
 import { Prompt } from "./prompt.ts";
 import { Reopener } from "./reopen.ts";
 import { DEFAULT_STEPS, type SeekSteps, SettingsStore } from "./settings.ts";
+import { Thumbnails } from "./thumbs.ts";
 import { TimeJump } from "./time-jump.ts";
 
 /**
@@ -17,7 +18,8 @@ import { TimeJump } from "./time-jump.ts";
  * mute are the player's own, run from the bar with `host.run`): open, the
  * 跳转到 and custom speed windows, and the 播放控制 chapter's features (打开链接,
  * 重开当前/最后文件, 复制到剪贴板, 关键帧, 跳转秒数, 跳到开头, 播放时禁止屏保,
- * 进度条悬停显示时间).
+ * 进度条悬停显示时间 and 缩略图), and the seek line's marks (B22: `timeline.marks`
+ * and the A-B loop).
  */
 export default async function activate(plugin: Plugin) {
   const { player } = plugin;
@@ -51,6 +53,7 @@ export default async function activate(plugin: Plugin) {
   const reopener = new Reopener(plugin, osd);
   const openUrl = new OpenUrl(plugin, settings, osd);
   const keyframes = new Keyframes(plugin, playback, () => plugin.update());
+  const thumbnails = new Thumbnails(plugin, settings, (id) => keyframes.video(id));
   // B29: the host holds the assertion while playing; a failed start is only in its log.
   const sleep = () => plugin.power.preventSleep(settings.value.preventSleep ? "playing" : "off");
   // B06: tier 1 is the core's ← / →; the plugin gives it the step and keeps tiers 2–4.
@@ -70,12 +73,15 @@ export default async function activate(plugin: Plugin) {
     settings,
     copy: (kind) => copyToClipboard(plugin.clipboard, player.state, kind, osd),
     jumpToStart: () => playback.jumpToStart(),
+    thumbnails,
   });
-  wireBar(bar, plugin, playback, settings);
+  wireBar(bar, plugin, playback, settings, thumbnails);
   plugin.onError((error) => playback.report(error));
 
   reopener.observe(player.state);
   keyframes.observe(player.state);
+  thumbnails.observe(player.state);
+  void thumbnails.probe();
   if (settings.value.preventSleep) void sleep().catch((error) => playback.report(error));
   // The core's step is 5 until someone sets it; it returns to 5 when this plugin stops.
   if (settings.value.seekSteps[0] !== DEFAULT_STEPS[0]) void stepSeek(settings.value.seekSteps[0]);
@@ -91,6 +97,7 @@ export default async function activate(plugin: Plugin) {
     phase = state.phase;
     reopener.observe(state);
     keyframes.observe(state);
+    thumbnails.observe(state);
     await Promise.resolve(); // the drag gesture observes the same change first
     if (replaced || playback.gestureLost) {
       playback.clearSeek();

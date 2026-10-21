@@ -22,8 +22,9 @@ export const loopText = (a: number, b: number) => `A-B 循环：${precise(a)} ~ 
  * it off. A new source clears A and B (the player clears the loop).
  */
 export class AbLoop {
-  a: number | null = null;
-  b: number | null = null;
+  #a: number | null = null;
+  #b: number | null = null;
+  readonly #pointListeners: (() => void)[] = [];
   /** The switch as this plugin wants it (the player's `state.loop` may differ). */
   on = false;
   readonly #plugin: Plugin;
@@ -45,6 +46,29 @@ export class AbLoop {
     plugin.onDispose(() => {
       if (this.#timer) clearTimeout(this.#timer);
     });
+  }
+
+  /** The start point A (seconds), `null` when unset. */
+  get a(): number | null {
+    return this.#a;
+  }
+  set a(value: number | null) {
+    if (value === this.#a) return;
+    this.#a = value;
+    for (const listener of this.#pointListeners) listener();
+  }
+  /** The end point B (seconds), `null` when unset. */
+  get b(): number | null {
+    return this.#b;
+  }
+  set b(value: number | null) {
+    if (value === this.#b) return;
+    this.#b = value;
+    for (const listener of this.#pointListeners) listener();
+  }
+  /** A or B moved (B22 publishes a lone A as a seek-bar marker). */
+  onPoints(listener: () => void) {
+    this.#pointListeners.push(listener);
   }
 
   get count(): Count {

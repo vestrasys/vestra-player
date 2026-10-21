@@ -1,6 +1,6 @@
 # 章节、书签与区段（vestra.marks）
 
-依据：doc/product/feature-requirements.md「章节、书签与区段（`marks`）」B21、B23（B22 进度条标记在第 3b 轮）。来源只通过 `player.state` 观察，跳转用 `player.seek`，循环用 `player.setLoop`；不和其它插件通信。
+依据：doc/product/feature-requirements.md「章节、书签与区段（`marks`）」B21、B22、B23。来源只通过 `player.state` 观察，跳转用 `player.seek`，循环用 `player.setLoop`，进度条标记发布到核心的时间轴标记层（`plugin.timeline.layer()`，能力 `timeline.marks`，由 playback 绘制）；不和其它插件通信。
 
 ## 菜单与快捷键
 
@@ -12,6 +12,7 @@
 | 播放 ▶ 章节/书签 ▶ 上一章节 · 下一章节 | 264 · 265 | marks-edit | Ctrl+PageUp · Ctrl+PageDown |
 | 播放 ▶ 章节/书签 ▶ （动态）章节，单选 = 当前章节 | 10000 + i | marks-chapters | |
 | 播放 ▶ 章节/书签 ▶ （动态）书签 | 20000 + i | marks-bookmarks | |
+| 播放 ▶ 章节/书签 ▶ 在进度条上显示标记（勾选） | 30000 | marks-option | |
 | 播放 ▶ A-B 区段循环 ▶ 设定起点 · 解除起点 · 起点后退/前进 0.1 秒 | 270–273 | ab-a | `[` · `{` · Ctrl+[ · Alt+[ |
 | 播放 ▶ A-B 区段循环 ▶ 设定止点 · 解除止点 · 止点后退/前进 0.1 秒 | 274–277 | ab-b | `]` · `}` · Ctrl+] · Alt+] |
 | 播放 ▶ A-B 区段循环 ▶ 区段整体后退/前进 0.1 秒 | 278 · 279 | ab-both | Ctrl+Alt+[ · Ctrl+Alt+] |
@@ -36,7 +37,14 @@
 
 - A、B 只在插件里；A、B 都有且开关为开时 `setLoop({ a, b, count? })`，否则 `setLoop(null)`（核心已无循环时不发）。开始循环时位置不在 [A, B) 内先跳到 A。微调 100 ms 去抖后提交；条件提交遇 `stale` 重试一次。
 - 开关的勾选 = `state.loop` 是否非空：别的插件设的循环也显示为开，`\` 关闭它。核心在次数用完后把 `state.loop` 置空：提示「区段循环结束」，保留 A、B。换来源清空 A、B。
-- 循环次数即核心的 `count`（回跳次数：2 = 区段共播 3 遍），存 `marks.json` 的 `abCount`。
+- 循环次数即核心的 `count`（回跳次数：2 = 区段共播 3 遍），存 `marks.json` 的 `abCount`（`marks.json`：`{ version: 1, abCount, showOnSeekbar }`）。
+
+## B22 进度条标记（`seekbar.ts`）
+
+- 开关「在进度条上显示标记」默认开，存 `marks.json` 的 `showOnSeekbar`；切换时提示 `进度条上显示书签/章节标记：开/关`。
+- 开关开且媒体就绪时，本插件的标记层 = 章节（`kind: "chapter"`，标题同菜单里的章节名：标题或 `章节 N`）∪ 书签（`"bookmark"`，书签标题）∪ 只设了 A 时的 `A`（`"marker"`，B23；设了 B 后区间由 playback 按 `state.loop` 画）。标题截到 100 字符；时间不在 `[0, 时长]` 内的略去（否则核心拒绝整层）；按时间排序后只发布前 1000 个。开关关、没有媒体时为空层。
+- 每次写入带 `ifCurrent: state`（核心只比较来源）；核心在新来源时清空所有层，本插件在新来源就绪、章节读到后重新发布。章节、书签、A/B、开关、时长变化后在同一轮更新结束时合并成一次写入，内容不变时不发送；位置变化不触发写入。停用插件时核心清除本层。
+- Alt+\ 的区段仍只用本插件的章节与书签（与开关无关），不读 `timeline.marks`。
 
 ## 开发
 
