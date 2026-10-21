@@ -74,6 +74,7 @@
 
 ## 待办（本轮之后）
 - 主窗口 `sidebar-actual` 绑定环警告（见上）。
+- SDK 仓库的 Docs 工作流在推标签时失败（Pages 环境只允许 main；v1.1.1 起就这样，main 上的那次会正常部署）。应让 Docs 只在 main 上运行。
 - reference §6.4「默认字体是系统 UI 字体」与实际强制 Hiragino 不一致，等 W4 决定后一起改。
 
 ## 记录
