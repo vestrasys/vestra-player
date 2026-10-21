@@ -47,7 +47,9 @@ component IdleScene inherits Rectangle {
     private property <length> side: clamp(self.short * 0.3, 64px, 256px);
     private property <bool> caption: self.height >= 120px;
     private property <length> caption-gap: 12px;
-    private property <length> caption-height: 16px;
+    // Line boxes taller than the font's line height: an elided line whose box is
+    // shorter than one line (CJK fallback fonts are tall) is not drawn at all.
+    private property <length> caption-height: 20px;
     private property <length> group: self.side + (self.caption ? self.caption-gap + self.caption-height : 0px);
     private property <length> top: (self.height - self.group) / 2;
     // A faint brand-violet glow so the mark does not sit on flat black.
@@ -87,8 +89,13 @@ component AudioScene inherits Rectangle {
     private property <length> short: min(self.width, self.height);
     private property <bool> full: self.height >= 200px;
     private property <length> gap: 14px;
-    // Title 18px; artist and album 16px each with 2px between lines.
-    private property <length> text-height: self.full ? 18px + 2 * (2px + 16px) : 18px;
+    // Line boxes: title 24px, artist and album 20px, 2px apart. They must be
+    // taller than one line of the font (CJK fallback fonts are tall): an
+    // elided Text whose box is shorter than one line is not drawn at all.
+    private property <length> title-line: 24px;
+    private property <length> line: 20px;
+    private property <length> line-gap: 2px;
+    private property <length> text-height: self.full ? self.title-line + 2 * (self.line-gap + self.line) : self.title-line;
     private property <length> margin: 10px;
     // The cover box: never taller than what is left above the text.
     private property <length> side: max(24px, min(self.short * 0.6, 480px, self.height - self.text-height - self.gap - 2 * self.margin));
@@ -152,7 +159,7 @@ component AudioScene inherits Rectangle {
         x: (root.width - self.width) / 2;
         y: root.top + root.side + root.gap;
         width: root.text-width;
-        height: 18px;
+        height: root.title-line;
         text: Art.title;
         color: Theme.text;
         font-size: Theme.font-title;
@@ -163,9 +170,9 @@ component AudioScene inherits Rectangle {
     }
     if root.full && Art.artist != "": Text {
         x: (root.width - self.width) / 2;
-        y: root.top + root.side + root.gap + 18px + 2px;
+        y: root.top + root.side + root.gap + root.title-line + root.line-gap;
         width: root.text-width;
-        height: 16px;
+        height: root.line;
         text: Art.artist;
         color: Theme.text-list;
         font-size: Theme.font-body;
@@ -176,9 +183,9 @@ component AudioScene inherits Rectangle {
     if root.full && Art.album != "": Text {
         x: (root.width - self.width) / 2;
         // Directly under the title when there is no artist line.
-        y: root.top + root.side + root.gap + 18px + 2px + (Art.artist != "" ? 18px : 0px);
+        y: root.top + root.side + root.gap + root.title-line + root.line-gap + (Art.artist != "" ? root.line + root.line-gap : 0px);
         width: root.text-width;
-        height: 16px;
+        height: root.line;
         text: Art.album;
         color: Theme.text-dim;
         font-size: Theme.font-body;
