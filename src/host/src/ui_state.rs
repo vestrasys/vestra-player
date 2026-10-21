@@ -145,8 +145,9 @@ pub fn default_path() -> PathBuf {
     std::env::var_os("VESTRA_UI_STATE")
         .map(PathBuf::from)
         .unwrap_or_else(|| {
-            PathBuf::from(std::env::var_os("HOME").unwrap_or_default())
-                .join("Library/Application Support/Vestra/ui-state.json")
+            crate::platform::app_data_dir()
+                .unwrap_or_default()
+                .join("ui-state.json")
         })
 }
 

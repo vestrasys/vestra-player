@@ -38,8 +38,9 @@ impl Manager {
         let root = std::env::var_os("VESTRA_PACKAGE_STORE")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
-                PathBuf::from(std::env::var_os("HOME").unwrap_or_default())
-                    .join("Library/Application Support/Vestra/packages")
+                crate::platform::app_data_dir()
+                    .unwrap_or_default()
+                    .join("packages")
             });
         let store = Store::open(root)?;
         let receipts = store.operations();

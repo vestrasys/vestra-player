@@ -27,8 +27,20 @@ const POLL: Duration = Duration::from_millis(20);
 const STDERR_TAIL: usize = 64 * 1024;
 const PNG_BYTES: usize = 128 * 1024 * 1024;
 
-pub enum Output {
+/// The still-image format of a one-frame export. FFmpeg always writes a PNG;
+/// JPEG and BMP are converted from it (validated) before publication.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Still {
     Png,
+    /// Quality 1–100.
+    Jpeg {
+        quality: u8,
+    },
+    Bmp,
+}
+
+pub enum Output {
+    Still(Still),
     Mp4 {
         end: f64,
         audio: Option<crate::media_tracks::AudioTrack>,
@@ -311,6 +323,39 @@ fn drain_tail(mut reader: impl Read) -> io::Result<Vec<u8>> {
     }
 }
 
+/// Re-encode a validated PNG as JPEG (RGB, the given quality) or BMP (24-bit
+/// RGB, pixel for pixel). Alpha is dropped; the encoder writes RGB24 anyway.
+pub fn convert_still(png: &std::path::Path, still: Still, out: &std::fs::File) -> Result<()> {
+    use image::ImageEncoder;
+    use std::io::Write;
+    let mut reader = image::ImageReader::open(png).context("PNG could not be reopened")?;
+    reader.set_format(image::ImageFormat::Png);
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(PNG_BYTES as u64 * 2);
+    reader.limits(limits);
+    let pixels = reader
+        .decode()
+        .context("PNG could not be decoded for conversion")?
+        .to_rgb8();
+    let (width, height) = pixels.dimensions();
+    let mut writer = io::BufWriter::new(out);
+    match still {
+        Still::Png => bail!("PNG needs no conversion"),
+        Still::Jpeg { quality } => {
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut writer, quality.clamp(1, 100))
+                .write_image(&pixels, width, height, image::ExtendedColorType::Rgb8)
+                .context("JPEG encoding failed")?
+        }
+        Still::Bmp => image::codecs::bmp::BmpEncoder::new(&mut writer)
+            .write_image(&pixels, width, height, image::ExtendedColorType::Rgb8)
+            .context("BMP encoding failed")?,
+    }
+    writer
+        .flush()
+        .context("converted image could not be written")?;
+    Ok(())
+}
+
 fn validate_png(temp: &tempfile::NamedTempFile) -> Result<()> {
     let file = temp
         .reopen()
@@ -529,7 +574,7 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
         .lines()
         .find(|s| s.trim_start().starts_with("libavfilter"))
         .context("libavfilter version missing")?;
-    control.record_facts(serde_json::json!({"descriptorVersion":"vestra-finite/1","ffmpegVersion":ffmpeg_version,"libavfilterVersion":libavfilter.trim(),"videoStreamIndex":request.video_stream,"range":{"start":request.time,"end":match &request.output{Output::Png=>None,Output::Mp4{end,..}=>Some(*end)},"interval":"half-open; first video PTS >= start"},"preroll":if request.processed.is_some() || matches!(&request.output,Output::Mp4{..}) {Some(crate::offline_audio::PREROLL)}else{None},"hasAudio":matches!(&request.output,Output::Mp4{audio:Some(_),..}),"audioTiming":if matches!(&request.output,Output::Mp4{audio:Some(_),..}) {"DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded"}else{"not applicable: no audio output"},"processed":request.processed.is_some()}));
+    control.record_facts(serde_json::json!({"descriptorVersion":"vestra-finite/1","ffmpegVersion":ffmpeg_version,"libavfilterVersion":libavfilter.trim(),"videoStreamIndex":request.video_stream,"range":{"start":request.time,"end":match &request.output{Output::Still(_)=>None,Output::Mp4{end,..}=>Some(*end)},"interval":"half-open; first video PTS >= start"},"preroll":if request.processed.is_some() || matches!(&request.output,Output::Mp4{..}) {Some(crate::offline_audio::PREROLL)}else{None},"hasAudio":matches!(&request.output,Output::Mp4{audio:Some(_),..}),"audioTiming":if matches!(&request.output,Output::Mp4{audio:Some(_),..}) {"DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded"}else{"not applicable: no audio output"},"processed":request.processed.is_some()}));
     reader
         .validate()
         .context("source-unavailable before encoding")?;
@@ -648,7 +693,7 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
                     display_height: frozen.height,
                 });
         match &request.output {
-            Output::Png => {
+            Output::Still(_) => {
                 crate::offline_descriptor::video(&frozen.processing.video, subtitle, request.time)?
             }
             Output::Mp4 { end, .. } => crate::offline_descriptor::video_range(
@@ -673,12 +718,12 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
         "-filter_complex_threads",
         "1",
     ]);
-    if request.processed.is_none() && matches!(&request.output, Output::Png) {
+    if request.processed.is_none() && matches!(&request.output, Output::Still(_)) {
         command.args(["-ss", &request.time.to_string()]);
     }
     command.args(["-i", "/dev/fd/0"]);
     match &request.output {
-        Output::Png => {
+        Output::Still(_) => {
             command.args(["-map", &format!("0:{}", request.video_stream)]);
             command.args([
                 "-frames:v",
@@ -805,14 +850,26 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
     if control.status() == Status::Cancelling {
         return Ok(Outcome::Cancelled);
     }
-    match &request.output {
-        Output::Png => validate_png(&temp)?,
+    let temp = match &request.output {
+        Output::Still(still) => {
+            validate_png(&temp)?;
+            if *still == Still::Png {
+                temp
+            } else {
+                // The converted file replaces the PNG (removed when dropped).
+                let converted = tempfile::NamedTempFile::new_in(&parent)
+                    .context("owned temporary output could not be created")?;
+                convert_still(temp.path(), *still, converted.as_file())?;
+                converted
+            }
+        }
         Output::Mp4 { .. } => {
             if !validate_mp4(request, &temp, control)? {
                 return Ok(Outcome::Cancelled);
             }
+            temp
         }
-    }
+    };
     reader
         .validate()
         .context("source-unavailable after encoding")?;
@@ -823,9 +880,9 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
     }
     temp.as_file()
         .sync_all()
-        .context("temporary PNG could not be flushed")?;
+        .context("temporary output could not be flushed")?;
     temp.persist_noclobber(&destination)
-        .map_err(|error| anyhow::anyhow!("PNG no-clobber publication failed: {}", error.error))?;
+        .map_err(|error| anyhow::anyhow!("no-clobber publication failed: {}", error.error))?;
     Ok(Outcome::Completed { destination })
 }
 
@@ -913,7 +970,7 @@ mod tests {
             destination: dir.path().join("out.png"),
             ffmpeg: dir.path().join("must-not-run"),
             processed: None,
-            output: Output::Png,
+            output: Output::Still(Still::Png),
             video_stream: 0,
             source_origin: 0.,
         };
@@ -952,7 +1009,7 @@ mod tests {
                 destination: dir.path().join("out.png"),
                 ffmpeg: dir.path().join("must-not-run"),
                 processed: None,
-                output: Output::Png,
+                output: Output::Still(Still::Png),
                 video_stream: 0,
                 source_origin: 0.,
             },
@@ -977,5 +1034,39 @@ mod tests {
         let tail = drain_tail(io::Cursor::new(input)).unwrap();
         assert_eq!(tail.len(), STDERR_TAIL);
         assert!(tail.ends_with(b"final diagnostic"));
+    }
+
+    #[test]
+    fn stills_convert_from_the_validated_png_bmp_pixel_for_pixel() {
+        let dir = tempfile::tempdir().unwrap();
+        let png = dir.path().join("frame.png");
+        let pixels =
+            image::RgbImage::from_fn(17, 9, |x, y| image::Rgb([x as u8 * 15, y as u8 * 28, 200]));
+        pixels
+            .save_with_format(&png, image::ImageFormat::Png)
+            .unwrap();
+        let bmp = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
+        convert_still(&png, Still::Bmp, bmp.as_file()).unwrap();
+        let back = image::load_from_memory_with_format(
+            &std::fs::read(bmp.path()).unwrap(),
+            image::ImageFormat::Bmp,
+        )
+        .unwrap();
+        assert_eq!(back.to_rgb8(), pixels);
+        let jpeg = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
+        convert_still(&png, Still::Jpeg { quality: 90 }, jpeg.as_file()).unwrap();
+        let bytes = std::fs::read(jpeg.path()).unwrap();
+        assert!(bytes.starts_with(&[0xff, 0xd8, 0xff]));
+        let decoded =
+            image::load_from_memory_with_format(&bytes, image::ImageFormat::Jpeg).unwrap();
+        assert_eq!((decoded.width(), decoded.height()), (17, 9));
+        let low = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
+        convert_still(&png, Still::Jpeg { quality: 1 }, low.as_file()).unwrap();
+        assert!(std::fs::metadata(low.path()).unwrap().len() < bytes.len() as u64);
+        let broken = dir.path().join("broken.png");
+        std::fs::write(&broken, b"not a png").unwrap();
+        let out = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
+        assert!(convert_still(&broken, Still::Bmp, out.as_file()).is_err());
+        assert!(convert_still(&png, Still::Png, out.as_file()).is_err());
     }
 }

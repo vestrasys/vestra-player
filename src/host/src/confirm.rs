@@ -1,5 +1,7 @@
-//! `plugin.dialogs.confirm`: a system alert (NSAlert) with a confirm and a
-//! cancel button and an optional checkbox, as a sheet on the main window.
+//! `plugin.dialogs.confirm`: a system alert with a confirm and a cancel button
+//! and an optional checkbox. The options are checked here; showing the alert
+//! is `platform::confirm` (an NSAlert sheet on macOS, a message box on
+//! Windows).
 #![forbid(unsafe_code)]
 
 use crate::RpcError;
@@ -46,68 +48,6 @@ pub fn parse(params: &Value) -> Result<Options, RpcError> {
         destructive,
         checkbox: text("checkbox", 1, 40)?,
     })
-}
-
-/// Show the alert; `done(confirmed, checked)` runs on the main thread when the
-/// user answered. A sheet on `parent` when there is one, else app-modal
-/// (`done` then runs before this returns).
-#[cfg(target_os = "macos")]
-pub fn show(
-    options: &Options,
-    parent: Option<crate::platform_window::HostWindowId>,
-    done: impl Fn(bool, bool) + 'static,
-) -> Result<(), RpcError> {
-    use objc2::MainThreadMarker;
-    use objc2_app_kit::{NSAlert, NSAlertFirstButtonReturn, NSControlStateValueOn};
-    use objc2_foundation::NSString;
-    let marker = MainThreadMarker::new()
-        .ok_or_else(|| RpcError::new("unavailable", "dialogs need the main thread"))?;
-    let alert = NSAlert::new(marker);
-    alert.setMessageText(&NSString::from_str(&options.message));
-    if let Some(detail) = &options.detail {
-        alert.setInformativeText(&NSString::from_str(detail));
-    }
-    let confirm = alert.addButtonWithTitle(&NSString::from_str(&options.confirm));
-    confirm.setHasDestructiveAction(options.destructive);
-    let cancel = alert.addButtonWithTitle(&NSString::from_str(&options.cancel));
-    cancel.setKeyEquivalent(&NSString::from_str("\u{1b}"));
-    let checkbox = options.checkbox.as_ref().and_then(|title| {
-        alert.setShowsSuppressionButton(true);
-        let button = alert.suppressionButton()?;
-        button.setTitle(&NSString::from_str(title));
-        Some(button)
-    });
-    let answer = move |response: isize| {
-        let checked = checkbox
-            .as_ref()
-            .is_some_and(|button| button.state() == NSControlStateValueOn);
-        done(response == NSAlertFirstButtonReturn, checked);
-    };
-    // The window the user is working in (a tool window that asked, the
-    // floating sidebar), else the main window: the sheet never hides its caller.
-    let key = objc2_app_kit::NSApplication::sharedApplication(marker)
-        .keyWindow()
-        .filter(|window| window.isVisible() && window.attachedSheet().is_none());
-    match key.or_else(|| parent.and_then(|id| crate::platform_window::ns_window(id).ok())) {
-        Some(window) => {
-            let handler = block2::RcBlock::new(answer);
-            alert.beginSheetModalForWindow_completionHandler(&window, Some(&handler));
-        }
-        None => answer(alert.runModal()),
-    }
-    Ok(())
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn show(
-    _options: &Options,
-    _parent: Option<crate::platform_window::HostWindowId>,
-    _done: impl Fn(bool, bool) + 'static,
-) -> Result<(), RpcError> {
-    Err(RpcError::new(
-        "unavailable",
-        "system alerts are unavailable on this platform",
-    ))
 }
 
 #[cfg(test)]

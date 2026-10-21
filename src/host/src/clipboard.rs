@@ -1,8 +1,9 @@
 //! `plugin.clipboard`: plain text and PNG/JPEG images on the system
-//! pasteboard. Called on the UI thread; the headless host has no pasteboard.
+//! clipboard. Called on the UI thread; the headless host has no clipboard.
+//! The checks are here; the system side is `platform::clipboard_*`.
 #![forbid(unsafe_code)]
 
-use crate::RpcError;
+use crate::{RpcError, platform};
 use serde_json::Value;
 use std::path::Path;
 
@@ -13,14 +14,6 @@ pub const MAX_IMAGE_BYTES: u64 = 16 * 1024 * 1024;
 pub enum Image {
     Png,
     Jpeg,
-}
-impl Image {
-    fn uti(self) -> &'static str {
-        match self {
-            Self::Png => "public.png",
-            Self::Jpeg => "public.jpeg",
-        }
-    }
 }
 
 /// The image kind from the file's leading bytes, not its name.
@@ -61,72 +54,21 @@ pub fn text(params: &Value) -> Result<&str, RpcError> {
     Ok(text)
 }
 
-#[cfg(target_os = "macos")]
-mod system {
-    use super::Image;
-    use crate::RpcError;
-    use objc2_app_kit::NSPasteboard;
-    use objc2_foundation::{NSData, NSString};
-
-    const TEXT: &str = "public.utf8-plain-text";
-
-    fn refused() -> RpcError {
-        RpcError::new("failed", "the system refused the pasteboard write")
-    }
-    pub fn read_text() -> Option<String> {
-        NSPasteboard::generalPasteboard()
-            .stringForType(&NSString::from_str(TEXT))
-            .map(|text| text.to_string())
-    }
-    pub fn write_text(text: &str) -> Result<(), RpcError> {
-        let board = NSPasteboard::generalPasteboard();
-        board.clearContents();
-        board
-            .setString_forType(&NSString::from_str(text), &NSString::from_str(TEXT))
-            .then_some(())
-            .ok_or_else(refused)
-    }
-    pub fn write_image(kind: Image, bytes: Vec<u8>) -> Result<(), RpcError> {
-        let board = NSPasteboard::generalPasteboard();
-        board.clearContents();
-        let data = NSData::from_vec(bytes);
-        board
-            .setData_forType(Some(&data), &NSString::from_str(kind.uti()))
-            .then_some(())
-            .ok_or_else(refused)
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-mod system {
-    use super::Image;
-    use crate::RpcError;
-    fn none() -> RpcError {
-        RpcError::new("unavailable", "no system clipboard on this platform")
-    }
-    pub fn read_text() -> Option<String> {
-        None
-    }
-    pub fn write_text(_: &str) -> Result<(), RpcError> {
-        Err(none())
-    }
-    pub fn write_image(kind: Image, _: Vec<u8>) -> Result<(), RpcError> {
-        let _ = kind.uti();
-        Err(none())
-    }
-}
-
 /// `clipboard.readText` / `writeText` / `writeImage`.
 pub fn dispatch(method: &str, params: &Value) -> Result<Value, RpcError> {
     match method {
-        "clipboard.readText" => Ok(system::read_text().map_or(Value::Null, Value::String)),
-        "clipboard.writeText" => system::write_text(text(params)?).map(|()| Value::Null),
+        "clipboard.readText" => {
+            Ok(platform::clipboard_read_text()?.map_or(Value::Null, Value::String))
+        }
+        "clipboard.writeText" => {
+            platform::clipboard_write_text(text(params)?).map(|()| Value::Null)
+        }
         "clipboard.writeImage" => {
             let path = params["path"]
                 .as_str()
                 .ok_or_else(|| RpcError::invalid("path requires a string"))?;
             let (kind, bytes) = read_image(path)?;
-            system::write_image(kind, bytes).map(|()| Value::Null)
+            platform::clipboard_write_image(kind, bytes).map(|()| Value::Null)
         }
         _ => Err(RpcError::new("unsupported", "unknown clipboard method")),
     }

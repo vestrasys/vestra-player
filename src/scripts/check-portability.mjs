@@ -112,8 +112,13 @@ function check(chain, extra) {
       if (own) errors.push(text);
       else blocked.set(crate, text.split("\n").slice(0, 3).join(" "));
     } else if (diagnostic.level === "warning" && own) {
-      const file = diagnostic.spans?.[0]?.file_name ?? "?";
-      warnings.set(file, [...(warnings.get(file) ?? []), diagnostic.message]);
+      // The binary and its tests report the same warning once each.
+      const span = diagnostic.spans?.[0];
+      const file = span?.file_name ?? "?";
+      const key = `${span?.line_start}:${diagnostic.message}`;
+      const list = warnings.get(file) ?? new Map();
+      list.set(key, diagnostic.message);
+      warnings.set(file, list);
     }
   }
   // Build scripts that fail (pkg-config, cc for the target) print to stderr.
@@ -130,10 +135,14 @@ function check(chain, extra) {
   }
   if (result.status !== 0 && !errors.length && !blocked.size)
     errors.push(result.stderr.trim().split("\n").slice(-15).join("\n"));
+  for (const [file, list] of warnings) warnings.set(file, [...list.values()]);
   return { ok: result.status === 0, errors, warnings, blocked };
 }
 
-/** `cfg(unix)` / `cfg(target_os)` / `std::os::` outside src/platform/. */
+/**
+ * `cfg(unix)` / `cfg(target_os)` / `std::os::` and absolute system paths
+ * outside src/platform/ (comments skipped).
+ */
 async function hostNotes() {
   const root = join(host, "src");
   const notes = [];
@@ -145,7 +154,13 @@ async function hostNotes() {
       } else if (item.name.endsWith(".rs")) {
         const lines = (await readFile(path, "utf8")).split("\n");
         lines.forEach((line, index) => {
-          if (/cfg\((not\()?(unix|windows|target_os)|std::os::/.test(line))
+          if (/^\s*\/\//.test(line)) return;
+          if (
+            /cfg\((not\()?(unix|windows|target_os)|std::os::/.test(line) ||
+            /"(\/usr\/|\/bin\/|\/opt\/|\/System\/|\/Library\/|\/tmp\b)/.test(
+              line,
+            )
+          )
             notes.push(
               `${relative(source, path)}:${index + 1}: ${line.trim()}`,
             );

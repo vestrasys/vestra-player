@@ -1,7 +1,8 @@
 //! File drops (R-U2, capability `ui.drop`). winit 0.30 reports one
 //! `DroppedFile` per path without position or modifiers; the paths of one
 //! drop arrive back to back, so a group closes after 30 ms without another.
-//! On closing, AppKit gives the pointer and modifier keys; the drop goes to
+//! On closing, the platform gives the pointer and modifier keys (AppKit on
+//! macOS, Win32 on Windows; `cmd` is Ctrl there); the drop goes to
 //! the panel under the pointer (if it listens) or, by extension, to the
 //! providers (`drops.provide`). Directories match the reserved name `folder`.
 #![forbid(unsafe_code)]
@@ -200,7 +201,7 @@ impl Host {
         let Some((generation, paths)) = self.drops.due() else {
             return;
         };
-        let (alt, shift, cmd) = platform_window::modifier_keys();
+        let (alt, shift, cmd) = platform::modifier_keys();
         let modifiers = json!({"alt":alt,"shift":shift,"cmd":cmd});
         let paths_json = json!(
             paths
@@ -217,7 +218,7 @@ impl Host {
             let floating = self.floating.as_ref().unwrap();
             let at = floating
                 .native
-                .and_then(|id| platform_window::pointer_in(id).ok())
+                .and_then(|id| platform::pointer_in(id).ok())
                 .unwrap_or((0., 0.));
             Some((floating.owner, at))
         } else if generation == self.shell_generation {
@@ -228,7 +229,7 @@ impl Host {
             let fullscreen = self.window_facts["fullscreen"] == true;
             let point = self
                 .native_window
-                .and_then(|id| platform_window::pointer_in(id).ok());
+                .and_then(|id| platform::pointer_in(id).ok());
             let input = self.input.borrow();
             point.filter(|_| !fullscreen).and_then(|point| {
                 hit(

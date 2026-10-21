@@ -57,6 +57,7 @@ pub const CAPABILITIES: &[&str] = &[
     "ui.drop",
     "ui.settings",
     "ui.theme",
+    "secrets",
 ];
 /// `plugin.app` as JSON, set once at start-up and given to every plugin.
 static APP_INFO: std::sync::OnceLock<String> = std::sync::OnceLock::new();
@@ -246,15 +247,13 @@ impl Plugin {
         }
     }
 }
-/// `$VESTRA_PLUGIN_DATA`, else `~/Library/Application Support/Vestra/plugin-data`.
+/// `$VESTRA_PLUGIN_DATA`, else `plugin-data` in the application data
+/// directory (`~/Library/Application Support/Vestra` on macOS,
+/// `%APPDATA%\Vestra` on Windows).
 pub fn data_root() -> Option<PathBuf> {
     std::env::var_os("VESTRA_PLUGIN_DATA")
         .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME").map(|home| {
-                PathBuf::from(home).join("Library/Application Support/Vestra/plugin-data")
-            })
-        })
+        .or_else(|| crate::platform::app_data_dir().map(|root| root.join("plugin-data")))
 }
 pub fn package_file(directory: &Path, relative: &str) -> Result<PathBuf> {
     if Path::new(relative).is_absolute() {
