@@ -116,7 +116,7 @@ channel = "stable"
 - **唯一性只由官方插件仓库保证**（CI 加审核）：第三方登记的 id 必须是 `<GitHub 用户名或组织名>.<插件名>`，前缀等于 `registry/<id>.toml` 里源码仓库的所有者；id 第一次登记后与 `owners` 绑定，之后改这个登记文件的 PR 必须由 owner 提交。`vestra.` 只给插件仓库自带的官方插件用。
 - 第三方仓库之间的重名和冒充由用户自己负责（是用户选择添加的仓库），我们不协调；数据不会互相覆盖，见下面的安装实例 GUID。
 - SDK：`npm create vestra-plugin` 默认填 `<GitHub 用户名>.<目录名>`；`vestra-plugin check` 对没有前缀的 id 只给提示，不报错。
-- 现有内置插件 `audio`、`bilibili`、`nes`、`youtube` 改为 `vestra.*`，因为它们进官方仓库后要符合仓库规则（宿主并不要求）。未发版，不迁移旧设置。
+- `youtube`、`bilibili` 迁到插件仓库后改为 `vestra.youtube`、`vestra.bilibili`（符合仓库规则）；留在主仓库的 `audio`、`nes` 为统一起见改为 `vestra.audio`、`vestra.nes`（宿主并不要求）。未发版，不迁移旧设置。
 - 曾考虑让宿主强制格式并保留 `vestra.` 前缀，后来放弃：唯一性、防覆盖、官方标记都已由官方仓库 CI、安装实例 GUID 和来源判断解决，宿主再强制只会带来一次破坏性变更。
 - 参照：Dalamud 的 `InternalName` 不带命名空间，只靠官方仓库目录名和人工审核保证唯一；Flathub 要求 GitHub 上的应用用 `io.github.<用户名>.*` 并验证账号。没有采用 Chrome 式的公钥 id：唯一且防冒充，但作者要保管密钥，id 不可读，对目前的规模不划算。
 
@@ -136,7 +136,8 @@ channel = "stable"
 3. **签名**第一版就做：`index.json.sig`，播放器内置公钥。
 4. **信任模型**：插件是完整的 Node 进程，`capabilities` 只限制宿主 API，挡不住直接读写文件和联网。官方仓库人工审核源码；第三方仓库和侧载在界面上明确警告；沙箱以后再说。详情页列出插件申请的 `capabilities`。
 5. **更新**：自动检查、用户手动确认；manifest 增加可选的 `minPlayerVersion`；用户可回退到上一个版本。
-6. **内置插件**迁到插件仓库，随安装包分发，可经商城单独更新，只能停用不能卸载。
+6. **内置插件留在主仓库**（2026-10-21 修订，参照 VS Code：内置扩展在主仓库 `extensions/` 下随主程序构建发版）。`src/plugins/` 下的插件随播放器构建，打包时直接从 `src/plugins` 构建 `.vxp` 放进安装包；只能停用不能卸载；**第一版只随播放器发版更新**，商城不更新、不替换内置插件（以后需要时再考虑 VS Code 式「市场版本覆盖内置版本」）。
+   - 例外：`youtube`、`bilibili` 两个网络视频插件迁到插件仓库，作为官方插件经商城安装，不随安装包分发。
 7. **撤回**：`index.json` 增加 `revoked` 列表（id 加版本或版本范围）。商城检查到已安装的被撤回版本时停用它并通知用户。
 8. **不分测试版和正式版**：合并即发布。兜底靠 CI 测试、用户回退和撤回。
 9. **不显示下载次数**：没有服务器时这个数字可以随意刷（GitHub Releases 的计数谁都能刷，第三方 `index.json` 由作者自己生成）。列表按名称或更新时间排序；以后自建服务器再经 `extensions` 提供。
@@ -150,11 +151,11 @@ channel = "stable"
 | --- | --- | --- |
 | `vestra-player`（现有） | Rust 宿主、runner、SDK 实现的运行时副本、文档 | 播放器安装包 |
 | SDK 仓库 [`vestra-player-sdk`](https://github.com/vestrasys/vestra-player-sdk)（S1 建立） | `@vestra-player/sdk`：类型、TestHost、CLI、`./runtime` 实现入口、Slint 控件库副本、插件模板 | npm（`NPM_TOKEN` 就绪前播放器用 git 标签） |
-| 插件仓库（新建） | 官方插件源码，以及第三方插件的登记文件（`registry/<id>.toml`），CI 构建出插件包和 `index.json` | GitHub Releases（插件包）、GitHub Pages（`index.json`、`index.json.sig`） |
+| 插件仓库 [`vestra-player-plugins`](https://github.com/vestrasys/vestra-player-plugins) | 不随安装包分发的官方插件源码（`plugins/youtube`、`plugins/bilibili`），以及第三方插件的登记文件（`registry/<id>.toml`），CI 构建出插件包和 `index.json` | GitHub Releases（插件包）、GitHub Pages（`index.json`、`index.json.sig`） |
 
 **SDK 源码的唯一来源**：建议 SDK 仓库作为类型和 CLI 的源头；播放器仓库通过 npm 依赖拿到 SDK 运行时代码，或者在 SDK 仓库里单独导出一个 `runtime` 入口供播放器打包。不要两个仓库各维护一份。具体做法在步骤 S2 里定。**已定（S2）**：SDK 实现也只在 SDK 仓库，经 `./runtime` 入口供播放器使用；播放器仓库删除 `src/packages/sdk`，依赖锁定版本的包，见文末 S1/S2 记录。
 
-**内置插件**：源码迁到插件仓库，播放器打包时从插件仓库的 Releases 取构建好的包，放进安装包。插件更新可以走商城，不必等播放器发版。
+**内置插件**：留在播放器仓库 `src/plugins/`，随播放器构建和发版（1.6 第 6 条）。只有 `youtube`、`bilibili` 迁到插件仓库（保留历史），经商城安装。
 
 ## 3. 需要你准备的
 
@@ -172,8 +173,8 @@ channel = "stable"
 | S0 | 在本仓库先把 SDK 整理成可独立的 workspace 包（`src/sdk` 改为包结构，插件改用包名引用，CLI 从 `scripts/plugin.mjs` 移进包），在 monorepo 内验证：全量检查，加开发方式和 dist 两种真机运行 | 无，可立即开始 |
 | S1 | SDK 仓库：迁入 S0 的包（保留 git 历史，用 `git subtree split` 或 `git filter-repo`），配置 CI（检查、测试、npm 发布），发布 `@vestra-player/sdk@1.0.0` | SDK 仓库链接、npm 作用域、`NPM_TOKEN` |
 | S2 | 播放器仓库改为依赖 npm 包：删除 `src/sdk` 里对外的部分；runner 和运行时代码的来源按第 2 节确定；打包和开发两条路径真机验证 | S1 |
-| S3 | 插件仓库：迁入内置插件源码（保留历史），改用 npm 上的 SDK；建 CI，包括构建、打包、上传 Releases、生成并签名 `index.json`（构建与签名分开的 job）、`revoked` 列表、发布到 Pages；写 `registry/<id>.toml` 的 PR 模板和贡献说明 | 插件仓库链接、Pages、签名密钥 |
-| S4 | 核心改动：manifest 显示字段，内置插件不可卸载；安装实例 GUID（1.5a）；`.vxp` 安装、`minPlayerVersion`；核心 Markdown 显示组件（1.6 第 10 条）；播放器打包时从插件仓库取内置插件 | S2、S3 |
+| S3 | 插件仓库：迁入 `youtube`、`bilibili` 源码（保留历史），改用 npm 上的 SDK；播放器仓库删除这两个插件；建 CI，包括构建、打包、上传 Releases、生成并签名 `index.json`（构建与签名分开的 job）、`revoked` 列表、发布到 Pages；写 `registry/<id>.toml` 的 PR 模板和贡献说明 | 插件仓库链接、Pages、签名密钥 |
+| S4 | 核心改动：manifest 显示字段，内置插件不可卸载；安装实例 GUID（1.5a）；`.vxp` 安装、`minPlayerVersion`；核心 Markdown 显示组件（1.6 第 10 条）；播放器打包时从 `src/plugins` 构建内置插件 | S2、S3 |
 | S5 | 商城插件：列表和详情界面、安装、更新、第三方仓库、链接与拖入安装、签名校验、`revoked` 处理、权限展示与第三方警告、回退 | S3、S4 |
 | S7 | 内置 Node 24 LTS 与 `.app` 打包、签名（1.6 第 12 条）；SDK `engines` 调整 | 可与 S3–S5 并行 |
 | S6 | 真机验收：从官方仓库安装和更新、第三方仓库、侧载、热卸载、内置插件保护；跨平台检查 | S5 |
