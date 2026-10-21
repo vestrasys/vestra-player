@@ -167,3 +167,14 @@ macOS 的代码是原样搬进 `platform/macos.rs` 的，但调用路径变了�
 ### 4.6 P4 交付（维护者，2026-10-21）
 
 删除 §4.4 的兼容期接口：`LocalServices.open` / `openUrl`（`sdk/wire.ts`，workshop `vendor/sdk` 已重同步）与 `TestHost` 经 `host.local` 转发 `system.*` 的那段（改为直接记录到 `host.system`，注入失败用 `host.handle`），grep 确认插件与测试已无引用，参考 §14/§17 已同步；`src/sdk` 中不再有 `/usr/bin/open`，`npm run portability`（含宿主）clean，src 与宿主的全部检查通过。
+
+### 4.7 协调者验收（2026-10-21）
+
+**全部检查通过**：19 个插件测试、test:sdk 97 个、cargo test 234 个。`npm run portability` 含 Windows 交叉编译检查，结果 clean。
+
+**macOS 真机回归通过**：
+- 系统信息页：系统版本、机型、CPU、内存、显示器都正确。
+- 截图：核心直接导出 JPEG（40 KB）和 BMP，没有残留的临时文件。
+- 「打开截图文件夹」：经宿主的 `system.openPath` 在访达中打开。
+
+**未在本轮验证**：Windows 真机运行。另有几处已知的 Windows 缺口：截图导出、生成流、确认框按钮文字，见 §4.2。
