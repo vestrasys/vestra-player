@@ -15,7 +15,7 @@
     "portability": "node scripts/check-portability.mjs"
   },
   "dependencies": {
-    "@vestra-player/sdk": "git+https://github.com/vestrasys/vestra-player-sdk.git#v1.0.0"
+    "@vestra-player/sdk": "github:vestrasys/vestra-player-sdk#v1.0.0"
   },
   "allowScripts": {
     "github:vestrasys/vestra-player-sdk": true
