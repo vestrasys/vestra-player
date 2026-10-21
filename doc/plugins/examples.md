@@ -13,7 +13,7 @@
 ## 1. 画面调节：连续控制 + 处理资源 + 工具窗口
 
 ```ts
-import type { Plugin } from "../../sdk/plugin/index.ts";
+import type { Plugin } from "@vestra-player/sdk";
 import { defaults, describe, nodesFor, presets } from "./model.ts";
 
 export default async function activate(plugin: Plugin) {
@@ -53,7 +53,7 @@ export default async function activate(plugin: Plugin) {
 ## 2. 基础播放栏：挂载到底栏、显示来源状态、拖动跳转
 
 ```ts
-import type { Plugin, Scrub } from "../../sdk/plugin/index.ts";
+import type { Plugin, Scrub } from "@vestra-player/sdk";
 import { time } from "./model.ts";
 
 export default async function activate(plugin: Plugin) {
@@ -89,7 +89,7 @@ export default async function activate(plugin: Plugin) {
 ## 3. 基础播放栏：命令启用状态随播放状态变化
 
 ```ts
-import type { Plugin } from "../../sdk/plugin/index.ts";
+import type { Plugin } from "@vestra-player/sdk";
 
 export default async function activate(plugin: Plugin) {
   const { player } = plugin;
@@ -130,7 +130,7 @@ export default async function activate(plugin: Plugin) {
 ## 4. 播放列表：侧栏列表模型、选中、自动推进
 
 ```ts
-import type { Disposable, Media, Plugin } from "../../sdk/plugin/index.ts";
+import type { Disposable, Media, Plugin } from "@vestra-player/sdk";
 import type { Row } from "./queue.ts";
 
 export default async function activate(plugin: Plugin) {
@@ -173,7 +173,7 @@ export default async function activate(plugin: Plugin) {
 ## 5. 截图导出：绑定来源快照的任务、进度、取消
 
 ```ts
-import type { ExportJob, Plugin } from "../../sdk/plugin/index.ts";
+import type { ExportJob, Plugin } from "@vestra-player/sdk";
 
 export default async function activate(plugin: Plugin) {
   const window = plugin.windows.create("capture.slint");
@@ -209,7 +209,7 @@ export default async function activate(plugin: Plugin) {
 
 ```ts
 import { readFile } from "node:fs/promises";
-import type { Plugin, Stream } from "../../sdk/plugin/index.ts";
+import type { Plugin, Stream } from "@vestra-player/sdk";
 import { NesCore } from "./core.ts";
 
 export default async function activate(plugin: Plugin) {
@@ -246,7 +246,7 @@ export default async function activate(plugin: Plugin) {
 
 ```ts
 import { readFile } from "node:fs/promises";
-import type { Plugin, SubtitlesState } from "../../sdk/plugin/index.ts";
+import type { Plugin, SubtitlesState } from "@vestra-player/sdk";
 import { styleWith } from "./model.ts";
 
 export default async function activate(plugin: Plugin) {
@@ -283,7 +283,7 @@ export default async function activate(plugin: Plugin) {
 ## 8. 音频工作台：带延迟的音频处理、按音轨复位
 
 ```ts
-import type { Plugin } from "../../sdk/plugin/index.ts";
+import type { Plugin } from "@vestra-player/sdk";
 import { neutral, nodesFor } from "./model.ts";
 
 export default async function activate(plugin: Plugin) {
@@ -320,7 +320,7 @@ export default async function activate(plugin: Plugin) {
 ## 9. 网络媒体：解析器、打开、等待就绪、取消（Bilibili / YouTube）
 
 ```ts
-import type { Plugin } from "../../sdk/plugin/index.ts";
+import type { Plugin } from "@vestra-player/sdk";
 import { extract } from "./extractor.ts";
 
 export default async function activate(plugin: Plugin) {
@@ -360,7 +360,7 @@ export default async function activate(plugin: Plugin) {
 ## 10. 插件工坊：校验、试载、安装
 
 ```ts
-import type { PackageCandidate, PackageTrial, Plugin } from "../../sdk/plugin/index.ts";
+import type { PackageCandidate, PackageTrial, Plugin } from "@vestra-player/sdk";
 
 export default async function activate(plugin: Plugin) {
   const window = plugin.windows.create("workshop.slint");
@@ -394,7 +394,7 @@ export default async function activate(plugin: Plugin) {
 ## 11. 拆分模块、子作用域与手动更新
 
 ```ts
-import type { Plugin, Scope, Window } from "../../sdk/plugin/index.ts";
+import type { Plugin, Scope, Window } from "@vestra-player/sdk";
 
 /** 功能模块只拿到它需要的作用域或句柄，而不是整个插件。 */
 function linkDialog(scope: Scope, add: (url: string) => void): Window {
@@ -425,7 +425,7 @@ export default async function activate(plugin: Plugin) {
 ```ts
 import assert from "node:assert/strict";
 import test from "node:test";
-import { HostError, startPlugin } from "../../../sdk/plugin/testing.ts";
+import { HostError, startPlugin } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 
 test("a refused change is shown and can be retried", async () => {
@@ -453,7 +453,7 @@ test("a refused change is shown and can be retried", async () => {
 完整代码见 `src/examples/core-ui/`。
 
 ```ts
-import type { Plugin } from "../../sdk/plugin/index.ts";
+import type { Plugin } from "@vestra-player/sdk";
 
 export default async function activate(plugin: Plugin) {
   const { player } = plugin;

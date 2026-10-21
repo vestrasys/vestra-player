@@ -120,3 +120,113 @@ S0 不依赖新仓库，可以先做。拿到仓库链接后从 S1 继续。
 - macOS `.app` 打包：`Info.plist` 显示名 Vestra Player、应用图标。
 - Node.js 运行时：正式版是要求用户自己安装 Node（≥ 22.18），还是随播放器内置一份。和打包一起定。
 - Windows 实机运行验证。
+
+## S0 记录（2026-10-21，API 维护者）
+
+SDK 已在本仓库整理成 npm workspace 包 `@vestra-player/sdk@1.0.0`（对应 `vestra/1`），所有插件、示例、runner 和测试都改用包名引用，插件工坊不再带 SDK 副本。插件行为不变：除 workshop 外，全部 18 个插件的 `dist/` 与改动前逐字节相同；workshop 只少了 `vendor/sdk`，`main.js` 随引擎改动变化。
+
+### 包结构
+
+```text
+src/packages/sdk/                 npm 包 @vestra-player/sdk（src/package.json 的 workspaces）
+  package.json                    exports / bin / files；依赖 typescript ^5.9、@types/node
+  README.md                       作者用：安装、最小插件、入口、CLI、Slint 副本
+  tsconfig.json                   构建：src → dist（.js + .d.ts）
+  tsconfig.check.json             src + test 的类型检查（S1 后包自己的 CI 用）
+  scripts/build.mjs               清空并重建 dist/
+  src/index.ts                    公共入口：只有类型（export type * from plugin/types.ts）
+  src/plugin/*.ts                 插件 API 实现（原 src/sdk/plugin/），testing.ts 为 TestHost
+  src/*.ts                        wire 客户端等内部模块（原 src/sdk/*.ts，wire.ts 在内）
+  src/player-runtime.ts           ./runtime 入口（仅供播放器）
+  src/capabilities.ts             能力名表与 API_VERSION（CLI 与宿主一致性测试用）
+  bin/vestra-plugin.mjs           CLI（由 scripts/plugin.mjs 迁入并泛化）
+  slint/palette.slint、slint/vestra/{theme,widgets}.slint   控件库只读副本
+  test/*.test.ts                  SDK 单元测试（原 src/tests/sdk/ 中只测 SDK 的部分）+ cli.test.ts
+```
+
+留在播放器一侧的：`src/runtime/runner.ts`；`src/tests/sdk/`（`runner.test.ts`、`host-agreement.test.ts`：命令上限、能力表、`apiVersion`、Slint 副本与宿主一致）；`src/scripts/plugin.mjs`（按插件名调用 CLI 的快捷方式，`npm run plugin -- …` 用法不变）、`sync-sdk-slint.mjs`、`stage-runtime.mjs`、`check-boundaries.mjs`。
+
+### exports
+
+| 入口 | 文件 | 内容 |
+| --- | --- | --- |
+| `@vestra-player/sdk` | `dist/index.{js,d.ts}` | 插件 API 全部公共类型，无运行时值（`index.js` 为空模块），所以误写值导入会在构建时被拒 |
+| `@vestra-player/sdk/testing` | `dist/plugin/testing.*` | `TestHost`、`startPlugin`、`HostError`、`FakeWindow` 等；新增再导出 `COMMAND_LIMITS`（参考文档原本就把它写成 SDK 常量，原来只能用内部路径取到） |
+| `@vestra-player/sdk/runtime` | `dist/player-runtime.*` | `createPlugin`、`PluginInstance`、`PluginManifest`、`HostError`、`Json`、`Transport`、`CAPABILITIES`、`API_VERSION`、`COMMAND_LIMITS`。**仅供播放器内部**（runner 与播放器测试），不属于插件 API，不受 semver 约束 |
+| `@vestra-player/sdk/package.json` | | 供 runner 位置解析包目录（工坊用） |
+| bin `vestra-plugin` | `bin/vestra-plugin.mjs` | `check / build / test / pack` |
+
+与 §1.5 的差别：SDK 实现代码（含 `wire.ts`）也在 npm 包里，经 `./runtime` 供播放器使用、不对插件承诺。这就是第 2 节「SDK 仓库单独导出一个 `runtime` 入口供播放器打包」的方案，SDK 源码只有一份；runner 仍只随播放器分发。
+
+`createPlugin` 放在 `./runtime` 而不是 `.`：插件只该 `import type`，公共入口没有值就不会被误用。`wire.ts` 等内部模块不在 `exports` 里，Node 和 TypeScript 都拒绝深路径导入；它们的 `.d.ts` 仍在包里，因为公共类型引用了其中的 `Json` 等类型。
+
+### 发布格式：编译后的 .js + .d.ts
+
+- Node 不对 `node_modules` 里的 `.ts` 做类型剥离（`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`）。打包后的 runner 从 `Resources/runtime/node_modules` 加载 SDK，只能是 `.js`；第三方插件的测试也一样。
+- 打包器、编辑器、旧版 TypeScript 都直接读 `.js` + `.d.ts`。
+- 声明文件保留 `.ts` 后缀的相对引用（TypeScript 的 `rewriteRelativeImportExtensions` 不改 `.d.ts`），已验证 NodeNext 解析正常（类型错误能报出，不会退化成 `any`），`skipLibCheck` 关闭时也无错误。
+- 仓库内：插件、示例、runner、播放器测试都用 `dist/`，与第三方作者看到的完全一样；SDK 自己的单元测试通过相对路径直接跑 `src/`。`dist/` 不提交（`.gitignore`），构建约 1 秒：根 `prepare` 在 `npm ci/install` 时构建，`check`、`test:sdk`、`plugin`、`plugins:build`、`start` 先跑 `sdk:build`；包自己用 `prepack`（`npm pack/publish` 前构建）。不用 `prepare` 是因为 npm 11 默认拦截依赖包的安装脚本并告警。
+- 包依赖 `typescript ^5.9`（CLI 自带编译器）和 `@types/node`（公共 `.d.ts` 引用 `AbortSignal`、`Buffer`、`node:net`）。不能用宽松的 peer 依赖：npm 上 `typescript` 最新版已是 7.0（原生编译器），它不导出 `lib/tsc.js` 和 `transpileModule`，CLI 用不了。运行时没有任何依赖（只用 Node 内置模块）。
+- `license` 暂填 `UNLICENSED`：**S1 发布前需要用户定许可证**。
+
+### CLI `vestra-plugin`
+
+- 按目录工作（默认当前目录），不再假设仓库路径：类型检查沿用插件目录或上层最近的 `tsconfig.json`（到 `.git` 所在的仓库根为止；本仓库即 `src/tsconfig.json`，`jsnes` 路径映射照旧生效），没有就用内置严格设置；`typeRoots` 收集插件目录往上的各级 `node_modules/@types`，再加 SDK 自带的 `@types/node`。
+- 新检查：manifest 的 `apiVersion` 必须是 `vestra/1`（宿主本来就拒绝其它值）。产物中对 `@vestra-player/sdk`（任何子路径）的运行时引用一律拒绝，改为解析语法树判断，不再用正则（工坊引擎的字符串里含 `from '@vestra-player/sdk'`，正则会误报）；打包（`bundle`）时把 SDK 标为 external，确保这项检查看得到。
+- `pack`：构建后把 `dist/` 打成 `<id>-<version>.zip`（条目排序、固定时间戳，同样输入得到同样字节），输出大小和 sha256，供以后的 `repo.json`。**这是暂定格式**：宿主现在只从目录安装，包格式在 S3/S5 定稿时再确认。`*.zip` 不会被复制进 `dist/`（需要时列入 `assets`）。
+- Windows：`npm ci` 通过 shell 调用（`npm.cmd`）。
+
+### 边界检查（check-boundaries）
+
+插件和示例只能引用：自己目录内的相对路径；`@vestra-player/sdk`；`tests/` 下另可引用 `@vestra-player/sdk/testing`。`/runtime`、深路径、指向 SDK 源码的相对路径都报错（已用临时文件验证两种违规会失败）。
+
+### 插件工坊
+
+删除 `vendor/sdk` 和 `tests/vendor-sdk.test.mjs`。生成时用 `playerSdk()`：从 `process.argv[1]`（播放器的 runner）按 Node 规则解析 `@vestra-player/sdk/package.json`，开发时得到 workspace 包，打包后得到 `Resources/runtime/node_modules/@vestra-player/sdk`；只把 `package.json` 和 `dist/**/*.d.ts` 复制进候选的 `node_modules/@vestra-player/sdk/`。生成的 `main.ts` 与普通插件一样写 `import type { Plugin } from '@vestra-player/sdk'`。新增 `tests/sdk-types.test.mjs`，`engine.test.mjs` 增加断言（候选只含类型文件、导入写法），17/17 通过。
+
+### Slint 控件库副本
+
+`src/scripts/sync-sdk-slint.mjs` 把 `host/ui/palette.slint`、`host/ui/vestra/{theme,widgets}.slint` 复制到包的 `slint/`（`theme.slint` 引用 `../palette.slint`，所以连同调色板一起复制，相对位置不变）；`--check` 只报告差异。`tests/sdk/host-agreement.test.ts` 要求副本逐字节一致，且 `host/ui/vestra/` 里每个文件都在同步列表中。作者在 Slint LSP 里把库路径 `vestra` 指到 `node_modules/@vestra-player/sdk/slint/vestra`；运行时以播放器自带的为准。
+
+### runner 如何解析 SDK
+
+`runtime/runner.ts` 改为 `import { createPlugin, HostError } from "@vestra-player/sdk/runtime"`，宿主启动方式和 runner 路径都不变（开发：`src/runtime/runner.ts`；打包：`Resources/runtime/runner.ts`），Node 从 runner 所在目录往上找 `node_modules`：
+
+- 开发：`src/node_modules/@vestra-player/sdk` 是 npm workspace 建的符号链接，指向 `src/packages/sdk`，加载 `dist/`。直接 `cargo run` 时用的是最近一次构建的 `dist/`：改了 SDK 源码要先 `npm run sdk:build`（或 `npm start`）。
+- 打包：`Resources/runtime/node_modules/@vestra-player/sdk`（复制，不是链接）。
+
+### 打包时 Resources/runtime 的内容
+
+```text
+Resources/runtime/
+  runner.ts                                  src/runtime/runner.ts
+  package.json                               {"type":"module","private":true}
+  node_modules/@vestra-player/sdk/
+    package.json                             exports 表（runner 和工坊都靠它解析）
+    dist/**/*.js                             SDK 实现
+    dist/**/*.d.ts                           工坊给生成的候选做类型检查要用
+```
+
+不需要 `npm install`（SDK 没有运行时依赖），也不需要 `bin/`、`slint/`、TypeScript。`node src/scripts/stage-runtime.mjs <目录>` 按这个布局生成（先 `npm run sdk:build`）；`tests/sdk/runner.test.ts` 新增一条：在仓库外的临时目录生成该布局，用其中的 runner 跑一个插件到 `runtime.ready`。S2 改为依赖 npm 上的包后，`node_modules/@vestra-player/sdk` 换成从 npm 包解出的同样文件即可。
+
+### 检查（本次实际执行）
+
+- `src/`：`npm ci`（干净安装，`prepare` 生成 `dist/`）、`check`、`format:check`、`boundaries` 均退出 0；`test:sdk`：包内 105/105（原 103 + CLI 2），播放器侧 9/9（`runner` 6 + 打包布局 1，`host-agreement` 3）。改动前基线 109/109。
+- `plugins:build` 退出 0；各插件与示例测试通过数与改动前完全相同：audio 35、bilibili 15、capture 25、history 22、hotkeys 17、info 31、marks 24、nes 11、playback 64、playlist 98、plugins 10、preferences 10、subtitle-online 17、subtitles 52、video 39、visualizer 17、window 34、workshop 17、youtube 14、examples bookmark 1 / core-ui 2 / panel-menu 1；三个示例 `check` 通过。
+- `npm pack`：76 个文件（`README.md`、`package.json`、`bin/`、`dist/`、`slint/`），没有 `src/`、`test/`、`scripts/`，`dist` 里没有指向仓库路径的引用。在仓库外的临时目录用 tarball 新建最小插件项目（`npm i -D <tarball>`，自动带上 TypeScript 5.9.3 和 `@types/node`），`vestra-plugin check / build / test / pack` 全部通过；构建产物只有 `main.js`、`manifest.json`、`package.json`；故意写错类型、写成值导入时 `check` / `build` 按预期失败。
+- `src/host/`（`CARGO_TARGET_DIR=~/.cache/vestra-target/s0`）：`cargo fmt --check`、`cargo clippy --locked --all-targets -- -D warnings` 通过，`cargo test --locked` 263/263。Rust 只改了两处注释。
+- `portability`：clean。宿主可编译到 Windows 目标；扫描范围改为 `plugins`、`packages/sdk/{src,bin,scripts}`、`runtime`，0 处系统命令；`process.platform` 分支 4 处（新增 1 处是 CLI 在 Windows 上经 shell 调用 `npm`）。
+
+### 给协调者的真机验证要点
+
+1. **开发方式**：`cd src && npm ci`（确认 `packages/sdk/dist/` 已生成）→ 在 `src/host/` 下 `cargo run --bin vestra-host -- --plugin ../plugins/<每个插件>`，全部插件激活、菜单齐全。确认插件进程报错里没有 `Cannot find package '@vestra-player/sdk'`。
+2. **dist 方式**：`npm run plugins:build` 后加载各插件的 `dist/` 目录，同上。
+3. **打包布局**：用 `node scripts/stage-runtime.mjs` 生成 `Resources/runtime` 并放进 `.app`（或任何 `<exe 上一级>/Resources/runtime`），确认宿主走打包路径的 runner、插件正常激活。
+4. **插件工坊**（开发方式和打包布局各一次）：生成 → 校验 → 试载 → 安装 → 回退。重点：候选目录现在多了 `node_modules/@vestra-player/sdk/`（约 40 个 `.d.ts`，没有符号链接），确认宿主 `packages.validate` 接受；打包布局下 TypeScript 诊断仍是真实的 `TS2322`，说明找到了 `Resources/runtime` 里的 SDK 类型。
+5. **Windows**：`npm ci` 能生成 `dist/`；`npm run plugin -- test <名字>` 对有依赖的插件（workshop、nes）会经 shell 调用 `npm ci`；`packages/sdk/test/cli.test.ts` 用目录联接（junction），需要在 Windows 上跑一次。
+
+### 给 S1 的备注
+
+- 迁到 `vestra-player-sdk` 仓库的就是 `src/packages/sdk/` 整个目录（它的 `package.json`、`tsconfig*.json`、`test/` 已能独立运行：`npm run check`、`npm test`、`npm pack`）。保留历史：`git filter-repo --path src/sdk --path src/tests/sdk --path src/packages/sdk --path-rename src/packages/sdk/:` 之类，S0 的第一个提交只做了改名，便于追溯。`src/tests/sdk/runner.test.ts` 是播放器侧的，不迁。
+- Slint 副本的同步方向不变（播放器是源头）：SDK 仓库发布时从对应的播放器版本复制，播放器侧的一致性测试在 S2 改为对比 npm 包里的副本。
+- 发布前要定：许可证、npm 组织 `vestra-player`、`NPM_TOKEN`（第 3 节）。

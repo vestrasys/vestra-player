@@ -5,7 +5,7 @@
 ```text
 src/host/       Rust 宿主
 src/runtime/    插件运行器（每插件一个 Node 进程）
-src/sdk/        插件 API（src/sdk/plugin/）
+src/packages/sdk/  插件 SDK：npm 包 @vestra-player/sdk（类型、TestHost、vestra-plugin 命令行）
 src/plugins/    10 个产品插件
 src/examples/   示例插件
 doc/            文档（入口：doc/README.md）

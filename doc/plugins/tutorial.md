@@ -134,7 +134,7 @@ import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
 ## 5. `main.ts`：插件的逻辑
 
 ```ts
-import type { Plugin } from "../../sdk/plugin/index.ts";
+import type { Plugin } from "@vestra-player/sdk";
 
 export default async function activate(plugin: Plugin) {
   const { player } = plugin;
@@ -160,7 +160,7 @@ export default async function activate(plugin: Plugin) {
 ### 入口
 
 ```ts
-import type { Plugin } from "../../sdk/plugin/index.ts";
+import type { Plugin } from "@vestra-player/sdk";
 export default async function activate(plugin: Plugin) {
 ```
 
@@ -259,7 +259,7 @@ export default async function activate(plugin: Plugin) {
 ```ts
 import assert from "node:assert/strict";
 import test from "node:test";
-import { startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
+import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 
 test("mark the position, then jump back to it", async () => {
@@ -329,6 +329,7 @@ npm run plugin -- build examples/bookmark   # 生成 dist/，安装的就是这�
 ```
 
 - 插件有 npm 依赖时，在插件自己的 `package.json` 里加 `"vestra": { "bundle": true }`，并把 `esbuild` 加入它的 devDependencies，否则安装后会找不到依赖包。
+- 在本仓库之外开发插件：`npm i -D @vestra-player/sdk`，然后在插件目录运行 `npx vestra-plugin check|test|build|pack`（同样的工具，按目录而不是名字）。
 - 构建工具的完整选项见 [API 参考 §15](reference.md#15-构建工具)。
 
 ## 10. 下一步

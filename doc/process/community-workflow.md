@@ -18,7 +18,7 @@ API 的演进有两种方向，流程不同：
 | 角色 | 可写范围 | 职责 |
 | --- | --- | --- |
 | 协调者（主会话） | 记录文件；git 提交与推送；GUI 测试 | 分派任务、审查交付、裁决阻塞、集成、执行真实 GUI 测试、向用户报告。不代替维护者写 SDK，不代替作者写插件 |
-| API 维护者（1 个） | `src/sdk/`、`src/runtime/`、`src/host/`、`src/scripts/`、`src/tests/`、`doc/plugins/`、`doc/architecture/` | 维护宿主、SDK、wire 协议、manifest 规则、构建工具；处理能力请求；保持 SDK、宿主、文档、示例一致 |
+| API 维护者（1 个） | `src/packages/sdk/`、`src/runtime/`、`src/host/`、`src/scripts/`、`src/tests/`、`doc/plugins/`、`doc/architecture/` | 维护宿主、SDK、wire 协议、manifest 规则、构建工具；处理能力请求；保持 SDK、宿主、文档、示例一致 |
 | 插件作者（每插件 1 个） | 只能写 `src/plugins/<自己的目录>/` | 设计并实现自己的插件、写测试；缺能力时提请求 |
 | 交互设计负责人（可由协调者兼任） | `doc/product/` | 维护全局菜单领域与界面规范，审查插件设计的一致性 |
 | 独立验收者（按批次） | 验收记录 | 不参与实现。自己读源码、跑命令、检查产物，不接受「别人说通过了」 |
@@ -149,7 +149,7 @@ Vestra 要同时支持 macOS 和 Windows，以后可能还有 Linux。
 - 删除插件里已由 SDK 提供的自制轮子（合并更新、结果查询重试、过期事件过滤、名称转换、手写清理清单）。
 - 现有测试改用 SDK 的假宿主，原有覆盖不能减少。
 - **不新增功能、不提新能力请求、不「顺手」修无关行为。** 发现现有 bug 记在报告里，本轮不修。
-- 不改 `src/sdk`、`src/runtime`、`src/host`、`src/scripts` 或兄弟插件，不绕开 SDK 直接调用底层传输。
+- 不改 `src/packages/sdk`、`src/runtime`、`src/host`、`src/scripts` 或兄弟插件，不绕开 SDK 直接调用底层传输。
 - 现有行为用新 SDK **表达不了**时，这是「迁移阻塞」：停下这部分，写明哪个行为、旧代码位置、新 SDK 为什么表达不了、最小复现，然后继续迁移其它部分。由协调者转维护者裁决（补 SDK 或给写法），迁移者不自行发明替代方案。
 
 ### 5.3 迁移完成条件（迁移者自检，协调者复核）
