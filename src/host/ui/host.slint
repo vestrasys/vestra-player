@@ -47,12 +47,21 @@ export component HostWindow inherits Window {
     in property <string> osd-text;
     in property <bool> osd-visible: false;
     in property <[string]> info-panels;
+    // G-10: the OSD font follows the video area (3% of its height, 12–48px;
+    // Vestra value until D-08 gives reference player's formula); the information
+    // blocks scale with it (11px at a 16px OSD, 9–28px).
+    out property <length> osd-size: clamp(round(canvas.height * 0.03 / 1px) * 1px, 12px, 48px);
+    out property <length> info-size: clamp(11px * root.osd-size / 16px, 9px, 28px);
     callback window-input(string);
     // Bindings (C3): true when the input is bound, so Slint stops propagating it.
     callback key-input(string, string, bool, bool, bool, bool, bool) -> bool;
     callback mouse-input(string, bool, bool, bool, bool) -> bool;
     // A left press on the video (x, y, modifiers): the host decides single clicks.
     callback left-press(float, float, bool, bool, bool, bool);
+    // G-05: the pointer dragged the video: the system moves the window.
+    callback drag-window();
+    // IA-CORE-12: a double click on the video during picture-in-picture.
+    callback pip-return();
     out property <float> pointer-x: mouse.mouse-x / 1px;
     out property <float> pointer-y: mouse.mouse-y / 1px;
     callback wheel-input(float, float, bool, bool, bool, bool) -> bool;
@@ -106,10 +115,34 @@ export component HostWindow inherits Window {
                         mouse := TouchArea {
                             private property <KeyboardModifiers> mods;
                             private property <bool> right-armed;
+                            // G-05: a left press without modifiers may become a window drag.
+                            private property <length> press-x;
+                            private property <length> press-y;
+                            private property <bool> drag-armed;
+                            // After a drag the system may swallow the release, so the
+                            // next press can complete a double click: ignore that one.
+                            private property <bool> drag-swallow;
+                            private property <bool> swallow-press;
                             mouse-cursor: root.cursor-hidden ? MouseCursor.none : MouseCursor.default;
                             changed mouse-x => { root.window-input("activity"); }
                             changed mouse-y => { root.window-input("activity"); }
+                            moved => {
+                                if self.pressed && self.drag-armed && !root.host-fullscreen && !root.menu-open
+                                        && sqrt(pow((self.mouse-x - self.press-x) / 1px, 2) + pow((self.mouse-y - self.press-y) / 1px, 2)) > 4 {
+                                    self.drag-armed = false;
+                                    self.drag-swallow = true;
+                                    self.swallow-press = false;
+                                    root.drag-window();
+                                }
+                            }
                             double-clicked => {
+                                if self.swallow-press { return; }
+                                // IA-CORE-12: during picture-in-picture a double click
+                                // brings the video back instead of toggling fullscreen.
+                                if root.picture-in-picture {
+                                    root.pip-return();
+                                    return;
+                                }
                                 if !root.menu-open {
                                     root.mouse-input(self.mouse-x < self.width / 2 ? "LeftDoubleClick:LeftHalf" : "LeftDoubleClick:RightHalf",
                                         self.mods.control, self.mods.alt, self.mods.shift, self.mods.meta);
@@ -120,6 +153,11 @@ export component HostWindow inherits Window {
                                 if event.kind == PointerEventKind.down {
                                     canvas.focus(); root.window-input("activity");
                                     if event.button == PointerEventButton.left {
+                                        self.press-x = self.mouse-x;
+                                        self.press-y = self.mouse-y;
+                                        self.drag-armed = !event.modifiers.control && !event.modifiers.alt
+                                            && !event.modifiers.shift && !event.modifiers.meta;
+                                        self.swallow-press = self.drag-swallow;
                                         root.window-input("capture");
                                         if !root.menu-open {
                                             root.left-press(self.mouse-x / 1px, self.mouse-y / 1px, event.modifiers.control,
@@ -150,7 +188,17 @@ export component HostWindow inherits Window {
                                     }
                                     self.right-armed = false;
                                 }
-                                if event.kind == PointerEventKind.cancel { self.right-armed = false; }
+                                if event.button == PointerEventButton.left && event.kind == PointerEventKind.up {
+                                    self.drag-armed = false;
+                                    if self.swallow-press {
+                                        self.drag-swallow = false;
+                                        self.swallow-press = false;
+                                    }
+                                }
+                                if event.kind == PointerEventKind.cancel {
+                                    self.right-armed = false;
+                                    self.drag-armed = false;
+                                }
                             }
                             scroll-event(event) => {
                                 root.window-input("activity");
@@ -164,9 +212,9 @@ export component HostWindow inherits Window {
                         osd := Text {
                             x: 10px; y: 10px;
                             text: root.osd-text;
-                            font-size: 16px; font-weight: 700;
+                            font-size: root.osd-size; font-weight: 700;
                             color: #ffffff;
-                            stroke: #000000; stroke-width: 1px; stroke-style: outside;
+                            stroke: #000000; stroke-width: max(1px, root.osd-size / 16); stroke-style: outside;
                             opacity: 0;
                             states [
                                 shown when root.osd-visible: {
@@ -178,15 +226,15 @@ export component HostWindow inherits Window {
                             ]
                         }
                         VerticalLayout {
-                            x: 10px; y: 36px;
+                            x: 10px; y: 20px + root.osd-size * 1.25;
                             width: min(self.preferred-width, parent.width - 20px);
                             height: self.preferred-height;
                             spacing: 4px;
                             for text in root.info-panels: Rectangle {
                                 background: #000000b0;
                                 HorizontalLayout {
-                                    padding: 6px;
-                                    Text { text: text; font-size: Theme.font-body; color: Theme.text; }
+                                    padding: 6px * root.osd-size / 16px;
+                                    Text { text: text; font-size: root.info-size; color: Theme.text; }
                                 }
                             }
                         }

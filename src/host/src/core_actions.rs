@@ -357,7 +357,13 @@ pub fn plan(
         }
         "volume-up" | "volume-down" => {
             let delta = if action == "volume-up" { 5.0 } else { -5.0 };
-            let volume = (facts.volume + delta).round().clamp(0.0, 200.0);
+            // G-13a: up stops at 100 (`AudioVolumeMaxVal=100`); a louder volume set
+            // through `setOutput` is kept, not raised further. Down steps by 5.
+            let volume = if delta > 0.0 {
+                (facts.volume + delta).round().min(100.0).max(facts.volume)
+            } else {
+                (facts.volume + delta).round().clamp(0.0, 200.0)
+            };
             (
                 Plan::Output {
                     volume: Some(volume),
@@ -728,12 +734,37 @@ mod tests {
             )
         );
         let loud = Facts {
-            volume: 198.0,
+            volume: 98.0,
+            ..facts
+        };
+        // G-13a: up stops at 100; above 100 (another plugin's setOutput) it
+        // stays; down still steps by 5.
+        assert_eq!(
+            plan("volume-up", &loud, 5.0, None).unwrap().1.as_deref(),
+            Some("音量: 100%")
+        );
+        let full = Facts {
+            volume: 100.0,
             ..facts
         };
         assert_eq!(
-            plan("volume-up", &loud, 5.0, None).unwrap().1.as_deref(),
-            Some("音量: 200%")
+            plan("volume-up", &full, 5.0, None).unwrap().1.as_deref(),
+            Some("音量: 100%")
+        );
+        let boosted = Facts {
+            volume: 150.0,
+            ..facts
+        };
+        assert_eq!(
+            plan("volume-up", &boosted, 5.0, None).unwrap().1.as_deref(),
+            Some("音量: 150%")
+        );
+        assert_eq!(
+            plan("volume-down", &boosted, 5.0, None)
+                .unwrap()
+                .1
+                .as_deref(),
+            Some("音量: 145%")
         );
         let quiet = Facts {
             volume: 3.0,
