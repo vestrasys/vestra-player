@@ -1,4 +1,4 @@
-//! Two-slot Slint composition, using the public 1.16.1 interpreter.
+//! Two-slot Slint composition, using the public interpreter API.
 //! Host-internal: the public contract is the SDK window/panel API.
 #![forbid(unsafe_code)]
 

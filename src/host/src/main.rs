@@ -45,6 +45,7 @@ mod producer_input_delivery;
 pub mod producer_binary;
 mod render_target;
 mod renderer;
+mod secret_index;
 mod session;
 mod settings_window;
 mod source_backend;
@@ -62,7 +63,6 @@ mod timeline;
 mod ui;
 mod ui_image;
 mod ui_markdown;
-mod ui_probe;
 mod ui_state;
 mod ui_values;
 mod video_render;
@@ -267,6 +267,8 @@ struct Host {
     menu_open: bool,
     /// G-01: the fullscreen sidebar overlay was popped out at the last tick.
     sidebar_popped: bool,
+    /// The bottom bar was shown at the last tick.
+    bottom_shown: bool,
     native_window: Option<platform::HostWindowId>,
     native_before: Option<platform::NativeSnapshot>,
     native_unavailable: Option<String>,
@@ -1014,6 +1016,7 @@ impl Host {
             .as_ref()
             .zip(self.native_window)
             .map(|(shell, id)| {
+                ui::settle_layout(shell.window());
                 let number = |name: &str| match shell.get_property(name) {
                     Ok(SValue::Number(n)) => n,
                     _ => 0.,
@@ -1213,6 +1216,8 @@ impl Host {
             let _ = shell.set_property("osd-visible", false.into());
         }
         self.host_command_states(fullscreen);
+        // The sidebar and plugin panels show and hide `if` elements.
+        ui::settle_layout(shell.window());
         let number = |name: &str| match shell.get_property(name) {
             Ok(slint_interpreter::Value::Number(n)) => n,
             _ => 0.,
@@ -1302,6 +1307,13 @@ impl Host {
             )?;
             let bottom = snapshot.bottom.is_some_and(|s| s.effective);
             shell.set_property("bottom-visible", bottom.into())?;
+            // Slint 1.18 drops the focus of an element that becomes invisible
+            // (#11079), and then no key reaches the bindings: hiding the bar
+            // gives the focus back to the video, as collapsing the sidebar does.
+            if self.bottom_shown && !bottom && !flag("canvas-focused") {
+                let _ = shell.invoke("focus-video", &[]);
+            }
+            self.bottom_shown = bottom;
             let sidebar = snapshot.sidebar.filter(|s| !s.detached);
             shell.set_property(
                 "sidebar-visible",
@@ -2071,12 +2083,10 @@ impl Host {
         let started = Instant::now();
         let mut next = self.mounts.clone();
         let owner = change.reply.owner;
-        let mut probe = None;
         if let Some(mount) = change.contribution {
             if !self.plugins.contains_key(&owner) {
                 return;
             }
-            probe = Some(composition::floating_source(&mount.spec, &mount.title));
             next.insert(owner, mount);
         } else {
             next.remove(&owner);
@@ -2089,15 +2099,6 @@ impl Host {
             .map(|mount| self.mount_values(mount))
             .collect();
         let build = || -> Result<slint_interpreter::ComponentInstance> {
-            // The new panel alone first: a UI that would panic the event
-            // loop fails its own mount (see `ui_probe`).
-            if let Some(source) = probe {
-                ui_probe::check(
-                    source?,
-                    ui::ui_dir().join("host.slint"),
-                    Some("FloatingPanel".into()),
-                )?;
-            }
             let specs = next.values().map(|m| m.spec.clone()).collect::<Vec<_>>();
             let shell =
                 composition::compile_json(&specs, self.mount_events.clone(), candidate_generation)?;
@@ -2684,6 +2685,7 @@ impl Host {
         if shell.window().is_fullscreen() {
             return Err(unavailable("全屏时不可用"));
         }
+        ui::settle_layout(shell.window());
         let number = |name: &str| match shell.get_property(name) {
             Ok(SValue::Number(n)) if n.is_finite() => n,
             _ => 0.,
@@ -4049,6 +4051,7 @@ fn main() -> Result<()> {
         measured_shell: None,
         menu_open: false,
         sidebar_popped: false,
+        bottom_shown: true,
         native_window: None,
         native_before: None,
         native_unavailable: None,

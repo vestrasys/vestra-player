@@ -141,10 +141,11 @@ export component OptionsWindow inherits Window {{
     in property <[SettingsRow]> rows;
     in property <int> current: -1;
     callback select(int);
-    callback close();
+    // Not `close`: Slint 1.17+ has a builtin `Window.close()`.
+    callback close-window();
     FocusScope {{
         key-pressed(event) => {{
-            if event.modifiers.meta && (event.text == "w" || event.text == "W") {{ root.close(); return accept; }}
+            if event.modifiers.meta && (event.text == "w" || event.text == "W") {{ root.close-window(); return accept; }}
             reject
         }}
         VerticalLayout {{
@@ -179,8 +180,8 @@ export component OptionsWindow inherits Window {{
                 }}
                 Rectangle {{ width: 1px; background: Theme.line; }}
                 pages := ScrollView {{
-                    viewport-width: 440px;
-                    viewport-height: max(self.visible-height, column.preferred-height);
+                    content-width: 440px;
+                    content-height: max(self.visible-height, column.preferred-height);
                     column := VerticalLayout {{
                         alignment: start;
 {views}                        if root.current < 0: Text {{
@@ -199,7 +200,7 @@ export component OptionsWindow inherits Window {{
                 vertical-stretch: 0;
                 padding: 8px;
                 alignment: end;
-                close := Button {{ height: Theme.button-height; text: "关闭"; clicked => {{ root.close(); }} }}
+                close := Button {{ height: Theme.button-height; text: "关闭"; clicked => {{ root.close-window(); }} }}
             }}
         }}
     }}
@@ -311,16 +312,10 @@ impl Host {
                     global: string(params, "global")?.into(),
                     properties,
                 };
-                // Check that the page compiles and survives its global
-                // properties changing on its own (`ui_probe`), so a broken
-                // page fails its own registration instead of the shared window.
-                let source = source(&[&page])?;
-                crate::ui_probe::check(
-                    source,
-                    crate::ui::ui_dir().join("host.slint"),
-                    Some("OptionsWindow".into()),
-                )
-                .map_err(|e| RpcError::new("ui-prepare", format!("{e:#}")))?;
+                // Compile the page alone, so a broken page fails its own
+                // registration instead of the shared window.
+                composition::build(source(&[&page])?, "OptionsWindow")
+                    .map_err(|e| RpcError::new("ui-prepare", format!("{e:#}")))?;
                 self.settings.pages.push(page);
                 self.settings.stale |= self.settings.open.is_some();
                 Ok(Some(Value::Null))
@@ -465,7 +460,7 @@ impl Host {
             SValue::Void
         })?;
         let events = self.events.clone();
-        instance.set_callback("close", move |_| {
+        instance.set_callback("close-window", move |_| {
             let _ = events.send(Event::Settings(generation, None));
             SValue::Void
         })?;
@@ -667,7 +662,7 @@ mod tests {
         }
         PLATFORM.with(|_| {});
         // Read the parts back through test-only out properties.
-        let probes = "    callback close();\n\
+        let probes = "    callback close-window();\n\
             out property <length> t-tree-h: tree.height;\n\
             out property <length> t-pages-y: pages.absolute-position.y;\n\
             out property <length> t-pages-h: pages.height;\n\
@@ -675,8 +670,8 @@ mod tests {
             out property <length> t-close-w: close.width;\n\
             out property <length> t-close-h: close.height;\n";
         let text = source(pages).unwrap();
-        assert!(text.contains("    callback close();\n"));
-        let text = text.replacen("    callback close();\n", probes, 1);
+        assert!(text.contains("    callback close-window();\n"));
+        let text = text.replacen("    callback close-window();\n", probes, 1);
         let definition = composition::build(text, "OptionsWindow").unwrap();
         let instance = definition.create().unwrap();
         instance
@@ -729,13 +724,83 @@ mod tests {
         }
     }
 
-    /// 2026-10-21, real machine: opening 选项 or 插件管理 panicked in the event
-    /// loop ("accessing deleted parent (issue #6426)") once the playlist page's
-    /// `ComboBox { current-index <=> PlaylistSettings.repeat; }` saw its global
-    /// change (`ui_probe`). The options window holds every page, so one such
-    /// page took the player down. Now each page is probed at registration as
-    /// `settings.register` does; the window of the accepted built-in pages
-    /// then survives every global property changing on every page.
+    /// Shows the options window of `pages` headless and changes every
+    /// scalar global property of every page while each page is shown.
+    fn change_every_global(pages: &[&Page]) -> slint_interpreter::ComponentInstance {
+        let window =
+            slint::platform::software_renderer::MinimalSoftwareWindow::new(Default::default());
+        slint::platform::set_platform(Box::new(Headless(window.clone()))).unwrap();
+        let definition = composition::build(source(pages).unwrap(), "OptionsWindow").unwrap();
+        let instance = definition.create().unwrap();
+        instance
+            .set_property("rows", ui_values::from_json(&rows(pages, None)).unwrap())
+            .unwrap();
+        instance
+            .window()
+            .set_size(slint::PhysicalSize::new(640, 480));
+        instance.show().unwrap();
+        let mut buffer = vec![slint::platform::software_renderer::Rgb565Pixel(0); 640 * 480];
+        let mut draw = || {
+            slint::platform::update_timers_and_animations();
+            window.request_redraw();
+            window.draw_if_needed(|r| {
+                r.render(&mut buffer, 640);
+            });
+        };
+        draw();
+        for (index, shown) in pages.iter().enumerate() {
+            instance
+                .set_property("current", (index as f64).into())
+                .unwrap();
+            draw();
+            for page in pages {
+                let alias = alias(page.serial);
+                for (name, _) in definition.global_properties(&alias).unwrap() {
+                    let changed = match instance.get_global_property(&alias, &name).unwrap() {
+                        SValue::Bool(b) => SValue::Bool(!b),
+                        SValue::Number(n) => SValue::Number(n + 1.),
+                        _ => continue,
+                    };
+                    let _ = instance.set_global_property(&alias, &name, changed);
+                }
+            }
+            draw();
+            eprintln!("shown with every global changed: {}", shown.component);
+        }
+        instance
+    }
+
+    /// 2026-10-21, real machine (Slint 1.16.1): opening 选项 or 插件管理
+    /// panicked in the event loop ("accessing deleted parent (issue #6426)")
+    /// once a page's `ComboBox { current-index <=> Global.index; }` saw its
+    /// global change. Fixed upstream in Slint 1.18; this fails if an older
+    /// Slint comes back.
+    #[test]
+    fn a_combo_box_two_way_bound_to_a_global_survives_changes() {
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/settings");
+        let combo = Page {
+            file: base.join("combo.slint"),
+            component: "ComboPage".into(),
+            global: "ComboBridge".into(),
+            ..page("a.plugin", "combo", 6, 0, 1)
+        };
+        let instance = change_every_global(&[&combo]);
+        let alias = alias(combo.serial);
+        for index in [2., 0., 1.] {
+            instance
+                .set_global_property(&alias, "index", SValue::Number(index))
+                .unwrap();
+            slint::platform::update_timers_and_animations();
+            assert_eq!(
+                instance.get_global_property(&alias, "index").unwrap(),
+                SValue::Number(index)
+            );
+        }
+    }
+
+    /// Every built-in page compiles alone (as `settings.register` checks),
+    /// and the window of all of them survives every global property
+    /// changing on every page.
     #[test]
     fn options_window_of_the_builtin_pages_survives_global_changes() {
         let plugins = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../plugins");
@@ -771,61 +836,10 @@ mod tests {
                 global: global.into(),
                 ..page("built.in", component, category, 0, i as u64 + 1)
             };
-            let probe = crate::ui_probe::check(
-                source(&[&page]).unwrap(),
-                crate::ui::ui_dir().join("host.slint"),
-                Some("OptionsWindow".into()),
-            );
-            match probe {
-                Ok(()) => pages.push(page),
-                Err(error) => {
-                    assert!(error.to_string().contains("<=>"), "{file}: {error:#}");
-                    eprintln!("refused at registration: {file}");
-                }
-            }
+            composition::build(source(&[&page]).unwrap(), "OptionsWindow")
+                .unwrap_or_else(|e| panic!("{file}: {e:#}"));
+            pages.push(page);
         }
-        // The pages without the hazard are all there.
-        assert!(pages.len() >= real.len() - 1, "{} accepted", pages.len());
-        let refs = sorted(&pages);
-        let window =
-            slint::platform::software_renderer::MinimalSoftwareWindow::new(Default::default());
-        slint::platform::set_platform(Box::new(Headless(window.clone()))).unwrap();
-        let definition = composition::build(source(&refs).unwrap(), "OptionsWindow").unwrap();
-        let instance = definition.create().unwrap();
-        instance
-            .set_property("rows", ui_values::from_json(&rows(&refs, None)).unwrap())
-            .unwrap();
-        instance
-            .window()
-            .set_size(slint::PhysicalSize::new(640, 480));
-        instance.show().unwrap();
-        let mut buffer = vec![slint::platform::software_renderer::Rgb565Pixel(0); 640 * 480];
-        let mut draw = || {
-            slint::platform::update_timers_and_animations();
-            window.request_redraw();
-            window.draw_if_needed(|r| {
-                r.render(&mut buffer, 640);
-            });
-        };
-        draw();
-        for (index, shown) in refs.iter().enumerate() {
-            instance
-                .set_property("current", (index as f64).into())
-                .unwrap();
-            draw();
-            for page in &refs {
-                let alias = alias(page.serial);
-                for (name, _) in definition.global_properties(&alias).unwrap() {
-                    let changed = match instance.get_global_property(&alias, &name).unwrap() {
-                        SValue::Bool(b) => SValue::Bool(!b),
-                        SValue::Number(n) => SValue::Number(n + 1.),
-                        _ => continue,
-                    };
-                    let _ = instance.set_global_property(&alias, &name, changed);
-                }
-            }
-            draw();
-            eprintln!("shown with every global changed: {}", shown.component);
-        }
+        change_every_global(&sorted(&pages));
     }
 }

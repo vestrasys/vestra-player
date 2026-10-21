@@ -7,7 +7,10 @@
 #![forbid(unsafe_code)]
 use super::*;
 use pulldown_cmark::{Event as Md, Options, Parser, Tag, TagEnd};
-use slint::private_unstable_api::re_exports::{StyledText, parse_markdown, string_to_styled_text};
+use slint::StyledText;
+// Filling placeholders has no public API in Slint 1.18.1
+// (`StyledText::from_markdown` takes no arguments): recheck on every upgrade.
+use slint::private_unstable_api::re_exports::parse_markdown;
 use slint_interpreter::Struct;
 
 /// The wire form the SDK sends for a `MarkdownRef` (an internal detail).
@@ -25,8 +28,10 @@ const TRUNCATED: &str = "…（内容过长，已截断）";
 const SLOT: char = '\u{e541}';
 /// Emphasis and strikethrough also get a colour: the system UI fonts the
 /// player forces for CJK (Hiragino Sans GB, Microsoft YaHei) have no italic
-/// face, Slint 1.16 does not synthesize one, and its strikethrough line can
-/// be thinner than a pixel at body size. Literal colours (the format string
+/// face and Slint 1.18.1's FemtoVG and software renderers still do not
+/// synthesize one (only Skia does), so italic draws like body text; its
+/// strikethrough line still draws no pixel at 11–12px, the Markdown body
+/// sizes (both measured 2026-10-22). Literal colours (the format string
 /// cannot read `Theme`), chosen to read on both palettes.
 const EMPHASIS_COLOR: &str = "#e8a33d";
 const STRIKE_COLOR: &str = "#8a8496";
@@ -111,29 +116,23 @@ impl Inline {
     fn is_empty(&self) -> bool {
         self.plain.trim().is_empty()
     }
-    /// Code text: ASCII runs in the monospace font (Slint's `Code` style),
-    /// other runs (CJK…) in the body font: the monospace family has no
-    /// fallback in Slint 1.16, so CJK inside `Code` would not be drawn.
+    /// Inline code: one `Code` span (Slint's monospace capsule); CJK inside
+    /// it is drawn through font fallback.
     fn code(&mut self, text: &str) {
-        let ascii = |c: char| c.is_ascii() && (c == '\t' || !c.is_ascii_control());
-        let mut rest = text;
-        while let Some(first) = rest.chars().next() {
-            let mono = ascii(first);
-            let end = rest
-                .char_indices()
-                .find(|(_, c)| ascii(*c) != mono)
-                .map_or(rest.len(), |(i, _)| i);
-            if mono {
-                self.format.push('`');
-                self.text(&rest[..end]);
-                self.format.push('`');
-            } else {
-                self.text(&rest[..end]);
-            }
-            rest = &rest[end..];
+        let slots = self.args.len();
+        let start = self.format.len();
+        self.format.push('`');
+        self.text(text);
+        if self.args.len() == slots {
+            self.format.truncate(start);
+        } else {
+            self.format.push('`');
         }
     }
-    /// A code block: each line as code, lines separated by hard breaks.
+    /// A code block: plain lines separated by hard breaks, indentation and
+    /// empty lines kept. Not the `Code` style, which would give every line
+    /// its own capsule: `markdown.slint` draws the block in the monospace
+    /// font.
     fn code_block(code: &str) -> Self {
         let mut inline = Self::default();
         for (index, line) in code.split('\n').enumerate() {
@@ -145,7 +144,7 @@ impl Inline {
                 // Keeps the empty line (a paragraph needs some text).
                 inline.text("\u{a0}");
             } else {
-                inline.code(line);
+                inline.text(line);
             }
         }
         inline
@@ -164,12 +163,15 @@ impl Inline {
         let args = self
             .args
             .iter()
-            .map(|a| string_to_styled_text(a.clone()))
+            .map(|a| StyledText::from_plain_text(a))
             .collect::<Vec<_>>();
+        // Slint 1.18 logs a parse error and returns what it parsed (1.16
+        // panicked); the guard stays because `parse_markdown` is private
+        // and may change again.
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             parse_markdown(&format, &args)
         }))
-        .unwrap_or_else(|_| string_to_styled_text(self.plain.clone()))
+        .unwrap_or_else(|_| StyledText::from_plain_text(&self.plain))
     }
 }
 
@@ -651,7 +653,7 @@ pub fn model(doc: &Doc, mut load: impl FnMut(&str) -> Option<slint::Image>) -> S
         );
         set(
             "text",
-            SValue::StyledText(block.inline.styled(block.kind == "heading")),
+            SValue::from(block.inline.styled(block.kind == "heading")),
         );
         set("code", SValue::String(block.code.as_str().into()));
         set("alt", SValue::String(block.alt.as_str().into()));
@@ -727,7 +729,7 @@ mod tests {
         assert_eq!(all[1].inline.plain, "段落 粗 斜 删 码 链接");
         assert_eq!(
             all[1].inline.format,
-            "S**S**S<font color=\"#e8a33d\">*S*</font>S<font color=\"#8a8496\">~~S~~</font>SSS[S](<https://a.example/x>)"
+            "S**S**S<font color=\"#e8a33d\">*S*</font>S<font color=\"#8a8496\">~~S~~</font>S`S`S[S](<https://a.example/x>)"
                 .replace('S', "\u{e541}")
         );
         assert_eq!((all[2].marker.as_str(), all[2].indent), ("•", 0));
@@ -753,60 +755,78 @@ mod tests {
         );
     }
 
-    /// The spans Slint will draw for a block's inline text.
-    fn spans_of(block: &Block) -> Vec<(String, String)> {
-        let styled = block.inline.styled(false);
-        let mut out = Vec::new();
-        for paragraph in styled.as_ref() {
-            for span in &paragraph.formatting {
-                out.push((
-                    format!("{:?}", span.style),
-                    paragraph.text[span.range.clone()].to_owned(),
-                ));
-            }
-        }
-        out
+    /// The same text as literal Markdown (each placeholder replaced by its
+    /// text), parsed through Slint's public API: equal values prove Slint
+    /// reads the format as intended. Only for texts without Markdown syntax.
+    fn literal(inline: &Inline) -> StyledText {
+        let mut args = inline.args.iter();
+        let text: String = inline
+            .format
+            .chars()
+            .map(|c| match c {
+                SLOT => args.next().unwrap().clone(),
+                c => c.to_string(),
+            })
+            .collect();
+        StyledText::from_markdown(&text).unwrap()
     }
 
     /// GUI review 2026-10-21: italic and strikethrough invisible with the
-    /// forced CJK font, CJK inside inline code invisible, the open task box
-    /// a missing glyph, table header alignment off.
+    /// forced CJK font, the open task box a missing glyph, table header
+    /// alignment off. Slint 1.18: code falls back to a CJK font itself.
     #[test]
     fn styles_survive_fonts_without_italic_and_cjk_code() {
         let all = blocks(
             "*斜体* *italic* ~~删除线~~ `行内代码` `assets/icon.png` `a 中 b`",
             None,
         );
-        let spans = spans_of(&all[0]);
-        let has =
-            |style: &str, text: &str| spans.iter().any(|(s, t)| s.starts_with(style) && t == text);
-        assert!(
-            has("Emphasis", "斜体") && has("Emphasis", "italic"),
-            "{spans:?}"
+        let inline = &all[0].inline;
+        // Italic and strikethrough carry a colour; each code span is one
+        // `Code` span (one capsule), CJK included.
+        assert_eq!(
+            inline.format,
+            "<font color=\"#e8a33d\">*S*</font>S<font color=\"#e8a33d\">*S*</font>S<font color=\"#8a8496\">~~S~~</font>S`S`S`S`S`S`"
+                .replace('S', "\u{e541}")
         );
-        assert!(
-            has("Color", "斜体") && has("Color", "删除线"),
-            "colour as well: {spans:?}"
+        assert_eq!(
+            inline.args,
+            [
+                "斜体",
+                " ",
+                "italic",
+                " ",
+                "删除线",
+                " ",
+                "行内代码",
+                " ",
+                "assets/icon.png",
+                " ",
+                "a 中 b"
+            ]
         );
-        assert!(has("Strikethrough", "删除线"));
-        // Code style (monospace, no CJK fallback) only on ASCII runs.
-        assert!(has("Code", "assets/icon.png"));
-        assert!(has("Code", "a ") && has("Code", " b"));
-        assert!(
-            !spans.iter().any(|(s, t)| s == "Code" && !t.is_ascii()),
-            "{spans:?}"
-        );
-        assert!(all[0].inline.plain.contains("行内代码"));
-        // Code blocks: the same per run, lines and indentation kept.
+        let styled = inline.styled(false);
+        assert_eq!(styled, literal(inline));
+        assert_ne!(styled, StyledText::from_plain_text(&inline.plain));
+        // Code blocks: plain lines (the view sets the monospace font), not
+        // `Code` spans; indentation and empty lines kept.
         let code = &blocks("```\nfn main() {\n\n    // 中文注释\n}\n```", None)[0];
-        let styled = code.inline.styled(false);
-        let lines: Vec<_> = styled.as_ref().iter().map(|p| p.text.as_str()).collect();
-        assert_eq!(lines, ["fn main() {", "\u{a0}", "    // 中文注释", "}"]);
-        assert!(
-            !spans_of(code)
-                .iter()
-                .any(|(s, t)| s == "Code" && !t.is_ascii())
+        assert_eq!(
+            code.inline.format,
+            "S  \nS  \nS  \nS".replace('S', "\u{e541}")
         );
+        assert_eq!(
+            code.inline.args,
+            ["fn main() {", "\u{a0}", "    // 中文注释", "}"]
+        );
+        assert_ne!(
+            code.inline.styled(false),
+            StyledText::from_plain_text(&code.inline.plain),
+            "hard breaks parsed"
+        );
+        // Empty inline code adds nothing.
+        let mut empty = Inline::default();
+        empty.code("");
+        assert_eq!(empty, Inline::default());
         // Task items: a drawn box (task 1/2), no glyph marker; loose lists too.
         let tasks = blocks("- [ ] open\n- [x] done\n\n- [ ] loose\n\n  more\n", None);
         let tasks: Vec<_> = tasks

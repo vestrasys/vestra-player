@@ -139,6 +139,8 @@ impl Host {
                     .map(|plugin| plugin.data_key.secret_service(&plugin.manifest.id))
                     .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
                 let name = secret_name(params)?.to_owned();
+                // The host records the names, so uninstalling can delete them.
+                let index = self.packages.secrets.clone();
                 match method {
                     "secrets.get" => Box::new(move || {
                         platform::secret_get(&service, &name)
@@ -146,13 +148,19 @@ impl Host {
                     }),
                     "secrets.set" => {
                         let value = secret_value(params)?.to_owned();
+                        index.reserve(&service, &name)?;
                         Box::new(move || {
                             platform::secret_set(&service, &name, &value).map(|()| Value::Null)
                         })
                     }
-                    _ => Box::new(move || {
-                        platform::secret_delete(&service, &name).map(|()| Value::Null)
-                    }),
+                    _ => {
+                        let generation = index.generation(&service, &name);
+                        Box::new(move || {
+                            platform::secret_delete(&service, &name)?;
+                            index.release(&service, &name, generation);
+                            Ok(Value::Null)
+                        })
+                    }
                 }
             }
             "app.system" => {

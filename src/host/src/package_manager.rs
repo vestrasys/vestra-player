@@ -7,6 +7,8 @@ use plugins::DataKey;
 
 pub struct Manager {
     store: Store,
+    /// Secret names per plugin service (`secrets.*`), for deleting them.
+    pub secrets: crate::secret_index::Index,
     candidates: BTreeMap<String, Candidate>,
     trials: BTreeMap<u64, Trial>,
     operations: BTreeMap<String, Operation>,
@@ -49,10 +51,12 @@ impl Manager {
                     .unwrap_or_default()
                     .join("packages")
             });
+        let secrets = crate::secret_index::Index::new(Some(root.join("secrets")));
         let store = Store::open(root)?;
         let receipts = store.operations();
         Ok(Self {
             store,
+            secrets,
             candidates: BTreeMap::new(),
             trials: BTreeMap::new(),
             operations: BTreeMap::new(),
@@ -844,9 +848,35 @@ impl Host {
             .uninstall(&id, &request, receipt.clone(), !remove_data)?;
         self.packages.receipts = self.packages.store.operations();
         self.failures.remove(&id);
+        if remove_data && let Some(instance) = &installed.instance {
+            self.purge_secrets(&DataKey::Instance(instance.guid.clone()), &id);
+        }
+        self.purge_dropped_secrets();
         Ok(receipt)
     }
+    /// Deletes the secret store entries recorded for `key` (on a worker
+    /// thread: keychain calls block and may prompt).
+    fn purge_secrets(&self, key: &DataKey, id: &str) {
+        let index = self.packages.secrets.clone();
+        let service = key.secret_service(id);
+        let spawned = std::thread::Builder::new()
+            .name("secrets-purge".into())
+            .spawn(move || {
+                index.purge(&service, platform::secret_delete);
+            });
+        if let Err(error) = spawned {
+            eprintln!("secrets purge: {error}");
+        }
+    }
+    /// Retired instances dropped because the dormant list was full can never
+    /// be reconnected: their secrets go too.
+    fn purge_dropped_secrets(&mut self) {
+        for (guid, id) in self.packages.store.take_dropped() {
+            self.purge_secrets(&DataKey::Instance(guid), &id);
+        }
+    }
     pub(super) fn package_tick(&mut self) {
+        self.purge_dropped_secrets();
         if !self.packages.booted {
             self.packages.booted = true;
             for recovery in self.packages.store.pending() {

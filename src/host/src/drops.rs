@@ -222,6 +222,9 @@ impl Host {
                 .unwrap_or((0., 0.));
             Some((floating.owner, at))
         } else if generation == self.shell_generation {
+            if let Some(shell) = &self.shell {
+                ui::settle_layout(shell.window());
+            }
             let number = |name: &str| match self.shell.as_ref().map(|s| s.get_property(name)) {
                 Some(Ok(SValue::Number(n))) => n,
                 _ => 0.,
