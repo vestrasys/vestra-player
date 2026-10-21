@@ -2,7 +2,7 @@
 
 本文是插件 API 的权威规格：每个模块、方法的签名、参数、返回值、错误和使用约束。入门请先读 [入门教程](tutorial.md)，按功能找写法看 [插件示例](examples.md)，设计取舍见 [SDK 设计说明](../architecture/sdk-design.md)。
 
-类型定义的源头是 `src/sdk/plugin/types.ts`。本文与它不一致时以代码为准，并应修正本文。
+类型定义的源头是 `src/packages/sdk/src/plugin/types.ts`（npm 包 `@vestra-player/sdk`）。本文与它不一致时以代码为准，并应修正本文。
 
 - 协议版本：`vestra/1`
 - 运行环境：每个插件一个 Node ≥ 22.18 进程，可以使用 Node 标准库、文件系统、网络和 npm 依赖。插件是受信任的，manifest 能力是契约声明，不是安全沙箱。
@@ -13,7 +13,7 @@
 ### 1.1 入口
 
 ```ts
-import type { Plugin } from "../../sdk/plugin/index.ts";
+import type { Plugin } from "@vestra-player/sdk";
 
 export default async function activate(plugin: Plugin) {
   // 创建句柄、绑定回调、声明命令
@@ -271,7 +271,7 @@ interface Command extends Disposable {
   });
   ```
 - 命令禁用或忙碌时，播放器不会调用 `run`（绑定的按键被接住但不执行）。`run` 抛出的错误交给 `onError`。
-- **数量上限**：每个插件实例同时最多 160 条命令，播放器全部（所有插件加上播放器自己的命令）最多 1024 条；超出时该命令的 `ready` 以 `limit` 失败（在激活期间注册的，激活随之失败），已注册的不受影响，`dispose` 后名额立即释放。试载包是独立实例，单独计数，但占用全部总量。上限只防失控（如按轨道数无限添加），不是产品限制：内置插件里最多的 video 在空闲时注册 71 条，全部插件约 290 条。按媒体内容动态添加的菜单项（轨道、章节、预设列表）请自行设一个合理的显示上限。常量 `COMMAND_LIMITS`（`sdk/commands.ts`，`{ perPlugin, total }`）与播放器一致，`TestHost` 执行同样的上限。
+- **数量上限**：每个插件实例同时最多 160 条命令，播放器全部（所有插件加上播放器自己的命令）最多 1024 条；超出时该命令的 `ready` 以 `limit` 失败（在激活期间注册的，激活随之失败），已注册的不受影响，`dispose` 后名额立即释放。试载包是独立实例，单独计数，但占用全部总量。上限只防失控（如按轨道数无限添加），不是产品限制：内置插件里最多的 video 在空闲时注册 71 条，全部插件约 290 条。按媒体内容动态添加的菜单项（轨道、章节、预设列表）请自行设一个合理的显示上限。常量 `COMMAND_LIMITS`（`{ perPlugin, total }`，从 `@vestra-player/sdk/testing` 导入）与播放器一致，`TestHost` 执行同样的上限。
 
 ### 4.1 绑定
 
@@ -1158,7 +1158,7 @@ interface PackageChange {
 ## 14. 测试工具
 
 ```ts
-import { HostError, startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
+import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 
 const host = new TestHost();
 const { stop } = await startPlugin(activate, { directory: new URL("..", import.meta.url), host });
@@ -1192,16 +1192,25 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 
 ## 15. 构建工具
 
-在 `src/` 下：
+命令行工具 `vestra-plugin` 随 npm 包 `@vestra-player/sdk` 提供，在任何插件项目里可用（插件目录默认是当前目录）：
 
 ```
-npm run plugin -- check <名字|路径…>   # 严格类型检查（含 tests/）
-npm run plugin -- test  <名字|路径…>   # node --test tests/*.test.{ts,mjs}
-npm run plugin -- build <名字|路径…> [--version x.y.z]
+vestra-plugin check [插件目录…]                  # 严格类型检查（含 tests/）
+vestra-plugin test  [插件目录…]                  # node --test tests/*.test.{ts,mjs}
+vestra-plugin build [插件目录…] [--version x.y.z]
+vestra-plugin pack  [插件目录…] [--version x.y.z] [--out 目录]   # build 后把 dist/ 打成 <id>-<version>.zip，输出大小和 sha256
+```
+
+在本仓库的 `src/` 下有按插件名调用的快捷方式：
+
+```
+npm run plugin -- check|test|build|pack <名字|路径…>
 npm run plugins:build                   # 构建 src/plugins/ 下全部插件
 ```
 
 - 名字指 `src/plugins/<名字>`；含 `/` 的参数是相对 `src/` 的路径（如 `examples/bookmark`）。`--all` 只覆盖 `src/plugins/`。
+- `check` 沿用插件目录或上层最近的 `tsconfig.json`（到仓库根为止），没有就用内置的严格设置（`strict`、`NodeNext`、`verbatimModuleSyntax`、`erasableSyntaxOnly`）。编译器是 SDK 自带的 TypeScript 5.x。
+- 插件只能 `import type` SDK；构建产物里出现 `@vestra-player/sdk` 的运行时引用时 `build` 失败。
 - `build` 先 `check`，然后生成 `dist/`：`.ts` 去掉类型、相对导入改为 `.js`；`.slint`、`.mjs`、数据文件、`licenses/` 原样复制；跳过 `tests/`、`node_modules/`、`vendor/`、`*.md`、`tsconfig*.json`、`package*.json`；写入 `dist/manifest.json`（入口改为 `.js`，写入版本）。版本取 `--version`，否则 manifest，否则 `package.json`。`dist/` 不提交。
 - 有 npm 依赖时，插件 `package.json` 的 `"vestra"` 字段：
   - `"bundle": true` 或 `{ "external": [...] }`：用插件自己的 esbuild（devDependency）把入口及依赖打包成一个文件。**有运行时依赖就必须打包**，否则安装后找不到依赖包。

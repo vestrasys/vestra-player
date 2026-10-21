@@ -2,14 +2,14 @@
 
 插件 API（SDK v2）为什么这样设计：句柄、生命周期、更新轮、协议细节如何被 SDK 吸收、条件提交、错误模型。给 API 维护者和想深入理解的插件作者看；接口的精确定义见 [API 参考](../plugins/reference.md)，写法见 [插件示例](../plugins/examples.md)。
 
-代码：`src/sdk/plugin/`（公共类型在 `types.ts`，入口 `index.ts`），测试宿主 `src/sdk/plugin/testing.ts`，单元测试 `src/tests/sdk/`，运行器 `src/runtime/runner.ts`，构建工具 `src/scripts/plugin.mjs`。最短的完整插件：`src/plugins/video/`。
+代码：npm 包 `@vestra-player/sdk`（`src/packages/sdk/`）。公共类型在 `src/plugin/types.ts`，由包入口 `src/index.ts` 导出；测试宿主 `src/plugin/testing.ts`（`@vestra-player/sdk/testing`）；`createPlugin` 在 `@vestra-player/sdk/runtime`（仅供播放器）；单元测试 `test/`；构建工具 `bin/vestra-plugin.mjs`。运行器 `src/runtime/runner.ts`。最短的完整插件：`src/plugins/video/`。
 
 ## 1. 一句话
 
 插件默认导出 `activate(plugin)`。`plugin` 上按领域分组的工厂创建**句柄**（命令、窗口、面板、滤镜、媒体、快照、任务……），句柄自带回调、自带最后写入生效的状态同步、自动随作用域释放。插件代码只描述“想要什么”，协议字段全部留在 SDK 里。
 
 ```ts
-import type { Plugin } from "../../sdk/plugin/index.ts";
+import type { Plugin } from "@vestra-player/sdk";
 
 export default async function activate(plugin: Plugin) {
   const filter = plugin.video.filter("picture");

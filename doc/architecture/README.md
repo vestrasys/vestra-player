@@ -13,7 +13,7 @@
                 │ JSONL over stdin/stdout（wire：vestra/1）
 ┌───────────────┴──── 每插件一个 Node 进程 ──────────┐
 │ 运行器 src/runtime/runner.ts                        │
-│ SDK  src/sdk/plugin/（句柄式 API）→ src/sdk/*.ts（wire 客户端，内部） │
+│ SDK  @vestra-player/sdk（src/packages/sdk/）：plugin/ 句柄式 API → wire 客户端（内部） │
 │ 插件 src/plugins/<名字>/：main.ts + .slint           │
 └────────────────────────────────────────────────────┘
 ```
@@ -68,10 +68,10 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 | `src/host/src/window_state.rs`、`ui_state.rs` | 底栏/侧栏显示规则（宽度、空闲隐藏、分离）、界面状态持久化 |
 | `src/host/ui/vestra/` | 插件可导入的主题与控件（`@vestra/theme.slint`、`@vestra/widgets.slint`） |
 | `src/runtime/runner.ts` | 插件运行器 |
-| `src/sdk/plugin/` | 插件 API（公共类型 `types.ts`，测试宿主 `testing.ts`） |
-| `src/sdk/*.ts` | wire 客户端（SDK 内部使用） |
-| `src/scripts/plugin.mjs`、`check-boundaries.mjs` | 插件构建工具、导入边界检查 |
-| `src/tests/sdk/` | SDK 单元测试 |
+| `src/packages/sdk/` | npm 包 `@vestra-player/sdk`（workspace）：`src/plugin/` 插件 API（公共类型 `types.ts`，测试宿主 `testing.ts`），`src/*.ts` wire 客户端（内部），`bin/vestra-plugin.mjs` 插件命令行工具，`slint/` 控件库只读副本，`test/` SDK 单元测试。入口与发布格式见 [生态计划 S0 记录](../product/ecosystem-plan.md) |
+| `src/scripts/plugin.mjs`、`check-boundaries.mjs` | 仓库内调用 `vestra-plugin` 的快捷方式（按插件名）、导入边界检查 |
+| `src/scripts/sync-sdk-slint.mjs`、`stage-runtime.mjs` | 把 `host/ui` 的控件库同步进 SDK 包；按打包布局生成 `Resources/runtime` |
+| `src/tests/sdk/` | 播放器侧测试：runner、SDK 常量与宿主一致、控件库副本一致 |
 | `src/plugins/` | 10 个产品插件 |
 | `src/examples/bookmark/` | 教程示例插件 |
 | `src/examples/core-ui/`、`src/examples/panel-menu/` | 核心界面接口的演示插件（菜单、绑定、屏幕提示、播放序列、侧栏状态与分离、面板右键菜单、主题控件） |
