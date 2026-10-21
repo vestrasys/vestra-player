@@ -292,8 +292,19 @@ export component FloatingPanel inherits Window {{
 
 /// R-U3: whether the video area has no video frame to show. Empty: none;
 /// ready or ended: none unless mpv shows a picture (cover art counts) or a
-/// stream produces frames; loading and error keep the previous answer.
+/// stream produces frames; loading: none (G-16a, the backdrop shows the
+/// loading screen instead of the previous source's last frame); error keeps
+/// the previous answer.
 pub fn no_video(previous: bool, source: &Json) -> bool {
+    match source["phase"].as_str() {
+        Some("loading") => true,
+        _ => video_absent(previous, source),
+    }
+}
+
+/// Whether the source has no video, with loading and error keeping the
+/// previous answer: picture-in-picture stays open while the next source loads.
+pub fn video_absent(previous: bool, source: &Json) -> bool {
     match source["phase"].as_str() {
         Some("empty") | None => true,
         Some("ready" | "ended") => !(source["kind"] == "producer" || source["videoOutput"] == true),
@@ -556,10 +567,16 @@ mod tests {
         assert!(no_video(false, &state("ready", false)));
         assert!(!no_video(true, &state("ready", true)));
         assert!(!no_video(true, &state("ended", true)));
-        // Loading and error keep what is shown.
+        // G-16a: loading shows the backdrop; error keeps what is shown.
         assert!(no_video(true, &state("loading", false)));
-        assert!(!no_video(false, &state("loading", false)));
+        assert!(no_video(false, &state("loading", false)));
         assert!(!no_video(false, &state("error", false)));
+        assert!(no_video(true, &state("error", false)));
+        // For picture-in-picture, loading keeps the previous answer.
+        assert!(!video_absent(false, &state("loading", false)));
+        assert!(video_absent(true, &state("loading", false)));
+        assert!(!video_absent(false, &state("error", false)));
+        assert!(video_absent(false, &state("ready", false)));
         assert!(!no_video(true, &json!({"phase":"ready","kind":"producer"})));
         assert!(no_video(false, &Json::Null));
     }

@@ -135,6 +135,8 @@ enum Event {
     /// A bound input fired: (window generation, owner, command id).
     Binding(u64, u64, String),
     SidebarResized(u64, f64),
+    /// IA-CORE-12: a double click on the video during picture-in-picture.
+    PipReturn(u64),
     FloatingClosed(u64),
     MenuAction(u64, MenuAction),
     Request(u64, Value),
@@ -318,6 +320,8 @@ struct Host {
     images: ui_image::Images,
     /// No video frame to show (R-U3): the backdrop is effective.
     no_video: bool,
+    /// The source has no video, loading keeping the previous answer (PiP).
+    video_absent: bool,
     /// GPU rendering: the video area was cleared for this empty phase.
     video_cleared: bool,
     /// A backdrop is mounted, so mpv is told not to show cover art (R-U3).
@@ -762,6 +766,11 @@ impl Host {
                 self.ui_state.state.sidebar = Some(ui_state::Sidebar { width });
                 self.ui_state.touch(self.now_ms());
             }
+            Event::PipReturn(generation) => {
+                if generation == self.shell_generation {
+                    self.pip.restore();
+                }
+            }
             Event::FloatingClosed(generation) => {
                 if let Some(owner) = self
                     .floating
@@ -947,7 +956,7 @@ impl Host {
                 .shell
                 .as_ref()
                 .is_some_and(|s| s.window().is_fullscreen()),
-            video: !self.no_video,
+            video: !self.video_absent,
         }
     }
     /// `window.setPictureInPicture { on }` (R-W5): answered once the system
@@ -1255,7 +1264,9 @@ impl Host {
         {
             return;
         }
-        if !fullscreen && !self.headless {
+        // IA-CORE-03: only the normal size is remembered (not fullscreen, not
+        // maximized), and the player always starts at it (`RestoreLastState=0`).
+        if !fullscreen && !shell.window().is_maximized() && !self.headless {
             self.remember_window(&shell);
         }
         // G-04 / G-01: where the pointer is. A hover counts only while its
@@ -1648,6 +1659,25 @@ impl Host {
                 name: format!("Mouse:{name}"),
             };
             SValue::Bool(fire(&input, &events, generation, &event, false, None))
+        })?;
+        // G-05: dragging the video moves the window; the press is no click.
+        let input = self.input.clone();
+        let weak = window.as_weak();
+        window.set_callback("drag-window", move |_| {
+            input.borrow_mut().click = None;
+            if let Some(window) = weak.upgrade() {
+                use slint::winit_030::WinitWindowAccessor;
+                window.window().with_winit_window(|window| {
+                    // Systems without it (some Linux) refuse; the window stays.
+                    let _ = window.drag_window();
+                });
+            }
+            SValue::Void
+        })?;
+        let events = self.events.clone();
+        window.set_callback("pip-return", move |_| {
+            let _ = events.send(Event::PipReturn(generation));
+            SValue::Void
         })?;
         let input = self.input.clone();
         window.set_callback("left-press", move |args| {
@@ -2209,7 +2239,13 @@ impl Host {
         let mut fullscreen = commands::Declaration::new("全屏", &["全屏"]);
         fullscreen.group = "screen".into();
         fullscreen.order = 700;
-        fullscreen.bindings = vec!["Enter".into(), "F11".into(), "Mouse:LeftDoubleClick".into()];
+        // IA-CORE-04: Enter and Alt+Enter as in PotPlayer; F11 is a Vestra extra.
+        fullscreen.bindings = vec![
+            "Enter".into(),
+            "Alt+Enter".into(),
+            "F11".into(),
+            "Mouse:LeftDoubleClick".into(),
+        ];
         let mut exit = commands::Declaration::new("退出全屏", &[]);
         exit.bindings = vec!["Escape".into()];
         let mut quit = commands::Declaration::new("退出", &["退出"]);
@@ -2500,6 +2536,7 @@ impl Host {
         }
     }
     fn backdrop_source(&mut self) {
+        self.video_absent = composition::video_absent(self.video_absent, &self.last_source);
         let next = composition::no_video(self.no_video, &self.last_source);
         let empty = self.last_source["phase"] == "empty";
         let Some(shell) = &self.shell else {
@@ -4034,6 +4071,7 @@ fn main() -> Result<()> {
         timeline: Default::default(),
         images: Default::default(),
         no_video: true,
+        video_absent: true,
         video_cleared: false,
         cover_art_off: false,
         pip: Default::default(),

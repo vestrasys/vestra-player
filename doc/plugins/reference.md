@@ -295,11 +295,11 @@ binding  = { 修饰键 "+" } 输入          修饰键按 Ctrl、Alt、Shift、C
 - `+` 无论怎样打出都是 `Plus`：美式 ⇧=、德语等布局的独立 `+` 键都是 `Plus`，带 Option 时是 `Alt+Plus`。
 - macOS 系统快捷键先于播放器：⌃F1–⌃F8（键盘导航，如 ⌃F6「将焦点移到浮动窗口」）、⌃↑/⌃↓/⌃←/⌃→（调度中心与切换桌面）、⌘Tab、⌘Space 等默认被系统截走，绑定收不到，默认绑定请避开。
 - `Mouse:LeftClick`（视频区左键单击）：只有它有生效的绑定时，播放器才延迟判定左键按下：系统双击间隔内没有第二次按下、指针移动不超过 4 点，才算单击并触发；第二次按下算双击（`Mouse:LeftDoubleClick` 照常）。没有绑定时左键行为不变（立即聚焦视频区，没有延迟）。
-- 鼠标绑定只在视频区生效，可带修饰键；`:LeftHalf` / `:RightHalf` 按双击位置区分左右半边，带区的绑定优先于不带区的。滚轮按累计位移计步。右键保留给菜单：在视频区按下并在视频区松开时，在松开处弹出（交互对齐 G-15）。
+- 鼠标绑定只在视频区生效，可带修饰键；`:LeftHalf` / `:RightHalf` 按双击位置区分左右半边，带区的绑定优先于不带区的。滚轮按累计位移计步。右键保留给菜单：在视频区按下并在视频区松开时，在松开处弹出（交互对齐 G-15）。窗口模式下在视频区按住左键（不带修饰键）移动超过 4px 时拖动窗口（G-05），这次按下不再算 `Mouse:LeftClick`，也不参与双击；全屏与菜单打开时不拖动。
 - 作用范围：默认全局（主窗口或浮动面板窗口获得焦点、且按键没被焦点控件吃掉时，例如输入框里的空格不会触发）；`focus: "panel"` 只在本插件面板（附着或浮动）获得焦点时生效，此时先于全局查找。工具窗口里不触发绑定。
 - 菜单或系统对话框打开时绑定暂停。默认只在按下时触发；`repeat: true` 时按住会重复触发。
 - 冲突（同一输入、同一范围被两个命令声明）不报错：用户覆盖层优先，其次宿主自己的命令，再次先加载的插件；被压下的绑定写一行宿主日志，赢家停用后自动生效。测试里用 `host.conflicts` 检查。
-- 宿主自己的命令：「全屏」（`Enter`、`F11`、`Mouse:LeftDoubleClick`）、「退出全屏」（`Escape`，不在菜单）、「退出」（`Cmd+Q`），以及 14 个基础播放动作（§5.5）。
+- 宿主自己的命令：「全屏」（`Enter`、`Alt+Enter`、`F11`、`Mouse:LeftDoubleClick`；画中画期间视频区双击改为把画面放回主窗口，§6.6）、「退出全屏」（`Escape`，不在菜单）、「退出」（`Cmd+Q`），以及 14 个基础播放动作（§5.5）。
 - 用户覆盖层保存在界面状态文件（[架构总览 §6](../architecture/README.md)），由 `plugin.bindings`（§4.2）读写。
 
 ### 4.2 绑定管理 `plugin.bindings`
@@ -542,7 +542,7 @@ plugin.host.run(action: HostAction): Promise<void>;
 | `seek-backward` / `seek-forward` | 播放 ▶ 跳转 ▶ 后退/前进 N秒 | 210 / 211，step | ← / →（按住重复） | 从最新未完成的目标累加，夹在 0 与时长之间；「前进 5秒: 00:37 / 01:40」；N 见 `setStepSeek` |
 | `rate-normal` | 播放 ▶ 速度 ▶ 正常（单选） | 220 | Z | 1 倍；「播放速度: 1x」 |
 | `rate-down` / `rate-up` | 播放 ▶ 速度 ▶ 减速 0.1 / 加速 0.1 | 221 / 222 | X / C | ±0.1，取两位小数，夹在 0.25–4；「播放速度: 1.1x」 |
-| `volume-up` / `volume-down` | 声音 ▶ 音量 + / 音量 − | 501 / 502 | ↑、滚轮上 / ↓、滚轮下（按住重复） | ±5，夹在 0–200，先设音量再取消静音；「音量: 85%」 |
+| `volume-up` / `volume-down` | 声音 ▶ 音量 + / 音量 − | 501 / 502 | ↑、滚轮上 / ↓、滚轮下（按住重复） | ±5，先设音量再取消静音；「音量: 85%」。`volume-up` 上限 100（交互对齐 G-13a）：已经 ≥ 100（别的插件用 `setOutput` 设到 100 以上）时不再增加、照常提示；`volume-down` 不低于 0。`setOutput` 的范围仍是 0–200 |
 | `mute` | 声音 ▶ 静音（勾选） | 503 | M | 「静音: 开」/「静音: 关」 |
 
 - 禁用时 `run` 以 `unavailable` 失败（`message` 为原因），未知 id 为 `invalid`。动作执行完才 resolve（之后 `player.state` 已刷新）；同一动作在途时的重复调用被丢弃并直接 resolve（相对跳转与音量除外，它们排队累加）。
@@ -675,7 +675,7 @@ interface SlotState {
 **背景层**（`"backdrop"`）：没有视频帧时画在视频区（铺满，替代黑色的视频图像），用于专辑封面、空闲徽标。
 
 - 同一时间只有一个背景层，第二个插件挂载以 `conflict` 失败；插件停用时卸载。组件与 global 推断规则同上，`title` 不用。
-- 什么时候显示（`state.effective`）由播放器决定：来源阶段 `empty`，或 `ready` / `ended` 且 mpv 没有输出画面（即 `stats().video === null`）时为 `true`；`loading`、`error` 保持上一状态（换文件时不闪烁）；有画面时为 `false`。画什么由插件按 `player.state.phase` 与 `stats().video` 自己决定（没有 `mode`）。
+- 什么时候显示（`state.effective`）由播放器决定：来源阶段 `empty`，或 `ready` / `ended` 且 mpv 没有输出画面（即 `stats().video === null`）时为 `true`；`loading` 时为 `true`（交互对齐 G-16a：加载中视频区不再停在上一个来源的最后一帧，背景层插件可以画加载界面）；`error` 保持上一状态；有画面时为 `false`。画什么由插件按 `player.state.phase` 与 `stats().video` 自己决定（没有 `mode`）。
 - 带封面的音频文件：挂着背景层时，播放器让 mpv 不把封面（内嵌图片、同目录的 cover.jpg 等）选作视频轨（`audio-display=no`、`cover-art-auto=no`），所以 `stats().video` 为 `null`、`effective` 为 `true`，封面由背景层插件自己画（例如读文件的内嵌图片）；从挂载后打开的下一个文件起生效。背景层卸载（`dispose` 或插件停用）后恢复 mpv 默认（`embedded-first`、`exact`），mpv 重新显示封面。
 - 层次：在视频区的输入层之下、屏幕提示与信息块之下；不接收指针和键盘，双击全屏、右键菜单、滚轮照常由视频区处理。`showMenu` 以 `unavailable` 失败，`setInteraction` 无效果。
 - 关闭来源（`empty`）后视频区不再保留最后一帧：没有背景层时是 `Theme.bg-video` 纯色。
@@ -703,8 +703,8 @@ interface OsdPanel extends Disposable {
 }
 ```
 
-- 提示：1–200 个字符，换行替换为空格；粗体 16px 白字黑描边，左/上边距 10px。插件停用时已显示的提示照常到时消失。
-- 信息块：位于提示一行之下，半透明黑底、11px 等宽字，不接收输入，最多 32 行、4096 字节；多个插件各一块时从上到下排列。`dispose` 或插件停用时移除。第二次调用 `panel()` 抛错。
+- 提示：1–200 个字符，换行替换为空格；粗体白字黑描边，左/上边距 10px。字号随视频区高度变化（交互对齐 G-10）：视频区高度的 3%，取整后夹在 12–48px（默认窗口约 18px，1080 高的全屏 32px），描边 `max(1px, 字号 / 16)`。插件停用时已显示的提示照常到时消失。
+- 信息块：位于提示一行之下（`y` = 20 + 提示字号 × 1.25），半透明黑底，字号随提示同比例缩放（提示 16px 时 11px，夹在 9–28px），不接收输入，最多 32 行、4096 字节；多个插件各一块时从上到下排列。`dispose` 或插件停用时移除。第二次调用 `panel()` 抛错。
 - 无界面模式下以 `unavailable` 失败（`panel().set` 的失败交给 `onError`）。
 
 ### 6.6 主窗口 `plugin.window`
@@ -729,7 +729,7 @@ interface WindowState {
 - `setVideoArea`：把窗口调成视频区为 `width`×`height`（1–16384 逻辑点；1 倍 = 一个视频像素一个点）。播放器加上底栏和附着的侧栏（侧栏宽 + 3），保持窗口左上角，再把窗口挪回屏幕可见区（macOS 不含菜单栏和 Dock；Windows 按整个显示器计算，可能与任务栏重叠）。放不下时按比例缩小；小于最小尺寸（视频区宽 318、高 120，窗口 320×182）时放大到最小值（会有黑边）；这两种情况 `clamped: true`。resolve 时布局已是新尺寸（最多等 1 秒），返回实际视频区，`state` 已刷新。全屏时与无界面模式 `unavailable`（`message`「全屏时不可用」）。
 - `setAlwaysOnTop`：`true` 时播放器的普通窗口（主窗口、浮动侧栏、工具窗口，包括之后新开的）浮在其他应用的窗口之上（macOS `NSFloatingWindowLevel`，Windows 为「总在最前」）；系统对话框不受影响。多个插件时最后一次调用生效，该插件停用后回到其余插件中最后的值（都没有则不置顶）。无界面模式 `unavailable`。
 - `setCursorAutoHide`：`"fullscreen"`（默认）只在全屏时隐藏指针；`"playing"` 在窗口模式也隐藏。隐藏条件不变：播放中（就绪且未暂停）、指针在视频区、3 秒内没有指针移动或按键、没有菜单或系统对话框、面板没有在操作；窗口模式另需主窗口是活动窗口。多个插件时最后一次调用生效，该插件停用后回到其余插件中最后的值（都没有则 `"fullscreen"`）。
-- `setPictureInPicture`：`true` 把视频放进系统画中画小窗播放，`false` 放回主窗口。小窗打开（或关闭）之后才 resolve，这时 `state.pictureInPicture.active` 已更新。小窗里是播放器渲染的画面（含画面效果和 mpv 画的字幕），播放器自己画的屏幕提示、信息块、底栏不在小窗里；画中画期间主窗口视频区显示灰字「正在以画中画播放」。GPU 渲染（§5.4）时小窗直接显示 GPU 渲染出的帧（不拷贝），软件渲染时显示软件渲染的帧，分辨率都是主窗口视频区的渲染尺寸（小窗拉得比视频区大时会变糊）。规则：
+- `setPictureInPicture`：`true` 把视频放进系统画中画小窗播放，`false` 放回主窗口。小窗打开（或关闭）之后才 resolve，这时 `state.pictureInPicture.active` 已更新。小窗里是播放器渲染的画面（含画面效果和 mpv 画的字幕），播放器自己画的屏幕提示、信息块、底栏不在小窗里；画中画期间主窗口视频区显示灰字「正在以画中画播放」，在视频区双击等于小窗的「返回」（关闭小窗、不暂停、不切换全屏，交互对齐 IA-CORE-12）。GPU 渲染（§5.4）时小窗直接显示 GPU 渲染出的帧（不拷贝），软件渲染时显示软件渲染的帧，分辨率都是主窗口视频区的渲染尺寸（小窗拉得比视频区大时会变糊）。规则：
   - 全屏时调用 `true`：播放器先退出全屏，再打开小窗。已经打开时再调 `true` 直接 resolve（之后算这个插件打开的）；没打开时调 `false` 直接 resolve。
   - 小窗的播放 / 暂停按钮和跳转按钮直接控制播放（跳转距离由系统给出）；小窗显示进度条，可以跳转的来源才有，直播或不能跳转的来源只有播放 / 暂停。小窗的「返回」按钮关闭小窗、不暂停；小窗的关闭按钮关闭小窗并暂停（和 Safari、QuickTime 一致）。这两种关闭插件都从 `onChange` 看到 `active` 变为 `false`。
   - 小窗跟着来源走：换来源时保持；新来源没有视频，或来源被关闭时自动关闭。打开它的插件停用时也关闭。主窗口重建（挂载、卸载界面）不影响小窗。
@@ -1175,7 +1175,7 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 | 通用能力 | `host.clipboard`（`{ text, images }`，预置 `text` 测 `readText`）；`host.power`（合并后的 `"off"` / `"playing"`）；`host.tools.handle(tool, (args) => ({ stdout, stderr }))`（未注入的工具 `unavailable`；抛 `HostError` 模拟失败），`host.tools.calls`；`host.system.revealed`、`.opened`（播放器收到的 `system.reveal` / `openPath` 路径；用 `host.handle("system.openPath", …)` 等注入失败）；`host.subtitleLoads`（每次 `load` 的 `format`、`title`、`select` 与字节）；`host.system.urls`（`system.openUrl`） |
 | 渲染轮 | `host.videoRender`（`{ owner, values, gpu }`；`gpu: false` 模拟软件渲染，`set` 以 `unsupported` 失败）；`host.setVideoRenderOwner(pluginId \| null)`；`host.failVideoRender("failed" \| "unsupported", message)`（播放器推给拥有者的失败：着色器编译失败、退回软件渲染）；`host.stats.video` 可带 `hwdec`、`transfer`。着色器文件是否存在按真实文件系统检查；`host.producerTransport = "tcp"`（`openStream` 走回环 TCP 加令牌，如 Windows；`producer.admitted` 表示令牌正确） |
 | 可移植性轮 | `host.secrets`（`Map`：名称 → 值，可预置）；`host.systemInfo`（`app.system()` 的返回值）；`host.exports`（每次 `jobs.start` 的参数：`kind` 为 `rawPng`、`rawJpeg`、`rawBmp`、`rawMp4` 或对应的 `processed…`，JPEG 带 `quality`） |
-| 交互对齐轮 | `host.setMainWindow({ fullscreen })` 同播放器一样把附着的侧栏收起（`effective: false`、`reason: "fullscreen"`），退出全屏时恢复；`host.popSidebar(popped)` 模拟指针到右边缘弹出 / 离开后收起（只在全屏、偏好为显示、未分离时有效）；全屏中 `setVisible(true)` 即弹出 |
+| 交互对齐轮 | `host.setMainWindow({ fullscreen })` 同播放器一样把附着的侧栏收起（`effective: false`、`reason: "fullscreen"`），退出全屏时恢复；`host.popSidebar(popped)` 模拟指针到右边缘弹出 / 离开后收起（只在全屏、偏好为显示、未分离时有效）；全屏中 `setVisible(true)` 即弹出；`volume-up` 上限 100（同 §5.5）；`setSource({ phase: "loading" })` 让已挂载的背景层 `effective` 变为 `true` 并推送 |
 | 上限 | `commands.register` 按播放器的同一套命令上限拒绝（`limit`，§4）：本插件最多 `COMMAND_LIMITS.perPlugin` 条，总量把 `host.coreCommands` 算在内 |
 | 第 4a 轮批次 2 | `host.videoView`（`{ owner, values }`：拥有者插件 id 与播放器持有的值）；`host.setVideoViewOwner(pluginId \| null)`（模拟别的插件先占用显示层，`null` 释放并复位） |
 | 第 4a 轮批次 1 | `frameBlend` 与播放器同一套校验，「全部插件最多一个」按本插件的全部视频滤镜计算（TestHost 只模拟一个插件） |
@@ -1336,6 +1336,13 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 - **全屏侧栏弹出层**（G-01，§6.3）：全屏时附着的侧栏不再「全屏时不可用」，而是收起在右边缘、指针移过去时弹出。`SlotState` 签名不变，语义变化：`reason: "fullscreen"` 改为「全屏覆盖层当前收起」；弹出时 `effective: true`、`reason: null`。全屏中 `setVisible(true)` 立即弹出。受影响：按 `preferred` / `effective` 画侧栏开关按钮的插件（playback 的列表按钮，见整改文档 G-18：`reason === "fullscreen"` 时按「开」显示）；playlist 的 `setInteraction` 在全屏下开始起作用（锁住弹出层），不用改。
 - **右键菜单**（G-03 第一步、G-15、IA-CORE-01；主菜单与 `showMenu` 的面板菜单相同）：右键松开时弹出；某一级比窗口高时，高度等于窗口高，上下各一条 12px 箭头条，指针停在箭头条上每 50ms 滚一行，滚轮按像素滚动，键盘 ↑↓ 移出可见区时自动滚动。指针停在子菜单行上满 400ms（Windows 读系统设置 `SPI_GETMENUSHOWDELAY`）才展开；已有子菜单展开时，停在同级其它行上同样的时间后才切换，期间指针进入已展开的子菜单则不切换；点击与键盘立即展开。Esc 先关最深一级，只剩顶层时才关闭菜单。插件不用改。
 - **`ToolTipArea` 修复**（§6.4，作者报告）：以前提示显示后把计时器的 `running` 赋值为 `false`，解除了绑定，每个提示只能出现一次；现在每次悬停都会再次显示，指针离开时关闭。新增只读属性 `showing`。
+- **加载中背景层生效**（G-16a，§6.3）：来源阶段为 `loading` 时 `panels.backdrop.state.effective` 为 `true`（以前保持上一状态）。受影响：visualizer 要在 `phase === "loading"` 时画加载界面（整改文档 G-16b），否则加载中视频区是它当前画的内容（空闲徽标或封面）。画中画不受影响：换来源时小窗照旧保持。
+- **音量键上限 100**（G-13a，§5.5）：`volume-up`（↑、滚轮上、`host.run`）停在 100，已在 100 以上时不变；`setOutput` 仍接受 0–200。受影响：playback 的音量滑块应改为 0–100（整改文档 G-13b）。
+- **屏幕提示字号随视频区**（G-10，§6.5）：不再固定 16px；信息块字号与位置随之变化。插件不用改。
+- **拖动画面移动窗口**（G-05，§4.1）：窗口模式下左键拖动视频区移动窗口，拖动不触发 `Mouse:LeftClick`。插件不用改。
+- **画中画期间双击视频区**（IA-CORE-12，§6.6）：放回主窗口，不再切换全屏。
+- **全屏多了 `Alt+Enter`**（IA-CORE-04 第 1 条，§4.1）：插件若把 `Alt+Enter` 绑给自己的命令，会与宿主冲突（按绑定规则，宿主命令优先）。
+- **窗口尺寸记忆**（IA-CORE-03）：最大化时不再记录窗口尺寸，启动时总是以普通尺寸打开。
 - **指针在面板上时不隐藏**（G-04，§6.3）：指针停在底栏或全屏侧栏弹出层上时视为锁住，在其上移动算活动。插件不用改；以前为此自己在悬停时调 `setInteraction({ focused: true })` 的写法可以删掉。
 
 ### 渲染轮：Windows 缺口（2026-10）

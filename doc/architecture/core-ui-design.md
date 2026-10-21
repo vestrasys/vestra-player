@@ -252,7 +252,7 @@ impl Table {
 
 | 命令 | 默认绑定 | 菜单 | 状态 |
 | --- | --- | --- | --- |
-| `host/fullscreen` 全屏 | `Enter`、`F11`、`Mouse:LeftDoubleClick` | 顶层，`group: "screen"`，`order: 700`，勾选 = 是否全屏 | 总是可用 |
+| `host/fullscreen` 全屏 | `Enter`、`Alt+Enter`（交互对齐 IA-CORE-04）、`F11`、`Mouse:LeftDoubleClick` | 顶层，`group: "screen"`，`order: 700`，勾选 = 是否全屏 | 总是可用 |
 | `host/exit-fullscreen` 退出全屏 | `Escape` | 不在菜单 | 仅全屏时可用 |
 | `host/quit` 退出 | `Cmd+Q` | 顶层，`group: "exit"`，`order: 990` | 总是可用 |
 

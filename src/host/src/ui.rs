@@ -340,6 +340,33 @@ export component W inherits Window {
         assert_eq!((count("backs"), count("dismissals")), (2., 1.));
     }
 
+    /// G-10: the OSD and information block sizes follow the video area.
+    #[test]
+    fn osd_font_follows_the_video_area_height() {
+        headless();
+        let source = crate::composition::shell_source(&[]).unwrap();
+        let shell = crate::composition::build(source, "HostWindow")
+            .unwrap()
+            .create()
+            .unwrap();
+        let size = |name: &str| match shell.get_property(name).unwrap() {
+            slint_interpreter::Value::Number(n) => n,
+            other => panic!("{other:?}"),
+        };
+        for (width, height, osd, info) in [
+            (780., 609., 18., 12.375),
+            (1920., 1080., 32., 22.),
+            (320., 182., 12., 9.),
+            (3840., 2160., 48., 28.),
+        ] {
+            shell
+                .window()
+                .set_size(slint::LogicalSize::new(width, height));
+            assert_eq!(size("osd-size"), osd, "{width}x{height}");
+            assert_eq!(size("info-size"), info, "{width}x{height}");
+        }
+    }
+
     /// Every plugin and example Slint file compiles with the host's configuration.
     #[test]
     fn all_plugin_and_example_slint_files_compile() {
