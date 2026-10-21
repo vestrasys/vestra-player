@@ -918,7 +918,10 @@ impl Host {
         {
             self.pip = platform_window::ns_window(id)
                 .ok()
-                .and_then(|window| vestra_pip::Pip::new(&window))
+                .and_then(|window| {
+                    let overlay = std::env::var_os("VESTRA_PIP_OVERLAY").is_some();
+                    vestra_pip::Pip::new(&window, overlay)
+                })
                 .map(|pip| (id, pip, false));
             if self.pip.is_some() {
                 eprintln!("pip: ready (supported: {})", vestra_pip::Pip::supported());
@@ -928,9 +931,8 @@ impl Host {
             return;
         };
         pip.set_paused(self.last_source["paused"] == true);
-        if !*started && pip.possible() {
+        if !*started && pip.start() {
             eprintln!("pip: possible, starting");
-            pip.start();
             *started = true;
         }
         let paused = self.last_source["paused"] == true;
