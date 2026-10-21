@@ -23,8 +23,8 @@
 | 截图与导出 | `src/plugins/capture` | 保存当前画面，PNG 与源帧逐像素一致 | 连拍、MP4 未复测；无数值进度；连拍页「Sample start」保留打开窗口时的时间 |
 | NES | `src/plugins/nes` | 打开 ROM 出画面和声音，停止后清屏 | 键盘输入、存读档按范围暂缓 |
 | 插件工坊（实验性） | `src/plugins/workshop` | 生成 → 宿主校验 → 安装 → 生成的计数器可用（本地 mock 模型，无付费调用） | 升级、回退未在 GUI 实测 |
-| YouTube | `src/plugins/youtube` | 公开视频播放 | 下载未在 GUI 复测 |
-| Bilibili | `src/plugins/bilibili` | 公开视频播放 | — |
+| YouTube | 插件仓库 `plugins/youtube` | 公开视频播放 | 下载未在 GUI 复测 |
+| Bilibili | 插件仓库 `plugins/bilibili` | 公开视频播放 | — |
 
 另有示例插件 `src/examples/bookmark`（[入门教程](plugins/tutorial.md)用），已在播放器中实测。
 

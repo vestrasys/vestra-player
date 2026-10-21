@@ -72,7 +72,7 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 | `src/scripts/plugin.mjs`、`check-boundaries.mjs` | 仓库内调用 `vestra-plugin` 的快捷方式（按插件名）、导入边界检查 |
 | `src/scripts/sync-sdk-slint.mjs`、`stage-runtime.mjs` | 校验已安装 SDK 的控件库副本与 `host/ui` 一致（`--write <SDK 仓库>` 把 `host/ui` 复制进 SDK 仓库）；从已安装的 SDK 按打包布局生成 `Resources/runtime` |
 | `src/tests/sdk/` | 播放器侧测试：runner、打包布局、已安装 SDK 的常量（能力表、`apiVersion`、命令上限）与控件库副本和宿主一致 |
-| `src/plugins/` | 10 个产品插件 |
+| `src/plugins/` | 内置产品插件（`youtube`、`bilibili` 在插件仓库 [vestra-player-plugins](https://github.com/vestrasys/vestra-player-plugins)） |
 | `src/examples/bookmark/` | 教程示例插件 |
 | `src/examples/core-ui/`、`src/examples/panel-menu/` | 核心界面接口的演示插件（菜单、绑定、屏幕提示、播放序列、侧栏状态与分离、面板右键菜单、主题控件） |
 

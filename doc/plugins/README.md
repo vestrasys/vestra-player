@@ -11,6 +11,7 @@
 可以直接运行的代码：
 
 - `src/examples/bookmark/`：教程中的书签插件（含测试）。
-- `src/plugins/`：10 个产品插件。最短的是 `video/`（画面调节），可作为第一个参考。
+- `src/plugins/`：内置产品插件。最短的是 `video/`（画面调节），可作为第一个参考。
+- 插件仓库 [vestra-player-plugins](https://github.com/vestrasys/vestra-player-plugins) 的 `plugins/`：不随安装包分发的官方插件 `youtube`、`bilibili`（网络媒体解析器的写法见[插件示例 §9](examples.md)）。
 
 设计取舍（为什么这样设计）见 [SDK 设计说明](../architecture/sdk-design.md)。
