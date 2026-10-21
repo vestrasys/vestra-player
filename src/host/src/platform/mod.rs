@@ -21,7 +21,7 @@
 //! | facts | `os_facts` (blocking), `displays` (UI thread), `app_data_dir`, `ui_font`, `default_ffmpeg`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD` |
 //! | generated streams | `av_listen` → `AvListener` / `AvStream` (Unix: `av_unix` below; Windows: `av_tcp`) |
 //! | offline media | `HELD_FILE_INPUT` (how FFmpeg names its stdin, the held source file) |
-//! | rendering | `GPU_RENDER`, `gpu_start` → `GpuRenderer` / `GpuHandle` (macOS: `vestra-gpu-render`; elsewhere `no_gpu` below refuses, so the host renders in software) |
+//! | rendering | `GPU_RENDER`, `gpu_start` → `GpuRenderer` / `GpuHandle` / `GpuFrame` (macOS: `vestra-gpu-render`; elsewhere `no_gpu` below refuses, so the host renders in software) |
 //! | picture-in-picture | `pip_supported`, `PipWindow` (UI thread; macOS: AVKit through `vestra-pip`; elsewhere `pip_unsupported.rs`: `unsupported`) |
 //!
 //! Window rectangles are logical points. macOS uses the Cocoa lower-left
@@ -209,6 +209,8 @@ mod no_gpu {
     pub struct GpuRenderer(());
     #[derive(Clone)]
     pub struct GpuHandle(());
+    /// A published GPU frame; there are none here.
+    pub enum GpuFrame {}
     pub fn gpu_start(
         _mpv: Arc<rsmpv::Mpv>,
         _size: (u32, u32),
@@ -237,6 +239,10 @@ mod no_gpu {
             None
         }
         pub fn reshow(&self) {}
+        pub fn latest(&self) -> Option<(u64, Box<GpuFrame>)> {
+            None
+        }
+        pub fn on_frame(&self, _notify: impl Fn() + Send + 'static) {}
         pub fn attach<T: slint::ComponentHandle + 'static>(
             &self,
             _component: &T,

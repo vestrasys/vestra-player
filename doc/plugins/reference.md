@@ -727,7 +727,7 @@ interface WindowState {
 - `setVideoArea`：把窗口调成视频区为 `width`×`height`（1–16384 逻辑点；1 倍 = 一个视频像素一个点）。播放器加上底栏和附着的侧栏（侧栏宽 + 3），保持窗口左上角，再把窗口挪回屏幕可见区（macOS 不含菜单栏和 Dock；Windows 按整个显示器计算，可能与任务栏重叠）。放不下时按比例缩小；小于最小尺寸（视频区宽 318、高 120，窗口 320×182）时放大到最小值（会有黑边）；这两种情况 `clamped: true`。resolve 时布局已是新尺寸（最多等 1 秒），返回实际视频区，`state` 已刷新。全屏时与无界面模式 `unavailable`（`message`「全屏时不可用」）。
 - `setAlwaysOnTop`：`true` 时播放器的普通窗口（主窗口、浮动侧栏、工具窗口，包括之后新开的）浮在其他应用的窗口之上（macOS `NSFloatingWindowLevel`，Windows 为「总在最前」）；系统对话框不受影响。多个插件时最后一次调用生效，该插件停用后回到其余插件中最后的值（都没有则不置顶）。无界面模式 `unavailable`。
 - `setCursorAutoHide`：`"fullscreen"`（默认）只在全屏时隐藏指针；`"playing"` 在窗口模式也隐藏。隐藏条件不变：播放中（就绪且未暂停）、指针在视频区、3 秒内没有指针移动或按键、没有菜单或系统对话框、面板没有在操作；窗口模式另需主窗口是活动窗口。多个插件时最后一次调用生效，该插件停用后回到其余插件中最后的值（都没有则 `"fullscreen"`）。
-- `setPictureInPicture`：`true` 把视频放进系统画中画小窗播放，`false` 放回主窗口。小窗打开（或关闭）之后才 resolve，这时 `state.pictureInPicture.active` 已更新。小窗里是播放器渲染的画面（含画面效果和 mpv 画的字幕），播放器自己画的屏幕提示、信息块、底栏不在小窗里；画中画期间主窗口视频区显示灰字「正在以画中画播放」。规则：
+- `setPictureInPicture`：`true` 把视频放进系统画中画小窗播放，`false` 放回主窗口。小窗打开（或关闭）之后才 resolve，这时 `state.pictureInPicture.active` 已更新。小窗里是播放器渲染的画面（含画面效果和 mpv 画的字幕），播放器自己画的屏幕提示、信息块、底栏不在小窗里；画中画期间主窗口视频区显示灰字「正在以画中画播放」。GPU 渲染（§5.4）时小窗直接显示 GPU 渲染出的帧（不拷贝），软件渲染时显示软件渲染的帧，分辨率都是主窗口视频区的渲染尺寸（小窗拉得比视频区大时会变糊）。规则：
   - 全屏时调用 `true`：播放器先退出全屏，再打开小窗。已经打开时再调 `true` 直接 resolve（之后算这个插件打开的）；没打开时调 `false` 直接 resolve。
   - 小窗的播放 / 暂停按钮和跳转按钮直接控制播放（跳转距离由系统给出）；小窗显示进度条，可以跳转的来源才有，直播或不能跳转的来源只有播放 / 暂停。小窗的「返回」按钮关闭小窗、不暂停；小窗的关闭按钮关闭小窗并暂停（和 Safari、QuickTime 一致）。这两种关闭插件都从 `onChange` 看到 `active` 变为 `false`。
   - 小窗跟着来源走：换来源时保持；新来源没有视频，或来源被关闭时自动关闭。打开它的插件停用时也关闭。主窗口重建（挂载、卸载界面）不影响小窗。
@@ -1355,7 +1355,7 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 - `WindowState.pictureInPicture: { supported, active }`（R-W1 的画中画部分）。`window.state` 的回复和事件多了这个字段；旧播放器没有这个字段时 SDK 读作 `{ supported: false, active: false }`。
 - 协议：新请求 `window.setPictureInPicture { on }`。`TestHost.mainWindow` 多了 `pictureInPicture`，`setMainWindow` 接受它。
 
-行为变化：直接对 `window.state` 做 `deepEqual` 的测试会多看到 `pictureInPicture` 字段。
+行为变化：直接对 `window.state` 做 `deepEqual` 的测试会多看到 `pictureInPicture` 字段。GPU 渲染（macOS 默认）时小窗的帧来自 GPU 渲染器，软件渲染时来自软件渲染，插件不用区分。
 
 ### 可移植性轮 P1：平台模块、文件与链接由播放器执行、密钥、系统信息、JPEG/BMP 导出（2026-10）
 

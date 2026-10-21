@@ -188,3 +188,36 @@ top -l 21 -s 1 -pid $PID -stats cpu | awk '/^%CPU/{getline v; n++; if(n>1){s+=v;
 **给协调者**：没有 Windows 机器，以下只能等有 Windows 环境时验证：(1) 链接后的 `vestra-host.exe` 能启动（清单已嵌入：`mt.exe -inputresource:vestra-host.exe;#1 -out:m.xml` 能导出含 `Microsoft.Windows.Common-Controls` 的清单）；(2) 插件确认框显示自定义按钮；(3) 截图导出（`VESTRA_FFMPEG` 指向 6.1+ 的 `ffmpeg.exe`）；(4) NES 生成流出画面和声音。macOS 上这次提交的行为不变（生成流的读循环不再空转除外），回归可以只看 R6（NES）和一次插件截图导出。
 
 **检查**（macOS，均实际执行）：`src/`：`npm run check`、`format:check`、`boundaries` 通过；`test:sdk` 104 通过；`plugins:build` 通过；19 个插件测试共 488 通过、0 失败（workshop 的 `vendor/sdk` 已重同步；前任两次整套运行中各有一个计时类测试偶发失败，playback 一次、subtitles「上传中取消」一次，单独重跑都通过；接手后重新整套运行一次全部通过）；`npm run portability`：`OK: the host compiles for Windows`，`portability: clean`。`src/host/`：`cargo fmt --check` 通过；`cargo clippy --locked --all-targets -- -D warnings` 通过（另跑 `--features pip`）；`cargo test --locked` 243 通过；`grep -rnw unsafe src/host/src` 为空。未执行：Windows 链接与运行（没有 MSVC 链接器和 Windows 环境）。
+
+### 3.4 A 线交付三：合并画中画，GPU 帧送进画中画（接手维护者甲，2026-10-21，提交「Merge rebuild/render-pip …」「Render: feed picture-in-picture from the GPU path」）
+
+前任维护者甲做完了 §3.2、§3.3 的代码和记录，没有提交 §3.3。接手后先审查：§3.3 的改动按原样保留，只把 `platform/windows.rs` 里放错位置的文档注释挪回 `default_ffmpeg`；重跑全部检查后提交。然后合并 `rebuild/render-pip`（维护者乙的 11b467b），再按 §3.1.3 接上 GPU 帧。
+
+**合并**：冲突在 `Cargo.toml`（两个 unsafe 子包都是 macOS 的普通依赖，`gpu-render`、`pip` 两个原型 feature 都不再有）、`platform/mod.rs` 的总表、参考文档 §17（两条都保留）、本单 §3（乙的 §3.1 编号不变，因为探针源码引用了它；甲的两次交付顺延为 §3.2、§3.3）。`main.rs` 自动合并：原型的 `#[cfg(feature = "pip")]` 整段被乙的正式实现替换，`show_frame` 里软件帧照常送画中画。合并提交单独做了全部检查（见下）。
+
+**§3.1.3 的四项**
+
+| 项 | 做法 |
+| --- | --- |
+| (1) GPU 帧回调送画中画 | `pip::Surface` 加关联类型 `Frame` 和 `push_surface(&Self::Frame)`；`PictureInPicture::push_surface(sequence, frame)` 像 `push` 一样置 `fed`，同一序号只送一次（关闭、重新打开时清零）。宿主第一次 tick 见到 GPU 渲染器时注册一次 `GpuHandle::on_frame`：渲染线程每发布一帧，只在画中画要帧（`pip.feeding()`，每个 tick 写进一个 `AtomicBool`）时 `invoke_from_event_loop` 一次（合并未处理的唤醒），UI 线程取 `GpuHandle::latest()` 送进去。生成流（NES）在用视频区时不送 GPU 帧，它的像素帧照旧经 `show_frame` 送 |
+| (2) BGRA、不改写在用的 IOSurface | 渲染子包的环本来就是 `'BGRA'` IOSurface，并且轮转时跳过 `IOSurfaceIsInUse` 的那块（§3.2 合入原型时就有）。环有 3 块；全部在用时仍会写下一块（宁可偶发撕裂，也不让画面停住），GUI 实测看 G3 |
+| (3) 暂停时起步用最新一块 | `pip_tick` 里 `needs_frame()` 时：GPU 渲染送 `latest()`，软件渲染照旧用 `last_image` |
+| (4) 去掉 `allow(dead_code)` | `PipWindow::push_surface` 这个固有方法删掉，改为 `Surface` 的实现，调用 `vestra_pip::Pip::enqueue_surface`（`CVPixelBufferCreateWithIOSurface`，零拷贝） |
+
+**签名调整**（插件 API 不变，只有宿主内部）：`pip::Surface::{type Frame, push_surface}`；平台模块新增 `GpuFrame`（macOS 是 `vestra_gpu_render::IOSurfaceRef`，与 `vestra_pip::IOSurfaceRef` 是同一个 `objc2-io-surface` 0.3.2 类型；其它系统是空枚举），`no_gpu` 的 `GpuHandle` 补上 `latest()`（总是 `None`）与 `on_frame()`（不做事）；`pip_unsupported.rs` 的 `push_surface` 是 `match *self {}`。宿主主包仍是 `forbid(unsafe_code)`，unsafe 子包这次没有改动。新增单测 `pip::gpu_frames_feed_the_window_once_each_and_only_while_it_exists`。参考文档 §6.6 与 §17（画中画条目）补了一句：GPU 渲染时小窗显示 GPU 帧，分辨率是主窗口视频区的渲染尺寸。
+
+**给作者**：接入说明不变，video 插件 E16/E17/E18 见 §3.2「给作者的接入说明」，window 插件 H07 见 §3.1.4。补充一点：E18 运动补偿打开后 GPU 渲染器按显示刷新率出帧，画中画也跟着收到同样多的帧。
+
+**给协调者的 GUI 实测要点**（默认构建就是 GPU 渲染加画中画：`cd src/host && cargo build --locked --release`；R1–R9 见 §3.2，P1–P11 见 §3.1.5，CPU 测量命令见 §3.2）。原来 P1–P11 是按软件渲染写的，现在默认是 GPU 渲染，P 系列请在默认启动下做一遍，下面几项另外看：
+
+| # | 场景 | 期望 / 记录 |
+| --- | --- | --- |
+| G1 | 默认启动（GPU），播放 1080p，打开画中画 | 1 秒内出小窗，画面铺满、颜色和方向正确（GPU 帧是 BGRA，如果红蓝互换要记录）；`stats().backend` 仍是「GPU 渲染（OpenGL）」 |
+| G2 | 暂停状态下打开画中画 | 小窗起步就有当前画面（取最新一帧），不是黑的；然后在小窗里点播放，画面动起来 |
+| G3 | 画中画打开时播放 4K、开 `interpolation`（运动补偿）、拖小窗放大 | 无撕裂、无闪回旧帧（渲染环只有 3 块，全部在用时会写下一块；如有撕裂请记录，必要时加大环） |
+| G4 | 画中画打开时换来源（视频 → 视频）、改主窗口尺寸、进出全屏 | 小窗换到新画面，比例正确；改尺寸后小窗分辨率跟着视频区变 |
+| G5 | 画中画打开时打开 NES，再停 NES 打开普通视频 | NES 画面进小窗（走软件帧），没有 GPU 旧帧插进来；之后普通视频正常 |
+| G6 | `VESTRA_SOFTWARE_RENDER=1` 启动重复 P1、P3 | 与 §3.1.5 一致（软件帧路径） |
+| G7 | CPU：4K 播放，GPU 渲染下画中画关 / 开各量 20 秒；软件渲染下再量一次画中画开 | 用 §3.2 的 `top` 命令。期望 GPU 下画中画开、关差别很小（零拷贝，只多一次唤醒和入队）；软件渲染下画中画开会多出 RGB→BGRA 拷贝的开销。三组数字都记下来 |
+
+**检查**（macOS，本机实际执行，三个提交各跑一遍，结果相同，下面是最后一个提交的数字）：`src/`：`npm run check`、`format:check`、`boundaries` 通过；`test:sdk` 107 通过；`plugins:build` 通过；19 个插件测试共 488 通过、0 失败（workshop 的 `vendor/sdk` 与 `src/sdk` 逐字节一致，合并后无须重同步）；`npm run portability`：`OK: the host compiles for Windows`，`portability: clean`。`src/host/`：`cargo fmt --check` 通过；`cargo clippy --locked --all-targets -- -D warnings` 通过（另跑 `-p vestra-pip -p vestra-gpu-render` 也通过）；`cargo test --locked` 250 通过（Windows 缺口提交 243，合并提交 249）；`grep -rnw unsafe src/host/src` 为空。未执行：GUI（协调者做）、Windows 链接与运行。

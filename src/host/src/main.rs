@@ -77,7 +77,11 @@ use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
     rc::Rc,
-    sync::mpsc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
     time::{Duration, Instant},
 };
 
@@ -309,6 +313,9 @@ struct Host {
     cover_art_off: bool,
     /// `window.setPictureInPicture` (R-W5, R-H8).
     pip: pip::PictureInPicture<platform::PipWindow>,
+    /// GPU rendering: PiP wants the renderer's frames (read by its frame
+    /// callback on the render thread), and that callback is registered.
+    pip_gpu: (Arc<AtomicBool>, bool),
     /// File drops (R-U2).
     drops: drops::Drops,
     /// Settings pages and the options window (R-S1, R-H7).
@@ -955,11 +962,15 @@ impl Host {
     /// report playback to the PiP window, run what its buttons ask, and
     /// show the main window's "playing in picture-in-picture" note.
     fn pip_tick(&mut self) {
-        if self.pip.needs_frame()
-            && let Some(still) = self.last_image.as_ref().and_then(slint::Image::to_rgb8)
-        {
-            let (width, height) = (still.width() as usize, still.height() as usize);
-            self.pip.push(width, height, still.as_bytes());
+        self.pip_gpu_hook();
+        if self.pip.needs_frame() {
+            if self.pip_gpu_frames() {
+                // Paused playback renders nothing new: start from the newest.
+                self.pip_gpu_frame();
+            } else if let Some(still) = self.last_image.as_ref().and_then(slint::Image::to_rgb8) {
+                let (width, height) = (still.width() as usize, still.height() as usize);
+                self.pip.push(width, height, still.as_bytes());
+            }
         }
         let place = self
             .shell
@@ -1003,6 +1014,49 @@ impl Host {
             if shell.get_property("picture-in-picture").ok() != Some(active.into()) {
                 let _ = shell.set_property("picture-in-picture", active.into());
             }
+        }
+    }
+    /// GPU rendering: once, have the render thread's frame callback wake the
+    /// UI thread for each new frame while PiP wants frames (coalesced; a
+    /// wake-up that finds the host busy is dropped, the next frame comes).
+    fn pip_gpu_hook(&mut self) {
+        let (wanted, hooked) = &mut self.pip_gpu;
+        wanted.store(self.pip.feeding(), Ordering::Release);
+        let Some(gpu) = self.backend.render.gpu().filter(|_| !*hooked) else {
+            return;
+        };
+        *hooked = true;
+        let wanted = wanted.clone();
+        let queued = Arc::new(AtomicBool::new(false));
+        gpu.on_frame(move || {
+            if !wanted.load(Ordering::Acquire) || queued.swap(true, Ordering::AcqRel) {
+                return;
+            }
+            let queued = queued.clone();
+            let _ = slint::invoke_from_event_loop(move || {
+                queued.store(false, Ordering::Release);
+                PIP_GPU_SINK.with(|sink| {
+                    if let Some(deliver) = &*sink.borrow() {
+                        deliver();
+                    }
+                });
+            });
+        });
+    }
+    /// PiP shows the GPU renderer's frames: GPU rendering, and no generated
+    /// stream (whose pixel frames go through `show_frame` like software ones).
+    fn pip_gpu_frames(&self) -> bool {
+        self.backend.render.gpu().is_some() && !self.backend.render.producer()
+    }
+    /// The GPU renderer's newest frame to PiP, without a copy (each frame
+    /// once). The renderer does not draw into a surface the system still
+    /// shows, so the PiP window never sees a frame being redrawn.
+    fn pip_gpu_frame(&mut self) {
+        if !self.pip.feeding() || !self.pip_gpu_frames() {
+            return;
+        }
+        if let Some((sequence, surface)) = self.backend.render.gpu().and_then(|gpu| gpu.latest()) {
+            self.pip.push_surface(sequence, &surface);
         }
     }
     fn window_tick(&mut self) {
@@ -3604,6 +3658,8 @@ fn string<'a>(params: &'a Value, key: &str) -> std::result::Result<&'a str, RpcE
 thread_local! {
     /// The UI thread's frame delivery, run by the renderer's wake-up.
     static FRAME_SINK: RefCell<Option<Box<dyn Fn()>>> = const { RefCell::new(None) };
+    /// The UI thread's delivery of GPU frames to picture-in-picture.
+    static PIP_GPU_SINK: RefCell<Option<Box<dyn Fn()>>> = const { RefCell::new(None) };
 }
 /// Opt-in bounded fixture diagnostics, not a plugin frame API or source/PTS fence.
 struct FrameEvidence {
@@ -3799,6 +3855,7 @@ fn main() -> Result<()> {
         video_cleared: false,
         cover_art_off: false,
         pip: Default::default(),
+        pip_gpu: Default::default(),
         drops: Default::default(),
         settings: Default::default(),
         settings_category: None,
@@ -3890,6 +3947,14 @@ fn main() -> Result<()> {
                 Err(_) => busy.miss(),
             }))
         });
+        let pip_host = host.clone();
+        PIP_GPU_SINK.with(|sink| {
+            *sink.borrow_mut() = Some(Box::new(move || {
+                if let Ok(mut host) = pip_host.try_borrow_mut() {
+                    host.pip_gpu_frame();
+                }
+            }))
+        });
         frames.set_waker(Box::new(|| {
             let _ = slint::invoke_from_event_loop(|| {
                 FRAME_SINK.with(|sink| {
@@ -3969,6 +4034,7 @@ fn main() -> Result<()> {
         window.run()?;
         timer.stop();
         FRAME_SINK.with(|sink| sink.borrow_mut().take());
+        PIP_GPU_SINK.with(|sink| sink.borrow_mut().take());
         host.borrow_mut().ui_state.flush();
         // Native windows/resources must be released before process teardown.
         host.borrow_mut().close_floating();
