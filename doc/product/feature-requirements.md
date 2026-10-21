@@ -765,58 +765,49 @@ OSD：
 
 ### A15 拖放文件到窗口打开
 
+> 第 3b 轮按裁决 R-U2 改写：`kinds` → `extensions`；没有 `onDragOver`，不画插入线，插到落点所在行之前；同一扩展名先登记的生效；无处理者时核心什么也不做。
+
 **需求**：从 Finder 把文件、文件夹或列表文件拖到 Vestra 主窗口（视频区）或播放列表侧栏（附着或浮动）上即可打开或加入。
 
 **入口**：拖放。无菜单、无快捷键。
 
 **行为细节**：
 
-1. **拖到视频区**（由核心转交给已登记的拖放处理者，playlist 登记媒体扩展名、列表文件和文件夹）：
-   - 文件夹按 A03 的规则展开（递归、上限 5000）；列表文件按 C18 解析成条目；媒体文件直接收。拖入多项时按 Finder 给出的顺序，各自展开后拼接。
+1. **拖到视频区**（核心按扩展名分组后交给登记者；playlist 用 `drops.provide` 登记媒体扩展名（附录 B.5）、列表文件 `m3u m3u8 pls dpl`、`webloc` 和保留名 `"folder"`）：
+   - 文件夹按 A03 的规则展开（递归、上限 5000；macOS 包如 `.app` 不展开、跳过）；列表文件按 C18 解析成条目；媒体文件直接收。拖入多项时按 Finder 给出的顺序，各自展开后拼接。
    - 结果加入列表末尾（去重），**播放第一个条目**。
    - 按住 Option（`modifiers.alt`）松手：只加入，不播放（OSD：「已添加 N 项」）。
-2. **拖到播放列表**：
-   - 不播放，只加入。插入位置是松手处的行间位置（与内部拖动排序同一套插入线：拖动悬停时画 2px `Theme.accent` 线），落在空白处则追加到末尾。
-3. 字幕文件（`srt ass ssa vtt …`）、图片、其它类型 playlist 不登记；核心把它们交给登记了对应扩展名的插件（例如字幕插件），没有处理者时核心 OSD：「无法打开拖入的文件」。playlist 不处理字幕，不调用字幕插件。
+2. **拖到播放列表**（`Panel.onDrop`，整组路径交给 playlist，不按扩展名分）：
+   - 不播放，只加入。插到松手处所在行**之前**；落在空白处（最后一行之下）、页签条或底部按钮栏上则追加到末尾。没有拖动中的插入线（核心不提供拖动过程中的位置）。
+   - 落点是面板坐标；playlist 用侧栏回传的滚动位置与列表区高度（`list-area` 回调）换算到行。搜索筛选时按显示的行换算，插在该行在完整列表中的位置之前。
+   - 整组中 playlist 不收的文件（字幕等）跳过，OSD 末尾注明「跳过 N 个不支持的项目」。
+3. 字幕文件（`srt ass ssa vtt …`）、图片、其它类型 playlist 不登记；核心把它们交给登记了对应扩展名的插件（例如字幕插件），没有处理者时核心什么也不做（不提示）。playlist 不处理字幕，不调用字幕插件。
 4. 拖入的条目全部重复：视频区拖放时播放第一个对应的已有行；OSD「已添加 0 项，跳过 N 个重复」。
-5. 网页链接：winit 只报告文件路径，不报告浏览器拖来的 URL；Safari/Chrome 拖出的 `.webloc` 文件按列表文件处理——读取其 plist 中的 `URL` 字段作为链接行（只接受 HTTP(S)）。
-6. 播放器正在打开另一个来源（`busy`）时，视频区拖放只加入，OSD 说明「正在打开，已加入列表」。
+5. 网页链接：核心只报告文件路径，不报告浏览器拖来的 URL；Safari/Chrome 拖出的 `.webloc` 文件读取其 plist（XML 或二进制，二进制经 `plutil` 转换）中的 `URL` 字段作为链接行（只接受 HTTP(S)，其它跳过）。
+6. 播放器正在打开另一个来源（`busy`）时，视频区拖放只加入，OSD 说明「…；正在打开，已加入列表」。
 7. 侧栏因空间不足被隐藏（`reason: "space"`）时，拖到视频区仍然有效。
+8. 拖入的内容一项都不能加入（全不支持、文件夹无法读取）：列表不变，OSD「没有可加入的项目：…」。多次拖放按到达顺序依次处理。
 
-**界面**：`ui/sidebar.slint` 增加 `in property <int> drop-hint`（悬停插入行号，-1 不画）；插入线复用现有 `drop-index` 的绘制。
+**界面**：`ui/sidebar.slint` 增加 `callback list-area(float, float)`（滚动距离、列表区高度，逻辑点），在列表区初始化、改变高度和滚动时回传。不画拖放插入线。
 
-**核心依赖**：【核心新增】窗口拖放事件。插件做不到的原因：系统拖放（winit 0.30 的 `DragEntered`/`DragMoved`/`DragDropped`/`DragLeft`）只送到宿主的原生窗口；Slint 插件组件收不到系统拖放；而视频区不属于任何插件，必须由宿主按「落点」和「文件类型」分发。
+**核心依赖**：窗口拖放（第 3b 轮批次 2，能力 `ui.drop`，参考文档 §6.7）。插件做不到的原因：系统拖放只送到宿主的原生窗口；Slint 插件组件收不到系统拖放；而视频区不属于任何插件，必须由宿主按落点和扩展名分发。
 
 ```ts
-// 【核心新增】能力 "ui.drop"
-interface DropEvent {
-  paths: string[];                         // 绝对路径，Finder 顺序
-  at: { x: number; y: number };            // 窗口坐标（与 showMenu 相同坐标系）
-  modifiers: { alt: boolean; shift: boolean; cmd: boolean };
-}
-interface Drops {
-  /** 视频区拖放的处理者。按扩展名分配；"folder" 表示目录。同一扩展名只能有一个处理者（conflict，同 provideSequence）。 */
-  provide(handler: { kinds: string[]; drop(event: DropEvent): unknown }): Disposable;
-}
-interface Plugin { readonly drops: Drops }
-interface Panel {
-  /** 拖到本插件面板上（附着或浮动）；面板拥有者收到全部路径，不按扩展名分配。 */
-  onDrop(listener: (event: DropEvent) => unknown): Disposable;
-  /** 悬停位置；离开或松手后为 null。用于画插入线。 */
-  onDragOver(listener: (at: { x: number; y: number } | null) => void): Disposable;
-}
+interface DropModifiers { alt: boolean; shift: boolean; cmd: boolean }
+drops.provide(handler: { extensions: string[] /* 小写、不带点；"folder" = 文件夹 */; drop(e: { paths: string[]; modifiers: DropModifiers }): unknown }): Disposable;
+Panel.onDrop(listener: (e: { paths: string[]; at: { x: number; y: number } /* 面板坐标 */; modifiers: DropModifiers }) => unknown): Disposable;
 ```
 
-宿主规则：视频区松手时，按扩展名把 `paths` 分组，每组交给对应处理者（一次调用，保留原顺序）；无人认领的组 OSD「无法打开拖入的文件」。面板上松手时整组交给面板拥有者；该面板没有 `onDrop` 监听时按视频区规则处理。拖放期间不暂停、不改变播放。
+宿主规则：视频区松手时按扩展名把 `paths` 分组（保留 Finder 顺序），每组一次调用交给对应提供者；同一扩展名多个提供者时先登记的生效；无人认领的文件核心什么也不做。面板上松手时整组交给该面板的 `onDrop`；没有监听时按视频区规则处理。拖放期间不暂停、不改变播放。
 
 **验收**：
 - 拖 1 个 mkv 到视频区：加入并播放。
 - 拖 1 个文件夹到视频区：按 A03 规则展开并播放第一项。
 - 按住 Option 拖 3 个文件到视频区：加入 3 行，不播放。
-- 拖 2 个文件到列表第 3、4 行之间：两行插在原第 3 行之后，不播放；悬停时可见插入线。
+- 拖 2 个文件到列表第 3、4 行之间（落在第 4 行上）：两行插在落点所在行（原第 4 行）之前，不播放；落在空白处时追加到末尾。
 - 拖 `.m3u8` 到视频区：解析出的条目加入并播放第一项。
-- 拖 `.srt` 到视频区、且没有插件登记 srt：OSD「无法打开拖入的文件」，列表不变。
-- 侧栏浮动时拖到浮动窗口：与附着时相同。
+- 拖 `.srt` 到视频区、且没有插件登记 srt：列表不变、无提示。
+- 侧栏浮动时拖到浮动窗口：与附着时相同；侧栏因空间隐藏时拖到视频区仍有效。
 
 **PotPlayer 参考**：基本设置 Dialog(354) 3340「拖拽文件播放时显示界面选项」；列表设置 Dialog(373) 3118「添加到鼠标拖放时指向的位置」、3128「对下拉列表中的文件排序」。差异：PotPlayer 的「拖拽时显示界面选项」（弹出选择播放/加入的浮层）不做，用 Option 键区分；拖入文件不再排序，保持 Finder 顺序。
 
@@ -1038,10 +1029,9 @@ interface Panel {
 
 | 接口（TS 草案） | 理由 |
 | --- | --- |
-| `plugin.drops.provide({ kinds: string[]; drop(e: DropEvent): unknown }): Disposable`（能力 `ui.drop`） | 系统拖放只到宿主原生窗口，视频区不属于任何插件，必须由宿主按扩展名分发（A15） |
-| `Panel.onDrop(listener: (e: DropEvent) => unknown): Disposable` | 拖到面板上需要落点坐标以插入到指定位置；Slint 插件组件收不到系统拖放（A15） |
-| `Panel.onDragOver(listener: (at: { x: number; y: number } \| null) => void): Disposable` | 拖动悬停时画插入线（A15） |
-| `interface DropEvent { paths: string[]; at: { x; y }; modifiers: { alt; shift; cmd } }` | 上面三项的事件类型 |
+| `plugin.drops.provide({ extensions: string[]; drop(e): unknown }): Disposable`（能力 `ui.drop`；`"folder"` 匹配文件夹） | 系统拖放只到宿主原生窗口，视频区不属于任何插件，必须由宿主按扩展名分发（A15） |
+| `Panel.onDrop(listener: (e: { paths; at /* 面板坐标 */; modifiers }) => unknown): Disposable` | 拖到面板上需要落点坐标以插入到指定位置；Slint 插件组件收不到系统拖放（A15） |
+| `interface DropEvent { paths: string[]; at: { x; y }; modifiers: { alt; shift; cmd } }` | 上面两项的事件数据（`at` 只在 `Panel.onDrop`；裁决 R-U2 去掉了 `onDragOver`） |
 | ~~`player.preload(source: string, options: { after: Media; signal?: AbortSignal }): Preload`~~ | 裁决 R-P5 拒绝（实测同格式切换低于 150 ms 门槛）；B26 降级为「快速推进到下一个」，不需要核心新增 |
 
 ---

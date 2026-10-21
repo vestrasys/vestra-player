@@ -6,6 +6,7 @@ import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Json } from "../../../sdk/plugin/index.ts";
 import { HostError, startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
+import { DROP_EXTENSIONS, dropRow } from "../drop.ts";
 import activate from "../main.ts";
 
 type ViewRow = { rowId: string; label: string; duration: string; tooltip: string; selected: boolean; current: boolean };
@@ -895,4 +896,121 @@ test("C17: ffprobe answers are kept in probe-cache.json and reused after a resta
     await rm(data, { recursive: true, force: true });
     if (first) await rm(first, { recursive: true, force: true });
   }
+});
+
+// ------------------------------------------------------------------ A15 drag and drop
+
+test("A15: drops on the video area add to the end and play the first item; Option only adds", async () => {
+  const app = await start();
+  try {
+    const drop = async (paths: string[], alt = false) => {
+      await app.host.drop(paths, { target: "video", modifiers: { alt } });
+      await app.host.settle(30);
+    };
+    const [a, b, c, srt] = await app.files(["a.mkv", "b.mp4", "c.mp3", "a.srt"]);
+    // Registered: media, list files, .webloc and folders; not subtitles.
+    const registered = app.host.dropProviders[0]!.extensions;
+    assert.deepEqual(registered, DROP_EXTENSIONS);
+    assert.ok(registered.includes("folder") && registered.includes("m3u8") && registered.includes("mkv"));
+    assert.equal(registered.includes("srt"), false);
+    assert.equal(app.host.panelDrops, true);
+
+    await drop([a!]);
+    assert.deepEqual(app.names(), ["a.mkv"]);
+    assert.deepEqual(app.opens().at(-1), { kind: "open", source: a, startPaused: false });
+    assert.equal(app.osd(), "已添加 1 项");
+    app.host.setSource({ phase: "ready" });
+    await app.host.settle();
+
+    // Option: three files added, nothing played.
+    await drop([b!, c!, srt!], true);
+    assert.deepEqual(app.names(), ["a.mkv", "b.mp4", "c.mp3"]);
+    assert.equal(app.opens().length, 1);
+    assert.equal(app.osd(), "已添加 2 项");
+
+    // Only a subtitle, nobody registered for it: nothing happens.
+    await drop([srt!]);
+    assert.equal(app.rows().length, 3);
+    assert.equal(app.opens().length, 1);
+
+    // All duplicates: the existing row of the first item plays.
+    await drop([c!, b!]);
+    assert.equal(app.osd(), "已添加 0 项，跳过 2 个重复");
+    assert.equal(app.opens().at(-1)?.source, c);
+  } finally {
+    await app.close();
+  }
+});
+
+test("A15: a dropped folder is scanned as A03, a list file parsed as C18, a .webloc gives its link", async () => {
+  const app = await start();
+  try {
+    const dir = join(app.root, "album");
+    await app.files(["album/02.flac", "album/01.flac", "album/cover.jpg", "album/Player.app/x.mp4"]);
+    const [extra] = await app.files(["extra.mp4"]);
+    await writeFile(join(app.root, "l.m3u8"), `#EXTM3U\n#EXTINF:12,Named\n${extra}\nhttps://example.org/v.mp4\n`);
+    await writeFile(
+      join(app.root, "page.webloc"),
+      `<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>URL</key><string>https://example.org/watch?a=1&amp;b=2</string></dict></plist>\n`,
+    );
+    await app.host.drop([dir], { target: "video" });
+    await app.host.settle(30);
+    assert.deepEqual(app.names(), ["01.flac", "02.flac"]);
+    assert.deepEqual(app.opens().at(-1), { kind: "open", source: join(dir, "01.flac"), startPaused: false });
+    app.host.setSource({ phase: "ready" });
+    await app.host.settle();
+
+    await app.host.drop([join(app.root, "l.m3u8"), join(app.root, "page.webloc")], { target: "video", modifiers: { alt: true } });
+    await app.host.settle(30);
+    assert.deepEqual(app.names(), ["01.flac", "02.flac", "Named", "https://example.org/v.mp4", "https://example.org/watch?a=1&b=2"]);
+    assert.equal(app.opens().length, 1);
+    assert.equal(app.osd(), "已添加 3 项");
+
+    // An unreadable folder: nothing added, the reason shown.
+    await app.host.drop([join(app.root, "album", "Player.app")], { target: "video" });
+    await app.host.settle(30);
+    assert.equal(app.rows().length, 5);
+    assert.equal(app.osd(), "没有可加入的项目：跳过 1 个不支持的项目");
+  } finally {
+    await app.close();
+  }
+});
+
+test("A15: drops on the list insert before the row under the point, or append on blank space; never play", async () => {
+  const app = await start();
+  try {
+    const rows = await app.files(["1.mp4", "2.mp4", "3.mp4", "4.mp4"]);
+    await app.addFiles(rows);
+    const [x, y, z, srt] = await app.files(["x.mp4", "y.mkv", "z.mp3", "z.srt"]);
+    await app.emit("list-area", 0, 200);
+    // Rows start at y 31 (below the tab strip), 20px each: y 75 is the third row.
+    await app.host.drop([x!, srt!, y!], { target: "panel", at: { x: 40, y: 75 } });
+    await app.host.settle(30);
+    assert.deepEqual(app.names(), ["1.mp4", "2.mp4", "x.mp4", "y.mkv", "3.mp4", "4.mp4"]);
+    assert.equal(app.opens().length, 0);
+    assert.equal(app.osd(), "已添加 2 项，跳过 1 个不支持的项目");
+    // Below the rows, or on the tab strip: the end.
+    await app.host.drop([z!], { target: "panel", at: { x: 40, y: 190 } });
+    await app.host.settle(30);
+    assert.equal(app.names().at(-1), "z.mp3");
+    // Scrolled by two rows: y 35 is the third row.
+    await app.emit("list-area", 40, 200);
+    const [w] = await app.files(["w.mp4"]);
+    await app.host.drop([w!], { target: "panel", at: { x: 10, y: 35 } });
+    await app.host.settle(30);
+    assert.deepEqual(app.names().slice(0, 4), ["1.mp4", "2.mp4", "w.mp4", "x.mp4"]);
+    assert.equal(app.opens().length, 0);
+  } finally {
+    await app.close();
+  }
+});
+
+test("A15: the drop point maps to a shown row; tab strip, bottom bar and blank space are the end", () => {
+  assert.equal(dropRow(31, 0, 200, 5), 0);
+  assert.equal(dropRow(50.9, 0, 200, 5), 0);
+  assert.equal(dropRow(51, 0, 200, 5), 1);
+  assert.equal(dropRow(20, 0, 200, 5), null); // tab strip
+  assert.equal(dropRow(31 + 200, 0, 200, 50), null); // bottom bar
+  assert.equal(dropRow(31 + 5 * 20, 0, 200, 5), null); // below the last row
+  assert.equal(dropRow(35, 60, 200, 5), 3);
 });

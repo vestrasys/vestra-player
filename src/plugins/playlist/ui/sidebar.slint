@@ -50,6 +50,9 @@ export global PlaylistBridge {
     callback toggle-detached();
     callback focus-changed(bool);
     callback dragging(bool);
+    // A15 drops on the list: (scrolled by, list area height) in logical px, so a panel
+    // drop point maps to a row (rows start below the 31px tab strip).
+    callback list-area(float, float);
     // C21 search box: text edited, focus, Enter, ↓ (Esc clears and reports "")
     callback search-changed(string);
     callback search-focus(bool);
@@ -197,9 +200,11 @@ export component PlaylistSidebar inherits Rectangle {
             }
 
             // The list; the empty space below the rows takes the list menu too.
-            Rectangle {
+            list-area := Rectangle {
                 vertical-stretch: 1;
                 background: Theme.bg-list;
+                init => { PlaylistBridge.list-area(-list.viewport-y / 1px, self.height / 1px); }
+                changed height => { PlaylistBridge.list-area(-list.viewport-y / 1px, self.height / 1px); }
                 TouchArea {
                     pointer-event(event) => {
                         if event.kind != PointerEventKind.down { return; }
@@ -209,9 +214,10 @@ export component PlaylistSidebar inherits Rectangle {
                         }
                     }
                 }
-                ListView {
+                list := ListView {
                     x: 0;
                     y: 0;
+                    changed viewport-y => { PlaylistBridge.list-area(-self.viewport-y / 1px, list-area.height / 1px); }
                     width: parent.width;
                     height: min(parent.height, PlaylistBridge.rows.length * root.row-height);
                     for row[index] in PlaylistBridge.rows: Rectangle {

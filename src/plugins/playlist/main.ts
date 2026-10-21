@@ -1,6 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname } from "node:path";
 import type { Command, CommandOptions, ConfirmOptions, Plugin, PluginError } from "../../sdk/plugin/index.ts";
+import { dropExtra, DROP_EXTENSIONS, dropRow, expandDrop } from "./drop.ts";
 import { follower, type OpenMode } from "./follow.ts";
 import { linkDialog } from "./link.ts";
 import {
@@ -713,6 +714,52 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     const first = queue.visible()[0];
     if (first) queue.select(first.rowId);
   });
+
+  // A15: drops from the Finder. On the video area (the player groups by extension): add to
+  // the end and play the first item, Option only adds. On the list: insert before the row
+  // under the drop point (blank space: the end), never play. One drop at a time, in order.
+  let dropping: Promise<void> = Promise.resolve();
+  const listArea = { scroll: 0, height: Number.POSITIVE_INFINITY };
+  list.on("listArea", (scroll: number, height: number) => {
+    listArea.scroll = Number.isFinite(scroll) ? scroll : 0;
+    listArea.height = Number.isFinite(height) && height > 0 ? height : Number.POSITIVE_INFINITY;
+  });
+  const dropped = (paths: string[], how: { play: boolean; at?: { x: number; y: number } }) =>
+    (dropping = dropping.then(
+      guard(async () => {
+        const expanded = await expandDrop(paths, { signal: stop.signal });
+        if (stop.signal.aborted) return;
+        const extra = dropExtra(expanded);
+        if (!expanded.entries.length)
+          return queue.notice(extra ? `没有可加入的项目：${extra}` : "没有可加入的项目");
+        let before: number | undefined;
+        if (how.at) {
+          const shown = queue.visible();
+          const row = dropRow(how.at.y, listArea.scroll, listArea.height, shown.length);
+          if (row !== null) before = queue.rows.indexOf(shown[row]!);
+        }
+        const wasEmpty = queue.rows.length === 0;
+        const result = await queue.addEntries(expanded.entries, before === undefined ? {} : { before });
+        prober.scan();
+        const summary = queue.summary(result, extra);
+        if (!how.play) {
+          queue.selectFirstAdded(result, wasEmpty);
+          return queue.notice(summary);
+        }
+        // The first new row, or (all duplicates) the existing row of the first item.
+        const target = result.fresh[0] ?? result.rows.find((row) => !!row);
+        if (!target) return queue.notice(summary);
+        if (player.busy()) return queue.notice(`${summary}；正在打开，已加入列表`);
+        queue.select(target.rowId);
+        queue.notice(summary);
+        await player.play(target.rowId, undefined, { quiet: true });
+      }),
+    ));
+  plugin.drops.provide({
+    extensions: DROP_EXTENSIONS,
+    drop: ({ paths, modifiers }) => dropped(paths, { play: !modifiers.alt }),
+  });
+  list.onDrop(({ paths, at }) => dropped(paths, { play: false, at }));
 
   // Other plugins (the bar, PgUp/PgDn) step through the list with player.next() / previous().
   plugin.player.provideSequence({
