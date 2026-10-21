@@ -10,7 +10,8 @@
     "boundaries": "node scripts/check-boundaries.mjs",
     "plugin": "node scripts/plugin.mjs",
     "plugins:build": "node scripts/plugin.mjs build --all",
-    "test:sdk": "node --test tests/sdk/"
+    "test:sdk": "node --test tests/sdk/",
+    "portability": "node scripts/check-portability.mjs"
   },
   "devDependencies": {
     "@types/node": "^25.0.0",
