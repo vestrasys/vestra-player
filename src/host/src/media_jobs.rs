@@ -90,9 +90,23 @@ enum Mutation {
         destination: String,
         end: Option<f64>,
         sample_time: Option<f64>,
+        /// JPEG quality 1–100 (`rawJpeg` / `processedJpeg` only; default 90).
+        quality: Option<u8>,
     },
     #[serde(rename = "jobs.cancel")]
     Cancel { operation_id: u64, job_id: u64 },
+}
+/// The still format of a one-frame job kind (`rawPng`, `processedJpeg`, …).
+fn still(kind: &str) -> Option<media_worker::Still> {
+    match kind
+        .strip_prefix("raw")
+        .or(kind.strip_prefix("processed"))?
+    {
+        "Png" => Some(media_worker::Still::Png),
+        "Jpeg" => Some(media_worker::Still::Jpeg { quality: 90 }),
+        "Bmp" => Some(media_worker::Still::Bmp),
+        _ => None,
+    }
 }
 fn include_subtitles_default() -> bool {
     true
@@ -283,13 +297,14 @@ impl Jobs {
                 destination,
                 end,
                 sample_time,
+                quality,
                 ..
             } => {
                 if !safe(*snapshot_id)
-                    || !matches!(
-                        kind.as_str(),
-                        "rawPng" | "processedPng" | "rawMp4" | "processedMp4"
-                    )
+                    || (still(kind).is_none()
+                        && !matches!(kind.as_str(), "rawMp4" | "processedMp4"))
+                    || (quality.is_some() && !kind.ends_with("Jpeg"))
+                    || quality.is_some_and(|quality| !(1..=100).contains(&quality))
                     || (kind.ends_with("Mp4")
                         && end.is_none_or(|v| !v.is_finite() || v <= 0. || v > 86400.))
                     || (!kind.ends_with("Mp4") && end.is_some())
@@ -302,7 +317,7 @@ impl Jobs {
                     || !PathBuf::from(destination).is_absolute()
                 {
                     return Err(RpcError::invalid(
-                        "PNG kind, snapshotId and bounded absolute destination required",
+                        "frame or MP4 kind, snapshotId, bounded absolute destination and JPEG quality 1–100 required",
                     ));
                 }
             }
@@ -520,6 +535,7 @@ impl Jobs {
                 kind,
                 end,
                 sample_time,
+                quality,
                 ..
             } => {
                 let snapshot = self
@@ -552,7 +568,13 @@ impl Jobs {
                         audio: snapshot.audio.clone(),
                     }
                 } else {
-                    media_worker::Output::Png
+                    let format = still(&kind).ok_or_else(|| RpcError::invalid("unknown kind"))?;
+                    media_worker::Output::Still(match format {
+                        media_worker::Still::Jpeg { .. } => media_worker::Still::Jpeg {
+                            quality: quality.unwrap_or(90),
+                        },
+                        other => other,
+                    })
                 };
                 if self.workers.len() >= 8
                     || self
@@ -581,7 +603,7 @@ impl Jobs {
                 }
                 let binary = std::env::var_os("VESTRA_FFMPEG")
                     .map(PathBuf::from)
-                    .unwrap_or_else(|| PathBuf::from("/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg"));
+                    .unwrap_or_else(crate::platform::default_ffmpeg);
                 if !binary.is_file() {
                     return Err(RpcError::new(
                         "unavailable",
@@ -648,6 +670,24 @@ impl Drop for Jobs {
         }
         for worker in self.workers.drain(..) {
             let _ = worker.join();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn frame_kinds_name_their_still_format() {
+        assert_eq!(still("rawPng"), Some(media_worker::Still::Png));
+        assert_eq!(still("processedBmp"), Some(media_worker::Still::Bmp));
+        assert_eq!(
+            still("rawJpeg"),
+            Some(media_worker::Still::Jpeg { quality: 90 })
+        );
+        for other in ["rawMp4", "rawGif", "Png", "processedpng"] {
+            assert_eq!(still(other), None, "{other}");
         }
     }
 }

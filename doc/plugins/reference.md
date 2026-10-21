@@ -6,6 +6,7 @@
 
 - 协议版本：`vestra.experimental/0.1`
 - 运行环境：每个插件一个 Node ≥ 22.18 进程，可以使用 Node 标准库、文件系统、网络和 npm 依赖。插件是受信任的，manifest 能力是契约声明，不是安全沙箱。
+- 系统：macOS 与 Windows（Windows 目前只做了编译检查，未在真机运行）。API 与系统无关；某个系统做不到的功能以 `unsupported` 失败，各节写明平台差异，汇总见 §16.7。插件不要直接调用系统命令（`open`、`sips`、`plutil`、`security` 等），用本文的能力或跨平台的纯 Node 实现。
 
 ## 1. 概览
 
@@ -96,8 +97,9 @@ interface Disposable { dispose(): Promise<void> }
 | `ui.drop` | `drops.provide`、`Panel.onDrop`（§6.7） |
 | `ui.theme` | `appearance.set`（§6.8；读取 `appearance.theme` / `onChange` 不需要能力） |
 | `ui.settings` | `settings.page`、`settings.show`（§6.9） |
+| `secrets` | `secrets.get`、`set`、`delete`（§16.6） |
 
-`tools`、`storage`、`system`（§16）在插件进程内执行，不需要能力。读取 `window.state` / `onChange`（§6.6）、`plugin.app`（§3.5）与 `ui.image`（§6.1）不需要能力。
+`tools`、`storage`（§16）在插件进程内执行，`system`（§16.5）由播放器执行，都不需要能力。读取 `window.state` / `onChange`（§6.6）、`plugin.app` 与 `app.system()`（§3.5）、`ui.image`（§6.1）不需要能力。
 
 没有 `events` 时，`player.state` 只在启动和操作完成后更新，`onChange` 不会因外部变化触发。
 
@@ -172,7 +174,7 @@ interface Plugin extends Scope {
 
 本插件自己的可写目录（设置、记住的文件夹等），不需要能力。
 
-- 位置：`~/Library/Application Support/Vestra/plugin-data/<manifest id>/`（环境变量 `VESTRA_PLUGIN_DATA` 可改根目录），播放器在启动插件前创建。插件停用、重新加载、升级、回退时都保留；卸载时只有 `uninstall(id, { removeData: true })` 才删除。别的插件（如插件管理）按同一规则 `<数据根>/<id>` 找到某个插件的数据目录：数据根是 `plugin.dataDirectory` 的上一级（`dirname(plugin.dataDirectory)`）。
+- 位置：macOS `~/Library/Application Support/Vestra/plugin-data/<manifest id>/`，Windows `%APPDATA%\Vestra\plugin-data\<manifest id>\`（环境变量 `VESTRA_PLUGIN_DATA` 可改根目录），播放器在启动插件前创建。插件停用、重新加载、升级、回退时都保留；卸载时只有 `uninstall(id, { removeData: true })` 才删除。别的插件（如插件管理）按同一规则 `<数据根>/<id>` 找到某个插件的数据目录：数据根是 `plugin.dataDirectory` 的上一级（`dirname(plugin.dataDirectory)`）。
 - 试载的插件拿到一个临时目录，试载停止时删除，不会碰正式安装版本的数据。
 - JSON 设置文件用 `plugin.storage.json`（§16.4），它已处理默认值、读坏改名、去抖与原子写入。
 - 存什么、什么格式由插件决定。自己写文件时先写临时文件再改名（`writeFileSync(tmp)` → `renameSync(tmp, path)`），播放器中途退出也不会留下写了一半的文件；读不到或读坏时用默认值。
@@ -191,11 +193,32 @@ interface AppInfo {
     readonly slint: string;          // 链接的 Slint 版本，如 "1.16.1"
   };
 }
+interface App extends AppInfo {      // plugin.app 的类型
+  system(): Promise<SystemInfo>;
+}
+interface SystemInfo {
+  readonly os: "macos" | "windows" | "linux" | "other";
+  readonly name: string;             // "macOS"、"Windows 11"
+  readonly version: string | null;   // macOS "26.2"（同 sw_vers -productVersion）；Windows "23H2"（DisplayVersion）
+  readonly build: string | null;     // macOS "25C56"；Windows "22631.4460"
+  readonly model: string | null;     // macOS hw.model，如 "Mac15,6"；Windows 固件的产品名
+  readonly arch: string;             // 播放器构建的 CPU 架构："aarch64"、"x86_64"
+  readonly displays: readonly {      // 主显示器在前；无界面模式为空
+    readonly name: string | null;    // 系统给的名字
+    readonly width: number;          // 当前模式的像素（逻辑尺寸 × scale）
+    readonly height: number;
+    readonly scale: number;          // 每逻辑点的像素数（Retina 为 2）
+    readonly refreshRate: number | null; // Hz
+    readonly primary: boolean;
+  }[];
+}
 ```
 
 - 同步只读、不需要能力，子作用域相同。播放器启动插件进程时随握手交给它（不经请求），整个进程内不变。
+- `system()`：每次调用向播放器读取（显示器可能插拔），不需要能力。系统版本与机型在播放器进程内只读一次。CPU 型号、核数和内存用 Node 的 `os`（`cpus()[0].model`、`cpus().length`、`totalmem()`、`freemem()`），播放器不重复提供。显示器：macOS 来自 `NSScreen`（名字是系统设置里显示的本地化名称，如「内建视网膜显示器」，不是 `system_profiler` 的 `Color LCD`；像素为逻辑尺寸 × `scale`；刷新率为该屏的最高帧率），Windows 来自 winit 的显示器列表（名字是设备名 `\\.\DISPLAY1`）。其它系统 `version`、`build`、`model` 为 `null`。
+- `system` 是方法，不在 `Object.keys(plugin.app)` 和 `JSON.stringify(plugin.app)` 里。
 - `libav` 只有 libmpv 报告的 `ffmpeg-version`（键 `ffmpeg`）：libmpv 0.41 不报告 libavcodec 等各库的版本，需要时用 `tools.run("ffmpeg", ["-version"])` 读取。
-- 测试：`host.app` 在 `startPlugin` 之前设置。
+- 测试：`host.app` 在 `startPlugin` 之前设置；`host.systemInfo` 是 `system()` 的返回值（默认是一台 macOS 26.2 的 Mac）。
 
 ## 4. 命令 `plugin.commands`
 
@@ -268,7 +291,7 @@ binding  = { 修饰键 "+" } 输入          修饰键按 Ctrl、Alt、Shift、C
 - 小键盘是独立的输入名：`"5"` 只认主键盘的 5，`"Numpad5"` 只认小键盘的 5；`"Enter"` 不认小键盘回车（写 `"NumpadEnter"`）。菜单里显示为 `Num5`、`Num+`、`NumEnter`。
 - Option（`Alt`）组合按物理键识别：`Alt+O` 按 ⌥O 触发，不看 ⌥O 打出的 `ø`；⌥E、⌥N、⌥U、⌥I、⌥\` 这类死键同样触发（死键只在视频区获得焦点时生效，输入框里照常组字）。键盘布局：Option 与 Ctrl 组合的字母和符号取当前布局不带修饰时的字符（德语 QWERTZ 上标着 Y 的键是 `Ctrl+Y`，与键帽一致）；`Alt+Shift+数字/符号` 时系统不报告该布局 Shift 后的字符，按美式键位换算（⌥⇧. 是 `Alt+>`，即使该布局 Shift+. 打出 `:`），美式键位上没有的符号键（如德语的 ß、´）与 Option+Shift 同按时不匹配任何绑定。在需要 Option 才能打出符号的布局上（德语 ⌥5 = `[`、⌥7 = `|`、⌥⇧7 = `\`、⌥L = `@`），Option 组合打出的非字母、非数字字符先按该字符匹配（不带 Alt 与 Shift，绑定写 `"["`、`"@"`），没有这样的绑定时再按物理键匹配（`Alt+5`、`Alt+L`）；两者都有绑定时字符优先。打出的是字母（⌥O 的 `ø`）时只按物理键（`Alt+O`）。美式布局上 ⌥[ 打出 `“`，通常无人绑定，仍是 `Alt+[`。小键盘名与布局无关。
 - Ctrl 组合即使系统以 ASCII 控制码送达也按键名识别：⌃Y 是 `Ctrl+Y`（不是 Shift+Tab），⌃I、⌃H、⌃M、⌃[ 分别是 `Ctrl+I`、`Ctrl+H`、`Ctrl+M`、`Ctrl+[`。
-- macOS 上 `Ctrl+X` 按 ⌃X 或 ⌘X 都触发，`Cmd+X` 只认 ⌘X。
+- macOS 上 `Ctrl+X` 按 ⌃X 或 ⌘X 都触发，`Cmd+X` 只认 ⌘X。Windows 上 `Ctrl` 就是 Ctrl，`Cmd` 是 Windows 徽标键（大多被系统保留），所以两个系统通用的绑定写 `Ctrl+…`。宿主的「退出」（`Cmd+Q`）在 Windows 上不触发，用窗口的关闭按钮或 Alt+F4。
 - `+` 无论怎样打出都是 `Plus`：美式 ⇧=、德语等布局的独立 `+` 键都是 `Plus`，带 Option 时是 `Alt+Plus`。
 - macOS 系统快捷键先于播放器：⌃F1–⌃F8（键盘导航，如 ⌃F6「将焦点移到浮动窗口」）、⌃↑/⌃↓/⌃←/⌃→（调度中心与切换桌面）、⌘Tab、⌘Space 等默认被系统截走，绑定收不到，默认绑定请避开。
 - `Mouse:LeftClick`（视频区左键单击）：只有它有生效的绑定时，播放器才延迟判定左键按下：系统双击间隔内没有第二次按下、指针移动不超过 4 点，才算单击并触发；第二次按下算双击（`Mouse:LeftDoubleClick` 照常）。没有绑定时左键行为不变（立即聚焦视频区，没有延迟）。
@@ -687,8 +710,8 @@ interface WindowState {
 ```
 
 - `state`、`onChange` 不需要能力；三个 `set…` 需要 `window.control`。`videoArea` 是视频区（不含底栏、侧栏、分隔条），全屏时是整个屏幕；无界面模式为 0×0。有 `events` 时随窗口变化更新（从插件第一次读 `state` 或调用 `onChange` 开始跟随），没有 `events` 时只在启动和本插件的 `setVideoArea` 之后更新。
-- `setVideoArea`：把窗口调成视频区为 `width`×`height`（1–16384 逻辑点；1 倍 = 一个视频像素一个点）。播放器加上底栏和附着的侧栏（侧栏宽 + 3），保持窗口左上角，再把窗口挪回屏幕可见区（不含菜单栏和 Dock）。放不下时按比例缩小；小于最小尺寸（视频区宽 318、高 120，窗口 320×182）时放大到最小值（会有黑边）；这两种情况 `clamped: true`。resolve 时布局已是新尺寸（最多等 1 秒），返回实际视频区，`state` 已刷新。全屏时与无界面模式 `unavailable`（`message`「全屏时不可用」）。
-- `setAlwaysOnTop`：`true` 时播放器的普通窗口（主窗口、浮动侧栏、工具窗口，包括之后新开的）浮在其他应用的窗口之上（`NSFloatingWindowLevel`）；系统对话框不受影响。多个插件时最后一次调用生效，该插件停用后回到其余插件中最后的值（都没有则不置顶）。无界面模式 `unavailable`。
+- `setVideoArea`：把窗口调成视频区为 `width`×`height`（1–16384 逻辑点；1 倍 = 一个视频像素一个点）。播放器加上底栏和附着的侧栏（侧栏宽 + 3），保持窗口左上角，再把窗口挪回屏幕可见区（macOS 不含菜单栏和 Dock；Windows 按整个显示器计算，可能与任务栏重叠）。放不下时按比例缩小；小于最小尺寸（视频区宽 318、高 120，窗口 320×182）时放大到最小值（会有黑边）；这两种情况 `clamped: true`。resolve 时布局已是新尺寸（最多等 1 秒），返回实际视频区，`state` 已刷新。全屏时与无界面模式 `unavailable`（`message`「全屏时不可用」）。
+- `setAlwaysOnTop`：`true` 时播放器的普通窗口（主窗口、浮动侧栏、工具窗口，包括之后新开的）浮在其他应用的窗口之上（macOS `NSFloatingWindowLevel`，Windows 为「总在最前」）；系统对话框不受影响。多个插件时最后一次调用生效，该插件停用后回到其余插件中最后的值（都没有则不置顶）。无界面模式 `unavailable`。
 - `setCursorAutoHide`：`"fullscreen"`（默认）只在全屏时隐藏指针；`"playing"` 在窗口模式也隐藏。隐藏条件不变：播放中（就绪且未暂停）、指针在视频区、3 秒内没有指针移动或按键、没有菜单或系统对话框、面板没有在操作；窗口模式另需主窗口是活动窗口。多个插件时最后一次调用生效，该插件停用后回到其余插件中最后的值（都没有则 `"fullscreen"`）。
 - 测试：`host.mainWindow`（`{ fullscreen, videoArea, onTop, cursorAutoHide }`）；`host.setMainWindow({ fullscreen?, videoArea? })` 模拟用户改变窗口并推送。
 
@@ -697,7 +720,7 @@ interface WindowState {
 需要 `ui.drop`。
 
 ```ts
-interface DropModifiers { alt: boolean; shift: boolean; cmd: boolean }
+interface DropModifiers { alt: boolean; shift: boolean; cmd: boolean } // cmd：macOS ⌘，Windows Ctrl
 drops.provide(handler: {
   extensions: string[];                                          // 小写、不带点；"folder" 匹配文件夹
   drop(e: { paths: string[]; modifiers: DropModifiers }): unknown;
@@ -705,7 +728,7 @@ drops.provide(handler: {
 Panel.onDrop(listener: (e: { paths: string[]; at: { x: number; y: number }; modifiers: DropModifiers }) => unknown): Disposable;
 ```
 
-- **视频区**上松手：播放器按扩展名（不区分大小写）把路径分组，保留 Finder 中的顺序，每个提供者一次调用。文件夹按保留名 `"folder"` 匹配（不展开，展开由提供者做）。同一扩展名有多个提供者时**先登记的生效**，后登记的写一行播放器日志；没有提供者的文件，播放器什么也不做（不提示）。
+- **视频区**上松手：播放器按扩展名（不区分大小写）把路径分组，保留文件管理器（Finder、资源管理器）给出的顺序，每个提供者一次调用。文件夹按保留名 `"folder"` 匹配（不展开，展开由提供者做）。同一扩展名有多个提供者时**先登记的生效**，后登记的写一行播放器日志；没有提供者的文件，播放器什么也不做（不提示）。
 - **面板**（附着的底栏、侧栏，以及浮动侧栏窗口）上松手：该面板有 `onDrop` 监听时，整组路径交给它（不按扩展名分）；没有监听时按视频区规则分发。`at` 是**面板坐标**：相对面板组件左上角的逻辑点（面板根组件自己的坐标系；窗口坐标要加上根组件的 `absolute-position`）。滚动列表请用自己回传的滚动位置换算到行。
 - 工具窗口、选项窗口上松手：忽略。全屏时底栏浮在视频上，松手一律按视频区处理。
 - 不提供拖动过程中的位置（没有 `onDragOver`），拖放期间播放不暂停、不变化。
@@ -760,7 +783,9 @@ dialogs.confirm(options: {
 }): Promise<{ confirmed: boolean; checked: boolean }>
 ```
 
-- 系统提示框（`NSAlert`），以当前活动的播放器窗口（发起确认的工具窗口、浮动侧栏，通常就是用户刚点按钮的窗口）为父窗口的表单（sheet），没有活动窗口时挂主窗口；都不可用时为应用模态窗口。`confirmed`：用户点了确认按钮；`checked`：复选框的状态（没有复选框为 `false`，取消时也如实返回）。长度按 Unicode 字符计（一个汉字一个字符），超出 `invalid`。
+- macOS：系统提示框（`NSAlert`），以当前活动的播放器窗口（发起确认的工具窗口、浮动侧栏，通常就是用户刚点按钮的窗口）为父窗口的表单（sheet），没有活动窗口时挂主窗口；都不可用时为应用模态窗口。`confirmed`：用户点了确认按钮；`checked`：复选框的状态（没有复选框为 `false`，取消时也如实返回）。长度按 Unicode 字符计（一个汉字一个字符），超出 `invalid`。
+- Windows：系统消息框，挂在当前活动的播放器窗口（没有时挂主窗口）。正文是 `message`，有 `detail` 时空一行接在后面，标题栏是「Vestra」；按钮是系统的「确定」「取消」（自定义按钮文字需要 comctl32 v6 与应用清单，打包时再做，`confirm`、`cancel` 暂不显示）；`destructive` 显示警告图标。有 `checkbox` 时，用户点「确定」后再弹一个「是 / 否」消息框，正文为复选框文字，选「是」即 `checked: true`；取消时不再询问，`checked` 为 `false`。
+- 其它系统 `unsupported`。
 - 「不再询问」之类的记忆由插件自己保存（`storage.json`），播放器不记。
 - 测试：`host.dialogAnswers.push({ confirmed, checked })`；`host.confirms` 记录每次的选项。
 
@@ -951,7 +976,8 @@ interface Snapshot extends Disposable {   // 冻结的不可变输入；dispose 
   readonly presentation: { width: number; height: number } | null;
   readonly processingRevision: number | null;
   export(options:
-    | { format: "png"; destination: string; sampleTime?: number }
+    | { format: "png" | "bmp"; destination: string; sampleTime?: number }
+    | { format: "jpeg"; destination: string; sampleTime?: number; quality?: number } // 1–100，默认 90
     | { format: "mp4"; destination: string; end: number }): Promise<ExportJob>;
 }
 
@@ -966,6 +992,8 @@ interface ExportJob extends Disposable {
 
 - `JobState.status`：`queued`、`running`、`cancelling`、`completed`、`failed`、`cancelled`。终态时 `outcome` 为 `{ destination }`、`{ error: { code, message } }` 或 `{ cancelled: true }`。
 - 导出在播放器的离线工作进程中独立解码，不影响播放。目标文件已存在时不覆盖。
+- 单帧格式：`png`（RGB 24 位）；`jpeg`（RGB，`quality` 为 1–100 的整数，默认 90，其它值 `invalid`）；`bmp`（24 位 RGB，与 PNG 逐像素相同）。JPEG 与 BMP 由播放器从校验过的 PNG 转换，转换完成后才发布到 `destination`（同样不覆盖已有文件），中间文件由播放器删除。扩展名不决定格式，插件按 `format` 自己命名。
+- Windows：截图导出目前不可用（任务以 `failed` 结束）：离线工作进程把持有的源文件经 Unix 文件描述符接到 FFmpeg，Windows 版尚未实现（可移植性轮任务单 §4.2）。
 - 同一快照可多次导出；用完 `dispose()`。
 
 ## 11. 网络地址解析 `plugin.resolvers`
@@ -1049,13 +1077,14 @@ interface PackageChange {
 | --- | --- |
 | `stale` | 条件不再成立（来源或字幕选择已被改变），**什么都没做** |
 | `missing` | 面板位置为空；`showMenu` 的命令不属于本插件；`system.reveal` / `openPath` 的路径不存在；`clipboard.writeImage` 的文件不存在 |
+| `unsupported` | 也用于当前系统做不到的功能（各节的平台差异、§16.7），如 Linux 上的剪贴板、确认框、`system.*`、`secrets` |
 | `capability` | manifest 未声明所需能力 |
 | `invalid` | 参数不合法（如滤镜值超出范围） |
 | `busy`、`conflict`、`unavailable`、`unsupported` | 播放器拒绝接纳，未执行（`conflict` 也用于已有别的播放序列提供者；`unavailable` 也用于 `next`/`previous` 不可用、面板未显示、无界面模式） |
 | `backend` | 载入或解析失败，`message` 为后端原因 |
 | `disabled` | 插件正在停用 |
 | `replaced` | 已被接受，但完成前被另一个来源替换（`open`、`openStream`、`media.ready`） |
-| `failed`、`ended` | `media.ready()`：载入失败 / 已播完。`failed` 也用于 `tools.run` 非零退出（`message` 为 stderr 最后一行）、`system.*` 打开失败、剪贴板被系统拒绝写入 |
+| `failed`、`ended` | `media.ready()`：载入失败 / 已播完。`failed` 也用于 `tools.run` 非零退出（`message` 为 stderr 最后一行）、`system.*` 打开失败、剪贴板被系统拒绝写入、`secrets` 读写失败 |
 | `aborted` | `signal` 中止（`error.name === "AbortError"`） |
 | `timeout` | `openStream` 启动超时；`error.stage` 为 `"prefill"`（首批缓冲未在 10 秒内备好）或 `"activation"`（选中后 10 秒内未激活）。`tools.run` 超过 `timeoutMs`；`system.*` 超过 10 秒 |
 | `stream`、`device` | `openStream`：生成端报错 / 音频设备未就绪 |
@@ -1085,7 +1114,8 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 | 模拟来源 | `host.openElsewhere(path, phase?)`（另一个插件打开了媒体）；`host.setSource({ phase, position, duration, … })` |
 | 断言 | `host.window(id).props`（kebab-case 名）、`.visible`；`host.command(id).state`、`.declaration`；`host.conflicts`（`[绑定, 赢家, ...被压下]`）；`host.layout.bottom` / `.sidebar`（可直接改后 `host.emit("window.state", {})` 模拟别处的变化）；`host.osd`（显示过的提示）、`host.osdPanel`；`host.sequence`（提供者的标志）；`host.menus`（`showMenu` 记录）；`host.sent(method)`；`host.source`；`host.processing`、`host.subtitles`、`host.snapshots`、`host.jobs`、`host.producers` |
 | 模拟数据 | `host.stats`（`player.stats()` 的返回值，第 2 轮新增字段可省略，SDK 补 `null`）；`host.dataDirectory`（`plugin.dataDirectory`，`storage.json` 直接读写其中的真实文件）；`host.setSource({ audioTracks })`（`addAudioTrack` / `selectAudioTrack` 有默认处理，可用 `host.handle("audio.addTrack" \| "audio.selectTrack", …)` 注入失败）；`host.subtitles.tracks` 的条目可带 `codec`、`text`、`streamIndex` |
-| 通用能力 | `host.clipboard`（`{ text, images }`，预置 `text` 测 `readText`）；`host.power`（合并后的 `"off"` / `"playing"`）；`host.tools.handle(tool, (args) => ({ stdout, stderr }))`（未注入的工具 `unavailable`；抛 `HostError` 模拟失败），`host.tools.calls`；`host.system.revealed`、`.opened`；`host.subtitleLoads`（每次 `load` 的 `format`、`title`、`select` 与字节）；`host.system.urls`（`system.openUrl`） |
+| 通用能力 | `host.clipboard`（`{ text, images }`，预置 `text` 测 `readText`）；`host.power`（合并后的 `"off"` / `"playing"`）；`host.tools.handle(tool, (args) => ({ stdout, stderr }))`（未注入的工具 `unavailable`；抛 `HostError` 模拟失败），`host.tools.calls`；`host.system.revealed`、`.opened`（播放器的 `system.*` 请求经 `host.local.open` / `openUrl` 记录，旧测试替换它们仍然有效；新测试请用 `host.handle("system.openPath", …)` 注入失败）；`host.subtitleLoads`（每次 `load` 的 `format`、`title`、`select` 与字节）；`host.system.urls`（`system.openUrl`） |
+| 可移植性轮 | `host.secrets`（`Map`：名称 → 值，可预置）；`host.systemInfo`（`app.system()` 的返回值）；`host.exports`（每次 `jobs.start` 的参数：`kind` 为 `rawPng`、`rawJpeg`、`rawBmp`、`rawMp4` 或对应的 `processed…`，JPEG 带 `quality`） |
 | 上限 | `commands.register` 按播放器的同一套命令上限拒绝（`limit`，§4）：本插件最多 `COMMAND_LIMITS.perPlugin` 条，总量把 `host.coreCommands` 算在内 |
 | 第 4a 轮批次 2 | `host.videoView`（`{ owner, values }`：拥有者插件 id 与播放器持有的值）；`host.setVideoViewOwner(pluginId \| null)`（模拟别的插件先占用显示层，`null` 释放并复位） |
 | 第 4a 轮批次 1 | `frameBlend` 与播放器同一套校验，「全部插件最多一个」按本插件的全部视频滤镜计算（TestHost 只模拟一个插件） |
@@ -1121,7 +1151,7 @@ npm run plugins:build                   # 构建 src/plugins/ 下全部插件
 
 ## 16. 通用能力
 
-很多插件都需要、行为应当一致的基础能力。剪贴板与阻止休眠由播放器提供；外部工具、设置文件、Finder 由 SDK 在插件进程里实现，不经过播放器。插件里不要再用 `pbcopy`、`caffeinate`、`open` 等命令自己实现。
+很多插件都需要、行为应当一致的基础能力。剪贴板、阻止休眠、显示与打开文件和链接、密钥存储由播放器提供；外部工具、设置文件由 SDK 在插件进程里实现，不经过播放器。插件里不要再用 `pbcopy`、`caffeinate`、`open`、`security` 等命令自己实现。
 
 ### 16.1 剪贴板 `plugin.clipboard`
 
@@ -1133,7 +1163,7 @@ clipboard.writeText(text: string): Promise<void>;  // ≤ 1 MiB（UTF-8）
 clipboard.writeImage(path: string): Promise<void>; // PNG/JPEG（按文件内容判断），≤ 16 MB，绝对路径
 ```
 
-- 写入替换剪贴板的全部内容。文本以 `public.utf8-plain-text`、图片以 `public.png` / `public.jpeg` 写入系统剪贴板，可在文本编辑、预览等应用中粘贴。
+- 写入替换剪贴板的全部内容。macOS：文本以 `public.utf8-plain-text`、图片以 `public.png` / `public.jpeg`（文件字节原样）写入，可在文本编辑、预览等应用中粘贴。Windows：文本为 Unicode 文本；图片解码后以位图（DIB）和 PNG 两种格式写入，JPEG 不保留原字节。其它系统 `unsupported`。
 - 失败：`invalid`（类型、大小、非绝对路径、不是 PNG/JPEG）、`missing`（图片文件不存在）、`unavailable`（无界面模式）、`failed`（系统拒绝写入）。
 
 ### 16.2 阻止休眠 `plugin.power`
@@ -1145,9 +1175,9 @@ power.preventSleep(mode: "off" | "playing"): Promise<void>;
 ```
 
 - 任一插件要求 `"playing"` 即生效；插件改回 `"off"` 或停用时撤销它自己的要求。
-- 生效期间，来源阶段为 `ready` 且未暂停（含生成流）时，播放器持有系统断言：正在显示视频帧时阻止显示器睡眠（`caffeinate -d -i`），纯音频只阻止系统睡眠（`-i`）；暂停、播完、关闭来源时释放。断言绑定播放器进程，播放器退出时随之结束。
-- 可用 `pmset -g assertions` 查看。
-- 失败语义：`preventSleep` 只登记要求（参数不对时 `invalid`），断言在播放条件满足时由播放器持有。启动 `/usr/bin/caffeinate` 失败只写播放器日志（`host.error power …`），不通知插件，相同条件下不重试，条件变化（暂停/继续、有无视频）时再试。插件不能据此提示「无法阻止屏保」。
+- 生效期间，来源阶段为 `ready` 且未暂停（含生成流）时，播放器持有系统断言：正在显示视频帧时阻止显示器睡眠，纯音频只阻止系统睡眠；暂停、播完、关闭来源时释放。断言绑定播放器进程，播放器退出时随之结束。
+- macOS：`caffeinate -d -i -w <播放器 pid>`（视频）或 `-i -w <pid>`（音频），可用 `pmset -g assertions` 查看。Windows：播放器界面线程的执行状态（`ES_SYSTEM_REQUIRED`，视频另加 `ES_DISPLAY_REQUIRED`），可用 `powercfg /requests` 查看。其它系统不生效（只写日志）。
+- 失败语义：`preventSleep` 只登记要求（参数不对时 `invalid`），断言在播放条件满足时由播放器持有。启动断言失败只写播放器日志（`host.error power …`），不通知插件，相同条件下不重试，条件变化（暂停/继续、有无视频）时再试。插件不能据此提示「无法阻止屏保」。
 
 ### 16.3 外部工具 `plugin.tools`
 
@@ -1158,9 +1188,9 @@ tools.run(tool: "ffmpeg" | "ffprobe", args: string[],
 tools.available(tool: "ffmpeg" | "ffprobe"): Promise<boolean>;
 ```
 
-- 可执行文件按环境变量 `VESTRA_FFMPEG` / `VESTRA_FFPROBE`（绝对路径），再按 `PATH` 查找；找到的结果在本插件内缓存，找不到时下次重新查找。
+- 可执行文件按环境变量 `VESTRA_FFMPEG` / `VESTRA_FFPROBE`（绝对路径），再按 `PATH` 查找（Windows 依次试 `PATHEXT` 的扩展名，默认 `ffmpeg.exe` 在先）；找到的结果在本插件内缓存，找不到时下次重新查找。
 - 不经 shell：参数原样传给程序，路径里的空格、引号不需要转义。
-- 超过 `timeoutMs`、`signal` 中止、所在作用域释放（含插件停用）都会结束子进程：先 SIGTERM，300 ms 后仍在则 SIGKILL。
+- 超过 `timeoutMs`、`signal` 中止、所在作用域释放（含插件停用）都会结束子进程：先 SIGTERM，300 ms 后仍在则 SIGKILL（Windows 上两者都是立即终止）。
 - `stdout` 最多 `maxOutput` 字节（默认 16 MiB），超出时结束进程并以 `invalid` 失败；`stderr` 保留最后 64 KiB。
 - 失败：`unavailable`（找不到）、`timeout`、`failed`（非零退出，`message` 为 stderr 最后一行）、`invalid`、`aborted`。
 - 调用方按工作量给超时；没有固定上限。
@@ -1183,23 +1213,74 @@ interface JsonStore<T> extends Disposable {
 
 - 文件为 `dataDirectory/<name>.json`；`name` 只能是 1–64 个 `a-z`、`0-9`、`-`，否则 `invalid`。
 - 创建时同步读取。文件不存在用 `defaults`；解析失败或 `validate` 返回 `false` 时，把原文件改名为 `<name>.json.bad-<毫秒时间戳>` 留给用户，并用 `defaults`。
-- 写入：临时文件 + 改名，按调用顺序一次一个，最后一次 `save` 的值最后落盘。文件权限 0600（只有当前用户可读写），设置里常有私人路径与播放记录。
+- 写入：临时文件 + 改名，按调用顺序一次一个，最后一次 `save` 的值最后落盘。文件权限 0600（只有当前用户可读写；Windows 没有这种权限位，由用户目录的访问控制保护），设置里常有私人路径与播放记录。
 - `dispose()` 与插件停用时先写完待写的值。只有 `save` 会写入：原地修改 `value` 的属性不会保存。
 
-### 16.5 Finder 与浏览器 `plugin.system`
+### 16.5 文件与链接 `plugin.system`
 
 ```ts
-system.reveal(paths: string | string[]): Promise<void>; // 在 Finder 中选中（一次 /usr/bin/open -R a b c）
-system.openPath(path: string): Promise<void>; // 用默认应用打开文件或文件夹（/usr/bin/open）
-system.openUrl(url: string): Promise<void>;   // 用默认浏览器打开 http(s) 地址（/usr/bin/open）
+system.reveal(paths: string | string[]): Promise<void>; // 在文件管理器中选中
+system.openPath(path: string): Promise<void>; // 用默认应用打开文件或文件夹
+system.openUrl(url: string): Promise<void>;   // 用默认浏览器打开 http(s) 地址
 ```
 
-- `reveal`：最多 256 个路径，一次调用全部选中（同一文件夹的多个文件在同一窗口高亮）；不存在的路径跳过，全部不存在时 `missing`。路径先转为绝对路径。
+- 由播放器执行（请求 `system.reveal`、`system.openPath`、`system.openUrl`），不需要能力。SDK 先把路径转为插件进程里的绝对路径并检查存在，播放器再检查一次。
+- `reveal`：最多 256 个路径；不存在的路径跳过，全部不存在时 `missing`。macOS 一次 `open -R` 全部选中（同一文件夹的多个文件在同一个 Finder 窗口高亮）；Windows 每个文件夹开一个资源管理器窗口，选中该文件夹的第一个路径。
 - `openPath` 路径不存在 `missing`。
 - `openUrl` 只接受 `http:` / `https:` 地址（按 WHATWG URL 解析并规范化，≤ 8192 字符），其它协议或格式不对为 `invalid`；不检查网址能否访问。
-- 三者 `open` 超过 10 秒 `timeout`，失败 `failed`。
+- macOS 用 `/usr/bin/open`，超过 10 秒 `timeout`，失败 `failed`（`message` 为它的最后一行错误）。Windows 用系统的 Shell 打开（`ShellExecute`、`SHOpenFolderAndSelectItems`），失败 `failed`。其它系统 `unsupported`。
+
+### 16.6 密钥存储 `plugin.secrets`
+
+需要 `secrets`。
+
+```ts
+secrets.get(name: string): Promise<string | null>;       // 没有为 null
+secrets.set(name: string, value: string): Promise<void>; // 新建或替换
+secrets.delete(name: string): Promise<void>;             // 不存在也算成功
+```
+
+- 每个插件一组，互不可见：macOS 是登录钥匙串里的通用密码，服务名为插件的 manifest id、账户名为 `name`（与 `security add-generic-password -s <id> -a <name>` 相同，已有的项可直接读到）；Windows 是凭据管理器里的普通凭据（目标名 `<name>.<id>`）。
+- `name` 1–64 个 `a-z`、`0-9`、`.`、`_`、`-`；`value` 1–1024 字节 UTF-8，不含 NUL；不合法 `invalid`。删除用 `delete`，不要写空串。
+- 读写可能等待系统的授权提示（macOS「…想要使用钥匙串中的机密信息」），在播放器的工作线程上执行，不阻塞播放。没有可用的存储（macOS 找不到或无法写入钥匙串，Windows 没有登录会话）时 `unavailable`；用户拒绝授权和其它系统错误 `failed`（`message` 为系统的原因）。
+- macOS 上，播放器重新构建后（开发版没有固定签名），第一次读取以前写入的项会再次弹出授权提示。
+- 其它系统 `unsupported`。插件应保留退路（例如只在本次运行内记住，或提示用户），不要把密钥写进设置文件。
+- 测试：`host.secrets` 是 `Map`（名称 → 值），可预置；用 `host.handle("secrets.get", …)` 注入失败。
+
+### 16.7 平台差异汇总
+
+| 功能 | macOS | Windows | 其它 |
+| --- | --- | --- | --- |
+| 剪贴板 §16.1 | 文本、PNG/JPEG 原字节 | 文本；图片转为位图与 PNG | `unsupported` |
+| 阻止休眠 §16.2 | `caffeinate` | 线程执行状态 | 不生效 |
+| 确认框 §7 | `NSAlert` 表单，自定义按钮与复选框 | 消息框，系统按钮；复选框改为第二个是/否框 | `unsupported` |
+| 置顶 §6.6 | `NSFloatingWindowLevel` | 总在最前 | `unavailable` |
+| `setVideoArea` §6.6 | 可见区不含菜单栏与 Dock | 按整个显示器 | `unavailable` |
+| 拖放 §6.7 | 指针与 ⌥⇧⌘ | 指针与 Alt、Shift、Ctrl（作 `cmd`） | 只按视频区规则分发 |
+| `system.*` §16.5 | `open`，一个 Finder 窗口选中全部 | Shell，每个文件夹一个窗口 | `unsupported` |
+| 密钥 §16.6 | 登录钥匙串 | 凭据管理器 | `unsupported` |
+| `app.system()` §3.5 | 版本、构建、机型、显示器 | 版本、构建、机型、显示器 | 只有 `os`、`arch`、显示器 |
+| 截图导出 §10 | 可用 | 暂不可用（`failed`） | 同 macOS |
+| 生成流 `openStream` | 可用 | 暂不可用（`unsupported`） | 同 macOS |
+| 绑定 §4.1 | `Ctrl` 也认 ⌘ | `Cmd` 是徽标键 | 同 Windows |
 
 ## 17. 变更说明
+
+### 可移植性轮 P1：平台模块、文件与链接由播放器执行、密钥、系统信息、JPEG/BMP 导出（2026-10）
+
+兼容扩展（不用它们的插件不必改）：
+
+- `plugin.secrets`（§16.6，新能力 `secrets`，宿主与构建工具同一张能力表）：系统的密钥存储，替代插件自己调用 `security`。
+- `plugin.app.system()`（§3.5）：系统名称、版本、构建、机型、架构与显示器，替代 `sw_vers`、`sysctl`、`system_profiler`。`plugin.app` 的类型变为 `App`（`AppInfo` 加 `system()`），`AppInfo` 本身不变，按 `AppInfo` 写的函数和测试数据照常可用。
+- `Snapshot.export({ format: "jpeg", quality? })`、`{ format: "bmp" }`（§10），替代导出 PNG 后用 `sips` 转换。协议的任务类型多了 `rawJpeg`、`processedJpeg`（可带 `quality`）、`rawBmp`、`processedBmp`。
+- 各节补充了 Windows 的行为与 `unsupported` 的情况（§16.7 汇总）。
+
+行为变化（签名不变）：
+
+- **`system.reveal` / `openPath` / `openUrl` 由播放器执行**：SDK 不再在插件进程里运行 `/usr/bin/open`，而是发请求 `system.*`，播放器再检查路径与网址，在 macOS 上照旧调用 `/usr/bin/open`（同样的 10 秒超时与错误），在 Windows 上用系统 Shell。参数检查和错误码不变。直接对协议计数的测试会看到这些请求。
+- **兼容期**：`LocalServices.open` / `openUrl` 变为可选并标为废弃，真实运行时不再使用；`TestHost` 仍把 `system.*` 请求交给 `host.local.open` / `openUrl` 处理，所以替换它们的旧测试（capture 的 `tests/fakes.ts`）照常工作。作者迁移后（可移植性轮 P2）删除这两个成员。
+- `tools.run` 在 Windows 上按 `PATHEXT` 找 `ffmpeg.exe` 等（之前只找无扩展名的 `ffmpeg`）。
+- 宿主的系统相关代码集中到 `src/host/src/platform/`（macOS、Windows、其它各一份）；macOS 的行为不变。Windows 版目前只通过了交叉编译检查。
 
 ### 第 2 轮批次 A（2026-10）
 

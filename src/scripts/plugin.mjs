@@ -71,6 +71,7 @@ const CAPABILITIES = new Set([
   "ui.drop",
   "ui.settings",
   "ui.theme",
+  "secrets",
 ]);
 
 /** Never part of a production package. */

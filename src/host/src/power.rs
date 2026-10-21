@@ -1,18 +1,27 @@
 //! `plugin.power.preventSleep`: while any plugin asks for `"playing"` and a
-//! source is ready and not paused, hold a `caffeinate` assertion bound to the
-//! host process: display sleep too when video frames are being shown, system
-//! sleep only for audio.
+//! source is ready and not paused, hold a system sleep assertion: display
+//! sleep too when video frames are being shown, system sleep only for audio.
+//! How the assertion is held is the platform's (`platform::sleep_launcher`:
+//! `caffeinate` bound to the host process on macOS, the thread execution
+//! state on Windows).
 #![forbid(unsafe_code)]
 
 use std::collections::BTreeSet;
 
-/// A started assertion; `stop` ends it (the process also exits with the host).
+/// A started assertion; `stop` ends it (it also ends with the host process).
 pub trait Assertion {
     fn stop(&mut self);
 }
 
-/// Starts `/usr/bin/caffeinate` with the given arguments; injectable for tests.
-pub type Launcher = Box<dyn FnMut(&[String]) -> std::io::Result<Box<dyn Assertion>>>;
+/// What to keep awake.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Hold {
+    /// The display as well as the system.
+    pub display: bool,
+}
+
+/// Starts an assertion; injectable for tests.
+pub type Launcher = Box<dyn FnMut(Hold) -> std::io::Result<Box<dyn Assertion>>>;
 
 /// What the host currently plays.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -25,36 +34,23 @@ pub struct Playback {
 
 pub struct Power {
     requesters: BTreeSet<u64>,
-    pid: u32,
     launch: Launcher,
-    held: Option<(Vec<String>, Box<dyn Assertion>)>,
-    failed: Option<Vec<String>>,
+    held: Option<(Hold, Box<dyn Assertion>)>,
+    failed: Option<Hold>,
 }
 
 impl Power {
-    pub fn new(pid: u32, launch: Launcher) -> Self {
+    pub fn new(launch: Launcher) -> Self {
         Self {
             requesters: BTreeSet::new(),
-            pid,
             launch,
             held: None,
             failed: None,
         }
     }
-    /// The real launcher: `/usr/bin/caffeinate <args>`, detached from stdio.
+    /// The real launcher of this system.
     pub fn system() -> Self {
-        Self::new(
-            std::process::id(),
-            Box::new(|args| {
-                let child = std::process::Command::new("/usr/bin/caffeinate")
-                    .args(args)
-                    .stdin(std::process::Stdio::null())
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
-                    .spawn()?;
-                Ok(Box::new(Child(child)) as Box<dyn Assertion>)
-            }),
-        )
+        Self::new(crate::platform::sleep_launcher())
     }
     /// `mode` is `"off"` or `"playing"`; anything else is refused.
     pub fn request(&mut self, owner: u64, mode: &str) -> Result<(), &'static str> {
@@ -78,42 +74,36 @@ impl Power {
             "playing"
         }
     }
-    /// The `caffeinate` arguments this state needs, `None` for no assertion.
-    pub fn wanted(&self, playback: Playback) -> Option<Vec<String>> {
-        if self.requesters.is_empty() || !playback.playing {
-            return None;
-        }
-        let mut args = Vec::new();
-        if playback.video {
-            args.push("-d".to_owned());
-        }
-        args.extend(["-i".to_owned(), "-w".to_owned(), self.pid.to_string()]);
-        Some(args)
+    /// The assertion this state needs, `None` for none.
+    pub fn wanted(&self, playback: Playback) -> Option<Hold> {
+        (!self.requesters.is_empty() && playback.playing).then_some(Hold {
+            display: playback.video,
+        })
     }
-    /// Bring the held assertion in line: end the old process before starting
-    /// one with different arguments. A failed start is not retried until the
-    /// wanted arguments change.
+    /// Bring the held assertion in line: end the old one before starting a
+    /// different one. A failed start is not retried until the wanted
+    /// assertion changes.
     pub fn update(&mut self, playback: Playback) -> Option<String> {
         let wanted = self.wanted(playback);
-        if self.held.as_ref().map(|(args, _)| args) == wanted.as_ref() {
+        if self.held.as_ref().map(|(hold, _)| *hold) == wanted {
             return None;
         }
         if let Some((_, mut assertion)) = self.held.take() {
             assertion.stop();
         }
-        let args = wanted?;
-        if self.failed.as_ref() == Some(&args) {
+        let hold = wanted?;
+        if self.failed == Some(hold) {
             return None;
         }
-        match (self.launch)(&args) {
+        match (self.launch)(hold) {
             Ok(assertion) => {
                 self.failed = None;
-                self.held = Some((args, assertion));
+                self.held = Some((hold, assertion));
                 None
             }
             Err(error) => {
-                self.failed = Some(args);
-                Some(format!("caffeinate: {error}"))
+                self.failed = Some(hold);
+                Some(error.to_string())
             }
         }
     }
@@ -123,14 +113,6 @@ impl Drop for Power {
         if let Some((_, mut assertion)) = self.held.take() {
             assertion.stop();
         }
-    }
-}
-
-struct Child(std::process::Child);
-impl Assertion for Child {
-    fn stop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
     }
 }
 
@@ -146,17 +128,16 @@ mod tests {
             self.0.borrow_mut().push(format!("stop {}", self.1));
         }
     }
+    fn name(hold: Hold) -> String {
+        if hold.display { "display" } else { "system" }.into()
+    }
     fn power() -> (Power, Log) {
         let log: Log = Rc::default();
         let sink = log.clone();
-        let power = Power::new(
-            42,
-            Box::new(move |args| {
-                let line = args.join(" ");
-                sink.borrow_mut().push(format!("start {line}"));
-                Ok(Box::new(Fake(sink.clone(), line)) as Box<dyn Assertion>)
-            }),
-        );
+        let power = Power::new(Box::new(move |hold| {
+            sink.borrow_mut().push(format!("start {}", name(hold)));
+            Ok(Box::new(Fake(sink.clone(), name(hold))) as Box<dyn Assertion>)
+        }));
         (power, log)
     }
     const VIDEO: Playback = Playback {
@@ -179,8 +160,8 @@ mod tests {
         power.request(1, "playing").unwrap();
         power.request(2, "playing").unwrap();
         assert_eq!(power.effective(), "playing");
-        assert_eq!(power.wanted(VIDEO).unwrap(), ["-d", "-i", "-w", "42"]);
-        assert_eq!(power.wanted(AUDIO).unwrap(), ["-i", "-w", "42"]);
+        assert_eq!(power.wanted(VIDEO), Some(Hold { display: true }));
+        assert_eq!(power.wanted(AUDIO), Some(Hold { display: false }));
         assert_eq!(power.wanted(PAUSED), None);
         power.update(AUDIO);
         power.update(AUDIO);
@@ -189,10 +170,10 @@ mod tests {
         assert_eq!(
             *log.borrow(),
             [
-                "start -i -w 42",
-                "stop -i -w 42",
-                "start -d -i -w 42",
-                "stop -d -i -w 42"
+                "start system",
+                "stop system",
+                "start display",
+                "stop display"
             ]
         );
     }
@@ -209,29 +190,26 @@ mod tests {
         power.request(2, "off").unwrap();
         assert_eq!(power.effective(), "off");
         power.update(VIDEO);
-        assert_eq!(log.borrow().last().unwrap(), "stop -d -i -w 42");
+        assert_eq!(log.borrow().last().unwrap(), "stop display");
         assert!(power.request(3, "always").is_err());
     }
 
     #[test]
-    fn a_failed_start_waits_for_new_arguments_and_drop_ends_the_assertion() {
+    fn a_failed_start_waits_for_a_different_assertion_and_drop_ends_it() {
         let log: Log = Rc::default();
         let sink = log.clone();
-        let mut power = Power::new(
-            7,
-            Box::new(move |args| {
-                if args.contains(&"-d".to_owned()) {
-                    return Err(std::io::Error::other("denied"));
-                }
-                sink.borrow_mut().push(args.join(" "));
-                Ok(Box::new(Fake(sink.clone(), args.join(" "))) as Box<dyn Assertion>)
-            }),
-        );
+        let mut power = Power::new(Box::new(move |hold| {
+            if hold.display {
+                return Err(std::io::Error::other("denied"));
+            }
+            sink.borrow_mut().push(name(hold));
+            Ok(Box::new(Fake(sink.clone(), name(hold))) as Box<dyn Assertion>)
+        }));
         power.request(1, "playing").unwrap();
-        assert!(power.update(VIDEO).is_some());
+        assert_eq!(power.update(VIDEO).as_deref(), Some("denied"));
         assert!(power.update(VIDEO).is_none(), "not retried");
         assert!(power.update(AUDIO).is_none());
         drop(power);
-        assert_eq!(*log.borrow(), ["-i -w 7", "stop -i -w 7"]);
+        assert_eq!(*log.borrow(), ["system", "stop system"]);
     }
 }

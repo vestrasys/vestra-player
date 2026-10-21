@@ -30,17 +30,17 @@ pub fn compiler() -> Compiler {
     compiler
 }
 
-const HIRAGINO: &str = "/System/Library/Fonts/Hiragino Sans GB.ttc";
-
 /// Default UI font. Without a forced family Slint 1.16 renders CJK text in
 /// plugin windows as blank (no per-script fallback here, GUI-verified
-/// 2026-10-20), so the system Hiragino Sans GB file is imported and made the
+/// 2026-10-20), so a system CJK font file (`platform::ui_font`: Hiragino
+/// Sans GB on macOS, Microsoft YaHei on Windows) is imported and made the
 /// default family whenever it exists (§18 Q12). `VESTRA_FONT_FALLBACK=system`
 /// opts out, for checking a future Slint's own fallback.
 pub fn font() -> Option<(&'static str, &'static str)> {
-    (std::env::var("VESTRA_FONT_FALLBACK").as_deref() != Ok("system")
-        && Path::new(HIRAGINO).is_file())
-    .then_some(("Hiragino Sans GB", HIRAGINO))
+    if std::env::var("VESTRA_FONT_FALLBACK").as_deref() == Ok("system") {
+        return None;
+    }
+    crate::platform::ui_font()
 }
 
 /// Source prefix that makes the forced font available (empty by default).
@@ -146,6 +146,7 @@ pub fn open(
     });
     prepare(&instance);
     instance.show()?;
+    crate::platform::shown(instance.window());
     Ok(View { instance })
 }
 

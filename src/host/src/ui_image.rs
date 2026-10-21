@@ -285,12 +285,16 @@ mod tests {
                 .code,
             "invalid"
         );
-        let link = root.join("link.png");
-        std::os::unix::fs::symlink(&outside, &link).unwrap();
-        assert_eq!(
-            locate(link.to_str().unwrap(), &roots).unwrap_err().code,
-            "invalid"
-        );
+        // Windows symlinks need a privilege test machines may lack.
+        #[cfg(unix)]
+        {
+            let link = root.join("link.png");
+            std::os::unix::fs::symlink(&outside, &link).unwrap();
+            assert_eq!(
+                locate(link.to_str().unwrap(), &roots).unwrap_err().code,
+                "invalid"
+            );
+        }
         // Content decides, not the extension.
         let (image, bytes) = decode(&png(3, 2)).unwrap();
         assert_eq!((image.size().width, image.size().height, bytes), (3, 2, 24));

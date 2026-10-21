@@ -22,7 +22,7 @@ pub mod package_activation;
 mod package_manager;
 pub mod package_stage;
 pub mod package_store;
-pub mod platform_window;
+mod platform;
 mod plugins;
 mod power;
 mod processing;
@@ -52,6 +52,7 @@ pub mod subtitle_format;
 pub mod subtitle_state;
 pub mod subtitle_style;
 pub mod subtitle_upload;
+mod system;
 mod theme;
 mod timeline;
 mod ui;
@@ -174,7 +175,7 @@ struct Floating {
     owner: u64,
     generation: u64,
     /// Its native window, for the pointer at a file drop.
-    native: Option<platform_window::HostWindowId>,
+    native: Option<platform::HostWindowId>,
 }
 /// Read synchronously by the shell's key/mouse callbacks, without borrowing Host.
 #[derive(Default)]
@@ -239,8 +240,8 @@ struct Host {
     window_facts: Value,
     measured_shell: Option<u64>,
     menu_open: bool,
-    native_window: Option<platform_window::HostWindowId>,
-    native_before: Option<platform_window::NativeSnapshot>,
+    native_window: Option<platform::HostWindowId>,
+    native_before: Option<platform::NativeSnapshot>,
     native_unavailable: Option<String>,
     input: Rc<RefCell<InputShared>>,
     ui_state: ui_state::Store,
@@ -303,7 +304,7 @@ struct Host {
     cover_art_off: bool,
     /// Prototype (r4a §7.1): system PiP for this window; started once.
     #[cfg(feature = "pip")]
-    pip: Option<(platform_window::HostWindowId, vestra_pip::Pip, bool)>,
+    pip: Option<(platform::HostWindowId, vestra_pip::Pip, bool)>,
     /// File drops (R-U2).
     drops: drops::Drops,
     /// Settings pages and the options window (R-S1, R-H7).
@@ -916,7 +917,7 @@ impl Host {
             .as_ref()
             .is_none_or(|(current, _, _)| *current != id)
         {
-            self.pip = platform_window::ns_window(id)
+            self.pip = platform::ns_window(id)
                 .ok()
                 .and_then(|window| {
                     let overlay = std::env::var_os("VESTRA_PIP_OVERLAY").is_some();
@@ -957,7 +958,7 @@ impl Host {
         if self.native_window.is_none()
             && let Some(before) = &self.native_before
         {
-            match platform_window::associate_new(before) {
+            match platform::associate_new(before) {
                 Ok(id) => {
                     self.native_window = Some(id);
                     self.native_before = None;
@@ -968,7 +969,7 @@ impl Host {
         }
         let native = self
             .native_window
-            .and_then(|id| platform_window::screen_for(id).ok());
+            .and_then(|id| platform::screen_for(id).ok());
         if native.is_some_and(|facts| !facts.active)
             && self.menu_open
             && self.menu_generation == self.shell_generation
@@ -1225,9 +1226,10 @@ impl Host {
             .window()
             .set_position(slint::LogicalPosition::new(frame.x as f32, frame.y as f32));
         self.theme_view(&instance);
-        let before = platform_window::capture_windows().ok();
+        let before = platform::capture_windows().ok();
         instance.show()?;
-        let native = before.and_then(|before| platform_window::associate_new(&before).ok());
+        platform::shown(instance.window());
+        let native = before.and_then(|before| platform::associate_new(&before).ok());
         self.floating = Some(Floating {
             instance,
             owner,
@@ -1752,7 +1754,7 @@ impl Host {
         }
         self.next_shell_generation += 1;
         let candidate_generation = self.next_shell_generation;
-        let native_before = platform_window::capture_windows().ok();
+        let native_before = platform::capture_windows().ok();
         let values: Vec<_> = next
             .values()
             .map(|mount| self.mount_values(mount))
@@ -1783,6 +1785,7 @@ impl Host {
             #[cfg(feature = "gpu-render")]
             self.attach_gpu(&shell);
             shell.show()?;
+            platform::shown(shell.window());
             Ok(shell)
         };
         let result = match build() {
@@ -1793,7 +1796,7 @@ impl Host {
                 self.native_before = native_before.clone();
                 self.native_window = native_before
                     .as_ref()
-                    .and_then(|before| platform_window::associate_new(before).ok());
+                    .and_then(|before| platform::associate_new(before).ok());
                 if let Some(old) = self.shell.replace(shell) {
                     let _ = old.hide();
                 }
@@ -2263,11 +2266,11 @@ impl Host {
             return;
         }
         let want = self.on_top.get();
-        let count = platform_window::window_count();
+        let count = platform::window_count();
         if self.on_top_applied == Some((want, count)) {
             return;
         }
-        match platform_window::set_floating(want) {
+        match platform::set_floating(want) {
             Ok(count) => self.on_top_applied = Some((want, count)),
             Err(error) => {
                 eprintln!("host.error window level: {error}");
@@ -2313,7 +2316,7 @@ impl Host {
         let id = self
             .native_window
             .ok_or_else(|| unavailable("the native window is not known"))?;
-        let screen = platform_window::screen_for(id).map_err(|e| unavailable(e.0))?;
+        let screen = platform::screen_for(id).map_err(|e| unavailable(e.0))?;
         let sidebar = &self.window_facts["slots"]["sidebar"];
         let docked = sidebar["preferred"] == true && sidebar["detached"] == false;
         let frame = window_control::Frame {
@@ -2323,11 +2326,10 @@ impl Host {
             } else {
                 0.
             },
-            max_content: platform_window::max_content(&screen),
+            max_content: platform::max_content(&screen),
         };
         let fit = window_control::fit(width, height, frame);
-        platform_window::resize_content(id, fit.content.0, fit.content.1)
-            .map_err(|e| unavailable(e.0))?;
+        platform::resize_content(id, fit.content.0, fit.content.1).map_err(|e| unavailable(e.0))?;
         self.area_replies.push(AreaReply {
             reply: reply.clone(),
             video: fit.video,
@@ -2445,6 +2447,8 @@ impl Host {
                 Some("clipboard")
             }
             "power.preventSleep" | "player.setStepSeek" | "player.step" => Some("playback.control"),
+            "system.reveal" | "system.openPath" | "system.openUrl" | "app.system" => None,
+            "secrets.get" | "secrets.set" | "secrets.delete" => Some("secrets"),
             "host.run" => Some("commands"),
             "playback.stats" => Some("playback.read"),
             "sequence.set" | "sequence.step" => Some("playback.control"),
@@ -2485,6 +2489,10 @@ impl Host {
         }
         if method.starts_with("bindings.") {
             return self.bindings_dispatch(method, params).map(Some);
+        }
+        if method.starts_with("system.") || method.starts_with("secrets.") || method == "app.system"
+        {
+            return self.system_dispatch(reply, method, params);
         }
         if method.starts_with("subtitles.")
             || method.starts_with("snapshot.")
@@ -2593,7 +2601,7 @@ impl Host {
                 #[cfg(feature = "producer-audio")]
                 self.physical_revoke(producer_input::RevokeReason::Dialog);
                 if let Err(error) =
-                    confirm::show(&options, self.native_window, move |yes, checked| {
+                    platform::confirm(&options, self.native_window, move |yes, checked| {
                         let _ = events.send(Event::ConfirmDone(answer.clone(), yes, checked));
                     })
                 {
@@ -3215,6 +3223,7 @@ impl Host {
                             .ok_or_else(|| RpcError::invalid("visible requires boolean"))?
                         {
                             view.instance.show().map_err(anyhow::Error::from)?;
+                            platform::shown(view.instance.window());
                         } else {
                             view.instance.hide().map_err(anyhow::Error::from)?;
                         }
@@ -3270,7 +3279,7 @@ fn menu_frame(window: &slint_interpreter::ComponentInstance) -> (menu::Point, me
 }
 /// Slint reports ⌘ as `control` and ⌃ as `meta` on Apple platforms.
 fn slint_mods(control: bool, meta: bool) -> (bool, bool) {
-    if cfg!(target_os = "macos") {
+    if platform::SLINT_CONTROL_IS_COMMAND {
         (meta, control)
     } else {
         (control, meta)
@@ -3431,10 +3440,7 @@ fn release_modifiers(
 }
 /// The system double-click interval (0.5 s where the system has none).
 fn double_click_interval() -> Duration {
-    #[cfg(target_os = "macos")]
-    let seconds = objc2_app_kit::NSEvent::doubleClickInterval();
-    #[cfg(not(target_os = "macos"))]
-    let seconds = 0.5;
+    let seconds = platform::double_click_seconds();
     Duration::from_secs_f64(if (0.05..=5.).contains(&seconds) {
         seconds
     } else {
@@ -3744,7 +3750,7 @@ fn main() -> Result<()> {
             }
         }
     } else {
-        let native_before = platform_window::capture_windows().ok();
+        let native_before = platform::capture_windows().ok();
         let window = composition::compile_json(&[], host.mount_events.clone(), 1)?;
         if let Some(frame) = host.ui_state.state.window {
             window.window().set_size(slint::LogicalSize::new(
@@ -3758,10 +3764,11 @@ fn main() -> Result<()> {
         #[cfg(feature = "gpu-render")]
         host.attach_gpu(&window);
         window.show()?;
+        platform::shown(window.window());
         host.native_before = native_before.clone();
         host.native_window = native_before
             .as_ref()
-            .and_then(|before| platform_window::associate_new(before).ok());
+            .and_then(|before| platform::associate_new(before).ok());
         let host = Rc::new(RefCell::new(host));
         host.borrow().bind_shell(&window, 1)?;
         host.borrow_mut().theme_view(&window);

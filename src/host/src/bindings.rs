@@ -338,7 +338,7 @@ pub fn typed_with_option(
     physical: Option<&Physical>,
 ) -> Option<Input> {
     let physical = physical?;
-    let (ctrl, cmd) = if cfg!(target_os = "macos") {
+    let (ctrl, cmd) = if crate::platform::SLINT_CONTROL_IS_COMMAND {
         (meta, control)
     } else {
         (control, meta)
@@ -381,8 +381,7 @@ pub fn from_key(
     meta: bool,
     physical: Option<&Physical>,
 ) -> Option<Input> {
-    let apple = cfg!(target_os = "macos");
-    let (ctrl, cmd) = if apple {
+    let (ctrl, cmd) = if crate::platform::SLINT_CONTROL_IS_COMMAND {
         (meta, control)
     } else {
         (control, meta)
@@ -836,7 +835,7 @@ impl Table {
     /// with ⌘ falls back to the `Ctrl` form ("Ctrl" accepts Cmd there).
     pub fn resolve(&self, input: &Input, panel: Option<Owner>) -> Option<&Target> {
         let mut candidates = vec![input.clone()];
-        if cfg!(target_os = "macos") && input.mods.cmd && !input.mods.ctrl {
+        if crate::platform::CTRL_ACCEPTS_CMD && input.mods.cmd && !input.mods.ctrl {
             let mut alias = input.clone();
             alias.mods.cmd = false;
             alias.mods.ctrl = true;
@@ -927,7 +926,7 @@ mod tests {
 
     /// Slint flags in its own order (`control` is ⌘ on macOS, `meta` is ⌃).
     fn ctrl() -> (bool, bool) {
-        if cfg!(target_os = "macos") {
+        if crate::platform::SLINT_CONTROL_IS_COMMAND {
             (false, true)
         } else {
             (true, false)
@@ -1291,7 +1290,7 @@ mod tests {
         );
         assert_eq!(from_slint_key("\u{10}", false, false, true, false), None);
         let command = from_slint_key("o", true, false, false, false).unwrap();
-        if cfg!(target_os = "macos") {
+        if crate::platform::SLINT_CONTROL_IS_COMMAND {
             assert_eq!(command, key("Cmd+O"));
         } else {
             assert_eq!(command, key("Ctrl+O"));
@@ -1319,7 +1318,7 @@ mod tests {
         );
         assert_eq!(
             table.resolve(&key("Cmd+O"), None).map(|t| t.id.as_str()),
-            cfg!(target_os = "macos").then_some("open")
+            crate::platform::CTRL_ACCEPTS_CMD.then_some("open")
         );
         assert_eq!(table.label(5, "open").as_deref(), Some("Ctrl+O"));
     }
