@@ -37,6 +37,9 @@ pub struct Backend {
     pub target: Arc<Shared>,
     #[cfg(feature = "producer-audio")]
     pub input: Arc<Mutex<Option<crate::producer_input::Routing>>>,
+    /// Prototype (r4a §7.2): set when mpv renders with OpenGL instead.
+    #[cfg(feature = "gpu-render")]
+    pub gpu: Arc<std::sync::OnceLock<vestra_gpu_render::Handle>>,
     /// `{ mpv, ffmpeg }`: the linked libmpv's `mpv-version` / `ffmpeg-version`.
     pub versions: Value,
     stop: mpsc::Sender<()>,
@@ -55,6 +58,10 @@ impl Backend {
         let input = Arc::new(Mutex::new(None));
         #[cfg(feature = "producer-audio")]
         let out_input = input.clone();
+        #[cfg(feature = "gpu-render")]
+        let gpu = Arc::new(std::sync::OnceLock::new());
+        #[cfg(feature = "gpu-render")]
+        let out_gpu = gpu.clone();
         let (ready, initialized) = mpsc::sync_channel(1);
         let worker = thread::spawn(move || {
             let run = || -> Result<()> {
@@ -94,8 +101,21 @@ impl Backend {
                 let render_events = events.clone();
                 let (render_ready, render_initialized) = mpsc::sync_channel(1);
                 let render_frame = out_frame.clone();
+                #[cfg(feature = "gpu-render")]
+                let gpu_slot = out_gpu.clone();
                 let renderer = thread::spawn(move || {
                     let run = || -> Result<()> {
+                        #[cfg(feature = "gpu-render")]
+                        if GPU.load(Ordering::Relaxed) {
+                            let area = render_target.get().1.area;
+                            return gpu_render(
+                                &render_core,
+                                area,
+                                &renderer_stop,
+                                &render_ready,
+                                &gpu_slot,
+                            );
+                        }
                         let mut render = RenderContext::new_software(render_core.clone())?;
                         let (wake, woke) = mpsc::sync_channel(1);
                         // Callback only signals. It never calls into libmpv.
@@ -469,12 +489,39 @@ impl Backend {
             frame,
             target,
             versions,
+            #[cfg(feature = "gpu-render")]
+            gpu,
             #[cfg(feature = "producer-audio")]
             input,
             stop,
             worker: Some(worker),
         })
     }
+}
+/// Prototype (r4a §7.2): render with OpenGL (vestra-gpu-render) instead of
+/// software; set before [`Backend::start`].
+#[cfg(feature = "gpu-render")]
+pub static GPU: AtomicBool = AtomicBool::new(false);
+/// The GPU renderer owns mpv's render context until the backend stops, so a
+/// rebuilt window never interrupts playback. `VESTRA_HWDEC` overrides hwdec.
+#[cfg(feature = "gpu-render")]
+fn gpu_render(
+    mpv: &Arc<Mpv>,
+    area: crate::render_target::Size,
+    stop: &AtomicBool,
+    ready: &mpsc::SyncSender<std::result::Result<(), String>>,
+    slot: &std::sync::OnceLock<vestra_gpu_render::Handle>,
+) -> Result<()> {
+    let hwdec = std::env::var("VESTRA_HWDEC").unwrap_or_else(|_| "auto-safe".into());
+    mpv.set_property("hwdec", hwdec.as_str())?;
+    let renderer =
+        vestra_gpu_render::Renderer::start(mpv.clone(), area).map_err(anyhow::Error::msg)?;
+    let _ = slot.set(renderer.handle());
+    let _ = ready.send(Ok(()));
+    while !stop.load(Ordering::Relaxed) {
+        thread::sleep(Duration::from_millis(20));
+    }
+    Ok(())
 }
 impl Drop for Backend {
     fn drop(&mut self) {
