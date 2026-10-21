@@ -1,4 +1,4 @@
-import type { Line } from "./keys-window.ts";
+import type { Line } from "./keys-page.ts";
 
 const COLUMNS = ["命令", "快捷键", "范围", "来源", "状态"] as const;
 const cells = (line: Line) => [line.command, line.keys, line.scope, line.source, line.status];

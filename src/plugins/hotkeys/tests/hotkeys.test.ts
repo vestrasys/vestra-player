@@ -33,27 +33,30 @@ test.afterEach(async () => {
   for (const stop of [...running]) await stop();
 });
 
+/** The settings page for a short name ("keys", "mouse"). */
+const page = (host: TestHost, id: string) =>
+  host.settingsPage(id === "keys" ? "hotkeys.keyboard" : id === "mouse" ? "hotkeys.mouse" : id);
 const key = (text: string, mods: Partial<{ control: boolean; alt: boolean; shift: boolean; meta: boolean }> = {}) =>
   fromSlintKey({ text, control: false, alt: false, shift: false, meta: false, ...mods });
 const overlay = (host: TestHost) => Object.fromEntries(host.bindings.overlay);
 type Row = { key: string; command: string; keys: string; status: string; selected: boolean; tip: string };
-const rows = (host: TestHost, id = "keys") => host.window(id).props.rows as Row[];
+const rows = (host: TestHost, id = "keys") => page(host, id).props.rows as Row[];
 const row = (host: TestHost, command: string) => rows(host).find((r) => r.command === command);
 
 async function openKeys(host: TestHost) {
   await host.command("keys").run();
   await host.settle(WAIT);
-  return host.window("keys");
+  return page(host, "keys");
 }
 async function emit(host: TestHost, view: string, callback: string, ...args: (string | number | boolean)[]) {
-  host.window(view).emit(callback, ...args);
+  page(host, view).emit(callback, ...args);
   await host.settle(WAIT);
 }
 /** Select a command in J01 and capture a key for it (Slint key event). */
 async function capture(host: TestHost, ref: string, text: string, mods: Partial<{ control: boolean; alt: boolean; shift: boolean; meta: boolean }> = {}) {
   await emit(host, "keys", "select", ref);
   await emit(host, "keys", "addKey");
-  assert.equal(host.window("keys").props.capturing, true);
+  assert.equal(page(host, "keys").props.capturing, true);
   await emit(host, "keys", "key", text, !!mods.control, !!mods.alt, !!mods.shift, !!mods.meta);
 }
 
@@ -132,6 +135,11 @@ test("menu: 设置 ▶ 快捷键… / 鼠标… / 忽略默认快捷键, no bind
   for (const id of ["keys", "mouse", "ignore-defaults"]) assert.deepEqual(decl(id).bindings, []);
   assert.equal(host.command("ignore-defaults").state.checked, false);
   assert.deepEqual(host.conflicts, []);
+  // J01, J02 are pages of the options window (category input).
+  for (const [id, title, order] of [["hotkeys.keyboard", "快捷键", 10], ["hotkeys.mouse", "鼠标", 20]] as const) {
+    const registered = host.settingsPage(id);
+    assert.deepEqual([registered.category, registered.title, registered.order], ["input", title, order]);
+  }
 });
 
 // ------------------------------------------------------------------ J01
@@ -140,7 +148,8 @@ test("J01: the list shows every command with keys, scope, source, status", async
   const host = new TestHost();
   await start(host);
   const window = await openKeys(host);
-  assert.equal(window.visible, true);
+  assert.deepEqual(host.settings.shows, ["hotkeys.keyboard"]);
+  assert.equal(host.settings.current, "hotkeys.keyboard");
   const play = row(host, "播放 ▶ 播放/暂停")!;
   assert.equal(play.keys, "Space");
   assert.equal(play.status, "默认");
@@ -168,9 +177,9 @@ test("J01: add a key; it runs the command, shows on the row, survives as an over
   assert.deepEqual(overlay(host), { "host/play-pause": ["Space", "K"] });
   assert.equal(row(host, "播放 ▶ 播放/暂停")!.keys, "Space, K");
   assert.equal(row(host, "播放 ▶ 播放/暂停")!.status, "已修改");
-  assert.equal(host.window("keys").props.capturing, false);
+  assert.equal(page(host, "keys").props.capturing, false);
   assert.deepEqual(
-    (host.window("keys").props.tags as { input: string }[]).map((t) => t.input),
+    (page(host, "keys").props.tags as { input: string }[]).map((t) => t.input),
     ["Space", "K"],
   );
   assert.equal(host.osd.at(-1), "快捷键已更新：播放 ▶ 播放/暂停 = Space, K");
@@ -178,12 +187,12 @@ test("J01: add a key; it runs the command, shows on the row, survives as an over
   assert.equal(host.coreRuns.at(-1), "play-pause");
   // Already there; a modifier alone keeps waiting; Esc cancels.
   await capture(host, "host/play-pause", "K", { shift: false });
-  assert.match(host.window("keys").props.message as string, /已经是这条命令的快捷键/);
+  assert.match(page(host, "keys").props.message as string, /已经是这条命令的快捷键/);
   await emit(host, "keys", "addKey");
   await emit(host, "keys", "key", "\u{10}", false, false, true, false);
-  assert.equal(host.window("keys").props.capturing, true);
+  assert.equal(page(host, "keys").props.capturing, true);
   await emit(host, "keys", "key", "\u{1b}", false, false, false, false);
-  assert.equal(host.window("keys").props.capturing, false);
+  assert.equal(page(host, "keys").props.capturing, false);
   assert.deepEqual(overlay(host), { "host/play-pause": ["Space", "K"] });
 });
 
@@ -192,7 +201,7 @@ test("J01: a key in use asks first; 替换 moves it, 取消 leaves both", async 
   await start(host);
   await openKeys(host);
   await capture(host, "host/mute", " ");
-  const window = host.window("keys");
+  const window = page(host, "keys");
   assert.equal(window.props.pending, true);
   assert.equal(window.props["pending-text"], "Space 已用于「播放 ▶ 播放/暂停」");
   assert.deepEqual(overlay(host), {});
@@ -222,8 +231,8 @@ test("J01: when the second write fails the first is undone", async () => {
   await emit(host, "keys", "replace");
   await host.settle(WAIT);
   assert.deepEqual(overlay(host), {}); // play-pause back to its defaults
-  assert.equal(host.window("keys").props.message, "无法使用此按键");
-  assert.equal(host.window("keys").props["message-warn"], true);
+  assert.equal(page(host, "keys").props.message, "无法使用此按键");
+  assert.equal(page(host, "keys").props["message-warn"], true);
 });
 
 test("J01: remove a tag, unbind all, restore one, restore all (asks)", async () => {
@@ -257,10 +266,10 @@ test("J01: at most 8 bindings; an invalid key is refused", async () => {
   await start(host);
   await openKeys(host);
   await capture(host, "host/mute", "9");
-  assert.match(host.window("keys").props.message as string, /最多 8 个/);
+  assert.match(page(host, "keys").props.message as string, /最多 8 个/);
   assert.deepEqual(overlay(host)["host/mute"], ["M", "1", "2", "3", "4", "5", "6", "7"]);
   await capture(host, "host/stop", "é");
-  assert.equal(host.window("keys").props.message, "无法使用此按键");
+  assert.equal(page(host, "keys").props.message, "无法使用此按键");
 });
 
 test("J01: filters by text (Ctrl+), status and source; orphans can be deleted", async () => {
@@ -309,7 +318,7 @@ test("J01: a conflict between defaults is shown with its holder", async () => {
   assert.equal(go.status, "冲突");
   assert.equal(go.tip, "Space 被「播放 ▶ 播放/暂停」占用，未生效");
   await emit(host, "keys", "select", "community.x/go");
-  assert.equal(host.window("keys").props.message, go.tip);
+  assert.equal(page(host, "keys").props.message, go.tip);
 });
 
 test("J01: export the list as CSV or text", async () => {
@@ -340,8 +349,6 @@ test("J01: the list follows changes made elsewhere; the selection stays", async 
   await host.settle(WAIT);
   assert.equal(row(host, "声音 ▶ 静音")!.keys, "N");
   assert.equal(row(host, "声音 ▶ 静音")!.selected, true);
-  await emit(host, "keys", "close");
-  assert.equal(host.windows.get("keys")?.visible ?? false, false);
 });
 
 // ------------------------------------------------------------------ J02
@@ -351,7 +358,8 @@ test("J02: mouse rows show the command each input runs; choosing moves the input
   await start(host);
   await host.command("mouse").run();
   await host.settle(WAIT);
-  const window = host.window("mouse");
+  const window = page(host, "mouse");
+  assert.deepEqual(host.settings.shows, ["hotkeys.mouse"]);
   type MouseRow = { label: string; command: string; resettable: boolean };
   const mouseRows = () => window.props.rows as MouseRow[];
   assert.equal(mouseRows().length, 11);
@@ -397,7 +405,7 @@ test("J02: left click and a modifier; （无） only takes the input", async () 
   assert.equal(host.coreRuns.at(-1), "play-pause");
 
   await emit(host, "mouse", "setModifier", 1); // Ctrl
-  assert.equal((host.window("mouse").props.rows as { command: string }[])[0]!.command, "（无）");
+  assert.equal((page(host, "mouse").props.rows as { command: string }[])[0]!.command, "（无）");
   await emit(host, "mouse", "pick", 7);
   await emit(host, "mouse", "choose", "host/mute");
   assert.deepEqual(overlay(host)["host/mute"], ["M", "Ctrl+Mouse:WheelUp"]);
@@ -439,7 +447,7 @@ test("J03: ignoring defaults (asks first), changed keys keep working, off restor
   await openKeys(host);
   assert.equal(row(host, "声音 ▶ 静音")!.status, "已忽略");
   assert.equal(row(host, "声音 ▶ 静音")!.keys, "（M）");
-  assert.equal(host.window("keys").props.ignore, true);
+  assert.equal(page(host, "keys").props.ignore, true);
   await capture(host, "host/play-pause", "k");
   assert.deepEqual(overlay(host)["host/play-pause"], ["K"]);
   await host.press("K");
