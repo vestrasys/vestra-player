@@ -9,12 +9,12 @@ description = "libmpv OpenGL rendering shown in Slint windows (macOS; the host's
 # One of the crates under src/host/unsafe/: the only place first-party Rust may
 # use `unsafe`. Every block carries a SAFETY comment; the public API is safe.
 [target.'cfg(target_os = "macos")'.dependencies]
-glow = "=0.17.0"
+glow = "=0.18.0"
 libc = "0.2"
 objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std", "CFDictionary", "CFNumber", "CFString"] }
 objc2-io-surface = { version = "=0.3.2", default-features = false, features = ["std", "IOSurfaceRef", "IOSurfaceTypes", "libc", "objc2-core-foundation"] }
 rsmpv = { version = "=0.2.1", features = ["render"] }
-slint = { version = "=1.16.1", default-features = false, features = ["std", "compat-1-2"] }
+slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2"] }
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

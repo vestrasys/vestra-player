@@ -18,6 +18,7 @@ use crate::package_stage::{Candidate, PackageManifest};
 const MAX_SAFE: u64 = (1_u64 << 53) - 1;
 const MAX_CATALOG: usize = 2 * 1024 * 1024;
 const MAX_PACKAGES: usize = 128;
+/// Operation receipts kept; when full, the oldest finished ones make room.
 const MAX_OPERATIONS: usize = 512;
 /// Retired instances kept so that a later install from the same source
 /// reconnects to their data (see `Dormant`).
@@ -141,6 +142,10 @@ struct Catalog {
     installed: BTreeMap<String, Installed>,
     pending: BTreeMap<String, Recovery>,
     operations: BTreeMap<String, Value>,
+    /// When each receipt was last written (unix ms), for evicting the
+    /// oldest. Receipts from older catalogs have none and go first.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    operation_at: BTreeMap<String, u64>,
     // One successful commit receipt per package makes a lost commit reply
     // retry harmless; full request deduplication belongs to the manager.
     last_commit: BTreeMap<String, String>,
@@ -150,6 +155,10 @@ struct Catalog {
     /// Retired instances by GUID (store proposal §1.2).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     dormant: BTreeMap<String, Dormant>,
+    /// Retired instances (GUID, package id) not kept because `dormant` was
+    /// full, until the manager takes them (not stored).
+    #[serde(skip)]
+    dropped: Vec<(String, String)>,
 }
 
 pub struct Store {
@@ -258,6 +267,7 @@ impl Store {
             self.catalog.installed.len() <= MAX_PACKAGES
                 && self.catalog.pending.len() <= 64
                 && self.catalog.operations.len() <= MAX_OPERATIONS
+                && self.catalog.operation_at.len() <= MAX_OPERATIONS
                 && self.catalog.last_commit.len() <= MAX_PACKAGES,
             "package catalog count exceeded"
         );
@@ -627,6 +637,11 @@ impl Store {
         Ok(())
     }
 
+    /// Instances dropped instead of retired since the last call (`retire`).
+    pub fn take_dropped(&mut self) -> Vec<(String, String)> {
+        std::mem::take(&mut self.catalog.dropped)
+    }
+
     pub fn operations(&self) -> BTreeMap<String, Value> {
         self.catalog.operations.clone()
     }
@@ -740,6 +755,7 @@ fn retire(catalog: &mut Catalog, id: &str, instance: &Instance, installed: &Inst
             "package library: dormant list full; {id} instance {} is no longer reconnectable",
             instance.guid
         );
+        catalog.dropped.push((instance.guid.clone(), id.into()));
         return;
     }
     catalog.dormant.insert(
@@ -766,12 +782,41 @@ fn check_receipt(value: &Value) -> Result<()> {
 }
 
 fn insert_receipt(catalog: &mut Catalog, id: &str, value: Value) -> Result<()> {
+    if !catalog.operations.contains_key(id) && catalog.operations.len() >= MAX_OPERATIONS {
+        evict_receipt(catalog);
+    }
     ensure!(
         catalog.operations.contains_key(id) || catalog.operations.len() < MAX_OPERATIONS,
         "operation history capacity reached; existing operations remain queryable"
     );
     catalog.operations.insert(id.into(), value);
+    catalog.operation_at.insert(id.into(), unix_ms());
     Ok(())
+}
+
+/// Drops the oldest receipt of a finished operation. Kept: operations still
+/// in progress (`preparing`, `restoring`, `pending`), the ones a pending
+/// transaction belongs to, and each package's last commit (so a lost commit
+/// reply can still be looked up).
+fn evict_receipt(catalog: &mut Catalog) {
+    let live = |id: &String, receipt: &Value| {
+        matches!(
+            receipt["status"].as_str(),
+            Some("preparing" | "restoring" | "pending")
+        ) || catalog.pending.values().any(|r| &r.operation_id == id)
+            || catalog.last_commit.values().any(|op| op == id)
+    };
+    let oldest = catalog
+        .operations
+        .iter()
+        .filter(|(id, receipt)| !live(id, receipt))
+        .map(|(id, _)| (catalog.operation_at.get(id).copied().unwrap_or(0), id))
+        .min()
+        .map(|(_, id)| id.clone());
+    if let Some(id) = oldest {
+        catalog.operations.remove(&id);
+        catalog.operation_at.remove(&id);
+    }
 }
 
 fn copy_tree(source: &std::path::Path, destination: &std::path::Path) -> Result<()> {
@@ -994,7 +1039,7 @@ mod tests {
     }
 
     #[test]
-    fn full_receipt_history_rejects_new_requests_and_preserves_existing() {
+    fn full_receipt_history_evicts_the_oldest_finished_receipt() {
         let root = tempfile::tempdir().unwrap();
         let (_, candidate) = candidate("1.0.0");
         let mut store = Store::open(root.path().into()).unwrap();
@@ -1002,21 +1047,59 @@ mod tests {
         store.prepare("counter", 0, &package, "a-pending").unwrap();
         // Populate directly to exercise the bounded insertion without 512
         // redundant disk durability barriers in this unit test.
-        for index in 0..511 {
+        for index in 0..509 {
             store.catalog.operations.insert(
                 format!("old-{index:03}"),
                 serde_json::json!({"status":"completed"}),
             );
+            store
+                .catalog
+                .operation_at
+                .insert(format!("old-{index:03}"), 1_000 + index);
+        }
+        // From an older catalog (no time): goes first. Still running: kept.
+        store
+            .catalog
+            .operations
+            .insert("untimed".into(), serde_json::json!({"status":"failed"}));
+        store.catalog.operations.insert(
+            "a-running".into(),
+            serde_json::json!({"status":"preparing"}),
+        );
+        assert_eq!(store.operations().len(), 512);
+        store
+            .save_operation("new", &serde_json::json!({"status":"completed"}))
+            .unwrap();
+        assert!(!store.operations().contains_key("untimed"));
+        store
+            .save_operation("newer", &serde_json::json!({"status":"completed"}))
+            .unwrap();
+        assert!(!store.operations().contains_key("old-000"));
+        let operations = store.operations();
+        assert_eq!(operations.len(), 512);
+        for kept in ["a-pending", "a-running", "old-001", "new", "newer"] {
+            assert!(operations.contains_key(kept), "{kept}");
+        }
+        // Survives reopening.
+        let store = Store::open(root.path().into()).unwrap();
+        assert_eq!(store.operations().len(), 512);
+        assert!(store.operations().contains_key("newer"));
+        // Only live receipts left: a new request is refused, nothing lost.
+        let mut store = store;
+        for id in store.operations().keys().cloned().collect::<Vec<_>>() {
+            if id != "a-pending" {
+                store
+                    .catalog
+                    .operations
+                    .insert(id, serde_json::json!({"status":"preparing"}));
+            }
         }
         assert!(
             store
-                .save_operation("new", &serde_json::json!({"status":"completed"}))
+                .save_operation("refused", &serde_json::json!({"status":"completed"}))
                 .is_err()
         );
         assert_eq!(store.operations().len(), 512);
-        assert!(store.operations().contains_key("a-pending"));
-        assert!(store.operations().contains_key("old-000"));
-        assert!(!store.operations().contains_key("new"));
         assert!(
             store
                 .commit_with_receipt(
@@ -1062,6 +1145,35 @@ mod tests {
             instance.guid
         );
         assert!(store.dormant_match("counter", "workshop").is_none());
+    }
+
+    #[test]
+    fn an_instance_not_kept_dormant_is_reported_once() {
+        let root = tempfile::tempdir().unwrap();
+        let (_, first) = candidate("1.0.0");
+        let mut store = Store::open(root.path().into()).unwrap();
+        let first = store.stage(&first).unwrap();
+        store.prepare("counter", 0, &first, "one").unwrap();
+        store.commit("counter", "one").unwrap();
+        let guid = store.get("counter").instance.unwrap().guid;
+        for index in 0..MAX_DORMANT {
+            store.catalog.dormant.insert(
+                format!("00000000-0000-4000-8000-{index:012}"),
+                Dormant {
+                    id: "other".into(),
+                    source: Source::File,
+                    version: None,
+                    installed_at: 0,
+                    retired_at: 0,
+                },
+            );
+        }
+        store
+            .uninstall("counter", "gone", serde_json::json!({}), true)
+            .unwrap();
+        assert!(!store.dormant().contains_key(&guid));
+        assert_eq!(store.take_dropped(), [(guid, "counter".to_owned())]);
+        assert!(store.take_dropped().is_empty());
     }
 
     #[test]

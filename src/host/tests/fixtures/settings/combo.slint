@@ -1,0 +1,16 @@
+// A std ComboBox bound two-way to its page's global: Slint 1.16.1 panicked in
+// the event loop when the global changed ("accessing deleted parent (issue
+// #6426)"); fixed in Slint 1.18.
+import { ComboBox } from "std-widgets.slint";
+
+export global ComboBridge {
+    in-out property <int> index;
+}
+
+export component ComboPage inherits Rectangle {
+    height: 60px;
+    ComboBox {
+        model: ["a", "b", "c"];
+        current-index <=> ComboBridge.index;
+    }
+}

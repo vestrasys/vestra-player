@@ -14,6 +14,9 @@
  *    cross-checked are listed with the reason, and the host is checked again
  *    without the optional features that pull them in; that is reported as a
  *    partial check, never as a pass.
+ *    Build output goes to `$CARGO_TARGET_DIR/portability`, or to
+ *    `<system temp>/vestra-target/portability` without it: never into the
+ *    repository.
  *    Also lists `cfg(unix)` / `cfg(target_os)` code outside the host's
  *    platform module (notes, not failures).
  * 2. Scan: string literals in src/plugins, the installed SDK package
@@ -27,12 +30,17 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { extname, join, relative, resolve } from "node:path";
 import ts from "typescript";
 
 const TARGET = "x86_64-pc-windows-msvc";
 const source = resolve(import.meta.dirname, "..");
 const host = resolve(source, "host");
+const targetDir = join(
+  process.env.CARGO_TARGET_DIR || join(tmpdir(), "vestra-target"),
+  "portability",
+);
 const args = new Set(process.argv.slice(2));
 let failed = false;
 
@@ -88,7 +96,7 @@ function check(chain, extra) {
       TARGET,
       "--all-targets",
       "--target-dir",
-      join(host, "target", "portability"),
+      targetDir,
       "--message-format",
       "json-diagnostic-short",
       ...chain.flags,

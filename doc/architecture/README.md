@@ -43,7 +43,8 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 
 ## 4. Slint 组合与输入
 
-- 编译：宿主、面板、工具窗口、包校验共用一个编译配置（`ui.rs` 的 `compiler()`）：库路径 `vestra` → `ui/vestra/`（`@vestra/theme.slint`、`@vestra/widgets.slint`），风格 `fluent-dark`。默认字体是系统自带的 Hiragino Sans GB（按文件导入并设为各窗口的默认字体）：GUI 实测（2026-10-20）不指定字体时插件窗口的中文显示为空白，Slint 1.16 在这里没有按文字回退。`VESTRA_FONT_FALLBACK=system` 可关闭，用于检验以后 Slint 版本自身的回退。主题的 `font-mono`（Menlo）只含西文，含中文的文字不要用它。
+- 编译：宿主、面板、工具窗口、包校验共用一个编译配置（`ui.rs` 的 `compiler()`）：库路径 `vestra` → `ui/vestra/`（`@vestra/theme.slint`、`@vestra/widgets.slint`），风格 `fluent-dark`。默认字体是系统自带的 Hiragino Sans GB（按文件导入并设为各窗口的默认字体）：GUI 实测（2026-10-20）不指定字体时插件窗口的中文显示为空白，Slint 1.16 在这里没有按文字回退。Slint 1.18.1 已能回退（无界面探针，2026-10-22），是否去掉强制字体待真机对比后决定（外观变化）；`VESTRA_FONT_FALLBACK=system` 可关闭它做对比。主题的 `font-mono`（Menlo）在 1.18 下中文可回退显示。
+- Slint 版本锁定 `=1.18.1`（`Cargo.toml` 与 `unsafe/render`）。依赖的私有接口两处，升级时必须复测：`ui_markdown` 的 `parse_markdown`（带占位参数的 Markdown）、`ui::settle_layout` 的 `WindowInner::ensure_tree_instantiated`。后者的原因：1.17 起 `if`/`for` 元素在每帧渲染和每个输入事件前的一遍里创建和删除，不在读取布局时更新，所以宿主切换 `sidebar-visible` 等条件后、下一帧之前读到的几何是旧的；宿主读视频区和窗口尺寸前先调用它（窗口 tick、画中画定位、`window.setVideoArea`、拖放落点）。
 - 工具窗口：插件 `.slint` 文件恰好导出一个组件；宿主用 slint-interpreter 编译，按 SDK 登记的回调白名单转发回调。
 - 面板：文件导出一个 component 和一个 global（属性与回调的桥接对象）；宿主按 owner 别名把它导入主界面（`host.slint` 的插入标记），转发 global 上的全部回调。主窗口外壳：视频列（视频 + 底栏）在左，3px 分隔条与全高侧栏在右；全屏时底栏覆盖在视频底部并按 `window_state::Policy` 的空闲规则隐藏（指针停在底栏上时不隐藏），附着的侧栏变成右边缘的弹出层。
 - 浮动面板（C14）：分离时宿主另外编译一个窗口，导入同一个组件与桥接 global；global 每个窗口实例一份，所以宿主用保存的 `Mount.properties` 初始化浮动窗口，之后每次 `ui.setMount` 同时写主窗口与浮动窗口，两边回调都以 `$mount` 转发。附着时只关闭浮动窗口，主窗口不重建。
@@ -64,7 +65,7 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 | `src/host/src/producer*.rs` | 插件生成的音视频流（NES） |
 | `src/host/src/composition.rs`、`ui.rs`、`menu.rs`、`ui/*.slint` | 界面组合（主窗口、浮动面板窗口）、编译配置、插件窗口、共享右键菜单 |
 | `src/host/src/commands.rs`、`bindings.rs` | 命令注册表与菜单树、输入绑定表（解析、作用范围、冲突、菜单快捷键文字） |
-| `src/host/src/plugins.rs` | 插件进程；`VESTRA_PLUGIN_DATA_DIR` 传入数据目录（按 `DataKey`：已安装 `plugin-data/<安装实例 GUID>`，开发加载 `plugin-data/development/<id>`，试载 `plugin-data/<id>.trial.<owner>`，停止时删除）；`secrets` 的服务名同样按 `DataKey` |
+| `src/host/src/plugins.rs` | 插件进程；`VESTRA_PLUGIN_DATA_DIR` 传入数据目录（按 `DataKey`：已安装 `plugin-data/<安装实例 GUID>`，开发加载 `plugin-data/development/<id>`，试载 `plugin-data/<id>.trial.<owner>`，停止时删除）；`secrets` 的服务名同样按 `DataKey`，用过的名字记在安装库的 `secrets/<服务名>.json`（`secret_index.rs`，只记名字，每服务 ≤ 256），带数据卸载与休眠实例被丢弃时据此删除 |
 | `src/host/src/manifest.rs` | manifest 结构与规则表（开发加载与托管包共用；SDK CLI 用同一张表，`host-agreement` 测试比对） |
 | `src/host/src/package_store.rs`、`package_archive.rs`、`package_manager.rs` | 安装库（`packages/catalog.json`：每个 id 的当前安装实例与休眠实例）、`.vxp` 解压、安装/替换/回退/卸载与内置插件播种（`Resources/plugins/builtin.json`）。设计见 [S4 提案](store-api-proposal.md) |
 | `src/host/src/ui_markdown.rs`、`ui/vestra/markdown.slint` | `plugin.ui.markdown`：pulldown-cmark 解析成 `[MarkdownBlock]`，行内样式用 Slint `styled-text` |

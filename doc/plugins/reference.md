@@ -210,7 +210,7 @@ interface AppInfo {
   readonly components: {
     readonly mpv: string | null;     // libmpv 的 mpv-version，如 "mpv v0.41.0"
     readonly libav: Record<string, string>; // { ffmpeg: <ffmpeg-version> }
-    readonly slint: string;          // 链接的 Slint 版本，如 "1.16.1"
+    readonly slint: string;          // 链接的 Slint 版本，如 "1.18.1"
   };
 }
 interface App extends AppInfo {      // plugin.app 的类型
@@ -633,7 +633,7 @@ window.on("openLink", (url: string) => plugin.system.openUrl(url));
 ```
 
 - 播放器解析（pulldown-cmark）并绘制：标题 1–6、段落（粗体、斜体、删除线、行内代码、链接）、无序/有序/任务列表（嵌套 ≤ 4 层）、代码块（等宽、不高亮）、引用（≤ 4 层）、图片、GFM 表格（单元格为纯文本，≤ 16 列 × 500 行）、分隔线。**内嵌 HTML 不显示**；脚注、数学不启用。`MarkdownRef` 只能作为 `[MarkdownBlock]` 属性的整个值，属于创建它的作用域（释放后写入为 `invalid`）。
-- 显示细节：播放器为中文强制使用的系统字体（Hiragino Sans GB、Microsoft YaHei）没有斜体，Slint 也不合成斜体，所以斜体另加琥珀色、删除线另加灰色，保证在任何字体下都看得出；行内代码与代码块中 ASCII 用等宽字体、中文等其它文字用正文字体（等宽字体没有中文字形）；任务列表的方框用图形绘制，不依赖字体字形；表格每行列宽相同，表头与正文都按分隔行的对齐方式（`:--`、`:-:`、`--:`）对齐。
+- 显示细节：播放器为中文强制使用的系统字体（Hiragino Sans GB、Microsoft YaHei）没有斜体，Slint 也不合成斜体，所以斜体另加琥珀色、删除线另加灰色，保证在任何字体下都看得出；行内代码整段用 Slint 的等宽胶囊样式（字号略小、半透明底），代码块整块用 `Theme.font-mono`，其中的中文按系统字体回退显示；任务列表的方框用图形绘制，不依赖字体字形；表格每行列宽相同，表头与正文都按分隔行的对齐方式（`:--`、`:-:`、`--:`）对齐。
 - 链接：点击时 `MarkdownView` 发出 `link-clicked(url)`，相对地址已按 `base` 解析（`#锚点` 原样）；打开与否由插件决定。
 - `base`：`http(s)` 地址（如 README 自己的地址）或绝对目录；相对链接与图片按它解析。没有 `base` 时相对图片显示替代文字。
 - 图片：PNG/JPEG。本地图片按 `ui.image` 的规则（本插件包目录或数据目录内，≤ 16 MB、4096²，与 `ui.image` 共用每插件 64 MB 的解码缓存）。`https:` 图片由 SDK 在本插件进程里下载到 `<dataDirectory>/.vestra-cache/markdown/`：单张 ≤ 4 MB、10 秒、重定向 ≤ 5 次（只跟随到 `https:`）、同时 4 个、每文档 ≤ 64 张；缓存 32 MB，按最近使用淘汰，同一地址 24 小时内不重新下载。下载失败、`http:`、SVG/GIF 等显示替代文字，`markdown()` 本身不因此失败。`remoteImages: false` 不下载。
@@ -733,8 +733,7 @@ interface SlotState {
 - 插件 → 界面用 `in` / `in-out property`，界面 → 插件用 `callback`。回调参数和属性值必须能用 JSON 表示（基本类型、数组、结构体），回调返回 `void`。
 - 会被插件改值的输入控件用双向绑定（`value <=> root.x`、`checked <=> root.x`）。单向的 `value: root.x` 在用户操作控件后会断开，之后插件改值，控件不会跟着动。属性须为 `in-out`。
 - `in` 属性只能单向绑定时，用 `changed x => { slider.value = root.x; }` 在模型变化时回推。
-- 例外：std-widgets 的 `ComboBox` 的 `current-index` 不要直接 `<=>` 到 global 属性（`current-index <=> Bridge.index`）。Slint 1.16 的编译器会把 ComboBox 内部的 `changed current-index` 处理挪到 global 上，插件一改这个属性播放器就崩溃（上游已在 1.18 修复）。写法：`private property <int> index: Bridge.index; changed index => { combo.current-index = self.index; }`，控件上用单向的 `current-index: Bridge.index` 加 `selected => { … }` 回报。凡是控件属性带内部 `changed` 处理的，都按此处理。播放器在 `settings.page`、`windows.create`、`panels.mount` 时先在独立线程试改每个 global 属性，会崩的界面以 `ui-prepare` 失败，不会被打开。
-- 主题与控件：`import { Theme } from "@vestra/theme.slint";` 提供颜色（由播放器按当前配色下发，§6.8；插件只读，不能给 `Theme` 赋值，硬编码颜色不会随配色变化）（`bg-bar`、`bg-panel`、`text`、`accent`、`playing`…）、字号（`font-xs` 9px、`font-body` 11px、`font-tab` 12px、`font-title` 13px、`font-mono` 等宽（Menlo，只含西文，中文不要用它））和控件尺寸（`button-height` 21px、`input-height`、`form-row-gap`、`dialog-padding`…），完整列表见 `src/host/ui/vestra/theme.slint`。`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";` 提供参考播放器样式的按钮（文字按钮 21px、`small` 18px；`text` 为空时是图标按钮：`icon` 是 Slint `Path` 的路径数据，画在 `icon-width` × `icon-height`（默认 14×12）的 viewbox 里，`stroked: true` 画 1.5px 线而不填充，`checked` 表示开启态；图标按钮的宽高由调用方设置，悬停提示用 `ToolTipArea` 包住：悬停 600ms 显示，指针离开或按下时关闭，下次悬停再显示；只读属性 `showing` 表示提示正在显示）、2px 线滑块（`panel: true` 为面板样式）和悬停提示，以及输入链接组件 `UrlInputRow`（UI-DLG-02：多行输入 + 「打开」「取消」；`in-out property <string> text`、`placeholder`、`confirm-text`（默认「打开」）、`cancel-text`、`enabled`，`callback accepted(string)`（回车或点确定，Shift+回车换行）、`cancelled()`（Esc 或点取消），`focus-input()`、`select-all()` 两个公共函数；不校验地址，校验由插件做；用法见示例 §29）。
+- 主题与控件：`import { Theme } from "@vestra/theme.slint";` 提供颜色（由播放器按当前配色下发，§6.8；插件只读，不能给 `Theme` 赋值，硬编码颜色不会随配色变化）（`bg-bar`、`bg-panel`、`text`、`accent`、`playing`…）、字号（`font-xs` 9px、`font-body` 11px、`font-tab` 12px、`font-title` 13px、`font-mono` 等宽（Menlo；其中的中文按系统字体回退显示））和控件尺寸（`button-height` 21px、`input-height`、`form-row-gap`、`dialog-padding`…），完整列表见 `src/host/ui/vestra/theme.slint`。`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";` 提供参考播放器样式的按钮（文字按钮 21px、`small` 18px；`text` 为空时是图标按钮：`icon` 是 Slint `Path` 的路径数据，画在 `icon-width` × `icon-height`（默认 14×12）的 viewbox 里，`stroked: true` 画 1.5px 线而不填充，`checked` 表示开启态；图标按钮的宽高由调用方设置，悬停提示用 `ToolTipArea` 包住：悬停 600ms 显示，指针离开或按下时关闭，下次悬停再显示；只读属性 `showing` 表示提示正在显示）、2px 线滑块（`panel: true` 为面板样式）和悬停提示，以及输入链接组件 `UrlInputRow`（UI-DLG-02：多行输入 + 「打开」「取消」；`in-out property <string> text`、`placeholder`、`confirm-text`（默认「打开」）、`cancel-text`、`enabled`，`callback accepted(string)`（回车或点确定，Shift+回车换行）、`cancelled()`（Esc 或点取消），`focus-input()`、`select-all()` 两个公共函数；不校验地址，校验由插件做；用法见示例 §29）。
 - 所有插件 Slint 都以 `fluent-dark` 风格编译：std-widgets 的控件默认是深色。默认字体是系统 UI 字体（含中文回退），插件不需要自己设字体。
 - 编辑器里要让 `@vestra/...` 导入可解析，给 Slint 语言服务设 `libraryPaths`：`{ "vestra": "<仓库>/src/host/ui/vestra" }`。
 
@@ -1178,7 +1177,7 @@ interface PackageChange {
 }
 ```
 
-- 安装和回退从不重复提交：请求 id 与预期修订号由 SDK 处理，答复丢失时只按同一请求查询。
+- 安装和回退从不重复提交：请求 id 与预期修订号由 SDK 处理，答复丢失时只按同一请求查询。播放器保留最近至少 512 条操作回执（满了淘汰最早结束的，进行中的不淘汰）；更早的请求 id 查询为 `missing`，再次提交按新请求处理。
 - `list`：运行中的插件、安装库里的全部插件（含停用、启动失败、未运行的）与本次运行的开发加载，按 id 排序。`onChange` 在列表变化（启动、就绪、停用、失败、安装、卸载）后收到新列表，约每 200 ms 至多一次。
 - `setEnabled(id, false)`：停止该插件（与播放器停用插件相同，§3.2）；已安装的插件写进安装库，之后启动播放器也不再运行，直到 `setEnabled(id, true)`；开发加载只在本次运行有效。`setEnabled(id, true)` 重新加载它。停用自己 `invalid`，试载 `unsupported`（用试载句柄停止），未知 id `missing`，正在安装 `busy`。安装或回退一个停用的插件会让它重新启用。
 - `uninstall`：只对已安装插件（内置插件、开发加载、试载 `unsupported`；未知 `missing`；自己 `invalid`）。先停止，再从安装库删除（当前与上一版本，一次原子提交），回收它的包文件；`removeData: true` 时在进程结束后删除它的数据目录，否则安装实例转为休眠，同来源重新安装时接上数据。系统密钥库里该实例的条目不会被删除（无法枚举），但新实例读不到它们。用户覆盖层里它的绑定保留（`bindings.list` 的 orphans）。返回的 `PackageChange` 通常已是 `committed`。
@@ -1209,7 +1208,7 @@ interface PackageChange {
 | `stream`、`device` | `openStream`：生成端报错 / 音频设备未就绪 |
 | `backend-uncertain` | 滤镜阶段被播放器后端阻塞，`filter.retry()` 重新检查 |
 | `cleanup` | `trial.stop()` 未确认清理，可再次调用 |
-| `limit` | 超出播放器的数量上限（如命令数，§4） |
+| `limit` | 超出播放器的数量上限（如命令数，§4；密钥名字数，§16.6） |
 | `versionMismatch` | 包的 `minPlayerVersion` 高于本播放器（`validate`、`validateArchive`；§2） |
 | `unknown`、`rejected`、`expired` | 传输异常后 SDK 查询仍无法确认结果（正常情况下不会出现） |
 
@@ -1372,7 +1371,8 @@ secrets.set(name: string, value: string): Promise<void>; // 新建或替换
 secrets.delete(name: string): Promise<void>;             // 不存在也算成功
 ```
 
-- 每个插件一组，互不可见：macOS 是登录钥匙串里的通用密码，服务名为插件的 manifest id、账户名为 `name`（与 `security add-generic-password -s <id> -a <name>` 相同，已有的项可直接读到）；Windows 是凭据管理器里的普通凭据（目标名 `<name>.<id>`）。
+- 每个安装实例一组（§3.4），互不可见：macOS 是登录钥匙串里的通用密码，服务名为 `vestra.plugin.<实例 GUID>`（开发加载为 `vestra.dev.<id>`）、账户名为 `name`；Windows 是凭据管理器里的普通凭据（目标名 `<name>.<服务名>`）。
+- 每个插件至多 256 个不同的名字：再 `set` 一个新名字以 `limit` 失败（替换已有的名字、`delete` 后再用不受影响）。播放器在自己的安装库里记下用过的名字（不记值），`uninstall(id, { removeData: true })` 时删除这些项；不保留数据的卸载与替换只让实例休眠，项保留到以后接上，休眠列表满了不再保留的实例同样删除。开始记录名字之前（Slint 1.18 升级之前的播放器）写入的项无法列出，卸载时不会删除。
 - `name` 1–64 个 `a-z`、`0-9`、`.`、`_`、`-`；`value` 1–1024 字节 UTF-8，不含 NUL；不合法 `invalid`。删除用 `delete`，不要写空串。
 - 读写可能等待系统的授权提示（macOS「…想要使用钥匙串中的机密信息」），在播放器的工作线程上执行，不阻塞播放。没有可用的存储（macOS 找不到或无法写入钥匙串，Windows 没有登录会话）时 `unavailable`；用户拒绝授权和其它系统错误 `failed`（`message` 为系统的原因）。
 - macOS 上，播放器重新构建后（开发版没有固定签名），第一次读取以前写入的项会再次弹出授权提示。
@@ -1400,6 +1400,17 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | 绑定 §4.1 | `Ctrl` 也认 ⌘ | `Cmd` 是徽标键 | 同 Windows |
 
 ## 17. 变更说明
+
+### Slint 1.18.1（2026-10，SDK 1.1.2）
+
+播放器链接的 Slint 从 1.16.1 升到 1.18.1。插件 API 签名不变；插件 `.slint` 受到的变化：
+
+- `Flickable` / `ScrollView` 的 `viewport-x`、`viewport-y`、`viewport-width`、`viewport-height` 改名 `content-*`，旧名仍可用但编译时出弃用警告。`@vestra/markdown.slint` 已改（SDK 1.1.2 带同步副本）。
+- `Window` 有了内置函数 `close()`、`hide()`：窗口组件自己声明同名回调时出「shadows the builtin function」警告，行为不变（调用仍落到自己的回调），建议改名。
+- 取消 §6.4 的 ComboBox 例外：`current-index <=> Global.x` 不再让播放器崩溃（上游修复），播放器也不再在注册界面前试改 global 属性；单向写法照常可用。选项页注册时仍单独编译，编译失败以 `ui-prepare` 失败。
+- `font-mono`（Menlo）里的中文按系统字体回退显示；Markdown 的行内代码整段显示为等宽胶囊，代码块整块等宽（§6.1）。
+- 外观微调（上游）：std-widgets 控件的默认字号与 `Text` 一致（fluent 约小 7%）；`ComboBox` 最小宽度按内容计算（至少 160px）；换行文字的最小宽度为最长单词宽度；滚轮滚动带动画。焦点所在的元素变为不可见时焦点被清除。
+- `secrets`：每个插件至多 256 个名字（超出 `limit`），带数据卸载时删除（§16.6）。操作回执满 512 条时淘汰最早结束的（§12）。
 
 ### 插件商城核心改动 S4：安装实例、来源、内置插件、manifest 显示字段、Markdown（2026-10，播放器 0.2.0、SDK 1.1.0）
 

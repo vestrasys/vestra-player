@@ -1,4 +1,4 @@
-//! Bounded JSON ↔ Slint 1.16.1 value conversion (host-internal).
+//! Bounded JSON ↔ Slint value conversion (host-internal).
 //! Equal values retain live properties; same-length Host-owned models reconcile
 //! changed rows. Structural changes replace models; Rc ownership stays with the view.
 //! This is data conversion only, with no layout or model-control protocol; runtime

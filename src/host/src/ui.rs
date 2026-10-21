@@ -17,6 +17,21 @@ pub fn ui_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("ui"))
 }
 
+/// Brings `if` and `for` elements up to date before the host reads geometry
+/// (`width`, `absolute-position`, layout results) off a window.
+///
+/// Since Slint 1.17 the conditional and repeated elements are created and
+/// removed in a pass that runs before each frame and each input event, not
+/// when a layout is read: geometry read right after a condition changed
+/// (`sidebar-visible`, or a plugin panel's own `if`) is the old layout until
+/// the next frame. This runs that pass now. It is the only Slint private
+/// interface outside `ui_markdown`: recheck on every Slint upgrade (the
+/// `ui::tests::geometry_*` tests fail if the behaviour changes).
+pub fn settle_layout(window: &slint::Window) {
+    slint::private_unstable_api::re_exports::WindowInner::from_pub(window)
+        .ensure_tree_instantiated();
+}
+
 /// The one Slint compiler configuration for the shell, panels, tool windows and
 /// package validation: `@vestra/...` imports and the dark std-widgets style.
 pub fn compiler() -> Compiler {
@@ -35,7 +50,9 @@ pub fn compiler() -> Compiler {
 /// 2026-10-20), so a system CJK font file (`platform::ui_font`: Hiragino
 /// Sans GB on macOS, Microsoft YaHei on Windows) is imported and made the
 /// default family whenever it exists (§18 Q12). `VESTRA_FONT_FALLBACK=system`
-/// opts out, for checking a future Slint's own fallback.
+/// opts out, for checking Slint's own fallback: 1.18.1 falls back in a
+/// headless probe (2026-10-22); dropping the forced family changes how all
+/// Latin text looks, so it waits for a side-by-side check on the real machine.
 pub fn font() -> Option<(&'static str, &'static str)> {
     if std::env::var("VESTRA_FONT_FALLBACK").as_deref() == Ok("system") {
         return None;
@@ -64,8 +81,6 @@ pub fn compile_source(mut source: String, path: &Path) -> Result<ComponentInstan
         source.push('\n');
         source.push_str(&crate::theme::export_line());
     }
-    // A window that would panic the event loop fails to open instead (`ui_probe`).
-    crate::ui_probe::check(source.clone(), path.to_owned(), None)?;
     let result = pollster::block_on(compiler().build_from_source(source, path.to_owned()));
     if result.components().count() > 1 {
         bail!("Slint file must export exactly one component");
@@ -342,15 +357,11 @@ export component W inherits Window {
         assert_eq!((count("backs"), count("dismissals")), (2., 1.));
     }
 
-    /// G-01: with the fullscreen sidebar popped out, the bottom bar spans from
-    /// the left edge to the overlay's left edge. (It used to be centred: a
-    /// narrower element without `x` in a plain parent is centred by Slint.)
-    #[test]
-    fn popped_sidebar_narrows_the_fullscreen_bar_from_the_left_edge() {
+    /// The shell with a bottom bar and a sidebar.
+    fn bar_and_sidebar() -> [crate::composition::CompileSpec; 2] {
         use crate::composition::{CompileSpec, Slot};
-        headless();
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
-        let specs = [
+        [
             CompileSpec {
                 owner: 10,
                 file: base.join("bar.slint"),
@@ -365,8 +376,53 @@ export component W inherits Window {
                 global: Some("Bridge".into()),
                 slot: Slot::Sidebar,
             },
-        ];
-        let source = crate::composition::shell_source(&specs).unwrap();
+        ]
+    }
+
+    /// Slint 1.17+ (see `settle_layout`): hiding the docked sidebar (an `if`
+    /// in the shell's layout) and reading the video area in the same turn,
+    /// as the window tick and `window.setVideoArea` do.
+    #[test]
+    fn geometry_is_current_after_a_condition_changes() {
+        headless();
+        let source = crate::composition::shell_source(&bar_and_sidebar()).unwrap();
+        let shell = crate::composition::build(source, "HostWindow")
+            .unwrap()
+            .create()
+            .unwrap();
+        shell
+            .window()
+            .set_size(slint::LogicalSize::new(1470., 956.));
+        shell.show().unwrap();
+        let read = |name: &str| match shell.get_property(name).unwrap() {
+            slint_interpreter::Value::Number(n) => n,
+            other => panic!("{name}: {other:?}"),
+        };
+        settle_layout(shell.window());
+        // The sidebar (317px) and its 3px splitter.
+        assert_eq!(read("video-width"), 1470. - 320.);
+        let unsettled = |visible: bool| {
+            shell
+                .set_property("sidebar-visible", visible.into())
+                .unwrap();
+            let before = read("video-width");
+            settle_layout(shell.window());
+            eprintln!("sidebar-visible {visible}: {before} before settle_layout");
+            read("video-width")
+        };
+        assert_eq!(unsettled(false), 1470.);
+        assert_eq!(read("video-x"), 0.);
+        assert_eq!(unsettled(true), 1470. - 320.);
+        shell.hide().unwrap();
+    }
+
+    /// G-01: with the fullscreen sidebar popped out, the bottom bar spans from
+    /// the left edge to the overlay's left edge. (It used to be centred: a
+    /// narrower element without `x` in a plain parent is centred by Slint.)
+    #[test]
+    fn popped_sidebar_narrows_the_fullscreen_bar_from_the_left_edge() {
+        headless();
+        let source = crate::composition::shell_source(&bar_and_sidebar()).unwrap();
         let marker = "    callback focus-video();\n";
         assert!(source.contains(marker));
         let probes = "    callback focus-video();\n\
@@ -392,8 +448,11 @@ export component W inherits Window {
         set("sidebar-overlay", true.into());
         set("sidebar-width", 317.0.into());
         set("sidebar-popped", false.into());
+        // Hiding the docked sidebar removes an `if` from the layout.
+        settle_layout(shell.window());
         assert_eq!((read("t-bar-x"), read("t-bar-w")), (0., 1470.));
         set("sidebar-popped", true.into());
+        settle_layout(shell.window());
         assert_eq!(read("sidebar-pop-width"), 317.);
         assert_eq!((read("t-bar-x"), read("t-bar-w")), (0., 1470. - 317.));
     }
@@ -422,6 +481,48 @@ export component W inherits Window {
                 .set_size(slint::LogicalSize::new(width, height));
             assert_eq!(size("osd-size"), osd, "{width}x{height}");
             assert_eq!(size("info-size"), info, "{width}x{height}");
+        }
+    }
+
+    /// The sources the host generates (main window with panels, floating
+    /// panel, options window) compile without warnings, so a Slint upgrade
+    /// that deprecates something they use shows up here.
+    #[test]
+    fn host_generated_sources_compile_without_warnings() {
+        let specs = bar_and_sidebar();
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
+        let page = crate::settings_window::Page {
+            owner: 1,
+            manifest: "a.plugin".into(),
+            id: "look".into(),
+            category: 6,
+            title: "look".into(),
+            order: 0,
+            serial: 1,
+            file: base.join("backdrop.slint"),
+            component: "Backdrop".into(),
+            global: "Bridge".into(),
+            properties: Default::default(),
+        };
+        for source in [
+            crate::composition::shell_source(&specs).unwrap(),
+            crate::composition::shell_source(&[]).unwrap(),
+            crate::composition::floating_source(&specs[1], "列表").unwrap(),
+            crate::settings_window::source(&[&page]).unwrap(),
+        ] {
+            let result = pollster::block_on(
+                compiler().build_from_source(source, ui_dir().join("host.slint")),
+            );
+            // Known since Slint 1.16 (not new in 1.18): `sidebar-actual`
+            // reads the window width that the sidebar's fixed width feeds.
+            let diagnostics: Vec<_> = result
+                .diagnostics()
+                .map(|d| d.to_string())
+                .filter(|d| {
+                    !d.contains("part of a binding loop (root.layoutinfo-h -> root.sidebar-actual")
+                })
+                .collect();
+            assert!(diagnostics.is_empty(), "{diagnostics:#?}");
         }
     }
 
