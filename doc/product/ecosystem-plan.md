@@ -112,11 +112,12 @@ channel = "stable"
 
 **人写的 id**（manifest 的 `id`）
 
-- 格式 `<发布者>.<插件名>`，至少两段，全部小写字母、数字和 `-`。`vestra.` 前缀保留给官方：宿主只对内置插件和官方仓库签名的插件放行，其它来源一律拒绝。
-- 唯一性只由官方插件仓库保证（CI 加审核）：前缀必须等于 `registry/<id>.toml` 里源码仓库的 GitHub 用户名或组织名；id 第一次登记后与 `owners` 绑定，之后改这个登记文件的 PR 必须由 owner 提交。
-- 第三方仓库之间的重名和冒充由用户自己负责（是用户选择添加的仓库），我们不协调。
-- SDK：`vestra-plugin check` 检查格式；`npm create vestra-plugin` 默认填 `<GitHub 用户名>.<目录名>`。
-- 现有内置插件 `audio`、`bilibili`、`nes`、`youtube` 改为 `vestra.*`。未发版，不迁移旧设置。
+- **宿主不改规则**：沿用现有字符检查（字母、数字、`.-_`），不强制命名空间，不保留前缀。宿主不给任何 id 特殊待遇；内置插件不可卸载、不可替换、官方与非官方的标记都按**来源**（安装包、哪个仓库、是否签名）判断，不看 id。所以第三方插件把 id 写成 `vestra.xxx` 得不到任何东西。
+- **唯一性只由官方插件仓库保证**（CI 加审核）：第三方登记的 id 必须是 `<GitHub 用户名或组织名>.<插件名>`，前缀等于 `registry/<id>.toml` 里源码仓库的所有者；id 第一次登记后与 `owners` 绑定，之后改这个登记文件的 PR 必须由 owner 提交。`vestra.` 只给插件仓库自带的官方插件用。
+- 第三方仓库之间的重名和冒充由用户自己负责（是用户选择添加的仓库），我们不协调；数据不会互相覆盖，见下面的安装实例 GUID。
+- SDK：`npm create vestra-plugin` 默认填 `<GitHub 用户名>.<目录名>`；`vestra-plugin check` 对没有前缀的 id 只给提示，不报错。
+- 现有内置插件 `audio`、`bilibili`、`nes`、`youtube` 改为 `vestra.*`，因为它们进官方仓库后要符合仓库规则（宿主并不要求）。未发版，不迁移旧设置。
+- 曾考虑让宿主强制格式并保留 `vestra.` 前缀，后来放弃：唯一性、防覆盖、官方标记都已由官方仓库 CI、安装实例 GUID 和来源判断解决，宿主再强制只会带来一次破坏性变更。
 - 参照：Dalamud 的 `InternalName` 不带命名空间，只靠官方仓库目录名和人工审核保证唯一；Flathub 要求 GitHub 上的应用用 `io.github.<用户名>.*` 并验证账号。没有采用 Chrome 式的公钥 id：唯一且防冒充，但作者要保管密钥，id 不可读，对目前的规模不划算。
 
 **安装实例 GUID**（宿主生成，作者不接触）
@@ -172,7 +173,7 @@ channel = "stable"
 | S1 | SDK 仓库：迁入 S0 的包（保留 git 历史，用 `git subtree split` 或 `git filter-repo`），配置 CI（检查、测试、npm 发布），发布 `@vestra-player/sdk@1.0.0` | SDK 仓库链接、npm 作用域、`NPM_TOKEN` |
 | S2 | 播放器仓库改为依赖 npm 包：删除 `src/sdk` 里对外的部分；runner 和运行时代码的来源按第 2 节确定；打包和开发两条路径真机验证 | S1 |
 | S3 | 插件仓库：迁入内置插件源码（保留历史），改用 npm 上的 SDK；建 CI，包括构建、打包、上传 Releases、生成并签名 `index.json`（构建与签名分开的 job）、`revoked` 列表、发布到 Pages；写 `registry/<id>.toml` 的 PR 模板和贡献说明 | 插件仓库链接、Pages、签名密钥 |
-| S4 | 核心改动：manifest 显示字段，内置插件不可卸载；id 格式与 `vestra.` 前缀保留、安装实例 GUID（1.5a）；`.vxp` 安装、`minPlayerVersion`；核心 Markdown 显示组件（1.6 第 10 条）；播放器打包时从插件仓库取内置插件 | S2、S3 |
+| S4 | 核心改动：manifest 显示字段，内置插件不可卸载；安装实例 GUID（1.5a）；`.vxp` 安装、`minPlayerVersion`；核心 Markdown 显示组件（1.6 第 10 条）；播放器打包时从插件仓库取内置插件 | S2、S3 |
 | S5 | 商城插件：列表和详情界面、安装、更新、第三方仓库、链接与拖入安装、签名校验、`revoked` 处理、权限展示与第三方警告、回退 | S3、S4 |
 | S7 | 内置 Node 24 LTS 与 `.app` 打包、签名（1.6 第 12 条）；SDK `engines` 调整 | 可与 S3–S5 并行 |
 | S6 | 真机验收：从官方仓库安装和更新、第三方仓库、侧载、热卸载、内置插件保护；跨平台检查 | S5 |
