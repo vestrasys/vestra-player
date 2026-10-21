@@ -437,6 +437,8 @@ interface Stream extends Disposable {
 
 `frame()` 由 SDK 按音频时钟调用，不会并发调用，暂停时不调用。预填充、激活、暂停与输入确认都由 SDK 处理。
 
+画面和声音经本机连接送给播放器，由 SDK 建立，插件不用管：macOS、Linux 是 `/tmp` 下私有目录里的 Unix 套接字；Windows 是回环地址（`127.0.0.1`）上的 TCP 端口，SDK 连上后先发播放器给的 32 字节令牌，没有令牌的连接被播放器丢弃（本机任何进程都能连回环端口）。协议上 `producer.prepare` 的答复相应是 `socket: "<路径>"` 或 `socket: "tcp://127.0.0.1:<端口>"` 加 `token`（十六进制）。
+
 ### 5.3 条件提交（`ifCurrent`）
 
 **控制操作作用于插件看到的状态。**
@@ -794,7 +796,7 @@ dialogs.confirm(options: {
 ```
 
 - macOS：系统提示框（`NSAlert`），以当前活动的播放器窗口（发起确认的工具窗口、浮动侧栏，通常就是用户刚点按钮的窗口）为父窗口的表单（sheet），没有活动窗口时挂主窗口；都不可用时为应用模态窗口。`confirmed`：用户点了确认按钮；`checked`：复选框的状态（没有复选框为 `false`，取消时也如实返回）。长度按 Unicode 字符计（一个汉字一个字符），超出 `invalid`。
-- Windows：系统消息框，挂在当前活动的播放器窗口（没有时挂主窗口）。正文是 `message`，有 `detail` 时空一行接在后面，标题栏是「Vestra」；按钮是系统的「确定」「取消」（自定义按钮文字需要 comctl32 v6 与应用清单，打包时再做，`confirm`、`cancel` 暂不显示）；`destructive` 显示警告图标。有 `checkbox` 时，用户点「确定」后再弹一个「是 / 否」消息框，正文为复选框文字，选「是」即 `checked: true`；取消时不再询问，`checked` 为 `false`。
+- Windows：系统任务对话框（`TaskDialogIndirect`，播放器的可执行文件内嵌 Common Controls v6 的应用清单），挂在当前活动的播放器窗口（没有时挂主窗口）。正文是 `message`，有 `detail` 时空一行接在后面，标题栏是「Vestra」；按钮文字是 `confirm`、`cancel`（两者相同时取消按钮末尾多一个看不见的空格，以区分答复）；`destructive` 显示警告图标；按 Esc 或关闭对话框等于取消。有 `checkbox` 时，用户确认后再弹一个「是 / 否」对话框，正文为复选框文字，选「是」即 `checked: true`；取消时不再询问，`checked` 为 `false`。
 - 其它系统 `unsupported`。
 - 「不再询问」之类的记忆由插件自己保存（`storage.json`），播放器不记。
 - 测试：`host.dialogAnswers.push({ confirmed, checked })`；`host.confirms` 记录每次的选项。
@@ -1039,7 +1041,7 @@ interface ExportJob extends Disposable {
 - `JobState.status`：`queued`、`running`、`cancelling`、`completed`、`failed`、`cancelled`。终态时 `outcome` 为 `{ destination }`、`{ error: { code, message } }` 或 `{ cancelled: true }`。
 - 导出在播放器的离线工作进程中独立解码，不影响播放。目标文件已存在时不覆盖。
 - 单帧格式：`png`（RGB 24 位）；`jpeg`（RGB，`quality` 为 1–100 的整数，默认 90，其它值 `invalid`）；`bmp`（24 位 RGB，与 PNG 逐像素相同）。JPEG 与 BMP 由播放器从校验过的 PNG 转换，转换完成后才发布到 `destination`（同样不覆盖已有文件），中间文件由播放器删除。扩展名不决定格式，插件按 `format` 自己命名。
-- Windows：截图导出目前不可用（任务以 `failed` 结束）：离线工作进程把持有的源文件经 Unix 文件描述符接到 FFmpeg，Windows 版尚未实现（可移植性轮任务单 §4.2）。
+- Windows：与 macOS 相同。离线工作进程照样把持有的源文件接到 FFmpeg 的标准输入，FFmpeg 用 `fd:` 协议读它（macOS、Linux 是 `/dev/fd/0`），所以 Windows 需要 FFmpeg 6.1 或更新（更早的版本没有 `fd` 协议，任务以 `failed` 结束，`message` 是 FFmpeg 的错误）。`ffprobe` 在 FFmpeg 同一目录下找 `ffprobe.exe`。
 - 同一快照可多次导出；用完 `dispose()`。
 
 ## 11. 网络地址解析 `plugin.resolvers`
@@ -1161,7 +1163,7 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 | 断言 | `host.window(id).props`（kebab-case 名）、`.visible`；`host.command(id).state`、`.declaration`；`host.conflicts`（`[绑定, 赢家, ...被压下]`）；`host.layout.bottom` / `.sidebar`（可直接改后 `host.emit("window.state", {})` 模拟别处的变化）；`host.osd`（显示过的提示）、`host.osdPanel`；`host.sequence`（提供者的标志）；`host.menus`（`showMenu` 记录）；`host.sent(method)`；`host.source`；`host.processing`、`host.subtitles`、`host.snapshots`、`host.jobs`、`host.producers` |
 | 模拟数据 | `host.stats`（`player.stats()` 的返回值，第 2 轮新增字段可省略，SDK 补 `null`）；`host.dataDirectory`（`plugin.dataDirectory`，`storage.json` 直接读写其中的真实文件）；`host.setSource({ audioTracks })`（`addAudioTrack` / `selectAudioTrack` 有默认处理，可用 `host.handle("audio.addTrack" \| "audio.selectTrack", …)` 注入失败）；`host.subtitles.tracks` 的条目可带 `codec`、`text`、`streamIndex` |
 | 通用能力 | `host.clipboard`（`{ text, images }`，预置 `text` 测 `readText`）；`host.power`（合并后的 `"off"` / `"playing"`）；`host.tools.handle(tool, (args) => ({ stdout, stderr }))`（未注入的工具 `unavailable`；抛 `HostError` 模拟失败），`host.tools.calls`；`host.system.revealed`、`.opened`（播放器收到的 `system.reveal` / `openPath` 路径；用 `host.handle("system.openPath", …)` 等注入失败）；`host.subtitleLoads`（每次 `load` 的 `format`、`title`、`select` 与字节）；`host.system.urls`（`system.openUrl`） |
-| 渲染轮 | `host.videoRender`（`{ owner, values, gpu }`；`gpu: false` 模拟软件渲染，`set` 以 `unsupported` 失败）；`host.setVideoRenderOwner(pluginId \| null)`；`host.failVideoRender("failed" \| "unsupported", message)`（播放器推给拥有者的失败：着色器编译失败、退回软件渲染）；`host.stats.video` 可带 `hwdec`、`transfer`。着色器文件是否存在按真实文件系统检查 |
+| 渲染轮 | `host.videoRender`（`{ owner, values, gpu }`；`gpu: false` 模拟软件渲染，`set` 以 `unsupported` 失败）；`host.setVideoRenderOwner(pluginId \| null)`；`host.failVideoRender("failed" \| "unsupported", message)`（播放器推给拥有者的失败：着色器编译失败、退回软件渲染）；`host.stats.video` 可带 `hwdec`、`transfer`。着色器文件是否存在按真实文件系统检查；`host.producerTransport = "tcp"`（`openStream` 走回环 TCP 加令牌，如 Windows；`producer.admitted` 表示令牌正确） |
 | 可移植性轮 | `host.secrets`（`Map`：名称 → 值，可预置）；`host.systemInfo`（`app.system()` 的返回值）；`host.exports`（每次 `jobs.start` 的参数：`kind` 为 `rawPng`、`rawJpeg`、`rawBmp`、`rawMp4` 或对应的 `processed…`，JPEG 带 `quality`） |
 | 上限 | `commands.register` 按播放器的同一套命令上限拒绝（`limit`，§4）：本插件最多 `COMMAND_LIMITS.perPlugin` 条，总量把 `host.coreCommands` 算在内 |
 | 第 4a 轮批次 2 | `host.videoView`（`{ owner, values }`：拥有者插件 id 与播放器持有的值）；`host.setVideoViewOwner(pluginId \| null)`（模拟别的插件先占用显示层，`null` 释放并复位） |
@@ -1300,20 +1302,28 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | --- | --- | --- | --- |
 | 剪贴板 §16.1 | 文本、PNG/JPEG 原字节 | 文本；图片转为位图与 PNG | `unsupported` |
 | 阻止休眠 §16.2 | `caffeinate` | 线程执行状态 | 不生效 |
-| 确认框 §7 | `NSAlert` 表单，自定义按钮与复选框 | 消息框，系统按钮；复选框改为第二个是/否框 | `unsupported` |
+| 确认框 §7 | `NSAlert` 表单，自定义按钮与复选框 | 任务对话框，自定义按钮；复选框改为第二个是/否框 | `unsupported` |
 | 置顶 §6.6 | `NSFloatingWindowLevel` | 总在最前 | `unavailable` |
 | `setVideoArea` §6.6 | 可见区不含菜单栏与 Dock | 按整个显示器 | `unavailable` |
 | 拖放 §6.7 | 指针与 ⌥⇧⌘ | 指针与 Alt、Shift、Ctrl（作 `cmd`） | 只按视频区规则分发 |
 | `system.*` §16.5 | `open`，一个 Finder 窗口选中全部 | Shell，每个文件夹一个窗口 | `unsupported` |
 | 密钥 §16.6 | 登录钥匙串 | 凭据管理器 | `unsupported` |
 | `app.system()` §3.5 | 版本、构建、机型、显示器 | 版本、构建、机型、显示器 | 只有 `os`、`arch`、显示器 |
-| 截图导出 §10 | 可用 | 暂不可用（`failed`） | 同 macOS |
-| 生成流 `openStream` | 可用 | 暂不可用（`unsupported`） | 同 macOS |
+| 截图导出 §10 | 可用 | 可用（需要 FFmpeg 6.1+） | 同 macOS |
+| 生成流 `openStream` §5.2 | Unix 套接字 | 回环 TCP 加令牌 | 同 macOS |
 | 渲染 §5.4 | GPU 渲染（OpenGL），硬件解码 | 软件渲染，不开硬件解码 | 同 Windows |
 | 渲染选项 §8.2 | 可用（`peakDetect` 不起作用） | `unsupported` | `unsupported` |
 | 绑定 §4.1 | `Ctrl` 也认 ⌘ | `Cmd` 是徽标键 | 同 Windows |
 
 ## 17. 变更说明
+
+### 渲染轮：Windows 缺口（2026-10）
+
+只影响 Windows（macOS 行为不变；Windows 仍只做了交叉编译检查，没有在真机运行）：
+
+- 截图与片段导出（§10）可用了：FFmpeg 用 `fd:` 读持有的源文件，需要 FFmpeg 6.1 或更新。
+- 生成流 `openStream`（§5.2）可用了：回环 TCP 加令牌，由 SDK 处理。协议上 `producer.prepare` 的答复可能是 `socket: "tcp://127.0.0.1:<端口>"` 加 `token`；自己实现协议的代码要先发令牌。`TestHost` 新增 `host.producerTransport = "tcp"` 用来测试这条路径（假生成端校验令牌，`producer.admitted`）。
+- 确认框（§7）显示插件给的按钮文字（任务对话框；可执行文件内嵌应用清单）。
 
 ### 渲染轮：GPU 渲染、硬件解码、渲染选项（2026-10）
 

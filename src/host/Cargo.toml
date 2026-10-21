@@ -58,6 +58,11 @@ arboard = { version = "=3.7.0", default-features = false, features = ["image-dat
 keyring = { version = "=3.6.3", features = ["windows-native"] }
 opener = { version = "=0.9.0", features = ["reveal"] }
 windows-registry = "0.6"
+# Confirmation buttons with the plugin's own labels (TaskDialogIndirect, needs
+# Common Controls v6: build.rs embeds the application manifest).
+rfd = { version = "0.17.2", features = ["common-controls-v6"] }
+# The loopback stream transport's token (platform/mod.rs `av_tcp`).
+getrandom = "=0.3.4"
 vestra-win32 = { path = "unsafe/win32" }
 
 # ICU4X prints every data-fallback warning with eprintln! when debug_assertions are on.

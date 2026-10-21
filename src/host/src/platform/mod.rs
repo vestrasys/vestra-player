@@ -19,6 +19,8 @@
 //! | files and links | `reveal`, `open_path`, `open_url` (blocking, run on a worker thread) |
 //! | secrets | `secret_get`, `secret_set`, `secret_delete` (blocking) |
 //! | facts | `os_facts` (blocking), `displays` (UI thread), `app_data_dir`, `ui_font`, `default_ffmpeg`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD` |
+//! | generated streams | `av_listen` → `AvListener` / `AvStream` (Unix: `av_unix` below; Windows: `av_tcp`) |
+//! | offline media | `HELD_FILE_INPUT` (how FFmpeg names its stdin, the held source file) |
 //! | rendering | `GPU_RENDER`, `gpu_start` → `GpuRenderer` / `GpuHandle` (macOS: `vestra-gpu-render`; elsewhere `no_gpu` below refuses, so the host renders in software) |
 //!
 //! Window rectangles are logical points. macOS uses the Cocoa lower-left
@@ -172,16 +174,16 @@ fn unsupported(what: &str) -> crate::RpcError {
 }
 
 /// GPU rendering on systems without an implementation yet (Windows, Linux):
-/// `gpu_start` refuses and the host renders in software. The types have no
-/// values, so their methods can never run.
+/// `gpu_start` refuses, so the host renders in software and never holds a
+/// `GpuHandle`; its methods are inert.
 #[cfg(not(target_os = "macos"))]
 mod no_gpu {
     use std::sync::{Arc, atomic::AtomicBool};
 
     pub const GPU_RENDER: bool = false;
-    pub enum GpuRenderer {}
+    pub struct GpuRenderer(());
     #[derive(Clone)]
-    pub enum GpuHandle {}
+    pub struct GpuHandle(());
     pub fn gpu_start(
         _mpv: Arc<rsmpv::Mpv>,
         _size: (u32, u32),
@@ -194,40 +196,162 @@ mod no_gpu {
     }
     impl GpuRenderer {
         pub fn handle(&self) -> GpuHandle {
-            match *self {}
+            GpuHandle(())
         }
     }
     impl GpuHandle {
-        pub fn set_size(&self, _size: (u32, u32)) {
-            match *self {}
-        }
-        pub fn set_display_fps(&self, _fps: Option<f64>) {
-            match *self {}
-        }
+        pub fn set_size(&self, _size: (u32, u32)) {}
+        pub fn set_display_fps(&self, _fps: Option<f64>) {}
         pub fn frames(&self) -> u64 {
-            match *self {}
+            0
         }
         pub fn shown(&self) -> u64 {
-            match *self {}
+            0
         }
         pub fn size(&self) -> Option<(u32, u32)> {
-            match *self {}
+            None
         }
-        pub fn reshow(&self) {
-            match *self {}
-        }
+        pub fn reshow(&self) {}
         pub fn attach<T: slint::ComponentHandle + 'static>(
             &self,
             _component: &T,
             _show: impl Fn(&T, slint::Image) + 'static,
             _failed: impl FnOnce(String) + 'static,
         ) -> Result<(), String> {
-            match *self {}
+            Err("GPU rendering is not available".into())
         }
     }
 }
 #[cfg(not(target_os = "macos"))]
 pub use no_gpu::*;
+
+/// `openStream`'s local transport on Unix (macOS, Linux): a Unix socket in a
+/// fresh private directory under `/tmp` (macOS limits socket paths to 104
+/// bytes). The answer to `producer.prepare` carries its path as `socket`.
+#[cfg(unix)]
+mod av_unix {
+    use std::io::{self, Read};
+    use std::os::unix::net::{UnixListener, UnixStream};
+    use std::time::Duration;
+
+    pub struct AvListener {
+        listener: UnixListener,
+        _directory: tempfile::TempDir,
+    }
+    pub struct AvStream(UnixStream);
+    pub fn av_listen() -> io::Result<(AvListener, serde_json::Value)> {
+        let directory = tempfile::Builder::new()
+            .prefix("vestra-av-")
+            .tempdir_in("/tmp")?;
+        let path = directory.path().join("av.sock");
+        let listener = UnixListener::bind(&path)?;
+        listener.set_nonblocking(true)?;
+        let address = serde_json::json!({ "socket": path });
+        Ok((
+            AvListener {
+                listener,
+                _directory: directory,
+            },
+            address,
+        ))
+    }
+    impl AvListener {
+        /// The plugin's connection, `None` while it has not connected.
+        pub fn accept(&self) -> io::Result<Option<AvStream>> {
+            match self.listener.accept() {
+                Ok((stream, _)) => {
+                    // macOS hands out accepted sockets non-blocking like the
+                    // listener; reads use a timeout instead.
+                    stream.set_nonblocking(false)?;
+                    Ok(Some(AvStream(stream)))
+                }
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => Ok(None),
+                Err(error) => Err(error),
+            }
+        }
+    }
+    impl AvStream {
+        pub fn set_read_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
+            self.0.set_read_timeout(timeout)
+        }
+    }
+    impl Read for AvStream {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            self.0.read(buffer)
+        }
+    }
+}
+#[cfg(unix)]
+pub use av_unix::*;
+
+/// `openStream`'s local transport where there are no Unix sockets for Node
+/// (Windows): TCP on the loopback interface. Any local process can connect to
+/// a loopback port, so the plugin first sends the 32-byte `token` from the
+/// `producer.prepare` answer; connections without it are dropped. Plain std,
+/// so its tests run everywhere.
+#[cfg_attr(not(windows), allow(dead_code))]
+mod av_tcp {
+    use std::io::{self, Read};
+    use std::net::{Ipv4Addr, TcpListener, TcpStream};
+    use std::time::Duration;
+
+    pub const TOKEN_BYTES: usize = 32;
+    pub struct AvListener {
+        listener: TcpListener,
+        token: [u8; TOKEN_BYTES],
+    }
+    pub struct AvStream(TcpStream);
+    /// `{ socket: "tcp://127.0.0.1:<port>", token: "<64 hex digits>" }`.
+    pub fn listen(token: [u8; TOKEN_BYTES]) -> io::Result<(AvListener, serde_json::Value)> {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
+        listener.set_nonblocking(true)?;
+        let port = listener.local_addr()?.port();
+        let hex: String = token.iter().map(|byte| format!("{byte:02x}")).collect();
+        let address = serde_json::json!({
+            "socket": format!("tcp://127.0.0.1:{port}"),
+            "token": hex,
+        });
+        Ok((AvListener { listener, token }, address))
+    }
+    impl AvListener {
+        /// The plugin's connection once it sent the token; `None` while
+        /// nobody connected, or for a connection without the token.
+        pub fn accept(&self) -> io::Result<Option<AvStream>> {
+            let mut stream = match self.listener.accept() {
+                Ok((stream, _)) => stream,
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => return Ok(None),
+                Err(error) => return Err(error),
+            };
+            // Accepted sockets inherit the listener's non-blocking mode on Windows.
+            stream.set_nonblocking(false)?;
+            stream.set_nodelay(true)?;
+            stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+            let mut token = [0; TOKEN_BYTES];
+            if stream.read_exact(&mut token).is_err() || token != self.token {
+                return Ok(None);
+            }
+            Ok(Some(AvStream(stream)))
+        }
+    }
+    impl AvStream {
+        pub fn set_read_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
+            self.0.set_read_timeout(timeout)
+        }
+    }
+    impl Read for AvStream {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            self.0.read(buffer)
+        }
+    }
+}
+#[cfg(windows)]
+pub use av_tcp::{AvListener, AvStream};
+#[cfg(windows)]
+pub fn av_listen() -> std::io::Result<(AvListener, serde_json::Value)> {
+    let mut token = [0; av_tcp::TOKEN_BYTES];
+    getrandom::fill(&mut token).map_err(|error| std::io::Error::other(error.to_string()))?;
+    av_tcp::listen(token)
+}
 
 /// `secrets.*` on systems with a keyring backend: the login keychain
 /// (generic passwords) on macOS, the Credential Manager on Windows.
@@ -300,5 +424,77 @@ mod tests {
         };
         assert!(scale.checked().is_err());
         assert!(["macos", "windows", "linux", "other"].contains(&os_name()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_unix_stream_transport_hands_over_a_blocking_connection_with_timeouts() {
+        use std::io::{Read, Write};
+        use std::os::unix::net::UnixStream;
+        use std::time::{Duration, Instant};
+        let (listener, address) = av_listen().unwrap();
+        let path = std::path::PathBuf::from(address["socket"].as_str().unwrap());
+        assert!(path.starts_with("/tmp") && address.get("token").is_none());
+        assert!(listener.accept().unwrap().is_none(), "nobody yet");
+        let mut plugin = UnixStream::connect(&path).unwrap();
+        let mut stream = loop {
+            if let Some(stream) = listener.accept().unwrap() {
+                break stream;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        };
+        stream
+            .set_read_timeout(Some(Duration::from_millis(50)))
+            .unwrap();
+        // No data: the read waits for the timeout instead of returning at once.
+        let start = Instant::now();
+        let mut byte = [0; 1];
+        assert!(stream.read(&mut byte).is_err());
+        assert!(
+            start.elapsed() >= Duration::from_millis(40),
+            "spinning read"
+        );
+        plugin.write_all(b"V").unwrap();
+        assert_eq!(stream.read(&mut byte).unwrap(), 1);
+        drop(listener);
+        assert!(
+            !path.exists(),
+            "the private directory goes with the listener"
+        );
+    }
+
+    #[test]
+    fn the_loopback_stream_transport_admits_only_the_token() {
+        use std::io::{Read, Write};
+        use std::net::TcpStream;
+        let token = [7; av_tcp::TOKEN_BYTES];
+        let (listener, address) = av_tcp::listen(token).unwrap();
+        assert_eq!(address["token"].as_str().unwrap(), "07".repeat(32));
+        let port = address["socket"]
+            .as_str()
+            .and_then(|s| s.strip_prefix("tcp://127.0.0.1:"))
+            .and_then(|port| port.parse::<u16>().ok())
+            .unwrap();
+        let accept = || loop {
+            match listener.accept() {
+                Ok(None) => std::thread::sleep(std::time::Duration::from_millis(5)),
+                other => return other,
+            }
+        };
+        assert!(listener.accept().unwrap().is_none(), "nobody yet");
+        let mut stranger = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        stranger.write_all(&[0; av_tcp::TOKEN_BYTES]).unwrap();
+        // The stranger is read and dropped: the next accept sees nothing.
+        let first = std::time::Instant::now();
+        while first.elapsed() < std::time::Duration::from_millis(200) {
+            assert!(listener.accept().unwrap().is_none(), "wrong token admitted");
+        }
+        let mut plugin = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        plugin.write_all(&token).unwrap();
+        plugin.write_all(b"VAV1").unwrap();
+        let mut stream = accept().unwrap().expect("the token's connection");
+        let mut header = [0; 4];
+        stream.read_exact(&mut header).unwrap();
+        assert_eq!(&header, b"VAV1");
     }
 }

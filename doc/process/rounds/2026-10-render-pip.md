@@ -90,3 +90,21 @@ top -l 21 -s 1 -pid $PID -stats cpu | awk '/^%CPU/{getline v; n++; if(n>1){s+=v;
 | R9 | 截图：`--snapshot` 或含效果截图 | 记录截图里是否有视频（GPU 纹理是否进 `take_snapshot`，原型未验证；插件的截图走离线 FFmpeg，不受影响） |
 
 **检查**（macOS，均实际执行）：`src/`：`npm run check`、`format:check`、`boundaries` 通过；`test:sdk` 102 通过（新增 `tests/sdk/render.test.ts` 5 项）；`plugins:build` 通过；19 个插件测试共 488 通过、0 失败（workshop 的 `vendor/sdk` 已重同步）；`npm run portability`：`portability: clean`（Windows 目标下宿主编译通过，GPU 部分走 `no_gpu`）。`src/host/`：`cargo fmt --check` 通过；`cargo clippy --locked --all-targets -- -D warnings` 通过（另跑 `--features pip` 与 `-p vestra-gpu-render` 也通过）；`cargo test --locked` 240 通过；`cargo test -p vestra-gpu-render` 2 通过；`grep -rnw unsafe src/host/src` 为空。未执行：GUI（按约定由协调者做）、HDR 片源实测（本机没有 HDR10 片源）。
+
+### 3.2 A 线交付二：Windows 缺口（维护者甲，2026-10-21，提交「Windows gaps: …」）
+
+按[可移植性任务单](2026-10-portability.md) §4.2 的三项。本机只能交叉编译检查，Windows 上没有运行过。
+
+| 缺口 | 做法 | 位置 |
+| --- | --- | --- |
+| 截图与片段导出 | 离线工作进程照旧把持有的源文件作为 FFmpeg 的标准输入（租约、前后校验不变），只是输入名由平台模块给：Unix `/dev/fd/0`，Windows `fd:`（FFmpeg 6.1 起的 `fd` 协议，可以对文件句柄 seek；`pipe:` 不行）。`encode`、MP4 校验、内嵌字幕提取去掉 `cfg(unix)`，删掉 Windows 的「不可用」桩；`ffprobe` 按 `EXE_SUFFIX` 找同目录的 `ffprobe.exe` | `platform::HELD_FILE_INPUT`；`media_worker.rs`、`native_subtitle.rs` |
+| `openStream` | 传输放进平台模块：Unix 仍是 `/tmp` 私有目录下的 Unix 套接字（`av_unix`）；Windows 是回环 TCP（`av_tcp`，只用 std），因为 Node 在 Windows 上不支持 Unix 套接字路径。本机任何进程都能连回环端口，所以播放器生成 32 字节随机令牌（`getrandom`，锁文件里已有的 0.3.4），SDK 连上后先发令牌，令牌不对的连接直接丢弃。`producer.prepare` 的答复多一个可选字段 `token`，`socket` 为 `tcp://127.0.0.1:<端口>`；SDK 按地址形态连接（`connectTo`），不按 `process.platform` 判断。顺带：Unix 上接受的连接改回阻塞模式（macOS 会继承监听端的非阻塞，原来的读超时形同虚设，读循环会空转） | `platform/mod.rs` 的 `av_unix`、`av_tcp`、`av_listen`；`producer.rs` 去掉全部 `cfg(unix)`；`sdk/producer.ts` |
+| 确认框按钮文字 | rfd 打开 `common-controls-v6`（`TaskDialogIndirect`，可以自定义按钮），`build.rs` 在 MSVC 目标上用链接参数 `/MANIFEST:EMBED /MANIFESTINPUT:windows/vestra.manifest` 嵌入 Common Controls v6 的应用清单（没有清单时打开这个特性的程序启动不了）。不引入新 crate。两个按钮文字相同时，取消按钮末尾加一个不换行空格，答复才不会混淆（`confirm::button_labels` / `confirmed_by`，有单元测试）。复选框仍是第二个「是 / 否」对话框（rfd 不提供任务对话框的复选框） | `Cargo.toml`、`build.rs`、`windows/vestra.manifest`、`platform/windows.rs`、`confirm.rs` |
+
+另外：Windows 目标下宿主的警告从 3 条减到 1 条（`no_gpu` 改成无效果的普通类型，不再产生「不可达代码」；`media_worker` 的取消测试不再限于 Unix）。剩下的 1 条是 `source_backend.rs` 的 `playback` 字段（`fd://` 租约，§4.2 表里的另一项，不在本轮范围）。
+
+**SDK / TestHost / 文档**：`PreparedProducer.token?`、`connectTo`；`TestHost.producerTransport = "tcp"`（假生成端校验令牌，`producer.admitted`）；新增 `tests/sdk/windows-gaps.test.ts`（2 项：TCP 加令牌的 `openStream` 全流程、`connectTo` 只把 `tcp://127.0.0.1:` 当回环地址）；宿主新增测试：回环传输只接受带令牌的连接、按钮文字区分。参考文档 §5.2（传输）、§7（Windows 任务对话框）、§10（Windows 导出与 FFmpeg 6.1）、§14、§16.7、§17「渲染轮：Windows 缺口」。
+
+**给协调者**：没有 Windows 机器，以下只能等有 Windows 环境时验证：(1) 链接后的 `vestra-host.exe` 能启动（清单已嵌入：`mt.exe -inputresource:vestra-host.exe;#1 -out:m.xml` 能导出含 `Microsoft.Windows.Common-Controls` 的清单）；(2) 插件确认框显示自定义按钮；(3) 截图导出（`VESTRA_FFMPEG` 指向 6.1+ 的 `ffmpeg.exe`）；(4) NES 生成流出画面和声音。macOS 上这次提交的行为不变（生成流的读循环不再空转除外），回归可以只看 R6（NES）和一次插件截图导出。
+
+**检查**（macOS，均实际执行）：`src/`：`npm run check`、`format:check`、`boundaries` 通过；`test:sdk` 104 通过；`plugins:build` 通过；19 个插件测试共 488 通过、0 失败（workshop 的 `vendor/sdk` 已重同步；前任两次整套运行中各有一个计时类测试偶发失败，playback 一次、subtitles「上传中取消」一次，单独重跑都通过；接手后重新整套运行一次全部通过）；`npm run portability`：`OK: the host compiles for Windows`，`portability: clean`。`src/host/`：`cargo fmt --check` 通过；`cargo clippy --locked --all-targets -- -D warnings` 通过（另跑 `--features pip`）；`cargo test --locked` 243 通过；`grep -rnw unsafe src/host/src` 为空。未执行：Windows 链接与运行（没有 MSVC 链接器和 Windows 环境）。

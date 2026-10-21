@@ -380,11 +380,9 @@ fn validate_png(temp: &tempfile::NamedTempFile) -> Result<()> {
     Ok(())
 }
 
-#[cfg(unix)]
 fn capture_command(command: &mut Command, control: &Control) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
     capture_input_command(command, Stdio::null(), control)
 }
-#[cfg(unix)]
 fn capture_input_command(
     command: &mut Command,
     stdin: Stdio,
@@ -454,7 +452,6 @@ fn capture_input_command(
     }
 }
 
-#[cfg(unix)]
 fn validate_mp4(
     request: &RenderRequest,
     temp: &tempfile::NamedTempFile,
@@ -503,11 +500,7 @@ fn validate_mp4(
     match result? {
         ChildResult::Cancelled => Ok(false),
         ChildResult::Exited(status) if status.success() => {
-            let probe = request
-                .ffmpeg
-                .parent()
-                .context("FFmpeg directory missing")?
-                .join("ffprobe");
+            let probe = sibling(&request.ffmpeg, "ffprobe")?;
             let mut command = Command::new(probe);
             command.args(["-v","error","-show_entries","stream=index,codec_name,codec_type,width,height,sample_rate,channels,channel_layout,duration,r_frame_rate:format=duration","-of","json"]).arg(temp.path());
             let Some((stdout, _)) = capture_command(&mut command, control)? else {
@@ -552,7 +545,12 @@ fn validate_mp4(
     }
 }
 
-#[cfg(unix)]
+/// FFmpeg's sibling tool (`ffprobe`, with `.exe` on Windows).
+fn sibling(ffmpeg: &std::path::Path, tool: &str) -> Result<std::path::PathBuf> {
+    let directory = ffmpeg.parent().context("FFmpeg directory missing")?;
+    Ok(directory.join(format!("{tool}{}", std::env::consts::EXE_SUFFIX)))
+}
+
 fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
     if !request.time.is_finite() || request.time < 0.0 {
         bail!("raw PNG time must be finite and nonnegative");
@@ -581,11 +579,7 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
     if control.status() == Status::Cancelling {
         return Ok(Outcome::Cancelled);
     }
-    let probe = request
-        .ffmpeg
-        .parent()
-        .context("FFmpeg directory missing")?
-        .join("ffprobe");
+    let probe = sibling(&request.ffmpeg, "ffprobe")?;
     let mut origin_command = Command::new(probe);
     origin_command.args([
         "-v",
@@ -594,7 +588,7 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
         "format=start_time",
         "-of",
         "json",
-        "/dev/fd/0",
+        crate::platform::HELD_FILE_INPUT,
     ]);
     let Some((origin, _)) = capture_input_command(&mut origin_command, reader.stdin()?, control)?
     else {
@@ -721,7 +715,7 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
     if request.processed.is_none() && matches!(&request.output, Output::Still(_)) {
         command.args(["-ss", &request.time.to_string()]);
     }
-    command.args(["-i", "/dev/fd/0"]);
+    command.args(["-i", crate::platform::HELD_FILE_INPUT]);
     match &request.output {
         Output::Still(_) => {
             command.args(["-map", &format!("0:{}", request.video_stream)]);
@@ -886,11 +880,6 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
     Ok(Outcome::Completed { destination })
 }
 
-#[cfg(not(unix))]
-fn encode(_request: &RenderRequest, _control: &Control) -> Result<Outcome> {
-    bail!("raw PNG held-file stdin input is unavailable on this platform")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -954,7 +943,6 @@ mod tests {
         assert!(publication_started);
     }
 
-    #[cfg(unix)]
     #[test]
     fn cancellation_interrupts_wait_for_shared_stdin_reader_without_starting_encoder() {
         let dir = tempfile::tempdir().unwrap();

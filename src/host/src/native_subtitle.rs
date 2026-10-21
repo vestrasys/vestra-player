@@ -172,9 +172,6 @@ pub fn extract(
     if cancelled() {
         return Ok(None);
     }
-    if !cfg!(unix) {
-        bail!("native subtitle leased fd input is unavailable on this platform");
-    }
     let child = Command::new(ffmpeg)
         .args([
             "-nostdin",
@@ -185,7 +182,7 @@ pub fn extract(
             "-copyts",
             "-start_at_zero",
             "-i",
-            "/dev/fd/0",
+            crate::platform::HELD_FILE_INPUT,
             "-map",
         ])
         .arg(format!("0:{stream}"))
