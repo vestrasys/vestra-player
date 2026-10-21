@@ -636,7 +636,7 @@ interface SlotState {
 
 - 同一时间只有一个背景层，第二个插件挂载以 `conflict` 失败；插件停用时卸载。组件与 global 推断规则同上，`title` 不用。
 - 什么时候显示（`state.effective`）由播放器决定：来源阶段 `empty`，或 `ready` / `ended` 且 mpv 没有输出画面（即 `stats().video === null`）时为 `true`；`loading`、`error` 保持上一状态（换文件时不闪烁）；有画面时为 `false`。画什么由插件按 `player.state.phase` 与 `stats().video` 自己决定（没有 `mode`）。
-- 带封面的音频文件：mpv 把封面当作视频轨显示，此时 `effective` 为 `false`，看到的是 mpv 渲染的封面（已知行为，不算缺陷）。
+- 带封面的音频文件：挂着背景层时，播放器让 mpv 不把封面（内嵌图片、同目录的 cover.jpg 等）选作视频轨（`audio-display=no`、`cover-art-auto=no`），所以 `stats().video` 为 `null`、`effective` 为 `true`，封面由背景层插件自己画（例如读文件的内嵌图片）；从挂载后打开的下一个文件起生效。背景层卸载（`dispose` 或插件停用）后恢复 mpv 默认（`embedded-first`、`exact`），mpv 重新显示封面。
 - 层次：在视频区的输入层之下、屏幕提示与信息块之下；不接收指针和键盘，双击全屏、右键菜单、滚轮照常由视频区处理。`showMenu` 以 `unavailable` 失败，`setInteraction` 无效果。
 - 关闭来源（`empty`）后视频区不再保留最后一帧：没有背景层时是 `Theme.bg-video` 纯色。
 - 没有 `events` 时 `state` 只在本插件自己挂载后刷新。测试：`host.backdrop`（`{ owner, effective }`，挂载时 `effective: true`）；`host.setBackdropEffective(bool)` 模拟画面出现或消失并推送。
@@ -1322,3 +1322,7 @@ await plugin.player.setStepSeek({ seconds: settings.value.step }); // 第 1 档�
 - `plugin.video.view()`（§8.1）：宽高比、填充方式、缩放、平移；单一拥有者，需要 `processing.video`。
 - `Scope.video` 多了 `view`；`ViewSettings`、`VideoView` 类型。
 - 协议新增 `video.view.set { values }`（返回 `{ state: "applied" | "waiting" }`）与 `video.view.release`。
+
+### 第 3b 轮修正：背景层与封面（2026-10）
+
+- 挂着背景层时，mpv 不再把音频文件的封面选作视频轨（§6.3）；之前带封面的 MP3 让 `effective` 恒为 `false`，背景层插件的封面界面永远不出现。卸载后恢复 mpv 默认。签名不变；没有背景层的插件不受影响。
