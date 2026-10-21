@@ -261,3 +261,27 @@ layer (0,0 780x671) in (0,0 780x671) | frame (1560, 1342) | renderSize (780, 671
 **给协调者的复测**：重做 P1、P2（拖小窗放大缩小，画面应一直铺满）、P5、P8（视频 → 视频换成不同比例的片源，小窗形状跟着变）、G1、G2、G6；另外打开侧栏让视频区变竖长再开画中画（就是这次的场景）。需要数据时用 `VESTRA_PIP_LOG=1` 启动。
 
 **检查**（本机实际执行）：`src/host/` 下 `cargo fmt --check`、`cargo clippy --locked --all-targets -- -D warnings`、`cargo clippy --locked -p vestra-pip -p vestra-gpu-render --all-targets -- -D warnings` 通过；`cargo test --locked` 251 通过（新增 `render_target::picture_in_picture_renders_the_picture_shape_inside_the_area`）；`cargo test -p vestra-pip` 3 通过；`src/` 下 `npm run portability` clean；`grep -rnw unsafe src/host/src` 为空，`vestra-pip` 25 个 `unsafe` 块都有 `// SAFETY:`。GUI：上表 5 个场景由本机启动截图确认（宿主用一个临时测试插件打开 1080p 彩条片源并开关画中画，未提交）。TS 没有改动。
+
+## 4. 协调者验收（2026-10-21）
+
+**全部检查通过**：19 个插件测试（503 个）、test:sdk、cargo test（251 个）；`npm run portability` 结果 clean；宿主主包中 `unsafe` 为零。
+
+**GPU 渲染（release，默认开启）**：画面方向、颜色、全屏都正确，硬件解码走 videotoolbox。4K 片源宿主 CPU：
+
+| 4K | GPU 渲染 | 软件渲染（`VESTRA_SOFTWARE_RENDER=1`） |
+| --- | --- | --- |
+| 窗口 | 14% | 83% |
+| 全屏 | 18% | — |
+
+**HDR**：PQ 片源默认做色调映射；切到「关」立即生效，并出 OSD 提示。
+
+**画中画**：
+- 小窗为 16:9，画面完整铺满；拖大后仍然铺满；关闭后主窗口恢复。软件和 GPU 两条路径都正常。
+- 从 window 插件菜单「屏幕 ▶ 画中画」开启正常。
+- 根因是 macOS 26 下 AVKit 不缩放 sample-buffer 画中画，Apple 有同类反馈 FB22411168；做法是让源图层跟随小窗尺寸，并按画面自身比例渲染。
+
+**当场修复**：window 插件激活时主窗口还不存在，读到 supported=false；改为跟随 `onChange`。
+
+**未做**：
+- Windows 实机运行。
+- `menus.md` 未同步本轮新增的「像素着色 ▶」与「画中画」菜单。
