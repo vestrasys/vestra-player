@@ -1,4 +1,4 @@
-//! Experimental worker-only native plain-SRT extraction, not a final API.
+//! Worker-only native plain-SRT extraction (host-internal).
 //! Caller freezes native subrip/srt + lavf absolute stream index + zero demuxer
 //! start time, and holds its source Reader until this function has reaped the
 //! child. No ASS/SSA, mov_text, bitmap, unverified timeline, markup conversion

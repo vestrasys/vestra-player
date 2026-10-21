@@ -132,7 +132,7 @@ test("keys are saved in the player's secret store, never in settings.json", asyn
     await t.host.settle();
     await waitFor(() => service.props["status-text"] === "密钥有效（未登录，匿名下载次数较少）", "test result");
     assert.equal(fetch.calls[0]!.headers["Api-Key"], "SECRET");
-    assert.equal(fetch.calls[0]!.headers["User-Agent"], "Vestra v0.1.0");
+    assert.equal(fetch.calls[0]!.headers["User-Agent"], "Vestra Player v0.1.0");
     service.emit("save", "SECRET", "me", "pw");
     await t.host.settle();
     await waitFor(() => String(service.props["status-text"]).startsWith("已保存"), "saved");

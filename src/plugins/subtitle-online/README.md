@@ -13,7 +13,7 @@
 
 ## 服务与密钥
 
-- OpenSubtitles.com REST API（默认启用）：每个请求带用户自己的 `Api-Key` 与 `User-Agent: Vestra v0.1.0`；用户名、密码可选（登录得到的 token 只在内存里）。没有随插件发布的密钥。
+- OpenSubtitles.com REST API（默认启用）：每个请求带用户自己的 `Api-Key` 与 `User-Agent: Vestra Player v0.1.0`；用户名、密码可选（登录得到的 token 只在内存里）。没有随插件发布的密钥。
 - 射手网(伪) assrt.net（默认关闭）：用户自己的 token。
 - **没有密钥时不发任何请求**：「搜索与下载字幕…」直接打开设置窗口并说明如何申请。首次搜索前在下载窗口提示「搜索会把文件名关键字与文件哈希发送给所选服务」，同意后才发送（记在设置里）。
 - 密钥与密码存系统的密钥存储（`plugin.secrets`：macOS 登录钥匙串、Windows 凭据管理器，服务名 `vestra.subtitle-online`，与旧版写入的钥匙串项相同）；系统没有可用的存储（`unsupported` / `unavailable`）时存 `<dataDirectory>/secrets.json`（0600），没有数据目录时只在本次运行内记住。设置窗口写明位置。

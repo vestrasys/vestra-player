@@ -1,6 +1,6 @@
 # Vestra Player
 
-插件化的视频播放器：Rust 宿主 + Slint 原生界面 + TypeScript 插件，播放基于 libmpv。产品功能（播放栏、播放列表、画面调节、音频工作台、字幕、截图导出、NES 模拟器、YouTube、Bilibili、插件工坊）全部由插件实现，使用同一套公开插件 API。
+插件化的视频播放器：Rust 宿主 + Slint 原生界面 + TypeScript 插件，播放基于 libmpv。产品功能（播放栏、播放列表、画面调节、音频工作台、字幕、截图导出、NES 模拟器、YouTube、Bilibili、插件工坊（实验性））全部由插件实现，使用同一套公开插件 API。
 
 ```text
 src/host/       Rust 宿主

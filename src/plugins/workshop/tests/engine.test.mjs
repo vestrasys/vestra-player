@@ -24,7 +24,7 @@ for (const [version, step] of [["1.0.0", 1], ["1.1.0", 3]]) {
     assert.deepEqual(manifest, {
       id: "community.counter",
       version,
-      apiVersion: "vestra.experimental/0.1",
+      apiVersion: "vestra/1",
       entry: "main.js",
       capabilities: ["ui.window"],
     });

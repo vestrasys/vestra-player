@@ -1,4 +1,4 @@
-//! Experimental finite offline audio mapper; final public API may differ.
+//! Finite offline audio mapper (host-internal).
 //! This graph is a candidate for leading silence/negative-PTS handling, not
 //! evidence of backend acceptance, DSP latency compensation, or audible parity.
 #![forbid(unsafe_code)]

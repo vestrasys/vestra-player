@@ -366,7 +366,7 @@ export class KeysPage {
     if (!pending) return "";
     const target = this.#model.text(pending.target);
     if (pending.owners.some((o) => o.plugin === "host" && o.command === "quit"))
-      return `⌘Q 是退出 Vestra 的默认快捷键，确定改为「${target}」？`;
+      return `⌘Q 是退出 Vestra Player 的默认快捷键，确定改为「${target}」？`;
     const first =
       pending.owners.find((o) => !o.shadowed.some((s) => sameKey(s.input, pending.input))) ?? pending.owners[0]!;
     return `${label(pending.input)} 已用于「${commandText(first)}」`;
@@ -473,7 +473,7 @@ export class KeysPage {
   async #export() {
     let path: string | null;
     try {
-      path = await this.#plugin.dialogs.saveFile({ title: "导出快捷键列表", fileName: "Vestra 快捷键.csv" });
+      path = await this.#plugin.dialogs.saveFile({ title: "导出快捷键列表", fileName: "Vestra Player 快捷键.csv" });
     } catch (error) {
       return this.#say(`无法导出：${(error as Error).message}`, true);
     }

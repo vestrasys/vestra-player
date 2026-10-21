@@ -775,7 +775,7 @@ OSD：
 >
 > 行为第 1 条已被 [interaction-alignment.md](interaction-alignment.md) G-11 取代（拖到视频区先清空列表再加入并播放）；行为第 2 条、验收第 4 条已被 G-12 取代（拖到列表默认追加到末尾，「插入到拖放位置」为选项、默认关）。下文已按新规则改写。
 
-**需求**：从文件管理器（macOS 访达 Finder、Windows 资源管理器）把文件、文件夹或列表文件拖到 Vestra 主窗口（视频区）或播放列表侧栏（附着或浮动）上即可打开或加入。
+**需求**：从文件管理器（macOS 访达 Finder、Windows 资源管理器）把文件、文件夹或列表文件拖到 Vestra Player 主窗口（视频区）或播放列表侧栏（附着或浮动）上即可打开或加入。
 
 **入口**：拖放。无菜单、无快捷键。
 
@@ -2539,7 +2539,7 @@ manifest 能力从 `commands, playback.read, events, ui.osd` 增加为：`+ ui.w
 | --- | --- | --- | --- | --- |
 | 播放信息（勾选） | 810 | windows | Tab | 现有，不变 |
 | 播放属性… | 811 | windows | Ctrl+F1 | I05 |
-| 关于 Vestra… | 880 | windows | F1 | I09 |
+| 关于 Vestra Player… | 880 | windows | F1 | I09 |
 | （无菜单）简要信息 | — | — | Shift+Tab | I03，`path` 省略，`title: "简要信息"` |
 
 快捷键冲突检查：Shift+Tab、Ctrl+F1、F1 都不在 [menus.md](menus.md) 里。macOS 有两处要注意：⌃F1 默认是系统的「打开/关闭键盘访问」，可能被系统先截走，用户可以改按 ⌘F1（`Ctrl` 绑定接受 ⌘）；笔记本上 F1 要配合 fn 键。I03 不放进右键菜单，原因是 PotPlayer 把它放在「配置/语言/其他」深层菜单里，平时都按键使用。如果日后需要菜单入口，再统一审查。
@@ -2582,7 +2582,7 @@ manifest 能力从 `commands, playback.read, events, ui.osd` 增加为：`+ ui.w
 
 ### I05 播放属性对话框
 
-> 第 2 轮降级（裁决 R-P7、R-W6 排期）：`PlaybackStats` 不加 `hwdec`，「播放信息」页单列一行「硬件解码」，固定显示「未使用」（播放器固定软件解码），等 C-GPU 再接。**渲染轮已接上**：`PlaybackStats.video.hwdec`（mpv `hwdec-current`）随 GPU 渲染交付，「硬件解码」一行如实显示：正在用的硬件解码器原样显示（如 `videotoolbox`），`"no"`（软件解码；软件渲染、Windows / Linux 目前总是如此，GPU 渲染下 mpv 解不了的格式也是）显示「未使用」，播放器没有报告（`null`）时显示「-」；`plugin.app` 在 3a 交付，「系统信息」页的 Vestra、mpv、FFmpeg 版本暂显示「未知」（行保留）。系统信息里的系统版本、机型、显示器当时由插件用 macOS 命令读取；可移植性轮 P1 起改为 `plugin.app.system()`（参考文档 §3.5），CPU 与内存用 Node `os`，插件不再调用系统命令。
+> 第 2 轮降级（裁决 R-P7、R-W6 排期）：`PlaybackStats` 不加 `hwdec`，「播放信息」页单列一行「硬件解码」，固定显示「未使用」（播放器固定软件解码），等 C-GPU 再接。**渲染轮已接上**：`PlaybackStats.video.hwdec`（mpv `hwdec-current`）随 GPU 渲染交付，「硬件解码」一行如实显示：正在用的硬件解码器原样显示（如 `videotoolbox`），`"no"`（软件解码；软件渲染、Windows / Linux 目前总是如此，GPU 渲染下 mpv 解不了的格式也是）显示「未使用」，播放器没有报告（`null`）时显示「-」；`plugin.app` 在 3a 交付，「系统信息」页的 Vestra Player、mpv、FFmpeg 版本暂显示「未知」（行保留）。系统信息里的系统版本、机型、显示器当时由插件用 macOS 命令读取；可移植性轮 P1 起改为 `plugin.app.system()`（参考文档 §3.5），CPU 与内存用 Node `os`，插件不再调用系统命令。
 
 **需求**
 - 工具窗口「播放属性」，三个页签：
@@ -2597,7 +2597,7 @@ manifest 能力从 `commands, playback.read, events, ui.osd` 增加为：`+ ui.w
      - 章节数，以及元数据标签（标题、艺术家、专辑等）。
      - 内嵌资源：附件流（字体、封面）的文件名与 MIME 类型。
   3. **系统信息**
-     - Vestra 版本、插件 API 版本、mpv 版本、FFmpeg（libavcodec/libavformat）版本。
+     - Vestra Player 版本、插件 API 版本、mpv 版本、FFmpeg（libavcodec/libavformat）版本。
      - 系统版本（如「macOS 26.2（25C56）」「Windows 11 23H2（22631.4460）」）、机型、CPU（型号与核数）、内存总量与可用量、显示器（每台一行：名称 · 像素尺寸 · 逻辑尺寸 @ 刷新率，如「Color LCD · 2940 x 1912 · 1470 x 956 @ 60 Hz」；多台时编号「显示器 1」「显示器 2」）。
 - 底部按钮：`复制到剪贴板`、`保存为…`、`关闭`。复制和保存的是当前页签的纯文本，`键：值` 一行一条，分组之间空行。
 
@@ -2649,7 +2649,7 @@ manifest 能力从 `commands, playback.read, events, ui.osd` 增加为：`+ ui.w
   ```
 
   理由：这些是播放器解码时才有的实时状态（硬解是否生效、当前帧率、音画同步、缓冲）。ffprobe 只能看到文件，看不到正在解码的会话。这些值只有 mpv 有，只能由核心转发。
-- 【核心新增·3a】`plugin.app.info(): Promise<AppInfo>`（定义见 I09）。「系统信息」页的 Vestra、mpv、FFmpeg 版本来自它，3a 之前显示「未知」。系统名称、版本、构建号、机型与显示器来自 `plugin.app.system()`（可移植性轮 P1，参考文档 §3.5，不需要能力；系统不报告的项显示「-」），CPU 与内存由插件用 Node `os` 模块读取。
+- 【核心新增·3a】`plugin.app.info(): Promise<AppInfo>`（定义见 I09）。「系统信息」页的 Vestra Player、mpv、FFmpeg 版本来自它，3a 之前显示「未知」。系统名称、版本、构建号、机型与显示器来自 `plugin.app.system()`（可移植性轮 P1，参考文档 §3.5，不需要能力；系统不报告的项显示「-」），CPU 与内存由插件用 Node `os` 模块读取。
 
 **验收**
 - 播放 1080p H.264 + AAC 文件，按 Ctrl+F1，「播放信息」页显示解码器、1920×1080、帧率、采样率；「硬件解码」一行在 macOS GPU 渲染下为 `videotoolbox`，`VESTRA_SOFTWARE_RENDER=1` 或 `VESTRA_HWDEC=no` 启动时为「未使用」。
@@ -2666,15 +2666,15 @@ manifest 能力从 `commands, playback.read, events, ui.osd` 增加为：`+ ui.w
 > 第 2 轮不做，推到 3a（依赖 `plugin.app.info` / `onChange`、`packages.list`）。
 
 **需求**
-- 工具窗口「关于 Vestra」，内容：
+- 工具窗口「关于 Vestra Player」，内容：
   - 品牌 logo，96×96。
-  - 「Vestra」字样（13px 粗体）。
+  - 「Vestra Player」字样（13px 粗体）。
   - 版本行：`版本 0.x.y（构建 2026-10-20 abcdef0）`。
-  - 组件版本：插件 API `vestra.experimental/0.1`、mpv、FFmpeg（libavcodec / libavformat / libavfilter）、Slint、Node（宿主为插件使用的 Node）。
+  - 组件版本：插件 API `vestra/1`、mpv、FFmpeg（libavcodec / libavformat / libavfilter）、Slint、Node（宿主为插件使用的 Node）。
   - 已加载插件列表：插件 id、版本、来源（已安装 / 开发加载 / 试载）、状态（运行中 / 启动中 / 失败）。按 id 排序，可滚动。
 - 按钮：`复制信息`（全部文字放进剪贴板，供报告问题时粘贴）、`关闭`。
 
-**入口**：右键菜单顶层「关于 Vestra…」（880），快捷键 F1。
+**入口**：右键菜单顶层「关于 Vestra Player…」（880），快捷键 F1。
 
 **行为细节**
 - 窗口打开期间插件列表实时更新：有插件被安装、停用或失败时 1 秒内刷新（订阅 `app.info` 的变化，或复用 J07 的 `packages.onChange`，见下）。
@@ -2693,9 +2693,9 @@ manifest 能力从 `commands, playback.read, events, ui.osd` 增加为：`+ ui.w
   plugin.app.info(): Promise<AppInfo>                 // 无需能力：只读的公开信息
   plugin.app.onChange(listener: (info: AppInfo) => void): Disposable // 插件列表或状态变化
   interface AppInfo {
-    version: string;            // Vestra 版本
+    version: string;            // Vestra Player 版本
     build: string | null;       // 构建日期 + 提交短哈希
-    apiVersion: string;         // "vestra.experimental/0.1"
+    apiVersion: string;         // "vestra/1"
     components: { mpv: string | null; ffmpeg: Record<string, string>; slint: string | null; node: string | null };
     plugins: PluginInfo[];      // 定义见「插件管理」J07
   }
@@ -3231,7 +3231,7 @@ interface Chapter { index: number; title: string | null; start: number }   // st
 **验收**
 - 播放带 5 章的 MKV，「播放 ▶ 章节/书签」列出 5 章，当前章节显示单选点；选第 3 章后跳到它的起点，提示章节名。
 - 在 00:10、00:50 按 P，菜单出现两个书签；按 Shift+PgUp 先跳到 00:50，再按跳到 00:10。
-- 重启 Vestra 后再打开同一文件，书签还在。
+- 重启 Vestra Player 后再打开同一文件，书签还在。
 - 窗口中把「书签 1」改名为「高潮」，菜单 1 秒内更新。
 - 直播流中 P 不可用，菜单项显示禁用原因。
 - 播放列表获得焦点时按 P，播放所选项，不添加书签；视频获得焦点时按 P 添加书签。
@@ -3471,7 +3471,7 @@ hotkeys 自己不设默认快捷键，避免和任何插件冲突；如果用户
   - 符号键去掉 Shift；
   - `+` 写成 `Plus`。
   最终以核心 `set()` 的校验为准，不合法时显示 `无法使用此按键`。
-- **系统保留键**：⌘Tab、⌘Space、⌃↑ 等被 macOS 截走，捕获不到，不需要特别处理。⌘Q 是宿主「退出」的默认键：可以改，但给其它命令绑定 ⌘Q 时要二次确认（「⌘Q 是退出 Vestra 的默认快捷键，确定改为……？」）。
+- **系统保留键**：⌘Tab、⌘Space、⌃↑ 等被 macOS 截走，捕获不到，不需要特别处理。⌘Q 是宿主「退出」的默认键：可以改，但给其它命令绑定 ⌘Q 时要二次确认（「⌘Q 是退出 Vestra Player 的默认快捷键，确定改为……？」）。
 - **冲突**：同一范围内，新输入已经是另一条命令的生效绑定时，弹出确认条：`Ctrl+E 已用于「视频 ▶ 截图 ▶ 保存当前画面」` + `替换` / `取消`。
   - 替换：先把对方的绑定写成「原生效绑定去掉这个输入」，再给本命令加上这个输入。两次 `set` 都成功才算完成；如果第二次失败，就把第一次改回去。
   - 不提供「两者都保留」：同一层级的两个用户绑定按核心规则只有一个生效，保留两者会让用户困惑。
@@ -3924,10 +3924,10 @@ manifest 能力：`commands`、`ui.window`、`ui.osd`、`plugins.manage`（现�
 **验收**
 - 打开窗口，列出 10 个产品插件及其状态，与 I09「关于」中的一致。
 - 停用 audio：「声音 ▶ 音频工作台…」从菜单消失，Shift+E 无效，正在播放的音乐不断；启用后恢复。
-- 停用一个已安装的插件并重启 Vestra，它仍为已停用，没有被加载。
+- 停用一个已安装的插件并重启 Vestra Player，它仍为已停用，没有被加载。
 - 卸载 workshop 安装的测试插件（不删数据）：从列表消失，安装库中没有记录；重新安装后它的设置还在。勾选「同时删除数据」后，`plugin-data/<id>` 不存在。
 - plugins 自己那一行的停用、卸载按钮禁用；直接调用 `setEnabled(self, false)` 返回 `invalid`。
-- 开发加载的插件：卸载按钮禁用，停用后重启 Vestra，它照常被加载。
+- 开发加载的插件：卸载按钮禁用，停用后重启 Vestra Player，它照常被加载。
 - 回退：有上一版本的插件，点「回退到上一版本」后版本号变为上一版本。
 
 **PotPlayer 参考**：PotPlayer 没有统一的插件管理器。相近的是 D:`Dialog(496)`「扩展功能」（启用即时编译器 / 程序启动时更新扩展 / 更新/安装 / 再次检查 / 设置），以及各类外部滤镜和 DSP 的「添加 / 移除 / 设置 / 信息」列表（D:`Dialog(359)`、`Dialog(365)`、`Dialog(493)`）。我们按 Vestra 的插件模型设计，列表与按钮布局参考这些列表对话框。
@@ -4054,7 +4054,7 @@ manifest 能力：`commands`、`playback.read`、`events`、`ui.mount`、`ui.dia
 **需求**
 - 没有打开任何来源时（启动后、关闭来源后、播放列表结束且关闭了媒体），视频区居中显示徽标：
   - 默认使用品牌 logo（`src/assets/brand/logo.png`），边长为视频区短边的 30%，限制在 64–256px，保持比例；
-  - 下方 12px 处显示「Vestra」（13px，`Theme.text-dim`）；
+  - 下方 12px 处显示「Vestra Player」（13px，`Theme.text-dim`）；
   - 背景 `Theme.bg-video`。
 - 可以选择自定义徽标图片（PNG/JPEG），恢复默认后回到品牌 logo。
 - 开关「空闲时显示徽标」默认开。关闭时空闲画面为纯色（现状）。
@@ -4069,7 +4069,7 @@ manifest 能力：`commands`、`playback.read`、`events`、`ui.mount`、`ui.dia
   - 通过校验后复制到 `<dataDirectory>/logo.<ext>`（不放在 `cache/` 下，不会被当作缓存清理），用 `plugin.ui.image()` 显示；
   - 原文件之后被删除或移动也不受影响。
 - 自定义图片读取失败时回退到内置 logo，提示一次 `徽标图片无法读取，已使用默认徽标`。
-- 窗口尺寸变化时徽标按比例实时缩放；视频区高度 < 120px 时隐藏「Vestra」字样。
+- 窗口尺寸变化时徽标按比例实时缩放；视频区高度 < 120px 时隐藏「Vestra Player」字样。
 - 菜单切换时提示 `空闲时显示徽标：开/关`。
 - 背景层不接收输入：空闲时双击仍然切换全屏，右键仍然打开菜单。
 
@@ -4082,7 +4082,7 @@ manifest 能力：`commands`、`playback.read`、`events`、`ui.mount`、`ui.dia
 - 【核心新增】图片属性（只有自定义徽标需要）。
 
 **验收**
-- 不带参数启动 Vestra：视频区中央显示品牌 logo 与「Vestra」，深色背景上清晰、不变形。
+- 不带参数启动 Vestra Player：视频区中央显示品牌 logo 与「Vestra Player」，深色背景上清晰、不变形。
 - 打开文件后徽标消失；按 F4 关闭后徽标重新出现。
 - 拖窄窗口到最小，徽标缩到 64px 且不溢出；全屏时最大 256px。
 - 选择一张自定义 PNG 后立即替换显示；删除原文件并重启后仍显示；「恢复默认徽标」后回到品牌 logo。
@@ -4395,7 +4395,7 @@ menu-tree「字幕 ▶ 在线字幕搜索 ▶ 上传字幕…（10864）/ 下载
   | 播放属性… | 811 |
   | 插件工坊… | 820 |
   | 设置 ▶ | 830–859 |
-  | 关于 Vestra… | 880 |
+  | 关于 Vestra Player… | 880 |
 
 - 实现时要同步更新 [menus.md](menus.md)。
 

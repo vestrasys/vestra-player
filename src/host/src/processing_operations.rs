@@ -1,4 +1,4 @@
-//! Experimental per-owner processing-operation retention, not a final SDK API.
+//! Per-owner processing-operation retention (host-internal).
 //! The caller validates and bounds keys/payloads before admission, executes only
 //! Execute, and drops this book when its owner generation ends. No persistence,
 //! backend work, resource lifecycle or retry scheduling belongs to this module.

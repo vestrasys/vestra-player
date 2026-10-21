@@ -1,1 +1,1 @@
-{"id":"audio","version":"1.4.0","apiVersion":"vestra.experimental/0.1","entry":"main.ts","capabilities":["commands","playback.read","events","processing.audio","ui.window","ui.osd","ui.dialog","playback.control"]}
+{"id":"audio","version":"1.4.0","apiVersion":"vestra/1","entry":"main.ts","capabilities":["commands","playback.read","events","processing.audio","ui.window","ui.osd","ui.dialog","playback.control"]}

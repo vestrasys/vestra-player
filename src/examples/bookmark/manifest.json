@@ -1,1 +1,1 @@
-{"id":"community.bookmark","version":"0.1.0","apiVersion":"vestra.experimental/0.1","entry":"main.ts","capabilities":["commands","ui.window","playback.read","events","playback.control"]}
+{"id":"community.bookmark","version":"0.1.0","apiVersion":"vestra/1","entry":"main.ts","capabilities":["commands","ui.window","playback.read","events","playback.control"]}

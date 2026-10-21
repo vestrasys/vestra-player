@@ -10,7 +10,7 @@
 │ libmpv 播放后端、处理链、字幕、快照/导出工作进程      │
 │ 插件管理：加载、停用、试载、安装/回退、owner 资源回收  │
 └───────────────▲─────────────────────────────────┘
-                │ JSONL over stdin/stdout（wire：vestra.experimental/0.1）
+                │ JSONL over stdin/stdout（wire：vestra/1）
 ┌───────────────┴──── 每插件一个 Node 进程 ──────────┐
 │ 运行器 src/runtime/runner.ts                        │
 │ SDK  src/sdk/plugin/（句柄式 API）→ src/sdk/*.ts（wire 客户端，内部） │

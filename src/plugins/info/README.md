@@ -29,13 +29,13 @@ movie.mp4
 
 - 播放信息：`player.stats()` 的扩展字段（解码器、输入格式、源 → 显示尺寸、帧率、码率、采样格式、声道布局、音画同步偏差、缓冲时长），窗口打开期间每秒刷新。「硬件解码」取 `stats().video.hwdec`：正在用的硬件解码器原样显示（如 `videotoolbox`），`"no"`（软件解码，软件渲染时总是如此）显示「未使用」，播放器没有报告时显示「-」。
 - 文件信息：本地文件用 `plugin.tools.run("ffprobe", ["-v", "error", "-show_format", "-show_streams", "-show_chapters", "-of", "json", 路径])`（超时 10 秒），每个来源读一次，「刷新」重读，换来源时中止旧的读取；列出来源（路径、大小、修改时间）、容器、逐条流、章节数、元数据、内嵌资源（附件文件名与 MIME、封面）。缺少 ffprobe 显示「无法读取文件信息（未找到 ffprobe）」。网络来源不调用 ffprobe，只列播放器报告的信息。
-- 系统信息：Vestra 版本（`plugin.app.version` 与构建哈希，如「0.1.0（构建 289b26b）」）、插件 API 版本、mpv 版本（`plugin.app.components.mpv`）、FFmpeg 版本（`components.libav`：libmpv 报告的 `ffmpeg-version`，有其它 `libav*` 键时依次列出），核心不知道的显示「未知」；系统版本（如「macOS 26.2（25C56）」「Windows 11 23H2（22631.4460）」）、机型、显示器（`plugin.app.system()`，每台一行「名称 · 像素尺寸 · 逻辑尺寸 @ 刷新率」，多台时编号），CPU 型号与核数、内存总量与可用量（Node `os`），`sysinfo.ts`。插件不调用系统命令。
+- 系统信息：Vestra Player 版本（`plugin.app.version` 与构建哈希，如「0.1.0（构建 289b26b）」）、插件 API 版本、mpv 版本（`plugin.app.components.mpv`）、FFmpeg 版本（`components.libav`：libmpv 报告的 `ffmpeg-version`，有其它 `libav*` 键时依次列出），核心不知道的显示「未知」；系统版本（如「macOS 26.2（25C56）」「Windows 11 23H2（22631.4460）」）、机型、显示器（`plugin.app.system()`，每台一行「名称 · 像素尺寸 · 逻辑尺寸 @ 刷新率」，多台时编号），CPU 型号与核数、内存总量与可用量（Node `os`），`sysinfo.ts`。插件不调用系统命令。
 
 底部「复制到剪贴板」（`plugin.clipboard.writeText`，提示「已复制播放信息」，失败时状态行「复制失败」）、「保存为…」（默认名 `<文件名> 信息.txt`，临时文件加改名）、「关闭」。复制和保存的都是当前页签的纯文本：分组标题一行，`键：值` 一行一条，分组之间空行；每个值最多 512 字符。
 
 窗口用「关闭」按钮或标题栏关闭（`Window.onClose`）时，「播放信息」的每秒 `stats()` 轮询和进行中的 ffprobe / 系统信息读取都停止；再次打开时重新开始。
 
-关于 Vestra（I09）：右键菜单顶层「关于 Vestra…」（`windows` 组 order 880）或 F1 打开工具窗口 `ui/about.slint`（固定 360×420），已打开时再按只带到前面。内容：logo（`ui/logo.png`，由 `src/assets/brand/logo.png` 缩成 192×192，编译期 `@image-url`）、「Vestra」、版本行「版本 0.1.0（构建 289b26b）」；组件版本：插件 API、mpv、FFmpeg、Slint（`plugin.app`）、Node（插件进程的 `process.versions.node`），拿不到的显示「未知」；已加载插件列表（id、版本、来源、状态，按 id 排序，行高 18、显示 8 行、超出滚动）。底部「复制信息」（全部文字放进剪贴板，提示「已复制版本信息」，失败时状态行「复制失败」）、「关闭」。
+关于 Vestra Player（I09）：右键菜单顶层「关于 Vestra Player…」（`windows` 组 order 880）或 F1 打开工具窗口 `ui/about.slint`（固定 360×420），已打开时再按只带到前面。内容：logo（`ui/logo.png`，由 `src/assets/brand/logo.png` 缩成 192×192，编译期 `@image-url`）、「Vestra」、版本行「版本 0.1.0（构建 289b26b）」；组件版本：插件 API、mpv、FFmpeg、Slint（`plugin.app`）、Node（插件进程的 `process.versions.node`），拿不到的显示「未知」；已加载插件列表（id、版本、来源、状态，按 id 排序，行高 18、显示 8 行、超出滚动）。底部「复制信息」（全部文字放进剪贴板，提示「已复制版本信息」，失败时状态行「复制失败」）、「关闭」。
 
 插件列表：每次打开窗口读一次 `plugin.packages.list()`（不需要能力），之后由 `packages.onChange` 推送更新（插件启动、停用、失败、安装、卸载时窗口立即刷新）。来源显示为 已安装 / 开发加载 / 试载，状态为 启动中 / 运行中 / 已停用 / 失败 / 已停止。读取失败时列表区显示「未知（无法读取插件列表）」，下次打开再读。
 

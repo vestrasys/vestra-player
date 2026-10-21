@@ -80,11 +80,11 @@ test("packages: trial waits for start, install follows the operation to its end"
   host.handle("packages.validate", () => ({
     token: "t",
     digest: "d",
-    apiVersion: "vestra.experimental/0.1",
+    apiVersion: "vestra/1",
     manifest: {
       id: "community.counter",
       version: "1.0.0",
-      apiVersion: "vestra.experimental/0.1",
+      apiVersion: "vestra/1",
       entry: "main.js",
       capabilities: [],
     },
@@ -148,11 +148,11 @@ test("packages: an unconfirmed trial cleanup fails with code cleanup and a retry
   host.handle("packages.validate", () => ({
     token: "t",
     digest: "d",
-    apiVersion: "vestra.experimental/0.1",
+    apiVersion: "vestra/1",
     manifest: {
       id: "community.counter",
       version: "1.0.0",
-      apiVersion: "vestra.experimental/0.1",
+      apiVersion: "vestra/1",
       entry: "main.js",
       capabilities: [],
     },

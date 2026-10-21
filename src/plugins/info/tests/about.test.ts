@@ -30,11 +30,11 @@ async function start() {
   return { host, stop: () => plugin.stop() };
 }
 
-test("I09: top-level 关于 Vestra… (880, windows, F1) opens the about window with plugin.app versions", async () => {
+test("I09: top-level 关于 Vestra Player… (880, windows, F1) opens the about window with plugin.app versions", async () => {
   const { host, stop } = await start();
   try {
     assert.deepEqual(host.command("info.about").declaration, {
-      title: "关于 Vestra…", path: ["关于 Vestra…"], order: 880, group: "windows", radio: false, bindings: ["F1"], focus: null, repeat: false,
+      title: "关于 Vestra Player…", path: ["关于 Vestra Player…"], order: 880, group: "windows", radio: false, bindings: ["F1"], focus: null, repeat: false,
     });
     assert.deepEqual(host.conflicts, []);
     await host.press("F1");
@@ -50,7 +50,7 @@ test("I09: top-level 关于 Vestra… (880, windows, F1) opens the about window 
     await readFile(new URL("../ui/logo.png", import.meta.url)); // packaged with the plugin
     assert.equal(window.props.version, "版本 0.1.0（构建 289b26b）");
     assert.deepEqual(window.props.components, [
-      { label: "插件 API", value: "vestra.experimental/0.1" },
+      { label: "插件 API", value: "vestra/1" },
       { label: "mpv", value: "mpv v0.41.0" },
       { label: "FFmpeg", value: "9.0.2" },
       { label: "Slint", value: "1.16.1" },
@@ -93,10 +93,10 @@ test("I09: 复制信息 copies the whole window as text; a refusal shows 复制�
     assert.equal(
       host.clipboard.text,
       [
-        "Vestra",
+        "Vestra Player",
         "版本 0.1.0（构建 289b26b）",
         "",
-        "插件 API：vestra.experimental/0.1",
+        "插件 API：vestra/1",
         "mpv：mpv v0.41.0",
         "FFmpeg：9.0.2",
         "Slint：1.16.1",
@@ -143,7 +143,7 @@ test("I09: a failed packages.list shows 未知 in the list; the next opening rea
 test("I09 pure rules: unknown versions show 未知; plugin rows sorted by id with Chinese origin and state", () => {
   const bare = { version: "0.2.0", build: null, components: { mpv: null, libav: {}, slint: "" } };
   assert.deepEqual(components(bare, null), [
-    ["插件 API", "vestra.experimental/0.1"],
+    ["插件 API", "vestra/1"],
     ["mpv", "未知"],
     ["FFmpeg", "未知"],
     ["Slint", "未知"],
@@ -159,5 +159,5 @@ test("I09 pure rules: unknown versions show 未知; plugin rows sorted by id wit
     { id: "vestra.audio", version: "未知", origin: "开发加载", state: "已停用" },
     { id: "vestra.video", version: "0.1.0", origin: "已安装", state: "运行中" },
   ]);
-  assert.match(aboutText(bare, null, rows), /^Vestra\n版本 0\.2\.0\n\n[\s\S]*\n已加载插件\ntest\.trial {2}1\.0\.0 {2}试载 {2}失败\n/);
+  assert.match(aboutText(bare, null, rows), /^Vestra Player\n版本 0\.2\.0\n\n[\s\S]*\n已加载插件\ntest\.trial {2}1\.0\.0 {2}试载 {2}失败\n/);
 });

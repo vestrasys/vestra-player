@@ -4,7 +4,7 @@
 
 类型定义的源头是 `src/sdk/plugin/types.ts`。本文与它不一致时以代码为准，并应修正本文。
 
-- 协议版本：`vestra.experimental/0.1`
+- 协议版本：`vestra/1`
 - 运行环境：每个插件一个 Node ≥ 22.18 进程，可以使用 Node 标准库、文件系统、网络和 npm 依赖。插件是受信任的，manifest 能力是契约声明，不是安全沙箱。
 - 系统：macOS 与 Windows（Windows 目前只做了编译检查，未在真机运行）。API 与系统无关；某个系统做不到的功能以 `unsupported` 失败，各节写明平台差异，汇总见 §16.7。插件不要直接调用系统命令（`open`、`sips`、`plutil`、`security` 等），用本文的能力或跨平台的纯 Node 实现。
 
@@ -54,7 +54,7 @@ interface Disposable { dispose(): Promise<void> }
 {
   "id": "community.bookmark",
   "version": "0.1.0",
-  "apiVersion": "vestra.experimental/0.1",
+  "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": ["commands", "ui.window"]
 }
@@ -64,7 +64,7 @@ interface Disposable { dispose(): Promise<void> }
 | --- | --- |
 | `id` | 非空且合法的标识，全局唯一；建议 `作者.插件名` |
 | `version` | 三段非负整数 `x.y.z`；构建工具写入 `dist/manifest.json` |
-| `apiVersion` | 固定 `vestra.experimental/0.1` |
+| `apiVersion` | 固定 `vestra/1` |
 | `entry` | 包内相对路径；开发时可为 `.ts`，构建后为 `.js` |
 | `capabilities` | 只能是下表中的值 |
 
@@ -806,7 +806,7 @@ dialogs.confirm(options: {
 ```
 
 - macOS：系统提示框（`NSAlert`），以当前活动的播放器窗口（发起确认的工具窗口、浮动侧栏，通常就是用户刚点按钮的窗口）为父窗口的表单（sheet），没有活动窗口时挂主窗口；都不可用时为应用模态窗口。`confirmed`：用户点了确认按钮；`checked`：复选框的状态（没有复选框为 `false`，取消时也如实返回）。长度按 Unicode 字符计（一个汉字一个字符），超出 `invalid`。
-- Windows：系统任务对话框（`TaskDialogIndirect`，播放器的可执行文件内嵌 Common Controls v6 的应用清单），挂在当前活动的播放器窗口（没有时挂主窗口）。正文是 `message`，有 `detail` 时空一行接在后面，标题栏是「Vestra」；按钮文字是 `confirm`、`cancel`（两者相同时取消按钮末尾多一个看不见的空格，以区分答复）；`destructive` 显示警告图标；按 Esc 或关闭对话框等于取消。有 `checkbox` 时，用户确认后再弹一个「是 / 否」对话框，正文为复选框文字，选「是」即 `checked: true`；取消时不再询问，`checked` 为 `false`。
+- Windows：系统任务对话框（`TaskDialogIndirect`，播放器的可执行文件内嵌 Common Controls v6 的应用清单），挂在当前活动的播放器窗口（没有时挂主窗口）。正文是 `message`，有 `detail` 时空一行接在后面，标题栏是「Vestra Player」；按钮文字是 `confirm`、`cancel`（两者相同时取消按钮末尾多一个看不见的空格，以区分答复）；`destructive` 显示警告图标；按 Esc 或关闭对话框等于取消。有 `checkbox` 时，用户确认后再弹一个「是 / 否」对话框，正文为复选框文字，选「是」即 `checked: true`；取消时不再询问，`checked` 为 `false`。
 - 其它系统 `unsupported`。
 - 「不再询问」之类的记忆由插件自己保存（`storage.json`），播放器不记。
 - 测试：`host.dialogAnswers.push({ confirmed, checked })`；`host.confirms` 记录每次的选项。
@@ -1328,6 +1328,17 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | 绑定 §4.1 | `Ctrl` 也认 ⌘ | `Cmd` 是徽标键 | 同 Windows |
 
 ## 17. 变更说明
+
+### 正式版命名：插件 API `vestra/1`（2026-10）
+
+**破坏性变更，集中切换**（社区工作流 §5）：插件 API 结束实验阶段，协议版本由 `vestra.experimental/0.1` 改为正式版本 `vestra/1`。manifest 的 `apiVersion` 必须写 `vestra/1`；播放器不再接受旧值，仍写旧值的插件在加载与校验时因 API 版本不符被拒绝。接口签名与行为都不变，迁移只改这一个字段：
+
+```diff
+-  "apiVersion": "vestra.experimental/0.1",
++  "apiVersion": "vestra/1",
+```
+
+受影响：全部内置插件、`src/examples/` 示例、插件工坊生成的插件模板（已一并迁移）；已安装在托管库中的旧版插件需重新安装。产品名称同时改为 Vestra Player（窗口标题、关于窗口、空闲徽标文字、确认框标题栏），插件 id、`@vestra/` 库路径与数据目录不变。
 
 ### 交互对齐轮 A 线：核心行为（2026-10）
 

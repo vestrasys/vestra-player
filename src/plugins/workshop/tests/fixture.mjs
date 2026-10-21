@@ -7,7 +7,7 @@ import { after } from "node:test";
 import { TestHost, startPlugin } from "../../../sdk/plugin/testing.ts";
 import activate from "../main.ts";
 
-const manifest = { id: "community.counter", version: "1.0.0", apiVersion: "vestra.experimental/0.1", entry: "main.js", capabilities: ["ui.window"] };
+const manifest = { id: "community.counter", version: "1.0.0", apiVersion: "vestra/1", entry: "main.js", capabilities: ["ui.window"] };
 
 export const defaultPackages = () => ({
   validate: () => ({ token: "validated", digest: "digest", apiVersion: manifest.apiVersion, manifest, checks: ["slint"], trustedExecution: true }),

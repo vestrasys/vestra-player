@@ -1,4 +1,4 @@
-// 关于 Vestra (I09): a fixed 360×420 window, PotPlayer Dialog(301) plus the loaded plugins.
+// 关于 Vestra Player (I09): a fixed 360×420 window, PotPlayer Dialog(301) plus the loaded plugins.
 // Heights (padding 12 top and bottom):
 //   12 + header 96 + 6 + components 5 × 18 + 6 + list head 18 + list 8 × 18 + 2 + 6 + spacer ≥ 0 + 6 + buttons 21 + 12 = 419 of 420
 // Widths (content 360 − 28 = 332):
@@ -55,7 +55,7 @@ component PluginLine {
 }
 
 export component AboutWindow inherits Window {
-    title: "关于 Vestra";
+    title: "关于 Vestra Player";
     preferred-width: 360px;
     preferred-height: 420px;
     min-width: 360px;
@@ -87,12 +87,12 @@ export component AboutWindow inherits Window {
                 source: @image-url("logo.png");
                 image-fit: contain;
                 accessible-role: image;
-                accessible-label: "Vestra";
+                accessible-label: "Vestra Player";
             }
             VerticalLayout {
                 alignment: center;
                 spacing: 4px;
-                Text { text: "Vestra"; color: Theme.text; font-size: Theme.font-title; font-weight: 700; }
+                Text { text: "Vestra Player"; color: Theme.text; font-size: Theme.font-title; font-weight: 700; }
                 Text { max-width: 200px; text: root.version; color: Theme.text-dim; font-size: Theme.font-body; overflow: elide; }
             }
         }
