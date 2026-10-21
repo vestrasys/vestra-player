@@ -515,6 +515,13 @@ S=/private/tmp/claude-501/-Users-ziyang-Develop-vestra-player/7b0dd90c-cb6e-48be
 - 实现：`main.rs` 在 `window_tick` 里比较「是否挂着背景层」，变化时给控制线程发内部命令 `host.coverArt { off }`（不在插件协议表里，插件调用得到 `unsupported`）；`backend.rs` 的 `CoverArt` 只在状态变化时写两项。单测 1 条（只在变化时写、恢复默认值）。参考 §6.3 改写、§17 补一条。宿主 Rust 31 974 → 32 060（+86）。
 - GUI 要点：visualizer 启用时打开带内嵌封面的 MP3 → 背景层显示插件封面与三行标签（`stats().video` 为 `null`）；有 cover.jpg 的目录里的 FLAC 同样；停用 visualizer 后再打开同一文件 → mpv 显示封面。
 
+#### 修正（2026-10-21，维护者；协调者 GUI 实测发现）
+
+- **命令上限**（`8512d2d`）：video 空闲时注册 71 条命令，超过每插件 64，真实播放器里激活失败；全部插件加宿主 292 条。上限改为每插件 160、全部 1024（防失控，不是产品限制；留出轨道列表与并行试载的余量）；`TestHost` 执行同一上限，`COMMAND_LIMITS` 从 `sdk/commands.ts` 导出并有测试校验与宿主一致。参考 §4、§13、§14、§17。
+- **选项窗口布局**（`e3e4901`）：底部按钮行可伸展、`Button` 无 max-height，内容区与按钮行平分高度。按钮行 `vertical-stretch: 0`、按钮固定 21px；无窗口平台下量几何的布局测试。
+- **德语布局 ⌥+**：`+` 在德语布局是不带 Shift 的独立键（US `]` 位置），⌥+ 的物理键路径解析成 `Alt++` 而不是 `Alt+Plus`，video 的「全帧」`Alt+Plus` 不触发。`bindings.rs` 的 `from_physical` 与 Option 符号候选统一用 `symbol_name`（`+` → `Plus`，与无修饰路径一致）；单测：德语 ⌥+、⌃⌥+、无修饰 `+`、US ⌥⇧=。
+- **默认键冲突（不改核心，转作者）**：⌃F6 是 macOS 系统快捷键（键盘导航「将焦点移到浮动窗口」，系统设置 › 键盘 › 键盘快捷键 › 键盘），系统先截走，应用收不到。video 的「依次切换比例」默认 `Ctrl+F6` 在 Mac 上默认不可用（除非用户关掉该系统快捷键或在快捷键页改键）。**建议作者改用不与系统冲突的默认键**，并避开 ⌃F1–⌃F8（同组的系统键盘导航快捷键）。
+
 ### 8.3 用户裁决
 
 （协调者填写 §7.1、§7.2 的回答与日期；按回答更新需求文档 H07、E16–E18 与 4b 排期）
@@ -539,3 +546,10 @@ S=/private/tmp/claude-501/-Users-ziyang-Develop-vestra-player/7b0dd90c-cb6e-48be
 **画中画（`pip`）**：日志依次出现 `pip: ready (supported: true)` 和 `pip: possible, starting`，随后宿主崩溃，类型是 EXC_BREAKPOINT。崩溃栈是 `-[AVPictureInPictureSampleBufferDisplayLayerHostView layout]` → `-[NSView setFrame:]` → `_NSViewValidateGeometry`，即画中画宿主视图布局时遇到非法几何，很可能和 1×1 子图层有关。崩溃报告在 `~/Library/Logs/DiagnosticReports/host-2026-10-21-100828.ips`。
 
 **结论**：GPU 渲染的收益已经确认，具备正式立项的条件，等用户确认。画中画先修崩溃再复测，不阻塞其它工作。
+
+**画中画复测（20e1272）**：不再崩溃，系统画中画小窗出现，画面在更新，宿主 CPU 约 4%（640×360 源，软件渲染）。剩下三个问题：
+- 小窗只显示画面左上角，且被极度放大，像是帧尺寸或缩放设置不对；
+- 小窗认为处于暂停状态，播放状态没有同步；
+- 主窗口标题栏错乱：标题文字压到了红黄绿按钮上。
+
+已转维护者处理。
