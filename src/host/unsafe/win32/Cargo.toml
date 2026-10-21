@@ -4,7 +4,7 @@ version = "0.0.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 publish = false
-description = "Win32 calls the host's Windows platform module needs (pointer, modifier keys, double-click time, sleep prevention)"
+description = "Win32 calls the host's Windows platform module needs (pointer, modifier keys, double-click time, menu show delay, sleep prevention)"
 
 # One of the crates under src/host/unsafe/: the only place first-party Rust may
 # use `unsafe`. Every block carries a SAFETY comment; the public API is safe.

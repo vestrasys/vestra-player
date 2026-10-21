@@ -46,6 +46,11 @@ pub fn double_click_seconds() -> f64 {
     0.5
 }
 
+/// G-15: no system setting; the Windows default.
+pub fn menu_show_delay_ms() -> u64 {
+    crate::menu::SHOW_DELAY_MS
+}
+
 pub fn clipboard_read_text() -> std::result::Result<Option<String>, RpcError> {
     Err(unsupported("the clipboard"))
 }

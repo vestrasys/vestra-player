@@ -1,11 +1,11 @@
 //! The Win32 calls that no mature safe crate wraps for the host's Windows
 //! platform module (`src/host/src/platform/windows.rs`): the pointer position
 //! while a file is dragged over a window (winit 0.30 reports no position for
-//! drags), the modifier keys held right now, the double-click time and the
-//! thread's sleep-prevention state. Each is one call with plain integer
-//! arguments or one local out-parameter; the public API is safe. Compiled only
-//! on Windows (cross-checked from macOS by `npm run portability`, not yet run
-//! on Windows).
+//! drags), the modifier keys held right now, the double-click time, the
+//! submenu show delay and the thread's sleep-prevention state. Each is one
+//! call with plain integer arguments or one local out-parameter; the public
+//! API is safe. Compiled only on Windows (cross-checked from macOS by
+//! `npm run portability`, not yet run on Windows).
 #![cfg(windows)]
 
 use windows_sys::Win32::Foundation::POINT;
@@ -15,7 +15,9 @@ use windows_sys::Win32::System::Power::{
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     GetDoubleClickTime, GetKeyState, VK_CONTROL, VK_MENU, VK_SHIFT,
 };
-use windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos;
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    GetCursorPos, SPI_GETMENUSHOWDELAY, SystemParametersInfoW,
+};
 
 /// The pointer in screen coordinates (physical pixels), `None` when the
 /// system does not report it (for example on a secure desktop).
@@ -38,6 +40,19 @@ pub fn modifier_keys() -> (bool, bool, bool) {
 pub fn double_click_ms() -> u32 {
     // SAFETY: no arguments, no preconditions.
     unsafe { GetDoubleClickTime() }
+}
+
+/// The system submenu show delay in milliseconds (`SPI_GETMENUSHOWDELAY`),
+/// `None` when the system does not answer.
+pub fn menu_show_delay_ms() -> Option<u32> {
+    let mut delay: u32 = 0;
+    // SAFETY: SPI_GETMENUSHOWDELAY writes one DWORD to the pointer, which
+    // points at `delay`, a valid writable u32 for the duration of the call;
+    // `uiParam` is unused (0) and no setting is changed (fWinIni 0).
+    let ok = unsafe {
+        SystemParametersInfoW(SPI_GETMENUSHOWDELAY, 0, (&mut delay as *mut u32).cast(), 0)
+    };
+    (ok != 0).then_some(delay)
 }
 
 /// Keep the system (and, with `display`, the display) awake until

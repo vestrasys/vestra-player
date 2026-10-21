@@ -259,7 +259,8 @@ export component FloatingPanel inherits Window {{
     out property <float> logical-width: root.width / 1px;
     out property <float> logical-height: root.height / 1px;
     callback menu-invoke(string);
-    callback menu-hover(int, string);
+    callback menu-hover(int, string, bool);
+    callback menu-scroll(int, float);
     callback menu-back();
     callback menu-dismiss();
     callback key-input(string, string, bool, bool, bool, bool, bool) -> bool;
@@ -273,7 +274,8 @@ export component FloatingPanel inherits Window {{
         MenuView {{
             width: root.width; height: root.height;
             levels: root.menu-levels;
-            hovered(level, token) => {{ root.menu-hover(level, token); }}
+            hovered(level, token, now) => {{ root.menu-hover(level, token, now); }}
+            scrolled(level, offset) => {{ root.menu-scroll(level, offset); }}
             activated(token) => {{ root.menu-invoke(token); }}
             back => {{ root.menu-back(); }}
             dismissed => {{ root.menu-dismiss(); }}
