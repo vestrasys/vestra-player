@@ -314,6 +314,7 @@ test("C17: the list, titles, selection and settings come back after a restart; n
     const saved = JSON.parse(await readFile(join(data, "playlists.json"), "utf8"));
     assert.equal(saved.version, 1);
     assert.deepEqual(saved.settings, {
+      version: 2,
       remember: true,
       repeat: "all",
       shuffle: false,
@@ -1216,6 +1217,87 @@ test("G-08: a newly playing row out of view is centred, unless the user scrolled
     app.host.setSource({ phase: "ready" });
     await app.host.settle();
     assert.equal(request(), asked);
+  } finally {
+    await app.close();
+  }
+});
+
+// ------------------------------------------------------------------ IA-PL-01 follow-ups (coordinator ruling)
+
+test("IA-PL-01: a settings file from before version 2 is migrated once to 加入相似文件 and no 追加; later choices are kept", async () => {
+  const data = await mkdtemp(join(tmpdir(), "vestra-playlist-migrate-"));
+  await writeFile(
+    join(data, "playlists.json"),
+    JSON.stringify({
+      version: 1,
+      settings: { remember: true, repeat: "all", shuffle: true, openMode: "only", appendOnOpen: true, dropAtPointer: true, confirmClear: false },
+    }),
+  );
+  let app = await start({ data });
+  try {
+    assert.equal(app.command("open-mode-similar").state.checked, true);
+    assert.equal(app.command("open-mode-only").state.checked, false);
+    const page = app.host.settingsPage("playlist");
+    assert.equal(page.props["append-on-open"], false);
+    // Everything else is kept.
+    assert.equal(page.props["drop-at-pointer"], true);
+    assert.equal(app.command("repeat-all").state.checked, true);
+    assert.equal(app.command("shuffle").state.checked, true);
+    assert.equal(app.command("confirm-clear").state.checked, false);
+    // The user changes them again: saved as version 2 and kept after a restart.
+    await app.run("open-mode-only");
+    page.emit("set-append-on-open", true);
+    await app.host.settle(1100);
+    const saved = JSON.parse(await readFile(join(data, "playlists.json"), "utf8"));
+    assert.equal(saved.settings.version, 2);
+    await app.stop();
+    app = await start({ data });
+    assert.equal(app.command("open-mode-only").state.checked, true);
+    assert.equal(app.host.settingsPage("playlist").props["append-on-open"], true);
+  } finally {
+    await app.close();
+    await rm(data, { recursive: true, force: true });
+  }
+});
+
+test("A15 / IA-PL-01: one media file dropped on the video area brings its similar files and plays itself; several files do not", async () => {
+  const app = await start();
+  try {
+    const [, a2, a3, b] = await app.files(["dir/A01.mkv", "dir/A02.mkv", "dir/A03.mkv", "dir/B.mkv", "dir/song.mp3"]);
+    await app.addFiles(await app.files(["x.mp4"]));
+    await app.host.drop([a2!], { target: "video" });
+    await app.host.settle(30);
+    assert.deepEqual(app.names(), ["A01.mkv", "A02.mkv", "A03.mkv"]);
+    assert.equal(app.opens().at(-1)?.source, a2, "the dropped file plays, not the first row");
+    app.host.setSource({ phase: "ready" });
+    await app.host.settle();
+    assert.equal(app.rows()[1]!.current, true);
+
+    // 全部 mode: the group's whole folder.
+    await app.run("open-mode-folder");
+    await app.host.drop([a3!], { target: "video" });
+    await app.host.settle(30);
+    assert.deepEqual(app.names(), ["A01.mkv", "A02.mkv", "A03.mkv", "B.mkv"]);
+    assert.equal(app.opens().at(-1)?.source, a3);
+    app.host.setSource({ phase: "ready" });
+    await app.host.settle();
+
+    // Two files: just those two.
+    await app.host.drop([b!, a2!], { target: "video" });
+    await app.host.settle(30);
+    assert.deepEqual(app.names(), ["B.mkv", "A02.mkv"]);
+    app.host.setSource({ phase: "ready" });
+    await app.host.settle();
+
+    // 仅打开该文件, and Option (only adds): no siblings.
+    await app.run("open-mode-similar");
+    await app.host.drop([a3!], { target: "video", modifiers: { alt: true } });
+    await app.host.settle(30);
+    assert.deepEqual(app.names(), ["B.mkv", "A02.mkv", "A03.mkv"]);
+    await app.run("open-mode-only");
+    await app.host.drop([a2!], { target: "video" });
+    await app.host.settle(30);
+    assert.deepEqual(app.names(), ["A02.mkv"]);
   } finally {
     await app.close();
   }

@@ -14,7 +14,7 @@ import {
   savePath,
   writeAtomic,
 } from "./listfile.ts";
-import { extensionOf, folderError, LIST_FILES, SCAN_LIMIT, scanFolder } from "./media.ts";
+import { extensionOf, folderError, isMedia, LIST_FILES, SCAN_LIMIT, scanFolder, siblings } from "./media.ts";
 import { playback } from "./playback.ts";
 import { Prober, toolRunner } from "./probe.ts";
 import { clock, lengthOf, Queue, type Placement, type Repeat, type Row, type SortKey } from "./queue.ts";
@@ -817,11 +817,30 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   // On the list (G-12): add to the end, or before the row under the drop point with
   // 「插入到拖放位置」; never play. One drop at a time, in order.
   let dropping: Promise<void> = Promise.resolve();
-  const dropped = (paths: string[], how: { play: boolean; clear?: boolean; at?: { x: number; y: number } }) =>
+  const dropped = (
+    paths: string[],
+    how: { play: boolean; clear?: boolean; expand?: boolean; at?: { x: number; y: number } },
+  ) =>
     (dropping = dropping.then(
       guard(async () => {
         const expanded = await expandDrop(paths, { signal: stop.signal });
         if (stop.signal.aborted) return;
+        // A15 / IA-PL-01 (reference player): a single media file dropped on the video area brings its
+        // similar files (or its group's whole folder) like an open does; several files never do.
+        let start: string | null = null;
+        const single = expanded.entries.length === 1 ? expanded.entries[0]! : null;
+        if (how.expand && paths.length === 1 && single?.kind === "file" && single.source === paths[0] && isMedia(single.source)) {
+          start = single.source;
+          if (settings.openMode !== "only") {
+            try {
+              const found = await siblings(start, settings.openMode === "similar" ? "similar" : "folder");
+              expanded.entries = found.paths.map((path) => ({ kind: "file" as const, source: path }));
+              expanded.truncated ||= found.truncated;
+            } catch {
+              /* the folder is unreadable: only this file */
+            }
+          }
+        }
         const extra = dropExtra(expanded);
         if (!expanded.entries.length)
           return queue.notice(extra ? `没有可加入的项目：${extra}` : "没有可加入的项目");
@@ -841,8 +860,10 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
           queue.selectFirstAdded(result, wasEmpty);
           return queue.notice(summary);
         }
-        // The first new row, or (all duplicates) the existing row of the first item.
-        const target = result.fresh[0] ?? result.rows.find((row) => !!row);
+        // The dropped file when it brought its siblings; else the first new row, or (all
+        // duplicates) the existing row of the first item.
+        const at = start === null ? -1 : expanded.entries.findIndex((entry) => entry.source === start);
+        const target = (at >= 0 ? result.rows[at] : undefined) ?? result.fresh[0] ?? result.rows.find((row) => !!row);
         if (!target) return queue.notice(summary);
         if (player.busy()) return queue.notice(`${summary}；正在打开，已加入列表`);
         queue.select(target.rowId);
@@ -853,7 +874,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   plugin.drops.provide({
     extensions: DROP_EXTENSIONS,
     drop: ({ paths, modifiers }) =>
-      dropped(paths, { play: !modifiers.alt, clear: !modifiers.alt && !settings.appendOnOpen }),
+      dropped(paths, { play: !modifiers.alt, clear: !modifiers.alt && !settings.appendOnOpen, expand: !modifiers.alt }),
   });
   list.onDrop(({ paths, at }) => dropped(paths, { play: false, ...(settings.dropAtPointer ? { at } : {}) }));
 

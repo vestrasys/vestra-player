@@ -4,6 +4,11 @@ import { lengthOf, ROW_LIMIT, type Queue, type Repeat, type SortKey } from "./qu
 
 /** C17 settings, saved even when the list is not remembered. */
 export type Settings = {
+  /**
+   * The settings' own version. Below `SETTINGS_VERSION` (files from before IA-PL-01) the
+   * open mode and 「追加」 are reset once to the new defaults (coordinator ruling: unreleased product).
+   */
+  version: number;
   remember: boolean;
   repeat: Repeat;
   shuffle: boolean;
@@ -29,7 +34,10 @@ type SavedList = {
 };
 export type Saved = { version: 1; settings: Settings; list?: SavedList };
 
+export const SETTINGS_VERSION = 2;
+
 export const defaults = (): Settings => ({
+  version: SETTINGS_VERSION,
   remember: true,
   repeat: "none",
   shuffle: false,
@@ -50,10 +58,12 @@ function readSettings(raw: Partial<Settings> | undefined): Settings {
   if (typeof raw.remember === "boolean") settings.remember = raw.remember;
   if (REPEATS.includes(raw.repeat as string)) settings.repeat = raw.repeat!;
   if (typeof raw.shuffle === "boolean") settings.shuffle = raw.shuffle;
-  if (MODES.includes(raw.openMode as string)) settings.openMode = raw.openMode!;
+  // One-time migration: older files keep everything except the open mode and 「追加」.
+  const current = raw.version === SETTINGS_VERSION;
+  if (current && MODES.includes(raw.openMode as string)) settings.openMode = raw.openMode!;
   if (typeof raw.gapless === "boolean") settings.gapless = raw.gapless;
   if (typeof raw.confirmClear === "boolean") settings.confirmClear = raw.confirmClear;
-  if (typeof raw.appendOnOpen === "boolean") settings.appendOnOpen = raw.appendOnOpen;
+  if (current && typeof raw.appendOnOpen === "boolean") settings.appendOnOpen = raw.appendOnOpen;
   if (typeof raw.dropAtPointer === "boolean") settings.dropAtPointer = raw.dropAtPointer;
   return settings;
 }

@@ -752,9 +752,9 @@ OSD：
 7. 读取文件夹失败（权限等）：只加入这一个文件并接管（清空模式下列表只剩它），不提示。
 8. 一次打开只处理一次；同一 `sourceId` 的重播（`restart`）不重复处理。
 9. OSD：加入了打开的文件以外的新行时「已加入同文件夹 N 个文件」（N 不含打开的文件；追加模式下按新加入的行数）；没有时不提示。
-10. 与 A15、C18 的关系：拖放到视频区由 playlist 自己处理（A15），不经过本规则（参考播放器拖入单个文件时也扩展，见 IA-PL-01 差异第 9 条，未做）；本规则只对其它插件打开的来源生效。其它插件一次只打开一个来源，多选打开不扩展的规则因此自然满足。
+10. 与 A15、C18 的关系：拖放到视频区由 playlist 自己处理（A15）；拖入单个媒体文件时同样按本条的模式与同类文件规则扩展（IA-PL-01 差异第 9 条），按住 Option 时不扩展；本规则只对其它插件打开的来源生效。其它插件一次只打开一个来源，多选打开不扩展的规则因此自然满足。
 
-**持久化**：模式存在 `settings.openMode`（`"only" | "similar" | "folder"`，见 C17）。
+**持久化**：模式存在 `settings.openMode`（`"only" | "similar" | "folder"`，见 C17）。`settings.version` 低于 2 的旧文件在读入时一次性把 `openMode` 与 `appendOnOpen` 迁移为新默认（相似文件、不追加），其余设置保留；之后保存为版本 2，用户再改的值照常保存。
 
 **核心依赖**：现有 `player.onChange`、`player.state`（`sourceId`、`source`、`phase`、`endReason`）、`player.open({ ifCurrent })`、`player.restart`、`provideSequence`。新增无：接管只依赖公开状态，不需要别的插件的 `Media`。
 
@@ -783,6 +783,7 @@ OSD：
 
 1. **拖到视频区**（核心按扩展名分组后交给登记者；playlist 用 `drops.provide` 登记媒体扩展名（附录 B.5）、列表文件 `m3u m3u8 pls dpl`、`webloc` 和保留名 `"folder"`）：
    - 文件夹按 A03 的规则展开（递归、上限 5000；macOS 包如 `.app` 不展开、跳过）；列表文件按 C18 解析成条目；媒体文件直接收。拖入多项时按文件管理器给出的顺序，各自展开后拼接。
+   - 只拖入**一个**本地媒体文件时，按 A13 的「打开文件时」模式扩展（参考播放器拖放入口同样扩展，interaction-alignment.md IA-PL-01 差异第 9 条）：「相似」加入同文件夹的相似文件，「全部」加入同组全部文件，「仅打开该文件」不扩展；播放的是拖入的那个文件。拖入多个文件、文件夹或列表文件时不扩展。
    - 有至少一项可加入时，**先清空列表**（不弹「移除全部前确认」），再按拖入顺序加入，**播放第一个条目**（G-11，参考播放器 `AppendFilePL=0`）。设置「打开或拖入时追加，不清空列表」（播放列表设置页，默认关）打开时：加入列表末尾（去重），播放第一个新条目。
    - 按住 Option（Windows 为 Alt；`modifiers.alt`）松手：只追加到末尾，不清空、不播放（OSD：「已添加 N 项」）。
 2. **拖到播放列表**（`Panel.onDrop`，整组路径交给 playlist，不按扩展名分）：
@@ -811,6 +812,7 @@ Panel.onDrop(listener: (e: { paths: string[]; at: { x: number; y: number } /* �
 **验收**：
 - 列表有 5 项，拖 1 个 mkv 到视频区：列表只剩这 1 项并播放；打开「打开或拖入时追加」后再拖：追加为第 6 项并播放。
 - 拖 1 个文件夹到视频区：按 A03 规则展开并播放第一项。
+- 文件夹有 `A01 A02 A03 B`，拖 `A02.mkv` 到视频区：列表为 `A01 A02 A03`，播放 `A02`；同时拖 `B` 与 `A02`：列表只有这 2 项。
 - 按住 Option（Windows 为 Alt）拖 3 个文件到视频区：加入 3 行，不播放。
 - 拖 2 个文件到列表第 4 行上：追加到末尾，不播放；打开「拖到列表时插入到拖放位置」后再拖到第 4 行上：两行插在原第 4 行之前；落在空白处时追加到末尾。
 - 拖 `.m3u8` 到视频区：列表被替换为解析出的条目并播放第一项。
@@ -933,7 +935,7 @@ Panel.onDrop(listener: (e: { paths: string[]; at: { x: number; y: number } /* �
 2. 保存内容（`playlists.json`）：
    ```json
    { "version": 1,
-     "settings": { "remember": true, "repeat": "none", "shuffle": false, "openMode": "similar",
+     "settings": { "version": 2, "remember": true, "repeat": "none", "shuffle": false, "openMode": "similar",
                    "gapless": false, "confirmClear": true,
                    "appendOnOpen": false, "dropAtPointer": false },
      "list": { "sort": { "key": "title", "descending": false },
