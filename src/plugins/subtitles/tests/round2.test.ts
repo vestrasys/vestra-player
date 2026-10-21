@@ -24,12 +24,21 @@ async function tempFiles(files: Record<string, string | Buffer>) {
   for (const [name, content] of Object.entries(files)) await writeFile(join(folder, name), content);
   return { path: (name: string) => join(folder, name), cleanup: () => rm(folder, { recursive: true, force: true }) };
 }
+/**
+ * Runs `action` and waits for the OSD line it ends with. The plugin reads and
+ * parses subtitle files itself (not host calls), so `settle()` alone can
+ * return before the result under load; a new OSD entry means the action ended.
+ */
+async function withOsd(host: TestHost, action: () => Promise<unknown>) {
+  const before = host.osd.length;
+  await action();
+  for (let i = 0; i < 250 && host.osd.length === before; i++) await host.settle(20);
+  await host.settle();
+}
+/** Loads one file; waits for its own OSD line, not an earlier file's 打开字幕. */
 async function loadFile(host: TestHost, path: string) {
   host.dialogAnswers.push([path]);
-  await host.command("load").run();
-  for (let i = 0; i < 50 && !host.osd.at(-1)?.startsWith("打开字幕") && host.sent("subtitles.commit").length === 0; i++)
-    await host.settle(10);
-  await host.settle();
+  await withOsd(host, () => host.command("load").run());
 }
 const style = (host: TestHost) => host.subtitles.presentation.effective?.style as Record<string, unknown> | undefined;
 

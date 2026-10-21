@@ -200,6 +200,11 @@ test("C07: Ctrl+Delete keeps the selection; Ctrl+T removes rows whose files are 
     assert.equal(app.command("remove-unselected").state.reason, "当前没有可操作项");
 
     await app.run("link");
+    assert.equal(app.host.window("playlist-link").visible, true);
+    app.host.window("playlist-link").emit("cancel");
+    await app.host.settle();
+    assert.equal(app.host.window("playlist-link").visible, false, "取消 (and Esc) close the window");
+    await app.run("link");
     app.host.window("playlist-link").emit("add-link", "https://example.org/v");
     await app.host.settle();
     await rm(d!);

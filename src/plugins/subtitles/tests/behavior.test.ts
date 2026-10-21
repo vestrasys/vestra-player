@@ -10,6 +10,17 @@ import activate from "../main.ts";
 const directory = new URL("..", import.meta.url);
 const pause = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
 const embedded = { kind: "embedded" as const, id: 1 };
+/**
+ * Runs `action` and waits for the OSD line it ends with. The plugin reads and
+ * parses subtitle files itself (not host calls), so `settle()` alone can
+ * return before the result under load; a new OSD entry means the action ended.
+ */
+async function withOsd(host: TestHost, action: () => Promise<unknown>) {
+  const before = host.osd.length;
+  await action();
+  for (let i = 0; i < 250 && host.osd.length === before; i++) await host.settle(20);
+  await host.settle();
+}
 
 /** A ready source (generation 1) with one selected, stylable embedded track. */
 function sourceHost() {
@@ -222,8 +233,7 @@ test("real file bytes are uploaded; a lost commit reply is resolved by the SDK a
     throw new Error("reply lost");
   });
   try {
-    await host.command("load").run();
-    await host.settle();
+    await withOsd(host, () => host.command("load").run());
     const appended = host.sent("subtitles.upload.append").map((c) => Buffer.from(String(c.base64), "base64"));
     assert.deepEqual(Buffer.concat(appended), bytes);
     assert.equal(host.sent("subtitles.upload.begin")[0]!.generation, 1);
@@ -282,8 +292,10 @@ test("a host refusal of the upload is shown as one Chinese sentence", async () =
   try {
     host.dialogAnswers.push([file.path]);
     window.emit("load-file");
-    await host.settle();
-    assert.equal(window.props["status-text"], "播放器拒绝了该字幕（文件过大或内容无效）。");
+    const refused = "播放器拒绝了该字幕（文件过大或内容无效）。";
+    // The plugin reads the file itself before the upload: poll for the result, `settle()` only waits for host calls.
+    for (let i = 0; i < 100 && window.props["status-text"] !== refused; i++) await host.settle(20);
+    assert.equal(window.props["status-text"], refused);
     assert.equal(host.sent("subtitles.commit").length, 0);
   } finally {
     await stop();
@@ -359,8 +371,7 @@ test("the track menu follows the real track list: names, loads and source change
   try {
     assert.deepEqual(titles(), ["不显示", "English · en", "English · en (2)"], "equal names stay distinct paths");
     host.dialogAnswers.push([file.path]);
-    await host.command("load").run();
-    await host.settle();
+    await withOsd(host, () => host.command("load").run());
     assert.equal(titles().length, 4);
     assert.equal(host.command("track-3").state.checked, true, "the loaded track is selected");
     switchSource(host);
@@ -427,6 +438,8 @@ test("cancelling during the upload stops it, discards and never commits", async 
   try {
     host.dialogAnswers.push([file.path]);
     window.emit("load-file");
+    // The plugin reads the file before the upload: wait for the discard, `settle()` only waits for host calls.
+    for (let i = 0; i < 250 && host.sent("subtitles.upload.discard").length === 0; i++) await host.settle(20);
     await host.settle();
     assert.equal(host.sent("subtitles.upload.append").length, 2); // the intercepted call and its forward
     assert.equal(host.sent("subtitles.upload.discard").length, 1);
@@ -607,8 +620,7 @@ async function savedJson(path: string) {
 /** Load `path` through 打开字幕… and return the new track's id. */
 async function loadFile(host: TestHost, path: string) {
   host.dialogAnswers.push([path]);
-  await host.command("load").run();
-  await host.settle();
+  await withOsd(host, () => host.command("load").run());
 }
 const externalCount = (host: TestHost) => host.subtitles.tracks.filter((t) => t.target.kind === "external").length;
 
@@ -620,13 +632,11 @@ test("A09: Ctrl+Alt+Y re-reads a changed file, replaces the track, keeps the syn
     const firstTarget = structuredClone(host.subtitles.selection.target);
     await host.press(",");
     await host.settle(170);
-    await host.press("Ctrl+Alt+Y");
-    await host.settle();
+    await withOsd(host, () => host.press("Ctrl+Alt+Y"));
     assert.equal(host.osd.at(-1), "字幕未改变");
     assert.equal(host.sent("subtitles.upload.begin").length, 1);
     await writeFile(file.path, "1\n00:00:00,000 --> 00:00:01,000\nHello again\n");
-    await host.press("Ctrl+Alt+Y");
-    await host.settle();
+    await withOsd(host, () => host.press("Ctrl+Alt+Y"));
     assert.equal(host.osd.at(-1), "已重载字幕 actual.srt");
     assert.equal(host.sent("subtitles.upload.begin").length, 2);
     assert.equal(externalCount(host), 1, "the old track is removed");
@@ -635,8 +645,7 @@ test("A09: Ctrl+Alt+Y re-reads a changed file, replaces the track, keeps the syn
     assert.equal(host.subtitles.presentation.effective?.style.offsetMs, 500, "sync is unchanged");
     assert.equal(window.props["can-remove"], true);
     await rm(file.path);
-    await host.press("Ctrl+Alt+Y");
-    await host.settle();
+    await withOsd(host, () => host.press("Ctrl+Alt+Y"));
     assert.equal(host.osd.at(-1), "无法重载：找不到字幕文件 actual.srt");
     assert.equal(externalCount(host), 1, "the track stays");
   } finally {

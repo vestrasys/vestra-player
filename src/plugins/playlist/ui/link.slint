@@ -8,7 +8,7 @@ import { UrlInputRow } from "@vestra/widgets.slint";
 export component AddLink inherits Window {
     in-out property <string> message: "输入 HTTP(S) 链接；添加只选择，不自动播放";
     callback add-link(string);
-    callback hide();
+    callback cancel();
     title: "添加链接到播放列表";
     width: 464px;
     background: Theme.bg-bar;
@@ -16,7 +16,7 @@ export component AddLink inherits Window {
     FocusScope {
         key-pressed(event) => {
             if event.text == Key.Escape {
-                root.hide();
+                root.cancel();
                 return accept;
             }
             return reject;
@@ -40,7 +40,7 @@ export component AddLink inherits Window {
                 placeholder: "https://…";
                 confirm-text: "添加";
                 accepted(text) => { root.add-link(text); }
-                cancelled => { root.hide(); }
+                cancelled => { root.cancel(); }
             }
             Text {
                 text: root.message;
