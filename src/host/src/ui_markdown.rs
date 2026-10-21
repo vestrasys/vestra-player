@@ -23,6 +23,13 @@ const TRUNCATED: &str = "…（内容过长，已截断）";
 /// Slint's interpolation placeholder (U+E541): user text never reaches the
 /// format string, so it cannot inject Markdown into the inline renderer.
 const SLOT: char = '\u{e541}';
+/// Emphasis and strikethrough also get a colour: the system UI fonts the
+/// player forces for CJK (Hiragino Sans GB, Microsoft YaHei) have no italic
+/// face, Slint 1.16 does not synthesize one, and its strikethrough line can
+/// be thinner than a pixel at body size. Literal colours (the format string
+/// cannot read `Theme`), chosen to read on both palettes.
+const EMPHASIS_COLOR: &str = "#e8a33d";
+const STRIKE_COLOR: &str = "#8a8496";
 
 /// `{ "$vestraMarkdown": { text, base, images }, "ref": n }`.
 pub fn reference(value: &Value) -> Option<&Value> {
@@ -104,6 +111,45 @@ impl Inline {
     fn is_empty(&self) -> bool {
         self.plain.trim().is_empty()
     }
+    /// Code text: ASCII runs in the monospace font (Slint's `Code` style),
+    /// other runs (CJK…) in the body font: the monospace family has no
+    /// fallback in Slint 1.16, so CJK inside `Code` would not be drawn.
+    fn code(&mut self, text: &str) {
+        let ascii = |c: char| c.is_ascii() && (c == '\t' || !c.is_ascii_control());
+        let mut rest = text;
+        while let Some(first) = rest.chars().next() {
+            let mono = ascii(first);
+            let end = rest
+                .char_indices()
+                .find(|(_, c)| ascii(*c) != mono)
+                .map_or(rest.len(), |(i, _)| i);
+            if mono {
+                self.format.push('`');
+                self.text(&rest[..end]);
+                self.format.push('`');
+            } else {
+                self.text(&rest[..end]);
+            }
+            rest = &rest[end..];
+        }
+    }
+    /// A code block: each line as code, lines separated by hard breaks.
+    fn code_block(code: &str) -> Self {
+        let mut inline = Self::default();
+        for (index, line) in code.split('\n').enumerate() {
+            if index > 0 {
+                inline.format.push_str("  \n");
+                inline.plain.push('\n');
+            }
+            if line.trim().is_empty() {
+                // Keeps the empty line (a paragraph needs some text).
+                inline.text("\u{a0}");
+            } else {
+                inline.code(line);
+            }
+        }
+        inline
+    }
     /// The Slint value; plain text if Slint's parser rejects the format.
     pub fn styled(&self, strong: bool) -> StyledText {
         let format = if strong
@@ -134,12 +180,16 @@ pub struct Block {
     pub indent: i32,
     pub quote: i32,
     pub marker: String,
+    /// Task list item: 0 none, 1 open, 2 done (drawn as a box, not a glyph).
+    pub task: i32,
     pub inline: Inline,
     pub code: String,
     /// `image`: the resolved source (address or path) and alt text.
     pub source: Option<String>,
     pub alt: String,
     pub rows: Vec<(Vec<String>, bool)>,
+    /// Table column alignment: "left", "center", "right" ("" for none).
+    pub aligns: Vec<&'static str>,
 }
 
 /// Where a link or image points: absolute http(s)/mailto addresses as they
@@ -193,6 +243,7 @@ struct Builder<'a> {
     code: Option<String>,
     image: Option<(String, String)>,
     table: Option<Vec<(Vec<String>, bool)>>,
+    aligns: Vec<&'static str>,
     cell: Option<String>,
     in_head: bool,
     images: usize,
@@ -226,7 +277,7 @@ impl Builder<'_> {
     }
     fn flush(&mut self) {
         if let Some(block) = self.current.take()
-            && (!block.inline.is_empty() || !block.marker.is_empty())
+            && (!block.inline.is_empty() || !block.marker.is_empty() || block.task > 0)
         {
             self.push(block);
         }
@@ -273,6 +324,7 @@ impl Builder<'_> {
                         kind: "code",
                         indent: if self.in_item { self.indent() } else { 0 },
                         quote: self.quote.min(MAX_QUOTE),
+                        inline: Inline::code_block(&code),
                         code,
                         ..Default::default()
                     });
@@ -282,7 +334,16 @@ impl Builder<'_> {
             return;
         }
         match event {
-            Md::Start(Tag::Paragraph) => self.flush(),
+            Md::Start(Tag::Paragraph) => {
+                // A task box opened the item's block before its paragraph.
+                if !self
+                    .current
+                    .as_ref()
+                    .is_some_and(|b| b.kind == "item" && b.inline.is_empty())
+                {
+                    self.flush();
+                }
+            }
             Md::End(TagEnd::Paragraph) => self.flush(),
             Md::Start(Tag::Heading { level, .. }) => {
                 self.flush();
@@ -337,19 +398,26 @@ impl Builder<'_> {
                 }
             }
             Md::TaskListMarker(done) => {
-                let marker = if done { "☑" } else { "☐" };
-                match self.current.as_mut() {
-                    Some(block) if block.inline.is_empty() => block.marker = marker.into(),
-                    _ => self.pending_marker = Some(marker.into()),
-                }
+                let task = if done { 2 } else { 1 };
+                // The box replaces the bullet.
+                self.pending_marker = None;
+                let block = self.open();
+                block.marker.clear();
+                block.task = task;
             }
             Md::Start(Tag::CodeBlock(_)) => {
                 self.flush();
                 self.code = Some(String::new());
             }
-            Md::Start(Tag::Emphasis) | Md::End(TagEnd::Emphasis) => self.markup("*"),
+            Md::Start(Tag::Emphasis) => {
+                self.markup(&format!("<font color=\"{EMPHASIS_COLOR}\">*"));
+            }
+            Md::End(TagEnd::Emphasis) => self.markup("*</font>"),
             Md::Start(Tag::Strong) | Md::End(TagEnd::Strong) => self.markup("**"),
-            Md::Start(Tag::Strikethrough) | Md::End(TagEnd::Strikethrough) => self.markup("~~"),
+            Md::Start(Tag::Strikethrough) => {
+                self.markup(&format!("<font color=\"{STRIKE_COLOR}\">~~"));
+            }
+            Md::End(TagEnd::Strikethrough) => self.markup("~~</font>"),
             Md::Start(Tag::Link { .. }) => self.markup("["),
             Md::End(TagEnd::Link) => {}
             Md::Start(Tag::Image { dest_url, .. }) => {
@@ -369,18 +437,34 @@ impl Builder<'_> {
                     });
                 }
             }
-            Md::Start(Tag::Table(_)) => {
+            Md::Start(Tag::Table(alignments)) => {
                 self.flush();
                 self.table = Some(Vec::new());
+                self.aligns = alignments
+                    .iter()
+                    .take(MAX_COLUMNS)
+                    .map(|a| match a {
+                        pulldown_cmark::Alignment::Left => "left",
+                        pulldown_cmark::Alignment::Center => "center",
+                        pulldown_cmark::Alignment::Right => "right",
+                        pulldown_cmark::Alignment::None => "",
+                    })
+                    .collect();
             }
             Md::End(TagEnd::Table) => {
-                if let Some(rows) = self.table.take()
+                let aligns = std::mem::take(&mut self.aligns);
+                if let Some(mut rows) = self.table.take()
                     && !rows.is_empty()
                 {
+                    // Every row has one cell per column, so columns line up.
+                    for (cells, _) in &mut rows {
+                        cells.resize(aligns.len(), String::new());
+                    }
                     self.push(Block {
                         kind: "table",
                         quote: self.quote.min(MAX_QUOTE),
                         rows,
+                        aligns,
                         ..Default::default()
                     });
                 }
@@ -414,9 +498,7 @@ impl Builder<'_> {
                 if self.cell.is_some() || self.image.is_some() {
                     self.inline(|i| i.text(&text));
                 } else {
-                    self.markup("`");
-                    self.inline(|i| i.text(&text));
-                    self.markup("`");
+                    self.inline(|i| i.code(&text));
                 }
             }
             Md::SoftBreak => self.inline(|i| i.text(" ")),
@@ -466,6 +548,7 @@ pub fn blocks(text: &str, base: Option<&str>) -> Vec<Block> {
         code: None,
         image: None,
         table: None,
+        aligns: Vec::new(),
         cell: None,
         in_head: false,
         images: 0,
@@ -555,6 +638,17 @@ pub fn model(doc: &Doc, mut load: impl FnMut(&str) -> Option<slint::Image>) -> S
         set("indent", SValue::Number(block.indent.into()));
         set("quote", SValue::Number(block.quote.into()));
         set("marker", SValue::String(block.marker.as_str().into()));
+        set("task", SValue::Number(block.task.into()));
+        set(
+            "aligns",
+            list(
+                block
+                    .aligns
+                    .iter()
+                    .map(|a| SValue::String((*a).into()))
+                    .collect(),
+            ),
+        );
         set(
             "text",
             SValue::StyledText(block.inline.styled(block.kind == "heading")),
@@ -633,10 +727,11 @@ mod tests {
         assert_eq!(all[1].inline.plain, "段落 粗 斜 删 码 链接");
         assert_eq!(
             all[1].inline.format,
-            "S**S**S*S*S~~S~~S`S`S[S](<https://a.example/x>)".replace('S', "\u{e541}")
+            "S**S**S<font color=\"#e8a33d\">*S*</font>S<font color=\"#8a8496\">~~S~~</font>SSS[S](<https://a.example/x>)"
+                .replace('S', "\u{e541}")
         );
         assert_eq!((all[2].marker.as_str(), all[2].indent), ("•", 0));
-        assert_eq!(all[3].marker, "☑");
+        assert_eq!((all[3].marker.as_str(), all[3].task), ("", 2));
         assert_eq!((all[4].marker.as_str(), all[4].indent), ("1.", 1));
         assert_eq!(all[5].marker, "2.");
         assert_eq!(all[6].quote, 1);
@@ -656,6 +751,81 @@ mod tests {
             !all.iter().any(|b| b.inline.plain.contains("html")),
             "HTML dropped"
         );
+    }
+
+    /// The spans Slint will draw for a block's inline text.
+    fn spans_of(block: &Block) -> Vec<(String, String)> {
+        let styled = block.inline.styled(false);
+        let mut out = Vec::new();
+        for paragraph in styled.as_ref() {
+            for span in &paragraph.formatting {
+                out.push((
+                    format!("{:?}", span.style),
+                    paragraph.text[span.range.clone()].to_owned(),
+                ));
+            }
+        }
+        out
+    }
+
+    /// GUI review 2026-10-21: italic and strikethrough invisible with the
+    /// forced CJK font, CJK inside inline code invisible, the open task box
+    /// a missing glyph, table header alignment off.
+    #[test]
+    fn styles_survive_fonts_without_italic_and_cjk_code() {
+        let all = blocks(
+            "*斜体* *italic* ~~删除线~~ `行内代码` `assets/icon.png` `a 中 b`",
+            None,
+        );
+        let spans = spans_of(&all[0]);
+        let has =
+            |style: &str, text: &str| spans.iter().any(|(s, t)| s.starts_with(style) && t == text);
+        assert!(
+            has("Emphasis", "斜体") && has("Emphasis", "italic"),
+            "{spans:?}"
+        );
+        assert!(
+            has("Color", "斜体") && has("Color", "删除线"),
+            "colour as well: {spans:?}"
+        );
+        assert!(has("Strikethrough", "删除线"));
+        // Code style (monospace, no CJK fallback) only on ASCII runs.
+        assert!(has("Code", "assets/icon.png"));
+        assert!(has("Code", "a ") && has("Code", " b"));
+        assert!(
+            !spans.iter().any(|(s, t)| s == "Code" && !t.is_ascii()),
+            "{spans:?}"
+        );
+        assert!(all[0].inline.plain.contains("行内代码"));
+        // Code blocks: the same per run, lines and indentation kept.
+        let code = &blocks("```\nfn main() {\n\n    // 中文注释\n}\n```", None)[0];
+        let styled = code.inline.styled(false);
+        let lines: Vec<_> = styled.as_ref().iter().map(|p| p.text.as_str()).collect();
+        assert_eq!(lines, ["fn main() {", "\u{a0}", "    // 中文注释", "}"]);
+        assert!(
+            !spans_of(code)
+                .iter()
+                .any(|(s, t)| s == "Code" && !t.is_ascii())
+        );
+        // Task items: a drawn box (task 1/2), no glyph marker; loose lists too.
+        let tasks = blocks("- [ ] open\n- [x] done\n\n- [ ] loose\n\n  more\n", None);
+        let tasks: Vec<_> = tasks
+            .iter()
+            .map(|b| (b.task, b.marker.as_str(), b.inline.plain.as_str()))
+            .collect();
+        assert_eq!(
+            tasks,
+            [
+                (1, "", "open"),
+                (2, "", "done"),
+                (1, "", "loose"),
+                (0, "", "more")
+            ]
+        );
+        // Table columns follow the delimiter row; short rows are padded.
+        let table = &blocks("| a | b | c |\n|:--|:-:|--:|\n| 1 | 2 |\n", None)[0];
+        assert_eq!(table.aligns, ["left", "center", "right"]);
+        assert_eq!(table.rows[1].0, ["1", "2", ""]);
     }
 
     #[test]
@@ -838,5 +1008,23 @@ export component W inherits Window {
             instance.get_property("clicked").unwrap(),
             SValue::String("https://b.example/".into())
         );
+        // The open task box is drawn with shapes (no font glyph needed).
+        let task = Doc {
+            text: "- [ ] 任务".into(),
+            ..Default::default()
+        };
+        instance
+            .set_property("doc", model(&task, |_| None))
+            .unwrap();
+        buffer.fill(slint::platform::software_renderer::Rgb565Pixel(0xffff));
+        window.request_redraw();
+        window.draw_if_needed(|r| {
+            r.render(&mut buffer, 320);
+        });
+        let boxed = (8..32)
+            .flat_map(|y| (10..30).map(move |x| y * 320 + x))
+            .filter(|&i| buffer[i].0 != 0xffff)
+            .count();
+        assert!(boxed >= 20, "task box drawn ({boxed} pixels)");
     }
 }
