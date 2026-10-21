@@ -163,3 +163,7 @@ macOS 的代码是原样搬进 `platform/macos.rs` 的，但调用路径变了�
 8. **双击与按键**：`Mouse:LeftClick` 的单击延迟仍按系统双击间隔；`Ctrl+…` 绑定按 ⌘ 也触发；⌘Q 退出。
 9. **字体与数据目录**：插件窗口的中文仍是冬青黑体；`~/Library/Application Support/Vestra/` 下的插件数据、安装库、界面状态照常读到（路径未变）。
 10. **P2 之后**：capture 的 JPEG/BMP 截图（BMP 与 PNG 逐像素一致，JPEG 质量设置生效，目标已存在时不覆盖）；info 的系统信息页（版本、构建、机型、显示器）；subtitle-online 的密钥（已存的密钥能读到，首次会弹钥匙串授权；保存、清空后在「钥匙串访问」里看到对应变化）。开发版每次重新构建后读钥匙串会再弹一次授权，属预期。
+
+### 4.6 P4 交付（维护者，2026-10-21）
+
+删除 §4.4 的兼容期接口：`LocalServices.open` / `openUrl`（`sdk/wire.ts`，workshop `vendor/sdk` 已重同步）与 `TestHost` 经 `host.local` 转发 `system.*` 的那段（改为直接记录到 `host.system`，注入失败用 `host.handle`），grep 确认插件与测试已无引用，参考 §14/§17 已同步；`src/sdk` 中不再有 `/usr/bin/open`，`npm run portability`（含宿主）clean，src 与宿主的全部检查通过。
