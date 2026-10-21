@@ -1,7 +1,7 @@
 import { mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { PlayerState, Scope, Snapshot } from "../../sdk/plugin/index.ts";
+import type { PlayerState, Scope, Snapshot } from "@vestra-player/sdk";
 import { captureError } from "./form.ts";
 import { usable } from "./model.ts";
 import { jobError } from "./tasks.ts";

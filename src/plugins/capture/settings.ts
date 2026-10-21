@@ -1,7 +1,7 @@
 import { existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Scope } from "../../sdk/plugin/index.ts";
+import type { Scope } from "@vestra-player/sdk";
 import { FORMATS, quality } from "./model.ts";
 import type { Format } from "./model.ts";
 

@@ -1,4 +1,4 @@
-import type { Plugin } from "../../sdk/plugin/index.ts";
+import type { Plugin } from "@vestra-player/sdk";
 import { PluginsPage } from "./manager.ts";
 
 /**

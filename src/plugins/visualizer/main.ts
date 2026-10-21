@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import type { ImageRef, Panel, PlayerState, Plugin } from "../../sdk/plugin/index.ts";
+import type { ImageRef, Panel, PlayerState, Plugin } from "@vestra-player/sdk";
 import { CoverCache, fileName, type Track } from "./covers.ts";
 import { imageProblem } from "./images.ts";
 import { Logo } from "./logo.ts";

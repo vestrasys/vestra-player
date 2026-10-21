@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { TestHost, startPlugin } from "../../../sdk/plugin/testing.ts";
+import { TestHost, startPlugin } from "@vestra-player/sdk/testing";
 import { clock, displayName, keyOf, mediaKind, middle } from "../identity.ts";
 import activate from "../main.ts";
 import { timing } from "../store.ts";

@@ -15,7 +15,8 @@
     }
   },
   "include": [
-    "sdk/**/*.ts",
+    "packages/sdk/src/**/*.ts",
+    "packages/sdk/test/**/*.ts",
     "runtime/**/*.ts",
     "examples/**/*.ts",
     "plugins/**/*.ts",

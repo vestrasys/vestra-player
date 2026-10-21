@@ -1,4 +1,4 @@
-import type { Plugin } from "../../sdk/plugin/index.ts";
+import type { Plugin } from "@vestra-player/sdk";
 import { IgnoreDefaults } from "./ignore.ts";
 import { KeysPage } from "./keys-page.ts";
 import { BindingsModel } from "./model.ts";

@@ -1,4 +1,4 @@
-import type { Disposable, Plugin } from "../../sdk/plugin/index.ts";
+import type { Disposable, Plugin } from "@vestra-player/sdk";
 import { AutoSize } from "./auto-size.ts";
 import { currentScale, SCALES } from "./geometry.ts";
 import { OnTop } from "./on-top.ts";

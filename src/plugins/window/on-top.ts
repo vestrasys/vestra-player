@@ -1,4 +1,4 @@
-import type { PlayerState, Plugin } from "../../sdk/plugin/index.ts";
+import type { PlayerState, Plugin } from "@vestra-player/sdk";
 import type { Preferences } from "./settings.ts";
 
 export const playing = (state: PlayerState) => state.phase === "ready" && !state.paused;

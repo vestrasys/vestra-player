@@ -1,4 +1,4 @@
-import type { Plugin } from "../../sdk/plugin/index.ts";
+import type { Plugin } from "@vestra-player/sdk";
 
 /**
  * A sidebar panel with its own right-click menu (C11), a key that works only

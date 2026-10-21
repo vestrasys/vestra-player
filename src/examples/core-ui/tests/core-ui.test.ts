@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
-import { startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
+import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 
 const directory = new URL("..", import.meta.url);

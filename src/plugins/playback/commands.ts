@@ -1,4 +1,4 @@
-import type { CommandState, Scope } from "../../sdk/plugin/index.ts";
+import type { CommandState, Scope } from "@vestra-player/sdk";
 import type { Playback } from "./controller.ts";
 import { type CopyKind, copyTarget } from "./copy.ts";
 import type { Keyframes } from "./keyframes.ts";

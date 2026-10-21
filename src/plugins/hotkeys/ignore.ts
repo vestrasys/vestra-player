@@ -1,4 +1,4 @@
-import type { BindingRef, JsonStore, Plugin } from "../../sdk/plugin/index.ts";
+import type { BindingRef, JsonStore, Plugin } from "@vestra-player/sdk";
 import { exempt, refKey, sameRef } from "./keys.ts";
 import type { BindingsModel } from "./model.ts";
 import { type IgnoreRecord, jsonStore, readRecord } from "./store.ts";

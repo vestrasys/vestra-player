@@ -1,5 +1,5 @@
 import { basename, extname } from "node:path";
-import type { AppInfo, PlaybackStats, PlayerState } from "../../sdk/plugin/index.ts";
+import type { AppInfo, PlaybackStats, PlayerState } from "@vestra-player/sdk";
 import { API_VERSION, ffmpegVersion, vestraVersion } from "./about.ts";
 
 /**

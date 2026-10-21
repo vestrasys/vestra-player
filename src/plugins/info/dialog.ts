@@ -1,6 +1,6 @@
 import { rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
-import type { PlaybackStats, PlayerState, Plugin } from "../../sdk/plugin/index.ts";
+import type { PlaybackStats, PlayerState, Plugin } from "@vestra-player/sdk";
 import { filePage, isUrl, message, pageText, playbackPage, remotePage, saveName, systemPage } from "./properties.ts";
 import type { Row, SystemFacts } from "./properties.ts";
 import { readFacts } from "./sysinfo.ts";

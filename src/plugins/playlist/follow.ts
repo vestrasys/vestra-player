@@ -1,6 +1,6 @@
 import { realpath } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
-import type { PlayerState, Scope } from "../../sdk/plugin/index.ts";
+import type { PlayerState, Scope } from "@vestra-player/sdk";
 import { SCAN_LIMIT, siblings } from "./media.ts";
 import type { Queue } from "./queue.ts";
 

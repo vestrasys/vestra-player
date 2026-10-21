@@ -3,8 +3,8 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import type { PlaybackStats } from "../../../sdk/plugin/index.ts";
-import { HostError, startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
+import type { PlaybackStats } from "@vestra-player/sdk";
+import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import { MAX_MARKS, seekMarks } from "../bar.ts";
 import activate from "../main.ts";
 import { clock, ffmpegArgs, MAX_FAILURES, NEEDS_FFMPEG, SETTLE_MS, slotOf } from "../thumbs.ts";

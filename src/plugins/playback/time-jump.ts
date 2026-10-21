@@ -1,4 +1,4 @@
-import type { Scope, Window } from "../../sdk/plugin/index.ts";
+import type { Scope, Window } from "@vestra-player/sdk";
 import { DEFAULT_STEPS, type SeekSteps, type SettingsStore, validStep } from "./settings.ts";
 
 export const RANGE = "范围 0.1–3600 秒，最多一位小数";

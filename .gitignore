@@ -2,6 +2,10 @@
 .cache/
 node_modules/
 
-# Plugin builds are produced by `npm run plugin -- build <name>` (src/scripts/plugin.mjs).
+# Plugin builds are produced by `npm run plugin -- build <name>` (the SDK's vestra-plugin CLI).
 src/plugins/*/dist/
 src/examples/*/dist/
+
+# The SDK package's compiled output (npm run sdk:build; `prepare` on install).
+src/packages/sdk/dist/
+*.tsbuildinfo

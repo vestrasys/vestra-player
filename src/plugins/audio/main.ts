@@ -1,6 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
-import type { AudioDevice, AudioTrack, Plugin, PlayerState, PluginError, Scope } from "../../sdk/plugin/index.ts";
+import type { AudioDevice, AudioTrack, Plugin, PlayerState, PluginError, Scope } from "@vestra-player/sdk";
 import {
   DEVICE_POLL_MS,
   NO_DEVICES,

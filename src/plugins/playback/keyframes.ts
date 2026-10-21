@@ -1,4 +1,4 @@
-import type { CommandState, PlayerState, Scope } from "../../sdk/plugin/index.ts";
+import type { CommandState, PlayerState, Scope } from "@vestra-player/sdk";
 import type { Playback } from "./controller.ts";
 
 export const UNSUPPORTED = "当前来源不支持此操作";

@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { after } from "node:test";
-import { TestHost, startPlugin } from "../../../sdk/plugin/testing.ts";
+import { TestHost, startPlugin } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 
 const manifest = { id: "community.counter", version: "1.0.0", apiVersion: "vestra/1", entry: "main.js", capabilities: ["ui.window"] };

@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
-import { startPlugin } from "../../../sdk/plugin/testing.ts";
+import { startPlugin } from "@vestra-player/sdk/testing";
 import { WorkshopJob, requirement } from "../engine.mjs";
 
 const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "vestra-workshop-engine-"));
@@ -28,6 +28,13 @@ for (const [version, step] of [["1.0.0", 1], ["1.1.0", 3]]) {
       entry: "main.js",
       capabilities: ["ui.window"],
     });
+    // Like any plugin: types from @vestra-player/sdk, here the player's own
+    // declaration files (no SDK code) copied into the candidate.
+    assert.match(await fs.readFile(path.join(result.directory, "main.ts"), "utf8"), /^import type \{ Plugin \} from '@vestra-player\/sdk';/);
+    const types = path.join(result.directory, "node_modules/@vestra-player/sdk");
+    const copied = (await fs.readdir(types, { recursive: true, withFileTypes: true })).filter((item) => item.isFile()).map((item) => item.name);
+    assert.ok(copied.includes("index.d.ts") && copied.includes("package.json"));
+    assert.deepEqual(copied.filter((name) => name !== "package.json" && !name.endsWith(".d.ts")), []);
 
     // Only the generated production JS, through the ordinary SDK v2 contract.
     const generated = await import(pathToFileURL(path.join(result.directory, "main.js")).href); // boundary-reviewed: generated candidate under test

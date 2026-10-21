@@ -1,4 +1,4 @@
-import type { PackageChange, PluginInfo } from "../../sdk/plugin/index.ts";
+import type { PackageChange, PluginInfo } from "@vestra-player/sdk";
 
 /** What each capability lets a plugin do (J07 detail area). */
 export const CAPABILITIES: Record<string, string> = {

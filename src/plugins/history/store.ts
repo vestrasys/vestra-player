@@ -1,4 +1,4 @@
-import type { JsonStore, Scope } from "../../sdk/plugin/index.ts";
+import type { JsonStore, Scope } from "@vestra-player/sdk";
 
 /** Delays, in milliseconds; tests shorten them. */
 export const timing = {

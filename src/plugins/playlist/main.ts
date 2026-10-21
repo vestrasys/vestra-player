@@ -1,6 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname } from "node:path";
-import type { Command, CommandOptions, ConfirmOptions, Plugin, PluginError } from "../../sdk/plugin/index.ts";
+import type { Command, CommandOptions, ConfirmOptions, Plugin, PluginError } from "@vestra-player/sdk";
 import { dropExtra, DROP_EXTENSIONS, dropRow, expandDrop } from "./drop.ts";
 import { follower, type OpenMode } from "./follow.ts";
 import { linkDialog } from "./link.ts";

@@ -1,5 +1,5 @@
 import { renameSync, writeFileSync } from "node:fs";
-import type { BindingInfo, BindingRef, JsonStore, Plugin } from "../../sdk/plugin/index.ts";
+import type { BindingInfo, BindingRef, JsonStore, Plugin } from "@vestra-player/sdk";
 import { exportCsv, exportText } from "./export.ts";
 import type { IgnoreDefaults } from "./ignore.ts";
 import {

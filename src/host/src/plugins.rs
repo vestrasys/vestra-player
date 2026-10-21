@@ -32,6 +32,8 @@ pub struct Manifest {
 /// Bounded per-plugin output queue. Source state alone emits ~10 events/s while playing,
 /// so a small queue disables healthy plugins after a brief event-loop stall.
 const OUTBOUND_CAPACITY: usize = 1024;
+/// The SDK repeats this list (packages/sdk/src/capabilities.ts, used by
+/// `vestra-plugin check`); tests/sdk/host-agreement.test.ts checks they agree.
 pub const CAPABILITIES: &[&str] = &[
     "producer.av",
     "playback.read",

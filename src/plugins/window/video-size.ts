@@ -1,4 +1,4 @@
-import type { PlaybackStats, PlayerState, Plugin } from "../../sdk/plugin/index.ts";
+import type { PlaybackStats, PlayerState, Plugin } from "@vestra-player/sdk";
 import type { Size } from "./geometry.ts";
 import { timing } from "./settings.ts";
 

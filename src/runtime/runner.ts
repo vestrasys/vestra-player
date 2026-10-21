@@ -2,10 +2,11 @@ import { createInterface } from "node:readline";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { HostError } from "../sdk/wire.ts";
-import type { Json, Transport } from "../sdk/wire.ts";
-import { createPlugin } from "../sdk/plugin/index.ts";
-import type { Plugin } from "../sdk/plugin/index.ts";
+// The SDK implementation, from the package the player ships with it
+// (development: the workspace package; packaged: Resources/runtime/node_modules).
+import { createPlugin, HostError } from "@vestra-player/sdk/runtime";
+import type { Json, Transport } from "@vestra-player/sdk/runtime";
+import type { Plugin } from "@vestra-player/sdk";
 
 // stdout is reserved for JSONL. Plugin logs use stderr.
 console.log = (...args: unknown[]) => console.error(...args);

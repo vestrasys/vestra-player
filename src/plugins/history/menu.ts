@@ -1,5 +1,5 @@
 import { basename } from "node:path";
-import type { CommandOptions, Plugin, Scope } from "../../sdk/plugin/index.ts";
+import type { CommandOptions, Plugin, Scope } from "@vestra-player/sdk";
 import { clock, displayName, middle } from "./identity.ts";
 import { exists, MENU_ITEMS, type Recent, type RecentItem } from "./recent.ts";
 import type { Mode, Resume } from "./resume.ts";

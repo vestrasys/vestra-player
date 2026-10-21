@@ -1,5 +1,5 @@
 import { basename, dirname } from "node:path";
-import type { Clipboard, PlayerState } from "../../sdk/plugin/index.ts";
+import type { Clipboard, PlayerState } from "@vestra-player/sdk";
 
 export type CopyKind = "name" | "folder" | "path";
 

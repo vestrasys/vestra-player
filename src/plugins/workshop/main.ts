@@ -1,4 +1,4 @@
-import type { PackageCandidate, PackageChange, PackageTrial, Plugin, PluginError } from "../../sdk/plugin/index.ts";
+import type { PackageCandidate, PackageChange, PackageTrial, Plugin, PluginError } from "@vestra-player/sdk";
 import { WorkshopJob, defaultRequirement, requirement } from "./engine.mjs";
 import * as fs from "node:fs/promises";
 import path from "node:path";

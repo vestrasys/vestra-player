@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { HostError } from "../../../sdk/plugin/testing.ts";
+import { HostError } from "@vestra-player/sdk/testing";
 import { startWorkshop } from "./fixture.mjs";
 
 test("one menu entrance; reopening shows the same window", async () => {

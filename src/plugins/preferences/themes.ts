@@ -1,4 +1,4 @@
-import type { ThemeId } from "../../sdk/plugin/index.ts";
+import type { ThemeId } from "@vestra-player/sdk";
 
 /** The palette a fresh player starts with, and what 恢复默认 returns to. */
 export const DEFAULT_THEME: ThemeId = "vestra";

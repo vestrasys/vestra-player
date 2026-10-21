@@ -1,4 +1,4 @@
-import type { Plugin, WindowState } from "../../sdk/plugin/index.ts";
+import type { Plugin, WindowState } from "@vestra-player/sdk";
 import type { Size } from "./geometry.ts";
 import type { PictureInPicture } from "./pip.ts";
 import type { Preferences } from "./settings.ts";

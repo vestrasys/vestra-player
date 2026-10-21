@@ -1,6 +1,6 @@
 import { access, mkdir, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
-import type { Plugin, PlayerState } from "../../sdk/plugin/index.ts";
+import type { Plugin, PlayerState } from "@vestra-player/sdk";
 import { convert } from "./formats.ts";
 import { archiveKind, keywords, movieHash, unzipSubtitles, urlTitle } from "./media.ts";
 import { DEFAULTS, fileLanguage, isSettingsFile, parseLanguages, parseSettings, rank, row, trackTitle } from "./model.ts";

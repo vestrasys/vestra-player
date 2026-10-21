@@ -1,8 +1,13 @@
 import { readdir, readFile } from "node:fs/promises";
 import { resolve, dirname, extname, relative, sep } from "node:path";
 import ts from "typescript";
+// Plugins reach the SDK only through the package's public entries: the types
+// (`@vestra-player/sdk`) and, in tests, the test host. `/runtime` is the
+// player's own and deep paths are not part of the package interface.
 const source = resolve(import.meta.dirname, "..");
-const sdk = resolve(source, "sdk");
+const SDK = "@vestra-player/sdk";
+const PUBLIC = new Set([SDK]);
+const PUBLIC_IN_TESTS = new Set([SDK, `${SDK}/testing`]);
 async function files(directory) {
   const items = await readdir(directory, { withFileTypes: true });
   return (
@@ -35,6 +40,7 @@ for (const collection of ["examples", "plugins"]) {
   }
   for (const item of packages.filter((item) => item.isDirectory())) {
     const own = resolve(root, item.name);
+    const tests = resolve(own, "tests");
     for (const path of await files(own)) {
       const parsed = ts.createSourceFile(
         path,
@@ -58,9 +64,15 @@ for (const collection of ["examples", "plugins"]) {
         const target = specifier.text;
         if (target.startsWith(".") || target.startsWith("/")) {
           const resolved = resolve(dirname(path), target);
-          if (!inside(resolved, own) && !inside(resolved, sdk))
+          if (!inside(resolved, own))
             throw new Error(
-              `${relative(source, path)} imports outside its package/SDK: ${target}`,
+              `${relative(source, path)} imports outside its package: ${target}`,
+            );
+        } else if (target === SDK || target.startsWith(`${SDK}/`)) {
+          const allowed = inside(path, tests) ? PUBLIC_IN_TESTS : PUBLIC;
+          if (!allowed.has(target))
+            throw new Error(
+              `${relative(source, path)} imports ${target}; plugins use ${[...allowed].join(" or ")}`,
             );
         }
       }

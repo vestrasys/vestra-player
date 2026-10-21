@@ -1,4 +1,4 @@
-import type { AppInfo, Plugin } from "../../sdk/plugin/index.ts";
+import type { AppInfo, Plugin } from "@vestra-player/sdk";
 
 /** The protocol version in manifest.json (the 插件 API rows of I05 and I09). */
 export const API_VERSION = "vestra/1";

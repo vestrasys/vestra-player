@@ -1,4 +1,4 @@
-import type { JsonStore, Scope } from "../../sdk/plugin/index.ts";
+import type { JsonStore, Scope } from "@vestra-player/sdk";
 
 /** H05 / IA-WIN-03: the four reference player modes, in `OnTopMode` order (0–3), which is also Ctrl+T's cycle. */
 export type OnTop = "never" | "always" | "playing" | "fullscreen";

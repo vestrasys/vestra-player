@@ -1,4 +1,4 @@
-import type { BindingInfo, Plugin } from "../../sdk/plugin/index.ts";
+import type { BindingInfo, Plugin } from "@vestra-player/sdk";
 
 /** The bar elements whose tooltip names a key (G-07). */
 export type TipKey = "play-pause" | "stop" | "seek-backward" | "seek-forward" | "previous" | "next" | "mute" | "open" | "sidebar";

@@ -1,4 +1,4 @@
-import type { SubtitleStyle } from "../../sdk/plugin/index.ts";
+import type { SubtitleStyle } from "@vestra-player/sdk";
 import type { Cue } from "./formats.ts";
 import { DEFAULT_ENCODING, isEncoding } from "./formats.ts";
 import type { Encoding } from "./formats.ts";

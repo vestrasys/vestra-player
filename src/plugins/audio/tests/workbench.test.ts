@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { HostError, startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
+import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 import { presets } from "../model.ts";
 

@@ -1,4 +1,4 @@
-import type { Player, Scope, Window } from "../../sdk/plugin/index.ts";
+import type { Player, Scope, Window } from "@vestra-player/sdk";
 
 type Labels = { windowTitle: string; groupTitle: string; actionLabel: string };
 

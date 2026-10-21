@@ -1,5 +1,5 @@
 import { cpus, freemem, totalmem } from "node:os";
-import type { App, DisplayInfo, SystemInfo } from "../../sdk/plugin/index.ts";
+import type { App, DisplayInfo, SystemInfo } from "@vestra-player/sdk";
 import type { SystemFacts } from "./properties.ts";
 
 /**

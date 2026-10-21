@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, realpath, rm, stat, unlink } from "node:fs/promises";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
-import type { CommandState, ImageRef, PlayerState, Plugin } from "../../sdk/plugin/index.ts";
+import type { CommandState, ImageRef, PlayerState, Plugin } from "@vestra-player/sdk";
 import type { SettingsStore } from "./settings.ts";
 
 export const NEEDS_FFMPEG = "需要 ffmpeg";

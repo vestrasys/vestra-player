@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { HostError, startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
+import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import { clampNote, currentScale, fitted, mini, near, scaled } from "../geometry.ts";
 import activate, { PAGE_ID } from "../main.ts";
 import { normalize, timing } from "../settings.ts";

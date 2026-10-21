@@ -1,4 +1,4 @@
-import type { HostAction, Json, Panel, Plugin, TimelineMark } from "../../sdk/plugin/index.ts";
+import type { HostAction, Json, Panel, Plugin, TimelineMark } from "@vestra-player/sdk";
 import type { Playback } from "./controller.ts";
 import { time } from "./format.ts";
 import type { SettingsStore } from "./settings.ts";

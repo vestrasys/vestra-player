@@ -1,4 +1,4 @@
-import type { PlaybackStats, PlayerState, Plugin } from "../../sdk/plugin/index.ts";
+import type { PlaybackStats, PlayerState, Plugin } from "@vestra-player/sdk";
 import { aboutWindow } from "./about.ts";
 import { propertiesWindow } from "./dialog.ts";
 

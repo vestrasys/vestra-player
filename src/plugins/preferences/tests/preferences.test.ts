@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { HostError, startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
+import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate, { PAGE_ID } from "../main.ts";
 import { THEMES, titleOf } from "../themes.ts";
 

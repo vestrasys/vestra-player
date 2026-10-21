@@ -1,6 +1,6 @@
 import { lstat } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
-import type { PlayerState } from "../../sdk/plugin/index.ts";
+import type { PlayerState } from "@vestra-player/sdk";
 
 /** Pure capture rules: parsing, validation, ranges and file naming. */
 export type Kind = "image" | "burst" | "clip";

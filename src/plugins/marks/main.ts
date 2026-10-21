@@ -1,4 +1,4 @@
-import type { Plugin } from "../../sdk/plugin/index.ts";
+import type { Plugin } from "@vestra-player/sdk";
 import { Actions } from "./actions.ts";
 import { Bookmarks } from "./bookmarks.ts";
 import { Chapters, hasMedia } from "./chapters.ts";

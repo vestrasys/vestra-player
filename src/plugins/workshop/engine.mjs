@@ -5,8 +5,29 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import ts from './vendor/typescript/lib/typescript.js';
 const here = path.dirname(fileURLToPath(import.meta.url));
+/**
+ * The plugin API types of the player running this workshop: its runner
+ * (process.argv[1]) resolves @vestra-player/sdk by Node rules — the workspace
+ * package in development, Resources/runtime/node_modules when packaged.
+ * Candidates type-check against exactly that version; nothing is vendored.
+ */
+export function playerSdk() {
+  for (const from of [process.argv[1], fileURLToPath(import.meta.url)]) {
+    if (!from) continue;
+    try { return path.dirname(createRequire(path.resolve(from)).resolve('@vestra-player/sdk/package.json')); } catch {}
+  }
+  throw Error('找不到播放器自带的插件 SDK（@vestra-player/sdk）');
+}
+/** package.json and the declaration files only: the candidate needs types, never SDK code. */
+async function copySdkTypes(target) {
+  const sdk = playerSdk();
+  await fs.mkdir(target, { recursive: true });
+  await fs.copyFile(path.join(sdk, 'package.json'), path.join(target, 'package.json'));
+  await fs.cp(path.join(sdk, 'dist'), path.join(target, 'dist'), { recursive: true, filter: (file) => !path.extname(file) || /\.d\.ts$/.test(file) });
+}
 export function requirement(text) {
   if (Buffer.byteLength(text) > 65536) throw Error('需求超过64KiB');
   const r = JSON.parse(text);
@@ -26,7 +47,7 @@ export component CounterWindow inherits Window {
 function counterSource(step, broken) {
   // Line 2 carries the deliberate first-draft type error (TS2322 at 2,7).
   return [
-    "import type { Plugin } from './types/plugin/index.ts';",
+    "import type { Plugin } from '@vestra-player/sdk';",
     `const step: number = ${broken ? JSON.stringify(String(step)) : step};`,
     'export default async function activate(plugin: Plugin) {',
     ' let count = 0;',
@@ -69,7 +90,7 @@ export class WorkshopJob {
   async run(text) {
     const r = requirement(text); this.requirement=r;
     await fs.mkdir(this.directory,{recursive:true}); this.realRoot = await fs.realpath(this.directory);
-    await fs.cp(path.join(here,'vendor/sdk'),path.join(this.directory,'types'),{recursive:true});
+    await copySdkTypes(path.join(this.directory,'node_modules/@vestra-player/sdk'));
     await fs.writeFile(path.join(this.directory,'package.json'),'{"type":"module","private":true}');
     const result = value=>({content:[{type:'text',text:JSON.stringify(value)}],details:{}});
     const schema = properties=>({type:'object',properties,required:Object.keys(properties),additionalProperties:false});

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, unlinkSync } from "node:fs";
 import { readdir, readFile, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { Tools } from "../../sdk/plugin/index.ts";
+import type { Tools } from "@vestra-player/sdk";
 import { extensionOf, imageInfo, imageProblem } from "./images.ts";
 
 /** Limits and delays; tests shorten them. */

@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { HostError, startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
+import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import { shorten } from "../copy.ts";
 import activate from "../main.ts";
 import { NO_VIDEO } from "../keyframes.ts";

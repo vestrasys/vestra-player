@@ -1,4 +1,4 @@
-import type { RenderSettings, VideoNode } from "../../sdk/plugin/index.ts";
+import type { RenderSettings, VideoNode } from "@vestra-player/sdk";
 
 // ---------------------------------------------------------------- colour (色彩 page, E02)
 

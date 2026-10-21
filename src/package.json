@@ -2,15 +2,21 @@
   "name": "vestra-runtime",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "packages/sdk"
+  ],
   "scripts": {
-    "check": "tsc --noEmit",
-    "start": "cd host && cargo run --",
-    "format": "prettier --write \"{sdk,runtime,examples,tests,scripts}/**/*.{ts,mjs}\" package.json tsconfig.json",
-    "format:check": "prettier --check \"{sdk,runtime,examples,tests,scripts}/**/*.{ts,mjs}\" package.json tsconfig.json",
+    "prepare": "npm run sdk:build",
+    "check": "npm run sdk:build && tsc --noEmit",
+    "start": "npm run sdk:build && cd host && cargo run --",
+    "format": "prettier --write \"{packages/sdk/{src,test,bin,scripts},runtime,examples,tests,scripts}/**/*.{ts,mjs}\" package.json tsconfig.json packages/sdk/package.json packages/sdk/tsconfig.json",
+    "format:check": "prettier --check \"{packages/sdk/{src,test,bin,scripts},runtime,examples,tests,scripts}/**/*.{ts,mjs}\" package.json tsconfig.json packages/sdk/package.json packages/sdk/tsconfig.json",
     "boundaries": "node scripts/check-boundaries.mjs",
-    "plugin": "node scripts/plugin.mjs",
-    "plugins:build": "node scripts/plugin.mjs build --all",
-    "test:sdk": "node --test tests/sdk/",
+    "sdk:build": "npm run build --silent -w @vestra-player/sdk",
+    "sdk:sync-slint": "node scripts/sync-sdk-slint.mjs",
+    "plugin": "npm run sdk:build && node scripts/plugin.mjs",
+    "plugins:build": "npm run sdk:build && node scripts/plugin.mjs build --all",
+    "test:sdk": "npm run sdk:build && npm test -w @vestra-player/sdk && node --test tests/sdk/",
     "portability": "node scripts/check-portability.mjs"
   },
   "devDependencies": {

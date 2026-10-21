@@ -1,6 +1,6 @@
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Plugin, Scope } from "../../sdk/plugin/index.ts";
+import type { Plugin, Scope } from "@vestra-player/sdk";
 
 /**
  * Demonstrates the core UI interfaces (doc/architecture/core-ui-design.md):

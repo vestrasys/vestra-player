@@ -1,6 +1,6 @@
 import { access, constants, mkdir, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
-import type { Plugin, Window } from "../../sdk/plugin/index.ts";
+import type { Plugin, Window } from "@vestra-player/sdk";
 import { ClipboardError, clipboard } from "./copy.ts";
 import { capturer } from "./form.ts";
 import { audioChoices, extensionOf, FORMAT_LABEL, FORMATS, formatOfName, frameName, message, parseRange, quality, usable } from "./model.ts";
