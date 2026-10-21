@@ -192,6 +192,154 @@ export component W inherits Window {
         assert!(result.component("W").is_some());
     }
 
+    /// A windowless platform, so a widget can take pointer events in a test.
+    struct Headless(std::rc::Rc<slint::platform::software_renderer::MinimalSoftwareWindow>);
+    impl slint::platform::Platform for Headless {
+        fn create_window_adapter(
+            &self,
+        ) -> std::result::Result<
+            std::rc::Rc<dyn slint::platform::WindowAdapter>,
+            slint::PlatformError,
+        > {
+            Ok(self.0.clone())
+        }
+    }
+
+    /// Reported by a plugin author (interaction round): the tip used to
+    /// assign its timer's `running`, dropping the binding, so it showed once.
+    #[test]
+    fn tool_tip_shows_again_on_every_hover_and_hides_when_the_pointer_leaves() {
+        headless();
+        let dir = tempfile::tempdir().unwrap();
+        let source = r#"
+import { ToolTipArea } from "@vestra/widgets.slint";
+export component W inherits Window {
+    width: 200px; height: 100px;
+    out property <bool> showing: tip.showing;
+    tip := ToolTipArea { x: 0px; y: 0px; width: 100px; height: 100px; text: "提示"; }
+}"#;
+        let result = pollster::block_on(
+            compiler().build_from_source(source.into(), dir.path().join("w.slint")),
+        );
+        let instance = result.component("W").unwrap().create().unwrap();
+        instance
+            .window()
+            .set_size(slint::LogicalSize::new(200., 100.));
+        let showing = || instance.get_property("showing").unwrap() == true.into();
+        let at = |x: f32| slint::platform::WindowEvent::PointerMoved {
+            position: slint::LogicalPosition::new(x, 50.),
+        };
+        let wait = |ms: u64| {
+            std::thread::sleep(std::time::Duration::from_millis(ms));
+            slint::platform::update_timers_and_animations();
+        };
+        for round in 0..2 {
+            instance.window().dispatch_event(at(50.));
+            wait(200);
+            assert!(!showing(), "round {round}: before 600 ms");
+            wait(500);
+            assert!(showing(), "round {round}: shown after 600 ms");
+            instance.window().dispatch_event(at(150.));
+            wait(0);
+            assert!(!showing(), "round {round}: hidden when the pointer left");
+        }
+        // A press hides it for the rest of this hover.
+        instance.window().dispatch_event(at(50.));
+        wait(700);
+        assert!(showing());
+        instance
+            .window()
+            .dispatch_event(slint::platform::WindowEvent::PointerPressed {
+                position: slint::LogicalPosition::new(50., 50.),
+                button: slint::platform::PointerEventButton::Left,
+            });
+        wait(700);
+        assert!(!showing());
+    }
+
+    fn headless() {
+        thread_local! {
+            static PLATFORM: () = {
+                let window = slint::platform::software_renderer::MinimalSoftwareWindow::new(
+                    Default::default(),
+                );
+                slint::platform::set_platform(Box::new(Headless(window))).unwrap();
+            };
+        }
+        PLATFORM.with(|_| {});
+    }
+
+    /// IA-CORE-01: Escape closes the deepest level first; on the top level it
+    /// dismisses the menu.
+    #[test]
+    fn escape_in_the_menu_closes_one_level_at_a_time() {
+        headless();
+        let source = r#"
+import { MenuView, MenuLevel } from "menu-view.slint";
+export component W inherits Window {
+    width: 600px; height: 400px;
+    in property <[MenuLevel]> levels;
+    in-out property <int> backs;
+    in-out property <int> dismissals;
+    MenuView {
+        width: root.width; height: root.height;
+        levels: root.levels;
+        back => { root.backs += 1; }
+        dismissed => { root.dismissals += 1; }
+    }
+}"#;
+        let result = pollster::block_on(
+            compiler().build_from_source(source.into(), ui_dir().join("t.slint")),
+        );
+        let errors: Vec<_> = result
+            .diagnostics()
+            .filter(|d| d.level() == slint_interpreter::DiagnosticLevel::Error)
+            .map(|d| d.to_string())
+            .collect();
+        assert!(errors.is_empty(), "{errors:?}");
+        let instance = result.component("W").unwrap().create().unwrap();
+        instance
+            .window()
+            .set_size(slint::LogicalSize::new(600., 400.));
+        let group = |title: &str, children| crate::commands::MenuNode::Group {
+            title: title.into(),
+            group: "g".into(),
+            children,
+        };
+        let roots = vec![group("视频", vec![group("比例", vec![])])];
+        let none = |_: u64, _: &str| None;
+        let set = |path: &[&str]| {
+            let path: Vec<String> = path.iter().map(|s| s.to_string()).collect();
+            let origin = crate::menu::Point { x: 10., y: 10. };
+            let window = crate::menu::Point { x: 600., y: 400. };
+            let value = crate::menu::levels(&roots, &path, origin, window, &[], &none);
+            instance
+                .set_property("levels", crate::ui_values::from_json(&value).unwrap())
+                .unwrap();
+        };
+        let escape = || {
+            instance
+                .window()
+                .dispatch_event(slint::platform::WindowEvent::KeyPressed {
+                    text: slint::platform::Key::Escape.into(),
+                });
+        };
+        let count = |name: &str| match instance.get_property(name).unwrap() {
+            slint_interpreter::Value::Number(n) => n,
+            other => panic!("{other:?}"),
+        };
+        // 视频 ▶ 比例 ▶ open: three levels. The host pops a level on `back`.
+        set(&["视频", "比例"]);
+        escape();
+        assert_eq!((count("backs"), count("dismissals")), (1., 0.));
+        set(&["视频"]);
+        escape();
+        assert_eq!((count("backs"), count("dismissals")), (2., 0.));
+        set(&[]);
+        escape();
+        assert_eq!((count("backs"), count("dismissals")), (2., 1.));
+    }
+
     /// Every plugin and example Slint file compiles with the host's configuration.
     #[test]
     fn all_plugin_and_example_slint_files_compile() {

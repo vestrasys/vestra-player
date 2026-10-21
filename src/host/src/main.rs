@@ -113,7 +113,11 @@ struct Reply {
 }
 enum MenuAction {
     Invoke(String),
-    Hover(usize, String),
+    /// A row entered: level, token, and whether it acts at once (a click or
+    /// a key) or after the submenu delay (the pointer, G-15).
+    Hover(usize, String, bool),
+    /// G-03: scroll a level to this offset (clamped when projected).
+    Scroll(usize, f64),
     Reset,
     Back,
     Dismiss,
@@ -242,6 +246,11 @@ struct Host {
     shell_generation: u64,
     next_shell_generation: u64,
     menu_path: Vec<String>,
+    /// Requested scroll offset of each open menu level (G-03).
+    menu_scroll: Vec<f64>,
+    /// The submenu delay (G-15) and its length.
+    menu_delay: menu::HoverDelay,
+    menu_show_delay_ms: u64,
     policy: window_state::Policy,
     clock: Instant,
     window_facts: Value,
@@ -681,32 +690,31 @@ impl Host {
                         self.open_menu(generation, MenuMode::Main);
                     }
                     MenuAction::Back => {
-                        self.menu_path.pop();
-                        let result = self.refresh_menu();
-                        self.report_menu(result);
+                        let mut path = self.menu_path.clone();
+                        path.pop();
+                        self.set_menu_path(path);
                     }
                     MenuAction::Dismiss => self.close_menu(),
-                    MenuAction::Hover(level, token) => {
-                        let mut path = match menu::parse_token(&token) {
-                            Some(menu::Token::Group(path)) => path,
-                            Some(menu::Token::Command { .. }) => {
-                                self.menu_path.iter().take(level).cloned().collect()
-                            }
-                            None => return,
+                    MenuAction::Hover(level, token, now) => {
+                        let Some(path) = menu::hover_target(&self.menu_path, level, &token) else {
+                            return;
                         };
-                        path.truncate(level + 1);
-                        if path != self.menu_path {
-                            self.menu_path = path;
+                        if now {
+                            self.set_menu_path(path);
+                        } else {
+                            self.menu_delay.hover(&self.menu_path, path, self.now_ms());
+                        }
+                    }
+                    MenuAction::Scroll(level, offset) => {
+                        if level <= self.menu_path.len() && offset.is_finite() {
+                            self.menu_scroll.resize(level + 1, 0.);
+                            self.menu_scroll[level] = offset;
                             let result = self.refresh_menu();
                             self.report_menu(result);
                         }
                     }
                     MenuAction::Invoke(token) => match menu::parse_token(&token) {
-                        Some(menu::Token::Group(path)) => {
-                            self.menu_path = path;
-                            let result = self.refresh_menu();
-                            self.report_menu(result);
-                        }
+                        Some(menu::Token::Group(path)) => self.set_menu_path(path),
                         Some(menu::Token::Command { owner, id }) => {
                             self.close_menu();
                             if let Err(error) = self.execute_command(owner, &id) {
@@ -1138,6 +1146,7 @@ impl Host {
     }
     fn window_tick(&mut self) {
         self.pip_tick();
+        self.menu_tick();
         let Some(shell) = self.shell.as_ref().map(ComponentHandle::clone_strong) else {
             return;
         };
@@ -1492,6 +1501,8 @@ impl Host {
             if self.menu_open && self.menu_generation == floating.generation {
                 self.menu_open = false;
                 self.menu_path.clear();
+                self.menu_scroll.clear();
+                self.menu_delay.clear();
                 self.menu_mode = MenuMode::Main;
             }
             let _ = floating.instance.hide();
@@ -1741,7 +1752,13 @@ impl Host {
         let labels = self.labels();
         set_menu_model(
             window,
-            menu_levels(window, &roots, &mut self.menu_path.clone(), &labels)?,
+            menu_levels(
+                window,
+                &roots,
+                &mut self.menu_path.clone(),
+                &self.menu_scroll,
+                &labels,
+            )?,
         )?;
         if let Some(image) = &self.last_image {
             window.set_property("video-frame", image.clone().into())?;
@@ -1758,12 +1775,28 @@ impl Host {
     ) -> Result<()> {
         let events = self.events.clone();
         window.set_callback("menu-hover", move |args| {
-            if let [SValue::Number(level), SValue::String(token)] = args
+            if let [
+                SValue::Number(level),
+                SValue::String(token),
+                SValue::Bool(now),
+            ] = args
                 && *level >= 0.
             {
                 let _ = events.send(Event::MenuAction(
                     generation,
-                    MenuAction::Hover(*level as usize, token.to_string()),
+                    MenuAction::Hover(*level as usize, token.to_string(), *now),
+                ));
+            }
+            SValue::Void
+        })?;
+        let events = self.events.clone();
+        window.set_callback("menu-scroll", move |args| {
+            if let [SValue::Number(level), SValue::Number(offset)] = args
+                && *level >= 0.
+            {
+                let _ = events.send(Event::MenuAction(
+                    generation,
+                    MenuAction::Scroll(*level as usize, *offset),
                 ));
             }
             SValue::Void
@@ -1884,11 +1917,40 @@ impl Host {
         self.menu_generation = generation;
         self.menu_mode = mode;
         self.menu_path.clear();
+        self.menu_scroll.clear();
+        self.menu_delay.clear();
         if let Some(window) = self.window_for(generation) {
             let _ = window.set_property("menu-open", true.into());
         }
         let result = self.refresh_menu();
         self.report_menu(result);
+    }
+    /// Open this chain of submenus now. Levels that close or change forget
+    /// their scroll offset; a waiting delayed hover is dropped.
+    fn set_menu_path(&mut self, path: Vec<String>) {
+        self.menu_delay.clear();
+        if path == self.menu_path {
+            return;
+        }
+        let common = path
+            .iter()
+            .zip(&self.menu_path)
+            .take_while(|(a, b)| a == b)
+            .count();
+        self.menu_scroll.truncate(common + 1);
+        self.menu_path = path;
+        let result = self.refresh_menu();
+        self.report_menu(result);
+    }
+    /// G-15: apply a hover whose submenu delay has passed.
+    fn menu_tick(&mut self) {
+        if !self.menu_open {
+            return;
+        }
+        let now = self.now_ms();
+        if let Some(path) = self.menu_delay.due(now, self.menu_show_delay_ms) {
+            self.set_menu_path(path);
+        }
     }
     fn refresh_menu(&mut self) -> Result<()> {
         let labels = self.labels();
@@ -1903,7 +1965,13 @@ impl Host {
         let model = match &self.menu_mode {
             MenuMode::Main => {
                 let roots = self.commands.snapshot().roots;
-                menu_levels(window, &roots, &mut self.menu_path, &labels)?
+                menu_levels(
+                    window,
+                    &roots,
+                    &mut self.menu_path,
+                    &self.menu_scroll,
+                    &labels,
+                )?
             }
             MenuMode::Panel(owner, items) => {
                 // A command removed while its panel menu is open drops out.
@@ -1915,7 +1983,13 @@ impl Host {
                     })
                     .collect();
                 let (origin, size) = menu_frame(window);
-                ui_values::from_json(&menu::context_level(&entries, origin, size, &labels))?
+                ui_values::from_json(&menu::context_level(
+                    &entries,
+                    origin,
+                    size,
+                    self.menu_scroll.first().copied().unwrap_or(0.),
+                    &labels,
+                ))?
             }
         };
         set_menu_model(window, model)
@@ -1923,6 +1997,8 @@ impl Host {
     fn close_menu(&mut self) {
         self.menu_open = false;
         self.menu_path.clear();
+        self.menu_scroll.clear();
+        self.menu_delay.clear();
         self.menu_mode = MenuMode::Main;
         for window in [
             self.shell.as_ref(),
@@ -3504,11 +3580,12 @@ fn menu_levels(
     window: &slint_interpreter::ComponentInstance,
     roots: &[commands::MenuNode],
     path: &mut Vec<String>,
+    scroll: &[f64],
     labels: &dyn Fn(u64, &str) -> Option<String>,
 ) -> Result<slint_interpreter::Value> {
     *path = menu::valid_path(roots, path);
     let (origin, size) = menu_frame(window);
-    ui_values::from_json(&menu::levels(roots, path, origin, size, labels))
+    ui_values::from_json(&menu::levels(roots, path, origin, size, scroll, labels))
 }
 /// Where the menu opens and the window it must fit in, in logical px.
 fn menu_frame(window: &slint_interpreter::ComponentInstance) -> (menu::Point, menu::Point) {
@@ -3902,6 +3979,9 @@ fn main() -> Result<()> {
         shell_generation: 1,
         next_shell_generation: 1,
         menu_path: Vec::new(),
+        menu_scroll: Vec::new(),
+        menu_delay: menu::HoverDelay::default(),
+        menu_show_delay_ms: platform::menu_show_delay_ms(),
         policy: window_state::Policy::new(0),
         clock: Instant::now(),
         window_facts: Value::Null,
