@@ -1,13 +1,12 @@
 //! Finite trusted-plugin binary AV transport; no emulator business.
 #![forbid(unsafe_code)]
+use crate::platform::{AvListener, AvStream};
 use crate::{
     RpcError,
     producer_audio::{Audio, Push, Writer},
     producer_binary::{self as wire, Kind, Spec},
 };
 use serde_json::{Value, json};
-#[cfg(unix)]
-use std::os::unix::net::{UnixListener, UnixStream};
 use std::{
     collections::{BTreeMap, VecDeque},
     io::Read,
@@ -38,7 +37,6 @@ struct Producer {
     shared: Arc<Shared>,
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
-    _directory: tempfile::TempDir,
     epoch: u64,
     last_video: Option<u64>,
 }
@@ -84,23 +82,9 @@ impl Producers {
             .ok_or_else(|| RpcError::invalid("height required"))?;
         let spec = Spec { width, height };
         spec.validate().map_err(failure)?;
-        #[cfg(not(unix))]
         {
-            let _ = (owner, spec);
-            Err(RpcError::new(
-                "unsupported",
-                "finite producer transport requires Unix sockets on this build",
-            ))
-        }
-        #[cfg(unix)]
-        {
-            let directory = tempfile::Builder::new()
-                .prefix("vestra-av-")
-                .tempdir_in("/tmp")
-                .map_err(failure)?;
-            let path = directory.path().join("av.sock");
-            let listener = UnixListener::bind(&path).map_err(failure)?;
-            listener.set_nonblocking(true).map_err(failure)?;
+            // A Unix socket, or loopback TCP with a token (platform module).
+            let (listener, address) = crate::platform::av_listen().map_err(failure)?;
             let (audio, writer) = Audio::open(self.device.as_deref()).map_err(failure)?;
             audio.reset(1, true, 0).map_err(failure)?;
             let shared = Arc::new(Shared::default());
@@ -140,14 +124,17 @@ impl Producers {
                     shared,
                     stop,
                     thread: Some(worker),
-                    _directory: directory,
                     epoch: 1,
                     last_video: None,
                 },
             );
-            Ok(
-                json!({"producerId":id,"socket":path,"epoch":1,"sampleRate":48000,"channels":2,"sampleFormat":"f32le","videoFormat":"rgba8","maxAudioFrames":4800,"audioCapacityFrames":9600,"videoCapacity":8}),
-            )
+            let mut prepared = json!({"producerId":id,"epoch":1,"sampleRate":48000,"channels":2,"sampleFormat":"f32le","videoFormat":"rgba8","maxAudioFrames":4800,"audioCapacityFrames":9600,"videoCapacity":8});
+            // `socket` (and `token` for loopback TCP).
+            if let (Some(prepared), Some(address)) = (prepared.as_object_mut(), address.as_object())
+            {
+                prepared.extend(address.clone());
+            }
+            Ok(prepared)
         }
     }
     pub fn state(&self, id: u64, owner: u64) -> Result<Value, RpcError> {
@@ -418,12 +405,7 @@ impl Drop for Producers {
         }
     }
 }
-#[cfg(unix)]
-fn read_exact(
-    stream: &mut UnixStream,
-    buffer: &mut [u8],
-    stop: &AtomicBool,
-) -> anyhow::Result<bool> {
+fn read_exact(stream: &mut AvStream, buffer: &mut [u8], stop: &AtomicBool) -> anyhow::Result<bool> {
     let mut offset = 0;
     while offset < buffer.len() {
         if stop.load(Ordering::Acquire) {
@@ -444,9 +426,8 @@ fn read_exact(
     }
     Ok(true)
 }
-#[cfg(unix)]
 fn receive(
-    listener: UnixListener,
+    listener: AvListener,
     mut writer: Writer,
     spec: Spec,
     shared: &Shared,
@@ -456,12 +437,9 @@ fn receive(
         if stop.load(Ordering::Acquire) {
             return Ok(());
         }
-        match listener.accept() {
-            Ok((s, _)) => break s,
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                thread::sleep(Duration::from_millis(10))
-            }
-            Err(e) => return Err(e.into()),
+        match listener.accept()? {
+            Some(stream) => break stream,
+            None => thread::sleep(Duration::from_millis(10)),
         }
     };
     stream.set_read_timeout(Some(Duration::from_millis(50)))?;

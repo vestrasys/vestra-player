@@ -4970,6 +4970,7 @@ dependencies = [
  "base64",
  "block2 0.6.2",
  "cpal",
+ "getrandom 0.3.4",
  "image",
  "keyring",
  "objc2 0.6.5",

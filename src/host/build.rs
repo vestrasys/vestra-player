@@ -20,6 +20,7 @@ fn main() {
         })
         .unwrap_or_default();
     println!("cargo:rustc-env=VESTRA_SLINT_VERSION={slint}");
+    windows_manifest();
     let git = |args: &[&str]| {
         Command::new("git")
             .args(args)
@@ -37,4 +38,24 @@ fn main() {
     if let Some(hash) = git(&["rev-parse", "--short", "HEAD"]) {
         println!("cargo:rustc-env=VESTRA_BUILD={hash}");
     }
+}
+
+/// Windows (MSVC): embed `windows/vestra.manifest` in every linked binary
+/// (the host and its test harness). It turns on Common Controls v6, which
+/// rfd's `common-controls-v6` needs to start at all (custom dialog buttons).
+fn windows_manifest() {
+    println!("cargo:rerun-if-changed=windows/vestra.manifest");
+    let var = |key: &str| std::env::var(key).unwrap_or_default();
+    if var("CARGO_CFG_TARGET_OS") != "windows" {
+        return;
+    }
+    if var("CARGO_CFG_TARGET_ENV") != "msvc" {
+        println!(
+            "cargo:warning=no application manifest for this Windows toolchain; dialogs need Common Controls v6"
+        );
+        return;
+    }
+    let manifest = std::path::Path::new(&var("CARGO_MANIFEST_DIR")).join("windows/vestra.manifest");
+    println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
+    println!("cargo:rustc-link-arg=/MANIFESTINPUT:{}", manifest.display());
 }

@@ -464,6 +464,9 @@ pub fn ui_font() -> Option<(&'static str, &'static str)> {
         .then_some(("Hiragino Sans GB", HIRAGINO))
 }
 
+/// FFmpeg's name for its stdin, which is the held source file (seekable).
+pub const HELD_FILE_INPUT: &str = "/dev/fd/0";
+
 /// The offline workers' FFmpeg when `VESTRA_FFMPEG` is not set.
 pub fn default_ffmpeg() -> PathBuf {
     PathBuf::from("/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg")

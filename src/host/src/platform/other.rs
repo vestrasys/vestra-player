@@ -120,6 +120,9 @@ pub fn app_data_dir() -> Option<PathBuf> {
 pub fn ui_font() -> Option<(&'static str, &'static str)> {
     None
 }
+/// FFmpeg's name for its stdin, which is the held source file (seekable).
+pub const HELD_FILE_INPUT: &str = "/dev/fd/0";
+
 pub fn default_ffmpeg() -> PathBuf {
     std::env::var_os("PATH")
         .and_then(|path| {

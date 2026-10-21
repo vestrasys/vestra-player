@@ -246,11 +246,12 @@ pub fn clipboard_write_image(kind: Image, bytes: Vec<u8>) -> std::result::Result
 
 // ------------------------------------------------------------------ dialogs
 
-/// A message box owned by the active host window (else `parent`): the
-/// message and detail as its text, the system's OK and Cancel buttons (custom
-/// labels need comctl32 v6 and an application manifest, which this build
-/// does not embed), a warning icon for destructive actions. A checkbox becomes
-/// a second Yes/No box after confirming. `done` runs on a worker thread.
+/// A task dialog owned by the active host window (else `parent`): the
+/// message and detail as its text, the plugin's own confirm and cancel labels
+/// (rfd's `common-controls-v6`; build.rs embeds the Common Controls v6
+/// manifest it needs), a warning icon for destructive actions. A checkbox
+/// becomes a second Yes/No dialog after confirming (task dialogs through rfd
+/// have no checkbox). `done` runs on a worker thread.
 pub fn confirm(
     options: &crate::confirm::Options,
     parent: Option<HostWindowId>,
@@ -284,9 +285,10 @@ pub fn confirm(
     };
     // Built here, on the UI thread that owns the windows; only waiting for
     // the answers happens on the worker.
+    let labels = crate::confirm::button_labels(options);
     let first = dialog(
         text,
-        MessageButtons::OkCancelCustom(options.confirm.clone(), options.cancel.clone()),
+        MessageButtons::OkCancelCustom(labels.0.clone(), labels.1.clone()),
         level,
     )
     .show();
@@ -294,11 +296,11 @@ pub fn confirm(
         .checkbox
         .clone()
         .map(|checkbox| dialog(checkbox, MessageButtons::YesNo, MessageLevel::Info).show());
-    let confirm_label = options.confirm.clone();
     std::thread::spawn(move || {
         let confirmed = match pollster::block_on(first) {
-            MessageDialogResult::Ok | MessageDialogResult::Yes => true,
-            MessageDialogResult::Custom(label) => label == confirm_label,
+            MessageDialogResult::Custom(label) => {
+                crate::confirm::confirmed_by(Some(&label), &labels)
+            }
             _ => false,
         };
         let checked = confirmed
@@ -439,6 +441,10 @@ pub fn ui_font() -> Option<(&'static str, &'static str)> {
         .is_file()
         .then_some(("Microsoft YaHei", YAHEI))
 }
+
+/// FFmpeg's name for its stdin, which is the held source file: the `fd`
+/// protocol (FFmpeg 6.1 and later) seeks it like a file; `pipe:` would not.
+pub const HELD_FILE_INPUT: &str = "fd:";
 
 /// The offline workers' FFmpeg when `VESTRA_FFMPEG` is not set: the first
 /// `ffmpeg.exe` on `PATH`.
