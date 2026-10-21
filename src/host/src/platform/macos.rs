@@ -80,10 +80,79 @@ fn window(id: HostWindowId) -> Result<objc2::rc::Retained<objc2_app_kit::NSWindo
     Ok(window)
 }
 
-/// The host window itself, for the PiP prototype (feature `pip`).
-#[cfg(feature = "pip")]
-pub fn ns_window(id: HostWindowId) -> Result<objc2::rc::Retained<objc2_app_kit::NSWindow>> {
-    window(id)
+// ------------------------------------------------------- picture-in-picture
+
+/// AVKit's sample-buffer picture-in-picture (macOS 14+).
+pub fn pip_supported() -> bool {
+    vestra_pip::Pip::supported()
+}
+
+/// The system picture-in-picture window and its source layer, which sits in
+/// a borderless child window below the main window, on the video area (see
+/// `vestra-pip`). UI thread only.
+pub struct PipWindow(vestra_pip::Pip);
+
+impl PipWindow {
+    pub fn new() -> std::result::Result<Self, RpcError> {
+        vestra_pip::Pip::new().map(Self).ok_or_else(|| {
+            RpcError::new(
+                "unsupported",
+                "此系统不支持画中画（需要 macOS 14 或更高版本）",
+            )
+        })
+    }
+    /// The zero-copy path for frames the GPU renderer drew into an IOSurface
+    /// (BGRA): the merge point with the GPU render line (round 2026-10
+    /// render-pip §3).
+    #[allow(dead_code)]
+    pub fn push_surface(
+        &self,
+        surface: &vestra_pip::IOSurfaceRef,
+    ) -> std::result::Result<(), String> {
+        self.0.enqueue_surface(surface)
+    }
+}
+
+impl crate::pip::Surface for PipWindow {
+    fn place(&self, id: HostWindowId, area: Rect) -> bool {
+        use objc2_foundation::{NSPoint, NSRect, NSSize};
+        let area = NSRect::new(
+            NSPoint::new(area.x, area.y),
+            NSSize::new(area.width, area.height),
+        );
+        window(id).is_ok_and(|window| self.0.place(&window, area))
+    }
+    fn push_rgb(&self, width: usize, height: usize, rgb: &[u8]) -> std::result::Result<(), String> {
+        self.0.enqueue(width, height, rgb)
+    }
+    fn start(&self) -> bool {
+        self.0.start()
+    }
+    fn stop(&self) {
+        self.0.stop()
+    }
+    fn set_playback(&self, playback: &crate::pip::Playback) {
+        self.0.set_playback(
+            playback.paused,
+            playback.position,
+            playback.duration,
+            playback.rate,
+        )
+    }
+    fn events(&self) -> Vec<super::PipEvent> {
+        use super::PipEvent;
+        self.0
+            .events()
+            .into_iter()
+            .map(|event| match event {
+                vestra_pip::Event::Pause(pause) => PipEvent::Pause(pause),
+                vestra_pip::Event::Skip(seconds) => PipEvent::Skip(seconds),
+                vestra_pip::Event::Started => PipEvent::Started,
+                vestra_pip::Event::Stopped { restored } => PipEvent::Stopped { restored },
+                vestra_pip::Event::Failed(reason) => PipEvent::Failed(reason),
+            })
+            .collect()
+    }
 }
 
 /// Every ordinary window of this application floats above other apps'
