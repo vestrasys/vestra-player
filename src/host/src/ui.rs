@@ -64,6 +64,8 @@ pub fn compile_source(mut source: String, path: &Path) -> Result<ComponentInstan
         source.push('\n');
         source.push_str(&crate::theme::export_line());
     }
+    // A window that would panic the event loop fails to open instead (`ui_probe`).
+    crate::ui_probe::check(source.clone(), path.to_owned(), None)?;
     let result = pollster::block_on(compiler().build_from_source(source, path.to_owned()));
     if result.components().count() > 1 {
         bail!("Slint file must export exactly one component");
