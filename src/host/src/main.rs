@@ -41,6 +41,7 @@ mod producer_input_delivery;
 #[cfg(feature = "producer-audio")]
 pub mod producer_binary;
 mod render_target;
+mod renderer;
 mod session;
 mod settings_window;
 mod source_backend;
@@ -59,6 +60,7 @@ mod ui;
 mod ui_image;
 mod ui_state;
 mod ui_values;
+mod video_render;
 mod video_view;
 pub mod window_control;
 pub mod window_state;
@@ -300,6 +302,8 @@ struct Host {
     images: ui_image::Images,
     /// No video frame to show (R-U3): the backdrop is effective.
     no_video: bool,
+    /// GPU rendering: the video area was cleared for this empty phase.
+    video_cleared: bool,
     /// A backdrop is mounted, so mpv is told not to show cover art (R-U3).
     cover_art_off: bool,
     /// Prototype (r4a §7.1): system PiP for this window; started once.
@@ -862,18 +866,26 @@ impl Host {
     fn now_ms(&self) -> u64 {
         self.clock.elapsed().as_millis().min(u64::MAX as u128) as u64
     }
-    /// Prototype (r4a §7.2): show the GPU renderer's texture in this window
-    /// (before `show()`, so the rendering notifier sees the setup).
-    #[cfg(feature = "gpu-render")]
+    /// GPU rendering: show the renderer's texture in this window (before
+    /// `show()`, so the rendering notifier sees the setup). A window that
+    /// cannot show it switches the player to software rendering.
     fn attach_gpu(&self, shell: &slint_interpreter::ComponentInstance) {
-        let Some(gpu) = self.backend.gpu.get() else {
+        let Some(gpu) = self.backend.render.gpu() else {
             return;
         };
-        let show = |shell: &slint_interpreter::ComponentInstance, image: slint::Image| {
-            let _ = shell.set_property("video-frame", image.into());
+        let render = self.backend.render.clone();
+        let show = move |shell: &slint_interpreter::ComponentInstance, image: slint::Image| {
+            // A generated stream's picture stays (its frames come as pixels).
+            if !render.producer() {
+                let _ = shell.set_property("video-frame", image.into());
+            }
         };
-        if let Err(error) = gpu.attach(shell, show) {
-            eprintln!("gpu-render: attach failed: {error}");
+        let render = self.backend.render.clone();
+        let failed = move |reason: String| render.fall_back(&reason);
+        if let Err(error) = gpu.attach(shell, show, failed) {
+            self.backend
+                .render
+                .fall_back(&format!("the window cannot show GPU frames ({error})"));
         }
     }
     /// Set the newest rendered frame on the video area (no copy: the renderer
@@ -900,6 +912,11 @@ impl Host {
         self.last_image = Some(image.clone());
         self.last_frame = Some(Instant::now());
         let _ = window.set_property("video-frame", image.into());
+        // With GPU rendering these are a generated stream's frames (or its
+        // cleared canvas): the next GPU frame sets its texture again.
+        if let Some(gpu) = self.backend.render.gpu() {
+            gpu.reshow();
+        }
     }
     /// Prototype (r4a §7.1, `VESTRA_PIP=1`): put the video into the system
     /// picture-in-picture window as soon as AVKit allows it; its play/pause
@@ -1017,13 +1034,17 @@ impl Host {
             .observe(video, scale, fullscreen, Instant::now())
         {
             self.backend.target.set_area(area);
-            #[cfg(feature = "gpu-render")]
-            if let Some(gpu) = self.backend.gpu.get() {
+            if let Some(gpu) = self.backend.render.gpu() {
                 gpu.set_size(area);
             }
         }
         if let Some(log) = self.frame_log.as_mut() {
-            log.tick(self.backend.frame.counts(), self.shown_size, Instant::now());
+            let (mut counts, mut size) = (self.backend.frame.counts(), self.shown_size);
+            if let Some(gpu) = self.backend.render.gpu() {
+                counts = (counts.0 + gpu.frames(), counts.1 + gpu.shown());
+                size = gpu.size().or(size);
+            }
+            log.tick(counts, size, Instant::now());
         }
         self.apply_on_top();
         // R-H11: a left press with no second press within the double-click
@@ -1782,7 +1803,6 @@ impl Host {
                 shell.window().set_position(old.window().position());
                 shell.window().set_fullscreen(old.window().is_fullscreen());
             }
-            #[cfg(feature = "gpu-render")]
             self.attach_gpu(&shell);
             shell.show()?;
             platform::shown(shell.window());
@@ -2206,8 +2226,19 @@ impl Host {
             self.no_video = next;
             return;
         };
-        if empty && self.last_image.take().is_some() {
+        // GPU frames are not kept in `last_image`: clear once per empty phase.
+        let gpu = self
+            .backend
+            .render
+            .gpu()
+            .filter(|_| empty && !self.video_cleared);
+        self.video_cleared = empty;
+        if empty && self.last_image.take().is_some() || gpu.is_some() {
             let _ = shell.set_property("video-frame", SValue::Image(Default::default()));
+            // The next source starts from its own first frame, not this one's last.
+            if let Some(gpu) = gpu {
+                gpu.reshow();
+            }
         }
         if next != self.no_video {
             self.no_video = next;
@@ -2476,6 +2507,7 @@ impl Host {
             }),
             "ui.open" | "ui.set" | "ui.show" | "ui.close" => Some("ui.window"),
             "video.view.set" | "video.view.release" => Some("processing.video"),
+            "video.render.set" | "video.render.release" => Some("processing.video"),
             _ => return Err(RpcError::new("unsupported", "unknown method")),
         };
         if capability.is_some_and(|capability| !plugin.allows(capability)) {
@@ -2498,6 +2530,7 @@ impl Host {
             || method.starts_with("snapshot.")
             || method.starts_with("jobs.")
             || method.starts_with("video.view.")
+            || method.starts_with("video.render.")
         {
             self.backend
                 .commands
@@ -3603,21 +3636,27 @@ fn main() -> Result<()> {
         bail!("--frame-evidence-dir is headless diagnostic only");
     }
     let mut evidence = frame_evidence.map(FrameEvidence::new).transpose()?;
+    // GPU rendering (reference §5.4) needs Slint's OpenGL renderer (femtovg);
+    // headless, `VESTRA_SOFTWARE_RENDER=1` and other systems render in software.
+    let mut gpu = renderer::wanted(
+        headless,
+        std::env::var_os("VESTRA_SOFTWARE_RENDER").as_deref(),
+    );
     if !headless {
-        slint::BackendSelector::new()
-            .backend_name("winit".into())
-            .select()?;
+        let winit = || slint::BackendSelector::new().backend_name("winit".into());
+        if gpu && let Err(error) = winit().renderer_name("femtovg".into()).select() {
+            eprintln!(
+                "render: the OpenGL window renderer is unavailable ({error}); software rendering"
+            );
+            gpu = false;
+            winit().select()?;
+        } else if !gpu {
+            winit().select()?;
+        }
     }
     let mut observed_source = Value::Null;
     let (events, receiver) = mpsc::channel();
-    // Prototype (r4a §7.2): GPU rendering needs a window; headless and
-    // `VESTRA_SOFTWARE_RENDER=1` keep the software renderer.
-    #[cfg(feature = "gpu-render")]
-    backend::GPU.store(
-        !headless && std::env::var_os("VESTRA_SOFTWARE_RENDER").is_none(),
-        std::sync::atomic::Ordering::Relaxed,
-    );
-    let backend = Backend::start(events.clone(), silent)?;
+    let backend = Backend::start(events.clone(), silent, gpu)?;
     // `plugin.app`, handed to every plugin process when it starts.
     let ffmpeg = &backend.versions["ffmpeg"];
     plugins::set_app_info(&json!({"version":env!("CARGO_PKG_VERSION"),
@@ -3695,6 +3734,7 @@ fn main() -> Result<()> {
         timeline: Default::default(),
         images: Default::default(),
         no_video: true,
+        video_cleared: false,
         cover_art_off: false,
         #[cfg(feature = "pip")]
         pip: None,
@@ -3761,10 +3801,15 @@ fn main() -> Result<()> {
                 .window()
                 .set_position(slint::LogicalPosition::new(frame.x as f32, frame.y as f32));
         }
-        #[cfg(feature = "gpu-render")]
         host.attach_gpu(&window);
         window.show()?;
         platform::shown(window.window());
+        // Interpolation (`video.render()`) resamples to the main display's rate.
+        let displays = platform::displays();
+        let main_display = displays.iter().find(|d| d.primary).or(displays.first());
+        host.backend
+            .render
+            .set_refresh(main_display.and_then(|d| d.refresh_rate));
         host.native_before = native_before.clone();
         host.native_window = native_before
             .as_ref()

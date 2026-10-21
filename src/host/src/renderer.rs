@@ -1,0 +1,142 @@
+//! Which renderer draws the video (reference §5.4). GPU rendering (libmpv
+//! OpenGL, through the platform module) is the default; software rendering
+//! (`RenderContext::new_software`) is the fallback: headless runs,
+//! `VESTRA_SOFTWARE_RENDER=1`, systems without a GPU implementation, and a GL
+//! failure at start (mpv's context, or a window that cannot show textures).
+#![forbid(unsafe_code)]
+
+use crate::platform;
+use std::ffi::OsStr;
+use std::sync::{
+    Arc, Mutex, OnceLock, PoisonError,
+    atomic::{AtomicBool, Ordering},
+};
+
+/// `stats().backend` for each renderer.
+pub const GPU_NAME: &str = "libmpv · GPU 渲染（OpenGL）";
+pub const SOFTWARE_NAME: &str = "libmpv · 软件渲染";
+
+/// Shared by the backend's render thread, its control worker and the UI.
+#[derive(Default)]
+pub struct Render {
+    wanted: bool,
+    handle: OnceLock<platform::GpuHandle>,
+    /// The GPU renderer draws now.
+    active: AtomicBool,
+    /// A window could not show GPU frames: the render thread switches.
+    fallback: AtomicBool,
+    /// A generated stream (`openStream`) owns the video area: GPU frames
+    /// (mpv idle or the last file) must not replace its picture.
+    producer: AtomicBool,
+    /// The display refresh rate interpolation paces to (UI thread sets it).
+    refresh: Mutex<Option<f64>>,
+}
+impl Render {
+    pub fn new(wanted: bool) -> Arc<Self> {
+        Arc::new(Self {
+            wanted,
+            ..Self::default()
+        })
+    }
+    pub fn wanted(&self) -> bool {
+        self.wanted
+    }
+    /// The GPU renderer while it draws.
+    pub fn gpu(&self) -> Option<&platform::GpuHandle> {
+        self.active
+            .load(Ordering::Acquire)
+            .then(|| self.handle.get())
+            .flatten()
+    }
+    pub fn install(&self, handle: platform::GpuHandle) {
+        let _ = self.handle.set(handle);
+        self.active.store(true, Ordering::Release);
+    }
+    pub fn deactivate(&self) {
+        self.active.store(false, Ordering::Release);
+    }
+    /// Ask the render thread to switch to software rendering (once).
+    pub fn fall_back(&self, reason: &str) {
+        if self.active.load(Ordering::Acquire) && !self.fallback.swap(true, Ordering::AcqRel) {
+            eprintln!("render: {reason}; switching to software rendering");
+        }
+    }
+    pub fn fallback_requested(&self) -> bool {
+        self.fallback.load(Ordering::Acquire)
+    }
+    pub fn set_producer(&self, on: bool) {
+        self.producer.store(on, Ordering::Release);
+    }
+    pub fn producer(&self) -> bool {
+        self.producer.load(Ordering::Acquire)
+    }
+    pub fn set_refresh(&self, fps: Option<f64>) {
+        *self.refresh.lock().unwrap_or_else(PoisonError::into_inner) =
+            fps.filter(|f| f.is_finite() && *f >= 1.);
+    }
+    /// The refresh rate for display-synced output (60 when unknown).
+    pub fn refresh(&self) -> f64 {
+        self.refresh
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .unwrap_or(60.)
+    }
+    pub fn backend_name(&self) -> &'static str {
+        if self.gpu().is_some() {
+            GPU_NAME
+        } else {
+            SOFTWARE_NAME
+        }
+    }
+}
+
+/// GPU unless headless, `VESTRA_SOFTWARE_RENDER` is set (to anything but
+/// `0` or empty), or this system has no GPU implementation.
+pub fn wanted(headless: bool, software: Option<&OsStr>) -> bool {
+    let software = software.is_some_and(|value| !value.is_empty() && value != "0");
+    platform::GPU_RENDER && !headless && !software
+}
+
+/// mpv `hwdec` for the GPU renderer: `VESTRA_HWDEC`, else `auto-safe`
+/// (mpv falls back to software decoding by itself when it cannot).
+pub fn hwdec(env: Option<String>) -> String {
+    env.filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "auto-safe".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn software_rendering_when_headless_asked_for_or_unavailable() {
+        assert_eq!(wanted(false, None), platform::GPU_RENDER);
+        assert!(!wanted(true, None), "headless");
+        assert!(!wanted(false, Some(OsStr::new("1"))));
+        assert_eq!(wanted(false, Some(OsStr::new("0"))), platform::GPU_RENDER);
+        assert_eq!(wanted(false, Some(OsStr::new(""))), platform::GPU_RENDER);
+        assert_eq!(hwdec(None), "auto-safe");
+        assert_eq!(hwdec(Some(String::new())), "auto-safe");
+        assert_eq!(hwdec(Some("no".into())), "no");
+    }
+
+    #[test]
+    fn a_fallback_needs_an_active_gpu_and_is_asked_once() {
+        let render = Render::new(true);
+        assert!(render.gpu().is_none());
+        assert_eq!(render.backend_name(), SOFTWARE_NAME);
+        render.fall_back("no GPU yet");
+        assert!(!render.fallback_requested(), "nothing to fall back from");
+        render.active.store(true, Ordering::Release);
+        render.fall_back("window");
+        render.fall_back("again");
+        assert!(render.fallback_requested());
+        render.deactivate();
+        assert!(render.gpu().is_none());
+        assert_eq!(render.refresh(), 60.);
+        render.set_refresh(Some(120.));
+        assert_eq!(render.refresh(), 120.);
+        render.set_refresh(Some(f64::NAN));
+        assert_eq!(render.refresh(), 60.);
+    }
+}

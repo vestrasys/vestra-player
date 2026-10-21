@@ -1,5 +1,6 @@
-//! Prototype (vestra-host feature `gpu-render`): libmpv draws with OpenGL and
-//! Slint shows the result as a texture.
+//! libmpv draws with OpenGL and Slint shows the result as a texture (the
+//! host's GPU rendering, reference §5.4; the host reaches it only through its
+//! macOS platform module).
 //!
 //! libmpv renders on its own thread, in a private offscreen CGL context, into a
 //! ring of IOSurfaces. Each Slint window binds the newest surface in its own GL
@@ -13,13 +14,14 @@
 
 use glow::{HasContext, NativeFramebuffer, NativeTexture};
 use objc2_core_foundation::{CFDictionary, CFNumber, CFRetained, CFString};
-use objc2_io_surface::IOSurfaceRef;
+pub use objc2_io_surface::IOSurfaceRef;
 use rsmpv::{Mpv, render::OpenGlFbo, render::OwnedRenderContext};
 use slint::{BorrowedOpenGLTextureBuilder as Borrowed, BorrowedOpenGLTextureOrigin};
 use slint::{ComponentHandle, GraphicsAPI, Image, RenderingState};
 use std::ffi::{CStr, CString, c_void};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, atomic::AtomicBool, mpsc};
-use std::{num::NonZeroU32, sync::atomic::Ordering, thread, time::Duration};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, mpsc};
+use std::{num::NonZeroU32, thread, time::Duration, time::Instant};
 
 type Cgl = *mut c_void;
 type Size = (u32, u32);
@@ -167,23 +169,34 @@ struct Published {
     surface: Arc<Surface>,
     sequence: u64,
 }
+type Notify = Box<dyn Fn() + Send>;
 #[derive(Default)]
 struct Shared {
     stop: AtomicBool,
     size: Mutex<Size>,
+    /// `Some(period)`: draw at most once per period and report each frame as
+    /// presented (mpv's display-synced timing, for interpolation).
+    pace: Mutex<Option<Duration>>,
     latest: Mutex<Option<Published>>,
     /// Set by mpv's update callback, a resize and stop; cleared by the renderer.
     pending: (Mutex<bool>, Condvar),
     /// Ask the last few attached windows to redraw (a dropped one ignores it).
-    redraw: Mutex<Vec<Box<dyn Fn() + Send>>>,
+    redraw: Mutex<Vec<Notify>>,
+    /// Called after each new frame ([`Handle::on_frame`]).
+    notify: Mutex<Vec<Notify>>,
+    /// (epoch, hold): after [`Handle::reshow`], windows show nothing up to
+    /// frame `hold`, then set the next frame's image again.
+    reshow: Mutex<(u64, u64)>,
+    /// Frames copied into windows.
+    shown: AtomicU64,
 }
 impl Shared {
     fn wake(&self) {
         *lock(&self.pending.0) = true;
         self.pending.1.notify_one();
     }
-    fn wait(&self) {
-        let (pending, timeout) = (lock(&self.pending.0), Duration::from_millis(20));
+    fn wait(&self, timeout: Duration) {
+        let pending = lock(&self.pending.0);
         let wait = self.pending.1.wait_timeout_while(pending, timeout, |pending| !*pending);
         *wait.unwrap_or_else(PoisonError::into_inner).0 = false;
     }
@@ -200,12 +213,15 @@ pub struct Handle(Arc<Shared>);
 
 impl Renderer {
     /// Render `mpv` (`vo=libmpv`, no other render context) at `size` pixels.
-    pub fn start(mpv: Arc<Mpv>, size: Size) -> Result<Self, String> {
+    /// While `publish` is false frames are drawn but not shown (the source's
+    /// orientation is still being prepared).
+    pub fn start(mpv: Arc<Mpv>, size: Size, publish: Arc<AtomicBool>) -> Result<Self, String> {
         let shared = Arc::new(Shared { size: Mutex::new(size), ..Shared::default() });
         let (ready, started) = mpsc::sync_channel(1);
         let inner = shared.clone();
         let thread = thread::Builder::new().name("vestra-gpu-render".into());
-        let thread = thread.spawn(move || produce(mpv, inner, ready)).map_err(|e| e.to_string())?;
+        let thread =
+            thread.spawn(move || produce(mpv, inner, publish, ready)).map_err(|e| e.to_string())?;
         let renderer = Self { shared, thread: Some(thread) };
         started.recv().map_err(|_| "render thread died".to_string())??;
         Ok(renderer)
@@ -226,7 +242,12 @@ impl Drop for Renderer {
 
 /// One drawing target of the ring, in the offscreen context.
 struct Target(Arc<Surface>, NativeTexture, NativeFramebuffer);
-fn produce(mpv: Arc<Mpv>, shared: Arc<Shared>, ready: mpsc::SyncSender<Result<(), String>>) {
+fn produce(
+    mpv: Arc<Mpv>,
+    shared: Arc<Shared>,
+    publish: Arc<AtomicBool>,
+    ready: mpsc::SyncSender<Result<(), String>>,
+) {
     let _context = match Offscreen::new() {
         Ok(context) => context,
         Err(error) => return drop(ready.send(Err(error))),
@@ -246,9 +267,16 @@ fn produce(mpv: Arc<Mpv>, shared: Arc<Shared>, ready: mpsc::SyncSender<Result<()
     let notify = shared.clone();
     render.set_update_callback(move || notify.wake()); // Only signals (rsmpv's rule).
     let _ = ready.send(Ok(()));
-    let (mut ring, mut next, mut sequence) = (Vec::new(), 0, 0);
+    let (mut ring, mut next, mut sequence, mut drawn) = (Vec::new(), 0, 0, None::<Instant>);
     while !shared.stop.load(Ordering::Acquire) {
-        shared.wait();
+        let pace = *lock(&shared.pace);
+        // Paced: wait for the rest of the period, so frames come at most at
+        // the display rate however often mpv asks.
+        let left = pace.zip(drawn).map(|(period, at)| period.saturating_sub(at.elapsed()));
+        match left {
+            Some(left) if !left.is_zero() => thread::sleep(left),
+            _ => shared.wait(Duration::from_millis(20)),
+        }
         let size = *lock(&shared.size);
         let resized = ring.first().is_none_or(|t: &Target| t.0.size() != size);
         if resized {
@@ -258,17 +286,26 @@ fn produce(mpv: Arc<Mpv>, shared: Arc<Shared>, ready: mpsc::SyncSender<Result<()
             ring.extend((0..RING).map_while(|_| unsafe { target(&gl, size) }));
         }
         if ring.len() == RING && (render.update() || (resized && sequence > 0)) {
-            let Target(surface, _, fbo) = &ring[next];
-            next = (next + 1) % RING;
+            // Skip a surface the window server still shows.
+            let free = (0..RING).map(|i| (next + i) % RING).find(|&i| !ring[i].0.0.is_in_use());
+            let Target(surface, _, fbo) = &ring[free.unwrap_or(next)];
+            next = (free.unwrap_or(next) + 1) % RING;
             let (width, height) = (size.0 as i32, size.1 as i32);
             let fbo = OpenGlFbo { fbo: fbo.0.get() as i32, width, height, internal_format: 0 };
-            if render.render_opengl(fbo, false, true).is_ok() {
+            if render.render_opengl(fbo, false, pace.is_none()).is_ok() {
                 // SAFETY: the offscreen context is current. glFinish makes the
                 // pixels complete before any window binds the surface.
                 unsafe { gl.finish() };
-                sequence += 1;
-                *lock(&shared.latest) = Some(Published { surface: surface.clone(), sequence });
-                lock(&shared.redraw).iter().for_each(|redraw| redraw());
+                if pace.is_some() {
+                    render.report_swap();
+                }
+                drawn = Some(Instant::now());
+                if publish.load(Ordering::Acquire) {
+                    sequence += 1;
+                    *lock(&shared.latest) = Some(Published { surface: surface.clone(), sequence });
+                    lock(&shared.redraw).iter().for_each(|redraw| redraw());
+                    lock(&shared.notify).iter().for_each(|notify| notify());
+                }
             }
         }
     }
@@ -315,14 +352,52 @@ impl Handle {
             self.0.wake();
         }
     }
-    /// Frames drawn so far.
+    /// `Some(fps)`: draw at most `fps` frames a second and report each as
+    /// presented (mpv `video-sync=display-*`); `None`: mpv's own timing.
+    pub fn set_display_fps(&self, fps: Option<f64>) {
+        let period =
+            fps.filter(|f| f.is_finite() && *f >= 1.).map(|f| Duration::from_secs_f64(1. / f));
+        *lock(&self.0.pace) = period;
+        self.0.wake();
+    }
+    /// Frames published so far.
     pub fn frames(&self) -> u64 {
         lock(&self.0.latest).as_ref().map_or(0, |frame| frame.sequence)
     }
+    /// Frames copied into windows so far.
+    pub fn shown(&self) -> u64 {
+        self.0.shown.load(Ordering::Relaxed)
+    }
+    /// The newest frame's size in pixels.
+    pub fn size(&self) -> Option<Size> {
+        lock(&self.0.latest).as_ref().map(|frame| frame.surface.size())
+    }
+    /// The caller replaced the image on the video area: windows show no frame
+    /// published so far and set the next one's image again.
+    pub fn reshow(&self) {
+        let hold = self.frames();
+        let mut reshow = lock(&self.0.reshow);
+        *reshow = (reshow.0 + 1, hold);
+    }
+    /// The newest frame: its number and surface (for picture-in-picture).
+    pub fn latest(&self) -> Option<(u64, CFRetained<IOSurfaceRef>)> {
+        lock(&self.0.latest).as_ref().map(|frame| (frame.sequence, frame.surface.0.clone()))
+    }
+    /// Call `notify` on the render thread after each new frame.
+    pub fn on_frame(&self, notify: impl Fn() + Send + 'static) {
+        lock(&self.0.notify).push(Box::new(notify));
+    }
     /// Show the video in `component`'s window (call before it is shown):
-    /// `show` gets each new texture image (first frame, resize) to set on the
-    /// video area. Each new frame asks the last four attached windows to redraw.
-    pub fn attach<T>(&self, component: &T, show: impl Fn(&T, Image) + 'static) -> Result<(), String>
+    /// `show` gets each new texture image (first frame, resize, after
+    /// [`reshow`](Self::reshow)) to set on the video area. Each new frame asks
+    /// the last four attached windows to redraw. `failed` runs once if the
+    /// window cannot show textures (its renderer is not OpenGL).
+    pub fn attach<T>(
+        &self,
+        component: &T,
+        show: impl Fn(&T, Image) + 'static,
+        failed: impl FnOnce(String) + 'static,
+    ) -> Result<(), String>
     where
         T: ComponentHandle + 'static,
     {
@@ -335,15 +410,22 @@ impl Handle {
         drop(redraw.drain(..stale));
         drop(redraw);
         let (shared, weak, mut view) = (self.0.clone(), component.as_weak(), None::<View>);
+        let mut failed = Some(failed);
         let notifier = move |state, api: &GraphicsAPI| match state {
-            RenderingState::RenderingSetup if matches!(api, GraphicsAPI::NativeOpenGL { .. }) => {
-                view = View::new();
+            RenderingState::RenderingSetup => {
+                view = matches!(api, GraphicsAPI::NativeOpenGL { .. }).then(View::new).flatten();
+                if view.is_none()
+                    && let Some(failed) = failed.take()
+                {
+                    failed("the window renderer cannot show OpenGL textures".into());
+                }
             }
             RenderingState::BeforeRendering => {
                 let frame = lock(&shared.latest).clone();
+                let reshow = *lock(&shared.reshow);
                 if let (Some(view), Some(frame), Some(component)) =
                     (view.as_mut(), frame, weak.upgrade())
-                    && let Some(image) = view.update(&frame)
+                    && let Some(image) = view.update(&frame, reshow, &shared.shown)
                 {
                     show(&component, image);
                 }
@@ -364,6 +446,7 @@ struct View {
     /// The texture Slint shows and its size.
     shown: Option<(NativeTexture, Size)>,
     sequence: u64,
+    epoch: u64,
 }
 impl View {
     fn new() -> Option<Self> {
@@ -377,13 +460,23 @@ impl View {
                 gl.create_framebuffer().ok()?,
             )
         };
-        Some(Self { gl, source, read, draw, shown: None, sequence: 0 })
+        Some(Self { gl, source, read, draw, shown: None, sequence: 0, epoch: 0 })
     }
-    /// Copy a new frame into the shown texture; a new image when that changed.
-    fn update(&mut self, frame: &Published) -> Option<Image> {
-        if std::mem::replace(&mut self.sequence, frame.sequence) == frame.sequence {
+    /// Copy a new frame into the shown texture; an image to set when the
+    /// texture changed or after a reshow.
+    fn update(
+        &mut self,
+        frame: &Published,
+        (epoch, hold): (u64, u64),
+        count: &AtomicU64,
+    ) -> Option<Image> {
+        let stale = self.epoch != epoch;
+        if frame.sequence <= hold && stale
+            || std::mem::replace(&mut self.sequence, frame.sequence) == frame.sequence && !stale
+        {
             return None;
         }
+        self.epoch = epoch;
         let (gl, size) = (&self.gl, frame.surface.size());
         let (w, h, mut fresh) = (size.0 as i32, size.1 as i32, None);
         // SAFETY: Slint calls BeforeRendering with this window's context
@@ -417,6 +510,7 @@ impl View {
                 gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.draw));
                 gl.disable(glow::SCISSOR_TEST);
                 gl.blit_framebuffer(0, 0, w, h, 0, 0, w, h, glow::COLOR_BUFFER_BIT, glow::NEAREST);
+                count.fetch_add(1, Ordering::Relaxed);
             }
             if scissor {
                 gl.enable(glow::SCISSOR_TEST);
@@ -426,11 +520,12 @@ impl View {
             gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, id(1).map(NativeFramebuffer));
             gl.bind_texture(glow::TEXTURE_2D, id(2).map(NativeTexture));
         }
-        // SAFETY: `fresh` is a complete RGBA8 GL_TEXTURE_2D of exactly `size` in
-        // the context Slint renders this window with. It is deleted only after
-        // Slint got its replacement (above) or at RenderingTeardown.
+        let texture = fresh.or_else(|| self.shown.map(|(texture, _)| texture).filter(|_| stale))?;
+        // SAFETY: `texture` is a complete RGBA8 GL_TEXTURE_2D of exactly `size`
+        // in the context Slint renders this window with. It is deleted only
+        // after Slint got its replacement (above) or at RenderingTeardown.
         let builder =
-            unsafe { Borrowed::new_gl_2d_rgba_texture(fresh?.0, [size.0, size.1].into()) };
+            unsafe { Borrowed::new_gl_2d_rgba_texture(texture.0, [size.0, size.1].into()) };
         Some(builder.origin(BorrowedOpenGLTextureOrigin::TopLeft).build())
     }
 }
@@ -456,7 +551,7 @@ impl Drop for View {
 mod tests {
     use super::*;
     fn until(what: impl Fn() -> bool) -> bool {
-        let start = std::time::Instant::now();
+        let start = Instant::now();
         while !what() && start.elapsed() < Duration::from_secs(10) {
             thread::sleep(Duration::from_millis(10));
         }
@@ -478,23 +573,49 @@ mod tests {
         };
         Some((frame.surface.size(), red))
     }
-    #[test]
-    fn draws_offscreen_top_row_first_and_survives_resizes_and_new_sources() {
+    fn player() -> Arc<Mpv> {
         let mpv = Mpv::builder()
             .and_then(|b| b.set_property("vo", "libmpv")?.set_property("ao", "null")?.build());
-        let mpv = Arc::new(mpv.expect("mpv"));
-        let renderer = Renderer::start(mpv.clone(), (64, 64)).expect("renderer");
+        Arc::new(mpv.expect("mpv"))
+    }
+    const SOURCE: &str =
+        "av://lavfi:color=c=white:s=64x64:d=30,drawbox=y=32:w=64:h=32:color=black:t=fill";
+    #[test]
+    fn draws_offscreen_top_row_first_and_survives_resizes_and_new_sources() {
+        let mpv = player();
+        let renderer = Renderer::start(mpv.clone(), (64, 64), Arc::new(true.into())).expect("gl");
         let handle = renderer.handle();
-        let source =
-            "av://lavfi:color=c=white:s=64x64:d=30,drawbox=y=32:w=64:h=32:color=black:t=fill";
-        mpv.command(&["loadfile", source]).expect("loadfile");
+        mpv.command(&["loadfile", SOURCE]).expect("loadfile");
         assert!(until(|| handle.frames() > 0), "no frame");
         let (top, bottom) = (red(&handle, 2).expect("frame").1, red(&handle, 61).expect("frame").1);
         assert!(top > 200 && bottom < 50, "top {top} bottom {bottom}");
         handle.set_size((32, 16));
         assert!(until(|| red(&handle, 0).is_some_and(|(size, _)| size == (32, 16))), "no resize");
+        assert_eq!(handle.size(), Some((32, 16)));
         let before = handle.frames();
-        mpv.command(&["loadfile", source]).expect("reload");
+        mpv.command(&["loadfile", SOURCE]).expect("reload");
         assert!(until(|| handle.frames() > before), "no frame after a new source");
+    }
+    #[test]
+    fn a_closed_gate_publishes_nothing_and_pacing_caps_the_rate() {
+        let mpv = player();
+        let gate = Arc::new(AtomicBool::new(false));
+        let renderer = Renderer::start(mpv.clone(), (32, 32), gate.clone()).expect("gl");
+        let handle = renderer.handle();
+        mpv.set_property("video-sync", "display-resample").expect("sync");
+        mpv.set_property("display-fps-override", "30").expect("fps");
+        handle.set_display_fps(Some(30.));
+        mpv.command(&["loadfile", "av://lavfi:testsrc2=s=32x32:r=60:d=30"]).expect("loadfile");
+        thread::sleep(Duration::from_millis(500));
+        assert_eq!(handle.frames(), 0, "gate closed");
+        gate.store(true, Ordering::Release);
+        assert!(until(|| handle.frames() > 0), "no frame once open");
+        let start = (Instant::now(), handle.frames());
+        thread::sleep(Duration::from_secs(1));
+        let rate = (handle.frames() - start.1) as f64 / start.0.elapsed().as_secs_f64();
+        assert!((15. ..=36.).contains(&rate), "paced rate {rate}");
+        handle.reshow();
+        let (epoch, hold) = *lock(&handle.0.reshow);
+        assert!(epoch == 1 && hold > 0 && hold <= handle.frames(), "{epoch} {hold}");
     }
 }

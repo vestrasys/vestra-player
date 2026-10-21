@@ -37,16 +37,16 @@ pub struct Backend {
     pub target: Arc<Shared>,
     #[cfg(feature = "producer-audio")]
     pub input: Arc<Mutex<Option<crate::producer_input::Routing>>>,
-    /// Prototype (r4a §7.2): set when mpv renders with OpenGL instead.
-    #[cfg(feature = "gpu-render")]
-    pub gpu: Arc<std::sync::OnceLock<vestra_gpu_render::Handle>>,
+    /// GPU or software rendering (reference §5.4).
+    pub render: Arc<crate::renderer::Render>,
     /// `{ mpv, ffmpeg }`: the linked libmpv's `mpv-version` / `ffmpeg-version`.
     pub versions: Value,
     stop: mpsc::Sender<()>,
     worker: Option<thread::JoinHandle<()>>,
 }
 impl Backend {
-    pub fn start(events: mpsc::Sender<Event>, silent: bool) -> Result<Self> {
+    /// `gpu`: try GPU rendering first (`renderer::wanted`).
+    pub fn start(events: mpsc::Sender<Event>, silent: bool, gpu: bool) -> Result<Self> {
         let (commands, receiver) = mpsc::channel::<Command>();
         let (stop, stopping) = mpsc::channel();
         let frame = FrameSlot::new();
@@ -58,10 +58,8 @@ impl Backend {
         let input = Arc::new(Mutex::new(None));
         #[cfg(feature = "producer-audio")]
         let out_input = input.clone();
-        #[cfg(feature = "gpu-render")]
-        let gpu = Arc::new(std::sync::OnceLock::new());
-        #[cfg(feature = "gpu-render")]
-        let out_gpu = gpu.clone();
+        let render = crate::renderer::Render::new(gpu);
+        let out_render = render.clone();
         let (ready, initialized) = mpsc::sync_channel(1);
         let worker = thread::spawn(move || {
             let run = || -> Result<()> {
@@ -101,20 +99,21 @@ impl Backend {
                 let render_events = events.clone();
                 let (render_ready, render_initialized) = mpsc::sync_channel(1);
                 let render_frame = out_frame.clone();
-                #[cfg(feature = "gpu-render")]
-                let gpu_slot = out_gpu.clone();
+                let render_mode = out_render.clone();
                 let renderer = thread::spawn(move || {
                     let run = || -> Result<()> {
-                        #[cfg(feature = "gpu-render")]
-                        if GPU.load(Ordering::Relaxed) {
+                        let mut ready = Some(&render_ready);
+                        if render_mode.wanted() {
                             let area = render_target.get().1.area;
-                            return gpu_render(
-                                &render_core,
-                                area,
-                                &renderer_stop,
-                                &render_ready,
-                                &gpu_slot,
-                            );
+                            let gpu = GpuRun {
+                                mpv: &render_core,
+                                render: &render_mode,
+                                publish: &renderer_publish,
+                                stop: &renderer_stop,
+                            };
+                            if gpu.run(area, &mut ready) {
+                                return Ok(());
+                            }
                         }
                         let mut render = RenderContext::new_software(render_core.clone())?;
                         let (wake, woke) = mpsc::sync_channel(1);
@@ -122,7 +121,9 @@ impl Backend {
                         render.set_update_callback(move || {
                             let _ = wake.try_send(());
                         });
-                        let _ = render_ready.send(Ok(()));
+                        if let Some(ready) = ready.take() {
+                            let _ = ready.send(Ok(()));
+                        }
                         let mut redraw = Redraw::default();
                         let mut source: Option<(u32, u32)> = None;
                         let mut source_read: Option<Instant> = None;
@@ -181,6 +182,8 @@ impl Backend {
                 let mut producer_was_active = false;
                 let mut processing = crate::processing::Processing::default();
                 let mut view = crate::video_view::View::default();
+                let mut render_options = crate::video_render::Options::default();
+                let mut render_was_gpu = out_render.gpu().is_some();
                 let mut cover_art = CoverArt::default();
                 let mut subtitles = crate::subtitle_backend::Subtitles::new(fonts);
                 let mut jobs = crate::media_jobs::Jobs::default();
@@ -237,6 +240,15 @@ impl Backend {
                                     ));
                                 }
                             }
+                            if let Err(error) = render_options
+                                .release(command.reply.owner, &mut crate::video_render::Mpv(&mpv))
+                            {
+                                let _ = events.send(Event::Broadcast(
+                                    "host.error".into(),
+                                    json!({"code":error.code,"message":error.message}),
+                                ));
+                            }
+                            pace(&out_render, render_options.settings());
                             let _ = events.send(Event::BackendCleaned(command.reply.owner));
                             continue;
                         }
@@ -331,9 +343,32 @@ impl Backend {
                             let _ = events.send(Event::Reply(command.reply, result));
                             continue;
                         }
+                        if command.method.starts_with("video.render.") {
+                            let owner = command.reply.owner;
+                            let mut player = crate::video_render::Mpv(&mpv);
+                            let result = if command.method != "video.render.set" {
+                                render_options
+                                    .release(owner, &mut player)
+                                    .map(|_| Value::Null)
+                            } else if out_render.gpu().is_none() {
+                                Err(RpcError::new(
+                                    "unsupported",
+                                    "render options need GPU rendering; the player renders in software",
+                                ))
+                            } else {
+                                let ready = sources.snapshot(&mpv)["phase"] == "ready";
+                                let refresh = out_render.refresh();
+                                let values = &command.params["values"];
+                                render_options.set(owner, values, ready, refresh, &mut player)
+                            };
+                            pace(&out_render, render_options.settings());
+                            let _ = events.send(Event::Reply(command.reply, result));
+                            continue;
+                        }
                         if command.method == "playback.stats" {
-                            let stats =
-                                stats(&mpv, sources.generation(), sequence.load(Ordering::Relaxed));
+                            let frames = sequence.load(Ordering::Relaxed)
+                                + out_render.gpu().map_or(0, |gpu| gpu.frames());
+                            let stats = stats(&mpv, sources.generation(), frames, &out_render);
                             let _ = events.send(Event::Reply(command.reply, Ok(stats)));
                             continue;
                         }
@@ -377,6 +412,18 @@ impl Backend {
                     }
                     while let Some(event) = mpv.poll_event() {
                         if let rsmpv::Event::LogMessage(message) = &event {
+                            if let Some((owner, status)) = render_options.shader_failure(
+                                &message.prefix,
+                                &message.level,
+                                &message.text,
+                            ) {
+                                eprintln!("libmpv: {}", message.text.trim_end());
+                                let _ = events.send(Event::PluginMessage(
+                                    owner,
+                                    "video.render.status".into(),
+                                    status,
+                                ));
+                            }
                             if message.prefix == "sub/ass"
                                 && (message.text.contains("fontselect")
                                     || message.text.contains("Loading font"))
@@ -415,8 +462,28 @@ impl Backend {
                         geometry_error = true;
                         let _ = events.send(Event::Broadcast("host.error".into(),json!({"code":"source-geometry","message":error.message,"generation":sources.generation()})));
                     }
+                    // A fallback to software rendering (a window could not
+                    // show GPU frames) ends the render options' effect.
+                    let render_is_gpu = out_render.gpu().is_some();
+                    if render_was_gpu
+                        && !render_is_gpu
+                        && let Some(owner) = render_options.owner()
+                    {
+                        let status = crate::video_render::status_failed(
+                            "unsupported",
+                            "the player switched to software rendering",
+                        );
+                        let _ = events.send(Event::PluginMessage(
+                            owner,
+                            "video.render.status".into(),
+                            status,
+                        ));
+                    }
+                    render_was_gpu = render_is_gpu;
                     #[cfg(feature = "producer-audio")]
                     {
+                        // Before its frames: the GPU picture must not cover them.
+                        out_render.set_producer(sources.provider_active());
                         if let Some(error) = sources.producer_failure() {
                             let _=events.send(Event::Broadcast("host.error".into(),json!({"code":"producer-failed","message":error,"generation":sources.generation()})));
                         }
@@ -489,8 +556,7 @@ impl Backend {
             frame,
             target,
             versions,
-            #[cfg(feature = "gpu-render")]
-            gpu,
+            render,
             #[cfg(feature = "producer-audio")]
             input,
             stop,
@@ -498,30 +564,52 @@ impl Backend {
         })
     }
 }
-/// Prototype (r4a §7.2): render with OpenGL (vestra-gpu-render) instead of
-/// software; set before [`Backend::start`].
-#[cfg(feature = "gpu-render")]
-pub static GPU: AtomicBool = AtomicBool::new(false);
-/// The GPU renderer owns mpv's render context until the backend stops, so a
-/// rebuilt window never interrupts playback. `VESTRA_HWDEC` overrides hwdec.
-#[cfg(feature = "gpu-render")]
-fn gpu_render(
-    mpv: &Arc<Mpv>,
-    area: crate::render_target::Size,
-    stop: &AtomicBool,
-    ready: &mpsc::SyncSender<std::result::Result<(), String>>,
-    slot: &std::sync::OnceLock<vestra_gpu_render::Handle>,
-) -> Result<()> {
-    let hwdec = std::env::var("VESTRA_HWDEC").unwrap_or_else(|_| "auto-safe".into());
-    mpv.set_property("hwdec", hwdec.as_str())?;
-    let renderer =
-        vestra_gpu_render::Renderer::start(mpv.clone(), area).map_err(anyhow::Error::msg)?;
-    let _ = slot.set(renderer.handle());
-    let _ = ready.send(Ok(()));
-    while !stop.load(Ordering::Relaxed) {
-        thread::sleep(Duration::from_millis(20));
+/// The GPU part of the render thread: the renderer owns mpv's render
+/// context until the backend stops (so a rebuilt window never interrupts
+/// playback) or a window asks for software rendering.
+struct GpuRun<'a> {
+    mpv: &'a Arc<Mpv>,
+    render: &'a crate::renderer::Render,
+    publish: &'a Arc<AtomicBool>,
+    stop: &'a AtomicBool,
+}
+type Ready<'a> = Option<&'a mpsc::SyncSender<std::result::Result<(), String>>>;
+impl GpuRun<'_> {
+    /// `true` when the backend stopped; `false`: render in software now.
+    fn run(&self, area: crate::render_target::Size, ready: &mut Ready) -> bool {
+        let renderer =
+            match crate::platform::gpu_start(self.mpv.clone(), area, self.publish.clone()) {
+                Ok(renderer) => renderer,
+                Err(error) => {
+                    eprintln!("render: GPU rendering unavailable ({error}); software rendering");
+                    return false;
+                }
+            };
+        let hwdec = crate::renderer::hwdec(std::env::var("VESTRA_HWDEC").ok());
+        if let Err(error) = self.mpv.set_property("hwdec", hwdec.as_str()) {
+            eprintln!("render: hwdec={hwdec} refused: {error}");
+        }
+        self.render.install(renderer.handle());
+        if let Some(ready) = ready.take() {
+            let _ = ready.send(Ok(()));
+        }
+        while !self.stop.load(Ordering::Relaxed) && !self.render.fallback_requested() {
+            thread::sleep(Duration::from_millis(20));
+        }
+        if self.stop.load(Ordering::Relaxed) {
+            return true;
+        }
+        self.render.deactivate();
+        drop(renderer);
+        let _ = self.mpv.set_property("hwdec", "no");
+        false
     }
-    Ok(())
+}
+/// Interpolation (`video.render()`) paces the GPU renderer to the display.
+fn pace(render: &crate::renderer::Render, settings: &crate::video_render::Settings) {
+    if let Some(gpu) = render.gpu() {
+        gpu.set_display_fps(settings.interpolation.then(|| render.refresh()));
+    }
 }
 impl Drop for Backend {
     fn drop(&mut self) {
@@ -570,7 +658,7 @@ fn source_size(mpv: &Mpv) -> Option<(u32, u32)> {
     Some((read("video-out-params/dw")?, read("video-out-params/dh")?))
 }
 /// `playback.stats` (C10): what the playback information overlay shows.
-fn stats(mpv: &Mpv, session: u64, frames: u64) -> Value {
+fn stats(mpv: &Mpv, session: u64, frames: u64, render: &crate::renderer::Render) -> Value {
     let text = |name: &str| {
         mpv.get_property::<String>(name)
             .ok()
@@ -592,7 +680,8 @@ fn stats(mpv: &Mpv, session: u64, frames: u64) -> Value {
             "colorspace":text("video-params/colormatrix"),
             "displayWidth":int("video-out-params/dw"),"displayHeight":int("video-out-params/dh"),
             "displayFps":float("estimated-display-fps"),
-            "bitrate":float("video-bitrate")})
+            "bitrate":float("video-bitrate"),
+            "hwdec":text("hwdec-current"),"transfer":text("video-params/gamma")})
     });
     let audio = text("audio-codec-name").map(|codec| {
         json!({"codec":codec,"sampleRate":int("audio-params/samplerate"),
@@ -602,7 +691,7 @@ fn stats(mpv: &Mpv, session: u64, frames: u64) -> Value {
             "channelLayout":text("audio-params/hr-channels"),
             "bitrate":float("audio-bitrate")})
     });
-    json!({"backend":"libmpv · 软件渲染","session":session,"framesShown":frames,
+    json!({"backend":render.backend_name(),"session":session,"framesShown":frames,
         "framesDropped":int("frame-drop-count"),"video":video,"audio":audio,
         "avSyncMs":signed("avsync").map(|seconds| seconds * 1000.),
         "cacheSeconds":signed("demuxer-cache-duration")})

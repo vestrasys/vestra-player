@@ -19,6 +19,7 @@
 //! | files and links | `reveal`, `open_path`, `open_url` (blocking, run on a worker thread) |
 //! | secrets | `secret_get`, `secret_set`, `secret_delete` (blocking) |
 //! | facts | `os_facts` (blocking), `displays` (UI thread), `app_data_dir`, `ui_font`, `default_ffmpeg`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD` |
+//! | rendering | `GPU_RENDER`, `gpu_start` → `GpuRenderer` / `GpuHandle` (macOS: `vestra-gpu-render`; elsewhere `no_gpu` below refuses, so the host renders in software) |
 //!
 //! Window rectangles are logical points. macOS uses the Cocoa lower-left
 //! origin of the global screen space, Windows the top-left origin of the
@@ -169,6 +170,64 @@ fn unsupported(what: &str) -> crate::RpcError {
         format!("{what} is not supported on {}", std::env::consts::OS),
     )
 }
+
+/// GPU rendering on systems without an implementation yet (Windows, Linux):
+/// `gpu_start` refuses and the host renders in software. The types have no
+/// values, so their methods can never run.
+#[cfg(not(target_os = "macos"))]
+mod no_gpu {
+    use std::sync::{Arc, atomic::AtomicBool};
+
+    pub const GPU_RENDER: bool = false;
+    pub enum GpuRenderer {}
+    #[derive(Clone)]
+    pub enum GpuHandle {}
+    pub fn gpu_start(
+        _mpv: Arc<rsmpv::Mpv>,
+        _size: (u32, u32),
+        _publish: Arc<AtomicBool>,
+    ) -> Result<GpuRenderer, String> {
+        Err(format!(
+            "GPU rendering is not available on {} yet",
+            std::env::consts::OS
+        ))
+    }
+    impl GpuRenderer {
+        pub fn handle(&self) -> GpuHandle {
+            match *self {}
+        }
+    }
+    impl GpuHandle {
+        pub fn set_size(&self, _size: (u32, u32)) {
+            match *self {}
+        }
+        pub fn set_display_fps(&self, _fps: Option<f64>) {
+            match *self {}
+        }
+        pub fn frames(&self) -> u64 {
+            match *self {}
+        }
+        pub fn shown(&self) -> u64 {
+            match *self {}
+        }
+        pub fn size(&self) -> Option<(u32, u32)> {
+            match *self {}
+        }
+        pub fn reshow(&self) {
+            match *self {}
+        }
+        pub fn attach<T: slint::ComponentHandle + 'static>(
+            &self,
+            _component: &T,
+            _show: impl Fn(&T, slint::Image) + 'static,
+            _failed: impl FnOnce(String) + 'static,
+        ) -> Result<(), String> {
+            match *self {}
+        }
+    }
+}
+#[cfg(not(target_os = "macos"))]
+pub use no_gpu::*;
 
 /// `secrets.*` on systems with a keyring backend: the login keychain
 /// (generic passwords) on macOS, the Credential Manager on Windows.
