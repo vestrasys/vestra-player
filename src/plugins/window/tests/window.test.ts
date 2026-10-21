@@ -54,6 +54,12 @@ async function play(host: TestHost, video: Video | null = { width: 1920, height:
   host.openElsewhere("/movie.mkv");
   await host.settle(30);
 }
+/** A player without system picture-in-picture (Windows, Linux): ` is 迷你尺寸. */
+function withoutPip() {
+  const host = new TestHost();
+  host.mainWindow.pictureInPicture.supported = false;
+  return host;
+}
 const state = (host: TestHost, id: string) => host.command(id).state;
 const lastOsd = (host: TestHost) => host.osd.at(-1);
 
@@ -110,7 +116,7 @@ test("menus: paths, orders, groups and bindings as in the window chapter; no con
     c.declaration.bindings.join(","),
   ]);
   assert.deepEqual(rows, [
-    ["mini", "屏幕 ▶ 迷你尺寸", 710, "screen", "`"],
+    ["mini", "屏幕 ▶ 画中画", 710, "screen", "`"],
     ["size.0.5", "屏幕 ▶ 0.5倍", 711, "screen-size", "1"],
     ["size.1", "屏幕 ▶ 1倍", 712, "screen-size", "2"],
     ["size.1.5", "屏幕 ▶ 1.5倍", 713, "screen-size", "3"],
@@ -129,10 +135,17 @@ test("menus: paths, orders, groups and bindings as in the window chapter; no con
   assert.deepEqual(host.sent("window.setCursorAutoHide"), []);
 });
 
+test("menus: without system picture-in-picture the same item is 迷你尺寸", async () => {
+  const { host } = await start(withoutPip());
+  const mini = host.command("mini").declaration;
+  assert.deepEqual([mini.path?.join(" ▶ "), mini.order, mini.group, mini.bindings], ["屏幕 ▶ 迷你尺寸", 710, "screen", ["`"]]);
+  assert.deepEqual(host.conflicts, []);
+});
+
 // ------------------------------------------------------------------ H03
 
 test("H03: disabled without video and in fullscreen; enabled once the video size is known", async () => {
-  const { host } = await start();
+  const { host } = await start(withoutPip());
   assert.deepEqual(
     [state(host, "size.1").enabled, state(host, "size.1").reason, state(host, "fit").enabled, state(host, "mini").enabled],
     [false, "没有视频", false, false],
@@ -223,7 +236,7 @@ test("H03: busy while a resize is in flight", async () => {
   });
   const first = host.press("2");
   await new Promise((resolve) => setTimeout(resolve, 20)); // settle() would wait for the held request
-  assert.deepEqual([state(host, "size.2").busy, state(host, "fit").busy, state(host, "mini").busy], [true, true, true]);
+  assert.deepEqual([state(host, "size.2").busy, state(host, "fit").busy], [true, true]);
   await assert.rejects(host.press("4"));
   release();
   await first;
@@ -342,7 +355,7 @@ test("B30: the toggle sets the core's cursor mode, says so, and is applied after
 // ------------------------------------------------------------------ 迷你尺寸
 
 test("mini: ` shrinks to the mini box and floats; again restores the size and the mode", async () => {
-  const { host } = await start();
+  const { host } = await start(withoutPip());
   host.setMainWindow({ videoArea: { width: 1280, height: 720 } });
   await play(host, { width: 1920, height: 1080 });
   await host.press("`");
@@ -361,7 +374,7 @@ test("mini: ` shrinks to the mini box and floats; again restores the size and th
 });
 
 test("mini: ends by itself when the user resizes or goes fullscreen; a size command ends it too", async () => {
-  const { host } = await start();
+  const { host } = await start(withoutPip());
   await play(host, { width: 1920, height: 1080 });
   await host.press("`");
   await host.settle();
@@ -387,7 +400,7 @@ test("mini: ends by itself when the user resizes or goes fullscreen; a size comm
 });
 
 test("mini: can be left after the source lost its video", async () => {
-  const { host } = await start();
+  const { host } = await start(withoutPip());
   host.setMainWindow({ videoArea: { width: 800, height: 450 } });
   await play(host);
   await host.press("`");
@@ -396,4 +409,140 @@ test("mini: can be left after the source lost its video", async () => {
   await host.press("`");
   await host.settle();
   assert.deepEqual(host.mainWindow.videoArea, { width: 800, height: 450 });
+});
+
+// ------------------------------------------------------------------ H07 画中画
+
+test("H07: ` opens and closes picture-in-picture; the check follows; no resize, no floating", async () => {
+  const { host } = await start();
+  assert.deepEqual([state(host, "mini").enabled, state(host, "mini").reason], [false, "没有视频"]);
+  await play(host, null);
+  assert.equal(state(host, "mini").enabled, false);
+  await play(host);
+  assert.deepEqual([state(host, "mini").enabled, state(host, "mini").checked], [true, false]);
+  const area = { ...host.mainWindow.videoArea };
+  await host.press("`");
+  await host.settle();
+  assert.equal(host.mainWindow.pictureInPicture.active, true);
+  assert.equal(state(host, "mini").checked, true);
+  assert.equal(lastOsd(host), "画中画: 开");
+  await host.press("`");
+  await host.settle();
+  assert.equal(host.mainWindow.pictureInPicture.active, false);
+  assert.equal(state(host, "mini").checked, false);
+  assert.equal(lastOsd(host), "画中画: 关");
+  assert.deepEqual(host.sent("window.setPictureInPicture").map((p) => p.on), [true, false]);
+  assert.deepEqual(host.mainWindow.videoArea, area);
+  assert.deepEqual(host.sent("window.setVideoArea"), []);
+  assert.deepEqual(host.sent("window.setAlwaysOnTop"), []);
+  assert.equal(host.osd.filter((text) => text.startsWith("画中画")).length, 2);
+});
+
+test("H07: available in fullscreen (the core leaves it first)", async () => {
+  const { host } = await start();
+  await play(host);
+  host.setMainWindow({ fullscreen: true });
+  await host.settle();
+  assert.equal(state(host, "mini").enabled, true);
+  await host.press("`");
+  await host.settle();
+  assert.deepEqual([host.mainWindow.fullscreen, host.mainWindow.pictureInPicture.active], [false, true]);
+});
+
+test("H07: closed from the small window or by the core: the check clears and it is said once", async () => {
+  const { host } = await start();
+  await play(host);
+  await host.press("`");
+  await host.settle();
+  // 返回 / close button in the small window.
+  host.setMainWindow({ pictureInPicture: { supported: true, active: false } });
+  await host.settle(20);
+  assert.equal(state(host, "mini").checked, false);
+  assert.equal(lastOsd(host), "画中画: 关");
+
+  await host.press("`");
+  await host.settle();
+  // The new source has no video: the core closes the window.
+  await play(host, null);
+  host.setMainWindow({ pictureInPicture: { supported: true, active: false } });
+  await host.settle(20);
+  assert.equal(lastOsd(host), "画中画: 关（没有视频）");
+  assert.equal(state(host, "mini").enabled, false);
+});
+
+test("H07: a refusal is shown and the check stays; busy is ignored", async () => {
+  const { host } = await start();
+  await play(host);
+  host.handle("window.setPictureInPicture", () => {
+    throw new HostError("failed", "系统拒绝");
+  });
+  await host.press("`");
+  await host.settle();
+  assert.equal(lastOsd(host), "无法进入画中画：系统拒绝");
+  assert.equal(state(host, "mini").checked, false);
+  const shown = host.osd.length;
+  host.handle("window.setPictureInPicture", () => {
+    throw new HostError("busy", "正在切换");
+  });
+  await host.press("`");
+  await host.settle();
+  assert.equal(host.osd.length, shown);
+});
+
+test("H07: busy while the switch is in flight; a second press sends nothing", async () => {
+  const { host } = await start();
+  await play(host);
+  let release!: () => void;
+  host.handle("window.setPictureInPicture", async (p) => {
+    await new Promise<void>((resolve) => (release = resolve));
+    host.setMainWindow({ pictureInPicture: { supported: true, active: p.on === true } });
+  });
+  const first = host.press("`");
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual([state(host, "mini").busy, state(host, "mini").reason], [true, "正在切换画中画"]);
+  await assert.rejects(host.press("`"));
+  release();
+  await first;
+  await host.settle();
+  assert.equal(host.sent("window.setPictureInPicture").length, 1);
+  assert.deepEqual([state(host, "mini").busy, state(host, "mini").checked, lastOsd(host)], [false, true, "画中画: 开"]);
+  assert.equal(host.osd.filter((text) => text.startsWith("画中画")).length, 1);
+});
+
+test("H07: supported only once the main window exists: 迷你尺寸 at activation, then 画中画", async () => {
+  const { host } = await start(withoutPip());
+  assert.equal(host.command("mini").declaration.path?.join(" ▶ "), "屏幕 ▶ 迷你尺寸");
+  host.setMainWindow({ pictureInPicture: { supported: true, active: false } });
+  await host.settle();
+  const mini = host.command("mini").declaration;
+  assert.deepEqual([mini.path?.join(" ▶ "), mini.order, mini.group, mini.bindings], ["屏幕 ▶ 画中画", 710, "screen", ["`"]]);
+  assert.deepEqual(host.conflicts, []);
+  await play(host);
+  await host.press("`");
+  await host.settle();
+  assert.deepEqual(host.sent("window.setPictureInPicture").map((p) => p.on), [true]);
+  assert.deepEqual([state(host, "mini").checked, lastOsd(host)], [true, "画中画: 开"]);
+  assert.deepEqual(host.sent("window.setVideoArea"), []);
+  // The window goes away again (headless): back to 迷你尺寸.
+  host.setMainWindow({ pictureInPicture: { supported: false, active: false } });
+  await host.settle();
+  assert.equal(host.command("mini").declaration.path?.join(" ▶ "), "屏幕 ▶ 迷你尺寸");
+  assert.equal(state(host, "mini").checked, false);
+});
+
+test("H07: 迷你尺寸 in effect when 画中画 becomes supported: the size and on-top mode are restored", async () => {
+  const { host } = await start(withoutPip());
+  host.setMainWindow({ videoArea: { width: 1280, height: 720 } });
+  await play(host, { width: 1920, height: 1080 });
+  await host.press("`");
+  await host.settle();
+  assert.deepEqual([host.mainWindow.videoArea, host.mainWindow.onTop], [{ width: 400, height: 225 }, true]);
+  host.setMainWindow({ pictureInPicture: { supported: true, active: false } });
+  await host.settle();
+  assert.deepEqual([host.mainWindow.videoArea, host.mainWindow.onTop], [{ width: 1280, height: 720 }, false]);
+  assert.equal(host.command("mini").declaration.path?.join(" ▶ "), "屏幕 ▶ 画中画");
+  assert.deepEqual([state(host, "mini").checked, host.mainWindow.pictureInPicture.active], [false, false]);
+  await host.press("`");
+  await host.settle();
+  assert.equal(host.mainWindow.pictureInPicture.active, true);
 });

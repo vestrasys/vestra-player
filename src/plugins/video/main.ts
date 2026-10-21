@@ -1,8 +1,13 @@
+import { existsSync } from "node:fs";
+import { copyFile, mkdir, readdir } from "node:fs/promises";
+import { basename, join, resolve } from "node:path";
 import type { FilterStatus, Plugin, PluginError } from "../../sdk/plugin/index.ts";
 import {
   DEINTERLACE_MODES,
   FITS,
+  MAX_SHADERS,
   PAN_STEP,
+  TONE_MAPPINGS,
   ZOOM_STEP,
   DEINTERLACE_OUTPUTS,
   DENOISE_MODES,
@@ -21,16 +26,19 @@ import {
   defaults,
   denoiseLabels,
   droppedTooMany,
+  isHdr,
+  isShaderName,
   nextAspect,
   nodesFor,
   parse,
   parseAspect,
+  peakOf,
   presets,
   reframeLabel,
   serialize,
   upright,
 } from "./model.ts";
-import type { DeinterlaceMode, DeinterlaceOutput, Fit, Frame, FrameCount, Look, ReframeMode, Rotation, Toggle } from "./model.ts";
+import type { DeinterlaceMode, DeinterlaceOutput, Fit, Frame, FrameCount, Look, ReframeMode, Rotation, Toggle, ToneMapping } from "./model.ts";
 
 type Color = "brightness" | "contrast" | "saturation" | "hue" | "gamma";
 const colors: readonly Color[] = ["brightness", "contrast", "saturation", "hue", "gamma"];
@@ -44,8 +52,9 @@ const steps: readonly [string, Color, string, string, number][] = [
 /** Effect rows with one 0–100 strength; their filters rebuild, so a drag commits on release. */
 type Strength = "sharpen" | "edge" | "denoise" | "deblock" | "deband";
 const strengths: readonly Strength[] = ["sharpen", "edge", "denoise", "deblock", "deband"];
-/** E16, E17 and 运动补偿 wait for the GPU rendering prototype (round 4a §7.2). */
-const GPU = "等待 GPU 渲染原型结论";
+/** E16, E17 and 运动补偿 are GPU render options; software rendering (and Windows for now) refuses them. */
+const SOFTWARE = "需要 GPU 渲染（当前为软件渲染）";
+const NOT_HDR = "当前片源不是 HDR";
 /** E18: the source rate is read this long after the chain without frameBlend is in place, this many times at most. */
 const MEASURE_DELAY_MS = 400;
 const MEASURE_TRIES = 8;
@@ -53,6 +62,8 @@ const ASPECT_FORMAT = "格式：16:9 或 2.39";
 const percent = (n: number) => `${Math.round(n * 100)}%`;
 const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`);
 const onOff = (on: boolean) => (on ? "开" : "关");
+/** A timer that does not keep the plugin process alive. */
+const pause = (ms: number) => new Promise<void>((done) => void setTimeout(done, ms).unref?.());
 
 /**
  * Picture tool: one four-page window, one owned video filter, the display layer
@@ -74,7 +85,86 @@ export default async function activate(plugin: Plugin) {
   const view = plugin.video.view();
   const window = plugin.windows.create("picture.slint");
   const aspectWindow = plugin.windows.create("ui/aspect.slint");
+  const shadersWindow = plugin.windows.create("ui/shaders.slint");
   const persist = () => store.save(serialize(look, tab));
+
+  // E16, E17, E18 运动补偿: GPU render options, global and saved; not part of the chain, so
+  // 启用画面效果 leaves them alone. Under software rendering every set is refused (`unsupported`).
+  const render = plugin.video.render();
+  const shaderFolder = join(plugin.dataDirectory, "shaders");
+  const shaderPath = (name: string) => join(shaderFolder, name);
+  const gpuReady = () => !(render.status.state === "failed" && render.status.error.code === "unsupported");
+  const gpuReason = () => (gpuReady() ? null : SOFTWARE);
+  let renderSent = "";
+  /** Set by a user action, so a conflict at activation stays off screen (as with the display layer). */
+  let renderAnnounce = false;
+  /** Missing shader files are left out (the player refuses them); 重新载入着色器 drops them from the list. */
+  const applyRender = (user = false, force = false) => {
+    renderAnnounce ||= user;
+    const values = {
+      toneMapping: look.render.toneMapping,
+      targetPeak: look.render.targetPeak,
+      peakDetect: look.render.peakDetect,
+      shaders: look.render.shadersEnabled ? look.render.shaders.map(shaderPath).filter((path) => existsSync(path)) : [],
+      interpolation: look.render.interpolation,
+    };
+    const key = JSON.stringify(values);
+    if (!force && key === renderSent && render.status.state !== "failed") return;
+    renderSent = key;
+    render.set(values);
+  };
+  const renderChanged = (user = false, force = false) => {
+    persist();
+    applyRender(user, force);
+  };
+  render.onStatus((status) => {
+    if (status.state !== "failed") {
+      if (status.state !== "applying") renderAnnounce = false;
+      return;
+    }
+    const announce = renderAnnounce;
+    renderAnnounce = false;
+    // A compile error arrives after `applied`, when the window is usually closed: always said.
+    if (shaderFailed(status.error)) osd("着色器载入失败");
+    else if (announce && status.error.code !== "unsupported") osd(`渲染选项不可用：${renderReason(status.error)}`);
+  });
+
+  // E16: the source's transfer (`stats().video.transfer`), read once per source when it is ready.
+  let transfer: string | null = null;
+  let transferSource = -1;
+  let transferRead = false;
+  let reading = false;
+  let stopped = false;
+  plugin.onDispose(() => {
+    stopped = true;
+  });
+  const readTransfer = async () => {
+    const source = player.state.sourceId;
+    if (source !== transferSource) {
+      transferSource = source;
+      transfer = null;
+      transferRead = false;
+    }
+    if (transferRead || reading || player.state.phase !== "ready") return;
+    reading = true;
+    try {
+      for (let attempt = 0; attempt < MEASURE_TRIES && !stopped && player.state.sourceId === source; attempt++) {
+        if (attempt > 0) await pause(MEASURE_DELAY_MS);
+        const stats = await player.stats().catch(() => null);
+        if (stopped || player.state.sourceId !== source) return;
+        if (stats?.video?.transfer) {
+          transfer = stats.video.transfer;
+          plugin.update();
+          break;
+        }
+      }
+      transferRead = player.state.sourceId === source;
+    } finally {
+      reading = false;
+    }
+  };
+  /** Only HDR sources (PQ, HLG) are tone mapped; said once the source is known not to be one. */
+  const notHdr = () => transfer !== null && !isHdr(transfer);
 
   // E18: the source rate is read with no frameBlend in the chain (afterwards stats() reports the
   // blended rate), once per source and deinterlace setting (field output doubles the rate).
@@ -175,9 +265,17 @@ export default async function activate(plugin: Plugin) {
       ratioIndex: look.reframe.ratio,
       deinterlaceIndex: DEINTERLACE_MODES.findIndex((m) => m.id === look.deinterlace.mode),
       outputIndex: DEINTERLACE_OUTPUTS.findIndex((m) => m.id === look.deinterlace.output),
+      renderReady: gpuReady(),
+      renderReason: SOFTWARE,
+      toneIndex: TONE_MAPPINGS.findIndex((t) => t.id === look.render.toneMapping),
+      targetPeak: look.render.targetPeak,
+      hdrNote: `目标亮度 ${look.render.targetPeak} 尼特${gpuReady() && notHdr() ? ` · ${NOT_HDR}` : ""}`,
+      shadersEnabled: look.render.shadersEnabled,
+      shaderCount: `${look.render.shaders.length} 个着色器`,
+      interpolation: look.render.interpolation,
       tabIndex: tab,
       effectEnabled: enabled,
-      ...statusLine(filter.status, view.status),
+      ...statusLine(filter.status, view.status, render.status),
     };
   });
   /** Store a slider value; how it takes effect (null when the field is unknown). */
@@ -187,19 +285,22 @@ export default async function activate(plugin: Plugin) {
     else if ((colors as string[]).includes(field)) look.picture[field as Color] = clamp(value, -100, 100);
     else if ((strengths as string[]).includes(field)) toggleOf(field as Strength).strength = clamp(Math.round(value), 0, 100);
     else if (field === "zoom") frame.zoom = zoomOf(2 ** clamp(value, -2, 2));
+    else if (field === "targetPeak") look.render.targetPeak = peakOf(value);
     else return null;
-    return field === "zoom" ? "view" : (strengths as string[]).includes(field) ? "rebuild" : "live";
+    return field === "zoom" ? "view" : field === "targetPeak" ? "render" : (strengths as string[]).includes(field) ? "rebuild" : "live";
   };
   // eq, hue and gblur change in place while playing; the other filters rebuild, so they wait for release.
-  // Zoom is a display property: it follows the drag.
+  // Zoom (a display property) and 目标亮度 (a render option) follow the drag.
   window.on("adjust", (field: string, value: number) => {
     const kind = storeValue(field, value);
     if (kind === "view") showView();
+    else if (kind === "render") renderChanged();
     else if (kind === "live") change();
   });
   window.on("commit", (field: string, value: number) => {
     const kind = storeValue(field, value);
     if (kind === "view") showView();
+    else if (kind === "render") renderChanged();
     else if (kind) change();
   });
   window.on("resetField", (field: string) => {
@@ -230,7 +331,9 @@ export default async function activate(plugin: Plugin) {
   window.on("toggle", (field: string, on: boolean) => {
     const value = on === true;
     if (field === "blur") look.picture.blurEnabled = value;
-    else if (field === "frameBlend") switchBlend(value);
+    else if (field === "frameBlend") return setBlend(value, false);
+    else if (field === "interpolation") return setInterpolation(value, false);
+    else if (field === "shaders") return setShaders(value, false);
     else if (field === "flipV" || field === "flipH") look.geometry[field] = value;
     else if ((strengths as string[]).includes(field)) toggleOf(field as Strength).on = value;
     else return;
@@ -254,10 +357,14 @@ export default async function activate(plugin: Plugin) {
     } else if (field === "fit" && index < FITS.length) {
       look.display.fit = FITS[index]!.id;
       return displayChanged();
+    } else if (field === "toneMapping" && index < TONE_MAPPINGS.length) {
+      look.render.toneMapping = TONE_MAPPINGS[index]!.id;
+      return renderChanged();
     } else return;
     change();
   });
   window.on("customAspect", () => openCustom());
+  window.on("shaderList", () => openShaders());
   window.on("tabChanged", (index: number) => {
     if (!Number.isInteger(index) || index < 0 || index >= TABS || index === tab) return;
     tab = index;
@@ -266,6 +373,7 @@ export default async function activate(plugin: Plugin) {
   window.on("retry", () => {
     if (filter.status.state === "failed") filter.retry();
     if (view.status.state === "failed") showView();
+    if (render.status.state === "failed" && gpuReady()) applyRender(true, true);
   });
 
   // ---------------------------------------------------------------- display layer (E11, E13)
@@ -340,6 +448,16 @@ export default async function activate(plugin: Plugin) {
     void aspectWindow.show();
   };
 
+  /** 画面调节…; HDR 设置… opens it on the 高级 page. */
+  const showWindow = (page?: number) => {
+    if (page !== undefined && page !== tab) {
+      tab = page;
+      persist();
+      plugin.update();
+    }
+    return window.show();
+  };
+
   // ---------------------------------------------------------------- actions (menu and keys)
   const offNote = () => (enabled ? "" : "（画面效果已关闭）");
   const reset = () => {
@@ -391,6 +509,46 @@ export default async function activate(plugin: Plugin) {
     osd(`裁剪位置 (${r.x}%, ${r.y}%)`);
   };
 
+  // E18: 倍帧 and 运动补偿 exclude each other; switching one on switches the other off and says so.
+  const setBlend = (on: boolean, menu: boolean) => {
+    switchBlend(on);
+    const excluded = on && look.render.interpolation;
+    if (excluded) {
+      look.render.interpolation = false;
+      applyRender();
+    }
+    change();
+    if (menu || excluded) osd(`倍帧: ${onOff(on)}${excluded ? "（已关闭运动补偿）" : on ? offNote() : ""}`);
+  };
+  const setInterpolation = (on: boolean, menu: boolean) => {
+    look.render.interpolation = on;
+    const excluded = on && effects.frameBlend;
+    if (excluded) {
+      switchBlend(false);
+      apply();
+    }
+    renderChanged(true);
+    if (menu || excluded) osd(`运动补偿: ${onOff(on)}${excluded ? "（已关闭倍帧）" : ""}`);
+  };
+  // E16: the options only act on HDR sources; on a known SDR source the OSD says so.
+  const setTone = (id: ToneMapping) => {
+    look.render.toneMapping = id;
+    renderChanged(true);
+    osd(`HDR 色调映射: ${TONE_MAPPINGS.find((t) => t.id === id)!.label}${notHdr() ? `（${NOT_HDR}）` : ""}`);
+  };
+  const switchPeak = () => {
+    look.render.peakDetect = !look.render.peakDetect;
+    renderChanged(true);
+    osd(`动态峰值检测: ${onOff(look.render.peakDetect)}`);
+  };
+  // E17: the list is file names in `<dataDirectory>/shaders/`; the switch keeps the list.
+  const setShaders = (on: boolean, menu: boolean) => {
+    look.render.shadersEnabled = on;
+    renderChanged(true);
+    const count = look.render.shaders.length;
+    if (menu) osd(!on ? "像素着色: 关" : count === 0 ? "像素着色: 没有着色器" : `像素着色: 开 (${count})`);
+  };
+
   // A new source starts upright and unflipped, silently.
   let source = player.state.sourceId;
   player.onChange((state) => {
@@ -406,11 +564,14 @@ export default async function activate(plugin: Plugin) {
       showView();
     }
   });
-  // A new source (or one becoming ready) needs its own rate before 倍帧 can add the node.
+  // A new source (or one becoming ready) needs its own rate before 倍帧 can add the node,
+  // and its transfer for the HDR note.
   player.onChange(() => {
     if (blendRate() !== sentBlend) apply();
     if (wantsMeasure()) void measure();
+    void readTransfer();
   });
+  void readTransfer();
 
   // E10 field output and E18 倍帧 raise the frame rate on the CPU: when more than 5 % of the
   // frames in 5 seconds are dropped, each says so once per source.
@@ -438,11 +599,120 @@ export default async function activate(plugin: Plugin) {
   monitor.unref?.();
   plugin.onDispose(() => clearInterval(monitor));
 
+  // ---------------------------------------------------------------- 着色器列表 (E17)
+  /** Files in the shader folder that are not in the list (double-click adds one). */
+  let available: string[] = [];
+  /** The selected row of the list, −1 for none. */
+  let picked = -1;
+  const scanShaders = async () =>
+    (await readdir(shaderFolder).catch(() => [] as string[])).filter(isShaderName).sort((a, b) => a.localeCompare(b));
+  const refreshShaders = async () => {
+    const files = await scanShaders();
+    available = files.filter((name) => !look.render.shaders.includes(name));
+    plugin.update();
+    return files;
+  };
+  const editShaders = (edit: (list: string[]) => void, force = false) => {
+    edit(look.render.shaders);
+    picked = Math.min(picked, look.render.shaders.length - 1);
+    renderChanged(true, force);
+    void refreshShaders();
+  };
+  const addShaderName = (name: string) => {
+    if (!look.render.shaders.includes(name) && look.render.shaders.length >= MAX_SHADERS) {
+      osd(`最多 ${MAX_SHADERS} 个着色器`);
+      return false;
+    }
+    editShaders((list) => {
+      if (!list.includes(name)) list.push(name);
+      picked = list.indexOf(name);
+    }, true);
+    return true;
+  };
+  /** 添加…: any .glsl file, copied into the shader folder so moving the original does not break the list. */
+  const addShader = async () => {
+    const path = await plugin.dialogs.openFile({ title: "添加着色器（.glsl）" }).catch(() => null);
+    if (path === null) return;
+    const name = basename(path);
+    if (!isShaderName(name)) return osd("只能添加 .glsl 或 .hook 着色器文件");
+    if (!look.render.shaders.includes(name) && look.render.shaders.length >= MAX_SHADERS) return osd(`最多 ${MAX_SHADERS} 个着色器`);
+    try {
+      await mkdir(shaderFolder, { recursive: true });
+      if (resolve(path) !== resolve(shaderPath(name))) await copyFile(path, shaderPath(name));
+    } catch (error) {
+      return osd(`着色器复制失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+    addShaderName(name);
+  };
+  const openShaderFolder = async () => {
+    try {
+      await mkdir(shaderFolder, { recursive: true });
+      await plugin.system.openPath(shaderFolder);
+    } catch (error) {
+      osd(`无法打开着色器文件夹：${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+  /** 重新载入着色器: rescan the folder, drop names whose file is gone, submit the list again. */
+  const reloadShaders = async () => {
+    const files = await refreshShaders();
+    const missing = look.render.shaders.filter((name) => !files.includes(name));
+    editShaders((list) => list.splice(0, list.length, ...list.filter((name) => files.includes(name))), true);
+    osd(missing.length > 0 ? `已移除不存在的着色器：${missing.join("、")}` : `已重新载入着色器 (${look.render.shaders.length})`);
+  };
+  const openShaders = () => {
+    void refreshShaders();
+    void shadersWindow.show();
+  };
+  shadersWindow.bind(() => ({
+    names: look.render.shaders.map((name) => (existsSync(shaderPath(name)) ? name : `${name}（文件不存在）`)),
+    selected: picked,
+    available,
+    heading: `已启用 ${look.render.shaders.length}/${MAX_SHADERS}（按顺序执行）`,
+    note: !gpuReady() ? SOFTWARE : look.render.shadersEnabled ? "" : "「使用着色器」未打开",
+  }));
+  shadersWindow.on("select", (index: number) => {
+    picked = Number.isInteger(index) && index >= 0 && index < look.render.shaders.length ? index : -1;
+    plugin.update();
+  });
+  shadersWindow.on("add", () => void addShader());
+  shadersWindow.on("pick", (index: number) => {
+    const name = available[index];
+    if (Number.isInteger(index) && name !== undefined) addShaderName(name);
+  });
+  shadersWindow.on("remove", () => {
+    if (picked >= 0) editShaders((list) => list.splice(picked, 1));
+  });
+  const moveShader = (by: number) => {
+    const to = picked + by;
+    if (picked < 0 || to < 0 || to >= look.render.shaders.length) return;
+    editShaders((list) => {
+      [list[picked], list[to]] = [list[to]!, list[picked]!];
+      picked = to;
+    });
+  };
+  shadersWindow.on("up", () => moveShader(-1));
+  shadersWindow.on("down", () => moveShader(1));
+  shadersWindow.on("clear", () => {
+    picked = -1;
+    editShaders((list) => list.splice(0, list.length));
+  });
+  shadersWindow.on("openFolder", () => void openShaderFolder());
+
   // ---------------------------------------------------------------- menu 视频 ▶
   const { commands } = plugin;
-  // 402 像素着色 (E16, E17): GPU rendering first; shown disabled with the reason.
-  commands.add({ id: "video.shader.use", path: ["视频", "像素着色", "使用着色器"], order: 402, group: "video-source", bindings: ["Shift+P"], enabled: false, reason: GPU, run: () => undefined });
-  commands.add({ id: "video.shader.hdr", path: ["视频", "像素着色", "HDR 色调映射"], order: 402, group: "video-source", enabled: false, reason: GPU, run: () => undefined });
+  // 402 像素着色 (E17, E16): GPU render options, disabled with the reason under software rendering.
+  // The list and the folder stay usable, so shaders can be arranged beforehand.
+  const gpu = { enabled: gpuReady, reason: gpuReason };
+  const pixel = (id: string, path: string[], group: string, extra: Omit<Parameters<typeof commands.add>[0], "id" | "path" | "order" | "group">) =>
+    commands.add({ id, path: ["视频", "像素着色", ...path], order: 402, group, ...extra });
+  pixel("video.shader.use", ["使用着色器"], "video-source", { bindings: ["Shift+P"], checked: () => look.render.shadersEnabled, ...gpu, run: () => setShaders(!look.render.shadersEnabled, true) });
+  pixel("video.shader.list", ["着色器列表…"], "video-source", { run: openShaders });
+  pixel("video.shader.folder", ["打开着色器文件夹"], "video-source", { run: openShaderFolder });
+  pixel("video.shader.reload", ["重新载入着色器"], "video-source", { ...gpu, run: reloadShaders });
+  for (const { id, label } of TONE_MAPPINGS)
+    pixel(`video.hdr.${id}`, ["HDR 色调映射", label], "video-hdr", { radio: true, checked: () => look.render.toneMapping === id, ...gpu, run: () => setTone(id) });
+  pixel("video.hdr.peak", ["HDR 色调映射", "动态峰值检测"], "video-hdr-peak", { checked: () => look.render.peakDetect, ...gpu, run: switchPeak });
+  pixel("video.hdr.settings", ["HDR 设置…"], "video-hdr", { ...gpu, run: () => showWindow(3) });
   // 403 反交错 (E10, BWDIF only).
   commands.add({
     id: "video.deinterlace.cycle",
@@ -560,17 +830,17 @@ export default async function activate(plugin: Plugin) {
   const denoiseKeys: Record<string, string[] | undefined> = { d3: ["Ctrl+N"], temporal: ["Ctrl+M"] };
   for (const mode of DENOISE_MODES)
     effect(`video.denoise.${mode}`, denoiseLabels[mode], "video-cleanup", () => effects.denoise[mode], denoiseKeys[mode]);
-  // E18: 倍帧 adds frameBlend once the source rate is known; 运动补偿 waits for GPU rendering, so
-  // their mutual exclusion never triggers yet.
-  processing("video.frame-blend", "倍帧", "video-frames", {
-    checked: () => effects.frameBlend,
-    run: () => {
-      switchBlend(!effects.frameBlend);
-      change();
-      osd(`倍帧: ${onOff(effects.frameBlend)}${effects.frameBlend ? offNote() : ""}`);
-    },
+  // E18: 倍帧 adds frameBlend once the source rate is known; 运动补偿 is a GPU render option.
+  processing("video.frame-blend", "倍帧", "video-frames", { checked: () => effects.frameBlend, run: () => setBlend(!effects.frameBlend, true) });
+  commands.add({
+    id: "video.interpolation",
+    path: ["视频", "图像处理", "运动补偿"],
+    order: 408,
+    group: "video-frames",
+    checked: () => look.render.interpolation,
+    ...gpu,
+    run: () => setInterpolation(!look.render.interpolation, true),
   });
-  commands.add({ id: "video.interpolation", path: ["视频", "图像处理", "运动补偿"], order: 408, group: "video-frames", enabled: false, reason: GPU, run: () => undefined });
   // 409 图像旋转 (E09).
   commands.add({
     id: "video.rotate.cycle",
@@ -591,7 +861,7 @@ export default async function activate(plugin: Plugin) {
       run: () => rotate(degrees),
     });
   // 440–449 the window and PotPlayer's colour keys.
-  commands.add({ id: "video.picture", path: ["视频", "画面调节…"], order: 440, group: "video-color", run: () => window.show() });
+  commands.add({ id: "video.picture", path: ["视频", "画面调节…"], order: 440, group: "video-color", run: () => showWindow() });
   commands.add({ id: "video.reset", path: ["视频", "复位"], order: 441, group: "video-color", bindings: ["Q"], run: reset });
   for (const [label, field, down, up, order] of steps) {
     // All colour steps repeat while held.
@@ -599,14 +869,35 @@ export default async function activate(plugin: Plugin) {
     commands.add({ id: `video.${field}.up`, path: ["视频", `${label} +1%`], order: order + 1, group: "video-color", bindings: [up], repeat: true, run: () => step(label, field, 1) });
   }
   apply();
+  applyRender();
 }
 
-/** The window's status line: one short Chinese line for a failure, the detail in a tooltip; the chain first. */
-function statusLine(filter: FilterStatus, view: FilterStatus) {
+/**
+ * The window's status line: one short Chinese line for a failure, the detail in a tooltip; the chain
+ * first, then the display layer, then the render options. Software rendering is not a failure here:
+ * the GPU controls are greyed with the reason instead.
+ */
+function statusLine(filter: FilterStatus, view: FilterStatus, render: FilterStatus) {
   if (filter.state === "failed")
     return { failed: true, status: filter.error.code === "unsupported" ? "当前来源没有画面" : "画面处理失败", detail: filter.error.message };
   if (view.state === "failed") return { failed: true, status: "画面显示不可用", detail: viewReason(view.error) };
+  if (render.state === "failed" && render.error.code !== "unsupported")
+    return {
+      failed: true,
+      status: shaderFailed(render.error) ? "着色器载入失败" : render.error.code === "conflict" ? "渲染选项不可用" : "渲染设置失败",
+      detail: renderReason(render.error),
+    };
   return { failed: false, status: "", detail: "" };
+}
+
+/** mpv compiles a shader on first use; the player pushes this later (it does not name the file). */
+function shaderFailed(error: PluginError) {
+  return error.code === "failed" && error.message.startsWith("shader compile failed");
+}
+
+/** Why the render options refused; `conflict` means another plugin owns them. */
+function renderReason(error: PluginError) {
+  return error.code === "conflict" ? "另一个插件正在控制渲染选项" : error.message;
 }
 
 /** Why the display layer (比例, 帧位) refused; `conflict` means another plugin owns it. */

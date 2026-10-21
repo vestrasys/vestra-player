@@ -96,6 +96,12 @@ export function bytes(n: number | null | undefined) {
   return unit ? `${value.toFixed(2)} ${units[unit]}（${exact}）` : exact;
 }
 
+/** mpv `hwdec-current` as reported: the decoder in use (`videotoolbox`, `d3d11va`…), `"no"` = software. */
+export function hwdec(value: string | null | undefined) {
+  if (!value) return null;
+  return value === "no" ? "未使用" : value;
+}
+
 /** 播放信息: what the player reports for the session now (`player.stats()`, refreshed every second). */
 export function playbackPage(state: PlayerState, stats: PlaybackStats | null): Row[] {
   if (!state.source) return message("未打开媒体");
@@ -104,7 +110,7 @@ export function playbackPage(state: PlayerState, stats: PlaybackStats | null): R
   return rows([
     ["视频", video ? [
       ["解码器", video.decoder],
-      ["硬件解码", "未使用"],
+      ["硬件解码", hwdec(video.hwdec)],
       ["输入格式", join(video.codec, video.pixelFormat, video.colorspace)],
       ["尺寸", size(video.width, video.height) && `${size(video.width, video.height)} → ${size(video.displayWidth, video.displayHeight) ?? "-"}`],
       ["源帧率", fps(video.fps)],

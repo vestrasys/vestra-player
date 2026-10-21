@@ -1,0 +1,123 @@
+// 着色器列表 (E17): the enabled list (in order) with 〔添加…〕〔移除〕〔上移〕〔下移〕〔清空〕 beside it,
+// and the shader folder's other files below (double-click adds one).
+// Widths (window 301, content 285 after the 8px side padding):
+//   list 219 + spacing 6 + buttons 60                                   = 285
+// Height: padding 8 + heading 16 + 4 + list 113 (5 × 21 buttons, 2 apart) + 4 + heading 16 + 4
+//   + folder list 62 (3 rows) + 4 + bottom row 21 + padding 8           = 260
+import { Theme } from "@vestra/theme.slint";
+import { Button } from "@vestra/widgets.slint";
+
+// A plain 20px-row list: click selects, double-click activates; `empty` shows when there are no rows.
+component NameList {
+    in property <[string]> model;
+    in property <int> selected: -1;
+    in property <string> empty;
+    callback picked(int);
+    callback activated(int);
+    accessible-role: list;
+    Rectangle {
+        background: Theme.bg-list;
+        border-color: Theme.line;
+        border-width: 1px;
+    }
+    Flickable {
+        x: 1px;
+        y: 1px;
+        width: root.width - 2px;
+        height: root.height - 2px;
+        viewport-height: root.model.length * 20px;
+        VerticalLayout {
+            width: root.width - 2px;
+            height: root.model.length * 20px;
+            for name[index] in root.model: Rectangle {
+                height: 20px;
+                background: index == root.selected ? Theme.selected-bg : touch.has-hover ? Theme.press-bg : transparent;
+                Text {
+                    x: 5px;
+                    width: parent.width - 10px;
+                    text: name;
+                    color: Theme.text-list;
+                    font-size: Theme.font-body;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+                touch := TouchArea {
+                    clicked => { root.picked(index); }
+                    double-clicked => { root.activated(index); }
+                }
+            }
+        }
+    }
+    if root.model.length == 0: Text {
+        text: root.empty;
+        color: Theme.text-dim;
+        font-size: Theme.font-body;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+export component ShadersWindow inherits Window {
+    title: "着色器列表";
+    width: 301px;
+    height: 260px;
+    background: Theme.bg-panel;
+    in property <[string]> names;
+    in property <int> selected: -1;
+    in property <[string]> available;
+    in property <string> heading: "已启用 0/16（按顺序执行）";
+    in property <string> note;
+    callback select(int);
+    callback add();
+    callback pick(int);
+    callback remove();
+    callback up();
+    callback down();
+    callback clear();
+    callback open-folder();
+    VerticalLayout {
+        padding: 8px;
+        spacing: 4px;
+        Text { height: 16px; text: root.heading; color: Theme.text; font-size: Theme.font-body; vertical-alignment: center; }
+        HorizontalLayout {
+            height: 113px;
+            spacing: 6px;
+            NameList {
+                width: 219px;
+                model: root.names;
+                selected: root.selected;
+                empty: "没有着色器";
+                picked(i) => { root.select(i); }
+            }
+            VerticalLayout {
+                width: 60px;
+                spacing: 2px;
+                Button { text: "添加…"; height: 21px; clicked => { root.add(); } }
+                Button { text: "移除"; height: 21px; enabled: root.selected >= 0; clicked => { root.remove(); } }
+                Button { text: "上移"; height: 21px; enabled: root.selected > 0; clicked => { root.up(); } }
+                Button { text: "下移"; height: 21px; enabled: root.selected >= 0 && root.selected < root.names.length - 1; clicked => { root.down(); } }
+                Button { text: "清空"; height: 21px; enabled: root.names.length > 0; clicked => { root.clear(); } }
+            }
+        }
+        Text { height: 16px; text: "着色器文件夹里的其它文件（双击加入）"; color: Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; }
+        NameList {
+            height: 62px;
+            model: root.available;
+            empty: "没有其它 .glsl 文件";
+            activated(i) => { root.pick(i); }
+        }
+        HorizontalLayout {
+            height: 21px;
+            spacing: 6px;
+            Text {
+                horizontal-stretch: 1;
+                text: root.note;
+                color: Theme.accent;
+                font-size: Theme.font-body;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            Button { text: "打开文件夹"; width: 80px; clicked => { root.open-folder(); } }
+        }
+    }
+}

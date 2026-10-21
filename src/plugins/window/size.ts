@@ -10,8 +10,9 @@ export function sizeReason(plugin: Plugin, video: VideoSize) {
 }
 
 /**
- * H03 倍数尺寸, H04 适应视频比例 and 迷你尺寸 (the 3a form of H07): every
- * resize goes through `setVideoArea`, one at a time (`busy` meanwhile).
+ * H03 倍数尺寸, H04 适应视频比例 and 迷你尺寸 (H07 where the system has
+ * no picture-in-picture): every resize goes through `setVideoArea`, one at
+ * a time (`busy` meanwhile).
  * 迷你尺寸 remembers the video area before it and ends by itself when the
  * window is resized or goes fullscreen.
  */
@@ -75,6 +76,11 @@ export class Sizer {
     this.mini = { previous, applied: { width: applied.width, height: applied.height } };
     this.#changed();
     this.#osd("迷你尺寸: 开");
+  }
+
+  /** End 迷你尺寸 if it is on, back to the size before it (the form switched to 画中画). */
+  async leaveMini() {
+    if (this.mini) await this.toggleMini();
   }
 
   #endMini() {

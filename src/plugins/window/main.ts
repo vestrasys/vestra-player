@@ -1,6 +1,7 @@
 import type { Plugin } from "../../sdk/plugin/index.ts";
 import { currentScale, SCALES } from "./geometry.ts";
 import { OnTop } from "./on-top.ts";
+import { PictureInPicture } from "./pip.ts";
 import { ON_TOP, type OnTop as Mode, Preferences } from "./settings.ts";
 import { Sizer, sizeReason } from "./size.ts";
 import { VideoSize } from "./video-size.ts";
@@ -11,8 +12,8 @@ const MODE_TITLES: Record<Mode, string> = { never: "不置顶", always: "总是�
 const MODE_OSD: Record<Mode, string> = { never: "置顶: 关闭", always: "置顶: 总是", playing: "置顶: 播放时" };
 
 /**
- * 主窗口: 屏幕 ▶ 迷你尺寸 / 倍数尺寸 (H03) / 适应视频比例 (H04) / 置顶 (H05),
- * 播放 ▶ 播放时隐藏鼠标指针 (B30). The window itself belongs to the core
+ * 主窗口: 屏幕 ▶ 画中画 (H07; 迷你尺寸 where the system has none) / 倍数尺寸 (H03) /
+ * 适应视频比例 (H04) / 置顶 (H05), 播放 ▶ 播放时隐藏鼠标指针 (B30). The window itself belongs to the core
  * (`plugin.window`); this plugin keeps the two preferences in settings.json
  * and applies them on activation. The core undoes its effects on deactivation.
  */
@@ -35,18 +36,45 @@ export default async function activate(plugin: Plugin) {
     reason: () => (sizer.resizing ? "正在调整窗口" : reason()),
   };
 
-  // 屏幕 ▶ 迷你尺寸 (710): the first item, so the submenu sits with the host's 全屏 (700, group "screen").
-  plugin.commands.add({
-    id: "mini",
-    path: [...SCREEN, "迷你尺寸"],
-    order: 710,
-    group: "screen",
-    bindings: ["`"],
-    checked: () => sizer.mini !== null,
-    enabled: () => !window.state.fullscreen && (sizer.mini !== null || video.size !== null),
-    busy: sizeState.busy,
-    reason: () => (sizer.resizing ? "正在调整窗口" : window.state.fullscreen ? "全屏时不可用" : "没有视频"),
-    run: () => sizer.toggleMini(),
+  // 屏幕 ▶ 画中画 / 迷你尺寸 (710): the first item, so the submenu sits with the host's 全屏 (700, group "screen").
+  // The id stays `mini` in both forms, so a user's rebinding of ` carries over.
+  // `supported` needs the main window, which may not exist yet at activation,
+  // so the form follows `window.onChange`: the command is declared again
+  // (title, check, action) whenever `supported` changes.
+  const position = { id: "mini", order: 710, group: "screen", bindings: ["`"] };
+  const pip = new PictureInPicture(plugin, video, osd);
+  const declare = (supported: boolean) =>
+    supported
+      ? // H07: the system picture-in-picture window (macOS).
+        plugin.commands.add({
+          ...position,
+          path: [...SCREEN, "画中画"],
+          checked: () => pip.active,
+          enabled: () => pip.active || video.size !== null,
+          busy: () => pip.switching,
+          reason: () => (pip.switching ? "正在切换画中画" : "没有视频"),
+          run: () => pip.toggle(),
+        })
+      : // Without system picture-in-picture (Windows, Linux, headless): the 3a 迷你尺寸.
+        plugin.commands.add({
+          ...position,
+          path: [...SCREEN, "迷你尺寸"],
+          checked: () => sizer.mini !== null,
+          enabled: () => !window.state.fullscreen && (sizer.mini !== null || video.size !== null),
+          busy: sizeState.busy,
+          reason: () => (sizer.resizing ? "正在调整窗口" : window.state.fullscreen ? "全屏时不可用" : "没有视频"),
+          run: () => sizer.toggleMini(),
+        });
+  let form = window.state.pictureInPicture.supported;
+  let command = declare(form);
+  window.onChange((state) => {
+    const supported = state.pictureInPicture.supported;
+    if (supported === form) return;
+    form = supported;
+    void command.dispose();
+    command = declare(supported);
+    // 迷你尺寸 in effect: back to the size before it (and the chosen on-top mode).
+    if (supported) void sizer.leaveMini();
   });
   SCALES.forEach(({ scale, title }, index) =>
     plugin.commands.add({

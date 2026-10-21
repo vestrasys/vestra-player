@@ -1,4 +1,4 @@
-import type { VideoNode } from "../../sdk/plugin/index.ts";
+import type { RenderSettings, VideoNode } from "../../sdk/plugin/index.ts";
 
 // ---------------------------------------------------------------- colour (色彩 page, E02)
 
@@ -197,6 +197,54 @@ export function nextAspect(display: Display): number | null {
   return cycle[(at + 1) % cycle.length]!;
 }
 
+// ---------------------------------------------------------------- GPU render options (E16, E17, E18 运动补偿)
+
+export const TONE_MAPPINGS = [
+  { id: "auto", label: "自动" },
+  { id: "off", label: "关" },
+  { id: "bt.2390", label: "BT.2390" },
+  { id: "hable", label: "Hable" },
+  { id: "mobius", label: "Mobius" },
+  { id: "reinhard", label: "Reinhard" },
+  { id: "clip", label: "裁剪" },
+] as const satisfies readonly { id: RenderSettings["toneMapping"]; label: string }[];
+export type ToneMapping = (typeof TONE_MAPPINGS)[number]["id"];
+export const PEAK_MIN = 100;
+export const PEAK_MAX = 400;
+export const PEAK_DEFAULT = 203;
+export const MAX_SHADERS = 16;
+/** Global; `shaders` are file names in `<dataDirectory>/shaders/`, kept while the switch is off. */
+export interface Render {
+  toneMapping: ToneMapping;
+  targetPeak: number;
+  peakDetect: boolean;
+  shadersEnabled: boolean;
+  shaders: string[];
+  interpolation: boolean;
+}
+export const defaultRender = (): Render => ({
+  toneMapping: "auto",
+  targetPeak: PEAK_DEFAULT,
+  peakDetect: true,
+  shadersEnabled: false,
+  shaders: [],
+  interpolation: false,
+});
+/** 100–400 nits in steps of 10; 203 (BT.2408 reference white) stays as it is. */
+export const peakOf = (n: number) => (n === PEAK_DEFAULT ? n : clamp(Math.round(n / 10) * 10, PEAK_MIN, PEAK_MAX));
+/** `stats().video.transfer` of an HDR source (HDR10 / HLG). */
+export const isHdr = (transfer: string | null | undefined) => transfer === "pq" || transfer === "hlg";
+/** A user shader's file name: a plain name (no folder part, not hidden) ending in .glsl or .hook. */
+export const isShaderName = (name: string) =>
+  /^[^/\\.][^/\\]*\.(glsl|hook)$/i.test(name);
+/** The 着色器 list after `names`: unique, at most `MAX_SHADERS`. */
+export function shaderList(names: unknown): string[] {
+  if (!Array.isArray(names)) return [];
+  const out: string[] = [];
+  for (const name of names) if (typeof name === "string" && isShaderName(name) && !out.includes(name)) out.push(name);
+  return out.slice(0, MAX_SHADERS);
+}
+
 // ---------------------------------------------------------------- the chain
 
 /** Everything the chain is computed from. */
@@ -207,6 +255,7 @@ export interface Look {
   reframe: Reframe;
   geometry: Geometry;
   display: Display;
+  render: Render;
 }
 export const defaultLook = (): Look => ({
   picture: { ...defaults },
@@ -215,6 +264,7 @@ export const defaultLook = (): Look => ({
   reframe: { mode: "none", ratio: 1, x: 50, y: 50 },
   geometry: upright(),
   display: defaultDisplay(),
+  render: defaultRender(),
 });
 
 const round = (n: number, digits = 4) => Math.round(n * 10 ** digits) / 10 ** digits;
@@ -281,6 +331,7 @@ export interface Stored {
   deinterlace: Deinterlace;
   reframe: Reframe;
   display: Display;
+  render: Render;
   tab: number;
 }
 export const TABS = 4;
@@ -355,8 +406,19 @@ export function parse(raw: unknown): Stored {
         : customAspect,
     fit: oneOf(v.fit, FITS.map((f) => f.id), "keep"),
   };
+  const rr = record(value.render);
+  const render: Render = {
+    toneMapping: oneOf(rr.toneMapping, TONE_MAPPINGS.map((t) => t.id), "auto"),
+    targetPeak: peakOf(num(rr.targetPeak, PEAK_DEFAULT, PEAK_MIN, PEAK_MAX)),
+    peakDetect: rr.peakDetect !== false,
+    shadersEnabled: rr.shadersEnabled === true,
+    shaders: shaderList(rr.shaders),
+    interpolation: rr.interpolation === true,
+  };
+  // 倍帧 and 运动补偿 exclude each other; a file with both keeps 倍帧.
+  if (effects.frameBlend) render.interpolation = false;
   const tab = typeof value.tab === "number" && Number.isInteger(value.tab) && value.tab >= 0 && value.tab < TABS ? value.tab : 0;
-  return { picture, effects, deinterlace, reframe, display, tab };
+  return { picture, effects, deinterlace, reframe, display, render, tab };
 }
 
 const stored = (look: Look): Omit<Stored, "tab"> => ({
@@ -365,6 +427,7 @@ const stored = (look: Look): Omit<Stored, "tab"> => ({
   deinterlace: look.deinterlace,
   reframe: look.reframe,
   display: look.display,
+  render: look.render,
 });
 
 /** The display settings are written as `view` (`view.aspect`, `view.customAspect`, `view.fit`). */

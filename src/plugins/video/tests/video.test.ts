@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { HostError, startPlugin, TestHost } from "../../../sdk/plugin/testing.ts";
 import activate from "../main.ts";
-import { aspectIndex, aspectLabel, blendFps, defaultLook, defaults, droppedTooMany, nextAspect, nodesFor, parse, parseAspect, serialize } from "../model.ts";
+import { aspectIndex, aspectLabel, blendFps, defaultLook, defaults, droppedTooMany, isHdr, isShaderName, nextAspect, nodesFor, parse, parseAspect, peakOf, serialize, shaderList } from "../model.ts";
 import type { Look, Picture } from "../model.ts";
 
 const directory = new URL("..", import.meta.url);
@@ -118,7 +118,7 @@ test("flip happens before rotation: a quarter turn moves the flip to the other a
 
 test("settings parse leniently; an unknown version starts from the defaults", () => {
   const base = defaultLook();
-  assert.deepEqual(parse(null), { picture: base.picture, effects: base.effects, deinterlace: base.deinterlace, reframe: base.reframe, display: base.display, tab: 0 });
+  assert.deepEqual(parse(null), { picture: base.picture, effects: base.effects, deinterlace: base.deinterlace, reframe: base.reframe, display: base.display, render: base.render, tab: 0 });
   const parsed = parse({
     version: 1,
     picture: { brightness: 500, hue: 12.6, blurEnabled: true, blurStrength: "x" },
@@ -143,7 +143,7 @@ test("settings parse leniently; an unknown version starts from the defaults", ()
   assert.equal("geometry" in written, false, "flip and rotation are per source");
   const { tab, ...again } = parse(JSON.parse(JSON.stringify(written)));
   assert.equal(tab, 2);
-  assert.deepEqual(again, { picture: base.picture, effects: base.effects, deinterlace: base.deinterlace, reframe: base.reframe, display: base.display });
+  assert.deepEqual(again, { picture: base.picture, effects: base.effects, deinterlace: base.deinterlace, reframe: base.reframe, display: base.display, render: base.render });
 });
 
 test("field-output frame drops: more than 5 % of the frames since the last count", () => {
@@ -154,7 +154,7 @@ test("field-output frame drops: more than 5 % of the frames since the last count
 
 // ---------------------------------------------------------------- menu
 
-test("menu under 视频 follows the chapter's allocation; GPU items are disabled with a reason", async () => {
+test("menu under 视频 follows the chapter's allocation; GPU items are enabled under GPU rendering", async () => {
   const host = new TestHost();
   host.openElsewhere("/movie.mp4");
   const { stop } = await start(host);
@@ -162,7 +162,12 @@ test("menu under 视频 follows the chapter's allocation; GPU items are disabled
   const ratios = ["4:3", "16:9", "16:10", "1.85:1", "2.35:1"];
   assert.deepEqual(declared, [
     ["像素着色 ▶ 使用着色器", 402, "video-source", "Shift+P"],
-    ["像素着色 ▶ HDR 色调映射", 402, "video-source", ""],
+    ["像素着色 ▶ 着色器列表…", 402, "video-source", ""],
+    ["像素着色 ▶ 打开着色器文件夹", 402, "video-source", ""],
+    ["像素着色 ▶ 重新载入着色器", 402, "video-source", ""],
+    ...["自动", "关", "BT.2390", "Hable", "Mobius", "Reinhard", "裁剪"].map((t) => [`像素着色 ▶ HDR 色调映射 ▶ ${t}`, 402, "video-hdr", ""]),
+    ["像素着色 ▶ HDR 色调映射 ▶ 动态峰值检测", 402, "video-hdr-peak", ""],
+    ["像素着色 ▶ HDR 设置…", 402, "video-hdr", ""],
     ["反交错 ▶ 按序切换", 403, "video-source", "Ctrl+I"],
     ["反交错 ▶ 自动", 403, "video-source", ""],
     ["反交错 ▶ 总是使用", 403, "video-source", ""],
@@ -218,13 +223,15 @@ test("menu under 视频 follows the chapter's allocation; GPU items are disabled
     ["色调 +1%", 449, "video-color", "O"],
   ]);
   assert.deepEqual(host.conflicts, []);
-  for (const id of ["video.shader.use", "video.shader.hdr", "video.interpolation"])
-    assert.deepEqual(host.command(id).state, { enabled: false, checked: null, busy: false, reason: "等待 GPU 渲染原型结论" });
+  await host.settle();
+  for (const id of ["video.shader.use", "video.interpolation"])
+    assert.deepEqual(host.command(id).state, { enabled: true, checked: false, busy: false, reason: null });
+  assert.equal(host.command("video.hdr.auto").state.checked, true);
+  assert.equal(host.command("video.hdr.peak").state.checked, true);
   assert.deepEqual(host.command("video.frame-blend").state, { enabled: true, checked: false, busy: false, reason: null });
   assert.equal(host.command("video.aspect.custom").state.enabled, false, "自定义 waits for a ratio");
   assert.equal(host.command("video.fit.keep").state.checked, true);
   assert.equal(host.command("video.aspect.default").state.checked, true);
-  await assert.rejects(host.press("Shift+P"));
   assert.equal(host.command("video.deinterlace.auto").state.checked, true);
   assert.equal(host.command("video.deinterlace.output.frame").state.checked, true);
   assert.equal(host.command("video.reframe.none").state.checked, true);
@@ -907,5 +914,278 @@ test("E13: the 缩放 slider is logarithmic and follows the drag; 默认 resets;
   assert.equal(host.videoView.values.zoom, 1);
   assert.equal(host.videoView.values.panY, 0);
   assert.ok(Math.abs(host.videoView.values.aspect! - 16 / 9) < 1e-9, "the ratio is global and stays");
+  await stop();
+});
+
+// ---------------------------------------------------------------- E16, E17, E18 运动补偿: GPU render options
+
+const SOFTWARE = "需要 GPU 渲染（当前为软件渲染）";
+/** `player.stats()` with a 1080p picture whose transfer is `transfer`. */
+function setTransfer(host: TestHost, transfer: string | null) {
+  setFps(host, 24);
+  host.stats = { ...host.stats, video: { ...host.stats.video!, hwdec: "videotoolbox", transfer } };
+}
+const INVERT = "//!HOOK MAIN\n//!BIND HOOKED\nvec4 hook() { vec4 c = HOOKED_tex(HOOKED_pos); return vec4(1.0 - c.rgb, c.a); }\n";
+
+test("render model: lenient parse, 目标亮度 in steps of 10, plain .glsl/.hook names, 倍帧 wins over 运动补偿", () => {
+  assert.deepEqual(defaultLook().render, { toneMapping: "auto", targetPeak: 203, peakDetect: true, shadersEnabled: false, shaders: [], interpolation: false });
+  const parsed = parse({
+    version: 1,
+    render: { toneMapping: "hable", targetPeak: 287, peakDetect: false, shadersEnabled: true, shaders: ["a.glsl", "../x.glsl", "a.glsl", ".h.glsl", "b.HOOK", 3, "c.txt"], interpolation: true },
+  }).render;
+  assert.deepEqual(parsed, { toneMapping: "hable", targetPeak: 290, peakDetect: false, shadersEnabled: true, shaders: ["a.glsl", "b.HOOK"], interpolation: true });
+  assert.deepEqual(parse({ version: 1, render: { toneMapping: "aces", targetPeak: 9000 } }).render, { ...defaultLook().render, targetPeak: 400 });
+  assert.equal(parse({ version: 1, effects: { frameBlend: true }, render: { interpolation: true } }).render.interpolation, false);
+  assert.equal(shaderList(Array.from({ length: 20 }, (_, i) => `s${i}.glsl`)).length, 16);
+  assert.deepEqual([peakOf(203), peakOf(96), peakOf(204), peakOf(401)], [203, 100, 200, 400]);
+  assert.deepEqual(["pq", "hlg", "bt.1886", null].map(isHdr), [true, true, false, false]);
+  assert.deepEqual(["x.glsl", "dir/x.glsl", "x", "x.glsl.txt"].map(isShaderName), [true, false, false, false]);
+});
+
+test("E16: tone mapping, 目标亮度 and peak detection reach the render options; SDR sources say they are not HDR", async () => {
+  await withData(async (data) => {
+    let host = new TestHost();
+    setTransfer(host, "bt.1886");
+    host.openElsewhere("/sdr.mp4");
+    let { stop } = await start(host, data);
+    await host.settle();
+    assert.equal(host.videoRender.owner, "vestra.video");
+    assert.deepEqual(host.videoRender.values, { toneMapping: "auto", targetPeak: 203, peakDetect: true, shaders: [], interpolation: false });
+    await host.command("video.hdr.bt.2390").run();
+    await host.settle();
+    assert.equal(host.videoRender.values.toneMapping, "bt.2390");
+    assert.equal(host.osd.at(-1), "HDR 色调映射: BT.2390（当前片源不是 HDR）");
+    assert.equal(host.command("video.hdr.bt.2390").state.checked, true);
+    await host.command("video.hdr.peak").run();
+    await host.settle();
+    assert.equal(host.videoRender.values.peakDetect, false);
+    assert.equal(host.osd.at(-1), "动态峰值检测: 关");
+    await host.command("video.hdr.settings").run();
+    const window = host.window("picture");
+    assert.equal(window.props["tab-index"], 3, "HDR 设置… opens the 高级 page");
+    assert.equal(window.props["tone-index"], 2);
+    assert.equal(window.props["hdr-note"], "目标亮度 203 尼特 · 当前片源不是 HDR");
+    assert.equal(window.props["render-ready"], true);
+    window.emit("adjust", "targetPeak", 296.4);
+    await host.settle();
+    assert.equal(host.videoRender.values.targetPeak, 300, "follows the drag in steps of 10");
+    window.emit("choose", "toneMapping", 1);
+    await host.settle();
+    assert.equal(host.videoRender.values.toneMapping, "off");
+    assert.equal(host.osd.at(-1), "动态峰值检测: 关", "window edits give no on-screen text");
+    // An HDR10 source: no note.
+    setTransfer(host, "pq");
+    host.openElsewhere("/hdr10.mkv");
+    await host.settle();
+    assert.equal(window.props["hdr-note"], "目标亮度 300 尼特");
+    await host.command("video.hdr.hable").run();
+    assert.equal(host.osd.at(-1), "HDR 色调映射: Hable");
+    await stop();
+    assert.equal(host.videoRender.owner, null, "released when the plugin stops");
+    assert.deepEqual(JSON.parse(await readFile(join(data, "settings.json"), "utf8")).render, {
+      toneMapping: "hable",
+      targetPeak: 300,
+      peakDetect: false,
+      shadersEnabled: false,
+      shaders: [],
+      interpolation: false,
+    });
+    host = new TestHost();
+    ({ stop } = await start(host, data));
+    await host.settle();
+    assert.deepEqual(host.videoRender.values, { toneMapping: "hable", targetPeak: 300, peakDetect: false, shaders: [], interpolation: false }, "restored at start");
+    await stop();
+  });
+});
+
+test("software rendering: the GPU items are disabled with the reason, the list and folder stay usable", async () => {
+  const host = new TestHost();
+  host.videoRender.gpu = false;
+  host.openElsewhere("/movie.mp4");
+  const { stop } = await start(host);
+  await host.command("video.picture").run();
+  await host.settle();
+  for (const id of ["video.shader.use", "video.shader.reload", "video.hdr.auto", "video.hdr.peak", "video.hdr.settings", "video.interpolation"]) {
+    assert.equal(host.command(id).state.enabled, false, id);
+    assert.equal(host.command(id).state.reason, SOFTWARE, id);
+  }
+  for (const id of ["video.shader.list", "video.shader.folder"]) assert.equal(host.command(id).state.enabled, true, id);
+  const window = host.window("picture");
+  assert.equal(window.props["render-ready"], false);
+  assert.equal(window.props["render-reason"], SOFTWARE);
+  assert.equal(window.props.status, "", "not a failure in the status line");
+  assert.deepEqual(host.osd, []);
+  await assert.rejects(host.press("Shift+P"), "disabled commands refuse their keys");
+  await stop();
+});
+
+test("software rendering after start: the player's push disables the items", async () => {
+  const { host, window, stop } = await playing();
+  await host.settle();
+  assert.equal(host.command("video.interpolation").state.enabled, true);
+  host.failVideoRender("unsupported", "the window cannot show OpenGL frames");
+  await host.settle();
+  assert.equal(host.command("video.interpolation").state.enabled, false);
+  assert.equal(host.command("video.interpolation").state.reason, SOFTWARE);
+  assert.equal(window.props["render-ready"], false);
+  await stop();
+});
+
+test("E17: 添加… copies the file into the shader folder; Shift+P sends absolute paths; the list is edited in the window", async () => {
+  await withData(async (data) => {
+    const desk = join(data, "desk");
+    await mkdir(desk);
+    await writeFile(join(desk, "invert.glsl"), INVERT);
+    await writeFile(join(desk, "notes.txt"), "x");
+    let host = new TestHost();
+    host.openElsewhere("/movie.mp4");
+    let { stop } = await start(host, data);
+    await host.press("Shift+P");
+    await host.settle();
+    assert.equal(host.osd.at(-1), "像素着色: 没有着色器");
+    assert.equal(host.command("video.shader.use").state.checked, true, "on, waiting for a shader");
+    await host.command("video.shader.list").run();
+    const list = host.window("shaders");
+    host.dialogAnswers.push([join(desk, "notes.txt")]);
+    list.emit("add");
+    await host.settle();
+    assert.equal(host.osd.at(-1), "只能添加 .glsl 或 .hook 着色器文件");
+    host.dialogAnswers.push([join(desk, "invert.glsl")]);
+    list.emit("add");
+    await host.settle();
+    const folder = join(data, "shaders");
+    assert.equal(await readFile(join(folder, "invert.glsl"), "utf8"), INVERT, "copied into the folder");
+    assert.deepEqual(host.videoRender.values.shaders, [join(folder, "invert.glsl")]);
+    assert.deepEqual(list.props.names, ["invert.glsl"]);
+    assert.equal(list.props.heading, "已启用 1/16（按顺序执行）");
+    await rm(join(desk, "invert.glsl"));
+    // Files dropped into the folder show below; double-click adds one.
+    await writeFile(join(folder, "b.glsl"), INVERT);
+    await writeFile(join(folder, "a.hook"), INVERT);
+    await host.command("video.shader.list").run();
+    await host.settle();
+    assert.deepEqual(list.props.available, ["a.hook", "b.glsl"]);
+    list.emit("pick", 1);
+    await host.settle();
+    assert.deepEqual(list.props.names, ["invert.glsl", "b.glsl"]);
+    assert.deepEqual(list.props.available, ["a.hook"]);
+    assert.equal(list.props.selected, 1);
+    list.emit("up");
+    await host.settle();
+    assert.deepEqual(host.videoRender.values.shaders, [join(folder, "b.glsl"), join(folder, "invert.glsl")], "in list order");
+    await host.press("Shift+P");
+    await host.settle();
+    assert.equal(host.osd.at(-1), "像素着色: 关");
+    assert.deepEqual(host.videoRender.values.shaders, [], "off sends no shaders");
+    assert.deepEqual(list.props.names, ["b.glsl", "invert.glsl"], "and keeps the list");
+    assert.equal(list.props.note, "「使用着色器」未打开");
+    await host.press("Shift+P");
+    assert.equal(host.osd.at(-1), "像素着色: 开 (2)");
+    list.emit("select", 1);
+    list.emit("remove");
+    await host.settle();
+    assert.deepEqual(list.props.names, ["b.glsl"]);
+    assert.deepEqual(list.props.available, ["a.hook", "invert.glsl"], "removed from the list, not from the folder");
+    // 重新载入: a file deleted outside the player leaves the list with a note.
+    await rm(join(folder, "b.glsl"));
+    await host.command("video.shader.reload").run();
+    await host.settle();
+    assert.equal(host.osd.at(-1), "已移除不存在的着色器：b.glsl");
+    assert.deepEqual(list.props.names, []);
+    list.emit("pick", 1);
+    await host.settle();
+    await host.command("video.shader.folder").run();
+    await host.settle();
+    assert.deepEqual(host.system.opened, [folder]);
+    await stop();
+    host = new TestHost();
+    ({ stop } = await start(host, data));
+    await host.settle();
+    assert.deepEqual(host.videoRender.values.shaders, [join(folder, "invert.glsl")], "list and switch restored");
+    await stop();
+  });
+});
+
+test("E17: a shader that does not compile shows in the status line and on screen; playback state is untouched", async () => {
+  await withData(async (data) => {
+    const folder = join(data, "shaders");
+    await mkdir(folder);
+    await writeFile(join(folder, "broken.glsl"), "//!HOOK MAIN\nvec4 hook() { return nope; }\n");
+    await writeFile(join(data, "settings.json"), JSON.stringify({ version: 1, render: { shadersEnabled: true, shaders: ["broken.glsl"] } }));
+    const host = new TestHost();
+    host.openElsewhere("/movie.mp4");
+    const { stop } = await start(host, data);
+    await host.command("video.picture").run();
+    await host.settle();
+    assert.deepEqual(host.videoRender.values.shaders, [join(folder, "broken.glsl")]);
+    host.failVideoRender("failed", "shader compile failed: ERROR: 0:2: Use of undeclared identifier 'nope'");
+    await host.settle();
+    const window = host.window("picture");
+    assert.equal(window.props.status, "着色器载入失败");
+    assert.equal(window.props.detail, "shader compile failed: ERROR: 0:2: Use of undeclared identifier 'nope'");
+    assert.equal(window.props.failed, true);
+    assert.equal(host.osd.at(-1), "着色器载入失败");
+    assert.equal(host.command("video.shader.use").state.enabled, true, "still a GPU renderer");
+    window.emit("toggle", "shaders", false);
+    await host.settle();
+    assert.equal(window.props.status, "");
+    assert.deepEqual(host.videoRender.values.shaders, []);
+    await stop();
+  });
+});
+
+test("E18: 运动补偿 and 倍帧 exclude each other, with OSD; the window does the same", async () => {
+  const host = new TestHost();
+  setFps(host, 24);
+  host.openElsewhere("/pan24.mp4");
+  const { stop } = await start(host);
+  await host.command("video.interpolation").run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "运动补偿: 开");
+  assert.equal(host.videoRender.values.interpolation, true);
+  assert.equal(host.command("video.interpolation").state.checked, true);
+  await host.command("video.frame-blend").run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "倍帧: 开（已关闭运动补偿）");
+  assert.equal(host.videoRender.values.interpolation, false);
+  assert.equal(host.command("video.interpolation").state.checked, false);
+  await measured(host);
+  assert.deepEqual(chain(host).at(-1), { kind: "frameBlend", fps: 48 });
+  await host.command("video.picture").run();
+  const window = host.window("picture");
+  window.emit("toggle", "interpolation", true);
+  await host.settle();
+  assert.equal(host.osd.at(-1), "运动补偿: 开（已关闭倍帧）");
+  assert.equal(node(host, "frameBlend"), undefined);
+  assert.equal(window.props["blend-enabled"], false);
+  assert.equal(window.props.interpolation, true);
+  window.emit("toggle", "interpolation", false);
+  await host.settle();
+  assert.equal(host.videoRender.values.interpolation, false);
+  assert.equal(host.osd.at(-1), "运动补偿: 开（已关闭倍帧）", "a plain window edit gives no on-screen text");
+  await stop();
+});
+
+test("render options owned by another plugin: silent at start, a reason on use, taken once free", async () => {
+  const host = new TestHost();
+  host.setVideoRenderOwner("probe.plugin");
+  host.openElsewhere("/movie.mp4");
+  const { stop } = await start(host);
+  await host.command("video.picture").run();
+  await host.settle();
+  const window = host.window("picture");
+  assert.deepEqual(host.osd, []);
+  assert.equal(window.props.status, "渲染选项不可用");
+  assert.equal(window.props.detail, "另一个插件正在控制渲染选项");
+  assert.equal(host.command("video.interpolation").state.enabled, true, "a conflict is not software rendering");
+  await host.command("video.hdr.clip").run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "渲染选项不可用：另一个插件正在控制渲染选项");
+  host.setVideoRenderOwner(null);
+  window.emit("retry");
+  await host.settle();
+  assert.equal(host.videoRender.owner, "vestra.video");
+  assert.equal(host.videoRender.values.toneMapping, "clip");
+  assert.equal(window.props.status, "");
   await stop();
 });
