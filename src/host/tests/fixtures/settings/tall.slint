@@ -1,0 +1,9 @@
+// A settings page as tall as the shortcut page (436px), for layout tests.
+export global Bridge {
+    in property <string> label;
+}
+
+export component Tall inherits Rectangle {
+    min-height: 436px;
+    preferred-height: 436px;
+}
