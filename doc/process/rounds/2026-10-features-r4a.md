@@ -505,3 +505,16 @@ S=/private/tmp/claude-501/-Users-ziyang-Develop-vestra-player/7b0dd90c-cb6e-48be
 ### 8.5 验收结果
 
 （P3 填写）
+
+#### 7.4 原型实机结果（协调者，2026-10-21）
+
+**GPU 渲染（release 构建，`gpu-render`）**：画面方向和颜色正确，窗口和全屏都清晰。4K 30 fps 测试片源，用 `gui-cpu.sh` 采样宿主进程 CPU：
+
+| 4K 播放 | 软件渲染 | GPU 渲染 |
+| --- | --- | --- |
+| 窗口 | 81% | 19% |
+| 全屏 | 152% | 14% |
+
+**画中画（`pip`）**：日志依次出现 `pip: ready (supported: true)` 和 `pip: possible, starting`，随后宿主崩溃，类型是 EXC_BREAKPOINT。崩溃栈是 `-[AVPictureInPictureSampleBufferDisplayLayerHostView layout]` → `-[NSView setFrame:]` → `_NSViewValidateGeometry`，即画中画宿主视图布局时遇到非法几何，很可能和 1×1 子图层有关。崩溃报告在 `~/Library/Logs/DiagnosticReports/host-2026-10-21-100828.ips`。
+
+**结论**：GPU 渲染的收益已经确认，具备正式立项的条件，等用户确认。画中画先修崩溃再复测，不阻塞其它工作。
