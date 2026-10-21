@@ -13,7 +13,7 @@ export function linkDialog(scope: Scope, queue: Queue): Window {
   const window = scope.windows.create("ui/link.slint", { id: "playlist-link" });
   let message = HINT;
   window.bind(() => ({ message }));
-  window.on("hide", () => window.hide());
+  window.on("cancel", () => window.hide());
   window.on("addLink", (text: string) => {
     const lines = String(text)
       .split(/\r?\n/)
