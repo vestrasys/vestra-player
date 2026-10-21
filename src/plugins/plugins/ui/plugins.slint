@@ -1,8 +1,11 @@
-// 插件管理 (J07): the plugin list (id | 版本 | 来源 | 状态 | 数据), the selected
-// plugin's details (label 80 | value), a message line and the buttons.
-// 600×420, at least 520×320. Columns: 70 + 70 + 70 + 60 plus four 6px gaps
-// and 14px row padding leave the id ≥ 190px at the minimum width; the
-// buttons (66 + 66 + 94 + 66 | 82 + 66 and five gaps = 470) fit in 500.
+// 插件管理 (J07) as a page of the options window (category 插件, id
+// plugins.manage): the plugin list (id | 版本 | 来源 | 状态 | 数据), the
+// selected plugin's details (label 64 | value), a message line and the
+// buttons. Width 440: 6px padding and the list border leave 426; row padding
+// 3 + 6 and four 4px gaps leave 401, so 版本 50 + 来源 56 + 状态 56 + 数据 50
+// give the id ≈ 189. Buttons 66 + 66 + 94 + 66 + 82 and four 6px gaps = 398.
+// Height 436: list (header + 12 rows) 238, details 6 × 18 + 2, message 18,
+// buttons 21, gaps and padding 48.
 import { ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button, ToolTipArea } from "@vestra/widgets.slint";
@@ -37,14 +40,14 @@ component Row inherits Rectangle {
     height: 18px;
     background: root.item.selected ? Theme.selected-bg : transparent;
     HorizontalLayout {
-        padding-left: 4px;
-        padding-right: 10px;
-        spacing: 6px;
+        padding-left: 3px;
+        padding-right: 6px;
+        spacing: 4px;
         Cell { horizontal-stretch: 1; text: root.item.id; color: root.item.dim ? Theme.text-dim : Theme.text; }
-        Cell { width: 70px; text: root.item.version; color: root.ink; }
-        Cell { width: 70px; text: root.item.origin; color: root.ink; }
-        Cell { width: 70px; text: root.item.state; color: root.item.failed ? Theme.accent : root.ink; }
-        Cell { width: 60px; text: root.item.size; color: root.ink; horizontal-alignment: right; }
+        Cell { width: 50px; text: root.item.version; color: root.ink; }
+        Cell { width: 56px; text: root.item.origin; color: root.ink; }
+        Cell { width: 56px; text: root.item.state; color: root.item.failed ? Theme.accent : root.ink; }
+        Cell { width: 50px; text: root.item.size; color: root.ink; horizontal-alignment: right; }
     }
     TouchArea { clicked => { root.select(); } }
 }
@@ -53,14 +56,7 @@ component Head inherits Cell {
     color: Theme.text-dim;
 }
 
-export component PluginsWindow inherits Window {
-    title: "插件管理";
-    preferred-width: 600px;
-    preferred-height: 420px;
-    min-width: 520px;
-    min-height: 320px;
-    background: Theme.bg-panel;
-
+export global Plugins {
     in property <[PluginRow]> rows;
     in property <bool> has-selection;
     in property <[DetailLine]> details;
@@ -80,15 +76,17 @@ export component PluginsWindow inherits Window {
     callback rollback();
     callback uninstall();
     callback open-data();
-    callback close();
+}
+
+export component PluginsPage inherits Rectangle {
+    height: 436px;
 
     VerticalLayout {
-        padding: 10px;
+        padding: 6px;
         spacing: 6px;
         Rectangle {
             vertical-stretch: 1;
-            min-height: 110px;
-            preferred-height: 220px;
+
             background: Theme.bg-list;
             border-width: 1px;
             border-color: Theme.line;
@@ -96,21 +94,21 @@ export component PluginsWindow inherits Window {
                 padding: 1px;
                 HorizontalLayout {
                     height: 18px;
-                    padding-left: 4px;
-                    padding-right: 10px;
-                    spacing: 6px;
+                    padding-left: 3px;
+                    padding-right: 6px;
+                    spacing: 4px;
                     Head { horizontal-stretch: 1; text: "插件"; }
-                    Head { width: 70px; text: "版本"; }
-                    Head { width: 70px; text: "来源"; }
-                    Head { width: 70px; text: "状态"; }
-                    Head { width: 60px; text: "数据"; horizontal-alignment: right; }
+                    Head { width: 50px; text: "版本"; }
+                    Head { width: 56px; text: "来源"; }
+                    Head { width: 56px; text: "状态"; }
+                    Head { width: 50px; text: "数据"; horizontal-alignment: right; }
                 }
                 Rectangle { height: 1px; background: Theme.line; }
                 ListView {
                     vertical-stretch: 1;
-                    for row in root.rows: Row {
+                    for row in Plugins.rows: Row {
                         item: row;
-                        select => { root.select(row.id); }
+                        select => { Plugins.select(row.id); }
                     }
                 }
             }
@@ -121,7 +119,7 @@ export component PluginsWindow inherits Window {
             background: Theme.bg-list;
             border-width: 1px;
             border-color: Theme.line;
-            if !root.has-selection: Cell {
+            if !Plugins.has-selection: Cell {
                 width: 100%;
                 height: 100%;
                 horizontal-alignment: center;
@@ -133,12 +131,12 @@ export component PluginsWindow inherits Window {
                 y: 1px;
                 width: parent.width - 2px;
                 height: parent.height - 2px;
-                for line in root.details: HorizontalLayout {
+                for line in Plugins.details: HorizontalLayout {
                     height: 18px;
                     padding-left: 6px;
                     padding-right: 10px;
                     spacing: 6px;
-                    Cell { width: 80px; text: line.label; color: Theme.text-dim; }
+                    Cell { width: 64px; text: line.label; color: Theme.text-dim; }
                     // Long paths and failure reasons elide; hovering shows all of it.
                     ToolTipArea {
                         horizontal-stretch: 1;
@@ -155,39 +153,38 @@ export component PluginsWindow inherits Window {
         }
         Cell {
             height: 18px;
-            text: root.message;
-            color: root.message-warn ? Theme.accent : Theme.text-dim;
+            text: Plugins.message;
+            color: Plugins.message-warn ? Theme.accent : Theme.text-dim;
         }
         HorizontalLayout {
             height: Theme.button-height;
             spacing: 6px;
             ToolTipArea {
                 width: 66px;
-                text: root.toggle-tip;
+                text: Plugins.toggle-tip;
                 Button {
                     width: 100%;
                     height: 100%;
-                    text: root.toggle-text;
-                    enabled: root.can-toggle;
-                    clicked => { root.toggle(); }
+                    text: Plugins.toggle-text;
+                    enabled: Plugins.can-toggle;
+                    clicked => { Plugins.toggle(); }
                 }
             }
-            Button { horizontal-stretch: 0; text: "重新加载"; enabled: root.can-reload; clicked => { root.reload(); } }
-            Button { horizontal-stretch: 0; width: 94px; text: "回退到上一版本"; enabled: root.can-rollback; clicked => { root.rollback(); } }
+            Button { horizontal-stretch: 0; text: "重新加载"; enabled: Plugins.can-reload; clicked => { Plugins.reload(); } }
+            Button { horizontal-stretch: 0; width: 94px; text: "回退到上一版本"; enabled: Plugins.can-rollback; clicked => { Plugins.rollback(); } }
             ToolTipArea {
                 width: 66px;
-                text: root.uninstall-tip;
+                text: Plugins.uninstall-tip;
                 Button {
                     width: 100%;
                     height: 100%;
                     text: "卸载…";
-                    enabled: root.can-uninstall;
-                    clicked => { root.uninstall(); }
+                    enabled: Plugins.can-uninstall;
+                    clicked => { Plugins.uninstall(); }
                 }
             }
+            Button { horizontal-stretch: 0; width: 82px; text: "打开数据目录"; enabled: Plugins.can-open; clicked => { Plugins.open-data(); } }
             Rectangle { horizontal-stretch: 1; }
-            Button { horizontal-stretch: 0; width: 82px; text: "打开数据目录"; enabled: root.can-open; clicked => { root.open-data(); } }
-            Button { horizontal-stretch: 0; text: "关闭"; clicked => { root.close(); } }
         }
     }
 }

@@ -20,19 +20,27 @@ const ORPHANS = "*orphans";
 /** J01: at most this many bindings per command. */
 export const MAX_BINDINGS = 8;
 
+/** One row of the page's list (命令 | 快捷键 | 状态). */
 type Row = {
   key: string;
   command: string;
   keys: string;
-  scope: string;
-  source: string;
   status: string;
   tone: number;
   selected: boolean;
   tip: string;
 };
-/** One line of the table, for rows and the exported list. */
-export type Line = Omit<Row, "selected"> & { info: BindingInfo | null; ref: BindingRef; inputs: string[] };
+/** One line of the table, for rows, the edit area and the exported list. */
+export type Line = Omit<Row, "selected"> & {
+  scope: string;
+  source: string;
+  info: BindingInfo | null;
+  ref: BindingRef;
+  inputs: string[];
+};
+
+/** The J01 page in the options window (category 快捷键与鼠标). */
+export const KEYS_PAGE = "hotkeys.keyboard";
 
 /** 已修改 / 冲突 / 已忽略 / 默认 for one command (J01, J03). */
 export function lineOf(info: BindingInfo, ignored: boolean, model: BindingsModel): Line {
@@ -73,18 +81,18 @@ export function lineOf(info: BindingInfo, ignored: boolean, model: BindingsModel
 }
 
 /**
- * 快捷键设置 (J01): every command of the binding table with its effective
+ * 快捷键 (J01), a page of the options window: every command of the binding table with its effective
  * keys, filtered and sorted; the selected command's bindings as tags that
  * can be removed, a capture box to add one (conflicts ask 替换 / 取消),
  * 恢复默认 / 全部解绑, and 恢复全部默认… / 导出列表… / 忽略默认快捷键.
  * The list follows `bindings.onChange`; the selection stays by command.
  */
-export class KeysWindow {
+export class KeysPage {
   readonly #plugin: Plugin;
   readonly #model: BindingsModel;
   readonly #ignore: IgnoreDefaults;
   readonly #osd: (text: string) => void;
-  readonly #window;
+  readonly #page;
   readonly #prefs: JsonStore<Prefs>;
   #search = "";
   #selected: string | null = null;
@@ -99,45 +107,42 @@ export class KeysWindow {
     this.#ignore = ignore;
     this.#osd = osd;
     this.#prefs = jsonStore<Prefs>(plugin, "hotkeys", PREFS);
-    const window = (this.#window = plugin.windows.create("ui/keys.slint"));
-    window.on("search", (text: string) => {
+    const page = (this.#page = plugin.settings.page("ui/keys.slint", {
+      id: KEYS_PAGE,
+      category: "input",
+      title: "快捷键",
+      order: 10,
+    }));
+    page.on("search", (text: string) => {
       this.#search = text;
     });
-    window.on("statusFilter", (index: number) => this.#savePrefs({ status: index }));
-    window.on("sourceFilter", (index: number) => this.#savePrefs({ source: this.#sources()[index]?.value ?? "" }));
-    window.on("sortBy", (column: "command" | "keys") => {
+    page.on("statusFilter", (index: number) => this.#savePrefs({ status: index }));
+    page.on("sourceFilter", (index: number) => this.#savePrefs({ source: this.#sources()[index]?.value ?? "" }));
+    page.on("sortBy", (column: "command" | "keys") => {
       const prefs = this.#prefsValue();
       this.#savePrefs({ sort: column, descending: prefs.sort === column ? !prefs.descending : false });
     });
-    window.on("select", (key: string) => this.#select(key));
-    window.on("removeTag", (input: string) => this.#removeTag(input));
-    window.on("addKey", () => this.#startCapture());
-    window.on("key", (text: string, control: boolean, alt: boolean, shift: boolean, meta: boolean) =>
+    page.on("select", (key: string) => this.#select(key));
+    page.on("removeTag", (input: string) => this.#removeTag(input));
+    page.on("addKey", () => this.#startCapture());
+    page.on("key", (text: string, control: boolean, alt: boolean, shift: boolean, meta: boolean) =>
       this.#key({ text, control, alt, shift, meta }),
     );
-    window.on("bindEscape", () => this.#captured("Escape"));
-    window.on("cancelCapture", () => {
+    page.on("bindEscape", () => this.#captured("Escape"));
+    page.on("cancelCapture", () => {
       this.#capturing = false;
     });
-    window.on("resetOne", () => this.#resetOne());
-    window.on("unbindAll", () => this.#unbindAll());
-    window.on("replace", () => this.#replace());
-    window.on("cancelReplace", () => {
+    page.on("resetOne", () => this.#resetOne());
+    page.on("unbindAll", () => this.#unbindAll());
+    page.on("replace", () => this.#replace());
+    page.on("cancelReplace", () => {
       this.#pending = null;
       this.#say("");
     });
-    window.on("resetAll", () => this.#resetAll());
-    window.on("export", () => this.#export());
-    window.on("toggleIgnore", async () => {
-      try {
-        await ignore.toggle();
-      } finally {
-        this.#raise();
-      }
-    });
-    window.on("close", () => window.close());
-    window.onClose(() => this.#leave());
-    window.bind(() => this.#props());
+    page.on("resetAll", () => this.#resetAll());
+    page.on("export", () => this.#export());
+    page.on("toggleIgnore", () => ignore.toggle());
+    page.bind(() => this.#props());
     model.onChange(() => {
       // A command that went away (plugin stopped) drops the selection.
       if (this.#selected && !this.#selectedLine()) this.#selected = null;
@@ -148,24 +153,10 @@ export class KeysWindow {
     });
   }
 
-  get opened() {
-    return this.#window.opened;
-  }
-
-  /** 设置 ▶ 快捷键…: open (or bring to the front) with a fresh list. */
+  /** 设置 ▶ 快捷键…: the options window on this page, with a fresh list. */
   async show() {
     await this.#model.reload().catch((error) => this.#say(failureText(error), true));
-    await this.#window.show();
-  }
-
-  /** The confirm alert is a sheet on the main window: bring this window back over it. */
-  #raise() {
-    if (this.#window.opened) void this.#window.show().catch(() => {});
-  }
-
-  #leave() {
-    this.#capturing = false;
-    this.#pending = null;
+    await this.#plugin.settings.show(KEYS_PAGE);
   }
 
   #prefsValue(): Prefs {
@@ -246,12 +237,10 @@ export class KeysWindow {
       return by(a).localeCompare(by(b), "zh-Hans-CN") || a.command.localeCompare(b.command, "zh-Hans-CN");
     });
     if (prefs.descending) lines.reverse();
-    const rows = lines.map(({ key, command, keys, scope, source, status, tone, tip }) => ({
+    const rows = lines.map(({ key, command, keys, status, tone, tip }) => ({
       key,
       command,
       keys,
-      scope,
-      source,
       status,
       tone,
       tip,
@@ -288,7 +277,11 @@ export class KeysWindow {
       sort: prefs.sort,
       descending: prefs.descending,
       hasSelection: !!line,
-      editTitle: line ? (info ? `${line.command}（${line.source}）` : `${line.command}（未加载）`) : "",
+      editTitle: line
+        ? info
+          ? `${line.command}（${line.source}${info.scope === "panel" ? " · 面板内" : ""}）`
+          : `${line.command}（未加载）`
+        : "",
       tags: info ? info.current.map((input, i) => ({ input, label: isMouse(input) ? label(input) : (info.labels[i] ?? label(input)) })) : [],
       canAdd: !!info,
       canReset: !!line && (!info || info.overridden),
@@ -463,8 +456,6 @@ export class KeysWindow {
       });
     } catch (error) {
       return this.#say(`无法确认：${(error as Error).message}`, true);
-    } finally {
-      this.#raise();
     }
     if (!answer.confirmed) return;
     this.#pending = null;

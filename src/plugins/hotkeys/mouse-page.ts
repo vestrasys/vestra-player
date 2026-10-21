@@ -3,21 +3,24 @@ import { commandText, MODIFIERS, MOUSE, refKey, winner } from "./keys.ts";
 import { type BindingsModel, failureText } from "./model.ts";
 
 const NONE = "（无）";
+/** The J02 page in the options window (category 快捷键与鼠标). */
+export const MOUSE_PAGE = "hotkeys.mouse";
 
 /** `Ctrl+Mouse:WheelUp` for a modifier choice and a mouse input. */
 export const mouseInput = (modifier: number, input: string) =>
   MODIFIERS[modifier] ? `${MODIFIERS[modifier]}+${input}` : input;
 
 /**
- * 鼠标动作 (J02): for each mouse input (under the chosen modifier) the
+ * 鼠标 (J02), a page of the options window: for each mouse input (under the chosen modifier) the
  * global command it runs. Choosing a command first takes the input from
  * whoever holds it, then adds it to the chosen one (（无） only takes it).
  * 默认 gives the input back to the command that declares it.
  */
-export class MouseWindow {
+export class MousePage {
+  readonly #plugin: Plugin;
   readonly #model: BindingsModel;
   readonly #osd: (text: string) => void;
-  readonly #window;
+  readonly #page;
   #modifier = 0;
   /** Row being picked for, or null. */
   #picking: number | null = null;
@@ -25,43 +28,41 @@ export class MouseWindow {
   #message = { text: "", warn: false };
 
   constructor(plugin: Plugin, model: BindingsModel, osd: (text: string) => void) {
+    this.#plugin = plugin;
     this.#model = model;
     this.#osd = osd;
-    const window = (this.#window = plugin.windows.create("ui/mouse.slint"));
-    window.on("setModifier", (index: number) => {
+    const page = (this.#page = plugin.settings.page("ui/mouse.slint", {
+      id: MOUSE_PAGE,
+      category: "input",
+      title: "鼠标",
+      order: 20,
+    }));
+    page.on("setModifier", (index: number) => {
       if (index < 0 || index >= MODIFIERS.length) return;
       this.#modifier = index;
       this.#picking = null;
     });
-    window.on("pick", (row: number) => {
+    page.on("pick", (row: number) => {
       if (!MOUSE[row]) return;
       this.#picking = row;
       this.#filter = "";
-      window.set({ pickFilter: "" });
+      page.set({ pickFilter: "" });
     });
-    window.on("filter", (text: string) => {
+    page.on("filter", (text: string) => {
       this.#filter = text;
     });
-    window.on("cancelPick", () => {
+    page.on("cancelPick", () => {
       this.#picking = null;
     });
-    window.on("choose", (key: string) => this.#choose(key));
-    window.on("setDefault", (row: number) => this.#default(row));
-    window.on("close", () => window.close());
-    window.onClose(() => {
-      this.#picking = null;
-    });
-    window.bind(() => this.#props());
+    page.on("choose", (key: string) => this.#choose(key));
+    page.on("setDefault", (row: number) => this.#default(row));
+    page.bind(() => this.#props());
   }
 
-  get opened() {
-    return this.#window.opened;
-  }
-
-  /** 设置 ▶ 鼠标…: open with a fresh list. */
+  /** 设置 ▶ 鼠标…: the options window on this page, with a fresh list. */
   async show() {
     await this.#model.reload().catch((error) => this.#say(failureText(error), true));
-    await this.#window.show();
+    await this.#plugin.settings.show(MOUSE_PAGE);
   }
 
   #say(text: string, warn = false) {

@@ -55,11 +55,11 @@ test.afterEach(async () => {
 });
 
 type Row = { id: string; version: string; origin: string; state: string; size: string; dim: boolean; failed: boolean; selected: boolean };
-const props = (host: TestHost) => host.window("plugins").props;
+const props = (host: TestHost) => host.settingsPage("plugins.manage").props;
 const rows = (host: TestHost) => props(host).rows as Row[];
 const row = (host: TestHost, id: string) => rows(host).find((r) => r.id === id);
 async function emit(host: TestHost, callback: string, ...args: string[]) {
-  host.window("plugins").emit(callback, ...args);
+  host.settingsPage("plugins.manage").emit(callback, ...args);
   await host.settle(WAIT);
 }
 
@@ -85,7 +85,9 @@ test("menu: 设置 ▶ 插件管理…", async () => {
   assert.equal(declaration.order, 836);
   assert.equal(declaration.group, "settings-plugins");
   assert.deepEqual(declaration.bindings, []);
-  assert.equal(host.window("plugins").visible, true);
+  const registered = host.settingsPage("plugins.manage");
+  assert.deepEqual([registered.category, registered.title], ["plugins", "插件管理"]);
+  assert.deepEqual(host.settings.shows, ["plugins.manage"]);
 });
 
 test("J07: the list shows id, version, origin, state and data size", async () => {
@@ -250,6 +252,4 @@ test("J07: open the data folder; a missing one is reported", async () => {
   await emit(host, "select", "vestra.audio");
   await emit(host, "openData");
   assert.match(String(props(host).message), /数据目录不存在/);
-  await emit(host, "close");
-  assert.equal(host.windows.get("plugins")?.visible ?? false, false);
 });

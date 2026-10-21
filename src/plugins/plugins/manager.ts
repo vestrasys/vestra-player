@@ -6,20 +6,22 @@ import { directorySize, timing } from "./sizes.ts";
 type Row = { id: string; version: string; origin: string; state: string; size: string; dim: boolean; failed: boolean; selected: boolean };
 type Detail = { label: string; text: string; warn: boolean };
 
+/** The J07 page in the options window (category 插件). */
+export const PLUGINS_PAGE = "plugins.manage";
 const SELF_TIP = "插件管理不能停用自身";
 const BUSY_TIP = "正在更新";
 
 /**
- * 插件管理 (J07): every plugin the player knows (running, installed but
+ * 插件管理 (J07), a page of the options window: every plugin the player knows (running, installed but
  * disabled or failed, development loads, trials) from `packages.list`,
  * following `packages.onChange`. The selected plugin can be disabled or
  * enabled, reloaded, rolled back, uninstalled (asks, optionally with its
  * data) and its data folder opened. Its own row cannot be disabled.
  */
-export class PluginsWindow {
+export class PluginsPage {
   readonly #plugin: Plugin;
   readonly #osd: (text: string) => void;
-  readonly #window;
+  readonly #page;
   /** The data root: `<root>/<id>` is each plugin's data folder (API reference §3.4). */
   readonly #root: string | null;
   #list: PluginInfo[] = [];
@@ -41,27 +43,31 @@ export class PluginsWindow {
       // No data directory from the player: sizes 「—」, 打开数据目录 off.
     }
     this.#root = root;
-    const window = (this.#window = plugin.windows.create("ui/plugins.slint"));
-    window.on("select", (id: string) => {
+    const page = (this.#page = plugin.settings.page("ui/plugins.slint", {
+      id: PLUGINS_PAGE,
+      category: "plugins",
+      title: "插件管理",
+      order: 10,
+    }));
+    page.on("select", (id: string) => {
       if (id === this.#selected) return;
       this.#selected = id;
       this.#say("");
     });
-    window.on("toggle", () => this.#toggle());
-    window.on("reload", () => this.#reload());
-    window.on("rollback", () => this.#rollback());
-    window.on("uninstall", () => this.#uninstall());
-    window.on("openData", () => this.#openData());
-    window.on("close", () => window.close());
-    window.bind(() => this.#props());
+    page.on("toggle", () => this.#toggle());
+    page.on("reload", () => this.#reload());
+    page.on("rollback", () => this.#rollback());
+    page.on("uninstall", () => this.#uninstall());
+    page.on("openData", () => this.#openData());
+    page.bind(() => this.#props());
     plugin.packages.onChange((list) => this.#accept(list));
     plugin.onDispose(() => {
       if (this.#measuring) clearTimeout(this.#measuring);
     });
   }
 
-  /** 设置 ▶ 插件管理…: open (or bring to the front) with a fresh list and sizes. */
-  async show() {
+  /** Read the list again and measure the data folders afresh. */
+  async refresh() {
     try {
       this.#accept(await this.#plugin.packages.list());
     } catch (error) {
@@ -69,7 +75,12 @@ export class PluginsWindow {
     }
     this.#sizes.clear();
     this.#measureSoon(0);
-    await this.#window.show();
+  }
+
+  /** 设置 ▶ 插件管理…: the options window on this page, list and sizes refreshed. */
+  async show() {
+    await this.refresh();
+    await this.#plugin.settings.show(PLUGINS_PAGE);
   }
 
   #accept(list: PluginInfo[]) {
@@ -77,7 +88,7 @@ export class PluginsWindow {
     this.#list = [...list].sort((a, b) => a.id.localeCompare(b.id));
     if (this.#selected && !this.#list.some((p) => p.id === this.#selected)) this.#selected = null;
     // New plugins (or a changed list) are measured shortly after.
-    if (this.#window.opened && this.#list.some((p) => !known.has(p.id))) this.#measureSoon(timing.sizeDebounce);
+    if (this.#list.some((p) => !known.has(p.id))) this.#measureSoon(timing.sizeDebounce);
     this.#plugin.update();
   }
 
@@ -271,15 +282,7 @@ export class PluginsWindow {
     } catch (error) {
       this.#say(`无法确认：${(error as Error).message}`, true);
       return null;
-    } finally {
-      // The alert is a sheet on the main window, which comes to the front;
-      // bring this window back over it.
-      this.#raise();
     }
-  }
-
-  #raise() {
-    if (this.#window.opened) void this.#window.show().catch(() => {});
   }
 
   async #openData() {

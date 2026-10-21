@@ -1,8 +1,11 @@
-// 快捷键设置 (J01): filters, the command list (命令 | 快捷键 | 范围 | 来源 | 状态),
-// the selected command's bindings with capture, and the global buttons.
-// 600×460, at least 520×380. Column widths: 140 + 50 + 120 + 50 plus five
-// 6px gaps, 8px row padding and the scroll bar leave the command column
-// ≥ 90px at the minimum width.
+// 快捷键 (J01) as a page of the options window (category 快捷键与鼠标, id
+// hotkeys.keyboard): filters, the command list (命令 | 快捷键 | 状态), the
+// selected command's bindings with capture, and the global buttons.
+// Page width 440: 6px padding and the list border leave 426; row padding
+// 3 + 6 (clear of the overlay scroll bar) and two 4px gaps leave 409, so
+// 快捷键 140 + 状态 60 give 命令 ≈ 209. Top row: 190 + 90 + 128 + 2×6 = 420.
+// Edit row: 72 + 150 + 41 + 66 + 66 + 4×6 = 419. Height 436 (fits the
+// options window's page area at its default size; it scrolls when smaller).
 import { LineEdit, ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button, ToolTipArea } from "@vestra/widgets.slint";
@@ -12,8 +15,6 @@ export struct KeyRow {
     key: string,
     command: string,
     keys: string,
-    scope: string,
-    source: string,
     status: string,
     // 0 default (text-list), 1 changed (text), 2 conflict (accent), 3 ignored / not loaded (dim)
     tone: int,
@@ -26,6 +27,48 @@ export struct KeyTag {
     label: string,
 }
 
+export global Keys {
+    in property <[KeyRow]> rows;
+    in property <string> empty-text;
+    in property <[string]> status-model;
+    in-out property <int> status-index;
+    in property <[string]> source-model;
+    in-out property <int> source-index;
+    in-out property <string> search-text;
+    in property <string> sort;
+    in property <bool> descending;
+    in property <bool> has-selection;
+    in property <string> edit-title;
+    in property <[KeyTag]> tags;
+    in property <bool> can-add;
+    in property <bool> can-reset;
+    in property <bool> can-unbind;
+    in property <string> reset-text: "恢复默认";
+    in property <bool> capturing;
+    in property <bool> pending;
+    in property <string> pending-text;
+    in property <string> message;
+    in property <bool> message-warn;
+    in property <bool> ignore;
+    callback search(string);
+    callback status-filter(int);
+    callback source-filter(int);
+    callback sort-by(string);
+    callback select(string);
+    callback remove-tag(string);
+    callback add-key();
+    callback key(string, bool, bool, bool, bool);
+    callback bind-escape();
+    callback cancel-capture();
+    callback reset-one();
+    callback unbind-all();
+    callback replace();
+    callback cancel-replace();
+    callback reset-all();
+    callback export();
+    callback toggle-ignore();
+}
+
 component Row inherits Rectangle {
     in property <KeyRow> item;
     callback select();
@@ -35,14 +78,12 @@ component Row inherits Rectangle {
     height: 18px;
     background: root.item.selected ? Theme.selected-bg : transparent;
     HorizontalLayout {
-        padding-left: 4px;
-        padding-right: 10px;
-        spacing: 6px;
+        padding-left: 3px;
+        padding-right: 6px;
+        spacing: 4px;
         Cell { horizontal-stretch: 1; text: root.item.command; color: root.ink; }
         Cell { width: 140px; text: root.item.keys; color: root.ink; }
-        Cell { width: 50px; text: root.item.scope; color: root.ink; }
-        Cell { width: 120px; text: root.item.source; color: root.ink; }
-        Cell { width: 50px; text: root.item.status; color: root.ink; }
+        Cell { width: 60px; text: root.item.status; color: root.ink; }
     }
     // ToolTipArea has no size of its own: without the explicit 100% it was
     // 0×0 and the row could not be clicked.
@@ -108,85 +149,39 @@ component Tag {
     }
 }
 
-export component KeysWindow inherits Window {
-    title: "快捷键设置";
-    preferred-width: 600px;
-    preferred-height: 460px;
-    min-width: 520px;
-    min-height: 380px;
-    background: Theme.bg-panel;
-
-    in property <[KeyRow]> rows;
-    in property <string> empty-text;
-    in property <[string]> status-model;
-    in-out property <int> status-index;
-    in property <[string]> source-model;
-    in-out property <int> source-index;
-    in-out property <string> search-text;
-    in property <string> sort;
-    in property <bool> descending;
-    in property <bool> has-selection;
-    in property <string> edit-title;
-    in property <[KeyTag]> tags;
-    in property <bool> can-add;
-    in property <bool> can-reset;
-    in property <bool> can-unbind;
-    in property <string> reset-text: "恢复默认";
-    in property <bool> capturing;
-    in property <bool> pending;
-    in property <string> pending-text;
-    in property <string> message;
-    in property <bool> message-warn;
-    in property <bool> ignore;
-    callback search(string);
-    callback status-filter(int);
-    callback source-filter(int);
-    callback sort-by(string);
-    callback select(string);
-    callback remove-tag(string);
-    callback add-key();
-    callback key(string, bool, bool, bool, bool);
-    callback bind-escape();
-    callback cancel-capture();
-    callback reset-one();
-    callback unbind-all();
-    callback replace();
-    callback cancel-replace();
-    callback reset-all();
-    callback export();
-    callback toggle-ignore();
-    callback close();
-
+export component KeysPage inherits Rectangle {
+    height: 436px;
+    private property <bool> capturing: Keys.capturing;
     changed capturing => {
-        if root.capturing { capture.focus(); }
+        if self.capturing { capture.focus(); }
     }
 
     VerticalLayout {
-        padding: 10px;
+        padding: 6px;
         spacing: 6px;
         HorizontalLayout {
             height: Theme.input-height;
             spacing: 6px;
             LineEdit {
-                width: 200px;
+                width: 190px;
                 height: Theme.input-height;
                 font-size: Theme.font-body;
                 placeholder-text: "搜索命令或按键（如 Ctrl+）";
-                text <=> root.search-text;
-                edited(text) => { root.search(text); }
+                text <=> Keys.search-text;
+                edited(text) => { Keys.search(text); }
             }
             Choice {
-                width: 97px;
-                model: root.status-model;
-                current-index <=> root.status-index;
-                selected(index) => { root.status-filter(index); }
+                width: 90px;
+                model: Keys.status-model;
+                current-index <=> Keys.status-index;
+                selected(index) => { Keys.status-filter(index); }
             }
             Choice {
-                width: 120px;
+                width: 128px;
                 popup-height: 240px;
-                model: root.source-model;
-                current-index <=> root.source-index;
-                selected(index) => { root.source-filter(index); }
+                model: Keys.source-model;
+                current-index <=> Keys.source-index;
+                selected(index) => { Keys.source-filter(index); }
             }
             Rectangle { horizontal-stretch: 1; }
         }
@@ -199,57 +194,54 @@ export component KeysWindow inherits Window {
                 padding: 1px;
                 HorizontalLayout {
                     height: 18px;
-                    padding-left: 4px;
-                    // Rows keep their right edge clear of the overlay scroll bar.
-                    padding-right: 10px;
-                    spacing: 6px;
+                    padding-left: 3px;
+                    padding-right: 6px;
+                    spacing: 4px;
                     Head {
                         horizontal-stretch: 1;
                         text: "命令";
                         sortable: true;
-                        sorted: root.sort == "command";
-                        descending: root.descending;
-                        clicked => { root.sort-by("command"); }
+                        sorted: Keys.sort == "command";
+                        descending: Keys.descending;
+                        clicked => { Keys.sort-by("command"); }
                     }
                     Head {
                         width: 140px;
                         text: "快捷键";
                         sortable: true;
-                        sorted: root.sort == "keys";
-                        descending: root.descending;
-                        clicked => { root.sort-by("keys"); }
+                        sorted: Keys.sort == "keys";
+                        descending: Keys.descending;
+                        clicked => { Keys.sort-by("keys"); }
                     }
-                    Head { width: 50px; text: "范围"; }
-                    Head { width: 120px; text: "来源"; }
-                    Head { width: 50px; text: "状态"; }
+                    Head { width: 60px; text: "状态"; }
                 }
                 Rectangle { height: 1px; background: Theme.line; }
                 ListView {
                     vertical-stretch: 1;
-                    for row in root.rows: Row {
+                    for row in Keys.rows: Row {
                         item: row;
-                        select => { root.select(row.key); }
+                        select => { Keys.select(row.key); }
                     }
                 }
             }
-            if root.rows.length == 0: Label {
+            if Keys.rows.length == 0: Label {
                 y: 19px;
                 width: 100%;
                 height: parent.height - 19px;
                 horizontal-alignment: center;
                 color: Theme.text-dim;
-                text: root.empty-text;
+                text: Keys.empty-text;
             }
         }
-        // Edit area (≈ 90px): path, bindings, actions, message.
+        // Edit area (87px): path · source · scope, bindings, actions, message.
         VerticalLayout {
             spacing: 4px;
             Text {
                 height: 18px;
-                text: root.has-selection ? root.edit-title : "选择一条命令以修改它的快捷键";
-                color: root.has-selection ? Theme.text : Theme.text-dim;
+                text: Keys.has-selection ? Keys.edit-title : "选择一条命令以修改它的快捷键";
+                color: Keys.has-selection ? Theme.text : Theme.text-dim;
                 font-size: Theme.font-body;
-                font-weight: root.has-selection ? 700 : 400;
+                font-weight: Keys.has-selection ? 700 : 400;
                 vertical-alignment: center;
                 overflow: elide;
             }
@@ -258,96 +250,95 @@ export component KeysWindow inherits Window {
                 clip: true;
                 HorizontalLayout {
                     spacing: 4px;
-                    for tag in root.tags: Tag {
+                    for tag in Keys.tags: Tag {
                         text: tag.label;
-                        remove => { root.remove-tag(tag.input); }
+                        remove => { Keys.remove-tag(tag.input); }
                     }
-                    if root.has-selection && root.tags.length == 0: Label { text: "未绑定"; color: Theme.text-dim; }
+                    if Keys.has-selection && Keys.tags.length == 0: Label { text: "未绑定"; color: Theme.text-dim; }
                     Rectangle { horizontal-stretch: 1; }
                 }
             }
             Rectangle {
                 height: Theme.button-height;
                 HorizontalLayout {
-                    visible: !root.pending;
+                    visible: !Keys.pending;
                     spacing: 6px;
                     Button {
                         horizontal-stretch: 0;
                         width: 72px;
                         text: "添加按键…";
-                        enabled: root.can-add;
-                        clicked => { root.add-key(); }
+                        enabled: Keys.can-add;
+                        clicked => { Keys.add-key(); }
                     }
                     Rectangle {
                         width: 150px;
                         border-radius: Theme.radius-control;
                         border-width: 1px;
-                        border-color: root.capturing ? Theme.accent : Theme.line;
+                        border-color: Keys.capturing ? Theme.accent : Theme.line;
                         background: Theme.bg-list;
                         Text {
                             x: 4px;
                             width: parent.width - 8px;
-                            text: root.capturing ? "请按下快捷键（Esc 取消）" : "";
+                            text: Keys.capturing ? "请按下快捷键（Esc 取消）" : "";
                             color: Theme.accent;
                             font-size: Theme.font-body;
                             vertical-alignment: center;
                             overflow: elide;
                         }
                         TouchArea {
-                            enabled: root.can-add;
-                            clicked => { root.add-key(); }
+                            enabled: Keys.can-add;
+                            clicked => { Keys.add-key(); }
                         }
                         capture := FocusScope {
-                            enabled: root.capturing;
+                            enabled: Keys.capturing;
                             key-pressed(event) => {
-                                root.key(event.text, event.modifiers.control, event.modifiers.alt, event.modifiers.shift, event.modifiers.meta);
+                                Keys.key(event.text, event.modifiers.control, event.modifiers.alt, event.modifiers.shift, event.modifiers.meta);
                                 accept
                             }
                             changed has-focus => {
-                                if !self.has-focus && root.capturing { root.cancel-capture(); }
+                                if !self.has-focus && Keys.capturing { Keys.cancel-capture(); }
                             }
                         }
                     }
-                    if root.capturing: Button {
+                    if Keys.capturing: Button {
                         horizontal-stretch: 0;
                         small: true;
-                        y: (Theme.button-height - Theme.button-small-height) / 2;
                         text: "Esc";
-                        clicked => { root.bind-escape(); }
+                        clicked => { Keys.bind-escape(); }
                     }
                     Button {
                         horizontal-stretch: 0;
-                        text: root.reset-text;
-                        enabled: root.can-reset;
-                        clicked => { root.reset-one(); }
+                        text: Keys.reset-text;
+                        enabled: Keys.can-reset;
+                        clicked => { Keys.reset-one(); }
                     }
                     Button {
                         horizontal-stretch: 0;
                         text: "全部解绑";
-                        enabled: root.can-unbind;
-                        clicked => { root.unbind-all(); }
+                        enabled: Keys.can-unbind;
+                        clicked => { Keys.unbind-all(); }
                     }
                     Rectangle { horizontal-stretch: 1; }
                 }
                 HorizontalLayout {
-                    visible: root.pending;
+                    visible: Keys.pending;
                     spacing: 6px;
                     Text {
                         horizontal-stretch: 1;
-                        text: root.pending-text;
+                        text: Keys.pending-text;
                         color: Theme.accent;
                         font-size: Theme.font-body;
                         vertical-alignment: center;
                         overflow: elide;
                     }
-                    Button { horizontal-stretch: 0; text: "替换"; enabled: root.pending; clicked => { root.replace(); } }
-                    Button { horizontal-stretch: 0; text: "取消"; enabled: root.pending; clicked => { root.cancel-replace(); } }
+                    Button { horizontal-stretch: 0; text: "替换"; enabled: Keys.pending; clicked => { Keys.replace(); } }
+                    Button { horizontal-stretch: 0; text: "取消"; enabled: Keys.pending; clicked => { Keys.cancel-replace(); } }
                 }
             }
             Text {
                 height: 18px;
-                text: root.message;
-                color: root.message-warn ? Theme.accent : Theme.text-dim;
+                text: Keys.message;
+                color: Keys.message-warn ? Theme.accent : Theme.text-dim;
                 font-size: Theme.font-body;
                 vertical-alignment: center;
                 overflow: elide;
@@ -356,16 +347,15 @@ export component KeysWindow inherits Window {
         HorizontalLayout {
             height: Theme.button-height;
             spacing: 6px;
-            Button { horizontal-stretch: 0; width: 94px; text: "恢复全部默认…"; clicked => { root.reset-all(); } }
-            Button { horizontal-stretch: 0; width: 72px; text: "导出列表…"; clicked => { root.export(); } }
+            Button { horizontal-stretch: 0; width: 94px; text: "恢复全部默认…"; clicked => { Keys.reset-all(); } }
+            Button { horizontal-stretch: 0; width: 72px; text: "导出列表…"; clicked => { Keys.export(); } }
             Check {
                 y: (Theme.button-height - self.height) / 2;
                 text: "忽略默认快捷键";
-                checked: root.ignore;
-                clicked => { root.toggle-ignore(); }
+                checked: Keys.ignore;
+                clicked => { Keys.toggle-ignore(); }
             }
             Rectangle { horizontal-stretch: 1; }
-            Button { horizontal-stretch: 0; text: "关闭"; clicked => { root.close(); } }
         }
     }
 }

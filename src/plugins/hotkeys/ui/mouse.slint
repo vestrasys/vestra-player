@@ -1,8 +1,10 @@
-// 鼠标动作 (J02): modifier radios, then one 26px row per mouse input:
-// label (140, right aligned) | command picker (320×21) | 默认 (41×18).
+// 鼠标 (J02) as a page of the options window (category 快捷键与鼠标, id
+// hotkeys.mouse): modifier radios, then one 26px row per mouse input:
+// label (110, right aligned) | command picker (250×21) | 默认 (41×18).
 // The picker opens a filterable command list over the rows (the list has
-// over a hundred commands, more than a drop-down fits in the window).
-// 540×410: 10 + 140 + 6 + 320 + 6 + 41 + 10 = 533.
+// over a hundred commands, more than a drop-down fits).
+// Width 440: 6 + 110 + 6 + 250 + 6 + 41 + 6 = 425. Height 6 + 21 + 6 + 286
+// + 6 + 18 + 6 + 18 + 6 = 373.
 import { LineEdit, ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
@@ -60,14 +62,7 @@ component PickLine inherits Rectangle {
     touch := TouchArea { clicked => { root.picked(); } }
 }
 
-export component MouseWindow inherits Window {
-    title: "鼠标动作";
-    preferred-width: 540px;
-    preferred-height: 410px;
-    min-width: 540px;
-    min-height: 410px;
-    background: Theme.bg-panel;
-
+export global Mouse {
     in property <[string]> modifiers;
     in property <int> modifier;
     in property <[MouseRow]> rows;
@@ -83,36 +78,39 @@ export component MouseWindow inherits Window {
     callback choose(string);
     callback cancel-pick();
     callback set-default(int);
-    callback close();
+}
 
+export component MousePage inherits Rectangle {
+    height: 373px;
+    private property <bool> picking: Mouse.picking;
     changed picking => {
-        if root.picking { filter-input.focus(); }
+        if self.picking { filter-input.focus(); }
     }
 
     VerticalLayout {
-        padding: 10px;
+        padding: 6px;
         spacing: 6px;
         HorizontalLayout {
             height: Theme.button-height;
             spacing: 14px;
             Label { width: 40px; text: "修饰键"; color: Theme.text-list; }
-            for name[index] in root.modifiers: Radio {
+            for name[index] in Mouse.modifiers: Radio {
                 horizontal-stretch: 0;
                 text: name;
-                checked: index == root.modifier;
-                clicked => { root.set-modifier(index); }
+                checked: index == Mouse.modifier;
+                clicked => { Mouse.set-modifier(index); }
             }
             Rectangle { horizontal-stretch: 1; }
         }
         Rectangle {
             height: 11 * 26px;
             VerticalLayout {
-                visible: !root.picking;
-                for row[index] in root.rows: HorizontalLayout {
+                visible: !Mouse.picking;
+                for row[index] in Mouse.rows: HorizontalLayout {
                     height: 26px;
                     spacing: 6px;
                     Label {
-                        width: 140px;
+                        width: 110px;
                         text: row.label;
                         horizontal-alignment: right;
                         color: Theme.text-list;
@@ -120,10 +118,10 @@ export component MouseWindow inherits Window {
                     VerticalLayout {
                         alignment: center;
                         Picker {
-                            width: 320px;
+                            width: 250px;
                             text: row.command;
                             bound: row.bound;
-                            clicked => { root.pick(index); }
+                            clicked => { Mouse.pick(index); }
                         }
                     }
                     VerticalLayout {
@@ -134,30 +132,30 @@ export component MouseWindow inherits Window {
                             small: true;
                             text: "默认";
                             enabled: row.resettable;
-                            clicked => { root.set-default(index); }
+                            clicked => { Mouse.set-default(index); }
                         }
                     }
                     Rectangle { horizontal-stretch: 1; }
                 }
             }
             Rectangle {
-                visible: root.picking;
+                visible: Mouse.picking;
                 background: Theme.bg-panel;
                 VerticalLayout {
                     spacing: 6px;
                     HorizontalLayout {
                         height: Theme.input-height;
                         spacing: 6px;
-                        Label { text: root.pick-title; overflow: elide; horizontal-stretch: 1; }
+                        Label { text: Mouse.pick-title; overflow: elide; horizontal-stretch: 1; }
                         filter-input := LineEdit {
-                            width: 200px;
+                            width: 160px;
                             height: Theme.input-height;
                             font-size: Theme.font-body;
                             placeholder-text: "输入文字过滤";
-                            text <=> root.pick-filter;
-                            edited(text) => { root.filter(text); }
+                            text <=> Mouse.pick-filter;
+                            edited(text) => { Mouse.filter(text); }
                         }
-                        Button { horizontal-stretch: 0; text: "取消"; clicked => { root.cancel-pick(); } }
+                        Button { horizontal-stretch: 0; text: "取消"; clicked => { Mouse.cancel-pick(); } }
                     }
                     Rectangle {
                         vertical-stretch: 1;
@@ -169,9 +167,9 @@ export component MouseWindow inherits Window {
                             y: 1px;
                             width: parent.width - 2px;
                             height: parent.height - 2px;
-                            for item in root.pick-items: PickLine {
+                            for item in Mouse.pick-items: PickLine {
                                 item: item;
-                                picked => { root.choose(item.key); }
+                                picked => { Mouse.choose(item.key); }
                             }
                         }
                     }
@@ -180,7 +178,7 @@ export component MouseWindow inherits Window {
         }
         Text {
             height: 18px;
-            text: "左键单击：绑定后单击要等过系统双击间隔才生效，响应会稍慢。右键固定打开菜单。";
+            text: "左键单击绑定后要等过系统双击间隔才响应；右键固定打开菜单。";
             color: Theme.text-dim;
             font-size: Theme.font-body;
             vertical-alignment: center;
@@ -188,16 +186,11 @@ export component MouseWindow inherits Window {
         }
         Text {
             height: 18px;
-            text: root.message;
-            color: root.message-warn ? Theme.accent : Theme.text-dim;
+            text: Mouse.message;
+            color: Mouse.message-warn ? Theme.accent : Theme.text-dim;
             font-size: Theme.font-body;
             vertical-alignment: center;
             overflow: elide;
-        }
-        HorizontalLayout {
-            height: Theme.button-height;
-            Rectangle { horizontal-stretch: 1; }
-            Button { horizontal-stretch: 0; text: "关闭"; clicked => { root.close(); } }
         }
     }
 }

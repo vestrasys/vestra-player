@@ -5,7 +5,7 @@
   "entry": "main.ts",
   "capabilities": [
     "commands",
-    "ui.window",
+    "ui.settings",
     "ui.osd",
     "ui.dialog",
     "plugins.manage"
