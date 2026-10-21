@@ -164,6 +164,16 @@ impl Images {
             None => self.shown.remove(&slot),
         };
     }
+    /// A Markdown property shows several images: `<property>#<n>` slots.
+    pub fn assign_many(&mut self, owner: u64, view: &str, property: &str, keys: Vec<Key>) {
+        let prefix = format!("{property}#");
+        self.shown
+            .retain(|(o, v, p), _| !(*o == owner && v == view && p.starts_with(&prefix)));
+        self.assign(owner, view, property, None);
+        for (index, key) in keys.into_iter().enumerate() {
+            self.assign(owner, view, &format!("{prefix}{index}"), Some(key));
+        }
+    }
     pub fn release_view(&mut self, owner: u64, view: &str) {
         self.shown
             .retain(|(o, v, _), _| !(*o == owner && v == view));
@@ -202,7 +212,7 @@ impl Images {
 
 impl Host {
     /// Where a plugin's images may live: its package and data directories.
-    fn image_roots(&self, owner: u64) -> Vec<PathBuf> {
+    pub(super) fn image_roots(&self, owner: u64) -> Vec<PathBuf> {
         let Some(plugin) = self.plugins.get(&owner) else {
             return Vec::new();
         };
@@ -221,8 +231,11 @@ impl Host {
         property: &str,
         value: &Value,
     ) -> std::result::Result<SValue, RpcError> {
+        if let Some(doc) = ui_markdown::reference(value) {
+            return self.markdown_value(owner, view, property, doc);
+        }
         let Some(path) = ui_image::reference(value) else {
-            self.images.assign(owner, view, property, None);
+            self.images.assign_many(owner, view, property, Vec::new());
             return Ok(ui_values::from_json(value)?);
         };
         let path = path

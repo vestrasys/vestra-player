@@ -62,13 +62,31 @@ interface Disposable { dispose(): Promise<void> }
 
 | 字段 | 规则 |
 | --- | --- |
-| `id` | 非空且合法的标识，全局唯一；建议 `作者.插件名` |
+| `id` | 1–128 个 ASCII 字母、数字与 `.-_`；播放器不强制前缀。发布到官方插件仓库须为 `<GitHub 用户名或组织>.<插件名>`（`vestra-plugin check` 对无前缀的 id 只提示） |
 | `version` | 三段非负整数 `x.y.z`；构建工具写入 `dist/manifest.json` |
 | `apiVersion` | 固定 `vestra/1` |
 | `entry` | 包内相对路径；开发时可为 `.ts`，构建后为 `.js` |
-| `capabilities` | 只能是下表中的值 |
+| `capabilities` | 只能是下表中的值，不重复 |
+| `minPlayerVersion` | 可选，`x.y.z`：能加载它的最低播放器版本（播放器版本即 `plugin.app.version`，只比较三段数字）。更旧的播放器以 `versionMismatch`（「requires Vestra Player ≥ x.y.z」）拒绝；播放器先读这一项再做严格解析，所以写了新字段的包在旧播放器上报的是版本不够而不是未知字段。用到 SDK 1.1 新增的接口时写 `"0.2.0"` |
 
-未知字段、未知能力、越出包目录的路径（含符号链接）都会被拒绝。
+可选的显示字段（播放器 0.2.0；商城与插件管理显示，播放器只校验不使用）：
+
+| 字段 | 规则 |
+| --- | --- |
+| `name` | 1–64 个字符，单行，首尾无空白 |
+| `author` | 1–64 个字符，同上 |
+| `punchline` | 一句话简介，1–120 个字符，单行 |
+| `description` | 纯文本，1–2000 个字符，可换行 |
+| `tags` | 至多 8 个，每个 1–24 个字符、单行，不区分大小写不重复 |
+| `icon` | 包内 PNG/JPEG 路径（按内容判断），≤ 512 KB，边长 ≤ 1024（建议 256×256）|
+| `readme` | 包内 `.md` 路径，UTF-8，≤ 256 KB；省略时包里有 `README.md` 就用它 |
+| `changelog` | 同上；省略时用 `CHANGELOG.md`（如有） |
+| `sourceUrl` | `https:` 地址，≤ 2048 字节 |
+| `license` | 1–64 个字符，建议 SPDX 表达式（如 `MIT`） |
+
+显式写出的 `icon`、`readme`、`changelog` 找不到文件时拒绝。`vestra-plugin build` 会把它们（以及默认的 `README.md`、`CHANGELOG.md`）复制进 `dist/`：README 会显示在商城详情页，请写成面向用户的说明。
+
+未知字段、未知能力、越出包目录的路径（含符号链接）都会被拒绝。规则表宿主（`host/src/manifest.rs`）与 SDK CLI 共用，一致性由 `tests/sdk/host-agreement.test.ts` 检查。
 
 调用未声明能力的功能，以 `code: "capability"` 失败。
 
@@ -88,7 +106,7 @@ interface Disposable { dispose(): Promise<void> }
 | `subtitles.control` | `subtitles.select`、`load`、`remove`、`setStyle` |
 | `media.read` / `media.control` | `media.capture`、`Snapshot.export`、`ExportJob`（`processed` 截图另需 `playback.read`、`subtitles.read`） |
 | `source.resolve` | `resolvers.add` |
-| `plugins.manage` | `packages.validate`、`rollback`、`setEnabled`、`uninstall`（`list`、`onChange` 不需要能力） |
+| `plugins.manage` | `packages.validate`、`validateArchive`、`rollback`、`setEnabled`、`uninstall`（`list`、`onChange` 不需要能力） |
 | `ui.osd` | `osd.show`、`osd.panel` |
 | `clipboard` | `clipboard.readText`、`writeText`、`writeImage` |
 | `window.control` | `window.setVideoArea`、`setAlwaysOnTop`、`setCursorAutoHide`、`setPictureInPicture` |
@@ -99,7 +117,7 @@ interface Disposable { dispose(): Promise<void> }
 | `ui.settings` | `settings.page`、`settings.show`（§6.9） |
 | `secrets` | `secrets.get`、`set`、`delete`（§16.6） |
 
-`tools`、`storage`（§16）在插件进程内执行，`system`（§16.5）由播放器执行，都不需要能力。读取 `window.state` / `onChange`（§6.6）、`plugin.app` 与 `app.system()`（§3.5）、`ui.image`（§6.1）不需要能力。
+`tools`、`storage`（§16）在插件进程内执行，`system`（§16.5）由播放器执行，都不需要能力。读取 `window.state` / `onChange`（§6.6）、`plugin.app` 与 `app.system()`（§3.5）、`ui.image`、`ui.markdown`（§6.1）不需要能力。
 
 没有 `events` 时，`player.state` 只在启动和操作完成后更新，`onChange` 不会因外部变化触发。
 
@@ -174,7 +192,9 @@ interface Plugin extends Scope {
 
 本插件自己的可写目录（设置、记住的文件夹等），不需要能力。
 
-- 位置：macOS `~/Library/Application Support/Vestra/plugin-data/<manifest id>/`，Windows `%APPDATA%\Vestra\plugin-data\<manifest id>\`（环境变量 `VESTRA_PLUGIN_DATA` 可改根目录），播放器在启动插件前创建。插件停用、重新加载、升级、回退时都保留；卸载时只有 `uninstall(id, { removeData: true })` 才删除。别的插件（如插件管理）按同一规则 `<数据根>/<id>` 找到某个插件的数据目录：数据根是 `plugin.dataDirectory` 的上一级（`dirname(plugin.dataDirectory)`）。
+- 位置（播放器 0.2.0 起）：每个**安装实例**一个目录，`<数据根>/<安装实例 GUID>/`；开发加载（`--plugin`）是 `<数据根>/development/<manifest id>/`。数据根在 macOS 是 `~/Library/Application Support/Vestra/plugin-data/`，Windows 是 `%APPDATA%\Vestra\plugin-data\`（环境变量 `VESTRA_PLUGIN_DATA` 可改）。播放器在启动插件前创建。路径的格式不属于 API。
+- 安装实例：每次全新安装生成一个 GUID。同一来源再安装同 id 是升级，沿用实例与数据；从另一来源安装同 id 并确认替换时，新插件拿新的空目录，旧实例的数据保留，以后从旧来源再装回来时接上（见 §12）。插件停用、重新加载、升级、回退时都保留数据；卸载时只有 `uninstall(id, { removeData: true })` 才删除，不删时同来源重装可接上。
+- 别的插件（如插件管理）要某个插件的数据目录，读 `packages.list()` 里的 `dataDirectory`。**不要**再用 `dirname(plugin.dataDirectory)` 加 id 推算（0.2.0 之前的规则，已失效）。
 - 试载的插件拿到一个临时目录，试载停止时删除，不会碰正式安装版本的数据。
 - JSON 设置文件用 `plugin.storage.json`（§16.4），它已处理默认值、读坏改名、去抖与原子写入。
 - 存什么、什么格式由插件决定。自己写文件时先写临时文件再改名（`writeFileSync(tmp)` → `renameSync(tmp, path)`），播放器中途退出也不会留下写了一半的文件；读不到或读坏时用默认值。
@@ -593,6 +613,31 @@ plugin.ui.image(path: string): ImageRef; // 不需要能力
 - 释放：`ImageRef` 属于创建它的作用域；作用域释放后再写入它以 `invalid` 失败（SDK 在发送前拒绝），已经显示的图片保持到被覆盖或视图关闭。
 - 线上形式（`{ "$vestraImage": 路径, "ref": n }`）是内部细节，不要自己构造：播放器对每次使用都按「该插件 + 路径规则」重新检查，手写的值不会得到额外的权限。
 - 测试：视图属性里是线上形式，`host.imagePath(host.window(id).props.cover)` 读出路径；`host.images` 记录写入过的图片。
+
+**Markdown 文档**（播放器 0.2.0，SDK 1.1）：控件库 `@vestra/markdown.slint` 的 `MarkdownView` 显示 Markdown，属性值用 `await plugin.ui.markdown(text, options?)` 得到的 `MarkdownRef`。
+
+```slint
+import { MarkdownView, MarkdownBlock } from "@vestra/markdown.slint";
+export component Readme inherits Window {
+    in property <[MarkdownBlock]> doc;
+    callback open-link(string);
+    MarkdownView { blocks: root.doc; link-clicked(url) => { root.open-link(url); } }
+}
+```
+
+```ts
+plugin.ui.markdown(text: string, options?: { base?: string; remoteImages?: boolean }): Promise<MarkdownRef>
+const doc = await plugin.ui.markdown(readme, { base: readmeUrl });
+window.set({ doc });
+window.on("openLink", (url: string) => plugin.system.openUrl(url));
+```
+
+- 播放器解析（pulldown-cmark）并绘制：标题 1–6、段落（粗体、斜体、删除线、行内代码、链接）、无序/有序/任务列表（嵌套 ≤ 4 层）、代码块（等宽、不高亮）、引用（≤ 4 层）、图片、GFM 表格（单元格为纯文本，≤ 16 列 × 500 行）、分隔线。**内嵌 HTML 不显示**；脚注、数学不启用。`MarkdownRef` 只能作为 `[MarkdownBlock]` 属性的整个值，属于创建它的作用域（释放后写入为 `invalid`）。
+- 链接：点击时 `MarkdownView` 发出 `link-clicked(url)`，相对地址已按 `base` 解析（`#锚点` 原样）；打开与否由插件决定。
+- `base`：`http(s)` 地址（如 README 自己的地址）或绝对目录；相对链接与图片按它解析。没有 `base` 时相对图片显示替代文字。
+- 图片：PNG/JPEG。本地图片按 `ui.image` 的规则（本插件包目录或数据目录内，≤ 16 MB、4096²，与 `ui.image` 共用每插件 64 MB 的解码缓存）。`https:` 图片由 SDK 在本插件进程里下载到 `<dataDirectory>/.vestra-cache/markdown/`：单张 ≤ 4 MB、10 秒、重定向 ≤ 5 次（只跟随到 `https:`）、同时 4 个、每文档 ≤ 64 张；缓存 32 MB，按最近使用淘汰，同一地址 24 小时内不重新下载。下载失败、`http:`、SVG/GIF 等显示替代文字，`markdown()` 本身不因此失败。`remoteImages: false` 不下载。
+- 上限：文本 ≤ 256 KB（否则 `invalid`）；超过 4000 块截断并在末尾提示。
+- 示例插件：`src/examples/markdown/`。测试：`host.markdown(host.window(id).props.doc)` 读回 `{ text, base, images }`；远程图片由 `host.remoteImages`（地址 → 本地文件）提供，测试不联网。
 
 | 方法 | 说明 |
 | --- | --- |
@@ -1081,11 +1126,12 @@ type ResolvedMedia = {
 
 ## 12. 插件包管理 `plugin.packages`
 
-`validate`、`rollback`、`setEnabled`、`uninstall` 需要 `plugins.manage`（插件工坊、插件管理）；`list`、`onChange` 不需要能力（关于窗口等也可以读）。
+`validate`、`validateArchive`、`rollback`、`setEnabled`、`uninstall` 需要 `plugins.manage`（插件工坊、插件管理）；`list`、`onChange` 不需要能力（关于窗口等也可以读）。
 
 ```ts
 interface Packages {
   validate(directory: string): Promise<PackageCandidate>; // 校验目录中的包
+  validateArchive(file: string): Promise<PackageCandidate>; // 校验 .vxp 包文件（0.2.0）
   rollback(id: string): Promise<PackageChange>;           // 回退到上一版本
   list(): Promise<PluginInfo[]>;
   onChange(listener: (plugins: PluginInfo[]) => void): Disposable;
@@ -1098,14 +1144,23 @@ interface PluginInfo {
   state: "starting" | "running" | "disabled" | "failed" | "stopped";
   error: string | null;     // failed 时的原因
   capabilities: string[];
-  directory: string;        // 包目录；数据目录按 §3.4 规则推出
+  directory: string;        // 包目录（显示字段读其中的 manifest.json）
   previousVersion: string | null; // 可回退到的版本
+  builtin: boolean;         // 0.2.0：随播放器安装，只能停用
+  source: PackageSource | null;   // 0.2.0：已安装插件的来源；开发加载、试载为 null
+  dataDirectory: string | null;   // 0.2.0：它的数据目录（§3.4）
 }
+type PackageSource =
+  | { kind: "repository"; url: string }   // index.json 的完整地址
+  | { kind: "link"; url: string }         // 插件包链接
+  | { kind: "file" }                      // 本地 .vxp 或目录
+  | { kind: "workshop" }                  // 插件工坊生成
+  | { kind: "bundled" };                  // 随播放器安装（只由播放器设置）
 interface PackageCandidate {
   readonly directory: string; readonly digest: string;
   readonly manifest: PackageManifest; readonly checks: string[];
   trial(): Promise<PackageTrial>;     // 与已安装插件并行临时加载
-  install(): Promise<PackageChange>;  // 安装，替换同 id 的已安装版本
+  install(options?: { source?: PackageSource; replace?: boolean }): Promise<PackageChange>;
 }
 interface PackageTrial extends Disposable {
   readonly status: string;
@@ -1124,8 +1179,12 @@ interface PackageChange {
 - 安装和回退从不重复提交：请求 id 与预期修订号由 SDK 处理，答复丢失时只按同一请求查询。
 - `list`：运行中的插件、安装库里的全部插件（含停用、启动失败、未运行的）与本次运行的开发加载，按 id 排序。`onChange` 在列表变化（启动、就绪、停用、失败、安装、卸载）后收到新列表，约每 200 ms 至多一次。
 - `setEnabled(id, false)`：停止该插件（与播放器停用插件相同，§3.2）；已安装的插件写进安装库，之后启动播放器也不再运行，直到 `setEnabled(id, true)`；开发加载只在本次运行有效。`setEnabled(id, true)` 重新加载它。停用自己 `invalid`，试载 `unsupported`（用试载句柄停止），未知 id `missing`，正在安装 `busy`。安装或回退一个停用的插件会让它重新启用。
-- `uninstall`：只对已安装插件（开发加载、试载 `unsupported`；未知 `missing`；自己 `invalid`）。先停止，再从安装库删除（当前与上一版本，一次原子提交），回收它的包文件；`removeData: true` 时在进程结束后删除它的数据目录。用户覆盖层里它的绑定保留（`bindings.list` 的 orphans）。返回的 `PackageChange` 通常已是 `committed`。
+- `uninstall`：只对已安装插件（内置插件、开发加载、试载 `unsupported`；未知 `missing`；自己 `invalid`）。先停止，再从安装库删除（当前与上一版本，一次原子提交），回收它的包文件；`removeData: true` 时在进程结束后删除它的数据目录，否则安装实例转为休眠，同来源重新安装时接上数据。系统密钥库里该实例的条目不会被删除（无法枚举），但新实例读不到它们。用户覆盖层里它的绑定保留（`bindings.list` 的 orphans）。返回的 `PackageChange` 通常已是 `committed`。
 - `trial.stop()` 以 `code: "cleanup"` 失败表示播放器停止了试载但未确认清理；再次调用会重新请求停止。
+- `validateArchive(file)`：`.vxp` 是 zip，根目录放 `manifest.json`（`vestra-plugin pack` 的产物）。播放器在解压过程中强制上限（包 ≤ 64 MB、≤ 1024 个文件、单文件 ≤ 32 MB、总计 ≤ 64 MB），只收 stored/deflate、不收加密，拒绝绝对路径、`..`、`\`、符号链接、忽略大小写重名；不合格为 `invalid`。之后的检查与 `validate` 相同。播放器不知道包的 sha256，从网络下载的包请先自己核对。
+- `install({ source, replace })`（0.2.0）：来源决定升级还是替换。来源标识：`repository` 按 `url`；`link` 与 `file` 同为「手动安装」；`workshop` 单独一类。同 id 同来源 = 升级（沿用安装实例与数据，可回退）；同 id 不同来源：不带 `replace` 以 `conflict` 失败、什么都不做——插件问过用户后带 `replace: true` 重试；替换后新插件拿新的空数据目录，旧实例转为休眠（数据保留），以后从旧来源再安装时接上。不带参数等于 `{ source: { kind: "file" } }`。`source` 的地址须为 `http(s)`、≤ 2048 字节，`bundled` 为 `invalid`。同一时间每个 id 只运行一个。
+- **内置插件**（`builtin: true`，随播放器安装、来源 `bundled`）：可以停用、启用、回退；`uninstall` 与任何 `install`（带不带 `replace`）都以 `unsupported` 失败。内置插件只随播放器更新：播放器启动时，安装包里的版本比上次播种的版本新才升级（保留用户的停用状态与数据；用户回退后不会被同一安装包再次覆盖）。
+- 开发加载（`--plugin`）与已安装插件同 id 时，本次运行只运行开发加载的那个。
 
 ## 13. 错误
 
@@ -1149,6 +1208,7 @@ interface PackageChange {
 | `backend-uncertain` | 滤镜阶段被播放器后端阻塞，`filter.retry()` 重新检查 |
 | `cleanup` | `trial.stop()` 未确认清理，可再次调用 |
 | `limit` | 超出播放器的数量上限（如命令数，§4） |
+| `versionMismatch` | 包的 `minPlayerVersion` 高于本播放器（`validate`、`validateArchive`；§2） |
 | `unknown`、`rejected`、`expired` | 传输异常后 SDK 查询仍无法确认结果（正常情况下不会出现） |
 
 处理函数里抛出的错误交给所在作用域的 `onError`。忘记 `await` 的 promise 被拒绝时只写日志，不会让插件进程崩溃。
@@ -1198,7 +1258,7 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 vestra-plugin check [插件目录…]                  # 严格类型检查（含 tests/）
 vestra-plugin test  [插件目录…]                  # node --test tests/*.test.{ts,mjs}
 vestra-plugin build [插件目录…] [--version x.y.z]
-vestra-plugin pack  [插件目录…] [--version x.y.z] [--out 目录]   # build 后把 dist/ 打成 <id>-<version>.zip，输出大小和 sha256
+vestra-plugin pack  [插件目录…] [--version x.y.z] [--out 目录]   # build 后把 dist/ 打成 <id>-<version>.vxp（zip），输出大小和 sha256
 ```
 
 在本仓库的 `src/` 下有按插件名调用的快捷方式：
@@ -1211,12 +1271,13 @@ npm run plugins:build                   # 构建 src/plugins/ 下全部插件
 - 名字指 `src/plugins/<名字>`；含 `/` 的参数是相对 `src/` 的路径（如 `examples/bookmark`）。`--all` 只覆盖 `src/plugins/`。
 - `check` 沿用插件目录或上层最近的 `tsconfig.json`（到仓库根为止），没有就用内置的严格设置（`strict`、`NodeNext`、`verbatimModuleSyntax`、`erasableSyntaxOnly`）。编译器是 SDK 自带的 TypeScript 5.x。
 - 插件只能 `import type` SDK；构建产物里出现 `@vestra-player/sdk` 的运行时引用时 `build` 失败。
-- `build` 先 `check`，然后生成 `dist/`：`.ts` 去掉类型、相对导入改为 `.js`；`.slint`、`.mjs`、数据文件、`licenses/` 原样复制；跳过 `tests/`、`node_modules/`、`vendor/`、`*.md`、`tsconfig*.json`、`package*.json`；写入 `dist/manifest.json`（入口改为 `.js`，写入版本）。版本取 `--version`，否则 manifest，否则 `package.json`。`dist/` 不提交。
+- `build` 先 `check`，然后生成 `dist/`：`.ts` 去掉类型、相对导入改为 `.js`；`.slint`、`.mjs`、数据文件、`licenses/` 原样复制；manifest 的 `icon`、`readme`、`changelog`（以及默认的 `README.md`、`CHANGELOG.md`）复制；跳过 `tests/`、`node_modules/`、`vendor/`、其它 `*.md`、`tsconfig*.json`、`package*.json`；写入 `dist/manifest.json`（入口改为 `.js`，写入版本）。版本取 `--version`，否则 manifest，否则 `package.json`。`dist/` 不提交。
 - 有 npm 依赖时，插件 `package.json` 的 `"vestra"` 字段：
   - `"bundle": true` 或 `{ "external": [...] }`：用插件自己的 esbuild（devDependency）把入口及依赖打包成一个文件。**有运行时依赖就必须打包**，否则安装后找不到依赖包。
   - `"assets": ["vendor"]`：原样复制额外的文件或目录。
 - 开发时不需要构建：`cargo run --bin vestra-host -- --plugin <插件目录>`（在 `src/host/` 下，可重复 `--plugin`）直接运行 `main.ts`。
-- `check` 也检查 manifest 的能力名（与宿主同一张表，§2）。
+- 每个命令先按 §2 的规则检查 manifest（与宿主同一张表）；`check` 另外打印不算失败的提示（如 id 没有 `<所有者>.` 前缀）。
+- `pack` 的同样输入得到同样字节（条目排序、固定时间戳）。SDK 1.0 的扩展名是 `.zip`，内容相同。
 
 ## 16. 通用能力
 
@@ -1337,6 +1398,16 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | 绑定 §4.1 | `Ctrl` 也认 ⌘ | `Cmd` 是徽标键 | 同 Windows |
 
 ## 17. 变更说明
+
+### 插件商城核心改动 S4：安装实例、来源、内置插件、manifest 显示字段、Markdown（2026-10，播放器 0.2.0、SDK 1.1.0）
+
+全部是新增，已有签名不变（设计见 [S4 提案](../architecture/store-api-proposal.md)，给插件维护者的说明见 [store-changes.md](store-changes.md)）：
+
+- manifest：可选显示字段与 `minPlayerVersion`（§2）；`versionMismatch` 错误码（§13）。
+- 数据目录按安装实例（§3.4）。**文档规则变化一处**：「`<数据根>/<id>` 推出别的插件的数据目录」作废，改读 `PluginInfo.dataDirectory`。`secrets` 同样按实例隔离（已有登录失效一次）。开发加载的数据在 `development/<id>/`。未发版，不迁移旧的 `plugin-data/<id>/`。
+- `packages.validateArchive`、`install({ source, replace })`、`PluginInfo.builtin` / `source` / `dataDirectory`；内置插件不可卸载、不可被安装覆盖（§12）。
+- `plugin.ui.markdown` 与 `@vestra/markdown.slint`（§6.1）。
+- `vestra-plugin`：manifest 全量检查、无前缀 id 提示、`build` 带上 icon/README/changelog、`pack` 产出 `.vxp`（§15）。
 
 ### 正式版命名：插件 API `vestra/1`（2026-10）
 

@@ -11,6 +11,7 @@ mod drops;
 mod effects;
 pub mod font_asset;
 pub mod font_carrier;
+mod manifest;
 mod media_jobs;
 mod media_tracks;
 mod media_worker;
@@ -19,6 +20,7 @@ mod native_subtitle;
 mod offline_audio;
 mod offline_descriptor;
 pub mod package_activation;
+mod package_archive;
 mod package_manager;
 pub mod package_stage;
 pub mod package_store;
@@ -59,6 +61,7 @@ mod theme;
 mod timeline;
 mod ui;
 mod ui_image;
+mod ui_markdown;
 mod ui_state;
 mod ui_values;
 mod video_render;
@@ -103,6 +106,9 @@ impl RpcError {
 }
 impl From<anyhow::Error> for RpcError {
     fn from(value: anyhow::Error) -> Self {
+        if value.downcast_ref::<manifest::NeedsPlayer>().is_some() {
+            return Self::new("versionMismatch", value.to_string());
+        }
         Self::new("host", value.to_string())
     }
 }
@@ -437,8 +443,7 @@ impl Host {
             bail!("activation timeout must be 1000..120000ms");
         }
         // Validate before spawning, preventing duplicate plugin activation side effects.
-        let candidate: plugins::Manifest =
-            serde_json::from_slice(&std::fs::read(directory.join("manifest.json"))?)?;
+        let candidate = manifest::read_development(directory)?;
         if self.plugins.values().any(|p| p.manifest.id == candidate.id) {
             bail!("plugin already running: {}", candidate.id);
         }
@@ -2807,6 +2812,7 @@ impl Host {
             }
             "power.preventSleep" | "player.setStepSeek" | "player.step" => Some("playback.control"),
             "system.reveal" | "system.openPath" | "system.openUrl" | "app.system" => None,
+            "ui.markdownScan" => None,
             "secrets.get" | "secrets.set" | "secrets.delete" => Some("secrets"),
             "host.run" => Some("commands"),
             "playback.stats" => Some("playback.read"),
@@ -2843,6 +2849,9 @@ impl Host {
                 "capability",
                 "capability must be declared in manifest",
             ));
+        }
+        if method == "ui.markdownScan" {
+            return self.markdown_scan(params).map(Some);
         }
         if method.starts_with("packages.") {
             return self.package_dispatch(reply.owner, method, params).map(Some);

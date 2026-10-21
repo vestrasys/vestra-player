@@ -1,7 +1,6 @@
 //! Each trusted plugin gets its own Node process and stdout protocol.
 use crate::Event;
 use anyhow::{Context, Result, bail};
-use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
     collections::BTreeSet,
@@ -14,20 +13,35 @@ use std::{
 };
 
 pub const API: &str = "vestra/1";
-#[derive(Deserialize, Serialize, Clone)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Manifest {
-    pub id: String,
-    pub api_version: String,
-    pub entry: String,
-    pub capabilities: Vec<String>,
-    /// Production packages carry a version; direct debug loading ignores it.
-    #[serde(default, skip_serializing)]
-    #[allow(
-        dead_code,
-        reason = "accepted for deny_unknown_fields; not read by the runtime"
-    )]
-    pub version: Option<String>,
+pub use crate::manifest::Manifest;
+
+/// Whose data directory and secrets a plugin process gets.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DataKey {
+    /// An installed instance: `plugin-data/<GUID>/`, secrets `vestra.plugin.<GUID>`.
+    Instance(String),
+    /// A development load (`--plugin`): `plugin-data/development/<id>/`.
+    Development(String),
+    /// A trial: `plugin-data/<id>.trial.<owner>/`, removed when it stops.
+    Trial,
+}
+impl DataKey {
+    /// The data directory under the data root.
+    pub fn directory(&self, root: &Path, manifest_id: &str) -> PathBuf {
+        match self {
+            Self::Instance(guid) => root.join(guid),
+            Self::Development(id) => root.join("development").join(id),
+            Self::Trial => root.join(manifest_id),
+        }
+    }
+    /// The secret store service name.
+    pub fn secret_service(&self, manifest_id: &str) -> String {
+        match self {
+            Self::Instance(guid) => format!("vestra.plugin.{guid}"),
+            Self::Development(id) => format!("vestra.dev.{id}"),
+            Self::Trial => manifest_id.to_owned(),
+        }
+    }
 }
 /// Bounded per-plugin output queue. Source state alone emits ~10 events/s while playing,
 /// so a small queue disables healthy plugins after a brief event-loop stall.
@@ -70,6 +84,7 @@ pub fn set_app_info(info: &Value) {
 pub struct Plugin {
     pub manifest: Manifest,
     pub directory: PathBuf,
+    pub data_key: DataKey,
     /// `plugin.dataDirectory`; a trial's is temporary and removed when it stops.
     data_directory: Option<PathBuf>,
     temporary_data: bool,
@@ -80,27 +95,23 @@ pub struct Plugin {
 impl Plugin {
     pub fn load(directory: &Path, generation: u64, events: mpsc::Sender<Event>) -> Result<Self> {
         let directory = directory.canonicalize().context("plugin directory")?;
-        let manifest: Manifest =
-            serde_json::from_slice(&std::fs::read(directory.join("manifest.json"))?)?;
-        Self::load_manifest(&directory, generation, events, manifest, false)
+        let manifest = crate::manifest::read_development(&directory)?;
+        let key = DataKey::Development(manifest.id.clone());
+        Self::load_manifest(&directory, generation, events, manifest, key)
     }
     pub fn load_manifest(
         directory: &Path,
         generation: u64,
         events: mpsc::Sender<Event>,
         manifest: Manifest,
-        trial: bool,
+        data_key: DataKey,
     ) -> Result<Self> {
+        let trial = data_key == DataKey::Trial;
         let directory = directory.canonicalize()?;
         if manifest.api_version != API {
             bail!("unsupported apiVersion: {}", manifest.api_version);
         }
-        if manifest.id.is_empty()
-            || !manifest
-                .id
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b".-_".contains(&b))
-        {
+        if !crate::manifest::valid_id(&manifest.id) {
             bail!("invalid plugin id");
         }
         if manifest
@@ -118,10 +129,10 @@ impl Plugin {
         let runner = packaged_runner
             .filter(|p| p.is_file())
             .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../runtime/runner.ts"));
-        // Per manifest id (a trial's id is unique per run). Without one the SDK
-        // reports `unavailable`; loading continues.
+        // Per installed instance, development id or trial (see `DataKey`).
+        // Without one the SDK reports `unavailable`; loading continues.
         let data_directory = data_root()
-            .map(|root| root.join(&manifest.id))
+            .map(|root| data_key.directory(&root, &manifest.id))
             .filter(|dir| {
                 std::fs::create_dir_all(dir)
                     .map_err(|error| eprintln!("plugin data {}: {error}", dir.display()))
@@ -201,6 +212,7 @@ impl Plugin {
         Ok(Self {
             manifest,
             directory,
+            data_key,
             data_directory,
             temporary_data: trial,
             subscriptions: BTreeSet::new(),
@@ -280,8 +292,7 @@ mod tests {
             id: id.into(),
             api_version: API.into(),
             entry: "main.mjs".into(),
-            capabilities: vec![],
-            version: None,
+            ..Default::default()
         };
         let package = tempfile::tempdir().unwrap();
         std::fs::write(package.path().join("main.mjs"), "export default () => {}").unwrap();
@@ -291,6 +302,11 @@ mod tests {
             let plugin = Plugin {
                 manifest: manifest(id),
                 directory: package.path().into(),
+                data_key: if trial {
+                    DataKey::Trial
+                } else {
+                    DataKey::Development(id.into())
+                },
                 data_directory: Some(dir.clone()),
                 temporary_data: trial,
                 subscriptions: BTreeSet::new(),
@@ -300,5 +316,33 @@ mod tests {
             drop(plugin);
             assert_eq!(dir.exists(), !trial, "{id}");
         }
+    }
+}
+
+#[cfg(test)]
+mod data_key_tests {
+    use super::*;
+
+    #[test]
+    fn data_keys_separate_instances_development_and_trials() {
+        let root = Path::new("/data");
+        let guid = "3f0c8a8e-5b7e-4c1f-9d0a-2b6f1c7e9a41";
+        let instance = DataKey::Instance(guid.into());
+        assert_eq!(instance.directory(root, "a.b"), root.join(guid));
+        assert_eq!(
+            instance.secret_service("a.b"),
+            format!("vestra.plugin.{guid}")
+        );
+        let development = DataKey::Development("a.b".into());
+        assert_eq!(
+            development.directory(root, "a.b"),
+            root.join("development").join("a.b")
+        );
+        assert_eq!(development.secret_service("a.b"), "vestra.dev.a.b");
+        assert_eq!(
+            DataKey::Trial.directory(root, "a.b.trial.7"),
+            root.join("a.b.trial.7")
+        );
+        assert_eq!(DataKey::Trial.secret_service("a.b.trial.7"), "a.b.trial.7");
     }
 }

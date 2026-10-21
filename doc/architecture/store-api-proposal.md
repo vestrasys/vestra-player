@@ -490,3 +490,56 @@ Slint 1.16.1 已有 `StyledText` 元素（加粗、斜体、删除线、行内�
 - 内置插件的来源是**安装包**（`source.kind = "bundled"`），不是官方仓库地址；`builtin.json` 与 `.vxp` 由打包脚本从 `src/plugins/` 构建。
 - 第一版商城**不更新、不替换**内置插件：对内置 id 的任何 `install`（无论来源、带不带 `replace`）都返回 `unsupported`；只有播种（新安装包里版本更高）会升级内置插件。§3 表中「`install` 同来源（官方仓库）的新版本 → 升级」一行作废；§3.3 中「用户经商城装了更高版本则不动」一种情形不再出现。
 - 回退、停用照常。
+
+## 实现记录（2026-10-21，阶段 3，API 维护者）
+
+按 §9 的顺序实现了 §0 的 1–8 项及协调者修订（内置插件来源 `bundled`、对内置 id 的任何 `install` 都是 `unsupported`）。播放器在 `rebuild/store-core` 工作树，SDK 在 `vestra-player-sdk` 的 `store-1.1` 分支（提交 `453088e`，版本 1.1.0，未打标签、未推送）。宿主版本升为 **0.2.0**（`Cargo.toml`），即 SDK 1.1 新增接口要求的 `minPlayerVersion`。
+
+### 宿主
+
+| 文件 | 内容 |
+| --- | --- |
+| `manifest.rs`（新） | 开发加载与托管包共用的 `Manifest`（`plugins::Manifest`、`package_stage::PackageManifest` 都是它的别名）与规则表（§4.1）；`parse` 先读 `minPlayerVersion` 再严格解析；`NeedsPlayer` 错误在 RPC 里映射为 `versionMismatch` |
+| `package_store.rs` | `Installed.instance`（GUID、`source`、`builtin`、`installedAt`、`seededVersion`）、`Catalog.dormant`（≤ 256）、`Recovery.instance`；提交时按 GUID 判断升级/替换（替换：旧实例转休眠、`previous` 清空；换回：从休眠取回）；`uninstall(keep_data)`；旧 catalog 打开时补实例 |
+| `package_manager.rs` | `install` 读 `source`/`replace` 决定实例（`install_instance`，§1.3/§2.3）；`packages.validateArchive`；`uninstall` 拒绝内置；`packages.list` 新字段；开发加载同 id 时优先；`seed_builtins` 播种 |
+| `package_archive.rs`（新） | `.vxp` 解压（`zip` 9.0.5，只开 deflate），上限在解压过程中强制 |
+| `plugins.rs` | `DataKey`（`Instance(guid)` / `Development(id)` / `Trial`）决定数据目录与密钥服务名 |
+| `system.rs` | `secrets.*` 的服务名取自 `DataKey` |
+| `ui_markdown.rs`（新）、`ui/vestra/markdown.slint`（新） | pulldown-cmark 0.13.4 解析成 `[MarkdownBlock]` 模型；`ui_image.rs` 的 `prop_value` 识别 `$vestraMarkdown`；`ui.markdownScan`（无能力）返回需要下载的远程图片 |
+| `ui_values.rs` | `reconcile` 遇到非 JSON 值（Markdown 行里的图片与样式文字）时整体替换，不再报错 |
+
+**M0 探针结论：采用 `StyledText`**。`slint::private_unstable_api::re_exports::{parse_markdown, string_to_styled_text}` 构造 `Value::StyledText`（解释器里该变体 `doc(hidden)`），插件 `.slint` 里的 `StyledText` 元素与结构体字段 `styled-text` 都能编译、渲染、`link-clicked` 可用（`ui_markdown` 的无界面渲染测试：文字、图片像素、点击链接回调）。为了不让用户文本进入 Slint 的 Markdown 解析，格式串里只有我们生成的标记与占位符 U+E541，文字全部作为占位参数传入；`parse_markdown` 包在 `catch_unwind` 里，失败时退回纯文本。Slint 锁定 `=1.16.1`，升级 Slint 时须复测这一处（`ui_markdown.rs` 的 `Inline::styled` 与渲染测试）。
+
+**与提案不同的实现选择**
+
+- 启用状态仍存在原 `disabled` 集合（按 id，只作用于当前实例），没有搬进 `instance.enabled`：语义相同、改动更小。
+- 内置插件播种在启动时**直接提交**，不等激活成功；随后由启动流程像其它已安装插件一样启动，启动失败显示为 `failed`。若等激活，无界面或某次启动失败时内置插件会从列表里消失。
+- 试载的数据目录与密钥服务名不变（本来就按 `<id>.trial.<owner>` 隔离）。
+- `validateArchive` 的解压错误为 `invalid`（目录的 `validate` 出错仍是原来的 `host`）。
+- 卸载时删除数据，但系统密钥库里该实例的条目不删（无法枚举服务下的条目）；新实例的服务名不同，读不到它们。
+
+### 打包
+
+`src/scripts/stage-plugins.mjs <目标>/plugins`：对 `src/plugins/` 下每个有 `manifest.json` 的目录运行 `vestra-plugin pack`，生成 `<id>-<version>.vxp` 与 `builtin.json`（`{ schema: 1, plugins: [{ id, version, file, sha256 }] }`；SDK 1.0 产出的 `.zip` 自动改名）。宿主从 `$VESTRA_BUILTIN_PLUGINS`，否则 `<exe>/../../Resources/plugins` 读取；没有 `builtin.json` 时不播种（开发运行）。youtube、bilibili 由另一个工作树删除后自然不再打包。
+
+**新增依赖与许可证**：`zip` 9.0.5（MIT；新带进依赖树的只有 `typed-path` 与 Unix 上的 `nix` 0.31，均为 MIT 或 MIT/Apache-2.0，其余 `flate2`、`crc32fast`、`indexmap`、`memchr` 原已在树里）、`uuid` 1.28.0 与 `pulldown-cmark` 0.13.4（均已在依赖树里）。仓库目前没有汇总第三方许可证文本的位置，发行包附带许可证需在打包任务里统一处理。
+
+### SDK 1.1.0
+
+类型、`packages.validateArchive`、`install(options)`、`PluginInfo` 新字段、`ui.markdown`（`src/plugin/markdown.ts`：Node `fetch` 只下 `https:`、手动跟随 ≤ 5 次重定向、单张 4 MB、10 秒、并发 4、缓存 32 MB/24 小时）、`src/manifest.ts`（CLI 的规则表；`MANIFEST_LIMITS`、`MANIFEST_FIELDS`、`MARKDOWN_LIMITS` 经 `./runtime` 给播放器一致性测试）、TestHost、CLI、`slint/vestra/markdown.slint`、README / Getting started / `CHANGELOG.md`。全部是新增；兼容性审查同 §7.3。`npm create vestra-plugin` 按 §7.2 推迟。
+
+### 文档与示例
+
+`doc/plugins/reference.md`（§2、§3.4、§6.1、§12、§13、§15、§17）、`doc/plugins/store-changes.md`（给插件维护者的通知与例子）、`doc/plugins/README.md`、`doc/architecture/README.md`；示例插件 `src/examples/markdown/`（Markdown 窗口、显示字段、`minPlayerVersion`）。
+
+### 检查（本次实际执行）
+
+- 宿主（`CARGO_TARGET_DIR=~/.cache/vestra-target/core`）：`cargo fmt --check`、`cargo clippy --locked --all-targets -- -D warnings` 通过；`cargo test --locked` 287/287（基线 263，新增 24）。`npm run portability`：clean，宿主可编译到 Windows 目标。
+- SDK 仓库：`npm ci`、`check`、`format:check`、`build`、`npm test` 111/111（基线 105）、`npm pack --dry-run`（83 个文件）、`npm run docs`（警告即错误）通过。
+- 播放器（临时 `npm install <SDK 仓库>`）：`check`、`format:check`、`boundaries` 通过；`test:sdk` 11/11；`plugins:build` 通过；19 个插件测试 552/552，与基线逐个相同；示例 bookmark 1、core-ui 2、panel-menu 1、markdown 1。交付前 `src/package.json`、`package-lock.json` 已恢复为 `^1.0.0`（与提交前逐字节相同）。
+- 无界面端到端（`vestra-host --headless`，临时的安装库与数据根）：首次播种 19 个内置插件（来源 `bundled`、各自 GUID 目录）；再次启动不重复播种；新安装包里 2 个插件升版本后升级、GUID 不变、`previousVersion` 为旧版本、用户停用状态保留；一个 `plugins.manage` 驱动插件依次验证了 `validateArchive`、仓库来源安装、异来源 `conflict`、`replace` 替换（新 GUID）、换回原来源（复用原 GUID 与数据）、内置插件 `uninstall`/`install` 均为 `unsupported`、可停用、含 `../` 条目的包被拒、`minPlayerVersion: 9.0.0` 的包为 `versionMismatch`、保留数据卸载后转休眠；开发加载与已安装插件同 id 时只运行开发加载的。
+
+### 发现但未修
+
+- 安装库的操作回执上限 512 条（`MAX_OPERATIONS`）从不清理；每次播种升级也会写回执（同一包复用同一回执 id）。长期使用后安装会以「operation history full」失败，需要单独设计回执的淘汰。
+- `npm run portability` 把 Windows 检查的产物写在仓库内 `src/host/target/portability`（已被 `.gitignore` 忽略），与「不在仓库里产生 `target/`」的约定不一致。

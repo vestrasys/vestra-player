@@ -124,7 +124,12 @@ pub fn reconcile(current: &Value, next: &Value) -> Result<bool> {
     if matches!(current, Value::Image(_)) || matches!(next, Value::Image(_)) {
         return Ok(false);
     }
-    if to_json(current)? == to_json(next)? {
+    // Markdown rows (`plugin.ui.markdown`) carry images and styled text:
+    // not JSON, so they are always installed.
+    let (Ok(current_json), Ok(next_json)) = (to_json(current), to_json(next)) else {
+        return Ok(false);
+    };
+    if current_json == next_json {
         return Ok(true);
     }
     if let (Value::Model(current), Value::Model(next)) = (current, next)

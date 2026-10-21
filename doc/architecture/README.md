@@ -64,12 +64,16 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 | `src/host/src/producer*.rs` | 插件生成的音视频流（NES） |
 | `src/host/src/composition.rs`、`ui.rs`、`menu.rs`、`ui/*.slint` | 界面组合（主窗口、浮动面板窗口）、编译配置、插件窗口、共享右键菜单 |
 | `src/host/src/commands.rs`、`bindings.rs` | 命令注册表与菜单树、输入绑定表（解析、作用范围、冲突、菜单快捷键文字） |
-| `src/host/src/plugins.rs` | 插件进程；`VESTRA_PLUGIN_DATA_DIR` 传入每插件数据目录（`plugin-data/<manifest id>`，试载的停止时删除） |
+| `src/host/src/plugins.rs` | 插件进程；`VESTRA_PLUGIN_DATA_DIR` 传入数据目录（按 `DataKey`：已安装 `plugin-data/<安装实例 GUID>`，开发加载 `plugin-data/development/<id>`，试载 `plugin-data/<id>.trial.<owner>`，停止时删除）；`secrets` 的服务名同样按 `DataKey` |
+| `src/host/src/manifest.rs` | manifest 结构与规则表（开发加载与托管包共用；SDK CLI 用同一张表，`host-agreement` 测试比对） |
+| `src/host/src/package_store.rs`、`package_archive.rs`、`package_manager.rs` | 安装库（`packages/catalog.json`：每个 id 的当前安装实例与休眠实例）、`.vxp` 解压、安装/替换/回退/卸载与内置插件播种（`Resources/plugins/builtin.json`）。设计见 [S4 提案](store-api-proposal.md) |
+| `src/host/src/ui_markdown.rs`、`ui/vestra/markdown.slint` | `plugin.ui.markdown`：pulldown-cmark 解析成 `[MarkdownBlock]`，行内样式用 Slint `styled-text` |
 | `src/host/src/window_state.rs`、`ui_state.rs` | 底栏/侧栏显示规则（宽度、空闲隐藏、分离）、界面状态持久化 |
 | `src/host/ui/vestra/` | 插件可导入的主题与控件（`@vestra/theme.slint`、`@vestra/widgets.slint`） |
 | `src/runtime/runner.ts` | 插件运行器 |
 | `src/node_modules/@vestra-player/sdk` | npm 包 `@vestra-player/sdk`，源码在独立仓库 [vestra-player-sdk](https://github.com/vestrasys/vestra-player-sdk)（`src/plugin/` 插件 API，公共类型 `types.ts`、测试宿主 `testing.ts`；`src/*.ts` wire 客户端（内部）；`bin/vestra-plugin.mjs` 插件命令行工具；`slint/` 控件库只读副本；`test/` SDK 单元测试），版本由 `src/package.json` 锁定。入口与发布格式见 [生态计划 S0 记录](../product/ecosystem-plan.md)，改动流程见 [工作流 §1.6](../process/community-workflow.md) |
 | `src/scripts/plugin.mjs`、`check-boundaries.mjs` | 仓库内调用 `vestra-plugin` 的快捷方式（按插件名）、导入边界检查 |
+| `src/scripts/stage-plugins.mjs` | 按打包布局生成 `Resources/plugins/`：`src/plugins/` 每个插件的 `.vxp` 与 `builtin.json` |
 | `src/scripts/sync-sdk-slint.mjs`、`stage-runtime.mjs` | 校验已安装 SDK 的控件库副本与 `host/ui` 一致（`--write <SDK 仓库>` 把 `host/ui` 复制进 SDK 仓库）；从已安装的 SDK 按打包布局生成 `Resources/runtime` |
 | `src/tests/sdk/` | 播放器侧测试：runner、打包布局、已安装 SDK 的常量（能力表、`apiVersion`、命令上限）与控件库副本和宿主一致 |
 | `src/plugins/` | 10 个产品插件 |
