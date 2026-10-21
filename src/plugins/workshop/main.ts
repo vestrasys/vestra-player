@@ -1,4 +1,4 @@
-import type { PackageCandidate, PackageChange, PackageTrial, Plugin, PluginError } from "@vestra-player/sdk";
+import type { InstallOptions, PackageCandidate, PackageChange, PackageTrial, Plugin, PluginError } from "@vestra-player/sdk";
 import { WorkshopJob, defaultRequirement, requirement } from "./engine.mjs";
 import * as fs from "node:fs/promises";
 import path from "node:path";
@@ -56,7 +56,8 @@ export default async function activate(plugin: Plugin) {
   let candidate: PackageCandidate | undefined;
   let trial: PackageTrial | undefined;
   let change: PackageChange | undefined;
-  let selectedId = "community.counter";
+  let selectedId = "workshop.counter";
+  let managing = false; // an install or rollback is submitted or waits for the user
   let log = "";
   let status = "选择工作区并输入需求后生成。";
   let workspace = "";
@@ -132,34 +133,73 @@ export default async function activate(plugin: Plugin) {
     show("试载已停止并清理。");
   };
 
+  /**
+   * Install as a workshop package (an upgrade when the installed one came from
+   * the workshop too). Resolves `undefined` when the user keeps the installed
+   * plugin of another source; the candidate stays for a later install.
+   */
+  const install = async (installing: PackageCandidate): Promise<PackageChange | undefined> => {
+    const options: InstallOptions = { source: { kind: "workshop" } };
+    const id = installing.manifest.id;
+    try {
+      return await installing.install(options);
+    } catch (error) {
+      const code = (error as PluginError).code;
+      if (code === "unsupported")
+        throw Error(`${id} 与播放器内置插件同名，不能安装。请在需求中改用别的 id 后重新生成。`);
+      if (code !== "conflict") throw error;
+    }
+    publish(`${id} 已从别处安装，等待用户确认是否替换`);
+    show(`${id} 已从别处安装，请在确认对话框中选择是否替换。`);
+    const answer = await plugin.dialogs.confirm({
+      message: `替换已安装的 ${id}？`,
+      detail:
+        "它是从别处安装的（不是插件工坊生成的）。替换后新插件使用新的空数据目录；原插件的数据保留，以后从原来源重新安装时接上。",
+      confirm: "替换",
+      destructive: true,
+    });
+    if (!answer.confirmed) {
+      publish(`用户取消替换 ${id}，候选保留`);
+      show("未安装：已保留原插件和本次候选，可稍后再安装。");
+      return undefined;
+    }
+    publish(`用户确认替换 ${id}`);
+    return installing.install({ ...options, replace: true });
+  };
+
   /** Install or roll back; only ever on an explicit click, and never resubmitted. */
   const manage = async (rollback: boolean) => {
     if (!idle()) throw Error("请先等待任务完成并停止试载");
     if (!rollback && !candidate) throw Error("请先生成并通过宿主校验");
-    busy = true;
+    busy = managing = true;
     const action = rollback ? "回退" : "安装";
     publish(`用户明确${action} ${selectedId}`);
-    let current: PackageChange;
+    let current: PackageChange | undefined;
     try {
-      current = rollback ? await plugin.packages.rollback(selectedId) : await candidate!.install();
+      current = rollback ? await plugin.packages.rollback(selectedId) : await install(candidate!);
     } catch (error) {
-      busy = false;
+      busy = managing = false;
       throw error;
     }
-    change = current;
+    if (!current) {
+      busy = managing = false;
+      plugin.update();
+      return;
+    }
+    const followed = (change = current);
     const report = () => {
-      const text = `${action}${changeText[current.status] ?? "状态未知。"}`;
-      publish(current.message ? `${text}（${current.message}）` : text);
-      show(current.message && current.status.startsWith("failed") ? `${text}原因：${oneLine(current.message)}` : text);
+      const text = `${action}${changeText[followed.status] ?? "状态未知。"}`;
+      publish(followed.message ? `${text}（${followed.message}）` : text);
+      show(followed.message && followed.status.startsWith("failed") ? `${text}原因：${oneLine(followed.message)}` : text);
     };
-    const listening = current.onChange(report);
+    const listening = followed.onChange(report);
     report();
     try {
-      await current.done;
+      await followed.done;
     } finally {
       await listening.dispose();
       change = undefined;
-      busy = false;
+      busy = managing = false;
     }
   };
 
@@ -184,7 +224,7 @@ export default async function activate(plugin: Plugin) {
   });
   window.on("generate", generate);
   window.on("cancelTask", async () => {
-    if (job && busy && !change && !starting) {
+    if (job && busy && !change && !starting && !managing) {
       job.cancel();
       await job.agent?.waitForIdle();
       show("正在取消生成…");

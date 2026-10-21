@@ -1,6 +1,6 @@
 {
   "id": "vestra.subtitles",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -13,5 +13,14 @@
     "ui.osd",
     "playback.read",
     "playback.control"
+  ],
+  "name": "字幕",
+  "author": "Vestra Player",
+  "punchline": "载入外部字幕、选择轨道、调整样式与同步",
+  "description": "选择和切换字幕轨，载入 SRT、ASS/SSA、WebVTT、SAMI、MicroDVD 字幕（自动识别编码），显示次字幕；调整字号、位置、字体、颜色、描边、阴影与背景框，调整同步；按对白跳转；外部字幕文件改动后自动重载。\n入口在右键菜单「字幕」。",
+  "tags": [
+    "字幕",
+    "样式",
+    "同步"
   ]
 }

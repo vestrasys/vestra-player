@@ -1,6 +1,6 @@
 {
   "id": "vestra.capture",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -14,5 +14,14 @@
     "subtitles.read",
     "ui.osd",
     "clipboard"
+  ],
+  "name": "截图",
+  "author": "Vestra Player",
+  "punchline": "保存或复制当前画面、连拍、导出片段",
+  "description": "保存、另存或复制当前画面（原始画面或含画面效果与字幕的实际画面），支持 PNG、JPEG、BMP；连拍多张；把一段视频导出为 MP4，并在任务列表里查看进度。\n入口在右键菜单「视频 ▶ 截图」。",
+  "tags": [
+    "视频",
+    "截图",
+    "导出"
   ]
 }

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { HostError, TestHost, startPlugin } from "@vestra-player/sdk/testing";
-import { bytes } from "../labels.ts";
+import { bytes, failureText, sourceText } from "../labels.ts";
 import activate from "../main.ts";
 import { directorySize, timing } from "../sizes.ts";
 
@@ -27,20 +27,31 @@ const info = (id: string, patch: Partial<Info> = {}): Info => ({
   previousVersion: null,
   ...patch,
 });
-const LIST = () => [
-  info("vestra.audio", { previousVersion: "0.0.9", capabilities: ["commands", "processing.audio", "playback.read"] }),
-  info("vestra.plugins", { capabilities: ["commands", "plugins.manage"] }),
-  info("dev.thing", { origin: "development", version: null }),
-  info("trial.x", { origin: "trial" }),
-  info("broken.one", { state: "failed", error: "activate threw: boom" }),
+const REPOSITORY = "https://plugins.example.org/index.json";
+/**
+ * Data directories are per install instance and not named after the id
+ * (the player's layout is not part of the API): the plugin must use
+ * `info.dataDirectory`, never derive it.
+ */
+const LIST = (root: string) => [
+  info("vestra.audio", {
+    previousVersion: "0.0.9",
+    capabilities: ["commands", "processing.audio", "playback.read"],
+    source: { kind: "repository", url: REPOSITORY },
+    dataDirectory: join(root, "instance-7f3a"),
+  }),
+  info("vestra.plugins", { capabilities: ["commands", "plugins.manage"], builtin: true, source: { kind: "bundled" }, dataDirectory: join(root, "self") }),
+  info("dev.thing", { origin: "development", version: null, dataDirectory: join(root, "development", "dev.thing") }),
+  info("trial.x", { origin: "trial", dataDirectory: join(root, "trial-tmp") }),
+  info("broken.one", { state: "failed", error: "activate threw: boom", source: { kind: "file" }, dataDirectory: join(root, "instance-01bc") }),
 ];
 
 const running = new Set<() => Promise<void>>();
 /** The plugin with its data folder in a fresh data root (so sibling folders can be measured). */
-async function start(host = new TestHost()) {
+async function start(host = new TestHost(), extra: (root: string) => Info[] = () => []) {
   const root = mkdtempSync(join(scratch, "root-"));
-  host.packages = LIST();
-  const started = await startPlugin(activate, { directory, host, dataDirectory: join(root, "vestra.plugins") });
+  host.packages = [...LIST(root), ...extra(root)];
+  const started = await startPlugin(activate, { directory, host, dataDirectory: join(root, "self") });
   const stop = async () => {
     running.delete(stop);
     await started.stop();
@@ -100,13 +111,13 @@ test("J07: the list shows id, version, origin, state and data size", async () =>
       ["dev.thing", "开发", "开发加载", "运行中"],
       ["trial.x", "0.1.0", "试载", "运行中"],
       ["vestra.audio", "0.1.0", "已安装", "运行中"],
-      ["vestra.plugins", "0.1.0", "已安装", "运行中"],
+      ["vestra.plugins", "0.1.0", "内置", "运行中"],
     ],
   );
   assert.equal(row(host, "broken.one")!.failed, true);
   // Sizes: measured when the window opens (a missing folder is 「—」).
-  mkdirSync(join(root, "vestra.audio"));
-  writeFileSync(join(root, "vestra.audio", "settings.json"), Buffer.alloc(2048));
+  mkdirSync(join(root, "instance-7f3a"));
+  writeFileSync(join(root, "instance-7f3a", "settings.json"), Buffer.alloc(2048));
   await host.command("manage").run();
   await host.settle(WAIT);
   assert.equal(row(host, "vestra.audio")!.size, "2.0 KB");
@@ -122,9 +133,10 @@ test("J07: details of the selected plugin", async () => {
   assert.deepEqual(
     details.map((d) => [d.label, d.text]),
     [
+      ["来源", `仓库（${REPOSITORY}）`],
       ["上一版本", "0.0.9"],
       ["包目录", "/packages/vestra.audio"],
-      ["数据目录", join(root, "vestra.audio")],
+      ["数据目录", join(root, "instance-7f3a")],
       ["能力", "commands  菜单命令与快捷键"],
       ["", "processing.audio  处理声音"],
       ["", "playback.read  读取播放状态"],
@@ -133,6 +145,7 @@ test("J07: details of the selected plugin", async () => {
   await emit(host, "select", "broken.one");
   const failed = (props(host).details as { label: string; text: string; warn: boolean }[])[0]!;
   assert.deepEqual(failed, { label: "失败原因", text: "activate threw: boom", warn: true });
+  assert.deepEqual((props(host).details as { label: string; text: string }[])[1], { label: "来源", text: "本地文件", warn: false });
   assert.equal(props(host)["can-reload"], true);
 });
 
@@ -248,8 +261,95 @@ test("J07: open the data folder; a missing one is reported", async () => {
   const { root } = await start(host);
   await emit(host, "select", "vestra.plugins");
   await emit(host, "openData");
-  assert.deepEqual(host.system.opened, [join(root, "vestra.plugins")]);
+  assert.deepEqual(host.system.opened, [join(root, "self")]);
   await emit(host, "select", "vestra.audio");
   await emit(host, "openData");
   assert.match(String(props(host).message), /数据目录不存在/);
+});
+
+test("source: each kind, and development loads and trials by their origin", () => {
+  const of = (patch: Partial<Info>) => sourceText({ ...info("x"), builtin: false, source: null, dataDirectory: null, ...patch });
+  assert.equal(of({ source: { kind: "repository", url: REPOSITORY } }), `仓库（${REPOSITORY}）`);
+  assert.equal(of({ source: { kind: "link", url: "https://example.org/x-1.0.0.vxp" } }), "链接（https://example.org/x-1.0.0.vxp）");
+  assert.equal(of({ source: { kind: "file" } }), "本地文件");
+  assert.equal(of({ source: { kind: "workshop" } }), "插件工坊");
+  assert.equal(of({ source: { kind: "bundled" }, builtin: true }), "内置");
+  assert.equal(of({ origin: "development" }), "开发加载");
+  assert.equal(of({ origin: "trial" }), "试载");
+});
+
+test("built-in plugins: disable and roll back, but 卸载… is off with a hint", async () => {
+  const host = new TestHost();
+  await start(host, (root) => [
+    info("vestra.subtitles", { builtin: true, source: { kind: "bundled" }, previousVersion: "0.3.0", dataDirectory: join(root, "instance-sub") }),
+  ]);
+  assert.equal(row(host, "vestra.subtitles")!.origin, "内置");
+  await emit(host, "select", "vestra.subtitles");
+  assert.equal(props(host)["can-uninstall"], false);
+  assert.equal(props(host)["uninstall-tip"], "内置插件只能停用");
+  assert.equal(props(host)["can-toggle"], true);
+  assert.equal(props(host)["can-reload"], true);
+  assert.equal(props(host)["can-rollback"], true);
+  assert.equal(props(host)["can-open"], true);
+  const details = (props(host).details as { label: string; text: string }[]).map((d) => [d.label, d.text]);
+  assert.deepEqual(details.slice(0, 2), [
+    ["说明", "内置插件：随播放器安装和更新，只能停用，不能卸载"],
+    ["来源", "内置"],
+  ]);
+  // The callback (if it fired anyway) neither asks nor calls the player.
+  const asked = host.confirms.length;
+  await emit(host, "uninstall");
+  assert.equal(host.confirms.length, asked);
+  assert.deepEqual(host.packageCalls, []);
+  // Disabling works as for any plugin.
+  host.dialogAnswers.push({ confirmed: true, checked: false });
+  await emit(host, "toggle");
+  assert.deepEqual(host.packageCalls, [{ method: "setEnabled", id: "vestra.subtitles", enabled: false }]);
+  // Its own row keeps its own hint, built in or not.
+  await emit(host, "select", "vestra.plugins");
+  assert.equal(props(host)["uninstall-tip"], "插件管理不能停用自身");
+});
+
+test("uninstall refused as unsupported (the list was out of date): reported and re-read", async () => {
+  const host = new TestHost();
+  await start(host);
+  await emit(host, "select", "vestra.audio");
+  assert.equal(props(host)["can-uninstall"], true);
+  // The player now treats it as built in; no list change was sent yet.
+  Object.assign(host.packages.find((p) => p.id === "vestra.audio")!, { builtin: true, source: { kind: "bundled" } });
+  host.dialogAnswers.push({ confirmed: true, checked: false });
+  await emit(host, "uninstall");
+  assert.deepEqual(host.packageCalls, []);
+  assert.equal(props(host).message, "内置插件只能停用");
+  assert.equal(props(host)["message-warn"], true);
+  assert.equal(props(host)["can-uninstall"], false);
+  assert.equal(props(host)["uninstall-tip"], "内置插件只能停用");
+  assert.ok(row(host, "vestra.audio"));
+  // The other unsupported cases keep their own text.
+  assert.equal(failureText({ code: "unsupported" }, { ...info("d", { origin: "development" }), builtin: false, source: null, dataDirectory: null }), "开发加载的插件不能卸载或回退");
+  assert.equal(failureText({ code: "unsupported" }, { ...info("t", { origin: "trial" }), builtin: false, source: null, dataDirectory: null }), "试载中的插件由插件工坊管理");
+});
+
+test("data directory: from the list; none from the player; a new one is measured", async () => {
+  const host = new TestHost();
+  const { root } = await start(host, () => [info("no.data", { dataDirectory: null })]);
+  await emit(host, "select", "no.data");
+  assert.equal(row(host, "no.data")!.size, "—");
+  assert.equal(props(host)["can-open"], false);
+  assert.deepEqual(
+    (props(host).details as { label: string; text: string }[]).find((d) => d.label === "数据目录")!.text,
+    "不可用",
+  );
+  await emit(host, "openData");
+  assert.deepEqual(host.system.opened, []);
+  // Replaced from another source: a new, separately measured data directory.
+  const replaced = join(root, "instance-new");
+  mkdirSync(replaced);
+  writeFileSync(join(replaced, "a"), Buffer.alloc(4096));
+  host.setPackages(host.packages.map((p) => (p.id === "vestra.audio" ? { ...p, source: { kind: "file" as const }, dataDirectory: replaced } : p)));
+  await host.settle(WAIT);
+  assert.equal(row(host, "vestra.audio")!.size, "4.0 KB");
+  await emit(host, "select", "vestra.audio");
+  await emit(host, "openData");
+  assert.deepEqual(host.system.opened, [replaced]);
 });

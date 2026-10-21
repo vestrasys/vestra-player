@@ -28,13 +28,20 @@ async function copySdkTypes(target) {
   await fs.copyFile(path.join(sdk, 'package.json'), path.join(target, 'package.json'));
   await fs.cp(path.join(sdk, 'dist'), path.join(target, 'dist'), { recursive: true, filter: (file) => !path.extname(file) || /\.d\.ts$/.test(file) });
 }
+/**
+ * Generated plugins default to the `workshop.` owner prefix: the workshop does
+ * not know the user's GitHub name, `workshop.` claims no real owner's namespace
+ * and says where the plugin came from. `community.counter` stays accepted for
+ * requirement files written before 1.1.
+ */
+const COUNTER_IDS = ['workshop.counter', 'community.counter'];
 export function requirement(text) {
   if (Buffer.byteLength(text) > 65536) throw Error('需求超过64KiB');
   const r = JSON.parse(text);
-  if (!r || Object.keys(r).sort().join(',') !== 'id,kind,step,version' || r.kind !== 'native-counter' || r.id !== 'community.counter' || !((r.version === '1.0.0' && r.step === 1) || (r.version === '1.1.0' && r.step === 3))) throw Error('仅支持native-counter / community.counter，1.0.0步长1或1.1.0步长3');
+  if (!r || Object.keys(r).sort().join(',') !== 'id,kind,step,version' || r.kind !== 'native-counter' || !COUNTER_IDS.includes(r.id) || !((r.version === '1.0.0' && r.step === 1) || (r.version === '1.1.0' && r.step === 3))) throw Error('仅支持native-counter / workshop.counter（或旧的community.counter），1.0.0步长1或1.1.0步长3');
   return Object.freeze(r);
 }
-export const defaultRequirement = JSON.stringify({kind:'native-counter',id:'community.counter',version:'1.0.0',step:1});
+export const defaultRequirement = JSON.stringify({kind:'native-counter',id:'workshop.counter',version:'1.0.0',step:1});
 const counterUi = `import { Button, VerticalBox, HorizontalBox } from "std-widgets.slint";
 export component CounterWindow inherits Window {
  title: "独立计数器"; width: 360px; height: 240px;
@@ -108,7 +115,7 @@ export class WorkshopJob {
         this.check(options?.signal); if(++turn>3)throw Error('模型轮次超限');
         const call=(name,args)=>({type:'toolCall',id:`${turn}-${name}-${Math.random()}`,name,arguments:args});
         const reports=context.messages.filter(m=>m.role==='toolResult'&&m.toolName==='validate_candidate');
-        if(turn===1)message.content=[call('write_candidate',{path:'manifest.json',text:JSON.stringify({id:r.id,version:r.version,apiVersion:'vestra/1',entry:'main.js',capabilities:['ui.window']},null,2)}),call('write_candidate',{path:'counter.slint',text:counterUi}),call('write_candidate',{path:'main.ts',text:counterSource(r.step,true)}),call('read_candidate',{path:'main.ts'}),call('validate_candidate',{revision:3})];
+        if(turn===1)message.content=[call('write_candidate',{path:'manifest.json',text:JSON.stringify({id:r.id,version:r.version,apiVersion:'vestra/1',entry:'main.js',capabilities:['ui.window'],name:'独立计数器'},null,2)}),call('write_candidate',{path:'counter.slint',text:counterUi}),call('write_candidate',{path:'main.ts',text:counterSource(r.step,true)}),call('read_candidate',{path:'main.ts'}),call('validate_candidate',{revision:3})];
         else {
           const report=JSON.parse(reports.at(-1)?.content.map(c=>c.text??'').join('')??'null');
           if(turn===2){

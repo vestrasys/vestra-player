@@ -1,4 +1,4 @@
-export interface Requirement {kind:'native-counter';id:'community.counter';version:'1.0.0'|'1.1.0';step:1|3}
+export interface Requirement {kind:'native-counter';id:'workshop.counter'|'community.counter';version:'1.0.0'|'1.1.0';step:1|3}
 export function requirement(text:string):Requirement;
 export const defaultRequirement:string;
 export class WorkshopJob {

@@ -1,6 +1,6 @@
 {
   "id": "vestra.history",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -11,5 +11,14 @@
     "ui.window",
     "ui.osd",
     "ui.dialog"
+  ],
+  "name": "播放历史",
+  "author": "Vestra Player",
+  "punchline": "最近播放记录，记忆并继续上次的播放位置",
+  "description": "在「打开 ▶ 最近播放」列出最近打开的文件和链接；在「播放 ▶ 记忆播放位置」中选择不记忆、自动继续或每次询问，下次打开同一文件时从上次停下的地方继续。",
+  "tags": [
+    "播放",
+    "历史",
+    "继续播放"
   ]
 }
