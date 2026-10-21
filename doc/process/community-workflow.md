@@ -186,7 +186,7 @@ SDK 在独立仓库（§1.6）：P1、P4 的 SDK 部分在 SDK 仓库的分支�
 
 ### 6.1 静态检查（每次公共改动后，维护者执行，协调者复核）
 
-在 `src/` 下：`npm run check`、`npm run format:check`、`npm run boundaries`、`npm run test:sdk`、`npm run plugins:build`、每个插件 `npm run plugin -- test <名字>`。
+在 `src/` 下：`npm run check`、`npm run format:check`、`npm run boundaries`、`npm run test:sdk`、`npm run plugins:build`、每个插件 `npm run plugin -- test <名字>`、`npm run portability`（构建输出在 `$CARGO_TARGET_DIR/portability`，未设时在系统临时目录的 `vestra-target/portability`，不进仓库）。
 在 `src/host/` 下：`cargo fmt --check`、`cargo clippy --locked --all-targets -- -D warnings`、`cargo test --locked`。
 改了插件仓库里的插件（`youtube`、`bilibili`）或可能影响它们的公共 API 时，另在插件仓库下：`npm ci`、`npm run check`、`npm run format:check`、`npm run boundaries`、`npm run portability`、`npm run build`、`npm test`（与它的 CI 相同）。
 改了 SDK 时，另在 SDK 仓库下：`npm ci`、`npm run check`、`npm run format:check`、`npm test`、`npm pack --dry-run`（与它的 CI 相同）。
