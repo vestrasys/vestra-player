@@ -469,6 +469,23 @@ pub fn default_ffmpeg() -> PathBuf {
     PathBuf::from("/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg")
 }
 
+// ---------------------------------------------------------------- rendering
+
+/// libmpv draws with OpenGL in its own offscreen CGL context into IOSurfaces;
+/// each Slint (femtovg) window copies the newest one into its own texture.
+/// The raw GL and CGL calls are in the `vestra-gpu-render` crate.
+pub use vestra_gpu_render::{Handle as GpuHandle, Renderer as GpuRenderer};
+pub const GPU_RENDER: bool = true;
+
+/// Start drawing `mpv` at `size` pixels; frames are shown while `publish`.
+pub fn gpu_start(
+    mpv: std::sync::Arc<rsmpv::Mpv>,
+    size: (u32, u32),
+    publish: std::sync::Arc<std::sync::atomic::AtomicBool>,
+) -> std::result::Result<GpuRenderer, String> {
+    GpuRenderer::start(mpv, size, publish)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

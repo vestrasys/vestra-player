@@ -82,7 +82,7 @@ interface Disposable { dispose(): Promise<void> }
 | `events` | `player.state` / `onChange` 实时更新、面板可见性、字幕状态刷新 |
 | `playback.control` | `player.open`、`setPaused`、`seek`、`setRate`、`restart`、`close`、`scrub`、`setOutput`、`provideSequence`、`next`、`previous`、`addAudioTrack`、`selectAudioTrack`、`step`、`setStepSeek`、`setLoop`、`setAudioDevice`；`power.preventSleep` |
 | `producer.av` | `player.openStream` |
-| `processing.video` | `video.filter`（另需 `playback.read`） |
+| `processing.video` | `video.filter`、`video.view`、`video.render`（另需 `playback.read`） |
 | `processing.audio` | `audio.filter`（另需 `playback.read`） |
 | `subtitles.read` | `subtitles.state`、`onChange`、`refresh` |
 | `subtitles.control` | `subtitles.select`、`load`、`remove`、`setStyle` |
@@ -474,7 +474,8 @@ interface Player {
 interface PlaybackStats {
   backend: string; session: number; framesShown: number; framesDropped: number | null;
   video: { codec; width; height; fps;                   // 字段都可为 null
-           decoder; pixelFormat; colorspace; displayWidth; displayHeight; displayFps; bitrate } | null;
+           decoder; pixelFormat; colorspace; displayWidth; displayHeight; displayFps; bitrate;
+           hwdec; transfer } | null;
   audio: { codec; sampleRate; channels; decoder; format; channelLayout; bitrate } | null;
   avSyncMs: number | null;      // 最近一次音画差（毫秒，有正负）
   cacheSeconds: number | null;  // 解复用器已缓冲的秒数
@@ -495,10 +496,19 @@ interface PlaybackStats {
 | `audio.channelLayout` | `audio-params/hr-channels` | 如 `stereo`、`5.1(side)` |
 | `avSyncMs` | `avsync` × 1000 | 无音频或无视频时为 `null` |
 | `cacheSeconds` | `demuxer-cache-duration` | |
+| `video.hwdec` | `hwdec-current` | 正在用的硬件解码器，如 `videotoolbox`；`"no"` 表示软件解码（软件渲染时总是 `"no"`） |
+| `video.transfer` | `video-params/gamma` | 传输特性原样给出，如 `bt.1886`、`srgb`、`pq`（HDR10）、`hlg`；判断是不是 HDR 由插件做 |
 
-不提供硬件解码状态（本播放器固定软件解码）。
+**渲染方式**（`backend`）：
 
-画面按视频区的物理像素渲染（窗口尺寸 × 屏幕缩放，随窗口拖动、全屏与换屏变化），再按来源分辨率封顶：不在 CPU 上渲染比来源更多的像素，余下的放大由界面完成；总像素不超过 3840×2160。`backend` 仍为「libmpv · 软件渲染」，没有新字段。
+| `backend` | 何时 | 画面 |
+| --- | --- | --- |
+| `libmpv · GPU 渲染（OpenGL）` | 默认（macOS） | libmpv 用 OpenGL 在自己的线程里渲染，按视频区的物理像素（窗口尺寸 × 屏幕缩放）渲染，缩放由 mpv 完成；硬件解码 `hwdec=auto-safe`（解不了的格式 mpv 自动改用软件解码，`video.hwdec` 如实报告）。界面固定用 Slint 的 OpenGL 渲染器（femtovg） |
+| `libmpv · 软件渲染` | 后备：无界面模式（`--headless`）；环境变量 `VESTRA_SOFTWARE_RENDER=1`；Windows、Linux（暂未实现 GPU 渲染）；OpenGL 初始化失败（mpv 的 OpenGL 上下文建不起来，或窗口不能显示 OpenGL 纹理）时自动退回，并在标准错误输出写一行 `render: …` | CPU 渲染，不开硬件解码。按视频区的物理像素渲染，再按来源分辨率封顶（不在 CPU 上渲染比来源更多的像素，余下的放大由界面完成），总像素不超过 3840×2160 |
+
+- 两种方式下 `framesShown` 都是播放器交给视频区的帧数（含生成流的帧），播放、截图、导出、滤镜与显示层（§8、§8.1、§10）行为相同。渲染选项（§8.2）只在 GPU 渲染下有效。
+- 运行中退回软件渲染（窗口不能显示纹理）只在第一个窗口出现时发生；如果那时已经在播放，当前来源可能要重新打开。
+- 诊断：`VESTRA_HWDEC` 覆盖 GPU 渲染时的 `hwdec`（如 `no`）；`VESTRA_FRAME_LOG=1` 每秒在标准错误输出一行渲染与显示的帧数和渲染尺寸（两种方式都有）。
 
 - 同时只能有一个提供者（例如播放列表）；另一个插件再登记以 `conflict` 失败（激活期间 = 激活失败）。`dispose` 或插件停用时撤销。
 - `canNext` / `canPrevious` 每轮更新重新求值，变化才发送；任何插件从 `player.state.can.next/previous` 读到。
@@ -886,6 +896,42 @@ interface ViewSettings {
 - **换来源时保留当前值**（与 mpv 相同）。需要「换片源时复位」的插件自己在 `player.state.sourceId` 变化时 `set({ zoom: 1, panX: 0, panY: 0 })`。
 - 渲染尺寸按视频区确定（§5.4），所以「不保持宽高比」「填满」在任何窗口比例下都正确；`zoom > 1` 时渲染尺寸随之放宽（放大后不是放大的低分辨率缓冲）。
 
+### 8.2 渲染选项 `plugin.video.render()`
+
+需要 `processing.video`（同时要 `playback.read`）。HDR 色调映射、用户着色器和运动补偿，是 GPU 渲染器（§5.4）在显示时做的事：**不改变画面本身**，截图与导出（§10）得到的是没有这些效果的帧，滤镜（§8）也看不到它们。
+
+```ts
+plugin.video.render(): RenderOptions;
+interface RenderOptions extends Disposable {
+  set(value: Partial<RenderSettings>): void;  // 合并写入，最后写入生效；失败交 onError 与 status
+  readonly status: FilterStatus;              // 与滤镜相同的四态
+  onStatus(listener: (s: FilterStatus) => void): Disposable;
+}
+interface RenderSettings {
+  toneMapping: "auto" | "off" | "bt.2390" | "hable" | "mobius" | "reinhard" | "clip";
+  targetPeak: number;     // SDR 显示器亮度（尼特）100–400
+  peakDetect: boolean;    // 逐场景估算峰值亮度
+  shaders: string[];      // mpv 用户着色器（.glsl），绝对路径，文件要存在，最多 16 个，按顺序执行
+  interpolation: boolean; // 运动补偿
+}
+```
+
+| 字段 | mpv 选项 |
+| --- | --- |
+| `toneMapping` | `tone-mapping`：`auto` 只映射 HDR 来源；算法名原样传；`off` 写 `tone-mapping=clip` 与 `gamut-mapping-mode=clip`（不做曲线和色域压缩，超出目标亮度的部分直接裁掉），同时不做峰值检测 |
+| `targetPeak` | `target-peak` |
+| `peakDetect` | `hdr-compute-peak`（`yes` / `no`） |
+| `shaders` | `glsl-shaders`（逐个加入，路径里可以有 `:`） |
+| `interpolation` | `interpolation=yes`、`video-sync=display-resample`、`display-fps-override` = 主显示器的刷新率（读不到时 60）；关时 `interpolation=no`、`video-sync=audio` |
+
+- **单一拥有者**，规则同显示层（§8.1）：第一个调用 `render()` 的插件取得渲染选项；别的插件的句柄为 `failed`（`conflict`），之后每次 `set` 再试。同一插件第二次调用抛错。`render()` 和 `view()` 是两个独立的句柄，可以由不同插件拥有。
+- 默认值 `{ toneMapping: "auto", targetPeak: 203, peakDetect: true, shaders: [], interpolation: false }`。拥有者 `dispose` 或停用时，播放器把这些选项写回 mpv 自己的默认值（`target-peak=auto` 等，效果与默认值相同）。
+- 范围外的值、未知字段、相对路径：`set` 立即以 `invalid` 失败，请求不发出。着色器文件不存在：播放器以 `invalid` 拒绝。播放器拒绝写入时为 `failed`（`backend`），并恢复写入前的值。
+- **软件渲染**（§5.4 后备）：`set` 以 `unsupported` 失败，句柄不占有渲染选项。之后每次 `set` 都会再试（结果相同，播放器不会从软件渲染切回 GPU）。运行中退回软件渲染时，拥有者的 `status` 变为 `failed`（`unsupported`）。
+- **着色器编译失败**：mpv 在第一次用到着色器时编译，所以 `set` 先报 `applied`，随后播放器把 `status` 推为 `failed`（`code: "failed"`，`message` 是 `shader compile failed: ` 加编译器的第一行错误，例如 `ERROR: 0:39: Use of undeclared identifier 'HOOKED_tex'`）。mpv 不报是哪个文件；列表里其它着色器照常执行。每次 `set` 最多推一次。
+- 没有就绪的媒体时为 `waiting`：值照样写入（跨来源保持），媒体就绪后变为 `applied`。
+- 平台与限制：只有 macOS 有 GPU 渲染，Windows、Linux 总是 `unsupported`。macOS 的 OpenGL 是 4.1，没有计算着色器，mpv 会关掉动态峰值检测，`peakDetect` 照样接受但不起作用。输出总是 SDR（8 位），显示器支持 EDR 时也不输出 HDR；`toneMapping: "auto"` 在 HDR 来源上总是做映射。运动补偿按主显示器的刷新率重采样，窗口在别的刷新率的显示器上时可能不够平滑。
+
 ## 9. 字幕 `plugin.subtitles`
 
 读取需要 `subtitles.read`，修改需要 `subtitles.control`。
@@ -1115,6 +1161,7 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 | 断言 | `host.window(id).props`（kebab-case 名）、`.visible`；`host.command(id).state`、`.declaration`；`host.conflicts`（`[绑定, 赢家, ...被压下]`）；`host.layout.bottom` / `.sidebar`（可直接改后 `host.emit("window.state", {})` 模拟别处的变化）；`host.osd`（显示过的提示）、`host.osdPanel`；`host.sequence`（提供者的标志）；`host.menus`（`showMenu` 记录）；`host.sent(method)`；`host.source`；`host.processing`、`host.subtitles`、`host.snapshots`、`host.jobs`、`host.producers` |
 | 模拟数据 | `host.stats`（`player.stats()` 的返回值，第 2 轮新增字段可省略，SDK 补 `null`）；`host.dataDirectory`（`plugin.dataDirectory`，`storage.json` 直接读写其中的真实文件）；`host.setSource({ audioTracks })`（`addAudioTrack` / `selectAudioTrack` 有默认处理，可用 `host.handle("audio.addTrack" \| "audio.selectTrack", …)` 注入失败）；`host.subtitles.tracks` 的条目可带 `codec`、`text`、`streamIndex` |
 | 通用能力 | `host.clipboard`（`{ text, images }`，预置 `text` 测 `readText`）；`host.power`（合并后的 `"off"` / `"playing"`）；`host.tools.handle(tool, (args) => ({ stdout, stderr }))`（未注入的工具 `unavailable`；抛 `HostError` 模拟失败），`host.tools.calls`；`host.system.revealed`、`.opened`（播放器收到的 `system.reveal` / `openPath` 路径；用 `host.handle("system.openPath", …)` 等注入失败）；`host.subtitleLoads`（每次 `load` 的 `format`、`title`、`select` 与字节）；`host.system.urls`（`system.openUrl`） |
+| 渲染轮 | `host.videoRender`（`{ owner, values, gpu }`；`gpu: false` 模拟软件渲染，`set` 以 `unsupported` 失败）；`host.setVideoRenderOwner(pluginId \| null)`；`host.failVideoRender("failed" \| "unsupported", message)`（播放器推给拥有者的失败：着色器编译失败、退回软件渲染）；`host.stats.video` 可带 `hwdec`、`transfer`。着色器文件是否存在按真实文件系统检查 |
 | 可移植性轮 | `host.secrets`（`Map`：名称 → 值，可预置）；`host.systemInfo`（`app.system()` 的返回值）；`host.exports`（每次 `jobs.start` 的参数：`kind` 为 `rawPng`、`rawJpeg`、`rawBmp`、`rawMp4` 或对应的 `processed…`，JPEG 带 `quality`） |
 | 上限 | `commands.register` 按播放器的同一套命令上限拒绝（`limit`，§4）：本插件最多 `COMMAND_LIMITS.perPlugin` 条，总量把 `host.coreCommands` 算在内 |
 | 第 4a 轮批次 2 | `host.videoView`（`{ owner, values }`：拥有者插件 id 与播放器持有的值）；`host.setVideoViewOwner(pluginId \| null)`（模拟别的插件先占用显示层，`null` 释放并复位） |
@@ -1262,9 +1309,24 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | `app.system()` §3.5 | 版本、构建、机型、显示器 | 版本、构建、机型、显示器 | 只有 `os`、`arch`、显示器 |
 | 截图导出 §10 | 可用 | 暂不可用（`failed`） | 同 macOS |
 | 生成流 `openStream` | 可用 | 暂不可用（`unsupported`） | 同 macOS |
+| 渲染 §5.4 | GPU 渲染（OpenGL），硬件解码 | 软件渲染，不开硬件解码 | 同 Windows |
+| 渲染选项 §8.2 | 可用（`peakDetect` 不起作用） | `unsupported` | `unsupported` |
 | 绑定 §4.1 | `Ctrl` 也认 ⌘ | `Cmd` 是徽标键 | 同 Windows |
 
 ## 17. 变更说明
+
+### 渲染轮：GPU 渲染、硬件解码、渲染选项（2026-10）
+
+默认行为变化（契约不变）：
+
+- **macOS 默认用 GPU 渲染**（§5.4）：libmpv 用 OpenGL 渲染，硬件解码 `hwdec=auto-safe`，界面固定用 Slint 的 femtovg 渲染器。4K 播放时播放器的 CPU 占用大幅下降（原型实测窗口 81% → 19%，全屏 152% → 14%）。软件渲染保留作后备：无界面模式、`VESTRA_SOFTWARE_RENDER=1`、Windows 与 Linux、OpenGL 初始化失败。`stats().backend` 相应为「libmpv · GPU 渲染（OpenGL）」或「libmpv · 软件渲染」。
+- GPU 渲染下画面按视频区的物理像素渲染，不再按来源分辨率封顶（缩放由 mpv 完成）；截图、导出、滤镜、显示层的行为不变。生成流的帧照旧按自己的尺寸显示，窗口改尺寸时不会被视频画面盖住。
+
+兼容扩展：
+
+- `plugin.video.render()`（§8.2）：HDR 色调映射、用户着色器、运动补偿；单一拥有者，需要 `processing.video`；软件渲染下 `unsupported`。类型 `RenderSettings`、`RenderOptions`；`Scope.video` 多了 `render`。协议新增 `video.render.set { values }`（返回 `{ state }`）、`video.render.release`，以及播放器推给拥有者的事件 `video.render.status`（`{ state: "failed", error }`）。
+- `PlaybackStats.video.hwdec`、`video.transfer`（§5.4）。旧的测试数据可以不写这两个字段，SDK 补 `null`。
+- `TestHost`：`host.videoRender`、`host.setVideoRenderOwner`、`host.failVideoRender`（§14）。
 
 ### 可移植性轮 P1：平台模块、文件与链接由播放器执行、密钥、系统信息、JPEG/BMP 导出（2026-10）
 

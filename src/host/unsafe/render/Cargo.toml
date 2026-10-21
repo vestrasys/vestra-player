@@ -4,7 +4,7 @@ version = "0.0.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 publish = false
-description = "Prototype: libmpv OpenGL rendering shown in Slint windows (vestra-host feature gpu-render)"
+description = "libmpv OpenGL rendering shown in Slint windows (macOS; the host's GPU rendering)"
 
 # One of the crates under src/host/unsafe/: the only place first-party Rust may
 # use `unsafe`. Every block carries a SAFETY comment; the public API is safe.

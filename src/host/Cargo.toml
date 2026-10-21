@@ -33,8 +33,7 @@ members = ["unsafe/pip", "unsafe/render", "unsafe/win32"]
 [features]
 default = ["producer-audio"]
 producer-audio = ["dep:cpal", "dep:rtrb"]
-# Prototypes (r4a §7): code with `unsafe` lives in crates under unsafe/.
-gpu-render = ["dep:vestra-gpu-render"]
+# Prototype (r4a §7.1): code with `unsafe` lives in crates under unsafe/.
 pip = ["dep:vestra-pip"]
 
 [lints.rust]
@@ -47,7 +46,9 @@ objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std
 objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSString", "NSData", "NSGeometry", "NSProcessInfo"] }
 # `plugin.secrets`: generic passwords in the login keychain.
 keyring = { version = "=3.6.3", features = ["apple-native"] }
-vestra-gpu-render = { path = "unsafe/render", optional = true }
+# GPU rendering (reference §5.4): libmpv draws with OpenGL into IOSurfaces
+# that Slint's femtovg renderer shows; the `unsafe` stays in unsafe/render.
+vestra-gpu-render = { path = "unsafe/render" }
 vestra-pip = { path = "unsafe/pip", optional = true }
 
 # The Windows platform module (src/platform/windows.rs). Safe crates first;

@@ -902,3 +902,36 @@ export default async function activate(plugin: Plugin) { // processing.video、p
 ```
 
 另一个插件已经拥有显示层时 `status` 是 `failed`（`conflict`），之后每次 `set` 都会再试；截图与导出不受显示层影响。
+
+## 34. 渲染选项：HDR 色调映射与着色器
+
+```ts
+export default async function activate(plugin: Plugin) { // processing.video、playback.read、commands、ui.osd
+  const render = plugin.video.render();               // 先调用的插件拥有渲染选项
+  const maps = ["auto", "off", "bt.2390", "hable"] as const;
+  let tone: (typeof maps)[number] = "auto";
+  maps.forEach((name, i) =>
+    plugin.commands.add({
+      id: `tone.${i}`, path: ["视频", "HDR 色调映射", name], order: 500 + i,
+      radio: true, checked: () => tone === name,
+      enabled: () => render.status.state !== "failed" || render.status.error.code !== "unsupported",
+      run: () => { tone = name; render.set({ toneMapping: name }); },
+    }));
+  const folder = join(plugin.dataDirectory, "shaders");
+  plugin.commands.add({
+    id: "shaders", path: ["视频", "使用着色器"], order: 510,
+    run: async () => {
+      const files = (await readdir(folder).catch(() => [])).filter((f) => f.endsWith(".glsl"));
+      render.set({ shaders: files.slice(0, 16).map((f) => join(folder, f)) });   // 绝对路径
+    },
+  });
+  render.onStatus((s) => {                            // 软件渲染：unsupported；编译失败：稍后推 failed
+    if (s.state === "failed") void plugin.osd.show(`渲染选项不可用：${s.error.message}`);
+  });
+  const stats = await plugin.player.stats();         // 片源是不是 HDR 由插件判断
+  if (stats.video?.transfer === "pq" || stats.video?.transfer === "hlg")
+    void plugin.osd.show(`HDR 片源（${stats.video.hwdec === "no" ? "软件解码" : stats.video.hwdec}）`);
+}
+```
+
+渲染选项只在 GPU 渲染下有效：软件渲染（无界面、`VESTRA_SOFTWARE_RENDER=1`、Windows）时 `status` 为 `failed`（`unsupported`），菜单据此禁用。着色器路径必须是绝对路径；编译失败时 `set` 先 `applied`，随后推来 `failed`。截图与导出不包含这些效果。
