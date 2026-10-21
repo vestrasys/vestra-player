@@ -250,6 +250,8 @@ interface ViewSettings {
 
 ### 7.1 画中画（H07 / R-W5 / R-H8）
 
+> **状态（2026-10-21）**：协调者建议 A（只保留迷你尺寸，跟踪上游 D），已向用户说明画中画的用途与代价，等用户最终确认。
+
 **问题**：macOS 系统画中画只能经 AVKit 的 `AVPictureInPictureController` + `AVSampleBufferDisplayLayer` 实现，而目前可用的 Rust 绑定（objc2 0.3.2 系列）把这条链路上的每个方法、以及 `CMSampleBuffer` / `CVPixelBuffer` / `CMTimebase` 的构造都标成了 `unsafe`（§1.2）。在「第一方 Rust 禁止 `unsafe`」之下做不出来。
 
 | 选项 | 做法 | 代价 |
@@ -264,6 +266,8 @@ interface ViewSettings {
 需要用户回答的一句话：**画中画选 A（只保留迷你尺寸）、B（允许隔离的 `unsafe` 模块）、C（Swift 辅助进程）还是 D（等上游，期间按 A）？**
 
 ### 7.2 C-GPU（4b：R-H3、R-V10、R-P8；需求 E16、E17、E18 运动补偿）
+
+> **用户裁决（2026-10-21）**：选 A。HDR 色调映射（E16）、自定义着色器（E17）、运动补偿（E18 的后半）既然要开 `unsafe` 就放弃，4b 轮取消。倍帧（frameBlend）照 4a 做。
 
 **问题**：GPU 渲染只能走 libmpv 的 OpenGL 渲染接口（mpv 0.41 没有 Metal / Vulkan 嵌入接口）。rsmpv 的 `new_opengl` 有意设计为 `unsafe fn`，Slint 接入外部 GL 纹理（`BorrowedOpenGLTextureBuilder`）也是 `unsafe fn`，GL 调用本身同样需要 `unsafe`（§1.3）。
 
