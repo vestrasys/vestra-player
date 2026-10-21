@@ -655,8 +655,8 @@ interface SidebarSlot extends PanelSlot {
 }
 interface SlotState {
   preferred: boolean;   // 用户的选择（菜单勾选）
-  effective: boolean;   // 现在是否显示（附着或在浮动窗口里）
-  reason: "userHidden" | "space" | "fullscreen" | "idle" | null;
+  effective: boolean;   // 现在是否看得见（附着、全屏弹出层弹出，或在浮动窗口里）
+  reason: "userHidden" | "space" | "fullscreen" | "idle" | null; // "fullscreen"：全屏覆盖层当前收起
   detached: boolean;    // 侧栏为浮动窗口；底栏总为 false
 }
 ```
@@ -664,8 +664,10 @@ interface SlotState {
 - 面板文件导出**一个 component 和一个 global**。属性和回调声明在 global 上（桥接对象），component 负责布局。名字由 SDK 从文件推断；文件导出多个时用 `options` 指定。`title` 是侧栏分离后浮动窗口的标题。
 - `panels.bottom` / `panels.sidebar` 不属于挂载者：任何插件都能读取和切换（例如底栏按钮开关播放列表）。位置为空时 `setVisible` 等以 `missing` 失败；对底栏 `setDetached` 是 `invalid`。没有 `events` 时 `state` 只在本插件自己改动后刷新。侧栏的显示、宽度、分离状态与浮动窗口位置由播放器跨启动记住。
 - 侧栏占视频右侧全高，用户可拖动分隔条改宽度（侧栏至少 317、视频至少 318）；窗口窄到放不下时先压缩视频，再不够才隐藏（`reason: "space"`，偏好不变）。分离后浮动窗口默认 300×408、最小 300×250，显示同一个面板组件，插件的属性和回调不变；点浮动窗口的关闭按钮等于 `setVisible(false)`。
+- **全屏时的附着侧栏**（交互对齐 G-01）：不挤压视频，而是以覆盖层盖在视频右侧（全高，宽为用户拖出的宽度、至少留 318 给视频）。进入全屏时**收起**（`effective: false`，`reason: "fullscreen"`）；偏好为显示时，指针移到屏幕右边缘 4px 以内**弹出**（向左滑出 150ms，`effective: true`，`reason: null`），弹出期间底栏收窄到弹出层左边。指针离开弹出层（回到它左边的视频或底栏上）500ms 后收起；没有锁时 3 秒无活动也收起。全屏中 `setVisible(true)`（F6、底栏按钮）立即弹出，保持到指针进入后再离开或 3 秒无活动；`setVisible(false)` 立即收起。偏好为隐藏时右边缘不弹出。弹出不抢键盘焦点；收起时焦点交回视频区。浮动侧栏不受影响。是否处于覆盖形态由插件按 `window.state.fullscreen && !state.detached` 自己判断；`reason: "fullscreen"` 表示「覆盖层收起，右边缘可以唤出」，不再表示「全屏时不可用」，所以按偏好画开关按钮的插件把它当作「开」。
 - `showMenu`：在面板当前所在的窗口弹出单层菜单，列出本插件的命令（`null` 为分隔线），样式、勾选、快捷键文字与主菜单相同；选择一项等于执行该命令。`at` 是窗口坐标，在 Slint 里取 `self.absolute-position.x / 1px + self.mouse-x / 1px`（y 同理）。命令不属于本插件以 `missing` 失败，面板未显示以 `unavailable` 失败，最多 32 项。
-- `setInteraction`：用户正在操作面板（输入框聚焦、拖动、弹出菜单打开）时设为 `true`，防止底栏自动隐藏。合并写入，最后写入生效。
+- `setInteraction`：用户正在操作面板（输入框聚焦、拖动、弹出菜单打开）时设为 `true`，防止底栏自动隐藏、全屏侧栏弹出层收起。合并写入，最后写入生效。
+- 指针停在底栏上或全屏侧栏弹出层上时，播放器自己把该面板视为锁住（交互对齐 G-04：不因空闲隐藏，指针也不隐藏），在其上移动也算活动；这个锁由播放器维护，插件的 `setInteraction` 写入不会清掉它。底栏内容画到槽位上方视频区的部分（负 `y`）不算在内。
 - 面板转发 global 上的所有回调，没有「先绑定再显示」的限制。
 - 底栏面板的内容可以画到槽位上方的视频区（负 `y`），宿主不裁切；侧栏与浮动窗口在其上层。进度条悬停时间提示这类内容可以直接画在底栏组件里（宿主的组合测试保证底栏外层不带 `clip`）。
 - 每个插件至多挂载一个面板（任一位置）。
@@ -1173,6 +1175,7 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 | 通用能力 | `host.clipboard`（`{ text, images }`，预置 `text` 测 `readText`）；`host.power`（合并后的 `"off"` / `"playing"`）；`host.tools.handle(tool, (args) => ({ stdout, stderr }))`（未注入的工具 `unavailable`；抛 `HostError` 模拟失败），`host.tools.calls`；`host.system.revealed`、`.opened`（播放器收到的 `system.reveal` / `openPath` 路径；用 `host.handle("system.openPath", …)` 等注入失败）；`host.subtitleLoads`（每次 `load` 的 `format`、`title`、`select` 与字节）；`host.system.urls`（`system.openUrl`） |
 | 渲染轮 | `host.videoRender`（`{ owner, values, gpu }`；`gpu: false` 模拟软件渲染，`set` 以 `unsupported` 失败）；`host.setVideoRenderOwner(pluginId \| null)`；`host.failVideoRender("failed" \| "unsupported", message)`（播放器推给拥有者的失败：着色器编译失败、退回软件渲染）；`host.stats.video` 可带 `hwdec`、`transfer`。着色器文件是否存在按真实文件系统检查；`host.producerTransport = "tcp"`（`openStream` 走回环 TCP 加令牌，如 Windows；`producer.admitted` 表示令牌正确） |
 | 可移植性轮 | `host.secrets`（`Map`：名称 → 值，可预置）；`host.systemInfo`（`app.system()` 的返回值）；`host.exports`（每次 `jobs.start` 的参数：`kind` 为 `rawPng`、`rawJpeg`、`rawBmp`、`rawMp4` 或对应的 `processed…`，JPEG 带 `quality`） |
+| 交互对齐轮 | `host.setMainWindow({ fullscreen })` 同播放器一样把附着的侧栏收起（`effective: false`、`reason: "fullscreen"`），退出全屏时恢复；`host.popSidebar(popped)` 模拟指针到右边缘弹出 / 离开后收起（只在全屏、偏好为显示、未分离时有效）；全屏中 `setVisible(true)` 即弹出 |
 | 上限 | `commands.register` 按播放器的同一套命令上限拒绝（`limit`，§4）：本插件最多 `COMMAND_LIMITS.perPlugin` 条，总量把 `host.coreCommands` 算在内 |
 | 第 4a 轮批次 2 | `host.videoView`（`{ owner, values }`：拥有者插件 id 与播放器持有的值）；`host.setVideoViewOwner(pluginId \| null)`（模拟别的插件先占用显示层，`null` 释放并复位） |
 | 第 4a 轮批次 1 | `frameBlend` 与播放器同一套校验，「全部插件最多一个」按本插件的全部视频滤镜计算（TestHost 只模拟一个插件） |
@@ -1325,6 +1328,13 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | 绑定 §4.1 | `Ctrl` 也认 ⌘ | `Cmd` 是徽标键 | 同 Windows |
 
 ## 17. 变更说明
+
+### 交互对齐轮 A 线：核心行为（2026-10）
+
+依据[交互对齐整改文档](../product/interaction-alignment.md)附录 C 第 1 轮。签名都不变，只改行为与语义；改了语义的条目写明受影响的插件。
+
+- **全屏侧栏弹出层**（G-01，§6.3）：全屏时附着的侧栏不再「全屏时不可用」，而是收起在右边缘、指针移过去时弹出。`SlotState` 签名不变，语义变化：`reason: "fullscreen"` 改为「全屏覆盖层当前收起」；弹出时 `effective: true`、`reason: null`。全屏中 `setVisible(true)` 立即弹出。受影响：按 `preferred` / `effective` 画侧栏开关按钮的插件（playback 的列表按钮，见整改文档 G-18：`reason === "fullscreen"` 时按「开」显示）；playlist 的 `setInteraction` 在全屏下开始起作用（锁住弹出层），不用改。
+- **指针在面板上时不隐藏**（G-04，§6.3）：指针停在底栏或全屏侧栏弹出层上时视为锁住，在其上移动算活动。插件不用改；以前为此自己在悬停时调 `setInteraction({ focused: true })` 的写法可以删掉。
 
 ### 渲染轮：Windows 缺口（2026-10）
 

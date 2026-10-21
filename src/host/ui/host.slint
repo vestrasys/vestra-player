@@ -58,6 +58,17 @@ export component HostWindow inherits Window {
     callback sidebar-resized(float);
     callback close-menu();
     close-menu => { canvas.focus(); }
+    // G-01: the fullscreen sidebar collapsed; keys go back to the video.
+    callback focus-video();
+    focus-video => { canvas.focus(); }
+    // G-04 / G-01: where the pointer is, sampled by the host every tick:
+    // over the video, over the bottom bar, over the fullscreen sidebar.
+    out property <bool> video-hover: mouse.has-hover;
+    in-out property <bool> bottom-hover: false;
+    in-out property <bool> sidebar-hover: false;
+    // The fullscreen sidebar overlay's width: the user's width, leaving at
+    // least the minimum video width (318) uncovered.
+    out property <float> sidebar-pop-width: max(0, min(root.sidebar-width, root.width / 1px - 318));
     // Keys reach the binding table only when something in the window has focus.
     init => { canvas.focus(); }
     // VESTRA-MOUNT-PROPERTIES
@@ -173,6 +184,7 @@ export component HostWindow inherits Window {
             }
             // VESTRA-MOUNT-SIDEBAR
         }
+        // VESTRA-MOUNT-OVERLAY
     }
     if root.menu-open: Rectangle {
         width: root.width; height: root.height;
