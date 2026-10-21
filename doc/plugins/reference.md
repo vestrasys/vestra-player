@@ -2,7 +2,7 @@
 
 本文是插件 API 的权威规格：每个模块、方法的签名、参数、返回值、错误和使用约束。入门请先读 [入门教程](tutorial.md)，按功能找写法看 [插件示例](examples.md)，设计取舍见 [SDK 设计说明](../architecture/sdk-design.md)。
 
-类型定义的源头是 `src/packages/sdk/src/plugin/types.ts`（npm 包 `@vestra-player/sdk`）。本文与它不一致时以代码为准，并应修正本文。
+类型定义的源头是 SDK 仓库 [vestra-player-sdk](https://github.com/vestrasys/vestra-player-sdk) 的 `src/plugin/types.ts`（npm 包 `@vestra-player/sdk`；本仓库安装在 `src/node_modules/@vestra-player/sdk/dist/plugin/types.d.ts`）。本文与它不一致时以代码为准，并应修正本文。
 
 - 协议版本：`vestra/1`
 - 运行环境：每个插件一个 Node ≥ 22.18 进程，可以使用 Node 标准库、文件系统、网络和 npm 依赖。插件是受信任的，manifest 能力是契约声明，不是安全沙箱。

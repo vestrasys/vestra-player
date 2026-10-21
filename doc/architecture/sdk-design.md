@@ -2,7 +2,7 @@
 
 插件 API（SDK v2）为什么这样设计：句柄、生命周期、更新轮、协议细节如何被 SDK 吸收、条件提交、错误模型。给 API 维护者和想深入理解的插件作者看；接口的精确定义见 [API 参考](../plugins/reference.md)，写法见 [插件示例](../plugins/examples.md)。
 
-代码：npm 包 `@vestra-player/sdk`（`src/packages/sdk/`）。公共类型在 `src/plugin/types.ts`，由包入口 `src/index.ts` 导出；测试宿主 `src/plugin/testing.ts`（`@vestra-player/sdk/testing`）；`createPlugin` 在 `@vestra-player/sdk/runtime`（仅供播放器）；单元测试 `test/`；构建工具 `bin/vestra-plugin.mjs`。运行器 `src/runtime/runner.ts`。最短的完整插件：`src/plugins/video/`。
+代码：npm 包 `@vestra-player/sdk`，独立仓库 [vestra-player-sdk](https://github.com/vestrasys/vestra-player-sdk)。以下 SDK 路径相对于该仓库：公共类型在 `src/plugin/types.ts`，由包入口 `src/index.ts` 导出；测试宿主 `src/plugin/testing.ts`（`@vestra-player/sdk/testing`）；`createPlugin` 在 `@vestra-player/sdk/runtime`（仅供播放器）；单元测试 `test/`；构建工具 `bin/vestra-plugin.mjs`。播放器仓库里：运行器 `src/runtime/runner.ts`，最短的完整插件 `src/plugins/video/`。
 
 ## 1. 一句话
 

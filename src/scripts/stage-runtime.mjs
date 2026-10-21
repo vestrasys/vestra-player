@@ -10,21 +10,27 @@
  *       package.json                         exports map (runner and workshop resolve through it)
  *       dist/**.js, dist/**.d.ts             SDK implementation; the .d.ts serve the workshop
  *
- * The SDK has no run-time dependencies (Node built-ins only), so nothing is
- * installed. Run `npm run sdk:build` first.
+ * The SDK files are copied from the installed package
+ * (node_modules/@vestra-player/sdk, the version src/package.json pins). It
+ * has no run-time dependencies (Node built-ins only), so nothing is installed.
  *
  *   node scripts/stage-runtime.mjs <destination>/runtime
  */
 import { existsSync } from "node:fs";
 import { cp, mkdir, rm, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join, resolve } from "node:path";
 
 const source = resolve(import.meta.dirname, "..");
-const sdk = join(source, "packages/sdk");
+const sdk = dirname(
+  createRequire(join(source, "package.json")).resolve(
+    "@vestra-player/sdk/package.json",
+  ),
+);
 
 export async function stageRuntime(destination) {
   if (!existsSync(join(sdk, "dist/player-runtime.js")))
-    throw new Error("SDK not built: run npm run sdk:build");
+    throw new Error(`SDK package without dist/ at ${sdk}: run npm ci`);
   await rm(destination, { recursive: true, force: true });
   await mkdir(destination, { recursive: true });
   await cp(join(source, "runtime/runner.ts"), join(destination, "runner.ts"));

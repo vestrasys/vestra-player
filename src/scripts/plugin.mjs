@@ -45,7 +45,7 @@ const directories = names.map((name) =>
   name.includes("/") ? resolve(source, name) : join(pluginsRoot, name),
 );
 
-// The CLI as the workspace links it (node_modules/@vestra-player/sdk).
+// The CLI from the installed SDK package (node_modules/@vestra-player/sdk).
 const sdkPackage = createRequire(join(source, "package.json")).resolve(
   "@vestra-player/sdk/package.json",
 );

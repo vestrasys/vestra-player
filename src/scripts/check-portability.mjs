@@ -16,8 +16,8 @@
  *    partial check, never as a pass.
  *    Also lists `cfg(unix)` / `cfg(target_os)` code outside the host's
  *    platform module (notes, not failures).
- * 2. Scan: string literals in src/plugins, the SDK package (src/packages/sdk:
- *    src, bin, scripts) and src/runtime (without
+ * 2. Scan: string literals in src/plugins, the installed SDK package
+ *    (node_modules/@vestra-player/sdk: dist, bin) and src/runtime (without
  *    tests, dist, vendor, node_modules) that name system command paths or
  *    macOS-only commands, and `process.platform` branches.
  *
@@ -344,15 +344,14 @@ function scanFile(path, text) {
 
 async function scan() {
   console.log(
-    "\n== Scan: system commands in src/plugins, src/packages/sdk, src/runtime",
+    "\n== Scan: system commands in src/plugins, the installed SDK package, src/runtime",
   );
   let commands = 0;
   let branches = 0;
   for (const root of [
     "plugins",
-    "packages/sdk/src",
-    "packages/sdk/bin",
-    "packages/sdk/scripts",
+    "node_modules/@vestra-player/sdk/dist",
+    "node_modules/@vestra-player/sdk/bin",
     "runtime",
   ]) {
     for (const path of (await files(join(source, root))).sort()) {
