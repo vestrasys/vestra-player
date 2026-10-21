@@ -45,7 +45,7 @@ Vestra 要同时支持 macOS 和 Windows，以后可能还有 Linux。
 
 ## 1.6 SDK 在独立仓库（2026-10-21）
 
-插件 SDK `@vestra-player/sdk` 的源码只在 [vestra-player-sdk](https://github.com/vestrasys/vestra-player-sdk) 仓库。播放器在 `src/package.json` 里锁定一个版本（npm 组织就绪前是 git 标签：`git+https://github.com/vestrasys/vestra-player-sdk.git#v<版本>`），`npm ci` 装到 `src/node_modules/@vestra-player/sdk`；runner、插件、示例、工坊、打包布局都用这份安装好的包。本仓库没有 SDK 源码，也不要再复制一份进来。
+插件 SDK `@vestra-player/sdk` 的源码只在 [vestra-player-sdk](https://github.com/vestrasys/vestra-player-sdk) 仓库。播放器在 `src/package.json` 里依赖 npm 上的版本（`"@vestra-player/sdk": "^1.0.0"`，由 `package-lock.json` 锁定），`npm ci` 装到 `src/node_modules/@vestra-player/sdk`；runner、插件、示例、工坊、打包布局都用这份安装好的包。本仓库没有 SDK 源码，也不要再复制一份进来。
 
 **改 SDK（类型、TestHost、CLI、wire 客户端、`./runtime`）**
 
