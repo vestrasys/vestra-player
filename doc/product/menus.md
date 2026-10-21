@@ -2,11 +2,11 @@
 
 > 本表记录当前实现，对应[界面整改](ui-alignment.md) §6.2 的目标结构。
 
-当前产品的右键菜单树，由 19 个插件各自注册的命令、宿主的 14 条核心动作和宿主自己的「全屏」「退出」合并而成（2026-10-21 从 main fafa40d 的插件代码实际注册结果整理）。菜单按用户领域组织，不按插件组织。新增或移动入口前对照本表，确认没有重复入口、没有散放到错误领域（[交互要求 §1](interaction-requirements.md#1-菜单按用户领域组织)）。
+当前产品的右键菜单树，由 19 个插件各自注册的命令（其中 `youtube`、`bilibili` 已迁到插件仓库、经商城安装，装上后才有它们的两项）、宿主的 14 条核心动作和宿主自己的「全屏」「退出」合并而成（2026-10-21 从 main fafa40d 的插件代码实际注册结果整理）。菜单按用户领域组织，不按插件组织。新增或移动入口前对照本表，确认没有重复入口、没有散放到错误领域（[交互要求 §1](interaction-requirements.md#1-菜单按用户领域组织)）。
 
 ## 菜单树
 
-2026-10-21，基线 main fafa40d。由 `OUT=<file> node --test doc/process/rounds/menus-snapshot.test.ts` 导出的快照整理（[分配表](../process/rounds/2026-10-plugin-ui.md) §3；脚本默认列表覆盖 `src/plugins` 下全部 19 个插件）；宿主的「全屏」「退出全屏」「退出」在 `src/host/src/main.rs`（`register_host_commands`），不在快照里。勾选、单选、初始禁用状态取自同一测试宿主里各命令的 `state`。
+2026-10-21，基线 main fafa40d。由 `OUT=<file> node --test doc/process/rounds/menus-snapshot.test.ts` 导出的快照整理（[分配表](../process/rounds/2026-10-plugin-ui.md) §3；当时脚本默认列表覆盖 `src/plugins` 下全部 19 个插件；`youtube`、`bilibili` 迁出后默认列表为其余 17 个）；宿主的「全屏」「退出全屏」「退出」在 `src/host/src/main.rs`（`register_host_commands`），不在快照里。勾选、单选、初始禁用状态取自同一测试宿主里各命令的 `state`。
 
 - 顺序按声明的 `order` 升序；同一 `order` 再按插件 id、注册先后。子菜单取其中最小的 `order`，分组（`group`）取其中第一项的分组。
 - 「插件」列：「核心」是宿主的核心动作（`host/<id>`），「宿主」是宿主自己的命令。
@@ -19,8 +19,8 @@
 | 打开文件… | playback | Ctrl+O、F3 | |
 | 打开 ▶ 打开链接… | playback | Ctrl+U | |
 | 打开 ▶ 打开文件夹… | playlist | F2 | |
-| 打开 ▶ YouTube 视频… | youtube | | |
-| 打开 ▶ Bilibili 视频… | bilibili | | |
+| 打开 ▶ YouTube 视频… | youtube | | 插件仓库的官方插件，安装后出现 |
+| 打开 ▶ Bilibili 视频… | bilibili | | 插件仓库的官方插件，安装后出现 |
 | 打开 ▶ 打开字幕… | subtitles | Alt+O | |
 | 打开 ▶ 载入外部音频… | audio | | 没有正在播放的文件时禁用 |
 | 打开 ▶ 添加次字幕… | subtitles | | 没有可播放的媒体时禁用 |

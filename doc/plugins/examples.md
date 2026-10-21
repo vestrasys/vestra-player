@@ -319,6 +319,8 @@ export default async function activate(plugin: Plugin) {
 
 ## 9. 网络媒体：解析器、打开、等待就绪、取消（Bilibili / YouTube）
 
+完整代码在插件仓库 [vestra-player-plugins](https://github.com/vestrasys/vestra-player-plugins) 的 `plugins/bilibili/`、`plugins/youtube/`。
+
 ```ts
 import type { Plugin } from "@vestra-player/sdk";
 import { extract } from "./extractor.ts";

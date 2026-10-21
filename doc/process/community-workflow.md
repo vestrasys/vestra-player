@@ -188,6 +188,7 @@ SDK 在独立仓库（§1.6）：P1、P4 的 SDK 部分在 SDK 仓库的分支�
 
 在 `src/` 下：`npm run check`、`npm run format:check`、`npm run boundaries`、`npm run test:sdk`、`npm run plugins:build`、每个插件 `npm run plugin -- test <名字>`。
 在 `src/host/` 下：`cargo fmt --check`、`cargo clippy --locked --all-targets -- -D warnings`、`cargo test --locked`。
+改了插件仓库里的插件（`youtube`、`bilibili`）或可能影响它们的公共 API 时，另在插件仓库下：`npm ci`、`npm run check`、`npm run format:check`、`npm run boundaries`、`npm run portability`、`npm run build`、`npm test`（与它的 CI 相同）。
 改了 SDK 时，另在 SDK 仓库下：`npm ci`、`npm run check`、`npm run format:check`、`npm test`、`npm pack --dry-run`（与它的 CI 相同）。
 
 ### 6.2 真实 GUI 测试（协调者）
@@ -203,7 +204,7 @@ SDK 在独立仓库（§1.6）：P1、P4 的 SDK 部分在 SDK 仓库的分支�
 | 字幕 | 载入外部 SRT、中英混排显示、轨道选择、样式与撤销 |
 | 截图导出 | 产物与源帧逐像素一致 |
 | NES | 打开 ROM 出画面，停止后清屏 |
-| 网络视频 | 公开视频能播放 |
+| 网络视频 | 公开视频能播放（`youtube`、`bilibili` 在插件仓库：用 `--plugin <插件仓库检出>/plugins/<名字>` 加载，检出里先 `npm ci`） |
 | 插件工坊 | 生成 → 校验 → 安装 → 生成的插件可用 |
 | 停用 | 停用一个处理插件只撤销它自己的效果，其它插件效果保留（目前没有对外的停用入口，需要测试插件或宿主测试驱动） |
 
