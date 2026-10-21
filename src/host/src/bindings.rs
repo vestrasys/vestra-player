@@ -280,14 +280,21 @@ fn from_physical(physical: &Physical, mut mods: Mods) -> Option<Input> {
         base.to_string()
     } else if mods.shift {
         mods.shift = false;
-        match us_shifted(base)? {
-            '+' => "Plus".into(),
-            c => c.to_string(),
-        }
+        symbol_name(us_shifted(base)?)
     } else {
-        base.to_string()
+        // Layouts where `+` has its own unshifted key (German ⌥+).
+        symbol_name(base)
     };
     Some(Input { mods, name })
+}
+
+/// A digit or symbol as a key name: `+` is spelled `Plus` everywhere.
+fn symbol_name(c: char) -> String {
+    if c == '+' {
+        "Plus".into()
+    } else {
+        c.to_string()
+    }
 }
 
 fn modifier_key(code: &str) -> bool {
@@ -360,11 +367,7 @@ pub fn typed_with_option(
             shift: false,
             ..mods
         },
-        name: if typed == '+' {
-            "Plus".into()
-        } else {
-            typed.to_string()
-        },
+        name: symbol_name(typed),
     })
 }
 
@@ -1117,6 +1120,28 @@ mod tests {
         );
         // A layout symbol without a US position keeps its own character.
         assert_eq!(press("•", "Backquote", '^', alt).as_deref(), Some("Alt+^"));
+        // `+` is always Plus. German has an unshifted `+` key (US `]`
+        // position): ⌥+ types ± and resolves physically to Alt+Plus, as
+        // the plain key gives Plus. US ⌥⇧= gets there via the shift table.
+        assert_eq!(
+            press("±", "BracketRight", '+', alt).as_deref(),
+            Some("Alt+Plus")
+        );
+        assert_eq!(
+            press("+", "BracketRight", '+', Mods::default()).as_deref(),
+            Some("Plus")
+        );
+        assert_eq!(
+            press("±", "Equal", '=', alt_shift).as_deref(),
+            Some("Alt+Plus")
+        );
+        let ctrl_alt = Mods { ctrl: true, ..alt };
+        assert_eq!(
+            press("±", "BracketRight", '+', ctrl_alt).as_deref(),
+            Some("Ctrl+Alt+Plus")
+        );
+        // Every result is a valid binding string.
+        assert!(parse("Alt+Plus").is_ok());
     }
 
     #[test]
