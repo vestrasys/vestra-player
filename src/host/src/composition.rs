@@ -203,7 +203,7 @@ pub fn shell_source(specs: &[CompileSpec]) -> Result<String> {
         .map(|spec| {
             format!(
                 "Rectangle {{ height: root.host-fullscreen || !root.bottom-visible ? 0px : bottom-keys.height; vertical-stretch: 0; \
-                 bottom-keys := FocusScope {{ visible: root.bottom-visible; \
+                 bottom-keys := FocusScope {{ visible: root.bottom-visible; x: 0px; \
                  width: parent.width - (root.host-fullscreen && root.sidebar-popped ? root.sidebar-pop-width * 1px : 0px); \
                  height: min(bottom-content.max-height, max(bottom-content.min-height, bottom-content.preferred-height)); \
                  y: root.host-fullscreen ? -self.height : 0px; {} \

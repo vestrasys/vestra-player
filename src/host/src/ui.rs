@@ -340,6 +340,62 @@ export component W inherits Window {
         assert_eq!((count("backs"), count("dismissals")), (2., 1.));
     }
 
+    /// G-01: with the fullscreen sidebar popped out, the bottom bar spans from
+    /// the left edge to the overlay's left edge. (It used to be centred: a
+    /// narrower element without `x` in a plain parent is centred by Slint.)
+    #[test]
+    fn popped_sidebar_narrows_the_fullscreen_bar_from_the_left_edge() {
+        use crate::composition::{CompileSpec, Slot};
+        headless();
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
+        let specs = [
+            CompileSpec {
+                owner: 10,
+                file: base.join("bar.slint"),
+                component: "SourceBar".into(),
+                global: Some("Bridge".into()),
+                slot: Slot::Bottom,
+            },
+            CompileSpec {
+                owner: 20,
+                file: base.join("sidebar.slint"),
+                component: "RowsSidebar".into(),
+                global: Some("Bridge".into()),
+                slot: Slot::Sidebar,
+            },
+        ];
+        let source = crate::composition::shell_source(&specs).unwrap();
+        let marker = "    callback focus-video();\n";
+        assert!(source.contains(marker));
+        let probes = "    callback focus-video();\n\
+            out property <length> t-bar-x: bottom-keys.absolute-position.x;\n\
+            out property <length> t-bar-w: bottom-keys.width;\n";
+        let source = source.replacen(marker, probes, 1);
+        let shell = crate::composition::build(source, "HostWindow")
+            .unwrap()
+            .create()
+            .unwrap();
+        shell
+            .window()
+            .set_size(slint::LogicalSize::new(1470., 956.));
+        let set = |name: &str, value: slint_interpreter::Value| {
+            shell.set_property(name, value).unwrap();
+        };
+        let read = |name: &str| match shell.get_property(name).unwrap() {
+            slint_interpreter::Value::Number(n) => n,
+            other => panic!("{name}: {other:?}"),
+        };
+        set("host-fullscreen", true.into());
+        set("sidebar-visible", false.into());
+        set("sidebar-overlay", true.into());
+        set("sidebar-width", 317.0.into());
+        set("sidebar-popped", false.into());
+        assert_eq!((read("t-bar-x"), read("t-bar-w")), (0., 1470.));
+        set("sidebar-popped", true.into());
+        assert_eq!(read("sidebar-pop-width"), 317.);
+        assert_eq!((read("t-bar-x"), read("t-bar-w")), (0., 1470. - 317.));
+    }
+
     /// G-10: the OSD and information block sizes follow the video area.
     #[test]
     fn osd_font_follows_the_video_area_height() {
