@@ -825,6 +825,39 @@ type FilterStatus =
 - `frameBlend` 不论写在哪个插件、链里哪个位置，播放器都把它放在整条视频图的**最后**（所有插件的链之后），所以降噪、反交错这类时间域滤镜仍在原帧率上工作。帧率只能改一次：第二个 `frameBlend`（同一插件的另一个滤镜，或别的插件）以 `invalid` 失败。打开后 `stats().video.fps`（`estimated-vf-fps`）读到的是输出帧率（如 48）。CPU 成本高（1080p 24 → 60 fps 约多一个核），插件应按 `stats()` 的原帧率决定是否加，并在丢帧时提示。
 - 「含效果」截图与导出（§10）使用同一条链，与播放画面一致；含 `frameBlend` 时导出视频的帧率随之改变。
 
+### 8.1 显示层 `plugin.video.view()`
+
+需要 `processing.video`（状态跟随来源，所以同时要 `playback.read`）。显示层决定视频在视频区里怎么摆：宽高比、填充方式、缩放与平移。它是播放器的显示属性，**不改变画面本身**：截图与导出（§10）不受影响，滤镜（§8）也看不到它。
+
+```ts
+plugin.video.view(): VideoView;
+interface VideoView extends Disposable {
+  set(value: Partial<ViewSettings>): void;   // 合并写入，最后写入生效；失败交 onError 与 status
+  readonly status: FilterStatus;             // 与滤镜相同的四态
+  onStatus(listener: (s: FilterStatus) => void): Disposable;
+}
+interface ViewSettings {
+  aspect: number | null;              // 显示宽高比 0.25–4；null = 按来源
+  fit: "keep" | "stretch" | "fill";   // 保持比例（黑边）/ 拉伸填满 / 填满并裁切
+  zoom: number;                       // 0.25–4，1 = 适应视频区
+  panX: number; panY: number;         // −1–1，单位为显示出的视频宽 / 高
+}
+```
+
+| 字段 | mpv 属性 |
+| --- | --- |
+| `aspect` | `video-aspect-override`（`null` 写 `-1`） |
+| `fit` | `keep`：`keepaspect=yes`、`panscan=0`；`stretch`：`keepaspect=no`、`panscan=0`；`fill`：`keepaspect=yes`、`panscan=1` |
+| `zoom` | `video-zoom = log2(zoom)` |
+| `panX` / `panY` | `video-pan-x` / `video-pan-y` |
+
+- **单一拥有者**：第一个调用 `view()` 的插件取得显示层（调用时就向播放器登记）。别的插件的 `view()` 照常返回句柄，但 `status` 为 `failed`（`conflict`）并交 `onError`；之后每次 `set` 都会再试一次，拥有者 `dispose` 或停用后就能取得。同一插件第二次调用 `view()` 抛错（先 `dispose` 旧的）。
+- 默认值 `{ aspect: null, fit: "keep", zoom: 1, panX: 0, panY: 0 }`。拥有者 `dispose` 或停用时，播放器把五项写回默认值。
+- 范围外的值、未知字段：`set` 立即以 `invalid` 进入 `failed` 并交 `onError`，请求不发出，已应用的值不变。
+- 没有就绪的媒体时为 `waiting`：值照样写入播放器（这些属性跨来源保持），媒体就绪后变为 `applied`。播放器拒绝写入时为 `failed`（`backend`），并恢复写入前的值。
+- **换来源时保留当前值**（与 mpv 相同）。需要「换片源时复位」的插件自己在 `player.state.sourceId` 变化时 `set({ zoom: 1, panX: 0, panY: 0 })`。
+- 渲染尺寸按视频区确定（§5.4），所以「不保持宽高比」「填满」在任何窗口比例下都正确；`zoom > 1` 时渲染尺寸随之放宽（放大后不是放大的低分辨率缓冲）。
+
 ## 9. 字幕 `plugin.subtitles`
 
 读取需要 `subtitles.read`，修改需要 `subtitles.control`。
@@ -1049,6 +1082,7 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 | 断言 | `host.window(id).props`（kebab-case 名）、`.visible`；`host.command(id).state`、`.declaration`；`host.conflicts`（`[绑定, 赢家, ...被压下]`）；`host.layout.bottom` / `.sidebar`（可直接改后 `host.emit("window.state", {})` 模拟别处的变化）；`host.osd`（显示过的提示）、`host.osdPanel`；`host.sequence`（提供者的标志）；`host.menus`（`showMenu` 记录）；`host.sent(method)`；`host.source`；`host.processing`、`host.subtitles`、`host.snapshots`、`host.jobs`、`host.producers` |
 | 模拟数据 | `host.stats`（`player.stats()` 的返回值，第 2 轮新增字段可省略，SDK 补 `null`）；`host.dataDirectory`（`plugin.dataDirectory`，`storage.json` 直接读写其中的真实文件）；`host.setSource({ audioTracks })`（`addAudioTrack` / `selectAudioTrack` 有默认处理，可用 `host.handle("audio.addTrack" \| "audio.selectTrack", …)` 注入失败）；`host.subtitles.tracks` 的条目可带 `codec`、`text`、`streamIndex` |
 | 通用能力 | `host.clipboard`（`{ text, images }`，预置 `text` 测 `readText`）；`host.power`（合并后的 `"off"` / `"playing"`）；`host.tools.handle(tool, (args) => ({ stdout, stderr }))`（未注入的工具 `unavailable`；抛 `HostError` 模拟失败），`host.tools.calls`；`host.system.revealed`、`.opened`；`host.subtitleLoads`（每次 `load` 的 `format`、`title`、`select` 与字节）；`host.system.urls`（`system.openUrl`） |
+| 第 4a 轮批次 2 | `host.videoView`（`{ owner, values }`：拥有者插件 id 与播放器持有的值）；`host.setVideoViewOwner(pluginId \| null)`（模拟别的插件先占用显示层，`null` 释放并复位） |
 | 第 4a 轮批次 1 | `frameBlend` 与播放器同一套校验，「全部插件最多一个」按本插件的全部视频滤镜计算（TestHost 只模拟一个插件） |
 | 第 3b 轮批次 2 | `host.drop(paths, options)`、`host.dropProviders`、`host.panelDrops`（§6.7）；`host.appearance`、`host.setAppearance(theme)`（§6.8）；`host.settings`、`host.settingsPage(id)`（§6.9） |
 | 第 3b 轮批次 1 | `host.timeline.layers` / `.marks`、`host.setTimelineLayer(pluginId, marks)`（§5.6）；`host.images`、`host.imagePath(value)`（§6.1）；`host.backdrop`、`host.setBackdropEffective(bool)`（§6.3） |
@@ -1279,4 +1313,12 @@ await plugin.player.setStepSeek({ seconds: settings.value.step }); // 第 1 档�
 - **渲染尺寸跟随视频区**（C-SIZE，§5.4）：画面不再固定按 960×540 渲染后放大，而是按视频区物理像素、以来源分辨率封顶渲染。所有插件的画面都更清楚；全屏与高分辨率来源下宿主 CPU 占用相应升高（1080p 来源在 Retina 全屏下约多 15 个百分点，4K 来源约多 50 个百分点）。截图与导出走离线 FFmpeg，不受影响。
 - **渲染节奏**：新帧一到就交给界面，不再按 16 ms 轮询，48 / 60 fps 输出不再被跳帧或重复。
 - 生成流（`producer`）的帧照旧按自己的尺寸显示。
-- 画中画（`window.setPictureInPicture`、`window.state.pictureInPicture`）与 GPU 渲染（`video.render()`、`PlaybackStats.video.transfer`）在 Safe Rust 下不可行，等用户裁决（第 4a 轮任务单 §7），在此之前不发布。
+- 画中画（`window.setPictureInPicture`、`window.state.pictureInPicture`）与 GPU 渲染（`video.render()`、`PlaybackStats.video.transfer`）需要 `unsafe`，用户裁决先在隔离子包里做原型再决定（第 4a 轮任务单 §7），在此之前不发布。
+
+### 第 4a 轮批次 2：显示层（2026-10）
+
+兼容扩展：
+
+- `plugin.video.view()`（§8.1）：宽高比、填充方式、缩放、平移；单一拥有者，需要 `processing.video`。
+- `Scope.video` 多了 `view`；`ViewSettings`、`VideoView` 类型。
+- 协议新增 `video.view.set { values }`（返回 `{ state: "applied" | "waiting" }`）与 `video.view.release`。

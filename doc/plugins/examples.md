@@ -871,3 +871,34 @@ export default async function activate(plugin: Plugin) { // processing.video、p
 ```
 
 整条视频图里只能有一个 `frameBlend`（别的插件已经加了时以 `invalid` 失败），播放器总把它放在所有效果之后。打开后 `stats().video.fps` 读到的是新帧率，所以原帧率要在打开之前读（换来源时把 `sourceFps` 清空，先 `set([])` 再读）。
+
+## 33. 显示层：宽高比切换与换片源时复位缩放
+
+```ts
+export default async function activate(plugin: Plugin) { // processing.video、playback.read、commands、ui.osd
+  const view = plugin.video.view();                   // 先调用的插件拥有显示层
+  const ratios: [string, number | null][] = [["按来源", null], ["4:3", 4 / 3], ["16:9", 16 / 9], ["21:9", 21 / 9]];
+  let current = 0;
+  ratios.forEach(([title, aspect], i) =>
+    plugin.commands.add({
+      id: `aspect.${i}`, path: ["画面", "比例", title], order: 400 + i,
+      radio: true, checked: () => current === i,
+      run: () => { current = i; view.set({ aspect }); },
+    }));
+  plugin.commands.add({
+    id: "fit", path: ["画面", "填满窗口"], order: 410, bindings: ["Ctrl+F6"],
+    run: () => view.set({ fit: "fill" }),
+  });
+  let sourceId = plugin.player.state.sourceId;
+  plugin.player.onChange((state) => {                // 显示层跨来源保留，复位由插件决定
+    if (state.sourceId === sourceId) return;
+    sourceId = state.sourceId;
+    view.set({ zoom: 1, panX: 0, panY: 0 });
+  });
+  view.onStatus((s) => {
+    if (s.state === "failed") void plugin.osd.show(`画面比例不可用：${s.error.message}`);
+  });
+}
+```
+
+另一个插件已经拥有显示层时 `status` 是 `failed`（`conflict`），之后每次 `set` 都会再试；截图与导出不受显示层影响。

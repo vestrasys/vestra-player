@@ -50,6 +50,7 @@ impl Backend {
         let out_frame = frame.clone();
         let target = Arc::new(Shared::default());
         let render_target = target.clone();
+        let view_target = target.clone();
         #[cfg(feature = "producer-audio")]
         let input = Arc::new(Mutex::new(None));
         #[cfg(feature = "producer-audio")]
@@ -159,6 +160,7 @@ impl Backend {
                 #[cfg(feature = "producer-audio")]
                 let mut producer_was_active = false;
                 let mut processing = crate::processing::Processing::default();
+                let mut view = crate::video_view::View::default();
                 let mut subtitles = crate::subtitle_backend::Subtitles::new(fonts);
                 let mut jobs = crate::media_jobs::Jobs::default();
                 let mut push = StatePush::new();
@@ -201,6 +203,18 @@ impl Backend {
                                     "host.error".into(),
                                     json!({"code":error.code,"message":error.message}),
                                 ));
+                            }
+                            match view
+                                .release(command.reply.owner, crate::video_view::mpv_writer(&mpv))
+                            {
+                                Ok(true) => view_target.set_zoom(1.),
+                                Ok(false) => (),
+                                Err(error) => {
+                                    let _ = events.send(Event::Broadcast(
+                                        "host.error".into(),
+                                        json!({"code":error.code,"message":error.message}),
+                                    ));
+                                }
                             }
                             let _ = events.send(Event::BackendCleaned(command.reply.owner));
                             continue;
@@ -267,6 +281,20 @@ impl Backend {
                                 ready,
                                 &command.params,
                             );
+                            let _ = events.send(Event::Reply(command.reply, result));
+                            continue;
+                        }
+                        if command.method.starts_with("video.view.") {
+                            let owner = command.reply.owner;
+                            let writer = crate::video_view::mpv_writer(&mpv);
+                            let result = if command.method == "video.view.set" {
+                                let ready = sources.snapshot(&mpv)["phase"] == "ready";
+                                view.set(owner, &command.params["values"], ready, writer)
+                            } else {
+                                view.release(owner, writer).map(|_| Value::Null)
+                            };
+                            // The view's zoom also widens the render target (C-SIZE).
+                            view_target.set_zoom(view.settings().zoom);
                             let _ = events.send(Event::Reply(command.reply, result));
                             continue;
                         }
