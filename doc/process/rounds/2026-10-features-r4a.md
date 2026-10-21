@@ -288,6 +288,49 @@ interface ViewSettings {
 
 （P1 每批交付时填写：实现清单、签名调整与实现取舍、检查、宿主 Rust 实测净增、给协调者的 GUI 实测要点。至少要记录：封顶规则的实际取值、节流参数、`video.view` 所有权在何时取得、`frameBlend` 在离线导出中的实测帧率、`estimated-vf-fps` 是否反映倍帧）
 
+#### P1 批次 1（2026-10-21，维护者）：C-SIZE、渲染节奏、`frameBlend`
+
+基于 `rebuild/features-r3b` `8ea6ab0`。
+
+**实现清单**
+
+| 任务单 | 内容 | 宿主 | SDK / TestHost / 文档 |
+| --- | --- | --- | --- |
+| §4.1 | C-SIZE（R-H2） | 新模块 `render_target.rs`（纯函数与小状态机，便于单测）：`physical`（逻辑视频区 × `scale_factor`，四舍五入取偶，最小 2×2，为 0 时返回 `None` 保持上一个目标）、`target`（来源封顶 + zoom 放宽 + 绝对上限）、`Throttle` / `Sizing`（节流，全屏与缩放因子变化立即应用）、`Shared`（UI 写视频区、批次 2 的显示层写 zoom，带修订号）、`Redraw`（暂停时目标变化重画一次）。`backend.rs` 渲染线程每帧按目标分配 `SharedPixelBuffer<Rgb8Pixel>` 直接渲进去；`main.rs` 在 `window_tick` 里由 `video-width/height` 算物理区并交给节流 | 参考 §5.4 补一段；§17 |
+| §4.2 | 渲染节奏 | `render_target::FrameSlot`：只留最新一帧；放入新帧时若「唤醒在途」为假则置真并调 waker；取帧先清标志。UI 端 waker 是 `slint::invoke_from_event_loop`，回调经线程局部 `FRAME_SINK` 调 `Host::show_frame`（`Image::from_rgb8(buffer)`，不再 `clone_from_slice`）。16 ms 定时器不再取帧，只在「唤醒时宿主正忙」（`try_borrow_mut` 失败，记为 `missed`）时补取一次。计数：产生 / 上屏；`VESTRA_FRAME_LOG=1` 每秒一行 stderr：`vestra frames: produced N shown M (x/y fps) target WxH` | — |
+| §4.4 | `frameBlend`（R-V8） | `effects.rs` 新节点 `FrameBlend { fps }`（24–120 整数，`framerate@nK=fps=N`，非运行时字段）；`Node::last()` + `sequence()`：渲染与原地更新都用「各链按稳定顺序、`frameBlend` 移到最后」的同一顺序；`ordered()` 校验全部资源合计最多 1 个（第二个 `invalid`）；离线导出（`offline_descriptor.rs`）经同一 `render_lavfi` 自动带上 | `sdk/processing.ts` 类型、范围、整数与「最多一个」；TestHost 按本插件全部视频滤镜合计；参考 §8 节点表、位置规则、§14、§17；示例 §32 |
+
+**签名调整与实现取舍**（公开签名与裁决一致，没有调整）
+
+1. **封顶规则实际取值**：`k = min(1, max(S.w/A.w, S.h/A.h) × max(1, zoom))`，目标 = `A × k` 再取偶；总像素上限 3840×2160 = 8 294 400（超过时按面积比例缩小，取偶后若越界再逐 2 像素收缩）；来源未知用 1920×1080。来源尺寸 `S` 是 `video-out-params/dw`、`dh`（滤镜与宽高比校正之后），由渲染线程在需要渲染时最多每 200 ms 读一次。例：Retina 全屏视频区 2560×1500、1080p 来源 → 1920×1126；默认窗口 1560×1000 → 1560×1000。
+2. **启动 / 无界面**：在 UI 报告视频区之前目标区为 960×540（与之前相同），所以 headless 与 `--frame-evidence-dir` 的输出尺寸不变（PPM 按实际帧尺寸写）。
+3. **节流参数**：50 ms。变化中至多每 50 ms 应用一次；变化停止后保留的最后值在上次应用 50 ms 后的第一个 16 ms 周期应用（即停止后 ≤ 66 ms）。全屏切换与 `scale_factor` 变化（换屏）立即应用。视频区为 0（最小化）时不改目标。
+4. **暂停时重画**：渲染线程每轮比较 `Shared` 的修订号，变化且已经渲染过真实帧时不等 `update()` 就调一次 `render_software`（mpv 重画当前帧）；第一帧之前的尺寸变化不重画（避免空来源时出一张黑帧）。改尺寸不重建 `RenderContext`。
+5. **生成流**（NES）的帧在控制线程上转成 `SharedPixelBuffer`（拷贝从 UI 线程移到控制线程），尺寸照旧；停止时的清屏帧仍为 960×540 黑帧。
+6. **帧只留最新一张**：UI 慢的时候覆盖旧帧（不排队），`shown` 比 `produced` 少的部分就是被覆盖的帧。
+7. **`frameBlend` 位置**：同一条 vf 链里放在所有插件的节点之后；离线导出里放在效果链末尾、方形像素与字幕烧录之前（与播放时字幕由 vo 叠在倍帧之后的顺序一致）。改 `fps` 重建本阶段；其它节点的原地更新索引按新顺序计算（单测覆盖）。
+8. **`estimated-vf-fps` 反映倍帧**：用同版本 mpv 0.41 CLI（`--vo=null --vf=lavfi=[framerate=fps=48]`，`t1080.mp4` 24 fps）读到 `estimated-vf-fps=48.000000`、`container-fps=24`；不加滤镜时为 24。所以 `stats().video.fps` 在打开倍帧后显示 48，原帧率要在打开之前读（参考 §8、示例 §32 已写明）。
+9. **离线导出帧率实测**：用 `offline_descriptor::video_range` 生成的同一形式图（`framerate@n0=fps=48,scale=…,setsar=1,settb=AVTB,trim=start=1:end=6,setpts=PTS-STARTPTS`），`ffmpeg` 导出 5 秒：`ffprobe` `r_frame_rate=48/1`、`nb_frames=240`。`media_worker.rs` 不强制 `-r`，帧率随图变化。
+10. **不发布**画中画相关字段（§2）。
+
+**检查**（worktree 内实际执行）
+
+- `src/`：`check`、`format:check`、`boundaries`、`plugins:build` 0；`test:sdk` 88/88（新增 `tests/sdk/round4a.test.ts` 1 条：`frameBlend` 校验与「最多一个」）；`plugin -- test --all` 全过：audio 35、bilibili 15、capture 25、history 22、hotkeys 17、info 26、marks 24、nes 11、playback 59、playlist 67、plugins 10、preferences 10、subtitle-online 13、subtitles 52、video 22、window 17、workshop 17、youtube 14（workshop `vendor/sdk` 已重同步，同一提交）。
+- `src/host/`：`cargo fmt --check`、`clippy --locked --all-targets -D warnings`（含 `--no-default-features`）0；`cargo test --locked` 215/215（新增：目标计算 1、节流 1、全屏与换屏立即应用 1、暂停时重画 1、帧槽合并唤醒 1、`frameBlend` 位置 / 唯一 / 原地更新索引 1、离线导出含 `framerate=fps=48` 且无显示层属性 1）。
+- `grep -rnw unsafe src/host/src`：空。
+- 未执行：GUI（按要求不操作）。
+- 宿主 Rust：`src/host/src/*.rs` 30 966 → 31 621（**+655**，含测试；`render_target.rs` 462）。低于本批估算 750。SDK +约 30（`processing.ts`、TestHost）。
+
+**给协调者的 GUI 实测要点**（启动时设 `VESTRA_FRAME_LOG=1`）
+
+1. 清晰度：1080p 测试图在默认窗口与全屏下截图，与基线对比细线、小字；日志里 `target` 应为默认窗口约 `1560x1000`（视窗口而定）、全屏 `1920x11xx`（1080p 来源封顶）；4K 来源全屏约 `2560x15xx`。
+2. 拖动：播放中连续拖窗口角 10 秒，画面不卡、不变形（最多一两帧细黑边）；日志 `target` 大约每 50 ms 变一次、停手后落在最终值。**暂停后拖动**：画面跟随新比例重画（这是 `Redraw` 路径，单测只覆盖了判定）。
+3. 渲染节奏：24 fps 片源 `produced ≈ shown ≈ 24/s`；用探针（或作者 A 完成后的 video 插件）加 `frameBlend 48` 后 `produced ≈ 48/s`、`shown/produced ≥ 95%`，`stats().video.fps` 为 48，`framesDropped` 不增长；60 也看一次。**UI 线程纹理上传**（§1.1 风险）：4K 来源全屏 + 倍帧 60 时看 `shown` 是否跟得上，跟不上时记录 `shown` 数值给维护者。
+4. 换屏：窗口拖到外接 1x 屏，`target` 立即减半（不等节流）。
+5. CPU：按 §6.2 表格对照 §1.1。
+6. 回归：NES 出画面、停止后清屏；关闭来源后背景层显示、无残留帧；侧栏浮动 / 附着切换后画面正常；打开文件对话框（模态）期间播放的画面在关闭对话框后继续更新（`missed` 补取路径）。
+7. 导出：倍帧打开后「含效果」导出 5 秒，`ffprobe` 48 fps。
+
 ### 8.3 用户裁决
 
 （协调者填写 §7.1、§7.2 的回答与日期；按回答更新需求文档 H07、E16–E18 与 4b 排期）

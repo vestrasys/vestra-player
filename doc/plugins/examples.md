@@ -846,3 +846,28 @@ export default async function activate(plugin: Plugin) { // ui.drop、ui.mount�
 ```
 
 同一扩展名先登记的插件生效；没有插件登记的文件拖进来什么也不发生。
+
+## 32. 倍帧：按原帧率决定是否加 `frameBlend`
+
+```ts
+export default async function activate(plugin: Plugin) { // processing.video、playback.read、commands、ui.osd
+  const smooth = plugin.video.filter("smooth");
+  let on = false;
+  let sourceFps: number | null = null;                        // 打开倍帧之前读到的原帧率
+  const apply = async () => {
+    if (!on) return smooth.set([]);
+    sourceFps ??= (await plugin.player.stats()).video?.fps ?? null;
+    if (sourceFps === null || sourceFps >= 50) return smooth.set([]); // 已经够流畅：不加节点
+    smooth.set([{ kind: "frameBlend", fps: Math.min(Math.round(sourceFps * 2), 60) }]);
+  };
+  plugin.commands.add({
+    id: "blend", path: ["画面", "倍帧"], checked: () => on,
+    run: () => { on = !on; void apply(); },
+  });
+  smooth.onStatus((s) => {
+    if (s.state === "failed") void plugin.osd.show(`倍帧不可用：${s.error.message}`);
+  });
+}
+```
+
+整条视频图里只能有一个 `frameBlend`（别的插件已经加了时以 `invalid` 失败），播放器总把它放在所有效果之后。打开后 `stats().video.fps` 读到的是新帧率，所以原帧率要在打开之前读（换来源时把 `sourceFps` 清空，先 `set([])` 再读）。

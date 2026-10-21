@@ -248,6 +248,28 @@ mod tests {
     }
 
     #[test]
+    fn frame_blend_changes_the_exported_frame_rate_and_the_view_never_enters() {
+        let resources = [Resource {
+            manifest_id: "video".into(),
+            resource_id: "blend".into(),
+            nodes: vec![VideoNode::FrameBlend { fps: 48.0 }],
+        }];
+        let graph = video_range(&resources, None, 1.0, Some(6.0)).unwrap();
+        assert!(graph.starts_with("framerate@n0=fps=48,"), "{graph}");
+        assert!(graph.find("framerate@n0").unwrap() < graph.find("trim=").unwrap());
+        // Display-layer settings (vo properties) are not part of the offline chain.
+        for property in [
+            "video-zoom",
+            "video-pan",
+            "video-aspect",
+            "panscan",
+            "keepaspect",
+        ] {
+            assert!(!graph.contains(property));
+        }
+    }
+
+    #[test]
     fn clip_end_is_absolute_before_timestamp_reset() {
         let graph = video_range(&[], None, 4.31, Some(4.32)).unwrap();
         assert!(graph.ends_with("trim=start=4.31:end=4.32,setpts=PTS-STARTPTS"));

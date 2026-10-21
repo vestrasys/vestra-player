@@ -70,6 +70,11 @@ pub enum VideoNode {
         x: f64,
         y: f64,
     },
+    /// Blended frame-rate conversion (FFmpeg `framerate=fps=N`), 24–120.
+    /// At most one across all plugins; always placed after every chain.
+    FrameBlend {
+        fps: f64,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -235,6 +240,10 @@ trait Node {
     fn filters(&self) -> Vec<Filter> {
         vec![filter(self.name(), self.parameters())]
     }
+    /// Placed after all chains (keeps its place among such nodes).
+    fn last(&self) -> bool {
+        false
+    }
 }
 
 fn integer(name: &str, value: f64, min: f64, max: f64) -> Result<()> {
@@ -306,7 +315,11 @@ impl Node for VideoNode {
                 range("x", *x, -1.0, 1.0)?;
                 range("y", *y, -1.0, 1.0)
             }
+            Self::FrameBlend { fps } => integer("fps", *fps, 24.0, 120.0),
         }
+    }
+    fn last(&self) -> bool {
+        matches!(self, Self::FrameBlend { .. })
     }
     fn name(&self) -> &'static str {
         match self {
@@ -320,6 +333,7 @@ impl Node for VideoNode {
             Self::Transform { .. } => "transform",
             Self::Deinterlace { .. } => "bwdif",
             Self::Reframe { .. } => "reframe",
+            Self::FrameBlend { .. } => "framerate",
         }
     }
     fn filters(&self) -> Vec<Filter> {
@@ -454,6 +468,7 @@ impl Node for VideoNode {
                     false,
                 ),
             ],
+            Self::FrameBlend { fps } => vec![parameter("fps", fps, false)],
             Self::Transform { .. } | Self::Reframe { .. } => Vec::new(),
         }
     }
@@ -595,7 +610,27 @@ fn ordered<N: Node>(resources: &[Resource<N>]) -> Result<Vec<&Resource<N>>> {
             node.validate()?;
         }
     }
+    let last = ordered
+        .iter()
+        .flat_map(|r| &r.nodes)
+        .filter(|n| n.last())
+        .count();
+    if last > 1 {
+        return Err(ValidationError(
+            "only one frameBlend node across all plugins (the frame rate changes once)".into(),
+        ));
+    }
     Ok(ordered)
+}
+
+/// The chain's nodes in graph order: resources in stable order, nodes in their
+/// own order, then the nodes that belong after every chain (`frameBlend`), so
+/// time-domain filters (denoise, deinterlace) work on the original frames.
+fn sequence<'a, N: Node>(resources: &[&'a Resource<N>]) -> Vec<&'a N> {
+    let nodes = resources.iter().flat_map(|r| &r.nodes);
+    let (mut chain, last): (Vec<_>, Vec<_>) = nodes.partition(|n| !n.last());
+    chain.extend(last);
+    chain
 }
 
 pub fn validate(descriptors: &Descriptors) -> Result<()> {
@@ -621,9 +656,8 @@ fn label(name: &str, prefix: &str, index: usize, part: usize) -> String {
 
 fn render<N: Node>(resources: &[Resource<N>], prefix: &str, empty: &str) -> Result<String> {
     let resources = ordered(resources)?;
-    let filters: Vec<_> = resources
+    let filters: Vec<_> = sequence(&resources)
         .into_iter()
-        .flat_map(|r| &r.nodes)
         .enumerate()
         .flat_map(|(index, node)| {
             node.filters()
@@ -675,35 +709,33 @@ fn updates<N: Node>(old: &[Resource<N>], new: &[Resource<N>], prefix: &str) -> R
     if old.len() != new.len() {
         return Ok(UpdatePlan::NeedsReconfigure);
     }
-    let mut commands = Vec::new();
-    let mut index = 0;
-    for (old, new) in old.into_iter().zip(new) {
+    for (old, new) in old.iter().zip(&new) {
         if old.manifest_id != new.manifest_id
             || old.resource_id != new.resource_id
             || old.nodes.len() != new.nodes.len()
         {
             return Ok(UpdatePlan::NeedsReconfigure);
         }
-        for (old, new) in old.nodes.iter().zip(&new.nodes) {
-            let (old, new) = (old.filters(), new.filters());
-            if old.len() != new.len() || old.iter().zip(&new).any(|(a, b)| a.name != b.name) {
-                return Ok(UpdatePlan::NeedsReconfigure);
-            }
-            for (part, (old, new)) in old.into_iter().zip(new).enumerate() {
-                for (old, parameter) in old.parameters.into_iter().zip(new.parameters) {
-                    if old.value != parameter.value {
-                        if !parameter.runtime {
-                            return Ok(UpdatePlan::NeedsReconfigure);
-                        }
-                        commands.push(RuntimeCommand {
-                            target: label(new.name, prefix, index, part),
-                            option: parameter.name,
-                            value: parameter.value,
-                        });
+    }
+    let mut commands = Vec::new();
+    for (index, (old, new)) in sequence(&old).into_iter().zip(sequence(&new)).enumerate() {
+        let (old, new) = (old.filters(), new.filters());
+        if old.len() != new.len() || old.iter().zip(&new).any(|(a, b)| a.name != b.name) {
+            return Ok(UpdatePlan::NeedsReconfigure);
+        }
+        for (part, (old, new)) in old.into_iter().zip(new).enumerate() {
+            for (old, parameter) in old.parameters.into_iter().zip(new.parameters) {
+                if old.value != parameter.value {
+                    if !parameter.runtime {
+                        return Ok(UpdatePlan::NeedsReconfigure);
                     }
+                    commands.push(RuntimeCommand {
+                        target: label(new.name, prefix, index, part),
+                        option: parameter.name,
+                        value: parameter.value,
+                    });
                 }
             }
-            index += 1;
         }
     }
     Ok(UpdatePlan::Commands(commands))
@@ -1047,6 +1079,63 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn frame_blend_goes_after_every_chain_and_only_once() {
+        let blend = |fps| VideoNode::FrameBlend { fps };
+        let denoise = VideoNode::Denoise {
+            luma_spatial: 1.0,
+            chroma_spatial: 1.0,
+            luma_temporal: 1.0,
+            chroma_temporal: 1.0,
+        };
+        // "a" sorts first, but its frameBlend still runs after "b"'s denoise.
+        let graph = Descriptors::Video(vec![
+            resource("a", "r", vec![blend(48.0), tone(0.1)]),
+            resource("b", "r", vec![denoise]),
+        ]);
+        let text = render_lavfi(&graph).unwrap();
+        assert!(text.starts_with("eq@n0="), "{text}");
+        assert!(text.find("hqdn3d@n1").unwrap() < text.find("framerate@n2").unwrap());
+        assert!(text.ends_with("framerate@n2=fps=48"), "{text}");
+        // A second one anywhere is invalid.
+        for second in [
+            vec![resource("a", "r", vec![blend(48.0), blend(60.0)])],
+            vec![
+                resource("a", "r", vec![blend(48.0)]),
+                resource("b", "r", vec![blend(60.0)]),
+            ],
+        ] {
+            assert!(validate(&Descriptors::Video(second)).is_err());
+        }
+        for fps in [23.0, 121.0, 47.5, f64::NAN] {
+            let one = Descriptors::Video(vec![resource("a", "r", vec![blend(fps)])]);
+            assert!(validate(&one).is_err(), "{fps}");
+        }
+        // Changing fps rebuilds; runtime updates elsewhere keep their indices.
+        let base = Descriptors::Video(vec![
+            resource("a", "r", vec![blend(48.0), tone(0.1)]),
+            resource("b", "r", vec![tone(0.0)]),
+        ]);
+        let faster = Descriptors::Video(vec![
+            resource("a", "r", vec![blend(60.0), tone(0.1)]),
+            resource("b", "r", vec![tone(0.0)]),
+        ]);
+        assert_eq!(
+            runtime_commands(&base, &faster).unwrap(),
+            UpdatePlan::NeedsReconfigure
+        );
+        let brighter = Descriptors::Video(vec![
+            resource("a", "r", vec![blend(48.0), tone(0.1)]),
+            resource("b", "r", vec![tone(0.3)]),
+        ]);
+        let UpdatePlan::Commands(commands) = runtime_commands(&base, &brighter).unwrap() else {
+            panic!("eq changes in place");
+        };
+        assert_eq!(commands.len(), 1);
+        assert_eq!(commands[0].target, "eq@n1");
+        assert!(serde_json::from_str::<VideoNode>(r#"{"kind":"frameBlend","fps":48}"#).is_ok());
     }
 
     #[test]

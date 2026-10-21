@@ -40,6 +40,7 @@ mod producer_input_delivery;
 
 #[cfg(feature = "producer-audio")]
 pub mod producer_binary;
+mod render_target;
 mod session;
 mod settings_window;
 mod source_backend;
@@ -262,6 +263,11 @@ struct Host {
     power: power::Power,
     /// When the shell last received a video frame (`power` keeps the display awake).
     last_frame: Option<Instant>,
+    /// C-SIZE: the video area -> the renderer's target area (throttled).
+    sizing: render_target::Sizing,
+    /// `VESTRA_FRAME_LOG=1` diagnostics and the size last set on the UI.
+    frame_log: Option<render_target::FrameLog>,
+    shown_size: Option<render_target::Size>,
     /// Core actions in flight that drop a repeated trigger.
     actions_busy: std::collections::BTreeSet<String>,
     /// `player.setStepSeek` per owner: (write sequence, seconds); the newest wins.
@@ -849,6 +855,21 @@ impl Host {
     fn now_ms(&self) -> u64 {
         self.clock.elapsed().as_millis().min(u64::MAX as u128) as u64
     }
+    /// Set the newest rendered frame on the video area (no copy: the renderer
+    /// drew into this buffer).
+    fn show_frame(&mut self) {
+        let Some(frame) = self.backend.frame.take() else {
+            return;
+        };
+        let Some(window) = self.shell.as_ref().map(ComponentHandle::clone_strong) else {
+            return;
+        };
+        self.shown_size = Some((frame.buffer.width(), frame.buffer.height()));
+        let image = slint::Image::from_rgb8(frame.buffer);
+        self.last_image = Some(image.clone());
+        self.last_frame = Some(Instant::now());
+        let _ = window.set_property("video-frame", image.into());
+    }
     fn window_tick(&mut self) {
         let Some(shell) = self.shell.as_ref().map(ComponentHandle::clone_strong) else {
             return;
@@ -910,6 +931,16 @@ impl Host {
             height: number("logical-height"),
         };
         let video = (number("video-width"), number("video-height"));
+        let scale = f64::from(shell.window().scale_factor());
+        if let Some(area) = self
+            .sizing
+            .observe(video, scale, fullscreen, Instant::now())
+        {
+            self.backend.target.set_area(area);
+        }
+        if let Some(log) = self.frame_log.as_mut() {
+            log.tick(self.backend.frame.counts(), self.shown_size, Instant::now());
+        }
         self.apply_on_top();
         // R-H11: a left press with no second press within the double-click
         // interval, and the pointer still within 4 px, is a single click.
@@ -3363,6 +3394,10 @@ fn string<'a>(params: &'a Value, key: &str) -> std::result::Result<&'a str, RpcE
         .as_str()
         .ok_or_else(|| RpcError::invalid(format!("{key} requires string")))
 }
+thread_local! {
+    /// The UI thread's frame delivery, run by the renderer's wake-up.
+    static FRAME_SINK: RefCell<Option<Box<dyn Fn()>>> = const { RefCell::new(None) };
+}
 /// Opt-in bounded fixture diagnostics, not a plugin frame API or source/PTS fence.
 struct FrameEvidence {
     directory: PathBuf,
@@ -3386,12 +3421,14 @@ impl FrameEvidence {
         if self.count >= 64 || self.last.elapsed() < Duration::from_millis(200) {
             return Ok(());
         }
-        let frame = backend
-            .frame
-            .lock()
-            .unwrap()
-            .as_ref()
-            .map(|f| (f.sequence, f.pixels.clone(), f.width, f.height));
+        let frame = backend.frame.peek(|f| {
+            (
+                f.sequence,
+                f.buffer.as_bytes().to_vec(),
+                f.buffer.width(),
+                f.buffer.height(),
+            )
+        });
         if let Some((sequence, pixels, width, height)) = frame {
             let name = format!("frame-{:03}.ppm", self.count);
             let mut file = std::fs::File::create(self.directory.join(&name))?;
@@ -3519,6 +3556,9 @@ fn main() -> Result<()> {
         cleanup: Default::default(),
         power: power::Power::system(),
         last_frame: None,
+        sizing: Default::default(),
+        frame_log: render_target::FrameLog::from_env(),
+        shown_size: None,
         actions_busy: Default::default(),
         step_seek: BTreeMap::new(),
         step_writes: 0,
@@ -3608,6 +3648,26 @@ fn main() -> Result<()> {
         host.borrow().bind_shell(&window, 1)?;
         host.borrow_mut().theme_view(&window);
         host.borrow_mut().shell = Some(window.clone_strong());
+        // Render cadence: each new frame wakes the event loop (coalesced)
+        // instead of waiting for the 16 ms tick.
+        let frames = host.borrow().backend.frame.clone();
+        let frame_host = host.clone();
+        let busy = frames.clone();
+        FRAME_SINK.with(|sink| {
+            *sink.borrow_mut() = Some(Box::new(move || match frame_host.try_borrow_mut() {
+                Ok(mut host) => host.show_frame(),
+                Err(_) => busy.miss(),
+            }))
+        });
+        frames.set_waker(Box::new(|| {
+            let _ = slint::invoke_from_event_loop(|| {
+                FRAME_SINK.with(|sink| {
+                    if let Some(deliver) = &*sink.borrow() {
+                        deliver();
+                    }
+                })
+            });
+        }));
         let tick_host = host.clone();
         let timer = slint::Timer::default();
         let mut menu_revision = u64::MAX;
@@ -3644,18 +3704,10 @@ fn main() -> Result<()> {
                         }
                     }
                 }
-                let frame = host.backend.frame.lock().unwrap().take();
-                if let Some(frame) = frame {
-                    let window = host.shell.as_ref().unwrap().clone_strong();
-                    let buffer = slint::SharedPixelBuffer::<slint::Rgb8Pixel>::clone_from_slice(
-                        &frame.pixels,
-                        frame.width,
-                        frame.height,
-                    );
-                    let image = slint::Image::from_rgb8(buffer);
-                    host.last_image = Some(image.clone());
-                    host.last_frame = Some(Instant::now());
-                    let _ = window.set_property("video-frame", image.into());
+                // The renderer's wake-up delivers frames; this only catches
+                // one whose wake-up found the host busy.
+                if host.backend.frame.missed() {
+                    host.show_frame();
                 }
                 if seconds.is_some_and(|seconds| start.elapsed().as_secs_f64() >= seconds) {
                     if let Some(path) = snapshot.as_ref()
@@ -3685,6 +3737,7 @@ fn main() -> Result<()> {
         );
         window.run()?;
         timer.stop();
+        FRAME_SINK.with(|sink| sink.borrow_mut().take());
         host.borrow_mut().ui_state.flush();
         // Native windows/resources must be released before process teardown.
         host.borrow_mut().close_floating();
