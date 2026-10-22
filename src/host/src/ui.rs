@@ -8,13 +8,10 @@ use std::{
     sync::mpsc,
 };
 
-/// Host-shipped Slint directory: `Resources/ui` in a bundle, else the source tree.
+/// Host-shipped Slint directory: the installation's `ui`, else the source
+/// tree (`runtime_paths.rs`).
 pub fn ui_dir() -> PathBuf {
-    std::env::current_exe()
-        .ok()
-        .and_then(|exe| Some(exe.parent()?.parent()?.join("Resources/ui")))
-        .filter(|dir| dir.join("host.slint").is_file())
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("ui"))
+    crate::runtime_paths::get().ui.clone()
 }
 
 /// Brings `if` and `for` elements up to date before the host reads geometry

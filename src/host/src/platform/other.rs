@@ -127,12 +127,5 @@ pub fn app_data_dir() -> Option<PathBuf> {
 /// FFmpeg's name for its stdin, which is the held source file (seekable).
 pub const HELD_FILE_INPUT: &str = "/dev/fd/0";
 
-pub fn default_ffmpeg() -> PathBuf {
-    std::env::var_os("PATH")
-        .and_then(|path| {
-            std::env::split_paths(&path)
-                .map(|directory| directory.join("ffmpeg"))
-                .find(|candidate| candidate.is_file())
-        })
-        .unwrap_or_else(|| PathBuf::from("ffmpeg"))
-}
+/// Child processes share the host's session; nothing to hide.
+pub fn hide_console(_command: &mut std::process::Command) {}

@@ -84,6 +84,7 @@ impl Backend {
                 if silent {
                     builder = builder.set_property("ao", "null")?;
                 }
+                no_builtin_scripts(&builder)?;
                 let mpv = Arc::new(builder.build()?);
                 mpv.request_log_messages("v")?;
                 let version = |name: &str| mpv.get_property::<String>(name).ok();
@@ -1059,10 +1060,65 @@ fn execute(mpv: &Mpv, method: &str, params: &Value) -> std::result::Result<Value
         .map_err(|e| RpcError::new("backend", e.to_string()))
 }
 
+/// mpv's own Lua scripts (S7 decision 7): the on-screen controller, ytdl
+/// (network sources are resolved by plugins), stats, console, auto profiles,
+/// select, positioning, commands, the context menu, and scripts from mpv's
+/// configuration directory. The host draws its own interface and binds its
+/// own keys, so none of them is used; off, libmpv also starts no LuaJIT (no
+/// JIT under the macOS Hardened Runtime). Options an older libmpv does not
+/// have are skipped: that libmpv does not have the script either.
+pub const BUILTIN_SCRIPTS_OFF: [&str; 10] = [
+    "osc",
+    "ytdl",
+    "load-scripts",
+    "load-stats-overlay",
+    "load-console",
+    "load-auto-profiles",
+    "load-select",
+    "load-positioning",
+    "load-commands",
+    "load-context-menu",
+];
+
+fn no_builtin_scripts(builder: &rsmpv::Builder) -> Result<()> {
+    for option in BUILTIN_SCRIPTS_OFF {
+        match rsmpv::Handle::set_property(builder, option, "no") {
+            Ok(()) | Err(rsmpv::Error::OptionNotFound) => {}
+            Err(error) => return Err(anyhow::anyhow!("mpv option {option}: {error}")),
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::session::Phase;
+    #[test]
+    fn mpv_starts_without_its_builtin_scripts() {
+        let builder = Mpv::builder().unwrap();
+        no_builtin_scripts(&builder).unwrap();
+        let mpv = builder.build().unwrap();
+        for option in BUILTIN_SCRIPTS_OFF {
+            // Options this libmpv does not have were skipped.
+            if let Ok(value) = mpv.get_property::<String>(option) {
+                assert_eq!(value, "no", "{option}");
+            }
+        }
+        for option in ["osc", "ytdl", "load-scripts", "load-stats-overlay"] {
+            assert_eq!(
+                mpv.get_property::<String>(option).unwrap(),
+                "no",
+                "{option}"
+            );
+        }
+        // No script client answers: stats.lua would take this binding.
+        std::thread::sleep(Duration::from_millis(200));
+        assert!(
+            mpv.command(&["script-binding", "stats/display-stats-toggle"])
+                .is_err()
+        );
+    }
     #[test]
     fn a_backdrop_turns_cover_art_off_and_back_to_the_defaults() {
         let mut written = Vec::new();

@@ -5,7 +5,7 @@
 类型定义的源头是 SDK 仓库 [vestra-player-sdk](https://github.com/vestrasys/vestra-player-sdk) 的 `src/plugin/types.ts`（npm 包 `@vestra-player/sdk`；本仓库安装在 `src/node_modules/@vestra-player/sdk/dist/plugin/types.d.ts`）。本文与它不一致时以代码为准，并应修正本文。
 
 - 协议版本：`vestra/1`
-- 运行环境：每个插件一个 Node ≥ 22.18 进程，可以使用 Node 标准库、文件系统、网络和 npm 依赖。插件是受信任的，manifest 能力是契约声明，不是安全沙箱。
+- 运行环境：每个插件一个 Node 进程：安装包里是播放器内置的 Node 26（`vestra/1` 期间主版本只升不降），开发构建用 `VESTRA_NODE` 或 `PATH` 上的 `node`（也要 26）。可以使用 Node 标准库、文件系统、网络和 npm 依赖。插件是受信任的，manifest 能力是契约声明，不是安全沙箱。
 - 系统：macOS 与 Windows（Windows 目前只做了编译检查，未在真机运行）。API 与系统无关；某个系统做不到的功能以 `unsupported` 失败，各节写明平台差异，汇总见 §16.7。插件不要直接调用系统命令（`open`、`sips`、`plutil`、`security` 等），用本文的能力或跨平台的纯 Node 实现。
 
 ## 1. 概览
@@ -1322,7 +1322,7 @@ tools.run(tool: "ffmpeg" | "ffprobe", args: string[],
 tools.available(tool: "ffmpeg" | "ffprobe"): Promise<boolean>;
 ```
 
-- 可执行文件按环境变量 `VESTRA_FFMPEG` / `VESTRA_FFPROBE`（绝对路径），再按 `PATH` 查找（Windows 依次试 `PATHEXT` 的扩展名，默认 `ffmpeg.exe` 在先）；找到的结果在本插件内缓存，找不到时下次重新查找。
+- 可执行文件按环境变量 `VESTRA_FFMPEG` / `VESTRA_FFPROBE`（绝对路径；安装包里宿主把它们设为随包的 ffmpeg / ffprobe，用户自己设置的优先），再按 `PATH` 查找（Windows 依次试 `PATHEXT` 的扩展名，默认 `ffmpeg.exe` 在先）；找到的结果在本插件内缓存，找不到时下次重新查找。
 - 不经 shell：参数原样传给程序，路径里的空格、引号不需要转义。
 - 超过 `timeoutMs`、`signal` 中止、所在作用域释放（含插件停用）都会结束子进程：先 SIGTERM，300 ms 后仍在则 SIGKILL（Windows 上两者都是立即终止）。
 - `stdout` 最多 `maxOutput` 字节（默认 16 MiB），超出时结束进程并以 `invalid` 失败；`stderr` 保留最后 64 KiB。

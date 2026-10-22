@@ -94,3 +94,8 @@ vestra-win32 = { path = "unsafe/win32" }
 # builds already compile these warnings out.
 [profile.dev.package.icu_provider]
 debug-assertions = false
+
+# Packaged builds (packaging proposal §3.1): no symbol tables in the shipped
+# executable (47 → 41.5 MB on macOS); panics still name their location.
+[profile.release]
+strip = "symbols"
