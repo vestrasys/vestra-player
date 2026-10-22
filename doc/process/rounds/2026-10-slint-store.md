@@ -119,7 +119,7 @@
 剩下的小问题（不影响功能，合并后另修）：S6「添加仓库」输入框底边压住下面的警告文字；换系统字体后，折行的灰色说明文字行距偏紧（「窗口」页、商城设置页、商城 README）。
 
 ## 待办（本轮之后）
-- 界面：S6 输入框与警告文字重叠；系统字体下折行说明文字行距偏紧（检查所有设置页和商城）。
+- ~~界面：S6 输入框与警告文字重叠；折行说明文字行距偏紧~~：已修（cc71fec，`line-height-factor: 1.25`），真机确认。Markdown 正文（StyledText）在 1.18 没有行高属性，商城 README 行距暂不改；以后可在 Theme 加行高变量随 SDK 发布。
 - ~~插件仓库：资源哈希、单调 `generated`、多签名、`revoked.json` 只追加~~：2026-10-22 已完成并发布（插件仓库 68ff01b，线上 `generated` = 1，签名通过）。商城端配套改动已完成（`rebuild/store-ui` dc58f40，测试 58/58；协调者对线上索引冒烟：验签通过、记下 generated=1、YouTube 包 sha256 一致、二次刷新 304）。
 - 插件仓库 youtube 测试「download shows progress while running and the saved file when done」在 Windows + Node 22.18 偶发失败一次（CI run 39678880495，dbd7e7d），前后同一测试都通过。交 youtube 作者查。
 - 主窗口 `sidebar-actual` 绑定环警告（见上）。
