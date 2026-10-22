@@ -144,3 +144,12 @@ Contributing · License（各一行）
 4. 示例要逐步、必要时逐行讲解（调研结论一致：OpenCV、MATLAB 的示例都是分步讲解，代码从真实示例文件引入）。
 
 执行：基础（维护者：README、CONTRIBUTING、工具链、迁移 4 个示例 + hello）与两个旗舰示例（各一个 agent）并行；之后「界面」样板；再按类别铺开。
+
+## 8. 示例作者发现的 API 问题（待维护者处理）
+
+来自 blur（examples/blur fdf9a93）：
+1. **菜单路径按标题精确匹配，播放器内置菜单是中文标题**：英文插件写 `["Video", "Blur"]` 会多出一个顶层菜单，挂不进「视频」。需要按语言无关的锚点定位内置菜单（如 `menu: "video"` 或保留 id），API 改动走提案。
+2. `VideoNode` 的 `gblur.steps` 固定为 3（SDK 类型、校验、测试宿主一致），计划 §3 写的「步数 1–3」不成立；blur 改为预设下拉。是否放开 steps 由维护者定。
+3. 滤镜文档漏写 `events` 能力：没有 `events` 时 SDK 看不到来源变化，媒体就绪前设的值会一直 `waiting`。`VideoFilter`、`Scope.video` 的说明要补。
+4. `Theme` 没有错误或危险色，失败状态只能用 `accent`。
+5. `vestra-plugin check` 在 SDK 仓库里会继承根 tsconfig（`rootDir: src`），示例全部报 TS6059；已交给基础 agent 统一处理。
