@@ -6,7 +6,7 @@
 //! ring of IOSurfaces. Each Slint window binds the newest surface in its own GL
 //! context (Slint's femtovg renderer is OpenGL, one context per window) and
 //! blits it into a texture it shows. The mpv render context therefore lives as
-//! long as the [`Renderer`], not as long as a window: libmpv ends playback when
+//! long as the `Renderer`, not as long as a window: libmpv ends playback when
 //! its render context is freed, so a window rebuild must never free it.
 //!
 //! macOS only. All `unsafe` stays in this crate; the public API is safe.
