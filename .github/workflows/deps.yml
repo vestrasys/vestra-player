@@ -12,12 +12,6 @@
 name: deps
 
 on:
-  # TEMPORARY (S7): GitHub only dispatches workflows known on the default
-  # branch; this push trigger runs deps.yml once from s7/packaging. Remove
-  # before merging.
-  push:
-    branches: [s7/packaging]
-    paths: [.github/workflows/deps.yml]
   workflow_dispatch:
     inputs:
       tag:
@@ -62,7 +56,7 @@ jobs:
           brew list --versions mpv ffmpeg
       - name: Collect the closure
         env:
-          SOURCES: ${{ github.event_name == 'push' || inputs.sources }}
+          SOURCES: ${{ inputs.sources }}
         run: |
           args=(--out "$RUNNER_TEMP/deps")
           if [ "$SOURCES" = true ]; then args+=(--sources "$RUNNER_TEMP/sources"); fi
