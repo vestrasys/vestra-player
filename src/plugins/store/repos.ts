@@ -31,6 +31,8 @@ type Meta = {
   fetchedAt: number;
   /** Official repository only: what its signed indexes have shown (never shrinks). */
   seen?: Seen;
+  /** Official repository only: the highest `generated` accepted (never shrinks). */
+  generated?: number;
 };
 
 /**
@@ -155,7 +157,12 @@ export class Repos {
           etag: result.etag,
           lastModified: result.lastModified,
           fetchedAt: now,
-          ...(repo.official ? { seen: remember(repo.meta?.seen, result.index) } : {}),
+          ...(repo.official
+            ? {
+                seen: remember(repo.meta?.seen, result.index),
+                generated: Math.max(repo.meta?.generated ?? 0, result.index.generated),
+              }
+            : {}),
         });
         repo.status = { text: `${repo.label} ${clock(now, now)} 已更新`, warn: false };
       }
@@ -219,6 +226,13 @@ export class Repos {
       const { index, dropped } = parseIndex(bytes.toString("utf8"), { allowLocalHttp: repo.local });
       if (dropped.length) this.#deps.log(`${repo.url}: ignored ${dropped.slice(0, 20).join(", ")}`);
       if (repo.official) {
+        // A lower sequence number than one accepted before (an index without
+        // `generated` counts as 0, so it is refused once one was seen).
+        const accepted = repo.meta?.generated ?? 0;
+        if (index.generated < accepted) {
+          this.#deps.log(`${repo.url}: replayed index, generated ${index.generated} < ${accepted}`);
+          throw new StoreRefusal("replay");
+        }
         const lost = replayed(repo.meta?.seen, index);
         if (lost) {
           this.#deps.log(`${repo.url}: replayed index, ${lost} is gone`);
@@ -271,7 +285,12 @@ export class Repos {
           return;
         }
       }
-      repo.index = parseIndex(bytes.toString("utf8"), { allowLocalHttp: repo.local }).index;
+      const index = parseIndex(bytes.toString("utf8"), { allowLocalHttp: repo.local }).index;
+      if (repo.official && index.generated < (meta.generated ?? 0)) {
+        this.#deps.log(`${repo.url}: cached index is older than one accepted before, ignored`);
+        return;
+      }
+      repo.index = index;
       repo.meta = meta;
       repo.fetchedAt = Number.isFinite(meta.fetchedAt) ? meta.fetchedAt : null;
       if (repo.fetchedAt !== null)

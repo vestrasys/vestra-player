@@ -511,7 +511,7 @@ export class Store {
     let path: string | null = null;
     // A third-party icon on another host than its index is never fetched (it would tell that host who looks).
     if (item.entry?.iconUrl && this.#sameHost(item, item.entry.iconUrl))
-      path = this.icons.remote(item.entry.iconUrl, item.repo?.local ?? false);
+      path = this.icons.remote(item.entry.iconUrl, item.repo?.local ?? false, item.entry.iconCheck);
     else if (item.local?.icon && item.installed) path = this.icons.local(join(item.installed.directory, item.local.icon));
     return this.#image(path ?? this.#logo);
   }
@@ -735,6 +735,7 @@ export class Store {
     try {
       if (item.entry) {
         const url = changelog ? item.entry.changelogUrl : item.entry.readmeUrl;
+        const check = changelog ? item.entry.changelogCheck : item.entry.readmeCheck;
         if (url && !this.#sameHost(item, url) && !this.#remoteShown.has(item.key)) {
           this.#doc = { ...this.#doc, note: `${changelog ? "更新日志" : "说明"}位于其它网站，未自动加载`, offHost: hostOf(url) };
           this.changed();
@@ -744,8 +745,11 @@ export class Store {
           base = url;
           text = this.#texts.get(url) ?? null;
           if (text === null) {
+            if (check && check.size > README_LIMIT) throw new Error("文件超过 256 KB");
+            // With the index's size and sha256 the text must match exactly (else nothing is shown or cached).
             const got = await get(this.deps.fetch, url, {
-              maxBytes: README_LIMIT,
+              maxBytes: check ? check.size : README_LIMIT,
+              ...(check ? { exactSize: check.size, sha256: check.sha256 } : {}),
               timeoutMs: 10_000,
               signal: abort.signal,
               headers: { "User-Agent": this.deps.userAgent },

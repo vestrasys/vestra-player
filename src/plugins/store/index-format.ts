@@ -28,6 +28,9 @@ export interface IndexVersion {
   published: string;
 }
 
+/** Expected size and sha256 of a store asset (README, changelog, icon); `null`: not given (older index). */
+export type AssetCheck = { sha256: string; size: number } | null;
+
 export interface IndexEntry {
   id: string;
   name: string;
@@ -40,6 +43,9 @@ export interface IndexEntry {
   readmeUrl: string | null;
   changelogUrl: string | null;
   sourceUrl: string | null;
+  iconCheck: AssetCheck;
+  readmeCheck: AssetCheck;
+  changelogCheck: AssetCheck;
   /** Newest first (sorted here, not trusted from the server). */
   versions: IndexVersion[];
 }
@@ -51,6 +57,8 @@ export interface Revocation {
 }
 
 export interface RepoIndex {
+  /** The publisher's sequence number; 0 when missing or not a positive integer (an index from before the field). */
+  generated: number;
   name: string;
   plugins: IndexEntry[];
   revoked: Revocation[];
@@ -144,9 +152,9 @@ export function parseIndex(text: string, options: ParseOptions = {}): { index: R
         ? [...new Set(item.tags.map((tag) => clean(tag, 24)).filter((tag): tag is string => tag !== null))].slice(0, 8)
         : [],
       license: clean(item.license, 64),
-      iconUrl: url(item.iconUrl),
-      readmeUrl: url(item.readmeUrl),
-      changelogUrl: url(item.changelogUrl),
+      ...asset(item, "icon", url),
+      ...asset(item, "readme", url),
+      ...asset(item, "changelog", url),
       sourceUrl: url(item.sourceUrl),
       versions,
     });
@@ -169,7 +177,31 @@ export function parseIndex(text: string, options: ParseOptions = {}): { index: R
     }
     revoked.push({ id: item.id, versions: item.versions as string, reason });
   }
-  return { index: { name: clean(data.name, 64) ?? "", plugins, revoked }, dropped };
+  const generated = Number.isSafeInteger(data.generated) && (data.generated as number) >= 1 ? (data.generated as number) : 0;
+  return { index: { generated, name: clean(data.name, 64) ?? "", plugins, revoked }, dropped };
+}
+
+/**
+ * `<name>Url` with its `<name>Sha256` / `<name>Size`. Both null or missing:
+ * no check (an index from before the fields). Present but malformed (or only
+ * one of them): the asset is unusable (URL dropped), the plugin stays.
+ */
+function asset<N extends "icon" | "readme" | "changelog">(
+  item: Record<string, unknown>,
+  name: N,
+  url: (value: unknown) => string | null,
+): Record<`${N}Url`, string | null> & Record<`${N}Check`, AssetCheck> {
+  const hash = item[`${name}Sha256`] ?? null;
+  const size = item[`${name}Size`] ?? null;
+  let address = url(item[`${name}Url`]);
+  let check: AssetCheck = null;
+  if (hash !== null || size !== null) {
+    if (typeof hash === "string" && SHA256.test(hash) && Number.isSafeInteger(size) && (size as number) >= 0)
+      check = { sha256: hash, size: size as number };
+    else address = null;
+  }
+  return { [`${name}Url`]: address, [`${name}Check`]: check } as unknown as Record<`${N}Url`, string | null> &
+    Record<`${N}Check`, AssetCheck>;
 }
 
 function readVersion(entry: unknown, url: (value: unknown) => string | null): IndexVersion | null {

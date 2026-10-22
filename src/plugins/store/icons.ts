@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { AssetCheck } from "./index-format.ts";
 import { get, type Fetch } from "./net.ts";
 
 const MAX_ICON = 512 * 1024;
@@ -32,23 +33,43 @@ export class Icons {
     this.#ready = ready;
   }
 
-  /** The cached file for a remote icon, or `null` (none yet, or it failed). */
-  remote(url: string, allowLocalHttp: boolean): string | null {
-    const key = `url ${url}`;
+  /**
+   * The cached file for a remote icon, or `null` (none yet, or it failed).
+   * With `check` (the index's iconSha256 / iconSize) the download must match
+   * exactly, the cache is keyed by that hash and verified again when used.
+   */
+  remote(url: string, allowLocalHttp: boolean, check: AssetCheck = null): string | null {
+    const key = check ? `sha ${check.sha256}` : `url ${url}`;
     const known = this.#known.get(key);
     if (known !== undefined) return known === "pending" ? null : known;
-    const base = join(this.#dir, digest(url));
+    const base = join(this.#dir, check ? `sha-${check.sha256}` : digest(url));
     for (const ext of ["png", "jpg"]) {
       try {
-        statSync(`${base}.${ext}`);
-        this.#known.set(key, `${base}.${ext}`);
-        return `${base}.${ext}`;
+        const path = `${base}.${ext}`;
+        if (check) {
+          const bytes = readFileSync(path);
+          if (bytes.length !== check.size || sha256(bytes) !== check.sha256) {
+            rmSync(path, { force: true });
+            continue;
+          }
+        } else statSync(path);
+        this.#known.set(key, path);
+        return path;
       } catch {
         // not cached
       }
     }
+    if (check && check.size > MAX_ICON) {
+      this.#known.set(key, null);
+      return null;
+    }
     this.#known.set(key, "pending");
-    void get(this.#fetch, url, { maxBytes: MAX_ICON, timeoutMs: 10_000, allowLocalHttp })
+    void get(this.#fetch, url, {
+      maxBytes: check ? Math.min(MAX_ICON, check.size) : MAX_ICON,
+      ...(check ? { exactSize: check.size, sha256: check.sha256 } : {}),
+      timeoutMs: 10_000,
+      allowLocalHttp,
+    })
       .then((got) => this.#store(key, base, got.bytes!))
       .catch(() => this.#known.set(key, null));
     return null;
@@ -109,4 +130,5 @@ export class Icons {
   }
 }
 
+const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 const digest = (text: string) => createHash("sha256").update(text).digest("hex").slice(0, 32);
