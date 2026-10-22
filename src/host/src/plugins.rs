@@ -94,7 +94,7 @@ pub struct Plugin {
 }
 impl Plugin {
     pub fn load(directory: &Path, generation: u64, events: mpsc::Sender<Event>) -> Result<Self> {
-        let directory = directory.canonicalize().context("plugin directory")?;
+        let directory = dunce::canonicalize(directory).context("plugin directory")?;
         let manifest = crate::manifest::read_development(&directory)?;
         let key = DataKey::Development(manifest.id.clone());
         Self::load_manifest(&directory, generation, events, manifest, key)
@@ -107,7 +107,7 @@ impl Plugin {
         data_key: DataKey,
     ) -> Result<Self> {
         let trial = data_key == DataKey::Trial;
-        let directory = directory.canonicalize()?;
+        let directory = dunce::canonicalize(directory)?;
         if manifest.api_version != API {
             bail!("unsupported apiVersion: {}", manifest.api_version);
         }
@@ -274,7 +274,7 @@ pub fn package_file(directory: &Path, relative: &str) -> Result<PathBuf> {
     if Path::new(relative).is_absolute() {
         bail!("package file must be relative");
     }
-    let path = directory.join(relative).canonicalize()?;
+    let path = dunce::canonicalize(directory.join(relative))?;
     if !path.starts_with(directory) || !path.is_file() {
         bail!("package file must remain inside package directory");
     }

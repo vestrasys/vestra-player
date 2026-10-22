@@ -885,8 +885,17 @@ mod tests {
             all[1].source.as_deref(),
             Some("https://raw.example/owner/repo/main/img/s.png")
         );
-        let local = blocks("![s](img/s.png)", Some("/data/plugin"));
-        assert_eq!(local[0].source.as_deref(), Some("/data/plugin/img/s.png"));
+        // A directory base is a path of this system (`/…` is not absolute
+        // on Windows, where it stays relative like any other non-path base).
+        let base = std::env::temp_dir().join("plugin");
+        let base = base.to_str().unwrap();
+        let local = blocks("![s](img/s.png)", Some(base));
+        assert_eq!(
+            local[0].source.as_deref(),
+            Path::new(base).join("img/s.png").to_str()
+        );
+        let relative = blocks("![s](img/s.png)", Some("data/plugin"));
+        assert_eq!(relative[0].source.as_deref(), Some("img/s.png"));
         assert_eq!(
             remote_images(
                 "![a](https://x/a.png) ![b](https://x/a.png) ![c](c.png)",

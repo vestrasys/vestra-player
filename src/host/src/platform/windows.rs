@@ -437,6 +437,29 @@ pub fn windows_name(build: Option<u32>) -> String {
 }
 
 /// `%APPDATA%\Vestra`.
+/// Durability barrier for the entries of `directory` (`platform::sync_dir`).
+///
+/// A rename (`MoveFileExW` / `SetFileInformationByHandle`, which `std::fs::rename`
+/// and `tempfile` persist use) is atomic on NTFS, which journals metadata, but
+/// it is not durable until the journal reaches the disk: without
+/// `MOVEFILE_WRITE_THROUGH` a crash can roll it back. `FlushFileBuffers` on a
+/// handle to the directory forces that. A directory opens only with
+/// `FILE_FLAG_BACKUP_SEMANTICS`, and the flush needs write access
+/// (`GENERIC_WRITE`), so the read-only `File::open` of the Unix version fails
+/// with "Access is denied". Plain std (`OpenOptionsExt::custom_flags`), no
+/// `unsafe`. Errors are returned, as on Unix: the store treats a failed
+/// barrier as "published, durability unknown".
+pub fn sync_dir(directory: &Path) -> std::io::Result<()> {
+    use std::os::windows::fs::OpenOptionsExt;
+    /// `FILE_FLAG_BACKUP_SEMANTICS` (winbase.h).
+    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+    std::fs::OpenOptions::new()
+        .write(true)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+        .open(directory)?
+        .sync_all()
+}
+
 pub fn app_data_dir() -> Option<PathBuf> {
     std::env::var_os("APPDATA").map(|root| PathBuf::from(root).join("Vestra"))
 }

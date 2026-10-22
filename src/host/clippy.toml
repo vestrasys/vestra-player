@@ -1,0 +1,7 @@
+# Windows: std's canonicalize returns `\\?\C:\…` verbatim paths, which Slint
+# imports (and some tools) do not resolve. dunce returns the plain path when it
+# names the same file, and is std's canonicalize elsewhere.
+disallowed-methods = [
+  { path = "std::fs::canonicalize", reason = "use dunce::canonicalize (no \\\\?\\ prefix on Windows)" },
+  { path = "std::path::Path::canonicalize", reason = "use dunce::canonicalize (no \\\\?\\ prefix on Windows)" },
+]

@@ -97,12 +97,15 @@ fn key_forward(scope: &str) -> String {
 }
 
 pub(crate) fn import_path(file: &std::path::Path) -> Result<String> {
-    let path = file
-        .canonicalize()
-        .context("composition file unavailable")?;
+    let path = dunce::canonicalize(file).context("composition file unavailable")?;
     let path = path.to_str().context("Slint import path must be UTF-8")?;
     if path.chars().any(char::is_control) {
         bail!("control character in Slint import path");
+    }
+    // dunce keeps the Windows verbatim form only where no plain path names
+    // the file (too long, reserved names); Slint does not resolve it.
+    if path.starts_with(r"\\?\") {
+        bail!("Slint cannot import this path (Windows verbatim path): {path}");
     }
     Ok(path.replace('\\', "\\\\").replace('"', "\\\""))
 }
@@ -137,11 +140,7 @@ pub fn shell_source(specs: &[CompileSpec]) -> Result<String> {
         if !owners.insert(spec.owner) || !slots.insert(spec.slot) {
             bail!("this shell requires unique owners and at most one component per slot");
         }
-        if !files.insert(
-            spec.file
-                .canonicalize()
-                .context("composition file unavailable")?,
-        ) {
+        if !files.insert(dunce::canonicalize(&spec.file).context("composition file unavailable")?) {
             bail!("independent composition owners require distinct Slint files");
         }
         let path = import_path(&spec.file)?;

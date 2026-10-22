@@ -89,3 +89,9 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 ## 6. 界面状态文件
 
 `$VESTRA_UI_STATE`，默认 `~/Library/Application Support/Vestra/ui-state.json`；无界面模式不读不写。内容：主窗口位置与尺寸、侧栏宽度、按 manifest id 记录的侧栏面板显示/分离状态与浮动窗口位置、用户绑定覆盖层（`"<manifest id>/<命令 id>": [绑定…]`，`[]` 为解绑；本轮只读）。变化后 1 秒合并写入（临时文件 + 改名），退出时再写一次；读不了的文件改名为 `ui-state.json.bad` 后用默认值。格式见 [core-ui-design.md §8](core-ui-design.md#8-c8-界面状态持久化)。
+
+## 7. 文件路径与持久化（跨平台）
+
+- 规范化路径一律用 `dunce::canonicalize`（`src/host/clippy.toml` 禁用 std 的 `canonicalize`）。Windows 上 std 返回 `\\?\C:\…` 形式，Slint 的 `import` 找不到这种路径，mpv、FFmpeg 也不一定认；dunce 在普通路径指同一个文件时去掉前缀，其它系统与 std 相同。去不掉时（超长路径、保留名）`composition::import_path` 直接报错。包内路径的「在包内」检查两边都用 dunce，结果一致；形式不一致时 `starts_with` 失败，是拒绝而不是放行。
+- 包内相对路径（manifest 字段、`.vxp` 条目名、目录捕获后的文件名）在所有系统上都用 `/`，同一套规则（`manifest::relative_path`）。`.vxp` 条目名里的 `\` 拒绝（zip 规范要求 `/`），不当作分隔符；目录捕获（`package_stage::relative_name`）按路径组件拼 `/`，所以 Windows 的 `ui\a.slint` 与 macOS 的 `ui/a.slint` 摘要相同；Unix 文件名里的 `\` 拒绝（在 Windows 上它是分隔符）。
+- 目录持久化屏障：`platform::sync_dir`。安装库每次原子替换（`tempfile` persist、`fs::rename`）后调用。Unix 对目录 `fsync`。Windows：重命名（`MoveFileExW`/`SetFileInformationByHandle`，不带 `MOVEFILE_WRITE_THROUGH`）在 NTFS 上是原子的（元数据有日志），但日志落盘前崩溃可能回滚，所以对目录句柄 `FlushFileBuffers`：目录只能以 `FILE_FLAG_BACKUP_SEMANTICS` 打开，且刷新需要写权限，只读的 `File::open` 会报 Access denied。只用 std 的 `OpenOptionsExt::custom_flags`，不需要 `unsafe`。两个系统都把错误返回给调用方（catalog 已发布，持久性未知，调用方查询/恢复而不是重做）。

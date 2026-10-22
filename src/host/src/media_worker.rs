@@ -623,9 +623,7 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| std::path::Path::new("."));
-    let parent = parent
-        .canonicalize()
-        .context("PNG destination directory is unavailable")?;
+    let parent = dunce::canonicalize(parent).context("PNG destination directory is unavailable")?;
     let destination = parent.join(filename);
     let temp = tempfile::NamedTempFile::new_in(&parent)
         .context("owned PNG temporary output could not be created")?;
