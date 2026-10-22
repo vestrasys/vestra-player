@@ -43,7 +43,10 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 
 ## 4. Slint 组合与输入
 
-- 编译：宿主、面板、工具窗口、包校验共用一个编译配置（`ui.rs` 的 `compiler()`）：库路径 `vestra` → `ui/vestra/`（`@vestra/theme.slint`、`@vestra/widgets.slint`），风格 `fluent-dark`。默认字体是系统自带的 Hiragino Sans GB（按文件导入并设为各窗口的默认字体）：GUI 实测（2026-10-20）不指定字体时插件窗口的中文显示为空白，Slint 1.16 在这里没有按文字回退。Slint 1.18.1 已能回退（无界面探针，2026-10-22），是否去掉强制字体待真机对比后决定（外观变化）；`VESTRA_FONT_FALLBACK=system` 可关闭它做对比。主题的 `font-mono`（Menlo）在 1.18 下中文可回退显示。
+- 编译：宿主、面板、工具窗口、包校验共用一个编译配置（`ui.rs` 的 `compiler()`）：库路径 `vestra` → `ui/vestra/`（`@vestra/theme.slint`、`@vestra/widgets.slint`），风格 `fluent-dark`。字体见下一条。
+- 字体（用户裁决 2026-10-22）：宿主不指定任何窗口的字体，各窗口用系统默认字体，缺字（西文字体里的中文、`font-mono` Menlo 里的中文）由 Slint 1.18 按字符回退到系统里有这个字的字体（parley/fontique；macOS 真机与无界面探针已确认，Windows 待 S6 真机）。各平台系统自带中文字体：macOS 苹方，Windows 微软雅黑，Linux 发行版通常带 Noto CJK，Android/iOS 系统字体。1.16 时代强制 Hiragino Sans GB / Microsoft YaHei 的注入（`platform::ui_font`、`ui::font_import`、窗口根上的 `default-font-family`、`host.slint` 的 `// VESTRA-FONT` 标记、`VESTRA_FONT_FALLBACK`）已删除，旧代码见 2f8e6ab 的 `ui.rs`、`composition.rs`、`settings_window.rs`。
+  - 若某个平台回退失败（例如没有中文字体的精简 Linux），只给该平台补回退字体，不改其它平台：在该平台模块里加 `ui_fallback_font() -> Option<(family, path)>`（其它平台模块返回 `None`，`platform/mod.rs` 的表里登记），再把上面删掉的注入恢复为调用它（工具窗口仅在插件没写 `default-font-family` 时注入，主窗口、浮动窗口、选项窗口直接注入）。字体用 Noto Sans SC（OFL）：字幕已经带了一份 Noto Sans CJK SC（`src/assets/fonts/noto-cjk/`，16 MB，`font_carrier.rs` 会把它写到临时目录，可以直接 `import` 那个路径），不用再加安装包体积。注意：Slint 没有只把字体加进「按文字回退」链的公开接口，设为默认字体后该平台的西文也会换成 Noto；`SLINT_FONT_PATH` 环境变量效果相同，且要在 Slint 初始化前设置（Rust 里 `set_var` 需要 `unsafe`，不用）。
+  - 斜体：系统中文字体都没有斜体，FemtoVG 与软件渲染器不合成斜体，所以 Markdown 斜体仍另加颜色（`ui_markdown.rs` `EMPHASIS_COLOR`）。
 - Slint 版本锁定 `=1.18.1`（`Cargo.toml` 与 `unsafe/render`）。依赖的私有接口两处，升级时必须复测：`ui_markdown` 的 `parse_markdown`（带占位参数的 Markdown）、`ui::settle_layout` 的 `WindowInner::ensure_tree_instantiated`。后者的原因：1.17 起 `if`/`for` 元素在每帧渲染和每个输入事件前的一遍里创建和删除，不在读取布局时更新，所以宿主切换 `sidebar-visible` 等条件后、下一帧之前读到的几何是旧的；宿主读视频区和窗口尺寸前先调用它（窗口 tick、画中画定位、`window.setVideoArea`、拖放落点）。
 - 工具窗口：插件 `.slint` 文件恰好导出一个组件；宿主用 slint-interpreter 编译，按 SDK 登记的回调白名单转发回调。
 - 面板：文件导出一个 component 和一个 global（属性与回调的桥接对象）；宿主按 owner 别名把它导入主界面（`host.slint` 的插入标记），转发 global 上的全部回调。主窗口外壳：视频列（视频 + 底栏）在左，3px 分隔条与全高侧栏在右；全屏时底栏覆盖在视频底部并按 `window_state::Policy` 的空闲规则隐藏（指针停在底栏上时不隐藏），附着的侧栏变成右边缘的弹出层。
@@ -51,6 +54,7 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 - 输入：主窗口最外层、两个面板各包一层 FocusScope。Slint 的按键先给焦点控件，未接受的逐级冒泡；面板那一层以「面板 + 全局」查表，最外层以全局查表（`bindings.rs`）。查表在 UI 线程上同步进行（`Rc<RefCell<InputShared>>`，不借用 Host），绑定了就返回 accept 并发 `Event::Binding`，主循环再按注册表检查启用状态后执行。视频区鼠标（双击、中键、侧键、滚轮）同理。全屏、退出全屏、退出是宿主自己的命令（owner 0），和插件命令在同一张表与同一棵菜单树里。
 - 菜单：`commands.rs` 按 `order`（子菜单取其最前的命令）建树，`menu.rs` 投影为面板列表（分隔线、单选、快捷键文字、行位置），`menu-view.slint` 只负责绘制。面板右键菜单（C11）复用同一投影的单层形式，弹在面板当前所在的窗口。
 - 模拟器输入捕获（`producer.declareInput`）在 winit 层先拦截按键；绑定在宿主命令上的键（全屏等）放行。
+- 窗口标准快捷键（用户裁决 2026-10-22）：工具窗口、浮动面板、选项窗口按系统约定关闭（macOS ⌘W；Windows Ctrl+W、Ctrl+F4；Linux Ctrl+W），主窗口不响应。表在平台层 `platform/shortcuts.rs`：按系统分开的纯函数 `window_shortcuts(System)`，每个平台模块只声明自己的 `SYSTEM`，所以每个系统的条目在任何机器上都有测试；以后加 Linux 桌面变体、Android、iOS 只加条目（移动端表为空，返回手势由那个平台模块映射到 `WindowAction::Close`）。`ui::WindowShortcuts` 在这些窗口的 winit 钩子里最先检查按键（字母按当前布局不带修饰键的字符，非拉丁布局按美式键位；修饰键必须完全一致），命中时调用 `slint::Window::dispatch_event(CloseRequested)`，即标题栏关闭按钮的同一路径（工具窗口 `ViewClosed` → 插件 `ui.closed`，浮动面板 `FloatingClosed`，选项窗口 `Event::Settings(_, None)`，与「关闭」按钮的 `close-window` 相同），并返回 `PreventDefault`：Slint 收不到这次按键，所以输入框获得焦点时也有效，也不会进绑定表或插件的 Slint 处理器。之前选项窗口的 ⌘W 写在 Slint 里，看的是 `modifiers.meta`，而 Slint 在 macOS 上把 ⌘ 报告为 `control`（⌃ 才是 `meta`，见 `SLINT_CONTROL_IS_COMMAND`），所以从来没生效；该处理器已删除。
 
 ## 5. 代码地图
 

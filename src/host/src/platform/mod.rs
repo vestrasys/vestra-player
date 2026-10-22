@@ -12,13 +12,14 @@
 //!
 //! | area | functions |
 //! | --- | --- |
+//! | window shortcuts | `SYSTEM` → `standard_window_shortcut` (the table itself is `shortcuts.rs`, the same on every system) |
 //! | windows | `shown`, `capture_windows`, `associate_new`, `set_floating`, `window_count`, `resize_content`, `screen_for`, `pointer_in`, `modifier_keys`, `double_click_seconds`, `menu_show_delay_ms` |
 //! | clipboard | `clipboard_read_text`, `clipboard_write_text`, `clipboard_write_image` |
 //! | dialogs | `confirm` |
 //! | power | `sleep_launcher` |
 //! | files and links | `reveal`, `open_path`, `open_url` (blocking, run on a worker thread) |
 //! | secrets | `secret_get`, `secret_set`, `secret_delete` (blocking) |
-//! | facts | `os_facts` (blocking), `displays` (UI thread), `app_data_dir`, `ui_font`, `default_ffmpeg`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD` |
+//! | facts | `os_facts` (blocking), `displays` (UI thread), `app_data_dir`, `default_ffmpeg`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD` |
 //! | generated streams | `av_listen` → `AvListener` / `AvStream` (Unix: `av_unix` below; Windows: `av_tcp`) |
 //! | offline media | `HELD_FILE_INPUT` (how FFmpeg names its stdin, the held source file) |
 //! | rendering | `GPU_RENDER`, `gpu_start` → `GpuRenderer` / `GpuHandle` / `GpuFrame` (macOS: `vestra-gpu-render`; elsewhere `no_gpu` below refuses, so the host renders in software) |
@@ -42,6 +43,14 @@ mod imp;
 mod imp;
 
 pub use imp::*;
+
+mod shortcuts;
+pub use shortcuts::*;
+
+/// The running system's standard window shortcut for `press`, if any.
+pub fn standard_window_shortcut(press: &KeyPress) -> Option<WindowAction> {
+    window_shortcut(imp::SYSTEM, press)
+}
 
 // The system picture-in-picture window exists only on macOS so far; Windows
 // and Linux will get a borderless always-on-top window of the player's own.

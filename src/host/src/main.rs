@@ -1877,14 +1877,20 @@ impl Host {
         }
         Ok(())
     }
-    /// A window that forwards keys to the binding table records each press's
-    /// physical key first (see `observe_key`).
+    /// A floating panel forwards keys to the binding table and records each
+    /// press's physical key first (see `observe_key`). Its standard window
+    /// shortcuts (⌘W…) come before that and never reach the table; the main
+    /// window has its own hook (`bind_shell`) without them.
     fn observe_keys(&self, window: &slint_interpreter::ComponentInstance, generation: u64) {
         use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
         let input = self.input.clone();
         let events = self.events.clone();
         let modifiers = std::cell::Cell::new(winit::keyboard::ModifiersState::empty());
-        window.window().on_winit_window_event(move |_, event| {
+        let shortcuts = ui::WindowShortcuts::default();
+        window.window().on_winit_window_event(move |window, event| {
+            if shortcuts.filter(window, event) {
+                return EventResult::PreventDefault;
+            }
             let _ = observe_key(&input, &modifiers, event);
             release_modifiers(&input, &events, generation);
             if let winit::event::WindowEvent::DroppedFile(path) = event {

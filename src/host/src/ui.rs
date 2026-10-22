@@ -45,37 +45,14 @@ pub fn compiler() -> Compiler {
     compiler
 }
 
-/// Default UI font. Without a forced family Slint 1.16 renders CJK text in
-/// plugin windows as blank (no per-script fallback here, GUI-verified
-/// 2026-10-20), so a system CJK font file (`platform::ui_font`: Hiragino
-/// Sans GB on macOS, Microsoft YaHei on Windows) is imported and made the
-/// default family whenever it exists (§18 Q12). `VESTRA_FONT_FALLBACK=system`
-/// opts out, for checking Slint's own fallback: 1.18.1 falls back in a
-/// headless probe (2026-10-22); dropping the forced family changes how all
-/// Latin text looks, so it waits for a side-by-side check on the real machine.
-pub fn font() -> Option<(&'static str, &'static str)> {
-    if std::env::var("VESTRA_FONT_FALLBACK").as_deref() == Ok("system") {
-        return None;
-    }
-    crate::platform::ui_font()
-}
-
-/// Source prefix that makes the forced font available (empty by default).
-pub fn font_import() -> String {
-    font()
-        .map(|(_, path)| format!("import \"{path}\";\n"))
-        .unwrap_or_default()
-}
-
+/// Fonts: no window sets `default-font-family`, so every window uses the
+/// system UI font and Slint's per-character fallback for scripts it lacks
+/// (CJK included since Slint 1.18; architecture README "fonts" has how to
+/// add a fallback font for one platform only).
 pub fn compile(path: &Path) -> Result<ComponentInstance> {
     compile_source(std::fs::read_to_string(path)?, path)
 }
 pub fn compile_source(mut source: String, path: &Path) -> Result<ComponentInstance> {
-    if let Some((family, _)) = font()
-        && !source.contains("default-font-family")
-    {
-        source = format!("{}{}", font_import(), with_window_font(&source, family));
-    }
     // R-H6: the player sets this window's palette (which `Theme` reads).
     if !source.contains(crate::theme::PALETTE) {
         source.push('\n');
@@ -93,22 +70,78 @@ pub fn compile_source(mut source: String, path: &Path) -> Result<ComponentInstan
     })?;
     definition.create().map_err(Into::into)
 }
-/// Insert a default font family into the exported root Window, if there is one.
-fn with_window_font(source: &str, family: &str) -> String {
-    let Some(start) = source.find("export component ") else {
-        return source.to_owned();
-    };
-    let Some(brace) = source[start..].find('{').map(|i| start + i) else {
-        return source.to_owned();
-    };
-    if !source[start..brace].contains("inherits Window") {
-        return source.to_owned();
+/// The standard window shortcuts (`platform::standard_window_shortcut`) of
+/// a secondary window: tool windows, floating panels, the options window;
+/// never the main window. Its winit hook calls `filter` first, before Slint
+/// sees the key, so the shortcut works with a text field focused and never
+/// reaches the window's Slint handlers, the binding table or a plugin. (On
+/// macOS Slint reports ⌘ as `control`, which is why the options window's
+/// own Slint `meta`+W handler never fired for ⌘W.)
+#[derive(Default)]
+pub struct WindowShortcuts {
+    modifiers: std::cell::Cell<slint::winit_030::winit::keyboard::ModifiersState>,
+}
+impl WindowShortcuts {
+    /// True: the event was a standard shortcut, done; the hook returns
+    /// `EventResult::PreventDefault`. An auto-repeat is kept from Slint too.
+    pub fn filter(
+        &self,
+        window: &slint::Window,
+        event: &slint::winit_030::winit::event::WindowEvent,
+    ) -> bool {
+        use slint::winit_030::winit::{
+            event::{ElementState, WindowEvent},
+            keyboard::{Key, PhysicalKey},
+            platform::modifier_supplement::KeyEventExtModifierSupplement,
+        };
+        match event {
+            WindowEvent::ModifiersChanged(state) => {
+                self.modifiers.set(state.state());
+                false
+            }
+            WindowEvent::KeyboardInput {
+                event,
+                is_synthetic: false,
+                ..
+            } if event.state == ElementState::Pressed => {
+                let PhysicalKey::Code(code) = event.physical_key else {
+                    return false;
+                };
+                let state = self.modifiers.get();
+                let press = crate::platform::KeyPress {
+                    code: format!("{code:?}"),
+                    base: match event.key_without_modifiers() {
+                        Key::Character(text) if text.chars().count() == 1 => text.chars().next(),
+                        _ => None,
+                    },
+                    mods: crate::platform::ShortcutMods {
+                        ctrl: state.control_key(),
+                        alt: state.alt_key(),
+                        shift: state.shift_key(),
+                        cmd: state.super_key(),
+                    },
+                };
+                let Some(action) = crate::platform::standard_window_shortcut(&press) else {
+                    return false;
+                };
+                if !event.repeat {
+                    perform(window, action);
+                }
+                true
+            }
+            _ => false,
+        }
     }
-    format!(
-        "{}{{\n    default-font-family: \"{family}\";{}",
-        &source[..brace],
-        &source[brace + 1..]
-    )
+}
+/// Do a standard window action. Close is the title bar's close button: the
+/// window's own close-requested handler runs (a plugin's view sends
+/// `ui.closed`, the options window and a floating panel close as usual).
+pub fn perform(window: &slint::Window, action: crate::platform::WindowAction) {
+    match action {
+        crate::platform::WindowAction::Close => {
+            window.dispatch_event(slint::platform::WindowEvent::CloseRequested)
+        }
+    }
 }
 pub struct View {
     pub instance: ComponentInstance,
@@ -161,6 +194,19 @@ pub fn open(
         let _ = events.send(Event::ViewClosed(owner, closed.clone()));
         slint::CloseRequestResponse::HideWindow
     });
+    let shortcuts = WindowShortcuts::default();
+    {
+        use slint::winit_030::{EventResult, WinitWindowAccessor};
+        instance
+            .window()
+            .on_winit_window_event(move |window, event| {
+                if shortcuts.filter(window, event) {
+                    EventResult::PreventDefault
+                } else {
+                    EventResult::Propagate
+                }
+            });
+    }
     prepare(&instance);
     instance.show()?;
     crate::platform::shown(instance.window());
@@ -272,6 +318,60 @@ export component W inherits Window {
             });
         wait(700);
         assert!(!showing());
+    }
+
+    /// Ruling 2026-10-22 item 2: a standard close shortcut on a plugin's
+    /// tool window is its title bar's close button: the window hides and
+    /// the plugin learns the view closed (`ui.closed`). The focused text
+    /// field does not matter: the winit hook takes the key before Slint.
+    #[test]
+    fn standard_close_on_a_tool_window_is_its_close_button() {
+        headless();
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("w.slint");
+        std::fs::write(
+            &file,
+            r#"import { LineEdit } from "std-widgets.slint";
+export component W inherits Window {
+    width: 200px; height: 100px;
+    field := LineEdit {}
+    init => { field.focus(); }
+}"#,
+        )
+        .unwrap();
+        let (events, received) = mpsc::channel();
+        let view = open(&file, 7, "find", &[], &[], events, |_| {}).unwrap();
+        let window = view.instance.window();
+        assert!(window.is_visible());
+        perform(window, crate::platform::WindowAction::Close);
+        assert!(!window.is_visible());
+        assert!(matches!(
+            received.try_recv(),
+            Ok(Event::ViewClosed(7, id)) if id == "find"
+        ));
+    }
+
+    /// Floating panels and the options window answer close requests with
+    /// `KeepWindowShown` and close through their own event; the shortcut
+    /// runs that same handler and leaves the hiding to it.
+    #[test]
+    fn standard_close_runs_the_windows_own_close_handler() {
+        headless();
+        let instance = compile_source(
+            "export component W inherits Window { width: 100px; height: 100px; }".into(),
+            Path::new("w.slint"),
+        )
+        .unwrap();
+        instance.show().unwrap();
+        let asked = std::rc::Rc::new(std::cell::Cell::new(0));
+        let count = asked.clone();
+        instance.window().on_close_requested(move || {
+            count.set(count.get() + 1);
+            slint::CloseRequestResponse::KeepWindowShown
+        });
+        perform(instance.window(), crate::platform::WindowAction::Close);
+        assert_eq!(asked.get(), 1);
+        assert!(instance.window().is_visible());
     }
 
     fn headless() {

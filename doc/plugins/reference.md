@@ -317,6 +317,7 @@ binding  = { 修饰键 "+" } 输入          修饰键按 Ctrl、Alt、Shift、C
 - `Mouse:LeftClick`（视频区左键单击）：只有它有生效的绑定时，播放器才延迟判定左键按下：系统双击间隔内没有第二次按下、指针移动不超过 4 点，才算单击并触发；第二次按下算双击（`Mouse:LeftDoubleClick` 照常）。没有绑定时左键行为不变（立即聚焦视频区，没有延迟）。
 - 鼠标绑定只在视频区生效，可带修饰键；`:LeftHalf` / `:RightHalf` 按双击位置区分左右半边，带区的绑定优先于不带区的。滚轮按累计位移计步。右键保留给菜单：在视频区按下并在视频区松开时，在松开处弹出（交互对齐 G-15）。窗口模式下在视频区按住左键（不带修饰键）移动超过 4px 时拖动窗口（G-05），这次按下不再算 `Mouse:LeftClick`，也不参与双击；全屏与菜单打开时不拖动。
 - 作用范围：默认全局（主窗口或浮动面板窗口获得焦点、且按键没被焦点控件吃掉时，例如输入框里的空格不会触发）；`focus: "panel"` 只在本插件面板（附着或浮动）获得焦点时生效，此时先于全局查找。工具窗口里不触发绑定。
+- 窗口标准快捷键不是绑定：工具窗口、浮动面板、选项窗口按系统的标准关闭键关闭（macOS ⌘W；Windows Ctrl+W、Ctrl+F4；Linux Ctrl+W），这些键在窗口收到时就被播放器处理，不进入绑定表，也不交给该窗口里的插件 Slint。主窗口不响应（关闭主窗口等于退出）：插件绑定 `Ctrl+W` 在主窗口照常触发，在这些窗口里不触发（macOS 上 `Ctrl+W` 也认 ⌘W）。默认绑定都不用这些键。
 - 菜单或系统对话框打开时绑定暂停。默认只在按下时触发；`repeat: true` 时按住会重复触发。
 - 冲突（同一输入、同一范围被两个命令声明）不报错：用户覆盖层优先，其次宿主自己的命令，再次先加载的插件；被压下的绑定写一行宿主日志，赢家停用后自动生效。测试里用 `host.conflicts` 检查。
 - 宿主自己的命令：「全屏」（`Enter`、`Alt+Enter`、`F11`、`Mouse:LeftDoubleClick`；画中画期间视频区双击改为把画面放回主窗口，§6.6）、「退出全屏」（`Escape`，不在菜单）、「退出」（`Cmd+Q`），以及 14 个基础播放动作（§5.5）。
@@ -633,7 +634,7 @@ window.on("openLink", (url: string) => plugin.system.openUrl(url));
 ```
 
 - 播放器解析（pulldown-cmark）并绘制：标题 1–6、段落（粗体、斜体、删除线、行内代码、链接）、无序/有序/任务列表（嵌套 ≤ 4 层）、代码块（等宽、不高亮）、引用（≤ 4 层）、图片、GFM 表格（单元格为纯文本，≤ 16 列 × 500 行）、分隔线。**内嵌 HTML 不显示**；脚注、数学不启用。`MarkdownRef` 只能作为 `[MarkdownBlock]` 属性的整个值，属于创建它的作用域（释放后写入为 `invalid`）。
-- 显示细节：播放器为中文强制使用的系统字体（Hiragino Sans GB、Microsoft YaHei）没有斜体，Slint 也不合成斜体，所以斜体另加琥珀色、删除线另加灰色，保证在任何字体下都看得出；行内代码整段用 Slint 的等宽胶囊样式（字号略小、半透明底），代码块整块用 `Theme.font-mono`，其中的中文按系统字体回退显示；任务列表的方框用图形绘制，不依赖字体字形；表格每行列宽相同，表头与正文都按分隔行的对齐方式（`:--`、`:-:`、`--:`）对齐。
+- 显示细节：中文回退到的系统字体（苹方、Microsoft YaHei 等）没有斜体，Slint 的 FemtoVG 与软件渲染器也不合成斜体，所以斜体另加琥珀色、删除线另加灰色，保证在任何字体下都看得出；行内代码整段用 Slint 的等宽胶囊样式（字号略小、半透明底），代码块整块用 `Theme.font-mono`，其中的中文按系统字体回退显示；任务列表的方框用图形绘制，不依赖字体字形；表格每行列宽相同，表头与正文都按分隔行的对齐方式（`:--`、`:-:`、`--:`）对齐。
 - 链接：点击时 `MarkdownView` 发出 `link-clicked(url)`，相对地址已按 `base` 解析（`#锚点` 原样）；打开与否由插件决定。
 - `base`：`http(s)` 地址（如 README 自己的地址）或绝对目录；相对链接与图片按它解析。没有 `base` 时相对图片显示替代文字。
 - 图片：PNG/JPEG。本地图片按 `ui.image` 的规则（本插件包目录或数据目录内，≤ 16 MB、4096²，与 `ui.image` 共用每插件 64 MB 的解码缓存）。`https:` 图片由 SDK 在本插件进程里下载到 `<dataDirectory>/.vestra-cache/markdown/`：单张 ≤ 4 MB、10 秒、重定向 ≤ 5 次（只跟随到 `https:`）、同时 4 个、每文档 ≤ 64 张；缓存 32 MB，按最近使用淘汰，同一地址 24 小时内不重新下载。下载失败、`http:`、SVG/GIF 等显示替代文字，`markdown()` 本身不因此失败。`remoteImages: false` 不下载。
@@ -664,7 +665,7 @@ interface Window extends View, Disposable {
 }
 ```
 
-- 用户点标题栏的关闭按钮时，播放器关闭该窗口（等同 `close()`），`opened` 变为 `false`，然后调用 `onClose` 的监听；之后 `show()` 用最新属性重新打开。插件自己调用 `close()` / `dispose()` 不触发 `onClose`。轮询之类的工作在 `onClose` 里停掉。测试里用 `host.window(id).userClose()` 模拟。
+- 用户点标题栏的关闭按钮，或按系统的标准关闭键（macOS ⌘W；Windows Ctrl+W、Ctrl+F4；Linux Ctrl+W；输入框获得焦点时也有效）时，播放器关闭该窗口（等同 `close()`），`opened` 变为 `false`，然后调用 `onClose` 的监听；之后 `show()` 用最新属性重新打开。插件自己调用 `close()` / `dispose()` 不触发 `onClose`。轮询之类的工作在 `onClose` 里停掉。测试里用 `host.window(id).userClose()` 模拟。
 - `create` 不会打开窗口。第一次 `show()` 时，用当前绑定的属性作为初始值打开，不会先闪一下默认值。
 - **回调必须在第一次 `show()` 之前用 `on` 绑定**，之后再绑定新的回调名会抛错。
 - 窗口 id 默认取文件名（`ui/picture.slint` → `picture`）；同一插件用同一文件开多个窗口时，用 `options.id` 区分，id 重复会抛错。
@@ -709,7 +710,7 @@ interface SlotState {
 
 - 面板文件导出**一个 component 和一个 global**。属性和回调声明在 global 上（桥接对象），component 负责布局。名字由 SDK 从文件推断；文件导出多个时用 `options` 指定。`title` 是侧栏分离后浮动窗口的标题。
 - `panels.bottom` / `panels.sidebar` 不属于挂载者：任何插件都能读取和切换（例如底栏按钮开关播放列表）。位置为空时 `setVisible` 等以 `missing` 失败；对底栏 `setDetached` 是 `invalid`。没有 `events` 时 `state` 只在本插件自己改动后刷新。侧栏的显示、宽度、分离状态与浮动窗口位置由播放器跨启动记住。
-- 侧栏占视频右侧全高，用户可拖动分隔条改宽度（侧栏至少 317、视频至少 318）；窗口窄到放不下时先压缩视频，再不够才隐藏（`reason: "space"`，偏好不变）。分离后浮动窗口默认 300×408、最小 300×250，显示同一个面板组件，插件的属性和回调不变；点浮动窗口的关闭按钮等于 `setVisible(false)`。
+- 侧栏占视频右侧全高，用户可拖动分隔条改宽度（侧栏至少 317、视频至少 318）；窗口窄到放不下时先压缩视频，再不够才隐藏（`reason: "space"`，偏好不变）。分离后浮动窗口默认 300×408、最小 300×250，显示同一个面板组件，插件的属性和回调不变；点浮动窗口的关闭按钮或按标准关闭键（同 §6.2）等于 `setVisible(false)`。
 - **全屏时的附着侧栏**（交互对齐 G-01）：不挤压视频，而是以覆盖层盖在视频右侧（全高，宽为用户拖出的宽度、至少留 318 给视频）。进入全屏时**收起**（`effective: false`，`reason: "fullscreen"`）；偏好为显示时，指针移到屏幕右边缘 4px 以内**弹出**（向左滑出 150ms，`effective: true`，`reason: null`），弹出期间底栏收窄到弹出层左边。指针离开弹出层（回到它左边的视频或底栏上）500ms 后收起；没有锁时 3 秒无活动也收起。全屏中 `setVisible(true)`（F6、底栏按钮）立即弹出，保持到指针进入后再离开或 3 秒无活动；`setVisible(false)` 立即收起。偏好为隐藏时右边缘不弹出。弹出不抢键盘焦点；收起时焦点交回视频区。浮动侧栏不受影响。是否处于覆盖形态由插件按 `window.state.fullscreen && !state.detached` 自己判断；`reason: "fullscreen"` 表示「覆盖层收起，右边缘可以唤出」，不再表示「全屏时不可用」，所以按偏好画开关按钮的插件把它当作「开」。
 - `showMenu`：在面板当前所在的窗口弹出单层菜单，列出本插件的命令（`null` 为分隔线），样式、勾选、快捷键文字与主菜单相同；选择一项等于执行该命令。`at` 是窗口坐标，在 Slint 里取 `self.absolute-position.x / 1px + self.mouse-x / 1px`（y 同理）。命令不属于本插件以 `missing` 失败，面板未显示以 `unavailable` 失败，最多 32 项。菜单比窗口高时在窗口内滚动（与主菜单相同）。建议在右键**松开**时调用（与主菜单一致）。
 - `setInteraction`：用户正在操作面板（输入框聚焦、拖动、弹出菜单打开）时设为 `true`，防止底栏自动隐藏、全屏侧栏弹出层收起。合并写入，最后写入生效。
@@ -734,7 +735,7 @@ interface SlotState {
 - 会被插件改值的输入控件用双向绑定（`value <=> root.x`、`checked <=> root.x`）。单向的 `value: root.x` 在用户操作控件后会断开，之后插件改值，控件不会跟着动。属性须为 `in-out`。
 - `in` 属性只能单向绑定时，用 `changed x => { slider.value = root.x; }` 在模型变化时回推。
 - 主题与控件：`import { Theme } from "@vestra/theme.slint";` 提供颜色（由播放器按当前配色下发，§6.8；插件只读，不能给 `Theme` 赋值，硬编码颜色不会随配色变化）（`bg-bar`、`bg-panel`、`text`、`accent`、`playing`…）、字号（`font-xs` 9px、`font-body` 11px、`font-tab` 12px、`font-title` 13px、`font-mono` 等宽（Menlo；其中的中文按系统字体回退显示））和控件尺寸（`button-height` 21px、`input-height`、`form-row-gap`、`dialog-padding`…），完整列表见 `src/host/ui/vestra/theme.slint`。`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";` 提供参考播放器样式的按钮（文字按钮 21px、`small` 18px；`text` 为空时是图标按钮：`icon` 是 Slint `Path` 的路径数据，画在 `icon-width` × `icon-height`（默认 14×12）的 viewbox 里，`stroked: true` 画 1.5px 线而不填充，`checked` 表示开启态；图标按钮的宽高由调用方设置，悬停提示用 `ToolTipArea` 包住：悬停 600ms 显示，指针离开或按下时关闭，下次悬停再显示；只读属性 `showing` 表示提示正在显示）、2px 线滑块（`panel: true` 为面板样式）和悬停提示，以及输入链接组件 `UrlInputRow`（UI-DLG-02：多行输入 + 「打开」「取消」；`in-out property <string> text`、`placeholder`、`confirm-text`（默认「打开」）、`cancel-text`、`enabled`，`callback accepted(string)`（回车或点确定，Shift+回车换行）、`cancelled()`（Esc 或点取消），`focus-input()`、`select-all()` 两个公共函数；不校验地址，校验由插件做；用法见示例 §29）。
-- 所有插件 Slint 都以 `fluent-dark` 风格编译：std-widgets 的控件默认是深色。默认字体是系统 UI 字体（含中文回退），插件不需要自己设字体。
+- 所有插件 Slint 都以 `fluent-dark` 风格编译：std-widgets 的控件默认是深色。每个窗口都用系统默认字体，字体里没有的字（例如西文字体里的中文）由 Slint 按字符回退到系统里有这个字的字体，插件不需要自己设字体；插件写的 `default-font-family` / `font-family` 照常生效，缺字同样回退。播放器不内置界面字体。
 - 编辑器里要让 `@vestra/...` 导入可解析，给 Slint 语言服务设 `libraryPaths`：`{ "vestra": "<仓库>/src/host/ui/vestra" }`。
 
 ### 6.5 屏幕提示 `plugin.osd`
@@ -830,7 +831,7 @@ settings.show(pageId?: string): Promise<void>;
 
 - 页面文件与面板相同：导出一个 component 和一个 global，名字由 SDK 推断（没有 `component` / `global` 选项）；属性与回调在 global 上，回调没有「先绑定再显示」的限制。页面宽 440 逻辑点，高度由组件决定，超高时选项窗口垂直滚动。
 - `id`：本插件内唯一，1–64 个字母、数字、`.`、`-`、`_`；重复或不合法 `invalid`。`title` 1–24 个字符；每个插件至多 8 页（超出 `invalid`）；`order` 整数（±1 000 000），同一分类内小的在前，再按插件 id、页面 id。不合法的 `options` 在 `page()` 时立即抛出；文件编译失败时 `ready` 以 `ui-prepare` 失败（激活期间 = 激活失败）。
-- 选项窗口（标题「选项」，640×480、最小 600×420，可调整大小）由播放器创建：左侧分类树（160 宽，九个分类按上面的固定顺序，标题为 常规 / 播放 / 字幕 / 视频 / 声音 / 快捷键与鼠标 / 外观 / 插件 / 其它，空分类不显示），右侧当前页面，底部「关闭」。窗口内不触发快捷键，⌘W 关闭；打开不影响播放。
+- 选项窗口（标题「选项」，640×480、最小 600×420，可调整大小）由播放器创建：左侧分类树（160 宽，九个分类按上面的固定顺序，标题为 常规 / 播放 / 字幕 / 视频 / 声音 / 快捷键与鼠标 / 外观 / 插件 / 其它，空分类不显示），右侧当前页面，底部「关闭」。窗口内不触发快捷键，标准关闭键（同 §6.2）等于「关闭」；打开不影响播放。
 - `show()`：打开窗口或把它带到前面。`pageId` 只能是本插件的页面（别的值 `invalid`）；省略时显示当前页，窗口第一次打开时显示上次的页面（播放器记在界面状态文件 `settings.lastPage`），不存在则第一页。没有界面时 `unavailable`。
 - 页面所属插件停用（或 `dispose`）时页面移除：正在显示的话切到同一分类的第一页，分类空了切到「常规」第一页（再没有则第一页），全空显示「没有可设置的项目」；插件重新启用后随它的注册恢复。页面集合变化时窗口重建，各页面的属性由播放器按最后写入的值恢复（`bind` 照常）。
 - 页面属性可以是运行时图片（§6.1）。
@@ -1398,8 +1399,18 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | 渲染 §5.4 | GPU 渲染（OpenGL），硬件解码 | 软件渲染，不开硬件解码 | 同 Windows |
 | 渲染选项 §8.2 | 可用（`peakDetect` 不起作用） | `unsupported` | `unsupported` |
 | 绑定 §4.1 | `Ctrl` 也认 ⌘ | `Cmd` 是徽标键 | 同 Windows |
+| 关闭工具窗口、浮动面板、选项窗口 §4.1 | ⌘W | Ctrl+W、Ctrl+F4 | Ctrl+W |
+| 界面字体 §6.4 | 系统默认（中文回退到苹方等） | 系统默认（中文回退待真机确认） | 系统默认 |
 
 ## 17. 变更说明
+
+### 系统默认字体、标准关闭键（2026-10，SDK 1.1.3）
+
+插件 API 签名不变。
+
+- 不再强制界面字体：之前每个窗口默认用 Hiragino Sans GB（macOS）/ Microsoft YaHei（Windows），现在用系统默认字体，缺字由 Slint 1.18 按字符回退（§6.4）。西文字形、行高、宽度随之变成系统字体的，自己按像素排版文字的插件请检查。`VESTRA_FONT_FALLBACK` 环境变量删除。
+- 工具窗口、浮动面板、选项窗口按系统标准关闭键关闭（§4.1、§6.2）：走与标题栏关闭按钮相同的路径（工具窗口照常 `onClose`）。之前选项窗口的 ⌘W 在 macOS 上不起作用（它的 Slint 处理器看的是 `meta`，而 Slint 在 macOS 上把 ⌘ 报告为 `control`）。
+- `Theme.font-mono` 的注释改为：Menlo 只有 macOS 自带，没有时用默认字体（不是等宽）。SDK 1.1.3 带同步副本。
 
 ### Slint 1.18.1（2026-10，SDK 1.1.2）
 
