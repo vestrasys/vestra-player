@@ -8,7 +8,9 @@
  *          the logo scaled to 60 % and centred. PNG entries 16–1024 px.
  *   Windows vestra.ico: the logo itself (Windows icons have no plate),
  *          16–256 px. Committed as src/host/windows/vestra.ico (build.rs
- *          embeds it in the exe); `--check` fails when it is out of date.
+ *          embeds it in the exe); `--check` fails when its entries or
+ *          pixels differ from a fresh one (not its bytes: zlib output
+ *          differs between builds and CPUs).
  *
  * Pure Node (zlib): same bytes on every OS, no sips/iconutil/ImageMagick.
  *
@@ -36,8 +38,11 @@ const crc32 = (bytes) => {
   return (c ^ -1) >>> 0;
 };
 
-/** 8-bit RGBA (or RGB), non-interlaced → { width, height, data: Float32 premultiplied 0–1 }. */
-export function decodePng(bytes) {
+/**
+ * The pixels of an 8-bit RGB/RGBA non-interlaced PNG, unfiltered:
+ * { width, height, channels, pixels } (pixels: Buffer, row-major).
+ */
+export function decodePngPixels(bytes) {
   if (bytes.readUInt32BE(0) !== 0x89504e47) throw new Error("not a PNG");
   let offset = 8;
   let header;
@@ -90,6 +95,12 @@ export function decodePng(bytes) {
       pixels[y * stride + x] = value & 0xff;
     }
   }
+  return { width, height, channels, pixels };
+}
+
+/** 8-bit RGBA (or RGB), non-interlaced → { width, height, data: Float32 premultiplied 0–1 }. */
+export function decodePng(bytes) {
+  const { width, height, channels, pixels } = decodePngPixels(bytes);
   const data = new Float32Array(width * height * 4);
   for (let i = 0; i < width * height; i++) {
     const alpha = channels === 4 ? pixels[i * 4 + 3] / 255 : 1;
@@ -100,7 +111,7 @@ export function decodePng(bytes) {
   return { width, height, data };
 }
 
-export function encodePng({ width, height, data }) {
+export function encodePng({ width, height, data }, { level = 9 } = {}) {
   const raw = Buffer.alloc((width * 4 + 1) * height);
   for (let y = 0; y < height; y++) {
     raw[y * (width * 4 + 1)] = 0;
@@ -129,7 +140,7 @@ export function encodePng({ width, height, data }) {
   return Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     chunk("IHDR", ihdr),
-    chunk("IDAT", deflateSync(raw, { level: 9 })),
+    chunk("IDAT", deflateSync(raw, { level })),
     chunk("IEND", Buffer.alloc(0)),
   ]);
 }
@@ -222,7 +233,7 @@ export function macosMaster(logo) {
 // ------------------------------------------------------------ containers
 
 /** .icns with PNG entries (macOS 10.7+). */
-export function icns(master) {
+export function icns(master, options) {
   const entries = [
     ["icp4", 16],
     ["icp5", 32],
@@ -242,8 +253,8 @@ export function icns(master) {
       cache.set(
         size,
         size === master.width
-          ? encodePng(master)
-          : encodePng(resize(master, size, size)),
+          ? encodePng(master, options)
+          : encodePng(resize(master, size, size), options),
       );
     return cache.get(size);
   };
@@ -295,11 +306,11 @@ function dib(image) {
  * .ico: 32-bit DIB entries up to 128 px, PNG for 256 px (what Windows'
  * own icons do; also embedded in vestra-host.exe by src/host/build.rs).
  */
-export function ico(master) {
+export function ico(master, options) {
   const sizes = [16, 20, 24, 32, 40, 48, 64, 128, 256];
   const images = sizes.map((size) => {
     const image = resize(master, size, size);
-    return size >= 256 ? encodePng(image) : dib(image);
+    return size >= 256 ? encodePng(image, options) : dib(image);
   });
   const header = Buffer.alloc(6 + 16 * sizes.length);
   header.writeUInt16LE(0, 0);
@@ -317,6 +328,69 @@ export function ico(master) {
     offset += images[index].length;
   });
   return Buffer.concat([header, ...images]);
+}
+
+// ------------------------------------------------------------ comparison
+
+/**
+ * The content of an .ico or .icns file, independent of how its PNG entries
+ * were compressed (zlib output differs between builds and CPUs): one record
+ * per entry with its directory fields and its pixels (PNG entries decoded,
+ * DIB entries as stored).
+ */
+export function iconContents(bytes) {
+  const payload = (data) => {
+    if (data.readUInt32BE(0) === 0x89504e47) {
+      const { width, height, channels, pixels } = decodePngPixels(data);
+      return { format: "png", width, height, channels, pixels };
+    }
+    return { format: "raw", pixels: data };
+  };
+  if (bytes.toString("latin1", 0, 4) === "icns") {
+    const entries = [];
+    for (let offset = 8; offset < bytes.length;) {
+      const type = bytes.toString("latin1", offset, offset + 4);
+      const length = bytes.readUInt32BE(offset + 4);
+      entries.push({
+        type,
+        ...payload(bytes.subarray(offset + 8, offset + length)),
+      });
+      offset += length;
+    }
+    return entries;
+  }
+  if (bytes.readUInt16LE(0) !== 0 || bytes.readUInt16LE(2) !== 1)
+    throw new Error("neither .ico nor .icns");
+  return Array.from({ length: bytes.readUInt16LE(4) }, (_, index) => {
+    const at = 6 + index * 16;
+    const size = bytes.readUInt32LE(at + 8);
+    const offset = bytes.readUInt32LE(at + 12);
+    return {
+      width: bytes[at],
+      height: bytes[at + 1],
+      colors: bytes[at + 2],
+      planes: bytes.readUInt16LE(at + 4),
+      bits: bytes.readUInt16LE(at + 6),
+      ...payload(bytes.subarray(offset, offset + size)),
+    };
+  });
+}
+
+/** null when both icon files hold the same entries and pixels, else the first difference. */
+export function iconDifference(a, b) {
+  const [left, right] = [iconContents(a), iconContents(b)];
+  if (left.length !== right.length)
+    return `${left.length} entries vs ${right.length}`;
+  for (let index = 0; index < left.length; index++) {
+    const [x, y] = [left[index], right[index]];
+    for (const key of new Set([...Object.keys(x), ...Object.keys(y)])) {
+      if (key === "pixels") continue;
+      if (x[key] !== y[key])
+        return `entry ${index}: ${key} ${x[key]} vs ${y[key]}`;
+    }
+    if (!x.pixels.equals(y.pixels)) return `entry ${index}: pixels differ`;
+  }
+  return null;
 }
 
 export async function writeIcons({
@@ -343,9 +417,10 @@ if (process.argv[1] && resolve(process.argv[1]) === import.meta.filename) {
   if (options.check) {
     const committed = await readFile(COMMITTED_ICO);
     const fresh = ico(decodePng(await readFile(LOGO)));
-    if (!committed.equals(fresh))
+    const difference = iconDifference(committed, fresh);
+    if (difference)
       fail(
-        "src/host/windows/vestra.ico is out of date: node packaging/icon.mjs --ico host/windows/vestra.ico",
+        `src/host/windows/vestra.ico is out of date (${difference}): node packaging/icon.mjs --ico host/windows/vestra.ico`,
       );
     console.log("src/host/windows/vestra.ico matches the logo");
     process.exit(0);

@@ -45,6 +45,7 @@ const steps = [
   [source, "npm run boundaries"],
   [source, "npm run licenses"],
   [source, "node packaging/icon.mjs --check"],
+  [source, "npm run test:packaging"],
   [source, "npm run portability"],
   [source, "npm run test:sdk"],
   [source, "npm run plugins:build"],
