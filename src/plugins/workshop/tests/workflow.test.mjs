@@ -150,14 +150,17 @@ test("a requirement file replaces the draft; invalid or edited drafts are checke
   const file = path.join(w.workspace, "requirement.json");
   const text = JSON.stringify({ kind: "native-counter", id: "workshop.counter", version: "1.1.0", step: 3 });
   await fs.writeFile(file, text);
+  // The handler reads the file itself after the dialog: wait for the result, not just the host calls.
   w.host.dialogAnswers.push([file]);
-  await w.send("choose-requirement");
+  w.window.emit("choose-requirement");
+  await w.until(() => w.status() !== "选择工作区并输入需求后生成。", "requirement read");
   assert.equal(w.props["requirement-text"], text);
   assert.equal(w.status(), "需求已读取，点击生成。");
 
   await fs.writeFile(file, '{"kind":"native-counter","id":"workshop.counter","version":"1.1.0","step":1}');
   w.host.dialogAnswers.push([file]);
-  await w.send("choose-requirement");
+  w.window.emit("choose-requirement");
+  await w.until(() => /^错误/.test(w.status()), "invalid requirement");
   assert.match(w.status(), /^错误：.*仅支持native-counter/);
   assert.equal(w.props["requirement-text"], text);
 
@@ -254,7 +257,7 @@ test("unsupported: an id of a built-in plugin asks for another id and asks nothi
   });
   await w.generate();
   await w.send("install-candidate");
-  assert.equal(w.props.busy, false);
+  await w.until(() => w.props.busy === false && /^错误/.test(w.status()), "refused install");
   assert.equal(w.status(), "错误：workshop.counter 与播放器内置插件同名，不能安装。请在需求中改用别的 id 后重新生成。");
   assert.equal(w.host.confirms.length, 0);
   assert.equal(submitted.length, 1);
@@ -270,7 +273,7 @@ test("other install failures are reported unchanged", async () => {
   });
   await w.generate();
   await w.send("install-candidate");
-  assert.equal(w.props.busy, false);
+  await w.until(() => w.props.busy === false && /^错误/.test(w.status()), "failed install");
   assert.match(w.status(), /^错误：.*validation token expired/);
   assert.equal(w.host.confirms.length, 0);
   await w.stop();

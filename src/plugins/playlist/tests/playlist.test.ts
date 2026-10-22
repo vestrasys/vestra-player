@@ -5,6 +5,7 @@ import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Json } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
+import { filesPending, settleFiles } from "./settle.ts";
 import activate from "../main.ts";
 import { Prober, type ProbeRunner } from "../probe.ts";
 import { Queue } from "../queue.ts";
@@ -39,9 +40,19 @@ function fakeProbe() {
     assert.ok(found, `ffprobe was not run for ${name}`);
     return found;
   };
-  /** Wait (bounded) until `count` processes were started; the probe stats the file first. */
+  /**
+   * Wait until `count` processes were started, or until nothing more happens: no
+   * new process and no file request (the probe stats the file first) for 200 ms.
+   */
   const started = async (count: number) => {
-    for (let i = 0; i < 200 && calls.length < count; i++) await pause(1);
+    let seen = calls.length,
+      quietSince = Date.now();
+    for (const deadline = Date.now() + 15_000; calls.length < count && Date.now() < deadline; await pause(1)) {
+      if (calls.length !== seen || filesPending()) {
+        seen = calls.length;
+        quietSince = Date.now();
+      } else if (Date.now() - quietSince > 200) break;
+    }
     await pause(5);
     return calls.map((c) => c.path).sort();
   };
@@ -57,6 +68,7 @@ async function start(probe = fakeProbe()) {
   for (const file of [a, b, c]) await writeFile(file, "plugin test, no media decode claim");
   await symlink(a, alias);
   const host = new TestHost();
+  settleFiles(host);
   host.tools.handle("ffprobe", probe.handler);
   const { stop } = await startPlugin((plugin) => activate(plugin), { directory: new URL("..", import.meta.url), host });
   const panel = host.mounted();
@@ -90,14 +102,31 @@ async function start(probe = fakeProbe()) {
     },
     click: (index: number, modifiers: { ctrl?: boolean; shift?: boolean } = {}) =>
       app.emit("select-row", app.rows()[index].rowId, !!modifiers.ctrl, !!modifiers.shift),
+    /**
+     * Wait (bounded) for something the plugin does on its own; not settle(), which
+     * never returns while a test holds a reply back.
+     */
+    until: async (check: () => boolean, what: string) => {
+      for (const deadline = Date.now() + 15_000; !check(); await pause(5))
+        if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    },
     /** Double-click a row while an open is held back (settling would wait for it). */
     playNow: async (index = app.rows().findIndex((row) => row.selected)) => {
       panel.emit("play-row", app.rows()[index].rowId);
       await pause();
     },
+    /**
+     * 添加文件…: the plugin resolves each path on disk itself (settle() waits for host
+     * calls only), so wait for the notice that ends the add, then for the window.
+     */
     addFiles: async (paths: string[]) => {
+      const notices = host.osd.length;
       host.dialogAnswers.push(paths);
       await app.run("add");
+      if (!paths.length) return;
+      for (const deadline = Date.now() + 15_000; host.osd.length === notices; await host.settle(10))
+        if (Date.now() > deadline) throw new Error(`adding ${paths.length} files did not finish`);
+      await host.settle();
     },
     addUrl: async (url: string) => {
       await app.run("link");
@@ -497,6 +526,7 @@ test("URL rows: adding only selects; the original URL goes to public routing; on
       }),
     );
     await app.playNow(0);
+    await app.until(() => accept !== undefined, "the open reached the host");
     await app.playNow(0);
     await app.playNow(1);
     assert.equal(app.host.sent("source.submit").length, 1);
@@ -737,7 +767,7 @@ test("a late accepted reply cannot reclaim a newer external source or resurrect 
     await app.addFiles([app.a, app.b]);
     // The host accepts our open at once, but the reply arrives after a newer source.
     const deferOpen = () => {
-      let accept!: () => void;
+      let accept: (() => void) | undefined;
       app.host.handle("source.submit", () => {
         app.host.openElsewhere(app.a, "loading");
         const { stamp, cycle } = app.host.source;
@@ -746,25 +776,30 @@ test("a late accepted reply cannot reclaim a newer external source or resurrect 
           ticket: { stamp, cycle, owner: 1 },
         }));
       });
-      return () => accept();
+      return {
+        /** The open reaches the host only after the plugin's own work: wait for it. */
+        reached: () => app.until(() => accept !== undefined, "the open reached the host"),
+        release: () => accept!(),
+      };
     };
-    let accept = deferOpen();
+    let open = deferOpen();
     await app.playNow(0);
+    await open.reached();
     app.host.openElsewhere(app.a); // same path, opened elsewhere
-    accept();
+    open.release();
     await app.host.settle();
     assert.equal(app.rows().some((row) => row.current), false);
     app.end();
     await app.host.settle();
     assert.equal(app.opens().length, 1);
 
-    accept = deferOpen();
+    open = deferOpen();
     await app.playNow(0);
+    await open.reached();
     app.host.openElsewhere(app.b);
     app.host.mounted().emit("remove");
-    await pause();
-    assert.equal(app.osd(), "正在打开的媒体已移出列表");
-    accept();
+    await app.until(() => app.osd() === "正在打开的媒体已移出列表", "notice");
+    open.release();
     await app.host.settle();
     app.host.reset("source.submit");
     assert.equal(app.rows().length, 1);
@@ -841,8 +876,7 @@ test("an accepted URL open replaced by another source while resolving is not a r
       return { status: "pending", ticket: done.ticket };
     });
     await app.playNow(0);
-    await pause(50);
-    assert.equal(app.command("play").state.busy, true);
+    await app.until(() => app.command("play").state.busy === true, "play busy");
     app.host.openElsewhere("/elsewhere.mp4");
     outcome = { status: "failed", error: { backend: "source resolution cancelled, expired or superseded" } };
     await app.host.settle(600);
