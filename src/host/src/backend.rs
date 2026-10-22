@@ -601,6 +601,8 @@ impl GpuRun<'_> {
             return true;
         }
         self.render.deactivate();
+        // Stops the GPU renderer on macOS; a no-op type elsewhere.
+        #[allow(clippy::drop_non_drop)]
         drop(renderer);
         let _ = self.mpv.set_property("hwdec", "no");
         false

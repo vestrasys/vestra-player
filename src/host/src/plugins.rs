@@ -310,7 +310,12 @@ mod tests {
                 data_directory: Some(dir.clone()),
                 temporary_data: trial,
                 subscriptions: BTreeSet::new(),
-                child: Command::new("true").spawn().unwrap(),
+                // Any short-lived child; Node is there on every system.
+                child: Command::new("node")
+                    .arg("--version")
+                    .stdout(std::process::Stdio::null())
+                    .spawn()
+                    .unwrap(),
                 outbound: mpsc::sync_channel(1).0,
             };
             drop(plugin);
