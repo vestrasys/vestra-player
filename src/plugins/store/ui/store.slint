@@ -257,6 +257,7 @@ export component StoreWindow inherits Window {
                     color: Theme.text-dim;
                     font-size: Theme.font-body;
                     wrap: word-wrap;
+                    line-height-factor: 1.25;
                     horizontal-alignment: center;
                     vertical-alignment: center;
                 }
@@ -317,6 +318,7 @@ export component StoreWindow inherits Window {
                                 color: Tone.color(banner.tone);
                                 font-size: Theme.font-body;
                                 wrap: word-wrap;
+                                line-height-factor: 1.25;
                                 vertical-alignment: center;
                             }
                             if banner.action != "": Button {
@@ -360,6 +362,7 @@ export component StoreWindow inherits Window {
                                     color: Theme.text-dim;
                                     font-size: Theme.font-body;
                                     wrap: word-wrap;
+                                    line-height-factor: 1.25;
                                     horizontal-alignment: center;
                                     vertical-alignment: center;
                                 }
@@ -408,6 +411,7 @@ export component StoreWindow inherits Window {
                                                 color: Tone.color(v.tone);
                                                 font-size: Theme.font-body;
                                                 wrap: word-wrap;
+                                                line-height-factor: 1.25;
                                             }
                                         }
                                     }
@@ -450,6 +454,7 @@ export component StoreWindow inherits Window {
                                     color: p.risky ? Tone.warn : Theme.text-list;
                                     font-size: Theme.font-body;
                                     wrap: word-wrap;
+                                    line-height-factor: 1.25;
                                 }
                             }
                             Text {
@@ -457,6 +462,7 @@ export component StoreWindow inherits Window {
                                 color: Theme.text-dim;
                                 font-size: Theme.font-xs;
                                 wrap: word-wrap;
+                                line-height-factor: 1.25;
                             }
                         }
                     }

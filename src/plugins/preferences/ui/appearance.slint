@@ -139,12 +139,13 @@ export component AppearancePage inherits Rectangle {
             }
         }
         Text {
-            height: 32px;
+            min-height: 32px;
             text: "切换后所有窗口立即生效。圆角、字号与控件尺寸不随配色变化。";
             font-size: Theme.font-body;
             color: Theme.text-dim;
             vertical-alignment: center;
             wrap: word-wrap;
+            line-height-factor: 1.25;
         }
         HorizontalLayout {
             alignment: end;
