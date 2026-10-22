@@ -79,8 +79,9 @@ test("仍然启用… asks about the risk; once accepted the store leaves it run
     assert.equal(host.window("store").visible, true);
 
     host.dialogAnswers.push(no);
+    const asked = host.confirms.length;
     host.window("store").emit("act", "enable");
-    await host.settle(20);
+    await until(host, () => host.confirms.length === asked + 1, "risk question");
     assert.equal(host.confirms.at(-1)!["message"], "仍然启用被撤回的「YouTube」0.2.0？");
     assert.equal(host.confirms.at(-1)!["destructive"], true);
     assert.match(String(host.confirms.at(-1)!["detail"]), /继续使用可能有风险/);

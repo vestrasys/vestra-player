@@ -151,7 +151,7 @@ test("installed from another source: 替换… asks once and installs with repla
 
     host.dialogAnswers.push(no);
     host.window("store").emit("act", "replace");
-    await host.settle(30);
+    await until(host, () => host.confirms.length === 1, "replace question");
     assert.equal(host.confirms.at(-1)!["message"], "替换已安装的「YouTube」？");
     assert.equal(host.confirms.at(-1)!["destructive"], true);
     assert.match(String(host.confirms.at(-1)!["detail"]), /原插件的数据保留，以后从原来源重新安装时接上/);

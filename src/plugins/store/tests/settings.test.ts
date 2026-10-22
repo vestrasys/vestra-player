@@ -61,8 +61,7 @@ test("the settings page: add a third-party repository with a warning, refuse bad
     ],
   );
   page.emit("toggleAuto");
-  await host.settle(400);
-  assert.equal(page.props["auto-check"], false);
+  await until(host, () => page.props["auto-check"] === false, "automatic check off");
   await first.stop();
 
   // Settings survive a restart.

@@ -87,7 +87,8 @@ const waitFor = async (check: () => boolean, what: string) => {
       return false; // e.g. a window that is not open yet
     }
   };
-  for (let i = 0; i < 100 && !ok(); i++) await pause(10);
+  // A time deadline, not a count of rounds: on a loaded machine each round is slower.
+  for (const deadline = Date.now() + 15_000; !ok() && Date.now() < deadline; ) await pause(10);
   assert.ok(ok(), what);
 };
 
@@ -246,7 +247,7 @@ test("search sends hash + keywords + languages once privacy is accepted; hash ma
     assert.equal(window.props["privacy-pending"], true);
     assert.equal(fetch.calls.length, 0, "nothing is sent before the user agrees");
     window.emit("accept-privacy");
-    await waitFor(() => String(window.props["status-text"]).startsWith("找到"), "results");
+    await waitFor(() => String(window.props["status-text"]).startsWith("找到") && window.props["busy"] === false, "results");
     const url = new URL(fetch.calls[0]!.url);
     assert.equal(url.searchParams.get("languages"), "en,zh-cn,zh-tw");
     assert.match(url.searchParams.get("moviehash")!, /^[0-9a-f]{16}$/);
@@ -284,18 +285,17 @@ test("double-click downloads, loads and selects the subtitle, and saves <视频�
   try {
     await t.host.command("search").run();
     const window = t.host.window("subtitle-download");
-    await waitFor(() => (window.props["rows"] as unknown[])?.length === 2, "results");
+    await waitFor(() => (window.props["rows"] as unknown[])?.length === 2 && window.props["busy"] === false, "results");
     window.emit("open-row", 0);
-    await waitFor(() => t.host.subtitleLoads.length === 1, "loaded");
-    await t.host.settle();
+    // The copy beside the video is written after the load, by the plugin itself: wait for the operation to end.
+    await waitFor(() => t.host.subtitleLoads.length === 1 && window.props["busy"] === false, "loaded");
     assert.deepEqual(t.host.subtitleLoads.map((l) => [l.format, l.title, l.select, l.bytes.toString()]), [["srt", "简体中文 · Movie.CN", "primary", SRT]]);
     assert.equal(JSON.parse(fetch.calls.find((c) => c.url.endsWith("/download"))!.body!).file_id, 7);
     assert.equal(t.host.osd.at(-1), "打开字幕：简体中文 · Movie.CN");
     const files = await readdir(t.folder);
     assert.ok(files.includes("The.Movie.2019.1080p.BluRay.x264-GRP.zh.srt"), files.join());
     window.emit("open-row", 0);
-    await waitFor(() => t.host.subtitleLoads.length === 2, "loaded again");
-    await t.host.settle();
+    await waitFor(() => t.host.subtitleLoads.length === 2 && window.props["busy"] === false, "loaded again");
     assert.ok((await readdir(t.folder)).includes("The.Movie.2019.1080p.BluRay.x264-GRP.zh (1).srt"), "never overwrites");
   } finally {
     await t.stop();
@@ -310,13 +310,13 @@ test("添加字幕 adds the checked results without selecting them; 直接保存
   try {
     await t.host.command("search").run();
     const window = t.host.window("subtitle-download");
-    await waitFor(() => (window.props["rows"] as unknown[])?.length === 2, "results");
+    await waitFor(() => (window.props["rows"] as unknown[])?.length === 2 && window.props["busy"] === false, "results");
     window.emit("toggle-row", 0, true);
     window.emit("toggle-row", 1, true);
     await t.host.settle();
     assert.equal(window.props["has-checked"], true);
     window.emit("add-checked");
-    await waitFor(() => t.host.osd.at(-1) === "已添加 2 条字幕", "added");
+    await waitFor(() => t.host.osd.at(-1) === "已添加 2 条字幕" && window.props["busy"] === false, "added");
     assert.deepEqual(t.host.subtitleLoads.map((l) => l.select), ["none", "none"]);
     assert.equal(t.host.subtitles.selection.target, null);
     window.emit("save-checked");
@@ -340,7 +340,7 @@ test("quota, bad key and network failures are explained; other services' results
   try {
     await t.host.command("search").run();
     const window = t.host.window("subtitle-download");
-    await waitFor(() => (window.props["rows"] as unknown[])?.length === 1, "results");
+    await waitFor(() => (window.props["rows"] as unknown[])?.length === 1 && window.props["busy"] === false, "results");
     window.emit("open-row", 0);
     await waitFor(() => /重置/.test(String(window.props["status-text"])), "quota");
     assert.equal(t.host.osd.at(-1), "今日下载次数已用完（OpenSubtitles）。登录账号可获得更多次数");
@@ -376,7 +376,7 @@ test("a source change during the download aborts it; nothing is loaded into the 
   try {
     await t.host.command("search").run();
     const window = t.host.window("subtitle-download");
-    await waitFor(() => (window.props["rows"] as unknown[])?.length === 1, "results");
+    await waitFor(() => (window.props["rows"] as unknown[])?.length === 1 && window.props["busy"] === false, "results");
     window.emit("open-row", 0);
     await waitFor(() => fetch.calls.some((c) => c.url.endsWith("/download")), "download started");
     t.host.openElsewhere("/other.mkv");
@@ -444,7 +444,7 @@ test("a zip with several subtitle files asks which one to load; rar is refused w
   try {
     await t.host.command("search").run();
     const window = t.host.window("subtitle-download");
-    await waitFor(() => (window.props["rows"] as unknown[])?.length === 1, "results");
+    await waitFor(() => (window.props["rows"] as unknown[])?.length === 1 && window.props["busy"] === false, "results");
     window.emit("open-row", 0);
     await waitFor(() => t.host.window("subtitle-online-choose").visible === true, "chooser");
     const chooser = t.host.window("subtitle-online-choose");
@@ -455,6 +455,8 @@ test("a zip with several subtitle files asks which one to load; rar is refused w
     await waitFor(() => t.host.subtitleLoads.length === 1, "loaded");
     assert.equal(t.host.subtitleLoads[0]!.format, "ass");
     assert.match(t.host.subtitleLoads[0]!.bytes.toString(), /繁體/);
+    // The load is recorded before the operation ends; a click while busy is ignored.
+    await waitFor(() => window.props["busy"] === false, "first download finished");
     body = Buffer.from("Rar!\u001a\u0007\u0000");
     window.emit("open-row", 0);
     await waitFor(() => /rar/.test(String(window.props["status-text"])), "rar refused");
