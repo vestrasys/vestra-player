@@ -73,7 +73,7 @@ test("从文件安装…: cancel, an invalid file, a built-in id, replacing a re
     window.emit("fromFile");
     await until(host, () => installs(host).length === 1);
     assert.equal(host.confirms.at(-1)!["message"], "用插件包「YouTube」0.2.1 替换已安装的版本？");
-    assert.match(String(host.confirms.at(-1)!["detail"]), /来自仓库 plugins\.test。替换后新插件使用新的空数据/);
+    assert.match(String(host.confirms.at(-1)!["detail"]), /来自仓库 plugins\.test。替换后，若之前从这个来源安装过，会接上当时的数据；否则使用新的空数据/);
     assert.deepEqual(installs(host)[0], { method: "install", id: "vestra.youtube", source: { kind: "file" }, replace: true });
   } finally {
     await stop();

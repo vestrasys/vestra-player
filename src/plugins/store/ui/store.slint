@@ -61,7 +61,8 @@ export struct StorePermission {
 component ListRow inherits Rectangle {
     in property <StoreRow> item;
     callback select();
-    height: 52px;
+    // Three lines (18 + 16 + 16) with 4px padding top and bottom.
+    height: 60px;
     background: root.item.selected ? Theme.selected-bg : touch.has-hover ? Theme.hover-bg : transparent;
     VerticalLayout {
         padding-left: 8px;
@@ -70,16 +71,18 @@ component ListRow inherits Rectangle {
         padding-bottom: 4px;
         spacing: 1px;
         HorizontalLayout {
+            height: 18px;
             spacing: 6px;
             Cell { horizontal-stretch: 1; text: root.item.name; color: Theme.text; font-size: Theme.font-tab; }
             Cell { text: root.item.version; color: Theme.text-dim; }
         }
         HorizontalLayout {
+            height: 16px;
             spacing: 6px;
             Cell { horizontal-stretch: 1; text: root.item.meta; color: Theme.text-dim; }
             Cell { text: root.item.badge; color: Tone.color(root.item.tone); }
         }
-        Cell { text: root.item.punchline; color: Theme.text-list; }
+        Cell { height: 16px; text: root.item.punchline; color: Theme.text-list; }
     }
     Rectangle { y: parent.height - 1px; height: 1px; background: Theme.line; }
     ToolTipArea {
@@ -372,34 +375,39 @@ export component StoreWindow inherits Window {
                                         spacing: 6px;
                                         Cell { width: 56px; text: "版本"; color: Theme.text-dim; }
                                         Cell { width: 76px; text: "发布日期"; color: Theme.text-dim; }
-                                        Cell { width: 76px; text: "最低播放器"; color: Theme.text-dim; }
-                                        Cell { horizontal-stretch: 1; text: "状态"; color: Theme.text-dim; }
+                                        Cell { horizontal-stretch: 1; text: "最低播放器"; color: Theme.text-dim; }
                                         Rectangle { width: 48px; }
                                     }
                                     Rectangle { height: 1px; background: Theme.line; }
+                                    // Two lines per version: the facts, then the status in full (wrapped).
                                     ListView {
                                         vertical-stretch: 1;
-                                        for v in root.versions: HorizontalLayout {
-                                            height: 24px;
+                                        for v in root.versions: VerticalLayout {
                                             padding-left: 6px;
                                             padding-right: 8px;
-                                            spacing: 6px;
-                                            Cell { width: 56px; text: v.version; color: Theme.text; }
-                                            Cell { width: 76px; text: v.date; color: Theme.text-list; }
-                                            Cell { width: 76px; text: v.minimum; color: Theme.text-list; }
-                                            ToolTipArea {
-                                                horizontal-stretch: 1;
-                                                text: v.status;
-                                                Cell { width: 100%; height: 100%; text: v.status; color: Tone.color(v.tone); }
-                                            }
-                                            VerticalLayout {
-                                                width: 48px;
-                                                alignment: center;
-                                                if v.canInstall: Button {
-                                                    small: true;
-                                                    text: "安装";
-                                                    clicked => { root.install-version(v.version); }
+                                            padding-top: 3px;
+                                            padding-bottom: 3px;
+                                            HorizontalLayout {
+                                                height: 20px;
+                                                spacing: 6px;
+                                                Cell { width: 56px; text: v.version; color: Theme.text; }
+                                                Cell { width: 76px; text: v.date; color: Theme.text-list; }
+                                                Cell { horizontal-stretch: 1; text: v.minimum; color: Theme.text-list; }
+                                                VerticalLayout {
+                                                    width: 48px;
+                                                    alignment: center;
+                                                    if v.canInstall: Button {
+                                                        small: true;
+                                                        text: "安装";
+                                                        clicked => { root.install-version(v.version); }
+                                                    }
                                                 }
+                                            }
+                                            if v.status != "": Text {
+                                                text: v.status;
+                                                color: Tone.color(v.tone);
+                                                font-size: Theme.font-body;
+                                                wrap: word-wrap;
                                             }
                                         }
                                     }

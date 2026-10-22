@@ -120,3 +120,54 @@ test("real fetch against a server on 127.0.0.1: local http allowed only when ask
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test("acceptance S1: a gzip body is checked by its decoded size, not the compressed Content-Length", async () => {
+  const net = new FakeNet();
+  const readme = Buffer.from("# README\n" + "说明".repeat(200));
+  // What fetch hands over for GitHub Pages: decoded bytes, headers of the encoded response.
+  net.route("https://d.test/README.md", { body: readme, headers: { "content-encoding": "gzip", "content-length": "647" } });
+  const got = await get(net.fetch, "https://d.test/README.md", {
+    maxBytes: readme.length,
+    exactSize: readme.length,
+    sha256: sha256(readme),
+    timeoutMs: 1000,
+  });
+  assert.deepEqual(got.bytes, readme);
+  // The decoded-size cap still holds (a gzip bomb with a tiny Content-Length).
+  net.route("https://d.test/bomb", { chunks: Array.from({ length: 64 }, () => Buffer.alloc(1024)), headers: { "content-encoding": "gzip", "content-length": "100" } });
+  await assert.rejects(get(net.fetch, "https://d.test/bomb", { maxBytes: 4096, timeoutMs: 1000 }), code("tooLarge"));
+  await assert.rejects(get(net.fetch, "https://d.test/bomb", { maxBytes: 100, exactSize: 100, timeoutMs: 1000 }), code("size"));
+});
+
+test("acceptance S1 with real fetch: a gzip-encoded response from 127.0.0.1", async () => {
+  const { gzipSync } = await import("node:zlib");
+  const readme = Buffer.from("# README\n" + "说明".repeat(300));
+  const packed = gzipSync(readme);
+  const bomb = gzipSync(Buffer.alloc(8 * 1024 * 1024));
+  const server = createServer((request, response) => {
+    const body = request.url === "/bomb" ? bomb : packed;
+    response.writeHead(200, { "content-encoding": "gzip", "content-length": String(body.length) });
+    response.end(body);
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = (server.address() as AddressInfo).port;
+  const fetch = (input: string, init: RequestInit) => globalThis.fetch(input, init);
+  try {
+    const got = await get(fetch, `http://127.0.0.1:${port}/README.md`, {
+      maxBytes: readme.length,
+      exactSize: readme.length,
+      sha256: sha256(readme),
+      timeoutMs: 5000,
+      allowLocalHttp: true,
+    });
+    assert.deepEqual(got.bytes, readme);
+    assert.ok(packed.length < readme.length);
+    await assert.rejects(
+      get(fetch, `http://127.0.0.1:${port}/bomb`, { maxBytes: 256 * 1024, timeoutMs: 5000, allowLocalHttp: true }),
+      code("tooLarge"),
+    );
+  } finally {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
