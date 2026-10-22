@@ -98,8 +98,8 @@ export component LogoCoverPage inherits Rectangle {
             checked <=> LogoPage.audio-on;
             toggled => { LogoPage.set-audio(self.checked); }
         }
+        // No fixed height: the layout gives the wrapped text all its lines.
         Text {
-            height: 28px;
             text: "封面取自文件内嵌图片，或同一文件夹中的 cover、folder、front 图片；没有时显示徽标占位。";
             font-size: Theme.font-body;
             color: Theme.text-dim;
