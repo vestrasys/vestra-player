@@ -13,7 +13,7 @@
    ```
    gh workflow run release.yml --repo vestrasys/vestra-player --ref main -f dry_run=true
    ```
-   全套检查、两个系统的安装包、`SHA256SUMS`，不签名、不建 release。产物在这次运行的 artifacts 里（`vestra-unsigned-macos`、`vestra-unsigned-windows`、`vestra-unsigned-SHA256SUMS`），用 `gh run download <run id>` 下载。按 [packaging-proposal.md](../architecture/packaging-proposal.md) 末尾的清单在真机上试。
+   全套检查、两个系统的安装包、`SHA256SUMS`，不签名、不建 release。产物在这次运行的 artifacts 里（`vestra-unsigned-macos`、`vestra-unsigned-windows`、`vestra-unsigned-SHA256SUMS`），用 `gh run download <run id>` 下载（只保留 1 天）。按 [packaging-proposal.md](../architecture/packaging-proposal.md) 末尾的清单在真机上试。
 5. **打 tag**：
    ```
    git tag -a v<版本> -m "Vestra Player <版本>" && git push origin v<版本>

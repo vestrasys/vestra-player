@@ -121,7 +121,7 @@ jobs:
         with:
           name: vestra-unsigned-SHA256SUMS
           path: dist/SHA256SUMS
-          retention-days: 7
+          retention-days: 1
           if-no-files-found: error
 
   # TODO(S7 signing): sign + notarize on Ubuntu with rcodesign (ci-research
