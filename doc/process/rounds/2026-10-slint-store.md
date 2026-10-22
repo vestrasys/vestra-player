@@ -122,11 +122,20 @@
 - **Windows 真机验收（S6，等用户有机器）**：中文回退字体、Consolas 等宽、Ctrl+W / Ctrl+F4 关闭工具窗口（单按 F4 仍是停止）、商城清单第 15 项（安装、侧载、跨来源替换，卸载时「同时删除数据」的是/否框）、GPU 渲染与画中画回退、全量菜单与插件功能（workflow §6.2）。
 - ~~界面：S6 输入框与警告文字重叠；折行说明文字行距偏紧~~：已修（cc71fec，`line-height-factor: 1.25`），真机确认。Markdown 正文（StyledText）在 1.18 没有行高属性，商城 README 行距暂不改；以后可在 Theme 加行高变量随 SDK 发布。
 - ~~插件仓库：资源哈希、单调 `generated`、多签名、`revoked.json` 只追加~~：2026-10-22 已完成并发布（插件仓库 68ff01b，线上 `generated` = 1，签名通过）。商城端配套改动已完成（`rebuild/store-ui` dc58f40，测试 58/58；协调者对线上索引冒烟：验签通过、记下 generated=1、YouTube 包 sha256 一致、二次刷新 304）。
-- 插件仓库 youtube 测试「download shows progress while running and the saved file when done」在 Windows + Node 22.18 偶发失败一次（CI run 39678880495，dbd7e7d），前后同一测试都通过。交 youtube 作者查。
+- ~~插件仓库 youtube 测试~~：已修（29ef948）。原文：「download shows progress while running and the saved file when done」在 Windows + Node 22.18 偶发失败一次（CI run 39678880495，dbd7e7d），前后同一测试都通过。交 youtube 作者查。
 - 主窗口 `sidebar-actual` 绑定环警告（见上）。
-- SDK：`StreamHandle.stop()` 先关数据连接再关来源，宿主把断开当成加载失败，生成流的插件停止时会弹「打开失败：producer transport closed」。nes 已规避（`rebuild/plugin-fixes` bdb1dd3）；SDK 应改为先关来源，宿主也可考虑播放中断开不算加载失败。交维护者（字体/快捷键任务之后），随 SDK 1.1.3。
+- ~~SDK：`StreamHandle.stop()` 顺序~~：SDK 1.1.3 已改为先关来源，宿主断开给 0.5 秒宽限（ee42ec1）。原文：`StreamHandle.stop()` 先关数据连接再关来源，宿主把断开当成加载失败，生成流的插件停止时会弹「打开失败：producer transport closed」。nes 已规避（`rebuild/plugin-fixes` bdb1dd3）；SDK 应改为先关来源，宿主也可考虑播放中断开不算加载失败。交维护者（字体/快捷键任务之后），随 SDK 1.1.3。
 - 用户待测：播放列表用真鼠标双击列表项能否播放（合成双击会卡在拖动状态）。
-- SDK 仓库的 Docs 工作流在推标签时失败（Pages 环境只允许 main；v1.1.1 起就这样，main 上的那次会正常部署）。应让 Docs 只在 main 上运行。
-- reference §6.4「默认字体是系统 UI 字体」与实际强制 Hiragino 不一致，等 W4 决定后一起改。
+- ~~SDK 仓库的 Docs 工作流在推标签时失败~~：CI 改造后文档只在 main 部署（SDK 8384e03）。原文：Docs 工作流在推标签时失败（Pages 环境只允许 main；v1.1.1 起就这样，main 上的那次会正常部署）。应让 Docs 只在 main 上运行。
+- ~~reference §6.4 字体说明~~：W4 拆掉强制字体后已一致（854d60d）。
+
+## CI 改造（2026-10-22，为 S7 发布做准备）
+
+三个仓库按 `doc/process/ci-research.md` §10 改成「可复用检查 + 推任意分支 / main / 发版三个入口」，`ci-ok` 为唯一必过检查；说明见 `doc/process/ci.md`。合并：播放器 13e2cb5、SDK 8384e03、插件仓库 414e8be，main 首次运行全绿。
+- 实测（播放器，冷缓存）：只改 TS 约 7 计费分钟；改 Rust（加 Windows）约 25；完整（加 macOS）约 46。
+- CI 首次在真 Windows 上跑宿主测试，修了 24 个失败（目录刷盘、`\\?\` 路径、包内 `/`）；ttf-parser 换成 skrifa；SDK 的 Windows 测试以前一直挂到超时，已修。
+- 用户已设：两个公开仓库 main 规则集（`ci-ok` 必过、禁强推和删除）；SDK `vestra` 环境审批人（协调者把 `v*` 规则从分支改成了标签）。播放器私有，免费方案不能设分支保护和环境审批。
+- **用户待办**：`npm login` 后 `npm trust github @vestra-player/sdk --file release.yml --repo vestrasys/vestra-player-sdk --env vestra`。下次 SDK 发版确认 provenance 后，再禁用 token 发布并删除 `NPM_TOKEN`。
+- 待定：Windows 包路径规则是否拒绝 `:*?"<>|`、保留名（改包格式，随 S6 定）；mpv-dev 下载源镜像到 vestrasys；CODEOWNERS。
 
 ## 记录
