@@ -121,7 +121,7 @@ export component BookmarkWindow inherits Window {
 
 ### 外观
 
-播放器以深色风格（`fluent-dark`）编译插件界面，默认字体是系统界面字体，所以上面的窗口不写颜色和字体也是深色、中文正常。要和播放器其它界面保持一致（参考播放器的配色与尺寸），从主题取值、用播放器提供的控件：
+播放器以深色风格（`fluent-dark`）编译插件界面，默认字体是系统界面字体，所以上面的窗口不写颜色和字体也是深色、中文正常。要和播放器其它界面保持一致（同一套配色与尺寸），从主题取值、用播放器提供的控件：
 
 ```slint
 import { Theme } from "@vestra/theme.slint";                 // 颜色、字号、控件尺寸
@@ -349,7 +349,7 @@ npm run plugin -- build examples/bookmark   # 生成 dist/，安装的就是这�
 | 画面上的提示、信息层 | `osd.show`、`osd.panel` | [示例 14](examples.md) |
 | 下一个/上一个 | `player.provideSequence`、`player.next` | [示例 15](examples.md) |
 | 开关或分离侧栏、面板右键菜单 | `panels.sidebar`、`panel.showMenu` | [示例 16](examples.md) |
-| 深色主题与参考播放器样式控件 | `@vestra/theme.slint`、`@vestra/widgets.slint` | [示例 17](examples.md) |
+| 深色主题与播放器样式控件 | `@vestra/theme.slint`、`@vestra/widgets.slint` | [示例 17](examples.md) |
 
 两个常见坑：
 

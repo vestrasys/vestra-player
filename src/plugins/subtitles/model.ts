@@ -3,7 +3,7 @@ import type { Cue } from "./formats.ts";
 import { DEFAULT_ENCODING, isEncoding } from "./formats.ts";
 import type { Encoding } from "./formats.ts";
 
-/** 同步单位 choices in ms (reference player dialogs 442「同步调整单位」); 0.5 s is the default. */
+/** 同步单位 choices in ms (「同步调整单位」); 0.5 s is the default. */
 export const SYNC_STEPS = [50, 100, 250, 500, 1000, 5000] as const;
 export const DEFAULT_SYNC_STEP = 500;
 /** The host's accepted `offsetMs` range (reference §9). */

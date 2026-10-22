@@ -135,9 +135,8 @@ export function folderError(error: unknown) {
 }
 
 // ------------------------------------------------------------------ A13 / IA-PL-01 similar files
-// reference player 260819's rule, statically reverse-engineered (doc/product/research/classic-260819/
-// similar-files.md §3–§5; spec in interaction-alignment.md IA-PL-01 「同类文件规则」). The
-// constants and the integer divisions are reference player's and must not be tuned.
+// The rule is specified in interaction-spec.md IA-PL-01 「同类文件规则」. The constants and
+// the integer divisions are part of the spec and must not be tuned.
 
 /** `T1`: the separators the comparison ignores (12 characters). */
 const T1 = new Set(" _-.(){}[]'\"");
@@ -195,13 +194,13 @@ export function maskEq(x: string, y: string, n: number, prefix: boolean) {
 /** `T1` characters to `?`, digits to `*`; same length. */
 export const mask = (s: string) => s.replace(/[\s\S]/g, (c) => (T1.has(c) ? "?" : isDigit(c) ? "*" : c));
 
-/** Only A–Z are lowered (reference player's `_wcslwr_s` in the C locale). */
+/** Only A–Z are lowered (as in the C locale). */
 const asciiLower = (s: string) => s.replace(/[A-Z]/g, (c) => c.toLowerCase());
 /** What `isSimilar` compares: the lowered name without extension plus `.tmp` (counted in every length). */
 export const similarKey = (stem: string) => `${asciiLower(stem)}.tmp`;
 
 /**
- * The reference player's four steps S1–S4 on two `similarKey`s (`audio` adds the looser audio
+ * The rule's four steps S1–S4 on two `similarKey`s (`audio` adds the looser audio
  * rule): the first step that finds them similar, `null` when none does.
  */
 export type SimilarStep = "S1" | "S2" | "S3 equal" | "S3 prefix" | "S4 audio" | "S4 mask";
@@ -233,8 +232,8 @@ export const canHaveSimilar = (stem: string) => stem.length >= 2 && /[ \-_0-9]/.
 const stemOf = (name: string) => basename(name, extname(name));
 
 /**
- * A13 / IA-PL-01: the files of `path`'s folder (not recursive) that reference player
- * would open with it: the same group (video with video, audio with audio), and in
+ * A13 / IA-PL-01: the files of `path`'s folder (not recursive) that are
+ * opened with it: the same group (video with video, audio with audio), and in
  * `similar` mode those `isSimilar` to it; `path` included, naturally sorted.
  * Names starting with `.` are skipped (macOS `._*` files; Vestra's deviation).
  * More than `SCAN_LIMIT` matches keep the `SCAN_LIMIT` around `path` (`truncated`).

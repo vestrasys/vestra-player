@@ -1,34 +1,37 @@
-# 2026-10 轮：去参考播放器化（自己的视觉身份）
+# 2026-10 轮：自己的视觉身份
 
 开始于 2026-10-22。**本文是这一轮的唯一进度来源。**
 
 ## 目标
 
-保持现在的交互手感——按钮和菜单的尺寸、位置、菜单排布全部不变——去掉一眼看出参考播放器的痕迹，做出自己的特色；开源前把仓库里对参考播放器的参考痕迹清干净，包括 git 历史。
+保持现在的交互手感——按钮和菜单的尺寸、位置、菜单排布全部不变——去掉对参考播放器的模仿痕迹，做出自己的特色；开源前把仓库里的参考痕迹清干净，包括 git 历史。
 
 ## 用户裁决（2026-10-22）
 
-1. 删除「经典」主题（一看就是参考播放器）。
+1. 删除第二套「经典」主题（模仿痕迹明显）。
 2. 开源前彻底清理，包括改写 git 历史。
 3. 菜单排布不变；交互尺寸不变。
 
 ## 现状（2026-10-22 盘点）
 
 - 图标不是拷贝的 SVG：播放栏等图标是 Slint 里手写的 Path，但造型照着参考播放器画。
-- 主题：`src/host/src/theme.rs` 的 `THEMES = ["vestra", "classic"]`，`CLASSIC` 22 个 经典配色；preferences 插件的「设置 ▶ 外观 ▶ Vestra / 经典」；SDK 公开类型 `ThemeId` 含 `"classic"`（SDK 的 `types.ts`、`appearance.ts`、`testing.ts`、`wire.ts`、`slint/vestra/*`、`docs/concepts/ui.md`）。
-- 播放器仓库：85 个文件提到参考播放器（`src/` 下 51 个，其余在 `doc/`）；`doc/product/research/classic-260819/` 是从参考播放器安装包提取的字符串、菜单树、资源表（1.6 MB）；9 个提交说明提到参考播放器。
-- SDK 仓库（已公开）：9 个文件、1 个提交说明提到参考播放器；已发布的 npm 包（1.0.0–1.3.0）里也有，npm 不能撤回内容，只能以后的版本里去掉。
+- 主题：`src/host/src/theme.rs` 的 `THEMES` 含第二套主题 id 与 22 个参考配色；preferences 插件的「设置 ▶ 外观 ▶ Vestra / 经典」；SDK 公开类型 `ThemeId` 含第二套主题 id（SDK 的 `types.ts`、`appearance.ts`、`testing.ts`、`wire.ts`、`slint/vestra/*`、`docs/concepts/ui.md`）。
+- 播放器仓库：85 个文件提到参考对象（`src/` 下 51 个，其余在 `doc/`）；`doc/product/research/` 下有从参考播放器安装包提取的字符串、菜单树、资源表（1.6 MB）；9 个提交说明提到参考对象。
+- SDK 仓库（已公开）：9 个文件、1 个提交说明提到参考对象；已发布的 npm 包（1.0.0–1.3.0）里也有，npm 不能撤回内容，只能以后的版本里去掉。
 - 插件仓库：干净。
 
 ## 分工
 
 - **A 视觉设计**（只出方案，不改产品代码）：2–3 套图标风格 + 配色方案，几何尺寸与现在完全一致，出对比图交用户选。
-- **B 清理**（与 A 并行，不依赖设计决定）：删除参考播放器主题（宿主、preferences 插件、SDK `ThemeId`，旧设置自动迁到 vestra）；代码和注释去掉参考播放器字样；删除 `doc/product/research/classic-*`；把对标文档改写成我们自己的交互规格；SDK 同步清理并发版。
-- **C 改写 git 历史**（最后做）：A、B 合并之后，用 `git filter-repo` 从历史中删掉提取资料、改写提交说明里的参考播放器字样；先做完整镜像备份；强推所有分支和标签；本机各 worktree 重建。SDK 仓库同样处理（公开仓库，已有的 fork/克隆无法收回，npm 旧版本内容无法改）。
+- **B 清理**（与 A 并行，不依赖设计决定）：删除第二套主题（宿主、preferences 插件、SDK `ThemeId`，旧设置自动迁到 vestra）；代码和注释去掉参考对象的字样；删除 `doc/product/research/` 下的提取资料；把对标文档改写成我们自己的交互规格；SDK 同步清理并发版。
+- **C 改写 git 历史**（最后做）：A、B 合并之后，用 `git filter-repo` 从历史中删掉提取资料、改写提交说明里的参考对象字样；先做完整镜像备份；强推所有分支和标签；本机各 worktree 重建。SDK 仓库同样处理（公开仓库，已有的 fork/克隆无法收回，npm 旧版本内容无法改）。
 
 ## 进度
 
 - [ ] A 设计方案 → 用户选定
 - [ ] A 实施（图标、主题配色）+ 真机像素对比验收
 - [ ] B 清理（播放器、SDK）+ SDK 发版
+  - [x] 播放器：分支 `identity/cleanup`（第二套主题删除，旧设置迁到 vestra；代码、注释、文档清理；新文档 `ui-spec.md`、`interaction-spec.md`、`feature-catalog.md`）
+  - [x] SDK：1.4.0（`ThemeId` 只剩 `"vestra"`），PR vestrasys/vestra-player-sdk#10，待合并、打 tag 发版
+  - [ ] 发版后播放器升级依赖（`npm install @vestra-player/sdk@1.4.0`），`test:sdk` 的 Slint 一致性检查在此之前对 1.3.0 不通过
 - [ ] C 历史改写（播放器、SDK）

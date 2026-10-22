@@ -3,8 +3,6 @@
 extend-exclude = [
   # Third-party code shipped with the workshop plugin.
   "src/plugins/*/vendor/",
-  # Raw research captures (extracted strings, hashes, symbol names).
-  "doc/product/research/",
   "*.lock",
   "package-lock.json",
 ]

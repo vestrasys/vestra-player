@@ -118,9 +118,13 @@ impl UiState {
                     .collect()
             })
             .unwrap_or_default();
+        // A palette this player does not have (one retired in an earlier
+        // version) becomes the default, silently.
         let appearance = serde_json::from_value::<Appearance>(field("appearance"))
             .ok()
-            .filter(|a| ["vestra", "classic"].contains(&a.theme.as_str()));
+            .map(|a| Appearance {
+                theme: crate::theme::known(&a.theme).into(),
+            });
         let settings = serde_json::from_value::<Settings>(field("settings")).ok();
         Self {
             window,
@@ -263,7 +267,7 @@ mod tests {
             .bindings
             .insert("vestra.playback/toggle-pause".into(), vec!["Space".into()]);
         store.state.appearance = Some(Appearance {
-            theme: "classic".into(),
+            theme: "vestra".into(),
         });
         store.state.settings = Some(Settings {
             last_page: Some("vestra.preferences/appearance".into()),
@@ -276,6 +280,29 @@ mod tests {
         assert_eq!(reopened.state, store.state);
         let text = std::fs::read_to_string(&path).unwrap();
         assert!(text.contains("\"version\": 1"));
+    }
+
+    #[test]
+    fn a_saved_palette_the_player_no_longer_has_becomes_vestra() {
+        // An earlier version offered a second palette; its id (any id not in
+        // `theme::THEMES`) loads as the default and is saved as such.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ui-state.json");
+        std::fs::write(
+            &path,
+            r#"{"version":1,"appearance":{"theme":"classic"},"sidebar":{"width":350}}"#,
+        )
+        .unwrap();
+        let mut store = Store::open(&path);
+        assert_eq!(store.state.appearance.as_ref().unwrap().theme, "vestra");
+        assert_eq!(store.state.sidebar, Some(Sidebar { width: 350. }));
+        // The next write (after any other change) stores the default.
+        store.state.sidebar = Some(Sidebar { width: 360. });
+        store.touch(0);
+        store.save_if_due(1000);
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains(r#""theme": "vestra""#), "{text}");
+        assert!(!text.contains("classic"));
     }
 
     #[test]
@@ -292,7 +319,7 @@ mod tests {
         .unwrap();
         let state = Store::open(&path).state;
         assert_eq!(state.window, None);
-        assert_eq!(state.appearance, None);
+        assert_eq!(state.appearance.unwrap().theme, "vestra");
         assert_eq!(state.sidebar, Some(Sidebar { width: 350. }));
         assert_eq!(state.panels.len(), 1);
         assert_eq!(state.bindings.len(), 1);

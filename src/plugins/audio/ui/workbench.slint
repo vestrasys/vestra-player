@@ -1,7 +1,7 @@
 import { Theme } from "@vestra/theme.slint";
 import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
 
-// 14px box + 11px text (reference player panel switch).
+// 14px box + 11px text (the panel switch).
 component Check {
     in-out property <bool> checked;
     in property <string> text;
@@ -46,7 +46,7 @@ component Check {
     }
 }
 
-// Vertical panel slider 14×70 (reference player EQ): 2px line, blue fill from the bottom, 14×12 thumb.
+// Vertical panel slider 14×70 (EQ bands): 2px line, blue fill from the bottom, 14×12 thumb.
 component VSlider {
     in-out property <float> value;
     in property <float> minimum: 0;

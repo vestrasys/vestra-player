@@ -7,10 +7,10 @@ use serde::Serialize;
 
 const IDLE_MS: u64 = 3000;
 /// G-01: the fullscreen sidebar pops out when the pointer comes this close to
-/// the right edge (Vestra value, to calibrate against Q-13).
+/// the right edge (Vestra value).
 pub const EDGE_PX: f64 = 4.0;
 /// G-01: the popped-out sidebar collapses this long after the pointer left it
-/// (Vestra value, Q-13).
+/// (Vestra value).
 pub const LEAVE_MS: u64 = 500;
 /// UI-SHELL-06/08: video at least 318px, a 3px splitter, sidebar at least 317px.
 pub const VIDEO_MIN_WIDTH: f64 = 318.0;

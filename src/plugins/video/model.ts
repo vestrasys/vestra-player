@@ -182,7 +182,7 @@ export function aspectIndex(display: Display) {
   const preset = RATIOS.findIndex((r) => Math.abs(r.aspect - display.aspect!) < 1e-3);
   return preset >= 0 ? preset + 1 : RATIOS.length + 1;
 }
-/** OSD wording (reference player): 默认, 4:3 …, 自定义 - 21:9. */
+/** OSD wording: 默认, 4:3 …, 自定义 - 21:9. */
 export function aspectLabel(display: Display) {
   const index = aspectIndex(display);
   if (index === 0) return "默认";
@@ -290,7 +290,7 @@ export function nodesFor(look: Look, blend: number | null = null): VideoNode[] {
       y: clamp(reframe.y, 0, 100) / 50 - 1,
     });
   if (g.rotate !== 0 || g.flipH || g.flipV) {
-    // The host rotates first and flips after; the user flips first (reference player), so a
+    // The host rotates first and flips after; the user flips first, so a
     // quarter turn swaps which axis the flip is on.
     const quarter = g.rotate === 90 || g.rotate === 270;
     nodes.push({ kind: "transform", rotate: g.rotate, flipH: quarter ? g.flipV : g.flipH, flipV: quarter ? g.flipH : g.flipV });

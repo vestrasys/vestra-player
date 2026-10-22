@@ -7,9 +7,8 @@ import type { Queue } from "./queue.ts";
 export type OpenMode = "only" | "similar" | "folder";
 
 /**
- * A13 / IA-PL-01: when another plugin opens a local file, the list becomes what
- * The reference player would make of it (`AppendFilePL=0`): cleared, then the file with its
- * similar files or its whole folder (`media.ts` `siblings`), the opened file's row
+ * A13 / IA-PL-01: when another plugin opens a local file (append off), the list
+ * becomes: cleared, then the file with its similar files or its whole folder (`media.ts` `siblings`), the opened file's row
  * adopted so next / auto-advance continue from it. With 「打开或拖入时追加」
  * (`append`) the old rule stays: add without duplicates, and 「仅打开该文件」
  * leaves the list alone. Each source is handled once; this plugin's own opens never.

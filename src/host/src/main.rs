@@ -2268,7 +2268,7 @@ impl Host {
         let mut fullscreen = commands::Declaration::new("全屏", &["全屏"]);
         fullscreen.group = "screen".into();
         fullscreen.order = 700;
-        // IA-CORE-04: Enter and Alt+Enter as in reference player; F11 is a Vestra extra.
+        // IA-CORE-04: Enter and Alt+Enter toggle full screen; F11 too.
         fullscreen.bindings = vec![
             "Enter".into(),
             "Alt+Enter".into(),

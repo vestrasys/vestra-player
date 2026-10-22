@@ -259,7 +259,7 @@ test("menu under 视频 follows the chapter's allocation; GPU items are enabled 
 
 // ---------------------------------------------------------------- colour
 
-test("reference player keys step colours by 1% with on-screen feedback; Q resets; Ctrl+B toggles blur", async () => {
+test("colour keys step colours by 1% with on-screen feedback; Q resets; Ctrl+B toggles blur", async () => {
   const { host, window, stop } = await playing();
   for (const key of ["E", "E", "W", "T", "Y"]) await host.press(key);
   await host.settle();
@@ -763,7 +763,7 @@ test("E11 model: custom ratios parse as w:h or a decimal in 0.25–4; Shift+F6 c
   assert.deepEqual(parse({ version: 1, view: { aspect: 9, fit: "zoom" } }).display, { aspect: null, customAspect: "", fit: "keep" });
 });
 
-test("E11: 比例 menu and Shift+F6 set the display layer with reference player's OSD; the chain is untouched", async () => {
+test("E11: 比例 menu and Shift+F6 set the display layer with the OSD wording; the chain is untouched", async () => {
   const { host, window, stop } = await playing();
   assert.deepEqual(host.videoView.values, { aspect: null, fit: "keep", zoom: 1, panX: 0, panY: 0 });
   const replaced = host.sent("processing.replace").length;

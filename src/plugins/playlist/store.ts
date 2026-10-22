@@ -18,7 +18,7 @@ export type Settings = {
   /** 移除全部 asks first; turned off by the confirmation's 「不再询问」. */
   confirmClear: boolean;
   /**
-   * 「打开或拖入时追加，不清空列表」 (reference player `AppendFilePL`, default off): opening a
+   * 「打开或拖入时追加，不清空列表」 (default off): opening a
    * local file (IA-PL-01), 打开文件夹 and drops on the video area (G-11) add to the
    * list instead of replacing it. It replaces the old `clearOnOpenFolder` (no menu entry).
    */
