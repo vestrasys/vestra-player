@@ -1,0 +1,5 @@
+# LF in every checkout, Windows included: tests compare source text and
+# prettier expects LF.
+* text=auto eol=lf
+# Vendored third-party files stay byte-for-byte as shipped.
+src/plugins/*/vendor/** -text
