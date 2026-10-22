@@ -200,7 +200,7 @@
 
 ### 3.2 HTTP（插件进程里的 Node `fetch`）
 
-插件进程是完整的 Node ≥ 22.18（reference 开头：「可以使用 Node 标准库、文件系统、网络和 npm 依赖」），不需要宿主 API。所有请求经过一个函数 `get(url, limits)`：
+插件进程是完整的 Node（播放器内置 Node 26；reference 开头：「可以使用 Node 标准库、文件系统、网络和 npm 依赖」），不需要宿主 API。所有请求经过一个函数 `get(url, limits)`：
 
 | 规则 | 值 |
 | --- | --- |

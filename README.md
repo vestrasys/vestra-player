@@ -14,7 +14,7 @@ doc/            文档（入口：doc/README.md）
 
 ## 运行
 
-需要 Rust、Node ≥ 22.18、libmpv；导出和 YouTube 另需 ffmpeg、yt-dlp。
+需要 Rust、Node 26、libmpv（安装包自带 Node，用户不用装）；导出和 YouTube 另需 ffmpeg、yt-dlp。
 
 ```sh
 cd src && npm ci

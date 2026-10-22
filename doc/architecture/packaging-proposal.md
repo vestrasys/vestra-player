@@ -157,7 +157,7 @@ Vestra Player.app/Contents/
 
 | 键 | 值 |
 | --- | --- |
-| `CFBundleIdentifier` | `com.vestrasys.player`。需要确认 vestrasys.com 这个域名是不是我们的；不是的话用 `io.github.vestrasys.player`。**一旦签名发布就不能再改**（钥匙串、TCC 权限、偏好都挂在它上面） |
+| `CFBundleIdentifier` | **定为 `com.vestraplayer.player`**（协调者 2026-10-22 最终决定，取代下面的提议和轮次文档决定 15 的旧值；宿主代码不使用 bundle id：数据目录是 `Vestra`，钥匙串服务名是 `vestra.plugin.<id>`）。原提议：`com.vestrasys.player`。需要确认 vestrasys.com 这个域名是不是我们的；不是的话用 `io.github.vestrasys.player`。**一旦签名发布就不能再改**（钥匙串、TCC 权限、偏好都挂在它上面） |
 | `CFBundleName`、`CFBundleDisplayName` | `Vestra Player` |
 | `CFBundleExecutable` | `vestra-host` |
 | `CFBundleIconFile` | `AppIcon` |
@@ -491,3 +491,50 @@ SHA256SUMS
 11. **发布说明的来源**：`doc/releases/v<版本>.md`（推荐），缺了这个文件 release 就失败。
 12. **文档类型和文件关联**：第一版不做（推荐），之后作为宿主功能单独排期。
 13. **SDK 1.2.0**（`engines`、`@types/node`）：和 S7 一起发。
+
+---
+
+## 10. 宿主实现（7.3a，2026-10-22）
+
+按 §2.4 实现，有两处与上文不同：`InstallLayout` 直接给出各个目录（不再只给 `resources`），ffmpeg/ffprobe 不是 `Option`（决定 5：两个平台都随包）。
+
+### 10.1 安装布局（打包脚本按这张表放文件）
+
+`platform::install_layout(system, exe, is_file)`（`src/host/src/platform/layout.rs`），纯函数，三种布局在任何机器上都有单元测试。
+
+| | macOS `.app` | Windows 安装目录（安装版与便携 zip 相同） | 开发构建 |
+| --- | --- | --- | --- |
+| 判定 | exe 是 `<X>.app/Contents/MacOS/<exe>`，且 `Contents/Info.plist` 存在 | exe 同目录下有 `resources\runtime\runner.ts` | 以上都不是 |
+| UI | `Contents/Resources/ui/`（含 `host.slint`） | `resources\ui\` | `src/host/ui` |
+| 运行时 | `Contents/Resources/runtime/runner.ts` | `resources\runtime\runner.ts` | `src/runtime/runner.ts` |
+| 内置插件 | `Contents/Resources/plugins/builtin.json` | `resources\plugins\builtin.json` | 无（`VESTRA_BUILTIN_PLUGINS`） |
+| Node | `Contents/MacOS/node` | `node\node.exe` | `VESTRA_NODE`，否则 PATH 上的 `node` |
+| FFmpeg | `Contents/MacOS/ffmpeg`、`Contents/MacOS/ffprobe` | `ffmpeg\ffmpeg.exe`、`ffmpeg\ffprobe.exe` | `VESTRA_FFMPEG`/`VESTRA_FFPROBE`，否则 PATH |
+| 许可证 | `Contents/Resources/licenses/` | `licenses\`（不在 `resources` 下） | 无 |
+
+`runtime_paths.rs` 在第一次使用时解析一次。打包运行时：
+
+- 环境变量仍然优先（调试用）：`VESTRA_NODE`、`VESTRA_BUILTIN_PLUGINS`、`VESTRA_FFMPEG`、`VESTRA_FFPROBE`；空字符串等于没设。
+- **不查 PATH 找 Node**。Node、runner、`ui/host.slint`、`plugins/builtin.json` 缺任何一个，启动时直接报错退出（有界面时弹一个错误框，列出缺的文件），不会让 18 个插件逐个失败。
+- 插件进程：去掉 `NODE_OPTIONS`、`NODE_PATH`，保留 `NODE_EXTRA_CA_CERTS`；随包的 ffmpeg/ffprobe 存在时设成 `VESTRA_FFMPEG`/`VESTRA_FFPROBE`。不加任何 Node 参数（§2.5）。
+- 「关于」里的 Node 版本是 info 插件进程自己的 `process.versions.node`，插件进程由上面的 Node 启动，所以就是随包的那个，不用改。
+- 开发构建：宿主自己找 ffmpeg 改成查 PATH（原来写死 Homebrew 的 `ffmpeg-full`；Homebrew 的普通 `ffmpeg` 9.0.2 同样有 x264 和 hqdn3d）。插件进程的环境不变。
+
+### 10.2 mpv（决定 7）
+
+`backend.rs` 在初始化前设置 `osc`、`ytdl`、`load-scripts`、`load-stats-overlay`、`load-console`、`load-auto-profiles`、`load-select`、`load-positioning`、`load-commands`、`load-context-menu` 全部为 `no`；较旧的 libmpv 没有某个选项时跳过（它也就没有那个脚本）。宿主和插件都没有用到这些脚本（没有 `script-binding`、`script-message`、ytdl 相关代码）。测试确认 `script-binding stats/…` 在关掉以后失败（不关时成功）。
+
+### 10.3 Windows
+
+- release 构建是 GUI 子系统（`#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]`），debug 构建保留控制台。
+- 子进程（插件的 Node、宿主自己跑的 ffmpeg/ffprobe）经 `platform::hide_console`：宿主的 stderr 不是控制台时（GUI 子系统、或被重定向）加 `CREATE_NO_WINDOW`。子进程得到一个隐藏的控制台，它再启动的进程（插件跑的 ffmpeg、工坊的 Node）继承这个隐藏控制台，也不会弹窗。SDK 1.2.0 的 `plugin.tools.run` 另外加了 `windowsHide`。
+- CRT 静态链接：`src/host/.cargo/config.toml` 对 `cfg(all(target_os = "windows", target_env = "msvc"))` 加 `-C target-feature=+crt-static`，不需要 VC++ 运行库。`libmpv-2.dll`（MinGW）用系统的 UCRT，两边不互相释放内存（rsmpv 用 `mpv_free`），所以没有冲突。环境变量 `RUSTFLAGS` 会覆盖这个设置，CI 和打包都不要设它；`platform/windows.rs` 有测试检查构建确实是静态 CRT。
+- exe 图标和 VERSIONINFO 没有做：要先有 `.ico`（由打包脚本从 logo 生成），再在 `build.rs` 里用 `rc.exe` 或 `embed-resource` 嵌入。留给打包那一步。
+- `[profile.release] strip = "symbols"`。
+
+### 10.4 日志在哪里
+
+- 宿主和插件的日志都是 stderr（插件进程继承宿主的 stderr）。
+- macOS：从 Finder 启动时 stderr 被丢弃。要看日志，在终端里直接运行 `"/Applications/Vestra Player.app/Contents/MacOS/vestra-host"`。
+- Windows release：GUI 子系统没有控制台。要看日志，在 cmd 里运行 `vestra-host.exe 2> host.log`（重定向的句柄 GUI 程序同样能用，插件的输出也进这个文件）。debug 构建直接打印在控制台。
+- §9 7.3a 提到的日志文件（`~/Library/Logs/Vestra`、`%LOCALAPPDATA%\Vestra\logs`，按大小轮换）**这次没有做**：把宿主自己的 stderr 改写到文件需要 `dup2`/`SetStdHandle`（unsafe），或者把所有 `eprintln!` 换成日志库，改动面大，单独排期。

@@ -468,21 +468,33 @@ pub fn app_data_dir() -> Option<PathBuf> {
 /// protocol (FFmpeg 6.1 and later) seeks it like a file; `pipe:` would not.
 pub const HELD_FILE_INPUT: &str = "fd:";
 
-/// The offline workers' FFmpeg when `VESTRA_FFMPEG` is not set: the first
-/// `ffmpeg.exe` on `PATH`.
-pub fn default_ffmpeg() -> PathBuf {
-    std::env::var_os("PATH")
-        .and_then(|path| {
-            std::env::split_paths(&path)
-                .map(|directory| directory.join("ffmpeg.exe"))
-                .find(|candidate| candidate.is_file())
-        })
-        .unwrap_or_else(|| PathBuf::from("ffmpeg.exe"))
+/// Console programs (Node, FFmpeg) started by a host without a console of
+/// its own (the release build is a GUI-subsystem program, `main.rs`) would
+/// each open a console window. `CREATE_NO_WINDOW` gives them a hidden one,
+/// which their own children (FFmpeg run by a plugin, the workshop's Node)
+/// inherit, so those stay hidden too. A host whose stderr is a console (a
+/// debug build run from a terminal) leaves its children on that console, so
+/// their output is still seen there.
+pub fn hide_console(command: &mut std::process::Command) {
+    use std::io::IsTerminal;
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    if !std::io::stderr().is_terminal() {
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `.cargo/config.toml`: no VC++ redistributable needed. Checked when
+    /// the tests compile (a build without the flag does not compile them).
+    #[cfg(target_env = "msvc")]
+    const _: () = assert!(
+        cfg!(target_feature = "crt-static"),
+        "build with +crt-static (src/host/.cargo/config.toml; RUSTFLAGS replaces it)"
+    );
 
     #[test]
     fn the_build_number_names_the_release() {

@@ -535,10 +535,8 @@ pub fn app_data_dir() -> Option<PathBuf> {
 /// FFmpeg's name for its stdin, which is the held source file (seekable).
 pub const HELD_FILE_INPUT: &str = "/dev/fd/0";
 
-/// The offline workers' FFmpeg when `VESTRA_FFMPEG` is not set.
-pub fn default_ffmpeg() -> PathBuf {
-    PathBuf::from("/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg")
-}
+/// Child processes share the host's session; nothing to hide.
+pub fn hide_console(_command: &mut std::process::Command) {}
 
 // ---------------------------------------------------------------- rendering
 
