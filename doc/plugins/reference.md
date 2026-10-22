@@ -1183,7 +1183,7 @@ interface PackageChange {
 - `uninstall`：只对已安装插件（内置插件、开发加载、试载 `unsupported`；未知 `missing`；自己 `invalid`）。先停止，再从安装库删除（当前与上一版本，一次原子提交），回收它的包文件；`removeData: true` 时在进程结束后删除它的数据目录，否则安装实例转为休眠，同来源重新安装时接上数据。系统密钥库里该实例的条目不会被删除（无法枚举），但新实例读不到它们。用户覆盖层里它的绑定保留（`bindings.list` 的 orphans）。返回的 `PackageChange` 通常已是 `committed`。
 - `trial.stop()` 以 `code: "cleanup"` 失败表示播放器停止了试载但未确认清理；再次调用会重新请求停止。
 - `validateArchive(file)`：`.vxp` 是 zip，根目录放 `manifest.json`（`vestra-plugin pack` 的产物）。播放器在解压过程中强制上限（包 ≤ 64 MB、≤ 1024 个文件、单文件 ≤ 32 MB、总计 ≤ 64 MB），只收 stored/deflate、不收加密，拒绝绝对路径、`..`、`\`、符号链接、忽略大小写重名；不合格为 `invalid`。之后的检查与 `validate` 相同。播放器不知道包的 sha256，从网络下载的包请先自己核对。
-- `install({ source, replace })`（0.2.0）：来源决定升级还是替换。来源标识：`repository` 按 `url`；`link` 与 `file` 同为「手动安装」；`workshop` 单独一类。同 id 同来源 = 升级（沿用安装实例与数据，可回退）；同 id 不同来源：不带 `replace` 以 `conflict` 失败、什么都不做——插件问过用户后带 `replace: true` 重试；替换后新插件拿新的空数据目录，旧实例转为休眠（数据保留），以后从旧来源再安装时接上。不带参数等于 `{ source: { kind: "file" } }`。`source` 的地址须为 `http(s)`、≤ 2048 字节，`bundled` 为 `invalid`。同一时间每个 id 只运行一个。
+- `install({ source, replace })`（0.2.0）：来源决定升级还是替换。来源标识：`repository` 按 `url`；`link` 与 `file` 同为「手动安装」；`workshop` 单独一类。同 id 同来源 = 升级（沿用安装实例与数据，可回退）；同 id 不同来源：不带 `replace` 以 `conflict` 失败、什么都不做——插件问过用户后带 `replace: true` 重试；替换后新插件拿新的空数据目录，旧实例转为休眠（数据保留），以后从旧来源再安装时接上。同来源安装**更低**的版本同样按升级处理：播放器不比较版本号，沿用实例与数据，原来的当前版本成为 `previousVersion`（可以再回退过去）；商城的「安装其它版本」依赖这一点。不带参数等于 `{ source: { kind: "file" } }`。`source` 的地址须为 `http(s)`、≤ 2048 字节，`bundled` 为 `invalid`。同一时间每个 id 只运行一个。
 - **内置插件**（`builtin: true`，随播放器安装、来源 `bundled`）：可以停用、启用、回退；`uninstall` 与任何 `install`（带不带 `replace`）都以 `unsupported` 失败。内置插件只随播放器更新：播放器启动时，安装包里的版本比上次播种的版本新才升级（保留用户的停用状态与数据；用户回退后不会被同一安装包再次覆盖）。
 - 开发加载（`--plugin`）与已安装插件同 id 时，本次运行只运行开发加载的那个。
 

@@ -1,0 +1,477 @@
+// 插件商城 (vestra.store, design §2.1): filters and buttons on top, the
+// plugin list on the left (300 wide, 52px rows), the selected plugin on the
+// right (header, actions, notices, tabs 说明 / 更新日志 / 版本 and a 200px
+// column with facts and permissions), a status line at the bottom.
+// Minimum 760×480: top row search ≥ 180 + 3 filter buttons + two 110px
+// drop-downs + gaps ≈ 600; the detail keeps ≥ 440 next to the list.
+import { LineEdit, ListView } from "std-widgets.slint";
+import { MarkdownView, MarkdownBlock } from "@vestra/markdown.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button, ToolTipArea, UrlInputRow } from "@vestra/widgets.slint";
+import { Cell, Chip, Choice, Tone } from "parts.slint";
+
+export struct StoreRow {
+    key: string,
+    name: string,
+    version: string,
+    meta: string,
+    punchline: string,
+    badge: string,
+    // 0 plain, 1 accent, 2 warn, 3 danger, 4 dim (see Tone)
+    tone: int,
+    selected: bool,
+}
+
+export struct StoreAction {
+    id: string,
+    text: string,
+    enabled: bool,
+    // Logical pixels (the plugin measures the label).
+    width: int,
+}
+
+export struct StoreBanner {
+    text: string,
+    tone: int,
+    action: string,
+    actionText: string,
+    actionWidth: int,
+}
+
+export struct StoreVersion {
+    version: string,
+    date: string,
+    minimum: string,
+    status: string,
+    tone: int,
+    canInstall: bool,
+}
+
+export struct StoreFact {
+    label: string,
+    text: string,
+    link: bool,
+}
+
+export struct StorePermission {
+    text: string,
+    risky: bool,
+}
+
+component ListRow inherits Rectangle {
+    in property <StoreRow> item;
+    callback select();
+    height: 52px;
+    background: root.item.selected ? Theme.selected-bg : touch.has-hover ? Theme.hover-bg : transparent;
+    VerticalLayout {
+        padding-left: 8px;
+        padding-right: 10px;
+        padding-top: 4px;
+        padding-bottom: 4px;
+        spacing: 1px;
+        HorizontalLayout {
+            spacing: 6px;
+            Cell { horizontal-stretch: 1; text: root.item.name; color: Theme.text; font-size: Theme.font-tab; }
+            Cell { text: root.item.version; color: Theme.text-dim; }
+        }
+        HorizontalLayout {
+            spacing: 6px;
+            Cell { horizontal-stretch: 1; text: root.item.meta; color: Theme.text-dim; }
+            Cell { text: root.item.badge; color: Tone.color(root.item.tone); }
+        }
+        Cell { text: root.item.punchline; color: Theme.text-list; }
+    }
+    Rectangle { y: parent.height - 1px; height: 1px; background: Theme.line; }
+    ToolTipArea {
+        width: 100%;
+        height: 100%;
+        text: root.item.punchline;
+        touch := TouchArea {
+            width: 100%;
+            height: 100%;
+            clicked => { root.select(); }
+        }
+    }
+}
+
+component Tab inherits Rectangle {
+    in property <string> text;
+    in property <bool> active;
+    callback clicked();
+    height: 22px;
+    width: label.preferred-width + 20px;
+    label := Text {
+        text: root.text;
+        font-size: Theme.font-tab;
+        color: root.active ? Theme.text : touch.has-hover ? Theme.text-list : Theme.text-dim;
+        vertical-alignment: center;
+    }
+    Rectangle {
+        y: parent.height - 2px;
+        height: 2px;
+        background: root.active ? Theme.accent : transparent;
+    }
+    touch := TouchArea { clicked => { root.clicked(); } }
+}
+
+export component StoreWindow inherits Window {
+    title: "插件商城";
+    preferred-width: 900px;
+    preferred-height: 600px;
+    min-width: 760px;
+    min-height: 480px;
+    background: Theme.bg-panel;
+
+    // Filters and list
+    in-out property <string> search-text;
+    in property <int> filter;
+    in property <string> updates-label: "可更新";
+    in property <[string]> tag-model;
+    in property <int> tag-index;
+    in property <[string]> sort-model;
+    in property <int> sort-index;
+    in property <[StoreRow]> rows;
+    in property <string> empty-text;
+    in property <bool> link-open;
+    in-out property <string> link-text;
+    // Detail
+    in property <bool> has-selection;
+    in property <string> d-name;
+    in property <string> d-meta;
+    in property <string> d-punchline;
+    in property <image> d-icon;
+    in property <[StoreAction]> actions;
+    in property <[StoreBanner]> banners;
+    in property <int> tab;
+    in property <[MarkdownBlock]> doc;
+    in property <string> doc-note;
+    in property <[StoreVersion]> versions;
+    in property <[StoreFact]> facts;
+    in property <string> permissions-title;
+    in property <[StorePermission]> permissions;
+    in property <string> permission-note;
+    in property <string> manage-note;
+    // Status line
+    in property <string> status-text;
+    in property <bool> status-warn;
+    in property <string> busy-text;
+    in property <bool> can-cancel;
+
+    callback search(string);
+    callback set-filter(int);
+    callback set-tag(int);
+    callback set-sort(int);
+    callback select(string);
+    callback set-tab(int);
+    callback act(string);
+    callback banner-act(string);
+    callback install-version(string);
+    callback open-link(string);
+    callback fact-link(int);
+    callback from-file();
+    callback from-link();
+    callback link-accepted(string);
+    callback link-cancelled();
+    callback repos();
+    callback refresh();
+    callback cancel();
+
+    forward-focus: search-box;
+
+    VerticalLayout {
+        padding: 8px;
+        spacing: 6px;
+        HorizontalLayout {
+            spacing: 6px;
+            height: 24px;
+            search-box := LineEdit {
+                min-width: 180px;
+                horizontal-stretch: 1;
+                placeholder-text: "搜索名称、作者、标签…";
+                font-size: Theme.font-body;
+                text <=> root.search-text;
+                edited(text) => { root.search(text); }
+            }
+            Chip { width: 48px; text: "全部"; checked: root.filter == 0; clicked => { root.set-filter(0); } }
+            Chip { width: 56px; text: "已安装"; checked: root.filter == 1; clicked => { root.set-filter(1); } }
+            Chip { width: 76px; text: root.updates-label; checked: root.filter == 2; clicked => { root.set-filter(2); } }
+            Choice {
+                width: 110px;
+                y: 1px;
+                model: root.tag-model;
+                current-index: root.tag-index;
+                selected(index) => { root.set-tag(index); }
+            }
+            Choice {
+                width: 110px;
+                y: 1px;
+                model: root.sort-model;
+                current-index: root.sort-index;
+                selected(index) => { root.set-sort(index); }
+            }
+        }
+        HorizontalLayout {
+            spacing: 6px;
+            height: Theme.button-height;
+            Cell { horizontal-stretch: 1; text: "也可以把 .vxp 插件包拖到播放器的视频区安装"; color: Theme.text-dim; }
+            Button { width: 84px; text: "从文件安装…"; clicked => { root.from-file(); } }
+            Button { width: 84px; text: "从链接安装…"; clicked => { root.from-link(); } }
+            Button { width: 60px; text: "仓库…"; clicked => { root.repos(); } }
+            Button { width: 52px; text: "刷新"; clicked => { root.refresh(); } }
+        }
+        if root.link-open: link-row := UrlInputRow {
+            text <=> root.link-text;
+            placeholder: "插件包链接（https://…/名称-版本.vxp）";
+            confirm-text: "安装";
+            accepted(url) => { root.link-accepted(url); }
+            cancelled => { root.link-cancelled(); }
+            init => { self.focus-input(); }
+        }
+        HorizontalLayout {
+            vertical-stretch: 1;
+            spacing: 8px;
+            // The plugin list.
+            Rectangle {
+                width: 300px;
+                background: Theme.bg-list;
+                border-width: 1px;
+                border-color: Theme.line;
+                ListView {
+                    x: 1px;
+                    y: 1px;
+                    width: parent.width - 2px;
+                    height: parent.height - 2px;
+                    for row in root.rows: ListRow {
+                        item: row;
+                        select => { root.select(row.key); }
+                    }
+                }
+                if root.rows.length == 0: Text {
+                    x: 12px;
+                    width: parent.width - 24px;
+                    height: parent.height;
+                    text: root.empty-text;
+                    color: Theme.text-dim;
+                    font-size: Theme.font-body;
+                    wrap: word-wrap;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+            // The selected plugin.
+            Rectangle {
+                horizontal-stretch: 1;
+                if !root.has-selection: Text {
+                    width: 100%;
+                    height: 100%;
+                    text: "选择左侧的插件查看详情";
+                    color: Theme.text-dim;
+                    font-size: Theme.font-body;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                if root.has-selection: VerticalLayout {
+                    spacing: 6px;
+                    HorizontalLayout {
+                        spacing: 10px;
+                        height: 56px;
+                        Image {
+                            width: 56px;
+                            height: 56px;
+                            source: root.d-icon;
+                            image-fit: contain;
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 2px;
+                            Cell { text: root.d-name; color: Theme.text; font-size: Theme.font-title; font-weight: 700; }
+                            Cell { text: root.d-meta; color: Theme.text-dim; }
+                            Cell { text: root.d-punchline; color: Theme.text-list; }
+                        }
+                    }
+                    HorizontalLayout {
+                        height: Theme.button-height;
+                        spacing: 6px;
+                        alignment: start;
+                        for action in root.actions: Button {
+                            width: action.width * 1px;
+                            text: action.text;
+                            enabled: action.enabled;
+                            clicked => { root.act(action.id); }
+                        }
+                    }
+                    for banner in root.banners: Rectangle {
+                        background: Theme.bg-list;
+                        border-radius: Theme.radius-control;
+                        HorizontalLayout {
+                            padding: 5px;
+                            padding-left: 0px;
+                            spacing: 8px;
+                            Rectangle { width: 3px; background: Tone.color(banner.tone); }
+                            Text {
+                                horizontal-stretch: 1;
+                                text: banner.text;
+                                color: Tone.color(banner.tone);
+                                font-size: Theme.font-body;
+                                wrap: word-wrap;
+                                vertical-alignment: center;
+                            }
+                            if banner.action != "": Button {
+                                width: banner.actionWidth * 1px;
+                                small: true;
+                                text: banner.actionText;
+                                clicked => { root.banner-act(banner.action); }
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        vertical-stretch: 1;
+                        spacing: 8px;
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            spacing: 0px;
+                            HorizontalLayout {
+                                alignment: start;
+                                Tab { text: "说明"; active: root.tab == 0; clicked => { root.set-tab(0); } }
+                                Tab { text: "更新日志"; active: root.tab == 1; clicked => { root.set-tab(1); } }
+                                Tab { text: "版本"; active: root.tab == 2; clicked => { root.set-tab(2); } }
+                            }
+                            Rectangle {
+                                vertical-stretch: 1;
+                                background: Theme.bg-list;
+                                border-width: 1px;
+                                border-color: Theme.line;
+                                if root.tab != 2: MarkdownView {
+                                    x: 1px;
+                                    y: 1px;
+                                    width: parent.width - 2px;
+                                    height: parent.height - 2px;
+                                    blocks: root.doc;
+                                    link-clicked(url) => { root.open-link(url); }
+                                }
+                                if root.tab != 2 && root.doc-note != "": Text {
+                                    x: 12px;
+                                    width: parent.width - 24px;
+                                    height: parent.height;
+                                    text: root.doc-note;
+                                    color: Theme.text-dim;
+                                    font-size: Theme.font-body;
+                                    wrap: word-wrap;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                                if root.tab == 2: VerticalLayout {
+                                    x: 1px;
+                                    y: 1px;
+                                    width: parent.width - 2px;
+                                    height: parent.height - 2px;
+                                    HorizontalLayout {
+                                        height: 20px;
+                                        padding-left: 6px;
+                                        padding-right: 8px;
+                                        spacing: 6px;
+                                        Cell { width: 56px; text: "版本"; color: Theme.text-dim; }
+                                        Cell { width: 76px; text: "发布日期"; color: Theme.text-dim; }
+                                        Cell { width: 76px; text: "最低播放器"; color: Theme.text-dim; }
+                                        Cell { horizontal-stretch: 1; text: "状态"; color: Theme.text-dim; }
+                                        Rectangle { width: 48px; }
+                                    }
+                                    Rectangle { height: 1px; background: Theme.line; }
+                                    ListView {
+                                        vertical-stretch: 1;
+                                        for v in root.versions: HorizontalLayout {
+                                            height: 24px;
+                                            padding-left: 6px;
+                                            padding-right: 8px;
+                                            spacing: 6px;
+                                            Cell { width: 56px; text: v.version; color: Theme.text; }
+                                            Cell { width: 76px; text: v.date; color: Theme.text-list; }
+                                            Cell { width: 76px; text: v.minimum; color: Theme.text-list; }
+                                            ToolTipArea {
+                                                horizontal-stretch: 1;
+                                                text: v.status;
+                                                Cell { width: 100%; height: 100%; text: v.status; color: Tone.color(v.tone); }
+                                            }
+                                            VerticalLayout {
+                                                width: 48px;
+                                                alignment: center;
+                                                if v.canInstall: Button {
+                                                    small: true;
+                                                    text: "安装";
+                                                    clicked => { root.install-version(v.version); }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // Facts and permissions.
+                        VerticalLayout {
+                            width: 200px;
+                            spacing: 2px;
+                            for fact[index] in root.facts: HorizontalLayout {
+                                height: 18px;
+                                spacing: 6px;
+                                Cell { width: 44px; text: fact.label; color: Theme.text-dim; }
+                                ToolTipArea {
+                                    horizontal-stretch: 1;
+                                    text: fact.text;
+                                    Cell {
+                                        width: 100%;
+                                        height: 100%;
+                                        text: fact.text;
+                                        color: fact.link ? Theme.accent : Theme.text-list;
+                                    }
+                                    if fact.link: TouchArea {
+                                        width: 100%;
+                                        height: 100%;
+                                        mouse-cursor: pointer;
+                                        clicked => { root.fact-link(index); }
+                                    }
+                                }
+                            }
+                            Rectangle { height: 6px; }
+                            Cell { text: root.permissions-title; color: Theme.text; }
+                            Rectangle { height: 1px; background: Theme.line; }
+                            ListView {
+                                vertical-stretch: 1;
+                                for p in root.permissions: Text {
+                                    height: self.preferred-height + 3px;
+                                    text: "· " + p.text;
+                                    color: p.risky ? Tone.warn : Theme.text-list;
+                                    font-size: Theme.font-body;
+                                    wrap: word-wrap;
+                                }
+                            }
+                            Text {
+                                text: root.permission-note;
+                                color: Theme.text-dim;
+                                font-size: Theme.font-xs;
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+                    if root.manage-note != "": Cell { text: root.manage-note; color: Theme.text-dim; }
+                }
+            }
+        }
+        // Status line.
+        HorizontalLayout {
+            height: 20px;
+            spacing: 8px;
+            ToolTipArea {
+                horizontal-stretch: 1;
+                text: root.status-text;
+                Cell {
+                    width: 100%;
+                    height: 100%;
+                    text: root.status-text;
+                    color: root.status-warn ? Tone.warn : Theme.text-dim;
+                }
+            }
+            if root.busy-text != "": Cell { text: root.busy-text; color: Theme.text; }
+            if root.can-cancel: Button { small: true; text: "取消"; clicked => { root.cancel(); } }
+        }
+    }
+}
