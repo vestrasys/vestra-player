@@ -36,6 +36,12 @@
 14. GPL：源码仓库日后开源；在那之前安装包不对外发布，只做内部测试版。安装包发在 **`vestra-player` 仓库自己的 GitHub Release**，官网也引导到这里。**推翻决定 1**：不再新建 `vestra-player-releases`，release 用本仓库的 `GITHUB_TOKEN`，不需要额外凭据。仓库公开时 Release 和源码同时公开，满足 GPL。依赖镜像（决定 4）也放本仓库 Release（固定标签如 `deps-<日期>`）。
 15. bundle id：`com.vestraplayer.player`（用户裁决）。bundle id 只是命名惯例，不需要拥有域名，也不在苹果登记（不上 App Store）；只有同一台 Mac 上两个应用的完整 ID 相同才会冲突。vestrasys.com、vestra.com 已被他人注册，vestraplayer.com 当时（2026-10-22）未注册，以后做官网可注册它。
 
+**2026-10-22，步骤 7.3 中的偏差**
+16. macOS 最低版本改为 **15.0**（推翻决定 3 的 14.0）：Homebrew 已不再为 macOS 14 出预编译包，要做到 14 得自己编译 mpv/FFmpeg。15.0（2024 年发布）可以接受；自编译 mpv 以后单独排期。依赖在 `macos-15` 上生成。
+17. 打包脚本放在 `src/packaging/`（方案写的是 `src/scripts/package/`）。
+
+**GitHub Actions 额度（2026-10-22）**：本月 2000 分钟已用完，主要是旧 SDK CI 的 Windows 测试每次挂满 6 小时（公开仓库，金额被抵扣，但吃掉了额度）；播放器自己约 3 美元。私有仓库的 CI 在用户设预算或 11 月 1 日重置前被拦。已建议用户设 Actions 预算 20 美元并勾选达到上限即停。agent 改为本机先验证、只在必要时上 CI。
+
 ## 流程
 
 自上而下（community-workflow §5）：维护者调研并写方案 → 协调者决定 → 维护者实现（宿主找内置 Node、资源路径、打包脚本、许可证）→ CI release 演练（dispatch dry_run）→ 协调者真机测试打包后的 `.app`（双击启动、插件全部激活、播放、商城安装）→ 合并。Windows 安装包在 CI 上构建并做冒烟测试，真机验收随 S6。
@@ -44,6 +50,7 @@
 
 - [x] 7.1 维护者调研与方案：[packaging-proposal.md](../../architecture/packaging-proposal.md)（试拼 .app 231 MB、DMG 76 MB；去掉 PATH 里的 node 后 18 个插件全部启动失败，证实必须内置 Node）
 - [x] 7.2 协调者决定（含用户裁决 13–15）
+- 7.3 进行中：宿主 `s7/host`（0872b84、db6983d，本机全过，Windows CI 因额度未跑）；打包 `s7/packaging`（d3b9c73；deps.yml 39788694017 成功，release `deps-20261022`；本机打出 .app 268 MB / DMG 78 MB，依赖全部从包内加载）
 - [ ] 7.3 实现
 - [ ] 7.4 release 演练（不签名）
 - [ ] 7.5 真机测试 macOS 包
