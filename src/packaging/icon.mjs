@@ -58,7 +58,9 @@ export function decodePng(bytes) {
   const { width, height, depth, color, interlace } = header;
   const channels = { 2: 3, 6: 4 }[color];
   if (depth !== 8 || !channels || interlace)
-    throw new Error("only 8-bit non-interlaced RGB or RGBA images are supported");
+    throw new Error(
+      "only 8-bit non-interlaced RGB or RGBA images are supported",
+    );
   const raw = inflateSync(Buffer.concat(idat));
   const stride = width * channels;
   const pixels = Buffer.alloc(stride * height);
