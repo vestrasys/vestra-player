@@ -224,6 +224,45 @@ fn local_id(value: &str) -> Result<()> {
     Ok(())
 }
 
+/// The player's built-in top-level menus. A plugin names one with `@<id>` as
+/// the first path segment (`["@video", "Blur"]`), so its command joins that
+/// menu whatever the player's language; the registry stores the menu's
+/// title. Reference §4. Mirrored by `MENU_IDS` in the SDK package;
+/// tests/sdk/host-agreement.test.ts checks the installed SDK agrees.
+pub const MENU_ANCHORS: [(&str, &str); 7] = [
+    ("open", "打开"),
+    ("playback", "播放"),
+    ("subtitles", "字幕"),
+    ("video", "视频"),
+    ("audio", "声音"),
+    ("screen", "屏幕"),
+    ("settings", "设置"),
+];
+
+/// Replace a leading `@<id>` with the built-in menu's title.
+fn resolve_anchor(path: &mut [String]) -> Result<()> {
+    let Some(id) = path.first().and_then(|first| first.strip_prefix('@')) else {
+        return Ok(());
+    };
+    let Some((_, title)) = MENU_ANCHORS.iter().find(|(anchor, _)| *anchor == id) else {
+        let known: Vec<_> = MENU_ANCHORS
+            .iter()
+            .map(|(id, _)| format!("@{id}"))
+            .collect();
+        return Err(CommandError::Invalid(format!(
+            "unknown menu id @{id}; the built-in menus are {}",
+            known.join(", ")
+        )));
+    };
+    if path.len() < 2 {
+        return Err(CommandError::Invalid(format!(
+            "menu id @{id} needs an item after it"
+        )));
+    }
+    path[0] = (*title).to_owned();
+    Ok(())
+}
+
 fn state_valid(state: &CommandState) -> Result<()> {
     if let Some(reason) = &state.reason {
         text(reason, "reason", 512)?;
@@ -258,10 +297,11 @@ impl Registry {
         manifest: &str,
         id: String,
         revision: u64,
-        declaration: Declaration,
+        mut declaration: Declaration,
         state: CommandState,
     ) -> Result<()> {
         local_id(&id)?;
+        resolve_anchor(&mut declaration.path)?;
         if revision == 0 {
             return Err(CommandError::Invalid("command revision starts at 1".into()));
         }
@@ -747,6 +787,78 @@ mod tests {
         let mut titles = Vec::new();
         flatten(&registry.snapshot().roots, &mut titles);
         assert_eq!(titles, ["M zero", "Z first", "A second"]);
+    }
+
+    /// An English plugin's `["@video", "Blur"]` lands in the same 视频 menu
+    /// as the built-in video plugin's `["视频", …]` commands.
+    #[test]
+    fn menu_ids_name_the_built_in_menus_in_any_language() {
+        let mut registry = Registry::new();
+        registry
+            .register(
+                1,
+                "video",
+                "rotate".into(),
+                1,
+                ordered(&["视频", "旋转"], 400),
+                state(true),
+            )
+            .unwrap();
+        registry
+            .register(
+                2,
+                "examples.blur",
+                "toggle".into(),
+                1,
+                ordered(&["@video", "Blur"], 401),
+                state(true),
+            )
+            .unwrap();
+        assert_eq!(
+            registry.get(2, "toggle").unwrap().declaration.path,
+            ["视频", "Blur"]
+        );
+        let roots = registry.snapshot().roots;
+        let mut titles = Vec::new();
+        flatten(&roots, &mut titles);
+        assert_eq!(titles, ["▸视频", "旋转", "Blur"]);
+        // The same leaf again collides whichever way the menu is named.
+        assert!(matches!(
+            registry.register(
+                3,
+                "c",
+                "again".into(),
+                1,
+                declaration(&["视频", "Blur"]),
+                state(true)
+            ),
+            Err(CommandError::Conflict(_))
+        ));
+        for bad in [&["@view", "X"][..], &["@video"][..], &["@", "X"][..]] {
+            assert!(
+                matches!(
+                    registry.register(3, "c", "bad".into(), 1, declaration(bad), state(true)),
+                    Err(CommandError::Invalid(_))
+                ),
+                "{bad:?}"
+            );
+        }
+        // Only the first segment names a menu; later ones are titles.
+        registry
+            .register(
+                3,
+                "c",
+                "at".into(),
+                1,
+                declaration(&["@audio", "@home", "X"]),
+                state(true),
+            )
+            .unwrap();
+        assert_eq!(
+            registry.get(3, "at").unwrap().declaration.path,
+            ["声音", "@home", "X"]
+        );
+        assert_eq!(MENU_ANCHORS.len(), 7);
     }
 
     #[test]

@@ -14,7 +14,9 @@ import {
   MANIFEST_FIELDS,
   MANIFEST_LIMITS,
   MARKDOWN_LIMITS,
+  MENU_IDS,
 } from "@vestra-player/sdk/runtime";
+import { TestHost } from "@vestra-player/sdk/testing";
 
 const host = (file: string) =>
   readFileSync(new URL(`../../host/${file}`, import.meta.url), "utf8");
@@ -25,6 +27,64 @@ test("COMMAND_LIMITS matches the player's registry", () => {
     Number(new RegExp(`const ${name}: usize = (\\d+);`).exec(rust)?.[1]);
   assert.equal(constant("MAX_PER_OWNER"), COMMAND_LIMITS.perPlugin);
   assert.equal(constant("MAX_COMMANDS"), COMMAND_LIMITS.total);
+});
+
+test("MENU_IDS are the player's built-in menu ids", () => {
+  const table = /pub const MENU_ANCHORS: [^=]+= \[([\s\S]*?)\];/.exec(
+    host("src/commands.rs"),
+  );
+  assert.ok(table, "MENU_ANCHORS in commands.rs");
+  const ids = [...table[1]!.matchAll(/\("([^"]+)",/g)].map((m) => m[1]);
+  assert.deepEqual(ids, [...MENU_IDS]);
+});
+
+type Step = {
+  source: "decoded" | "generated" | "loading";
+  stage: "video" | "audio";
+  nodes: unknown[];
+  offsetMs?: number;
+  expect: string;
+  resources: number;
+};
+
+// host/src/processing.rs runs the same cases against the player's own
+// processing book (conformance_cases_shared_with_the_sdk_test_host).
+test("TestHost answers processing changes like the player", async () => {
+  const fixture = JSON.parse(
+    host("tests/fixtures/processing-conformance.json"),
+  ) as { cases: { name: string; steps: Step[] }[] };
+  for (const { name, steps } of fixture.cases) {
+    const fake = new TestHost();
+    for (const [index, step] of steps.entries()) {
+      fake.setSource(
+        step.source === "loading"
+          ? { phase: "loading" }
+          : {
+              phase: "ready",
+              kind: step.source === "generated" ? "producer" : "media",
+            },
+      );
+      const outcome = await fake
+        .request("processing.replace", {
+          stage: step.stage,
+          resourceId: "r",
+          revision: index + 1,
+          expectedGeneration: fake.source.stamp.generation,
+          nodes: step.nodes as never,
+          ...(step.offsetMs === undefined ? {} : { offsetMs: step.offsetMs }),
+        })
+        .then(
+          () => "applied",
+          (error: { code?: string }) => error.code,
+        );
+      assert.equal(outcome, step.expect, `${name}, step ${index}`);
+      const held = [...fake.processing.resources.values()].filter(
+        (resource) => resource.stage === step.stage,
+      ).length;
+      assert.equal(held, step.resources, `${name}, step ${index}`);
+    }
+    fake.close();
+  }
 });
 
 test("capabilities and apiVersion match the player's manifest rules", () => {

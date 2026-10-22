@@ -52,6 +52,9 @@ pub struct Processing {
     video: BTreeMap<(u64, String), (u64, Resource<VideoNode>)>,
     audio: BTreeMap<(u64, String), (u64, Resource<AudioNode>)>,
     audio_offsets: BTreeMap<(u64, String), i32>,
+    /// `(original, copy)`: the `hwdec` mode before the owned video chain
+    /// needed frames in memory, and the copy-back mode set for it.
+    hwdec: Option<(String, String)>,
 }
 impl Processing {
     pub fn register(&mut self, owner: u64, id: String) {
@@ -150,6 +153,9 @@ impl Processing {
             } else if empty {
                 Ok(())
             } else {
+                if stage == "video" {
+                    self.frames_in_memory(mpv, true);
+                }
                 set_graph(mpv, &graph)
             };
             if stage == "audio" && result.is_ok() {
@@ -245,7 +251,7 @@ impl Processing {
         mpv: &Mpv,
         owner: u64,
         generation: u64,
-        ready: bool,
+        source: Source,
         params: &Value,
     ) -> Result<Value, RpcError> {
         let change: Change =
@@ -302,9 +308,13 @@ impl Processing {
         {
             return Err(RpcError::invalid("bounded resourceId required"));
         }
+        // An empty chain removes the resource (both stages).
         let validation = match &graph {
             Descriptors::Audio(r) if r.len() == 1 && r[0].nodes.is_empty() => {
                 Descriptors::Audio(vec![])
+            }
+            Descriptors::Video(r) if r.len() == 1 && r[0].nodes.is_empty() => {
+                Descriptors::Video(vec![])
             }
             _ => graph,
         };
@@ -351,7 +361,7 @@ impl Processing {
                 ));
             }
         }
-        let result = self.apply_change(mpv, owner, generation, ready, change);
+        let result = self.apply_change(mpv, owner, generation, source, change);
         let outcome = result
             .as_ref()
             .map(Clone::clone)
@@ -373,7 +383,7 @@ impl Processing {
         mpv: &Mpv,
         owner: u64,
         generation: u64,
-        ready: bool,
+        source: Source,
         change: Change,
     ) -> Result<Value, RpcError> {
         let manifest = self
@@ -381,10 +391,27 @@ impl Processing {
             .get(&owner)
             .ok_or_else(|| RpcError::new("disabled", "owner is not registered"))?
             .clone();
-        if !ready {
+        if source == Source::NotReady {
             return Err(RpcError::new(
                 "unavailable",
                 "source must be ready before applying processing",
+            ));
+        }
+        let removal = match &change {
+            Change::Video { nodes, .. } => nodes.is_empty(),
+            Change::Audio {
+                nodes, offset_ms, ..
+            } => nodes.is_empty() && *offset_ms == 0,
+        };
+        // A generated stream's frames and samples go from the producer to the
+        // renderer and the audio device without mpv, so no chain can act on
+        // them. Removing a chain is still fine: it only changes what the next
+        // decoded media gets.
+        if source == Source::Generated && !removal {
+            return Err(RpcError::new(
+                "unsupported",
+                "generated streams (openStream) do not pass through the player's filters; \
+                 the chain applies to the next media the player decodes",
             ));
         }
         if self.config_revision >= operations::Book::MAX_REVISION {
@@ -400,7 +427,7 @@ impl Processing {
         if let Some(reason) = self.uncertain.get(stage) {
             return Err(RpcError::new("backend-uncertain", reason.clone()));
         }
-        if self.load.is_none() {
+        if self.load.is_none() && source != Source::Generated {
             return Err(RpcError::new(
                 "unavailable",
                 "current load processing is not yet confirmed",
@@ -424,19 +451,33 @@ impl Processing {
                 }
                 let before = self.video_graph();
                 let mut next = self.video.clone();
-                next.insert(
-                    key,
-                    (
-                        revision,
-                        Resource {
-                            manifest_id: manifest,
-                            resource_id,
-                            nodes,
-                        },
-                    ),
-                );
+                if nodes.is_empty() {
+                    next.remove(&key);
+                } else {
+                    next.insert(
+                        key,
+                        (
+                            revision,
+                            Resource {
+                                manifest_id: manifest,
+                                resource_id,
+                                nodes,
+                            },
+                        ),
+                    );
+                }
                 let after = Descriptors::Video(next.values().map(|(_, r)| r.clone()).collect());
-                if let Err(error) = apply(mpv, &before, &after) {
+                if !next.is_empty() {
+                    self.frames_in_memory(mpv, true);
+                }
+                let applied = if before == after {
+                    Ok(())
+                } else {
+                    apply(mpv, &before, &after)
+                };
+                if let Err(error) = applied {
+                    let keep = !self.video.is_empty();
+                    self.frames_in_memory(mpv, keep);
                     if error.code == "backend-uncertain" {
                         self.uncertain.insert(stage.into(), error.message.clone());
                         self.confirmations.insert(
@@ -447,6 +488,9 @@ impl Processing {
                     return Err(error);
                 }
                 self.video = next;
+                if self.video.is_empty() {
+                    self.frames_in_memory(mpv, false);
+                }
                 self.confirmations
                     .insert("video".into(), json!({"status":"applied","error":null}));
                 json!({"stage":"video","revision":revision,"generation":generation,"status":"applied"})
@@ -564,11 +608,72 @@ impl Processing {
                 failures.push(format!("{stage}: {reason}"));
             }
         }
+        if self.video.is_empty() {
+            self.frames_in_memory(mpv, false);
+        }
         if !failures.is_empty() {
             return Err(RpcError::new("backend-uncertain", failures.join("; ")));
         }
         Ok(())
     }
+    /// The owned video nodes are FFmpeg software filters: they need decoded
+    /// frames in memory. With zero-copy hardware decoding (GPU rendering's
+    /// `hwdec=auto-safe`, i.e. VideoToolbox on macOS) mpv hands the graph GPU
+    /// frames, the graph cannot be configured, and mpv drops the filter with
+    /// only a log line ("Disabling filter vestra-owned because it has
+    /// failed") while `vf add` has already succeeded. So while any owned video
+    /// chain exists, decoding uses the copy-back variant of the configured
+    /// mode (still hardware decoding), switched before the graph is
+    /// installed; the configured mode comes back once no chain is left,
+    /// unless someone else (the renderer's software fallback) changed `hwdec`
+    /// in between.
+    fn frames_in_memory(&mut self, mpv: &Mpv, needed: bool) {
+        let current = mpv.get_property::<String>("hwdec").unwrap_or_default();
+        if needed {
+            if self.hwdec.is_some() {
+                return;
+            }
+            let Some(copy) = copy_back(&current) else {
+                return;
+            };
+            match mpv.set_property("hwdec", copy.as_str()) {
+                Ok(()) => self.hwdec = Some((current, copy)),
+                Err(error) => eprintln!("processing: hwdec={copy} refused: {error}"),
+            }
+        } else if let Some((original, copy)) = self.hwdec.take()
+            && current == copy
+            && let Err(error) = mpv.set_property("hwdec", original.as_str())
+        {
+            eprintln!("processing: restoring hwdec={original} failed: {error}");
+        }
+    }
+}
+/// What the current source is, for `processing.replace`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Source {
+    /// Media mpv decodes, ready.
+    Decoded,
+    /// A plugin's generated stream (`openStream`), ready.
+    Generated,
+    NotReady,
+}
+/// The copy-back variant of an mpv `hwdec` mode (a single mode or a
+/// comma-separated list), or `None` when frames are already in memory.
+fn copy_back(mode: &str) -> Option<String> {
+    let items: Vec<String> = mode
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(|item| match item {
+            "no" => item.to_owned(),
+            "auto-safe" => "auto-copy-safe".to_owned(),
+            "auto" | "yes" | "auto-unsafe" => "auto-copy".to_owned(),
+            _ if item.contains("copy") => item.to_owned(),
+            _ => format!("{item}-copy"),
+        })
+        .collect();
+    let copy = items.join(",");
+    (!items.is_empty() && copy != mode && items.iter().any(|item| item != "no")).then_some(copy)
 }
 fn combined_offset(offsets: &BTreeMap<(u64, String), i32>) -> Result<i32, RpcError> {
     let positive: i64 = offsets
@@ -721,5 +826,292 @@ mod offset_tests {
         offsets.remove(&(3, "c".into()));
         offsets.remove(&(2, "b".into()));
         assert_eq!(combined_offset(&offsets).unwrap(), 10_000);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session::{IntentTicket, Phase, SourceStamp};
+
+    const OWNER: u64 = 7;
+
+    fn ticket(generation: u64) -> IntentTicket {
+        IntentTicket {
+            stamp: SourceStamp {
+                generation,
+                intent_version: 1,
+            },
+            cycle: 1,
+            owner: 1,
+        }
+    }
+    /// A processing book whose current source is ready (generation 1).
+    fn ready() -> Processing {
+        let mut processing = Processing::default();
+        processing.register(OWNER, "examples.blur".into());
+        processing.note_source(1, Phase::Ready);
+        processing.load = Some((1, ticket(1)));
+        processing
+    }
+    fn mpv(hwdec: &str) -> Mpv {
+        let mpv = Mpv::builder()
+            .unwrap()
+            .set_property("vo", "null")
+            .unwrap()
+            .set_property("ao", "null")
+            .unwrap()
+            .set_property("vf", crate::source_geometry::INITIAL_FILTERS)
+            .unwrap()
+            .build()
+            .unwrap();
+        mpv.set_property("hwdec", hwdec).unwrap();
+        mpv
+    }
+    fn video(revision: u64, nodes: Value) -> Value {
+        json!({"stage":"video","resourceId":"blur","revision":revision,"expectedGeneration":1,"nodes":nodes})
+    }
+    fn gblur(sigma: f64) -> Value {
+        json!([{"kind":"gblur","sigma":sigma,"steps":3}])
+    }
+    fn vf(mpv: &Mpv) -> String {
+        mpv.get_property::<String>("vf").unwrap()
+    }
+
+    #[test]
+    fn copy_back_modes_keep_hardware_decoding() {
+        assert_eq!(copy_back("auto-safe").as_deref(), Some("auto-copy-safe"));
+        assert_eq!(copy_back("auto").as_deref(), Some("auto-copy"));
+        assert_eq!(
+            copy_back("videotoolbox").as_deref(),
+            Some("videotoolbox-copy")
+        );
+        assert_eq!(
+            copy_back("videotoolbox,d3d11va").as_deref(),
+            Some("videotoolbox-copy,d3d11va-copy")
+        );
+        for already in ["no", "", "auto-copy-safe", "auto-copy", "videotoolbox-copy"] {
+            assert_eq!(copy_back(already), None, "{already}");
+        }
+    }
+
+    /// The blur example's sequence: on, off (`[]`), on again. An empty chain
+    /// removes the resource (it used to fail `invalid` for video, so "off"
+    /// left the blur in place), and while a chain exists decoding copies
+    /// frames back to memory so mpv's software filters can run.
+    #[test]
+    fn an_empty_video_chain_removes_the_resource_and_hwdec_follows_the_chain() {
+        let mpv = mpv("auto-safe");
+        let mut processing = ready();
+        let source = Source::Decoded;
+        processing
+            .replace(&mpv, OWNER, 1, source, &video(1, gblur(4.0)))
+            .unwrap();
+        assert!(
+            vf(&mpv).contains("gblur@n0=sigma=4:sigmaV=4:steps=3"),
+            "{}",
+            vf(&mpv)
+        );
+        assert_eq!(
+            mpv.get_property::<String>("hwdec").unwrap(),
+            "auto-copy-safe"
+        );
+        assert_eq!(processing.state()["video"].as_array().unwrap().len(), 1);
+
+        processing
+            .replace(&mpv, OWNER, 1, source, &video(3, json!([])))
+            .unwrap();
+        assert!(processing.state()["video"].as_array().unwrap().is_empty());
+        assert!(!vf(&mpv).contains("gblur"), "{}", vf(&mpv));
+        assert_eq!(mpv.get_property::<String>("hwdec").unwrap(), "auto-safe");
+        // Removing what is not there is a no-op, not an error.
+        processing
+            .replace(&mpv, OWNER, 1, source, &video(4, json!([])))
+            .unwrap();
+
+        processing
+            .replace(&mpv, OWNER, 1, source, &video(5, gblur(4.0)))
+            .unwrap();
+        assert!(vf(&mpv).contains("gblur@n0=sigma=4"), "{}", vf(&mpv));
+        assert_eq!(
+            mpv.get_property::<String>("hwdec").unwrap(),
+            "auto-copy-safe"
+        );
+        // Stopping the owner removes its chain and restores the mode.
+        processing.disable(&mpv, OWNER).unwrap();
+        assert_eq!(mpv.get_property::<String>("hwdec").unwrap(), "auto-safe");
+    }
+
+    #[test]
+    fn hwdec_changed_by_someone_else_is_left_alone() {
+        let mpv = mpv("auto-safe");
+        let mut processing = ready();
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(1, gblur(4.0)))
+            .unwrap();
+        // The renderer fell back to software rendering meanwhile.
+        mpv.set_property("hwdec", "no").unwrap();
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(2, json!([])))
+            .unwrap();
+        assert_eq!(mpv.get_property::<String>("hwdec").unwrap(), "no");
+        // Software decoding needs no switch at all.
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(3, gblur(4.0)))
+            .unwrap();
+        assert_eq!(mpv.get_property::<String>("hwdec").unwrap(), "no");
+    }
+
+    #[test]
+    fn generated_streams_refuse_chains_but_accept_removal() {
+        let mpv = mpv("no");
+        let mut processing = ready();
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(1, gblur(4.0)))
+            .unwrap();
+        // openStream: a new source whose frames never reach mpv.
+        processing.note_source(2, Phase::Ready);
+        let on_stream = |revision, nodes| json!({"stage":"video","resourceId":"blur","revision":revision,"expectedGeneration":2,"nodes":nodes});
+        let error = processing
+            .replace(&mpv, OWNER, 2, Source::Generated, &on_stream(2, gblur(5.0)))
+            .unwrap_err();
+        assert_eq!(error.code, "unsupported");
+        let audio = json!({"stage":"audio","resourceId":"tone","revision":1,"expectedGeneration":2,
+            "nodes":[{"kind":"channels","mode":"mono"}]});
+        let error = processing
+            .replace(&mpv, OWNER, 2, Source::Generated, &audio)
+            .unwrap_err();
+        assert_eq!(error.code, "unsupported");
+        // Turning the effect off works and reaches the next decoded media.
+        processing
+            .replace(&mpv, OWNER, 2, Source::Generated, &on_stream(3, json!([])))
+            .unwrap();
+        assert!(processing.state()["video"].as_array().unwrap().is_empty());
+        assert!(!vf(&mpv).contains("gblur"));
+        let error = processing
+            .replace(&mpv, OWNER, 2, Source::NotReady, &on_stream(4, gblur(1.0)))
+            .unwrap_err();
+        assert_eq!(error.code, "unavailable");
+    }
+
+    /// The cases the SDK's TestHost must answer alike
+    /// (tests/sdk/host-agreement.test.ts runs them against it).
+    #[test]
+    fn conformance_cases_shared_with_the_sdk_test_host() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/processing-conformance.json"
+        ))
+        .unwrap();
+        for case in fixture["cases"].as_array().unwrap() {
+            let name = case["name"].as_str().unwrap();
+            let mpv = mpv("no");
+            let mut processing = ready();
+            for (index, step) in case["steps"].as_array().unwrap().iter().enumerate() {
+                let source = match step["source"].as_str().unwrap() {
+                    "decoded" => Source::Decoded,
+                    "generated" => Source::Generated,
+                    "loading" => Source::NotReady,
+                    other => panic!("{name}: source {other}"),
+                };
+                let stage = step["stage"].as_str().unwrap();
+                let mut change = json!({"stage":stage,"resourceId":"r","revision":index + 1,
+                    "expectedGeneration":1,"nodes":step["nodes"]});
+                if let Some(offset) = step.get("offsetMs") {
+                    change["offsetMs"] = offset.clone();
+                }
+                let outcome = match processing.replace(&mpv, OWNER, 1, source, &change) {
+                    Ok(_) => "applied".to_owned(),
+                    Err(error) => error.code,
+                };
+                assert_eq!(
+                    outcome,
+                    step["expect"].as_str().unwrap(),
+                    "{name}, step {index}"
+                );
+                let held = processing.state()[stage].as_array().unwrap().len();
+                assert_eq!(
+                    held as u64,
+                    step["resources"].as_u64().unwrap(),
+                    "{name}, step {index}"
+                );
+            }
+        }
+    }
+
+    /// Real decoding under GPU rendering, as the packaged player plays: a
+    /// 1440x1080 H.264 file, VideoToolbox (`hwdec=auto-safe`), an owned
+    /// gblur chain. Before the copy-back switch the frames reaching the
+    /// renderer stayed `videotoolbox` and mpv logged "Disabling filter
+    /// vestra-owned because it has failed": the blur was reported applied but
+    /// never drawn. Needs a GPU and `ffmpeg` (to make the file), so it runs
+    /// on request: `cargo test --locked -- --ignored gpu_decoding`.
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "needs a GPU, VideoToolbox and ffmpeg"]
+    fn gpu_decoding_runs_the_owned_chain() {
+        use std::time::{Duration, Instant};
+        let dir = std::env::temp_dir().join(format!("vestra-gblur-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("four3.mp4");
+        let made = std::process::Command::new("ffmpeg")
+            .args(["-loglevel", "error", "-y", "-f", "lavfi", "-i"])
+            .arg("testsrc2=size=1440x1080:rate=25")
+            .args(["-t", "4", "-c:v", "libx264", "-pix_fmt", "yuv420p"])
+            .arg(&file)
+            .status()
+            .unwrap();
+        assert!(made.success());
+        let mpv = std::sync::Arc::new(mpv("no"));
+        mpv.set_property("keep-open", true).unwrap();
+        mpv.set_property("vo", "libmpv").unwrap();
+        mpv.request_log_messages("v").unwrap();
+        let publish = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let renderer = crate::platform::gpu_start(mpv.clone(), (720, 540), publish).unwrap();
+        mpv.set_property("hwdec", crate::renderer::hwdec(None).as_str())
+            .unwrap();
+        mpv.command(&["loadfile", file.to_str().unwrap()]).unwrap();
+        let failed = std::cell::Cell::new(false);
+        let pump = |seconds: u64| {
+            let end = Instant::now() + Duration::from_secs(seconds);
+            while Instant::now() < end {
+                while let Some(event) = mpv.poll_event() {
+                    if let rsmpv::Event::LogMessage(message) = event
+                        && message.text.contains("because it has failed")
+                    {
+                        failed.set(true);
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        };
+        pump(2);
+        let format = || {
+            mpv.get_property::<String>("video-out-params/pixelformat")
+                .unwrap_or_default()
+        };
+        assert_eq!(
+            format(),
+            "videotoolbox",
+            "zero-copy decoding before any chain"
+        );
+        let mut processing = ready();
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(1, gblur(4.0)))
+            .unwrap();
+        pump(2);
+        assert!(!failed.get(), "mpv dropped the owned filter");
+        assert_ne!(
+            format(),
+            "videotoolbox",
+            "frames reach the filter in memory"
+        );
+        assert!(vf(&mpv).contains("gblur"));
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(2, json!([])))
+            .unwrap();
+        pump(2);
+        assert_eq!(format(), "videotoolbox", "zero-copy again without a chain");
+        drop(renderer);
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
