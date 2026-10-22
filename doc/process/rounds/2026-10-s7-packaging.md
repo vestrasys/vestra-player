@@ -34,7 +34,7 @@
 **2026-10-22，用户裁决**
 13. Node 主版本用 **26**（26 LTS 起，`vestra/1` 期间只升不降）。SDK `engines` 随之调整（SDK 1.2.0）。
 14. GPL：源码仓库日后开源；在那之前安装包不对外发布，只做内部测试版。安装包发在 **`vestra-player` 仓库自己的 GitHub Release**，官网也引导到这里。**推翻决定 1**：不再新建 `vestra-player-releases`，release 用本仓库的 `GITHUB_TOKEN`，不需要额外凭据。仓库公开时 Release 和源码同时公开，满足 GPL。依赖镜像（决定 4）也放本仓库 Release（固定标签如 `deps-<日期>`）。
-15. bundle id：`com.vestrasys.player`（用户裁决；bundle id 只是命名惯例，不需要拥有域名，许多开源项目如 Moonlight `com.moonlight-stream.Moonlight`、ares `dev.ares.ares` 都不对应自有域名）。
+15. bundle id：`com.vestraplayer.player`（用户裁决）。bundle id 只是命名惯例，不需要拥有域名，也不在苹果登记（不上 App Store）；只有同一台 Mac 上两个应用的完整 ID 相同才会冲突。vestrasys.com、vestra.com 已被他人注册，vestraplayer.com 当时（2026-10-22）未注册，以后做官网可注册它。
 
 ## 流程
 
