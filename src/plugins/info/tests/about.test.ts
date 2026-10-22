@@ -153,11 +153,21 @@ test("I09 pure rules: unknown versions show 未知; plugin rows sorted by id wit
     { id: "vestra.video", version: "0.1.0", origin: "installed", state: "running" },
     { id: "vestra.audio", version: null, origin: "development", state: "disabled" },
     { id: "test.trial", version: "1.0.0", origin: "trial", state: "failed" },
+    { id: "x.repo", version: "1.0.0", origin: "installed", state: "running", builtin: false, source: { kind: "repository", url: "https://x/index.json" } },
+    { id: "x.file", version: "1.0.0", origin: "installed", state: "running", builtin: false, source: { kind: "file" } },
+    { id: "x.link", version: "1.0.0", origin: "installed", state: "running", builtin: false, source: { kind: "link", url: "https://x/a.vxp" } },
+    { id: "x.workshop", version: "1.0.0", origin: "installed", state: "running", builtin: false, source: { kind: "workshop" } },
+    { id: "vestra.info", version: "0.1.0", origin: "installed", state: "running", builtin: true, source: { kind: "bundled" } },
   ]);
   assert.deepEqual(rows, [
     { id: "test.trial", version: "1.0.0", origin: "试载", state: "失败" },
     { id: "vestra.audio", version: "未知", origin: "开发加载", state: "已停用" },
-    { id: "vestra.video", version: "0.1.0", origin: "已安装", state: "运行中" },
+    { id: "vestra.info", version: "0.1.0", origin: "内置", state: "运行中" },
+    { id: "vestra.video", version: "0.1.0", origin: "已安装", state: "运行中" }, // an older player without sources
+    { id: "x.file", version: "1.0.0", origin: "本地文件", state: "运行中" },
+    { id: "x.link", version: "1.0.0", origin: "链接", state: "运行中" },
+    { id: "x.repo", version: "1.0.0", origin: "仓库", state: "运行中" },
+    { id: "x.workshop", version: "1.0.0", origin: "插件工坊", state: "运行中" },
   ]);
   assert.match(aboutText(bare, null, rows), /^Vestra Player\n版本 0\.2\.0\n\n[\s\S]*\n已加载插件\ntest\.trial {2}1\.0\.0 {2}试载 {2}失败\n/);
 });

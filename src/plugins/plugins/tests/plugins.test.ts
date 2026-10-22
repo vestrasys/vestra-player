@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { HostError, TestHost, startPlugin } from "@vestra-player/sdk/testing";
-import { bytes, failureText, sourceText } from "../labels.ts";
+import { bytes, failureText, sourceShort, sourceText } from "../labels.ts";
 import activate from "../main.ts";
 import { directorySize, timing } from "../sizes.ts";
 
@@ -107,10 +107,10 @@ test("J07: the list shows id, version, origin, state and data size", async () =>
   assert.deepEqual(
     rows(host).map((r) => [r.id, r.version, r.origin, r.state]),
     [
-      ["broken.one", "0.1.0", "已安装", "启动失败"],
+      ["broken.one", "0.1.0", "本地文件", "启动失败"],
       ["dev.thing", "开发", "开发加载", "运行中"],
       ["trial.x", "0.1.0", "试载", "运行中"],
-      ["vestra.audio", "0.1.0", "已安装", "运行中"],
+      ["vestra.audio", "0.1.0", "仓库", "运行中"],
       ["vestra.plugins", "0.1.0", "内置", "运行中"],
     ],
   );
@@ -276,6 +276,22 @@ test("source: each kind, and development loads and trials by their origin", () =
   assert.equal(of({ source: { kind: "bundled" }, builtin: true }), "内置");
   assert.equal(of({ origin: "development" }), "开发加载");
   assert.equal(of({ origin: "trial" }), "试载");
+  // The list's narrow column: the same words without the address.
+  const short = (patch: Partial<Info>) => sourceShort({ ...info("x"), builtin: false, source: null, dataDirectory: null, ...patch });
+  assert.deepEqual(
+    [
+      short({ source: { kind: "repository", url: REPOSITORY } }),
+      short({ source: { kind: "link", url: "https://example.org/x-1.0.0.vxp" } }),
+      short({ source: { kind: "file" } }),
+      short({ source: { kind: "workshop" } }),
+      short({ source: { kind: "bundled" }, builtin: true }),
+      short({ builtin: true }),
+      short({ origin: "development" }),
+      short({ origin: "trial" }),
+      short({}), // an older player without sources
+    ],
+    ["仓库", "链接", "本地文件", "插件工坊", "内置", "内置", "开发加载", "试载", "已安装"],
+  );
 });
 
 test("built-in plugins: disable and roll back, but 卸载… is off with a hint", async () => {

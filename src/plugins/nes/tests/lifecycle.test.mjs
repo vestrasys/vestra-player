@@ -106,6 +106,43 @@ test('opening another ROM replaces our own stream; a bad ROM keeps the running g
   }
 });
 
+// The real host fails a selected producer source whose transport closes
+// ("producer transport closed", shown as 打开失败 by the playback plugin):
+// the source must already be closed when the plugin drops the connection.
+test('Stop (window button, menu) and a newer ROM close the source before the producer transport', async () => {
+  const files = await roms();
+  const closedUnder = [];
+  const { host, stop, window } = await start(async (method, params, next) => {
+    const result = await next();
+    if (method === 'producer.prepare') {
+      host.producers.get(result.producerId).server.on('connection', socket =>
+        socket.on('close', () => closedUnder.push(`${host.source.source} ${host.source.phase}`)));
+    }
+    return result;
+  });
+  try {
+    host.dialogAnswers.push([files.blue]);
+    void host.command('nes.open').run();
+    await until(() => window().props.running === true, 'first ROM');
+    host.dialogAnswers.push([files.red]);
+    void host.command('nes.open').run();
+    await until(() => window().props.status === running('red.nes'), 'second ROM');
+    await until(() => closedUnder.length === 1, 'first transport closed');
+    assert.equal(closedUnder[0], 'null empty', 'the first stream was closed before its transport');
+
+    window().emit('stop');
+    await until(() => window().props.status === '已停止。', 'stopped');
+    await until(() => closedUnder.length === 2, 'second transport closed');
+    assert.equal(closedUnder[1], 'null empty', 'closed before its transport');
+    assert.equal(host.source.terminalReason, 'stopped');
+    assert.equal(host.sent('source.submit').filter(p => p.intent.kind === 'close').length, 2);
+    assert.equal(host.producers.get(2).released, true);
+  } finally {
+    await stop();
+    await files.remove();
+  }
+});
+
 test('Stop closes our own source, releases it and says so', async () => {
   const files = await roms();
   const { host, stop, window } = await start();
