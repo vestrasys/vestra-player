@@ -3,6 +3,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { isDeepStrictEqual } from "node:util";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 import { clock, frameName, parseRange, sampleTimes, uniqueFile } from "../model.ts";
@@ -15,13 +16,20 @@ const start = (host = new TestHost()) => startPlugin(activate, { directory, host
 type Row = { id: string; title: string; detail: string; retryable: boolean; openable: boolean };
 const rows = (host: TestHost) => host.window("tasks").props["task-rows"] as Row[];
 const tick = () => new Promise((done) => setTimeout(done, 5));
-async function until(predicate: () => boolean) {
+/**
+ * Poll an observable result. `host.settle()` waits only for host calls, not for
+ * the plugin's own file-system work or timers, so assert after those this way.
+ */
+async function until(predicate: () => boolean | Promise<boolean>) {
   for (let i = 0; i < 1200; i++) {
-    if (predicate()) return;
+    if (await predicate()) return;
     await tick();
   }
   assert.fail("timed out waiting for condition");
 }
+/** The JSON in `path` once it equals `expected` (written by a debounced, asynchronous store). */
+const jsonFile = (path: string, expected: unknown) =>
+  until(() => readFile(path, "utf8").then((text) => isDeepStrictEqual(JSON.parse(text), expected), () => false));
 /** A ready finite source with snapshot support. */
 function ready(host: TestHost, path = "/contract/source-one.mp4") {
   host.openElsewhere(path);
@@ -42,7 +50,7 @@ async function withFolder(host: TestHost) {
   const folder = await mkdtemp(join(tmpdir(), "capture-folder-"));
   host.dialogAnswers.push([folder]);
   await host.command("capture.folder").run();
-  await host.settle();
+  await until(() => host.osd.at(-1) === `截图文件夹：${folder}`); // after the plugin's own stat of the folder
   return { folder, cleanup: () => rm(folder, { recursive: true, force: true }) };
 }
 
@@ -143,10 +151,8 @@ test("the chosen capture folder is kept in the data directory and restored on th
   const restart = new TestHost();
   ready(restart);
   try {
-    await host.settle(350); // plugin.storage writes 300 ms after the last change
-    assert.deepEqual(JSON.parse(await readFile(join(data, "settings.json"), "utf8")), {
-      folder, format: "png", quality: 90, screenSubtitles: true, besideMedia: false,
-    });
+    // plugin.storage writes 300 ms after the last change
+    await jsonFile(join(data, "settings.json"), { folder, format: "png", quality: 90, screenSubtitles: true, besideMedia: false });
     assert.deepEqual((await readdir(data)).sort(), ["settings.json"], "no temporary file left behind");
     await first.stop();
     const second = await startPlugin(activate, { directory, host: restart, dataDirectory: data });
@@ -206,6 +212,7 @@ test("clip: the snapshot is conditional on the seen source and honours the dialo
   const host = new TestHost();
   ready(host);
   host.setSource({ audioTracks: [{ trackId: 7, selected: true, external: false, streamIndex: 1, codec: "aac", title: null, language: "en" }] });
+  const setJob = manualJobs(host);
   const { stop } = await start(host);
   const folder = await mkdtemp(join(tmpdir(), "capture-options-"));
   try {
@@ -214,7 +221,8 @@ test("clip: the snapshot is conditional on the seen source and honours the dialo
     assert.deepEqual(clip.props["audio-labels"], ["无声音", "当前音轨", "音轨 7 · en"]);
     host.dialogAnswers.push([join(folder, "clip.mp4")]);
     clip.emit("export-clip", "1", "4", true, false, 2);
-    await until(() => host.sent("jobs.start").length === 1);
+    // The status follows the job start (the name is checked on disk first); the job waits for setJob.
+    await until(() => host.sent("jobs.start").length === 1 && clip.props.status === "已开始导出，可在导出任务中查看。");
     const capture = host.sent("snapshot.capture")[0]!;
     assert.deepEqual(capture.expected, host.source.stamp);
     assert.equal(capture.mode, "processed");
@@ -222,9 +230,8 @@ test("clip: the snapshot is conditional on the seen source and honours the dialo
     assert.equal(capture.includeSubtitles, false);
     assert.deepEqual(capture.audio, { kind: "track", trackId: 7 });
     assert.deepEqual({ kind: host.sent("jobs.start")[0]!.kind, end: host.sent("jobs.start")[0]!.end }, { kind: "processedMp4", end: 4 });
-    assert.equal(clip.props.status, "已开始导出，可在导出任务中查看。");
-    await until(() => host.osd.at(-1)?.startsWith("片段已导出为") ?? false);
-    assert.match(String(clip.props.status), /^已导出 /);
+    setJob(1, { status: "completed", publicationStarted: true, outcome: { destination: join(folder, "clip.mp4") } });
+    await until(() => host.osd.at(-1) === `片段已导出为 ${join(folder, "clip.mp4")}` && clip.props.status === "已导出 clip.mp4");
   } finally {
     await stop();
     await rm(folder, { recursive: true, force: true });
@@ -256,16 +263,16 @@ test("one running and four queued; the sixth is refused; queued input keeps its 
   const { stop } = await start(host);
   const { folder, cleanup } = await withFolder(host);
   try {
+    const queued = () => host.osd.filter((line) => line === "截图已排队").length;
     for (let i = 1; i <= 5; i++) {
       await host.press("Ctrl+E");
-      await until(() => host.sent("snapshot.capture").length === i);
-      await host.settle();
+      // Each press finishes (unique name, task accepted) before the next, or 仍在处理 would refuse it.
+      await until(() => host.sent("snapshot.capture").length === i && (i === 1 ? host.sent("jobs.start").length === 1 : queued() === i - 1));
     }
     assert.equal(host.osd.at(-1), "截图已排队");
     assert.equal(host.sent("jobs.start").length, 1, "only one accepted task starts its worker");
     await host.press("Ctrl+E");
-    await host.settle();
-    assert.equal(host.osd.at(-1), "截图失败：已有一个导出在进行、四个在排队，请稍候。");
+    await until(() => host.osd.at(-1) === "截图失败：已有一个导出在进行、四个在排队，请稍候。"); // after creating the folder
     assert.equal(host.sent("snapshot.capture").length, 5, "the sixth entry freezes nothing");
     await host.command("capture.tasks").run();
     host.window("tasks").emit("cancel-task", "2");
@@ -302,7 +309,7 @@ test("burst: unique folder under the capture folder, one snapshot, sample times 
     assert.equal(burst.props.folder, folder);
     assert.equal(burst.props["burst-count"], undefined, "the dialog keeps its own defaults");
     burst.emit("start-burst", "1", "3", "0.5", false, false, false);
-    await until(() => burst.props.progress === "已完成 · 3/3");
+    await until(() => burst.props.progress === "已完成 · 3/3" && burst.props.status === "已保存 3 张" && host.osd.at(-1)!.startsWith("连拍已保存"));
     assert.equal(host.sent("snapshot.capture").length, 1);
     const starts = host.sent("jobs.start");
     assert.deepEqual(starts.map((s) => s.sampleTime), [1, 1.5, 2]);
@@ -312,8 +319,7 @@ test("burst: unique folder under the capture folder, one snapshot, sample times 
     assert.equal(burst.props.status, "已保存 3 张");
     assert.match(host.osd.at(-1)!, /^连拍已保存 3 张到 /);
     burst.emit("start-burst", "29", "3", "1", false, false, false);
-    await host.settle();
-    assert.equal(burst.props.status, "连拍超出媒体时长，请减少张数或间隔。");
+    await until(() => burst.props.status === "连拍超出媒体时长，请减少张数或间隔。"); // after creating the folder
     burst.emit("capture-frame");
     await until(() => host.osd.at(-1)?.startsWith("帧已保存为") ?? false);
   } finally {
@@ -338,10 +344,10 @@ test("a failed task keeps its input; retry reuses it after the source changed", 
     assert.equal(rows(host)[0]!.retryable, true);
     host.openElsewhere("/contract/source-two.mp4");
     host.window("tasks").emit("retry-task", "1");
-    await until(() => host.sent("jobs.start").length === 2 && rows(host).length === 2);
+    // The new task starts its job before retry() returns; the status follows.
+    await until(() => host.sent("jobs.start").length === 2 && rows(host).length === 2 && host.window("tasks").props.status === "已重新开始。");
     assert.equal(host.sent("snapshot.capture").length, 1, "no new snapshot");
     assert.equal(host.sent("jobs.start")[1]!.snapshotId, 1);
-    assert.equal(host.window("tasks").props.status, "已重新开始。");
     assert.equal(host.sent("jobs.start")[1]!.destination, join(folder, "source-one_00.02.000 (1).png"));
   } finally {
     await stop();
