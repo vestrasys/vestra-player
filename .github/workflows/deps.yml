@@ -1,0 +1,204 @@
+# Manual: build the pinned native dependencies once and mirror them to a
+# `deps-<date>` prerelease of this repository (coordinator decisions 4, 14;
+# doc/process/ci.md "Packaging"). Afterwards commit the deps.json this run
+# attaches (and prints in its summary) as src/packaging/deps.json; CI and
+# the packages then use exactly these bytes.
+#
+#   macOS   Homebrew mpv + ffmpeg bottles → collect-macos-deps.mjs (dylib
+#           closure, @rpath, ad-hoc signed, components.json, licenses) and the
+#           source archives of every formula (GPL source offer).
+#   Windows deps.json "upstream" pins (shinchiro mpv-dev, BtbN ffmpeg) →
+#           collect-windows-deps.mjs, plus mpv.lib for MSVC.
+name: deps
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (default deps-<UTC date>). Must not exist yet.
+        type: string
+        default: ""
+      sources:
+        description: Also mirror the macOS formulae's source archives.
+        type: boolean
+        default: true
+
+permissions: {}
+
+concurrency:
+  group: deps
+  cancel-in-progress: false
+
+jobs:
+  macos:
+    name: macOS arm64 (Homebrew)
+    # Homebrew no longer bottles macOS 14 (only sequoia and newer), so the
+    # bottles come from macos-15 and the package's minimum is 15.0
+    # (components.json min_macos); see doc/process/ci.md.
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26"
+      - name: brew install mpv ffmpeg
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: "1"
+        run: |
+          brew install mpv ffmpeg
+          brew list --versions mpv ffmpeg
+      - name: Collect the closure
+        env:
+          SOURCES: ${{ inputs.sources }}
+        run: |
+          args=(--out "$RUNNER_TEMP/deps")
+          if [ "$SOURCES" = true ]; then args+=(--sources "$RUNNER_TEMP/sources"); fi
+          node src/packaging/collect-macos-deps.mjs "${args[@]}"
+          mkdir -p "$RUNNER_TEMP/out"
+          tar -cJf "$RUNNER_TEMP/out/vestra-deps-macos-arm64.tar.xz" -C "$RUNNER_TEMP/deps" .
+          if [ "$SOURCES" = true ]; then
+            tar -cf "$RUNNER_TEMP/out/vestra-deps-macos-arm64-sources.tar" -C "$RUNNER_TEMP/sources" .
+          fi
+          cp "$RUNNER_TEMP/deps/components.json" "$RUNNER_TEMP/out/components-macos-arm64.json"
+          ls -l "$RUNNER_TEMP/out"
+      - name: The closure loads from its own directory
+        run: |
+          "$RUNNER_TEMP/deps/bin/ffprobe" -version | head -1
+          if otool -L "$RUNNER_TEMP"/deps/lib/*.dylib "$RUNNER_TEMP"/deps/bin/* | grep -E '^\s+/(opt|usr/local)/'; then
+            echo "::error::a reference outside the closure is left"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: deps-macos
+          path: ${{ runner.temp }}/out
+          retention-days: 3
+          if-no-files-found: error
+
+  windows:
+    name: Windows x64 (shinchiro, BtbN)
+    runs-on: windows-2022
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26"
+      - name: Collect
+        run: node src/packaging/collect-windows-deps.mjs --out "$env:RUNNER_TEMP\deps"
+      # MSVC import library from the DLL's export table (rsmpv-sys links mpv.lib).
+      - name: mpv.lib
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = "$env:RUNNER_TEMP\deps"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $version = (Get-Content "$vs\VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt").Trim()
+          $bin = "$vs\VC\Tools\MSVC\$version\bin\Hostx64\x64"
+          $exports = & "$bin\dumpbin.exe" /nologo /exports "$dir\libmpv-2.dll"
+          $names = $exports | ForEach-Object {
+            if ($_ -match '^\s+\d+\s+[0-9A-Fa-f]+\s+[0-9A-Fa-f]{8}\s+(\S+)') { $Matches[1] }
+          }
+          if (-not $names) { throw 'no exports found in libmpv-2.dll' }
+          Write-Host "libmpv-2.dll exports $($names.Count) symbols"
+          Set-Content -Path "$env:RUNNER_TEMP\mpv.def" -Value (@('LIBRARY libmpv-2', 'EXPORTS') + $names)
+          & "$bin\lib.exe" /nologo /def:"$env:RUNNER_TEMP\mpv.def" /machine:x64 /out:"$dir\mpv.lib"
+          if ($LASTEXITCODE -ne 0) { throw 'lib.exe failed' }
+          Remove-Item "$dir\mpv.exp" -ErrorAction SilentlyContinue
+      - name: Archive
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = "$env:RUNNER_TEMP\out"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Push-Location "$env:RUNNER_TEMP\deps"
+          7z a -tzip -mx=9 "$out\vestra-deps-windows-x64.zip" * | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw '7z failed' }
+          Pop-Location
+          Copy-Item "$env:RUNNER_TEMP\deps\components.json" "$out\components-windows-x64.json"
+          & "$env:RUNNER_TEMP\deps\ffmpeg\ffprobe.exe" -version | Select-Object -First 1
+          Get-ChildItem $out
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: deps-windows
+          path: ${{ runner.temp }}/out
+          retention-days: 3
+          if-no-files-found: error
+
+  release:
+    name: deps release
+    needs: [macos, windows]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: deps-*
+          path: ${{ runner.temp }}/assets
+          merge-multiple: true
+      - name: Create the release and the new deps.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          INPUT_TAG: ${{ inputs.tag }}
+          SHA: ${{ github.sha }}
+        run: |
+          tag="${INPUT_TAG:-deps-$(date -u +%Y%m%d)}"
+          case "$tag" in deps-*) ;; *) echo "::error::the tag must start with deps-"; exit 1 ;; esac
+          cd "$RUNNER_TEMP/assets"
+          sha256sum ./* | sed 's| \./| |' > SHA256SUMS
+          cat SHA256SUMS
+          sum() { awk -v f="$1" '$2 == f { print $1 }' SHA256SUMS; }
+          asset() { jq -n --arg file "$1" --arg sha "$(sum "$1")" '{file: $file, sha256: $sha}'; }
+          assets=$(jq -n \
+            --argjson mac "$(asset vestra-deps-macos-arm64.tar.xz)" \
+            --argjson win "$(asset vestra-deps-windows-x64.zip)" \
+            '{"macos-arm64": $mac, "windows-x64": $win}')
+          if [ -f vestra-deps-macos-arm64-sources.tar ]; then
+            assets=$(jq --argjson src "$(asset vestra-deps-macos-arm64-sources.tar)" '. + {"macos-arm64-sources": $src}' <<< "$assets")
+          fi
+          jq --arg tag "$tag" --argjson assets "$assets" '.release = $tag | .assets = $assets' \
+            "$GITHUB_WORKSPACE/src/packaging/deps.json" > deps.json
+          min=$(jq -r .min_macos components-macos-arm64.json)
+          {
+            echo "Native dependencies for Vestra Player packages, built by deps.yml from $SHA."
+            echo
+            echo "macOS arm64 (minimum macOS $min):"
+            jq -r '.components[] | "- \(.name) \(.version) (\(.license))"' components-macos-arm64.json
+            echo
+            echo "Windows x64:"
+            jq -r '.components[] | "- \(.name) \(.version) (\(.license)): \(.source.archive)"' components-windows-x64.json
+            echo
+            echo "Commit the attached deps.json as src/packaging/deps.json to use this release."
+          } > notes.md
+          files=(./*.tar.xz ./*.zip ./*.json SHA256SUMS)
+          if [ -f vestra-deps-macos-arm64-sources.tar ]; then files+=(vestra-deps-macos-arm64-sources.tar); fi
+          gh release create "$tag" --prerelease --target "$SHA" --title "Native dependencies $tag" \
+            --notes-file notes.md "${files[@]}"
+          {
+            echo "## $tag"
+            echo
+            echo "New src/packaging/deps.json:"
+            echo
+            echo "~~~json"
+            cat deps.json
+            echo "~~~"
+          } >> "$GITHUB_STEP_SUMMARY"

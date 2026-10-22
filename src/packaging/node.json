@@ -1,0 +1,11 @@
+{
+  "version": "26.12.1",
+  "keyring": {
+    "url": "https://raw.githubusercontent.com/nodejs/release-keys/481637f813e912c4aa3622d7964ab426c97b8e8d/gpg-only-active-keys/pubring.kbx",
+    "sha256": "140f2ad5260fd62773b6243ce8e1d3009645d558f121b8262c55e383dc285932"
+  },
+  "sha256": {
+    "darwin-arm64": "18830bf448fe187c650dc28c98aa8c968ed1d40b6dd032c081e70a384a1bf660",
+    "win-x64": "b3efd5c70cba3308ed46e7e699a9b8aac075bbc6b027fcb39c84c31acc25e2b4"
+  }
+}

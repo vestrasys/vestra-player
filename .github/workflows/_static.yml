@@ -74,6 +74,8 @@ jobs:
       - run: npm run check
       - run: npm run format:check
       - run: npm run boundaries
+      - name: third-party licenses (config, deny.toml/about.toml, plugin licenses)
+        run: npm run licenses
       # The host half of `portability` (cargo check for Windows) is covered by
       # the real Windows build-test job; here only the system-command scan.
       - run: npm run portability -- --skip-host

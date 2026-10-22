@@ -1,5 +1,7 @@
-# Release build and an unsigned artifact. Bundling (.app/installer), signing
-# and notarization come in S7 (doc/process/ci.md).
+# Unsigned packages (doc/process/ci.md "Packaging"): release build →
+# bundle (macOS .app + DMG, Windows staged dir + Inno Setup installer +
+# portable zip) → license check (inside the bundle scripts) → headless smoke
+# test without node on PATH → artifact. Signing happens in release.yml.
 name: package
 
 on:
@@ -9,6 +11,13 @@ on:
         description: windows or macos
         type: string
         required: true
+      artifact:
+        description: Artifact name (the OS is appended), e.g. vestra-unsigned.
+        type: string
+        default: vestra-unsigned
+      retention-days:
+        type: number
+        default: 7
       cache:
         type: boolean
         default: false
@@ -18,18 +27,20 @@ permissions: {}
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
+  # TODO(S7 host): drop once the host resolves its bundled node (install
+  # layout); until then the smoke test puts the bundled node on PATH.
+  SMOKE_COMPAT: --node-on-path
 
 jobs:
   package:
     name: package ${{ inputs.os }}
     runs-on: ${{ inputs.os == 'windows' && 'windows-2022' || 'macos-15' }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     permissions:
       contents: read
     defaults:
       run:
         shell: bash
-        working-directory: src/host
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -39,23 +50,68 @@ jobs:
           cache: ${{ inputs.cache }}
           cache-key: package
       - uses: ./.github/actions/setup-libmpv
+      - uses: ./.github/actions/setup-node
+      - uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2.87.30
+        with:
+          tool: cargo-about@0.9.2
       - name: cargo build --release
+        working-directory: src/host
         run: cargo build --release --locked
-      # TODO(S7): bundle (.app with libmpv dylibs / installer), THIRD_PARTY_LICENSES, plugins.
-      - name: Stage the unsigned binary
-        env:
-          OS: ${{ inputs.os }}
+      - name: Bundle (macOS)
+        if: inputs.os == 'macos'
+        run: node src/packaging/bundle-macos.mjs --out "$RUNNER_TEMP/dist" --binary src/host/target/release/vestra-host --zip
+      - name: Bundle (Windows)
+        if: inputs.os == 'windows'
+        run: node src/packaging/bundle-windows.mjs --out "$RUNNER_TEMP/dist" --binary src/host/target/release/vestra-host.exe
+      - name: Collect the artifacts
+        id: collect
         run: |
-          mkdir -p "$RUNNER_TEMP/out"
-          if [ "$OS" = windows ]; then
-            cp target/release/vestra-host.exe "$MPV_LIBRARY_DIR/libmpv-2.dll" "$RUNNER_TEMP/out/"
-          else
-            cp target/release/vestra-host "$RUNNER_TEMP/out/"
-          fi
-          ls -l "$RUNNER_TEMP/out"
+          mkdir -p "$RUNNER_TEMP/upload"
+          find "$RUNNER_TEMP/dist" -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.app.zip' -o -name '*-setup.exe' -o -name '*-portable.zip' \) \
+            -exec mv {} "$RUNNER_TEMP/upload/" \;
+          ls -l "$RUNNER_TEMP/upload"
+          test -n "$(ls "$RUNNER_TEMP/upload")"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: vestra-unsigned-${{ inputs.os }}
-          path: ${{ runner.temp }}/out
-          retention-days: 7
+          name: ${{ inputs.artifact }}-${{ inputs.os }}
+          path: ${{ runner.temp }}/upload
+          retention-days: ${{ inputs.retention-days }}
           if-no-files-found: error
+          compression-level: 0
+
+      - name: Smoke test (macOS, the DMG's app)
+        if: inputs.os == 'macos'
+        run: |
+          dmg=$(ls "$RUNNER_TEMP"/upload/*.dmg)
+          mount=$(mktemp -d)
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$dmg"
+          ditto "$mount/Vestra Player.app" "$RUNNER_TEMP/smoke/Vestra Player.app"
+          hdiutil detach "$mount"
+          app="$RUNNER_TEMP/smoke/Vestra Player.app"
+          codesign --verify --deep --strict "$app"
+          plutil -p "$app/Contents/Info.plist"
+          # shellcheck disable=SC2086 # SMOKE_COMPAT is a flag list
+          node src/packaging/smoke.mjs --exe "$app/Contents/MacOS/vestra-host" \
+            --plugins "$app/Contents/Resources/plugins" $SMOKE_COMPAT
+
+      # TODO(S7 host): the released host finds runner/ui/plugins only beside
+      # `Contents/`; the Windows smoke test passes once the host branch's
+      # install-layout resolver is merged. Until then it reports only.
+      - name: Smoke test (Windows, silent install → run → uninstall)
+        if: inputs.os == 'windows'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Get-ChildItem "$env:RUNNER_TEMP\upload\*-setup.exe" | Select-Object -First 1
+          $dir = "$env:RUNNER_TEMP\smoke-install"
+          $p = Start-Process -Wait -PassThru $setup.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART', "/DIR=$dir", "/LOG=$env:RUNNER_TEMP\setup.log"
+          if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\setup.log"; throw "setup exited with $($p.ExitCode)" }
+          Get-ChildItem $dir
+          node src/packaging/smoke.mjs --exe "$dir\vestra-host.exe" --plugins "$dir\resources\plugins" $env:SMOKE_COMPAT.Split(' ')
+          $smoke = $LASTEXITCODE
+          $p = Start-Process -Wait -PassThru "$dir\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+          if ($p.ExitCode -ne 0) { throw "uninstall exited with $($p.ExitCode)" }
+          Start-Sleep -Seconds 3
+          if (Test-Path "$dir\vestra-host.exe") { throw 'uninstall left vestra-host.exe behind' }
+          if ($smoke -ne 0) { throw "smoke test failed ($smoke)" }
