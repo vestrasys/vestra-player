@@ -601,15 +601,18 @@ impl Jobs {
                 if self.next_job >= Book::MAX_REVISION {
                     return Err(RpcError::new("busy", "job identity capacity exhausted"));
                 }
-                let binary = std::env::var_os("VESTRA_FFMPEG")
-                    .map(PathBuf::from)
-                    .unwrap_or_else(crate::platform::default_ffmpeg);
-                if !binary.is_file() {
+                // `$VESTRA_FFMPEG`, the bundled one, else `PATH` in a
+                // development build (`runtime_paths.rs`).
+                let Some(binary) = crate::runtime_paths::get()
+                    .ffmpeg
+                    .clone()
+                    .filter(|binary| binary.is_file())
+                else {
                     return Err(RpcError::new(
                         "unavailable",
                         "validated FFmpeg binary unavailable",
                     ));
-                }
+                };
                 self.next_job += 1;
                 let id = self.next_job;
                 let control = Arc::new(Control::new());

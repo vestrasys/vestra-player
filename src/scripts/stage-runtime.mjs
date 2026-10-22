@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 /**
  * Lays out the plugin runtime the way a packaged player ships it
- * (`Vestra Player.app/Contents/Resources/runtime/`, found by host/src/plugins.rs):
+ * (`Vestra Player.app/Contents/Resources/runtime/`, `<install dir>\resources\runtime\`
+ * on Windows; found by host/src/runtime_paths.rs):
  *
  *   runtime/
  *     runner.ts                              the plugin runner (Node strips its types)
  *     package.json                           {"type":"module"}
  *     node_modules/@vestra-player/sdk/
  *       package.json                         exports map (runner and workshop resolve through it)
+       LICENSE                              the SDK's license (Apache-2.0), shipped with its code
  *       dist/**.js, dist/**.d.ts             SDK implementation; the .d.ts serve the workshop
  *
  * The SDK files are copied from the installed package
@@ -41,6 +43,7 @@ export async function stageRuntime(destination) {
   const target = join(destination, "node_modules/@vestra-player/sdk");
   await mkdir(target, { recursive: true });
   await cp(join(sdk, "package.json"), join(target, "package.json"));
+  await cp(join(sdk, "LICENSE"), join(target, "LICENSE"));
   await cp(join(sdk, "dist"), join(target, "dist"), { recursive: true });
 }
 
