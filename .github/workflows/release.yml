@@ -1,5 +1,8 @@
-# Tag v* (or a manual dry run): the same checks as CI without caches, release
-# builds, then a draft GitHub release. Signing and notarization are S7 TODOs.
+# Tag v* (or a manual dry run): the same checks as CI without caches, the
+# unsigned packages (macOS .dmg + .app zip, Windows setup.exe + portable
+# zip), SHA256SUMS, and a draft GitHub release in this repository with the
+# notes from doc/releases/v<version>.md. Signing and notarization are TODO
+# jobs in the `release` environment. How to cut a release: doc/releases/README.md.
 name: release
 
 on:
@@ -8,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: Build and check only; no signing, no draft release.
+        description: Build, check and package only; no signing, no draft release.
         type: boolean
         default: true
 
@@ -20,7 +23,7 @@ concurrency:
 
 jobs:
   verify:
-    name: tag matches version
+    name: tag, version, notes, pins
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -42,6 +45,16 @@ jobs:
             echo "::error::tag $TAG does not match src/host/Cargo.toml version $version"
             exit 1
           fi
+          notes="doc/releases/v$version.md"
+          if [ ! -s "$notes" ]; then
+            if [ "$REF_TYPE" = tag ]; then
+              echo "::error::$notes is missing (the release notes; see doc/releases/README.md)"
+              exit 1
+            fi
+            echo "::warning::$notes is missing; a tag release would fail here"
+          fi
+          jq -e '.release and .assets["macos-arm64"] and .assets["windows-x64"]' src/packaging/deps.json > /dev/null \
+            || { echo "::error::src/packaging/deps.json pins no deps release"; exit 1; }
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
   static:
@@ -85,9 +98,37 @@ jobs:
     with:
       os: macos
 
-  # TODO(S7): sign + notarize the macOS bundle on Ubuntu with rcodesign
-  # (ci-research §10.2); secrets live only in the `release` environment
-  # (tag-only deployments, required reviewer).
+  checksums:
+    name: SHA256SUMS
+    needs: [package-windows, package-macos]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: vestra-unsigned-*
+          path: dist
+          merge-multiple: true
+      - name: sha256sum
+        working-directory: dist
+        run: |
+          sha256sum ./* | sed 's| \./| |' > SHA256SUMS
+          cat SHA256SUMS
+          ls -l
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: vestra-unsigned-SHA256SUMS
+          path: dist/SHA256SUMS
+          retention-days: 7
+          if-no-files-found: error
+
+  # TODO(S7 signing): sign + notarize on Ubuntu with rcodesign (ci-research
+  # §10.2, packaging-proposal §8): every Mach-O inside out with
+  # src/packaging/macos/*.entitlements and the Hardened Runtime, the .app,
+  # then a new DMG, notarize and staple both. Secrets only in the `release`
+  # environment (tag-only deployments, required reviewer).
   sign-macos:
     name: sign macOS (TODO)
     needs: package-macos
@@ -100,7 +141,9 @@ jobs:
     steps:
       - run: echo "TODO(S7) macOS signing and notarization; the artifact stays unsigned."
 
-  # TODO(S7): Azure Artifact Signing with OIDC (id-token: write) + signtool verify.
+  # TODO(S7 signing): Azure Artifact Signing with OIDC (id-token: write):
+  # vestra-host.exe, libmpv-2.dll, ffmpeg/*, then iscc with SignTool= for
+  # setup.exe and the uninstaller; signtool verify /pa.
   sign-windows:
     name: sign Windows (TODO)
     needs: package-windows
@@ -115,28 +158,30 @@ jobs:
 
   draft-release:
     name: draft GitHub release
-    needs: [verify, sign-macos, sign-windows]
+    needs: [verify, checksums, sign-macos, sign-windows]
     if: ${{ !inputs.dry_run && github.ref_type == 'tag' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: doc/releases
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: vestra-unsigned-*
           path: dist
-      - name: Archive and checksum
-        working-directory: dist
-        run: |
-          for d in vestra-unsigned-*; do (cd "$d" && zip -qr "../$d.zip" .); done
-          sha256sum ./*.zip > SHA256SUMS
-          cat SHA256SUMS
+          merge-multiple: true
       - name: gh release create --draft
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.verify.outputs.version }}
         run: |
-          gh release create "$TAG" --draft --verify-tag --title "Vestra Player $TAG" \
-            --notes "Unsigned build (signing: S7)." dist/*.zip dist/SHA256SUMS
+          (cd dist && sha256sum -c SHA256SUMS)
+          gh release create "$TAG" --draft --verify-tag \
+            --title "Vestra Player $VERSION (unsigned test build)" \
+            --notes-file "doc/releases/v$VERSION.md" dist/*
