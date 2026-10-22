@@ -14,6 +14,7 @@
  *
  * Downloads are cached in --cache (default <system temp>/vestra-node-cache).
  */
+import { spawnSync } from "node:child_process";
 import {
   chmod,
   mkdir,
@@ -55,8 +56,27 @@ async function verifiedSums(version, keyring, cache) {
   const sums = join(dir, "SHASUMS256.txt");
   await download(`${base}/SHASUMS256.txt`, sums);
   await download(`${base}/SHASUMS256.txt.sig`, `${sums}.sig`);
-  // gpgv wants a keyring path with a directory part (else it looks in ~/.gnupg).
-  run("gpgv", ["--keyring", resolve(kbx), `${sums}.sig`, sums]);
+  // gpgv wants a keyring path with a directory part (else it looks in
+  // ~/.gnupg). Without gpgv (some Git for Windows builds), gpg --verify with
+  // only that keyring and a throw-away home.
+  const gpgv = spawnSync("gpgv", ["--version"], { stdio: "ignore" });
+  if (!gpgv.error)
+    run("gpgv", ["--keyring", resolve(kbx), `${sums}.sig`, sums]);
+  else {
+    const home = join(cache, "gnupg-home");
+    await mkdir(home, { recursive: true });
+    run("gpg", [
+      "--batch",
+      "--homedir",
+      home,
+      "--no-default-keyring",
+      "--keyring",
+      resolve(kbx),
+      "--verify",
+      `${sums}.sig`,
+      sums,
+    ]);
+  }
   const table = {};
   for (const line of (await readFile(sums, "utf8")).split("\n")) {
     const match = /^([0-9a-f]{64})\s+(\S+)$/.exec(line.trim());
