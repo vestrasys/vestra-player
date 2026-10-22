@@ -547,7 +547,12 @@ export class Store {
         break;
     }
     if (info && !info.builtin && (item.state === "installed" || item.state === "update" || item.state === "revoked" || item.state === "local")) {
-      if (info.previousVersion) list.push({ id: "rollback", text: `回退到 ${info.previousVersion}`, enabled: idle });
+      if (info.previousVersion)
+        list.push({
+          id: "rollback",
+          text: `${installer.rollbackVerb(info.version, info.previousVersion)}到 ${info.previousVersion}`,
+          enabled: idle,
+        });
       list.push({ id: "uninstall", text: "卸载…", enabled: idle });
     }
     return list;
@@ -578,7 +583,7 @@ export class Store {
       if (added.length) add(`新版本需要新的权限：${added.map((p) => p.text).join("、")}`, 2);
     }
     if (item.state === "otherSource" && info)
-      add(`已从${sourceName(info.source)}安装 ${info.version ?? ""}。替换后使用新的空数据，原数据保留`, 0);
+      add(`已从${sourceName(info.source)}安装 ${info.version ?? ""}。替换时若之前从这个来源安装过会接上当时的数据，否则使用新的空数据；原数据保留`, 0);
     if (item.state === "builtin")
       add(item.repo ? "与播放器内置插件同 id，不能从这里安装" : "内置插件随播放器更新，不能卸载；停用请到「设置 ▶ 插件管理…」", 4);
     if (item.state === "local" && info) {

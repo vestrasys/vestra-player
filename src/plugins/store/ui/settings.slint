@@ -1,9 +1,9 @@
 // 插件商城 settings page (options window ▶ 插件, id store.repos): automatic
 // update checks and the repositories. Width 440: 6px padding leaves 428; a
 // repository row is name / address (stretch) and a 50px 「移除」 button.
-import { ListView } from "std-widgets.slint";
+import { LineEdit, ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
-import { Button, UrlInputRow } from "@vestra/widgets.slint";
+import { Button } from "@vestra/widgets.slint";
 import { Cell, Check, Tone } from "parts.slint";
 
 export struct RepoRow {
@@ -92,13 +92,35 @@ export component StorePage inherits Rectangle {
             }
             Rectangle { horizontal-stretch: 1; }
         }
-        if StoreSettings.adding: UrlInputRow {
-            text <=> StoreSettings.add-text;
-            placeholder: "仓库地址（https://… 仓库根地址或 index.json 的完整地址）";
-            confirm-text: "添加";
-            accepted(url) => { StoreSettings.add(url); }
-            cancelled => { StoreSettings.cancel-add(); }
-            init => { self.focus-input(); }
+        // One line: address, 添加, 取消 (Enter adds, Esc cancels).
+        if StoreSettings.adding: FocusScope {
+            height: Theme.input-height + 2px;
+            key-pressed(event) => {
+                if event.text == Key.Escape {
+                    StoreSettings.cancel-add();
+                    return accept;
+                }
+                return reject;
+            }
+            HorizontalLayout {
+                spacing: 6px;
+                address := LineEdit {
+                    horizontal-stretch: 1;
+                    font-size: Theme.font-body;
+                    placeholder-text: "仓库根地址或 index.json 的完整地址（https://…）";
+                    text <=> StoreSettings.add-text;
+                    accepted(text) => { StoreSettings.add(text); }
+                    init => { self.focus(); }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    Button { width: 52px; text: "添加"; clicked => { StoreSettings.add(address.text); } }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    Button { width: 52px; text: "取消"; clicked => { StoreSettings.cancel-add(); } }
+                }
+            }
         }
         Text {
             text: "第三方仓库未经 Vestra Player 审核，其中的插件可能读取你的文件或联网。只添加你信任的仓库。官方仓库不能移除；不想联网时可以在「插件管理」里停用插件商城。";

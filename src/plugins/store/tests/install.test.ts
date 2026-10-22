@@ -155,6 +155,8 @@ test("installed from another source: 替换… asks once and installs with repla
     assert.equal(host.confirms.at(-1)!["message"], "替换已安装的「YouTube」？");
     assert.equal(host.confirms.at(-1)!["destructive"], true);
     assert.match(String(host.confirms.at(-1)!["detail"]), /原插件的数据保留，以后从原来源重新安装时接上/);
+    // Acceptance S5: the store cannot see dormant instances, so it says both cases.
+    assert.match(String(host.confirms.at(-1)!["detail"]), /若之前从这个来源安装过，会接上当时的数据；否则使用新的空数据/);
     assert.equal(installs(host).length, 0);
 
     host.dialogAnswers.push(yes);
@@ -267,6 +269,8 @@ test("update, rollback, older version and uninstall from the same repository", a
     host.window("store").emit("act", "rollback");
     await until(host, () => host.osd.includes("已回退 YouTube 到 0.2.0"));
     await until(host, () => !store.busy);
+    // Acceptance S3: after the rollback the previous version (0.3.0) is newer.
+    assert.deepEqual(actions(host).map((a) => a.text), ["更新到 0.3.0", "恢复到 0.3.0", "卸载…"]);
 
     // 版本 tab: the older 0.1.0 can be installed (same source; the player keeps one rollback step).
     const versions = props(host)["versions"] as { version: string; status: string; canInstall: boolean }[];
@@ -282,6 +286,11 @@ test("update, rollback, older version and uninstall from the same repository", a
     host.window("store").emit("installVersion", "0.1.0");
     await until(host, () => host.osd.includes("已安装 YouTube 0.1.0"));
     assert.equal(host.confirms.at(-1)!["message"], "安装「YouTube」0.1.0（旧版本）？");
+    assert.equal(host.confirms.at(-1)!["detail"], "当前 0.2.0。安装后可以在商城恢复到 0.2.0。");
+    await until(host, () => !store.busy);
+    assert.ok(actions(host).some((x) => x.text === "恢复到 0.2.0"));
+    host.window("store").emit("act", "rollback");
+    await until(host, () => host.osd.includes("已恢复 YouTube 到 0.2.0"));
     await until(host, () => !store.busy);
 
     host.dialogAnswers.push({ confirmed: true, checked: true });

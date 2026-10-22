@@ -130,7 +130,11 @@ export async function get(fetch: Fetch, url: string, options: GetOptions): Promi
         await response.body?.cancel().catch(() => {});
         throw new NetError("http", `HTTP ${response.status}`, response.status);
       }
-      const declared = response.headers.get("content-length");
+      // With a Content-Encoding (GitHub Pages serves gzip) fetch hands us the
+      // decoded body while Content-Length counts the encoded bytes: only the
+      // decoded bytes counted below are checked then.
+      const encoding = (response.headers.get("content-encoding") ?? "identity").trim().toLowerCase();
+      const declared = encoding === "identity" ? response.headers.get("content-length") : null;
       const length = declared === null ? null : Number(declared);
       if (length !== null && Number.isFinite(length)) {
         if (options.exactSize !== undefined && length !== options.exactSize) {

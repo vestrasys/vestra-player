@@ -76,7 +76,7 @@ const identity = (source: PackageSource | null) =>
       : source.kind;
 
 function replaceDetail(info: PluginInfo, name: string): string {
-  return `当前的「${name}」${info.version ?? ""} 来自${sourceName(info.source)}。替换后新插件使用新的空数据；原插件的数据保留，以后从原来源重新安装时接上。`;
+  return `当前的「${name}」${info.version ?? ""} 来自${sourceName(info.source)}。替换后，若之前从这个来源安装过，会接上当时的数据；否则使用新的空数据。原插件的数据保留，以后从原来源重新安装时接上。`;
 }
 
 // ------------------------------------------------------------ repository
@@ -120,7 +120,7 @@ export async function installFromRepository(store: Store, item: Item, version: I
     else
       question = {
         message: `安装「${name}」${version.version}（${order < 0 ? "旧版本" : "重新安装"}）？`,
-        detail: `当前 ${info.version}。安装后可以在商城回退到 ${info.version}。${added.length ? `\n\n这个版本需要更多权限：\n${permissionList(added)}` : ""}`,
+        detail: `当前 ${info.version}。安装后可以在商城${order < 0 ? "恢复" : "回退"}到 ${info.version}。${added.length ? `\n\n这个版本需要更多权限：\n${permissionList(added)}` : ""}`,
         confirm: "安装",
       };
   } else
@@ -234,7 +234,7 @@ async function installCandidate(
     const info = installedOf(store, candidate.manifest.id);
     const answer = await store.ask({
       message: `替换已安装的「${name}」？`,
-      detail: info ? replaceDetail(info, name) : "这个插件已从其它来源安装。替换后新插件使用新的空数据，原数据保留。",
+      detail: info ? replaceDetail(info, name) : `这个插件已从其它来源安装。替换后，若之前从这个来源安装过，会接上当时的数据；否则使用新的空数据。原插件的数据保留，以后从原来源重新安装时接上。`,
       confirm: "替换",
       destructive: true,
     });
@@ -361,13 +361,19 @@ export async function installFromLink(store: Store, text: string) {
 
 // ------------------------------------------------------------ rollback / uninstall
 
+/** 「回退」 to an older previous version, 「恢复」 to a newer one (after installing an older version or a rollback). */
+export function rollbackVerb(current: string | null, previous: string): "回退" | "恢复" {
+  return current && isVersion(current) && isVersion(previous) && compareVersions(previous, current) > 0 ? "恢复" : "回退";
+}
+
 export async function rollback(store: Store, item: Item) {
   const info = item.installed;
   if (!info?.previousVersion) return;
-  if (!store.begin(`正在回退 ${item.name}…`)) return;
+  if (!store.begin(`正在${rollbackVerb(info.version, info.previousVersion)} ${item.name}…`)) return;
   try {
     const change = await store.plugin.packages.rollback(info.id);
-    await follow(store, change, () => `已回退 ${item.name} 到 ${info.previousVersion}`, "回退");
+    const verb = rollbackVerb(info.version, info.previousVersion);
+    await follow(store, change, () => `已${verb} ${item.name} 到 ${info.previousVersion}`, verb);
   } catch (error) {
     store.report(errorCode(error) === "unsupported" ? "这个插件不能回退" : failureText(store, error, info.id), true);
   } finally {

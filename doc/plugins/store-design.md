@@ -207,7 +207,7 @@
 | 协议 | 每一跳都必须 `https:`（本机例外同 3.1）；跳到 `http:` 或别的协议即失败 |
 | 重定向 | `redirect: "manual"` 手动跟随 ≤ 5 次（GitHub Releases 下载会 302 到 `release-assets.githubusercontent.com`，已实测） |
 | 超时 | 连接 + 首字节 15 秒；整个请求：索引 30 秒，包按 `max(60 秒, size / 100 KB/s)` |
-| 大小 | 流式读取并计数，超过上限立即中止；`Content-Length` 超过上限的直接拒绝 |
+| 大小 | 流式读取并计数**解码后**的字节，超过上限立即中止；`Content-Length` 超过上限的直接拒绝。响应带 `Content-Encoding`（GitHub Pages 对 README 用 gzip）时 `Content-Length` 是压缩后的字节数而 `fetch` 交出的是解压后的内容，这时不看 `Content-Length`，只按解码后的计数做上限、精确大小和 sha256 检查（真机验收 S1）。没选 `Accept-Encoding: identity`：服务器和 CDN 可以不理它，而计数解码后的字节在两种情况下都对，也继续挡住压缩炸弹 |
 | 上限 | `index.json` 4 MB；`.sig` 1 KB；README / CHANGELOG 256 KB；图标 512 KB；仓库包按索引的 `size`（必须相等）；链接包 64 MB（与宿主 `.vxp` 上限一致） |
 | 头 | `User-Agent: VestraPlayer/<app.version> vestra.store/<version>`；不带 cookie（Node fetch 本来不带）；条件请求用 `If-None-Match` / `If-Modified-Since` |
 | 取消 | 每个请求一个 `AbortController`，窗口的「取消」、作用域释放（插件停用）都中止 |
@@ -672,6 +672,8 @@ TS 约 2840 行（不含测试），Slint 约 790 行。没有 npm 依赖。
 - **索引里的 URL 字段**（`iconUrl`、`readmeUrl` 等）不是 https 时只置空，不丢整个插件；版本的 `downloadUrl` 不合格才丢这个版本。仓库本身在本机（`http://localhost` 等）时，它自己的本机 http 链接可用——协调者验收清单 #10–#13 的本地测试仓库因此能装上插件。
 - **签名对不上时再取一次**：索引和 `.sig` 是两个请求，索引恰好在中间更新时第一次会对不上；再取一对仍不符才判失败。
 - **其它来源安装的同 id**：列表里有两行，一行是仓库条目（状态「已从…安装」，只有「替换…」），一行是本机已安装的实例（「已安装」过滤里出现，可回退、卸载）。
+- **回退按钮**：上一版本比当前新时（装了旧版本或回退之后）写「恢复到 x」，结果「已恢复 X 到 x」（真机验收 S3）。
+- **替换的数据说明**：`PluginInfo` 看不到休眠实例，商城无法知道这个来源以前装过没有，所以确认框写「若之前从这个来源安装过，会接上当时的数据；否则使用新的空数据」（S5）。
 - **右栏信息**：版本、已安装、更新、来源、id、许可证、源码 ↗。
 - **设置页**：id `store.repos`，分类「插件」，order 20（插件管理是 10）。
 - **列表行没有图标**（G1）；详情页图标：仓库的 `iconUrl` 下载缓存到 `<data>/icons/`，已安装插件的 manifest `icon` 复制过去，都没有时用商城自己的图标。
