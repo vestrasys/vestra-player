@@ -169,3 +169,16 @@ Contributing · License（各一行）
 - **GPU 渲染下视频滤镜从未生效**（硬件解码帧在显存里，mpv 静默丢弃软件滤镜）：已修，滤镜存在时切到回拷硬解；真机确认 blur 生效、关闭不报错。
 - 真机截图（打包的 0.3.0，GPU 渲染）：SDK PR #5。core-ui 的截图没有体现它演示的内容，待换。
 - 下一步：「界面」类样板（概念篇「工具窗口、面板与设置页」+ `Windows`/`Window`/`Panels`/`Settings` 参考注释 + 两篇操作指南），交用户评审。
+
+## 10. 界面样板（SDK PR #7，2026-10-22，待用户评审）
+
+概念篇 `docs/concepts/ui.md`、两篇操作指南、24 个界面符号按模板重写；界面类 doc-lint 强制通过（284/284），38 个 `@example` 全部能编译。
+
+样板发现的代码问题（交维护者，下一轮处理）：
+1. 若干失败抛无 `code` 的普通 Error（窗口打开后再 `on()`、重复 `panels.mount`、重复 `osd.panel()`、面板/设置文件导出不符）；`.slint` 读不到时抛 Node 的 ENOENT。
+2. 同类失败错误码不一：设置页重复 id 是 `invalid`，窗口重复 id 是 `conflict`；底栏/侧栏被占是 `ui-prepare`，背景层是 `conflict`；缺 `.slint` 是 `host` 而不是 `missing`。
+3. 写 Slint 未声明的属性：各界面报不同的码；设置页上一个这样的属性会让整个选项窗口对所有插件都打不开。
+4. 有些错误到不了插件：SDK 忽略宿主的 `ui.error`、`ui-value` 错误；面板和设置页首批值里的坏图片只进日志。
+5. 没有工具窗口位置和尺寸的 API，播放器也不记住。
+
+样板对模板的修改建议（推开其它类别前采纳）：`@throws` 写成「`code`（throws/rejects）条件」；方法不强制 `@remarks`，模块和句柄类型强制；每类开始时在 `doc-standard.mjs` 标 full 或 data；事实以播放器代码为准；CI 加 Slint 编译检查；`MainWindow`、`Drops` 待定类别。
