@@ -82,6 +82,7 @@ export component SubtitleDownload inherits Window {
                 font-size: Theme.font-body;
                 vertical-alignment: center;
                 wrap: word-wrap;
+                line-height-factor: 1.25;
                 horizontal-stretch: 1;
             }
             Button { text: "同意并搜索"; clicked => { root.accept-privacy(); } }

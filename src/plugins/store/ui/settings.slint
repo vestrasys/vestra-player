@@ -45,6 +45,7 @@ export component StorePage inherits Rectangle {
             color: Theme.text-dim;
             font-size: Theme.font-body;
             wrap: word-wrap;
+            line-height-factor: 1.25;
         }
         Rectangle { height: 4px; }
         Cell { text: "仓库"; color: Theme.text; }
@@ -92,9 +93,11 @@ export component StorePage inherits Rectangle {
             }
             Rectangle { horizontal-stretch: 1; }
         }
-        // One line: address, 添加, 取消 (Enter adds, Esc cancels).
+        // One line: address, 添加, 取消 (Enter adds, Esc cancels). The fluent
+        // LineEdit asks for 32px; pinned to input-height (as the row) it stays
+        // inside the row, so the warning below starts under it.
         if StoreSettings.adding: FocusScope {
-            height: Theme.input-height + 2px;
+            height: Theme.input-height;
             key-pressed(event) => {
                 if event.text == Key.Escape {
                     StoreSettings.cancel-add();
@@ -105,6 +108,7 @@ export component StorePage inherits Rectangle {
             HorizontalLayout {
                 spacing: 6px;
                 address := LineEdit {
+                    height: Theme.input-height;
                     horizontal-stretch: 1;
                     font-size: Theme.font-body;
                     placeholder-text: "仓库根地址或 index.json 的完整地址（https://…）";
@@ -127,12 +131,14 @@ export component StorePage inherits Rectangle {
             color: Tone.warn;
             font-size: Theme.font-body;
             wrap: word-wrap;
+            line-height-factor: 1.25;
         }
         if StoreSettings.message != "": Text {
             text: StoreSettings.message;
             color: StoreSettings.message-warn ? Tone.warn : Theme.text-dim;
             font-size: Theme.font-body;
             wrap: word-wrap;
+            line-height-factor: 1.25;
         }
     }
 }

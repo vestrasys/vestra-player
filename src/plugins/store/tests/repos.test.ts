@@ -24,7 +24,9 @@ test("the official index is read, verified and listed when the window opens", as
     );
     assert.match(String(host.window("store").props["status-text"]), /^官方仓库 \d\d:\d\d 已更新$/);
     assert.equal(store.repos.official.index?.plugins.length, 2);
-    assert.match(net.requests[0]!.headers["user-agent"]!, /^VestraPlayer\/0\.2\.0 vestra\.store\/0\.1\.0$/);
+    const manifest = readFileSync(new URL("../manifest.json", import.meta.url), "utf8");
+    const { version } = JSON.parse(manifest) as { version: string };
+    assert.equal(net.requests[0]!.headers["user-agent"], `VestraPlayer/0.2.0 vestra.store/${version}`);
   } finally {
     await stop();
   }
