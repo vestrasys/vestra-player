@@ -7,6 +7,6 @@ rustflags = ["-L", "native=/opt/homebrew/lib"]
 # (MinGW) uses the system UCRT on its own side; nothing allocated by one side
 # is freed by the other (rsmpv frees mpv's memory with mpv_free).
 # `RUSTFLAGS` in the environment replaces this list: CI and packaging do not
-# set it. A test in `platform/windows.rs` checks it reached the build.
+# set it. `platform/windows.rs` checks it reached the test build.
 [target.'cfg(all(target_os = "windows", target_env = "msvc"))']
 rustflags = ["-C", "target-feature=+crt-static"]
