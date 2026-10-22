@@ -24,7 +24,18 @@ jobs:
           persist-credentials: false
       - uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2.87.30
         with:
-          tool: typos@1.51.1,actionlint@1.7.12,zizmor@1.31.1,cargo-deny@0.20.2,cargo-shear@1.14.0
+          tool: typos@1.51.1,zizmor@1.31.1,cargo-deny@0.20.2,cargo-shear@1.14.0
+      - name: Install actionlint 1.7.12
+        env:
+          VERSION: 1.7.12
+          SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          archive="actionlint_${VERSION}_linux_amd64.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/$archive" "https://github.com/rhysd/actionlint/releases/download/v${VERSION}/$archive"
+          echo "$SHA256  $RUNNER_TEMP/$archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP/bin" actionlint
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH" # zizmor: ignore[github-env]
       - name: typos
         run: typos
       - name: actionlint
