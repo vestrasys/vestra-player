@@ -203,7 +203,21 @@ mod tests {
     #[test]
     fn hostile_entries_are_rejected() {
         let m = manifest();
-        for name in ["../evil.js", "/abs.js", "a\\b.js", "a/../b.js", "./x.js"] {
+        // Zip names use `/` (APPNOTE 4.4.17); a `\` is rejected, not taken
+        // as a separator, alone or mixed with `/`.
+        for name in [
+            "../evil.js",
+            "/abs.js",
+            "a\\b.js",
+            "ui/a\\b.js",
+            "ui\\sub/b.js",
+            "..\\evil.js",
+            "ui/..\\..\\evil.js",
+            "\\abs.js",
+            "C:\\abs.js",
+            "a/../b.js",
+            "./x.js",
+        ] {
             let file = archive(
                 &[("manifest.json", &m), (name, b"x")],
                 zip::CompressionMethod::Stored,

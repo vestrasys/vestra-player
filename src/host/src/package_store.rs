@@ -185,7 +185,7 @@ impl Store {
             !fs::symlink_metadata(&root)?.file_type().is_symlink(),
             "store root must not be a symlink"
         );
-        let root = root.canonicalize()?;
+        let root = dunce::canonicalize(&root)?;
         fs::create_dir_all(root.join("packages"))?;
         ensure!(
             !fs::symlink_metadata(root.join("packages"))?
@@ -350,7 +350,7 @@ impl Store {
         // Publish succeeded even if the directory durability barrier fails:
         // callers must query/recover rather than blindly repeat an operation.
         self.catalog = next;
-        File::open(&self.root)?.sync_all()?;
+        crate::platform::sync_dir(&self.root)?;
         Ok(())
     }
 
@@ -390,7 +390,7 @@ impl Store {
             "candidate changed during staging"
         );
         fs::rename(temporary.path(), &target.directory)?;
-        File::open(self.root.join("packages"))?.sync_all()?;
+        crate::platform::sync_dir(&self.root.join("packages"))?;
         Ok(target)
     }
 
@@ -633,7 +633,7 @@ impl Store {
                 fs::remove_dir_all(entry.path())?;
             }
         }
-        File::open(packages)?.sync_all()?;
+        crate::platform::sync_dir(&packages)?;
         Ok(())
     }
 
@@ -843,7 +843,7 @@ fn copy_tree(source: &std::path::Path, destination: &std::path::Path) -> Result<
             output.sync_all()?;
         }
     }
-    File::open(destination)?.sync_all()?;
+    crate::platform::sync_dir(destination)?;
     Ok(())
 }
 
@@ -1122,7 +1122,9 @@ mod tests {
         store.prepare("counter", 0, &first, "one").unwrap();
         store.commit("counter", "one").unwrap();
         // Strip the instance as an older catalog would have it.
-        let path = root.path().canonicalize().unwrap().join("catalog.json");
+        let path = dunce::canonicalize(root.path())
+            .unwrap()
+            .join("catalog.json");
         let mut json: serde_json::Value =
             serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
         json["installed"]["counter"]
@@ -1205,8 +1207,12 @@ mod tests {
         assert!(stored.builtin);
         assert_eq!(stored.guid, instance.guid);
         assert_eq!(stored.seeded_version.as_deref(), Some("1.1.0"));
-        let text =
-            fs::read_to_string(root.path().canonicalize().unwrap().join("catalog.json")).unwrap();
+        let text = fs::read_to_string(
+            dunce::canonicalize(root.path())
+                .unwrap()
+                .join("catalog.json"),
+        )
+        .unwrap();
         assert!(text.contains(r#""source":{"kind":"bundled"}"#), "{text}");
     }
 }

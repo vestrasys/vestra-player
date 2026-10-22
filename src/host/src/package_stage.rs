@@ -17,7 +17,6 @@ use tempfile::TempDir;
 const MAX_FILES: usize = 1024;
 const MAX_TOTAL: u64 = 64 * 1024 * 1024;
 const MAX_FILE: u64 = 32 * 1024 * 1024;
-const MAX_PATH: usize = 1024;
 const MAX_DEPTH: usize = 12;
 const DIGEST_DOMAIN: &[u8] = b"vestra.package-stage/v1\0";
 
@@ -45,7 +44,7 @@ impl Candidate {
             initial_root.is_dir() && !initial_root.file_type().is_symlink(),
             "package root must be a regular directory"
         );
-        let source = source.canonicalize().context("package root")?;
+        let source = dunce::canonicalize(source).context("package root")?;
         let mut files = Vec::new();
         let mut total = 0;
         collect(&source, &source, 0, &mut files, &mut total)?;
@@ -133,26 +132,23 @@ impl Candidate {
     }
 }
 
+/// The package-relative name of a captured file: its components joined with
+/// `/` on every system (Windows' `strip_prefix` yields `ui\a.slint`), so a
+/// directory hashes like its `.vxp` archive (whose names use `/`). Then the
+/// same rules as manifest and archive paths (`manifest::relative_path`); a
+/// `\` inside a component (a Unix file name) is rejected there, since it
+/// would be a separator on Windows.
 fn relative_name(path: &Path) -> Result<String> {
-    let text = path.to_str().context("package path must be UTF-8")?;
-    ensure!(
-        !text.is_empty()
-            && text.len() <= MAX_PATH
-            && !text.chars().any(char::is_control)
-            && !text.contains('\\'),
-        "invalid package relative path"
-    );
-    ensure!(
-        path.components().count() <= MAX_DEPTH
-            && path.components().all(|c| matches!(c, Component::Normal(_))),
-        "package path must contain only normal relative components within the depth limit"
-    );
-    ensure!(
-        text.split('/')
-            .all(|s| !s.is_empty() && s != "." && s != ".."),
-        "invalid package path component"
-    );
-    Ok(text.to_owned())
+    let mut parts = Vec::new();
+    for component in path.components() {
+        let Component::Normal(part) = component else {
+            bail!("package path must contain only normal relative components");
+        };
+        parts.push(part.to_str().context("package path must be UTF-8")?);
+    }
+    let text = parts.join("/");
+    crate::manifest::relative_path(&text)?;
+    Ok(text)
 }
 
 fn collect(
@@ -321,6 +317,41 @@ mod tests {
             second.digest(),
             Candidate::capture(root.path()).unwrap().digest()
         );
+    }
+
+    #[test]
+    fn captured_names_use_slash_on_every_system_and_stay_relative() {
+        assert_eq!(
+            relative_name(Path::new("ui/a.slint")).unwrap(),
+            "ui/a.slint"
+        );
+        assert_eq!(
+            relative_name(&Path::new("ui").join("sub").join("a.slint")).unwrap(),
+            "ui/sub/a.slint"
+        );
+        // A separator on Windows; a file name character elsewhere, rejected
+        // there so that a package means the same tree on every system.
+        for name in ["ui\\a.slint", "ui/sub\\a.slint", "ui\\sub/a.slint"] {
+            let named = relative_name(Path::new(name));
+            if cfg!(windows) {
+                assert_eq!(named.unwrap(), name.replace('\\', "/"), "{name}");
+            } else {
+                assert!(named.is_err(), "{name}");
+            }
+        }
+        for name in [
+            "",
+            "../a.js",
+            "ui/../../a.js",
+            "./a.js",
+            "/abs.js",
+            "ui\\..\\..\\a.js",
+            "..\\a.js",
+            "\\abs.js",
+            "C:\\abs.js",
+        ] {
+            assert!(relative_name(Path::new(name)).is_err(), "{name}");
+        }
     }
 
     #[test]

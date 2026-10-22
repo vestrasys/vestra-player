@@ -85,8 +85,11 @@ mod tests {
         assert_eq!(image_kind(&[0xff, 0xd8, 0xff, 0xe0]), Some(Image::Jpeg));
         assert_eq!(image_kind(b"GIF89a"), None);
         assert_eq!(read_image("relative.png").unwrap_err().code, "invalid");
+        // Absolute on this system (`/…` is not absolute on Windows).
+        let missing = std::env::temp_dir().join("vestra-nonexistent/vestra.png");
+        assert!(missing.is_absolute());
         assert_eq!(
-            read_image("/nonexistent/vestra.png").unwrap_err().code,
+            read_image(missing.to_str().unwrap()).unwrap_err().code,
             "missing"
         );
         let gif = tempfile::Builder::new().suffix(".png").tempfile().unwrap();

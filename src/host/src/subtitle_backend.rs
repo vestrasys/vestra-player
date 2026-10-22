@@ -416,7 +416,7 @@ impl Subtitles {
             .active_load
             .ok_or_else(|| RpcError::new("unavailable", "subtitle current load unknown"))?;
         let before = tracks(mpv)?.into_iter().map(|t| t.id).collect::<Vec<_>>();
-        let path = file.path().canonicalize().map_err(failure)?;
+        let path = dunce::canonicalize(file.path()).map_err(failure)?;
         let url = path
             .to_str()
             .ok_or_else(|| failure("subtitle path is not UTF-8"))?;
@@ -652,7 +652,7 @@ impl Subtitles {
                 continue;
             }
             let cleanup = (|| -> Result<(), RpcError> {
-                let path = file.path().canonicalize().map_err(failure)?;
+                let path = dunce::canonicalize(file.path()).map_err(failure)?;
                 let url = path
                     .to_str()
                     .ok_or_else(|| failure("orphan subtitle path unavailable"))?;
@@ -902,7 +902,7 @@ impl Subtitles {
                 let refreshed = (|| -> Result<i64, RpcError> {
                     mpv.command(&["sub-reload", &asset.track.to_string()])
                         .map_err(failure)?;
-                    let url = asset.file.path().canonicalize().map_err(failure)?;
+                    let url = dunce::canonicalize(asset.file.path()).map_err(failure)?;
                     let matches = tracks(mpv)?
                         .into_iter()
                         .filter(|track| track.filename.as_deref() == url.to_str())

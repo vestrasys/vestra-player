@@ -8,7 +8,8 @@ use std::sync::{Arc, OnceLock};
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use ttf_parser::Face;
+use skrifa::raw::TableProvider;
+use skrifa::{FontRef, MetadataProvider};
 
 const FONT_BYTES: &[u8] = include_bytes!("../../assets/fonts/noto-cjk/NotoSansCJKsc-Regular.otf");
 const DIGEST: &str = "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b";
@@ -41,7 +42,7 @@ impl FontAsset {
         if format!("{:x}", Sha256::digest(FONT_BYTES)) != DIGEST {
             bail!("fixed subtitle font digest mismatch");
         }
-        Face::parse(FONT_BYTES, 0).context("fixed subtitle font face 0 is invalid")?;
+        parse(FONT_BYTES).context("fixed subtitle font face 0 is invalid")?;
         let candidate = Self(Arc::from(FONT_BYTES));
         Ok(BUNDLED.get_or_init(|| candidate).clone())
     }
@@ -68,13 +69,17 @@ impl FontAsset {
         if text.len() > MAX_TEXT_BYTES {
             bail!("unsupported: subtitle font coverage input exceeds 2 MiB");
         }
-        let face = Face::parse(&self.0, 0).context("fixed subtitle font face is invalid")?;
+        let charmap = FontRef::from_index(&self.0, 0)
+            .context("fixed subtitle font face is invalid")?
+            .charmap();
         for character in text.chars() {
             if matches!(character, '\n' | '\r' | '\t') {
                 continue;
             }
             if character.is_control()
-                || face.glyph_index(character).is_none_or(|glyph| glyph.0 == 0)
+                || charmap
+                    .map(character)
+                    .is_none_or(|glyph| glyph == skrifa::GlyphId::NOTDEF)
             {
                 bail!(
                     "unsupported: fixed subtitle font lacks a supported glyph for U+{:04X}",
@@ -84,6 +89,17 @@ impl FontAsset {
         }
         Ok(())
     }
+}
+
+/// Face 0 with the tables a font cannot be used without (what `ttf-parser`'s
+/// `Face::parse` required) and a Unicode cmap.
+fn parse(bytes: &[u8]) -> Result<FontRef<'_>> {
+    let font = FontRef::from_index(bytes, 0)?;
+    font.head()?;
+    font.hhea()?;
+    font.maxp()?;
+    font.cmap()?;
+    Ok(font)
 }
 
 #[cfg(test)]
@@ -101,7 +117,8 @@ mod tests {
         let held = first.bytes();
         drop(first);
         drop(second);
-        assert!(Face::parse(&held, 0).is_ok());
+        assert!(parse(&held).is_ok());
+        assert!(parse(b"not a font").is_err());
     }
 
     #[test]

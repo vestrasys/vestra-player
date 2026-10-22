@@ -20,6 +20,7 @@
 //! | files and links | `reveal`, `open_path`, `open_url` (blocking, run on a worker thread) |
 //! | secrets | `secret_get`, `secret_set`, `secret_delete` (blocking) |
 //! | facts | `os_facts` (blocking), `displays` (UI thread), `app_data_dir`, `default_ffmpeg`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD` |
+//! | storage | `sync_dir` (Unix: `fsync` below; Windows: `FlushFileBuffers` on a directory handle) |
 //! | generated streams | `av_listen` → `AvListener` / `AvStream` (Unix: `av_unix` below; Windows: `av_tcp`) |
 //! | offline media | `HELD_FILE_INPUT` (how FFmpeg names its stdin, the held source file) |
 //! | rendering | `GPU_RENDER`, `gpu_start` → `GpuRenderer` / `GpuHandle` / `GpuFrame` (macOS: `vestra-gpu-render`; elsewhere `no_gpu` below refuses, so the host renders in software) |
@@ -293,6 +294,15 @@ mod no_gpu {
 }
 #[cfg(not(target_os = "macos"))]
 pub use no_gpu::*;
+
+/// Durability barrier for the entries of `directory`: after it returns, the
+/// names created, renamed or removed in it survive a crash (the package
+/// store calls it after each atomic rename). Unix: `fsync` of the directory.
+/// The Windows version is in `windows.rs`.
+#[cfg(unix)]
+pub fn sync_dir(directory: &std::path::Path) -> std::io::Result<()> {
+    std::fs::File::open(directory)?.sync_all()
+}
 
 /// `openStream`'s local transport on Unix (macOS, Linux): a Unix socket in a
 /// fresh private directory under `/tmp` (macOS limits socket paths to 104

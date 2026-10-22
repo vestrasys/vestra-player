@@ -196,10 +196,8 @@ fn package_file(
     max: u64,
 ) -> Result<std::path::PathBuf> {
     relative_path(relative).with_context(|| format!("{field}: {relative}"))?;
-    let root = directory.canonicalize()?;
-    let path = directory
-        .join(relative)
-        .canonicalize()
+    let root = dunce::canonicalize(directory)?;
+    let path = dunce::canonicalize(directory.join(relative))
         .with_context(|| format!("{field} file {relative} is missing from the package"))?;
     ensure!(
         path.starts_with(&root),

@@ -61,7 +61,7 @@ pub fn locate(
     if !Path::new(path).is_absolute() {
         return Err(fail("invalid", "image path must be absolute"));
     }
-    let real = std::fs::canonicalize(path).map_err(|error| match error.kind() {
+    let real = dunce::canonicalize(path).map_err(|error| match error.kind() {
         std::io::ErrorKind::NotFound => fail("missing", format!("image not found: {path}")),
         _ => fail("invalid", format!("image unavailable: {error}")),
     })?;
@@ -217,7 +217,10 @@ impl Host {
             return Vec::new();
         };
         let mut roots = vec![plugin.directory.clone()];
-        if let Some(data) = plugin.data_directory().and_then(|d| d.canonicalize().ok()) {
+        if let Some(data) = plugin
+            .data_directory()
+            .and_then(|d| dunce::canonicalize(d).ok())
+        {
             roots.push(data);
         }
         roots
@@ -276,7 +279,7 @@ mod tests {
     #[test]
     fn paths_formats_and_sizes_are_checked() {
         let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
         let inside = root.join("cover.png");
         std::fs::write(&inside, png(3, 2)).unwrap();
         let roots = [root.join("pkg"), root.clone()];
@@ -326,7 +329,7 @@ mod tests {
     #[test]
     fn cache_keeps_shown_images_and_reloads_changed_files() {
         let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
         let roots = [root.clone()];
         let path = root.join("a.png");
         std::fs::write(&path, png(2, 2)).unwrap();
