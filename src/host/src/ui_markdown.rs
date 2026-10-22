@@ -26,12 +26,12 @@ const TRUNCATED: &str = "…（内容过长，已截断）";
 /// Slint's interpolation placeholder (U+E541): user text never reaches the
 /// format string, so it cannot inject Markdown into the inline renderer.
 const SLOT: char = '\u{e541}';
-/// Emphasis and strikethrough also get a colour: the system UI fonts the
-/// player forces for CJK (Hiragino Sans GB, Microsoft YaHei) have no italic
-/// face and Slint 1.18.1's FemtoVG and software renderers still do not
-/// synthesize one (only Skia does), so italic draws like body text; its
-/// strikethrough line still draws no pixel at 11–12px, the Markdown body
-/// sizes (both measured 2026-10-22). Literal colours (the format string
+/// Emphasis and strikethrough also get a colour: CJK system fonts (PingFang
+/// SC, Microsoft YaHei, Hiragino Sans GB, which CJK text falls back to)
+/// have no italic face and Slint 1.18.1's FemtoVG and software renderers do
+/// not synthesize one (only Skia does), so italic CJK draws like body text;
+/// the strikethrough line drew no pixel at 11–12px, the Markdown body sizes
+/// (both measured 2026-10-22 under the then-forced Hiragino Sans GB). Literal colours (the format string
 /// cannot read `Theme`), chosen to read on both palettes.
 const EMPHASIS_COLOR: &str = "#e8a33d";
 const STRIKE_COLOR: &str = "#8a8496";
@@ -772,7 +772,7 @@ mod tests {
     }
 
     /// GUI review 2026-10-21: italic and strikethrough invisible with the
-    /// forced CJK font, the open task box a missing glyph, table header
+    /// (then forced) CJK font, the open task box a missing glyph, table header
     /// alignment off. Slint 1.18: code falls back to a CJK font itself.
     #[test]
     fn styles_survive_fonts_without_italic_and_cjk_code() {
