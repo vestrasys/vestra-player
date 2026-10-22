@@ -57,11 +57,11 @@ D2、D4、D6 已于 2026-10-20 由用户确定。下文按建议方案写目标�
 
 | 用途 | reference player | 我们的目标（macOS） |
 | --- | --- | --- |
-| 界面默认字体 | 语言文件的 `DefaultMessageFont`（英文 Segoe UI，中文宋体） | 系统 UI 字体（中文 PingFang SC），由宿主统一设置 |
+| 界面默认字体 | 语言文件的 `DefaultMessageFont`（英文 Segoe UI，中文宋体） | 各平台的系统 UI 字体（macOS 中文为 PingFang SC、Windows 为微软雅黑），不强制指定；缺字时由 Slint 回退（2026-10-22 用户裁决） |
 | 时间、徽标 | Tahoma 11px | 等宽数字的系统字体 11px（`font-feature: tnum`） |
 | 字号档位 | 9 / 11 / 12 / 13 / 15 | 只用这几档：9（极小标签）、11（正文、列表、时间）、12（页签）、13（窗口标题、页签标题） |
 
-我们现在：宿主强制 `Arial Unicode MS`；工具窗口里有 22–36px 的大标题，正文默认 13–14px。
+我们现在（2026-10-22 起）：不再强制字体，用系统默认；等宽字体由宿主按平台设置（macOS Menlo、Windows Consolas、Linux DejaVu Sans Mono）；工具窗口里有 22–36px 的大标题，正文默认 13–14px。
 
 ### 2.3 控件尺寸（B§2.3，确认）
 
