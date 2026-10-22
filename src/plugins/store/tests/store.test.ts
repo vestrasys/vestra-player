@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { timing } from "../store.ts";
 import { actions, banners, BUILTIN, choose, FakeNet, info, OFFICIAL, openStore, props, publish, rows, start, THIRD, until, yes } from "./helpers.ts";
@@ -52,28 +55,53 @@ test("menu 「插件商城…」 counts updates from the same source only, annou
 });
 
 test("automatic check: once after activation, then daily; off means no network", async () => {
-  Object.assign(timing, { firstCheck: 30, tick: 10, interval: 150 });
+  // Real timers stay short, but nothing depends on how fast this machine is:
+  // the first check is bounded from below only, "a day later" is an injected
+  // clock, and every positive wait polls the observable request count.
+  const defaults = { ...timing };
+  const DAY = 86_400_000;
+  let clock = 1_000; // far less than a day since lastCheck = 0: only the first-check timer may fire
+  const now = () => clock;
   const net = new FakeNet();
   publish(net, OFFICIAL, []);
-  const first = await start({ net });
+  Object.assign(timing, { firstCheck: 300, tick: 10, interval: DAY });
+  const data = mkdtempSync(join(tmpdir(), "vestra-store-autocheck-"));
   try {
-    assert.equal(net.count(OFFICIAL), 0, "not during activation");
-    await until(first.host, () => net.count(OFFICIAL) === 1, "first check");
-    await until(first.host, () => net.count(OFFICIAL) === 2, "next check after the interval");
-    assert.ok(first.store.settings.value.lastCheck > 0);
+    const activated = Date.now();
+    const first = await start({ net, now });
+    try {
+      if (Date.now() - activated < timing.firstCheck) assert.equal(net.count(OFFICIAL), 0, "not during activation");
+      await until(first.host, () => net.count(OFFICIAL) === 1, "first check");
+      assert.ok(Date.now() - activated >= timing.firstCheck, "not before the first-check delay");
+      await until(first.host, () => first.store.settings.value.lastCheck === 1_000, "lastCheck saved");
+      await first.host.settle(50);
+      assert.equal(net.count(OFFICIAL), 1, "once, not again within the day");
+      clock += DAY;
+      await until(first.host, () => net.count(OFFICIAL) === 2, "next check a day later");
+    } finally {
+      await first.stop();
+    }
+
+    // Turned off before the timers exist, so no first check can win a race with the save.
+    Object.assign(timing, defaults);
+    const quiet = new FakeNet();
+    publish(quiet, OFFICIAL, []);
+    const off = await start({ net: quiet, dataDirectory: data });
+    off.store.settings.save({ ...off.store.settings.value, autoCheck: false });
+    await off.stop();
+    Object.assign(timing, { firstCheck: 30, tick: 10, interval: DAY });
+    clock = 10 * DAY; // the daily check is due too
+    const second = await start({ net: quiet, now, dataDirectory: data });
+    try {
+      assert.equal(second.store.settings.value.autoCheck, false);
+      await second.host.settle(300);
+      assert.equal(quiet.count(OFFICIAL), 0);
+    } finally {
+      await second.stop();
+    }
   } finally {
-    await first.stop();
-  }
-  const quiet = new FakeNet();
-  publish(quiet, OFFICIAL, []);
-  const second = await start({ net: quiet });
-  try {
-    second.store.settings.save({ ...second.store.settings.value, autoCheck: false });
-    await second.host.settle(300);
-    assert.equal(quiet.count(OFFICIAL), 0);
-  } finally {
-    await second.stop();
-    Object.assign(timing, { firstCheck: 1_000_000_000, tick: 1_000_000_000, interval: 86_400_000 });
+    Object.assign(timing, defaults);
+    rmSync(data, { recursive: true, force: true });
   }
 });
 
@@ -166,8 +194,13 @@ test("README and changelog tabs; missing ones say so; 显示图片 for a third-p
     await choose(host, "Gamma");
     await until(host, () => banners(host).includes("已阻止 2 张远程图片（非官方来源）"));
     host.window("store").emit("bannerAct", "showImages");
-    await until(host, () => !banners(host).some((b) => b.startsWith("已阻止")), "images allowed");
-    assert.equal(host.markdown(props(host)["doc"])?.text, "![a](https://img.test/a.png) ![b](https://img.test/b.png)");
+    // The banner goes as soon as the reload starts, before the README is back: wait for both.
+    const images = "![a](https://img.test/a.png) ![b](https://img.test/b.png)";
+    await until(
+      host,
+      () => !banners(host).some((b) => b.startsWith("已阻止")) && host.markdown(props(host)["doc"])?.text === images,
+      "images allowed",
+    );
 
     // A README that fails to load offers 重试.
     const readme = "https://plugins.test/assets/b.beta/README.md";

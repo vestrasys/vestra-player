@@ -1,0 +1,50 @@
+{
+  "about": "processing.replace cases the player (host/src/processing.rs) and the SDK's TestHost (tests/sdk/host-agreement.test.ts) must answer alike. Each case starts from a ready decoded source with no chains; each step sends one change (resourceId \"r\", revision 1, 2, ...) and expects \"applied\" or an error code, then the number of this stage's resources the player holds.",
+  "cases": [
+    {
+      "name": "on, off with an empty chain, on again (the blur example)",
+      "steps": [
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "gblur", "sigma": 4, "steps": 3 }], "expect": "applied", "resources": 1 },
+        { "source": "decoded", "stage": "video", "nodes": [], "expect": "applied", "resources": 0 },
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "gblur", "sigma": 4, "steps": 3 }], "expect": "applied", "resources": 1 }
+      ]
+    },
+    {
+      "name": "an empty video chain that was never applied",
+      "steps": [{ "source": "decoded", "stage": "video", "nodes": [], "expect": "applied", "resources": 0 }]
+    },
+    {
+      "name": "values out of range",
+      "steps": [
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "gblur", "sigma": 10.5, "steps": 3 }], "expect": "invalid", "resources": 0 },
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "gblur", "sigma": 2, "steps": 2 }], "expect": "invalid", "resources": 0 },
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "frameBlend", "fps": 48 }, { "kind": "frameBlend", "fps": 60 }], "expect": "invalid", "resources": 0 },
+        { "source": "decoded", "stage": "audio", "nodes": [{ "kind": "volume", "gainDb": 1 }], "expect": "invalid", "resources": 0 },
+        { "source": "decoded", "stage": "audio", "nodes": [], "offsetMs": 15, "expect": "invalid", "resources": 0 }
+      ]
+    },
+    {
+      "name": "an audio delay alone is a chain; no nodes and no delay removes it",
+      "steps": [
+        { "source": "decoded", "stage": "audio", "nodes": [], "offsetMs": 50, "expect": "applied", "resources": 1 },
+        { "source": "decoded", "stage": "audio", "nodes": [{ "kind": "channels", "mode": "mono" }], "expect": "applied", "resources": 1 },
+        { "source": "decoded", "stage": "audio", "nodes": [], "expect": "applied", "resources": 0 }
+      ]
+    },
+    {
+      "name": "a generated stream refuses chains and accepts removal",
+      "steps": [
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "hue", "degrees": 30 }], "expect": "applied", "resources": 1 },
+        { "source": "generated", "stage": "video", "nodes": [{ "kind": "hue", "degrees": 30 }], "expect": "unsupported", "resources": 1 },
+        { "source": "generated", "stage": "audio", "nodes": [{ "kind": "channels", "mode": "swap" }], "expect": "unsupported", "resources": 0 },
+        { "source": "generated", "stage": "audio", "nodes": [], "offsetMs": 100, "expect": "unsupported", "resources": 0 },
+        { "source": "generated", "stage": "video", "nodes": [], "expect": "applied", "resources": 0 },
+        { "source": "decoded", "stage": "video", "nodes": [{ "kind": "hue", "degrees": 30 }], "expect": "applied", "resources": 1 }
+      ]
+    },
+    {
+      "name": "no ready source",
+      "steps": [{ "source": "loading", "stage": "video", "nodes": [{ "kind": "gblur", "sigma": 1, "steps": 3 }], "expect": "unavailable", "resources": 0 }]
+    }
+  ]
+}

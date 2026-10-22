@@ -305,14 +305,22 @@ impl Backend {
                             continue;
                         }
                         if command.method == "processing.replace" {
-                            let ready = sources.snapshot(&mpv)["phase"] == "ready";
+                            let snapshot = sources.snapshot(&mpv);
+                            let source = match (
+                                snapshot["phase"] == "ready",
+                                snapshot["kind"] == "producer",
+                            ) {
+                                (false, _) => crate::processing::Source::NotReady,
+                                (true, true) => crate::processing::Source::Generated,
+                                (true, false) => crate::processing::Source::Decoded,
+                            };
                             processing.note_source(sources.generation(), sources.phase());
                             subtitles.note_source(sources.generation(), sources.phase());
                             let result = processing.replace(
                                 &mpv,
                                 command.reply.owner,
                                 sources.generation(),
-                                ready,
+                                source,
                                 &command.params,
                             );
                             let _ = events.send(Event::Reply(command.reply, result));

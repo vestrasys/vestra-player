@@ -189,13 +189,13 @@ test("presets change the EQ only and the window follows them after a drag; reset
   await host.settle();
   assert.deepEqual(window.props["gain-values"], [0, 0, 0, 0, 0, 0]);
   assert.equal(window.props["delay-ms"], 0);
-  assert.deepEqual(own(host)?.nodes, []);
-  assert.equal(own(host)?.offsetMs, 0);
+  assert.deepEqual(own(host)?.nodes ?? [], []);
+  assert.equal(own(host)?.offsetMs ?? 0, 0);
   assert.equal(host.command("audio.preset.0").state.checked, true);
   window.emit("delay-changed", 40);
   await host.settle();
   await host.command("audio.reset").run();
-  assert.equal(own(host)?.offsetMs, 0);
+  assert.equal(own(host)?.offsetMs ?? 0, 0);
   assert.equal(window.props["delay-ms"], 0);
   await stop();
 });
@@ -369,7 +369,7 @@ test("Shift+E bypasses the bands but keeps their gains; presets and band edits t
   await host.command("audio.reset").run();
   await host.settle();
   assert.equal(host.osd.at(-1), "音频处理已复位");
-  assert.deepEqual(own(host)?.nodes, []);
+  assert.deepEqual(own(host)?.nodes ?? [], []);
   assert.equal(window.props["preset-index"], 0);
   assert.equal(host.osd.length, 4, "window edits give no on-screen text");
   await stop();
@@ -404,7 +404,7 @@ test("G09: > < ? step the audio sync by 50 ms with OSD, stop at ±10 000 ms and 
   await host.press("?");
   assert.equal(host.osd.at(-1), "音频同步: 0秒");
   await host.settle();
-  assert.equal(own(host)?.offsetMs, 0);
+  assert.equal(own(host)?.offsetMs ?? 0, 0);
   window.emit("delay-changed", 9980);
   await host.press("<");
   await host.press("<");
@@ -413,7 +413,7 @@ test("G09: > < ? step the audio sync by 50 ms with OSD, stop at ±10 000 ms and 
   assert.equal(own(host)?.offsetMs, 10000);
   window.emit("delay-reset");
   await host.settle();
-  assert.equal(own(host)?.offsetMs, 0);
+  assert.equal(own(host)?.offsetMs ?? 0, 0);
   assert.equal(host.sent("subtitles.style").length, 0, "audio sync never touches the subtitles");
   await stop();
 });
@@ -508,7 +508,7 @@ test("G11: Shift+C switches 晶化 at the remembered strength; menu, window and 
   await host.press("Shift+C");
   await host.settle();
   assert.equal(host.osd.at(-1), "晶化: 关");
-  assert.deepEqual(own(host)?.nodes, []);
+  assert.deepEqual(own(host)?.nodes ?? [], []);
   assert.equal(window.props["clarity-db"], 4.6, "off keeps the strength");
   window.emit("clarity-toggled", true);
   await host.settle();
@@ -516,7 +516,7 @@ test("G11: Shift+C switches 晶化 at the remembered strength; menu, window and 
   window.emit("clarity-changed", 0);
   await host.settle();
   assert.equal(host.command("audio.clarity").state.checked, true, "on at 0 dB stays checked");
-  assert.deepEqual(own(host)?.nodes, [], "but makes no node");
+  assert.deepEqual(own(host)?.nodes ?? [], [], "but makes no node");
   window.emit("clarity-reset");
   await host.settle();
   assert.equal(window.props["clarity-enabled"], false);
