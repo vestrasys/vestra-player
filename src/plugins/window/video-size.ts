@@ -21,10 +21,12 @@ export class VideoSize {
   readonly #plugin: Plugin;
   #size: Size | null = null;
   #source = -1;
+  /** The source whose size is known or being probed; reset whenever the size is dropped. */
   #probed = -1;
+  #announced = -1;
   #timer: ReturnType<typeof setTimeout> | null = null;
   #disposed = false;
-  /** G-02: called once per source, when the probe after its first `ready` finds the video size. */
+  /** G-02: called once per source, when a probe first finds its video size (not again after a restart). */
   onFirstSize: ((source: number, size: Size) => void) | null = null;
 
   constructor(plugin: Plugin) {
@@ -44,6 +46,10 @@ export class VideoSize {
       if (this.#size) this.#plugin.update();
       this.#size = null;
       this.#source = state.sourceId;
+      // A restart keeps the source id but passes through `loading`: probe again on its `ready`.
+      this.#probed = -1;
+      if (this.#timer) clearTimeout(this.#timer);
+      this.#timer = null;
     }
     if (state.phase === "ready" && this.#probed !== state.sourceId) {
       this.#probed = state.sourceId;
@@ -59,6 +65,7 @@ export class VideoSize {
     const current = this.#plugin.player.state;
     if (current.sourceId !== source || !showing(current)) return this.#size;
     this.#size = displaySize(stats.video);
+    if (!this.#size) this.#probed = -1; // the next `ready` asks again
     return this.#size;
   }
 
@@ -71,7 +78,10 @@ export class VideoSize {
     if (size) {
       this.#size = size;
       this.#plugin.update();
-      this.onFirstSize?.(source, size);
+      if (this.#announced !== source) {
+        this.#announced = source;
+        this.onFirstSize?.(source, size);
+      }
     } else if (attempts > 1) {
       this.#timer = setTimeout(() => void this.#probe(source, attempts - 1), timing.probeRetry);
     }

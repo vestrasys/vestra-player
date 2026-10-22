@@ -7,6 +7,8 @@ import { NesCore } from "./core.ts";
 export default async function activate(plugin: Plugin) {
   const window = plugin.windows.create("nes.slint");
   let stream: Stream | undefined;
+  /** The player's source id while `stream` is selected (-1: unknown). */
+  let streamSource = -1;
   let opening: AbortController | undefined;
   let status = "请选择 iNES ROM 文件。";
   window.bind(() => ({ status, running: !!stream?.running }));
@@ -23,12 +25,16 @@ export default async function activate(plugin: Plugin) {
       if (signal.aborted) return;
       if (bytes.byteLength > 16 * 1024 * 1024) throw new Error("ROM 超过 16 MiB 上限。");
       const core = new NesCore(bytes);
-      await stream?.stop(); // a bad ROM keeps the running game
+      await end(); // a bad ROM keeps the running game
       if (signal.aborted) return;
       // The SDK prerolls, activates, acknowledges pause/input controls and paces frame().
       const next = await plugin.player.openStream({ width: 256, height: 240, frame: () => core.frame(), signal });
       stream = next;
-      next.onStop((error) => (status = stopText(error)));
+      const { kind, sourceId } = plugin.player.state; // refreshed when the host accepted the stream
+      streamSource = kind === "stream" ? sourceId : -1;
+      next.onStop((error) => {
+        if (stream === next) status = stopText(error); // not when this plugin stops it
+      });
       status = `正在运行 ${basename(path)} · 256×240 · 48 kHz 立体声`;
     } catch (error) {
       if (!signal.aborted) status = failureText(error); // Stop cancels silently
@@ -36,10 +42,24 @@ export default async function activate(plugin: Plugin) {
       opening = undefined;
     }
   }
+  /**
+   * Stop the running game. The source is closed first, while the producer is
+   * still connected: `Stream.stop()` closes the transport before the source,
+   * and the host reports a transport closing under a selected source as a
+   * failure ("producer transport closed"). Only our own source is closed.
+   */
+  async function end() {
+    const current = stream;
+    stream = undefined;
+    if (!current) return;
+    const state = plugin.player.state;
+    if (current.running && state.sourceId === streamSource && state.phase !== "empty")
+      await plugin.player.close({ ifCurrent: state }).catch(() => {}); // replaced meanwhile: not ours
+    await current.stop(); // closes the source only if it is still ours
+  }
   async function stop() {
     opening?.abort(); // a pending open never selects its stream afterwards
-    await stream?.stop(); // closes the source only if it is still ours
-    stream = undefined;
+    await end();
     status = "已停止。";
   }
 

@@ -1,5 +1,5 @@
 import type { PackageChange, Plugin, PluginInfo } from "@vestra-player/sdk";
-import { BUILTIN_TIP, bytes, CAPABILITIES, CHANGE, failureText, ORIGIN, sourceText, STATE } from "./labels.ts";
+import { BUILTIN_TIP, bytes, CAPABILITIES, CHANGE, failureText, sourceShort, sourceText, STATE } from "./labels.ts";
 import { directorySize, timing } from "./sizes.ts";
 
 type Row = { id: string; version: string; origin: string; state: string; size: string; dim: boolean; failed: boolean; selected: boolean };
@@ -129,7 +129,7 @@ export class PluginsPage {
         (p): Row => ({
           id: p.id,
           version: p.version ?? "开发",
-          origin: p.builtin ? "内置" : (ORIGIN[p.origin] ?? p.origin),
+          origin: sourceShort(p),
           state: STATE[p.state] ?? p.state,
           size: this.#size(p),
           dim: p.state === "disabled",

@@ -212,6 +212,11 @@ test("G-02: once per source; a replay, pause or seek does not size again; the sa
   host.setSource({ phase: "ready", position: 0 }); // replay: the same source
   await host.settle(30);
   assert.equal(host.sent("window.setVideoArea").length, 1);
+  host.setSource({ phase: "ended" });
+  host.setSource({ phase: "loading", position: null }); // a restart: the same source through loading
+  host.setSource({ phase: "ready", position: 0 });
+  await host.settle(30);
+  assert.equal(host.sent("window.setVideoArea").length, 1);
   assert.deepEqual(host.mainWindow.videoArea, { width: 900, height: 506 });
   host.setMainWindow({ videoArea: { width: 1280, height: 720 } });
   await play(host, { width: 1280, height: 720 });
@@ -366,6 +371,28 @@ test("H03: disabled without video and in fullscreen; enabled once the video size
   host.setSource({ phase: "empty" });
   await host.settle();
   assert.equal(state(host, "size.2").reason, "没有视频");
+});
+
+test("H03: still enabled after the video ends and plays again (restart passes through loading, or a seek back)", async () => {
+  const { host } = await manual(withoutPip());
+  await play(host);
+  assert.equal(state(host, "size.1").enabled, true);
+  host.setSource({ phase: "ended", position: 60 });
+  await host.settle();
+  assert.equal(state(host, "size.1").enabled, true, "the last frame is still shown");
+  // Space at EOF: the host restarts the same source (same id) through loading.
+  host.setSource({ phase: "loading", position: null });
+  await host.settle();
+  assert.equal(state(host, "size.1").reason, "没有视频");
+  host.setSource({ phase: "ready", position: 0 });
+  await host.settle(30);
+  assert.deepEqual([state(host, "size.1").enabled, state(host, "mini").enabled], [true, true]);
+  // Ended again, then a seek back: the size is kept.
+  host.setSource({ phase: "ended", position: 60 });
+  await host.settle();
+  host.setSource({ phase: "ready", position: 10 });
+  await host.settle(30);
+  assert.equal(state(host, "size.2").enabled, true);
 });
 
 test("H03: the size is read again while mpv has not reported it yet", async () => {
