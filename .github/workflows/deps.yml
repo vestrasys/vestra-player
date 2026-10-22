@@ -79,7 +79,7 @@ jobs:
         with:
           name: deps-macos
           path: ${{ runner.temp }}/out
-          retention-days: 3
+          retention-days: 1
           if-no-files-found: error
 
   windows:
@@ -135,7 +135,7 @@ jobs:
         with:
           name: deps-windows
           path: ${{ runner.temp }}/out
-          retention-days: 3
+          retention-days: 1
           if-no-files-found: error
 
   release:

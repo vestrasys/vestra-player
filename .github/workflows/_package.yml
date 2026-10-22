@@ -17,7 +17,7 @@ on:
         default: vestra-unsigned
       retention-days:
         type: number
-        default: 7
+        default: 1
       cache:
         type: boolean
         default: false

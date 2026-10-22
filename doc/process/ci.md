@@ -113,7 +113,7 @@ node packaging/smoke.mjs --exe "<输出目录>/Vestra Player.app/Contents/MacOS/
 
 `<deps>` 可以用 `gh release download <deps 标签> -p vestra-deps-macos-arm64.tar.xz` 下载后解压，也可以本机 `node packaging/collect-macos-deps.mjs --out <deps>`（用本机 Homebrew，最低系统版本跟着本机走，只适合自测）。需要 `brew install cargo-about`（或者 `--rust-licenses <html>` 跳过）。Windows 包在 macOS 上可以用 `--no-installer` 暂存和出 zip，安装包只能在 Windows 上编。
 
-**产物命名**：`VestraPlayer-<版本>-macos-arm64.dmg`、`…-macos-arm64.app.zip`（以后在 Linux 上签名要用）、`…-windows-x64-setup.exe`、`…-windows-x64-portable.zip`、`SHA256SUMS`。release 和 dry run 的 artifact 叫 `vestra-unsigned-<os>`，nightly 叫 `vestra-nightly-<日期>-<短哈希>-<os>`，都保留 7 天，nightly 不发 release。
+**产物命名**：`VestraPlayer-<版本>-macos-arm64.dmg`、`…-macos-arm64.app.zip`（以后在 Linux 上签名要用）、`…-windows-x64-setup.exe`、`…-windows-x64-portable.zip`、`SHA256SUMS`。release 和 dry run 的 artifact 叫 `vestra-unsigned-<os>`，nightly 叫 `vestra-nightly-<日期>-<短哈希>-<os>`，都只保留 1 天（artifact 存储额度只有 500 MB；要长期保存的东西放 release 资产），nightly 不发 release。
 
 **冒烟测试的过渡状态**：宿主找自带 Node 的改动（S7 宿主分支）合并之前，`_package.yml` 的 `SMOKE_COMPAT=--node-on-path` 把包里 node 的目录放进 PATH；Windows 的冒烟测试 `continue-on-error`（旧宿主在 Windows 上找不到 `resources\`）。宿主分支合并后两处都删掉。
 
