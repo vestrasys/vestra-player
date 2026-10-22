@@ -27,7 +27,7 @@ import { readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fetchNode } from "./fetch-node.mjs";
-import { writeIcons } from "./icon.mjs";
+import { COMMITTED_ICO } from "./icon.mjs";
 import {
   clean,
   copy,
@@ -125,8 +125,7 @@ if (!options["no-installer"]) {
       "C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe",
       "C:\\Program Files\\Inno Setup 6\\ISCC.exe",
     ].find((path) => path && exists(path)) ?? "iscc";
-  const icon = join(out, "vestra.ico");
-  await writeIcons({ ico: icon });
+  const icon = COMMITTED_ICO;
   run(iscc, [
     "/Q",
     `/DAppId=${APP_ID}`,
