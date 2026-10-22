@@ -31,7 +31,10 @@
 11. 打包用自写脚本（不用 cargo-bundle/cargo-packager），DMG 用系统 `hdiutil`。
 12. 补仓库根 LICENSE（GPL-3.0 全文）；运行时暂存时带上 SDK 的 LICENSE；nes 插件补 jsnes（Apache-2.0）许可证（交 nes 作者）。
 
-**待用户决定**：Node 主版本（24 还是 26）、GPL 对应源码怎么提供、bundle id、发布仓库与凭据。
+**2026-10-22，用户裁决**
+13. Node 主版本用 **26**（26 LTS 起，`vestra/1` 期间只升不降）。SDK `engines` 随之调整（SDK 1.2.0）。
+14. GPL：源码仓库日后开源；在那之前安装包不对外发布，只做内部测试版。安装包发在 **`vestra-player` 仓库自己的 GitHub Release**，官网也引导到这里。**推翻决定 1**：不再新建 `vestra-player-releases`，release 用本仓库的 `GITHUB_TOKEN`，不需要额外凭据。仓库公开时 Release 和源码同时公开，满足 GPL。依赖镜像（决定 4）也放本仓库 Release（固定标签如 `deps-<日期>`）。
+15. bundle id：`io.github.vestrasys.player`（没有自有域名时的惯例写法，不需要买域名）。用户以后有官网域名可改，签名正式发布前改无成本。
 
 ## 流程
 
@@ -40,7 +43,7 @@
 ## 进度
 
 - [x] 7.1 维护者调研与方案：[packaging-proposal.md](../../architecture/packaging-proposal.md)（试拼 .app 231 MB、DMG 76 MB；去掉 PATH 里的 node 后 18 个插件全部启动失败，证实必须内置 Node）
-- [ ] 7.2 协调者决定
+- [x] 7.2 协调者决定（含用户裁决 13–15）
 - [ ] 7.3 实现
 - [ ] 7.4 release 演练（不签名）
 - [ ] 7.5 真机测试 macOS 包
