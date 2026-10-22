@@ -1,31 +1,64 @@
-# Vestra Player
+<p align="center"><img src=".github/assets/logo.png" width="96" height="96" alt="Vestra Player logo"></p>
+<h1 align="center">Vestra Player</h1>
+<p align="center"><b>A reference player-style desktop video player where every feature is a plugin.</b></p>
+<p align="center">
+  <a href="https://github.com/vestrasys/vestra-player/actions/workflows/main.yml"><img src="https://github.com/vestrasys/vestra-player/actions/workflows/main.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/vestrasys/vestra-player/releases"><img src="https://img.shields.io/badge/release-v0.3.0-blue" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Windows-lightgrey" alt="Platforms: macOS and Windows">
+  <a href="https://vestrasys.github.io/vestra-player-sdk/"><img src="https://img.shields.io/badge/plugin%20API-vestra%2F1-6f42c1" alt="Plugin API vestra/1"></a>
+  <a href="https://www.npmjs.com/package/@vestra-player/sdk"><img src="https://img.shields.io/npm/v/@vestra-player/sdk?label=SDK&logo=npm&color=cb3837" alt="SDK on npm"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-green" alt="License: GPL-3.0"></a>
+</p>
+<p align="center">
+  <a href="https://github.com/vestrasys/vestra-player/releases">Releases</a> ·
+  <a href="https://vestrasys.github.io/vestra-player-sdk/">Plugin SDK docs</a> ·
+  <a href="https://github.com/vestrasys/vestra-player-plugins">Plugins</a> ·
+  <a href="doc/README.md">Design docs</a>
+</p>
 
-插件化的视频播放器：Rust 宿主 + Slint 原生界面 + TypeScript 插件，播放基于 libmpv。产品功能（播放栏、播放列表、画面调节、音频工作台、字幕、截图导出、NES 模拟器、YouTube、Bilibili、插件工坊（实验性））全部由插件实现，使用同一套公开插件 API。YouTube、Bilibili 是插件仓库 [vestra-player-plugins](https://github.com/vestrasys/vestra-player-plugins) 里的官方插件，经商城安装，不随安装包分发；其余内置插件在本仓库 `src/plugins/`。
+Vestra Player is an open-source video player for macOS and Windows. It aims for reference player's rich, discoverable controls (menus, shortcuts, a docked playlist, deep video and audio settings) on a modern, extensible architecture. Playback is handled by [libmpv](https://mpv.io); the interface is native [Slint](https://slint.dev); and everything you use (playback bar, playlist, video and audio adjustments, subtitles, screenshots and export, history, hotkeys, the plugin store, even an NES emulator) is a TypeScript plugin.
+
+## Core ideas
+
+- **Everything is a plugin.** The Rust host only provides shared infrastructure: playback, UI composition, processing chains, plugin lifecycle. Product features live in plugins.
+- **One public API for everyone.** Built-in and third-party plugins use the same API, `vestra/1`, through the [`@vestra-player/sdk`](https://www.npmjs.com/package/@vestra-player/sdk) package. If a built-in plugin needs something, the public API grows; there are no private back doors.
+- **Isolated plugins.** Each plugin runs in its own Node.js process. The host checks every call against the capabilities the plugin declares, and stopping a plugin releases everything it owns.
+- **Native UI.** Plugin windows and panels are Slint components, compiled and composed by the host with a shared theme and widget set.
+- **Signed plugin store.** Plugins install from a signed index (Ed25519), built from source in [vestra-player-plugins](https://github.com/vestrasys/vestra-player-plugins).
+- **Cross-platform.** All OS-specific code sits in a thin platform layer (`src/host/src/platform/`), one module per system; everything else is shared.
+
+## Architecture
 
 ```text
-src/host/       Rust 宿主
-src/runtime/    插件运行器（每插件一个 Node 进程）
-src/plugins/    内置产品插件
-src/examples/   示例插件
-doc/            文档（入口：doc/README.md）
+┌──────────────────────── Host process (Rust) ────────────────────────┐
+│  Playback (libmpv)        Slint UI composition     Package store    │
+│  Processing chains        Plugin process manager   Platform layer   │
+└──────────────────────────────────▲──────────────────────────────────┘
+                                   │  JSON-RPC (one JSON message per line)
+                                   │  over stdin/stdout, protocol vestra/1
+        ┌──────────────────────────┼──────────────────────────┐
+┌───────┴────────┐        ┌────────┴───────┐        ┌─────────┴──────┐
+│ Node process   │        │ Node process   │        │ Node process   │
+│ plugin (TS)    │        │ plugin (TS)    │  ...   │ plugin (TS)    │
+│ + SDK + .slint │        │ + SDK + .slint │        │ + SDK + .slint │
+└────────────────┘        └────────────────┘        └────────────────┘
 ```
 
-插件 SDK `@vestra-player/sdk`（类型、TestHost、`vestra-plugin` 命令行）在独立仓库 [vestra-player-sdk](https://github.com/vestrasys/vestra-player-sdk)，本仓库通过 `src/package.json` 依赖它。
+Plugins describe their windows and panels in `.slint` files; the host compiles them, places them in the main window or a tool window, and forwards their callbacks back to the plugin.
 
-## 运行
+## Repository layout
 
-需要 Rust、Node 26、libmpv（安装包自带 Node，用户不用装）；导出和 YouTube 另需 ffmpeg、yt-dlp。
+| Path | Contents |
+| --- | --- |
+| `src/host/` | The Rust host: playback, UI composition, plugin and package management, platform layer |
+| `src/runtime/` | The runner that starts each plugin in its Node.js process |
+| `src/plugins/` | The built-in product plugins |
+| `src/examples/` | Example plugins |
+| `src/packaging/` | Installer builds for macOS and Windows |
+| `doc/` | Design documents, architecture and process notes ([index](doc/README.md)) |
 
-```sh
-cd src && npm ci
-cd host && cargo run --bin vestra-host -- --plugin ../plugins/playback --plugin ../plugins/playlist
-```
+The SDK lives in [vestra-player-sdk](https://github.com/vestrasys/vestra-player-sdk); the YouTube and Bilibili plugins and the store index live in [vestra-player-plugins](https://github.com/vestrasys/vestra-player-plugins).
 
-`--plugin` 可重复，直接加载插件目录的源码。YouTube、Bilibili 从插件仓库的检出加载，例如检出在本仓库旁边时 `--plugin ../../../vestra-player-plugins/plugins/youtube`（在插件仓库下先 `npm ci`）。
+## License
 
-## 文档
-
-- 写插件：[doc/plugins/](doc/plugins/README.md)
-- 项目方向与原则：[doc/product/](doc/product/direction.md)
-- 开发流程（插件作者与 API 维护者的模拟社区）：[doc/process/](doc/process/community-workflow.md)
-- 当前状态：[doc/status.md](doc/status.md)
+Vestra Player is licensed under [GPL-3.0-or-later](LICENSE). The SDK and the plugins repository are Apache-2.0.
