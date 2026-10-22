@@ -34,7 +34,7 @@
 **2026-10-22，用户裁决**
 13. Node 主版本用 **26**（26 LTS 起，`vestra/1` 期间只升不降）。SDK `engines` 随之调整（SDK 1.2.0）。
 14. GPL：源码仓库日后开源；在那之前安装包不对外发布，只做内部测试版。安装包发在 **`vestra-player` 仓库自己的 GitHub Release**，官网也引导到这里。**推翻决定 1**：不再新建 `vestra-player-releases`，release 用本仓库的 `GITHUB_TOKEN`，不需要额外凭据。仓库公开时 Release 和源码同时公开，满足 GPL。依赖镜像（决定 4）也放本仓库 Release（固定标签如 `deps-<日期>`）。
-15. bundle id：`io.github.vestrasys.player`（没有自有域名时的惯例写法，不需要买域名）。用户以后有官网域名可改，签名正式发布前改无成本。
+15. bundle id：`com.vestrasys.player`（用户裁决；bundle id 只是命名惯例，不需要拥有域名，许多开源项目如 Moonlight `com.moonlight-stream.Moonlight`、ares `dev.ares.ares` 都不对应自有域名）。
 
 ## 流程
 
