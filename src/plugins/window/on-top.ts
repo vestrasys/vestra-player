@@ -5,7 +5,7 @@ export const playing = (state: PlayerState) => state.phase === "ready" && !state
 
 /**
  * H05 / IA-WIN-03: the window floats when the mode says so: always, while
- * playing, or while playing in fullscreen (PotPlayer's default). 迷你尺寸
+ * playing, or while playing in fullscreen (the default). 迷你尺寸
  * does not float (IA-WIN-02). Only changes are sent, in order, so another
  * plugin's last write is not overridden for nothing; the core drops this
  * plugin's request when it is deactivated. Callers re-apply on player and

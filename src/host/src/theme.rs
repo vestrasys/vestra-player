@@ -1,12 +1,25 @@
 //! Theme colours set by the player (R-H6) and `plugin.appearance` (R-S2):
-//! two fixed palettes, delivered to every view instance (shell with its
+//! fixed palettes (one today, `vestra`; the table form leaves room for a
+//! light palette), delivered to every view instance (shell with its
 //! panels, floating sidebar, tool windows, options window) through the
 //! host-only `VestraPalette` global (`ui/palette.slint`). Plugin Slint reads
 //! `Theme`, whose colours are `out` properties bound to the palette.
 #![forbid(unsafe_code)]
 use super::*;
 
-pub const THEMES: [&str; 2] = ["vestra", "potplayer"];
+/// The palettes, in menu order; the first is the default.
+pub const THEMES: [&str; 1] = ["vestra"];
+
+/// The palette a theme id selects: an id the player does not have (one
+/// retired in an earlier version, saved or sent by an older plugin) selects
+/// the default, so neither a saved setting nor an older plugin fails.
+pub fn known(theme: &str) -> &'static str {
+    THEMES
+        .iter()
+        .find(|t| **t == theme)
+        .copied()
+        .unwrap_or(THEMES[0])
+}
 
 /// Colour tokens of `ui/palette.slint`; Vestra is also its default.
 const VESTRA: [(&str, u32); 22] = [
@@ -34,32 +47,8 @@ const VESTRA: [(&str, u32); 22] = [
     ("danger", 0xff5a4a),
 ];
 
-/// PotPlayer's own colours (ui-alignment §2.1); `selected-bg` has no
-/// PotPlayer counterpart and uses the button press grey.
-const POTPLAYER: [(&str, u32); 22] = [
-    ("bg-bar", 0x1e1e1e),
-    ("bg-video", 0x101010),
-    ("bg-list", 0x3b3b3b),
-    ("bg-panel", 0x333333),
-    ("line", 0x000000),
-    ("hover-bg", 0x272727),
-    ("press-bg", 0x181818),
-    ("selected-bg", 0x444444),
-    ("text", 0xf0f0f0),
-    ("text-dim", 0x777777),
-    ("text-list", 0xaeaeae),
-    ("text-played", 0x888888),
-    ("accent", 0xfae100),
-    ("accent-press", 0xc8b400),
-    ("accent-disabled", 0x7d7000),
-    ("icon-disabled", 0x3b3b3b),
-    ("playing", 0x2282f2),
-    ("button-bg", 0x555555),
-    ("button-hover", 0x5c5c5c),
-    ("button-press", 0x444444),
-    ("button-disabled", 0x2a2a2a),
-    ("danger", 0xe04343),
-];
+/// Each palette's colours, in `THEMES` order.
+const TABLES: [&[(&str, u32); 22]; THEMES.len()] = [&VESTRA];
 
 fn color(rgb: u32) -> SValue {
     SValue::Brush(slint::Brush::SolidColor(slint::Color::from_rgb_u8(
@@ -76,10 +65,16 @@ pub fn apply(
     theme: &str,
     vestra_fill: Option<&SValue>,
 ) -> Result<()> {
-    let (table, fill) = if theme == "potplayer" {
-        (&POTPLAYER, Some(color(0xfae100)))
+    let index = THEMES.iter().position(|t| *t == known(theme)).unwrap_or(0);
+    let table = TABLES[index];
+    // Vestra fills with its gradient; another palette with its accent.
+    let fill = if index == 0 {
+        vestra_fill.cloned()
     } else {
-        (&VESTRA, vestra_fill.cloned())
+        table
+            .iter()
+            .find(|(n, _)| *n == "accent")
+            .map(|(_, rgb)| color(*rgb))
     };
     for (name, rgb) in table {
         instance.set_global_property(PALETTE, name, color(*rgb))?;
@@ -164,10 +159,9 @@ impl Host {
         &mut self,
         params: &Value,
     ) -> std::result::Result<Value, RpcError> {
-        let theme = string(params, "theme")?;
-        if !THEMES.contains(&theme) {
-            return Err(RpcError::invalid("theme is vestra or potplayer"));
-        }
+        // An id the player does not have selects the default (`known`):
+        // plugins built for an older SDK may still send a retired palette.
+        let theme = known(string(params, "theme")?);
         if theme != self.theme() {
             self.ui_state.state.appearance = Some(ui_state::Appearance {
                 theme: theme.into(),
@@ -192,9 +186,6 @@ mod tests {
             let line = format!("in property <color> {name}: #{rgb:06x};");
             assert!(file.contains(&line), "theme.slint lacks {line}");
         }
-        let names =
-            |table: &[(&'static str, u32)]| table.iter().map(|(n, _)| *n).collect::<Vec<_>>();
-        assert_eq!(names(&VESTRA), names(&POTPLAYER));
         let colours = file.matches("in property <color>").count();
         assert_eq!(colours, VESTRA.len(), "every colour token is in the tables");
         assert!(file.contains("in property <brush> accent-fill"));
@@ -203,6 +194,15 @@ mod tests {
             !theme.contains("in property"),
             "plugins cannot assign Theme"
         );
+    }
+
+    #[test]
+    fn an_id_the_player_does_not_have_selects_the_default() {
+        assert_eq!(known("vestra"), "vestra");
+        // Retired in an earlier version, or never a palette: the default, no error.
+        assert_eq!(known("classic"), THEMES[0]);
+        assert_eq!(known(""), "vestra");
+        assert_eq!(TABLES.len(), THEMES.len());
     }
 
     #[test]

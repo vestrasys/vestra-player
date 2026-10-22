@@ -101,7 +101,7 @@ test("geometry: scales, nearness, aspect fit, mini box, clamp notes, display siz
 });
 
 
-test("settings: PotPlayer's defaults; a bad field falls back to its default, the others are kept", () => {
+test("settings: the spec defaults; a bad field falls back to its default, the others are kept", () => {
   assert.deepEqual(normalize({}), { onTop: "fullscreen", hideCursorWhilePlaying: true, autoSize: 1, autoSizeOnce: false });
   assert.deepEqual(normalize({ onTop: "sometimes", hideCursorWhilePlaying: false, autoSize: "fit", autoSizeOnce: true }), {
     onTop: "fullscreen",
@@ -512,7 +512,7 @@ test("IA-WIN-03: 全屏播放时置顶 (the default) floats only while playing i
   assert.deepEqual(host.sent("window.setAlwaysOnTop").map((p) => p.onTop), [true, false, true, false]);
 });
 
-test("H05: modes by menu and Ctrl+T in PotPlayer's order, OSD texts, playing mode follows pause, kept after a restart", async () => {
+test("H05: modes by menu and Ctrl+T in `OnTopMode` order, OSD texts, playing mode follows pause, kept after a restart", async () => {
   const data = mkdtempSync(join(scratch, "top-"));
   const host = new TestHost();
   const { stop } = await start(host, data);

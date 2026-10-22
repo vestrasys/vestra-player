@@ -237,8 +237,8 @@ pub fn double_click_seconds() -> f64 {
     objc2_app_kit::NSEvent::doubleClickInterval()
 }
 
-/// G-15: macOS has no submenu delay setting; PotPlayer's value under the
-/// Windows default.
+/// G-15: macOS has no submenu delay setting; the menu's own delay, which
+/// equals the Windows default.
 pub fn menu_show_delay_ms() -> u64 {
     crate::menu::SHOW_DELAY_MS
 }

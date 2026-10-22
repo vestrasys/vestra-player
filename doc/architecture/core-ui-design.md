@@ -1,7 +1,7 @@
 # 核心界面与输入能力设计（C1–C11、C14）
 
 日期：2026-10-20。阶段：P1a 设计，P2 审查已通过（裁决见[本轮任务](../process/rounds/2026-10-core-ui.md) §8「P2 审查」，已并入本文），P1b 按本文实现。
-依据：[本轮任务](../process/rounds/2026-10-core-ui.md) §2、§5，[界面整改文档](../../product/ui-alignment.md) §2、§3、§6、§8、§9、§10。
+依据：[本轮任务](../process/rounds/2026-10-core-ui.md) §2、§5，[界面规格](../product/ui-spec.md) §2、§3、§6、§8、§9、§10。
 现状代码：`src/host/src/{main,commands,menu,composition,window_state,ui,plugins}.rs`、`src/host/ui/*.slint`、`src/sdk/plugin/*.ts`、`src/runtime/runner.ts`。
 
 读法：每项先给公共接口，再给宿主怎么做、生命周期与错误、用法示例、取代并在 P4 删除的旧东西、现有插件的迁移写法。§14 说明迁移后菜单树为何不变，§15 是迁移者照抄的改写对照，§16 是删除总清单，§18 是需要协调者决定的问题。
@@ -27,7 +27,7 @@
 
 ### 1.1 宿主行为（无插件接口）
 
-`host.slint` 改成下面的结构（数值来自整改文档 §3）：
+`host.slint` 改成下面的结构（数值来自界面规格 §3）：
 
 ```text
 HostWindow (默认 780×671，最小 320×182，背景 Theme.bg-video #101010，默认字体见 C2)
@@ -103,7 +103,7 @@ export component ToolTipArea {           // 包住任意内容；悬停 600 ms �
     in property <string> text;
     @children
 }
-export component Button {                // PotPlayer 对话框按钮
+export component Button {                // 对话框按钮（界面规格 §2.3）
     in property <string> text;
     in property <string> icon;           // Path 路径数据；text 为空、icon 非空 = 图标按钮（step 2 R2）
     in property <length> icon-width: 14px;   // 同时是 viewbox 尺寸
@@ -205,8 +205,8 @@ mouse     = "LeftDoubleClick" [ ":LeftHalf" | ":RightHalf" ]
 规则：
 
 - **字母**按键名匹配，与大小写锁无关：`E` = 按 E；`Shift+E` = Shift 加 E。
-- **符号键**按实际打出的字符匹配，不能再写 `Shift`：PotPlayer 的字幕同步 `>` 写成 `">"`，不是 `"Shift+."`。`+` 写成 `Plus`。数字同理：`"Shift+1"` 非法，要写 `"!"`。
-- **macOS 的 Ctrl 与 Cmd**：`Ctrl+X` 在 macOS 上按 ⌃X 或 ⌘X 都触发（整改文档 §0）；`Cmd+X` 只认 ⌘X。同一事件先找完全匹配（⌘X 先找 `Cmd+X`），找不到再按 `Ctrl+X` 找。其它平台 `Cmd` 是 Win/Super 键。（Slint 在 macOS 上把 ⌘ 报成 `control`、⌃ 报成 `meta`，宿主在 Rust 里换回来。）
+- **符号键**按实际打出的字符匹配，不能再写 `Shift`：字幕同步的 `>` 写成 `">"`，不是 `"Shift+."`。`+` 写成 `Plus`。数字同理：`"Shift+1"` 非法，要写 `"!"`。
+- **macOS 的 Ctrl 与 Cmd**：`Ctrl+X` 在 macOS 上按 ⌃X 或 ⌘X 都触发（界面规格 §0）；`Cmd+X` 只认 ⌘X。同一事件先找完全匹配（⌘X 先找 `Cmd+X`），找不到再按 `Ctrl+X` 找。其它平台 `Cmd` 是 Win/Super 键。（Slint 在 macOS 上把 ⌘ 报成 `control`、⌃ 报成 `meta`，宿主在 Rust 里换回来。）
 - **鼠标**只在视频区生效，可带修饰键。`LeftDoubleClick:LeftHalf`/`:RightHalf` 按双击位置在视频左/右半边区分；同时有带区与不带区的绑定时，带区的优先，不算冲突。滚轮按累计位移计步（阈值在 P1b 按触控板和鼠标实测确定），每步触发一次。`X1`/`X2` 是鼠标侧键（Slint `back`/`forward`）。
 - 右键保留给菜单，不能绑定。左键单击、长按、右键双击本轮不做（§18 Q3）。宿主默认把 `Mouse:LeftDoubleClick` 绑到全屏。
 - 默认绑定**只在按下时触发，忽略按住不放的自动重复**（与现在 Space/←/→ 相同）；命令声明 `repeat: true` 时，按键的系统自动重复也触发（§18 Q6）。鼠标事件没有重复。
@@ -342,7 +342,7 @@ interface CommandOptions {
 | `windows` | 800–899 | 播放列表、播放信息、插件工坊等窗口入口 |
 | `exit` | 900–999 | 退出（宿主 990） |
 
-   顶层编号表放在 [doc/product/menus.md](../../product/menus.md)（交互负责人维护）；子菜单内部的编号由所在子菜单的插件自定。
+   顶层编号表放在 [doc/product/menus.md](../product/menus.md)（交互负责人维护）；子菜单内部的编号由所在子菜单的插件自定。
 6. 试载插件：菜单项**最后一段**加前缀 `试载 <owner> · `（现在是第 2 段；现有命令都是 2 段时结果相同），绑定忽略。
 
 ### 4.3 宿主数据结构
@@ -953,7 +953,7 @@ SDK 与运行器（`src/sdk/`）：
 | Q10 | 播放信息菜单位置 | 「视图 → 播放信息」 |
 | Q11 | 快捷键文字格式 | `Ctrl+O`、箭头 |
 | Q12 | 默认字体 | 按实测顺序；只能按文件导入时用系统自带 Hiragino Sans GB |
-| Q13 | PotPlayer 样式控件 | `@vestra/widgets.slint` 提供 `Slider`、`Button`、`ToolTipArea`（§2.1）；其它控件不做 |
+| Q13 | 主题控件库 | `@vestra/widgets.slint` 提供 `Slider`、`Button`、`ToolTipArea`（§2.1）；其它控件不做 |
 | Q14 | 全屏时浮动面板 | 已知限制 |
 
 ## 19. P1b 实现记录（2026-10-20）

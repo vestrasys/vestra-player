@@ -5,7 +5,7 @@ import type { Preferences } from "./settings.ts";
 import type { Sizer } from "./size.ts";
 
 /**
- * G-02 开始播放时的窗口尺寸 (PotPlayer `PlayScreenSize`, default 1.0x): each
+ * G-02 开始播放时的窗口尺寸 (default 1.0x): each
  * new source (`sourceId`) is sized once, when its video size first becomes
  * known. Not when the source has no video, in fullscreen, with 迷你尺寸 on,
  * in 画中画, or when the user dragged the window while it played (the size

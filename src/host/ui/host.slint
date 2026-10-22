@@ -46,8 +46,8 @@ export component HostWindow inherits Window {
     in property <string> osd-text;
     in property <bool> osd-visible: false;
     in property <[string]> info-panels;
-    // G-10: the OSD font follows the video area (3% of its height, 12–48px;
-    // Vestra value until D-08 gives PotPlayer's formula); the information
+    // G-10: the OSD font follows the video area (3% of its height, 12–48px);
+    // the information
     // blocks scale with it (11px at a 16px OSD, 9–28px).
     out property <length> osd-size: clamp(round(canvas.height * 0.03 / 1px) * 1px, 12px, 48px);
     out property <length> info-size: clamp(11px * root.osd-size / 16px, 9px, 28px);

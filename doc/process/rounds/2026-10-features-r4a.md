@@ -267,7 +267,7 @@ interface ViewSettings {
 
 ### 7.2 C-GPU（4b：R-H3、R-V10、R-P8；需求 E16、E17、E18 运动补偿）
 
-> **用户裁决（2026-10-21，修订）**：GPU 渲染重要（主流 macOS 播放器与 PotPlayer 都支持；还影响 4K 的 CPU 占用与硬件解码零拷贝），改为先做原型：放在独立子包 `src/host/unsafe/render/`，隔离规则同 §7.1，上限 500 行，验证 libmpv OpenGL 渲染到纹理并由 Slint 显示。原型报回：`unsafe` 块个数与行数、4K 播放 CPU 对比软件渲染、能否满足播放连续性（换来源、重建界面不中断）。正式切换时保留软件渲染作为后备。E16/E17/E18 运动补偿视原型结论恢复。
+> **用户裁决（2026-10-21，修订）**：GPU 渲染重要（主流桌面播放器都支持；还影响 4K 的 CPU 占用与硬件解码零拷贝），改为先做原型：放在独立子包 `src/host/unsafe/render/`，隔离规则同 §7.1，上限 500 行，验证 libmpv OpenGL 渲染到纹理并由 Slint 显示。原型报回：`unsafe` 块个数与行数、4K 播放 CPU 对比软件渲染、能否满足播放连续性（换来源、重建界面不中断）。正式切换时保留软件渲染作为后备。E16/E17/E18 运动补偿视原型结论恢复。
 
 **问题**：GPU 渲染只能走 libmpv 的 OpenGL 渲染接口（mpv 0.41 没有 Metal / Vulkan 嵌入接口）。rsmpv 的 `new_opengl` 有意设计为 `unsafe fn`，Slint 接入外部 GL 纹理（`BorrowedOpenGLTextureBuilder`）也是 `unsafe fn`，GL 调用本身同样需要 `unsafe`（§1.3）。
 

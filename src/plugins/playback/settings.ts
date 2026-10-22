@@ -5,13 +5,13 @@ export type SeekSteps = [number, number, number, number];
 export type Settings = {
   openUrl: { pasteFromClipboard: boolean };
   preventSleep: boolean;
-  /** I06 / IA-PB-01: off by default (PotPlayer `PreviewSeekTime=0`). */
+  /** I06 / IA-PB-01: off by default. */
   hoverTime: boolean;
   /** I07: off by default (needs ffmpeg and takes CPU). */
   hoverThumbnail: boolean;
   /** B06: seconds of the four relative-seek tiers (← →, Ctrl, Shift, Ctrl+Alt). */
   seekSteps: SeekSteps;
-  /** G-14: the bar's current-time label shows the remaining time (PotPlayer `SkinCurrentLeftTime`). */
+  /** G-14: the bar's current-time label shows the remaining time. */
   remainingTime: boolean;
 };
 
