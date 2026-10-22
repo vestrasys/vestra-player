@@ -1,4 +1,4 @@
-import type { AppInfo, Plugin } from "@vestra-player/sdk";
+import type { AppInfo, PackageSource, Plugin } from "@vestra-player/sdk";
 
 /** The protocol version in manifest.json (the 插件 API rows of I05 and I09). */
 export const API_VERSION = "vestra/1";
@@ -30,7 +30,15 @@ export function components(app: AppInfo, node: string | null): [string, string][
 
 /** One row of the loaded-plugin list (`packages.list`). */
 export type PluginRow = { id: string; version: string; origin: string; state: string };
+/** 「来源」 in the words of 插件管理 / 商城 (内置, 仓库, 链接, 本地文件, 插件工坊; 开发加载, 试载). */
+const SOURCES: Record<string, string> = { repository: "仓库", link: "链接", file: "本地文件", workshop: "插件工坊", bundled: "内置" };
 const ORIGINS: Record<string, string> = { installed: "已安装", development: "开发加载", trial: "试载" };
+type Listed = { id: string; version: string | null; origin: string; state: string; builtin?: boolean; source?: PackageSource | null };
+function origin(p: Listed) {
+  if (p.builtin) return SOURCES.bundled!;
+  if (p.source) return SOURCES[p.source.kind] ?? p.source.kind;
+  return ORIGINS[p.origin] ?? p.origin;
+}
 const STATES: Record<string, string> = {
   starting: "启动中",
   running: "运行中",
@@ -39,13 +47,13 @@ const STATES: Record<string, string> = {
   stopped: "已停止",
 };
 /** Rows for `packages.list()` results, sorted by id. */
-export function pluginRows(plugins: { id: string; version: string | null; origin: string; state: string }[]): PluginRow[] {
+export function pluginRows(plugins: Listed[]): PluginRow[] {
   return [...plugins]
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .map((p) => ({
       id: p.id,
       version: p.version ?? UNKNOWN,
-      origin: ORIGINS[p.origin] ?? p.origin,
+      origin: origin(p),
       state: STATES[p.state] ?? p.state,
     }));
 }

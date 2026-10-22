@@ -1,7 +1,7 @@
 // 选项 ▶ 播放 ▶ 窗口: the settings page for G-02, H05 / IA-WIN-03 and B30 / G-06
 // (440 wide, the options window's page area). The same preferences as the menu items.
 // Heights (padding 14, spacing 6): title 24, section 14, radios 18, check 18,
-//   note 28, gap 8, section 14, radios 18, gap 8, section 14, check 18.
+//   note (its wrapped height: two lines at 412 wide), gap 8, section 14, radios 18, gap 8, section 14, check 18.
 import { CheckBox } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 
@@ -105,8 +105,8 @@ export component WindowSettingsPage inherits Rectangle {
             checked <=> WindowPage.auto-once;
             toggled => { WindowPage.set-auto-once(self.checked); }
         }
+        // No fixed height: the layout gives the wrapped text all its lines.
         Text {
-            height: 28px;
             text: "每个新文件拿到视频尺寸时调整一次，保持窗口左上角。全屏、迷你尺寸、画中画时不调整；播放中拖动过窗口后，这个文件不再调整。";
             font-size: Theme.font-body;
             color: Theme.text-dim;
