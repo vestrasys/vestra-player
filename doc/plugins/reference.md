@@ -67,7 +67,7 @@ interface Disposable { dispose(): Promise<void> }
 | `apiVersion` | 固定 `vestra/1` |
 | `entry` | 包内相对路径；开发时可为 `.ts`，构建后为 `.js` |
 | `capabilities` | 只能是下表中的值，不重复 |
-| `minPlayerVersion` | 可选，`x.y.z`：能加载它的最低播放器版本（播放器版本即 `plugin.app.version`，只比较三段数字）。更旧的播放器以 `versionMismatch`（「requires Vestra Player ≥ x.y.z」）拒绝；播放器先读这一项再做严格解析，所以写了新字段的包在旧播放器上报的是版本不够而不是未知字段。用到 SDK 1.1 新增的接口时写 `"0.2.0"` |
+| `minPlayerVersion` | 可选，`x.y.z`：能加载它的最低播放器版本（播放器版本即 `plugin.app.version`，只比较三段数字）。更旧的播放器以 `versionMismatch`（「requires Vestra Player ≥ x.y.z」）拒绝；播放器先读这一项再做严格解析，所以写了新字段的包在旧播放器上报的是版本不够而不是未知字段。用到 SDK 1.1 新增的接口时写 `"0.2.0"`；用到 SDK 1.3 新增的（菜单 id、`Theme.danger`、视频空链）写 `"0.3.0"` |
 
 可选的显示字段（播放器 0.2.0；商城与插件管理显示，播放器只校验不使用）：
 
@@ -99,9 +99,9 @@ interface Disposable { dispose(): Promise<void> }
 | `playback.read` | `player.state` 启动时读取、`player.refresh`、`player.stats`、`player.chapters`、`player.audioDevices`、`timeline.marks`；滤镜读取处理状态 |
 | `events` | `player.state` / `onChange` 实时更新、面板可见性、字幕状态刷新 |
 | `playback.control` | `player.open`、`setPaused`、`seek`、`setRate`、`restart`、`close`、`scrub`、`setOutput`、`provideSequence`、`next`、`previous`、`addAudioTrack`、`selectAudioTrack`、`step`、`setStepSeek`、`setLoop`、`setAudioDevice`；`power.preventSleep` |
-| `producer.av` | `player.openStream` |
-| `processing.video` | `video.filter`、`video.view`、`video.render`（另需 `playback.read`） |
-| `processing.audio` | `audio.filter`（另需 `playback.read`） |
+| `producer.av` | `player.openStream`（另需 `playback.control`：选中生成流和打开文件一样是一次来源提交） |
+| `processing.video` | `video.filter`、`video.view`、`video.render`（另需 `playback.read`；`video.filter` 还要 `events`，§8） |
+| `processing.audio` | `audio.filter`（另需 `playback.read`、`events`，§8） |
 | `subtitles.read` | `subtitles.state`、`onChange`、`refresh` |
 | `subtitles.control` | `subtitles.select`、`load`、`remove`、`setStyle` |
 | `media.read` / `media.control` | `media.capture`、`Snapshot.export`、`ExportJob`（`processed` 截图另需 `playback.read`、`subtitles.read`） |
@@ -249,7 +249,7 @@ commands.add(options: CommandOptions): Command
 
 interface CommandOptions {
   id: string;                         // 插件内唯一
-  path?: string[];                    // 菜单路径，1–8 段，最后一项是菜单项；1 段 = 顶层直接命令；省略 = 不进主菜单
+  path?: string[];                    // 菜单路径，1–8 段，最后一项是菜单项；1 段 = 顶层直接命令；省略 = 不进主菜单；第一段可写内置菜单 id，如 "@video"
   title?: string;                     // 菜单文字，默认取 path 最后一项；省略 path 时必填
   order?: number;                     // 同级排序，小的在前；整数，±1 000 000 内，默认 0
   group?: string;                     // 分组名，相邻两项分组不同时画分隔线；默认 "domain"
@@ -272,6 +272,19 @@ interface Command extends Disposable {
 }
 ```
 
+- **内置菜单 id**（播放器 0.3.0）：路径按标题精确匹配，播放器的内置菜单标题是中文，英文插件写 `["Video", "Blur"]` 会多出一个顶层菜单「Video」。要挂进内置的顶层菜单，第一段写它的 id，与播放器界面语言无关：
+
+  | id | 菜单 |
+  | --- | --- |
+  | `@open` | 打开 |
+  | `@playback` | 播放 |
+  | `@subtitles` | 字幕 |
+  | `@video` | 视频 |
+  | `@audio` | 声音 |
+  | `@screen` | 屏幕 |
+  | `@settings` | 设置 |
+
+  `["@video", "Blur"]` 与 `["视频", "Blur"]` 是同一个菜单项（重复注册一样以 `conflict` 失败）；播放器保存的是菜单标题，绑定表里的 `path` 也是标题。只有第一段按 id 解释，后面的段照常是标题；未知的 id（`@view`）或 id 后面没有菜单项（`["@video"]`）以 `invalid` 失败。写标题的旧路径照常可用。0.3.0 之前的播放器把 `@video` 当作普通标题，插件要设 `"minPlayerVersion": "0.3.0"`。SDK 常量 `MENU_IDS`（从 `@vestra-player/sdk/testing` 导入）列出全部 id，与播放器一致。
 - 菜单排序：同级按 `order` 升序；子菜单（路径中间的一段）排在它下面最靠前的命令的位置，并取该命令的 `group`。`order` 相同时按插件 id、再按同一插件的声明顺序，**不按标题排序**。`group` 只决定分隔线，不参与排序：一个分组要连在一起，它的 `order` 也要连续。
 - 推荐顶层骨架（[doc/product/menus.md](../product/menus.md) 维护顶层编号）：`open` 100–199（打开、关闭）、`domain` 200–699（播放、字幕、视频、声音、模拟器等子菜单）、`screen` 700–799（宿主「全屏」700）、`windows` 800–899（播放列表、播放信息等窗口入口）、`exit` 900–999（宿主「退出」990）。
 - 同一路径不能注册两次，也不能既是菜单项又是子菜单（`conflict`）。路径、`order`、`group`、绑定格式不合法时 `commands.add` 立即抛出 `invalid`。
@@ -393,7 +406,7 @@ interface AudioTrack {
 
 ### 5.2 控制
 
-需要 `playback.control`（`openStream` 需要 `producer.av`）。
+需要 `playback.control`（`openStream` 另需 `producer.av`）。
 
 | 方法 | 说明 |
 | --- | --- |
@@ -457,6 +470,14 @@ interface Stream extends Disposable {
 ```
 
 `frame()` 由 SDK 按音频时钟调用，不会并发调用，暂停时不调用。预填充、激活、暂停与输入确认都由 SDK 处理。
+
+限制（`frame()` 的结果不合规时 SDK 结束这个流：启动期间 `openStream` 以 `invalid` 失败，播放中 `onStop` 收到 `code: "invalid"` 的错误；SDK 1.3 之前 `code` 是 `"error"`）：
+
+- 画面：正好 `width × height × 4` 字节的 RGBA，每帧最多 4 MiB（4 194 304 字节）。1280×720（3.5 MiB）可以，1920×1080（7.9 MiB）超出；大画面请降低分辨率，播放器会缩放显示。
+- 声音：48 kHz 立体声交错的 `Float32Array`（长度为偶数），每个采样都必须是有限值且在 −1–1 之间（`NaN`、`Infinity`、溢出的混音都会结束流）；自己混音时先限幅。长度不限，SDK 按每包至多 4800 帧（100 毫秒）分包发送。
+- SDK 在 `frame()` 返回后把画面复制一次进发送缓冲区（SDK 1.3 起；之前两次），所以 `frame()` 可以复用同一个缓冲区，返回后改写它不会影响已经交出的帧。
+- `onStop` 只报告插件之外的停止：被别的来源替换、用户关闭、出错；插件自己调用 `stop()` / `dispose()`（以及停用）时不调用，`stop()` 的 promise 结束就是停止完成。
+- 生成流不经过播放器的滤镜（§8）：`video.filter` / `audio.filter` 在生成流播放期间以 `unsupported` 失败。
 
 停止（`stop()`、`dispose()`、插件停用）时 SDK 先关闭来源（仍是当前来源时），再断开画面连接，最后释放生成端（SDK 1.1.3 起；之前先断开连接，播放器会把它报成「producer transport closed」加载失败，插件不必再自己先 `close`，原有的这种写法照常可用）。播放器一侧：连接在两帧之间断开后，来源 0.5 秒内被关闭或替换就不算失败；仍选中则报 `producer transport closed`（例如插件进程崩溃）；帧中途断开、协议错误立即报告。
 
@@ -670,7 +691,7 @@ interface Window extends View, Disposable {
 - 用户点标题栏的关闭按钮，或按系统的标准关闭键（macOS ⌘W；Windows Ctrl+W、Ctrl+F4；Linux Ctrl+W；输入框获得焦点时也有效）时，播放器关闭该窗口（等同 `close()`），`opened` 变为 `false`，然后调用 `onClose` 的监听；之后 `show()` 用最新属性重新打开。插件自己调用 `close()` / `dispose()` 不触发 `onClose`。轮询之类的工作在 `onClose` 里停掉。测试里用 `host.window(id).userClose()` 模拟。
 - `create` 不会打开窗口。第一次 `show()` 时，用当前绑定的属性作为初始值打开，不会先闪一下默认值。
 - **回调必须在第一次 `show()` 之前用 `on` 绑定**，之后再绑定新的回调名会抛错。
-- 窗口 id 默认取文件名（`ui/picture.slint` → `picture`）；同一插件用同一文件开多个窗口时，用 `options.id` 区分，id 重复会抛错。
+- 窗口 id 默认取文件名（`ui/picture.slint` → `picture`）；同一插件用同一文件开多个窗口时，用 `options.id` 区分，id 重复时 `windows.create` 立即抛出 `conflict`（SDK 1.3 之前是不带 `code` 的普通 `Error`）。
 
 ### 6.3 面板 `plugin.panels`
 
@@ -736,7 +757,7 @@ interface SlotState {
 - 插件 → 界面用 `in` / `in-out property`，界面 → 插件用 `callback`。回调参数和属性值必须能用 JSON 表示（基本类型、数组、结构体），回调返回 `void`。
 - 会被插件改值的输入控件用双向绑定（`value <=> root.x`、`checked <=> root.x`）。单向的 `value: root.x` 在用户操作控件后会断开，之后插件改值，控件不会跟着动。属性须为 `in-out`。
 - `in` 属性只能单向绑定时，用 `changed x => { slider.value = root.x; }` 在模型变化时回推。
-- 主题与控件：`import { Theme } from "@vestra/theme.slint";` 提供颜色（由播放器按当前配色下发，§6.8；插件只读，不能给 `Theme` 赋值，硬编码颜色不会随配色变化）（`bg-bar`、`bg-panel`、`text`、`accent`、`playing`…）、字号（`font-xs` 9px、`font-body` 11px、`font-tab` 12px、`font-title` 13px、`font-mono` 等宽字体名（由播放器按系统设置：macOS Menlo、Windows Consolas、Linux DejaVu Sans Mono；其中的中文按系统字体回退显示））和控件尺寸（`button-height` 21px、`input-height`、`form-row-gap`、`dialog-padding`…），完整列表见 `src/host/ui/vestra/theme.slint`。`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";` 提供参考播放器样式的按钮（文字按钮 21px、`small` 18px；`text` 为空时是图标按钮：`icon` 是 Slint `Path` 的路径数据，画在 `icon-width` × `icon-height`（默认 14×12）的 viewbox 里，`stroked: true` 画 1.5px 线而不填充，`checked` 表示开启态；图标按钮的宽高由调用方设置，悬停提示用 `ToolTipArea` 包住：悬停 600ms 显示，指针离开或按下时关闭，下次悬停再显示；只读属性 `showing` 表示提示正在显示）、2px 线滑块（`panel: true` 为面板样式）和悬停提示，以及输入链接组件 `UrlInputRow`（UI-DLG-02：多行输入 + 「打开」「取消」；`in-out property <string> text`、`placeholder`、`confirm-text`（默认「打开」）、`cancel-text`、`enabled`，`callback accepted(string)`（回车或点确定，Shift+回车换行）、`cancelled()`（Esc 或点取消），`focus-input()`、`select-all()` 两个公共函数；不校验地址，校验由插件做；用法见示例 §29）。
+- 主题与控件：`import { Theme } from "@vestra/theme.slint";` 提供颜色（由播放器按当前配色下发，§6.8；插件只读，不能给 `Theme` 赋值，硬编码颜色不会随配色变化）（`bg-bar`、`bg-panel`、`text`、`accent`、`playing`、`danger`（错误与危险操作：失败状态、删除按钮；播放器 0.3.0，SDK 1.3）…）、字号（`font-xs` 9px、`font-body` 11px、`font-tab` 12px、`font-title` 13px、`font-mono` 等宽字体名（由播放器按系统设置：macOS Menlo、Windows Consolas、Linux DejaVu Sans Mono；其中的中文按系统字体回退显示））和控件尺寸（`button-height` 21px、`input-height`、`form-row-gap`、`dialog-padding`…），完整列表见 `src/host/ui/vestra/theme.slint`。`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";` 提供参考播放器样式的按钮（文字按钮 21px、`small` 18px；`text` 为空时是图标按钮：`icon` 是 Slint `Path` 的路径数据，画在 `icon-width` × `icon-height`（默认 14×12）的 viewbox 里，`stroked: true` 画 1.5px 线而不填充，`checked` 表示开启态；图标按钮的宽高由调用方设置，悬停提示用 `ToolTipArea` 包住：悬停 600ms 显示，指针离开或按下时关闭，下次悬停再显示；只读属性 `showing` 表示提示正在显示）、2px 线滑块（`panel: true` 为面板样式）和悬停提示，以及输入链接组件 `UrlInputRow`（UI-DLG-02：多行输入 + 「打开」「取消」；`in-out property <string> text`、`placeholder`、`confirm-text`（默认「打开」）、`cancel-text`、`enabled`，`callback accepted(string)`（回车或点确定，Shift+回车换行）、`cancelled()`（Esc 或点取消），`focus-input()`、`select-all()` 两个公共函数；不校验地址，校验由插件做；用法见示例 §29）。
 - 所有插件 Slint 都以 `fluent-dark` 风格编译：std-widgets 的控件默认是深色。每个窗口都用系统默认字体，字体里没有的字（例如西文字体里的中文）由 Slint 按字符回退到系统里有这个字的字体，插件不需要自己设字体；插件写的 `default-font-family` / `font-family` 照常生效，缺字同样回退。播放器不内置界面字体。
 - 编辑器里要让 `@vestra/...` 导入可解析，给 Slint 语言服务设 `libraryPaths`：`{ "vestra": "<仓库>/src/host/ui/vestra" }`。
 
@@ -871,14 +892,14 @@ dialogs.confirm(options: {
 
 ## 8. 视频与音频滤镜
 
-需要 `processing.video` / `processing.audio`，以及 `playback.read`。
+需要 `processing.video` / `processing.audio`，以及 `playback.read` 和 `events`。没有 `events` 时 SDK 收不到来源变化：媒体就绪前设的值一直停在 `waiting`，换片源后失败状态也不会自动清除。
 
 ```ts
 plugin.video.filter(id: string): VideoFilter  // Filter<VideoNode[]>
 plugin.audio.filter(id: string): AudioFilter  // Filter<{ nodes: AudioNode[]; delayMs?: number }>
 
 interface Filter<T> extends Disposable {
-  set(value: T): void;          // 期望的处理链；最后写入生效；空链 = 撤销本插件的效果
+  set(value: T): void;          // 期望的处理链；最后写入生效；空链 = 撤销本插件的这条链
   readonly status: FilterStatus;
   onStatus(listener: (s: FilterStatus) => void): Disposable;
   retry(): void;                // 重新检查并再次应用当前值
@@ -895,6 +916,9 @@ type FilterStatus =
 - 换片源后，SDK 自动把当前值重新应用到新来源。
 - 拖动滑块时连续调用 `set`：同一时间只有一个请求在途，只保留最新值。
 - `failed` 之后不会自动重试，直到下一次 `set()`、`retry()` 或来源变化。`error.code === "backend-uncertain"` 表示播放器后端暂时阻塞了该阶段。
+- **空链**（视频 `set([])`，音频 `nodes: []` 且 `delayMs` 为 0）删除本插件的这条链，其它插件不受影响；从未应用过时什么都不发送。播放器 0.3.0 之前视频空链以 `invalid`（「resource must contain a node」）失败，效果留在画面上；音频一直可以。
+- **生成流**（`openStream`，§5.2）的画面和声音不经过播放器的解码管线，处理链对它不起作用：生成流播放期间 `set` 非空链以 `{ state: "failed", error.code: "unsupported" }` 结束（不轮询；播放器 0.3.0 之前一直停在 `waiting` 并每 250 毫秒重试），空链照常删除。值保留，来源换成文件后 SDK 自动重新应用。
+- **硬件解码**：滤镜是 FFmpeg 的软件滤镜，需要内存里的帧。GPU 渲染默认的零拷贝硬件解码（`hwdec=auto-safe`，macOS 上是 VideoToolbox）把帧留在显存里，mpv 配置不了滤镜图，只写一行日志就把它丢掉（播放器 0.3.0 之前的缺陷：状态是 `applied`，画面却没变）。播放器 0.3.0 起，只要有任何插件的视频链，就改用同一解码器的回拷模式（`auto-copy-safe`，仍是硬件解码，`stats().video.hwdec` 报 `videotoolbox-copy`），链全部删除后恢复；切换时解码器重新初始化，画面可能停顿一下。
 
 节点类型与取值范围（超出范围以 `invalid` 失败）：
 
@@ -1196,12 +1220,12 @@ interface PackageChange {
 
 | code | 含义 |
 | --- | --- |
-| `stale` | 条件不再成立（来源或字幕选择已被改变），**什么都没做** |
+| `stale` | 条件不再成立（来源或字幕选择已被改变），**什么都没做**。`staleDigest`：`PackageCandidate.install` 时候选包的文件在 `validate` 之后变了，重新 `validate` |
 | `missing` | 面板位置为空；`showMenu` 的命令不属于本插件；`system.reveal` / `openPath` 的路径不存在；`clipboard.writeImage` 的文件不存在 |
-| `unsupported` | 也用于当前系统做不到的功能（各节的平台差异、§16.7），如 Linux 上的剪贴板、确认框、`system.*`、`secrets` |
+| `unsupported` | 也用于当前系统做不到的功能（各节的平台差异、§16.7），如 Linux 上的剪贴板、确认框、`system.*`、`secrets`；以及当前来源做不到的，如生成流上的滤镜（§8） |
 | `capability` | manifest 未声明所需能力 |
 | `invalid` | 参数不合法（如滤镜值超出范围） |
-| `busy`、`conflict`、`unavailable`、`unsupported` | 播放器拒绝接纳，未执行（`conflict` 也用于已有别的播放序列提供者；`unavailable` 也用于 `next`/`previous` 不可用、面板未显示、无界面模式） |
+| `busy`、`conflict`、`unavailable`、`unsupported` | 播放器拒绝接纳，未执行（`conflict` 也用于已有别的播放序列提供者、菜单路径已被占用，以及同一插件里重复的窗口 id 或命令 id；`unavailable` 也用于 `next`/`previous` 不可用、面板未显示、无界面模式） |
 | `backend` | 载入或解析失败，`message` 为后端原因 |
 | `disabled` | 插件正在停用 |
 | `replaced` | 已被接受，但完成前被另一个来源替换（`open`、`openStream`、`media.ready`） |
@@ -1213,6 +1237,8 @@ interface PackageChange {
 | `cleanup` | `trial.stop()` 未确认清理，可再次调用 |
 | `limit` | 超出播放器的数量上限（如命令数，§4；密钥名字数，§16.6） |
 | `versionMismatch` | 包的 `minPlayerVersion` 高于本播放器（`validate`、`validateArchive`；§2） |
+| `noSource` | `media.capture`：没有可截图的来源 |
+| `released`、`disposed` | 已 `release()` 的 `Snapshot` 再 `export`；已释放的 `ExportJob` 句柄还在等结果 |
 | `unknown`、`rejected`、`expired` | 传输异常后 SDK 查询仍无法确认结果（正常情况下不会出现） |
 
 处理函数里抛出的错误交给所在作用域的 `onError`。忘记 `await` 的 promise 被拒绝时只写日志，不会让插件进程崩溃。
@@ -1406,6 +1432,18 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | `Theme.font-mono` §6.4 | Menlo | Consolas | DejaVu Sans Mono |
 
 ## 17. 变更说明
+
+### 滤镜与示例作者发现的缺口（2026-10，播放器 0.3.0，SDK 1.3.0）
+
+新增与修正，原有写法照常可用。用到新增项的插件设 `"minPlayerVersion": "0.3.0"`。
+
+- **视频滤镜在 GPU 渲染下不起作用（缺陷）**：零拷贝硬件解码的帧到不了 FFmpeg 软件滤镜，mpv 静默丢掉整条链，状态却是 `applied`（§8）。现在有视频链时改用回拷硬件解码。所有视频滤镜插件（含内置 video）都受影响，软件渲染（Windows、`VESTRA_SOFTWARE_RENDER=1`）不受影响。
+- **视频空链**：`video.filter(id).set([])` 删除这条链（之前以 `invalid` 失败，效果留在画面上）。`TestHost` 与播放器一致：空链删除资源，生成流上的非空链 `unsupported`；一致性由 `tests/sdk/host-agreement.test.ts` 按 `host/tests/fixtures/processing-conformance.json` 的用例检查，宿主的 `processing.rs` 跑同一份用例。
+- **生成流上的滤镜**：以 `unsupported` 失败，不再一直 `waiting` 并轮询（§8）。
+- **内置菜单 id**：路径第一段写 `@video`、`@audio` 等（§4），与界面语言无关。SDK 常量 `MENU_IDS`。
+- **`Theme.danger`**：错误与危险操作的颜色（Vestra `#ff5a4a`，参考播放器 `#e04343`；§6.4）。SDK 1.3.0 带同步的 `theme.slint`、`palette.slint`。
+- 文档补齐：滤镜需要 `events`（§8）；`openStream` 另需 `playback.control`（§2、§5.2）；生成流的帧大小与采样限制、`onStop` 不为插件自己的 `stop()` 调用（§5.2）；错误码 `staleDigest`、`noSource`、`released`、`disposed`（§13）。
+- SDK：重复的窗口 id、命令 id 抛出 `conflict`（之前是不带 `code` 的 `Error`）；不合规的生成帧以 `invalid` 结束流（之前 `code` 为 `error`）；生成帧发送时只复制一次（之前两次）。
 
 ### 系统默认字体、标准关闭键（2026-10，SDK 1.1.3）
 
