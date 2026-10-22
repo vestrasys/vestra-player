@@ -19,6 +19,7 @@
 | `.github/actions/setup-libmpv` | macOS：`brew install mpv`。Windows：固定版本的 shinchiro mpv-dev（校验 SHA-256，缓存），从 `libmpv-2.dll` 的导出表生成 MSVC 用的 `mpv.lib`。设 `MPV_LIBRARY_DIR`（rsmpv-sys 的 build.rs 读它），DLL 目录加进 PATH |
 | `.github/scripts/plan.sh` | ci.yml 的 plan：按改动的路径决定跑什么 |
 | `rust-toolchain.toml`、`src/host/deny.toml`、`_typos.toml`、`.github/zizmor.yml` | 工具配置 |
+| `.gitattributes` | 所有检出都用 LF（Windows 默认会转成 CRLF，测试比较源码文本会失败） |
 | `src/scripts/check-unsafe-policy.mjs` | unsafe 规则（见下） |
 
 ## ci.yml 的阶段
@@ -91,3 +92,13 @@ npm run ci:local -- --advisories  # 另查 RustSec 公告
 ## 成本
 
 计费倍数：Linux 1、Windows 2、macOS 10，每个 job 按分钟向上取整。缓存只有 main 写，feature 分支读 main 的缓存；main 还没跑过时分支都是冷缓存。
+
+实测（2026-10-22，`ci/rework` 分支，全部冷缓存）：
+
+| 运行 | job（分钟） | 墙钟 | 计费分钟 |
+| --- | --- | --- | --- |
+| push，只有 static（[39759385214](https://github.com/vestrasys/vestra-player/actions/runs/39759385214)） | plan 0.1 · lint 0.5 · ts 3.8 · ci-ok 0.1 | 4.1 | 7 |
+| push，static + Windows（[39754674923](https://github.com/vestrasys/vestra-player/actions/runs/39754674923)） | 同上 + windows 8.0（clippy 3.4、test 3.3、doc 0.1） | 12.1 | 23 |
+| 手动 full（[39760523366](https://github.com/vestrasys/vestra-player/actions/runs/39760523366)） | + audit 0.4 · windows 7.9 · macos 1.8（clippy 0.6、test 0.6） | 12.5 | 45 |
+
+macOS（macos-15 arm64）编译比 Windows 快得多，按 10 倍计费仍是最贵的一项。
