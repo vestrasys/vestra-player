@@ -34,7 +34,7 @@ has() { [ "$all" = true ] || printf '%s\n' "$files" | grep -Eq "$1"; }
 # What the host build-test jobs depend on: the Rust workspace and the Node
 # runtime its tests start (src/runtime, the SDK in src/package*.json). CI
 # changes test everything they could affect.
-host=false; has '^(src/host/|src/runtime/|src/package(-lock)?\.json$|rust-toolchain\.toml$|\.github/)' && host=true
+host=false; has '^(src/host/|src/runtime/|src/package(-lock)?\.json$|rust-toolchain\.toml$|\.gitattributes$|\.github/)' && host=true
 lock=false; has '^(src/host/Cargo\.lock|src/host/deny\.toml|\.github/workflows/_audit\.yml)$' && lock=true
 docs_only=true
 if [ "$all" = true ] || printf '%s\n' "$files" | grep -Ev '^$|^doc/|\.md$' | grep -q .; then

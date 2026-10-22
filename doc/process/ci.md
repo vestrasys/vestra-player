@@ -44,7 +44,7 @@ plan [ubuntu]  改动路径 → docs_only, host, lock, run_windows, run_macos
 └─ ci-ok  if: always()；任一 needs 为 failure/cancelled 就失败（跳过算通过）
 ```
 
-- `host` = 改了 `src/host/`、`src/runtime/`、`src/package*.json`、`rust-toolchain.toml` 或 `.github/`（host 的测试会启动 Node 插件运行器）。
+- `host` = 改了 `src/host/`、`src/runtime/`、`src/package*.json`、`rust-toolchain.toml`、`.gitattributes` 或 `.github/`（host 的测试会启动 Node 插件运行器）。
 - `run_windows` = `host` 或 `full`。`run_macos` = `full`，或目标为 main 的 PR 且 `host`。
 - 只改 `doc/` 或 `*.md`：只跑 plan 和 ci-ok。
 - 同一个分支有 PR 时，push 和 pull_request 各跑一次（concurrency 组不同）；PR 那次多跑 macOS。
