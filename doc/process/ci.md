@@ -58,6 +58,8 @@ plan [ubuntu]  改动路径 → docs_only, host, lock, run_windows, run_macos
 
 - `npm run portability` 在 CI 里只跑系统命令扫描（`--skip-host`）。它的宿主部分（在 macOS 上对 Windows 目标 `cargo check`）由 windows job 的真实编译、clippy、测试代替。
 - `cargo clippy` / `cargo test` 用 `--workspace`，三个 unsafe crate 也检查、测试。
+- `cargo test` 加 `--no-fail-fast`，一个测试程序失败后其余照跑。
+- 需要 GPU 的测试（`unsafe/render` 的两个 OpenGL 测试）标了 `#[ignore]`：CI 的 macOS 虚拟机建不出 OpenGL 4.1 上下文。`ci:local` 用 `--include-ignored` 在本机跑它们。
 - `cargo doc` 只在 Windows 上跑。
 
 ## unsafe 规则

@@ -55,7 +55,10 @@ const steps = [
           host,
           "cargo clippy --locked --workspace --all-targets -- -D warnings",
         ],
-        [host, "cargo test --locked --workspace"],
+        [
+          host,
+          "cargo test --locked --workspace --no-fail-fast -- --include-ignored",
+        ],
         [
           host,
           "cargo doc --locked --no-deps --workspace --document-private-items",

@@ -48,8 +48,9 @@ jobs:
       - uses: ./.github/actions/setup-node
       - name: cargo clippy
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      # Tests that need a GPU are #[ignore]d (CI VMs have none); ci:local runs them.
       - name: cargo test
-        run: cargo test --locked --workspace
+        run: cargo test --locked --workspace --no-fail-fast
       # Runs even when the tests failed, for one more signal per run.
       - name: cargo doc
         if: ${{ !cancelled() && inputs.doc }}
