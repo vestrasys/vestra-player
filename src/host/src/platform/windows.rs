@@ -488,12 +488,13 @@ pub fn hide_console(command: &mut std::process::Command) {
 mod tests {
     use super::*;
 
-    /// `.cargo/config.toml`: no VC++ redistributable needed.
-    #[test]
+    /// `.cargo/config.toml`: no VC++ redistributable needed. Checked when
+    /// the tests compile (a build without the flag does not compile them).
     #[cfg(target_env = "msvc")]
-    fn the_c_runtime_is_linked_in_statically() {
-        assert!(cfg!(target_feature = "crt-static"));
-    }
+    const _: () = assert!(
+        cfg!(target_feature = "crt-static"),
+        "build with +crt-static (src/host/.cargo/config.toml; RUSTFLAGS replaces it)"
+    );
 
     #[test]
     fn the_build_number_names_the_release() {
