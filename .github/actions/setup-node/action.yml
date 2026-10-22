@@ -1,0 +1,23 @@
+name: Set up Node
+description: >
+  Node with the npm cache, then `npm ci` in src/ and in every plugin that has
+  its own package-lock.json (nes, workshop).
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version: "26"
+        cache: npm
+        cache-dependency-path: |
+          src/package-lock.json
+          src/plugins/*/package-lock.json
+    - name: npm ci
+      shell: bash
+      working-directory: src
+      run: |
+        npm ci --no-audit --no-fund
+        for lock in plugins/*/package-lock.json; do
+          echo "npm ci in ${lock%/package-lock.json}"
+          (cd "${lock%/package-lock.json}" && npm ci --no-audit --no-fund)
+        done

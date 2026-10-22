@@ -1,0 +1,98 @@
+# Entry workflow for branches and pull requests: orchestration only, the checks
+# live in the _*.yml reusable workflows (doc/process/ci.md). main has main.yml.
+name: CI
+
+on:
+  push:
+    branches: ["**", "!main"]
+    tags-ignore: ["**"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      full:
+        description: Run everything, macOS included.
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      docs_only: ${{ steps.plan.outputs.docs_only }}
+      host: ${{ steps.plan.outputs.host }}
+      lock: ${{ steps.plan.outputs.lock }}
+      run_windows: ${{ steps.plan.outputs.run_windows }}
+      run_macos: ${{ steps.plan.outputs.run_macos }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          FULL: ${{ inputs.full || false }}
+          BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.base_ref }}
+        run: bash .github/scripts/plan.sh
+
+  static:
+    needs: plan
+    if: needs.plan.outputs.docs_only != 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_static.yml
+
+  audit:
+    needs: plan
+    if: needs.plan.outputs.lock == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_audit.yml
+    with:
+      blocking: false
+
+  windows:
+    needs: [plan, static]
+    if: needs.plan.outputs.run_windows == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_build-test.yml
+    with:
+      os: windows
+      doc: true
+
+  macos:
+    needs: [plan, static]
+    if: needs.plan.outputs.run_macos == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_build-test.yml
+    with:
+      os: macos
+
+  # The one required check: fails when anything failed or was cancelled;
+  # skipped jobs count as passed.
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [plan, static, audit, windows, macos]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Fail when a needed job failed or was cancelled
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+      - run: echo "all needed jobs passed or were skipped"

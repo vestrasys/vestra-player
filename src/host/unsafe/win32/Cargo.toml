@@ -12,5 +12,13 @@ description = "Win32 calls the host's Windows platform module needs (pointer, mo
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Power", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
 
+# Not `workspace = true` (that would forbid unsafe); src/scripts/check-unsafe-policy.mjs
+# requires these entries.
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"
+missing_safety_doc = "deny"
+dbg_macro = "warn"
+todo = "warn"

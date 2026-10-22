@@ -1,0 +1,48 @@
+# cargo-deny: licenses, bans, sources, advisories (doc/process/ci.md).
+# Run from src/host: `cargo deny check` (all four) or `cargo deny check licenses bans sources`.
+
+[graph]
+# Every platform the host ships on; add Linux/Android/iOS targets with the ports.
+targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-pc-windows-msvc"]
+all-features = true
+
+[advisories]
+yanked = "deny"
+
+[licenses]
+# vestra-host is GPL-3.0-or-later: only GPLv3-compatible licenses are allowed.
+# Anything else (GPL-2.0-only, AGPL, SSPL, proprietary, unknown) fails.
+allow = [
+  "MIT",
+  "MIT-0",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Zlib",
+  "Unicode-3.0",
+  "MPL-2.0",
+  "BSL-1.0",
+  "CC0-1.0",
+  "0BSD",
+  "LGPL-2.1-or-later",
+  "LGPL-3.0-or-later",
+  "GPL-3.0-or-later",
+  # Slint is "GPL-3.0-only OR LicenseRef-Slint-..."; we take GPL-3.0-only,
+  # which a GPL-3.0-or-later program may use (the combined work is GPLv3).
+  "GPL-3.0-only",
+  "OFL-1.1",
+  "Unlicense",
+]
+confidence-threshold = 0.9
+
+[bans]
+wildcards = "deny"
+# Path dependencies inside the workspace have no version.
+allow-wildcard-paths = true
+multiple-versions = "warn"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

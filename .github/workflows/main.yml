@@ -1,0 +1,50 @@
+# Every push to main: everything, both systems. These runs write the cargo
+# caches that branch runs restore (doc/process/ci.md).
+name: main
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: main-${{ github.ref }}
+  # Let each main run finish: it is the one that saves the caches.
+  cancel-in-progress: false
+
+jobs:
+  static:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_static.yml
+
+  windows:
+    needs: static
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_build-test.yml
+    with:
+      os: windows
+      doc: true
+
+  macos:
+    needs: static
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_build-test.yml
+    with:
+      os: macos
+
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [static, windows, macos]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Fail when a needed job failed or was cancelled
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+      - run: echo "all needed jobs passed"

@@ -1,0 +1,42 @@
+# RustSec advisories (cargo-deny). Separate from _static: a new advisory can
+# appear any day without a change here, so ci.yml runs it only when Cargo.lock
+# or deny.toml changes and nightly.yml runs it every day.
+name: audit
+
+on:
+  workflow_call:
+    inputs:
+      blocking:
+        description: >
+          Fail the job on an advisory. ci.yml passes false (the advisory is
+          reported as a warning and does not block the branch); nightly blocks.
+        type: boolean
+        default: true
+
+permissions: {}
+
+jobs:
+  advisories:
+    name: advisories
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2.87.30
+        with:
+          tool: cargo-deny@0.20.2
+      - uses: ./.github/actions/setup-rust
+        with:
+          cache: "false"
+      - name: cargo deny check advisories
+        id: deny
+        continue-on-error: ${{ !inputs.blocking }}
+        working-directory: src/host
+        run: cargo deny --locked check advisories
+      - name: Report a non-blocking advisory
+        if: steps.deny.outcome == 'failure'
+        run: echo "::warning title=RustSec advisory::cargo deny check advisories failed; see the step log. nightly.yml fails on it."

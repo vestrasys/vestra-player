@@ -1,0 +1,31 @@
+# typos (https://github.com/crate-ci/typos): run from the repository root, `typos`.
+[files]
+extend-exclude = [
+  # Third-party code shipped with the workshop plugin.
+  "src/plugins/*/vendor/",
+  # Raw research captures (extracted strings, hashes, symbol names).
+  "doc/product/research/",
+  "*.lock",
+  "package-lock.json",
+]
+
+[default]
+extend-ignore-re = [
+  # Hex digests and evidence ids.
+  "[0-9a-f]{16,}",
+]
+
+[default.extend-words]
+# mpv/FFmpeg filter and option names: `anull`, deband `1thr`…`4thr`.
+anull = "anull"
+thr = "thr"
+# The HTML media event name, used for mpv seeks too.
+seeked = "seeked"
+# File-name fixtures in the similar-files tests and docs (`abc-01`, `abd-01`).
+abd = "abd"
+# `flate2`, the deflate crate.
+flate = "flate"
+
+[default.extend-identifiers]
+# A deliberately misspelled field in the store API proposal's example.
+capabilties = "capabilties"

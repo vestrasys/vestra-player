@@ -16,5 +16,13 @@ objc2-io-surface = { version = "=0.3.2", default-features = false, features = ["
 rsmpv = { version = "=0.2.1", features = ["render"] }
 slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2"] }
 
+# Not `workspace = true` (that would forbid unsafe); src/scripts/check-unsafe-policy.mjs
+# requires these entries.
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"
+missing_safety_doc = "deny"
+dbg_macro = "warn"
+todo = "warn"

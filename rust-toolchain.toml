@@ -1,0 +1,6 @@
+# The Rust toolchain CI uses (doc/process/ci.md). Bump it on purpose, in its own
+# commit; rustup installs it on first use. (Homebrew Rust ignores this file.)
+[toolchain]
+channel = "1.99.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

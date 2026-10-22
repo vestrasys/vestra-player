@@ -1,0 +1,79 @@
+# Static checks on Ubuntu: the gate before any Windows/macOS build.
+# Called by ci.yml, main.yml and release.yml (doc/process/ci.md).
+name: static
+
+on:
+  workflow_call:
+
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  lint:
+    name: lint (rust, typos, workflows)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2.87.30
+        with:
+          tool: typos@1.51.1,actionlint@1.7.12,zizmor@1.31.1,cargo-deny@0.20.2,cargo-shear@1.14.0
+      - name: typos
+        run: typos
+      - name: actionlint
+        run: actionlint
+      - name: zizmor
+        run: zizmor --offline --persona regular .github
+      - uses: ./.github/actions/setup-rust
+        with:
+          cache: "false"
+      - name: cargo fmt --check
+        working-directory: src/host
+        run: cargo fmt --all --check
+      - name: cargo deny (licenses, bans, sources)
+        working-directory: src/host
+        run: cargo deny --locked check licenses bans sources
+      - name: cargo shear (unused dependencies)
+        working-directory: src/host
+        run: cargo shear
+      - name: unsafe policy
+        run: node src/scripts/check-unsafe-policy.mjs
+
+  ts:
+    name: ts (runtime, plugins, SDK copy)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: src
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-node
+      - run: npm run check
+      - run: npm run format:check
+      - run: npm run boundaries
+      # The host half of `portability` (cargo check for Windows) is covered by
+      # the real Windows build-test job; here only the system-command scan.
+      - run: npm run portability -- --skip-host
+      - run: npm run test:sdk
+      - run: npm run plugins:build
+      - name: plugin tests (every plugin)
+        run: npm run plugin -- test --all
+      - name: SDK Slint copy matches host/ui
+        run: npm run sdk:sync-slint
+      - name: nothing generated differs from git
+        run: |
+          git status --porcelain
+          git diff --exit-code
+          test -z "$(git status --porcelain)"

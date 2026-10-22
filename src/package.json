@@ -12,7 +12,9 @@
     "plugin": "node scripts/plugin.mjs",
     "plugins:build": "node scripts/plugin.mjs build --all",
     "test:sdk": "node --test tests/sdk/",
-    "portability": "node scripts/check-portability.mjs"
+    "portability": "node scripts/check-portability.mjs",
+    "unsafe-policy": "node scripts/check-unsafe-policy.mjs",
+    "ci:local": "node scripts/ci-local.mjs"
   },
   "dependencies": {
     "@vestra-player/sdk": "^1.1.3"
