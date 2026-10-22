@@ -153,3 +153,11 @@ Contributing · License（各一行）
 3. 滤镜文档漏写 `events` 能力：没有 `events` 时 SDK 看不到来源变化，媒体就绪前设的值会一直 `waiting`。`VideoFilter`、`Scope.video` 的说明要补。
 4. `Theme` 没有错误或危险色，失败状态只能用 `accent`。
 5. `vestra-plugin check` 在 SDK 仓库里会继承根 tsconfig（`rootDir: src`），示例全部报 TS6059；已交给基础 agent 统一处理。
+
+来自 signal-generator（examples/signal-generator 27c37ac）：
+6. **生成流的音频不经过播放器的音频滤镜**：宿主拒绝对流来源设处理链，SDK 每 250 ms 重试并一直报 `waiting`；没有文档，TestHost 行为也与播放器不同（会对流应用处理链）。要么让流的音频走处理链，要么写明限制并给出最终状态而不是轮询。
+7. **`openStream` 实际还需要 `playback.control`**（选中来源走 `source.submit`），getting-started、类型注释和 reference §2/§5.2 只写了 `producer.av`。
+8. 未写明的限制：单帧最大 4 MiB（1920×1080 RGBA 会被拒）；采样值必须有限且在 ±1 内，否则流结束；每帧发送时复制两次。
+9. `Stream.onStop` 不为插件自己的 `stop()` 触发（行为正确，文档没写）。
+10. 长时间 `run` 里等待 `openStream` 时，窗口绑定属性不会刷新，需要 `plugin.update()` 才显示「Starting…」——值得写成操作指南。
+11. npm 11 不对 `file:../..` 依赖执行 `prepare`，示例安装前要先在根目录构建 `dist/`（已写进检查脚本）。
