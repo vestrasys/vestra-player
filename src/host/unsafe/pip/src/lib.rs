@@ -11,7 +11,7 @@
 //! Measured 2026-10-21 with the offline probe, this crate's `check` example
 //! and the host on macOS 26.2; Apple feedback FB22411168 describes the same.
 //! So while the PiP window is open the layer takes the panel's content size
-//! ([`Pip::place`] reads it each tick, so resizing the PiP window follows),
+//! (`Pip::place` reads it each tick, so resizing the PiP window follows),
 //! and the frames must have the picture's own shape (no bars, the host's
 //! job): the panel opens with the frame's shape and the layer, of the same
 //! shape, then shows the whole frame filling it.
@@ -27,11 +27,11 @@
 //! covered). A rebuilt main window only changes the parent, so PiP survives
 //! it.
 //!
-//! **Frames.** [`Pip::enqueue`] copies RGB24 into a pooled, IOSurface-backed
-//! BGRA `CVPixelBuffer`; [`Pip::enqueue_surface`] wraps an IOSurface the GPU
+//! **Frames.** `Pip::enqueue` copies RGB24 into a pooled, IOSurface-backed
+//! BGRA `CVPixelBuffer`; `Pip::enqueue_surface` wraps an IOSurface the GPU
 //! renderer drew (no copy). Either is wrapped in a `CMSampleBuffer` marked
 //! "display immediately". The renderer's timebase only tells AVKit's buttons
-//! and scrubber where playback is ([`Pip::set_playback`]).
+//! and scrubber where playback is (`Pip::set_playback`).
 //!
 //! `cargo run -p vestra-pip --example check` checks all this without Vestra
 //! (see the example for the host-like options).
