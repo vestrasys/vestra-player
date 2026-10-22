@@ -54,6 +54,10 @@ export type PluginSpec = {
   readme?: string | null;
   changelog?: string | null;
   iconUrl?: string | null;
+  /** Served at iconUrl. */
+  icon?: Buffer;
+  /** Publish iconSha256/iconSize, readmeSha256/… like the current plugins repository. */
+  hashes?: boolean;
   versions: VersionSpec[];
 };
 
@@ -74,8 +78,26 @@ export function buildIndex(
     plugins: plugins.map((p) => {
       const readmeUrl = p.readme === null ? null : `${root}assets/${p.id}/README.md`;
       const changelogUrl = p.changelog === null || p.changelog === undefined ? null : `${root}assets/${p.id}/CHANGELOG.md`;
-      if (readmeUrl) net.route(readmeUrl, { body: p.readme ?? `# ${p.name ?? p.id}\n\n说明正文。` });
+      const readme = Buffer.from(p.readme ?? `# ${p.name ?? p.id}\n\n说明正文。`);
+      if (readmeUrl) net.route(readmeUrl, { body: readme });
       if (changelogUrl) net.route(changelogUrl, { body: p.changelog! });
+      if (p.iconUrl && p.icon) net.route(p.iconUrl, { body: p.icon });
+      const check = (url: string | null | undefined, bytes: Buffer | undefined) =>
+        url && bytes ? { sha256: sha256(bytes), size: bytes.length } : { sha256: null, size: null };
+      const hashes = p.hashes
+        ? Object.fromEntries(
+            (
+              [
+                ["icon", check(p.iconUrl, p.icon)],
+                ["readme", check(readmeUrl, readme)],
+                ["changelog", check(changelogUrl, p.changelog ? Buffer.from(p.changelog) : undefined)],
+              ] as const
+            ).flatMap(([name, c]) => [
+              [`${name}Sha256`, c.sha256],
+              [`${name}Size`, c.size],
+            ]),
+          )
+        : {};
       return {
         id: p.id,
         name: p.name ?? p.id,
@@ -87,6 +109,7 @@ export function buildIndex(
         iconUrl: p.iconUrl ?? null,
         readmeUrl,
         changelogUrl,
+        ...hashes,
         sourceUrl: `https://github.com/example/${p.id}`,
         versions: p.versions.map((v) => {
           const capabilities = v.capabilities ?? ["commands"];
@@ -222,6 +245,7 @@ export async function start(
     player?: string;
     host?: TestHost;
     now?: () => number;
+    keys?: KeyObject[];
   } = {},
 ) {
   const net = options.net ?? new FakeNet();
@@ -259,7 +283,7 @@ export async function start(
     async (plugin: Plugin) => {
       store = await startStore(plugin, {
         fetch: net.fetch,
-        keys: [pair.publicKey],
+        keys: options.keys ?? [pair.publicKey],
         now: options.now ?? (() => Date.now()),
         officialUrl: OFFICIAL,
         log: (line) => logs.push(line),

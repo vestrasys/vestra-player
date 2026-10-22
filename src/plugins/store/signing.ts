@@ -1,5 +1,7 @@
 import { createPublicKey, verify, type KeyObject } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /**
  * The official repository's index signing key: `keys/index-signing.pub.pem`,
@@ -9,10 +11,25 @@ import { readFileSync } from "node:fs";
  */
 export const OFFICIAL_KEY_FILE = new URL("./keys/index-signing.pub.pem", import.meta.url);
 
-export function officialKeys(): KeyObject[] {
-  const key = createPublicKey({ key: readFileSync(OFFICIAL_KEY_FILE, "utf8"), format: "pem" });
-  if (key.asymmetricKeyType !== "ed25519") throw new Error("the official index key is not Ed25519");
-  return [key];
+export const OFFICIAL_KEYS_DIRECTORY = new URL("./keys/", import.meta.url);
+
+/**
+ * Every `keys/*.pub.pem` in the package (the plugins repository's keys; two
+ * during a key rotation). A signature that verifies with any of them counts,
+ * so a rotation needs only a store release that adds the next key.
+ */
+export function officialKeys(directory: string | URL = OFFICIAL_KEYS_DIRECTORY): KeyObject[] {
+  const root = typeof directory === "string" ? directory : fileURLToPath(directory);
+  const keys = readdirSync(root)
+    .filter((name) => name.endsWith(".pub.pem"))
+    .sort()
+    .map((name) => {
+      const key = createPublicKey({ key: readFileSync(join(root, name), "utf8"), format: "pem" });
+      if (key.asymmetricKeyType !== "ed25519") throw new Error(`${name} is not an Ed25519 key`);
+      return key;
+    });
+  if (!keys.length) throw new Error("no official index key");
+  return keys;
 }
 
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
