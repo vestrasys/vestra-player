@@ -47,6 +47,21 @@ const measured = async (host: TestHost) => {
   await new Promise((resolve) => setTimeout(resolve, 500));
   await host.settle();
 };
+/**
+ * Poll an observable result, then settle. `host.settle()` waits only for host calls, not for
+ * the plugin's own file-system work (shader folder scan and copy) or timers (the source-rate
+ * read), so assert after those this way. The settle afterwards matters: `host.sent` records a
+ * request before the host handles it, and window properties arrive one call each.
+ */
+async function until(host: TestHost, predicate: () => boolean | Promise<boolean>, what = "condition") {
+  for (let i = 0; i < 1200; i++) {
+    if (await predicate()) return host.settle();
+    await new Promise((done) => setTimeout(done, 5));
+  }
+  assert.fail(`timed out waiting for ${what}`);
+}
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+const blendNode = (host: TestHost, fps: number) => () => same(chain(host).at(-1), { kind: "frameBlend", fps });
 async function withData(run: (data: string) => Promise<void>) {
   const data = await mkdtemp(join(tmpdir(), "vestra-video-"));
   try {
@@ -673,7 +688,7 @@ test("E18: 倍帧 reads the source rate without frameBlend, then adds it last; a
   assert.equal(host.command("video.frame-blend").state.checked, true);
   assert.equal(window.props["blend-enabled"], true);
   assert.equal(node(host, "frameBlend"), undefined, "not before the rate is read");
-  await measured(host);
+  await until(host, blendNode(host, 48), "the 24 fps rate read");
   assert.deepEqual(chain(host).at(-1), { kind: "frameBlend", fps: 48 });
   assert.equal(window.props["blend-note"], "");
   // Now stats() reports the blended rate; a new 60 fps source is read again without the node.
@@ -681,14 +696,14 @@ test("E18: 倍帧 reads the source rate without frameBlend, then adds it last; a
   host.openElsewhere("/sport60.mp4");
   await host.settle();
   assert.equal(node(host, "frameBlend"), undefined);
-  await measured(host);
+  await until(host, () => window.props["blend-note"] === "当前帧率已足够", "the 60 fps rate read");
   assert.equal(node(host, "frameBlend"), undefined, "60 fps is smooth enough");
   assert.equal(window.props["blend-note"], "当前帧率已足够");
   assert.equal(host.command("video.frame-blend").state.checked, true, "the switch stays on");
   // Field output changes the base rate: read again.
   setFps(host, 25);
   await host.command("video.deinterlace.output.field").run();
-  await measured(host);
+  await until(host, blendNode(host, 50), "the field-output rate read");
   assert.deepEqual(chain(host).at(-1), { kind: "frameBlend", fps: 50 });
   window.emit("toggle", "frameBlend", false);
   await host.settle();
@@ -710,9 +725,7 @@ test("E18: an unknown rate blends to 60; no picture adds nothing; 启用画面�
     setFps(host, null);
     await measured(host);
     assert.equal(node(host, "frameBlend"), undefined, "an unknown rate is read again first");
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-    await host.settle();
-    assert.deepEqual(chain(host).at(-1), { kind: "frameBlend", fps: 60 });
+    await until(host, blendNode(host, 60), "the last try counting an unknown rate as 60");
     await host.command("video.picture").run();
     host.window("picture").emit("toggle-effect", false);
     await host.settle();
@@ -1052,7 +1065,7 @@ test("E17: 添加… copies the file into the shader folder; Shift+P sends absol
     assert.equal(host.osd.at(-1), "只能添加 .glsl 或 .hook 着色器文件");
     host.dialogAnswers.push([join(desk, "invert.glsl")]);
     list.emit("add");
-    await host.settle();
+    await until(host, () => same(list.props.names, ["invert.glsl"]), "the copied shader in the list");
     const folder = join(data, "shaders");
     assert.equal(await readFile(join(folder, "invert.glsl"), "utf8"), INVERT, "copied into the folder");
     assert.deepEqual(host.videoRender.values.shaders, [join(folder, "invert.glsl")]);
@@ -1063,12 +1076,10 @@ test("E17: 添加… copies the file into the shader folder; Shift+P sends absol
     await writeFile(join(folder, "b.glsl"), INVERT);
     await writeFile(join(folder, "a.hook"), INVERT);
     await host.command("video.shader.list").run();
-    await host.settle();
-    assert.deepEqual(list.props.available, ["a.hook", "b.glsl"]);
+    await until(host, () => same(list.props.available, ["a.hook", "b.glsl"]), "the folder scan");
     list.emit("pick", 1);
-    await host.settle();
+    await until(host, () => same(list.props.available, ["a.hook"]), "the rescan after a pick");
     assert.deepEqual(list.props.names, ["invert.glsl", "b.glsl"]);
-    assert.deepEqual(list.props.available, ["a.hook"]);
     assert.equal(list.props.selected, 1);
     list.emit("up");
     await host.settle();
@@ -1083,19 +1094,19 @@ test("E17: 添加… copies the file into the shader folder; Shift+P sends absol
     assert.equal(host.osd.at(-1), "像素着色: 开 (2)");
     list.emit("select", 1);
     list.emit("remove");
-    await host.settle();
+    await until(host, () => same(list.props.available, ["a.hook", "invert.glsl"]), "the rescan after a remove");
     assert.deepEqual(list.props.names, ["b.glsl"]);
     assert.deepEqual(list.props.available, ["a.hook", "invert.glsl"], "removed from the list, not from the folder");
     // 重新载入: a file deleted outside the player leaves the list with a note.
     await rm(join(folder, "b.glsl"));
     await host.command("video.shader.reload").run();
-    await host.settle();
-    assert.equal(host.osd.at(-1), "已移除不存在的着色器：b.glsl");
+    await until(host, () => host.osd.at(-1) === "已移除不存在的着色器：b.glsl", "the reload scan");
     assert.deepEqual(list.props.names, []);
+    await until(host, () => same(list.props.available, ["a.hook", "invert.glsl"]), "the rescan after the reload");
     list.emit("pick", 1);
-    await host.settle();
+    await until(host, () => same(list.props.names, ["invert.glsl"]), "the pick after the reload");
     await host.command("video.shader.folder").run();
-    await host.settle();
+    await until(host, () => host.system.opened.length > 0, "the folder created and opened");
     assert.deepEqual(host.system.opened, [folder]);
     await stop();
     host = new TestHost();
@@ -1149,7 +1160,7 @@ test("E18: 运动补偿 and 倍帧 exclude each other, with OSD; the window does
   assert.equal(host.osd.at(-1), "倍帧: 开（已关闭运动补偿）");
   assert.equal(host.videoRender.values.interpolation, false);
   assert.equal(host.command("video.interpolation").state.checked, false);
-  await measured(host);
+  await until(host, blendNode(host, 48), "the 24 fps rate read");
   assert.deepEqual(chain(host).at(-1), { kind: "frameBlend", fps: 48 });
   await host.command("video.picture").run();
   const window = host.window("picture");
