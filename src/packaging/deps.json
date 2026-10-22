@@ -1,0 +1,32 @@
+{
+  "repository": "vestrasys/vestra-player",
+  "release": "deps-20261022",
+  "assets": {
+    "macos-arm64": {
+      "file": "vestra-deps-macos-arm64.tar.xz",
+      "sha256": "ff033d84465ee606f67058045bdf37aab0e1137bbf35b7632badf5acea9541ce"
+    },
+    "windows-x64": {
+      "file": "vestra-deps-windows-x64.zip",
+      "sha256": "d31aa05c015a74cf5953a726972488078a8309f3edb875ee58679af91e191839"
+    },
+    "macos-arm64-sources": {
+      "file": "vestra-deps-macos-arm64-sources.tar",
+      "sha256": "be200a0e4204ad0d3126e7339f8af4eac70a428802bdb4f42b34e08a2a57d7b4"
+    }
+  },
+  "upstream": {
+    "windows-mpv": {
+      "url": "https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20261021/mpv-dev-x86_64-20261021-git-e471496c56.7z",
+      "sha256": "efc719eff3dc5954b4a5efc800632808bcec01cc9034940dd14e5eb7fe9ea633",
+      "mpv_commit": "e471496c56f0f49c133bd88b50aed62b845f1909",
+      "build": "https://github.com/shinchiro/mpv-winbuild-cmake/tree/20261021"
+    },
+    "windows-ffmpeg": {
+      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-21-13-06/ffmpeg-n9.0.2-31-gc89d6ee1ca-win64-gpl-shared-9.0.zip",
+      "sha256": "242f3b24335b04511de006594b685d19bc3a46538e086322beb5797f91554413",
+      "version": "n9.0.2-31-gc89d6ee1ca",
+      "build": "https://github.com/BtbN/FFmpeg-Builds/tree/autobuild-2026-10-21-13-06"
+    }
+  }
+}

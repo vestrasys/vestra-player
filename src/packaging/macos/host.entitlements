@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Contents/MacOS/vestra-host under the Hardened Runtime. Empty on purpose:
+  every dylib in Frameworks/ is signed with the same identity, so no
+  disable-library-validation. mpv's Lua scripts are off (decision 7); add
+  com.apple.security.cs.allow-jit only if signed tests show LuaJIT needs it.
+-->
+<plist version="1.0">
+<dict>
+</dict>
+</plist>

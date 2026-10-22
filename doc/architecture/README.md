@@ -24,7 +24,7 @@
 
 ## 2. 插件的加载与停止
 
-- **开发加载**：`vestra-host --plugin <目录>`（可多次），直接运行入口 `.ts`（Node ≥ 22.18 去类型执行）。
+- **开发加载**：`vestra-host --plugin <目录>`（可多次），直接运行入口 `.ts`（Node 26 去类型执行；安装包用内置 Node，见 `src/host/src/runtime_paths.rs`）。
 - **托管安装**：`packages.validate` → `trial`/`install`/`rollback`，包存放在 `VESTRA_PACKAGE_STORE`。只接受构建产物（`dist/`，入口为 `.js`，manifest 带 `version`）。
 - **激活**：宿主启动 `node runner.ts <包目录>` → 运行器读取 manifest、按能力读初始状态和订阅事件 → 调用默认导出的 `activate(plugin)` → 激活期间的注册全部成功后发送 `runtime.ready`，否则 `runtime.failed`。
 - **停用**：宿主按 owner 撤销该插件的全部资源（菜单与绑定、窗口、面板与浮动面板窗口、处理资源、字幕层、快照、任务、解析器、producer、播放序列提供者、屏幕信息块），发送 `runtime.stop`；运行器释放句柄，300 ms 内未退出则被结束。每次运行有新的 owner 代次，旧进程的迟到消息不会路由给重新加载的同名插件。

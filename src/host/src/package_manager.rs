@@ -168,7 +168,8 @@ impl Host {
                 {
                     return Err(RpcError::new("versionMismatch", "contract mismatch"));
                 }
-                let result = std::process::Command::new("node")
+                let result = crate::runtime_paths::get()
+                    .node_command()
                     .arg("--check")
                     .arg(candidate.directory().join(&candidate.manifest().entry))
                     .output()
@@ -501,7 +502,7 @@ impl Host {
         plugins::data_root().map(|root| key.directory(&root, id))
     }
     /// Install or upgrade the built-in plugins the installation ships
-    /// (`Resources/plugins/builtin.json`, or `$VESTRA_BUILTIN_PLUGINS`). A
+    /// (`<resources>/plugins/builtin.json`, or `$VESTRA_BUILTIN_PLUGINS`). A
     /// built-in is upgraded only when the installation carries a newer
     /// version than it last seeded, so a user's rollback stays.
     fn seed_builtins(&mut self) {
@@ -1182,21 +1183,11 @@ mod seed {
         pub sha256: String,
     }
 
-    /// `$VESTRA_BUILTIN_PLUGINS`, else `Resources/plugins` beside the packaged
-    /// runtime; none when it has no `builtin.json` (a development run).
+    /// `$VESTRA_BUILTIN_PLUGINS`, else the installation's built-in plugins
+    /// (`runtime_paths.rs`); none when it has no `builtin.json` (a
+    /// development run).
     pub fn directory() -> Option<PathBuf> {
-        std::env::var_os("VESTRA_BUILTIN_PLUGINS")
-            .map(PathBuf::from)
-            .or_else(|| {
-                Some(
-                    std::env::current_exe()
-                        .ok()?
-                        .parent()?
-                        .parent()?
-                        .join("Resources/plugins"),
-                )
-            })
-            .filter(|dir| dir.join("builtin.json").is_file())
+        crate::runtime_paths::get().builtin_directory()
     }
 
     pub fn read(directory: &Path) -> Result<Vec<Entry>> {

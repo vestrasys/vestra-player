@@ -1,4 +1,8 @@
 #![forbid(unsafe_code)]
+// Windows: the release build is a GUI program (no console window when
+// started from Explorer); debug builds keep their console for the logs. Where
+// the logs go: doc/architecture/packaging-proposal.md §10.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod backend;
 mod binding_manager;
 mod bindings;
@@ -40,6 +44,7 @@ mod producer_controls;
 pub mod producer_input;
 #[cfg(feature = "producer-audio")]
 mod producer_input_delivery;
+mod runtime_paths;
 
 #[cfg(feature = "producer-audio")]
 pub mod producer_binary;
@@ -4002,6 +4007,24 @@ fn main() -> Result<()> {
         bail!("--frame-evidence-dir is headless diagnostic only");
     }
     let mut evidence = frame_evidence.map(FrameEvidence::new).transpose()?;
+    // A packaged player missing its own files (the bundled Node above all)
+    // stops here, not with every plugin failing on its own.
+    let missing = runtime_paths::get().missing(std::path::Path::is_file);
+    if !missing.is_empty() {
+        let text = format!(
+            "This installation of Vestra Player is incomplete; reinstall it.\n\n{}",
+            missing.join("\n")
+        );
+        if !headless {
+            rfd::MessageDialog::new()
+                .set_title("Vestra Player")
+                .set_description(&text)
+                .set_level(rfd::MessageLevel::Error)
+                .set_buttons(rfd::MessageButtons::Ok)
+                .show();
+        }
+        bail!("{text}");
+    }
     // GPU rendering (reference §5.4) needs Slint's OpenGL renderer (femtovg);
     // headless, `VESTRA_SOFTWARE_RENDER=1` and other systems render in software.
     let mut gpu = renderer::wanted(

@@ -460,7 +460,7 @@ fn validate_mp4(
     // Decode every encoded stream to completion before publication, on this
     // cancellable background worker. Encoder success/header bytes alone do not
     // establish a readable MP4. ffprobe/independent consumers verify codec/time.
-    let child = Command::new(&request.ffmpeg)
+    let child = crate::platform::tool_command(&request.ffmpeg)
         .args(["-nostdin", "-v", "error", "-threads", "1", "-i"])
         .arg(temp.path())
         .args([
@@ -501,7 +501,7 @@ fn validate_mp4(
         ChildResult::Cancelled => Ok(false),
         ChildResult::Exited(status) if status.success() => {
             let probe = sibling(&request.ffmpeg, "ffprobe")?;
-            let mut command = Command::new(probe);
+            let mut command = crate::platform::tool_command(probe);
             command.args(["-v","error","-show_entries","stream=index,codec_name,codec_type,width,height,sample_rate,channels,channel_layout,duration,r_frame_rate:format=duration","-of","json"]).arg(temp.path());
             let Some((stdout, _)) = capture_command(&mut command, control)? else {
                 return Ok(false);
@@ -558,8 +558,10 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
     let Some(mut reader) = acquire_reader(&request.lease, control)? else {
         return Ok(Outcome::Cancelled);
     };
-    let Some((version, _)) =
-        capture_command(Command::new(&request.ffmpeg).arg("-version"), control)?
+    let Some((version, _)) = capture_command(
+        crate::platform::tool_command(&request.ffmpeg).arg("-version"),
+        control,
+    )?
     else {
         return Ok(Outcome::Cancelled);
     };
@@ -580,7 +582,7 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
         return Ok(Outcome::Cancelled);
     }
     let probe = sibling(&request.ffmpeg, "ffprobe")?;
-    let mut origin_command = Command::new(probe);
+    let mut origin_command = crate::platform::tool_command(probe);
     origin_command.args([
         "-v",
         "error",
@@ -698,7 +700,7 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
     } else {
         "scale=w='max(1,round(iw*sar))':h=ih,setsar=1,settb=AVTB".into()
     };
-    let mut command = Command::new(&request.ffmpeg);
+    let mut command = crate::platform::tool_command(&request.ffmpeg);
     command.args([
         "-nostdin",
         "-v",

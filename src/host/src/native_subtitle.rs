@@ -8,7 +8,7 @@
 use std::{
     io::{self, Read, Write},
     path::Path,
-    process::{Child, Command, Stdio},
+    process::{Child, Stdio},
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -172,7 +172,7 @@ pub fn extract(
     if cancelled() {
         return Ok(None);
     }
-    let child = Command::new(ffmpeg)
+    let child = crate::platform::tool_command(ffmpeg)
         .args([
             "-nostdin",
             "-v",

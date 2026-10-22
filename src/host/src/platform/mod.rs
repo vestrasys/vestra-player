@@ -19,7 +19,9 @@
 //! | power | `sleep_launcher` |
 //! | files and links | `reveal`, `open_path`, `open_url` (blocking, run on a worker thread) |
 //! | secrets | `secret_get`, `secret_set`, `secret_delete` (blocking) |
-//! | facts | `os_facts` (blocking), `displays` (UI thread), `app_data_dir`, `default_ffmpeg`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD` |
+//! | facts | `os_facts` (blocking), `displays` (UI thread), `app_data_dir`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD` |
+//! | installation | `install_layout` (pure, in `layout.rs`, for every system) → `current_install_layout` |
+//! | child processes | `tool_command`, `hide_console` (Windows: `CREATE_NO_WINDOW` when the host has no console; elsewhere nothing) |
 //! | storage | `sync_dir` (Unix: `fsync` below; Windows: `FlushFileBuffers` on a directory handle) |
 //! | generated streams | `av_listen` → `AvListener` / `AvStream` (Unix: `av_unix` below; Windows: `av_tcp`) |
 //! | offline media | `HELD_FILE_INPUT` (how FFmpeg names its stdin, the held source file) |
@@ -60,6 +62,24 @@ pub enum System {
 
 mod shortcuts;
 pub use shortcuts::*;
+
+mod layout;
+pub use layout::*;
+
+/// The installation this executable runs from (`layout.rs`); `None` for a
+/// development build.
+pub fn current_install_layout() -> Option<InstallLayout> {
+    let exe = std::env::current_exe().ok()?;
+    install_layout(imp::SYSTEM, &exe, std::path::Path::is_file)
+}
+
+/// A command for a console tool the host runs itself (FFmpeg, ffprobe),
+/// without a console window (`hide_console`).
+pub fn tool_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
+    let mut command = std::process::Command::new(program);
+    hide_console(&mut command);
+    command
+}
 
 /// The monospace family `Theme.font-mono` names on `system`: one that ships
 /// with it (Slint falls back per character for scripts it lacks, CJK
