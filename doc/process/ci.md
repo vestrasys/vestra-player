@@ -94,8 +94,9 @@ plan [ubuntu]  改动路径 → docs_only, host, lock, run_windows, run_macos
 
 - macOS：在 `macos-15` 上 `brew install mpv ffmpeg`，从 `libmpv.2.dylib`、`ffmpeg`、`ffprobe` 出发收集整个 dylib 闭包，install name 改成 `@rpath/<名字>`，ad-hoc 签名，各配方的许可证文件拷进 `licenses/<配方>/`，各配方源码包（`brew fetch -s`）另打一个 `-sources.tar`。
 - **最低系统版本是 15.0，不是决定 3 的 14.0**：Homebrew 已经不再为 macOS 14 出 bottle（mpv、ffmpeg 等 45 个配方只有 sequoia 及更新的 bottle），在 `macos-14` 上要从源码编译整棵依赖树（含 deno、python、shaderc），不可行。`bundle-macos.mjs` 取 `components.json` 的 `min_macos` 与 14.0 中较大者作为 `LSMinimumSystemVersion`。要 14.0 只能自己编译 mpv/FFmpeg（方案 §6 的 B）。
-- Windows：`deps.json` `upstream` 里固定的 shinchiro mpv-dev 与 BtbN `win64-gpl-shared`（FFmpeg n9.0），校验 SHA-256，取 `libmpv-2.dll`、头文件、`ffmpeg/{ffmpeg,ffprobe}.exe` 和 DLL，从 mpv 对应提交取许可证文件，用 MSVC 的 `dumpbin`/`lib` 生成 `mpv.lib`。
+- Windows：`deps.json` `upstream` 里固定的 shinchiro mpv-dev 与 BtbN `win64-gpl-shared`（FFmpeg n9.0），校验 SHA-256，取 `libmpv-2.dll`、头文件、`ffmpeg/{ffmpeg,ffprobe}.exe` 和 DLL，从 mpv 对应提交取许可证文件，用 MSVC 的 `dumpbin`/`lib` 生成 `mpv.lib`。另带 MSYS2 UCRT64 的 Vulkan 加载器 `vulkan-1.dll`（Apache-2.0）：`libmpv-2.dll` 在加载时就导入它，而 Windows 只有装了带 Vulkan 的显卡驱动才有这个文件（CI runner 上没有），缺了它播放器根本启动不了；它和 `libmpv-2.dll` 一起放在安装目录根上。
 - 结果发到本仓库的预发布 release `deps-<UTC 日期>`（`GITHUB_TOKEN`，`contents: write`），附 `SHA256SUMS`、两份 `components-*.json` 和新的 `deps.json`。**把这份 `deps.json` 提交为 `src/packaging/deps.json`** 以后，CI 和打包才用新依赖。
+- 只重建一个系统：`-f platforms=windows`（或 `macos`），另一个系统的资产从当前 `deps.json` 固定的 release 复制过来（校验 SHA-256），省掉 macOS runner。
 - 升级：改 `deps.json` 的 `upstream`（Windows），或直接重跑（macOS 取当时的 Homebrew），提交新的 `deps.json`。旧的 `deps-*` release 不要删：旧版本的构建靠它们复现。
 
 ```

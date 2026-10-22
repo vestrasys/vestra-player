@@ -22,6 +22,13 @@ on:
         description: Also mirror the macOS formulae's source archives.
         type: boolean
         default: true
+      platforms:
+        description: >
+          Rebuild only one system; the other's assets are copied from the
+          release src/packaging/deps.json pins now (saves a macOS runner).
+        type: choice
+        options: [both, windows, macos]
+        default: both
 
 permissions: {}
 
@@ -35,6 +42,7 @@ jobs:
     # Homebrew no longer bottles macOS 14 (only sequoia and newer), so the
     # bottles come from macos-15 and the package's minimum is 15.0
     # (components.json min_macos); see doc/process/ci.md.
+    if: inputs.platforms != 'windows'
     runs-on: macos-15
     timeout-minutes: 60
     permissions:
@@ -83,7 +91,8 @@ jobs:
           if-no-files-found: error
 
   windows:
-    name: Windows x64 (shinchiro, BtbN)
+    name: Windows x64 (shinchiro, BtbN, Vulkan loader)
+    if: inputs.platforms != 'macos'
     runs-on: windows-2022
     timeout-minutes: 30
     permissions:
@@ -141,6 +150,7 @@ jobs:
   release:
     name: deps release
     needs: [macos, windows]
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -154,6 +164,25 @@ jobs:
           pattern: deps-*
           path: ${{ runner.temp }}/assets
           merge-multiple: true
+      - name: Copy the assets of a system not rebuilt
+        if: inputs.platforms != 'both'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PLATFORMS: ${{ inputs.platforms }}
+        run: |
+          pins=src/packaging/deps.json
+          old=$(jq -r .release "$pins")
+          if [ "$PLATFORMS" = windows ]; then keys="macos-arm64 macos-arm64-sources"; json=components-macos-arm64.json
+          else keys="windows-x64"; json=components-windows-x64.json; fi
+          gh release download "$old" --pattern "$json" --dir "$RUNNER_TEMP/assets"
+          for key in $keys; do
+            file=$(jq -r --arg key "$key" '.assets[$key].file // empty' "$pins")
+            [ -n "$file" ] || continue
+            sha=$(jq -r --arg key "$key" '.assets[$key].sha256' "$pins")
+            gh release download "$old" --pattern "$file" --dir "$RUNNER_TEMP/assets"
+            echo "$sha  $RUNNER_TEMP/assets/$file" | sha256sum -c -
+          done
       - name: Create the release and the new deps.json
         env:
           GH_TOKEN: ${{ github.token }}
