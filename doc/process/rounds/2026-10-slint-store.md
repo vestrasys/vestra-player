@@ -83,8 +83,8 @@
 8. 插件仓库索引加单调 `generated` 字段、签名支持多签名：放进待办，不阻塞 S5。
 
 ## 待办（本轮之后）
-- 插件仓库：索引里给 README、CHANGELOG、图标加 sha256 和 size（安全审查第 3 条：现在这些资源不在签名覆盖范围内，Pages 被攻破时详情页内容可被替换），商城随后校验；
-- 插件仓库：索引加单调 `generated` 字段；`sign-index`/`verify-index` 支持多签名（商城已兼容）。
+- ~~插件仓库：资源哈希、单调 `generated`、多签名、`revoked.json` 只追加~~：2026-10-22 已完成并发布（插件仓库 68ff01b，线上 `generated` = 1，签名通过）。商城端配套改动交给商城作者（进行中）。
+- 插件仓库 youtube 测试「download shows progress while running and the saved file when done」在 Windows + Node 22.18 偶发失败一次（CI run 39678880495，dbd7e7d），前后同一测试都通过。交 youtube 作者查。
 - 主窗口 `sidebar-actual` 绑定环警告（见上）。
 - SDK 仓库的 Docs 工作流在推标签时失败（Pages 环境只允许 main；v1.1.1 起就这样，main 上的那次会正常部署）。应让 Docs 只在 main 上运行。
 - reference §6.4「默认字体是系统 UI 字体」与实际强制 Hiragino 不一致，等 W4 决定后一起改。
