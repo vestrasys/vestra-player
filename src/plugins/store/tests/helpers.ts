@@ -297,10 +297,13 @@ export async function start(
 
 /** Wait until `check()` holds (the store's own network work is not awaited by settle). */
 export async function until(host: TestHost, check: () => boolean, what = "condition") {
-  for (let i = 0; i < 200; i++) {
-    if (check()) return;
+  // A time deadline, not a count of settle rounds: a loaded CI runner makes each round slower.
+  // Once it holds, settle: the SDK writes changed window properties one host call at a time.
+  for (const deadline = Date.now() + 15_000; Date.now() < deadline; ) {
+    if (check()) return host.settle();
     await host.settle(10);
   }
+  if (check()) return host.settle();
   throw new Error(`timed out waiting for ${what}`);
 }
 

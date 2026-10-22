@@ -6,6 +6,7 @@ import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Json } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
+import { settleFiles } from "./settle.ts";
 import { DROP_EXTENSIONS, dropRow } from "../drop.ts";
 import activate from "../main.ts";
 
@@ -25,6 +26,7 @@ async function start(
 ) {
   const root = await realpath(await mkdtemp(join(tmpdir(), "vestra-playlist-features-")));
   const host = new TestHost();
+  settleFiles(host);
   host.tools.handle("ffprobe", probeTable(options.durations));
   const { stop } = await startPlugin((plugin) => activate(plugin, { random: options.random ?? (() => 0) }), {
     directory: new URL("..", import.meta.url),
@@ -55,6 +57,18 @@ async function start(
     },
     click: (index: number, modifiers: { ctrl?: boolean; shift?: boolean } = {}) =>
       app.emit("select-row", app.rows()[index]!.rowId, !!modifiers.ctrl, !!modifiers.shift),
+    /** Wait (bounded) for something the plugin does on its own (file I/O); settle() waits for host calls only. */
+    until: async (check: () => boolean, what: string) => {
+      for (const deadline = Date.now() + 15_000; !check(); await host.settle(10))
+        if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+      await host.settle();
+    },
+    /** Run an action that scans the disk and ends with a notice (打开文件夹…); wait for that notice. */
+    noticed: async (action: () => Promise<void>) => {
+      const notices = host.osd.length;
+      await action();
+      await app.until(() => host.osd.length > notices, "the notice");
+    },
     /** Write files (relative to the test folder) and return their absolute paths. */
     files: async (names: string[], content = "x") => {
       const paths: string[] = [];
@@ -66,9 +80,18 @@ async function start(
       }
       return paths;
     },
+    /**
+     * 添加文件…: the plugin resolves each path on disk itself (settle() waits for host
+     * calls only), so wait for the notice that ends the add, then for the window.
+     */
     addFiles: async (paths: string[]) => {
+      const notices = host.osd.length;
       host.dialogAnswers.push(paths);
       await app.run("add");
+      if (!paths.length) return;
+      for (const deadline = Date.now() + 15_000; host.osd.length === notices; await host.settle(10))
+        if (Date.now() > deadline) throw new Error(`adding ${paths.length} files did not finish`);
+      await host.settle();
     },
     end: () => host.setSource({ phase: "ended", terminalReason: "natural" }),
     stop,
@@ -98,7 +121,7 @@ test("A03: F2 opens a folder recursively in folder order, appends and plays the 
     ]);
     await symlink(dir, join(dir, "sub", "loop")); // a symlink cycle ends the walk
     app.host.dialogAnswers.push([dir]);
-    await app.press("F2", false);
+    await app.noticed(() => app.press("F2", false));
     assert.deepEqual(app.host.sent("dialogs.open").at(-1), { kind: "openDirectory", title: "打开文件夹" });
     assert.deepEqual(app.names(), ["b1.mp4", "b2.mkv", "b10.mkv", "s1.mp3", "s2.mp3"]);
     assert.equal(app.osd(), "已添加 5 项");
@@ -110,7 +133,7 @@ test("A03: F2 opens a folder recursively in folder order, appends and plays the 
     const [extra] = await app.files(["extra.mp4"]);
     await app.addFiles([extra!]);
     app.host.dialogAnswers.push([dir]);
-    await app.run("open-folder");
+    await app.noticed(() => app.run("open-folder"));
     assert.deepEqual(app.names(), ["b1.mp4", "b2.mkv", "b10.mkv", "s1.mp3", "s2.mp3"]);
     assert.equal(app.osd(), "已添加 5 项");
     assert.equal(app.host.sent("dialogs.confirm").length, 0);
@@ -122,7 +145,7 @@ test("A03: F2 opens a folder recursively in folder order, appends and plays the 
     app.host.settingsPage("playlist").emit("set-append-on-open", true);
     await app.click(3);
     app.host.dialogAnswers.push([dir]);
-    await app.run("open-folder");
+    await app.noticed(() => app.run("open-folder"));
     assert.equal(app.rows().length, 5);
     assert.equal(app.osd(), "已添加 0 项，跳过 5 个重复");
     assert.equal(app.opens().length, 3);
@@ -131,10 +154,10 @@ test("A03: F2 opens a folder recursively in folder order, appends and plays the 
     // An empty folder and an unreadable one change nothing.
     await mkdir(join(app.root, "empty"));
     app.host.dialogAnswers.push([join(app.root, "empty")]);
-    await app.run("open-folder");
+    await app.noticed(() => app.run("open-folder"));
     assert.equal(app.osd(), "文件夹中没有可播放的文件");
     app.host.dialogAnswers.push([join(app.root, "missing")]);
-    await app.run("open-folder");
+    await app.noticed(() => app.run("open-folder"));
     assert.equal(app.osd(), "无法读取文件夹：文件夹不存在");
     app.host.dialogAnswers.push(null); // cancelled
     await app.run("open-folder");
