@@ -6,7 +6,7 @@ use std::{
     collections::BTreeSet,
     io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
-    process::{Child, Command, Stdio},
+    process::{Child, Stdio},
     sync::mpsc,
     thread,
     time::{Duration, Instant},
@@ -122,13 +122,7 @@ impl Plugin {
             bail!("unknown required capability");
         }
         package_file(&directory, &manifest.entry)?;
-        let packaged_runner = std::env::current_exe()?
-            .parent()
-            .and_then(Path::parent)
-            .map(|p| p.join("Resources/runtime/runner.ts"));
-        let runner = packaged_runner
-            .filter(|p| p.is_file())
-            .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../runtime/runner.ts"));
+        let paths = crate::runtime_paths::get();
         // Per installed instance, development id or trial (see `DataKey`).
         // Without one the SDK reports `unavailable`; loading continues.
         let data_directory = data_root()
@@ -138,7 +132,7 @@ impl Plugin {
                     .map_err(|error| eprintln!("plugin data {}: {error}", dir.display()))
                     .is_ok()
             });
-        let mut command = Command::new("node");
+        let mut command = paths.node_command();
         if let Some(dir) = &data_directory {
             command.env("VESTRA_PLUGIN_DATA_DIR", dir);
         }
@@ -146,13 +140,13 @@ impl Plugin {
             command.env("VESTRA_APP_INFO", info);
         }
         let mut child = command
-            .arg(runner)
+            .arg(&paths.runner)
             .arg(&directory)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .spawn()
-            .context("start Node plugin runtime (Node >=22.18)")?;
+            .with_context(|| paths.node_failure())?;
         let mut stdin = child.stdin.take().context("plugin stdin")?;
         let (outbound, output) = mpsc::sync_channel::<Value>(OUTBOUND_CAPACITY);
         let write_events = events.clone();
@@ -311,7 +305,8 @@ mod tests {
                 temporary_data: trial,
                 subscriptions: BTreeSet::new(),
                 // Any short-lived child; Node is there on every system.
-                child: Command::new("node")
+                child: crate::runtime_paths::get()
+                    .node_command()
                     .arg("--version")
                     .stdout(std::process::Stdio::null())
                     .spawn()

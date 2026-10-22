@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -71,6 +71,14 @@ test("the packaged runtime layout (runner + SDK package) runs a plugin", async (
     { encoding: "utf8" },
   );
   assert.equal(stage.status, 0, stage.stderr);
+  // The SDK's Apache-2.0 license ships with its code (S7 decision 12).
+  assert.match(
+    readFileSync(
+      join(staged, "node_modules/@vestra-player/sdk/LICENSE"),
+      "utf8",
+    ),
+    /Apache License/,
+  );
   const result = await run(
     "export default async function activate(plugin) { plugin.commands.add({ id: 'a', path: ['文件', 'A'], run() {} }); }",
     undefined,

@@ -1,68 +1,88 @@
 name: Set up libmpv
 description: >
-  libmpv for rsmpv-sys to link against and for the tests to load.
-  macOS: Homebrew mpv. Windows: a pinned shinchiro mpv-dev build (MinGW,
-  static FFmpeg inside libmpv-2.dll), plus an MSVC import library mpv.lib
-  generated from the DLL's exports. Sets MPV_LIBRARY_DIR (rsmpv-sys build.rs)
-  and, on Windows, puts the DLL on PATH.
+  The pinned dependency archive from this repository's `deps-*` release
+  (src/packaging/deps.json, built by deps.yml): macOS the Homebrew libmpv +
+  FFmpeg closure with @rpath install names, Windows shinchiro libmpv-2.dll
+  with its MSVC import library mpv.lib and BtbN ffmpeg/ffprobe. Downloaded
+  with the job token, checked against the SHA-256 in deps.json, cached.
+  Sets MPV_LIBRARY_DIR (rsmpv-sys build.rs) and VESTRA_DEPS_DIR (the
+  packaging scripts); macOS adds an rpath to the deps so test binaries load
+  libmpv, Windows puts the DLL directory on PATH.
 runs:
   using: composite
   steps:
-    - name: libmpv (macOS, Homebrew)
-      if: runner.os == 'macOS'
+    - name: Read the pin
+      id: pin
       shell: bash
       env:
-        HOMEBREW_NO_AUTO_UPDATE: "1"
-        HOMEBREW_NO_INSTALL_CLEANUP: "1"
-        HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: "1"
-      # The values written are runner paths, not event data.
-      run: | # zizmor: ignore[github-env]
-        brew install mpv
-        echo "MPV_LIBRARY_DIR=$(brew --prefix)/lib" >> "$GITHUB_ENV"
-        ls -l "$(brew --prefix)/lib/"libmpv*.dylib
+        KEY: ${{ runner.os == 'Windows' && 'windows-x64' || 'macos-arm64' }}
+      run: |
+        pins=src/packaging/deps.json
+        tag=$(jq -r '.release // empty' "$pins")
+        repo=$(jq -r '.repository' "$pins")
+        file=$(jq -r --arg key "$KEY" '.assets[$key].file // empty' "$pins")
+        sha=$(jq -r --arg key "$KEY" '.assets[$key].sha256 // empty' "$pins")
+        if [ -z "$tag" ] || [ -z "$file" ] || [ -z "$sha" ]; then
+          echo "::error::src/packaging/deps.json has no $KEY asset; run the deps workflow and commit its deps.json"
+          exit 1
+        fi
+        {
+          echo "tag=$tag"
+          echo "repo=$repo"
+          echo "file=$file"
+          echo "sha=$sha"
+        } >> "$GITHUB_OUTPUT"
 
-    - name: libmpv archive cache (Windows)
-      if: runner.os == 'Windows'
+    - name: Dependency archive cache
       id: cache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: ${{ runner.temp }}/mpv-dev.7z
-        key: mpv-dev-x86_64-20261021-git-e471496c56-efc719ef
+        path: ${{ runner.temp }}/vestra-deps-archive
+        key: vestra-deps-${{ steps.pin.outputs.sha }}
 
-    - name: libmpv (Windows, mpv-dev)
-      if: runner.os == 'Windows'
-      shell: pwsh
+    - name: Download, verify and unpack
+      shell: bash
       env:
-        # Pinned build: bump the URL, cache key and SHA-256 together.
-        MPV_URL: https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20261021/mpv-dev-x86_64-20261021-git-e471496c56.7z
-        MPV_SHA256: efc719eff3dc5954b4a5efc800632808bcec01cc9034940dd14e5eb7fe9ea633
+        GH_TOKEN: ${{ github.token }}
+        TAG: ${{ steps.pin.outputs.tag }}
+        REPO: ${{ steps.pin.outputs.repo }}
+        FILE: ${{ steps.pin.outputs.file }}
+        SHA: ${{ steps.pin.outputs.sha }}
         CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
       # The values written are runner paths, not event data.
       run: | # zizmor: ignore[github-env]
-        $ErrorActionPreference = 'Stop'
-        $archive = Join-Path $env:RUNNER_TEMP 'mpv-dev.7z'
-        $dir = Join-Path $env:RUNNER_TEMP 'mpv'
-        if ($env:CACHE_HIT -ne 'true') {
-          Invoke-WebRequest -Uri $env:MPV_URL -OutFile $archive
-        }
-        $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLower()
-        if ($hash -ne $env:MPV_SHA256) { throw "mpv-dev SHA-256 mismatch: $hash" }
-        7z x -y "-o$dir" $archive | Out-Null
-
-        # MSVC import library from the DLL's export table.
-        $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-        $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-        $version = (Get-Content "$vs\VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt").Trim()
-        $bin = "$vs\VC\Tools\MSVC\$version\bin\Hostx64\x64"
-        $exports = & "$bin\dumpbin.exe" /nologo /exports "$dir\libmpv-2.dll"
-        $names = $exports | ForEach-Object {
-          if ($_ -match '^\s+\d+\s+[0-9A-Fa-f]+\s+[0-9A-Fa-f]{8}\s+(\S+)') { $Matches[1] }
-        }
-        if (-not $names) { throw 'no exports found in libmpv-2.dll' }
-        Write-Host "libmpv-2.dll exports $($names.Count) symbols"
-        Set-Content -Path "$dir\mpv.def" -Value (@('LIBRARY libmpv-2', 'EXPORTS') + $names)
-        & "$bin\lib.exe" /nologo /def:"$dir\mpv.def" /machine:x64 /out:"$dir\mpv.lib"
-        if ($LASTEXITCODE -ne 0) { throw 'lib.exe failed' }
-
-        "MPV_LIBRARY_DIR=$dir" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
-        $dir | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+        archive_dir="$RUNNER_TEMP/vestra-deps-archive"
+        deps="$RUNNER_TEMP/vestra-deps"
+        mkdir -p "$archive_dir" "$deps"
+        if [ "$CACHE_HIT" != true ]; then
+          gh release download "$TAG" --repo "$REPO" --pattern "$FILE" --dir "$archive_dir" --clobber
+        fi
+        if command -v sha256sum > /dev/null; then
+          actual=$(sha256sum "$archive_dir/$FILE" | cut -d' ' -f1)
+        else
+          actual=$(shasum -a 256 "$archive_dir/$FILE" | cut -d' ' -f1)
+        fi
+        if [ "$actual" != "$SHA" ]; then
+          echo "::error::$FILE SHA-256 mismatch: $actual, deps.json pins $SHA"
+          exit 1
+        fi
+        case "$FILE" in
+          *.tar.xz) tar -xJf "$archive_dir/$FILE" -C "$deps" ;;
+          *.zip) 7z x -y "-o$deps" "$archive_dir/$FILE" > /dev/null ;;
+          *) echo "::error::unknown archive type $FILE"; exit 1 ;;
+        esac
+        if [ "$RUNNER_OS" = Windows ]; then
+          deps_native=$(cygpath -w "$deps")
+          echo "MPV_LIBRARY_DIR=$deps_native" >> "$GITHUB_ENV"
+          echo "VESTRA_DEPS_DIR=$deps_native" >> "$GITHUB_ENV"
+          echo "$deps_native" >> "$GITHUB_PATH"
+          ls -l "$deps"
+        else
+          echo "MPV_LIBRARY_DIR=$deps/lib" >> "$GITHUB_ENV"
+          echo "VESTRA_DEPS_DIR=$deps" >> "$GITHUB_ENV"
+          # libmpv's install name is @rpath/libmpv.2.dylib: test binaries need
+          # the rpath; bundle-macos.mjs replaces it with @executable_path/../Frameworks.
+          echo "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS=-C link-arg=-Wl,-rpath,$deps/lib" >> "$GITHUB_ENV"
+          ls -l "$deps/lib" | head -5
+        fi
+        jq -r '.components[] | "\(.name) \(.version) \(.license)"' "$deps/components.json"
