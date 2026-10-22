@@ -314,7 +314,7 @@ npm run plugin -- check examples/bookmark   # 严格类型检查
 npm run plugin -- test  examples/bookmark   # 运行 tests/ 下的测试
 ```
 
-在真实播放器里试用（开发模式直接运行 `main.ts`，不需要先构建；需要 Node ≥ 22.18）。在 `src/host/` 下执行：
+在真实播放器里试用（开发模式直接运行 `main.ts`，不需要先构建；需要 Node 26，或用 `VESTRA_NODE` 指定）。在 `src/host/` 下执行：
 
 ```
 cargo run --bin vestra-host -- --plugin ../plugins/playback --plugin ../examples/bookmark

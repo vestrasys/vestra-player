@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Builds the built-in plugins a packaged player ships
- * (`Vestra Player.app/Contents/Resources/plugins/`, seeded by the host at
+ * (`Vestra Player.app/Contents/Resources/plugins/`, `<install dir>\resources\plugins\`
+ * on Windows; seeded by the host at
  * start-up; see host/src/package_manager.rs `seed_builtins`):
  *
  *   plugins/
