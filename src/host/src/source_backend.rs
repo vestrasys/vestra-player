@@ -12,6 +12,8 @@ use std::{collections::BTreeMap, fs::File, path::Path, sync::Arc};
 
 struct LocalMedia {
     // This open description is used exclusively by libmpv, never by workers.
+    // Read only by the `fd://` route, which is Unix only.
+    #[cfg_attr(not(unix), allow(dead_code))]
     playback: File,
     lease: Arc<crate::source_lease::Lease>,
 }
