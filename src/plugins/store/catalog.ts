@@ -91,6 +91,8 @@ export interface Item {
   tags: string[];
   published: string | null;
   local: Display | null;
+  /** A local row installed from a configured repository that does not list it any more. */
+  delisted?: boolean;
 }
 
 export const sameRepository = (info: PluginInfo | null, repo: Repo) =>
@@ -154,16 +156,22 @@ export function buildItems(
   for (const info of installed.values()) {
     if (covered.has(info.id)) continue;
     const local = display(info);
+    // Installed from a repository that no longer lists it (delisted, or all
+    // its entries unusable): that repository's `revoked` still applies.
+    const source = info.source?.kind === "repository" ? info.source.url : null;
+    const repo = source ? (repos.find((r) => r.url === source) ?? null) : null;
+    const revocation =
+      repo?.index && info.version && !info.builtin ? revocationOf(info.id, info.version, repo.index.revoked) : null;
     items.push({
-      key: `\n${info.id}`,
+      key: revocation ? `${repo!.url}\n${info.id}` : `\n${info.id}`,
       id: info.id,
-      repo: null,
+      repo: revocation ? repo : null,
       entry: null,
       installed: info,
       development: development.has(info.id),
       best: null,
-      state: info.builtin ? "builtin" : "local",
-      revocation: null,
+      state: info.builtin ? "builtin" : revocation ? "revoked" : "local",
+      revocation,
       blocked: null,
       name: local.name,
       author: local.author,
@@ -171,6 +179,7 @@ export function buildItems(
       tags: local.tags,
       published: null,
       local,
+      delisted: !revocation && repo?.index != null,
     });
   }
   return items;

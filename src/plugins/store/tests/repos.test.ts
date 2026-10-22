@@ -3,7 +3,7 @@ import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync }
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { FakeNet, OFFICIAL, openStore, publish, rows, signWith, start, THIRD, until, other } from "./helpers.ts";
+import { BUILTIN, FakeNet, info, OFFICIAL, openStore, publish, rows, signWith, start, THIRD, until, other } from "./helpers.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "vestra-store-repos-"));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -156,6 +156,57 @@ test("third-party repositories: no signature read, `official: true` ignored, lab
     await openStore(host);
     const row = rows(host).find((r) => r.name === "Viz") as { meta: string } | undefined;
     assert.equal(row?.meta, "Someone · 非官方：Vestra 官方（third.example）");
+  } finally {
+    await stop();
+  }
+});
+
+test("review B: replaying an older signed index cannot hide a revocation", async () => {
+  const net = new FakeNet();
+  const plugins = [{ id: "vestra.p", name: "P", versions: [{ version: "0.2.0" }, { version: "0.1.0" }] }];
+  const { host, store, stop } = await start({
+    net,
+    packages: [BUILTIN, info("vestra.p", { version: "0.2.0", source: { kind: "repository", url: OFFICIAL } })],
+  });
+  try {
+    publish(net, OFFICIAL, plugins);
+    await store.refreshAll(true);
+    const old = [net.routes.get(OFFICIAL)!, net.routes.get(`${OFFICIAL}.sig`)!];
+    host.dialogAnswers.push({ confirmed: false, checked: false });
+    publish(net, OFFICIAL, plugins, { revoked: [{ id: "vestra.p", versions: "0.2.0", reason: "bad" }] });
+    await store.refreshAll(true);
+    await until(host, () => store.items.find((i) => i.id === "vestra.p")?.state === "revoked");
+    net.route(OFFICIAL, old[0]!);
+    net.route(`${OFFICIAL}.sig`, old[1]!);
+    await store.refreshAll(true);
+    assert.equal(store.repos.official.status.text, "官方仓库返回了旧的索引，已忽略这次更新");
+    assert.equal(store.items.find((i) => i.id === "vestra.p")?.state, "revoked");
+    await openStore(host);
+    assert.match(String(host.window("store").props["status-text"]), /官方仓库返回了旧的索引/);
+    assert.equal(host.window("store").props["status-warn"], true);
+  } finally {
+    await stop();
+  }
+});
+
+test("review C: a plugin absent for a while keeps its seen versions; an even older index is refused", async () => {
+  const net = new FakeNet();
+  const { store, stop } = await start({ net });
+  try {
+    publish(net, OFFICIAL, [{ id: "vestra.p", versions: [{ version: "0.1.0" }] }]);
+    await store.refreshAll(true);
+    const v1 = [net.routes.get(OFFICIAL)!, net.routes.get(`${OFFICIAL}.sig`)!];
+    publish(net, OFFICIAL, [{ id: "vestra.q", versions: [{ version: "1.0.0" }] }]); // p delisted: accepted
+    await store.refreshAll(true);
+    assert.match(store.repos.official.status.text, /已更新$/);
+    publish(net, OFFICIAL, [{ id: "vestra.p", versions: [{ version: "0.2.0" }, { version: "0.1.0" }] }, { id: "vestra.q", versions: [{ version: "1.0.0" }] }]);
+    await store.refreshAll(true);
+    assert.deepEqual(store.repos.official.meta?.seen?.versions["vestra.p"]?.sort(), ["0.1.0", "0.2.0"]);
+    net.route(OFFICIAL, v1[0]!);
+    net.route(`${OFFICIAL}.sig`, v1[1]!);
+    await store.refreshAll(true);
+    assert.equal(store.repos.official.status.text, "官方仓库返回了旧的索引，已忽略这次更新");
+    assert.deepEqual(store.repos.official.index?.plugins.map((p) => p.id), ["vestra.p", "vestra.q"]);
   } finally {
     await stop();
   }

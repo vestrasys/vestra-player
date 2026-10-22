@@ -203,3 +203,35 @@ test("仓库… opens the settings page; the window keeps the selection when clo
     await stop();
   }
 });
+
+test("review 4: third-party README and icon on another host are not fetched until asked", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, []);
+  publish(net, THIRD, [
+    { id: "c.same", name: "Same", iconUrl: "https://third.example/icons/same.png", versions: [{ version: "1.0.0" }] },
+    { id: "c.far", name: "Far", iconUrl: "https://tracker.test/i.png", versions: [{ version: "1.0.0" }] },
+  ]);
+  // Point Far's README at another host.
+  const index = JSON.parse(String((net.routes.get(THIRD) as { body: Buffer }).body));
+  index.plugins[1].readmeUrl = "https://tracker.test/readme.md";
+  net.route(THIRD, { body: JSON.stringify(index) });
+  net.route("https://tracker.test/readme.md", { body: "# Far" });
+  const { host, store, stop } = await start({ net });
+  try {
+    store.settings.save({ ...store.settings.value, repos: [THIRD] });
+    store.repos.sync([THIRD]);
+    await openStore(host);
+    await until(host, () => rows(host).length === 3);
+    await choose(host, "Same");
+    await until(host, () => net.count("https://third.example/icons/same.png") === 1, "same-host icon fetched");
+    await choose(host, "Far");
+    await until(host, () => banners(host).includes("说明位于其它网站（tracker.test），没有自动加载"));
+    assert.equal(net.count("https://tracker.test/readme.md"), 0);
+    assert.equal(net.count("https://tracker.test/i.png"), 0);
+    host.window("store").emit("bannerAct", "showImages");
+    await until(host, () => host.markdown(props(host)["doc"])?.text === "# Far", "loaded after asking");
+    assert.equal(net.count("https://tracker.test/i.png"), 0, "the icon never");
+  } finally {
+    await stop();
+  }
+});

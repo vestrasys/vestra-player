@@ -15,7 +15,7 @@ import { buildItems, checkVersion, isInstalledRow, updateCount, type Display, ty
 import { clean } from "./index-format.ts";
 import { Icons } from "./icons.ts";
 import * as installer from "./installer.ts";
-import { cut, day, permissions, sourceName, TRUST_NOTE } from "./labels.ts";
+import { cut, day, hostOf, permissions, sourceName, TRUST_NOTE } from "./labels.ts";
 import { get } from "./net.ts";
 import { Revocations, revocationKey } from "./revocations.ts";
 import { Repos, type Deps } from "./repos.ts";
@@ -73,7 +73,16 @@ export function labelWidth(text: string, min = 66): number {
   return Math.max(min, Math.ceil(width));
 }
 
-type Doc = { key: string; ref: MarkdownRef | null; note: string; blocked: number; failed: boolean; scope: Scope | null };
+type Doc = {
+  key: string;
+  ref: MarkdownRef | null;
+  note: string;
+  blocked: number;
+  failed: boolean;
+  scope: Scope | null;
+  /** The document is on another host than a third-party index: not fetched until asked. */
+  offHost?: string;
+};
 
 /**
  * The store: repositories and the install library combined into rows, the
@@ -500,7 +509,9 @@ export class Store {
 
   #icon(item: Item): ImageRef {
     let path: string | null = null;
-    if (item.entry?.iconUrl) path = this.icons.remote(item.entry.iconUrl, item.repo?.local ?? false);
+    // A third-party icon on another host than its index is never fetched (it would tell that host who looks).
+    if (item.entry?.iconUrl && this.#sameHost(item, item.entry.iconUrl))
+      path = this.icons.remote(item.entry.iconUrl, item.repo?.local ?? false);
     else if (item.local?.icon && item.installed) path = this.icons.local(join(item.installed.directory, item.local.icon));
     return this.#image(path ?? this.#logo);
   }
@@ -571,12 +582,14 @@ export class Store {
     if (item.state === "builtin")
       add(item.repo ? "与播放器内置插件同 id，不能从这里安装" : "内置插件随播放器更新，不能卸载；停用请到「设置 ▶ 插件管理…」", 4);
     if (item.state === "local" && info) {
-      if (info.source?.kind === "repository") add("它的仓库已从商城移除，商城不再为它检查更新和撤回", 4);
+      if (item.delisted) add("仓库已不再提供这个插件，商城不再为它检查更新（仍会检查撤回）", 4);
+      else if (info.source?.kind === "repository") add("它的仓库已从商城移除，商城不再为它检查更新和撤回", 4);
       else add("侧载插件：未经审核，商城不会为它检查更新", 2);
     }
     if (item.development) add("本次运行使用开发加载的版本", 4);
     const doc = this.#doc;
     if (doc.key === this.#docKey(item)) {
+      if (doc.offHost) add(`说明位于其它网站（${doc.offHost}），没有自动加载`, 2, "showImages", "加载");
       if (doc.blocked > 0) add(`已阻止 ${doc.blocked} 张远程图片（非官方来源）`, 2, "showImages", "显示图片");
       if (doc.failed) add(doc.note, 2, "reloadDoc", "重试");
     }
@@ -686,6 +699,16 @@ export class Store {
 
   // ------------------------------------------------------------ README / CHANGELOG
 
+  /** Official resources, or third-party ones on the index's own host (design §6.1). */
+  #sameHost(item: Item, url: string): boolean {
+    if (!item.repo || item.repo.official) return true;
+    try {
+      return new URL(url).origin === new URL(item.repo.url).origin;
+    } catch {
+      return false;
+    }
+  }
+
   #remoteImages(item: Item): boolean {
     return item.repo?.official === true || this.#remoteShown.has(item.key);
   }
@@ -712,6 +735,11 @@ export class Store {
     try {
       if (item.entry) {
         const url = changelog ? item.entry.changelogUrl : item.entry.readmeUrl;
+        if (url && !this.#sameHost(item, url) && !this.#remoteShown.has(item.key)) {
+          this.#doc = { ...this.#doc, note: `${changelog ? "更新日志" : "说明"}位于其它网站，未自动加载`, offHost: hostOf(url) };
+          this.changed();
+          return;
+        }
         if (url) {
           base = url;
           text = this.#texts.get(url) ?? null;

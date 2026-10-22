@@ -173,3 +173,39 @@ test("disabling fails while an install runs: tried again on the next pass", asyn
     await stop();
   }
 });
+
+test("review A: a delisted plugin revoked with '*' is still disabled (and one whose entries are all unusable)", async () => {
+  const net = new FakeNet();
+  // The publisher drops a deleted plugin from `plugins` but keeps `revoked`.
+  publish(net, OFFICIAL, [{ id: "vestra.other", versions: [{ version: "1.0.0" }] }], {
+    revoked: [
+      { id: "vestra.evil", versions: "*", reason: "恶意插件" },
+      { id: "vestra.broken", versions: "*", reason: "坏了" },
+    ],
+  });
+  const { host, store, stop } = await start({
+    net,
+    packages: [BUILTIN, fromOfficial("vestra.evil", "0.1.0"), fromOfficial("vestra.broken", "0.3.0"), fromOfficial("vestra.gone", "1.0.0")],
+  });
+  try {
+    host.dialogAnswers.push(no);
+    await store.refreshAll(true);
+    await until(host, () => disables(host) === 2, "both disabled");
+    assert.match(String(host.confirms[0]!["detail"]), /恶意插件/);
+    const evil = store.items.find((i) => i.id === "vestra.evil")!;
+    assert.equal(evil.state, "revoked");
+    assert.equal(evil.entry, null);
+    await openStore(host);
+    host.window("store").emit("select", evil.key);
+    await host.settle();
+    assert.ok(banners(host).includes("此版本已被撤回：恶意插件。商城已停用它。"));
+    assert.ok(!banners(host).some((b) => b.includes("仓库已从商城移除")));
+    assert.deepEqual(actions(host).map((a) => a.text), ["仍然启用…", "卸载…"]);
+    // Delisted without a revocation: says so truthfully.
+    host.window("store").emit("select", "\nvestra.gone");
+    await host.settle();
+    assert.ok(banners(host).includes("仓库已不再提供这个插件，商城不再为它检查更新（仍会检查撤回）"));
+  } finally {
+    await stop();
+  }
+});

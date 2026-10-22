@@ -64,10 +64,13 @@ export class IndexError extends Error {
   }
 }
 
-/** Control characters out; one line unless `multiline`; at most `max` characters. */
+/** Bidirectional overrides and zero-width characters: they can make a name read as another one. */
+const INVISIBLE = /[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g;
+
+/** Control and invisible characters out; one line unless `multiline`; at most `max` characters. */
 export function clean(value: unknown, max: number, multiline = false): string | null {
   if (typeof value !== "string") return null;
-  let text = value.replace(/\r\n?/g, "\n");
+  let text = value.replace(INVISIBLE, "").replace(/\r\n?/g, "\n");
   text = multiline ? text.replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, "") : text.replace(/[\u0000-\u001f\u007f]+/g, " ");
   text = text.trim();
   if (!text) return null;
@@ -149,7 +152,10 @@ export function parseIndex(text: string, options: ParseOptions = {}): { index: R
     });
   }
   const revoked: Revocation[] = [];
-  for (const [i, item] of ((data.revoked as unknown[] | undefined) ?? []).slice(0, MAX_REVOKED).entries()) {
+  const listed = (data.revoked as unknown[] | undefined) ?? [];
+  // Fail closed: ignoring revocations past a cap would let an index hide them.
+  if (listed.length > MAX_REVOKED) throw new IndexError("format", `revoked 超过 ${MAX_REVOKED} 条`);
+  for (const [i, item] of listed.entries()) {
     const reason = object(item) ? clean(item.reason, 500, true) : null;
     let range = false;
     try {
@@ -189,25 +195,44 @@ function readVersion(entry: unknown, url: (value: unknown) => string | null): In
   };
 }
 
-/** Plugin id → the versions an index lists (kept with the cache for the replay check). */
-export function versionSets(index: RepoIndex): Record<string, string[]> {
-  return Object.fromEntries(index.plugins.map((p) => [p.id, p.versions.map((v) => v.version)]));
+/**
+ * What a repository's signed indexes have shown so far (kept with the cache):
+ * every version of every plugin and every revocation (id and range). It only
+ * grows; a plugin that disappears keeps its versions here.
+ */
+export type Seen = { versions: Record<string, string[]>; revoked: string[] };
+
+const revocationId = (r: Revocation) => `${r.id}\n${r.versions}`;
+
+/** `seen` plus what `index` lists. */
+export function remember(seen: Seen | undefined, index: RepoIndex): Seen {
+  const versions: Record<string, string[]> = { ...(seen?.versions ?? {}) };
+  for (const plugin of index.plugins)
+    versions[plugin.id] = [...new Set([...(versions[plugin.id] ?? []), ...plugin.versions.map((v) => v.version)])];
+  const revoked = [...new Set([...(seen?.revoked ?? []), ...index.revoked.map(revocationId)])];
+  return { versions, revoked };
 }
 
 /**
- * An older signed index served again (design §3.4): a plugin that is still
- * listed lost a version we have seen before. The publishing job keeps every
- * old version entry, so this does not happen with a fresh index. A plugin
- * missing entirely is accepted (the repository may delete one).
+ * An older signed index served again (design §3.4, §6.1). The publishing job
+ * keeps every version entry of a listed plugin and `revoked` is append-only,
+ * so a fresh index never
+ * - lists a plugin without a version seen before (a delisted plugin may be
+ *   absent, but when it comes back its old versions must be there), or
+ * - lacks a revocation seen before.
+ * Returns what is missing, or `null`.
  */
-export function replayed(seen: Record<string, string[]> | undefined, next: RepoIndex): string | null {
+export function replayed(seen: Seen | undefined, next: RepoIndex): string | null {
   if (!seen) return null;
   for (const plugin of next.plugins) {
-    const before = seen[plugin.id];
+    const before = seen.versions[plugin.id];
     if (!before) continue;
     const now = new Set(plugin.versions.map((v) => v.version));
     const lost = before.find((version) => !now.has(version));
     if (lost) return `${plugin.id} ${lost}`;
   }
+  const now = new Set(next.revoked.map(revocationId));
+  const lost = seen.revoked.find((r) => !now.has(r));
+  if (lost) return `revoked ${lost.replace("\n", " ")}`;
   return null;
 }

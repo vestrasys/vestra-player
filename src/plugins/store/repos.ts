@@ -1,7 +1,7 @@
 import { createHash, randomUUID, type KeyObject } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { IndexError, parseIndex, replayed, versionSets, type RepoIndex } from "./index-format.ts";
+import { IndexError, parseIndex, remember, replayed, type RepoIndex, type Seen } from "./index-format.ts";
 import { clock, hostOf } from "./labels.ts";
 import { get, isHttps, isLocalHttp, NetError, type Fetch } from "./net.ts";
 import { verifyIndex } from "./signing.ts";
@@ -29,7 +29,8 @@ type Meta = {
   etag: string | null;
   lastModified: string | null;
   fetchedAt: number;
-  versionsSeen: Record<string, string[]>;
+  /** Official repository only: what its signed indexes have shown (never shrinks). */
+  seen?: Seen;
 };
 
 /**
@@ -154,7 +155,7 @@ export class Repos {
           etag: result.etag,
           lastModified: result.lastModified,
           fetchedAt: now,
-          versionsSeen: versionSets(result.index),
+          ...(repo.official ? { seen: remember(repo.meta?.seen, result.index) } : {}),
         });
         repo.status = { text: `${repo.label} ${clock(now, now)} 已更新`, warn: false };
       }
@@ -218,7 +219,7 @@ export class Repos {
       const { index, dropped } = parseIndex(bytes.toString("utf8"), { allowLocalHttp: repo.local });
       if (dropped.length) this.#deps.log(`${repo.url}: ignored ${dropped.slice(0, 20).join(", ")}`);
       if (repo.official) {
-        const lost = replayed(repo.meta?.versionsSeen, index);
+        const lost = replayed(repo.meta?.seen, index);
         if (lost) {
           this.#deps.log(`${repo.url}: replayed index, ${lost} is gone`);
           throw new StoreRefusal("replay");

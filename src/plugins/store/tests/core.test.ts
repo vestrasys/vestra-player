@@ -3,7 +3,7 @@ import { createHash, createPublicKey } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { bestVersion, checkVersion, revocationOf } from "../catalog.ts";
-import { parseIndex, replayed, versionSets, IndexError } from "../index-format.ts";
+import { clean, parseIndex, remember, replayed, IndexError } from "../index-format.ts";
 import { permissionList, permissions } from "../labels.ts";
 import { normalizeRepoUrl } from "../repos.ts";
 import { compareVersions, parseRange, playerAtLeast, satisfies } from "../semver.ts";
@@ -101,20 +101,43 @@ test("index parsing: lenient per entry, strict at the top", () => {
   assert.throws(() => parseIndex(JSON.stringify({ ...data, plugins: {} })), (e: IndexError) => e.kind === "format");
 });
 
-test("replay check: a listed plugin may not lose a version; a removed plugin is fine", () => {
+test("replay check: seen versions and revocations never shrink; a delisted plugin may be absent", () => {
   const net = new FakeNet();
-  const parse = (versions: string[], extra = true) =>
+  const parse = (versions: string[], extra = true, revoked: { id: string; versions: string; reason: string }[] = []) =>
     parseIndex(
-      buildIndex(net, "https://r.test/index.json", [
-        { id: "a.one", versions: versions.map((version) => ({ version })) },
-        ...(extra ? [{ id: "b.two", versions: [{ version: "1.0.0" }] }] : []),
-      ]).toString("utf8"),
+      buildIndex(
+        net,
+        "https://r.test/index.json",
+        [
+          ...(versions.length ? [{ id: "a.one", versions: versions.map((version) => ({ version })) }] : []),
+          ...(extra ? [{ id: "b.two", versions: [{ version: "1.0.0" }] }] : []),
+        ],
+        revoked,
+      ).toString("utf8"),
     ).index;
-  const seen = versionSets(parse(["1.0.0", "1.1.0"]));
+  const seen = remember(undefined, parse(["1.0.0", "1.1.0"]));
   assert.equal(replayed(seen, parse(["1.0.0", "1.1.0", "1.2.0"])), null);
   assert.equal(replayed(seen, parse(["1.0.0"])), "a.one 1.1.0");
-  assert.equal(replayed(seen, parse(["1.0.0", "1.1.0"], false)), null);
+  assert.equal(replayed(seen, parse(["1.0.0", "1.1.0"], false)), null, "b.two delisted");
   assert.equal(replayed(undefined, parse(["1.0.0"])), null);
+  // Scenario C: a.one absent for a while keeps its seen versions.
+  const absent = remember(seen, parse([]));
+  assert.deepEqual(absent.versions["a.one"]?.sort(), ["1.0.0", "1.1.0"]);
+  assert.equal(replayed(absent, parse(["1.0.0"])), "a.one 1.1.0");
+  // Scenario B: a revocation once seen must stay.
+  const revoked = [{ id: "a.one", versions: "1.1.0", reason: "bad" }];
+  const withRevocation = remember(seen, parse(["1.0.0", "1.1.0"], true, revoked));
+  assert.equal(replayed(withRevocation, parse(["1.0.0", "1.1.0"])), "revoked a.one 1.1.0");
+  assert.equal(replayed(withRevocation, parse(["1.0.0", "1.1.0", "1.2.0"], true, revoked)), null);
+});
+
+test("invisible characters are removed from display text; too many revocations reject the index", () => {
+  assert.equal(clean("Vestra\u202e\u200bPlayer\ufeff\u2066x\u2069", 64), "VestraPlayerx");
+  const net = new FakeNet();
+  const many = Array.from({ length: 1001 }, (_, i) => ({ id: `p.${i}`, versions: "*", reason: "x" }));
+  const text = buildIndex(net, "https://r.test/index.json", [], many).toString("utf8");
+  assert.throws(() => parseIndex(text), (e: IndexError) => e.kind === "format" && /revoked/.test(e.message));
+  assert.equal(parseIndex(buildIndex(net, "https://r.test/index.json", [], many.slice(0, 1000)).toString("utf8")).index.revoked.length, 1000);
 });
 
 test("version choice: API, player version and revocations", () => {
