@@ -3573,6 +3573,7 @@ impl Host {
                     |instance| {
                         if theme != "vestra"
                             && theme::apply(instance, &theme, fill.as_ref()).is_err()
+                            || theme::apply_fonts(instance).is_err()
                         {
                             missed.set(true);
                         }

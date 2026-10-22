@@ -54,6 +54,7 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 - 输入：主窗口最外层、两个面板各包一层 FocusScope。Slint 的按键先给焦点控件，未接受的逐级冒泡；面板那一层以「面板 + 全局」查表，最外层以全局查表（`bindings.rs`）。查表在 UI 线程上同步进行（`Rc<RefCell<InputShared>>`，不借用 Host），绑定了就返回 accept 并发 `Event::Binding`，主循环再按注册表检查启用状态后执行。视频区鼠标（双击、中键、侧键、滚轮）同理。全屏、退出全屏、退出是宿主自己的命令（owner 0），和插件命令在同一张表与同一棵菜单树里。
 - 菜单：`commands.rs` 按 `order`（子菜单取其最前的命令）建树，`menu.rs` 投影为面板列表（分隔线、单选、快捷键文字、行位置），`menu-view.slint` 只负责绘制。面板右键菜单（C11）复用同一投影的单层形式，弹在面板当前所在的窗口。
 - 模拟器输入捕获（`producer.declareInput`）在 winit 层先拦截按键；绑定在宿主命令上的键（全屏等）放行。
+- 等宽字体：`Theme.font-mono` 读 `VestraPalette.font-mono`（`ui/palette.slint`，默认 Menlo），宿主在每个视图（主窗口、浮动面板、工具窗口、选项窗口）下发配色时一并设置为 `platform::monospace_font(SYSTEM)`（macOS Menlo、Windows Consolas、Linux DejaVu Sans Mono；纯函数，各系统在任何机器上都有测试），`theme::apply_fonts`；与配色无关，Vestra 配色下也设置。
 - 窗口标准快捷键（用户裁决 2026-10-22）：工具窗口、浮动面板、选项窗口按系统约定关闭（macOS ⌘W；Windows Ctrl+W、Ctrl+F4；Linux Ctrl+W），主窗口不响应。表在平台层 `platform/shortcuts.rs`：按系统分开的纯函数 `window_shortcuts(System)`，每个平台模块只声明自己的 `SYSTEM`，所以每个系统的条目在任何机器上都有测试；以后加 Linux 桌面变体、Android、iOS 只加条目（移动端表为空，返回手势由那个平台模块映射到 `WindowAction::Close`）。`ui::WindowShortcuts` 在这些窗口的 winit 钩子里最先检查按键（字母按当前布局不带修饰键的字符，非拉丁布局按美式键位；修饰键必须完全一致），命中时调用 `slint::Window::dispatch_event(CloseRequested)`，即标题栏关闭按钮的同一路径（工具窗口 `ViewClosed` → 插件 `ui.closed`，浮动面板 `FloatingClosed`，选项窗口 `Event::Settings(_, None)`，与「关闭」按钮的 `close-window` 相同），并返回 `PreventDefault`：Slint 收不到这次按键，所以输入框获得焦点时也有效，也不会进绑定表或插件的 Slint 处理器。之前选项窗口的 ⌘W 写在 Slint 里，看的是 `modifiers.meta`，而 Slint 在 macOS 上把 ⌘ 报告为 `control`（⌃ 才是 `meta`，见 `SLINT_CONTROL_IS_COMMAND`），所以从来没生效；该处理器已删除。
 
 ## 5. 代码地图
@@ -66,7 +67,7 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 | `src/host/src/processing*.rs`、`effects.rs` | 视频/音频处理链 |
 | `src/host/src/subtitle_*.rs`、`native_subtitle.rs` | 字幕上传、选择、样式层 |
 | `src/host/src/media_*.rs`、`offline_*.rs` | 快照与离线导出工作进程 |
-| `src/host/src/producer*.rs` | 插件生成的音视频流（NES） |
+| `src/host/src/producer*.rs` | 插件生成的音视频流（NES）。连接在两帧之间断开（`TransportClosed`）先等 0.5 秒（`CLOSE_GRACE`）：来源在此期间关闭或替换就不算失败（SDK 1.1.2 及以前先断连接再关来源），否则报 `producer transport closed`；帧中途断开与协议错误立即报告 |
 | `src/host/src/composition.rs`、`ui.rs`、`menu.rs`、`ui/*.slint` | 界面组合（主窗口、浮动面板窗口）、编译配置、插件窗口、共享右键菜单 |
 | `src/host/src/commands.rs`、`bindings.rs` | 命令注册表与菜单树、输入绑定表（解析、作用范围、冲突、菜单快捷键文字） |
 | `src/host/src/plugins.rs` | 插件进程；`VESTRA_PLUGIN_DATA_DIR` 传入数据目录（按 `DataKey`：已安装 `plugin-data/<安装实例 GUID>`，开发加载 `plugin-data/development/<id>`，试载 `plugin-data/<id>.trial.<owner>`，停止时删除）；`secrets` 的服务名同样按 `DataKey`，用过的名字记在安装库的 `secrets/<服务名>.json`（`secret_index.rs`，只记名字，每服务 ≤ 256），带数据卸载与休眠实例被丢弃时据此删除 |

@@ -458,6 +458,8 @@ interface Stream extends Disposable {
 
 `frame()` 由 SDK 按音频时钟调用，不会并发调用，暂停时不调用。预填充、激活、暂停与输入确认都由 SDK 处理。
 
+停止（`stop()`、`dispose()`、插件停用）时 SDK 先关闭来源（仍是当前来源时），再断开画面连接，最后释放生成端（SDK 1.1.3 起；之前先断开连接，播放器会把它报成「producer transport closed」加载失败，插件不必再自己先 `close`，原有的这种写法照常可用）。播放器一侧：连接在两帧之间断开后，来源 0.5 秒内被关闭或替换就不算失败；仍选中则报 `producer transport closed`（例如插件进程崩溃）；帧中途断开、协议错误立即报告。
+
 画面和声音经本机连接送给播放器，由 SDK 建立，插件不用管：macOS、Linux 是 `/tmp` 下私有目录里的 Unix 套接字；Windows 是回环地址（`127.0.0.1`）上的 TCP 端口，SDK 连上后先发播放器给的 32 字节令牌，没有令牌的连接被播放器丢弃（本机任何进程都能连回环端口）。协议上 `producer.prepare` 的答复相应是 `socket: "<路径>"` 或 `socket: "tcp://127.0.0.1:<端口>"` 加 `token`（十六进制）。
 
 ### 5.3 条件提交（`ifCurrent`）
@@ -734,7 +736,7 @@ interface SlotState {
 - 插件 → 界面用 `in` / `in-out property`，界面 → 插件用 `callback`。回调参数和属性值必须能用 JSON 表示（基本类型、数组、结构体），回调返回 `void`。
 - 会被插件改值的输入控件用双向绑定（`value <=> root.x`、`checked <=> root.x`）。单向的 `value: root.x` 在用户操作控件后会断开，之后插件改值，控件不会跟着动。属性须为 `in-out`。
 - `in` 属性只能单向绑定时，用 `changed x => { slider.value = root.x; }` 在模型变化时回推。
-- 主题与控件：`import { Theme } from "@vestra/theme.slint";` 提供颜色（由播放器按当前配色下发，§6.8；插件只读，不能给 `Theme` 赋值，硬编码颜色不会随配色变化）（`bg-bar`、`bg-panel`、`text`、`accent`、`playing`…）、字号（`font-xs` 9px、`font-body` 11px、`font-tab` 12px、`font-title` 13px、`font-mono` 等宽（Menlo；其中的中文按系统字体回退显示））和控件尺寸（`button-height` 21px、`input-height`、`form-row-gap`、`dialog-padding`…），完整列表见 `src/host/ui/vestra/theme.slint`。`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";` 提供 PotPlayer 样式的按钮（文字按钮 21px、`small` 18px；`text` 为空时是图标按钮：`icon` 是 Slint `Path` 的路径数据，画在 `icon-width` × `icon-height`（默认 14×12）的 viewbox 里，`stroked: true` 画 1.5px 线而不填充，`checked` 表示开启态；图标按钮的宽高由调用方设置，悬停提示用 `ToolTipArea` 包住：悬停 600ms 显示，指针离开或按下时关闭，下次悬停再显示；只读属性 `showing` 表示提示正在显示）、2px 线滑块（`panel: true` 为面板样式）和悬停提示，以及输入链接组件 `UrlInputRow`（UI-DLG-02：多行输入 + 「打开」「取消」；`in-out property <string> text`、`placeholder`、`confirm-text`（默认「打开」）、`cancel-text`、`enabled`，`callback accepted(string)`（回车或点确定，Shift+回车换行）、`cancelled()`（Esc 或点取消），`focus-input()`、`select-all()` 两个公共函数；不校验地址，校验由插件做；用法见示例 §29）。
+- 主题与控件：`import { Theme } from "@vestra/theme.slint";` 提供颜色（由播放器按当前配色下发，§6.8；插件只读，不能给 `Theme` 赋值，硬编码颜色不会随配色变化）（`bg-bar`、`bg-panel`、`text`、`accent`、`playing`…）、字号（`font-xs` 9px、`font-body` 11px、`font-tab` 12px、`font-title` 13px、`font-mono` 等宽字体名（由播放器按系统设置：macOS Menlo、Windows Consolas、Linux DejaVu Sans Mono；其中的中文按系统字体回退显示））和控件尺寸（`button-height` 21px、`input-height`、`form-row-gap`、`dialog-padding`…），完整列表见 `src/host/ui/vestra/theme.slint`。`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";` 提供 PotPlayer 样式的按钮（文字按钮 21px、`small` 18px；`text` 为空时是图标按钮：`icon` 是 Slint `Path` 的路径数据，画在 `icon-width` × `icon-height`（默认 14×12）的 viewbox 里，`stroked: true` 画 1.5px 线而不填充，`checked` 表示开启态；图标按钮的宽高由调用方设置，悬停提示用 `ToolTipArea` 包住：悬停 600ms 显示，指针离开或按下时关闭，下次悬停再显示；只读属性 `showing` 表示提示正在显示）、2px 线滑块（`panel: true` 为面板样式）和悬停提示，以及输入链接组件 `UrlInputRow`（UI-DLG-02：多行输入 + 「打开」「取消」；`in-out property <string> text`、`placeholder`、`confirm-text`（默认「打开」）、`cancel-text`、`enabled`，`callback accepted(string)`（回车或点确定，Shift+回车换行）、`cancelled()`（Esc 或点取消），`focus-input()`、`select-all()` 两个公共函数；不校验地址，校验由插件做；用法见示例 §29）。
 - 所有插件 Slint 都以 `fluent-dark` 风格编译：std-widgets 的控件默认是深色。每个窗口都用系统默认字体，字体里没有的字（例如西文字体里的中文）由 Slint 按字符回退到系统里有这个字的字体，插件不需要自己设字体；插件写的 `default-font-family` / `font-family` 照常生效，缺字同样回退。播放器不内置界面字体。
 - 编辑器里要让 `@vestra/...` 导入可解析，给 Slint 语言服务设 `libraryPaths`：`{ "vestra": "<仓库>/src/host/ui/vestra" }`。
 
@@ -1401,6 +1403,7 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | 绑定 §4.1 | `Ctrl` 也认 ⌘ | `Cmd` 是徽标键 | 同 Windows |
 | 关闭工具窗口、浮动面板、选项窗口 §4.1 | ⌘W | Ctrl+W、Ctrl+F4 | Ctrl+W |
 | 界面字体 §6.4 | 系统默认（中文回退到苹方等） | 系统默认（中文回退待真机确认） | 系统默认 |
+| `Theme.font-mono` §6.4 | Menlo | Consolas | DejaVu Sans Mono |
 
 ## 17. 变更说明
 
@@ -1410,7 +1413,8 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 
 - 不再强制界面字体：之前每个窗口默认用 Hiragino Sans GB（macOS）/ Microsoft YaHei（Windows），现在用系统默认字体，缺字由 Slint 1.18 按字符回退（§6.4）。西文字形、行高、宽度随之变成系统字体的，自己按像素排版文字的插件请检查。`VESTRA_FONT_FALLBACK` 环境变量删除。
 - 工具窗口、浮动面板、选项窗口按系统标准关闭键关闭（§4.1、§6.2）：走与标题栏关闭按钮相同的路径（工具窗口照常 `onClose`）。之前选项窗口的 ⌘W 在 macOS 上不起作用（它的 Slint 处理器看的是 `meta`，而 Slint 在 macOS 上把 ⌘ 报告为 `control`）。
-- `Theme.font-mono` 的注释改为：Menlo 只有 macOS 自带，没有时用默认字体（不是等宽）。SDK 1.1.3 带同步副本。
+- `Theme.font-mono` 由播放器按系统设置（macOS Menlo、Windows Consolas、Linux DejaVu Sans Mono），在所有窗口（主窗口与面板、工具窗口、浮动面板、选项窗口、Markdown 代码块）生效；插件照常写 `Theme.font-mono`。它改为读 `VestraPalette.font-mono`（默认 Menlo），SDK 1.1.3 带同步的 `theme.slint`、`palette.slint`。
+- 生成流（§5.2）：`Stream.stop()`、`dispose()`、停用时先关闭来源，再断开连接、释放生成端，停止不再弹「打开失败：producer transport closed」。播放器对两帧之间的断开给 0.5 秒等来源关闭，旧 SDK 的插件也不再误报；崩溃与协议错误照常报告。`TestHost` 的生成端新增 `droppedWhileSelected`。
 
 ### Slint 1.18.1（2026-10，SDK 1.1.2）
 

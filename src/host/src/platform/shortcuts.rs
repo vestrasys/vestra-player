@@ -13,15 +13,7 @@
 //! table); their back gesture is mapped to `WindowAction::Close` by their own
 //! platform module, not through this table.
 
-/// The systems with a table (`imp::SYSTEM`). A build names only its own.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(not(test), allow(dead_code))]
-pub enum System {
-    MacOs,
-    Windows,
-    /// Linux and the other desktop systems of `other.rs`.
-    Linux,
-}
+use super::System;
 
 /// What a standard window shortcut does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
