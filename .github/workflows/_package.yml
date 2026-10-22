@@ -1,0 +1,61 @@
+# Release build and an unsigned artifact. Bundling (.app/installer), signing
+# and notarization come in S7 (doc/process/ci.md).
+name: package
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        description: windows or macos
+        type: string
+        required: true
+      cache:
+        type: boolean
+        default: false
+
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  package:
+    name: package ${{ inputs.os }}
+    runs-on: ${{ inputs.os == 'windows' && 'windows-2022' || 'macos-15' }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+        working-directory: src/host
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+        with:
+          cache: ${{ inputs.cache }}
+          cache-key: package
+      - uses: ./.github/actions/setup-libmpv
+      - name: cargo build --release
+        run: cargo build --release --locked
+      # TODO(S7): bundle (.app with libmpv dylibs / installer), THIRD_PARTY_LICENSES, plugins.
+      - name: Stage the unsigned binary
+        env:
+          OS: ${{ inputs.os }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          if [ "$OS" = windows ]; then
+            cp target/release/vestra-host.exe "$MPV_LIBRARY_DIR/libmpv-2.dll" "$RUNNER_TEMP/out/"
+          else
+            cp target/release/vestra-host "$RUNNER_TEMP/out/"
+          fi
+          ls -l "$RUNNER_TEMP/out"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: vestra-unsigned-${{ inputs.os }}
+          path: ${{ runner.temp }}/out
+          retention-days: 7
+          if-no-files-found: error

@@ -1,0 +1,68 @@
+name: Set up libmpv
+description: >
+  libmpv for rsmpv-sys to link against and for the tests to load.
+  macOS: Homebrew mpv. Windows: a pinned shinchiro mpv-dev build (MinGW,
+  static FFmpeg inside libmpv-2.dll), plus an MSVC import library mpv.lib
+  generated from the DLL's exports. Sets MPV_LIBRARY_DIR (rsmpv-sys build.rs)
+  and, on Windows, puts the DLL on PATH.
+runs:
+  using: composite
+  steps:
+    - name: libmpv (macOS, Homebrew)
+      if: runner.os == 'macOS'
+      shell: bash
+      env:
+        HOMEBREW_NO_AUTO_UPDATE: "1"
+        HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: "1"
+      # The values written are runner paths, not event data.
+      run: | # zizmor: ignore[github-env]
+        brew install mpv
+        echo "MPV_LIBRARY_DIR=$(brew --prefix)/lib" >> "$GITHUB_ENV"
+        ls -l "$(brew --prefix)/lib/"libmpv*.dylib
+
+    - name: libmpv archive cache (Windows)
+      if: runner.os == 'Windows'
+      id: cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/mpv-dev.7z
+        key: mpv-dev-x86_64-20261021-git-e471496c56-efc719ef
+
+    - name: libmpv (Windows, mpv-dev)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        # Pinned build: bump the URL, cache key and SHA-256 together.
+        MPV_URL: https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20261021/mpv-dev-x86_64-20261021-git-e471496c56.7z
+        MPV_SHA256: efc719eff3dc5954b4a5efc800632808bcec01cc9034940dd14e5eb7fe9ea633
+        CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+      # The values written are runner paths, not event data.
+      run: | # zizmor: ignore[github-env]
+        $ErrorActionPreference = 'Stop'
+        $archive = Join-Path $env:RUNNER_TEMP 'mpv-dev.7z'
+        $dir = Join-Path $env:RUNNER_TEMP 'mpv'
+        if ($env:CACHE_HIT -ne 'true') {
+          Invoke-WebRequest -Uri $env:MPV_URL -OutFile $archive
+        }
+        $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLower()
+        if ($hash -ne $env:MPV_SHA256) { throw "mpv-dev SHA-256 mismatch: $hash" }
+        7z x -y "-o$dir" $archive | Out-Null
+
+        # MSVC import library from the DLL's export table.
+        $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+        $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        $version = (Get-Content "$vs\VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt").Trim()
+        $bin = "$vs\VC\Tools\MSVC\$version\bin\Hostx64\x64"
+        $exports = & "$bin\dumpbin.exe" /nologo /exports "$dir\libmpv-2.dll"
+        $names = $exports | ForEach-Object {
+          if ($_ -match '^\s+\d+\s+[0-9A-Fa-f]+\s+[0-9A-Fa-f]{8}\s+(\S+)') { $Matches[1] }
+        }
+        if (-not $names) { throw 'no exports found in libmpv-2.dll' }
+        Write-Host "libmpv-2.dll exports $($names.Count) symbols"
+        Set-Content -Path "$dir\mpv.def" -Value (@('LIBRARY libmpv-2', 'EXPORTS') + $names)
+        & "$bin\lib.exe" /nologo /def:"$dir\mpv.def" /machine:x64 /out:"$dir\mpv.lib"
+        if ($LASTEXITCODE -ne 0) { throw 'lib.exe failed' }
+
+        "MPV_LIBRARY_DIR=$dir" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+        $dir | Out-File -Append -Encoding utf8 $env:GITHUB_PATH

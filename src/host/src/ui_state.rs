@@ -68,7 +68,7 @@ pub struct UiState {
     pub sidebar: Option<Sidebar>,
     #[serde(default)]
     pub panels: BTreeMap<String, PanelPrefs>,
-    /// "<manifest id>/<command id>" → bindings; read only this round, kept on save.
+    /// `"<manifest id>/<command id>"` → bindings; read only this round, kept on save.
     #[serde(default)]
     pub bindings: BTreeMap<String, Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

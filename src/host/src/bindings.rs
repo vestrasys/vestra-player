@@ -579,7 +579,7 @@ struct Declared {
 #[derive(Default)]
 pub struct Table {
     declared: BTreeMap<(Owner, String), Declared>,
-    /// "<manifest id>/<command id>" → bindings; `[]` unbinds.
+    /// `"<manifest id>/<command id>"` → bindings; `[]` unbinds.
     overlay: BTreeMap<String, Vec<String>>,
     active: BTreeMap<(Scope, Input), Target>,
     conflicts: Vec<String>,

@@ -1,0 +1,5 @@
+# zizmor (https://docs.zizmor.sh) settings for `zizmor --offline .github`.
+rules:
+  # Keep `uses: ./.github/...` for local actions and reusable workflows.
+  self-repository:
+    disable: true

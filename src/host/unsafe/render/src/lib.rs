@@ -207,7 +207,7 @@ pub struct Renderer {
     shared: Arc<Shared>,
     thread: Option<thread::JoinHandle<()>>,
 }
-/// The UI side of a [`Renderer`]: clonable and `Send`.
+/// The UI side of a [`Renderer`]: cloneable and `Send`.
 #[derive(Clone)]
 pub struct Handle(Arc<Shared>);
 
