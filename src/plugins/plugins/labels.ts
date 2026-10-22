@@ -47,6 +47,13 @@ export function sourceText(info: PluginInfo): string {
   return "url" in source ? `${kind}（${source.url}）` : kind;
 }
 
+/** The list's narrow 「来源」 column: the same words without the address; 内置 for built-ins. */
+export function sourceShort(info: Pick<PluginInfo, "origin" | "builtin" | "source">): string {
+  if (info.builtin) return SOURCE.bundled;
+  if (info.source) return SOURCE[info.source.kind] ?? info.source.kind;
+  return ORIGIN[info.origin] ?? info.origin;
+}
+
 /** The hint on 「卸载…」 for built-in plugins. */
 export const BUILTIN_TIP = "内置插件只能停用";
 
