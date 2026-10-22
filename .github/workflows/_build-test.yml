@@ -50,8 +50,9 @@ jobs:
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - name: cargo test
         run: cargo test --locked --workspace
+      # Runs even when the tests failed, for one more signal per run.
       - name: cargo doc
-        if: inputs.doc
+        if: ${{ !cancelled() && inputs.doc }}
         env:
           RUSTDOCFLAGS: -D warnings
         run: cargo doc --locked --no-deps --workspace --document-private-items
