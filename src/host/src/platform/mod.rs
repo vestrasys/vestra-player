@@ -12,7 +12,7 @@
 //!
 //! | area | functions |
 //! | --- | --- |
-//! | window shortcuts | `SYSTEM` → `standard_window_shortcut` (the table itself is `shortcuts.rs`, the same on every system) |
+//! | per-system tables | `SYSTEM` → `standard_window_shortcut` (table in `shortcuts.rs`), `ui_monospace_font` (`monospace_font`); the tables are the same code on every system |
 //! | windows | `shown`, `capture_windows`, `associate_new`, `set_floating`, `window_count`, `resize_content`, `screen_for`, `pointer_in`, `modifier_keys`, `double_click_seconds`, `menu_show_delay_ms` |
 //! | clipboard | `clipboard_read_text`, `clipboard_write_text`, `clipboard_write_image` |
 //! | dialogs | `confirm` |
@@ -44,8 +44,37 @@ mod imp;
 
 pub use imp::*;
 
+/// The systems the platform layer has per-system tables for (standard
+/// window shortcuts, the monospace font); each platform module names its own
+/// as `SYSTEM`. The tables are pure functions of it, so every system's
+/// entries are tested on every machine. A build names only its own variant.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(not(test), allow(dead_code))]
+pub enum System {
+    MacOs,
+    Windows,
+    /// Linux and the other desktop systems of `other.rs`.
+    Linux,
+}
+
 mod shortcuts;
 pub use shortcuts::*;
+
+/// The monospace family `Theme.font-mono` names on `system`: one that ships
+/// with it (Slint falls back per character for scripts it lacks, CJK
+/// included). Android and iOS get theirs when they get a module.
+pub fn monospace_font(system: System) -> &'static str {
+    match system {
+        System::MacOs => "Menlo",
+        System::Windows => "Consolas",
+        System::Linux => "DejaVu Sans Mono",
+    }
+}
+
+/// The running system's monospace family (`theme::apply_fonts`).
+pub fn ui_monospace_font() -> &'static str {
+    monospace_font(imp::SYSTEM)
+}
 
 /// The running system's standard window shortcut for `press`, if any.
 pub fn standard_window_shortcut(press: &KeyPress) -> Option<WindowAction> {
@@ -431,6 +460,16 @@ mod keyring_store {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn each_system_names_a_monospace_font_it_ships() {
+        assert_eq!(monospace_font(System::MacOs), "Menlo");
+        assert_eq!(monospace_font(System::Windows), "Consolas");
+        assert_eq!(monospace_font(System::Linux), "DejaVu Sans Mono");
+        // The palette's default is the macOS one (the SDK copy shows it).
+        let palette = include_str!("../../ui/palette.slint");
+        assert!(palette.contains("in property <string> font-mono: \"Menlo\";"));
+    }
 
     fn rect(width: f64, height: f64) -> Rect {
         Rect {

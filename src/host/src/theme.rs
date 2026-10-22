@@ -90,6 +90,17 @@ pub fn apply(
 
 pub const PALETTE: &str = "VestraPalette";
 
+/// Set one view's per-system fonts (`Theme.font-mono`): every view, whatever
+/// the palette, before it is shown where the caller can.
+pub fn apply_fonts(instance: &slint_interpreter::ComponentInstance) -> Result<()> {
+    instance.set_global_property(
+        PALETTE,
+        "font-mono",
+        SValue::String(crate::platform::ui_monospace_font().into()),
+    )?;
+    Ok(())
+}
+
 /// The source line that makes the palette settable on an instance.
 pub fn export_line() -> String {
     let path = crate::ui::ui_dir().join("palette.slint");
@@ -113,6 +124,10 @@ impl Host {
         if self.vestra_fill.is_none() {
             self.vestra_fill = instance.get_global_property(PALETTE, "accent-fill").ok();
         }
+        if let Err(error) = apply_fonts(instance) {
+            eprintln!("host.error theme: {error:#}");
+            self.theme_pending = true;
+        }
         if self.theme() == "vestra" && self.vestra_fill.is_some() {
             // A fresh instance already shows Vestra.
             return;
@@ -135,7 +150,9 @@ impl Host {
             .collect();
         self.theme_pending = false;
         for instance in instances.drain(..) {
-            if let Err(error) = apply(&instance, &theme, self.vestra_fill.as_ref()) {
+            if let Err(error) = apply(&instance, &theme, self.vestra_fill.as_ref())
+                .and_then(|()| apply_fonts(&instance))
+            {
                 eprintln!("host.error theme: {error:#}");
                 self.theme_pending = true;
             }

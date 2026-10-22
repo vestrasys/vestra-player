@@ -962,7 +962,7 @@ SDK 与运行器（`src/sdk/`）：
 
 - **代码位置**：宿主新文件 `bindings.rs`（绑定表）、`ui_state.rs`（持久化）、`ui/vestra/theme.slint`、`ui/vestra/widgets.slint`；`commands.rs` 重写为新菜单模型（含 §14 的 46 条命令顺序测试）；`menu.rs` 增加分隔线、单选、快捷键列与单层面板菜单；`host.slint` 重写外壳；`composition.rs` 生成侧栏分隔条、按键转发层与浮动窗口源码。SDK 新文件 `sdk/plugin/bindings.ts`（与宿主同规则的语法检查）、`sdk/plugin/osd.ts`。新插件 `src/plugins/info/`；演示 `src/examples/core-ui/`（菜单分组与单选、`repeat` 绑定、不进菜单的命令、屏幕提示、`next/previous` 调用、侧栏开关与分离、主题控件窗口）与 `src/examples/panel-menu/`（面板右键菜单、面板焦点按键、序列提供者、浮动窗口标题）。
 - **⌘Q**：Slint 1.16 的 winit 后端在 macOS 默认建立应用菜单（muda，含系统「退出 ⌘Q」，`i-slint-backend-winit` `muda.rs` `create_default_app_menu`），⌘Q 由系统菜单先处理，不会到达窗口，所以不会和宿主的 `Cmd+Q` 绑定重复触发；宿主绑定在 macOS 上只提供菜单里的快捷键文字。经系统菜单退出时宿主不经过自己的退出路径，界面状态最多丢失最后 1 秒内未写入的变化（右键菜单「退出」会先写入）。需 P5 实测。
-- **主题令牌**：`Theme.font-family` 未提供（各窗口用系统默认字体，§2.2）；`font-mono` 为 `Menlo`。
+- **主题令牌**：`Theme.font-family` 未提供（各窗口用系统默认字体，§2.2）；`font-mono` 由宿主按系统下发（macOS `Menlo`、Windows `Consolas`、Linux `DejaVu Sans Mono`，2026-10-22）。
 - **wire 方法**：`playback.stats` 由后端线程读 libmpv；`layout.set` 在答复前跑一次布局，紧接着的 `layout.state` 能看到结果。`ui.menu` 的宿主错误码按 §11.3。
 - **滚轮步长**：每 40 逻辑像素一步（`WHEEL_STEP`），需按触控板与鼠标实测调整。
 - **删除提前做了的部分**（因为外壳已换，旧代码不再有调用者）：`host.slint` 写死的 Space/←/→/F11/Esc 路由、`Host::canvas_shortcut`、`WindowInput` 的 `shortcut:`/`toggleFullscreen`/`escape` 分支、`Registry::resolve_shortcut`、领域列表、`diagnostic` 及后端为它维护的状态快照、`sidebar_resize*`（Q7）、Arial Unicode 字体。§16 其余项（`shortcut` 字段、旧面板可见性接口与 wire、`reveal_sidebar_in_fullscreen`、测试宿主旧字段）留到 P4。

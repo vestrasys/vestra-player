@@ -374,6 +374,35 @@ export component W inherits Window {
         assert!(instance.window().is_visible());
     }
 
+    /// `Theme.font-mono` in a plugin's own window (and so in its Markdown
+    /// code blocks) is the running system's monospace family once the
+    /// player delivers the fonts (`theme::apply_fonts`).
+    #[test]
+    fn plugin_windows_read_the_systems_monospace_font() {
+        headless();
+        let instance = compile_source(
+            r#"import { Theme } from "@vestra/theme.slint";
+export component W inherits Window {
+    out property <string> mono: Theme.font-mono;
+    Text { text: "代码"; font-family: Theme.font-mono; }
+}"#
+            .into(),
+            &ui_dir().join("w.slint"),
+        )
+        .unwrap();
+        assert_eq!(
+            instance.get_property("mono").unwrap(),
+            Value::from(slint::SharedString::from("Menlo"))
+        );
+        crate::theme::apply_fonts(&instance).unwrap();
+        assert_eq!(
+            instance.get_property("mono").unwrap(),
+            Value::from(slint::SharedString::from(
+                crate::platform::ui_monospace_font()
+            ))
+        );
+    }
+
     fn headless() {
         thread_local! {
             static PLATFORM: () = {
