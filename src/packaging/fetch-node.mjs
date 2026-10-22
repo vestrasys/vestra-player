@@ -24,7 +24,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import {
   download,
   exists,
@@ -56,26 +56,31 @@ async function verifiedSums(version, keyring, cache) {
   const sums = join(dir, "SHASUMS256.txt");
   await download(`${base}/SHASUMS256.txt`, sums);
   await download(`${base}/SHASUMS256.txt.sig`, `${sums}.sig`);
-  // gpgv wants a keyring path with a directory part (else it looks in
-  // ~/.gnupg). Without gpgv (some Git for Windows builds), gpg --verify with
-  // only that keyring and a throw-away home.
+  // Paths relative to the cache, with "./": gpgv looks a bare keyring name
+  // up in ~/.gnupg, and the MSYS2 gpg of Git for Windows reads "C:\\…" as a
+  // URL. Without gpgv (some Git for Windows builds), gpg --verify with only
+  // that keyring and a throw-away home.
+  const rel = (path) => `./${relative(cache, path).split(sep).join("/")}`;
+  const verify = [`${rel(sums)}.sig`, rel(sums)];
   const gpgv = spawnSync("gpgv", ["--version"], { stdio: "ignore" });
   if (!gpgv.error)
-    run("gpgv", ["--keyring", resolve(kbx), `${sums}.sig`, sums]);
+    run("gpgv", ["--keyring", rel(kbx), ...verify], { cwd: cache });
   else {
-    const home = join(cache, "gnupg-home");
-    await mkdir(home, { recursive: true });
-    run("gpg", [
-      "--batch",
-      "--homedir",
-      home,
-      "--no-default-keyring",
-      "--keyring",
-      resolve(kbx),
-      "--verify",
-      `${sums}.sig`,
-      sums,
-    ]);
+    await mkdir(join(cache, "gnupg-home"), { recursive: true });
+    run(
+      "gpg",
+      [
+        "--batch",
+        "--homedir",
+        "./gnupg-home",
+        "--no-default-keyring",
+        "--keyring",
+        rel(kbx),
+        "--verify",
+        ...verify,
+      ],
+      { cwd: cache },
+    );
   }
   const table = {};
   for (const line of (await readFile(sums, "utf8")).split("\n")) {
