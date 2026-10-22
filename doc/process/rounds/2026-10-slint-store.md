@@ -119,6 +119,7 @@
 - ~~插件仓库：资源哈希、单调 `generated`、多签名、`revoked.json` 只追加~~：2026-10-22 已完成并发布（插件仓库 68ff01b，线上 `generated` = 1，签名通过）。商城端配套改动已完成（`rebuild/store-ui` dc58f40，测试 58/58；协调者对线上索引冒烟：验签通过、记下 generated=1、YouTube 包 sha256 一致、二次刷新 304）。
 - 插件仓库 youtube 测试「download shows progress while running and the saved file when done」在 Windows + Node 22.18 偶发失败一次（CI run 39678880495，dbd7e7d），前后同一测试都通过。交 youtube 作者查。
 - 主窗口 `sidebar-actual` 绑定环警告（见上）。
+- SDK：`StreamHandle.stop()` 先关数据连接再关来源，宿主把断开当成加载失败，生成流的插件停止时会弹「打开失败：producer transport closed」。nes 已规避（`rebuild/plugin-fixes` bdb1dd3）；SDK 应改为先关来源，宿主也可考虑播放中断开不算加载失败。交维护者（字体/快捷键任务之后），随 SDK 1.1.3。
 - 用户待测：播放列表用真鼠标双击列表项能否播放（合成双击会卡在拖动状态）。
 - SDK 仓库的 Docs 工作流在推标签时失败（Pages 环境只允许 main；v1.1.1 起就这样，main 上的那次会正常部署）。应让 Docs 只在 main 上运行。
 - reference §6.4「默认字体是系统 UI 字体」与实际强制 Hiragino 不一致，等 W4 决定后一起改。
