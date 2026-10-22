@@ -3,6 +3,7 @@ import { mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import test from "node:test";
+import { isDeepStrictEqual } from "node:util";
 import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 import { newFakes, stills, watchHost } from "./fakes.ts";
@@ -10,9 +11,13 @@ import { newFakes, stills, watchHost } from "./fakes.ts";
 const fakes = newFakes();
 const directory = new URL("..", import.meta.url);
 const tick = () => new Promise((done) => setTimeout(done, 5));
-async function until(predicate: () => boolean) {
+/**
+ * Poll an observable result. `host.settle()` waits only for host calls, not for
+ * the plugin's own file-system work or timers, so assert after those this way.
+ */
+async function until(predicate: () => boolean | Promise<boolean>) {
   for (let i = 0; i < 1200; i++) {
-    if (predicate()) return;
+    if (await predicate()) return;
     await tick();
   }
   assert.fail("timed out waiting for condition");
@@ -47,7 +52,7 @@ async function setup(path = "/contract/source-one.mp4") {
   const plugin = await startPlugin(activate, { directory, host, dataDirectory: data });
   host.dialogAnswers.push([folder]);
   await host.command("capture.folder").run();
-  await host.settle();
+  await until(() => lastOsd(host) === `截图文件夹：${folder}`); // after the plugin's own stat of the folder
   return {
     host,
     folder,
@@ -177,10 +182,9 @@ test("F07: JPEG is exported by the player with the chosen quality; quality and f
     assert.deepEqual([first!.kind, first!.destination, first!.quality, first!.sampleTime], ["rawJpeg", target, 80, 2]);
     assert.equal(lastOsd(host), `帧已保存为 ${target}`);
     assert.deepEqual(await readdir(folder), ["source-one_00.02.000.jpg"], "only the final file, no temporary PNG");
-    await host.settle(350); // plugin.storage writes 300 ms after the last change
-    assert.deepEqual(JSON.parse(await readFile(join(data, "settings.json"), "utf8")), {
-      folder, format: "jpeg", quality: 80, screenSubtitles: true, besideMedia: false,
-    });
+    // plugin.storage writes 300 ms after the last change
+    const expected = { folder, format: "jpeg", quality: 80, screenSubtitles: true, besideMedia: false };
+    await until(() => readFile(join(data, "settings.json"), "utf8").then((text) => isDeepStrictEqual(JSON.parse(text), expected), () => false));
     settings.emit("choose-format", 2);
     await host.settle();
     assert.equal(host.command("capture.format.bmp").state.checked, true);
@@ -275,18 +279,19 @@ test("F09: 打开截图文件夹 reveals the folder, recreating it; the media fo
   const media = await mkdtemp(join(tmpdir(), "capture-media-"));
   const { host, folder, stop } = await setup(join(media, "movie.mp4"));
   try {
+    // 打开截图文件夹 checks and creates the folder on disk before system.openPath: wait for the open.
     await host.command("capture.openFolder").run();
-    await host.settle();
+    await until(() => fakes.opened.length === 1);
     assert.deepEqual(fakes.opened, [folder]);
     await rm(folder, { recursive: true });
     await host.command("capture.openFolder").run();
-    await host.settle();
+    await until(() => fakes.opened.length === 2);
     assert.equal(await exists(folder), true, "recreated");
     await host.command("capture.settings").run();
     host.window("settings").emit("set-beside-media", true);
     await host.settle();
     await host.command("capture.openFolder").run();
-    await host.settle();
+    await until(() => fakes.opened.length === 3);
     assert.equal(fakes.opened.at(-1), media);
     await host.press("Ctrl+E");
     await until(() => lastOsd(host).startsWith("帧已保存为"));
@@ -294,12 +299,11 @@ test("F09: 打开截图文件夹 reveals the folder, recreating it; the media fo
     host.openElsewhere("https://example.test/live.m3u8");
     await host.settle();
     await host.command("capture.openFolder").run();
-    await host.settle();
+    await until(() => fakes.opened.length === 4);
     assert.equal(fakes.opened.at(-1), folder, "a URL source uses the capture folder");
     fakes.failOpen = true;
     await host.command("capture.openFolder").run();
-    await host.settle();
-    assert.equal(lastOsd(host), "无法打开文件夹。");
+    await until(() => lastOsd(host) === "无法打开文件夹。");
   } finally {
     await stop();
     await rm(media, { recursive: true, force: true });
