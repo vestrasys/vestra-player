@@ -83,7 +83,7 @@ export global Theme {
     out property <color> button-bg: #555555;   out property <color> button-hover: #5c5c5c;
     out property <color> button-press: #444444; out property <color> button-disabled: #2a2a2a;
     // §2.2 字体与字号（只用这几档）
-    out property <string> font-mono: "Menlo";  // 默认字体不在这里：宿主统一设置（§2.2）
+    out property <string> font-mono: "Menlo";  // 默认字体不在这里：各窗口用系统默认字体（§2.2）
     out property <length> font-xs: 9px;  out property <length> font-body: 11px;
     out property <length> font-tab: 12px; out property <length> font-title: 13px;
     // §2.3 控件尺寸
@@ -133,7 +133,7 @@ export component Slider {                // 2px 线滑块
 - **导入机制**：slint-interpreter 1.16 的 `Compiler::set_library_paths` 支持 `@库名/文件` 形式的导入（`i-slint-compiler` `typeloader.rs` 的 `find_file_in_library_path`）。宿主把库名 `vestra` 映射到随附目录（开发时 `src/host/ui/vestra/`，打包后 `Resources/ui/vestra/`，与现在找 `host.slint` 的方式相同）。不需要虚拟文件或改写插件源码。
 - 宿主现在有三处编译 Slint：`ui.rs`（工具窗口）、`composition.rs`（主窗口与面板）、`package_manager.rs`（包校验）。合并成一个 `slint_compiler()`：设库路径，`set_style("fluent-dark")`。因此**不改代码的插件，std-widgets 控件自动变成深色**（Button、Slider、LineEdit、CheckBox、ComboBox、ScrollView），这是预期变化。已核对：现有浅色工具窗口（video、subtitles、capture、nes、youtube、bilibili、workshop、playlist/link、bookmark）的 `.slint` 都没有写死文字颜色，深色下不会出现看不清的文字；audio、playback、playlist 侧栏本来就是自定深色。
 - `Theme` 是只读常量，同一文件被多个插件导入、在主窗口里共享不会互相影响（`composition.rs` 注释里禁止的是**有状态**的共享 global）。
-- **默认字体**：删除强制的 `Arial Unicode MS` 与按文件导入它的代码。P1b 查明 Slint 1.16 用 parley 排版、按字符经 fontique 回退（macOS 上走 CoreText 的系统回退链，`i-slint-core` `textlayout/sharedparley.rs`），所以默认**不指定字体**：系统 UI 字体 + 系统 CJK 回退。备用方案已实现但默认关闭：环境变量 `VESTRA_FONT_FALLBACK=hiragino` 时导入系统自带的 `/System/Library/Fonts/Hiragino Sans GB.ttc` 并设为主窗口、浮动窗口、工具窗口的默认字体（工具窗口沿用「插件没写 `default-font-family` 才注入」）。**P5 实测（2026-10-20）：不指定字体时插件窗口与面板的中文全部显示为空白，因此改为默认启用 Hiragino**（`VESTRA_FONT_FALLBACK=system` 可关闭）；信息层原用 `font-mono`（Menlo）同样缺中文，改为默认字体（§18 Q12）。
+- **默认字体**：删除强制的 `Arial Unicode MS` 与按文件导入它的代码。P1b 查明 Slint 1.16 用 parley 排版、按字符经 fontique 回退（macOS 上走 CoreText 的系统回退链，`i-slint-core` `textlayout/sharedparley.rs`），所以默认**不指定字体**：系统 UI 字体 + 系统 CJK 回退。备用方案已实现但默认关闭：环境变量 `VESTRA_FONT_FALLBACK=hiragino` 时导入系统自带的 `/System/Library/Fonts/Hiragino Sans GB.ttc` 并设为主窗口、浮动窗口、工具窗口的默认字体（工具窗口沿用「插件没写 `default-font-family` 才注入」）。**P5 实测（2026-10-20）：不指定字体时插件窗口与面板的中文全部显示为空白，因此改为默认启用 Hiragino**（`VESTRA_FONT_FALLBACK=system` 可关闭）；信息层原用 `font-mono`（Menlo）同样缺中文，改为默认字体（§18 Q12）。**现状（2026-10-22，用户裁决）**：Slint 1.18.1 已按字符回退，强制 Hiragino 与 `VESTRA_FONT_FALLBACK` 已删除，各窗口不指定字体（系统默认 + 回退）；信息层不必改回 `font-mono`。某平台缺中文字体时的补法见[架构总览 §4](README.md)「字体」。
 - 宿主自己的界面（`host.slint`、`menu-view.slint`）也改用 `Theme` 令牌；菜单专用颜色（§6.3）留在 `menu-view.slint` 内，不进 `Theme`。
 - 编辑器支持：在 `doc/plugins/tutorial.md` 说明 Slint 语言服务的 `libraryPaths` 设置（`"vestra": "<仓库>/src/host/ui/vestra"`）。
 
@@ -729,7 +729,7 @@ import { Theme } from "@vestra/theme.slint";
 export { Owner7Bridge }
 export component FloatingPanel inherits Window {
     title: "<title>"; min-width: 300px; min-height: 250px;
-    default-font-family: "<系统 UI 字体>"; background: Theme.bg-list;
+    background: Theme.bg-list;  // 不设 default-font-family（系统默认字体）
     // key-input / mouse-input / 菜单层：与 HostWindow 相同的宿主属性和回调
     keys := FocusScope { /* 全局 + 面板范围绑定 */  Owner7View { width: parent.width; height: parent.height; } }
 }
@@ -962,7 +962,7 @@ SDK 与运行器（`src/sdk/`）：
 
 - **代码位置**：宿主新文件 `bindings.rs`（绑定表）、`ui_state.rs`（持久化）、`ui/vestra/theme.slint`、`ui/vestra/widgets.slint`；`commands.rs` 重写为新菜单模型（含 §14 的 46 条命令顺序测试）；`menu.rs` 增加分隔线、单选、快捷键列与单层面板菜单；`host.slint` 重写外壳；`composition.rs` 生成侧栏分隔条、按键转发层与浮动窗口源码。SDK 新文件 `sdk/plugin/bindings.ts`（与宿主同规则的语法检查）、`sdk/plugin/osd.ts`。新插件 `src/plugins/info/`；演示 `src/examples/core-ui/`（菜单分组与单选、`repeat` 绑定、不进菜单的命令、屏幕提示、`next/previous` 调用、侧栏开关与分离、主题控件窗口）与 `src/examples/panel-menu/`（面板右键菜单、面板焦点按键、序列提供者、浮动窗口标题）。
 - **⌘Q**：Slint 1.16 的 winit 后端在 macOS 默认建立应用菜单（muda，含系统「退出 ⌘Q」，`i-slint-backend-winit` `muda.rs` `create_default_app_menu`），⌘Q 由系统菜单先处理，不会到达窗口，所以不会和宿主的 `Cmd+Q` 绑定重复触发；宿主绑定在 macOS 上只提供菜单里的快捷键文字。经系统菜单退出时宿主不经过自己的退出路径，界面状态最多丢失最后 1 秒内未写入的变化（右键菜单「退出」会先写入）。需 P5 实测。
-- **主题令牌**：`Theme.font-family` 未提供（默认字体由宿主统一设置，§2.2）；`font-mono` 为 `Menlo`。
+- **主题令牌**：`Theme.font-family` 未提供（各窗口用系统默认字体，§2.2）；`font-mono` 为 `Menlo`。
 - **wire 方法**：`playback.stats` 由后端线程读 libmpv；`layout.set` 在答复前跑一次布局，紧接着的 `layout.state` 能看到结果。`ui.menu` 的宿主错误码按 §11.3。
 - **滚轮步长**：每 40 逻辑像素一步（`WHEEL_STEP`），需按触控板与鼠标实测调整。
 - **删除提前做了的部分**（因为外壳已换，旧代码不再有调用者）：`host.slint` 写死的 Space/←/→/F11/Esc 路由、`Host::canvas_shortcut`、`WindowInput` 的 `shortcut:`/`toggleFullscreen`/`escape` 分支、`Registry::resolve_shortcut`、领域列表、`diagnostic` 及后端为它维护的状态快照、`sidebar_resize*`（Q7）、Arial Unicode 字体。§16 其余项（`shortcut` 字段、旧面板可见性接口与 wire、`reveal_sidebar_in_fullscreen`、测试宿主旧字段）留到 P4。

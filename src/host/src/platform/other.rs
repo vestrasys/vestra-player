@@ -10,6 +10,8 @@ use crate::clipboard::Image;
 use crate::power::Launcher;
 use std::path::{Path, PathBuf};
 
+/// Which standard window shortcuts apply (`shortcuts.rs`).
+pub const SYSTEM: super::System = super::System::Linux;
 /// Slint reports Ctrl as `control` here.
 pub const SLINT_CONTROL_IS_COMMAND: bool = false;
 /// `Ctrl` is Ctrl; `Cmd` is the Super key.
@@ -121,9 +123,6 @@ pub fn app_data_dir() -> Option<PathBuf> {
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")))
         .map(|root| root.join("vestra"))
-}
-pub fn ui_font() -> Option<(&'static str, &'static str)> {
-    None
 }
 /// FFmpeg's name for its stdin, which is the held source file (seekable).
 pub const HELD_FILE_INPUT: &str = "/dev/fd/0";

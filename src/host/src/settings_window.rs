@@ -110,7 +110,7 @@ fn rows(pages: &[&Page], current: Option<u64>) -> Value {
 
 /// The window's Slint source: every page imported under its own aliases.
 pub fn source(pages: &[&Page]) -> Result<String> {
-    let mut source = crate::ui::font_import();
+    let mut source = String::new();
     let mut views = String::new();
     for (index, page) in pages.iter().enumerate() {
         composition::identifier(&page.component)?;
@@ -122,7 +122,7 @@ pub fn source(pages: &[&Page]) -> Result<String> {
             page.component, page.serial, page.global
         ));
         views.push_str(&format!(
-            "            if root.current == {index}: Page{}View {{ width: 440px; }}\n",
+            "                    if root.current == {index}: Page{}View {{ width: 440px; }}\n",
             page.serial
         ));
     }
@@ -137,76 +137,68 @@ export component OptionsWindow inherits Window {{
     preferred-width: 640px; preferred-height: 480px;
     min-width: 600px; min-height: 420px;
     background: Theme.bg-panel;
-    {font}
     in property <[SettingsRow]> rows;
     in property <int> current: -1;
     callback select(int);
     // Not `close`: Slint 1.17+ has a builtin `Window.close()`.
     callback close-window();
-    FocusScope {{
-        key-pressed(event) => {{
-            if event.modifiers.meta && (event.text == "w" || event.text == "W") {{ root.close-window(); return accept; }}
-            reject
-        }}
-        VerticalLayout {{
-            HorizontalLayout {{
-                vertical-stretch: 1;
-                Rectangle {{
-                    width: 160px;
-                    background: Theme.bg-list;
-                    tree := ScrollView {{
-                        VerticalLayout {{
-                            alignment: start;
-                            padding-top: 4px;
-                            for row in root.rows: Rectangle {{
-                                height: 20px;
-                                background: row.selected ? Theme.selected-bg : touch.has-hover && !row.header ? Theme.hover-bg : transparent;
-                                Text {{
-                                    x: row.header ? 8px : 20px;
-                                    width: parent.width - self.x - 4px;
-                                    text: row.label;
-                                    font-size: Theme.font-body;
-                                    vertical-alignment: center;
-                                    overflow: elide;
-                                    color: row.header ? Theme.text-dim : row.selected ? Theme.accent : Theme.text-list;
-                                }}
-                                touch := TouchArea {{
-                                    enabled: !row.header;
-                                    clicked => {{ root.select(row.page); }}
-                                }}
+    VerticalLayout {{
+        HorizontalLayout {{
+            vertical-stretch: 1;
+            Rectangle {{
+                width: 160px;
+                background: Theme.bg-list;
+                tree := ScrollView {{
+                    VerticalLayout {{
+                        alignment: start;
+                        padding-top: 4px;
+                        for row in root.rows: Rectangle {{
+                            height: 20px;
+                            background: row.selected ? Theme.selected-bg : touch.has-hover && !row.header ? Theme.hover-bg : transparent;
+                            Text {{
+                                x: row.header ? 8px : 20px;
+                                width: parent.width - self.x - 4px;
+                                text: row.label;
+                                font-size: Theme.font-body;
+                                vertical-alignment: center;
+                                overflow: elide;
+                                color: row.header ? Theme.text-dim : row.selected ? Theme.accent : Theme.text-list;
+                            }}
+                            touch := TouchArea {{
+                                enabled: !row.header;
+                                clicked => {{ root.select(row.page); }}
                             }}
                         }}
                     }}
                 }}
-                Rectangle {{ width: 1px; background: Theme.line; }}
-                pages := ScrollView {{
-                    content-width: 440px;
-                    content-height: max(self.visible-height, column.preferred-height);
-                    column := VerticalLayout {{
-                        alignment: start;
-{views}                        if root.current < 0: Text {{
-                            width: 440px; height: 80px;
-                            text: "没有可设置的项目";
-                            color: Theme.text-dim; font-size: Theme.font-body;
-                            horizontal-alignment: center; vertical-alignment: center;
-                        }}
+            }}
+            Rectangle {{ width: 1px; background: Theme.line; }}
+            pages := ScrollView {{
+                content-width: 440px;
+                content-height: max(self.visible-height, column.preferred-height);
+                column := VerticalLayout {{
+                    alignment: start;
+{views}                    if root.current < 0: Text {{
+                        width: 440px; height: 80px;
+                        text: "没有可设置的项目";
+                        color: Theme.text-dim; font-size: Theme.font-body;
+                        horizontal-alignment: center; vertical-alignment: center;
                     }}
                 }}
             }}
-            // Fixed-height footer: every extra pixel goes to the tree and the
-            // page (a Button has no max-height, so a stretchable row grew it).
-            Rectangle {{ height: 1px; vertical-stretch: 0; background: Theme.line; }}
-            buttons := HorizontalLayout {{
-                vertical-stretch: 0;
-                padding: 8px;
-                alignment: end;
-                close := Button {{ height: Theme.button-height; text: "关闭"; clicked => {{ root.close-window(); }} }}
-            }}
+        }}
+        // Fixed-height footer: every extra pixel goes to the tree and the
+        // page (a Button has no max-height, so a stretchable row grew it).
+        Rectangle {{ height: 1px; vertical-stretch: 0; background: Theme.line; }}
+        buttons := HorizontalLayout {{
+            vertical-stretch: 0;
+            padding: 8px;
+            alignment: end;
+            close := Button {{ height: Theme.button-height; text: "关闭"; clicked => {{ root.close-window(); }} }}
         }}
     }}
 }}
 "#,
-        font = composition::font_property(),
     ));
     Ok(source)
 }
@@ -469,6 +461,20 @@ impl Host {
             let _ = events.send(Event::Settings(generation, None));
             slint::CloseRequestResponse::KeepWindowShown
         });
+        // ⌘W / Ctrl+W (the platform's standard keys) close it like 关闭.
+        let shortcuts = crate::ui::WindowShortcuts::default();
+        {
+            use slint::winit_030::{EventResult, WinitWindowAccessor};
+            instance
+                .window()
+                .on_winit_window_event(move |window, event| {
+                    if shortcuts.filter(window, event) {
+                        EventResult::PreventDefault
+                    } else {
+                        EventResult::Propagate
+                    }
+                });
+        }
         self.theme_view(&instance);
         if let Some(old) = self.settings.open.take() {
             let window = old.instance.window();

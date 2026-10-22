@@ -234,6 +234,7 @@
 
 - **全局作用域：一处冲突。** `Alt+↑`、`Alt+↓` 同时是「视频 ▶ 帧位 ▶ 偏移 ↑/↓」（video，第 4a 轮的备用键）和「字幕 ▶ 字幕样式 ▶ 上移/下移」（subtitles）的默认绑定。宿主按插件加载先后（owner 代次小者）取胜，另一方被忽略并打印 `binding conflict`；Ctrl+Numpad8/2（帧位）不受影响。[功能需求](feature-requirements.md)「帧位」一节第 4a 轮的冲突检查只核对了 playback 的方向键，漏了 subtitles。需要改其中一方的默认键（待裁决）。
 - 宿主唯一的 ⌘ 绑定是 Cmd+Q（退出），没有命令声明 Ctrl+Q；其余 Ctrl 绑定与它不重复。
+- 窗口标准关闭键（macOS ⌘W；Windows Ctrl+W、Ctrl+F4；Linux Ctrl+W；只在工具窗口、浮动面板、选项窗口，不进绑定表，见 [参考 §4.1](../plugins/reference.md)）：2026-10-22 核对，没有默认绑定用 Ctrl+W、Cmd+W、Ctrl+F4（F4 是「停止」，不带修饰键，不冲突）。
 - 面板焦点作用域（播放列表）：无冲突。
 - 跨作用域遮蔽（按设计，不算冲突）：列表获得焦点时 Enter、P、Ctrl+I、Ctrl+O、Ctrl+U、Backspace、Ctrl+T、Ctrl+Home、F3、F2、F6 用列表自己的含义，见上节备注。
 - `>` `<` `?` 是按出的字符，与 `.` `,` `/` 是不同的键名（美式键盘上前者需要 Shift），互不冲突；`{` `}` 与 `[` `]` 同理。

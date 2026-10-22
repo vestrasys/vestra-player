@@ -21,6 +21,8 @@ use std::sync::{Arc, Weak};
 
 pub use super::keyring_store::{secret_delete, secret_get, secret_set};
 
+/// Which standard window shortcuts apply (`shortcuts.rs`).
+pub const SYSTEM: super::System = super::System::Windows;
 /// Slint reports Ctrl as `control` here.
 pub const SLINT_CONTROL_IS_COMMAND: bool = false;
 /// `Ctrl` is Ctrl; `Cmd` is the Windows (logo) key.
@@ -437,14 +439,6 @@ pub fn windows_name(build: Option<u32>) -> String {
 /// `%APPDATA%\Vestra`.
 pub fn app_data_dir() -> Option<PathBuf> {
     std::env::var_os("APPDATA").map(|root| PathBuf::from(root).join("Vestra"))
-}
-
-/// Microsoft YaHei has the CJK glyphs Slint needs (`ui::font`).
-pub fn ui_font() -> Option<(&'static str, &'static str)> {
-    const YAHEI: &str = "C:/Windows/Fonts/msyh.ttc";
-    Path::new(YAHEI)
-        .is_file()
-        .then_some(("Microsoft YaHei", YAHEI))
 }
 
 /// FFmpeg's name for its stdin, which is the held source file: the `fd`

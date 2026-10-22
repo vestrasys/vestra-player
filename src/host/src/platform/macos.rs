@@ -18,6 +18,8 @@ use std::time::{Duration, Instant};
 
 pub use super::keyring_store::{secret_delete, secret_get, secret_set};
 
+/// Which standard window shortcuts apply (`shortcuts.rs`).
+pub const SYSTEM: super::System = super::System::MacOs;
 /// Slint reports ⌘ as `control` and ⌃ as `meta` on Apple platforms.
 pub const SLINT_CONTROL_IS_COMMAND: bool = true;
 /// A `Ctrl` binding also fires with ⌘ (bindings written for both systems).
@@ -528,14 +530,6 @@ pub fn build_of(text: &str) -> Option<String> {
 pub fn app_data_dir() -> Option<PathBuf> {
     std::env::var_os("HOME")
         .map(|home| PathBuf::from(home).join("Library/Application Support/Vestra"))
-}
-
-/// The UI font that has the CJK glyphs Slint needs (`ui::font`).
-pub fn ui_font() -> Option<(&'static str, &'static str)> {
-    const HIRAGINO: &str = "/System/Library/Fonts/Hiragino Sans GB.ttc";
-    Path::new(HIRAGINO)
-        .is_file()
-        .then_some(("Hiragino Sans GB", HIRAGINO))
 }
 
 /// FFmpeg's name for its stdin, which is the held source file (seekable).
