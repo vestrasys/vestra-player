@@ -581,6 +581,7 @@ mod tests {
     const SOURCE: &str =
         "av://lavfi:color=c=white:s=64x64:d=30,drawbox=y=32:w=64:h=32:color=black:t=fill";
     #[test]
+    #[ignore = "needs a GPU OpenGL 4.1 context, which CI's macOS VMs lack; `npm run ci:local` runs it"]
     fn draws_offscreen_top_row_first_and_survives_resizes_and_new_sources() {
         let mpv = player();
         let renderer = Renderer::start(mpv.clone(), (64, 64), Arc::new(true.into())).expect("gl");
@@ -597,6 +598,7 @@ mod tests {
         assert!(until(|| handle.frames() > before), "no frame after a new source");
     }
     #[test]
+    #[ignore = "needs a GPU OpenGL 4.1 context, which CI's macOS VMs lack; `npm run ci:local` runs it"]
     fn a_closed_gate_publishes_nothing_and_pacing_caps_the_rate() {
         let mpv = player();
         let gate = Arc::new(AtomicBool::new(false));
