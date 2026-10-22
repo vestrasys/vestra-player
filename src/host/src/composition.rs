@@ -123,12 +123,6 @@ fn import_spec(source: &mut String, spec: &CompileSpec, path: &str) -> Result<()
     Ok(())
 }
 
-pub(crate) fn font_property() -> String {
-    crate::ui::font()
-        .map(|(family, _)| format!("default-font-family: \"{family}\";"))
-        .unwrap_or_default()
-}
-
 /// Generated source is ordinary Slint, not a layout protocol. Imports use
 /// canonical files; package containment is the package loader's responsibility.
 /// Aliases prevent exported-name collisions, but are not a sandbox. Slint globals
@@ -138,7 +132,7 @@ pub fn shell_source(specs: &[CompileSpec]) -> Result<String> {
     let mut owners = BTreeSet::new();
     let mut slots = BTreeSet::new();
     let mut files = BTreeSet::new();
-    let mut source = crate::ui::font_import();
+    let mut source = String::new();
     for spec in specs {
         if !owners.insert(spec.owner) || !slots.insert(spec.slot) {
             bail!("this shell requires unique owners and at most one component per slot");
@@ -154,7 +148,6 @@ pub fn shell_source(specs: &[CompileSpec]) -> Result<String> {
         import_spec(&mut source, spec, &path)?;
     }
     let mut shell = include_str!("../ui/host.slint").to_owned();
-    replace_marker(&mut shell, "// VESTRA-FONT", &font_property())?;
     let properties = "in property <bool> bottom-visible: true;\n\
                       in property <bool> sidebar-visible: true;\n\
                       in property <bool> sidebar-overlay: false;\n\
@@ -238,7 +231,7 @@ pub fn shell_source(specs: &[CompileSpec]) -> Result<String> {
 /// The detached sidebar (C14): the same component and bridge global in a
 /// window of its own, with the shell's key forwarding and menu layer.
 pub fn floating_source(spec: &CompileSpec, title: &str) -> Result<String> {
-    let mut source = crate::ui::font_import();
+    let mut source = String::new();
     let path = import_path(&spec.file)?;
     import_spec(&mut source, spec, &path)?;
     let title = serde_json::to_string(title)?;
@@ -251,7 +244,6 @@ export component FloatingPanel inherits Window {{
     min-width: 300px; min-height: 250px;
     preferred-width: 300px; preferred-height: 408px;
     background: Theme.bg-list;
-    {font}
     in property <[MenuLevel]> menu-levels;
     in property <bool> menu-open: false;
     in-out property <float> menu-origin-x;
@@ -283,7 +275,6 @@ export component FloatingPanel inherits Window {{
     }}
 }}
 "#,
-        font = font_property(),
         keys = key_forward("panel:sidebar"),
         owner = spec.owner,
     ));

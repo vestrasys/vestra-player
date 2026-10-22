@@ -15,7 +15,7 @@ use std::{
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
     thread::{self, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 const SAFE: u64 = 9_007_199_254_740_991;
 struct Video {
@@ -29,6 +29,46 @@ struct Shared {
     received: Mutex<(u64, u64)>,
     desired_epoch: AtomicU64,
     error: Mutex<Option<String>>,
+    /// When the plugin closed the frame connection between two frames.
+    closed: Mutex<Option<Instant>>,
+}
+/// How long a connection closed between frames may wait for its source to
+/// be closed or replaced before it counts as a failure. A plugin that stops
+/// its stream closes the connection and the source together (SDK 1.1.2 and
+/// earlier: connection first), so neither order shows "打开失败"; a plugin
+/// that crashed while playing is still reported, this much later.
+const CLOSE_GRACE: Duration = Duration::from_millis(500);
+/// The frame connection ended cleanly at a frame boundary.
+#[derive(Debug)]
+struct TransportClosed;
+impl std::fmt::Display for TransportClosed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("producer transport closed")
+    }
+}
+impl std::error::Error for TransportClosed {}
+/// The failure to report: a protocol or I/O error at once; a clean close
+/// only once it has lasted `CLOSE_GRACE` with the source still selected.
+fn reported_failure(error: Option<String>, closed_for: Option<Duration>) -> Option<String> {
+    error.or_else(|| {
+        closed_for
+            .filter(|d| *d >= CLOSE_GRACE)
+            .map(|_| TransportClosed.to_string())
+    })
+}
+impl Shared {
+    fn failure(&self) -> Option<String> {
+        let error = self
+            .error
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let closed = *self
+            .closed
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        reported_failure(error, closed.map(|at| at.elapsed()))
+    }
 }
 struct Producer {
     owner: u64,
@@ -102,6 +142,13 @@ impl Producers {
                     if let Err(error) = receive(listener, writer, spec, &s, &ending)
                         && !ending.load(Ordering::Acquire)
                     {
+                        if error.is::<TransportClosed>() {
+                            *s.closed
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                                Some(Instant::now());
+                            return;
+                        }
                         *s.error
                             .lock()
                             .unwrap_or_else(std::sync::PoisonError::into_inner) =
@@ -145,7 +192,7 @@ impl Producers {
             .ok_or_else(|| RpcError::new("unavailable", "producer absent"))?;
         let a = p.audio.facts();
         Ok(
-            json!({"producerId":id,"epoch":a.epoch,"acknowledged":a.acknowledged,"paused":a.paused,"consumedFrames":a.consumed_frames,"underrunFrames":a.underrun_frames,"deviceErrors":a.device_errors,"health":a.health,"xrunEvents":a.xruns,"deviceChangeEvents":a.device_changes,"errorDetails":a.error_details,"errorOverflow":a.error_overflow,"buffer":a.buffer,"receivedFrames":p.shared.received.lock().unwrap_or_else(std::sync::PoisonError::into_inner).1,"hasVideo":p.shared.video.lock().unwrap_or_else(std::sync::PoisonError::into_inner).iter().any(|v|v.epoch==a.epoch && v.time<=a.consumed_frames),"error":*p.shared.error.lock().unwrap_or_else(std::sync::PoisonError::into_inner),"active":self.active==Some(id)}),
+            json!({"producerId":id,"epoch":a.epoch,"acknowledged":a.acknowledged,"paused":a.paused,"consumedFrames":a.consumed_frames,"underrunFrames":a.underrun_frames,"deviceErrors":a.device_errors,"health":a.health,"xrunEvents":a.xruns,"deviceChangeEvents":a.device_changes,"errorDetails":a.error_details,"errorOverflow":a.error_overflow,"buffer":a.buffer,"receivedFrames":p.shared.received.lock().unwrap_or_else(std::sync::PoisonError::into_inner).1,"hasVideo":p.shared.video.lock().unwrap_or_else(std::sync::PoisonError::into_inner).iter().any(|v|v.epoch==a.epoch && v.time<=a.consumed_frames),"error":p.shared.failure(),"active":self.active==Some(id)}),
         )
     }
     pub fn ready(&self, id: u64, owner: u64) -> Result<(), RpcError> {
@@ -242,13 +289,7 @@ impl Producers {
     }
     pub fn active_failure(&self) -> Option<String> {
         let p = self.items.get(&self.active?)?;
-        if let Some(error) = p
-            .shared
-            .error
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
-        {
+        if let Some(error) = p.shared.failure() {
             return Some(error);
         }
         let f = p.audio.facts();
@@ -405,14 +446,22 @@ impl Drop for Producers {
         }
     }
 }
-fn read_exact(stream: &mut AvStream, buffer: &mut [u8], stop: &AtomicBool) -> anyhow::Result<bool> {
+/// `boundary`: the buffer starts a frame, so a close before its first byte
+/// is the plugin ending the stream (`TransportClosed`), not a cut frame.
+fn read_exact(
+    stream: &mut AvStream,
+    buffer: &mut [u8],
+    stop: &AtomicBool,
+    boundary: bool,
+) -> anyhow::Result<bool> {
     let mut offset = 0;
     while offset < buffer.len() {
         if stop.load(Ordering::Acquire) {
             return Ok(false);
         }
         match stream.read(&mut buffer[offset..]) {
-            Ok(0) => anyhow::bail!("producer transport closed"),
+            Ok(0) if boundary && offset == 0 => return Err(TransportClosed.into()),
+            Ok(0) => anyhow::bail!("producer transport closed mid-frame"),
             Ok(n) => offset += n,
             Err(e)
                 if matches!(
@@ -448,7 +497,7 @@ fn receive(
     let mut video_time = None;
     loop {
         let mut bytes = [0; 32];
-        if !read_exact(&mut stream, &mut bytes, stop)? {
+        if !read_exact(&mut stream, &mut bytes, stop, true)? {
             return Ok(());
         }
         let h = wire::decode_header(&bytes, spec).map_err(|e| anyhow::anyhow!(e.to_string()))?;
@@ -468,7 +517,7 @@ fn receive(
         }
         sequence = Some(h.sequence);
         let mut payload = vec![0; h.payload_bytes as usize];
-        if !read_exact(&mut stream, &mut payload, stop)? {
+        if !read_exact(&mut stream, &mut payload, stop, false)? {
             return Ok(());
         }
         match h.kind {
@@ -520,5 +569,34 @@ fn receive(
                 });
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A plugin stopping its stream may close the connection a moment before
+    /// the source (SDK 1.1.2 and earlier): no failure unless the source stays
+    /// selected for `CLOSE_GRACE`. Real errors are reported at once.
+    #[test]
+    fn a_clean_close_waits_for_the_source_to_go_and_errors_do_not() {
+        assert_eq!(reported_failure(None, None), None);
+        assert_eq!(
+            reported_failure(None, Some(Duration::from_millis(10))),
+            None
+        );
+        assert_eq!(
+            reported_failure(None, Some(CLOSE_GRACE)).as_deref(),
+            Some("producer transport closed")
+        );
+        assert_eq!(
+            reported_failure(Some("producer stale epoch".into()), None).as_deref(),
+            Some("producer stale epoch")
+        );
+        assert_eq!(
+            reported_failure(Some("producer transport closed mid-frame".into()), None).as_deref(),
+            Some("producer transport closed mid-frame")
+        );
     }
 }
