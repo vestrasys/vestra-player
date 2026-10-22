@@ -34,28 +34,48 @@ export async function startWorkshop(overrides = {}) {
   await host.command("workshop.open").run();
   const window = host.window("workshop");
   const props = window.props;
-  /** Fire a window callback and let the SDK finish the resulting requests. */
+  /**
+   * Fire a window callback and let the SDK finish the resulting requests.
+   * settle() waits for host calls only: when the handler also does its own
+   * file I/O (choosing the workspace or a requirement file) or runs Pi/tsc,
+   * wait for the observable result with until() instead.
+   */
   const send = async (callback, ...args) => {
     window.emit(callback, ...args);
     await host.settle();
   };
-  /** Wait for a condition that depends on local work (Pi, tsc) or SDK polling. */
+  /**
+   * Wait for a condition that depends on local work (Pi, tsc, file I/O) or SDK
+   * polling, then for the window to finish updating: the SDK writes changed
+   * properties one host call at a time, so `busy` can already be new while
+   * `can-trial` is not yet. Not settle(): a held reply stays in flight.
+   */
   const until = async (condition, what = "condition") => {
-    for (const deadline = Date.now() + 30_000; !condition(); ) {
+    const pause = () => new Promise((resolve) => setTimeout(resolve, 20));
+    const deadline = Date.now() + 30_000;
+    for (;;) {
+      if (condition()) {
+        const calls = host.calls.length;
+        await pause();
+        if (host.calls.length === calls && condition()) return;
+      } else await pause();
       if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}; status: ${props["status-text"]}`);
-      await new Promise((resolve) => setTimeout(resolve, 20)); // not settle(): a held reply stays in flight
     }
   };
   const status = () => String(props["status-text"]);
+  /** Choose the workspace; the handler resolves the path on disk after the dialog. */
   const chooseWorkspace = async () => {
+    const real = await fs.realpath(workspace);
     host.dialogAnswers.push([workspace]);
-    await send("choose-workspace");
+    window.emit("choose-workspace");
+    await until(() => props["workspace-text"] === real, "workspace");
   };
   /** Choose the workspace and run the real generation up to host validation. */
   const generate = async () => {
     await chooseWorkspace();
     await send("generate");
     await until(() => /候选已通过宿主校验|错误/.test(status()) && props.busy === false, "generation");
+    if (!/候选已通过宿主校验/.test(status())) throw new Error(`generation failed; status: ${status()}`);
   };
   return {
     host,

@@ -9,7 +9,7 @@ use super::*;
 pub const THEMES: [&str; 2] = ["vestra", "potplayer"];
 
 /// Colour tokens of `ui/palette.slint`; Vestra is also its default.
-const VESTRA: [(&str, u32); 21] = [
+const VESTRA: [(&str, u32); 22] = [
     ("bg-bar", 0x17141c),
     ("bg-video", 0x0b0a0f),
     ("bg-list", 0x1c1922),
@@ -31,11 +31,12 @@ const VESTRA: [(&str, u32); 21] = [
     ("button-hover", 0x3d3648),
     ("button-press", 0x26212e),
     ("button-disabled", 0x1d1a23),
+    ("danger", 0xff5a4a),
 ];
 
 /// PotPlayer's own colours (ui-alignment §2.1); `selected-bg` has no
 /// PotPlayer counterpart and uses the button press grey.
-const POTPLAYER: [(&str, u32); 21] = [
+const POTPLAYER: [(&str, u32); 22] = [
     ("bg-bar", 0x1e1e1e),
     ("bg-video", 0x101010),
     ("bg-list", 0x3b3b3b),
@@ -57,6 +58,7 @@ const POTPLAYER: [(&str, u32); 21] = [
     ("button-hover", 0x5c5c5c),
     ("button-press", 0x444444),
     ("button-disabled", 0x2a2a2a),
+    ("danger", 0xe04343),
 ];
 
 fn color(rgb: u32) -> SValue {
