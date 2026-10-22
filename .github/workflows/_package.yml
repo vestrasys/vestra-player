@@ -27,9 +27,6 @@ permissions: {}
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
-  # TODO(S7 host): drop once the host resolves its bundled node (install
-  # layout); until then the smoke test puts the bundled node on PATH.
-  SMOKE_COMPAT: --node-on-path
 
 jobs:
   package:
@@ -90,16 +87,11 @@ jobs:
           app="$RUNNER_TEMP/smoke/Vestra Player.app"
           codesign --verify --deep --strict "$app"
           plutil -p "$app/Contents/Info.plist"
-          # shellcheck disable=SC2086 # SMOKE_COMPAT is a flag list
           node src/packaging/smoke.mjs --exe "$app/Contents/MacOS/vestra-host" \
-            --plugins "$app/Contents/Resources/plugins" $SMOKE_COMPAT
+            --plugins "$app/Contents/Resources/plugins"
 
-      # TODO(S7 host): the released host finds runner/ui/plugins only beside
-      # `Contents/`; the Windows smoke test passes once the host branch's
-      # install-layout resolver is merged. Until then it reports only.
       - name: Smoke test (Windows, silent install → run → uninstall)
         if: inputs.os == 'windows'
-        continue-on-error: true
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -108,7 +100,7 @@ jobs:
           $p = Start-Process -Wait -PassThru $setup.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART', "/DIR=$dir", "/LOG=$env:RUNNER_TEMP\setup.log"
           if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\setup.log"; throw "setup exited with $($p.ExitCode)" }
           Get-ChildItem $dir
-          node src/packaging/smoke.mjs --exe "$dir\vestra-host.exe" --plugins "$dir\resources\plugins" $env:SMOKE_COMPAT.Split(' ')
+          node src/packaging/smoke.mjs --exe "$dir\vestra-host.exe" --plugins "$dir\resources\plugins"
           $smoke = $LASTEXITCODE
           $p = Start-Process -Wait -PassThru "$dir\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
           if ($p.ExitCode -ne 0) { throw "uninstall exited with $($p.ExitCode)" }

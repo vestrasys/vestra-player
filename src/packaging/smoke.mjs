@@ -7,24 +7,17 @@
  * headless mode answers them).
  *
  *   node packaging/smoke.mjs --exe <vestra-host[.exe]> --plugins <Resources/plugins>
- *     [--seconds 8] [--node-on-path]
- *
- * --node-on-path puts the bundled node's directory on PATH: only for host
- * builds from before the install-layout resolver (S7 host side), which
- * still look up `node` on PATH. Remove it from the workflows once the host
- * branch is merged.
+ *     [--seconds 8]
  */
 import { spawnSync } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { delimiter, join, resolve } from "node:path";
 import { fail, parseArgs, readJson } from "./lib.mjs";
 
-const options = parseArgs(process.argv.slice(2), ["node-on-path"]);
+const options = parseArgs(process.argv.slice(2));
 if (!options.exe || !options.plugins)
-  fail(
-    "usage: smoke.mjs --exe <file> --plugins <dir> [--seconds N] [--node-on-path]",
-  );
+  fail("usage: smoke.mjs --exe <file> --plugins <dir> [--seconds N]");
 const exe = resolve(options.exe);
 const builtins = (
   await readJson(join(resolve(options.plugins), "builtin.json"))
@@ -38,8 +31,6 @@ const systemPath = windows
       process.env.SystemRoot ?? "C:\\Windows",
     ]
   : ["/usr/bin", "/bin", "/usr/sbin", "/sbin"];
-if (options["node-on-path"])
-  systemPath.unshift(windows ? join(dirname(exe), "node") : dirname(exe));
 const env = {
   PATH: systemPath.join(delimiter),
   HOME: home,

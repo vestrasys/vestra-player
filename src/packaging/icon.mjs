@@ -7,11 +7,12 @@
  *          (radius 185) with a dark vertical gradient on a 1024 canvas,
  *          the logo scaled to 60 % and centred. PNG entries 16–1024 px.
  *   Windows vestra.ico: the logo itself (Windows icons have no plate),
- *          PNG entries 16–256 px.
+ *          16–256 px. Committed as src/host/windows/vestra.ico (build.rs
+ *          embeds it in the exe); `--check` fails when it is out of date.
  *
  * Pure Node (zlib): same bytes on every OS, no sips/iconutil/ImageMagick.
  *
- *   node packaging/icon.mjs [--icns <file>] [--ico <file>] [--png <file>]
+ *   node packaging/icon.mjs [--icns <file>] [--ico <file>] [--png <file>] [--check]
  *   (--png writes the 1024 px macOS master, for review)
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -20,6 +21,7 @@ import { deflateSync, inflateSync } from "node:zlib";
 import { fail, parseArgs, source } from "./lib.mjs";
 
 const LOGO = join(source, "assets/brand/logo.png");
+export const COMMITTED_ICO = join(source, "host/windows/vestra.ico");
 
 // ------------------------------------------------------------ PNG codec
 
@@ -261,10 +263,44 @@ export function icns(master) {
   return Buffer.concat([head, ...blocks]);
 }
 
-/** .ico with PNG entries (Windows Vista+). */
+/** 32-bit DIB (BGRA bottom-up + AND mask), the classic .ico payload. */
+function dib(image) {
+  const { width, height, data } = image;
+  const maskStride = Math.ceil(width / 32) * 4;
+  const out = Buffer.alloc(40 + width * height * 4 + maskStride * height);
+  out.writeUInt32LE(40, 0);
+  out.writeInt32LE(width, 4);
+  out.writeInt32LE(height * 2, 8);
+  out.writeUInt16LE(1, 12);
+  out.writeUInt16LE(32, 14);
+  out.writeUInt32LE(width * height * 4 + maskStride * height, 20);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const i = ((height - 1 - y) * width + x) * 4;
+      const alpha = data[i + 3];
+      const o = 40 + (y * width + x) * 4;
+      for (let k = 0; k < 3; k++)
+        out[o + 2 - k] =
+          alpha > 0 ? Math.round(Math.min(1, data[i + k] / alpha) * 255) : 0;
+      out[o + 3] = Math.round(Math.min(1, alpha) * 255);
+      if (out[o + 3] === 0) {
+        const m = 40 + width * height * 4 + y * maskStride + (x >> 3);
+        out[m] |= 0x80 >> (x & 7);
+      }
+    }
+  return out;
+}
+
+/**
+ * .ico: 32-bit DIB entries up to 128 px, PNG for 256 px (what Windows'
+ * own icons do; also embedded in vestra-host.exe by src/host/build.rs).
+ */
 export function ico(master) {
   const sizes = [16, 20, 24, 32, 40, 48, 64, 128, 256];
-  const images = sizes.map((size) => encodePng(resize(master, size, size)));
+  const images = sizes.map((size) => {
+    const image = resize(master, size, size);
+    return size >= 256 ? encodePng(image) : dib(image);
+  });
   const header = Buffer.alloc(6 + 16 * sizes.length);
   header.writeUInt16LE(0, 0);
   header.writeUInt16LE(1, 2);
@@ -303,7 +339,17 @@ export async function writeIcons({
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === import.meta.filename) {
-  const options = parseArgs(process.argv.slice(2));
+  const options = parseArgs(process.argv.slice(2), ["check"]);
+  if (options.check) {
+    const committed = await readFile(COMMITTED_ICO);
+    const fresh = ico(decodePng(await readFile(LOGO)));
+    if (!committed.equals(fresh))
+      fail(
+        "src/host/windows/vestra.ico is out of date: node packaging/icon.mjs --ico host/windows/vestra.ico",
+      );
+    console.log("src/host/windows/vestra.ico matches the logo");
+    process.exit(0);
+  }
   if (!options.icns && !options.ico && !options.png)
     fail("usage: icon.mjs [--icns <file>] [--ico <file>] [--png <file>]");
   await writeIcons({

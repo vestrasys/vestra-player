@@ -115,7 +115,7 @@ node packaging/smoke.mjs --exe "<输出目录>/Vestra Player.app/Contents/MacOS/
 
 **产物命名**：`VestraPlayer-<版本>-macos-arm64.dmg`、`…-macos-arm64.app.zip`（以后在 Linux 上签名要用）、`…-windows-x64-setup.exe`、`…-windows-x64-portable.zip`、`SHA256SUMS`。release 和 dry run 的 artifact 叫 `vestra-unsigned-<os>`，nightly 叫 `vestra-nightly-<日期>-<短哈希>-<os>`，都只保留 1 天（artifact 存储额度只有 500 MB；要长期保存的东西放 release 资产），nightly 不发 release。
 
-**冒烟测试的过渡状态**：宿主找自带 Node 的改动（S7 宿主分支）合并之前，`_package.yml` 的 `SMOKE_COMPAT=--node-on-path` 把包里 node 的目录放进 PATH；Windows 的冒烟测试 `continue-on-error`（旧宿主在 Windows 上找不到 `resources\`）。宿主分支合并后两处都删掉。
+**exe 图标和版本信息**：`src/host/build.rs` 在 MSVC 目标上用 `src/host/windows/resources.rs` 直接写出 `.res`（图标 `src/host/windows/vestra.ico` 加 VERSIONINFO），交给 link.exe 嵌入，不需要 rc.exe；输出与 `llvm-rc` 对同样的 `.rc` 逐字节相同。`vestra.ico` 由 `node packaging/icon.mjs --ico host/windows/vestra.ico` 生成并提交，`_static` 用 `--check` 确认它与 logo 一致。
 
 ## 手动跑全量（含 macOS）
 
