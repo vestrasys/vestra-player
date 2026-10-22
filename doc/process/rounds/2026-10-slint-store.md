@@ -46,7 +46,7 @@
 - [x] 2.1 商城插件作者设计 + API 缺口：`doc/plugins/store-design.md`（分支 `rebuild/store-ui` c504731）。v1 无阻塞缺口（G1 列表图标、G2 窗口拖放为可选；G3 契约澄清）
 - [x] 2.2 协调者决定设计
 - [x] 2.3 API 提案与实现：不需要（G3 只是文档澄清，见决定）
-- [x] 2.4 商城插件实施：`rebuild/store-ui` 6481427（scratchpad/wt-plugins2），47 个测试通过，线上索引冒烟通过。真机驱动说明和验收清单见设计稿 §8.2。安全审查（独立 agent，对抗式）完成：签名、下载、包核对无可利用缺陷；发现 1 高（下架后撤回不生效）、1 中（重放旧索引隐藏撤回）、4 低，退回商城作者修复中（README/图标哈希留给插件仓库）
+- [x] 2.4 商城插件实施：`rebuild/store-ui` 6481427（scratchpad/wt-plugins2），47 个测试通过，线上索引冒烟通过。真机驱动说明和验收清单见设计稿 §8.2。安全审查（独立 agent，对抗式）完成：签名、下载、包核对无可利用缺陷；发现 1 高（下架后撤回不生效）、1 中（重放旧索引隐藏撤回）、4 低，已全部修复（34c1822），README/图标哈希随插件仓库加固一起完成（dc58f40）
 - [ ] 2.5 真机验收（含阶段 4 遗留三项）
 - [ ] 2.6 合并
 
@@ -83,7 +83,7 @@
 8. 插件仓库索引加单调 `generated` 字段、签名支持多签名：放进待办，不阻塞 S5。
 
 ## 待办（本轮之后）
-- ~~插件仓库：资源哈希、单调 `generated`、多签名、`revoked.json` 只追加~~：2026-10-22 已完成并发布（插件仓库 68ff01b，线上 `generated` = 1，签名通过）。商城端配套改动交给商城作者（进行中）。
+- ~~插件仓库：资源哈希、单调 `generated`、多签名、`revoked.json` 只追加~~：2026-10-22 已完成并发布（插件仓库 68ff01b，线上 `generated` = 1，签名通过）。商城端配套改动已完成（`rebuild/store-ui` dc58f40，测试 58/58；协调者对线上索引冒烟：验签通过、记下 generated=1、YouTube 包 sha256 一致、二次刷新 304）。
 - 插件仓库 youtube 测试「download shows progress while running and the saved file when done」在 Windows + Node 22.18 偶发失败一次（CI run 39678880495，dbd7e7d），前后同一测试都通过。交 youtube 作者查。
 - 主窗口 `sidebar-actual` 绑定环警告（见上）。
 - SDK 仓库的 Docs 工作流在推标签时失败（Pages 环境只允许 main；v1.1.1 起就这样，main 上的那次会正常部署）。应让 Docs 只在 main 上运行。
