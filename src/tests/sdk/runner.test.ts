@@ -283,3 +283,37 @@ test("a sequence another plugin provides does not fail activation", async () => 
   const other = await run(source, refuse({}), runner, capabilities);
   assert.equal(other.event, "runtime.failed");
 });
+
+test("a file type or site another plugin resolves does not fail activation", async () => {
+  const source = `export default async function activate(plugin) {
+    const resolver = plugin.resolvers.add({ id: "nes", extensions: ["nes"], async resolve() { throw new Error("unused"); } });
+    const code = await resolver.ready.then(() => "registered", (error) => error.code);
+    plugin.commands.add({ id: code, path: ["文件", code], run() {} });
+  }`;
+  const refuse = (detail: object) => (method: string) =>
+    method === "sourceResolvers.register"
+      ? {
+          error: {
+            code: "conflict",
+            message: "文件类型 .nes 已由 vestra.nes 解析",
+            ...detail,
+          },
+        }
+      : { result: { revision: 1 } };
+  const capabilities = ["commands", "source.resolve"];
+  const taken = await run(
+    source,
+    refuse({
+      reason: "resolver-taken",
+      owner: "vestra.nes",
+      target: "文件类型 .nes",
+    }),
+    runner,
+    capabilities,
+  );
+  assert.equal(taken.event, "runtime.ready");
+  assert.ok(taken.methods.includes("sourceResolvers.register"));
+  assert.ok(taken.methods.includes("commands.register"));
+  const other = await run(source, refuse({}), runner, capabilities);
+  assert.equal(other.event, "runtime.failed");
+});

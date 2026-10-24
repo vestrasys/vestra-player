@@ -105,7 +105,7 @@ interface Disposable { dispose(): Promise<void> }
 | `subtitles.read` | `subtitles.state`、`onChange`、`refresh` |
 | `subtitles.control` | `subtitles.select`、`load`、`remove`、`setStyle` |
 | `media.read` / `media.control` | `media.capture`、`Snapshot.export`、`ExportJob`（`processed` 截图另需 `playback.read`、`subtitles.read`） |
-| `source.resolve` | `resolvers.add` |
+| `source.resolve` | `resolvers.add`（文件解析器另需 `producer.av`，§11） |
 | `plugins.manage` | `packages.validate`、`validateArchive`、`rollback`、`setEnabled`、`uninstall`（`list`、`onChange` 不需要能力） |
 | `ui.osd` | `osd.show`、`osd.panel` |
 | `clipboard` | `clipboard.readText`、`writeText`、`writeImage` |
@@ -380,7 +380,7 @@ interface PlayerState {
   readonly sourceId: number;   // 每次打开来源都变化，即使是同一文件
   readonly kind: "media" | "stream";
   readonly phase: "empty" | "loading" | "ready" | "ended" | "error";
-  readonly source: string | null;    // 路径或 URL
+  readonly source: string | null;    // 路径或 URL；生成流见下
   readonly paused: boolean;
   readonly position: number | null;  // 秒
   readonly duration: number | null;  // 秒
@@ -403,6 +403,8 @@ interface AudioTrack {
 }
 ```
 
+`source` 的取值：本地路径或 URL；没有来源时为 `null`。生成流（`kind === "stream"`）有两种：`openStream`（§5.2）的来源是不透明的 `producer://<n>`，不要解析它；文件解析器（§11）生成的流保留打开时的路径。判断是不是生成流看 `kind`，不要看 `source`。
+
 `PlayerState` 是不可变快照，可以保存下来，用作之后操作的条件（§5.3）。`loop` 由 SDK 总是给出（没有循环为 `null`）；类型上写成可选，只是为了让测试里手写的状态对象不必带它。`can.next` / `can.previous` 来自播放序列提供者（§5.4），没有提供者时为 `false`。
 
 ### 5.2 控制
@@ -411,7 +413,7 @@ interface AudioTrack {
 
 | 方法 | 说明 |
 | --- | --- |
-| `open(source, { paused?, signal?, ifCurrent? })` → `Promise<Media>` | 打开路径或 URL，替换当前来源。默认**无条件**。播放器接受加载后 resolve（不等就绪，就绪用 `media.ready()`） |
+| `open(source, { paused?, signal?, ifCurrent? })` → `Promise<Media>` | 打开路径或 URL，替换当前来源。默认**无条件**。播放器接受加载后 resolve（不等就绪，就绪用 `media.ready()`）。匹配解析器的网址和文件先交给解析器（§11） |
 | `setPaused(paused, opts?)` | 暂停/继续 |
 | `seek(seconds, opts?)` | 跳转 |
 | `setRate(rate, opts?)` | 倍速 |
@@ -1155,17 +1157,27 @@ interface ExportJob extends Disposable {
 - Windows：与 macOS 相同。离线工作进程照样把持有的源文件接到 FFmpeg 的标准输入，FFmpeg 用 `fd:` 协议读它（macOS、Linux 是 `/dev/fd/0`），所以 Windows 需要 FFmpeg 6.1 或更新（更早的版本没有 `fd` 协议，任务以 `failed` 结束，`message` 是 FFmpeg 的错误）。`ffprobe` 在 FFmpeg 同一目录下找 `ffprobe.exe`。
 - 同一快照可多次导出；用完 `dispose()`。
 
-## 11. 网络地址解析 `plugin.resolvers`
+## 11. 来源解析 `plugin.resolvers`
 
-需要 `source.resolve`。把网页地址解析成可播放的流地址；用户（或任何插件）`player.open` 匹配的 URL 时，播放器调用对应解析器。
+需要 `source.resolve`。用户（或任何插件）`player.open` 一个来源时，如果有插件登记了匹配的解析器，播放器先交给它解析。解析器有两种：
+
+- **网页解析器**（`schemes` + `hosts`）：把网页地址解析成可播放的流地址。
+- **文件解析器**（`extensions`，播放器 0.4.1，SDK 1.5.3）：按扩展名接管本地文件，返回由本插件生成画面和声音的流（模拟器、合成器等）。另需 `producer.av`。
 
 ```ts
-resolvers.add(options: {
-  id: string;
-  schemes: ("http" | "https")[];
-  hosts: string[];    // 精确主机名
-  resolve(url: string, signal: AbortSignal): Promise<ResolvedMedia>;
-}): Resolver          // { ready: Promise<void> } & Disposable
+resolvers.add(options:
+  | {
+      id: string;
+      schemes: ("http" | "https")[];
+      hosts: string[];    // 精确主机名
+      resolve(url: string, signal: AbortSignal): Promise<ResolvedMedia>;
+    }
+  | {
+      id: string;
+      extensions: string[]; // 小写、不带点
+      resolve(path: string, signal: AbortSignal): Promise<ResolvedStream>;
+    }
+): Resolver          // { ready: Promise<void> } & Disposable
 
 type ResolvedMedia = {
   kind: "media";
@@ -1174,11 +1186,35 @@ type ResolvedMedia = {
   primary: { url: string; headers?: Record<string, string> };
   audio?: { url: string; headers?: Record<string, string> }; // 音视频分离时
 };
+
+type ResolvedStream = {
+  kind: "stream";
+  width: number; height: number;   // 帧的限制同 openStream（§5.2）
+  frame(): StreamFrame;
+  started?(stream: Stream): void;  // 流开始播放后交出 Stream
+};
 ```
 
-- 一个 scheme + 主机组合只能有一个解析器。
-- 打开被取消或被替换时 `signal` 中止。
+**共同规则**
+
+- 一个 scheme + 主机组合、一个扩展名，都只能有一个解析器。别的插件已登记时，`ready` 以 `conflict` 失败（消息如「文件类型 .nes 已由 vestra.nes 解析」），但**不让激活失败**：插件照常运行，播放器显示屏幕提示，插件管理里显示提示（`PluginInfo.error`，以及 `PluginInfo.warnings` 中的 `{ code: "resolver-taken", owner, target }`，`target` 如「文件类型 .nes」或 `https://主机`）。同一插件自己重复登记仍是 `conflict` 且让激活失败。启动时内置插件先登记，其它插件的登记请求等内置插件激活完成后再处理。
+- 解析沿用原来那次 `open` 的仲裁：`ifCurrent`、操作 id 不变；打开方的 `open` 与 `media.ready()` 和打开普通文件一样结束。
+- `resolve` 抛错时这次打开失败：`phase` 为 `"error"`，`state.error` 是错误的 `message` 原文（≤ 2048 字符；播放器 0.4.1 之前带 `resolver failed: ` 前缀，SDK 1.5.3 之前发送的是 `String(error)`）。
+- 打开被替换、被关闭（包括 `player.close()`、F4）、30 秒内没有答复，或解析器被注销、插件停用时，`signal` 中止，迟到的答复作废。
+- 插件停用时它登记的解析器随之注销：之后这些地址或文件按普通来源打开。
+
+**网页解析器**
+
 - 两路流的 `headers` 必须相同，不同会明确失败。
+
+**文件解析器**
+
+- 扩展名 1–16 个，每个 1–16 个小写字母或数字，不能是 `folder`。只匹配本地绝对路径（扩展名不分大小写，`/roms/Game.NES` 也算）；URL 永远不匹配。
+- 选中后 `state.kind` 为 `"stream"`，`state.source` 是打开的路径；`player.open(path, { paused: true })` 让流以暂停开始。生成流的限制同 `openStream`：不能跳转、变速、重播（`can` 中为 `false`），不经过滤镜（§8）。
+- `resolve` 返回后，SDK 准备并预填充生成端，再作为答复交给播放器；播放器选中后 SDK 确认启动控制，然后**同步**调用 `started(stream)`，早于任何 `onStop`。`Stream` 与 `openStream` 返回的相同，属于登记解析器的插件：`stop()` 关闭来源（仍是当前来源时），插件停用时一并停止。
+- `resolve` 返回之后、流开始播放之前被取消（打开被替换或关闭、插件停用）：SDK 释放生成端，不调用 `started`。
+- 打开方不需要 `producer.av`，只需要 `playback.control`；文件选择、拖放、播放列表等入口统一用 `player.open(path)`。
+- 用到文件解析器的插件设 `"minPlayerVersion": "0.4.1"`：旧播放器不认识 `extensions`，登记以 `invalid` 失败。
 
 ## 12. 插件包管理 `plugin.packages`
 
@@ -1198,7 +1234,10 @@ interface PluginInfo {
   id: string; version: string | null;
   origin: "installed" | "development" | "trial";   // 安装库 / --plugin 开发加载 / 试载
   state: "starting" | "running" | "disabled" | "failed" | "stopped";
-  error: string | null;     // failed 时的原因；running 时为提示（面板位置或上一个/下一个被占，§6.3）
+  error: string | null;     // failed 时的原因；running 时为提示（面板位置、上一个/下一个或解析器被占，§6.3、§11）
+  warnings: { code: string; slot?: string; owner?: string; target?: string }[];
+    // SDK 1.5.2：被别的插件占用而没拿到的东西；code 为 "slot-occupied"（带 slot）、"sequence-taken"、
+    // "resolver-taken"（0.4.1，带 target），以后可能增加；owner 是占用者的 id
   capabilities: string[];
   directory: string;        // 包目录（显示字段读其中的 manifest.json）
   previousVersion: string | null; // 可回退到的版本
@@ -1460,6 +1499,12 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | `Theme.font-mono` §6.4 | Menlo | Consolas | DejaVu Sans Mono |
 
 ## 17. 变更说明
+
+### 文件解析器：本地文件交给插件生成流（2026-10，播放器 0.4.1，SDK 1.5.3）
+
+- `resolvers.add({ id, extensions, resolve })`：任何入口 `player.open` 这些扩展名的本地文件时，由登记的插件返回生成流（§11）。`source` 保留路径，`kind` 为 `"stream"`；`openStream` 的来源仍是 `producer://<n>`（§5.1 `source` 的说明）。
+- 解析器被别的插件占用（扩展名或网页的 scheme + 主机）时以 `conflict` 失败，不再让激活失败（线上 `reason: "resolver-taken"`，带 `owner`、`target`；`PluginInfo.warnings` 多一种 `code` `"resolver-taken"`，并新增 `target` 字段）；登记请求和面板一样等内置插件先登记。
+- 解析失败的文字改为插件给的原文，去掉 `resolver failed: ` 前缀；SDK 1.5.3 发送错误的 `message`。网页解析器同样适用。
 
 ### 侧栏页签（2026-10，播放器 0.4.0 之后，SDK 1.5.2）
 

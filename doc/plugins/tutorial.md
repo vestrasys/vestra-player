@@ -345,6 +345,7 @@ npm run plugin -- build examples/bookmark   # 生成 dist/，安装的就是这�
 | 字幕 | `subtitles.load/select/setStyle` | [示例 7](examples.md) |
 | 网络视频解析 | `resolvers.add` | [示例 9](examples.md) |
 | 自己生成画面和声音（模拟器） | `player.openStream` | [示例 6](examples.md) |
+| 按扩展名接管本地文件（打开、播放列表都走它） | `resolvers.add({ extensions })` | [参考 §11](reference.md#11-来源解析-pluginresolvers) |
 | 把大插件拆成模块 | `plugin.scope()` | [示例 11](examples.md) |
 | 菜单分组、单选、快捷键 | `commands.add` 的 `group`、`radio`、`bindings` | [示例 13](examples.md) |
 | 画面上的提示、信息层 | `osd.show`、`osd.panel` | [示例 14](examples.md) |
