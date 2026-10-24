@@ -70,7 +70,9 @@ export function follower(
     if (state.sourceId === handled || player.busy()) return;
     handled = state.sourceId;
     if (player.owns(state.sourceId)) return;
-    if (state.kind !== "media" || !state.source || state.source.includes("://") || !isAbsolute(state.source)) return;
+    // A local file, also when a plugin's file resolver made it a generated stream (§11:
+    // `source` keeps the path); `openStream`'s opaque `producer://` sources are skipped.
+    if (!state.source || state.source.includes("://") || !isAbsolute(state.source)) return;
     if (state.phase === "empty") return;
     // Appending in 「仅打开该文件」 mode: the list is not touched (UI-PL-20).
     if (mode() === "only" && (append() || initial)) return;

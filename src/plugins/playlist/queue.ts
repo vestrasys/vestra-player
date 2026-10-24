@@ -527,8 +527,10 @@ export class Queue {
     const row = this.row(binding.rowId);
     if (!row) return this.detach("当前媒体已移出列表");
     // Another open (even of the same path) is a new source; a restart is not.
-    // UI-PL-20: switching to an outside source is not announced.
-    if (!this.following(state) || state.kind !== "media") {
+    // UI-PL-20: switching to an outside source is not announced. The bound source may
+    // be a generated stream: a file a plugin's file resolver turned into one (§11),
+    // e.g. a ROM in a mixed list. It never ends naturally, so only its phases count.
+    if (!this.following(state)) {
       this.failed = null;
       return this.detach("已切换到列表外来源");
     }
