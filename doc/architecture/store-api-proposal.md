@@ -39,11 +39,11 @@
 ```jsonc
 {
   "installed": {
-    "vestra.youtube": {
+    "vestra.subtitles": {
       "revision": 3,
       "instance": {                          // 新增：当前安装实例
         "guid": "3f0c8a8e-5b7e-4c1f-9d0a-2b6f1c7e9a41",
-        "source": { "kind": "repository", "url": "https://…/index.json" },
+        "source": { "kind": "bundled" },     // 修订后内置插件的来源（文末）
         "builtin": true,
         "enabled": true,                     // 取代原 disabled 集合
         "installedAt": 1792540800000,        // 该实例首次安装，Unix 毫秒
@@ -65,7 +65,7 @@
 | --- | --- |
 | `guid` | 宿主生成的 UUID v4，小写带连字符。全新安装时生成；升级、回退沿用 |
 | `id`、版本 | 分别是 `installed` 的键与 `current.manifest.version`，不重复存 |
-| `source` | §2.3 的 `PackageSource`；内置插件的来源是官方仓库地址，由 `builtin.json` 给出 |
+| `source` | §2.3 的 `PackageSource`；内置插件的来源是 `bundled`（初稿为官方仓库地址，已按文末「协调者修订」改） |
 | `builtin` | 由宿主播种时写入，插件无法设置 |
 | `enabled` | `setEnabled` 写这里；原 `disabled` 集合删除（读到旧 catalog 时按集合换算一次） |
 | `installedAt` | 实例首次安装时间 |
@@ -191,7 +191,7 @@ interface PackageManifest {
 
 ### 3.1 识别
 
-按**来源**：只有宿主启动时从安装包的 `Resources/plugins/builtin.json` 播种的实例带 `builtin: true`。插件不能通过 `install()` 声明内置；id 不参与判断（`vestra.` 前缀得不到任何东西，1.5a）。
+按**来源**：只有宿主启动时从安装包的 `Resources/plugins/builtin.json` 播种的实例带 `builtin: true`。插件不能通过 `install()` 声明内置；`builtin` 标记仍只看来源。2026-10-24 起 `vestra.` 前缀只留给内置插件，宿主拒绝安装、试载其它 `vestra.` 开头的包（文末「协调者修订（2026-10-24）」）。
 
 ### 3.2 行为
 
@@ -209,7 +209,7 @@ interface PackageManifest {
 
 ```json
 { "schema": 1, "source": { "kind": "repository", "url": "https://…/index.json" },
-  "plugins": [ { "file": "vestra.youtube-1.2.0.vxp", "sha256": "…" } ] }
+  "plugins": [ { "file": "vestra.subtitles-1.2.0.vxp", "sha256": "…" } ] }
 ```
 
 | 已安装状态 | 动作 |
@@ -225,7 +225,7 @@ interface PackageManifest {
 ### 3.4 `plugins` 插件与工坊需要知道的
 
 - 插件管理：`builtin` 为真时禁用「卸载…」，悬停说明「内置插件只能停用」；详情显示来源（官方仓库 / 第三方仓库地址 / 链接 / 本地文件 / 插件工坊）。`uninstall` 仍要处理 `unsupported`（列表可能过时）。
-- 工坊：生成的 id 与内置插件撞名时 `install` 得到 `unsupported`，提示用户改 id。
+- 工坊：生成的 id 与内置插件撞名时 `install` 得到 `unsupported`，提示用户改 id。2026-10-24 起生成 `vestra.` 开头的 id 时，`validate`、`trial`、`install` 得到 `reserved`（文末修订）。
 
 ---
 
@@ -263,7 +263,7 @@ interface PackageManifest {
 
 ### 4.3 id 规则
 
-不变（1.5a 已定）：非空、≤ 128 字节、ASCII 字母数字与 `.-_`。宿主不强制前缀，不给任何 id 特殊待遇。
+不变（1.5a 已定）：非空、≤ 128 字节、ASCII 字母数字与 `.-_`。宿主不强制前缀。（2026-10-24 修订：`vestra` 与 `vestra.` 开头的 id 只留给内置插件，见文末。）
 
 ---
 
@@ -465,7 +465,7 @@ Slint 1.16.1 已有 `StyledText` 元素（加粗、斜体、删除线、行内�
 | 休眠实例的列表与清理接口 | 先观察是否真有大量残留；需要时作为插件管理的请求单独设计。现在不自动删除用户数据 |
 | 放宽 `ui.image` 让商城显示别的插件包里的图标 | 商城可把文件复制进自己的数据目录再显示；不为一个插件开放跨插件读路径 |
 | `PluginInfo.origin` 增加 `"builtin"` | 输出联合加成员是隐性破坏（§2.2） |
-| 宿主强制 id 前缀或保留 `vestra.` | 1.5a 已放弃 |
+| 宿主强制 id 前缀 | 1.5a 已放弃（保留 `vestra.` 已在 2026-10-24 改为要做，见文末） |
 | 未知 manifest 字段改为忽略 | 失去拼写错误检查；`minPlayerVersion` 已解决向前兼容（§4.2） |
 | `maxPlayerVersion`、版本范围 | 没有需求；`apiVersion` 管破坏性变更 |
 | Markdown：内嵌 HTML、语法高亮、SVG/GIF/WebP、脚注、数学、编辑、目录跳转 | 1.6 第 10 条只要常见子集；每项都要额外解析或解码代码 |
@@ -490,6 +490,16 @@ Slint 1.16.1 已有 `StyledText` 元素（加粗、斜体、删除线、行内�
 - 内置插件的来源是**安装包**（`source.kind = "bundled"`），不是官方仓库地址；`builtin.json` 与 `.vxp` 由打包脚本从 `src/plugins/` 构建。
 - 第一版商城**不更新、不替换**内置插件：对内置 id 的任何 `install`（无论来源、带不带 `replace`）都返回 `unsupported`；只有播种（新安装包里版本更高）会升级内置插件。§3 表中「`install` 同来源（官方仓库）的新版本 → 升级」一行作废；§3.3 中「用户经商城装了更高版本则不动」一种情形不再出现。
 - 回退、停用照常。
+
+## 协调者修订（2026-10-24，`vestra.` 前缀只留给内置插件）
+
+用户裁决（生态计划开头「插件分类」）：官方插件只有播放器主仓库自带的内置插件，id 用 `vestra.<名字>`，这个前缀只留给它们。其余插件都是第三方插件，包括官方插件仓库 `plugins/` 里的；它们只是托管在官方仓库、审核更严格，id 按 `<GitHub 用户或组织>.<名字>`。youtube、bilibili 改为 `zysilm.youtube`、`zysilm.bilibili`（作者 zysilm）。播放器未发布，不做迁移。这推翻了 §4.3 与 §10 中「不给任何 id 特殊待遇」「不保留 `vestra.`」。宿主的做法：
+
+- `packages.validate`、`validateArchive`、`trial`、`install` 拒绝 id 为保留 id（不分大小写，等于 `vestra` 或以 `vestra.` 开头）的包，错误码 `reserved`，message「「<id>」：vestra. 开头的 id 只留给播放器内置插件，不能安装或试载」。商城安装、侧载（拖入 `.vxp`、从文件安装、从链接安装）、插件工坊与 AI 的安装和试载都经过这几个方法。
+- 对保留 id 的 `packages.rollback` 只在内置实例上有效（即回退内置插件，与以前相同）。
+- 内置插件只来自安装包的内置插件集合（`builtin.json`，播种时来源 `bundled`），这是保留 id 装进安装库的唯一途径。
+- 启动时，安装库里遗留的非内置保留 id 插件（这条规则之前装的）不启动；`packages.list` 里显示为 `failed`，`error` 是上面那句话；用户可以卸载它。
+- `--plugin DIR` 开发加载保留 id 仍然可以（内置插件的作者用 `--plugin` 开发），宿主在 stderr 打印警告。开发加载从不写进安装库，数据在 `plugin-data/development/<id>/`。
 
 ## 实现记录（2026-10-21，阶段 3，API 维护者）
 

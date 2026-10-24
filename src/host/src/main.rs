@@ -528,6 +528,16 @@ impl Host {
         if self.plugins.values().any(|p| p.manifest.id == candidate.id) {
             bail!("plugin already running: {}", candidate.id);
         }
+        // Built-in plugins are developed with `--plugin`, so a reserved id
+        // loads here; a development load is never installed (data under
+        // plugin-data/development/), so it cannot become a built-in.
+        if manifest::reserved_id(&candidate.id) {
+            eprintln!(
+                "host.warning development load {}: vestra. ids are reserved for built-in plugins; \
+                 this load is for built-in development only and cannot be installed",
+                candidate.id
+            );
+        }
         self.next_generation = self
             .next_generation
             .checked_add(1)

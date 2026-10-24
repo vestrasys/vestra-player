@@ -7,8 +7,8 @@
 | 插件 | 必须做 | 建议做 |
 | --- | --- | --- |
 | 插件管理（`plugins`） | 数据目录改读 `info.dataDirectory`（旧的 `dirname(plugin.dataDirectory)` + id 推算已失效）；`info.builtin` 为真时禁用「卸载…」 | 详情显示来源（`info.source`）；商城（S5）用 `validateArchive`、`install({ source, replace })`、Markdown 组件 |
-| 插件工坊（`workshop`） | `install` 处理新的失败：`conflict`（同 id 已从别的来源安装）与 `unsupported`（与内置插件同 id） | 安装时传 `{ source: { kind: "workshop" } }` |
-| youtube、bilibili | 无代码改动。密钥改按安装实例存放，已有登录失效一次 | 迁到插件仓库时补显示字段，并写 `"minPlayerVersion": "0.2.0"` |
+| 插件工坊（`workshop`） | `install` 处理新的失败：`conflict`（同 id 已从别的来源安装）与 `unsupported`（与内置插件同 id）；播放器 0.4.1 起还有 `reserved`（id 是 `vestra.` 开头，参考 §12） | 安装时传 `{ source: { kind: "workshop" } }` |
+| youtube、bilibili | 无代码改动。密钥改按安装实例存放，已有登录失效一次 | 迁到插件仓库时补显示字段，并写 `"minPlayerVersion": "0.2.0"`。它们是托管在官方仓库的第三方插件，id 为 `zysilm.youtube`、`zysilm.bilibili`（`vestra.` 前缀只留给内置插件） |
 | 全部插件 | 无 | 补显示字段；把 README 改成面向用户；**改了代码就升 `version`**（内置插件只在版本更高时才会在用户机器上升级） |
 
 ## 1. 发生了什么变化
@@ -69,6 +69,8 @@ try {
       await candidate.install({ source: { kind: "workshop" }, replace: true });
   } else if (code === "unsupported") {
     // 与内置插件同 id：请改用别的 id
+  } else if (code === "reserved") {
+    // 播放器 0.4.1 起：vestra. 开头的 id 只留给内置插件，请改用 <所有者>.<名字>
   } else throw error;
 }
 ```
@@ -104,7 +106,7 @@ plugin.commands.add({
 - 文档文件要进包：`.md` 默认不复制，在插件 `package.json` 里写 `"vestra": { "assets": ["HELP.md"] }`（README/CHANGELOG 自动复制）。
 - 完整示例：`src/examples/markdown/`；测试里用 `host.markdown(host.window("help").props.doc)` 读回文本。
 
-## 5. 显示字段（发布到官方仓库前）
+## 5. 显示字段（发布到商城前）
 
 ```json
 {
@@ -122,7 +124,7 @@ plugin.commands.add({
 }
 ```
 
-规则见参考 §2。`vestra-plugin check` 会逐项检查，并对没有 `<所有者>.` 前缀的 id 给出提示（不算失败）；`audio`、`nes` 已在阶段 4 改名为 `vestra.audio`、`vestra.nes`（生态计划 1.5a）。
+上例是内置插件。规则见参考 §2。`vestra-plugin check` 会逐项检查，并对没有 `<所有者>.` 前缀的 id 给出提示（不算失败）；`audio`、`nes` 已在阶段 4 改名为 `vestra.audio`、`vestra.nes`（生态计划 1.5a）。`vestra.` 前缀只留给内置插件（官方插件）；其它插件，包括发布到官方插件仓库的，用 `<GitHub 用户名或组织>.<插件名>`，播放器 0.4.1 起拒绝安装 `vestra.` 开头的包（`reserved`）。
 
 ## 6. 内置插件的版本
 
