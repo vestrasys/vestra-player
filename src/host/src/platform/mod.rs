@@ -68,8 +68,8 @@ pub enum KeyLabels {
     /// `Ctrl+Shift+S`, `Alt+→`.
     Text,
     /// The macOS menu style: ⌃⌥⇧⌘ in that order without `+` (`⇧⌘S`, `⌥→`),
-    /// a `Ctrl` binding as ⌘ (what it answers to, `CTRL_ACCEPTS_CMD`), and
-    /// the system's key glyphs (⎋ ↩ ⇥ ⌫ ⌦ ⇞ ⇟ ↖ ↘).
+    /// and a `Ctrl` binding as ⌘ (what it answers to, `CTRL_ACCEPTS_CMD`).
+    /// Named keys stay words (`Enter`, `Tab`, `Esc`).
     Symbols,
 }
 

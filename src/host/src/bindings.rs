@@ -521,8 +521,9 @@ pub fn label(input: &Input) -> String {
 }
 
 /// Menu text in `style`. Text: `Ctrl+O`, arrows as ← → ↑ ↓, Esc,
-/// PgUp/PgDn, Del. Symbols (macOS): `⌘O`, `⇧⌘S`, `⌥→`, ⎋ ↩ ⇥ ⌫ ⌦ ⇞ ⇟ ↖ ↘;
-/// a `Ctrl` binding shows ⌘ (it answers to ⌘ there), and ⌃ only next to ⌘.
+/// PgUp/PgDn, Del. Symbols (macOS): `⌘O`, `⇧⌘S`, `⌥→`; a `Ctrl` binding
+/// shows ⌘ (it answers to ⌘ there), and ⌃ only next to ⌘. Named keys stay
+/// words in both styles: the UI font has no ⇥ ⌤ ⎋, and ↩ draws as an emoji.
 pub fn label_in(input: &Input, style: KeyLabels) -> String {
     let mods = &input.mods;
     let mut text = String::new();
@@ -546,22 +547,11 @@ pub fn label_in(input: &Input, style: KeyLabels) -> String {
             text.push_str(name);
         }
     }
-    let symbols = style == KeyLabels::Symbols;
     let named = match input.name.as_str() {
         "ArrowLeft" => "←",
         "ArrowRight" => "→",
         "ArrowUp" => "↑",
         "ArrowDown" => "↓",
-        "Escape" if symbols => "⎋",
-        "Enter" if symbols => "↩",
-        "Tab" if symbols => "⇥",
-        "Backspace" if symbols => "⌫",
-        "Delete" if symbols => "⌦",
-        "PageUp" if symbols => "⇞",
-        "PageDown" if symbols => "⇟",
-        "Home" if symbols => "↖",
-        "End" if symbols => "↘",
-        "NumpadEnter" if symbols => "⌤",
         "Escape" => "Esc",
         "PageUp" => "PgUp",
         "PageDown" => "PgDn",
@@ -1470,18 +1460,18 @@ mod tests {
             ("Alt+ArrowRight", "Alt+→", "⌥→"),
             ("Ctrl+Alt+Shift+Cmd+F", "Ctrl+Alt+Shift+Cmd+F", "⌃⌥⇧⌘F"),
             ("Ctrl+Cmd+F", "Ctrl+Cmd+F", "⌃⌘F"),
-            ("Shift+Tab", "Shift+Tab", "⇧⇥"),
-            ("Alt+Delete", "Alt+Del", "⌥⌦"),
-            ("Ctrl+Backspace", "Ctrl+Backspace", "⌘⌫"),
-            ("Escape", "Esc", "⎋"),
-            ("Enter", "Enter", "↩"),
-            ("PageUp", "PgUp", "⇞"),
-            ("End", "End", "↘"),
+            ("Shift+Tab", "Shift+Tab", "⇧Tab"),
+            ("Alt+Delete", "Alt+Del", "⌥Del"),
+            ("Ctrl+Backspace", "Ctrl+Backspace", "⌘Backspace"),
+            ("Escape", "Esc", "Esc"),
+            ("Enter", "Enter", "Enter"),
+            ("PageUp", "PgUp", "PgUp"),
+            ("End", "End", "End"),
             ("Space", "Space", "Space"),
             ("Ctrl+Plus", "Ctrl++", "⌘+"),
             ("Numpad5", "Num5", "Num5"),
             ("Shift+Numpad5", "Shift+Num5", "⇧Num5"),
-            ("NumpadEnter", "NumEnter", "⌤"),
+            ("NumpadEnter", "NumEnter", "NumEnter"),
             ("F11", "F11", "F11"),
         ];
         for (input, text, symbols) in cases {
