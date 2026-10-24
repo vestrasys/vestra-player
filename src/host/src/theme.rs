@@ -1,14 +1,17 @@
 //! Theme colours set by the player (R-H6) and `plugin.appearance` (R-S2):
-//! fixed palettes (one today, `vestra`; the table form leaves room for a
-//! light palette), delivered to every view instance (shell with its
-//! panels, floating sidebar, tool windows, options window) through the
-//! host-only `VestraPalette` global (`ui/palette.slint`). Plugin Slint reads
-//! `Theme`, whose colours are `out` properties bound to the palette.
+//! fixed palettes (`vestra`, the dark default, and `vestra-light`; both
+//! Aurora, doc/product/ui-spec.md §2.1), delivered to every view instance
+//! (shell with its panels, floating sidebar, tool windows, options window)
+//! through the host-only `VestraPalette` global (`ui/palette.slint`). Plugin
+//! Slint reads `Theme`, whose colours are `out` properties bound to the
+//! palette. A palette also picks the std-widgets colour scheme (the fluent
+//! controls: scroll bars, line edits, combo boxes, check boxes), so they are
+//! light in a light palette although the host compiles them as fluent-dark.
 #![forbid(unsafe_code)]
 use super::*;
 
 /// The palettes, in menu order; the first is the default.
-pub const THEMES: [&str; 1] = ["vestra"];
+pub const THEMES: [&str; 2] = ["vestra", "vestra-light"];
 
 /// The palette a theme id selects: an id the player does not have (one
 /// retired in an earlier version, saved or sent by an older plugin) selects
@@ -21,34 +24,79 @@ pub fn known(theme: &str) -> &'static str {
         .unwrap_or(THEMES[0])
 }
 
-/// Colour tokens of `ui/palette.slint`; Vestra is also its default.
+/// Colour tokens of `ui/palette.slint`; `vestra` is also its default.
 const VESTRA: [(&str, u32); 22] = [
-    ("bg-bar", 0x17141c),
-    ("bg-video", 0x0b0a0f),
-    ("bg-list", 0x1c1922),
-    ("bg-panel", 0x221e29),
-    ("line", 0x07060a),
-    ("hover-bg", 0x2a2533),
-    ("press-bg", 0x120f16),
-    ("selected-bg", 0x2f2938),
-    ("text", 0xf2eff7),
-    ("text-dim", 0x8a8496),
-    ("text-list", 0xb8b2c4),
-    ("text-played", 0x6f6a7a),
-    ("accent", 0xfa139c),
-    ("accent-press", 0xc40f7a),
-    ("accent-disabled", 0x5c1a42),
-    ("icon-disabled", 0x3a3542),
-    ("playing", 0xa24bff),
-    ("button-bg", 0x322c3b),
-    ("button-hover", 0x3d3648),
-    ("button-press", 0x26212e),
-    ("button-disabled", 0x1d1a23),
-    ("danger", 0xff5a4a),
+    ("bg-bar", 0x16141c),
+    ("bg-video", 0x0a090e),
+    ("bg-list", 0x1a1821),
+    ("bg-panel", 0x201d28),
+    ("line", 0x2b2734),
+    ("hover-bg", 0x28232f),
+    ("press-bg", 0x110f16),
+    ("selected-bg", 0x2f2840),
+    ("text", 0xf5f3fa),
+    ("text-dim", 0x8e88a0),
+    ("text-list", 0xbdb8cb),
+    ("text-played", 0x6e6980),
+    ("accent", 0xf72aa6),
+    ("accent-press", 0xc41a83),
+    ("accent-disabled", 0x5a1d48),
+    ("icon-disabled", 0x3b3646),
+    ("playing", 0x2bb6ff),
+    ("button-bg", 0x2f2a3b),
+    ("button-hover", 0x3a3448),
+    ("button-press", 0x25202e),
+    ("button-disabled", 0x1b1922),
+    ("danger", 0xff5a5f),
 ];
 
-/// Each palette's colours, in `THEMES` order.
-const TABLES: [&[(&str, u32); 22]; THEMES.len()] = [&VESTRA];
+/// Aurora Light: the same tokens on near-white; the video area stays dark.
+const VESTRA_LIGHT: [(&str, u32); 22] = [
+    ("bg-bar", 0xf7f6fa),
+    ("bg-video", 0x0e0d12),
+    ("bg-list", 0xffffff),
+    ("bg-panel", 0xf1eff5),
+    ("line", 0xdcd8e4),
+    ("hover-bg", 0xe9e6f0),
+    ("press-bg", 0xdcd8e6),
+    ("selected-bg", 0xefe4fb),
+    ("text", 0x1c1924),
+    ("text-dim", 0x6f6a7f),
+    ("text-list", 0x3b3748),
+    ("text-played", 0x9a95a8),
+    ("accent", 0xd4128a),
+    ("accent-press", 0xa80d6c),
+    ("accent-disabled", 0xecbcd9),
+    ("icon-disabled", 0xc9c5d2),
+    ("playing", 0x0773ba),
+    ("button-bg", 0xe6e3ec),
+    ("button-hover", 0xdcd8e4),
+    ("button-press", 0xcfcadb),
+    ("button-disabled", 0xefedf3),
+    ("danger", 0xc42b2b),
+];
+
+/// One palette: its colours, the `VestraPalette` property holding its
+/// gradient, and whether the std-widgets draw light.
+struct Table {
+    colours: &'static [(&'static str, u32); 22],
+    fill: &'static str,
+    light: bool,
+}
+
+/// Each palette, in `THEMES` order.
+const TABLES: [Table; THEMES.len()] = [
+    Table {
+        colours: &VESTRA,
+        fill: "fill-vestra",
+        light: false,
+    },
+    Table {
+        colours: &VESTRA_LIGHT,
+        fill: "fill-vestra-light",
+        light: true,
+    },
+];
 
 fn color(rgb: u32) -> SValue {
     SValue::Brush(slint::Brush::SolidColor(slint::Color::from_rgb_u8(
@@ -58,30 +106,23 @@ fn color(rgb: u32) -> SValue {
     )))
 }
 
-/// Set one view's palette. `vestra_fill` is the default gradient brush, read
-/// once from a fresh instance (Slint's public API cannot build gradients).
-pub fn apply(
-    instance: &slint_interpreter::ComponentInstance,
-    theme: &str,
-    vestra_fill: Option<&SValue>,
-) -> Result<()> {
+/// Set one view's palette: colours, the gradient (copied from the instance's
+/// own constant, Slint's public API cannot build gradients) and the
+/// std-widgets colour scheme.
+pub fn apply(instance: &slint_interpreter::ComponentInstance, theme: &str) -> Result<()> {
     let index = THEMES.iter().position(|t| *t == known(theme)).unwrap_or(0);
-    let table = TABLES[index];
-    // Vestra fills with its gradient; another palette with its accent.
-    let fill = if index == 0 {
-        vestra_fill.cloned()
-    } else {
-        table
-            .iter()
-            .find(|(n, _)| *n == "accent")
-            .map(|(_, rgb)| color(*rgb))
-    };
-    for (name, rgb) in table {
+    let table = &TABLES[index];
+    for (name, rgb) in table.colours {
         instance.set_global_property(PALETTE, name, color(*rgb))?;
     }
-    if let Some(fill) = fill {
-        instance.set_global_property(PALETTE, "accent-fill", fill)?;
-    }
+    let fill = instance.get_global_property(PALETTE, table.fill)?;
+    instance.set_global_property(PALETTE, "accent-fill", fill)?;
+    let scheme = if table.light { "light" } else { "dark" };
+    instance.set_global_property(
+        PALETTE,
+        "color-scheme",
+        SValue::EnumerationValue("ColorScheme".into(), scheme.into()),
+    )?;
     Ok(())
 }
 
@@ -114,22 +155,19 @@ impl Host {
             .state
             .appearance
             .as_ref()
-            .map_or("vestra", |a| a.theme.as_str())
+            .map_or(THEMES[0], |a| a.theme.as_str())
     }
     /// Deliver the palette to one new instance (failures retried on the next tick).
     pub(super) fn theme_view(&mut self, instance: &slint_interpreter::ComponentInstance) {
-        if self.vestra_fill.is_none() {
-            self.vestra_fill = instance.get_global_property(PALETTE, "accent-fill").ok();
-        }
         if let Err(error) = apply_fonts(instance) {
             eprintln!("host.error theme: {error:#}");
             self.theme_pending = true;
         }
-        if self.theme() == "vestra" && self.vestra_fill.is_some() {
-            // A fresh instance already shows Vestra.
+        if self.theme() == THEMES[0] {
+            // A fresh instance already shows the default palette.
             return;
         }
-        if let Err(error) = apply(instance, self.theme(), self.vestra_fill.as_ref()) {
+        if let Err(error) = apply(instance, self.theme()) {
             eprintln!("host.error theme: {error:#}");
             self.theme_pending = true;
         }
@@ -147,9 +185,7 @@ impl Host {
             .collect();
         self.theme_pending = false;
         for instance in instances.drain(..) {
-            if let Err(error) = apply(&instance, &theme, self.vestra_fill.as_ref())
-                .and_then(|()| apply_fonts(&instance))
-            {
+            if let Err(error) = apply(&instance, &theme).and_then(|()| apply_fonts(&instance)) {
                 eprintln!("host.error theme: {error:#}");
                 self.theme_pending = true;
             }
@@ -184,11 +220,21 @@ mod tests {
         let file = include_str!("../ui/palette.slint");
         for (name, rgb) in VESTRA {
             let line = format!("in property <color> {name}: #{rgb:06x};");
-            assert!(file.contains(&line), "theme.slint lacks {line}");
+            assert!(file.contains(&line), "palette.slint lacks {line}");
         }
         let colours = file.matches("in property <color>").count();
         assert_eq!(colours, VESTRA.len(), "every colour token is in the tables");
-        assert!(file.contains("in property <brush> accent-fill"));
+        assert!(file.contains("in property <brush> accent-fill: self.fill-vestra;"));
+        for table in &TABLES {
+            // Every palette sets the same tokens, and has its gradient.
+            let names: Vec<_> = table.colours.iter().map(|(n, _)| *n).collect();
+            let default: Vec<_> = VESTRA.iter().map(|(n, _)| *n).collect();
+            assert_eq!(names, default);
+            assert!(file.contains(&format!(
+                "out property <brush> {}: @linear-gradient(",
+                table.fill
+            )));
+        }
         let theme = include_str!("../ui/vestra/theme.slint");
         assert!(
             !theme.contains("in property"),
@@ -199,8 +245,10 @@ mod tests {
     #[test]
     fn an_id_the_player_does_not_have_selects_the_default() {
         assert_eq!(known("vestra"), "vestra");
+        assert_eq!(known("vestra-light"), "vestra-light");
         // Retired in an earlier version, or never a palette: the default, no error.
         assert_eq!(known("classic"), THEMES[0]);
+        assert_eq!(known("light"), THEMES[0]);
         assert_eq!(known(""), "vestra");
         assert_eq!(TABLES.len(), THEMES.len());
     }

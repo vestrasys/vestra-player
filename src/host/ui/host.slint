@@ -51,6 +51,8 @@ export component HostWindow inherits Window {
     // blocks scale with it (11px at a 16px OSD, 9–28px).
     out property <length> osd-size: clamp(round(canvas.height * 0.03 / 1px) * 1px, 12px, 48px);
     out property <length> info-size: clamp(11px * root.osd-size / 16px, 9px, 28px);
+    private property <length> osd-pad-x: round(12px * root.osd-size / 18px / 1px) * 1px;
+    private property <length> osd-pad-y: round(5px * root.osd-size / 18px / 1px) * 1px;
     callback window-input(string);
     // Bindings (C3): true when the input is bound, so Slint stops propagating it.
     callback key-input(string, string, bool, bool, bool, bool, bool) -> bool;
@@ -208,13 +210,29 @@ export component HostWindow inherits Window {
                                 reject
                             }
                         }
-                        osd := Text {
+                        // The OSD (ui-spec §6.6): white text on a translucent dark plate
+                        // with the accent gradient along its bottom edge. Its padding and
+                        // corners scale with the font (12×5px and 8px at 18px). The video
+                        // area is dark in every palette, so the colours are fixed.
+                        osd := Rectangle {
                             x: 10px; y: 10px;
-                            text: root.osd-text;
-                            font-size: root.osd-size; font-weight: 700;
-                            color: #ffffff;
-                            stroke: #000000; stroke-width: max(1px, root.osd-size / 16); stroke-style: outside;
+                            width: osd-label.preferred-width + 2 * root.osd-pad-x;
+                            height: osd-label.preferred-height + 2 * root.osd-pad-y;
+                            border-radius: Theme.radius-panel * root.osd-size / 18px;
+                            background: #0b0a10c4;
                             opacity: 0;
+                            osd-label := Text {
+                                x: root.osd-pad-x; y: root.osd-pad-y;
+                                text: root.osd-text;
+                                font-size: root.osd-size; font-weight: 600;
+                                color: #ffffff;
+                            }
+                            Rectangle {
+                                x: parent.border-radius; y: parent.height - 2px;
+                                width: parent.width - 2 * parent.border-radius; height: 2px;
+                                border-radius: 1px;
+                                background: Theme.accent-fill;
+                            }
                             states [
                                 shown when root.osd-visible: {
                                     opacity: 1;
@@ -224,16 +242,19 @@ export component HostWindow inherits Window {
                                 }
                             ]
                         }
+                        // The information blocks (C10): the same plates without the line,
+                        // 4px below the OSD.
                         VerticalLayout {
-                            x: 10px; y: 20px + root.osd-size * 1.25;
+                            x: 10px; y: osd.y + osd.height + 4px;
                             width: min(self.preferred-width, parent.width - 20px);
                             height: self.preferred-height;
                             spacing: 4px;
                             for text in root.info-panels: Rectangle {
-                                background: #000000b0;
+                                background: #0b0a10c4;
+                                border-radius: Theme.radius-control * root.osd-size / 16px;
                                 HorizontalLayout {
                                     padding: 6px * root.osd-size / 16px;
-                                    Text { text: text; font-size: root.info-size; color: Theme.text; }
+                                    Text { text: text; font-size: root.info-size; color: #f5f3fa; }
                                 }
                             }
                         }

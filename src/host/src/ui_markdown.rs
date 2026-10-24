@@ -32,8 +32,9 @@ const SLOT: char = '\u{e541}';
 /// not synthesize one (only Skia does), so italic CJK draws like body text;
 /// the strikethrough line drew no pixel at 11–12px, the Markdown body sizes
 /// (both measured 2026-10-22 under the then-forced Hiragino Sans GB). Literal colours (the format string
-/// cannot read `Theme`), chosen to read on both palettes.
-const EMPHASIS_COLOR: &str = "#e8a33d";
+/// cannot read `Theme`), chosen to read on both palettes: the amber is 5.2:1
+/// on the dark list background and 3.4:1 on the light one.
+const EMPHASIS_COLOR: &str = "#c27c12";
 const STRIKE_COLOR: &str = "#8a8496";
 
 /// `{ "$vestraMarkdown": { text, base, images }, "ref": n }`.
@@ -729,7 +730,7 @@ mod tests {
         assert_eq!(all[1].inline.plain, "段落 粗 斜 删 码 链接");
         assert_eq!(
             all[1].inline.format,
-            "S**S**S<font color=\"#e8a33d\">*S*</font>S<font color=\"#8a8496\">~~S~~</font>S`S`S[S](<https://a.example/x>)"
+            "S**S**S<font color=\"#c27c12\">*S*</font>S<font color=\"#8a8496\">~~S~~</font>S`S`S[S](<https://a.example/x>)"
                 .replace('S', "\u{e541}")
         );
         assert_eq!((all[2].marker.as_str(), all[2].indent), ("•", 0));
@@ -785,7 +786,7 @@ mod tests {
         // `Code` span (one capsule), CJK included.
         assert_eq!(
             inline.format,
-            "<font color=\"#e8a33d\">*S*</font>S<font color=\"#e8a33d\">*S*</font>S<font color=\"#8a8496\">~~S~~</font>S`S`S`S`S`S`"
+            "<font color=\"#c27c12\">*S*</font>S<font color=\"#c27c12\">*S*</font>S<font color=\"#8a8496\">~~S~~</font>S`S`S`S`S`S`"
                 .replace('S', "\u{e541}")
         );
         assert_eq!(
