@@ -1,6 +1,7 @@
-// Vestra Player AI: session sidebar (220 px) | conversation. Rows are plain
-// text in this version (Markdown per message waits for R-a).
+// Vestra Player AI: session sidebar (220 px) | conversation. Assistant
+// messages are Markdown (one document per row, `body`); the rest is text.
 import { ListView, TextEdit } from "std-widgets.slint";
+import { MarkdownBlock, MarkdownBlocks } from "@vestra/markdown.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
 
@@ -14,6 +15,9 @@ export struct ChatRow {
     state: int,
     expanded: bool,
     settings: bool,
+    // assistant: the message as Markdown; empty for the other kinds, and
+    // until the plugin made the document (then `text` shows instead).
+    body: [MarkdownBlock],
 }
 
 export struct SessionRow {
@@ -59,6 +63,8 @@ component Message inherits VerticalLayout {
     in property <bool> last;
     in property <bool> can-retry;
     callback copy(string);
+    callback copy-code(string);
+    callback open-link(string);
     callback toggle(string);
     callback retry();
     callback open-settings();
@@ -117,7 +123,13 @@ component Message inherits VerticalLayout {
 
     if item.kind == "assistant": VerticalLayout {
         spacing: 4px;
-        Body { text: item.text == "" ? "…" : item.text; }
+        if item.body.length > 0: MarkdownBlocks {
+            blocks: item.body;
+            code-copy: true;
+            copy-code(code) => { root.copy-code(code); }
+            link-clicked(url) => { root.open-link(url); }
+        }
+        if item.body.length == 0: Body { text: item.text == "" ? "…" : item.text; }
         if item.state != 0: HorizontalLayout {
             alignment: start;
             Link { text: "复制"; clicked => { root.copy(item.id); } }
@@ -177,6 +189,8 @@ export component AiWindow inherits Window {
     callback open-settings();
     callback retry();
     callback copy(string);
+    callback copy-code(string);
+    callback open-link(string);
     callback toggle(string);
     callback open-folder();
     callback open-pi();
@@ -316,6 +330,8 @@ export component AiWindow inherits Window {
                     last: index == root.rows.length - 1;
                     can-retry: root.can-retry;
                     copy(id) => { root.copy(id); }
+                    copy-code(code) => { root.copy-code(code); }
+                    open-link(url) => { root.open-link(url); }
                     toggle(id) => { root.toggle(id); }
                     retry => { root.retry(); }
                     open-settings => { root.open-settings(); }

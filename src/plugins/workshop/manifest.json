@@ -1,6 +1,6 @@
 {
   "id": "vestra.workshop",
-  "version": "2.0.3",
+  "version": "2.1.0",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": ["commands", "ui.window", "ui.settings", "secrets", "clipboard"],
@@ -9,5 +9,5 @@
   "punchline": "和你选的模型对话，让 AI 在会话文件夹里读写文件（自带 API key，实验性）",
   "description": "Vestra Player AI 是播放器里的 AI 助手，基于 pi（github.com/earendil-works/pi）。在设置里选择服务商（Anthropic、OpenAI、Google、OpenRouter、DeepSeek，或 Ollama 等 OpenAI 兼容服务）并保存你自己的 API key，就可以开始对话。\n\n每个对话有自己的文件夹，AI 只能读写这个文件夹，不能运行命令。API key 只保存在系统钥匙串里，不写入任何文件。调用模型的费用由你的服务商账户承担。\n\n这一版是第一阶段：对话、流式回复和文件读写。生成、校验、安装插件会在后续版本加入。",
   "tags": ["AI", "插件开发", "实验性"],
-  "minPlayerVersion": "0.4.0"
+  "minPlayerVersion": "0.4.1"
 }

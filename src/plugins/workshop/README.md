@@ -6,7 +6,7 @@
 
 1. 右键菜单选「Vestra Player AI…」。
 2. 第一次使用时点「去设置」（或侧栏的「⚙ 设置」），在「选项 ▸ 插件 ▸ Vestra Player AI」里：
-   - 选服务商：pi 支持、用 API key 的全部服务商（Anthropic、OpenAI、Google、OpenRouter、DeepSeek、Mistral、Groq、xAI、MiniMax、Moonshot、Z.AI 等），或者「自定义 · OpenAI 格式」/「自定义 · Anthropic 格式」（填 Base URL，可接 Ollama、LM Studio 或其它兼容服务）；
+   - 选服务商：pi 支持、用 API key 的全部服务商（Anthropic、OpenAI、Google、OpenRouter、DeepSeek、Mistral、Groq、xAI、MiniMax、Moonshot 等，按量付费），或者「自定义 · OpenAI 格式」/「自定义 · Anthropic 格式」（填 Base URL，可接 Ollama、LM Studio 或其它兼容服务）；
    - 粘贴 API key，点「保存」；每个服务商的 key 分开保存；
    - 选模型。自定义服务在填好 Base URL 后按 Enter 或点「获取模型」，会向服务列出模型；列不出来时直接填写模型 ID。
 3. 回到 AI 窗口输入消息，Enter 发送，Shift+Enter 换行。生成过程中可以点「■ 停止」。
@@ -21,5 +21,7 @@
 - **AI 能做什么**：只能读写当前对话的工作文件夹（`read`、`write`、`edit`、`ls`、`find`、`grep`），不能运行命令，不能访问文件夹以外的文件，也不能使用符号链接或以「.」开头的文件名。AI 在一个单独的受限进程里运行。
 - **对话保存在哪里**：插件数据目录下的 `sessions/<对话>/`：`meta.json`、pi 的对话记录（`.jsonl`）和工作文件夹 `work/`。
 - 同一时间只有一个对话在生成。
-- 这一版是第一阶段：纯文本消息（还不渲染 Markdown），生成、校验、安装插件会在后续版本加入。
+- AI 的回复按 Markdown 显示（标题、列表、表格、代码块等），代码块右上角可以「复制」，链接用浏览器打开。回复里的网络图片不会下载，只显示替代文字。很长的对话只显示最近的消息，完整记录在会话文件夹里。
+- 服务商列表只有按量付费的 API；编程套餐、Token Plan 等订阅套餐不在列表里，需要时用「自定义 · OpenAI 格式」或「自定义 · Anthropic 格式」接入。
+- 生成、校验、安装插件会在后续版本加入。需要 Vestra Player 0.4.1 或更新版本。
 - 第三方组件的许可证见 `licenses/`，pi 的 logo 出处见 `licenses/pi-logo/NOTICE.md`。

@@ -1,7 +1,8 @@
 import type { Plugin } from "@vestra-player/sdk";
 import path from "node:path";
 import { AgentWorker } from "./agent.ts";
-import { Chat, type Row } from "./chat.ts";
+import { Chat } from "./chat.ts";
+import { MessageDocs, cut } from "./messages.ts";
 import {
   DEFAULT_SETTINGS,
   LEGACY_COMPAT,
@@ -154,7 +155,11 @@ export default async function activate(plugin: Plugin) {
   const later = () => {
     refresh ??= setTimeout(() => {
       refresh = undefined;
-      plugin.update();
+      // The streaming message gets its new document once per tick.
+      docs
+        .sync(shown.rows)
+        .catch((error) => console.error(`markdown: ${error}`))
+        .finally(() => plugin.update());
     }, REFRESH_MS);
   };
 
@@ -173,6 +178,8 @@ export default async function activate(plugin: Plugin) {
     return chat;
   };
   let shown: Chat = active ? await chatOf(active) : new Chat();
+  const docs = new MessageDocs((text) => plugin.ui.markdown(text, { remoteImages: false }));
+  await docs.sync(shown.rows);
 
   const sessionRows = () => {
     const rows: { id: string; title: string; header: boolean; active: boolean; running: boolean }[] = [];
@@ -191,7 +198,7 @@ export default async function activate(plugin: Plugin) {
     const last = shown.rows.at(-1);
     return {
       sessions: sessionRows(),
-      rows: shown.rows.map((row: Row) => ({ ...row })),
+      rows: docs.props(shown.rows),
       configured: configured(),
       banner: banner(),
       busy,
@@ -326,6 +333,7 @@ export default async function activate(plugin: Plugin) {
   const select = async (meta: Meta | null) => {
     active = meta;
     shown = meta ? await chatOf(meta) : new Chat();
+    await docs.sync(shown.rows);
     releaseIdle(meta?.id);
     settings.save({ ...settings.value, lastSession: meta?.id ?? null });
   };
@@ -344,7 +352,12 @@ export default async function activate(plugin: Plugin) {
   window.on("toggle", (id: string) => shown.toggle(id));
   window.on("copy", (id: string) => {
     const row = shown.rows.find((r) => r.id === id);
-    if (row) return plugin.clipboard.writeText(row.text);
+    if (row) return plugin.clipboard.writeText(cut(row.text, 1000 * 1000, ""));
+  });
+  window.on("copyCode", (code: string) => plugin.clipboard.writeText(cut(code, 1000 * 1000, "")));
+  window.on("openLink", (url: string) => {
+    // Only web links; the player refuses other schemes too.
+    if (/^https?:\/\//i.test(url)) return plugin.system.openUrl(url);
   });
   window.on("openSettings", () => plugin.settings.show("byok"));
   window.on("openFolder", () => active && plugin.system.openPath(sessions.work(active.id)));

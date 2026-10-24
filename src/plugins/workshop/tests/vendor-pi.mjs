@@ -47,6 +47,21 @@ const UPSTREAM = { pi: "pi-LICENSE", "data-uri-to-buffer": "data-uri-to-buffer-L
  * endpoints beyond a key (Bedrock, Vertex, Azure, Cloudflare).
  */
 const EXCLUDED = new Map([
+  // User ruling 2026-10-24: no coding-plan / token-plan / subscription
+  // entries; pay-as-you-go APIs only. Users reach a plan themselves through
+  // 「自定义 · OpenAI/Anthropic 格式」. Plan names per pi's provider table:
+  // https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/providers.md
+  ["kimi-coding", "Kimi For Coding plan"],
+  ["zai", "Z.AI GLM Coding Plan (global); pi's only Z.AI endpoint"],
+  ["zai-coding-cn", "Z.AI GLM Coding Plan (China)"],
+  ["qwen-token-plan", "Qwen Token Plan"],
+  ["qwen-token-plan-cn", "Qwen Token Plan (China)"],
+  ["qwen-token-plan-individual", "Qwen Token Plan Individual"],
+  ["xiaomi-token-plan-ams", "Xiaomi MiMo Token Plan"],
+  ["xiaomi-token-plan-cn", "Xiaomi MiMo Token Plan"],
+  ["xiaomi-token-plan-sgp", "Xiaomi MiMo Token Plan"],
+  ["opencode-go", "OpenCode Go subscription"],
+  ["radius", "Earendil's gateway, set up through /login (account)"],
   ["github-copilot", "subscription login"],
   ["amazon-bedrock", "AWS credentials; its SDK is not bundled"],
   ["google-vertex", "Google Cloud project and location"],
@@ -54,8 +69,16 @@ const EXCLUDED = new Map([
   ["cloudflare-ai-gateway", "account and gateway id in the endpoint"],
   ["cloudflare-workers-ai", "account id in the endpoint"],
 ]);
+/** A provider pi adds later that calls itself a plan or subscription is left out too, until reviewed. */
+const PLAN = /plan|coding|subscription/i;
 export function offered(provider, models) {
-  return !!provider.auth?.apiKey && !EXCLUDED.has(provider.id) && models.length > 0 && models.every((m) => m.baseUrl && !m.baseUrl.includes("{"));
+  return (
+    !!provider.auth?.apiKey &&
+    !EXCLUDED.has(provider.id) &&
+    !PLAN.test(`${provider.id} ${provider.name}`) &&
+    models.length > 0 &&
+    models.every((m) => m.baseUrl && !m.baseUrl.includes("{") && !PLAN.test(m.baseUrl))
+  );
 }
 
 const stubPlugin = {

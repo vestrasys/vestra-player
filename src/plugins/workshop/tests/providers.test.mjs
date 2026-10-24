@@ -13,10 +13,14 @@ const catalog = async () => JSON.parse(await fs.readFile(new URL("../vendor/pi/m
 test("the catalog carries every key-based provider of pi, no login-only or cloud-credential ones", async () => {
   const providers = await catalog();
   const ids = providers.map((p) => p.id);
-  for (const id of ["anthropic", "openai", "google", "openrouter", "deepseek", "mistral", "groq", "xai", "minimax", "moonshotai", "zai", "qwen-token-plan"])
+  for (const id of ["anthropic", "openai", "google", "openrouter", "deepseek", "mistral", "groq", "xai", "minimax", "moonshotai"])
     assert.ok(ids.includes(id), id);
   for (const id of ["openai-codex", "github-copilot", "amazon-bedrock", "google-vertex", "azure", "cloudflare-ai-gateway", "cloudflare-workers-ai"])
     assert.ok(!ids.includes(id), id);
+  // User ruling: no coding-plan / token-plan / subscription entries.
+  for (const id of ["kimi-coding", "zai", "zai-coding-cn", "qwen-token-plan", "qwen-token-plan-cn", "qwen-token-plan-individual", "xiaomi-token-plan-ams", "xiaomi-token-plan-cn", "xiaomi-token-plan-sgp", "opencode-go", "radius"])
+    assert.ok(!ids.includes(id), id);
+  for (const p of providers) assert.doesNotMatch(`${p.id} ${p.name}`, /plan|coding|subscription/i);
   for (const p of providers) assert.ok(p.models.length > 0 && p.name, p.id);
 
   const ai = await startAi();
@@ -134,4 +138,19 @@ test("settings of the first slice move to 「自定义 · OpenAI 格式」 with 
     assert.equal(saved.provider, "custom-openai");
     assert.equal(saved.baseUrl, undefined);
   }
+});
+
+test("pi's own User-Agent and headers go out unchanged: the worker never sets identity or header filters", async () => {
+  // Kimi and OpenCode treat a changed User-Agent as a terms violation.
+  for (const file of ["worker.ts", "tools.ts", "files.ts", "protocol.ts"]) {
+    const source = await fs.readFile(new URL(`../worker/${file}`, import.meta.url), "utf8");
+    assert.doesNotMatch(source, /userAgent|user-agent|identity|headers\s*:|filterHeaders|setGlobalDispatcher/i, file);
+  }
+  const mock = await server(() => ({ text: ["好"] }));
+  const ai = await startAi({ compat: mock.url });
+  await ai.ask("hi");
+  const agent = mock.chats[0].headers["user-agent"];
+  assert.ok(agent, "a User-Agent was sent");
+  assert.doesNotMatch(agent, /vestra/i);
+  await ai.stop();
 });

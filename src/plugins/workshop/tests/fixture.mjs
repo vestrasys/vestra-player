@@ -82,7 +82,8 @@ export async function startAi({ data, compat, secrets = {}, deny = false } = {})
     send,
     configure,
     until: (condition, what, ms) => until(host, condition, what, ms),
-    rows: () => props.rows,
+    /** The rows, assistant text read back from its Markdown document (`body`). */
+    rows: () => props.rows.map((row) => ({ ...row, text: host.markdown(row.body)?.text || row.text })),
     kinds: () => props.rows.map((r) => r.kind).join(","),
     /** Type and send a message, then wait until the run is over. */
     async ask(text, { wait = true } = {}) {
