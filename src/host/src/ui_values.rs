@@ -179,6 +179,19 @@ pub fn reconcile(current: &Value, next: &Value) -> Result<bool> {
     }
     Ok(false)
 }
+/// `reconcile` that also keeps models nested in rows: when `next` has the
+/// shape of `current` it is written in place at every depth, so a row whose
+/// field changes keeps the model it holds and the repeater elements drawn
+/// from it. The context menu needs this: a changed level used to replace
+/// its row elements, which loses a press in progress (no click) and the
+/// pointer's hover until it moves again.
+pub fn reconcile_nested(current: &Value, next: &Value) -> Result<bool> {
+    if fits(current, next) {
+        trace_reconciliation("in-place", rows(current));
+        return Ok(!merge(current, next).1);
+    }
+    reconcile(current, next)
+}
 fn rows(value: &Value) -> usize {
     match value {
         Value::Model(model) => model.row_count(),

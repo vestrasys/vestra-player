@@ -135,6 +135,27 @@ fn place(origin: Point, width: f64, height: f64, window: Point) -> (f64, f64) {
     )
 }
 
+/// G-03: where a submenu of `width` opens beside its parent panel at `px`
+/// (`pw` wide) in a window `window_x` wide, and whether it went left.
+/// It keeps the direction of the cascade so far (right at first) and flips
+/// when that side has no room. When neither side has room it takes the side
+/// that leaves more of the parent uncovered (the right on a tie), clamped
+/// into the window: the deeper panel is drawn above and takes the pointer,
+/// so whatever it covers of the parent cannot be hovered or clicked.
+fn cascade(px: f64, pw: f64, width: f64, window_x: f64, leftward: bool) -> (f64, bool) {
+    let right = px + pw - OVERLAP;
+    let left = px - width + OVERLAP;
+    let go_left = match (right + width <= window_x, left >= 0.) {
+        (true, true) => leftward,
+        (true, false) => false,
+        (false, true) => true,
+        // Room left of the parent against room right of it.
+        (false, false) => px > window_x - (px + pw),
+    };
+    let x = if go_left { left } else { right };
+    (x.min(window_x - width).max(0.), go_left)
+}
+
 /// G-03: a level's height in a window `available` high, whether it scrolls,
 /// and its scroll offset (`requested`, clamped). A scrolling level fills the
 /// window; its rows show between two arrow bars.
@@ -158,9 +179,10 @@ fn row_shift(scrolling: bool, offset: f64) -> f64 {
 }
 
 /// One panel per open level, root first. `path` must come from `valid_path`.
-/// Panels open at `origin`, cascade to the right of their open row, flip to
-/// the left at the window edge and are clamped inside `window`. A level
-/// taller than the window scrolls; `scroll[depth]` is its requested offset.
+/// Panels open at `origin` and cascade beside their open row (`cascade`):
+/// to the right, to the left after a flip at the window edge, clamped
+/// inside `window`. A level taller than the window scrolls; `scroll[depth]`
+/// is its requested offset.
 pub fn levels(
     roots: &[MenuNode],
     path: &[String],
@@ -172,6 +194,7 @@ pub fn levels(
     let mut output = Vec::new();
     let mut nodes = roots;
     let mut previous: Option<(f64, f64, f64, f64)> = None; // x, y, width, open row top
+    let mut leftward = false;
     for depth in 0..=path.len() {
         let open_title = path.get(depth);
         let open = nodes.iter().position(
@@ -193,17 +216,10 @@ pub fn levels(
         let (x, y) = match previous {
             None => place(origin, width, height, window),
             Some((px, py, pw, row_y)) => {
-                let right = px + pw - OVERLAP;
-                let x = if right + width > window.x {
-                    px - width + OVERLAP
-                } else {
-                    right
-                };
+                let x;
+                (x, leftward) = cascade(px, pw, width, window.x, leftward);
                 let y = py + row_y - PAD;
-                (
-                    x.min(window.x - width).max(0.),
-                    y.min(window.y - height).max(0.),
-                )
+                (x, y.min(window.y - height).max(0.))
             }
         };
         let open_y = open.and_then(|index| rows[index]["y"].as_f64());
@@ -401,6 +417,52 @@ mod tests {
             assert!(y >= 0. && y + level["height"].as_f64().unwrap() <= WINDOW.y);
         }
         assert!(levels[1]["x"].as_f64().unwrap() < levels[0]["x"].as_f64().unwrap());
+    }
+
+    fn spans(value: &Value) -> Vec<(f64, f64)> {
+        value
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|level| {
+                let x = level["x"].as_f64().unwrap();
+                (x, x + level["width"].as_f64().unwrap())
+            })
+            .collect()
+    }
+
+    /// Coordinator report 2026-10-24: a submenu drawn over its parent takes
+    /// the pointer, so the parent's rows under it can be neither hovered nor
+    /// clicked. After a flip to the left the cascade keeps going left
+    /// instead of opening back over the top level.
+    #[test]
+    fn a_cascade_that_flipped_left_keeps_going_left() {
+        let path = vec!["文件".to_owned(), "网络".to_owned()];
+        let origin = Point { x: 700., y: 50. };
+        let spans = spans(&levels(&tree(), &path, origin, WINDOW, &[], &none));
+        assert_eq!(spans[0].0, 700.);
+        assert!(spans[1].1 <= spans[0].0 + OVERLAP, "{spans:?}");
+        assert!(spans[2].1 <= spans[1].0 + OVERLAP, "{spans:?}");
+    }
+
+    /// With room on neither side, the submenu takes the side that covers
+    /// less of its parent; the rest of the parent stays reachable.
+    #[test]
+    fn with_room_on_neither_side_a_submenu_covers_as_little_of_its_parent_as_it_can() {
+        let path = vec!["文件".to_owned()];
+        let narrow = Point { x: 330., y: 400. };
+        for origin_x in [10., 40., 80., 120., 160.] {
+            let origin = Point {
+                x: origin_x,
+                y: 20.,
+            };
+            let spans = spans(&levels(&tree(), &path, origin, narrow, &[], &none));
+            let ((x0, r0), (x1, r1)) = (spans[0], spans[1]);
+            assert!(x1 >= 0. && r1 <= narrow.x);
+            let uncovered = if x1 > x0 { x1 - x0 } else { r0 - r1 };
+            let best = (narrow.x - (r1 - x1) - x0).max(r0 - (r1 - x1));
+            assert_eq!(uncovered, best.min(r0 - x0), "origin {origin_x}: {spans:?}");
+        }
     }
 
     #[test]

@@ -627,6 +627,214 @@ export component W inherits Window {
         assert_eq!((count("backs"), count("dismissals")), (2., 1.));
     }
 
+    /// Coordinator report 2026-10-24 (播放 ▸ 跳转 ▸ / 速度微调 ▸): drives the
+    /// real view with pointer events and a host loop like `Host` (hover
+    /// delay, `set_menu_model`). Walking down a submenu in 20 px steps opens
+    /// the row it rests on; resting on a sibling switches after the delay;
+    /// a click opens at once even when an open level's state is published
+    /// between press and release.
+    #[test]
+    fn menu_pointer_walk_switches_sibling_submenus_and_clicks_survive_state_changes() {
+        use crate::commands::{CommandKey, CommandSnapshot, CommandState, Declaration, MenuNode};
+        use crate::menu::{HoverDelay, Point, SHOW_DELAY_MS, hover_target, levels};
+        use std::cell::{Cell, RefCell};
+        use std::rc::Rc;
+        headless();
+        let source = r#"
+import { MenuView, MenuLevel } from "menu-view.slint";
+export component W inherits Window {
+    width: 900px; height: 600px;
+    in property <[MenuLevel]> menu-levels;
+    callback hover(int, string, bool);
+    MenuView {
+        width: root.width; height: root.height;
+        levels: root.menu-levels;
+        hovered(level, token, now) => { root.hover(level, token, now); }
+    }
+}"#;
+        let result = pollster::block_on(
+            compiler().build_from_source(source.into(), ui_dir().join("t.slint")),
+        );
+        let instance = result.component("W").unwrap().create().unwrap();
+        instance
+            .window()
+            .set_size(slint::LogicalSize::new(900., 600.));
+        // The state a plugin republishes: 播放/暂停's check mark.
+        let paused = Cell::new(false);
+        let leaf = |title: &str| {
+            let mut declaration = Declaration::new(title, &[title]);
+            declaration.group = "g".into();
+            MenuNode::Command {
+                entry: CommandSnapshot {
+                    key: CommandKey {
+                        owner: 1,
+                        local_id: title.into(),
+                    },
+                    revision: 1,
+                    declaration,
+                    state: CommandState {
+                        enabled: true,
+                        checked: (title == "播放/暂停").then(|| paused.get()),
+                        busy: false,
+                        reason: None,
+                    },
+                    manifest: "m".into(),
+                    sequence: 1,
+                },
+            }
+        };
+        let group = |title: &str, children| MenuNode::Group {
+            title: title.into(),
+            group: "g".into(),
+            children,
+        };
+        let roots = || {
+            vec![
+                group("文件", vec![leaf("打开")]),
+                group(
+                    "播放",
+                    vec![
+                        leaf("播放/暂停"),
+                        leaf("上一个"),
+                        leaf("下一个"),
+                        group(
+                            "跳转",
+                            vec![
+                                leaf("上一帧"),
+                                leaf("下一帧"),
+                                leaf("后退5秒"),
+                                leaf("前进5秒"),
+                            ],
+                        ),
+                        group(
+                            "速度微调",
+                            vec![leaf("慢一点"), leaf("快一点"), leaf("复位")],
+                        ),
+                        leaf("循环"),
+                    ],
+                ),
+            ]
+        };
+        let hovers: Rc<RefCell<Vec<(usize, String, bool)>>> = Rc::default();
+        let sink = hovers.clone();
+        instance
+            .set_callback("hover", move |args| {
+                if let [Value::Number(level), Value::String(token), Value::Bool(now)] = args {
+                    sink.borrow_mut()
+                        .push((*level as usize, token.to_string(), *now));
+                }
+                Value::Void
+            })
+            .unwrap();
+        let none = |_: u64, _: &str| None;
+        let origin = Point { x: 100., y: 100. };
+        let size = Point { x: 900., y: 600. };
+        let show = |path: &[String]| {
+            let value = levels(&roots(), path, origin, size, &[], &none);
+            crate::set_menu_model(&instance, crate::ui_values::from_json(&value).unwrap()).unwrap();
+        };
+        let path = RefCell::new(Vec::<String>::new());
+        let clock = Cell::new(0u64);
+        let delay = RefCell::new(HoverDelay::default());
+        show(&path.borrow());
+        // One host tick (16 ms): the view's hovers, then a due delay.
+        let tick = || {
+            slint::platform::update_timers_and_animations();
+            let mut path = path.borrow_mut();
+            for (level, token, now) in hovers.borrow_mut().drain(..) {
+                let Some(target) = hover_target(&path, level, &token) else {
+                    continue;
+                };
+                if now {
+                    delay.borrow_mut().clear();
+                    *path = target;
+                    show(&path);
+                } else {
+                    delay.borrow_mut().hover(&path, target, clock.get());
+                }
+            }
+            if let Some(next) = delay.borrow_mut().due(clock.get(), SHOW_DELAY_MS) {
+                *path = next;
+                show(&path);
+            }
+        };
+        let wait = |ms: u64| {
+            tick();
+            for _ in 0..ms / 16 {
+                clock.set(clock.get() + 16);
+                tick();
+            }
+        };
+        let pointer = |(x, y): (f32, f32)| {
+            instance
+                .window()
+                .dispatch_event(slint::platform::WindowEvent::PointerMoved {
+                    position: slint::LogicalPosition::new(x, y),
+                });
+        };
+        // The centre of a row's title, in window coordinates.
+        let row = |depth: usize, index: usize| {
+            let level = levels(&roots(), &path.borrow(), origin, size, &[], &none)[depth].clone();
+            let x = level["x"].as_f64().unwrap() + 40.;
+            let y =
+                level["y"].as_f64().unwrap() + level["rows"][index]["y"].as_f64().unwrap() + 12.;
+            (x as f32, y as f32)
+        };
+        let open = |expected: &[&str], what: &str| assert_eq!(*path.borrow(), expected, "{what}");
+
+        pointer(row(0, 1));
+        wait(500);
+        open(&["播放"], "resting on 播放 opens it");
+        // Down 播放 ▸ in 20 px steps every 150 ms, resting on 跳转 until it opens.
+        let (x, mut y) = row(1, 0);
+        let (_, jump) = row(1, 3);
+        let (_, speed) = row(1, 4);
+        while y <= speed {
+            pointer((x, y));
+            wait(150);
+            if (y - jump).abs() <= 12. && *path.borrow() == ["播放"] {
+                wait(300);
+                open(&["播放", "跳转"], "resting on 跳转 opens it");
+            }
+            y += 20.;
+        }
+        // On 速度微调 with small wiggles: 跳转 closes, 速度微调 opens.
+        for wiggle in 0..4 {
+            pointer((x + if wiggle % 2 == 0 { 3. } else { -3. }, speed));
+            wait(150);
+        }
+        open(
+            &["播放", "速度微调"],
+            "resting on a sibling switches submenus",
+        );
+
+        // Clicks, with 播放/暂停's state published between press and release.
+        let click = |at: (f32, f32)| {
+            pointer(at);
+            wait(0);
+            let position = slint::LogicalPosition::new(at.0, at.1);
+            let button = slint::platform::PointerEventButton::Left;
+            instance
+                .window()
+                .dispatch_event(slint::platform::WindowEvent::PointerPressed { position, button });
+            wait(32);
+            paused.set(!paused.get());
+            show(&path.borrow());
+            wait(32);
+            instance
+                .window()
+                .dispatch_event(slint::platform::WindowEvent::PointerReleased { position, button });
+            wait(0);
+        };
+        click(row(1, 3));
+        open(&["播放", "跳转"], "a click on 跳转 opens it at once");
+        click(row(1, 4));
+        open(
+            &["播放", "速度微调"],
+            "a click on 速度微调 opens it at once",
+        );
+    }
+
     /// The shell with a bottom bar and a sidebar.
     fn bar_and_sidebar() -> [crate::composition::CompileSpec; 2] {
         use crate::composition::{CompileSpec, Slot};
