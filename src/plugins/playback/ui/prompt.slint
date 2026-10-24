@@ -1,17 +1,24 @@
-// Small one-input tool window: 跳转到 (UI-DLG-01, time group only) and the custom speed.
+// Small one-input tool window: Jump to Time (UI-DLG-01, time group only) and the custom speed.
 import { LineEdit } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
 
 export component PromptWindow inherits Window {
-    in property <string> window-title;
-    in property <string> group-title;
-    in property <string> action-label;
-    in property <string> message;
+    // "jump" or "rate".
+    in property <string> kind;
+    // The message line (prompt.ts `Notice`): "", "stale", "source", "time-range", "rate-range", "other".
+    in property <string> notice;
+    // The player's message for "source" and "other".
+    in property <string> detail;
     in-out property <string> value;
     callback confirm(string);
     callback cancel();
-    title: root.window-title;
+    private property <string> message: root.notice == "stale" ? @tr("The source changed; open this window again")
+        : root.notice == "source" ? @tr("Source operation failed: {}", root.detail)
+        : root.notice == "time-range" ? @tr("Enter a time within the source's duration as HH:MM:SS.mmm")
+        : root.notice == "rate-range" ? @tr("Speed must be between 0.25× and 4×")
+        : root.detail;
+    title: root.kind == "rate" ? @tr("Custom Speed") : @tr("Jump to Time");
     preferred-width: 357px;
     min-width: 260px;
     background: Theme.bg-bar;
@@ -34,7 +41,7 @@ export component PromptWindow inherits Window {
                     padding: 8px;
                     spacing: 6px;
                     Text {
-                        text: root.group-title;
+                        text: root.kind == "rate" ? @tr("Speed (0.25–4×)") : @tr("Time (h:mm:ss.ms)");
                         color: Theme.text;
                         font-size: Theme.font-body;
                         height: Theme.label-height;
@@ -50,7 +57,7 @@ export component PromptWindow inherits Window {
                             accepted => { root.confirm(self.text); }
                         }
                         Button {
-                            text: root.action-label;
+                            text: root.kind == "rate" ? @tr("OK") : @tr("Go");
                             clicked => { root.confirm(root.value); }
                         }
                     }

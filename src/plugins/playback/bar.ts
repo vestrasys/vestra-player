@@ -2,6 +2,7 @@ import type { HostAction, Json, Panel, Plugin, TimelineMark } from "@vestra-play
 import type { Playback } from "./controller.ts";
 import { time } from "./format.ts";
 import type { SettingsStore } from "./settings.ts";
+import { sourceFailure } from "./texts.ts";
 import type { Thumbnails } from "./thumbs.ts";
 import { barTips, Keys } from "./tips.ts";
 
@@ -13,7 +14,7 @@ const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 /**
  * B22: `timeline.marks` as the seek line draws them, sorted by time (as the
  * player merges them): `at` is the fraction of the duration, `clock` the
- * mark's time for the hover tip 「标题  01:23」.
+ * mark's time for the hover tip "Title  01:23".
  */
 export function seekMarks(marks: readonly TimelineMark[], duration: number | null): Json[] {
   if (!duration || duration <= 0) return [];
@@ -39,7 +40,7 @@ const CORE: ReadonlySet<string> = new Set<HostAction>([
 /**
  * Project the playback state onto `ui/bar.slint` and route its callbacks. The
  * buttons' enabled flags still come from `player.state`; their actions are the
- * core's (`host.run`), except 打开 (this plugin's) and the volume slider, which
+ * core's (`host.run`), except Open (this plugin's) and the volume slider, which
  * needs continuous values (`player.setOutput`, the same rules as volume ±).
  */
 export function wireBar(bar: Panel, scope: Plugin, playback: Playback, settings: SettingsStore, thumbnails: Thumbnails) {
@@ -98,14 +99,9 @@ export function wireBar(bar: Panel, scope: Plugin, playback: Playback, settings:
       sidebarOn: slot?.preferred ?? false,
       // G-18: on but not shown because the window is too narrow (fullscreen's collapsed pop-out counts as on).
       sidebarHidden: sidebarHidden,
-      ...barTips(keys, {
-        playing: state.phase === "ready" && !state.paused,
-        muted: state.muted,
-        volume,
-        remaining,
-        step: settings.value.seekSteps[0],
-        sidebarHidden,
-      }),
+      // G-14: which time the label shows (the tooltip offers the other).
+      remainingTime: remaining,
+      ...barTips(keys, { volume, step: settings.value.seekSteps[0] }),
     };
   });
   const locks = () =>
@@ -124,7 +120,7 @@ export function wireBar(bar: Panel, scope: Plugin, playback: Playback, settings:
     } catch (error) {
       // Disabled meanwhile (the button state lags a little): nothing to report.
       if ((error as { code?: string })?.code === "unavailable") return;
-      throw new Error(`来源操作失败：${error instanceof Error ? error.message : String(error)}`);
+      throw sourceFailure(error);
     } finally {
       if (id === "mute") p.muteBusy = false;
     }
@@ -150,7 +146,7 @@ export function wireBar(bar: Panel, scope: Plugin, playback: Playback, settings:
   bar.on("dragging", (dragging: boolean) => {
     p.dragging = dragging;
     if (dragging) p.startDrag(); // the bar does not auto-hide while dragging
-    else if (p.draft !== null && !p.blockedGesture) p.notify(`跳转: ${p.positionText(p.draft)}`);
+    else if (p.draft !== null && !p.blockedGesture) p.notify("Seek: {} / {}", p.positionArgs(p.draft));
     locks();
   });
   bar.on("seekChanged", (fraction: number) => {

@@ -27,10 +27,19 @@ export function firstKey(info: BindingInfo): string | null {
 }
 
 /**
+ * The top-level menu item whose key the sidebar toggle shows, as the binding
+ * table names it (the menu text in the interface language): the playlist's
+ * English title and its Chinese translation. The table has no
+ * language-independent path yet (round doc, 第 2 轮请求).
+ */
+// i18n-ignore: other plugins' menu titles, compared with, never shown
+const SIDEBAR_ITEM: ReadonlySet<string> = new Set(["Playlist", "播放列表"]);
+
+/**
  * The bar elements' keys from the binding table (`plugin.bindings`), so a key
  * the user rebinds shows in the tooltip; the labels are the host's menu text.
  * The sidebar toggle has no command of its own: its key is that of the top-level
- * menu item 「播放列表」, whoever registers it (none: no key).
+ * menu item Playlist ({@link SIDEBAR_ITEM}), whoever registers it (none: no key).
  */
 export class Keys {
   #keys: Record<TipKey, string | null> = { ...DEFAULT_KEYS };
@@ -69,35 +78,36 @@ export class Keys {
       next: host("next"),
       mute: host("mute"),
       open: find((info) => info.plugin === this.#plugin.id && info.command === "open"),
-      sidebar: find((info) => info.path?.length === 1 && info.path[0] === "播放列表"),
+      sidebar: find((info) => info.path?.length === 1 && SIDEBAR_ITEM.has(info.path[0]!)),
     };
     this.#changed();
   }
 
-  /** `title (key)`, or the title alone when the command has no key. */
-  label(title: string, key: TipKey) {
-    const text = this.#keys[key];
-    return text ? `${title} (${text})` : title;
+  /** The key's menu text, "" when the command has no key. */
+  key(key: TipKey) {
+    return this.#keys[key] ?? "";
   }
 }
 
-/** Seconds as typed in 时间跨度设置 (5, 0.5, 300). */
+/** Seconds as typed in Seek Steps (5, 0.5, 300). */
 const seconds = (value: number) => String(Math.round(value * 10) / 10);
 
-/** G-07: the bar's tooltips from the current state, keys and first seek tier. */
-export function barTips(
-  keys: Keys,
-  state: { playing: boolean; muted: boolean; volume: number; remaining: boolean; step: number; sidebarHidden: boolean },
-) {
+/**
+ * G-07: what the bar's tooltips show, as data: the keys ("" for none), the
+ * first seek tier and the volume. `ui/bar.slint` words the tooltips.
+ */
+export function barTips(keys: Keys, state: { volume: number; step: number }) {
   return {
-    tipPlayPause: keys.label(state.playing ? "暂停" : "播放", "play-pause"),
-    tipStop: keys.label("停止", "stop"),
-    tipBack: `${keys.label(`后退 ${seconds(state.step)} 秒`, "seek-backward")}\n右键：${keys.label("播放上一个", "previous")}`,
-    tipForward: `${keys.label(`前进 ${seconds(state.step)} 秒`, "seek-forward")}\n右键：${keys.label("播放下一个", "next")}`,
-    tipOpen: keys.label("打开文件", "open"),
-    tipTime: state.remaining ? "点击切换已播放时间" : "点击切换剩余时间",
-    tipMute: keys.label(state.muted ? "取消静音" : "静音", "mute"),
-    tipVolume: `音量: ${Math.round(state.volume)}%`,
-    tipSidebar: keys.label("播放列表", "sidebar") + (state.sidebarHidden ? "（窗口太窄，放不下播放列表）" : ""),
+    keyPlayPause: keys.key("play-pause"),
+    keyStop: keys.key("stop"),
+    keyBack: keys.key("seek-backward"),
+    keyForward: keys.key("seek-forward"),
+    keyPrevious: keys.key("previous"),
+    keyNext: keys.key("next"),
+    keyOpen: keys.key("open"),
+    keyMute: keys.key("mute"),
+    keySidebar: keys.key("sidebar"),
+    stepText: seconds(state.step),
+    volumePercent: Math.round(state.volume),
   };
 }

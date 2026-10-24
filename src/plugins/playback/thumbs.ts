@@ -2,10 +2,11 @@ import { createHash } from "node:crypto";
 import { mkdir, realpath, rm, stat, unlink } from "node:fs/promises";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
-import type { CommandState, ImageRef, PlayerState, Plugin } from "@vestra-player/sdk";
+import type { ImageRef, PlayerState, Plugin } from "@vestra-player/sdk";
 import type { SettingsStore } from "./settings.ts";
+import type { State } from "./texts.ts";
 
-export const NEEDS_FFMPEG = "需要 ffmpeg";
+export const NEEDS_FFMPEG = "Needs ffmpeg";
 /** Cached pictures per source; the least recently shown go first. */
 export const MAX_PER_SOURCE = 200;
 /** The pointer rests this long on an uncached position before ffmpeg runs. */
@@ -67,7 +68,7 @@ type Source = {
 };
 
 /**
- * I07 进度条悬停显示缩略图: the bar reports the hovered fraction (at most every
+ * I07 Show Thumbnail on Seek Bar Hover: the bar reports the hovered fraction (at most every
  * 50 ms); a cached slot shows at once, an uncached one is made by ffmpeg once
  * the pointer rests 80 ms. One ffmpeg at a time: a target that changed while
  * it ran only gets cached, and the newest target runs next. Pictures live in
@@ -109,7 +110,7 @@ export class Thumbnails {
     this.#scope.update();
   }
 
-  command(): CommandState {
+  command(): State {
     const missing = this.available === false;
     return {
       enabled: !missing,
