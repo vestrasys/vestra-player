@@ -2,7 +2,18 @@ import type { Plugin } from "@vestra-player/sdk";
 import path from "node:path";
 import { AgentWorker } from "./agent.ts";
 import { Chat, type Row } from "./chat.ts";
-import { COMPAT_PROVIDER, DEFAULT_SETTINGS, checkBaseUrl, loadProviders, masked, secretName, validSettings, type AiSettings } from "./providers.ts";
+import {
+  DEFAULT_SETTINGS,
+  LEGACY_COMPAT,
+  checkBaseUrl,
+  listModels,
+  loadProviders,
+  masked,
+  migrate,
+  secretName,
+  validSettings,
+  type AiSettings,
+} from "./providers.ts";
 import { Sessions, group, titleFrom, type Meta } from "./sessions.ts";
 
 const PI_URL = "https://github.com/earendil-works/pi";
@@ -29,6 +40,17 @@ export default async function activate(plugin: Plugin) {
   const providers = loadProviders(import.meta.dirname);
   const sessions = new Sessions(plugin.dataDirectory);
   const settings = plugin.storage.json<AiSettings>("settings", { defaults: DEFAULT_SETTINGS, validate: validSettings });
+  const migrated = migrate(settings.value);
+  if (migrated) {
+    settings.save(migrated);
+    // The first slice's key moves to the custom OpenAI entry; the old entry goes.
+    for (const old of LEGACY_COMPAT) {
+      const key = await plugin.secrets.get(secretName(old));
+      if (!key) continue;
+      if (!(await plugin.secrets.get(secretName("custom-openai")))) await plugin.secrets.set(secretName("custom-openai"), key);
+      await plugin.secrets.delete(secretName(old));
+    }
+  }
   const keys = new Map<string, string>(); // provider → key, read from the keychain on demand
   const runs = new Map<string, Run>(); // session id → its worker
   const chats = new Map<string, Chat>(); // session id → rows (loaded once)
@@ -39,6 +61,9 @@ export default async function activate(plugin: Plugin) {
   let pageMessage = "";
   let pageWarn = false;
   let keyText = "";
+  /** Models a custom endpoint listed (this run only; the chosen one is saved). */
+  const listed = new Map<string, string[]>();
+  let listing = false;
 
   const provider = () => providers.find((p) => p.id === settings.value.provider) ?? providers[0];
   const model = () => settings.value.models[provider().id] || provider().defaultModel;
@@ -50,7 +75,8 @@ export default async function activate(plugin: Plugin) {
   const configured = () => {
     const p = provider();
     if (!model()) return false;
-    if (p.id === COMPAT_PROVIDER) return !!settings.value.baseUrl;
+    // A custom endpoint may be a local server that takes no key.
+    if (p.api) return !!settings.value.baseUrls[p.id];
     return !!keys.get(p.id);
   };
   const running = () => [...runs.values()].find((r) => r.running);
@@ -148,7 +174,8 @@ export default async function activate(plugin: Plugin) {
           sessionFile: meta.file ? path.join(directory, meta.file) : null,
           provider: p.id,
           modelId: model(),
-          baseUrl: p.id === COMPAT_PROVIDER ? settings.value.baseUrl : null,
+          baseUrl: p.api ? settings.value.baseUrls[p.id] : null,
+          api: p.api,
           key,
           systemPrompt: SYSTEM_PROMPT,
         },
@@ -214,6 +241,7 @@ export default async function activate(plugin: Plugin) {
     draft = "";
     window.set({ draft: "" }); // clears the field even if the user typed the same text again
     chat.user(message);
+    chat.begin();
     let run = runs.get(meta.id);
     if (!run || run.worker.exited) run = await startWorker(meta, chat);
     run.running = true;
@@ -257,17 +285,19 @@ export default async function activate(plugin: Plugin) {
   page.bind(() => {
     const p = provider();
     const key = keys.get(p.id) ?? "";
+    const models = p.api ? (listed.get(p.id) ?? []) : p.models;
     return {
       providers: providers.map((x) => x.label),
       providerIndex: providers.indexOf(p),
-      compat: p.id === COMPAT_PROVIDER,
-      baseUrl: settings.value.baseUrl,
+      custom: !!p.api,
+      baseUrl: settings.value.baseUrls[p.id] ?? "",
       keyText,
-      keyState: p.keyOptional && !key ? "未保存（本地服务可以不填）" : masked(key),
+      keyState: p.api && !key ? "未保存（本地服务可以不填）" : masked(key),
       hasKey: !!key,
-      models: p.models,
-      modelIndex: Math.max(0, p.models.indexOf(model())),
+      models,
+      modelIndex: models.indexOf(model()),
       modelText: model(),
+      listing,
       message: pageMessage,
       messageWarn: pageWarn,
     };
@@ -302,6 +332,7 @@ export default async function activate(plugin: Plugin) {
     page.set({ keyText: "" });
     say(`${p.label} 的 key 已保存。`);
     changed();
+    if (p.api && settings.value.baseUrls[p.id]) await fetchModels(false);
   });
   page.on("deleteKey", async () => {
     const p = provider();
@@ -310,15 +341,57 @@ export default async function activate(plugin: Plugin) {
     say(`${p.label} 的 key 已删除。`);
     changed();
   });
-  page.on("setBaseUrl", (text: string) => {
+  /** Saves a custom Base URL; `loud`: say why an invalid one is not saved. */
+  const saveBaseUrl = (text: string, loud: boolean): boolean => {
+    const p = provider();
+    if (!p.api) return false;
+    let url = "";
     try {
-      settings.save({ ...settings.value, baseUrl: text.trim() ? checkBaseUrl(text) : "" });
-      say("");
+      url = text.trim() ? checkBaseUrl(text) : "";
     } catch (error) {
-      say((error as Error).message, true);
+      if (loud) say((error as Error).message, true);
+      return false;
     }
-    changed();
+    // The Anthropic SDK adds /v1/messages itself.
+    if (p.api === "anthropic-messages") url = url.replace(/\/v1$/, "");
+    if (url !== (settings.value.baseUrls[p.id] ?? "")) {
+      settings.save({ ...settings.value, baseUrls: { ...settings.value.baseUrls, [p.id]: url } });
+      listed.delete(p.id);
+      changed();
+    }
+    if (loud) say("");
+    return !!url;
+  };
+  /** Lists a custom endpoint's models; on failure the model id is typed by hand. */
+  const fetchModels = async (loud: boolean) => {
+    const p = provider();
+    const base = settings.value.baseUrls[p.id];
+    if (!p.api || !base) {
+      if (loud) say("请先填写 Base URL。", true);
+      return;
+    }
+    listing = true;
+    plugin.update();
+    try {
+      const models = await listModels(p, base, await keyFor(p.id));
+      listed.set(p.id, models);
+      if (!models.includes(model())) settings.save({ ...settings.value, models: { ...settings.value.models, [p.id]: models[0] } });
+      say(`获取到 ${models.length} 个模型。`);
+      changed();
+    } catch (error) {
+      listed.delete(p.id);
+      say(`没能获取模型列表（${(error as Error).message}），请直接填写模型 ID。`, true);
+    } finally {
+      listing = false;
+    }
+  };
+  page.on("setBaseUrl", (text: string) => {
+    saveBaseUrl(text, false);
   });
+  page.on("acceptBaseUrl", async (text: string) => {
+    if (saveBaseUrl(text, true)) await fetchModels(true);
+  });
+  page.on("fetchModels", () => fetchModels(true));
   page.on("chooseModel", (id: string) => {
     settings.save({ ...settings.value, models: { ...settings.value.models, [provider().id]: id.trim() } });
     changed();

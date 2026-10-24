@@ -49,6 +49,10 @@ export class Chat {
   private calls: Call[] = [];
   private toolsRow: Row | undefined;
   private assistant: Row | undefined;
+  /** A live turn is in progress (the status line says what the agent is doing). */
+  private live = false;
+  /** The latest model output of the live turn is text (not a tool call). */
+  private replying = false;
   /** The text of the last user message, for 「重试」. */
   lastPrompt = "";
 
@@ -64,6 +68,29 @@ export class Chat {
     this.push({ kind: "user", text });
   }
 
+  /**
+   * A live turn starts (a message was sent): the status line appears at once
+   * as 「思考中…」, before the model's first event, and follows every event.
+   */
+  begin() {
+    this.live = true;
+    this.replying = false;
+    this.statusRow();
+    this.refreshTools();
+  }
+
+  private statusRow(): Row {
+    if (!this.toolsRow) {
+      const row: Row = { id: nextId(), kind: "tools", text: "", detail: "", state: 0, expanded: false, settings: false };
+      // Before the turn's text: the line reads as "what the agent did".
+      const at = this.assistant ? this.rows.indexOf(this.assistant) : -1;
+      if (at >= 0) this.rows.splice(at, 0, row);
+      else this.rows.push(row);
+      this.toolsRow = row;
+    }
+    return this.toolsRow;
+  }
+
   notice(text: string) {
     this.push({ kind: "notice", text });
   }
@@ -77,23 +104,24 @@ export class Chat {
     const row = this.toolsRow;
     if (!row) return;
     const running = this.calls.findLast((call) => call.state === 0);
+    const last = this.calls.at(-1);
     const failed = this.calls.filter((call) => call.state === 2).length;
-    row.state = running ? 0 : failed ? 2 : 1;
-    row.text = running
-      ? `${running.label}…`
-      : `${this.calls.length} 个工具调用${failed ? `，${failed} 个失败` : ""}`;
+    if (running || this.live) {
+      // While the turn runs: the call in progress, else the latest call and
+      // what the model does now; each new call replaces the previous one.
+      row.state = 0;
+      const now = this.replying ? "回复中…" : "思考中…";
+      row.text = running ? `${running.label}…` : last ? `${last.label}${last.state === 2 ? " ✗" : " ✓"} · ${now}` : now;
+    } else {
+      row.state = failed ? 2 : 1;
+      row.text = `${this.calls.length} 个工具调用${failed ? `，${failed} 个失败` : ""}`;
+    }
     row.detail = this.calls.map((call) => `${call.state === 0 ? "…" : call.state === 1 ? "✓" : "✗"} ${call.label}`).join("\n");
   }
 
   private toolCall(id: string, label: string, state: number) {
-    if (!this.toolsRow) {
-      const row: Row = { id: nextId(), kind: "tools", text: "", detail: "", state: 0, expanded: false, settings: false };
-      // Before the turn's text: the line reads as "what the agent did".
-      const at = this.assistant ? this.rows.indexOf(this.assistant) : -1;
-      if (at >= 0) this.rows.splice(at, 0, row);
-      else this.rows.push(row);
-      this.toolsRow = row;
-    }
+    this.statusRow();
+    if (state === 0) this.replying = false;
     const known = this.calls.find((call) => call.id === id);
     if (known) known.state = state;
     else this.calls.push({ id, label, state });
@@ -102,6 +130,10 @@ export class Chat {
 
   private appendText(text: string) {
     if (!text) return;
+    if (this.live && !this.replying) {
+      this.replying = true;
+      this.refreshTools();
+    }
     if (!this.assistant) this.assistant = this.push({ kind: "assistant", text: "", state: 0 });
     this.assistant.text += text;
   }
@@ -109,7 +141,10 @@ export class Chat {
   /** Closes the current turn: no more text or calls join its rows. */
   endTurn() {
     if (this.assistant) this.assistant.state = 1;
-    this.refreshTools();
+    this.live = false;
+    // A turn without tool calls keeps no status line.
+    if (this.toolsRow && !this.calls.length) this.rows.splice(this.rows.indexOf(this.toolsRow), 1);
+    else this.refreshTools();
     this.toolsRow = undefined;
     this.assistant = undefined;
     this.calls = [];

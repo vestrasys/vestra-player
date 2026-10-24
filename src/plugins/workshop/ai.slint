@@ -83,16 +83,20 @@ component Message inherits VerticalLayout {
     // The rolling tool line: the latest call while running, a count after; click to list all.
     if item.kind == "tools": VerticalLayout {
         spacing: 4px;
-        HorizontalLayout {
-            spacing: 6px;
+        // The whole line toggles the list; the TouchArea is outside the
+        // layout so it takes no cell of its own.
+        Rectangle {
             height: 20px;
-            Small {
-                width: 14px;
-                text: item.state == 0 ? "◌" : item.state == 2 ? "✗" : "✓";
-                color: item.state == 2 ? Theme.danger : item.state == 0 ? Theme.accent : Theme.text-dim;
+            HorizontalLayout {
+                spacing: 6px;
+                Small {
+                    width: 14px;
+                    text: item.state == 0 ? "●" : item.state == 2 ? "✗" : "✓";
+                    color: item.state == 2 ? Theme.danger : item.state == 0 ? Theme.accent : Theme.text-dim;
+                }
+                Small { text: item.text; horizontal-stretch: 1; }
+                Small { horizontal-stretch: 0; text: item.expanded ? "收起 ▾" : "全部 ▸"; color: tools-touch.has-hover ? Theme.accent : Theme.text-dim; }
             }
-            Small { text: item.text; horizontal-stretch: 1; }
-            Small { text: item.expanded ? "收起 ▾" : "全部 ▸"; color: tools-touch.has-hover ? Theme.accent : Theme.text-dim; }
             tools-touch := TouchArea { mouse-cursor: pointer; clicked => { root.toggle(item.id); } }
         }
         if item.expanded: Rectangle {
@@ -134,8 +138,9 @@ component Message inherits VerticalLayout {
             HorizontalLayout {
                 alignment: start;
                 spacing: 6px;
+                height: Theme.button-small-height;
                 if root.last && root.can-retry: Button { small: true; text: "重试"; clicked => { root.retry(); } }
-                if item.settings: Button { small: true; text: "打开设置"; clicked => { root.open-settings(); } }
+                if item.settings: Button { small: true; width: 64px; text: "打开设置"; clicked => { root.open-settings(); } }
             }
         }
     }
@@ -193,7 +198,9 @@ export component AiWindow inherits Window {
             VerticalLayout {
                 padding: 10px;
                 spacing: 8px;
-                Button { text: "+ 新对话"; clicked => { root.new-chat(); } }
+                // Buttons have a minimum height but no maximum: in a layout
+                // with spare height they need a fixed one.
+                Button { height: Theme.button-primary-height; text: "+ 新对话"; clicked => { root.new-chat(); } }
                 ListView {
                     vertical-stretch: 1;
                     for s in root.sessions: Rectangle {
@@ -220,7 +227,7 @@ export component AiWindow inherits Window {
                         }
                     }
                 }
-                Button { text: "⚙ 设置"; clicked => { root.open-settings(); } }
+                Button { height: Theme.button-primary-height; text: "⚙ 设置"; clicked => { root.open-settings(); } }
                 HorizontalLayout {
                     spacing: 6px;
                     height: 18px;
@@ -250,10 +257,12 @@ export component AiWindow inherits Window {
                 }
                 if root.has-folder: VerticalLayout {
                     alignment: center;
-                    Button { small: true; text: "打开文件夹"; clicked => { root.open-folder(); } }
+                    horizontal-stretch: 0;
+                    Button { small: true; width: 72px; text: "打开文件夹"; clicked => { root.open-folder(); } }
                 }
             }
             if !root.configured: Rectangle {
+                vertical-stretch: 0;
                 background: Theme.bg-list;
                 HorizontalLayout {
                     padding: 10px;
@@ -269,7 +278,8 @@ export component AiWindow inherits Window {
                     }
                     VerticalLayout {
                         alignment: center;
-                        Button { text: "去设置"; clicked => { root.open-settings(); } }
+                        horizontal-stretch: 0;
+                        Button { horizontal-stretch: 0; text: "去设置"; clicked => { root.open-settings(); } }
                     }
                 }
             }
@@ -310,8 +320,9 @@ export component AiWindow inherits Window {
                 }
             }
 
-            // ---- composer
+            // ---- composer: anchored at the bottom, its own height only
             VerticalLayout {
+                vertical-stretch: 0;
                 padding: 12px;
                 padding-top: 6px;
                 spacing: 6px;
@@ -332,14 +343,16 @@ export component AiWindow inherits Window {
                     }
                 }
                 HorizontalLayout {
+                    height: Theme.button-height;
                     spacing: 8px;
                     Small { text: root.model-text; horizontal-stretch: 1; }
                     if !root.busy: Button {
+                        horizontal-stretch: 0;
                         text: "发送";
                         enabled: root.can-send && root.draft != "";
                         clicked => { root.submit(); }
                     }
-                    if root.busy: Button { text: "■ 停止"; clicked => { root.stop(); } }
+                    if root.busy: Button { horizontal-stretch: 0; text: "■ 停止"; clicked => { root.stop(); } }
                 }
             }
         }

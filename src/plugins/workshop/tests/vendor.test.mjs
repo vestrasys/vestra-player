@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import test from "node:test";
-import { PROVIDERS, differences } from "./vendor-pi.mjs";
+import { differences } from "./vendor-pi.mjs";
 
 const read = async (file) => JSON.parse(await fs.readFile(new URL(`../${file}`, import.meta.url), "utf8"));
 
@@ -17,8 +17,8 @@ test("pi is pinned to 1.4.0 and the bundle stays under 5 MB", async () => {
   assert.equal((await read("vendor/pi/package.json")).version, "1.4.0");
   const { size } = await fs.stat(new URL("../vendor/pi/pi.mjs", import.meta.url));
   assert.ok(size < 5 * 1024 * 1024, `pi.mjs is ${size} bytes`);
-  const models = await read("vendor/pi/models.json");
-  for (const provider of PROVIDERS) assert.ok(models[provider].length > 0, provider);
+  const { providers } = await read("vendor/pi/models.json");
+  assert.ok(providers.length >= 20, `${providers.length} providers`);
 });
 
 test("every bundled package has its license; pi's logo has its source", async () => {

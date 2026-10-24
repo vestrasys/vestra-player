@@ -18,8 +18,8 @@ export async function dataDirectory() {
   return dir;
 }
 
-export async function server(reply) {
-  const mock = await mockOpenAI(reply);
+export async function server(reply, options) {
+  const mock = await mockOpenAI(reply, options);
   cleanup.push(() => mock.close());
   return mock;
 }
@@ -39,7 +39,7 @@ export async function until(host, condition, what = "condition", ms = 20_000) {
 
 /**
  * The plugin, its window opened. `compat`: a mock server URL to configure as
- * the 「OpenAI 兼容」 provider with model mock-1 and KEY.
+ * 「自定义 · OpenAI 格式」 (its first listed model, mock-1) with KEY.
  */
 export async function startAi({ data, compat, secrets = {} } = {}) {
   const host = new TestHost();
@@ -57,14 +57,15 @@ export async function startAi({ data, compat, secrets = {} } = {}) {
     window.emit(callback, ...args);
     await host.settle();
   };
-  const configure = async (url) => {
-    const index = page.props.providers.findIndex((label) => label.startsWith("OpenAI 兼容"));
-    page.emit("choose-provider", index);
+  /** A custom endpoint: Base URL (Enter lists its models), then the key. */
+  const configure = async (url, { format = "OpenAI", model } = {}) => {
+    page.emit("choose-provider", page.props.providers.indexOf(`自定义 · ${format} 格式`));
     await host.settle();
-    page.emit("set-base-url", url);
-    page.emit("choose-model", "mock-1");
+    page.emit("accept-base-url", url);
+    await until(host, () => page.props.listing === false && page.props.message !== "", "model list");
+    if (model) page.emit("choose-model", model);
     page.emit("save-key", KEY);
-    await until(host, () => props.configured === true, "configured");
+    await until(host, () => props.configured === true && page.props.listing === false && /key 已保存|获取到|没能获取/.test(page.props.message), "configured");
   };
   if (compat) await configure(compat);
   const ai = {

@@ -39,8 +39,24 @@ const QUIET = new Set(["jiti", "highlight.js", "grok-mermaid"]);
  * libraries/LICENSE of github.com/standard-webhooks/standard-webhooks.
  */
 const UPSTREAM = { pi: "pi-LICENSE", "data-uri-to-buffer": "data-uri-to-buffer-LICENSE", standardwebhooks: "standardwebhooks-LICENSE" };
-/** Providers the settings page offers, with their models from pi's built-in catalog. */
-export const PROVIDERS = ["anthropic", "openai", "google", "openrouter", "deepseek"];
+/**
+ * Which of pi's providers the settings page offers: every provider that takes
+ * an API key, has models in pi's catalog and a fixed endpoint. Left out:
+ * login-only providers (OAuth, subscriptions; user ruling: no subscription
+ * login) and providers that need cloud credentials or account-specific
+ * endpoints beyond a key (Bedrock, Vertex, Azure, Cloudflare).
+ */
+const EXCLUDED = new Map([
+  ["github-copilot", "subscription login"],
+  ["amazon-bedrock", "AWS credentials; its SDK is not bundled"],
+  ["google-vertex", "Google Cloud project and location"],
+  ["azure", "account-specific endpoint"],
+  ["cloudflare-ai-gateway", "account and gateway id in the endpoint"],
+  ["cloudflare-workers-ai", "account id in the endpoint"],
+]);
+export function offered(provider, models) {
+  return !!provider.auth?.apiKey && !EXCLUDED.has(provider.id) && models.length > 0 && models.every((m) => m.baseUrl && !m.baseUrl.includes("{"));
+}
 
 const stubPlugin = {
   name: "stub",
@@ -118,7 +134,9 @@ export async function vendor(out) {
     if (!file) throw new Error(`${name}: no license file; add it to UPSTREAM`);
     const target = path.join(out, "licenses", name.replace("/", "__"));
     await fs.mkdir(target, { recursive: true });
-    await fs.copyFile(upstream ? path.join(plugin, "tests/upstream", upstream) : path.join(directory, file), path.join(target, file));
+    // LF, as git checks it out (.gitattributes: text=auto eol=lf): some ship CRLF.
+    const text = await fs.readFile(upstream ? path.join(plugin, "tests/upstream", upstream) : path.join(directory, file), "utf8");
+    await fs.writeFile(path.join(target, file), text.replace(/\r\n/g, "\n"));
     await fs.writeFile(
       path.join(target, "package.json"),
       `${JSON.stringify({ name, version: meta.version, license: meta.license ?? null }, null, 2)}\n`,
@@ -134,9 +152,13 @@ export async function vendor(out) {
   const built = `${pathToFileURL(path.join(out, "vendor/pi/pi.mjs")).href}?${Date.now()}`;
   const sdk = await import(built); // boundary-reviewed: the bundle just built, inside this package or a scratch copy of it
   const runtime = await sdk.ModelRuntime.create({ credentials: new sdk.InMemoryCredentialStore(), modelsPath: null, refreshOnCreate: false });
-  const catalog = {};
-  for (const provider of PROVIDERS) catalog[provider] = runtime.getModels(provider).map((m) => m.id).sort();
-  await fs.writeFile(path.join(out, "vendor/pi/models.json"), `${JSON.stringify(catalog, null, 2)}\n`);
+  const providers = [];
+  for (const provider of runtime.getProviders()) {
+    const models = runtime.getModels(provider.id);
+    if (offered(provider, models)) providers.push({ id: provider.id, name: provider.name, models: models.map((m) => m.id).sort() });
+  }
+  providers.sort((a, b) => a.name.localeCompare(b.name, "en"));
+  await fs.writeFile(path.join(out, "vendor/pi/models.json"), `${JSON.stringify({ providers }, null, 2)}\n`);
   return { size: bundle.contents.length, packages: inventory.length };
 }
 

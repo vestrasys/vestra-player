@@ -77,7 +77,7 @@ test("a tool call that tries to leave the work folder fails and the turn goes on
   assert.equal(ai.kinds(), "user,tools,assistant");
   assert.equal(ai.rows()[1].state, 2);
   assert.equal(ai.rows()[1].detail, "✗ 读取 ../meta.json");
-  const result = mock.requests[1].body.messages.at(-1);
+  const result = mock.chats[1].body.messages.at(-1);
   assert.match(typeof result.content === "string" ? result.content : JSON.stringify(result.content), /工作目录以外/);
   await ai.stop();
 });

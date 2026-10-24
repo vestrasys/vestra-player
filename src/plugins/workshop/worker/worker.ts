@@ -102,11 +102,11 @@ async function start(message: StartMessage) {
     modelsPath: null,
     refreshOnCreate: false,
   });
-  if (message.baseUrl) {
+  if (message.baseUrl && message.api) {
     modelRuntime.registerProvider(message.provider, {
-      name: "OpenAI 兼容",
+      name: message.provider,
       baseUrl: message.baseUrl,
-      api: "openai-completions",
+      api: message.api,
       models: [
         {
           type: "chat",

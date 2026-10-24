@@ -12,8 +12,12 @@ export interface StartMessage {
   sessionFile: string | null;
   provider: string;
   modelId: string;
-  /** An OpenAI-compatible endpoint (「OpenAI 兼容」), registered as `provider`; null for pi's built-in providers. */
+  /**
+   * A custom endpoint, registered as `provider`: its Base URL and wire format.
+   * Both null for pi's built-in providers.
+   */
   baseUrl: string | null;
+  api: "openai-completions" | "anthropic-messages" | null;
   /** The API key, from the keychain; kept in the worker's memory only. */
   key: string;
   systemPrompt: string;

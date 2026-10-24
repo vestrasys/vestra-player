@@ -6,11 +6,11 @@
 
 1. 右键菜单选「Vestra Player AI…」。
 2. 第一次使用时点「去设置」（或侧栏的「⚙ 设置」），在「选项 ▸ 插件 ▸ Vestra Player AI」里：
-   - 选服务商：Anthropic、OpenAI、Google、OpenRouter、DeepSeek，或「OpenAI 兼容」（填 Base URL，可接 Ollama、LM Studio）；
-   - 粘贴 API key，点「保存」；
-   - 选模型。
+   - 选服务商：pi 支持、用 API key 的全部服务商（Anthropic、OpenAI、Google、OpenRouter、DeepSeek、Mistral、Groq、xAI、MiniMax、Moonshot、Z.AI 等），或者「自定义 · OpenAI 格式」/「自定义 · Anthropic 格式」（填 Base URL，可接 Ollama、LM Studio 或其它兼容服务）；
+   - 粘贴 API key，点「保存」；每个服务商的 key 分开保存；
+   - 选模型。自定义服务在填好 Base URL 后按 Enter 或点「获取模型」，会向服务列出模型；列不出来时直接填写模型 ID。
 3. 回到 AI 窗口输入消息，Enter 发送，Shift+Enter 换行。生成过程中可以点「■ 停止」。
-4. AI 调用工具时显示为一行，最新的一次替换上一次；结束后点「全部 ▸」看这一轮的所有工具调用。
+4. AI 工作时有一行状态：先显示「思考中…」，调用工具时显示当前的工具（最新的一次替换上一次）；这一轮结束后点这一行可以展开所有工具调用。
 5. 左侧是对话列表：「+ 新对话」开始新对话，点一项切换。关闭后再打开，回到上次的对话。
 6. 「打开文件夹」打开当前对话的工作文件夹。
 

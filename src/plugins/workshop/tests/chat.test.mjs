@@ -34,7 +34,7 @@ test("a saved key goes to the keychain only and is shown masked", async () => {
   assert.equal(ai.host.secrets.get("key.anthropic"), KEY);
   assert.equal(ai.page.props["key-state"], `已保存 ••••${KEY.slice(-4)}`);
   assert.equal(ai.page.props["key-text"], "");
-  assert.match(ai.props["model-text"], /^Anthropic · claude-/);
+  assert.equal(ai.props["model-text"], "Anthropic · claude-sonnet-4-5");
   assert.deepEqual(await filesContaining(ai.plugin.dataDirectory, KEY), []);
   ai.page.emit("delete-key");
   await ai.until(() => ai.props.configured === false, "key deleted");
@@ -63,10 +63,10 @@ test("a message streams back; the write tool shows one tool line and the file la
   assert.equal(ai.props.sessions[1].title, "写一个 notes.md");
 
   // The key reached the provider, and nothing on disk.
-  assert.equal(mock.requests[0].headers.authorization, `Bearer ${KEY}`);
+  assert.equal(mock.chats[0].headers.authorization, `Bearer ${KEY}`);
   assert.deepEqual(await filesContaining(ai.plugin.dataDirectory, KEY), []);
   // pi got our system prompt and exactly our tools.
-  const body = mock.requests[0].body;
+  const body = mock.chats[0].body;
   assert.match(body.messages[0].content, /Vestra Player AI/);
   assert.deepEqual(body.tools.map((t) => t.function.name).sort(), ["edit", "find", "grep", "ls", "read", "write"]);
 
@@ -93,7 +93,7 @@ test("「停止」 ends a run that hangs", async () => {
   const mock = await server(() => ({ hang: true }));
   const ai = await startAi({ compat: mock.url });
   await ai.ask("你好", { wait: false });
-  await ai.until(() => ai.props.busy === true && mock.requests.length === 1, "request sent");
+  await ai.until(() => ai.props.busy === true && mock.chats.length === 1, "request sent");
   await ai.send("stop");
   await ai.until(() => ai.props.busy === false, "stopped");
   assert.equal(ai.rows().at(-1).kind, "notice");
@@ -119,7 +119,9 @@ test("an invalid key shows the error row with 「打开设置」 and 「重试�
 });
 
 test("an unreachable endpoint is a network error after pi's retries", async () => {
-  const ai = await startAi({ compat: "http://127.0.0.1:9/v1" });
+  const ai = await startAi();
+  // Nothing listens there: the model list fails too, so the id is typed.
+  await ai.configure("http://127.0.0.1:9/v1", { model: "mock-1" });
   await ai.ask("你好");
   await ai.until(() => ai.rows().at(-1)?.kind === "error", "error", 30_000);
   assert.match(ai.rows().at(-1).text, /网络错误/);
@@ -158,7 +160,7 @@ test("new chat, switch back, and the conversation survives a restart", async () 
   await ai.ask("接着聊");
   assert.equal(ai.rows().at(-1).text, "回答 2");
   const text = (content) => (typeof content === "string" ? content : content.map((part) => part.text).join(""));
-  const history = mock.requests.at(-1).body.messages.filter((m) => m.role !== "system").map((m) => text(m.content));
+  const history = mock.chats.at(-1).body.messages.filter((m) => m.role !== "system").map((m) => text(m.content));
   assert.deepEqual(history.slice(0, 2), ["第一个会话", "回答 1"]);
   await ai.stop();
 });
