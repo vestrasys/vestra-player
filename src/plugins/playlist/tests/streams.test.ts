@@ -28,7 +28,11 @@ async function start() {
   host.tools.handle("ffprobe", () => {
     throw new HostError("failed", "no duration");
   });
-  const { stop } = await startPlugin((plugin) => activate(plugin), { directory: new URL("..", import.meta.url), host });
+  const { stop } = await startPlugin((plugin) => activate(plugin), {
+    directory: new URL("..", import.meta.url),
+    host,
+    locale: "zh-Hans",
+  });
   const panel = host.mounted();
 
   const book = new Map<number, Json>();

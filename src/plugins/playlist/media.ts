@@ -1,5 +1,6 @@
 import { readdir, realpath, stat } from "node:fs/promises";
 import { basename, dirname, extname, join, sep } from "node:path";
+import type { ReadFailure } from "./notices.ts";
 
 /** Appendix B.5 media extensions (case-insensitive). */
 export const VIDEO = new Set(
@@ -128,13 +129,13 @@ export async function scanFolder(
 }
 
 /** Why a folder could not be read, as the user should read it. */
-export function folderError(error: unknown) {
+export function folderError(error: unknown): ReadFailure {
   const code = (error as NodeJS.ErrnoException).code;
-  if (code === "EPERM") return "未获准访问此位置（系统设置 ▶ 隐私与安全性 ▶ 文件与文件夹）";
-  if (code === "EACCES") return "没有读取权限";
-  if (code === "ENOENT") return "文件夹不存在";
-  if (code === "ENOTDIR") return "不是文件夹";
-  return error instanceof Error ? error.message : String(error);
+  if (code === "EPERM") return { reason: "permission" };
+  if (code === "EACCES") return { reason: "access" };
+  if (code === "ENOENT") return { reason: "missing" };
+  if (code === "ENOTDIR") return { reason: "not-folder" };
+  return { reason: "message", message: error instanceof Error ? error.message : String(error) };
 }
 
 // ------------------------------------------------------------------ A13 / IA-PL-01 similar files

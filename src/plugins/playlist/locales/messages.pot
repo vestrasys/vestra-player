@@ -1,0 +1,721 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: vestra.playlist 0.1.7\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: main.ts:133
+msgid "Added: {added}"
+msgstr ""
+
+#: main.ts:133
+msgid "Added: {added}, duplicates skipped: {duplicates}"
+msgstr ""
+
+#: main.ts:133
+msgid "Added: {added}, not readable for now: {count}"
+msgstr ""
+
+#: main.ts:133
+msgid "Added: {added}, duplicates skipped: {duplicates}, not readable for now: {count}"
+msgstr ""
+
+#: main.ts:133
+msgid "Added: {added}, unsupported items skipped: {count}"
+msgstr ""
+
+#: main.ts:133
+msgid "Added: {added}, duplicates skipped: {duplicates}, unsupported items skipped: {count}"
+msgstr ""
+
+#: main.ts:133
+msgid "Added: {added}, subfolders that could not be read: {count}"
+msgstr ""
+
+#: main.ts:133
+msgid "Added: {added}, duplicates skipped: {duplicates}, subfolders that could not be read: {count}"
+msgstr ""
+
+#: main.ts:133
+msgid "Added: {added}, limit of {limit} reached"
+msgstr ""
+
+#: main.ts:133
+msgid "Added: {added}, duplicates skipped: {duplicates}, limit of {limit} reached"
+msgstr ""
+
+#: main.ts:133
+msgid "Added: {added}, could not read {name}"
+msgstr ""
+
+#: main.ts:133
+msgid "Added: {added}, duplicates skipped: {duplicates}, could not read {name}"
+msgstr ""
+
+#: main.ts:133
+msgid "Added: {added}, the list is full at {limit} items"
+msgstr ""
+
+#: main.ts:133
+msgid "Added: {added}, duplicates skipped: {duplicates}, the list is full at {limit} items"
+msgstr ""
+
+#: main.ts:133
+msgid "Added: {added}; another source is opening, only added to the list"
+msgstr ""
+
+#: main.ts:133
+msgid "Added: {added}; opening, added to the list"
+msgstr ""
+
+#: main.ts:133
+msgid "Added {count} files from the same folder"
+msgstr ""
+
+#: main.ts:133
+msgid "Added {count} files from the same folder, limit of {limit} reached"
+msgstr ""
+
+#: main.ts:133
+msgid "Nothing to add"
+msgstr ""
+
+#: main.ts:133
+msgid "Nothing to add: unsupported items skipped: {count}"
+msgstr ""
+
+#: main.ts:133
+msgid "Nothing to add: subfolders that could not be read: {count}"
+msgstr ""
+
+#: main.ts:133
+msgid "Nothing to add: cannot read {name}: access to this location is not allowed (System Settings ▸ Privacy & Security ▸ Files & Folders)"
+msgstr ""
+
+#: main.ts:133
+msgid "Nothing to add: cannot read {name}: no permission to read"
+msgstr ""
+
+#: main.ts:133
+msgid "Nothing to add: cannot read {name}: the folder does not exist"
+msgstr ""
+
+#: main.ts:133
+msgid "Nothing to add: cannot read {name}: not a folder"
+msgstr ""
+
+#: main.ts:133
+msgid "Nothing to add: cannot read {name}: the file is larger than 16 MB"
+msgstr ""
+
+#: main.ts:133
+msgid "Nothing to add: cannot read {name}: {message}"
+msgstr ""
+
+#: main.ts:133
+msgid "Link added"
+msgstr ""
+
+#: main.ts:133
+msgid "Existing link selected"
+msgstr ""
+
+#: main.ts:133
+msgid "Scanning folder…"
+msgstr ""
+
+#: main.ts:133
+msgid "No playable files in the folder"
+msgstr ""
+
+#: main.ts:133
+msgid "Cannot read the folder: access to this location is not allowed (System Settings ▸ Privacy & Security ▸ Files & Folders)"
+msgstr ""
+
+#: main.ts:133
+msgid "Cannot read the folder: no permission to read"
+msgstr ""
+
+#: main.ts:133
+msgid "Cannot read the folder: the folder does not exist"
+msgstr ""
+
+#: main.ts:133
+msgid "Cannot read the folder: not a folder"
+msgstr ""
+
+#: main.ts:133
+msgid "Cannot read the folder: {}"
+msgstr ""
+
+#: main.ts:133
+msgid "Removed: {}"
+msgstr ""
+
+#: main.ts:133
+msgid "Invalid items removed: {}"
+msgstr ""
+
+#: main.ts:133
+msgid "No invalid items"
+msgstr ""
+
+#: main.ts:133
+msgid "The media being opened was removed from the list"
+msgstr ""
+
+#: main.ts:133
+msgid "The current media was removed from the list"
+msgstr ""
+
+#: main.ts:133
+msgid "List cleared; the current media continues"
+msgstr ""
+
+#: main.ts:133
+msgid "Only the first {} files are shown"
+msgstr ""
+
+#: main.ts:133
+msgid "File not found: {}"
+msgstr ""
+
+#: main.ts:133
+msgid "Only the first {limit} files are shown; file not found: {name}"
+msgstr ""
+
+#: main.ts:133
+msgid "Unsupported list format"
+msgstr ""
+
+#: main.ts:133
+msgid "Cannot open the list: the file is larger than 16 MB"
+msgstr ""
+
+#: main.ts:133
+msgid "Cannot open the list: {}"
+msgstr ""
+
+#: main.ts:133
+msgid "Opened list: {name} ({count} items)"
+msgstr ""
+
+#: main.ts:133
+msgid "Opened list: {name} ({count} items), skipped: {skipped}"
+msgstr ""
+
+#: main.ts:133
+msgid "Cannot save the list: {}"
+msgstr ""
+
+#: main.ts:133
+msgid "Saved list: {}"
+msgstr ""
+
+#: main.ts:133
+msgid "Repeat: Off"
+msgstr ""
+
+#: main.ts:133
+msgid "Repeat: All"
+msgstr ""
+
+#: main.ts:133
+msgid "Repeat: One"
+msgstr ""
+
+#: main.ts:133
+msgid "Shuffle: On"
+msgstr ""
+
+#: main.ts:133
+msgid "Shuffle: Off"
+msgstr ""
+
+#: main.ts:133
+msgid "Fast advance to next: On"
+msgstr ""
+
+#: main.ts:133
+msgid "Fast advance to next: Off"
+msgstr ""
+
+#: main.ts:133
+msgid "The list will be remembered"
+msgstr ""
+
+#: main.ts:133
+msgid "The list will no longer be remembered"
+msgstr ""
+
+#: main.ts:133
+msgid "Confirm before removing all: On"
+msgstr ""
+
+#: main.ts:133
+msgid "Confirm before removing all: Off"
+msgstr ""
+
+#: main.ts:133
+msgid "End of the list"
+msgstr ""
+
+#: main.ts:133
+msgid "Cannot replay: {}"
+msgstr ""
+
+#: main.ts:133
+msgid "Cannot open {}: the file does not exist"
+msgstr ""
+
+#: main.ts:133
+msgid "Cannot open {}: cannot open this media"
+msgstr ""
+
+#: main.ts:133
+msgid "Cannot open {}: {}"
+msgstr ""
+
+#: main.ts:133
+msgid "The file's canonical path matches an existing item; that item is selected"
+msgstr ""
+
+#: main.ts:133
+msgid "Close the other dialog first"
+msgstr ""
+
+#: main.ts:146 main.ts:548 main.ts:571 main.ts:724 manifest.json ui/settings.slint:57 ui/sidebar.slint:242
+msgid "Playlist"
+msgstr ""
+
+#: main.ts:245
+msgid "Remove all {} items from the playlist?"
+msgstr ""
+
+#: main.ts:245
+msgid "Replace the current list with {}?"
+msgstr ""
+
+#: main.ts:245
+msgid "The media that is playing continues to play."
+msgstr ""
+
+#: main.ts:245 main.ts:537
+msgid "Remove All"
+msgstr ""
+
+#: main.ts:245
+msgid "Replace"
+msgstr ""
+
+#: main.ts:245
+msgid "Don't ask again"
+msgstr ""
+
+#: main.ts:274
+msgid "Add to Playlist"
+msgstr ""
+
+#: main.ts:288
+msgid "Open Folder"
+msgstr ""
+
+#: main.ts:288
+msgid "Add Folder to Playlist"
+msgstr ""
+
+#: main.ts:460
+msgid "Open Playlist File"
+msgstr ""
+
+#: main.ts:506
+msgid "Save Playlist"
+msgstr ""
+
+#: main.ts:537
+msgid "Play"
+msgstr ""
+
+#: main.ts:537 main.ts:571
+msgid "Add Files…"
+msgstr ""
+
+#: main.ts:537 main.ts:571
+msgid "Add Folder…"
+msgstr ""
+
+#: main.ts:537 main.ts:571
+msgid "Add Link…"
+msgstr ""
+
+#: main.ts:537
+msgid "Remove Selected"
+msgstr ""
+
+#: main.ts:537
+msgid "Remove Unselected"
+msgstr ""
+
+#: main.ts:537
+msgid "Remove Invalid Items"
+msgstr ""
+
+#: main.ts:537
+msgid "Show in Finder"
+msgstr ""
+
+#: main.ts:537
+msgid "Move to Top"
+msgstr ""
+
+#: main.ts:537
+msgid "Move Up"
+msgstr ""
+
+#: main.ts:537
+msgid "Move Down"
+msgstr ""
+
+#: main.ts:537
+msgid "Move to Bottom"
+msgstr ""
+
+#: main.ts:537
+msgid "Ascending"
+msgstr ""
+
+#: main.ts:537
+msgid "Descending"
+msgstr ""
+
+#: main.ts:537
+msgid "By Title"
+msgstr ""
+
+#: main.ts:537
+msgid "By File Name"
+msgstr ""
+
+#: main.ts:537
+msgid "By Extension"
+msgstr ""
+
+#: main.ts:537
+msgid "By Size"
+msgstr ""
+
+#: main.ts:537
+msgid "By Duration"
+msgstr ""
+
+#: main.ts:537
+msgid "By Date"
+msgstr ""
+
+#: main.ts:537
+msgid "Random Order"
+msgstr ""
+
+#: main.ts:537
+msgid "By Folder"
+msgstr ""
+
+#: main.ts:537
+msgid "Sort by Path"
+msgstr ""
+
+#: main.ts:537
+msgid "Reverse Current Order"
+msgstr ""
+
+#: main.ts:537
+msgid "Select All"
+msgstr ""
+
+#: main.ts:537 ui/sidebar.slint:541
+msgid "Search"
+msgstr ""
+
+#: main.ts:537 main.ts:571
+msgid "Open List File…"
+msgstr ""
+
+#: main.ts:537 main.ts:571
+msgid "Save List…"
+msgstr ""
+
+#: main.ts:537
+msgid "Close List"
+msgstr ""
+
+#: main.ts:537
+msgid "Playlist Settings…"
+msgstr ""
+
+#: main.ts:539 main.ts:575
+msgid "Opening, or the result is not known yet"
+msgstr ""
+
+#: main.ts:539 main.ts:575
+msgid "Nothing to act on"
+msgstr ""
+
+#: main.ts:539 main.ts:565 main.ts:575
+msgid "Scanning folder"
+msgstr ""
+
+#: main.ts:539 main.ts:575
+msgid "Links have no local location"
+msgstr ""
+
+#: main.ts:539 main.ts:575
+msgid "The order cannot change while searching"
+msgstr ""
+
+#: main.ts:555
+msgid "Not enough room; enlarge the window to show it"
+msgstr ""
+
+#: main.ts:560
+msgid "Open Folder…"
+msgstr ""
+
+#: main.ts:571
+msgid "Repeat"
+msgstr ""
+
+#: main.ts:571 ui/settings.slint:93
+msgid "Off"
+msgstr ""
+
+#: main.ts:571 ui/settings.slint:93
+msgid "All"
+msgstr ""
+
+#: main.ts:571 ui/settings.slint:93
+msgid "One"
+msgstr ""
+
+#: main.ts:571 ui/settings.slint:99
+msgid "Shuffle"
+msgstr ""
+
+#: main.ts:571
+msgid "When Opening a File"
+msgstr ""
+
+#: main.ts:571
+msgid "Open Only That File"
+msgstr ""
+
+#: main.ts:571
+msgid "Add Similar Files"
+msgstr ""
+
+#: main.ts:571
+msgid "Add All Files in the Folder"
+msgstr ""
+
+#: main.ts:571
+msgid "Fast Advance to Next"
+msgstr ""
+
+#: main.ts:571
+msgid "Remember List"
+msgstr ""
+
+#: main.ts:571
+msgid "Confirm Before Removing All"
+msgstr ""
+
+#: manifest.json
+msgid "Sidebar playlist: add, sort, repeat and shuffle"
+msgstr ""
+
+#: manifest.json
+msgid ""
+"A playlist in the right sidebar: add files, folders and links, drag and drop, sort and search, repeat and shuffle, and add the similar files of the same folder when a file is opened; reads and writes M3U, M3U8 and PLS list files and restores the list after a restart.\n"
+"Entry points: \"Playlist\" (F6) in the context menu and Playback ▸ Playlist."
+msgstr ""
+
+#: manifest.json
+msgid "playlist"
+msgstr ""
+
+#: manifest.json
+msgid "open"
+msgstr ""
+
+#: manifest.json
+msgid "drag and drop"
+msgstr ""
+
+#: ui/link.slint:18
+msgid "{} links added, only selected; playing them needs an available source provider"
+msgstr ""
+
+#: ui/link.slint:18
+msgid "Link added, only selected; playing it needs an available source provider"
+msgstr ""
+
+#: ui/link.slint:20
+msgid "Line {}: Enter a complete HTTP(S) link"
+msgstr ""
+
+#: ui/link.slint:20
+msgid "Enter a complete HTTP(S) link"
+msgstr ""
+
+#: ui/link.slint:22
+msgid "Line {}: Only HTTP(S) links without a user name or password are accepted"
+msgstr ""
+
+#: ui/link.slint:22
+msgid "Only HTTP(S) links without a user name or password are accepted"
+msgstr ""
+
+#: ui/link.slint:24
+msgid "Line {}: The list is full at {} items"
+msgstr ""
+
+#: ui/link.slint:24
+msgid "The list is full at {} items"
+msgstr ""
+
+#: ui/link.slint:25
+msgid "Enter HTTP(S) links; adding only selects, it does not play"
+msgstr ""
+
+#: ui/link.slint:26
+msgid "Add Links to Playlist"
+msgstr ""
+
+#: ui/link.slint:42
+msgid "Enter the web addresses to add to the playlist below, one per line."
+msgstr ""
+
+#: ui/link.slint:48
+msgid "Example: {}"
+msgstr ""
+
+#: ui/link.slint:55 ui/sidebar.slint:466
+msgid "Add"
+msgstr ""
+
+#: ui/settings.slint:63
+msgid "Open and drop"
+msgstr ""
+
+#: ui/settings.slint:67
+msgid "When opening a file:"
+msgstr ""
+
+#: ui/settings.slint:70
+msgid "Open only that file"
+msgstr ""
+
+#: ui/settings.slint:70
+msgid "Add similar files"
+msgstr ""
+
+#: ui/settings.slint:70
+msgid "Add all files in the folder"
+msgstr ""
+
+#: ui/settings.slint:76
+msgid "Append when opening or dropping; don't clear the list"
+msgstr ""
+
+#: ui/settings.slint:81
+msgid "Insert at the drop position when dropping on the list"
+msgstr ""
+
+#: ui/settings.slint:86
+msgid "Playback"
+msgstr ""
+
+#: ui/settings.slint:90
+msgid "Repeat:"
+msgstr ""
+
+#: ui/settings.slint:104
+msgid "Fast advance to next"
+msgstr ""
+
+#: ui/settings.slint:109
+msgid "List"
+msgstr ""
+
+#: ui/settings.slint:111
+msgid "Remember list"
+msgstr ""
+
+#: ui/settings.slint:116
+msgid "Confirm before removing all"
+msgstr ""
+
+#: ui/sidebar.slint:190
+msgid "Filtered {}"
+msgstr ""
+
+#: ui/sidebar.slint:251
+msgid "Attach to main window"
+msgstr ""
+
+#: ui/sidebar.slint:251
+msgid "Detach as floating window"
+msgstr ""
+
+#: ui/sidebar.slint:257
+msgid "Close list"
+msgstr ""
+
+#: ui/sidebar.slint:314
+msgid ""
+"{}\n"
+"The file does not exist"
+msgstr ""
+
+#: ui/sidebar.slint:315
+msgid ""
+"{}\n"
+"The file does not exist or cannot be read now; can retry"
+msgstr ""
+
+#: ui/sidebar.slint:316
+msgid ""
+"{}\n"
+"Cannot open this media"
+msgstr ""
+
+#: ui/sidebar.slint:414
+msgid "No matches"
+msgstr ""
+
+#: ui/sidebar.slint:441
+msgid "Move to top (Ctrl+Home)"
+msgstr ""
+
+#: ui/sidebar.slint:447
+msgid "Move up (Ctrl+↑)"
+msgstr ""
+
+#: ui/sidebar.slint:453
+msgid "Move down (Ctrl+↓)"
+msgstr ""
+
+#: ui/sidebar.slint:459
+msgid "Move to bottom (Ctrl+End)"
+msgstr ""
+
+#: ui/sidebar.slint:473
+msgid "Delete"
+msgstr ""
+
+#: ui/sidebar.slint:480
+msgid "Sort"
+msgstr ""
+
+#: ui/sidebar.slint:492
+msgid "Search (Ctrl+S)"
+msgstr ""

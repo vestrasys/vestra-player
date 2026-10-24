@@ -59,7 +59,8 @@ function fakeProbe() {
   return { handler, calls, call, started };
 }
 
-async function start(probe = fakeProbe()) {
+/** Checks the texts as a Simplified Chinese user sees them (the plugin's old texts); `"en"` for the English source. */
+async function start(probe = fakeProbe(), locale: "en" | "zh-Hans" = "zh-Hans") {
   const directory = await mkdtemp(join(tmpdir(), "vestra-playlist-"));
   const a = join(directory, "a.mp4"),
     b = join(directory, "b.mp4"),
@@ -70,7 +71,11 @@ async function start(probe = fakeProbe()) {
   const host = new TestHost();
   settleFiles(host);
   host.tools.handle("ffprobe", probe.handler);
-  const { stop } = await startPlugin((plugin) => activate(plugin), { directory: new URL("..", import.meta.url), host });
+  const { stop } = await startPlugin((plugin) => activate(plugin), {
+    directory: new URL("..", import.meta.url),
+    host,
+    locale,
+  });
   const panel = host.mounted();
   const app = {
     host,
@@ -157,11 +162,29 @@ async function start(probe = fakeProbe()) {
   return app;
 }
 
+test("English is the source: menus, notices and confirmations in English by default", async () => {
+  const app = await start(fakeProbe(), "en");
+  try {
+    assert.deepEqual(app.command("fast-advance").display.path, ["Playback", "Playlist", "Fast Advance to Next"]);
+    assert.deepEqual(app.command("open-folder").display.path, ["Open", "Open Folder…"]);
+    assert.equal(app.command("remove").display.title, "Remove Selected");
+    await app.addFiles([app.a, app.alias, app.b]);
+    assert.equal(app.osd(), "Added: 2, duplicates skipped: 1");
+    app.host.dialogAnswers.push({ confirmed: false, checked: false });
+    await app.press("Alt+Delete");
+    await app.host.settle(30);
+    assert.equal(app.host.confirmTexts.at(-1)?.message, "Remove all 2 items from the playlist?");
+  } finally {
+    await app.close();
+  }
+});
+
 test("menu positions follow the round allocation table; list keys only work with list focus", async () => {
   const app = await start();
   try {
-    const declared = [...app.host.commands.values()].map(({ declaration: d }) => [
-      d.path.join("/") || `(${d.title})`,
+    // As a Simplified Chinese user sees the menus (the declarations are English, see below).
+    const declared = [...app.host.commands.values()].map(({ declaration: d, display }) => [
+      display.path.join("/") || `(${display.title})`,
       d.order,
       d.group,
       d.bindings.join(" "),
@@ -238,13 +261,14 @@ test("menu positions follow the round allocation table; list keys only work with
     await assert.rejects(app.host.press("Delete"), /nothing is bound/, "Delete is a list key");
     assert.equal(app.host.mounted().slot, "sidebar");
     assert.equal(app.host.mounted().component, "PlaylistSidebar");
-    assert.equal(app.host.sent("ui.mount")[0]!.title, "播放列表");
+    assert.equal(app.host.sent("ui.mount")[0]!.title, "Playlist");
     assert.deepEqual(app.command("play").state, {
       enabled: false,
       checked: null,
       busy: false,
-      reason: "当前没有可操作项",
+      reason: "Nothing to act on",
     });
+    assert.equal(app.host.translate("Nothing to act on"), "当前没有可操作项");
   } finally {
     await app.close();
   }
@@ -536,21 +560,52 @@ test("the list menu, ADD and SORT popups list this plugin's commands; sorting re
   }
 });
 
+/** The link window's message line as `ui/link.slint` words it, translated as the player shows it. */
+function linkMessage(host: TestHost) {
+  const { notice, line, count, limit } = host.window("playlist-link").props as {
+    notice: string;
+    line: number;
+    count: number;
+    limit: number;
+  };
+  const [text, args]: [string, (string | number)[]] =
+    notice === "added"
+      ? count > 1
+        ? ["{} links added, only selected; playing them needs an available source provider", [count]]
+        : ["Link added, only selected; playing it needs an available source provider", []]
+      : notice === "incomplete"
+        ? line > 0
+          ? ["Line {}: Enter a complete HTTP(S) link", [line]]
+          : ["Enter a complete HTTP(S) link", []]
+        : notice === "refused"
+          ? line > 0
+            ? ["Line {}: Only HTTP(S) links without a user name or password are accepted", [line]]
+            : ["Only HTTP(S) links without a user name or password are accepted", []]
+          : notice === "full"
+            ? line > 0
+              ? ["Line {}: The list is full at {} items", [line, limit]]
+              : ["The list is full at {} items", [limit]]
+            : ["Enter HTTP(S) links; adding only selects, it does not play", []];
+  return host.translate(text, args);
+}
+
 test("添加链接…: one link per line, a bad line stops there and says which", async () => {
   const app = await start();
   try {
     const window = () => app.host.window("playlist-link");
     await app.addUrl(" https://example.org/a \n\nhttps://example.org/b\r\n");
     assert.deepEqual(app.names(), ["https://example.org/a", "https://example.org/b"]);
-    assert.equal(window().props.message, "已添加 2 个链接，仅选中；显式播放需可用的来源提供者");
+    assert.equal(window().props.notice, "added");
+    assert.equal(linkMessage(app.host), "已添加 2 个链接，仅选中；显式播放需可用的来源提供者");
     assert.equal(window().visible, false);
     assert.equal(app.rows()[1].selected, true);
     await app.addUrl("https://example.org/c\nftp://example.org/x\nhttps://example.org/d");
-    assert.equal(window().props.message, "第 2 行：只接受不含账户密码的 HTTP(S) 链接");
+    assert.deepEqual([window().props.notice, window().props.line], ["refused", 2]);
+    assert.equal(linkMessage(app.host), "第 2 行：只接受不含账户密码的 HTTP(S) 链接");
     assert.equal(window().visible, true);
     assert.equal(app.names().length, 3);
     await app.addUrl("   ");
-    assert.equal(window().props.message, "请输入完整 HTTP(S) 链接");
+    assert.equal(linkMessage(app.host), "请输入完整 HTTP(S) 链接");
     assert.equal(app.opens().length, 0);
   } finally {
     await app.close();
@@ -563,12 +618,12 @@ test("URL rows: adding only selects; the original URL goes to public routing; on
     const a = "https://example.org/watch?v=one",
       b = "https://example.org/watch?v=two";
     await app.addUrl(a);
-    assert.equal(app.host.window("playlist-link").props.message, "链接已添加，仅选中；显式播放需可用的来源提供者");
+    assert.equal(linkMessage(app.host), "链接已添加，仅选中；显式播放需可用的来源提供者");
     assert.equal(app.host.window("playlist-link").visible, false);
     assert.equal(app.osd(), "已添加链接");
     await app.addUrl(b);
     await app.addUrl("ftp://example.org/x");
-    assert.equal(app.host.window("playlist-link").props.message, "只接受不含账户密码的 HTTP(S) 链接");
+    assert.equal(linkMessage(app.host), "只接受不含账户密码的 HTTP(S) 链接");
     assert.equal(app.rows().length, 2);
     assert.equal(app.rows()[1].selected, true);
     assert.equal(app.opens().length, 0);

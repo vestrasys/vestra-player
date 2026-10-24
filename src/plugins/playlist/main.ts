@@ -1,7 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname } from "node:path";
 import type { Command, CommandOptions, ConfirmOptions, Panel, Plugin, PluginError } from "@vestra-player/sdk";
-import { dropExtra, DROP_EXTENSIONS, dropRow, expandDrop, LIST_TOP, ROW_HEIGHT } from "./drop.ts";
+import { DROP_EXTENSIONS, dropProblems, dropRow, expandDrop, LIST_TOP, nothingToAdd, ROW_HEIGHT } from "./drop.ts";
 import { follower, type OpenMode } from "./follow.ts";
 import { linkDialog } from "./link.ts";
 import {
@@ -14,7 +14,8 @@ import {
   savePath,
   writeAtomic,
 } from "./listfile.ts";
-import { extensionOf, folderError, isMedia, LIST_FILES, SCAN_LIMIT, scanFolder, siblings } from "./media.ts";
+import { extensionOf, folderError, isMedia, LIST_FILES, scanFolder, siblings } from "./media.ts";
+import { fitName, type Notice, type NoticeArgs } from "./notices.ts";
 import { playback } from "./playback.ts";
 import { Prober, toolRunner } from "./probe.ts";
 import { clock, lengthOf, Queue, type Placement, type Repeat, type Row, type SortKey } from "./queue.ts";
@@ -22,33 +23,93 @@ import { centered, ensureVisible, inView, USER_SCROLL_HOLD_MS, WINDOW_ROWS, wind
 import { defaults, PERSIST_CHECK_MS, Store, type Saved } from "./store.ts";
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
-const repeats: [Repeat, string][] = [
-  ["none", "不循环"],
-  ["all", "全部"],
-  ["one", "单个"],
-];
-const openModes: [OpenMode, string][] = [
-  ["only", "仅打开该文件"],
-  ["similar", "加入相似文件"],
-  ["folder", "加入同文件夹全部文件"],
-];
+const repeats = [
+  ["none", "Off"],
+  ["all", "All"],
+  ["one", "One"],
+] as const satisfies readonly (readonly [Repeat, string])[];
+const openModes = [
+  ["only", "Open Only That File"],
+  ["similar", "Add Similar Files"],
+  ["folder", "Add All Files in the Folder"],
+] as const satisfies readonly (readonly [OpenMode, string])[];
 /** C11 sort keys with their list-focus keys (Ctrl+3 … Ctrl+0), then the unbound ones. */
-const sortKeys: [SortKey, string, string | null][] = [
-  ["title", "按标题", "Ctrl+3"],
-  ["filename", "按文件名", "Ctrl+4"],
-  ["extension", "按扩展名", "Ctrl+5"],
-  ["size", "按大小", "Ctrl+6"],
-  ["duration", "按时长", "Ctrl+7"],
-  ["date", "按日期", "Ctrl+8"],
-  ["shuffle", "乱序", "Ctrl+9"],
-  ["folder", "按文件夹", "Ctrl+0"],
-  ["path", "按路径排序", null],
-  ["reverse", "倒置当前顺序", null],
-];
+const sortKeys = [
+  ["title", "By Title", "Ctrl+3"],
+  ["filename", "By File Name", "Ctrl+4"],
+  ["extension", "By Extension", "Ctrl+5"],
+  ["size", "By Size", "Ctrl+6"],
+  ["duration", "By Duration", "Ctrl+7"],
+  ["date", "By Date", "Ctrl+8"],
+  ["shuffle", "Random Order", "Ctrl+9"],
+  ["folder", "By Folder", "Ctrl+0"],
+  ["path", "Sort by Path", null],
+  ["reverse", "Reverse Current Order", null],
+] as const satisfies readonly (readonly [SortKey, string, string | null])[];
+/** The titles of the list commands (context menu, bottom-bar popups, list-focus keys). */
+type ListTitle =
+  | "Play"
+  | "Add Files…"
+  | "Add Folder…"
+  | "Add Link…"
+  | "Remove Selected"
+  | "Remove Unselected"
+  | "Remove Invalid Items"
+  | "Remove All"
+  | "Show in Finder"
+  | "Move to Top"
+  | "Move Up"
+  | "Move Down"
+  | "Move to Bottom"
+  | "Ascending"
+  | "Descending"
+  | (typeof sortKeys)[number][1]
+  | "Select All"
+  | "Search"
+  | "Open List File…"
+  | "Save List…"
+  | "Close List"
+  | "Playlist Settings…";
+/** Why a command is disabled or busy (shown by the menu). */
+type Reason =
+  | "Opening, or the result is not known yet"
+  | "Nothing to act on"
+  | "Scanning folder"
+  | "Links have no local location"
+  | "The order cannot change while searching";
+/** Command options whose `reason` is one of `Reason` (so the texts are found for translation). */
+type CommandSetup = Partial<Omit<CommandOptions, "reason">> & { reason?: () => Reason | null };
+/** Playback ▸ Playlist ▸ … (after the shared "Playlist" submenu). */
+type PlaylistItem =
+  | "Add Files…"
+  | "Add Link…"
+  | "Add Folder…"
+  | "Repeat"
+  | (typeof repeats)[number][1]
+  | "Shuffle"
+  | "Open List File…"
+  | "Save List…"
+  | "When Opening a File"
+  | (typeof openModes)[number][1]
+  | "Fast Advance to Next"
+  | "Remember List"
+  | "Confirm Before Removing All";
 const STAT_LIMIT = 8;
 const SEARCH_DEBOUNCE_MS = 150;
 
-/** IA-PL-02: the page id of 选项 ▶ 播放 ▶ 播放列表. */
+/** The confirmations this plugin asks (`dialogs.confirm`; the player translates the texts). */
+type Question = Omit<ConfirmOptions, "cancel"> &
+  (
+    | {
+        message: "Remove all {} items from the playlist?";
+        detail: "The media that is playing continues to play.";
+        confirm: "Remove All";
+        checkbox: "Don't ask again";
+      }
+    | { message: "Replace the current list with {}?"; confirm: "Replace"; detail?: never; checkbox?: never }
+  );
+
+/** IA-PL-02: the page id of Options ▸ Playback ▸ Playlist. */
 export const SETTINGS_PAGE = "playlist";
 /** C23: at most this many selected files are shown in the file manager. */
 export const REVEAL_LIMIT = 20;
@@ -69,7 +130,9 @@ async function pool<T>(items: T[], limit: number, work: (item: T) => Promise<voi
 export default async function activate(plugin: Plugin, options: Partial<Options> = {}) {
   const random = options.random ?? Math.random;
   const queue = new Queue();
-  queue.say = (text) => void plugin.osd.show(text.slice(0, 200)).catch(() => {});
+  queue.say = (text: Notice, args?: NoticeArgs) => void plugin.osd.show(text, args).catch(() => {});
+  // i18n-ignore: a row's title is data
+  queue.sayTitle = (title) => void plugin.osd.show(title.slice(0, 200)).catch(() => {});
   const prober = new Prober(queue, toolRunner(plugin.tools), () => plugin.update());
   queue.removed = (rowId) => prober.cancel(rowId);
   plugin.onDispose(() => prober.cancelAll());
@@ -80,7 +143,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   const link = linkDialog(plugin, queue);
   // SDK 1.5.2 sidebar tabs (`Panel.state`, `Panel.toggle`); absent from older SDKs, which have
   // one sidebar panel and use the position's state instead.
-  const list = plugin.panels.mount("sidebar", "ui/sidebar.slint", { title: "播放列表" }) as Panel &
+  const list = plugin.panels.mount("sidebar", "ui/sidebar.slint", { title: "Playlist" }) as Panel &
     Partial<{ readonly state: { preferred: boolean; active: boolean } | null; toggle(): Promise<void> }>;
   const sidebar = plugin.panels.sidebar;
   const stop = new AbortController();
@@ -115,13 +178,13 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     saved = json;
     if (prober.dirty) store.cache.save(prober.export());
   };
-  /** Write now (turning "记住列表" off removes the saved list at once). */
+  /** Write now (turning "Remember List" off removes the saved list at once). */
   const flush = async () => {
     persist();
     try {
       await Promise.all([store?.lists.flush(), store?.cache.flush()]);
     } catch (error) {
-      queue.message = `无法保存列表：${errorText(error)}`;
+      queue.message = `Cannot save the list: ${errorText(error)}`;
     }
   };
   let persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -149,14 +212,16 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   let focusSearch = 0;
   const focus = { search: false };
 
-  /** Every action runs through here; failures become a notice. */
+  /** Every action runs through here; failures (the player's or the SDK's messages) become a notice. */
   const guard =
     (run: () => unknown) =>
     async (): Promise<void> => {
       try {
         await run();
       } catch (error) {
-        queue.notice(errorText(error));
+        queue.message = errorText(error);
+        // i18n-ignore: the player's (or the SDK's) own message
+        void plugin.osd.show(errorText(error).slice(0, 200)).catch(() => {});
       }
     };
   const canPlay = () => !!queue.row(queue.selected) && !player.busy();
@@ -167,7 +232,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     remove();
     if (pending && !queue.row(pending)) {
       queue.epoch++;
-      queue.notice("正在打开的媒体已移出列表");
+      queue.notice("The media being opened was removed from the list");
     }
   };
 
@@ -175,28 +240,26 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
    * A system confirmation (`dialogs.confirm`). Another dialog still open
    * (`busy`) is a notice and counts as cancelled; other failures go to `guard`.
    */
-  const ask = async (options: ConfirmOptions) => {
+  const ask = async (options: Question) => {
     try {
       return await plugin.dialogs.confirm(options);
     } catch (error) {
       if ((error as PluginError).code !== "busy") throw error;
-      queue.notice("请先关闭另一个对话框");
+      queue.notice("Close the other dialog first");
       return { confirmed: false, checked: false };
     }
   };
-  /** At most `max` characters of a name shown in a confirmation (its message is 1–200 characters). */
-  const fitName = (name: string, max = 120) => ([...name].length > max ? `${[...name].slice(0, max - 1).join("")}…` : name);
-
-  /** 移除全部: asks first unless 「不再询问」 was ticked on a confirmed clear (saved with the settings). */
+  /** Remove All: asks first unless "Don't ask again" was ticked on a confirmed clear (saved with the settings). */
   const clearAll = guard(async () => {
     if (!queue.rows.length) return;
     if (settings.confirmClear) {
       const answer = await ask({
-        message: `移除播放列表中的全部 ${queue.rows.length} 项？`,
-        detail: "正在播放的媒体继续播放。",
-        confirm: "移除全部",
+        message: "Remove all {} items from the playlist?",
+        detail: "The media that is playing continues to play.",
+        confirm: "Remove All",
         destructive: true,
-        checkbox: "不再询问",
+        checkbox: "Don't ask again",
+        args: [queue.rows.length],
       });
       if (!answer.confirmed) return;
       if (answer.checked) settings.confirmClear = false;
@@ -208,7 +271,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     if (adding) return;
     adding = true;
     try {
-      const paths = await plugin.dialogs.openFiles({ title: "添加到播放列表" });
+      const paths = await plugin.dialogs.openFiles({ title: "Add to Playlist" });
       if (paths.length) await queue.addFiles(paths);
       prober.scan();
     } finally {
@@ -222,43 +285,46 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       if (scanning) return;
       scanning = true;
       try {
-        const folder = await plugin.dialogs.openDirectory({ title: play ? "打开文件夹" : "添加文件夹到播放列表" });
+        const folder = await plugin.dialogs.openDirectory({ title: play ? "Open Folder" : "Add Folder to Playlist" });
         if (!folder) return;
-        const slow = setTimeout(() => queue.notice("正在扫描文件夹…"), 1000);
+        const slow = setTimeout(() => queue.notice("Scanning folder…"), 1000);
         let scan;
         try {
           scan = await scanFolder(folder, { signal: stop.signal });
         } catch (error) {
           if (stop.signal.aborted) return;
-          return queue.notice(`无法读取文件夹：${folderError(error)}`);
+          const failure = folderError(error);
+          if (failure.reason === "permission")
+            return queue.notice(
+              "Cannot read the folder: access to this location is not allowed (System Settings ▸ Privacy & Security ▸ Files & Folders)",
+            );
+          if (failure.reason === "access") return queue.notice("Cannot read the folder: no permission to read");
+          if (failure.reason === "missing") return queue.notice("Cannot read the folder: the folder does not exist");
+          if (failure.reason === "not-folder") return queue.notice("Cannot read the folder: not a folder");
+          return queue.notice("Cannot read the folder: {}", [failure.reason === "message" ? fitName(failure.message) : failure.reason]);
         } finally {
           clearTimeout(slow);
         }
-        if (!scan.files.length) return queue.notice("文件夹中没有可播放的文件");
-        // IA-PL-01: 打开文件夹 replaces the list too (not while another source opens; 「追加」 adds).
+        if (!scan.files.length) return queue.notice("No playable files in the folder");
+        // IA-PL-01: Open Folder replaces the list too (not while another source opens; "Append" adds).
         if (play && !settings.appendOnOpen && queue.rows.length && !player.busy()) removing(() => queue.clear(false));
         const wasEmpty = queue.rows.length === 0;
         const result = await queue.addEntries(
           scan.files.map((file) => ({ kind: "file" as const, source: file.path, key: file.key })),
         );
         prober.scan();
-        const extra = [
-          scan.unreadable ? `${scan.unreadable} 个子文件夹无法读取` : "",
-          scan.truncated ? `已达上限 ${SCAN_LIMIT}` : "",
-        ]
-          .filter(Boolean)
-          .join("，");
-        const summary = queue.summary(result, extra);
+        const summary = queue.summary(result, { unreadable: scan.unreadable, truncated: scan.truncated });
         if (!play) {
           queue.selectFirstAdded(result, wasEmpty);
-          return queue.notice(summary);
+          return queue.notice(...summary);
         }
         // The first new row, or (all duplicates) the row of the folder's first file.
         const target = result.fresh[0] ?? result.rows.find((row) => !!row);
-        if (!target) return queue.notice(summary);
-        if (player.busy()) return queue.notice(`${summary}；正在打开另一个来源，只加入列表`);
+        if (!target) return queue.notice(...summary);
+        if (player.busy())
+          return queue.notice("Added: {added}; another source is opening, only added to the list", { added: result.added });
         queue.select(target.rowId);
-        queue.notice(summary);
+        queue.notice(...summary);
         await player.play(target.rowId, undefined, { quiet: true });
       } finally {
         scanning = false;
@@ -278,7 +344,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   const removeUnselected = guard(() => {
     let count = 0;
     removing(() => (count = queue.removeUnselected()));
-    queue.notice(`已移除 ${count} 项`);
+    queue.notice("Removed: {}", [count]);
   });
   /** C07: remove local rows whose file is gone (not ones that are only unreadable now). */
   const removeInvalid = guard(async () => {
@@ -300,7 +366,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       );
       const present = doomed.filter((id) => queue.row(id));
       removing(() => queue.removeRows(new Set(present)));
-      queue.notice(present.length ? `已移除 ${present.length} 个无效项` : "没有无效项");
+      if (present.length) queue.notice("Invalid items removed: {}", [present.length]);
+      else queue.notice("No invalid items");
     } finally {
       checking = false;
     }
@@ -352,8 +419,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
    */
   const revealSelected = guard(async () => {
     const paths = queue.marked().filter((row) => row.kind === "file").map((row) => row.source);
-    const notices: string[] = [];
-    if (paths.length > REVEAL_LIMIT) notices.push(`只显示前 ${REVEAL_LIMIT} 个文件`);
+    const limited = paths.length > REVEAL_LIMIT;
+    const notFound: string[] = [];
     const folders = new Map<string, string[]>();
     for (const path of paths.slice(0, REVEAL_LIMIT)) folders.set(dirname(path), [...(folders.get(dirname(path)) ?? []), path]);
     const missing = (error: unknown) => {
@@ -375,10 +442,14 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
         await plugin.system.openPath(dir);
       } catch (error) {
         missing(error);
-        notices.push(`找不到文件：${basename(files[0]!)}`);
+        notFound.push(basename(files[0]!));
       }
     }
-    if (notices.length) queue.notice(notices.join("；"));
+    const name = fitName(notFound.join(", "), 100);
+    if (limited && notFound.length)
+      queue.notice("Only the first {limit} files are shown; file not found: {name}", { limit: REVEAL_LIMIT, name });
+    else if (limited) queue.notice("Only the first {} files are shown", [REVEAL_LIMIT]);
+    else if (notFound.length) queue.notice("File not found: {}", [name]);
   });
 
   /** C18: replace the list with a list file's entries (after confirmation when not empty). */
@@ -386,20 +457,21 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     if (listBusy) return;
     listBusy = true;
     try {
-      const path = await plugin.dialogs.openFile({ title: "打开播放列表文件" });
+      const path = await plugin.dialogs.openFile({ title: "Open Playlist File" });
       if (!path) return;
       const ext = extensionOf(path);
-      if (!LIST_FILES.has(ext)) return queue.notice("不支持的列表格式");
+      if (!LIST_FILES.has(ext)) return queue.notice("Unsupported list format");
       let parsed;
       try {
-        if ((await stat(path)).size > LIST_SIZE_LIMIT) return queue.notice("无法打开列表：文件超过 16 MB");
+        if ((await stat(path)).size > LIST_SIZE_LIMIT) return queue.notice("Cannot open the list: the file is larger than 16 MB");
         parsed = parseList(decodeList(await readFile(path), ext), ext, dirname(path));
       } catch (error) {
-        return queue.notice(`无法打开列表：${errorText(error)}`);
+        return queue.notice("Cannot open the list: {}", [fitName(errorText(error))]);
       }
       if (
         queue.rows.length &&
-        !(await ask({ message: `用 ${fitName(basename(path))} 替换当前列表？`, confirm: "替换" })).confirmed
+        !(await ask({ message: "Replace the current list with {}?", confirm: "Replace", args: [fitName(basename(path))] }))
+          .confirmed
       )
         return;
       const entries = parsed.entries.slice(0, LIST_ENTRY_LIMIT);
@@ -410,14 +482,17 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
           source: entry.source,
           named: entry.title,
           duration: entry.duration,
-          missing: "文件不存在",
+          missing: true,
         })),
       );
       if (result.fresh[0]) queue.selected = result.fresh[0].rowId;
       prober.scan();
       lastList = listName(path);
       const skipped = parsed.skipped + (parsed.entries.length - entries.length) + result.duplicate + result.refused;
-      queue.notice(`已打开列表：${lastList}（${result.added} 项）${skipped ? `，跳过 ${skipped} 项` : ""}`);
+      const name = fitName(lastList, 100);
+      if (skipped)
+        queue.notice("Opened list: {name} ({count} items), skipped: {skipped}", { name, count: result.added, skipped });
+      else queue.notice("Opened list: {name} ({count} items)", { name, count: result.added });
     } finally {
       listBusy = false;
     }
@@ -428,8 +503,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     listBusy = true;
     try {
       const chosen = await plugin.dialogs.saveFile({
-        title: "保存播放列表",
-        fileName: `${lastList ?? "播放列表"}.m3u8`,
+        title: "Save Playlist",
+        fileName: `${lastList ?? "Playlist"}.m3u8`,
       });
       if (!chosen) return;
       const { path, ext } = savePath(chosen);
@@ -437,110 +512,117 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
         const rows = queue.rows.map((row) => ({ kind: row.kind, source: row.source, title: row.title, duration: lengthOf(row) }));
         writeAtomic(path, formatList(rows, path, ext));
       } catch (error) {
-        return queue.notice(`无法保存列表：${errorText(error)}`);
+        return queue.notice("Cannot save the list: {}", [fitName(errorText(error))]);
       }
       lastList = listName(path);
-      queue.notice(`已保存列表：${basename(path)}`);
+      queue.notice("Saved list: {}", [fitName(basename(path))]);
     } finally {
       listBusy = false;
     }
   });
 
-  const reason = (enabled: () => boolean) => () =>
-    enabled() ? null : player.busy() ? "正在打开或结果未知" : "当前没有可操作项";
+  const reason = (enabled: () => boolean) => (): Reason | null =>
+    enabled() ? null : player.busy() ? "Opening, or the result is not known yet" : "Nothing to act on";
   /** A list command: not in the main menu; its keys work while the list has focus. */
   const listCommand = (
     id: string,
-    title: string,
+    title: ListTitle,
     enabled: () => boolean,
     run: () => unknown,
     bindings?: string[],
-    extra: Partial<CommandOptions> = {},
+    extra: CommandSetup = {},
   ) =>
     plugin.commands.add({
       id: `playlist.${id}`,
       title,
       enabled,
-      reason: reason(enabled),
+      reason: extra.reason ?? reason(enabled),
       ...(bindings ? { bindings, focus: "panel" as const } : {}),
       run,
       ...extra,
     });
 
-  // Main menu (allocation table: 打开 ▶ 110, 播放 ▶ 播放列表 ▶ 230–249, windows 800).
+  // Main menu (allocation table: Open ▸ 110, Playback ▸ Playlist ▸ 230–249, windows 800).
   plugin.commands.add({
     id: "playlist.visibility",
-    path: ["播放列表"],
+    path: ["Playlist"],
     group: "windows",
     order: 800,
     bindings: ["F6"],
     // With tabs: checked while the sidebar is shown on the playlist's tab; F6 brings the tab
     // forward from another tab, hides the sidebar on it, shows the sidebar on it when hidden.
     checked: () => (list.state ? list.state.preferred && list.state.active : (sidebar.state?.preferred ?? true)),
-    reason: () => (sidebar.state?.reason === "space" ? "空间不足，放大窗口后可显示" : null),
+    reason: () => (sidebar.state?.reason === "space" ? "Not enough room; enlarge the window to show it" : null),
     run: () => (typeof list.toggle === "function" ? list.toggle() : sidebar.toggle()),
   });
   plugin.commands.add({
     id: "playlist.open-folder",
-    path: ["打开", "打开文件夹…"],
+    path: ["@open", "Open Folder…"],
     group: "open",
     order: 110,
     bindings: ["F2"],
     busy: () => scanning,
-    reason: () => (scanning ? "正在扫描文件夹" : null),
+    reason: () => (scanning ? "Scanning folder" : null),
     run: openFolder,
   });
-  const playlistMenu = (id: string, title: string[], order: number, options: Partial<CommandOptions>) =>
-    plugin.commands.add({ id: `playlist.${id}`, path: ["播放", "播放列表", ...title], order, run: () => {}, ...options });
+  const playlistMenu = (id: string, title: readonly PlaylistItem[], order: number, options: CommandSetup) =>
+    plugin.commands.add({
+      id: `playlist.${id}`,
+      path: ["@playback", "Playlist", ...title],
+      order,
+      run: () => {},
+      ...options,
+      reason: options.reason ?? null,
+    });
   const addingFiles = { enabled: () => !adding, busy: () => adding };
-  const scanningFolder = { busy: () => scanning, reason: () => (scanning ? "正在扫描文件夹" : null) };
+  const scanningFolder = { busy: () => scanning, reason: (): Reason | null => (scanning ? "Scanning folder" : null) };
   const listFile = { busy: () => listBusy, group: "list" };
-  playlistMenu("add", ["添加文件…"], 230, { ...addingFiles, run: addFiles });
-  playlistMenu("link", ["添加链接…"], 231, { run: guard(() => link.show()) });
-  playlistMenu("add-folder", ["添加文件夹…"], 232, { ...scanningFolder, run: addFolderOnly });
+  playlistMenu("add", ["Add Files…"], 230, { ...addingFiles, run: addFiles });
+  playlistMenu("link", ["Add Link…"], 231, { run: guard(() => link.show()) });
+  playlistMenu("add-folder", ["Add Folder…"], 232, { ...scanningFolder, run: addFolderOnly });
   // The options shared by the menu and the settings page (IA-PL-02).
   const setRepeat = (mode: Repeat) => {
     queue.repeat = mode;
-    queue.notice(`循环：${repeats.find(([each]) => each === mode)![1]}`);
+    queue.notice(mode === "none" ? "Repeat: Off" : mode === "all" ? "Repeat: All" : "Repeat: One");
   };
   const setShuffle = (on: boolean) => {
     queue.setShuffle(on);
-    queue.notice(queue.shuffle ? "随机播放：开" : "随机播放：关");
+    queue.notice(queue.shuffle ? "Shuffle: On" : "Shuffle: Off");
   };
   const setFast = (on: boolean) => {
     settings.gapless = on;
     player.setFast(settings.gapless);
-    queue.notice(settings.gapless ? "快速推进到下一个：开" : "快速推进到下一个：关");
+    queue.notice(settings.gapless ? "Fast advance to next: On" : "Fast advance to next: Off");
   };
   const setRemember = (on: boolean) => {
     settings.remember = on;
     void flush();
-    queue.notice(settings.remember ? "将记住列表" : "不再记住列表");
+    queue.notice(settings.remember ? "The list will be remembered" : "The list will no longer be remembered");
   };
   const setConfirmClear = (on: boolean) => {
     settings.confirmClear = on;
-    queue.notice(settings.confirmClear ? "移除全部前确认：开" : "移除全部前确认：关");
+    queue.notice(settings.confirmClear ? "Confirm before removing all: On" : "Confirm before removing all: Off");
   };
   repeats.forEach(([mode, title], index) =>
-    playlistMenu(`repeat-${mode}`, ["循环", title], 233 + index, {
+    playlistMenu(`repeat-${mode}`, ["Repeat", title], 233 + index, {
       radio: true,
       checked: () => queue.repeat === mode,
       run: () => setRepeat(mode),
     }),
   );
-  playlistMenu("shuffle", ["随机"], 236, {
+  playlistMenu("shuffle", ["Shuffle"], 236, {
     checked: () => queue.shuffle,
     run: () => setShuffle(!queue.shuffle),
   });
-  playlistMenu("open-list", ["打开列表文件…"], 237, { ...listFile, run: openList });
-  playlistMenu("save-list", ["保存列表…"], 238, {
+  playlistMenu("open-list", ["Open List File…"], 237, { ...listFile, run: openList });
+  playlistMenu("save-list", ["Save List…"], 238, {
     ...listFile,
     enabled: hasRows,
     reason: reason(hasRows),
     run: saveList,
   });
   openModes.forEach(([mode, title], index) =>
-    playlistMenu(`open-mode-${mode}`, ["打开文件时", title], 239 + index, {
+    playlistMenu(`open-mode-${mode}`, ["When Opening a File", title], 239 + index, {
       group: "open-mode",
       radio: true,
       checked: () => settings.openMode === mode,
@@ -549,68 +631,68 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       },
     }),
   );
-  playlistMenu("fast-advance", ["快速推进到下一个"], 242, {
+  playlistMenu("fast-advance", ["Fast Advance to Next"], 242, {
     group: "options",
     checked: () => settings.gapless,
     run: () => setFast(!settings.gapless),
   });
-  playlistMenu("remember", ["记住列表"], 243, {
+  playlistMenu("remember", ["Remember List"], 243, {
     group: "options",
     checked: () => settings.remember,
     run: () => setRemember(!settings.remember),
   });
-  // Turns the 移除全部 question back on after 「不再询问」 (or off).
-  playlistMenu("confirm-clear", ["移除全部前确认"], 244, {
+  // Turns the Remove All question back on after "Don't ask again" (or off).
+  playlistMenu("confirm-clear", ["Confirm Before Removing All"], 244, {
     group: "options",
     checked: () => settings.confirmClear,
     run: () => setConfirmClear(!settings.confirmClear),
   });
 
   // List commands (context menu, bottom-bar popups and keys while the list has focus).
-  const play = listCommand("play", "播放", canPlay, playSelected, ["Enter", "P"], {
+  const play = listCommand("play", "Play", canPlay, playSelected, ["Enter", "P"], {
     busy: () => player.busy(),
   });
-  const add = listCommand("list-add", "添加文件…", () => !adding, addFiles, ["Ctrl+I"], { busy: () => adding });
-  const addFolderCommand = listCommand("list-add-folder", "添加文件夹…", () => true, addFolderOnly, ["Ctrl+O"], scanningFolder);
-  const addLink = listCommand("list-link", "添加链接…", () => true, guard(() => link.show()), ["Ctrl+U"]);
-  const remove = listCommand("remove", "移除所选", () => queue.selection.size > 0, removeSelected, [
+  const add = listCommand("list-add", "Add Files…", () => !adding, addFiles, ["Ctrl+I"], { busy: () => adding });
+  const addFolderCommand = listCommand("list-add-folder", "Add Folder…", () => true, addFolderOnly, ["Ctrl+O"], scanningFolder);
+  const addLink = listCommand("list-link", "Add Link…", () => true, guard(() => link.show()), ["Ctrl+U"]);
+  const remove = listCommand("remove", "Remove Selected", () => queue.selection.size > 0, removeSelected, [
     "Delete",
     "Backspace",
   ]);
   const removeOthers = listCommand(
     "remove-unselected",
-    "移除未选",
+    "Remove Unselected",
     () => queue.canRemoveUnselected(),
     removeUnselected,
     ["Ctrl+Delete"],
   );
-  const removeInvalidCommand = listCommand("remove-invalid", "移除无效项", hasRows, removeInvalid, ["Ctrl+T"], {
+  const removeInvalidCommand = listCommand("remove-invalid", "Remove Invalid Items", hasRows, removeInvalid, ["Ctrl+T"], {
     busy: () => checking,
   });
-  const removeAll = listCommand("clear", "移除全部", hasRows, clearAll, ["Alt+Delete"]);
+  const removeAll = listCommand("clear", "Remove All", hasRows, clearAll, ["Alt+Delete"]);
   const hasLocal = () => queue.marked().some((row) => row.kind === "file");
-  const revealCommand = listCommand("reveal", "在 Finder 中显示", hasLocal, revealSelected, ["Ctrl+F"], {
-    reason: () => (hasLocal() ? null : queue.selection.size ? "链接没有本地位置" : "当前没有可操作项"),
+  const revealCommand = listCommand("reveal", "Show in Finder", hasLocal, revealSelected, ["Ctrl+F"], {
+    reason: () => (hasLocal() ? null : queue.selection.size ? "Links have no local location" : "Nothing to act on"),
   });
-  const moveReason = (where: Placement) => () =>
-    queue.canPlace(where) ? null : queue.filtering ? "搜索时不能调整顺序" : "当前没有可操作项";
-  const move = (id: string, title: string, where: Placement, binding: string) =>
+  const moveReason = (where: Placement) => (): Reason | null =>
+    queue.canPlace(where) ? null : queue.filtering ? "The order cannot change while searching" : "Nothing to act on";
+  const move = (id: string, title: ListTitle, where: Placement, binding: string) =>
     listCommand(id, title, () => queue.canPlace(where), place(where), [binding], { reason: moveReason(where) });
   const moves: Record<Placement, Command> = {
-    top: move("move-top", "置顶", "top", "Ctrl+Home"),
-    up: move("move-up", "上移", "up", "Ctrl+ArrowUp"),
-    down: move("move-down", "下移", "down", "Ctrl+ArrowDown"),
-    bottom: move("move-bottom", "置底", "bottom", "Ctrl+End"),
+    top: move("move-top", "Move to Top", "top", "Ctrl+Home"),
+    up: move("move-up", "Move Up", "up", "Ctrl+ArrowUp"),
+    down: move("move-down", "Move Down", "down", "Ctrl+ArrowDown"),
+    bottom: move("move-bottom", "Move to Bottom", "bottom", "Ctrl+End"),
   };
   const sortable = () => queue.rows.length > 1;
   const sortState = { busy: () => statting };
   const sorts = [
-    listCommand("sort-ascending", "正序", () => true, setDirection(false), ["Ctrl+1"], {
+    listCommand("sort-ascending", "Ascending", () => true, setDirection(false), ["Ctrl+1"], {
       ...sortState,
       radio: true,
       checked: () => !queue.descending,
     }),
-    listCommand("sort-descending", "反序", () => true, setDirection(true), ["Ctrl+2"], {
+    listCommand("sort-descending", "Descending", () => true, setDirection(true), ["Ctrl+2"], {
       ...sortState,
       radio: true,
       checked: () => queue.descending,
@@ -619,27 +701,27 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       listCommand(`sort-${key}`, title, sortable, sortBy(key), binding ? [binding] : undefined, sortState),
     ),
   ];
-  const selectAll = listCommand("select-all", "全选", () => queue.visible().length > 0, () => queue.selectAll(), [
+  const selectAll = listCommand("select-all", "Select All", () => queue.visible().length > 0, () => queue.selectAll(), [
     "Ctrl+A",
   ]);
-  const search = listCommand("search", "搜索", () => true, () => void focusSearch++, ["Ctrl+S"]);
-  const openListCommand = listCommand("list-open-list", "打开列表文件…", () => true, openList, ["F3"], {
+  const search = listCommand("search", "Search", () => true, () => void focusSearch++, ["Ctrl+S"]);
+  const openListCommand = listCommand("list-open-list", "Open List File…", () => true, openList, ["F3"], {
     busy: () => listBusy,
   });
-  const saveListCommand = listCommand("list-save-list", "保存列表…", hasRows, saveList, ["F2"], {
+  const saveListCommand = listCommand("list-save-list", "Save List…", hasRows, saveList, ["F2"], {
     busy: () => listBusy,
   });
-  // F6 while the list has focus closes it, shown as "关闭列表" in the list menu.
-  const close = listCommand("close", "关闭列表", () => true, () => sidebar.setVisible(false), ["F6"]);
-  // IA-PL-02: F5 while the list has focus opens its settings page (播放列表设置);
-  // elsewhere F5 stays the global 选项….
-  listCommand("settings", "播放列表设置…", () => true, guard(() => plugin.settings.show(SETTINGS_PAGE)), ["F5"]);
+  // F6 while the list has focus closes it, shown as "Close List" in the list menu.
+  const close = listCommand("close", "Close List", () => true, () => sidebar.setVisible(false), ["F6"]);
+  // IA-PL-02: F5 while the list has focus opens its settings page (Playlist Settings…);
+  // elsewhere F5 stays the global Options….
+  listCommand("settings", "Playlist Settings…", () => true, guard(() => plugin.settings.show(SETTINGS_PAGE)), ["F5"]);
 
-  // IA-PL-02: 选项 ▶ 播放 ▶ 播放列表, in step with the menu items.
+  // IA-PL-02: Options ▸ Playback ▸ Playlist, in step with the menu items.
   const page = plugin.settings.page("ui/settings.slint", {
     id: SETTINGS_PAGE,
     category: "playback",
-    title: "播放列表",
+    title: "Playlist",
     order: 30,
   });
   page.bind(() => ({
@@ -738,13 +820,14 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
         rowId: row.rowId,
         label: `${(index ? index.get(row.rowId)! : firstRow + i) + 1}. ${row.title}`,
         duration: lengthOf(row) !== null ? clock(lengthOf(row)!) : row.probe === "failed" ? "--:--" : "",
-        tooltip: row.error ? `${row.source}\n${row.error}` : row.source,
+        tooltip: row.error?.kind === "message" ? `${row.source}\n${row.error.text}` : row.source,
+        problem: row.error && row.error.kind !== "message" ? row.error.kind : "",
         selected: queue.selection.has(row.rowId),
         current: row.rowId === queue.binding?.rowId,
         played: row.played,
-        failed: row.status === "失败",
+        failed: row.status === "failed",
       })),
-      total: queue.filtering && total ? `筛选 ${total}` : total,
+      total,
       filtering: queue.filtering,
       focusSearch,
       detached: sidebar.state?.detached ?? false,
@@ -862,9 +945,9 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   });
 
   // A15: drops from the file manager. On the video area (the player groups by extension): G-11
-  // replace the list (「追加」 option: add to the end) and play the first item; Option only adds.
+  // replace the list ("Append" option: add to the end) and play the first item; Option only adds.
   // On the list (G-12): add to the end, or before the row under the drop point with
-  // 「插入到拖放位置」; never play. One drop at a time, in order.
+  // "Insert at the drop position"; never play. One drop at a time, in order.
   let dropping: Promise<void> = Promise.resolve();
   const dropped = (
     paths: string[],
@@ -890,9 +973,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
             }
           }
         }
-        const extra = dropExtra(expanded);
-        if (!expanded.entries.length)
-          return queue.notice(extra ? `没有可加入的项目：${extra}` : "没有可加入的项目");
+        if (!expanded.entries.length) return queue.notice(...nothingToAdd(expanded));
         let before: number | undefined;
         if (how.at) {
           const shown = queue.visible();
@@ -904,19 +985,19 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
         const wasEmpty = queue.rows.length === 0;
         const result = await queue.addEntries(expanded.entries, before === undefined ? {} : { before });
         prober.scan();
-        const summary = queue.summary(result, extra);
+        const summary = queue.summary(result, dropProblems(expanded));
         if (!how.play) {
           queue.selectFirstAdded(result, wasEmpty);
-          return queue.notice(summary);
+          return queue.notice(...summary);
         }
         // The dropped file when it brought its siblings; else the first new row, or (all
         // duplicates) the existing row of the first item.
         const at = start === null ? -1 : expanded.entries.findIndex((entry) => entry.source === start);
         const target = (at >= 0 ? result.rows[at] : undefined) ?? result.fresh[0] ?? result.rows.find((row) => !!row);
-        if (!target) return queue.notice(summary);
-        if (player.busy()) return queue.notice(`${summary}；正在打开，已加入列表`);
+        if (!target) return queue.notice(...summary);
+        if (player.busy()) return queue.notice("Added: {added}; opening, added to the list", { added: result.added });
         queue.select(target.rowId);
-        queue.notice(summary);
+        queue.notice(...summary);
         await player.play(target.rowId, undefined, { quiet: true });
       }),
     ));

@@ -10,7 +10,15 @@ import { settleFiles } from "./settle.ts";
 import { DROP_EXTENSIONS, dropRow } from "../drop.ts";
 import activate from "../main.ts";
 
-type ViewRow = { rowId: string; label: string; duration: string; tooltip: string; selected: boolean; current: boolean };
+type ViewRow = {
+  rowId: string;
+  label: string;
+  duration: string;
+  tooltip: string;
+  problem: string;
+  selected: boolean;
+  current: boolean;
+};
 type Intent = { kind: string; source?: string; expected?: Json };
 const pause = (ms = 10) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -22,7 +30,8 @@ const probeTable = (seconds: Record<string, number> = {}) => (args: string[]) =>
 };
 
 async function start(
-  options: { data?: string; durations?: Record<string, number>; random?: () => number } = {},
+  // The old (Chinese) texts are checked as a Simplified Chinese user sees them; `locale: "en"` for the English source.
+  options: { data?: string; durations?: Record<string, number>; random?: () => number; locale?: "en" | "zh-Hans" } = {},
 ) {
   const root = await realpath(await mkdtemp(join(tmpdir(), "vestra-playlist-features-")));
   const host = new TestHost();
@@ -31,6 +40,7 @@ async function start(
   const { stop } = await startPlugin((plugin) => activate(plugin, { random: options.random ?? (() => 0) }), {
     directory: new URL("..", import.meta.url),
     host,
+    locale: options.locale ?? "zh-Hans",
     ...(options.data ? { dataDirectory: options.data } : {}),
   });
   const panel = host.mounted();
@@ -122,7 +132,8 @@ test("A03: F2 opens a folder recursively in folder order, appends and plays the 
     await symlink(dir, join(dir, "sub", "loop")); // a symlink cycle ends the walk
     app.host.dialogAnswers.push([dir]);
     await app.noticed(() => app.press("F2", false));
-    assert.deepEqual(app.host.sent("dialogs.open").at(-1), { kind: "openDirectory", title: "打开文件夹" });
+    assert.deepEqual(app.host.sent("dialogs.open").at(-1), { kind: "openDirectory", title: "Open Folder" });
+    assert.equal(app.host.translate("Open Folder"), "打开文件夹");
     assert.deepEqual(app.names(), ["b1.mp4", "b2.mkv", "b10.mkv", "s1.mp3", "s2.mp3"]);
     assert.equal(app.osd(), "已添加 5 项");
     assert.deepEqual(app.opens().at(-1), { kind: "open", source: join(dir, "b1.mp4"), startPaused: false });
@@ -198,7 +209,8 @@ test("C04: Ctrl+O in the list adds a folder without playing and selects the firs
     await app.files(["f/x2.mp4", "f/x1.mp4"]);
     app.host.dialogAnswers.push([join(app.root, "f")]);
     await app.press("Ctrl+O");
-    assert.deepEqual(app.host.sent("dialogs.open").at(-1), { kind: "openDirectory", title: "添加文件夹到播放列表" });
+    assert.deepEqual(app.host.sent("dialogs.open").at(-1), { kind: "openDirectory", title: "Add Folder to Playlist" });
+    assert.equal(app.host.translate("Add Folder to Playlist"), "添加文件夹到播放列表");
     assert.deepEqual(app.names(), ["x1.mp4", "x2.mp4"]);
     assert.equal(app.rows()[0]!.selected, true);
     assert.equal(app.opens().length, 0);
@@ -220,7 +232,7 @@ test("C07: Ctrl+Delete keeps the selection; Ctrl+T removes rows whose files are 
     assert.deepEqual(app.names(), ["b.mp4", "d.mp4"]);
     assert.equal(app.osd(), "已移除 3 项");
     assert.equal(app.command("remove-unselected").state.enabled, false, "everything left is selected");
-    assert.equal(app.command("remove-unselected").state.reason, "当前没有可操作项");
+    assert.equal(app.host.translate(app.command("remove-unselected").state.reason!), "当前没有可操作项");
 
     await app.run("link");
     assert.equal(app.host.window("playlist-link").visible, true);
@@ -421,7 +433,8 @@ test("C18: opening an m3u8 resolves relative paths, file URLs, titles and links;
     );
     app.host.dialogAnswers.push([list]);
     await app.press("F3");
-    assert.deepEqual(app.host.sent("dialogs.open").at(-1), { kind: "openFile", title: "打开播放列表文件" });
+    assert.deepEqual(app.host.sent("dialogs.open").at(-1), { kind: "openFile", title: "Open Playlist File" });
+    assert.equal(app.host.translate("Open Playlist File"), "打开播放列表文件");
     assert.deepEqual(app.names(), [
       "First title",
       "Second",
@@ -432,7 +445,10 @@ test("C18: opening an m3u8 resolves relative paths, file URLs, titles and links;
     assert.equal(app.osd(), "已打开列表：vlc（5 项），跳过 1 项");
     assert.equal(app.rows()[0]!.tooltip, a);
     assert.equal(app.rows()[0]!.duration, "01:01");
-    assert.equal(app.rows()[4]!.tooltip, `${join(app.root, "gone.mp4")}\n文件不存在`);
+    // The tooltip reads "<path>\n文件不存在" (ui/sidebar.slint words the reason).
+    assert.equal(app.rows()[4]!.tooltip, join(app.root, "gone.mp4"));
+    assert.equal(app.rows()[4]!.problem, "missing");
+    assert.equal(app.host.translate("{}\nThe file does not exist", [join(app.root, "gone.mp4")]), `${join(app.root, "gone.mp4")}\n文件不存在`);
     assert.equal(app.opens().length, 0, "opening a list does not play");
 
     // Not a list file.
@@ -455,7 +471,8 @@ test("C18: a non-empty list is replaced only after the system confirmation", asy
     await app.host.settle();
     app.host.dialogAnswers.push([join(app.root, "x.m3u")], { confirmed: false, checked: false });
     await app.run("open-list");
-    assert.deepEqual(app.host.confirms.at(-1), { message: "用 x.m3u 替换当前列表？", confirm: "替换" });
+    assert.deepEqual(app.host.confirms.at(-1), { message: "Replace the current list with {}?", confirm: "Replace", args: ["x.m3u"] });
+    assert.deepEqual(app.host.confirmTexts.at(-1), { message: "用 x.m3u 替换当前列表？", confirm: "替换", cancel: app.host.confirmTexts.at(-1)!.cancel });
     assert.deepEqual(app.names(), ["a.mp4"]);
     app.host.dialogAnswers.push([join(app.root, "x.m3u")], { confirmed: true, checked: false });
     await app.run("open-list");
@@ -488,10 +505,19 @@ test("移除全部 asks with the system confirmation; 「不再询问」 on a co
     app.host.dialogAnswers.push({ confirmed: false, checked: true });
     await app.press("Alt+Delete");
     assert.deepEqual(app.host.confirms.at(-1), {
+      message: "Remove all {} items from the playlist?",
+      detail: "The media that is playing continues to play.",
+      confirm: "Remove All",
+      destructive: true,
+      checkbox: "Don't ask again",
+      args: [2],
+    });
+    const { cancel, ...shown } = app.host.confirmTexts.at(-1)!;
+    assert.ok(cancel);
+    assert.deepEqual(shown, {
       message: "移除播放列表中的全部 2 项？",
       detail: "正在播放的媒体继续播放。",
       confirm: "移除全部",
-      destructive: true,
       checkbox: "不再询问",
     });
     assert.deepEqual(app.names(), ["a.mp4", "b.mp4"]);
@@ -550,7 +576,7 @@ test("C18: GBK .m3u, PLS round trip, DPL; saving adds .m3u8 and writes relative 
     await app.press("F2");
     assert.deepEqual(app.host.sent("dialogs.open").at(-1), {
       kind: "saveFile",
-      title: "保存播放列表",
+      title: "Save Playlist",
       fileName: "gbk.m3u8",
     });
     assert.equal(app.osd(), "已保存列表：list.m3u8");
@@ -621,7 +647,7 @@ test("C21: search filters by all words (NFKC, any case), keeps numbers, limits a
     assert.deepEqual(app.rows().map((row) => row.label), ["1. Show.S01E01.1080p.mkv", "3. Other.S01.1080P.mkv"]);
     assert.equal(app.command("move-down").state.enabled, false);
     await app.click(0);
-    assert.equal(app.command("move-down").state.reason, "搜索时不能调整顺序");
+    assert.equal(app.host.translate(app.command("move-down").state.reason!), "搜索时不能调整顺序");
     assert.equal(app.prop("can-drag"), false);
     await app.press("Ctrl+A");
     await app.press("Delete");
@@ -664,7 +690,10 @@ test("C21: Ctrl+Delete under a filter removes only shown unselected rows; the to
     assert.equal(app.prop("total"), "01:40");
     await app.emit("search-changed", "a");
     await app.host.settle(200);
-    assert.equal(app.prop("total"), "筛选 01:30");
+    // Shown as "筛选 01:30" (ui/sidebar.slint).
+    assert.equal(app.prop("total"), "01:30");
+    assert.equal(app.prop("filtering"), true);
+    assert.equal(app.host.translate("Filtered {}", ["01:30"]), "筛选 01:30");
     await app.click(0);
     await app.press("Ctrl+Delete");
     await app.emit("search-changed", "");
@@ -703,7 +732,7 @@ test("C23: Ctrl+F reveals the first selected file of each folder; a missing file
     app.host.window("playlist-link").emit("add-link", "https://example.org/v");
     await app.host.settle();
     assert.equal(app.command("reveal").state.enabled, false);
-    assert.equal(app.command("reveal").state.reason, "链接没有本地位置");
+    assert.equal(app.host.translate(app.command("reveal").state.reason!), "链接没有本地位置");
   } finally {
     await app.close();
   }
@@ -846,7 +875,8 @@ test("B26: \"快速推进到下一个\" is off by default, toggles with a notice
   let app = await start({ data });
   try {
     assert.equal(app.command("fast-advance").state.checked, false);
-    assert.deepEqual(app.command("fast-advance").declaration.path, ["播放", "播放列表", "快速推进到下一个"]);
+    assert.deepEqual(app.command("fast-advance").declaration.path, ["@playback", "Playlist", "Fast Advance to Next"]);
+    assert.deepEqual(app.command("fast-advance").display.path, ["播放", "播放列表", "快速推进到下一个"]);
     await app.run("fast-advance");
     assert.equal(app.command("fast-advance").state.checked, true);
     assert.equal(app.osd(), "快速推进到下一个：开");

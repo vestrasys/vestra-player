@@ -1,15 +1,15 @@
-// 选项 ▶ 播放 ▶ 播放列表 (IA-PL-02; 播放列表设置): the open
-// and drop options and the same switches as the 播放 ▶ 播放列表 menu items. 440 wide
+// Options ▸ Playback ▸ Playlist (IA-PL-02; Playlist Settings…): the open
+// and drop options and the same switches as the Playback ▸ Playlist menu items. 440 wide
 // (the options window's page area). Combo boxes hold indexes into the plugin's lists.
 import { CheckBox, ComboBox } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 
 export global PlaylistSettings {
-    // 0 仅打开该文件, 1 加入相似文件, 2 加入同文件夹全部文件
+    // 0 Open Only That File, 1 Add Similar Files, 2 Add All Files in the Folder
     in-out property <int> open-mode;
     in-out property <bool> append-on-open;
     in-out property <bool> drop-at-pointer;
-    // 0 不循环, 1 全部, 2 单个
+    // 0 Off, 1 All, 2 One
     in-out property <int> repeat;
     in-out property <bool> shuffle;
     in-out property <bool> fast-advance;
@@ -54,66 +54,66 @@ export component PlaylistSettingsPage inherits Rectangle {
         alignment: start;
         Text {
             height: 24px;
-            text: "播放列表";
+            text: @tr("Playlist");
             font-size: Theme.font-title;
             font-weight: 700;
             vertical-alignment: center;
             color: Theme.text;
         }
-        Section { text: "打开与拖放"; }
+        Section { text: @tr("Open and drop"); }
         HorizontalLayout {
             height: Theme.input-height;
             spacing: 4px;
-            Label { text: "打开文件时："; }
+            Label { text: @tr("When opening a file:"); }
             open-combo := ComboBox {
                 width: 200px;
-                model: ["仅打开该文件", "加入相似文件", "加入同文件夹全部文件"];
+                model: [@tr("Open only that file"), @tr("Add similar files"), @tr("Add all files in the folder")];
                 current-index: PlaylistSettings.open-mode;
                 selected => { PlaylistSettings.set-open-mode(self.current-index); }
             }
         }
         Check {
-            text: "打开或拖入时追加，不清空列表";
+            text: @tr("Append when opening or dropping; don't clear the list");
             checked <=> PlaylistSettings.append-on-open;
             toggled => { PlaylistSettings.set-append-on-open(self.checked); }
         }
         Check {
-            text: "拖到列表时插入到拖放位置";
+            text: @tr("Insert at the drop position when dropping on the list");
             checked <=> PlaylistSettings.drop-at-pointer;
             toggled => { PlaylistSettings.set-drop-at-pointer(self.checked); }
         }
         Rectangle { height: 8px; }
-        Section { text: "播放"; }
+        Section { text: @tr("Playback"); }
         HorizontalLayout {
             height: Theme.input-height;
             spacing: 4px;
-            Label { text: "循环："; }
+            Label { text: @tr("Repeat:"); }
             repeat-combo := ComboBox {
                 width: 200px;
-                model: ["不循环", "全部", "单个"];
+                model: [@tr("Off"), @tr("All"), @tr("One")];
                 current-index: PlaylistSettings.repeat;
                 selected => { PlaylistSettings.set-repeat(self.current-index); }
             }
         }
         Check {
-            text: "随机";
+            text: @tr("Shuffle");
             checked <=> PlaylistSettings.shuffle;
             toggled => { PlaylistSettings.set-shuffle(self.checked); }
         }
         Check {
-            text: "快速推进到下一个";
+            text: @tr("Fast advance to next");
             checked <=> PlaylistSettings.fast-advance;
             toggled => { PlaylistSettings.set-fast-advance(self.checked); }
         }
         Rectangle { height: 8px; }
-        Section { text: "列表"; }
+        Section { text: @tr("List"); }
         Check {
-            text: "记住列表";
+            text: @tr("Remember list");
             checked <=> PlaylistSettings.remember;
             toggled => { PlaylistSettings.set-remember(self.checked); }
         }
         Check {
-            text: "移除全部前确认";
+            text: @tr("Confirm before removing all");
             checked <=> PlaylistSettings.confirm-clear;
             toggled => { PlaylistSettings.set-confirm-clear(self.checked); }
         }

@@ -56,8 +56,9 @@ export function follower(
       if (!current()) return changed();
       target = result.rows[paths.indexOf(source)];
       const others = replace ? result.added - 1 : result.added;
-      const limit = truncated ? `，已达上限 ${SCAN_LIMIT}` : "";
-      if (others > 0) queue.notice(`已加入同文件夹 ${others} 个文件${limit}`);
+      if (others > 0 && truncated)
+        queue.notice("Added {count} files from the same folder, limit of {limit} reached", { count: others, limit: SCAN_LIMIT });
+      else if (others > 0) queue.notice("Added {count} files from the same folder", { count: others });
     }
     if (target) player.adopt(target.rowId, scope.player.state);
     changed();

@@ -1,15 +1,29 @@
-// 添加链接… (UI-DLG-02 "输入链接" window, the same layout and input row as
-// playback's 打开链接…): explanation, the shared `UrlInputRow` (multi-line
-// input, [添加] [取消]) and a message line. Enter adds, Shift+Enter starts a
+// Add Link… (UI-DLG-02 link input window, the same layout and input row as
+// playback's Open Link…): explanation, the shared `UrlInputRow` (multi-line
+// input, [Add] [Cancel]) and a message line. Enter adds, Shift+Enter starts a
 // new line (one link per line), Esc cancels.
 import { Theme } from "@vestra/theme.slint";
 import { UrlInputRow } from "@vestra/widgets.slint";
 
 export component AddLink inherits Window {
-    in-out property <string> message: "输入 HTTP(S) 链接；添加只选择，不自动播放";
+    // The message line: "hint", why line `line` (0: the only line) was not added
+    // ("incomplete", "refused", "full": the list holds `limit` rows), or "added" (`count` links).
+    in-out property <string> notice: "hint";
+    in-out property <int> line;
+    in-out property <int> count;
+    in-out property <int> limit: 20000;
     callback add-link(string);
     callback cancel();
-    title: "添加链接到播放列表";
+    private property <string> message: root.notice == "added"
+        ? (root.count > 1 ? @tr("{} links added, only selected; playing them needs an available source provider", root.count) : @tr("Link added, only selected; playing it needs an available source provider"))
+        : root.notice == "incomplete"
+        ? (root.line > 0 ? @tr("Line {}: Enter a complete HTTP(S) link", root.line) : @tr("Enter a complete HTTP(S) link"))
+        : root.notice == "refused"
+        ? (root.line > 0 ? @tr("Line {}: Only HTTP(S) links without a user name or password are accepted", root.line) : @tr("Only HTTP(S) links without a user name or password are accepted"))
+        : root.notice == "full"
+        ? (root.line > 0 ? @tr("Line {}: The list is full at {} items", root.line, root.limit) : @tr("The list is full at {} items", root.limit))
+        : @tr("Enter HTTP(S) links; adding only selects, it does not play");
+    title: @tr("Add Links to Playlist");
     width: 464px;
     background: Theme.bg-bar;
     // Esc also cancels while the focus is outside the input (after clicking a button).
@@ -25,20 +39,20 @@ export component AddLink inherits Window {
             padding: Theme.dialog-padding;
             spacing: 6px;
             Text {
-                text: "在下方输入要加入播放列表的网址，每行一个。";
+                text: @tr("Enter the web addresses to add to the playlist below, one per line.");
                 color: Theme.text;
                 font-size: Theme.font-body;
                 height: Theme.label-height;
             }
             Text {
-                text: "例) https://example.com/video.mp4";
+                text: @tr("Example: {}", "https://example.com/video.mp4");
                 color: Theme.text-dim;
                 font-size: Theme.font-body;
                 height: Theme.label-height;
             }
             row := UrlInputRow {
-                placeholder: "https://…";
-                confirm-text: "添加";
+                placeholder: "https://…"; // i18n-ignore
+                confirm-text: @tr("Add");
                 accepted(text) => { root.add-link(text); }
                 cancelled => { root.cancel(); }
             }

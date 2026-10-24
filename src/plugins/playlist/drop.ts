@@ -1,8 +1,10 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname } from "node:path";
 import { decodeList, LIST_ENTRY_LIMIT, LIST_SIZE_LIMIT, parseList } from "./listfile.ts";
-import { AUDIO, extensionOf, folderError, isMedia, isPackage, LIST_FILES, scanFolder, SCAN_LIMIT, VIDEO } from "./media.ts";
-import type { Entry } from "./queue.ts";
+import { AUDIO, extensionOf, folderError, isMedia, isPackage, LIST_FILES, scanFolder, VIDEO } from "./media.ts";
+import type { Notice, NoticeArgs, ReadFailure } from "./notices.ts";
+import { fitName } from "./notices.ts";
+import type { Entry, Problems } from "./queue.ts";
 
 /**
  * A15: what playlist takes from a drop on the video area (`drops.provide`):
@@ -41,8 +43,8 @@ export type Expanded = {
   truncated: boolean;
   /** Dropped items playlist does not take, and unusable list lines. */
   skipped: number;
-  /** `<name>：<reason>` for folders and list files that could not be read. */
-  failed: string[];
+  /** Folders and list files that could not be read. */
+  failed: { name: string; failure: ReadFailure }[];
 };
 
 const HTTP = /^https?:\/\//i;
@@ -147,14 +149,17 @@ export async function expandDrop(paths: readonly string[], options: { signal?: A
         for (const file of scan.files) out.entries.push({ kind: "file", source: file.path, key: file.key });
       } catch (error) {
         if (options.signal?.aborted) throw error;
-        out.failed.push(`${name}：${folderError(error)}`);
+        out.failed.push({ name, failure: folderError(error) });
       }
       continue;
     }
     const ext = extensionOf(path);
     if (LIST_FILES.has(ext)) {
+      if ((info?.size ?? 0) > LIST_SIZE_LIMIT) {
+        out.failed.push({ name, failure: { reason: "large" } });
+        continue;
+      }
       try {
-        if ((info?.size ?? 0) > LIST_SIZE_LIMIT) throw new Error("文件超过 16 MB");
         const parsed = parseList(decodeList(await readFile(path), ext), ext, dirname(path));
         const entries = parsed.entries.slice(0, LIST_ENTRY_LIMIT);
         out.skipped += parsed.skipped + parsed.entries.length - entries.length;
@@ -164,10 +169,10 @@ export async function expandDrop(paths: readonly string[], options: { signal?: A
             source: entry.source,
             named: entry.title,
             duration: entry.duration,
-            missing: "文件不存在",
+            missing: true,
           });
       } catch (error) {
-        out.failed.push(`${name}：${error instanceof Error ? error.message : String(error)}`);
+        out.failed.push({ name, failure: { reason: "message", message: error instanceof Error ? error.message : String(error) } });
       }
     } else if (ext === "webloc") {
       const url = await weblocUrl(path).catch(() => null);
@@ -179,14 +184,38 @@ export async function expandDrop(paths: readonly string[], options: { signal?: A
   return out;
 }
 
-/** The extra part of the notice after a drop (after `已添加 N 项…`). */
-export function dropExtra(expanded: Expanded) {
-  return [
-    expanded.skipped ? `跳过 ${expanded.skipped} 个不支持的项目` : "",
-    expanded.unreadable ? `${expanded.unreadable} 个子文件夹无法读取` : "",
-    expanded.truncated ? `已达上限 ${SCAN_LIMIT}` : "",
-    ...expanded.failed.map((text) => `无法读取 ${text}`),
-  ]
-    .filter(Boolean)
-    .join("，");
+/** What a drop could not take, for the notice after adding. */
+export const dropProblems = (expanded: Expanded): Problems => ({
+  skipped: expanded.skipped,
+  unreadable: expanded.unreadable,
+  truncated: expanded.truncated,
+  failed: expanded.failed,
+});
+
+/** The notice when a drop brought nothing to add: its first problem. */
+export function nothingToAdd(expanded: Expanded): [Notice, NoticeArgs?] {
+  if (expanded.skipped) return ["Nothing to add: unsupported items skipped: {count}", { count: expanded.skipped }];
+  if (expanded.unreadable)
+    return ["Nothing to add: subfolders that could not be read: {count}", { count: expanded.unreadable }];
+  const failed = expanded.failed[0];
+  if (!failed) return ["Nothing to add"];
+  const name = fitName(failed.name, 60);
+  const { failure } = failed;
+  switch (failure.reason) {
+    case "permission":
+      return [
+        "Nothing to add: cannot read {name}: access to this location is not allowed (System Settings ▸ Privacy & Security ▸ Files & Folders)",
+        { name },
+      ];
+    case "access":
+      return ["Nothing to add: cannot read {name}: no permission to read", { name }];
+    case "missing":
+      return ["Nothing to add: cannot read {name}: the folder does not exist", { name }];
+    case "not-folder":
+      return ["Nothing to add: cannot read {name}: not a folder", { name }];
+    case "large":
+      return ["Nothing to add: cannot read {name}: the file is larger than 16 MB", { name }];
+    case "message":
+      return ["Nothing to add: cannot read {name}: {message}", { name, message: fitName(failure.message, 60) }];
+  }
 }

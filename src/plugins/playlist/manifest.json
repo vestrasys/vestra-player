@@ -1,6 +1,6 @@
 {
   "id": "vestra.playlist",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -15,14 +15,14 @@
     "ui.drop",
     "ui.settings"
   ],
-  "name": "播放列表",
+  "name": "Playlist",
   "author": "Vestra Player",
-  "punchline": "侧栏播放列表：添加、排序、循环与随机",
-  "description": "右侧栏播放列表：添加文件、文件夹和链接，拖放加入，排序与搜索，循环与随机播放，打开文件时自动加入同文件夹的相似文件；读写 M3U、M3U8、PLS 列表文件，重启后恢复列表。\n入口：右键菜单「播放列表」（F6）与「播放 ▶ 播放列表」。",
+  "punchline": "Sidebar playlist: add, sort, repeat and shuffle",
+  "description": "A playlist in the right sidebar: add files, folders and links, drag and drop, sort and search, repeat and shuffle, and add the similar files of the same folder when a file is opened; reads and writes M3U, M3U8 and PLS list files and restores the list after a restart.\nEntry points: \"Playlist\" (F6) in the context menu and Playback ▸ Playlist.",
   "tags": [
-    "播放列表",
-    "打开",
-    "拖放"
+    "playlist",
+    "open",
+    "drag and drop"
   ],
-  "minPlayerVersion": "0.4.0"
+  "minPlayerVersion": "0.4.3"
 }
