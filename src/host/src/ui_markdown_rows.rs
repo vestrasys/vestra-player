@@ -555,12 +555,17 @@ fn nested_document_images_are_checked_on_every_write() {
         bytes
     };
     std::fs::write(&file, png(2)).unwrap();
-    let text = format!("![图](<{}>)", file.display());
+    // Relative to an absolute directory `base`, the documented form: an
+    // absolute Windows path written into the text would lose backslashes
+    // before punctuation to CommonMark escapes (`\.tmpXYZ` → `.tmpXYZ`).
+    let base = root.to_str().unwrap().to_owned();
     let mut images = crate::ui_image::Images::default();
     let mut cache = Cache::default();
     let mut write = |cache: &mut Cache| {
         let roots = [root.clone()];
-        convert(cache, SLOT, &chat(&[&text, "无图"]), &mut |path| {
+        let mut value = chat(&["![图](a.png)", "无图"]);
+        value[0]["body"]["$vestraMarkdown"]["base"] = json!(base);
+        convert(cache, SLOT, &value, &mut |path| {
             images
                 .load(1, &roots, path)
                 .ok()

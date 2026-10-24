@@ -682,7 +682,7 @@ export component Chat inherits Window {
 - 显示细节：中文回退到的系统字体（苹方、Microsoft YaHei 等）没有斜体，Slint 的 FemtoVG 与软件渲染器也不合成斜体，所以斜体另加琥珀色、删除线另加灰色，保证在任何字体下都看得出；行内代码整段用 Slint 的等宽胶囊样式（字号略小、半透明底），代码块整块用 `Theme.font-mono`，其中的中文按系统字体回退显示；任务列表的方框用图形绘制，不依赖字体字形；表格每行列宽相同，表头与正文都按分隔行的对齐方式（`:--`、`:-:`、`--:`）对齐。
 - 链接：点击时 `MarkdownView` 发出 `link-clicked(url)`，相对地址已按 `base` 解析（`#锚点` 原样）；打开与否由插件决定。
 - `base`：`http(s)` 地址（如 README 自己的地址）或绝对目录；相对链接与图片按它解析。没有 `base` 时相对图片显示替代文字。
-- 图片：PNG/JPEG。本地图片按 `ui.image` 的规则（本插件包目录或数据目录内，≤ 16 MB、4096²，与 `ui.image` 共用每插件 64 MB 的解码缓存）。`https:` 图片由 SDK 在本插件进程里下载到 `<dataDirectory>/.vestra-cache/markdown/`：单张 ≤ 4 MB、10 秒、重定向 ≤ 5 次（只跟随到 `https:`）、同时 4 个、每文档 ≤ 64 张；缓存 32 MB，按最近使用淘汰，同一地址 24 小时内不重新下载。下载失败、`http:`、SVG/GIF 等显示替代文字，`markdown()` 本身不因此失败。`remoteImages: false` 不下载。
+- 图片：PNG/JPEG。本地图片按 `ui.image` 的规则（本插件包目录或数据目录内，≤ 16 MB、4096²，与 `ui.image` 共用每插件 64 MB 的解码缓存）。`https:` 图片由 SDK 在本插件进程里下载到 `<dataDirectory>/.vestra-cache/markdown/`：单张 ≤ 4 MB、10 秒、重定向 ≤ 5 次（只跟随到 `https:`）、同时 4 个、每文档 ≤ 64 张；缓存 32 MB，按最近使用淘汰，同一地址 24 小时内不重新下载。下载失败、`http:`、SVG/GIF 等显示替代文字，`markdown()` 本身不因此失败。`remoteImages: false` 不下载。本地图片写成相对 `base`（绝对目录）的路径，或用 `/` 分隔：Markdown 文本里的 `\` 后跟标点是转义，Windows 绝对路径 `C:\…\.cache\a.png` 会丢掉 `.` 前的 `\`，找不到文件而显示替代文字。
 - 上限：每个文档文本 ≤ 256 KB（否则 `invalid`）、超过 4000 块截断并在末尾提示、图片 ≤ 64 张；一个属性值里所有文本（各文档的文本也算）合计 ≤ 1 MiB，每个文档算值里的一个节点（共 4096）。
 - 示例插件：`src/examples/markdown/`。测试：`host.markdown(host.window(id).props.doc)` 读回 `{ text, base, images }`（嵌在行里的同样读：`host.markdown(rows[0].body)`）；远程图片由 `host.remoteImages`（地址 → 本地文件）提供，测试不联网。
 
