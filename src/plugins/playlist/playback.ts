@@ -21,13 +21,6 @@ type Plan = {
   ready: boolean;
 };
 
-/**
- * A plugin file resolution (§11) the player cancelled while the source stayed
- * where it was: closed (F4, `player.close()`). A resolver's own failure carries
- * its message and leaves the source in `error` (as does an expired resolution).
- */
-const RESOLUTION_CANCELLED = "source resolution cancelled";
-
 /** `VESTRA_PLAYLIST_TIMING=1`: print each automatic advance's timings to stderr (GUI measurement). */
 const timing = !!process.env.VESTRA_PLAYLIST_TIMING;
 
@@ -53,8 +46,9 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
   // The source that was current when the failed anchor was set.
   let failedSource: number | null = null;
 
-  const cancelled = (code: string, message: string) =>
-    code === "backend" && message.startsWith(RESOLUTION_CANCELLED) && player.state.phase !== "error";
+  // §11: a resolution cancelled by a close (F4, `player.close()`) fails `backend` with the
+  // source empty; a resolver's own failure (or an expired resolution) leaves it in `error`.
+  const cancelled = (code: string) => code === "backend" && player.state.phase === "empty";
 
   const observe = (state: PlayerState) => {
     if (advancing?.sourceId === state.sourceId && state.phase !== "loading") {
@@ -204,7 +198,7 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
         // Accepted, then superseded by another source before it loaded: not a failure of this row.
         else if (code === "replaced") queue.detach("已切换到列表外来源");
         // A file resolution (§11) cancelled by a close (F4, player.close()): not a failure of this row.
-        else if (cancelled(code, message)) queue.detach("当前来源已关闭");
+        else if (cancelled(code)) queue.detach("当前来源已关闭");
         else {
           queue.fail(rowId, message);
           failedSource = player.state.sourceId;

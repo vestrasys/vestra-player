@@ -795,7 +795,13 @@ test("a failed open stays on its row, keeps the navigation anchor and can be ret
     await app.addUrl("https://example.org/c");
     const [a, b, c] = app.rows().map((row) => row.rowId);
     await app.click(1);
-    app.host.handle("source.submit", () => ({ status: "failed", error: { backend: "resolverUnavailable" } }));
+    // Like the player: an accepted open whose resolution failed leaves the source in `error`
+    // (`backend` with an empty source is a resolution cancelled by a close, §11).
+    app.host.handle("source.submit", (p) => {
+      app.host.openElsewhere(String((p.intent as { source: string }).source), "loading");
+      app.host.setSource({ phase: "error", terminalReason: { failed: "resolverUnavailable" } });
+      return { status: "failed", error: { backend: "resolverUnavailable" } };
+    });
     await app.press("Enter");
     assert.equal(app.rows()[1].failed, true);
     assert.match(app.rows()[1].tooltip, /resolverUnavailable/);
