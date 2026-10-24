@@ -10,6 +10,8 @@ use crate::clipboard::Image;
 use crate::power::Launcher;
 use std::path::{Path, PathBuf};
 
+/// How menus write shortcuts (`bindings::label`).
+pub const KEY_LABELS: super::KeyLabels = super::KeyLabels::Text;
 /// Which standard window shortcuts apply (`shortcuts.rs`).
 pub const SYSTEM: super::System = super::System::Linux;
 /// Slint reports Ctrl as `control` here.

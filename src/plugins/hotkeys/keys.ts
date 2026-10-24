@@ -143,7 +143,8 @@ const KEY_LABELS: Record<string, string> = {
 /**
  * Display text of an input the player gave no label for (ignored defaults,
  * orphans, the mouse page): the menu's style (`Ctrl+←`, `Num5`), mouse
- * inputs in words (`Ctrl+滚轮上推`). Labels of `current` come from the player.
+ * inputs in words (`Ctrl+滚轮上推`). Labels of `current` come from the player
+ * in the system's style (`⌘O` on macOS; `BindingsModel.labelOf`).
  */
 export function label(input: string): string {
   const mouse = input.indexOf("Mouse:");

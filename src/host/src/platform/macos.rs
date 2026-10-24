@@ -18,6 +18,8 @@ use std::time::{Duration, Instant};
 
 pub use super::keyring_store::{secret_delete, secret_get, secret_set};
 
+/// How menus write shortcuts (`bindings::label`).
+pub const KEY_LABELS: super::KeyLabels = super::KeyLabels::Symbols;
 /// Which standard window shortcuts apply (`shortcuts.rs`).
 pub const SYSTEM: super::System = super::System::MacOs;
 /// Slint reports ⌘ as `control` and ⌃ as `meta` on Apple platforms.

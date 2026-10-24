@@ -3,6 +3,7 @@
 //! Pure data; the shell forwards Slint key and mouse events here.
 #![forbid(unsafe_code)]
 
+use crate::platform::KeyLabels;
 use std::collections::BTreeMap;
 
 pub type Owner = u64;
@@ -513,24 +514,54 @@ pub fn text(input: &Input) -> String {
     text + &input.name
 }
 
-/// Menu text: `Ctrl+O`, arrows as ← → ↑ ↓, Esc, PgUp/PgDn, Del.
+/// Menu text in the running system's style (`platform::KEY_LABELS`):
+/// `Ctrl+O` on Windows and Linux, `⌘O` on macOS.
 pub fn label(input: &Input) -> String {
+    label_in(input, crate::platform::KEY_LABELS)
+}
+
+/// Menu text in `style`. Text: `Ctrl+O`, arrows as ← → ↑ ↓, Esc,
+/// PgUp/PgDn, Del. Symbols (macOS): `⌘O`, `⇧⌘S`, `⌥→`, ⎋ ↩ ⇥ ⌫ ⌦ ⇞ ⇟ ↖ ↘;
+/// a `Ctrl` binding shows ⌘ (it answers to ⌘ there), and ⌃ only next to ⌘.
+pub fn label_in(input: &Input, style: KeyLabels) -> String {
+    let mods = &input.mods;
     let mut text = String::new();
-    for (on, name) in [
-        (input.mods.ctrl, "Ctrl+"),
-        (input.mods.alt, "Alt+"),
-        (input.mods.shift, "Shift+"),
-        (input.mods.cmd, "Cmd+"),
-    ] {
+    let modifiers = match style {
+        KeyLabels::Text => [
+            (mods.ctrl, "Ctrl+"),
+            (mods.alt, "Alt+"),
+            (mods.shift, "Shift+"),
+            (mods.cmd, "Cmd+"),
+        ],
+        // Apple's order ⌃⌥⇧⌘.
+        KeyLabels::Symbols => [
+            (mods.ctrl && mods.cmd, "⌃"),
+            (mods.alt, "⌥"),
+            (mods.shift, "⇧"),
+            (mods.ctrl || mods.cmd, "⌘"),
+        ],
+    };
+    for (on, name) in modifiers {
         if on {
             text.push_str(name);
         }
     }
-    text.push_str(match input.name.as_str() {
+    let symbols = style == KeyLabels::Symbols;
+    let named = match input.name.as_str() {
         "ArrowLeft" => "←",
         "ArrowRight" => "→",
         "ArrowUp" => "↑",
         "ArrowDown" => "↓",
+        "Escape" if symbols => "⎋",
+        "Enter" if symbols => "↩",
+        "Tab" if symbols => "⇥",
+        "Backspace" if symbols => "⌫",
+        "Delete" if symbols => "⌦",
+        "PageUp" if symbols => "⇞",
+        "PageDown" if symbols => "⇟",
+        "Home" if symbols => "↖",
+        "End" if symbols => "↘",
+        "NumpadEnter" if symbols => "⌤",
         "Escape" => "Esc",
         "PageUp" => "PgUp",
         "PageDown" => "PgDn",
@@ -542,16 +573,15 @@ pub fn label(input: &Input) -> String {
         "NumpadDivide" => "Num/",
         "NumpadEnter" => "NumEnter",
         "NumpadDecimal" => "Num.",
-        other => other,
-    });
-    if let Some(digit) = input.name.strip_prefix("Numpad")
-        && digit.len() == 1
-    {
-        text.truncate(text.len() - input.name.len());
-        text.push_str("Num");
-        text.push_str(digit);
-    }
-    text
+        other => match other.strip_prefix("Numpad") {
+            Some(digit) if digit.len() == 1 => {
+                text.push_str("Num");
+                digit
+            }
+            _ => other,
+        },
+    };
+    text + named
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -1219,8 +1249,9 @@ mod tests {
         .unwrap();
         assert_eq!(table.resolve(&pad, None).unwrap().id, "pad");
         assert_eq!(table.resolve(&main, None).unwrap().id, "five");
-        assert_eq!(label(&parse("Numpad5").unwrap()), "Num5");
-        assert_eq!(label(&parse("Ctrl+NumpadPlus").unwrap()), "Ctrl+Num+");
+        let text = |input: &str| label_in(&parse(input).unwrap(), KeyLabels::Text);
+        assert_eq!(text("Numpad5"), "Num5");
+        assert_eq!(text("Ctrl+NumpadPlus"), "Ctrl+Num+");
     }
 
     #[test]
@@ -1320,7 +1351,13 @@ mod tests {
             table.resolve(&key("Cmd+O"), None).map(|t| t.id.as_str()),
             crate::platform::CTRL_ACCEPTS_CMD.then_some("open")
         );
-        assert_eq!(table.label(5, "open").as_deref(), Some("Ctrl+O"));
+        // The menu writes it as the system does (⌘O on macOS).
+        let menu = if cfg!(target_os = "macos") {
+            "⌘O"
+        } else {
+            "Ctrl+O"
+        };
+        assert_eq!(table.label(5, "open").as_deref(), Some(menu));
     }
 
     #[test]
@@ -1411,8 +1448,52 @@ mod tests {
         assert_eq!(table.resolve(&right, None).unwrap().id, "fullscreen");
         assert!(table.conflicts().is_empty());
         assert!(!table.has_wheel(true));
-        assert_eq!(label(&key("Ctrl+ArrowLeft")), "Ctrl+←");
-        assert_eq!(label(&key("PageDown")), "PgDn");
+        assert_eq!(label_in(&key("Ctrl+ArrowLeft"), KeyLabels::Text), "Ctrl+←");
+        assert_eq!(label_in(&key("PageDown"), KeyLabels::Text), "PgDn");
+    }
+
+    /// Menu shortcut text in both styles; `text` stays the canonical string.
+    #[test]
+    fn menu_labels_are_text_or_macos_symbols() {
+        let both = |input: &str| {
+            let parsed = parse(input).unwrap();
+            assert_eq!(text(&parsed), input, "canonical form unchanged");
+            (
+                label_in(&parsed, KeyLabels::Text),
+                label_in(&parsed, KeyLabels::Symbols),
+            )
+        };
+        let cases = [
+            ("Ctrl+O", "Ctrl+O", "⌘O"),
+            ("Cmd+Q", "Cmd+Q", "⌘Q"),
+            ("Ctrl+Shift+S", "Ctrl+Shift+S", "⇧⌘S"),
+            ("Alt+ArrowRight", "Alt+→", "⌥→"),
+            ("Ctrl+Alt+Shift+Cmd+F", "Ctrl+Alt+Shift+Cmd+F", "⌃⌥⇧⌘F"),
+            ("Ctrl+Cmd+F", "Ctrl+Cmd+F", "⌃⌘F"),
+            ("Shift+Tab", "Shift+Tab", "⇧⇥"),
+            ("Alt+Delete", "Alt+Del", "⌥⌦"),
+            ("Ctrl+Backspace", "Ctrl+Backspace", "⌘⌫"),
+            ("Escape", "Esc", "⎋"),
+            ("Enter", "Enter", "↩"),
+            ("PageUp", "PgUp", "⇞"),
+            ("End", "End", "↘"),
+            ("Space", "Space", "Space"),
+            ("Ctrl+Plus", "Ctrl++", "⌘+"),
+            ("Numpad5", "Num5", "Num5"),
+            ("Shift+Numpad5", "Shift+Num5", "⇧Num5"),
+            ("NumpadEnter", "NumEnter", "⌤"),
+            ("F11", "F11", "F11"),
+        ];
+        for (input, text, symbols) in cases {
+            assert_eq!(both(input), (text.into(), symbols.into()), "{input}");
+        }
+        // The running system's style.
+        let expected = if cfg!(target_os = "macos") {
+            "⌘O"
+        } else {
+            "Ctrl+O"
+        };
+        assert_eq!(label(&parse("Ctrl+O").unwrap()), expected);
     }
 
     #[test]

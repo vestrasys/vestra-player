@@ -59,7 +59,7 @@ export function lineOf(info: BindingInfo, ignored: boolean, model: BindingsModel
     status = "冲突";
     tone = 2;
     tip = info.shadowed
-      .map((s) => `${label(s.input)} 被「${model.text(s.by)}」占用，未生效`)
+      .map((s) => `${model.labelOf(s.input)} 被「${model.text(s.by)}」占用，未生效`)
       .join("；");
   } else if (info.overridden) {
     status = "已修改";
@@ -338,7 +338,7 @@ export class KeysPage {
     this.#capturing = false;
     const info = this.#selectedLine()?.info;
     if (!info) return;
-    if (info.current.includes(input)) return this.#say(`${label(input)} 已经是这条命令的快捷键`);
+    if (info.current.includes(input)) return this.#say(`${this.#model.labelOf(input)} 已经是这条命令的快捷键`);
     if (info.current.length >= MAX_BINDINGS) return this.#say(`每条命令最多 ${MAX_BINDINGS} 个绑定`, true);
     const owners = this.#model.commands.filter(
       (c) => refKey(c) !== refKey(info) && c.scope === info.scope && c.current.some((each) => sameKey(each, input)),
@@ -369,7 +369,7 @@ export class KeysPage {
       return `⌘Q 是退出 Vestra Player 的默认快捷键，确定改为「${target}」？`;
     const first =
       pending.owners.find((o) => !o.shadowed.some((s) => sameKey(s.input, pending.input))) ?? pending.owners[0]!;
-    return `${label(pending.input)} 已用于「${commandText(first)}」`;
+    return `${this.#model.labelOf(pending.input)} 已用于「${commandText(first)}」`;
   }
 
   async #replace() {

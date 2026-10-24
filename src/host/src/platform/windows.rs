@@ -21,6 +21,8 @@ use std::sync::{Arc, Weak};
 
 pub use super::keyring_store::{secret_delete, secret_get, secret_set};
 
+/// How menus write shortcuts (`bindings::label`).
+pub const KEY_LABELS: super::KeyLabels = super::KeyLabels::Text;
 /// Which standard window shortcuts apply (`shortcuts.rs`).
 pub const SYSTEM: super::System = super::System::Windows;
 /// Slint reports Ctrl as `control` here.

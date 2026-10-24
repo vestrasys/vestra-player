@@ -12,7 +12,7 @@
 //!
 //! | area | functions |
 //! | --- | --- |
-//! | per-system tables | `SYSTEM` → `standard_window_shortcut` (table in `shortcuts.rs`), `ui_monospace_font` (`monospace_font`); the tables are the same code on every system |
+//! | per-system tables | `SYSTEM` → `standard_window_shortcut` (table in `shortcuts.rs`), `ui_monospace_font` (`monospace_font`); the tables are the same code on every system; `KEY_LABELS` (how menus write shortcuts) |
 //! | windows | `shown`, `capture_windows`, `associate_new`, `set_floating`, `set_dark_title_bars`, `window_count`, `resize_content`, `screen_for`, `pointer_in`, `modifier_keys`, `double_click_seconds`, `menu_show_delay_ms` |
 //! | clipboard | `clipboard_read_text`, `clipboard_write_text`, `clipboard_write_image` |
 //! | dialogs | `confirm` |
@@ -58,6 +58,19 @@ pub enum System {
     Windows,
     /// Linux and the other desktop systems of `other.rs`.
     Linux,
+}
+
+/// How menus write a binding (`bindings::label`); each platform module names
+/// its own as `KEY_LABELS`. A build names only its own variant.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(not(test), allow(dead_code))]
+pub enum KeyLabels {
+    /// `Ctrl+Shift+S`, `Alt+→`.
+    Text,
+    /// The macOS menu style: ⌃⌥⇧⌘ in that order without `+` (`⇧⌘S`, `⌥→`),
+    /// a `Ctrl` binding as ⌘ (what it answers to, `CTRL_ACCEPTS_CMD`), and
+    /// the system's key glyphs (⎋ ↩ ⇥ ⌫ ⌦ ⇞ ⇟ ↖ ↘).
+    Symbols,
 }
 
 mod shortcuts;
