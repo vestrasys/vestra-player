@@ -136,7 +136,7 @@ impl Host {
                 let service = self
                     .plugins
                     .get(&reply.owner)
-                    .map(|plugin| plugin.data_key.secret_service(&plugin.manifest.id))
+                    .map(|plugin| plugin.data_key.secret_service())
                     .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
                 let name = secret_name(params)?.to_owned();
                 // The host records the names, so uninstalling can delete them.

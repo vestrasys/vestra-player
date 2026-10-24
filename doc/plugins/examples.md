@@ -359,35 +359,31 @@ export default async function activate(plugin: Plugin) {
 
 `media.ready()` 失败时 `code` 为 `failed`（载入失败，`message` 为后端原因）、`replaced`（被别的来源替换）或 `ended`。
 
-## 10. 插件工坊：校验、试载、安装
+## 10. 插件工坊：校验、安装、回退
 
 ```ts
-import type { PackageCandidate, PackageTrial, Plugin } from "@vestra-player/sdk";
+import type { PackageCandidate, Plugin } from "@vestra-player/sdk";
 
 export default async function activate(plugin: Plugin) {
   const window = plugin.windows.create("workshop.slint");
   let candidate: PackageCandidate | undefined;
-  let trial: PackageTrial | undefined;
+  let installed: string | undefined;
   let status = "选择工作区并输入需求后生成";
-  window.bind(() => ({ statusText: status, canTrial: !!candidate && !trial, canStop: !!trial }));
+  window.bind(() => ({ statusText: status, canInstall: !!candidate, canRollback: !!installed }));
 
   window.on("validate", async (directory: string) => {
     candidate = await plugin.packages.validate(directory);
     status = `候选已通过宿主校验 ${candidate.digest}`;
   });
-  window.on("startTrial", async () => {
-    trial = await candidate!.trial(); // 等到试载启动完成
-    status = `试载：${trial.status}`;
-  });
-  window.on("stopTrial", async () => {
-    await trial?.stop(); // 等宿主确认清理
-    trial = undefined;
-    status = "试载已清理";
-  });
   window.on("install", async () => {
-    const change = await candidate!.install(); // 预期修订号与请求 id 由 SDK 处理，从不重发
+    const change = await candidate!.install({ source: { kind: "workshop" } }); // 预期修订号与请求 id 由 SDK 处理，从不重发
     change.onChange((next) => (status = `包操作：${next}`));
     status = `包操作：${await change.done}`;
+    if (change.status === "committed") installed = candidate!.manifest.id;
+  });
+  window.on("rollback", async () => {
+    const change = await plugin.packages.rollback(installed!); // 不满意就回到上一版本
+    status = `回退：${await change.done}`;
   });
   plugin.onError((error) => (status = `错误：${error.message}`));
 }

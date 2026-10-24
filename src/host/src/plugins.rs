@@ -22,24 +22,20 @@ pub enum DataKey {
     Instance(String),
     /// A development load (`--plugin`): `plugin-data/development/<id>/`.
     Development(String),
-    /// A trial: `plugin-data/<id>.trial.<owner>/`, removed when it stops.
-    Trial,
 }
 impl DataKey {
     /// The data directory under the data root.
-    pub fn directory(&self, root: &Path, manifest_id: &str) -> PathBuf {
+    pub fn directory(&self, root: &Path) -> PathBuf {
         match self {
             Self::Instance(guid) => root.join(guid),
             Self::Development(id) => root.join("development").join(id),
-            Self::Trial => root.join(manifest_id),
         }
     }
     /// The secret store service name.
-    pub fn secret_service(&self, manifest_id: &str) -> String {
+    pub fn secret_service(&self) -> String {
         match self {
             Self::Instance(guid) => format!("vestra.plugin.{guid}"),
             Self::Development(id) => format!("vestra.dev.{id}"),
-            Self::Trial => manifest_id.to_owned(),
         }
     }
 }
@@ -85,9 +81,8 @@ pub struct Plugin {
     pub manifest: Manifest,
     pub directory: PathBuf,
     pub data_key: DataKey,
-    /// `plugin.dataDirectory`; a trial's is temporary and removed when it stops.
+    /// `plugin.dataDirectory`.
     data_directory: Option<PathBuf>,
-    temporary_data: bool,
     pub subscriptions: BTreeSet<String>,
     child: Child,
     outbound: mpsc::SyncSender<Value>,
@@ -106,7 +101,6 @@ impl Plugin {
         manifest: Manifest,
         data_key: DataKey,
     ) -> Result<Self> {
-        let trial = data_key == DataKey::Trial;
         let directory = dunce::canonicalize(directory)?;
         if manifest.api_version != API {
             bail!("unsupported apiVersion: {}", manifest.api_version);
@@ -123,10 +117,10 @@ impl Plugin {
         }
         package_file(&directory, &manifest.entry)?;
         let paths = crate::runtime_paths::get();
-        // Per installed instance, development id or trial (see `DataKey`).
+        // Per installed instance or development id (see `DataKey`).
         // Without one the SDK reports `unavailable`; loading continues.
         let data_directory = data_root()
-            .map(|root| data_key.directory(&root, &manifest.id))
+            .map(|root| data_key.directory(&root))
             .filter(|dir| {
                 std::fs::create_dir_all(dir)
                     .map_err(|error| eprintln!("plugin data {}: {error}", dir.display()))
@@ -208,7 +202,6 @@ impl Plugin {
             directory,
             data_key,
             data_directory,
-            temporary_data: trial,
             subscriptions: BTreeSet::new(),
             child,
             outbound,
@@ -244,16 +237,6 @@ impl Drop for Plugin {
             let _ = self.child.kill();
             let _ = self.child.wait();
         }
-        self.remove_temporary_data();
-    }
-}
-impl Plugin {
-    fn remove_temporary_data(&self) {
-        if self.temporary_data
-            && let Some(dir) = &self.data_directory
-        {
-            let _ = std::fs::remove_dir_all(dir);
-        }
     }
 }
 /// `$VESTRA_PLUGIN_DATA`, else `plugin-data` in the application data
@@ -276,73 +259,21 @@ pub fn package_file(directory: &Path, relative: &str) -> Result<PathBuf> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn trial_data_is_removed_and_installed_data_kept() {
-        let root = tempfile::tempdir().unwrap();
-        let manifest = |id: &str| Manifest {
-            id: id.into(),
-            api_version: API.into(),
-            entry: "main.mjs".into(),
-            ..Default::default()
-        };
-        let package = tempfile::tempdir().unwrap();
-        std::fs::write(package.path().join("main.mjs"), "export default () => {}").unwrap();
-        for (id, trial) in [("a.plugin", false), ("a.plugin.trial.9", true)] {
-            let dir = root.path().join(id);
-            std::fs::create_dir_all(&dir).unwrap();
-            let plugin = Plugin {
-                manifest: manifest(id),
-                directory: package.path().into(),
-                data_key: if trial {
-                    DataKey::Trial
-                } else {
-                    DataKey::Development(id.into())
-                },
-                data_directory: Some(dir.clone()),
-                temporary_data: trial,
-                subscriptions: BTreeSet::new(),
-                // Any short-lived child; Node is there on every system.
-                child: crate::runtime_paths::get()
-                    .node_command()
-                    .arg("--version")
-                    .stdout(std::process::Stdio::null())
-                    .spawn()
-                    .unwrap(),
-                outbound: mpsc::sync_channel(1).0,
-            };
-            drop(plugin);
-            assert_eq!(dir.exists(), !trial, "{id}");
-        }
-    }
-}
-
-#[cfg(test)]
 mod data_key_tests {
     use super::*;
 
     #[test]
-    fn data_keys_separate_instances_development_and_trials() {
+    fn data_keys_separate_instances_and_development_loads() {
         let root = Path::new("/data");
         let guid = "3f0c8a8e-5b7e-4c1f-9d0a-2b6f1c7e9a41";
         let instance = DataKey::Instance(guid.into());
-        assert_eq!(instance.directory(root, "a.b"), root.join(guid));
-        assert_eq!(
-            instance.secret_service("a.b"),
-            format!("vestra.plugin.{guid}")
-        );
+        assert_eq!(instance.directory(root), root.join(guid));
+        assert_eq!(instance.secret_service(), format!("vestra.plugin.{guid}"));
         let development = DataKey::Development("a.b".into());
         assert_eq!(
-            development.directory(root, "a.b"),
+            development.directory(root),
             root.join("development").join("a.b")
         );
-        assert_eq!(development.secret_service("a.b"), "vestra.dev.a.b");
-        assert_eq!(
-            DataKey::Trial.directory(root, "a.b.trial.7"),
-            root.join("a.b.trial.7")
-        );
-        assert_eq!(DataKey::Trial.secret_service("a.b.trial.7"), "a.b.trial.7");
+        assert_eq!(development.secret_service(), "vestra.dev.a.b");
     }
 }
