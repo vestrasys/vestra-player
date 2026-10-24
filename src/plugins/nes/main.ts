@@ -1,6 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename } from "node:path";
-import type { PlayerState, Plugin, PluginError, Stream, StreamStartError } from "@vestra-player/sdk";
+import type { Plugin, PluginError, Stream, StreamStartError } from "@vestra-player/sdk";
 import { NesCore } from "./core.ts";
 
 const MAX_ROM = 16 * 1024 * 1024;
@@ -37,14 +37,22 @@ export default async function activate(plugin: Plugin) {
         started(next) {
           stream = next;
           if (pending === path) pending = undefined;
+          const source = plugin.player.state.sourceId; // this ROM's open
           status = `正在运行 ${basename(path)} · 256×240 · 48 kHz 立体声`;
-          next.onStop((error) => {
+          next.onStop(async (error) => {
             if (stream !== next) return; // not when this plugin stops it
             stream = undefined;
-            const state = plugin.player.state;
+            // The stream itself failed (the SDK closed its source): the player's reason.
+            if (error && error.code !== "unavailable") return void (status = stopText(error.message));
+            // Replaced or closed (F4). The player retires such a stream's producer, so
+            // this may arrive as `unavailable: producer absent`: ask what the source is.
+            const state = await plugin.player.refresh().catch(() => plugin.player.state);
+            if (stream) return; // a newer ROM started meanwhile
+            if (state.phase === "empty") return void (status = "已停止。");
+            // Still this ROM's source: the player failed it (its reason is in the state).
+            if (state.sourceId === source) return void (status = stopText(state.error ?? error?.message));
             // Replaced by another ROM: its start or failure says what happened.
-            if (!error && state.phase !== "empty" && state.source === latest) return;
-            status = stopText(error, state);
+            if (state.source !== latest) status = "已被其他媒体源替换。";
           });
         },
       };
@@ -137,10 +145,9 @@ const oneLine = (text: string) => {
   return flat.length > 160 ? `${flat.slice(0, 159)}…` : flat;
 };
 
-/** Why the running game stopped; the player's state tells a close (F4) from a replacement. */
-function stopText(error: PluginError | null, state: PlayerState) {
-  if (error) return `模拟器已停止：${oneLine(error.message)}`; // the host's own reason
-  return state.phase === "empty" ? "已停止。" : "已被其他媒体源替换。";
+/** The running game failed: the player's (or SDK's) own reason. */
+function stopText(reason: string | null | undefined) {
+  return `模拟器已停止：${oneLine(reason ?? "来源已结束。")}`;
 }
 
 /** Start-up failures in Chinese; the SDK words these generically. */

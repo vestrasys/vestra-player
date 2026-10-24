@@ -4,6 +4,9 @@ import { TestHost } from '@vestra-player/sdk/testing';
 import { roms, running, start, until } from './harness.mjs';
 
 /** The plugin's stream is the player's source, under the path that was opened. */
+/** The real player retires a replaced stream's producer; the TestHost alone keeps it. */
+const mode = retire => (retire ? 'producer retired like the player' : 'TestHost producer kept');
+
 const playing = (host, path) =>
   host.source.kind === 'producer' && host.source.source === path && host.source.phase === 'ready';
 
@@ -103,105 +106,137 @@ test('dropping files on the video area opens the first ROM; other files are not 
   }
 });
 
-test('replacement by another source shows the old wording; a newer ROM is never torn down by the old one', async () => {
-  const files = await roms();
-  const { host, stop, window } = await start();
-  try {
-    host.openElsewhere(files.blue);
-    await until(() => window().props.running === true, 'first ROM');
-    host.openElsewhere('/media/movie.mp4');
-    await until(() => window().props.status === '已被其他媒体源替换。', 'replacement');
-    await until(() => host.producers.get(1).released, 'first stream released');
-    await until(() => window().props.running === false, 'running false'); // props are written one by one
-    assert.equal(host.sent('source.submit').some(p => p.intent.kind === 'close'), false, 'never closes a source it no longer owns');
-    assert.equal(host.source.source, '/media/movie.mp4');
+for (const retire of [true, false]) {
+  test(`replacement by another source shows the old wording; a newer ROM is never torn down by the old one (${mode(retire)})`, async () => {
+    const files = await roms();
+    const { host, stop, window } = await start(undefined, undefined, { retire });
+    try {
+      host.openElsewhere(files.blue);
+      await until(() => window().props.running === true, 'first ROM');
+      host.openElsewhere('/media/movie.mp4');
+      await until(() => window().props.status === '已被其他媒体源替换。', 'replacement');
+      await until(() => host.producers.get(1).released, 'first stream released');
+      await until(() => window().props.running === false, 'running false'); // props are written one by one
+      assert.equal(host.sent('source.submit').some(p => p.intent.kind === 'close'), false, 'never closes a source it no longer owns');
+      assert.equal(host.source.source, '/media/movie.mp4');
 
-    host.openElsewhere(files.red);
-    await until(() => window().props.status === running('red.nes'), 'second ROM');
-    await host.settle(30);
-    assert.equal(host.producers.get(2).released, false);
-    await until(() => window().props.running === true, 'running true'); // props are written one by one
-    assert.equal(playing(host, files.red), true);
-  } finally {
-    await stop();
-    await files.remove();
-  }
-});
+      host.openElsewhere(files.red);
+      await until(() => window().props.status === running('red.nes'), 'second ROM');
+      await host.settle(30);
+      assert.equal(host.producers.get(2).released, false);
+      await until(() => window().props.running === true, 'running true'); // props are written one by one
+      assert.equal(playing(host, files.red), true);
+    } finally {
+      await stop();
+      await files.remove();
+    }
+  });
+}
 
 // Playlist next / previous are `player.open(path)` by the playlist plugin:
 // the same as an open elsewhere, through a list mixing media and ROMs.
-test('next / previous through a mixed list: ROM → ROM → media → ROM', async () => {
-  const files = await roms();
-  const { host, stop, window } = await start();
-  try {
-    host.openElsewhere(files.blue);
-    await until(() => window().props.status === running('blue.nes'), 'blue');
-    host.openElsewhere(files.red); // ROM straight after ROM
-    await until(() => window().props.status === running('red.nes') && playing(host, files.red), 'red');
-    await until(() => host.producers.get(1).released, 'blue released');
-    await host.settle(30);
-    assert.equal(window().props.status, running('red.nes'), 'the old stream stopping does not overwrite the new status');
-    await until(() => window().props.running === true, 'running true'); // props are written one by one
-    host.openElsewhere('/media/movie.mp4');
-    await until(() => window().props.status === '已被其他媒体源替换。', 'media');
-    host.openElsewhere(files.blue);
-    await until(() => window().props.status === running('blue.nes') && playing(host, files.blue), 'blue again');
-    assert.equal(host.producers.get(3).released, false);
-    assert.equal(host.sent('source.submit').length, 0, 'the plugin itself never submitted anything');
-  } finally {
-    await stop();
-    await files.remove();
-  }
-});
-
-test('closing the source (F4) stops the game and says 已停止。', async () => {
-  const files = await roms();
-  const { host, stop, window } = await start();
-  try {
-    host.openElsewhere(files.blue);
-    await until(() => window().props.running === true, 'ROM');
-    await host.press('F4');
-    await until(() => window().props.status === '已停止。', 'stopped by F4');
-    await until(() => window().props.running === false, 'running false'); // props are written one by one
-    await until(() => host.producers.get(1).released, 'released');
-    assert.equal(host.source.phase, 'empty');
-  } finally {
-    await stop();
-    await files.remove();
-  }
-});
-
-test('a bad ROM fails the open with the plugin wording, in the player and the window', async () => {
-  const files = await roms();
-  const { host, stop, window } = await start();
-  const cases = [
-    [files.bad, '这不是 iNES 格式的 NES ROM 文件。'],
-    [files.truncated, 'ROM 文件不完整：比文件头声明的短。'],
-    [files.large, 'ROM 文件超过 16 MiB 上限。'],
-    [files.missing, '找不到 ROM 文件。'],
-  ];
-  try {
-    host.openElsewhere(files.blue);
-    await until(() => window().props.running === true, 'ROM');
-    for (const [path, message] of cases) {
-      host.openElsewhere(path);
-      await until(() => host.source.phase === 'error', `error for ${path}`);
-      assert.equal(host.source.source, path);
-      assert.deepEqual(host.source.terminalReason, { failed: message }, 'the player shows the plugin text, unprefixed');
-      await until(() => window().props.status === `错误：${message}`, `status for ${path}`);
-      await until(() => window().props.running === false, 'running false'); // props are written one by one
+for (const retire of [true, false]) {
+  test(`next / previous through a mixed list: ROM → ROM → media → ROM (${mode(retire)})`, async () => {
+    const files = await roms();
+    const { host, stop, window } = await start(undefined, undefined, { retire });
+    try {
+      host.openElsewhere(files.blue);
+      await until(() => window().props.status === running('blue.nes'), 'blue');
+      host.openElsewhere(files.red); // ROM straight after ROM
+      await until(() => window().props.status === running('red.nes') && playing(host, files.red), 'red');
+      await until(() => host.producers.get(1).released, 'blue released');
+      await host.settle(30);
+      assert.equal(window().props.status, running('red.nes'), 'the old stream stopping does not overwrite the new status');
+      await until(() => window().props.running === true, 'running true'); // props are written one by one
+      host.openElsewhere('/media/movie.mp4');
+      await until(() => window().props.status === '已被其他媒体源替换。', 'media');
+      host.openElsewhere(files.blue);
+      await until(() => window().props.status === running('blue.nes') && playing(host, files.blue), 'blue again');
+      assert.equal(host.producers.get(3).released, false);
+      assert.equal(host.sent('source.submit').length, 0, 'the plugin itself never submitted anything');
+    } finally {
+      await stop();
+      await files.remove();
     }
-    assert.equal(host.producers.size, 1, 'a bad ROM never prepares a stream');
-    assert.equal(host.producers.get(1).released, true, 'the open replaced the running game first');
+  });
+}
 
-    host.dialogAnswers.push([files.bad]); // the menu entry: the same failure
-    await host.command('nes.open').run();
-    await until(() => host.source.phase === 'error' && window().props.status === '错误：这不是 iNES 格式的 NES ROM 文件。', 'menu');
-  } finally {
-    await stop();
-    await files.remove();
-  }
-});
+for (const retire of [true, false]) {
+  test(`closing the source (F4) stops the game and says 已停止。 (${mode(retire)})`, async () => {
+    const files = await roms();
+    const { host, stop, window } = await start(undefined, undefined, { retire });
+    try {
+      host.openElsewhere(files.blue);
+      await until(() => window().props.running === true, 'ROM');
+      await host.press('F4');
+      await until(() => window().props.status === '已停止。', 'stopped by F4');
+      await until(() => window().props.running === false, 'running false'); // props are written one by one
+      await until(() => host.producers.get(1).released, 'released');
+      assert.equal(host.source.phase, 'empty');
+    } finally {
+      await stop();
+      await files.remove();
+    }
+  });
+}
+
+for (const retire of [true, false]) {
+  test(`a bad ROM fails the open with the plugin wording, in the player and the window (${mode(retire)})`, async () => {
+    const files = await roms();
+    const { host, stop, window } = await start(undefined, undefined, { retire });
+    const cases = [
+      [files.bad, '这不是 iNES 格式的 NES ROM 文件。'],
+      [files.truncated, 'ROM 文件不完整：比文件头声明的短。'],
+      [files.large, 'ROM 文件超过 16 MiB 上限。'],
+      [files.missing, '找不到 ROM 文件。'],
+    ];
+    try {
+      host.openElsewhere(files.blue);
+      await until(() => window().props.running === true, 'ROM');
+      for (const [path, message] of cases) {
+        host.openElsewhere(path);
+        await until(() => host.source.phase === 'error', `error for ${path}`);
+        assert.equal(host.source.source, path);
+        assert.deepEqual(host.source.terminalReason, { failed: message }, 'the player shows the plugin text, unprefixed');
+        await until(() => window().props.status === `错误：${message}`, `status for ${path}`);
+        await until(() => window().props.running === false, 'running false'); // props are written one by one
+      }
+      assert.equal(host.producers.size, 1, 'a bad ROM never prepares a stream');
+      assert.equal(host.producers.get(1).released, true, 'the open replaced the running game first');
+
+      host.dialogAnswers.push([files.bad]); // the menu entry: the same failure
+      await host.command('nes.open').run();
+      await until(() => host.source.phase === 'error' && window().props.status === '错误：这不是 iNES 格式的 NES ROM 文件。', 'menu');
+    } finally {
+      await stop();
+      await files.remove();
+    }
+  });
+}
+
+// Real player (GUI, 2026-10-24): test.nes running, ⌘O bad.nes showed
+// 「模拟器已停止：producer absent」: the old stream's stop overwrote the failure.
+for (const retire of [true, false]) {
+  test(`a running ROM replaced by a ROM that fails to resolve keeps the failure text (${mode(retire)})`, async () => {
+    const files = await roms();
+    const { host, stop, window } = await start(undefined, undefined, { retire });
+    try {
+      host.openElsewhere(files.blue);
+      await until(() => window().props.running === true, 'ROM');
+      host.openElsewhere(files.bad);
+      await until(() => host.source.phase === 'error', 'failed open');
+      await until(() => host.producers.get(1).released, 'old stream released');
+      await host.settle(100); // the old stream's stop has been handled
+      assert.equal(window().props.status, '错误：这不是 iNES 格式的 NES ROM 文件。');
+      assert.equal(window().props.running, false);
+      assert.equal(host.source.source, files.bad);
+      assert.equal(host.sent('source.submit').length, 0, 'nothing closed or reopened by the plugin');
+    } finally {
+      await stop();
+      await files.remove();
+    }
+  });
+}
 
 // The real host fails a selected producer source whose transport closes
 // ("producer transport closed", shown as 打开失败 by the playback plugin):

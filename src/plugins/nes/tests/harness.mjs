@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { startPlugin, TestHost } from '@vestra-player/sdk/testing';
+import { HostError, startPlugin, TestHost } from '@vestra-player/sdk/testing';
 import activate from '../main.ts';
 import { homebrew } from './homebrew.mjs';
 
@@ -41,12 +41,24 @@ export async function roms() {
  * Start the plugin. `intercept(method, params, next)` may delay or rewrite any
  * host request while keeping the TestHost's own behaviour behind `next()`;
  * `host` may be prepared beforehand (e.g. `otherResolvers`).
+ *
+ * `retire` (default true) acts like the real player, which retires the
+ * producer of a stream that was replaced or closed: its `producer.state`
+ * then fails with `unavailable: producer absent` (the TestHost keeps it and
+ * answers `active: false`).
  */
-export async function start(intercept, host = new TestHost()) {
-  if (intercept) {
-    const request = host.request.bind(host);
-    host.request = (method, params = {}) => intercept(method, params, () => request(method, params));
-  }
+export async function start(intercept, host = new TestHost(), { retire = true } = {}) {
+  const request = host.request.bind(host);
+  const ran = new Set();
+  host.request = async (method, params = {}) => {
+    const result = await (intercept ? intercept(method, params, () => request(method, params)) : request(method, params));
+    if (retire && method === 'producer.state') {
+      const id = Number(params.producerId);
+      if (result.active) ran.add(id);
+      else if (ran.has(id)) throw new HostError('unavailable', 'producer absent');
+    }
+    return result;
+  };
   const started = await startPlugin(activate, { directory, host });
   // The tool window shows the status: open it, as a user watching it would.
   await host.command('nes.window').run();
