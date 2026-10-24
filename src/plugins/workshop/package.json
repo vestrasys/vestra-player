@@ -1,10 +1,12 @@
 {
   "name": "vestra-workshop",
-  "version": "2.1.2",
+  "version": "2.2.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "vendor:pi": "node tests/vendor-pi.mjs --write"
+    "vendor:pi": "node tests/vendor-pi.mjs --write",
+    "vendor:sdk": "node tests/vendor-sdk.mjs --write",
+    "eval": "node tests/eval/run.mjs"
   },
   "devDependencies": {
     "@earendil-works/pi-agent-core": "1.4.0",
@@ -19,7 +21,8 @@
     "assets": [
       "vendor",
       "worker",
-      "assets"
+      "assets",
+      "knowledge"
     ]
   }
 }

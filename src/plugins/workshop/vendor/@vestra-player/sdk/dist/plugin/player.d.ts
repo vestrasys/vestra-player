@@ -1,0 +1,43 @@
+import type { SourceIntent, SourceStamp, SourceState, SourceTicket } from "../source.ts";
+import { Latest } from "./runtime.ts";
+import type { Runtime } from "./runtime.ts";
+import type { ScopeImpl } from "./scope.ts";
+import type { Conditional, Disposable, Player, PlayerState, PluginError } from "./types.ts";
+export declare const rawOf: (state: PlayerState) => SourceState | undefined;
+export declare const sameStamp: (a: SourceStamp, b: SourceStamp) => boolean;
+export declare function abortError(): PluginError;
+/** One per plugin: the state store and the operation book client. */
+export declare class PlayerService {
+    #private;
+    readonly runtime: Runtime;
+    raw: SourceState;
+    state: PlayerState;
+    readonly output: Latest<{
+        volume?: number;
+        muted?: boolean;
+    }>;
+    constructor(runtime: Runtime);
+    init(): Promise<void>;
+    /** Drop anything older than what was already delivered. */
+    accept(raw: SourceState): void;
+    watch(watcher: (raw: SourceState) => void): Disposable;
+    refresh(): Promise<PlayerState>;
+    /**
+     * Submit an intent and wait for its definite outcome. A reply from the host
+     * is final. Only a lost reply makes the outcome uncertain; then the same
+     * operation id is queried (the pipe is ordered, so the host has already
+     * admitted or rejected it). "pending" means accepted and still running.
+     */
+    submit(intent: SourceIntent, options?: {
+        signal?: AbortSignal;
+        accepted?: (ticket: SourceTicket) => void;
+    }): Promise<SourceTicket>;
+    expected(state: PlayerState | undefined): {
+        expected?: SourceStamp;
+    };
+    control(intent: SourceIntent, options?: Conditional): Promise<void>;
+    /** Close only if `generation` is still the player's source. */
+    closeIfCurrent(generation: number): Promise<void>;
+}
+export declare const playerOf: (runtime: Runtime) => PlayerService;
+export declare function player(scope: ScopeImpl): Player;

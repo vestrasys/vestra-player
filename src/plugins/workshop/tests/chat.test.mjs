@@ -65,10 +65,13 @@ test("a message streams back; the write tool shows one tool line and the file la
   // The key reached the provider, and nothing on disk.
   assert.equal(mock.chats[0].headers.authorization, `Bearer ${KEY}`);
   assert.deepEqual(await filesContaining(ai.plugin.dataDirectory, KEY), []);
-  // pi got our system prompt and exactly our tools.
+  // pi got our system prompt and exactly our tools: the file tools and the plugin tools.
   const body = mock.chats[0].body;
   assert.match(body.messages[0].content, /Vestra Player AI/);
-  assert.deepEqual(body.tools.map((t) => t.function.name).sort(), ["edit", "find", "grep", "ls", "read", "write"]);
+  assert.deepEqual(
+    body.tools.map((t) => t.function.name).sort(),
+    ["check", "edit", "find", "grep", "install_plugin", "ls", "pack", "read", "scaffold_plugin", "test", "trial_load", "typecheck", "write"],
+  );
 
   await ai.send("toggle", tools.id);
   assert.equal(ai.rows()[1].expanded, true);

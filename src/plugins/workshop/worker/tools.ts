@@ -1,5 +1,7 @@
 // The agent's tools: pi's read/write/edit/ls/find on our WorkFolder, and a
 // pure-JS grep (pi's grep always starts ripgrep; the worker may not spawn).
+// read, ls, find and grep also reach the read-only reference folders (the
+// SDK package, knowledge/); write and edit only the work folder.
 import path from "node:path";
 import {
   Type,
@@ -13,6 +15,20 @@ import {
 import { MAX_FILE, type WorkFolder } from "./files.ts";
 
 export const TOOL_NAMES = ["read", "write", "edit", "ls", "find", "grep"];
+
+/** The folder a path belongs to: a reference folder it lies in, else the work folder (which refuses it if outside). */
+export class Folders {
+  readonly work: WorkFolder;
+  readonly docs: WorkFolder[];
+  constructor(work: WorkFolder, docs: WorkFolder[]) {
+    this.work = work;
+    this.docs = docs;
+  }
+  of(file: string): WorkFolder {
+    const absolute = path.resolve(this.work.root, file);
+    return this.docs.find((d) => absolute === d.root || absolute.startsWith(d.root + path.sep)) ?? this.work;
+  }
+}
 
 /** Glob as fd matches it: a pattern without "/" matches the file name. */
 function matches(file: string, pattern: string): boolean {
@@ -28,17 +44,18 @@ const grepSchema = Type.Object({
   limit: Type.Optional(Type.Number({ description: "Most matches to return (default 100)" })),
 });
 
-function grepTool(folder: WorkFolder): ToolDefinition {
+function grepTool(folders: Folders): ToolDefinition {
   return {
     name: "grep",
     label: "grep",
-    description: "Search file contents in the work folder. Returns file:line: text for each matching line.",
+    description: "Search file contents in the work folder or a read-only reference folder (absolute path). Returns file:line: text for each matching line.",
     promptSnippet: "Search file contents for patterns",
     parameters: grepSchema,
     async execute(_id, params: { pattern: string; path?: string; glob?: string; ignoreCase?: boolean; literal?: boolean; limit?: number }, signal) {
       const source = params.literal ? params.pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : params.pattern;
       const regex = new RegExp(source, params.ignoreCase ? "i" : "");
       const limit = Math.max(1, Math.min(params.limit ?? 100, 1000));
+      const folder = folders.of(params.path ?? ".");
       const start = await folder.resolve(params.path ?? ".");
       const single = !(await folder.isDirectory(start));
       const files = single ? [path.basename(start)] : await folder.walk(start, 5000);
@@ -54,7 +71,8 @@ function grepTool(folder: WorkFolder): ToolDefinition {
           continue; // too large or vanished
         }
         if (buffer.length > MAX_FILE || buffer.includes(0)) continue; // binary
-        const shown = folder.relative(path.join(base, file));
+        // Reference files by their absolute path (the model reads them by it).
+        const shown = folder === folders.work ? folder.relative(path.join(base, file)) : path.join(base, file);
         for (const [index, line] of buffer.toString("utf8").split("\n").entries()) {
           if (!regex.test(line)) continue;
           lines.push(`${shown}:${index + 1}: ${line.length > 300 ? `${line.slice(0, 300)}…` : line}`);
@@ -68,32 +86,36 @@ function grepTool(folder: WorkFolder): ToolDefinition {
   } as ToolDefinition;
 }
 
-export function createTools(folder: WorkFolder): ToolDefinition[] {
+export function createTools(folders: Folders, extra: ToolDefinition[] = []): ToolDefinition[] {
+  const folder = folders.work;
   const root = folder.root;
+  const of = (file: string) => folders.of(file);
+  const readAny = { readFile: (file: string) => of(file).readFile(file), access: async (file: string) => void (await of(file).readFile(file)) };
   const read = { readFile: (file: string) => folder.readFile(file), access: async (file: string) => void (await folder.readFile(file)) };
   return [
-    createReadToolDefinition(root, { autoResizeImages: false, operations: { ...read, detectImageMimeType: async () => null } }),
+    createReadToolDefinition(root, { autoResizeImages: false, operations: { ...readAny, detectImageMimeType: async () => null } }),
     createWriteToolDefinition(root, {
       operations: { writeFile: (file, content) => folder.writeFile(file, content), mkdir: (dir) => folder.mkdir(dir) },
     }),
     createEditToolDefinition(root, { operations: { ...read, writeFile: (file, content) => folder.writeFile(file, content) } }),
     createLsToolDefinition(root, {
       operations: {
-        exists: (file) => folder.exists(file),
+        exists: (file) => of(file).exists(file),
         stat: async (file) => {
-          const directory = await folder.isDirectory(file);
+          const directory = await of(file).isDirectory(file);
           return { isDirectory: () => directory };
         },
-        readdir: (dir) => folder.readdir(dir),
+        readdir: (dir) => of(dir).readdir(dir),
       },
     }),
     createFindToolDefinition(root, {
       operations: {
-        exists: (file) => folder.exists(file),
+        exists: (file) => of(file).exists(file),
         glob: async (pattern, cwd, { ignore, limit }) =>
-          (await folder.walk(cwd, 20000)).filter((file) => matches(file, pattern) && !ignore.some((skip) => path.matchesGlob(file, skip))).slice(0, limit),
+          (await of(cwd).walk(cwd, 20000)).filter((file) => matches(file, pattern) && !ignore.some((skip) => path.matchesGlob(file, skip))).slice(0, limit),
       },
     }),
-    grepTool(folder),
+    grepTool(folders),
+    ...extra,
   ] as ToolDefinition[];
 }

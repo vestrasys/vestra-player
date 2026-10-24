@@ -116,6 +116,8 @@ export interface AiSettings {
    * whose saved key cannot be read must not be called without it.
    */
   savedKeys?: Record<string, boolean>;
+  /** The user's GitHub name: the id prefix of new plugins (unset: local.). */
+  owner?: string;
 }
 
 export const DEFAULT_SETTINGS: AiSettings = { provider: "anthropic", models: {}, baseUrls: {}, lastSession: null, migrateKeys: false, savedKeys: {} };
@@ -133,7 +135,8 @@ export function validSettings(value: unknown): value is AiSettings {
     record(v.models) &&
     (record(v.baseUrls) || typeof v.baseUrl === "string") &&
     (v.lastSession === null || v.lastSession === undefined || typeof v.lastSession === "string") &&
-    (v.savedKeys === undefined || (!!v.savedKeys && typeof v.savedKeys === "object"))
+    (v.savedKeys === undefined || (!!v.savedKeys && typeof v.savedKeys === "object")) &&
+    (v.owner === undefined || typeof v.owner === "string")
   );
 }
 

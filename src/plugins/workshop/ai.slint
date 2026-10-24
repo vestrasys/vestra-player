@@ -1,6 +1,6 @@
 // Vestra Player AI: session sidebar (220 px) | conversation. Assistant
 // messages are Markdown (one document per row, `body`); the rest is text.
-import { ListView, TextEdit } from "std-widgets.slint";
+import { ComboBox, ListView, TextEdit } from "std-widgets.slint";
 import { MarkdownBlock, MarkdownBlocks } from "@vestra/markdown.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
@@ -187,6 +187,19 @@ export component AiWindow inherits Window {
     in property <bool> has-folder;
     in property <bool> can-retry;
     in-out property <string> draft;
+    // The result card: a plugin project of this session.
+    in property <bool> has-project;
+    // "<name> · <id>" per project, newest first; the card shows project-index.
+    in property <[string]> projects;
+    in-out property <int> project-index;
+    in property <string> project-title;
+    // What the last card action (or the agent's trial/install) did.
+    in property <string> card-status;
+    in property <bool> card-busy;
+    // A trial runs: 「停止试载」 instead of 「试载」.
+    in property <bool> trial-active;
+    // Installed in this run: 「回退」 undoes it.
+    in property <bool> can-rollback;
 
     callback send(string);
     callback stop();
@@ -201,6 +214,14 @@ export component AiWindow inherits Window {
     callback open-folder();
     callback open-pi();
     callback draft-changed(string);
+    callback choose-project(int);
+    callback trial();
+    callback stop-trial();
+    callback install();
+    callback rollback();
+    callback export-vxp();
+    callback export-source();
+    callback open-project();
 
     private property <bool> can-send: root.configured && !root.busy && !root.blocked;
     // Follow new text unless the user scrolled up.
@@ -342,6 +363,62 @@ export component AiWindow inherits Window {
                     retry => { root.retry(); }
                     open-settings => { root.open-settings(); }
                 }
+            }
+
+            // ---- result card: the session's plugin and what can be done with it
+            if root.has-project: VerticalLayout {
+              vertical-stretch: 0;
+              padding-left: 12px;
+              padding-right: 12px;
+              padding-top: 6px;
+              Rectangle {
+                border-width: 1px;
+                border-color: Theme.line;
+                border-radius: Theme.radius-panel;
+                background: Theme.bg-list;
+                VerticalLayout {
+                    padding: 8px;
+                    spacing: 6px;
+                    HorizontalLayout {
+                        spacing: 8px;
+                        height: Theme.input-height;
+                        Text {
+                            text: "插件：" + root.project-title;
+                            color: Theme.text;
+                            font-size: Theme.font-body;
+                            vertical-alignment: center;
+                            overflow: elide;
+                            horizontal-stretch: 1;
+                        }
+                        if root.projects.length > 1: ComboBox {
+                            width: 180px;
+                            height: Theme.input-height;
+                            horizontal-stretch: 0;
+                            model: root.projects;
+                            current-index <=> root.project-index;
+                            selected => { root.choose-project(self.current-index); }
+                        }
+                    }
+                    HorizontalLayout {
+                        alignment: start;
+                        spacing: 6px;
+                        height: Theme.button-small-height;
+                        if !root.trial-active: Button { small: true; width: 52px; text: "试载"; enabled: !root.card-busy; clicked => { root.trial(); } }
+                        if root.trial-active: Button { small: true; width: 72px; text: "停止试载"; enabled: !root.card-busy; clicked => { root.stop-trial(); } }
+                        Button { small: true; width: 52px; text: "安装"; enabled: !root.card-busy; clicked => { root.install(); } }
+                        if root.can-rollback: Button { small: true; width: 52px; text: "回退"; enabled: !root.card-busy; clicked => { root.rollback(); } }
+                        Button { small: true; width: 80px; text: "导出 .vxp"; enabled: !root.card-busy; clicked => { root.export-vxp(); } }
+                        Button { small: true; width: 96px; text: "导出源码 zip"; enabled: !root.card-busy; clicked => { root.export-source(); } }
+                        Button { small: true; width: 72px; text: "打开文件夹"; clicked => { root.open-project(); } }
+                    }
+                    if root.card-status != "": Text {
+                        text: root.card-status;
+                        color: Theme.text-dim;
+                        font-size: Theme.font-body;
+                        wrap: word-wrap;
+                    }
+                }
+              }
             }
 
             // ---- composer: anchored at the bottom, its own height only
