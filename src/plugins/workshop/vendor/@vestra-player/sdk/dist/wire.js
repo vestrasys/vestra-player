@@ -258,16 +258,6 @@ export function createWire(transport) {
             validateArchive: (file) => transport.request("packages.validateArchive", {
                 file,
             }),
-            /** `requestId` recovers a lost first reply in this owner session. */
-            trial: (token, requestId) => transport.request("packages.trial", {
-                token,
-                requestId,
-            }),
-            trialStateByRequest: (requestId) => transport.request("packages.trialStateByRequest", {
-                requestId,
-            }),
-            trialState: (trialId) => transport.request("packages.trialState", { trialId }),
-            stopTrial: (trialId) => transport.request("packages.stopTrial", { trialId }),
             installed: (id) => transport.request("packages.installed", { id }),
             /** `source` and `replace` are sent only when given (player 0.2.0). */
             install: (token, expectedRevision, requestId, options = {}) => transport.request("packages.install", {

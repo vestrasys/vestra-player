@@ -78,6 +78,9 @@ function targetOf(args: unknown): string {
   const p = typeof value.path === "string" ? value.path : "";
   const root = p && docsRoots.find((r) => p === r || p.startsWith(r + path.sep) || p.startsWith(r + "/"));
   if (root) return `参考资料/${path.basename(root)}${p.slice(root.length).split(path.sep).join("/")}`;
+  // The short name, sdk/… (see Folders).
+  const short = p.replace(/^@/, "").replace(/^\.\//, "");
+  if (docsRoots.some((r) => short === path.basename(r) || short.startsWith(`${path.basename(r)}/`))) return `参考资料/${short}`;
   for (const key of ["path", "pattern", "file", "id", "name"]) if (typeof value[key] === "string") return value[key] as string;
   return "";
 }

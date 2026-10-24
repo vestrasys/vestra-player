@@ -1,4 +1,4 @@
-/** Package validation, trial loading and install/rollback (`plugins.manage`). */
+/** Package validation and install/rollback (`plugins.manage`). */
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { failure, sleep, uncertain } from "./runtime.js";
@@ -9,51 +9,6 @@ const TERMINAL = [
     "failedDegraded",
     "tooLate",
 ];
-const STARTING = ["preparing", "activating", "starting"];
-class TrialHandle {
-    #scope;
-    #record;
-    #stopped;
-    constructor(scope, record) {
-        this.#scope = scope;
-        this.#record = record;
-        scope.add(this);
-    }
-    get status() {
-        return this.#record.status;
-    }
-    /**
-     * Concurrent calls share one stop; a confirmed stop is final. A failed one
-     * (code `cleanup`: the host did not confirm cleanup) is forgotten, so the
-     * next call sends a new stop to the host.
-     */
-    stop() {
-        const host = this.#scope.runtime.host.packages;
-        if (this.#stopped)
-            return this.#stopped;
-        const stopping = (async () => {
-            this.#record = await host.stopTrial(this.#record.trialId);
-            while (!this.#record.cleanupConfirmed &&
-                this.#record.status !== "stopped" &&
-                this.#record.status !== "failed") {
-                await sleep(250);
-                this.#record = await host.trialState(this.#record.trialId);
-            }
-            if (!this.#record.cleanupConfirmed)
-                throw failure("cleanup", `trial cleanup not confirmed: ${this.#record.status}`);
-        })();
-        this.#stopped = stopping;
-        stopping.catch(() => {
-            if (this.#stopped === stopping)
-                this.#stopped = undefined;
-        });
-        return stopping;
-    }
-    async dispose() {
-        this.#scope.forget(this);
-        await this.stop().catch(() => { });
-    }
-}
 class ChangeHandle {
     #scope;
     #id;
@@ -123,24 +78,6 @@ async function change(scope, submit, id) {
     }
     return new ChangeHandle(scope, operation);
 }
-async function trial(scope, runtime, token) {
-    const host = runtime.host.packages;
-    const requestId = randomUUID();
-    let record;
-    try {
-        record = await host.trial(token, requestId);
-    }
-    catch (error) {
-        if (!uncertain(error))
-            throw error;
-        record = await host.trialStateByRequest(requestId);
-    }
-    while (STARTING.includes(record.status)) {
-        await sleep(250);
-        record = await host.trialState(record.trialId);
-    }
-    return new TrialHandle(scope, record);
-}
 function installOptions(options) {
     if (options === undefined)
         return {};
@@ -171,7 +108,6 @@ function candidate(scope, directory, checked) {
         digest: checked.digest,
         manifest: checked.manifest,
         checks: checked.checks,
-        trial: () => trial(scope, runtime, checked.token),
         install: async (options) => {
             const wire = installOptions(options);
             return change(scope, (requestId, revision) => runtime.host.packages.install(checked.token, revision, requestId, wire), checked.manifest.id);

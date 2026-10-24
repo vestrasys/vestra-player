@@ -2,7 +2,9 @@
 // packages.validateArchive (the player's checks, Slint included) → an
 // install the user confirmed, reversible with 回退 (rollback, or uninstall
 // after a first install). Used by the agent's install_plugin and by the
-// result card's buttons.
+// result card's buttons. After an install, bindings the player ignored
+// because another command holds the key (bindings.list, `shadowed`) are
+// reported to the user and the agent.
 import type { PackageCandidate, PackageChange, Plugin, PluginError } from "@vestra-player/sdk";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -64,6 +66,35 @@ export class Delivering {
     } catch (error) {
       // Manifest, package and Slint problems the player found.
       return { failure: { ok: false, text: `播放器校验没有通过（${code(error) ?? "error"}）：${errorText(error)}` } };
+    }
+  }
+
+  /**
+   * Inputs of `id`'s commands that another command holds, as text: the
+   * player ignores them silently (its log only). Read once the plugin has
+   * left "starting"; [] when it is not running or the list is unavailable.
+   */
+  private async shadowed(id: string): Promise<string[]> {
+    try {
+      for (let wait = 0; wait < 25; wait++) {
+        const entry = (await this.plugin.packages.list()).find((p) => p.id === id);
+        if (entry?.state !== "starting") {
+          if (entry?.state !== "running") return [];
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+      const { commands } = await this.plugin.bindings.list();
+      const title = (ref: { plugin: string; command: string }) => {
+        const holder = commands.find((c) => c.plugin === ref.plugin && c.command === ref.command);
+        const owner = ref.plugin === "host" ? "播放器" : ref.plugin;
+        return `${owner}「${holder?.title || ref.command}」`;
+      };
+      return commands
+        .filter((c) => c.plugin === id)
+        .flatMap((c) => c.shadowed.map((s) => `${s.input}（${c.title}）已被${title(s.by)}占用`));
+    } catch {
+      return [];
     }
   }
 
@@ -130,9 +161,20 @@ export class Delivering {
         change = await candidate.install({ ...options, replace: true });
       }
       const { ok, text } = await this.follow(change, `安装 ${name} ${manifest.version}`);
-      if (ok) this.installed.add(id);
-      this.say(ok ? `已安装 ${name} ${manifest.version}，可以点「回退（撤销安装）」。` : text);
-      return { ok, text: ok ? `${text}。插件已在播放器里启用；用户可以在 AI 窗口点「回退（撤销安装）」回到安装前的状态。` : text };
+      if (!ok) {
+        this.say(text);
+        return { ok, text };
+      }
+      this.installed.add(id);
+      const shadowed = await this.shadowed(id);
+      const keys = shadowed.length ? `快捷键没有生效：${shadowed.join("；")}。` : "";
+      this.say(`已安装 ${name} ${manifest.version}，可以点「回退（撤销安装）」。${keys}`);
+      return {
+        ok,
+        text:
+          `${text}。插件已在播放器里启用；用户可以在 AI 窗口点「回退（撤销安装）」回到安装前的状态。` +
+          (keys ? `\n${keys}播放器忽略了这些按键（冲突时先用户设置，再播放器和先加载的插件）。告诉用户，并建议换成没有被占用的按键后重新安装。` : ""),
+      };
     });
   }
 

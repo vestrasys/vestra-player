@@ -73,8 +73,8 @@ export interface Disposable {
  * | `timeout` | A time limit ran out (`openStream` start-up, `tools.run`, `system.*` after 10 s). |
  * | `stream`, `device` | `openStream`: the producer failed / the audio device is not ready. |
  * | `backend-uncertain` | The player's backend blocked a filter stage; call `retry()`. |
- * | `cleanup` | {@link PackageTrial.stop} could not confirm cleanup; call it again. |
  * | `limit` | A player-wide limit was reached (for example the number of commands). |
+ * | `reserved` | {@link Packages.validate}, {@link PackageCandidate.install}: the id is `vestra` or starts with `vestra.` (any case), which only the player's built-in plugins use (player 0.4.1). |
  * | `versionMismatch` | The package needs a newer player (`minPlayerVersion`) or another `apiVersion`. |
  * | `ui-prepare` | The player could not prepare a mounted panel or a settings page (its Slint file does not compile, a bound property is not declared, or another plugin's panel holds the slot); `message` has the diagnostics. |
  * | `ui` | The player could not apply a property to a tool window or a settings page, or could not build the Options window (a property the Slint file does not declare, a value of the wrong type); `message` has Slint's reason. |
@@ -194,7 +194,7 @@ export interface Scope extends Disposable {
     readonly media: MediaCapture;
     /** Page-URL to stream-URL resolvers (`source.resolve`). */
     readonly resolvers: Resolvers;
-    /** The installed plugins; validation, trials, installs (`plugins.manage` for changes). */
+    /** The installed plugins; validation, installs (`plugins.manage` for changes). */
     readonly packages: Packages;
     /** On-screen messages over the video (`ui.osd`). */
     readonly osd: Osd;
@@ -319,8 +319,7 @@ export interface Plugin extends Scope {
     readonly id: string;
     /**
      * A writable directory for this plugin's own files (settings, remembered
-     * folders). Kept across restarts, disabling and upgrades; a trial gets a
-     * temporary one. Write files atomically: to a temporary name, then rename.
+     * folders). Kept across restarts, disabling and upgrades. Write files atomically: to a temporary name, then rename.
      * Throws `unavailable` when the player provided none.
      *
      * Location: `~/Library/Application Support/Vestra/plugin-data/<id>/` on
@@ -3001,9 +3000,15 @@ export interface Stream extends Disposable {
     /**
      * The stream stopped for a reason outside this plugin: `error` is null when
      * another source replaced it or the user closed it, otherwise the failure
-     * (`stream`, `invalid` for a bad frame, …). Not called when the plugin
-     * itself stops it (`stop()`, `dispose()`, deactivation): the promise of
-     * `stop()` is that notification.
+     * (`stream` with the player's text, `invalid` for a bad frame, …). Not
+     * called when the plugin itself stops it (`stop()`, `dispose()`,
+     * deactivation): the promise of `stop()` is that notification.
+     *
+     * The player retires a stream's producer as soon as it is replaced or
+     * closed; the SDK reads the player's state to tell that from a failure
+     * (before 1.5.7 a replaced or closed stream could get `unavailable`
+     * "producer absent"). Without `playback.read` a failure the SDK has not
+     * seen yet is reported as null.
      */
     onStop(listener: (error: PluginError | null) => void): Disposable;
     /**
@@ -3146,7 +3151,8 @@ export interface Player {
      * activation, pausing and acknowledgement. Frames travel over a local
      * connection the SDK sets up: a Unix socket on macOS and Linux, loopback
      * TCP with a token on Windows. Rejects with a {@link StreamStartError}
-     * (`timeout`), `stream` or `device`.
+     * (`timeout`), `stream`, `device`, or `replaced` when another source
+     * replaced it (or it was closed) before it ran.
      *
      * @example
      * ```ts
@@ -3936,6 +3942,14 @@ export interface FileResolverOptions {
 /**
  * What a file resolver returns: a stream, with the same frame contract as
  * {@link StreamOptions} (size limits, `frame()` on the audio clock).
+ *
+ * After `resolve` returns, the SDK starts the stream while the open waits.
+ * If that fails, the open fails with the player's words instead of the
+ * SDK's (the detail goes to the log): `device` "音频输出设备不可用",
+ * `timeout` "启动超时", `busy` "播放器正忙，请稍后重试", other start-up
+ * failures "无法启动播放". An error thrown by `frame()` keeps its message.
+ * To give your own text for a file you can tell is unusable (a bad header),
+ * check it in `resolve` and throw there.
  */
 export interface ResolvedStream {
     /** Always `"stream"`. */
@@ -3992,6 +4006,47 @@ export interface Resolvers {
      * error's message.
      */
     add(options: ResolverOptions): Resolver;
+    /**
+     * The extensions some plugin's file resolver handles (SDK 1.5.8, player
+     * 0.4.2): lower case, without the dot, sorted, each once; not who
+     * registered them. Reading needs no capability; `[]` from older players.
+     * Without `events` it is the list from when the plugin first read it.
+     * Use it to accept such files beside the player's own media types, for
+     * example in a playlist's drop or folder scan.
+     *
+     * @example
+     * ```ts
+     * const MEDIA = ["mp4", "mkv", "mp3"];
+     * const accepted = (path: string) => {
+     *   const extension = path.split(".").pop()?.toLowerCase() ?? "";
+     *   return MEDIA.includes(extension) || plugin.resolvers.fileTypes.includes(extension);
+     * };
+     * ```
+     *
+     * @capability None.
+     * @player 0.4.2
+     * @since 1.5.8
+     */
+    readonly fileTypes: readonly string[];
+    /**
+     * {@link Resolvers.fileTypes} changed: a file resolver was added, or its
+     * plugin stopped. Needs `events`; without it the listener never fires.
+     *
+     * @param listener - Receives the new list.
+     * @returns A handle that removes the listener.
+     *
+     * @example
+     * ```ts
+     * plugin.resolvers.onFileTypesChange((types) => {
+     *   void plugin.osd.show(`Also accepted: ${types.join(", ")}`);
+     * });
+     * ```
+     *
+     * @capability `events`
+     * @player 0.4.2
+     * @since 1.5.8
+     */
+    onFileTypesChange(listener: (types: string[]) => void): Disposable;
 }
 /**
  * The manifest of a package, as validated. The display fields and
@@ -4083,26 +4138,15 @@ export interface PackageCandidate {
     readonly manifest: PackageManifest;
     /** The checks the player ran. */
     readonly checks: string[];
-    /** Load it temporarily alongside the installed plugins. */
-    trial(): Promise<PackageTrial>;
     /**
      * Install it. The same source upgrades the installed plugin (its data
      * stays); another source fails with `conflict` unless `replace` is set;
      * a built-in id fails with `unsupported` (built-ins update with the
-     * player).
+     * player). A reserved id (`vestra` or `vestra.*`, which every built-in
+     * uses) fails with `reserved` (player 0.4.1; already when validated), as
+     * only the player installs built-in plugins.
      */
     install(options?: InstallOptions): Promise<PackageChange>;
-}
-/** A trial load of a package. Disposing it stops the trial and waits for cleanup. */
-export interface PackageTrial extends Disposable {
-    /** The trial's status as the player reports it. */
-    readonly status: string;
-    /**
-     * Stop and wait until the host confirmed cleanup. Rejects with code
-     * `cleanup` when the host stopped the trial without confirming cleanup;
-     * calling `stop()` again then asks the host again.
-     */
-    stop(): Promise<void>;
 }
 /** The progress of an install, rollback or uninstall. */
 export type PackageChangeStatus = "preparing" | "activating" | "restoring" | "committed" | "cancelled" | "failed" | "failedDegraded" | "tooLate";
@@ -4128,8 +4172,8 @@ export interface PluginInfo {
     id: string;
     /** Version, `null` when unknown. */
     version: string | null;
-    /** From the install library, a `--plugin` development load, or a trial. */
-    origin: "installed" | "development" | "trial";
+    /** From the install library, or a `--plugin` development load. */
+    origin: "installed" | "development";
     /** Run state. */
     state: "starting" | "running" | "disabled" | "failed" | "stopped";
     /** Why it failed (`state: "failed"`). */
@@ -4145,7 +4189,7 @@ export interface PluginInfo {
      * replaced. `false` from players before 0.2.0.
      */
     builtin: boolean;
-    /** Where an installed plugin came from; `null` for development loads and trials. */
+    /** Where an installed plugin came from; `null` for development loads. */
     source: PackageSource | null;
     /**
      * Its data directory (`plugin.dataDirectory` of that plugin); `null` when
@@ -4197,12 +4241,21 @@ export interface PluginWarning {
  * ```
  */
 export interface Packages {
-    /** Validate a package directory (`plugins.manage`). */
+    /**
+     * Validate a package directory (`plugins.manage`). A package whose id is
+     * reserved for the built-in plugins (`vestra` or `vestra.*`) fails with
+     * `reserved` (player 0.4.1).
+     *
+     * The player keeps the 32 most recent candidates of all plugins; an
+     * older one's `install` fails with `stale` (validate again). Before
+     * player 0.4.2 the 33rd validation of a run failed with `busy` instead.
+     */
     validate(directory: string): Promise<PackageCandidate>;
     /**
      * Validate a `.vxp` package file (`plugins.manage`, player 0.2.0): the
      * same checks as {@link Packages.validate} after unpacking. Check the
-     * file's sha256 yourself before calling when you know it.
+     * file's sha256 yourself before calling when you know it. A reserved id
+     * fails with `reserved`, as in {@link Packages.validate}.
      */
     validateArchive(file: string): Promise<PackageCandidate>;
     /** Restore a plugin's previous version (`plugins.manage`). */
@@ -4214,7 +4267,7 @@ export interface Packages {
     /**
      * Stop or start a plugin (`plugins.manage`). An installed plugin stays
      * disabled across launches; a development load only for this run.
-     * `invalid` to disable oneself, `unsupported` for a trial, `missing` unknown.
+     * `invalid` to disable oneself, `missing` unknown.
      * `busy` while it is being installed.
      */
     setEnabled(id: string, enabled: boolean): Promise<void>;
@@ -4222,7 +4275,7 @@ export interface Packages {
      * Remove an installed plugin (`plugins.manage`); `removeData` also deletes
      * its data directory, otherwise reinstalling it from the same source
      * reconnects to its data. Its user bindings stay (as orphans).
-     * `unsupported` for built-ins, development loads and trials, `missing`
+     * `unsupported` for built-ins and development loads, `missing`
      * unknown, `invalid` for oneself.
      */
     uninstall(id: string, options?: {

@@ -18,8 +18,7 @@
  */
 export const COMMAND_LIMITS = {
     /**
-     * Commands one plugin instance may have at the same time (160). A trial
-     * package is its own instance.
+     * Commands one plugin instance may have at the same time (160).
      */
     perPlugin: 160,
     /** Commands of every plugin plus the player's own, together (1024). */

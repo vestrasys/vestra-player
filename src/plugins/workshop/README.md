@@ -32,7 +32,7 @@
 
 对话里有插件项目时，输入框上方出现插件卡片：
 
-- 「安装」：安装进播放器（来源记为 AI 工坊）；同 id 的插件来自别处时先问是否替换。之后可以点「回退（撤销安装）」（有旧版本时回到旧版本，第一次安装则卸载）。
+- 「安装」：安装进播放器（来源记为 AI 工坊）；同 id 的插件来自别处时先问是否替换。之后可以点「回退（撤销安装）」（有旧版本时回到旧版本，第一次安装则卸载）。装好后如果插件的快捷键被播放器或其它插件占用（播放器会忽略这些按键），卡片和 AI 都会得到提示；为此插件读取快捷键表（`bindings.manage`，只读取，不改任何按键）。
 - 「导出 .vxp」：打包后另存，可以分享。
 - 「导出源码 zip」：完整的插件项目，可以直接建成你自己的 GitHub 仓库：README、CHANGELOG、测试、tsconfig、带 SDK 依赖的 package.json、GitHub Actions 工作流（check、test、pack），以及待替换的 LICENSE 占位文件；不含 node_modules 和 dist。
 - 「打开文件夹」：插件项目的文件夹。
@@ -41,12 +41,13 @@
 
 - **key 的保存**：只保存在系统钥匙串（macOS）或凭据管理器（Windows）里，不写入任何文件、日志或对话记录。调用模型的费用由你的服务商账户承担。
 - **读取 key**：打开 AI 窗口时才读取，读过一次就记在内存里。系统可能会弹出授权对话框（播放器更新后常见）；拒绝或读取失败时，窗口顶部会提示「无法读取钥匙串中的 key，请在设置中重新保存」，其它功能不受影响。
-- **AI 能做什么**：只能读写当前对话的工作文件夹（`read`、`write`、`edit`、`ls`、`find`、`grep`、`delete`；`delete` 只删文件或空文件夹，用来清掉调试文件），另外可以读插件 SDK 的参考资料（只读）；不能运行命令，不能访问其它文件，也不能使用符号链接或以「.」开头的文件名。AI 在一个单独的受限进程里运行。插件工具由插件进程按固定参数执行。
+- **AI 能做什么**：只能读写当前对话的工作文件夹（`read`、`write`、`edit`、`ls`、`find`、`grep`、`delete`；`delete` 只删文件或空文件夹，用来清掉调试文件），另外可以读插件 SDK 的参考资料（只读，短路径 `sdk/…`，例如 `sdk/llms.txt`；模型抄长绝对路径容易抄错）；不能运行命令，不能访问其它文件，也不能使用符号链接或以「.」开头的文件名。AI 在一个单独的受限进程里运行。插件工具由插件进程按固定参数执行。测试和类型检查（typecheck）在 Node 的权限模式（`--permission`）下运行：只能读插件项目、SDK 和数据目录里的 SDK 副本，只能写临时文件夹，不能联网；测试不能启动子进程，类型检查可以，但只用来启动 `tsc`，`tsc` 继承同样的限制。check 和打包暂时不在权限模式下（SDK 命令行复制文件用的 `fs.cp` 在权限模式下会读目标的所有上级目录）。
 - **对话保存在哪里**：插件数据目录下的 `sessions/<对话>/`：`meta.json`、pi 的对话记录（`.jsonl`）、工作文件夹 `work/`（每个插件一个 `work/<id>/`）和打包结果 `dist/`。数据目录的 `node_modules/` 是插件 SDK 的一份副本，供类型检查和测试使用。
 - 同一时间只有一个对话在生成。
+- 一轮回复里第一次工具调用之前的那一行开场白（「I'll start by reading…」）不显示：模型常用英文写它，工具状态行已经说明在做什么。对话记录里仍保留原文。
 - AI 的回复按 Markdown 显示（标题、列表、表格、代码块等），代码块右上角可以「复制」，链接用浏览器打开。回复里的网络图片不会下载，只显示替代文字。很长的对话只显示最近的消息，完整记录在会话文件夹里。
 - 服务商列表只有按量付费的 API；编程套餐、Token Plan 等订阅套餐不在列表里，需要时用「自定义 · OpenAI 格式」或「自定义 · Anthropic 格式」接入。
 - 需要 Vestra Player 0.4.1 或更新版本。
-- 插件 SDK（`vendor/@vestra-player/sdk`，含 `vestra-plugin` 命令行）、TypeScript 和 `@types/node` 随插件一起提供，与播放器使用的 SDK 版本相同（`npm run vendor:sdk` 更新，`tests/vendor-sdk.mjs`）。SDK 自带 `llms.txt` 之前，参考资料 `knowledge/` 由同一脚本从 SDK 的 README、.d.ts 和示例生成。
+- 插件 SDK（`vendor/@vestra-player/sdk`，含 `vestra-plugin` 命令行）、TypeScript 和 `@types/node` 随插件一起提供，与播放器使用的 SDK 版本相同（`npm run vendor:sdk` 更新，`tests/vendor-sdk.mjs`）。AI 读的参考资料是 SDK 包自带的 `llms.txt` 和 `llms-full.txt`。
 - 评估：`tests/eval/` 有 6 道固定题目，`npm run eval` 用真实模型跑（会花你服务商账户的钱，只在改提示词或工具后手动跑），见 `tests/eval/run.mjs` 开头的说明。
-- 第三方组件的许可证见 `licenses/`，pi 的 logo 出处见 `licenses/pi-logo/NOTICE.md`。
+- 第三方组件的许可证见 `licenses/`（随插件包一起发布），pi 的 logo 出处见 `licenses/pi-logo/NOTICE.md`；随插件提供的 SDK、TypeScript、`@types/node`、`undici-types` 的许可证在 `vendor/` 下各自的文件夹里（`LICENSE`、`LICENSE.txt`、`ThirdPartyNoticeText.txt`）。

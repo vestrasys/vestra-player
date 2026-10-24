@@ -774,6 +774,43 @@ export class TestHost {
      */
     otherResolvers = [];
     /**
+     * What `plugin.resolvers.fileTypes` reports: the extensions of this
+     * plugin's file resolvers and of {@link TestHost.otherResolvers}, sorted,
+     * each once.
+     */
+    fileTypes() {
+        const types = new Set();
+        for (const declaration of [
+            ...this.resolvers.values(),
+            ...this.otherResolvers,
+        ])
+            for (const type of declaration.extensions ?? [])
+                types.add(type);
+        return [...types].sort();
+    }
+    #sentTypes = "[]";
+    /**
+     * Push `resolvers.fileTypes` when {@link TestHost.fileTypes} changed:
+     * called after this plugin's resolvers come and go; call it yourself
+     * after changing {@link TestHost.otherResolvers} (another plugin started
+     * or stopped).
+     *
+     * @example
+     * ```ts
+     * host.otherResolvers.push({ owner: "vestra.nes", extensions: ["nes"] });
+     * host.updateFileTypes();
+     * await host.settle();
+     * assert.deepEqual(plugin.resolvers.fileTypes, ["nes"]);
+     * ```
+     */
+    updateFileTypes() {
+        const types = this.fileTypes();
+        if (JSON.stringify(types) === this.#sentTypes)
+            return;
+        this.#sentTypes = JSON.stringify(types);
+        this.emit("resolvers.fileTypes", { fileTypes: types });
+    }
+    /**
      * File opens waiting for this plugin's file resolver (`extensions`), by
      * request id: the path and how it was opened. Opening a matching path
      * (`player.open`, {@link TestHost.openElsewhere}) sends
@@ -1361,6 +1398,7 @@ export class TestHost {
             videoArea: { ...this.mainWindow.videoArea },
             pictureInPicture: { ...this.mainWindow.pictureInPicture },
             appearance: this.appearance,
+            fileTypes: this.fileTypes(),
         };
     }
     /**
@@ -1384,6 +1422,31 @@ export class TestHost {
         // A file this plugin's file resolver claims waits for its answer.
         if (this.#resolve(source, false) === null)
             this.setSource({ phase });
+    }
+    /**
+     * Simulate a generated stream failing in the player (its audio device
+     * lost, its frame connection broken), like the player: the source fails
+     * with `message` (`phase: "error"`) and the producer is retired at once.
+     * The stream's `onStop` listeners get a `stream` error with `message`.
+     *
+     * @param producerId - The producer, from {@link TestHost.producers}.
+     * @param message - The player's failure text.
+     *
+     * @example
+     * ```ts
+     * const [producer] = host.producers.values();
+     * host.failStream(producer.id, "producer transport closed");
+     * ```
+     */
+    failStream(producerId, message) {
+        const producer = this.producers.get(producerId);
+        if (!producer || !this.#current(producerId))
+            throw new Error(`producer ${producerId} is not the player's source`);
+        this.setSource({
+            phase: "error",
+            terminalReason: { failed: message },
+        });
+        producer.retired = true;
     }
     /**
      * Press a binding like the host's table would: panel-focus bindings first
@@ -1721,6 +1784,10 @@ export class TestHost {
             if (control.kind === "rate")
                 next.rate = Number(control.rate);
         }
+        // Like the player: the selected producer is retired as soon as another
+        // source replaces it or the source closes.
+        if (["open", "openProvider", "close"].includes(String(intent.kind)))
+            this.#retireSelected(intent.kind === "openProvider" ? Number(intent.producerId) : null);
         if (intent.kind === "openProvider")
             this.#selected = Number(intent.producerId);
         if (intent.kind === "open" || intent.kind === "close")
@@ -1747,6 +1814,14 @@ export class TestHost {
                 return id;
         }
         return null;
+    }
+    /** Retire the producer that is the player's source, unless it is `keep`. */
+    #retireSelected(keep) {
+        for (const producer of this.producers.values())
+            if (producer.id !== keep &&
+                !producer.retired &&
+                this.#current(producer.id))
+                producer.retired = true;
     }
     /** Whether producer `id` is the player's source. */
     #current(id) {
@@ -1853,9 +1928,10 @@ export class TestHost {
         const producer = this.producers.get(Number(result.producerId));
         if (result.kind !== "stream")
             fail("invalid resolved stream descriptor");
-        if (!producer || producer.released)
+        if (!producer || producer.released || producer.retired)
             fail("unavailable: producer absent");
         // Like openProvider, but the source keeps the path and `startPaused`.
+        this.#retireSelected(producer.id);
         this.#selected = producer.id;
         producer.active = true;
         producer.acknowledged = false;
@@ -2645,8 +2721,6 @@ export class TestHost {
             const entry = this.packages.find((each) => each.id === id);
             if (!entry)
                 throw new HostError("missing", `no plugin ${id}`);
-            if (entry.origin === "trial")
-                throw new HostError("unsupported", "a trial is stopped with its handle");
             this.packageCalls.push({
                 method: "setEnabled",
                 id,
@@ -2906,10 +2980,14 @@ export class TestHost {
             return { jobId: job.jobId, cancel: "requested" };
         },
         "jobs.operation": () => ({ status: "unknown" }),
-        "sourceResolvers.register": (p) => void this.#register(p),
+        "sourceResolvers.register": (p) => {
+            this.#register(p);
+            this.updateFileTypes();
+        },
         "sourceResolvers.unregister": (p) => {
             this.resolvers.delete(String(p.id));
             this.#cancelResolutions();
+            this.updateFileTypes();
         },
         "sourceResolvers.respond": (p) => this.#respond(p),
         "producer.prepare": async () => {
@@ -2922,6 +3000,7 @@ export class TestHost {
                 receivedFrames: 0,
                 videoFrames: 0,
                 released: false,
+                retired: false,
                 droppedWhileSelected: false,
                 path,
                 admitted: !tcp,
@@ -2988,6 +3067,8 @@ export class TestHost {
             const producer = this.producers.get(Number(p.producerId));
             if (!producer)
                 throw new HostError("missing", "producer");
+            if (producer.retired || producer.released)
+                throw new HostError("unavailable", "producer absent");
             const current = this.#current(producer.id);
             return {
                 input: null,
@@ -3017,6 +3098,8 @@ export class TestHost {
             const producer = this.producers.get(Number(control.producerId));
             if (!producer)
                 throw new HostError("missing", "producer");
+            if (producer.retired || producer.released)
+                throw new HostError("stale", "producer control changed");
             producer.pending = null;
             producer.acknowledged = true;
             producer.epoch = Number(control.epoch);

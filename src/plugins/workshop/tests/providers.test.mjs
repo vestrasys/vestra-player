@@ -62,7 +62,8 @@ test("「自定义 · Anthropic 格式」: listed model, streamed reply and a to
   assert.equal(ai.props["model-text"], "自定义 · Anthropic 格式 · mock-1");
   await ai.ask("写 a.md");
   assert.equal(ai.kinds(), "user,tools,assistant");
-  assert.equal(ai.rows()[2].text, "好的\n\n写好了");
+  // 「好的」 before the first tool call is an opening line, not shown (Chat.opening).
+  assert.equal(ai.rows()[2].text, "写好了");
   const chat = mock.requests.filter((r) => r.method === "POST");
   assert.equal(new URL(chat[0].url, "http://x").pathname, "/v1/messages");
   assert.equal(chat[0].headers["x-api-key"], KEY);
