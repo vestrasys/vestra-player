@@ -67,7 +67,7 @@ interface Disposable { dispose(): Promise<void> }
 | `apiVersion` | 固定 `vestra/1` |
 | `entry` | 包内相对路径；开发时可为 `.ts`，构建后为 `.js` |
 | `capabilities` | 只能是下表中的值，不重复 |
-| `minPlayerVersion` | 可选，`x.y.z`：能加载它的最低播放器版本（播放器版本即 `plugin.app.version`，只比较三段数字）。更旧的播放器以 `versionMismatch`（「requires Vestra Player ≥ x.y.z」）拒绝；播放器先读这一项再做严格解析，所以写了新字段的包在旧播放器上报的是版本不够而不是未知字段。用到 SDK 1.1 新增的接口时写 `"0.2.0"`；用到 SDK 1.3 新增的（菜单 id、`Theme.danger`、视频空链）写 `"0.3.0"` |
+| `minPlayerVersion` | 可选，`x.y.z`：能加载它的最低播放器版本（播放器版本即 `plugin.app.version`，只比较三段数字）。更旧的播放器以 `versionMismatch`（「requires Vestra Player ≥ x.y.z」）拒绝；播放器先读这一项再做严格解析，所以写了新字段的包在旧播放器上报的是版本不够而不是未知字段。用到 SDK 1.1 新增的接口时写 `"0.2.0"`；用到 SDK 1.3 新增的（菜单 id、`Theme.danger`、视频空链）写 `"0.3.0"`；用到 SDK 1.5 新增的（`@vestra/icons.slint`、配色 `vestra-light`）写 `"0.4.0"` |
 
 可选的显示字段（播放器 0.2.0；商城与插件管理显示，播放器只校验不使用）：
 
@@ -758,7 +758,8 @@ interface SlotState {
 - 会被插件改值的输入控件用双向绑定（`value <=> root.x`、`checked <=> root.x`）。单向的 `value: root.x` 在用户操作控件后会断开，之后插件改值，控件不会跟着动。属性须为 `in-out`。
 - `in` 属性只能单向绑定时，用 `changed x => { slider.value = root.x; }` 在模型变化时回推。
 - 主题与控件：`import { Theme } from "@vestra/theme.slint";` 提供颜色（由播放器按当前配色下发，§6.8；插件只读，不能给 `Theme` 赋值，硬编码颜色不会随配色变化）（`bg-bar`、`bg-panel`、`text`、`accent`、`playing`、`danger`（错误与危险操作：失败状态、删除按钮；播放器 0.3.0，SDK 1.3）…）、字号（`font-xs` 9px、`font-body` 11px、`font-tab` 12px、`font-title` 13px、`font-mono` 等宽字体名（由播放器按系统设置：macOS Menlo、Windows Consolas、Linux DejaVu Sans Mono；其中的中文按系统字体回退显示））和控件尺寸（`button-height` 21px、`input-height`、`form-row-gap`、`dialog-padding`…），完整列表见 `src/host/ui/vestra/theme.slint`。`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";` 提供紧凑样式的按钮（文字按钮 21px、`small` 18px；`text` 为空时是图标按钮：`icon` 是 Slint `Path` 的路径数据，画在 `icon-width` × `icon-height`（默认 14×12）的 viewbox 里，`stroked: true` 画 1.5px 线而不填充，`checked` 表示开启态；图标按钮的宽高由调用方设置，悬停提示用 `ToolTipArea` 包住：悬停 600ms 显示，指针离开或按下时关闭，下次悬停再显示；只读属性 `showing` 表示提示正在显示）、2px 线滑块（`panel: true` 为面板样式）和悬停提示，以及输入链接组件 `UrlInputRow`（UI-DLG-02：多行输入 + 「打开」「取消」；`in-out property <string> text`、`placeholder`、`confirm-text`（默认「打开」）、`cancel-text`、`enabled`，`callback accepted(string)`（回车或点确定，Shift+回车换行）、`cancelled()`（Esc 或点取消），`focus-input()`、`select-all()` 两个公共函数；不校验地址，校验由插件做；用法见示例 §29）。
-- 所有插件 Slint 都以 `fluent-dark` 风格编译：std-widgets 的控件默认是深色。每个窗口都用系统默认字体，字体里没有的字（例如西文字体里的中文）由 Slint 按字符回退到系统里有这个字的字体，插件不需要自己设字体；插件写的 `default-font-family` / `font-family` 照常生效，缺字同样回退。播放器不内置界面字体。
+- 图标：`import { Icon } from "@vestra/icons.slint";`（播放器 0.4.0，SDK 1.5）：`Icon { name: "play"; color: Theme.text; }` 画播放器自己的 V-Line 图标（圆头 1.5px 线条，不填充），默认大小是图标的绘制框，设 `width`/`height` 可缩放；`Icons.commands(name)`、`Icons.box-width(name)`、`Icons.box-height(name)`、`Icons.line(name)` 给出路径数据，供自己的 `Path` 用。名称与绘制框见[界面规格](../product/ui-spec.md) §2.5。
+- 所有插件 Slint 都以 `fluent-dark` 风格编译：std-widgets 的控件在深色配色下是深色；选浅色配色 `vestra-light` 时，播放器在运行时把 std-widgets 的配色方案（`Palette.color-scheme`）切到浅色，切回时复原（插件不要自己改 `Palette.color-scheme`）。每个窗口都用系统默认字体，字体里没有的字（例如西文字体里的中文）由 Slint 按字符回退到系统里有这个字的字体，插件不需要自己设字体；插件写的 `default-font-family` / `font-family` 照常生效，缺字同样回退。播放器不内置界面字体。
 - 编辑器里要让 `@vestra/...` 导入可解析，给 Slint 语言服务设 `libraryPaths`：`{ "vestra": "<仓库>/src/host/ui/vestra" }`。
 
 ### 6.5 屏幕提示 `plugin.osd`
@@ -773,8 +774,8 @@ interface OsdPanel extends Disposable {
 }
 ```
 
-- 提示：1–200 个字符，换行替换为空格；粗体白字黑描边，左/上边距 10px。字号随视频区高度变化（交互对齐 G-10）：视频区高度的 3%，取整后夹在 12–48px（默认窗口约 18px，1080 高的全屏 32px），描边 `max(1px, 字号 / 16)`。插件停用时已显示的提示照常到时消失。
-- 信息块：位于提示一行之下（`y` = 20 + 提示字号 × 1.25），半透明黑底，字号随提示同比例缩放（提示 16px 时 11px，夹在 9–28px），不接收输入，最多 32 行、4096 字节；多个插件各一块时从上到下排列。`dispose` 或插件停用时移除。第二次调用 `panel()` 抛错。
+- 提示：1–200 个字符，换行替换为空格；白字放在半透明深色圆角底板上，底边一条渐变线，左/上边距 10px（播放器 0.4.0 之前是粗体白字黑描边）。字号随视频区高度变化（交互对齐 G-10）：视频区高度的 3%，取整后夹在 12–48px（默认窗口约 18px，1080 高的全屏 32px），底板内边距与圆角随字号缩放。插件停用时已显示的提示照常到时消失。
+- 信息块：位于提示底板下方 4px，与提示同样的半透明深色圆角底板，字号随提示同比例缩放（提示 16px 时 11px，夹在 9–28px），不接收输入，最多 32 行、4096 字节；多个插件各一块时从上到下排列。`dispose` 或插件停用时移除。第二次调用 `panel()` 抛错。
 - 无界面模式下以 `unavailable` 失败（`panel().set` 的失败交给 `onError`）。
 
 ### 6.6 主窗口 `plugin.window`
@@ -833,11 +834,12 @@ Panel.onDrop(listener: (e: { paths: string[]; at: { x: number; y: number }; modi
 appearance.theme: ThemeId;                                      // 同步只读，不需要能力
 appearance.onChange(listener: (theme: ThemeId) => void): Disposable; // 需要 events
 appearance.set(theme: ThemeId): Promise<void>;                  // 需要 ui.theme；SDK 对其它值抛 invalid
-type ThemeId = "vestra";
+type ThemeId = "vestra" | "vestra-light";
 ```
 
-- 配色固定由播放器提供，目前只有 `vestra`（默认）；以后增加的配色（例如浅色）会加入 `ThemeId`，插件不要假定只有一种，用 `Theme` token 而不是比较配色 id。圆角、字号、控件尺寸不随配色变化，没有单独的圆角选项。
-- 播放器不认识的配色 id（例如早期版本有过、现已去掉的配色）一律按 `vestra` 处理：界面状态文件里保存的旧值读成 `vestra`；用旧 SDK 构建的插件发来的旧 id 也按 `vestra` 执行，不报错。
+- 配色固定由播放器提供：`vestra`（深色，默认）和 `vestra-light`（浅色，播放器 0.4.0、SDK 1.5）。两套都取自标志的色谱，颜色值见[界面规格](../product/ui-spec.md) §2.1。以后还可能增加配色，插件不要假定只有这两种，用 `Theme` token 而不是比较配色 id。圆角、字号、控件尺寸不随配色变化，没有单独的圆角选项。
+- 视频区在两套配色里都是深色（`Theme.bg-video`）：画在视频上的文字和图标用浅色，不要用 `Theme.text`（浅色配色里是深色字）。
+- 播放器不认识的配色 id（例如早期版本有过、现已去掉的配色；0.4.0 之前的播放器收到 `vestra-light`）一律按 `vestra` 处理：界面状态文件里保存的旧值读成 `vestra`；用旧 SDK 构建的插件发来的旧 id 也按 `vestra` 执行，不报错。
 - 播放器把配色下发到每个视图（主窗口与其中的底栏、侧栏、背景层，浮动侧栏，工具窗口，选项窗口），新开的窗口一开始就是当前配色；`Theme` 的颜色随之变化，插件 Slint 不用改。切换不打断正在拖动的滑块与打开的菜单。单个视图下发失败只写日志，下一个刷新周期重试。
 - 选择由播放器保存（界面状态文件的 `appearance.theme`），调用 `set` 的插件停用后配色保持。`theme` 在激活前随窗口状态读好；有 `events` 时从第一次读 `theme` 或调用 `onChange` 开始跟随别的插件的切换。
 - 屏幕提示「配色：…」由调用方插件自己显示。
@@ -1434,6 +1436,18 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | `Theme.font-mono` §6.4 | Menlo | Consolas | DejaVu Sans Mono |
 
 ## 17. 变更说明
+
+### 自己的视觉身份：Aurora 配色与 V-Line 图标（2026-10，播放器 0.4.0，SDK 1.5.0）
+
+只增不改，原有写法照常可用。用到新增项的插件设 `"minPlayerVersion": "0.4.0"`。
+
+- 新配色 `vestra-light`（浅色，视频区仍是深色），`ThemeId` 变为 `"vestra" | "vestra-light"`（§6.8）；「设置 ▶ 外观」有「Vestra 深色」「Vestra 浅色」两项。浅色时 std-widgets 控件由播放器切到浅色。
+- `vestra` 的颜色值换成 Aurora（取标志的完整色谱）：强调色 `#f72aa6`，`playing` 由紫色改为青色 `#2bb6ff`，`accent-fill` 为琥珀→洋红→紫→青，`line` 由近黑改为可见的细线色 `#2b2734`。token 名不变，读 `Theme` 的插件不用改。
+- 圆角：`radius-control` 4px（原 3px），`radius-panel` 8px（原 6px）。尺寸 token 不变。
+- 新库文件 `@vestra/icons.slint`：`Icon` 组件与 `Icons` 全局（§6.4 主题与控件）。
+- `@vestra/widgets.slint`：底栏样式滑块的 thumb 是白芯加 2px 强调色环；面板样式滑块的轨道改用 `line`；描边图标按钮用圆头；悬停提示有圆角。尺寸与接口不变。
+- 屏幕提示与信息块改为半透明深色圆角底板（§6.5），位置与字号规则不变。
+- 内置插件的界面按[界面规格](../product/ui-spec.md)换了图标与外观，交互几何（按钮、点击区、菜单项的大小和位置，菜单顺序）不变；播放列表底栏的 ADD / DEL / SORT 改为同样大小的图标按钮（＋ − ⇅，带悬停提示）。
 
 ### 只保留 Vestra 配色（2026-10，SDK 1.4.0）
 

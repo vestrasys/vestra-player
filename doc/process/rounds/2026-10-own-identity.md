@@ -30,6 +30,10 @@
 
 - [x] A 设计方案 → 用户选定（2026-10-24）：**默认 A「V-Line 圆角线 × Aurora 极光」，主题可选 A′「Aurora Light 浅色」**；完全替换旧造型。方案与对比图：`scratchpad/identity/`（proposal.md、compare*.png、icons-v-line.json、palette-aurora*.json）
 - [ ] A 实施（图标、主题配色）+ 真机像素对比验收
+  - [x] 实施：分支 `identity/look`（播放器 0.4.0）；SDK 1.5.0 分支 `identity/look`（`ThemeId` 加 `"vestra-light"`、`@vestra/icons.slint`），PR 待合并发版。说明与最终效果图见 [proposal.md 的「实施」](../../product/identity/proposal.md)
+  - [x] 交互几何核对（解释器读元素位置，改动前后对比）：一致；顺带修好播放列表六个图标按钮点击区为 0×0 的缺陷
+  - [ ] SDK 1.5.0 发版后播放器升级依赖（`test:sdk` 与 `sdk:sync-slint` 在此之前对 1.4.0 不通过）
+  - [ ] 协调者真机验收（两套配色）
 - [x] B 清理（播放器、SDK）+ SDK 发版：SDK 1.4.0 已发布；播放器 main e17ec0e，全树 0 处提及
   - [x] 播放器：分支 `identity/cleanup`（第二套主题删除，旧设置迁到 vestra；代码、注释、文档清理；新文档 `ui-spec.md`、`interaction-spec.md`、`feature-catalog.md`）
   - [x] SDK：1.4.0（`ThemeId` 只剩 `"vestra"`），PR vestrasys/vestra-player-sdk#10，待合并、打 tag 发版

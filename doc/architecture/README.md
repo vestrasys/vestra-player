@@ -43,7 +43,7 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 
 ## 4. Slint 组合与输入
 
-- 编译：宿主、面板、工具窗口、包校验共用一个编译配置（`ui.rs` 的 `compiler()`）：库路径 `vestra` → `ui/vestra/`（`@vestra/theme.slint`、`@vestra/widgets.slint`），风格 `fluent-dark`。字体见下一条。
+- 编译：宿主、面板、工具窗口、包校验共用一个编译配置（`ui.rs` 的 `compiler()`）：库路径 `vestra` → `ui/vestra/`（`@vestra/theme.slint`、`@vestra/widgets.slint`、`@vestra/markdown.slint`、`@vestra/icons.slint`），风格 `fluent-dark`。配色（`theme.rs`）由宿主写进每个实例的 `VestraPalette`（`ui/palette.slint`，不属于插件库）：22 个颜色、`accent-fill`（从同一 global 里各配色的渐变常量复制，Slint 的 Rust API 造不出渐变）和 `color-scheme`；后者与 std-widgets 的 `Palette.color-scheme` 双向绑定，所以浅色配色 `vestra-light` 在运行时把以 `fluent-dark` 编译的 std-widgets 切成浅色，无需重新编译。字体见下一条。
 - 字体（用户裁决 2026-10-22）：宿主不指定任何窗口的字体，各窗口用系统默认字体，缺字（西文字体里的中文、`font-mono` Menlo 里的中文）由 Slint 1.18 按字符回退到系统里有这个字的字体（parley/fontique；macOS 真机与无界面探针已确认，Windows 待 S6 真机）。各平台系统自带中文字体：macOS 苹方，Windows 微软雅黑，Linux 发行版通常带 Noto CJK，Android/iOS 系统字体。1.16 时代强制 Hiragino Sans GB / Microsoft YaHei 的注入（`platform::ui_font`、`ui::font_import`、窗口根上的 `default-font-family`、`host.slint` 的 `// VESTRA-FONT` 标记、`VESTRA_FONT_FALLBACK`）已删除，旧代码见 2f8e6ab 的 `ui.rs`、`composition.rs`、`settings_window.rs`。
   - 若某个平台回退失败（例如没有中文字体的精简 Linux），只给该平台补回退字体，不改其它平台：在该平台模块里加 `ui_fallback_font() -> Option<(family, path)>`（其它平台模块返回 `None`，`platform/mod.rs` 的表里登记），再把上面删掉的注入恢复为调用它（工具窗口仅在插件没写 `default-font-family` 时注入，主窗口、浮动窗口、选项窗口直接注入）。字体用 Noto Sans SC（OFL）：字幕已经带了一份 Noto Sans CJK SC（`src/assets/fonts/noto-cjk/`，16 MB，`font_carrier.rs` 会把它写到临时目录，可以直接 `import` 那个路径），不用再加安装包体积。注意：Slint 没有只把字体加进「按文字回退」链的公开接口，设为默认字体后该平台的西文也会换成 Noto；`SLINT_FONT_PATH` 环境变量效果相同，且要在 Slint 初始化前设置（Rust 里 `set_var` 需要 `unsafe`，不用）。
   - 斜体：系统中文字体都没有斜体，FemtoVG 与软件渲染器不合成斜体，所以 Markdown 斜体仍另加颜色（`ui_markdown.rs` `EMPHASIS_COLOR`）。

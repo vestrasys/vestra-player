@@ -1,4 +1,6 @@
-# 视觉身份方案（A1，供选择）
+# 视觉身份方案（A1）
+
+**2026-10-24 用户选定方向 A「V-Line × Aurora」，并要求主题里可选 A′「Aurora Light」；已实施，见文末「实施」。** 下面是当时供选择的方案原文。
 
 先看 `compare.png`：每行一套方案，依次是当前、A、B、C 和 A′ 浅色，都按 1× 实际尺寸出图。分元素的对比图（2×）：`compare-bar.png`（底栏常态和悬停）、`compare-icons.png`（全部图标，1× 和 3×）、`compare-sidebar.png`、`compare-menu.png`、`compare-osd.png`、`compare-options.png`、`palettes.png`。
 所有截图都由真实的 Slint 1.18 解释器加载真实的 `@vestra` 库和插件 .slint，用软件渲染器画出。
@@ -53,3 +55,14 @@ ADD / DEL / SORT 改成图标是独立的可选项，也可以保留文字（比
 - 三套里对比度最均衡：正文 16.6:1，强调色 5.1:1，正在播放 7.7:1。
 
 可以考虑一个折中：只把 B 的「28px 圆形播放主键」借到 A 里，播放键会更醒目。浅色主题需要时再做，不阻塞本轮。
+
+
+## 实施（2026-10-24，播放器 0.4.0，SDK 1.5.0）
+
+最终效果：[final-dark.png](final-dark.png)（`vestra`）、[final-light.png](final-light.png)（`vestra-light`），由 Slint 1.18.1 软件渲染器加载真实的库与插件 .slint 画出，2×。规格写进了[界面规格](../ui-spec.md) §2.1（两套配色的全部 token）、§2.5（图标规则与清单）、§4–§7、§9（屏幕提示）。
+
+- **配色**：`vestra` 换成 Aurora（`palette-aurora.json`），新增配色 id `vestra-light`（`palette-aurora-light.json`）：宿主 `theme.rs` 的两张表、`ui/palette.slint` 的两条渐变常量；「设置 ▶ 外观 ▶ Vestra 深色 / Vestra 浅色」与选项窗口外观页（带预览）；选择存在 `ui-state.json`；SDK `ThemeId` 增加 `"vestra-light"`。
+- **浅色下的 std-widgets**：Slint 1.18 的 fluent 风格在运行时读 `Palette.color-scheme`（`fluent-dark` 只决定它的初值），所以宿主仍以 `fluent-dark` 编译，在 `VestraPalette` 里把 `color-scheme` 与 std-widgets 的 `Palette.color-scheme` 双向绑定，切到浅色时设为 `light`。输入框、下拉框、复选框、滚动条随之变浅，不用重新编译、不用替换控件。剩下的差别：fluent 控件用自己的中性灰和蓝色强调，两套配色都一样。
+- **图标**：新库文件 `@vestra/icons.slint`（`Icon`、`Icons`，源自 `icons-v-line.json`），底栏、播放列表、章节/书签、快捷键、商城、Markdown 任务框、菜单勾选/单选/子菜单箭头/滚动箭头、下拉箭头、排序箭头、标签 ×、外观预览全部换用，字体字符 ✓ › ▲▼ ▾ × ▶ 不再用作图标。ADD / DEL / SORT 改为 41×18 的图标按钮（＋ − ⇅，悬停提示「添加」「删除」「排序」）。
+- **其它外观**：底栏去掉按钮间的整高分隔线与进度条行下沿的线，悬停为 32×32 圆角底；进度条与音量 thumb 为白芯 + 2px 强调色环；播放列表页签和工具窗口页签为文字下的 28px 渐变短线；正在播放的行左侧 2px 青色竖条；菜单当前项左侧 2px 强调色竖条、分隔线缩进；选项树选中项为竖条 + 正文色；屏幕提示与信息层为半透明深色圆角底板，屏幕提示底边一条渐变线；圆角 4/8px。
+- **几何**：按钮、点击区、菜单项的大小和位置、菜单排布不变。核对方法：用 Slint 1.18.1 解释器分别加载改动前（main 4d2759e）和改动后的 .slint，按同样的数据和窗口大小建 27 个场景（底栏常态/悬停/窄窗/空闲、播放列表四种、菜单三种、选项窗口、快捷键两页、鼠标页、商城两页、音频、画面、章节/书签、播放属性、外壳屏幕提示），用测试后端的 `ElementHandle` 读出每个 TouchArea / FocusScope / TextInput / 带无障碍角色元素的绝对位置与大小，逐项比较；另在底栏和播放列表上逐个点击按钮，比较触发的回调。结果：除下面两处外完全一致。（1）外观页多了一行（浅色配色），其下的「恢复默认」下移一行，属于新增内容。（2）播放列表的置顶/上移/下移/置底、分离、关闭六个图标按钮在改动前点击区是 0×0（悬停提示组件没有设大小），点了没有反应；改为占满 25px 槽，现在可以点。只变了文字框的地方：下拉框的箭头槽由 ▾ 字形宽（本机 5px）变为图标宽 8px，下拉框里的文字宽度少 3px；被替换掉的字形文字不再存在。

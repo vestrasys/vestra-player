@@ -566,7 +566,7 @@ export component Picture inherits Window {
 }
 ```
 
-不改代码的插件也会变成深色：播放器用 `fluent-dark` 风格编译所有插件 Slint。新写的界面用 `Theme` 的令牌，不要写死颜色。
+不改代码的插件也跟随配色：播放器用 `fluent-dark` 风格编译所有插件 Slint，选浅色配色时把 std-widgets 切成浅色。新写的界面用 `Theme` 的令牌，不要写死颜色（视频区上的文字除外：视频区总是深色）。
 
 ## 18. 外部工具：用 ffprobe 读文件信息
 
