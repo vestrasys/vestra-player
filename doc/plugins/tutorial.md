@@ -121,10 +121,11 @@ export component BookmarkWindow inherits Window {
 
 ### 外观
 
-播放器以深色风格（`fluent-dark`）编译插件界面，默认字体是系统界面字体，所以上面的窗口不写颜色和字体也是深色、中文正常。要和播放器其它界面保持一致（同一套配色与尺寸），从主题取值、用播放器提供的控件：
+播放器以 `fluent-dark` 风格编译插件界面（用户选浅色配色时，std-widgets 控件由播放器切成浅色），默认字体是系统界面字体，所以上面的窗口不写颜色和字体也能看清、中文正常。要和播放器其它界面保持一致（同一套配色、图标与尺寸），从主题取值、用播放器提供的控件和图标：
 
 ```slint
 import { Theme } from "@vestra/theme.slint";                 // 颜色、字号、控件尺寸
+import { Icon } from "@vestra/icons.slint";                  // 播放器的线条图标（播放器 0.4.0）
 import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
 // Rectangle { background: Theme.bg-panel; }  Text { color: Theme.text; font-size: Theme.font-body; }
 ```

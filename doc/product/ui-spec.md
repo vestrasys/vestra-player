@@ -6,7 +6,7 @@
 
 - **编号**：`UI-<区域>-<序号>`，例如 `UI-BAR-03`。代码注释和其它文档按编号和小节号引用本文，编号不改、不复用。负责方写成 `宿主`（Rust 宿主与 `host.slint`）、`SDK`（插件 API；核心能力汇总在 §10）、或插件名。
 - **单位**：Slint 逻辑像素。macOS 上 1 逻辑像素 = 1 点；Windows 上按 96 DPI 的 1x 像素，随系统缩放。
-- **颜色**：写主题 token 名（§2.1），括号里是 Vestra 配色的值。插件 `.slint` 只用 token，不写颜色值。
+- **颜色**：写主题 token 名（§2.1），括号里是默认配色 `vestra` 的值。插件 `.slint` 只用 token，不写颜色值。
 - **样式代码**：用 CSS 写，便于和 Slint 属性逐项对照（`height` ↔ `height`，`background` ↔ `background`，`gap` ↔ `spacing`，`padding` ↔ `padding`）。
 - **标题栏**：主窗口使用系统标题栏（macOS 保留红黄绿按钮）。自绘标题栏的计划见交互规格 IA-CORE-07。快捷键的 Ctrl 在 macOS 上同时接受 Cmd。
 
@@ -14,7 +14,7 @@
 
 | # | 问题 | 决定 |
 | --- | --- | --- |
-| D1 | 配色 | 配色取自 Vestra 品牌 logo（`src/assets/brand/logo.png`）：带紫调的深色底、品红强调 `#fa139c`，进度与音量用品牌渐变 `#fdb506→#fc6f3b→#fa139c→#911efc`，圆角 3/6px（§2） |
+| D1 | 视觉身份 | 方向 A「V-Line × Aurora」（2026-10-24 用户选定，[方案](identity/proposal.md)）：配色取标志（`src/assets/brand/logo.png`）的完整色谱，洋红强调 `#f72aa6`、青色表示正在播放、进度用琥珀→洋红→紫→青渐变；默认深色 `vestra`，可选浅色 `vestra-light`（视频区仍是深色）；图标是 V-Line 圆头线条（§2.5）；圆角 4/8px（§2） |
 | D2 | 画面、声音、字幕的调节工具 | 三个独立的插件小窗口，都按 §7.1 的面板页规格；不做把它们收进同一窗口的容器（C12） |
 | D3 | 截图 | 「保存当前画面」Ctrl+E 直接保存到截图文件夹并给出屏幕提示，不弹确认；「另存为…」才弹保存对话框。连拍、导出片段是独立对话框 |
 | D4 | 菜单入口 | 主窗口内没有菜单按钮，菜单只靠右键；不做 macOS 顶部菜单栏 |
@@ -25,36 +25,42 @@
 
 ### 2.1 颜色表
 
-宿主只有一套配色：Vestra。颜色由宿主下发给每个视图（主窗口外壳与面板、浮动侧栏、工具窗口、选项窗口），插件通过 `@vestra/theme.slint` 的 `Theme` 读取；`Theme` 的颜色是只读的 `out` 属性。主题机制（宿主的配色表、`plugin.appearance`、「设置 ▶ 外观」的单选组）保留，以后可以加浅色等其它配色，目前单选组里只有「Vestra」一项。
+宿主有两套配色，都叫 Aurora、取自标志的完整色谱：`vestra`（深色，默认）和 `vestra-light`（浅色，2026-10-24 加入）。颜色由宿主下发给每个视图（主窗口外壳与面板、浮动侧栏、工具窗口、选项窗口），插件通过 `@vestra/theme.slint` 的 `Theme` 读取；`Theme` 的颜色是只读的 `out` 属性。用户在「设置 ▶ 外观 ▶ Vestra 深色 / Vestra 浅色」或选项窗口「外观」页切换，所有窗口立即生效，选择跨启动保存。
 
-```css
-:root {
-  --bg-bar:          #17141c;  /* 控制栏、页签条、窗口背景 */
-  --bg-video:        #0b0a0f;  /* 视频区、空闲画面 */
-  --bg-list:         #1c1922;  /* 播放列表内容区、浮动面板 */
-  --bg-panel:        #221e29;  /* 工具页面、列表底栏、选中页签、菜单、悬停提示 */
-  --line:            #07060a;  /* 分隔线 1px、外框、进度条未播放段 */
-  --hover-bg:        #2a2533;  /* 悬停底色；菜单分隔线；搜索框底色 */
-  --press-bg:        #120f16;  /* 按下底色 */
-  --selected-bg:     #2f2938;  /* 列表选中行、菜单当前项 */
-  --text:            #f2eff7;  /* 主文字、图标常态、滑块 thumb */
-  --text-dim:        #8a8496;  /* 次要文字、小图标常态、总时长、快捷键文字 */
-  --text-list:       #b8b2c4;  /* 列表文字、按钮文字、菜单文字 */
-  --text-played:     #6f6a7a;  /* 列表中播放过的项 */
-  --accent:          #fa139c;  /* 悬停图标、开启状态、勾选框、书签标记 */
-  --accent-press:    #c40f7a;
-  --accent-disabled: #5c1a42;
-  --icon-disabled:   #3a3542;  /* 禁用图标、禁用滑块 */
-  --playing:         #a24bff;  /* 正在播放的列表项；AB 循环区间 */
-  --button-bg:       #322c3b;  /* 面板内小按钮、单选圆点外圈 */
-  --button-hover:    #3d3648;
-  --button-press:    #26212e;
-  --button-disabled: #1d1a23;
-  --danger:          #ff5a4a;  /* 失败状态、删除类按钮 */
-  --accent-fill: linear-gradient(90deg, #fdb506 0%, #fc6f3b 25%, #fa139c 60%, #911efc 100%);
-                               /* 进度类填充：进度条已播放段、音量、滑块填充 */
-}
-```
+| token | `vestra`（深色） | `vestra-light`（浅色） | 用途 |
+| --- | --- | --- | --- |
+| `bg-bar` | `#16141c` | `#f7f6fa` | 控制栏、页签条、窗口背景 |
+| `bg-video` | `#0a090e` | `#0e0d12` | 视频区、空闲画面（两套都是深色） |
+| `bg-list` | `#1a1821` | `#ffffff` | 播放列表内容区、浮动面板、选项树 |
+| `bg-panel` | `#201d28` | `#f1eff5` | 工具页面、列表底栏、菜单、悬停提示 |
+| `line` | `#2b2734` | `#dcd8e4` | 1px 分隔线与外框、进度条和滑块的轨道、菜单分隔线、侧栏分隔条 |
+| `hover-bg` | `#28232f` | `#e9e6f0` | 悬停底色（底栏按钮的圆角底、页签）；搜索框底色 |
+| `press-bg` | `#110f16` | `#dcd8e6` | 按下底色 |
+| `selected-bg` | `#2f2840` | `#efe4fb` | 列表选中行、菜单当前项、选项树选中项 |
+| `text` | `#f5f3fa` | `#1c1924` | 主文字、图标常态、面板滑块 thumb |
+| `text-dim` | `#8e88a0` | `#6f6a7f` | 次要文字、小图标常态、总时长、快捷键文字 |
+| `text-list` | `#bdb8cb` | `#3b3748` | 列表文字、按钮文字、菜单文字 |
+| `text-played` | `#6e6980` | `#9a95a8` | 列表中播放过的项 |
+| `accent` | `#f72aa6` | `#d4128a` | 悬停图标、开启状态、勾选框、书签、当前项竖条、滑块外环 |
+| `accent-press` | `#c41a83` | `#a80d6c` | 按下的强调色 |
+| `accent-disabled` | `#5a1d48` | `#ecbcd9` | 禁用的强调色 |
+| `icon-disabled` | `#3b3646` | `#c9c5d2` | 禁用图标、禁用滑块 |
+| `playing` | `#2bb6ff` | `#0773ba` | 正在播放的列表项及其左侧竖条；AB 循环区间与标记 |
+| `button-bg` | `#2f2a3b` | `#e6e3ec` | 面板内小按钮、标签 |
+| `button-hover` | `#3a3448` | `#dcd8e4` | |
+| `button-press` | `#25202e` | `#cfcadb` | |
+| `button-disabled` | `#1b1922` | `#efedf3` | |
+| `danger` | `#ff5a5f` | `#c42b2b` | 失败状态、删除类按钮 |
+| `accent-fill` | 琥珀 `#fcc402` 0% → `#fb5a35` 20% → 洋红 `#fa0aa8` 45% → 紫 `#7a0afa` 72% → 青 `#10a8fc` 100% | `#f5a700` → `#f0442f` → `#e0089a` → `#6a08e8` → `#0a95e6`（同位置） | 进度类填充（进度条已播放段、音量、滑块）、页签和 OSD 的渐变短线 |
+
+对比度（WCAG）：深色 `text`/`bg-bar` 16.6:1，`accent`/`bg-bar` 5.1:1，`playing`/`bg-list` 7.7:1；浅色 `text`/`bg-bar` 16.1:1，`accent`/`bg-bar` 4.6:1，`playing`/`bg-list` 5.0:1。
+
+固定颜色（不随配色）：
+
+- 视频区上的东西（屏幕提示、信息层，§9）：白字 `#ffffff` / `#f5f3fa`，半透明深色底板 `#0b0a10c4`。视频区在两套配色里都是深色，所以这里不用 `Theme.text`（浅色配色里是深色字）。
+- 强调色底上的勾（菜单勾选框、复选框、任务列表）是白色 `#ffffff`；底栏滑块的芯是白色。
+
+std-widgets 控件（`LineEdit`、`ComboBox`、`CheckBox`、`ScrollView`、`ListView` 的滚动条等）：宿主以 `fluent-dark` 风格编译所有 Slint，选浅色配色时把 std-widgets 的 `Palette.color-scheme` 改为 `light`（`ui/palette.slint` 的 `VestraPalette.color-scheme`），这些控件随之变成 fluent 的浅色，切回深色时复原，不需要重新编译。仍有的差别：fluent 控件用自己的中性灰和蓝色强调（焦点下划线、复选框），不是 Aurora 的颜色，两套配色都一样。
 
 ### 2.2 字体
 
@@ -76,19 +82,30 @@ checkbox-row    { height: 18px; }
 label           { height: 14px; }                                    /* 表单左列标签右对齐 */
 .form-row       { gap: 26px; }
 .dialog         { padding: 14px; }
-.control        { border-radius: 3px; }                              /* radius-control：按钮、菜单项、面板滑块 thumb */
-.panel          { border-radius: 6px; }                              /* radius-panel：菜单、浮层 */
+.control        { border-radius: 4px; }                              /* radius-control：按钮、菜单项、悬停提示、页签悬停底、面板滑块 thumb */
+.panel          { border-radius: 8px; }                              /* radius-panel：菜单、浮层、底栏按钮的悬停底、OSD 底板 */
 ```
 
-控件库 `@vestra/widgets.slint` 提供 `Button`、`Slider`、`ToolTipArea` 等，尺寸取上面的 token。
+控件库 `@vestra/widgets.slint` 提供 `Button`、`Slider`、`ToolTipArea` 等，尺寸取上面的 token；图标在 `@vestra/icons.slint`（§2.5）。
 
 ### 2.4 宿主提供的主题
 
 | 编号 | 要求 | 负责方 |
 | --- | --- | --- |
 | UI-THEME-01 | 提供可导入的主题 global `Theme`（§2.1–2.3 的全部 token），插件 `.slint` 用 `import { Theme } from "@vestra/theme.slint"` 取值，不写颜色值（主题文件除外） | 宿主 + SDK（C2） |
-| UI-THEME-02 | 所有插件窗口都是深色控件风格（控件库或主题配色的 std-widgets），没有浅色窗口 | 宿主（C2） |
+| UI-THEME-02 | 所有插件窗口跟随配色：控件库按 `Theme` 着色；std-widgets 在深色配色下是 fluent 深色，在浅色配色下由宿主切到 fluent 浅色（§2.1）；视频区两套配色都是深色 | 宿主（C2） |
 | UI-THEME-03 | 默认字体为系统 UI 字体，CJK 按字符回退，中英混排无方框字 | 宿主 |
+
+### 2.5 图标（V-Line）
+
+所有图标来自 `@vestra/icons.slint`（宿主控件库，SDK 1.5 起带只读副本）：`Icon { name: "play"; color: Theme.text; }`。源文件是 [icons-v-line.json](identity/icons-v-line.json)。
+
+- **线条**：只描边、不填充；圆头（`round` cap）、圆角（`round` join）；线宽 1.5px，12px 以内的小图标 1.25px（排序箭头 1.1px）。
+- **V 形**：标志的 V 贯穿整套图标：快退、快进是 « »，上移、下移是 ∧ ∨，置顶、置底是 ∧ ∨ 加横线，子菜单箭头、下拉箭头、滚动箭头、排序箭头都是小 V，播放列表开关的第三行末尾带一个小 V。
+- **绘制框**：每个图标有自己的绘制框（`Icons.box-width` × `Icons.box-height`），就是它的默认大小；和被替换的旧图标完全相同，所以按钮和行的布局不变。线条离框边至少半个线宽，不出框。
+- **颜色**：图标颜色由调用方给（`color`），规则与旧图标相同：常态 `text` 或 `text-dim`，悬停/开启 `accent`，按下 `accent-press`，禁用 `icon-disabled`；强调色底上的勾是白色。
+- **不用字体字符当图标**：✓ › ▲ ▼ ▾ × ▶ 都换成了图标（不同系统的字体画出来不一样）。
+- **清单**（名称：绘制框，用处）：`play`、`pause` 12×14，`stop` 12×12，`back`、`forward` 14×10，`open` 14×12（底栏按钮）；`volume`、`mute`、`playlist` 13×10（静音、播放列表开关）；`detach`、`attach` 14×12，`close` 14×13（列表页签条）；`move-top`、`move-up`、`move-down`、`move-bottom`、`search` 14×12，`add`、`remove`、`sort` 10×10（列表底栏）；`failed` 10×10（失败的列表项）；`chapter`、`bookmark` 12×12（章节/书签窗口）；`menu-check` 14×14，`submenu` 5×8，`scroll-up`、`scroll-down` 8×5（菜单）；`caret-down` 8×5（下拉框）；`check-box` 9×9，`check-task` 11×11（复选框、Markdown 任务列表）；`sort-asc`、`sort-desc` 7×4，`tag-remove` 7×7（快捷键页）；`preview-play` 8×9（外观页预览）。
 
 ## 3. 主窗口外壳（宿主）
 
@@ -121,20 +138,21 @@ label           { height: 14px; }                                    /* 表单�
 
 ```css
 /* 进度条行 */
-.seek-row  { height: 22px; background: var(--bg-bar); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+.seek-row  { height: 22px; background: var(--bg-bar); border-top: 1px solid var(--line); /* 只有上沿一条线 */
              padding: 0 10px 0 5px; }
 .seekbar   { flex: 1; height: 10px; margin: 0 10px; }            /* 10px 点击区 */
-.seekbar .track  { height: 2px; background: var(--line); }
-.seekbar .played { height: 2px; background: var(--accent-fill); } /* 不可跳转时 icon-disabled */
-.seekbar .thumb  { width: 8px; height: 8px; border-radius: 50%; background: var(--text); } /* 悬停 accent，按下 accent-press */
+.seekbar .track  { height: 2px; border-radius: 1px; background: var(--line); }
+.seekbar .played { height: 2px; border-radius: 1px; background: var(--accent-fill); } /* 不可跳转时 icon-disabled */
+.seekbar .thumb  { width: 8px; height: 8px; border-radius: 50%; background: #ffffff; border: 2px solid var(--accent); } /* 按下时环为 accent-press */
 .seekbar .mark   { width: 1px; height: 6px; }   /* 章节 text-dim、书签 accent、标记 playing；AB 循环为 2px playing 带，两端 1×8 */
 .mute-btn  { width: 13px; height: 10px; color: var(--text-dim); margin-left: 10px; } /* 悬停 accent，按下 accent-press */
-.volume    { width: 70px; height: 10px; margin-left: 4px; }      /* 2px 线，accent-fill 填充，同款 thumb */
+.volume    { width: 70px; height: 10px; margin-left: 4px; }      /* 2px 线，accent-fill 填充，同款 thumb（白芯 + 2px accent 环） */
 
 /* 按钮行 */
 .button-row { height: 40px; background: var(--bg-bar); }
-.big-btn    { width: 41px; height: 40px; border-right: 1px solid var(--line); color: var(--text); }
-            /* 悬停底 hover-bg，按下底 press-bg，禁用图标 icon-disabled */
+.big-btn    { width: 41px; height: 40px; color: var(--text); }     /* 按钮之间没有分隔线；图标在左 40px 内居中 */
+.big-btn::hover-plate { left: 4px; top: 4px; width: 32px; height: 32px; border-radius: 8px; }
+            /* 悬停时圆角底 hover-bg，按下 press-bg；禁用图标 icon-disabled */
 /* 左→右：播放/暂停（按状态二选一）| 停止 | 后退（右键：上一个）| 前进（右键：下一个）| 打开 */
 .time      { margin-left: 10px; font-size: 11px; }  /* 「00:12」text + 「 / 15:00」text-dim；只有当前时间可点击，切换已播放/剩余 */
 /* 右端：播放列表开关 */
@@ -143,12 +161,12 @@ label           { height: 14px; }                                    /* 表单�
 
 | 编号 | 要求 | 负责方 |
 | --- | --- | --- |
-| UI-BAR-01 | 两行：进度条行 22px + 按钮行 40px，背景 `bg-bar`，行间与上沿 1px `line`，总高固定 62px | playback |
+| UI-BAR-01 | 两行：进度条行 22px + 按钮行 40px，背景 `bg-bar`，只有上沿一条 1px `line`（与视频分开），总高固定 62px | playback |
 | UI-BAR-02 | 底栏不显示来源路径和状态文字。来源名在窗口标题（C9），状态用屏幕提示（C5） | playback + 宿主 |
-| UI-BAR-03 | 进度条按上方 CSS：10px 点击区内 2px 线，未播放 `line`，已播放 `accent-fill`；8px 圆形 thumb，悬停 `accent` | playback |
+| UI-BAR-03 | 进度条按上方 CSS：10px 点击区内 2px 圆头线，未播放 `line`，已播放 `accent-fill`；8px 圆形 thumb，白芯 + 2px `accent` 环，按下时环为 `accent-press` | playback |
 | UI-BAR-04 | 静音图标 13×10 + 音量条 70×10 在进度条行最右端；音量条固定 70px，不拉伸 | playback |
 | UI-BAR-05 | 按钮行左侧 5 个 41×40 图标按钮：播放/暂停、停止（关闭来源）、后退、前进、打开；在后退/前进上右键 = 上一个/下一个 | playback（上一个/下一个用 C6） |
-| UI-BAR-06 | 图标用 Slint Path 自绘；常态 `text`，禁用 `icon-disabled` | playback |
+| UI-BAR-06 | 图标用 `@vestra/icons.slint`（§2.5）；常态 `text`，禁用 `icon-disabled`；悬停/按下点亮按钮中间 32×32 的圆角底，按钮之间没有分隔线 | playback |
 | UI-BAR-07 | 时间是文字标签 `当前 / 总长`：当前 `text`，斜杠和总长 `text-dim`，11px，紧跟打开按钮后 10px；点击当前时间在「已播放 / 剩余」之间切换 | playback |
 | UI-BAR-08 | 底栏没有倍速按钮和内嵌编辑框。倍速用菜单与 Z/X/C；跳转用「跳转到…」对话框（G，§7.5）；音量用滑块、↑/↓、M | playback |
 | UI-BAR-09 | 按钮行右端 23×22 播放列表开关（F6），开启时 `accent`，与菜单勾选、侧栏状态一致 | playback 放按钮，读取与切换侧栏状态（C7） |
@@ -170,27 +188,28 @@ label           { height: 14px; }                                    /* 表单�
 
 ```css
 .pl-tabs   { height: 31px; background: var(--bg-bar); }          /* 只有一个「播放列表」页签时也显示 */
-.pl-tab    { width: 105px; height: 31px; font-size: 12px; color: var(--text-dim); } /* 选中：background bg-panel; color text */
+.pl-tab    { width: 105px; height: 31px; font-size: 12px; color: var(--text); }  /* 无色块；文字下方居中一条 28×2 accent-fill 圆头短线（底边上 1px） */
 .pl-close  { width: 14px; height: 13px; }                        /* 页签条右端 */
-.pl-list   { background: var(--bg-list); }                       /* 无斑马纹、无卡片、无圆角 */
+.pl-list   { background: var(--bg-list); }                       /* 无斑马纹、无卡片、行无圆角 */
 .pl-item   { height: 20px; padding: 0 6px; font-size: 11px; color: var(--text-list); } /* 单行：序号. 标题 … 时长 */
 .pl-item.selected { background: var(--selected-bg); color: var(--text); }
-.pl-item.current  { color: var(--playing); }                     /* 正在播放 */
+.pl-item.current  { color: var(--playing); }                     /* 正在播放；左侧 2px playing 竖条（上下各留 3px，圆头） */
 .pl-item.played   { color: var(--text-played); }                 /* 播放过 */
 .pl-bottom { height: 35px; background: var(--bg-panel); border-top: 1px solid var(--line); padding-left: 6px; }
-/* 左→右：置顶 上移 下移 置底（每个 25px 槽，图标 14×12）| 6 | ADD | 4 | DEL | 4 | SORT | 搜索框（高 24，hover-bg；窄时折叠为放大镜图标）| 总时长 11px text-list */
-.pl-btn    { height: 18px; min-width: 35px; padding: 0 4px; background: var(--button-bg); font-size: 11px; color: var(--text-list); }
+/* 左→右：置顶 上移 下移 置底（每个 25px 槽，图标 14×12）| 6 | 添加 | 4 | 删除 | 4 | 排序 | 搜索框（高 24，hover-bg；窄时折叠为放大镜图标）| 总时长 11px text-list */
+.pl-btn    { height: 18px; width: 41px; border-radius: 4px; background: var(--button-bg); color: var(--text-list); }
+           /* 图标标签 add / remove / sort（10×10）居中；悬停提示「添加」「删除」「排序」 */
 ```
 
 | 编号 | 要求 | 负责方 |
 | --- | --- | --- |
 | UI-PL-05 | 顶部 31px 页签条（单个「播放列表」页签，105px 宽），没有大标题；关闭按钮在页签条右端（14×13 图标） | playlist |
 | UI-PL-06 | 列表项单行：`序号. 标题` 左对齐，时长右对齐，背景 `bg-list`，无卡片无圆角，行高 20px | playlist |
-| UI-PL-07 | 状态用颜色表达：正在播放 `playing`、播放过 `text-played`、选中 `selected-bg` 底；没有状态文字行。失败用屏幕提示 + 行尾小图标 | playlist |
-| UI-PL-08 | 列表上方没有按钮行。上一项/下一项归底栏右键和 PgUp/PgDn，播放由双击/Enter 完成，添加归底栏 ADD 按钮的弹出菜单 | playlist |
-| UI-PL-09 | 底部 35px 按钮栏：置顶/上移/下移/置底四个图标按钮（25px 槽）+ ADD / DEL / SORT 文字按钮（18px 高）+ 搜索框（约 24px 高）+ 右侧列表总时长 | playlist |
+| UI-PL-07 | 状态用颜色表达：正在播放 `playing`（加左侧 2px 竖条）、播放过 `text-played`、选中 `selected-bg` 底；没有状态文字行。失败用屏幕提示 + 行尾小图标 | playlist |
+| UI-PL-08 | 列表上方没有按钮行。上一项/下一项归底栏右键和 PgUp/PgDn，播放由双击/Enter 完成，添加归底栏「添加」按钮的弹出菜单 | playlist |
+| UI-PL-09 | 底部 35px 按钮栏：置顶/上移/下移/置底四个图标按钮（25px 槽）+ 添加 / 删除 / 排序三个 41×18 的图标按钮（＋ − ⇅，有悬停提示）+ 搜索框（约 24px 高）+ 右侧列表总时长 | playlist |
 | UI-PL-10 | 底部没有路径和消息文字；完整路径是鼠标悬停提示，消息用屏幕提示 | playlist（悬停提示用 C2 的 `ToolTipArea`） |
-| UI-PL-11 | 滚动条为深色样式，颜色取主题 | playlist（C2） |
+| UI-PL-11 | 滚动条随配色（std-widgets 的深色或浅色，§2.1） | playlist（C2） |
 
 ### 5.3 列表交互
 
@@ -261,18 +280,18 @@ label           { height: 14px; }                                    /* 表单�
 ### 6.3 样式
 
 ```css
-.ctx-menu  { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 6px; padding: 2px;
+.ctx-menu  { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 8px; padding: 2px;
              box-shadow: 0 0 8px #00000080; }
-.ctx-item  { height: 24px; border-radius: 3px; padding: 0 8px 0 4px; font-size: 12px; color: var(--text-list); }
-.ctx-item.lit      { background: var(--selected-bg); color: var(--text); }   /* 悬停或键盘当前项 */
+.ctx-item  { height: 24px; border-radius: 4px; padding: 0 8px 0 4px; font-size: 12px; color: var(--text-list); }
+.ctx-item.lit      { background: var(--selected-bg); color: var(--text); }   /* 悬停或键盘当前项；左边缘 2×14 accent 竖条（y 5） */
 .ctx-item:disabled { color: var(--text-dim); }
 .ctx-shortcut      { font-size: 12px; color: var(--text-dim); text-align: right; }
-.ctx-arrow         { width: 10px; font-size: 13px; }                         /* 子菜单箭头 */
-.ctx-sep   { height: 7px; } .ctx-sep::after { height: 1px; background: var(--hover-bg); }
-.ctx-check { width: 14px; height: 14px; border-radius: 3px; background: var(--accent); /* 白色 ✓ 11px */ }
-.ctx-radio { width: 12px; height: 12px; border-radius: 50%; background: var(--button-bg); /* 中心 6px accent 圆点 */ }
-.ctx-scroll-arrow  { height: 12px; }   /* 放不下时上下各一条滚动箭头 */
-.ctx-tip   { max-width: 360px; padding: 5px 8px; background: var(--bg-panel); border: 1px solid var(--line); font-size: 11px; }
+.ctx-arrow         { width: 10px; }                                          /* 子菜单箭头：submenu 图标 5×8，x 3 */
+.ctx-sep   { height: 7px; } .ctx-sep::after { height: 1px; margin: 0 8px; background: var(--line); }
+.ctx-check { width: 14px; height: 14px; border-radius: 4px; background: var(--accent); /* 白色 menu-check 图标 */ }
+.ctx-radio { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--accent); /* 中心 6px accent 圆点 */ }
+.ctx-scroll-arrow  { height: 12px; }   /* 放不下时上下各一条，scroll-up / scroll-down 图标 8×5 */
+.ctx-tip   { max-width: 360px; padding: 5px 8px; background: var(--bg-panel); border: 1px solid var(--line); border-radius: 4px; font-size: 11px; }
 ```
 
 | 编号 | 要求 | 负责方 |
@@ -288,11 +307,12 @@ label           { height: 14px; }                                    /* 表单�
 
 ```css
 .tool        { width: 301px; background: var(--bg-bar); }          /* 内容区左右各 8px，可用宽 285 */
-.cbox-tabs   { height: 31px; } .cbox-tab { width: 74px; font-size: 12px; color: var(--text-dim); } /* 选中：text，底 bg-panel；悬停底 hover-bg */
+.cbox-tabs   { height: 31px; } .cbox-tab { width: 74px; font-size: 12px; color: var(--text-dim); }
+             /* 选中：text，文字下 28×2 accent-fill 短线；未选中悬停：内缩 (3,4) 的 radius-control 圆角底 hover-bg */
 .cbox-page   { background: var(--bg-panel); }
 .row         { height: 24px; }                                       /* 行距 24 */
 .row label   { width: 65px; text-align: right; font-size: 11px; color: var(--text); }
-.row slider  { width: 154px; height: 12px; }  /* 2px 线，轨道 bg-bar，填充 accent-fill，thumb 14×12 text、圆角 3 */
+.row slider  { width: 154px; height: 12px; }  /* 2px 线，轨道 line，填充 accent-fill，thumb 14×12 text、圆角 radius-control */
 .row default { width: 41px; height: 18px; }
 .toggle      { width: 46px; height: 22px; }                          /* 翻转、旋转等成组按钮 */
 .choice      { width: 51px; height: 22px; } .choice.wide { width: 69px; }
@@ -322,7 +342,7 @@ label           { height: 14px; }                                    /* 表单�
 | 编号 | 要求 | 负责方 |
 | --- | --- | --- |
 | UI-TOOL-01 | 窗口内部没有大号标题（窗口标题栏已有标题） | 所有工具窗口插件 |
-| UI-TOOL-02 | 主题深色样式和 §2.3 控件尺寸：按钮 21px、输入框 21px、表单行距 24–26px、内边距 8–14px、正文 11px | 所有工具窗口插件（C2） |
+| UI-TOOL-02 | 主题样式（随配色）和 §2.3 控件尺寸：按钮 21px、输入框 21px、表单行距 24–26px、内边距 8–14px、正文 11px | 所有工具窗口插件（C2） |
 | UI-TOOL-03 | 滑块用控件库的面板样式：2px 线、`accent-fill` 填充、thumb 14×12 | 所有用滑块的插件 |
 | UI-TOOL-04 | 改动立即生效 + 每项「默认」按钮：不出现「应用」「确定」 | video、audio、subtitles |
 | UI-TOOL-05 | 状态与错误文字只用中文、一句话；不显示调试信息（任务 id、修订号、generation） | 所有插件 |
@@ -415,7 +435,7 @@ label           { height: 14px; }                                    /* 表单�
 
 | 编号 | 要求 | 负责方 |
 | --- | --- | --- |
-| UI-OSD-01 | 宿主提供 `plugin.osd.show(text)`：左上角，边距 10px，粗体，白字黑描边（描边宽为字号的 1/16，至少 1px）；字号为视频区高度的 3%，取整后限制在 12–48px（交互规格 G-10）；显示 2 秒后 300ms 淡出，新提示替换旧提示 | 宿主 + SDK（C5） |
+| UI-OSD-01 | 宿主提供 `plugin.osd.show(text)`：左上角，边距 10px；半透明深色圆角底板 `#0b0a10c4`，白字 `#ffffff` 半粗（600），底边一条 2px `accent-fill` 渐变线（左右各缩进一个圆角）；字号为视频区高度的 3%，取整后限制在 12–48px（交互规格 G-10），底板内边距和圆角随字号缩放（字号 18px 时左右 12、上下 5、圆角 8）；显示 2 秒后 300ms 淡出，新提示替换旧提示 | 宿主 + SDK（C5） |
 | UI-OSD-02 | 各插件的操作反馈用屏幕提示：playback（跳转、音量、静音、倍速、暂停）、video（色彩）、subtitles（显示、同步）、capture（保存）、playlist（切换、列表结束、失败） | 各插件 |
 
 ### 9.2 播放信息插件（info，D5）
@@ -423,7 +443,7 @@ label           { height: 14px; }                                    /* 表单�
 | 编号 | 要求 | 负责方 |
 | --- | --- | --- |
 | UI-INFO-01 | 「播放信息」插件：右键菜单顶层「播放信息 ✓」、Tab 开关，默认关；Shift+Tab 简要信息 | info（C10） |
-| UI-INFO-02 | 叠加层在视频左上角、屏幕提示下方（左边距 10px），每块半透明黑底（`#000000b0`），字号随屏幕提示缩放（屏幕提示 16px 时为 11px，限制在 9–28px），每秒刷新；内容一行一项、中文标签：文件名、时间 / 时长、视频编码与分辨率、帧率、音频编码 / 采样率 / 声道、后端、已显示帧数、丢帧、会话与帧计数 | info |
+| UI-INFO-02 | 叠加层在视频左上角、屏幕提示底板下方 4px（左边距 10px），每块与屏幕提示同样的半透明圆角底板（`#0b0a10c4`，圆角随字号缩放），文字 `#f5f3fa`，字号随屏幕提示缩放（屏幕提示 16px 时为 11px，限制在 9–28px），每秒刷新；内容一行一项、中文标签：文件名、时间 / 时长、视频编码与分辨率、帧率、音频编码 / 采样率 / 声道、后端、已显示帧数、丢帧、会话与帧计数 | info |
 
 播放属性（Ctrl+F1）是独立窗口，分视频信息（编码、尺寸、帧率）和音频信息（编码、采样率、位深、声道）。
 
@@ -436,7 +456,7 @@ label           { height: 14px; }                                    /* 表单�
 | 编号 | 能力 | 要求 | 覆盖的条目 |
 | --- | --- | --- | --- |
 | C1 | 主窗口外壳 | 视频贴边、`bg-video`；侧栏占视频右侧全高，3px 可拖分隔条（视频 ≥318、侧栏 ≥317，默认 317）；底栏只在视频下方；默认窗口 780×671，最小 320×182；全屏时底栏覆盖并在 3 秒无操作后隐藏，同时隐藏指针；窄窗口先压缩视频再隐藏侧栏 | UI-SHELL-01–09 |
-| C2 | 主题 | 可导入的 Slint 主题（§2.1 颜色、§2.2 字号、§2.3 控件尺寸）+ 深色控件（按钮、滑块、输入框、复选框、下拉框、滚动条、悬停提示）；默认字体为系统 UI 字体 | UI-THEME-01–03、UI-TOOL-02/03、UI-PL-10/11 |
+| C2 | 主题 | 可导入的 Slint 主题（§2.1 两套配色、§2.2 字号、§2.3 控件尺寸、§2.5 图标）+ 随配色的控件（按钮、滑块、输入框、复选框、下拉框、滚动条、悬停提示）；默认字体为系统 UI 字体 | UI-THEME-01–03、UI-TOOL-02/03、UI-PL-10/11 |
 | C3 | 输入绑定表 | 命令声明 `bindings`。可绑定输入：全部按键 × 修饰键（Ctrl/Shift/Alt/Cmd）；视频区鼠标的左键单击/双击、左半区/右半区双击、右键双击、中键、侧键 X1/X2、滚轮上/下/左/右、长按，均可加修饰键。作用范围：全局，或某个面板/窗口获得焦点时。宿主维护插件默认值 + 用户覆盖层（持久化）；同一输入被两个命令声明时报告冲突、不静默覆盖。右键保留给菜单 | UI-KEY-01–02、UI-MOUSE-01–05、§8.1 |
 | C4 | 菜单结构 | 命令声明 `path`（任意深度，含顶层直接命令）、`group`（推荐骨架：打开 / 领域 / 画面 / 窗口入口 / 退出）、`order`；同组按 `order` 排序，组间分隔线；`radio` 单选组；快捷键文字由绑定表生成；样式按 §6.3 | UI-MENU-02/06–08、§6.2 |
 | C5 | 屏幕提示 | `plugin.osd.show(text)`，规格见 UI-OSD-01 | UI-OSD-01–02、UI-BAR-02/11、UI-PL-07/10 |

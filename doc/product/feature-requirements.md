@@ -3587,9 +3587,9 @@ manifest 能力：`commands`、`events`、`ui.osd`、`ui.settings`、`ui.theme`�
 | 菜单路径 | order | group | 默认绑定 |
 | --- | --- | --- | --- |
 | 设置 ▶ 选项… | 830 | settings-main | F5 |
-| 设置 ▶ 外观 ▶ Vestra（radio，默认） | 840 | settings-look | |
+| 设置 ▶ 外观 ▶ Vestra 深色（radio，默认）· Vestra 浅色 | 840、841 | settings-look | |
 
-「设置 ▶」子菜单的号段分配（本文七章合计）：选项… 830（preferences）；快捷键… 832、鼠标… 833、忽略默认快捷键 834（hotkeys）；插件管理… 836（plugins）；外观 ▶ 840–849（preferences 配色 840–841，本轮只用 840；visualizer 的「空闲时显示徽标」845）。F5 未被占用。macOS 笔记本上 F5 要配合 fn 键。
+「设置 ▶」子菜单的号段分配（本文七章合计）：选项… 830（preferences）；快捷键… 832、鼠标… 833、忽略默认快捷键 834（hotkeys）；插件管理… 836（plugins）；外观 ▶ 840–849（preferences 配色 840–841；visualizer 的「空闲时显示徽标」845）。F5 未被占用。macOS 笔记本上 F5 要配合 fn 键。
 
 ### J04 首选项总窗口
 
@@ -3662,22 +3662,22 @@ manifest 能力：`commands`、`events`、`ui.osd`、`ui.settings`、`ui.theme`�
 
 **需求**
 - 配色由核心统一下发，可以在运行时切换，所有界面（主窗口、底栏、侧栏、右键菜单、所有插件工具窗口、首选项窗口）**立即**生效，不需要重启或重开窗口。
-- 本轮只有一套配色 **Vestra**（默认）：`theme.slint` 中取自品牌 logo 的配色，强调色 `#fa139c`，进度渐变 `#fdb506 → #fc6f3b → #fa139c → #911efc`。切换机制先做好，供以后加入浅色配色时使用。
-- 目前只能是深色配色：插件 std-widgets 以 `fluent-dark` 编译，浅色配色会和输入框、下拉框不协调；加浅色配色前要先解决这一点。
+- 两套配色（2026-10 视觉身份轮，界面规格 §2.1）：**Vestra 深色**（`vestra`，默认）和 **Vestra 浅色**（`vestra-light`），都是取自标志完整色谱的 Aurora 配色：强调色洋红，正在播放为青色，进度渐变琥珀 → 洋红 → 紫 → 青。浅色配色的视频区仍是深色。
+- 插件 std-widgets 以 `fluent-dark` 编译；选浅色配色时宿主在运行时把 std-widgets 的配色方案切到浅色（`Palette.color-scheme`），输入框、下拉框、复选框、滚动条随之变浅。
 - 「外观」页内容：
   - 配色单选，每项附一块 120×40 的预览，画出视频区与底栏底色、进度填充、强调色、文字色；
-  - 「恢复默认」按钮（回到 Vestra，已是默认时置灰）。
+  - 「恢复默认」按钮（回到 Vestra 深色，已是默认时置灰）。
   - 没有圆角选项：圆角、字号与控件尺寸不随配色变化，也不能单独改（裁决 R-S2）。
 
-**入口**：设置 ▶ 外观 ▶ Vestra（radio）；选项 ▶ 外观。以后每加一套配色，在这里多一个单选项。
+**入口**：设置 ▶ 外观 ▶ Vestra 深色 / Vestra 浅色（radio，840、841）；选项 ▶ 外观。以后每加一套配色，在这里多一个单选项。
 
 **行为细节**
 - 切换时屏幕提示 `配色：<配色名>`。
 - 选择保存在核心，跨启动保持。preferences 停用时配色保持不变：核心持有当前值，只是暂时没有切换入口。
 - 正在拖动的滑块、打开的菜单在切换时不应中断；如果某个视图更新失败，下次刷新时重试，不影响别的视图。
-- 未来可以开放「自定义强调色」，本轮不做；配色 id 由核心固定（当前只有 `vestra`），没有配色列表接口（裁决 R-S2）。
+- 未来可以开放「自定义强调色」，本轮不做；配色 id 由核心固定（`vestra`、`vestra-light`），没有配色列表接口（裁决 R-S2）。
 
-**持久化**：核心写入 `ui-state.json` 的 `appearance.theme`（当前只有 `"vestra"`；读到未知值时回到 `"vestra"`），只存这一项。
+**持久化**：核心写入 `ui-state.json` 的 `appearance.theme`（`"vestra"` 或 `"vestra-light"`；读到未知值时回到 `"vestra"`），只存这一项。
 
 **核心依赖**
 - 【核心新增】Theme 改为宿主可设的全局。
@@ -3688,7 +3688,7 @@ manifest 能力：`commands`、`events`、`ui.osd`、`ui.settings`、`ui.theme`�
 - 【核心新增】
 
   ```ts
-  type ThemeId = "vestra";                                   // 以后加配色时扩充
+  type ThemeId = "vestra" | "vestra-light";                 // 以后加配色时扩充
   interface Appearance {
     readonly theme: ThemeId;                                 // 同步只读，不需要能力
     onChange(listener: (theme: ThemeId) => void): Disposable;

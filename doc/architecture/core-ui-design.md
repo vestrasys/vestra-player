@@ -419,7 +419,7 @@ interface Scope { readonly osd: Osd }
 
 ### 5.2 宿主行为
 
-- 视频区左上角，左/上边距 10px，粗体 16px，白字、1px 黑色描边（Slint `Text` 的 `stroke`/`stroke-width`）；显示 2000 ms 后在 300 ms 内淡出；任何插件的新提示替换当前提示（只有一行）。全屏与普通模式都显示。
+- 视频区左上角，左/上边距 10px，粗体 16px，白字、1px 黑色描边（Slint `Text` 的 `stroke`/`stroke-width`；2026-10 视觉身份轮起改为半透明深色圆角底板，见界面规格 UI-OSD-01）；显示 2000 ms 后在 300 ms 内淡出；任何插件的新提示替换当前提示（只有一行）。全屏与普通模式都显示。
 - 文字 1–200 字符，换行替换为空格。
 - 提示不属于任何资源：插件停用时，已显示的提示照常到时消失。
 - wire：`osd.show { text }`，宿主显示后答复。
@@ -630,7 +630,7 @@ interface PlaybackStats {
 
 ### 10.2 宿主行为
 
-- 信息层：视频区左上角，位于屏幕提示一行之下（y = 36px，x = 10px），半透明黑底 `#000000b0`、内边距 6px、`Theme.font-mono` 11px、`Theme.text`；不接收输入（不放 TouchArea），跟随视频区，全屏时也显示。多个插件各有一块时按 owner 代次从上到下排列。
+- 信息层：视频区左上角，位于屏幕提示一行之下（y = 36px，x = 10px），半透明黑底 `#000000b0`、内边距 6px、`Theme.font-mono` 11px、`Theme.text`（2026-10 视觉身份轮起为与 OSD 相同的圆角底板、固定浅色字，见界面规格 UI-INFO-02）；不接收输入（不放 TouchArea），跟随视频区，全屏时也显示。多个插件各有一块时按 owner 代次从上到下排列。
 - 文字最多 32 行、4096 字节；SDK 用「最后写入生效」泵发送（同一时间一个请求在途），每秒刷新一次只产生一个请求。wire：`osd.panel { text: string | null }`。
 - 插件停用或句柄 `dispose` 时宿主移除该块。
 - `playback.stats`：转给后端工作线程，从 libmpv 读 `video-codec`、`video-params/w,h`、`estimated-vf-fps`（无则 `container-fps`）、`audio-codec-name`、`audio-params/samplerate`、`audio-params/channel-count`、`frame-drop-count`，加上宿主自己的 session 与已显示帧序号。没有来源时 `video`、`audio` 为 `null`。
