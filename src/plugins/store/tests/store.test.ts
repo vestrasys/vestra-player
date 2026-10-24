@@ -11,7 +11,7 @@ const path = (host: Awaited<ReturnType<typeof start>>["host"]) => host.command("
 test("menu 「插件商城…」 counts updates from the same source only, announces them once", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, [
-    { id: "vestra.youtube", name: "YouTube", versions: [{ version: "0.3.0" }, { version: "0.2.0" }] },
+    { id: "zysilm.youtube", name: "YouTube", versions: [{ version: "0.3.0" }, { version: "0.2.0" }] },
     { id: "vestra.video", name: "Video", versions: [{ version: "9.0.0" }] },
   ]);
   publish(net, THIRD, [{ id: "someone.x", name: "X", versions: [{ version: "5.0.0" }] }]);
@@ -19,7 +19,7 @@ test("menu 「插件商城…」 counts updates from the same source only, annou
     net,
     packages: [
       BUILTIN,
-      info("vestra.youtube", { version: "0.2.0", source: { kind: "repository", url: OFFICIAL } }),
+      info("zysilm.youtube", { version: "0.2.0", source: { kind: "repository", url: OFFICIAL } }),
       // Installed from the official repository, but only the third-party one has a newer version.
       info("someone.x", { version: "1.0.0", source: { kind: "repository", url: OFFICIAL } }),
     ],

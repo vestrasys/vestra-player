@@ -234,7 +234,8 @@ export const BUILTIN = info("vestra.video", { version: "0.2.0", builtin: true, s
 
 /**
  * The store on a TestHost (player 0.2.0) with the fake network and the test
- * key. `validateArchive` reads the fake package file the store downloaded;
+ * key. `validateArchive` reads the fake package file the store downloaded
+ * (and refuses reserved `vestra.` ids like the player);
  * `rollback` swaps current and previous like the player.
  */
 export async function start(
@@ -263,6 +264,9 @@ export async function start(
         throw new HostError("invalid", "not a Vestra plugin package");
       }
     }
+    // Like the player (0.4.1): vestra / vestra.* belong to built-in plugins.
+    if (/^vestra(\.|$)/i.test(manifest.id))
+      throw new HostError("reserved", `「${manifest.id}」：vestra. 开头的 id 只留给播放器内置插件，不能安装或试载`);
     if (manifest.minPlayerVersion && manifest.minPlayerVersion > host.app.version)
       throw new HostError("versionMismatch", `requires Vestra Player ≥ ${manifest.minPlayerVersion}`);
     host.candidates.set(file, manifest);

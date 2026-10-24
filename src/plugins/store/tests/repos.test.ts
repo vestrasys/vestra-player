@@ -8,8 +8,8 @@ import { BUILTIN, FakeNet, info, OFFICIAL, openStore, publish, rows, signWith, s
 const scratch = mkdtempSync(join(tmpdir(), "vestra-store-repos-"));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
 
-const YT = { id: "vestra.youtube", name: "YouTube", versions: [{ version: "0.2.0" }] };
-const BB = { id: "vestra.bilibili", name: "Bilibili 视频", versions: [{ version: "0.2.0" }] };
+const YT = { id: "zysilm.youtube", name: "YouTube", versions: [{ version: "0.2.0" }] };
+const BB = { id: "zysilm.bilibili", name: "Bilibili 视频", versions: [{ version: "0.2.0" }] };
 
 test("the official index is read, verified and listed when the window opens", async () => {
   const net = new FakeNet();
@@ -41,12 +41,12 @@ test("a tampered index, a wrong key or a missing signature keep the last verifie
   assert.equal(first.store.repos.official.index?.plugins.length, 1);
 
   // Same signature, one byte changed (a plugin added by an attacker).
-  const forged = Buffer.from(good.toString().replace('"vestra.youtube"', '"vestra.youtubf"'));
+  const forged = Buffer.from(good.toString().replace('"zysilm.youtube"', '"zysilm.youtubf"'));
   net.route(OFFICIAL, { body: forged });
   await first.store.refreshAll(true);
   const official = first.store.repos.official;
   assert.equal(official.status.text, "官方仓库的签名校验失败，可能被篡改，已忽略这次更新");
-  assert.deepEqual(official.index?.plugins.map((p) => p.id), ["vestra.youtube"]);
+  assert.deepEqual(official.index?.plugins.map((p) => p.id), ["zysilm.youtube"]);
 
   // Signed with a key the store does not trust.
   net.route(OFFICIAL, { body: forged });
@@ -57,7 +57,7 @@ test("a tampered index, a wrong key or a missing signature keep the last verifie
   net.route(`${OFFICIAL}.sig`, { status: 404 });
   await first.store.refreshAll(true);
   assert.equal(official.status.text, "官方仓库缺少签名文件，已忽略这次更新");
-  assert.deepEqual(official.index?.plugins.map((p) => p.id), ["vestra.youtube"]);
+  assert.deepEqual(official.index?.plugins.map((p) => p.id), ["zysilm.youtube"]);
   await first.stop();
 });
 
@@ -165,24 +165,24 @@ test("third-party repositories: no signature read, `official: true` ignored, lab
 
 test("review B: replaying an older signed index cannot hide a revocation", async () => {
   const net = new FakeNet();
-  const plugins = [{ id: "vestra.p", name: "P", versions: [{ version: "0.2.0" }, { version: "0.1.0" }] }];
+  const plugins = [{ id: "zysilm.p", name: "P", versions: [{ version: "0.2.0" }, { version: "0.1.0" }] }];
   const { host, store, stop } = await start({
     net,
-    packages: [BUILTIN, info("vestra.p", { version: "0.2.0", source: { kind: "repository", url: OFFICIAL } })],
+    packages: [BUILTIN, info("zysilm.p", { version: "0.2.0", source: { kind: "repository", url: OFFICIAL } })],
   });
   try {
     publish(net, OFFICIAL, plugins);
     await store.refreshAll(true);
     const old = [net.routes.get(OFFICIAL)!, net.routes.get(`${OFFICIAL}.sig`)!];
     host.dialogAnswers.push({ confirmed: false, checked: false });
-    publish(net, OFFICIAL, plugins, { revoked: [{ id: "vestra.p", versions: "0.2.0", reason: "bad" }] });
+    publish(net, OFFICIAL, plugins, { revoked: [{ id: "zysilm.p", versions: "0.2.0", reason: "bad" }] });
     await store.refreshAll(true);
-    await until(host, () => store.items.find((i) => i.id === "vestra.p")?.state === "revoked");
+    await until(host, () => store.items.find((i) => i.id === "zysilm.p")?.state === "revoked");
     net.route(OFFICIAL, old[0]!);
     net.route(`${OFFICIAL}.sig`, old[1]!);
     await store.refreshAll(true);
     assert.equal(store.repos.official.status.text, "官方仓库返回了旧的索引，已忽略这次更新");
-    assert.equal(store.items.find((i) => i.id === "vestra.p")?.state, "revoked");
+    assert.equal(store.items.find((i) => i.id === "zysilm.p")?.state, "revoked");
     await openStore(host);
     assert.match(String(host.window("store").props["status-text"]), /官方仓库返回了旧的索引/);
     assert.equal(host.window("store").props["status-warn"], true);
@@ -195,20 +195,20 @@ test("review C: a plugin absent for a while keeps its seen versions; an even old
   const net = new FakeNet();
   const { store, stop } = await start({ net });
   try {
-    publish(net, OFFICIAL, [{ id: "vestra.p", versions: [{ version: "0.1.0" }] }]);
+    publish(net, OFFICIAL, [{ id: "zysilm.p", versions: [{ version: "0.1.0" }] }]);
     await store.refreshAll(true);
     const v1 = [net.routes.get(OFFICIAL)!, net.routes.get(`${OFFICIAL}.sig`)!];
-    publish(net, OFFICIAL, [{ id: "vestra.q", versions: [{ version: "1.0.0" }] }]); // p delisted: accepted
+    publish(net, OFFICIAL, [{ id: "zysilm.q", versions: [{ version: "1.0.0" }] }]); // p delisted: accepted
     await store.refreshAll(true);
     assert.match(store.repos.official.status.text, /已更新$/);
-    publish(net, OFFICIAL, [{ id: "vestra.p", versions: [{ version: "0.2.0" }, { version: "0.1.0" }] }, { id: "vestra.q", versions: [{ version: "1.0.0" }] }]);
+    publish(net, OFFICIAL, [{ id: "zysilm.p", versions: [{ version: "0.2.0" }, { version: "0.1.0" }] }, { id: "zysilm.q", versions: [{ version: "1.0.0" }] }]);
     await store.refreshAll(true);
-    assert.deepEqual(store.repos.official.meta?.seen?.versions["vestra.p"]?.sort(), ["0.1.0", "0.2.0"]);
+    assert.deepEqual(store.repos.official.meta?.seen?.versions["zysilm.p"]?.sort(), ["0.1.0", "0.2.0"]);
     net.route(OFFICIAL, v1[0]!);
     net.route(`${OFFICIAL}.sig`, v1[1]!);
     await store.refreshAll(true);
     assert.equal(store.repos.official.status.text, "官方仓库返回了旧的索引，已忽略这次更新");
-    assert.deepEqual(store.repos.official.index?.plugins.map((p) => p.id), ["vestra.p", "vestra.q"]);
+    assert.deepEqual(store.repos.official.index?.plugins.map((p) => p.id), ["zysilm.p", "zysilm.q"]);
   } finally {
     await stop();
   }

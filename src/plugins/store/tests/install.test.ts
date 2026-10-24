@@ -3,6 +3,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 import { HostError } from "@vestra-player/sdk/testing";
+import { installFromRepository } from "../installer.ts";
 import {
   actions,
   banners,
@@ -23,9 +24,9 @@ import {
 } from "./helpers.ts";
 
 const YT = {
-  id: "vestra.youtube",
+  id: "zysilm.youtube",
   name: "YouTube",
-  author: "Vestra Player",
+  author: "zysilm",
   versions: [{ version: "0.2.0", capabilities: ["commands", "ui.window", "playback.control", "clipboard"] }],
 };
 
@@ -43,13 +44,15 @@ test("official install: confirm with permissions, download through a redirect, c
   const net = new FakeNet();
   publish(net, OFFICIAL, [YT]);
   // GitHub Releases answer with a redirect to their asset host.
-  const direct = "https://plugins.test/download/vestra.youtube-0.2.0.vxp";
+  const direct = "https://plugins.test/download/zysilm.youtube-0.2.0.vxp";
   const asset = net.routes.get(direct)!;
   net.route(direct, { status: 302, headers: { location: "https://assets.test/yt.vxp" } });
   net.route("https://assets.test/yt.vxp", asset);
   const { host, store, stop } = await ready(net);
   try {
-    await choose(host, "YouTube");
+    const row = (await choose(host, "YouTube")) as { meta?: string };
+    // The repository is official; the plugin is a third-party one hosted there.
+    assert.equal(row.meta, "zysilm · 官方仓库");
     assert.deepEqual(actions(host).map((a) => a.text), ["安装 0.2.0"]);
     assert.equal(props(host)["permissions-title"], "权限（4）");
     host.dialogAnswers.push(yes);
@@ -57,12 +60,12 @@ test("official install: confirm with permissions, download through a redirect, c
     await until(host, () => installs(host).length === 1, "install");
     const confirm = host.confirms.at(-1)!;
     assert.equal(confirm["message"], "安装「YouTube」0.2.0？");
-    assert.match(String(confirm["detail"]), /来自 Vestra Player 官方仓库，作者 Vestra Player。/);
+    assert.match(String(confirm["detail"]), /来自 Vestra Player 官方仓库，作者 zysilm。/);
     assert.match(String(confirm["detail"]), /· 读写剪贴板/);
     assert.match(String(confirm["detail"]), /不限制它读写文件和联网/);
     assert.deepEqual(installs(host)[0], {
       method: "install",
-      id: "vestra.youtube",
+      id: "zysilm.youtube",
       source: { kind: "repository", url: OFFICIAL },
       replace: false,
     });
@@ -86,7 +89,7 @@ test("a refused confirmation downloads nothing", async () => {
     host.dialogAnswers.push(no);
     host.window("store").emit("act", "install");
     await host.settle(50);
-    assert.equal(net.count("https://plugins.test/download/vestra.youtube-0.2.0.vxp"), 0);
+    assert.equal(net.count("https://plugins.test/download/zysilm.youtube-0.2.0.vxp"), 0);
     assert.equal(installs(host).length, 0);
   } finally {
     await stop();
@@ -100,7 +103,7 @@ for (const [what, served, text] of [
   test(`a package whose ${what} differs from the index is deleted and not installed`, async () => {
     const net = new FakeNet();
     publish(net, OFFICIAL, [YT]);
-    const url = "https://plugins.test/download/vestra.youtube-0.2.0.vxp";
+    const url = "https://plugins.test/download/zysilm.youtube-0.2.0.vxp";
     const real = Buffer.from((net.routes.get(url) as { body: Buffer }).body);
     const body = served ?? Buffer.from(real.toString().replace("YouTube", "YouTubf"));
     net.route(url, { body });
@@ -140,14 +143,14 @@ test("a package that asks for more than its entry lists is not installed", async
 test("installed from another source: 替换… asks once and installs with replace", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, [YT]);
-  const { host, stop } = await ready(net, [BUILTIN, info("vestra.youtube", { version: "0.1.5", source: { kind: "file" } })]);
+  const { host, stop } = await ready(net, [BUILTIN, info("zysilm.youtube", { version: "0.1.5", source: { kind: "file" } })]);
   try {
     const row = await choose(host, "YouTube");
     assert.equal(row.badge, "已从本地文件安装");
     assert.deepEqual(actions(host).map((a) => a.id), ["replace"]);
     assert.ok(banners(host).some((b) => b.startsWith("已从本地文件安装 0.1.5")));
     // There is also the row of the installed instance (named from its manifest, here unreadable: the id).
-    assert.equal(rows(host).find((r) => r.name === "vestra.youtube")?.badge, "已安装");
+    assert.equal(rows(host).find((r) => r.name === "zysilm.youtube")?.badge, "已安装");
 
     host.dialogAnswers.push(no);
     host.window("store").emit("act", "replace");
@@ -162,7 +165,7 @@ test("installed from another source: 替换… asks once and installs with repla
     host.dialogAnswers.push(yes);
     host.window("store").emit("act", "replace");
     await until(host, () => installs(host).length === 1);
-    assert.deepEqual(installs(host)[0], { method: "install", id: "vestra.youtube", source: { kind: "repository", url: OFFICIAL }, replace: true });
+    assert.deepEqual(installs(host)[0], { method: "install", id: "zysilm.youtube", source: { kind: "repository", url: OFFICIAL }, replace: true });
     assert.equal(host.confirms.length, 2, "one question per attempt");
   } finally {
     await stop();
@@ -176,7 +179,7 @@ test("a conflict the store did not know about: confirm, then retry with replace"
   try {
     await choose(host, "YouTube");
     // Installed from the workshop meanwhile, without the store hearing about it yet.
-    host.packages.push(info("vestra.youtube", { source: { kind: "workshop" } }));
+    host.packages.push(info("zysilm.youtube", { source: { kind: "workshop" } }));
     host.dialogAnswers.push(yes, yes);
     host.window("store").emit("act", "install");
     await until(host, () => installs(host).length === 1);
@@ -188,14 +191,33 @@ test("a conflict the store did not know about: confirm, then retry with replace"
   }
 });
 
-test("built-in id in a repository: nothing to install", async () => {
+test("vestra. ids in any repository: refused before downloading (reserved for built-ins)", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, [YT, { id: "vestra.video", name: "Fake Video", versions: [{ version: "9.0.0" }] }]);
-  const { host, stop } = await ready(net);
+  publish(net, THIRD, [{ id: "Vestra.extra", name: "Extra", versions: [{ version: "1.0.0" }] }]);
+  const { host, store, stop } = await start({ net });
   try {
-    await choose(host, "Fake Video");
+    store.settings.save({ ...store.settings.value, repos: [THIRD] });
+    store.repos.sync([THIRD]);
+    await openStore(host);
+    await until(host, () => rows(host).some((r) => r.name === "Extra") && rows(host).some((r) => r.name === "Fake Video"), "rows");
+    const fake = await choose(host, "Fake Video");
+    assert.equal(fake.badge, "不能安装");
     assert.deepEqual(actions(host), []);
-    assert.ok(banners(host).includes("与播放器内置插件同 id，不能从这里安装"));
+    assert.ok(banners(host).includes("「vestra.video」：vestra. 开头的 id 只留给播放器内置插件，不能安装或试载"));
+    assert.ok((props(host)["versions"] as { canInstall: boolean }[]).every((v) => !v.canInstall));
+    // The built-in plugin keeps its own row.
+    assert.equal(rows(host).find((r) => r.name === "vestra.video")?.badge, "内置");
+    const extra = await choose(host, "Extra");
+    assert.equal(extra.badge, "不能安装");
+    assert.deepEqual(actions(host), []);
+    // Even if asked to (an older window, a race): no question, no download, no install.
+    const item = store.items.find((i) => i.id === "Vestra.extra")!;
+    await installFromRepository(store, item, item.entry!.versions[0]!);
+    await until(host, () => host.osd.includes("「Vestra.extra」：vestra. 开头的 id 只留给播放器内置插件，不能安装或试载"));
+    assert.equal(host.confirms.length, 0);
+    assert.equal(net.count("https://third.example/repo/download/Vestra.extra-1.0.0.vxp"), 0);
+    assert.equal(installs(host).length, 0);
   } finally {
     await stop();
   }
@@ -245,7 +267,7 @@ test("update, rollback, older version and uninstall from the same repository", a
       ],
     },
   ]);
-  const installed = info("vestra.youtube", {
+  const installed = info("zysilm.youtube", {
     version: "0.2.0",
     capabilities: ["commands"],
     source: { kind: "repository", url: OFFICIAL },
@@ -296,7 +318,7 @@ test("update, rollback, older version and uninstall from the same repository", a
     host.dialogAnswers.push({ confirmed: true, checked: true });
     host.window("store").emit("act", "uninstall");
     await until(host, () => host.osd.includes("已卸载 YouTube（数据已删除）"));
-    assert.deepEqual(host.packageCalls.at(-1), { method: "uninstall", id: "vestra.youtube", removeData: true });
+    assert.deepEqual(host.packageCalls.at(-1), { method: "uninstall", id: "zysilm.youtube", removeData: true });
     assert.equal(host.confirms.at(-1)!["checkbox"], "同时删除它的设置与数据");
   } finally {
     await stop();
@@ -361,7 +383,7 @@ test("README links: web addresses open in the browser, anchors are ignored, othe
     const facts = props(host)["facts"] as { label: string; link: boolean }[];
     window.emit("factLink", facts.findIndex((f) => f.link));
     await host.settle(20);
-    assert.equal(host.system.urls.at(-1), "https://github.com/example/vestra.youtube");
+    assert.equal(host.system.urls.at(-1), "https://github.com/example/zysilm.youtube");
     assert.ok(!existsSync(join(host.dataDirectory, "downloads", "x")));
   } finally {
     await stop();
