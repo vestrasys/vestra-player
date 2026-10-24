@@ -1,26 +1,31 @@
-# 音频工作台
+# Audio Workbench
 
-调整声音效果，选择音轨和输出设备。
+Adjusts the sound and picks the audio track and the output device.
 
-## 功能
+## Features
 
-- **均衡器**：六段（60 Hz–10 kHz，±6 dB）及开关，四个预设：平直、人声、音乐、影院。
-- **声音同步**：±10 秒，每步 50 毫秒；可选不保持、本次运行内保持或始终保持。
-- **声音处理**：规格化（自动平衡音量）、晶化（提亮高频，可调强度）。
-- **声道**：立体声、左声道、右声道、单声道混合、左右互换。
-- **音轨**：选择或依次切换音轨，载入外部音频文件；可自动载入与视频同名的音频文件。
-- **输出设备**：选择播放用的声音设备；设备拔出时自动改用系统默认，重新接上后切回。
+- **Equalizer**: six bands (60 Hz–10 kHz, ±6 dB) with an on/off switch and four presets: Flat, Voice, Music, Cinema.
+- **Audio sync**: ±10 seconds in 50 ms steps; Don't Keep, Keep for This Run or Always Keep.
+- **Processing**: Normalize (evens out the loudness), Crystalizer (brightens the treble, adjustable strength).
+- **Channels**: Stereo, Left Channel, Right Channel, Mono Mix, Swap Left and Right.
+- **Audio tracks**: pick or cycle through the tracks, load an external audio file; optionally load audio files with the same name as the video automatically.
+- **Output device**: the sound device to play on; when it is unplugged the system default takes over, and the choice returns when it is plugged back in.
 
-以上设置跨文件、跨重启保留（声音同步按所选的保持方式）。
+These settings are kept across files and restarts (the audio sync as its keep mode says).
 
-## 入口
+## Entries
 
-- 右键菜单「声音」：音频工作台…、音轨、输出设备、均衡器（Shift+E）、预设、声音同步（`>` 超前、`<` 滞后、`?` 复位）、声音处理（规格化 Shift+N、晶化 Shift+C）、复位。
-- 「声音 ▶ 音轨 ▶ 按序切换」：Alt+A。
-- 「打开 ▶ 载入外部音频…」。
-- 「音频工作台…」窗口有均衡器、效果、声道与输出三个页签。
+- Right-click menu Audio: Audio Workbench…, Audio Track, Output Device, Equalizer (Shift+E), Preset, Audio Sync (`>` earlier, `<` later, `?` reset), Processing (Normalize Shift+N, Crystalizer Shift+C), Reset.
+- Audio ▸ Audio Track ▸ Cycle Tracks: Alt+A.
+- Open ▸ Load External Audio….
+- The Audio Workbench… window has three tabs: Equalizer, Effects, Output.
 
-## 限制
+## Limits
 
-- 音量、静音由播放器提供，不在本插件里。
-- 载入的外部音轨在换片源前保留。
+- Volume and mute are the player's, not this plugin's.
+- A loaded external track stays until the source changes.
+- In the menu, a track without title and language reads "Track 2 (opus)", and an external track gets "(external)", in English in every language: a command title cannot take template arguments yet (round doc 2026-10-i18n, request R2-audio-1).
+
+## Translations
+
+Texts are English in the source; `locales/zh-Hans.po` has the Simplified Chinese (`vestra-plugin i18n extract`, `i18n check`).

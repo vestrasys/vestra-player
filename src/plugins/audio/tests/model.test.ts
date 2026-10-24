@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bands, clamp, companions, deviceId, deviceLabel, deviceTitles, matches, neutral, nodes, parse, presetOf, presets, serialize, syncText, trackLabel } from "../model.ts";
+import { bands, clamp, companions, deviceId, deviceLabel, deviceTitles, matches, neutral, nodes, parse, presetOf, presets, serialize, syncSeconds, trackOsd, trackRow, trackTitle } from "../model.ts";
 
 test("reset clears the owned chain and preset gains stay inside the ±6 dB EQ range", () => {
   assert.deepEqual(nodes(neutral()), []);
@@ -15,13 +15,13 @@ test("reset clears the owned chain and preset gains stay inside the ±6 dB EQ ra
   assert.ok(!matches(neutral(), 1));
 });
 
-test("normalization and 晶化 use typed processing nodes without device volume", () => {
+test("normalization and the crystalizer use typed processing nodes without device volume", () => {
   assert.deepEqual(nodes({ ...neutral(), normalize: true, clarity: { on: true, db: 3 } }), [
     { kind: "treble", frequency: 3000, slope: 0.5, gainDb: 3 },
     { kind: "dynaudnorm", enabled: true, maxGain: 4, peak: 0.9 },
   ]);
   assert.ok(nodes({ ...neutral(), gains: [6, 6, 6, 6, 6, 6] }).every((node) => node.kind === "equalizer"));
-  assert.deepEqual(nodes({ ...neutral(), clarity: { on: false, db: 5 } }), [], "晶化 off keeps its strength but makes no node");
+  assert.deepEqual(nodes({ ...neutral(), clarity: { on: false, db: 5 } }), [], "crystalizer off keeps its strength but makes no node");
 });
 
 test("a bypassed equalizer drops only the bands; presetOf names the matching preset", () => {
@@ -32,14 +32,14 @@ test("a bypassed equalizer drops only the bands; presetOf names the matching pre
   assert.equal(presetOf(value), -1);
 });
 
-test("settings parse leniently; a legacy numeric clarity migrates to the 晶化 switch", () => {
+test("settings parse leniently; a legacy numeric clarity migrates to the crystalizer switch", () => {
   assert.deepEqual(parse(null), { settings: neutral(), syncKeep: "none", autoLoad: false, tab: 0, device: null, deviceName: null, extra: {} });
   assert.deepEqual(parse({ clarity: 2.5 }).settings.clarity, { on: true, db: 2.5 });
   assert.deepEqual(parse({ clarity: 0 }).settings.clarity, { on: false, db: 3 });
   assert.deepEqual(parse({ clarity: { on: true, db: 9 } }).settings.clarity, { on: true, db: 6 });
   assert.deepEqual(parse({ gains: [1, "x", 9, 0, 0, 0] }).settings.gains, [1, 0, 6, 0, 0, 0]);
   assert.deepEqual(parse({ gains: [1, 2] }).settings.gains, [0, 0, 0, 0, 0, 0]);
-  assert.equal(parse({ syncKeep: "session", syncMs: 500 }).settings.delayMs, 0, "only 始终保持 restores the delay");
+  assert.equal(parse({ syncKeep: "session", syncMs: 500 }).settings.delayMs, 0, "only Always Keep restores the delay");
   assert.equal(parse({ syncKeep: "always", syncMs: 5003 }).settings.delayMs, 5000);
   assert.equal(parse({ syncKeep: "always", syncMs: -25000 }).settings.delayMs, -10000, "G09: ±10 000 ms");
   assert.equal(parse({ syncKeep: "bogus" }).syncKeep, "none");
@@ -64,9 +64,9 @@ test("settings parse leniently; a legacy numeric clarity migrates to the 晶化 
     device: null,
   });
   assert.equal("syncMs" in serialize({ ...stored, syncKeep: "session" }), false);
-  assert.equal(syncText(-50), "音频同步: -0.05秒");
-  assert.equal(syncText(300), "音频同步: +0.3秒");
-  assert.equal(syncText(0), "音频同步: 0秒");
+  assert.equal(syncSeconds(-50), "-0.05");
+  assert.equal(syncSeconds(300), "+0.3");
+  assert.equal(syncSeconds(0), "0");
 });
 
 test("G05: the channels node comes first, only off stereo and never on a mono track", () => {
@@ -81,14 +81,25 @@ test("G05: the channels node comes first, only off stereo and never on a mono tr
 });
 
 test("G03 track labels: number, title, language, codec, external", () => {
-  const t = (fields: Partial<Parameters<typeof trackLabel>[0]>) => ({
+  const t = (fields: Partial<Parameters<typeof trackRow>[0]>) => ({
     id: 1, selected: false, external: false, exportable: true, codec: null, title: null, language: null, ...fields,
   });
-  assert.equal(trackLabel(t({ title: "日语", language: "jpn", codec: "aac" }), 0), "1. 日语 [jpn] (aac)");
-  assert.equal(trackLabel(t({ title: "movie.ac3", codec: "ac3", external: true }), 2), "3. movie.ac3 (ac3)（外部）");
-  assert.equal(trackLabel(t({ codec: "opus" }), 1), "音轨 2 (opus)");
-  assert.equal(trackLabel(t({ language: "eng" }), 0), "1. [eng]");
-  assert.equal([...trackLabel(t({ title: "长".repeat(80) }), 0)].length, 60);
+  const label = (fields: Partial<Parameters<typeof trackRow>[0]>, index: number) => trackTitle(trackRow(t(fields), index));
+  assert.equal(label({ title: "日语", language: "jpn", codec: "aac" }, 0), "1. 日语 [jpn] (aac)");
+  assert.equal(label({ title: "movie.ac3", codec: "ac3", external: true }, 2), "3. movie.ac3 (ac3) (external)");
+  assert.equal(label({ codec: "opus" }, 1), "Track 2 (opus)");
+  assert.equal(label({ language: "eng" }, 0), "1. [eng]");
+  assert.equal(label({}, 3), "Track 4");
+  assert.equal([...label({ title: "长".repeat(80) }, 0)].length, 60);
+  // The window and the OSD get the data and put the words around it.
+  assert.deepEqual(trackRow(t({ codec: "opus", external: true }), 1), {
+    kind: "track", text: "", n: 2, codec: "opus", external: true, disconnected: false,
+  });
+  assert.deepEqual(trackOsd(trackRow(t({ title: "日语", codec: "aac" }), 0)), ["Audio track: {}", ["1. 日语 (aac)"]]);
+  assert.deepEqual(trackOsd(trackRow(t({ title: "movie.ac3", external: true }), 2)), ["Audio track: {} (external)", ["3. movie.ac3"]]);
+  assert.deepEqual(trackOsd(trackRow(t({ codec: "opus" }), 1)), ["Audio track: Track {} ({})", [2, "opus"]]);
+  assert.deepEqual(trackOsd(trackRow(t({ external: true }), 1)), ["Audio track: Track {} (external)", [2]]);
+  assert.deepEqual(trackOsd(trackRow(t({}), 0)), ["Audio track: Track {}", [1]]);
 });
 
 test("A11 same-name scan: audio files that start with the video's name, at most 8", () => {
@@ -105,13 +116,13 @@ test("G16: the saved device is an id the player accepts, kept with its name; tit
   assert.equal(stored.deviceName, "AirPods Pro");
   assert.deepEqual(serialize(stored).device, "coreaudio/AB-12");
   assert.equal(serialize(stored).deviceName, "AirPods Pro");
-  assert.equal(serialize(parse({})).device, null, "系统默认 is saved as null");
+  assert.equal(serialize(parse({})).device, null, "System Default is saved as null");
   assert.equal("deviceName" in serialize(parse({})), false);
   for (const bad of ["", 7, "a\nb", "x".repeat(513)]) assert.equal(parse({ device: bad, deviceName: "n" }).device, null);
   assert.equal(deviceId("coreaudio/X"), "coreaudio/X");
   assert.deepEqual(
-    deviceTitles([{ id: "a", name: "USB Audio" }, { id: "b", name: "USB Audio" }, { id: "c", name: "系统默认" }, { id: "d", name: " \t " }], "USB Audio"),
-    ["USB Audio", "USB Audio (2)", "系统默认 (2)", "未命名设备", "USB Audio (3)"],
+    deviceTitles([{ id: "a", name: "USB Audio" }, { id: "b", name: "USB Audio" }, { id: "c", name: "System Default" }, { id: "d", name: " \t " }], "USB Audio"),
+    ["USB Audio", "USB Audio (2)", "System Default (2)", "Unnamed device", "USB Audio (3)"],
   );
   const long = deviceLabel("扬声器".repeat(40));
   assert.ok(new TextEncoder().encode(long).length <= 72 && long.endsWith("…"));

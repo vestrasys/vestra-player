@@ -1,18 +1,22 @@
 import type { AudioNode, AudioTrack } from "@vestra-player/sdk";
 
 export const bands = [60, 170, 350, 1000, 3500, 10000] as const;
-/** 晶化 (crystalizer, a 3 kHz treble shelf): a switch plus a remembered strength. */
+/** Crystalizer (a 3 kHz treble shelf): a switch plus a remembered strength. */
 export type Clarity = { on: boolean; db: number };
-/** G05 声道: routing on a stereo mix; `stereo` leaves the track as it is. */
+/**
+ * G05 channels: routing on a stereo mix; `stereo` leaves the track as it is.
+ * `osd` is the message after a menu choice, `mixed` the one for a track with
+ * more than two channels (mixed to stereo first).
+ */
 export const channelModes = [
-  { id: "stereo", label: "立体声" },
-  { id: "left", label: "左声道" },
-  { id: "right", label: "右声道" },
-  { id: "mono", label: "单声道混合" },
-  { id: "swap", label: "左右互换" },
+  { id: "stereo", label: "Stereo", osd: "Channels: Stereo", mixed: "Channels: Stereo" },
+  { id: "left", label: "Left Channel", osd: "Channels: Left Channel", mixed: "Channels: Left Channel (mixed to stereo)" },
+  { id: "right", label: "Right Channel", osd: "Channels: Right Channel", mixed: "Channels: Right Channel (mixed to stereo)" },
+  { id: "mono", label: "Mono Mix", osd: "Channels: Mono Mix", mixed: "Channels: Mono Mix (mixed to stereo)" },
+  { id: "swap", label: "Swap Left and Right", osd: "Channels: Swap Left and Right", mixed: "Channels: Swap Left and Right (mixed to stereo)" },
 ] as const;
 export type ChannelMode = (typeof channelModes)[number]["id"];
-/** `equalizer: false` bypasses the bands but keeps their gains (均衡器, Shift+E). */
+/** `equalizer: false` bypasses the bands but keeps their gains (Equalizer, Shift+E). */
 export type Settings = {
   equalizer: boolean;
   gains: number[];
@@ -21,11 +25,12 @@ export type Settings = {
   clarity: Clarity;
   channels: ChannelMode;
 };
+/** The window's preset list (ui/workbench.slint) has the same names in the same order. */
 export const presets = [
-  { label: "平直", gains: [0, 0, 0, 0, 0, 0] },
-  { label: "人声", gains: [-3, -2, 1, 3, 2, -1] },
-  { label: "音乐", gains: [3, 2, -1, 0, 2, 3] },
-  { label: "影院", gains: [4, 2, -1, 1, 2, 2] },
+  { label: "Flat", osd: "Equalizer preset: Flat", gains: [0, 0, 0, 0, 0, 0] },
+  { label: "Voice", osd: "Equalizer preset: Voice", gains: [-3, -2, 1, 3, 2, -1] },
+  { label: "Music", osd: "Equalizer preset: Music", gains: [3, 2, -1, 0, 2, 3] },
+  { label: "Cinema", osd: "Equalizer preset: Cinema", gains: [4, 2, -1, 1, 2, 2] },
 ] as const;
 export const CLARITY_DB = 3;
 export const neutralClarity = (): Clarity => ({ on: false, db: CLARITY_DB });
@@ -38,11 +43,11 @@ export const neutral = (): Settings => ({
   channels: "stereo",
 });
 
-/** 声音同步 ▶ keep mode: reset per source, keep for this run, or keep across restarts. */
+/** Audio Sync ▸ keep mode: reset per source, keep for this run, or keep across restarts. */
 export const syncKeeps = [
-  { id: "none", label: "不保持" },
-  { id: "session", label: "本次运行内保持" },
-  { id: "always", label: "始终保持" },
+  { id: "none", label: "Don't Keep" },
+  { id: "session", label: "Keep for This Run" },
+  { id: "always", label: "Always Keep" },
 ] as const;
 export type SyncKeep = (typeof syncKeeps)[number]["id"];
 export const DELAY_LIMIT = 10000;
@@ -57,8 +62,8 @@ export function clamp(value: unknown, min: number, max: number) {
 export const delay = (value: unknown) => Math.round(clamp(value, -DELAY_LIMIT, DELAY_LIMIT) / 10) * 10;
 export const tenth = (value: unknown, min: number, max: number) => Math.round(clamp(value, min, max) * 10) / 10;
 
-/** OSD wording: "音频同步: -0.05秒". */
-export const syncText = (ms: number) => `音频同步: ${ms > 0 ? "+" : ms < 0 ? "-" : ""}${Math.abs(ms) / 1000}秒`;
+/** The delay in seconds with its sign, for the OSD template "Audio sync: {} s": "-0.05", "+0.3", "0". */
+export const syncSeconds = (ms: number) => `${ms > 0 ? "+" : ms < 0 ? "-" : ""}${Math.abs(ms) / 1000}`;
 
 /** True when the equalizer gains equal the preset's (menu check mark). */
 export const matches = (settings: Settings, index: number) =>
@@ -69,7 +74,7 @@ export const presetOf = (settings: Settings) => presets.findIndex((_, index) => 
 
 /**
  * Neutral or bypassed bands and effects are left out, so neutral settings are an empty chain.
- * Order: channels → equalizer × 6 → treble (晶化) → dynaudnorm (规格化). A mono track keeps
+ * Order: channels → equalizer × 6 → treble (crystalizer) → dynaudnorm (normalize). A mono track keeps
  * the channel mode but gets no channels node.
  */
 export function nodes(value: Settings, track: { mono: boolean } = { mono: false }): AudioNode[] {
@@ -92,7 +97,7 @@ export type Stored = {
   /** A11: load same-named audio files next to a local source (not selected). */
   autoLoad: boolean;
   tab: number;
-  /** G16: the chosen output device id (`null` = 系统默认) and its last known name. */
+  /** G16: the chosen output device id (`null` = System Default) and its last known name. */
   device: string | null;
   deviceName: string | null;
   extra: Record<string, unknown>;
@@ -110,7 +115,7 @@ const number = (value: unknown, fallback: number, read: (value: unknown) => numb
 
 /**
  * Parse `settings.json` leniently: any broken field falls back to its default.
- * A legacy numeric `clarity` (the old 清晰度 slider) migrates to the 晶化 switch:
+ * A legacy numeric `clarity` (the old clarity slider) migrates to the crystalizer switch:
  * above 0 is on at that strength, 0 is off at the default strength.
  */
 export function parse(raw: unknown): Stored {
@@ -144,7 +149,7 @@ export function parse(raw: unknown): Stored {
   return { settings, syncKeep, autoLoad: value.autoLoadExternal === true, tab, device, deviceName, extra };
 }
 
-/** The JSON written back; `syncMs` only while 始终保持. */
+/** The JSON written back; `syncMs` only while Always Keep. */
 export function serialize({ settings, syncKeep, autoLoad, tab, device, deviceName, extra }: Stored) {
   return {
     ...extra,
@@ -165,8 +170,15 @@ export function serialize({ settings, syncKeep, autoLoad, tab, device, deviceNam
 
 // ---------------------------------------------------------------- output device (G16)
 
-export const SYSTEM_DEFAULT = "系统默认";
-export const NO_DEVICES = "没有可用的输出设备";
+/**
+ * Fixed device titles. The menu titles are translated by the player from the
+ * catalog; "System Default", "Unnamed device" and "Selected device" are also
+ * texts of the window, so their translations are there.
+ */
+export const SYSTEM_DEFAULT = "System Default";
+export const NO_DEVICES = "No Output Devices";
+export const UNNAMED_DEVICE = "Unnamed device";
+export const SELECTED_DEVICE = "Selected device";
 export const DEVICE_POLL_MS = 5000;
 /** A saved id the player would accept: 1–512 characters, no control characters. */
 export function deviceId(value: unknown): string | null {
@@ -183,10 +195,12 @@ function fit(text: string, bytes: number) {
   }
   return `${out}…`;
 }
-/** A device name as a menu item: no control characters or edge spaces, ≤ 72 bytes, never empty. */
-export const deviceLabel = (name: string) => fit(name.replace(/[\u0000-\u001f\u007f]/g, " ").trim(), 72) || "未命名设备";
+/** A device name without control characters or edge spaces, ≤ 72 bytes; empty for a blank name. */
+export const cleanName = (name: string) => fit(name.replace(/[\u0000-\u001f\u007f]/g, " ").trim(), 72);
+/** A device name as a menu item: `cleanName`, never empty. */
+export const deviceLabel = (name: string) => cleanName(name) || UNNAMED_DEVICE;
 /**
- * Menu titles for `[系统默认, ...devices, missing?]`: distinct (a repeated name gets " (2)"),
+ * Menu titles for `[System Default, ...devices, missing?]`: distinct (a repeated name gets " (2)"),
  * never one of the fixed titles. `missing` is the chosen device while it is not connected.
  */
 export function deviceTitles(devices: readonly { id: string; name: string }[], missing: string | null = null) {
@@ -202,15 +216,43 @@ export function deviceTitles(devices: readonly { id: string; name: string }[], m
 
 // ---------------------------------------------------------------- tracks (G03, G04) and external audio (A11)
 
-/** "1. 日语 [jpn] (aac)", "3. movie.ac3 (ac3)（外部）", "音轨 2 (opus)"; at most 60 characters. */
-export function trackLabel(track: AudioTrack, index: number) {
+/**
+ * A track as the window's list shows it (ui/workbench.slint `Row`, kind
+ * "track"). `text` is data, "1. 日语 [jpn] (aac)" (at most 60 characters), or
+ * empty for a track without title and language: the window then shows the
+ * words "Track {n}" ("Track 2 (opus)"). An external track gets " (external)".
+ */
+export type TrackRow = { kind: "track"; text: string; n: number; codec: string; external: boolean; disconnected: false };
+export function trackRow(track: AudioTrack, index: number): TrackRow {
   const n = index + 1;
   const title = track.title?.trim() || null;
   const language = track.language ? `[${track.language}]` : null;
   const codec = track.codec ? `(${track.codec})` : null;
-  const head = title || language ? [`${n}.`, title, language] : [`音轨 ${n}`];
-  const text = [...head, codec].filter(Boolean).join(" ") + (track.external ? "（外部）" : "");
-  return [...text].length > 60 ? `${[...text].slice(0, 59).join("")}…` : text;
+  const text = title || language ? [`${n}.`, title, language, codec].filter(Boolean).join(" ") : "";
+  return { kind: "track", text: clip(text, 60), n, codec: track.codec ?? "", external: track.external, disconnected: false };
+}
+/** At most `length` characters, cut with "…". */
+export const clip = (text: string, length: number) => ([...text].length > length ? `${[...text].slice(0, length - 1).join("")}…` : text);
+
+/**
+ * The OSD after switching to a track: one whole template per shape of the
+ * label, so each is translated as a sentence.
+ */
+export function trackOsd(row: TrackRow) {
+  if (row.text) return row.external ? (["Audio track: {} (external)", [row.text]] as const) : (["Audio track: {}", [row.text]] as const);
+  if (row.codec)
+    return row.external ? (["Audio track: Track {} ({}) (external)", [row.n, row.codec]] as const) : (["Audio track: Track {} ({})", [row.n, row.codec]] as const);
+  return row.external ? (["Audio track: Track {} (external)", [row.n]] as const) : (["Audio track: Track {}", [row.n]] as const);
+}
+
+/**
+ * The track as a menu item title, in English: a command title cannot take
+ * arguments (doc/process/rounds/2026-10-i18n.md, 第 2 轮请求 R2-audio-1), so
+ * "Track {}" and " (external)" stay untranslated in the menu meanwhile.
+ */
+export function trackTitle(row: TrackRow) {
+  const text = row.text || (row.codec ? `Track ${row.n} (${row.codec})` : `Track ${row.n}`);
+  return row.external ? `${text} (external)` : text;
 }
 
 /** Audio file extensions A11 offers and the same-name scan picks up. */

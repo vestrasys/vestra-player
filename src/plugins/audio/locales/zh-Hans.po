@@ -1,0 +1,462 @@
+msgid ""
+msgstr ""
+"Language: zh-Hans\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: main.ts:95 main.ts:594
+msgid "Audio sync: {} s"
+msgstr "音频同步: {}秒"
+
+#: main.ts:104
+msgid "Channels: Stereo"
+msgstr "声道: 立体声"
+
+#: main.ts:104
+msgid "Channels: Left Channel (mixed to stereo)"
+msgstr "声道: 左声道（已混为立体声）"
+
+#: main.ts:104
+msgid "Channels: Right Channel (mixed to stereo)"
+msgstr "声道: 右声道（已混为立体声）"
+
+#: main.ts:104
+msgid "Channels: Mono Mix (mixed to stereo)"
+msgstr "声道: 单声道混合（已混为立体声）"
+
+#: main.ts:104
+msgid "Channels: Swap Left and Right (mixed to stereo)"
+msgstr "声道: 左右互换（已混为立体声）"
+
+#: main.ts:104
+msgid "Channels: Left Channel"
+msgstr "声道: 左声道"
+
+#: main.ts:104
+msgid "Channels: Right Channel"
+msgstr "声道: 右声道"
+
+#: main.ts:104
+msgid "Channels: Mono Mix"
+msgstr "声道: 单声道混合"
+
+#: main.ts:104
+msgid "Channels: Swap Left and Right"
+msgstr "声道: 左右互换"
+
+#: main.ts:167
+msgid "Load External Audio"
+msgstr "载入外部音频"
+
+#: main.ts:170
+msgid "This audio is already loaded"
+msgstr "该音频已载入"
+
+#: main.ts:174
+msgid "Audio loaded: {}"
+msgstr "已载入音频: {}"
+
+#: main.ts:176
+msgid "The source changed; the audio was not loaded"
+msgstr "来源已改变，未载入音频"
+
+#: main.ts:177
+msgid "Cannot load audio: {}"
+msgstr "无法载入音频: {}"
+
+#: main.ts:229
+msgid "Audio track: {} (external)"
+msgstr "音轨: {}（外部）"
+
+#: main.ts:229
+msgid "Audio track: {}"
+msgstr "音轨: {}"
+
+#: main.ts:229
+msgid "Audio track: Track {} ({}) (external)"
+msgstr "音轨: 音轨 {} ({})（外部）"
+
+#: main.ts:229
+msgid "Audio track: Track {} ({})"
+msgstr "音轨: 音轨 {} ({})"
+
+#: main.ts:229
+msgid "Audio track: Track {} (external)"
+msgstr "音轨: 音轨 {}（外部）"
+
+#: main.ts:229
+msgid "Audio track: Track {}"
+msgstr "音轨: 音轨 {}"
+
+#: main.ts:232
+msgid "Cannot switch the audio track: {}"
+msgstr "无法切换音轨: {}"
+
+#: main.ts:237
+msgid "Only one audio track"
+msgstr "只有一条音轨"
+
+#: main.ts:259 main.ts:270 main.ts:538 main.ts:549
+msgid "Audio Track"
+msgstr "音轨"
+
+#: main.ts:259
+msgid "Loading…"
+msgstr "正在载入…"
+
+#: main.ts:259
+msgid "No Audio Tracks"
+msgstr "没有音轨"
+
+#: main.ts:339
+msgid "Cannot switch to System Default: {}"
+msgstr "无法切换到 系统默认: {}"
+
+#: main.ts:340
+msgid "Cannot switch to {}: {}"
+msgstr "无法切换到 {}: {}"
+
+#: main.ts:351
+msgid "Audio output: System Default"
+msgstr "音频输出: 系统默认"
+
+#: main.ts:352
+msgid "Audio output: Selected device"
+msgstr "音频输出: 所选设备"
+
+#: main.ts:353
+msgid "Audio output: {}"
+msgstr "音频输出: {}"
+
+#: main.ts:363
+msgid "Output device disconnected, using System Default"
+msgstr "输出设备已断开，改用系统默认"
+
+#: main.ts:386 main.ts:393
+msgid "Output Device"
+msgstr "输出设备"
+
+#: main.ts:386
+msgid "No Output Devices"
+msgstr "没有可用的输出设备"
+
+#: main.ts:397
+msgid "Device not connected"
+msgstr "设备未连接"
+
+#: main.ts:517
+msgid "Load External Audio…"
+msgstr "载入外部音频…"
+
+#: main.ts:522 main.ts:543 ui/workbench.slint:21
+msgid "Loading"
+msgstr "正在载入"
+
+#: main.ts:522
+msgid "No file is playing"
+msgstr "没有正在播放的文件"
+
+#: main.ts:522
+msgid "Generated video cannot take external audio"
+msgstr "生成的画面不能载入音频"
+
+#: main.ts:531
+msgid "Audio Workbench…"
+msgstr "音频工作台…"
+
+#: main.ts:538
+msgid "Cycle Tracks"
+msgstr "按序切换"
+
+#: main.ts:543 ui/workbench.slint:22
+msgid "No audio tracks"
+msgstr "没有音轨"
+
+#: main.ts:549 ui/workbench.slint:594
+msgid "Stereo"
+msgstr "立体声"
+
+#: main.ts:549 ui/workbench.slint:595
+msgid "Left Channel"
+msgstr "左声道"
+
+#: main.ts:549 ui/workbench.slint:596
+msgid "Right Channel"
+msgstr "右声道"
+
+#: main.ts:549 ui/workbench.slint:597
+msgid "Mono Mix"
+msgstr "单声道混合"
+
+#: main.ts:549 ui/workbench.slint:598
+msgid "Swap Left and Right"
+msgstr "左右互换"
+
+#: main.ts:555 ui/workbench.slint:36
+msgid "No audio track selected"
+msgstr "没有选中的音轨"
+
+#: main.ts:555 ui/workbench.slint:582
+msgid "The current track is mono"
+msgstr "当前音轨是单声道"
+
+#: main.ts:561 ui/workbench.slint:409 ui/workbench.slint:452
+msgid "Equalizer"
+msgstr "均衡器"
+
+#: main.ts:568
+msgid "Equalizer: On"
+msgstr "均衡器: 开"
+
+#: main.ts:568
+msgid "Equalizer: Off"
+msgstr "均衡器: 关"
+
+#: main.ts:574
+msgid "Preset"
+msgstr "预设"
+
+#: main.ts:574 ui/workbench.slint:408
+msgid "Flat"
+msgstr "平直"
+
+#: main.ts:574 ui/workbench.slint:408
+msgid "Voice"
+msgstr "人声"
+
+#: main.ts:574 ui/workbench.slint:408
+msgid "Music"
+msgstr "音乐"
+
+#: main.ts:574 ui/workbench.slint:408
+msgid "Cinema"
+msgstr "影院"
+
+#: main.ts:581
+msgid "Equalizer preset: Flat"
+msgstr "均衡器预设: 平直"
+
+#: main.ts:581
+msgid "Equalizer preset: Voice"
+msgstr "均衡器预设: 人声"
+
+#: main.ts:581
+msgid "Equalizer preset: Music"
+msgstr "均衡器预设: 音乐"
+
+#: main.ts:581
+msgid "Equalizer preset: Cinema"
+msgstr "均衡器预设: 影院"
+
+#: main.ts:599 main.ts:603
+msgid "Audio Sync"
+msgstr "声音同步"
+
+#: main.ts:599
+msgid "50 ms Earlier"
+msgstr "超前 50 毫秒"
+
+#: main.ts:599
+msgid "50 ms Later"
+msgstr "滞后 50 毫秒"
+
+#: main.ts:599 main.ts:638 ui/workbench.slint:474
+msgid "Reset"
+msgstr "复位"
+
+#: main.ts:603 ui/workbench.slint:648
+msgid "Don't Keep"
+msgstr "不保持"
+
+#: main.ts:603 ui/workbench.slint:649
+msgid "Keep for This Run"
+msgstr "本次运行内保持"
+
+#: main.ts:603 ui/workbench.slint:650
+msgid "Always Keep"
+msgstr "始终保持"
+
+#: main.ts:613 main.ts:625
+msgid "Processing"
+msgstr "声音处理"
+
+#: main.ts:613 ui/workbench.slint:518
+msgid "Normalize"
+msgstr "规格化"
+
+#: main.ts:620
+msgid "Normalize: On"
+msgstr "规格化: 开"
+
+#: main.ts:620
+msgid "Normalize: Off"
+msgstr "规格化: 关"
+
+#: main.ts:625 ui/workbench.slint:531
+msgid "Crystalizer"
+msgstr "晶化"
+
+#: main.ts:633
+msgid "Crystalizer: On"
+msgstr "晶化: 开"
+
+#: main.ts:633
+msgid "Crystalizer: Off"
+msgstr "晶化: 关"
+
+#: main.ts:643
+msgid "Audio processing reset"
+msgstr "音频处理已复位"
+
+#: manifest.json ui/workbench.slint:358
+msgid "Audio Workbench"
+msgstr "音频工作台"
+
+#: manifest.json
+msgid "Equalizer, audio sync, channels, audio tracks and output device"
+msgstr "均衡器、声音同步、声道、音轨与输出设备"
+
+#: manifest.json
+msgid ""
+"A six-band equalizer with presets, audio sync, normalize and crystalizer, channel selection, plus audio track switching, loading external audio files and choosing the output device.\n"
+"Settings are kept across files and restarts; find it under Audio in the right-click menu and in the Audio Workbench… window."
+msgstr ""
+"六段均衡器与预设、声音同步、规格化与晶化、声道选择，以及音轨切换、载入外部音频文件和输出设备选择。\n"
+"设置跨文件、跨重启保留；入口在右键菜单「声音」与「音频工作台…」窗口。"
+
+#: manifest.json
+msgid "audio"
+msgstr "声音"
+
+#: manifest.json
+msgid "equalizer"
+msgstr "均衡器"
+
+#: manifest.json
+msgid "audio track"
+msgstr "音轨"
+
+#: manifest.json
+msgid "output device"
+msgstr "输出设备"
+
+#: ui/workbench.slint:12
+msgid "{} (external)"
+msgstr "{}（外部）"
+
+#: ui/workbench.slint:13
+msgid "Track {} ({}) (external)"
+msgstr "音轨 {} ({})（外部）"
+
+#: ui/workbench.slint:13
+msgid "Track {} ({})"
+msgstr "音轨 {} ({})"
+
+#: ui/workbench.slint:14
+msgid "Track {} (external)"
+msgstr "音轨 {}（外部）"
+
+#: ui/workbench.slint:14
+msgid "Track {}"
+msgstr "音轨 {}"
+
+#: ui/workbench.slint:17
+msgid "System Default"
+msgstr "系统默认"
+
+#: ui/workbench.slint:18
+msgid "Unnamed device"
+msgstr "未命名设备"
+
+#: ui/workbench.slint:19
+msgid "Selected device"
+msgstr "所选设备"
+
+#: ui/workbench.slint:20
+msgid "No output devices available"
+msgstr "没有可用的输出设备"
+
+#: ui/workbench.slint:28
+msgid "{} (not connected)"
+msgstr "{}（未连接）"
+
+#: ui/workbench.slint:32
+msgid "{}: device not connected, using System Default"
+msgstr "{}：设备未连接，正在使用系统默认"
+
+#: ui/workbench.slint:35
+msgid "Loading audio…"
+msgstr "正在载入音频…"
+
+#: ui/workbench.slint:37
+msgid "Applying…"
+msgstr "正在应用…"
+
+#: ui/workbench.slint:38
+msgid "Audio processing failed"
+msgstr "音频处理失败"
+
+#: ui/workbench.slint:39
+msgid "Applied"
+msgstr "已应用"
+
+#: ui/workbench.slint:40
+msgid "Ready"
+msgstr "就绪"
+
+#: ui/workbench.slint:184 ui/workbench.slint:549 ui/workbench.slint:697
+msgid "Default"
+msgstr "默认"
+
+#: ui/workbench.slint:409
+msgid "Effects"
+msgstr "效果"
+
+#: ui/workbench.slint:409
+msgid "Output"
+msgstr "声道与输出"
+
+#: ui/workbench.slint:463
+msgid "Custom"
+msgstr "自定义"
+
+#: ui/workbench.slint:505
+msgid "Audio sync"
+msgstr "声音同步"
+
+#: ui/workbench.slint:506
+msgid "{} ms"
+msgstr "{} ms"
+
+#: ui/workbench.slint:546
+msgid "{} dB"
+msgstr "{} dB"
+
+#: ui/workbench.slint:563
+msgid "Track"
+msgstr "音轨"
+
+#: ui/workbench.slint:576
+msgid "Load…"
+msgstr "载入…"
+
+#: ui/workbench.slint:586
+msgid "Channels"
+msgstr "声道"
+
+#: ui/workbench.slint:614
+msgid "Device"
+msgstr "输出设备"
+
+#: ui/workbench.slint:633
+msgid "Auto-load audio files with the same name"
+msgstr "自动载入同名音频文件"
+
+#: ui/workbench.slint:641
+msgid "Keep sync"
+msgstr "同步保持"
+
+#: ui/workbench.slint:676
+msgid "Retry"
+msgstr "重试"

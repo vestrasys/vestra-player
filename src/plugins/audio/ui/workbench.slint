@@ -2,6 +2,45 @@ import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
 import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
 
+// A row of a drop-down. `kind` "text", "device" and "track" show `text` (data); the other
+// kinds are words of this file. A "track" without `text` is "Track {n}" (with its codec);
+// `external` and `disconnected` add a note.
+struct Row { kind: string, text: string, n: int, codec: string, external: bool, disconnected: bool }
+
+global Words {
+    pure public function track(r: Row) -> string {
+        if r.text != "" { return r.external ? @tr("{} (external)", r.text) : r.text; }
+        if r.codec != "" { return r.external ? @tr("Track {} ({}) (external)", r.n, r.codec) : @tr("Track {} ({})", r.n, r.codec); }
+        return r.external ? @tr("Track {} (external)", r.n) : @tr("Track {}", r.n);
+    }
+    pure public function name(r: Row) -> string {
+        return r.kind == "system-default" ? @tr("System Default")
+            : r.kind == "unnamed-device" ? @tr("Unnamed device")
+            : r.kind == "selected-device" ? @tr("Selected device")
+            : r.kind == "no-devices" ? @tr("No output devices available")
+            : r.kind == "loading" ? @tr("Loading")
+            : r.kind == "no-tracks" ? @tr("No audio tracks")
+            : r.kind == "track" ? Words.track(r)
+            : r.text;
+    }
+    // What the drop-down shows for the row.
+    pure public function row(r: Row) -> string {
+        return r.disconnected ? @tr("{} (not connected)", Words.name(r)) : Words.name(r);
+    }
+    // The output device's tip: its full name, and why it is not used.
+    pure public function device-tip(r: Row) -> string {
+        return r.disconnected ? @tr("{}: device not connected, using System Default", Words.name(r)) : Words.name(r);
+    }
+    pure public function status(state: string) -> string {
+        return state == "loading" ? @tr("Loading audio…")
+            : state == "no-track" ? @tr("No audio track selected")
+            : state == "applying" ? @tr("Applying…")
+            : state == "failed" ? @tr("Audio processing failed")
+            : state == "applied" ? @tr("Applied")
+            : @tr("Ready");
+    }
+}
+
 // 14px box + 11px text (the panel switch).
 component Check {
     in-out property <bool> checked;
@@ -114,7 +153,7 @@ component Band {
     }
 }
 
-// Effect row (UI-TOOL-04): label 56 (right, 11px) + panel slider 100 + value 60 + 默认 41, 4px apart:
+// Effect row (UI-TOOL-04): label 56 (right, 11px) + panel slider 100 + value 60 + Default 41, 4px apart:
 // 269px, inside the 285px the 301px window leaves after its 8px padding ("-10000 ms" needs ~57).
 component EffectRow {
     in property <string> label;
@@ -142,7 +181,7 @@ component EffectRow {
         Text { width: 60px; text: root.shown; color: Theme.text-list; font-size: Theme.font-body; vertical-alignment: center; }
         VerticalLayout {
             alignment: center;
-            Button { width: 41px; text: "默认"; small: true; enabled: root.available; clicked => { root.reset(); } }
+            Button { width: 41px; text: @tr("Default"); small: true; enabled: root.available; clicked => { root.reset(); } }
         }
     }
 }
@@ -180,7 +219,7 @@ component ChoiceItem {
 // Compact 21px drop-down with an 11px label; the list opens below it. `max-rows` > 0 caps
 // the list's height (it scrolls with the wheel), so a long list stays inside the window.
 component Choice {
-    in property <[string]> model;
+    in property <[Row]> model;
     in-out property <int> current-index;
     in property <bool> enabled: true;
     in property <int> max-rows: 0;
@@ -189,7 +228,7 @@ component Choice {
     height: 21px;
     accessible-role: combobox;
     accessible-enabled: root.enabled;
-    accessible-value: root.current-index >= 0 && root.current-index < root.model.length ? root.model[root.current-index] : "";
+    accessible-value: root.current-index >= 0 && root.current-index < root.model.length ? Words.row(root.model[root.current-index]) : "";
     Rectangle {
         border-radius: Theme.radius-control;
         background: !root.enabled ? Theme.button-disabled
@@ -202,7 +241,7 @@ component Choice {
         spacing: 2px;
         Text {
             horizontal-stretch: 1;
-            text: root.current-index >= 0 && root.current-index < root.model.length ? root.model[root.current-index] : "";
+            text: root.current-index >= 0 && root.current-index < root.model.length ? Words.row(root.model[root.current-index]) : "";
             color: root.enabled ? Theme.text-list : Theme.text-dim;
             font-size: Theme.font-body;
             vertical-alignment: center;
@@ -236,8 +275,8 @@ component Choice {
                 content-height: root.model.length * 20px;
                 VerticalLayout {
                     width: root.width - 2px;
-                    for name[index] in root.model: ChoiceItem {
-                        text: name;
+                    for item[index] in root.model: ChoiceItem {
+                        text: Words.row(item);
                         selected: index == root.current-index;
                         picked => {
                             root.current-index = index;
@@ -316,11 +355,12 @@ component PresetItem {
 }
 
 export component AudioWorkbench inherits Window {
-    title: "音频工作台";
+    title: @tr("Audio Workbench");
     width: 301px;
     height: 260px;
     background: Theme.bg-panel;
-    in property <string> status-text;
+    // "loading", "no-track", "applying", "failed", "applied" or "ready" (Words.status).
+    in property <string> status;
     in property <bool> source-ready;
     in property <bool> is-busy;
     in property <bool> has-error;
@@ -334,18 +374,18 @@ export component AudioWorkbench inherits Window {
     in property <bool> clarity-enabled;
     in property <float> clarity-db: 3;
     in property <int> sync-keep-index: 0;
-    in property <[string]> track-names: ["没有音轨"];
+    in property <[Row]> track-rows: [{ kind: "no-tracks", text: "", n: 0, codec: "", external: false, disconnected: false }];
     in property <int> track-index: 0;
     in property <bool> tracks-available;
     in property <bool> can-load;
     in property <int> channel-index: 0;
     in property <bool> channels-available;
-    in property <string> channel-tip;
+    in property <bool> mono-track;
     in property <bool> auto-load;
-    in property <[string]> device-names: ["系统默认"];
+    in property <[Row]> device-rows: [{ kind: "system-default", text: "", n: 0, codec: "", external: false, disconnected: false }];
     in property <int> device-index: 0;
     in property <bool> devices-available;
-    in property <string> devices-tip;
+    in property <Row> device-tip;
     callback tab-changed(int);
     callback gain-changed(int, float);
     callback equalizer-changed(bool);
@@ -364,8 +404,9 @@ export component AudioWorkbench inherits Window {
     callback channel-selected(int);
     callback auto-load-changed(bool);
     callback device-selected(int);
-    private property <[string]> preset-names: ["平直", "人声", "音乐", "影院"];
-    private property <[string]> tab-names: ["均衡器", "效果", "声道与输出"];
+    // The presets of model.ts, in the same order.
+    private property <[string]> preset-names: [@tr("Flat"), @tr("Voice"), @tr("Music"), @tr("Cinema")];
+    private property <[string]> tab-names: [@tr("Equalizer"), @tr("Effects"), @tr("Output")];
     changed delay-ms => { delay.value = root.delay-ms; }
     changed clarity-db => { clarity.value = root.clarity-db; }
     changed normalize-enabled => { norm.checked = root.normalize-enabled; }
@@ -376,7 +417,7 @@ export component AudioWorkbench inherits Window {
     changed channel-index => { channel-combo.current-index = root.channel-index; }
     changed auto-load => { auto-check.checked = root.auto-load; }
     changed device-index => { device-combo.current-index = root.device-index; }
-    changed device-names => { device-combo.current-index = root.device-index; }
+    changed device-rows => { device-combo.current-index = root.device-index; }
     VerticalLayout {
         // Page tabs, 31px; the last picked page is remembered by the plugin.
         Rectangle {
@@ -408,7 +449,7 @@ export component AudioWorkbench inherits Window {
                         spacing: 6px;
                         eq := Check {
                             width: 82px;
-                            text: "均衡器";
+                            text: @tr("Equalizer");
                             checked: root.equalizer-enabled;
                             enabled: root.source-ready;
                             toggled(on) => { root.equalizer-changed(on); }
@@ -419,7 +460,7 @@ export component AudioWorkbench inherits Window {
                                 width: 100%;
                                 height: 100%;
                                 enabled: root.source-ready;
-                                text: root.preset-index >= 0 ? root.preset-names[root.preset-index] : "自定义";
+                                text: root.preset-index >= 0 ? root.preset-names[root.preset-index] : @tr("Custom");
                                 clicked => { presets.show(); }
                             }
                             Icon {
@@ -430,7 +471,7 @@ export component AudioWorkbench inherits Window {
                         }
                         VerticalLayout {
                             alignment: center;
-                            Button { text: "复位"; small: true; enabled: root.source-ready; clicked => { root.reset-requested(); } }
+                            Button { text: @tr("Reset"); small: true; enabled: root.source-ready; clicked => { root.reset-requested(); } }
                         }
                         Rectangle { }
                     }
@@ -438,7 +479,8 @@ export component AudioWorkbench inherits Window {
                         padding-left: 3px;
                         spacing: 0px;
                         for value[index] in root.gain-values: Band {
-                            caption: ["60", "170", "350", "1k", "3.5k", "10k"][index];
+                            // i18n-ignore: frequencies
+                        caption: ["60", "170", "350", "1k", "3.5k", "10k"][index];
                             gain: value;
                             available: root.source-ready;
                             edited(gain) => { root.gain-changed(index, gain); }
@@ -447,9 +489,9 @@ export component AudioWorkbench inherits Window {
                             padding-left: 6px;
                             padding-top: 11px;
                             padding-bottom: 13px;
-                            Text { text: "+6 dB"; color: Theme.text-dim; font-size: Theme.font-xs; vertical-alignment: top; }
+                            Text { text: "+6 dB"; color: Theme.text-dim; font-size: Theme.font-xs; vertical-alignment: top; } // i18n-ignore: unit
                             Text { text: "0"; color: Theme.text-dim; font-size: Theme.font-xs; vertical-alignment: center; }
-                            Text { text: "-6 dB"; color: Theme.text-dim; font-size: Theme.font-xs; vertical-alignment: bottom; }
+                            Text { text: "-6 dB"; color: Theme.text-dim; font-size: Theme.font-xs; vertical-alignment: bottom; } // i18n-ignore: unit
                         }
                         Rectangle { }
                     }
@@ -460,8 +502,8 @@ export component AudioWorkbench inherits Window {
                     visible: root.tab-index == 1;
                     spacing: 0px;
                     delay := EffectRow {
-                        label: "声音同步";
-                        shown: round(root.delay-ms) + " ms";
+                        label: @tr("Audio sync");
+                        shown: @tr("{} ms", round(root.delay-ms));
                         minimum: -10000;
                         maximum: 10000;
                         value: root.delay-ms;
@@ -473,7 +515,7 @@ export component AudioWorkbench inherits Window {
                         height: 24px;
                         norm := Check {
                             width: 56px;
-                            text: "规格化";
+                            text: @tr("Normalize");
                             checked: root.normalize-enabled;
                             enabled: root.source-ready;
                             toggled(on) => { root.normalize-changed(on); }
@@ -486,7 +528,7 @@ export component AudioWorkbench inherits Window {
                         alignment: start;
                         clarity-check := Check {
                             width: 56px;
-                            text: "晶化";
+                            text: @tr("Crystalizer");
                             checked: root.clarity-enabled;
                             enabled: root.source-ready;
                             toggled(on) => { root.clarity-toggled(on); }
@@ -501,10 +543,10 @@ export component AudioWorkbench inherits Window {
                             enabled: root.source-ready && root.clarity-enabled;
                             changed(v) => { root.clarity-changed(v); }
                         }
-                        Text { width: 60px; text: round(root.clarity-db * 10) / 10 + " dB"; color: root.clarity-enabled ? Theme.text-list : Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; }
+                        Text { width: 60px; text: @tr("{} dB", round(root.clarity-db * 10) / 10); color: root.clarity-enabled ? Theme.text-list : Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; }
                         VerticalLayout {
                             alignment: center;
-                            Button { width: 41px; text: "默认"; small: true; enabled: root.source-ready; clicked => { root.clarity-reset(); } }
+                            Button { width: 41px; text: @tr("Default"); small: true; enabled: root.source-ready; clicked => { root.clarity-reset(); } }
                         }
                     }
                     Rectangle { }
@@ -513,75 +555,82 @@ export component AudioWorkbench inherits Window {
                     x: 0; y: 0; width: parent.width; height: parent.height;
                     visible: root.tab-index == 2;
                     spacing: 4px;
-                    // 音轨 (G03) + 载入… (A11): 65 + 6 + 140 + 6 + 50 = 267 of 285.
+                    // Track (G03) + Load… (A11): 65 + 6 + 140 + 6 + 50 = 267 of 285.
                     HorizontalLayout {
                         height: 24px;
                         spacing: 6px;
                         alignment: start;
-                        Text { width: 65px; text: "音轨"; color: Theme.text; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
+                        Text { width: 65px; text: @tr("Track"); color: Theme.text; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
                         VerticalLayout {
                             alignment: center;
                             track-combo := Choice {
                                 width: 140px;
                                 enabled: root.tracks-available;
-                                model: root.track-names;
+                                model: root.track-rows;
                                 current-index: root.track-index;
                                 selected(i) => { root.track-selected(i); }
                             }
                         }
                         VerticalLayout {
                             alignment: center;
-                            Button { width: 50px; text: "载入…"; small: true; enabled: root.can-load; clicked => { root.load-requested(); } }
+                            Button { width: 50px; text: @tr("Load…"); small: true; enabled: root.can-load; clicked => { root.load-requested(); } }
                         }
                     }
-                    // 声道 (G05): 65 + 6 + 140 = 211.
+                    // Channels (G05): 65 + 6 + 140 = 211.
                     ToolTipArea {
                         height: 24px;
-                        text: root.channel-tip;
+                        text: root.mono-track ? @tr("The current track is mono") : "";
                         HorizontalLayout {
                             spacing: 6px;
                             alignment: start;
-                            Text { width: 65px; text: "声道"; color: root.channels-available ? Theme.text : Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
+                            Text { width: 65px; text: @tr("Channels"); color: root.channels-available ? Theme.text : Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
                             VerticalLayout {
                                 alignment: center;
                                 channel-combo := Choice {
                                     width: 140px;
                                     enabled: root.channels-available;
-                                    model: ["立体声", "左声道", "右声道", "单声道混合", "左右互换"];
+                                    // The channel modes of model.ts, in the same order.
+                                    model: [
+                                        { kind: "text", text: @tr("Stereo") },
+                                        { kind: "text", text: @tr("Left Channel") },
+                                        { kind: "text", text: @tr("Right Channel") },
+                                        { kind: "text", text: @tr("Mono Mix") },
+                                        { kind: "text", text: @tr("Swap Left and Right") },
+                                    ];
                                     current-index: root.channel-index;
                                     selected(i) => { root.channel-selected(i); }
                                 }
                             }
                         }
                     }
-                    // 输出设备 (G16): 65 + 6 + 200 = 271 of 285; the full name on hover. The list
+                    // Output device (G16): 65 + 6 + 200 = 271 of 285; the full name on hover. The list
                     // opens at y ≈ 117 of 260, so 7 rows (142) fit below; longer lists scroll.
                     ToolTipArea {
                         height: 24px;
-                        text: root.devices-tip;
+                        text: Words.device-tip(root.device-tip);
                         HorizontalLayout {
                             spacing: 6px;
                             alignment: start;
-                            Text { width: 65px; text: "输出设备"; color: root.devices-available ? Theme.text : Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
+                            Text { width: 65px; text: @tr("Device"); color: root.devices-available ? Theme.text : Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
                             VerticalLayout {
                                 alignment: center;
                                 device-combo := Choice {
                                     width: 200px;
                                     max-rows: 7;
                                     enabled: root.devices-available;
-                                    model: root.device-names;
+                                    model: root.device-rows;
                                     current-index: root.device-index;
                                     selected(i) => { root.device-selected(i); }
                                 }
                             }
                         }
                     }
-                    // 自动载入 (A11): indented to the controls, 71 + check.
+                    // Auto-load (A11): indented to the controls, 71 + check.
                     HorizontalLayout {
                         height: 24px;
                         padding-left: 71px;
                         auto-check := Check {
-                            text: "自动载入同名音频文件";
+                            text: @tr("Auto-load audio files with the same name");
                             checked: root.auto-load;
                             toggled(on) => { root.auto-load-changed(on); }
                         }
@@ -589,12 +638,17 @@ export component AudioWorkbench inherits Window {
                     HorizontalLayout {
                         height: 24px;
                         spacing: 6px;
-                        Text { width: 65px; text: "同步保持"; color: Theme.text; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
+                        Text { width: 65px; text: @tr("Keep sync"); color: Theme.text; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
                         VerticalLayout {
                             alignment: center;
                             keep-combo := Choice {
                                 width: 140px;
-                                model: ["不保持", "本次运行内保持", "始终保持"];
+                                // The keep modes of model.ts, in the same order.
+                                model: [
+                                    { kind: "text", text: @tr("Don't Keep") },
+                                    { kind: "text", text: @tr("Keep for This Run") },
+                                    { kind: "text", text: @tr("Always Keep") },
+                                ];
                                 current-index: root.sync-keep-index;
                                 selected(i) => { root.sync-keep-selected(i); }
                             }
@@ -610,7 +664,7 @@ export component AudioWorkbench inherits Window {
                 ToolTipArea {
                     text: root.error-detail;
                     Text {
-                        text: root.status-text;
+                        text: Words.status(root.status);
                         color: root.has-error ? Theme.accent : Theme.text-dim;
                         font-size: Theme.font-body;
                         vertical-alignment: center;
@@ -619,7 +673,7 @@ export component AudioWorkbench inherits Window {
                 }
                 if root.has-error: VerticalLayout {
                     alignment: center;
-                    Button { text: "重试"; small: true; enabled: !root.is-busy; clicked => { root.retry-requested(); } }
+                    Button { text: @tr("Retry"); small: true; enabled: !root.is-busy; clicked => { root.retry-requested(); } }
                 }
             }
         }
@@ -640,7 +694,7 @@ export component AudioWorkbench inherits Window {
                     picked => { root.preset-selected(index); }
                 }
                 Rectangle { height: 7px; Rectangle { height: 1px; background: Theme.line; } }
-                PresetItem { text: "默认"; picked => { root.reset-requested(); } }
+                PresetItem { text: @tr("Default"); picked => { root.reset-requested(); } }
             }
         }
     }

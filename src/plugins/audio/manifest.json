@@ -1,6 +1,6 @@
 {
   "id": "vestra.audio",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -13,15 +13,15 @@
     "ui.dialog",
     "playback.control"
   ],
-  "name": "音频工作台",
+  "name": "Audio Workbench",
   "author": "Vestra Player",
-  "punchline": "均衡器、声音同步、声道、音轨与输出设备",
-  "description": "六段均衡器与预设、声音同步、规格化与晶化、声道选择，以及音轨切换、载入外部音频文件和输出设备选择。\n设置跨文件、跨重启保留；入口在右键菜单「声音」与「音频工作台…」窗口。",
+  "punchline": "Equalizer, audio sync, channels, audio tracks and output device",
+  "description": "A six-band equalizer with presets, audio sync, normalize and crystalizer, channel selection, plus audio track switching, loading external audio files and choosing the output device.\nSettings are kept across files and restarts; find it under Audio in the right-click menu and in the Audio Workbench… window.",
   "tags": [
-    "声音",
-    "均衡器",
-    "音轨",
-    "输出设备"
+    "audio",
+    "equalizer",
+    "audio track",
+    "output device"
   ],
-  "minPlayerVersion": "0.4.0"
+  "minPlayerVersion": "0.4.3"
 }

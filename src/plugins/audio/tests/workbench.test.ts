@@ -58,77 +58,77 @@ function hold(host: TestHost, then: (params: Record<string, unknown>) => unknown
   };
 }
 
-test("menu under 声音 follows the allocation, and editing commands wait for a selected track", async () => {
+test("menu under Audio follows the allocation, and editing commands wait for a selected track", async () => {
   const { host, stop } = await startPlugin(activate, { directory });
   await host.settle();
   assert.deepEqual(
     [...host.commands.values()].map(({ declaration: d }) => [d.path.join(" ▶ "), d.order, d.group, d.bindings.join(","), d.radio, d.repeat]),
     [
-      ["打开 ▶ 载入外部音频…", 114, "open", "", false, false],
-      ["声音 ▶ 音频工作台…", 510, "audio-tools", "", false, false],
-      ["声音 ▶ 音轨 ▶ 按序切换", 512, "audio-track-cycle", "Alt+A", false, false],
-      ...["立体声", "左声道", "右声道", "单声道混合", "左右互换"].map((label) => [`声音 ▶ 音轨 ▶ ${label}`, 512, "audio-channels", "", true, false]),
-      ["声音 ▶ 均衡器", 513, "audio-eq", "Shift+E", false, false],
-      ...presets.map((p) => [`声音 ▶ 预设 ▶ ${p.label}`, 514, "audio-eq", "", true, false]),
-      ["声音 ▶ 声音同步 ▶ 超前 50 毫秒", 515, "audio-eq", ">", false, true],
-      ["声音 ▶ 声音同步 ▶ 滞后 50 毫秒", 515, "audio-eq", "<", false, true],
-      ["声音 ▶ 声音同步 ▶ 复位", 515, "audio-eq", "?", false, true],
-      ["声音 ▶ 声音同步 ▶ 不保持", 515, "audio-sync-keep", "", true, false],
-      ["声音 ▶ 声音同步 ▶ 本次运行内保持", 515, "audio-sync-keep", "", true, false],
-      ["声音 ▶ 声音同步 ▶ 始终保持", 515, "audio-sync-keep", "", true, false],
-      ["声音 ▶ 声音处理 ▶ 规格化", 516, "audio-eq", "Shift+N", false, false],
-      ["声音 ▶ 声音处理 ▶ 晶化", 516, "audio-eq", "Shift+C", false, false],
-      ["声音 ▶ 复位", 517, "audio-eq", "", false, false],
-      ["声音 ▶ 音轨 ▶ 没有音轨", 511, "audio-tools", "", false, false],
-      ["声音 ▶ 输出设备 ▶ 没有可用的输出设备", 512, "audio-tools", "", false, false],
+      ["@open ▶ Load External Audio…", 114, "open", "", false, false],
+      ["@audio ▶ Audio Workbench…", 510, "audio-tools", "", false, false],
+      ["@audio ▶ Audio Track ▶ Cycle Tracks", 512, "audio-track-cycle", "Alt+A", false, false],
+      ...["Stereo", "Left Channel", "Right Channel", "Mono Mix", "Swap Left and Right"].map((label) => [`@audio ▶ Audio Track ▶ ${label}`, 512, "audio-channels", "", true, false]),
+      ["@audio ▶ Equalizer", 513, "audio-eq", "Shift+E", false, false],
+      ...presets.map((p) => [`@audio ▶ Preset ▶ ${p.label}`, 514, "audio-eq", "", true, false]),
+      ["@audio ▶ Audio Sync ▶ 50 ms Earlier", 515, "audio-eq", ">", false, true],
+      ["@audio ▶ Audio Sync ▶ 50 ms Later", 515, "audio-eq", "<", false, true],
+      ["@audio ▶ Audio Sync ▶ Reset", 515, "audio-eq", "?", false, true],
+      ["@audio ▶ Audio Sync ▶ Don't Keep", 515, "audio-sync-keep", "", true, false],
+      ["@audio ▶ Audio Sync ▶ Keep for This Run", 515, "audio-sync-keep", "", true, false],
+      ["@audio ▶ Audio Sync ▶ Always Keep", 515, "audio-sync-keep", "", true, false],
+      ["@audio ▶ Processing ▶ Normalize", 516, "audio-eq", "Shift+N", false, false],
+      ["@audio ▶ Processing ▶ Crystalizer", 516, "audio-eq", "Shift+C", false, false],
+      ["@audio ▶ Reset", 517, "audio-eq", "", false, false],
+      ["@audio ▶ Audio Track ▶ No Audio Tracks", 511, "audio-tools", "", false, false],
+      ["@audio ▶ Output Device ▶ No Output Devices", 512, "audio-tools", "", false, false],
     ],
   );
   assert.equal(host.command("audio.device.none").state.enabled, false);
   assert.equal(host.command("audio.track.none").state.enabled, false);
-  assert.equal(host.command("audio.load").state.reason, "没有正在播放的文件");
-  assert.equal(host.command("audio.track.cycle").state.reason, "没有音轨");
+  assert.equal(host.command("audio.load").state.reason, "No file is playing");
+  assert.equal(host.command("audio.track.cycle").state.reason, "No audio tracks");
   assert.deepEqual(host.conflicts, []);
   assert.deepEqual(host.command("audio.workbench").state, { enabled: true, checked: null, busy: false, reason: null });
   assert.deepEqual(host.command("audio.reset").state, {
     enabled: false,
     checked: null,
     busy: false,
-    reason: "没有选中的音轨",
+    reason: "No audio track selected",
   });
   assert.equal(host.command("audio.equalizer").state.enabled, false);
   for (const key of ["Shift+E", ">", "<", "?", "Shift+N", "Shift+C"]) await assert.rejects(host.press(key), key);
-  assert.equal(host.command("audio.sync.earlier").state.reason, "没有选中的音轨");
+  assert.equal(host.command("audio.sync.earlier").state.reason, "No audio track selected");
   assert.equal(host.command("audio.sync.keep.none").state.checked, true);
   assert.equal(host.command("audio.sync.keep.always").state.enabled, true, "the keep mode needs no track");
   assert.equal(host.command("audio.preset.0").state.checked, true);
   await host.command("audio.workbench").run();
   const window = host.window("audio-workbench");
-  assert.equal(window.props["status-text"], "没有选中的音轨");
+  assert.equal(window.props.status, "no-track");
   assert.equal(window.props["source-ready"], false);
   window.emit("delay-changed", 500); // disabled controls: ignored
   host.openElsewhere("/movie.mp4", "loading");
   await host.settle();
-  assert.equal(window.props["status-text"], "正在载入音频…");
+  assert.equal(window.props.status, "loading");
   host.setSource({ phase: "ready", audioTracks: [track(1, false)] });
   await host.settle();
-  assert.equal(window.props["status-text"], "没有选中的音轨");
+  assert.equal(window.props.status, "no-track");
   host.setSource({ audioTracks: [track(1)] });
   await host.settle();
-  assert.equal(window.props["status-text"], "就绪");
+  assert.equal(window.props.status, "ready");
   assert.equal(window.props["source-ready"], true);
   assert.equal(host.command("audio.reset").state.enabled, true);
   assert.equal(replaces(host).length, 0, "a never-applied neutral chain is not sent");
   await stop();
 });
 
-test("edits round like the host: EQ ±6 dB in 0.1 dB, delay to 10 ms, 晶化 0–6 dB", async () => {
+test("edits round like the host: EQ ±6 dB in 0.1 dB, delay to 10 ms, crystalizer 0–6 dB", async () => {
   const { host, window, stop } = await open();
   window.emit("gain-changed", 0, 9.87);
   window.emit("gain-changed", 1, -2.345);
   window.emit("gain-changed", 6, 3); // no such band
   window.emit("gain-changed", 2, Number.NaN); // rejected, nothing changes
   window.emit("delay-changed", 104.9);
-  window.emit("clarity-changed", 5); // 晶化 is off: the slider is greyed out, nothing changes
+  window.emit("clarity-changed", 5); // the crystalizer is off: the slider is greyed out, nothing changes
   window.emit("clarity-toggled", true);
   window.emit("clarity-changed", 7);
   window.emit("normalize-changed", true);
@@ -150,7 +150,7 @@ test("edits round like the host: EQ ±6 dB in 0.1 dB, delay to 10 ms, 晶化 0�
   window.emit("delay-changed", -15000);
   await host.settle();
   assert.equal(own(host)?.offsetMs, -10000, "G09: ±10 000 ms");
-  assert.equal(window.props["status-text"], "已应用");
+  assert.equal(window.props.status, "applied");
   assert.equal(host.sent("playback.set").length + host.sent("source.submit").length, 0, "no volume, mute or transport");
   await stop();
 });
@@ -162,7 +162,7 @@ test("a burst of edits keeps one change in flight and ends on the last value", a
   await flush();
   assert.equal(gate.count(), 1);
   assert.equal(window.props["is-busy"], true);
-  assert.equal(window.props["status-text"], "正在应用…");
+  assert.equal(window.props.status, "applying");
   assert.equal(host.command("audio.reset").state.busy, true);
   await gate.release();
   assert.equal(own(host)?.offsetMs, 300);
@@ -200,7 +200,7 @@ test("presets change the EQ only and the window follows them after a drag; reset
   await stop();
 });
 
-test("under 不保持 another load of a source resets only the delay; an old success does not report", async () => {
+test("under Don't Keep another load of a source resets only the delay; an old success does not report", async () => {
   const { host, window, stop } = await open();
   window.emit("gain-changed", 0, 3);
   await host.settle();
@@ -216,7 +216,7 @@ test("under 不保持 another load of a source resets only the delay; an old suc
   assert.equal(latest(host).offsetMs, 0);
   assert.deepEqual(latest(host).nodes, [{ kind: "equalizer", frequency: 60, q: 1, gainDb: 3 }], "the equalizer is global");
   assert.deepEqual(window.props["gain-values"], [3, 0, 0, 0, 0, 0]);
-  assert.equal(window.props["status-text"], "已应用");
+  assert.equal(window.props.status, "applied");
   await stop();
 });
 
@@ -231,7 +231,7 @@ test("a track switch in the same source keeps the delay and the effects", async 
   assert.deepEqual(own(host)?.nodes, [{ kind: "equalizer", frequency: 60, q: 1, gainDb: 3 }]);
   assert.deepEqual(window.props["gain-values"], [3, 0, 0, 0, 0, 0]);
   assert.equal(window.props["delay-ms"], 500);
-  assert.equal(window.props["status-text"], "已应用");
+  assert.equal(window.props.status, "applied");
   await stop();
 });
 
@@ -252,7 +252,7 @@ test(
     await gate.release();
     assert.equal(window.props["has-error"], false);
     assert.equal(own(host)?.offsetMs, 900);
-    assert.equal(window.props["status-text"], "已应用");
+    assert.equal(window.props.status, "applied");
     await stop();
   },
 );
@@ -265,12 +265,12 @@ test("a host validation refusal is shown, never sticks, and retry or the next ed
   window.emit("delay-changed", 105);
   await host.settle();
   assert.equal(window.props["has-error"], true);
-  assert.equal(window.props["status-text"], "音频处理失败");
+  assert.equal(window.props.status, "failed");
   assert.equal(window.props["error-detail"], "offset out of range");
   assert.equal(host.command("audio.reset").state.busy, false);
   host.setSource({ position: 3 }); // ordinary source updates keep the error, nothing "pending"
   await host.settle();
-  assert.equal(window.props["status-text"], "音频处理失败");
+  assert.equal(window.props.status, "failed");
   host.reset("processing.replace");
   window.emit("retry-requested");
   await host.settle();
@@ -288,7 +288,7 @@ test("a host validation refusal is shown, never sticks, and retry or the next ed
   await host.settle();
   assert.equal(window.props["has-error"], false);
   assert.equal(own(host)?.offsetMs, 200);
-  assert.equal(window.props["status-text"], "已应用");
+  assert.equal(window.props.status, "applied");
   await stop();
 });
 
@@ -302,7 +302,7 @@ test("a lost reply is resolved by the SDK: applied or resent, never left pending
   window.emit("delay-changed", 100);
   await host.settle(150);
   assert.equal(own(host)?.offsetMs, 100);
-  assert.equal(window.props["status-text"], "已应用");
+  assert.equal(window.props.status, "applied");
   // Admitted and applied, but the reply is lost.
   host.handle("processing.replace", async (params) => {
     host.reset("processing.replace");
@@ -313,7 +313,7 @@ test("a lost reply is resolved by the SDK: applied or resent, never left pending
   await host.settle();
   assert.equal(own(host)?.offsetMs, 900);
   assert.equal(window.props["has-error"], false);
-  assert.equal(window.props["status-text"], "已应用");
+  assert.equal(window.props.status, "applied");
   window.emit("delay-changed", 200);
   await host.settle();
   assert.equal(own(host)?.offsetMs, 200);
@@ -344,14 +344,14 @@ test("Shift+E bypasses the bands but keeps their gains; presets and band edits t
   assert.equal(window.props["preset-index"], -1);
   await host.press("Shift+E");
   await host.settle();
-  assert.equal(host.osd.at(-1), "均衡器: 关");
+  assert.equal(host.osd.at(-1), "Equalizer: Off");
   assert.equal(host.command("audio.equalizer").state.checked, false);
   assert.equal(window.props["equalizer-enabled"], false);
   assert.deepEqual(window.props["gain-values"], [3, 0, 0, 0, 0, 0]);
   assert.deepEqual(own(host)?.nodes, [{ kind: "treble", frequency: 3000, slope: 0.5, gainDb: 2 }]);
   await host.press("Shift+E");
   await host.settle();
-  assert.equal(host.osd.at(-1), "均衡器: 开");
+  assert.equal(host.osd.at(-1), "Equalizer: On");
   assert.equal((own(host)?.nodes as { kind: string }[]).length, 2);
   window.emit("equalizer-changed", false);
   await host.settle();
@@ -362,13 +362,13 @@ test("Shift+E bypasses the bands but keeps their gains; presets and band edits t
   window.emit("equalizer-changed", false);
   await host.command("audio.preset.1").run();
   await host.settle();
-  assert.equal(host.osd.at(-1), "均衡器预设: 人声");
+  assert.equal(host.osd.at(-1), "Equalizer preset: Voice");
   assert.equal(window.props["equalizer-enabled"], true);
   assert.equal(window.props["preset-index"], 1);
   assert.equal(host.command("audio.preset.1").state.checked, true);
   await host.command("audio.reset").run();
   await host.settle();
-  assert.equal(host.osd.at(-1), "音频处理已复位");
+  assert.equal(host.osd.at(-1), "Audio processing reset");
   assert.deepEqual(own(host)?.nodes ?? [], []);
   assert.equal(window.props["preset-index"], 0);
   assert.equal(host.osd.length, 4, "window edits give no on-screen text");
@@ -392,23 +392,23 @@ test("headless: a missing on-screen display does not break the menu commands", a
 test("G09: > < ? step the audio sync by 50 ms with OSD, stop at ±10 000 ms and move the window slider", async () => {
   const { host, window, stop } = await open();
   await host.press(">");
-  assert.equal(host.osd.at(-1), "音频同步: -0.05秒");
+  assert.equal(host.osd.at(-1), "Audio sync: -0.05 s");
   await host.press(">");
   await host.press(">");
-  assert.equal(host.osd.at(-1), "音频同步: -0.15秒");
+  assert.equal(host.osd.at(-1), "Audio sync: -0.15 s");
   await host.settle();
   assert.equal(window.props["delay-ms"], -150);
   assert.equal(own(host)?.offsetMs, -150);
   for (let i = 0; i < 9; i++) await host.press("<");
-  assert.equal(host.osd.at(-1), "音频同步: +0.3秒");
+  assert.equal(host.osd.at(-1), "Audio sync: +0.3 s");
   await host.press("?");
-  assert.equal(host.osd.at(-1), "音频同步: 0秒");
+  assert.equal(host.osd.at(-1), "Audio sync: 0 s");
   await host.settle();
   assert.equal(own(host)?.offsetMs ?? 0, 0);
   window.emit("delay-changed", 9980);
   await host.press("<");
   await host.press("<");
-  assert.equal(host.osd.at(-1), "音频同步: +10秒", "the edge keeps the value and still reports it");
+  assert.equal(host.osd.at(-1), "Audio sync: +10 s", "the edge keeps the value and still reports it");
   await host.settle();
   assert.equal(own(host)?.offsetMs, 10000);
   window.emit("delay-reset");
@@ -427,14 +427,14 @@ test("G09: sync keys are not swallowed while a change is applying", async () => 
   assert.equal(gate.count(), 1);
   presses.push(host.press(">"), host.press(">"));
   await flush();
-  assert.equal(host.osd.at(-1), "音频同步: -0.15秒");
+  assert.equal(host.osd.at(-1), "Audio sync: -0.15 s");
   await gate.release();
   await Promise.all(presses);
   assert.equal(own(host)?.offsetMs, -150);
   await stop();
 });
 
-test("G09: 本次运行内保持 keeps the delay across sources; 始终保持 also keeps it across restarts", async () => {
+test("G09: Keep for This Run keeps the delay across sources; Always Keep also keeps it across restarts", async () => {
   const data = await mkdtemp(join(tmpdir(), "vestra-audio-"));
   try {
     const first = await open(new TestHost());
@@ -449,7 +449,7 @@ test("G09: 本次运行内保持 keeps the delay across sources; 始终保持 al
     assert.equal(own(first.host)?.offsetMs, 300);
     await first.stop();
 
-    // 本次运行内保持: a restart starts at 0.
+    // Keep for This Run: a restart starts at 0.
     let started = await startPlugin(activate, { directory, dataDirectory: data });
     await started.host.command("audio.sync.keep.session").run();
     started.host.openElsewhere("/movie.mp4");
@@ -462,7 +462,7 @@ test("G09: 本次运行内保持 keeps the delay across sources; 始终保持 al
     await started.host.command("audio.workbench").run();
     assert.equal(started.host.window("audio-workbench").props["delay-ms"], 0);
 
-    // 始终保持: the delay is written and comes back.
+    // Always Keep: the delay is written and comes back.
     await started.host.command("audio.sync.keep.always").run();
     started.host.openElsewhere("/movie.mp4");
     started.host.setSource({ audioTracks: [track(1)] });
@@ -492,13 +492,13 @@ test("G09: 本次运行内保持 keeps the delay across sources; 始终保持 al
   }
 });
 
-test("G11: Shift+C switches 晶化 at the remembered strength; menu, window and OSD agree", async () => {
+test("G11: Shift+C switches the crystalizer at the remembered strength; menu, window and OSD agree", async () => {
   const { host, window, stop } = await open();
   assert.equal(window.props["clarity-enabled"], false);
   assert.equal(window.props["clarity-db"], 3, "default strength 3 dB");
   await host.press("Shift+C");
   await host.settle();
-  assert.equal(host.osd.at(-1), "晶化: 开");
+  assert.equal(host.osd.at(-1), "Crystalizer: On");
   assert.equal(host.command("audio.clarity").state.checked, true);
   assert.equal(window.props["clarity-enabled"], true);
   assert.deepEqual(own(host)?.nodes, [{ kind: "treble", frequency: 3000, slope: 0.5, gainDb: 3 }]);
@@ -507,7 +507,7 @@ test("G11: Shift+C switches 晶化 at the remembered strength; menu, window and 
   assert.equal(window.props["clarity-db"], 4.6);
   await host.press("Shift+C");
   await host.settle();
-  assert.equal(host.osd.at(-1), "晶化: 关");
+  assert.equal(host.osd.at(-1), "Crystalizer: Off");
   assert.deepEqual(own(host)?.nodes ?? [], []);
   assert.equal(window.props["clarity-db"], 4.6, "off keeps the strength");
   window.emit("clarity-toggled", true);
@@ -523,7 +523,7 @@ test("G11: Shift+C switches 晶化 at the remembered strength; menu, window and 
   assert.equal(window.props["clarity-db"], 3);
   await host.press("Shift+N");
   await host.settle();
-  assert.equal(host.osd.at(-1), "规格化: 开");
+  assert.equal(host.osd.at(-1), "Normalize: On");
   assert.equal(window.props["normalize-enabled"], true);
   await stop();
 });
@@ -539,7 +539,7 @@ test("global settings and the last page survive a restart", async () => {
     await host.press("Shift+C");
     await host.command("audio.workbench").run();
     host.window("audio-workbench").emit("tab-changed", 1);
-    host.window("audio-workbench").emit("delay-changed", 400); // 不保持: not saved
+    host.window("audio-workbench").emit("delay-changed", 400); // Don't Keep: not saved
     await started.stop();
     host = new TestHost();
     host.openElsewhere("/movie.mp4");
@@ -551,7 +551,7 @@ test("global settings and the last page survive a restart", async () => {
     assert.equal(window.props["preset-index"], 1);
     assert.equal(window.props["clarity-enabled"], true);
     assert.equal(window.props["delay-ms"], 0);
-    assert.equal(window.props["status-text"], "已应用", "saved settings are applied at start");
+    assert.equal(window.props.status, "applied", "saved settings are applied at start");
     assert.equal((own(host)?.nodes as unknown[]).length, 7);
     await started.stop();
   } finally {
@@ -581,7 +581,7 @@ const titled = (trackId: number, title: string, language: string | null, selecte
   language,
 });
 
-test("G03: the 音轨 menu lists the tracks, follows the list and switches with OSD; stale is silent", async () => {
+test("G03: the Audio Track menu lists the tracks, follows the list and switches with OSD; stale is silent", async () => {
   const host = new TestHost();
   host.openElsewhere("/movie.mkv");
   host.setSource({ audioTracks: [titled(1, "日语", "jpn", true), titled(2, "English", "eng", false)] });
@@ -589,14 +589,14 @@ test("G03: the 音轨 menu lists the tracks, follows the list and switches with 
   await host.settle();
   const items = () =>
     [...host.commands.values()]
-      .filter(({ declaration: d }) => d.path[1] === "音轨" && d.order === 511)
+      .filter(({ declaration: d }) => d.path[1] === "Audio Track" && d.order === 511)
       .map(({ declaration: d }) => d.path[2]);
   assert.deepEqual(items(), ["1. 日语 [jpn] (aac)", "2. English [eng] (aac)"]);
   assert.equal(host.command("audio.track.1").state.checked, true);
   assert.equal(host.command("audio.track.1").declaration.radio, true);
   await host.command("audio.track.2").run();
   await host.settle();
-  assert.equal(host.osd.at(-1), "音轨: 2. English [eng] (aac)");
+  assert.equal(host.osd.at(-1), "Audio track: 2. English [eng] (aac)");
   assert.equal(host.command("audio.track.2").state.checked, true);
   assert.equal(host.command("audio.track.1").state.checked, false);
   const sent = host.sent("audio.selectTrack").length;
@@ -613,11 +613,11 @@ test("G03: the 音轨 menu lists the tracks, follows the list and switches with 
   host.openElsewhere("/next.mkv", "loading");
   host.setSource({ audioTracks: null });
   await host.settle();
-  assert.deepEqual(items(), ["正在载入…"]);
-  assert.equal(host.command("audio.track.cycle").state.reason, "正在载入");
+  assert.deepEqual(items(), ["Loading…"]);
+  assert.equal(host.command("audio.track.cycle").state.reason, "Loading");
   host.setSource({ phase: "ready", audioTracks: [] });
   await host.settle();
-  assert.deepEqual(items(), ["没有音轨"]);
+  assert.deepEqual(items(), ["No Audio Tracks"]);
   await stop();
 });
 
@@ -631,12 +631,12 @@ test("G04: Alt+A cycles in list order and wraps; one track says so", async () =>
     await host.press("Alt+A");
     await host.settle();
   }
-  assert.deepEqual(host.osd, ["音轨: 音轨 2 (aac)", "音轨: 音轨 3 (aac)", "音轨: 音轨 1 (aac)"]);
+  assert.deepEqual(host.osd, ["Audio track: Track 2 (aac)", "Audio track: Track 3 (aac)", "Audio track: Track 1 (aac)"]);
   assert.deepEqual(host.sent("audio.selectTrack").map((p) => p.id), [2, 3, 1]);
   host.setSource({ audioTracks: [track(1, true)] });
   await host.settle();
   await host.press("Alt+A");
-  assert.equal(host.osd.at(-1), "只有一条音轨");
+  assert.equal(host.osd.at(-1), "Only one audio track");
   assert.equal(host.sent("audio.selectTrack").length, 3);
   await stop();
 });
@@ -648,7 +648,7 @@ test("G05: channel modes route a stereo mix, are global, and wait on a mono trac
   await host.settle();
   await host.command("audio.channels.left").run();
   await host.settle();
-  assert.equal(host.osd.at(-1), "声道: 左声道（已混为立体声）");
+  assert.equal(host.osd.at(-1), "Channels: Left Channel (mixed to stereo)");
   assert.deepEqual(own(host)?.nodes, [{ kind: "channels", mode: "left" }]);
   assert.equal(window.props["channel-index"], 1);
   assert.equal(host.command("audio.channels.left").state.checked, true);
@@ -664,9 +664,9 @@ test("G05: channel modes route a stereo mix, are global, and wait on a mono trac
   await host.settle(20);
   assert.deepEqual((own(host)?.nodes as { kind: string }[]).map((n) => n.kind), ["equalizer"]);
   assert.equal(host.command("audio.channels.mono").state.enabled, false);
-  assert.equal(host.command("audio.channels.mono").state.reason, "当前音轨是单声道");
+  assert.equal(host.command("audio.channels.mono").state.reason, "The current track is mono");
   assert.equal(window.props["channels-available"], false);
-  assert.equal(window.props["channel-tip"], "当前音轨是单声道");
+  assert.equal(window.props["mono-track"], true);
   assert.equal(window.props["channel-index"], 4, "the setting is kept");
   host.stats = { ...host.stats, audio: { ...host.stats.audio!, channels: 2 } };
   host.setSource({ audioTracks: [track(1, false), track(2)] });
@@ -674,12 +674,12 @@ test("G05: channel modes route a stereo mix, are global, and wait on a mono trac
   assert.deepEqual((own(host)?.nodes as unknown[])[0], { kind: "channels", mode: "swap" });
   await host.command("audio.channels.stereo").run();
   await host.settle();
-  assert.equal(host.osd.at(-1), "声道: 立体声");
+  assert.equal(host.osd.at(-1), "Channels: Stereo");
   assert.deepEqual((own(host)?.nodes as { kind: string }[]).map((n) => n.kind), ["equalizer"]);
   await stop();
 });
 
-test("A11: 载入外部音频… adds and selects the file once; failures and a changed source are reported", async () => {
+test("A11: Load External Audio… adds and selects the file once; failures and a changed source are reported", async () => {
   const host = new TestHost();
   host.openElsewhere("/movie.mkv");
   host.setSource({ audioTracks: [track(1)] });
@@ -695,16 +695,19 @@ test("A11: 载入外部音频… adds and selects the file once; failures and a 
   host.dialogAnswers.push(["/music/movie.jpn.mka"]);
   window.emit("load-requested");
   await host.settle();
-  assert.equal(host.osd.at(-1), "已载入音频: movie.jpn.mka");
+  assert.equal(host.osd.at(-1), "Audio loaded: movie.jpn.mka");
   assert.deepEqual(host.sent("audio.addTrack").at(-1)!.path, "/music/movie.jpn.mka");
   assert.equal(host.sent("audio.addTrack").at(-1)!.select, true, "selected");
-  assert.deepEqual(window.props["track-names"], ["音轨 1 (aac)", "2. movie.jpn.mka（外部）"]);
+  assert.deepEqual(window.props["track-rows"], [
+    { kind: "track", text: "", n: 1, codec: "aac", external: false, disconnected: false },
+    { kind: "track", text: "2. movie.jpn.mka", n: 2, codec: "", external: true, disconnected: false },
+  ]);
   assert.equal(window.props["track-index"], 1);
   assert.equal(host.command("audio.track.2").state.checked, true);
   host.dialogAnswers.push(["/music/movie.jpn.mka"]);
   await host.command("audio.load").run();
   await host.settle();
-  assert.equal(host.osd.at(-1), "该音频已载入");
+  assert.equal(host.osd.at(-1), "This audio is already loaded");
   assert.equal(host.sent("audio.addTrack").length, 1);
   host.handle("audio.addTrack", () => {
     throw new HostError("backend", "unrecognized file format");
@@ -712,7 +715,7 @@ test("A11: 载入外部音频… adds and selects the file once; failures and a 
   host.dialogAnswers.push(["/music/notes.txt"]);
   await host.command("audio.load").run();
   await host.settle();
-  assert.equal(host.osd.at(-1), "无法载入音频: unrecognized file format");
+  assert.equal(host.osd.at(-1), "Cannot load audio: unrecognized file format");
   host.reset("audio.addTrack");
   // The source changes while the dialog is open.
   host.handle("dialogs.open", () => {
@@ -722,17 +725,17 @@ test("A11: 载入外部音频… adds and selects the file once; failures and a 
   });
   await host.command("audio.load").run();
   await host.settle();
-  assert.equal(host.osd.at(-1), "来源已改变，未载入音频");
+  assert.equal(host.osd.at(-1), "The source changed; the audio was not loaded");
   assert.deepEqual(host.source.audioTracks?.map((t) => t.trackId), [1]);
   host.reset("dialogs.open");
   host.openElsewhere("/later.mkv", "loading");
   await host.settle();
-  assert.equal(host.command("audio.load").state.reason, "正在载入");
+  assert.equal(host.command("audio.load").state.reason, "Loading");
   assert.equal(window.props["can-load"], false);
   await stop();
 });
 
-test("A11: 自动载入同名音频文件 adds same-named audio next to a local file without selecting it", async () => {
+test("A11: auto-loading same-named audio adds same-named audio next to a local file without selecting it", async () => {
   const folder = await mkdtemp(join(tmpdir(), "vestra-audio-media-"));
   const data = await mkdtemp(join(tmpdir(), "vestra-audio-"));
   try {
@@ -776,9 +779,12 @@ test("A11: 自动载入同名音频文件 adds same-named audio next to a local 
 
 const SPEAKERS = { id: "coreaudio/BuiltInSpeakerDevice", name: "MacBook Air 扬声器" };
 const PHONES = { id: "coreaudio/USB-1", name: "USB 耳机" };
+/** A row of the window's drop-downs (ui/workbench.slint `Row`). */
+const row = (kind: string, text = "", disconnected = false) => ({ kind, text, n: 0, codec: "", external: false, disconnected });
+const device = (name: string, disconnected = false) => row("device", name, disconnected);
 const deviceItems = (host: TestHost) =>
   [...host.commands.entries()]
-    .filter(([, { declaration: d }]) => d.path[1] === "输出设备")
+    .filter(([, { declaration: d }]) => d.path[1] === "Output Device")
     .map(([id, { declaration: d, state }]) => [d.path[2], d.order, d.group, d.radio, state.enabled, state.checked, state.reason, id] as const);
 const deviceCommand = (host: TestHost, title: string) => host.command(deviceItems(host).find((item) => item[0] === title)![7]);
 const savedJson = async (path: string) => JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
@@ -789,7 +795,7 @@ function plug(host: TestHost, devices: { id: string; name: string }[]) {
   host.setSource({ audioOutput: { requested, active: requested !== null && devices.some((d) => d.id === requested) ? requested : null } });
 }
 
-test("G16: 输出设备 lists 系统默认 and the devices; choosing one switches, says so and is saved", async () => {
+test("G16: Output Device lists System Default and the devices; choosing one switches, says so and is saved", async () => {
   const data = await mkdtemp(join(tmpdir(), "vestra-audio-"));
   try {
     const host = new TestHost();
@@ -797,29 +803,29 @@ test("G16: 输出设备 lists 系统默认 and the devices; choosing one switche
     const { stop } = await startPlugin(activate, { directory, host, dataDirectory: data });
     await host.settle();
     assert.deepEqual(deviceItems(host).map((item) => item.slice(0, 7)), [
-      ["系统默认", 512, "audio-tools", true, true, true, null],
+      ["System Default", 512, "audio-tools", true, true, true, null],
       ["MacBook Air 扬声器", 512, "audio-tools", true, true, false, null],
       ["USB 耳机", 512, "audio-tools", true, true, false, null],
     ]);
-    assert.equal(host.sent("player.setAudioDevice").length, 0, "系统默认 at start sends nothing");
+    assert.equal(host.sent("player.setAudioDevice").length, 0, "System Default at start sends nothing");
     await deviceCommand(host, "USB 耳机").run();
     await host.settle();
     assert.deepEqual(host.sent("player.setAudioDevice").at(-1), { id: PHONES.id });
     assert.deepEqual(host.source.audioOutput, { requested: PHONES.id, active: PHONES.id });
-    assert.equal(host.osd.at(-1), "音频输出: USB 耳机");
+    assert.equal(host.osd.at(-1), "Audio output: USB 耳机");
     assert.equal(deviceCommand(host, "USB 耳机").state.checked, true);
-    assert.equal(deviceCommand(host, "系统默认").state.checked, false);
+    assert.equal(deviceCommand(host, "System Default").state.checked, false);
     // No source is needed, and the window shows the same choice.
     await host.command("audio.workbench").run();
     const window = host.window("audio-workbench");
-    assert.deepEqual(window.props["device-names"], ["系统默认", "MacBook Air 扬声器", "USB 耳机"]);
+    assert.deepEqual(window.props["device-rows"], [row("system-default"), device(SPEAKERS.name), device(PHONES.name)]);
     assert.equal(window.props["device-index"], 2);
     assert.equal(window.props["devices-available"], true);
-    assert.equal(window.props["devices-tip"], "USB 耳机");
+    assert.deepEqual(window.props["device-tip"], device(PHONES.name));
     window.emit("device-selected", 0);
     await host.settle();
     assert.deepEqual(host.sent("player.setAudioDevice").at(-1), { id: null });
-    assert.equal(host.osd.at(-1), "音频输出: 系统默认");
+    assert.equal(host.osd.at(-1), "Audio output: System Default");
     assert.equal(window.props["device-index"], 0);
     window.emit("device-selected", 1);
     await host.settle(350);
@@ -831,7 +837,7 @@ test("G16: 输出设备 lists 系统默认 and the devices; choosing one switche
     });
     await deviceCommand(host, "USB 耳机").run();
     await host.settle();
-    assert.equal(host.osd.at(-1), "无法切换到 USB 耳机: 设备被占用");
+    assert.equal(host.osd.at(-1), "Cannot switch to USB 耳机: 设备被占用");
     assert.equal(deviceCommand(host, "MacBook Air 扬声器").state.checked, true);
     await stop();
   } finally {
@@ -848,27 +854,27 @@ test("G16: unplugging the chosen device falls back with an OSD; plugging it back
   await host.settle();
   plug(host, [SPEAKERS]);
   await host.settle();
-  assert.equal(host.osd.at(-1), "输出设备已断开，改用系统默认");
+  assert.equal(host.osd.at(-1), "Output device disconnected, using System Default");
   // The check mark stays on the choice, now disabled and listed after the connected ones.
   assert.deepEqual(deviceItems(host).map((item) => item.slice(0, 7)), [
-    ["系统默认", 512, "audio-tools", true, true, false, null],
+    ["System Default", 512, "audio-tools", true, true, false, null],
     ["MacBook Air 扬声器", 512, "audio-tools", true, true, false, null],
-    ["USB 耳机", 512, "audio-tools", true, false, true, "设备未连接"],
+    ["USB 耳机", 512, "audio-tools", true, false, true, "Device not connected"],
   ]);
   await host.command("audio.workbench").run();
   const window = host.window("audio-workbench");
-  assert.deepEqual(window.props["device-names"], ["系统默认", "MacBook Air 扬声器", "USB 耳机（未连接）"]);
+  assert.deepEqual(window.props["device-rows"], [row("system-default"), device(SPEAKERS.name), device(PHONES.name, true)]);
   assert.equal(window.props["device-index"], 2);
-  assert.equal(window.props["devices-tip"], "USB 耳机：设备未连接，正在使用系统默认");
+  assert.deepEqual(window.props["device-tip"], device(PHONES.name, true));
   const sent = host.sent("player.setAudioDevice").length;
   window.emit("device-selected", 2); // the disconnected entry cannot be picked
   await host.settle();
   assert.equal(host.sent("player.setAudioDevice").length, sent);
   plug(host, [SPEAKERS, PHONES]);
   await host.settle();
-  assert.equal(host.osd.at(-1), "音频输出: USB 耳机");
+  assert.equal(host.osd.at(-1), "Audio output: USB 耳机");
   assert.equal(deviceCommand(host, "USB 耳机").state.enabled, true);
-  assert.deepEqual(window.props["device-names"], ["系统默认", "MacBook Air 扬声器", "USB 耳机"]);
+  assert.deepEqual(window.props["device-rows"], [row("system-default"), device(SPEAKERS.name), device(PHONES.name)]);
   await stop();
 });
 
@@ -891,11 +897,11 @@ test("G16: the saved device is restored at start without an OSD, also while it i
     started = await startPlugin(activate, { directory, host, dataDirectory: data });
     await host.settle();
     assert.deepEqual(host.source.audioOutput, { requested: PHONES.id, active: null });
-    assert.deepEqual(deviceItems(host).at(-1)!.slice(0, 7), ["USB 耳机", 512, "audio-tools", true, false, true, "设备未连接"]);
+    assert.deepEqual(deviceItems(host).at(-1)!.slice(0, 7), ["USB 耳机", 512, "audio-tools", true, false, true, "Device not connected"]);
     assert.deepEqual(host.osd, []);
     plug(host, [SPEAKERS, PHONES]);
     await host.settle();
-    assert.equal(host.osd.at(-1), "音频输出: USB 耳机", "plugging it in later is announced");
+    assert.equal(host.osd.at(-1), "Audio output: USB 耳机", "plugging it in later is announced");
     assert.equal((await savedJson(join(data, "settings.json"))).device, PHONES.id, "the choice is never dropped");
     await started.stop();
   } finally {
@@ -911,17 +917,129 @@ test("G16: a device plugged in later shows up within 5 s; no list means one disa
   const { stop } = await startPlugin(activate, { directory, host });
   await host.settle();
   assert.deepEqual(deviceItems(host).map((item) => item.slice(0, 7)), [
-    ["没有可用的输出设备", 512, "audio-tools", false, false, null, null],
+    ["No Output Devices", 512, "audio-tools", false, false, null, null],
   ]);
   await host.command("audio.workbench").run();
   const window = host.window("audio-workbench");
-  assert.deepEqual(window.props["device-names"], ["没有可用的输出设备"]);
+  assert.deepEqual(window.props["device-rows"], [row("no-devices")]);
+  assert.deepEqual(window.props["device-tip"], row("no-devices"));
   assert.equal(window.props["devices-available"], false);
   host.reset("player.audioDevices");
   host.audioDevices = [SPEAKERS, PHONES];
   await host.settle(5200);
-  assert.deepEqual(deviceItems(host).map((item) => item[0]), ["系统默认", "MacBook Air 扬声器", "USB 耳机"]);
-  assert.deepEqual(window.props["device-names"], ["系统默认", "MacBook Air 扬声器", "USB 耳机"]);
+  assert.deepEqual(deviceItems(host).map((item) => item[0]), ["System Default", "MacBook Air 扬声器", "USB 耳机"]);
+  assert.deepEqual(window.props["device-rows"], [row("system-default"), device(SPEAKERS.name), device(PHONES.name)]);
   assert.deepEqual(host.osd, [], "a new device is not announced");
+  await stop();
+});
+
+// ---------------------------------------------------------------- i18n: a Simplified Chinese user sees the texts of before
+
+test("zh-Hans: the menu, its reasons and the on-screen messages read as before the English source", async () => {
+  const host = new TestHost();
+  host.audioDevices = [SPEAKERS, PHONES];
+  const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
+  await host.settle();
+  assert.deepEqual(
+    [...host.commands.values()].map((command) => command.display.path.join(" ▶ ")),
+    [
+      "打开 ▶ 载入外部音频…",
+      "声音 ▶ 音频工作台…",
+      "声音 ▶ 音轨 ▶ 按序切换",
+      ...["立体声", "左声道", "右声道", "单声道混合", "左右互换"].map((label) => `声音 ▶ 音轨 ▶ ${label}`),
+      "声音 ▶ 均衡器",
+      ...["平直", "人声", "音乐", "影院"].map((label) => `声音 ▶ 预设 ▶ ${label}`),
+      "声音 ▶ 声音同步 ▶ 超前 50 毫秒",
+      "声音 ▶ 声音同步 ▶ 滞后 50 毫秒",
+      "声音 ▶ 声音同步 ▶ 复位",
+      "声音 ▶ 声音同步 ▶ 不保持",
+      "声音 ▶ 声音同步 ▶ 本次运行内保持",
+      "声音 ▶ 声音同步 ▶ 始终保持",
+      "声音 ▶ 声音处理 ▶ 规格化",
+      "声音 ▶ 声音处理 ▶ 晶化",
+      "声音 ▶ 复位",
+      "声音 ▶ 音轨 ▶ 没有音轨",
+      "声音 ▶ 输出设备 ▶ 系统默认",
+      "声音 ▶ 输出设备 ▶ MacBook Air 扬声器",
+      "声音 ▶ 输出设备 ▶ USB 耳机",
+    ],
+  );
+  const reason = (id: string) => host.translate(host.command(id).state.reason!);
+  assert.equal(reason("audio.load"), "没有正在播放的文件");
+  assert.equal(reason("audio.track.cycle"), "没有音轨");
+  assert.equal(reason("audio.reset"), "没有选中的音轨");
+  assert.equal(reason("audio.channels.left"), "没有选中的音轨");
+  // Output device: switched, refused, unplugged (the menu says why), back.
+  await deviceCommand(host, "USB 耳机").run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "音频输出: USB 耳机");
+  host.handle("player.setAudioDevice", () => {
+    throw new HostError("busy", "设备被占用");
+  });
+  await deviceCommand(host, "System Default").run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "无法切换到 系统默认: 设备被占用");
+  host.reset("player.setAudioDevice");
+  plug(host, [SPEAKERS]);
+  await host.settle();
+  assert.equal(host.osd.at(-1), "输出设备已断开，改用系统默认");
+  assert.equal(host.translate(host.command("audio.device.2").state.reason!), "设备未连接");
+  plug(host, [SPEAKERS, PHONES]);
+  await host.settle();
+  assert.equal(host.osd.at(-1), "音频输出: USB 耳机");
+  await deviceCommand(host, "System Default").run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "音频输出: 系统默认");
+  // A source with three tracks: the processing, sync and track messages.
+  host.stats = { ...host.stats, audio: { codec: "aac", sampleRate: 48000, channels: 6, decoder: "aac", format: "floatp", channelLayout: "5.1", bitrate: null } };
+  host.openElsewhere("/movie.mkv");
+  host.setSource({ audioTracks: [titled(1, "日语", "jpn", true), track(2, false)] });
+  await host.settle(20);
+  const shown: string[] = [];
+  const say = async (run: () => Promise<unknown>) => {
+    await run();
+    await host.settle();
+    shown.push(host.osd.at(-1)!);
+  };
+  await say(() => host.press("Shift+E"));
+  await say(() => host.press("Shift+E"));
+  await say(() => host.command("audio.preset.3").run());
+  await say(() => host.press(">"));
+  await say(() => host.press("?"));
+  await say(() => host.press("Shift+N"));
+  await say(() => host.press("Shift+C"));
+  await say(() => host.command("audio.channels.mono").run());
+  await say(() => host.command("audio.channels.stereo").run());
+  await say(() => host.command("audio.reset").run());
+  await say(() => host.press("Alt+A"));
+  await say(() => host.press("Alt+A"));
+  host.dialogAnswers.push(["/music/movie.jpn.mka"]);
+  await say(() => host.command("audio.load").run());
+  await say(() => host.command("audio.track.1").run());
+  await say(() => host.command("audio.track.3").run());
+  host.dialogAnswers.push(["/music/movie.jpn.mka"]);
+  await say(() => host.command("audio.load").run());
+  assert.deepEqual(shown, [
+    "均衡器: 关",
+    "均衡器: 开",
+    "均衡器预设: 影院",
+    "音频同步: -0.05秒",
+    "音频同步: 0秒",
+    "规格化: 开",
+    "晶化: 开",
+    "声道: 单声道混合（已混为立体声）",
+    "声道: 立体声",
+    "音频处理已复位",
+    "音轨: 音轨 2 (aac)",
+    "音轨: 1. 日语 [jpn] (aac)",
+    "已载入音频: movie.jpn.mka",
+    "音轨: 1. 日语 [jpn] (aac)",
+    "音轨: 3. movie.jpn.mka（外部）",
+    "该音频已载入",
+  ]);
+  host.setSource({ audioTracks: [track(1)] });
+  await host.settle();
+  await host.press("Alt+A");
+  assert.equal(host.osd.at(-1), "只有一条音轨");
   await stop();
 });
