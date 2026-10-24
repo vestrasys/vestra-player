@@ -1,0 +1,106 @@
+msgid ""
+msgstr ""
+"Language: zh-Hans\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: main.ts:83
+msgid "Open NES ROM"
+msgstr "打开 NES ROM"
+
+#: main.ts:116 main.ts:117 main.ts:118 manifest.json
+msgid "Emulator"
+msgstr "模拟器"
+
+#: main.ts:116
+msgid "Open NES ROM…"
+msgstr "打开 NES ROM…"
+
+#: main.ts:117
+msgid "Stop NES"
+msgstr "停止 NES"
+
+#: main.ts:118
+msgid "NES Tools…"
+msgstr "NES 工具…"
+
+#: manifest.json
+msgid "NES Emulator"
+msgstr "NES 模拟器"
+
+#: manifest.json
+msgid "Play NES game ROMs in the player"
+msgstr "在播放器里运行 NES 游戏 ROM"
+
+#: manifest.json
+msgid ""
+"Runs iNES ROMs with JSNES; picture and sound play in the player like any other media.\n"
+".nes files open like media: Open File, a drop on the video, the playlist; the Emulator context menu opens and stops them too. No keyboard controls or save states yet; no games included."
+msgstr ""
+"用 JSNES 运行 iNES 格式的 ROM，画面和声音像普通媒体一样在播放器里播放。\n"
+".nes 文件可以像媒体一样打开：打开文件、拖到视频区、播放列表；右键菜单「模拟器」也可打开和停止。暂不支持键盘操作和存档，不附带游戏。"
+
+#: manifest.json
+msgid "Games"
+msgstr "游戏"
+
+#: nes.slint:5
+msgid "NES"
+msgstr "NES"
+
+#: nes.slint:15
+msgid "Running {} · 256×240 · 48 kHz stereo"
+msgstr "正在运行 {} · 256×240 · 48 kHz 立体声"
+
+#: nes.slint:16
+msgid "Stopped."
+msgstr "已停止。"
+
+#: nes.slint:17
+msgid "Replaced by another source."
+msgstr "已被其他媒体源替换。"
+
+#: nes.slint:18
+msgid "Emulator stopped: {}"
+msgstr "模拟器已停止：{}"
+
+#: nes.slint:19
+msgid "Emulator stopped: the source ended."
+msgstr "模拟器已停止：来源已结束。"
+
+#: nes.slint:20
+msgid "Error: {}"
+msgstr "错误：{}"
+
+#: nes.slint:21
+msgid "Error: could not open the ROM."
+msgstr "错误：无法打开 ROM。"
+
+#: nes.slint:22
+msgid "Error: timed out preparing the first audio and video buffers."
+msgstr "错误：准备首批音视频缓冲超时。"
+
+#: nes.slint:23
+msgid "Error: timed out waiting for the emulator source to start."
+msgstr "错误：等待模拟器来源启用超时。"
+
+#: nes.slint:24
+msgid "Error: start-up timed out."
+msgstr "错误：启动超时。"
+
+#: nes.slint:25
+msgid "Error: the audio device is not ready."
+msgstr "错误：音频设备未就绪。"
+
+#: nes.slint:26
+msgid "Choose an iNES ROM file."
+msgstr "请选择 iNES ROM 文件。"
+
+#: nes.slint:47
+msgid "Open ROM…"
+msgstr "打开 ROM…"
+
+#: nes.slint:48
+msgid "Stop"
+msgstr "停止"

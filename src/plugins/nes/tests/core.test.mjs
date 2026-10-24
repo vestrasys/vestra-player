@@ -33,16 +33,16 @@ test('pixel channel conversion and malformed ROM errors', () => {
   const pixels = new Uint32Array(256 * 240);
   pixels[0] = 0x00563412;
   assert.deepEqual([...rgbaFrame(pixels).slice(0, 4)], [0x12, 0x34, 0x56, 255]);
-  assert.throws(() => rgbaFrame(new Uint32Array(1)), /尺寸无效/);
+  assert.throws(() => rgbaFrame(new Uint32Array(1)), /invalid size/);
   assert.throws(() => new NesCore(new Uint8Array(100)), /iNES/);
   const unsupported = homebrew();
   unsupported[6] = 0xf0;
   unsupported[7] = 0xf0;
-  assert.throws(() => new NesCore(unsupported), { message: 'JSNES 不支持这个 ROM 的 mapper 255。' });
-  assert.throws(() => new NesCore(homebrew().subarray(0, 16 + 16384)), /不完整/); // CHR bank missing
+  assert.throws(() => new NesCore(unsupported), { message: 'JSNES does not support mapper 255 of this ROM.' });
+  assert.throws(() => new NesCore(homebrew().subarray(0, 16 + 16384)), /incomplete/); // CHR bank missing
   const trainer = new Uint8Array(512 + homebrew().length);
   trainer.set(homebrew().subarray(0, 16));
   trainer[6] |= 4; // a trainer precedes PRG: 512 bytes more are needed
   assert.doesNotThrow(() => new NesCore(trainer.subarray(0, 512 + homebrew().length)));
-  assert.throws(() => new NesCore(trainer.subarray(0, homebrew().length)), /不完整/);
+  assert.throws(() => new NesCore(trainer.subarray(0, homebrew().length)), /incomplete/);
 });

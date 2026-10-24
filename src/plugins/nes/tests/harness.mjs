@@ -9,8 +9,24 @@ import { homebrew } from './homebrew.mjs';
 
 const directory = new URL('..', import.meta.url);
 
-/** The window's status while `name` runs. */
-export const running = name => `正在运行 ${name} · 256×240 · 48 kHz 立体声`;
+/** The window's status while `name` runs (English). */
+export const running = name => `Running ${name} · 256×240 · 48 kHz stereo`;
+
+/**
+ * nes.slint's status line, read from the file itself: each `state` with its
+ * `@tr` template (and the argument it takes), then the fallback.
+ */
+const slint = await fs.readFile(new URL('nes.slint', directory), 'utf8');
+const wording = new Map(
+  [...slint.matchAll(/root\.state == "(\w+)" \? @tr\("([^"]+)"(?:, root\.(\w+))?\)/g)].map(([, state, text, arg]) => [state, { text, arg }]),
+);
+const fallback = { text: /\n\s*: @tr\("([^"]+)"\);/.exec(slint)[1] };
+
+/** The status line the window shows for its props, in the host's language. */
+export function statusText(host, props) {
+  const { text, arg } = wording.get(props.state) ?? fallback;
+  return host.translate(text, arg ? [props[arg]] : undefined);
+}
 
 /** Write generated ROMs (and malformed ones) to a scratch directory. */
 export async function roms() {
@@ -40,14 +56,15 @@ export async function roms() {
 /**
  * Start the plugin. `intercept(method, params, next)` may delay or rewrite any
  * host request while keeping the TestHost's own behaviour behind `next()`;
- * `host` may be prepared beforehand (e.g. `otherResolvers`).
+ * `host` may be prepared beforehand (e.g. `otherResolvers`); `locale` is the
+ * interface language the TestHost plays (English by default).
  *
  * `retire` (default true) acts like the real player, which retires the
  * producer of a stream that was replaced or closed: its `producer.state`
  * then fails with `unavailable: producer absent` (the TestHost keeps it and
  * answers `active: false`).
  */
-export async function start(intercept, host = new TestHost(), { retire = true } = {}) {
+export async function start(intercept, host = new TestHost(), { retire = true, locale } = {}) {
   const request = host.request.bind(host);
   const ran = new Set();
   host.request = async (method, params = {}) => {
@@ -59,11 +76,13 @@ export async function start(intercept, host = new TestHost(), { retire = true } 
     }
     return result;
   };
-  const started = await startPlugin(activate, { directory, host });
+  const started = await startPlugin(activate, { directory, host, ...(locale ? { locale } : {}) });
   // The tool window shows the status: open it, as a user watching it would.
   await host.command('nes.window').run();
   const window = () => host.windows.get('nes') ?? assert.fail('window not open');
-  return { ...started, window };
+  /** The status line as the user reads it. */
+  const status = () => statusText(host, window().props);
+  return { ...started, window, status };
 }
 
 /** Poll until `predicate()` holds (stream pacing runs on timers). */

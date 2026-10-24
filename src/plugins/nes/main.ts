@@ -20,8 +20,9 @@ export default async function activate(plugin: Plugin) {
   let opening: AbortController | undefined;
   /** The picker is up: a second one is ignored. */
   let picking = false;
-  let status = "请选择 iNES ROM 文件。";
-  window.bind(() => ({ status, running: !!stream?.running }));
+  /** What the window says (worded in nes.slint): a state, the ROM's name, a reason. */
+  let status: Status = { state: "idle" };
+  window.bind(() => ({ state: status.state, rom: status.rom ?? "", detail: status.detail ?? "", running: !!stream?.running }));
 
   plugin.resolvers.add({
     id: "nes",
@@ -37,7 +38,7 @@ export default async function activate(plugin: Plugin) {
         started(next) {
           stream = next;
           if (pending === path) pending = undefined;
-          status = `正在运行 ${basename(path)} · 256×240 · 48 kHz 立体声`;
+          status = { state: "running", rom: basename(path) };
           next.onStop((error) => {
             if (stream !== next) return; // not when this plugin stops it, nor after a newer ROM started
             stream = undefined;
@@ -45,9 +46,9 @@ export default async function activate(plugin: Plugin) {
             if (error) return void (status = stopText(error.message));
             // Replaced or closed: the player's state (read by the SDK) says which.
             const state = plugin.player.state;
-            if (state.phase === "empty") status = "已停止。";
+            if (state.phase === "empty") status = { state: "stopped" };
             // Replaced by another source; a newer ROM words its own start or failure.
-            else if (state.source !== latest) status = "已被其他媒体源替换。";
+            else if (state.source !== latest) status = { state: "replaced" };
           });
         },
       };
@@ -58,7 +59,7 @@ export default async function activate(plugin: Plugin) {
   plugin.player.onChange((state) => {
     if (state.phase === "error" && pending !== undefined && state.source === pending) {
       pending = undefined;
-      status = `错误：${oneLine(state.error ?? "无法打开 ROM。")}`;
+      status = state.error == null ? { state: "openFailed" } : { state: "error", detail: oneLine(state.error) };
     }
   });
 
@@ -79,7 +80,7 @@ export default async function activate(plugin: Plugin) {
     picking = true;
     try {
       await window.show();
-      const path = await plugin.dialogs.openFile({ title: "打开 NES ROM" });
+      const path = await plugin.dialogs.openFile({ title: "Open NES ROM" });
       picking = false;
       if (path && !attempt.signal.aborted) await open(path, attempt.signal);
     } catch (error) {
@@ -100,7 +101,7 @@ export default async function activate(plugin: Plugin) {
     const current = stream;
     stream = undefined;
     await current?.stop(); // closes the source only if it is still ours
-    status = "已停止。";
+    status = { state: "stopped" };
   }
 
   plugin.drops.provide({
@@ -111,15 +112,16 @@ export default async function activate(plugin: Plugin) {
   window.on("stop", stop);
   plugin.onError((error) => (status = failureText(error)));
   plugin.onDispose(() => opening?.abort());
-  // 模拟器 ▶ (domain 601–619, round allocation table): open, stop, then the window.
-  plugin.commands.add({ id: "nes.open", path: ["模拟器", "打开 NES ROM…"], order: 601, run: openRom });
-  plugin.commands.add({ id: "nes.stop", path: ["模拟器", "停止 NES"], order: 602, run: stop });
-  plugin.commands.add({ id: "nes.window", path: ["模拟器", "NES 工具…"], order: 603, run: () => window.show() });
+  // Emulator ▶ (domain 601–619, round allocation table): open, stop, then the window.
+  plugin.commands.add({ id: "nes.open", path: ["Emulator", "Open NES ROM…"], order: 601, run: openRom });
+  plugin.commands.add({ id: "nes.stop", path: ["Emulator", "Stop NES"], order: 602, run: stop });
+  plugin.commands.add({ id: "nes.window", path: ["Emulator", "NES Tools…"], order: 603, run: () => window.show() });
 }
 
 /** The ROM's bytes; file system failures in the plugin's words. */
 async function readRom(path: string, signal: AbortSignal) {
-  const tooLarge = () => new Error("ROM 文件超过 16 MiB 上限。");
+  // i18n: needs R2-nes-1 (a resolver's error is shown by the player as it is, untranslated)
+  const tooLarge = () => new Error("The ROM file is larger than the 16 MiB limit.");
   try {
     if ((await stat(path)).size > MAX_ROM) throw tooLarge();
     const bytes = await readFile(path, { signal });
@@ -127,12 +129,35 @@ async function readRom(path: string, signal: AbortSignal) {
     return bytes;
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
-    if (code === "ENOENT") throw new Error("找不到 ROM 文件。");
-    if (code === "EACCES" || code === "EPERM") throw new Error("没有权限读取 ROM 文件。");
-    if (code === "EISDIR") throw new Error("这是一个文件夹，不是 ROM 文件。");
+    // i18n: needs R2-nes-1
+    if (code === "ENOENT") throw new Error("The ROM file was not found.");
+    if (code === "EACCES" || code === "EPERM") throw new Error("No permission to read the ROM file.");
+    if (code === "EISDIR") throw new Error("This is a folder, not a ROM file.");
     throw error; // the size limit, or the open was cancelled (AbortError)
   }
 }
+
+/**
+ * The window's status line, worded in nes.slint. `detail` is a reason in the
+ * player's (or the SDK's) words, shown in one line.
+ */
+type Status = {
+  state:
+    | "idle"
+    | "running"
+    | "stopped"
+    | "replaced"
+    | "halted"
+    | "ended"
+    | "error"
+    | "openFailed"
+    | "timeout"
+    | "prefillTimeout"
+    | "activationTimeout"
+    | "device";
+  rom?: string;
+  detail?: string;
+};
 
 /** Status text is one line (UI-TOOL-05). */
 const oneLine = (text: string) => {
@@ -141,19 +166,19 @@ const oneLine = (text: string) => {
 };
 
 /** The running game failed: the player's (or SDK's) own reason. */
-function stopText(reason: string | null | undefined) {
-  return `模拟器已停止：${oneLine(reason ?? "来源已结束。")}`;
+function stopText(reason: string | null | undefined): Status {
+  return reason == null ? { state: "ended" } : { state: "halted", detail: oneLine(reason) };
 }
 
-/** Start-up failures in Chinese; the SDK words these generically. */
-const timeouts: Record<StreamStartError["stage"], string> = {
-  prefill: "准备首批音视频缓冲超时。",
-  activation: "等待模拟器来源启用超时。",
+/** Start-up failures the SDK words generically get the plugin's own words. */
+const timeouts: Record<StreamStartError["stage"], Status["state"]> = {
+  prefill: "prefillTimeout",
+  activation: "activationTimeout",
 };
 
-function failureText(error: unknown) {
+function failureText(error: unknown): Status {
   const { code } = error as PluginError;
-  if (code === "timeout") return `错误：${timeouts[(error as StreamStartError).stage] ?? "启动超时。"}`;
-  if (code === "device") return "错误：音频设备未就绪。";
-  return `错误：${oneLine(error instanceof Error ? error.message : String(error))}`;
+  if (code === "timeout") return { state: timeouts[(error as StreamStartError).stage] ?? "timeout" };
+  if (code === "device") return { state: "device" };
+  return { state: "error", detail: oneLine(error instanceof Error ? error.message : String(error)) };
 }

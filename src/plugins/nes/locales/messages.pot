@@ -1,0 +1,103 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: vestra.nes 0.3.2\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: main.ts:83
+msgid "Open NES ROM"
+msgstr ""
+
+#: main.ts:116 main.ts:117 main.ts:118 manifest.json
+msgid "Emulator"
+msgstr ""
+
+#: main.ts:116
+msgid "Open NES ROM…"
+msgstr ""
+
+#: main.ts:117
+msgid "Stop NES"
+msgstr ""
+
+#: main.ts:118
+msgid "NES Tools…"
+msgstr ""
+
+#: manifest.json
+msgid "NES Emulator"
+msgstr ""
+
+#: manifest.json
+msgid "Play NES game ROMs in the player"
+msgstr ""
+
+#: manifest.json
+msgid ""
+"Runs iNES ROMs with JSNES; picture and sound play in the player like any other media.\n"
+".nes files open like media: Open File, a drop on the video, the playlist; the Emulator context menu opens and stops them too. No keyboard controls or save states yet; no games included."
+msgstr ""
+
+#: manifest.json
+msgid "Games"
+msgstr ""
+
+#: nes.slint:5
+msgid "NES"
+msgstr ""
+
+#: nes.slint:15
+msgid "Running {} · 256×240 · 48 kHz stereo"
+msgstr ""
+
+#: nes.slint:16
+msgid "Stopped."
+msgstr ""
+
+#: nes.slint:17
+msgid "Replaced by another source."
+msgstr ""
+
+#: nes.slint:18
+msgid "Emulator stopped: {}"
+msgstr ""
+
+#: nes.slint:19
+msgid "Emulator stopped: the source ended."
+msgstr ""
+
+#: nes.slint:20
+msgid "Error: {}"
+msgstr ""
+
+#: nes.slint:21
+msgid "Error: could not open the ROM."
+msgstr ""
+
+#: nes.slint:22
+msgid "Error: timed out preparing the first audio and video buffers."
+msgstr ""
+
+#: nes.slint:23
+msgid "Error: timed out waiting for the emulator source to start."
+msgstr ""
+
+#: nes.slint:24
+msgid "Error: start-up timed out."
+msgstr ""
+
+#: nes.slint:25
+msgid "Error: the audio device is not ready."
+msgstr ""
+
+#: nes.slint:26
+msgid "Choose an iNES ROM file."
+msgstr ""
+
+#: nes.slint:47
+msgid "Open ROM…"
+msgstr ""
+
+#: nes.slint:48
+msgid "Stop"
+msgstr ""
