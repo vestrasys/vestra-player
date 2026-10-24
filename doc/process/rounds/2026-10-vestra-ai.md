@@ -67,3 +67,21 @@
 
 - `src/packaging/third-party.toml` 里 workshop 一条只列了 4 个包，实际打进去的有 61 个；应改为指向 `dependency-inventory.json`。归打包维护。
 - 「重试」会把上一条用户消息再发一遍，记录里会出现重复（pi 1.4 没有 regenerate）。
+
+## 第 3 阶段（2.2.0，分支 ai/stage3，2026-10-24）
+
+完成：
+- 知识目录：SDK 的 .d.ts、示例和 llms.txt；
+- 系统提示重写，写明完成标准；
+- 工具：scaffold / typecheck / test（`--permission` 子进程）/ check / pack / trial / install；
+- 结果卡片：试载、安装、回退、导出 .vxp、导出源码 zip、打开文件夹；
+- 作者前缀用 `local.` 或 GitHub 用户名；
+- 评估：6 道题加 harness。
+
+作者新提的请求（等维护者答复）：
+- **R-i（宿主）**：试载只支持 commands/ui.window/events，其余能力返回 `unsupported`，大多数生成的插件因此不能试载。希望试载支持全部能力，停止时撤销全部资源。
+- **R-j（SDK）**：`trial()` 的 STARTING 列表缺少宿主的 `"pending"`，状态于是不再更新，失败原因也丢了；作者暂时用 `packages.list()` 轮询顶替。
+- **R-k（宿主）**：安装时宿主不弹自己的确认，只有插件侧的确认。
+- **R-l（宿主）**：`validate` 的候选从不释放，每次运行上限 32 个；希望能释放候选，或提供只编译 Slint 的检查。
+- **R-m（SDK CLI，不阻塞）**：在 `--permission` 下，`existsSync` 遇到无权限路径会抛错，所以 CLI 改用不受限子进程运行。
+- 另外：`third-party.toml` 需要补上 vendor 进来的 SDK。
