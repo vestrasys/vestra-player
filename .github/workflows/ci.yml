@@ -1,12 +1,17 @@
-# Entry workflow for branches and pull requests: orchestration only, the checks
-# live in the _*.yml reusable workflows (doc/process/ci.md). main has main.yml.
+# Entry workflow for branches: orchestration only, the checks live in the
+# _*.yml reusable workflows (doc/process/ci.md). main has main.yml; macOS for
+# a pull request is ci-macos.yml.
+#
+# One run per push. There is no pull_request trigger: a same-repository PR
+# shows the push run's checks (they are on its head commit), and a second
+# run per push doubled the bill. This repository is private, so there are no
+# fork PRs to cover.
 name: CI
 
 on:
   push:
     branches: ["**", "!main"]
     tags-ignore: ["**"]
-  pull_request:
   workflow_dispatch:
     inputs:
       full:
@@ -17,7 +22,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -27,6 +32,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+      actions: read # plan.sh: the last green run of this workflow
     outputs:
       docs_only: ${{ steps.plan.outputs.docs_only }}
       host: ${{ steps.plan.outputs.host }}
@@ -42,9 +48,10 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           FULL: ${{ inputs.full || false }}
-          BEFORE: ${{ github.event.before }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-          BASE_REF: ${{ github.base_ref }}
+          REF: ${{ github.ref }}
+          WORKFLOW: ci.yml
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
         run: bash .github/scripts/plan.sh
 
   static:

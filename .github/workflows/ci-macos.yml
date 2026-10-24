@@ -1,0 +1,36 @@
+# macOS build-test for a pull request, on request only (macOS runners cost
+# 10x): when a non-draft PR is opened or marked ready for review, and each
+# time the `ci:macos` label is added (remove and add it again to re-run).
+# Only PRs that touch what the host build depends on (the `host` paths of
+# .github/scripts/plan.sh). Static checks and Windows come from the branch's
+# push run (ci.yml); main runs macOS after the merge (doc/process/ci.md).
+name: CI macOS
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, labeled]
+    paths:
+      - "src/host/**"
+      - "src/runtime/**"
+      - "src/package.json"
+      - "src/package-lock.json"
+      - "rust-toolchain.toml"
+      - ".gitattributes"
+      - ".github/**"
+
+permissions: {}
+
+concurrency:
+  group: ci-macos-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    if: >-
+      !github.event.pull_request.draft
+      && (github.event.action != 'labeled' || github.event.label.name == 'ci:macos')
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_build-test.yml
+    with:
+      os: macos

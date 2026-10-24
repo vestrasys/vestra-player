@@ -1,5 +1,6 @@
-# Every push to main: everything, both systems. These runs write the cargo
-# caches that branch runs restore (doc/process/ci.md).
+# Every push to main: the checks the changed paths need, Windows and macOS
+# for host changes (plan.sh; docs-only pushes run plan and ci-ok only). These
+# runs write the cargo caches that branch runs restore (doc/process/ci.md).
 name: main
 
 on:
@@ -10,17 +11,48 @@ permissions: {}
 
 concurrency:
   group: main-${{ github.ref }}
-  # Let each main run finish: it is the one that saves the caches.
+  # Let each main run finish: it is the one that saves the caches. A pending
+  # run replaced by a newer push is not lost: plan.sh counts the changes from
+  # the last green main run.
   cancel-in-progress: false
 
 jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read # plan.sh: the last green run of this workflow
+    outputs:
+      docs_only: ${{ steps.plan.outputs.docs_only }}
+      run_windows: ${{ steps.plan.outputs.run_windows }}
+      run_macos: ${{ steps.plan.outputs.run_macos }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          FULL: "false"
+          REF: ${{ github.ref }}
+          WORKFLOW: main.yml
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/plan.sh
+
   static:
+    needs: plan
+    if: needs.plan.outputs.docs_only != 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/_static.yml
 
   windows:
-    needs: static
+    needs: [plan, static]
+    if: needs.plan.outputs.run_windows == 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/_build-test.yml
@@ -29,7 +61,8 @@ jobs:
       doc: true
 
   macos:
-    needs: static
+    needs: [plan, static]
+    if: needs.plan.outputs.run_macos == 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/_build-test.yml
@@ -39,7 +72,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [static, windows, macos]
+    needs: [plan, static, windows, macos]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}
@@ -47,4 +80,4 @@ jobs:
       - name: Fail when a needed job failed or was cancelled
         if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         run: exit 1
-      - run: echo "all needed jobs passed"
+      - run: echo "all needed jobs passed or were skipped"

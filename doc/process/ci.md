@@ -6,8 +6,9 @@
 
 | 文件 | 作用 |
 | --- | --- |
-| `.github/workflows/ci.yml` | 入口：push 到 main 以外的任意分支（不含 tag）、pull_request、手动触发（`full`）。只做编排 |
-| `.github/workflows/main.yml` | 入口：push 到 main。全部检查、两个系统都跑；只有它（和 nightly）写入 cargo 缓存 |
+| `.github/workflows/ci.yml` | 入口：push 到 main 以外的任意分支（不含 tag）、手动触发（`full`）。只做编排。**没有 pull_request 触发**：同仓库 PR 直接显示 push 运行的检查（在同一个 head 提交上） |
+| `.github/workflows/ci-macos.yml` | 入口：PR 的 macOS build-test，只在按需时跑：非草稿 PR opened/reopened/ready_for_review，或加上 `ci:macos` 标签（去掉再加一次即重跑）；PR 没改 host 路径时不触发 |
+| `.github/workflows/main.yml` | 入口：push 到 main。和 ci.yml 同一个 plan；host 改动时 Windows、macOS 都跑，只改文档时只跑 plan 和 ci-ok；只有它（和 nightly）写入 cargo 缓存 |
 | `.github/workflows/nightly.yml` | 每天 01:17 UTC 与手动：RustSec 公告每天查；main 在 24 小时内有新提交才跑两个系统的 build-test 和未签名包 |
 | `.github/workflows/release.yml` | tag `v*` 与手动（`dry_run`，默认开）：核对 tag 与 `src/host/Cargo.toml` 版本、发布说明、依赖固定；同一套检查（不用缓存）；两个系统的未签名安装包、`SHA256SUMS`；tag 时建本仓库的草稿 release。签名是 TODO job（`environment: release`）。见下文「打包」和 [doc/releases/README.md](../releases/README.md) |
 | `.github/workflows/deps.yml` | 只能手动：生成并固定原生依赖（libmpv、FFmpeg），发到本仓库的预发布 release `deps-<日期>`。见下文「打包」 |
@@ -18,16 +19,16 @@
 | `.github/actions/setup-rust` | 按 `rust-toolchain.toml` 安装工具链；`Swatinem/rust-cache`，只在 main 上保存 |
 | `.github/actions/setup-node` | Node 26 + npm 缓存；`src/` 和带 lockfile 的插件（nes、workshop）各 `npm ci` |
 | `.github/actions/setup-libmpv` | 按 `src/packaging/deps.json` 用 job token 下载本仓库 `deps-*` release 里的依赖包，校验 SHA-256，缓存，解压。设 `MPV_LIBRARY_DIR`（rsmpv-sys 的 build.rs 读它）和 `VESTRA_DEPS_DIR`（打包脚本读它）。macOS 另设 rpath（测试程序靠它找到 `@rpath/libmpv.2.dylib`），Windows 把 DLL 目录加进 PATH |
-| `.github/scripts/plan.sh` | ci.yml 的 plan：按改动的路径决定跑什么 |
+| `.github/scripts/plan.sh` | ci.yml、main.yml 的 plan：按改动的路径决定跑什么（见下） |
 | `rust-toolchain.toml`、`src/host/deny.toml`、`_typos.toml`、`.github/zizmor.yml` | 工具配置 |
 | `.gitattributes` | 所有检出都用 LF（Windows 默认会转成 CRLF，测试比较源码文本会失败） |
 | `src/scripts/check-unsafe-policy.mjs` | unsafe 规则（见下） |
 
-## ci.yml 的阶段
+## ci.yml / main.yml 的阶段
 
 ```
-push(非 main) / pull_request / workflow_dispatch{full}
-│
+push(非 main) / workflow_dispatch{full}      push(main)
+│                                            │
 plan [ubuntu]  改动路径 → docs_only, host, lock, run_windows, run_macos
 │
 ├─ static [ubuntu]  (docs_only 时跳过)               ← 闸门
@@ -36,7 +37,7 @@ plan [ubuntu]  改动路径 → docs_only, host, lock, run_windows, run_macos
 │    └─ ts:   npm run check · format:check · boundaries · portability --skip-host
 │             licenses · test:sdk · plugins:build · plugin -- test --all · sdk:sync-slint
 │             git 工作区无改动
-├─ audit [ubuntu]  (lock: Cargo.lock / deny.toml 改了)  不阻塞，失败只出 warning
+├─ audit [ubuntu]  (只在 ci.yml；lock: Cargo.lock / deny.toml 改了)  不阻塞，失败只出 warning
 │
 ├─ windows [windows-2022, 2x]  needs static, if run_windows
 │    clippy -D warnings · cargo test --workspace · cargo doc -D warnings
@@ -44,15 +45,20 @@ plan [ubuntu]  改动路径 → docs_only, host, lock, run_windows, run_macos
 │    clippy -D warnings · cargo test --workspace
 │
 └─ ci-ok  if: always()；任一 needs 为 failure/cancelled 就失败（跳过算通过）
+
+pull_request{opened, reopened, ready_for_review, labeled ci:macos}，非草稿，改了 host 路径
+└─ ci-macos.yml: macos [macos-15]  clippy · cargo test（static 和 Windows 由分支的 push 运行负责）
 ```
 
-- `host` = 改了 `src/host/`、`src/runtime/`、`src/package*.json`、`rust-toolchain.toml`、`.gitattributes` 或 `.github/`（host 的测试会启动 Node 插件运行器）。
-- `run_windows` = `host` 或 `full`。`run_macos` = `full`，或目标为 main 的 PR 且 `host`。
-- 只改 `doc/` 或 `*.md`：只跑 plan 和 ci-ok。
-- 同一个分支有 PR 时，push 和 pull_request 各跑一次（concurrency 组不同）；PR 那次多跑 macOS。
-- main.yml：static → windows + macos → ci-ok，不取消正在跑的 main 运行（它要写缓存）。
+**改动从哪里算起**：plan.sh 用 API（`actions: read`）找这个 workflow 在这个分支上**最近一次成功运行**的提交（必须是 HEAD 的祖先，不是 HEAD 本身），`git diff` 它到 HEAD。没有这样的运行时：分支从它离开 main 的地方（`merge-base origin/main`）算，main 全跑。所以被 cancel-in-progress 取消的运行、被新 push 替换掉的 main 排队运行、失败的运行，它们的改动都会被下一次运行重新检查：tip 上绿色的 ci-ok 覆盖到上一次绿色为止的全部改动。
 
-**branch protection 只需要一个 required check：`ci-ok`。**
+- `host` = 改了 `src/host/`、`src/runtime/`、`src/package*.json`、`rust-toolchain.toml`、`.gitattributes` 或 `.github/`（host 的测试会启动 Node 插件运行器）。ci-macos.yml 的 `paths` 与它一致。只改 `src/plugins/` 不算 host：插件测试在 static 的 ts job 里。
+- `run_windows` = `host` 或 `full`。`run_macos` = `full`，或 main 上 `host`。分支 push 不跑 macOS：分支都在 Mac 上开发，`npm run ci:local` 本地就跑了 macOS（含 GPU 测试）；Windows 本地跑不了，所以分支上每次 host 改动都跑。
+- 只改 `doc/` 或 `*.md`：只跑 plan 和 ci-ok（main 也一样）。
+- 每次 push 只有一个运行（以前有 PR 的分支 push 和 pull_request 各跑一次，PR 那次还多跑 macOS）。ci.yml 的 concurrency 组是 `ci-<ref>`，新 push 取消旧运行。
+- main.yml 不取消正在跑的 main 运行（它要写缓存）。
+
+**branch protection 只需要一个 required check：`ci-ok`。** 目前私有仓库在 Free 计划上不能开 branch protection（API 返回 403），`ci-ok` 只是给人看的；PR 页面上显示的是 push 运行的 `ci-ok`。
 
 ## 和 §6.1 的对应
 
@@ -140,9 +146,9 @@ npm run ci:local -- --advisories  # 另查 RustSec 公告
 
 ## 成本
 
-计费倍数：Linux 1、Windows 2、macOS 10，每个 job 按分钟向上取整。缓存只有 main 写，feature 分支读 main 的缓存；main 还没跑过时分支都是冷缓存。
+计费倍数：Linux 1、Windows 2、macOS 10，每个 job 按分钟向上取整（plan、ci-ok、lint 各算 1 分钟）。缓存只有 main（和 nightly）写，分支读 main 的缓存；restore 命中正常（2026-10-24 分支运行：Windows、macOS 的 `build-test` 缓存都是 full match）。
 
-实测（2026-10-22，`ci/rework` 分支，全部冷缓存）：
+冷缓存实测（2026-10-22，`ci/rework` 分支）：
 
 | 运行 | job（分钟） | 墙钟 | 计费分钟 |
 | --- | --- | --- | --- |
@@ -150,4 +156,34 @@ npm run ci:local -- --advisories  # 另查 RustSec 公告
 | push，static + Windows（[39754674923](https://github.com/vestrasys/vestra-player/actions/runs/39754674923)） | 同上 + windows 8.0（clippy 3.4、test 3.3、doc 0.1） | 12.1 | 23 |
 | 手动 full（[39760523366](https://github.com/vestrasys/vestra-player/actions/runs/39760523366)） | + audit 0.4 · windows 7.9 · macos 1.8（clippy 0.6、test 0.6） | 12.5 | 45 |
 
-macOS（macos-15 arm64）编译比 Windows 快得多，按 10 倍计费仍是最贵的一项。
+热缓存时（2026-10-24）每个 job 的计费：plan 1、lint 1、ts 4（墙钟 3–4）、ci-ok 1、windows 10（墙钟约 4）、macos 20（墙钟约 1.2，向上取整成 2 分钟再乘 10）。
+
+**2026-10-22 08:40 至 10-24 12:50 的 136 次运行**（按 job 墙钟向上取整乘倍数估算，共约 2470 计费分钟：Linux 760、Windows 710、macOS 1000）：
+
+| workflow / 事件 | 运行数 | 计费分钟 | 说明 |
+| --- | --- | --- | --- |
+| main / push | 52 | 1000 | 每次都全跑；其中 38 次 tip 提交只改文档，仍花了约 690 |
+| release / workflow_dispatch | 11 | 420 | S7 打包的 dry run |
+| CI / push | 45 | 380 | |
+| CI / pull_request | 18 | 310 | 和同一提交的 push 运行重复，另加 macOS（8 次 × 20） |
+| CI / workflow_dispatch | 6 | 215 | full |
+| nightly、deps | 4 | 140 | |
+
+**每次 push 的估算（热缓存）**：
+
+| 场景 | 以前 | 现在 |
+| --- | --- | --- |
+| 分支 push，改了 host，没有 PR | 17 | 17 |
+| 分支 push，改了 host，有 PR | 54（push 17 + pull_request 17 + macOS 20） | 17 |
+| 分支 push，只改插件 / 其他非 host 代码，有 PR | 14–37（PR 运行按整个 PR 的改动算） | 7 |
+| 分支 push，只改文档 | 2（有 PR 时 + PR 运行 2–37） | 2 |
+| PR 的 macOS | 每次 push 20 | opened / ready_for_review / 加标签时各 20 |
+| main push，改了 host | 36 | 37 |
+| main push，非 host 代码 | 36 | 7 |
+| main push，只改文档 | 36 | 2 |
+
+按上面两天的运行粗算：pull_request 运行（310）换成 ci-macos 的少数几次（约 6 个 PR × 20），只改文档的 main push 从约 690 降到约 80，合计约 2470 → 1600（-35%），release dry run 不算在内时更明显。最近一次绿色运行之后失败过的分支 / main，下一次运行会把失败那几次的改动一起重跑，这时的成本高于表中的数。
+
+**现在要晚一点才知道的事**：分支上的 macOS 编译 / 测试错误（本地 `ci:local` 之外）要到 PR opened / 加 `ci:macos` 标签、或合进 main 之后才在 CI 里看到；只改文档的 main push 不跑 typos（分支 push 时跑）。
+
+进一步可选（未做）：main 上的 macOS 也只留给 nightly（每次 host main push 再省 20，代价是 macOS 问题最多晚 24 小时发现）；release dry run 用 `platforms=windows` / `macos` 只打一个系统的包。
