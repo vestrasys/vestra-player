@@ -100,12 +100,15 @@ export async function scanFolder(
       if (isDir) {
         if (!isPackage(entry.name) && depth < maxDepth) subdirs.push(path);
       } else if (isFile && isMedia(entry.name)) {
-        let key = path;
-        try {
-          key = await realpath(path);
-        } catch {
-          continue;
-        }
+        // A plain file's realpath is its name in the folder's realpath; only links are resolved
+        // (one realpath per file made large folders slow on Windows).
+        let key = join(real, entry.name);
+        if (entry.isSymbolicLink())
+          try {
+            key = await realpath(path);
+          } catch {
+            continue;
+          }
         if (seenFiles.has(key)) continue;
         if (files.length >= limit) {
           truncated = true;

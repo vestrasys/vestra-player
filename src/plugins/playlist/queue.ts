@@ -68,6 +68,8 @@ export type Added = {
 /** C17: the list holds at most this many rows. */
 export const ROW_LIMIT = 20_000;
 const UNREADABLE = "文件不存在或暂不可读取，可重试";
+/** Paths resolved at once while adding. */
+const RESOLVE_LIMIT = 16;
 
 /** C21: NFKC, lower case. */
 export const fold = (text: string) => text.normalize("NFKC").toLowerCase();
@@ -108,6 +110,10 @@ export class Queue {
   private cursor: string | null = null;
   private anchor: string | null = null;
   private nextId = 0;
+  /** rowId -> row, for every row in `rows` (lookups stay O(1) with thousands of rows). */
+  private byId = new Map<string, Row>();
+  /** Folded search text per row (its title and source do not change). */
+  private folded = new WeakMap<Row, string>();
 
   get filtering() {
     return this.terms.length > 0;
@@ -115,7 +121,11 @@ export class Queue {
   matches(row: Row) {
     if (!this.terms.length) return true;
     // Title, file name and (for links) the URL; a local file's folders do not match.
-    const text = fold(`${row.title}\n${fileNameOf(row)}${row.kind === "url" ? `\n${row.source}` : ""}`);
+    let text = this.folded.get(row);
+    if (text === undefined) {
+      text = fold(`${row.title}\n${fileNameOf(row)}${row.kind === "url" ? `\n${row.source}` : ""}`);
+      this.folded.set(row, text);
+    }
     return this.terms.every((term) => text.includes(term));
   }
   /** The rows shown (all of them unless a search filters). */
@@ -145,7 +155,7 @@ export class Queue {
     this.say(text);
   }
   row(id: string | null) {
-    return this.rows.find((row) => row.rowId === id);
+    return id === null ? undefined : this.byId.get(id);
   }
   indexOf(id: string | null) {
     return this.rows.findIndex((row) => row.rowId === id);
@@ -238,14 +248,28 @@ export class Queue {
     const files = new Map<string, Row>(),
       links = new Map<string, Row>();
     for (const row of this.rows) (row.kind === "file" ? files : links).set(row.key, row);
-    for (const entry of entries) {
+    // Local files without a known realpath are resolved first, `RESOLVE_LIMIT` at a time
+    // (one after another, 3000 files took seconds on Windows).
+    const sources = entries.map((entry) => (entry.kind === "file" ? resolve(entry.source) : entry.source));
+    const real = new Map<number, string | null>();
+    let next = 0;
+    const unknown = entries.flatMap((entry, i) => (entry.kind === "file" && entry.key === undefined ? [i] : []));
+    await Promise.all(
+      Array.from({ length: Math.min(RESOLVE_LIMIT, unknown.length) }, async () => {
+        while (next < unknown.length) {
+          const i = unknown[next++]!;
+          real.set(i, await realpath(sources[i]!).catch(() => null));
+        }
+      }),
+    );
+    for (const [i, entry] of entries.entries()) {
       let key = entry.key ?? (entry.kind === "url" ? this.urlKey(entry.source) : entry.source),
         error = "";
-      const source = entry.kind === "file" ? resolve(entry.source) : entry.source;
-      if (entry.kind === "file" && entry.key === undefined) {
-        try {
-          key = await realpath(source);
-        } catch {
+      const source = sources[i]!;
+      if (real.has(i)) {
+        const found = real.get(i);
+        if (found) key = found;
+        else {
           key = source;
           error = entry.missing ?? UNREADABLE;
         }
@@ -343,15 +367,19 @@ export class Queue {
       played: false,
     };
     this.rows.push(row);
+    this.byId.set(row.rowId, row);
     return row;
   }
 
   /** Whether `place` would move any marked row. */
   canPlace(place: Placement) {
-    if (this.filtering) return false;
-    const marks = this.rows.map((row) => this.selection.has(row.rowId));
-    if (place === "top" || place === "up") return marks.some((mark, i) => mark && i > 0 && !marks[i - 1]);
-    return marks.some((mark, i) => mark && i < marks.length - 1 && !marks[i + 1]);
+    if (this.filtering || !this.selection.size) return false;
+    const rows = this.rows,
+      marked = (i: number) => this.selection.has(rows[i]!.rowId);
+    if (place === "top" || place === "up") {
+      for (let i = 1; i < rows.length; i++) if (marked(i) && !marked(i - 1)) return true;
+    } else for (let i = 0; i < rows.length - 1; i++) if (marked(i) && !marked(i + 1)) return true;
+    return false;
   }
   /** Move the marked rows one step or to an end, keeping their relative order. */
   place(place: Placement) {
@@ -439,16 +467,15 @@ export class Queue {
 
   /** Remove the marked rows; the cursor lands on the row after them. */
   removeSelected() {
-    const marked = this.marked();
-    if (!marked.length) return;
-    const first = this.indexOf(marked[0].rowId);
-    for (const row of marked) this.removeRow(row.rowId);
+    const first = this.rows.findIndex((row) => this.selection.has(row.rowId));
+    if (first < 0) return;
+    this.removeRows(new Set(this.selection));
     this.selected = this.rows[Math.min(first, this.rows.length - 1)]?.rowId ?? null;
   }
   /** C07: remove the shown rows that are not selected; returns how many. */
   removeUnselected() {
     const doomed = this.visible().filter((row) => !this.selection.has(row.rowId));
-    for (const row of doomed) this.removeRow(row.rowId);
+    this.removeRows(new Set(doomed.map((row) => row.rowId)));
     return doomed.length;
   }
   /** Whether "移除未选" would remove anything and keep something. */
@@ -459,20 +486,31 @@ export class Queue {
   }
   /** Remove one row without touching the selection of the others. */
   removeRow(rowId: string) {
-    const index = this.indexOf(rowId);
-    if (index < 0) return;
-    const [removed] = this.rows.splice(index, 1);
-    this.removed(rowId);
-    this.selection.delete(rowId);
-    this.shuffled.delete(rowId);
-    if (this.cursor === rowId) this.cursor = null;
-    if (removed.rowId === this.binding?.rowId) this.detach("当前媒体已移出列表", true);
-    if (removed.rowId === this.failed) this.failed = null;
+    this.removeRows(new Set([rowId]));
+  }
+  /** Remove these rows in one pass (thousands at once stay linear). */
+  removeRows(ids: ReadonlySet<string>) {
+    const gone = ids.size ? [...ids].filter((id) => this.byId.has(id)) : [];
+    if (!gone.length) return;
+    this.rows = this.rows.filter((row) => !ids.has(row.rowId));
+    const bound = this.binding?.rowId;
+    let detach = false;
+    for (const rowId of gone) {
+      this.byId.delete(rowId);
+      this.removed(rowId);
+      this.selection.delete(rowId);
+      this.shuffled.delete(rowId);
+      if (this.cursor === rowId) this.cursor = null;
+      if (rowId === bound) detach = true;
+      if (rowId === this.failed) this.failed = null;
+    }
+    if (detach) this.detach("当前媒体已移出列表", true);
   }
   /** `loud`: say that the current media goes on (not when something new plays right after). */
   clear(loud = true) {
     for (const row of this.rows) this.removed(row.rowId);
     this.rows = [];
+    this.byId.clear();
     this.selected = null;
     this.failed = null;
     this.shuffled.clear();

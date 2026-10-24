@@ -828,7 +828,9 @@ test("C17: a list above 20 000 rows is refused", async () => {
   );
   const app = await start({ data });
   try {
-    assert.equal(app.rows().length, 20_000);
+    // The list is 20 000 rows tall; the panel gets the 200 around the view.
+    assert.equal(app.prop("row-count"), 20_000);
+    assert.equal(app.rows().length, 200);
     const [a] = await app.files(["a.mp4"]);
     await app.addFiles([a!]);
     assert.equal(app.osd(), "已添加 0 项，列表已达上限 20000 项");
