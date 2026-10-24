@@ -303,25 +303,66 @@ test("G-16b: loading shows the loading screen with the source name; ready judges
   assert.equal(props(host).mode, "loading");
 });
 
-test("G-16b: an error while loading goes back to what was shown before", async () => {
+test("G-16b: an error is the idle screen, never the card of the source before", async () => {
   const host = new TestHost();
   host.tools.handle("ffprobe", () => ({ stdout: PROBE_PLAIN }));
   await start(host);
   host.openElsewhere(join(folder({ "a.mp3": "x" }), "a.mp3"));
   await settle(host);
+  assert.deepEqual([props(host).mode, props(host).title], ["audio", "a.mp3"]);
   host.openElsewhere("https://broken.example/x.mp3", "loading");
   await settle(host);
   assert.equal(props(host).mode, "loading");
   host.setSource({ phase: "error" });
   await settle(host);
-  assert.deepEqual([props(host).mode, props(host).title], ["audio", "a.mp3"]);
-  host.setSource({ phase: "empty", source: null });
+  assert.deepEqual([props(host).mode, props(host).title], ["idle", ""]);
+  // Failing without a loading phase first: the same.
+  host.openElsewhere(join(folder({ "b.mp3": "x" }), "b.mp3"));
   await settle(host);
-  host.openElsewhere("https://broken.example/y.mp3", "loading");
+  assert.equal(props(host).mode, "audio");
+  host.openElsewhere("https://broken.example/y.mp3", "error");
+  await settle(host);
+  assert.deepEqual([props(host).mode, props(host).title], ["idle", ""]);
+  // Idle logo switched off: nothing.
+  await host.command("idle-logo").run();
+  await host.settle();
+  host.openElsewhere("https://broken.example/z.mp3", "loading");
   await settle(host);
   host.setSource({ phase: "error" });
   await settle(host);
-  assert.equal(props(host).mode, "idle");
+  assert.equal(props(host).mode, "none");
+});
+
+test("generated streams count as video: no card while one runs, none left after a failing open", async () => {
+  const host = new TestHost();
+  host.tools.handle("ffprobe", () => ({ stdout: PROBE_PLAIN }));
+  await start(host);
+  // A file resolver's stream: the path that was opened, `kind` stream, no mpv video track.
+  assert.equal(host.stats.video, null);
+  host.openElsewhere(join(folder({ "test.nes": "rom" }), "test.nes"), "loading");
+  await settle(host);
+  assert.deepEqual([props(host).mode, props(host).loading], ["loading", "test.nes"]);
+  host.setSource({ kind: "producer", phase: "ready" });
+  await settle(host);
+  assert.deepEqual([props(host).mode, props(host).title], ["none", ""]);
+  assert.equal(host.tools.calls.length, 0, "no ffprobe for a stream");
+  // The backdrop comes back while the stream runs: still no card.
+  host.setBackdropEffective(true);
+  await settle(host);
+  assert.equal(props(host).mode, "none");
+
+  // Another file whose resolution fails.
+  host.openElsewhere(join(folder({ "bad.nes": "x" }), "bad.nes"), "loading");
+  await settle(host);
+  assert.deepEqual([props(host).mode, props(host).loading], ["loading", "bad.nes"]);
+  host.setSource({ kind: "producer", phase: "error" });
+  await settle(host);
+  assert.deepEqual([props(host).mode, props(host).title], ["idle", ""]);
+
+  // A plain audio file after it still gets its card.
+  host.openElsewhere(join(folder({ "song.mp3": "x" }), "song.mp3"));
+  await settle(host);
+  assert.deepEqual([props(host).mode, props(host).title], ["audio", "song.mp3"]);
 });
 
 test("G-16b: loading names: file name, link host and last segment, cut with an ellipsis", () => {

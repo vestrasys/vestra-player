@@ -7,7 +7,7 @@ import { SettingsStore } from "./settings.ts";
 
 /** What the backdrop draws: the idle logo, the audio cover, the loading screen, or nothing (plain Theme.bg-video). */
 export type Mode = "idle" | "audio" | "loading" | "none";
-/** What the video area holds, as this plugin judges it from `phase` and `stats().video`. */
+/** What the video area holds, as this plugin judges it from `phase`, `kind` and `stats().video`. */
 type Kind = "idle" | "audio" | "video" | "loading";
 
 /** Longest source name on the loading screen (the Slint text elides as well). */
@@ -45,7 +45,10 @@ function size(bytes: number) {
  * phase `empty` is the idle screen (H12, logo), `loading` is the loading
  * screen (G-16b: the player shows the backdrop while loading, G-16a), and a
  * ready source whose `stats().video` is null is audio only (J11, cover and
- * tags). `error` goes back to what was shown before loading. Audio files with a cover picture are
+ * tags). A generated stream (`kind` `stream`, e.g. a file resolver's) has
+ * pictures of its own that mpv does not see: always video. `error` is the
+ * idle screen: the source that failed has nothing to show, and the one
+ * before it is gone (never its card). Audio files with a cover picture are
  * shown by mpv as a video track, so the backdrop is not shown for them
  * (README, known behaviour).
  */
@@ -68,8 +71,6 @@ export default async function activate(plugin: Plugin) {
 
   // ------------------------------------------------------------------ scene
   let kind: Kind = "idle";
-  /** What was shown before the loading screen: `error` goes back to it. */
-  let beforeLoading: Kind = "idle";
   let loading = "";
   /** The source the kind and track belong to (-1: none judged yet). */
   let judged = -1;
@@ -105,14 +106,19 @@ export default async function activate(plugin: Plugin) {
     }
   }
 
-  /** Is the ready source audio only? `stats().video`, with the backdrop's own state as the fallback. */
+  /**
+   * Is the ready source audio only? A generated stream never is (its frames
+   * do not go through mpv, so `stats().video` is null); otherwise
+   * `stats().video`, with the backdrop's own state as the fallback.
+   */
   async function judge(state: PlayerState) {
-    let audio: boolean;
-    try {
-      audio = (await player.stats()).video === null;
-    } catch {
-      audio = plugin.panels.backdrop.state?.effective === true;
-    }
+    let audio = false;
+    if (state.kind !== "stream")
+      try {
+        audio = (await player.stats()).video === null;
+      } catch {
+        audio = plugin.panels.backdrop.state?.effective === true;
+      }
     // A newer source was judged meanwhile.
     if (judged !== state.sourceId) return;
     kind = audio ? "audio" : "video";
@@ -121,7 +127,8 @@ export default async function activate(plugin: Plugin) {
   }
 
   function observe(state: PlayerState) {
-    if (state.phase === "empty") {
+    // error: the idle screen, never the card of the source before (G-16b).
+    if (state.phase === "empty" || state.phase === "error") {
       preparing?.abort();
       kind = "idle";
       judged = -1;
@@ -131,15 +138,12 @@ export default async function activate(plugin: Plugin) {
     }
     if (state.sourceId !== judged && preparing) preparing.abort();
     if (state.phase === "loading") {
-      if (kind !== "loading") beforeLoading = kind;
       kind = "loading";
       loading = loadingName(state.source);
       // Judged again once ready (a reload of the same source too).
       judged = -1;
       return;
     }
-    // error: what was shown before loading (the player keeps the backdrop's last state).
-    if (kind === "loading" && state.phase === "error") kind = beforeLoading;
     if ((state.phase === "ready" || state.phase === "ended") && state.sourceId !== judged) {
       judged = state.sourceId;
       void judge(state);
