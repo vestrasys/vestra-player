@@ -154,3 +154,33 @@ test("pi's own User-Agent and headers go out unchanged: the worker never sets id
   assert.doesNotMatch(agent, /vestra/i);
   await ai.stop();
 });
+
+test("a saved provider that is no longer offered: notice, nothing sent, settings and key kept until deleted", async () => {
+  const mock = await server(() => ({ text: ["好"] }));
+  const data = await dataDirectory();
+  const saved = { provider: "zai", models: { zai: "glm-4.6" }, baseUrls: {}, lastSession: null, migrateKeys: false, savedKeys: { zai: true } };
+  await fs.writeFile(path.join(data, "settings.json"), JSON.stringify(saved));
+  const ai = await startAi({ data, secrets: { "key.zai": KEY } });
+  const notice = "之前选择的服务商「Z.AI」已不再提供，请改用其他服务商或「自定义 · OpenAI/Anthropic 格式」。";
+  await ai.until(() => ai.props.banner === notice, "banner");
+  assert.equal(ai.page.props.gone, notice);
+  assert.equal(ai.page.props.providers[ai.page.props["provider-index"]], "Z.AI（已不再提供）");
+  assert.equal(ai.props.configured, false);
+  await ai.send("send", "hi");
+  assert.equal(mock.chats.length, 0);
+  assert.equal(ai.rows().length, 0);
+  // Nothing was changed or read: the old settings and the key stay.
+  assert.equal(ai.host.calls.filter((c) => c.method === "secrets.get" && c.params.name === "key.zai").length, 0);
+  assert.equal(ai.host.secrets.get("key.zai"), KEY);
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(data, "settings.json"), "utf8")).models, { zai: "glm-4.6" });
+  ai.page.emit("delete-old-key");
+  await ai.until(() => !ai.host.secrets.has("key.zai"), "old key deleted");
+  // Picking a provider ends the notice.
+  ai.page.emit("choose-provider", ai.page.props.providers.indexOf("自定义 · OpenAI 格式"));
+  await ai.host.settle();
+  assert.equal(ai.page.props.gone, "");
+  await ai.configure(mock.url);
+  await ai.ask("hi");
+  assert.equal(ai.rows().at(-1).text, "好");
+  await ai.stop();
+});

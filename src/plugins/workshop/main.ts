@@ -7,6 +7,8 @@ import {
   DEFAULT_SETTINGS,
   LEGACY_COMPAT,
   checkBaseUrl,
+  goneName,
+  goneNotice,
   listModels,
   loadProviders,
   masked,
@@ -14,6 +16,7 @@ import {
   secretName,
   validSettings,
   type AiSettings,
+  type Provider,
 } from "./providers.ts";
 import { Sessions, group, titleFrom, type Meta } from "./sessions.ts";
 
@@ -67,7 +70,14 @@ export default async function activate(plugin: Plugin) {
   const listed = new Map<string, string[]>();
   let listing = false;
 
-  const provider = () => providers.find((p) => p.id === settings.value.provider) ?? providers[0];
+  /**
+   * The saved provider. One that is no longer offered stays selected (its
+   * model, Base URL and key are left alone) as a stand-in without models:
+   * nothing is sent until the user picks another one.
+   */
+  const provider = (): Provider =>
+    providers.find((p) => p.id === settings.value.provider) ?? { id: settings.value.provider, label: settings.value.provider, models: [], defaultModel: "", api: null };
+  const gone = () => !providers.some((p) => p.id === settings.value.provider);
   const model = () => settings.value.models[provider().id] || provider().defaultModel;
   /**
    * The first slice kept the custom endpoint's key under another name: move
@@ -128,6 +138,7 @@ export default async function activate(plugin: Plugin) {
   };
   /** Starts reading the current provider's key without waiting (window shown, provider chosen). */
   const loadKey = () => {
+    if (gone()) return; // its key stays where it is, unread
     keyFor(provider().id).catch(() => {}); // shown through keyError
   };
   /**
@@ -136,7 +147,7 @@ export default async function activate(plugin: Plugin) {
    */
   const configured = () => {
     const p = provider();
-    if (!model() || !keys.has(p.id)) return false;
+    if (gone() || !model() || !keys.has(p.id)) return false;
     if (p.api) return !!settings.value.baseUrls[p.id] && (!!keys.get(p.id) || !settings.value.savedKeys?.[p.id]);
     return !!keys.get(p.id);
   };
@@ -144,6 +155,7 @@ export default async function activate(plugin: Plugin) {
   /** The line above the conversation: keychain state or missing setup. */
   const banner = () => {
     const p = provider();
+    if (gone()) return goneNotice(p.id);
     if (reading.has(p.id)) return "正在读取钥匙串中的 API key…（系统可能会请求授权）";
     if (keyError) return keyError;
     if (!configured()) return !keys.has(p.id) ? "尚未读取 API key。" : "尚未配置服务商：请先在设置中选择服务商并保存 API key。";
@@ -370,12 +382,16 @@ export default async function activate(plugin: Plugin) {
     const key = keys.get(p.id) ?? "";
     const models = p.api ? (listed.get(p.id) ?? []) : p.models;
     return {
-      providers: providers.map((x) => x.label),
-      providerIndex: providers.indexOf(p),
+      // A provider no longer offered shows as the first entry, so the list
+      // does not pretend another one is selected.
+      providers: [...(gone() ? [`${goneName(p.id)}（已不再提供）`] : []), ...providers.map((x) => x.label)],
+      providerIndex: gone() ? 0 : providers.indexOf(p),
       custom: !!p.api,
       baseUrl: settings.value.baseUrls[p.id] ?? "",
       keyText,
-      keyState: reading.has(p.id)
+      keyState: gone()
+        ? "旧服务商的 key 不会自动删除"
+        : reading.has(p.id)
         ? "正在读取钥匙串…"
         : !keys.has(p.id)
           ? keyError
@@ -389,6 +405,7 @@ export default async function activate(plugin: Plugin) {
       modelIndex: models.indexOf(model()),
       modelText: model(),
       listing,
+      gone: gone() ? goneNotice(p.id) : "",
       message: pageMessage,
       messageWarn: pageWarn,
     };
@@ -400,7 +417,7 @@ export default async function activate(plugin: Plugin) {
   /** A change of service, key or model applies to the next message. */
   const changed = () => releaseIdle();
   page.on("chooseProvider", async (index: number) => {
-    const p = providers[index];
+    const p = providers[gone() ? index - 1 : index];
     if (!p) return;
     settings.save({ ...settings.value, provider: p.id });
     keyText = "";
@@ -412,6 +429,10 @@ export default async function activate(plugin: Plugin) {
   page.on("saveKey", async (text: string) => {
     const key = text.trim();
     if (!key) return;
+    if (gone()) {
+      say("请先选择一个服务商，再保存 key。", true);
+      return;
+    }
     const p = provider();
     try {
       await plugin.secrets.set(secretName(p.id), key);
@@ -427,6 +448,19 @@ export default async function activate(plugin: Plugin) {
     say(`${p.label} 的 key 已保存。`);
     changed();
     if (p.api && settings.value.baseUrls[p.id]) await fetchModels(false);
+  });
+  /** The key of a provider that is no longer offered: kept until the user deletes it. */
+  page.on("deleteOldKey", async () => {
+    if (!gone()) return;
+    const id = settings.value.provider;
+    try {
+      await plugin.secrets.delete(secretName(id));
+    } catch (error) {
+      say(`没能从钥匙串删除：${(error as Error).message}`, true);
+      return;
+    }
+    markSaved(id, false);
+    say("旧服务商的 key 已删除。");
   });
   page.on("deleteKey", async () => {
     const p = provider();

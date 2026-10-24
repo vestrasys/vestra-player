@@ -39,6 +39,31 @@ export function loadProviders(packageDirectory: string): Provider[] {
   return [...builtin, ...CUSTOM];
 }
 
+/**
+ * Names of providers that were offered once and are no longer (user ruling
+ * 2026-10-24: no coding/token plans or subscriptions), for the notice.
+ */
+const REMOVED: Record<string, string> = {
+  "kimi-coding": "Kimi For Coding",
+  zai: "Z.AI",
+  "zai-coding-cn": "Z.AI Coding CN",
+  "qwen-token-plan": "Qwen Token Plan",
+  "qwen-token-plan-cn": "Qwen Token Plan CN",
+  "qwen-token-plan-individual": "Qwen Token Plan Individual",
+  "xiaomi-token-plan-ams": "Xiaomi Token Plan AMS",
+  "xiaomi-token-plan-cn": "Xiaomi Token Plan CN",
+  "xiaomi-token-plan-sgp": "Xiaomi Token Plan SGP",
+  "opencode-go": "OpenCode Go",
+  radius: "Radius",
+};
+
+export const goneName = (id: string) => REMOVED[id] ?? id;
+
+/** The notice for a saved provider that is not offered any more. */
+export function goneNotice(id: string): string {
+  return `之前选择的服务商「${goneName(id)}」已不再提供，请改用其他服务商或「自定义 · OpenAI/Anthropic 格式」。`;
+}
+
 /** Keychain entry of a provider's key (one per provider id, custom entries included). */
 export const secretName = (provider: string) => `key.${provider}`;
 

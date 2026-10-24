@@ -18,11 +18,14 @@ export global AiSettings {
     in property <[string]> models;
     in property <int> model-index;
     in-out property <string> model-text;
+    // The saved provider is no longer offered: the notice; empty otherwise.
+    in property <string> gone;
     in property <string> message;
     in property <bool> message-warn;
     callback choose-provider(int);
     callback save-key(string);
     callback delete-key();
+    callback delete-old-key();
     callback set-base-url(string);
     callback accept-base-url(string);
     callback fetch-models();
@@ -42,6 +45,22 @@ export component AiSettingsPage inherits Rectangle {
         padding: 6px;
         spacing: 10px;
         alignment: start;
+        if AiSettings.gone != "": HorizontalLayout {
+            spacing: 8px;
+            Text {
+                text: AiSettings.gone;
+                color: Theme.danger;
+                font-size: Theme.font-body;
+                wrap: word-wrap;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 0;
+                Button { small: true; width: 72px; text: "删除旧 key"; clicked => { AiSettings.delete-old-key(); } }
+            }
+        }
         HorizontalLayout {
             spacing: 8px;
             Label { text: "服务商"; }
