@@ -1,0 +1,198 @@
+// The agent worker: one pi session in a Node process started by the plugin
+// with the permission model on (see agent.ts for the flags). It talks only
+// over the IPC channel and exits when the channel closes.
+//
+// pi runs fully in memory except the session JSONL: credentials in an
+// InMemoryCredentialStore (no auth.json), settings in memory, no model
+// catalog file, no discovered extensions, skills, prompts, themes or context
+// files. Telemetry and network catalog refreshes are off (PI_TELEMETRY=0,
+// PI_OFFLINE=1, set by the plugin).
+import {
+  InMemoryCredentialStore,
+  ModelRuntime,
+  SessionManager,
+  SettingsManager,
+  createAgentSession,
+  createExtensionRuntime,
+  type AgentSessionEvent,
+  type ResourceLoader,
+} from "../vendor/pi/pi.mjs";
+import { WorkFolder } from "./files.ts";
+import { type StartMessage, type ToPlugin, type ToWorker, type WorkerEvent } from "./protocol.ts";
+import { TOOL_NAMES, createTools } from "./tools.ts";
+
+type Session = Awaited<ReturnType<typeof createAgentSession>>["session"];
+
+let session: Session | undefined;
+let secret = "";
+
+/** No message leaves the worker with the key in it. */
+const redact = (text: string) => (secret.length >= 4 ? text.split(secret).join("••••") : text);
+function send(message: ToPlugin) {
+  if (!process.connected) return;
+  process.send?.(JSON.parse(redact(JSON.stringify(message))));
+}
+const event = (e: WorkerEvent) => send({ type: "event", event: e });
+const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+function textOf(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((part) => part && part.type === "text" && typeof part.text === "string")
+    .map((part) => part.text)
+    .join("");
+}
+
+/** The file or pattern a tool call is about, for its one-line label. */
+function targetOf(args: unknown): string {
+  if (!args || typeof args !== "object") return "";
+  const value = args as Record<string, unknown>;
+  for (const key of ["path", "pattern", "file"]) if (typeof value[key] === "string") return value[key] as string;
+  return "";
+}
+
+function forward(e: AgentSessionEvent) {
+  switch (e.type) {
+    case "message_start":
+      if (e.message.role === "assistant") event({ kind: "assistant_start" });
+      break;
+    case "message_update":
+      if (e.assistantMessageEvent.type === "text_delta") event({ kind: "text", delta: e.assistantMessageEvent.delta });
+      else if (e.assistantMessageEvent.type === "thinking_delta") event({ kind: "thinking", delta: e.assistantMessageEvent.delta });
+      break;
+    case "message_end":
+      if (e.message.role === "assistant") {
+        const message = e.message as { content: unknown; stopReason?: string; errorMessage?: string };
+        event({
+          kind: "assistant_end",
+          text: textOf(message.content),
+          stopReason: message.stopReason ?? "stop",
+          error: message.stopReason === "error" ? (message.errorMessage ?? "未知错误") : null,
+        });
+        if (session?.sessionFile) send({ type: "file", sessionFile: session.sessionFile });
+      }
+      break;
+    case "tool_execution_start":
+      event({ kind: "tool_start", id: e.toolCallId, name: e.toolName, target: targetOf(e.args) });
+      break;
+    case "tool_execution_end":
+      event({ kind: "tool_end", id: e.toolCallId, name: e.toolName, ok: !e.isError, summary: textOf(e.result?.content).slice(0, 2000) });
+      break;
+    case "auto_retry_start":
+      event({ kind: "retry", attempt: e.attempt, max: e.maxAttempts, error: e.errorMessage });
+      break;
+    case "compaction_start":
+      event({ kind: "compaction", done: false });
+      break;
+    case "compaction_end":
+      event({ kind: "compaction", done: true });
+      break;
+    case "agent_settled":
+      event({ kind: "settled", aborted: e.aborted });
+      break;
+  }
+}
+
+async function start(message: StartMessage) {
+  secret = message.key;
+  const folder = await WorkFolder.open(message.workDir);
+  const modelRuntime = await ModelRuntime.create({
+    credentials: new InMemoryCredentialStore(),
+    modelsPath: null,
+    refreshOnCreate: false,
+  });
+  if (message.baseUrl) {
+    modelRuntime.registerProvider(message.provider, {
+      name: "OpenAI 兼容",
+      baseUrl: message.baseUrl,
+      api: "openai-completions",
+      models: [
+        {
+          type: "chat",
+          id: message.modelId,
+          name: message.modelId,
+          reasoning: false,
+          input: ["text"],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: 128000,
+          maxTokens: 8192,
+        },
+      ],
+    } as Parameters<ModelRuntime["registerProvider"]>[1]);
+  }
+  const model = modelRuntime.getModel(message.provider, message.modelId);
+  if (!model) throw new Error(`未知模型：${message.provider}/${message.modelId}`);
+  // Local servers (Ollama, LM Studio) take any key.
+  await modelRuntime.setRuntimeApiKey(message.provider, message.key || "none");
+
+  const resourceLoader: ResourceLoader = {
+    getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
+    getSkills: () => ({ skills: [], diagnostics: [] }),
+    getPrompts: () => ({ prompts: [], diagnostics: [] }),
+    getThemes: () => ({ themes: [], diagnostics: [] }),
+    getAgentsFiles: () => ({ agentsFiles: [] }),
+    getSystemPrompt: () => message.systemPrompt,
+    getSystemPromptSource: () => undefined,
+    getAppendSystemPrompt: () => [],
+    getAppendSystemPromptSources: () => [],
+    extendResources: () => {},
+    reload: async () => {},
+  } as unknown as ResourceLoader;
+
+  const sessionManager = message.sessionFile
+    ? SessionManager.open(message.sessionFile, message.sessionDir, folder.root)
+    : SessionManager.create(folder.root, message.sessionDir);
+  ({ session } = await createAgentSession({
+    cwd: folder.root,
+    // Never written: credentials, settings and models are in memory. The
+    // worker may not write there anyway (only the session folder).
+    agentDir: message.sessionDir,
+    model,
+    thinkingLevel: "off",
+    modelRuntime,
+    resourceLoader,
+    sessionManager,
+    // Two automatic retries for transient failures (1.5 s, 3 s), then the error row with 「重试」.
+    settingsManager: SettingsManager.inMemory({ retry: { enabled: true, maxRetries: 2, baseDelayMs: 1500 } }),
+    noTools: "builtin",
+    customTools: createTools(folder),
+    tools: TOOL_NAMES,
+  }));
+  session.subscribe(forward);
+  send({ type: "ready", sessionFile: session.sessionFile ?? null });
+}
+
+async function prompt(text: string) {
+  if (!session) throw new Error("会话尚未就绪");
+  try {
+    await session.prompt(text);
+  } finally {
+    if (session.sessionFile) send({ type: "file", sessionFile: session.sessionFile });
+  }
+}
+
+process.on("message", (raw) => {
+  const message = raw as ToWorker;
+  const run = async () => {
+    switch (message.type) {
+      case "start":
+        return start(message);
+      case "prompt":
+        return prompt(message.text);
+      case "abort":
+        return session?.abort();
+      case "shutdown":
+        session?.dispose();
+        process.exit(0);
+    }
+  };
+  run().catch((error) => {
+    // Details for the plugin log (stderr); the message for the user.
+    const resource = (error as { resource?: string }).resource;
+    process.stderr.write(redact(`${error instanceof Error ? error.stack : error}${resource ? `\nresource: ${resource}` : ""}\n`));
+    send({ type: "failed", message: errorText(error) });
+  });
+});
+// The plugin process ended or closed the channel: nothing left to answer.
+process.on("disconnect", () => process.exit(0));

@@ -1,262 +1,338 @@
-import type { InstallOptions, PackageCandidate, PackageChange, PackageTrial, Plugin, PluginError } from "@vestra-player/sdk";
-import { WorkshopJob, defaultRequirement, requirement } from "./engine.mjs";
-import * as fs from "node:fs/promises";
+import type { Plugin } from "@vestra-player/sdk";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { AgentWorker } from "./agent.ts";
+import { Chat, type Row } from "./chat.ts";
+import { COMPAT_PROVIDER, DEFAULT_SETTINGS, checkBaseUrl, loadProviders, masked, secretName, validSettings, type AiSettings } from "./providers.ts";
+import { Sessions, group, titleFrom, type Meta } from "./sessions.ts";
 
-/** Status text is one line (UI-TOOL-05). */
-const oneLine = (text: string) => {
-  const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length > 160 ? `${flat.slice(0, 159)}…` : flat;
-};
+const PI_URL = "https://github.com/earendil-works/pi";
+/** No event from a running agent for this long: stop and say so. */
+export const QUIET_TIMEOUT_MS = 120_000;
+/** Streaming text reaches the window at most this often. */
+const REFRESH_MS = 100;
 
-/** Package change states in Chinese, after 「安装」/「回退」. */
-const changeText: Record<string, string> = {
-  preparing: "：正在准备…",
-  activating: "：正在启用…",
-  restoring: "：正在恢复原版本…",
-  committed: "完成。",
-  cancelled: "已取消。",
-  failed: "失败。",
-  failedDegraded: "失败，未能完全恢复原版本。",
-  tooLate: "已无法取消，操作继续。",
-};
+const SYSTEM_PROMPT = `你是 Vestra Player AI，内置在 Vestra Player 播放器里的助手，基于 pi 运行。
+- 用用户使用的语言回答，默认中文。
+- 你可以用 read、write、edit、ls、find、grep 工具读写当前会话的工作文件夹；只能访问这个文件夹，不能运行命令。
+- 写 Vestra 插件时遵守插件独立规则：插件只依赖公开的插件 SDK（@vestra-player/sdk，只能 import type），不引用其它插件，不调用系统命令。`;
 
-const tools: Record<string, string> = {
-  write_candidate: "写入候选文件",
-  read_candidate: "读取候选文件",
-  validate_candidate: "真实TypeScript校验",
-};
-
-/** One readable log line per engine event, without its internal ids, revisions or digests. */
-export function logLine(event: { phase: string; text: string }) {
-  let value: Record<string, unknown>;
-  try {
-    value = JSON.parse(event.text);
-  } catch {
-    return `${event.phase}：${event.text}`;
-  }
-  if (event.phase === "真实TypeScript诊断") {
-    const output = String(value.stdout ?? "").trim();
-    return value.code === 0 ? "真实TypeScript诊断：通过" : `真实TypeScript诊断：未通过\n${output}`;
-  }
-  const name = tools[String(value.toolName)] ?? String(value.toolName);
-  const file = (value.args as { path?: unknown } | undefined)?.path;
-  if (value.type === "tool_execution_start") return `Pi工具：${name}${typeof file === "string" ? ` ${file}` : ""}`;
-  if (value.type === "tool_execution_end") return `Pi工具：${name}${value.isError ? "失败" : "完成"}`;
-  return event.phase;
+interface Run {
+  worker: AgentWorker;
+  meta: Meta;
+  chat: Chat;
+  running: boolean;
+  watchdog?: ReturnType<typeof setTimeout>;
 }
 
-/** Pi plugin workshop: generate a counter plugin, let the host validate it, trial, install, roll back. */
+/** Vestra Player AI: chat with a model of the user's choice (BYOK); the agent works in the session folder. */
 export default async function activate(plugin: Plugin) {
-  let busy = false;
-  let starting = false; // a trial start is in flight
-  let draft = defaultRequirement;
-  let job: WorkshopJob | undefined;
-  let candidate: PackageCandidate | undefined;
-  let trial: PackageTrial | undefined;
-  let change: PackageChange | undefined;
-  let selectedId = "workshop.counter";
-  let managing = false; // an install or rollback is submitted or waits for the user
-  let log = "";
-  let status = "选择工作区并输入需求后生成。";
-  let workspace = "";
-  const idle = () => !busy && !trial;
+  const providers = loadProviders(import.meta.dirname);
+  const sessions = new Sessions(plugin.dataDirectory);
+  const settings = plugin.storage.json<AiSettings>("settings", { defaults: DEFAULT_SETTINGS, validate: validSettings });
+  const keys = new Map<string, string>(); // provider → key, read from the keychain on demand
+  const runs = new Map<string, Run>(); // session id → its worker
+  const chats = new Map<string, Chat>(); // session id → rows (loaded once)
 
-  /** Progress inside long handlers is shown right away, not when the handler ends. */
-  const publish = (text: string) => {
-    log = (log + "\n" + text).slice(-16000);
-    plugin.update();
-  };
-  const show = (text: string) => {
-    status = text;
-    plugin.update();
-  };
-  const fail = (error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    show(`错误：${oneLine(message)}`);
-    publish(`错误：${message}`);
-  };
+  let metas: Meta[] = await sessions.list();
+  let active: Meta | null = metas.find((m) => m.id === settings.value.lastSession) ?? null;
+  let draft = "";
+  let pageMessage = "";
+  let pageWarn = false;
+  let keyText = "";
 
-  const window = plugin.windows.create("workshop.slint");
-  window.bind(() => ({
-    requirementText: draft,
-    logText: log,
-    statusText: status,
-    workspaceText: workspace || "尚未选择：请选择专用空文件夹",
-    busy,
-    canTrial: !!candidate && idle(),
-    canStop: !!trial,
-    canRecover: false, // a lost trial reply is recovered by the SDK
-    canInstall: !!candidate && idle(),
-  }));
-
-  const generate = async () => {
-    if (!idle()) throw Error("请先停止试载并等待当前任务完成");
-    if (!workspace) throw Error("请先选择本次工坊专用工作区");
-    requirement(draft);
-    busy = true;
-    candidate = undefined;
-    const current = (job = new WorkshopJob(path.join(workspace, `candidate-${randomUUID()}`), (event) =>
-      publish(logLine(event)),
-    ));
-    try {
-      show("正在生成候选插件（本地模型，不联网）…");
-      const result = await current.run(draft);
-      selectedId = current.requirement.id;
-      show("类型检查通过，正在由播放器校验…");
-      const checked = await plugin.packages.validate(result.directory);
-      if (current.cancelled) throw Error("任务已取消");
-      candidate = checked;
-      publish(`宿主校验通过：${checked.manifest.id} ${checked.manifest.version}（${checked.checks.join("、")}），位于 ${result.directory}`);
-      show(`候选已通过宿主校验：${checked.manifest.id} ${checked.manifest.version}，可试载或安装。`);
-    } catch (error) {
-      candidate = undefined;
-      if (current.cancelled) show("生成已取消。");
-      else fail(error);
-    } finally {
-      busy = false;
-    }
+  const provider = () => providers.find((p) => p.id === settings.value.provider) ?? providers[0];
+  const model = () => settings.value.models[provider().id] || provider().defaultModel;
+  const keyFor = async (id: string) => {
+    if (!keys.has(id)) keys.set(id, (await plugin.secrets.get(secretName(id))) ?? "");
+    return keys.get(id)!;
   };
-
-  const stopTrial = async () => {
-    if (!trial) return;
-    try {
-      await trial.stop(); // waits until the host confirmed cleanup
-    } catch (error) {
-      // Keep the trial: stopping again re-asks the host.
-      if ((error as PluginError).code === "cleanup") throw Error("播放器未确认试载已清理，请再次停止试载。");
-      throw error;
-    }
-    await trial.dispose();
-    trial = undefined;
-    show("试载已停止并清理。");
+  await keyFor(provider().id);
+  const configured = () => {
+    const p = provider();
+    if (!model()) return false;
+    if (p.id === COMPAT_PROVIDER) return !!settings.value.baseUrl;
+    return !!keys.get(p.id);
   };
+  const running = () => [...runs.values()].find((r) => r.running);
 
-  /**
-   * Install as a workshop package (an upgrade when the installed one came from
-   * the workshop too). Resolves `undefined` when the user keeps the installed
-   * plugin of another source; the candidate stays for a later install.
-   */
-  const install = async (installing: PackageCandidate): Promise<PackageChange | undefined> => {
-    const options: InstallOptions = { source: { kind: "workshop" } };
-    const id = installing.manifest.id;
-    try {
-      return await installing.install(options);
-    } catch (error) {
-      const code = (error as PluginError).code;
-      if (code === "unsupported")
-        throw Error(`${id} 与播放器内置插件同名，不能安装。请在需求中改用别的 id 后重新生成。`);
-      if (code !== "conflict") throw error;
-    }
-    publish(`${id} 已从别处安装，等待用户确认是否替换`);
-    show(`${id} 已从别处安装，请在确认对话框中选择是否替换。`);
-    const answer = await plugin.dialogs.confirm({
-      message: `替换已安装的 ${id}？`,
-      detail:
-        "它是从别处安装的（不是插件工坊生成的）。替换后新插件使用新的空数据目录；原插件的数据保留，以后从原来源重新安装时接上。",
-      confirm: "替换",
-      destructive: true,
-    });
-    if (!answer.confirmed) {
-      publish(`用户取消替换 ${id}，候选保留`);
-      show("未安装：已保留原插件和本次候选，可稍后再安装。");
-      return undefined;
-    }
-    publish(`用户确认替换 ${id}`);
-    return installing.install({ ...options, replace: true });
-  };
-
-  /** Install or roll back; only ever on an explicit click, and never resubmitted. */
-  const manage = async (rollback: boolean) => {
-    if (!idle()) throw Error("请先等待任务完成并停止试载");
-    if (!rollback && !candidate) throw Error("请先生成并通过宿主校验");
-    busy = managing = true;
-    const action = rollback ? "回退" : "安装";
-    publish(`用户明确${action} ${selectedId}`);
-    let current: PackageChange | undefined;
-    try {
-      current = rollback ? await plugin.packages.rollback(selectedId) : await install(candidate!);
-    } catch (error) {
-      busy = managing = false;
-      throw error;
-    }
-    if (!current) {
-      busy = managing = false;
+  /** Throttled window refresh for events that arrive outside SDK handlers. */
+  let refresh: ReturnType<typeof setTimeout> | undefined;
+  const later = () => {
+    refresh ??= setTimeout(() => {
+      refresh = undefined;
       plugin.update();
-      return;
-    }
-    const followed = (change = current);
-    const report = () => {
-      const text = `${action}${changeText[followed.status] ?? "状态未知。"}`;
-      publish(followed.message ? `${text}（${followed.message}）` : text);
-      show(followed.message && followed.status.startsWith("failed") ? `${text}原因：${oneLine(followed.message)}` : text);
-    };
-    const listening = followed.onChange(report);
-    report();
-    try {
-      await followed.done;
-    } finally {
-      await listening.dispose();
-      change = undefined;
-      busy = managing = false;
-    }
+    }, REFRESH_MS);
   };
 
+  const chatOf = async (meta: Meta): Promise<Chat> => {
+    let chat = chats.get(meta.id);
+    if (!chat) {
+      chat = Chat.fromJsonl(await sessions.transcript(meta));
+      if (meta.running) {
+        // The plugin stopped during a run: the unfinished reply is lost.
+        chat.notice("上次的生成被中断（播放器或插件已退出）");
+        meta.running = false;
+        await sessions.save(meta);
+      }
+      chats.set(meta.id, chat);
+    }
+    return chat;
+  };
+  let shown: Chat = active ? await chatOf(active) : new Chat();
+
+  const sessionRows = () => {
+    const rows: { id: string; title: string; header: boolean; active: boolean; running: boolean }[] = [];
+    let heading = "";
+    for (const meta of metas) {
+      const name = group(meta.updated);
+      if (name !== heading) rows.push({ id: `h-${name}`, title: (heading = name), header: true, active: false, running: false });
+      rows.push({ id: meta.id, title: meta.title, header: false, active: meta.id === active?.id, running: !!runs.get(meta.id)?.running });
+    }
+    return rows;
+  };
+
+  const window = plugin.windows.create("ai.slint");
+  window.bind(() => {
+    const busy = !!(active && runs.get(active.id)?.running);
+    const last = shown.rows.at(-1);
+    return {
+      sessions: sessionRows(),
+      rows: shown.rows.map((row: Row) => ({ ...row })),
+      configured: configured(),
+      busy,
+      blocked: !busy && !!running(),
+      sessionTitle: active?.title ?? "新对话",
+      modelText: configured() ? `${provider().label} · ${model()}` : "",
+      hasFolder: !!active,
+      canRetry: !busy && !running() && last?.kind === "error" && !!shown.lastPrompt,
+      draft,
+    };
+  });
+
+  const stopWatchdog = (run: Run) => {
+    clearTimeout(run.watchdog);
+    run.watchdog = undefined;
+  };
+  const feed = (run: Run) => {
+    stopWatchdog(run);
+    if (!run.running) return;
+    run.watchdog = setTimeout(() => {
+      run.chat.apply({ kind: "settled", aborted: true });
+      run.chat.error("timeout", `超过 ${QUIET_TIMEOUT_MS / 1000} 秒没有收到服务商的回复，已停止。`);
+      run.worker.abort();
+      finish(run);
+    }, QUIET_TIMEOUT_MS);
+  };
+  const finish = (run: Run) => {
+    stopWatchdog(run);
+    if (!run.running) return;
+    run.running = false;
+    run.meta.running = false;
+    run.meta.updated = Date.now();
+    sessions.save(run.meta).catch((error) => console.error(`meta.json: ${error}`));
+    later();
+  };
+
+  const startWorker = async (meta: Meta, chat: Chat): Promise<Run> => {
+    const p = provider();
+    const key = await keyFor(p.id);
+    const directory = sessions.directory(meta.id);
+    const run: Run = {
+      meta,
+      chat,
+      running: false,
+      worker: new AgentWorker(
+        {
+          sessionDir: directory,
+          workDir: sessions.work(meta.id),
+          sessionFile: meta.file ? path.join(directory, meta.file) : null,
+          provider: p.id,
+          modelId: model(),
+          baseUrl: p.id === COMPAT_PROVIDER ? settings.value.baseUrl : null,
+          key,
+          systemPrompt: SYSTEM_PROMPT,
+        },
+        {
+          event: (event) => {
+            run.chat.apply(event);
+            if (event.kind === "settled") finish(run);
+            else feed(run);
+            later();
+          },
+          file: (file) => {
+            const name = file.split(/[\\/]/).at(-1)!;
+            if (run.meta.file !== name) {
+              run.meta.file = name;
+              sessions.save(run.meta).catch(() => {});
+            }
+          },
+          failed: (message) => {
+            if (run.running) {
+              run.chat.endTurn();
+              run.chat.error(message);
+              finish(run);
+            }
+            later();
+          },
+          exited: (code) => {
+            if (runs.get(meta.id) === run) runs.delete(meta.id);
+            if (run.running) {
+              run.chat.endTurn();
+              run.chat.error(run.worker.lastError() || `exit ${code}`, "agent 进程意外退出。");
+              finish(run);
+            }
+            later();
+          },
+        },
+      ),
+    };
+    runs.set(meta.id, run);
+    return run;
+  };
+
+  /** Ends the workers that are not generating (another session shown, settings changed). */
+  const releaseIdle = (except?: string) => {
+    for (const [id, run] of runs)
+      if (!run.running && id !== except) {
+        runs.delete(id);
+        run.worker.stop().catch(() => {});
+      }
+  };
+
+  const send = async (text: string) => {
+    const message = text.trim();
+    if (!message) return;
+    if (!configured()) throw Error("请先在设置中配置服务商和 API key");
+    if (running()) throw Error("另一会话正在生成，请稍候");
+    if (!active) {
+      active = await sessions.create(titleFrom(message));
+      chats.set(active.id, shown);
+      settings.save({ ...settings.value, lastSession: active.id });
+    }
+    const meta = active;
+    const chat = shown;
+    draft = "";
+    window.set({ draft: "" }); // clears the field even if the user typed the same text again
+    chat.user(message);
+    let run = runs.get(meta.id);
+    if (!run || run.worker.exited) run = await startWorker(meta, chat);
+    run.running = true;
+    meta.running = true;
+    meta.updated = Date.now();
+    await sessions.save(meta);
+    metas = [meta, ...metas.filter((m) => m.id !== meta.id)];
+    feed(run);
+    run.worker.prompt(message).catch(() => {}); // start failures arrive through `failed`
+  };
+
+  const select = async (meta: Meta | null) => {
+    active = meta;
+    shown = meta ? await chatOf(meta) : new Chat();
+    releaseIdle(meta?.id);
+    settings.save({ ...settings.value, lastSession: meta?.id ?? null });
+  };
+
+  window.on("send", send);
   window.on("draftChanged", (text: string) => {
     draft = text;
   });
-  window.on("chooseWorkspace", async () => {
-    if (!idle()) throw Error("活动任务期间不能更换工作区");
-    const chosen = await plugin.dialogs.openDirectory({ title: "选择工坊专用工作区（每个候选写入新子目录）" });
-    if (!chosen) return;
-    workspace = await fs.realpath(chosen);
-    candidate = undefined;
+  window.on("stop", () => {
+    const run = active && runs.get(active.id);
+    if (run?.running) run.worker.abort();
   });
-  window.on("chooseRequirement", async () => {
-    const chosen = await plugin.dialogs.openFile({ title: "选择计数器需求JSON" });
-    if (!chosen) return;
-    if ((await fs.stat(chosen)).size > 65536) throw Error("需求超过64KiB");
-    const text = await fs.readFile(chosen, "utf8");
-    requirement(text);
-    draft = text;
-    show("需求已读取，点击生成。");
+  window.on("retry", () => send(shown.lastPrompt));
+  window.on("newChat", () => select(null));
+  window.on("selectSession", (id: string) => select(metas.find((m) => m.id === id) ?? null));
+  window.on("toggle", (id: string) => shown.toggle(id));
+  window.on("copy", (id: string) => {
+    const row = shown.rows.find((r) => r.id === id);
+    if (row) return plugin.clipboard.writeText(row.text);
   });
-  window.on("generate", generate);
-  window.on("cancelTask", async () => {
-    if (job && busy && !change && !starting && !managing) {
-      job.cancel();
-      await job.agent?.waitForIdle();
-      show("正在取消生成…");
-    }
-    if (trial) await stopTrial();
-    if (change) await change.cancel();
+  window.on("openSettings", () => plugin.settings.show("byok"));
+  window.on("openFolder", () => active && plugin.system.openPath(sessions.work(active.id)));
+  window.on("openPi", () => plugin.system.openUrl(PI_URL));
+
+  // ---- settings page (Options ▸ 插件 ▸ Vestra Player AI)
+  const page = plugin.settings.page("settings.slint", { id: "byok", category: "plugins", title: "Vestra Player AI" });
+  page.bind(() => {
+    const p = provider();
+    const key = keys.get(p.id) ?? "";
+    return {
+      providers: providers.map((x) => x.label),
+      providerIndex: providers.indexOf(p),
+      compat: p.id === COMPAT_PROVIDER,
+      baseUrl: settings.value.baseUrl,
+      keyText,
+      keyState: p.keyOptional && !key ? "未保存（本地服务可以不填）" : masked(key),
+      hasKey: !!key,
+      models: p.models,
+      modelIndex: Math.max(0, p.models.indexOf(model())),
+      modelText: model(),
+      message: pageMessage,
+      messageWarn: pageWarn,
+    };
   });
-  window.on("startTrial", async () => {
-    if (!candidate || !idle()) throw Error("候选尚未就绪");
-    starting = busy = true;
-    plugin.update();
+  const say = (text: string, warn = false) => {
+    pageMessage = text;
+    pageWarn = warn;
+  };
+  /** A change of service, key or model applies to the next message. */
+  const changed = () => releaseIdle();
+  page.on("chooseProvider", async (index: number) => {
+    const p = providers[index];
+    if (!p) return;
+    settings.save({ ...settings.value, provider: p.id });
+    keyText = "";
+    await keyFor(p.id);
+    say("");
+    changed();
+  });
+  page.on("saveKey", async (text: string) => {
+    const key = text.trim();
+    if (!key) return;
+    const p = provider();
     try {
-      trial = await candidate.trial(); // resolves once the trial has started
-    } finally {
-      starting = busy = false;
+      await plugin.secrets.set(secretName(p.id), key);
+    } catch (error) {
+      say(`没能保存到钥匙串：${(error as Error).message}`, true);
+      return;
     }
-    publish(`试载已开始：${selectedId}`);
-    show("试载中：请在计数器窗口测试「增加」「归零」。");
+    keys.set(p.id, key);
+    keyText = "";
+    page.set({ keyText: "" });
+    say(`${p.label} 的 key 已保存。`);
+    changed();
   });
-  window.on("recoverTrial", () => {}); // kept for the window; the button stays disabled
-  window.on("stopTrial", stopTrial);
-  window.on("installCandidate", () => manage(false));
-  window.on("rollbackVersion", () => manage(true));
-  plugin.onError(fail);
+  page.on("deleteKey", async () => {
+    const p = provider();
+    await plugin.secrets.delete(secretName(p.id));
+    keys.set(p.id, "");
+    say(`${p.label} 的 key 已删除。`);
+    changed();
+  });
+  page.on("setBaseUrl", (text: string) => {
+    try {
+      settings.save({ ...settings.value, baseUrl: text.trim() ? checkBaseUrl(text) : "" });
+      say("");
+    } catch (error) {
+      say((error as Error).message, true);
+    }
+    changed();
+  });
+  page.on("chooseModel", (id: string) => {
+    settings.save({ ...settings.value, models: { ...settings.value.models, [provider().id]: id.trim() } });
+    changed();
+  });
+
   plugin.onDispose(async () => {
-    job?.cancel();
-    await job?.agent?.waitForIdle();
+    clearTimeout(refresh);
+    // Runs still in progress stay marked in meta.json: the next start says so.
+    await Promise.all([...runs.values()].map((run) => (stopWatchdog(run), run.worker.stop(300))));
   });
 
   plugin.commands.add({
     id: "workshop.open",
-    path: ["插件工坊…"],
+    path: ["Vestra Player AI…"],
     order: 820,
     group: "windows",
     run: () => window.show(),

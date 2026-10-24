@@ -1,0 +1,124 @@
+// Options ▸ 插件 ▸ Vestra Player AI: the service, its API key (kept in the
+// system keychain; only the last four characters are ever shown) and the model.
+import { ComboBox, LineEdit } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button } from "@vestra/widgets.slint";
+
+export global AiSettings {
+    in property <[string]> providers;
+    in property <int> provider-index;
+    // 「OpenAI 兼容」: Base URL and a typed model name instead of the list.
+    in property <bool> compat;
+    in-out property <string> base-url;
+    in-out property <string> key-text;
+    in property <string> key-state;
+    in property <bool> has-key;
+    in property <[string]> models;
+    in property <int> model-index;
+    in-out property <string> model-text;
+    in property <string> message;
+    in property <bool> message-warn;
+    callback choose-provider(int);
+    callback save-key(string);
+    callback delete-key();
+    callback set-base-url(string);
+    callback choose-model(string);
+}
+
+component Label inherits Text {
+    color: Theme.text;
+    font-size: Theme.font-body;
+    vertical-alignment: center;
+    width: 76px;
+}
+
+export component AiSettingsPage inherits Rectangle {
+    height: 300px;
+    VerticalLayout {
+        padding: 6px;
+        spacing: 10px;
+        alignment: start;
+        HorizontalLayout {
+            spacing: 8px;
+            Label { text: "服务商"; }
+            ComboBox {
+                horizontal-stretch: 1;
+                model: AiSettings.providers;
+                current-index: AiSettings.provider-index;
+                selected => { AiSettings.choose-provider(self.current-index); }
+            }
+        }
+        if AiSettings.compat: HorizontalLayout {
+            spacing: 8px;
+            Label { text: "Base URL"; }
+            LineEdit {
+                horizontal-stretch: 1;
+                font-size: Theme.font-body;
+                placeholder-text: "http://localhost:11434/v1";
+                text <=> AiSettings.base-url;
+                accepted(text) => { AiSettings.set-base-url(text); }
+                edited(text) => { AiSettings.set-base-url(text); }
+            }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            Label { text: "API Key"; }
+            LineEdit {
+                horizontal-stretch: 1;
+                font-size: Theme.font-body;
+                input-type: password;
+                placeholder-text: AiSettings.compat ? "本地服务可以留空" : "粘贴 API key";
+                text <=> AiSettings.key-text;
+                accepted(text) => { AiSettings.save-key(text); }
+            }
+            VerticalLayout {
+                alignment: center;
+                Button { text: "保存"; enabled: AiSettings.key-text != ""; clicked => { AiSettings.save-key(AiSettings.key-text); } }
+            }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            Label { text: ""; }
+            Text {
+                text: AiSettings.key-state;
+                color: AiSettings.has-key ? Theme.text : Theme.text-dim;
+                font-size: Theme.font-body;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            if AiSettings.has-key: VerticalLayout {
+                alignment: center;
+                Button { small: true; text: "删除"; clicked => { AiSettings.delete-key(); } }
+            }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            Label { text: "模型"; }
+            if !AiSettings.compat: ComboBox {
+                horizontal-stretch: 1;
+                model: AiSettings.models;
+                current-index: AiSettings.model-index;
+                selected(value) => { AiSettings.choose-model(value); }
+            }
+            if AiSettings.compat: LineEdit {
+                horizontal-stretch: 1;
+                font-size: Theme.font-body;
+                placeholder-text: "模型名，如 qwen3:8b";
+                text <=> AiSettings.model-text;
+                edited(text) => { AiSettings.choose-model(text); }
+            }
+        }
+        Text {
+            text: "key 只保存在系统钥匙串（macOS）或凭据管理器（Windows）里，不写入任何文件、日志或会话记录。";
+            color: Theme.text-dim;
+            font-size: Theme.font-body;
+            wrap: word-wrap;
+        }
+        if AiSettings.message != "": Text {
+            text: AiSettings.message;
+            color: AiSettings.message-warn ? Theme.danger : Theme.text-dim;
+            font-size: Theme.font-body;
+            wrap: word-wrap;
+        }
+    }
+}
