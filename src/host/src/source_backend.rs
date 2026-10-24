@@ -1455,7 +1455,11 @@ impl Sources {
                     })));
                 }
                 match control {
-                    Control::Pause { paused } => mpv.set_property("pause", *paused),
+                    Control::Pause { paused } => mpv.set_property("pause", *paused).inspect(|()| {
+                        crate::input_trace::mark(&format!(
+                            "playback worker: libmpv pause={paused} set"
+                        ));
+                    }),
                     Control::Seek { seconds } => {
                         mpv.command(&["seek", &seconds.to_string(), "absolute+exact"])
                     }

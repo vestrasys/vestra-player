@@ -393,8 +393,12 @@ impl Backend {
                         };
                         if command.method == "host.action" {
                             let action = command.params["action"].as_str().unwrap_or("").to_owned();
+                            crate::input_trace::mark(&format!(
+                                "playback worker: {action} received"
+                            ));
                             let done = Completion::Action(command.reply, action);
                             let result = actions.run(&mut context, &command.params, done);
+                            push.soon();
                             processing.note_source(sources.generation(), sources.phase());
                             subtitles.note_source(sources.generation(), sources.phase());
                             if let Some((done, result)) = result {
@@ -1050,6 +1054,11 @@ impl StatePush {
         }
         changed || periodic
     }
+    /// A core action changed the source (paused, rate, volume): the next
+    /// check publishes at once, so the controls follow without the period.
+    pub fn soon(&mut self) {
+        self.sent = None;
+    }
     /// The phase the published state carries.
     pub fn seen(&mut self, generation: u64, phase: crate::session::Phase) {
         self.last = Some((generation, phase));
@@ -1181,6 +1190,12 @@ mod tests {
         let mut push = StatePush::new();
         assert!(push.due(1, Phase::Ready, start));
         let soon = start + Duration::from_millis(5);
+        assert!(!push.due(1, Phase::Ready, soon));
+        push.soon();
+        assert!(
+            push.due(1, Phase::Ready, soon),
+            "after a core action at once"
+        );
         assert!(!push.due(1, Phase::Ready, soon));
         assert!(
             push.due(1, Phase::Ended, soon),
