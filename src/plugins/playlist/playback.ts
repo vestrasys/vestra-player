@@ -46,6 +46,10 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
   // The source that was current when the failed anchor was set.
   let failedSource: number | null = null;
 
+  // §11: a resolution cancelled by a close (F4, `player.close()`) fails `backend` with the
+  // source empty; a resolver's own failure (or an expired resolution) leaves it in `error`.
+  const cancelled = (code: string) => code === "backend" && player.state.phase === "empty";
+
   const observe = (state: PlayerState) => {
     if (advancing?.sourceId === state.sourceId && state.phase !== "loading") {
       const now = performance.now();
@@ -193,6 +197,8 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
         if (code === "stale") queue.detach("自动推进已过期，保留较新的来源");
         // Accepted, then superseded by another source before it loaded: not a failure of this row.
         else if (code === "replaced") queue.detach("已切换到列表外来源");
+        // A file resolution (§11) cancelled by a close (F4, player.close()): not a failure of this row.
+        else if (cancelled(code)) queue.detach("当前来源已关闭");
         else {
           queue.fail(rowId, message);
           failedSource = player.state.sourceId;
