@@ -30,8 +30,17 @@
 
 ## API 请求
 
-- **R-a**：`MarkdownRef` 可以放进列表行；新增一个不带滚动的 `MarkdownBlocks` 组件。挡第 2 阶段。维护者答复：待定
-- **R-h**：在已安装的播放器里也能跑 SDK 的 check/pack（`@vestra-player/sdk/tooling`）。现在 `stage-runtime.mjs` 不带 `bin/` 和 typescript。挡第 3 阶段。维护者答复：待定
+- **R-a**：`MarkdownRef` 可以放进列表行；新增一个不带滚动的 `MarkdownBlocks` 组件。挡第 2 阶段。
+  - **维护者答复（2026-10-24）：改写后接受。**
+  - `MarkdownRef` 可以出现在属性值的任意深度，所在的 Slint 类型必须是 `[MarkdownBlock]`；新增 `MarkdownBlocks` 组件（不滚动，高度随内容），可以选择打开 `code-copy`，通过 `copy-code(string)` 回调。
+  - R-b 不提供 API，由宿主内部完成：按指纹缓存、未变的文档不重新解析、块模型原地 diff、追加行时原地 push。
+  - 嵌套的 `ImageRef` 明确报 `invalid`。
+  - SDK 1.5.4，排在 1.5.2、1.5.3 之后。
+- **R-h**：在已安装的播放器里也能跑 SDK 的 check/pack（`@vestra-player/sdk/tooling`）。现在 `stage-runtime.mjs` 不带 `bin/` 和 typescript。挡第 3 阶段。
+  - **维护者答复（2026-10-24）：拒绝，给出替代方案。**
+  - 不该让每个用户的 runtime 都多背约 20 MB（gzip 后约 3.6 MB），而用到它的只有一个插件。
+  - 替代方案：插件包里自带 SDK 的 `bin/`、`dist/`、typescript 和 `@types/node`（现在的工坊已经自带 tsc），用子进程跑 `vestra-plugin check|pack`，再交给已有的 `packages.validateArchive`、`trial`、`install`。
+  - 如果确实需要结构化诊断，再给 CLI 加 `--json`（SDK patch）。
 - **R-c**（以后）：代码块的复制回调。
 - 不提的：R-b、R-d、R-e、R-g；R-f 已证明不需要。
 
