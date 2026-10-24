@@ -1,26 +1,30 @@
-# 插件管理
+# Plugin Manager
 
-查看播放器里的全部插件，停用、启用、重新加载、回退或卸载它们。
+See every plugin of the player; disable, enable, reload, roll back or uninstall them.
 
-## 入口
+## Entry points
 
-- 菜单 `设置 ▶ 插件管理…`：打开「选项」窗口并切到「插件管理」页。
-- 也可以在「选项」窗口左侧的「插件」分类里进入。
+- Menu `Settings ▸ Plugin Manager…`: opens the options window on the Plugin Manager page.
+- Also reachable from the Plugins category on the left of the options window.
 
-## 功能
+## Features
 
-- **插件列表**：每个插件的名称（id）、版本、来源（仓库、链接、本地文件、插件工坊、内置、开发加载；不附地址）、状态（运行中、启动中、已停用、启动失败、已停止）和数据大小。安装、卸载、停用其它插件后，列表自动更新。
-- **详情**：选中一个插件后显示失败原因（运行中的插件则显示提示，例如面板位置已被别的插件占用、面板未显示，或上一个/下一个已由别的插件提供；这时列表里的状态文字以强调色显示）、来源（仓库、链接、本地文件、插件工坊、内置；仓库与链接附地址）、上一版本、包目录、数据目录，以及它使用的能力。路径过长时省略，悬停显示全文。
-- **停用 / 启用**：停用前会确认。停用后它的菜单、快捷键、窗口与处理效果立即撤销，正在播放的媒体继续播放；重启播放器后仍保持停用，随时可以在这里重新启用。
-- **重新加载**：先停止再启动，用于恢复出了问题的插件。
-- **回退到上一版本**：插件更新后可以回到上一个版本。
-- **卸载…**：确认后从播放器中删除插件。可以勾选「同时删除它的设置与数据」，默认保留，重新安装后会接上原来的数据。
-- **打开数据目录**：在文件管理器中打开插件保存设置和数据的文件夹。
+- **Plugin list**: each plugin's name (id), version, source (repository, link, local file, Plugin Workshop, built-in, development; without the address), state (running, starting, disabled, failed, stopped) and data size. The list updates by itself when plugins are installed, uninstalled or disabled.
+- **Details**: for the selected plugin, the failure reason (for a running plugin, a warning instead, for example that its panel position is taken by another plugin, that its panel is not shown, or that previous/next is provided by another plugin; the state in the list is then drawn in the accent colour), source (repository, link, local file, Plugin Workshop, built-in; with the address for repositories and links), previous version, package folder, data folder and the capabilities it uses. Long paths are shortened; hover to see all of it.
+- **Disable / Enable**: disabling asks first. Its menus, shortcuts, windows and effects are removed at once, and the open media keeps playing. It stays disabled after the player restarts; enable it here at any time.
+- **Reload**: stops and starts the plugin again, to recover one that went wrong.
+- **Roll Back**: after an update, go back to the previous version.
+- **Uninstall…**: after confirming, removes the plugin from the player. Tick "Also delete its settings and data" to remove those too; by default they are kept, and a reinstalled plugin picks them up again.
+- **Open Data Folder**: opens the folder where the plugin keeps its settings and data in the file manager.
 
-## 限制
+## Limits
 
-- 插件管理不能停用、卸载或回退自身。
-- 内置插件（随播放器安装）只能停用，不能卸载；它们随播放器一起更新。
-- 开发加载的插件只能停用和启用，停用只在本次运行内有效。
-- 插件从未保存过数据时，没有数据目录可打开。数据大小统计每个插件最多 2 秒，超时显示「—」。
-- 安装新插件、浏览插件商城不在这里。
+- Plugin Manager cannot disable, uninstall or roll back itself.
+- Built-in plugins (installed with the player) can only be disabled, not uninstalled; they are updated with the player.
+- Development-loaded plugins can only be disabled and enabled, and disabling lasts only for the current run.
+- A plugin that never saved any data has no data folder to open. Each plugin's data size is measured for at most 2 seconds; after that it shows "—".
+- Installing new plugins and browsing the store are not done here.
+
+## Languages
+
+English source text; Simplified Chinese in `locales/zh-Hans.po`. The page's words are in `ui/plugins.slint` (`@tr`); TypeScript passes codes and data.

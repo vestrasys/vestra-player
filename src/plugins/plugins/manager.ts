@@ -1,17 +1,33 @@
 import type { PackageChange, Plugin, PluginInfo } from "@vestra-player/sdk";
-import { BUILTIN_TIP, bytes, CAPABILITIES, CHANGE, failureText, sourceShort, sourceText, STATE } from "./labels.ts";
+import { bytes, failure, sourceCode, sourceUrl } from "./labels.ts";
 import { directorySize, timing } from "./sizes.ts";
 
+/**
+ * What the page shows, as codes and data: ui/plugins.slint turns the codes
+ * into words. `version` is "" for a development load, `origin` a
+ * `sourceCode`, `state` a `PluginInfo["state"]`.
+ */
 type Row = { id: string; version: string; origin: string; state: string; size: string; dim: boolean; failed: boolean; selected: boolean };
-type Detail = { label: string; text: string; warn: boolean };
+/**
+ * One detail line: `label` a code (`failure`, `warning`, `note`, `source`,
+ * `previous`, `package`, `data`, `capabilities`, "" for a continued list);
+ * `kind` says how the page words `value`: "" shows it as it is, `source`
+ * is a source code (with `url`), `capability` a capability id, the others
+ * (`development`, `self`, `builtin`, `unavailable`, `none`) fixed notes.
+ */
+type Detail = { label: string; kind: string; value: string; url: string; warn: boolean };
+/**
+ * The message line: `kind` picks the page's sentence, `id` the plugin,
+ * `code` a change status or failure code, `text` data (a version, the
+ * player's message).
+ */
+type Message = { kind: string; id?: string; code?: string; text?: string };
 
-/** The J07 page in the options window (category 插件). */
+/** The J07 page in the options window (category Plugins). */
 export const PLUGINS_PAGE = "plugins.manage";
-const SELF_TIP = "插件管理不能停用自身";
-const BUSY_TIP = "正在更新";
 
 /**
- * 插件管理 (J07), a page of the options window: every plugin the player knows (running, installed but
+ * Plugin Manager (J07), a page of the options window: every plugin the player knows (running, installed but
  * disabled or failed, development loads) from `packages.list`,
  * following `packages.onChange`. The selected plugin can be disabled or
  * enabled, reloaded, rolled back, uninstalled (asks, optionally with its
@@ -20,31 +36,29 @@ const BUSY_TIP = "正在更新";
  */
 export class PluginsPage {
   readonly #plugin: Plugin;
-  readonly #osd: (text: string) => void;
   readonly #page;
   #list: PluginInfo[] = [];
   #selected: string | null = null;
-  /** Ids with a call in flight (buttons off, 「正在更新」). */
+  /** Ids with a call in flight (buttons off, tip 「Updating」). */
   readonly #busy = new Set<string>();
-  #message = { text: "", warn: false };
+  #message: Message & { warn: boolean } = { kind: "", warn: false };
   /** Data directory → bytes (`null`: missing or too slow). Keyed by directory: a replaced plugin gets a new one. */
   readonly #sizes = new Map<string, number | null>();
   #measuring: ReturnType<typeof setTimeout> | null = null;
   #measureRun = 0;
 
-  constructor(plugin: Plugin, osd: (text: string) => void) {
+  constructor(plugin: Plugin) {
     this.#plugin = plugin;
-    this.#osd = osd;
     const page = (this.#page = plugin.settings.page("ui/plugins.slint", {
       id: PLUGINS_PAGE,
       category: "plugins",
-      title: "插件管理",
+      title: "Plugin Manager",
       order: 10,
     }));
     page.on("select", (id: string) => {
       if (id === this.#selected) return;
       this.#selected = id;
-      this.#say("");
+      this.#say({ kind: "" });
     });
     page.on("toggle", () => this.#toggle());
     page.on("reload", () => this.#reload());
@@ -63,13 +77,13 @@ export class PluginsPage {
     try {
       this.#accept(await this.#plugin.packages.list());
     } catch (error) {
-      this.#say(`无法读取插件列表：${failureText(error)}`, true);
+      this.#say({ kind: "list-failed", ...failure(error) }, true);
     }
     this.#sizes.clear();
     this.#measureSoon(0);
   }
 
-  /** 设置 ▶ 插件管理…: the options window on this page, list and sizes refreshed. */
+  /** Settings ▸ Plugin Manager…: the options window on this page, list and sizes refreshed. */
   async show() {
     await this.refresh();
     await this.#plugin.settings.show(PLUGINS_PAGE);
@@ -102,8 +116,8 @@ export class PluginsPage {
     }
   }
 
-  #say(text: string, warn = false) {
-    this.#message = { text, warn };
+  #say(message: Message, warn = false) {
+    this.#message = { ...message, warn };
   }
 
   #info() {
@@ -127,9 +141,9 @@ export class PluginsPage {
       rows: this.#list.map(
         (p): Row => ({
           id: p.id,
-          version: p.version ?? "开发",
-          origin: sourceShort(p),
-          state: STATE[p.state] ?? p.state,
+          version: p.version ?? "",
+          origin: sourceCode(p),
+          state: p.state,
           size: this.#size(p),
           dim: p.state === "disabled",
           // Failed, or running with a warning: the state is drawn in the accent colour.
@@ -139,44 +153,36 @@ export class PluginsPage {
       ),
       hasSelection: !!info,
       details: info ? this.#details(info) : [],
-      toggleText: info?.state === "disabled" ? "启用" : "停用",
+      toggleEnables: info?.state === "disabled",
       canToggle: canAct && !self,
-      toggleTip: self ? SELF_TIP : busy ? BUSY_TIP : "",
+      // Tips are codes: self, busy, builtin, not-installed.
+      toggleTip: self ? "self" : busy ? "busy" : "",
       canReload: canAct && !self && info.state !== "disabled",
       canRollback: canAct && !self && installed && !!info.previousVersion,
       canUninstall: canAct && !self && installed && !info.builtin,
-      uninstallTip: self
-        ? SELF_TIP
-        : busy
-          ? BUSY_TIP
-          : info?.builtin
-            ? BUILTIN_TIP
-            : info && !installed
-              ? "只能卸载已安装的插件"
-              : "",
+      uninstallTip: self ? "self" : busy ? "busy" : info?.builtin ? "builtin" : info && !installed ? "not-installed" : "",
       canOpen: !!info?.dataDirectory,
-      message: this.#message.text,
-      messageWarn: this.#message.warn,
+      message: { id: "", code: "", text: "", ...this.#message },
     };
   }
 
   #details(info: PluginInfo): Detail[] {
     const lines: Detail[] = [];
-    const line = (label: string, text: string, warn = false) => lines.push({ label, text, warn });
+    const line = (label: string, kind: string, value = "", warn = false, url = "") => lines.push({ label, kind, value, url, warn });
     // A running plugin's `error` is a warning: the player refused its panel
-    // because another plugin holds that position (「面板未显示：侧栏已被 … 使用」).
-    if (info.error) line(info.state === "failed" ? "失败原因" : "提示", info.error, true);
-    if (info.origin === "development") line("说明", "开发加载：停用只在本次运行有效；不能卸载或回退");
-    if (info.id === this.#plugin.id) line("说明", SELF_TIP);
-    else if (info.builtin) line("说明", "内置插件：随播放器安装和更新，只能停用，不能卸载");
-    line("来源", sourceText(info));
-    if (info.previousVersion) line("上一版本", info.previousVersion);
-    line("包目录", info.directory);
-    line("数据目录", info.dataDirectory ?? "不可用");
-    info.capabilities.forEach((capability, i) =>
-      line(i === 0 ? "能力" : "", `${capability}  ${CAPABILITIES[capability] ?? ""}`.trimEnd()),
-    );
-    if (info.capabilities.length === 0) line("能力", "（无）");
+    // because another plugin holds that position (the player's own message).
+    if (info.error) line(info.state === "failed" ? "failure" : "warning", "", info.error, true);
+    if (info.origin === "development") line("note", "development");
+    if (info.id === this.#plugin.id) line("note", "self");
+    else if (info.builtin) line("note", "builtin");
+    // A source kind, or (development loads, older players) the origin.
+    line("source", "source", info.source?.kind ?? info.origin, false, sourceUrl(info));
+    if (info.previousVersion) line("previous", "", info.previousVersion);
+    line("package", "", info.directory);
+    if (info.dataDirectory) line("data", "", info.dataDirectory);
+    else line("data", "unavailable");
+    info.capabilities.forEach((capability, i) => line(i === 0 ? "capabilities" : "", "capability", capability));
+    if (info.capabilities.length === 0) line("capabilities", "none");
     return lines;
   }
 
@@ -188,7 +194,7 @@ export class PluginsPage {
     try {
       await action();
     } catch (error) {
-      this.#say(failureText(error, info), true);
+      this.#say({ kind: "failure", ...failure(error, info) }, true);
       // The list may be out of date (a plugin gone, or built in after all): read it again.
       const code = (error as { code?: string }).code;
       if (code === "unsupported" || code === "missing") await this.#relist();
@@ -206,82 +212,93 @@ export class PluginsPage {
     }
   }
 
-  #done(text: string) {
-    this.#say(text);
-    this.#osd(text);
+  /** A finished action: on the message line and as an OSD (`shown`, the same sentence). */
+  #done(message: Message, shown: Promise<void>) {
+    this.#say(message);
+    // Headless hosts refuse the display; that never fails the action itself.
+    void shown.catch(() => {});
   }
 
   async #toggle() {
     const info = this.#info();
     if (!info || info.id === this.#plugin.id) return;
+    const { id } = info;
     if (info.state === "disabled")
       return this.#busyWith(info, async () => {
-        await this.#plugin.packages.setEnabled(info.id, true);
-        this.#done(`已启用 ${info.id}`);
+        await this.#plugin.packages.setEnabled(id, true);
+        this.#done({ kind: "enabled", id }, this.#plugin.osd.show("Enabled {}", [id]));
       });
-    const answer = await this.#ask({
-      message: `停用 ${info.id}？`,
-      detail:
-        info.origin === "development"
-          ? "它的菜单、快捷键、窗口与处理效果会立即撤销，打开的媒体继续播放。开发加载的插件只在本次运行内停用。"
-          : "它的菜单、快捷键、窗口与处理效果（如均衡器、滤镜、字幕样式）会立即撤销，打开的媒体继续播放。重启 Vestra Player 后仍保持停用，可随时在这里启用。",
-      confirm: "停用",
-    });
+    const answer = await this.#ask(() =>
+      this.#plugin.dialogs.confirm({
+        message: "Disable {}?",
+        args: [id],
+        detail:
+          info.origin === "development"
+            ? "Its menus, shortcuts, windows and effects are removed at once; open media keeps playing. A development-loaded plugin stays disabled only for this run."
+            : "Its menus, shortcuts, windows and effects (such as the equalizer, filters, subtitle style) are removed at once; open media keeps playing. It stays disabled after Vestra Player restarts; you can enable it here at any time.",
+        confirm: "Disable",
+      }),
+    );
     if (!answer?.confirmed) return;
     return this.#busyWith(info, async () => {
-      await this.#plugin.packages.setEnabled(info.id, false);
-      this.#done(`已停用 ${info.id}`);
+      await this.#plugin.packages.setEnabled(id, false);
+      this.#done({ kind: "disabled", id }, this.#plugin.osd.show("Disabled {}", [id]));
     });
   }
 
-  /** 重新加载: stop and start again (recovering a plugin that went wrong). */
+  /** Reload: stop and start again (recovering a plugin that went wrong). */
   #reload() {
     const info = this.#info();
     if (!info || info.id === this.#plugin.id) return;
+    const { id } = info;
     return this.#busyWith(info, async () => {
-      await this.#plugin.packages.setEnabled(info.id, false);
-      await this.#plugin.packages.setEnabled(info.id, true);
-      this.#done(`已重新加载 ${info.id}`);
+      await this.#plugin.packages.setEnabled(id, false);
+      await this.#plugin.packages.setEnabled(id, true);
+      this.#done({ kind: "reloaded", id }, this.#plugin.osd.show("Reloaded {}", [id]));
     });
   }
 
   #rollback() {
     const info = this.#info();
     if (!info?.previousVersion || info.id === this.#plugin.id) return;
+    const { id } = info;
     const target = info.previousVersion;
     return this.#busyWith(info, async () => {
-      const change = await this.#plugin.packages.rollback(info.id);
-      const status = await this.#follow(change, `回退 ${info.id}`);
-      if (status === "committed") this.#done(`已回退 ${info.id} 到 ${target}`);
-      else this.#say(`回退 ${info.id}：${CHANGE[status] ?? status}${change.message ? `（${change.message}）` : ""}`, true);
+      const change = await this.#plugin.packages.rollback(id);
+      const status = await this.#follow(change, "rollback", id);
+      if (status === "committed") this.#done({ kind: "rolled-back", id, text: target }, this.#plugin.osd.show("Rolled back {} to {}", [id, target]));
+      else this.#say({ kind: "rollback", id, code: status, text: change.message ?? "" }, true);
     });
   }
 
   async #uninstall() {
     const info = this.#info();
     if (!info || info.origin !== "installed" || info.builtin || info.id === this.#plugin.id) return;
-    const answer = await this.#ask({
-      message: `卸载 ${info.id}？`,
-      detail: "将从安装库移除它的当前版本与上一版本。它的快捷键修改会保留，重新安装后恢复。",
-      confirm: "卸载",
-      destructive: true,
-      checkbox: "同时删除它的设置与数据",
-    });
+    const { id } = info;
+    const answer = await this.#ask(() =>
+      this.#plugin.dialogs.confirm({
+        message: "Uninstall {}?",
+        args: [id],
+        detail: "Its current and previous versions are removed from the installed plugins. Its shortcut changes are kept and come back if you install it again.",
+        confirm: "Uninstall",
+        destructive: true,
+        checkbox: "Also delete its settings and data",
+      }),
+    );
     if (!answer?.confirmed) return;
     return this.#busyWith(info, async () => {
-      const change = await this.#plugin.packages.uninstall(info.id, { removeData: answer.checked });
-      const status = await this.#follow(change, `卸载 ${info.id}`);
-      if (status !== "committed")
-        return this.#say(`卸载 ${info.id}：${CHANGE[status] ?? status}${change.message ? `（${change.message}）` : ""}`, true);
+      const change = await this.#plugin.packages.uninstall(id, { removeData: answer.checked });
+      const status = await this.#follow(change, "uninstall", id);
+      if (status !== "committed") return this.#say({ kind: "uninstall", id, code: status, text: change.message ?? "" }, true);
       if (info.dataDirectory) this.#sizes.delete(info.dataDirectory);
-      if (this.#selected === info.id) this.#selected = null;
-      this.#done(`已卸载 ${info.id}`);
+      if (this.#selected === id) this.#selected = null;
+      this.#done({ kind: "uninstalled", id }, this.#plugin.osd.show("Uninstalled {}", [id]));
     });
   }
 
-  /** Show a change's progress until it ends; its final status. */
-  async #follow(change: PackageChange, what: string) {
-    const show = (status: PackageChange["status"]) => this.#say(`${what}：${CHANGE[status] ?? status}`);
+  /** Show a change's progress (`kind` rollback or uninstall) until it ends; its final status. */
+  async #follow(change: PackageChange, kind: string, id: string) {
+    const show = (status: PackageChange["status"]) => this.#say({ kind, id, code: status });
     show(change.status);
     const watch = change.onChange(show);
     try {
@@ -291,11 +308,11 @@ export class PluginsPage {
     }
   }
 
-  async #ask(options: Parameters<Plugin["dialogs"]["confirm"]>[0]) {
+  async #ask(confirm: () => ReturnType<Plugin["dialogs"]["confirm"]>) {
     try {
-      return await this.#plugin.dialogs.confirm(options);
+      return await confirm();
     } catch (error) {
-      this.#say(`无法确认：${(error as Error).message}`, true);
+      this.#say({ kind: "confirm-failed", text: (error as Error).message }, true);
       return null;
     }
   }
@@ -306,10 +323,11 @@ export class PluginsPage {
     if (!directory) return;
     try {
       await this.#plugin.system.openPath(directory);
-      this.#say("");
+      this.#say({ kind: "" });
     } catch (error) {
       const code = (error as { code?: string }).code;
-      this.#say(code === "missing" ? "数据目录不存在（插件还没有保存过设置或数据）" : `数据目录不可用：${(error as Error).message}`, true);
+      if (code === "missing") this.#say({ kind: "no-data-folder" }, true);
+      else this.#say({ kind: "data-folder-failed", text: (error as Error).message }, true);
     }
   }
 }

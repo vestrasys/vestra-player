@@ -1,11 +1,14 @@
-// 插件管理 (J07) as a page of the options window (category 插件, id
-// plugins.manage): the plugin list (id | 版本 | 来源 | 状态 | 数据), the
-// selected plugin's details (label 64 | value), a message line and the
-// buttons. Width 440: 6px padding and the list border leave 426; row padding
-// 3 + 6 and four 4px gaps leave 401, so 版本 50 + 来源 56 + 状态 56 + 数据 50
-// give the id ≈ 189. Buttons 66 + 66 + 94 + 66 + 82 and four 6px gaps = 398.
+// Plugin Manager (J07) as a page of the options window (category Plugins,
+// id plugins.manage): the plugin list (id | Version | Source | Status |
+// Data), the selected plugin's details (label 64 | value), a message line
+// and the buttons. Width 440: 6px padding and the list border leave 426; row
+// padding 3 + 6 and four 4px gaps leave 401, so Version 50 + Source 56 +
+// Status 56 + Data 50 give the id ≈ 189. Buttons 66 + 66 + 94 + 66 + 82 and
+// four 6px gaps = 398 (Open Data Folder grows when its text is longer).
 // Height 436: list (header + 12 rows) 238, details 6 × 18 + 2, message 18,
 // buttons 21, gaps and padding 48.
+//
+// TypeScript passes codes and data (see manager.ts); the words are here.
 import { ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button, ToolTipArea } from "@vestra/widgets.slint";
@@ -23,8 +26,146 @@ export struct PluginRow {
 
 export struct DetailLine {
     label: string,
+    kind: string,
+    value: string,
+    url: string,
+    warn: bool,
+}
+
+export struct Message {
+    kind: string,
+    id: string,
+    code: string,
     text: string,
     warn: bool,
+}
+
+// Codes → words. An unknown code (a newer player) shows as it is.
+global Words {
+    public pure function state(code: string) -> string {
+        if code == "running" { return @tr("Running"); }
+        if code == "starting" { return @tr("Starting"); }
+        if code == "disabled" { return @tr("Disabled"); }
+        // TRANSLATORS: a plugin's state in the list: it failed to start.
+        if code == "failed" { return @tr("plugin state" => "Failed"); }
+        if code == "stopped" { return @tr("Stopped"); }
+        return code;
+    }
+    // Where a plugin came from: a source kind, or the origin.
+    public pure function source(code: string) -> string {
+        if code == "repository" { return @tr("Repository"); }
+        if code == "link" { return @tr("Link"); }
+        if code == "file" { return @tr("Local file"); }
+        if code == "workshop" { return @tr("Plugin Workshop"); }
+        if code == "bundled" { return @tr("Built-in"); }
+        if code == "installed" { return @tr("Installed"); }
+        if code == "development" { return @tr("Development"); }
+        return code;
+    }
+    public pure function capability(id: string) -> string {
+        if id == "commands" { return @tr("Menu commands and shortcuts"); }
+        if id == "ui.window" { return @tr("Open tool windows"); }
+        if id == "ui.mount" { return @tr("Bottom bar and sidebar panels"); }
+        if id == "ui.dialog" { return @tr("System dialogs"); }
+        if id == "ui.osd" { return @tr("On-screen messages"); }
+        if id == "playback.read" { return @tr("Read the playback state"); }
+        if id == "events" { return @tr("Receive live state"); }
+        if id == "playback.control" { return @tr("Control playback"); }
+        if id == "producer.av" { return @tr("Generate audio and video streams"); }
+        if id == "processing.video" { return @tr("Process the picture"); }
+        if id == "processing.audio" { return @tr("Process the sound"); }
+        if id == "subtitles.read" { return @tr("Read subtitles"); }
+        if id == "subtitles.control" { return @tr("Control subtitles"); }
+        if id == "media.read" { return @tr("Read the picture (snapshots)"); }
+        if id == "media.control" { return @tr("Snapshots and export"); }
+        if id == "source.resolve" { return @tr("Resolve web addresses"); }
+        if id == "plugins.manage" { return @tr("Manage plugins"); }
+        if id == "clipboard" { return @tr("Clipboard"); }
+        if id == "window.control" { return @tr("Control the main window"); }
+        if id == "bindings.manage" { return @tr("Change shortcuts"); }
+        return "";
+    }
+    // A package change's status (rollback, uninstall).
+    public pure function change(status: string) -> string {
+        if status == "preparing" { return @tr("Preparing"); }
+        if status == "activating" { return @tr("Activating"); }
+        if status == "restoring" { return @tr("Restoring"); }
+        if status == "committed" { return @tr("Done"); }
+        if status == "cancelled" { return @tr("Cancelled"); }
+        // TRANSLATORS: a rollback or uninstall did not complete.
+        if status == "failed" { return @tr("change status" => "Failed"); }
+        if status == "failedDegraded" { return @tr("Failed (previous version restored)"); }
+        if status == "tooLate" { return @tr("Too late to cancel"); }
+        return status;
+    }
+    // A refused package call; `text` is the player's message.
+    public pure function failure(code: string, text: string) -> string {
+        if code == "self" { return @tr("Plugin Manager cannot disable or uninstall itself"); }
+        if code == "development" { return @tr("Development-loaded plugins cannot be uninstalled or rolled back"); }
+        if code == "builtin" { return @tr("Built-in plugins can only be disabled"); }
+        if code == "missing" { return @tr("This plugin no longer exists"); }
+        if code == "busy" { return @tr("Installing or rolling back, please try again later"); }
+        return text;
+    }
+    // Why a button is off.
+    public pure function tip(code: string) -> string {
+        if code == "self" { return @tr("Plugin Manager cannot disable itself"); }
+        if code == "busy" { return @tr("Updating"); }
+        if code == "builtin" { return @tr("Built-in plugins can only be disabled"); }
+        if code == "not-installed" { return @tr("Only installed plugins can be uninstalled"); }
+        return "";
+    }
+    // Detail labels; the column is 64px wide.
+    public pure function label(code: string) -> string {
+        if code == "failure" { return @tr("Error"); }
+        if code == "warning" { return @tr("Warning"); }
+        if code == "note" { return @tr("Note"); }
+        if code == "source" { return @tr("Source"); }
+        // TRANSLATORS: detail label: the version a rollback returns to.
+        if code == "previous" { return @tr("Previous"); }
+        // TRANSLATORS: detail label: the folder the plugin's package is in.
+        if code == "package" { return @tr("Package"); }
+        // TRANSLATORS: detail label: the folder with the plugin's settings and data.
+        if code == "data" { return @tr("Data folder"); }
+        if code == "capabilities" { return @tr("Capabilities"); }
+        return code;
+    }
+    public pure function detail(line: DetailLine) -> string {
+        if line.kind == "development" { return @tr("Development load: disabling lasts only for this run; cannot be uninstalled or rolled back"); }
+        if line.kind == "self" { return @tr("Plugin Manager cannot disable itself"); }
+        if line.kind == "builtin" { return @tr("Built-in plugin: installed and updated with the player; can be disabled but not uninstalled"); }
+        if line.kind == "unavailable" { return @tr("Unavailable"); }
+        if line.kind == "none" { return @tr("(none)"); }
+        if line.kind == "source" && line.url != "" && line.value == "repository" { return @tr("Repository ({})", line.url); }
+        if line.kind == "source" && line.url != "" && line.value == "link" { return @tr("Link ({})", line.url); }
+        if line.kind == "source" { return Words.source(line.value); }
+        if line.kind == "capability" && Words.capability(line.value) != "" {
+            // TRANSLATORS: a capability id, two spaces, what it lets a plugin do.
+            return @tr("{0}  {1}", line.value, Words.capability(line.value));
+        }
+        return line.value;
+    }
+    public pure function message(m: Message) -> string {
+        if m.kind == "enabled" { return @tr("Enabled {}", m.id); }
+        if m.kind == "disabled" { return @tr("Disabled {}", m.id); }
+        if m.kind == "reloaded" { return @tr("Reloaded {}", m.id); }
+        if m.kind == "uninstalled" { return @tr("Uninstalled {}", m.id); }
+        if m.kind == "rolled-back" { return @tr("Rolled back {} to {}", m.id, m.text); }
+        // TRANSLATORS: progress or result of a rollback: plugin id, status.
+        if m.kind == "rollback" && m.text == "" { return @tr("Roll back {0}: {1}", m.id, Words.change(m.code)); }
+        // TRANSLATORS: plugin id, status, the player's message.
+        if m.kind == "rollback" { return @tr("Roll back {0}: {1} ({2})", m.id, Words.change(m.code), m.text); }
+        // TRANSLATORS: progress or result of an uninstall: plugin id, status.
+        if m.kind == "uninstall" && m.text == "" { return @tr("Uninstall {0}: {1}", m.id, Words.change(m.code)); }
+        // TRANSLATORS: plugin id, status, the player's message.
+        if m.kind == "uninstall" { return @tr("Uninstall {0}: {1} ({2})", m.id, Words.change(m.code), m.text); }
+        if m.kind == "failure" { return Words.failure(m.code, m.text); }
+        if m.kind == "list-failed" { return @tr("Cannot read the plugin list: {}", Words.failure(m.code, m.text)); }
+        if m.kind == "confirm-failed" { return @tr("Cannot ask for confirmation: {}", m.text); }
+        if m.kind == "no-data-folder" { return @tr("The data folder does not exist (the plugin has not saved any settings or data yet)"); }
+        if m.kind == "data-folder-failed" { return @tr("Data folder unavailable: {}", m.text); }
+        return "";
+    }
 }
 
 component Cell inherits Text {
@@ -44,9 +185,10 @@ component Row inherits Rectangle {
         padding-right: 6px;
         spacing: 4px;
         Cell { horizontal-stretch: 1; text: root.item.id; color: root.item.dim ? Theme.text-dim : Theme.text; }
-        Cell { width: 50px; text: root.item.version; color: root.ink; }
-        Cell { width: 56px; text: root.item.origin; color: root.ink; }
-        Cell { width: 56px; text: root.item.state; color: root.item.failed ? Theme.accent : root.ink; }
+        // TRANSLATORS: the version column of a development-loaded plugin (50px wide).
+        Cell { width: 50px; text: root.item.version == "" ? @tr("Dev") : root.item.version; color: root.ink; }
+        Cell { width: 56px; text: Words.source(root.item.origin); color: root.ink; }
+        Cell { width: 56px; text: Words.state(root.item.state); color: root.item.failed ? Theme.accent : root.ink; }
         Cell { width: 50px; text: root.item.size; color: root.ink; horizontal-alignment: right; }
     }
     TouchArea { clicked => { root.select(); } }
@@ -60,7 +202,7 @@ export global Plugins {
     in property <[PluginRow]> rows;
     in property <bool> has-selection;
     in property <[DetailLine]> details;
-    in property <string> toggle-text: "停用";
+    in property <bool> toggle-enables;
     in property <bool> can-toggle;
     in property <string> toggle-tip;
     in property <bool> can-reload;
@@ -68,8 +210,7 @@ export global Plugins {
     in property <bool> can-uninstall;
     in property <string> uninstall-tip;
     in property <bool> can-open;
-    in property <string> message;
-    in property <bool> message-warn;
+    in property <Message> message;
     callback select(string);
     callback toggle();
     callback reload();
@@ -97,11 +238,12 @@ export component PluginsPage inherits Rectangle {
                     padding-left: 3px;
                     padding-right: 6px;
                     spacing: 4px;
-                    Head { horizontal-stretch: 1; text: "插件"; }
-                    Head { width: 50px; text: "版本"; }
-                    Head { width: 56px; text: "来源"; }
-                    Head { width: 56px; text: "状态"; }
-                    Head { width: 50px; text: "数据"; horizontal-alignment: right; }
+                    Head { horizontal-stretch: 1; text: @tr("Plugin"); }
+                    Head { width: 50px; text: @tr("Version"); }
+                    Head { width: 56px; text: @tr("Source"); }
+                    Head { width: 56px; text: @tr("Status"); }
+                    // TRANSLATORS: column header: the size of the plugin's data folder.
+                    Head { width: 50px; text: @tr("Data"); horizontal-alignment: right; }
                 }
                 Rectangle { height: 1px; background: Theme.line; }
                 ListView {
@@ -124,7 +266,7 @@ export component PluginsPage inherits Rectangle {
                 height: 100%;
                 horizontal-alignment: center;
                 color: Theme.text-dim;
-                text: "选择一个插件查看详情";
+                text: @tr("Select a plugin to see its details");
             }
             ListView {
                 x: 1px;
@@ -136,15 +278,15 @@ export component PluginsPage inherits Rectangle {
                     padding-left: 6px;
                     padding-right: 10px;
                     spacing: 6px;
-                    Cell { width: 64px; text: line.label; color: Theme.text-dim; }
+                    Cell { width: 64px; text: Words.label(line.label); color: Theme.text-dim; }
                     // Long paths and failure reasons elide; hovering shows all of it.
                     ToolTipArea {
                         horizontal-stretch: 1;
-                        text: line.text;
+                        text: Words.detail(line);
                         Cell {
                             width: 100%;
                             height: 100%;
-                            text: line.text;
+                            text: Words.detail(line);
                             color: line.warn ? Theme.accent : Theme.text-list;
                         }
                     }
@@ -153,37 +295,38 @@ export component PluginsPage inherits Rectangle {
         }
         Cell {
             height: 18px;
-            text: Plugins.message;
-            color: Plugins.message-warn ? Theme.accent : Theme.text-dim;
+            text: Words.message(Plugins.message);
+            color: Plugins.message.warn ? Theme.accent : Theme.text-dim;
         }
         HorizontalLayout {
             height: Theme.button-height;
             spacing: 6px;
             ToolTipArea {
                 width: 66px;
-                text: Plugins.toggle-tip;
+                text: Words.tip(Plugins.toggle-tip);
                 Button {
                     width: 100%;
                     height: 100%;
-                    text: Plugins.toggle-text;
+                    text: Plugins.toggle-enables ? @tr("Enable") : @tr("Disable");
                     enabled: Plugins.can-toggle;
                     clicked => { Plugins.toggle(); }
                 }
             }
-            Button { horizontal-stretch: 0; text: "重新加载"; enabled: Plugins.can-reload; clicked => { Plugins.reload(); } }
-            Button { horizontal-stretch: 0; width: 94px; text: "回退到上一版本"; enabled: Plugins.can-rollback; clicked => { Plugins.rollback(); } }
+            Button { horizontal-stretch: 0; text: @tr("Reload"); enabled: Plugins.can-reload; clicked => { Plugins.reload(); } }
+            // TRANSLATORS: button: roll the plugin back to its previous version (94px wide).
+            Button { horizontal-stretch: 0; width: 94px; text: @tr("Roll Back"); enabled: Plugins.can-rollback; clicked => { Plugins.rollback(); } }
             ToolTipArea {
                 width: 66px;
-                text: Plugins.uninstall-tip;
+                text: Words.tip(Plugins.uninstall-tip);
                 Button {
                     width: 100%;
                     height: 100%;
-                    text: "卸载…";
+                    text: @tr("Uninstall…");
                     enabled: Plugins.can-uninstall;
                     clicked => { Plugins.uninstall(); }
                 }
             }
-            Button { horizontal-stretch: 0; width: 82px; text: "打开数据目录"; enabled: Plugins.can-open; clicked => { Plugins.open-data(); } }
+            Button { horizontal-stretch: 0; min-width: 82px; text: @tr("Open Data Folder"); enabled: Plugins.can-open; clicked => { Plugins.open-data(); } }
             Rectangle { horizontal-stretch: 1; }
         }
     }

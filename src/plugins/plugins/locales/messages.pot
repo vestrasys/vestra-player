@@ -1,0 +1,424 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: vestra.plugins 0.2.4\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: main.ts:21
+msgid "Plugin Manager…"
+msgstr ""
+
+#: manager.ts:55 manifest.json
+msgid "Plugin Manager"
+msgstr ""
+
+#: manager.ts:229 ui/plugins.slint:149
+msgid "Enabled {}"
+msgstr ""
+
+#: manager.ts:233
+msgid "Disable {}?"
+msgstr ""
+
+#: manager.ts:236
+msgid "Its menus, shortcuts, windows and effects are removed at once; open media keeps playing. A development-loaded plugin stays disabled only for this run."
+msgstr ""
+
+#: manager.ts:236
+msgid "Its menus, shortcuts, windows and effects (such as the equalizer, filters, subtitle style) are removed at once; open media keeps playing. It stays disabled after Vestra Player restarts; you can enable it here at any time."
+msgstr ""
+
+#: manager.ts:239 ui/plugins.slint:310
+msgid "Disable"
+msgstr ""
+
+#: manager.ts:245 ui/plugins.slint:150
+msgid "Disabled {}"
+msgstr ""
+
+#: manager.ts:257 ui/plugins.slint:151
+msgid "Reloaded {}"
+msgstr ""
+
+#: manager.ts:269 ui/plugins.slint:153
+msgid "Rolled back {} to {}"
+msgstr ""
+
+#: manager.ts:280
+msgid "Uninstall {}?"
+msgstr ""
+
+#: manager.ts:282
+msgid "Its current and previous versions are removed from the installed plugins. Its shortcut changes are kept and come back if you install it again."
+msgstr ""
+
+#: manager.ts:283
+msgid "Uninstall"
+msgstr ""
+
+#: manager.ts:285
+msgid "Also delete its settings and data"
+msgstr ""
+
+#: manager.ts:295 ui/plugins.slint:152
+msgid "Uninstalled {}"
+msgstr ""
+
+#: manifest.json
+msgid "See the installed plugins; disable, enable, roll back or uninstall them"
+msgstr ""
+
+#: manifest.json
+msgid "Lists every plugin of the player on the Plugins page of the options window: version, source, state and data size. Select a plugin to see its details (failure reason, source, package folder, data folder, capabilities), disable or enable it, reload it, roll it back to its previous version, uninstall it (optionally with its settings and data), or open its data folder. Built-in plugins, installed with the player, cannot be uninstalled."
+msgstr ""
+
+#: manifest.json
+msgid "plugins"
+msgstr ""
+
+#: manifest.json
+msgid "settings"
+msgstr ""
+
+#: ui/plugins.slint:46
+msgid "Running"
+msgstr ""
+
+#: ui/plugins.slint:47
+msgid "Starting"
+msgstr ""
+
+#: ui/plugins.slint:48
+msgid "Disabled"
+msgstr ""
+
+#. a plugin's state in the list: it failed to start.
+#: ui/plugins.slint:50
+msgctxt "plugin state"
+msgid "Failed"
+msgstr ""
+
+#: ui/plugins.slint:51
+msgid "Stopped"
+msgstr ""
+
+#: ui/plugins.slint:56
+msgid "Repository"
+msgstr ""
+
+#: ui/plugins.slint:57
+msgid "Link"
+msgstr ""
+
+#: ui/plugins.slint:58
+msgid "Local file"
+msgstr ""
+
+#: ui/plugins.slint:59
+msgid "Plugin Workshop"
+msgstr ""
+
+#: ui/plugins.slint:60
+msgid "Built-in"
+msgstr ""
+
+#: ui/plugins.slint:61
+msgid "Installed"
+msgstr ""
+
+#: ui/plugins.slint:62
+msgid "Development"
+msgstr ""
+
+#: ui/plugins.slint:66
+msgid "Menu commands and shortcuts"
+msgstr ""
+
+#: ui/plugins.slint:67
+msgid "Open tool windows"
+msgstr ""
+
+#: ui/plugins.slint:68
+msgid "Bottom bar and sidebar panels"
+msgstr ""
+
+#: ui/plugins.slint:69
+msgid "System dialogs"
+msgstr ""
+
+#: ui/plugins.slint:70
+msgid "On-screen messages"
+msgstr ""
+
+#: ui/plugins.slint:71
+msgid "Read the playback state"
+msgstr ""
+
+#: ui/plugins.slint:72
+msgid "Receive live state"
+msgstr ""
+
+#: ui/plugins.slint:73
+msgid "Control playback"
+msgstr ""
+
+#: ui/plugins.slint:74
+msgid "Generate audio and video streams"
+msgstr ""
+
+#: ui/plugins.slint:75
+msgid "Process the picture"
+msgstr ""
+
+#: ui/plugins.slint:76
+msgid "Process the sound"
+msgstr ""
+
+#: ui/plugins.slint:77
+msgid "Read subtitles"
+msgstr ""
+
+#: ui/plugins.slint:78
+msgid "Control subtitles"
+msgstr ""
+
+#: ui/plugins.slint:79
+msgid "Read the picture (snapshots)"
+msgstr ""
+
+#: ui/plugins.slint:80
+msgid "Snapshots and export"
+msgstr ""
+
+#: ui/plugins.slint:81
+msgid "Resolve web addresses"
+msgstr ""
+
+#: ui/plugins.slint:82
+msgid "Manage plugins"
+msgstr ""
+
+#: ui/plugins.slint:83
+msgid "Clipboard"
+msgstr ""
+
+#: ui/plugins.slint:84
+msgid "Control the main window"
+msgstr ""
+
+#: ui/plugins.slint:85
+msgid "Change shortcuts"
+msgstr ""
+
+#: ui/plugins.slint:90
+msgid "Preparing"
+msgstr ""
+
+#: ui/plugins.slint:91
+msgid "Activating"
+msgstr ""
+
+#: ui/plugins.slint:92
+msgid "Restoring"
+msgstr ""
+
+#: ui/plugins.slint:93
+msgid "Done"
+msgstr ""
+
+#: ui/plugins.slint:94
+msgid "Cancelled"
+msgstr ""
+
+#. a rollback or uninstall did not complete.
+#: ui/plugins.slint:96
+msgctxt "change status"
+msgid "Failed"
+msgstr ""
+
+#: ui/plugins.slint:97
+msgid "Failed (previous version restored)"
+msgstr ""
+
+#: ui/plugins.slint:98
+msgid "Too late to cancel"
+msgstr ""
+
+#: ui/plugins.slint:103
+msgid "Plugin Manager cannot disable or uninstall itself"
+msgstr ""
+
+#: ui/plugins.slint:104
+msgid "Development-loaded plugins cannot be uninstalled or rolled back"
+msgstr ""
+
+#: ui/plugins.slint:105 ui/plugins.slint:114
+msgid "Built-in plugins can only be disabled"
+msgstr ""
+
+#: ui/plugins.slint:106
+msgid "This plugin no longer exists"
+msgstr ""
+
+#: ui/plugins.slint:107
+msgid "Installing or rolling back, please try again later"
+msgstr ""
+
+#: ui/plugins.slint:112 ui/plugins.slint:135
+msgid "Plugin Manager cannot disable itself"
+msgstr ""
+
+#: ui/plugins.slint:113
+msgid "Updating"
+msgstr ""
+
+#: ui/plugins.slint:115
+msgid "Only installed plugins can be uninstalled"
+msgstr ""
+
+#: ui/plugins.slint:120
+msgid "Error"
+msgstr ""
+
+#: ui/plugins.slint:121
+msgid "Warning"
+msgstr ""
+
+#: ui/plugins.slint:122
+msgid "Note"
+msgstr ""
+
+#: ui/plugins.slint:123 ui/plugins.slint:243
+msgid "Source"
+msgstr ""
+
+#. detail label: the version a rollback returns to.
+#: ui/plugins.slint:125
+msgid "Previous"
+msgstr ""
+
+#. detail label: the folder the plugin's package is in.
+#: ui/plugins.slint:127
+msgid "Package"
+msgstr ""
+
+#. detail label: the folder with the plugin's settings and data.
+#: ui/plugins.slint:129
+msgid "Data folder"
+msgstr ""
+
+#: ui/plugins.slint:130
+msgid "Capabilities"
+msgstr ""
+
+#: ui/plugins.slint:134
+msgid "Development load: disabling lasts only for this run; cannot be uninstalled or rolled back"
+msgstr ""
+
+#: ui/plugins.slint:136
+msgid "Built-in plugin: installed and updated with the player; can be disabled but not uninstalled"
+msgstr ""
+
+#: ui/plugins.slint:137
+msgid "Unavailable"
+msgstr ""
+
+#: ui/plugins.slint:138
+msgid "(none)"
+msgstr ""
+
+#: ui/plugins.slint:139
+msgid "Repository ({})"
+msgstr ""
+
+#: ui/plugins.slint:140
+msgid "Link ({})"
+msgstr ""
+
+#. a capability id, two spaces, what it lets a plugin do.
+#: ui/plugins.slint:144
+msgid "{0}  {1}"
+msgstr ""
+
+#. progress or result of a rollback: plugin id, status.
+#: ui/plugins.slint:155
+msgid "Roll back {0}: {1}"
+msgstr ""
+
+#. plugin id, status, the player's message.
+#: ui/plugins.slint:157
+msgid "Roll back {0}: {1} ({2})"
+msgstr ""
+
+#. progress or result of an uninstall: plugin id, status.
+#: ui/plugins.slint:159
+msgid "Uninstall {0}: {1}"
+msgstr ""
+
+#. plugin id, status, the player's message.
+#: ui/plugins.slint:161
+msgid "Uninstall {0}: {1} ({2})"
+msgstr ""
+
+#: ui/plugins.slint:163
+msgid "Cannot read the plugin list: {}"
+msgstr ""
+
+#: ui/plugins.slint:164
+msgid "Cannot ask for confirmation: {}"
+msgstr ""
+
+#: ui/plugins.slint:165
+msgid "The data folder does not exist (the plugin has not saved any settings or data yet)"
+msgstr ""
+
+#: ui/plugins.slint:166
+msgid "Data folder unavailable: {}"
+msgstr ""
+
+#. the version column of a development-loaded plugin (50px wide).
+#: ui/plugins.slint:189
+msgid "Dev"
+msgstr ""
+
+#: ui/plugins.slint:241
+msgid "Plugin"
+msgstr ""
+
+#: ui/plugins.slint:242
+msgid "Version"
+msgstr ""
+
+#: ui/plugins.slint:244
+msgid "Status"
+msgstr ""
+
+#. column header: the size of the plugin's data folder.
+#: ui/plugins.slint:246
+msgid "Data"
+msgstr ""
+
+#: ui/plugins.slint:269
+msgid "Select a plugin to see its details"
+msgstr ""
+
+#: ui/plugins.slint:310
+msgid "Enable"
+msgstr ""
+
+#: ui/plugins.slint:315
+msgid "Reload"
+msgstr ""
+
+#. button: roll the plugin back to its previous version (94px wide).
+#: ui/plugins.slint:317
+msgid "Roll Back"
+msgstr ""
+
+#: ui/plugins.slint:324
+msgid "Uninstall…"
+msgstr ""
+
+#: ui/plugins.slint:329
+msgid "Open Data Folder"
+msgstr ""

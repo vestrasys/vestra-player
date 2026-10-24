@@ -1,6 +1,6 @@
 {
   "id": "vestra.plugins",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -10,10 +10,13 @@
     "ui.dialog",
     "plugins.manage"
   ],
-  "name": "插件管理",
+  "name": "Plugin Manager",
   "author": "Vestra Player",
-  "punchline": "查看已安装的插件，停用、启用、回退或卸载",
-  "description": "在「选项」窗口的「插件」分类里列出播放器的全部插件：版本、来源、运行状态与数据大小。选中一个插件可以查看详情（失败原因、来源、包目录、数据目录、能力），停用或启用、重新加载、回退到上一版本、卸载（可同时删除它的设置与数据），或打开它的数据目录。随播放器安装的内置插件不能卸载。",
-  "tags": ["插件", "设置"],
-  "minPlayerVersion": "0.2.0"
+  "punchline": "See the installed plugins; disable, enable, roll back or uninstall them",
+  "description": "Lists every plugin of the player on the Plugins page of the options window: version, source, state and data size. Select a plugin to see its details (failure reason, source, package folder, data folder, capabilities), disable or enable it, reload it, roll it back to its previous version, uninstall it (optionally with its settings and data), or open its data folder. Built-in plugins, installed with the player, cannot be uninstalled.",
+  "tags": [
+    "plugins",
+    "settings"
+  ],
+  "minPlayerVersion": "0.4.3"
 }
