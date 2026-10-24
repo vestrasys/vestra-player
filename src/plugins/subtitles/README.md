@@ -1,24 +1,28 @@
-# 字幕
+# Subtitles
 
-选择字幕轨，载入外部字幕，调整样式和同步。
+Picks subtitle tracks, loads external subtitles, adjusts style and sync.
 
-## 功能
+## Features
 
-- **字幕轨**：显示/隐藏，选择或依次切换字幕轨。
-- **外部字幕**：载入 SRT、ASS/SSA、WebVTT、SAMI、MicroDVD，自动识别编码；重载字幕，可在文件改动后自动重载。
-- **次字幕**：同时显示第二条文本字幕，位置在顶部或主字幕上方。
-- **样式**：字号、位置、字体、颜色、描边、粗体、阴影、背景框，以及是否使用 ASS/SSA 原样式；样式跨重启保留。
-- **同步**：超前、滞后、复位，可设同步单位或手动输入毫秒值。
-- **按对白跳转**：上一句、下一句、当前字幕起点。
+- **Tracks**: show/hide, pick a track or cycle through them.
+- **External subtitles**: load SRT, ASS/SSA, WebVTT, SAMI and MicroDVD, with the encoding detected; reload them, automatically when the file changes if wanted.
+- **Secondary subtitle**: a second text subtitle at the top or above the main one.
+- **Style**: size, position, font, colour, outline, bold, shadow, background box, and whether ASS/SSA keep their own styles; the style is kept across restarts.
+- **Sync**: earlier, later, reset; a sync step, or a value typed in milliseconds.
+- **Jump by dialogue**: previous, next, start of the current subtitle.
 
-## 入口
+## Entries
 
-- 右键菜单「打开 ▶ 打开字幕…」（Alt+O）、「打开 ▶ 添加次字幕…」。
-- 右键菜单「字幕」：显示字幕（Alt+H）、选择字幕轨（依次切换 Alt+L）、次字幕、字幕样式（粗体 Alt+B，字号 Alt+PgUp/PgDn，上移/下移 Alt+↑/↓）、同步（`.` 超前、`,` 滞后、`/` 复位）、重载字幕（Ctrl+Alt+Y）、字幕微调…、字幕设置…
-- 右键菜单「播放 ▶ 跳转」：上一句对白（Home）、下一句对白（End）、当前字幕起点（Ctrl+Home）。
+- Right-click menu: Open ▸ Open Subtitle… (Alt+O), Open ▸ Add Secondary Subtitle….
+- Right-click menu Subtitles: Show Subtitles (Alt+H), Subtitle Track (Cycle Alt+L), Secondary Subtitle, Subtitle Style (Bold Alt+B, Size Alt+PgUp/PgDn, Move Up/Down Alt+↑/↓), Sync (`.` earlier, `,` later, `/` reset), Reload Subtitles (Ctrl+Alt+Y), Subtitle Tuning…, Subtitle Settings….
+- Right-click menu Playback ▸ Seek: Previous Dialogue (Home), Next Dialogue (End), Current Subtitle Start (Ctrl+Home).
 
-## 限制
+## Limits
 
-- 不支持图形字幕文件（.sup、VobSub）。
-- 菜单里最多列出 8 条字幕轨，其余在「字幕微调…」里选择。
-- 按对白跳转只用于本地文件的文本字幕。
+- No image subtitle files (.sup, VobSub).
+- The menu lists at most 8 tracks; the rest are in Subtitle Tuning….
+- Jumping by dialogue works for text subtitles of local files only.
+
+## Translations
+
+Texts are English in the source; `locales/zh-Hans.po` has the Simplified Chinese (`vestra-plugin i18n extract`, `i18n check`). The windows' status line and the on-screen messages share one table: `messages.ts` (by id) and `ui/messages.slint` (`@tr`); `tests/i18n.test.ts` checks that they agree.

@@ -1,19 +1,21 @@
-// 手动调整同步 (D05): 350×121, one row
-// 「同步值(毫秒)：」 102 right-aligned + field 86×21 + 应用 75×23, 7px apart.
-// Enter or 应用 applies; ↑/↓ in the field step by the 同步单位 (the field eats the keys).
+// Adjust Sync (D05): 350×121, one row
+// "Sync value (ms):" 102 right-aligned + field 86×21 + Apply 75×23, 7px apart.
+// Enter or Apply applies; ↑/↓ in the field step by the sync step (the field eats the keys).
+// Every text is @tr (English source; locales/<lang>.po translate it).
 import { LineEdit } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
+import { Messages, Status } from "messages.slint";
 
 export component SubtitleSync inherits Window {
-    title: "手动调整同步";
+    title: @tr("Adjust Sync");
     width: 350px;
     height: 121px;
     background: Theme.bg-panel;
     in property <bool> busy: false;
     in property <bool> can-style: false;
-    in property <string> style-reason: "";
-    in property <string> status-text: "";
+    in property <Status> style-reason;
+    in property <Status> status;
     in-out property <string> value-text: "0";
     callback apply(string);
     callback nudge(string, int);
@@ -27,7 +29,7 @@ export component SubtitleSync inherits Window {
             alignment: center;
             Text {
                 width: 102px;
-                text: "同步值(毫秒)：";
+                text: @tr("Sync value (ms):");
                 color: root.can-style ? Theme.text : Theme.text-dim;
                 font-size: Theme.font-body;
                 horizontal-alignment: right;
@@ -57,15 +59,15 @@ export component SubtitleSync inherits Window {
             Button {
                 width: 75px;
                 height: 23px;
-                text: "应用";
+                text: @tr("Apply");
                 enabled: root.can-style;
                 clicked => { root.apply(root.value-text); }
             }
         }
         Text {
-            text: root.status-text != "" ? root.status-text
-                : !root.can-style ? root.style-reason
-                : "正值字幕滞后，负值超前。";
+            text: root.status.id != "" ? Messages.text(root.status)
+                : !root.can-style ? Messages.text(root.style-reason)
+                : @tr("Positive delays the subtitles, negative advances them.");
             color: Theme.text-list;
             font-size: Theme.font-body;
             horizontal-alignment: center;
