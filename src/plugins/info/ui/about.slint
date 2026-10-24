@@ -1,19 +1,16 @@
-// 关于 Vestra Player (I09): a fixed 360×420 window: the product, then the loaded plugins.
+// About Vestra Player (I09): a fixed 360×420 window: the product, then the loaded plugins.
 // Heights (padding 12 top and bottom):
 //   12 + header 96 + 6 + components 5 × 18 + 6 + list head 18 + list 8 × 18 + 2 + 6 + spacer ≥ 0 + 6 + buttons 21 + 12 = 419 of 420
 // Widths (content 360 − 28 = 332):
 //   header      logo 96 + 12 + name / version text (elided)
 //   components  label 100 + 8 + value 224 (elided)
 //   plugin list 1 + 6 + id ≥ 100 + 6 + version 56 + 6 + origin 56 + 6 + state 48 + 6 + scroll bar 12 + 1 ≤ 332
-//   buttons     status ≥ 50 + 4 + 复制信息 66 + 4 + 关闭 66 = 190 of 332
+//   buttons     status ≥ 50 + 4 + Copy Info 66 + 4 + Close 66 = 190 of 332
+// Texts are @tr (English source; locales/<lang>.po translate them); versions, ids and
+// the plugin's origin and state codes are data from main.ts.
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
-
-export struct ComponentRow {
-    label: string,
-    value: string,
-}
 
 export struct PluginRow {
     id: string,
@@ -55,7 +52,7 @@ component PluginLine {
 }
 
 export component AboutWindow inherits Window {
-    title: "关于 Vestra Player";
+    title: @tr("About Vestra Player");
     preferred-width: 360px;
     preferred-height: 420px;
     min-width: 360px;
@@ -64,12 +61,44 @@ export component AboutWindow inherits Window {
     max-height: 420px;
     background: Theme.bg-panel;
     in property <string> version;
-    in property <[ComponentRow]> components;
+    // "" without a build hash.
+    in property <string> build;
+    // Component versions; "" = not known.
+    in property <string> api;
+    in property <string> mpv;
+    in property <string> ffmpeg;
+    in property <string> slint;
+    in property <string> node;
     in property <[PluginRow]> plugins;
-    in property <string> plugins-note;
+    // packages.list failed: the list is empty and says so.
+    in property <bool> plugins-unknown;
+    // "" or "copy-failed".
     in property <string> status;
     callback copy-info();
     callback close-window();
+
+    pure function known(version: string) -> string {
+        return version != "" ? version : @tr("Unknown");
+    }
+    // A plugin's source, in the words of the plugin manager and the store.
+    pure function origin-name(code: string) -> string {
+        return code == "bundled" ? @tr("Built-in")
+            : code == "repository" ? @tr("Repository")
+            : code == "link" ? @tr("Link")
+            : code == "file" ? @tr("Local file")
+            : code == "workshop" ? @tr("Workshop")
+            : code == "installed" ? @tr("Installed")
+            : code == "development" ? @tr("Development")
+            : code;
+    }
+    pure function state-name(code: string) -> string {
+        return code == "starting" ? @tr("Starting")
+            : code == "running" ? @tr("Running")
+            : code == "disabled" ? @tr("Disabled")
+            : code == "failed" ? @tr("Failed")
+            : code == "stopped" ? @tr("Stopped")
+            : code;
+    }
 
     body := VerticalLayout {
         padding-left: Theme.dialog-padding;
@@ -87,31 +116,40 @@ export component AboutWindow inherits Window {
                 source: @image-url("logo.png");
                 image-fit: contain;
                 accessible-role: image;
-                accessible-label: "Vestra Player";
+                accessible-label: "Vestra Player"; // i18n-ignore: the product's name
             }
             VerticalLayout {
                 alignment: center;
                 spacing: 4px;
+                // i18n-ignore: the product's name
                 Text { text: "Vestra Player"; color: Theme.text; font-size: Theme.font-title; font-weight: 700; }
-                Text { max-width: 200px; text: root.version; color: Theme.text-dim; font-size: Theme.font-body; overflow: elide; }
+                Text { max-width: 200px; text: root.build != "" ? @tr("Version {} (build {})", root.version, root.build) : @tr("Version {}", root.version); color: Theme.text-dim; font-size: Theme.font-body; overflow: elide; }
             }
         }
         VerticalLayout {
-            for row in root.components: VersionLine { label: row.label; value: row.value; }
+            VersionLine { label: @tr("Plugin API"); value: root.api; }
+            // i18n-ignore: component names
+            VersionLine { label: "mpv"; value: root.known(root.mpv); }
+            // i18n-ignore
+            VersionLine { label: "FFmpeg"; value: root.known(root.ffmpeg); }
+            // i18n-ignore
+            VersionLine { label: "Slint"; value: root.known(root.slint); }
+            // i18n-ignore
+            VersionLine { label: "Node"; value: root.known(root.node); }
         }
         VerticalLayout {
-            PluginLine { id: "已加载插件"; version: "版本"; origin: "来源"; state: "状态"; heading: true; }
+            PluginLine { id: @tr("Loaded plugins"); version: @tr("Version"); origin: @tr("Source"); state: @tr("State"); heading: true; }
             Rectangle {
                 height: 8 * 18px + 2px;
                 background: Theme.bg-list;
                 border-width: 1px;
                 border-color: Theme.line;
-                if root.plugins-note != "": Text {
+                if root.plugins-unknown: Text {
                     x: 7px;
                     y: 1px;
                     width: parent.width - 14px;
                     height: 18px;
-                    text: root.plugins-note;
+                    text: @tr("Unknown (cannot read the plugin list)");
                     color: Theme.text-dim;
                     font-size: Theme.font-body;
                     vertical-alignment: center;
@@ -126,9 +164,9 @@ export component AboutWindow inherits Window {
                         width: list.visible-width;
                         for plugin in root.plugins: PluginLine {
                             id: plugin.id;
-                            version: plugin.version;
-                            origin: plugin.origin;
-                            state: plugin.state;
+                            version: root.known(plugin.version);
+                            origin: root.origin-name(plugin.origin);
+                            state: root.state-name(plugin.state);
                         }
                     }
                 }
@@ -140,14 +178,14 @@ export component AboutWindow inherits Window {
             Text {
                 horizontal-stretch: 1;
                 min-width: 50px;
-                text: root.status;
+                text: root.status == "copy-failed" ? @tr("Copy failed") : "";
                 color: Theme.text-list;
                 font-size: Theme.font-body;
                 vertical-alignment: center;
                 overflow: elide;
             }
-            Button { width: 66px; text: "复制信息"; clicked => { root.copy-info(); } }
-            Button { width: 66px; text: "关闭"; clicked => { root.close-window(); } }
+            Button { width: 66px; text: @tr("Copy Info"); clicked => { root.copy-info(); } }
+            Button { width: 66px; text: @tr("Close"); clicked => { root.close-window(); } }
         }
     }
 }

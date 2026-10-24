@@ -1,20 +1,24 @@
-# 播放信息
+# Playback Info
 
-查看正在播放的媒体、播放器和系统的信息。
+Information about the media playing, the player and the system.
 
-## 功能
+## Features
 
-- **播放信息**：在视频左上角显示文件、时间、编码、分辨率、帧率、音频、丢帧等，每秒刷新。
-- **简要信息**：短暂显示文件名、时间、当前章节、编码和字幕轨。
-- **播放属性**：三个页签——播放信息（解码器、硬件解码、码率、音画同步等）、文件信息（容器、各条流、章节、元数据）、系统信息（版本、系统、显示器、CPU、内存）。可复制或保存为文本。
-- **关于 Vestra Player**：版本、组件版本与已加载的插件列表。
+- **Playback Info**: file, time, codecs, size, frame rate, audio, dropped frames and more at the top left of the video, refreshed every second.
+- **Brief Info**: the file name, time, current chapter, codecs and subtitle track for a few seconds.
+- **Playback Properties**: three pages — Playback (decoder, hardware decoding, bitrates, A/V sync…), File (container, streams, chapters, metadata) and System (versions, system, displays, CPU, memory). Copy or save as text.
+- **About Vestra Player**: the version, component versions and the loaded plugins.
 
-## 入口
+## Entries
 
-- 右键菜单「播放信息」（Tab）；简要信息按 Shift+Tab。
-- 右键菜单「播放属性…」（Ctrl+F1）。
-- 右键菜单「关于 Vestra Player…」（F1）。
+- Context menu **Playback Info** (Tab); Brief Info with Shift+Tab.
+- Context menu **Playback Properties…** (Ctrl+F1).
+- Context menu **About Vestra Player…** (F1).
 
-## 限制
+## Languages
 
-- 文件信息需要 ffprobe，只读取本地文件。
+English, Simplified Chinese (`locales/zh-Hans.po`). The overlay, the property rows and the copied or saved text are English for now.
+
+## Limits
+
+- The File page needs ffprobe and reads local files only.

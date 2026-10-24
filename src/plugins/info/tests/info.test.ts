@@ -14,7 +14,7 @@ const stats = {
   audio: { codec: "aac", sampleRate: 48000, channels: 2 },
 };
 
-test("top-level 播放信息 entry in the windows group, Tab toggles the overlay; off by default", async () => {
+test("top-level Playback Info entry in the windows group, Tab toggles the overlay; off by default", async () => {
   const host = new TestHost();
   host.stats = stats;
   host.openElsewhere("/videos/movie.mp4");
@@ -22,8 +22,8 @@ test("top-level 播放信息 entry in the windows group, Tab toggles the overlay
   const { stop } = await startPlugin(activate, { directory, host });
   const command = host.command("info.toggle");
   assert.deepEqual(command.declaration, {
-    title: "播放信息",
-    path: ["播放信息"],
+    title: "Playback Info",
+    path: ["Playback Info"],
     order: 810,
     group: "windows",
     radio: false,
@@ -39,14 +39,14 @@ test("top-level 播放信息 entry in the windows group, Tab toggles the overlay
   assert.equal(
     host.osdPanel,
     [
-      "文件：movie.mp4",
-      "时间：00:05 / 01:40",
-      "视频：h264 1920×1080",
-      "帧率：24.00 fps",
-      "音频：aac 48000 Hz 2 声道",
-      "后端：libmpv · 软件渲染（会话 3）",
-      "已显示帧：120",
-      "丢帧：1",
+      "File: movie.mp4",
+      "Time: 00:05 / 01:40",
+      "Video: h264 1920×1080",
+      "Frame rate: 24.00 fps",
+      "Audio: aac 48000 Hz 2 channels",
+      "Backend: libmpv · 软件渲染 (session 3)",
+      "Frames shown: 120",
+      "Dropped frames: 1",
     ].join("\n"),
   );
   await host.press("Tab");
@@ -56,6 +56,25 @@ test("top-level 播放信息 entry in the windows group, Tab toggles the overlay
   await stop();
 });
 
+test("Simplified Chinese shows the menus of before", async () => {
+  const { host, stop } = await startPlugin(activate, { directory, locale: "zh-Hans" });
+  assert.deepEqual(host.command("info.toggle").display.path, ["播放信息"]);
+  assert.equal(host.command("info.brief").display.title, "简要信息");
+  assert.deepEqual(host.command("info.properties").display.path, ["播放属性…"]);
+  assert.deepEqual(host.command("info.about").display.path, ["关于 Vestra Player…"]);
+  await stop();
+});
+
+test("every text of the template is translated into Simplified Chinese", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const read = (file: string) => readFile(new URL(`../locales/${file}`, import.meta.url), "utf8");
+  const ids = [...(await read("messages.pot")).matchAll(/^msgid "(.+)"$/gm)].map((m) => m[1]);
+  assert.ok(ids.includes("Playback Properties") && ids.includes("Copy Info"));
+  const zh = await read("zh-Hans.po");
+  assert.doesNotMatch(zh, /msgstr ""\n\n/);
+  assert.match(zh, /msgid "Copy"\nmsgstr "复制到剪贴板"/);
+});
+
 test("refreshes once per second while shown, and stops when hidden", async () => {
   const host = new TestHost();
   host.stats = { ...stats, framesShown: 1 };
@@ -63,10 +82,10 @@ test("refreshes once per second while shown, and stops when hidden", async () =>
   const { stop } = await startPlugin(activate, { directory, host });
   await host.command("info.toggle").run();
   await host.settle();
-  assert.match(String(host.osdPanel), /已显示帧：1\n/);
+  assert.match(String(host.osdPanel), /Frames shown: 1\n/);
   host.stats = { ...stats, framesShown: 25 };
   await host.settle(1100);
-  assert.match(String(host.osdPanel), /已显示帧：25\n/);
+  assert.match(String(host.osdPanel), /Frames shown: 25\n/);
   await host.command("info.toggle").run();
   await host.settle();
   host.stats = { ...stats, framesShown: 50 };
@@ -84,14 +103,14 @@ test("without media every fact is a dash", async () => {
   assert.equal(
     host.osdPanel,
     [
-      "文件：未打开媒体",
-      "时间：--:-- / --:--",
-      "视频：- -",
-      "帧率：-",
-      "音频：- - -",
-      "后端：libmpv · 软件渲染（会话 0）",
-      "已显示帧：0",
-      "丢帧：-",
+      "File: No media open",
+      "Time: --:-- / --:--",
+      "Video: - -",
+      "Frame rate: -",
+      "Audio: - - -",
+      "Backend: libmpv · 软件渲染 (session 0)",
+      "Frames shown: 0",
+      "Dropped frames: -",
     ].join("\n"),
   );
   await stop();
@@ -116,7 +135,7 @@ test("I03: Shift+Tab shows two short lines for three seconds; no menu entry", as
   const { stop } = await startPlugin(activate, { directory, host });
   const command = host.command("info.brief");
   assert.deepEqual(command.declaration, {
-    title: "简要信息",
+    title: "Brief Info",
     path: [],
     order: 0,
     group: "domain",
@@ -128,10 +147,10 @@ test("I03: Shift+Tab shows two short lines for three seconds; no menu entry", as
   assert.deepEqual(host.conflicts, []);
   await host.press("Shift+Tab");
   await host.settle();
-  assert.equal(host.osdPanel, "movie.mp4\n01:23 / 45:00 · H.264 1920×1080 · AAC 2 声道");
+  assert.equal(host.osdPanel, "movie.mp4\n01:23 / 45:00 · H.264 1920×1080 · AAC 2 ch");
   host.setSource({ position: 85 });
   await host.settle(1100);
-  assert.equal(host.osdPanel, "movie.mp4\n01:25 / 45:00 · H.264 1920×1080 · AAC 2 声道", "time refreshed every second");
+  assert.equal(host.osdPanel, "movie.mp4\n01:25 / 45:00 · H.264 1920×1080 · AAC 2 ch", "time refreshed every second");
   await host.settle(2000);
   assert.equal(host.osdPanel, null);
   await stop();
@@ -160,10 +179,10 @@ test("I03: with the full overlay open both blocks show, short first; expiry leav
   await host.press("Shift+Tab");
   await host.settle();
   const text = String(host.osdPanel);
-  assert.ok(text.startsWith("movie.mp4\n01:23 / 45:00 · H.264 1920×1080 · AAC 2 声道\n\n文件：movie.mp4\n"), text);
+  assert.ok(text.startsWith("movie.mp4\n01:23 / 45:00 · H.264 1920×1080 · AAC 2 ch\n\nFile: movie.mp4\n"), text);
   assert.equal(text.split("\n").length, 11);
   await host.settle(3100);
-  assert.match(String(host.osdPanel), /^文件：movie\.mp4\n/);
+  assert.match(String(host.osdPanel), /^File: movie\.mp4\n/);
   assert.equal(host.command("info.toggle").state.checked, true);
   await host.press("Shift+Tab");
   await host.settle();
@@ -173,20 +192,20 @@ test("I03: with the full overlay open both blocks show, short first; expiry leav
   await stop();
 });
 
-test("I03: without media only 未打开媒体; unknown items are left out; live streams", async () => {
+test("I03: without media only No media open; unknown items are left out; live streams", async () => {
   const host = new TestHost();
   host.stats = { backend: "libmpv · 软件渲染", session: 0, framesShown: 0, framesDropped: null, video: null, audio: null };
   const { stop } = await startPlugin(activate, { directory, host });
   await host.press("Shift+Tab");
   await host.settle();
-  assert.equal(host.osdPanel, "未打开媒体");
+  assert.equal(host.osdPanel, "No media open");
   await stop();
   const blank = { source: "/a.mp4", position: null, duration: null } as unknown as PlayerState;
   assert.equal(brief(blank, null), "a.mp4");
   const live = { source: "https://live.test/stream.m3u8", position: 83, duration: null } as unknown as PlayerState;
   assert.equal(
     brief(live, { ...stats, video: { codec: "h264", width: 0, height: 0, fps: 0 }, audio: { codec: null, sampleRate: null, channels: 2 } } as unknown as PlaybackStats),
-    "stream.m3u8\n01:23 / 直播 · H.264 · 2 声道",
+    "stream.m3u8\n01:23 / Live · H.264 · 2 ch",
   );
 });
 
@@ -202,7 +221,7 @@ test("I03: short codec names, and lines cut to the video width with an ellipsis"
   assert.equal(shortCodec(null), null);
   const state = { source: "/v/movie.mp4", position: 7, duration: 8 } as unknown as PlayerState;
   const long = { ...stats, video: { codec: "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10", width: 640, height: 360, fps: 25 }, audio: { codec: "AAC (Advanced Audio Coding)", sampleRate: 48000, channels: 2 } };
-  assert.equal(brief(state, long as unknown as PlaybackStats), "movie.mp4\n00:07 / 00:08 · H.264 640×360 · AAC 2 声道");
+  assert.equal(brief(state, long as unknown as PlaybackStats), "movie.mp4\n00:07 / 00:08 · H.264 640×360 · AAC 2 ch");
   assert.equal(fit("a".repeat(50)), `${"a".repeat(BRIEF_COLUMNS - 1)}…`);
   assert.equal(fit("视".repeat(30)), `${"视".repeat(21)}…`, "CJK characters take two columns");
   assert.equal(fit("a".repeat(BRIEF_COLUMNS)), "a".repeat(BRIEF_COLUMNS));
@@ -223,13 +242,13 @@ test("IA-INFO-01: the chapter after the time, the subtitle track on a third line
   const { stop } = await startPlugin(activate, { directory, host });
   await host.press("Shift+Tab");
   await host.settle();
-  assert.equal(host.osdPanel, "movie.mp4\n01:23 / 45:00 · 第 2 章 · H.264 1920×1080 · AAC 2 声道\n简体中文");
+  assert.equal(host.osdPanel, "movie.mp4\n01:23 / 45:00 · Chapter 2 · H.264 1920×1080 · AAC 2 ch\n简体中文");
   // The next chapter, and the subtitle turned off by another plugin: read again within a second.
   host.setSource({ position: 754 });
   host.subtitles.selection.target = null;
   host.subtitles.selection.stamp = { ...host.subtitles.selection.stamp, revision: host.subtitles.selection.stamp.revision + 1 };
   await host.settle(1100);
-  assert.equal(host.osdPanel, "movie.mp4\n12:34 / 45:00 · 第二章 标题 · H.264 1920×1080 · AAC 2 声道");
+  assert.equal(host.osdPanel, "movie.mp4\n12:34 / 45:00 · 第二章 标题 · H.264 1920×1080 · AAC 2 ch");
   // The narrowest window: the line is cut to the video area.
   host.setMainWindow({ videoArea: { width: 318, height: 179 } });
   await host.settle(1100);
@@ -251,7 +270,7 @@ test("IA-INFO-01: the chapter list is read once per source", async () => {
   await host.press("Shift+Tab");
   await host.settle();
   assert.equal(host.sent("player.chapters").length, 2);
-  assert.equal(host.osdPanel, "movie.mp4\n01:23 / 45:00 · H.264 1920×1080 · AAC 2 声道");
+  assert.equal(host.osdPanel, "movie.mp4\n01:23 / 45:00 · H.264 1920×1080 · AAC 2 ch");
   await stop();
 });
 
@@ -260,14 +279,14 @@ test("IA-INFO-01: chapter and subtitle names", () => {
     { title: "  ", start: 0 },
     { title: "Two", start: 10 },
   ];
-  assert.equal(currentChapter(list, 5), "第 1 章");
+  assert.equal(currentChapter(list, 5), "Chapter 1");
   assert.equal(currentChapter(list, 10), "Two");
   assert.equal(currentChapter([{ title: "late", start: 30 }], 5), null);
   assert.equal(currentChapter(list, null), null);
   assert.equal(currentChapter([], 5), null);
   assert.equal(subtitleName({ title: "English SDH", language: "en" }), "English SDH");
   assert.equal(subtitleName({ title: "", language: "en" }), "en");
-  assert.equal(subtitleName({ title: "", language: null }), "字幕");
+  assert.equal(subtitleName({ title: "", language: null }), "Subtitles");
   assert.equal(subtitleName(null), null);
   assert.deepEqual([0, 318, 780, 1920].map(briefColumns), [44, 44, 115, 290]);
   const state = { source: "/a.mkv", position: 3, duration: 8 } as unknown as PlayerState;

@@ -15,7 +15,7 @@ const or = (value: unknown) => (value === null || value === undefined || value =
 
 /** The file name of a path, or the last path segment of a URL (its host when it has none). */
 export function fileName(source: string | null) {
-  if (!source) return "未打开媒体";
+  if (!source) return "No media open";
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(source)) {
     try {
       const url = new URL(source);
@@ -28,19 +28,25 @@ export function fileName(source: string | null) {
   return source.split(/[\\/]/).filter(Boolean).at(-1) ?? source;
 }
 
-/** The overlay text (ui-spec §9.2): one fact per line, Chinese labels. */
+/**
+ * The overlay text (ui-spec §9.2): one fact per line.
+ *
+ * i18n: needs r2-api. The lines put words ("channels", "No media open") inside
+ * the panel's arguments, so the overlay stays English until the player can
+ * translate nested arguments.
+ */
 export function describe(state: PlayerState, stats: PlaybackStats) {
   const { video, audio } = stats;
   const size = video?.width && video?.height ? `${video.width}×${video.height}` : "-";
   return [
-    `文件：${fileName(state.source)}`,
-    `时间：${clock(state.position)} / ${clock(state.duration)}`,
-    `视频：${or(video?.codec)} ${size}`,
-    `帧率：${video?.fps ? `${video.fps.toFixed(2)} fps` : "-"}`,
-    `音频：${or(audio?.codec)} ${audio?.sampleRate ? `${audio.sampleRate} Hz` : "-"} ${audio?.channels ? `${audio.channels} 声道` : "-"}`,
-    `后端：${or(stats.backend)}（会话 ${stats.session}）`,
-    `已显示帧：${stats.framesShown}`,
-    `丢帧：${or(stats.framesDropped)}`,
+    `File: ${fileName(state.source)}`,
+    `Time: ${clock(state.position)} / ${clock(state.duration)}`,
+    `Video: ${or(video?.codec)} ${size}`,
+    `Frame rate: ${video?.fps ? `${video.fps.toFixed(2)} fps` : "-"}`,
+    `Audio: ${or(audio?.codec)} ${audio?.sampleRate ? `${audio.sampleRate} Hz` : "-"} ${audio?.channels ? `${audio.channels} channels` : "-"}`,
+    `Backend: ${or(stats.backend)} (session ${stats.session})`,
+    `Frames shown: ${stats.framesShown}`,
+    `Dropped frames: ${or(stats.framesDropped)}`,
   ].join("\n");
 }
 
@@ -103,7 +109,7 @@ export function fit(line: string, columns = BRIEF_COLUMNS) {
 
 /** What the short information adds from other public state (IA-INFO-01); `null` / absent = left out. */
 export interface BriefExtras {
-  /** The current chapter's title (`第 N 章` when it has none). */
+  /** The current chapter's title (`Chapter N` when it has none). */
   chapter?: string | null;
   /** The selected subtitle track's name. */
   subtitle?: string | null;
@@ -117,33 +123,38 @@ export function currentChapter(chapters: readonly { title: string | null; start:
     if (chapter.start <= position + 1e-3) found = index;
   });
   if (found < 0) return null;
-  return chapters[found]!.title?.trim() || `第 ${found + 1} 章`;
+  // i18n: needs r2-api (a word inside the overlay's text)
+  return chapters[found]!.title?.trim() || `Chapter ${found + 1}`;
 }
 
-/** IA-INFO-01: the selected subtitle track's title, else its language, else 「字幕」; `null` when none is selected. */
+/** IA-INFO-01: the selected subtitle track's title, else its language, else "Subtitles"; `null` when none is selected. */
 export function subtitleName(track: { title: string; language: string | null } | null | undefined) {
   if (!track) return null;
-  return track.title.trim() || track.language?.trim() || "字幕";
+  // i18n: needs r2-api (a word inside the overlay's text)
+  return track.title.trim() || track.language?.trim() || "Subtitles";
 }
 
 /**
  * I03 / IA-INFO-01 short information, up to three lines: the file name, then
- * `01:23 / 45:00 · 第二章 · H.264 1920×1080 · AAC 2 声道`, then the selected
+ * `01:23 / 45:00 · Part Two · H.264 1920×1080 · AAC 2 ch`, then the selected
  * subtitle track's name; unknown items (and the subtitle line without a
  * selected track) are left out, codecs use short names, and each line fits
  * the video area (cut with "…").
+ *
+ * i18n: needs r2-api ("Live", "ch", "No media open" are words inside the
+ * overlay's text, and a line is cut to the video width after it is worded).
  */
 export function brief(state: PlayerState, stats: PlaybackStats | null, extras: BriefExtras = {}, columns = BRIEF_COLUMNS) {
-  if (!state.source) return "未打开媒体";
+  if (!state.source) return "No media open";
   const { video, audio } = stats ?? { video: null, audio: null };
   const join = (...parts: (string | null | undefined | false)[]) => parts.filter(Boolean).join(" ");
   const items = [
     state.position !== null && Number.isFinite(state.position)
-      ? `${clock(state.position)} / ${state.duration === null ? "直播" : clock(state.duration)}`
+      ? `${clock(state.position)} / ${state.duration === null ? "Live" : clock(state.duration)}`
       : null,
     extras.chapter,
     join(shortCodec(video?.codec), !!video?.width && !!video?.height && `${video.width}×${video.height}`),
-    join(shortCodec(audio?.codec), !!audio?.channels && `${audio.channels} 声道`),
+    join(shortCodec(audio?.codec), !!audio?.channels && `${audio.channels} ch`),
   ].filter(Boolean);
   const lines = [fit(fileName(state.source), columns)];
   if (items.length) lines.push(fit(items.join(" · "), columns));
@@ -157,7 +168,7 @@ const BRIEF_MS = 3000;
  * Playback information: Tab toggles the full overlay; Shift+Tab shows the
  * short information for three seconds. Both share this plugin's one panel,
  * short first, a blank line between; each refreshes every second while shown.
- * Ctrl+F1 opens 播放属性 (I05) and F1 关于 Vestra Player (I09), tool windows.
+ * Ctrl+F1 opens Playback Properties (I05) and F1 About Vestra Player (I09), tool windows.
  */
 export default async function activate(plugin: Plugin) {
   const panel = plugin.osd.panel();
@@ -182,6 +193,8 @@ export default async function activate(plugin: Plugin) {
       briefShown() ? brief(plugin.player.state, stats, extras(), briefColumns(plugin.window.state.videoArea.width)) : null,
       shown && stats ? describe(plugin.player.state, stats) : null,
     ].filter((block): block is string => block !== null);
+    // i18n: needs r2-api (the overlay is composed here; see describe and brief)
+    // i18n-ignore
     panel.set(blocks.length ? blocks.join("\n\n") : null);
   };
   /** The chapter list (once per source) and the subtitle selection (no event exists: read each time). */
@@ -213,7 +226,7 @@ export default async function activate(plugin: Plugin) {
   };
   plugin.commands.add({
     id: "info.toggle",
-    path: ["播放信息"],
+    path: ["Playback Info"],
     order: 810,
     group: "windows",
     bindings: ["Tab"],
@@ -227,7 +240,7 @@ export default async function activate(plugin: Plugin) {
   });
   plugin.commands.add({
     id: "info.brief",
-    title: "简要信息",
+    title: "Brief Info",
     bindings: ["Shift+Tab"],
     run: () => {
       // Each press restarts the three seconds.
@@ -243,10 +256,10 @@ export default async function activate(plugin: Plugin) {
       refresh();
     },
   });
-  const showProperties = propertiesWindow(plugin, (text) => void plugin.osd.show(text).catch(() => {}));
+  const showProperties = propertiesWindow(plugin);
   plugin.commands.add({
     id: "info.properties",
-    path: ["播放属性…"],
+    path: ["Playback Properties…"],
     order: 811,
     group: "windows",
     bindings: ["Ctrl+F1"],
@@ -254,11 +267,11 @@ export default async function activate(plugin: Plugin) {
   });
   plugin.commands.add({
     id: "info.about",
-    path: ["关于 Vestra Player…"],
+    path: ["About Vestra Player…"],
     order: 880,
     group: "windows",
     bindings: ["F1"],
-    run: aboutWindow(plugin, (text) => void plugin.osd.show(text).catch(() => {})),
+    run: aboutWindow(plugin),
   });
   plugin.onDispose(() => {
     clearInterval(timer);

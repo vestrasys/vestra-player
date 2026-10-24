@@ -3,9 +3,13 @@ import type { AppInfo, PlaybackStats, PlayerState } from "@vestra-player/sdk";
 import { API_VERSION, ffmpegVersion, vestraVersion } from "./about.ts";
 
 /**
- * I05 播放属性: the rows of the three pages and their plain text. A row is a
- * group heading (`heading`, no value) or a `label：value` line; a page without
- * content is one row with an empty label (「未打开媒体」).
+ * I05 Playback Properties: the rows of the three pages and their plain text. A
+ * row is a group heading (`heading`, no value) or a `label: value` line; a page
+ * without content is one row with an empty label ("No media open").
+ *
+ * i18n: needs r2-api. The rows mix fixed words (labels, units, "Not used") with
+ * data and are composed here, so they stay English until the player can
+ * translate such window lists; the window's own texts are @tr.
  */
 export interface Row {
   label: string;
@@ -34,7 +38,7 @@ function rows(groups: [string, [string, string | number | null | undefined][]][]
       const text = cut(value === null || value === undefined || value === "" ? "-" : String(value));
       total += text.length;
       if (total > PAGE_MAX) {
-        out.push({ label: "", value: "（其余内容过长，已省略）", heading: false });
+        out.push({ label: "", value: "(The rest is too long and was left out)", heading: false });
         return out;
       }
       out.push({ label, value: text, heading: false });
@@ -45,14 +49,15 @@ function rows(groups: [string, [string, string | number | null | undefined][]][]
 
 export const message = (text: string): Row[] => [{ label: "", value: text, heading: false }];
 
-/** `键：值` lines, a blank line before each group but the first. */
+/** `label: value` lines, a blank line before each group but the first. */
+// i18n: needs r2-api (the copied / saved text)
 export function pageText(page: Row[]) {
   const lines: string[] = [];
   for (const row of page) {
     if (row.heading) {
       if (lines.length) lines.push("");
       lines.push(row.label);
-    } else lines.push(row.label ? `${row.label}：${row.value}` : row.value);
+    } else lines.push(row.label ? `${row.label}: ${row.value}` : row.value);
   }
   return `${lines.join("\n")}\n`;
 }
@@ -69,9 +74,9 @@ const join = (...parts: (string | null | undefined)[]) => parts.filter(Boolean).
 /** Bits and kind of an FFmpeg sample format (`floatp`, `s16`, `fltp`…). */
 export function sampleFormat(format: string | null | undefined) {
   if (!format) return null;
-  const bits: Record<string, string> = { u8: "8 位", s16: "16 位", s32: "32 位", s64: "64 位", flt: "32 位浮点", float: "32 位浮点", dbl: "64 位浮点", double: "64 位浮点" };
+  const bits: Record<string, string> = { u8: "8-bit", s16: "16-bit", s32: "32-bit", s64: "64-bit", flt: "32-bit float", float: "32-bit float", dbl: "64-bit float", double: "64-bit float" };
   const name = bits[format.replace(/p$/, "")];
-  return name ? `${name}（${format}）` : format;
+  return name ? `${name} (${format})` : format;
 }
 
 /** `h:mm:ss`, or `mm:ss` below one hour. */
@@ -85,53 +90,53 @@ export function clock(seconds: number | null | undefined) {
 
 export function bytes(n: number | null | undefined) {
   if (n === null || n === undefined || !Number.isFinite(n)) return null;
-  const units = ["字节", "KB", "MB", "GB", "TB"];
+  const units = ["bytes", "KB", "MB", "GB", "TB"];
   let value = n;
   let unit = 0;
   while (value >= 1024 && unit < units.length - 1) {
     value /= 1024;
     unit++;
   }
-  const exact = `${n.toLocaleString("en-US")} 字节`;
-  return unit ? `${value.toFixed(2)} ${units[unit]}（${exact}）` : exact;
+  const exact = `${n.toLocaleString("en-US")} bytes`;
+  return unit ? `${value.toFixed(2)} ${units[unit]} (${exact})` : exact;
 }
 
 /** mpv `hwdec-current` as reported: the decoder in use (`videotoolbox`, `d3d11va`…), `"no"` = software. */
 export function hwdec(value: string | null | undefined) {
   if (!value) return null;
-  return value === "no" ? "未使用" : value;
+  return value === "no" ? "Not used" : value;
 }
 
-/** 播放信息: what the player reports for the session now (`player.stats()`, refreshed every second). */
+/** Playback page: what the player reports for the session now (`player.stats()`, refreshed every second). */
 export function playbackPage(state: PlayerState, stats: PlaybackStats | null): Row[] {
-  if (!state.source) return message("未打开媒体");
-  if (!stats) return message("正在读取…");
+  if (!state.source) return message("No media open");
+  if (!stats) return message("Reading…");
   const { video, audio } = stats;
   return rows([
-    ["视频", video ? [
-      ["解码器", video.decoder],
-      ["硬件解码", hwdec(video.hwdec)],
-      ["输入格式", join(video.codec, video.pixelFormat, video.colorspace)],
-      ["尺寸", size(video.width, video.height) && `${size(video.width, video.height)} → ${size(video.displayWidth, video.displayHeight) ?? "-"}`],
-      ["源帧率", fps(video.fps)],
-      ["当前帧率", fps(video.displayFps)],
-      ["视频码率", kbps(video.bitrate)],
+    ["Video", video ? [
+      ["Decoder", video.decoder],
+      ["Hardware decoding", hwdec(video.hwdec)],
+      ["Input format", join(video.codec, video.pixelFormat, video.colorspace)],
+      ["Size", size(video.width, video.height) && `${size(video.width, video.height)} → ${size(video.displayWidth, video.displayHeight) ?? "-"}`],
+      ["Source frame rate", fps(video.fps)],
+      ["Display frame rate", fps(video.displayFps)],
+      ["Video bitrate", kbps(video.bitrate)],
     ] : []],
-    ["音频", audio ? [
-      ["解码器", audio.decoder],
-      ["编码", audio.codec],
-      ["采样率", audio.sampleRate ? `${audio.sampleRate} Hz` : null],
-      ["采样位数", sampleFormat(audio.format)],
-      ["声道数", audio.channels ? `${audio.channels}${audio.channelLayout ? `（${audio.channelLayout}）` : ""}` : audio.channelLayout],
-      ["音频码率", kbps(audio.bitrate)],
+    ["Audio", audio ? [
+      ["Decoder", audio.decoder],
+      ["Codec", audio.codec],
+      ["Sample rate", audio.sampleRate ? `${audio.sampleRate} Hz` : null],
+      ["Sample format", sampleFormat(audio.format)],
+      ["Channels", audio.channels ? `${audio.channels}${audio.channelLayout ? ` (${audio.channelLayout})` : ""}` : audio.channelLayout],
+      ["Audio bitrate", kbps(audio.bitrate)],
     ] : []],
-    ["其它", [
-      ["后端", stats.backend],
-      ["会话", stats.session],
-      ["已显示帧", stats.framesShown],
-      ["丢帧", stats.framesDropped],
-      ["音画同步偏差", stats.avSyncMs === null || stats.avSyncMs === undefined ? null : `${stats.avSyncMs.toFixed(1)} ms`],
-      ["缓冲时长", stats.cacheSeconds === null || stats.cacheSeconds === undefined ? null : `${stats.cacheSeconds.toFixed(1)} 秒`],
+    ["Other", [
+      ["Backend", stats.backend],
+      ["Session", stats.session],
+      ["Frames shown", stats.framesShown],
+      ["Dropped frames", stats.framesDropped],
+      ["A/V sync offset", stats.avSyncMs === null || stats.avSyncMs === undefined ? null : `${stats.avSyncMs.toFixed(1)} ms`],
+      ["Cache", stats.cacheSeconds === null || stats.cacheSeconds === undefined ? null : `${stats.cacheSeconds.toFixed(1)} s`],
     ]],
   ]);
 }
@@ -149,10 +154,10 @@ interface ProbeStream {
   disposition?: Record<string, number>; tags?: Record<string, string>;
 }
 
-const TYPES: Record<string, string> = { video: "视频", audio: "音频", subtitle: "字幕", data: "数据", attachment: "附件" };
+const TYPES: Record<string, string> = { video: "Video", audio: "Audio", subtitle: "Subtitles", data: "Data", attachment: "Attachment" };
 const TAGS: Record<string, string> = {
-  title: "标题", artist: "艺术家", album_artist: "专辑艺术家", album: "专辑", date: "日期", genre: "流派",
-  track: "音轨号", comment: "注释", composer: "作曲", copyright: "版权", encoder: "编码器", creation_time: "创建时间",
+  title: "Title", artist: "Artist", album_artist: "Album artist", album: "Album", date: "Date", genre: "Genre",
+  track: "Track", comment: "Comment", composer: "Composer", copyright: "Copyright", encoder: "Encoder", creation_time: "Creation time",
 };
 /** `30000/1001` → 29.97 fps. */
 const rate = (text: string | undefined) => {
@@ -162,71 +167,71 @@ const rate = (text: string | undefined) => {
 const tag = (tags: Record<string, string> | undefined, name: string) =>
   tags && Object.entries(tags).find(([key]) => key.toLowerCase() === name)?.[1];
 
-/** 文件信息 of a local file: source, container, every stream, chapters, tags, embedded resources. */
-export function filePage(path: string, file: { size: number; mtime: Date } | null, probe: Probe): Row[] {
+/** File page of a local file: source, container, every stream, chapters, tags, embedded resources; dates in `locale`. */
+export function filePage(path: string, file: { size: number; mtime: Date } | null, probe: Probe, locale = "en"): Row[] {
   const format = probe.format ?? {};
   const streams = probe.streams ?? [];
   const embedded = streams.filter((s) => s.codec_type === "attachment" || s.disposition?.attached_pic);
-  const flags = (s: ProbeStream) => [s.disposition?.default ? "默认" : null, s.disposition?.forced ? "强制" : null].filter(Boolean).join("、") || "无";
+  const flags = (s: ProbeStream) => [s.disposition?.default ? "Default" : null, s.disposition?.forced ? "Forced" : null].filter(Boolean).join(", ") || "None";
   const streamGroup = (s: ProbeStream): [string, [string, string | number | null | undefined][]] => [
-    `流 #${s.index ?? "?"}：${TYPES[s.codec_type ?? ""] ?? s.codec_type ?? "未知"}`,
+    `Stream #${s.index ?? "?"}: ${TYPES[s.codec_type ?? ""] ?? s.codec_type ?? "Unknown"}`,
     [
-      ["编码", join(s.codec_long_name ?? s.codec_name, s.profile)],
-      ["语言", tag(s.tags, "language")],
-      ["标题", tag(s.tags, "title")],
-      ["标记", flags(s)],
+      ["Codec", join(s.codec_long_name ?? s.codec_name, s.profile)],
+      ["Language", tag(s.tags, "language")],
+      ["Title", tag(s.tags, "title")],
+      ["Flags", flags(s)],
       ...(s.codec_type === "video" ? ([
-        ["尺寸", size(s.width, s.height)],
-        ["帧率", rate(s.avg_frame_rate) ?? rate(s.r_frame_rate)],
-        ["像素格式", s.pix_fmt],
-        ["色彩空间", s.color_space],
-        ["码率", kbps(s.bit_rate)],
+        ["Size", size(s.width, s.height)],
+        ["Frame rate", rate(s.avg_frame_rate) ?? rate(s.r_frame_rate)],
+        ["Pixel format", s.pix_fmt],
+        ["Color space", s.color_space],
+        ["Bitrate", kbps(s.bit_rate)],
       ] as [string, string | null | undefined][]) : []),
       ...(s.codec_type === "audio" ? ([
-        ["采样率", s.sample_rate ? `${s.sample_rate} Hz` : null],
-        ["声道", s.channels ? `${s.channels}${s.channel_layout ? `（${s.channel_layout}）` : ""}` : null],
-        ["采样格式", sampleFormat(s.sample_fmt)],
-        ["码率", kbps(s.bit_rate)],
+        ["Sample rate", s.sample_rate ? `${s.sample_rate} Hz` : null],
+        ["Channels", s.channels ? `${s.channels}${s.channel_layout ? ` (${s.channel_layout})` : ""}` : null],
+        ["Sample format", sampleFormat(s.sample_fmt)],
+        ["Bitrate", kbps(s.bit_rate)],
       ] as [string, string | null | undefined][]) : []),
     ],
   ];
   const tags = Object.entries(format.tags ?? {});
   return rows([
-    ["来源", [
-      ["路径", path],
-      ["文件大小", bytes(file?.size)],
-      ["修改时间", file ? file.mtime.toLocaleString("zh-CN", { hour12: false }) : null],
+    ["Source", [
+      ["Path", path],
+      ["File size", bytes(file?.size)],
+      ["Modified", file ? file.mtime.toLocaleString(locale, { hour12: false }) : null],
     ]],
-    ["容器", [
-      ["格式", format.format_long_name ? `${format.format_long_name}（${format.format_name}）` : format.format_name],
-      ["总时长", clock(Number(format.duration))],
-      ["总码率", kbps(format.bit_rate)],
-      ["流数量", streams.length],
-      ["章节数", (probe.chapters ?? []).length],
+    ["Container", [
+      ["Format", format.format_long_name ? `${format.format_long_name} (${format.format_name})` : format.format_name],
+      ["Duration", clock(Number(format.duration))],
+      ["Overall bitrate", kbps(format.bit_rate)],
+      ["Streams", streams.length],
+      ["Chapters", (probe.chapters ?? []).length],
     ]],
     ...streams.filter((s) => !embedded.includes(s)).map(streamGroup),
-    ["元数据", tags.map(([key, value]) => [TAGS[key.toLowerCase()] ?? key, value] as [string, string])],
-    ["内嵌资源", embedded.map((s) =>
+    ["Metadata", tags.map(([key, value]) => [TAGS[key.toLowerCase()] ?? key, value] as [string, string])],
+    ["Embedded resources", embedded.map((s) =>
       s.codec_type === "attachment"
-        ? [`附件 #${s.index}`, join(tag(s.tags, "filename") ?? "（无文件名）", tag(s.tags, "mimetype"))] as [string, string | null]
-        : [`封面 #${s.index}`, join(s.codec_name, size(s.width, s.height))] as [string, string | null])],
+        ? [`Attachment #${s.index}`, join(tag(s.tags, "filename") ?? "(no file name)", tag(s.tags, "mimetype"))] as [string, string | null]
+        : [`Cover #${s.index}`, join(s.codec_name, size(s.width, s.height))] as [string, string | null])],
   ]);
 }
 
-/** 文件信息 of a network source: only what the player reports. */
+/** File page of a network source: only what the player reports. */
 export function remotePage(state: PlayerState, stats: PlaybackStats | null): Row[] {
   const { video, audio } = stats ?? { video: null, audio: null };
   return [
-    ...message("网络来源：只显示播放器报告的信息"),
+    ...message("Network source: only what the player reports"),
     ...rows([
-      ["来源", [
-        ["地址", state.source],
-        ["总时长", state.duration === null ? "直播" : clock(state.duration)],
+      ["Source", [
+        ["Address", state.source],
+        ["Duration", state.duration === null ? "Live" : clock(state.duration)],
       ]],
-      ["流", [
-        ["视频", video ? join(video.codec, size(video.width, video.height), fps(video.fps)) : null],
-        ["音频", audio ? join(audio.codec, audio.sampleRate ? `${audio.sampleRate} Hz` : null, audio.channels ? `${audio.channels} 声道` : null) : null],
-        ["音轨数", state.audioTracks?.length ?? null],
+      ["Streams", [
+        ["Video", video ? join(video.codec, size(video.width, video.height), fps(video.fps)) : null],
+        ["Audio", audio ? join(audio.codec, audio.sampleRate ? `${audio.sampleRate} Hz` : null, audio.channels ? `${audio.channels} channels` : null) : null],
+        ["Audio tracks", state.audioTracks?.length ?? null],
       ]],
     ]),
   ];
@@ -234,7 +239,7 @@ export function remotePage(state: PlayerState, stats: PlaybackStats | null): Row
 
 /** What `sysinfo.ts` read; every field may be unknown. */
 export interface SystemFacts {
-  /** `macOS 26.2（25C56）`, `Windows 11 23H2（22631.4460）`. */
+  /** `macOS 26.2 (25C56)`, `Windows 11 23H2 (22631.4460)`. */
   os: string | null;
   model: string | null;
   cpu: string | null;
@@ -243,30 +248,31 @@ export interface SystemFacts {
   displays: string[];
 }
 
-/** 系统信息. Vestra Player, mpv and FFmpeg versions come from the core (`plugin.app`); one it does not know shows 未知. */
+/** System page. Vestra Player, mpv and FFmpeg versions come from the core (`plugin.app`); one it does not know shows Unknown. */
 export function systemPage(app: AppInfo, facts: SystemFacts | null): Row[] {
   const gb = (n: number | null) => (n === null ? null : `${(n / 1024 ** 3).toFixed(1)} GB`);
   return rows([
-    ["播放器", [
-      ["Vestra Player 版本", vestraVersion(app)],
-      ["插件 API 版本", API_VERSION],
-      ["mpv 版本", app.components.mpv || "未知"],
-      ["FFmpeg 版本", ffmpegVersion(app)],
+    ["Player", [
+      ["Vestra Player version", vestraVersion(app)],
+      ["Plugin API version", API_VERSION],
+      ["mpv version", app.components.mpv || "Unknown"],
+      ["FFmpeg version", ffmpegVersion(app) || "Unknown"],
     ]],
-    ["系统", facts ? [
-      ["系统版本", facts.os],
-      ["机型", facts.model],
+    ["System", facts ? [
+      ["System version", facts.os],
+      ["Model", facts.model],
       ["CPU", facts.cpu],
-      ["内存总量", gb(facts.memory)],
-      ["可用内存", gb(facts.freeMemory)],
-      ...(facts.displays.length ? facts.displays.map((d, i) => [facts.displays.length > 1 ? `显示器 ${i + 1}` : "显示器", d] as [string, string]) : [["显示器", null] as [string, null]]),
-    ] : [["状态", "正在读取…"]]],
+      ["Total memory", gb(facts.memory)],
+      ["Free memory", gb(facts.freeMemory)],
+      ...(facts.displays.length ? facts.displays.map((d, i) => [facts.displays.length > 1 ? `Display ${i + 1}` : "Display", d] as [string, string]) : [["Display", null] as [string, null]]),
+    ] : [["Status", "Reading…"]]],
   ]);
 }
 
-/** `movie 信息.txt`, or `Vestra Player 信息.txt` without media. */
+/** `movie info.txt`, or `Vestra Player info.txt` without media. */
+// i18n: needs r2-api (saveFile fileName: a translated word around data)
 export function saveName(source: string | null) {
-  if (!source) return "Vestra Player 信息.txt";
+  if (!source) return "Vestra Player info.txt";
   let name = source;
   if (isUrl(source)) {
     try {
@@ -277,7 +283,7 @@ export function saveName(source: string | null) {
     }
   } else name = basename(source);
   const stem = basename(name, extname(name)).replace(/[\\/:*?"<>|]/g, "_") || "Vestra Player";
-  return `${stem} 信息.txt`;
+  return `${stem} info.txt`;
 }
 
 export { isUrl };

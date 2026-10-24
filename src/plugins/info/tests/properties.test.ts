@@ -32,7 +32,7 @@ const probe: Probe = {
   chapters: [{}, {}, {}],
 };
 
-// 系统信息 as the player reports it (`plugin.app.system()`): one macOS and one Windows machine.
+// The System page as the player reports it (`plugin.app.system()`): one macOS and one Windows machine.
 const mac = {
   os: "macos" as const, name: "macOS", version: "15.2", build: "24C101", model: "Mac14,2", arch: "aarch64",
   displays: [{ name: "Color LCD", width: 2940, height: 1912, scale: 2, refreshRate: 60, primary: true }],
@@ -58,7 +58,7 @@ const rows = (host: TestHost) => host.window("properties").props.rows as Shown[]
 const value = (host: TestHost, label: string) => rows(host).find((r) => r.label === label && !r.heading)?.value;
 const headings = (host: TestHost) => rows(host).filter((r) => r.heading).map((r) => r.label);
 
-async function start(source: string | null = "/videos/movie.mkv", dataDirectory?: string, app?: TestHost["app"]) {
+async function start(source: string | null = "/videos/movie.mkv", dataDirectory?: string, app?: TestHost["app"], locale?: "zh-Hans") {
   const host = new TestHost();
   if (app) host.app = app;
   host.systemInfo = structuredClone(mac);
@@ -67,7 +67,7 @@ async function start(source: string | null = "/videos/movie.mkv", dataDirectory?
     host.openElsewhere(source);
     host.setSource({ duration: 5400, position: 83 });
   }
-  const plugin = await startPlugin(activate, { directory, host, ...(dataDirectory ? { dataDirectory } : {}) });
+  const plugin = await startPlugin(activate, { directory, host, ...(dataDirectory ? { dataDirectory } : {}), ...(locale ? { locale } : {}) });
   const stop = async () => {
     running.delete(stop);
     await plugin.stop();
@@ -81,10 +81,10 @@ test.afterEach(async () => {
   for (const stop of [...running]) await stop();
 });
 
-test("I05: top-level 播放属性… (811, windows, Ctrl+F1) opens the window; a second Ctrl+F1 keeps it open", async () => {
+test("I05: top-level Playback Properties… (811, windows, Ctrl+F1) opens the window; a second Ctrl+F1 keeps it open", async () => {
   const { host, stop } = await start();
   assert.deepEqual(host.command("info.properties").declaration, {
-    title: "播放属性…", path: ["播放属性…"], order: 811, group: "windows", radio: false, bindings: ["Ctrl+F1"], focus: null, repeat: false,
+    title: "Playback Properties…", path: ["Playback Properties…"], order: 811, group: "windows", radio: false, bindings: ["Ctrl+F1"], focus: null, repeat: false,
   });
   assert.deepEqual(host.conflicts, []);
   await host.press("Ctrl+F1");
@@ -101,60 +101,60 @@ test("I05: top-level 播放属性… (811, windows, Ctrl+F1) opens the window; a
   assert.equal(host.window("properties").visible, true, "brought to the front, not closed");
   window.emit("close-window");
   await host.settle();
-  assert.throws(() => host.window("properties"), "关闭 closes the window");
+  assert.throws(() => host.window("properties"), "Close closes the window");
   await stop();
 });
 
-test("I05 hwdec: the decoder in use, 未使用 for software, unknown when not reported", () => {
+test("I05 hwdec: the decoder in use, Not used for software, unknown when not reported", () => {
   assert.equal(hwdec("videotoolbox"), "videotoolbox");
   assert.equal(hwdec("d3d11va"), "d3d11va");
-  assert.equal(hwdec("no"), "未使用");
+  assert.equal(hwdec("no"), "Not used");
   assert.equal(hwdec(null), null);
   assert.equal(hwdec(undefined), null);
 });
 
-test("I05 播放信息: the extended stats, hardware decoding as reported, refreshed every second", async () => {
+test("I05 Playback: the extended stats, hardware decoding as reported, refreshed every second", async () => {
   const { host, stop } = await start();
   await host.command("info.properties").run();
   await host.settle();
   assert.equal(host.window("properties").props["tab-index"], 0);
   assert.equal(host.window("properties").props["can-refresh"], false);
-  assert.deepEqual(headings(host), ["视频", "音频", "其它"]);
-  assert.equal(value(host, "解码器"), "h264");
-  assert.equal(value(host, "硬件解码"), "videotoolbox");
-  assert.equal(value(host, "输入格式"), "H.264 / AVC · yuv420p · bt.709");
-  assert.equal(value(host, "尺寸"), "1920×1080 → 1920×800");
-  assert.equal(value(host, "源帧率"), "23.976 fps");
-  assert.equal(value(host, "当前帧率"), "-");
-  assert.equal(value(host, "视频码率"), "4500 kbps");
-  assert.equal(value(host, "采样位数"), "32 位浮点（floatp）");
-  assert.equal(value(host, "声道数"), "2（stereo）");
-  assert.equal(value(host, "音画同步偏差"), "-3.3 ms");
-  assert.equal(value(host, "缓冲时长"), "12.4 秒");
+  assert.deepEqual(headings(host), ["Video", "Audio", "Other"]);
+  assert.equal(value(host, "Decoder"), "h264");
+  assert.equal(value(host, "Hardware decoding"), "videotoolbox");
+  assert.equal(value(host, "Input format"), "H.264 / AVC · yuv420p · bt.709");
+  assert.equal(value(host, "Size"), "1920×1080 → 1920×800");
+  assert.equal(value(host, "Source frame rate"), "23.976 fps");
+  assert.equal(value(host, "Display frame rate"), "-");
+  assert.equal(value(host, "Video bitrate"), "4500 kbps");
+  assert.equal(value(host, "Sample format"), "32-bit float (floatp)");
+  assert.equal(value(host, "Channels"), "2 (stereo)");
+  assert.equal(value(host, "A/V sync offset"), "-3.3 ms");
+  assert.equal(value(host, "Cache"), "12.4 s");
   host.stats = { ...stats, framesShown: 500, video: { ...stats.video, hwdec: "no" } };
   await host.settle(1100);
-  assert.equal(value(host, "已显示帧"), "500");
-  assert.equal(value(host, "硬件解码"), "未使用", "software decoding after a fallback");
+  assert.equal(value(host, "Frames shown"), "500");
+  assert.equal(value(host, "Hardware decoding"), "Not used", "software decoding after a fallback");
   await stop();
 });
 
-test("I05: without media 播放信息 and 文件信息 say 未打开媒体; 系统信息 still shows", async () => {
+test("I05: without media Playback and File say No media open; System still shows", async () => {
   const { host, stop } = await start(null);
   await host.command("info.properties").run();
   await host.settle();
-  assert.deepEqual(rows(host), [{ label: "", value: "未打开媒体", heading: false }]);
+  assert.deepEqual(rows(host), [{ label: "", value: "No media open", heading: false }]);
   const window = host.window("properties");
   window.emit("tab-changed", 1);
   await host.settle();
-  assert.deepEqual(rows(host), [{ label: "", value: "未打开媒体", heading: false }]);
+  assert.deepEqual(rows(host), [{ label: "", value: "No media open", heading: false }]);
   assert.equal(host.tools.calls.length, 0);
   window.emit("tab-changed", 2);
-  await until(() => value(host, "系统版本") !== undefined);
-  assert.deepEqual(headings(host), ["播放器", "系统"]);
+  await until(() => value(host, "System version") !== undefined);
+  assert.deepEqual(headings(host), ["Player", "System"]);
   await stop();
 });
 
-test("I05 文件信息: ffprobe through plugin.tools; streams, chapters, tags and embedded resources", async () => {
+test("I05 File: ffprobe through plugin.tools; streams, chapters, tags and embedded resources", async () => {
   const media = await mkdtemp(join(tmpdir(), "info-media-"));
   const path = join(media, "movie.mkv");
   await writeFile(path, Buffer.alloc(2048));
@@ -163,22 +163,23 @@ test("I05 文件信息: ffprobe through plugin.tools; streams, chapters, tags an
   try {
     await host.command("info.properties").run();
     host.window("properties").emit("tab-changed", 1);
-    await until(() => value(host, "路径") === path);
+    await until(() => value(host, "Path") === path);
     assert.deepEqual(host.tools.calls, [{ tool: "ffprobe", args: ["-v", "error", "-show_format", "-show_streams", "-show_chapters", "-of", "json", path] }]);
     assert.equal(host.window("properties").props["can-refresh"], true);
-    assert.deepEqual(headings(host), ["来源", "容器", "流 #0：视频", "流 #1：音频", "流 #2：字幕", "元数据", "内嵌资源"]);
-    assert.equal(value(host, "文件大小"), "2.00 KB（2,048 字节）");
-    assert.equal(value(host, "格式"), "Matroska / WebM（matroska,webm）");
-    assert.equal(value(host, "总时长"), "1:30:00");
-    assert.equal(value(host, "章节数"), "3");
-    assert.equal(value(host, "附件 #3"), "font.ttf · font/ttf");
-    assert.equal(value(host, "封面 #4"), "mjpeg · 600×600");
-    assert.equal(value(host, "艺术家"), "某人");
+    assert.deepEqual(headings(host), ["Source", "Container", "Stream #0: Video", "Stream #1: Audio", "Stream #2: Subtitles", "Metadata", "Embedded resources"]);
+    assert.equal(value(host, "File size"), "2.00 KB (2,048 bytes)");
+    assert.equal(value(host, "Format"), "Matroska / WebM (matroska,webm)");
+    assert.equal(value(host, "Duration"), "1:30:00");
+    assert.equal(value(host, "Chapters"), "3");
+    assert.equal(value(host, "Attachment #3"), "font.ttf · font/ttf");
+    assert.equal(value(host, "Cover #4"), "mjpeg · 600×600");
+    assert.equal(value(host, "Artist"), "某人");
+    assert.match(value(host, "Modified")!, /^\d{1,2}\/\d{1,2}\/\d{4}, \d{2}:\d{2}:\d{2}$/, "dates in the interface language (English)");
     const text = pageText(rows(host) as Row[]);
-    assert.match(text, /\n\n流 #1：音频\n编码：aac\n语言：jpn\n标题：日语\n标记：默认\n采样率：48000 Hz\n声道：6（5\.1\(side\)）\n采样格式：32 位浮点（fltp）\n/);
-    assert.match(text, /流 #0：视频\n[^]*帧率：23\.976 fps\n/);
-    assert.match(text, /流 #2：字幕\n编码：ass\n语言：chi\n标题：-\n标记：强制\n/);
-    // Read once per source; 刷新 reads again.
+    assert.match(text, /\n\nStream #1: Audio\nCodec: aac\nLanguage: jpn\nTitle: 日语\nFlags: Default\nSample rate: 48000 Hz\nChannels: 6 \(5\.1\(side\)\)\nSample format: 32-bit float \(fltp\)\n/);
+    assert.match(text, /Stream #0: Video\n[^]*Frame rate: 23\.976 fps\n/);
+    assert.match(text, /Stream #2: Subtitles\nCodec: ass\nLanguage: chi\nTitle: -\nFlags: Forced\n/);
+    // Read once per source; Refresh reads again.
     host.window("properties").emit("tab-changed", 0);
     host.window("properties").emit("tab-changed", 1);
     await host.settle();
@@ -191,7 +192,7 @@ test("I05 文件信息: ffprobe through plugin.tools; streams, chapters, tags an
   }
 });
 
-test("I05 文件信息: a missing ffprobe, a failure; a source change aborts the old read and reads the new source", async () => {
+test("I05 File: a missing ffprobe, a failure; a source change aborts the old read and reads the new source", async () => {
   const media = await mkdtemp(join(tmpdir(), "info-media-"));
   const [a, b] = [join(media, "a.mkv"), join(media, "b.mkv")];
   await writeFile(a, "a");
@@ -200,12 +201,12 @@ test("I05 文件信息: a missing ffprobe, a failure; a source change aborts the
   try {
     await host.command("info.properties").run();
     host.window("properties").emit("tab-changed", 1);
-    await until(() => rows(host)[0]?.value === "无法读取文件信息（未找到 ffprobe）");
+    await until(() => rows(host)[0]?.value === "Cannot read file information (ffprobe not found)");
     host.tools.handle("ffprobe", () => {
       throw new HostError("failed", "Invalid data found when processing input");
     });
     host.window("properties").emit("refresh");
-    await until(() => rows(host)[0]?.value === "无法读取文件信息：Invalid data found when processing input");
+    await until(() => rows(host)[0]?.value === "Cannot read file information: Invalid data found when processing input");
     let release!: () => void;
     const held = new Promise<void>((done) => (release = done));
     host.tools.handle("ffprobe", async (args) => {
@@ -215,92 +216,92 @@ test("I05 文件信息: a missing ffprobe, a failure; a source change aborts the
     const before = host.tools.calls.length;
     host.window("properties").emit("refresh");
     await until(() => host.tools.calls.length === before + 1);
-    assert.equal(rows(host)[0]?.value, "正在读取…");
+    assert.equal(rows(host)[0]?.value, "Reading…");
     host.openElsewhere(b);
-    await until(() => value(host, "格式") === "new");
+    await until(() => value(host, "Format") === "new");
     release();
     await host.settle(50);
-    assert.equal(value(host, "格式"), "new", "the aborted read of a never shows");
-    assert.equal(value(host, "路径"), b);
+    assert.equal(value(host, "Format"), "new", "the aborted read of a never shows");
+    assert.equal(value(host, "Path"), b);
   } finally {
     await stop();
     await rm(media, { recursive: true, force: true });
   }
 });
 
-test("I05 文件信息: a network source shows what the player reports, without ffprobe", async () => {
+test("I05 File: a network source shows what the player reports, without ffprobe", async () => {
   const { host, stop } = await start("https://cdn.test/live/stream.m3u8");
   host.tools.handle("ffprobe", () => ({ stdout: "{}" }));
   await host.command("info.properties").run();
   host.window("properties").emit("tab-changed", 1);
   await host.settle();
-  assert.equal(rows(host)[0]!.value, "网络来源：只显示播放器报告的信息");
-  assert.equal(value(host, "地址"), "https://cdn.test/live/stream.m3u8");
-  assert.equal(value(host, "视频"), "H.264 / AVC · 1920×1080 · 23.976 fps");
+  assert.equal(rows(host)[0]!.value, "Network source: only what the player reports");
+  assert.equal(value(host, "Address"), "https://cdn.test/live/stream.m3u8");
+  assert.equal(value(host, "Video"), "H.264 / AVC · 1920×1080 · 23.976 fps");
   assert.equal(host.tools.calls.length, 0);
   await stop();
 });
 
-test("I05 系统信息: system name, model and displays from plugin.app.system(); CPU and memory from os; versions from plugin.app", async () => {
+test("I05 System: system name, model and displays from plugin.app.system(); CPU and memory from os; versions from plugin.app", async () => {
   const { host, stop } = await start();
   await host.command("info.properties").run();
   host.window("properties").emit("tab-changed", 2);
-  await until(() => value(host, "系统版本") === "macOS 15.2（24C101）");
-  assert.equal(value(host, "Vestra Player 版本"), "0.1.0（构建 test）");
-  assert.equal(value(host, "插件 API 版本"), "vestra/1");
-  assert.equal(value(host, "mpv 版本"), "mpv 0.41.0");
-  assert.equal(value(host, "FFmpeg 版本"), "7.1");
-  assert.equal(value(host, "机型"), "Mac14,2");
-  assert.match(value(host, "CPU")!, /^.+（\d+ 核）$/);
-  assert.match(value(host, "内存总量")!, /^\d+\.\d GB$/);
-  assert.match(value(host, "可用内存")!, /^\d+\.\d GB$/);
-  assert.equal(value(host, "显示器"), "Color LCD · 2940 x 1912 · 1470 x 956 @ 60 Hz");
+  await until(() => value(host, "System version") === "macOS 15.2 (24C101)");
+  assert.equal(value(host, "Vestra Player version"), "0.1.0 (build test)");
+  assert.equal(value(host, "Plugin API version"), "vestra/1");
+  assert.equal(value(host, "mpv version"), "mpv 0.41.0");
+  assert.equal(value(host, "FFmpeg version"), "7.1");
+  assert.equal(value(host, "Model"), "Mac14,2");
+  assert.match(value(host, "CPU")!, /^.+ \(\d+ cores\)$/);
+  assert.match(value(host, "Total memory")!, /^\d+\.\d GB$/);
+  assert.match(value(host, "Free memory")!, /^\d+\.\d GB$/);
+  assert.equal(value(host, "Display"), "Color LCD · 2940 x 1912 · 1470 x 956 @ 60 Hz");
   assert.equal(host.sent("app.system").length, 1, "read once per opening");
   assert.equal(host.tools.calls.length, 0, "no external programs");
   await stop();
 });
 
-test("I05 系统信息: a Windows machine; several displays are numbered; a failed read leaves the system rows unknown", async () => {
+test("I05 System: a Windows machine; several displays are numbered; a failed read leaves the system rows unknown", async () => {
   const { host, stop } = await start(null);
   host.systemInfo = structuredClone(windows);
   await host.command("info.properties").run();
   const window = host.window("properties");
   window.emit("tab-changed", 2);
-  await until(() => value(host, "系统版本") === "Windows 11 23H2（22631.4460）");
-  assert.equal(value(host, "机型"), "Surface Laptop 5");
-  assert.equal(value(host, "显示器"), undefined);
-  assert.equal(value(host, "显示器 1"), "2256 x 1504 · 1504 x 1003 @ 59.94 Hz");
-  assert.equal(value(host, "显示器 2"), "DELL U2723QE · 3840 x 2160 · 3840 x 2160");
+  await until(() => value(host, "System version") === "Windows 11 23H2 (22631.4460)");
+  assert.equal(value(host, "Model"), "Surface Laptop 5");
+  assert.equal(value(host, "Display"), undefined);
+  assert.equal(value(host, "Display 1"), "2256 x 1504 · 1504 x 1003 @ 59.94 Hz");
+  assert.equal(value(host, "Display 2"), "DELL U2723QE · 3840 x 2160 · 3840 x 2160");
   host.handle("app.system", () => {
     throw new HostError("failed", "registry unreadable");
   });
   window.emit("refresh");
-  await until(() => host.sent("app.system").length === 2 && value(host, "系统版本") === "-");
-  assert.equal(value(host, "机型"), "-");
-  assert.equal(value(host, "显示器"), "-");
-  assert.match(value(host, "CPU")!, /核）$/, "CPU still from os");
+  await until(() => host.sent("app.system").length === 2 && value(host, "System version") === "-");
+  assert.equal(value(host, "Model"), "-");
+  assert.equal(value(host, "Display"), "-");
+  assert.match(value(host, "CPU")!, /cores\)$/, "CPU still from os");
   await stop();
 });
 
-test("I05: 复制到剪贴板 puts the current page's text on the clipboard; a refusal shows 复制失败", async () => {
+test("I05: Copy puts the current page's text on the clipboard; a refusal shows Copy failed", async () => {
   const { host, stop } = await start();
   await host.command("info.properties").run();
   await host.settle();
   const window = host.window("properties");
   window.emit("copy-page");
-  await until(() => host.osd.at(-1) === "已复制播放信息");
+  await until(() => host.osd.at(-1) === "Playback info copied");
   assert.equal(host.clipboard.text, pageText(rows(host) as Row[]));
-  assert.match(host.clipboard.text!, /^视频\n解码器：h264\n硬件解码：videotoolbox\n/);
-  assert.match(host.clipboard.text!, /\n\n音频\n/);
+  assert.match(host.clipboard.text!, /^Video\nDecoder: h264\nHardware decoding: videotoolbox\n/);
+  assert.match(host.clipboard.text!, /\n\nAudio\n/);
   host.handle("clipboard.writeText", () => {
     throw new HostError("failed", "refused");
   });
   window.emit("copy-page");
-  await until(() => window.props.status === "复制失败");
+  await until(() => window.props.status === "copy-failed");
   await stop();
 });
 
-test("I05: 保存为… writes the page as <name> 信息.txt; cancelling writes nothing", async () => {
+test("I05: Save As… writes the page as <name> info.txt; cancelling writes nothing; a failed write shows Save failed", async () => {
   const folder = await mkdtemp(join(tmpdir(), "info-save-"));
   const { host, stop } = await start();
   try {
@@ -310,13 +311,18 @@ test("I05: 保存为… writes the page as <name> 信息.txt; cancelling writes 
     host.dialogAnswers.push(null);
     window.emit("save-page");
     await host.settle();
-    assert.equal(host.sent("dialogs.open").at(-1)!.fileName, "movie 信息.txt");
-    const target = join(folder, "movie 信息.txt");
+    assert.equal(host.sent("dialogs.open").at(-1)!.fileName, "movie info.txt");
+    assert.equal(host.sent("dialogs.open").at(-1)!.title, "Save As");
+    const target = join(folder, "movie info.txt");
     host.dialogAnswers.push([target]);
     window.emit("save-page");
-    await until(() => host.osd.at(-1) === "已保存到 movie 信息.txt");
+    await until(() => host.osd.at(-1) === "Saved to movie info.txt");
     assert.equal(await readFile(target, "utf8"), pageText(rows(host) as Row[]));
-    assert.deepEqual(await readdir(folder), ["movie 信息.txt"], "no temporary file left");
+    assert.deepEqual(await readdir(folder), ["movie info.txt"], "no temporary file left");
+    host.dialogAnswers.push([join(folder, "missing", "x.txt")]);
+    window.emit("save-page");
+    await until(() => window.props.status === "save-failed");
+    assert.match(String(window.props["status-detail"]), /ENOENT/);
   } finally {
     await stop();
     await rm(folder, { recursive: true, force: true });
@@ -345,32 +351,34 @@ test("I05: the last page is remembered in info.json", async () => {
 test("I05 pure rules: values cut at 512, sample formats, save names, displays, empty groups left out", () => {
   assert.equal([...cut("a".repeat(600))].length, VALUE_MAX);
   assert.ok(cut("a".repeat(600)).endsWith("…"));
-  assert.equal(sampleFormat("s16"), "16 位（s16）");
-  assert.equal(sampleFormat("dblp"), "64 位浮点（dblp）");
+  assert.equal(sampleFormat("s16"), "16-bit (s16)");
+  assert.equal(sampleFormat("dblp"), "64-bit float (dblp)");
   assert.equal(sampleFormat("weird"), "weird");
-  assert.equal(saveName("/v/My Film.mkv"), "My Film 信息.txt");
-  assert.equal(saveName("https://cdn.test/v/%E8%A7%86%E9%A2%91.mp4?x=1"), "视频 信息.txt");
-  assert.equal(saveName(null), "Vestra Player 信息.txt");
-  assert.equal(systemVersion({ name: "macOS", version: "26.2", build: "25C56" }), "macOS 26.2（25C56）");
+  assert.equal(saveName("/v/My Film.mkv"), "My Film info.txt");
+  assert.equal(saveName("https://cdn.test/v/%E8%A7%86%E9%A2%91.mp4?x=1"), "视频 info.txt");
+  assert.equal(saveName(null), "Vestra Player info.txt");
+  assert.equal(systemVersion({ name: "macOS", version: "26.2", build: "25C56" }), "macOS 26.2 (25C56)");
   assert.equal(systemVersion({ name: "Linux", version: null, build: null }), "Linux");
   assert.equal(displayLine({ name: "Built-in Retina Display", width: 3024, height: 1964, scale: 2, refreshRate: 120, primary: true }), "Built-in Retina Display · 3024 x 1964 · 1512 x 982 @ 120 Hz");
   const page = filePage("/a.mkv", null, {});
-  assert.deepEqual(page.filter((r) => r.heading).map((r) => r.label), ["来源", "容器"]);
-  assert.equal(pageText([{ label: "A", value: "", heading: true }, { label: "k", value: "v", heading: false }, { label: "B", value: "", heading: true }, { label: "", value: "m", heading: false }]), "A\nk：v\n\nB\nm\n");
+  assert.deepEqual(page.filter((r) => r.heading).map((r) => r.label), ["Source", "Container"]);
+  assert.equal(pageText([{ label: "A", value: "", heading: true }, { label: "k", value: "v", heading: false }, { label: "B", value: "", heading: true }, { label: "", value: "m", heading: false }]), "A\nk: v\n\nB\nm\n");
+  const dated = filePage("/a.mkv", { size: 1, mtime: new Date(2026, 9, 25, 13, 5, 9) }, {}, "zh-Hans");
+  assert.equal(dated.find((r) => r.label === "Modified")?.value, "2026/10/25 13:05:09", "dates in the interface language");
 });
 
-test("I05 系统信息: versions the core does not know show 未知; no build hash, extra libav libraries", () => {
+test("I05 System: versions the core does not know show Unknown; no build hash, extra libav libraries", () => {
   const page = systemPage({ version: "0.2.0", build: null, components: { mpv: null, libav: {}, slint: "1.16.1" } }, null);
   const row = (label: string) => page.find((r) => r.label === label)?.value;
-  assert.equal(row("Vestra Player 版本"), "0.2.0");
-  assert.equal(row("mpv 版本"), "未知");
-  assert.equal(row("FFmpeg 版本"), "未知");
+  assert.equal(row("Vestra Player version"), "0.2.0");
+  assert.equal(row("mpv version"), "Unknown");
+  assert.equal(row("FFmpeg version"), "Unknown");
   const more = systemPage(
     { version: "0.2.0", build: "abc1234", components: { mpv: "mpv v0.41.0", libav: { ffmpeg: "9.0.2", libavcodec: "62.11.100" }, slint: "1.16.1" } },
     null,
   );
-  assert.equal(more.find((r) => r.label === "Vestra Player 版本")?.value, "0.2.0（构建 abc1234）");
-  assert.equal(more.find((r) => r.label === "FFmpeg 版本")?.value, "9.0.2 · libavcodec 62.11.100");
+  assert.equal(more.find((r) => r.label === "Vestra Player version")?.value, "0.2.0 (build abc1234)");
+  assert.equal(more.find((r) => r.label === "FFmpeg version")?.value, "9.0.2 · libavcodec 62.11.100");
 });
 
 test("I05: closing the window with the title bar stops the 1-second polling (onClose); reopening starts it again", async () => {
@@ -389,4 +397,27 @@ test("I05: closing the window with the title bar stops the 1-second polling (onC
   assert.equal(host.window("properties").visible, true);
   assert.ok(polled() >= after + 2, "polling again after reopening");
   await stop();
+});
+
+test("I05 in Simplified Chinese: the menu, the window's words and the messages of before", async () => {
+  const folder = await mkdtemp(join(tmpdir(), "info-save-"));
+  const { host, stop } = await start("/videos/movie.mkv", undefined, undefined, "zh-Hans");
+  try {
+    assert.deepEqual(host.command("info.properties").display.path, ["播放属性…"]);
+    // What properties.slint shows through @tr.
+    const words = ["Playback Properties", "Playback", "File", "System", "Refresh", "Copy", "Save As…", "Close", "Copy failed", "Save As"];
+    assert.deepEqual(words.map((w) => host.translate(w)), ["播放属性", "播放信息", "文件信息", "系统信息", "刷新", "复制到剪贴板", "保存为…", "关闭", "复制失败", "保存为"]);
+    assert.equal(host.translate("Save failed: {}", ["EACCES"]), "保存失败：EACCES");
+    await host.command("info.properties").run();
+    await host.settle();
+    const window = host.window("properties");
+    window.emit("copy-page");
+    await until(() => host.osd.at(-1) === "已复制播放信息");
+    host.dialogAnswers.push([join(folder, "movie info.txt")]);
+    window.emit("save-page");
+    await until(() => host.osd.at(-1) === "已保存到 movie info.txt");
+  } finally {
+    await stop();
+    await rm(folder, { recursive: true, force: true });
+  }
 });

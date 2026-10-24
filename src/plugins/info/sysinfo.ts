@@ -3,9 +3,11 @@ import type { App, DisplayInfo, SystemInfo } from "@vestra-player/sdk";
 import type { SystemFacts } from "./properties.ts";
 
 /**
- * I05 系统信息: the system's name, version, model and displays from the player
+ * I05 System page: the system's name, version, model and displays from the player
  * (`plugin.app.system()`), CPU and memory from Node's `os`. A failed read
  * leaves the player's facts unknown.
+ *
+ * i18n: needs r2-api (the values are words around data in properties rows: `(8 cores)`).
  */
 export async function readFacts(app: Pick<App, "system">): Promise<SystemFacts> {
   const info = await app.system().catch((error) => {
@@ -17,16 +19,16 @@ export async function readFacts(app: Pick<App, "system">): Promise<SystemFacts> 
   return {
     os: info ? systemVersion(info) : null,
     model: info?.model ?? null,
-    cpu: brand ? `${brand}${cpu.length ? `（${cpu.length} 核）` : ""}` : null,
+    cpu: brand ? `${brand}${cpu.length ? ` (${cpu.length} cores)` : ""}` : null,
     memory: totalmem(),
     freeMemory: freemem(),
     displays: info?.displays.map(displayLine) ?? [],
   };
 }
 
-/** `macOS 26.2（25C56）`, `Windows 11 23H2（22631.4460）`; parts the system does not report are left out. */
+/** `macOS 26.2 (25C56)`, `Windows 11 23H2 (22631.4460)`; parts the system does not report are left out. */
 export function systemVersion(info: Pick<SystemInfo, "name" | "version" | "build">) {
-  return `${[info.name, info.version].filter(Boolean).join(" ")}${info.build ? `（${info.build}）` : ""}` || null;
+  return `${[info.name, info.version].filter(Boolean).join(" ")}${info.build ? ` (${info.build})` : ""}` || null;
 }
 
 /** `Built-in Retina Display · 3024 x 1964 · 1512 x 982 @ 120 Hz`: pixels, then points. */

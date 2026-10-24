@@ -1,0 +1,189 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: vestra.info 0.1.5\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: about.ts:120
+msgid "Version info copied"
+msgstr ""
+
+#: dialog.ts:153
+msgid "Playback info copied"
+msgstr ""
+
+#: dialog.ts:161
+msgid "Save As"
+msgstr ""
+
+#: dialog.ts:168
+msgid "Saved to {}"
+msgstr ""
+
+#: main.ts:229 manifest.json
+msgid "Playback Info"
+msgstr ""
+
+#: main.ts:243
+msgid "Brief Info"
+msgstr ""
+
+#: main.ts:262
+msgid "Playback Properties…"
+msgstr ""
+
+#: main.ts:270
+msgid "About Vestra Player…"
+msgstr ""
+
+#: manifest.json
+msgid "Playback info overlay, playback properties and the About window"
+msgstr ""
+
+#: manifest.json
+msgid "Shows live facts at the top left of the video (Tab): file, time, codecs, frame rate and more, or a short summary with Shift+Tab. Playback Properties… lists the decoding state, the file's streams and metadata, and system information, to copy or save as text. About Vestra Player… shows the version, components and loaded plugins."
+msgstr ""
+
+#: manifest.json
+msgid "Info"
+msgstr ""
+
+#: manifest.json
+msgid "Media info"
+msgstr ""
+
+#: manifest.json
+msgid "About"
+msgstr ""
+
+#: ui/about.slint:55
+msgid "About Vestra Player"
+msgstr ""
+
+#: ui/about.slint:81
+msgid "Unknown"
+msgstr ""
+
+#: ui/about.slint:85
+msgid "Built-in"
+msgstr ""
+
+#: ui/about.slint:86
+msgid "Repository"
+msgstr ""
+
+#: ui/about.slint:87
+msgid "Link"
+msgstr ""
+
+#: ui/about.slint:88
+msgid "Local file"
+msgstr ""
+
+#: ui/about.slint:89
+msgid "Workshop"
+msgstr ""
+
+#: ui/about.slint:90
+msgid "Installed"
+msgstr ""
+
+#: ui/about.slint:91
+msgid "Development"
+msgstr ""
+
+#: ui/about.slint:95
+msgid "Starting"
+msgstr ""
+
+#: ui/about.slint:96
+msgid "Running"
+msgstr ""
+
+#: ui/about.slint:97
+msgid "Disabled"
+msgstr ""
+
+#: ui/about.slint:98
+msgid "Failed"
+msgstr ""
+
+#: ui/about.slint:99
+msgid "Stopped"
+msgstr ""
+
+#: ui/about.slint:126
+msgid "Version {} (build {})"
+msgstr ""
+
+#: ui/about.slint:126
+msgid "Version {}"
+msgstr ""
+
+#: ui/about.slint:130
+msgid "Plugin API"
+msgstr ""
+
+#: ui/about.slint:141
+msgid "Loaded plugins"
+msgstr ""
+
+#: ui/about.slint:141
+msgid "Version"
+msgstr ""
+
+#: ui/about.slint:141
+msgid "Source"
+msgstr ""
+
+#: ui/about.slint:141
+msgid "State"
+msgstr ""
+
+#: ui/about.slint:152
+msgid "Unknown (cannot read the plugin list)"
+msgstr ""
+
+#: ui/about.slint:181 ui/properties.slint:147
+msgid "Copy failed"
+msgstr ""
+
+#: ui/about.slint:187
+msgid "Copy Info"
+msgstr ""
+
+#: ui/about.slint:188 ui/properties.slint:158
+msgid "Close"
+msgstr ""
+
+#: ui/properties.slint:55
+msgid "Playback Properties"
+msgstr ""
+
+#: ui/properties.slint:72
+msgid "Playback"
+msgstr ""
+
+#: ui/properties.slint:72
+msgid "File"
+msgstr ""
+
+#: ui/properties.slint:72
+msgid "System"
+msgstr ""
+
+#: ui/properties.slint:148
+msgid "Save failed: {}"
+msgstr ""
+
+#: ui/properties.slint:155
+msgid "Refresh"
+msgstr ""
+
+#: ui/properties.slint:156
+msgid "Copy"
+msgstr ""
+
+#: ui/properties.slint:157
+msgid "Save As…"
+msgstr ""

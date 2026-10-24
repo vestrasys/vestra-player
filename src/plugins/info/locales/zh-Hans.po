@@ -1,0 +1,190 @@
+msgid ""
+msgstr ""
+"Language: zh-Hans\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: about.ts:120
+msgid "Version info copied"
+msgstr "已复制版本信息"
+
+#: dialog.ts:153
+msgid "Playback info copied"
+msgstr "已复制播放信息"
+
+#: dialog.ts:161
+msgid "Save As"
+msgstr "保存为"
+
+#: dialog.ts:168
+msgid "Saved to {}"
+msgstr "已保存到 {}"
+
+#: main.ts:229 manifest.json
+msgid "Playback Info"
+msgstr "播放信息"
+
+#: main.ts:243
+msgid "Brief Info"
+msgstr "简要信息"
+
+#: main.ts:262
+msgid "Playback Properties…"
+msgstr "播放属性…"
+
+#: main.ts:270
+msgid "About Vestra Player…"
+msgstr "关于 Vestra Player…"
+
+#: manifest.json
+msgid "Playback info overlay, playback properties and the About window"
+msgstr "播放信息层、播放属性与关于窗口"
+
+#: manifest.json
+msgid "Shows live facts at the top left of the video (Tab): file, time, codecs, frame rate and more, or a short summary with Shift+Tab. Playback Properties… lists the decoding state, the file's streams and metadata, and system information, to copy or save as text. About Vestra Player… shows the version, components and loaded plugins."
+msgstr "在视频左上角显示文件、时间、编码、帧率等实时信息（Tab），或按 Shift+Tab 显示简要信息；「播放属性…」列出解码状态、文件的流与元数据、系统信息，可复制或保存为文本；「关于 Vestra Player…」显示版本、组件与已加载的插件。"
+
+#: manifest.json
+msgid "Info"
+msgstr "信息"
+
+#: manifest.json
+msgid "Media info"
+msgstr "媒体信息"
+
+#: manifest.json
+msgid "About"
+msgstr "关于"
+
+#: ui/about.slint:55
+msgid "About Vestra Player"
+msgstr "关于 Vestra Player"
+
+#: ui/about.slint:81
+msgid "Unknown"
+msgstr "未知"
+
+#: ui/about.slint:85
+msgid "Built-in"
+msgstr "内置"
+
+#: ui/about.slint:86
+msgid "Repository"
+msgstr "仓库"
+
+#: ui/about.slint:87
+msgid "Link"
+msgstr "链接"
+
+#: ui/about.slint:88
+msgid "Local file"
+msgstr "本地文件"
+
+#: ui/about.slint:89
+msgid "Workshop"
+msgstr "插件工坊"
+
+#: ui/about.slint:90
+msgid "Installed"
+msgstr "已安装"
+
+#: ui/about.slint:91
+msgid "Development"
+msgstr "开发加载"
+
+#: ui/about.slint:95
+msgid "Starting"
+msgstr "启动中"
+
+#: ui/about.slint:96
+msgid "Running"
+msgstr "运行中"
+
+#: ui/about.slint:97
+msgid "Disabled"
+msgstr "已停用"
+
+#: ui/about.slint:98
+msgid "Failed"
+msgstr "失败"
+
+#: ui/about.slint:99
+msgid "Stopped"
+msgstr "已停止"
+
+#: ui/about.slint:126
+msgid "Version {} (build {})"
+msgstr "版本 {}（构建 {}）"
+
+#: ui/about.slint:126
+msgid "Version {}"
+msgstr "版本 {}"
+
+#: ui/about.slint:130
+msgid "Plugin API"
+msgstr "插件 API"
+
+#: ui/about.slint:141
+msgid "Loaded plugins"
+msgstr "已加载插件"
+
+#: ui/about.slint:141
+msgid "Version"
+msgstr "版本"
+
+#: ui/about.slint:141
+msgid "Source"
+msgstr "来源"
+
+#: ui/about.slint:141
+msgid "State"
+msgstr "状态"
+
+#: ui/about.slint:152
+msgid "Unknown (cannot read the plugin list)"
+msgstr "未知（无法读取插件列表）"
+
+#: ui/about.slint:181 ui/properties.slint:147
+msgid "Copy failed"
+msgstr "复制失败"
+
+#: ui/about.slint:187
+msgid "Copy Info"
+msgstr "复制信息"
+
+#: ui/about.slint:188 ui/properties.slint:158
+msgid "Close"
+msgstr "关闭"
+
+#: ui/properties.slint:55
+msgid "Playback Properties"
+msgstr "播放属性"
+
+#: ui/properties.slint:72
+msgid "Playback"
+msgstr "播放信息"
+
+#: ui/properties.slint:72
+msgid "File"
+msgstr "文件信息"
+
+#: ui/properties.slint:72
+msgid "System"
+msgstr "系统信息"
+
+#: ui/properties.slint:148
+msgid "Save failed: {}"
+msgstr "保存失败：{}"
+
+#: ui/properties.slint:155
+msgid "Refresh"
+msgstr "刷新"
+
+#: ui/properties.slint:156
+msgid "Copy"
+msgstr "复制到剪贴板"
+
+#: ui/properties.slint:157
+msgid "Save As…"
+msgstr "保存为…"
