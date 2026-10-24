@@ -557,7 +557,7 @@ interface PlaybackStats {
 - 运行中退回软件渲染（窗口不能显示纹理）只在第一个窗口出现时发生；如果那时已经在播放，当前来源可能要重新打开。
 - 诊断：`VESTRA_HWDEC` 覆盖 GPU 渲染时的 `hwdec`（如 `no`）；`VESTRA_FRAME_LOG=1` 每秒在标准错误输出一行渲染与显示的帧数和渲染尺寸（两种方式都有）。
 
-- 同时只能有一个提供者（例如播放列表）；另一个插件再登记以 `conflict` 失败（激活期间 = 激活失败）。`dispose` 或插件停用时撤销。
+- 同时只能有一个提供者（例如播放列表）；另一个插件再登记以 `conflict` 失败（「上一个/下一个已由 vestra.playlist 提供」），**不算激活失败**：插件照常运行，只是不提供上一个/下一个；屏幕提示与插件管理的「提示」同面板位置被占（§6.3）。之后它的标志变化时会再登记一次，原提供者撤销后就能接上。启动时内置插件先登记（同 §6.3）。`dispose` 或插件停用时撤销。
 - `canNext` / `canPrevious` 每轮更新重新求值，变化才发送；任何插件从 `player.state.can.next/previous` 读到。
 - `next()` / `previous()`：没有提供者或标志为假时以 `unavailable` 失败；否则宿主把请求交给提供者，在它的作用域里调用 `next` / `previous`。
 - `stats()` 需要 `playback.read`；没有来源时 `video`、`audio` 为 `null`。
@@ -1177,7 +1177,7 @@ interface PluginInfo {
   id: string; version: string | null;
   origin: "installed" | "development" | "trial";   // 安装库 / --plugin 开发加载 / 试载
   state: "starting" | "running" | "disabled" | "failed" | "stopped";
-  error: string | null;     // failed 时的原因；running 时为提示（面板位置被占，§6.3）
+  error: string | null;     // failed 时的原因；running 时为提示（面板位置或上一个/下一个被占，§6.3）
   capabilities: string[];
   directory: string;        // 包目录（显示字段读其中的 manifest.json）
   previousVersion: string | null; // 可回退到的版本
@@ -1232,7 +1232,7 @@ interface PackageChange {
 | `unsupported` | 也用于当前系统做不到的功能（各节的平台差异、§16.7），如 Linux 上的剪贴板、确认框、`system.*`、`secrets`；以及当前来源做不到的，如生成流上的滤镜（§8） |
 | `capability` | manifest 未声明所需能力 |
 | `invalid` | 参数不合法（如滤镜值超出范围） |
-| `busy`、`conflict`、`unavailable`、`unsupported` | 播放器拒绝接纳，未执行（`conflict` 也用于已有别的播放序列提供者、菜单路径已被占用、面板位置已被别的插件占用，以及同一插件里重复的窗口 id 或命令 id；`unavailable` 也用于 `next`/`previous` 不可用、面板未显示、无界面模式） |
+| `busy`、`conflict`、`unavailable`、`unsupported` | 播放器拒绝接纳，未执行（`conflict` 也用于已有别的播放序列提供者、菜单路径已被占用、面板位置已被别的插件占用（这两种不算激活失败），以及同一插件里重复的窗口 id 或命令 id；`unavailable` 也用于 `next`/`previous` 不可用、面板未显示、无界面模式） |
 | `backend` | 载入或解析失败，`message` 为后端原因 |
 | `disabled` | 插件正在停用 |
 | `replaced` | 已被接受，但完成前被另一个来源替换（`open`、`openStream`、`media.ready`） |
@@ -1440,12 +1440,13 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 
 ## 17. 变更说明
 
-### 面板位置被占：挂载时拒绝，不再让激活失败（2026-10，播放器 0.4.x）
+### 面板位置、上一个/下一个被占：不再让激活失败（2026-10，播放器 0.4.x）
 
 - 底栏、侧栏已有别的插件的面板时，`panels.mount` 的 `ready` 在挂载请求时就以 `conflict` 失败（消息「侧栏已被 <id> 使用」）。之前要等组合窗口编译时才以 `ui-prepare` 失败，而激活期间的挂载失败让整个插件激活失败（例如开发加载的面板抢先占了侧栏，内置播放列表连命令都没有了）。背景层原来就是 `conflict`。
 - 这类拒绝**不再让激活失败**：插件照常运行，`PluginInfo.state` 为 `running`，`error` 带提示文字；播放器显示屏幕提示。其它挂载失败（编译失败 `ui-prepare` 等）照旧让激活失败。
-- 启动时内置插件先挂载，其它插件的挂载请求等内置插件激活完成后再处理。
-- 线上的拒绝另带 `reason: "slot-occupied"`、`slot`、`owner` 字段，`packages.list` 的每项另带 `warnings: [{ code: "slot-occupied", slot, owner }]`；SDK 目前不转交这些字段，所以插件读 `error.code`（`conflict`）和 `PluginInfo.error`。
+- 上一个/下一个（`player.provideSequence`）已有提供者时同样以 `conflict` 失败、不让激活失败（§5.4）；之前激活期间 = 激活失败。
+- 启动时内置插件先挂载、先登记上一个/下一个，其它插件的这些请求等内置插件激活完成后再处理。
+- 线上的拒绝另带 `reason`（`"slot-occupied"`，带 `slot`、`owner`；`"sequence-taken"`，带 `owner`），`packages.list` 的每项另带 `warnings: [{ code, slot?, owner }]`；SDK 目前不转交这些字段，所以插件读 `error.code`（`conflict`）和 `PluginInfo.error`。
 
 ### 自己的视觉身份：Aurora 配色与 V-Line 图标（2026-10，播放器 0.4.0，SDK 1.5.0）
 

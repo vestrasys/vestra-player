@@ -3,9 +3,11 @@
 //! The shell has one component per slot (`composition::shell_source`). A
 //! second plugin asking for a taken slot is refused at `ui.mount` with
 //! `conflict` (not later, as a compile failure), and the refusal does not
-//! fail its activation. While the built-in plugins start, other plugins'
-//! mount requests wait, so a built-in panel (the playlist's sidebar) keeps its
-//! slot whatever order the processes answer in.
+//! fail its activation (nor does `sequence.set` refused for another
+//! provider). While the built-in plugins start, other plugins' mount and
+//! sequence requests wait, so a built-in panel (the playlist's sidebar) keeps
+//! its slot, and the playlist the sequence, whatever order the processes
+//! answer in.
 #![forbid(unsafe_code)]
 
 use std::collections::VecDeque;
@@ -46,7 +48,7 @@ pub fn refusal(slot: Slot, holder: &str) -> String {
     format!("{}已被 {holder} 使用", slot.label())
 }
 
-/// Mount requests of non-built-in plugins, held while built-in plugins start.
+/// Mount and sequence requests of non-built-in plugins, held while built-in plugins start.
 /// One owner's requests stay in order: once one is held, its later ones are too.
 pub struct Gate<T> {
     held: VecDeque<(u64, T)>,

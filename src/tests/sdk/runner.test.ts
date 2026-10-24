@@ -254,3 +254,32 @@ test("a panel refused because another plugin holds its slot does not fail activa
   const other = await run(source, refuse({}), runner, capabilities);
   assert.equal(other.event, "runtime.failed");
 });
+
+test("a sequence another plugin provides does not fail activation", async () => {
+  const source = `export default async function activate(plugin) {
+    plugin.player.provideSequence({ canNext: true, canPrevious: false, next() {}, previous() {} });
+    plugin.commands.add({ id: "a", path: ["文件", "A"], run() {} });
+  }`;
+  const refuse = (detail: object) => (method: string) =>
+    method === "sequence.set"
+      ? {
+          error: {
+            code: "conflict",
+            message: "上一个/下一个已由 vestra.playlist 提供",
+            ...detail,
+          },
+        }
+      : { result: { revision: 1 } };
+  const capabilities = ["commands", "playback.control"];
+  const taken = await run(
+    source,
+    refuse({ reason: "sequence-taken", owner: "vestra.playlist" }),
+    runner,
+    capabilities,
+  );
+  assert.equal(taken.event, "runtime.ready");
+  assert.ok(taken.methods.includes("sequence.set"));
+  assert.ok(taken.methods.includes("commands.register"));
+  const other = await run(source, refuse({}), runner, capabilities);
+  assert.equal(other.event, "runtime.failed");
+});

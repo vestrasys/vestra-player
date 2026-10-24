@@ -28,11 +28,13 @@ const pending = new Map<
 >();
 const listeners = new Map<string, Set<(data: unknown) => void>>();
 /**
- * `ui.mount` refusals because another plugin holds the slot (`conflict` with
- * `reason: "slot-occupied"`). The panel's `ready` rejects with them, but they
- * do not fail activation: the plugin runs without its panel.
+ * Refusals because another plugin holds a single-owner resource: `conflict`
+ * with `reason` `"slot-occupied"` (`ui.mount`: the panel's `ready` rejects)
+ * or `"sequence-taken"` (`sequence.set`). They do not fail activation: the
+ * plugin runs without its panel, or without providing next/previous.
  */
-const slotOccupied = new WeakSet<Error>();
+const TAKEN = new Set(["slot-occupied", "sequence-taken"]);
+const taken = new WeakSet<Error>();
 const send = (message: unknown) =>
   process.stdout.write(`${JSON.stringify(message)}\n`);
 /**
@@ -110,7 +112,7 @@ input.on("line", (line) => {
       pending.delete(message.id);
       if (message.error) {
         const error = new HostError(message.error.code, message.error.message);
-        if (message.error.reason === "slot-occupied") slotOccupied.add(error);
+        if (TAKEN.has(message.error.reason ?? "")) taken.add(error);
         request.reject(error);
       } else request.resolve(message.result);
     } else if (message.event) {
@@ -159,14 +161,14 @@ try {
   dispose = () => instance.dispose();
   await module.default(instance.plugin);
   // `activated()` throws the first rejected start-up work; called again it
-  // waits for the rest. A refused slot is not an activation failure.
+  // waits for the rest. What another plugin holds is not an activation failure.
   for (;;) {
     try {
       await instance.activated();
       break;
     } catch (error) {
-      if (!(error instanceof Error && slotOccupied.has(error))) throw error;
-      console.error(`panel not shown: ${error.message}`);
+      if (!(error instanceof Error && taken.has(error))) throw error;
+      console.error(`not taken over: ${error.message}`);
     }
   }
   send({ event: "runtime.ready" });
