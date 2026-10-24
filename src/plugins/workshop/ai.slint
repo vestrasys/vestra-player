@@ -68,20 +68,24 @@ component Message inherits VerticalLayout {
     callback toggle(string);
     callback retry();
     callback open-settings();
+    private property <length> bubble-indent: max(80px, root.width * 0.25);
     padding-left: 18px;
     padding-right: 18px;
     padding-top: 6px;
     padding-bottom: 6px;
 
-    if item.kind == "user": HorizontalLayout {
-        Rectangle { horizontal-stretch: 1; min-width: 80px; }
+    // The bubble's width comes from the row (a quarter left free), not from
+    // a HorizontalLayout share: wrapped text gets its height for that width,
+    // so a long message pushes the next row down instead of overlapping it.
+    if item.kind == "user": VerticalLayout {
+        padding-left: root.bubble-indent;
         Rectangle {
-            horizontal-stretch: 3;
             background: Theme.selected-bg;
             border-radius: Theme.radius-panel;
             VerticalLayout {
                 padding: 9px;
-                Body { text: item.text; }
+                // An explicit width: the wrapped height is measured for it.
+                Body { text: item.text; width: root.width - 2 * 18px - root.bubble-indent - 2 * 9px; }
             }
         }
     }
@@ -112,6 +116,7 @@ component Message inherits VerticalLayout {
                 padding: 8px;
                 Text {
                     text: item.detail;
+                    width: root.width - 2 * 18px - 2 * 8px;
                     color: Theme.text-list;
                     font-family: Theme.font-mono;
                     font-size: Theme.font-body;
@@ -129,7 +134,7 @@ component Message inherits VerticalLayout {
             copy-code(code) => { root.copy-code(code); }
             link-clicked(url) => { root.open-link(url); }
         }
-        if item.body.length == 0: Body { text: item.text == "" ? "…" : item.text; }
+        if item.body.length == 0: Body { text: item.text == "" ? "…" : item.text; width: root.width - 2 * 18px; }
         if item.state != 0: HorizontalLayout {
             alignment: start;
             Link { text: "复制"; clicked => { root.copy(item.id); } }
@@ -145,8 +150,9 @@ component Message inherits VerticalLayout {
         VerticalLayout {
             padding: 9px;
             spacing: 6px;
-            Body { text: "⚠ " + item.text; color: Theme.danger; }
-            if item.detail != "": Small { text: item.detail; wrap: word-wrap; overflow: clip; }
+            // Explicit widths (row minus paddings and border): wrapped height follows.
+            Body { text: "⚠ " + item.text; color: Theme.danger; width: root.width - 2 * 18px - 2 * 9px - 2px; }
+            if item.detail != "": Small { text: item.detail; wrap: word-wrap; overflow: clip; width: root.width - 2 * 18px - 2 * 9px - 2px; }
             HorizontalLayout {
                 alignment: start;
                 spacing: 6px;

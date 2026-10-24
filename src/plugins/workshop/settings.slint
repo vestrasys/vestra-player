@@ -6,17 +6,22 @@ import { Button } from "@vestra/widgets.slint";
 
 export global AiSettings {
     in property <[string]> providers;
-    in property <int> provider-index;
+    // in-out and two-way below: a one-way index stops following the model
+    // once the user picked an entry (reference §6.4), and the list would then
+    // show another model than the one used.
+    in-out property <int> provider-index;
     // A custom endpoint (OpenAI or Anthropic format): Base URL, models listed
     // from it (「获取模型」) or typed by hand.
     in property <bool> custom;
     in property <bool> listing;
+    // The provider can list its models (built-in ones where their API does).
+    in property <bool> can-list;
     in-out property <string> base-url;
     in-out property <string> key-text;
     in property <string> key-state;
     in property <bool> has-key;
     in property <[string]> models;
-    in property <int> model-index;
+    in-out property <int> model-index;
     in-out property <string> model-text;
     // The saved provider is no longer offered: the notice; empty otherwise.
     in property <string> gone;
@@ -68,7 +73,7 @@ export component AiSettingsPage inherits Rectangle {
                 height: Theme.input-height;
                 horizontal-stretch: 1;
                 model: AiSettings.providers;
-                current-index: AiSettings.provider-index;
+                current-index <=> AiSettings.provider-index;
                 selected => { AiSettings.choose-provider(self.current-index); }
             }
         }
@@ -126,8 +131,19 @@ export component AiSettingsPage inherits Rectangle {
                 height: Theme.input-height;
                 horizontal-stretch: 1;
                 model: AiSettings.models;
-                current-index: AiSettings.model-index;
+                current-index <=> AiSettings.model-index;
                 selected(value) => { AiSettings.choose-model(value); }
+            }
+            // Custom endpoints have the button on the model id row below.
+            if !AiSettings.custom && AiSettings.can-list: VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 0;
+                Button {
+                    width: Theme.button-min-width;
+                    text: AiSettings.listing ? "获取中…" : "获取模型";
+                    enabled: !AiSettings.listing;
+                    clicked => { AiSettings.fetch-models(); }
+                }
             }
         }
         // Custom endpoints: the id can always be typed (when the endpoint lists none, or another one).

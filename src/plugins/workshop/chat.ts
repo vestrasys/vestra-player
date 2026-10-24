@@ -32,9 +32,13 @@ export function toolLabel(name: string, target: string): string {
 }
 
 /** A provider or network failure in Chinese, and whether the key is the likely cause. */
-export function classify(message: string): { text: string; settings: boolean } {
+export function classify(message: string, model = ""): { text: string; settings: boolean } {
   if (/\b(401|403)\b|invalid.{0,20}(api.?key|x-api-key|token)|incorrect api key|authentication|authenticate|unauthori[sz]ed/i.test(message))
     return { text: "API key 无效或没有权限，请在设置中检查。", settings: true };
+  if (
+    /model.{0,60}(not found|no longer available|not available|does not exist|not exist|is not supported|unsupported|deprecated|retired)|(unknown|invalid|unsupported) model|model_not_found|未知模型/i.test(message)
+  )
+    return { text: model ? `模型「${model}」不可用，请在设置中换一个模型。` : "模型不可用，请在设置中换一个模型。", settings: true };
   if (/\b429\b|quota|insufficient|credit|billing|rate.?limit/i.test(message)) return { text: "额度不足或请求过于频繁，请稍后重试。", settings: false };
   if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ECONNRESET|ETIMEDOUT|fetch failed|network|socket|getaddrinfo|Connection error/i.test(message))
     return { text: "网络错误：无法连接服务商。", settings: false };
@@ -55,6 +59,8 @@ export class Chat {
   private replying = false;
   /** The text of the last user message, for 「重试」. */
   lastPrompt = "";
+  /** The model of the current run, named in a "model not available" error. */
+  model = "";
 
   private push(row: Omit<Row, "id" | "detail" | "state" | "expanded" | "settings"> & Partial<Row>): Row {
     const full: Row = { id: nextId(), detail: "", state: 1, expanded: false, settings: false, ...row };
@@ -96,7 +102,7 @@ export class Chat {
   }
 
   error(message: string, override?: string) {
-    const { text, settings } = classify(message);
+    const { text, settings } = classify(message, this.model);
     this.push({ kind: "error", text: override ?? text, detail: message.split("\n")[0].slice(0, 400), state: 2, settings });
   }
 

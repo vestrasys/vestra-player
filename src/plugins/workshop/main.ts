@@ -7,12 +7,14 @@ import {
   DEFAULT_SETTINGS,
   LEGACY_COMPAT,
   checkBaseUrl,
+  customList,
   goneName,
   goneNotice,
   listModels,
   loadProviders,
   masked,
   migrate,
+  pickListed,
   secretName,
   validSettings,
   type AiSettings,
@@ -75,6 +77,11 @@ export default async function activate(plugin: Plugin) {
    * model, Base URL and key are left alone) as a stand-in without models:
    * nothing is sent until the user picks another one.
    */
+  /** The models offered for `p`: those it listed first, then the rest of pi's catalog. */
+  const modelsOf = (p: Provider) => {
+    const fetched = listed.get(p.id) ?? [];
+    return [...fetched, ...p.models.filter((m) => !fetched.includes(m))];
+  };
   const provider = (): Provider =>
     providers.find((p) => p.id === settings.value.provider) ?? { id: settings.value.provider, label: settings.value.provider, models: [], defaultModel: "", api: null };
   const gone = () => !providers.some((p) => p.id === settings.value.provider);
@@ -330,6 +337,7 @@ export default async function activate(plugin: Plugin) {
     draft = "";
     window.set({ draft: "" }); // clears the field even if the user typed the same text again
     chat.user(message);
+    chat.model = model();
     chat.begin();
     let run = runs.get(meta.id);
     if (!run || run.worker.exited) run = await startWorker(meta, chat);
@@ -380,13 +388,14 @@ export default async function activate(plugin: Plugin) {
   page.bind(() => {
     const p = provider();
     const key = keys.get(p.id) ?? "";
-    const models = p.api ? (listed.get(p.id) ?? []) : p.models;
+    const models = modelsOf(p);
     return {
       // A provider no longer offered shows as the first entry, so the list
       // does not pretend another one is selected.
       providers: [...(gone() ? [`${goneName(p.id)}（已不再提供）`] : []), ...providers.map((x) => x.label)],
       providerIndex: gone() ? 0 : providers.indexOf(p),
       custom: !!p.api,
+      canList: !gone() && (!!p.api || !!p.list),
       baseUrl: settings.value.baseUrls[p.id] ?? "",
       keyText,
       keyState: gone()
@@ -416,15 +425,27 @@ export default async function activate(plugin: Plugin) {
   };
   /** A change of service, key or model applies to the next message. */
   const changed = () => releaseIdle();
+  /** Pulls the lists back to the model values (a one-way index stops following after a pick). */
+  const syncIndexes = () => {
+    const p = provider();
+    page.set({ providerIndex: gone() ? 0 : providers.indexOf(p), modelIndex: modelsOf(p).indexOf(model()) });
+  };
   page.on("chooseProvider", async (index: number) => {
     const p = providers[gone() ? index - 1 : index];
     if (!p) return;
-    settings.save({ ...settings.value, provider: p.id });
+    // The model shown is the model used: a provider chosen for the first
+    // time gets its default model saved at once.
+    const models = settings.value.models[p.id] ? settings.value.models : { ...settings.value.models, [p.id]: p.defaultModel };
+    settings.save({ ...settings.value, provider: p.id, models });
     keyText = "";
     keyError = "";
-    loadKey();
     say("");
     changed();
+    syncIndexes();
+    // pi's catalog can be out of date: ask the provider when its key is at hand.
+    keyFor(p.id)
+      .then((key) => (key && p.list && !listed.has(p.id) ? fetchModels(false) : undefined))
+      .catch(() => {}); // a keychain failure shows through keyError
   });
   page.on("saveKey", async (text: string) => {
     const key = text.trim();
@@ -447,7 +468,7 @@ export default async function activate(plugin: Plugin) {
     page.set({ keyText: "" });
     say(`${p.label} 的 key 已保存。`);
     changed();
-    if (p.api && settings.value.baseUrls[p.id]) await fetchModels(false);
+    if ((p.api && settings.value.baseUrls[p.id]) || p.list) await fetchModels(false);
   });
   /** The key of a provider that is no longer offered: kept until the user deletes it. */
   page.on("deleteOldKey", async () => {
@@ -498,26 +519,39 @@ export default async function activate(plugin: Plugin) {
     return !!url;
   };
   /** Lists a custom endpoint's models; on failure the model id is typed by hand. */
+  /**
+   * Asks the provider for its models: a custom endpoint at its Base URL, a
+   * built-in one where its API lists them. Listed models come first, then
+   * the catalog's others; a current model that is not listed is replaced.
+   */
   const fetchModels = async (loud: boolean) => {
     const p = provider();
+    if (gone()) return;
     const base = settings.value.baseUrls[p.id];
-    if (!p.api || !base) {
-      if (loud) say("请先填写 Base URL。", true);
+    const spec = p.api ? (base ? customList(p, base) : undefined) : p.list;
+    if (!spec) {
+      if (loud) say(p.api ? "请先填写 Base URL。" : "这个服务商不提供模型列表。", true);
       return;
     }
     listing = true;
     plugin.update();
     try {
-      const models = await listModels(p, base, await keyFor(p.id).catch(() => ""));
+      const models = await listModels(spec, await keyFor(p.id).catch(() => ""));
+      if (provider().id !== p.id) return; // another provider was chosen meanwhile
       listed.set(p.id, models);
-      if (!models.includes(model())) settings.save({ ...settings.value, models: { ...settings.value.models, [p.id]: models[0] } });
-      say(`获取到 ${models.length} 个模型。`);
+      const before = model();
+      const chosen = pickListed(p, before, models);
+      settings.save({ ...settings.value, models: { ...settings.value.models, [p.id]: chosen } });
+      say(chosen === before ? `获取到 ${models.length} 个模型。` : `获取到 ${models.length} 个模型。「${before}」不在列表中，已改用「${chosen}」。`);
       changed();
     } catch (error) {
       listed.delete(p.id);
-      say(`没能获取模型列表（${(error as Error).message}），请直接填写模型 ID。`, true);
+      if (loud || p.api)
+        say(p.api ? `没能获取模型列表（${(error as Error).message}），请直接填写模型 ID。` : `没能获取模型列表（${(error as Error).message}），可以从 pi 自带的列表中选择。`, true);
     } finally {
       listing = false;
+      syncIndexes();
+      plugin.update();
     }
   };
   page.on("setBaseUrl", (text: string) => {
@@ -526,11 +560,11 @@ export default async function activate(plugin: Plugin) {
   page.on("acceptBaseUrl", async (text: string) => {
     if (saveBaseUrl(text, true)) await fetchModels(true);
   });
-  page.on("fetchModels", () => fetchModels(true));
   page.on("chooseModel", (id: string) => {
     settings.save({ ...settings.value, models: { ...settings.value.models, [provider().id]: id.trim() } });
     changed();
   });
+  page.on("fetchModels", () => fetchModels(true));
 
   plugin.onDispose(async () => {
     clearTimeout(refresh);

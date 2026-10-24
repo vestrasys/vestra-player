@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { CUSTOM, listModels } from "../providers.ts";
+import { CUSTOM, customList, listModels, loadProviders, pickListed } from "../providers.ts";
 import { KEY, dataDirectory, server, startAi } from "./fixture.mjs";
 
 const catalog = async () => JSON.parse(await fs.readFile(new URL("../vendor/pi/models.json", import.meta.url), "utf8")).providers;
@@ -37,17 +37,17 @@ test("the catalog carries every key-based provider of pi, no login-only or cloud
 test("custom endpoints list their models: OpenAI GET /models, Anthropic GET /v1/models", async () => {
   const mock = await server(() => ({ text: ["x"] }), { models: ["b-model", "a-model"] });
   const [openai, anthropic] = CUSTOM;
-  assert.deepEqual(await listModels(openai, mock.url, KEY), ["a-model", "b-model"]);
+  assert.deepEqual(await listModels(customList(openai, mock.url), KEY), ["a-model", "b-model"]);
   assert.equal(mock.requests.at(-1).url, "/v1/models");
   assert.equal(mock.requests.at(-1).headers.authorization, `Bearer ${KEY}`);
   const root = mock.url.replace(/\/v1$/, "");
-  assert.deepEqual(await listModels(anthropic, root, KEY), ["a-model", "b-model"]);
+  assert.deepEqual(await listModels(customList(anthropic, root), KEY), ["a-model", "b-model"]);
   assert.equal(mock.requests.at(-1).url, "/v1/models");
   assert.equal(mock.requests.at(-1).headers["x-api-key"], KEY);
   assert.equal(mock.requests.at(-1).headers["anthropic-version"], "2023-06-01");
 
   const bare = await server(() => ({ text: ["x"] }), { models: null });
-  await assert.rejects(listModels(openai, bare.url, KEY), /404/);
+  await assert.rejects(listModels(customList(openai, bare.url), KEY), /404/);
 });
 
 test("「自定义 · Anthropic 格式」: listed model, streamed reply and a tool call over the Anthropic wire format", async () => {
@@ -142,7 +142,7 @@ test("settings of the first slice move to 「自定义 · OpenAI 格式」 with 
 
 test("pi's own User-Agent and headers go out unchanged: the worker never sets identity or header filters", async () => {
   // Kimi and OpenCode treat a changed User-Agent as a terms violation.
-  for (const file of ["worker.ts", "tools.ts", "files.ts", "protocol.ts"]) {
+  for (const file of ["worker.ts", "tools.ts", "files.ts", "protocol.ts", "models.ts"]) {
     const source = await fs.readFile(new URL(`../worker/${file}`, import.meta.url), "utf8");
     assert.doesNotMatch(source, /userAgent|user-agent|identity|headers\s*:|filterHeaders|setGlobalDispatcher/i, file);
   }
@@ -182,5 +182,79 @@ test("a saved provider that is no longer offered: notice, nothing sent, settings
   await ai.configure(mock.url);
   await ai.ask("hi");
   assert.equal(ai.rows().at(-1).text, "好");
+  await ai.stop();
+});
+
+test("the model shown is the model used: choosing a provider saves its default and the lists follow", async () => {
+  const data = await dataDirectory();
+  const ai = await startAi({ data });
+  const providers = loadProviders(new URL("..", import.meta.url).pathname);
+  const minimax = providers.find((p) => p.id === "minimax");
+  // The user picked something else in the list before (a one-way index would stop following).
+  ai.page.emit("choose-provider", ai.page.props.providers.indexOf("OpenAI"));
+  await ai.host.settle();
+  ai.page.emit("choose-provider", ai.page.props.providers.indexOf("MiniMax"));
+  await ai.host.settle();
+  await ai.until(() => ai.page.props.models.length > 0, "models");
+  const shown = ai.page.props.models[ai.page.props["model-index"]];
+  assert.equal(shown, minimax.defaultModel);
+  assert.equal(ai.page.props["model-text"], shown);
+  assert.equal(ai.page.props.providers[ai.page.props["provider-index"]], "MiniMax");
+  assert.equal(ai.page.props["can-list"], true);
+  await ai.stop();
+  const settings = JSON.parse(await fs.readFile(path.join(data, "settings.json"), "utf8"));
+  assert.equal(settings.models.minimax, shown, "saved, so the request uses the same model");
+});
+
+test("listing styles of built-in providers, and which model to use after a listing", async () => {
+  const mock = await server(() => ({ text: ["x"] }), { models: ["MiniMax-M3.1", "MiniMax-M3.1-Flash"] });
+  assert.deepEqual(await listModels({ style: "anthropic", url: `${mock.url}/models` }, KEY), ["MiniMax-M3.1", "MiniMax-M3.1-Flash"]);
+  assert.equal(mock.requests.at(-1).headers["x-api-key"], KEY);
+  // Google: { models: [{ name: "models/<id>" }] }, key in x-goog-api-key.
+  const http = await import("node:http");
+  let header;
+  const google = http.createServer((req, res) => {
+    header = req.headers["x-goog-api-key"];
+    res.end(JSON.stringify({ models: [{ name: "models/gemini-9" }, { name: "models/gemini-8" }] }));
+  });
+  await new Promise((resolve) => google.listen(0, "127.0.0.1", resolve));
+  assert.deepEqual(await listModels({ style: "google", url: `http://127.0.0.1:${google.address().port}/v1beta/models` }, KEY), ["gemini-8", "gemini-9"]);
+  assert.equal(header, KEY);
+  google.close();
+
+  const providers = loadProviders(new URL("..", import.meta.url).pathname);
+  const minimax = providers.find((p) => p.id === "minimax");
+  assert.equal(minimax.list.style, "anthropic");
+  // A retired model (still in pi's catalog) is replaced by a listed one; a listed current one stays.
+  assert.equal(pickListed(minimax, "MiniMax-M2.7", ["MiniMax-M3.1", "MiniMax-M3.1-Flash"]), "MiniMax-M3.1");
+  assert.equal(pickListed(minimax, "MiniMax-M3.1-Flash", ["MiniMax-M3.1", "MiniMax-M3.1-Flash"]), "MiniMax-M3.1-Flash");
+});
+
+test("a listed model that pi's catalog does not know runs on the provider's endpoint", async () => {
+  process.env.PI_OFFLINE = "1";
+  process.env.PI_TELEMETRY = "0";
+  process.env.PI_PACKAGE_DIR = new URL("../vendor/pi", import.meta.url).pathname;
+  const sdk = await import("../vendor/pi/pi.mjs");
+  const { resolveModel } = await import("../worker/models.ts");
+  const runtime = await sdk.ModelRuntime.create({ credentials: new sdk.InMemoryCredentialStore(), modelsPath: null, refreshOnCreate: false });
+  const known = runtime.getModels("minimax")[0];
+  assert.equal(resolveModel(runtime, "minimax", known.id), runtime.getModel("minimax", known.id));
+  const fresh = resolveModel(runtime, "minimax", "MiniMax-M9-Future");
+  assert.equal(fresh.id, "MiniMax-M9-Future");
+  assert.equal(fresh.provider, "minimax");
+  assert.equal(fresh.baseUrl, known.baseUrl);
+  assert.equal(resolveModel(runtime, "no-such-provider", "x"), undefined);
+});
+
+test("a model the provider no longer serves: a clear error with 打开设置 and 重试", async () => {
+  const mock = await server(() => ({ status: 404, error: "The model mock-1 is no longer available", code: "model_not_found" }));
+  const ai = await startAi({ compat: mock.url });
+  await ai.ask("hi");
+  const error = ai.rows().at(-1);
+  assert.equal(error.kind, "error");
+  assert.equal(error.text, "模型「mock-1」不可用，请在设置中换一个模型。");
+  assert.equal(error.settings, true);
+  assert.match(error.detail, /no longer available/);
+  assert.equal(ai.props["can-retry"], true);
   await ai.stop();
 });

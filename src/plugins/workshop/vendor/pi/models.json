@@ -7,7 +7,11 @@
         "Ling-2.6-1T",
         "Ling-2.6-flash",
         "Ring-2.6-1T"
-      ]
+      ],
+      "list": {
+        "style": "openai",
+        "url": "https://api.ant-ling.com/v1/models"
+      }
     },
     {
       "id": "anthropic",
@@ -30,7 +34,11 @@
         "claude-sonnet-4-6",
         "claude-sonnet-5",
         "claude-sonnet-5-5"
-      ]
+      ],
+      "list": {
+        "style": "anthropic",
+        "url": "https://api.anthropic.com/v1/models"
+      }
     },
     {
       "id": "baseten",
@@ -50,7 +58,11 @@
         "zai-org/GLM-5.3",
         "zai-org/GLM-5.3-Fast",
         "zai-org/GLM-5.3-Flash"
-      ]
+      ],
+      "list": {
+        "style": "openai",
+        "url": "https://inference.baseten.co/v1/models"
+      }
     },
     {
       "id": "cerebras",
@@ -58,7 +70,11 @@
       "models": [
         "gpt-oss-120b",
         "qwen-3.8-27b"
-      ]
+      ],
+      "list": {
+        "style": "openai",
+        "url": "https://api.cerebras.ai/v1/models"
+      }
     },
     {
       "id": "deepseek",
@@ -66,7 +82,11 @@
       "models": [
         "deepseek-flash",
         "deepseek-v4-pro"
-      ]
+      ],
+      "list": {
+        "style": "openai",
+        "url": "https://api.deepseek.com/models"
+      }
     },
     {
       "id": "fireworks",
@@ -96,7 +116,11 @@
         "accounts/fireworks/routers/kimi-latest",
         "accounts/fireworks/routers/minimax-latest",
         "accounts/fireworks/routers/qwen-max-latest"
-      ]
+      ],
+      "list": {
+        "style": "anthropic",
+        "url": "https://api.fireworks.ai/inference/v1/models"
+      }
     },
     {
       "id": "google",
@@ -126,7 +150,11 @@
         "gemini-pro-latest",
         "gemma-4-26b-a4b-it",
         "gemma-4-31b-it"
-      ]
+      ],
+      "list": {
+        "style": "google",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models"
+      }
     },
     {
       "id": "groq",
@@ -139,7 +167,11 @@
         "openai/gpt-oss-safeguard-20b",
         "qwen/qwen3.6-27b",
         "qwen/qwen3.8-27b"
-      ]
+      ],
+      "list": {
+        "style": "openai",
+        "url": "https://api.groq.com/openai/v1/models"
+      }
     },
     {
       "id": "huggingface",
@@ -225,7 +257,11 @@
         "zai-org/GLM-5.2",
         "zai-org/GLM-5.3",
         "zai-org/GLM-5.3-Flash"
-      ]
+      ],
+      "list": {
+        "style": "openai",
+        "url": "https://router.huggingface.co/v1/models"
+      }
     },
     {
       "id": "meta",
@@ -237,7 +273,11 @@
         "muse-spark-1.3",
         "muse-spark-1.3-contributor",
         "muse-wonder-1.0"
-      ]
+      ],
+      "list": {
+        "style": "openai",
+        "url": "https://api.meta.ai/v1/models"
+      }
     },
     {
       "id": "minimax",
@@ -247,7 +287,11 @@
         "MiniMax-M2.7-highspeed",
         "MiniMax-M3",
         "MiniMax-M3.1-Flash"
-      ]
+      ],
+      "list": {
+        "style": "anthropic",
+        "url": "https://api.minimax.io/anthropic/v1/models"
+      }
     },
     {
       "id": "minimax-cn",
@@ -257,7 +301,11 @@
         "MiniMax-M2.7-highspeed",
         "MiniMax-M3",
         "MiniMax-M3.1-Flash"
-      ]
+      ],
+      "list": {
+        "style": "anthropic",
+        "url": "https://api.minimaxi.com/anthropic/v1/models"
+      }
     },
     {
       "id": "mistral",
@@ -300,7 +348,11 @@
         "voxtral-small-latest",
         "zai-glm-5-2",
         "zai-glm-5-3"
-      ]
+      ],
+      "list": {
+        "style": "openai",
+        "url": "https://api.mistral.ai/v1/models"
+      }
     },
     {
       "id": "moonshotai",
@@ -310,7 +362,11 @@
         "kimi-k2.7-code",
         "kimi-k2.7-code-highspeed",
         "kimi-k3"
-      ]
+      ],
+      "list": {
+        "style": "openai",
+        "url": "https://api.moonshot.ai/v1/models"
+      }
     },
     {
       "id": "moonshotai-cn",
@@ -320,7 +376,11 @@
         "kimi-k2.7-code",
         "kimi-k2.7-code-highspeed",
         "kimi-k3"
-      ]
+      ],
+      "list": {
+        "style": "openai",
+        "url": "https://api.moonshot.cn/v1/models"
+      }
     },
     {
       "id": "nvidia",
@@ -347,7 +407,11 @@
         "stepfun-ai/step-5-preview",
         "z-ai/glm-5.3",
         "z-ai/glm-5.3-flash"
-      ]
+      ],
+      "list": {
+        "style": "openai",
+        "url": "https://integrate.api.nvidia.com/v1/models"
+      }
     },
     {
       "id": "openai",
@@ -395,7 +459,11 @@
         "o3-mini",
         "o3-pro",
         "o4-mini"
-      ]
+      ],
+      "list": {
+        "style": "openai",
+        "url": "https://api.openai.com/v1/models"
+      }
     },
     {
       "id": "opencode",
@@ -484,7 +552,11 @@
         "qwen3.6-plus",
         "qwen3.8-flash",
         "qwen3.8-max"
-      ]
+      ],
+      "list": {
+        "style": "openai",
+        "url": "https://opencode.ai/inference/v1/models"
+      }
     },
     {
       "id": "openrouter",
@@ -891,7 +963,11 @@
         "~x-ai/grok-latest",
         "~z-ai/glm-flash-latest",
         "~z-ai/glm-latest"
-      ]
+      ],
+      "list": {
+        "style": "openai",
+        "url": "https://openrouter.ai/api/v1/models"
+      }
     },
     {
       "id": "together",
@@ -912,7 +988,11 @@
         "zai-org/GLM-5.2",
         "zai-org/GLM-5.3",
         "zai-org/GLM-5.3-Flash"
-      ]
+      ],
+      "list": {
+        "style": "openai",
+        "url": "https://api.together.ai/v1/models"
+      }
     },
     {
       "id": "vercel-ai-gateway",
@@ -1223,7 +1303,11 @@
         "zai/glm-5.3-flash",
         "zai/glm-5.3-flashx",
         "zai/glm-5v-turbo"
-      ]
+      ],
+      "list": {
+        "style": "anthropic",
+        "url": "https://ai-gateway.vercel.sh/v1/models"
+      }
     },
     {
       "id": "xai",
@@ -1233,7 +1317,11 @@
         "grok-4.5",
         "grok-4.6",
         "grok-4.7"
-      ]
+      ],
+      "list": {
+        "style": "openai",
+        "url": "https://api.x.ai/v1/models"
+      }
     },
     {
       "id": "xiaomi",
@@ -1242,7 +1330,11 @@
         "mimo-v2.6-flash",
         "mimo-v2.6-pro",
         "mimo-v2.6-pro-ultraspeed"
-      ]
+      ],
+      "list": {
+        "style": "openai",
+        "url": "https://api.xiaomimimo.com/v1/models"
+      }
     }
   ]
 }

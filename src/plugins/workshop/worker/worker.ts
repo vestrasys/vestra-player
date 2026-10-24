@@ -18,6 +18,7 @@ import {
   type ResourceLoader,
 } from "../vendor/pi/pi.mjs";
 import { WorkFolder } from "./files.ts";
+import { resolveModel } from "./models.ts";
 import { type StartMessage, type ToPlugin, type ToWorker, type WorkerEvent } from "./protocol.ts";
 import { TOOL_NAMES, createTools } from "./tools.ts";
 
@@ -121,7 +122,7 @@ async function start(message: StartMessage) {
       ],
     } as Parameters<ModelRuntime["registerProvider"]>[1]);
   }
-  const model = modelRuntime.getModel(message.provider, message.modelId);
+  const model = resolveModel(modelRuntime, message.provider, message.modelId);
   if (!model) throw new Error(`未知模型：${message.provider}/${message.modelId}`);
   // Local servers (Ollama, LM Studio) take any key.
   await modelRuntime.setRuntimeApiKey(message.provider, message.key || "none");

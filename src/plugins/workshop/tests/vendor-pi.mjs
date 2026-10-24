@@ -69,6 +69,18 @@ const EXCLUDED = new Map([
   ["cloudflare-ai-gateway", "account and gateway id in the endpoint"],
   ["cloudflare-workers-ai", "account id in the endpoint"],
 ]);
+/**
+ * The model list endpoint of an API family: OpenAI style `GET …/models`
+ * (Bearer), Anthropic `GET …/v1/models` (x-api-key), Google `GET …/models`
+ * (x-goog-api-key). Null when the family has none we know.
+ */
+export function listing(api, base) {
+  if (api === "openai-completions" || api === "openai-responses") return { style: "openai", url: `${base}/models` };
+  if (api === "mistral-conversations") return { style: "openai", url: `${base.replace(/\/v1$/, "")}/v1/models` };
+  if (api === "anthropic-messages") return { style: "anthropic", url: `${base.replace(/\/v1$/, "")}/v1/models` };
+  if (api === "google-generative-ai") return { style: "google", url: `${base}/models` };
+  return null;
+}
 /** A provider pi adds later that calls itself a plan or subscription is left out too, until reviewed. */
 const PLAN = /plan|coding|subscription/i;
 export function offered(provider, models) {
@@ -178,7 +190,14 @@ export async function vendor(out) {
   const providers = [];
   for (const provider of runtime.getProviders()) {
     const models = runtime.getModels(provider.id);
-    if (offered(provider, models)) providers.push({ id: provider.id, name: provider.name, models: models.map((m) => m.id).sort() });
+    if (!offered(provider, models)) continue;
+    // Where the provider lists its models (「获取模型」): from the API most of its models use.
+    const count = new Map();
+    for (const m of models) count.set(m.api, (count.get(m.api) ?? 0) + 1);
+    const api = [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0];
+    const base = models.find((m) => m.api === api).baseUrl.replace(/\/+$/, "");
+    const list = listing(api, base);
+    providers.push({ id: provider.id, name: provider.name, models: models.map((m) => m.id).sort(), ...(list ? { list } : {}) });
   }
   providers.sort((a, b) => a.name.localeCompare(b.name, "en"));
   await fs.writeFile(path.join(out, "vendor/pi/models.json"), `${JSON.stringify({ providers }, null, 2)}\n`);

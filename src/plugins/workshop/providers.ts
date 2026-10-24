@@ -4,6 +4,12 @@
 import fs from "node:fs";
 import path from "node:path";
 
+/** Where a provider lists its models: OpenAI, Anthropic or Google style. */
+export interface ListSpec {
+  style: "openai" | "anthropic" | "google";
+  url: string;
+}
+
 export interface Provider {
   id: string;
   label: string;
@@ -12,6 +18,24 @@ export interface Provider {
   defaultModel: string;
   /** Custom endpoints: the wire format pi speaks to them. */
   api: "openai-completions" | "anthropic-messages" | null;
+  /** Built-in providers whose model list we can ask for (pi's catalog can be out of date). */
+  list?: ListSpec;
+}
+
+/** The list endpoint of a custom endpoint, from its Base URL. */
+export function customList(provider: Provider, baseUrl: string): ListSpec {
+  return provider.api === "anthropic-messages"
+    ? { style: "anthropic", url: `${baseUrl.replace(/\/v1$/, "")}/v1/models` }
+    : { style: "openai", url: `${baseUrl}/models` };
+}
+
+/**
+ * The model to use after a successful listing: the current one if listed,
+ * else a preferred or the catalog's default one if listed, else the first listed.
+ */
+export function pickListed(provider: Provider, current: string, listed: string[]): string {
+  if (listed.includes(current)) return current;
+  return PREFERRED.find((m) => listed.includes(m)) ?? (listed.includes(provider.defaultModel) ? provider.defaultModel : listed[0]);
 }
 
 /** Custom endpoints; the worker registers each under its id. */
@@ -25,7 +49,7 @@ const PREFERRED = ["claude-sonnet-4-5", "gpt-5-mini", "gemini-2.5-flash", "anthr
 
 export function loadProviders(packageDirectory: string): Provider[] {
   const catalog = JSON.parse(fs.readFileSync(path.join(packageDirectory, "vendor/pi/models.json"), "utf8")) as {
-    providers: { id: string; name: string; models: string[] }[];
+    providers: { id: string; name: string; models: string[]; list?: ListSpec }[];
   };
   const builtin = catalog.providers.map(
     (p): Provider => ({
@@ -34,6 +58,7 @@ export function loadProviders(packageDirectory: string): Provider[] {
       models: p.models,
       defaultModel: PREFERRED.find((m) => p.models.includes(m)) ?? p.models[0] ?? "",
       api: null,
+      ...(p.list ? { list: p.list } : {}),
     }),
   );
   return [...builtin, ...CUSTOM];
@@ -152,20 +177,27 @@ export function checkBaseUrl(text: string): string {
  * Anthropic format `GET {base}/v1/models`. Throws when the endpoint has no
  * list or refuses; the user can then type the model id.
  */
-export async function listModels(provider: Provider, baseUrl: string, key: string, timeoutMs = 10_000): Promise<string[]> {
-  const anthropic = provider.api === "anthropic-messages";
-  const url = anthropic ? `${baseUrl.replace(/\/v1$/, "")}/v1/models` : `${baseUrl}/models`;
-  const headers: Record<string, string> = anthropic
-    ? { "anthropic-version": "2023-06-01", ...(key ? { "x-api-key": key } : {}) }
-    : key
-      ? { authorization: `Bearer ${key}` }
-      : {};
-  const response = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
+export async function listModels(spec: ListSpec, key: string, timeoutMs = 10_000): Promise<string[]> {
+  const headers: Record<string, string> =
+    spec.style === "anthropic"
+      ? { "anthropic-version": "2023-06-01", ...(key ? { "x-api-key": key } : {}) }
+      : spec.style === "google"
+        ? key
+          ? { "x-goog-api-key": key }
+          : {}
+        : key
+          ? { authorization: `Bearer ${key}` }
+          : {};
+  const response = await fetch(spec.url, { headers, signal: AbortSignal.timeout(timeoutMs) });
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`.trim());
   const body = (await response.json()) as { data?: { id?: unknown }[]; models?: { id?: unknown; name?: unknown }[] };
-  // OpenAI and Anthropic: { data: [{ id }] }; Ollama's native list: { models: [{ name }] }.
+  // OpenAI and Anthropic: { data: [{ id }] }; Google and Ollama: { models: [{ name }] }
+  // (Google's names are "models/<id>").
   const items = body.data ?? body.models ?? [];
-  const ids = items.map((m) => (typeof m.id === "string" ? m.id : typeof (m as { name?: unknown }).name === "string" ? String((m as { name: string }).name) : "")).filter(Boolean);
+  const ids = items
+    .map((m) => (typeof m.id === "string" ? m.id : typeof (m as { name?: unknown }).name === "string" ? String((m as { name: string }).name) : ""))
+    .map((id) => id.replace(/^models\//, ""))
+    .filter(Boolean);
   if (!ids.length) throw new Error("没有列出任何模型");
   return [...new Set(ids)].sort();
 }
