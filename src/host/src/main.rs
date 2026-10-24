@@ -53,6 +53,7 @@ mod renderer;
 mod secret_index;
 mod session;
 mod settings_window;
+mod slot_claims;
 mod source_backend;
 mod source_geometry;
 pub mod source_lease;
@@ -98,13 +99,33 @@ use std::{
 struct RpcError {
     code: String,
     message: String,
+    /// Extra fields beside `code` and `message` (a slot refusal's `reason`, `slot`, `owner`).
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    detail: Option<serde_json::Map<String, Value>>,
 }
 impl RpcError {
     fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
             code: code.into(),
             message: message.into(),
+            detail: None,
         }
+    }
+    /// `ui.mount` refused because another plugin holds the slot: `conflict`
+    /// with `reason: "slot-occupied"`. It does not fail activation.
+    fn slot_occupied(slot: composition::Slot, holder: &str) -> Self {
+        let mut error = Self::new("conflict", slot_claims::refusal(slot, holder));
+        if let Value::Object(detail) =
+            json!({"reason":"slot-occupied","slot":slot.name(),"owner":holder})
+        {
+            error.detail = Some(detail);
+        }
+        error
+    }
+    fn is_slot_occupied(&self) -> bool {
+        self.detail
+            .as_ref()
+            .is_some_and(|d| d.get("reason").and_then(Value::as_str) == Some("slot-occupied"))
     }
     fn invalid(message: impl Into<String>) -> Self {
         Self::new("invalid", message)
@@ -294,6 +315,10 @@ struct Host {
     activations: package_activation::Book,
     activation_ui: std::collections::BTreeSet<(u64, u64)>,
     activation_receipts: std::collections::VecDeque<Value>,
+    /// Mount requests of other plugins waiting for the built-ins to start: reply, method, params.
+    held_mounts: slot_claims::Gate<(Reply, String, Value)>,
+    /// Slots a running plugin was refused, with their holder (`packages.list` `warnings`).
+    slot_warnings: BTreeMap<u64, Vec<(composition::Slot, String)>>,
     packages: package_manager::Manager,
     cleanup: BTreeMap<u64, (bool, bool)>,
     power: power::Power,
@@ -497,6 +522,8 @@ impl Host {
             return;
         }
         self.archive_activation(owner, "plugin disabled before activation completed");
+        self.held_mounts.forget(owner);
+        self.slot_warnings.remove(&owner);
         let _ = self.commands.remove_owner(owner);
         {
             let mut input = self.input.borrow_mut();
@@ -658,19 +685,19 @@ impl Host {
                                 self.activation_ui.insert((owner, reply.id));
                             }
                         }
-                        match self.dispatch(&reply, &request.method, &request.params) {
-                            Ok(None) => (),
-                            Ok(Some(value)) => self.respond(reply, Ok(value)),
-                            Err(error) => {
-                                if debug_keys() && request.method == "ui.menu" {
-                                    eprintln!(
-                                        "keys: ui.menu refused {}: {}",
-                                        error.code, error.message
-                                    );
-                                }
-                                self.respond(reply, Err(error))
+                        // Built-in panels claim their slots first (slot_claims).
+                        if matches!(request.method.as_str(), "ui.mount" | "ui.unmount")
+                            && !self.headless
+                        {
+                            let builtin = self.is_builtin(owner);
+                            let starting = self.builtins_starting();
+                            if self.held_mounts.holds(owner, builtin, starting) {
+                                self.held_mounts
+                                    .hold(owner, (reply, request.method, request.params));
+                                return;
                             }
                         }
+                        self.answer(reply, &request.method, &request.params);
                     }
                     Err(error) => {
                         eprintln!("malformed request: {error}");
@@ -2075,6 +2102,7 @@ impl Host {
         }
     }
     fn prepare_mount_tick(&mut self) {
+        self.release_held_mounts();
         if self.preparing.is_none() {
             if let Some(change) = self.mount_queue.pop_front() {
                 self.send(
@@ -2096,6 +2124,8 @@ impl Host {
             if !self.plugins.contains_key(&owner) {
                 return;
             }
+            // Mounted after all: an earlier refusal no longer applies.
+            self.slot_warnings.remove(&owner);
             next.insert(owner, mount);
         } else {
             next.remove(&owner);
@@ -2773,14 +2803,76 @@ impl Host {
                 |m| json!({"owner":m.spec.owner,"effective":self.no_video}),
             )
     }
+    fn answer(&mut self, reply: Reply, method: &str, params: &Value) {
+        match self.dispatch(&reply, method, params) {
+            Ok(None) => (),
+            Ok(Some(value)) => self.respond(reply, Ok(value)),
+            Err(error) => {
+                if debug_keys() && method == "ui.menu" {
+                    eprintln!("keys: ui.menu refused {}: {}", error.code, error.message);
+                }
+                self.respond(reply, Err(error))
+            }
+        }
+    }
+    /// Mount requests held while the built-ins start, answered in order once they have.
+    fn release_held_mounts(&mut self) {
+        if self.held_mounts.is_empty() {
+            return;
+        }
+        let starting = self.builtins_starting();
+        for (reply, method, params) in self.held_mounts.release(starting) {
+            if self.plugins.contains_key(&reply.owner) {
+                self.answer(reply, &method, &params);
+            }
+        }
+    }
+    /// Refuse a mount whose slot `holder` has: recorded for `packages.list`,
+    /// shown on the OSD and announced as `host.error`.
+    fn slot_refusal(&mut self, owner: u64, slot: composition::Slot, holder: u64) -> RpcError {
+        let holder = self
+            .plugins
+            .get(&holder)
+            .map_or_else(|| holder.to_string(), |p| p.manifest.id.clone());
+        let id = self
+            .plugins
+            .get(&owner)
+            .map(|p| p.manifest.id.clone())
+            .unwrap_or_default();
+        let error = RpcError::slot_occupied(slot, &holder);
+        let warnings = self.slot_warnings.entry(owner).or_default();
+        warnings.retain(|(s, _)| *s != slot);
+        warnings.push((slot, holder.clone()));
+        eprintln!("ui.mount {id}: {}", error.message);
+        self.show_osd(&format!("{id} 的面板未显示：{}", error.message));
+        self.broadcast(
+            "host.error",
+            json!({"code":"slot-occupied","plugin":id,"slot":slot.name(),"owner":holder,"message":error.message}),
+        );
+        error
+    }
+    /// `packages.list` `warnings` of a running plugin.
+    fn warnings_of(&self, owner: u64) -> Vec<Value> {
+        self.slot_warnings
+            .get(&owner)
+            .into_iter()
+            .flatten()
+            .map(|(slot, holder)| json!({"code":"slot-occupied","slot":slot.name(),"owner":holder}))
+            .collect()
+    }
+    /// The same warnings as text: 「面板未显示：侧栏已被 vestra.playlist 使用」.
+    fn warning_text(&self, owner: u64) -> Option<String> {
+        let text = self
+            .slot_warnings
+            .get(&owner)?
+            .iter()
+            .map(|(slot, holder)| format!("面板未显示：{}", slot_claims::refusal(*slot, holder)))
+            .collect::<Vec<_>>();
+        (!text.is_empty()).then(|| text.join("；"))
+    }
     fn respond(&mut self, reply: Reply, result: std::result::Result<Value, RpcError>) {
         if self.activation_ui.remove(&(reply.owner, reply.id)) {
-            let outcome = result.as_ref().map(|_| ()).map_err(|error| {
-                format!("{}: {}", error.code, error.message)
-                    .chars()
-                    .take(512)
-                    .collect()
-            });
+            let outcome = activation_outcome(&result);
             if let Err(error) =
                 self.activations
                     .ui_finish(reply.owner, reply.id, outcome, self.now_ms())
@@ -3270,21 +3362,19 @@ impl Host {
                         "backdrop" => composition::Slot::Backdrop,
                         _ => return Err(RpcError::invalid("unknown mount slot")),
                     };
-                    // R-U3: one backdrop at a time, whoever mounted it.
-                    let backdrop =
-                        |spec: &composition::CompileSpec| spec.slot == composition::Slot::Backdrop;
-                    let queued = self
+                    // One component per slot (R-U3 for the backdrop), whoever
+                    // mounted it: refused here, not when the shell compiles.
+                    let pending = self
                         .mount_queue
                         .iter()
                         .chain(self.preparing.as_ref().map(|(_, change)| change))
-                        .any(|c| c.contribution.as_ref().is_some_and(|m| backdrop(&m.spec)));
-                    if slot == composition::Slot::Backdrop
-                        && (queued || self.mounts.values().any(|m| backdrop(&m.spec)))
+                        .map(|c| (c.reply.owner, c.contribution.as_ref().map(|m| m.spec.slot)))
+                        .collect::<Vec<_>>();
+                    let mounted = self.mounts.values().map(|m| (m.spec.owner, m.spec.slot));
+                    if let Some(holder) =
+                        slot_claims::occupant(slot, reply.owner, mounted, &pending)
                     {
-                        return Err(RpcError::new(
-                            "conflict",
-                            "another plugin shows the backdrop",
-                        ));
+                        return Err(self.slot_refusal(reply.owner, slot, holder));
                     }
                     let file = plugins::package_file(&plugin.directory, string(params, "file")?)?;
                     let properties = serde_json::from_value(
@@ -3640,6 +3730,22 @@ impl Host {
     }
 }
 /// The window policy's slot (the backdrop has no preference or auto-hide).
+/// What an initial UI request means for activation. A slot another plugin
+/// holds does not fail it: the plugin runs without its panel, with a warning
+/// (`packages.list`).
+fn activation_outcome(
+    result: &std::result::Result<Value, RpcError>,
+) -> std::result::Result<(), String> {
+    match result {
+        Err(error) if !error.is_slot_occupied() => {
+            Err(format!("{}: {}", error.code, error.message)
+                .chars()
+                .take(512)
+                .collect())
+        }
+        _ => Ok(()),
+    }
+}
 fn policy_slot(slot: composition::Slot) -> Option<window_state::Slot> {
     match slot {
         composition::Slot::Bottom => Some(window_state::Slot::Bottom),
@@ -4101,6 +4207,8 @@ fn main() -> Result<()> {
         activations: package_activation::Book::default(),
         activation_ui: Default::default(),
         activation_receipts: Default::default(),
+        held_mounts: Default::default(),
+        slot_warnings: BTreeMap::new(),
         packages: package_manager::Manager::open()?,
         cleanup: Default::default(),
         power: power::Power::system(),
@@ -4318,4 +4426,40 @@ fn main() -> Result<()> {
         host.borrow_mut().shell = None;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_slot_refusal_is_a_conflict_naming_the_slot_and_its_holder() {
+        let refusal = RpcError::slot_occupied(composition::Slot::Sidebar, "vestra.playlist");
+        assert_eq!(
+            serde_json::to_value(&refusal).unwrap(),
+            json!({"code":"conflict","message":"侧栏已被 vestra.playlist 使用",
+                "reason":"slot-occupied","slot":"sidebar","owner":"vestra.playlist"})
+        );
+        let plain = RpcError::new("conflict", "owner already mounted");
+        assert_eq!(
+            serde_json::to_value(&plain).unwrap(),
+            json!({"code":"conflict","message":"owner already mounted"})
+        );
+        assert!(refusal.is_slot_occupied() && !plain.is_slot_occupied());
+    }
+
+    #[test]
+    fn only_a_slot_refusal_leaves_activation_to_succeed() {
+        let refusal = RpcError::slot_occupied(composition::Slot::Bottom, "a.b");
+        assert_eq!(activation_outcome(&Err(refusal)), Ok(()));
+        assert_eq!(activation_outcome(&Ok(Value::Null)), Ok(()));
+        assert_eq!(
+            activation_outcome(&Err(RpcError::new("ui-prepare", "syntax error"))),
+            Err("ui-prepare: syntax error".into())
+        );
+        assert_eq!(
+            activation_outcome(&Err(RpcError::new("conflict", "owner already mounted"))),
+            Err("conflict: owner already mounted".into())
+        );
+    }
 }

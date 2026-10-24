@@ -25,6 +25,22 @@ impl Slot {
             Self::Backdrop => None,
         }
     }
+    /// The wire name (`ui.mount`'s `slot`).
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Bottom => "bottom",
+            Self::Sidebar => "sidebar",
+            Self::Backdrop => "backdrop",
+        }
+    }
+    /// What the user calls it, in host messages.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Bottom => "底栏",
+            Self::Sidebar => "侧栏",
+            Self::Backdrop => "视频背景",
+        }
+    }
 }
 
 /// One independent package per owner; this minimal shell allows one component

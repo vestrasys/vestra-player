@@ -742,10 +742,12 @@ interface SlotState {
 - 面板转发 global 上的所有回调，没有「先绑定再显示」的限制。
 - 底栏面板的内容可以画到槽位上方的视频区（负 `y`），宿主不裁切；侧栏与浮动窗口在其上层。进度条悬停时间提示这类内容可以直接画在底栏组件里（宿主的组合测试保证底栏外层不带 `clip`）。
 - 每个插件至多挂载一个面板（任一位置）。
+- **每个位置同一时间只有一个面板**（底栏、侧栏、背景层各一个）。位置已有别的插件的面板（已显示，或正在挂载）时，`ready` 以 `conflict` 失败，消息说明位置和占用者（「侧栏已被 vestra.playlist 使用」）；这次拒绝**不算激活失败**：插件照常运行，命令、快捷键都在，只是没有面板。播放器同时显示一条屏幕提示、写宿主日志，插件管理里该插件显示「提示：面板未显示：侧栏已被 … 使用」（`PluginInfo.error`，状态仍为 `running`）。占用者卸载后位置空出，插件重新加载即可挂上。`ui-prepare` 只表示文件编译或桥接失败。
+- 启动时**内置插件先挂载**：内置插件激活完成之前，其它插件（已安装的第三方插件、`--plugin` 开发加载）的挂载请求先等着，所以内置面板（播放列表的侧栏）总是保有自己的位置，与各插件进程谁先回应无关。
 
 **背景层**（`"backdrop"`）：没有视频帧时画在视频区（铺满，替代黑色的视频图像），用于专辑封面、空闲徽标。
 
-- 同一时间只有一个背景层，第二个插件挂载以 `conflict` 失败；插件停用时卸载。组件与 global 推断规则同上，`title` 不用。
+- 同一时间只有一个背景层，第二个插件挂载以 `conflict` 失败（规则同上，不算激活失败）；插件停用时卸载。组件与 global 推断规则同上，`title` 不用。
 - 什么时候显示（`state.effective`）由播放器决定：来源阶段 `empty`，或 `ready` / `ended` 且 mpv 没有输出画面（即 `stats().video === null`）时为 `true`；`loading` 时为 `true`（交互对齐 G-16a：加载中视频区不再停在上一个来源的最后一帧，背景层插件可以画加载界面）；`error` 保持上一状态；有画面时为 `false`。画什么由插件按 `player.state.phase` 与 `stats().video` 自己决定（没有 `mode`）。
 - 带封面的音频文件：挂着背景层时，播放器让 mpv 不把封面（内嵌图片、同目录的 cover.jpg 等）选作视频轨（`audio-display=no`、`cover-art-auto=no`），所以 `stats().video` 为 `null`、`effective` 为 `true`，封面由背景层插件自己画（例如读文件的内嵌图片）；从挂载后打开的下一个文件起生效。背景层卸载（`dispose` 或插件停用）后恢复 mpv 默认（`embedded-first`、`exact`），mpv 重新显示封面。
 - 层次：在视频区的输入层之下、屏幕提示与信息块之下；不接收指针和键盘，双击全屏、右键菜单、滚轮照常由视频区处理。`showMenu` 以 `unavailable` 失败，`setInteraction` 无效果。
@@ -1175,7 +1177,7 @@ interface PluginInfo {
   id: string; version: string | null;
   origin: "installed" | "development" | "trial";   // 安装库 / --plugin 开发加载 / 试载
   state: "starting" | "running" | "disabled" | "failed" | "stopped";
-  error: string | null;     // failed 时的原因
+  error: string | null;     // failed 时的原因；running 时为提示（面板位置被占，§6.3）
   capabilities: string[];
   directory: string;        // 包目录（显示字段读其中的 manifest.json）
   previousVersion: string | null; // 可回退到的版本
@@ -1230,7 +1232,7 @@ interface PackageChange {
 | `unsupported` | 也用于当前系统做不到的功能（各节的平台差异、§16.7），如 Linux 上的剪贴板、确认框、`system.*`、`secrets`；以及当前来源做不到的，如生成流上的滤镜（§8） |
 | `capability` | manifest 未声明所需能力 |
 | `invalid` | 参数不合法（如滤镜值超出范围） |
-| `busy`、`conflict`、`unavailable`、`unsupported` | 播放器拒绝接纳，未执行（`conflict` 也用于已有别的播放序列提供者、菜单路径已被占用，以及同一插件里重复的窗口 id 或命令 id；`unavailable` 也用于 `next`/`previous` 不可用、面板未显示、无界面模式） |
+| `busy`、`conflict`、`unavailable`、`unsupported` | 播放器拒绝接纳，未执行（`conflict` 也用于已有别的播放序列提供者、菜单路径已被占用、面板位置已被别的插件占用，以及同一插件里重复的窗口 id 或命令 id；`unavailable` 也用于 `next`/`previous` 不可用、面板未显示、无界面模式） |
 | `backend` | 载入或解析失败，`message` 为后端原因 |
 | `disabled` | 插件正在停用 |
 | `replaced` | 已被接受，但完成前被另一个来源替换（`open`、`openStream`、`media.ready`） |
@@ -1437,6 +1439,13 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | `Theme.font-mono` §6.4 | Menlo | Consolas | DejaVu Sans Mono |
 
 ## 17. 变更说明
+
+### 面板位置被占：挂载时拒绝，不再让激活失败（2026-10，播放器 0.4.x）
+
+- 底栏、侧栏已有别的插件的面板时，`panels.mount` 的 `ready` 在挂载请求时就以 `conflict` 失败（消息「侧栏已被 <id> 使用」）。之前要等组合窗口编译时才以 `ui-prepare` 失败，而激活期间的挂载失败让整个插件激活失败（例如开发加载的面板抢先占了侧栏，内置播放列表连命令都没有了）。背景层原来就是 `conflict`。
+- 这类拒绝**不再让激活失败**：插件照常运行，`PluginInfo.state` 为 `running`，`error` 带提示文字；播放器显示屏幕提示。其它挂载失败（编译失败 `ui-prepare` 等）照旧让激活失败。
+- 启动时内置插件先挂载，其它插件的挂载请求等内置插件激活完成后再处理。
+- 线上的拒绝另带 `reason: "slot-occupied"`、`slot`、`owner` 字段，`packages.list` 的每项另带 `warnings: [{ code: "slot-occupied", slot, owner }]`；SDK 目前不转交这些字段，所以插件读 `error.code`（`conflict`）和 `PluginInfo.error`。
 
 ### 自己的视觉身份：Aurora 配色与 V-Line 图标（2026-10，播放器 0.4.0，SDK 1.5.0）
 

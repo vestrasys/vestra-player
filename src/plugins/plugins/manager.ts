@@ -133,7 +133,8 @@ export class PluginsPage {
           state: STATE[p.state] ?? p.state,
           size: this.#size(p),
           dim: p.state === "disabled",
-          failed: p.state === "failed",
+          // Failed, or running with a warning: the state is drawn in the accent colour.
+          failed: p.state === "failed" || !!p.error,
           selected: p.id === this.#selected,
         }),
       ),
@@ -163,7 +164,9 @@ export class PluginsPage {
   #details(info: PluginInfo): Detail[] {
     const lines: Detail[] = [];
     const line = (label: string, text: string, warn = false) => lines.push({ label, text, warn });
-    if (info.error) line("失败原因", info.error, true);
+    // A running plugin's `error` is a warning: the player refused its panel
+    // because another plugin holds that position (「面板未显示：侧栏已被 … 使用」).
+    if (info.error) line(info.state === "failed" ? "失败原因" : "提示", info.error, true);
     if (info.origin === "development") line("说明", "开发加载：停用只在本次运行有效；不能卸载或回退");
     if (info.origin === "trial") line("说明", "试载中的插件由插件工坊管理");
     if (info.id === this.#plugin.id) line("说明", SELF_TIP);
