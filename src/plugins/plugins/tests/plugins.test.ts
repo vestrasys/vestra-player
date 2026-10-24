@@ -149,6 +149,30 @@ test("J07: details of the selected plugin", async () => {
   assert.equal(props(host)["can-reload"], true);
 });
 
+test("J07: a running plugin's warning (a refused panel position) shows as 提示", async () => {
+  const host = new TestHost();
+  const warning = "面板未显示：侧栏已被 vestra.playlist 使用";
+  await start(host, () => [info("dev.panel", { origin: "development", version: null, error: warning })]);
+  assert.deepEqual(row(host, "dev.panel"), {
+    id: "dev.panel",
+    version: "开发",
+    origin: "开发加载",
+    state: "运行中",
+    size: "—",
+    dim: false,
+    failed: true,
+    selected: false,
+  });
+  assert.equal(row(host, "vestra.audio")!.failed, false);
+  await emit(host, "select", "dev.panel");
+  const details = props(host).details as { label: string; text: string; warn: boolean }[];
+  assert.deepEqual(details[0], { label: "提示", text: warning, warn: true });
+  assert.ok(!details.some((d) => d.label === "失败原因"));
+  // Still a running plugin: it can be disabled and reloaded.
+  assert.equal(props(host)["toggle-text"], "停用");
+  assert.equal(props(host)["can-reload"], true);
+});
+
 test("J07: disable asks first, enable does not; the list follows the player", async () => {
   const host = new TestHost();
   await start(host);

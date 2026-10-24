@@ -610,6 +610,40 @@ impl Host {
         self.packages.receipts = self.packages.store.operations();
         Ok(())
     }
+    /// A running built-in plugin (shipped with the player, not a development load).
+    pub(super) fn is_builtin(&self, owner: u64) -> bool {
+        let Some(plugin) = self.plugins.get(&owner) else {
+            return false;
+        };
+        if self.packages.is_trial(owner) {
+            return false;
+        }
+        let stored = self.packages.store.get(&plugin.manifest.id);
+        stored
+            .current
+            .is_some_and(|current| current.directory == plugin.directory)
+            && stored.instance.is_some_and(|instance| instance.builtin)
+    }
+    /// Until the installed plugins started and while a built-in activates,
+    /// other plugins' mounts wait (slot_claims).
+    pub(super) fn builtins_starting(&mut self) -> bool {
+        if !self.packages.booted {
+            return true;
+        }
+        let now = self.now_ms();
+        let builtins = self
+            .plugins
+            .keys()
+            .copied()
+            .filter(|owner| self.is_builtin(*owner))
+            .collect::<Vec<_>>();
+        builtins.into_iter().any(|owner| {
+            matches!(
+                self.activations.status(owner, now),
+                Ok(package_activation::Status::Pending { .. })
+            )
+        })
+    }
     fn running(&self, id: &str) -> Option<u64> {
         self.plugins
             .iter()
@@ -642,13 +676,16 @@ impl Host {
                     .current
                     .as_ref()
                     .is_some_and(|current| current.directory == plugin.directory);
+            let warnings = self.warnings_of(owner);
             let (state, error) = match status {
                 Some(package_activation::Status::Pending { .. }) => ("starting", None),
                 Some(package_activation::Status::Failed { message }) => ("failed", Some(message)),
                 Some(package_activation::Status::TimedOut) => {
                     ("failed", Some("activation timed out".to_owned()))
                 }
-                _ => ("running", None),
+                // Until the SDK passes `warnings` on (it keeps only the known
+                // fields), a running plugin's `error` carries them as text.
+                _ => ("running", self.warning_text(owner)),
             };
             let origin = match (trial, installed) {
                 (true, _) => "trial",
@@ -664,7 +701,7 @@ impl Host {
                 "directory":plugin.directory,"previousVersion":previous,
                 "builtin":instance.as_ref().is_some_and(|i| i.builtin),
                 "source":instance.map(|i| i.source),
-                "dataDirectory":plugin.data_directory()}));
+                "dataDirectory":plugin.data_directory(),"warnings":warnings}));
         }
         let stopped = |disabled: bool, failure: Option<&String>| {
             if disabled {
@@ -699,7 +736,7 @@ impl Host {
                 "previousVersion":record.previous.and_then(|p| p.manifest.version),
                 "builtin":record.instance.as_ref().is_some_and(|i| i.builtin),
                 "source":record.instance.map(|i| i.source),
-                "dataDirectory":data}),
+                "dataDirectory":data,"warnings":[]}),
             );
         }
         for (id, (directory, manifest)) in &self.development {
@@ -713,7 +750,7 @@ impl Host {
                 json!({"id":id,"version":manifest.version,
                 "origin":"development","state":state,"error":error,
                 "capabilities":manifest.capabilities,"directory":directory,"previousVersion":null,
-                "builtin":false,"source":null,"dataDirectory":data}),
+                "builtin":false,"source":null,"dataDirectory":data,"warnings":[]}),
             );
         }
         Value::Array(list.into_values().collect())

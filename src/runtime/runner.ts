@@ -27,6 +27,14 @@ const pending = new Map<
   }
 >();
 const listeners = new Map<string, Set<(data: unknown) => void>>();
+/**
+ * Refusals because another plugin holds a single-owner resource: `conflict`
+ * with `reason` `"slot-occupied"` (`ui.mount`: the panel's `ready` rejects)
+ * or `"sequence-taken"` (`sequence.set`). They do not fail activation: the
+ * plugin runs without its panel, or without providing next/previous.
+ */
+const TAKEN = new Set(["slot-occupied", "sequence-taken"]);
+const taken = new WeakSet<Error>();
 const send = (message: unknown) =>
   process.stdout.write(`${JSON.stringify(message)}\n`);
 /**
@@ -88,7 +96,7 @@ input.on("line", (line) => {
     const message = JSON.parse(line) as {
       id?: number;
       result?: unknown;
-      error?: { code: string; message: string };
+      error?: { code: string; message: string; reason?: string };
       event?: string;
       data?: unknown;
     };
@@ -102,11 +110,11 @@ input.on("line", (line) => {
       if (!request) return;
       clearTimeout(request.timer);
       pending.delete(message.id);
-      if (message.error)
-        request.reject(
-          new HostError(message.error.code, message.error.message),
-        );
-      else request.resolve(message.result);
+      if (message.error) {
+        const error = new HostError(message.error.code, message.error.message);
+        if (TAKEN.has(message.error.reason ?? "")) taken.add(error);
+        request.reject(error);
+      } else request.resolve(message.result);
     } else if (message.event) {
       for (const listener of listeners.get(message.event) ?? []) {
         try {
@@ -152,7 +160,17 @@ try {
   );
   dispose = () => instance.dispose();
   await module.default(instance.plugin);
-  await instance.activated();
+  // `activated()` throws the first rejected start-up work; called again it
+  // waits for the rest. What another plugin holds is not an activation failure.
+  for (;;) {
+    try {
+      await instance.activated();
+      break;
+    } catch (error) {
+      if (!(error instanceof Error && taken.has(error))) throw error;
+      console.error(`not taken over: ${error.message}`);
+    }
+  }
   send({ event: "runtime.ready" });
 } catch (error) {
   console.error(error);
