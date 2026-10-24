@@ -18,12 +18,32 @@ use serde_json::{Map, Number, Value as Json};
 use slint::{Model, ModelRc, VecModel};
 use slint_interpreter::{Struct, Value};
 
+// The limits of one property value, in both directions (plugin writes and
+// callback arguments). They bound what one write costs the UI thread: about
+// 0.35 µs per value to convert and reconcile (release build, Apple M-series),
+// so a full value of 16384 is about 6 ms. The text total cannot
+// usefully grow past the 1 MiB protocol line (`plugins.rs`). The SDK repeats
+// them (`UI_VALUE_LIMITS`) and its TestHost enforces them; the player's
+// tests check that the two agree (doc/plugins/reference.md §6.1).
 pub const MAX_DEPTH: usize = 8;
-pub const MAX_NODES: usize = 4096;
-pub const MAX_ARRAY: usize = 1024;
+pub const MAX_NODES: usize = 16384;
+pub const MAX_ARRAY: usize = 4096;
 pub const MAX_STRING_BYTES: usize = 64 * 1024;
 /// Includes object field names, in both directions.
 pub const MAX_TEXT_BYTES: usize = 1024 * 1024;
+
+/// A value over one of the limits above: the plugin sees code `limit`.
+#[derive(Debug)]
+pub struct OverLimit(String);
+impl std::fmt::Display for OverLimit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+impl std::error::Error for OverLimit {}
+fn over(message: String) -> anyhow::Error {
+    anyhow::Error::new(OverLimit(message))
+}
 
 #[derive(Default)]
 struct Budget {
@@ -34,10 +54,12 @@ struct Budget {
 impl Budget {
     fn node(&mut self, depth: usize) -> Result<()> {
         if depth > MAX_DEPTH {
-            bail!("UI value depth exceeds {MAX_DEPTH} (root is depth 0)");
+            return Err(over(format!(
+                "UI value depth exceeds {MAX_DEPTH} (root is depth 0)"
+            )));
         }
         if self.nodes == MAX_NODES {
-            bail!("UI value exceeds {MAX_NODES} total nodes");
+            return Err(over(format!("UI value exceeds {MAX_NODES} total nodes")));
         }
         self.nodes += 1;
         Ok(())
@@ -45,11 +67,15 @@ impl Budget {
 
     fn text(&mut self, value: &str) -> Result<()> {
         if value.len() > MAX_STRING_BYTES {
-            bail!("UI string or field name exceeds {MAX_STRING_BYTES} bytes");
+            return Err(over(format!(
+                "UI string or field name exceeds {MAX_STRING_BYTES} bytes"
+            )));
         }
         // Both operands have independent small bounds, so addition cannot wrap.
         if self.text + value.len() > MAX_TEXT_BYTES {
-            bail!("UI value text exceeds {MAX_TEXT_BYTES} total bytes");
+            return Err(over(format!(
+                "UI value text exceeds {MAX_TEXT_BYTES} total bytes"
+            )));
         }
         self.text += value.len();
         Ok(())
@@ -58,7 +84,9 @@ impl Budget {
     /// Text that is not a JSON string (a Markdown document): only the total counts.
     fn bulk_text(&mut self, bytes: usize) -> Result<()> {
         if self.text + bytes > MAX_TEXT_BYTES {
-            bail!("UI value text exceeds {MAX_TEXT_BYTES} total bytes");
+            return Err(over(format!(
+                "UI value text exceeds {MAX_TEXT_BYTES} total bytes"
+            )));
         }
         self.text += bytes;
         Ok(())
@@ -66,10 +94,10 @@ impl Budget {
 
     fn array(&self, count: usize) -> Result<()> {
         if count > MAX_ARRAY {
-            bail!("UI array exceeds {MAX_ARRAY} rows");
+            return Err(over(format!("UI array exceeds {MAX_ARRAY} rows")));
         }
         if count > MAX_NODES - self.nodes {
-            bail!("UI array cannot fit in remaining node budget");
+            return Err(over("UI array cannot fit in remaining node budget".into()));
         }
         Ok(())
     }
@@ -158,14 +186,15 @@ pub fn reconcile(current: &Value, next: &Value) -> Result<bool> {
     if let (Value::Model(current), Value::Model(next)) = (current, next)
         && current.row_count() == next.row_count()
         && let Some(rows) = current.as_any().downcast_ref::<VecModel<Value>>()
+        && let (Json::Array(before), Json::Array(after)) = (&current_json, &next_json)
     {
         // Validate and collect before mutation, so invalid input cannot partly apply.
+        // The rows were converted above; comparing them again here used to
+        // double the cost of a write.
         let mut changes = Vec::new();
-        for index in 0..rows.row_count() {
-            let before = rows.row_data(index).context("current UI row missing")?;
-            let after = next.row_data(index).context("new UI row missing")?;
-            if to_json(&before)? != to_json(&after)? {
-                changes.push((index, after));
+        for (index, (before, after)) in before.iter().zip(after).enumerate() {
+            if before != after {
+                changes.push((index, next.row_data(index).context("new UI row missing")?));
             }
         }
         trace_reconciliation("in-place", rows.row_count());
@@ -367,7 +396,7 @@ fn encode(value: &Json, depth: usize, budget: &mut Budget, hook: &mut Hook<'_>) 
         }
         Json::Object(fields) => {
             if fields.len() > MAX_NODES - budget.nodes {
-                bail!("UI object cannot fit in remaining node budget");
+                return Err(over("UI object cannot fit in remaining node budget".into()));
             }
             let mut object = Struct::default();
             for (name, value) in fields {
@@ -384,6 +413,23 @@ fn encode(value: &Json, depth: usize, budget: &mut Budget, hook: &mut Hook<'_>) 
             Value::Struct(object)
         }
     })
+}
+
+/// Refuse now what `from_json` would refuse later: a property value (wire
+/// form) the player stores and converts when a view is built (initial panel
+/// and settings page properties, settings writes while the window is closed).
+/// Images are checked when used; a Markdown document counts as one node and
+/// its text.
+pub fn check(value: &Json) -> Result<()> {
+    if crate::ui_image::reference(value).is_some() {
+        return Ok(());
+    }
+    from_json_with(value, &mut |node, _| {
+        let doc = crate::ui_markdown::reference(node)?;
+        let text = doc.get("text").and_then(Json::as_str).map_or(0, str::len);
+        Some(Ok((Value::Void, text)))
+    })
+    .map(drop)
 }
 
 /// Unsupported types, non-finite numbers, missing rows and models changing size
@@ -488,12 +534,13 @@ mod tests {
 
     #[test]
     fn nested_containers_share_one_total_node_budget() {
-        // root + 4 arrays + (1024 + 1024 + 1024 + 1019) nulls = 4096.
+        // root + 4 arrays + (3 × 4096 + 4091) nulls = MAX_NODES.
+        let last = MAX_NODES - 5 - 3 * MAX_ARRAY;
         let exact = Json::Array(vec![
-            Json::Array(vec![Json::Null; 1024]),
-            Json::Array(vec![Json::Null; 1024]),
-            Json::Array(vec![Json::Null; 1024]),
-            Json::Array(vec![Json::Null; 1019]),
+            Json::Array(vec![Json::Null; MAX_ARRAY]),
+            Json::Array(vec![Json::Null; MAX_ARRAY]),
+            Json::Array(vec![Json::Null; MAX_ARRAY]),
+            Json::Array(vec![Json::Null; last]),
         ]);
         let converted = from_json(&exact).unwrap();
         assert_eq!(to_json(&converted).unwrap(), exact);
@@ -503,11 +550,42 @@ mod tests {
             .unwrap()
             .push(Json::Null);
         assert!(from_json(&too_many).is_err());
-        let rows: Vec<_> = [1024, 1024, 1024, 1020]
+        let rows: Vec<_> = [MAX_ARRAY, MAX_ARRAY, MAX_ARRAY, last + 1]
             .into_iter()
             .map(|count| Value::Model(Rc::new(VecModel::from(vec![Value::Void; count])).into()))
             .collect();
         assert!(to_json(&Value::Model(Rc::new(VecModel::from(rows)).into())).is_err());
+    }
+
+    #[test]
+    fn limit_failures_are_typed_and_check_matches_conversion() {
+        let over = |value: &Json| {
+            let error = from_json(value).unwrap_err();
+            assert!(error.downcast_ref::<OverLimit>().is_some(), "{error}");
+            let error = check(value).unwrap_err();
+            assert!(error.downcast_ref::<OverLimit>().is_some(), "{error}");
+            error.to_string()
+        };
+        // D1: a playlist row of 8 fields is 9 values.
+        let row = json!({"a":"1","b":"","c":"","d":"","e":false,"f":false,"g":false,"h":false});
+        let fits = Json::Array(vec![row.clone(); MAX_NODES / 9 - 1]);
+        check(&fits).unwrap();
+        let rows = Json::Array(vec![row; MAX_NODES / 9 + 1]);
+        assert!(over(&rows).contains("node"));
+        assert!(over(&Json::Array(vec![Json::Null; MAX_ARRAY + 1])).contains("rows"));
+        assert!(over(&json!("x".repeat(MAX_STRING_BYTES + 1))).contains("bytes"));
+        // Not a limit: a different code.
+        assert!(
+            from_json(&json!({"a_b": 1}))
+                .unwrap_err()
+                .downcast_ref::<OverLimit>()
+                .is_none()
+        );
+        // An image is checked when used; a document is one value and its text.
+        check(&json!({"$vestraImage": "/x.png", "ref": 1})).unwrap();
+        let doc = |n: usize| json!({"$vestraMarkdown": {"text": "x".repeat(n)}, "ref": 1});
+        check(&json!([doc(200_000), doc(200_000)])).unwrap();
+        assert!(over(&Json::Array(vec![doc(200_000); 6])).contains("total bytes"));
     }
 
     #[test]

@@ -682,7 +682,7 @@ export component Chat inherits Window {
 - 链接：点击时 `MarkdownView` 发出 `link-clicked(url)`，相对地址已按 `base` 解析（`#锚点` 原样）；打开与否由插件决定。
 - `base`：`http(s)` 地址（如 README 自己的地址）或绝对目录；相对链接与图片按它解析。没有 `base` 时相对图片显示替代文字。
 - 图片：PNG/JPEG。本地图片按 `ui.image` 的规则（本插件包目录或数据目录内，≤ 16 MB、4096²，与 `ui.image` 共用每插件 64 MB 的解码缓存）。`https:` 图片由 SDK 在本插件进程里下载到 `<dataDirectory>/.vestra-cache/markdown/`：单张 ≤ 4 MB、10 秒、重定向 ≤ 5 次（只跟随到 `https:`）、同时 4 个、每文档 ≤ 64 张；缓存 32 MB，按最近使用淘汰，同一地址 24 小时内不重新下载。下载失败、`http:`、SVG/GIF 等显示替代文字，`markdown()` 本身不因此失败。`remoteImages: false` 不下载。本地图片写成相对 `base`（绝对目录）的路径，或用 `/` 分隔：Markdown 文本里的 `\` 后跟标点是转义，Windows 绝对路径 `C:\…\.cache\a.png` 会丢掉 `.` 前的 `\`，找不到文件而显示替代文字。
-- 上限：每个文档文本 ≤ 256 KB（否则 `invalid`）、超过 4000 块截断并在末尾提示、图片 ≤ 64 张；一个属性值里所有文本（各文档的文本也算）合计 ≤ 1 MiB，每个文档算值里的一个节点（共 4096）。
+- 上限：每个文档文本 ≤ 256 KB（否则 `invalid`）、超过 4000 块截断并在末尾提示、图片 ≤ 64 张；一个属性值里所有文本（各文档的文本也算）合计 ≤ 1 MiB，每个文档算值里的一个节点（共 16384，见上面的属性值上限）。
 - 示例插件：`src/examples/markdown/`。测试：`host.markdown(host.window(id).props.doc)` 读回 `{ text, base, images }`（嵌在行里的同样读：`host.markdown(rows[0].body)`）；远程图片由 `host.remoteImages`（地址 → 本地文件）提供，测试不联网。
 
 | 方法 | 说明 |
@@ -691,7 +691,25 @@ export component Chat inherits Window {
 | `bind(fn)` | 保持属性等于 `fn()` 的结果；每轮更新重新求值，**值变化时才发送**，所以用户在界面上改过的 in-out 属性不会被无关的更新覆盖 |
 | `set(props)` | 立即写入；即使值与上次相同也发送一次，可用来把被用户改动的控件「拉回」模型值 |
 
-写入失败时：绑定值在下次变化前不重发；`set` 的值退避重试（0.25 秒起翻倍，最长 30 秒）；连续失败只报告一次错误。
+写入失败时：绑定值在下次变化前不重发；`set` 的值退避重试（0.25 秒起翻倍，最长 30 秒）；连续失败只报告一次错误（交给 `onError`，消息以属性名开头，如 `rows: UI array exceeds 4096 rows`）。
+
+**属性值上限**（播放器 0.4.3，SDK 1.5.10；括号里是更早的播放器）。每个属性值（`set`、`bind` 的一次写入，或窗口、面板、设置页的一个初始属性）分别计算：
+
+| 上限 | 值 | 说明 |
+| --- | --- | --- |
+| 嵌套深度 | 8 | 属性值本身是第 0 层 |
+| 值的总数 | 16384（4096） | 数组、对象、字符串、数字、布尔、`null` 各算一个，属性值本身也算；一个 Markdown 文档算一个。每行 8 个字段的列表每行 9 个，约 1800 行（以前约 450 行） |
+| 一个数组的行数 | 4096（1024） | |
+| 一个字符串或字段名 | 64 KiB | UTF-8 字节 |
+| 全部文本 | 1 MiB | 所有字符串和字段名，加上其中 Markdown 文档的文本 |
+
+此外整条请求不能超过播放器的 1 MiB 消息上限。常量 `UI_VALUE_LIMITS`（从 `@vestra-player/sdk/testing` 导入）与播放器一致，播放器的测试检查两边相同。
+
+- 超出时整次写入以 `limit` 失败，属性保持原值，按上面的规则交给 `onError`。初始属性超出时：工具窗口的 `show()` 被拒绝（一向如此）；面板、设置页照常挂上，只是不带这个属性（保持默认值），播放器把失败作为 `ui.error` 交给 `onError`。不让挂载失败，是因为激活期间的挂载失败会让整个插件激活失败。以前这种属性被悄悄丢掉，只写宿主日志。设置窗口未打开时的 `settings.set` 当场检查，超出即失败，与打开时相同。
+- 超过 1 MiB 的请求由插件运行器在发送前以 `limit` 拒绝；以前播放器会因此停止插件。
+- 播放器之后才发现的失败（重建面板或选项窗口时图片文件已被删除、回调参数无法转换、浮动侧栏准备失败）作为 `ui.error` 推给插件，SDK 交给根作用域的 `onError`，`code` 为播放器给的（`missing`、`ui`、`ui-prepare` 等）。
+- 这些上限限制的是一次写入在界面线程上的工作量（转换加比较，每个值约 0.35 µs，满额一次约 6 ms，Apple M 系列），不是建议的列表大小。可能无限增长的列表（播放列表、历史）只发视图附近的行和总行数，随滚动移动窗口（内置播放列表的做法：200 行窗口）。
+- `TestHost` 对 `ui.open`、`ui.set`、`ui.mount`、`ui.setMount`、`settings.register`、`settings.set` 执行同样的检查，`code` 与消息和播放器相同。
 
 ### 6.2 工具窗口 `plugin.windows`
 
@@ -1360,7 +1378,7 @@ interface PackageChange {
 | `timeout` | `openStream` 启动超时；`error.stage` 为 `"prefill"`（首批缓冲未在 10 秒内备好）或 `"activation"`（选中后 10 秒内未激活）。`tools.run` 超过 `timeoutMs`；`system.*` 超过 10 秒 |
 | `stream`、`device` | `openStream`：生成端报错 / 音频设备未就绪 |
 | `backend-uncertain` | 滤镜阶段被播放器后端阻塞，`filter.retry()` 重新检查 |
-| `limit` | 超出播放器的数量上限（如命令数，§4；密钥名字数，§16.6） |
+| `limit` | 超出播放器的数量上限（如命令数，§4；密钥名字数，§16.6）；属性值超出上限（§6.1，播放器 0.4.3 起，以前为 `host`）；请求超过 1 MiB 消息上限 |
 | `versionMismatch` | 包的 `minPlayerVersion` 高于本播放器（`validate`、`validateArchive`；§2） |
 | `reserved` | 包的 id 是保留给内置插件的 `vestra` / `vestra.*`（不分大小写），不能安装（`validate`、`validateArchive`、`install`；§2、§12） |
 | `noSource` | `media.capture`：没有可截图的来源 |
@@ -1393,7 +1411,7 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 | 渲染轮 | `host.videoRender`（`{ owner, values, gpu }`；`gpu: false` 模拟软件渲染，`set` 以 `unsupported` 失败）；`host.setVideoRenderOwner(pluginId \| null)`；`host.failVideoRender("failed" \| "unsupported", message)`（播放器推给拥有者的失败：着色器编译失败、退回软件渲染）；`host.stats.video` 可带 `hwdec`、`transfer`。着色器文件是否存在按真实文件系统检查；`host.producerTransport = "tcp"`（`openStream` 走回环 TCP 加令牌，如 Windows；`producer.admitted` 表示令牌正确） |
 | 可移植性轮 | `host.secrets`（`Map`：名称 → 值，可预置）；`host.systemInfo`（`app.system()` 的返回值）；`host.exports`（每次 `jobs.start` 的参数：`kind` 为 `rawPng`、`rawJpeg`、`rawBmp`、`rawMp4` 或对应的 `processed…`，JPEG 带 `quality`） |
 | 交互对齐轮 | `host.setMainWindow({ fullscreen })` 同播放器一样把附着的侧栏收起（`effective: false`、`reason: "fullscreen"`），退出全屏时恢复；`host.popSidebar(popped)` 模拟指针到右边缘弹出 / 离开后收起（只在全屏、偏好为显示、未分离时有效）；全屏中 `setVisible(true)` 即弹出；`volume-up` 上限 100（同 §5.5）；`setSource({ phase: "loading" })` 让已挂载的背景层 `effective` 变为 `true` 并推送 |
-| 上限 | `commands.register` 按播放器的同一套命令上限拒绝（`limit`，§4）：本插件最多 `COMMAND_LIMITS.perPlugin` 条，总量把 `host.coreCommands` 算在内 |
+| 上限 | `commands.register` 按播放器的同一套命令上限拒绝（`limit`，§4）：本插件最多 `COMMAND_LIMITS.perPlugin` 条，总量把 `host.coreCommands` 算在内。SDK 1.5.10 起，窗口、面板、设置页的属性值按 `UI_VALUE_LIMITS` 检查（§6.1），超出时以 `limit` 拒绝，消息与播放器相同 |
 | 第 4a 轮批次 2 | `host.videoView`（`{ owner, values }`：拥有者插件 id 与播放器持有的值）；`host.setVideoViewOwner(pluginId \| null)`（模拟别的插件先占用显示层，`null` 释放并复位） |
 | 第 4a 轮批次 1 | `frameBlend` 与播放器同一套校验，「全部插件最多一个」按本插件的全部视频滤镜计算（TestHost 只模拟一个插件） |
 | 第 3b 轮批次 2 | `host.drop(paths, options)`、`host.dropProviders`、`host.panelDrops`（§6.7）；`host.appearance`、`host.setAppearance(theme)`（§6.8）；`host.settings`、`host.settingsPage(id)`（§6.9） |
@@ -1563,6 +1581,7 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 
 ## 17. 变更说明
 
+<<<<<<< HEAD
 ### 多语言第 1 轮（2026-10，播放器 0.4.3，SDK 1.5.9）
 
 - 界面以英文为原文，7 种语言（§6.10），启动时决定，改语言下次启动生效；`appearance.language` / `setLanguage`（§6.8）；`plugin.i18n.locale`（§6.10）。
@@ -1571,6 +1590,16 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 - `vestra-plugin i18n extract|check`，`build` 编译词典（§15）；TestHost 的 `locale`（§14）。
 - 播放器自己的界面文字改为英文原文 + 简体中文词典（`src/host/locales/`），选项窗口、宿主提示与拒绝消息在简体中文下与之前相同。
 - 迁移：SDK《Migrate a plugin to English source text》（`docs/how-to/i18n-migration.md`）；参考迁移是 `vestra.preferences`。
+=======
+### 属性值上限：写明、放宽、TestHost 执行、失败可见（2026-10，播放器 0.4.3，SDK 1.5.10）
+
+- 缺陷 D1（vestra.playlist）：属性值的上限（每个值 4096 个、每个数组 1024 行、文本 1 MiB）只在 Markdown 一节提了一句，`TestHost` 也不执行。播放列表每行 9 个值，超过约 450 行时整个 `rows` 写入都被播放器拒绝，插件测试却全部通过；用户加入 3000 个文件时列表停在旧内容上。
+- 上限写进 §6.1，并放宽到每个值 16384 个、每个数组 4096 行；深度、单个字符串、全部文本不变（全部文本受 1 MiB 消息上限约束，放宽没有意义）。放宽的依据：同时把宿主比较同长度列表的工作减半（不再逐行重复转换），一次满额写入在界面线程上约 6 ms（Apple M 系列，release），旧上限下满额约 2 ms。
+- 超限的错误码由 `host` 改为 `limit`，消息以属性名开头。面板、设置页的初始属性超限时仍然不带它挂上，但不再悄悄丢掉：播放器发 `ui.error`，SDK 交给 `onError`。设置窗口未打开时的 `settings.set` 当场检查，超出即失败。
+- 播放器之后才发现的界面失败（`ui.error`）现在带 `code`，SDK 交给 `onError`；以前 SDK 不处理这个事件。
+- 插件运行器在发送前拒绝超过 1 MiB 的请求（`limit`），不再让播放器停止插件。
+- `TestHost` 执行同样的检查；`UI_VALUE_LIMITS` 与播放器的常量由 `tests/sdk/host-agreement.test.ts` 核对。
+>>>>>>> fix/ui-value-limits-main
 
 ### 修正：左键单击不再等双击间隔（2026-10）
 

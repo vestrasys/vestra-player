@@ -307,9 +307,10 @@ impl Host {
                     .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
                 let file = plugins::package_file(&plugin.directory, string(params, "file")?)?;
                 let manifest = plugin.manifest.id.clone();
-                let properties =
+                let mut properties: BTreeMap<String, Value> =
                     serde_json::from_value(params.get("properties").cloned().unwrap_or(json!({})))
                         .map_err(|e| RpcError::invalid(e.to_string()))?;
+                let refused = crate::refuse_initial(&mut properties);
                 self.settings.next_serial += 1;
                 let page = Page {
                     owner,
@@ -330,6 +331,7 @@ impl Host {
                     .map_err(|e| RpcError::new("ui-prepare", format!("{e:#}")))?;
                 self.settings.pages.push(page);
                 self.settings.stale |= self.settings.open.is_some();
+                self.report_refused(owner, refused);
                 Ok(Some(Value::Null))
             }
             "settings.unregister" => {
@@ -367,6 +369,8 @@ impl Host {
                 } else if ui_image::reference(&params["value"]).is_some() {
                     // Checked now, shown when the window opens.
                     self.prop_value(owner, &view, &property, &params["value"])?;
+                } else {
+                    RpcError::check_property(&property, &params["value"])?;
                 }
                 if let Some(page) = self.settings.page_mut(owner, &id) {
                     page.properties.insert(property, params["value"].clone());
@@ -426,6 +430,7 @@ impl Host {
         let refs: Vec<&Page> = pages.iter().collect();
         let definition = composition::build(source(&refs)?, "OptionsWindow")?;
         let instance = definition.create()?;
+        let mut reports = Vec::new();
         for page in &pages {
             let alias = alias(page.serial);
             crate::ui_values::own_default_models(&instance, Some(&alias))?;
@@ -433,7 +438,10 @@ impl Host {
                 match self.prop_value(page.owner, &page.view(), name, value) {
                     Ok(value) => composition::set_alias_value(&instance, &alias, name, value)?,
                     Err(error) => {
-                        eprintln!("settings property {}/{name}: {}", page.key(), error.message)
+                        // Checked when written (`check_property`): an image
+                        // removed since. Logged and reported to the plugin.
+                        eprintln!("settings property {}/{name}: {}", page.key(), error.message);
+                        reports.push((page.owner, crate::ui_error(&error)));
                     }
                 }
             }
@@ -450,7 +458,7 @@ impl Host {
                             let _ = events.send(Event::PluginMessage(
                                 owner,
                                 "ui.error".into(),
-                                json!({"message":error}),
+                                json!({"code":"ui","message":format!("callback {name}: {error}")}),
                             ));
                             return SValue::Void;
                         }
@@ -459,6 +467,9 @@ impl Host {
                     SValue::Void
                 })?;
             }
+        }
+        for (owner, report) in reports {
+            self.send(owner, report);
         }
         self.next_shell_generation += 1;
         let generation = self.next_shell_generation;
