@@ -30,3 +30,94 @@ export component Note inherits Text {
     vertical-alignment: center;
     overflow: elide;
 }
+
+// A task's progress as the plugin passes it (tasks.ts `Progress`): data only.
+export struct Progress {
+    status: string,
+    reason: string,
+    raw: string,
+    done: int,
+    total: int,
+}
+
+// A dialog's status line as the plugin passes it (main.ts `Status`): data only.
+export struct Status {
+    kind: string,
+    reason: string,
+    raw: string,
+    count: int,
+    name: string,
+}
+
+// The windows' words for the plugin's data. The reasons are the same texts as
+// model.ts `REASON` (a test keeps the two lists equal).
+export global Words {
+    // A reason code of the plugin, or (code "") the player's or system's own message.
+    public pure function reason(code: string, raw: string) -> string {
+        if (code == "range") { return @tr("Enter valid seconds; the end must be after the start."); }
+        if (code == "burstLimits") { return @tr("A burst needs 2–20 frames, an interval of 0.1–10 s and a known media duration."); }
+        if (code == "burstPastEnd") { return @tr("The burst runs past the end of the media. Use fewer frames or a shorter interval."); }
+        if (code == "noName") { return @tr("No free file name found."); }
+        if (code == "unusable") { return @tr("The current frame cannot be captured. Open a local video file first."); }
+        if (code == "unexportable") { return @tr("The current frame cannot be exported. Open a local video file first."); }
+        if (code == "needDuration") { return @tr("Bursts and clips need a known media duration."); }
+        if (code == "outOfRange") { return @tr("The selected range is past the end of the media."); }
+        if (code == "track") { return @tr("The selected audio track cannot be exported. Choose another track or No Audio."); }
+        if (code == "changed") { return @tr("The media changed; nothing was started."); }
+        if (code == "busy") { return @tr("The player is busy. Try again later."); }
+        if (code == "unavailable") { return @tr("The current frame cannot be captured."); }
+        if (code == "captureFailed") { return @tr("Could not capture the frame."); }
+        if (code == "queueFull") { return @tr("One export is running and four are queued. Please wait."); }
+        if (code == "expired") { return @tr("The kept frame has expired. Retry with the current frame."); }
+        if (code == "released") { return @tr("The kept frame was released."); }
+        if (code == "cancelled") { return @tr("Cancelled."); }
+        if (code == "clipboard") { return @tr("Could not write to the clipboard"); }
+        if (code == "space") { return @tr("Not enough disk space"); }
+        if (code == "exists") { return @tr("The target file already exists"); }
+        if (code == "permission") { return @tr("No write permission"); }
+        if (code == "encoder") { return @tr("This media cannot be encoded"); }
+        if (code == "exportFailed") { return @tr("Export failed"); }
+        if (code == "noOutput") { return @tr("This task has no output file yet."); }
+        if (code == "outputGone") { return @tr("The output file no longer exists."); }
+        if (code == "cannotOpen") { return @tr("Could not open the folder."); }
+        if (code == "folderUnavailable") { return @tr("The snapshot folder is unavailable. Please choose it again."); }
+        return raw;
+    }
+
+    // The name of a task state; another state shows as it is.
+    public pure function state(status: string) -> string {
+        if (status == "queued") { return @tr("Queued"); }
+        if (status == "preparing") { return @tr("Preparing"); }
+        if (status == "running") { return @tr("Exporting"); }
+        if (status == "cancelling") { return @tr("Cancelling"); }
+        if (status == "completed") { return @tr("Completed"); }
+        if (status == "failed") { return @tr("Failed"); }
+        if (status == "cancelled") { return @tr("Cancelled"); }
+        return status;
+    }
+
+    // "Completed", "Exporting · 3/10", "Failed: Not enough disk space"; empty without a task.
+    public pure function progress(p: Progress) -> string {
+        if (p.status == "") { return ""; }
+        // TRANSLATORS: {0} is a task state (Failed), {1} why.
+        if (p.reason != "" || p.raw != "") { return @tr("{0}: {1}", Words.state(p.status), Words.reason(p.reason, p.raw)); }
+        // TRANSLATORS: {0} is a task state (Exporting), {1} the frames done, {2} the frames in all.
+        if (p.total > 1) { return @tr("{0} · {1}/{2}", Words.state(p.status), p.done, p.total); }
+        return Words.state(p.status);
+    }
+
+    public pure function status(s: Status) -> string {
+        if (s.kind == "error") { return Words.reason(s.reason, s.raw); }
+        // TRANSLATORS: {} is the number of frames (2–20).
+        if (s.kind == "saved") { return @tr("{} frames saved", s.count); }
+        // TRANSLATORS: {} is the number of frames (2–20).
+        if (s.kind == "started") { return @tr("Burst of {} frames started", s.count); }
+        if (s.kind == "burst-failed") { return @tr("Burst failed: {}", Words.reason(s.reason, s.raw)); }
+        if (s.kind == "exported") { return @tr("Exported {}", s.name); }
+        if (s.kind == "clip-failed") { return @tr("Export failed: {}", Words.reason(s.reason, s.raw)); }
+        if (s.kind == "no-destination") { return @tr("No save location chosen."); }
+        if (s.kind == "clip-started") { return @tr("Export started. Follow it in Export Tasks."); }
+        if (s.kind == "restarted") { return @tr("Restarted."); }
+        return "";
+    }
+}

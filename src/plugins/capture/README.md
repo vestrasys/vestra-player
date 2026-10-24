@@ -1,27 +1,32 @@
-# 截图
+# Snapshot
 
-保存、复制当前画面，连拍，导出视频片段。
+Saves and copies the current frame, captures bursts, exports video clips.
 
-## 功能
+## Features
 
-- **单张截图**：「保存当前画面」直接存进截图文件夹，文件名为「片名_播放时间」；「另存为…」可自选位置；「复制」放进剪贴板。
-- **原始画面与实际画面**：实际画面包含画面效果，并可选择是否带字幕。
-- **格式**：PNG、JPEG（可调质量）、BMP。
-- **连拍**：按间隔连续截取 2–20 张，存入单独的文件夹。
-- **导出片段**：把一段视频导出为 MP4，可选音轨、画面效果与字幕。
-- **导出任务**：查看、取消、重试导出任务，打开输出文件。
-- 截图文件夹可自选，也可在条件允许时存到视频所在文件夹。不会覆盖已有文件。
+- **Single frames**: Save Current Frame saves straight into the snapshot folder, named after the title and the playback time; Save As… lets you pick the place; Copy puts it on the clipboard.
+- **Source frame and rendered frame**: the rendered frame includes video effects and, optionally, the subtitles.
+- **Formats**: PNG, JPEG (adjustable quality), BMP.
+- **Burst**: 2–20 frames at a fixed interval, saved into a folder of their own.
+- **Export Clip**: part of a video as MP4, with a choice of audio track, video effects and subtitles.
+- **Export Tasks**: view, cancel and retry exports, open their output.
+- The snapshot folder can be chosen, or captures go beside the video when possible. Existing files are never overwritten.
 
-## 入口
+## Entries
 
-右键菜单「视频 ▶ 截图」：
+Right-click menu: Video ▸ Snapshot.
 
-- 保存当前画面（Ctrl+E）、复制当前画面（Ctrl+C）
-- 保存实际画面（Ctrl+Alt+E）、复制实际画面（Ctrl+Alt+C）
-- 连拍…（Ctrl+G）、导出片段…、导出任务…
-- 截图设置…、截图文件夹…、打开截图文件夹
+- Save Current Frame (Ctrl+E), Copy Current Frame (Ctrl+C)
+- Save Rendered Frame (Ctrl+Alt+E), Copy Rendered Frame (Ctrl+Alt+C)
+- Burst… (Ctrl+G), Export Clip…, Export Tasks…
+- Snapshot Settings…, Snapshot Folder…, Open Snapshot Folder
 
-## 限制
+## Limits
 
-- 只支持本地的、有固定时长的视频。
-- 导出没有百分比进度，只显示阶段和已保存的张数。
+- Local videos with a known duration only.
+- Exports show no percentage, only the stage and the number of frames saved.
+- The audio choices of Export Clip are still in Chinese in every language (a window cannot yet build a translated list from data).
+
+## Translations
+
+Texts are English in the source; `locales/zh-Hans.po` has the Simplified Chinese (`vestra-plugin i18n extract`, `i18n check`).

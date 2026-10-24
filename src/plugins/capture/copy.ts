@@ -3,11 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PlayerState, Scope, Snapshot } from "@vestra-player/sdk";
 import { captureError } from "./form.ts";
-import { usable } from "./model.ts";
+import { Failure, usable } from "./model.ts";
 import { jobError } from "./tasks.ts";
-
-/** The clipboard write failed (not the capture): shown without the 截图失败 prefix. */
-export class ClipboardError extends Error {}
 
 /**
  * F03: copy the current frame to the clipboard as PNG. Not an export task:
@@ -20,7 +17,7 @@ export function clipboard(plugin: Scope) {
   let sequence = 0;
 
   async function copy(seen: PlayerState, processed: boolean, subtitles: boolean) {
-    if (!usable(seen)) throw new Error("当前画面无法截取，请先打开本地视频文件。");
+    if (!usable(seen)) throw new Failure("unusable");
     await mkdir(directory, { recursive: true });
     const file = join(directory, `clip-${++sequence}.png`);
     let snapshot: Snapshot | undefined;
@@ -32,11 +29,11 @@ export function clipboard(plugin: Scope) {
       try {
         const state = await job.done;
         if (state.status === "failed")
-          throw new Error(state.outcome && "error" in state.outcome ? jobError(state.outcome.error) : "导出失败");
-        if (state.status !== "completed" || !state.outcome || !("destination" in state.outcome)) throw new Error("已取消。");
+          throw new Failure(state.outcome && "error" in state.outcome ? jobError(state.outcome.error) : "exportFailed");
+        if (state.status !== "completed" || !state.outcome || !("destination" in state.outcome)) throw new Failure("cancelled");
         await plugin.clipboard.writeImage(state.outcome.destination).catch((error) => {
           console.error(`[capture] clipboard: ${(error as Error).message}`);
-          throw new ClipboardError("无法写入剪贴板");
+          throw new Failure("clipboard"); // shown without the "Snapshot failed" prefix
         });
       } finally {
         await job.dispose();

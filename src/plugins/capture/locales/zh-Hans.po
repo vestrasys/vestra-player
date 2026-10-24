@@ -1,0 +1,652 @@
+msgid ""
+msgstr ""
+"Language: zh-Hans\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: main.ts:68 ui/parts.slint:57
+msgid "Enter valid seconds; the end must be after the start."
+msgstr "请输入有效的秒数，终点须晚于起点。"
+
+#: main.ts:68 ui/parts.slint:58
+msgid "A burst needs 2–20 frames, an interval of 0.1–10 s and a known media duration."
+msgstr "连拍需要 2–20 张、间隔 0.1–10 秒，且媒体时长已知。"
+
+#: main.ts:68 ui/parts.slint:59
+msgid "The burst runs past the end of the media. Use fewer frames or a shorter interval."
+msgstr "连拍超出媒体时长，请减少张数或间隔。"
+
+#: main.ts:68 ui/parts.slint:60
+msgid "No free file name found."
+msgstr "找不到可用的文件名。"
+
+#: main.ts:68 ui/parts.slint:61
+msgid "The current frame cannot be captured. Open a local video file first."
+msgstr "当前画面无法截取，请先打开本地视频文件。"
+
+#: main.ts:68 ui/parts.slint:62
+msgid "The current frame cannot be exported. Open a local video file first."
+msgstr "当前画面无法导出，请先打开本地视频文件。"
+
+#: main.ts:68 ui/parts.slint:63
+msgid "Bursts and clips need a known media duration."
+msgstr "连拍和导出片段需要已知的媒体时长。"
+
+#: main.ts:68 ui/parts.slint:64
+msgid "The selected range is past the end of the media."
+msgstr "所选范围超出媒体时长。"
+
+#: main.ts:68 ui/parts.slint:65
+msgid "The selected audio track cannot be exported. Choose another track or No Audio."
+msgstr "所选音轨无法导出，请换一条音轨或选择无声音。"
+
+#: main.ts:68 ui/parts.slint:66
+msgid "The media changed; nothing was started."
+msgstr "播放内容已变化，未开始。"
+
+#: main.ts:68 ui/parts.slint:67
+msgid "The player is busy. Try again later."
+msgstr "播放器忙，请稍后再试。"
+
+#: main.ts:68 ui/parts.slint:68
+msgid "The current frame cannot be captured."
+msgstr "当前画面无法截取。"
+
+#: main.ts:68 ui/parts.slint:69
+msgid "Could not capture the frame."
+msgstr "截取画面失败。"
+
+#: main.ts:68 ui/parts.slint:70
+msgid "One export is running and four are queued. Please wait."
+msgstr "已有一个导出在进行、四个在排队，请稍候。"
+
+#: main.ts:68 ui/parts.slint:71
+msgid "The kept frame has expired. Retry with the current frame."
+msgstr "保留的画面已过期，请用当前画面重试。"
+
+#: main.ts:68 ui/parts.slint:72
+msgid "The kept frame was released."
+msgstr "保留的画面已释放。"
+
+#: main.ts:68 ui/parts.slint:73
+msgid "Cancelled."
+msgstr "已取消。"
+
+#: main.ts:68 ui/parts.slint:74
+msgid "Could not write to the clipboard"
+msgstr "无法写入剪贴板"
+
+#: main.ts:68 ui/parts.slint:75
+msgid "Not enough disk space"
+msgstr "磁盘空间不足"
+
+#: main.ts:68 ui/parts.slint:76
+msgid "The target file already exists"
+msgstr "目标文件已存在"
+
+#: main.ts:68 ui/parts.slint:77
+msgid "No write permission"
+msgstr "没有写入权限"
+
+#: main.ts:68 ui/parts.slint:78
+msgid "This media cannot be encoded"
+msgstr "无法编码此媒体"
+
+#: main.ts:68 ui/parts.slint:79
+msgid "Export failed"
+msgstr "导出失败"
+
+#: main.ts:68 ui/parts.slint:80
+msgid "This task has no output file yet."
+msgstr "这个任务还没有输出文件。"
+
+#: main.ts:68 ui/parts.slint:81
+msgid "The output file no longer exists."
+msgstr "输出文件已不存在。"
+
+#: main.ts:68 ui/parts.slint:82
+msgid "Could not open the folder."
+msgstr "无法打开文件夹。"
+
+#: main.ts:68 ui/parts.slint:83
+msgid "The snapshot folder is unavailable. Please choose it again."
+msgstr "截图文件夹不可用，请重新选择。"
+
+#: main.ts:75
+msgid "Snapshot failed: the snapshot folder is unavailable. Please choose it again."
+msgstr "截图失败：截图文件夹不可用，请重新选择。"
+
+#: main.ts:75
+msgid "Snapshot failed: one export is running and four are queued. Please wait."
+msgstr "截图失败：已有一个导出在进行、四个在排队，请稍候。"
+
+#: main.ts:75
+msgid "Snapshot failed: the current frame cannot be captured. Open a local video file first."
+msgstr "截图失败：当前画面无法截取，请先打开本地视频文件。"
+
+#: main.ts:75
+msgid "Snapshot failed: the selected range is past the end of the media."
+msgstr "截图失败：所选范围超出媒体时长。"
+
+#: main.ts:75
+msgid "Snapshot failed: the media changed; nothing was started."
+msgstr "截图失败：播放内容已变化，未开始。"
+
+#: main.ts:75
+msgid "Snapshot failed: the player is busy. Try again later."
+msgstr "截图失败：播放器忙，请稍后再试。"
+
+#: main.ts:75
+msgid "Snapshot failed: the current frame cannot be captured."
+msgstr "截图失败：当前画面无法截取。"
+
+#: main.ts:75
+msgid "Snapshot failed: could not capture the frame."
+msgstr "截图失败：截取画面失败。"
+
+#: main.ts:75
+msgid "Snapshot failed: cancelled."
+msgstr "截图失败：已取消。"
+
+#: main.ts:75
+msgid "Snapshot failed: no free file name found."
+msgstr "截图失败：找不到可用的文件名。"
+
+#: main.ts:75
+msgid "Snapshot failed: not enough disk space"
+msgstr "截图失败：磁盘空间不足"
+
+#: main.ts:75
+msgid "Snapshot failed: the target file already exists"
+msgstr "截图失败：目标文件已存在"
+
+#: main.ts:75
+msgid "Snapshot failed: no write permission"
+msgstr "截图失败：没有写入权限"
+
+#: main.ts:75
+msgid "Snapshot failed: this media cannot be encoded"
+msgstr "截图失败：无法编码此媒体"
+
+#: main.ts:75
+msgid "Snapshot failed: export failed"
+msgstr "截图失败：导出失败"
+
+#: main.ts:75
+msgid "Snapshot failed: the kept frame was released."
+msgstr "截图失败：保留的画面已释放。"
+
+#: main.ts:75
+msgid "Burst failed: not enough disk space"
+msgstr "连拍失败：磁盘空间不足"
+
+#: main.ts:75
+msgid "Burst failed: the target file already exists"
+msgstr "连拍失败：目标文件已存在"
+
+#: main.ts:75
+msgid "Burst failed: no write permission"
+msgstr "连拍失败：没有写入权限"
+
+#: main.ts:75
+msgid "Burst failed: this media cannot be encoded"
+msgstr "连拍失败：无法编码此媒体"
+
+#: main.ts:75
+msgid "Burst failed: export failed"
+msgstr "连拍失败：导出失败"
+
+#: main.ts:75
+msgid "Burst failed: the kept frame was released."
+msgstr "连拍失败：保留的画面已释放。"
+
+#: main.ts:75
+msgid "Export failed: not enough disk space"
+msgstr "导出失败：磁盘空间不足"
+
+#: main.ts:75
+msgid "Export failed: the target file already exists"
+msgstr "导出失败：目标文件已存在"
+
+#: main.ts:75
+msgid "Export failed: no write permission"
+msgstr "导出失败：没有写入权限"
+
+#: main.ts:75
+msgid "Export failed: this media cannot be encoded"
+msgstr "导出失败：无法编码此媒体"
+
+#: main.ts:75
+msgid "Export failed: export failed"
+msgstr "导出失败：导出失败"
+
+#: main.ts:75
+msgid "Export failed: the kept frame was released."
+msgstr "导出失败：保留的画面已释放。"
+
+#: main.ts:78
+msgid "Snapshot failed: {}"
+msgstr "截图失败：{}"
+
+#: main.ts:78 ui/parts.slint:115
+msgid "Burst failed: {}"
+msgstr "连拍失败：{}"
+
+#: main.ts:78 ui/parts.slint:117
+msgid "Export failed: {}"
+msgstr "导出失败：{}"
+
+#: main.ts:94
+msgid "Frame saved as {}"
+msgstr "帧已保存为 {}"
+
+#. {0} is the number of frames (2–20), {1} the folder.
+#: main.ts:99
+msgid "Burst of {0} frames saved to {1}"
+msgstr "连拍已保存 {0} 张到 {1}"
+
+#: main.ts:103
+msgid "Clip exported as {}"
+msgstr "片段已导出为 {}"
+
+#: main.ts:133
+msgid "Snapshot format: {}"
+msgstr "截图格式：{}"
+
+#: main.ts:155
+msgid "The previous snapshot is still being processed"
+msgstr "上一张截图仍在处理"
+
+#: main.ts:174
+msgid "Snapshot queued"
+msgstr "截图已排队"
+
+#: main.ts:182
+msgid "Save Rendered Frame As"
+msgstr "实际画面另存为"
+
+#: main.ts:182
+msgid "Save Current Frame As"
+msgstr "当前画面另存为"
+
+#: main.ts:193
+msgid "Frame copied to the clipboard"
+msgstr "画面截图：复制到剪贴板"
+
+#: main.ts:196
+msgid "Choose Snapshot Folder"
+msgstr "选择截图文件夹"
+
+#: main.ts:198
+msgid "Please choose an existing folder."
+msgstr "请选择一个已有的文件夹。"
+
+#: main.ts:201
+msgid "Snapshot folder: {}"
+msgstr "截图文件夹：{}"
+
+#: main.ts:286 ui/clip.slint:8
+msgid "Export Clip"
+msgstr "导出片段"
+
+#: main.ts:335
+msgid "The snapshot window could not open."
+msgstr "截图窗口无法打开。"
+
+#: main.ts:352 manifest.json ui/error.slint:5
+msgid "Snapshot"
+msgstr "截图"
+
+#: main.ts:352
+msgid "Save Current Frame"
+msgstr "保存当前画面"
+
+#: main.ts:352
+msgid "Save Current Frame As…"
+msgstr "当前画面另存为…"
+
+#: main.ts:352
+msgid "Copy Current Frame"
+msgstr "复制当前画面"
+
+#: main.ts:352
+msgid "Save Rendered Frame"
+msgstr "保存实际画面"
+
+#: main.ts:352
+msgid "Save Rendered Frame As…"
+msgstr "实际画面另存为…"
+
+#: main.ts:352
+msgid "Copy Rendered Frame"
+msgstr "复制实际画面"
+
+#: main.ts:352
+msgid "Burst…"
+msgstr "连拍…"
+
+#: main.ts:352
+msgid "Export Clip…"
+msgstr "导出片段…"
+
+#: main.ts:352 ui/clip.slint:74
+msgid "Export Tasks…"
+msgstr "导出任务…"
+
+#: main.ts:352
+msgid "Capture as PNG"
+msgstr "截取为 PNG"
+
+#: main.ts:352
+msgid "Capture as JPEG"
+msgstr "截取为 JPEG"
+
+#: main.ts:352
+msgid "Capture as BMP"
+msgstr "截取为 BMP"
+
+#: main.ts:352
+msgid "Include Subtitles in Rendered Frame"
+msgstr "实际画面包含字幕"
+
+#: main.ts:352
+msgid "Snapshot Settings…"
+msgstr "截图设置…"
+
+#: main.ts:352
+msgid "Snapshot Folder…"
+msgstr "截图文件夹…"
+
+#: main.ts:352
+msgid "Open Snapshot Folder"
+msgstr "打开截图文件夹"
+
+#: main.ts:352
+msgid "No frame to capture"
+msgstr "没有可截取的画面"
+
+#: manifest.json
+msgid "Save or copy the current frame, capture bursts, export clips"
+msgstr "保存或复制当前画面、连拍、导出片段"
+
+#: manifest.json
+msgid ""
+"Saves, saves as or copies the current frame (the source frame, or the rendered frame with video effects and subtitles) as PNG, JPEG or BMP; captures a burst of frames; exports part of a video as MP4 and shows its progress in a task list.\n"
+"Right-click menu: Video ▸ Snapshot."
+msgstr ""
+"保存、另存或复制当前画面（原始画面或含画面效果与字幕的实际画面），支持 PNG、JPEG、BMP；连拍多张；把一段视频导出为 MP4，并在任务列表里查看进度。\n"
+"入口在右键菜单「视频 ▶ 截图」。"
+
+#: manifest.json
+msgid "video"
+msgstr "视频"
+
+#: manifest.json
+msgid "snapshot"
+msgstr "截图"
+
+#: manifest.json
+msgid "export"
+msgstr "导出"
+
+#: ui/burst.slint:8
+msgid "Burst"
+msgstr "连拍"
+
+#: ui/burst.slint:35
+msgid "Save to"
+msgstr "保存设置"
+
+#: ui/burst.slint:45
+msgid "Snapshot settings"
+msgstr "截图设置"
+
+#: ui/burst.slint:48
+msgid "Count:"
+msgstr "数量："
+
+#: ui/burst.slint:50
+msgid "frames (2–20)"
+msgstr "张（2–20）"
+
+#: ui/burst.slint:54
+msgid "Interval:"
+msgstr "间隔："
+
+#: ui/burst.slint:56
+msgid "s (0.1–10)"
+msgstr "秒（0.1–10）"
+
+#: ui/burst.slint:58
+msgid "Start at the current position"
+msgstr "从当前位置开始"
+
+#: ui/burst.slint:61
+msgid "Start:"
+msgstr "起点："
+
+#: ui/burst.slint:63 ui/clip.slint:34 ui/clip.slint:40
+msgid "Current"
+msgstr "当前"
+
+#: ui/burst.slint:67
+msgid "Other settings"
+msgstr "其他设置"
+
+#: ui/burst.slint:70 ui/clip.slint:47 ui/settings.slint:29
+msgid "Format:"
+msgstr "格式："
+
+#: ui/burst.slint:79 ui/clip.slint:58
+msgid "Include video effects"
+msgstr "包含画面效果"
+
+#: ui/burst.slint:80
+msgid "Capture subtitles too"
+msgstr "同时截取字幕"
+
+#: ui/burst.slint:85 ui/clip.slint:63
+msgid "Information"
+msgstr "信息"
+
+#: ui/burst.slint:88
+msgid "Progress:"
+msgstr "进度："
+
+#: ui/burst.slint:93 ui/clip.slint:66
+msgid "Status:"
+msgstr "状态："
+
+#: ui/burst.slint:100 ui/tasks.slint:80
+msgid "Open Save Folder"
+msgstr "打开存档文件夹"
+
+#: ui/burst.slint:101
+msgid "Capture Current Frame"
+msgstr "截取当前画面"
+
+#: ui/burst.slint:104
+msgid "Start"
+msgstr "开始"
+
+#: ui/clip.slint:13
+msgid "No Audio"
+msgstr "无声音"
+
+#: ui/clip.slint:13
+msgid "Current Track"
+msgstr "当前音轨"
+
+#: ui/clip.slint:29
+msgid "Range"
+msgstr "范围"
+
+#: ui/clip.slint:32
+msgid "Start (s):"
+msgstr "起点（秒）："
+
+#: ui/clip.slint:38
+msgid "End (s):"
+msgstr "终点（秒）："
+
+#: ui/clip.slint:44
+msgid "Output"
+msgstr "输出设置"
+
+#: ui/clip.slint:48
+msgid "MP4 (H.264 + AAC)"
+msgstr "MP4（H.264 + AAC）"
+
+#: ui/clip.slint:52
+msgid "Audio:"
+msgstr "声音："
+
+#: ui/clip.slint:59
+msgid "Export subtitles too"
+msgstr "同时导出字幕"
+
+#: ui/clip.slint:77
+msgid "Export…"
+msgstr "导出…"
+
+#: ui/error.slint:12
+msgid "The snapshot window could not open. Close this notice and try again."
+msgstr "截图窗口无法打开，请关闭此提示后重试。"
+
+#: ui/parts.slint:89
+msgid "Queued"
+msgstr "排队中"
+
+#: ui/parts.slint:90
+msgid "Preparing"
+msgstr "准备中"
+
+#: ui/parts.slint:91
+msgid "Exporting"
+msgstr "导出中"
+
+#: ui/parts.slint:92
+msgid "Cancelling"
+msgstr "正在取消"
+
+#: ui/parts.slint:93
+msgid "Completed"
+msgstr "已完成"
+
+#: ui/parts.slint:94
+msgid "Failed"
+msgstr "失败"
+
+#: ui/parts.slint:95
+msgid "Cancelled"
+msgstr "已取消"
+
+#. {0} is a task state (Failed), {1} why.
+#: ui/parts.slint:103
+msgid "{0}: {1}"
+msgstr "{0}：{1}"
+
+#. {0} is a task state (Exporting), {1} the frames done, {2} the frames in all.
+#: ui/parts.slint:105
+msgid "{0} · {1}/{2}"
+msgstr "{0} · {1}/{2}"
+
+#. {} is the number of frames (2–20).
+#: ui/parts.slint:112
+msgid "{} frames saved"
+msgstr "已保存 {} 张"
+
+#. {} is the number of frames (2–20).
+#: ui/parts.slint:114
+msgid "Burst of {} frames started"
+msgstr "已开始连拍 {} 张"
+
+#: ui/parts.slint:116
+msgid "Exported {}"
+msgstr "已导出 {}"
+
+#: ui/parts.slint:118
+msgid "No save location chosen."
+msgstr "未选择保存位置。"
+
+#: ui/parts.slint:119
+msgid "Export started. Follow it in Export Tasks."
+msgstr "已开始导出，可在导出任务中查看。"
+
+#: ui/parts.slint:120
+msgid "Restarted."
+msgstr "已重新开始。"
+
+#: ui/settings.slint:8
+msgid "Snapshot Settings"
+msgstr "截图设置"
+
+#: ui/settings.slint:26
+msgid "Format"
+msgstr "格式"
+
+#: ui/settings.slint:39
+msgid "Quality:"
+msgstr "质量："
+
+#: ui/settings.slint:49
+msgid "Quality applies to JPEG only; copies to the clipboard are always PNG."
+msgstr "质量只用于 JPEG；复制到剪贴板总是 PNG。"
+
+#: ui/settings.slint:52
+msgid "Save location"
+msgstr "保存位置"
+
+#: ui/settings.slint:60
+msgid "Save to the media folder when possible"
+msgstr "条件允许时储存到播放文件夹"
+
+#: ui/settings.slint:66
+msgid "Rendered frame"
+msgstr "实际画面"
+
+#: ui/settings.slint:69
+msgid "Include subtitles"
+msgstr "包含字幕"
+
+#: ui/settings.slint:74
+msgid "The rendered frame is made offline: it includes the plugins' video effects, and subtitles are drawn again in the plugins' style, always inside the picture, so it is not pixel for pixel what the screen shows. On-screen messages are not included."
+msgstr "实际画面由离线渲染生成：包含插件画面效果，字幕按插件样式重新绘制并始终画在画面内，与屏幕上的像素不完全相同；屏幕提示不包含在内。"
+
+#: ui/tasks.slint:20
+msgid "Export Tasks"
+msgstr "导出任务"
+
+#: ui/tasks.slint:41
+msgid "No export tasks yet."
+msgstr "还没有导出任务。"
+
+#: ui/tasks.slint:56
+msgid "Burst · {}"
+msgstr "连拍 · {}"
+
+#: ui/tasks.slint:56
+msgid "Clip · {}"
+msgstr "片段 · {}"
+
+#: ui/tasks.slint:56
+msgid "Snapshot · {}"
+msgstr "截图 · {}"
+
+#. {0} is the time or time range, {1} the progress (Completed).
+#: ui/tasks.slint:60
+msgid "{0} · {1}"
+msgstr "{0} · {1}"
+
+#: ui/tasks.slint:66
+msgid "Cancel"
+msgstr "取消"
+
+#: ui/tasks.slint:67
+msgid "Open"
+msgstr "打开"
+
+#: ui/tasks.slint:68
+msgid "Retry"
+msgstr "重试"

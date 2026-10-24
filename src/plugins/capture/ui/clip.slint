@@ -1,17 +1,17 @@
-// 导出片段: options in group boxes (B§6.8; UI-DLG-05).
+// Export Clip: options in group boxes (B§6.8; UI-DLG-05).
 import { CheckBox, ComboBox, LineEdit } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
-import { FormLabel, Group, Note } from "parts.slint";
+import { FormLabel, Group, Note, Status, Words } from "parts.slint";
 
 export component ClipDialog inherits Window {
-    title: "导出片段";
+    title: @tr("Export Clip");
     width: 400px;
     background: Theme.bg-panel;
     in property <bool> busy;
     in property <bool> can-export;
-    in property <[string]> audio-labels: ["无声音", "当前音轨"];
-    in property <string> status;
+    in property <[string]> audio-labels: [@tr("No Audio"), @tr("Current Track")];
+    in property <Status> status;
     in-out property <string> start-time: "0";
     in-out property <string> end-time: "10";
     in-out property <int> audio-index: 1;
@@ -26,55 +26,55 @@ export component ClipDialog inherits Window {
         padding: Theme.dialog-padding;
         spacing: 5px;
         Group {
-            title: "范围";
+            title: @tr("Range");
             HorizontalLayout {
                 spacing: 4px;
-                FormLabel { width: 100px; text: "起点（秒）："; }
+                FormLabel { width: 100px; text: @tr("Start (s):"); }
                 LineEdit { height: Theme.input-height; font-size: Theme.font-body; text <=> root.start-time; enabled: !root.busy; }
-                Button { small: true; height: Theme.input-height; text: "当前"; enabled: !root.busy; clicked => { root.mark-start(); } }
+                Button { small: true; height: Theme.input-height; text: @tr("Current"); enabled: !root.busy; clicked => { root.mark-start(); } }
             }
             HorizontalLayout {
                 spacing: 4px;
-                FormLabel { width: 100px; text: "终点（秒）："; }
+                FormLabel { width: 100px; text: @tr("End (s):"); }
                 LineEdit { height: Theme.input-height; font-size: Theme.font-body; text <=> root.end-time; enabled: !root.busy; }
-                Button { small: true; height: Theme.input-height; text: "当前"; enabled: !root.busy; clicked => { root.mark-end(); } }
+                Button { small: true; height: Theme.input-height; text: @tr("Current"); enabled: !root.busy; clicked => { root.mark-end(); } }
             }
         }
         Group {
-            title: "输出设置";
+            title: @tr("Output");
             HorizontalLayout {
                 spacing: 4px;
-                FormLabel { width: 100px; text: "格式："; }
-                Note { text: "MP4（H.264 + AAC）"; }
+                FormLabel { width: 100px; text: @tr("Format:"); }
+                Note { text: @tr("MP4 (H.264 + AAC)"); }
             }
             HorizontalLayout {
                 spacing: 4px;
-                FormLabel { width: 100px; text: "声音："; }
+                FormLabel { width: 100px; text: @tr("Audio:"); }
                 ComboBox { height: Theme.input-height; model: root.audio-labels; current-index <=> root.audio-index; enabled: !root.busy; }
             }
             HorizontalLayout {
                 spacing: 4px;
                 Rectangle { width: 100px; }
-                CheckBox { height: Theme.checkbox-row-height; text: "包含画面效果"; checked <=> root.processed; enabled: !root.busy; }
-                CheckBox { height: Theme.checkbox-row-height; text: "同时导出字幕"; checked <=> root.subtitles; enabled: root.processed && !root.busy; }
+                CheckBox { height: Theme.checkbox-row-height; text: @tr("Include video effects"); checked <=> root.processed; enabled: !root.busy; }
+                CheckBox { height: Theme.checkbox-row-height; text: @tr("Export subtitles too"); checked <=> root.subtitles; enabled: root.processed && !root.busy; }
             }
         }
         Group {
-            title: "信息";
+            title: @tr("Information");
             HorizontalLayout {
                 spacing: 4px;
-                FormLabel { width: 100px; text: "状态："; }
-                Note { text: root.status; }
+                FormLabel { width: 100px; text: @tr("Status:"); }
+                Note { text: Words.status(root.status); }
             }
         }
         Rectangle { height: 2px; background: Theme.line; }
         HorizontalLayout {
             spacing: 4px;
             alignment: end;
-            Button { height: Theme.button-primary-height; text: "导出任务…"; clicked => { root.open-tasks(); } }
+            Button { height: Theme.button-primary-height; text: @tr("Export Tasks…"); clicked => { root.open-tasks(); } }
             Button {
                 height: Theme.button-primary-height;
-                text: "导出…";
+                text: @tr("Export…");
                 enabled: root.can-export && !root.busy;
                 clicked => { root.export-clip(root.start-time, root.end-time, root.processed, root.subtitles, root.audio-index); }
             }

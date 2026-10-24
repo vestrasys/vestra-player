@@ -6,7 +6,7 @@ import test from "node:test";
 import { isDeepStrictEqual } from "node:util";
 import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
-import { newFakes, stills, watchHost } from "./fakes.ts";
+import { newFakes, stills, watchHost, words } from "./fakes.ts";
 
 const fakes = newFakes();
 const directory = new URL("..", import.meta.url);
@@ -24,6 +24,8 @@ async function until(predicate: () => boolean | Promise<boolean>) {
 }
 const exists = (path: string) => stat(path).then(() => true, () => false);
 const lastOsd = (host: TestHost) => host.osd.at(-1) ?? "";
+/** The burst dialog's progress line as shown. */
+const burstProgress = (host: TestHost) => words(host).progress(host.window("burst").props.progress as never);
 
 /** Jobs publish a real file at the requested destination (like the worker), so copies and the task list see it. */
 function publishingJobs(host: TestHost) {
@@ -40,7 +42,7 @@ function publishingJobs(host: TestHost) {
   });
 }
 
-/** A started plugin with a ready local source, a temporary capture folder and data directory. */
+/** A started plugin with a ready local source, a temporary capture folder and data directory; texts as a Chinese user sees them. */
 async function setup(path = "/contract/source-one.mp4") {
   const host = new TestHost();
   watchHost(host, fakes);
@@ -49,7 +51,7 @@ async function setup(path = "/contract/source-one.mp4") {
   publishingJobs(host);
   const data = await mkdtemp(join(tmpdir(), "capture-data-"));
   const folder = await mkdtemp(join(tmpdir(), "capture-folder-"));
-  const plugin = await startPlugin(activate, { directory, host, dataDirectory: data });
+  const plugin = await startPlugin(activate, { directory, host, dataDirectory: data, locale: "zh-Hans" });
   host.dialogAnswers.push([folder]);
   await host.command("capture.folder").run();
   await until(() => lastOsd(host) === `截图文件夹：${folder}`); // after the plugin's own stat of the folder
@@ -118,10 +120,10 @@ test("F03/F04: Ctrl+Alt+C copies the processed frame; a second press while one i
 });
 
 test("F03: copy commands are disabled without a capturable source", async () => {
-  const { host, stop } = await startPlugin(activate, { directory, host: new TestHost() });
+  const { host, stop } = await startPlugin(activate, { directory, host: new TestHost(), locale: "zh-Hans" });
   for (const id of ["capture.copy", "capture.copyScreen", "capture.saveScreen", "capture.saveScreenAs"]) {
     assert.equal(host.command(id).state.enabled, false, id);
-    assert.equal(host.command(id).state.reason, "没有可截取的画面");
+    assert.equal(host.translate(host.command(id).state.reason!), "没有可截取的画面");
   }
   assert.equal(host.command("capture.openFolder").state.enabled, true, "F09 works without media");
   await stop();
@@ -154,7 +156,8 @@ test("F04: 保存实际画面 includes effects and, unless unticked, subtitles; 
     await until(() => host.sent("snapshot.capture").length === 4);
     assert.equal(host.sent("snapshot.capture").at(-1)!.mode, "processed");
     const panel = host.sent("dialogs.open").at(-1)!;
-    assert.equal(panel.title, "实际画面另存为");
+    assert.equal(panel.title, "Save Rendered Frame As");
+    assert.equal(host.translate(String(panel.title)), "实际画面另存为");
   } finally {
     await stop();
   }
@@ -194,7 +197,7 @@ test("F07: JPEG is exported by the player with the chosen quality; quality and f
     assert.deepEqual([second.kind, second.destination, "quality" in second], ["rawBmp", join(folder, "source-one_00.02.000.bmp"), false]);
     // Restart: the format and quality come back.
     const restart = new TestHost();
-    const again = await startPlugin(activate, { directory, host: restart, dataDirectory: data });
+    const again = await startPlugin(activate, { directory, host: restart, dataDirectory: data, locale: "zh-Hans" });
     assert.equal(restart.command("capture.format.bmp").state.checked, true);
     await restart.command("capture.settings").run();
     assert.equal(restart.window("settings").props.quality, 80);
@@ -221,8 +224,8 @@ test("F07: a failed JPEG export fails the task like a PNG one; nothing is left b
     assert.equal(stills(host)[0]!.kind, "rawJpeg");
     assert.deepEqual(await readdir(folder), []);
     await host.command("capture.tasks").run();
-    const [row] = host.window("tasks").props["task-rows"] as { detail: string; retryable: boolean }[];
-    assert.match(row!.detail, /失败：导出失败$/);
+    const [row] = host.window("tasks").props["task-rows"] as (Parameters<ReturnType<typeof words>["row"]>[0] & { retryable: boolean })[];
+    assert.match(words(host).row(row!).detail, /失败：导出失败$/);
     assert.equal(row!.retryable, true);
   } finally {
     await stop();
@@ -265,7 +268,7 @@ test("F07: bursts use the shared format; the dialog's combo box changes it", asy
     assert.equal(lastOsd(host), "截图格式：JPEG");
     assert.equal(host.command("capture.format.jpeg").state.checked, true);
     burst.emit("start-burst", "1", "3", "0.5", false, false, false);
-    await until(() => burst.props.progress === "已完成 · 3/3");
+    await until(() => burstProgress(host) === "已完成 · 3/3");
     const [child] = await readdir(folder);
     assert.deepEqual((await readdir(join(folder, child!))).sort(), ["001-1.000s.jpg", "002-1.500s.jpg", "003-2.000s.jpg"]);
     assert.equal(host.exports.length, 3);
@@ -321,14 +324,14 @@ test("F09: 导出任务「打开」opens the confirmed output with system.openPa
     assert.deepEqual(fakes.opened, [join(folder, "source-one_00.02.000.png")]);
     await host.press("Ctrl+G");
     host.window("burst").emit("start-burst", "1", "2", "0.5", false, false, false);
-    await until(() => host.window("burst").props.progress === "已完成 · 2/2");
+    await until(() => burstProgress(host) === "已完成 · 2/2");
     host.window("tasks").emit("open-output", "2");
     await until(() => fakes.opened.length === 2);
     const [burstFolder] = (await readdir(folder)).filter((name) => name.startsWith("Capture-"));
     assert.equal(fakes.opened[1], join(folder, burstFolder!));
     fakes.failOpen = true;
     host.window("tasks").emit("open-output", "1");
-    await until(() => host.window("tasks").props.status === "无法打开文件夹。");
+    await until(() => words(host).status(host.window("tasks").props.status as never) === "无法打开文件夹。");
   } finally {
     await stop();
   }

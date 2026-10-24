@@ -1,11 +1,11 @@
-// 截图设置 (F07, F04): format and quality, where captures go; group 「格式设置」.
+// Snapshot Settings (F07, F04): format and quality, where captures go, the rendered frame.
 import { CheckBox, ComboBox, LineEdit } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button, Slider } from "@vestra/widgets.slint";
 import { FormLabel, Group, Note } from "parts.slint";
 
 export component CaptureSettings inherits Window {
-    title: "截图设置";
+    title: @tr("Snapshot Settings");
     width: 360px;
     background: Theme.bg-panel;
     in property <string> folder;
@@ -23,10 +23,10 @@ export component CaptureSettings inherits Window {
         padding: Theme.dialog-padding;
         spacing: 5px;
         Group {
-            title: "格式";
+            title: @tr("Format");
             HorizontalLayout {
                 spacing: 4px;
-                FormLabel { width: 60px; text: "格式："; }
+                FormLabel { width: 60px; text: @tr("Format:"); }
                 ComboBox {
                     height: Theme.input-height;
                     model: ["PNG", "JPEG", "BMP"];
@@ -36,7 +36,7 @@ export component CaptureSettings inherits Window {
             }
             HorizontalLayout {
                 spacing: 4px;
-                FormLabel { width: 60px; text: "质量："; }
+                FormLabel { width: 60px; text: @tr("Quality:"); }
                 Slider {
                     minimum: 1;
                     maximum: 100;
@@ -46,10 +46,10 @@ export component CaptureSettings inherits Window {
                 }
                 Note { width: 30px; text: round(root.quality); horizontal-alignment: right; }
             }
-            Note { text: "质量只用于 JPEG；复制到剪贴板总是 PNG。"; color: Theme.text-dim; }
+            Note { text: @tr("Quality applies to JPEG only; copies to the clipboard are always PNG."); color: Theme.text-dim; }
         }
         Group {
-            title: "保存位置";
+            title: @tr("Save location");
             HorizontalLayout {
                 spacing: 4px;
                 LineEdit { height: Theme.input-height; font-size: Theme.font-body; text: root.folder; read-only: true; }
@@ -57,21 +57,21 @@ export component CaptureSettings inherits Window {
             }
             CheckBox {
                 height: Theme.checkbox-row-height;
-                text: "条件允许时储存到播放文件夹";
+                text: @tr("Save to the media folder when possible");
                 checked <=> root.beside-media;
                 toggled => { root.set-beside-media(self.checked); }
             }
         }
         Group {
-            title: "实际画面";
+            title: @tr("Rendered frame");
             CheckBox {
                 height: Theme.checkbox-row-height;
-                text: "包含字幕";
+                text: @tr("Include subtitles");
                 checked <=> root.screen-subtitles;
                 toggled => { root.set-screen-subtitles(self.checked); }
             }
             Text {
-                text: "实际画面由离线渲染生成：包含插件画面效果，字幕按插件样式重新绘制并始终画在画面内，与屏幕上的像素不完全相同；屏幕提示不包含在内。";
+                text: @tr("The rendered frame is made offline: it includes the plugins' video effects, and subtitles are drawn again in the plugins' style, always inside the picture, so it is not pixel for pixel what the screen shows. On-screen messages are not included.");
                 color: Theme.text-dim;
                 font-size: Theme.font-body;
                 wrap: word-wrap;

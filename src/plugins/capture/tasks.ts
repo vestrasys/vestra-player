@@ -1,8 +1,8 @@
 import { rmdir, stat } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import type { ExportJob, JobState, Scope, Snapshot } from "@vestra-player/sdk";
-import { clock, extensionOf, KIND_LABEL } from "./model.ts";
-import type { Spec } from "./model.ts";
+import { clock, extensionOf, Failure, jobProblem } from "./model.ts";
+import type { JobReason, Problem, Spec } from "./model.ts";
 
 /** An accepted export: one frozen snapshot, one or more sequential jobs. */
 export interface Task {
@@ -15,8 +15,8 @@ export interface Task {
   /** The unique burst folder this plugin created. */
   directory?: string;
   status: string;
-  /** Chinese one-line failure reason. */
-  error?: string;
+  /** Why it failed. */
+  error?: Problem<JobReason>;
   cancel: boolean;
   jobs: ExportJob[];
   /** `path`: the file the host confirmed (JPEG/BMP are converted by the player before it publishes). */
@@ -28,32 +28,29 @@ export interface Task {
 
 const TERMINAL = ["completed", "failed", "cancelled"];
 const RETAIN_MS = 300_000;
-const STATUS: Record<string, string> = {
-  queued: "排队中",
-  preparing: "准备中",
-  running: "导出中",
-  cancelling: "正在取消",
-  completed: "已完成",
-  failed: "失败",
-  cancelled: "已取消",
-};
+/**
+ * A task's progress as data; ui/parts.slint `Words.progress` turns it into
+ * words ("Completed", "Exporting · 3/10", "Failed: Not enough disk space").
+ */
+export type Progress = Problem<JobReason> & { status: string; done: number; total: number };
+const IDLE: Progress = { status: "", reason: "", raw: "", done: 0, total: 0 };
 export const terminal = (task: Task) => TERMINAL.includes(task.status);
 
-/** A host job failure in one Chinese sentence; the code and message go to the log. */
-export function jobError(error: { code: string; message: string }) {
+/** A host job failure as one of the plugin's reasons; the code and message go to the log. */
+export function jobError(error: { code: string; message: string }): JobReason {
   console.error(`[capture] export failed: ${error.code}: ${error.message}`);
   switch (error.code) {
     case "space":
-      return "磁盘空间不足";
+      return "space";
     case "exists":
-      return "目标文件已存在";
+      return "exists";
     case "permission":
-      return "没有写入权限";
+      return "permission";
     case "encoder":
     case "unsupported":
-      return "无法编码此媒体";
+      return "encoder";
     default:
-      return "导出失败";
+      return "exportFailed";
   }
 }
 
@@ -76,10 +73,11 @@ export class Tasks {
   /** The newest task of a kind (the burst dialog shows its progress). */
   latest = (kind: Spec["kind"]) => this.list.findLast((task) => task.spec.kind === kind);
 
-  /** `已完成`, `导出中 · 3/10`, `失败：磁盘空间不足`. */
-  progress(task: Task) {
-    const count = task.spec.count > 1 ? ` · ${task.outputs.length}/${task.spec.count}` : "";
-    return `${STATUS[task.status] ?? task.status}${task.error ? `：${task.error}` : count}`;
+  /** The progress of a task, or of none (an empty line). */
+  progress(task: Task | undefined): Progress {
+    if (!task) return IDLE;
+    const { reason, raw } = task.error ?? { reason: "", raw: "" };
+    return { status: task.status, reason, raw, done: task.outputs.length, total: task.spec.count };
   }
 
   rows() {
@@ -88,11 +86,14 @@ export class Tasks {
       .reverse()
       .map((task) => {
         const { spec } = task;
-        const range = spec.kind === "clip" ? `${clock(spec.start)}–${clock(spec.end!)}` : clock(spec.start);
         return {
           id: task.id,
-          title: `${KIND_LABEL[spec.kind]} · ${basename(task.destination)}`,
-          detail: `${range} · ${this.progress(task)}`,
+          // The row's words are in ui/tasks.slint: "Snapshot · <name>", "<range> · <progress>".
+          kind: spec.kind,
+          name: basename(task.destination),
+          // Times are data: `00:02.000`, a clip `00:01.000–00:04.000`.
+          range: spec.kind === "clip" ? `${clock(spec.start)}–${clock(spec.end!)}` : clock(spec.start),
+          progress: this.progress(task),
           cancellable: !terminal(task),
           retryable: terminal(task) && task.status !== "completed",
           openable: task.outputs.length > 0,
@@ -111,7 +112,7 @@ export class Tasks {
 
   /** Hand a retained snapshot to a retry; the old task no longer owns it. */
   take(task: Task): Snapshot {
-    if (!this.retained(task)) throw new Error("保留的画面已过期，请用当前画面重试。");
+    if (!this.retained(task)) throw new Failure("expired");
     const snapshot = task.snapshot!;
     clearTimeout(task.retentionTimer);
     task.snapshot = task.retainUntil = task.retentionTimer = undefined;
@@ -155,16 +156,16 @@ export class Tasks {
             const { job, state } = await this.#run(task, index);
             if (state.status === "completed" && state.outcome && "destination" in state.outcome)
               task.outputs.push({ job, path: state.outcome.destination }); else if (state.status === "failed")
-              throw new Error(state.outcome && "error" in state.outcome ? jobError(state.outcome.error) : jobError({ code: "unknown", message: "no error outcome" }));
+              throw new Failure(state.outcome && "error" in state.outcome ? jobError(state.outcome.error) : jobError({ code: "unknown", message: "no error outcome" }));
             else if (state.status === "cancelled") {
               task.cancel = true;
               break;
-            } else throw new Error(jobError({ code: "unknown", message: "completed without a destination" }));
+            } else throw new Failure(jobError({ code: "unknown", message: "completed without a destination" }));
           }
           task.status = task.outputs.length === task.spec.count ? "completed" : "cancelled";
         } catch (error) {
           task.status = "failed";
-          task.error = error instanceof Error ? error.message : "导出失败";
+          task.error = error instanceof Error ? jobProblem(error) : { reason: "exportFailed", raw: "" };
         }
         if (task.status === "completed") await this.release(task);
         else this.#retain(task);
@@ -178,7 +179,7 @@ export class Tasks {
   }
 
   async #run(task: Task, index: number): Promise<{ job: ExportJob; state: JobState }> {
-    if (!task.snapshot) throw new Error("保留的画面已释放。");
+    if (!task.snapshot) throw new Failure("released");
     const { spec } = task;
     const sampleTime = spec.start + index * spec.step;
     const format = spec.format ?? "png";
@@ -224,13 +225,13 @@ export class Tasks {
   /** Open the confirmed output (a burst opens its folder) with its default application. */
   async open(task: Task) {
     const output = task.outputs.at(-1);
-    if (!output) throw new Error("这个任务还没有输出文件。");
+    if (!output) throw new Failure("noOutput");
     const state = await output.job.refresh();
     const confirmed =
       state.status === "completed" && !!state.outcome && "destination" in state.outcome && resolve(state.outcome.destination) === resolve(output.path);
-    if (!confirmed || !(await stat(output.path).catch(() => null))?.isFile()) throw new Error("输出文件已不存在。");
+    if (!confirmed || !(await stat(output.path).catch(() => null))?.isFile()) throw new Failure("outputGone");
     await this.#plugin.system.openPath(resolve(task.directory ?? output.path)).catch(() => {
-      throw new Error("无法打开文件夹。");
+      throw new Failure("cannotOpen");
     });
   }
 

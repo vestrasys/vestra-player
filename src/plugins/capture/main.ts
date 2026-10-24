@@ -1,10 +1,13 @@
 import { access, constants, mkdir, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
-import type { Plugin, Window } from "@vestra-player/sdk";
-import { ClipboardError, clipboard } from "./copy.ts";
+import type { CommandOptions, Plugin, Window } from "@vestra-player/sdk";
+import { clipboard } from "./copy.ts";
 import { capturer } from "./form.ts";
-import { audioChoices, extensionOf, FORMAT_LABEL, FORMATS, formatOfName, frameName, message, parseRange, quality, usable } from "./model.ts";
-import type { Format, Spec } from "./model.ts";
+import {
+  audioChoices, BURST_FAILED, CLIP_FAILED, extensionOf, Failure, FORMAT_LABEL, FORMATS, formatOfName, frameName, message, parseRange,
+  problemOf, quality, REASON, SNAPSHOT_FAILED, usable,
+} from "./model.ts";
+import type { Format, Kind, Problem, Reason, Spec } from "./model.ts";
 import { openSettings } from "./settings.ts";
 import { Tasks, terminal } from "./tasks.ts";
 import type { Task } from "./tasks.ts";
@@ -12,19 +15,68 @@ import type { Task } from "./tasks.ts";
 /** A local file path (not a URL) whose folder can hold captures. */
 const localFolder = (source: string | null) =>
   source && isAbsolute(source) && !/^[a-z][a-z0-9+.-]*:\/\//i.test(source) ? dirname(source) : null;
-/** An OSD line is at most 200 characters: fall back to the file name for long paths. */
-const fit = (prefix: string, path: string) =>
-  (prefix + path).length <= 200 ? prefix + path : (prefix + basename(path)).slice(0, 200);
+/**
+ * An OSD line is at most 200 characters as shown: a path argument leaves room
+ * for the words of the template (in any language) and falls back to the file
+ * name when long; other arguments are cut.
+ */
+const ROOM = 160;
+const fit = (path: string) => (path.length <= ROOM ? path : basename(path).slice(0, ROOM));
+const cut = (text: string) => text.slice(0, ROOM);
+
+/** What a dialog's status line says, as data; ui/parts.slint `Words.status` puts it into words. */
+type Status = Problem<string> & { kind: string; count: number; name: string };
+const status = (kind = "", fields: Partial<Status> = {}): Status => ({ kind, reason: "", raw: "", count: 0, name: "", ...fields });
+const errorStatus = (error: unknown): Status => status("error", problemOf(error));
+
+/** The menu titles under Video ▸ Snapshot, by command id. */
+const MENU = {
+  "capture.save": "Save Current Frame",
+  "capture.saveAs": "Save Current Frame As…",
+  "capture.copy": "Copy Current Frame",
+  "capture.saveScreen": "Save Rendered Frame",
+  "capture.saveScreenAs": "Save Rendered Frame As…",
+  "capture.copyScreen": "Copy Rendered Frame",
+  "capture.burst": "Burst…",
+  "capture.clip": "Export Clip…",
+  "capture.tasks": "Export Tasks…",
+  "capture.format.png": "Capture as PNG",
+  "capture.format.jpeg": "Capture as JPEG",
+  "capture.format.bmp": "Capture as BMP",
+  "capture.screenSubtitles": "Include Subtitles in Rendered Frame",
+  "capture.settings": "Snapshot Settings…",
+  "capture.folder": "Snapshot Folder…",
+  "capture.openFolder": "Open Snapshot Folder",
+} as const;
+const FAILED = { image: SNAPSHOT_FAILED, burst: BURST_FAILED, clip: CLIP_FAILED } as const;
+type FailedText = (typeof SNAPSHOT_FAILED)[keyof typeof SNAPSHOT_FAILED] | (typeof BURST_FAILED)[keyof typeof BURST_FAILED] | (typeof CLIP_FAILED)[keyof typeof CLIP_FAILED];
 
 /**
- * Capture (decision D3): 保存当前画面 saves straight into the capture folder,
- * 另存为 asks for a file, 连拍 / 导出片段 / 导出任务 are their own dialogs.
+ * Capture (decision D3): Save Current Frame saves straight into the capture
+ * folder, Save As asks for a file, Burst / Export Clip / Export Tasks are
+ * their own dialogs. Every text is English source text (locales/ has the
+ * translations); the windows get data and say it in their Slint files.
  */
 export default async function activate(plugin: Plugin) {
   const { player, osd } = plugin;
   const { settings, save } = openSettings(plugin);
-  const ui = { burstBusy: false, clipBusy: false, stillBusy: false, burstStatus: "", clipStatus: "", tasksStatus: "" };
-  const say = (text: string) => void osd.show(text.slice(0, 200)).catch(() => {});
+  const ui = { burstBusy: false, clipBusy: false, stillBusy: false, burstStatus: status(), clipStatus: status(), tasksStatus: status() };
+  // Headless hosts refuse the display; that never fails the action itself.
+  const shown = (showing: Promise<void>) => void showing.catch(() => {});
+  /** A reason on its own, or the player's or system's own message as it is. */
+  function sayProblem({ reason, raw }: Problem) {
+    if (reason) return shown(osd.show(REASON[reason]));
+    // i18n-ignore: the player's or system's own message
+    shown(osd.show(raw.slice(0, 200)));
+  }
+  /** "Snapshot failed: …", "Burst failed: …", "Export failed: …": one template per reason. */
+  function sayFailed(kind: Kind, { reason, raw }: Problem) {
+    const text = reason ? (FAILED[kind] as Partial<Record<Reason, FailedText>>)[reason] : undefined;
+    if (text) return shown(osd.show(text));
+    // The player's or system's own message (or a reason this kind never fails with) after the prefix, as before.
+    const detail = cut(reason ? REASON[reason] : raw);
+    shown(kind === "image" ? osd.show("Snapshot failed: {}", [detail]) : kind === "burst" ? osd.show("Burst failed: {}", [detail]) : osd.show("Export failed: {}", [detail]));
+  }
   const tasks = new Tasks(plugin, finished);
   const exporter = capturer(plugin, tasks);
   const copier = clipboard(plugin);
@@ -37,30 +89,38 @@ export default async function activate(plugin: Plugin) {
   /** A task reached its end: report it on screen and in its dialog. */
   function finished(task: Task) {
     const path = task.outputs[0]?.path ?? task.destination;
+    const { kind } = task.spec;
     if (task.status === "completed") {
-      if (task.spec.kind === "image") say(fit("帧已保存为 ", path));
-      else if (task.spec.kind === "burst") say(fit(`连拍已保存 ${task.outputs.length} 张到 `, task.destination));
-      else say(fit("片段已导出为 ", path));
-      if (task.spec.kind === "burst") ui.burstStatus = `已保存 ${task.outputs.length} 张`;
-      if (task.spec.kind === "clip") ui.clipStatus = `已导出 ${basename(path)}`;
+      if (kind === "image") shown(osd.show("Frame saved as {}", [fit(path)]));
+      else if (kind === "burst")
+        shown(
+          osd.show(
+            // TRANSLATORS: {0} is the number of frames (2–20), {1} the folder.
+            "Burst of {0} frames saved to {1}",
+            [task.outputs.length, fit(task.destination)],
+          ),
+        );
+      else shown(osd.show("Clip exported as {}", [fit(path)]));
+      if (kind === "burst") ui.burstStatus = status("saved", { count: task.outputs.length });
+      if (kind === "clip") ui.clipStatus = status("exported", { name: basename(path) });
     } else if (task.status === "failed") {
-      const text = `${task.spec.kind === "image" ? "截图" : task.spec.kind === "burst" ? "连拍" : "导出"}失败：${task.error}`;
-      say(text);
-      if (task.spec.kind === "burst") ui.burstStatus = text;
-      if (task.spec.kind === "clip") ui.clipStatus = text;
+      const problem = task.error ?? { reason: "", raw: "" };
+      sayFailed(kind, problem);
+      if (kind === "burst") ui.burstStatus = status("burst-failed", problem);
+      if (kind === "clip") ui.clipStatus = status("clip-failed", problem);
     }
   }
 
   // ---------------------------------------------------------------- settings
   const store = save;
-  /** F07/F09: the playing file's folder when 储存到播放文件夹 is on and the source is local; the capture folder otherwise. */
+  /** F07/F09: the playing file's folder when "Save to the media folder" is on and the source is local; the capture folder otherwise. */
   const shownFolder = (source: string | null) => (settings.besideMedia && localFolder(source)) || settings.folder;
   /** The folder captures go to now: falls back to the capture folder when the media folder cannot be written. */
   async function targetFolder(source: string | null) {
     const beside = settings.besideMedia ? localFolder(source) : null;
     if (beside && (await access(beside, constants.W_OK).then(() => true, () => false))) return beside;
     await mkdir(settings.folder, { recursive: true }).catch(() => {
-      throw new Error("截图文件夹不可用，请重新选择。");
+      throw new Failure("folderUnavailable");
     });
     return settings.folder;
   }
@@ -70,7 +130,7 @@ export default async function activate(plugin: Plugin) {
       settings.format = format;
       store();
     }
-    say(`截图格式：${FORMAT_LABEL[format]}`);
+    shown(osd.show("Snapshot format: {}", [FORMAT_LABEL[format]]));
   }
   function setQuality(value: unknown) {
     const next = quality(value);
@@ -85,19 +145,21 @@ export default async function activate(plugin: Plugin) {
   };
 
   // ---------------------------------------------------------------- single frames
-  /** `screen`: 实际画面 (F04) — plugin effects and, when ticked, the subtitles. */
+  /** `screen`: the rendered frame (F04) — plugin effects and, when ticked, the subtitles. */
   const frameSpec = (seen: { position: number | null }, current: boolean, screen: boolean, format: Format): Spec => ({
     kind: "image", start: seen.position ?? 0, count: 1, step: 1, processed: screen, subtitles: screen && settings.screenSubtitles,
     track: "none", current, format, quality: settings.quality,
   });
   /** One single frame at a time (save, save as, copy); a second press is refused, not queued here. */
   async function single(action: () => Promise<void>) {
-    if (ui.stillBusy) return say("上一张截图仍在处理");
+    if (ui.stillBusy) return shown(osd.show("The previous snapshot is still being processed"));
     ui.stillBusy = true;
     try {
       await action();
     } catch (error) {
-      say(error instanceof ClipboardError ? error.message : `截图失败：${message(error)}`);
+      const problem = problemOf(error);
+      if (problem.reason === "clipboard") sayProblem(problem);
+      else sayFailed("image", problem);
     } finally {
       ui.stillBusy = false;
     }
@@ -109,16 +171,15 @@ export default async function activate(plugin: Plugin) {
       const folder = await targetFolder(seen.source);
       const format = settings.format;
       await exporter.start(frameSpec(seen, true, screen, format), seen, join(folder, frameName(seen.source, seen.position ?? 0, extensionOf(format))));
-      if (tasks.active().length > 1) say("截图已排队");
+      if (tasks.active().length > 1) shown(osd.show("Snapshot queued"));
     });
   /** The frame shown when the command ran, into a file the user picks; a typed extension picks the format once. */
   const saveFrameAs = (screen: boolean) =>
     single(async () => {
       const seen = await player.refresh();
-      if (!usable(seen)) throw new Error("当前画面无法截取，请先打开本地视频文件。");
+      if (!usable(seen)) throw new Failure("unusable");
       const start = seen.position ?? 0;
-      const title = screen ? "实际画面另存为" : "当前画面另存为";
-      const chosen = await plugin.dialogs.saveFile({ title, fileName: frameName(seen.source, start, extensionOf(settings.format)) });
+      const chosen = await plugin.dialogs.saveFile({ title: screen ? "Save Rendered Frame As" : "Save Current Frame As", fileName: frameName(seen.source, start, extensionOf(settings.format)) });
       if (!chosen) return;
       const typed = formatOfName(chosen);
       const format = typed ?? settings.format;
@@ -129,26 +190,26 @@ export default async function activate(plugin: Plugin) {
     single(async () => {
       const seen = await player.refresh();
       await copier.copy(seen, screen, settings.screenSubtitles);
-      say("画面截图：复制到剪贴板");
+      shown(osd.show("Frame copied to the clipboard"));
     });
   async function chooseFolder() {
-    const chosen = await plugin.dialogs.openDirectory({ title: "选择截图文件夹" });
+    const chosen = await plugin.dialogs.openDirectory({ title: "Choose Snapshot Folder" });
     if (!chosen) return;
-    if (!(await stat(chosen).catch(() => null))?.isDirectory()) return say("请选择一个已有的文件夹。");
+    if (!(await stat(chosen).catch(() => null))?.isDirectory()) return shown(osd.show("Please choose an existing folder."));
     settings.folder = chosen;
     store();
-    say(fit("截图文件夹：", chosen));
+    shown(osd.show("Snapshot folder: {}", [fit(chosen)]));
   }
   /** F09: the folder captures go to now, created when missing, opened in the file manager. */
   const openFolder = async () => {
     const folder = await targetFolder(player.state.source);
     await plugin.system.openPath(folder).catch(() => {
-      throw new Error("无法打开文件夹。");
+      throw new Failure("cannotOpen");
     });
   };
-  const openFolderSaying = () => openFolder().catch((error) => say(message(error)));
+  const openFolderSaying = () => openFolder().catch((error) => sayProblem(problemOf(error)));
 
-  // ---------------------------------------------------------------- 截图设置
+  // ---------------------------------------------------------------- Snapshot Settings
   settingsWindow.bind(() => ({
     formatIndex: FORMATS.indexOf(settings.format),
     quality: settings.quality,
@@ -162,14 +223,14 @@ export default async function activate(plugin: Plugin) {
   settingsWindow.on("setBesideMedia", (value: boolean) => setFlag("besideMedia", value === true));
   settingsWindow.on("setScreenSubtitles", (value: boolean) => setFlag("screenSubtitles", value === true));
 
-  // ---------------------------------------------------------------- 连拍
+  // ---------------------------------------------------------------- Burst
   burst.bind(() => {
     const last = tasks.latest("burst");
     return {
       folder: shownFolder(player.state.source),
       busy: ui.burstBusy,
       canCapture: usable(player.state),
-      progress: last ? tasks.progress(last) : "",
+      progress: tasks.progress(last),
       status: ui.burstStatus,
       formatIndex: FORMATS.indexOf(settings.format),
     };
@@ -190,14 +251,14 @@ export default async function activate(plugin: Plugin) {
       };
       const seen = await player.refresh();
       await exporter.start(spec, seen, await targetFolder(seen.source));
-      ui.burstStatus = `已开始连拍 ${spec.count} 张`;
+      ui.burstStatus = status("started", { count: spec.count });
     } catch (error) {
-      ui.burstStatus = message(error);
+      ui.burstStatus = errorStatus(error);
     } finally {
       ui.burstBusy = false;
     }
   });
-  // ---------------------------------------------------------------- 导出片段
+  // ---------------------------------------------------------------- Export Clip
   clip.bind(() => ({
     busy: ui.clipBusy,
     canExport: usable(player.state),
@@ -221,29 +282,29 @@ export default async function activate(plugin: Plugin) {
         processed: processed === true, subtitles: subtitles === true,
         track: audioChoices(seen).values[Number(audio)] ?? "none", current: false,
       };
-      if (!usable(seen)) throw new Error("当前画面无法导出，请先打开本地视频文件。");
-      const chosen = await plugin.dialogs.saveFile({ title: "导出片段", fileName: frameName(seen.source, range.start, ".mp4") });
-      if (!chosen) return void (ui.clipStatus = "未选择保存位置。");
+      if (!usable(seen)) throw new Failure("unexportable");
+      const chosen = await plugin.dialogs.saveFile({ title: "Export Clip", fileName: frameName(seen.source, range.start, ".mp4") });
+      if (!chosen) return void (ui.clipStatus = status("no-destination"));
       await exporter.start(spec, seen, /\.mp4$/i.test(chosen) ? chosen : `${chosen}.mp4`);
-      ui.clipStatus = "已开始导出，可在导出任务中查看。";
+      ui.clipStatus = status("clip-started");
     } catch (error) {
-      ui.clipStatus = message(error);
+      ui.clipStatus = errorStatus(error);
     } finally {
       ui.clipBusy = false;
     }
   });
 
-  // ---------------------------------------------------------------- 导出任务
+  // ---------------------------------------------------------------- Export Tasks
   list.bind(() => ({ taskRows: tasks.rows(), status: ui.tasksStatus }));
   const onTask = (name: string, action: (task: Task) => unknown) =>
     list.on(name, async (id: string) => {
       const task = tasks.find(String(id));
       if (!task) return;
       try {
-        ui.tasksStatus = "";
+        ui.tasksStatus = status();
         await action(task);
       } catch (error) {
-        ui.tasksStatus = message(error);
+        ui.tasksStatus = errorStatus(error);
       }
     });
   onTask("cancelTask", (task) => tasks.cancel(task));
@@ -251,12 +312,12 @@ export default async function activate(plugin: Plugin) {
   onTask("retryTask", async (task) => {
     if (!terminal(task) || task.status === "completed") return;
     await exporter.retry(task);
-    ui.tasksStatus = "已重新开始。";
+    ui.tasksStatus = status("restarted");
   });
-  list.on("openFolder", () => openFolder().catch((error) => (ui.tasksStatus = message(error))));
+  list.on("openFolder", () => openFolder().catch((error) => (ui.tasksStatus = errorStatus(error))));
   plugin.onError((error) => {
     console.error(`[capture] ${error.message}`);
-    ui.tasksStatus = message(error);
+    ui.tasksStatus = errorStatus(error);
   });
 
   // ---------------------------------------------------------------- windows and menu
@@ -268,11 +329,10 @@ export default async function activate(plugin: Plugin) {
     } catch (error) {
       console.error(`[capture] window failed to open: ${message(error)}`);
       try {
-        errorWindow.set({ message: "截图窗口无法打开，请关闭此提示后重试。" });
-        await errorWindow.show();
+        await errorWindow.show(); // its text is in ui/error.slint
       } catch (feedback) {
         console.error(`[capture] error window also failed: ${message(feedback)}`);
-        say("截图窗口无法打开。");
+        shown(osd.show("The snapshot window could not open."));
       }
     }
   }
@@ -284,34 +344,37 @@ export default async function activate(plugin: Plugin) {
       ...(withEnd ? { endTime: String(Math.min((position ?? 0) + 10, duration ?? Infinity)), audioIndex: 1 } : {}),
     });
   };
-  const canCapture = { enabled: () => usable(player.state), reason: () => (usable(player.state) ? null : "没有可截取的画面") };
-  const entry = (id: string, title: string, order: number, run: () => unknown, extra: object = {}) =>
-    plugin.commands.add({ id, path: ["视频", "截图", title], order, run, ...extra });
+  const canCapture = { enabled: () => usable(player.state), reason: () => (usable(player.state) ? null : "No frame to capture" as const) };
+  /** The options besides id, path, order and run; `reason` is typed so that its text is found (extract does not read spreads). */
+  type Extra = Omit<CommandOptions, "id" | "path" | "order" | "run" | "reason"> & { reason?: () => "No frame to capture" | null };
+  // `@video` is the player's Video menu; "Snapshot" is this plugin's own submenu.
+  const entry = (id: keyof typeof MENU, order: number, run: () => unknown, extra: Extra = {}) =>
+    plugin.commands.add({ id, path: ["@video", "Snapshot", MENU[id]], order, run, ...extra, reason: extra.reason });
   const source = { group: "capture-source", ...canCapture };
   const screen = { group: "capture-screen", ...canCapture };
-  entry("capture.save", "保存当前画面", 420, () => saveFrame(false), { bindings: ["Ctrl+E"], ...source });
-  entry("capture.saveAs", "当前画面另存为…", 421, () => saveFrameAs(false), source);
-  entry("capture.copy", "复制当前画面", 422, () => copyFrame(false), { bindings: ["Ctrl+C"], ...source });
-  entry("capture.saveScreen", "保存实际画面", 423, () => saveFrame(true), { bindings: ["Ctrl+Alt+E"], ...screen });
-  entry("capture.saveScreenAs", "实际画面另存为…", 424, () => saveFrameAs(true), screen);
-  entry("capture.copyScreen", "复制实际画面", 425, () => copyFrame(true), { bindings: ["Ctrl+Alt+C"], ...screen });
+  entry("capture.save", 420, () => saveFrame(false), { bindings: ["Ctrl+E"], ...source });
+  entry("capture.saveAs", 421, () => saveFrameAs(false), source);
+  entry("capture.copy", 422, () => copyFrame(false), { bindings: ["Ctrl+C"], ...source });
+  entry("capture.saveScreen", 423, () => saveFrame(true), { bindings: ["Ctrl+Alt+E"], ...screen });
+  entry("capture.saveScreenAs", 424, () => saveFrameAs(true), screen);
+  entry("capture.copyScreen", 425, () => copyFrame(true), { bindings: ["Ctrl+Alt+C"], ...screen });
   // Checked while the dialog is open; closing it with the title bar (`onClose`) clears the mark at once.
-  entry("capture.burst", "连拍…", 426, () => show(burst, startAtNow(burst, false)), {
+  entry("capture.burst", 426, () => show(burst, startAtNow(burst, false)), {
     bindings: ["Ctrl+G"], group: "capture-export", checked: () => burst.opened,
   });
   burst.onClose(() => plugin.update());
-  entry("capture.clip", "导出片段…", 428, () => show(clip, startAtNow(clip, true)), { group: "capture-export" });
-  entry("capture.tasks", "导出任务…", 429, () => show(list), { group: "capture-export" });
+  entry("capture.clip", 428, () => show(clip, startAtNow(clip, true)), { group: "capture-export" });
+  entry("capture.tasks", 429, () => show(list), { group: "capture-export" });
   FORMATS.forEach((format, index) =>
-    entry(`capture.format.${format}`, `截取为 ${FORMAT_LABEL[format]}`, 430 + index, () => setFormat(format), {
+    entry(`capture.format.${format}`, 430 + index, () => setFormat(format), {
       group: "capture-format", radio: true, checked: () => settings.format === format,
     }));
-  entry("capture.screenSubtitles", "实际画面包含字幕", 435, () => setFlag("screenSubtitles", !settings.screenSubtitles), {
+  entry("capture.screenSubtitles", 435, () => setFlag("screenSubtitles", !settings.screenSubtitles), {
     group: "capture-name", checked: () => settings.screenSubtitles,
   });
-  entry("capture.settings", "截图设置…", 436, () => show(settingsWindow), { group: "capture-name" });
-  entry("capture.folder", "截图文件夹…", 437, chooseFolder, { group: "capture-folder" });
-  entry("capture.openFolder", "打开截图文件夹", 438, openFolderSaying, { group: "capture-folder" });
+  entry("capture.settings", 436, () => show(settingsWindow), { group: "capture-name" });
+  entry("capture.folder", 437, chooseFolder, { group: "capture-folder" });
+  entry("capture.openFolder", 438, openFolderSaying, { group: "capture-folder" });
 
   // Closing a window keeps tasks running; deactivation cancels them (the SDK releases jobs and snapshots).
   plugin.onDispose(async () => {
