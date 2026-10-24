@@ -362,13 +362,10 @@ impl Processing {
             }
         }
         let result = self.apply_change(mpv, owner, generation, source, change);
-        let outcome = result
-            .as_ref()
-            .cloned()
-            .map_err(|e| operations::Failure {
-                code: e.code.clone(),
-                message: e.message.clone(),
-            });
+        let outcome = result.as_ref().cloned().map_err(|e| operations::Failure {
+            code: e.code.clone(),
+            message: e.message.clone(),
+        });
         self.operations
             .get_mut(&owner)
             .expect("registered owner book")
