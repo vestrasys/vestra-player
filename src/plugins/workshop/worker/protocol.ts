@@ -21,12 +21,26 @@ export interface StartMessage {
   /** The API key, from the keychain; kept in the worker's memory only. */
   key: string;
   systemPrompt: string;
+  /**
+   * Read-only folders the file tools may also read (the SDK package and the
+   * generated reference): real paths, outside the session folder.
+   */
+  docsRoots: string[];
+  /** Plugin tools the plugin process runs for the agent (PLUGIN_TOOLS names). */
+  pluginTools: string[];
+}
+
+/** What a plugin tool call returned (the plugin process ran it). */
+export interface ToolReply {
+  ok: boolean;
+  text: string;
 }
 
 export type ToWorker =
   | StartMessage
   | { type: "prompt"; text: string }
   | { type: "abort" }
+  | { type: "toolResult"; call: string; reply: ToolReply }
   | { type: "shutdown" };
 
 export type WorkerEvent =
@@ -45,4 +59,8 @@ export type ToPlugin =
   | { type: "event"; event: WorkerEvent }
   /** The session's JSONL once pi created it (after the first prompt). */
   | { type: "file"; sessionFile: string }
-  | { type: "failed"; message: string };
+  | { type: "failed"; message: string }
+  /** Run plugin tool `name` (the plugin answers with toolResult). */
+  | { type: "tool"; call: string; name: string; args: Record<string, unknown> }
+  /** The agent stopped waiting for `call` (aborted): cancel it. */
+  | { type: "toolCancel"; call: string };

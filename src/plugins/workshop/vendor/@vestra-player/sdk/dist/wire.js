@@ -1,0 +1,299 @@
+/**
+ * Wire clients for the `vestra/1` JSON-RPC protocol. Internal to
+ * SDK v2 (`sdk/plugin/`): plugins never receive these objects. Each method maps
+ * one call to one request and adds nothing; revisions, operation ids,
+ * conditional stamps and recovery live in `sdk/plugin/`.
+ */
+import { commandClient } from "./commands.js";
+import { processingClient } from "./processing.js";
+import { subtitleClient } from "./subtitles.js";
+import { mediaClients } from "./media.js";
+import { producerClient } from "./producer.js";
+import { sourceClient } from "./source.js";
+import { sourceResolverClient } from "./source-resolvers.js";
+/** Working contract. Trusted plugin runtime, not a permissions sandbox. */
+export const API_VERSION = "vestra/1";
+/**
+ * A definite refusal from the player (or the plugin runner), with a stable
+ * `code`. Plugin code sees it as a `PluginError` (an `Error` with `code`);
+ * branch on `code`, never on `message`.
+ *
+ * In tests, throw one from a {@link TestHost.handle} override to simulate the
+ * player refusing a request: the SDK treats it exactly like a real refusal
+ * (the call rejects with that `code`, nothing is retried). Throwing a plain
+ * `Error` instead simulates a lost reply, which makes the SDK run its
+ * recovery path (asking the host about the operation again).
+ *
+ * Common codes: `stale` (the condition no longer holds; nothing was done),
+ * `invalid` (bad argument), `missing` (unknown target), `capability`
+ * (undeclared capability), `busy`, `conflict`, `unavailable`, `unsupported`
+ * (refused, not executed), `backend` (load or parse failure), `failed`,
+ * `timeout`, `aborted`, `limit` (a player limit such as the command count),
+ * `disabled` (the plugin is stopping).
+ *
+ * @example
+ * ```ts
+ * import { HostError, startPlugin } from "@vestra-player/sdk/testing";
+ *
+ * const { host, plugin, stop } = await startPlugin(activate, { directory });
+ * host.handle("clipboard.writeText", () => {
+ *   throw new HostError("failed", "the system refused the write");
+ * });
+ * await assert.rejects(plugin.clipboard.writeText("x"), { code: "failed" });
+ * host.reset("clipboard.writeText");
+ * await stop();
+ * ```
+ */
+export class HostError extends Error {
+    /** The stable error code, e.g. `"invalid"`, `"stale"`, `"unavailable"`. */
+    code;
+    /**
+     * @param code - The stable error code the caller will see as `error.code`.
+     * @param message - Human-readable detail (not for branching on).
+     */
+    constructor(code, message) {
+        super(message);
+        this.code = code;
+        this.name = "HostError";
+    }
+}
+export function createWire(transport) {
+    const subscriptions = new Map();
+    return {
+        source: sourceClient(transport),
+        sourceResolvers: sourceResolverClient(transport),
+        producer: producerClient(transport),
+        subtitles: subtitleClient(transport),
+        ...mediaClients(transport),
+        processing: processingClient(transport),
+        commands: commandClient(transport),
+        dialogs: {
+            open: (options) => transport.request("dialogs.open", options),
+            confirm: (options) => transport.request("dialogs.confirm", options),
+        },
+        /** The main window: its state, size, level, pointer hiding and picture-in-picture. */
+        window: {
+            state: () => transport.request("window.state"),
+            setVideoArea: (width, height) => transport.request("window.setVideoArea", { width, height }),
+            setAlwaysOnTop: (onTop) => transport.request("window.setAlwaysOnTop", { onTop }),
+            setCursorAutoHide: (mode) => transport.request("window.setCursorAutoHide", { mode }),
+            setPictureInPicture: (on) => transport.request("window.setPictureInPicture", { on }),
+        },
+        /** Output devices (mpv ids) and the one to play on. */
+        audioOutput: {
+            devices: () => transport.request("player.audioDevices"),
+            set: (id) => transport.request("player.setAudioDevice", { id }),
+        },
+        /** The binding table: list, user overlay (`bindings.manage`). */
+        bindings: {
+            list: () => transport.request("bindings.list"),
+            set: (plugin, command, inputs) => transport.request("bindings.set", { plugin, command, inputs }),
+            reset: (ref) => transport.request("bindings.reset", ref ?? {}),
+        },
+        /** File drops: providers by extension, panel listeners (`ui.drop`). */
+        drops: {
+            provide: (id, extensions) => transport.request("drops.provide", { id, extensions }),
+            withdraw: (id) => transport.request("drops.withdraw", { id }),
+            listen: (listen) => transport.request("drops.listen", { listen }),
+        },
+        /** The palette (`ui.theme` to change it). */
+        appearance: {
+            set: (theme) => transport.request("appearance.set", { theme }),
+        },
+        /** Settings pages in the player's options window (`ui.settings`). */
+        settings: {
+            register: (options) => transport.request("settings.register", options),
+            set: (id, property, value) => transport.request("settings.set", { id, property, value }),
+            unregister: (id) => transport.request("settings.unregister", { id }),
+            show: (id) => transport.request("settings.show", id === undefined ? {} : { id }),
+        },
+        /** The display layer (`plugin.video.view()`); the host checks ownership. */
+        video: {
+            viewSet: (values) => transport.request("video.view.set", {
+                values,
+            }),
+            viewRelease: () => transport.request("video.view.release"),
+            /** The GPU renderer's options (`plugin.video.render()`). */
+            renderSet: (values) => transport.request("video.render.set", { values }),
+            renderRelease: () => transport.request("video.render.release"),
+        },
+        /** Mark layers on the seek bar (`plugin.timeline`). */
+        timeline: {
+            marks: () => transport.request("timeline.marks"),
+            set: (marks, sourceId) => transport.request("timeline.set", {
+                marks,
+                ...(sourceId === undefined ? {} : { sourceId }),
+            }),
+        },
+        /** Chapters and the A-B loop of the current media. */
+        marks: {
+            chapters: () => transport.request("player.chapters"),
+            setLoop: (loop, expected) => transport.request("player.setLoop", {
+                loop,
+                ...(expected ? { expected } : {}),
+            }),
+        },
+        playback: {
+            /** Shared device output. Does not advance source intent. */
+            set: (property, value) => transport.request("playback.set", { property, value }),
+            stats: () => transport.request("playback.stats"),
+        },
+        /** External audio files and the selected audio track of the current media. */
+        audio: {
+            add: (path, select, expected) => transport.request("audio.addTrack", {
+                path,
+                select,
+                ...(expected ? { expected } : {}),
+            }),
+            select: (id, expected) => transport.request("audio.selectTrack", {
+                id,
+                ...(expected ? { expected } : {}),
+            }),
+        },
+        /** The core's own playback actions; resolves when the action finished. */
+        host: {
+            run: (action) => transport.request("host.run", { action }),
+        },
+        step: {
+            step: (unit, direction, expected) => transport.request("player.step", {
+                unit,
+                direction,
+                ...(expected ? { expected } : {}),
+            }),
+            setStepSeek: (seconds) => transport.request("player.setStepSeek", { seconds }),
+        },
+        clipboard: {
+            readText: () => transport.request("clipboard.readText"),
+            writeText: (text) => transport.request("clipboard.writeText", { text }),
+            writeImage: (path) => transport.request("clipboard.writeImage", { path }),
+        },
+        /** Files, folders and links shown or opened by the player. */
+        system: {
+            reveal: (paths) => transport.request("system.reveal", { paths }),
+            openPath: (path) => transport.request("system.openPath", { path }),
+            openUrl: (url) => transport.request("system.openUrl", { url }),
+        },
+        /** The system's secret store, per plugin (`secrets`). */
+        secrets: {
+            get: (name) => transport.request("secrets.get", { name }),
+            set: (name, value) => transport.request("secrets.set", { name, value }),
+            delete: (name) => transport.request("secrets.delete", { name }),
+        },
+        app: {
+            system: () => transport.request("app.system"),
+        },
+        power: {
+            preventSleep: (mode) => transport.request("power.preventSleep", { mode }),
+        },
+        /** Shared next/previous; the host routes `sequence.step` events to the provider. */
+        sequence: {
+            set: (flags) => transport.request("sequence.set", { flags }),
+            step: (direction) => transport.request("sequence.step", { direction }),
+        },
+        osd: {
+            show: (text) => transport.request("osd.show", { text }),
+            panel: (text) => transport.request("osd.panel", { text }),
+        },
+        layout: {
+            state: () => transport.request("layout.state"),
+            set: (options) => transport.request("layout.set", options),
+        },
+        events: {
+            /** One `events.subscribe` per name however many listeners. */
+            async subscribe(event, listener) {
+                const off = transport.on(event, listener);
+                let subscription = subscriptions.get(event);
+                if (!subscription) {
+                    subscription = {
+                        count: 0,
+                        ready: transport.request("events.subscribe", { event }),
+                    };
+                    subscriptions.set(event, subscription);
+                }
+                subscription.count++;
+                try {
+                    await subscription.ready;
+                }
+                catch (error) {
+                    off();
+                    subscriptions.delete(event);
+                    throw error;
+                }
+                let active = true;
+                return async () => {
+                    if (!active)
+                        return;
+                    active = false;
+                    off();
+                    if (--subscription.count === 0) {
+                        subscriptions.delete(event);
+                        await transport.request("events.unsubscribe", { event });
+                    }
+                };
+            },
+        },
+        ui: {
+            /** Player 0.2.0: the remote images a Markdown document shows. */
+            markdownScan: (text, base) => transport.request("ui.markdownScan", {
+                text,
+                base,
+            }),
+            mount: (options) => transport.request("ui.mount", options),
+            setMount: (property, value) => transport.request("ui.setMount", { property, value }),
+            interaction: (locks) => transport.request("ui.interaction", locks),
+            unmount: () => transport.request("ui.unmount"),
+            menu: (items, x, y) => transport.request("ui.menu", { items, x, y }),
+            open: (id, file, properties = {}, callbacks = []) => transport.request("ui.open", { id, file, properties, callbacks }),
+            set: (id, property, value) => transport.request("ui.set", { id, property, value }),
+            show: (id, visible) => transport.request("ui.show", { id, visible }),
+            close: (id) => transport.request("ui.close", { id }),
+        },
+        /** Executes trusted package code. Validation checks production JS and Slint. */
+        packages: {
+            validate: (directory, apiVersion = API_VERSION) => transport.request("packages.validate", {
+                directory,
+                apiVersion,
+            }),
+            /** Player 0.2.0: a `.vxp` file. */
+            validateArchive: (file) => transport.request("packages.validateArchive", {
+                file,
+            }),
+            /** `requestId` recovers a lost first reply in this owner session. */
+            trial: (token, requestId) => transport.request("packages.trial", {
+                token,
+                requestId,
+            }),
+            trialStateByRequest: (requestId) => transport.request("packages.trialStateByRequest", {
+                requestId,
+            }),
+            trialState: (trialId) => transport.request("packages.trialState", { trialId }),
+            stopTrial: (trialId) => transport.request("packages.stopTrial", { trialId }),
+            installed: (id) => transport.request("packages.installed", { id }),
+            /** `source` and `replace` are sent only when given (player 0.2.0). */
+            install: (token, expectedRevision, requestId, options = {}) => transport.request("packages.install", {
+                token,
+                expectedRevision,
+                requestId,
+                ...(options.source === undefined ? {} : { source: options.source }),
+                ...(options.replace ? { replace: true } : {}),
+            }),
+            rollback: (id, expectedRevision, requestId) => transport.request("packages.rollback", {
+                id,
+                expectedRevision,
+                requestId,
+            }),
+            operation: (operationId) => transport.request("packages.operation", {
+                operationId,
+            }),
+            cancel: (operationId) => transport.request("packages.cancel", { operationId }),
+            list: () => transport.request("packages.list"),
+            setEnabled: (id, enabled) => transport.request("packages.setEnabled", { id, enabled }),
+            uninstall: (id, removeData, expectedRevision, requestId) => transport.request("packages.uninstall", {
+                id,
+                removeData,
+                expectedRevision,
+                requestId,
+            }),
+        },
+    };
+}

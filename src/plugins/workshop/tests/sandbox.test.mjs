@@ -40,6 +40,19 @@ test("the work folder: inside is fine, outside, links and hidden names are refus
   assert.deepEqual(await work.walk(".", 100), ["src/main.ts"]);
 
   await assert.rejects(work.writeFile("big.txt", "x".repeat(1024 * 1024 + 1)), /1 MB/);
+
+  // delete: a file or an empty folder inside; never through a link, never outside or the folder itself.
+  await work.writeFile("src/debug.test.ts", "x");
+  assert.equal(await work.remove("src/debug.test.ts"), "src/debug.test.ts");
+  await assert.rejects(work.remove("src"), /不是空的/);
+  await assert.rejects(work.remove("link.txt"), /符号链接/);
+  await assert.rejects(work.remove("up/secret.txt"), /符号链接/);
+  await assert.rejects(work.remove("../secret.txt"), /工作目录以外/);
+  await assert.rejects(work.remove("."), /工作目录本身/);
+  assert.equal(await fs.readFile(path.join(root, "secret.txt"), "utf8"), "outside");
+  await work.remove("src/main.ts");
+  await work.remove("src");
+  assert.deepEqual(await work.readdir("."), []);
 });
 
 test("the worker process cannot read outside, spawn, or see the key in its environment", async () => {
@@ -79,5 +92,23 @@ test("a tool call that tries to leave the work folder fails and the turn goes on
   assert.equal(ai.rows()[1].detail, "✗ 读取 ../meta.json");
   const result = mock.chats[1].body.messages.at(-1);
   assert.match(typeof result.content === "string" ? result.content : JSON.stringify(result.content), /工作目录以外/);
+  await ai.stop();
+});
+
+test("delete removes a debug file from the work folder in the worker", async () => {
+  const mock = await server((req) => {
+    const done = req.body.messages.filter((m) => m.role === "tool").length;
+    if (done === 0) return { toolCalls: [{ name: "write", args: { path: "demo/tests/debug.test.ts", content: "x" } }] };
+    if (done === 1) return { toolCalls: [{ name: "delete", args: { path: "demo/tests/debug.test.ts" } }] };
+    return { text: ["删好了。"] };
+  });
+  const ai = await startAi({ compat: mock.url });
+  await ai.ask("写一个调试文件再删掉");
+  const sessions = path.join(ai.plugin.dataDirectory, "sessions");
+  const [session] = await fs.readdir(sessions);
+  await assert.rejects(fs.access(path.join(sessions, session, "work/demo/tests/debug.test.ts")));
+  await fs.access(path.join(sessions, session, "work/demo/tests"));
+  const result = mock.chats[2].body.messages.at(-1);
+  assert.match(typeof result.content === "string" ? result.content : JSON.stringify(result.content), /Deleted demo\/tests\/debug\.test\.ts/);
   await ai.stop();
 });

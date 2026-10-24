@@ -1,0 +1,316 @@
+/**
+ * Shared services: the clipboard, sleep prevention, showing and opening files
+ * and links, and secrets go to the host; external tools and settings files
+ * run in this plugin's own process.
+ */
+import { existsSync, readFileSync, renameSync } from "node:fs";
+import { mkdir, open, rename, rm, stat } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { failure } from "./runtime.js";
+import { systemServices } from "./local.js";
+import { playerOf } from "./player.js";
+const MAX_OUTPUT = 16 * 1024 * 1024;
+export const clipboard = (scope) => ({
+    readText: () => scope.runtime.host.clipboard.readText(),
+    writeText: (text) => scope.runtime.host.clipboard.writeText(text),
+    writeImage: (path) => scope.runtime.host.clipboard.writeImage(path),
+});
+const ACTIONS = new Set([
+    "play-pause",
+    "stop",
+    "previous",
+    "next",
+    "frame-back",
+    "frame-forward",
+    "seek-backward",
+    "seek-forward",
+    "rate-down",
+    "rate-up",
+    "rate-normal",
+    "volume-up",
+    "volume-down",
+    "mute",
+]);
+export const host = (scope) => ({
+    async run(action) {
+        if (!ACTIONS.has(action))
+            throw failure("invalid", `unknown host action ${String(action)}`);
+        await scope.runtime.host.host.run(action);
+        // Like the player's own controls: `player.state` shows the result.
+        if (scope.runtime.can("playback.read"))
+            await playerOf(scope.runtime)
+                .refresh()
+                .catch(() => { });
+    },
+});
+export const power = (scope) => ({
+    preventSleep: (mode) => scope.runtime.host.power.preventSleep(mode),
+});
+export function tools(scope) {
+    const local = () => scope.runtime.local ?? systemServices;
+    // Where each tool is, looked up once per plugin; a miss is looked up again
+    // next time (the user may install it meanwhile).
+    const located = () => scope.runtime.service("tools.located", () => new Map());
+    const locate = async (tool) => {
+        const cache = located();
+        const known = cache.get(tool);
+        if (known)
+            return known;
+        const found = await local().locate(tool);
+        if (found)
+            cache.set(tool, found);
+        return found;
+    };
+    return {
+        async run(tool, args, options) {
+            if (tool !== "ffmpeg" && tool !== "ffprobe")
+                throw failure("invalid", `unknown tool ${String(tool)}`);
+            if (!Array.isArray(args) || args.some((arg) => typeof arg !== "string"))
+                throw failure("invalid", "args must be strings");
+            const timeoutMs = options?.timeoutMs;
+            if (!Number.isFinite(timeoutMs) || timeoutMs <= 0)
+                throw failure("invalid", "timeoutMs must be a positive number");
+            const maxOutput = options.maxOutput ?? MAX_OUTPUT;
+            if (!Number.isFinite(maxOutput) || maxOutput <= 0)
+                throw failure("invalid", "maxOutput must be a positive number");
+            const path = await locate(tool);
+            if (!path)
+                throw failure("unavailable", `${tool} was not found`);
+            // Disposing the scope ends the process like the caller's signal does.
+            const controller = new AbortController();
+            const forward = () => controller.abort();
+            options.signal?.addEventListener("abort", forward, { once: true });
+            if (options.signal?.aborted)
+                controller.abort();
+            const release = scope.onDispose(() => controller.abort());
+            try {
+                return await local().run(path, [...args], {
+                    timeoutMs,
+                    maxOutput,
+                    signal: controller.signal,
+                });
+            }
+            finally {
+                options.signal?.removeEventListener("abort", forward);
+                await release.dispose();
+            }
+        },
+        async available(tool) {
+            return (await locate(tool)) !== null;
+        },
+    };
+}
+const NAME = /^[a-z0-9-]{1,64}$/;
+/** Writes so far in this process; numbers each write's temporary file. */
+let written = 0;
+/**
+ * The pending writes of each file, whichever store they come from: the same
+ * name opened twice must not write or rename into one file at once.
+ */
+const writes = new Map();
+/** Write `text` to `path` atomically, owner-only (0600). */
+async function writeAtomic(path, text) {
+    // A name of its own per write, so no other write renames it away.
+    const temporary = `${path}.tmp-${process.pid}-${++written}`;
+    await mkdir(join(path, ".."), { recursive: true });
+    try {
+        // Settings can hold private paths and history. The mode is set through
+        // the handle, before the file has its name.
+        const file = await open(temporary, "w", 0o600);
+        try {
+            await file.chmod(0o600);
+            await file.writeFile(text);
+        }
+        finally {
+            await file.close();
+        }
+        await replace(temporary, path);
+    }
+    catch (error) {
+        await rm(temporary, { force: true }).catch(() => { });
+        throw error;
+    }
+}
+/**
+ * Rename over `to`. Windows refuses while another program (a virus scanner,
+ * the search indexer) has `to` open for a moment: retry for up to 2 s there.
+ */
+async function replace(from, to) {
+    for (let attempt = 0;; attempt++)
+        try {
+            return await rename(from, to);
+        }
+        catch (error) {
+            const code = error.code;
+            if (process.platform !== "win32" ||
+                !(code === "EPERM" || code === "EACCES" || code === "EBUSY") ||
+                attempt >= 20)
+                throw error;
+            await new Promise((resolve) => setTimeout(resolve, 10 + attempt * 10));
+        }
+}
+class Store {
+    #scope;
+    #path;
+    #debounce;
+    #value;
+    #dirty = false;
+    #timer;
+    #writing = Promise.resolve();
+    #disposed = false;
+    constructor(scope, directory, name, options) {
+        this.#scope = scope;
+        this.#path = join(directory, `${name}.json`);
+        this.#debounce = options.debounceMs ?? 300;
+        this.#value = options.defaults;
+        if (existsSync(this.#path)) {
+            let loaded;
+            let good = false;
+            try {
+                loaded = JSON.parse(readFileSync(this.#path, "utf8"));
+                good = options.validate ? options.validate(loaded) : true;
+            }
+            catch {
+                good = false;
+            }
+            if (good)
+                this.#value = loaded;
+            else {
+                // Keep the broken file for the user; start from the defaults.
+                try {
+                    renameSync(this.#path, `${this.#path}.bad-${Date.now()}`);
+                }
+                catch (error) {
+                    console.error(`[${scope.id}] storage ${name}:`, error);
+                }
+            }
+        }
+        scope.add(this);
+    }
+    get value() {
+        return this.#value;
+    }
+    save(next) {
+        if (this.#disposed)
+            return;
+        this.#value = next;
+        this.#dirty = true;
+        clearTimeout(this.#timer);
+        this.#timer = setTimeout(() => {
+            this.flush().catch((error) => this.#scope.report(error));
+        }, this.#debounce);
+    }
+    flush() {
+        clearTimeout(this.#timer);
+        this.#timer = undefined;
+        if (!this.#dirty)
+            return this.#writing;
+        this.#dirty = false;
+        const text = `${JSON.stringify(this.#value, null, 2)}\n`;
+        // One write per file at a time, in order; the newest value is written
+        // last. The queue is per file, not per store (see `writes`).
+        const path = this.#path;
+        const write = (writes.get(path) ?? Promise.resolve())
+            .catch(() => { })
+            .then(() => writeAtomic(path, text));
+        const done = () => {
+            if (writes.get(path) === write)
+                writes.delete(path);
+        };
+        writes.set(path, write);
+        write.then(done, done);
+        this.#writing = write;
+        return this.#writing;
+    }
+    async dispose() {
+        if (this.#disposed)
+            return;
+        await this.flush();
+        this.#disposed = true;
+        this.#scope.forget(this);
+    }
+}
+export const storage = (scope) => ({
+    json(name, options) {
+        if (typeof name !== "string" || !NAME.test(name))
+            throw failure("invalid", "storage names are 1–64 of a-z, 0-9 and -");
+        if (options.debounceMs !== undefined &&
+            (!Number.isFinite(options.debounceMs) || options.debounceMs < 0))
+            throw failure("invalid", "debounceMs must be a non-negative number");
+        return new Store(scope, scope.dataDirectory, name, options);
+    },
+});
+export function system(scope) {
+    const exists = async (path) => {
+        try {
+            await stat(path);
+            return true;
+        }
+        catch {
+            return false;
+        }
+    };
+    const valid = (path) => typeof path === "string" && path.length > 0;
+    return {
+        async reveal(paths) {
+            const list = typeof paths === "string" ? [paths] : paths;
+            if (!Array.isArray(list) ||
+                !list.length ||
+                list.length > 256 ||
+                !list.every(valid))
+                throw failure("invalid", "reveal takes 1–256 non-empty paths");
+            // Absolute: the player resolves nothing against this process's cwd.
+            const present = [];
+            for (const path of list.map((each) => resolve(each)))
+                if ((await exists(path)) && !present.includes(path))
+                    present.push(path);
+            if (!present.length)
+                throw failure("missing", `${list.join(", ")} does not exist`);
+            await scope.runtime.host.system.reveal(present);
+        },
+        async openUrl(url) {
+            let parsed;
+            try {
+                if (typeof url !== "string" || url.length > 8192)
+                    throw new Error();
+                parsed = new URL(url);
+            }
+            catch {
+                throw failure("invalid", "url must be a well-formed http(s) address");
+            }
+            if (parsed.protocol !== "http:" && parsed.protocol !== "https:")
+                throw failure("invalid", "only http and https addresses open");
+            // The normalized form starts with the scheme, never with `-`.
+            await scope.runtime.host.system.openUrl(parsed.href);
+        },
+        async openPath(path) {
+            if (!valid(path))
+                throw failure("invalid", "path must be a non-empty string");
+            if (!(await exists(path)))
+                throw failure("missing", `${path} does not exist`);
+            await scope.runtime.host.system.openPath(resolve(path));
+        },
+    };
+}
+const SECRET = /^[a-z0-9._-]{1,64}$/;
+export const secrets = (scope) => {
+    const named = (name) => {
+        if (!scope.runtime.can("secrets"))
+            throw failure("capability", "secrets must be declared in manifest");
+        if (typeof name !== "string" || !SECRET.test(name))
+            throw failure("invalid", "secret names are 1–64 of a-z, 0-9, ., _ and -");
+        return name;
+    };
+    return {
+        get: async (name) => scope.runtime.host.secrets.get(named(name)),
+        async set(name, value) {
+            if (typeof value !== "string" ||
+                !value ||
+                value.includes("\0") ||
+                Buffer.byteLength(value) > 1024)
+                throw failure("invalid", "secret values are 1–1024 bytes of text; delete() removes one");
+            await scope.runtime.host.secrets.set(named(name), value);
+        },
+        delete: async (name) => scope.runtime.host.secrets.delete(named(name)),
+    };
+};

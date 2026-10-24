@@ -24,7 +24,21 @@ interface Call {
   state: number;
 }
 
-const VERBS: Record<string, string> = { read: "读取", write: "写入", edit: "修改", ls: "列出", find: "查找", grep: "搜索" };
+const VERBS: Record<string, string> = {
+  read: "读取",
+  write: "写入",
+  edit: "修改",
+  ls: "列出",
+  find: "查找",
+  grep: "搜索",
+  delete: "删除",
+  scaffold_plugin: "创建插件",
+  typecheck: "类型检查",
+  test: "运行测试",
+  check: "检查",
+  pack: "打包",
+  install_plugin: "安装",
+};
 
 export function toolLabel(name: string, target: string): string {
   const verb = VERBS[name] ?? name;
@@ -223,7 +237,7 @@ export class Chat {
           if (part.type === "text") chat.appendText(String(part.text ?? ""));
           else if (part.type === "toolCall") {
             const args = (part.arguments ?? {}) as Record<string, unknown>;
-            const target = ["path", "pattern"].map((k) => args[k]).find((v) => typeof v === "string") as string | undefined;
+            const target = ["path", "pattern", "file", "id", "name"].map((k) => args[k]).find((v) => typeof v === "string") as string | undefined;
             chat.toolCall(String(part.id), toolLabel(String(part.name), target ?? ""), 1);
           }
         }

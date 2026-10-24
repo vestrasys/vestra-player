@@ -1,6 +1,11 @@
 import type { Plugin } from "@vestra-player/sdk";
+import fs from "node:fs/promises";
 import path from "node:path";
 import { AgentWorker } from "./agent.ts";
+import { Delivering } from "./delivery.ts";
+import { systemPrompt } from "./prompt.ts";
+import { Toolchain, checkOwner, type Project, type SessionPaths } from "./toolchain.ts";
+import { BUILD_TOOLS, DELIVERY_TOOLS, runTool } from "./toolhost.ts";
 import { Chat } from "./chat.ts";
 import { MessageDocs, cut } from "./messages.ts";
 import {
@@ -28,27 +33,38 @@ export const QUIET_TIMEOUT_MS = 120_000;
 /** Streaming text reaches the window at most this often. */
 const REFRESH_MS = 100;
 
-const SYSTEM_PROMPT = `你是 Vestra Player AI，内置在 Vestra Player 播放器里的助手，基于 pi 运行。
-- 用用户使用的语言回答，默认中文。
-- 你可以用 read、write、edit、ls、find、grep 工具读写当前会话的工作文件夹；只能访问这个文件夹，不能运行命令。
-- 写 Vestra 插件时遵守插件独立规则：插件只依赖公开的插件 SDK（@vestra-player/sdk，只能 import type），不引用其它插件，不调用系统命令。`;
-
 interface Run {
   worker: AgentWorker;
   meta: Meta;
   chat: Chat;
   running: boolean;
   watchdog?: ReturnType<typeof setTimeout>;
+  /** Plugin tool calls in progress (a test run, a dialog): no quiet timeout meanwhile. */
+  tools: number;
 }
 
 /** Vestra Player AI: chat with a model of the user's choice (BYOK); the agent works in the session folder. */
 export default async function activate(plugin: Plugin) {
   const providers = loadProviders(import.meta.dirname);
   const sessions = new Sessions(plugin.dataDirectory);
+  const toolchain = new Toolchain(import.meta.dirname, plugin.dataDirectory);
+  const pathsOf = (id: string): SessionPaths => ({ dir: sessions.directory(id), work: sessions.work(id) });
   const settings = plugin.storage.json<AiSettings>("settings", { defaults: DEFAULT_SETTINGS, validate: validSettings });
   // Settings migrate now (a file); keys only later (see moveLegacyKeys).
   const migrated = migrate(settings.value);
   if (migrated) settings.save(migrated);
+  /** The id prefix of new plugins: the user's GitHub name, "" for local. (see checkOwner). */
+  const owner = () => {
+    try {
+      return checkOwner(settings.value.owner ?? "");
+    } catch {
+      return "";
+    }
+  };
+  const delivering = new Delivering(plugin, toolchain, owner);
+  const delivery = {
+    install: (session: SessionPaths, id: string, signal: AbortSignal) => delivering.install(session, id, true, signal),
+  };
   /**
    * provider → key, read from the keychain once, on demand. Never during
    * activation: a read can wait on the system's authorization dialog
@@ -211,11 +227,54 @@ export default async function activate(plugin: Plugin) {
     return rows;
   };
 
+  // ---- the result card: the shown session's plugin projects
+  let projects: Project[] = [];
+  /** The project the card shows (the newest unless the user picked another). */
+  let chosen: string | null = null;
+  let exporting = false;
+  const project = () => projects.find((p) => p.id === chosen) ?? null;
+  const refreshProjects = () => {
+    const meta = active;
+    (async () => {
+      const list = meta ? await toolchain.projects(pathsOf(meta.id)) : [];
+      if (active !== meta) return;
+      const newest = list[0]?.id;
+      // A new or just changed project comes forward.
+      if (!chosen || !list.some((p) => p.id === chosen) || newest !== projects[0]?.id || list[0]?.modified !== projects[0]?.modified) chosen = newest ?? null;
+      projects = list;
+      plugin.update();
+    })().catch((error) => console.error(`projects: ${error}`));
+  };
+  const cardSay = (text: string) => {
+    delivering.status = text;
+    plugin.update();
+  };
+  /** A card action: failures show on the card's line. */
+  const action = (work: (meta: Meta, p: Project) => Promise<unknown>) => async () => {
+    const p = project();
+    if (!active || !p) return;
+    try {
+      await work(active, p);
+    } catch (error) {
+      cardSay(`出错了：${(error as Error).message}`);
+    } finally {
+      refreshProjects();
+    }
+  };
+
   const window = plugin.windows.create("ai.slint");
   window.bind(() => {
     const busy = !!(active && runs.get(active.id)?.running);
     const last = shown.rows.at(-1);
+    const p = project();
     return {
+      hasProject: !!p,
+      projects: projects.map((x) => `${x.name} · ${x.id}`),
+      projectIndex: Math.max(0, projects.findIndex((x) => x.id === chosen)),
+      projectTitle: p ? `${p.name} · ${p.id} ${p.version}` : "",
+      cardStatus: delivering.status,
+      cardBusy: delivering.busy || exporting,
+      canRollback: !!p && delivering.installed.has(p.id),
       sessions: sessionRows(),
       rows: docs.props(shown.rows),
       configured: configured(),
@@ -238,6 +297,7 @@ export default async function activate(plugin: Plugin) {
     stopWatchdog(run);
     if (!run.running) return;
     run.watchdog = setTimeout(() => {
+      if (run.tools > 0) return feed(run); // a tool runs (with its own time limit) or waits for the user
       run.chat.apply({ kind: "settled", aborted: true });
       run.chat.error("timeout", `超过 ${QUIET_TIMEOUT_MS / 1000} 秒没有收到服务商的回复，已停止。`);
       run.worker.abort();
@@ -263,6 +323,7 @@ export default async function activate(plugin: Plugin) {
       meta,
       chat,
       running: false,
+      tools: 0,
       worker: new AgentWorker(
         {
           sessionDir: directory,
@@ -273,11 +334,24 @@ export default async function activate(plugin: Plugin) {
           baseUrl: p.api ? settings.value.baseUrls[p.id] : null,
           api: p.api,
           key,
-          systemPrompt: SYSTEM_PROMPT,
+          systemPrompt: systemPrompt({ sdk: toolchain.sdk, index: toolchain.docsIndex(), sdkVersion: toolchain.sdkVersion, owner: owner(), delivery: true }),
+          docsRoots: toolchain.docsRoots(),
+          pluginTools: [...BUILD_TOOLS, ...DELIVERY_TOOLS],
         },
         {
+          tool: (call, name, args, signal) => {
+            run.tools++;
+            runTool(toolchain, pathsOf(meta.id), owner(), name, args, signal, delivery)
+              .then((reply) => run.worker.reply(call, reply))
+              .finally(() => {
+                run.tools--;
+                feed(run);
+                if (active?.id === meta.id) refreshProjects();
+              });
+          },
           event: (event) => {
             run.chat.apply(event);
+            if (event.kind === "settled" && active?.id === meta.id) refreshProjects();
             if (event.kind === "settled") finish(run);
             else feed(run);
             later();
@@ -355,6 +429,10 @@ export default async function activate(plugin: Plugin) {
     shown = meta ? await chatOf(meta) : new Chat();
     await docs.sync(shown.rows);
     releaseIdle(meta?.id);
+    projects = [];
+    chosen = null;
+    delivering.status = "";
+    refreshProjects();
     settings.save({ ...settings.value, lastSession: meta?.id ?? null });
   };
 
@@ -381,6 +459,45 @@ export default async function activate(plugin: Plugin) {
   });
   window.on("openSettings", () => plugin.settings.show("byok"));
   window.on("openFolder", () => active && plugin.system.openPath(sessions.work(active.id)));
+  window.on("chooseProject", (index: number) => {
+    chosen = projects[index]?.id ?? chosen;
+    delivering.status = "";
+  });
+  window.on("install", action((meta, p) => delivering.install(pathsOf(meta.id), p.id, false)));
+  window.on("rollback", action((_meta, p) => delivering.rollback(p.id)));
+  window.on(
+    "exportVxp",
+    action(async (meta, p) => {
+      exporting = true;
+      try {
+        cardSay(`正在打包 ${p.id}…`);
+        const packed = await toolchain.pack(pathsOf(meta.id), p.id, owner());
+        if (!packed.ok || !packed.file) return cardSay(packed.text.split("\n")[0]);
+        const target = await plugin.dialogs.saveFile({ title: "导出插件包", fileName: path.basename(packed.file) });
+        if (!target) return cardSay("");
+        await fs.copyFile(packed.file, target);
+        cardSay(`已导出 ${path.basename(target)}`);
+      } finally {
+        exporting = false;
+      }
+    }),
+  );
+  window.on(
+    "exportSource",
+    action(async (meta, p) => {
+      exporting = true;
+      try {
+        const { data, fileName, notes } = await toolchain.exportSource(pathsOf(meta.id), p.id);
+        const target = await plugin.dialogs.saveFile({ title: "导出源码（可以直接作为 GitHub 仓库）", fileName });
+        if (!target) return cardSay("");
+        await fs.writeFile(target, data);
+        cardSay(`已导出 ${path.basename(target)}。${notes.join("；")}。`);
+      } finally {
+        exporting = false;
+      }
+    }),
+  );
+  window.on("openProject", action((_meta, p) => plugin.system.openPath(p.directory)));
   window.on("openPi", () => plugin.system.openUrl(PI_URL));
 
   // ---- settings page (Options ▸ 插件 ▸ Vestra Player AI)
@@ -417,7 +534,25 @@ export default async function activate(plugin: Plugin) {
       gone: gone() ? goneNotice(p.id) : "",
       message: pageMessage,
       messageWarn: pageWarn,
+      ownerText: settings.value.owner ?? "",
+      ownerHint: ownerHint(),
     };
+  });
+  /** What the owner field means now. */
+  const ownerHint = () => {
+    try {
+      const name = checkOwner(settings.value.owner ?? "");
+      return name
+        ? `新插件的 id 是 ${name}.<名字>（官方插件仓库要求 id 前缀就是源码仓库所属的 GitHub 用户或组织）。`
+        : "没有填写：新插件的 id 用 local.<名字>，只适合在本机使用；要发布到官方插件仓库，请填你的 GitHub 用户名。";
+    } catch (error) {
+      return `${(error as Error).message}（新插件暂时用 local.<名字>）`;
+    }
+  };
+  page.on("setOwner", (text: string) => {
+    // Saved as typed; checkOwner decides what is used (the hint says why not).
+    settings.save({ ...settings.value, owner: text.trim() });
+    changed(); // the next message gets a system prompt with the new owner
   });
   const say = (text: string, warn = false) => {
     pageMessage = text;
@@ -571,6 +706,8 @@ export default async function activate(plugin: Plugin) {
     // Runs still in progress stay marked in meta.json: the next start says so.
     await Promise.all([...runs.values()].map((run) => (stopWatchdog(run), run.worker.stop(300))));
   });
+
+  refreshProjects();
 
   plugin.commands.add({
     id: "workshop.open",

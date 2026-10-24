@@ -1,0 +1,138 @@
+/** Menu commands: declaration, state sync (revisions hidden) and dispatch. */
+import { failure, Latest, quiet } from "./runtime.js";
+import { checkBindings } from "./bindings.js";
+import { MENU_IDS } from "../commands.js";
+const value = (item) => typeof item === "function" ? item() : item;
+/** Validate options and build the wire declaration. */
+function declare(options) {
+    const path = options.path ?? [];
+    const title = options.title ?? path.at(-1);
+    if (!title)
+        throw failure("invalid", `command ${options.id}: title or path required`);
+    if (path.length > 8)
+        throw failure("invalid", `command ${options.id}: path has 1–8 segments`);
+    const menu = path[0]?.startsWith("@") ? path[0].slice(1) : null;
+    if (menu !== null && !MENU_IDS.includes(menu))
+        throw failure("invalid", `command ${options.id}: unknown menu id @${menu}; the built-in menus are ${MENU_IDS.map((id) => `@${id}`).join(", ")}`);
+    if (menu !== null && path.length < 2)
+        throw failure("invalid", `command ${options.id}: menu id @${menu} needs an item after it`);
+    const order = options.order ?? 0;
+    if (!Number.isInteger(order) || Math.abs(order) > 1_000_000)
+        throw failure("invalid", `command ${options.id}: order must be an integer within ±1000000`);
+    const bindings = [...(options.bindings ?? [])];
+    return {
+        title,
+        path,
+        order,
+        group: options.group ?? "domain",
+        radio: options.radio ?? false,
+        bindings: checkBindings(bindings),
+        focus: options.focus ?? null,
+        repeat: options.repeat ?? false,
+    };
+}
+/** Unregistrations in flight per plugin: re-adding an id waits for its removal. */
+const removals = new WeakMap();
+const removing = (runtime) => {
+    let map = removals.get(runtime);
+    if (!map)
+        removals.set(runtime, (map = new Map()));
+    return map;
+};
+class CommandHandle {
+    id;
+    ready;
+    #scope;
+    #spec;
+    #revision = 0;
+    #last = "";
+    #disposed = false;
+    #registered = false;
+    #pump;
+    #binding;
+    constructor(scope, options) {
+        const runtime = scope.runtime;
+        if (runtime.commands.has(options.id))
+            throw failure("conflict", `command ${options.id} is already declared`);
+        this.id = options.id;
+        this.#scope = scope;
+        this.#spec = {
+            enabled: options.enabled ?? true,
+            checked: options.checked ?? null,
+            busy: options.busy ?? false,
+            reason: options.reason ?? null,
+        };
+        const declaration = declare(options);
+        // The host requires a strictly increasing revision per update; the
+        // registration itself is revision 1, so every later state follows it.
+        const previous = removing(runtime).get(this.id);
+        this.#pump = new Latest(async (state) => {
+            const revision = ++this.#revision;
+            if (revision === 1) {
+                await previous;
+                await runtime.host.commands.register(this.id, 1, declaration, state);
+                this.#registered = true;
+            }
+            else
+                await runtime.host.commands.update(this.id, revision, state);
+        });
+        const initial = this.#state();
+        this.#last = JSON.stringify(initial);
+        this.ready = quiet(runtime
+            .starting(this.#pump.push(initial), (error) => scope.report(error))
+            .then(() => { }));
+        runtime.commands.set(this.id, () => {
+            if (!this.#disposed)
+                scope.run(options.run);
+        });
+        this.#binding = runtime.bind(() => this.#sync());
+        scope.add(this);
+    }
+    #state() {
+        return {
+            enabled: value(this.#spec.enabled),
+            checked: value(this.#spec.checked),
+            busy: value(this.#spec.busy),
+            reason: value(this.#spec.reason),
+        };
+    }
+    #sync() {
+        if (this.#disposed)
+            return;
+        const state = this.#state();
+        const encoded = JSON.stringify(state);
+        if (encoded === this.#last)
+            return;
+        this.#last = encoded;
+        this.#pump.push(state).catch((error) => this.#scope.report(error));
+    }
+    set(state) {
+        Object.assign(this.#spec, state);
+        this.#scope.update();
+    }
+    async dispose() {
+        if (this.#disposed)
+            return;
+        this.#disposed = true;
+        this.#scope.forget(this);
+        const runtime = this.#scope.runtime;
+        runtime.commands.delete(this.id);
+        this.#pump.stop();
+        // Removed from the menu once registered. Recorded before any await, so an
+        // immediate re-add of the same id registers after this removal.
+        const pending = removing(runtime);
+        const removal = (async () => {
+            await this.#binding.dispose();
+            await this.ready.catch(() => { });
+            if (this.#registered)
+                await runtime.host.commands.unregister(this.id).catch(() => { });
+        })();
+        pending.set(this.id, removal);
+        await removal;
+        if (pending.get(this.id) === removal)
+            pending.delete(this.id);
+    }
+}
+export const commands = (scope) => ({
+    add: (options) => new CommandHandle(scope, options),
+});

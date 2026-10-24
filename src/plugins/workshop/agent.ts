@@ -1,7 +1,7 @@
 // Starts and talks to the agent worker (worker/worker.ts) of one session.
 //
 // The worker is this Node (process.execPath) with the permission model on:
-//   read   the plugin package (worker code, vendored pi) and the session folder
+//   read   the plugin package (worker code, vendored pi, the SDK reference) and the session folder
 //   write  the session folder only (pi's JSONL; the tools stay in work/)
 //   net    allowed (the provider)
 // No child processes, worker threads, native addons or WASI. The API key goes
@@ -9,7 +9,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import type { StartMessage, ToPlugin, ToWorker, WorkerEvent } from "./worker/protocol.ts";
+import type { StartMessage, ToolReply, ToPlugin, ToWorker, WorkerEvent } from "./worker/protocol.ts";
 
 const here = import.meta.dirname;
 
@@ -48,12 +48,15 @@ export interface WorkerHandlers {
   file(sessionFile: string): void;
   failed(message: string): void;
   exited(code: number | null, stderr: string): void;
+  /** A plugin tool call: answer with AgentWorker.reply(call, …); `signal` aborts when the agent stops waiting. */
+  tool?(call: string, name: string, args: Record<string, unknown>, signal: AbortSignal): void;
 }
 
 export class AgentWorker {
   private readonly child: ChildProcess;
   private readonly ready: Promise<void>;
   private stderr = "";
+  private readonly calls = new Map<string, AbortController>();
   exited = false;
 
   constructor(options: Omit<StartMessage, "type">, handlers: WorkerHandlers) {
@@ -63,6 +66,7 @@ export class AgentWorker {
       sessionDir: fs.realpathSync(options.sessionDir),
       workDir: fs.realpathSync(options.workDir),
       sessionFile: options.sessionFile && fs.realpathSync(options.sessionFile),
+      docsRoots: options.docsRoots.map((root) => fs.realpathSync(root)),
     };
     this.child = spawn(process.execPath, workerArguments(start.sessionDir), {
       cwd: start.sessionDir,
@@ -88,6 +92,15 @@ export class AgentWorker {
         resolveReady();
       } else if (message.type === "event") handlers.event(message.event);
       else if (message.type === "file") handlers.file(message.sessionFile);
+      else if (message.type === "tool") {
+        const controller = new AbortController();
+        this.calls.set(message.call, controller);
+        if (handlers.tool) handlers.tool(message.call, message.name, message.args, controller.signal);
+        else this.reply(message.call, { ok: false, text: `工具 ${message.name} 不可用` });
+      } else if (message.type === "toolCancel") {
+        this.calls.get(message.call)?.abort();
+        this.calls.delete(message.call);
+      }
       else if (message.type === "failed") {
         if (!started) rejectReady(new Error(message.message));
         handlers.failed(message.message);
@@ -99,6 +112,8 @@ export class AgentWorker {
     });
     this.child.on("exit", (code) => {
       this.exited = true;
+      for (const controller of this.calls.values()) controller.abort();
+      this.calls.clear();
       rejectReady(new Error(this.lastError() || `agent 进程已退出（${code}）`));
       handlers.exited(code, this.stderr);
     });
@@ -112,6 +127,12 @@ export class AgentWorker {
 
   private send(message: ToWorker) {
     if (!this.exited && this.child.connected) this.child.send(message);
+  }
+
+  /** The answer to a plugin tool call (ignored when the call was cancelled meanwhile). */
+  reply(call: string, reply: ToolReply) {
+    if (!this.calls.delete(call)) return;
+    this.send({ type: "toolResult", call, reply });
   }
 
   async prompt(text: string): Promise<void> {

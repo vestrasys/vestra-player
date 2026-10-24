@@ -1,0 +1,28 @@
+{
+  "tasks": [
+    {
+      "id": "duration-panel",
+      "prompt": "写一个 Vestra 插件：菜单里有「播放时长…」，打开一个小窗口，显示当前媒体的已播放时间和总时长（mm:ss），播放时实时更新。"
+    },
+    {
+      "id": "snapshot-watermark",
+      "prompt": "写一个 Vestra 插件：截取当前画面并在右下角加上文字水印「Vestra」，导出为 PNG，保存位置让用户选。"
+    },
+    {
+      "id": "speed-shortcuts",
+      "prompt": "写一个 Vestra 插件：用快捷键 Ctrl+[ 和 Ctrl+] 把播放速度每次降低或提高 0.25 倍（范围 0.25–4），并在画面上提示当前速度。"
+    },
+    {
+      "id": "subtitle-delay",
+      "prompt": "写一个 Vestra 插件：一个字幕延迟调节窗口，有「-0.1 秒」「+0.1 秒」「复位」三个按钮，显示当前延迟。"
+    },
+    {
+      "id": "chapters-sidebar",
+      "prompt": "写一个 Vestra 插件：在侧栏面板列出当前媒体的章节（标题和开始时间），点一项跳到那里；没有章节时显示「没有章节」。"
+    },
+    {
+      "id": "settings-page",
+      "prompt": "写一个 Vestra 插件：在选项窗口里加一个设置页，可以设置「跳转步长（秒）」，菜单里的「快进」「快退」两项按这个步长跳转。设置要保存下来。"
+    }
+  ]
+}

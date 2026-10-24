@@ -1,0 +1,124 @@
+/** Stage D candidate; additive discovery capability, not the shared release baseline. */
+import type { Transport } from "./wire.ts";
+export type SourceStamp = {
+    generation: number;
+    intentVersion: number;
+};
+export type SourceTicket = {
+    stamp: SourceStamp;
+    cycle: number;
+    owner: number;
+};
+export type SourceIntent = {
+    kind: "openProvider";
+    producerId: number;
+    startPaused: boolean;
+    expected?: SourceStamp;
+} | {
+    kind: "open";
+    source: string;
+    startPaused: boolean;
+    expected?: SourceStamp;
+} | {
+    kind: "restart" | "close";
+    expected?: SourceStamp;
+} | {
+    kind: "control";
+    control: {
+        kind: "pause";
+        paused: boolean;
+    } | {
+        kind: "seek";
+        seconds: number;
+    } | {
+        kind: "rate";
+        rate: number;
+    };
+    expected?: SourceStamp;
+};
+export type SourceAudioTrack = {
+    trackId: number;
+    streamIndex: number | null;
+    selected: boolean;
+    external: boolean;
+    codec: string | null;
+    title: string | null;
+    language: string | null;
+};
+export interface SourceState {
+    kind: "media" | "producer";
+    container: string | null;
+    snapshotProfile?: {
+        timeDomain: "mpv-media";
+        fileOriginValidation: "deferred-worker-origin-match-required";
+    };
+    audioTracks: SourceAudioTrack[] | null;
+    controlPending?: boolean;
+    audioHealth?: {
+        status: import("./producer.ts").ProducerState["health"];
+        deviceErrors: number;
+        xrunEvents: number;
+        deviceChangeEvents: number;
+        errorDetails: string[];
+        errorOverflow: number;
+        buffer: import("./producer.ts").ProducerState["buffer"];
+    } | null;
+    stamp: SourceStamp;
+    cycle: number;
+    eventSequence: number;
+    phase: "empty" | "loading" | "ready" | "ended" | "error";
+    source: string | null;
+    loadingOwner: number | null;
+    terminalReason: "natural" | "stopped" | "replaced" | "unknown" | {
+        failed: string;
+    } | null;
+    paused: boolean;
+    position: number | null;
+    /** Backend metadata estimate; sample availability and clip video coverage are validated by worker. */
+    duration: number | null;
+    capabilities: {
+        pause: boolean;
+        seek: boolean;
+        rate: boolean;
+        restart: boolean;
+        close: boolean;
+        snapshotSource: boolean;
+    };
+    output: {
+        volume: number;
+        muted: boolean;
+    };
+    rate: number;
+    /** A selected video track that is not cover art (frame stepping). */
+    hasVideo?: boolean;
+    /** The A-B loop as requested (`player.setLoop`); absent or null: none. */
+    loop?: {
+        a: number;
+        b: number;
+        count: number | null;
+    } | null;
+    /** `player.setAudioDevice` and the device in use (`null` = system default). */
+    audioOutput?: {
+        requested: string | null;
+        active: string | null;
+    };
+    /** Merged by the host from the sequence provider (absent: none). */
+    sequence?: {
+        next: boolean;
+        previous: boolean;
+    };
+}
+export type SourceOperation = {
+    status: "pending" | "completed";
+    ticket: SourceTicket;
+} | {
+    status: "failed";
+    error: "stale" | "invalid" | "noSource" | "conflict" | "busy" | "unknownExpired" | {
+        backend: string;
+    };
+};
+export declare function sourceClient(transport: Transport): {
+    state: () => Promise<SourceState>;
+    submit: (intent: SourceIntent, operationId?: number) => Promise<SourceOperation>;
+    operation: (operationId: number) => Promise<SourceOperation>;
+};

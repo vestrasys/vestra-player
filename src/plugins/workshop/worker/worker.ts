@@ -17,15 +17,38 @@ import {
   type AgentSessionEvent,
   type ResourceLoader,
 } from "../vendor/pi/pi.mjs";
+import path from "node:path";
 import { WorkFolder } from "./files.ts";
 import { resolveModel } from "./models.ts";
-import { type StartMessage, type ToPlugin, type ToWorker, type WorkerEvent } from "./protocol.ts";
-import { TOOL_NAMES, createTools } from "./tools.ts";
+import { pluginTools } from "./plugin-tools.ts";
+import { type StartMessage, type ToPlugin, type ToolReply, type ToWorker, type WorkerEvent } from "./protocol.ts";
+import { Folders, TOOL_NAMES, createTools } from "./tools.ts";
 
 type Session = Awaited<ReturnType<typeof createAgentSession>>["session"];
 
 let session: Session | undefined;
 let secret = "";
+/** Plugin tool calls waiting for the plugin's answer. */
+const waiting = new Map<string, (reply: ToolReply) => void>();
+let calls = 0;
+
+function askPlugin(name: string, args: Record<string, unknown>, signal: AbortSignal | undefined): Promise<ToolReply> {
+  const call = `c${++calls}`;
+  return new Promise((resolve) => {
+    if (signal?.aborted) return resolve({ ok: false, text: "已取消" });
+    const abort = () => {
+      waiting.delete(call);
+      send({ type: "toolCancel", call });
+      resolve({ ok: false, text: "已取消" });
+    };
+    signal?.addEventListener("abort", abort, { once: true });
+    waiting.set(call, (reply) => {
+      signal?.removeEventListener("abort", abort);
+      resolve(reply);
+    });
+    send({ type: "tool", call, name, args });
+  });
+}
 
 /** No message leaves the worker with the key in it. */
 const redact = (text: string) => (secret.length >= 4 ? text.split(secret).join("••••") : text);
@@ -45,11 +68,17 @@ function textOf(content: unknown): string {
     .join("");
 }
 
-/** The file or pattern a tool call is about, for its one-line label. */
+/** The reference folders (StartMessage.docsRoots), for short labels. */
+let docsRoots: string[] = [];
+
+/** The file, pattern or plugin a tool call is about, for its one-line label (reference files as 「参考资料/…」). */
 function targetOf(args: unknown): string {
   if (!args || typeof args !== "object") return "";
   const value = args as Record<string, unknown>;
-  for (const key of ["path", "pattern", "file"]) if (typeof value[key] === "string") return value[key] as string;
+  const p = typeof value.path === "string" ? value.path : "";
+  const root = p && docsRoots.find((r) => p === r || p.startsWith(r + path.sep) || p.startsWith(r + "/"));
+  if (root) return `参考资料/${path.basename(root)}${p.slice(root.length).split(path.sep).join("/")}`;
+  for (const key of ["path", "pattern", "file", "id", "name"]) if (typeof value[key] === "string") return value[key] as string;
   return "";
 }
 
@@ -98,6 +127,9 @@ function forward(e: AgentSessionEvent) {
 async function start(message: StartMessage) {
   secret = message.key;
   const folder = await WorkFolder.open(message.workDir);
+  docsRoots = message.docsRoots ?? [];
+  const docs = await Promise.all((message.docsRoots ?? []).map((root) => WorkFolder.open(root)));
+  const folders = new Folders(folder, docs);
   const modelRuntime = await ModelRuntime.create({
     credentials: new InMemoryCredentialStore(),
     modelsPath: null,
@@ -157,8 +189,8 @@ async function start(message: StartMessage) {
     // Two automatic retries for transient failures (1.5 s, 3 s), then the error row with 「重试」.
     settingsManager: SettingsManager.inMemory({ retry: { enabled: true, maxRetries: 2, baseDelayMs: 1500 } }),
     noTools: "builtin",
-    customTools: createTools(folder),
-    tools: TOOL_NAMES,
+    customTools: createTools(folders, pluginTools(message.pluginTools ?? [], askPlugin)),
+    tools: [...TOOL_NAMES, ...(message.pluginTools ?? [])],
   }));
   session.subscribe(forward);
   send({ type: "ready", sessionFile: session.sessionFile ?? null });
@@ -183,6 +215,11 @@ process.on("message", (raw) => {
         return prompt(message.text);
       case "abort":
         return session?.abort();
+      case "toolResult": {
+        const done = waiting.get(message.call);
+        waiting.delete(message.call);
+        return done?.(message.reply);
+      }
       case "shutdown":
         session?.dispose();
         process.exit(0);

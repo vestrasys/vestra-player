@@ -1,0 +1,71 @@
+{
+  "name": "@vestra-player/sdk",
+  "version": "1.5.4",
+  "description": "Plugin API types, test host and plugin CLI for Vestra Player (apiVersion vestra/1)",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vestrasys/vestra-player-sdk.git"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=26"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/plugin/testing.d.ts",
+      "default": "./dist/plugin/testing.js"
+    },
+    "./runtime": {
+      "types": "./dist/player-runtime.d.ts",
+      "default": "./dist/player-runtime.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "vestra-plugin": "./bin/vestra-plugin.mjs"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "slint",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "tsc -p tsconfig.check.json",
+    "doc-lint": "node scripts/doc-lint.mjs",
+    "docs": "typedoc",
+    "docs:check": "node scripts/check-docs.mjs",
+    "examples": "node scripts/check-examples.mjs",
+    "format": "prettier --write \"{src,test,bin,scripts,examples}/**/*.{ts,mjs}\" package.json tsconfig.json tsconfig.check.json typedoc.json .oxlintrc.json examples/tsconfig.json \"examples/*/package.json\"",
+    "format:check": "prettier --check \"{src,test,bin,scripts,examples}/**/*.{ts,mjs}\" package.json tsconfig.json tsconfig.check.json typedoc.json .oxlintrc.json examples/tsconfig.json \"examples/*/package.json\"",
+    "lint": "oxlint --deny-warnings",
+    "pack:check": "node scripts/check-pack.mjs",
+    "pack:smoke": "node scripts/smoke-pack.mjs",
+    "prepare": "node scripts/build.mjs",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "^5.9.0"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
+    "oxlint": "1.89.0",
+    "prettier": "^3.9.10",
+    "publint": "0.3.25",
+    "typedoc": "0.28.20",
+    "typedoc-github-theme": "0.4.0",
+    "typedoc-plugin-mdn-links": "5.1.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

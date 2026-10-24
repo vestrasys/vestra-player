@@ -27,6 +27,10 @@ export global AiSettings {
     in property <string> gone;
     in property <string> message;
     in property <bool> message-warn;
+    // The user's GitHub name, the id prefix of new plugins; the hint says what it gives.
+    in-out property <string> owner-text;
+    in property <string> owner-hint;
+    callback set-owner(string);
     callback choose-provider(int);
     callback save-key(string);
     callback delete-key();
@@ -45,7 +49,7 @@ component Label inherits Text {
 }
 
 export component AiSettingsPage inherits Rectangle {
-    height: 300px;
+    height: 380px;
     VerticalLayout {
         padding: 6px;
         spacing: 10px;
@@ -167,6 +171,30 @@ export component AiSettingsPage inherits Rectangle {
                     enabled: !AiSettings.listing && AiSettings.base-url != "";
                     clicked => { AiSettings.fetch-models(); }
                 }
+            }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            Label { text: "插件作者"; }
+            LineEdit {
+                height: Theme.input-height;
+                horizontal-stretch: 1;
+                font-size: Theme.font-body;
+                placeholder-text: "你的 GitHub 用户名（插件 id 的前缀）";
+                text <=> AiSettings.owner-text;
+                edited(text) => { AiSettings.set-owner(text); }
+                accepted(text) => { AiSettings.set-owner(text); }
+            }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            Label { text: ""; }
+            Text {
+                text: AiSettings.owner-hint;
+                color: Theme.text-dim;
+                font-size: Theme.font-body;
+                wrap: word-wrap;
+                horizontal-stretch: 1;
             }
         }
         Text {
