@@ -1,13 +1,13 @@
 {
   "id": "vestra.workshop",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": ["commands", "ui.window", "ui.settings", "ui.dialog", "secrets", "clipboard", "plugins.manage"],
   "name": "Vestra Player AI",
   "author": "Vestra Player",
-  "punchline": "和你选的模型对话，让 AI 写 Vestra 插件：检查、测试、试载、安装、导出（自带 API key，实验性）",
-  "description": "Vestra Player AI 是播放器里的 AI 助手，基于 pi（github.com/earendil-works/pi）。在设置里选择服务商（Anthropic、OpenAI、Google、OpenRouter、DeepSeek，或 Ollama 等 OpenAI 兼容服务）并保存你自己的 API key，就可以开始对话。\n\n每个对话有自己的文件夹，AI 只能读写这个文件夹，不能运行命令。API key 只保存在系统钥匙串里，不写入任何文件。调用模型的费用由你的服务商账户承担。\n\nAI 按插件 SDK 的文档写插件，用类型检查、测试和打包工具自己修错；写好的插件可以试载、安装（能回退），也可以导出 .vxp 或完整的源码项目。",
+  "punchline": "和你选的模型对话，让 AI 写 Vestra 插件：检查、测试、安装（可回退）、导出（自带 API key，实验性）",
+  "description": "Vestra Player AI 是播放器里的 AI 助手，基于 pi（github.com/earendil-works/pi）。在设置里选择服务商（Anthropic、OpenAI、Google、OpenRouter、DeepSeek，或 Ollama 等 OpenAI 兼容服务）并保存你自己的 API key，就可以开始对话。\n\n每个对话有自己的文件夹，AI 只能读写这个文件夹，不能运行命令。API key 只保存在系统钥匙串里，不写入任何文件。调用模型的费用由你的服务商账户承担。\n\nAI 按插件 SDK 的文档写插件，用类型检查、测试和打包工具自己修错；写好的插件可以安装（能回退），也可以导出 .vxp 或完整的源码项目。",
   "tags": ["AI", "插件开发", "实验性"],
   "minPlayerVersion": "0.4.1"
 }

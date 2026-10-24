@@ -14,7 +14,7 @@
 //
 // Per task: pass (every project the agent made passes typecheck, test and
 // check, verified again after the run) and fix rounds (failed typecheck /
-// test / check calls on the way). Trial and install need the player and are
+// test / check calls on the way). Installing needs the player and is
 // not part of the eval.
 import fs from "node:fs/promises";
 import path from "node:path";

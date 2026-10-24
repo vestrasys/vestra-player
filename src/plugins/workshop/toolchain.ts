@@ -93,6 +93,41 @@ export interface TestReport {
   passed: number;
   failed: number;
   failures: { name: string; error: string; location: string }[];
+  /** What the tests printed (console.log / console.error), when a run failed. */
+  output?: string;
+}
+
+/** Most of the tests' own output kept in a failed run's report. */
+const MAX_OUTPUT = { lines: 60, chars: 4000 };
+
+/** A TAP line (at any subtest depth), not something a test printed. */
+const TAP_LINE = /^\s*(TAP version \d+|# |#$|ok \d+|not ok \d+|1\.\.\d+|---$|\.\.\.$|Bail out!)/;
+
+/**
+ * What the tests printed: `--test-isolation=none` writes console output to
+ * stdout between the TAP lines, unprefixed; stderr has console.error.
+ */
+export function testOutput(stdout: string, stderr: string): string {
+  const lines: string[] = [];
+  let yaml = -1; // indent of the open YAML block's "---", -1 outside
+  for (const line of stdout.split(/\r?\n/)) {
+    const indent = line.length - line.trimStart().length;
+    if (yaml >= 0) {
+      if (line.trim() === "..." && indent === yaml) yaml = -1;
+      continue;
+    }
+    if (line.trim() === "---") {
+      yaml = indent;
+      continue;
+    }
+    if (line.trim() === "" || TAP_LINE.test(line)) continue;
+    lines.push(line);
+  }
+  for (const line of stderr.split(/\r?\n/)) if (line.trim() && !/^\(node:\d+\) (ExperimentalWarning|SecurityWarning)|^\(Use `node --trace-warnings/.test(line)) lines.push(line);
+  let text = lines.slice(0, MAX_OUTPUT.lines).join("\n");
+  if (text.length > MAX_OUTPUT.chars) text = `${text.slice(0, MAX_OUTPUT.chars)}…`;
+  else if (lines.length > MAX_OUTPUT.lines) text += `\n…（还有 ${lines.length - MAX_OUTPUT.lines} 行）`;
+  return text;
 }
 
 /** The TAP reporter's output of `node --test`. */
@@ -107,10 +142,14 @@ export function parseTap(output: string, root: string): TestReport {
     if (fail) report.failed = Number(fail[1]);
     const bad = /^(\s*)not ok \d+ - (.*)$/.exec(line);
     if (!bad) continue;
-    // The YAML block below the line: location and error.
+    // The YAML block below the line: location and error. Only its own keys
+    // (two spaces deeper than "not ok"): the `actual:` / `expected:` values
+    // of an assertion are nested deeper and may have an `error` field too.
+    const key = " ".repeat(bad[1].length + 2);
     let error = "";
     let location = "";
     for (let j = i + 1; j < lines.length && !/^\s*\.\.\.$/.test(lines[j]); j++) {
+      if (!lines[j].startsWith(key) || lines[j][key.length] === " ") continue;
       const loc = /^\s*location: '(.*)'$/.exec(lines[j]);
       if (loc) location = path.relative(root, loc[1].replace(/:\d+:\d+$/, "")).split(path.sep).join("/") + (/(:\d+:\d+)$/.exec(loc[1])?.[1] ?? "");
       const err = /^(\s*)error: (\|-)?(.*)$/.exec(lines[j]);
@@ -392,6 +431,8 @@ export class Toolchain {
           const tap = run.stdout.trim().split("\n").filter((l) => !/^# (tests|suites|pass|fail|cancelled|skipped|todo|duration_ms) /.test(l)).slice(0, 40).join("\n");
           return result(false, "测试没能运行", { stderr, output: tap });
         }
+        const printed = testOutput(run.stdout, run.stderr);
+        if (printed) report.output = printed;
         return result(false, `测试未通过：${report.failed} 个失败，${report.passed} 个通过`, report);
       } finally {
         await fs.rm(tmp, { recursive: true, force: true });
@@ -411,7 +452,7 @@ export class Toolchain {
       const report = this.cliReport(run, directory);
       const warnings = [...rules.warnings, ...report.hints];
       if (run.code !== 0) return result(false, report.errorCount ? `检查未通过：${report.errorCount} 个类型错误` : "检查未通过", { ...report, warnings });
-      return result(true, "检查通过（manifest、严格类型检查、构建）。Slint 由播放器在试载或安装时编译检查。", warnings.length ? { warnings } : undefined);
+      return result(true, "检查通过（manifest、严格类型检查、构建）。Slint 由播放器在安装时编译检查。", warnings.length ? { warnings } : undefined);
     });
   }
 

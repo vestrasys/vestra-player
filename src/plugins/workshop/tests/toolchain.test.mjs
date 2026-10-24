@@ -78,11 +78,16 @@ test("reads outside", () => fs.readFileSync(${JSON.stringify(secret)}));
 test("writes outside", () => fs.writeFileSync(${JSON.stringify(path.join(session.dir, "x.txt"))}, "x"));
 test("network", async () => { await fetch("http://127.0.0.1:9/"); });
 test("child process", async () => { (await import("node:child_process")).execFileSync(process.execPath, ["-v"]); });
+test("object diff", () => {
+  console.log("debug state", JSON.stringify({ phase: "ready" }));
+  console.error("debug on stderr");
+  assert.deepEqual({ error: null, n: 1 }, { error: null, n: 2 });
+});
 `,
   );
   const tested = await toolchain.test(session, "local.demo");
   assert.equal(tested.ok, false);
-  assert.match(tested.text, /^测试未通过：5 个失败，1 个通过/);
+  assert.match(tested.text, /^测试未通过：6 个失败，1 个通过/);
   const report = JSON.parse(tested.text.split("\n").slice(1).join("\n"));
   const failure = (name) => report.failures.find((f) => f.name === name);
   assert.match(failure("one is two").error, /one is not two/);
@@ -91,6 +96,11 @@ test("child process", async () => { (await import("node:child_process")).execFil
   assert.match(failure("writes outside").error, /allow-fs-write/);
   assert.ok(failure("network"), "the network is refused");
   assert.match(failure("child process").error, /allow-child-process|restricted/);
+  // The assertion's own message, not the `error: ~` of the compared objects; and what the tests printed.
+  assert.match(failure("object diff").error, /^Expected values to be strictly deep-equal:[\s\S]*n: 1/);
+  assert.match(report.output, /debug state \{"phase":"ready"\}/);
+  assert.match(report.output, /debug on stderr/);
+  assert.doesNotMatch(report.output, /^(TAP version|ok |not ok |# )/m);
   // The template's own test still fails in the same run: the main.ts type error is only a type error.
   await assert.rejects(fs.access(path.join(session.dir, "x.txt")));
 });

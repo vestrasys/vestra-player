@@ -193,11 +193,9 @@ export component AiWindow inherits Window {
     in property <[string]> projects;
     in-out property <int> project-index;
     in property <string> project-title;
-    // What the last card action (or the agent's trial/install) did.
+    // What the last card action (or the agent's install) did.
     in property <string> card-status;
     in property <bool> card-busy;
-    // A trial runs: 「停止试载」 instead of 「试载」.
-    in property <bool> trial-active;
     // Installed in this run: 「回退」 undoes it.
     in property <bool> can-rollback;
 
@@ -215,8 +213,6 @@ export component AiWindow inherits Window {
     callback open-pi();
     callback draft-changed(string);
     callback choose-project(int);
-    callback trial();
-    callback stop-trial();
     callback install();
     callback rollback();
     callback export-vxp();
@@ -403,10 +399,8 @@ export component AiWindow inherits Window {
                         alignment: start;
                         spacing: 6px;
                         height: Theme.button-small-height;
-                        if !root.trial-active: Button { small: true; width: 52px; text: "试载"; enabled: !root.card-busy; clicked => { root.trial(); } }
-                        if root.trial-active: Button { small: true; width: 72px; text: "停止试载"; enabled: !root.card-busy; clicked => { root.stop-trial(); } }
                         Button { small: true; width: 52px; text: "安装"; enabled: !root.card-busy; clicked => { root.install(); } }
-                        if root.can-rollback: Button { small: true; width: 52px; text: "回退"; enabled: !root.card-busy; clicked => { root.rollback(); } }
+                        if root.can-rollback: Button { small: true; width: 112px; text: "回退（撤销安装）"; enabled: !root.card-busy; clicked => { root.rollback(); } }
                         Button { small: true; width: 80px; text: "导出 .vxp"; enabled: !root.card-busy; clicked => { root.export-vxp(); } }
                         Button { small: true; width: 96px; text: "导出源码 zip"; enabled: !root.card-busy; clicked => { root.export-source(); } }
                         Button { small: true; width: 72px; text: "打开文件夹"; clicked => { root.open-project(); } }

@@ -79,6 +79,22 @@ export class WorkFolder {
     await fs.writeFile(absolute, content);
   }
 
+  /**
+   * Deletes one file, or an empty folder. Not the work folder itself; a
+   * link is refused by resolve() before anything is removed.
+   */
+  async remove(file: string): Promise<string> {
+    const absolute = await this.resolve(file);
+    if (absolute === this.root) throw new OutsideError("不能删除工作目录本身");
+    const stat = await fs.lstat(absolute);
+    if (stat.isDirectory()) {
+      if ((await fs.readdir(absolute)).length) throw new Error(`文件夹不是空的：${this.relative(absolute)}（先删除里面的文件）`);
+      await fs.rmdir(absolute);
+    } else if (stat.isFile()) await fs.unlink(absolute);
+    else throw new Error(`不是普通文件：${this.relative(absolute)}`);
+    return this.relative(absolute);
+  }
+
   async mkdir(directory: string): Promise<void> {
     const absolute = await this.resolve(directory, true);
     const rel = path.relative(this.root, absolute);

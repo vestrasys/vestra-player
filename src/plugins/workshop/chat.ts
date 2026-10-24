@@ -31,12 +31,12 @@ const VERBS: Record<string, string> = {
   ls: "列出",
   find: "查找",
   grep: "搜索",
+  delete: "删除",
   scaffold_plugin: "创建插件",
   typecheck: "类型检查",
   test: "运行测试",
   check: "检查",
   pack: "打包",
-  trial_load: "试载",
   install_plugin: "安装",
 };
 

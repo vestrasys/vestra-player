@@ -1,5 +1,6 @@
-// The agent's tools: pi's read/write/edit/ls/find on our WorkFolder, and a
-// pure-JS grep (pi's grep always starts ripgrep; the worker may not spawn).
+// The agent's tools: pi's read/write/edit/ls/find on our WorkFolder, a
+// pure-JS grep (pi's grep always starts ripgrep; the worker may not spawn)
+// and delete (so a debug file does not have to stay in the project).
 // read, ls, find and grep also reach the read-only reference folders (the
 // SDK package, knowledge/); write and edit only the work folder.
 import path from "node:path";
@@ -14,7 +15,7 @@ import {
 } from "../vendor/pi/pi.mjs";
 import { MAX_FILE, type WorkFolder } from "./files.ts";
 
-export const TOOL_NAMES = ["read", "write", "edit", "ls", "find", "grep"];
+export const TOOL_NAMES = ["read", "write", "edit", "ls", "find", "grep", "delete"];
 
 /** The folder a path belongs to: a reference folder it lies in, else the work folder (which refuses it if outside). */
 export class Folders {
@@ -86,6 +87,24 @@ function grepTool(folders: Folders): ToolDefinition {
   } as ToolDefinition;
 }
 
+const deleteSchema = Type.Object({
+  path: Type.String({ description: "File (or empty folder) to delete, relative to the work folder, e.g. octocat.demo/tests/debug.test.ts" }),
+});
+
+function deleteTool(folder: WorkFolder): ToolDefinition {
+  return {
+    name: "delete",
+    label: "delete",
+    description: "Delete a file, or an empty folder, in the work folder (not in the read-only reference folders). Use it for debug or scratch files and files the plugin no longer needs.",
+    promptSnippet: "Delete a file in the work folder",
+    parameters: deleteSchema,
+    async execute(_id, params: { path: string }) {
+      const removed = await folder.remove(params.path);
+      return { content: [{ type: "text", text: `Deleted ${removed}` }], details: undefined };
+    },
+  } as ToolDefinition;
+}
+
 export function createTools(folders: Folders, extra: ToolDefinition[] = []): ToolDefinition[] {
   const folder = folders.work;
   const root = folder.root;
@@ -116,6 +135,7 @@ export function createTools(folders: Folders, extra: ToolDefinition[] = []): Too
       },
     }),
     grepTool(folders),
+    deleteTool(folder),
     ...extra,
   ] as ToolDefinition[];
 }

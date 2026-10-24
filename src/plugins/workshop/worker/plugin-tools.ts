@@ -1,5 +1,5 @@
 // The plugin tools: fixed-parameter calls the plugin process runs for the
-// agent (scaffold, type check, tests, checks, packing, trial, install). The
+// agent (scaffold, type check, tests, checks, packing, install). The
 // worker only forwards them over IPC; an abort cancels the call there.
 import { Type, type ToolDefinition } from "../vendor/pi/pi.mjs";
 import type { ToolReply } from "./protocol.ts";
@@ -21,24 +21,19 @@ export const PLUGIN_TOOLS: Record<string, { description: string; parameters: Ret
     parameters: Type.Object({ id }),
   },
   test: {
-    description: "Run the plugin's tests (tests/*.test.ts, node:test with @vestra-player/sdk/testing) in a fresh restricted Node process: it may read only the plugin folder, no network. Returns passed/failed tests with their assertion messages.",
+    description: "Run the plugin's tests (tests/*.test.ts, node:test with @vestra-player/sdk/testing) in a fresh restricted Node process: it may read only the plugin folder and write only os.tmpdir(), no network. Returns passed/failed tests with their assertion messages and, when a test failed, what the tests printed (console.log / console.error).",
     parameters: Type.Object({ id }),
   },
   check: {
-    description: "Release check: the workshop rules (id, no npm dependencies), the manifest rules, strict types and a build (no runtime import of the SDK). Slint is compiled by the player in trial_load/install_plugin.",
+    description: "Release check: the workshop rules (id, no npm dependencies), the manifest rules, strict types and a build (no runtime import of the SDK). Slint is compiled by the player when installing (install_plugin).",
     parameters: Type.Object({ id }),
   },
   pack: {
     description: "Build and pack the plugin as dist/<id>-<version>.vxp in the session folder.",
     parameters: Type.Object({ id }),
   },
-  trial_load: {
-    description:
-      "Pack the plugin, let the player validate it (including Slint) and load it temporarily for the user to try. Returns whether it activated, or the player's error. The user stops the trial in the window.",
-    parameters: Type.Object({ id }),
-  },
   install_plugin: {
-    description: "Install the plugin into the player. The user confirms in a dialog first; installing can be rolled back. Only after the user asked for it.",
+    description: "Pack the plugin, let the player validate it (including Slint) and install it. The user confirms in a dialog first; 回退 in the window undoes the install (the previous version, or uninstall after a first install). Only after the user asked for it.",
     parameters: Type.Object({ id }),
   },
 };

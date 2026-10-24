@@ -1,7 +1,7 @@
-// The result card and the agent's trial/install tools on the SDK test host:
-// a scaffolded project shows on the card; 试载 / 停止试载, 安装 (the agent's
-// install asks first), 回退, 导出 .vxp, 导出源码 zip. The player side of
-// validation and trials is simulated with host handlers.
+// The result card and the agent's install tool on the SDK test host: a
+// scaffolded project shows on the card; 安装 (the agent's install asks
+// first), 回退（撤销安装）, 导出 .vxp, 导出源码 zip. The player side of
+// validation is simulated with host handlers.
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -25,73 +25,45 @@ const toolText = (mock, n) => {
   return typeof content === "string" ? content : JSON.stringify(content);
 };
 
-/** The player's side: validation by file, a trial that starts (or fails), install, uninstall. */
-function player(ai, { trialState = "running", trialError = null } = {}) {
+/** The player's side: validation by file (or a validation error), install, uninstall. */
+function player(ai, { invalid = null } = {}) {
   const { host } = ai;
-  const projects = path.join(ai.plugin.dataDirectory, "sessions");
   host.handle("packages.validateArchive", async ({ file }) => {
+    if (invalid) throw Object.assign(new Error(invalid), { code: "invalid" });
     // The manifest of the packed project: dist/<id>-<version>.vxp → work/<id>/manifest.json
     const id = path.basename(String(file)).replace(/-\d+\.\d+\.\d+\.vxp$/, "");
     const manifest = JSON.parse(await fs.readFile(path.join(path.dirname(path.dirname(String(file))), "work", id, "manifest.json"), "utf8"));
     host.candidates.set(String(file), { ...manifest, entry: "main.js" });
     return { token: String(file), digest: "0".repeat(64), apiVersion: "vestra/1", manifest: { ...manifest, entry: "main.js" }, checks: ["manifest", "slintCompile"], trustedExecution: true };
   });
-  const trialEntry = (id) => ({ id, version: "0.1.0", origin: "trial", state: trialState, error: trialError, capabilities: [], directory: "/trial", previousVersion: null, builtin: false, source: null, dataDirectory: null });
-  host.handle("packages.trial", ({ token }) => {
-    const id = path.basename(String(token)).replace(/-\d+\.\d+\.\d+\.vxp$/, "");
-    host.setPackages([...host.packages.filter((p) => p.origin !== "trial"), trialEntry(id)]);
-    return { trialId: 9, activationOwner: 9, status: "pending" };
-  });
-  const stopped = () => {
-    host.setPackages(host.packages.filter((p) => p.origin !== "trial"));
-    return { trialId: 9, activationOwner: 9, status: "stopped", cleanupConfirmed: true };
-  };
-  host.handle("packages.stopTrial", stopped);
-  host.handle("packages.trialState", stopped);
-  return projects;
 }
 
-test("a scaffolded plugin shows on the card; 试载 starts and 停止试载 ends the trial", async () => {
-  const mock = await server(scripted({ 做个插件: [{ toolCalls: [{ name: "scaffold_plugin", args: { name: "demo", title: "演示" } }] }] }));
+test("a scaffolded plugin shows on the card with 安装 (no trial); the player's validation error reaches the card and the agent", async () => {
+  const mock = await server(
+    scripted({
+      做个插件: [{ toolCalls: [{ name: "scaffold_plugin", args: { name: "demo", title: "演示" } }] }],
+      安装: [{ toolCalls: [{ name: "install_plugin", args: { id: "local.demo" } }] }],
+    }),
+  );
   const ai = await startAi({ compat: mock.url });
   assert.equal(ai.props["has-project"], false);
   await ai.ask("做个插件");
   assert.equal(ai.rows()[1].detail, "✓ 创建插件 demo");
   await ai.until(() => ai.props["has-project"] === true, "card");
   assert.equal(ai.props["project-title"], "演示 · local.demo 0.1.0");
-  assert.equal(ai.props["trial-active"], false);
+  assert.ok(!("trial-active" in ai.props), "no trial on the card");
+  assert.ok(!mock.chats[0].body.tools.some((t) => /trial/.test(t.function.name)), "no trial tool");
+  assert.doesNotMatch(mock.chats[0].body.messages[0].content, /试载|trial/);
 
-  player(ai);
-  await ai.send("trial");
-  await ai.until(() => ai.props["trial-active"] === true, "trial");
-  assert.equal(ai.props["card-status"], "试载中：演示");
-  await ai.send("stop-trial");
-  await ai.until(() => ai.props["trial-active"] === false, "trial stopped");
-  assert.equal(ai.props["card-status"], "已停止试载 演示。");
-  await ai.stop();
-});
-
-test("a trial that fails to activate reports the player's error; capabilities a trial cannot load are explained", async () => {
-  const mock = await server(
-    scripted({
-      做个插件: [{ toolCalls: [{ name: "scaffold_plugin", args: { name: "demo" } }] }],
-      试载: [{ toolCalls: [{ name: "trial_load", args: { id: "local.demo" } }] }],
-    }),
-  );
-  const ai = await startAi({ compat: mock.url });
-  await ai.ask("做个插件");
-  player(ai, { trialState: "failed", trialError: "TypeError: plugin.osd is undefined" });
-  await ai.ask("试载");
-  assert.equal(ai.rows().at(-2).detail, "✗ 试载 local.demo");
-  assert.match(toolText(mock, mock.chats.length - 1), /试载的插件没能启动：TypeError: plugin\.osd is undefined/);
-  assert.equal(ai.props["trial-active"], false);
-
-  const manifestFile = (await fs.readdir(path.join(ai.plugin.dataDirectory, "sessions"))).map((s) => path.join(ai.plugin.dataDirectory, "sessions", s, "work/local.demo/manifest.json"))[0];
-  const manifest = JSON.parse(await fs.readFile(manifestFile, "utf8"));
-  await fs.writeFile(manifestFile, JSON.stringify({ ...manifest, capabilities: [...manifest.capabilities, "ui.osd"] }));
-  await ai.send("trial");
-  await ai.until(() => /不能试载/.test(ai.props["card-status"]), "refused");
-  assert.match(ai.props["card-status"], /还用到 ui\.osd。可以直接安装/);
+  player(ai, { invalid: "ui/main.slint:3: unknown element FancyButton" });
+  await ai.send("install");
+  await ai.until(() => /播放器校验没有通过/.test(ai.props["card-status"]), "validation error on the card");
+  assert.match(ai.props["card-status"], /（invalid）：ui\/main\.slint:3: unknown element FancyButton/);
+  ai.host.dialogAnswers.push({ confirmed: true, checked: false });
+  await ai.ask("安装");
+  assert.equal(ai.rows().at(-2).detail, "✗ 安装 local.demo");
+  assert.match(toolText(mock, mock.chats.length - 1), /unknown element FancyButton/);
+  assert.deepEqual(ai.host.packageCalls, []);
   await ai.stop();
 });
 

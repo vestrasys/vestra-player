@@ -60,9 +60,9 @@ test("the harness: the agent reads the reference, fixes a type error and passes;
 
   // The system prompt: the checklist and where the reference is; no full reference inline.
   const system = mock.chats[0].body.messages[0].content;
-  for (const rule of ["先查文档再写代码", "<owner>.<name>", "vestra.", "import type", "typecheck 0 个错误", "llms-full.txt"]) assert.ok(system.includes(rule), rule);
+  for (const rule of ["先查文档再写代码", "<owner>.<name>", "vestra.", "import type", "typecheck 0 个错误", "llms-full.txt", "包括工具调用之间的过程说明", "过程说明尽量少", "不要留下调试用的文件", "state.phase", "testing.d.ts"]) assert.ok(system.includes(rule), rule);
   assert.ok(system.length < 6000, `${system.length} characters`);
-  // Without a player: no trial or install tools.
+  // Without a player: no install tool.
   const tools = mock.chats[0].body.tools.map((t) => t.function.name).sort();
-  assert.deepEqual(tools, ["check", "edit", "find", "grep", "ls", "pack", "read", "scaffold_plugin", "test", "typecheck", "write"]);
+  assert.deepEqual(tools, ["check", "delete", "edit", "find", "grep", "ls", "pack", "read", "scaffold_plugin", "test", "typecheck", "write"]);
 });

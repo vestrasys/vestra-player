@@ -63,7 +63,6 @@ export default async function activate(plugin: Plugin) {
   };
   const delivering = new Delivering(plugin, toolchain, owner);
   const delivery = {
-    trial: (session: SessionPaths, id: string, signal: AbortSignal) => delivering.trialLoad(session, id, signal),
     install: (session: SessionPaths, id: string, signal: AbortSignal) => delivering.install(session, id, true, signal),
   };
   /**
@@ -275,7 +274,6 @@ export default async function activate(plugin: Plugin) {
       projectTitle: p ? `${p.name} · ${p.id} ${p.version}` : "",
       cardStatus: delivering.status,
       cardBusy: delivering.busy || exporting,
-      trialActive: !!delivering.trial,
       canRollback: !!p && delivering.installed.has(p.id),
       sessions: sessionRows(),
       rows: docs.props(shown.rows),
@@ -464,14 +462,6 @@ export default async function activate(plugin: Plugin) {
   window.on("chooseProject", (index: number) => {
     chosen = projects[index]?.id ?? chosen;
     delivering.status = "";
-  });
-  window.on("trial", action((meta, p) => delivering.trialLoad(pathsOf(meta.id), p.id)));
-  window.on("stopTrial", async () => {
-    try {
-      await delivering.stopTrial();
-    } catch (error) {
-      cardSay((error as Error).message);
-    }
   });
   window.on("install", action((meta, p) => delivering.install(pathsOf(meta.id), p.id, false)));
   window.on("rollback", action((_meta, p) => delivering.rollback(p.id)));
@@ -713,7 +703,6 @@ export default async function activate(plugin: Plugin) {
 
   plugin.onDispose(async () => {
     clearTimeout(refresh);
-    await delivering.stopTrial().catch(() => {}); // the trial handle's scope ends with the plugin too
     // Runs still in progress stay marked in meta.json: the next start says so.
     await Promise.all([...runs.values()].map((run) => (stopWatchdog(run), run.worker.stop(300))));
   });

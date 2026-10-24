@@ -1,5 +1,5 @@
 // One eval task: a fresh session folder, the real agent worker and the real
-// plugin tools (no player: trial_load and install_plugin are not offered),
+// plugin tools (no player: install_plugin is not offered),
 // one prompt, then an independent typecheck, test and check of every project
 // the agent made. Used by run.mjs (a real model) and by tests/eval.test.mjs
 // (the mock server).
