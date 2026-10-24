@@ -9,6 +9,7 @@
 2026-10-21，基线 main fafa40d。由 `OUT=<file> node --test doc/process/rounds/menus-snapshot.test.ts` 导出的快照整理（[分配表](../process/rounds/2026-10-plugin-ui.md) §3；当时脚本默认列表覆盖 `src/plugins` 下全部 19 个插件；`youtube`、`bilibili` 迁出后默认列表为其余 17 个）；宿主的「全屏」「退出全屏」「退出」在 `src/host/src/main.rs`（`register_host_commands`），不在快照里。勾选、单选、初始禁用状态取自同一测试宿主里各命令的 `state`。
 
 - 顺序按声明的 `order` 升序；同一 `order` 再按插件 id、注册先后。子菜单取其中最小的 `order`，分组（`group`）取其中第一项的分组。
+- 例外：7 个内置顶层菜单（`@open` … `@settings`）的位置固定，不随里面的命令变：打开 110、播放 200、字幕 300、视频 400、声音 500、屏幕 710、设置 830（`src/host/src/commands.rs` 的 `MENU_ANCHORS`）。插件写 `["@video", …]` 或直接写 `["视频", …]` 都挪不动它。内置菜单的直接下一级里，`order` 为 0（插件省略 `order`）的项排在最后（[参考 §4](../plugins/reference.md)）；内置命令在这一级都用 100 以上的 `order`，不用 0。改内置菜单的顶层位置改这张表，不改命令的 `order`。
 - 「插件」列：「核心」是宿主的核心动作（`host/<id>`），「宿主」是宿主自己的命令。
 - 顶层分隔线画成「——」行（相邻两项 `group` 不同）。子菜单内相邻两项的 `group` 不同时也画分隔线，表中不逐一画出。
 - 快捷键在全局作用域生效（视频画面、底栏、侧栏获得焦点时；工具窗口内不生效）。写 `Ctrl` 的在 macOS 上 ⌃ 和 ⌘ 都能触发。用户可在「设置 ▶ 快捷键…」改绑，或用「忽略默认快捷键」整体停用默认绑定。
