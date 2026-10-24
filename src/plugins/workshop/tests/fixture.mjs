@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { after } from "node:test";
-import { TestHost, startPlugin } from "@vestra-player/sdk/testing";
+import { HostError, TestHost, startPlugin } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 import { mockOpenAI } from "./mock-openai.mjs";
 
@@ -41,8 +41,13 @@ export async function until(host, condition, what = "condition", ms = 20_000) {
  * The plugin, its window opened. `compat`: a mock server URL to configure as
  * 「自定义 · OpenAI 格式」 (its first listed model, mock-1) with KEY.
  */
-export async function startAi({ data, compat, secrets = {} } = {}) {
+export async function startAi({ data, compat, secrets = {}, deny = false } = {}) {
   const host = new TestHost();
+  // `deny`: the user refuses the keychain's authorization dialog.
+  if (deny)
+    host.handle("secrets.get", () => {
+      throw new HostError("failed", "User canceled the operation.");
+    });
   for (const [name, value] of Object.entries(secrets)) host.secrets.set(name, value);
   const started = await startPlugin(activate, { directory: new URL("..", import.meta.url), host, ...(data ? { dataDirectory: data } : {}) });
   // Also after a failed test: the plugin's workers end with it.

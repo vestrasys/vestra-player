@@ -55,6 +55,8 @@ export interface AiSettings {
   baseUrls: Record<string, string>;
   /** The session shown when the window opens again. */
   lastSession: string | null;
+  /** The first slice's key still has to move to custom-openai (done lazily, retried). */
+  migrateKeys?: boolean;
 }
 
 export const DEFAULT_SETTINGS: AiSettings = { provider: "anthropic", models: {}, baseUrls: {}, lastSession: null };
@@ -93,6 +95,7 @@ export function migrate(value: AiSettings & { baseUrl?: string }): AiSettings | 
     models,
     baseUrls,
     lastSession: value.lastSession ?? null,
+    migrateKeys: true,
   };
 }
 

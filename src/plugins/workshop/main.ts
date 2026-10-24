@@ -40,18 +40,19 @@ export default async function activate(plugin: Plugin) {
   const providers = loadProviders(import.meta.dirname);
   const sessions = new Sessions(plugin.dataDirectory);
   const settings = plugin.storage.json<AiSettings>("settings", { defaults: DEFAULT_SETTINGS, validate: validSettings });
+  // Settings migrate now (a file); keys only later (see moveLegacyKeys).
   const migrated = migrate(settings.value);
-  if (migrated) {
-    settings.save(migrated);
-    // The first slice's key moves to the custom OpenAI entry; the old entry goes.
-    for (const old of LEGACY_COMPAT) {
-      const key = await plugin.secrets.get(secretName(old));
-      if (!key) continue;
-      if (!(await plugin.secrets.get(secretName("custom-openai")))) await plugin.secrets.set(secretName("custom-openai"), key);
-      await plugin.secrets.delete(secretName(old));
-    }
-  }
-  const keys = new Map<string, string>(); // provider → key, read from the keychain on demand
+  if (migrated) settings.save(migrated);
+  /**
+   * provider → key, read from the keychain once, on demand. Never during
+   * activation: a read can wait on the system's authorization dialog
+   * (macOS asks again after the player was re-signed), and activation must
+   * not wait on the user.
+   */
+  const keys = new Map<string, string>();
+  const reading = new Map<string, Promise<string>>();
+  /** The keychain read failed or was denied (cleared by the next attempt or a save). */
+  let keyError = "";
   const runs = new Map<string, Run>(); // session id → its worker
   const chats = new Map<string, Chat>(); // session id → rows (loaded once)
 
@@ -67,11 +68,52 @@ export default async function activate(plugin: Plugin) {
 
   const provider = () => providers.find((p) => p.id === settings.value.provider) ?? providers[0];
   const model = () => settings.value.models[provider().id] || provider().defaultModel;
-  const keyFor = async (id: string) => {
-    if (!keys.has(id)) keys.set(id, (await plugin.secrets.get(secretName(id))) ?? "");
-    return keys.get(id)!;
+  /**
+   * The first slice kept the custom endpoint's key under another name: move
+   * it once. Idempotent and retried until it succeeds (settings.migrateKeys).
+   */
+  let moving: Promise<void> | undefined;
+  const moveLegacyKeys = () =>
+    (moving ??= (async () => {
+      if (!settings.value.migrateKeys) return;
+      for (const old of LEGACY_COMPAT) {
+        const key = await plugin.secrets.get(secretName(old));
+        if (!key) continue;
+        if (!(await plugin.secrets.get(secretName("custom-openai")))) await plugin.secrets.set(secretName("custom-openai"), key);
+        await plugin.secrets.delete(secretName(old));
+        keys.delete("custom-openai");
+      }
+      settings.save({ ...settings.value, migrateKeys: false });
+    })().finally(() => (moving = undefined)));
+  /** The key of `id`, read once; concurrent callers share the read. */
+  const keyFor = (id: string): Promise<string> => {
+    if (keys.has(id)) return Promise.resolve(keys.get(id)!);
+    let pending = reading.get(id);
+    if (!pending) {
+      pending = (async () => {
+        try {
+          await moveLegacyKeys();
+          const key = (await plugin.secrets.get(secretName(id))) ?? "";
+          keys.set(id, key);
+          keyError = "";
+          return key;
+        } catch (error) {
+          keyError = `无法读取钥匙串中的 key，请在设置中重新保存。（${(error as Error).message}）`;
+          throw error;
+        } finally {
+          reading.delete(id);
+          plugin.update();
+        }
+      })();
+      reading.set(id, pending);
+      plugin.update();
+    }
+    return pending;
   };
-  await keyFor(provider().id);
+  /** Starts reading the current provider's key without waiting (window shown, provider chosen). */
+  const loadKey = () => {
+    keyFor(provider().id).catch(() => {}); // shown through keyError
+  };
   const configured = () => {
     const p = provider();
     if (!model()) return false;
@@ -80,6 +122,14 @@ export default async function activate(plugin: Plugin) {
     return !!keys.get(p.id);
   };
   const running = () => [...runs.values()].find((r) => r.running);
+  /** The line above the conversation: keychain state or missing setup. */
+  const banner = () => {
+    const p = provider();
+    if (!p.api && reading.has(p.id)) return "正在读取钥匙串中的 API key…（系统可能会请求授权）";
+    if (keyError && !p.api) return keyError;
+    if (!configured()) return !p.api && !keys.has(p.id) ? "尚未读取 API key。" : "尚未配置服务商：请先在设置中选择服务商并保存 API key。";
+    return "";
+  };
 
   /** Throttled window refresh for events that arrive outside SDK handlers. */
   let refresh: ReturnType<typeof setTimeout> | undefined;
@@ -125,6 +175,7 @@ export default async function activate(plugin: Plugin) {
       sessions: sessionRows(),
       rows: shown.rows.map((row: Row) => ({ ...row })),
       configured: configured(),
+      banner: banner(),
       busy,
       blocked: !busy && !!running(),
       sessionTitle: active?.title ?? "新对话",
@@ -161,7 +212,9 @@ export default async function activate(plugin: Plugin) {
 
   const startWorker = async (meta: Meta, chat: Chat): Promise<Run> => {
     const p = provider();
-    const key = await keyFor(p.id);
+    // Built-in providers: configured() already has the key in memory. A
+    // custom endpoint may run without one when the keychain refuses.
+    const key = await keyFor(p.id).catch(() => "");
     const directory = sessions.directory(meta.id);
     const run: Run = {
       meta,
@@ -292,7 +345,15 @@ export default async function activate(plugin: Plugin) {
       custom: !!p.api,
       baseUrl: settings.value.baseUrls[p.id] ?? "",
       keyText,
-      keyState: p.api && !key ? "未保存（本地服务可以不填）" : masked(key),
+      keyState: reading.has(p.id)
+        ? "正在读取钥匙串…"
+        : !keys.has(p.id)
+          ? keyError
+            ? "无法读取钥匙串中的 key，请重新保存"
+            : "尚未读取（打开 AI 窗口时读取）"
+          : p.api && !key
+            ? "未保存（本地服务可以不填）"
+            : masked(key),
       hasKey: !!key,
       models,
       modelIndex: models.indexOf(model()),
@@ -313,7 +374,8 @@ export default async function activate(plugin: Plugin) {
     if (!p) return;
     settings.save({ ...settings.value, provider: p.id });
     keyText = "";
-    await keyFor(p.id);
+    keyError = "";
+    loadKey();
     say("");
     changed();
   });
@@ -328,6 +390,7 @@ export default async function activate(plugin: Plugin) {
       return;
     }
     keys.set(p.id, key);
+    keyError = "";
     keyText = "";
     page.set({ keyText: "" });
     say(`${p.label} 的 key 已保存。`);
@@ -336,7 +399,12 @@ export default async function activate(plugin: Plugin) {
   });
   page.on("deleteKey", async () => {
     const p = provider();
-    await plugin.secrets.delete(secretName(p.id));
+    try {
+      await plugin.secrets.delete(secretName(p.id));
+    } catch (error) {
+      say(`没能从钥匙串删除：${(error as Error).message}`, true);
+      return;
+    }
     keys.set(p.id, "");
     say(`${p.label} 的 key 已删除。`);
     changed();
@@ -373,7 +441,7 @@ export default async function activate(plugin: Plugin) {
     listing = true;
     plugin.update();
     try {
-      const models = await listModels(p, base, await keyFor(p.id));
+      const models = await listModels(p, base, await keyFor(p.id).catch(() => ""));
       listed.set(p.id, models);
       if (!models.includes(model())) settings.save({ ...settings.value, models: { ...settings.value.models, [p.id]: models[0] } });
       say(`获取到 ${models.length} 个模型。`);
@@ -408,6 +476,9 @@ export default async function activate(plugin: Plugin) {
     path: ["Vestra Player AI…"],
     order: 820,
     group: "windows",
-    run: () => window.show(),
+    run: () => {
+      loadKey(); // not awaited: a keychain dialog must not hold the window
+      return window.show();
+    },
   });
 }
