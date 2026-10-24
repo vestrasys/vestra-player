@@ -1,17 +1,16 @@
 import type { BindingInfo, BindingRef, Plugin } from "@vestra-player/sdk";
-import { commandText, isMouse, label, refKey } from "./keys.ts";
+import { commandText, isMouse, label, type Message, message, refKey } from "./keys.ts";
 import { timing } from "./store.ts";
 
 const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((each) => b.includes(each));
 
 type Orphan = { ref: BindingRef; inputs: string[] };
 
-/** User-facing text for a refused write. */
-export function failureText(error: unknown): string {
+/** The message for a refused write (shown as a warning). */
+export function failure(error: unknown): Message {
   const code = (error as { code?: string }).code;
-  if (code === "missing") return "该命令已不存在";
-  if (code === "invalid") return "无法使用此按键";
-  return `修改失败：${(error as Error).message}`;
+  if (code === "missing" || code === "invalid") return message(code, { warn: true });
+  return message("failed", { text: (error as Error).message, warn: true });
 }
 
 /**

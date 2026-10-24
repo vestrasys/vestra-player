@@ -1,6 +1,6 @@
 {
   "id": "vestra.hotkeys",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -10,14 +10,14 @@
     "ui.dialog",
     "bindings.manage"
   ],
-  "name": "快捷键设置",
+  "name": "Shortcut Settings",
   "author": "Vestra Player",
-  "punchline": "查看和改绑快捷键与鼠标动作",
-  "description": "在选项窗口的「快捷键与鼠标」分类里列出播放器和所有插件的命令，按命令或按键搜索，改绑、解绑、恢复默认，检查冲突，导出列表；可为视频区的鼠标点击和滚轮指定命令，也可一键忽略全部默认快捷键。\n入口在右键菜单「设置 ▶ 快捷键… / 鼠标… / 忽略默认快捷键」。",
+  "punchline": "View and rebind keyboard shortcuts and mouse actions",
+  "description": "Lists the commands of the player and of every plugin in the Keys and Mouse category of the options window: search by command or key, rebind, unbind, restore defaults, check conflicts and export the list. Assigns commands to mouse clicks and the wheel on the video, and can ignore every default shortcut at once.\nOpen it from the context menu: Settings ▸ Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts.",
   "tags": [
-    "设置",
-    "快捷键",
-    "鼠标"
+    "settings",
+    "shortcuts",
+    "mouse"
   ],
-  "minPlayerVersion": "0.4.0"
+  "minPlayerVersion": "0.4.3"
 }

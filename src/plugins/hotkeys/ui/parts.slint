@@ -1,9 +1,99 @@
 // Compact controls shared by the two hotkeys windows (compact geometry:
 // 11px text, 21px controls, 18px rows). std-widgets' fluent ComboBox has a
 // 160px minimum, so the drop-down here is our own.
+// Every text of the pages is here or in the pages as @tr (English source;
+// locales/<lang>.po translate it). The plugin passes data: codes, command
+// paths and key labels (the player's), plugin ids.
 import { ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
+
+// An input as shown: a mouse input (`mouse` >= 0, the index in Words.mouse)
+// after its modifiers (`prefix`, `Ctrl+`), or a key label (`text`).
+export struct Input {
+    prefix: string,
+    mouse: int,
+    text: string,
+}
+
+// `input` of the command is taken by `by` (a command path).
+export struct Conflict {
+    input: Input,
+    by: string,
+}
+
+// A line under the controls: `kind` picks the sentence, the other fields
+// are its data. `warn` draws it in the accent colour.
+export struct Message {
+    kind: string,
+    text: string,
+    other: string,
+    n: int,
+    input: Input,
+    conflicts: [Conflict],
+    warn: bool,
+}
+
+export global Words {
+    // The mouse inputs of the mouse page, in its order (keys.ts MOUSE).
+    public pure function mouse(index: int) -> string {
+        [
+            @tr("Left click"),
+            @tr("Left double-click"),
+            @tr("Left double-click (left half)"),
+            @tr("Left double-click (right half)"),
+            @tr("Middle click"),
+            @tr("Back button"),
+            @tr("Forward button"),
+            @tr("Wheel up"),
+            @tr("Wheel down"),
+            @tr("Wheel left"),
+            @tr("Wheel right"),
+        ][index]
+    }
+    public pure function input(input: Input) -> string {
+        input.mouse >= 0 ? input.prefix + mouse(input.mouse) : input.text
+    }
+    // Source filter entries: the player, plugins not loaded, all, or a plugin id.
+    public pure function source(value: string) -> string {
+        value == "*all" ? @tr("All sources")
+            : value == "host" ? @tr("Player")
+            : value == "*orphans" ? @tr("Plugins not loaded") : value
+    }
+    pure function conflict(list: [Conflict], index: int) -> string {
+        index < list.length ? @tr("{0} is taken by “{1}” and has no effect", input(list[index].input), list[index].by) : ""
+    }
+    pure function join(first: string, next: string) -> string {
+        next == "" ? first : @tr("{0}; {1}", first, next)
+    }
+    // Up to 8 conflicts of one command (the most bindings a command keeps).
+    public pure function conflicts(list: [Conflict]) -> string {
+        join(join(join(join(join(join(join(conflict(list, 0), conflict(list, 1)), conflict(list, 2)), conflict(list, 3)), conflict(list, 4)), conflict(list, 5)), conflict(list, 6)), conflict(list, 7))
+    }
+    public pure function message(m: Message) -> string {
+        m.kind == "missing" ? @tr("The command no longer exists")
+            : m.kind == "invalid" ? @tr("This key cannot be used")
+            : m.kind == "unrecognized" ? @tr("This key is not recognized")
+            : m.kind == "failed" ? @tr("Change failed: {}", m.text)
+            : m.kind == "conflict" ? conflicts(m.conflicts)
+            : m.kind == "capture" ? @tr("Press Esc to cancel; to bind Esc itself, click “Esc” next to the box")
+            : m.kind == "already" ? @tr("{} is already a shortcut of this command", input(m.input))
+            : m.kind == "max" ? @tr("At most {} bindings per command", m.n)
+            : m.kind == "panel-use" ? @tr("This key does something else while the “{0}” panel has focus: {1}", m.other, m.text)
+            : m.kind == "player-panel-use" ? @tr("This key does something else while a panel of the player has focus: {}", m.text)
+            : m.kind == "outside-use" ? @tr("This key does something else outside the panel: {}", m.text)
+            : m.kind == "updated" ? @tr("Updated: {}", m.text)
+            : m.kind == "updated-none" ? @tr("Updated: (none)")
+            : m.kind == "mouse-updated" ? @tr("Updated: {0} = {1}", input(m.input), m.text)
+            : m.kind == "mouse-updated-none" ? @tr("Updated: {} = (none)", input(m.input))
+            : m.kind == "deleted" ? @tr("Deleted the changes of {}", m.text)
+            : m.kind == "confirm-failed" ? @tr("Cannot confirm: {}", m.text)
+            : m.kind == "restored" ? @tr("All defaults restored")
+            : m.kind == "export-failed" ? @tr("Cannot export: {}", m.text)
+            : m.kind == "exported" ? @tr("Exported {n} command" | "Exported {n} commands" % m.n)
+            : ""
+    }
+}
 
 export component Label inherits Text {
     color: Theme.text;
@@ -55,11 +145,16 @@ export component Choice {
     in-out property <int> current-index;
     in property <bool> enabled: true;
     in property <length> popup-height: 200px;
+    // The model holds source filter values (Words.source shows them).
+    in property <bool> sources;
     callback selected(int);
     height: 21px;
     accessible-role: combobox;
     accessible-enabled: root.enabled;
-    accessible-value: root.current-index >= 0 && root.current-index < root.model.length ? root.model[root.current-index] : "";
+    pure function shown(value: string) -> string {
+        root.sources ? Words.source(value) : value
+    }
+    accessible-value: root.current-index >= 0 && root.current-index < root.model.length ? root.shown(root.model[root.current-index]) : "";
     Rectangle {
         border-radius: Theme.radius-control;
         background: !root.enabled ? Theme.button-disabled
@@ -72,7 +167,7 @@ export component Choice {
         spacing: 2px;
         Text {
             horizontal-stretch: 1;
-            text: root.current-index >= 0 && root.current-index < root.model.length ? root.model[root.current-index] : "";
+            text: root.current-index >= 0 && root.current-index < root.model.length ? root.shown(root.model[root.current-index]) : "";
             color: root.enabled ? Theme.text-list : Theme.text-dim;
             font-size: Theme.font-body;
             vertical-alignment: center;
@@ -104,7 +199,7 @@ export component Choice {
                 width: parent.width - 2px;
                 height: parent.height - 2px;
                 for name[index] in root.model: ChoiceItem {
-                    text: name;
+                    text: root.shown(name);
                     selected: index == root.current-index;
                     picked => {
                         root.current-index = index;

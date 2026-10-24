@@ -2,68 +2,70 @@ import { renameSync, writeFileSync } from "node:fs";
 import type { BindingInfo, BindingRef, JsonStore, Plugin } from "@vestra-player/sdk";
 import { exportCsv, exportText } from "./export.ts";
 import type { IgnoreDefaults } from "./ignore.ts";
+import type { Osd } from "./main.ts";
 import {
+  type Conflict,
   commandText,
   fromSlintKey,
+  inputOf,
   isMouse,
   label,
+  type Message,
+  message,
   refKey,
+  STATE,
   sameKey,
-  sourceText,
 } from "./keys.ts";
-import { type BindingsModel, failureText } from "./model.ts";
+import { type BindingsModel, failure } from "./model.ts";
 import { jsonStore, PREFS, type Prefs, readPrefs } from "./store.ts";
 
-/** Status filter choices (J01). */
-export const STATUS = ["全部", "已修改", "有冲突", "未绑定"];
+/** Status filter choices (J01; ui/keys.slint names them): all, changed, conflicts, unbound. */
 const ORPHANS = "*orphans";
 /** J01: at most this many bindings per command. */
 export const MAX_BINDINGS = 8;
 
-/** One row of the page's list (命令 | 快捷键 | 状态). */
+/** One row of the page's list (Command | Shortcut | Status). */
 type Row = {
   key: string;
   command: string;
+  /** Key labels (the player's), `, `-separated; an ignored command's defaults (shown in brackets). */
   keys: string;
-  status: string;
-  tone: number;
+  state: number;
   selected: boolean;
-  tip: string;
+  conflicts: Conflict[];
 };
 /** One line of the table, for rows, the edit area and the exported list. */
 export type Line = Omit<Row, "selected"> & {
-  scope: string;
+  /** `""` for orphans. */
+  scope: BindingInfo["scope"] | "";
+  /** The plugin id, `host` for the player's own commands. */
   source: string;
   info: BindingInfo | null;
   ref: BindingRef;
   inputs: string[];
+  /** Sort text of the keys column (an ignored command's defaults in brackets, as shown). */
+  sortKeys: string;
 };
 
-/** The J01 page in the options window (category 快捷键与鼠标). */
+/** The J01 page in the options window (category Keys and Mouse). */
 export const KEYS_PAGE = "hotkeys.keyboard";
 
-/** 已修改 / 冲突 / 已忽略 / 默认 for one command (J01, J03). */
+/** Changed / conflict / ignored / default for one command (J01, J03). */
 export function lineOf(info: BindingInfo, ignored: boolean, model: BindingsModel): Line {
   const keyboard = info.labels.filter((_, i) => !isMouse(info.current[i] ?? ""));
   let keys = keyboard.join(", ");
-  let status = "默认";
-  let tone = 0;
-  let tip = "";
+  let sortKeys = keys;
+  let state: number = STATE.default;
+  let conflicts: Conflict[] = [];
   if (ignored) {
-    status = "已忽略";
-    tone = 3;
-    const defaults = info.defaults.filter((input) => !isMouse(input)).map(label);
-    keys = defaults.length ? `（${defaults.join(", ")}）` : "";
-    tip = "默认快捷键已忽略（设置 ▶ 忽略默认快捷键）";
+    state = STATE.ignored;
+    keys = info.defaults.filter((input) => !isMouse(input)).map(label).join(", ");
+    sortKeys = keys && `（${keys}）`;
   } else if (info.shadowed.length) {
-    status = "冲突";
-    tone = 2;
-    tip = info.shadowed
-      .map((s) => `${model.labelOf(s.input)} 被「${model.text(s.by)}」占用，未生效`)
-      .join("；");
+    state = STATE.conflict;
+    conflicts = info.shadowed.map((s) => ({ input: inputOf(s.input, model.labelOf(s.input)), by: model.text(s.by) }));
   } else if (info.overridden) {
-    status = "已修改";
-    tone = 1;
+    state = STATE.changed;
   }
   return {
     key: refKey(info),
@@ -72,36 +74,37 @@ export function lineOf(info: BindingInfo, ignored: boolean, model: BindingsModel
     inputs: info.current,
     command: commandText(info),
     keys,
-    scope: info.scope === "panel" ? "面板内" : "全局",
-    source: sourceText(info.plugin),
-    status,
-    tone,
-    tip,
+    sortKeys,
+    scope: info.scope,
+    source: info.plugin,
+    state,
+    conflicts,
   };
 }
 
 /**
- * 快捷键 (J01), a page of the options window: every command of the binding table with its effective
+ * Keyboard Shortcuts (J01), a page of the options window: every command of the binding table with its effective
  * keys, filtered and sorted; the selected command's bindings as tags that
- * can be removed, a capture box to add one (conflicts ask 替换 / 取消),
- * 恢复默认 / 全部解绑, and 恢复全部默认… / 导出列表… / 忽略默认快捷键.
+ * can be removed, a capture box to add one (conflicts ask Replace / Cancel),
+ * Restore Default / Unbind All, and Restore All Defaults… / Export List… /
+ * Ignore default shortcuts. Texts are in ui/keys.slint; this passes data.
  * The list follows `bindings.onChange`; the selection stays by command.
  */
 export class KeysPage {
   readonly #plugin: Plugin;
   readonly #model: BindingsModel;
   readonly #ignore: IgnoreDefaults;
-  readonly #osd: (text: string) => void;
+  readonly #osd: Osd;
   readonly #page;
   readonly #prefs: JsonStore<Prefs>;
   #search = "";
   #selected: string | null = null;
   #capturing = false;
   #pending: { input: string; owners: BindingInfo[]; target: BindingRef } | null = null;
-  #message = { text: "", warn: false };
+  #message = message();
   #rows: { key: string; rows: Row[]; lines: Line[] } = { key: "", rows: [], lines: [] };
 
-  constructor(plugin: Plugin, model: BindingsModel, ignore: IgnoreDefaults, osd: (text: string) => void) {
+  constructor(plugin: Plugin, model: BindingsModel, ignore: IgnoreDefaults, osd: Osd) {
     this.#plugin = plugin;
     this.#model = model;
     this.#ignore = ignore;
@@ -110,7 +113,7 @@ export class KeysPage {
     const page = (this.#page = plugin.settings.page("ui/keys.slint", {
       id: KEYS_PAGE,
       category: "input",
-      title: "快捷键",
+      title: "Keyboard Shortcuts",
       order: 10,
     }));
     page.on("search", (text: string) => {
@@ -137,7 +140,7 @@ export class KeysPage {
     page.on("replace", () => this.#replace());
     page.on("cancelReplace", () => {
       this.#pending = null;
-      this.#say("");
+      this.#say();
     });
     page.on("resetAll", () => this.#resetAll());
     page.on("export", () => this.#export());
@@ -153,9 +156,9 @@ export class KeysPage {
     });
   }
 
-  /** 设置 ▶ 快捷键…: the options window on this page, with a fresh list. */
+  /** Settings ▸ Keyboard Shortcuts…: the options window on this page, with a fresh list. */
   async show() {
-    await this.#model.reload().catch((error) => this.#say(failureText(error), true));
+    await this.#model.reload().catch((error) => this.#say(failure(error)));
     await this.#plugin.settings.show(KEYS_PAGE);
   }
 
@@ -166,16 +169,20 @@ export class KeysPage {
     this.#prefs.save({ ...this.#prefsValue(), ...patch });
   }
 
-  /** Source filter: all, 宿主, each plugin with commands, 未加载的插件. */
+  /**
+   * Source filter: all, the player, each plugin with commands, plugins not
+   * loaded. `title` is what the Slint drop-down gets: plugin ids, and codes
+   * it shows in words (ui/parts.slint Words.source).
+   */
   #sources(): { title: string; value: string }[] {
     const plugins = [...new Set(this.#model.commands.map((c) => c.plugin))]
       .filter((id) => id !== "host")
       .sort();
     return [
-      { title: "全部来源", value: "" },
-      { title: "宿主", value: "host" },
+      { title: "*all", value: "" },
+      { title: "host", value: "host" },
       ...plugins.map((id) => ({ title: id, value: id })),
-      { title: "未加载的插件", value: ORPHANS },
+      { title: ORPHANS, value: ORPHANS },
     ];
   }
 
@@ -190,11 +197,11 @@ export class KeysPage {
         inputs: o.inputs,
         command: refKey(o.ref),
         keys: o.inputs.filter((i) => !isMouse(i)).map(label).join(", "),
-        scope: "—",
-        source: sourceText(o.ref.plugin),
-        status: "未加载",
-        tone: 3,
-        tip: "插件未加载；它回来后这条修改照常生效",
+        sortKeys: o.inputs.filter((i) => !isMouse(i)).map(label).join(", "),
+        scope: "",
+        source: o.ref.plugin,
+        state: STATE.orphan,
+        conflicts: [],
       }),
     );
     return [...lines, ...orphans];
@@ -218,8 +225,8 @@ export class KeysPage {
     const lines = this.lines()
       .filter((line) => (prefs.source === ORPHANS ? !line.info : !!line.info && (!prefs.source || line.ref.plugin === prefs.source)))
       .filter((line) => {
-        if (prefs.status === 1) return line.status === "已修改" || line.status === "已忽略";
-        if (prefs.status === 2) return line.status === "冲突";
+        if (prefs.status === 1) return line.state === STATE.changed || line.state === STATE.ignored;
+        if (prefs.status === 2) return line.state === STATE.conflict;
         if (prefs.status === 3) return line.inputs.length === 0;
         return true;
       })
@@ -230,20 +237,19 @@ export class KeysPage {
           line.keys.toLowerCase().includes(search) ||
           line.inputs.some((input) => input.toLowerCase().includes(search)),
       );
-    const by = prefs.sort === "keys" ? (line: Line) => line.keys : (line: Line) => line.command;
+    const by = prefs.sort === "keys" ? (line: Line) => line.sortKeys : (line: Line) => line.command;
     lines.sort((a, b) => {
       // Unbound commands go last when sorting by keys.
       if (prefs.sort === "keys" && !a.keys !== !b.keys) return a.keys ? -1 : 1;
       return by(a).localeCompare(by(b), "zh-Hans-CN") || a.command.localeCompare(b.command, "zh-Hans-CN");
     });
     if (prefs.descending) lines.reverse();
-    const rows = lines.map(({ key, command, keys, status, tone, tip }) => ({
+    const rows = lines.map(({ key, command, keys, state, conflicts }) => ({
       key,
       command,
       keys,
-      status,
-      tone,
-      tip,
+      state,
+      conflicts,
       selected: key === this.#selected,
     }));
     this.#rows = { key, rows, lines };
@@ -266,8 +272,7 @@ export class KeysPage {
     const info = line?.info ?? null;
     return {
       rows,
-      emptyText: this.#model.commands.length === 0 ? "正在读取…" : "没有符合条件的命令",
-      statusModel: STATUS,
+      loading: this.#model.commands.length === 0,
       statusIndex: prefs.status,
       sourceModel: sources.map((s) => s.title),
       sourceIndex: Math.max(
@@ -277,27 +282,25 @@ export class KeysPage {
       sort: prefs.sort,
       descending: prefs.descending,
       hasSelection: !!line,
-      editTitle: line
-        ? info
-          ? `${line.command}（${line.source}${info.scope === "panel" ? " · 面板内" : ""}）`
-          : `${line.command}（未加载）`
-        : "",
-      tags: info ? info.current.map((input, i) => ({ input, label: isMouse(input) ? label(input) : (info.labels[i] ?? label(input)) })) : [],
+      editCommand: line?.command ?? "",
+      editSource: line?.source ?? "",
+      editPanel: info?.scope === "panel",
+      editLoaded: !!info,
+      tags: info ? info.current.map((input, i) => ({ input, label: inputOf(input, info.labels[i]) })) : [],
       canAdd: !!info,
       canReset: !!line && (!info || info.overridden),
-      resetText: info || !line ? "恢复默认" : "删除此条",
+      orphan: !!line && !info,
       canUnbind: !!info && info.current.length > 0,
       capturing: this.#capturing,
       pending: !!this.#pending,
-      pendingText: this.#pendingText(),
-      message: this.#message.text,
-      messageWarn: this.#message.warn,
+      ...this.#pendingText(),
+      message: this.#message,
       ignore: this.#ignore.enabled,
     };
   }
 
-  #say(text: string, warn = false) {
-    this.#message = { text, warn };
+  #say(next: Message = message()) {
+    this.#message = next;
   }
 
   #select(key: string) {
@@ -306,14 +309,14 @@ export class KeysPage {
     this.#capturing = false;
     this.#pending = null;
     const line = this.#selectedLine();
-    this.#say(line?.tip && line.tone === 2 ? line.tip : "");
+    this.#say(line?.state === STATE.conflict ? message("conflict", { conflicts: line.conflicts }) : undefined);
   }
 
   #startCapture() {
     if (!this.#selectedLine()?.info) return;
     this.#pending = null;
     this.#capturing = true;
-    this.#say("按 Esc 取消；要绑定 Esc 本身，点旁边的「Esc」");
+    this.#say(message("capture"));
   }
 
   #key(event: Parameters<typeof fromSlintKey>[0]) {
@@ -322,12 +325,12 @@ export class KeysPage {
     if (!result) return; // a modifier alone: keep waiting
     if ("cancel" in result) {
       this.#capturing = false;
-      this.#say("");
+      this.#say();
       return;
     }
     if ("error" in result) {
       this.#capturing = false;
-      this.#say(result.error, true);
+      this.#say(message(result.error, { warn: true }));
       return;
     }
     return this.#captured(result.input);
@@ -338,14 +341,14 @@ export class KeysPage {
     this.#capturing = false;
     const info = this.#selectedLine()?.info;
     if (!info) return;
-    if (info.current.includes(input)) return this.#say(`${this.#model.labelOf(input)} 已经是这条命令的快捷键`);
-    if (info.current.length >= MAX_BINDINGS) return this.#say(`每条命令最多 ${MAX_BINDINGS} 个绑定`, true);
+    if (info.current.includes(input)) return this.#say(message("already", { input: inputOf(input, this.#model.labelOf(input)) }));
+    if (info.current.length >= MAX_BINDINGS) return this.#say(message("max", { n: MAX_BINDINGS, warn: true }));
     const owners = this.#model.commands.filter(
       (c) => refKey(c) !== refKey(info) && c.scope === info.scope && c.current.some((each) => sameKey(each, input)),
     );
     if (owners.length) {
       this.#pending = { input, owners, target: { plugin: info.plugin, command: info.command } };
-      this.#say("");
+      this.#say();
       return;
     }
     await this.#apply(input, [], info);
@@ -353,23 +356,23 @@ export class KeysPage {
     const other = this.#model.commands.find(
       (c) => c.scope !== info.scope && c.current.some((each) => sameKey(each, input)),
     );
-    if (other && !this.#message.warn)
-      this.#say(
-        info.scope === "global"
-          ? `此键在「${sourceText(other.plugin)}」面板获得焦点时另有用途：${commandText(other)}`
-          : `此键在面板外另有用途：${commandText(other)}`,
-      );
+    if (other && !this.#message.warn) {
+      const text = commandText(other);
+      if (info.scope !== "global") this.#say(message("outside-use", { text }));
+      else if (other.plugin === "host") this.#say(message("player-panel-use", { text }));
+      else this.#say(message("panel-use", { text, other: other.plugin }));
+    }
   }
 
+  /** The question while a captured key is in use (ui/keys.slint words it). */
   #pendingText() {
     const pending = this.#pending;
-    if (!pending) return "";
-    const target = this.#model.text(pending.target);
+    if (!pending) return { pendingKind: "", pendingKey: "", pendingCommand: "" };
     if (pending.owners.some((o) => o.plugin === "host" && o.command === "quit"))
-      return `⌘Q 是退出 Vestra Player 的默认快捷键，确定改为「${target}」？`;
+      return { pendingKind: "quit", pendingKey: "", pendingCommand: this.#model.text(pending.target) };
     const first =
       pending.owners.find((o) => !o.shadowed.some((s) => sameKey(s.input, pending.input))) ?? pending.owners[0]!;
-    return `${this.#model.labelOf(pending.input)} 已用于「${commandText(first)}」`;
+    return { pendingKind: "used", pendingKey: this.#model.labelOf(pending.input), pendingCommand: commandText(first) };
   }
 
   async #replace() {
@@ -379,7 +382,7 @@ export class KeysPage {
     // The owners and the target as the list knows them now.
     const owners = pending.owners.map((o) => this.#model.find(o)).filter((o): o is BindingInfo => !!o);
     const target = this.#model.find(pending.target);
-    if (!target) return this.#say("该命令已不存在", true);
+    if (!target) return this.#say(message("missing", { warn: true }));
     await this.#apply(pending.input, owners, target);
   }
 
@@ -389,16 +392,21 @@ export class KeysPage {
       await this.#model.move(input, owners, target, (each) => sameKey(each, input));
       this.#updated(target);
     } catch (error) {
-      this.#say(failureText(error), true);
+      this.#say(failure(error));
     }
   }
 
   #updated(ref: BindingRef) {
     const info = this.#model.find(ref);
     if (!info) return;
-    const keys = info.labels.join(", ") || "（无）";
-    this.#say(`已更新：${keys}`);
-    this.#osd(`快捷键已更新：${commandText(info)} = ${keys}`);
+    const keys = info.labels.join(", ");
+    if (keys) {
+      this.#say(message("updated", { text: keys }));
+      this.#osd(this.#plugin.osd.show("Shortcut updated: {0} = {1}", [commandText(info), keys]));
+    } else {
+      this.#say(message("updated-none"));
+      this.#osd(this.#plugin.osd.show("Shortcut updated: {} = (none)", [commandText(info)]));
+    }
   }
 
   async #write(action: () => Promise<void>, ref: BindingRef) {
@@ -407,7 +415,7 @@ export class KeysPage {
       await this.#model.reload();
       this.#updated(ref);
     } catch (error) {
-      this.#say(failureText(error), true);
+      this.#say(failure(error));
       await this.#model.reload().catch(() => {});
     }
   }
@@ -424,14 +432,14 @@ export class KeysPage {
     if (!line) return;
     this.#pending = null;
     if (!line.info) {
-      // 未加载的插件: drop its override for good.
+      // A plugin not loaded: drop its override for good.
       try {
         await this.#model.reset(line.ref);
         await this.#model.reload();
         this.#selected = null;
-        this.#say(`已删除 ${refKey(line.ref)} 的修改`);
+        this.#say(message("deleted", { text: refKey(line.ref) }));
       } catch (error) {
-        this.#say(failureText(error), true);
+        this.#say(failure(error));
       }
       return;
     }
@@ -449,33 +457,34 @@ export class KeysPage {
     let answer;
     try {
       answer = await this.#plugin.dialogs.confirm({
-        message: "恢复全部默认快捷键？",
-        detail: "将清除你对所有命令（包括未加载插件）的快捷键与鼠标动作修改。",
-        confirm: "恢复全部默认",
+        message: "Restore all default shortcuts?",
+        detail: "This clears your changes to the shortcuts and mouse actions of every command, including those of plugins that are not loaded.",
+        confirm: "Restore All Defaults",
         destructive: true,
       });
     } catch (error) {
-      return this.#say(`无法确认：${(error as Error).message}`, true);
+      return this.#say(message("confirm-failed", { text: (error as Error).message, warn: true }));
     }
     if (!answer.confirmed) return;
     this.#pending = null;
     try {
       await this.#model.reset();
       await this.#model.reload();
-      this.#say("已恢复全部默认");
-      this.#osd("快捷键已恢复默认");
+      this.#say(message("restored"));
+      this.#osd(this.#plugin.osd.show("Shortcuts restored to defaults"));
     } catch (error) {
-      this.#say(failureText(error), true);
+      this.#say(failure(error));
     }
   }
 
-  /** 导出列表…: the full table as CSV (`.csv`) or aligned text. */
+  /** Export List…: the full table as CSV (`.csv`) or aligned text. */
   async #export() {
     let path: string | null;
     try {
-      path = await this.#plugin.dialogs.saveFile({ title: "导出快捷键列表", fileName: "Vestra Player 快捷键.csv" });
+      // i18n: needs r2-api (a translatable fileName)
+      path = await this.#plugin.dialogs.saveFile({ title: "Export Shortcut List", fileName: "Vestra Player Shortcuts.csv" });
     } catch (error) {
-      return this.#say(`无法导出：${(error as Error).message}`, true);
+      return this.#say(message("export-failed", { text: (error as Error).message, warn: true }));
     }
     if (!path) return;
     const lines = this.lines()
@@ -486,9 +495,9 @@ export class KeysPage {
       const temp = `${path}.tmp-${process.pid}`;
       writeFileSync(temp, text);
       renameSync(temp, path);
-      this.#say(`已导出 ${lines.length} 条命令`);
+      this.#say(message("exported", { n: lines.length }));
     } catch (error) {
-      this.#say(`无法导出：${(error as Error).message}`, true);
+      this.#say(message("export-failed", { text: (error as Error).message, warn: true }));
     }
   }
 }

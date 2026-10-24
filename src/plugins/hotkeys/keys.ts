@@ -10,8 +10,31 @@ import type { BindingInfo, BindingRef } from "@vestra-player/sdk";
 /** What a Slint key event carries (`event.text`, `event.modifiers.*`). */
 export type KeyEvent = { text: string; control: boolean; alt: boolean; shift: boolean; meta: boolean };
 
-/** A captured binding, a key that only ends the capture, or a refusal to show. */
-export type Capture = { input: string } | { cancel: true } | { error: string } | null;
+/** A captured binding, a key that only ends the capture, or a refusal to show (a Message kind). */
+export type Capture = { input: string } | { cancel: true } | { error: "unrecognized" | "invalid" } | null;
+
+/** An input as the pages show it (Slint `Input`): a mouse input after its modifiers, or a key label. */
+export type Input = { prefix: string; mouse: number; text: string };
+/** `input` of a command is taken by `by` (a command path; Slint `Conflict`). */
+export type Conflict = { input: Input; by: string };
+/**
+ * A line under a page's controls (Slint `Message`): `kind` picks the
+ * sentence in ui/parts.slint (Words.message), the rest is its data.
+ */
+export type Message = { kind: string; text: string; other: string; n: number; input: Input; conflicts: Conflict[]; warn: boolean };
+/** Row states of the keyboard page (ui/keys.slint shows their words). */
+export const STATE = { default: 0, changed: 1, conflict: 2, ignored: 3, orphan: 4 } as const;
+const NO_INPUT: Input = { prefix: "", mouse: -1, text: "" };
+export const message = (kind = "", fields: Partial<Message> = {}): Message => ({
+  kind,
+  text: "",
+  other: "",
+  n: 0,
+  input: NO_INPUT,
+  conflicts: [],
+  warn: false,
+  ...fields,
+});
 
 const NAMED: Record<string, string> = {
   " ": "Space",
@@ -97,27 +120,32 @@ export function fromSlintKey(event: KeyEvent): Capture {
     }
     if (/^[a-z]$/i.test(c)) return { input: join({ ctrl, alt, shift }, c.toUpperCase()) };
     if (/^[0-9]$/.test(c)) return { input: join({ ctrl, alt }, c) };
-    if (/^[\p{L}\p{N}\s]$/u.test(c)) return { error: "无法识别此按键" };
+    if (/^[\p{L}\p{N}\s]$/u.test(c)) return { error: "unrecognized" };
     return { input: join({ ctrl }, symbol(c)) };
   }
   if (/^[a-z]$/i.test(c)) return { input: join({ ctrl, shift }, c.toUpperCase()) };
   if (/^[0-9]$/.test(c) || /^[^\p{L}\p{N}\s]$/u.test(c)) return { input: join({ ctrl }, symbol(c)) };
-  return { error: "无法使用此按键" };
+  return { error: "invalid" };
 }
 
-/** Mouse inputs J02 lists, in J02's order (右键 is the menu's). */
+/**
+ * Mouse inputs J02 lists, in J02's order (the right button is the menu's).
+ * The pages show them by index (ui/parts.slint Words.mouse, translated);
+ * `label` is the English name for the mouse OSD message only.
+ */
 export const MOUSE: { input: string; label: string }[] = [
-  { input: "Mouse:LeftClick", label: "左键单击" },
-  { input: "Mouse:LeftDoubleClick", label: "左键双击" },
-  { input: "Mouse:LeftDoubleClick:LeftHalf", label: "左键双击（左半边）" },
-  { input: "Mouse:LeftDoubleClick:RightHalf", label: "左键双击（右半边）" },
-  { input: "Mouse:MiddleClick", label: "中键单击" },
-  { input: "Mouse:X1", label: "侧键后退" },
-  { input: "Mouse:X2", label: "侧键前进" },
-  { input: "Mouse:WheelUp", label: "滚轮上推" },
-  { input: "Mouse:WheelDown", label: "滚轮下推" },
-  { input: "Mouse:WheelLeft", label: "滚轮左推" },
-  { input: "Mouse:WheelRight", label: "滚轮右推" },
+  // i18n: needs r2-api (the labels are nested in the OSD message of the mouse page)
+  { input: "Mouse:LeftClick", label: "Left click" },
+  { input: "Mouse:LeftDoubleClick", label: "Left double-click" },
+  { input: "Mouse:LeftDoubleClick:LeftHalf", label: "Left double-click (left half)" },
+  { input: "Mouse:LeftDoubleClick:RightHalf", label: "Left double-click (right half)" },
+  { input: "Mouse:MiddleClick", label: "Middle click" },
+  { input: "Mouse:X1", label: "Back button" },
+  { input: "Mouse:X2", label: "Forward button" },
+  { input: "Mouse:WheelUp", label: "Wheel up" },
+  { input: "Mouse:WheelDown", label: "Wheel down" },
+  { input: "Mouse:WheelLeft", label: "Wheel left" },
+  { input: "Mouse:WheelRight", label: "Wheel right" },
 ];
 /** J02 modifier choices; `""` is none. */
 export const MODIFIERS = ["", "Ctrl", "Alt", "Shift", "Cmd"] as const;
@@ -143,8 +171,9 @@ const KEY_LABELS: Record<string, string> = {
 /**
  * Display text of an input the player gave no label for (ignored defaults,
  * orphans, the mouse page): the menu's style (`Ctrl+←`, `Num5`), mouse
- * inputs in words (`Ctrl+滚轮上推`). Labels of `current` come from the player
- * in the system's style (`⌘O` on macOS; `BindingsModel.labelOf`).
+ * inputs in (English) words (`Ctrl+Wheel up`; the pages use `inputOf`).
+ * Labels of `current` come from the player in the system's style (`⌘O` on
+ * macOS; `BindingsModel.labelOf`).
  */
 export function label(input: string): string {
   const mouse = input.indexOf("Mouse:");
@@ -156,6 +185,17 @@ export function label(input: string): string {
   const name = parts.pop() ?? "";
   const key = KEY_LABELS[name] ?? (/^Numpad[0-9]$/.test(name) ? `Num${name.slice(6)}` : name);
   return [...parts, key].join("+");
+}
+
+/**
+ * An input for the pages: a listed mouse input as its index (translated in
+ * Slint) after its modifiers, anything else as `shown` or `label`.
+ */
+export function inputOf(input: string, shown?: string): Input {
+  const at = input.indexOf("Mouse:");
+  const mouse = at >= 0 ? MOUSE.findIndex((m) => m.input === input.slice(at)) : -1;
+  if (mouse >= 0) return { prefix: input.slice(0, at), mouse, text: "" };
+  return { prefix: "", mouse: -1, text: shown || label(input) };
 }
 
 /** True for a mouse binding (`Ctrl+Mouse:WheelUp`). */
@@ -176,16 +216,16 @@ export function sameKey(a: string, b: string): boolean {
   return norm(a) === norm(b);
 }
 
-/** `播放 ▶ 跳转 ▶ 前进5秒`, or the title for commands outside the menu. */
+/**
+ * `Playback ▸ Seek ▸ Forward 5 s`, or the title for commands outside the menu.
+ * ▸ (U+25B8) has no emoji presentation; ▶ (U+25B6) showed as a colour emoji.
+ */
 export const commandText = (info: { path: string[] | null; title: string }) =>
-  info.path?.length ? info.path.join(" ▶ ") : info.title;
+  info.path?.length ? info.path.join(" ▸ ") : info.title;
 
 /** `"<plugin>/<command>"`, the overlay's own key. */
 export const refKey = (ref: BindingRef) => `${ref.plugin}/${ref.command}`;
 export const sameRef = (a: BindingRef, b: BindingRef) => a.plugin === b.plugin && a.command === b.command;
-
-/** Source column: the plugin id, 宿主 for the player's own commands. */
-export const sourceText = (plugin: string) => (plugin === "host" ? "宿主" : plugin);
 
 /** The command an input reaches: the claimer that is not shadowed. */
 export function winner(commands: readonly BindingInfo[], input: string, scope: BindingInfo["scope"]) {
@@ -193,5 +233,5 @@ export function winner(commands: readonly BindingInfo[], input: string, scope: B
   return claimers.find((c) => !c.shadowed.some((s) => s.input === input)) ?? claimers[0] ?? null;
 }
 
-/** The player's safe exits, never ignored by J03: 退出 (⌘Q) and 退出全屏 (Esc). */
+/** The player's safe exits, never ignored by J03: Quit (⌘Q) and Exit Fullscreen (Esc). */
 export const exempt = (ref: BindingRef) => ref.plugin === "host" && (ref.command === "quit" || ref.command === "exit-fullscreen");

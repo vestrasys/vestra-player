@@ -1,6 +1,6 @@
-// 鼠标 (J02) as a page of the options window (category 快捷键与鼠标, id
+// Mouse (J02) as a page of the options window (category Keys and Mouse, id
 // hotkeys.mouse): modifier radios, then one 26px row per mouse input:
-// label (110, right aligned) | command picker (250×21) | 默认 (41×18).
+// label (110, right aligned) | command picker (250×21) | Default (41×18).
 // The picker opens a filterable command list over the rows (the list has
 // over a hundred commands, more than a drop-down fits).
 // Width 440: 6 + 110 + 6 + 250 + 6 + 41 + 6 = 425. Height 6 + 21 + 6 + 286
@@ -9,16 +9,19 @@ import { LineEdit, ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
 import { Button } from "@vestra/widgets.slint";
-import { Cell, Label, Radio } from "parts.slint";
+import { Cell, Input, Label, Message, Radio, Words } from "parts.slint";
 
 export struct MouseRow {
-    label: string,
+    // the index in Words.mouse
+    input: int,
+    // the command path, or "" for none
     command: string,
     bound: bool,
     resettable: bool,
 }
 
 export struct PickItem {
+    // "" is (None)
     key: string,
     text: string,
     selected: bool,
@@ -61,7 +64,7 @@ component PickLine inherits Rectangle {
         padding-left: 6px;
         padding-right: 6px;
         Cell {
-            text: root.item.text;
+            text: root.item.key == "" ? @tr("(None)") : root.item.text;
             color: root.item.selected ? Theme.accent : Theme.text-list;
         }
     }
@@ -69,15 +72,16 @@ component PickLine inherits Rectangle {
 }
 
 export global Mouse {
+    // "" is none
     in property <[string]> modifiers;
     in property <int> modifier;
     in property <[MouseRow]> rows;
     in property <bool> picking;
-    in property <string> pick-title;
+    // The input whose command is being picked.
+    in property <Input> pick-input;
     in property <[PickItem]> pick-items;
     in-out property <string> pick-filter;
-    in property <string> message;
-    in property <bool> message-warn;
+    in property <Message> message;
     callback set-modifier(int);
     callback pick(int);
     callback filter(string);
@@ -99,10 +103,10 @@ export component MousePage inherits Rectangle {
         HorizontalLayout {
             height: Theme.button-height;
             spacing: 14px;
-            Label { width: 40px; text: "修饰键"; color: Theme.text-list; }
+            Label { width: 40px; text: @tr("Modifier"); color: Theme.text-list; }
             for name[index] in Mouse.modifiers: Radio {
                 horizontal-stretch: 0;
-                text: name;
+                text: name == "" ? @tr("None") : name;
                 checked: index == Mouse.modifier;
                 clicked => { Mouse.set-modifier(index); }
             }
@@ -117,7 +121,7 @@ export component MousePage inherits Rectangle {
                     spacing: 6px;
                     Label {
                         width: 110px;
-                        text: row.label;
+                        text: Words.mouse(row.input);
                         horizontal-alignment: right;
                         color: Theme.text-list;
                     }
@@ -125,7 +129,7 @@ export component MousePage inherits Rectangle {
                         alignment: center;
                         Picker {
                             width: 250px;
-                            text: row.command;
+                            text: row.bound ? row.command : @tr("(None)");
                             bound: row.bound;
                             clicked => { Mouse.pick(index); }
                         }
@@ -136,7 +140,7 @@ export component MousePage inherits Rectangle {
                             horizontal-stretch: 0;
                             height: Theme.button-small-height;
                             small: true;
-                            text: "默认";
+                            text: @tr("Default");
                             enabled: row.resettable;
                             clicked => { Mouse.set-default(index); }
                         }
@@ -152,16 +156,16 @@ export component MousePage inherits Rectangle {
                     HorizontalLayout {
                         height: Theme.input-height;
                         spacing: 6px;
-                        Label { text: Mouse.pick-title; overflow: elide; horizontal-stretch: 1; }
+                        Label { text: @tr("Command run by “{}”:", Words.input(Mouse.pick-input)); overflow: elide; horizontal-stretch: 1; }
                         filter-input := LineEdit {
                             width: 160px;
                             height: Theme.input-height;
                             font-size: Theme.font-body;
-                            placeholder-text: "输入文字过滤";
+                            placeholder-text: @tr("Type to filter");
                             text <=> Mouse.pick-filter;
                             edited(text) => { Mouse.filter(text); }
                         }
-                        Button { horizontal-stretch: 0; text: "取消"; clicked => { Mouse.cancel-pick(); } }
+                        Button { horizontal-stretch: 0; text: @tr("Cancel"); clicked => { Mouse.cancel-pick(); } }
                     }
                     Rectangle {
                         vertical-stretch: 1;
@@ -184,7 +188,7 @@ export component MousePage inherits Rectangle {
         }
         Text {
             height: 18px;
-            text: "左键单击绑定后要等过系统双击间隔才响应；右键固定打开菜单。";
+            text: @tr("A bound left click responds only after the system's double-click interval; the right button always opens the menu.");
             color: Theme.text-dim;
             font-size: Theme.font-body;
             vertical-alignment: center;
@@ -192,8 +196,8 @@ export component MousePage inherits Rectangle {
         }
         Text {
             height: 18px;
-            text: Mouse.message;
-            color: Mouse.message-warn ? Theme.accent : Theme.text-dim;
+            text: Words.message(Mouse.message);
+            color: Mouse.message.warn ? Theme.accent : Theme.text-dim;
             font-size: Theme.font-body;
             vertical-alignment: center;
             overflow: elide;

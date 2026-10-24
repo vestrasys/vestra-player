@@ -1,0 +1,414 @@
+msgid ""
+msgstr ""
+"Language: zh-Hans\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: ignore.ts:47
+msgid "Ignore default shortcuts?"
+msgstr "忽略默认快捷键？"
+
+#: ignore.ts:49
+msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Exit Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts."
+msgstr "忽略后，只有你在快捷键设置中修改过的按键生效，Space、方向键等默认按键都将失效。「退出」（⌘Q）与「退出全屏」（Esc）不受影响，可随时从「设置 ▸ 忽略默认快捷键」关闭。"
+
+#: ignore.ts:50
+msgid "Ignore"
+msgstr "忽略"
+
+#: ignore.ts:58
+msgid "Ignore default shortcuts: On"
+msgstr "忽略默认快捷键：开"
+
+#: ignore.ts:58
+msgid "Ignore default shortcuts: Off"
+msgstr "忽略默认快捷键：关"
+
+#: keys-page.ts:117
+msgid "Keyboard Shortcuts"
+msgstr "快捷键"
+
+#: keys-page.ts:406
+msgid "Shortcut updated: {0} = {1}"
+msgstr "快捷键已更新：{0} = {1}"
+
+#: keys-page.ts:409
+msgid "Shortcut updated: {} = (none)"
+msgstr "快捷键已更新：{} = （无）"
+
+#: keys-page.ts:461
+msgid "Restore all default shortcuts?"
+msgstr "恢复全部默认快捷键？"
+
+#: keys-page.ts:462
+msgid "This clears your changes to the shortcuts and mouse actions of every command, including those of plugins that are not loaded."
+msgstr "将清除你对所有命令（包括未加载插件）的快捷键与鼠标动作修改。"
+
+#: keys-page.ts:463
+msgid "Restore All Defaults"
+msgstr "恢复全部默认"
+
+#: keys-page.ts:475
+msgid "Shortcuts restored to defaults"
+msgstr "快捷键已恢复默认"
+
+#: keys-page.ts:486
+msgid "Export Shortcut List"
+msgstr "导出快捷键列表"
+
+#: main.ts:32
+msgid "Keyboard Shortcuts…"
+msgstr "快捷键…"
+
+#: main.ts:39
+msgid "Mouse…"
+msgstr "鼠标…"
+
+#: main.ts:46
+msgid "Ignore Default Shortcuts"
+msgstr "忽略默认快捷键"
+
+#: manifest.json
+msgid "Shortcut Settings"
+msgstr "快捷键设置"
+
+#: manifest.json
+msgid "View and rebind keyboard shortcuts and mouse actions"
+msgstr "查看和改绑快捷键与鼠标动作"
+
+#: manifest.json
+msgid ""
+"Lists the commands of the player and of every plugin in the Keys and Mouse category of the options window: search by command or key, rebind, unbind, restore defaults, check conflicts and export the list. Assigns commands to mouse clicks and the wheel on the video, and can ignore every default shortcut at once.\n"
+"Open it from the context menu: Settings ▸ Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts."
+msgstr "在选项窗口的「快捷键与鼠标」分类里列出播放器和所有插件的命令，按命令或按键搜索，改绑、解绑、恢复默认，检查冲突，导出列表；可为视频区的鼠标点击和滚轮指定命令，也可一键忽略全部默认快捷键。\n入口在右键菜单「设置 ▸ 快捷键… / 鼠标… / 忽略默认快捷键」。"
+
+#: manifest.json
+msgid "settings"
+msgstr "设置"
+
+#: manifest.json
+msgid "shortcuts"
+msgstr "快捷键"
+
+#: manifest.json
+msgid "mouse"
+msgstr "鼠标"
+
+#: mouse-page.ts:38
+msgid "Mouse"
+msgstr "鼠标"
+
+#: mouse-page.ts:180
+msgid "Mouse action updated: {0} = {1}"
+msgstr "鼠标动作已更新：{0} = {1}"
+
+#: mouse-page.ts:181
+msgid "Mouse action updated: {} = (none)"
+msgstr "鼠标动作已更新：{} = （无）"
+
+#: ui/keys.slint:95
+msgid "({})"
+msgstr "（{}）"
+
+#: ui/keys.slint:98 ui/keys.slint:197
+msgid "Changed"
+msgstr "已修改"
+
+#: ui/keys.slint:99
+msgid "Conflict"
+msgstr "冲突"
+
+#: ui/keys.slint:100
+msgid "Ignored"
+msgstr "已忽略"
+
+#: ui/keys.slint:101
+msgid "Not loaded"
+msgstr "未加载"
+
+#: ui/keys.slint:101 ui/mouse.slint:143
+msgid "Default"
+msgstr "默认"
+
+#: ui/keys.slint:111
+msgid "Default shortcuts are ignored (Settings ▸ Ignore Default Shortcuts)"
+msgstr "默认快捷键已忽略（设置 ▸ 忽略默认快捷键）"
+
+#: ui/keys.slint:112
+msgid "The plugin is not loaded; this change works again when it is back"
+msgstr "插件未加载；它回来后这条修改照常生效"
+
+#: ui/keys.slint:191
+msgid "Search commands or keys (e.g. Ctrl+)"
+msgstr "搜索命令或按键（如 Ctrl+）"
+
+#: ui/keys.slint:197
+msgid "All"
+msgstr "全部"
+
+#: ui/keys.slint:197
+msgid "Conflicts"
+msgstr "有冲突"
+
+#: ui/keys.slint:197 ui/keys.slint:284
+msgid "Unbound"
+msgstr "未绑定"
+
+#: ui/keys.slint:225
+msgid "Command"
+msgstr "命令"
+
+#: ui/keys.slint:233
+msgid "Shortcut"
+msgstr "快捷键"
+
+#: ui/keys.slint:239
+msgid "Status"
+msgstr "状态"
+
+#: ui/keys.slint:256
+msgid "Loading…"
+msgstr "正在读取…"
+
+#: ui/keys.slint:256
+msgid "No matching commands"
+msgstr "没有符合条件的命令"
+
+#: ui/keys.slint:264
+msgid "Select a command to change its shortcuts"
+msgstr "选择一条命令以修改它的快捷键"
+
+#: ui/keys.slint:265
+msgid "{} (not loaded)"
+msgstr "{}（未加载）"
+
+#: ui/keys.slint:266
+msgid "{} (Player · in panel)"
+msgstr "{}（宿主 · 面板内）"
+
+#: ui/keys.slint:266
+msgid "{} (Player)"
+msgstr "{}（宿主）"
+
+#: ui/keys.slint:267
+msgid "{0} ({1} · in panel)"
+msgstr "{0}（{1} · 面板内）"
+
+#: ui/keys.slint:268
+msgid "{0} ({1})"
+msgstr "{0}（{1}）"
+
+#: ui/keys.slint:296
+msgid "Add Key…"
+msgstr "添加按键…"
+
+#: ui/keys.slint:309
+msgid "Press a shortcut (Esc cancels)"
+msgstr "请按下快捷键（Esc 取消）"
+
+#: ui/keys.slint:339
+msgid "Delete Entry"
+msgstr "删除此条"
+
+#: ui/keys.slint:339
+msgid "Restore Default"
+msgstr "恢复默认"
+
+#: ui/keys.slint:345
+msgid "Unbind All"
+msgstr "全部解绑"
+
+#: ui/keys.slint:356
+msgid "⌘Q is the default shortcut to quit Vestra Player. Change it to “{}”?"
+msgstr "⌘Q 是退出 Vestra Player 的默认快捷键，确定改为「{}」？"
+
+#: ui/keys.slint:357
+msgid "{0} is already used by “{1}”"
+msgstr "{0} 已用于「{1}」"
+
+#: ui/keys.slint:363
+msgid "Replace"
+msgstr "替换"
+
+#: ui/keys.slint:364 ui/mouse.slint:168
+msgid "Cancel"
+msgstr "取消"
+
+#: ui/keys.slint:379
+msgid "Restore All Defaults…"
+msgstr "恢复全部默认…"
+
+#: ui/keys.slint:380
+msgid "Export List…"
+msgstr "导出列表…"
+
+#: ui/keys.slint:383
+msgid "Ignore default shortcuts"
+msgstr "忽略默认快捷键"
+
+#: ui/mouse.slint:67 ui/mouse.slint:132
+msgid "(None)"
+msgstr "（无）"
+
+#: ui/mouse.slint:106
+msgid "Modifier"
+msgstr "修饰键"
+
+#: ui/mouse.slint:109
+msgid "None"
+msgstr "无"
+
+#: ui/mouse.slint:159
+msgid "Command run by “{}”:"
+msgstr "「{}」触发的命令："
+
+#: ui/mouse.slint:164
+msgid "Type to filter"
+msgstr "输入文字过滤"
+
+#: ui/mouse.slint:191
+msgid "A bound left click responds only after the system's double-click interval; the right button always opens the menu."
+msgstr "左键单击绑定后要等过系统双击间隔才响应；右键固定打开菜单。"
+
+#: ui/parts.slint:41
+msgid "Left click"
+msgstr "左键单击"
+
+#: ui/parts.slint:42
+msgid "Left double-click"
+msgstr "左键双击"
+
+#: ui/parts.slint:43
+msgid "Left double-click (left half)"
+msgstr "左键双击（左半边）"
+
+#: ui/parts.slint:44
+msgid "Left double-click (right half)"
+msgstr "左键双击（右半边）"
+
+#: ui/parts.slint:45
+msgid "Middle click"
+msgstr "中键单击"
+
+#: ui/parts.slint:46
+msgid "Back button"
+msgstr "侧键后退"
+
+#: ui/parts.slint:47
+msgid "Forward button"
+msgstr "侧键前进"
+
+#: ui/parts.slint:48
+msgid "Wheel up"
+msgstr "滚轮上推"
+
+#: ui/parts.slint:49
+msgid "Wheel down"
+msgstr "滚轮下推"
+
+#: ui/parts.slint:50
+msgid "Wheel left"
+msgstr "滚轮左推"
+
+#: ui/parts.slint:51
+msgid "Wheel right"
+msgstr "滚轮右推"
+
+#: ui/parts.slint:59
+msgid "All sources"
+msgstr "全部来源"
+
+#: ui/parts.slint:60
+msgid "Player"
+msgstr "宿主"
+
+#: ui/parts.slint:61
+msgid "Plugins not loaded"
+msgstr "未加载的插件"
+
+#: ui/parts.slint:64
+msgid "{0} is taken by “{1}” and has no effect"
+msgstr "{0} 被「{1}」占用，未生效"
+
+#: ui/parts.slint:67
+msgid "{0}; {1}"
+msgstr "{0}；{1}"
+
+#: ui/parts.slint:74
+msgid "The command no longer exists"
+msgstr "该命令已不存在"
+
+#: ui/parts.slint:75
+msgid "This key cannot be used"
+msgstr "无法使用此按键"
+
+#: ui/parts.slint:76
+msgid "This key is not recognized"
+msgstr "无法识别此按键"
+
+#: ui/parts.slint:77
+msgid "Change failed: {}"
+msgstr "修改失败：{}"
+
+#: ui/parts.slint:79
+msgid "Press Esc to cancel; to bind Esc itself, click “Esc” next to the box"
+msgstr "按 Esc 取消；要绑定 Esc 本身，点旁边的「Esc」"
+
+#: ui/parts.slint:80
+msgid "{} is already a shortcut of this command"
+msgstr "{} 已经是这条命令的快捷键"
+
+#: ui/parts.slint:81
+msgid "At most {} bindings per command"
+msgstr "每条命令最多 {} 个绑定"
+
+#: ui/parts.slint:82
+msgid "This key does something else while the “{0}” panel has focus: {1}"
+msgstr "此键在「{0}」面板获得焦点时另有用途：{1}"
+
+#: ui/parts.slint:83
+msgid "This key does something else while a panel of the player has focus: {}"
+msgstr "此键在「宿主」面板获得焦点时另有用途：{}"
+
+#: ui/parts.slint:84
+msgid "This key does something else outside the panel: {}"
+msgstr "此键在面板外另有用途：{}"
+
+#: ui/parts.slint:85
+msgid "Updated: {}"
+msgstr "已更新：{}"
+
+#: ui/parts.slint:86
+msgid "Updated: (none)"
+msgstr "已更新：（无）"
+
+#: ui/parts.slint:87
+msgid "Updated: {0} = {1}"
+msgstr "已更新：{0} = {1}"
+
+#: ui/parts.slint:88
+msgid "Updated: {} = (none)"
+msgstr "已更新：{} = （无）"
+
+#: ui/parts.slint:89
+msgid "Deleted the changes of {}"
+msgstr "已删除 {} 的修改"
+
+#: ui/parts.slint:90
+msgid "Cannot confirm: {}"
+msgstr "无法确认：{}"
+
+#: ui/parts.slint:91
+msgid "All defaults restored"
+msgstr "已恢复全部默认"
+
+#: ui/parts.slint:92
+msgid "Cannot export: {}"
+msgstr "无法导出：{}"
+
+#: ui/parts.slint:93
+msgid "Exported {n} command"
+msgid_plural "Exported {n} commands"
+msgstr[0] "已导出 {n} 条命令"
+msgstr[1] ""
