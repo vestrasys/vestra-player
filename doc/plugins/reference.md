@@ -659,13 +659,32 @@ window.set({ doc });
 window.on("openLink", (url: string) => plugin.system.openUrl(url));
 ```
 
-- 播放器解析（pulldown-cmark）并绘制：标题 1–6、段落（粗体、斜体、删除线、行内代码、链接）、无序/有序/任务列表（嵌套 ≤ 4 层）、代码块（等宽、不高亮）、引用（≤ 4 层）、图片、GFM 表格（单元格为纯文本，≤ 16 列 × 500 行）、分隔线。**内嵌 HTML 不显示**；脚注、数学不启用。`MarkdownRef` 只能作为 `[MarkdownBlock]` 属性的整个值，属于创建它的作用域（释放后写入为 `invalid`）。
+- 播放器解析（pulldown-cmark）并绘制：标题 1–6、段落（粗体、斜体、删除线、行内代码、链接）、无序/有序/任务列表（嵌套 ≤ 4 层）、代码块（等宽、不高亮）、引用（≤ 4 层）、图片、GFM 表格（单元格为纯文本，≤ 16 列 × 500 行）、分隔线。**内嵌 HTML 不显示**；脚注、数学不启用。`MarkdownRef` 放在 Slint 类型为 `[MarkdownBlock]` 的位置：属性的整个值，或（播放器 0.4.0 之后，SDK 1.5.4）属性值任意深度的一个字段，例如消息列表每行的 `body`；类型不符时整次写入失败。它属于创建它的作用域：释放后写入为 `invalid`，不论在值里的哪一层。`ImageRef` 仍只能作为整个值，嵌在数组或对象里为 `invalid`。
+- 组件：`MarkdownView` 是带滚动的整篇文档；`MarkdownBlocks`（播放器 0.4.0 之后，SDK 1.5.4）不滚动、高度随内容，放进自己的布局或 `ListView` 的行。两者都有 `in [MarkdownBlock] blocks`、`link-clicked(string)`，以及可选的 `in bool code-copy`（默认 `false`）与 `copy-code(string)`：打开后代码块右上角有「复制」按钮，点击发出 `copy-code(代码文本)`，由插件写剪贴板（`plugin.clipboard.writeText`）。不打开时外观与以前相同。
+
+```slint
+import { ListView } from "std-widgets.slint";
+import { MarkdownBlocks, MarkdownBlock } from "@vestra/markdown.slint";
+export struct Message { id: string, role: string, body: [MarkdownBlock] }
+export component Chat inherits Window {
+    in property <[Message]> messages;
+    callback copy-code(string);
+    ListView {
+        for message in root.messages: VerticalLayout {
+            padding: 8px;
+            MarkdownBlocks { blocks: message.body; code-copy: true; copy-code(code) => { root.copy-code(code); } }
+        }
+    }
+}
+```
+
+- 更新：播放器按（插件、视图、属性）记住每个文档的指纹，未变的文档（包括为同一文本重新调用 `ui.markdown` 得到的新引用）不重新解析；含文档的值在形状不变时原地更新：变化的行改写、末尾增删的行原地加减、变化的文档只换变化的块。所以流式回复时每次把整个消息列表重发一遍即可：列表、滚动位置和其它行都保留。形状变化（字段增减、类型变化、原来是空列表）时整体替换，并由 Slint 检查类型。
 - 显示细节：中文回退到的系统字体（苹方、Microsoft YaHei 等）没有斜体，Slint 的 FemtoVG 与软件渲染器也不合成斜体，所以斜体另加琥珀色、删除线另加灰色，保证在任何字体下都看得出；行内代码整段用 Slint 的等宽胶囊样式（字号略小、半透明底），代码块整块用 `Theme.font-mono`，其中的中文按系统字体回退显示；任务列表的方框用图形绘制，不依赖字体字形；表格每行列宽相同，表头与正文都按分隔行的对齐方式（`:--`、`:-:`、`--:`）对齐。
 - 链接：点击时 `MarkdownView` 发出 `link-clicked(url)`，相对地址已按 `base` 解析（`#锚点` 原样）；打开与否由插件决定。
 - `base`：`http(s)` 地址（如 README 自己的地址）或绝对目录；相对链接与图片按它解析。没有 `base` 时相对图片显示替代文字。
-- 图片：PNG/JPEG。本地图片按 `ui.image` 的规则（本插件包目录或数据目录内，≤ 16 MB、4096²，与 `ui.image` 共用每插件 64 MB 的解码缓存）。`https:` 图片由 SDK 在本插件进程里下载到 `<dataDirectory>/.vestra-cache/markdown/`：单张 ≤ 4 MB、10 秒、重定向 ≤ 5 次（只跟随到 `https:`）、同时 4 个、每文档 ≤ 64 张；缓存 32 MB，按最近使用淘汰，同一地址 24 小时内不重新下载。下载失败、`http:`、SVG/GIF 等显示替代文字，`markdown()` 本身不因此失败。`remoteImages: false` 不下载。
-- 上限：文本 ≤ 256 KB（否则 `invalid`）；超过 4000 块截断并在末尾提示。
-- 示例插件：`src/examples/markdown/`。测试：`host.markdown(host.window(id).props.doc)` 读回 `{ text, base, images }`；远程图片由 `host.remoteImages`（地址 → 本地文件）提供，测试不联网。
+- 图片：PNG/JPEG。本地图片按 `ui.image` 的规则（本插件包目录或数据目录内，≤ 16 MB、4096²，与 `ui.image` 共用每插件 64 MB 的解码缓存）。`https:` 图片由 SDK 在本插件进程里下载到 `<dataDirectory>/.vestra-cache/markdown/`：单张 ≤ 4 MB、10 秒、重定向 ≤ 5 次（只跟随到 `https:`）、同时 4 个、每文档 ≤ 64 张；缓存 32 MB，按最近使用淘汰，同一地址 24 小时内不重新下载。下载失败、`http:`、SVG/GIF 等显示替代文字，`markdown()` 本身不因此失败。`remoteImages: false` 不下载。本地图片写成相对 `base`（绝对目录）的路径，或用 `/` 分隔：Markdown 文本里的 `\` 后跟标点是转义，Windows 绝对路径 `C:\…\.cache\a.png` 会丢掉 `.` 前的 `\`，找不到文件而显示替代文字。
+- 上限：每个文档文本 ≤ 256 KB（否则 `invalid`）、超过 4000 块截断并在末尾提示、图片 ≤ 64 张；一个属性值里所有文本（各文档的文本也算）合计 ≤ 1 MiB，每个文档算值里的一个节点（共 4096）。
+- 示例插件：`src/examples/markdown/`。测试：`host.markdown(host.window(id).props.doc)` 读回 `{ text, base, images }`（嵌在行里的同样读：`host.markdown(rows[0].body)`）；远程图片由 `host.remoteImages`（地址 → 本地文件）提供，测试不联网。
 
 | 方法 | 说明 |
 | --- | --- |
@@ -1499,6 +1518,14 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | `Theme.font-mono` §6.4 | Menlo | Consolas | DejaVu Sans Mono |
 
 ## 17. 变更说明
+
+### Markdown 进列表行（2026-10，播放器 0.4.1，SDK 1.5.4）
+
+只新增，`apiVersion` 仍为 `vestra/1`（§6.1）。
+
+- `MarkdownRef` 可以出现在属性值的任意深度，所在的 Slint 类型必须是 `[MarkdownBlock]`；SDK 的 `PropValue` 改为 `PropData | ImageRef`，新类型 `PropData` 是可以嵌入 `MarkdownRef` 的 JSON。嵌套的 `ImageRef` 为 `invalid`。旧播放器拒绝嵌套的文档（属性写入失败）。
+- `@vestra/markdown.slint` 新增 `MarkdownBlocks`（不滚动、高度随内容）；`MarkdownView` 改为外面套一层 `ScrollView`，外观不变。两者新增可选的 `code-copy` 与 `copy-code(string)`。
+- 宿主：每个（插件、视图、属性）按指纹缓存已解析的文档，未变的不重新解析；含文档的值原地 diff（改写变化的行、末尾原地增删、文档只换变化的块）。上限：每文档 256 KB / 4000 块 / 64 张图，每个值文本合计 1 MiB。
 
 ### 文件解析器：本地文件交给插件生成流（2026-10，播放器 0.4.1，SDK 1.5.3）
 

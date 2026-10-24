@@ -23,7 +23,7 @@ pub fn reference(value: &Value) -> Option<&Value> {
         .then_some(path)
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Key {
     owner: u64,
     path: PathBuf,
@@ -46,6 +46,8 @@ pub struct Images {
     entries: BTreeMap<Key, Entry>,
     shown: BTreeMap<Slot, Key>,
     clock: u64,
+    /// The Markdown documents properties show, released with them.
+    pub markdown: ui_markdown::Cache,
 }
 
 fn fail(code: &str, message: impl Into<String>) -> RpcError {
@@ -177,9 +179,11 @@ impl Images {
     pub fn release_view(&mut self, owner: u64, view: &str) {
         self.shown
             .retain(|(o, v, _), _| !(*o == owner && v == view));
+        self.markdown.release(owner, Some(view), None);
     }
     pub fn release_owner(&mut self, owner: u64) {
         self.shown.retain(|(o, ..), _| *o != owner);
+        self.markdown.release(owner, None, None);
         self.entries.retain(|key, _| key.owner != owner);
     }
     /// Bytes of decoded pixels this plugin keeps.
@@ -225,8 +229,9 @@ impl Host {
         }
         roots
     }
-    /// A property value for `owner`'s `view`: JSON, or an image reference
-    /// (checked again on every use, whoever produced the wire value).
+    /// A property value for `owner`'s `view`: JSON, Markdown documents at
+    /// any depth, or an image reference as the whole value (checked again on
+    /// every use, whoever produced the wire value).
     pub(super) fn prop_value(
         &mut self,
         owner: u64,
@@ -234,18 +239,30 @@ impl Host {
         property: &str,
         value: &Value,
     ) -> std::result::Result<SValue, RpcError> {
-        if let Some(doc) = ui_markdown::reference(value) {
-            return self.markdown_value(owner, view, property, doc);
-        }
+        let roots = self.image_roots(owner);
         let Some(path) = ui_image::reference(value) else {
-            self.images.assign_many(owner, view, property, Vec::new());
-            return Ok(ui_values::from_json(value)?);
+            let mut cache = std::mem::take(&mut self.images.markdown);
+            let images = &mut self.images;
+            let converted =
+                ui_markdown::convert(&mut cache, (owner, view, property), value, &mut |path| {
+                    images
+                        .load(owner, &roots, path)
+                        .ok()
+                        .map(|(key, image)| (Some(key), image))
+                });
+            self.images.markdown = cache;
+            let (converted, shown) = converted?;
+            self.images.assign_many(owner, view, property, shown);
+            return Ok(converted);
         };
         let path = path
             .as_str()
             .ok_or_else(|| RpcError::invalid("image path must be a string"))?;
-        let roots = self.image_roots(owner);
         let (key, image) = self.images.load(owner, &roots, path)?;
+        self.images.assign_many(owner, view, property, Vec::new());
+        self.images
+            .markdown
+            .release(owner, Some(view), Some(property));
         self.images.assign(owner, view, property, Some(key));
         Ok(SValue::Image(image))
     }
