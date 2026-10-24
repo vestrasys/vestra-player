@@ -292,11 +292,12 @@ test('stream failures keep the plugin wording', async () => {
     return { ...result, health: result.active ? result.health : health, error: lost };
   });
   try {
-    // Preparation fails after resolve returned: the SDK answers with its own text.
+    // Preparation fails after resolve returned: the open fails with the SDK's
+    // Chinese start-up text (SDK 1.5.7+), shown by the player and the window alike.
     host.openElsewhere(files.blue);
     await until(() => host.source.phase === 'error', 'device failure');
-    await until(() => window().props.status === `错误：${host.source.terminalReason.failed}`, 'device status');
-    assert.match(window().props.status, /audio device is not ready/);
+    assert.deepEqual(host.source.terminalReason, { failed: '音频输出设备不可用' });
+    await until(() => window().props.status === '错误：音频输出设备不可用', 'device status');
     await until(() => host.producers.get(1).released, 'released');
 
     health = 'ok';

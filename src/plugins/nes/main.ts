@@ -37,22 +37,17 @@ export default async function activate(plugin: Plugin) {
         started(next) {
           stream = next;
           if (pending === path) pending = undefined;
-          const source = plugin.player.state.sourceId; // this ROM's open
           status = `正在运行 ${basename(path)} · 256×240 · 48 kHz 立体声`;
-          next.onStop(async (error) => {
-            if (stream !== next) return; // not when this plugin stops it
+          next.onStop((error) => {
+            if (stream !== next) return; // not when this plugin stops it, nor after a newer ROM started
             stream = undefined;
-            // The stream itself failed (the SDK closed its source): the player's reason.
-            if (error && error.code !== "unavailable") return void (status = stopText(error.message));
-            // Replaced or closed (F4). The player retires such a stream's producer, so
-            // this may arrive as `unavailable: producer absent`: ask what the source is.
-            const state = await plugin.player.refresh().catch(() => plugin.player.state);
-            if (stream) return; // a newer ROM started meanwhile
-            if (state.phase === "empty") return void (status = "已停止。");
-            // Still this ROM's source: the player failed it (its reason is in the state).
-            if (state.sourceId === source) return void (status = stopText(state.error ?? error?.message));
-            // Replaced by another ROM: its start or failure says what happened.
-            if (state.source !== latest) status = "已被其他媒体源替换。";
+            // The stream failed: the player's reason.
+            if (error) return void (status = stopText(error.message));
+            // Replaced or closed: the player's state (read by the SDK) says which.
+            const state = plugin.player.state;
+            if (state.phase === "empty") status = "已停止。";
+            // Replaced by another source; a newer ROM words its own start or failure.
+            else if (state.source !== latest) status = "已被其他媒体源替换。";
           });
         },
       };
