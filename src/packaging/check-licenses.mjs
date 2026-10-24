@@ -6,14 +6,18 @@
  *       Repository only (runs in _static): about.toml `accepted` equals
  *       deny.toml [licenses].allow; third-party.toml parses and every
  *       `license_from` file exists; every plugin with run-time npm
- *       dependencies has a licenses/ directory; node.json's major equals the
- *       Node major CI tests with (.github/actions/setup-node).
+ *       dependencies has a licenses/ directory; a plugin with a
+ *       dependency-inventory.json or vendor/ has inventory / vendor components
+ *       and every package they list has an allowed license and its license
+ *       files; node.json's major equals the Node major CI tests with
+ *       (.github/actions/setup-node).
  *   node packaging/check-licenses.mjs --bundle <root> --platform macos|windows
  *       A staged package (root = Vestra Player.app/Contents or the install
  *       directory): every file is ours or belongs to a component of
  *       third-party.toml / the shipped deps components.json; every license
  *       file exists; every license expression is allowed; every plugin
- *       package holds the licenses of what it bundles; the shipped node is
+ *       package holds the licenses of what it bundles (inventory / vendor
+ *       components are checked inside the .vxp); the shipped node is
  *       the pinned version (when it can run here).
  *
  * Exit status 1 with every problem listed.
@@ -87,6 +91,188 @@ export function spdxAllowed(expression, allowed) {
   return value;
 }
 
+// ------------------------------------------------------------ plugin packages
+
+/** A plugin's files, from its source directory: { files, read(rel) }. */
+export async function sourcePlugin(dir) {
+  const files = await walk(dir);
+  return {
+    files,
+    read: async (rel) =>
+      exists(join(dir, rel)) ? readFile(join(dir, rel)) : undefined,
+  };
+}
+
+/** A plugin's files, from its .vxp. */
+export async function vxpPlugin(path) {
+  const files = (await zipEntries(path)).filter((name) => !name.endsWith("/"));
+  return { files, read: (rel) => zipRead(path, rel) };
+}
+
+/** A vendored package's license text, and the notices shipped beside it. */
+const LICENSE_FILE = /^(licen[cs]e|copying)([.-].*)?$/i;
+const NOTICE_FILE = /^(notice|third-?party-?notice)/i;
+
+/**
+ * The npm packages a component's `inventory` / `vendor` describe in a plugin
+ * (see third-party.toml): [{ name, version, license, files }] with `files`
+ * relative to the plugin, and the problems found while reading them. A
+ * vendored package named in `bundled` (the plugin's inventories) is that
+ * bundle and is not listed again.
+ */
+export async function bundledPackages(component, plugin, bundled = new Set()) {
+  const packages = [];
+  const problems = [];
+  const label = component.name;
+  const inventoryNames = new Set(bundled);
+  if (component.inventory) {
+    const bytes = await plugin.read(component.inventory);
+    let inventory;
+    try {
+      inventory = bytes && JSON.parse(bytes.toString("utf8"));
+    } catch (error) {
+      problems.push(`${label}: ${component.inventory}: ${error.message}`);
+    }
+    if (!bytes) problems.push(`${label}: no ${component.inventory}`);
+    else if (inventory && !Array.isArray(inventory))
+      problems.push(`${label}: ${component.inventory} is not an array`);
+    const base = component.inventory_licenses ?? "licenses";
+    for (const entry of Array.isArray(inventory) ? inventory : []) {
+      inventoryNames.add(entry.name);
+      packages.push({
+        name: entry.name,
+        version: entry.version,
+        license: entry.license,
+        files: (entry.licenseFiles ?? []).map(
+          (file) => `${base}/${String(entry.name).replace("/", "__")}/${file}`,
+        ),
+      });
+    }
+  }
+  if (component.vendor) {
+    const root = `${component.vendor}/`;
+    const under = plugin.files.filter((file) => file.startsWith(root));
+    const directories = new Set();
+    for (const file of under) {
+      const parts = file.slice(root.length).split("/");
+      const depth = parts[0].startsWith("@") ? 2 : 1;
+      if (parts.length === depth + 1 && parts[depth] === "package.json")
+        directories.add(parts.slice(0, depth).join("/"));
+    }
+    if (!directories.size)
+      problems.push(`${label}: no package under ${component.vendor}/`);
+    for (const directory of [...directories].sort()) {
+      const at = `${root}${directory}/`;
+      let meta = {};
+      try {
+        meta = JSON.parse((await plugin.read(`${at}package.json`)).toString());
+      } catch (error) {
+        problems.push(`${label}: ${at}package.json: ${error.message}`);
+      }
+      // The bundle the inventory describes (vendor/pi is pi-coding-agent).
+      if (inventoryNames.has(meta.name)) continue;
+      if (meta.name !== directory)
+        problems.push(
+          `${label}: ${at}package.json names ${meta.name}, not ${directory}`,
+        );
+      const own = under
+        .filter((file) => file.startsWith(at))
+        .map((file) => file.slice(at.length))
+        .filter((name) => !name.includes("/"));
+      const licenses = own.filter((name) => LICENSE_FILE.test(name));
+      packages.push({
+        name: meta.name ?? directory,
+        version: meta.version,
+        license: typeof meta.license === "string" ? meta.license : undefined,
+        // A notice alone is not a license text: such a package has no files.
+        files: licenses.length
+          ? [...licenses, ...own.filter((name) => NOTICE_FILE.test(name))].map(
+              (name) => `${at}${name}`,
+            )
+          : [],
+      });
+    }
+    for (const file of under)
+      if (![...directories].some((dir) => file.startsWith(`${root}${dir}/`)))
+        problems.push(`${label}: ${file} belongs to no vendored package`);
+  }
+  return { packages, problems };
+}
+
+/**
+ * The packages of one plugin's `inventory` / `vendor` components:
+ * [{ component, packages }] in config order, and the problems found reading
+ * them. Inventories are read first: a vendor/ directory may hold the bundle
+ * they describe.
+ */
+export async function pluginPackages(components, plugin) {
+  const bundled = new Set();
+  const found = new Map();
+  const problems = [];
+  const listed = components.filter((c) => c.inventory || c.vendor);
+  for (const component of [...listed].sort(
+    (a, b) => Boolean(b.inventory) - Boolean(a.inventory),
+  )) {
+    const result = await bundledPackages(component, plugin, bundled);
+    if (component.inventory)
+      for (const pkg of result.packages) bundled.add(pkg.name);
+    found.set(component, result.packages);
+    problems.push(...result.problems);
+  }
+  return {
+    lists: listed.map((component) => ({
+      component,
+      packages: found.get(component),
+    })),
+    problems,
+  };
+}
+
+/**
+ * Checks the `inventory` / `vendor` components of one plugin against its
+ * files: every package has an allowed license and its license files; nothing
+ * under the license or vendor directories is unaccounted for.
+ */
+export async function checkPluginPackages(components, plugin, allowed, where) {
+  const files = new Set(plugin.files);
+  const claimed = new Set(components.flatMap((c) => c.vxp_license_files ?? []));
+  const licenseRoots = new Set(
+    components
+      .filter((c) => c.inventory)
+      .map((c) => `${c.inventory_licenses ?? "licenses"}/`),
+  );
+  const { lists, problems: found } = await pluginPackages(components, plugin);
+  const problems = found.map((text) => `${where}: ${text}`);
+  for (const { packages } of lists) {
+    for (const pkg of packages) {
+      const label = `${where}: ${pkg.name}@${pkg.version}`;
+      if (!pkg.license) problems.push(`${label}: no license`);
+      else
+        try {
+          if (!spdxAllowed(pkg.license, allowed))
+            problems.push(`${label}: ${pkg.license} is not allowed`);
+        } catch (error) {
+          problems.push(`${label}: ${error.message}`);
+        }
+      if (!pkg.files.length) problems.push(`${label}: no license file`);
+      for (const file of pkg.files) {
+        claimed.add(file);
+        if (!files.has(file)) problems.push(`${label}: missing ${file}`);
+      }
+    }
+  }
+  // License texts nobody claims are stale or undeclared (the source tree's
+  // licenses/<package>/package.json are vendor-pi.mjs's own records).
+  for (const file of plugin.files)
+    if (
+      [...licenseRoots].some((root) => file.startsWith(root)) &&
+      !claimed.has(file) &&
+      !file.endsWith("/package.json")
+    )
+      problems.push(`${where}: ${file} is in no component of third-party.toml`);
+  return problems;
+}
+
 // ------------------------------------------------------------ static
 
 async function checkStatic() {
@@ -116,11 +302,15 @@ async function checkStatic() {
       );
   for (const component of config.component ?? []) {
     if (!component.name) problem("third-party.toml: a component without name");
-    if (!component.deps && !component.license)
+    const packages = component.inventory || component.vendor;
+    if (packages && !component.vxp)
+      problem(`${component.name}: inventory/vendor need vxp`);
+    if (!component.deps && !packages && !component.license)
       problem(`${component.name}: no license`);
     if (component.license && !spdxAllowed(component.license, allowed))
       problem(`${component.name}: ${component.license} is not allowed`);
     if (
+      !packages &&
       !component.license_files?.length &&
       !component.vxp_license_files?.length
     )
@@ -158,6 +348,32 @@ async function checkStatic() {
       problem(`plugins/${dir} has npm dependencies but no licenses/ directory`);
   }
 
+  // A plugin with an inventory or a vendor/ directory is described by
+  // inventory / vendor components, which its source satisfies.
+  for (const [id, dir] of await pluginIdMap()) {
+    const components = config.component.filter((c) => c.vxp === id);
+    for (const [key, rel] of [
+      ["inventory", "dependency-inventory.json"],
+      ["vendor", "vendor"],
+    ])
+      if (
+        exists(join(source, "plugins", dir, rel)) &&
+        !components.some((c) => c[key] === rel)
+      )
+        problem(
+          `plugins/${dir}/${rel}: no component with vxp = "${id}" and ${key} = "${rel}"`,
+        );
+    if (components.some((c) => c.inventory || c.vendor))
+      problems.push(
+        ...(await checkPluginPackages(
+          components,
+          await sourcePlugin(join(source, "plugins", dir)),
+          allowed,
+          `plugins/${dir}`,
+        )),
+      );
+  }
+
   const node = await readJson(join(packaging, "node.json"));
   const action = await readFile(
     join(repo, ".github/actions/setup-node/action.yml"),
@@ -171,7 +387,11 @@ async function checkStatic() {
 }
 
 let pluginIds;
-async function pluginDirectory(id) {
+async function pluginIdMap() {
+  await pluginDirectory();
+  return pluginIds;
+}
+export async function pluginDirectory(id) {
   if (!pluginIds) {
     pluginIds = new Map();
     for (const dir of await readdir(join(source, "plugins"))) {
@@ -203,6 +423,7 @@ async function checkBundle(root, platform) {
   };
   claim(config.own[platform], "own");
 
+  const packaged = new Map(); // .vxp → its components
   for (const component of config.component) {
     const globs = component[platform] ?? [];
     if (globs.length && !claim(globs, component.name) && !component.deps)
@@ -220,14 +441,26 @@ async function checkBundle(root, platform) {
         problem(`${component.name}: ${component.vxp} is not in ${pluginsDir}`);
       else {
         const entries = new Set(await zipEntries(join(root, vxp)));
-        for (const file of component.vxp_license_files)
+        for (const file of component.vxp_license_files ?? [])
           if (!entries.has(file))
             problem(`${component.name}: ${vxp} has no ${file}`);
+        packaged.set(vxp, [...(packaged.get(vxp) ?? []), component]);
       }
     }
     if (component.deps) await checkDeps(root, platform, licensesDir, allowed);
     if (component.version === "node.json") await checkNode(root, platform);
   }
+
+  for (const [vxp, components] of packaged)
+    if (components.some((c) => c.inventory || c.vendor))
+      problems.push(
+        ...(await checkPluginPackages(
+          components,
+          await vxpPlugin(join(root, vxp)),
+          allowed,
+          vxp,
+        )),
+      );
 
   // Every plugin package that bundles npm packages carries licenses/.
   for (const vxp of files.filter(

@@ -13,6 +13,21 @@
 # The libmpv/FFmpeg closure is not listed here: each deps archive carries a
 # generated components.json (deps.yml), shipped as
 # licenses/third-party/deps/components.json and read the same way.
+#
+# Plugin packages that bundle many npm packages are described by what the
+# plugin itself generates, so a vendor refresh needs no edit here:
+#   inventory = "<file>"   a JSON array [{ name, version, license,
+#                          licenseFiles }] in the plugin, each license file at
+#                          <inventory_licenses>/<name, "/" as "__">/<file>;
+#   vendor = "<dir>"       every <dir>/<name> and <dir>/@<scope>/<name> with a
+#                          package.json is a package: its license field, a
+#                          LICENSE*/LICENCE*/COPYING* file beside it and any
+#                          NOTICE*/ThirdPartyNotice* (recorded, not enough
+#                          alone); one whose name is in the inventory is that
+#                          bundle.
+# Both are checked in the plugin source (--static) and in the .vxp (--bundle);
+# every file under <dir>/ must belong to a package, and every file under
+# <inventory_licenses>/ to a package or a component's vxp_license_files.
 
 [policy]
 # GPLv3-compatible licenses (the package as a whole is GPL-3.0-or-later):
@@ -107,23 +122,23 @@ license_from = ["plugins/nes/licenses/jsnes-LICENSE"]
 source = "https://github.com/bfirsh/jsnes"
 
 [[component]]
-name = "pi-ai, pi-agent-core, typebox, partial-json (in the workshop plugin)"
-license = "MIT"
+name = "npm packages bundled into vendor/pi/pi.mjs (in the workshop plugin)"
 vxp = "vestra.workshop"
-vxp_license_files = [
-  "licenses/@earendil-works__pi-ai/LICENSE",
-  "licenses/@earendil-works__pi-agent-core/LICENSE",
-  "licenses/typebox/license",
-  "licenses/partial-json/LICENSE",
-]
-note = "Versions and license notes: dependency-inventory.json in the plugin package."
+inventory = "dependency-inventory.json"
+inventory_licenses = "licenses"
+note = "pi and its dependencies, bundled by the plugin's tests/vendor-pi.mjs."
+source = "https://github.com/earendil-works/pi"
 
 [[component]]
-name = "TypeScript, @types/node, undici-types (in the workshop plugin)"
-license = "Apache-2.0 AND MIT"
+name = "Vendored npm packages (in the workshop plugin)"
 vxp = "vestra.workshop"
-vxp_license_files = [
-  "vendor/typescript/LICENSE.txt",
-  "vendor/@types/node/LICENSE",
-  "vendor/undici-types/LICENSE",
-]
+vendor = "vendor"
+note = "The plugin toolchain (SDK, TypeScript, @types/node, undici-types), copied by the plugin's tests/vendor-sdk.mjs."
+
+[[component]]
+name = "pi logo (in the workshop plugin)"
+license = "MIT"
+vxp = "vestra.workshop"
+vxp_license_files = ["licenses/pi-logo/NOTICE.md"]
+note = "assets/pi-logo.svg, the pi project's logo, shown unchanged as attribution."
+source = "https://github.com/earendil-works/pi"

@@ -92,7 +92,7 @@ pull_request{opened, reopened, ready_for_review, labeled ci:macos}，非草稿�
 | `icon.mjs` | 从 `src/assets/brand/logo.png` 生成图标：macOS 是 824 px 深色圆角底板加 logo 的 `.icns`，Windows 是 logo 本身的 `.ico`。纯 Node 实现，各系统输出相同 |
 | `about.toml`、`about.hbs` | cargo-about 配置和 HTML 模板。`accepted` 必须与 `src/host/deny.toml` 的 `allow` 相同 |
 | `third-party.toml` | 非 Cargo 组件清单：我们自己的文件（`[own]`）、各组件的文件、许可证和来源；libmpv/FFmpeg 闭包由包里的 `components.json` 展开 |
-| `check-licenses.mjs` | `--static`（`npm run licenses`，`_static` 的 ts job）：about.toml 与 deny.toml 一致、清单里引用的仓库文件存在、带 npm 依赖的插件有 `licenses/`、Node 主版本与 CI 一致。`--bundle <根目录> --platform macos\|windows`（打包脚本最后一步）：包里每个文件都属于我们或某个组件，每个许可证文件都在，每个许可证表达式都在 `[policy].allowed` 里，插件包里带着打包进去的依赖的许可证，`node --version` 等于固定版本 |
+| `check-licenses.mjs` | `--static`（`npm run licenses`，`_static` 的 ts job）：about.toml 与 deny.toml 一致、清单里引用的仓库文件存在、带 npm 依赖的插件有 `licenses/`、有 `dependency-inventory.json` 或 `vendor/` 的插件在清单里有对应的 `inventory`/`vendor` 组件且其中每个包的许可证表达式允许、许可证文件都在、没有无主的许可证文件或 vendor 文件、Node 主版本与 CI 一致。工坊（Vestra Player AI）这类打包了几十个 npm 包的插件，清单只写 `inventory = "dependency-inventory.json"` 和 `vendor = "vendor"`，包列表由插件自己生成（`vendor-pi.mjs`、`vendor-sdk.mjs`），刷新 vendor 不用改 `third-party.toml`。`--bundle <根目录> --platform macos\|windows`（打包脚本最后一步）：包里每个文件都属于我们或某个组件，每个许可证文件都在，每个许可证表达式都在 `[policy].allowed` 里，插件包里带着打包进去的依赖的许可证（`inventory`/`vendor` 组件在 `.vxp` 里逐包再查一遍），`node --version` 等于固定版本 |
 | `smoke.mjs` | 空数据目录、PATH 里没有 node 时无界面启动 `--headless --seconds 8`，要求 18 个内置插件都 `runtime.ready`（面板插件在无界面模式下报 `mounts require a native shell` 也算） |
 | `macos/node.entitlements`、`macos/host.entitlements` | 以后签名用（Node 需要 JIT） |
 
