@@ -38,9 +38,11 @@
   - [x] 播放器：分支 `identity/cleanup`（第二套主题删除，旧设置迁到 vestra；代码、注释、文档清理；新文档 `ui-spec.md`、`interaction-spec.md`、`feature-catalog.md`）
   - [x] SDK：1.4.0（`ThemeId` 只剩 `"vestra"`），PR vestrasys/vestra-player-sdk#10，待合并、打 tag 发版
   - [x] 发版后播放器升级依赖
-- [ ] C 历史改写（播放器、SDK）
+- [x] C 历史改写（播放器、SDK）：2026-10-24 强推完成
   - [x] 演练（2026-10-24）：镜像备份与 bundle、`git filter-repo` 改写、核对（所有 ref 的全部对象 0 处提及，提交数不变）。脚本在 scratchpad `history/`（`prepare.sh`、`push.sh`、`replacements.txt`）；推送前重跑 `prepare.sh`
-  - [ ] 用户确认后：暂停两个仓库的 Actions 和 SDK 规则集，推送，恢复；本机重新克隆，删掉旧 worktree
+  - [x] 用户确认后强推（2026-10-24）：暂停 Actions 和 SDK 规则集 → 推送 → 恢复 → 重新部署文档站；本机仓库原地切到新历史，旧 worktree、旧分支、旧 SDK 克隆已删，全部对象 0 处提及。改写前的完整备份：`~/vestra-history-backup-20261024/`（bundle + SHA256SUMS）
+  - [x] npm：1.0.0–1.3.0 已撤回（用户操作，2026-10-24），现存 0.0.0-stage、1.4.0、1.5.0、1.5.1
+  - [ ] 文档里引用的旧提交 SHA 未改写（可从备份重跑 filter-repo 得到对照表）；SDK 已合并 PR 的 refs/pull 仍指向旧提交，需要时联系 GitHub Support
   - 留在 GitHub 上的：SDK 已合并 PR 的 refs/pull 仍指向旧提交，只有 GitHub Support 能清；npm 1.0.0–1.3.0 含提及，72 小时内可 unpublish（窗口 10-24 16:25Z 起陆续关闭），之后只能 deprecate
 
 ## 记录
