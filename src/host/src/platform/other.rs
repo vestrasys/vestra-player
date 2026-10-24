@@ -26,6 +26,8 @@ pub fn capture_windows() -> Result<NativeSnapshot> {
 pub fn associate_new(_before: &NativeSnapshot) -> Result<HostWindowId> {
     Err(WINDOWS)
 }
+/// Title bars stay as the window system draws them.
+pub fn set_dark_title_bars(_dark: bool) {}
 pub fn set_floating(_on: bool) -> Result<usize> {
     Err(WINDOWS)
 }

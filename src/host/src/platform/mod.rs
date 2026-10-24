@@ -13,7 +13,7 @@
 //! | area | functions |
 //! | --- | --- |
 //! | per-system tables | `SYSTEM` → `standard_window_shortcut` (table in `shortcuts.rs`), `ui_monospace_font` (`monospace_font`); the tables are the same code on every system |
-//! | windows | `shown`, `capture_windows`, `associate_new`, `set_floating`, `window_count`, `resize_content`, `screen_for`, `pointer_in`, `modifier_keys`, `double_click_seconds`, `menu_show_delay_ms` |
+//! | windows | `shown`, `capture_windows`, `associate_new`, `set_floating`, `set_dark_title_bars`, `window_count`, `resize_content`, `screen_for`, `pointer_in`, `modifier_keys`, `double_click_seconds`, `menu_show_delay_ms` |
 //! | clipboard | `clipboard_read_text`, `clipboard_write_text`, `clipboard_write_image` |
 //! | dialogs | `confirm` |
 //! | power | `sleep_launcher` |

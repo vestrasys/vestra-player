@@ -111,6 +111,12 @@ fn color(rgb: u32) -> SValue {
     )))
 }
 
+/// Whether `theme` is a light palette (std-widgets scheme, title bars).
+pub fn is_light(theme: &str) -> bool {
+    let index = THEMES.iter().position(|t| *t == known(theme)).unwrap_or(0);
+    TABLES[index].light
+}
+
 /// Set one view's palette: colours, the gradient (copied from the instance's
 /// own constant, Slint's public API cannot build gradients) and the
 /// std-widgets colour scheme.
@@ -193,6 +199,7 @@ impl Host {
     /// Every view, after a change or a failed delivery.
     pub(super) fn theme_all(&mut self) {
         let theme = self.theme().to_owned();
+        crate::platform::set_dark_title_bars(!is_light(&theme));
         let mut instances: Vec<_> = self
             .shell
             .iter()
@@ -276,6 +283,7 @@ mod tests {
         assert_eq!(known("classic"), THEMES[0]);
         assert_eq!(known("light"), THEMES[0]);
         assert_eq!(known(""), "vestra");
+        assert!(!is_light("vestra") && is_light("vestra-light") && !is_light("classic"));
         assert_eq!(TABLES.len(), THEMES.len());
     }
 

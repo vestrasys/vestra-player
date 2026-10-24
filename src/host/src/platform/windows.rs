@@ -35,6 +35,21 @@ thread_local! {
     static WINDOWS: RefCell<Vec<(i64, Weak<winit::window::Window>)>> = const { RefCell::new(Vec::new()) };
     /// `set_floating`, for windows shown later.
     static FLOATING: Cell<bool> = const { Cell::new(false) };
+    /// `set_dark_title_bars`, for windows shown later; the default palette is dark.
+    static DARK: Cell<bool> = const { Cell::new(true) };
+}
+
+/// One window's title bar dark or light (DWMWA_USE_IMMERSIVE_DARK_MODE).
+fn title_bar(window: &winit::window::Window, dark: bool) {
+    use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let Ok(handle) = window.window_handle() else {
+        return;
+    };
+    if let RawWindowHandle::Win32(handle) = handle.as_raw()
+        && !vestra_win32::set_dark_title_bar(handle.hwnd.get(), dark)
+    {
+        eprintln!("platform: the system refused a dark/light title bar");
+    }
 }
 
 fn level(on: bool) -> winit::window::WindowLevel {
@@ -60,6 +75,7 @@ pub fn shown(window: &slint::Window) {
     if FLOATING.get() {
         native.set_window_level(level(true));
     }
+    title_bar(&native, DARK.get());
     WINDOWS.with_borrow_mut(|list| {
         list.retain(|(known, weak)| *known != id && weak.strong_count() > 0);
         list.push((id, Arc::downgrade(&native)));
@@ -103,6 +119,15 @@ pub fn associate_new(before: &NativeSnapshot) -> Result<HostWindowId> {
         ));
     }
     Ok(HostWindowId(*first))
+}
+
+/// Title bars dark or light, following the player's palette rather than the
+/// system setting, including windows shown later.
+pub fn set_dark_title_bars(dark: bool) {
+    DARK.set(dark);
+    for (_, window) in live() {
+        title_bar(&window, dark);
+    }
 }
 
 /// Every window of the host stays above other applications' windows (or
