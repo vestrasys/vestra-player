@@ -57,3 +57,30 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
         run: cargo doc --locked --no-deps --workspace --document-private-items
+      # A test program that cannot start (STATUS_DLL_NOT_FOUND) says nothing
+      # about which DLL is missing: list each import and where it resolves.
+      - name: Missing DLLs (Windows, after a failure)
+        if: failure() && inputs.os == 'windows'
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $version = (Get-Content "$vs\VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt").Trim()
+          $dumpbin = "$vs\VC\Tools\MSVC\$version\bin\Hostx64\x64\dumpbin.exe"
+          $dirs = @("$env:SystemRoot\System32", "$env:SystemRoot") + ($env:PATH -split ';' | Where-Object { $_ })
+          function Find-Dll($name, $beside) {
+            if ($name -like 'api-ms-win-*' -or $name -like 'ext-ms-*') { return 'api set' }
+            foreach ($dir in @($beside) + $dirs) { if ($dir -and (Test-Path (Join-Path $dir $name))) { return (Join-Path $dir $name) } }
+            return $null
+          }
+          function Show-Imports($file, $depth) {
+            $names = & $dumpbin /nologo /dependents $file | Where-Object { $_ -match '^\s+\S+\.(dll|DLL)\s*$' } | ForEach-Object { $_.Trim() }
+            foreach ($name in $names) {
+              $found = Find-Dll $name (Split-Path $file)
+              if (-not $found) { Write-Host "::error::$(Split-Path -Leaf $file) imports $name, which is not found" }
+              elseif ($depth -lt 1 -and $found -notlike "$env:SystemRoot*" -and $found -ne 'api set') {
+                Write-Host "$name -> $found"; Show-Imports $found ($depth + 1)
+              }
+            }
+          }
+          Get-ChildItem target\debug\deps\*.exe | ForEach-Object { Write-Host "== $($_.Name)"; Show-Imports $_.FullName 0 }

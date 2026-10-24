@@ -77,7 +77,7 @@ source = "https://nodejs.org/dist/"
 name = "libmpv, FFmpeg and their libraries"
 deps = true
 macos = ["Frameworks/*.dylib", "MacOS/ffmpeg", "MacOS/ffprobe"]
-windows = ["libmpv-2.dll", "ffmpeg/*"]
+windows = ["libmpv-2.dll", "vulkan-1.dll", "ffmpeg/*"]
 license_files = ["third-party/deps/components.json"]
 note = "Per-library versions, licenses and sources: third-party/deps/components.json."
 
