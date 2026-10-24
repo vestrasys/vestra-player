@@ -15,6 +15,7 @@ import {
   MANIFEST_LIMITS,
   MARKDOWN_LIMITS,
   MENU_IDS,
+  UI_VALUE_LIMITS,
 } from "@vestra-player/sdk/runtime";
 import { TestHost } from "@vestra-player/sdk/testing";
 
@@ -27,6 +28,30 @@ test("COMMAND_LIMITS matches the player's registry", () => {
     Number(new RegExp(`const ${name}: usize = (\\d+);`).exec(rust)?.[1]);
   assert.equal(constant("MAX_PER_OWNER"), COMMAND_LIMITS.perPlugin);
   assert.equal(constant("MAX_COMMANDS"), COMMAND_LIMITS.total);
+});
+
+test("UI_VALUE_LIMITS match the player's (host/src/ui_values.rs)", () => {
+  const rust = host("src/ui_values.rs");
+  const constant = (name: string) => {
+    const value = new RegExp(`pub const ${name}: usize = ([^;]+);`).exec(
+      rust,
+    )?.[1];
+    assert.ok(value, name);
+    return value
+      .split("*")
+      .map((part) => Number(part.trim()))
+      .reduce((a, b) => a * b, 1);
+  };
+  assert.deepEqual(
+    {
+      depth: constant("MAX_DEPTH"),
+      values: constant("MAX_NODES"),
+      arrayRows: constant("MAX_ARRAY"),
+      stringBytes: constant("MAX_STRING_BYTES"),
+      textBytes: constant("MAX_TEXT_BYTES"),
+    },
+    { ...UI_VALUE_LIMITS },
+  );
 });
 
 test("MENU_IDS are the player's built-in menu ids", () => {

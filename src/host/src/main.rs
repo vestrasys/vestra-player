@@ -160,11 +160,24 @@ impl RpcError {
     fn invalid(message: impl Into<String>) -> Self {
         Self::new("invalid", message)
     }
+    /// The same failure, naming the property it is about.
+    fn for_property(mut self, property: &str) -> Self {
+        self.message = format!("{property}: {}", self.message);
+        self
+    }
+    /// A property value the player stores now and converts later, checked
+    /// against the value limits now (`ui_values::check`).
+    fn check_property(property: &str, value: &Value) -> std::result::Result<(), Self> {
+        ui_values::check(value).map_err(|error| Self::from(error).for_property(property))
+    }
 }
 impl From<anyhow::Error> for RpcError {
     fn from(value: anyhow::Error) -> Self {
         if value.downcast_ref::<manifest::NeedsPlayer>().is_some() {
             return Self::new("versionMismatch", value.to_string());
+        }
+        if value.downcast_ref::<ui_values::OverLimit>().is_some() {
+            return Self::new("limit", value.to_string());
         }
         Self::new("host", value.to_string())
     }
@@ -1724,7 +1737,7 @@ impl Host {
                     eprintln!("floating panel: {error:#}");
                     if let Some(&owner) = owners.first() {
                         for owner in &owners {
-                            self.send(*owner, json!({"event":"ui.error","data":{"message":format!("ui-prepare: {error:#}")}}));
+                            self.send(*owner, json!({"event":"ui.error","data":{"code":"ui-prepare","message":format!("ui-prepare: {error:#}")}}));
                         }
                         let _ = self.policy.set_detached(owner, false);
                         self.remember_sidebar(false);
@@ -2586,23 +2599,32 @@ impl Host {
             self.respond(change.reply, result);
         }
     }
-    /// A mount's properties converted for a new instance; a value that no
-    /// longer converts (an image file removed since) is left out and logged.
+    /// Initial properties `refuse_initial` left out: logged and reported
+    /// to the plugin (`ui.error`, its `onError`).
+    fn report_refused(&mut self, owner: u64, refused: Vec<RpcError>) {
+        for error in refused {
+            eprintln!("initial property {owner}: {}", error.message);
+            self.send(owner, ui_error(&error));
+        }
+    }
+    /// A mount's properties converted for a new instance. They were checked
+    /// when written, so a value that no longer converts is an image file
+    /// removed since (or a document over the text total): it is left out (the
+    /// property keeps its default), logged and reported to the plugin
+    /// (`ui.error`, its `onError`).
     fn mount_values(&mut self, mount: &Mount) -> Vec<(String, SValue)> {
         let owner = mount.spec.owner;
-        mount
-            .properties
-            .iter()
-            .filter_map(
-                |(name, value)| match self.prop_value(owner, "$mount", name, value) {
-                    Ok(value) => Some((name.clone(), value)),
-                    Err(error) => {
-                        eprintln!("mount property {owner}/{name}: {}", error.message);
-                        None
-                    }
-                },
-            )
-            .collect()
+        let mut values = Vec::new();
+        for (name, value) in &mount.properties {
+            match self.prop_value(owner, "$mount", name, value) {
+                Ok(value) => values.push((name.clone(), value)),
+                Err(error) => {
+                    eprintln!("mount property {owner}/{name}: {}", error.message);
+                    self.send(owner, ui_error(&error));
+                }
+            }
+        }
+        values
     }
     fn mount_callbacks(&mut self) {
         for event in self.mount_input.try_iter().take(64).collect::<Vec<_>>() {
@@ -2613,7 +2635,7 @@ impl Host {
             }
             match event.args {
                 Ok(args)=>self.send(event.owner,json!({"event":"ui.callback","data":{"view":"$mount","callback":event.callback,"args":args}})),
-                Err(error)=>self.send(event.owner,json!({"event":"ui.error","data":{"message":error}})),
+                Err(error)=>self.send(event.owner,json!({"event":"ui.error","data":{"code":"ui","message":format!("callback {}: {error}",event.callback)}})),
             }
         }
     }
@@ -3760,6 +3782,7 @@ impl Host {
                 if self.mount_queue.len() >= 8 {
                     return Err(RpcError::new("busy", "UI preparation queue full"));
                 }
+                let mut refused = Vec::new();
                 let contribution = if method == "ui.mount" {
                     if self.mounts.contains_key(&reply.owner) {
                         return Err(RpcError::new("conflict", "owner already mounted"));
@@ -3796,7 +3819,7 @@ impl Host {
                         return Err(self.refuse_taken(reply.owner, error, text));
                     }
                     let file = plugins::package_file(&plugin.directory, string(params, "file")?)?;
-                    let properties = serde_json::from_value(
+                    let mut properties: BTreeMap<String, Value> = serde_json::from_value(
                         params.get("properties").cloned().unwrap_or(json!({})),
                     )
                     .map_err(|e| RpcError::invalid(e.to_string()))?;
@@ -3804,6 +3827,7 @@ impl Host {
                     if title.len() > 128 || title.chars().any(char::is_control) {
                         return Err(RpcError::invalid("title requires 0..=128 bytes"));
                     }
+                    refused = refuse_initial(&mut properties);
                     let manifest = plugin.manifest.id.clone();
                     let name = plugin.manifest.name.clone().unwrap_or_default();
                     let builtin = self.is_builtin(reply.owner);
@@ -3833,6 +3857,7 @@ impl Host {
                 } else {
                     None
                 };
+                self.report_refused(reply.owner, refused);
                 self.mount_queue.push_back(MountChange {
                     reply: reply.clone(),
                     contribution,
@@ -4151,6 +4176,28 @@ impl Host {
         };
         Ok(Some(value))
     }
+}
+/// Initial properties of a panel or settings page are converted when the
+/// view is built. A value over the limits is left out now (the property
+/// keeps its default) and returned, to be reported (`report_refused`),
+/// rather than failing the mount: a mount failing during activation would
+/// fail the whole plugin.
+fn refuse_initial(properties: &mut BTreeMap<String, Value>) -> Vec<RpcError> {
+    let mut refused = Vec::new();
+    properties.retain(|name, value| match RpcError::check_property(name, value) {
+        Ok(()) => true,
+        Err(error) => {
+            refused.push(error);
+            false
+        }
+    });
+    refused
+}
+/// A `ui.error` event: a failure the plugin did not ask about (a property
+/// the player could not show when it rebuilt a view, a callback whose
+/// arguments it could not convert). The SDK reports it to `onError`.
+fn ui_error(error: &RpcError) -> Value {
+    json!({"event":"ui.error","data":{"code":error.code,"message":error.message}})
 }
 /// The window policy's slot (the backdrop has no preference or auto-hide).
 /// What an initial UI request means for activation. A slot another plugin
@@ -4983,6 +5030,24 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_value_over_the_limits_is_limit_naming_the_property() {
+        // D1: 3000 playlist rows of 8 fields; refused when stored, not later.
+        let row = json!({"a":"1","b":"","c":"","d":"","e":false,"f":false,"g":false,"h":false});
+        let rows = Value::Array(vec![row; 3000]);
+        let error = RpcError::check_property("rows", &rows).unwrap_err();
+        assert_eq!(error.code, "limit");
+        assert!(error.message.starts_with("rows: UI "), "{}", error.message);
+        assert!(RpcError::check_property("rows", &json!([1, 2])).is_ok());
+        // Other conversion failures keep their code.
+        let error = RpcError::check_property("x", &json!({"a_b": 1})).unwrap_err();
+        assert_eq!(error.code, "host");
+        assert_eq!(
+            ui_error(&error),
+            json!({"event":"ui.error","data":{"code":"host","message":error.message}})
+        );
+    }
 
     #[test]
     fn a_slot_refusal_is_a_conflict_naming_the_slot_and_its_holder() {

@@ -231,8 +231,19 @@ impl Host {
     }
     /// A property value for `owner`'s `view`: JSON, Markdown documents at
     /// any depth, or an image reference as the whole value (checked again on
-    /// every use, whoever produced the wire value).
+    /// every use, whoever produced the wire value). A failure names the
+    /// property (`rows: UI array exceeds 4096 rows`).
     pub(super) fn prop_value(
+        &mut self,
+        owner: u64,
+        view: &str,
+        property: &str,
+        value: &Value,
+    ) -> std::result::Result<SValue, RpcError> {
+        self.convert_prop(owner, view, property, value)
+            .map_err(|error| error.for_property(property))
+    }
+    fn convert_prop(
         &mut self,
         owner: u64,
         view: &str,

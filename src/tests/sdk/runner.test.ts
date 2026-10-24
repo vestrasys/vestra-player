@@ -256,3 +256,20 @@ test("a file type or site another plugin resolves does not fail activation", asy
   const other = await run(source, refuse({}), runner, capabilities);
   assert.equal(other.event, "runtime.failed");
 });
+
+test("a request longer than the player's 1 MiB line is refused with limit, not sent", async () => {
+  // The player stops a plugin that writes a longer line (host/src/plugins.rs).
+  const result = await run(
+    `export default async function activate(plugin) {
+      const code = await plugin.osd.show("x".repeat(1024 * 1024)).then(() => "sent", (e) => e.code);
+      await plugin.osd.show(code);
+    }`,
+    () => ({ result: null }),
+    runner,
+    ["ui.osd"],
+  );
+  assert.deepEqual(result, {
+    event: "runtime.ready",
+    methods: ["window.state", "osd.show"],
+  });
+});
