@@ -6,7 +6,12 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { basename, dirname, join } from "node:path";
-import { loadThirdParty } from "./check-licenses.mjs";
+import {
+  loadThirdParty,
+  pluginDirectory,
+  pluginPackages,
+  sourcePlugin,
+} from "./check-licenses.mjs";
 import { copy, exists, hostVersion, readJson, run, source } from "./lib.mjs";
 import { stagePlugins } from "../scripts/stage-plugins.mjs";
 import { stageRuntime } from "../scripts/stage-runtime.mjs";
@@ -100,8 +105,16 @@ async function indexHtml(config, componentsPath) {
   const link = (file) =>
     `<a href="${escape(encodeURI(file))}">${escape(basename(file))}</a>`;
   const rows = [];
+  const expanded = await expandedPackages(config);
   for (const component of config.component) {
     if (component.deps) continue;
+    if (expanded.has(component)) {
+      for (const pkg of expanded.get(component))
+        rows.push(
+          `<tr><td>${escape(pkg.name)} ${escape(pkg.version)}</td><td>${escape(pkg.license)}</td><td>inside the ${escape(component.vxp)} plugin package: ${pkg.files.map(escape).join(", ")}<br><small>${escape(component.name)}</small></td></tr>`,
+        );
+      continue;
+    }
     const files = (component.license_files ?? []).map(link).join(", ");
     const inside = component.vxp
       ? ` (inside the ${escape(component.vxp)} plugin package: ${component.vxp_license_files.map(escape).join(", ")})`
@@ -140,6 +153,24 @@ ${rows.join("\n")}
 </body>
 </html>
 `;
+}
+
+/** Each inventory / vendor component's packages, read from the plugin source. */
+async function expandedPackages(config) {
+  const out = new Map();
+  const ids = new Set(
+    config.component.filter((c) => c.inventory || c.vendor).map((c) => c.vxp),
+  );
+  for (const id of ids) {
+    const dir = await pluginDirectory(id);
+    if (!dir) throw new Error(`third-party.toml: no plugin with id ${id}`);
+    const { lists } = await pluginPackages(
+      config.component.filter((c) => c.vxp === id),
+      await sourcePlugin(join(source, "plugins", dir)),
+    );
+    for (const { component, packages } of lists) out.set(component, packages);
+  }
+  return out;
 }
 
 const link2 = (url) =>
