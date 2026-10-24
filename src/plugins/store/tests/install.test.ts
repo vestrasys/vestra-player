@@ -4,24 +4,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { HostError } from "@vestra-player/sdk/testing";
 import { installFromRepository } from "../installer.ts";
-import {
-  actions,
-  banners,
-  BUILTIN,
-  choose,
-  FakeNet,
-  info,
-  no,
-  OFFICIAL,
-  openStore,
-  props,
-  publish,
-  rows,
-  start,
-  THIRD,
-  until,
-  yes,
-} from "./helpers.ts";
+import { actions, banners, BUILTIN, choose, FakeNet, info, no, OFFICIAL, openStore, props, publish, rows, start, THIRD, until, yes } from "./helpers.ts";
 
 const YT = {
   id: "zysilm.youtube",
@@ -54,15 +37,17 @@ test("official install: confirm with permissions, download through a redirect, c
     // The repository is official; the plugin is a third-party one hosted there.
     assert.equal(row.meta, "zysilm · 官方仓库");
     assert.deepEqual(actions(host).map((a) => a.text), ["安装 0.2.0"]);
-    assert.equal(props(host)["permissions-title"], "权限（4）");
+    // The window counts them ("Permissions ({})", in Slint).
+    assert.equal((props(host)["permissions"] as unknown[]).length, 4);
     host.dialogAnswers.push(yes);
     host.window("store").emit("act", "install");
     await until(host, () => installs(host).length === 1, "install");
-    const confirm = host.confirms.at(-1)!;
-    assert.equal(confirm["message"], "安装「YouTube」0.2.0？");
-    assert.match(String(confirm["detail"]), /来自 Vestra Player 官方仓库，作者 zysilm。/);
-    assert.match(String(confirm["detail"]), /· 读写剪贴板/);
-    assert.match(String(confirm["detail"]), /不限制它读写文件和联网/);
+    const confirm = host.confirmTexts.at(-1)!;
+    assert.equal(confirm.message, "安装「YouTube」0.2.0？");
+    assert.match(String(confirm.detail), /来自 Vestra Player 官方仓库，作者 zysilm。/);
+    // The permission list is a nested template: English until the player translates nested arguments.
+    assert.match(String(confirm.detail), /· Read and write the clipboard/);
+    assert.match(String(confirm.detail), /not reading and writing files or using the network/);
     assert.deepEqual(installs(host)[0], {
       method: "install",
       id: "zysilm.youtube",
@@ -74,7 +59,7 @@ test("official install: confirm with permissions, download through a redirect, c
     assert.deepEqual(readdirSync(join(host.dataDirectory, "downloads")), [], "download removed");
     assert.equal(rows(host).find((r) => r.name === "YouTube")?.badge, "已安装");
     assert.deepEqual(actions(host).map((a) => a.text), ["卸载…"]);
-    assert.equal(props(host)["manage-note"], "停用、重新加载、查看数据目录：设置 ▶ 插件管理…");
+    assert.equal(props(host)["manage"], true);
   } finally {
     await stop();
   }
@@ -155,11 +140,13 @@ test("installed from another source: 替换… asks once and installs with repla
     host.dialogAnswers.push(no);
     host.window("store").emit("act", "replace");
     await until(host, () => host.confirms.length === 1, "replace question");
-    assert.equal(host.confirms.at(-1)!["message"], "替换已安装的「YouTube」？");
+    assert.equal(host.confirmTexts.at(-1)!.message, "替换已安装的「YouTube」？");
     assert.equal(host.confirms.at(-1)!["destructive"], true);
-    assert.match(String(host.confirms.at(-1)!["detail"]), /原插件的数据保留，以后从原来源重新安装时接上/);
-    // Acceptance S5: the store cannot see dormant instances, so it says both cases.
-    assert.match(String(host.confirms.at(-1)!["detail"]), /若之前从这个来源安装过，会接上当时的数据；否则使用新的空数据/);
+    assert.match(String(host.confirmTexts.at(-1)!.detail), /将安装官方仓库的 0\.2\.0。/);
+    // Acceptance S5: the store cannot see dormant instances, so it says both cases (a nested
+    // template: English until the player translates nested arguments).
+    assert.match(String(host.confirmTexts.at(-1)!.detail), /The original plugin's data is kept and is used again when you reinstall it/);
+    assert.match(String(host.confirmTexts.at(-1)!.detail), /from this source, if there was one, otherwise with new, empty data/);
     assert.equal(installs(host).length, 0);
 
     host.dialogAnswers.push(yes);
@@ -184,7 +171,7 @@ test("a conflict the store did not know about: confirm, then retry with replace"
     host.window("store").emit("act", "install");
     await until(host, () => installs(host).length === 1);
     assert.equal(host.confirms.length, 2);
-    assert.equal(host.confirms[1]!["message"], "替换已安装的「YouTube」？");
+    assert.equal(host.confirmTexts[1]!.message, "替换已安装的「YouTube」？");
     assert.equal(installs(host)[0]!.replace, true);
   } finally {
     await stop();
@@ -278,13 +265,15 @@ test("update, rollback, older version and uninstall from the same repository", a
     assert.equal(row.badge, "可更新 → 0.3.0");
     assert.deepEqual(actions(host).map((a) => a.text), ["更新到 0.3.0", "卸载…"]);
     assert.ok(banners(host).includes("新版本需要新的权限：读写剪贴板"));
-    assert.equal(props(host)["updates-label"], "可更新 1");
+    // The Updates chip shows the count ("Updates {}", in Slint).
+    assert.equal(props(host)["updates"], 1);
 
     host.dialogAnswers.push(yes);
     host.window("store").emit("act", "update");
     await until(host, () => host.osd.includes("已更新 YouTube 到 0.3.0"));
-    assert.equal(host.confirms.at(-1)!["message"], "更新「YouTube」到 0.3.0？新版本需要更多权限");
-    assert.match(String(host.confirms.at(-1)!["detail"]), /新增：\n· 读写剪贴板/);
+    assert.equal(host.confirmTexts.at(-1)!.message, "更新「YouTube」到 0.3.0？新版本需要更多权限");
+    // The permission list: English until the player translates nested arguments.
+    assert.match(String(host.confirmTexts.at(-1)!.detail), /新增：\n· Read and write the clipboard/);
     await until(host, () => !store.busy);
     assert.deepEqual(actions(host).map((a) => a.text), ["回退到 0.2.0", "卸载…"]);
 
@@ -307,8 +296,8 @@ test("update, rollback, older version and uninstall from the same repository", a
     host.dialogAnswers.push(yes);
     host.window("store").emit("installVersion", "0.1.0");
     await until(host, () => host.osd.includes("已安装 YouTube 0.1.0"));
-    assert.equal(host.confirms.at(-1)!["message"], "安装「YouTube」0.1.0（旧版本）？");
-    assert.equal(host.confirms.at(-1)!["detail"], "当前 0.2.0。安装后可以在商城恢复到 0.2.0。");
+    assert.equal(host.confirmTexts.at(-1)!.message, "安装「YouTube」0.1.0（旧版本）？");
+    assert.equal(host.confirmTexts.at(-1)!.detail, "当前 0.2.0。安装后可以在商城恢复到 0.2.0。");
     await until(host, () => !store.busy);
     assert.ok(actions(host).some((x) => x.text === "恢复到 0.2.0"));
     host.window("store").emit("act", "rollback");
@@ -319,7 +308,7 @@ test("update, rollback, older version and uninstall from the same repository", a
     host.window("store").emit("act", "uninstall");
     await until(host, () => host.osd.includes("已卸载 YouTube（数据已删除）"));
     assert.deepEqual(host.packageCalls.at(-1), { method: "uninstall", id: "zysilm.youtube", removeData: true });
-    assert.equal(host.confirms.at(-1)!["checkbox"], "同时删除它的设置与数据");
+    assert.equal(host.confirmTexts.at(-1)!.checkbox, "同时删除它的设置与数据");
   } finally {
     await stop();
   }
@@ -355,11 +344,12 @@ test("third-party repository: warning banner, unofficial confirmation, remote RE
     host.dialogAnswers.push(yes);
     host.window("store").emit("act", "install");
     await until(host, () => installs(host).length === 1);
-    const confirm = host.confirms.at(-1)!;
-    assert.equal(confirm["message"], "安装来自非官方仓库的「Viz」1.0.0？");
-    assert.equal(confirm["confirm"], "仍然安装");
-    assert.equal(confirm["destructive"], true);
-    assert.match(String(confirm["detail"]), /这个仓库未经 Vestra Player 审核/);
+    const confirm = host.confirmTexts.at(-1)!;
+    assert.equal(confirm.message, "安装来自非官方仓库的「Viz」1.0.0？");
+    assert.equal(confirm.confirm, "仍然安装");
+    assert.equal(host.confirms.at(-1)!["destructive"], true);
+    // A nested template: English until the player translates nested arguments.
+    assert.match(String(confirm.detail), /This repository is not reviewed by Vestra Player/);
     assert.deepEqual(installs(host)[0]!.source, { kind: "repository", url: THIRD });
   } finally {
     await stop();

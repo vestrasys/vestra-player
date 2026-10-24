@@ -1,32 +1,36 @@
-# 插件商城
+# Plugin Store
 
-浏览 Vestra Player 官方仓库里的插件，安装、更新、回退或卸载它们。
+Browse the plugins in the official Vestra Player repository and install, update, roll back or uninstall them.
 
-## 入口
+## Entries
 
-- 右键菜单 `插件商城…`。有可以更新的插件时显示为 `插件商城（2 个可更新）…`。
-- 把 `.vxp` 插件包拖到视频区，直接安装。
-- 「选项」窗口 ▶ 插件 ▶ 插件商城：第三方仓库与自动检查更新。
+- Right-click menu: Plugin Store…. When updates are available it reads Plugin Store (2 updates)….
+- Drop a `.vxp` plugin package on the video area to install it.
+- Options ▸ Plugins ▸ Plugin Store: third-party repositories and the automatic update check.
 
-## 功能
+## Features
 
-- **列表**：官方仓库与已添加仓库的插件，以及本机已安装的插件。可以搜索（名称、作者、标签）、按「全部 / 已安装 / 可更新」过滤、按标签筛选、按名称或更新时间排序。
-- **详情**：说明、更新日志、版本历史，以及插件需要的权限（用平常的话写出，需要留意的标为琥珀色）。
-- **安装与更新**：每次安装前都会列出权限并请你确认。更新只来自插件原来的仓库；更新后可以回退到上一个版本。也可以在「版本」里安装别的版本。
-- **从文件或链接安装**：窗口里的「从文件安装…」「从链接安装…」，或把 `.vxp` 拖到视频区。这样装的插件没有经过任何仓库审核，商城也不会为它们检查更新。
-- **替换**：同一个插件已从别处安装时，商城会先问你是否替换。替换后新插件使用新的空数据，原来的数据保留，以后从原来源重新安装时接上。
-- **撤回**：仓库撤回某个版本时，商城会停用它并告诉你原因，详情页一直显示警告。你仍可以确认风险后重新启用，之后商城不会再停用它。
-- **自动检查**：播放器启动 30 秒后检查一次，之后每 24 小时一次，只计数、不会自动安装。可以在设置页关闭。
+- **List**: the plugins of the official repository and of the repositories you added, and the plugins installed on this machine. Search (name, author, tags), filter by All / Installed / Updates, pick a tag, sort by name or by update time.
+- **Details**: description, changelog, version history and the permissions the plugin needs (in plain words; the ones to watch are amber).
+- **Install and update**: every install lists the permissions and asks first. Updates come only from the plugin's own repository; after an update you can roll back to the previous version. The Versions tab installs another version.
+- **From a file or a link**: Install from File… and Install from Link… in the window, or drop a `.vxp` on the video area. Such plugins are not reviewed by any repository, and the store does not check them for updates.
+- **Replace**: when the same plugin is already installed from somewhere else, the store asks before replacing it. The replacement starts with new, empty data; the old data is kept and comes back when you reinstall from the original source.
+- **Revocations**: when a repository revokes a version, the store disables it and tells you why; its page keeps a warning. You can confirm the risk and enable it again, and the store will not disable it again.
+- **Automatic check**: 30 seconds after the player starts, then every 24 hours; it only counts updates and never installs on its own. It can be turned off on the settings page.
 
-## 安全
+## Security
 
-- 官方仓库的索引有数字签名，商城用内置的公钥校验；校验不过时不使用，继续显示上一份可信的数据。每个插件包的大小和校验和都要与索引一致才会安装。
-- 官方插件只有随播放器安装的内置插件，id 以 `vestra.` 开头。官方仓库里的插件是第三方插件：由各自的作者编写，只是经过官方仓库审核，列表里标为「官方仓库」。任何仓库列出的、或安装包里的 `vestra.` 开头的 id 都不能安装。
-- 第三方仓库的插件标为「非官方：仓库名」，它们和侧载的插件都会在安装前警告。第三方仓库的说明默认不加载远程图片，可以按需点「显示图片」。
-- 插件是完整的程序：权限只限制它使用播放器的功能，不限制它读写文件和联网。只安装你信任的作者的插件。
+- The official repository's index is digitally signed, and the store checks it with a built-in public key; an index that does not verify is not used, and the last trusted copy stays. A package is installed only when its size and checksum match the index.
+- The only official plugins are the built-in ones that come with the player, with ids starting with `vestra.`. The plugins in the official repository are third-party plugins, written by their authors and reviewed by the repository; the list marks them Official repository. An id starting with `vestra.` cannot be installed from any repository or package.
+- Plugins of third-party repositories are marked Unofficial: <repository>; they and sideloaded plugins come with a warning before installing. A third-party README does not load remote images until you click Show Images.
+- A plugin is a complete program: permissions only limit what it can do with the player, not reading and writing files or using the network. Only install plugins from authors you trust.
 
-## 限制
+## Limits
 
-- 内置插件随播放器更新，不能在这里安装、替换或卸载；停用和重新加载请用「设置 ▶ 插件管理…」。
-- 列表里不显示插件图标（只在详情页显示）；把 `.vxp` 拖到商城窗口上无效，请拖到视频区。
-- 公司代理或自签名证书的网络里可能连不上仓库。
+- Built-in plugins are updated with the player and cannot be installed, replaced or uninstalled here; disable or reload them in Settings ▸ Plugin Manager….
+- The list shows no plugin icons (only the details do); dropping a `.vxp` on the store window does nothing, drop it on the video area.
+- Behind a company proxy or with self-signed certificates the repositories may be unreachable.
+
+## Translations
+
+Texts are English in the source; `locales/zh-Hans.po` has the Simplified Chinese (`vestra-plugin i18n extract`, `i18n check`). Sentences built at run time are templates in `text.ts`; the windows turn them into words in `ui/words.slint`.

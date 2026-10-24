@@ -28,12 +28,13 @@ test("a .vxp dropped on the video area: the window opens, a side-load warning, i
     await host.drop([a, b]);
     await until(host, () => host.confirms.length === 2 && !store.busy, "two confirmations");
     assert.equal(host.window("store").visible, true);
-    assert.equal(host.confirms[0]!["message"], "安装插件包「A」1.0.0？");
-    assert.equal(host.confirms[0]!["confirm"], "仍然安装");
+    assert.equal(host.confirmTexts[0]!.message, "安装插件包「A」1.0.0？");
+    assert.equal(host.confirmTexts[0]!.confirm, "仍然安装");
     assert.equal(host.confirms[0]!["destructive"], true);
-    assert.match(String(host.confirms[0]!["detail"]), /来自文件 a\.vxp，未经任何仓库审核，也不会自动更新/);
-    assert.match(String(host.confirms[0]!["detail"]), /· 修改所有快捷键/);
-    assert.equal(host.confirms[1]!["message"], "安装插件包「someone.b」2.0.0？");
+    // Nested templates: English until the player translates nested arguments.
+    assert.match(String(host.confirmTexts[0]!.detail), /^From the file a\.vxp; not reviewed by any repository and not updated automatically/);
+    assert.match(String(host.confirmTexts[0]!.detail), /· Change all shortcuts/);
+    assert.equal(host.confirmTexts[1]!.message, "安装插件包「someone.b」2.0.0？");
     assert.deepEqual(installs(host), [{ method: "install", id: "someone.a", source: { kind: "file" }, replace: false }]);
     await until(host, () => host.osd.includes("已安装 A 1.0.0"));
     assert.equal(store.selected, "\nsomeone.a");
@@ -72,8 +73,9 @@ test("从文件安装…: cancel, an invalid file, a built-in id, replacing a re
     host.dialogAnswers.push([packageFile("yt.vxp", { id: "zysilm.youtube", version: "0.2.1", name: "YouTube" })], yes);
     window.emit("fromFile");
     await until(host, () => installs(host).length === 1);
-    assert.equal(host.confirms.at(-1)!["message"], "用插件包「YouTube」0.2.1 替换已安装的版本？");
-    assert.match(String(host.confirms.at(-1)!["detail"]), /来自仓库 plugins\.test。替换后，若之前从这个来源安装过，会接上当时的数据；否则使用新的空数据/);
+    assert.equal(host.confirmTexts.at(-1)!.message, "用插件包「YouTube」0.2.1 替换已安装的版本？");
+    // Nested templates: English until the player translates nested arguments.
+    assert.match(String(host.confirmTexts.at(-1)!.detail), /comes from Repository plugins\.test\. Replacing it continues with the data from an earlier install/);
     assert.deepEqual(installs(host)[0], { method: "install", id: "zysilm.youtube", source: { kind: "file" }, replace: true });
   } finally {
     await stop();
@@ -103,8 +105,9 @@ test("从链接安装…: https only, 64 MB at most, the permissions come from t
     host.dialogAnswers.push(yes);
     window.emit("linkAccepted", "https://example.org/x-1.0.0.vxp");
     await until(host, () => installs(host).length === 1);
-    assert.match(String(host.confirms.at(-1)!["detail"]), /来自链接 https:\/\/example\.org\/x-1\.0\.0\.vxp/);
-    assert.match(String(host.confirms.at(-1)!["detail"]), /· 在系统钥匙串保存登录信息/);
+    // Nested templates: English until the player translates nested arguments.
+    assert.match(String(host.confirmTexts.at(-1)!.detail), /From the link https:\/\/example\.org\/x-1\.0\.0\.vxp/);
+    assert.match(String(host.confirmTexts.at(-1)!.detail), /· Store sign-in details in the system keychain/);
     assert.deepEqual(installs(host)[0], {
       method: "install",
       id: "someone.x",

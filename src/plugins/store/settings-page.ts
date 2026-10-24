@@ -1,26 +1,27 @@
-import { hostOf } from "./labels.ts";
+import { hostOf, reasonOf } from "./labels.ts";
 import { MAX_REPOS, normalizeRepoUrl } from "./repos.ts";
 import type { Store } from "./store.ts";
+import { msg, slint, type Msg } from "./text.ts";
 
 /**
- * 「选项 ▶ 插件 ▶ 插件商城」 (design §4): automatic checks on or off, the
- * official repository (fixed) and up to 16 third-party ones. Adding reads the
- * repository first and asks with a warning; removing keeps what was
- * installed from it (it becomes 「只在本机」).
+ * Options ▸ Plugins ▸ Plugin Store (design §4): automatic checks on or off,
+ * the official repository (fixed) and up to 16 third-party ones. Adding
+ * reads the repository first and asks with a warning; removing keeps what
+ * was installed from it (it becomes a local row).
  */
 export class SettingsPage {
   static readonly ID = "store.repos";
   readonly #store: Store;
   #adding = false;
   #working = false;
-  #message = { text: "", warn: false };
+  #message: { text: Msg | null; warn: boolean } = { text: null, warn: false };
 
   constructor(store: Store) {
     this.#store = store;
     const page = store.plugin.settings.page("ui/settings.slint", {
       id: SettingsPage.ID,
       category: "plugins",
-      title: "插件商城",
+      title: "Plugin Store",
       order: 20,
     });
     page.on("toggleAuto", () => {
@@ -30,7 +31,7 @@ export class SettingsPage {
     page.on("startAdd", () => {
       this.#adding = true;
       page.set({ addText: "" });
-      this.#say("");
+      this.#say(null);
     });
     page.on("cancelAdd", () => {
       this.#adding = false;
@@ -40,7 +41,7 @@ export class SettingsPage {
     page.bind(() => this.#props());
   }
 
-  #say(text: string, warn = false) {
+  #say(text: Msg | null, warn = false) {
     this.#message = { text, warn };
     this.#store.changed();
   }
@@ -50,15 +51,15 @@ export class SettingsPage {
     return {
       autoCheck: store.settings.value.autoCheck,
       repos: store.repos.list.map((repo) => ({
-        name: repo.official ? "Vestra Player 官方仓库" : `非官方：${repo.label}`,
+        name: slint(repo.official ? msg("Vestra Player official repository") : repo.origin),
         url: repo.url,
-        note: repo.status.text,
+        note: slint(repo.status.text),
         tone: repo.status.warn ? 2 : 0,
         removable: !repo.official,
       })),
       adding: this.#adding,
       canAdd: store.settings.value.repos.length < MAX_REPOS && !this.#working,
-      message: this.#message.text,
+      message: slint(this.#message.text),
       messageWarn: this.#message.warn,
     };
   }
@@ -70,36 +71,47 @@ export class SettingsPage {
     if ("error" in normalized) return this.#say(normalized.error, true);
     const { url, local } = normalized;
     if (url === store.repos.official.url || store.settings.value.repos.includes(url))
-      return this.#say("这个仓库已经添加过了", true);
-    if (store.settings.value.repos.length >= MAX_REPOS) return this.#say(`最多添加 ${MAX_REPOS} 个仓库`, true);
+      return this.#say(msg("This repository has already been added"), true);
+    if (store.settings.value.repos.length >= MAX_REPOS) return this.#say(msg("At most {} repositories can be added", MAX_REPOS), true);
     this.#working = true;
-    this.#say(`正在读取 ${hostOf(url)}…`);
+    this.#say(msg("Reading {}…", hostOf(url)));
     try {
       let name: string;
       try {
         const index = await store.repos.probe(url);
-        name = index.name || "未命名仓库";
+        name = index.name;
       } catch (error) {
         return this.#say(
-          `无法读取这个仓库：${(error as Error).message}。请检查地址（仓库根地址或 index.json 的完整地址）`,
+          msg(
+            "Couldn't read this repository: {}. Check the address (the repository's root address or the full address of index.json)",
+            reasonOf(error),
+          ),
           true,
         );
       }
       const answer = await store.ask({
-        message: `添加非官方仓库「${name}」？`,
-        detail:
-          `地址：${url}\n\n其中的插件未经 Vestra Player 审核，可能读取你的文件或联网。商城会显示这个仓库的插件，但不会替你判断它们是否可信。` +
-          (local ? "\n\n这是本机上的测试仓库，没有加密。" : ""),
-        confirm: "添加",
+        message: name
+          ? msg("Add the unofficial repository “{}”?", name)
+          : msg("Add the unofficial repository “Unnamed repository”?", ""),
+        detail: local
+          ? msg(
+              "Address: {1}\n\nIts plugins are not reviewed by Vestra Player and may read your files or use the network. The store shows this repository's plugins but does not judge for you whether they can be trusted.\n\nThis is a test repository on this machine, without encryption.",
+              url,
+            )
+          : msg(
+              "Address: {1}\n\nIts plugins are not reviewed by Vestra Player and may read your files or use the network. The store shows this repository's plugins but does not judge for you whether they can be trusted.",
+              url,
+            ),
+        confirm: "Add",
       });
-      if (!answer?.confirmed) return this.#say("");
+      if (!answer?.confirmed) return this.#say(null);
       store.settings.save({ ...store.settings.value, repos: [...store.settings.value.repos, url] });
       store.repos.sync(store.settings.value.repos);
       this.#adding = false;
       const repo = store.repos.find(url)!;
       await store.repos.refresh(repo);
       store.rebuild(true);
-      this.#say(`已添加 ${repo.label}`);
+      this.#say(msg("Added {}", repo.label));
     } finally {
       this.#working = false;
       store.changed();
@@ -110,10 +122,16 @@ export class SettingsPage {
     const store = this.#store;
     const repo = store.repos.find(url);
     if (!repo || repo.official) return;
+    const name = repo.index?.name;
+    const host = hostOf(repo.url);
     const answer = await store.ask({
-      message: `移除仓库「${repo.label}」？`,
-      detail: "移除后商城不再读取这个仓库。从它安装的插件会保留，但商城不再为它们检查更新和撤回。",
-      confirm: "移除",
+      message: name
+        ? msg("Remove the repository “{} ({})”?", name, host)
+        : msg("Remove the repository “Unnamed repository ({1})”?", "", host),
+      detail: msg(
+        "The store will stop reading this repository. Plugins installed from it stay, but the store no longer checks them for updates and revocations.",
+      ),
+      confirm: "Remove",
       destructive: true,
     });
     if (!answer?.confirmed) return;
@@ -121,6 +139,6 @@ export class SettingsPage {
     store.repos.sync(store.settings.value.repos);
     store.repos.forget(url);
     store.rebuild();
-    this.#say(`已移除 ${repo.label}`);
+    this.#say(msg("Removed {}", repo.label));
   }
 }

@@ -7,9 +7,12 @@ import { createHash, generateKeyPairSync, sign, type KeyObject } from "node:cryp
 import { readFileSync } from "node:fs";
 import type { PackageManifest, Plugin } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
+import type { Json, Locale } from "@vestra-player/sdk";
+import { CAPABILITIES } from "../labels.ts";
 import { startStore } from "../main.ts";
 import type { Store } from "../store.ts";
 import { timing } from "../store.ts";
+import { slint, type Msg, type SlintArg, type SlintMsg } from "../text.ts";
 
 export const directory = new URL("..", import.meta.url);
 
@@ -247,6 +250,8 @@ export async function start(
     host?: TestHost;
     now?: () => number;
     keys?: KeyObject[];
+    /** The interface language; the store's tests read Simplified Chinese unless they say otherwise. */
+    locale?: Locale;
   } = {},
 ) {
   const net = options.net ?? new FakeNet();
@@ -293,9 +298,15 @@ export async function start(
         log: (line) => logs.push(line),
       });
     },
-    { directory, host, ...(options.dataDirectory ? { dataDirectory: options.dataDirectory } : {}) },
+    {
+      directory,
+      host,
+      locale: options.locale ?? "zh-Hans",
+      ...(options.dataDirectory ? { dataDirectory: options.dataDirectory } : {}),
+    },
   );
   await host.settle();
+  latest = host;
   return { host, net, store, logs, plugin: started.plugin, stop: started.stop };
 }
 
@@ -322,8 +333,53 @@ export async function openStore(host: TestHost) {
   return window;
 }
 
+// ------------------------------------------------------------ window texts as shown
+
+const isSlintMsg = (value: unknown): value is SlintMsg =>
+  typeof value === "object" && value !== null && "id" in value && "args" in value && Object.keys(value).length === 2;
+
+/** What ui/words.slint makes of a `Msg`, in the test host's language. */
+export function shown(host: TestHost, value: SlintMsg | Msg | null): string {
+  const m = value === null || isSlintMsg(value) ? (value ?? slint(null)) : slint(value);
+  const arg = (x: SlintArg | undefined): string =>
+    !x ? "" : x.id === "" ? x.a : host.translate(x.id, [x.a, x.b, x.c, x.d]);
+  return m.id === "" ? arg(m.args[0]) : host.translate(m.id, m.args.map(arg));
+}
+
+/** Window props with every `Msg` turned into its text (as the Slint files do). */
+export function view(host: TestHost, value: unknown): unknown {
+  if (isSlintMsg(value)) return shown(host, value);
+  if (Array.isArray(value)) return value.map((each) => view(host, each));
+  // Images and Markdown documents stay as they are.
+  if (typeof value !== "object" || value === null || Object.keys(value).some((key) => key.startsWith("$"))) return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, each] of Object.entries(value)) out[key] = view(host, each);
+  // A banner listing new permissions.
+  if (Array.isArray(out["caps"]) && (out["caps"] as string[]).length)
+    out["text"] = host.translate("The new version needs new permissions: {}", [
+      (out["caps"] as string[]).map((id) => host.translate(CAPABILITIES[id]!.text)).join(host.translate(", ")),
+    ]);
+  return out;
+}
+
+let latest: TestHost | null = null;
+
+/** A `Msg` as a window shows it, in the language of the store started last. */
+export const said = (value: Msg | null) => shown(latest!, value);
+
+/** The store window's props as shown, plus the status line's text. */
+export function props(host: TestHost): Record<string, Json> {
+  const raw = host.window("store").props;
+  const out = view(host, raw) as Record<string, Json>;
+  out["status-text"] = ((raw["status"] as SlintMsg[] | undefined) ?? []).map((m) => shown(host, m)).join(" · ");
+  return out;
+}
+
+/** The settings page's props as shown. */
+export const pageProps = (host: TestHost) => view(host, host.settingsPage("store.repos").props) as Record<string, Json>;
+
 export const rows = (host: TestHost) =>
-  (host.window("store").props["rows"] as { key: string; name: string; badge: string; version: string }[]) ?? [];
+  (props(host)["rows"] as { key: string; name: string; badge: string; version: string }[]) ?? [];
 
 /** Select the row with this name in the store window. */
 export async function choose(host: TestHost, name: string) {
@@ -334,6 +390,5 @@ export async function choose(host: TestHost, name: string) {
   return row;
 }
 
-export const props = (host: TestHost) => host.window("store").props;
 export const actions = (host: TestHost) => (props(host)["actions"] as { id: string; text: string; enabled: boolean }[]) ?? [];
 export const banners = (host: TestHost) => ((props(host)["banners"] as { text: string }[]) ?? []).map((b) => b.text);

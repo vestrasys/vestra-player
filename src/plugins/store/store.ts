@@ -2,7 +2,6 @@ import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
-  ConfirmOptions,
   ImageRef,
   JsonStore,
   MarkdownRef,
@@ -15,12 +14,13 @@ import { buildItems, checkVersion, isInstalledRow, updateCount, type Display, ty
 import { clean } from "./index-format.ts";
 import { Icons } from "./icons.ts";
 import * as installer from "./installer.ts";
-import { cut, day, hostOf, permissions, sourceName, TRUST_NOTE } from "./labels.ts";
-import { get } from "./net.ts";
+import { day, hostOf, permissions, reasonOf, sourceName } from "./labels.ts";
+import { get, NetError } from "./net.ts";
 import { Revocations, revocationKey } from "./revocations.ts";
 import { Repos, type Deps } from "./repos.ts";
 import { compareVersions, isVersion } from "./semver.ts";
 import { SettingsPage } from "./settings-page.ts";
+import { host, msg, raw, slint, type Label, type Msg } from "./text.ts";
 
 /** Persisted in `<data>/settings.json`. */
 export type Settings = {
@@ -62,21 +62,24 @@ export const timing = {
 export const MENU_ORDER = 822;
 const README_LIMIT = 256 * 1024;
 const FILTERS = 3;
-const SORTS = ["排序：名称", "排序：更新时间"];
 const REMOTE_IMAGE = /!\[[^\]]*\]\(\s*<?(https?:\/\/[^)\s>]+)/g;
-const MANAGE_NOTE = "停用、重新加载、查看数据目录：设置 ▶ 插件管理…";
 
-/** Rough label width for the 11px buttons (CJK ≈ 11px, other ≈ 6.5px, padding 16). */
-export function labelWidth(text: string, min = 66): number {
-  let width = 16;
-  for (const ch of text) width += /[⺀-￿]/.test(ch) ? 11 : 6.5;
-  return Math.max(min, Math.ceil(width));
+/** A confirmation: `message` and `detail` share one list of arguments (`detail` numbers its placeholders after the message's). */
+export interface Question {
+  message: Msg;
+  detail?: Msg;
+  confirm: Label;
+  cancel?: Label;
+  destructive?: boolean;
+  checkbox?: Label;
 }
+
+type Banner = { text: Msg | null; caps: string[]; tone: number; action: string; actionText: Msg | null };
 
 type Doc = {
   key: string;
   ref: MarkdownRef | null;
-  note: string;
+  note: Msg | null;
   blocked: number;
   failed: boolean;
   scope: Scope | null;
@@ -112,9 +115,9 @@ export class Store {
   tab = 0;
   linkOpen = false;
   linkText = "";
-  #message: { text: string; warn: boolean } | null = null;
-  #operation: { text: string; cancel: (() => void) | null } | null = null;
-  #doc: Doc = { key: "", ref: null, note: "", blocked: 0, failed: false, scope: null };
+  #message: { text: Msg; warn: boolean } | null = null;
+  #operation: { text: Msg; cancel: (() => void) | null } | null = null;
+  #doc: Doc = { key: "", ref: null, note: null, blocked: 0, failed: false, scope: null };
   #docAbort: AbortController | null = null;
   readonly #texts = new Map<string, string>();
   readonly #remoteShown = new Set<string>();
@@ -278,7 +281,7 @@ export class Store {
     this.rebuild();
   }
 
-  /** 「插件商城…」, with the number of updates in the title (design §1.2). */
+  /** "Plugin Store…", with the number of updates in the title (design §1.2). */
   updateMenu(afterRefresh = false): Promise<void> {
     this.#menuChain = this.#menuChain.then(async () => {
       if (this.#disposed) return;
@@ -290,14 +293,15 @@ export class Store {
       const scope = (this.#menuScope = this.plugin.scope());
       scope.commands.add({
         id: "open",
-        path: [count > 0 ? `插件商城（${count} 个可更新）…` : "插件商城…"],
+        // The count cannot be translated yet: a menu title takes no arguments (第 2 轮请求 in the i18n round).
+        path: [count > 0 ? `Plugin Store (${count} updates)…` : "Plugin Store…"],
         order: MENU_ORDER,
         group: "windows",
         run: () => this.open(),
       });
       if (afterRefresh && count > 0 && before <= 0 && !this.#announced) {
         this.#announced = true;
-        this.osd(`插件商城：${count} 个插件可以更新`);
+        this.osd(msg("Plugin Store: plugin updates available ({})", count));
       }
     });
     return this.#menuChain;
@@ -306,9 +310,9 @@ export class Store {
   // ------------------------------------------------------------ operations
 
   /** One download or install at a time. */
-  begin(text: string, cancel: (() => void) | null = null): boolean {
+  begin(text: Msg, cancel: (() => void) | null = null): boolean {
     if (this.#operation) {
-      this.report("正在进行另一项安装，请等它结束", true);
+      this.report(msg("Another install is in progress; wait for it to finish"), true);
       return false;
     }
     this.#operation = { text, cancel };
@@ -317,7 +321,7 @@ export class Store {
     return true;
   }
 
-  progress(text: string, cancel?: (() => void) | null) {
+  progress(text: Msg, cancel?: (() => void) | null) {
     if (!this.#operation) return;
     this.#operation = { text, cancel: cancel === undefined ? this.#operation.cancel : cancel };
     this.changed();
@@ -336,30 +340,37 @@ export class Store {
   }
 
   /** A result for the user: the status line and an on-screen message. */
-  report(text: string, warn = false) {
+  report(text: Msg, warn = false) {
     this.#message = { text, warn };
     this.osd(text);
     this.changed();
   }
 
-  osd(text: string) {
-    void this.plugin.osd.show(cut(text.replace(/\s+/g, " "), 200)).catch(() => {});
+  osd(text: Msg) {
+    // Arguments cut so the shown text stays within the OSD's 200 characters.
+    void this.plugin.osd.show(text.text, host(text.args, 80)).catch(() => {});
   }
 
   /** `dialogs.confirm` with the limits applied; `null` when no dialog could be shown. */
-  async ask(options: ConfirmOptions): Promise<{ confirmed: boolean; checked: boolean } | null> {
+  async ask(question: Question): Promise<{ confirmed: boolean; checked: boolean } | null> {
     this.lastDialogError = null;
+    const { message, detail, confirm, cancel, destructive, checkbox } = question;
+    const args = host([...message.args, ...(detail?.args ?? [])], 1200);
     try {
       return await this.plugin.dialogs.confirm({
-        ...options,
-        message: cut(options.message, 200),
-        ...(options.detail === undefined ? {} : { detail: cut(options.detail, 2000) }),
+        message: message.text,
+        ...(detail === undefined ? {} : { detail: detail.text }),
+        confirm,
+        ...(cancel === undefined ? {} : { cancel }),
+        ...(destructive === undefined ? {} : { destructive }),
+        ...(checkbox === undefined ? {} : { checkbox }),
+        ...(args.length ? { args } : {}),
       });
     } catch (error) {
       const code = (error as { code?: string }).code;
       this.lastDialogError = code ?? "failed";
-      if (code === "unsupported") this.report("此系统不支持确认框，无法继续", true);
-      else if (code === "busy") this.report("另一个对话框正在打开，请先关闭它", true);
+      if (code === "unsupported") this.report(msg("This system does not support confirmation dialogs; cannot continue"), true);
+      else if (code === "busy") this.report(msg("Another dialog is open; close it first"), true);
       else this.deps.log(`confirm: ${(error as Error).message}`);
       return null;
     }
@@ -404,66 +415,59 @@ export class Store {
     const visible = this.visible();
     const tags = this.#tags();
     const item = this.selectedItem();
-    const updates = updateCount(this.items);
     const op = this.#operation;
+    const status = this.#message
+      ? [this.#message.text]
+      : this.repos.list.flatMap((repo) => (repo.status.text ? [repo.status.text] : []));
     const base = {
       filter: this.filter,
-      updatesLabel: updates > 0 ? `可更新 ${updates}` : "可更新",
-      tagModel: ["标签：全部", ...tags],
+      updates: updateCount(this.items),
+      // The first entry is "Tags: All" (the window's words).
+      tagModel: ["", ...tags],
       tagIndex: this.tag ? Math.max(0, tags.findIndex((t) => t.toLowerCase() === this.tag!.toLowerCase()) + 1) : 0,
-      sortModel: SORTS,
       sortIndex: this.sort,
       rows: visible.map((each) => this.#row(each)),
-      emptyText: this.#emptyText(visible),
+      emptyText: slint(this.#emptyText(visible)),
       linkOpen: this.linkOpen,
-      statusText: this.#message?.text ?? this.#repoStatus(),
+      status: status.map(slint),
       statusWarn: this.#message?.warn ?? this.repos.list.some((repo) => repo.status.warn),
-      busyText: op?.text ?? "",
+      busyText: slint(op?.text ?? null),
       canCancel: op?.cancel != null,
       hasSelection: item !== null,
     };
     if (!item) return base;
     const caps = item.best?.capabilities ?? item.installed?.capabilities ?? item.entry?.versions[0]?.capabilities ?? [];
-    const perms = permissions(caps);
     return {
       ...base,
       dName: item.name,
-      dMeta: `${item.author ?? "未知作者"} · ${this.#origin(item)}`,
+      dMeta: slint(msg("{} · {}", item.author ?? msg("Unknown author"), this.#origin(item))),
       dPunchline: item.punchline ?? item.local?.description ?? "",
       dIcon: this.#icon(item),
-      actions: this.#actions(item).map((a) => ({ ...a, width: labelWidth(a.text) })),
-      banners: this.#banners(item).map((b) => ({ ...b, actionWidth: b.actionText ? labelWidth(b.actionText, 41) : 0 })),
+      actions: this.#actions(item).map((a) => ({ ...a, text: slint(a.text) })),
+      banners: this.#banners(item).map((b) => ({ ...b, text: slint(b.text), actionText: slint(b.actionText) })),
       tab: this.tab,
       doc: this.#doc.key === this.#docKey(item) && this.#doc.ref ? this.#doc.ref : [],
-      docNote: this.#doc.key === this.#docKey(item) ? this.#doc.note : "正在加载…",
+      docNote: slint(this.#doc.key === this.#docKey(item) ? this.#doc.note : msg("Loading…")),
       versions: this.#versions(item),
-      facts: this.#facts(item).map(({ label, text, url }) => ({ label, text, link: url !== null })),
-      permissionsTitle: `权限（${perms.length}）`,
-      permissions: perms,
-      permissionNote: TRUST_NOTE,
-      manageNote: item.installed && !item.installed.builtin ? MANAGE_NOTE : "",
+      facts: this.#facts(item).map(({ label, text, url }) => ({ label: slint(label), text: slint(text), link: url !== null })),
+      permissions: permissions(caps).map(({ id, risky }) => ({ id, risky })),
+      manage: item.installed !== null && !item.installed.builtin,
     };
   }
 
-  #repoStatus(): string {
-    return this.repos.list
-      .map((repo) => repo.status.text)
-      .filter(Boolean)
-      .join(" · ");
+  #emptyText(visible: Item[]): Msg | null {
+    if (visible.length) return null;
+    if (this.search || this.tag) return msg("No plugins match");
+    if (this.filter === 2) return msg("All plugins are up to date");
+    if (this.filter === 1) return msg("No plugins installed yet");
+    if (this.repos.list.some((repo) => repo.refreshing)) return msg("Reading repositories…");
+    if (this.repos.list.every((repo) => !repo.index))
+      return msg("Can't connect to the repositories and there is no cached copy. Click “Refresh” once you are online.");
+    return msg("The repositories have no plugins yet");
   }
 
-  #emptyText(visible: Item[]): string {
-    if (visible.length) return "";
-    if (this.search || this.tag) return "没有符合条件的插件";
-    if (this.filter === 2) return "所有插件都是最新的";
-    if (this.filter === 1) return "还没有安装插件";
-    if (this.repos.list.some((repo) => repo.refreshing)) return "正在读取仓库…";
-    if (this.repos.list.every((repo) => !repo.index)) return "无法连接仓库，也没有缓存。连上网络后点「刷新」。";
-    return "仓库里还没有插件";
-  }
-
-  #origin(item: Item): string {
-    if (item.repo) return item.repo.official ? "官方仓库" : `非官方：${item.repo.label}`;
+  #origin(item: Item): Msg {
+    if (item.repo) return item.repo.origin;
     return sourceName(item.installed?.source ?? null);
   }
 
@@ -472,38 +476,37 @@ export class Store {
     const shown = item.state === "otherSource" || item.state === "available" || item.state === "incompatible" || item.state === "allRevoked" || item.state === "reserved"
       ? (item.best ?? item.entry?.versions[0])?.version ?? ""
       : installedVersion;
-    const repoTag = item.repo ? (item.repo.official ? "官方仓库" : `非官方：${item.repo.label}`) : sourceName(item.installed?.source ?? null);
-    const [badge, tone] = ((): [string, number] => {
+    const [badge, tone] = ((): [Msg | null, number] => {
       switch (item.state) {
         case "installed":
-          return ["已安装", 0];
+          return [msg("Installed"), 0];
         case "update":
-          return [`可更新 → ${item.best!.version}`, 1];
+          return [msg("Update → {}", item.best!.version), 1];
         case "revoked":
-          return ["已撤回", 3];
+          return [msg("Revoked"), 3];
         case "otherSource":
-          return [`已从${sourceName(item.installed?.source ?? null)}安装`, 4];
+          return [msg("Installed from {}", sourceName(item.installed?.source ?? null)), 4];
         case "builtin":
-          return ["内置", 4];
+          return [msg("Built-in"), 4];
         case "incompatible":
-          return ["不兼容", 4];
+          return [msg("Incompatible"), 4];
         case "reserved":
-          return ["不能安装", 3];
+          return [msg("Cannot be installed"), 3];
         case "allRevoked":
-          return ["已撤回", 3];
+          return [msg("Revoked"), 3];
         case "local":
-          return ["已安装", 0];
+          return [msg("Installed"), 0];
         default:
-          return ["", 0];
+          return [null, 0];
       }
     })();
     return {
       key: item.key,
       name: item.name,
       version: shown,
-      meta: `${item.author ?? "未知作者"} · ${repoTag}`,
+      meta: slint(msg("{} · {}", item.author ?? msg("Unknown author"), this.#origin(item))),
       punchline: item.punchline ?? "",
-      badge,
+      badge: slint(badge),
       tone,
       selected: item.key === this.selected,
     };
@@ -527,79 +530,112 @@ export class Store {
     return ref;
   }
 
-  #actions(item: Item): { id: string; text: string; enabled: boolean }[] {
+  #actions(item: Item): { id: string; text: Msg; enabled: boolean }[] {
     const idle = !this.busy;
     const info = item.installed;
-    const list: { id: string; text: string; enabled: boolean }[] = [];
+    const list: { id: string; text: Msg; enabled: boolean }[] = [];
     const newer =
       item.best && info?.version && isVersion(info.version) && compareVersions(item.best.version, info.version) > 0;
     switch (item.state) {
       case "available":
-        list.push({ id: "install", text: `安装 ${item.best!.version}`, enabled: idle });
+        list.push({ id: "install", text: msg("Install {}", item.best!.version), enabled: idle });
         break;
       case "update":
-        list.push({ id: "update", text: `更新到 ${item.best!.version}`, enabled: idle });
+        list.push({ id: "update", text: msg("Update to {}", item.best!.version), enabled: idle });
         break;
       case "revoked":
-        if (newer) list.push({ id: "update", text: `更新到 ${item.best!.version}`, enabled: idle });
-        if (info?.state === "disabled") list.push({ id: "enable", text: "仍然启用…", enabled: idle });
+        if (newer) list.push({ id: "update", text: msg("Update to {}", item.best!.version), enabled: idle });
+        if (info?.state === "disabled") list.push({ id: "enable", text: msg("Enable Anyway…"), enabled: idle });
         break;
       case "otherSource":
-        if (item.best) list.push({ id: "replace", text: "替换…", enabled: idle });
+        if (item.best) list.push({ id: "replace", text: msg("Replace…"), enabled: idle });
         break;
     }
     if (info && !info.builtin && (item.state === "installed" || item.state === "update" || item.state === "revoked" || item.state === "local")) {
       if (info.previousVersion)
         list.push({
           id: "rollback",
-          text: `${installer.rollbackVerb(info.version, info.previousVersion)}到 ${info.previousVersion}`,
+          text:
+            installer.rollbackVerb(info.version, info.previousVersion) === "restore"
+              ? msg("Restore to {}", info.previousVersion)
+              : msg("Roll Back to {}", info.previousVersion),
           enabled: idle,
         });
-      list.push({ id: "uninstall", text: "卸载…", enabled: idle });
+      list.push({ id: "uninstall", text: msg("Uninstall…"), enabled: idle });
     }
     return list;
   }
 
-  #banners(item: Item): { text: string; tone: number; action: string; actionText: string }[] {
-    const banners: { text: string; tone: number; action: string; actionText: string }[] = [];
-    const add = (text: string, tone: number, action = "", actionText = "") => banners.push({ text, tone, action, actionText });
+  #banners(item: Item): Banner[] {
+    const banners: Banner[] = [];
+    const add = (text: Msg | null, tone: number, action = "", actionText: Msg | null = null) =>
+      banners.push({ text, caps: [], tone, action, actionText });
     const info = item.installed;
     if (item.state === "revoked" && item.revocation && info) {
       const key = revocationKey(item.repo!.url, item.id, info.version ?? "", item.revocation.versions);
       const handled = this.settings.value.revocations[key];
-      const tail =
+      const reason = item.revocation.reason;
+      add(
         handled === "accepted"
-          ? "你已确认风险并重新启用，商城不会再停用它。"
+          ? msg(
+              "This version has been revoked: {}. You confirmed the risk and enabled it again; the store will not disable it again.",
+              reason,
+            )
           : info.state === "disabled"
-            ? "商城已停用它。"
-            : "";
-      add(`此版本已被撤回：${item.revocation.reason}。${tail}`, 3);
+            ? msg("This version has been revoked: {}. The store has disabled it.", reason)
+            : msg("This version has been revoked: {}.", reason),
+        3,
+      );
     }
     if (item.state === "allRevoked" || item.state === "incompatible" || item.state === "reserved")
-      add(item.blocked ?? "", item.state === "incompatible" ? 2 : 3);
+      add(item.blocked, item.state === "incompatible" ? 2 : 3);
     if (item.repo && !item.repo.official) {
-      add("非官方仓库：未经 Vestra Player 审核，插件可能读取你的文件或联网", 2);
-      if (item.repo.local) add("这是本机上的测试仓库，没有加密", 2);
+      add(msg("Unofficial repository: not reviewed by Vestra Player; plugins may read your files or use the network"), 2);
+      if (item.repo.local) add(msg("This is a test repository on this machine, without encryption"), 2);
     }
     if (item.state === "update" && item.best && info) {
+      // "The new version needs new permissions: …" (the window lists them).
       const added = permissions(item.best.capabilities.filter((c) => !info.capabilities.includes(c)));
-      if (added.length) add(`新版本需要新的权限：${added.map((p) => p.text).join("、")}`, 2);
+      if (added.length) banners.push({ text: null, caps: added.map((p) => p.id), tone: 2, action: "", actionText: null });
     }
     if (item.state === "otherSource" && info)
-      add(`已从${sourceName(info.source)}安装 ${info.version ?? ""}。替换时若之前从这个来源安装过会接上当时的数据，否则使用新的空数据；原数据保留`, 0);
+      add(
+        msg(
+          "Installed {1} from {0}. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data; the current data is kept",
+          sourceName(info.source),
+          info.version ?? "",
+        ),
+        0,
+      );
     if (item.state === "builtin")
-      add(item.repo ? "与播放器内置插件同 id，不能从这里安装" : "内置插件随播放器更新，不能卸载；停用请到「设置 ▶ 插件管理…」", 4);
+      add(
+        item.repo
+          ? msg("Same id as a built-in plugin of the player; cannot be installed from here")
+          : msg(
+              "Built-in plugins are updated with the player and cannot be uninstalled; to disable one, use “Settings ▸ Plugin Manager…”",
+            ),
+        4,
+      );
     if (item.state === "local" && info) {
-      if (item.delisted) add("仓库已不再提供这个插件，商城不再为它检查更新（仍会检查撤回）", 4);
-      else if (info.source?.kind === "repository") add("它的仓库已从商城移除，商城不再为它检查更新和撤回", 4);
-      else add("侧载插件：未经审核，商城不会为它检查更新", 2);
+      if (item.delisted)
+        add(
+          msg(
+            "The repository no longer offers this plugin; the store no longer checks it for updates (it still checks for revocations)",
+          ),
+          4,
+        );
+      else if (info.source?.kind === "repository")
+        add(msg("Its repository was removed from the store; the store no longer checks it for updates or revocations"), 4);
+      else add(msg("Sideloaded plugin: not reviewed; the store does not check it for updates"), 2);
     }
-    if (item.development) add("本次运行使用开发加载的版本", 4);
+    if (item.development) add(msg("This run uses the development-loaded version"), 4);
     const doc = this.#doc;
     if (doc.key === this.#docKey(item)) {
-      if (doc.offHost) add(`说明位于其它网站（${doc.offHost}），没有自动加载`, 2, "showImages", "加载");
-      if (doc.blocked > 0) add(`已阻止 ${doc.blocked} 张远程图片（非官方来源）`, 2, "showImages", "显示图片");
-      if (doc.failed) add(doc.note, 2, "reloadDoc", "重试");
+      if (doc.offHost)
+        add(msg("The description is on another website ({}); not loaded automatically", doc.offHost), 2, "showImages", msg("Load"));
+      if (doc.blocked > 0)
+        add(msg("Remote images blocked (unofficial source): {}", doc.blocked), 2, "showImages", msg("Show Images"));
+      if (doc.failed) add(doc.note, 2, "reloadDoc", msg("Retry"));
     }
     return banners;
   }
@@ -608,7 +644,7 @@ export class Store {
     if (!item.entry) {
       const info = item.installed;
       return info?.version
-        ? [{ version: info.version, date: "", minimum: "", status: "当前", tone: 0, canInstall: false }]
+        ? [{ version: info.version, date: "", minimum: "", status: slint(msg("Current")), tone: 0, canInstall: false }]
         : [];
     }
     const revoked = item.repo?.index?.revoked ?? [];
@@ -618,39 +654,39 @@ export class Store {
       const current = sameSource && item.installed?.version === v.version;
       const status = current
         ? check.ok
-          ? "当前"
-          : `当前，${check.text}`
+          ? msg("Current")
+          : msg("Current, {}", check.text)
         : !check.ok
           ? check.why === "revoked"
             ? check.text
-            : `不兼容：${check.text}`
+            : msg("Incompatible: {}", check.text)
           : v === item.best
-            ? "最新"
-            : "";
+            ? msg("Latest")
+            : null;
       return {
         version: v.version,
         date: day(v.published),
         minimum: v.minPlayerVersion ?? "—",
-        status,
+        status: slint(status),
         tone: check.ok ? 0 : check.why === "revoked" ? 3 : 4,
         canInstall: check.ok && !current && item.state !== "builtin" && item.state !== "reserved" && !this.busy,
       };
     });
   }
 
-  #facts(item: Item | null): { label: string; text: string; url: string | null }[] {
+  #facts(item: Item | null): { label: Msg; text: Msg; url: string | null }[] {
     if (!item) return [];
-    const facts: { label: string; text: string; url: string | null }[] = [];
+    const facts: { label: Msg; text: Msg; url: string | null }[] = [];
     const latest = item.best ?? item.entry?.versions[0];
-    if (latest) facts.push({ label: "版本", text: latest.version, url: null });
-    if (item.installed) facts.push({ label: "已安装", text: item.installed.version ?? "—", url: null });
-    if (latest) facts.push({ label: "更新", text: day(latest.published), url: null });
-    facts.push({ label: "来源", text: item.repo ? item.repo.label : sourceName(item.installed?.source ?? null), url: null });
-    facts.push({ label: "id", text: item.id, url: null });
+    if (latest) facts.push({ label: msg("Version"), text: raw(latest.version), url: null });
+    if (item.installed) facts.push({ label: msg("Installed"), text: raw(item.installed.version ?? "—"), url: null });
+    if (latest) facts.push({ label: msg("Updated"), text: raw(day(latest.published)), url: null });
+    facts.push({ label: msg("Source"), text: item.repo ? item.repo.label : sourceName(item.installed?.source ?? null), url: null });
+    facts.push({ label: raw("id"), text: raw(item.id), url: null });
     const license = item.entry?.license ?? item.local?.license;
-    if (license) facts.push({ label: "许可证", text: license, url: null });
+    if (license) facts.push({ label: msg("License"), text: raw(license), url: null });
     const source = item.entry?.sourceUrl ?? item.local?.sourceUrl;
-    if (source) facts.push({ label: "源码", text: "打开 ↗", url: source });
+    if (source) facts.push({ label: msg("Code"), text: msg("Open ↗"), url: source });
     return facts;
   }
 
@@ -689,17 +725,17 @@ export class Store {
       try {
         await this.plugin.system.openUrl(url);
       } catch (error) {
-        this.report(`无法打开链接：${(error as Error).message}`, true);
+        this.report(msg("Couldn't open the link: {}", raw((error as Error).message)), true);
       }
-    } else if (!url.startsWith("#")) this.report("不支持打开这种链接", true);
+    } else if (!url.startsWith("#")) this.report(msg("This kind of link cannot be opened"), true);
   }
 
   async #fromFile() {
     let path: string | null;
     try {
-      path = await this.plugin.dialogs.openFile({ title: "选择插件包（.vxp）" });
+      path = await this.plugin.dialogs.openFile({ title: "Choose a plugin package (.vxp)" });
     } catch (error) {
-      if ((error as { code?: string }).code === "busy") this.report("另一个对话框正在打开，请先关闭它", true);
+      if ((error as { code?: string }).code === "busy") this.report(msg("Another dialog is open; close it first"), true);
       return;
     }
     if (path) await installer.installFile(this, path);
@@ -735,9 +771,16 @@ export class Store {
     const abort = (this.#docAbort = new AbortController());
     const changelog = this.tab === 1;
     const previous = this.#doc;
-    this.#doc = { key, ref: null, note: changelog ? "正在加载更新日志…" : "正在加载说明…", blocked: 0, failed: false, scope: previous.scope };
+    this.#doc = {
+      key,
+      ref: null,
+      note: changelog ? msg("Loading the changelog…") : msg("Loading the description…"),
+      blocked: 0,
+      failed: false,
+      scope: previous.scope,
+    };
     this.changed();
-    const empty = changelog ? "作者没有提供更新日志" : "作者没有提供说明";
+    const empty = changelog ? msg("The author provided no changelog") : msg("The author provided no description");
     let text: string | null = null;
     let base: string | undefined;
     try {
@@ -745,7 +788,13 @@ export class Store {
         const url = changelog ? item.entry.changelogUrl : item.entry.readmeUrl;
         const check = changelog ? item.entry.changelogCheck : item.entry.readmeCheck;
         if (url && !this.#sameHost(item, url) && !this.#remoteShown.has(item.key)) {
-          this.#doc = { ...this.#doc, note: `${changelog ? "更新日志" : "说明"}位于其它网站，未自动加载`, offHost: hostOf(url) };
+          this.#doc = {
+            ...this.#doc,
+            note: changelog
+              ? msg("The changelog is on another website; not loaded automatically")
+              : msg("The description is on another website; not loaded automatically"),
+            offHost: hostOf(url),
+          };
           this.changed();
           return;
         }
@@ -753,7 +802,7 @@ export class Store {
           base = url;
           text = this.#texts.get(url) ?? null;
           if (text === null) {
-            if (check && check.size > README_LIMIT) throw new Error("文件超过 256 KB");
+            if (check && check.size > README_LIMIT) throw new NetError("tooLarge", msg("File exceeds 256 KB"));
             // With the index's size and sha256 the text must match exactly (else nothing is shown or cached).
             const got = await get(this.deps.fetch, url, {
               maxBytes: check ? check.size : README_LIMIT,
@@ -773,7 +822,12 @@ export class Store {
       }
     } catch (error) {
       if (abort.signal.aborted || this.#doc.key !== key) return;
-      this.#doc = { ...this.#doc, note: `无法加载${changelog ? "更新日志" : "说明"}：${(error as Error).message}`, failed: true };
+      const why = reasonOf(error);
+      this.#doc = {
+        ...this.#doc,
+        note: changelog ? msg("Couldn't load the changelog: {}", why) : msg("Couldn't load the description: {}", why),
+        failed: true,
+      };
       this.changed();
       return;
     }
@@ -792,11 +846,16 @@ export class Store {
         await scope.dispose();
         return;
       }
-      this.#doc = { key, ref, note: "", blocked, failed: false, scope };
+      this.#doc = { key, ref, note: null, blocked, failed: false, scope };
     } catch (error) {
       await scope.dispose();
       if (this.#doc.key !== key) return;
-      this.#doc = { ...this.#doc, note: `无法显示${changelog ? "更新日志" : "说明"}：${(error as Error).message}`, failed: true };
+      const why = raw((error as Error).message);
+      this.#doc = {
+        ...this.#doc,
+        note: changelog ? msg("Couldn't show the changelog: {}", why) : msg("Couldn't show the description: {}", why),
+        failed: true,
+      };
     }
     this.changed();
     // The old document's scope goes once the new one is in the window.

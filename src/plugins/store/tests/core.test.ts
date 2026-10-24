@@ -5,6 +5,7 @@ import test from "node:test";
 import { bestVersion, checkVersion, revocationOf } from "../catalog.ts";
 import { clean, parseIndex, remember, replayed, IndexError } from "../index-format.ts";
 import { permissionList, permissions } from "../labels.ts";
+import { msg } from "../text.ts";
 import { normalizeRepoUrl } from "../repos.ts";
 import { compareVersions, parseRange, playerAtLeast, satisfies } from "../semver.ts";
 import { OFFICIAL_KEY_FILE, officialKeys, verifyIndex } from "../signing.ts";
@@ -165,12 +166,12 @@ test("version choice: API, player version and revocations", () => {
   assert.equal(revocationOf("a.one", "1.2.0", revoked)?.reason, "数据丢失");
   assert.equal(revocationOf("other", "1.2.0", revoked), null);
   const v3 = entry.versions[0]!;
-  assert.deepEqual(checkVersion("a.one", v3, [], "0.2.0"), { ok: false, why: "api", text: "需要更新的插件 API（vestra/2）" });
+  assert.deepEqual(checkVersion("a.one", v3, [], "0.2.0"), { ok: false, why: "api", text: msg("Needs a newer plugin API ({})", "vestra/2") });
   const v2 = entry.versions[1]!;
   assert.deepEqual(checkVersion("a.one", v2, [], "0.2.0"), {
     ok: false,
     why: "player",
-    text: "需要 Vestra Player ≥ 9.0.0（当前 0.2.0）",
+    text: msg("Needs Vestra Player ≥ {} (current {})", "9.0.0", "0.2.0"),
   });
 });
 
@@ -188,12 +189,12 @@ test("repository addresses are normalized; only https (and this machine's http)"
 
 test("permissions in plain words; unknown ones are named; long lists are cut", () => {
   assert.deepEqual(permissions(["clipboard", "media.read", "media.control", "future.thing"]), [
-    { text: "读写剪贴板", risky: true },
-    { text: "截图与导出视频片段", risky: false },
-    { text: "未知权限：future.thing", risky: false },
+    { id: "clipboard", text: "Read and write the clipboard", risky: true },
+    { id: "media.read", text: "Take snapshots and export clips", risky: false },
+    { id: "future.thing", text: "Unknown permission: future.thing", risky: false },
   ]);
   const many = Array.from({ length: 25 }, (_, i) => `x.${i}`);
   const list = permissionList(many).split("\n");
   assert.equal(list.length, 21);
-  assert.equal(list.at(-1), "等 25 项");
+  assert.equal(list.at(-1), "25 in total");
 });

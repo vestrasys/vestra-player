@@ -86,8 +86,10 @@ component ChoiceItem {
 }
 
 // 21px drop-down; the list opens below and scrolls past `popup-height`.
+// `first-label`, when set, is shown for the first entry instead of its text.
 export component Choice {
     in property <[string]> model;
+    in property <string> first-label;
     in property <int> current-index;
     in property <bool> enabled: true;
     in property <length> popup-height: 220px;
@@ -95,7 +97,11 @@ export component Choice {
     height: 21px;
     accessible-role: combobox;
     accessible-enabled: root.enabled;
-    accessible-value: root.current-index >= 0 && root.current-index < root.model.length ? root.model[root.current-index] : "";
+    accessible-value: root.label(root.current-index);
+    pure function label(index: int) -> string {
+        return index == 0 && root.first-label != "" ? root.first-label
+            : index >= 0 && index < root.model.length ? root.model[index] : "";
+    }
     Rectangle {
         border-radius: Theme.radius-control;
         background: !root.enabled ? Theme.button-disabled
@@ -108,7 +114,7 @@ export component Choice {
         spacing: 2px;
         Text {
             horizontal-stretch: 1;
-            text: root.current-index >= 0 && root.current-index < root.model.length ? root.model[root.current-index] : "";
+            text: root.label(root.current-index);
             color: root.enabled ? Theme.text-list : Theme.text-dim;
             font-size: Theme.font-body;
             vertical-alignment: center;
@@ -140,7 +146,7 @@ export component Choice {
                 width: parent.width - 2px;
                 height: parent.height - 2px;
                 for name[index] in root.model: ChoiceItem {
-                    text: name;
+                    text: root.label(index);
                     selected: index == root.current-index;
                     picked => {
                         root.selected(index);

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { HostError } from "@vestra-player/sdk/testing";
-import { actions, banners, BUILTIN, choose, FakeNet, info, no, OFFICIAL, openStore, publish, start, THIRD, until, yes } from "./helpers.ts";
+import { actions, banners, BUILTIN, choose, FakeNet, info, no, OFFICIAL, openStore, props, publish, start, THIRD, until, yes } from "./helpers.ts";
 
 const fromOfficial = (id: string, version: string) =>
   info(id, { version, source: { kind: "repository", url: OFFICIAL } });
@@ -41,12 +41,14 @@ test("a revoked version installed from the repository is disabled once, with one
         ["setEnabled", "zysilm.bilibili", false],
       ],
     );
-    const notice = host.confirms[0]!;
-    assert.equal(notice["message"], "已停用 2 个被撤回的插件");
-    assert.match(String(notice["detail"]), /「YouTube」0\.2\.0：会删除下载目录\n可以在插件商城更新到 0\.2\.1。/);
-    assert.match(String(notice["detail"]), /「Bilibili」0\.2\.0：接口失效/);
-    assert.equal(notice["confirm"], "打开插件商城");
-    assert.equal(notice["cancel"], "知道了");
+    const notice = host.confirmTexts[0]!;
+    assert.equal(notice.message, "已停用 2 个被撤回的插件");
+    assert.match(String(notice.detail), /^仓库撤回了这些版本，原因：/);
+    // The reasons are nested templates: English until the player translates nested arguments.
+    assert.match(String(notice.detail), /“YouTube” 0\.2\.0: 会删除下载目录\nYou can update to 0\.2\.1 in the Plugin Store\./);
+    assert.match(String(notice.detail), /“Bilibili” 0\.2\.0: 接口失效/);
+    assert.equal(notice.confirm, "打开插件商城");
+    assert.equal(notice.cancel, "知道了");
 
     await store.refreshAll(true);
     await host.settle(30);
@@ -61,7 +63,7 @@ test("a revoked version installed from the repository is disabled once, with one
     // The revoked version cannot be installed again from 版本.
     host.window("store").emit("setTab", 2);
     await host.settle();
-    const versions = host.window("store").props["versions"] as { version: string; status: string; canInstall: boolean }[];
+    const versions = props(host)["versions"] as { version: string; status: string; canInstall: boolean }[];
     assert.deepEqual(versions[1], { version: "0.2.0", date: "2026-10-21", minimum: "0.2.0", status: "当前，已撤回：会删除下载目录", tone: 3, canInstall: false });
   } finally {
     await stop();
@@ -82,9 +84,9 @@ test("仍然启用… asks about the risk; once accepted the store leaves it run
     const asked = host.confirms.length;
     host.window("store").emit("act", "enable");
     await until(host, () => host.confirms.length === asked + 1, "risk question");
-    assert.equal(host.confirms.at(-1)!["message"], "仍然启用被撤回的「YouTube」0.2.0？");
+    assert.equal(host.confirmTexts.at(-1)!.message, "仍然启用被撤回的「YouTube」0.2.0？");
     assert.equal(host.confirms.at(-1)!["destructive"], true);
-    assert.match(String(host.confirms.at(-1)!["detail"]), /继续使用可能有风险/);
+    assert.match(String(host.confirmTexts.at(-1)!.detail), /继续使用可能有风险/);
     assert.equal(host.packages.find((p) => p.id === "zysilm.youtube")!.state, "disabled");
 
     host.dialogAnswers.push(yes);
@@ -113,8 +115,8 @@ test("enabled again elsewhere (插件管理): confirm the risk or it is disabled
     host.dialogAnswers.push(no);
     host.setPackages(host.packages.map((p) => (p.id === "zysilm.youtube" ? { ...p, state: "running" } : p)));
     await until(host, () => disables(host) === 2, "disabled again");
-    assert.equal(host.confirms.at(-1)!["message"], "「YouTube」0.2.0 已被撤回，确定继续使用吗？");
-    assert.equal(host.confirms.at(-1)!["cancel"], "停用");
+    assert.equal(host.confirmTexts.at(-1)!.message, "「YouTube」0.2.0 已被撤回，确定继续使用吗？");
+    assert.equal(host.confirmTexts.at(-1)!.cancel, "停用");
 
     // Again, and this time 「继续使用」.
     host.dialogAnswers.push(yes);
@@ -192,7 +194,7 @@ test("review A: a delisted plugin revoked with '*' is still disabled (and one wh
     host.dialogAnswers.push(no);
     await store.refreshAll(true);
     await until(host, () => disables(host) === 2, "both disabled");
-    assert.match(String(host.confirms[0]!["detail"]), /恶意插件/);
+    assert.match(String(host.confirmTexts[0]!.detail), /恶意插件/);
     const evil = store.items.find((i) => i.id === "zysilm.evil")!;
     assert.equal(evil.state, "revoked");
     assert.equal(evil.entry, null);

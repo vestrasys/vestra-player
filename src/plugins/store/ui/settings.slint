@@ -1,15 +1,16 @@
-// 插件商城 settings page (options window ▶ 插件, id store.repos): automatic
-// update checks and the repositories. Width 440: 6px padding leaves 428; a
-// repository row is name / address (stretch) and a 50px 「移除」 button.
+// Plugin Store settings page (options window ▸ Plugins, id store.repos):
+// automatic update checks and the repositories. Width 440: 6px padding leaves
+// 428; a repository row is name / address (stretch) and a 50px Remove button.
 import { LineEdit, ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
 import { Cell, Check, Tone } from "parts.slint";
+import { Msg, Words } from "words.slint";
 
 export struct RepoRow {
-    name: string,
+    name: Msg,
     url: string,
-    note: string,
+    note: Msg,
     // 0 plain, 2 warn (see Tone)
     tone: int,
     removable: bool,
@@ -21,7 +22,7 @@ export global StoreSettings {
     in property <bool> adding;
     in-out property <string> add-text;
     in property <bool> can-add: true;
-    in property <string> message;
+    in property <Msg> message;
     in property <bool> message-warn;
     callback toggle-auto();
     callback start-add();
@@ -36,19 +37,19 @@ export component StorePage inherits Rectangle {
         padding: 6px;
         spacing: 6px;
         Check {
-            text: "自动检查更新（播放器启动 30 秒后一次，之后每 24 小时）";
+            text: @tr("Check for updates automatically (30 seconds after the player starts, then every 24 hours)");
             checked: StoreSettings.auto-check;
             clicked => { StoreSettings.toggle-auto(); }
         }
         Text {
-            text: "关闭后只在打开插件商城或点「刷新」时联网；被仓库撤回的插件也只在这时停用。有可以更新的插件时，菜单「插件商城…」会显示数量。";
+            text: @tr("When off, the store goes online only when you open it or click “Refresh”; plugins revoked by a repository are disabled only then too. When updates are available, the “Plugin Store…” menu item shows how many.");
             color: Theme.text-dim;
             font-size: Theme.font-body;
             wrap: word-wrap;
             line-height-factor: 1.25;
         }
         Rectangle { height: 4px; }
-        Cell { text: "仓库"; color: Theme.text; }
+        Cell { text: @tr("Repositories"); color: Theme.text; }
         Rectangle {
             vertical-stretch: 1;
             background: Theme.bg-list;
@@ -67,16 +68,16 @@ export component StorePage inherits Rectangle {
                     VerticalLayout {
                         horizontal-stretch: 1;
                         alignment: center;
-                        Cell { text: repo.name; color: Theme.text; }
+                        Cell { text: Words.msg(repo.name); color: Theme.text; }
                         Cell { text: repo.url; color: Theme.text-dim; }
-                        if repo.note != "": Cell { text: repo.note; color: Tone.color(repo.tone); }
+                        if Words.msg(repo.note) != "": Cell { text: Words.msg(repo.note); color: Tone.color(repo.tone); }
                     }
                     VerticalLayout {
                         width: 50px;
                         alignment: center;
                         if repo.removable: Button {
                             small: true;
-                            text: "移除";
+                            text: @tr("Remove");
                             clicked => { StoreSettings.remove(repo.url); }
                         }
                     }
@@ -87,13 +88,13 @@ export component StorePage inherits Rectangle {
             height: Theme.button-height;
             Button {
                 width: 84px;
-                text: "添加仓库…";
+                text: @tr("Add Repository…");
                 enabled: StoreSettings.can-add;
                 clicked => { StoreSettings.start-add(); }
             }
             Rectangle { horizontal-stretch: 1; }
         }
-        // One line: address, 添加, 取消 (Enter adds, Esc cancels). The fluent
+        // One line: address, Add, Cancel (Enter adds, Esc cancels). The fluent
         // LineEdit asks for 32px; pinned to input-height (as the row) it stays
         // inside the row, so the warning below starts under it.
         if StoreSettings.adding: FocusScope {
@@ -111,30 +112,30 @@ export component StorePage inherits Rectangle {
                     height: Theme.input-height;
                     horizontal-stretch: 1;
                     font-size: Theme.font-body;
-                    placeholder-text: "仓库根地址或 index.json 的完整地址（https://…）";
+                    placeholder-text: @tr("The repository's root address or the full address of index.json (https://…)");
                     text <=> StoreSettings.add-text;
                     accepted(text) => { StoreSettings.add(text); }
                     init => { self.focus(); }
                 }
                 VerticalLayout {
                     alignment: center;
-                    Button { width: 52px; text: "添加"; clicked => { StoreSettings.add(address.text); } }
+                    Button { width: 52px; text: @tr("Add"); clicked => { StoreSettings.add(address.text); } }
                 }
                 VerticalLayout {
                     alignment: center;
-                    Button { width: 52px; text: "取消"; clicked => { StoreSettings.cancel-add(); } }
+                    Button { width: 52px; text: @tr("Cancel"); clicked => { StoreSettings.cancel-add(); } }
                 }
             }
         }
         Text {
-            text: "第三方仓库未经 Vestra Player 审核，其中的插件可能读取你的文件或联网。只添加你信任的仓库。官方仓库不能移除；不想联网时可以在「插件管理」里停用插件商城。";
+            text: @tr("Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline, disable the Plugin Store in “Plugin Manager”.");
             color: Tone.warn;
             font-size: Theme.font-body;
             wrap: word-wrap;
             line-height-factor: 1.25;
         }
-        if StoreSettings.message != "": Text {
-            text: StoreSettings.message;
+        if Words.msg(StoreSettings.message) != "": Text {
+            text: Words.msg(StoreSettings.message);
             color: StoreSettings.message-warn ? Tone.warn : Theme.text-dim;
             font-size: Theme.font-body;
             wrap: word-wrap;

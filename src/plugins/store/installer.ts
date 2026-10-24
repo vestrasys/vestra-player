@@ -5,10 +5,11 @@ import type { PackageCandidate, PackageChange, PackageSource, PluginInfo } from 
 import type { Item } from "./catalog.ts";
 import type { IndexVersion } from "./index-format.ts";
 import { MAX_PACKAGE } from "./index-format.ts";
-import { permissionList, reservedId, reservedText, sourceName, TRUST_NOTE } from "./labels.ts";
+import { permissionList, reservedId, reservedText, sourceName } from "./labels.ts";
 import { get, isHttps, NetError } from "./net.ts";
 import { compareVersions, isVersion } from "./semver.ts";
 import type { Store } from "./store.ts";
+import { msg, raw, type Msg } from "./text.ts";
 
 /**
  * Installing (design §3.8, §3.9): every path asks first, downloads with
@@ -22,47 +23,51 @@ import type { Store } from "./store.ts";
 const errorCode = (error: unknown) => (error as { code?: string }).code;
 
 /** User-facing text for a refused or failed step. */
-export function failureText(store: Store, error: unknown, id?: string): string {
+export function failureText(store: Store, error: unknown, id?: string): Msg {
   if (error instanceof NetError) {
     switch (error.code) {
       case "size":
-        return "下载的文件与仓库描述不符（大小），已删除";
+        return msg("The downloaded file does not match the repository's description (size); deleted");
       case "sha256":
-        return "下载的文件与仓库描述不符（校验和），已删除";
+        return msg("The downloaded file does not match the repository's description (checksum); deleted");
       case "tooLarge":
-        return "插件包超过 64 MB，已停止下载";
+        return msg("The plugin package exceeds 64 MB; download stopped");
       case "protocol":
       case "redirects":
-        return "下载地址不安全或跳转过多，已停止";
+        return msg("The download address is insecure or redirects too often; stopped");
       case "aborted":
-        return "已取消下载";
+        return msg("Download cancelled");
       case "disk":
-        return `无法写入下载文件：${error.message}`;
+        return msg("Couldn't write the download file: {}", error.reason);
       default:
-        return `下载失败：${error.message}`;
+        return msg("Download failed: {}", error.reason);
     }
   }
+  const message = (error as Error).message;
   switch (errorCode(error)) {
     case "invalid":
-      return `这不是有效的插件包：${(error as Error).message}`;
+      return msg("This is not a valid plugin package: {}", raw(message));
     case "versionMismatch": {
-      const needed = /(\d+\.\d+\.\d+)/.exec((error as Error).message)?.[1];
+      const needed = /(\d+\.\d+\.\d+)/.exec(message)?.[1];
       return needed
-        ? `这个插件需要 Vestra Player ≥ ${needed}（当前 ${store.plugin.app.version}）`
-        : `这个插件需要更新的 Vestra Player（当前 ${store.plugin.app.version}）`;
+        ? msg("This plugin needs Vestra Player ≥ {} (current {})", needed, store.plugin.app.version)
+        : msg("This plugin needs a newer Vestra Player (current {})", store.plugin.app.version);
     }
     case "reserved":
-      return (error as Error).message || reservedText(id ?? "这个插件");
+      // The player's own wording, in the player's language.
+      return message ? raw(message) : reservedText(id);
     case "unsupported":
-      return `「${id ?? "这个插件"}」与播放器内置插件同 id，不能安装`;
+      return id === undefined
+        ? msg("This plugin has the same id as a built-in plugin and cannot be installed")
+        : msg("“{}” has the same id as a built-in plugin and cannot be installed", id);
     case "busy":
-      return "这个插件正在安装或回退，请稍后再试";
+      return msg("This plugin is being installed or rolled back; try again later");
     case "capability":
-      return "插件商城缺少「管理插件」权限";
+      return msg("The Plugin Store lacks the “Manage plugins” permission");
     case "missing":
-      return "这个插件已不存在";
+      return msg("This plugin no longer exists");
     default:
-      return (error as Error).message || String(error);
+      return raw(message || String(error));
   }
 }
 
@@ -77,9 +82,21 @@ const identity = (source: PackageSource | null) =>
       ? `repository ${source.url}`
       : source.kind;
 
-function replaceDetail(info: PluginInfo, name: string): string {
-  return `当前的「${name}」${info.version ?? ""} 来自${sourceName(info.source)}。替换后，若之前从这个来源安装过，会接上当时的数据；否则使用新的空数据。原插件的数据保留，以后从原来源重新安装时接上。`;
+function replaceDetail(info: PluginInfo, name: string): Msg {
+  return msg(
+    "The current “{}” {} comes from {}. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source.",
+    name,
+    info.version ?? "",
+    sourceName(info.source),
+  );
 }
+
+/** What the plugin will be able to do, and what permissions do not limit. */
+const willBeAble = (capabilities: readonly string[]) =>
+  msg(
+    "It will be able to:\n{}\n\nA plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network.",
+    permissionList(capabilities),
+  );
 
 // ------------------------------------------------------------ repository
 
@@ -93,69 +110,112 @@ export async function installFromRepository(store: Store, item: Item, version: I
   const name = item.name;
   const sameSource = info !== null && identity(info.source) === identity({ kind: "repository", url: repo.url });
   const replace = info !== null && !sameSource;
-  const unofficial = repo.official
-    ? ""
-    : `仓库：${repo.label}（${repo.url}）。这个仓库未经 Vestra Player 审核，插件可能读取你的文件或联网。只安装你信任的作者的插件。${repo.local ? "这是本机上的测试仓库，没有加密。" : ""}\n\n`;
-  const perms = `它将可以：\n${permissionList(version.capabilities)}\n\n${TRUST_NOTE}`;
-  let question: { message: string; detail: string; confirm: string; destructive?: boolean };
+  const unofficial = repo.local
+    ? msg(
+        "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust. This is a test repository on this machine, without encryption.",
+        repo.label,
+        repo.url,
+      )
+    : msg(
+        "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust.",
+        repo.label,
+        repo.url,
+      );
+  const perms = willBeAble(version.capabilities);
+  let question: Question;
   if (replace) {
     question = {
-      message: `替换已安装的「${name}」？`,
-      detail: `${replaceDetail(info, name)}\n\n将安装${repo.official ? "官方仓库" : "非官方仓库"}的 ${version.version}。\n\n${unofficial}${perms}`,
-      confirm: "替换",
+      message: msg("Replace the installed “{}”?", name),
+      detail: repo.official
+        ? msg("{1}\n\nWill install {2} from the official repository.\n\n{3}", replaceDetail(info, name), version.version, perms)
+        : msg(
+            "{1}\n\nWill install {2} from the unofficial repository.\n\n{4}\n\n{3}",
+            replaceDetail(info, name),
+            version.version,
+            perms,
+            unofficial,
+          ),
+      confirm: "Replace",
       destructive: true,
     };
   } else if (sameSource && info.version && isVersion(info.version)) {
     const order = compareVersions(version.version, info.version);
     const added = version.capabilities.filter((c) => !info.capabilities.includes(c));
+    const current = info.version;
     if (order > 0)
       question = added.length
         ? {
-            message: `更新「${name}」到 ${version.version}？新版本需要更多权限`,
-            detail: `新增：\n${permissionList(added)}\n\n当前 ${info.version}。更新后可以在商城回退到 ${info.version}。\n\n${TRUST_NOTE}`,
-            confirm: "更新",
+            message: msg("Update “{}” to {}? The new version needs more permissions", name, version.version),
+            detail: msg(
+              "Added:\n{2}\n\nCurrent: {3}. After updating you can roll back to {3} in the store.\n\nA plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network.",
+              permissionList(added),
+              current,
+            ),
+            confirm: "Update",
           }
         : {
-            message: `更新「${name}」到 ${version.version}？`,
-            detail: `当前 ${info.version}。更新后可以在商城回退到 ${info.version}。`,
-            confirm: "更新",
+            message: msg("Update “{}” to {}?", name, version.version),
+            detail: msg("Current: {2}. After updating you can roll back to {2} in the store.", current),
+            confirm: "Update",
           };
-    else
+    else {
+      const older = order < 0;
       question = {
-        message: `安装「${name}」${version.version}（${order < 0 ? "旧版本" : "重新安装"}）？`,
-        detail: `当前 ${info.version}。安装后可以在商城${order < 0 ? "恢复" : "回退"}到 ${info.version}。${added.length ? `\n\n这个版本需要更多权限：\n${permissionList(added)}` : ""}`,
-        confirm: "安装",
+        message: older
+          ? msg("Install “{}” {} (older version)?", name, version.version)
+          : msg("Install “{}” {} (reinstall)?", name, version.version),
+        detail: added.length
+          ? older
+            ? msg(
+                "Current: {2}. After installing you can restore {2} in the store.\n\nThis version needs more permissions:\n{3}",
+                current,
+                permissionList(added),
+              )
+            : msg(
+                "Current: {2}. After installing you can roll back to {2} in the store.\n\nThis version needs more permissions:\n{3}",
+                current,
+                permissionList(added),
+              )
+          : older
+            ? msg("Current: {2}. After installing you can restore {2} in the store.", current)
+            : msg("Current: {2}. After installing you can roll back to {2} in the store.", current),
+        confirm: "Install",
       };
+    }
   } else
     question = repo.official
       ? {
-          message: `安装「${name}」${version.version}？`,
-          detail: `来自 Vestra Player 官方仓库，作者 ${item.author ?? "未知"}。\n\n${perms}`,
-          confirm: "安装",
+          message: msg("Install “{}” {}?", name, version.version),
+          detail: msg(
+            "From the Vestra Player official repository, author {2}.\n\n{3}",
+            item.author ?? msg("Unknown"),
+            perms,
+          ),
+          confirm: "Install",
         }
       : {
-          message: `安装来自非官方仓库的「${name}」${version.version}？`,
-          detail: `${unofficial}${perms}`,
-          confirm: "仍然安装",
+          message: msg("Install “{}” {} from an unofficial repository?", name, version.version),
+          detail: msg("{2}\n\n{3}", unofficial, perms),
+          confirm: "Install Anyway",
           destructive: true,
         };
-  if (store.busy) return store.report("正在进行另一项安装，请等它结束", true);
+  if (store.busy) return store.report(msg("Another install is in progress; wait for it to finish"), true);
   const answer = await store.ask(question);
   if (!answer?.confirmed) return;
 
   const controller = new AbortController();
-  if (!store.begin(`正在下载 ${name} ${version.version}`, () => controller.abort())) return;
+  if (!store.begin(msg("Downloading {} {}", name, version.version), () => controller.abort())) return;
   let file: string | null = null;
   try {
-    file = await download(store, version.downloadUrl, `${name} ${version.version}`, controller.signal, {
+    file = await download(store, version.downloadUrl, { name, version: version.version }, controller.signal, {
       exactSize: version.size,
       sha256: version.sha256,
       allowLocalHttp: repo.local,
     });
-    store.progress(`正在检查 ${name}…`, null);
+    store.progress(msg("Checking {}…", name), null);
     const candidate = await store.plugin.packages.validateArchive(file);
     const mismatch = compare(candidate, item.id, version);
-    if (mismatch) return store.report(`插件包与仓库描述不符（${mismatch}），未安装`, true);
+    if (mismatch) return store.report(mismatch, true);
     await installCandidate(store, candidate, { kind: "repository", url: repo.url }, replace, name, sameSource ? info : null);
   } catch (error) {
     store.report(failureText(store, error, item.id), true);
@@ -165,21 +225,31 @@ export async function installFromRepository(store: Store, item: Item, version: I
   }
 }
 
+/**
+ * A confirmation: `message` and `detail` share one list of arguments, so a
+ * `detail` template numbers its placeholders after the message's arguments.
+ */
+export type Question = Parameters<Store["ask"]>[0];
+
 /** What differs between the package and the index entry the user agreed to. */
-function compare(candidate: PackageCandidate, id: string, version: IndexVersion): string | null {
+function compare(candidate: PackageCandidate, id: string, version: IndexVersion): Msg | null {
   const manifest = candidate.manifest;
-  if (manifest.id !== id) return "id";
-  if (manifest.version !== version.version) return "版本";
+  if (manifest.id !== id)
+    return msg("The plugin package does not match the repository's description (id); not installed");
+  if (manifest.version !== version.version)
+    return msg("The plugin package does not match the repository's description (version); not installed");
   const declared = new Set(version.capabilities);
   const actual = new Set(manifest.capabilities);
-  if (declared.size !== actual.size || [...actual].some((c) => !declared.has(c))) return "权限";
+  if (declared.size !== actual.size || [...actual].some((c) => !declared.has(c)))
+    return msg("The plugin package does not match the repository's description (permissions); not installed");
   return null;
 }
 
 async function download(
   store: Store,
   url: string,
-  label: string,
+  /** What is downloading (shown with the percentage); `null`: a package from a link. */
+  label: { name: string; version: string } | null,
   signal: AbortSignal,
   limits: { exactSize?: number; sha256?: string; allowLocalHttp?: boolean },
 ): Promise<string> {
@@ -204,7 +274,11 @@ async function download(
       const percent = Math.floor((received / whole) * 100);
       if (percent === shown) return;
       shown = percent;
-      store.progress(`正在下载 ${label}（${percent}%）`);
+      store.progress(
+        label
+          ? msg("Downloading {} {} ({}%)", label.name, label.version, percent)
+          : msg("Downloading the plugin package ({}%)", percent),
+      );
     },
   });
   // validateArchive wants the .vxp extension.
@@ -227,7 +301,7 @@ async function installCandidate(
   previous: PluginInfo | null,
 ) {
   const version = candidate.manifest.version;
-  store.progress(`正在安装 ${name}…`, null);
+  store.progress(msg("Installing {}…", name), null);
   let change: PackageChange;
   try {
     change = await candidate.install({ source, ...(replace ? { replace: true } : {}) });
@@ -236,17 +310,21 @@ async function installCandidate(
     // Installed from somewhere else since we asked: ask about replacing.
     const info = installedOf(store, candidate.manifest.id);
     const answer = await store.ask({
-      message: `替换已安装的「${name}」？`,
-      detail: info ? replaceDetail(info, name) : `这个插件已从其它来源安装。替换后，若之前从这个来源安装过，会接上当时的数据；否则使用新的空数据。原插件的数据保留，以后从原来源重新安装时接上。`,
-      confirm: "替换",
+      message: msg("Replace the installed “{}”?", name),
+      detail: info
+        ? msg("{1}", replaceDetail(info, name))
+        : msg(
+            "This plugin has already been installed from another source. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source.",
+          ),
+      confirm: "Replace",
       destructive: true,
     });
-    if (!answer?.confirmed) return store.report("未安装");
+    if (!answer?.confirmed) return store.report(msg("Not installed"));
     change = await candidate.install({ source, replace: true });
   }
-  await follow(store, change, () => {
+  await follow(store, change, "install", () => {
     const upgraded = previous?.version && isVersion(previous.version) && compareVersions(version, previous.version) > 0;
-    return upgraded ? `已更新 ${name} 到 ${version}` : `已安装 ${name} ${version}`;
+    return upgraded ? msg("Updated {} to {}", name, version) : msg("Installed {} {}", name, version);
   });
   store.select(selectKey(store, candidate.manifest.id, source));
 }
@@ -257,59 +335,113 @@ function selectKey(store: Store, id: string, source: PackageSource): string {
   return `\n${id}`;
 }
 
-async function follow(store: Store, change: PackageChange, committed: () => string, verb = "安装") {
-  store.progress(`正在${verb}…（${change.status === "activating" ? "激活中" : "准备中"}）`, () => void change.cancel().catch(() => {}));
+type Verb = "install" | "uninstall" | "rollback" | "restore";
+
+/** What `follow` shows for each verb (one whole sentence per verb and outcome). */
+const FOLLOW = {
+  install: {
+    preparing: msg("Installing… (preparing)"),
+    activating: msg("Installing… (activating)"),
+    tooLate: msg("Can no longer cancel; the installation continues"),
+    failedDegraded: msg("Installation failed; the previous version was restored"),
+    cancelled: msg("Installation cancelled"),
+    failed: (why: Msg) => msg("Installation failed: {}", why),
+  },
+  uninstall: {
+    preparing: msg("Uninstalling… (preparing)"),
+    activating: msg("Uninstalling… (activating)"),
+    tooLate: msg("Can no longer cancel; the uninstallation continues"),
+    failedDegraded: msg("Uninstallation failed; the previous version was restored"),
+    cancelled: msg("Uninstallation cancelled"),
+    failed: (why: Msg) => msg("Uninstallation failed: {}", why),
+  },
+  rollback: {
+    preparing: msg("Rolling back… (preparing)"),
+    activating: msg("Rolling back… (activating)"),
+    tooLate: msg("Can no longer cancel; the rollback continues"),
+    failedDegraded: msg("Rollback failed; the previous version was restored"),
+    cancelled: msg("Rollback cancelled"),
+    failed: (why: Msg) => msg("Rollback failed: {}", why),
+  },
+  restore: {
+    preparing: msg("Restoring… (preparing)"),
+    activating: msg("Restoring… (activating)"),
+    tooLate: msg("Can no longer cancel; the restore continues"),
+    failedDegraded: msg("Restore failed; the previous version was restored"),
+    cancelled: msg("Restore cancelled"),
+    failed: (why: Msg) => msg("Restore failed: {}", why),
+  },
+} satisfies Record<Verb, unknown>;
+
+async function follow(store: Store, change: PackageChange, verb: Verb, committed: () => Msg) {
+  const words = FOLLOW[verb];
+  store.progress(change.status === "activating" ? words.activating : words.preparing, () => void change.cancel().catch(() => {}));
   change.onChange((status) => {
-    if (status === "activating") store.progress(`正在${verb}…（激活中）`);
+    if (status === "activating") store.progress(words.activating);
   });
   const status = await change.done;
   switch (status) {
     case "committed":
       return store.report(committed());
     case "tooLate":
-      return store.report(`已无法取消，${verb}继续进行`);
+      return store.report(words.tooLate);
     case "failedDegraded":
-      return store.report(`${verb}失败，已恢复原来的版本`, true);
+      return store.report(words.failedDegraded, true);
     case "cancelled":
-      return store.report(`已取消${verb}`);
+      return store.report(words.cancelled);
     default:
-      return store.report(`${verb}失败：${change.message ?? status}`, true);
+      return store.report(words.failed(raw(change.message ?? status)), true);
   }
 }
 
 // ------------------------------------------------------------ side-loading
 
-function sideloadQuestion(store: Store, candidate: PackageCandidate, from: string) {
+function sideloadQuestion(store: Store, candidate: PackageCandidate, from: { file: string } | { link: string }) {
   const manifest = candidate.manifest;
   const name = manifest.name ?? manifest.id;
   const info = installedOf(store, manifest.id);
-  const perms = `它将可以：\n${permissionList(manifest.capabilities)}\n\n${TRUST_NOTE}`;
-  const warning = `来自${from}，未经任何仓库审核，也不会自动更新。只安装你信任的作者的插件。`;
+  const perms = willBeAble(manifest.capabilities);
+  const warning =
+    "file" in from
+      ? msg(
+          "From the file {}; not reviewed by any repository and not updated automatically. Only install plugins from authors you trust.",
+          from.file,
+        )
+      : msg(
+          "From the link {}; not reviewed by any repository and not updated automatically. Only install plugins from authors you trust.",
+          from.link,
+        );
   if (info && identity(info.source) !== "manual")
     return {
       replace: true,
       question: {
-        message: `用插件包「${name}」${manifest.version} 替换已安装的版本？`,
-        detail: `${replaceDetail(info, name)}\n\n${warning}\n\n${perms}`,
-        confirm: "替换",
+        message: msg("Replace the installed version with the plugin package “{}” {}?", name, manifest.version),
+        detail: msg("{2}\n\n{3}\n\n{4}", replaceDetail(info, name), warning, perms),
+        confirm: "Replace",
         destructive: true,
-      },
+      } satisfies Question,
     };
-  const current = info ? `当前已安装 ${info.version ?? ""}（同一来源，安装后可以回退）。\n\n` : "";
   return {
     replace: false,
     question: {
-      message: `安装插件包「${name}」${manifest.version}？`,
-      detail: `${warning}\n\n${current}${perms}`,
-      confirm: "仍然安装",
+      message: msg("Install the plugin package “{}” {}?", name, manifest.version),
+      detail: info
+        ? msg(
+            "{2}\n\nCurrently installed: {3} (same source; you can roll back after installing).\n\n{4}",
+            warning,
+            info.version ?? "",
+            perms,
+          )
+        : msg("{2}\n\n{3}", warning, perms),
+      confirm: "Install Anyway",
       destructive: true,
-    },
+    } satisfies Question,
   };
 }
 
-/** 「从文件安装…」 and a `.vxp` dropped on the video area. */
+/** "Install from File…" and a `.vxp` dropped on the video area. */
 export async function installFile(store: Store, path: string) {
-  if (!store.begin(`正在检查 ${basename(path)}…`)) return;
+  if (!store.begin(msg("Checking {}…", basename(path)))) return;
   try {
     let candidate: PackageCandidate;
     try {
@@ -319,7 +451,7 @@ export async function installFile(store: Store, path: string) {
     }
     // validateArchive already refused reserved ids, so built-in ones too.
     const info = installedOf(store, candidate.manifest.id);
-    const { replace, question } = sideloadQuestion(store, candidate, `文件 ${basename(path)}`);
+    const { replace, question } = sideloadQuestion(store, candidate, { file: basename(path) });
     const answer = await store.ask(question);
     if (!answer?.confirmed) return;
     const name = candidate.manifest.name ?? candidate.manifest.id;
@@ -331,24 +463,24 @@ export async function installFile(store: Store, path: string) {
   }
 }
 
-/** 「从链接安装…」: https only, at most 64 MB; the permissions are known only after the download. */
+/** "Install from Link…": https only, at most 64 MB; the permissions are known only after the download. */
 export async function installFromLink(store: Store, text: string) {
   let url: string;
   try {
     url = new URL(text.trim()).href;
   } catch {
-    return store.report("只能从 https:// 链接安装", true);
+    return store.report(msg("You can only install from https:// links"), true);
   }
-  if (!isHttps(url)) return store.report("只能从 https:// 链接安装", true);
+  if (!isHttps(url)) return store.report(msg("You can only install from https:// links"), true);
   const controller = new AbortController();
-  if (!store.begin("正在下载插件包", () => controller.abort())) return;
+  if (!store.begin(msg("Downloading the plugin package"), () => controller.abort())) return;
   let file: string | null = null;
   try {
-    file = await download(store, url, "插件包", controller.signal, {});
-    store.progress("正在检查插件包…", null);
+    file = await download(store, url, null, controller.signal, {});
+    store.progress(msg("Checking the plugin package…"), null);
     const candidate = await store.plugin.packages.validateArchive(file);
     const info = installedOf(store, candidate.manifest.id);
-    const { replace, question } = sideloadQuestion(store, candidate, `链接 ${url}`);
+    const { replace, question } = sideloadQuestion(store, candidate, { link: url });
     const answer = await store.ask(question);
     if (!answer?.confirmed) return;
     const name = candidate.manifest.name ?? candidate.manifest.id;
@@ -363,21 +495,25 @@ export async function installFromLink(store: Store, text: string) {
 
 // ------------------------------------------------------------ rollback / uninstall
 
-/** 「回退」 to an older previous version, 「恢复」 to a newer one (after installing an older version or a rollback). */
-export function rollbackVerb(current: string | null, previous: string): "回退" | "恢复" {
-  return current && isVersion(current) && isVersion(previous) && compareVersions(previous, current) > 0 ? "恢复" : "回退";
+/** "Roll back" to an older previous version, "restore" a newer one (after installing an older version or a rollback). */
+export function rollbackVerb(current: string | null, previous: string): "rollback" | "restore" {
+  return current && isVersion(current) && isVersion(previous) && compareVersions(previous, current) > 0 ? "restore" : "rollback";
 }
 
 export async function rollback(store: Store, item: Item) {
   const info = item.installed;
   if (!info?.previousVersion) return;
-  if (!store.begin(`正在${rollbackVerb(info.version, info.previousVersion)} ${item.name}…`)) return;
+  const verb = rollbackVerb(info.version, info.previousVersion);
+  if (!store.begin(verb === "restore" ? msg("Restoring {}…", item.name) : msg("Rolling back {}…", item.name))) return;
   try {
     const change = await store.plugin.packages.rollback(info.id);
-    const verb = rollbackVerb(info.version, info.previousVersion);
-    await follow(store, change, () => `已${verb} ${item.name} 到 ${info.previousVersion}`, verb);
+    await follow(store, change, verb, () =>
+      verb === "restore"
+        ? msg("Restored {} to {}", item.name, info.previousVersion!)
+        : msg("Rolled back {} to {}", item.name, info.previousVersion!),
+    );
   } catch (error) {
-    store.report(errorCode(error) === "unsupported" ? "这个插件不能回退" : failureText(store, error, info.id), true);
+    store.report(errorCode(error) === "unsupported" ? msg("This plugin cannot be rolled back") : failureText(store, error, info.id), true);
   } finally {
     store.end();
   }
@@ -387,26 +523,22 @@ export async function uninstall(store: Store, item: Item) {
   const info = item.installed;
   if (!info) return;
   const answer = await store.ask({
-    message: `卸载「${item.name}」？`,
-    detail: "它的菜单、窗口和处理效果会立即撤销。",
-    confirm: "卸载",
+    message: msg("Uninstall “{}”?", item.name),
+    detail: msg("Its menus, windows and processing effects are removed immediately."),
+    confirm: "Uninstall",
     destructive: true,
-    checkbox: "同时删除它的设置与数据",
+    checkbox: "Also delete its settings and data",
   });
   if (!answer?.confirmed) return;
-  if (!store.begin(`正在卸载 ${item.name}…`)) return;
+  if (!store.begin(msg("Uninstalling {}…", item.name))) return;
   try {
     const change = await store.plugin.packages.uninstall(info.id, { removeData: answer.checked });
-    await follow(
-      store,
-      change,
-      () => `已卸载 ${item.name}（${answer.checked ? "数据已删除" : "数据已保留"}）`,
-      "卸载",
+    await follow(store, change, "uninstall", () =>
+      answer.checked ? msg("Uninstalled {} (data deleted)", item.name) : msg("Uninstalled {} (data kept)", item.name),
     );
   } catch (error) {
-    store.report(errorCode(error) === "unsupported" ? "内置插件只能停用" : failureText(store, error, info.id), true);
+    store.report(errorCode(error) === "unsupported" ? msg("Built-in plugins can only be disabled") : failureText(store, error, info.id), true);
   } finally {
     store.end();
   }
 }
-

@@ -5,6 +5,7 @@ import { IndexError, parseIndex, remember, replayed, type RepoIndex, type Seen }
 import { clock, hostOf } from "./labels.ts";
 import { get, isHttps, isLocalHttp, NetError, type Fetch } from "./net.ts";
 import { verifyIndex } from "./signing.ts";
+import { msg, raw, type Msg } from "./text.ts";
 
 /** What the store needs from the outside world; tests pass their own. */
 export interface Deps {
@@ -42,20 +43,20 @@ type Meta = {
  * gets installed from it, so "only update from the same source" compares
  * these strings.
  */
-export function normalizeRepoUrl(input: string): { url: string; local: boolean } | { error: string } {
+export function normalizeRepoUrl(input: string): { url: string; local: boolean } | { error: Msg } {
   const text = input.trim();
   let url: URL;
   try {
     url = new URL(text);
   } catch {
-    return { error: "请输入 https:// 开头的仓库地址" };
+    return { error: msg("Enter a repository address starting with https://") };
   }
   const local = isLocalHttp(url.href);
-  if (!isHttps(url.href) && !local) return { error: "请输入 https:// 开头的仓库地址" };
-  if (url.username || url.password) return { error: "仓库地址里不能带用户名或密码" };
+  if (!isHttps(url.href) && !local) return { error: msg("Enter a repository address starting with https://") };
+  if (url.username || url.password) return { error: msg("The address cannot contain a user name or password") };
   url.hash = "";
   if (!url.pathname.endsWith(".json")) url.pathname = `${url.pathname.replace(/\/+$/, "")}/index.json`;
-  if (url.href.length > 2048) return { error: "仓库地址太长" };
+  if (url.href.length > 2048) return { error: msg("The repository address is too long") };
   return { url: url.href, local };
 }
 
@@ -66,7 +67,7 @@ export class Repo {
   index: RepoIndex | null = null;
   /** When the copy in use was last confirmed by the server (200 or 304). */
   fetchedAt: number | null = null;
-  status: { text: string; warn: boolean } = { text: "", warn: false };
+  status: { text: Msg | null; warn: boolean } = { text: null, warn: false };
   refreshing = false;
   meta: Meta | null = null;
 
@@ -76,10 +77,20 @@ export class Repo {
     this.local = isLocalHttp(url);
   }
 
-  /** 「官方仓库」, or the index's own name with the host, so a third party cannot pose as us. */
-  get label(): string {
-    if (this.official) return "官方仓库";
-    return `${this.index?.name || "未命名仓库"}（${hostOf(this.url)}）`;
+  /** "Official repository", or the index's own name with the host, so a third party cannot pose as us. */
+  get label(): Msg {
+    if (this.official) return msg("Official repository");
+    const name = this.index?.name;
+    return name ? msg("{} ({})", name, hostOf(this.url)) : msg("Unnamed repository ({})", hostOf(this.url));
+  }
+
+  /** "Unofficial: <label>" (the official repository: "Official repository"). */
+  get origin(): Msg {
+    if (this.official) return msg("Official repository");
+    const name = this.index?.name;
+    return name
+      ? msg("Unofficial: {} ({})", name, hostOf(this.url))
+      : msg("Unofficial: Unnamed repository ({})", hostOf(this.url));
   }
 }
 
@@ -141,14 +152,14 @@ export class Repos {
   async refresh(repo: Repo): Promise<void> {
     if (repo.refreshing) return;
     repo.refreshing = true;
-    repo.status = { text: `正在更新 ${repo.label}…`, warn: false };
+    repo.status = { text: msg("Updating {}…", repo.label), warn: false };
     try {
       const result = await this.#fetch(repo, repo.index !== null);
       const now = this.#deps.now();
       if (result === "unchanged") {
         repo.fetchedAt = now;
         if (repo.meta) this.#writeMeta(repo, { ...repo.meta, fetchedAt: now });
-        repo.status = { text: `${repo.label} ${clock(now, now)} 已是最新`, warn: false };
+        repo.status = { text: msg("{0}: up to date at {1}", repo.label, clock(now, now)), warn: false };
       } else {
         repo.index = result.index;
         repo.fetchedAt = now;
@@ -164,7 +175,7 @@ export class Repos {
               }
             : {}),
         });
-        repo.status = { text: `${repo.label} ${clock(now, now)} 已更新`, warn: false };
+        repo.status = { text: msg("{0}: updated at {1}", repo.label, clock(now, now)), warn: false };
       }
     } catch (error) {
       repo.status = { text: this.#failure(repo, error), warn: true };
@@ -201,7 +212,7 @@ export class Repos {
       if (got.status === 304) {
         if (repo.index) return "unchanged" as const;
         if (attempt === 0) continue;
-        throw new NetError("http", "HTTP 304", 304);
+        throw new NetError("http", raw("HTTP 304"), 304);
       }
       const bytes = got.bytes!;
       let signature: string | null = null;
@@ -243,28 +254,51 @@ export class Repos {
     }
   }
 
-  #failure(repo: Repo, error: unknown): string {
-    const cached = repo.index && repo.fetchedAt !== null ? `，继续显示 ${clock(repo.fetchedAt, this.#deps.now())} 的数据` : "";
+  #failure(repo: Repo, error: unknown): Msg {
+    const label = repo.label;
+    // Since when the copy still shown is, if there is one.
+    const cached = repo.index && repo.fetchedAt !== null ? clock(repo.fetchedAt, this.#deps.now()) : null;
     if (error instanceof StoreRefusal) {
-      const text = {
-        signatureMissing: "官方仓库缺少签名文件，已忽略这次更新",
-        signature: "官方仓库的签名校验失败，可能被篡改，已忽略这次更新",
-        replay: "官方仓库返回了旧的索引，已忽略这次更新",
-      }[error.kind];
-      return text;
+      if (error.kind === "signatureMissing")
+        return msg("The official repository has no signature file; this update was ignored");
+      if (error.kind === "signature")
+        return msg(
+          "The official repository's signature check failed (it may have been tampered with); this update was ignored",
+        );
+      return msg("The official repository returned an old index; this update was ignored");
     }
-    if (error instanceof IndexError)
-      return error.kind === "schema"
-        ? `${repo.label} 使用更新的格式，请更新 Vestra Player`
-        : `${repo.label} 的索引格式不正确${cached}`;
+    if (error instanceof IndexError) {
+      if (error.kind === "schema") return msg("{} uses a newer format; please update Vestra Player", label);
+      return cached === null
+        ? msg("{}'s index is malformed", label)
+        : msg("{0}'s index is malformed; showing the data from {1}", label, cached);
+    }
     if (error instanceof NetError) {
-      if (error.code === "http") return `${repo.label} 返回错误 ${error.status}${cached}`;
-      if (error.code === "tooLarge") return `${repo.label} 的索引超过 4 MB，已拒绝${cached}`;
-      if (error.code === "protocol" || error.code === "redirects") return `${repo.label}：${error.message}${cached}`;
-      if (!repo.index) return `无法连接 ${repo.label}（${error.message}），暂时看不到它的插件`;
-      return `无法连接 ${repo.label}（${error.message}），显示 ${clock(repo.fetchedAt ?? 0, this.#deps.now())} 的缓存`;
+      const status = String(error.status);
+      if (error.code === "http")
+        return cached === null
+          ? msg("{0} returned error {1}", label, status)
+          : msg("{0} returned error {1}; showing the data from {2}", label, status, cached);
+      if (error.code === "tooLarge")
+        return cached === null
+          ? msg("{}'s index exceeds 4 MB; refused", label)
+          : msg("{0}'s index exceeds 4 MB; refused; showing the data from {1}", label, cached);
+      if (error.code === "protocol" || error.code === "redirects")
+        return cached === null
+          ? msg("{0}: {1}", label, error.reason)
+          : msg("{0}: {1}; showing the data from {2}", label, error.reason, cached);
+      if (!repo.index) return msg("Can't connect to {0} ({1}); its plugins are not available for now", label, error.reason);
+      return msg(
+        "Can't connect to {0} ({1}); showing the cache from {2}",
+        label,
+        error.reason,
+        clock(repo.fetchedAt ?? 0, this.#deps.now()),
+      );
     }
-    return `${repo.label}：${(error as Error).message}${cached}`;
+    const reason = raw((error as Error).message);
+    return cached === null
+      ? msg("{0}: {1}", label, reason)
+      : msg("{0}: {1}; showing the data from {2}", label, reason, cached);
   }
 
   #dir(url: string) {
@@ -294,7 +328,7 @@ export class Repos {
       repo.meta = meta;
       repo.fetchedAt = Number.isFinite(meta.fetchedAt) ? meta.fetchedAt : null;
       if (repo.fetchedAt !== null)
-        repo.status = { text: `${repo.label}：${clock(repo.fetchedAt, this.#deps.now())} 的数据`, warn: false };
+        repo.status = { text: msg("{0}: data from {1}", repo.label, clock(repo.fetchedAt, this.#deps.now())), warn: false };
     } catch {
       // No cache yet, or unreadable: start without one.
     }
