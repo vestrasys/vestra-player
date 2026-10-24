@@ -23,7 +23,7 @@
 
 ## 进度
 
-- [ ] 纵向切片：菜单 → 无 key 横幅 → 设置页保存 key → 新对话 → 真实服务商流式回复（纯文本）→ write 工具卡片 → 文件出现在 `work/`；包括停止、错误条、新对话/切换会话。不需要新 API。
+- [x] 纵向切片代码完成（2.0.0，PR 待合并，2026-10-24；pi bundle 4.8 MB，vxp 5.1 MB，测试 18/18）——待真机验收：菜单 → 无 key 横幅 → 设置页保存 key → 新对话 → 真实服务商流式回复（纯文本）→ write 工具卡片 → 文件出现在 `work/`；包括停止、错误条、新对话/切换会话。不需要新 API。
 - [ ] 第 2 阶段：Markdown 消息（等 R-a）
 - [ ] 第 3 阶段：插件工具、安装、导出 .vxp/zip（等 R-h）
 - [ ] 真机验收：真实 key、中文输入法下按 Enter
@@ -36,11 +36,13 @@
   - R-b 不提供 API，由宿主内部完成：按指纹缓存、未变的文档不重新解析、块模型原地 diff、追加行时原地 push。
   - 嵌套的 `ImageRef` 明确报 `invalid`。
   - SDK 1.5.4，排在 1.5.2、1.5.3 之后。
+  - **作者：接受。**
 - **R-h**：在已安装的播放器里也能跑 SDK 的 check/pack（`@vestra-player/sdk/tooling`）。现在 `stage-runtime.mjs` 不带 `bin/` 和 typescript。挡第 3 阶段。
   - **维护者答复（2026-10-24）：拒绝，给出替代方案。**
   - 不该让每个用户的 runtime 都多背约 20 MB（gzip 后约 3.6 MB），而用到它的只有一个插件。
   - 替代方案：插件包里自带 SDK 的 `bin/`、`dist/`、typescript 和 `@types/node`（现在的工坊已经自带 tsc），用子进程跑 `vestra-plugin check|pack`，再交给已有的 `packages.validateArchive`、`trial`、`install`。
   - 如果确实需要结构化诊断，再给 CLI 加 `--json`（SDK patch）。
+  - **作者：接受替代方案。**如果 SDK 构建跳过 vendor 里 `node_modules` 布局的问题无法解决，作者会按迁移阻塞报告。
 - **R-c**（以后）：代码块的复制回调。
 - 不提的：R-b、R-d、R-e、R-g；R-f 已证明不需要。
 
@@ -49,3 +51,8 @@
 - 2026-10-24 消息渲染：**用 Markdown，不做 HTML+JS**。HTML 要在宿主里嵌浏览器内核，改动和安全面都太大。流式显示按约 100 ms 节流、整条消息重新解析。工具调用显示为**一行滚动状态**：最新一条原地替换上一条，这一轮结束后可以展开查看全部，必须实时刷新。回复文本的流式显示如果有困难，可以先不做。
 
 - 2026-10-24 导出源码 zip：**自己的仓库加 registry 登记**。zip 是一个完整的插件项目（README、测试、发布用 CI），可以直接建成用户自己的 GitHub 仓库；上架时到官方插件仓库提交 `registry/<id>.toml` 登记。插件仓库那边需要补上「第三方登记、从源码构建」这条路，属于插件仓库 infra 的工作，单独立项。
+
+## 遗留
+
+- `src/packaging/third-party.toml` 里 workshop 一条只列了 4 个包，实际打进去的有 61 个；应改为指向 `dependency-inventory.json`。归打包维护。
+- 「重试」会把上一条用户消息再发一遍，记录里会出现重复（pi 1.4 没有 regenerate）。
