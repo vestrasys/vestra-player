@@ -1213,7 +1213,7 @@ impl Subtitles {
         let result = self.mutate(mpv, owner, mutation);
         let outcome = result
             .as_ref()
-            .map(Clone::clone)
+            .cloned()
             .map_err(|e| operations::Failure {
                 code: e.code.clone(),
                 message: e.message.clone(),
