@@ -443,6 +443,32 @@ export component W inherits Window {
         assert_eq!(get("fill"), dark_fill);
     }
 
+    /// The menu shadow follows the palette in windows that export MenuChrome,
+    /// and a window without a menu still takes a palette.
+    #[test]
+    fn the_menu_shadow_follows_the_palette() {
+        headless();
+        let instance = compile_source(
+            r#"import { MenuChrome } from "menu-view.slint";
+export { MenuChrome } from "menu-view.slint";
+export component W inherits Window {
+    out property <color> shadow: MenuChrome.shadow;
+}"#
+            .into(),
+            &ui_dir().join("w.slint"),
+        )
+        .unwrap();
+        let alpha = || match instance.get_property("shadow").unwrap() {
+            Value::Brush(brush) => brush.color().alpha(),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(alpha(), 0x80);
+        crate::theme::apply(&instance, "vestra-light").unwrap();
+        assert_eq!(alpha(), 0x33);
+        crate::theme::apply(&instance, "vestra").unwrap();
+        assert_eq!(alpha(), 0x80);
+    }
+
     fn headless() {
         thread_local! {
             static PLATFORM: () = {

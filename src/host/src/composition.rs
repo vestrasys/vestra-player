@@ -238,6 +238,7 @@ pub fn floating_source(spec: &CompileSpec, title: &str) -> Result<String> {
         r#"import {{ MenuView, MenuLevel }} from "menu-view.slint";
 import {{ Theme }} from "@vestra/theme.slint";
 export {{ VestraPalette }} from "palette.slint";
+export {{ MenuChrome }} from "menu-view.slint";
 export component FloatingPanel inherits Window {{
     title: {title};
     min-width: 300px; min-height: 250px;

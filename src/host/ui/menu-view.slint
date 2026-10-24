@@ -13,6 +13,14 @@
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
 
+// Per-palette menu values the player sets (theme.rs, with the colours); the
+// defaults are the `vestra` palette's. Host-only, not in the plugin library:
+// windows that draw a MenuView export it next to VestraPalette.
+export global MenuChrome {
+    // Panel drop shadow; only its strength differs between palettes.
+    in property <color> shadow: #00000080;
+}
+
 export struct MenuRow {
     token: string,
     title: string,
@@ -240,7 +248,7 @@ export component MenuView inherits Rectangle {
         border-width: 1px;
         border-radius: Theme.radius-panel;
         drop-shadow-blur: 8px;
-        drop-shadow-color: #00000080;
+        drop-shadow-color: MenuChrome.shadow;
         // Swallow presses between rows so they do not dismiss the menu; the
         // wheel scrolls a level taller than the window.
         TouchArea {

@@ -281,7 +281,7 @@ label           { height: 14px; }                                    /* 表单�
 
 ```css
 .ctx-menu  { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 8px; padding: 2px;
-             box-shadow: 0 0 8px #00000080; }
+             box-shadow: 0 0 8px var(--menu-shadow); }   /* vestra #00000080，vestra-light #00000033（theme.rs，MenuChrome.shadow） */
 .ctx-item  { height: 24px; border-radius: 4px; padding: 0 8px 0 4px; font-size: 12px; color: var(--text-list); }
 .ctx-item.lit      { background: var(--selected-bg); color: var(--text); }   /* 悬停或键盘当前项；左边缘 2×14 accent 竖条（y 5） */
 .ctx-item:disabled { color: var(--text-dim); }
