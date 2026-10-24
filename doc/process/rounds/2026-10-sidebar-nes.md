@@ -63,7 +63,30 @@
 - 宿主不接受命令行或系统传来的文件。
 - 生成流的 `source` 实际是 `producer://<id>`，而需求文档写的是「`source` 为空」，两者不一致。
 
-**维护者答复**：待定
+**维护者答复（2026-10-24）：改写后接受**
+
+- **核实作者证据**：第 2、3、5 条成立。第 1 条有一处不准确：`.nes` 拖到视频区时，现在是被静默忽略，并没有交给 mpv。不改 API 的替代方案（A1–A5）都做不到用户要的效果。满足 §4.3 第 4 条：来源仲裁归宿主，按来源分派属于核心的打开职责，而且是通用能力。
+- **范围**：只认本地绝对路径，只返回生成流；http(s) 解析器不变。
+- **形态**：`ResolverOptions` 改为联合类型，新增 `{ id, extensions, resolve(path, signal): Promise<ResolvedStream> }`。`ResolvedStream = { kind:"stream", width, height, frame, started?(stream) }`：作者提的 `onStop` 改成交出 `Stream` 句柄，概念只有一个。
+- **wire**：`register` 新增 `{id, extensions}` 形式；`respond` 新增 `{kind:"stream", producerId}`，宿主回 `{stamp}`。
+- **能力与 manifest**：需要 `source.resolve` 和 `producer.av`；不新增 manifest 字段；NES 设 `minPlayerVersion`。
+- **匹配**：来源不含 `://`、是绝对路径、扩展名不分大小写；扩展名分支先于 URL 解析（Windows 的 `C:\`）。
+- **冲突**：一个扩展名只能有一个登记者，后来者 `conflict`，不导致激活失败。
+- **来源命名**：`source` 保留原路径，`kind === "stream"`；直接 `openStream` 的来源仍是 `producer://<n>`。
+- **失败**：错误用插件给的原文，所有解析器都去掉 `resolver failed: ` 前缀。
+- **取消、停用、旧宿主**：取消沿用现有机制（被取代、30 秒期限、停用、注销）；停用后回到今天的行为；旧宿主靠 `minPlayerVersion` 挡住。
+- **版本**：SDK 1.5.3（patch，排在 1.5.2 之后）。
+- **需要回归的插件**：
+  - 必须改：playlist（`queue.ts:531` 遇到 stream 会 detach）；
+  - 要确认：marks、info、subtitles（`hasMedia` 不看 `kind`）；
+  - 只跑测试：其余插件、youtube、bilibili。
+- **工作量**：维护者约 2–2.5 天（人工估计），NES 约 40 行，playlist 几行。
+- **待裁决的两项取舍**：
+  1. host 形式的解析器冲突是否也改成不导致激活失败？
+  2. 去掉错误前缀是否适用于所有解析器？
+- **顺带发现**：
+  1. 命令行和系统打开文件另立宿主条目（平台模块统一投递到 `Open` intent），R1 不依赖它。
+  2. `producer://` 保持不变，改文档：`reference.md` 中 `PlayerState.source` 由维护者改；`feature-requirements.md:508` 由维护者提供文案、协调者落笔。
 
 **作者反驳**：待定
 
