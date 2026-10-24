@@ -627,6 +627,202 @@ export component W inherits Window {
         assert_eq!((count("backs"), count("dismissals")), (2., 1.));
     }
 
+    /// Coordinator report 2026-10-25: one pointer move straight to a far row,
+    /// then a click there, must hover and activate that row, not the one
+    /// hovered before. Each row has its own TouchArea, and Slint hit-tests a
+    /// press at the press's own position (winit also reports the cursor at
+    /// the press first), so even a press with no move before it lands on the
+    /// row under it. Rows of a level that scrolls are drawn where `menu.rs`
+    /// says they are (below the up arrow bar), so the host's submenu and
+    /// tooltip positions match what the pointer hits.
+    #[test]
+    fn a_click_activates_the_row_under_it_after_a_single_jump() {
+        use crate::commands::{CommandKey, CommandSnapshot, CommandState, Declaration, MenuNode};
+        use crate::menu::{ARROW, Point, levels};
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        headless();
+        let leaf = |title: String, group: &str| {
+            let mut declaration = Declaration::new(&title, &[title.as_str()]);
+            declaration.group = group.into();
+            MenuNode::Command {
+                entry: CommandSnapshot {
+                    key: CommandKey {
+                        owner: 1,
+                        local_id: title.clone(),
+                    },
+                    revision: 1,
+                    declaration,
+                    state: CommandState {
+                        enabled: true,
+                        checked: None,
+                        busy: false,
+                        reason: None,
+                    },
+                    manifest: "m".into(),
+                    sequence: 1,
+                },
+            }
+        };
+        let none = |_: u64, _: &str| None;
+        // The view, the host's last hovered token and the activated tokens.
+        let view = |width: f32, height: f32| {
+            let source = r#"
+import { MenuView, MenuLevel } from "menu-view.slint";
+export component W inherits Window {
+    in property <[MenuLevel]> menu-levels;
+    callback hover(int, string, bool);
+    callback invoke(string);
+    MenuView {
+        width: root.width; height: root.height;
+        levels: root.menu-levels;
+        hovered(level, token, now) => { root.hover(level, token, now); }
+        activated(token) => { root.invoke(token); }
+    }
+}"#;
+            let result = pollster::block_on(
+                compiler().build_from_source(source.into(), ui_dir().join("t.slint")),
+            );
+            let instance = result.component("W").unwrap().create().unwrap();
+            instance
+                .window()
+                .set_size(slint::LogicalSize::new(width, height));
+            let log: Rc<RefCell<(String, Vec<String>)>> = Rc::default();
+            let sink = log.clone();
+            instance
+                .set_callback("hover", move |args| {
+                    if let Some(Value::String(token)) = args.get(1) {
+                        sink.borrow_mut().0 = token.to_string();
+                    }
+                    Value::Void
+                })
+                .unwrap();
+            let sink = log.clone();
+            instance
+                .set_callback("invoke", move |args| {
+                    if let Some(Value::String(token)) = args.first() {
+                        sink.borrow_mut().1.push(token.to_string());
+                    }
+                    Value::Void
+                })
+                .unwrap();
+            (instance, log)
+        };
+        let settle = || {
+            slint::platform::update_timers_and_animations();
+        };
+        let move_to = |instance: &slint_interpreter::ComponentInstance, (x, y): (f32, f32)| {
+            instance
+                .window()
+                .dispatch_event(slint::platform::WindowEvent::PointerMoved {
+                    position: slint::LogicalPosition::new(x, y),
+                });
+            settle();
+        };
+        let click = |instance: &slint_interpreter::ComponentInstance, (x, y): (f32, f32)| {
+            let position = slint::LogicalPosition::new(x, y);
+            let button = slint::platform::PointerEventButton::Left;
+            let window = instance.window();
+            window
+                .dispatch_event(slint::platform::WindowEvent::PointerPressed { position, button });
+            settle();
+            window
+                .dispatch_event(slint::platform::WindowEvent::PointerReleased { position, button });
+            settle();
+        };
+        // The centre of a row's title, in window coordinates, from menu.rs.
+        let centre = |level: &serde_json::Value, index: usize| {
+            let shift = if level["scroll"] == true {
+                ARROW - level["viewport-y"].as_f64().unwrap()
+            } else {
+                0.
+            };
+            let x = level["x"].as_f64().unwrap() + 40.;
+            let y = level["y"].as_f64().unwrap()
+                + shift
+                + level["rows"][index]["y"].as_f64().unwrap()
+                + 12.;
+            (x as f32, y as f32)
+        };
+        let token = |level: &serde_json::Value, index: usize| {
+            level["rows"][index]["token"].as_str().unwrap().to_owned()
+        };
+
+        // A top-level menu like the player's: groups of commands, then 设置 ▸.
+        let mut roots: Vec<MenuNode> = (0..9)
+            .map(|i| leaf(format!("命令{i}"), if i < 4 { "a" } else { "b" }))
+            .collect();
+        roots.push(leaf("插件商城…".into(), "c"));
+        roots.push(MenuNode::Group {
+            title: "设置".into(),
+            group: "d".into(),
+            children: vec![leaf("偏好".into(), "d")],
+        });
+        let (instance, log) = view(900., 700.);
+        let value = levels(
+            &roots,
+            &[],
+            Point { x: 420., y: 100. },
+            Point { x: 900., y: 700. },
+            &[],
+            &none,
+        );
+        crate::set_menu_model(&instance, crate::ui_values::from_json(&value).unwrap()).unwrap();
+        let level = &value[0];
+        let (store, settings) = (9, 10);
+        move_to(&instance, centre(level, 1));
+        move_to(&instance, centre(level, store));
+        assert_eq!(log.borrow().0, token(level, store));
+        // One jump from 命令1 to 设置, no move in between.
+        move_to(&instance, centre(level, 1));
+        move_to(&instance, centre(level, settings));
+        assert_eq!(
+            log.borrow().0,
+            token(level, settings),
+            "hover follows the jump"
+        );
+        // A click on 命令7 with no move before it: the press's own position.
+        click(&instance, centre(level, 7));
+        assert_eq!(log.borrow().1, [token(level, 7)], "the row under the press");
+        // A click on 插件商城… right after hovering 设置.
+        move_to(&instance, centre(level, settings));
+        move_to(&instance, centre(level, store));
+        click(&instance, centre(level, store));
+        assert_eq!(log.borrow().1.last().unwrap(), &token(level, store));
+
+        // A level taller than the window, at the top and scrolled.
+        let roots: Vec<MenuNode> = (0..25).map(|i| leaf(format!("行{i}"), "g")).collect();
+        let (instance, log) = view(320., 182.);
+        for offset in [0., 30., 1e6] {
+            let value = levels(
+                &roots,
+                &[],
+                Point { x: 10., y: 0. },
+                Point { x: 320., y: 182. },
+                &[offset],
+                &none,
+            );
+            crate::set_menu_model(&instance, crate::ui_values::from_json(&value).unwrap()).unwrap();
+            let level = &value[0];
+            let vp = level["viewport-y"].as_f64().unwrap();
+            let visible = level["height"].as_f64().unwrap() - 2. * ARROW;
+            for index in 0..25 {
+                let top = level["rows"][index]["y"].as_f64().unwrap();
+                if top < vp || top + 24. > vp + visible {
+                    continue;
+                }
+                log.borrow_mut().1.clear();
+                move_to(&instance, centre(level, index));
+                click(&instance, centre(level, index));
+                assert_eq!(
+                    log.borrow().1,
+                    [token(level, index)],
+                    "offset {offset}: row {index} under its menu.rs position"
+                );
+            }
+        }
+    }
+
     /// Coordinator report 2026-10-24 (播放 ▸ 跳转 ▸ / 速度微调 ▸): drives the
     /// real view with pointer events and a host loop like `Host` (hover
     /// delay, `set_menu_model`). Walking down a submenu in 20 px steps opens
