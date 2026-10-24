@@ -1413,6 +1413,10 @@ export component W inherits Window {
                 .diagnostics()
                 .filter(|d| d.level() == slint_interpreter::DiagnosticLevel::Error)
                 .map(|d| d.to_string())
+                // A library file (only globals or exported components for other
+                // files to import) has no component of its own; its importers
+                // compile it, so any real error in it still fails here.
+                .filter(|e| e != "No component found")
                 .collect();
             assert!(errors.is_empty(), "{}: {errors:?}", file.display());
         }

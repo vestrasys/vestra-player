@@ -714,7 +714,7 @@ test("B22: stopping the plugin clears its layer; other plugins' layers stay", as
 
 // ------------------------------------------------------------------ menus
 
-const fixedMenu = (host: TestHost, path: (c: ReturnType<TestHost["command"]>) => string[]) =>
+const fixedMenu = (host: TestHost, path: (c: ReturnType<TestHost["command"]>) => readonly unknown[]) =>
   [...host.commands.values()]
     .filter((c) => c.declaration.order < 10000)
     .sort((a, b) => a.declaration.order - b.declaration.order)
