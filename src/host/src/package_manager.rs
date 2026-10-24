@@ -580,7 +580,8 @@ impl Host {
                 "directory":plugin.directory,"previousVersion":previous,
                 "builtin":instance.as_ref().is_some_and(|i| i.builtin),
                 "source":instance.map(|i| i.source),
-                "dataDirectory":plugin.data_directory(),"warnings":warnings}));
+                "dataDirectory":plugin.data_directory(),"warnings":warnings,
+                "display":display(&plugin.manifest, plugin.catalog.as_deref())}));
         }
         let stopped = |disabled: bool, failure: Option<&String>| {
             if disabled {
@@ -615,7 +616,8 @@ impl Host {
                 "previousVersion":record.previous.and_then(|p| p.manifest.version),
                 "builtin":record.instance.as_ref().is_some_and(|i| i.builtin),
                 "source":record.instance.map(|i| i.source),
-                "dataDirectory":data,"warnings":[]}),
+                "dataDirectory":data,"warnings":[],
+                "display":display(&current.manifest, crate::i18n::load(&current.directory).as_deref())}),
             );
         }
         for (id, (directory, manifest)) in &self.development {
@@ -629,7 +631,8 @@ impl Host {
                 json!({"id":id,"version":manifest.version,
                 "origin":"development","state":state,"error":error,
                 "capabilities":manifest.capabilities,"directory":directory,"previousVersion":null,
-                "builtin":false,"source":null,"dataDirectory":data,"warnings":[]}),
+                "builtin":false,"source":null,"dataDirectory":data,"warnings":[],
+                "display":display(manifest, crate::i18n::load(directory).as_deref())}),
             );
         }
         Value::Array(list.into_values().collect())
@@ -1069,6 +1072,25 @@ fn install_source(params: &Value) -> std::result::Result<Source, RpcError> {
     })
 }
 
+/// `PluginInfo.display`: the manifest's display texts in the interface
+/// language, translated with the package's own catalog (the store and the
+/// plugin manager show these; `null` fields are absent from the manifest).
+fn display(manifest: &plugins::Manifest, catalog: Option<&crate::i18n::Catalog>) -> Value {
+    let text = |value: &Option<String>| {
+        value
+            .as_deref()
+            .map(|text| catalog.map_or(text, |c| c.text(text)).to_owned())
+    };
+    let tags: Vec<String> = manifest
+        .tags
+        .iter()
+        .flatten()
+        .map(|tag| catalog.map_or(tag.as_str(), |c| c.text(tag)).to_owned())
+        .collect();
+    json!({"name":text(&manifest.name),"punchline":text(&manifest.punchline),
+        "description":text(&manifest.description),"tags":tags})
+}
+
 /// The 2026-10-24 ruling (ecosystem-plan.md): a reserved `vestra.` id
 /// (`manifest::reserved_id`) is installed and started only as the
 /// installation's built-in instance, which seeding alone creates. Store,
@@ -1079,7 +1101,10 @@ fn check_reserved(id: &str, instance: Option<&Instance>) -> std::result::Result<
     if crate::manifest::reserved_id(id) && !instance.is_some_and(|i| i.builtin) {
         return Err(RpcError::new(
             "reserved",
-            format!("「{id}」：vestra. 开头的 id 只留给播放器内置插件，不能安装"),
+            crate::i18n::tr_args(
+                "“{}”: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed",
+                &serde_json::json!([id]),
+            ),
         ));
     }
     Ok(())
@@ -1380,7 +1405,7 @@ mod tests {
             for instance in [None, Some(&installed)] {
                 let error = check_reserved(id, instance).unwrap_err();
                 assert_eq!(error.code, "reserved", "{id}");
-                assert!(error.message.contains(id) && error.message.contains("内置插件"));
+                assert!(error.message.contains(id) && error.message.contains("built-in plugins"));
             }
             assert!(check_reserved(id, Some(&builtin)).is_ok(), "{id}");
         }

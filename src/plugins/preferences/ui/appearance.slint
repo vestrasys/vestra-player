@@ -1,14 +1,15 @@
-// 选项 ▶ 外观 (H10): palette radio, each with a 120×40 preview, and 恢复默认.
-// The page is 440 wide (the options window's page area). Everything themed
-// uses `Theme`; the previews draw colours the plugin passes in (`Swatch`),
-// because `Theme` only holds the current palette.
+// Options ▸ Appearance (H10): palette radio, each with a 120×40 preview, and
+// Restore Defaults. The page is 440 wide (the options window's page area).
+// Everything themed uses `Theme`; the previews draw colours the plugin passes
+// in (`Swatch`), because `Theme` only holds the current palette. Every text is
+// @tr (English source; locales/<lang>.po translate it).
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
 import { Button } from "@vestra/widgets.slint";
 
 struct Rgb { r: int, g: int, b: int }
 struct Swatch { video: Rgb, bar: Rgb, track: Rgb, text: Rgb, dim: Rgb, accent: Rgb, f0: Rgb, f1: Rgb, f2: Rgb, f3: Rgb }
-struct ThemeRow { id: string, title: string, note: string, swatch: Swatch }
+struct ThemeRow { id: string, swatch: Swatch }
 
 export global AppearanceBridge {
     in property <[ThemeRow]> themes;
@@ -81,13 +82,20 @@ component Radio inherits Rectangle {
 }
 
 export component AppearancePage inherits Rectangle {
+    // The palettes' names and notes (the plugin passes ids).
+    pure function title-of(id: string) -> string {
+        id == "vestra-light" ? @tr("Vestra Light") : @tr("Vestra Dark")
+    }
+    pure function note-of(id: string) -> string {
+        id == "vestra-light" ? @tr("For bright rooms; the video area stays dark") : @tr("Default, from the logo's aurora colours")
+    }
     background: Theme.bg-panel;
     VerticalLayout {
         padding: Theme.dialog-padding;
         spacing: 6px;
         Text {
             height: 24px;
-            text: "外观";
+            text: @tr("Appearance");
             font-size: Theme.font-title;
             font-weight: 700;
             vertical-alignment: center;
@@ -95,7 +103,7 @@ export component AppearancePage inherits Rectangle {
         }
         Text {
             height: Theme.label-height;
-            text: "配色";
+            text: @tr("Palette");
             font-size: Theme.font-body;
             color: Theme.text-dim;
         }
@@ -120,13 +128,13 @@ export component AppearancePage inherits Rectangle {
                     alignment: center;
                     spacing: 2px;
                     Text {
-                        text: row.title;
+                        text: root.title-of(row.id);
                         font-size: Theme.font-tab;
                         color: AppearanceBridge.theme == row.id ? Theme.text : Theme.text-list;
                         overflow: elide;
                     }
                     Text {
-                        text: row.note;
+                        text: root.note-of(row.id);
                         font-size: Theme.font-body;
                         color: Theme.text-dim;
                         overflow: elide;
@@ -141,7 +149,7 @@ export component AppearancePage inherits Rectangle {
         }
         Text {
             min-height: 32px;
-            text: "切换后所有窗口立即生效。圆角、字号与控件尺寸不随配色变化。";
+            text: @tr("Changes apply to every window at once. Corner radii, font sizes and control sizes stay the same in every palette.");
             font-size: Theme.font-body;
             color: Theme.text-dim;
             vertical-alignment: center;
@@ -151,7 +159,7 @@ export component AppearancePage inherits Rectangle {
         HorizontalLayout {
             alignment: end;
             Button {
-                text: "恢复默认";
+                text: @tr("Restore Defaults");
                 enabled: AppearanceBridge.can-reset;
                 clicked => { AppearanceBridge.reset(); }
             }

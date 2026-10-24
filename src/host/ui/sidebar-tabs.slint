@@ -101,7 +101,7 @@ export component SidebarTabs inherits Rectangle {
         x: root.width - 53px;
         y: 0px;
         height: root.height;
-        tip: root.detached ? "附着到主窗口" : "分离为浮动窗口";
+        tip: root.detached ? @tr("Attach to the main window") : @tr("Detach as a floating window");
         // Detached: arrow into the frame; attached: arrow out of it.
         icon: root.detached ? "attach" : "detach";
         clicked => { root.detach(); }
@@ -110,7 +110,7 @@ export component SidebarTabs inherits Rectangle {
         x: root.width - 28px;
         y: 0px;
         height: root.height;
-        tip: "关闭侧栏";
+        tip: @tr("Close the sidebar");
         icon: "close";
         clicked => { root.close(); }
     }

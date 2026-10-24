@@ -12,9 +12,13 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-/// `stats().backend` for each renderer.
-pub const GPU_NAME: &str = "libmpv · GPU 渲染（OpenGL）";
-pub const SOFTWARE_NAME: &str = "libmpv · 软件渲染";
+/// `stats().backend` for each renderer, in the interface language.
+pub fn gpu_name() -> String {
+    crate::i18n::tr("libmpv · GPU rendering (OpenGL)")
+}
+pub fn software_name() -> String {
+    crate::i18n::tr("libmpv · software rendering")
+}
 
 /// Shared by the backend's render thread, its control worker and the UI.
 #[derive(Default)]
@@ -81,11 +85,11 @@ impl Render {
             .unwrap_or_else(PoisonError::into_inner)
             .unwrap_or(60.)
     }
-    pub fn backend_name(&self) -> &'static str {
+    pub fn backend_name(&self) -> String {
         if self.gpu().is_some() {
-            GPU_NAME
+            gpu_name()
         } else {
-            SOFTWARE_NAME
+            software_name()
         }
     }
 }
@@ -124,7 +128,7 @@ mod tests {
     fn a_fallback_needs_an_active_gpu_and_is_asked_once() {
         let render = Render::new(true);
         assert!(render.gpu().is_none());
-        assert_eq!(render.backend_name(), SOFTWARE_NAME);
+        assert_eq!(render.backend_name(), software_name());
         render.fall_back("no GPU yet");
         assert!(!render.fallback_requested(), "nothing to fall back from");
         render.active.store(true, Ordering::Release);

@@ -74,6 +74,7 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 | `src/host/src/manifest.rs` | manifest 结构与规则表（开发加载与托管包共用；SDK CLI 用同一张表，`host-agreement` 测试比对） |
 | `src/host/src/package_store.rs`、`package_archive.rs`、`package_manager.rs` | 安装库（`packages/catalog.json`：每个 id 的当前安装实例与休眠实例）、`.vxp` 解压、安装/替换/回退/卸载与内置插件播种（`Resources/plugins/builtin.json`）。设计见 [S4 提案](store-api-proposal.md) |
 | `src/host/src/ui_markdown.rs`、`ui/vestra/markdown.slint` | `plugin.ui.markdown`：pulldown-cmark 解析成 `[MarkdownBlock]`，行内样式用 Slint `styled-text`；文档可在属性值任意深度（`convert`，经 `ui_values::from_json_with` 的钩子），每个文档是宿主自己的 `Rows` 模型；按（插件、视图、属性）的指纹缓存（`Cache`，放在 `ui_image::Images` 里随视图释放）；`ui_values::reconcile` 对含文档的值按形状原地更新（`fits`/`merge`），文档按块 diff（`Rows::update`）。`MarkdownView` = `ScrollView` + `MarkdownBlocks` |
+| `src/host/src/i18n/`、`src/host/locales/` | 界面语言：启动时决定 locale（`platform::preferred_languages`）、`.po` 解析与编译（`po.rs`，`build.rs` 共用）、Slint `@tr` 改写（`slint_tr.rs`，经 `ui::compiler` 的文件加载器）、插件与播放器的词典、模板格式化。设计见 [多语言设计](i18n.md) |
 | `src/host/src/window_state.rs`、`ui_state.rs` | 底栏/侧栏显示规则（宽度、空闲隐藏、分离）、界面状态持久化 |
 | `src/host/ui/vestra/` | 插件可导入的主题与控件（`@vestra/theme.slint`、`@vestra/widgets.slint`） |
 | `src/runtime/runner.ts` | 插件运行器 |

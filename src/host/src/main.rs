@@ -15,6 +15,7 @@ mod drops;
 mod effects;
 pub mod font_asset;
 pub mod font_carrier;
+mod i18n;
 mod manifest;
 mod media_jobs;
 mod media_tracks;
@@ -136,14 +137,17 @@ impl RpcError {
     fn sidebar_full() -> Self {
         Self::taken(
             "slot-occupied",
-            format!("侧栏最多 {} 个页签", slot_claims::MAX_SIDEBAR_TABS),
+            i18n::tr_args(
+                "The sidebar holds at most {} tabs",
+                &json!([slot_claims::MAX_SIDEBAR_TABS]),
+            ),
             json!({"slot":"sidebar"}),
         )
     }
     fn sequence_taken(holder: &str) -> Self {
         Self::taken(
             "sequence-taken",
-            format!("上一个/下一个已由 {holder} 提供"),
+            i18n::tr_args("Previous/Next is provided by {}", &json!([holder])),
             json!({"owner":holder}),
         )
     }
@@ -2587,7 +2591,7 @@ impl Host {
             busy: false,
             reason: None,
         };
-        let mut fullscreen = commands::Declaration::new("全屏", &["全屏"]);
+        let mut fullscreen = commands::Declaration::new("Fullscreen", &["Fullscreen"]);
         fullscreen.group = "screen".into();
         fullscreen.order = 700;
         // IA-CORE-04: Enter and Alt+Enter toggle full screen; F11 too.
@@ -2597,9 +2601,12 @@ impl Host {
             "F11".into(),
             "Mouse:LeftDoubleClick".into(),
         ];
-        let mut exit = commands::Declaration::new("退出全屏", &[]);
+        fullscreen.localize(|_| i18n::tr("Fullscreen"));
+        let mut exit = commands::Declaration::new("Exit Fullscreen", &[]);
         exit.bindings = vec!["Escape".into()];
-        let mut quit = commands::Declaration::new("退出", &["退出"]);
+        exit.localize(|_| i18n::tr("Exit Fullscreen"));
+        let mut quit = commands::Declaration::new("Quit", &["Quit"]);
+        quit.localize(|_| i18n::tr("Quit"));
         quit.group = "exit".into();
         quit.order = 990;
         quit.bindings = vec!["Cmd+Q".into()];
@@ -2989,7 +2996,9 @@ impl Host {
             "videoArea":{"width":facts["videoArea"]["width"].as_f64().unwrap_or(0.),
                 "height":facts["videoArea"]["height"].as_f64().unwrap_or(0.)},
             "pictureInPicture":self.pip_state(),
-            "appearance":self.theme(),"fileTypes":self.file_types})
+            "appearance":self.theme(),"fileTypes":self.file_types,
+            "language":self.language_preference().unwrap_or_else(|| i18n::SYSTEM.into()),
+            "locale":i18n::locale()})
     }
     /// `WindowState.pictureInPicture`: offered here, and the window showing.
     fn pip_state(&self) -> Value {
@@ -3017,7 +3026,7 @@ impl Host {
             .as_ref()
             .ok_or_else(|| unavailable("the video area needs a native window"))?;
         if shell.window().is_fullscreen() {
-            return Err(unavailable("全屏时不可用"));
+            return Err(unavailable(&i18n::tr("Not available in fullscreen")));
         }
         ui::settle_layout(shell.window());
         let number = |name: &str| match shell.get_property(name) {
@@ -3144,6 +3153,15 @@ impl Host {
             .map_or_else(|| owner.to_string(), |p| p.manifest.id.clone())
     }
     /// Refuse what another plugin holds (`RpcError::taken`): recorded for
+    /// A sentence of a plugin's (`osd.show`, dialogs) in the interface
+    /// language: its catalog's translation, formatted with `args`.
+    fn plugin_template(&self, owner: u64, text: &str, args: &Value) -> String {
+        match self.plugins.get(&owner) {
+            Some(plugin) => plugin.template(text, args),
+            None if args.is_null() => text.to_owned(),
+            None => i18n::format(text, args),
+        }
+    }
     /// `packages.list`, shown on the OSD and announced as `host.error`.
     fn refuse_taken(&mut self, owner: u64, error: RpcError, text: String) -> RpcError {
         let id = self.plugin_id(owner);
@@ -3155,7 +3173,7 @@ impl Host {
         warnings.retain(|(w, _)| w["code"] != warning["code"] || w["slot"] != warning["slot"]);
         warnings.push((warning.clone(), text.clone()));
         eprintln!("{id}: {}", error.message);
-        self.show_osd(&format!("{id} 的{text}"));
+        self.show_osd(&i18n::tr_args("{}: {}", &json!([id, text])));
         warning["plugin"] = id.into();
         warning["message"] = error.message.clone().into();
         self.broadcast("host.error", warning);
@@ -3183,7 +3201,7 @@ impl Host {
             .iter()
             .map(|(_, text)| text.as_str())
             .collect::<Vec<_>>();
-        (!text.is_empty()).then(|| text.join("；"))
+        (!text.is_empty()).then(|| text.join(&i18n::tr("; ")))
     }
     fn respond(&mut self, reply: Reply, mut result: std::result::Result<Value, RpcError>) {
         // The backend names the holder of a taken resolver by owner number.
@@ -3199,8 +3217,8 @@ impl Host {
             let id = self.plugin_id(holder);
             detail.insert("owner".into(), id.clone().into());
             detail.insert("target".into(), target.clone().into());
-            error.message = format!("{target} 已由 {id} 解析");
-            let text = format!("{target} 未接管：已由 {id} 解析");
+            error.message = i18n::tr_args("{} is resolved by {}", &json!([target, id]));
+            let text = i18n::tr_args("{} not taken over: resolved by {}", &json!([target, id]));
             let refusal = error.clone();
             result = Err(self.refuse_taken(reply.owner, refusal, text));
         }
@@ -3250,7 +3268,7 @@ impl Host {
             "timeline.set" => Some("timeline.marks"),
             "drops.provide" | "drops.withdraw" | "drops.listen" => Some("ui.drop"),
             method if method.starts_with("settings.") => Some("ui.settings"),
-            "appearance.set" => Some("ui.theme"),
+            "appearance.set" | "appearance.setLanguage" => Some("ui.theme"),
             "player.setLoop" | "player.setAudioDevice" => Some("playback.control"),
             "ui.mount" | "ui.setMount" | "ui.unmount" | "ui.interaction" | "ui.menu"
             | "layout.state" | "layout.set" => Some("ui.mount"),
@@ -3374,6 +3392,7 @@ impl Host {
                 self.drops_dispatch(reply.owner, method, params)?
             }
             "appearance.set" => self.appearance_set(params)?,
+            "appearance.setLanguage" => self.language_set(params)?,
             method if method.starts_with("settings.") => {
                 return self.settings_dispatch(reply, method, params);
             }
@@ -3416,7 +3435,21 @@ impl Host {
                 if self.dialog_busy {
                     return Err(RpcError::new("busy", "a native dialog is already open"));
                 }
-                let options = confirm::parse(params)?;
+                // Message and detail are templates (`args`); the button and
+                // checkbox texts are translated as they are.
+                i18n::valid_args(&params["args"]).map_err(RpcError::invalid)?;
+                let mut shown = params.clone();
+                for field in ["message", "detail", "confirm", "cancel", "checkbox"] {
+                    if let Some(text) = params[field].as_str() {
+                        let args = if matches!(field, "message" | "detail") {
+                            &params["args"]
+                        } else {
+                            &Value::Null
+                        };
+                        shown[field] = self.plugin_template(reply.owner, text, args).into();
+                    }
+                }
+                let options = confirm::parse(&shown)?;
                 let events = self.events.clone();
                 let answer = reply.clone();
                 self.dialog_busy = true;
@@ -3572,7 +3605,12 @@ impl Host {
                 Value::Null
             }
             "osd.show" => {
-                let text = string(params, "text")?.replace(['\n', '\r'], " ");
+                // A template in the plugin's language: translated with its
+                // catalog, then formatted with `args` (i18n.md §5).
+                i18n::valid_args(&params["args"]).map_err(RpcError::invalid)?;
+                let text = self
+                    .plugin_template(reply.owner, string(params, "text")?, &params["args"])
+                    .replace(['\n', '\r'], " ");
                 if text.trim().is_empty() || text.chars().count() > 200 {
                     return Err(RpcError::invalid("osd text needs 1..=200 characters"));
                 }
@@ -3598,10 +3636,12 @@ impl Host {
                         self.info_panels.remove(&reply.owner);
                     }
                     Value::String(text) => {
+                        i18n::valid_args(&params["args"]).map_err(RpcError::invalid)?;
+                        let text = self.plugin_template(reply.owner, text, &params["args"]);
                         if text.len() > 4096 || text.lines().count() > 32 {
                             return Err(RpcError::invalid("osd panel allows 32 lines, 4096 bytes"));
                         }
-                        self.info_panels.insert(reply.owner, text.clone());
+                        self.info_panels.insert(reply.owner, text);
                     }
                     _ => return Err(RpcError::invalid("text requires string or null")),
                 }
@@ -3613,7 +3653,10 @@ impl Host {
                     && provider != reply.owner
                 {
                     let holder = self.plugin_id(provider);
-                    let text = format!("上一个/下一个未接管：已由 {holder} 提供");
+                    let text = i18n::tr_args(
+                        "Previous/Next not taken over: provided by {}",
+                        &json!([holder]),
+                    );
                     return Err(self.refuse_taken(
                         reply.owner,
                         RpcError::sequence_taken(&holder),
@@ -3730,14 +3773,15 @@ impl Host {
                             >= slot_claims::MAX_SIDEBAR_TABS
                         {
                             let error = RpcError::sidebar_full();
-                            let text = format!("面板未显示：{}", error.message);
+                            let text =
+                                i18n::tr_args("Panel not shown: {}", &json!([error.message]));
                             return Err(self.refuse_taken(reply.owner, error, text));
                         }
                     } else if let Some(holder) =
                         slot_claims::occupant(slot, reply.owner, mounted, &pending)
                     {
                         let error = RpcError::slot_occupied(slot, &self.plugin_id(holder));
-                        let text = format!("面板未显示：{}", error.message);
+                        let text = i18n::tr_args("Panel not shown: {}", &json!([error.message]));
                         return Err(self.refuse_taken(reply.owner, error, text));
                     }
                     let file = plugins::package_file(&plugin.directory, string(params, "file")?)?;
@@ -3765,10 +3809,12 @@ impl Host {
                         properties,
                         visible: true,
                         detached: false,
+                        // The tab label and the floating window's title, in
+                        // the interface language (this plugin's catalog).
                         title: if !title.is_empty() {
-                            title.into()
+                            plugin.text(title)
                         } else if !name.is_empty() {
-                            name
+                            plugin.text(&name)
                         } else {
                             "Vestra Player".into()
                         },
@@ -3830,10 +3876,14 @@ impl Host {
                 if !["openFile", "openFiles", "openDirectory", "saveFile"].contains(&kind) {
                     return Err(RpcError::invalid("unsupported dialog kind"));
                 }
-                let title = params["title"].as_str().unwrap_or("Select a path");
+                let title = match params["title"].as_str() {
+                    Some(title) => self.plugin_template(reply.owner, title, &Value::Null),
+                    None => i18n::tr("Select a path"),
+                };
                 if title.len() > 256 {
                     return Err(RpcError::invalid("dialog title too long"));
                 }
+                let title = title.as_str();
                 let mut dialog = rfd::AsyncFileDialog::new().set_title(title);
                 if let Some(name) = params["fileName"].as_str() {
                     if name.len() > 256 || name.contains(['/', '\\']) {
@@ -3892,12 +3942,23 @@ impl Host {
                     .as_u64()
                     .filter(|v| *v > 0)
                     .ok_or_else(|| RpcError::invalid("positive revision required"))?;
-                let state = serde_json::from_value(params["state"].clone())
-                    .map_err(|e| RpcError::invalid(e.to_string()))?;
+                let mut state: commands::CommandState =
+                    serde_json::from_value(params["state"].clone())
+                        .map_err(|e| RpcError::invalid(e.to_string()))?;
+                // The disabled reason is one of the plugin's sentences.
+                if let Some(reason) = &mut state.reason {
+                    *reason = plugin.text(reason);
+                }
                 if method == "commands.register" {
-                    let declaration: commands::Declaration =
+                    let mut declaration: commands::Declaration =
                         serde_json::from_value(params["declaration"].clone())
                             .map_err(|e| RpcError::invalid(e.to_string()))?;
+                    // Keys first (`@video`, old Chinese titles), then the
+                    // shown text from this plugin's catalog.
+                    let declared = declaration.path.clone();
+                    commands::normalize(&mut declaration.path)
+                        .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
+                    declaration.localize_declared(&declared, |text| plugin.text(text));
                     let manifest = plugin.manifest.id.clone();
                     let bindings = declaration.bindings.clone();
                     let panel = declaration.focus == Some(commands::Focus::Panel);
@@ -4691,6 +4752,19 @@ fn main() -> Result<()> {
         placements: ui::Placements::default(),
         commands: commands::Registry::new(),
     };
+    // The interface language of this run (doc/architecture/i18n.md §2):
+    // `VESTRA_LANGUAGE` (development and tests), else the saved choice, else
+    // the system's languages. Headless runs ignore the system: English
+    // unless asked, so diagnostics read the same on every machine.
+    let preference = std::env::var("VESTRA_LANGUAGE")
+        .ok()
+        .or_else(|| host.language_preference());
+    let system = if headless {
+        Vec::new()
+    } else {
+        platform::preferred_languages()
+    };
+    i18n::init(i18n::resolve(preference.as_deref(), &system));
     host.register_host_commands()?;
     {
         if core_actions::migrate_overlay(&mut host.ui_state.state.bindings) {
@@ -4885,7 +4959,7 @@ mod tests {
         let refusal = RpcError::slot_occupied(composition::Slot::Sidebar, "vestra.playlist");
         assert_eq!(
             serde_json::to_value(&refusal).unwrap(),
-            json!({"code":"conflict","message":"侧栏已被 vestra.playlist 使用",
+            json!({"code":"conflict","message":"The sidebar is used by vestra.playlist",
                 "reason":"slot-occupied","slot":"sidebar","owner":"vestra.playlist"})
         );
         let plain = RpcError::new("conflict", "owner already mounted");
@@ -4896,7 +4970,7 @@ mod tests {
         let sequence = RpcError::sequence_taken("vestra.playlist");
         assert_eq!(
             serde_json::to_value(&sequence).unwrap(),
-            json!({"code":"conflict","message":"上一个/下一个已由 vestra.playlist 提供",
+            json!({"code":"conflict","message":"Previous/Next is provided by vestra.playlist",
                 "reason":"sequence-taken","owner":"vestra.playlist"})
         );
         assert!(refusal.is_taken() && sequence.is_taken() && !plain.is_taken());
@@ -4970,7 +5044,7 @@ mod tests {
         let full = RpcError::sidebar_full();
         assert_eq!(
             serde_json::to_value(&full).unwrap(),
-            json!({"code":"conflict","message":"侧栏最多 8 个页签","reason":"slot-occupied","slot":"sidebar"})
+            json!({"code":"conflict","message":"The sidebar holds at most 8 tabs","reason":"slot-occupied","slot":"sidebar"})
         );
         assert_eq!(activation_outcome(&Err(full)), Ok(()));
     }

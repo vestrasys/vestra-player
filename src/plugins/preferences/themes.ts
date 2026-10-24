@@ -1,6 +1,6 @@
 import type { ThemeId } from "@vestra-player/sdk";
 
-/** The palette a fresh player starts with, and what 恢复默认 returns to. */
+/** The palette a fresh player starts with, and what Restore Defaults returns to. */
 export const DEFAULT_THEME: ThemeId = "vestra";
 
 /** A colour as the page's Slint takes it (`rgb(r, g, b)`): the page has no colour literals. (Types, not interfaces: they are page property values, `Json`.) */
@@ -26,7 +26,8 @@ export type Swatch = {
   f3: Rgb;
 };
 
-export type ThemeRow = { id: ThemeId; title: string; note: string; swatch: Swatch };
+/** What the page gets per palette: data only; its words are in the Slint file. */
+export type ThemeRow = { id: ThemeId; swatch: Swatch };
 
 const rgb = (hex: string): Rgb => {
   const value = Number.parseInt(hex.slice(1), 16);
@@ -34,16 +35,16 @@ const rgb = (hex: string): Rgb => {
 };
 
 /**
- * The player's palettes, in menu order. The preview colours copy the
- * player's own tables (bg-video, bg-bar, line, text-dim, accent and the
+ * The player's palettes, in menu order, with their menu titles (English
+ * source text; the player shows them translated). The preview colours copy
+ * the player's own tables (bg-video, bg-bar, line, text-dim, accent and the
  * accent-fill stops; doc/product/ui-spec.md §2.1): `Theme` only ever holds
  * the current palette, so the preview of another one cannot come from it.
  */
-export const THEMES: ThemeRow[] = [
+export const THEMES = [
   {
     id: "vestra",
-    title: "Vestra 深色",
-    note: "默认，取自标志的极光色谱",
+    title: "Vestra Dark",
     swatch: {
       video: rgb("#0a090e"),
       bar: rgb("#16141c"),
@@ -59,8 +60,7 @@ export const THEMES: ThemeRow[] = [
   },
   {
     id: "vestra-light",
-    title: "Vestra 浅色",
-    note: "适合明亮环境；视频区保持深色",
+    title: "Vestra Light",
     swatch: {
       video: rgb("#0e0d12"),
       bar: rgb("#f7f6fa"),
@@ -74,9 +74,9 @@ export const THEMES: ThemeRow[] = [
       f3: rgb("#0a95e6"),
     },
   },
-];
+] as const satisfies readonly (ThemeRow & { title: string })[];
 
-/** The menu and OSD name of a palette. */
-export const titleOf = (theme: ThemeId) => THEMES.find((row) => row.id === theme)?.title ?? theme;
+/** The page's rows: id and swatch. */
+export const themeRows = (): ThemeRow[] => THEMES.map(({ id, swatch }) => ({ id, swatch }));
 
 export const isTheme = (value: unknown): value is ThemeId => THEMES.some((row) => row.id === value);

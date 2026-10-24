@@ -6,9 +6,10 @@
 //! [`Surface`] trait, so the rules are tested without one.
 #![forbid(unsafe_code)]
 
+use crate::i18n::{tr, tr_args};
 use crate::platform::{HostWindowId, PipEvent, Rect};
 use crate::{Reply, RpcError};
-use serde_json::Value;
+use serde_json::{Value, json};
 
 /// How long a start or stop may take before the reply gives up (ms).
 pub const TIMEOUT_MS: u64 = 5000;
@@ -156,7 +157,7 @@ impl<S: Surface> PictureInPicture<S> {
         create: impl FnOnce() -> Result<S, RpcError>,
     ) -> Result<Option<Value>, RpcError> {
         if self.pending.is_some() {
-            return Err(RpcError::new("busy", "画中画正在切换"));
+            return Err(RpcError::new("busy", tr("Picture-in-picture is switching")));
         }
         if !on {
             let Some(surface) = &self.surface else {
@@ -179,10 +180,13 @@ impl<S: Surface> PictureInPicture<S> {
             return Err(RpcError::new("unavailable", "no native window"));
         }
         if !facts.supported {
-            return Err(RpcError::new("unsupported", "此系统不支持画中画"));
+            return Err(RpcError::new(
+                "unsupported",
+                tr("Picture-in-picture is not supported on this system"),
+            ));
         }
         if !facts.video {
-            return Err(RpcError::new("unavailable", "没有视频"));
+            return Err(RpcError::new("unavailable", tr("No video")));
         }
         self.surface = Some(create()?);
         self.owner = Some(reply.owner);
@@ -271,12 +275,16 @@ impl<S: Surface> PictureInPicture<S> {
                     if !self.stopping && !restored && !playback.paused {
                         effects.push(Effect::Action("play-pause", None));
                     }
-                    effects.extend(self.answer(Ok(Value::Null), "画中画窗口已关闭"));
+                    let closed = tr("The picture-in-picture window was closed");
+                    effects.extend(self.answer(Ok(Value::Null), &closed));
                     self.close();
                     return effects;
                 }
                 PipEvent::Failed(reason) => {
-                    let failed = RpcError::new("failed", format!("无法进入画中画：{reason}"));
+                    let failed = RpcError::new(
+                        "failed",
+                        tr_args("Cannot enter picture-in-picture: {}", &json!([reason])),
+                    );
                     effects.extend(self.answer(Err(failed), ""));
                     self.close();
                     return effects;
@@ -285,7 +293,7 @@ impl<S: Surface> PictureInPicture<S> {
         }
         let starting = self.pending.as_ref().is_some_and(|p| p.on) && !self.active;
         if starting && !facts.video {
-            let gone = RpcError::new("unavailable", "没有视频");
+            let gone = RpcError::new("unavailable", tr("No video"));
             effects.extend(self.answer(Err(gone), ""));
             self.close();
             return effects;
@@ -299,7 +307,7 @@ impl<S: Surface> PictureInPicture<S> {
             surface.stop();
         }
         if self.pending.as_ref().is_some_and(|p| now >= p.deadline) {
-            let late = RpcError::new("failed", "画中画没有启动");
+            let late = RpcError::new("failed", tr("Picture-in-picture did not start"));
             effects.extend(self.answer(Err(late), ""));
             if !self.active {
                 self.close();
@@ -671,7 +679,10 @@ mod tests {
         let effects = pip.tick(&FACTS, place(), &PLAYING, 16);
         assert_eq!(
             responses(&effects),
-            [(1, Err("failed: 无法进入画中画：not possible".into()))]
+            [(
+                1,
+                Err("failed: Cannot enter picture-in-picture: not possible".into())
+            )]
         );
         assert!(!pip.feeding());
         // Never possible: the start times out.
@@ -685,7 +696,7 @@ mod tests {
         let effects = pip.tick(&FACTS, place(), &PLAYING, TIMEOUT_MS);
         assert_eq!(
             responses(&effects),
-            [(1, Err("failed: 画中画没有启动".into()))]
+            [(1, Err("failed: Picture-in-picture did not start".into()))]
         );
         assert!(!pip.feeding());
         // The video goes away while starting, or while open.
@@ -699,7 +710,7 @@ mod tests {
         let effects = pip.tick(&audio, place(), &PLAYING, 16);
         assert_eq!(
             responses(&effects),
-            [(1, Err("unavailable: 没有视频".into()))]
+            [(1, Err("unavailable: No video".into()))]
         );
         let fake = Fake::default();
         let mut pip = started(&fake);

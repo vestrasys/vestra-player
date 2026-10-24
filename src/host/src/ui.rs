@@ -106,6 +106,12 @@ impl Placements {
 
 /// The one Slint compiler configuration for the shell, panels, tool windows and
 /// package validation: `@vestra/...` imports and the dark std-widgets style.
+///
+/// Every imported `.slint` file comes through the file loader, which puts
+/// the interface language's translations into its `@tr` literals with the
+/// catalog of the package that holds it (`ui/` files: the player's own;
+/// doc/architecture/i18n.md §4). The file a compile starts from is given as
+/// source: `build_from_source` callers pass it through [`translate`].
 pub fn compiler() -> Compiler {
     let mut compiler = Compiler::default();
     compiler.set_library_paths(
@@ -114,7 +120,27 @@ pub fn compiler() -> Compiler {
             .collect(),
     );
     compiler.set_style("fluent-dark".into());
+    compiler.set_file_loader(|path: &Path| {
+        let path = path.to_owned();
+        Box::pin(async move {
+            // No catalog (English, or a package without this language): the
+            // compiler reads the file itself.
+            let catalog = crate::i18n::catalog_for(&path)?;
+            // Not readable here: the compiler's own loader reports it.
+            let source = std::fs::read_to_string(&path).ok()?;
+            if !source.contains("@tr") {
+                return None;
+            }
+            Some(Ok(catalog.rewrite(&source)))
+        })
+    });
     compiler
+}
+
+/// Source of the file at `path` (a package's, or the player's when it is
+/// under `ui/`) in the interface language: see [`compiler`].
+pub fn translate(source: String, path: &Path) -> String {
+    crate::i18n::translate_slint(path, source)
 }
 
 /// Fonts: no window sets `default-font-family`, so every window uses the
@@ -130,6 +156,7 @@ pub fn compile_source(mut source: String, path: &Path) -> Result<ComponentInstan
         source.push('\n');
         source.push_str(&crate::theme::export_line());
     }
+    let source = translate(source, path);
     let result = pollster::block_on(compiler().build_from_source(source, path.to_owned()));
     if result.components().count() > 1 {
         bail!("Slint file must export exactly one component");
@@ -544,6 +571,69 @@ export component W inherits Window {
         assert_eq!(alpha(), 0x80);
     }
 
+    /// i18n.md §4: a package's `.slint` files, the one opened and the ones
+    /// it imports, show its catalog's translations; the player's library
+    /// keeps the player's own (none in an English run).
+    #[test]
+    fn plugin_slint_files_show_their_packages_translations() {
+        headless();
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(root.join("ui")).unwrap();
+        std::fs::write(
+            root.join("ui/part.slint"),
+            r#"export global Part { out property <string> label: @tr("Hello {}", "Ann"); }"#,
+        )
+        .unwrap();
+        let main = root.join("ui/w.slint");
+        std::fs::write(
+            &main,
+            r#"import { Part } from "part.slint";
+import { UrlInputRow } from "@vestra/widgets.slint";
+export component W inherits Window {
+    in property <int> count: 2;
+    out property <string> label: Part.label;
+    out property <string> files: @tr("{n} file" | "{n} files" % count);
+    out property <string> quote: @tr("Quote");
+    out property <string> english: @tr("Untranslated");
+    out property <string> library: row.confirm-text;
+    row := UrlInputRow {}
+}"#,
+        )
+        .unwrap();
+        let po = r#"msgid "Hello {}"
+msgstr "你好 {}"
+
+msgid "{n} file"
+msgid_plural "{n} files"
+msgstr[0] "{n} 个文件"
+
+msgid "Quote"
+msgstr "引 \"号\" \\ 后"
+"#;
+        let catalog = std::sync::Arc::new(crate::i18n::Catalog::from_entries(
+            &crate::i18n::po::parse(po).unwrap(),
+        ));
+        crate::i18n::register(&root, catalog.clone());
+        let instance = compile(&main).unwrap();
+        crate::i18n::unregister(&root, &catalog);
+        let get = |name: &str| match instance.get_property(name).unwrap() {
+            Value::String(text) => text.to_string(),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(get("label"), "你好 Ann");
+        assert_eq!(get("files"), "2 个文件");
+        assert_eq!(get("quote"), "引 \"号\" \\ 后");
+        assert_eq!(get("english"), "Untranslated");
+        assert_eq!(get("library"), "Open");
+        // Without the catalog the same files are English.
+        let english = compile(&main).unwrap();
+        assert_eq!(
+            english.get_property("files").unwrap(),
+            Value::String("2 files".into())
+        );
+    }
+
     fn headless() {
         thread_local! {
             static PLATFORM: () = {
@@ -590,6 +680,7 @@ export component W inherits Window {
             .set_size(slint::LogicalSize::new(600., 400.));
         let group = |title: &str, children| crate::commands::MenuNode::Group {
             title: title.into(),
+            label: title.into(),
             group: "g".into(),
             children,
         };
@@ -685,6 +776,7 @@ export component W inherits Window {
         };
         let group = |title: &str, children| MenuNode::Group {
             title: title.into(),
+            label: title.into(),
             group: "g".into(),
             children,
         };

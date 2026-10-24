@@ -70,7 +70,7 @@ fn extension_of(source: &str, windows: bool) -> Option<String> {
 fn taken(holder: u64, what: String) -> RpcError {
     RpcError::taken(
         "resolver-taken",
-        format!("{what} 已由 {holder} 解析"),
+        crate::i18n::tr_args("{} is resolved by {}", &json!([what, holder])),
         json!({ "holder": holder, "target": what }),
     )
 }
@@ -151,7 +151,10 @@ impl Registry {
                 .iter()
                 .find(|e| declaration.extensions.contains(e))
             {
-                return Some((*owner, format!("文件类型 .{extension}")));
+                return Some((
+                    *owner,
+                    crate::i18n::tr_args("File type .{}", &json!([extension])),
+                ));
             }
             let host = existing
                 .hosts
@@ -518,7 +521,7 @@ pub(crate) mod tests {
         assert_eq!(error.code, "conflict");
         assert_eq!(reason(&error), Some("resolver-taken"));
         assert_eq!(error.detail.as_ref().unwrap()["holder"], 1);
-        assert_eq!(error.detail.as_ref().unwrap()["target"], "文件类型 .nes");
+        assert_eq!(error.detail.as_ref().unwrap()["target"], "File type .nes");
         assert!(error.is_taken());
         let own = r.register(1, files("other", &["nes"])).unwrap_err();
         assert_eq!(own.code, "conflict");

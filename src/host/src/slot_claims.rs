@@ -71,9 +71,13 @@ pub fn tabs(
             .count()
 }
 
-/// The message of the `conflict` refusal: 「侧栏已被 vestra.playlist 使用」.
+/// The message of the `conflict` refusal: "The sidebar is used by
+/// vestra.playlist".
 pub fn refusal(slot: Slot, holder: &str) -> String {
-    format!("{}已被 {holder} 使用", slot.label())
+    crate::i18n::tr_args(
+        "The {} is used by {}",
+        &serde_json::json!([slot.label(), holder]),
+    )
 }
 
 /// Mount and sequence requests of non-built-in plugins, held while built-in plugins start.
@@ -173,10 +177,16 @@ mod tests {
     fn refusal_names_the_slot_and_its_holder() {
         assert_eq!(
             refusal(Slot::Sidebar, "vestra.playlist"),
-            "侧栏已被 vestra.playlist 使用"
+            "The sidebar is used by vestra.playlist"
         );
-        assert_eq!(refusal(Slot::Bottom, "x.y"), "底栏已被 x.y 使用");
-        assert_eq!(refusal(Slot::Backdrop, "x.y"), "视频背景已被 x.y 使用");
+        assert_eq!(
+            refusal(Slot::Bottom, "x.y"),
+            "The bottom bar is used by x.y"
+        );
+        assert_eq!(
+            refusal(Slot::Backdrop, "x.y"),
+            "The video backdrop is used by x.y"
+        );
     }
 
     #[test]

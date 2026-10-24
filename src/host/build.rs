@@ -2,6 +2,9 @@
 #![forbid(unsafe_code)]
 use std::process::Command;
 
+#[path = "src/i18n/po.rs"]
+#[allow(dead_code)]
+mod po;
 #[path = "windows/resources.rs"]
 mod resources;
 
@@ -24,6 +27,7 @@ fn main() {
         .unwrap_or_default();
     println!("cargo:rustc-env=VESTRA_SLINT_VERSION={slint}");
     windows_manifest();
+    locales();
     let git = |args: &[&str]| {
         Command::new("git")
             .args(args)
@@ -91,4 +95,37 @@ fn windows_resources(manifest_dir: &str, out_dir: &str) {
     let path = std::path::Path::new(out_dir).join("vestra.res");
     std::fs::write(&path, res).expect("write vestra.res");
     println!("cargo:rustc-link-arg={}", path.display());
+}
+
+/// The player's own catalogs (doc/architecture/i18n.md §6): every
+/// `locales/<lang>.po` compiled to `$OUT_DIR/locales/<lang>.json`, which
+/// `src/i18n/mod.rs` includes. A broken file fails the build.
+fn locales() {
+    println!("cargo:rerun-if-changed=locales");
+    let out = std::path::Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("locales");
+    std::fs::create_dir_all(&out).expect("create OUT_DIR/locales");
+    let mut found = Vec::new();
+    for entry in std::fs::read_dir("locales").expect("read locales/") {
+        let path = entry.expect("locales/ entry").path();
+        let Some(language) = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .and_then(|n| n.strip_suffix(".po"))
+        else {
+            continue;
+        };
+        println!("cargo:rerun-if-changed={}", path.display());
+        let text = std::fs::read_to_string(&path).expect("read a .po file");
+        let entries = po::parse(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        std::fs::write(
+            out.join(format!("{language}.json")),
+            po::compile(language, &entries),
+        )
+        .expect("write a compiled catalog");
+        found.push(language.to_owned());
+    }
+    assert!(
+        found.iter().any(|l| l == "zh-Hans"),
+        "locales/zh-Hans.po is missing"
+    );
 }

@@ -10,11 +10,18 @@ import { fileURLToPath } from "node:url";
 import {
   API_VERSION,
   CAPABILITIES,
+  Catalog,
   COMMAND_LIMITS,
+  HOST_ZH_HANS,
+  LOCALES,
   MANIFEST_FIELDS,
   MANIFEST_LIMITS,
   MARKDOWN_LIMITS,
   MENU_IDS,
+  MENU_KEYS,
+  parsePo,
+  rewriteSlint,
+  scanSlint,
 } from "@vestra-player/sdk/runtime";
 import { TestHost } from "@vestra-player/sdk/testing";
 
@@ -168,4 +175,61 @@ test("Markdown limits match the player's (host/src/ui_markdown.rs)", () => {
     .map((part) => Number(part.trim()))
     .reduce((a, b) => a * b, 1);
   assert.equal(bytes, MARKDOWN_LIMITS.textBytes);
+});
+
+// ---------------------------------------------------------------- i18n
+
+test("LOCALES and the menu keys are the player's (host/src/i18n, commands.rs)", () => {
+  const locales = /pub const LOCALES: \[&str; \d+\] = \[([^\]]*)\];/.exec(
+    host("src/i18n/mod.rs"),
+  );
+  assert.ok(locales, "LOCALES in i18n/mod.rs");
+  assert.deepEqual(
+    [...locales[1]!.matchAll(/"([^"]+)"/g)].map((m) => m[1]),
+    [...LOCALES],
+  );
+  const anchors = /pub const MENU_ANCHORS: [^=]+= \[([\s\S]*?)\];/.exec(
+    host("src/commands.rs"),
+  );
+  assert.ok(anchors, "MENU_ANCHORS in commands.rs");
+  const keys = Object.fromEntries(
+    [...anchors[1]!.matchAll(/\("([^"]+)", "([^"]+)"/g)].map((m) => [
+      m[1],
+      m[2],
+    ]),
+  );
+  assert.deepEqual(keys, { ...MENU_KEYS });
+});
+
+// host/src/i18n/tests.rs runs the same cases against the player's scanner.
+test("the SDK's Slint @tr scanner agrees with the player's", () => {
+  const fixture = JSON.parse(host("tests/fixtures/slint-tr.json")) as {
+    cases: {
+      name: string;
+      source: string;
+      catalog: Record<string, string | [string, string]>;
+      messages: { id: string; context?: string; plural?: string }[];
+      output: string;
+    }[];
+  };
+  for (const item of fixture.cases) {
+    const found = scanSlint(item.source).map(({ id, context, plural }) => ({
+      id,
+      ...(context === undefined ? {} : { context }),
+      ...(plural === undefined ? {} : { plural }),
+    }));
+    assert.deepEqual(found, item.messages, `${item.name}: messages`);
+    assert.equal(
+      rewriteSlint(item.source, new Catalog(item.catalog)),
+      item.output,
+      `${item.name}: output`,
+    );
+  }
+});
+
+test("the test host's copy of the player's Chinese texts matches locales/zh-Hans.po", () => {
+  const { entries } = parsePo(host("locales/zh-Hans.po"));
+  const player = new Map(entries.map((e) => [e.id, e.strings[0]]));
+  for (const [english, chinese] of Object.entries(HOST_ZH_HANS))
+    assert.equal(player.get(english), chinese, english);
 });

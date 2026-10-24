@@ -19,7 +19,7 @@
 //! | power | `sleep_launcher` |
 //! | files and links | `reveal`, `open_path`, `open_url` (blocking, run on a worker thread) |
 //! | secrets | `secret_get`, `secret_set`, `secret_delete` (blocking) |
-//! | facts | `os_facts` (blocking), `displays` (UI thread), `app_data_dir`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD` |
+//! | facts | `os_facts` (blocking), `displays` (UI thread), `app_data_dir`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD`, `preferred_languages` (here, through sys-locale on every system) |
 //! | installation | `install_layout` (pure, in `layout.rs`, for every system) → `current_install_layout` |
 //! | child processes | `tool_command`, `hide_console` (Windows: `CREATE_NO_WINDOW` when the host has no console; elsewhere nothing) |
 //! | storage | `sync_dir` (Unix: `fsync` below; Windows: `FlushFileBuffers` on a directory handle) |
@@ -75,6 +75,15 @@ pub enum KeyLabels {
 
 mod shortcuts;
 pub use shortcuts::*;
+
+/// The user's preferred interface languages, most preferred first, as BCP 47
+/// tags the way the system reports them (`zh-Hans-CN`, `de-DE`, `en_US`):
+/// macOS the language list of System Settings, Windows the user's display
+/// languages, Linux `LANGUAGE`, `LC_ALL`, `LC_MESSAGES` and `LANG`. sys-locale
+/// keeps the per-system calls; `i18n::resolve` picks the locale.
+pub fn preferred_languages() -> Vec<String> {
+    sys_locale::get_locales().collect()
+}
 
 mod layout;
 pub use layout::*;

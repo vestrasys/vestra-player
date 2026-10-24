@@ -5,7 +5,8 @@
 #![forbid(unsafe_code)]
 
 use crate::commands::{CommandState, Declaration};
-use serde_json::Value;
+use crate::i18n::{tr, tr_args};
+use serde_json::{Value, json};
 
 pub const ACTIONS: [&str; 14] = [
     "play-pause",
@@ -26,7 +27,9 @@ pub const ACTIONS: [&str; 14] = [
 pub const MIN_RATE: f64 = 0.25;
 pub const MAX_RATE: f64 = 4.0;
 pub const DEFAULT_STEP: f64 = 5.0;
-const UNSUPPORTED: &str = "当前来源不支持此操作";
+fn unsupported() -> String {
+    tr("Not supported by the current source")
+}
 
 /// Actions that drop a repeated trigger while one is in flight (the plugin's
 /// busy flags); relative seeks and volume steps queue and accumulate instead.
@@ -130,38 +133,68 @@ pub fn time(seconds: Option<f64>) -> String {
     }
 }
 
-pub fn seek_title(forward: bool, step: f64) -> String {
-    format!(
-        "{}{}秒",
-        if forward { "前进" } else { "后退" },
-        number_text(step)
-    )
+/// The relative seek item: its key (`Back 5 s`) and its menu text.
+pub fn seek_title(forward: bool, step: f64) -> (String, String) {
+    let step = number_text(step);
+    if forward {
+        (
+            format!("Forward {step} s"),
+            tr_args("Forward {} s", &json!([step])),
+        )
+    } else {
+        (
+            format!("Back {step} s"),
+            tr_args("Back {} s", &json!([step])),
+        )
+    }
 }
 
-/// Menu entries: the same paths, orders and bindings the playback plugin had.
+/// Menu entries: the same paths, orders and bindings the playback plugin
+/// had. Paths are the keys (English); each item's menu text is the player's
+/// translation.
 pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
-    let make = |path: &[&str], order: i32, group: &str, bindings: &[&str], repeat: bool| {
-        let mut declaration = Declaration::new(path.last().unwrap(), path);
-        declaration.order = order;
-        declaration.group = group.into();
-        declaration.bindings = bindings.iter().map(|b| b.to_string()).collect();
-        declaration.repeat = repeat;
-        declaration
-    };
-    let backward = seek_title(false, step);
-    let forward = seek_title(true, step);
-    let mut normal = make(&["播放", "速度", "正常"], 220, "domain", &["Z"], false);
+    let make =
+        |path: &[&str], shown: String, order: i32, group: &str, bindings: &[&str], repeat: bool| {
+            let mut declaration = Declaration::new(path.last().unwrap(), path);
+            declaration.order = order;
+            declaration.group = group.into();
+            declaration.bindings = bindings.iter().map(|b| b.to_string()).collect();
+            declaration.repeat = repeat;
+            declaration.localize(|_| shown.clone());
+            declaration
+        };
+    let (backward, backward_shown) = seek_title(false, step);
+    let (forward, forward_shown) = seek_title(true, step);
+    let mut normal = make(
+        &["Playback", "Speed", "Normal"],
+        tr("Normal"),
+        220,
+        "domain",
+        &["Z"],
+        false,
+    );
     normal.radio = true;
     vec![
-        ("stop", make(&["关闭"], 120, "open", &["F4"], false)),
+        (
+            "stop",
+            make(&["Close"], tr("Close"), 120, "open", &["F4"], false),
+        ),
         (
             "play-pause",
-            make(&["播放", "播放/暂停"], 201, "domain", &["Space"], false),
+            make(
+                &["Playback", "Play/Pause"],
+                tr("Play/Pause"),
+                201,
+                "domain",
+                &["Space"],
+                false,
+            ),
         ),
         (
             "previous",
             make(
-                &["播放", "上一个"],
+                &["Playback", "Previous"],
+                tr("Previous"),
                 202,
                 "domain",
                 &["PageUp", "Mouse:X1"],
@@ -171,7 +204,8 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         (
             "next",
             make(
-                &["播放", "下一个"],
+                &["Playback", "Next"],
+                tr("Next"),
                 203,
                 "domain",
                 &["PageDown", "Mouse:X2"],
@@ -180,16 +214,31 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         ),
         (
             "frame-back",
-            make(&["播放", "跳转", "上一帧"], 204, "frame", &["D"], true),
+            make(
+                &["Playback", "Seek", "Previous Frame"],
+                tr("Previous Frame"),
+                204,
+                "frame",
+                &["D"],
+                true,
+            ),
         ),
         (
             "frame-forward",
-            make(&["播放", "跳转", "下一帧"], 205, "frame", &["F"], true),
+            make(
+                &["Playback", "Seek", "Next Frame"],
+                tr("Next Frame"),
+                205,
+                "frame",
+                &["F"],
+                true,
+            ),
         ),
         (
             "seek-backward",
             make(
-                &["播放", "跳转", &backward],
+                &["Playback", "Seek", &backward],
+                backward_shown,
                 210,
                 "step",
                 &["ArrowLeft"],
@@ -199,7 +248,8 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         (
             "seek-forward",
             make(
-                &["播放", "跳转", &forward],
+                &["Playback", "Seek", &forward],
+                forward_shown,
                 211,
                 "step",
                 &["ArrowRight"],
@@ -209,16 +259,31 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         ("rate-normal", normal),
         (
             "rate-down",
-            make(&["播放", "速度", "减速 0.1"], 221, "domain", &["X"], false),
+            make(
+                &["Playback", "Speed", "Slower 0.1"],
+                tr("Slower 0.1"),
+                221,
+                "domain",
+                &["X"],
+                false,
+            ),
         ),
         (
             "rate-up",
-            make(&["播放", "速度", "加速 0.1"], 222, "domain", &["C"], false),
+            make(
+                &["Playback", "Speed", "Faster 0.1"],
+                tr("Faster 0.1"),
+                222,
+                "domain",
+                &["C"],
+                false,
+            ),
         ),
         (
             "volume-up",
             make(
-                &["声音", "音量 +"],
+                &["Audio", "Volume +"],
+                tr("Volume +"),
                 501,
                 "domain",
                 &["ArrowUp", "Mouse:WheelUp"],
@@ -228,7 +293,8 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         (
             "volume-down",
             make(
-                &["声音", "音量 −"],
+                &["Audio", "Volume −"],
+                tr("Volume −"),
                 502,
                 "domain",
                 &["ArrowDown", "Mouse:WheelDown"],
@@ -237,18 +303,18 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         ),
         (
             "mute",
-            make(&["声音", "静音"], 503, "domain", &["M"], false),
+            make(&["Audio", "Mute"], tr("Mute"), 503, "domain", &["M"], false),
         ),
     ]
 }
 
 /// Busy implies disabled; the reason is shown only when it cannot be done.
-fn ready(enabled: bool, checked: Option<bool>, busy: bool, reason: &str) -> CommandState {
+fn ready(enabled: bool, checked: Option<bool>, busy: bool, reason: String) -> CommandState {
     CommandState {
         enabled: enabled && !busy,
         checked,
         busy,
-        reason: (!enabled).then(|| reason.to_owned()),
+        reason: (!enabled).then_some(reason),
     }
 }
 
@@ -258,26 +324,33 @@ pub fn state(action: &str, facts: &Facts, busy: bool) -> CommandState {
             facts.can_toggle(),
             facts.phase_ready.then_some(facts.paused),
             busy,
-            UNSUPPORTED,
+            unsupported(),
         ),
         "stop" => ready(
             facts.can_close && !facts.phase_empty,
             None,
             busy,
-            UNSUPPORTED,
+            unsupported(),
         ),
-        "previous" => ready(facts.previous, None, false, "没有上一个"),
-        "next" => ready(facts.next, None, false, "没有下一个"),
+        "previous" => ready(facts.previous, None, false, tr("No previous item")),
+        "next" => ready(facts.next, None, false, tr("No next item")),
         "frame-back" | "frame-forward" => match frame_check(facts, action == "frame-forward") {
-            Ok(()) => ready(true, None, busy, UNSUPPORTED),
+            Ok(()) => ready(true, None, busy, unsupported()),
             Err(reason) => ready(false, None, busy, reason),
         },
-        "seek-backward" | "seek-forward" => ready(facts.can_step_seek(), None, false, UNSUPPORTED),
-        "rate-normal" => ready(facts.can_rate(), Some(facts.rate == 1.0), busy, UNSUPPORTED),
-        "rate-down" | "rate-up" => ready(facts.can_rate(), None, busy, UNSUPPORTED),
-        "volume-up" | "volume-down" => ready(true, None, false, UNSUPPORTED),
-        "mute" => ready(true, Some(facts.muted), busy, UNSUPPORTED),
-        _ => ready(false, None, false, UNSUPPORTED),
+        "seek-backward" | "seek-forward" => {
+            ready(facts.can_step_seek(), None, false, unsupported())
+        }
+        "rate-normal" => ready(
+            facts.can_rate(),
+            Some(facts.rate == 1.0),
+            busy,
+            unsupported(),
+        ),
+        "rate-down" | "rate-up" => ready(facts.can_rate(), None, busy, unsupported()),
+        "volume-up" | "volume-down" => ready(true, None, false, unsupported()),
+        "mute" => ready(true, Some(facts.muted), busy, unsupported()),
+        _ => ready(false, None, false, unsupported()),
     }
 }
 
@@ -313,13 +386,17 @@ pub fn plan(
 ) -> Result<(Plan, Option<String>), String> {
     let state = state(action, facts, false);
     if !state.enabled {
-        return Err(state.reason.unwrap_or_else(|| UNSUPPORTED.into()));
+        return Err(state.reason.unwrap_or_else(unsupported));
     }
     Ok(match action {
-        "play-pause" if facts.phase_ended => (Plan::Restart, Some("播放".into())),
+        "play-pause" if facts.phase_ended => (Plan::Restart, Some(tr("Playing"))),
         "play-pause" => (
             Plan::Pause(!facts.paused),
-            Some(if facts.paused { "播放" } else { "已暂停" }.into()),
+            Some(if facts.paused {
+                tr("Playing")
+            } else {
+                tr("Paused")
+            }),
         ),
         "stop" => (Plan::Close, None),
         "previous" => (Plan::Sequence { next: false }, None),
@@ -333,13 +410,12 @@ pub fn plan(
             let target = (base + delta)
                 .max(0.0)
                 .min(facts.duration.unwrap_or(f64::INFINITY));
-            let text = format!(
-                "{} {}秒: {} / {}",
-                if forward { "前进" } else { "后退" },
-                number_text(step),
-                time(Some(target)),
-                time(facts.duration)
-            );
+            let args = json!([number_text(step), time(Some(target)), time(facts.duration)]);
+            let text = if forward {
+                tr_args("Forward {} s: {} / {}", &args)
+            } else {
+                tr_args("Back {} s: {} / {}", &args)
+            };
             (Plan::Seek(target), Some(text))
         }
         "rate-normal" | "rate-down" | "rate-up" => {
@@ -352,7 +428,7 @@ pub fn plan(
             };
             (
                 Plan::Rate(rate),
-                Some(format!("播放速度: {}x", rate_text(rate))),
+                Some(tr_args("Speed: {}x", &json!([rate_text(rate)]))),
             )
         }
         "volume-up" | "volume-down" => {
@@ -369,7 +445,7 @@ pub fn plan(
                     volume: Some(volume),
                     muted: false,
                 },
-                Some(format!("音量: {}%", number_text(volume))),
+                Some(tr_args("Volume: {}%", &json!([number_text(volume)]))),
             )
         }
         "mute" => (
@@ -377,14 +453,11 @@ pub fn plan(
                 volume: None,
                 muted: !facts.muted,
             },
-            Some(
-                if facts.muted {
-                    "静音: 关"
-                } else {
-                    "静音: 开"
-                }
-                .into(),
-            ),
+            Some(if facts.muted {
+                tr("Mute: Off")
+            } else {
+                tr("Mute: On")
+            }),
         ),
         other => return Err(format!("unknown action {other}")),
     })
@@ -397,29 +470,41 @@ pub fn valid_step(seconds: f64) -> bool {
         && ((seconds * 10.0).round() - seconds * 10.0).abs() < 1e-9
 }
 
-pub const NO_VIDEO: &str = "没有视频";
-pub const NO_FRAME_BACK: &str = "当前来源不支持逐帧后退";
-pub const LAST_FRAME: &str = "已是最后一帧";
-pub const FIRST_FRAME: &str = "已是第一帧";
+pub fn no_video() -> String {
+    tr("No video")
+}
+fn no_frame_back() -> String {
+    tr("The current source cannot step back a frame")
+}
+fn last_frame() -> String {
+    tr("Already at the last frame")
+}
+pub fn first_frame() -> String {
+    tr("Already at the first frame")
+}
 
 /// Whether one frame that way is possible now (B07), or the reason. Forward
 /// needs playing-ready media with moving video (a live stream can step
 /// forward); backward also works after the end but needs a seekable source.
-pub fn frame_check(facts: &Facts, forward: bool) -> Result<(), &'static str> {
+pub fn frame_check(facts: &Facts, forward: bool) -> Result<(), String> {
     if facts.phase_empty || !(facts.phase_ready || facts.phase_ended) {
-        return Err(UNSUPPORTED);
+        return Err(unsupported());
     }
     if !facts.media {
-        return Err(if forward { UNSUPPORTED } else { NO_FRAME_BACK });
+        return Err(if forward {
+            unsupported()
+        } else {
+            no_frame_back()
+        });
     }
     if !facts.video {
-        return Err(NO_VIDEO);
+        return Err(no_video());
     }
     if forward && !facts.phase_ready {
-        return Err(UNSUPPORTED);
+        return Err(unsupported());
     }
     if !forward && !facts.can_seek {
-        return Err(NO_FRAME_BACK);
+        return Err(no_frame_back());
     }
     Ok(())
 }
@@ -440,11 +525,11 @@ pub fn step_plan(
     facts: &Facts,
     unit: &str,
     direction: &str,
-) -> Result<StepPlan, (&'static str, &'static str)> {
+) -> Result<StepPlan, (&'static str, String)> {
     let forward = match direction {
         "forward" => true,
         "backward" => false,
-        _ => return Err(("invalid", "direction is backward or forward")),
+        _ => return Err(("invalid", "direction is backward or forward".into())),
     };
     match unit {
         "frame" => {
@@ -464,7 +549,11 @@ pub fn step_plan(
             if !(facts.phase_ready && facts.media && facts.video && facts.can_seek) {
                 return Err((
                     "unsupported",
-                    if facts.video { UNSUPPORTED } else { NO_VIDEO },
+                    if facts.video {
+                        unsupported()
+                    } else {
+                        no_video()
+                    },
                 ));
             }
             // Measured with mpv 0.41: `seek ±0 relative+keyframes` lands on
@@ -476,7 +565,7 @@ pub fn step_plan(
                 vec!["seek", "-0.001", "relative+keyframes"]
             }))
         }
-        _ => Err(("invalid", "unit is frame or keyframe")),
+        _ => Err(("invalid", "unit is frame or keyframe".into())),
     }
 }
 
@@ -495,13 +584,12 @@ pub fn precise_time(seconds: f64) -> String {
 /// The frame-step notice once it settled: where it is, or the boundary.
 pub fn frame_notice(forward: bool, moved: bool, position: Option<f64>) -> String {
     match (moved, position) {
-        (true, Some(position)) => format!(
-            "定位: {} {}",
-            if forward { "下一帧" } else { "上一帧" },
-            precise_time(position)
-        ),
-        _ if forward => LAST_FRAME.into(),
-        _ => FIRST_FRAME.into(),
+        (true, Some(position)) if forward => {
+            tr_args("Next frame: {}", &json!([precise_time(position)]))
+        }
+        (true, Some(position)) => tr_args("Previous frame: {}", &json!([precise_time(position)])),
+        _ if forward => last_frame(),
+        _ => first_frame(),
     }
 }
 
@@ -539,6 +627,14 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    // Tests run in English (the locale is never set in tests); the
+    // Simplified Chinese text is checked against the catalog below.
+    const UNSUPPORTED: &str = "Not supported by the current source";
+    const NO_VIDEO: &str = "No video";
+    const NO_FRAME_BACK: &str = "The current source cannot step back a frame";
+    const LAST_FRAME: &str = "Already at the last frame";
+    const FIRST_FRAME: &str = "Already at the first frame";
+
     fn playing() -> Facts {
         Facts::from_state(
             &json!({"phase":"ready","paused":false,"kind":"media","hasVideo":true,
@@ -556,12 +652,12 @@ mod tests {
         for id in ACTIONS {
             assert!(declarations.iter().any(|(each, _)| *each == id), "{id}");
         }
-        assert_eq!(find("play-pause").path, ["播放", "播放/暂停"]);
+        assert_eq!(find("play-pause").path, ["Playback", "Play/Pause"]);
         assert_eq!(find("play-pause").order, 201);
-        assert_eq!(find("stop").path, ["关闭"]);
+        assert_eq!(find("stop").path, ["Close"]);
         assert_eq!(find("stop").bindings, ["F4"]);
         assert_eq!(find("stop").group, "open");
-        assert_eq!(find("seek-backward").path, ["播放", "跳转", "后退5秒"]);
+        assert_eq!(find("seek-backward").path, ["Playback", "Seek", "Back 5 s"]);
         assert_eq!(find("seek-backward").bindings, ["ArrowLeft"]);
         assert!(
             find("seek-forward").repeat && find("volume-up").repeat && find("frame-forward").repeat
@@ -572,7 +668,7 @@ mod tests {
             find("volume-down").bindings,
             ["ArrowDown", "Mouse:WheelDown"]
         );
-        assert_eq!(find("volume-down").path, ["声音", "音量 −"]);
+        assert_eq!(find("volume-down").path, ["Audio", "Volume −"]);
         assert!(find("rate-normal").radio);
         assert_eq!(
             (
@@ -585,7 +681,7 @@ mod tests {
         assert_eq!(find("mute").order, 503);
         assert_eq!(
             declarations_titles(10.5),
-            ("后退10.5秒".to_owned(), "前进10.5秒".to_owned())
+            ("Back 10.5 s".to_owned(), "Forward 10.5 s".to_owned())
         );
         for (_, declaration) in &declarations {
             for binding in &declaration.bindings {
@@ -614,7 +710,7 @@ mod tests {
         assert!(!state("play-pause", &facts, true).enabled);
         assert_eq!(
             state("previous", &facts, false).reason.as_deref(),
-            Some("没有上一个")
+            Some("No previous item")
         );
         assert!(state("next", &facts, false).enabled);
         assert_eq!(state("rate-normal", &facts, false).checked, Some(true));
@@ -659,7 +755,7 @@ mod tests {
         let facts = playing();
         assert_eq!(
             plan("play-pause", &facts, 5.0, None).unwrap(),
-            (Plan::Pause(true), Some("已暂停".into()))
+            (Plan::Pause(true), Some("Paused".into()))
         );
         let paused = Facts {
             paused: true,
@@ -667,7 +763,7 @@ mod tests {
         };
         assert_eq!(
             plan("play-pause", &paused, 5.0, None).unwrap().1.as_deref(),
-            Some("播放")
+            Some("Playing")
         );
         let ended = Facts {
             phase_ready: false,
@@ -676,11 +772,11 @@ mod tests {
         };
         assert_eq!(
             plan("play-pause", &ended, 5.0, None).unwrap(),
-            (Plan::Restart, Some("播放".into()))
+            (Plan::Restart, Some("Playing".into()))
         );
         assert_eq!(
             plan("seek-forward", &facts, 5.0, None).unwrap(),
-            (Plan::Seek(42.0), Some("前进 5秒: 00:42 / 01:40".into()))
+            (Plan::Seek(42.0), Some("Forward 5 s: 00:42 / 01:40".into()))
         );
         // Consecutive presses accumulate from the newest pending target.
         assert_eq!(
@@ -700,11 +796,11 @@ mod tests {
                 .unwrap()
                 .1
                 .as_deref(),
-            Some("后退 10秒: 00:27 / 01:40")
+            Some("Back 10 s: 00:27 / 01:40")
         );
         assert_eq!(
             plan("rate-up", &facts, 5.0, None).unwrap(),
-            (Plan::Rate(1.1), Some("播放速度: 1.1x".into()))
+            (Plan::Rate(1.1), Some("Speed: 1.1x".into()))
         );
         let fast = Facts {
             rate: 3.95,
@@ -721,7 +817,7 @@ mod tests {
         );
         assert_eq!(
             plan("rate-normal", &fast, 5.0, None).unwrap().1.as_deref(),
-            Some("播放速度: 1x")
+            Some("Speed: 1x")
         );
         assert_eq!(
             plan("volume-up", &facts, 5.0, None).unwrap(),
@@ -730,7 +826,7 @@ mod tests {
                     volume: Some(85.0),
                     muted: false
                 },
-                Some("音量: 85%".into())
+                Some("Volume: 85%".into())
             )
         );
         let loud = Facts {
@@ -741,7 +837,7 @@ mod tests {
         // stays; down still steps by 5.
         assert_eq!(
             plan("volume-up", &loud, 5.0, None).unwrap().1.as_deref(),
-            Some("音量: 100%")
+            Some("Volume: 100%")
         );
         let full = Facts {
             volume: 100.0,
@@ -749,7 +845,7 @@ mod tests {
         };
         assert_eq!(
             plan("volume-up", &full, 5.0, None).unwrap().1.as_deref(),
-            Some("音量: 100%")
+            Some("Volume: 100%")
         );
         let boosted = Facts {
             volume: 150.0,
@@ -757,14 +853,14 @@ mod tests {
         };
         assert_eq!(
             plan("volume-up", &boosted, 5.0, None).unwrap().1.as_deref(),
-            Some("音量: 150%")
+            Some("Volume: 150%")
         );
         assert_eq!(
             plan("volume-down", &boosted, 5.0, None)
                 .unwrap()
                 .1
                 .as_deref(),
-            Some("音量: 145%")
+            Some("Volume: 145%")
         );
         let quiet = Facts {
             volume: 3.0,
@@ -772,11 +868,11 @@ mod tests {
         };
         assert_eq!(
             plan("volume-down", &quiet, 5.0, None).unwrap().1.as_deref(),
-            Some("音量: 0%")
+            Some("Volume: 0%")
         );
         assert_eq!(
             plan("mute", &facts, 5.0, None).unwrap().1.as_deref(),
-            Some("静音: 开")
+            Some("Mute: On")
         );
         let muted = Facts {
             muted: true,
@@ -784,11 +880,11 @@ mod tests {
         };
         assert_eq!(
             plan("mute", &muted, 5.0, None).unwrap().1.as_deref(),
-            Some("静音: 关")
+            Some("Mute: Off")
         );
         assert_eq!(
             plan("previous", &facts, 5.0, None).unwrap_err(),
-            "没有上一个"
+            "No previous item"
         );
         assert_eq!(plan("stop", &facts, 5.0, None).unwrap().0, Plan::Close);
     }
@@ -819,7 +915,7 @@ mod tests {
             ..facts
         };
         assert!(frame_check(&live, true).is_ok());
-        assert_eq!(frame_check(&live, false), Err(NO_FRAME_BACK));
+        assert_eq!(frame_check(&live, false), Err(NO_FRAME_BACK.to_owned()));
         assert_eq!(
             plan(&live, "keyframe", "forward").unwrap_err().0,
             "unsupported"
@@ -830,7 +926,7 @@ mod tests {
             phase_ended: true,
             ..facts
         };
-        assert_eq!(frame_check(&ended, true), Err(UNSUPPORTED));
+        assert_eq!(frame_check(&ended, true), Err(UNSUPPORTED.to_owned()));
         assert_eq!(
             plan(&ended, "frame", "backward").unwrap(),
             StepPlan::FromEnd
@@ -840,16 +936,16 @@ mod tests {
             video: false,
             ..facts
         };
-        assert_eq!(frame_check(&audio, true), Err(NO_VIDEO));
-        assert_eq!(frame_check(&audio, false), Err(NO_VIDEO));
+        assert_eq!(frame_check(&audio, true), Err(NO_VIDEO.to_owned()));
+        assert_eq!(frame_check(&audio, false), Err(NO_VIDEO.to_owned()));
         let stream = Facts {
             media: false,
             ..facts
         };
-        assert_eq!(frame_check(&stream, false), Err(NO_FRAME_BACK));
-        assert_eq!(frame_check(&stream, true), Err(UNSUPPORTED));
+        assert_eq!(frame_check(&stream, false), Err(NO_FRAME_BACK.to_owned()));
+        assert_eq!(frame_check(&stream, true), Err(UNSUPPORTED.to_owned()));
         let empty = Facts::from_state(&json!({"phase":"empty","capabilities":{}}));
-        assert_eq!(frame_check(&empty, true), Err(UNSUPPORTED));
+        assert_eq!(frame_check(&empty, true), Err(UNSUPPORTED.to_owned()));
         // The first frame does not move.
         let start = Facts {
             position: Some(0.0),
@@ -879,11 +975,11 @@ mod tests {
         // Notices.
         assert_eq!(
             frame_notice(true, true, Some(83.456)),
-            "定位: 下一帧 00:01:23.456"
+            "Next frame: 00:01:23.456"
         );
         assert_eq!(
             frame_notice(false, true, Some(3723.004)),
-            "定位: 上一帧 01:02:03.004"
+            "Previous frame: 01:02:03.004"
         );
         assert_eq!(frame_notice(true, false, Some(10.0)), LAST_FRAME);
         assert_eq!(frame_notice(false, false, Some(0.0)), FIRST_FRAME);

@@ -90,8 +90,9 @@ impl Host {
                 let declaration = &self.commands.get(info.owner, &info.id)?.declaration;
                 Some(json!({
                     "plugin":info.manifest,"command":info.id,
-                    "title":declaration.title,
-                    "path":(!declaration.path.is_empty()).then_some(&declaration.path),
+                    // What the user sees: the interface language.
+                    "title":declaration.shown_title(),
+                    "path":(!declaration.path.is_empty()).then(|| declaration.shown_path()),
                     "scope":if info.panel {"panel"} else {"global"},
                     "defaults":texts(&info.defaults),"current":texts(&info.current),
                     "overridden":info.overridden,

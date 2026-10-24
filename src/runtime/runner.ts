@@ -154,7 +154,8 @@ try {
     console.error("unhandled rejection:", error),
   );
   const instance = await createPlugin(
-    { request, on },
+    // `plugin.i18n.locale`: the interface language the player fixed for this run.
+    { request, on, locale: process.env.VESTRA_LOCALE || undefined },
     manifest,
     directory,
     process.env.VESTRA_PLUGIN_DATA_DIR || undefined,

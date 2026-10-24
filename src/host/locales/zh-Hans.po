@@ -1,0 +1,354 @@
+# Simplified Chinese: the player's interface text before English became the
+# source (players up to 0.4.2).
+msgid ""
+msgstr ""
+"Language: zh-Hans\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#. The top-level menu, and the link input's confirm button.
+#: src/commands.rs:327 ui/vestra/widgets.slint:192
+msgid "Open"
+msgstr "打开"
+
+#: src/commands.rs:328 src/settings_window.rs:27
+msgid "Playback"
+msgstr "播放"
+
+#: src/commands.rs:329 src/settings_window.rs:28
+msgid "Subtitles"
+msgstr "字幕"
+
+#: src/commands.rs:330 src/settings_window.rs:29
+msgid "Video"
+msgstr "视频"
+
+#: src/commands.rs:331 src/settings_window.rs:30
+msgid "Audio"
+msgstr "声音"
+
+#: src/commands.rs:332
+msgid "Screen"
+msgstr "屏幕"
+
+#: src/commands.rs:333
+msgid "Settings"
+msgstr "设置"
+
+#: src/commands.rs:334
+msgid "Speed"
+msgstr "速度"
+
+#: src/commands.rs:335
+msgid "Seek"
+msgstr "跳转"
+
+#: src/composition.rs:39
+msgid "bottom bar"
+msgstr "底栏"
+
+#: src/composition.rs:40
+msgid "sidebar"
+msgstr "侧栏"
+
+#: src/composition.rs:41
+msgid "video backdrop"
+msgstr "视频背景"
+
+#: src/confirm.rs:47 ui/vestra/widgets.slint:193
+msgid "Cancel"
+msgstr "取消"
+
+#. A menu item; {} is a number of seconds.
+#: src/core_actions.rs:142
+msgid "Forward {} s"
+msgstr "前进{}秒"
+
+#. A menu item; {} is a number of seconds.
+#: src/core_actions.rs:147
+msgid "Back {} s"
+msgstr "后退{}秒"
+
+#: src/core_actions.rs:174
+msgid "Normal"
+msgstr "正常"
+
+#: src/core_actions.rs:184 src/settings_window.rs:218 src/settings_window.rs:218
+msgid "Close"
+msgstr "关闭"
+
+#: src/core_actions.rs:190
+msgid "Play/Pause"
+msgstr "播放/暂停"
+
+#: src/core_actions.rs:201
+msgid "Previous"
+msgstr "上一个"
+
+#: src/core_actions.rs:212
+msgid "Next"
+msgstr "下一个"
+
+#: src/core_actions.rs:223
+msgid "Previous Frame"
+msgstr "上一帧"
+
+#: src/core_actions.rs:234
+msgid "Next Frame"
+msgstr "下一帧"
+
+#: src/core_actions.rs:268
+msgid "Slower 0.1"
+msgstr "减速 0.1"
+
+#: src/core_actions.rs:279
+msgid "Faster 0.1"
+msgstr "加速 0.1"
+
+#: src/core_actions.rs:290
+msgid "Volume +"
+msgstr "音量 +"
+
+#: src/core_actions.rs:301
+msgid "Volume −"
+msgstr "音量 −"
+
+#: src/core_actions.rs:31
+msgid "Not supported by the current source"
+msgstr "当前来源不支持此操作"
+
+#: src/core_actions.rs:310
+msgid "Mute"
+msgstr "静音"
+
+#: src/core_actions.rs:339
+msgid "No previous item"
+msgstr "没有上一个"
+
+#: src/core_actions.rs:340
+msgid "No next item"
+msgstr "没有下一个"
+
+#. On-screen message after Play/Pause resumes playback.
+#: src/core_actions.rs:389 src/core_actions.rs:393
+msgid "Playing"
+msgstr "播放"
+
+#: src/core_actions.rs:395
+msgid "Paused"
+msgstr "已暂停"
+
+#. On-screen message: the step in seconds, then the new position and the duration.
+#: src/core_actions.rs:412
+msgid "Forward {} s: {} / {}"
+msgstr "前进 {}秒: {} / {}"
+
+#. On-screen message: the step in seconds, then the new position and the duration.
+#: src/core_actions.rs:414
+msgid "Back {} s: {} / {}"
+msgstr "后退 {}秒: {} / {}"
+
+#: src/core_actions.rs:428
+msgid "Speed: {}x"
+msgstr "播放速度: {}x"
+
+#: src/core_actions.rs:445
+msgid "Volume: {}%"
+msgstr "音量: {}%"
+
+#: src/core_actions.rs:454
+msgid "Mute: Off"
+msgstr "静音: 关"
+
+#: src/core_actions.rs:456
+msgid "Mute: On"
+msgstr "静音: 开"
+
+#: src/core_actions.rs:471 src/pip.rs:192 src/pip.rs:299
+msgid "No video"
+msgstr "没有视频"
+
+#: src/core_actions.rs:474
+msgid "The current source cannot step back a frame"
+msgstr "当前来源不支持逐帧后退"
+
+#: src/core_actions.rs:477
+msgid "Already at the last frame"
+msgstr "已是最后一帧"
+
+#: src/core_actions.rs:480
+msgid "Already at the first frame"
+msgstr "已是第一帧"
+
+#: src/core_actions.rs:585
+msgid "Next frame: {}"
+msgstr "定位: 下一帧 {}"
+
+#: src/core_actions.rs:587
+msgid "Previous frame: {}"
+msgstr "定位: 上一帧 {}"
+
+#: src/main.rs:140
+msgid "The sidebar holds at most {} tabs"
+msgstr "侧栏最多 {} 个页签"
+
+#: src/main.rs:150
+msgid "Previous/Next is provided by {}"
+msgstr "上一个/下一个已由 {} 提供"
+
+#: src/main.rs:2604
+msgid "Fullscreen"
+msgstr "全屏"
+
+#: src/main.rs:2607
+msgid "Exit Fullscreen"
+msgstr "退出全屏"
+
+#: src/main.rs:2609
+msgid "Quit"
+msgstr "退出"
+
+#: src/main.rs:3029
+msgid "Not available in fullscreen"
+msgstr "全屏时不可用"
+
+#. A plugin's id, then what was refused (on the OSD).
+#: src/main.rs:3176
+msgid "{}: {}"
+msgstr "{} 的{}"
+
+#. Between two warnings of one plugin.
+#: src/main.rs:3204
+msgid "; "
+msgstr "；"
+
+#. {0}: “File type .nes” or a site such as https://example.com; {1}: a plugin id.
+#: src/main.rs:3220 src/source_resolvers.rs:73
+msgid "{} is resolved by {}"
+msgstr "{} 已由 {} 解析"
+
+#: src/main.rs:3221
+msgid "{} not taken over: resolved by {}"
+msgstr "{} 未接管：已由 {} 解析"
+
+#: src/main.rs:3656
+msgid "Previous/Next not taken over: provided by {}"
+msgstr "上一个/下一个未接管：已由 {} 提供"
+
+#: src/main.rs:3776 src/main.rs:3783
+msgid "Panel not shown: {}"
+msgstr "面板未显示：{}"
+
+#: src/main.rs:3880
+msgid "Select a path"
+msgstr "选择路径"
+
+#: src/package_manager.rs:1104
+msgid "“{}”: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed"
+msgstr "「{}」：vestra. 开头的 id 只留给播放器内置插件，不能安装"
+
+#: src/pip.rs:162
+msgid "Picture-in-picture is switching"
+msgstr "画中画正在切换"
+
+#: src/pip.rs:188
+msgid "Picture-in-picture is not supported on this system"
+msgstr "此系统不支持画中画"
+
+#: src/pip.rs:281
+msgid "The picture-in-picture window was closed"
+msgstr "画中画窗口已关闭"
+
+#: src/pip.rs:289
+msgid "Cannot enter picture-in-picture: {}"
+msgstr "无法进入画中画：{}"
+
+#: src/pip.rs:313
+msgid "Picture-in-picture did not start"
+msgstr "画中画没有启动"
+
+#: src/platform/macos.rs:104
+msgid "Picture-in-picture needs macOS 14 or later"
+msgstr "此系统不支持画中画（需要 macOS 14 或更高版本）"
+
+#: src/renderer.rs:17
+msgid "libmpv · GPU rendering (OpenGL)"
+msgstr "libmpv · GPU 渲染（OpenGL）"
+
+#: src/renderer.rs:20
+msgid "libmpv · software rendering"
+msgstr "libmpv · 软件渲染"
+
+#: src/settings_window.rs:156 src/settings_window.rs:156
+msgid "Options"
+msgstr "选项"
+
+#: src/settings_window.rs:204 src/settings_window.rs:204
+msgid "Nothing to set here"
+msgstr "没有可设置的项目"
+
+#: src/settings_window.rs:26
+msgid "General"
+msgstr "常规"
+
+#: src/settings_window.rs:31
+msgid "Keys and Mouse"
+msgstr "快捷键与鼠标"
+
+#: src/settings_window.rs:32
+msgid "Appearance"
+msgstr "外观"
+
+#: src/settings_window.rs:33
+msgid "Plugins"
+msgstr "插件"
+
+#: src/settings_window.rs:34
+msgid "Other"
+msgstr "其它"
+
+#. {0}: “bottom bar”, “sidebar” or “video backdrop”; {1}: a plugin id.
+#: src/slot_claims.rs:77
+msgid "The {} is used by {}"
+msgstr "{}已被 {} 使用"
+
+#. A file extension, such as nes.
+#: src/source_resolvers.rs:156
+msgid "File type .{}"
+msgstr "文件类型 .{}"
+
+#: src/ui_markdown.rs:27
+msgid "… (too long, cut off)"
+msgstr "…（内容过长，已截断）"
+
+#: ui/host.slint:110
+msgid "Playing in picture-in-picture"
+msgstr "正在以画中画播放"
+
+#: ui/menu-view.slint:329
+msgid "(No commands available)"
+msgstr "（无可用命令）"
+
+#: ui/sidebar-tabs.slint:104
+msgid "Attach to the main window"
+msgstr "附着到主窗口"
+
+#: ui/sidebar-tabs.slint:104
+msgid "Detach as a floating window"
+msgstr "分离为浮动窗口"
+
+#: ui/sidebar-tabs.slint:113
+msgid "Close the sidebar"
+msgstr "关闭侧栏"
+
+#: ui/vestra/markdown.slint:142
+msgid "Copy"
+msgstr "复制"
+
+#: ui/vestra/markdown.slint:163
+msgid "[Image]"
+msgstr "[图片]"
+
+#: ui/vestra/markdown.slint:163
+msgid "[Image] {}"
+msgstr "[图片] {}"

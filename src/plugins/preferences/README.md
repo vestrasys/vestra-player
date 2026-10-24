@@ -1,13 +1,20 @@
-# 首选项
+# Preferences
 
-打开选项窗口，切换界面配色。
+Opens the options window and changes the palette and the interface language.
 
-## 功能
+## Features
 
-- 打开播放器的「选项」窗口，回到上次查看的页面。
-- 界面配色：Vestra 深色（默认）和 Vestra 浅色（视频区保持深色），都取自标志的极光色谱。切换后所有窗口立即生效，播放器记住选择。选项窗口的「外观」页有预览，可恢复默认。
+- Opens the player's Options window on the page viewed last.
+- Palettes: Vestra Dark (the default) and Vestra Light (the video area stays dark), both from the logo's aurora colours. A change applies to every window at once, and the player remembers it. The Options window's Appearance page has previews and Restore Defaults.
+- Interface language: Follow System, or English, 简体中文, 日本語, 한국어, Deutsch, Français, Español (each named in its own language). The player remembers the choice and uses it from the next start.
 
-## 入口
+## Entries
 
-- 右键菜单「设置 ▶ 选项…」（F5）。
-- 右键菜单「设置 ▶ 外观 ▶ Vestra 深色 / Vestra 浅色」（单选）。
+- Right-click menu: Settings ▸ Options… (F5).
+- Right-click menu: Settings ▸ Appearance ▸ Vestra Dark / Vestra Light (radio).
+- Right-click menu: Settings ▸ Language ▸ Follow System / a language (radio).
+- Options ▸ General ▸ Language, Options ▸ Appearance ▸ Appearance.
+
+## Translations
+
+Texts are English in the source; `locales/zh-Hans.po` has the Simplified Chinese (`vestra-plugin i18n extract`, `i18n check`).

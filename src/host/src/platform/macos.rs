@@ -101,7 +101,7 @@ impl PipWindow {
         vestra_pip::Pip::new().map(Self).ok_or_else(|| {
             RpcError::new(
                 "unsupported",
-                "此系统不支持画中画（需要 macOS 14 或更高版本）",
+                crate::i18n::tr("Picture-in-picture needs macOS 14 or later"),
             )
         })
     }

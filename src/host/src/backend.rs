@@ -898,7 +898,7 @@ impl CoreActions {
         params: &Value,
         done: &mut Option<Completion>,
     ) -> Result<Option<Value>, RpcError> {
-        use crate::core_actions::{FIRST_FRAME, Facts, StepPlan, step_plan};
+        use crate::core_actions::{Facts, StepPlan, first_frame, step_plan};
         if self.stepping.is_some() {
             return Err(RpcError::new("busy", "the previous step is still running"));
         }
@@ -914,7 +914,7 @@ impl CoreActions {
         let before = context.mpv.get_property::<f64>("time-pos").ok();
         match plan {
             StepPlan::AtStart => {
-                return Ok(Some(json!({ "osd": FIRST_FRAME })));
+                return Ok(Some(json!({ "osd": first_frame() })));
             }
             StepPlan::Command(command) => context
                 .mpv
