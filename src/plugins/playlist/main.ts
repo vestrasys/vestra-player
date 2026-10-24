@@ -609,9 +609,9 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   const saveListCommand = listCommand("list-save-list", "保存列表…", hasRows, saveList, ["F2"], {
     busy: () => listBusy,
   });
-  // F6 while the list has focus closes it (PotPlayer), shown as "关闭列表" in the list menu.
+  // F6 while the list has focus closes it, shown as "关闭列表" in the list menu.
   const close = listCommand("close", "关闭列表", () => true, () => sidebar.setVisible(false), ["F6"]);
-  // IA-PL-02: F5 while the list has focus opens its settings page (PotPlayer 播放列表设置);
+  // IA-PL-02: F5 while the list has focus opens its settings page (播放列表设置);
   // elsewhere F5 stays the global 选项….
   listCommand("settings", "播放列表设置…", () => true, guard(() => plugin.settings.show(SETTINGS_PAGE)), ["F5"]);
 
@@ -825,7 +825,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       guard(async () => {
         const expanded = await expandDrop(paths, { signal: stop.signal });
         if (stop.signal.aborted) return;
-        // A15 / IA-PL-01 (PotPlayer): a single media file dropped on the video area brings its
+        // A15 / IA-PL-01: a single media file dropped on the video area brings its
         // similar files (or its group's whole folder) like an open does; several files never do.
         let start: string | null = null;
         const single = expanded.entries.length === 1 ? expanded.entries[0]! : null;

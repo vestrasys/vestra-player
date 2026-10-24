@@ -1,14 +1,14 @@
 import type { Plugin, ThemeId } from "@vestra-player/sdk";
 import { DEFAULT_THEME, isTheme, THEMES, titleOf } from "./themes.ts";
 
-/** 设置 ▶ (选项… 830; 外观 ▶ 840–849, of which the palettes take 840–841). */
+/** 设置 ▶ (选项… 830; 外观 ▶ 840–849, one radio per palette from 840). */
 const SETTINGS = "设置";
 export const PAGE_ID = "appearance";
 
 /**
  * 首选项: 设置 ▶ 选项… (J04, F5) opens the player's options window; this
  * plugin's own page there is 外观 (H10: palette radio with previews and
- * 恢复默认), also reachable as 设置 ▶ 外观 ▶ Vestra / PotPlayer 经典.
+ * 恢复默认), also reachable as 设置 ▶ 外观 ▶ <palette> (Vestra).
  * The palette itself is the player's (`plugin.appearance`): it is saved by
  * the player and stays when this plugin stops.
  */

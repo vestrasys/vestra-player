@@ -578,14 +578,14 @@ test("C18: GBK .m3u, PLS round trip, DPL; saving adds .m3u8 and writes relative 
     await app.run("save-list");
     assert.deepEqual([...(await readFile(join(app.root, "bom.m3u"))).subarray(0, 3)], [0xef, 0xbb, 0xbf]);
 
-    // PotPlayer DPL (read only).
+    // DPL (read only); lines that are not items are skipped.
     await writeFile(
-      join(app.root, "pot.dpl"),
-      `DAUMPLAYLIST\n2*file*${far}\n1*file*${a}\n1*title*Pot A\n1*duration2*5000\n`,
+      join(app.root, "list.dpl"),
+      `topindex=0\n2*file*${far}\n1*file*${a}\n1*title*Title A\n1*duration2*5000\n`,
     );
-    app.host.dialogAnswers.push([join(app.root, "pot.dpl")], { confirmed: true, checked: false });
+    app.host.dialogAnswers.push([join(app.root, "list.dpl")], { confirmed: true, checked: false });
     await app.run("open-list");
-    assert.deepEqual(app.names(), ["Pot A", "far.mp4"]);
+    assert.deepEqual(app.names(), ["Title A", "far.mp4"]);
     await rm(outside, { recursive: true, force: true });
   } finally {
     await app.close();

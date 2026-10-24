@@ -105,7 +105,7 @@ export function fromSlintKey(event: KeyEvent): Capture {
   return { error: "无法使用此按键" };
 }
 
-/** Mouse inputs J02 lists, in PotPlayer's order (右键 is the menu's). */
+/** Mouse inputs J02 lists, in J02's order (右键 is the menu's). */
 export const MOUSE: { input: string; label: string }[] = [
   { input: "Mouse:LeftClick", label: "左键单击" },
   { input: "Mouse:LeftDoubleClick", label: "左键双击" },

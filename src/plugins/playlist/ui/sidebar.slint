@@ -1,4 +1,4 @@
-// Playlist sidebar (ui-alignment §5): 31px tab strip, single-line 20px rows on
+// Playlist sidebar (ui-spec §5): 31px tab strip, single-line 20px rows on
 // the list background, 35px bottom bar. Icons are drawn with Path.
 import { ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
@@ -118,7 +118,7 @@ export component PlaylistSidebar inherits Rectangle {
     preferred-width: 317px;
     background: Theme.bg-list;
     private property <length> row-height: 20px;
-    // PotPlayer's selected-row background (§5.2); the theme has no token for it.
+    // The selected-row background (ui-spec §5.2); the theme has no token for it.
     private property <color> selected-bg: Theme.selected-bg;
     private property <bool> dragging;
     private property <int> drop-index: -1;

@@ -83,7 +83,7 @@ test("menu follows the allocation table: positions, groups, radio items, binding
   for (const id of ["copy-name", "copy-folder", "copy-path"])
     assert.deepEqual([host.command(id).state.enabled, host.command(id).state.reason], [false, "没有打开的文件"], id);
   assert.equal(host.command("prevent-sleep").state.checked, true);
-  // IA-PB-01: the hover time is off by default (PotPlayer PreviewSeekTime=0).
+  // IA-PB-01: the hover time is off by default.
   assert.equal(host.command("hover-time").state.checked, false);
   for (const id of ["open", "open-url", "prevent-sleep", "hover-time", "time-jump"])
     assert.equal(host.command(id).state.enabled, true, id);

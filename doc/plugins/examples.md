@@ -814,7 +814,7 @@ export default async function activate(plugin: Plugin) { // ui.settings、ui.the
     id: "appearance", category: "appearance", title: "外观", order: 10,
   });
   page.bind(() => ({ theme: plugin.appearance.theme }));       // 别的插件切换时也跟着变
-  page.on("pick", (theme: "vestra" | "potplayer") => plugin.appearance.set(theme));
+  page.on("pick", (theme: ThemeId) => plugin.appearance.set(theme));
   plugin.commands.add({
     id: "options", path: ["设置", "选项…"], order: 830, bindings: ["F5"],
     run: () => plugin.settings.show(),                          // 上次的页面

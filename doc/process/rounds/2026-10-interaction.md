@@ -1,6 +1,6 @@
 # 交互对齐轮
 
-分支：`rebuild/interaction`（自 `main`）。依据：[交互对齐整改文档](../../product/interaction-alignment.md)（下称「整改文档」），以[细粒度审计](../../product/interaction-gap-audit.md)为准。流程：先按社区工作流 §5 自上而下改核心，再按 §4 自下而上（§4.3 保守协商）；跨平台遵守 §1.5。
+分支：`rebuild/interaction`（自 `main`）。依据：[交互规格](../../product/interaction-spec.md)（下称「整改文档」），以其中的细粒度审计条目为准。流程：先按社区工作流 §5 自上而下改核心，再按 §4 自下而上（§4.3 保守协商）；跨平台遵守 §1.5。
 
 ## 1. 本轮范围（整改文档附录 C 第 1、2 轮）
 

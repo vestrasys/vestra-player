@@ -129,16 +129,18 @@ Panel.onDrop(listener: (e: { paths: string[]; at: { x: number; y: number }; modi
 
 ### 3.5 Theme 下发与外观（R-H6、R-S2，能力 `ui.theme`）
 
+（当时 `ThemeId` 有两个值：`vestra` 与第二套配色；第二套配色在 2026-10 删除，下文以 `classic` 指代它。）
+
 ```ts
 plugin.appearance: {
-  readonly theme: "vestra" | "potplayer";              // 同步只读，不需要能力
-  onChange(listener: (theme: "vestra" | "potplayer") => void): Disposable;
-  set(theme: "vestra" | "potplayer"): Promise<void>;   // 需 ui.theme；其它值 invalid
+  readonly theme: "vestra" | "classic";              // 同步只读，不需要能力
+  onChange(listener: (theme: "vestra" | "classic") => void): Disposable;
+  set(theme: "vestra" | "classic"): Promise<void>;   // 需 ui.theme；其它值 invalid
 };
 ```
 
 - `theme.slint`：颜色 token 与 `accent-fill` 由 `out property` 改为 `in property`（默认值为现在的 Vestra 值，未下发时外观不变）；`radius-*`、字号、控件尺寸保持常量。插件 Slint 只读 `Theme`，原有写法不用改；插件不能写 `Theme`（Slint 不允许在 `.slint` 里给 global 的 `in` 属性赋值，SDK 的 `set` / `bind` 只到插件自己的 global）——加一条编译测试断言。
-- 配色表放宿主（Rust 常量，两套各列全部颜色 token）：`vestra` = 现值；`potplayer` = [ui-alignment](../../product/ui-alignment.md) §2.1 的 PotPlayer 原色（强调 `#fae100`、正在播放 `#2282f2`、底色 `#1e1e1e` 等），`accent-fill` 用纯色 `#fae100`。
+- 配色表放宿主（Rust 常量，两套各列全部颜色 token）：`vestra` = 现值；`classic` = 当时界面规格 §2.1 的第二套取值（黄色强调色等，已随该配色删除），`accent-fill` 用纯色。
 - 下发：每个视图实例（主窗口外壳含底栏与侧栏、浮动侧栏、工具窗口、菜单视图、背景层、选项窗口）创建时与配色变化时 `set_global_property("Theme", …)`；单个视图失败不影响其它视图，下次刷新重试；切换时不中断正在拖动的滑块与打开的菜单。
 - 选择由核心持久化：`ui-state.json` 的 `appearance.theme`（去抖保存）；preferences 停用后配色保持。变化推送新事件 `appearance.changed`，推送规则同 `window.onChange`（有 `events` 时跟随）。
 - 屏幕提示「配色：…」由调用方插件自己显示，核心不显示。
@@ -161,7 +163,7 @@ plugin.settings.show(pageId?: string): Promise<void>;   // 只能指定本插件
 
 ### 3.7 输入链接组件 `UrlInputRow`（裁决 3.3，不加协议）
 
-- 在 `src/host/ui/vestra/widgets.slint` 新增 `export component UrlInputRow`：输入框 + 「确定」「取消」，规格按 [ui-alignment](../../product/ui-alignment.md) UI-DLG-02（不做历史列表）。建议接口：`in-out property <string> text`、`in property <string> placeholder`、`in property <string> confirm-text`（默认「打开」）、`in property <bool> enabled`、`callback accepted(string)`（回车或点确定）、`callback cancelled()`（点取消或 Esc）。
+- 在 `src/host/ui/vestra/widgets.slint` 新增 `export component UrlInputRow`：输入框 + 「确定」「取消」，规格按 [界面规格](../../product/ui-spec.md) UI-DLG-02（不做历史列表）。建议接口：`in-out property <string> text`、`in property <string> placeholder`、`in property <string> confirm-text`（默认「打开」）、`in property <bool> enabled`、`callback accepted(string)`（回车或点确定）、`callback cancelled()`（点取消或 Esc）。
 - 只用 `Theme` token，不含业务（不校验 URL，校验由插件做）。
 - 参考文档 §6.4 的控件列表加上它；示例里给一个 ≤ 15 行的用法。
 
@@ -182,7 +184,7 @@ plugin.settings.show(pageId?: string): Promise<void>;   // 只能指定本插件
 | B | marks、playlist | marks：B22 发布侧（`timeline.layer()`；「在进度条上显示标记」开关，`marks.json` 的 `showOnSeekbar`；章节 ∪ 书签，带 `ifCurrent`，超 1000 截断）。playlist：A15 拖放（`drops.provide` 登记媒体扩展名、列表文件、文件夹；视频区加入并播放第一项，Option 只加入；`Panel.onDrop` 插到落点所在行之前） | playlist「添加链接…」（`ui/link.slint`）改用 `UrlInputRow`；`ui/sidebar.slint` 的 2 处硬编码颜色改用 `Theme` token（H10 验收要求插件 Slint 无硬编码颜色） | A15 按 §4.3 改写需求文档 | 中（marks 批次 1；playlist 拖放批次 2） |
 | C | hotkeys、plugins | hotkeys：J01、J02 的设置页形态（`settings.page`，分类 `input`，id `hotkeys.keyboard` / `hotkeys.mouse`；「快捷键…」「鼠标…」改为 `settings.show(…)`；J01 按 440 宽重排：命令 220、快捷键 140、状态 60）。plugins：J07 的设置页形态（分类 `plugins`，「插件管理…」改为 `settings.show`） | 两插件原有工具窗口：页面与窗口内容相同，作者决定保留窗口还是只留页面，写进 README | 若 §3.6 拆到 3c（§3.0），本行整体推迟 | 小中（批次 2） |
 | D | visualizer（新） | J11 纯音频专辑封面（`panels.mount("backdrop")` + `ui.image`；封面用 `tools.run("ffmpeg"/"ffprobe")` 提取，或同文件夹 `cover.jpg` 等；标签 ffprobe；缓存 `dataDirectory/cache/covers/`）；H12 空闲徽标（内置 logo 用 `@image-url`；自定义徽标 `dialogs.openFile` → 复制到 `dataDirectory/logo.<ext>` → `ui.image`）；「徽标与专辑封面」设置页（`settings.page`，分类 `appearance`） | — | 无 `mode`：用 `phase` 与 `stats().video` 判断（§4.3）；README 记封面被 mpv 当作视频轨的已知行为 | 高（批次 1；设置页批次 2） |
-| E | preferences（新） | J04 首选项：「设置 ▶ 选项…」（F5，order 830）→ `settings.show()`；本插件「外观」页（`settings.page`，分类 `appearance`）。H10 配色：「设置 ▶ 外观 ▶ Vestra / PotPlayer 经典」（radio，840、841）+ 外观页的配色单选与 120×40 预览块（自己用 Slint 画）+「恢复默认」；`appearance.set` / `onChange`；切换时 OSD「配色：…」 | — | 去掉圆角选项与 `themes` 列表（§4.3）；若 §3.6 拆到 3c，J04 按需求文档「过渡」形态（自己的工具窗口，只含外观页） | 中（批次 2） |
+| E | preferences（新） | J04 首选项：「设置 ▶ 选项…」（F5，order 830）→ `settings.show()`；本插件「外观」页（`settings.page`，分类 `appearance`）。H10 配色：「设置 ▶ 外观 ▶ Vestra / 经典」（radio，840、841）+ 外观页的配色单选与 120×40 预览块（自己用 Slint 画）+「恢复默认」；`appearance.set` / `onChange`；切换时 OSD「配色：…」 | — | 去掉圆角选项与 `themes` 列表（§4.3）；若 §3.6 拆到 3c，J04 按需求文档「过渡」形态（自己的工具窗口，只含外观页） | 中（批次 2） |
 
 不在本轮的插件条目：window H07（4a）；video E11、E13、E16–E18（4a / 4b）。subtitles「字幕设置…」改为设置页属于需求文档的「以后可以」，本轮不要求。youtube、bilibili 的链接输入小窗（UI-DLG-02 的同一规格）可以顺带改用 `UrlInputRow`（不强制，报告说明）。其余插件没有本轮条目；H10 验收若发现别的插件 Slint 有硬编码颜色，按缺陷退回该插件作者。
 
@@ -222,7 +224,7 @@ plugin.settings.show(pageId?: string): Promise<void>;   // 只能指定本插件
 | 背景层 / J11 | 带内嵌封面的 MP3 显示封面与标题 / 艺术家 / 专辑；无封面的 FLAC 文件夹有 `cover.jpg` 时显示它；无封面时半透明 logo 与文件名；双击仍全屏、右键仍出菜单、滚轮仍调音量；音频切到视频 1 秒内显示视频画面；关闭开关为纯色；停用 visualizer 后纯色且播放不中断 | 截图 |
 | 背景层 / H12 | 无参数启动显示 logo 与「Vestra」；打开文件后消失，F4 关闭后重新出现（不残留最后一帧）；窗口拖到最小 logo 64px 不溢出、全屏 256px；自定义 PNG 立即替换，删原文件并重启后仍在，「恢复默认徽标」回到品牌 logo；空闲时双击切换全屏 | 截图 |
 | 拖放 / A15 | 从 Finder 拖 1 个 mkv 到视频区：加入并播放；拖文件夹：按 A03 展开并播放第一项；按住 Option 拖 3 个文件：加入 3 行不播放；拖 2 个文件到列表第 3、4 行之间：插在落点行之前、不播放；拖 `.m3u8`：解析并播放第一项；拖 `.srt` 且无插件登记：无反应、列表不变；侧栏浮动时拖到浮动窗口与附着时相同；侧栏因空间隐藏时拖到视频区仍有效 | 物理拖放记录、截图 |
-| 主题 / H10 | 切到「PotPlayer 经典」1 秒内：底栏进度条变黄、菜单选中项变色、已打开的音频工作台窗口与浮动侧栏同步变色；拖动音量滑块时切换，滑块不中断；重启后保持；停用 preferences 后配色不变；切回 Vestra 后与本轮开始前的截图一致 | 截图 |
+| 主题 / H10 | 切到「经典」1 秒内：底栏进度条变黄、菜单选中项变色、已打开的音频工作台窗口与浮动侧栏同步变色；拖动音量滑块时切换，滑块不中断；重启后保持；停用 preferences 后配色不变；切回 Vestra 后与本轮开始前的截图一致 | 截图 |
 | 设置页 / J04 | F5 打开「选项」，分类树至少有「外观」（preferences、visualizer）、「快捷键与鼠标」（hotkeys）、「插件」（plugins）；点页面右侧切换，播放不受影响；停用 hotkeys 后该分类 1 秒内消失，重新启用后恢复；在外观页切换配色，选项窗口自身与主窗口立即变化；关闭再开显示上次页面；⌘W 关闭；窗口内按 Space 不触发播放/暂停；「快捷键…」直接打开对应页面 | 截图 |
 | 输入链接组件 | playback「打开链接…」与 playlist「添加链接…」外观一致（同一组件）；回车 = 确定、Esc = 取消；两者功能与改动前一致 | 截图 |
 
@@ -297,7 +299,7 @@ plugin.settings.show(pageId?: string): Promise<void>;   // 只能指定本插件
 
 | 任务单 | 内容 | 宿主 | SDK / TestHost / 文档 |
 | --- | --- | --- | --- |
-| §3.5 | Theme 下发（R-H6） | 新文件 `ui/palette.slint`（宿主专用 global `VestraPalette`，颜色与 `accent-fill` 为 `in` 属性，默认 Vestra）；`ui/vestra/theme.slint` 的颜色改为绑定到它的 `out` 属性；新模块 `theme.rs`：两套配色表（21 个颜色 token；PotPlayer 的 `accent-fill` 为纯色 `#fae100`），`apply` 用 `set_global_property("VestraPalette", …)`；外壳（`host.slint` 导出 palette）、浮动侧栏、工具窗口（`ui.rs` 在源码末尾追加 `export { VestraPalette } from <绝对路径>`，显示前下发）、选项窗口逐实例下发；失败置 `theme_pending`，下一个 16 ms 周期全部重发 | 参考 §6.4、§6.8、§17 |
+| §3.5 | Theme 下发（R-H6） | 新文件 `ui/palette.slint`（宿主专用 global `VestraPalette`，颜色与 `accent-fill` 为 `in` 属性，默认 Vestra）；`ui/vestra/theme.slint` 的颜色改为绑定到它的 `out` 属性；新模块 `theme.rs`：两套配色表（21 个颜色 token；`classic` 的 `accent-fill` 为纯色），`apply` 用 `set_global_property("VestraPalette", …)`；外壳（`host.slint` 导出 palette）、浮动侧栏、工具窗口（`ui.rs` 在源码末尾追加 `export { VestraPalette } from <绝对路径>`，显示前下发）、选项窗口逐实例下发；失败置 `theme_pending`，下一个 16 ms 周期全部重发 | 参考 §6.4、§6.8、§17 |
 | §3.5 | `plugin.appearance`（R-S2，能力 `ui.theme`） | `appearance.set`（`invalid` 校验）；`ui-state.json` 的 `appearance.theme`（去抖保存，读坏的值丢弃）；变化时广播 `appearance.changed`；`window.state` 答复带 `appearance` | `sdk/plugin/appearance.ts`：初值随激活前的 `window.state` 读取（不加请求），第一次读 `theme` / `onChange` 后跟随事件；`host.appearance`、`host.setAppearance` |
 | §3.6 | `plugin.settings`（R-S1，能力 `ui.settings`）与选项窗口（R-H7） | 新模块 `settings_window.rs`：页面表（校验 id、分类、标题 1–24、`order`、每插件 ≤ 8、注册时单独编译检查）、九类固定顺序的树、窗口源码生成（每页 `Page<序号>View` 与 `Settings<序号>Bridge` 别名，`if current == k` 实例化，右侧 `ScrollView` 440 宽）、属性写入复用 `prop_value`（图片可用）与 `reconcile`、回调经 `ui.callback`（视图 `$settings:<id>`）只发给注册它的插件；`show` 打开或用 winit `focus_window` 带到前面；`settings.lastPage`；停用 / `dispose` 移除并在下一周期重建，按「同分类 → 常规 → 第一页 → 空」回退；⌘W、关闭按钮、标题栏关闭都是隐藏并丢弃实例 | `sdk/plugin/settings.ts`（`ViewBase` 子类，组件与 global 推断复用 `exported`）；`host.settings`、`host.settingsPage`；参考 §6.9；示例 §30 |
 | §3.4 | `plugin.drops.provide`、`Panel.onDrop`（R-U2，能力 `ui.drop`） | 新模块 `drops.rs`：提供者表（先登记生效，冲突写日志）、按扩展名分组、`folder`、30 ms 无新路径即一组；winit `DroppedFile` 在外壳与浮动侧栏的窗口钩子里转为事件；松手时 `platform_window::pointer_in`（`NSWindow::mouseLocationOutsideOfEventStream` + `contentRectForFrameRect`）与 `modifier_keys`（`NSEvent::modifierFlags` 类方法），都是 objc2 安全方法；`drops::hit` 按视频列宽高判定底栏 / 侧栏并换算面板坐标；浮动侧栏打开时关联原生窗口 | `sdk/plugin/drops.ts`（提供者 id 由 SDK 生成；面板监听计数，第一个 `onDrop` 发 `drops.listen(true)`，最后一个撤销）；`host.drop`、`host.dropProviders`、`host.panelDrops`；参考 §6.7；示例 §31 |
@@ -306,7 +308,7 @@ plugin.settings.show(pageId?: string): Promise<void>;   // 只能指定本插件
 **签名调整与实现取舍**（公开签名均与裁决一致）
 
 1. **Theme 的「插件不可写」换了实现方式**：任务单 §3.5 假设「Slint 不允许在 `.slint` 里给 global 的 `in` 属性赋值」，实测 Slint 1.16 允许（`Theme.accent = #ff0000` 编译无诊断）。改为：可写的颜色放在宿主专用的 `VestraPalette`（`ui/palette.slint`，不在 `@vestra` 库目录里），`Theme` 的颜色仍是 `out` 属性、绑定到它。插件照旧 `import { Theme }`，赋值 `Theme.x` 编译失败（`theme.rs` 的编译测试断言）。插件理论上可以按绝对路径导入 palette 自己改色，这属于有意绕过（插件是受信任的，见参考开头）。
-2. 配色表中 PotPlayer 没有对应项的 `selected-bg` 取 `#444444`（按钮按下灰），`button-hover` / `button-press` / `button-disabled` 取 ui-alignment §2.1 注释里的值。Vestra 的 `accent-fill` 渐变从第一个实例读出缓存（Slint 公开 API 不能构造渐变），切回 Vestra 时下发它。
+2. 配色表中 `classic` 没有对应项的 `selected-bg` 取 `#444444`（按钮按下灰），`button-hover` / `button-press` / `button-disabled` 取当时界面规格 §2.1 注释里的值。Vestra 的 `accent-fill` 渐变从第一个实例读出缓存（Slint 公开 API 不能构造渐变），切回 Vestra 时下发它。
 3. `appearance.theme` 的初值随激活前已有的 `window.state` 读取返回，不增加协议请求；事件 `appearance.changed` 按任务单新增，需要 `events`。
 4. **拖放文件夹规则**：目录（按松手时 `is_dir`）匹配保留名 `"folder"`，不展开；没有扩展名的文件不匹配任何提供者。
 5. **`Panel.onDrop` 的坐标系**：面板坐标 = 相对面板根组件左上角的逻辑点（底栏：`y − 视频列高`；侧栏：`x − 视频列宽 − 3`；浮动侧栏：窗口内容坐标）。
@@ -325,7 +327,7 @@ plugin.settings.show(pageId?: string): Promise<void>;   // 只能指定本插件
 
 **给协调者的 GUI 实测要点**
 
-1. 配色：探针（或作者 E 的 preferences）`appearance.set("potplayer")` 后 1 秒内：底栏进度条黄色纯色、菜单选中项、已打开的工具窗口（如音频工作台）、浮动侧栏、选项窗口同时变色；拖着音量滑块时切换滑块不中断；重启后仍为 PotPlayer；停用调用者后不变；切回 Vestra 与切换前截图一致（渐变恢复）。
+1. 配色：探针（或作者 E 的 preferences）`appearance.set("classic")` 后 1 秒内：底栏进度条黄色纯色、菜单选中项、已打开的工具窗口（如音频工作台）、浮动侧栏、选项窗口同时变色；拖着音量滑块时切换滑块不中断；重启后仍为 classic；停用调用者后不变；切回 Vestra 与切换前截图一致（渐变恢复）。
 2. 设置页：两个探针各注册一页（不同分类）后 F5/`show()`：「选项」640×480、树按九类顺序、空分类不显示；点页面切换；窗口内按 Space 不暂停；⌘W 关闭；再开显示上次页面（重启后也是）；停用其中一个插件 1 秒内该页消失（正在显示则切到同类第一页 / 常规 / 「没有可设置的项目」）；启用后恢复；页面里的输入框与滑块可用，回调到达注册它的插件；页面超高时右侧可滚动。
 3. 拖放（物理拖放，**必须实测**）：Finder 拖 1 个 mkv 到视频区 → 提供者收到 1 个路径；同时拖 3 个文件 → 一次调用、顺序与 Finder 一致；拖文件夹 → `folder` 提供者收到目录路径；按住 Option 松手 → `modifiers.alt: true`（Shift、⌘ 同理）；拖到附着侧栏第 3、4 行之间 → `onDrop` 收到的 `at.y` 与面板内行位置一致（与面板里 `mouse-y` 对照）；拖到浮动侧栏窗口 → 同样走 `onDrop`、坐标为窗口内容坐标；拖到底栏 → 底栏插件有监听时收到、否则按扩展名分发；拖 `.srt` 且无提供者 → 无反应；拖到工具窗口 → 无反应；拖放期间播放不暂停。若出现一次拖放被拆成多组或坐标偏一个标题栏高度，按第 6 条降级并告诉维护者。
 
@@ -342,7 +344,7 @@ plugin.settings.show(pageId?: string): Promise<void>;   // 只能指定本插件
 **GUI 实测通过**：
 - 时间轴：进度条上显示章节、书签标记和 A-B 区段，悬停显示缩略图。
 - 拖放：拖到视频区时追加并播放；拖到列表行时插入到该行之前，不打断当前播放。
-- 配色：Vestra 与 PotPlayer 两套配色在所有窗口即时切换；「恢复默认」可用。
+- 配色：Vestra 与 classic 两套配色在所有窗口即时切换；「恢复默认」可用。
 - 选项窗口：分类树、外观页、快捷键页。
 - visualizer：空闲时显示徽标；带内嵌封面的 MP3 显示插件绘制的封面和三行标签，mpv 不再自己显示封面。
 

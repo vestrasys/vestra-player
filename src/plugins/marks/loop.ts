@@ -11,7 +11,7 @@ const same = (x: Loop | null | undefined, y: Loop | null | undefined) =>
   (x ?? null) === (y ?? null) || (!!x && !!y && x.a === y.a && x.b === y.b && x.count === y.count);
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
 
-/** `A-B 循环：0:10.0 ~ 0:20.0` (PotPlayer S:1152/1153). */
+/** OSD wording: `A-B 循环：0:10.0 ~ 0:20.0`. */
 export const loopText = (a: number, b: number) => `A-B 循环：${precise(a)} ~ ${precise(b)}`;
 
 /**

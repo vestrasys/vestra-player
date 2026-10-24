@@ -28,7 +28,7 @@ export async function movieHash(path: string): Promise<{ hash: string; size: num
   }
 }
 
-/** Tokens that start the technical tail of a release name (PotPlayer `%SS`). */
+/** Tokens that start the technical tail of a release name (the `%SS` cleanup). */
 const TECHNICAL =
   /^(\d{3,4}p|4k|uhd|x26[45]|h\.?26[45]|hevc|avc|xvid|divx|blu-?ray|bdrip|brrip|web-?dl|web-?rip|web|hdtv|hdrip|dvd(rip|scr)?|remux|hdr(10)?|dv|10bit|8bit|aac(2\.0)?|ac3|dts(-hd)?|truehd|atmos|ddp?(5\.1)?|5\.1|7\.1|proper|repack|extended|unrated|imax|multi|complete|chs|cht|chi|eng)$/i;
 

@@ -28,10 +28,11 @@ const rgb = (hex: string): Rgb => {
 };
 
 /**
- * Both palettes, in menu order. The preview colours copy the player's own
- * tables (bg-video, bg-bar, button-bg, text, text-dim, accent, accent-fill;
- * doc/product/ui-alignment.md §2.1): `Theme` only ever holds the current
- * palette, so the preview of the other one cannot come from it.
+ * The player's palettes, in menu order (one today; a light palette would be
+ * a second row, menu item and preview). The preview colours copy the
+ * player's own table (bg-video, bg-bar, button-bg, text, text-dim, accent,
+ * accent-fill; doc/product/ui-spec.md §2.1): `Theme` only ever holds the
+ * current palette, so the preview of another one cannot come from it.
  */
 export const THEMES: ThemeRow[] = [
   {
@@ -49,23 +50,6 @@ export const THEMES: ThemeRow[] = [
       f1: rgb("#fc6f3b"),
       f2: rgb("#fa139c"),
       f3: rgb("#911efc"),
-    },
-  },
-  {
-    id: "potplayer",
-    title: "PotPlayer 经典",
-    note: "PotPlayer 原色：黄色强调，蓝色正在播放",
-    swatch: {
-      video: rgb("#101010"),
-      bar: rgb("#1e1e1e"),
-      track: rgb("#555555"),
-      text: rgb("#f0f0f0"),
-      dim: rgb("#777777"),
-      accent: rgb("#fae100"),
-      f0: rgb("#fae100"),
-      f1: rgb("#fae100"),
-      f2: rgb("#fae100"),
-      f3: rgb("#fae100"),
     },
   },
 ];
