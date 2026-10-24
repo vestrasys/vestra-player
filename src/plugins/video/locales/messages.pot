@@ -1,0 +1,1079 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: vestra.video 1.1.4\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: main.ts:195 picture.slint:386
+msgid "Shader failed to load"
+msgstr ""
+
+#: main.ts:196
+msgid "Render options unavailable: another plugin controls them"
+msgstr ""
+
+#: main.ts:199
+msgid "Render options unavailable: {}"
+msgstr ""
+
+#: main.ts:456
+msgid "Display unavailable: another plugin controls the display"
+msgstr ""
+
+#: main.ts:458
+msgid "Display unavailable: {}"
+msgstr ""
+
+#: main.ts:468
+msgid "Aspect ratio: Default"
+msgstr ""
+
+#: main.ts:468
+msgid "Aspect ratio: {}"
+msgstr ""
+
+#: main.ts:468
+msgid "Aspect ratio: Custom - {}"
+msgstr ""
+
+#: main.ts:473 main.ts:882 picture.slint:680
+msgid "Keep Aspect Ratio"
+msgstr ""
+
+#: main.ts:473 main.ts:882 picture.slint:680
+msgid "Ignore Aspect Ratio"
+msgstr ""
+
+#: main.ts:473 picture.slint:680
+msgid "Fill Window"
+msgstr ""
+
+#: main.ts:479
+msgid "Framing: larger ({}%)"
+msgstr ""
+
+#: main.ts:479
+msgid "Framing: smaller ({}%)"
+msgstr ""
+
+#: main.ts:486
+msgid "Framing: move right ({}%, {}%)"
+msgstr ""
+
+#: main.ts:486
+msgid "Framing: move left ({}%, {}%)"
+msgstr ""
+
+#: main.ts:486
+msgid "Framing: move up ({}%, {}%)"
+msgstr ""
+
+#: main.ts:486
+msgid "Framing: move down ({}%, {}%)"
+msgstr ""
+
+#: main.ts:491
+msgid "Framing: centered"
+msgstr ""
+
+#: main.ts:491
+msgid "Framing: reset"
+msgstr ""
+
+#: main.ts:534
+msgid "Picture reset"
+msgstr ""
+
+#: main.ts:539
+msgid "Brightness -1% ({}%)"
+msgstr ""
+
+#: main.ts:539
+msgid "Brightness +1% ({}%)"
+msgstr ""
+
+#: main.ts:539
+msgid "Contrast -1% ({}%)"
+msgstr ""
+
+#: main.ts:539
+msgid "Contrast +1% ({}%)"
+msgstr ""
+
+#: main.ts:539
+msgid "Saturation -1% ({}%)"
+msgstr ""
+
+#: main.ts:539
+msgid "Saturation +1% ({}%)"
+msgstr ""
+
+#: main.ts:539
+msgid "Hue -1% ({}%)"
+msgstr ""
+
+#: main.ts:539
+msgid "Hue +1% ({}%)"
+msgstr ""
+
+#: main.ts:539
+msgid "Brightness -1% ({}%) (picture effects off)"
+msgstr ""
+
+#: main.ts:539
+msgid "Brightness +1% ({}%) (picture effects off)"
+msgstr ""
+
+#: main.ts:539
+msgid "Contrast -1% ({}%) (picture effects off)"
+msgstr ""
+
+#: main.ts:539
+msgid "Contrast +1% ({}%) (picture effects off)"
+msgstr ""
+
+#: main.ts:539
+msgid "Saturation -1% ({}%) (picture effects off)"
+msgstr ""
+
+#: main.ts:539
+msgid "Saturation +1% ({}%) (picture effects off)"
+msgstr ""
+
+#: main.ts:539
+msgid "Hue -1% ({}%) (picture effects off)"
+msgstr ""
+
+#: main.ts:539
+msgid "Hue +1% ({}%) (picture effects off)"
+msgstr ""
+
+#: main.ts:545
+msgid "Flip vertically: on"
+msgstr ""
+
+#: main.ts:545
+msgid "Flip vertically: off"
+msgstr ""
+
+#: main.ts:546
+msgid "Flip horizontally: on"
+msgstr ""
+
+#: main.ts:546
+msgid "Flip horizontally: off"
+msgstr ""
+
+#: main.ts:551
+msgid "Rotation: none"
+msgstr ""
+
+#: main.ts:551
+msgid "Rotation: {}°"
+msgstr ""
+
+#: main.ts:556
+msgid "Sharpen: on"
+msgstr ""
+
+#: main.ts:556
+msgid "Edge sharpen: on"
+msgstr ""
+
+#: main.ts:556
+msgid "Deblock: on"
+msgstr ""
+
+#: main.ts:556
+msgid "Deband: on"
+msgstr ""
+
+#: main.ts:556
+msgid "3D denoise: on"
+msgstr ""
+
+#: main.ts:556
+msgid "Gradual denoise: on"
+msgstr ""
+
+#: main.ts:556
+msgid "Temporal denoise: on"
+msgstr ""
+
+#: main.ts:556
+msgid "Sharpen: off"
+msgstr ""
+
+#: main.ts:556
+msgid "Edge sharpen: off"
+msgstr ""
+
+#: main.ts:556
+msgid "Deblock: off"
+msgstr ""
+
+#: main.ts:556
+msgid "Deband: off"
+msgstr ""
+
+#: main.ts:556
+msgid "3D denoise: off"
+msgstr ""
+
+#: main.ts:556
+msgid "Gradual denoise: off"
+msgstr ""
+
+#: main.ts:556
+msgid "Temporal denoise: off"
+msgstr ""
+
+#: main.ts:561
+msgid "Deinterlace: auto"
+msgstr ""
+
+#: main.ts:561
+msgid "Deinterlace: always"
+msgstr ""
+
+#: main.ts:561
+msgid "Deinterlace: never"
+msgstr ""
+
+#: main.ts:566
+msgid "Deinterlace output: by frame"
+msgstr ""
+
+#: main.ts:566
+msgid "Deinterlace output: by field (double rate)"
+msgstr ""
+
+#: main.ts:573
+msgid "Crop/stretch: none"
+msgstr ""
+
+#: main.ts:573
+msgid "Crop/stretch: stretch to {}"
+msgstr ""
+
+#: main.ts:573
+msgid "Crop/stretch: crop to {}"
+msgstr ""
+
+#: main.ts:580
+msgid "Crop position ({}%, {}%)"
+msgstr ""
+
+#: main.ts:595
+msgid "Frame doubling: off"
+msgstr ""
+
+#: main.ts:595
+msgid "Frame doubling: on (motion interpolation turned off)"
+msgstr ""
+
+#: main.ts:595
+msgid "Frame doubling: on"
+msgstr ""
+
+#: main.ts:595
+msgid "Frame doubling: on (picture effects off)"
+msgstr ""
+
+#: main.ts:615
+msgid "Motion interpolation: off"
+msgstr ""
+
+#: main.ts:615
+msgid "Motion interpolation: on (frame doubling turned off)"
+msgstr ""
+
+#: main.ts:615
+msgid "Motion interpolation: on"
+msgstr ""
+
+#: main.ts:623
+msgid "HDR tone mapping: auto (not an HDR source)"
+msgstr ""
+
+#: main.ts:623
+msgid "HDR tone mapping: off (not an HDR source)"
+msgstr ""
+
+#: main.ts:623
+msgid "HDR tone mapping: BT.2390 (not an HDR source)"
+msgstr ""
+
+#: main.ts:623
+msgid "HDR tone mapping: Hable (not an HDR source)"
+msgstr ""
+
+#: main.ts:623
+msgid "HDR tone mapping: Mobius (not an HDR source)"
+msgstr ""
+
+#: main.ts:623
+msgid "HDR tone mapping: Reinhard (not an HDR source)"
+msgstr ""
+
+#: main.ts:623
+msgid "HDR tone mapping: clip (not an HDR source)"
+msgstr ""
+
+#: main.ts:623
+msgid "HDR tone mapping: auto"
+msgstr ""
+
+#: main.ts:623
+msgid "HDR tone mapping: off"
+msgstr ""
+
+#: main.ts:623
+msgid "HDR tone mapping: BT.2390"
+msgstr ""
+
+#: main.ts:623
+msgid "HDR tone mapping: Hable"
+msgstr ""
+
+#: main.ts:623
+msgid "HDR tone mapping: Mobius"
+msgstr ""
+
+#: main.ts:623
+msgid "HDR tone mapping: Reinhard"
+msgstr ""
+
+#: main.ts:623
+msgid "HDR tone mapping: clip"
+msgstr ""
+
+#: main.ts:628
+msgid "Dynamic peak detection: on"
+msgstr ""
+
+#: main.ts:628
+msgid "Dynamic peak detection: off"
+msgstr ""
+
+#: main.ts:636
+msgid "Pixel shaders: off"
+msgstr ""
+
+#: main.ts:637
+msgid "Pixel shaders: no shaders"
+msgstr ""
+
+#: main.ts:638
+msgid "Pixel shaders: on ({})"
+msgstr ""
+
+#: main.ts:687
+msgid "Many frames dropped with field output, try frame output; many dropped with frame doubling, consider turning it off"
+msgstr ""
+
+#: main.ts:687
+msgid "Many frames dropped with field output, try frame output"
+msgstr ""
+
+#: main.ts:687
+msgid "Many frames dropped with frame doubling, consider turning it off"
+msgstr ""
+
+#: main.ts:721 main.ts:737
+msgid "At most {} shaders"
+msgstr ""
+
+#: main.ts:732
+msgid "Add Shader (.glsl)"
+msgstr ""
+
+#: main.ts:735
+msgid "Only .glsl or .hook shader files can be added"
+msgstr ""
+
+#: main.ts:742
+msgid "Could not copy the shader: {}"
+msgstr ""
+
+#: main.ts:751
+msgid "Could not open the shader folder: {}"
+msgstr ""
+
+#. {} is a list of file names, separated by "、" for now (R2-video-1: list format by language).
+#: main.ts:760
+msgid "Removed missing shaders: {}"
+msgstr ""
+
+#. {} is a list of file names, separated by "、" for now (R2-video-1: list format by language).
+#: main.ts:761
+msgid "Shaders reloaded ({})"
+msgstr ""
+
+#: main.ts:814 main.ts:822 main.ts:823 main.ts:824 main.ts:828 main.ts:838 main.ts:845
+msgid "Pixel Shaders"
+msgstr ""
+
+#: main.ts:814
+msgid "Use Shaders"
+msgstr ""
+
+#: main.ts:822
+msgid "Shader List…"
+msgstr ""
+
+#: main.ts:823
+msgid "Open Shader Folder"
+msgstr ""
+
+#: main.ts:824
+msgid "Reload Shaders"
+msgstr ""
+
+#: main.ts:828 main.ts:838
+msgid "HDR Tone Mapping"
+msgstr ""
+
+#: main.ts:828 main.ts:861 picture.slint:723 picture.slint:752
+msgid "Auto"
+msgstr ""
+
+#: main.ts:828 picture.slint:752
+msgid "Off"
+msgstr ""
+
+#: main.ts:828
+msgid "BT.2390"
+msgstr ""
+
+#: main.ts:828
+msgid "Hable"
+msgstr ""
+
+#: main.ts:828
+msgid "Mobius"
+msgstr ""
+
+#: main.ts:828
+msgid "Reinhard"
+msgstr ""
+
+#: main.ts:828 picture.slint:752
+msgid "Clip"
+msgstr ""
+
+#: main.ts:838
+msgid "Dynamic Peak Detection"
+msgstr ""
+
+#: main.ts:845
+msgid "HDR Settings…"
+msgstr ""
+
+#: main.ts:849 main.ts:861 main.ts:871 picture.slint:718
+msgid "Deinterlace"
+msgstr ""
+
+#: main.ts:849 main.ts:1077
+msgid "Cycle"
+msgstr ""
+
+#: main.ts:861 picture.slint:723
+msgid "Always"
+msgstr ""
+
+#: main.ts:861 picture.slint:723
+msgid "Never"
+msgstr ""
+
+#: main.ts:871
+msgid "Output"
+msgstr ""
+
+#: main.ts:871 picture.slint:732
+msgid "By Frame"
+msgstr ""
+
+#: main.ts:871 picture.slint:732
+msgid "By Field (Double Rate)"
+msgstr ""
+
+#: main.ts:882 main.ts:891 main.ts:899 main.ts:948 main.ts:949
+msgid "Aspect"
+msgstr ""
+
+#: main.ts:882
+msgid "Fill Window (Crop Excess)"
+msgstr ""
+
+#: main.ts:891
+msgid "Cycle Aspect Ratio"
+msgstr ""
+
+#: main.ts:899 picture.slint:353 picture.slint:354
+msgid "Default (Source)"
+msgstr ""
+
+#: main.ts:948
+msgid "Custom (x:y)"
+msgstr ""
+
+#: main.ts:948
+msgid "Enter one with Custom Aspect Ratio… first"
+msgstr ""
+
+#: main.ts:949 picture.slint:665
+msgid "Custom Aspect Ratio…"
+msgstr ""
+
+#: main.ts:955 main.ts:966 main.ts:984
+msgid "Crop/Stretch"
+msgstr ""
+
+#: main.ts:955 picture.slint:630
+msgid "None"
+msgstr ""
+
+#: main.ts:966
+msgid "Stretch to 4:3"
+msgstr ""
+
+#: main.ts:966
+msgid "Stretch to 16:9"
+msgstr ""
+
+#: main.ts:966
+msgid "Stretch to 16:10"
+msgstr ""
+
+#: main.ts:966
+msgid "Stretch to 1.85:1"
+msgstr ""
+
+#: main.ts:966
+msgid "Stretch to 2.35:1"
+msgstr ""
+
+#: main.ts:966
+msgid "Crop to 4:3"
+msgstr ""
+
+#: main.ts:966
+msgid "Crop to 16:9"
+msgstr ""
+
+#: main.ts:966
+msgid "Crop to 16:10"
+msgstr ""
+
+#: main.ts:966
+msgid "Crop to 1.85:1"
+msgstr ""
+
+#: main.ts:966
+msgid "Crop to 2.35:1"
+msgstr ""
+
+#: main.ts:984
+msgid "Reset Position"
+msgstr ""
+
+#: main.ts:984
+msgid "Move Left"
+msgstr ""
+
+#: main.ts:984
+msgid "Move Right"
+msgstr ""
+
+#: main.ts:984 ui/shaders.slint:103
+msgid "Move Up"
+msgstr ""
+
+#: main.ts:984 ui/shaders.slint:104
+msgid "Move Down"
+msgstr ""
+
+#: main.ts:1002
+msgid "Framing"
+msgstr ""
+
+#: main.ts:1002
+msgid "Reset Framing"
+msgstr ""
+
+#: main.ts:1002
+msgid "Zoom In"
+msgstr ""
+
+#: main.ts:1002
+msgid "Zoom Out"
+msgstr ""
+
+#: main.ts:1002
+msgid "Pan →"
+msgstr ""
+
+#: main.ts:1002
+msgid "Pan ←"
+msgstr ""
+
+#: main.ts:1002
+msgid "Pan ↑"
+msgstr ""
+
+#: main.ts:1002
+msgid "Pan ↓"
+msgstr ""
+
+#: main.ts:1002
+msgid "Center Frame"
+msgstr ""
+
+#: main.ts:1006 main.ts:1015 main.ts:1024 main.ts:1048 main.ts:1059 main.ts:1067
+msgid "Image Processing"
+msgstr ""
+
+#: main.ts:1006
+msgid "Flip Vertically"
+msgstr ""
+
+#: main.ts:1015
+msgid "Flip Horizontally"
+msgstr ""
+
+#: main.ts:1024
+msgid "Gaussian Blur"
+msgstr ""
+
+#: main.ts:1032
+msgid "Gaussian blur: on"
+msgstr ""
+
+#: main.ts:1032
+msgid "Gaussian blur: off"
+msgstr ""
+
+#: main.ts:1048 picture.slint:463
+msgid "Sharpen"
+msgstr ""
+
+#: main.ts:1048
+msgid "Edge Sharpen"
+msgstr ""
+
+#: main.ts:1048 picture.slint:516
+msgid "Deblock"
+msgstr ""
+
+#: main.ts:1048 picture.slint:526
+msgid "Deband"
+msgstr ""
+
+#: main.ts:1048
+msgid "3D Denoise"
+msgstr ""
+
+#: main.ts:1048
+msgid "Gradual Denoise"
+msgstr ""
+
+#: main.ts:1048
+msgid "Temporal Denoise"
+msgstr ""
+
+#: main.ts:1059
+msgid "Frame Doubling"
+msgstr ""
+
+#: main.ts:1067
+msgid "Motion Interpolation"
+msgstr ""
+
+#: main.ts:1077 main.ts:1086
+msgid "Rotation"
+msgstr ""
+
+#: main.ts:1086
+msgid "No Rotation"
+msgstr ""
+
+#: main.ts:1086
+msgid "90°"
+msgstr ""
+
+#: main.ts:1086
+msgid "180°"
+msgstr ""
+
+#: main.ts:1086
+msgid "270°"
+msgstr ""
+
+#: main.ts:1094
+msgid "Picture Adjustments…"
+msgstr ""
+
+#: main.ts:1095
+msgid "Reset"
+msgstr ""
+
+#: main.ts:1100
+msgid "Brightness -1%"
+msgstr ""
+
+#: main.ts:1100
+msgid "Contrast -1%"
+msgstr ""
+
+#: main.ts:1100
+msgid "Saturation -1%"
+msgstr ""
+
+#: main.ts:1100
+msgid "Hue -1%"
+msgstr ""
+
+#: main.ts:1109
+msgid "Brightness +1%"
+msgstr ""
+
+#: main.ts:1109
+msgid "Contrast +1%"
+msgstr ""
+
+#: main.ts:1109
+msgid "Saturation +1%"
+msgstr ""
+
+#: main.ts:1109
+msgid "Hue +1%"
+msgstr ""
+
+#: manifest.json picture.slint:317
+msgid "Picture Adjustments"
+msgstr ""
+
+#: manifest.json
+msgid "Color, image processing, aspect ratio, crop, rotation and HDR"
+msgstr ""
+
+#: manifest.json
+msgid ""
+"Adjust brightness, contrast, saturation and hue; image processing such as sharpening, denoising and deblocking; flip, rotation, deinterlacing and frame doubling; aspect ratio, crop/stretch and zooming and panning the frame; with GPU rendering also HDR tone mapping, pixel shaders and motion interpolation.\n"
+"Find it in the Video context menu and the Picture Adjustments… window."
+msgstr ""
+
+#: manifest.json
+msgid "video"
+msgstr ""
+
+#: manifest.json
+msgid "picture"
+msgstr ""
+
+#: manifest.json
+msgid "color"
+msgstr ""
+
+#: manifest.json
+msgid "filters"
+msgstr ""
+
+#: picture.slint:232 picture.slint:274 picture.slint:512 picture.slint:704
+msgid "Default"
+msgstr ""
+
+#: picture.slint:354
+msgid "Custom ({})"
+msgstr ""
+
+#: picture.slint:365 ui/shaders.slint:120
+msgid "Needs GPU rendering (currently software rendering)"
+msgstr ""
+
+#: picture.slint:383
+msgid "No picture in the current source"
+msgstr ""
+
+#: picture.slint:384
+msgid "Picture processing failed"
+msgstr ""
+
+#: picture.slint:385
+msgid "Display unavailable"
+msgstr ""
+
+#: picture.slint:387
+msgid "Render options unavailable"
+msgstr ""
+
+#: picture.slint:388
+msgid "Render settings failed"
+msgstr ""
+
+#: picture.slint:391
+msgid "Another plugin controls the display"
+msgstr ""
+
+#: picture.slint:392
+msgid "Another plugin controls the render options"
+msgstr ""
+
+#: picture.slint:404
+msgid "Color"
+msgstr ""
+
+#: picture.slint:404
+msgid "Effects"
+msgstr ""
+
+#: picture.slint:404
+msgid "Picture"
+msgstr ""
+
+#: picture.slint:404
+msgid "Advanced"
+msgstr ""
+
+#: picture.slint:432
+msgid "Brightness"
+msgstr ""
+
+#: picture.slint:433
+msgid "Contrast"
+msgstr ""
+
+#: picture.slint:434
+msgid "Saturation"
+msgstr ""
+
+#: picture.slint:435
+msgid "Hue"
+msgstr ""
+
+#: picture.slint:436
+msgid "Gamma"
+msgstr ""
+
+#: picture.slint:441
+msgid "Original"
+msgstr ""
+
+#: picture.slint:442
+msgid "Vivid"
+msgstr ""
+
+#: picture.slint:443
+msgid "Cinema"
+msgstr ""
+
+#: picture.slint:444
+msgid "Soft"
+msgstr ""
+
+#: picture.slint:453
+msgid "Blur"
+msgstr ""
+
+#: picture.slint:472
+msgid "Edges"
+msgstr ""
+
+#: picture.slint:473
+msgid "Wide-radius sharpening that mainly strengthens outlines"
+msgstr ""
+
+#: picture.slint:487
+msgid "Denoise"
+msgstr ""
+
+#: picture.slint:495
+msgid "3D"
+msgstr ""
+
+#: picture.slint:495
+msgid "Gradual"
+msgstr ""
+
+#: picture.slint:495
+msgid "Temporal"
+msgstr ""
+
+#: picture.slint:517
+msgid "Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4"
+msgstr ""
+
+#: picture.slint:540
+msgid "Doubles the frame rate (up to 60), blending each in-between frame from its neighbours"
+msgstr ""
+
+#: picture.slint:544
+msgid "Doubling"
+msgstr ""
+
+#: picture.slint:551
+msgid "Rate already high enough"
+msgstr ""
+
+#: picture.slint:559
+msgid "GPU interpolation to the display refresh rate; excludes frame doubling"
+msgstr ""
+
+#: picture.slint:563
+msgid "Interpolation"
+msgstr ""
+
+#: picture.slint:579
+msgid "Flip"
+msgstr ""
+
+#: picture.slint:585
+msgid "Vert."
+msgstr ""
+
+#: picture.slint:593
+msgid "Horiz."
+msgstr ""
+
+#: picture.slint:606
+msgid "Rotate"
+msgstr ""
+
+#: picture.slint:625
+msgid "Crop/stretch"
+msgstr ""
+
+#: picture.slint:630
+msgid "Stretch"
+msgstr ""
+
+#: picture.slint:630
+msgid "Crop"
+msgstr ""
+
+#: picture.slint:649
+msgid "Aspect ratio"
+msgstr ""
+
+#: picture.slint:674
+msgid "Display"
+msgstr ""
+
+#: picture.slint:688
+msgid "Zoom {}%"
+msgstr ""
+
+#: picture.slint:692
+msgid "Zoom"
+msgstr ""
+
+#: picture.slint:741
+msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays; the slider sets the target brightness"
+msgstr ""
+
+#: picture.slint:745
+msgid "HDR"
+msgstr ""
+
+#: picture.slint:776
+msgid "Target {} nits · Not an HDR source"
+msgstr ""
+
+#: picture.slint:776
+msgid "Target {} nits"
+msgstr ""
+
+#: picture.slint:786
+msgid "mpv user shaders (.glsl), run in list order"
+msgstr ""
+
+#: picture.slint:790
+msgid "Shaders"
+msgstr ""
+
+#: picture.slint:793
+msgid "Enable"
+msgstr ""
+
+#: picture.slint:798
+msgid "{n} shader"
+msgid_plural "{n} shaders"
+msgstr[0] ""
+msgstr[1] ""
+
+#: picture.slint:801
+msgid "List…"
+msgstr ""
+
+#: picture.slint:812
+msgid "Enable picture effects"
+msgstr ""
+
+#: picture.slint:829
+msgid "Retry"
+msgstr ""
+
+#: ui/aspect.slint:9
+msgid "Custom Aspect Ratio"
+msgstr ""
+
+#: ui/aspect.slint:32
+msgid "Aspect ratio (width:height or decimal, 0.25–4)"
+msgstr ""
+
+#: ui/aspect.slint:50
+msgid "Format: 16:9 or 2.39"
+msgstr ""
+
+#: ui/aspect.slint:59
+msgid "OK"
+msgstr ""
+
+#: ui/aspect.slint:60
+msgid "Cancel"
+msgstr ""
+
+#: ui/shaders.slint:40
+msgid "{} (file missing)"
+msgstr ""
+
+#: ui/shaders.slint:63
+msgid "Shader List"
+msgstr ""
+
+#: ui/shaders.slint:86
+msgid "Enabled {}/{} (run in order)"
+msgstr ""
+
+#: ui/shaders.slint:95
+msgid "No shaders"
+msgstr ""
+
+#: ui/shaders.slint:101
+msgid "Add…"
+msgstr ""
+
+#: ui/shaders.slint:102
+msgid "Remove"
+msgstr ""
+
+#: ui/shaders.slint:105
+msgid "Clear"
+msgstr ""
+
+#: ui/shaders.slint:108
+msgid "Other files in the shader folder (double-click to add)"
+msgstr ""
+
+#: ui/shaders.slint:112
+msgid "No other .glsl files"
+msgstr ""
+
+#: ui/shaders.slint:120
+msgid "“Use Shaders” is off"
+msgstr ""
+
+#: ui/shaders.slint:126
+msgid "Open Folder"
+msgstr ""

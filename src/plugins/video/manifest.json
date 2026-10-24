@@ -1,6 +1,6 @@
 {
   "id": "vestra.video",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -12,15 +12,15 @@
     "ui.dialog",
     "ui.osd"
   ],
-  "name": "画面调节",
+  "name": "Picture Adjustments",
   "author": "Vestra Player",
-  "punchline": "色彩、图像处理、比例、裁剪、旋转与 HDR",
-  "description": "调整亮度、对比度、饱和度、色调；锐化、降噪、去块等图像处理；翻转、旋转、反交错、倍帧；宽高比、裁剪/拉伸与帧位缩放平移；GPU 渲染时还有 HDR 色调映射、像素着色器与运动补偿。\n入口在右键菜单「视频」与「画面调节…」窗口。",
+  "punchline": "Color, image processing, aspect ratio, crop, rotation and HDR",
+  "description": "Adjust brightness, contrast, saturation and hue; image processing such as sharpening, denoising and deblocking; flip, rotation, deinterlacing and frame doubling; aspect ratio, crop/stretch and zooming and panning the frame; with GPU rendering also HDR tone mapping, pixel shaders and motion interpolation.\nFind it in the Video context menu and the Picture Adjustments… window.",
   "tags": [
-    "视频",
-    "画面",
-    "色彩",
-    "滤镜"
+    "video",
+    "picture",
+    "color",
+    "filters"
   ],
-  "minPlayerVersion": "0.4.0"
+  "minPlayerVersion": "0.4.3"
 }

@@ -229,7 +229,7 @@ component ColorRow {
         }
         VerticalLayout {
             alignment: center;
-            Button { text: "默认"; small: true; width: 41px; clicked => { root.reset(); } }
+            Button { text: @tr("Default"); small: true; width: 41px; clicked => { root.reset(); } }
         }
     }
 }
@@ -271,7 +271,7 @@ component EffectRow {
             }
             VerticalLayout {
                 alignment: center;
-                Button { text: "默认"; small: true; width: 41px; clicked => { root.reset(); } }
+                Button { text: @tr("Default"); small: true; width: 41px; clicked => { root.reset(); } }
             }
         }
     }
@@ -314,7 +314,7 @@ component Tab {
 }
 
 export component PictureWindow inherits Window {
-    title: "画面调节";
+    title: @tr("Picture Adjustments");
     width: 301px;
     height: 245px;
     background: Theme.bg-panel;
@@ -339,37 +339,57 @@ export component PictureWindow inherits Window {
     in-out property <bool> deband-enabled;
     in-out property <float> deband-strength: 40;
     in-out property <bool> blend-enabled;
-    in property <string> blend-note;
+    // The source is smooth enough: 倍帧 adds nothing.
+    in property <bool> blend-enough;
     // 画面
     in-out property <bool> flip-v;
     in-out property <bool> flip-h;
     in-out property <int> rotate-index: 0;
     in-out property <int> reframe-index: 0;
     in-out property <int> ratio-index: 1;
-    in property <[string]> aspect-names: ["默认（按来源）", "4:3", "16:9", "16:10", "1.85:1", "2.35:1"];
+    // The last 自定义 ratio typed ("" = none); it adds a choice after the presets.
+    in property <string> custom-ratio;
+    private property <[string]> aspect-names: root.custom-ratio == ""
+        ? [@tr("Default (Source)"), "4:3", "16:9", "16:10", "1.85:1", "2.35:1"]
+        : [@tr("Default (Source)"), "4:3", "16:9", "16:10", "1.85:1", "2.35:1", @tr("Custom ({})", root.custom-ratio)];
     in-out property <int> aspect-index: 0;
     in-out property <int> fit-index: 0;
     // log2 of the zoom: −2…2 is 25 %…400 %, 0 (the middle) is 100 %.
     in-out property <float> zoom-level: 0;
-    in property <string> zoom-text: "缩放 100%";
+    in property <int> zoom-percent: 100;
     // 高级
     in-out property <int> deinterlace-index: 0;
     in-out property <int> output-index: 0;
     // GPU render options (高级 HDR / 着色器, 效果 运动补偿); greyed with `render-reason` under software rendering.
     in property <bool> render-ready: true;
-    in property <string> render-reason;
+    private property <string> render-reason: @tr("Needs GPU rendering (currently software rendering)");
     in-out property <int> tone-index: 0;
     in-out property <float> target-peak: 203;
-    in property <string> hdr-note;
+    // 目标亮度 as saved (the slider's value while dragging is not rounded); the source is known to be SDR.
+    in property <int> peak-nits: 203;
+    in property <bool> not-hdr;
     in-out property <bool> shaders-enabled;
-    in property <string> shader-count: "0 个着色器";
+    in property <int> shader-count: 0;
     in-out property <bool> interpolation;
     // shared
     in-out property <int> tab-index: 0;
     in-out property <bool> effect-enabled: true;
     in property <bool> failed;
+    // What failed: "no-picture", "filter", "view", "shader", "render-conflict", "render" ("" = nothing).
     in property <string> status;
+    // The player's message; with `conflict`, another plugin owns the display or the render options.
     in property <string> detail;
+    in property <bool> conflict;
+    private property <string> status-text: root.status == "no-picture" ? @tr("No picture in the current source")
+        : root.status == "filter" ? @tr("Picture processing failed")
+        : root.status == "view" ? @tr("Display unavailable")
+        : root.status == "shader" ? @tr("Shader failed to load")
+        : root.status == "render-conflict" ? @tr("Render options unavailable")
+        : root.status == "render" ? @tr("Render settings failed")
+        : "";
+    private property <string> detail-text: !root.conflict ? root.detail
+        : root.status == "view" ? @tr("Another plugin controls the display")
+        : @tr("Another plugin controls the render options");
     callback adjust(string, float);
     callback commit(string, float);
     callback reset-field(string);
@@ -381,7 +401,7 @@ export component PictureWindow inherits Window {
     callback retry();
     callback custom-aspect();
     callback shader-list();
-    private property <[string]> tab-names: ["色彩", "效果", "画面", "高级"];
+    private property <[string]> tab-names: [@tr("Color"), @tr("Effects"), @tr("Picture"), @tr("Advanced")];
     VerticalLayout {
         // Page tabs, 31px; the last picked page is remembered by the plugin.
         Rectangle {
@@ -409,19 +429,19 @@ export component PictureWindow inherits Window {
                 VerticalLayout {
                     x: 0; y: 0; width: parent.width; height: parent.height;
                     visible: root.tab-index == 0;
-                    ColorRow { label: "亮度"; value <=> root.brightness; edited(v) => { root.adjust("brightness", v); } committed(v) => { root.commit("brightness", v); } reset => { root.reset-field("brightness"); } }
-                    ColorRow { label: "对比度"; value <=> root.contrast; edited(v) => { root.adjust("contrast", v); } committed(v) => { root.commit("contrast", v); } reset => { root.reset-field("contrast"); } }
-                    ColorRow { label: "饱和度"; value <=> root.saturation; edited(v) => { root.adjust("saturation", v); } committed(v) => { root.commit("saturation", v); } reset => { root.reset-field("saturation"); } }
-                    ColorRow { label: "色调"; value <=> root.hue; edited(v) => { root.adjust("hue", v); } committed(v) => { root.commit("hue", v); } reset => { root.reset-field("hue"); } }
-                    ColorRow { label: "Gamma"; value <=> root.gamma; edited(v) => { root.adjust("gamma", v); } committed(v) => { root.commit("gamma", v); } reset => { root.reset-field("gamma"); } }
+                    ColorRow { label: @tr("Brightness"); value <=> root.brightness; edited(v) => { root.adjust("brightness", v); } committed(v) => { root.commit("brightness", v); } reset => { root.reset-field("brightness"); } }
+                    ColorRow { label: @tr("Contrast"); value <=> root.contrast; edited(v) => { root.adjust("contrast", v); } committed(v) => { root.commit("contrast", v); } reset => { root.reset-field("contrast"); } }
+                    ColorRow { label: @tr("Saturation"); value <=> root.saturation; edited(v) => { root.adjust("saturation", v); } committed(v) => { root.commit("saturation", v); } reset => { root.reset-field("saturation"); } }
+                    ColorRow { label: @tr("Hue"); value <=> root.hue; edited(v) => { root.adjust("hue", v); } committed(v) => { root.commit("hue", v); } reset => { root.reset-field("hue"); } }
+                    ColorRow { label: @tr("Gamma"); value <=> root.gamma; edited(v) => { root.adjust("gamma", v); } committed(v) => { root.commit("gamma", v); } reset => { root.reset-field("gamma"); } }
                     Rectangle { height: 8px; }
                     HorizontalLayout {
                         spacing: 3px;
                         alignment: center;
-                        Button { text: "原始"; width: 69px; clicked => { root.preset("original"); } }
-                        Button { text: "鲜艳"; width: 69px; clicked => { root.preset("vivid"); } }
-                        Button { text: "电影"; width: 69px; clicked => { root.preset("cinema"); } }
-                        Button { text: "柔和"; width: 69px; clicked => { root.preset("soft"); } }
+                        Button { text: @tr("Original"); width: 69px; clicked => { root.preset("original"); } }
+                        Button { text: @tr("Vivid"); width: 69px; clicked => { root.preset("vivid"); } }
+                        Button { text: @tr("Cinema"); width: 69px; clicked => { root.preset("cinema"); } }
+                        Button { text: @tr("Soft"); width: 69px; clicked => { root.preset("soft"); } }
                     }
                     Rectangle { }
                 }
@@ -430,7 +450,7 @@ export component PictureWindow inherits Window {
                     x: 0; y: 0; width: parent.width; height: parent.height;
                     visible: root.tab-index == 1;
                     EffectRow {
-                        label: "高斯模糊";
+                        label: @tr("Blur");
                         maximum: 10;
                         checked <=> root.blur-enabled;
                         value <=> root.blur-strength;
@@ -440,7 +460,7 @@ export component PictureWindow inherits Window {
                         reset => { root.reset-field("blurStrength"); }
                     }
                     EffectRow {
-                        label: "锐化";
+                        label: @tr("Sharpen");
                         checked <=> root.sharpen-enabled;
                         value <=> root.sharpen-strength;
                         toggled(on) => { root.toggle("sharpen", on); }
@@ -449,8 +469,8 @@ export component PictureWindow inherits Window {
                         reset => { root.reset-field("sharpen"); }
                     }
                     EffectRow {
-                        label: "边缘锐化";
-                        tip: "大范围锐化，主要增强轮廓";
+                        label: @tr("Edges");
+                        tip: @tr("Wide-radius sharpening that mainly strengthens outlines");
                         checked <=> root.edge-enabled;
                         value <=> root.edge-strength;
                         toggled(on) => { root.toggle("edge", on); }
@@ -464,7 +484,7 @@ export component PictureWindow inherits Window {
                         alignment: start;
                         Check {
                             width: 65px;
-                            text: "降噪";
+                            text: @tr("Denoise");
                             checked <=> root.denoise-enabled;
                             toggled(on) => { root.toggle("denoise", on); }
                         }
@@ -472,7 +492,7 @@ export component PictureWindow inherits Window {
                             alignment: center;
                             Choice {
                                 width: 60px;
-                                model: ["3D", "渐进", "瞬态"];
+                                model: [@tr("3D"), @tr("Gradual"), @tr("Temporal")];
                                 current-index <=> root.denoise-index;
                                 selected(i) => { root.choose("denoiseMode", i); }
                             }
@@ -489,12 +509,12 @@ export component PictureWindow inherits Window {
                         }
                         VerticalLayout {
                             alignment: center;
-                            Button { text: "默认"; small: true; width: 41px; clicked => { root.reset-field("denoise"); } }
+                            Button { text: @tr("Default"); small: true; width: 41px; clicked => { root.reset-field("denoise"); } }
                         }
                     }
                     EffectRow {
-                        label: "去块";
-                        tip: "小于 50 为弱、50 及以上为强；对低码率 MPEG-2/MPEG-4 效果最明显";
+                        label: @tr("Deblock");
+                        tip: @tr("Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4");
                         checked <=> root.deblock-enabled;
                         value <=> root.deblock-strength;
                         toggled(on) => { root.toggle("deblock", on); }
@@ -503,7 +523,7 @@ export component PictureWindow inherits Window {
                         reset => { root.reset-field("deblock"); }
                     }
                     EffectRow {
-                        label: "消色带";
+                        label: @tr("Deband");
                         checked <=> root.deband-enabled;
                         value <=> root.deband-strength;
                         toggled(on) => { root.toggle("deband", on); }
@@ -517,18 +537,18 @@ export component PictureWindow inherits Window {
                         alignment: start;
                         ToolTipArea {
                             width: 65px;
-                            text: "把帧率提高到 2 倍（最高 60），中间帧由前后两帧混合生成";
+                            text: @tr("Doubles the frame rate (up to 60), blending each in-between frame from its neighbours");
                             Check {
                                 width: 100%;
                                 height: 100%;
-                                text: "倍帧";
+                                text: @tr("Doubling");
                                 checked <=> root.blend-enabled;
                                 toggled(on) => { root.toggle("frameBlend", on); }
                             }
                         }
                         Text {
                             width: 84px;
-                            text: root.blend-note;
+                            text: root.blend-enough ? @tr("Rate already high enough") : "";
                             color: Theme.text-dim;
                             font-size: Theme.font-xs;
                             vertical-alignment: center;
@@ -536,11 +556,11 @@ export component PictureWindow inherits Window {
                         }
                         ToolTipArea {
                             width: 100px;
-                            text: root.render-ready ? "GPU 按显示器刷新率插帧；与倍帧互斥" : root.render-reason;
+                            text: root.render-ready ? @tr("GPU interpolation to the display refresh rate; excludes frame doubling") : root.render-reason;
                             Check {
                                 width: 100%;
                                 height: 100%;
-                                text: "运动补偿";
+                                text: @tr("Interpolation");
                                 enabled: root.render-ready;
                                 checked <=> root.interpolation;
                                 toggled(on) => { root.toggle("interpolation", on); }
@@ -556,13 +576,13 @@ export component PictureWindow inherits Window {
                         height: 24px;
                         spacing: 6px;
                         alignment: start;
-                        Label { text: "翻转"; }
+                        Label { text: @tr("Flip"); }
                         HorizontalLayout {
                             spacing: 3px;
                             padding-top: 1px;
                             padding-bottom: 1px;
                             Toggle {
-                                text: "上下";
+                                text: @tr("Vert.");
                                 checked: root.flip-v;
                                 clicked => {
                                     root.flip-v = !root.flip-v;
@@ -570,7 +590,7 @@ export component PictureWindow inherits Window {
                                 }
                             }
                             Toggle {
-                                text: "左右";
+                                text: @tr("Horiz.");
                                 checked: root.flip-h;
                                 clicked => {
                                     root.flip-h = !root.flip-h;
@@ -583,7 +603,7 @@ export component PictureWindow inherits Window {
                         height: 24px;
                         spacing: 6px;
                         alignment: start;
-                        Label { text: "旋转"; }
+                        Label { text: @tr("Rotate"); }
                         HorizontalLayout {
                             spacing: 3px;
                             padding-top: 1px;
@@ -602,12 +622,12 @@ export component PictureWindow inherits Window {
                         height: 24px;
                         spacing: 6px;
                         alignment: start;
-                        Label { text: "裁剪/拉伸"; }
+                        Label { text: @tr("Crop/stretch"); }
                         VerticalLayout {
                             alignment: center;
                             Choice {
                                 width: 72px;
-                                model: ["不使用", "拉伸", "裁剪"];
+                                model: [@tr("None"), @tr("Stretch"), @tr("Crop")];
                                 current-index <=> root.reframe-index;
                                 selected(i) => { root.choose("reframe", i); }
                             }
@@ -626,7 +646,7 @@ export component PictureWindow inherits Window {
                         height: 24px;
                         spacing: 6px;
                         alignment: start;
-                        Label { text: "宽高比"; }
+                        Label { text: @tr("Aspect ratio"); }
                         VerticalLayout {
                             alignment: center;
                             Choice {
@@ -642,7 +662,7 @@ export component PictureWindow inherits Window {
                             ToolTipArea {
                                 width: 21px;
                                 height: 21px;
-                                text: "自定义比例…";
+                                text: @tr("Custom Aspect Ratio…");
                                 Toggle { text: "…"; width: 21px; height: 21px; clicked => { root.custom-aspect(); } }
                             }
                         }
@@ -651,13 +671,13 @@ export component PictureWindow inherits Window {
                         height: 24px;
                         spacing: 6px;
                         alignment: start;
-                        Label { text: "显示"; }
+                        Label { text: @tr("Display"); }
                         VerticalLayout {
                             alignment: center;
                             Choice {
                                 width: 154px;
                                 window-height: root.height;
-                                model: ["保持宽高比", "不保持宽高比", "填满窗口"];
+                                model: [@tr("Keep Aspect Ratio"), @tr("Ignore Aspect Ratio"), @tr("Fill Window")];
                                 current-index <=> root.fit-index;
                                 selected(i) => { root.choose("fit", i); }
                             }
@@ -665,11 +685,11 @@ export component PictureWindow inherits Window {
                     }
                     ToolTipArea {
                         height: 24px;
-                        text: root.zoom-text;
+                        text: @tr("Zoom {}%", root.zoom-percent);
                         HorizontalLayout {
                             spacing: 6px;
                             alignment: start;
-                            Label { text: "缩放"; }
+                            Label { text: @tr("Zoom"); }
                             Slider {
                                 width: 154px;
                                 panel: true;
@@ -681,7 +701,7 @@ export component PictureWindow inherits Window {
                             }
                             VerticalLayout {
                                 alignment: center;
-                                Button { text: "默认"; small: true; width: 41px; clicked => { root.reset-field("zoom"); } }
+                                Button { text: @tr("Default"); small: true; width: 41px; clicked => { root.reset-field("zoom"); } }
                             }
                         }
                     }
@@ -695,12 +715,12 @@ export component PictureWindow inherits Window {
                         height: 24px;
                         spacing: 6px;
                         alignment: start;
-                        Label { text: "反交错"; }
+                        Label { text: @tr("Deinterlace"); }
                         VerticalLayout {
                             alignment: center;
                             Choice {
                                 width: 90px;
-                                model: ["自动", "总是使用", "不使用"];
+                                model: [@tr("Auto"), @tr("Always"), @tr("Never")];
                                 current-index <=> root.deinterlace-index;
                                 selected(i) => { root.choose("deinterlace", i); }
                             }
@@ -709,7 +729,7 @@ export component PictureWindow inherits Window {
                             alignment: center;
                             Choice {
                                 width: 104px;
-                                model: ["按帧", "按场（倍帧率）"];
+                                model: [@tr("By Frame"), @tr("By Field (Double Rate)")];
                                 current-index <=> root.output-index;
                                 selected(i) => { root.choose("output", i); }
                             }
@@ -718,18 +738,18 @@ export component PictureWindow inherits Window {
                     // E16: tone mapping (only HDR sources are mapped) + 目标亮度 100–400 nits.
                     ToolTipArea {
                         height: 24px;
-                        text: root.render-ready ? "HDR 片源（PQ / HLG）在 SDR 显示器上的色调映射；滑块为目标亮度" : root.render-reason;
+                        text: root.render-ready ? @tr("Tone mapping of HDR sources (PQ / HLG) on SDR displays; the slider sets the target brightness") : root.render-reason;
                         HorizontalLayout {
                             spacing: 6px;
                             alignment: start;
-                            Label { text: "HDR"; color: root.render-ready ? Theme.text : Theme.text-dim; }
+                            Label { text: @tr("HDR"); color: root.render-ready ? Theme.text : Theme.text-dim; }
                             VerticalLayout {
                                 alignment: center;
                                 Choice {
                                     width: 90px;
                                     enabled: root.render-ready;
                                     window-height: root.height;
-                                    model: ["自动", "关", "BT.2390", "Hable", "Mobius", "Reinhard", "裁剪"];
+                                    model: [@tr("Auto"), @tr("Off"), "BT.2390", "Hable", "Mobius", "Reinhard", @tr("Clip")];
                                     current-index <=> root.tone-index;
                                     selected(i) => { root.choose("toneMapping", i); }
                                 }
@@ -753,7 +773,7 @@ export component PictureWindow inherits Window {
                         Label { text: ""; }
                         Text {
                             width: 214px;
-                            text: root.render-ready ? root.hdr-note : root.render-reason;
+                            text: !root.render-ready ? root.render-reason : root.not-hdr ? @tr("Target {} nits · Not an HDR source", root.peak-nits) : @tr("Target {} nits", root.peak-nits);
                             color: Theme.text-dim;
                             font-size: Theme.font-xs;
                             vertical-alignment: center;
@@ -763,22 +783,22 @@ export component PictureWindow inherits Window {
                     // E17: switch + count + the list window (usable without GPU rendering, to arrange it beforehand).
                     ToolTipArea {
                         height: 24px;
-                        text: root.render-ready ? "mpv 用户着色器（.glsl），按列表顺序执行" : root.render-reason;
+                        text: root.render-ready ? @tr("mpv user shaders (.glsl), run in list order") : root.render-reason;
                         HorizontalLayout {
                             spacing: 6px;
                             alignment: start;
-                            Label { text: "着色器"; color: root.render-ready ? Theme.text : Theme.text-dim; }
+                            Label { text: @tr("Shaders"); color: root.render-ready ? Theme.text : Theme.text-dim; }
                             Check {
                                 width: 50px;
-                                text: "启用";
+                                text: @tr("Enable");
                                 enabled: root.render-ready;
                                 checked <=> root.shaders-enabled;
                                 toggled(on) => { root.toggle("shaders", on); }
                             }
-                            Text { width: 70px; text: root.shader-count; color: Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; overflow: elide; }
+                            Text { width: 70px; text: @tr("{n} shader" | "{n} shaders" % root.shader-count); color: Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; overflow: elide; }
                             VerticalLayout {
                                 alignment: center;
-                                Button { text: "列表…"; small: true; width: 50px; clicked => { root.shader-list(); } }
+                                Button { text: @tr("List…"); small: true; width: 50px; clicked => { root.shader-list(); } }
                             }
                         }
                     }
@@ -789,14 +809,14 @@ export component PictureWindow inherits Window {
                 height: 22px;
                 spacing: 6px;
                 Check {
-                    text: "启用画面效果";
+                    text: @tr("Enable picture effects");
                     checked <=> root.effect-enabled;
                     toggled(on) => { root.toggle-effect(on); }
                 }
                 ToolTipArea {
-                    text: root.detail;
+                    text: root.detail-text;
                     Text {
-                        text: root.status;
+                        text: root.status-text;
                         color: Theme.accent;
                         font-size: Theme.font-body;
                         horizontal-alignment: right;
@@ -806,7 +826,7 @@ export component PictureWindow inherits Window {
                 }
                 if root.failed: VerticalLayout {
                     alignment: center;
-                    Button { text: "重试"; small: true; width: 41px; clicked => { root.retry(); } }
+                    Button { text: @tr("Retry"); small: true; width: 41px; clicked => { root.retry(); } }
                 }
             }
         }

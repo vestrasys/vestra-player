@@ -17,14 +17,13 @@ import {
   ROTATIONS,
   TABS,
   aspectIndex,
-  aspectLabel,
+  aspectMessage,
   blendFps,
   centred,
   clamp,
   defaultEffects,
   defaultLook,
   defaults,
-  denoiseLabels,
   droppedTooMany,
   isHdr,
   isShaderName,
@@ -34,7 +33,7 @@ import {
   parseAspect,
   peakOf,
   presets,
-  reframeLabel,
+  reframeMessage,
   serialize,
   upright,
 } from "./model.ts";
@@ -42,26 +41,94 @@ import type { DeinterlaceMode, DeinterlaceOutput, Fit, Frame, FrameCount, Look, 
 
 type Color = "brightness" | "contrast" | "saturation" | "hue" | "gamma";
 const colors: readonly Color[] = ["brightness", "contrast", "saturation", "hue", "gamma"];
-/** Keyboard steps (W/E, R/T, Y/U; 色调 I/O): label, field, keys for −1 and +1, menu order. */
-const steps: readonly [string, Color, string, string, number][] = [
-  ["亮度", "brightness", "W", "E", 442],
-  ["对比度", "contrast", "R", "T", 444],
-  ["饱和度", "saturation", "Y", "U", 446],
-  ["色调", "hue", "I", "O", 448],
-];
+/**
+ * Keyboard steps (W/E, R/T, Y/U; 色调 I/O): field, keys for −1 and +1, menu order, the menu
+ * titles and the OSD templates (the new value as `{}`; `…Off` while 启用画面效果 is off).
+ */
+const steps = [
+  {
+    field: "brightness",
+    keys: ["W", "E"],
+    order: 442,
+    down: { title: "Brightness -1%", osd: "Brightness -1% ({}%)", off: "Brightness -1% ({}%) (picture effects off)" },
+    up: { title: "Brightness +1%", osd: "Brightness +1% ({}%)", off: "Brightness +1% ({}%) (picture effects off)" },
+  },
+  {
+    field: "contrast",
+    keys: ["R", "T"],
+    order: 444,
+    down: { title: "Contrast -1%", osd: "Contrast -1% ({}%)", off: "Contrast -1% ({}%) (picture effects off)" },
+    up: { title: "Contrast +1%", osd: "Contrast +1% ({}%)", off: "Contrast +1% ({}%) (picture effects off)" },
+  },
+  {
+    field: "saturation",
+    keys: ["Y", "U"],
+    order: 446,
+    down: { title: "Saturation -1%", osd: "Saturation -1% ({}%)", off: "Saturation -1% ({}%) (picture effects off)" },
+    up: { title: "Saturation +1%", osd: "Saturation +1% ({}%)", off: "Saturation +1% ({}%) (picture effects off)" },
+  },
+  {
+    field: "hue",
+    keys: ["I", "O"],
+    order: 448,
+    down: { title: "Hue -1%", osd: "Hue -1% ({}%)", off: "Hue -1% ({}%) (picture effects off)" },
+    up: { title: "Hue +1%", osd: "Hue +1% ({}%)", off: "Hue +1% ({}%) (picture effects off)" },
+  },
+] as const satisfies readonly { field: Color; keys: readonly [string, string]; order: number; down: StepTexts; up: StepTexts }[];
+type StepTexts = { title: string; osd: string; off: string };
+type Step = (typeof steps)[number]["up" | "down"];
 /** Effect rows with one 0–100 strength; their filters rebuild, so a drag commits on release. */
 type Strength = "sharpen" | "edge" | "denoise" | "deblock" | "deband";
 const strengths: readonly Strength[] = ["sharpen", "edge", "denoise", "deblock", "deband"];
+/** 图像处理 switches with a strength: menu title, key, OSD on and off; `toggle` names the setting. */
+const EFFECTS = [
+  { id: "video.sharpen", toggle: "sharpen", title: "Sharpen", group: "video-sharpness", bindings: ["Ctrl+R"], on: "Sharpen: on", off: "Sharpen: off" },
+  { id: "video.edge", toggle: "edge", title: "Edge Sharpen", group: "video-sharpness", bindings: [], on: "Edge sharpen: on", off: "Edge sharpen: off" },
+  { id: "video.deblock", toggle: "deblock", title: "Deblock", group: "video-cleanup", bindings: ["Ctrl+H"], on: "Deblock: on", off: "Deblock: off" },
+  { id: "video.deband", toggle: "deband", title: "Deband", group: "video-cleanup", bindings: [], on: "Deband: on", off: "Deband: off" },
+  { id: "video.denoise.d3", toggle: "d3", title: "3D Denoise", group: "video-cleanup", bindings: ["Ctrl+N"], on: "3D denoise: on", off: "3D denoise: off" },
+  {
+    id: "video.denoise.gradual",
+    toggle: "gradual",
+    title: "Gradual Denoise",
+    group: "video-cleanup",
+    bindings: [],
+    on: "Gradual denoise: on",
+    off: "Gradual denoise: off",
+  },
+  {
+    id: "video.denoise.temporal",
+    toggle: "temporal",
+    title: "Temporal Denoise",
+    group: "video-cleanup",
+    bindings: ["Ctrl+M"],
+    on: "Temporal denoise: on",
+    off: "Temporal denoise: off",
+  },
+] as const;
+type Switch = (typeof EFFECTS)[number];
+/** 图像旋转 menu titles. */
+const ROTATION_TITLES = [
+  { degrees: 0, title: "No Rotation" },
+  { degrees: 90, title: "90°" },
+  { degrees: 180, title: "180°" },
+  { degrees: 270, title: "270°" },
+] as const satisfies readonly { degrees: Rotation; title: string }[];
 /** E16, E17 and 运动补偿 are GPU render options; software rendering (and Windows for now) refuses them. */
-const SOFTWARE = "需要 GPU 渲染（当前为软件渲染）";
-const NOT_HDR = "当前片源不是 HDR";
+const SOFTWARE = "Needs GPU rendering (currently software rendering)";
 /** E18: the source rate is read this long after the chain without frameBlend is in place, this many times at most. */
 const MEASURE_DELAY_MS = 400;
 const MEASURE_TRIES = 8;
-const ASPECT_FORMAT = "格式：16:9 或 2.39";
-const percent = (n: number) => `${Math.round(n * 100)}%`;
+/** 帧位 偏移 OSD per direction (帧位调整：向右位移 (1%, 0%)). */
+const PAN = {
+  right: "Framing: move right ({}%, {}%)",
+  left: "Framing: move left ({}%, {}%)",
+  up: "Framing: move up ({}%, {}%)",
+  down: "Framing: move down ({}%, {}%)",
+} as const;
+const percent = (n: number) => Math.round(n * 100);
+/** The value of a colour step as shown: +5, 0, -3 (data in an OSD template). */
 const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`);
-const onOff = (on: boolean) => (on ? "开" : "关");
 /** A timer that does not keep the plugin process alive. */
 const pause = (ms: number) => new Promise<void>((done) => void setTimeout(done, ms).unref?.());
 
@@ -125,8 +192,11 @@ export default async function activate(plugin: Plugin) {
     const announce = renderAnnounce;
     renderAnnounce = false;
     // A compile error arrives after `applied`, when the window is usually closed: always said.
-    if (shaderFailed(status.error)) osd("着色器载入失败");
-    else if (announce && status.error.code !== "unsupported") osd(`渲染选项不可用：${renderReason(status.error)}`);
+    if (shaderFailed(status.error)) shown(plugin.osd.show("Shader failed to load"));
+    else if (announce && status.error.code === "conflict") shown(plugin.osd.show("Render options unavailable: another plugin controls them"));
+    else if (announce && status.error.code !== "unsupported")
+      // The player's message, as before (e.g. 渲染选项不可用：<reason>).
+      shown(plugin.osd.show("Render options unavailable: {}", [status.error.message]));
   });
 
   // E16: the source's transfer (`stats().video.transfer`), read once per source when it is ready.
@@ -226,7 +296,7 @@ export default async function activate(plugin: Plugin) {
     }
   };
   /** Best-effort feedback: a missing OSD (headless) must not look like a picture failure. */
-  const osd = (text: string) => void plugin.osd.show(text).catch(() => undefined);
+  const shown = (message: Promise<void>) => void message.catch(() => undefined);
   const effects = look.effects;
   const toggleOf = (field: Strength): Toggle =>
     field === "denoise" ? effects.denoise[effects.denoise.shown] : effects[field];
@@ -248,16 +318,12 @@ export default async function activate(plugin: Plugin) {
       debandEnabled: effects.deband.on,
       debandStrength: effects.deband.strength,
       blendEnabled: effects.frameBlend,
-      blendNote: blendEnough() ? "当前帧率已足够" : "",
-      aspectNames: [
-        "默认（按来源）",
-        ...RATIOS.map((r) => r.label),
-        ...(look.display.customAspect ? [`自定义（${look.display.customAspect}）`] : []),
-      ],
+      blendEnough: blendEnough(),
+      customRatio: look.display.customAspect,
       aspectIndex: aspectIndex(look.display),
       fitIndex: FITS.findIndex((f) => f.id === look.display.fit),
       zoomLevel: Math.log2(frame.zoom),
-      zoomText: `缩放 ${percent(frame.zoom)}`,
+      zoomPercent: percent(frame.zoom),
       flipV: look.geometry.flipV,
       flipH: look.geometry.flipH,
       rotateIndex: ROTATIONS.indexOf(look.geometry.rotate),
@@ -266,12 +332,12 @@ export default async function activate(plugin: Plugin) {
       deinterlaceIndex: DEINTERLACE_MODES.findIndex((m) => m.id === look.deinterlace.mode),
       outputIndex: DEINTERLACE_OUTPUTS.findIndex((m) => m.id === look.deinterlace.output),
       renderReady: gpuReady(),
-      renderReason: SOFTWARE,
       toneIndex: TONE_MAPPINGS.findIndex((t) => t.id === look.render.toneMapping),
       targetPeak: look.render.targetPeak,
-      hdrNote: `目标亮度 ${look.render.targetPeak} 尼特${gpuReady() && notHdr() ? ` · ${NOT_HDR}` : ""}`,
+      peakNits: look.render.targetPeak,
+      notHdr: notHdr(),
       shadersEnabled: look.render.shadersEnabled,
-      shaderCount: `${look.render.shaders.length} 个着色器`,
+      shaderCount: look.render.shaders.length,
       interpolation: look.render.interpolation,
       tabIndex: tab,
       effectEnabled: enabled,
@@ -387,7 +453,9 @@ export default async function activate(plugin: Plugin) {
     if (status.state === "applied") announce = false;
     if (status.state !== "failed" || !announce) return;
     announce = false;
-    osd(`画面显示不可用：${viewReason(status.error)}`);
+    if (status.error.code === "conflict") shown(plugin.osd.show("Display unavailable: another plugin controls the display"));
+    // The player's message, as before (画面显示不可用：<reason>).
+    else shown(plugin.osd.show("Display unavailable: {}", [status.error.message]));
   });
   const displayChanged = (user = false) => {
     persist();
@@ -396,30 +464,31 @@ export default async function activate(plugin: Plugin) {
   const setAspect = (aspect: number | null) => {
     look.display.aspect = aspect;
     displayChanged(true);
-    osd(`宽高比：${aspectLabel(look.display)}`);
+    const message = aspectMessage(look.display);
+    shown(plugin.osd.show(message.text, message.args));
   };
   const setFit = (fit: Fit) => {
     look.display.fit = fit;
     displayChanged(true);
-    osd(FITS.find((f) => f.id === fit)!.label);
+    shown(plugin.osd.show(FITS.find((f) => f.id === fit)!.label));
   };
   const zoomOf = (zoom: number) => clamp(Math.round(zoom * 10000) / 10000, 0.25, 4);
   const zoomBy = (factor: number) => {
     frame.zoom = zoomOf(frame.zoom * factor);
     showView(true);
-    osd(`帧位调整：${factor > 1 ? "增加" : "减少"}尺寸 (${percent(frame.zoom)})`);
+    shown(plugin.osd.show(factor > 1 ? "Framing: larger ({}%)" : "Framing: smaller ({}%)", [percent(frame.zoom)]));
   };
-  const panBy = (dx: number, dy: number, direction: string) => {
+  const panBy = (dx: number, dy: number, text: (typeof PAN)[keyof typeof PAN]) => {
     const pan = (n: number, d: number) => clamp(Math.round((n + d) * 100) / 100, -1, 1);
     frame.panX = pan(frame.panX, dx);
     frame.panY = pan(frame.panY, dy);
     showView(true);
-    osd(`帧位调整：向${direction}位移 (${percent(frame.panX)}, ${percent(frame.panY)})`);
+    shown(plugin.osd.show(text, [percent(frame.panX), percent(frame.panY)]));
   };
   const resetFrame = (centreOnly: boolean) => {
     frame = centreOnly ? { ...frame, panX: 0, panY: 0 } : centred();
     showView(true);
-    osd(centreOnly ? "帧位调整：位移到中间" : "帧位调整：重置");
+    shown(plugin.osd.show(centreOnly ? "Framing: centered" : "Framing: reset"));
   };
   showView();
 
@@ -427,7 +496,7 @@ export default async function activate(plugin: Plugin) {
   let draft = "";
   aspectWindow.bind(() => {
     const valid = parseAspect(draft) !== null;
-    return { valid, error: draft.trim() === "" || valid ? "" : ASPECT_FORMAT };
+    return { valid, invalid: draft.trim() !== "" && !valid };
   });
   aspectWindow.on("edited", (text: string) => {
     draft = String(text);
@@ -459,54 +528,56 @@ export default async function activate(plugin: Plugin) {
   };
 
   // ---------------------------------------------------------------- actions (menu and keys)
-  const offNote = () => (enabled ? "" : "（画面效果已关闭）");
   const reset = () => {
     look.picture = { ...defaults };
     change();
-    osd("画面调节已复位");
+    shown(plugin.osd.show("Picture reset"));
   };
-  const step = (label: string, field: Color, delta: number) => {
+  const step = (texts: Step, field: Color, delta: number) => {
     look.picture[field] = clamp(Math.round(look.picture[field]) + delta, -100, 100);
     change();
-    osd(`${label} ${delta > 0 ? "+" : "-"}1% (${signed(look.picture[field])}%)${offNote()}`);
+    shown(plugin.osd.show(enabled ? texts.osd : texts.off, [signed(look.picture[field])]));
   };
-  const flip = (field: "flipV" | "flipH", label: string) => {
+  const flip = (field: "flipV" | "flipH") => {
     look.geometry[field] = !look.geometry[field];
     apply();
-    osd(`${label}: ${onOff(look.geometry[field])}`);
+    const on = look.geometry[field];
+    if (field === "flipV") shown(plugin.osd.show(on ? "Flip vertically: on" : "Flip vertically: off"));
+    else shown(plugin.osd.show(on ? "Flip horizontally: on" : "Flip horizontally: off"));
   };
   const rotate = (degrees: Rotation) => {
     look.geometry.rotate = degrees;
     apply();
-    osd(`图像旋转: ${degrees === 0 ? "不旋转" : `${degrees}°`}`);
+    shown(degrees === 0 ? plugin.osd.show("Rotation: none") : plugin.osd.show("Rotation: {}°", [degrees]));
   };
-  const switchEffect = (toggle: Toggle, label: string) => {
+  const switchEffect = (toggle: Toggle, texts: Switch) => {
     toggle.on = !toggle.on;
     change();
-    osd(`${label}: ${onOff(toggle.on)}`);
+    shown(plugin.osd.show(toggle.on ? texts.on : texts.off));
   };
   const setDeinterlace = (mode: DeinterlaceMode) => {
     look.deinterlace.mode = mode;
     change();
-    osd(`反交错: ${DEINTERLACE_MODES.find((m) => m.id === mode)!.label}`);
+    shown(plugin.osd.show(DEINTERLACE_MODES.find((m) => m.id === mode)!.osd));
   };
   const setOutput = (output: DeinterlaceOutput) => {
     look.deinterlace.output = output;
     change();
-    osd(`反交错输出: ${DEINTERLACE_OUTPUTS.find((m) => m.id === output)!.label}`);
+    shown(plugin.osd.show(DEINTERLACE_OUTPUTS.find((m) => m.id === output)!.osd));
   };
   const setReframe = (mode: ReframeMode, ratio = look.reframe.ratio) => {
     look.reframe.mode = mode;
     look.reframe.ratio = ratio;
     change();
-    osd(`裁剪/拉伸: ${reframeLabel(look.reframe)}`);
+    const message = reframeMessage(look.reframe);
+    shown(plugin.osd.show(message.text, message.args));
   };
   const move = (dx: number, dy: number) => {
     const r = look.reframe;
     r.x = dx === 0 && dy === 0 ? 50 : clamp(r.x + dx, 0, 100);
     r.y = dx === 0 && dy === 0 ? 50 : clamp(r.y + dy, 0, 100);
     change();
-    osd(`裁剪位置 (${r.x}%, ${r.y}%)`);
+    shown(plugin.osd.show("Crop position ({}%, {}%)", [r.x, r.y]));
   };
 
   // E18: 倍帧 and 运动补偿 exclude each other; switching one on switches the other off and says so.
@@ -518,7 +589,18 @@ export default async function activate(plugin: Plugin) {
       applyRender();
     }
     change();
-    if (menu || excluded) osd(`倍帧: ${onOff(on)}${excluded ? "（已关闭运动补偿）" : on ? offNote() : ""}`);
+    if (menu || excluded)
+      shown(
+        plugin.osd.show(
+          !on
+            ? "Frame doubling: off"
+            : excluded
+              ? "Frame doubling: on (motion interpolation turned off)"
+              : enabled
+                ? "Frame doubling: on"
+                : "Frame doubling: on (picture effects off)",
+        ),
+      );
   };
   const setInterpolation = (on: boolean, menu: boolean) => {
     look.render.interpolation = on;
@@ -528,25 +610,32 @@ export default async function activate(plugin: Plugin) {
       apply();
     }
     renderChanged(true);
-    if (menu || excluded) osd(`运动补偿: ${onOff(on)}${excluded ? "（已关闭倍帧）" : ""}`);
+    if (menu || excluded)
+      shown(
+        plugin.osd.show(!on ? "Motion interpolation: off" : excluded ? "Motion interpolation: on (frame doubling turned off)" : "Motion interpolation: on"),
+      );
   };
   // E16: the options only act on HDR sources; on a known SDR source the OSD says so.
   const setTone = (id: ToneMapping) => {
     look.render.toneMapping = id;
     renderChanged(true);
-    osd(`HDR 色调映射: ${TONE_MAPPINGS.find((t) => t.id === id)!.label}${notHdr() ? `（${NOT_HDR}）` : ""}`);
+    const row = TONE_MAPPINGS.find((t) => t.id === id)!;
+    shown(plugin.osd.show(notHdr() ? row.sdr : row.osd));
   };
   const switchPeak = () => {
     look.render.peakDetect = !look.render.peakDetect;
     renderChanged(true);
-    osd(`动态峰值检测: ${onOff(look.render.peakDetect)}`);
+    shown(plugin.osd.show(look.render.peakDetect ? "Dynamic peak detection: on" : "Dynamic peak detection: off"));
   };
   // E17: the list is file names in `<dataDirectory>/shaders/`; the switch keeps the list.
   const setShaders = (on: boolean, menu: boolean) => {
     look.render.shadersEnabled = on;
     renderChanged(true);
     const count = look.render.shaders.length;
-    if (menu) osd(!on ? "像素着色: 关" : count === 0 ? "像素着色: 没有着色器" : `像素着色: 开 (${count})`);
+    if (!menu) return;
+    if (!on) shown(plugin.osd.show("Pixel shaders: off"));
+    else if (count === 0) shown(plugin.osd.show("Pixel shaders: no shaders"));
+    else shown(plugin.osd.show("Pixel shaders: on ({})", [count]));
   };
 
   // A new source starts upright and unflipped, silently.
@@ -576,8 +665,8 @@ export default async function activate(plugin: Plugin) {
   // E10 field output and E18 倍帧 raise the frame rate on the CPU: when more than 5 % of the
   // frames in 5 seconds are dropped, each says so once per source.
   const heavy = [
-    { active: () => enabled && look.deinterlace.mode !== "off" && look.deinterlace.output === "field", text: "反交错按场输出丢帧较多，可改为按帧" },
-    { active: () => sentBlend !== null, text: "倍帧丢帧较多，建议关闭" },
+    { id: "field", active: () => enabled && look.deinterlace.mode !== "off" && look.deinterlace.output === "field" },
+    { id: "blend", active: () => sentBlend !== null },
   ].map((item) => ({ ...item, warned: null as number | null }));
   let counted: (FrameCount & { source: number; watching: string }) | null = null;
   const monitor = setInterval(async () => {
@@ -589,10 +678,19 @@ export default async function activate(plugin: Plugin) {
     }
     const stats = await player.stats().catch(() => null);
     if (!stats || stats.video === null || stats.framesDropped === null) return;
-    const now = { source: state.sourceId, shown: stats.framesShown, dropped: stats.framesDropped, watching: watching.map((h) => h.text).join() };
+    const now = { source: state.sourceId, shown: stats.framesShown, dropped: stats.framesDropped, watching: watching.map((h) => h.id).join() };
     if (counted && counted.source === now.source && counted.watching === now.watching && droppedTooMany(counted, now)) {
       for (const h of watching) h.warned = now.source;
-      osd(watching.map((h) => h.text).join("；"));
+      const said = (id: string) => watching.some((h) => h.id === id);
+      shown(
+        plugin.osd.show(
+          said("field") && said("blend")
+            ? "Many frames dropped with field output, try frame output; many dropped with frame doubling, consider turning it off"
+            : said("field")
+              ? "Many frames dropped with field output, try frame output"
+              : "Many frames dropped with frame doubling, consider turning it off",
+        ),
+      );
     }
     counted = now;
   }, 5000);
@@ -620,7 +718,7 @@ export default async function activate(plugin: Plugin) {
   };
   const addShaderName = (name: string) => {
     if (!look.render.shaders.includes(name) && look.render.shaders.length >= MAX_SHADERS) {
-      osd(`最多 ${MAX_SHADERS} 个着色器`);
+      shown(plugin.osd.show("At most {} shaders", [MAX_SHADERS]));
       return false;
     }
     editShaders((list) => {
@@ -631,16 +729,17 @@ export default async function activate(plugin: Plugin) {
   };
   /** 添加…: any .glsl file, copied into the shader folder so moving the original does not break the list. */
   const addShader = async () => {
-    const path = await plugin.dialogs.openFile({ title: "添加着色器（.glsl）" }).catch(() => null);
+    const path = await plugin.dialogs.openFile({ title: "Add Shader (.glsl)" }).catch(() => null);
     if (path === null) return;
     const name = basename(path);
-    if (!isShaderName(name)) return osd("只能添加 .glsl 或 .hook 着色器文件");
-    if (!look.render.shaders.includes(name) && look.render.shaders.length >= MAX_SHADERS) return osd(`最多 ${MAX_SHADERS} 个着色器`);
+    if (!isShaderName(name)) return shown(plugin.osd.show("Only .glsl or .hook shader files can be added"));
+    if (!look.render.shaders.includes(name) && look.render.shaders.length >= MAX_SHADERS)
+      return shown(plugin.osd.show("At most {} shaders", [MAX_SHADERS]));
     try {
       await mkdir(shaderFolder, { recursive: true });
       if (resolve(path) !== resolve(shaderPath(name))) await copyFile(path, shaderPath(name));
     } catch (error) {
-      return osd(`着色器复制失败：${error instanceof Error ? error.message : String(error)}`);
+      return shown(plugin.osd.show("Could not copy the shader: {}", [error instanceof Error ? error.message : String(error)]));
     }
     addShaderName(name);
   };
@@ -649,7 +748,7 @@ export default async function activate(plugin: Plugin) {
       await mkdir(shaderFolder, { recursive: true });
       await plugin.system.openPath(shaderFolder);
     } catch (error) {
-      osd(`无法打开着色器文件夹：${error instanceof Error ? error.message : String(error)}`);
+      shown(plugin.osd.show("Could not open the shader folder: {}", [error instanceof Error ? error.message : String(error)]));
     }
   };
   /** 重新载入着色器: rescan the folder, drop names whose file is gone, submit the list again. */
@@ -657,18 +756,24 @@ export default async function activate(plugin: Plugin) {
     const files = await refreshShaders();
     const missing = look.render.shaders.filter((name) => !files.includes(name));
     editShaders((list) => list.splice(0, list.length, ...list.filter((name) => files.includes(name))), true);
-    osd(missing.length > 0 ? `已移除不存在的着色器：${missing.join("、")}` : `已重新载入着色器 (${look.render.shaders.length})`);
+    // TRANSLATORS: {} is a list of file names, separated by "、" for now (R2-video-1: list format by language).
+    if (missing.length > 0) shown(plugin.osd.show("Removed missing shaders: {}", [missing.join("、")]));
+    else shown(plugin.osd.show("Shaders reloaded ({})", [look.render.shaders.length]));
   };
   const openShaders = () => {
     void refreshShaders();
     void shadersWindow.show();
   };
+  // Data only: the window words the heading, the missing files and the note.
   shadersWindow.bind(() => ({
-    names: look.render.shaders.map((name) => (existsSync(shaderPath(name)) ? name : `${name}（文件不存在）`)),
+    names: look.render.shaders,
+    missing: look.render.shaders.map((name) => !existsSync(shaderPath(name))),
     selected: picked,
     available,
-    heading: `已启用 ${look.render.shaders.length}/${MAX_SHADERS}（按顺序执行）`,
-    note: !gpuReady() ? SOFTWARE : look.render.shadersEnabled ? "" : "「使用着色器」未打开",
+    count: look.render.shaders.length,
+    max: MAX_SHADERS,
+    renderReady: gpuReady(),
+    shadersEnabled: look.render.shadersEnabled,
   }));
   shadersWindow.on("select", (index: number) => {
     picked = Number.isInteger(index) && index >= 0 && index < look.render.shaders.length ? index : -1;
@@ -698,25 +803,50 @@ export default async function activate(plugin: Plugin) {
   });
   shadersWindow.on("openFolder", () => void openShaderFolder());
 
-  // ---------------------------------------------------------------- menu 视频 ▶
+  // ---------------------------------------------------------------- menu 视频 ▶ (@video)
   const { commands } = plugin;
   // 402 像素着色 (E17, E16): GPU render options, disabled with the reason under software rendering.
   // The list and the folder stay usable, so shaders can be arranged beforehand.
   const gpu = { enabled: gpuReady, reason: gpuReason };
-  const pixel = (id: string, path: string[], group: string, extra: Omit<Parameters<typeof commands.add>[0], "id" | "path" | "order" | "group">) =>
-    commands.add({ id, path: ["视频", "像素着色", ...path], order: 402, group, ...extra });
-  pixel("video.shader.use", ["使用着色器"], "video-source", { bindings: ["Shift+P"], checked: () => look.render.shadersEnabled, ...gpu, run: () => setShaders(!look.render.shadersEnabled, true) });
-  pixel("video.shader.list", ["着色器列表…"], "video-source", { run: openShaders });
-  pixel("video.shader.folder", ["打开着色器文件夹"], "video-source", { run: openShaderFolder });
-  pixel("video.shader.reload", ["重新载入着色器"], "video-source", { ...gpu, run: reloadShaders });
+  const pixel = { order: 402 } as const;
+  commands.add({
+    id: "video.shader.use",
+    path: ["@video", "Pixel Shaders", "Use Shaders"],
+    ...pixel,
+    group: "video-source",
+    bindings: ["Shift+P"],
+    checked: () => look.render.shadersEnabled,
+    ...gpu,
+    run: () => setShaders(!look.render.shadersEnabled, true),
+  });
+  commands.add({ id: "video.shader.list", path: ["@video", "Pixel Shaders", "Shader List…"], ...pixel, group: "video-source", run: openShaders });
+  commands.add({ id: "video.shader.folder", path: ["@video", "Pixel Shaders", "Open Shader Folder"], ...pixel, group: "video-source", run: openShaderFolder });
+  commands.add({ id: "video.shader.reload", path: ["@video", "Pixel Shaders", "Reload Shaders"], ...pixel, group: "video-source", ...gpu, run: reloadShaders });
   for (const { id, label } of TONE_MAPPINGS)
-    pixel(`video.hdr.${id}`, ["HDR 色调映射", label], "video-hdr", { radio: true, checked: () => look.render.toneMapping === id, ...gpu, run: () => setTone(id) });
-  pixel("video.hdr.peak", ["HDR 色调映射", "动态峰值检测"], "video-hdr-peak", { checked: () => look.render.peakDetect, ...gpu, run: switchPeak });
-  pixel("video.hdr.settings", ["HDR 设置…"], "video-hdr", { ...gpu, run: () => showWindow(3) });
+    commands.add({
+      id: `video.hdr.${id}`,
+      path: ["@video", "Pixel Shaders", "HDR Tone Mapping", label],
+      ...pixel,
+      group: "video-hdr",
+      radio: true,
+      checked: () => look.render.toneMapping === id,
+      ...gpu,
+      run: () => setTone(id),
+    });
+  commands.add({
+    id: "video.hdr.peak",
+    path: ["@video", "Pixel Shaders", "HDR Tone Mapping", "Dynamic Peak Detection"],
+    ...pixel,
+    group: "video-hdr-peak",
+    checked: () => look.render.peakDetect,
+    ...gpu,
+    run: switchPeak,
+  });
+  commands.add({ id: "video.hdr.settings", path: ["@video", "Pixel Shaders", "HDR Settings…"], ...pixel, group: "video-hdr", ...gpu, run: () => showWindow(3) });
   // 403 反交错 (E10, BWDIF only).
   commands.add({
     id: "video.deinterlace.cycle",
-    path: ["视频", "反交错", "按序切换"],
+    path: ["@video", "Deinterlace", "Cycle"],
     order: 403,
     group: "video-source",
     bindings: ["Ctrl+I"],
@@ -726,24 +856,64 @@ export default async function activate(plugin: Plugin) {
     },
   });
   for (const { id, label } of DEINTERLACE_MODES)
-    commands.add({ id: `video.deinterlace.${id}`, path: ["视频", "反交错", label], order: 403, group: "video-source", radio: true, checked: () => look.deinterlace.mode === id, run: () => setDeinterlace(id) });
+    commands.add({
+      id: `video.deinterlace.${id}`,
+      path: ["@video", "Deinterlace", label],
+      order: 403,
+      group: "video-source",
+      radio: true,
+      checked: () => look.deinterlace.mode === id,
+      run: () => setDeinterlace(id),
+    });
   for (const { id, label } of DEINTERLACE_OUTPUTS)
-    commands.add({ id: `video.deinterlace.output.${id}`, path: ["视频", "反交错", "输出", label], order: 403, group: "video-deinterlace-output", radio: true, checked: () => look.deinterlace.output === id, run: () => setOutput(id) });
+    commands.add({
+      id: `video.deinterlace.output.${id}`,
+      path: ["@video", "Deinterlace", "Output", label],
+      order: 403,
+      group: "video-deinterlace-output",
+      radio: true,
+      checked: () => look.deinterlace.output === id,
+      run: () => setOutput(id),
+    });
   // 404 比例 (E11): display mode, then the aspect ratios.
-  for (const { id, label } of FITS)
+  for (const { id, menu } of FITS)
     commands.add({
       id: `video.fit.${id}`,
-      path: ["视频", "比例", id === "fill" ? "填满窗口（裁去多余）" : label],
+      path: ["@video", "Aspect", menu],
       order: 404,
       group: "video-display",
       radio: true,
       checked: () => look.display.fit === id,
       run: () => setFit(id),
     });
-  commands.add({ id: "video.aspect.cycle", path: ["视频", "比例", "依次切换比例"], order: 404, group: "video-aspect", bindings: ["Shift+F6"], run: () => setAspect(nextAspect(look.display)) });
-  commands.add({ id: "video.aspect.default", path: ["视频", "比例", "默认（按来源）"], order: 404, group: "video-aspect", radio: true, checked: () => look.display.aspect === null, run: () => setAspect(null) });
+  commands.add({
+    id: "video.aspect.cycle",
+    path: ["@video", "Aspect", "Cycle Aspect Ratio"],
+    order: 404,
+    group: "video-aspect",
+    bindings: ["Shift+F6"],
+    run: () => setAspect(nextAspect(look.display)),
+  });
+  commands.add({
+    id: "video.aspect.default",
+    path: ["@video", "Aspect", "Default (Source)"],
+    order: 404,
+    group: "video-aspect",
+    radio: true,
+    checked: () => look.display.aspect === null,
+    run: () => setAspect(null),
+  });
   RATIOS.forEach(({ label, aspect }, i) =>
-    commands.add({ id: `video.aspect.${i}`, path: ["视频", "比例", label], order: 404, group: "video-aspect", radio: true, checked: () => aspectIndex(look.display) === i + 1, run: () => setAspect(aspect) }),
+    commands.add({
+      id: `video.aspect.${i}`,
+      // i18n-ignore: a ratio (4:3), the same in every language
+      path: ["@video", "Aspect", label],
+      order: 404,
+      group: "video-aspect",
+      radio: true,
+      checked: () => aspectIndex(look.display) === i + 1,
+      run: () => setAspect(aspect),
+    }),
   );
   // The 自定义 item shows its ratio in the title, so it is re-added (with 自定义比例… after it) when that changes.
   let custom = plugin.scope();
@@ -759,27 +929,41 @@ export default async function activate(plugin: Plugin) {
   };
   const addCustom = () => {
     const text = look.display.customAspect;
-    custom.commands.add({
+    const item = {
       id: "video.aspect.custom",
-      path: ["视频", "比例", text ? `自定义（${text}）` : "自定义（x:y）"],
       order: 404,
       group: "video-aspect",
       radio: true,
-      enabled: text !== "",
-      reason: text ? null : "先用「自定义比例…」输入",
       checked: () => aspectIndex(look.display) === RATIOS.length + 1,
       run: () => setAspect(parseAspect(text)),
-    });
-    custom.commands.add({ id: "video.aspect.edit", path: ["视频", "比例", "自定义比例…"], order: 404, group: "video-aspect", run: openCustom });
+    };
+    if (text)
+      custom.commands.add({
+        ...item,
+        // A menu title cannot take arguments, so "Custom (21:9)" is not translated
+        // (R2-audio-1 in doc/process/rounds/2026-10-i18n.md).
+        // i18n-ignore
+        path: ["@video", "Aspect", `Custom (${text})`],
+      });
+    else custom.commands.add({ ...item, path: ["@video", "Aspect", "Custom (x:y)"], enabled: false, reason: "Enter one with Custom Aspect Ratio… first" });
+    custom.commands.add({ id: "video.aspect.edit", path: ["@video", "Aspect", "Custom Aspect Ratio…"], order: 404, group: "video-aspect", run: openCustom });
   };
   addCustom();
   // 405 裁剪/拉伸 (E12).
-  commands.add({ id: "video.reframe.none", path: ["视频", "裁剪/拉伸", "不使用"], order: 405, group: "video-display", radio: true, checked: () => look.reframe.mode === "none", run: () => setReframe("none") });
+  commands.add({
+    id: "video.reframe.none",
+    path: ["@video", "Crop/Stretch", "None"],
+    order: 405,
+    group: "video-display",
+    radio: true,
+    checked: () => look.reframe.mode === "none",
+    run: () => setReframe("none"),
+  });
   for (const mode of ["pad", "crop"] as const)
-    RATIOS.forEach(({ label }, ratio) =>
+    RATIOS.forEach((row, ratio) =>
       commands.add({
         id: `video.reframe.${mode}.${ratio}`,
-        path: ["视频", "裁剪/拉伸", `按 ${label} ${mode === "pad" ? "拉伸" : "裁剪"}`],
+        path: ["@video", "Crop/Stretch", mode === "pad" ? row.pad : row.crop],
         order: 405,
         group: "video-display",
         radio: true,
@@ -787,54 +971,100 @@ export default async function activate(plugin: Plugin) {
         run: () => setReframe(mode, ratio),
       }),
     );
-  const positions: [string, string, number, number][] = [
-    ["reset", "位置复位", 0, 0],
-    ["left", "左移", -POSITION_STEP, 0],
-    ["right", "右移", POSITION_STEP, 0],
-    ["up", "上移", 0, -POSITION_STEP],
-    ["down", "下移", 0, POSITION_STEP],
-  ];
-  for (const [id, title, dx, dy] of positions)
-    commands.add({ id: `video.reframe.${id}`, path: ["视频", "裁剪/拉伸", title], order: 405, group: "video-reframe-position", repeat: id !== "reset", run: () => move(dx, dy) });
+  const positions = [
+    { id: "reset", title: "Reset Position", dx: 0, dy: 0 },
+    { id: "left", title: "Move Left", dx: -POSITION_STEP, dy: 0 },
+    { id: "right", title: "Move Right", dx: POSITION_STEP, dy: 0 },
+    { id: "up", title: "Move Up", dx: 0, dy: -POSITION_STEP },
+    { id: "down", title: "Move Down", dx: 0, dy: POSITION_STEP },
+  ] as const;
+  for (const { id, title, dx, dy } of positions)
+    commands.add({
+      id: `video.reframe.${id}`,
+      path: ["@video", "Crop/Stretch", title],
+      order: 405,
+      group: "video-reframe-position",
+      repeat: id !== "reset",
+      run: () => move(dx, dy),
+    });
   // 406 帧位 (E13): keypad keys plus mpv-style Alt keys for keyboards without one.
-  const frameCommand = (id: string, title: string, group: string, bindings: string[], run: () => void, repeat = true) =>
-    commands.add({ id: `video.frame.${id}`, path: ["视频", "帧位", title], order: 406, group, bindings, repeat, run });
-  frameCommand("reset", "帧位复位", "video-display", ["Numpad5", "Alt+Backspace"], () => resetFrame(false), false);
-  frameCommand("zoom-in", "全帧 +", "video-display", ["Numpad9", "Alt+Plus"], () => zoomBy(ZOOM_STEP));
-  frameCommand("zoom-out", "全帧 -", "video-display", ["Numpad1", "Alt+-"], () => zoomBy(1 / ZOOM_STEP));
-  frameCommand("right", "偏移 →", "video-frame-pan", ["Ctrl+Numpad6", "Alt+ArrowRight"], () => panBy(PAN_STEP, 0, "右"));
-  frameCommand("left", "偏移 ←", "video-frame-pan", ["Ctrl+Numpad4", "Alt+ArrowLeft"], () => panBy(-PAN_STEP, 0, "左"));
-  frameCommand("up", "偏移 ↑", "video-frame-pan", ["Ctrl+Numpad8", "Alt+ArrowUp"], () => panBy(0, -PAN_STEP, "上"));
-  frameCommand("down", "偏移 ↓", "video-frame-pan", ["Ctrl+Numpad2", "Alt+ArrowDown"], () => panBy(0, PAN_STEP, "下"));
-  frameCommand("centre", "帧位居中", "video-frame-pan", ["Ctrl+Numpad5"], () => resetFrame(true), false);
+  const frames = [
+    { id: "reset", title: "Reset Framing", group: "video-display", bindings: ["Numpad5", "Alt+Backspace"], run: () => resetFrame(false), repeat: false },
+    { id: "zoom-in", title: "Zoom In", group: "video-display", bindings: ["Numpad9", "Alt+Plus"], run: () => zoomBy(ZOOM_STEP), repeat: true },
+    { id: "zoom-out", title: "Zoom Out", group: "video-display", bindings: ["Numpad1", "Alt+-"], run: () => zoomBy(1 / ZOOM_STEP), repeat: true },
+    { id: "right", title: "Pan →", group: "video-frame-pan", bindings: ["Ctrl+Numpad6", "Alt+ArrowRight"], run: () => panBy(PAN_STEP, 0, PAN.right), repeat: true },
+    { id: "left", title: "Pan ←", group: "video-frame-pan", bindings: ["Ctrl+Numpad4", "Alt+ArrowLeft"], run: () => panBy(-PAN_STEP, 0, PAN.left), repeat: true },
+    { id: "up", title: "Pan ↑", group: "video-frame-pan", bindings: ["Ctrl+Numpad8", "Alt+ArrowUp"], run: () => panBy(0, -PAN_STEP, PAN.up), repeat: true },
+    { id: "down", title: "Pan ↓", group: "video-frame-pan", bindings: ["Ctrl+Numpad2", "Alt+ArrowDown"], run: () => panBy(0, PAN_STEP, PAN.down), repeat: true },
+    { id: "centre", title: "Center Frame", group: "video-frame-pan", bindings: ["Ctrl+Numpad5"], run: () => resetFrame(true), repeat: false },
+  ] as const;
+  for (const { id, title, group, bindings, run, repeat } of frames)
+    commands.add({ id: `video.frame.${id}`, path: ["@video", "Framing", title], order: 406, group, bindings: [...bindings], repeat, run });
   // 408 图像处理 (E04–E06, E08; 高斯模糊 moved here, same id and key).
-  const processing = (id: string, title: string, group: string, extra: { bindings?: string[]; checked: () => boolean; run: () => void }) =>
-    commands.add({ id, path: ["视频", "图像处理", title], order: 408, group, ...extra });
-  processing("video.flip.vertical", "上下翻转", "video-effects", { bindings: ["Ctrl+P"], checked: () => look.geometry.flipV, run: () => flip("flipV", "上下翻转") });
-  processing("video.flip.horizontal", "左右翻转", "video-effects", { bindings: ["Ctrl+Z"], checked: () => look.geometry.flipH, run: () => flip("flipH", "左右翻转") });
-  processing("video.gaussian", "高斯模糊", "video-sharpness", {
+  commands.add({
+    id: "video.flip.vertical",
+    path: ["@video", "Image Processing", "Flip Vertically"],
+    order: 408,
+    group: "video-effects",
+    bindings: ["Ctrl+P"],
+    checked: () => look.geometry.flipV,
+    run: () => flip("flipV"),
+  });
+  commands.add({
+    id: "video.flip.horizontal",
+    path: ["@video", "Image Processing", "Flip Horizontally"],
+    order: 408,
+    group: "video-effects",
+    bindings: ["Ctrl+Z"],
+    checked: () => look.geometry.flipH,
+    run: () => flip("flipH"),
+  });
+  commands.add({
+    id: "video.gaussian",
+    path: ["@video", "Image Processing", "Gaussian Blur"],
+    order: 408,
+    group: "video-sharpness",
     bindings: ["Ctrl+B"],
     checked: () => look.picture.blurEnabled,
     run: () => {
       look.picture.blurEnabled = !look.picture.blurEnabled;
       change();
-      osd(`高斯模糊: ${onOff(look.picture.blurEnabled)}`);
+      shown(plugin.osd.show(look.picture.blurEnabled ? "Gaussian blur: on" : "Gaussian blur: off"));
     },
   });
-  const effect = (id: string, title: string, group: string, toggle: () => Toggle, bindings?: string[]) =>
-    processing(id, title, group, { ...(bindings ? { bindings } : {}), checked: () => toggle().on, run: () => switchEffect(toggle(), title) });
-  effect("video.sharpen", "锐化", "video-sharpness", () => effects.sharpen, ["Ctrl+R"]);
-  effect("video.edge", "边缘锐化", "video-sharpness", () => effects.edge);
-  effect("video.deblock", "去块", "video-cleanup", () => effects.deblock, ["Ctrl+H"]);
-  effect("video.deband", "消色带", "video-cleanup", () => effects.deband);
-  const denoiseKeys: Record<string, string[] | undefined> = { d3: ["Ctrl+N"], temporal: ["Ctrl+M"] };
-  for (const mode of DENOISE_MODES)
-    effect(`video.denoise.${mode}`, denoiseLabels[mode], "video-cleanup", () => effects.denoise[mode], denoiseKeys[mode]);
+  const toggles: Record<(typeof EFFECTS)[number]["toggle"], () => Toggle> = {
+    sharpen: () => effects.sharpen,
+    edge: () => effects.edge,
+    deblock: () => effects.deblock,
+    deband: () => effects.deband,
+    d3: () => effects.denoise.d3,
+    gradual: () => effects.denoise.gradual,
+    temporal: () => effects.denoise.temporal,
+  };
+  for (const row of EFFECTS) {
+    const toggle = toggles[row.toggle];
+    commands.add({
+      id: row.id,
+      path: ["@video", "Image Processing", row.title],
+      order: 408,
+      group: row.group,
+      bindings: [...row.bindings],
+      checked: () => toggle().on,
+      run: () => switchEffect(toggle(), row),
+    });
+  }
   // E18: 倍帧 adds frameBlend once the source rate is known; 运动补偿 is a GPU render option.
-  processing("video.frame-blend", "倍帧", "video-frames", { checked: () => effects.frameBlend, run: () => setBlend(!effects.frameBlend, true) });
+  commands.add({
+    id: "video.frame-blend",
+    path: ["@video", "Image Processing", "Frame Doubling"],
+    order: 408,
+    group: "video-frames",
+    checked: () => effects.frameBlend,
+    run: () => setBlend(!effects.frameBlend, true),
+  });
   commands.add({
     id: "video.interpolation",
-    path: ["视频", "图像处理", "运动补偿"],
+    path: ["@video", "Image Processing", "Motion Interpolation"],
     order: 408,
     group: "video-frames",
     checked: () => look.render.interpolation,
@@ -844,16 +1074,16 @@ export default async function activate(plugin: Plugin) {
   // 409 图像旋转 (E09).
   commands.add({
     id: "video.rotate.cycle",
-    path: ["视频", "图像旋转", "按序切换"],
+    path: ["@video", "Rotation", "Cycle"],
     order: 409,
     group: "video-effects",
     bindings: ["Alt+K"],
     run: () => rotate(ROTATIONS[(ROTATIONS.indexOf(look.geometry.rotate) + 1) % ROTATIONS.length]!),
   });
-  for (const degrees of ROTATIONS)
+  for (const { degrees, title } of ROTATION_TITLES)
     commands.add({
       id: `video.rotate.${degrees}`,
-      path: ["视频", "图像旋转", degrees === 0 ? "不旋转" : `${degrees}°`],
+      path: ["@video", "Rotation", title],
       order: 409,
       group: "video-effects",
       radio: true,
@@ -861,33 +1091,50 @@ export default async function activate(plugin: Plugin) {
       run: () => rotate(degrees),
     });
   // 440–449 the window and the colour keys.
-  commands.add({ id: "video.picture", path: ["视频", "画面调节…"], order: 440, group: "video-color", run: () => showWindow() });
-  commands.add({ id: "video.reset", path: ["视频", "复位"], order: 441, group: "video-color", bindings: ["Q"], run: reset });
-  for (const [label, field, down, up, order] of steps) {
+  commands.add({ id: "video.picture", path: ["@video", "Picture Adjustments…"], order: 440, group: "video-color", run: () => showWindow() });
+  commands.add({ id: "video.reset", path: ["@video", "Reset"], order: 441, group: "video-color", bindings: ["Q"], run: reset });
+  for (const { field, keys, order, down, up } of steps) {
     // All colour steps repeat while held.
-    commands.add({ id: `video.${field}.down`, path: ["视频", `${label} -1%`], order, group: "video-color", bindings: [down], repeat: true, run: () => step(label, field, -1) });
-    commands.add({ id: `video.${field}.up`, path: ["视频", `${label} +1%`], order: order + 1, group: "video-color", bindings: [up], repeat: true, run: () => step(label, field, 1) });
+    commands.add({
+      id: `video.${field}.down`,
+      path: ["@video", down.title],
+      order,
+      group: "video-color",
+      bindings: [keys[0]],
+      repeat: true,
+      run: () => step(down, field, -1),
+    });
+    commands.add({
+      id: `video.${field}.up`,
+      path: ["@video", up.title],
+      order: order + 1,
+      group: "video-color",
+      bindings: [keys[1]],
+      repeat: true,
+      run: () => step(up, field, 1),
+    });
   }
   apply();
   applyRender();
 }
 
 /**
- * The window's status line: one short Chinese line for a failure, the detail in a tooltip; the chain
- * first, then the display layer, then the render options. Software rendering is not a failure here:
- * the GPU controls are greyed with the reason instead.
+ * The window's status line, as data the window words: `status` names a failure ("" when none), the
+ * detail in a tooltip is the player's message, or `conflict` when another plugin owns the layer. The
+ * chain first, then the display layer, then the render options. Software rendering is not a failure
+ * here: the GPU controls are greyed with the reason instead.
  */
 function statusLine(filter: FilterStatus, view: FilterStatus, render: FilterStatus) {
   if (filter.state === "failed")
-    return { failed: true, status: filter.error.code === "unsupported" ? "当前来源没有画面" : "画面处理失败", detail: filter.error.message };
-  if (view.state === "failed") return { failed: true, status: "画面显示不可用", detail: viewReason(view.error) };
+    return { failed: true, status: filter.error.code === "unsupported" ? "no-picture" : "filter", detail: filter.error.message, conflict: false };
+  if (view.state === "failed") return { failed: true, status: "view", ...reason(view.error) };
   if (render.state === "failed" && render.error.code !== "unsupported")
     return {
       failed: true,
-      status: shaderFailed(render.error) ? "着色器载入失败" : render.error.code === "conflict" ? "渲染选项不可用" : "渲染设置失败",
-      detail: renderReason(render.error),
+      status: shaderFailed(render.error) ? "shader" : render.error.code === "conflict" ? "render-conflict" : "render",
+      ...reason(render.error),
     };
-  return { failed: false, status: "", detail: "" };
+  return { failed: false, status: "", detail: "", conflict: false };
 }
 
 /** mpv compiles a shader on first use; the player pushes this later (it does not name the file). */
@@ -895,14 +1142,9 @@ function shaderFailed(error: PluginError) {
   return error.code === "failed" && error.message.startsWith("shader compile failed");
 }
 
-/** Why the render options refused; `conflict` means another plugin owns them. */
-function renderReason(error: PluginError) {
-  return error.code === "conflict" ? "另一个插件正在控制渲染选项" : error.message;
-}
-
-/** Why the display layer (比例, 帧位) refused; `conflict` means another plugin owns it. */
-function viewReason(error: PluginError) {
-  return error.code === "conflict" ? "另一个插件正在控制画面显示" : error.message;
+/** Why the display layer (比例, 帧位) or the render options refused; `conflict`: another plugin owns them. */
+function reason(error: PluginError) {
+  return error.code === "conflict" ? { detail: "", conflict: true } : { detail: error.message, conflict: false };
 }
 
 /** `settings.json` through `plugin.storage`; without a data directory, settings last for this run. */

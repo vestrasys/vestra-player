@@ -1,25 +1,29 @@
-# 画面调节
+# Picture Adjustments
 
-调整画面的色彩、效果、比例与显示方式。
+Adjusts the picture's color, effects, aspect ratio and how it is shown.
 
-## 功能
+## Features
 
-- **色彩**：亮度、对比度、饱和度、色调、Gamma，四个预设。
-- **图像处理**：高斯模糊、锐化、边缘锐化、3D / 渐进 / 瞬态降噪、去块、消色带、倍帧。
-- **翻转与旋转**、**反交错**（自动、总是使用、不使用；按帧或按场输出）。
-- **比例与裁剪**：保持或不保持宽高比、填满窗口，常用比例与自定义比例；按比例裁剪或拉伸。
-- **帧位**：缩放与平移画面。
-- **GPU 渲染选项**：HDR 色调映射、像素着色器、运动补偿。
-- 色彩、效果和比例设置跨文件、跨重启保留；翻转、旋转和帧位只作用于当前文件。
+- **Color**: brightness, contrast, saturation, hue, gamma; four presets.
+- **Image processing**: Gaussian blur, sharpen, edge sharpen, 3D / gradual / temporal denoise, deblock, deband, frame doubling.
+- **Flip and rotation**, **deinterlace** (auto, always, never; output by frame or by field).
+- **Aspect ratio and crop**: keep or ignore the aspect ratio, fill the window; common and custom ratios; crop or stretch to a ratio.
+- **Framing**: zoom and pan the picture.
+- **GPU render options**: HDR tone mapping, pixel shaders, motion interpolation.
+- Color, effect and aspect settings carry over between files and restarts; flip, rotation and framing apply to the current file only.
 
-## 入口
+## Entries
 
-- 右键菜单「视频」：像素着色、反交错（Ctrl+I）、比例（Shift+F6）、裁剪/拉伸、帧位、图像处理、图像旋转（Alt+K）、画面调节…、复位（Q）。
-- 亮度 W/E、对比度 R/T、饱和度 Y/U、色调 I/O。
-- 「画面调节…」窗口有色彩、效果、画面、高级四个页签。
+- Right-click menu Video: Pixel Shaders, Deinterlace (Ctrl+I), Aspect (Shift+F6), Crop/Stretch, Framing, Image Processing, Rotation (Alt+K), Picture Adjustments…, Reset (Q).
+- Brightness W/E, contrast R/T, saturation Y/U, hue I/O.
+- The Picture Adjustments… window has four tabs: Color, Effects, Picture, Advanced.
 
-## 限制
+## Limits
 
-- HDR、像素着色器、运动补偿需要 GPU 渲染；软件渲染时不可用。
-- 倍帧在 CPU 上处理，高分辨率视频负担较重。
-- 输出总是 SDR。
+- HDR, pixel shaders and motion interpolation need GPU rendering; they are unavailable under software rendering.
+- Frame doubling runs on the CPU and is heavy for high-resolution video.
+- The output is always SDR.
+
+## Translations
+
+Texts are English in the source; `locales/zh-Hans.po` has the Simplified Chinese (`vestra-plugin i18n extract`, `i18n check`).
