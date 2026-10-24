@@ -182,3 +182,10 @@ Contributing · License（各一行）
 5. 没有工具窗口位置和尺寸的 API，播放器也不记住。
 
 样板对模板的修改建议（推开其它类别前采纳）：`@throws` 写成「`code`（throws/rejects）条件」；方法不强制 `@remarks`，模块和句柄类型强制；每类开始时在 `doc-standard.mjs` 标 full 或 data；事实以播放器代码为准；CI 加 Slint 编译检查；`MainWindow`、`Drops` 待定类别。
+
+## 11. 示例改为原子化（2026-10-24，用户反馈）
+
+用户：示例太难读（blur 里搭了小架构、类、JSON 持久化）。标准：每个示例只讲一件事、结构扁平（一个 `main.ts`、普通函数），额外功能放讲解末尾的「Try next」；只改文档或改动很小时 SDK 只升补丁号。
+- 8 个示例已按此重写：hello、blur（一个滑条）、signal-generator（彩条 + 正弦）、bookmark、panel-menu、menus、theme-widgets（core-ui 拆分）、markdown。合并分支 `examples/atomic`（SDK 仓库），原 PR #11、#12。
+- 真机发现：插件用 `@video` 等锚点加命令、不写 `order` 时会把整个内置菜单拉到右键菜单顶部 → 宿主修复中（`fix/menu-anchor-order`）。
+- 截图：用户要求等新主题（A + 浅色）合并后统一重拍。
