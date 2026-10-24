@@ -1,6 +1,9 @@
-# Daily: RustSec advisories always; the full build-test and unsigned packages
-# (artifacts vestra-nightly-<date>-<sha>-<os>, kept 7 days, never released)
-# only when main changed in the last 24 hours (or on manual dispatch).
+# Daily: RustSec advisories always; the unsigned packages (artifacts
+# vestra-nightly-<date>-<sha>-<os>, kept 1 day, never released) only when
+# main changed outside doc/ and *.md in the last 24 hours (or on manual
+# dispatch). build-test runs first only when main.yml has not passed the tip
+# (.github/scripts/main-green.sh). The package build uses the cargo cache:
+# these packages are never released (release.yml builds without caches).
 name: nightly
 
 on:
@@ -18,30 +21,39 @@ jobs:
   changed:
     name: main changed in 24h
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 25
     permissions:
       contents: read
+      actions: read # main-green.sh: main.yml runs
     outputs:
       run: ${{ steps.check.outputs.run }}
       stamp: ${{ steps.check.outputs.stamp }}
+      tested: ${{ steps.tested.outputs.tested }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: main
+          fetch-depth: 0
       - id: check
         env:
           EVENT: ${{ github.event_name }}
         run: |
-          last=$(git log -1 --format=%ct)
-          echo "stamp=$(date -u +%Y%m%d)-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-          age=$(( $(date +%s) - last ))
-          echo "main tip is ${age}s old"
-          if [ "$EVENT" = workflow_dispatch ] || [ "$age" -lt 86400 ]; then
+          echo "stamp=$(date -u +%Y%m%d)-$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+          changed=$(git log --since="24 hours ago" --format=%h -- . ':(exclude)doc/' ':(exclude)*.md')
+          echo "commits in the last 24 hours that change more than docs: ${changed:-none}"
+          if [ "$EVENT" = workflow_dispatch ] || [ -n "$changed" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
+      - id: tested
+        if: steps.check.outputs.run == 'true'
+        env:
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          WAIT: "1200"
+        run: SHA=$(git rev-parse HEAD) bash .github/scripts/main-green.sh
 
   audit:
     permissions:
@@ -52,7 +64,7 @@ jobs:
 
   windows:
     needs: changed
-    if: needs.changed.outputs.run == 'true'
+    if: needs.changed.outputs.run == 'true' && needs.changed.outputs.tested != 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/_build-test.yml
@@ -62,7 +74,7 @@ jobs:
 
   macos:
     needs: changed
-    if: needs.changed.outputs.run == 'true'
+    if: needs.changed.outputs.run == 'true' && needs.changed.outputs.tested != 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/_build-test.yml
@@ -71,20 +83,26 @@ jobs:
 
   package-windows:
     needs: [changed, windows]
-    if: needs.changed.outputs.run == 'true'
+    if: >-
+      !cancelled() && needs.changed.outputs.run == 'true'
+      && (needs.changed.outputs.tested == 'true' || needs.windows.result == 'success')
     permissions:
       contents: read
     uses: ./.github/workflows/_package.yml
     with:
       os: windows
       artifact: vestra-nightly-${{ needs.changed.outputs.stamp }}
+      cache: true
 
   package-macos:
     needs: [changed, macos]
-    if: needs.changed.outputs.run == 'true'
+    if: >-
+      !cancelled() && needs.changed.outputs.run == 'true'
+      && (needs.changed.outputs.tested == 'true' || needs.macos.result == 'success')
     permissions:
       contents: read
     uses: ./.github/workflows/_package.yml
     with:
       os: macos
       artifact: vestra-nightly-${{ needs.changed.outputs.stamp }}
+      cache: true

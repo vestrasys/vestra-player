@@ -1,6 +1,7 @@
 # Every push to main: the checks the changed paths need, Windows and macOS
-# for host changes (plan.sh; docs-only pushes run plan and ci-ok only). These
-# runs write the cargo caches that branch runs restore (doc/process/ci.md).
+# for host changes unless a branch run already passed that OS on the same
+# tree (plan.sh; docs-only pushes run plan and ci-ok only). These runs write
+# the cargo caches that branch runs restore (doc/process/ci.md).
 name: main
 
 on:
@@ -28,6 +29,7 @@ jobs:
       docs_only: ${{ steps.plan.outputs.docs_only }}
       run_windows: ${{ steps.plan.outputs.run_windows }}
       run_macos: ${{ steps.plan.outputs.run_macos }}
+      plugins: ${{ steps.plan.outputs.plugins }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -49,6 +51,8 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/_static.yml
+    with:
+      plugins: ${{ needs.plan.outputs.plugins }}
 
   windows:
     needs: [plan, static]
