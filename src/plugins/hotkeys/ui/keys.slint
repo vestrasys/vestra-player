@@ -8,6 +8,7 @@
 // options window's page area at its default size; it scrolls when smaller).
 import { LineEdit, ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
+import { Icon } from "@vestra/icons.slint";
 import { Button, ToolTipArea } from "@vestra/widgets.slint";
 import { Cell, Check, Choice, Label } from "parts.slint";
 
@@ -112,7 +113,11 @@ component Head {
             text: root.text;
             color: touch.has-hover && root.sortable ? Theme.accent : Theme.text-dim;
         }
-        if root.sorted: Cell { text: root.descending ? "▼" : "▲"; color: Theme.text-dim; font-size: Theme.font-xs; }
+        if root.sorted: VerticalLayout {
+            horizontal-stretch: 0;
+            alignment: center;
+            Icon { name: root.descending ? "sort-desc" : "sort-asc"; color: Theme.text-dim; }
+        }
         Rectangle { horizontal-stretch: 1; }
     }
     touch := TouchArea {
@@ -137,12 +142,11 @@ component Tag {
         Text { text: root.text; color: Theme.text; font-size: Theme.font-body; vertical-alignment: center; }
         Rectangle {
             width: 13px;
-            Text {
-                text: "×";
+            // Not stretchable: the tag keeps its label's width.
+            horizontal-stretch: 0;
+            Icon {
+                name: "tag-remove";
                 color: x-touch.has-hover ? Theme.accent : Theme.text-dim;
-                font-size: Theme.font-body;
-                vertical-alignment: center;
-                horizontal-alignment: center;
             }
             x-touch := TouchArea { clicked => { root.remove(); } }
         }

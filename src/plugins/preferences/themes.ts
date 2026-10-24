@@ -6,7 +6,13 @@ export const DEFAULT_THEME: ThemeId = "vestra";
 /** A colour as the page's Slint takes it (`rgb(r, g, b)`): the page has no colour literals. (Types, not interfaces: they are page property values, `Json`.) */
 export type Rgb = { r: number; g: number; b: number };
 
-/** The colours one 120×40 preview block draws. The progress fill is four stops `f0`–`f3`, left to right (one colour four times for a solid fill). */
+/**
+ * The colours one 120×40 preview block draws: the video area with a play
+ * glyph (`text`; the video area is dark in every palette, so it is light in
+ * every preview), the bar with a time (`dim`), the track (`track`, the
+ * palette's `line`) and the knob (`accent`). The progress fill is four stops
+ * `f0`–`f3` at 0, 45, 72 and 100 %, left to right.
+ */
 export type Swatch = {
   video: Rgb;
   bar: Rgb;
@@ -28,28 +34,44 @@ const rgb = (hex: string): Rgb => {
 };
 
 /**
- * The player's palettes, in menu order (one today; a light palette would be
- * a second row, menu item and preview). The preview colours copy the
- * player's own table (bg-video, bg-bar, button-bg, text, text-dim, accent,
- * accent-fill; doc/product/ui-spec.md §2.1): `Theme` only ever holds the
- * current palette, so the preview of another one cannot come from it.
+ * The player's palettes, in menu order. The preview colours copy the
+ * player's own tables (bg-video, bg-bar, line, text-dim, accent and the
+ * accent-fill stops; doc/product/ui-spec.md §2.1): `Theme` only ever holds
+ * the current palette, so the preview of another one cannot come from it.
  */
 export const THEMES: ThemeRow[] = [
   {
     id: "vestra",
-    title: "Vestra",
-    note: "品牌配色：琥珀 → 洋红 → 紫渐变（默认）",
+    title: "Vestra 深色",
+    note: "默认，取自标志的极光色谱",
     swatch: {
-      video: rgb("#0b0a0f"),
-      bar: rgb("#17141c"),
-      track: rgb("#322c3b"),
-      text: rgb("#f2eff7"),
-      dim: rgb("#8a8496"),
-      accent: rgb("#fa139c"),
-      f0: rgb("#fdb506"),
-      f1: rgb("#fc6f3b"),
-      f2: rgb("#fa139c"),
-      f3: rgb("#911efc"),
+      video: rgb("#0a090e"),
+      bar: rgb("#16141c"),
+      track: rgb("#2b2734"),
+      text: rgb("#f5f3fa"),
+      dim: rgb("#8e88a0"),
+      accent: rgb("#f72aa6"),
+      f0: rgb("#fcc402"),
+      f1: rgb("#fa0aa8"),
+      f2: rgb("#7a0afa"),
+      f3: rgb("#10a8fc"),
+    },
+  },
+  {
+    id: "vestra-light",
+    title: "Vestra 浅色",
+    note: "适合明亮环境；视频区保持深色",
+    swatch: {
+      video: rgb("#0e0d12"),
+      bar: rgb("#f7f6fa"),
+      track: rgb("#dcd8e4"),
+      text: rgb("#f5f3fa"),
+      dim: rgb("#6f6a7f"),
+      accent: rgb("#d4128a"),
+      f0: rgb("#f5a700"),
+      f1: rgb("#e0089a"),
+      f2: rgb("#6a08e8"),
+      f3: rgb("#0a95e6"),
     },
   },
 ];

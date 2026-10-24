@@ -1,6 +1,6 @@
 {
   "id": "vestra.preferences",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -13,10 +13,11 @@
   "name": "首选项",
   "author": "Vestra Player",
   "punchline": "打开选项窗口，切换界面配色",
-  "description": "「设置 ▶ 选项…」（F5）打开播放器的选项窗口；「设置 ▶ 外观」选择界面配色（目前为 Vestra），选项窗口里也有带预览的「外观」页。",
+  "description": "「设置 ▶ 选项…」（F5）打开播放器的选项窗口；「设置 ▶ 外观」选择界面配色（Vestra 深色、Vestra 浅色），选项窗口里也有带预览的「外观」页。",
   "tags": [
     "设置",
     "外观",
     "配色"
-  ]
+  ],
+  "minPlayerVersion": "0.4.0"
 }

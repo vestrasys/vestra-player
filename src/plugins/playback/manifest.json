@@ -1,6 +1,6 @@
 {
   "id": "vestra.playback",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -24,5 +24,6 @@
     "控制栏",
     "跳转",
     "速度"
-  ]
+  ],
+  "minPlayerVersion": "0.4.0"
 }

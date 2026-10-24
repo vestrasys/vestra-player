@@ -1,4 +1,5 @@
 import { Theme } from "@vestra/theme.slint";
+import { Icon } from "@vestra/icons.slint";
 import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
 
 // Widths (window 301, content 285 after the 8px side padding; totals include the 6px spacing):
@@ -168,7 +169,12 @@ component Choice {
             vertical-alignment: center;
             overflow: elide;
         }
-        Text { text: "▾"; color: root.enabled ? Theme.text-dim : Theme.icon-disabled; font-size: Theme.font-body; vertical-alignment: center; }
+        // The drop-down arrow: a small V.
+        VerticalLayout {
+            horizontal-stretch: 0;
+            alignment: center;
+            Icon { name: "caret-down"; color: root.enabled ? Theme.text-dim : Theme.icon-disabled; }
+        }
     }
     touch := TouchArea {
         enabled: root.enabled;
@@ -280,7 +286,23 @@ component Tab {
     height: 31px;
     accessible-role: tab;
     accessible-label: root.text;
-    Rectangle { background: root.selected ? Theme.bg-panel : touch.has-hover ? Theme.hover-bg : transparent; }
+    // Hover lights a rounded plate; the selected tab has a 28px gradient stroke under its label.
+    Rectangle {
+        x: 3px;
+        y: 4px;
+        width: parent.width - 6px;
+        height: parent.height - 8px;
+        border-radius: Theme.radius-control;
+        background: !root.selected && touch.has-hover ? Theme.hover-bg : transparent;
+    }
+    if root.selected: Rectangle {
+        x: (parent.width - 28px) / 2;
+        y: parent.height - 3px;
+        width: 28px;
+        height: 2px;
+        border-radius: 1px;
+        background: Theme.accent-fill;
+    }
     Text {
         text: root.text;
         color: root.selected ? Theme.text : Theme.text-dim;

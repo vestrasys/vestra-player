@@ -7,6 +7,7 @@
 // + 6 + 18 + 6 + 18 + 6 = 373.
 import { LineEdit, ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
+import { Icon } from "@vestra/icons.slint";
 import { Button } from "@vestra/widgets.slint";
 import { Cell, Label, Radio } from "parts.slint";
 
@@ -41,7 +42,12 @@ component Picker {
             text: root.text;
             color: root.bound ? Theme.text : Theme.text-dim;
         }
-        Text { text: "▾"; color: Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; }
+        // The drop-down arrow: a small V.
+        VerticalLayout {
+            horizontal-stretch: 0;
+            alignment: center;
+            Icon { name: "caret-down"; color: Theme.text-dim; }
+        }
     }
     touch := TouchArea { clicked => { root.clicked(); } }
 }

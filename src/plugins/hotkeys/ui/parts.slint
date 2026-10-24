@@ -3,6 +3,7 @@
 // 160px minimum, so the drop-down here is our own.
 import { ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
+import { Icon } from "@vestra/icons.slint";
 
 export component Label inherits Text {
     color: Theme.text;
@@ -77,7 +78,12 @@ export component Choice {
             vertical-alignment: center;
             overflow: elide;
         }
-        Text { text: "▾"; color: root.enabled ? Theme.text-dim : Theme.icon-disabled; font-size: Theme.font-body; vertical-alignment: center; }
+        // The drop-down arrow: a small V.
+        VerticalLayout {
+            horizontal-stretch: 0;
+            alignment: center;
+            Icon { name: "caret-down"; color: root.enabled ? Theme.text-dim : Theme.icon-disabled; }
+        }
     }
     touch := TouchArea {
         enabled: root.enabled;
@@ -129,19 +135,11 @@ export component Check {
             Rectangle {
                 width: 13px;
                 height: 13px;
-                border-radius: 2px;
-                border-width: 1px;
+                border-radius: 3px;
+                border-width: root.checked ? 0px : 1px;
                 border-color: touch.has-hover && root.enabled ? Theme.accent : Theme.text-dim;
                 background: root.checked ? Theme.accent : Theme.bg-list;
-                if root.checked: Path {
-                    width: 9px;
-                    height: 9px;
-                    viewbox-width: 9;
-                    viewbox-height: 9;
-                    commands: "M 1 4.5 L 3.5 7 L 8 1.5";
-                    stroke: Theme.text;
-                    stroke-width: 1.5px;
-                }
+                if root.checked: Icon { name: "check-box"; color: Colors.white; }
             }
         }
         Text {

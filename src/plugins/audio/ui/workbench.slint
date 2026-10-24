@@ -1,4 +1,5 @@
 import { Theme } from "@vestra/theme.slint";
+import { Icon } from "@vestra/icons.slint";
 import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
 
 // 14px box + 11px text (the panel switch).
@@ -207,7 +208,12 @@ component Choice {
             vertical-alignment: center;
             overflow: elide;
         }
-        Text { text: "▾"; color: root.enabled ? Theme.text-dim : Theme.icon-disabled; font-size: Theme.font-body; vertical-alignment: center; }
+        // The drop-down arrow: a small V.
+        VerticalLayout {
+            horizontal-stretch: 0;
+            alignment: center;
+            Icon { name: "caret-down"; color: root.enabled ? Theme.text-dim : Theme.icon-disabled; }
+        }
     }
     touch := TouchArea {
         enabled: root.enabled;
@@ -253,7 +259,23 @@ component Tab {
     height: 31px;
     accessible-role: tab;
     accessible-label: root.text;
-    Rectangle { background: root.selected ? Theme.bg-panel : touch.has-hover ? Theme.hover-bg : transparent; }
+    // Hover lights a rounded plate; the selected tab has a 28px gradient stroke under its label.
+    Rectangle {
+        x: 3px;
+        y: 4px;
+        width: parent.width - 6px;
+        height: parent.height - 8px;
+        border-radius: Theme.radius-control;
+        background: !root.selected && touch.has-hover ? Theme.hover-bg : transparent;
+    }
+    if root.selected: Rectangle {
+        x: (parent.width - 28px) / 2;
+        y: parent.height - 3px;
+        width: 28px;
+        height: 2px;
+        border-radius: 1px;
+        background: Theme.accent-fill;
+    }
     Text {
         text: root.text;
         color: root.selected ? Theme.text : Theme.text-dim;
@@ -391,11 +413,20 @@ export component AudioWorkbench inherits Window {
                             enabled: root.source-ready;
                             toggled(on) => { root.equalizer-changed(on); }
                         }
-                        preset-button := Button {
+                        Rectangle {
                             width: 97px;
-                            enabled: root.source-ready;
-                            text: (root.preset-index >= 0 ? root.preset-names[root.preset-index] : "自定义") + " ▾";
-                            clicked => { presets.show(); }
+                            preset-button := Button {
+                                width: 100%;
+                                height: 100%;
+                                enabled: root.source-ready;
+                                text: root.preset-index >= 0 ? root.preset-names[root.preset-index] : "自定义";
+                                clicked => { presets.show(); }
+                            }
+                            Icon {
+                                x: parent.width - Theme.button-padding - self.width;
+                                name: "caret-down";
+                                color: root.source-ready ? Theme.text-dim : Theme.icon-disabled;
+                            }
                         }
                         VerticalLayout {
                             alignment: center;

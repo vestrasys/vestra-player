@@ -1,7 +1,8 @@
 // Bottom control bar (doc/product/ui-spec.md §4): a 22px seek row and a
-// 40px button row, 62px in total. Icons are drawn with Path; colours and font
-// sizes come from Theme.
+// 40px button row, 62px in total. Icons come from @vestra/icons.slint; colours,
+// corners and font sizes from Theme.
 import { Theme } from "@vestra/theme.slint";
+import { Icon } from "@vestra/icons.slint";
 import { Slider, ToolTipArea } from "@vestra/widgets.slint";
 
 // B22: one mark of `timeline.marks`; `at` is the fraction of the duration,
@@ -75,8 +76,10 @@ export global PlaybackBridge {
     callback toggle-sidebar();
 }
 
-// 41×40 icon button with a 1px right divider. Right click runs `right-clicked`
-// when `right-enabled` (back/forward: previous/next). `tip` is the tooltip (G-07).
+// 41×40 icon button; hover and press light a 32×32 rounded plate in the
+// middle of the cell (no dividers between the buttons). Right click runs
+// `right-clicked` when `right-enabled` (back/forward: previous/next). `tip`
+// is the tooltip (G-07).
 component BarButton inherits Rectangle {
     in property <string> icon;
     in property <string> tip;
@@ -84,37 +87,27 @@ component BarButton inherits Rectangle {
     in property <bool> right-enabled;
     callback clicked();
     callback right-clicked();
-    private property <length> icon-width: root.icon == "back" || root.icon == "forward" || root.icon == "open" ? 14px : 12px;
-    private property <length> icon-height: root.icon == "play" || root.icon == "pause" ? 14px
-        : root.icon == "stop" || root.icon == "open" ? 12px : 10px;
     width: 41px;
     height: 40px;
-    background: !root.enabled ? transparent
-        : touch.pressed ? Theme.press-bg
-        : touch.has-hover ? Theme.hover-bg : transparent;
     accessible-role: button;
     accessible-label: root.icon;
     accessible-enabled: root.enabled;
     accessible-action-default => { if root.enabled { root.clicked(); } }
-    Path {
+    Rectangle {
+        x: 4px;
+        y: 4px;
+        width: parent.width - 9px;
+        height: parent.height - 8px;
+        border-radius: Theme.radius-panel;
+        background: !root.enabled ? transparent
+            : touch.pressed ? Theme.press-bg
+            : touch.has-hover ? Theme.hover-bg : transparent;
+    }
+    Icon {
         x: (root.width - 1px - self.width) / 2;
         y: (root.height - self.height) / 2;
-        width: root.icon-width;
-        height: root.icon-height;
-        viewbox-width: root.icon-width / 1px;
-        viewbox-height: root.icon-height / 1px;
-        fill: root.enabled ? Theme.text : Theme.icon-disabled;
-        commands: root.icon == "play" ? "M 0 0 L 12 7 L 0 14 Z"
-            : root.icon == "pause" ? "M 0 0 L 4 0 L 4 14 L 0 14 Z M 8 0 L 12 0 L 12 14 L 8 14 Z"
-            : root.icon == "stop" ? "M 0 0 L 12 0 L 12 12 L 0 12 Z"
-            : root.icon == "back" ? "M 7 0 L 7 10 L 0 5 Z M 14 0 L 14 10 L 7 5 Z"
-            : root.icon == "forward" ? "M 0 0 L 7 5 L 0 10 Z M 7 0 L 14 5 L 7 10 Z"
-            : "M 7 0 L 14 7 L 0 7 Z M 0 9 L 14 9 L 14 12 L 0 12 Z";
-    }
-    Rectangle {
-        x: parent.width - 1px;
-        width: 1px;
-        background: Theme.line;
+        name: root.icon;
+        color: root.enabled ? Theme.text : Theme.icon-disabled;
     }
     ToolTipArea {
         width: 100%;
@@ -132,7 +125,8 @@ component BarButton inherits Rectangle {
     }
 }
 
-// Seek line: 10px click area, 2px line (unplayed Theme.line, played Theme.accent-fill), 8px thumb.
+// Seek line: 10px click area, 2px round-ended line (unplayed Theme.line, played
+// Theme.accent-fill), 8px thumb: a white core in a 2px accent ring.
 // B22: 1×6 marks across the line (chapter Theme.text-dim, bookmark Theme.accent,
 // marker Theme.playing) and the A-B loop: a 2px Theme.playing band under the
 // line with 1×8 ends. Marks take no input: a click seeks as before.
@@ -236,6 +230,7 @@ component SeekBar inherits Rectangle {
     Rectangle {
         y: 4px;
         height: 2px;
+        border-radius: 1px;
         background: Theme.line;
     }
     Rectangle {
@@ -280,7 +275,9 @@ component SeekBar inherits Rectangle {
         width: 8px;
         height: 8px;
         border-radius: 4px;
-        background: touch.pressed ? Theme.accent-press : touch.has-hover ? Theme.accent : Theme.text;
+        background: Colors.white;
+        border-width: 2px;
+        border-color: touch.pressed ? Theme.accent-press : Theme.accent;
     }
     touch := TouchArea {
         enabled: PlaybackBridge.can-seek;
@@ -311,23 +308,9 @@ component MuteButton inherits Rectangle {
     accessible-role: button;
     accessible-label: PlaybackBridge.muted ? "解除静音" : "静音";
     accessible-action-default => { if PlaybackBridge.can-mute { PlaybackBridge.action("mute"); } }
-    Path {
-        width: 13px;
-        height: 10px;
-        viewbox-width: 13;
-        viewbox-height: 10;
-        fill: root.icon-color;
-        commands: PlaybackBridge.muted ? "M 0 3 L 3 3 L 7 0 L 7 10 L 3 7 L 0 7 Z"
-            : "M 0 3 L 3 3 L 7 0 L 7 10 L 3 7 L 0 7 Z M 9 3 L 10 3 L 10 7 L 9 7 Z M 11.5 1 L 12.5 1 L 12.5 9 L 11.5 9 Z";
-    }
-    if PlaybackBridge.muted: Path {
-        width: 13px;
-        height: 10px;
-        viewbox-width: 13;
-        viewbox-height: 10;
-        stroke: root.icon-color;
-        stroke-width: 1.2px;
-        commands: "M 9 3 L 13 7 M 13 3 L 9 7";
+    Icon {
+        name: PlaybackBridge.muted ? "mute" : "volume";
+        color: root.icon-color;
     }
     ToolTipArea {
         width: 100%;
@@ -351,17 +334,13 @@ component SidebarToggle inherits Rectangle {
     accessible-checked: PlaybackBridge.sidebar-on;
     accessible-enabled: PlaybackBridge.has-sidebar;
     accessible-action-default => { if PlaybackBridge.has-sidebar { PlaybackBridge.toggle-sidebar(); } }
-    Path {
+    Icon {
         x: 5px;
         y: 6px;
-        width: 13px;
-        height: 10px;
-        viewbox-width: 13;
-        viewbox-height: 10;
-        fill: !PlaybackBridge.has-sidebar ? Theme.icon-disabled
+        name: "playlist";
+        color: !PlaybackBridge.has-sidebar ? Theme.icon-disabled
             : touch.pressed ? Theme.accent-press
             : (touch.has-hover || PlaybackBridge.sidebar-on) ? Theme.accent : Theme.text-dim;
-        commands: "M 0 0 L 13 0 L 13 2 L 0 2 Z M 0 4 L 13 4 L 13 6 L 0 6 Z M 0 8 L 13 8 L 13 10 L 0 10 Z";
     }
     ToolTipArea {
         width: 100%;
@@ -380,11 +359,11 @@ export component PlaybackBar inherits Rectangle {
     background: Theme.bg-bar;
 
     // Seek row: padding 0 10px 0 5px; seek line with 10px margins; mute 13×10; volume 70×10.
+    // One hairline separates the bar from the video above.
     seek-row := Rectangle {
         y: 0;
         height: 22px;
         Rectangle { y: 0; height: 1px; background: Theme.line; }
-        Rectangle { y: parent.height - 1px; height: 1px; background: Theme.line; }
         seek-bar := SeekBar {
             x: 15px;
             y: 6px;
@@ -500,6 +479,7 @@ export component PlaybackBar inherits Rectangle {
         background: Theme.bg-panel;
         border-color: Theme.line;
         border-width: 1px;
+        border-radius: Theme.radius-control;
         tip := VerticalLayout {
             padding-left: 5px;
             padding-right: 5px;

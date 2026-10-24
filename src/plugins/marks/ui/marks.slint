@@ -3,6 +3,7 @@
 // buttons. 380×420, at least 320×300.
 import { LineEdit, ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
+import { Icon } from "@vestra/icons.slint";
 import { Button } from "@vestra/widgets.slint";
 
 export struct MarkRow {
@@ -32,16 +33,10 @@ component Row inherits Rectangle {
         spacing: 4px;
         Rectangle {
             width: 16px;
-            Path {
-                width: 12px;
-                height: 12px;
-                viewbox-width: 12;
-                viewbox-height: 12;
-                // Chapter: a flag on a pole; bookmark: a ribbon.
-                commands: root.mark.chapter ? "M 2.5 0.5 L 2.5 11.5 M 2.5 1 L 10 1 L 8.2 3.7 L 10 6.4 L 2.5 6.4" : "M 3 0.5 L 9 0.5 L 9 11.5 L 6 8.8 L 3 11.5 Z";
-                fill: root.mark.chapter ? transparent : Theme.accent;
-                stroke: root.mark.chapter ? Theme.text-dim : transparent;
-                stroke-width: root.mark.chapter ? 1.2px : 0px;
+            // Chapter: a flag on a pole; bookmark: a ribbon.
+            Icon {
+                name: root.mark.chapter ? "chapter" : "bookmark";
+                color: root.mark.chapter ? Theme.text-dim : Theme.accent;
             }
         }
         Text {

@@ -23,7 +23,23 @@ component Tab {
     height: 31px;
     accessible-role: tab;
     accessible-label: root.text;
-    Rectangle { background: root.selected ? Theme.bg-panel : touch.has-hover ? Theme.hover-bg : transparent; }
+    // Hover lights a rounded plate; the selected tab has a 28px gradient stroke under its label.
+    Rectangle {
+        x: 3px;
+        y: 4px;
+        width: parent.width - 6px;
+        height: parent.height - 8px;
+        border-radius: Theme.radius-control;
+        background: !root.selected && touch.has-hover ? Theme.hover-bg : transparent;
+    }
+    if root.selected: Rectangle {
+        x: (parent.width - 28px) / 2;
+        y: parent.height - 3px;
+        width: 28px;
+        height: 2px;
+        border-radius: 1px;
+        background: Theme.accent-fill;
+    }
     Text {
         text: root.text;
         color: root.selected ? Theme.text : Theme.text-dim;

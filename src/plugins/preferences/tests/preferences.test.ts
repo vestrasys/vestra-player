@@ -39,10 +39,34 @@ test("menu: 选项… (F5, 830) and one radio per palette from 840", async () =>
   const radios = THEMES.map((row) => host.command(`theme.${row.id}`).declaration);
   assert.deepEqual(
     radios.map((d) => [d.path, d.order, d.group, d.radio]),
-    [[["设置", "外观", "Vestra"], 840, "settings-look", true]],
+    [
+      [["设置", "外观", "Vestra 深色"], 840, "settings-look", true],
+      [["设置", "外观", "Vestra 浅色"], 841, "settings-look", true],
+    ],
   );
   assert.equal(checked(host), true);
   assert.deepEqual(host.conflicts, []);
+});
+
+test("the light palette: menu radio and page pick switch to it, 恢复默认 returns", async () => {
+  const { host } = await start();
+  const light = () => host.command("theme.vestra-light").state.checked;
+  assert.equal(light(), false);
+  await host.command("theme.vestra-light").run();
+  await host.settle();
+  assert.equal(host.appearance, "vestra-light");
+  assert.deepEqual(host.osd, ["配色：Vestra 浅色"]);
+  assert.deepEqual([checked(host), light()], [false, true]);
+  assert.equal(page(host).props.theme, "vestra-light");
+  assert.equal(page(host).props["can-reset"], true);
+  page(host).emit("reset");
+  await host.settle();
+  assert.equal(host.appearance, "vestra");
+  assert.deepEqual([checked(host), light()], [true, false]);
+  page(host).emit("pick", "vestra-light");
+  await host.settle();
+  assert.equal(host.appearance, "vestra-light");
+  assert.equal(host.sent("appearance.set").length, 3);
 });
 
 test("F5 opens the options window on the last page", async () => {
@@ -53,7 +77,7 @@ test("F5 opens the options window on the last page", async () => {
   assert.equal(host.settings.open, true);
 });
 
-test("外观 page: registered in 外观 with the palette and its preview", async () => {
+test("外观 page: registered in 外观 with the palettes and their previews", async () => {
   const { host } = await start();
   const p = page(host);
   assert.deepEqual([p.category, p.title, p.order, p.file, p.component, p.global], [
@@ -67,11 +91,18 @@ test("外观 page: registered in 外观 with the palette and its preview", async
   assert.equal(p.props.theme, "vestra");
   assert.equal(p.props["can-reset"], false);
   const themes = p.props.themes as { id: string; title: string; swatch: Record<string, { r: number; g: number; b: number }> }[];
-  assert.deepEqual(themes.map((t) => [t.id, t.title]), [["vestra", "Vestra"]]);
+  assert.deepEqual(themes.map((t) => [t.id, t.title]), [
+    ["vestra", "Vestra 深色"],
+    ["vestra-light", "Vestra 浅色"],
+  ]);
   // The preview draws the palette's own colours, whatever is current.
-  assert.deepEqual(themes[0]!.swatch.accent, { r: 0xfa, g: 0x13, b: 0x9c });
-  assert.deepEqual(themes[0]!.swatch.bar, { r: 0x17, g: 0x14, b: 0x1c });
-  assert.deepEqual(themes[0]!.swatch.f0, { r: 0xfd, g: 0xb5, b: 0x06 });
+  assert.deepEqual(themes[0]!.swatch.accent, { r: 0xf7, g: 0x2a, b: 0xa6 });
+  assert.deepEqual(themes[0]!.swatch.bar, { r: 0x16, g: 0x14, b: 0x1c });
+  assert.deepEqual(themes[0]!.swatch.f0, { r: 0xfc, g: 0xc4, b: 0x02 });
+  assert.deepEqual(themes[1]!.swatch.bar, { r: 0xf7, g: 0xf6, b: 0xfa });
+  assert.deepEqual(themes[1]!.swatch.accent, { r: 0xd4, g: 0x12, b: 0x8a });
+  // The light palette keeps a dark video area.
+  assert.deepEqual(themes[1]!.swatch.video, { r: 0x0e, g: 0x0d, b: 0x12 });
 });
 
 test("menu radio: choosing the current palette does nothing", async () => {
@@ -90,7 +121,7 @@ test("menu radio switches to Vestra from another palette, with the OSD", async (
   await host.command("theme.vestra").run();
   await host.settle();
   assert.equal(host.appearance, "vestra");
-  assert.deepEqual(host.osd, ["配色：Vestra"]);
+  assert.deepEqual(host.osd, ["配色：Vestra 深色"]);
   assert.equal(checked(host), true);
   assert.equal(page(host).props.theme, "vestra");
   assert.equal(page(host).props["can-reset"], false);
@@ -101,7 +132,7 @@ test("page: 恢复默认, and picks that are not a listed palette", async () => 
   page(host).emit("reset");
   await host.settle();
   assert.equal(host.appearance, "vestra");
-  assert.deepEqual(host.osd, ["配色：Vestra"]);
+  assert.deepEqual(host.osd, ["配色：Vestra 深色"]);
   assert.equal(page(host).props["can-reset"], false);
   // Already the default, or not a palette this plugin lists: nothing is sent.
   page(host).emit("reset");
@@ -119,7 +150,7 @@ test("quick repeated clicks switch once", async () => {
   await host.command("theme.vestra").run();
   await host.settle();
   assert.equal(host.sent("appearance.set").length, 1);
-  assert.deepEqual(host.osd, ["配色：Vestra"]);
+  assert.deepEqual(host.osd, ["配色：Vestra 深色"]);
 });
 
 test("the saved palette shows at start; another plugin's switch is followed silently", async () => {
@@ -161,9 +192,10 @@ test("stopping removes the page and the menu, the palette stays", async () => {
 });
 
 test("titles and the page's Slint has no colour literals", () => {
-  assert.equal(titleOf("vestra"), "Vestra");
+  assert.equal(titleOf("vestra"), "Vestra 深色");
+  assert.equal(titleOf("vestra-light"), "Vestra 浅色");
   assert.equal(titleOf(OTHER), OTHER);
-  assert.equal(THEMES.length, 1);
+  assert.equal(THEMES.length, 2);
   const slint = readFileSync(new URL("../ui/appearance.slint", import.meta.url), "utf8");
   assert.doesNotMatch(slint, /#[0-9a-fA-F]{3,8}\b/);
 });

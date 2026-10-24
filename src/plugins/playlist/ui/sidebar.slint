@@ -1,8 +1,9 @@
 // Playlist sidebar (ui-spec §5): 31px tab strip, single-line 20px rows on
-// the list background, 35px bottom bar. Icons are drawn with Path.
+// the list background, 35px bottom bar. Icons come from @vestra/icons.slint.
 import { ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
-import { Button, ToolTipArea } from "@vestra/widgets.slint";
+import { Icon } from "@vestra/icons.slint";
+import { ToolTipArea } from "@vestra/widgets.slint";
 
 export struct PlaylistRow {
     rowId: string,
@@ -63,32 +64,28 @@ export global PlaylistBridge {
     callback search-down();
 }
 
-// Icon button drawn with a Path, coloured like the @vestra Button icon state.
+// A 25px icon button (one icon of the set, centred), coloured like the
+// @vestra Button icon state.
 component IconButton {
-    in property <string> commands;
+    in property <string> icon;
     in property <bool> enabled: true;
-    in property <bool> stroked;
     in property <string> tip;
-    in property <length> icon-width: 14px;
-    in property <length> icon-height: 12px;
     callback clicked();
     width: 25px;
     private property <color> tint: !root.enabled ? Theme.icon-disabled : touch.has-hover ? (touch.pressed ? Theme.accent-press : Theme.accent) : Theme.text-dim;
     accessible-role: button;
     accessible-label: root.tip;
-    Path {
+    Icon {
         x: (parent.width - self.width) / 2;
         y: (parent.height - self.height) / 2;
-        width: root.icon-width;
-        height: root.icon-height;
-        viewbox-width: root.icon-width / 1px;
-        viewbox-height: root.icon-height / 1px;
-        commands: root.commands;
-        fill: root.stroked ? transparent : root.tint;
-        stroke: root.stroked ? root.tint : transparent;
-        stroke-width: root.stroked ? 1.5px : 0px;
+        name: root.icon;
+        color: root.tint;
     }
+    // Sized: an unsized ToolTipArea has no area, and the button took no
+    // clicks (found by the 2026-10 geometry check).
     ToolTipArea {
+        width: 100%;
+        height: 100%;
         text: root.tip;
         touch := TouchArea {
             enabled: root.enabled;
@@ -97,18 +94,40 @@ component IconButton {
     }
 }
 
-// A small text button in the bottom bar (18px high), centred vertically.
+// A small button in the bottom bar: an 18px pill (41px, the width of the
+// text buttons it replaced), centred vertically, with an icon label; `text`
+// is its tooltip and accessible name.
 component BarButton {
     in property <string> text;
+    in property <string> icon;
     in property <bool> enabled: true;
     callback clicked(float, float);
     VerticalLayout {
         alignment: center;
-        button := Button {
-            text: root.text;
-            small: true;
-            enabled: root.enabled;
-            clicked => { root.clicked(self.absolute-position.x / 1px, self.absolute-position.y / 1px); }
+        pill := Rectangle {
+            height: Theme.button-small-height;
+            width: Theme.button-small-min-width;
+            border-radius: Theme.radius-control;
+            background: !root.enabled ? Theme.button-disabled
+                : touch.pressed ? Theme.button-press
+                : touch.has-hover ? Theme.button-hover : Theme.button-bg;
+            accessible-role: button;
+            accessible-label: root.text;
+            accessible-enabled: root.enabled;
+            accessible-action-default => { if root.enabled { root.clicked(self.absolute-position.x / 1px, self.absolute-position.y / 1px); } }
+            Icon {
+                name: root.icon;
+                color: root.enabled ? Theme.text-list : Theme.text-dim;
+            }
+            ToolTipArea {
+                width: 100%;
+                height: 100%;
+                text: root.text;
+                touch := TouchArea {
+                    enabled: root.enabled;
+                    clicked => { root.clicked(pill.absolute-position.x / 1px, pill.absolute-position.y / 1px); }
+                }
+            }
         }
     }
 }
@@ -191,9 +210,17 @@ export component PlaylistSidebar inherits Rectangle {
                 height: 31px;
                 background: Theme.bg-bar;
                 HorizontalLayout {
+                    // The one tab: its label over a 28px gradient stroke.
                     Rectangle {
                         width: 105px;
-                        background: Theme.bg-panel;
+                        Rectangle {
+                            x: (parent.width - 28px) / 2;
+                            y: parent.height - 3px;
+                            width: 28px;
+                            height: 2px;
+                            border-radius: 1px;
+                            background: Theme.accent-fill;
+                        }
                         Text {
                             width: 100%;
                             height: 100%;
@@ -207,19 +234,13 @@ export component PlaylistSidebar inherits Rectangle {
                     Rectangle { horizontal-stretch: 1; }
                     IconButton {
                         tip: PlaylistBridge.detached ? "附着到主窗口" : "分离为浮动窗口";
-                        stroked: true;
                         // Detached: arrow into the frame; attached: arrow out of it.
-                        commands: PlaylistBridge.detached
-                            ? "M 7 1.5 L 12.5 1.5 L 12.5 10.5 L 1.5 10.5 L 1.5 6 M 1.5 1.5 L 7 6 M 3.5 6 L 7 6 L 7 2.5"
-                            : "M 6 1.5 L 1.5 1.5 L 1.5 10.5 L 10.5 10.5 L 10.5 7 M 12.5 0.5 L 7 6 M 8.5 0.5 L 12.5 0.5 L 12.5 4.5";
+                        icon: PlaylistBridge.detached ? "attach" : "detach";
                         clicked => { PlaylistBridge.toggle-detached(); }
                     }
                     IconButton {
                         tip: "关闭列表";
-                        stroked: true;
-                        icon-width: 14px;
-                        icon-height: 13px;
-                        commands: "M 3 2.5 L 11 10.5 M 11 2.5 L 3 10.5";
+                        icon: "close";
                         clicked => { PlaylistBridge.hide(); }
                     }
                     Rectangle { width: 3px; }
@@ -254,6 +275,15 @@ export component PlaylistSidebar inherits Rectangle {
                         property <color> ink: row.current ? Theme.playing : row.selected ? Theme.text : row.played ? Theme.text-played : Theme.text-list;
                         height: root.row-height;
                         background: row.selected ? root.selected-bg : transparent;
+                        // The playing row: a 2px bar in the playing colour at its left edge.
+                        if row.current: Rectangle {
+                            x: 0;
+                            y: 3px;
+                            width: 2px;
+                            height: parent.height - 6px;
+                            border-radius: 1px;
+                            background: Theme.playing;
+                        }
                         ToolTipArea {
                             width: parent.width;
                             height: parent.height;
@@ -272,15 +302,10 @@ export component PlaylistSidebar inherits Rectangle {
                                     overflow: elide;
                                     horizontal-stretch: 1;
                                 }
-                                if row.failed: Path {
-                                    width: 10px;
-                                    height: 10px;
+                                if row.failed: Icon {
                                     y: 5px;
-                                    viewbox-width: 10;
-                                    viewbox-height: 10;
-                                    commands: "M 5 0 L 10 9.5 L 0 9.5 Z M 4.4 3 L 5.6 3 L 5.4 6.5 L 4.6 6.5 Z M 4.4 7.3 L 5.6 7.3 L 5.6 8.5 L 4.4 8.5 Z";
-                                    fill: Theme.accent;
-                                    fill-rule: evenodd;
+                                    name: "failed";
+                                    color: Theme.accent;
                                 }
                                 Text {
                                     text: row.duration;
@@ -388,63 +413,58 @@ export component PlaylistSidebar inherits Rectangle {
                     IconButton {
                         tip: "置顶 (Ctrl+Home)";
                         enabled: PlaylistBridge.can-top;
-                        commands: "M 2 1 L 12 1 L 12 2.6 L 2 2.6 Z M 7 4 L 12.5 11 L 1.5 11 Z";
+                        icon: "move-top";
                         clicked => { PlaylistBridge.place("top"); }
                     }
                     IconButton {
                         tip: "上移 (Ctrl+↑)";
                         enabled: PlaylistBridge.can-up;
-                        commands: "M 7 2.5 L 12.5 9.5 L 1.5 9.5 Z";
+                        icon: "move-up";
                         clicked => { PlaylistBridge.place("up"); }
                     }
                     IconButton {
                         tip: "下移 (Ctrl+↓)";
                         enabled: PlaylistBridge.can-down;
-                        commands: "M 1.5 2.5 L 12.5 2.5 L 7 9.5 Z";
+                        icon: "move-down";
                         clicked => { PlaylistBridge.place("down"); }
                     }
                     IconButton {
                         tip: "置底 (Ctrl+End)";
                         enabled: PlaylistBridge.can-bottom;
-                        commands: "M 1.5 1 L 12.5 1 L 7 8 Z M 2 9.4 L 12 9.4 L 12 11 L 2 11 Z";
+                        icon: "move-bottom";
                         clicked => { PlaylistBridge.place("bottom"); }
                     }
                     Rectangle { width: 6px; }
                     BarButton {
-                        text: "ADD";
+                        text: "添加";
+                        icon: "add";
                         enabled: PlaylistBridge.can-add;
                         clicked(x, y) => { PlaylistBridge.add-menu(x, y); }
                     }
                     Rectangle { width: 4px; }
                     BarButton {
-                        text: "DEL";
+                        text: "删除";
+                        icon: "remove";
                         enabled: PlaylistBridge.can-remove;
                         clicked => { PlaylistBridge.remove(); }
                     }
                     Rectangle { width: 4px; }
                     BarButton {
-                        text: "SORT";
+                        text: "排序";
+                        icon: "sort";
                         enabled: PlaylistBridge.can-sort;
                         clicked(x, y) => { PlaylistBridge.sort-menu(x, y); }
                     }
                 }
                 // C21 search box: about 24px high on `Theme.hover-bg` (UI-PL-09); width from `search-width`.
                 // The folded search box: a magnifier icon the size of the bar's other icons.
-                if root.folded: ToolTipArea {
+                if root.folded: IconButton {
                     x: root.bar-fixed;
                     y: 1px;
-                    width: 25px;
                     height: parent.height - 1px;
-                    text: "搜索 (Ctrl+S)";
-                    Button {
-                        width: 100%;
-                        height: 100%;
-                        stroked: true;
-                        icon-width: 14px;
-                        icon-height: 12px;
-                        icon: "M 9 5 A 4 4 0 1 1 1 5 A 4 4 0 1 1 9 5 Z M 8 8 L 12 11.5";
-                        clicked => { root.open-search(); }
-                    }
+                    tip: "搜索 (Ctrl+S)";
+                    icon: "search";
+                    clicked => { root.open-search(); }
                 }
                 search-keys := FocusScope {
                     visible: !root.folded;
