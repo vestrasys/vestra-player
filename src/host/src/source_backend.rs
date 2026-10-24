@@ -599,6 +599,10 @@ impl Sources {
     pub fn producer_frame(&mut self) -> Option<crate::producer::Frame> {
         self.producers.frame()
     }
+    /// The registered file resolvers' extensions (`Registry::file_types`).
+    pub fn file_types(&self) -> Vec<String> {
+        self.resolvers.file_types()
+    }
     #[cfg(feature = "producer-audio")]
     pub fn provider_active(&self) -> bool {
         self.producers.active().is_some()

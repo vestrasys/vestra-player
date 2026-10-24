@@ -227,6 +227,18 @@ impl Registry {
     pub fn disable(&mut self, owner: u64) {
         self.entries.retain(|(id, _), _| *id != owner);
     }
+    /// `plugin.resolvers.fileTypes`: every registered file resolver's
+    /// extensions, lower case, sorted, once each (not who registered them).
+    pub fn file_types(&self) -> Vec<String> {
+        let mut types = self
+            .entries
+            .values()
+            .flat_map(|d| d.extensions.iter().cloned())
+            .collect::<Vec<_>>();
+        types.sort();
+        types.dedup();
+        types
+    }
 }
 /// What a file resolver answers: the producer it prepared (`producer.prepare`).
 #[derive(Clone, Deserialize)]
@@ -408,6 +420,29 @@ pub(crate) mod tests {
             Some((1, "web".into()))
         );
     }
+    #[test]
+    fn file_types_list_every_file_resolver_once_and_go_with_their_owner() {
+        let mut r = Registry::default();
+        assert!(r.file_types().is_empty());
+        r.register(1, files("nes", &["nes", "fds"])).unwrap();
+        r.register(2, files("gb", &["gb", "gbc"])).unwrap();
+        r.register(
+            3,
+            Declaration {
+                id: "web".into(),
+                schemes: vec!["https".into()],
+                hosts: vec!["media.example".into()],
+                extensions: vec![],
+            },
+        )
+        .unwrap();
+        assert_eq!(r.file_types(), ["fds", "gb", "gbc", "nes"]);
+        r.disable(1);
+        assert_eq!(r.file_types(), ["gb", "gbc"]);
+        r.remove(2, "gb");
+        assert!(r.file_types().is_empty());
+    }
+
     #[test]
     fn unix_paths_are_absolute_from_the_root() {
         let ext = |s| extension_of(s, false);

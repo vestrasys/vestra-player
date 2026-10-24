@@ -4,23 +4,22 @@ use super::*;
 use package_stage::Candidate;
 use package_store::{Instance, Source, Store, StoredPackage};
 use plugins::DataKey;
+use std::collections::VecDeque;
 
+/// Validated candidates kept at once (each is a staged copy on disk).
+const MAX_CANDIDATES: usize = 32;
 pub struct Manager {
     store: Store,
     /// Secret names per plugin service (`secrets.*`), for deleting them.
     pub secrets: crate::secret_index::Index,
+    /// Validated packages by token, at most `MAX_CANDIDATES`; `candidate_order`
+    /// is oldest first, and a new validation drops the oldest token (`stale`).
     candidates: BTreeMap<String, Candidate>,
-    trials: BTreeMap<u64, Trial>,
+    candidate_order: VecDeque<String>,
     operations: BTreeMap<String, Operation>,
     next: u64,
     receipts: BTreeMap<String, Value>,
     booted: bool,
-}
-struct Trial {
-    owner: u64,
-    request_id: Option<String>,
-    candidate: Candidate,
-    stopping: bool,
 }
 struct Operation {
     id: String,
@@ -43,6 +42,17 @@ struct Operation {
     request: Value,
 }
 impl Manager {
+    /// Keep a validated candidate; past `MAX_CANDIDATES` the oldest token
+    /// goes (an install that already staged it keeps its own copy).
+    fn remember(&mut self, token: String, candidate: Candidate) {
+        while self.candidate_order.len() >= MAX_CANDIDATES {
+            if let Some(oldest) = self.candidate_order.pop_front() {
+                self.candidates.remove(&oldest);
+            }
+        }
+        self.candidate_order.push_back(token.clone());
+        self.candidates.insert(token, candidate);
+    }
     pub fn open() -> Result<Self> {
         let root = std::env::var_os("VESTRA_PACKAGE_STORE")
             .map(PathBuf::from)
@@ -58,37 +68,15 @@ impl Manager {
             store,
             secrets,
             candidates: BTreeMap::new(),
-            trials: BTreeMap::new(),
+            candidate_order: VecDeque::new(),
             operations: BTreeMap::new(),
             next: 0,
             receipts,
             booted: false,
         })
     }
-    pub fn is_trial(&self, owner: u64) -> bool {
-        self.trials.contains_key(&owner)
-    }
-    pub fn owner_gone(&mut self, owner: u64) {
-        for trial in self.trials.values_mut() {
-            if trial.owner == owner {
-                trial.stopping = true;
-            }
-        }
-    }
 }
 impl Host {
-    fn trial_state(&mut self, id: u64) -> std::result::Result<Value, RpcError> {
-        let trial = &self.packages.trials[&id];
-        let state = if self.cleanup_done(id) {
-            "stopped".to_owned()
-        } else if trial.stopping {
-            "stopping".into()
-        } else {
-            self.package_status(id)
-        };
-        Ok(json!({"trialId":id,"activationOwner":id,"status":state,
-            "cleanupConfirmed":self.cleanup_done(id),"activation":self.activation(id)?}))
-    }
     fn cleanup_done(&self, owner: u64) -> bool {
         self.cleanup.get(&owner) == Some(&(true, true))
     }
@@ -98,14 +86,9 @@ impl Host {
         manifest: &package_stage::PackageManifest,
         key: DataKey,
     ) -> Result<u64> {
-        let trial = key == DataKey::Trial;
         self.next_generation += 1;
         let owner = self.next_generation;
-        let id = if trial {
-            format!("{}.trial.{owner}", manifest.id)
-        } else {
-            manifest.id.clone()
-        };
+        let id = manifest.id.clone();
         anyhow::ensure!(
             !self.plugins.values().any(|p| p.manifest.id == id),
             "plugin already running"
@@ -143,9 +126,6 @@ impl Host {
     ) -> std::result::Result<Value, RpcError> {
         match method {
             "packages.validate" | "packages.validateArchive" => {
-                if self.packages.candidates.len() >= 32 {
-                    return Err(RpcError::new("busy", "candidate limit reached"));
-                }
                 let candidate = if method == "packages.validate" {
                     Candidate::capture(Path::new(string(params, "directory")?))?
                 } else {
@@ -210,106 +190,13 @@ impl Host {
                 self.packages.next += 1;
                 let token = format!("candidate-{}-{}", self.packages.next, candidate.digest());
                 let report = json!({"token":token,"digest":candidate.digest(),"apiVersion":plugins::API,"manifest":candidate.manifest(),"checks":["manifest","digest","productionJavaScript","slintCompile"],"trustedExecution":true});
-                self.packages.candidates.insert(token, candidate);
+                self.packages.remember(token, candidate);
                 Ok(report)
             }
             "packages.installed" => Ok(serde_json::to_value(
                 self.packages.store.get(string(params, "id")?),
             )
             .map_err(anyhow::Error::from)?),
-            "packages.trial" => {
-                let token = string(params, "token")?;
-                let request_id = match params.get("requestId") {
-                    None => None,
-                    Some(value) => {
-                        let id = value
-                            .as_str()
-                            .filter(|id| !id.is_empty() && id.len() <= 128)
-                            .ok_or_else(|| {
-                                RpcError::invalid("requestId must contain 1..128 bytes")
-                            })?;
-                        Some(id.to_owned())
-                    }
-                };
-                let candidate = self
-                    .packages
-                    .candidates
-                    .get(token)
-                    .cloned()
-                    .ok_or_else(|| RpcError::new("stale", "unknown validation token"))?;
-                check_reserved(&candidate.manifest().id, None)?;
-                if let Some(request) = &request_id
-                    && let Some((&id, trial)) = self.packages.trials.iter().find(|(_, trial)| {
-                        trial.owner == caller && trial.request_id.as_ref() == Some(request)
-                    })
-                {
-                    if trial.candidate.digest() != candidate.digest() {
-                        return Err(RpcError::new(
-                            "conflict",
-                            "trial requestId was used for another candidate",
-                        ));
-                    }
-                    return self.trial_state(id);
-                }
-                if candidate
-                    .manifest()
-                    .capabilities
-                    .iter()
-                    .any(|c| !matches!(c.as_str(), "commands" | "ui.window" | "events"))
-                {
-                    return Err(RpcError::new(
-                        "unsupported",
-                        "finite trial supports only commands, windows and events",
-                    ));
-                }
-                if self.packages.trials.len() >= 16 {
-                    return Err(RpcError::new("busy", "trial limit"));
-                }
-                let owner =
-                    self.load_package(candidate.directory(), candidate.manifest(), DataKey::Trial)?;
-                self.packages.trials.insert(
-                    owner,
-                    Trial {
-                        owner: caller,
-                        request_id,
-                        candidate,
-                        stopping: false,
-                    },
-                );
-                Ok(json!({"trialId":owner,"activationOwner":owner,"status":"pending"}))
-            }
-            "packages.stopTrial" | "packages.trialState" | "packages.trialStateByRequest" => {
-                let id = if method == "packages.trialStateByRequest" {
-                    let request = string(params, "requestId")?;
-                    self.packages
-                        .trials
-                        .iter()
-                        .find(|(_, trial)| {
-                            trial.owner == caller && trial.request_id.as_deref() == Some(request)
-                        })
-                        .map(|(&id, _)| id)
-                        .ok_or_else(|| {
-                            RpcError::new("missing", "trial request unknown in this owner session")
-                        })?
-                } else {
-                    params["trialId"]
-                        .as_u64()
-                        .ok_or_else(|| RpcError::invalid("trialId required"))?
-                };
-                let trial = self
-                    .packages
-                    .trials
-                    .get_mut(&id)
-                    .ok_or_else(|| RpcError::new("missing", "trial unknown"))?;
-                if trial.owner != caller {
-                    return Err(RpcError::new("owner", "trial belongs to another instance"));
-                }
-                if method == "packages.stopTrial" {
-                    trial.stopping = true;
-                    self.disable(id);
-                }
-                self.trial_state(id)
-            }
             "packages.install" | "packages.rollback" => {
                 let request = string(params, "requestId")?.to_owned();
                 if request.is_empty() || request.len() > 128 {
@@ -352,14 +239,6 @@ impl Host {
                         .cloned()
                         .ok_or_else(|| RpcError::new("stale", "unknown validation token"))?;
                     check_reserved(&candidate.manifest().id, None)?;
-                    if self.packages.trials.iter().any(|(id, t)| {
-                        t.candidate.digest() == candidate.digest() && !self.cleanup_done(*id)
-                    }) {
-                        return Err(RpcError::new(
-                            "busy",
-                            "stop matching trial and await cleanup before install",
-                        ));
-                    }
                     self.packages.store.gc()?;
                     self.packages.store.stage(&candidate)?
                 } else {
@@ -503,8 +382,8 @@ impl Host {
     }
     /// The data directory of an installed instance, development load or
     /// running plugin (`PluginInfo.dataDirectory`).
-    fn data_directory_of(&self, key: &DataKey, id: &str) -> Option<PathBuf> {
-        plugins::data_root().map(|root| key.directory(&root, id))
+    fn data_directory_of(&self, key: &DataKey) -> Option<PathBuf> {
+        plugins::data_root().map(|root| key.directory(&root))
     }
     /// Install or upgrade the built-in plugins the installation ships
     /// (`<resources>/plugins/builtin.json`, or `$VESTRA_BUILTIN_PLUGINS`). A
@@ -620,9 +499,6 @@ impl Host {
         let Some(plugin) = self.plugins.get(&owner) else {
             return false;
         };
-        if self.packages.is_trial(owner) {
-            return false;
-        }
         let stored = self.packages.store.get(&plugin.manifest.id);
         stored
             .current
@@ -671,16 +547,14 @@ impl Host {
         let mut list = BTreeMap::<String, Value>::new();
         let owners = self.plugins.keys().copied().collect::<Vec<_>>();
         for owner in owners {
-            let trial = self.packages.is_trial(owner);
             let status = self.activations.status(owner, now).ok();
             let plugin = &self.plugins[&owner];
             let id = plugin.manifest.id.clone();
             let stored = self.packages.store.get(&id);
-            let installed = !trial
-                && stored
-                    .current
-                    .as_ref()
-                    .is_some_and(|current| current.directory == plugin.directory);
+            let installed = stored
+                .current
+                .as_ref()
+                .is_some_and(|current| current.directory == plugin.directory);
             let warnings = self.warnings_of(owner);
             let (state, error) = match status {
                 Some(package_activation::Status::Pending { .. }) => ("starting", None),
@@ -692,10 +566,10 @@ impl Host {
                 // fields), a running plugin's `error` carries them as text.
                 _ => ("running", self.warning_text(owner)),
             };
-            let origin = match (trial, installed) {
-                (true, _) => "trial",
-                (_, true) => "installed",
-                _ => "development",
+            let origin = if installed {
+                "installed"
+            } else {
+                "development"
             };
             let previous = installed
                 .then(|| stored.previous.and_then(|p| p.manifest.version))
@@ -732,7 +606,7 @@ impl Host {
             let data = record
                 .instance
                 .as_ref()
-                .and_then(|i| self.data_directory_of(&DataKey::Instance(i.guid.clone()), &id));
+                .and_then(|i| self.data_directory_of(&DataKey::Instance(i.guid.clone())));
             list.insert(
                 id.clone(),
                 json!({"id":id,"version":current.manifest.version,
@@ -749,7 +623,7 @@ impl Host {
                 continue;
             }
             let (state, error) = stopped(self.dev_disabled.contains(id), self.failures.get(id));
-            let data = self.data_directory_of(&DataKey::Development(id.clone()), id);
+            let data = self.data_directory_of(&DataKey::Development(id.clone()));
             list.insert(
                 id.clone(),
                 json!({"id":id,"version":manifest.version,
@@ -772,22 +646,13 @@ impl Host {
             return Err(RpcError::invalid("a plugin cannot disable itself"));
         }
         let running = self.running(id);
-        if running.is_some_and(|owner| self.packages.is_trial(owner)) {
-            return Err(RpcError::new(
-                "unsupported",
-                "a trial is stopped with its trial handle",
-            ));
-        }
         if self.operation_pending(id) {
             return Err(RpcError::new("busy", "the package is being installed"));
         }
         let record = self.packages.store.get(id);
         let installed = record.current;
         let reserved = check_reserved(id, record.instance.as_ref());
-        let key = record
-            .instance
-            .map(|i| DataKey::Instance(i.guid))
-            .unwrap_or(DataKey::Trial);
+        let key = record.instance.map(|i| DataKey::Instance(i.guid));
         let development = self.development.get(id).cloned();
         if installed.is_none() && development.is_none() {
             return Err(RpcError::new("missing", format!("no plugin {id}")));
@@ -815,6 +680,10 @@ impl Host {
             (_, Some((directory, _))) => self.load(&directory, 120_000)?,
             (Some(current), None) => {
                 reserved?;
+                // Only seeding and installs record a package, both with an instance.
+                let key = key.ok_or_else(|| {
+                    RpcError::new("unavailable", "the installed package has no instance")
+                })?;
                 self.load_package(&current.directory, &current.manifest, key)?;
             }
             (None, None) => unreachable!("checked above"),
@@ -874,7 +743,7 @@ impl Host {
                 installed
                     .instance
                     .as_ref()
-                    .and_then(|i| self.data_directory_of(&DataKey::Instance(i.guid.clone()), &id))
+                    .and_then(|i| self.data_directory_of(&DataKey::Instance(i.guid.clone())))
             })
             .flatten();
         let receipt =
@@ -894,16 +763,16 @@ impl Host {
         self.packages.receipts = self.packages.store.operations();
         self.failures.remove(&id);
         if remove_data && let Some(instance) = &installed.instance {
-            self.purge_secrets(&DataKey::Instance(instance.guid.clone()), &id);
+            self.purge_secrets(&DataKey::Instance(instance.guid.clone()));
         }
         self.purge_dropped_secrets();
         Ok(receipt)
     }
     /// Deletes the secret store entries recorded for `key` (on a worker
     /// thread: keychain calls block and may prompt).
-    fn purge_secrets(&self, key: &DataKey, id: &str) {
+    fn purge_secrets(&self, key: &DataKey) {
         let index = self.packages.secrets.clone();
-        let service = key.secret_service(id);
+        let service = key.secret_service();
         let spawned = std::thread::Builder::new()
             .name("secrets-purge".into())
             .spawn(move || {
@@ -916,8 +785,8 @@ impl Host {
     /// Retired instances dropped because the dormant list was full can never
     /// be reconnected: their secrets go too.
     fn purge_dropped_secrets(&mut self) {
-        for (guid, id) in self.packages.store.take_dropped() {
-            self.purge_secrets(&DataKey::Instance(guid), &id);
+        for (guid, _) in self.packages.store.take_dropped() {
+            self.purge_secrets(&DataKey::Instance(guid));
         }
     }
     pub(super) fn package_tick(&mut self) {
@@ -1008,16 +877,6 @@ impl Host {
                         .insert(id.clone(), error.to_string().chars().take(512).collect());
                 }
             }
-        }
-        let dead = self
-            .packages
-            .trials
-            .iter()
-            .filter(|(_, t)| t.stopping || !self.plugins.contains_key(&t.owner))
-            .map(|(id, _)| *id)
-            .collect::<Vec<_>>();
-        for id in dead {
-            self.disable(id);
         }
         let keys = self
             .packages
@@ -1211,16 +1070,16 @@ fn install_source(params: &Value) -> std::result::Result<Source, RpcError> {
 }
 
 /// The 2026-10-24 ruling (ecosystem-plan.md): a reserved `vestra.` id
-/// (`manifest::reserved_id`) is installed, tried and started only as the
+/// (`manifest::reserved_id`) is installed and started only as the
 /// installation's built-in instance, which seeding alone creates. Store,
-/// file, link and workshop installs and trials of one are refused, and an
+/// file, link and workshop installs of one are refused, and an
 /// installed non-built-in one (from before the rule) is not started.
 /// Development loads (`--plugin`) are not checked here (`Host::load`).
 fn check_reserved(id: &str, instance: Option<&Instance>) -> std::result::Result<(), RpcError> {
     if crate::manifest::reserved_id(id) && !instance.is_some_and(|i| i.builtin) {
         return Err(RpcError::new(
             "reserved",
-            format!("「{id}」：vestra. 开头的 id 只留给播放器内置插件，不能安装或试载"),
+            format!("「{id}」：vestra. 开头的 id 只留给播放器内置插件，不能安装"),
         ));
     }
     Ok(())

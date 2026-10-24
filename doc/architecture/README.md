@@ -8,7 +8,7 @@
 ┌──────────── 宿主进程（Rust，src/host）────────────┐
 │ Slint 原生界面：主窗口、底栏/侧栏挂载、工具窗口、菜单 │
 │ libmpv 播放后端、处理链、字幕、快照/导出工作进程      │
-│ 插件管理：加载、停用、试载、安装/回退、owner 资源回收  │
+│ 插件管理：加载、停用、安装/回退、owner 资源回收        │
 └───────────────▲─────────────────────────────────┘
                 │ JSONL over stdin/stdout（wire：vestra/1）
 ┌───────────────┴──── 每插件一个 Node 进程 ──────────┐
@@ -25,7 +25,7 @@
 ## 2. 插件的加载与停止
 
 - **开发加载**：`vestra-host --plugin <目录>`（可多次），直接运行入口 `.ts`（Node 26 去类型执行；安装包用内置 Node，见 `src/host/src/runtime_paths.rs`）。
-- **托管安装**：`packages.validate` → `trial`/`install`/`rollback`，包存放在 `VESTRA_PACKAGE_STORE`。只接受构建产物（`dist/`，入口为 `.js`，manifest 带 `version`）。
+- **托管安装**：`packages.validate` → `install`/`rollback`，包存放在 `VESTRA_PACKAGE_STORE`。只接受构建产物（`dist/`，入口为 `.js`，manifest 带 `version`）。
 - **激活**：宿主启动 `node runner.ts <包目录>` → 运行器读取 manifest、按能力读初始状态和订阅事件 → 调用默认导出的 `activate(plugin)` → 激活期间的注册全部成功后发送 `runtime.ready`，否则 `runtime.failed`。
 - **停用**：宿主按 owner 撤销该插件的全部资源（菜单与绑定、窗口、面板与浮动面板窗口、处理资源、字幕层、快照、任务、解析器、producer、播放序列提供者、屏幕信息块），发送 `runtime.stop`；运行器释放句柄，300 ms 内未退出则被结束。每次运行有新的 owner 代次，旧进程的迟到消息不会路由给重新加载的同名插件。
 
@@ -62,7 +62,7 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 | 路径 | 内容 |
 | --- | --- |
 | `src/host/src/main.rs` | 宿主主循环、RPC 路由与能力检查、事件广播 |
-| `src/host/src/plugins.rs`、`package_*.rs` | 插件进程、manifest 校验、托管包存储/试载/安装/回退 |
+| `src/host/src/plugins.rs`、`package_*.rs` | 插件进程、manifest 校验、托管包存储/安装/回退 |
 | `src/host/src/backend.rs`、`source_*.rs`、`session.rs` | libmpv 后端、来源控制与操作簿、网络来源解析 |
 | `src/host/src/processing*.rs`、`effects.rs` | 视频/音频处理链 |
 | `src/host/src/subtitle_*.rs`、`native_subtitle.rs` | 字幕上传、选择、样式层 |
@@ -70,7 +70,7 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 | `src/host/src/producer*.rs` | 插件生成的音视频流（NES）。连接在两帧之间断开（`TransportClosed`）先等 0.5 秒（`CLOSE_GRACE`）：来源在此期间关闭或替换就不算失败（SDK 1.1.2 及以前先断连接再关来源），否则报 `producer transport closed`；帧中途断开与协议错误立即报告 |
 | `src/host/src/composition.rs`、`ui.rs`、`menu.rs`、`ui/*.slint` | 界面组合（主窗口、浮动面板窗口）、编译配置、插件窗口、共享右键菜单 |
 | `src/host/src/commands.rs`、`bindings.rs` | 命令注册表与菜单树、输入绑定表（解析、作用范围、冲突、菜单快捷键文字） |
-| `src/host/src/plugins.rs` | 插件进程；`VESTRA_PLUGIN_DATA_DIR` 传入数据目录（按 `DataKey`：已安装 `plugin-data/<安装实例 GUID>`，开发加载 `plugin-data/development/<id>`，试载 `plugin-data/<id>.trial.<owner>`，停止时删除）；`secrets` 的服务名同样按 `DataKey`，用过的名字记在安装库的 `secrets/<服务名>.json`（`secret_index.rs`，只记名字，每服务 ≤ 256），带数据卸载与休眠实例被丢弃时据此删除 |
+| `src/host/src/plugins.rs` | 插件进程；`VESTRA_PLUGIN_DATA_DIR` 传入数据目录（按 `DataKey`：已安装 `plugin-data/<安装实例 GUID>`，开发加载 `plugin-data/development/<id>`）；`secrets` 的服务名同样按 `DataKey`，用过的名字记在安装库的 `secrets/<服务名>.json`（`secret_index.rs`，只记名字，每服务 ≤ 256），带数据卸载与休眠实例被丢弃时据此删除 |
 | `src/host/src/manifest.rs` | manifest 结构与规则表（开发加载与托管包共用；SDK CLI 用同一张表，`host-agreement` 测试比对） |
 | `src/host/src/package_store.rs`、`package_archive.rs`、`package_manager.rs` | 安装库（`packages/catalog.json`：每个 id 的当前安装实例与休眠实例）、`.vxp` 解压、安装/替换/回退/卸载与内置插件播种（`Resources/plugins/builtin.json`）。设计见 [S4 提案](store-api-proposal.md) |
 | `src/host/src/ui_markdown.rs`、`ui/vestra/markdown.slint` | `plugin.ui.markdown`：pulldown-cmark 解析成 `[MarkdownBlock]`，行内样式用 Slint `styled-text`；文档可在属性值任意深度（`convert`，经 `ui_values::from_json_with` 的钩子），每个文档是宿主自己的 `Rows` 模型；按（插件、视图、属性）的指纹缓存（`Cache`，放在 `ui_image::Images` 里随视图释放）；`ui_values::reconcile` 对含文档的值按形状原地更新（`fits`/`merge`），文档按块 diff（`Rows::update`）。`MarkdownView` = `ScrollView` + `MarkdownBlocks` |

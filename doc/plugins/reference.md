@@ -62,7 +62,7 @@ interface Disposable { dispose(): Promise<void> }
 
 | 字段 | 规则 |
 | --- | --- |
-| `id` | 1–128 个 ASCII 字母、数字与 `.-_`。`vestra` 与 `vestra.` 开头的 id（不分大小写）只留给播放器内置插件（官方插件）：安装、试载这样的包以 `reserved` 失败（§12）。除此之外播放器不强制前缀。第三方插件（包括托管在官方插件仓库里的）用 `<GitHub 用户名或组织>.<插件名>`，发布到官方插件仓库时必须这样取（`vestra-plugin check` 对无前缀的 id 只提示） |
+| `id` | 1–128 个 ASCII 字母、数字与 `.-_`。`vestra` 与 `vestra.` 开头的 id（不分大小写）只留给播放器内置插件（官方插件）：安装这样的包以 `reserved` 失败（§12）。除此之外播放器不强制前缀。第三方插件（包括托管在官方插件仓库里的）用 `<GitHub 用户名或组织>.<插件名>`，发布到官方插件仓库时必须这样取（`vestra-plugin check` 对无前缀的 id 只提示） |
 | `version` | 三段非负整数 `x.y.z`；构建工具写入 `dist/manifest.json` |
 | `apiVersion` | 固定 `vestra/1` |
 | `entry` | 包内相对路径；开发时可为 `.ts`，构建后为 `.js` |
@@ -182,7 +182,6 @@ interface Plugin extends Scope {
 | `ExportJob` | 未结束则取消 |
 | `Stream` | 停止生成；若仍是当前来源则关闭 |
 | `Resolver` | 注销并中止进行中的解析 |
-| `PackageTrial` | 停止试载并等待清理确认 |
 | `JsonStore` | 写完待写的值 |
 | 进行中的 `tools.run` | 结束子进程（以 `aborted` 失败） |
 | 监听（`on`、`bind`、`onChange`…） | 退订 |
@@ -195,7 +194,6 @@ interface Plugin extends Scope {
 - 位置（播放器 0.2.0 起）：每个**安装实例**一个目录，`<数据根>/<安装实例 GUID>/`；开发加载（`--plugin`）是 `<数据根>/development/<manifest id>/`。数据根在 macOS 是 `~/Library/Application Support/Vestra/plugin-data/`，Windows 是 `%APPDATA%\Vestra\plugin-data\`（环境变量 `VESTRA_PLUGIN_DATA` 可改）。播放器在启动插件前创建。路径的格式不属于 API。
 - 安装实例：每次全新安装生成一个 GUID。同一来源再安装同 id 是升级，沿用实例与数据；从另一来源安装同 id 并确认替换时，新插件拿新的空目录，旧实例的数据保留，以后从旧来源再装回来时接上（见 §12）。插件停用、重新加载、升级、回退时都保留数据；卸载时只有 `uninstall(id, { removeData: true })` 才删除，不删时同来源重装可接上。
 - 别的插件（如插件管理）要某个插件的数据目录，读 `packages.list()` 里的 `dataDirectory`。**不要**再用 `dirname(plugin.dataDirectory)` 加 id 推算（0.2.0 之前的规则，已失效）。
-- 试载的插件拿到一个临时目录，试载停止时删除，不会碰正式安装版本的数据。
 - JSON 设置文件用 `plugin.storage.json`（§16.4），它已处理默认值、读坏改名、去抖与原子写入。
 - 存什么、什么格式由插件决定。自己写文件时先写临时文件再改名（`writeFileSync(tmp)` → `renameSync(tmp, path)`），播放器中途退出也不会留下写了一半的文件；读不到或读坏时用默认值。
 - 播放器没能提供目录时（例如创建失败），读取这个属性抛出 `code: "unavailable"`。
@@ -305,7 +303,7 @@ interface Command extends Disposable {
   });
   ```
 - 命令禁用或忙碌时，播放器不会调用 `run`（绑定的按键被接住但不执行）。`run` 抛出的错误交给 `onError`。
-- **数量上限**：每个插件实例同时最多 160 条命令，播放器全部（所有插件加上播放器自己的命令）最多 1024 条；超出时该命令的 `ready` 以 `limit` 失败（在激活期间注册的，激活随之失败），已注册的不受影响，`dispose` 后名额立即释放。试载包是独立实例，单独计数，但占用全部总量。上限只防失控（如按轨道数无限添加），不是产品限制：内置插件里最多的 video 在空闲时注册 71 条，全部插件约 290 条。按媒体内容动态添加的菜单项（轨道、章节、预设列表）请自行设一个合理的显示上限。常量 `COMMAND_LIMITS`（`{ perPlugin, total }`，从 `@vestra-player/sdk/testing` 导入）与播放器一致，`TestHost` 执行同样的上限。
+- **数量上限**：每个插件实例同时最多 160 条命令，播放器全部（所有插件加上播放器自己的命令）最多 1024 条；超出时该命令的 `ready` 以 `limit` 失败（在激活期间注册的，激活随之失败），已注册的不受影响，`dispose` 后名额立即释放。上限只防失控（如按轨道数无限添加），不是产品限制：内置插件里最多的 video 在空闲时注册 71 条，全部插件约 290 条。按媒体内容动态添加的菜单项（轨道、章节、预设列表）请自行设一个合理的显示上限。常量 `COMMAND_LIMITS`（`{ perPlugin, total }`，从 `@vestra-player/sdk/testing` 导入）与播放器一致，`TestHost` 执行同样的上限。
 
 ### 4.1 绑定
 
@@ -1235,6 +1233,17 @@ type ResolvedStream = {
 - 打开方不需要 `producer.av`，只需要 `playback.control`；文件选择、拖放、播放列表等入口统一用 `player.open(path)`。
 - 用到文件解析器的插件设 `"minPlayerVersion": "0.4.1"`：旧播放器不认识 `extensions`，登记以 `invalid` 失败。
 
+**有解析器的文件类型**（播放器 0.4.2，SDK 1.5.8）
+
+```ts
+resolvers.fileTypes: readonly string[]                         // 只读快照
+resolvers.onFileTypesChange(listener: (types: string[]) => void): Disposable
+```
+
+- 所有插件登记的文件解析器的扩展名：小写、不带点、排序、去重，不给登记者。播放列表等按扩展名过滤文件的插件，用它在自带的媒体类型之外接受这些文件（如 NES 启用时的 `.nes`）。
+- 读取不需要能力：激活前随 `window.state` 读到一次，插件第一次读时再读一次。变化通知需要 `events`：解析器登记、注销或其插件停用时，宿主推送 `resolvers.fileTypes` 事件，快照随之更新；没有 `events` 时监听不会触发，快照停在第一次读取时。旧播放器上是 `[]`。
+- `TestHost`：`host.fileTypes()` 是本插件的文件解析器加上 `host.otherResolvers` 的扩展名；改了 `otherResolvers` 之后调用 `host.updateFileTypes()` 推送变化。
+
 ## 12. 插件包管理 `plugin.packages`
 
 `validate`、`validateArchive`、`rollback`、`setEnabled`、`uninstall` 需要 `plugins.manage`（插件工坊、插件管理）；`list`、`onChange` 不需要能力（关于窗口等也可以读）。
@@ -1251,7 +1260,7 @@ interface Packages {
 }
 interface PluginInfo {
   id: string; version: string | null;
-  origin: "installed" | "development" | "trial";   // 安装库 / --plugin 开发加载 / 试载
+  origin: "installed" | "development";   // 安装库 / --plugin 开发加载（试载已删除，§17）
   state: "starting" | "running" | "disabled" | "failed" | "stopped";
   error: string | null;     // failed 时的原因；running 时为提示（面板位置、上一个/下一个或解析器被占，§6.3、§11）
   warnings: { code: string; slot?: string; owner?: string; target?: string }[];
@@ -1261,7 +1270,7 @@ interface PluginInfo {
   directory: string;        // 包目录（显示字段读其中的 manifest.json）
   previousVersion: string | null; // 可回退到的版本
   builtin: boolean;         // 0.2.0：随播放器安装，只能停用
-  source: PackageSource | null;   // 0.2.0：已安装插件的来源；开发加载、试载为 null
+  source: PackageSource | null;   // 0.2.0：已安装插件的来源；开发加载为 null
   dataDirectory: string | null;   // 0.2.0：它的数据目录（§3.4）
 }
 type PackageSource =
@@ -1273,12 +1282,7 @@ type PackageSource =
 interface PackageCandidate {
   readonly directory: string; readonly digest: string;
   readonly manifest: PackageManifest; readonly checks: string[];
-  trial(): Promise<PackageTrial>;     // 与已安装插件并行临时加载
   install(options?: { source?: PackageSource; replace?: boolean }): Promise<PackageChange>;
-}
-interface PackageTrial extends Disposable {
-  readonly status: string;
-  stop(): Promise<void>;  // 停止并等待清理确认
 }
 interface PackageChange {
   readonly status: "preparing" | "activating" | "restoring" | "committed"
@@ -1292,13 +1296,13 @@ interface PackageChange {
 
 - 安装和回退从不重复提交：请求 id 与预期修订号由 SDK 处理，答复丢失时只按同一请求查询。播放器保留最近至少 512 条操作回执（满了淘汰最早结束的，进行中的不淘汰）；更早的请求 id 查询为 `missing`，再次提交按新请求处理。
 - `list`：运行中的插件、安装库里的全部插件（含停用、启动失败、未运行的）与本次运行的开发加载，按 id 排序。`onChange` 在列表变化（启动、就绪、停用、失败、安装、卸载）后收到新列表，约每 200 ms 至多一次。
-- `setEnabled(id, false)`：停止该插件（与播放器停用插件相同，§3.2）；已安装的插件写进安装库，之后启动播放器也不再运行，直到 `setEnabled(id, true)`；开发加载只在本次运行有效。`setEnabled(id, true)` 重新加载它。停用自己 `invalid`，试载 `unsupported`（用试载句柄停止），未知 id `missing`，正在安装 `busy`。安装或回退一个停用的插件会让它重新启用。
-- `uninstall`：只对已安装插件（内置插件、开发加载、试载 `unsupported`；未知 `missing`；自己 `invalid`）。先停止，再从安装库删除（当前与上一版本，一次原子提交），回收它的包文件；`removeData: true` 时在进程结束后删除它的数据目录，否则安装实例转为休眠，同来源重新安装时接上数据。系统密钥库里该实例的条目不会被删除（无法枚举），但新实例读不到它们。用户覆盖层里它的绑定保留（`bindings.list` 的 orphans）。返回的 `PackageChange` 通常已是 `committed`。
-- `trial.stop()` 以 `code: "cleanup"` 失败表示播放器停止了试载但未确认清理；再次调用会重新请求停止。
+- `setEnabled(id, false)`：停止该插件（与播放器停用插件相同，§3.2）；已安装的插件写进安装库，之后启动播放器也不再运行，直到 `setEnabled(id, true)`；开发加载只在本次运行有效。`setEnabled(id, true)` 重新加载它。停用自己 `invalid`，未知 id `missing`，正在安装 `busy`。安装或回退一个停用的插件会让它重新启用。
+- `uninstall`：只对已安装插件（内置插件、开发加载 `unsupported`；未知 `missing`；自己 `invalid`）。先停止，再从安装库删除（当前与上一版本，一次原子提交），回收它的包文件；`removeData: true` 时在进程结束后删除它的数据目录，否则安装实例转为休眠，同来源重新安装时接上数据。系统密钥库里该实例的条目不会被删除（无法枚举），但新实例读不到它们。用户覆盖层里它的绑定保留（`bindings.list` 的 orphans）。返回的 `PackageChange` 通常已是 `committed`。
+- 候选包（播放器 0.4.2）：播放器为所有插件共保留最近 32 个 `validate`/`validateArchive` 的候选包，再校验时丢掉最早的；被丢掉的候选包 `install` 以 `stale` 失败，重新 `validate` 即可。0.4.2 之前候选包从不释放，一次运行里第 33 次校验起以 `busy` 失败。
 - `validateArchive(file)`：`.vxp` 是 zip，根目录放 `manifest.json`（`vestra-plugin pack` 的产物）。播放器在解压过程中强制上限（包 ≤ 64 MB、≤ 1024 个文件、单文件 ≤ 32 MB、总计 ≤ 64 MB），只收 stored/deflate、不收加密，拒绝绝对路径、`..`、`\`、符号链接、忽略大小写重名；不合格为 `invalid`。之后的检查与 `validate` 相同。播放器不知道包的 sha256，从网络下载的包请先自己核对。
 - `install({ source, replace })`（0.2.0）：来源决定升级还是替换。来源标识：`repository` 按 `url`；`link` 与 `file` 同为「手动安装」；`workshop` 单独一类。同 id 同来源 = 升级（沿用安装实例与数据，可回退）；同 id 不同来源：不带 `replace` 以 `conflict` 失败、什么都不做——插件问过用户后带 `replace: true` 重试；替换后新插件拿新的空数据目录，旧实例转为休眠（数据保留），以后从旧来源再安装时接上。同来源安装**更低**的版本同样按升级处理：播放器不比较版本号，沿用实例与数据，原来的当前版本成为 `previousVersion`（可以再回退过去）；商城的「安装其它版本」依赖这一点。不带参数等于 `{ source: { kind: "file" } }`。`source` 的地址须为 `http(s)`、≤ 2048 字节，`bundled` 为 `invalid`。同一时间每个 id 只运行一个。
 - **内置插件**（`builtin: true`，随播放器安装、来源 `bundled`）：可以停用、启用、回退；`uninstall` 与任何 `install`（带不带 `replace`）都以 `unsupported` 失败（内置插件的 id 都是保留 id，同 id 的包从 0.4.1 起在 `validate` 时就以 `reserved` 失败，见下条）。内置插件只随播放器更新：播放器启动时，安装包里的版本比上次播种的版本新才升级（保留用户的停用状态与数据；用户回退后不会被同一安装包再次覆盖）。
-- **保留 id**（播放器 0.4.1）：`vestra` 与 `vestra.` 开头的 id（不分大小写）只留给内置插件。`validate`、`validateArchive`、`trial`、`install` 遇到这样的包以 `reserved` 失败，`message` 为「「<id>」：vestra. 开头的 id 只留给播放器内置插件，不能安装或试载」。商城安装、侧载（拖入 `.vxp`、从文件安装、从链接安装）、插件工坊与 AI 的安装和试载都走这几个方法，所以都一样被拒绝。`rollback` 一个保留 id 只对内置实例有效（即回退内置插件，与以前相同）。保留 id 只有一种装进来的途径：安装包的内置插件集合（`builtin.json`，播种时来源 `bundled`）。
+- **保留 id**（播放器 0.4.1）：`vestra` 与 `vestra.` 开头的 id（不分大小写）只留给内置插件。`validate`、`validateArchive`、`install` 遇到这样的包以 `reserved` 失败，`message` 为「「<id>」：vestra. 开头的 id 只留给播放器内置插件，不能安装」（0.4.2 之前结尾是「不能安装或试载」）。商城安装、侧载（拖入 `.vxp`、从文件安装、从链接安装）、插件工坊与 AI 的安装都走这几个方法，所以都一样被拒绝。`rollback` 一个保留 id 只对内置实例有效（即回退内置插件，与以前相同）。保留 id 只有一种装进来的途径：安装包的内置插件集合（`builtin.json`，播种时来源 `bundled`）。
 - 这条规则之前装进安装库的非内置保留 id 插件：启动时不运行，在 `list` 里是 `failed`，`error` 为上面那句话；用户可以卸载它。
 - 开发加载（`--plugin`）与已安装插件同 id 时，本次运行只运行开发加载的那个。开发加载保留 id 仍然可以（内置插件的作者用 `--plugin` 开发），播放器在 stderr 打印一条警告；开发加载从不写进安装库，数据在 `plugin-data/development/<id>/`。
 
@@ -1322,10 +1326,9 @@ interface PackageChange {
 | `timeout` | `openStream` 启动超时；`error.stage` 为 `"prefill"`（首批缓冲未在 10 秒内备好）或 `"activation"`（选中后 10 秒内未激活）。`tools.run` 超过 `timeoutMs`；`system.*` 超过 10 秒 |
 | `stream`、`device` | `openStream`：生成端报错 / 音频设备未就绪 |
 | `backend-uncertain` | 滤镜阶段被播放器后端阻塞，`filter.retry()` 重新检查 |
-| `cleanup` | `trial.stop()` 未确认清理，可再次调用 |
 | `limit` | 超出播放器的数量上限（如命令数，§4；密钥名字数，§16.6） |
 | `versionMismatch` | 包的 `minPlayerVersion` 高于本播放器（`validate`、`validateArchive`；§2） |
-| `reserved` | 包的 id 是保留给内置插件的 `vestra` / `vestra.*`（不分大小写），不能安装或试载（`validate`、`validateArchive`、`trial`、`install`；§2、§12） |
+| `reserved` | 包的 id 是保留给内置插件的 `vestra` / `vestra.*`（不分大小写），不能安装（`validate`、`validateArchive`、`install`；§2、§12） |
 | `noSource` | `media.capture`：没有可截图的来源 |
 | `released`、`disposed` | 已 `release()` 的 `Snapshot` 再 `export`；已释放的 `ExportJob` 句柄还在等结果 |
 | `unknown`、`rejected`、`expired` | 传输异常后 SDK 查询仍无法确认结果（正常情况下不会出现） |
@@ -1522,10 +1525,19 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 
 ## 17. 变更说明
 
+### 删除试载；有解析器的文件类型；候选包释放（2026-10，播放器 0.4.2，SDK 1.5.8）
+
+`apiVersion` 仍为 `vestra/1`。删除试载会让调用它的代码失效；只有 Vestra Player AI 用过，改为直接安装（装后可回退）。
+
+- **删除试载**：`PackageCandidate.trial()`、`PackageTrial`、`PluginInfo.origin` 的 `"trial"`、错误码 `cleanup`（只有 `PackageTrial.stop` 用）都已删除；播放器不再处理 `packages.trial`、`packages.trialState`、`packages.trialStateByRequest`、`packages.stopTrial`（以 `unsupported` 拒绝），插件列表不再出现 `origin: "trial"`，试载命令的「试载 N · 」标题前缀、临时数据目录 `plugin-data/<id>.trial.<n>/` 也随之去掉。原因：试载只支持 `commands`、`ui.window`、`events`，列表里的 id 被改成 `<id>.trial.<n>`，`trial()` 在激活结束前就返回，扩展到全部能力还要逐项保证停止后不留状态；用 `validate` + `install` + `rollback` 代替。
+- **有解析器的文件类型**：`plugin.resolvers.fileTypes` 与 `onFileTypesChange`（§11）。`window.state` 的答复多一个 `fileTypes` 字段，新事件 `resolvers.fileTypes`（`{ fileTypes }`，需要 `events`）。
+- **候选包释放**：播放器只保留最近 32 个候选包，旧的以 `stale` 失效，不再在第 33 次校验时 `busy`（§12）。
+- SDK 命令行：在 Node 权限模型（`--permission`）下运行时，向上查找 `node_modules/@types`、`tsconfig.json`、`.git` 碰到不可读的目录不再抛 `ERR_ACCESS_DENIED`，按不存在处理（类型检查要子进程，另需 `--allow-child-process`）。
+
 ### `vestra.` 前缀只留给内置插件（2026-10，播放器 0.4.1，SDK 1.5.5）
 
 - 官方插件只有随播放器安装的内置插件，id 用 `vestra.<名字>`。其余插件都是第三方插件，包括托管在官方插件仓库里的；它们的 id 用 `<GitHub 用户名或组织>.<插件名>`。插件仓库里的 YouTube、Bilibili 改为 `zysilm.youtube`、`zysilm.bilibili`（播放器还没有公开发布，不做迁移）。
-- `packages.validate`、`validateArchive`、`trial`、`install` 拒绝保留 id 的包，错误码 `reserved`（§12、§13）。`rollback` 只对内置实例有效。启动时遗留的非内置保留 id 插件不运行，显示为 `failed`，可以卸载。
+- `packages.validate`、`validateArchive`、`trial`（SDK 1.5.8 已删除）、`install` 拒绝保留 id 的包，错误码 `reserved`（§12、§13）。`rollback` 只对内置实例有效。启动时遗留的非内置保留 id 插件不运行，显示为 `failed`，可以卸载。
 - `--plugin` 开发加载保留 id 仍然可以，stderr 打印警告。
 
 ### Markdown 进列表行（2026-10，播放器 0.4.1，SDK 1.5.4）

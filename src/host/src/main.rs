@@ -362,6 +362,8 @@ struct Host {
     activations: package_activation::Book,
     activation_ui: std::collections::BTreeSet<(u64, u64)>,
     activation_receipts: std::collections::VecDeque<Value>,
+    /// `resolvers.fileTypes` as last pushed by the backend (an array).
+    file_types: Value,
     /// Mount requests of other plugins waiting for the built-ins to start: reply, method, params.
     held_mounts: slot_claims::Gate<(Reply, String, Value)>,
     /// What a running plugin was refused because another holds it: the
@@ -669,7 +671,6 @@ impl Host {
             }
         }
         self.cleanup.insert(owner, (false, false));
-        self.packages.owner_gone(owner);
         // Waiting for graceful disposal/killing belongs off the Slint event loop.
         if let Some(plugin) = self.plugins.remove(&owner) {
             let events = self.events.clone();
@@ -860,6 +861,9 @@ impl Host {
                     self.update_title();
                     self.core_action_states();
                 }
+                if event == "resolvers.fileTypes" {
+                    self.file_types = data["fileTypes"].clone();
+                }
                 self.broadcast(&event, data)
             }
             Event::Binding(generation, owner, id) => {
@@ -1027,9 +1031,6 @@ impl Host {
     }
     /// Why a plugin stopped on its own (`packages.list` state `failed`).
     fn record_failure(&mut self, owner: u64, message: &str) {
-        if self.packages.is_trial(owner) {
-            return;
-        }
         if let Some(plugin) = self.plugins.get(&owner) {
             self.failures.insert(
                 plugin.manifest.id.clone(),
@@ -2968,14 +2969,15 @@ impl Host {
         }
     }
     /// `{ fullscreen, videoArea, pictureInPicture }` of the main window
-    /// (zero without one).
+    /// (zero without one), with the palette and the file resolvers'
+    /// extensions (`plugin.resolvers.fileTypes`).
     fn window_state(&self) -> Value {
         let facts = &self.window_facts;
         json!({"fullscreen":facts["fullscreen"] == true,
             "videoArea":{"width":facts["videoArea"]["width"].as_f64().unwrap_or(0.),
                 "height":facts["videoArea"]["height"].as_f64().unwrap_or(0.)},
             "pictureInPicture":self.pip_state(),
-            "appearance":self.theme()})
+            "appearance":self.theme(),"fileTypes":self.file_types})
     }
     /// `WindowState.pictureInPicture`: offered here, and the window showing.
     fn pip_state(&self) -> Value {
@@ -3881,16 +3883,9 @@ impl Host {
                 let state = serde_json::from_value(params["state"].clone())
                     .map_err(|e| RpcError::invalid(e.to_string()))?;
                 if method == "commands.register" {
-                    let mut declaration: commands::Declaration =
+                    let declaration: commands::Declaration =
                         serde_json::from_value(params["declaration"].clone())
                             .map_err(|e| RpcError::invalid(e.to_string()))?;
-                    // Trial packages: a marked leaf title and no bindings.
-                    if self.packages.is_trial(reply.owner) {
-                        if let Some(leaf) = declaration.path.last_mut() {
-                            *leaf = format!("试载 {} · {leaf}", reply.owner);
-                        }
-                        declaration.bindings.clear();
-                    }
                     let manifest = plugin.manifest.id.clone();
                     let bindings = declaration.bindings.clone();
                     let panel = declaration.focus == Some(commands::Focus::Panel);
@@ -3964,6 +3959,7 @@ impl Host {
                     "bindings.changed",
                     "timeline.changed",
                     "appearance.changed",
+                    "resolvers.fileTypes",
                 ]
                 .contains(&event)
                 {
@@ -4610,6 +4606,7 @@ fn main() -> Result<()> {
         activations: package_activation::Book::default(),
         activation_ui: Default::default(),
         activation_receipts: Default::default(),
+        file_types: json!([]),
         held_mounts: Default::default(),
         warnings: BTreeMap::new(),
         packages: package_manager::Manager::open()?,

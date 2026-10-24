@@ -34,7 +34,7 @@ export default async function activate(plugin: Plugin) {
 | `subtitles` | `state`、`onChange`、`refresh`、`select`、`load(bytes, { ifCurrent?, signal? })`、`remove`、`setStyle` | `SubtitleTrack`（值对象：`id`、`kind`、`embeddedId?`、`title`、`language`、`styleSupported`、`styleReason`、`owned`） | | subtitles |
 | `media` | `capture({ at?, processed?, subtitles?, audio?, ifCurrent? })` | `Snapshot` → `ExportJob` | Snapshot：`export`、只读描述；Job：`state`、`onChange`、`done`、`cancel`、`refresh` | capture |
 | `resolvers` | `add({ id, schemes, hosts, resolve })` | `Resolver` | `ready` | bilibili、youtube |
-| `packages` | `validate(dir)`、`rollback(id)` | `PackageCandidate` → `PackageTrial` / `PackageChange` | Candidate：`trial`、`install`；Trial：`status`、`stop`；Change：`status`、`message`、`onChange`、`done`、`cancel` | workshop |
+| `packages` | `validate(dir)`、`rollback(id)` | `PackageCandidate` → `PackageChange` | Candidate：`install`；Change：`status`、`message`、`onChange`、`done`、`cancel` | workshop |
 | `osd` | `show(text)`、`panel()` | `OsdPanel` | `set(text \| null)` | info |
 | 作用域 | `scope()`、`add`、`onDispose`、`onError`、`update`、`dispose` | `Scope` | | 全部（`onError`、`update` 按需） |
 
@@ -64,7 +64,6 @@ export default async function activate(plugin: Plugin) {
 | ExportJob | 未结束则 `jobs.cancel` |
 | Stream | 停止渲染，若仍是当前来源则关闭，释放 producer |
 | Resolver | `sourceResolvers.unregister`，中止进行中的解析 |
-| PackageTrial | `stopTrial` 并等待清理确认 |
 | 监听（`onChange`、`onEnd`、`on`、`bind`…） | 退订 |
 
 `Media` 不随作用域关闭来源：插件停用时当前播放继续（播放列表的既有行为）。需要关闭时显式 `media.close()`。
@@ -114,7 +113,6 @@ SDK 仍然处理“答复丢失”（非宿主错误的拒绝，或客户端 `ti
 | 字幕 | `subtitles.operation(id)` | `completed` → 采用其状态；`failed` → 失败；`unknown` → 失败 `rejected`（未执行）；`unknownExpired` → 刷新状态并失败 `expired` |
 | 快照/任务 | `jobs.operation(id)` | `completed` → 采用结果（快照会再读 `snapshot.state`）；`failed`/`unknown`/`unknownExpired` → 失败；`pending` → 250 ms 后再查 |
 | 包安装/回退 | `packages.operation(requestId)` | 宿主保证 `operationId === requestId`，持续查询直到终态，从不重发 |
-| 试载 | `packages.trialStateByRequest(requestId)` | 取回原试载，不重新申请 |
 
 这些分支在 v2 下实际几乎不会发生（没有客户端超时），但保留它们使 SDK 在传输异常时仍然给出确定结论，并且**从不盲目重发非幂等操作**（打开、提交字幕、启动任务、安装）。可安全重发的只有“最后写入生效”的处理资源，而且只在确定未执行时。
 
@@ -143,7 +141,7 @@ SDK 仍然处理“答复丢失”（非宿主错误的拒绝，或客户端 `ti
 
 ## 7. 错误模型
 
-- 失败一律以普通 `Error` reject/抛出，带稳定的 `code`（类型 `PluginError`）：宿主错误码原样保留（`stale`、`busy`、`unsupported`、`unavailable`、`conflict`、`invalid`…），来源操作失败的 `{ backend }` 映射为 `code: "backend"`、`message` 为后端文本；SDK 自己的码：`cleanup`（`trial.stop()`：宿主停止了试载但未确认清理；再次调用 `stop()` 会重新向宿主发送停止）、`replaced`、`failed`、`ended`（`media.ready`），`aborted`（`AbortError`），`backend-uncertain`，`unknown`/`rejected`/`expired`（见 5.1）。
+- 失败一律以普通 `Error` reject/抛出，带稳定的 `code`（类型 `PluginError`）：宿主错误码原样保留（`stale`、`busy`、`unsupported`、`unavailable`、`conflict`、`invalid`…），来源操作失败的 `{ backend }` 映射为 `code: "backend"`、`message` 为后端文本；SDK 自己的码：`replaced`、`failed`、`ended`（`media.ready`），`aborted`（`AbortError`），`backend-uncertain`，`unknown`/`rejected`/`expired`（见 5.1）。
 - `player.open()` / `openStream()` 的错误 code：`stale`（带 `ifCurrent` 时来源已变化，什么都没做）；`replaced`（宿主已接受，但在完成前被另一个来源替换或撤销，例如 URL 仍在解析时用户打开了别的文件；与 `media.ready()` 的 `replaced` 同义，不是这一项的失败）；`backend`（载入/解析失败，`message` 为后端文本）；`invalid`、`busy`、`conflict`、`unavailable`、`unsupported`（宿主拒绝接纳，未执行）；`aborted`（`AbortError`，`signal` 中止，已接受的会被关闭）。`openStream` 另有 `stream`（producer 报错，`message` 为宿主原因）、`device`（音频设备未就绪）、`timeout`（类型 `StreamStartError`，`error.stage` 为 `"prefill"`：首批音视频缓冲未在 10 秒内备好，或 `"activation"`：宿主选中后 10 秒内未激活；按 `stage` 区分，不要按消息文本）。`openStream` 被 `signal` 中止时，若选中请求已发出，SDK 先等宿主答复拿到来源代次，只关闭这一代来源，再释放 producer。
 - SDK 调用的处理函数里抛出的错误（包括 async 处理函数的 reject）交给所在作用域的 `onError`；没有监听就上交父作用域，最终写入插件日志。插件不需要到处写 `.catch(report)`。
 - 滤镜这类持续目标用状态表达失败：`filter.status`（`waiting`/`applying`/`applied`/`failed`）。`failed` 之后不会自动重试，直到 `set()`、`retry()` 或来源变化。

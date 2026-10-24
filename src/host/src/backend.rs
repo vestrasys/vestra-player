@@ -177,6 +177,8 @@ impl Backend {
                 render_initialized.recv()?.map_err(anyhow::Error::msg)?;
                 let _ = ready.send(Ok(versions));
                 let mut sources = crate::source_backend::Sources::default();
+                // Pushed as `resolvers.fileTypes` when a file resolver comes or goes.
+                let mut file_types = Vec::<String>::new();
                 let mut geometry = crate::source_geometry::Geometry::new(publish_gate.clone());
                 let mut geometry_error = false;
                 #[cfg(feature = "producer-audio")]
@@ -526,6 +528,14 @@ impl Backend {
                             });
                         }
                         producer_was_active = producer_active;
+                    }
+                    let now_types = sources.file_types();
+                    if now_types != file_types {
+                        file_types = now_types;
+                        let _ = events.send(Event::Broadcast(
+                            "resolvers.fileTypes".into(),
+                            json!({"fileTypes":file_types}),
+                        ));
                     }
                     // A phase change from the commands and events above goes
                     // out in this iteration; otherwise every 100 ms.

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import test from "node:test";
-import { HostError, startPlugin } from "@vestra-player/sdk/testing";
+import { startPlugin } from "@vestra-player/sdk/testing";
 import type { Plugin } from "@vestra-player/sdk";
 
 const runner = resolve(import.meta.dirname, "../../runtime/runner.ts");
@@ -103,11 +103,10 @@ test("a v2 plugin is not ready until its registrations succeeded", async () => {
   });
 });
 
-test("packages: trial waits for start, install follows the operation to its end", async () => {
+test("packages: install follows the operation to its end", async () => {
   const { host, plugin, stop } = await startPlugin(() => {}, {
     capabilities: ["plugins.manage"],
   });
-  let trialPolls = 0;
   let operationPolls = 0;
   host.handle("packages.validate", () => ({
     token: "t",
@@ -123,17 +122,6 @@ test("packages: trial waits for start, install follows the operation to its end"
     checks: ["slint"],
     trustedExecution: true,
   }));
-  host.handle("packages.trial", () => ({ trialId: 7, status: "activating" }));
-  host.handle("packages.trialState", () => ({
-    trialId: 7,
-    status: ++trialPolls > 1 ? "running" : "activating",
-    cleanupConfirmed: false,
-  }));
-  host.handle("packages.stopTrial", () => ({
-    trialId: 7,
-    status: "stopped",
-    cleanupConfirmed: true,
-  }));
   host.handle("packages.installed", () => ({
     revision: 3,
     current: null,
@@ -148,9 +136,6 @@ test("packages: trial waits for start, install follows the operation to its end"
     status: ++operationPolls > 1 ? "committed" : "activating",
   }));
   const candidate = await plugin.packages.validate("/tmp/candidate");
-  const trial = await candidate.trial();
-  assert.equal(trial.status, "running");
-  await trial.stop();
   const change = await candidate.install();
   assert.equal(await change.done, "committed");
   const install = host.sent("packages.install")[0]!;
@@ -170,52 +155,6 @@ test("plugin id and update are available to plugin code", async () => {
     { id: "demo.id" },
   );
   assert.equal(id, "demo.id");
-  await stop();
-});
-
-test("packages: an unconfirmed trial cleanup fails with code cleanup and a retry re-sends stop", async () => {
-  const { host, plugin, stop } = await startPlugin(() => {}, {
-    capabilities: ["plugins.manage"],
-  });
-  host.handle("packages.validate", () => ({
-    token: "t",
-    digest: "d",
-    apiVersion: "vestra/1",
-    manifest: {
-      id: "community.counter",
-      version: "1.0.0",
-      apiVersion: "vestra/1",
-      entry: "main.js",
-      capabilities: [],
-    },
-    checks: [],
-    trustedExecution: true,
-  }));
-  host.handle("packages.trial", () => ({ trialId: 9, status: "running" }));
-  let confirmed = false;
-  host.handle("packages.stopTrial", () => ({
-    trialId: 9,
-    status: "failed",
-    cleanupConfirmed: confirmed,
-  }));
-  const trial = await (await plugin.packages.validate("/tmp/c")).trial();
-  await assert.rejects(
-    trial.stop(),
-    (error: HostError) => error.code === "cleanup",
-  );
-  confirmed = true;
-  await trial.stop();
-  assert.equal(
-    host.sent("packages.stopTrial").length,
-    2,
-    "the second stop asked the host again",
-  );
-  await trial.stop();
-  assert.equal(
-    host.sent("packages.stopTrial").length,
-    2,
-    "a confirmed stop is final",
-  );
   await stop();
 });
 

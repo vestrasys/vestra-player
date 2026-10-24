@@ -290,7 +290,7 @@ impl Registry {
     /// Runaway guards, not product limits (reference.md §4). Sized from the
     /// real menus: video registers 71 at idle and all plugins plus the host
     /// about 290, so one owner gets 160 and the registry 1024, enough for
-    /// track lists and parallel trial packages. Mirrored by
+    /// track lists and several plugins at once. Mirrored by
     /// `COMMAND_LIMITS` in the SDK package (vestra-player-sdk: src/commands.ts);
     /// tests/sdk/host-agreement.test.ts checks the installed SDK agrees.
     pub const MAX_COMMANDS: usize = 1024;
