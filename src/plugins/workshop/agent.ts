@@ -96,7 +96,7 @@ export class AgentWorker {
         const controller = new AbortController();
         this.calls.set(message.call, controller);
         if (handlers.tool) handlers.tool(message.call, message.name, message.args, controller.signal);
-        else this.reply(message.call, { ok: false, text: `工具 ${message.name} 不可用` });
+        else this.reply(message.call, { ok: false, text: `Tool ${message.name} is not available` });
       } else if (message.type === "toolCancel") {
         this.calls.get(message.call)?.abort();
         this.calls.delete(message.call);
@@ -108,13 +108,13 @@ export class AgentWorker {
     });
     this.child.on("error", (error) => {
       rejectReady(error);
-      handlers.failed(`无法启动 agent 进程：${error.message}`);
+      handlers.failed(`Cannot start the agent process: ${error.message}`);
     });
     this.child.on("exit", (code) => {
       this.exited = true;
       for (const controller of this.calls.values()) controller.abort();
       this.calls.clear();
-      rejectReady(new Error(this.lastError() || `agent 进程已退出（${code}）`));
+      rejectReady(new Error(this.lastError() || `The agent process exited (${code})`));
       handlers.exited(code, this.stderr);
     });
     this.child.once("spawn", () => this.send({ type: "start", ...start }));

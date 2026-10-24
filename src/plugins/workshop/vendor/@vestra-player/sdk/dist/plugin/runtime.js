@@ -1,5 +1,6 @@
 /** Shared machinery behind every scope: invocation, update passes, events. */
 import { createWire, HostError } from "../wire.js";
+import { LOCALES } from "../i18n.js";
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 export function toError(error) {
     if (error instanceof Error) {
@@ -94,6 +95,8 @@ export class Runtime {
     services = new Map();
     /** `plugin.app`, from the start-up handshake; `system()` asks the player. */
     app;
+    /** `plugin.i18n.locale`, from the start-up handshake; English when unknown. */
+    locale;
     constructor(transport, manifest, directory, dataDirectory, app) {
         this.#transport = transport;
         this.dataDirectory = dataDirectory;
@@ -101,6 +104,9 @@ export class Runtime {
         this.host = createWire(transport);
         const host = this.host;
         this.app = appInfo(app, () => host.app.system());
+        this.locale = LOCALES.includes(transport.locale ?? "")
+            ? transport.locale
+            : "en";
         this.manifest = manifest;
         this.directory = directory;
         transport.on("ui.callback", (data) => {

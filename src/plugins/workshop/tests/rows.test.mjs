@@ -2,17 +2,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Chat, classify } from "../chat.ts";
+import { error, notice, toolLine, toolList, translator } from "./texts.mjs";
+
+const zh = translator("zh-Hans");
+const en = translator("en");
+/** A row as the window shows it in Simplified Chinese: the message, or the line its code makes. */
+const shown = (row) => (row.kind === "tools" ? toolLine(zh, row) : row.kind === "error" ? error(zh, row) : row.text);
 
 test("tool calls share one line: the latest replaces the previous, the list expands", () => {
   const chat = new Chat();
   chat.user("做个插件");
   chat.apply({ kind: "assistant_start" });
   chat.apply({ kind: "tool_start", id: "a", name: "write", target: "main.ts" });
-  assert.equal(chat.rows[1].text, "写入 main.ts…");
+  assert.equal(toolLine(zh, chat.rows[1]), "写入 main.ts…");
+  assert.equal(toolLine(en, chat.rows[1]), "Write main.ts…");
   chat.apply({ kind: "tool_end", id: "a", name: "write", ok: true, summary: "" });
   chat.apply({ kind: "tool_start", id: "b", name: "read", target: "manifest.json" });
   assert.equal(chat.rows.length, 2, "still one tool line");
-  assert.equal(chat.rows[1].text, "读取 manifest.json…");
+  assert.equal(toolLine(zh, chat.rows[1]), "读取 manifest.json…");
   assert.equal(chat.rows[1].state, 0);
   chat.apply({ kind: "tool_end", id: "b", name: "read", ok: false, summary: "" });
   chat.apply({ kind: "assistant_start" });
@@ -20,14 +27,15 @@ test("tool calls share one line: the latest replaces the previous, the list expa
   chat.apply({ kind: "assistant_end", text: "完成", stopReason: "stop", error: null });
   chat.apply({ kind: "settled", aborted: false });
   assert.deepEqual(
-    chat.rows.map((r) => [r.kind, r.text, r.state]),
+    chat.rows.map((r) => [r.kind, shown(r), r.state]),
     [
       ["user", "做个插件", 1],
       ["tools", "2 个工具调用，1 个失败", 2],
       ["assistant", "完成", 1],
     ],
   );
-  assert.equal(chat.rows[1].detail, "✓ 写入 main.ts\n✗ 读取 manifest.json");
+  assert.equal(toolLine(en, chat.rows[1]), "2 tool calls, 1 failed");
+  assert.equal(toolList(zh, chat.rows[1]), "✓ 写入 main.ts\n✗ 读取 manifest.json");
   chat.toggle(chat.rows[1].id);
   assert.equal(chat.rows[1].expanded, true);
 });
@@ -57,7 +65,7 @@ test("an opening line before the turn's first tool call is not shown; later text
   chat.apply({ kind: "tool_start", id: "b", name: "edit", target: "main.ts" });
   chat.apply({ kind: "tool_end", id: "b", name: "edit", ok: true, summary: "" });
   chat.apply({ kind: "settled", aborted: false });
-  assert.deepEqual(chat.rows.map((r) => [r.kind, r.text]), [
+  assert.deepEqual(chat.rows.map((r) => [r.kind, shown(r)]), [
     ["user", "写个插件"],
     ["tools", "2 个工具调用"],
     ["assistant", "测试失败是因为绑定写法不对。"],
@@ -74,14 +82,18 @@ test("an opening line before the turn's first tool call is not shown; later text
 
 test("errors: key, quota, network; an automatic retry replaces the error row", () => {
   assert.equal(classify("401 Incorrect API key provided").settings, true);
-  assert.match(classify("429 You exceeded your current quota").text, /额度/);
-  assert.match(classify("fetch failed: ECONNREFUSED").text, /网络/);
+  assert.equal(classify("429 You exceeded your current quota").code, "quota");
+  assert.equal(classify("fetch failed: ECONNREFUSED").code, "network");
+  assert.equal(error(zh, classify("429 You exceeded your current quota")), "额度不足或请求过于频繁，请稍后重试。");
+  assert.equal(error(zh, classify("fetch failed: ECONNREFUSED")), "网络错误：无法连接服务商。");
+  assert.equal(error(en, classify("fetch failed: ECONNREFUSED")), "Network error: cannot reach the provider.");
   const chat = new Chat();
   chat.user("hi");
   chat.apply({ kind: "assistant_end", text: "", stopReason: "error", error: "Connection error." });
   assert.equal(chat.rows.at(-1).kind, "error");
   chat.apply({ kind: "retry", attempt: 1, max: 2, error: "Connection error." });
   assert.deepEqual(chat.rows.map((r) => r.kind), ["user", "notice"]);
+  assert.equal(notice(zh, chat.rows[1]), "连接失败，正在重试（1/2）…");
 });
 
 test("rows from pi's JSONL", () => {
@@ -96,7 +108,7 @@ test("rows from pi's JSONL", () => {
   ];
   const chat = Chat.fromJsonl(`${lines.map((l) => JSON.stringify(l)).join("\n")}\n{"type":"mess`);
   assert.deepEqual(
-    chat.rows.map((r) => [r.kind, r.text]),
+    chat.rows.map((r) => [r.kind, shown(r)]),
     [
       ["user", "写文件"],
       ["tools", "1 个工具调用"],

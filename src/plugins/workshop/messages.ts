@@ -13,8 +13,10 @@
 //   ≤ 64 KiB per string, ≤ 1 MiB of text in all (documents included). The
 //   newest rows that fit a smaller budget are sent; a notice says how many
 //   older ones are not shown (they stay in the session's JSONL).
+// - A tool line's calls are sent only while it is expanded (each call is a
+//   few value nodes); a message cut short says so (`truncated`, ai.slint).
 import type { MarkdownRef } from "@vestra-player/sdk";
-import type { Row } from "./chat.ts";
+import type { Row, ToolCall } from "./chat.ts";
 
 /** Rows sent at most (each row is about 10 value nodes). */
 export const MAX_ROWS = 200;
@@ -24,20 +26,25 @@ export const MAX_TEXT_BYTES = 900 * 1024;
 export const MAX_DOC_BYTES = 200 * 1024;
 /** A plain string field at most (the player allows 64 KiB). */
 export const MAX_FIELD_BYTES = 16 * 1024;
+/** Value nodes sent at most (the player allows 4096). */
+export const MAX_NODES = 3500;
+/** Value nodes of a row without its calls, and of one call. */
+const ROW_NODES = 24;
+const CALL_NODES = 5;
 
 const bytes = (text: string) => Buffer.byteLength(text);
 
-/** `text` cut to at most `limit` UTF-8 bytes, on a character boundary, with a note. */
-export function cut(text: string, limit: number, note = "\n\n…（内容过长，后面没有显示）"): string {
+/** `text` cut to at most `limit` UTF-8 bytes, on a character boundary. */
+export function cut(text: string, limit: number): string {
   if (bytes(text) <= limit) return text;
   let out = "";
-  let size = bytes(note);
+  let size = 0;
   for (const char of text) {
     size += bytes(char);
     if (size > limit) break;
     out += char;
   }
-  return out + note;
+  return out;
 }
 
 /** A type, not an interface: property values need an index-compatible shape. */
@@ -50,7 +57,20 @@ export type PropRow = {
   expanded: boolean;
   settings: boolean;
   body: MarkdownRef;
+  code: string;
+  args: string[];
+  n: number;
+  calls: ToolCall[];
+  call: ToolCall;
+  phase: string;
+  failed: number;
+  /** The message is longer than shown. */
+  truncated: boolean;
 };
+
+const textLimit = (row: Row) => (row.kind === "assistant" ? MAX_DOC_BYTES : MAX_FIELD_BYTES);
+/** The calls sent for a row: only an expanded tool line lists them. */
+const callsOf = (row: Row) => (row.kind === "tools" && row.expanded ? row.calls : []);
 
 export class MessageDocs {
   private readonly docs = new Map<string, { text: string; ref: MarkdownRef }>();
@@ -66,12 +86,20 @@ export class MessageDocs {
   /** The newest rows within the budget; `hidden`: how many older ones are left out. */
   static visible(rows: Row[]): { rows: Row[]; hidden: number } {
     let total = 0;
+    let nodes = 0;
     let first = rows.length;
     while (first > 0 && rows.length - first < MAX_ROWS) {
       const row = rows[first - 1];
-      const size = bytes(cut(row.text, row.kind === "assistant" ? MAX_DOC_BYTES : MAX_FIELD_BYTES)) + bytes(cut(row.detail, MAX_FIELD_BYTES));
-      if (total + size > MAX_TEXT_BYTES && first < rows.length) break;
+      const calls = callsOf(row);
+      const size =
+        bytes(cut(row.text, textLimit(row))) +
+        bytes(cut(row.detail, MAX_FIELD_BYTES)) +
+        row.args.reduce((sum, arg) => sum + bytes(arg), 0) +
+        [...calls, row.call].reduce((sum, call) => sum + bytes(call.tool) + bytes(call.target), 0);
+      const count = ROW_NODES + calls.length * CALL_NODES;
+      if ((total + size > MAX_TEXT_BYTES || nodes + count > MAX_NODES) && first < rows.length) break;
       total += size;
+      nodes += count;
       first--;
     }
     return { rows: rows.slice(first), hidden: first };
@@ -114,8 +142,26 @@ export class MessageDocs {
     const empty = this.empty;
     const out: PropRow[] = [];
     if (!empty) return out; // before the first sync(); it runs before the window opens
+    const none = { tool: "", target: "", reference: false, state: 0 };
     if (hidden)
-      out.push({ id: "hidden", kind: "notice", text: `更早的 ${hidden} 条消息没有显示（完整记录在会话文件夹里）`, detail: "", state: 1, expanded: false, settings: false, body: empty });
+      out.push({
+        id: "hidden",
+        kind: "notice",
+        text: "",
+        detail: "",
+        state: 1,
+        expanded: false,
+        settings: false,
+        body: empty,
+        code: "hidden",
+        args: [],
+        n: hidden,
+        calls: [],
+        call: none,
+        phase: "",
+        failed: 0,
+        truncated: false,
+      });
     for (const row of shown) {
       const doc = row.kind === "assistant" ? this.docs.get(row.id) : undefined;
       out.push({
@@ -127,6 +173,14 @@ export class MessageDocs {
         expanded: row.expanded,
         settings: row.settings,
         body: doc?.ref ?? empty,
+        code: row.code,
+        args: row.args,
+        n: row.n,
+        calls: callsOf(row),
+        call: row.call,
+        phase: row.phase,
+        failed: row.failed,
+        truncated: bytes(row.text) > (doc ? MAX_DOC_BYTES : MAX_FIELD_BYTES),
       });
     }
     return out;

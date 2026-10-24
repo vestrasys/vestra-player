@@ -21,6 +21,8 @@ export declare class WindowService {
     appearance: string | undefined;
     /** The file resolvers' extensions, as the reply carried them (`plugin.resolvers.fileTypes`). */
     fileTypes: string[] | undefined;
+    /** The saved interface language, as the reply carried it (`plugin.appearance.language`). */
+    language: string | undefined;
     accept(facts: WindowFacts): void;
     read(): Promise<void>;
     watch(listener: (state: WindowState) => void): {

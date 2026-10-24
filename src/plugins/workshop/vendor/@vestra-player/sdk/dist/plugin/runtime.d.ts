@@ -1,5 +1,5 @@
 import type { Json, LocalServices, Transport, Wire } from "../wire.ts";
-import type { App, Disposable, PluginError, SystemInfo } from "./types.ts";
+import type { App, Disposable, Locale, PluginError, SystemInfo } from "./types.ts";
 export interface PluginManifest {
     id: string;
     capabilities: string[];
@@ -40,6 +40,8 @@ export declare class Runtime {
     readonly services: Map<string, unknown>;
     /** `plugin.app`, from the start-up handshake; `system()` asks the player. */
     readonly app: App;
+    /** `plugin.i18n.locale`, from the start-up handshake; English when unknown. */
+    readonly locale: Locale;
     constructor(transport: Transport, manifest: PluginManifest, directory: string, dataDirectory?: string, app?: unknown);
     can(capability: string): boolean;
     /** Lazily created singletons shared by every scope of this plugin. */

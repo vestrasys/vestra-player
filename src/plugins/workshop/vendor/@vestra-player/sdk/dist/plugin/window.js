@@ -54,9 +54,13 @@ export class WindowService {
     appearance;
     /** The file resolvers' extensions, as the reply carried them (`plugin.resolvers.fileTypes`). */
     fileTypes;
+    /** The saved interface language, as the reply carried it (`plugin.appearance.language`). */
+    language;
     accept(facts) {
         if (facts.appearance)
             this.appearance = facts.appearance;
+        if (facts.language)
+            this.language = facts.language;
         if (Array.isArray(facts.fileTypes))
             this.fileTypes = [...facts.fileTypes];
         const next = view(facts);

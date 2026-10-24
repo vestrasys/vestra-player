@@ -39,6 +39,7 @@ export declare class ScopeImpl implements Plugin {
     readonly drops: import("./types.ts").Drops;
     readonly appearance: import("./types.ts").Appearance;
     readonly settings: import("./types.ts").Settings;
+    readonly i18n: import("./types.ts").I18n;
     get app(): import("./types.ts").App;
     scope(): Scope;
     add<T extends Disposable>(item: T): T;

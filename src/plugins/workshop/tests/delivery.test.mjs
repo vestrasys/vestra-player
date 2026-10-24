@@ -1,12 +1,13 @@
 // The result card and the agent's install tool on the SDK test host: a
-// scaffolded project shows on the card; 安装 (the agent's install asks
-// first), 回退（撤销安装）, 导出 .vxp, 导出源码 zip. The player side of
+// scaffolded project shows on the card; Install (the agent's install asks
+// first), Roll Back (Undo Install), Export .vxp, Export Source .zip. The player side of
 // validation is simulated with host handlers.
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { dataDirectory, server, startAi } from "./fixture.mjs";
+import { shadowedText } from "./texts.mjs";
 import { unzip } from "./unzip.mjs";
 
 /** The model: per user message, a list of steps (one per tool result so far in that turn). */
@@ -45,10 +46,10 @@ test("a scaffolded plugin shows on the card with 安装 (no trial); the player's
       安装: [{ toolCalls: [{ name: "install_plugin", args: { id: "local.demo" } }] }],
     }),
   );
-  const ai = await startAi({ compat: mock.url });
+  const ai = await startAi({ compat: mock.url, locale: "zh-Hans" });
   assert.equal(ai.props["has-project"], false);
   await ai.ask("做个插件");
-  assert.equal(ai.rows()[1].detail, "✓ 创建插件 demo");
+  assert.equal(await ai.calls(1), "✓ 创建插件 demo");
   await ai.until(() => ai.props["has-project"] === true, "card");
   assert.equal(ai.props["project-title"], "演示 · local.demo 0.1.0");
   assert.ok(!("trial-active" in ai.props), "no trial on the card");
@@ -57,11 +58,11 @@ test("a scaffolded plugin shows on the card with 安装 (no trial); the player's
 
   player(ai, { invalid: "ui/main.slint:3: unknown element FancyButton" });
   await ai.send("install");
-  await ai.until(() => /播放器校验没有通过/.test(ai.props["card-status"]), "validation error on the card");
-  assert.match(ai.props["card-status"], /（invalid）：ui\/main\.slint:3: unknown element FancyButton/);
+  await ai.until(() => ai.props["card-status"].code === "invalid", "validation error on the card");
+  assert.equal(ai.card(), "播放器校验没有通过（invalid）：ui/main.slint:3: unknown element FancyButton");
   ai.host.dialogAnswers.push({ confirmed: true, checked: false });
   await ai.ask("安装");
-  assert.equal(ai.rows().at(-2).detail, "✗ 安装 local.demo");
+  assert.equal(await ai.calls(-2), "✗ 安装 local.demo");
   assert.match(toolText(mock, mock.chats.length - 1), /unknown element FancyButton/);
   assert.deepEqual(ai.host.packageCalls, []);
   await ai.stop();
@@ -74,23 +75,31 @@ test("install_plugin asks the user first; 回退 removes a first install; a refu
       安装: [{ toolCalls: [{ name: "install_plugin", args: { id: "local.demo" } }] }],
     }),
   );
-  const ai = await startAi({ compat: mock.url });
+  const ai = await startAi({ compat: mock.url, locale: "zh-Hans" });
   await ai.ask("做个插件");
   player(ai);
   ai.host.dialogAnswers.push({ confirmed: false, checked: false });
   await ai.ask("安装");
-  assert.match(toolText(mock, mock.chats.length - 1), /用户取消了安装/);
+  assert.match(toolText(mock, mock.chats.length - 1), /The user cancelled the install/);
+  assert.equal(ai.card(), "没有安装（已取消）。");
   assert.deepEqual(ai.host.packageCalls, []);
 
   ai.host.dialogAnswers.push({ confirmed: true, checked: false });
   await ai.ask("安装");
-  assert.match(ai.host.confirms.at(-1).message, /安装 AI 生成的插件「演示」/);
-  assert.match(toolText(mock, mock.chats.length - 1), /安装 演示 0\.1\.0完成/);
+  assert.deepEqual(ai.host.confirmTexts.at(-1), {
+    message: "安装 AI 生成的插件「演示」？",
+    detail: "local.demo 0.1.0\n能力：commands、ui.window\n安装后可以在 AI 窗口里点「回退（撤销安装）」。".replace("、", ", "),
+    confirm: "安装",
+    cancel: ai.host.confirmTexts.at(-1).cancel,
+  });
+  assert.match(toolText(mock, mock.chats.length - 1), /Install 演示 0\.1\.0: done/);
+  assert.equal(ai.card(), "已安装 演示 0.1.0，可以点「回退（撤销安装）」。");
   assert.deepEqual(ai.host.packageCalls.map((c) => [c.method, c.id, c.source?.kind]), [["install", "local.demo", "workshop"]]);
   await ai.until(() => ai.props["can-rollback"] === true, "rollback offered");
 
   await ai.send("rollback");
   await ai.until(() => ai.props["can-rollback"] === false, "rolled back");
+  assert.equal(ai.card(), "卸载 local.demo完成");
   assert.deepEqual(ai.host.packageCalls.at(-1), { method: "uninstall", id: "local.demo", removeData: false });
   // A click on 安装 is the user's own decision: no second dialog.
   const confirms = ai.host.confirms.length;
@@ -107,7 +116,7 @@ test("after an install, bindings another command holds are reported to the card 
       安装: [{ toolCalls: [{ name: "install_plugin", args: { id: "local.demo" } }] }],
     }),
   );
-  const ai = await startAi({ compat: mock.url });
+  const ai = await startAi({ compat: mock.url, locale: "zh-Hans" });
   await ai.ask("做个插件");
   player(ai);
   // The player's table once local.demo runs: its `]` is held by a built-in plugin's command.
@@ -123,28 +132,35 @@ test("after an install, bindings another command holds are reported to the card 
   ai.host.dialogAnswers.push({ confirmed: true, checked: false });
   await ai.ask("安装");
   const told = toolText(mock, mock.chats.length - 1);
-  assert.match(told, /安装 演示 0\.1\.0完成/);
-  assert.match(told, /快捷键没有生效：\]（加快 0\.25×）已被vestra\.marks「设置 B 点」占用。/);
-  assert.match(ai.props["card-status"], /快捷键没有生效：\]（加快 0\.25×）/);
+  assert.match(told, /Install 演示 0\.1\.0: done/);
+  assert.match(told, /Shortcuts not in effect: \] \(加快 0\.25×\) is taken by vestra\.marks "设置 B 点"\./);
+  assert.equal(ai.card(), "已安装 演示 0.1.0，可以点「回退（撤销安装）」。快捷键没有生效：");
+  assert.deepEqual(
+    ai.props["card-keys"].map((k) => shadowedText(ai.host, k)),
+    ["]（加快 0.25×）已被vestra.marks「设置 B 点」占用"],
+  );
   await ai.stop();
 });
 
-test("导出 .vxp and 导出源码 zip save where the user chose", async () => {
+test("Export .vxp and Export Source .zip save where the user chose", async () => {
   const mock = await server(scripted({ 做个插件: [{ toolCalls: [{ name: "scaffold_plugin", args: { name: "demo", title: "演示" } }] }] }));
-  const ai = await startAi({ compat: mock.url });
+  const ai = await startAi({ compat: mock.url, locale: "zh-Hans" });
   await ai.ask("做个插件");
   await ai.until(() => ai.props["has-project"] === true, "card");
   const out = await dataDirectory();
   ai.host.dialogAnswers.push([path.join(out, "demo.vxp")]);
   await ai.send("export-vxp");
-  await ai.until(() => /已导出/.test(ai.props["card-status"]), "vxp exported");
+  await ai.until(() => ai.props["card-status"].code === "exported", "vxp exported");
+  assert.equal(ai.card(), "已导出 demo.vxp");
+  assert.equal(ai.host.confirmTexts.length, 0);
   assert.ok(unzip(await fs.readFile(path.join(out, "demo.vxp"))).has("manifest.json"));
 
   ai.host.dialogAnswers.push([path.join(out, "demo.zip")]);
   await ai.send("export-source");
-  await ai.until(() => /已导出 demo\.zip/.test(ai.props["card-status"]), "source exported");
+  await ai.until(() => ai.props["card-status"].code === "exported-source-local", "source exported");
+  assert.match(ai.card(), /^已导出 demo\.zip。id 以 local\. 开头/);
   assert.ok(unzip(await fs.readFile(path.join(out, "demo.zip"))).has("demo/.github/workflows/ci.yml"));
-  assert.match(ai.props["card-status"], /local\./);
+
 
   await ai.send("open-project");
   assert.equal(path.basename(ai.host.system.opened.at(-1)), "local.demo");
@@ -153,16 +169,17 @@ test("导出 .vxp and 导出源码 zip save where the user chose", async () => {
 
 test("the GitHub name in the settings is the prefix of new plugins", async () => {
   const mock = await server(scripted({ 做个插件: [{ toolCalls: [{ name: "scaffold_plugin", args: { name: "demo" } }] }] }));
-  const ai = await startAi({ compat: mock.url });
-  assert.match(ai.page.props["owner-hint"], /local\.<名字>/);
+  const ai = await startAi({ compat: mock.url, locale: "zh-Hans" });
+  assert.match(ai.ownerHint(), /local\.<名字>/);
   ai.page.emit("set-owner", "vestra");
   await ai.host.settle();
-  assert.match(ai.page.props["owner-hint"], /留给官方插件/);
+  assert.equal(ai.ownerHint(), "「vestra」留给官方插件，请填你自己的 GitHub 用户名（新插件暂时用 local.<名字>）");
   ai.page.emit("set-owner", "OctoCat");
   await ai.host.settle();
-  assert.match(ai.page.props["owner-hint"], /octocat\.<名字>/);
+  assert.match(ai.ownerHint(), /^新插件的 id 是 octocat\.<名字>/);
   await ai.ask("做个插件");
-  assert.match(mock.chats[0].body.messages[0].content, /现在是「octocat」/);
+  assert.match(mock.chats[0].body.messages[0].content, /currently "octocat"/);
+  assert.match(mock.chats[0].body.messages[0].content, /The user's interface language is Simplified Chinese/);
   await ai.until(() => ai.props["project-title"] === "demo · octocat.demo 0.1.0", "owner prefix");
   await ai.stop();
 });

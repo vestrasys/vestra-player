@@ -1,4 +1,5 @@
 /** Tool windows, docked panels and system dialogs. */
+import { templateArgs } from "./osd.js";
 import { readFileSync } from "node:fs";
 import { basename, extname, resolve } from "node:path";
 import { failure, Latest, quiet } from "./runtime.js";
@@ -651,7 +652,8 @@ export const dialogs = (scope) => {
     };
     return {
         async confirm(options) {
-            const { message, detail, confirm, cancel, destructive, checkbox } = options ?? {};
+            const { message, detail, confirm, cancel, destructive, checkbox, args } = options ?? {};
+            const values = templateArgs(args);
             const length = (text, min, max) => typeof text === "string" &&
                 [...text].length >= min &&
                 [...text].length <= max;
@@ -669,6 +671,7 @@ export const dialogs = (scope) => {
                 ...(cancel === undefined ? {} : { cancel }),
                 ...(destructive === undefined ? {} : { destructive }),
                 ...(checkbox === undefined ? {} : { checkbox }),
+                ...(values === undefined ? {} : { args: values }),
             });
             return {
                 confirmed: answer.confirmed === true,

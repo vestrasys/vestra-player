@@ -13,7 +13,7 @@ export const PLUGIN_TOOLS: Record<string, { description: string; parameters: Ret
       "Create a new plugin project <owner>.<name>/ in the work folder from the official template (manifest.json, main.ts, ui/main.slint, tests/main.test.ts, README.md, CHANGELOG.md, package.json, tsconfig.json). The owner prefix comes from the user's settings. Returns the id and the files.",
     parameters: Type.Object({
       name: Type.String({ description: "Short name: lower-case letters, digits and -, e.g. subtitle-delay" }),
-      title: Type.Optional(Type.String({ description: "Display name for the menu and manifest, e.g. 字幕延迟" })),
+      title: Type.Optional(Type.String({ description: "Display name for the menu and manifest, e.g. Subtitle Delay" })),
     }),
   },
   typecheck: {
@@ -33,7 +33,7 @@ export const PLUGIN_TOOLS: Record<string, { description: string; parameters: Ret
     parameters: Type.Object({ id }),
   },
   install_plugin: {
-    description: "Pack the plugin, let the player validate it (including Slint) and install it. The user confirms in a dialog first; 回退 in the window undoes the install (the previous version, or uninstall after a first install). Only after the user asked for it.",
+    description: "Pack the plugin, let the player validate it (including Slint) and install it. The user confirms in a dialog first; Roll Back in the window undoes the install (the previous version, or uninstall after a first install). Only after the user asked for it.",
     parameters: Type.Object({ id }),
   },
 };

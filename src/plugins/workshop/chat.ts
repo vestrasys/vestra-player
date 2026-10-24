@@ -2,61 +2,67 @@
 // worker's live events or from pi's JSONL. One user turn is: the user's
 // message, ONE rolling tool line (the latest call replaces the previous one;
 // expandable to the whole list), then the assistant's text.
+//
+// Rows carry data, not sentences: notices, errors and the tool line say what
+// happened with a `code` and its `args`; ai.slint has the words (@tr).
 import type { WorkerEvent } from "./worker/protocol.ts";
+
+/** One tool call: its tool, what it is about, 0 running / 1 done / 2 failed. */
+export type ToolCall = {
+  tool: string;
+  target: string;
+  /** `target` is a file of the read-only reference (shown as such). */
+  reference: boolean;
+  state: number;
+};
+
+const NO_CALL: ToolCall = { tool: "", target: "", reference: false, state: 0 };
 
 export interface Row {
   id: string;
   /** "user" | "tools" | "assistant" | "notice" | "error" */
   kind: string;
+  /** user and assistant: the message (data). */
   text: string;
-  /** tools: one line per call; error: the provider's message. */
+  /** error: the provider's message. */
   detail: string;
   /** 0 running, 1 done, 2 failed */
   state: number;
   expanded: boolean;
-  /** error rows: offer 「打开设置」. */
+  /** error rows: offer Open Settings. */
   settings: boolean;
+  /**
+   * notice / error: what to say (see ai.slint). tools: "running" (`call` in
+   * progress), "after" (`call` ended, the model `phase`), "phase" (no call
+   * yet), "done" (the turn is over: `n` calls, `failed` failed).
+   */
+  code: string;
+  args: string[];
+  /** notice: the count of a plural notice; tools: the number of calls. */
+  n: number;
+  /** tools: every call of the turn, and the one the line shows. */
+  calls: ToolCall[];
+  call: ToolCall;
+  /** tools: "thinking" | "replying" while the turn runs. */
+  phase: string;
+  failed: number;
 }
 
-interface Call {
-  id: string;
-  label: string;
-  state: number;
-}
-
-const VERBS: Record<string, string> = {
-  read: "读取",
-  write: "写入",
-  edit: "修改",
-  ls: "列出",
-  find: "查找",
-  grep: "搜索",
-  delete: "删除",
-  scaffold_plugin: "创建插件",
-  typecheck: "类型检查",
-  test: "运行测试",
-  check: "检查",
-  pack: "打包",
-  install_plugin: "安装",
-};
-
-export function toolLabel(name: string, target: string): string {
-  const verb = VERBS[name] ?? name;
-  return target ? `${verb} ${target}` : verb;
-}
-
-/** A provider or network failure in Chinese, and whether the key is the likely cause. */
-export function classify(message: string, model = ""): { text: string; settings: boolean } {
+/**
+ * A provider or network failure: the error row's `code` (and the model it
+ * names), and whether the key is the likely cause.
+ */
+export function classify(message: string, model = ""): { code: string; args: string[]; settings: boolean } {
   if (/\b(401|403)\b|invalid.{0,20}(api.?key|x-api-key|token)|incorrect api key|authentication|authenticate|unauthori[sz]ed/i.test(message))
-    return { text: "API key 无效或没有权限，请在设置中检查。", settings: true };
+    return { code: "key", args: [], settings: true };
   if (
-    /model.{0,60}(not found|no longer available|not available|does not exist|not exist|is not supported|unsupported|deprecated|retired)|(unknown|invalid|unsupported) model|model_not_found|未知模型/i.test(message)
+    /model.{0,60}(not found|no longer available|not available|does not exist|not exist|is not supported|unsupported|deprecated|retired)|(unknown|invalid|unsupported) model|model_not_found/i.test(message)
   )
-    return { text: model ? `模型「${model}」不可用，请在设置中换一个模型。` : "模型不可用，请在设置中换一个模型。", settings: true };
-  if (/\b429\b|quota|insufficient|credit|billing|rate.?limit/i.test(message)) return { text: "额度不足或请求过于频繁，请稍后重试。", settings: false };
+    return model ? { code: "model", args: [model], settings: true } : { code: "model-unnamed", args: [], settings: true };
+  if (/\b429\b|quota|insufficient|credit|billing|rate.?limit/i.test(message)) return { code: "quota", args: [], settings: false };
   if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ECONNRESET|ETIMEDOUT|fetch failed|network|socket|getaddrinfo|Connection error/i.test(message))
-    return { text: "网络错误：无法连接服务商。", settings: false };
-  return { text: "出错了。", settings: false };
+    return { code: "network", args: [], settings: false };
+  return { code: "failed", args: [], settings: false };
 }
 
 let serial = 0;
@@ -67,7 +73,7 @@ const nextId = () => `r${++serial}`;
 
 export class Chat {
   rows: Row[] = [];
-  private calls: Call[] = [];
+  private calls: (ToolCall & { id: string })[] = [];
   private toolsRow: Row | undefined;
   private assistant: Row | undefined;
   /** A live turn is in progress (the status line says what the agent is doing). */
@@ -83,13 +89,17 @@ export class Chat {
    * keeps it). Anything longer, or a reply without tool calls, is shown.
    */
   private opening = "";
-  /** The text of the last user message, for 「重试」. */
+  /** The text of the last user message, for Retry. */
   lastPrompt = "";
   /** The model of the current run, named in a "model not available" error. */
   model = "";
 
-  private push(row: Omit<Row, "id" | "detail" | "state" | "expanded" | "settings"> & Partial<Row>): Row {
-    const full: Row = { id: nextId(), detail: "", state: 1, expanded: false, settings: false, ...row };
+  private static row(fields: Pick<Row, "kind"> & Partial<Row>): Row {
+    return { id: nextId(), text: "", detail: "", state: 1, expanded: false, settings: false, code: "", args: [], n: 0, calls: [], call: NO_CALL, phase: "", failed: 0, ...fields };
+  }
+
+  private push(fields: Pick<Row, "kind"> & Partial<Row>): Row {
+    const full = Chat.row(fields);
     this.rows.push(full);
     return full;
   }
@@ -102,7 +112,7 @@ export class Chat {
 
   /**
    * A live turn starts (a message was sent): the status line appears at once
-   * as 「思考中…」, before the model's first event, and follows every event.
+   * as "Thinking…", before the model's first event, and follows every event.
    */
   begin() {
     this.live = true;
@@ -113,7 +123,7 @@ export class Chat {
 
   private statusRow(): Row {
     if (!this.toolsRow) {
-      const row: Row = { id: nextId(), kind: "tools", text: "", detail: "", state: 0, expanded: false, settings: false };
+      const row = Chat.row({ kind: "tools", state: 0 });
       // Before the turn's text: the line reads as "what the agent did".
       const at = this.assistant ? this.rows.indexOf(this.assistant) : -1;
       if (at >= 0) this.rows.splice(at, 0, row);
@@ -123,13 +133,22 @@ export class Chat {
     return this.toolsRow;
   }
 
-  notice(text: string) {
-    this.push({ kind: "notice", text });
+  /** A notice row: `code` and its arguments (see ai.slint). */
+  notice(code: string, args: (string | number)[] = []) {
+    this.push({ kind: "notice", code, args: args.map(String) });
   }
 
-  error(message: string, override?: string) {
-    const { text, settings } = classify(message, this.model);
-    this.push({ kind: "error", text: override ?? text, detail: message.split("\n")[0].slice(0, 400), state: 2, settings });
+  /** An error row for the provider's `message`; `code` says it instead of the classification. */
+  error(message: string, code?: string, args: (string | number)[] = []) {
+    const found = classify(message, this.model);
+    this.push({
+      kind: "error",
+      code: code ?? found.code,
+      args: code ? args.map(String) : found.args,
+      detail: message.split("\n")[0].slice(0, 400),
+      state: 2,
+      settings: code ? false : found.settings,
+    });
   }
 
   private refreshTools() {
@@ -138,25 +157,31 @@ export class Chat {
     const running = this.calls.findLast((call) => call.state === 0);
     const last = this.calls.at(-1);
     const failed = this.calls.filter((call) => call.state === 2).length;
+    const plain = ({ tool, target, reference, state }: ToolCall): ToolCall => ({ tool, target, reference, state });
     if (running || this.live) {
       // While the turn runs: the call in progress, else the latest call and
       // what the model does now; each new call replaces the previous one.
       row.state = 0;
-      const now = this.replying ? "回复中…" : "思考中…";
-      row.text = running ? `${running.label}…` : last ? `${last.label}${last.state === 2 ? " ✗" : " ✓"} · ${now}` : now;
+      row.phase = this.replying ? "replying" : "thinking";
+      row.code = running ? "running" : last ? "after" : "phase";
+      row.call = running ? plain(running) : last ? plain(last) : NO_CALL;
     } else {
       row.state = failed ? 2 : 1;
-      row.text = `${this.calls.length} 个工具调用${failed ? `，${failed} 个失败` : ""}`;
+      row.code = "done";
+      row.phase = "";
+      row.call = NO_CALL;
     }
-    row.detail = this.calls.map((call) => `${call.state === 0 ? "…" : call.state === 1 ? "✓" : "✗"} ${call.label}`).join("\n");
+    row.n = this.calls.length;
+    row.failed = failed;
+    row.calls = this.calls.map(plain);
   }
 
-  private toolCall(id: string, label: string, state: number) {
+  private toolCall(id: string, call: Omit<ToolCall, "state">, state: number) {
     this.statusRow();
     if (state === 0) this.replying = false;
-    const known = this.calls.find((call) => call.id === id);
+    const known = this.calls.find((c) => c.id === id);
     if (known) known.state = state;
-    else this.calls.push({ id, label, state });
+    else this.calls.push({ id, ...call, state });
     this.refreshTools();
   }
 
@@ -220,23 +245,23 @@ export class Chat {
           this.error(event.error);
         } else if (event.stopReason === "aborted") {
           this.endTurn();
-          this.notice("已停止");
+          this.notice("stopped");
         }
         break;
       case "tool_start":
         this.messageEnd("toolUse");
-        this.toolCall(event.id, toolLabel(event.name, event.target), 0);
+        this.toolCall(event.id, { tool: event.name, target: event.target, reference: !!event.reference }, 0);
         break;
       case "tool_end":
-        this.toolCall(event.id, "", event.ok ? 1 : 2);
+        this.toolCall(event.id, NO_CALL, event.ok ? 1 : 2);
         break;
       case "retry":
         // pi retries by itself: the failed attempt's error row gives way.
         if (this.rows.at(-1)?.kind === "error") this.rows.pop();
-        this.notice(`连接失败，正在重试（${event.attempt}/${event.max}）…`);
+        this.notice("retry", [event.attempt, event.max]);
         break;
       case "compaction":
-        this.notice(event.done ? "上下文已压缩" : "正在压缩上下文…");
+        this.notice(event.done ? "compacted" : "compacting");
         break;
       case "settled":
         this.endTurn();
@@ -273,18 +298,18 @@ export class Chat {
             const args = (part.arguments ?? {}) as Record<string, unknown>;
             const target = ["path", "pattern", "file", "id", "name"].map((k) => args[k]).find((v) => typeof v === "string") as string | undefined;
             chat.messageEnd("toolUse");
-            chat.toolCall(String(part.id), toolLabel(String(part.name), target ?? ""), 1);
+            chat.toolCall(String(part.id), { tool: String(part.name), target: target ?? "", reference: false }, 1);
           }
         }
         chat.messageEnd(String(message.stopReason ?? "stop"));
         if (message.stopReason === "error") {
           chat.endTurn();
-          chat.error(String(message.errorMessage ?? "未知错误"));
+          chat.error(String(message.errorMessage ?? ""));
         } else if (message.stopReason === "aborted") {
           chat.endTurn();
-          chat.notice("已停止");
+          chat.notice("stopped");
         }
-      } else if (message.role === "toolResult" && message.isError) chat.toolCall(String(message.toolCallId), "", 2);
+      } else if (message.role === "toolResult" && message.isError) chat.toolCall(String(message.toolCallId), NO_CALL, 2);
     }
     chat.endTurn();
     return chat;

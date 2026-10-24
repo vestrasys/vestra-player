@@ -50,16 +50,16 @@ test("custom endpoints list their models: OpenAI GET /models, Anthropic GET /v1/
   await assert.rejects(listModels(customList(openai, bare.url), KEY), /404/);
 });
 
-test("「自定义 · Anthropic 格式」: listed model, streamed reply and a tool call over the Anthropic wire format", async () => {
+test("Custom · Anthropic format: listed model, streamed reply and a tool call over the Anthropic wire format", async () => {
   const mock = await server((req) =>
     req.body.messages.at(-1).content.some?.((part) => part.type === "tool_result")
       ? { text: ["写好了"] }
       : { text: ["好的"], toolCalls: [{ name: "write", args: { path: "a.md", content: "anthropic\n" } }] },
   );
-  const ai = await startAi();
+  const ai = await startAi({ locale: "zh-Hans" });
   await ai.configure(mock.url.replace(/\/v1$/, ""), { format: "Anthropic" });
   assert.deepEqual(ai.page.props.models, ["mock-1", "mock-2"]);
-  assert.equal(ai.props["model-text"], "自定义 · Anthropic 格式 · mock-1");
+  assert.equal(ai.modelLine(), "自定义 · Anthropic 格式 · mock-1");
   await ai.ask("写 a.md");
   assert.equal(ai.kinds(), "user,tools,assistant");
   // 「好的」 before the first tool call is an opening line, not shown (Chat.opening).
@@ -75,9 +75,9 @@ test("「自定义 · Anthropic 格式」: listed model, streamed reply and a to
 
 test("an endpoint without a model list: say so, and a typed model id works", async () => {
   const mock = await server(() => ({ text: ["你好"] }), { models: null });
-  const ai = await startAi();
+  const ai = await startAi({ locale: "zh-Hans" });
   await ai.configure(mock.url, { model: "typed-model" });
-  assert.match(ai.page.props.message, /没能获取模型列表|key 已保存/);
+  assert.match(ai.message(), /没能获取模型列表|key 已保存/);
   assert.deepEqual(ai.page.props.models, []);
   assert.equal(ai.page.props["model-text"], "typed-model");
   await ai.ask("hi");
@@ -87,15 +87,15 @@ test("an endpoint without a model list: say so, and a typed model id works", asy
   await ai.stop();
 });
 
-test("the status line is live: 思考中 before the first event, each tool call, then the summary; it expands", async () => {
+test("the status line is live: Thinking before the first event, each tool call, then the summary; it expands", async () => {
   const mock = await server((req) =>
     req.body.messages.at(-1).role === "tool"
       ? { text: ["完成"], delayMs: 1200 }
       : { toolCalls: [{ name: "write", args: { path: "notes.md", content: "x" } }], delayMs: 1200 },
   );
-  const ai = await startAi({ compat: mock.url });
+  const ai = await startAi({ compat: mock.url, locale: "zh-Hans" });
   await ai.ask("写 notes.md", { wait: false });
-  const status = () => ai.rows()[1]?.text;
+  const status = () => (ai.rows()[1]?.kind === "tools" ? ai.shown(1) : undefined);
   await ai.until(() => status() === "思考中…" && ai.rows()[1].state === 0, "thinking before the first event", 5_000);
   await ai.until(() => status() === "写入 notes.md ✓ · 思考中…", "the tool call, then thinking again", 5_000);
   await ai.until(() => ai.props.busy === false, "end");
@@ -103,7 +103,8 @@ test("the status line is live: 思考中 before the first event, each tool call,
   assert.equal(ai.rows()[1].expanded, false);
   await ai.send("toggle", ai.rows()[1].id);
   assert.equal(ai.rows()[1].expanded, true);
-  assert.equal(ai.rows()[1].detail, "✓ 写入 notes.md");
+  assert.deepEqual(ai.rows()[1].calls, [{ tool: "write", target: "notes.md", reference: false, state: 1 }], "the calls are sent while expanded");
+  assert.equal(await ai.calls(1), "✓ 写入 notes.md");
   await ai.stop();
 });
 
@@ -111,13 +112,13 @@ test("a reply without tool calls keeps no status line", async () => {
   const mock = await server(() => ({ text: ["只是回答"], delayMs: 300 }));
   const ai = await startAi({ compat: mock.url });
   await ai.ask("你好", { wait: false });
-  await ai.until(() => ai.rows()[1]?.text === "思考中…", "thinking", 5_000);
+  await ai.until(() => ai.rows()[1]?.kind === "tools" && ai.shown(1) === "Thinking…", "thinking", 5_000);
   await ai.until(() => ai.props.busy === false, "end");
   assert.equal(ai.kinds(), "user,assistant");
   await ai.stop();
 });
 
-test("settings of the first slice move to 「自定义 · OpenAI 格式」 with their Base URL, model and key", async () => {
+test("settings of the first slice move to Custom · OpenAI format with their Base URL, model and key", async () => {
   for (const old of ["vestra-compat", "openai-compatible"]) {
     const mock = await server(() => ({ text: ["迁移后可用"] }));
     const data = await dataDirectory();
@@ -127,7 +128,7 @@ test("settings of the first slice move to 「自定义 · OpenAI 格式」 with 
     );
     const ai = await startAi({ data, secrets: { [`key.${old}`]: KEY } });
     await ai.until(() => ai.props.configured === true, "configured from the old settings");
-    assert.equal(ai.props["model-text"], "自定义 · OpenAI 格式 · MiniMax-M3.1-Flash");
+    assert.equal(ai.modelLine(), "Custom · OpenAI format · MiniMax-M3.1-Flash");
     assert.equal(ai.page.props["base-url"], mock.url);
     assert.equal(ai.host.secrets.get("key.custom-openai"), KEY);
     assert.equal(ai.host.secrets.has(`key.${old}`), false);
@@ -161,10 +162,12 @@ test("a saved provider that is no longer offered: notice, nothing sent, settings
   const data = await dataDirectory();
   const saved = { provider: "zai", models: { zai: "glm-4.6" }, baseUrls: {}, lastSession: null, migrateKeys: false, savedKeys: { zai: true } };
   await fs.writeFile(path.join(data, "settings.json"), JSON.stringify(saved));
-  const ai = await startAi({ data, secrets: { "key.zai": KEY } });
+  const ai = await startAi({ data, secrets: { "key.zai": KEY }, locale: "zh-Hans" });
   const notice = "之前选择的服务商「Z.AI」已不再提供，请改用其他服务商或「自定义 · OpenAI/Anthropic 格式」。";
-  await ai.until(() => ai.props.banner === notice, "banner");
-  assert.equal(ai.page.props.gone, notice);
+  await ai.until(() => ai.props.banner.code === "gone", "banner");
+  assert.equal(ai.host.translate("The provider you chose before, “{}”, is no longer offered; use another provider or “Custom · OpenAI/Anthropic format”.", ai.props.banner.args), notice);
+  assert.equal(ai.page.props.gone, "Z.AI");
+  assert.equal(ai.keyState(), "旧服务商的 key 不会自动删除");
   assert.equal(ai.page.props.providers[ai.page.props["provider-index"]], "Z.AI（已不再提供）");
   assert.equal(ai.props.configured, false);
   await ai.send("send", "hi");
@@ -247,13 +250,14 @@ test("a listed model that pi's catalog does not know runs on the provider's endp
   assert.equal(resolveModel(runtime, "no-such-provider", "x"), undefined);
 });
 
-test("a model the provider no longer serves: a clear error with 打开设置 and 重试", async () => {
+test("a model the provider no longer serves: a clear error with Open Settings and Retry", async () => {
   const mock = await server(() => ({ status: 404, error: "The model mock-1 is no longer available", code: "model_not_found" }));
-  const ai = await startAi({ compat: mock.url });
+  const ai = await startAi({ compat: mock.url, locale: "zh-Hans" });
   await ai.ask("hi");
   const error = ai.rows().at(-1);
   assert.equal(error.kind, "error");
-  assert.equal(error.text, "模型「mock-1」不可用，请在设置中换一个模型。");
+  assert.deepEqual([error.code, error.args], ["model", ["mock-1"]]);
+  assert.equal(ai.shown(-1), "模型「mock-1」不可用，请在设置中换一个模型。");
   assert.equal(error.settings, true);
   assert.match(error.detail, /no longer available/);
   assert.equal(ai.props["can-retry"], true);

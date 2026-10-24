@@ -6,6 +6,7 @@ import { timeline } from "./timeline.js";
 import { drops } from "./drops.js";
 import { appearance } from "./appearance.js";
 import { settings } from "./settings.js";
+import { i18n } from "./language.js";
 import { player } from "./player.js";
 import { audioFilters, videoFilters } from "./filters.js";
 import { videoRender, videoView } from "./view.js";
@@ -69,6 +70,7 @@ export class ScopeImpl {
     drops = drops(this);
     appearance = appearance(this);
     settings = settings(this);
+    i18n = i18n(this);
     get app() {
         return this.runtime.app;
     }

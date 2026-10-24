@@ -161,4 +161,14 @@ const info = (plugin) => Object.freeze({
         ...(warning.slot === undefined ? {} : { slot: warning.slot }),
         ...(warning.owner === undefined ? {} : { owner: warning.owner }),
     }))),
+    ...(plugin.display
+        ? {
+            display: Object.freeze({
+                name: plugin.display.name ?? null,
+                punchline: plugin.display.punchline ?? null,
+                description: plugin.display.description ?? null,
+                tags: Object.freeze([...(plugin.display.tags ?? [])]),
+            }),
+        }
+        : {}),
 });

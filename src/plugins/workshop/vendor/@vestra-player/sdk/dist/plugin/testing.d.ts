@@ -8,11 +8,28 @@ import type { SourceState } from "../source.ts";
 import type { SubtitleState } from "../subtitles.ts";
 import type { RenderSettings, ViewSettings } from "./types.ts";
 import type { MediaJob } from "../media.ts";
-import type { Plugin, ThemeId } from "./types.ts";
+import type { LanguagePreference, Locale, Plugin, TemplateArgs, ThemeId } from "./types.ts";
+import { LOCALES } from "../i18n.ts";
 /** Throw one of these from `host.handle(...)` to simulate a definite refusal. */
 export { HostError };
 /** The player's command caps, which the test host enforces as well. */
 export { COMMAND_LIMITS, MENU_IDS };
+/**
+ * The player's interface languages, English (the source) first, as the
+ * player's own table: `["en", "zh-Hans", "ja", "ko", "de", "fr", "es"]`.
+ *
+ * @example
+ * ```ts
+ * import { LOCALES } from "@vestra-player/sdk/testing";
+ *
+ * for (const locale of LOCALES.slice(1)) {
+ *   const { host, stop } = await startPlugin(activate, { directory, locale });
+ *   assert.notEqual(host.command("open").display.title, "Open…");
+ *   await stop();
+ * }
+ * ```
+ */
+export { LOCALES };
 type Handler = (params: Record<string, Json>) => unknown;
 type Call = {
     method: string;
@@ -80,6 +97,20 @@ export interface FakeCommand {
      * versions.
      */
     declaration: CommandDeclaration;
+    /**
+     * What the menu shows, as the player shows it in the test host's
+     * {@link TestHost.locale}: the title and each path segment translated with
+     * the plugin's catalog (the player's own menus in the player's words), the
+     * keys normalized (`@video` is "Video").
+     *
+     * @since 1.5.9
+     */
+    readonly display: {
+        /** The menu text of the item. */
+        title: string;
+        /** Each segment of the path as shown; empty without a path. */
+        path: string[];
+    };
     /** The command state the player last received (after the update pass). */
     state: {
         /** `false` when the plugin disabled the command. */
@@ -257,10 +288,101 @@ export declare class TestHost implements Transport {
          */
         sidebar: LayoutSlot | null;
     };
-    /** Every `osd.show` text, newest last. */
+    /**
+     * Every `osd.show` text as the player shows it (translated with the
+     * plugin's catalog and formatted with its args), newest last. The
+     * template and args the plugin sent are in `host.sent("osd.show")`.
+     */
     readonly osd: string[];
-    /** The text of this plugin's osd panel, `null` when hidden. */
+    /** The text of this plugin's osd panel as shown, `null` when hidden. */
     osdPanel: string | null;
+    /**
+     * The interface language the test host plays (`plugin.i18n.locale`), `"en"`
+     * by default. Set it before {@link startPlugin} (or pass its `locale`
+     * option): the plugin's catalog for it is read from the package's
+     * `locales/` then, and the menus ({@link FakeCommand.display}), OSD
+     * messages, dialog texts, settings page and panel titles show its
+     * translations, the way the player shows them.
+     *
+     * The player's own texts (core actions' messages and menus, its
+     * refusals) are English, or the player's Simplified Chinese for
+     * `"zh-Hans"`. While `locale` was never set they stay in Chinese, as
+     * players up to 0.4.2 showed them, so tests written for SDK 1.5.8 keep
+     * passing; set `locale` to test what a user sees now.
+     *
+     * @example
+     * ```ts
+     * const { host, stop } = await startPlugin(activate, { directory, locale: "zh-Hans" });
+     * assert.deepEqual(host.command("blur").display.path, ["视频", "模糊…"]);
+     * await stop();
+     * ```
+     *
+     * @since 1.5.9
+     */
+    get locale(): Locale;
+    set locale(locale: Locale);
+    /**
+     * Read the plugin's translations for {@link TestHost.locale} from a
+     * package directory, as the player would (`locales/<locale>.json` of a
+     * built package, else the source `locales/<locale>.po`); `startPlugin`
+     * does this. None for English; a missing file means none; a broken `.po`
+     * throws.
+     *
+     * @param directory - The package directory (holding `locales/`).
+     * @since 1.5.9
+     */
+    loadCatalog(directory: string): void;
+    /**
+     * A text of the plugin as the player shows it: translated with the
+     * plugin's catalog ({@link TestHost.loadCatalog}), then formatted with
+     * `args` when given.
+     *
+     * @param text - English source text or template.
+     * @param args - Values for its placeholders.
+     * @returns The shown text.
+     *
+     * @example
+     * ```ts
+     * assert.equal(host.translate("Speed {}×", [2]), "倍速 2×");
+     * ```
+     *
+     * @since 1.5.9
+     */
+    translate(text: string, args?: TemplateArgs): string;
+    /**
+     * The saved interface language (`plugin.appearance.language`), changed by
+     * `appearance.setLanguage` or {@link TestHost.setLanguage}.
+     *
+     * @since 1.5.9
+     */
+    language: LanguagePreference;
+    /**
+     * Simulate another plugin (or the user) saving the interface language:
+     * pushes `appearance.changed`.
+     *
+     * @param language - `"system"` or a locale.
+     * @since 1.5.9
+     */
+    setLanguage(language: LanguagePreference): void;
+    /**
+     * Every `dialogs.confirm` as the player shows it: its texts translated
+     * (message and detail formatted with `args`), newest last. The options
+     * the plugin sent are in {@link TestHost.confirms}.
+     *
+     * @since 1.5.9
+     */
+    readonly confirmTexts: {
+        /** The question. */
+        message: string;
+        /** The text under it, if any. */
+        detail?: string;
+        /** The confirm button. */
+        confirm: string;
+        /** The cancel button (the player's "Cancel" by default). */
+        cancel: string;
+        /** The checkbox, if any. */
+        checkbox?: string;
+    }[];
     /** The sequence provider's flags, `null` without a provider. */
     sequence: {
         /** The provider's `canNext`, as last evaluated. */
@@ -1341,6 +1463,14 @@ export declare function startPlugin(activate: (plugin: Plugin) => unknown, optio
     host?: TestHost;
     /** Use an existing directory as `plugin.dataDirectory` (to test a restart). */
     dataDirectory?: string;
+    /**
+     * The interface language to play ({@link TestHost.locale}): the plugin's
+     * `locales/<locale>.po` (or `.json`) in `directory` is loaded and its
+     * menus, messages and titles show translated. Default: the host's.
+     *
+     * @since 1.5.9
+     */
+    locale?: Locale;
 }): Promise<{
     /** The test host the plugin talks to. */
     host: TestHost;

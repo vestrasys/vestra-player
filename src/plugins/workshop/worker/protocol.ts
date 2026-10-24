@@ -48,7 +48,7 @@ export type WorkerEvent =
   | { kind: "text"; delta: string }
   | { kind: "thinking"; delta: string }
   | { kind: "assistant_end"; text: string; stopReason: string; error: string | null }
-  | { kind: "tool_start"; id: string; name: string; target: string }
+  | { kind: "tool_start"; id: string; name: string; target: string; /** `target` is a reference file (sdk/…). */ reference?: boolean }
   | { kind: "tool_end"; id: string; name: string; ok: boolean; summary: string }
   | { kind: "retry"; attempt: number; max: number; error: string }
   | { kind: "compaction"; done: boolean }
