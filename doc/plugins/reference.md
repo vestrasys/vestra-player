@@ -1581,7 +1581,6 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 
 ## 17. 变更说明
 
-<<<<<<< HEAD
 ### 多语言第 1 轮（2026-10，播放器 0.4.3，SDK 1.5.9）
 
 - 界面以英文为原文，7 种语言（§6.10），启动时决定，改语言下次启动生效；`appearance.language` / `setLanguage`（§6.8）；`plugin.i18n.locale`（§6.10）。
@@ -1590,7 +1589,7 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 - `vestra-plugin i18n extract|check`，`build` 编译词典（§15）；TestHost 的 `locale`（§14）。
 - 播放器自己的界面文字改为英文原文 + 简体中文词典（`src/host/locales/`），选项窗口、宿主提示与拒绝消息在简体中文下与之前相同。
 - 迁移：SDK《Migrate a plugin to English source text》（`docs/how-to/i18n-migration.md`）；参考迁移是 `vestra.preferences`。
-=======
+
 ### 属性值上限：写明、放宽、TestHost 执行、失败可见（2026-10，播放器 0.4.3，SDK 1.5.10）
 
 - 缺陷 D1（vestra.playlist）：属性值的上限（每个值 4096 个、每个数组 1024 行、文本 1 MiB）只在 Markdown 一节提了一句，`TestHost` 也不执行。播放列表每行 9 个值，超过约 450 行时整个 `rows` 写入都被播放器拒绝，插件测试却全部通过；用户加入 3000 个文件时列表停在旧内容上。
@@ -1599,7 +1598,6 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 - 播放器之后才发现的界面失败（`ui.error`）现在带 `code`，SDK 交给 `onError`；以前 SDK 不处理这个事件。
 - 插件运行器在发送前拒绝超过 1 MiB 的请求（`limit`），不再让播放器停止插件。
 - `TestHost` 执行同样的检查；`UI_VALUE_LIMITS` 与播放器的常量由 `tests/sdk/host-agreement.test.ts` 核对。
->>>>>>> fix/ui-value-limits-main
 
 ### 修正：左键单击不再等双击间隔（2026-10）
 
