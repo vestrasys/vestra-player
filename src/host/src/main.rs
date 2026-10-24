@@ -1848,7 +1848,15 @@ impl Host {
             let input = self.input.clone();
             let weak = window.as_weak();
             let modifiers = std::cell::Cell::new(winit::keyboard::ModifiersState::empty());
-            window.window().on_winit_window_event(move |_, event| {
+            let menu_cursor = std::cell::Cell::new((f64::NAN, f64::NAN));
+            window.window().on_winit_window_event(move |slint_window, event| {
+                if debug_menu()
+                    && weak.upgrade().is_some_and(|shell| {
+                        matches!(shell.get_property("menu-open"), Ok(SValue::Bool(true)))
+                    })
+                {
+                    debug_menu_pointer(slint_window, &menu_cursor, event);
+                }
                 let dead = observe_key(&input, &modifiers, event);
                 release_modifiers(&input, &events, generation);
                 if let winit::event::WindowEvent::DroppedFile(path) = event {
@@ -4390,6 +4398,28 @@ fn double_click_interval() -> Duration {
 fn debug_menu() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("VESTRA_DEBUG_MENU").is_some_and(|v| v == "1"))
+}
+/// `VESTRA_DEBUG_MENU=1`: the pointer as Slint receives it (logical px in
+/// the window's content), so a log shows which row a move or press hits.
+fn debug_menu_pointer(
+    window: &slint::Window,
+    cursor: &std::cell::Cell<(f64, f64)>,
+    event: &slint::winit_030::winit::event::WindowEvent,
+) {
+    use slint::winit_030::winit::event::WindowEvent;
+    let scale = f64::from(window.scale_factor());
+    match event {
+        WindowEvent::CursorMoved { position, .. } => {
+            let (x, y) = (position.x / scale, position.y / scale);
+            cursor.set((x, y));
+            eprintln!("menu: pointer moved x={x:.1} y={y:.1}");
+        }
+        WindowEvent::MouseInput { state, button, .. } => {
+            let (x, y) = cursor.get();
+            eprintln!("menu: pointer {state:?} {button:?} at x={x:.1} y={y:.1}");
+        }
+        _ => {}
+    }
 }
 fn debug_keys() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
