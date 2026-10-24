@@ -30,9 +30,9 @@ export function components(app: AppInfo, node: string | null): [string, string][
 
 /** One row of the loaded-plugin list (`packages.list`). */
 export type PluginRow = { id: string; version: string; origin: string; state: string };
-/** 「来源」 in the words of 插件管理 / 商城 (内置, 仓库, 链接, 本地文件, 插件工坊; 开发加载, 试载). */
+/** 「来源」 in the words of 插件管理 / 商城 (内置, 仓库, 链接, 本地文件, 插件工坊; 开发加载). */
 const SOURCES: Record<string, string> = { repository: "仓库", link: "链接", file: "本地文件", workshop: "插件工坊", bundled: "内置" };
-const ORIGINS: Record<string, string> = { installed: "已安装", development: "开发加载", trial: "试载" };
+const ORIGINS: Record<string, string> = { installed: "已安装", development: "开发加载" };
 type Listed = { id: string; version: string | null; origin: string; state: string; builtin?: boolean; source?: PackageSource | null };
 function origin(p: Listed) {
   if (p.builtin) return SOURCES.bundled!;

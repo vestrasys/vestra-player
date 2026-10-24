@@ -42,7 +42,6 @@ const LIST = (root: string) => [
   }),
   info("vestra.plugins", { capabilities: ["commands", "plugins.manage"], builtin: true, source: { kind: "bundled" }, dataDirectory: join(root, "self") }),
   info("dev.thing", { origin: "development", version: null, dataDirectory: join(root, "development", "dev.thing") }),
-  info("trial.x", { origin: "trial", dataDirectory: join(root, "trial-tmp") }),
   info("broken.one", { state: "failed", error: "activate threw: boom", source: { kind: "file" }, dataDirectory: join(root, "instance-01bc") }),
 ];
 
@@ -109,7 +108,6 @@ test("J07: the list shows id, version, origin, state and data size", async () =>
     [
       ["broken.one", "0.1.0", "本地文件", "启动失败"],
       ["dev.thing", "开发", "开发加载", "运行中"],
-      ["trial.x", "0.1.0", "试载", "运行中"],
       ["vestra.audio", "0.1.0", "仓库", "运行中"],
       ["vestra.plugins", "0.1.0", "内置", "运行中"],
     ],
@@ -224,7 +222,7 @@ test("J07: its own row cannot be disabled or uninstalled", async () => {
   assert.equal(props(host)["can-open"], true);
 });
 
-test("J07: development loads and trials", async () => {
+test("J07: development loads", async () => {
   const host = new TestHost();
   await start(host);
   await emit(host, "select", "dev.thing");
@@ -236,9 +234,6 @@ test("J07: development loads and trials", async () => {
   host.dialogAnswers.push({ confirmed: true, checked: false });
   await emit(host, "toggle");
   assert.match(String(host.confirms.at(-1)!.detail), /只在本次运行内停用/);
-  await emit(host, "select", "trial.x");
-  for (const name of ["can-toggle", "can-reload", "can-rollback", "can-uninstall", "can-open"])
-    assert.equal(props(host)[name], false, name);
 });
 
 test("J07: uninstall asks, can remove the data, and reports", async () => {
@@ -291,7 +286,7 @@ test("J07: open the data folder; a missing one is reported", async () => {
   assert.match(String(props(host).message), /数据目录不存在/);
 });
 
-test("source: each kind, and development loads and trials by their origin", () => {
+test("source: each kind, and development loads by their origin", () => {
   const of = (patch: Partial<Info>) => sourceText({ ...info("x"), builtin: false, source: null, dataDirectory: null, ...patch });
   assert.equal(of({ source: { kind: "repository", url: REPOSITORY } }), `仓库（${REPOSITORY}）`);
   assert.equal(of({ source: { kind: "link", url: "https://example.org/x-1.0.0.vxp" } }), "链接（https://example.org/x-1.0.0.vxp）");
@@ -299,7 +294,6 @@ test("source: each kind, and development loads and trials by their origin", () =
   assert.equal(of({ source: { kind: "workshop" } }), "插件工坊");
   assert.equal(of({ source: { kind: "bundled" }, builtin: true }), "内置");
   assert.equal(of({ origin: "development" }), "开发加载");
-  assert.equal(of({ origin: "trial" }), "试载");
   // The list's narrow column: the same words without the address.
   const short = (patch: Partial<Info>) => sourceShort({ ...info("x"), builtin: false, source: null, dataDirectory: null, ...patch });
   assert.deepEqual(
@@ -311,10 +305,9 @@ test("source: each kind, and development loads and trials by their origin", () =
       short({ source: { kind: "bundled" }, builtin: true }),
       short({ builtin: true }),
       short({ origin: "development" }),
-      short({ origin: "trial" }),
       short({}), // an older player without sources
     ],
-    ["仓库", "链接", "本地文件", "插件工坊", "内置", "内置", "开发加载", "试载", "已安装"],
+    ["仓库", "链接", "本地文件", "插件工坊", "内置", "内置", "开发加载", "已安装"],
   );
 });
 
@@ -367,7 +360,6 @@ test("uninstall refused as unsupported (the list was out of date): reported and 
   assert.ok(row(host, "vestra.audio"));
   // The other unsupported cases keep their own text.
   assert.equal(failureText({ code: "unsupported" }, { ...info("d", { origin: "development" }), builtin: false, source: null, dataDirectory: null }), "开发加载的插件不能卸载或回退");
-  assert.equal(failureText({ code: "unsupported" }, { ...info("t", { origin: "trial" }), builtin: false, source: null, dataDirectory: null }), "试载中的插件由插件工坊管理");
 });
 
 test("data directory: from the list; none from the player; a new one is measured", async () => {
