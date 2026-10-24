@@ -95,7 +95,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 struct RpcError {
     code: String,
     message: String,
@@ -151,7 +151,7 @@ impl RpcError {
         self.detail.as_ref().is_some_and(|d| {
             matches!(
                 d.get("reason").and_then(Value::as_str),
-                Some("slot-occupied" | "sequence-taken")
+                Some("slot-occupied" | "sequence-taken" | "resolver-taken")
             )
         })
     }
@@ -744,10 +744,14 @@ impl Host {
                                 self.activation_ui.insert((owner, reply.id));
                             }
                         }
-                        // Built-in plugins claim panel slots and the sequence first (slot_claims).
+                        // Built-in plugins claim panel slots, the sequence and resolvers first (slot_claims).
                         if matches!(
                             request.method.as_str(),
-                            "ui.mount" | "ui.unmount" | "sequence.set"
+                            "ui.mount"
+                                | "ui.unmount"
+                                | "sequence.set"
+                                | "sourceResolvers.register"
+                                | "sourceResolvers.unregister"
                         ) && !self.headless
                         {
                             let builtin = self.is_builtin(owner);
@@ -3157,7 +3161,25 @@ impl Host {
             .collect::<Vec<_>>();
         (!text.is_empty()).then(|| text.join("；"))
     }
-    fn respond(&mut self, reply: Reply, result: std::result::Result<Value, RpcError>) {
+    fn respond(&mut self, reply: Reply, mut result: std::result::Result<Value, RpcError>) {
+        // The backend names the holder of a taken resolver by owner number.
+        if let Err(error) = &mut result
+            && let Some(detail) = error.detail.as_mut()
+            && detail.get("reason").and_then(Value::as_str) == Some("resolver-taken")
+            && let Some(holder) = detail.remove("holder").and_then(|h| h.as_u64())
+        {
+            let target = detail
+                .remove("target")
+                .and_then(|t| t.as_str().map(str::to_owned))
+                .unwrap_or_default();
+            let id = self.plugin_id(holder);
+            detail.insert("owner".into(), id.clone().into());
+            detail.insert("target".into(), target.clone().into());
+            error.message = format!("{target} 已由 {id} 解析");
+            let text = format!("{target} 未接管：已由 {id} 解析");
+            let refusal = error.clone();
+            result = Err(self.refuse_taken(reply.owner, refusal, text));
+        }
         if self.activation_ui.remove(&(reply.owner, reply.id)) {
             let outcome = activation_outcome(&result);
             if let Err(error) =
@@ -4836,6 +4858,9 @@ mod tests {
         assert_eq!(activation_outcome(&Err(refusal)), Ok(()));
         let sequence = RpcError::sequence_taken("a.b");
         assert_eq!(activation_outcome(&Err(sequence)), Ok(()));
+        // A file type or site another plugin resolves (source_resolvers).
+        let resolver = RpcError::taken("resolver-taken", "taken".into(), json!({"holder":1}));
+        assert_eq!(activation_outcome(&Err(resolver)), Ok(()));
         assert_eq!(activation_outcome(&Ok(Value::Null)), Ok(()));
         assert_eq!(
             activation_outcome(&Err(RpcError::new("ui-prepare", "syntax error"))),

@@ -869,12 +869,22 @@ impl Sources {
                         "source resolution superseded or expired",
                     ));
                 }
-                let result = (|| -> Result<(), String> {
+                let files = self.resolvers.files(owner, &r.resolver_id);
+                let result = (|| -> Result<Value, String> {
                     if let Some(error) = params["error"].as_str() {
-                        return Err(format!(
-                            "resolver failed: {}",
-                            error.chars().take(2048).collect::<String>()
-                        ));
+                        // The resolver's own words: they are what the user sees.
+                        let error = error.chars().take(2048).collect::<String>();
+                        return Err(if error.trim().is_empty() {
+                            "resolver failed".into()
+                        } else {
+                            error
+                        });
+                    }
+                    if files {
+                        let stream: crate::source_resolvers::Stream =
+                            serde_json::from_value(params["result"].clone())
+                                .map_err(|_| "invalid resolved stream descriptor")?;
+                        return self.select_resolved_stream(owner, stream.producer()?, &r);
                     }
                     let media: crate::source_resolvers::Media =
                         serde_json::from_value(params["result"].clone())
@@ -884,17 +894,52 @@ impl Sources {
                     self.current_local = None;
                     self.entries.clear();
                     self.entries.insert(entry, r.ticket);
-                    Ok(())
+                    Ok(Value::Null)
                 })();
-                self.finish_resolution(&r, result.clone());
-                result.map_err(|message| RpcError::new("resolution", message))?;
-                Ok(Value::Null)
+                self.finish_resolution(&r, result.as_ref().map(|_| ()).map_err(Clone::clone));
+                result.map_err(|message| RpcError::new("resolution", message))
             }
             _ => Err(RpcError::new(
                 "unsupported",
                 "unknown source resolver method",
             )),
         }
+    }
+    /// A file resolver's answer: select the producer its plugin prepared as
+    /// the source of the pending open. The open keeps its path as `source`,
+    /// its stamp, operation and `startPaused`; mpv was stopped when the
+    /// resolution began. Answers the stamp the stream belongs to.
+    #[cfg(feature = "producer-audio")]
+    fn select_resolved_stream(
+        &mut self,
+        owner: u64,
+        producer_id: u64,
+        r: &Resolution,
+    ) -> Result<Value, String> {
+        self.producers
+            .ready(producer_id, owner)
+            .map_err(|e| format!("{}: {}", e.code, e.message))?;
+        self.producers
+            .activate(producer_id, r.paused)
+            .map_err(|e| e.message)?;
+        self.active = None;
+        self.loaded = None;
+        self.entries.clear();
+        self.current_local = None;
+        self.lease_ready = None;
+        self.provider_ticket = Some(r.ticket);
+        self.session
+            .event(SourceEvent::ProviderReady { ticket: r.ticket });
+        Ok(json!({ "stamp": r.ticket.stamp }))
+    }
+    #[cfg(not(feature = "producer-audio"))]
+    fn select_resolved_stream(
+        &mut self,
+        _owner: u64,
+        _producer_id: u64,
+        _r: &Resolution,
+    ) -> Result<Value, String> {
+        Err("unsupported: producer not enabled in this build".into())
     }
     pub fn disable(&mut self, owner: u64) {
         self.resolvers.disable(owner);
@@ -1692,6 +1737,204 @@ mod audio_track_tests {
         assert!(added_external(&before, &[track(1, false), track(2, false)]).is_none());
         assert!(
             added_external(&before, &[track(1, false), track(2, true), track(3, true)]).is_none()
+        );
+    }
+}
+
+#[cfg(test)]
+mod resolution_tests {
+    use super::*;
+    const PLAYER: u64 = 1;
+    const EMULATOR: u64 = 2;
+    fn mpv() -> Mpv {
+        Mpv::builder()
+            .unwrap()
+            .set_property("vo", "null")
+            .unwrap()
+            .set_property("ao", "null")
+            .unwrap()
+            .build()
+            .unwrap()
+    }
+    fn call(
+        sources: &mut Sources,
+        mpv: &Mpv,
+        owner: u64,
+        method: &str,
+        params: Value,
+    ) -> Result<Value, RpcError> {
+        sources
+            .dispatch(mpv, owner, method, &params)
+            .map(|value| value.unwrap_or(Value::Null))
+    }
+    /// The player opens `source` with operation `id`; the resolution request sent.
+    fn open(sources: &mut Sources, mpv: &Mpv, id: u64, source: &str, paused: bool) -> Value {
+        let status = call(
+            sources,
+            mpv,
+            PLAYER,
+            "source.submit",
+            json!({"operationId":id,"intent":{"kind":"open","source":source,"startPaused":paused}}),
+        )
+        .unwrap();
+        assert_eq!(status["status"], "pending");
+        let events = sources.resolver_events();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].0, EMULATOR);
+        assert_eq!(events[0].1, "source.resolveRequest");
+        events[0].2.clone()
+    }
+    fn registered() -> (Sources, Mpv) {
+        let mpv = mpv();
+        let mut sources = Sources::default();
+        call(
+            &mut sources,
+            &mpv,
+            EMULATOR,
+            "sourceResolvers.register",
+            json!({"id":"nes","extensions":["nes"]}),
+        )
+        .unwrap();
+        (sources, mpv)
+    }
+    fn operation(sources: &mut Sources, mpv: &Mpv, id: u64) -> Value {
+        call(
+            sources,
+            mpv,
+            PLAYER,
+            "source.operation",
+            json!({"operationId":id}),
+        )
+        .unwrap()
+    }
+    #[test]
+    fn a_file_open_waits_for_its_resolver_and_keeps_the_path() {
+        let (mut sources, mpv) = registered();
+        let request = open(&mut sources, &mpv, 1, "/roms/Game.NES", false);
+        assert_eq!(request["resolverId"], "nes");
+        assert_eq!(request["url"], "/roms/Game.NES");
+        let state = sources.session.state();
+        assert_eq!(state.phase, Phase::Loading);
+        assert_eq!(state.source.as_deref(), Some("/roms/Game.NES"));
+        // Other files still go to mpv.
+        assert!(sources.resolvers.find("/movies/a.mkv").is_none());
+    }
+    #[test]
+    fn the_resolvers_error_is_shown_in_its_own_words() {
+        let (mut sources, mpv) = registered();
+        let request = open(&mut sources, &mpv, 1, "/roms/bad.nes", false);
+        let error = call(
+            &mut sources,
+            &mpv,
+            EMULATOR,
+            "sourceResolvers.respond",
+            json!({"requestId":request["requestId"],"error":"不是 iNES 文件"}),
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "resolution");
+        let state = sources.session.state();
+        assert_eq!(state.phase, Phase::Error);
+        assert_eq!(
+            state.terminal_reason,
+            Some(EndReason::Failed("不是 iNES 文件".into()))
+        );
+        assert_eq!(
+            operation(&mut sources, &mpv, 1),
+            json!({"status":"failed","error":{"backend":"不是 iNES 文件"}})
+        );
+    }
+    #[test]
+    fn a_file_resolver_answers_with_a_stream_only() {
+        let (mut sources, mpv) = registered();
+        let request = open(&mut sources, &mpv, 1, "/roms/a.nes", false);
+        let media = json!({"kind":"media","originalUrl":"/roms/a.nes","primary":{"url":"https://cdn.example/a.mp4"}});
+        let error = call(
+            &mut sources,
+            &mpv,
+            EMULATOR,
+            "sourceResolvers.respond",
+            json!({"requestId":request["requestId"],"result":media}),
+        )
+        .unwrap_err();
+        assert_eq!(error.message, "invalid resolved stream descriptor");
+        assert_eq!(sources.session.state().phase, Phase::Error);
+        // A producer it does not hold is refused the same way, as a failed open.
+        let request = open(&mut sources, &mpv, 2, "/roms/a.nes", false);
+        let error = call(
+            &mut sources,
+            &mpv,
+            EMULATOR,
+            "sourceResolvers.respond",
+            json!({"requestId":request["requestId"],"result":{"kind":"stream","producerId":9}}),
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "resolution");
+        assert_eq!(sources.session.state().phase, Phase::Error);
+        assert_eq!(
+            sources.session.state().source.as_deref(),
+            Some("/roms/a.nes")
+        );
+    }
+    #[test]
+    fn closing_or_disabling_cancels_the_resolution() {
+        let (mut sources, mpv) = registered();
+        let request = open(&mut sources, &mpv, 1, "/roms/a.nes", false);
+        call(
+            &mut sources,
+            &mpv,
+            PLAYER,
+            "source.submit",
+            json!({"operationId":2,"intent":{"kind":"close"}}),
+        )
+        .unwrap();
+        let events = sources.resolver_events();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].1, "source.resolveCancel");
+        assert_eq!(events[0].2["requestId"], request["requestId"]);
+        let late = call(
+            &mut sources,
+            &mpv,
+            EMULATOR,
+            "sourceResolvers.respond",
+            json!({"requestId":request["requestId"],"result":{"kind":"stream","producerId":1}}),
+        )
+        .unwrap_err();
+        assert_eq!(late.code, "stale");
+        assert_eq!(sources.session.state().phase, Phase::Empty);
+        // The resolver's plugin stops while resolving: cancelled, and the
+        // extension goes back to mpv.
+        let request = open(&mut sources, &mpv, 3, "/roms/b.nes", false);
+        sources.disable(EMULATOR);
+        let events = sources.resolver_events();
+        assert_eq!(events[0].1, "source.resolveCancel");
+        assert_eq!(events[0].2["requestId"], request["requestId"]);
+        assert_eq!(sources.session.state().phase, Phase::Error);
+        assert_eq!(operation(&mut sources, &mpv, 3)["status"], json!("failed"));
+        assert!(sources.resolvers.find("/roms/b.nes").is_none());
+    }
+    #[test]
+    fn web_resolver_errors_drop_the_old_prefix_too() {
+        let mpv = mpv();
+        let mut sources = Sources::default();
+        call(
+            &mut sources,
+            &mpv,
+            EMULATOR,
+            "sourceResolvers.register",
+            json!({"id":"web","schemes":["https"],"hosts":["media.example"]}),
+        )
+        .unwrap();
+        let request = open(&mut sources, &mpv, 1, "https://media.example/v/1", false);
+        let _ = call(
+            &mut sources,
+            &mpv,
+            EMULATOR,
+            "sourceResolvers.respond",
+            json!({"requestId":request["requestId"],"error":"需要登录"}),
+        );
+        assert_eq!(
+            sources.session.state().terminal_reason,
+            Some(EndReason::Failed("需要登录".into()))
         );
     }
 }

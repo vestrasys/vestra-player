@@ -29,11 +29,13 @@ const pending = new Map<
 const listeners = new Map<string, Set<(data: unknown) => void>>();
 /**
  * Refusals because another plugin holds a single-owner resource: `conflict`
- * with `reason` `"slot-occupied"` (`ui.mount`: the panel's `ready` rejects)
- * or `"sequence-taken"` (`sequence.set`). They do not fail activation: the
- * plugin runs without its panel, or without providing next/previous.
+ * with `reason` `"slot-occupied"` (`ui.mount`: the panel's `ready` rejects),
+ * `"sequence-taken"` (`sequence.set`) or `"resolver-taken"`
+ * (`sourceResolvers.register`: the resolver's `ready` rejects). They do not
+ * fail activation: the plugin runs without its panel, without providing
+ * next/previous, or without resolving that file type or site.
  */
-const TAKEN = new Set(["slot-occupied", "sequence-taken"]);
+const TAKEN = new Set(["slot-occupied", "sequence-taken", "resolver-taken"]);
 const taken = new WeakSet<Error>();
 const send = (message: unknown) =>
   process.stdout.write(`${JSON.stringify(message)}\n`);
