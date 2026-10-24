@@ -3,13 +3,16 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { startPlugin, TestHost } from '@vestra-player/sdk/testing';
+import { HostError, startPlugin, TestHost } from '@vestra-player/sdk/testing';
 import activate from '../main.ts';
 import { homebrew } from './homebrew.mjs';
 
 const directory = new URL('..', import.meta.url);
 
-/** Write generated ROMs (and a malformed one) to a scratch directory. */
+/** The window's status while `name` runs. */
+export const running = name => `正在运行 ${name} · 256×240 · 48 kHz 立体声`;
+
+/** Write generated ROMs (and malformed ones) to a scratch directory. */
 export async function roms() {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'nes-plugin-test-'));
   const write = async (name, bytes) => {
@@ -20,24 +23,46 @@ export async function roms() {
   return {
     blue: await write('blue.nes', homebrew(0x21)),
     red: await write('red.nes', homebrew(0x16)),
+    upper: await write('GAME.NES', homebrew(0x2a)),
     bad: await write('bad.nes', new Uint8Array(100)),
+    truncated: await write('truncated.nes', homebrew().subarray(0, 4096)),
+    large: await (async () => {
+      const file = await write('large.nes', homebrew());
+      await fs.truncate(file, 16 * 1024 * 1024 + 1); // sparse: nothing is written
+      return file;
+    })(),
+    missing: path.join(dir, 'missing.nes'),
+    movie: path.join(dir, 'movie.mp4'),
     remove: () => fs.rm(dir, { recursive: true, force: true }),
   };
 }
 
 /**
  * Start the plugin. `intercept(method, params, next)` may delay or rewrite any
- * host request while keeping the TestHost's own behaviour behind `next()`.
+ * host request while keeping the TestHost's own behaviour behind `next()`;
+ * `host` may be prepared beforehand (e.g. `otherResolvers`).
+ *
+ * `retire` (default true) acts like the real player, which retires the
+ * producer of a stream that was replaced or closed: its `producer.state`
+ * then fails with `unavailable: producer absent` (the TestHost keeps it and
+ * answers `active: false`).
  */
-export async function start(intercept) {
-  const host = new TestHost();
-  if (intercept) {
-    const request = host.request.bind(host);
-    host.request = (method, params = {}) => intercept(method, params, () => request(method, params));
-  }
+export async function start(intercept, host = new TestHost(), { retire = true } = {}) {
+  const request = host.request.bind(host);
+  const ran = new Set();
+  host.request = async (method, params = {}) => {
+    const result = await (intercept ? intercept(method, params, () => request(method, params)) : request(method, params));
+    if (retire && method === 'producer.state') {
+      const id = Number(params.producerId);
+      if (result.active) ran.add(id);
+      else if (ran.has(id)) throw new HostError('unavailable', 'producer absent');
+    }
+    return result;
+  };
   const started = await startPlugin(activate, { directory, host });
-  // Before the first show() there is no window yet: read it as empty props.
-  const window = () => host.windows.get('nes') ?? { props: {}, emit: () => assert.fail('window not open') };
+  // The tool window shows the status: open it, as a user watching it would.
+  await host.command('nes.window').run();
+  const window = () => host.windows.get('nes') ?? assert.fail('window not open');
   return { ...started, window };
 }
 

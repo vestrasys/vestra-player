@@ -20,14 +20,22 @@ export class NesCore {
   readonly nes: NES;
   constructor(rom: Uint8Array) {
     if (rom.length < 16 || rom[0] !== 78 || rom[1] !== 69 || rom[2] !== 83 || rom[3] !== 26)
-      throw new Error('请选择 iNES 格式的 .nes ROM 文件。');
+      throw new Error('这不是 iNES 格式的 NES ROM 文件。');
+    // Header: PRG banks × 16 KiB, CHR banks × 8 KiB, an optional 512-byte trainer.
+    if (rom.length < 16 + (rom[6]! & 4 ? 512 : 0) + rom[4]! * 16384 + rom[5]! * 8192)
+      throw new Error('ROM 文件不完整：比文件头声明的短。');
     this.nes = new NES({ sampleRate: 48000, emulateSound: true,
       onFrame: pixels => { this.video = rgbaFrame(pixels); },
       onAudioSample: (left, right) => {
         this.samples.push(Math.max(-1, Math.min(1, left)), Math.max(-1, Math.min(1, right)));
       },
     });
-    this.nes.loadROM(rom);
+    try {
+      this.nes.loadROM(rom);
+    } catch (error) {
+      const mapper = /mapper:?\s*(\d+)/i.exec(String((error as Error)?.message))?.[1];
+      throw new Error(mapper ? `JSNES 不支持这个 ROM 的 mapper ${mapper}。` : `JSNES 无法载入这个 ROM：${(error as Error)?.message ?? error}`);
+    }
   }
   frame() {
     this.samples = [];
