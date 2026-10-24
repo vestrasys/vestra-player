@@ -111,12 +111,12 @@ pi 本身没有沙箱，路径也不做限制，官方文档明确说明了这�
 
 不需要请求、现在就能用的：`secrets`、`settings.page`、`clipboard`、`openUrl`、`fetch`、`fs`、`child_process`。
 
-## 5. 待用户裁决
+## 5. 用户裁决（2026-10-24）
 
-1. **shell**：第 1 版不给 agent shell（推荐）？
-2. **服务商**：第 1 版只支持 API key 和自定义 Base URL，不做 ChatGPT、Claude、Copilot 订阅登录（推荐，订阅登录是否允许第三方应用使用要看服务商条款）？
-3. **pi logo**：pi 没有公开的商标和品牌使用条款，MIT 只覆盖代码。是否先联系 Earendil 获得许可（推荐），拿到许可前只用文字「powered by pi」？
-4. **包体积**：裁剪后插件体积的上限是多少（现在 dist 是 23 MB）？
+1. **不给 agent 命令行**（bash/powershell）。§3.2 第 4 层的系统级沙箱不在计划内。
+2. **订阅登录先不做**。第 1 版只支持 API key 和自定义 Base URL。
+3. **pi logo**：使用 pi 仓库 README 里的官方 logo，配文「powered by pi」，并链接到 pi 仓库；在插件的 `licenses/` 里写明出处。
+4. **包体积可以接受**。打包只裁掉用不到的部分：终端界面（`pi-tui`）、CLI 入口、没有接入的服务商 SDK。会话、压缩、工具、模型目录、所选服务商这些用得到的 SDK 核心能力都保留。
 
 ## 6. 分工（按社区流程）
 
