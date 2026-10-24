@@ -18,6 +18,8 @@ use std::time::{Duration, Instant};
 
 pub use super::keyring_store::{secret_delete, secret_get, secret_set};
 
+/// How menus write shortcuts (`bindings::label`).
+pub const KEY_LABELS: super::KeyLabels = super::KeyLabels::Symbols;
 /// Which standard window shortcuts apply (`shortcuts.rs`).
 pub const SYSTEM: super::System = super::System::MacOs;
 /// Slint reports ⌘ as `control` and ⌃ as `meta` on Apple platforms.
@@ -154,6 +156,24 @@ impl crate::pip::Surface for PipWindow {
             })
             .collect()
     }
+}
+
+/// Title bars (and the system's alerts and panels) dark or light, following
+/// the player's palette rather than the system setting: the application's
+/// appearance, which every window, including later ones, inherits.
+pub fn set_dark_title_bars(dark: bool) {
+    use objc2_app_kit::NSAppearance;
+    use objc2_foundation::NSString;
+    let Ok(app) = app() else { return };
+    // The values of NSAppearanceNameDarkAqua / NSAppearanceNameAqua (reading
+    // the extern statics would need `unsafe`).
+    let name = if dark {
+        "NSAppearanceNameDarkAqua"
+    } else {
+        "NSAppearanceNameAqua"
+    };
+    let appearance = NSAppearance::appearanceNamed(&NSString::from_str(name));
+    app.setAppearance(appearance.as_deref());
 }
 
 /// Every ordinary window of this application floats above other apps'

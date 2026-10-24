@@ -83,7 +83,10 @@ test('opening another ROM replaces our own stream; a bad ROM keeps the running g
   try {
     host.dialogAnswers.push([files.blue]);
     void host.command('nes.open').run();
-    await until(() => window().props.running === true, 'first ROM');
+    await until(
+      () => window().props.running === true && window().props.status === running('blue.nes'),
+      'first ROM',
+    );
 
     host.dialogAnswers.push([files.bad]);
     await host.command('nes.open').run();

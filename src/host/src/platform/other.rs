@@ -10,6 +10,8 @@ use crate::clipboard::Image;
 use crate::power::Launcher;
 use std::path::{Path, PathBuf};
 
+/// How menus write shortcuts (`bindings::label`).
+pub const KEY_LABELS: super::KeyLabels = super::KeyLabels::Text;
 /// Which standard window shortcuts apply (`shortcuts.rs`).
 pub const SYSTEM: super::System = super::System::Linux;
 /// Slint reports Ctrl as `control` here.
@@ -26,6 +28,8 @@ pub fn capture_windows() -> Result<NativeSnapshot> {
 pub fn associate_new(_before: &NativeSnapshot) -> Result<HostWindowId> {
     Err(WINDOWS)
 }
+/// Title bars stay as the window system draws them.
+pub fn set_dark_title_bars(_dark: bool) {}
 pub fn set_floating(_on: bool) -> Result<usize> {
     Err(WINDOWS)
 }

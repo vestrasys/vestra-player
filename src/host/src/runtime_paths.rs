@@ -105,6 +105,9 @@ fn on_path(name: &str) -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
+/// The Node option every host-started Node process gets (`node_command`).
+pub const NO_WEB_STORAGE: &str = "--no-experimental-webstorage";
+
 impl RuntimePaths {
     /// The files a packaged player cannot run without that are not there,
     /// one line each; empty for a development build (its Node is on `PATH`).
@@ -141,8 +144,17 @@ impl RuntimePaths {
     /// unless `VESTRA_FFMPEG` / `VESTRA_FFPROBE` already name one.
     /// `NODE_EXTRA_CA_CERTS` stays: proxies with their own CA need it. No
     /// console window on Windows (`platform::hide_console`).
+    ///
+    /// Every system, packaged or not: without the Web Storage API. Node 25
+    /// and later define `localStorage` / `sessionStorage`, and any access
+    /// without `--localstorage-file` prints an ExperimentalWarning to the
+    /// plugin's stderr; browser-minded dependencies probe it at import time
+    /// (JSNES, in the NES plugin, reads `localStorage.getItem` in a
+    /// try/catch). A plugin keeps its data through `plugin.storage`, so the
+    /// globals are left undefined, as in Node 24 and earlier.
     pub fn node_command(&self) -> Command {
         let mut command = Command::new(&self.node);
+        command.arg(NO_WEB_STORAGE);
         platform::hide_console(&mut command);
         if self.packaged {
             command.env_remove("NODE_OPTIONS").env_remove("NODE_PATH");
@@ -324,5 +336,13 @@ mod tests {
         // A development build changes nothing in the environment.
         paths.packaged = false;
         assert_eq!(paths.node_command().get_envs().count(), 0);
+        // Both run without Web Storage, before the script and its arguments.
+        for packaged in [true, false] {
+            paths.packaged = packaged;
+            let mut command = paths.node_command();
+            command.arg("runner.ts");
+            let args: Vec<_> = command.get_args().collect();
+            assert_eq!(args, [NO_WEB_STORAGE, "runner.ts"]);
+        }
     }
 }

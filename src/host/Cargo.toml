@@ -64,7 +64,7 @@ workspace = true
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "=0.6.5"
 block2 = "=0.6.2"
-objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "block2", "NSApplication", "NSWindow", "NSResponder", "NSScreen", "NSPasteboard", "NSAlert", "NSButton", "NSControl", "NSView", "NSCell", "NSEvent"] }
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "block2", "NSApplication", "NSWindow", "NSResponder", "NSScreen", "NSPasteboard", "NSAlert", "NSButton", "NSControl", "NSView", "NSCell", "NSEvent", "NSAppearance"] }
 objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSString", "NSData", "NSGeometry", "NSProcessInfo"] }
 # `plugin.secrets`: generic passwords in the login keychain.
 keyring = { version = "=3.6.3", features = ["apple-native"] }

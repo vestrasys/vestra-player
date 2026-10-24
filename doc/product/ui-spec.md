@@ -281,7 +281,7 @@ label           { height: 14px; }                                    /* 表单�
 
 ```css
 .ctx-menu  { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 8px; padding: 2px;
-             box-shadow: 0 0 8px #00000080; }
+             box-shadow: 0 0 8px var(--menu-shadow); }   /* vestra #00000080，vestra-light #00000033（theme.rs，MenuChrome.shadow） */
 .ctx-item  { height: 24px; border-radius: 4px; padding: 0 8px 0 4px; font-size: 12px; color: var(--text-list); }
 .ctx-item.lit      { background: var(--selected-bg); color: var(--text); }   /* 悬停或键盘当前项；左边缘 2×14 accent 竖条（y 5） */
 .ctx-item:disabled { color: var(--text-dim); }
@@ -296,7 +296,7 @@ label           { height: 14px; }                                    /* 表单�
 
 | 编号 | 要求 | 负责方 |
 | --- | --- | --- |
-| UI-MENU-07 | 菜单配色、圆角、快捷键文字按上方 CSS | 宿主 |
+| UI-MENU-07 | 菜单配色、圆角、快捷键文字按上方 CSS。快捷键按系统习惯书写（`platform::KEY_LABELS`）：Windows、Linux 写 `Ctrl+Shift+S`、`Alt+→`；macOS 用符号，按 ⌃⌥⇧⌘ 顺序、不加「+」（`⇧⌘S`、`⌥→`），`Ctrl` 绑定写成 ⌘（它在 macOS 上响应 ⌘），Esc、Enter、Tab、退格、Del、PgUp、PgDn、Home、End 写成 ⎋ ↩ ⇥ ⌫ ⌦ ⇞ ⇟ ↖ ↘。本文与 menus.md 的快捷键一律用 Windows 写法 | 宿主 |
 | UI-MENU-08 | 项高 24px，字号 12px；分隔行 7px（中间 1px 线）；行高、分隔、内边距、箭头四个常量在 `menu-view.slint` 与 `menu.rs` 保持一致 | 宿主 |
 
 ## 7. 工具窗口（画面、声音、字幕、截图等插件）

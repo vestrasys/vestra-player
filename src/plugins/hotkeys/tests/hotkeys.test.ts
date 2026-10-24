@@ -321,6 +321,22 @@ test("J01: a conflict between defaults is shown with its holder", async () => {
   assert.equal(page(host, "keys").props.message, go.tip);
 });
 
+test("J01: keys bound now read as the player labels them (macOS ⌘ style)", async () => {
+  const host = new TestHost();
+  host.handle("bindings.list", () => ({
+    commands: [
+      { plugin: "host", command: "open", title: "打开文件…", path: ["打开文件…"], scope: "global", defaults: ["Ctrl+O"], current: ["Ctrl+O"], overridden: false, shadowed: [], labels: ["⌘O"] },
+      { plugin: "community.x", command: "go", title: "Go", path: null, scope: "global", defaults: ["Ctrl+O", "Ctrl+G"], current: ["Ctrl+O", "Ctrl+G"], overridden: false, shadowed: [{ input: "Ctrl+O", by: { plugin: "host", command: "open" } }], labels: ["⌘O", "⌘G"] },
+    ],
+    orphans: [],
+  }));
+  await start(host);
+  await openKeys(host);
+  const go = row(host, "Go")!;
+  assert.equal(go.keys, "⌘O, ⌘G");
+  assert.equal(go.tip, "⌘O 被「打开文件…」占用，未生效");
+});
+
 test("J01: export the list as CSV or text", async () => {
   const host = new TestHost();
   await start(host);

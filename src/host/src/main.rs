@@ -4196,6 +4196,8 @@ fn main() -> Result<()> {
                 .set_position(slint::LogicalPosition::new(frame.x as f32, frame.y as f32));
         }
         host.attach_gpu(&window);
+        // Title bars follow the palette from the first window on.
+        platform::set_dark_title_bars(!theme::is_light(host.theme()));
         window.show()?;
         platform::shown(window.window());
         // Interpolation (`video.render()`) resamples to the main display's rate.

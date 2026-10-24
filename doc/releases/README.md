@@ -8,7 +8,7 @@
 
 1. **确认依赖固定**：`src/packaging/deps.json` 的 `release` 指向一个存在的 `deps-*` release；要升级 libmpv/FFmpeg 就先跑 `deps.yml` 并提交新的 `deps.json`（[ci.md「打包」](../process/ci.md#打包)）。Node 补丁版本用 `node src/packaging/fetch-node.mjs --pin <版本>` 升级（主版本不变）。
 2. **升版本号**：`src/host/Cargo.toml` 的 `version`（`cargo build` 会同步 `Cargo.lock`）。改过的内置插件也要升各自的版本，否则用户机器上不会更新（`src/scripts/stage-plugins.mjs` 的说明）。
-3. **写发布说明** `doc/releases/v<版本>.md`：面向用户，中文；新功能、修复、已知问题；未签名测试版写上安装方法（见下）。
+3. **写发布说明** `doc/releases/v<版本>.md`：面向用户，英文（release 页面面向所有用户）；新功能、修复、已知问题；未签名测试版写上安装方法（见下）。
 4. **dry run**：合并到 main 以后，
    ```
    gh workflow run release.yml --repo vestrasys/vestra-player --ref main -f dry_run=true

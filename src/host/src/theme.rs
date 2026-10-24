@@ -77,11 +77,14 @@ const VESTRA_LIGHT: [(&str, u32); 22] = [
 ];
 
 /// One palette: its colours, the `VestraPalette` property holding its
-/// gradient, and whether the std-widgets draw light.
+/// gradient, whether the std-widgets draw light, and the context menu's drop
+/// shadow (`MenuChrome.shadow`, RGBA; the same blur everywhere, lighter on a
+/// light palette so the panel does not sit in a dark halo).
 struct Table {
     colours: &'static [(&'static str, u32); 22],
     fill: &'static str,
     light: bool,
+    menu_shadow: u32,
 }
 
 /// Each palette, in `THEMES` order.
@@ -90,11 +93,13 @@ const TABLES: [Table; THEMES.len()] = [
         colours: &VESTRA,
         fill: "fill-vestra",
         light: false,
+        menu_shadow: 0x0000_0080,
     },
     Table {
         colours: &VESTRA_LIGHT,
         fill: "fill-vestra-light",
         light: true,
+        menu_shadow: 0x0000_0033,
     },
 ];
 
@@ -104,6 +109,12 @@ fn color(rgb: u32) -> SValue {
         (rgb >> 8) as u8,
         rgb as u8,
     )))
+}
+
+/// Whether `theme` is a light palette (std-widgets scheme, title bars).
+pub fn is_light(theme: &str) -> bool {
+    let index = THEMES.iter().position(|t| *t == known(theme)).unwrap_or(0);
+    TABLES[index].light
 }
 
 /// Set one view's palette: colours, the gradient (copied from the instance's
@@ -123,10 +134,23 @@ pub fn apply(instance: &slint_interpreter::ComponentInstance, theme: &str) -> Re
         "color-scheme",
         SValue::EnumerationValue("ColorScheme".into(), scheme.into()),
     )?;
+    // Only windows that draw a MenuView (shell, floating sidebar) export it.
+    if instance.definition().globals().any(|g| g == MENU_CHROME) {
+        let [r, g, b, a] = table.menu_shadow.to_be_bytes();
+        instance.set_global_property(
+            MENU_CHROME,
+            "shadow",
+            SValue::Brush(slint::Brush::SolidColor(slint::Color::from_argb_u8(
+                a, r, g, b,
+            ))),
+        )?;
+    }
     Ok(())
 }
 
 pub const PALETTE: &str = "VestraPalette";
+/// Host-only per-palette menu values (`ui/menu-view.slint`).
+pub const MENU_CHROME: &str = "MenuChrome";
 
 /// Set one view's per-system fonts (`Theme.font-mono`): every view, whatever
 /// the palette, before it is shown where the caller can.
@@ -175,6 +199,7 @@ impl Host {
     /// Every view, after a change or a failed delivery.
     pub(super) fn theme_all(&mut self) {
         let theme = self.theme().to_owned();
+        crate::platform::set_dark_title_bars(!is_light(&theme));
         let mut instances: Vec<_> = self
             .shell
             .iter()
@@ -235,6 +260,14 @@ mod tests {
                 table.fill
             )));
         }
+        // The menu shadow default is the `vestra` palette's.
+        let menu = include_str!("../ui/menu-view.slint");
+        let line = format!(
+            "in property <color> shadow: #{:08x};",
+            TABLES[0].menu_shadow
+        );
+        assert!(menu.contains(&line), "menu-view.slint lacks {line}");
+        assert!(TABLES[1].menu_shadow & 0xff < TABLES[0].menu_shadow & 0xff);
         let theme = include_str!("../ui/vestra/theme.slint");
         assert!(
             !theme.contains("in property"),
@@ -250,6 +283,7 @@ mod tests {
         assert_eq!(known("classic"), THEMES[0]);
         assert_eq!(known("light"), THEMES[0]);
         assert_eq!(known(""), "vestra");
+        assert!(!is_light("vestra") && is_light("vestra-light") && !is_light("classic"));
         assert_eq!(TABLES.len(), THEMES.len());
     }
 

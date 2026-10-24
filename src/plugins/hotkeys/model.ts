@@ -1,5 +1,5 @@
 import type { BindingInfo, BindingRef, Plugin } from "@vestra-player/sdk";
-import { commandText, refKey } from "./keys.ts";
+import { commandText, isMouse, label, refKey } from "./keys.ts";
 import { timing } from "./store.ts";
 
 const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((each) => b.includes(each));
@@ -71,6 +71,19 @@ export class BindingsModel {
 
   find(ref: BindingRef): BindingInfo | undefined {
     return this.commands.find((c) => c.plugin === ref.plugin && c.command === ref.command);
+  }
+  /**
+   * Display text of a keyboard input: the player's own label when some
+   * command is bound to it now (the system's menu style, `⌘O` on macOS),
+   * otherwise `label` (ignored defaults, orphans, keys bound to nothing).
+   */
+  labelOf(input: string): string {
+    if (!isMouse(input))
+      for (const command of this.commands) {
+        const shown = command.labels[command.current.indexOf(input)];
+        if (shown) return shown;
+      }
+    return label(input);
   }
   orphan(ref: BindingRef): Orphan | undefined {
     return this.orphans.find((o) => refKey(o.ref) === refKey(ref));
