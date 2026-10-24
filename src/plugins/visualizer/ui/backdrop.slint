@@ -2,7 +2,7 @@
 // whenever there is no video frame, under the input layer, the OSD and the
 // information blocks. It never receives the pointer or the keyboard.
 //
-// One component for both scenes (feature-requirements「专辑封面与空闲画面」):
+// One component for both scenes (feature-requirements「专辑封面与空闲画面」, Album Cover and Idle Screen):
 //   idle   H12: the logo centred, side = 30% of the short edge in 64–256px,
 //               「Vestra Player」12px below it (hidden under 120px of height).
 //   audio  J11: the cover centred, side = 60% of the short edge up to 480px,
@@ -10,7 +10,7 @@
 //               200px of height); text at most 80% of the width, elided.
 //   loading G-16b: a 74×74 spinner of 12 ticks,
 //               one step every 50 ms, centred 30px above the middle; under it
-//               「正在打开：<name>」 bold 15px in Theme.text-dim, 30px below the
+//               "Opening: <name>" bold 15px in Theme.text-dim, 30px below the
 //               middle. The ticks are drawn here (no artwork).
 //   none   the switch for the scene is off: plain Theme.bg-video.
 // Scenes cross-fade in 200 ms; a new cover fades in over the placeholder in
@@ -84,6 +84,7 @@ component IdleScene inherits Rectangle {
         y: root.top + root.side + root.caption-gap;
         width: root.width;
         height: root.caption-height;
+        // i18n-ignore: the product name
         text: "Vestra Player";
         color: Theme.text-dim;
         font-size: Theme.font-title;
@@ -223,7 +224,7 @@ component LoadingScene inherits Rectangle {
         width: root.spinner;
         height: root.spinner;
         accessible-role: progress-indicator;
-        accessible-label: "正在打开";
+        accessible-label: @tr("Opening");
         // Tick i is brightest when it is the current frame, fading behind it.
         for i in 12: Rectangle {
             x: root.spinner / 2 + root.radius * Math.cos(i * 30deg - 90deg) - root.tick / 2;
@@ -241,7 +242,7 @@ component LoadingScene inherits Rectangle {
         width: root.width * 0.8;
         // Taller than one line: an elided line whose box is shorter is not drawn.
         height: 24px;
-        text: "正在打开：" + Art.loading;
+        text: @tr("Opening: {}", Art.loading);
         color: Theme.text-dim;
         font-size: 15px;
         font-weight: 700;

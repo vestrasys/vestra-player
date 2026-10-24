@@ -5,9 +5,18 @@ import type { ImageRef, Plugin } from "@vestra-player/sdk";
 import { extensionOf, imageInfo, imageProblem, MAX_IMAGE_BYTES } from "./images.ts";
 import type { SettingsStore } from "./settings.ts";
 
-export const TOO_LARGE = "图片过大（最大 4096×4096、16 MB）";
-export const NOT_IMAGE = "只能使用 PNG 或 JPEG 图片";
-export const UNREADABLE = "徽标图片无法读取，已使用默认徽标";
+export const TOO_LARGE = "Image too large (max 4096×4096, 16 MB)";
+export const NOT_IMAGE = "Only PNG or JPEG images can be used";
+export const UNREADABLE = "The logo image cannot be read; using the default logo";
+const CANNOT_READ = "Cannot read the selected image";
+const CUSTOM = "Using the custom logo";
+const RESTORED = "Default logo restored";
+
+/**
+ * The notices of this file, as a union of literals: `vestra-plugin i18n
+ * extract` reads the texts from this type where `osd.show` is called.
+ */
+export type LogoNotice = typeof TOO_LARGE | typeof NOT_IMAGE | typeof UNREADABLE | typeof CANNOT_READ | typeof CUSTOM | typeof RESTORED;
 
 /**
  * H12 custom logo: a PNG or JPEG chosen with `dialogs.openFile`, checked like
@@ -18,11 +27,11 @@ export const UNREADABLE = "徽标图片无法读取，已使用默认徽标";
 export class Logo {
   readonly #plugin: Plugin;
   readonly #settings: SettingsStore;
-  readonly #osd: (text: string) => void;
+  readonly #osd: (text: LogoNotice) => void;
   /** The custom logo now shown; null for the brand logo. */
   image: ImageRef | null = null;
 
-  constructor(plugin: Plugin, settings: SettingsStore, osd: (text: string) => void) {
+  constructor(plugin: Plugin, settings: SettingsStore, osd: (text: LogoNotice) => void) {
     this.#plugin = plugin;
     this.#settings = settings;
     this.#osd = osd;
@@ -49,9 +58,9 @@ export class Logo {
     this.#osd(UNREADABLE);
   }
 
-  /** 设置 ▶ 外观 ▶ 选择徽标图片…; true when the logo changed. */
+  /** Settings ▸ Appearance ▸ Choose Logo Image…; true when the logo changed. */
   async choose(): Promise<boolean> {
-    const picked = await this.#plugin.dialogs.openFile({ title: "选择徽标图片" });
+    const picked = await this.#plugin.dialogs.openFile({ title: "Choose Logo Image" });
     if (!picked) return false;
     if (![".png", ".jpg", ".jpeg"].includes(extname(picked).toLowerCase())) {
       this.#osd(NOT_IMAGE);
@@ -65,7 +74,7 @@ export class Logo {
       }
       bytes = await readFile(picked);
     } catch {
-      this.#osd("无法读取所选图片");
+      this.#osd(CANNOT_READ);
       return false;
     }
     const problem = imageProblem(bytes);
@@ -84,16 +93,16 @@ export class Logo {
     this.#settings.update((s) => void (s.idle.logo = name));
     // A new reference even for the same path: the file's content changed.
     this.image = this.#plugin.ui.image(target);
-    this.#osd("已使用自定义徽标");
+    this.#osd(CUSTOM);
     return true;
   }
 
-  /** 设置 ▶ 外观 ▶ 恢复默认徽标. */
+  /** Settings ▸ Appearance ▸ Restore Default Logo. */
   async reset() {
     const name = this.#settings.value.idle.logo;
     this.image = null;
     this.#settings.update((s) => void (s.idle.logo = null));
     if (name) await unlink(join(this.#plugin.dataDirectory, name)).catch(() => {});
-    this.#osd("已恢复默认徽标");
+    this.#osd(RESTORED);
   }
 }

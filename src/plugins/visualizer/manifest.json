@@ -1,6 +1,6 @@
 {
   "id": "vestra.visualizer",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -12,13 +12,14 @@
     "ui.osd",
     "ui.settings"
   ],
-  "name": "专辑封面与空闲画面",
+  "name": "Album Cover and Idle Screen",
   "author": "Vestra Player",
-  "punchline": "纯音频时显示专辑封面，空闲时显示徽标",
-  "description": "播放没有画面的音频时显示专辑封面与标题、艺术家、专辑；没有打开媒体时显示徽标（可换成自己的图片）；打开媒体期间显示加载画面。\n入口：「声音 ▶ 纯音频时显示专辑封面」「设置 ▶ 外观」。",
+  "punchline": "Shows the album cover for audio only and a logo when idle",
+  "description": "While audio without a picture plays, shows the album cover with title, artist and album; with no media open, shows a logo (which can be replaced with your own image); while media opens, shows a loading screen.\nEntries: Audio ▸ Show Album Cover for Audio Only, Settings ▸ Appearance.",
   "tags": [
-    "声音",
-    "外观",
-    "封面"
-  ]
+    "audio",
+    "appearance",
+    "cover"
+  ],
+  "minPlayerVersion": "0.4.3"
 }
