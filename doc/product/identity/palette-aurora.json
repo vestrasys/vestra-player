@@ -1,0 +1,64 @@
+{
+  "name": "Aurora",
+  "colors": {
+    "bg-bar": "#16141c",
+    "bg-video": "#0a090e",
+    "bg-list": "#1a1821",
+    "bg-panel": "#201d28",
+    "line": "#2b2734",
+    "hover-bg": "#28232f",
+    "press-bg": "#110f16",
+    "selected-bg": "#2f2840",
+    "text": "#f5f3fa",
+    "text-dim": "#8e88a0",
+    "text-list": "#bdb8cb",
+    "text-played": "#6e6980",
+    "accent": "#f72aa6",
+    "accent-press": "#c41a83",
+    "accent-disabled": "#5a1d48",
+    "icon-disabled": "#3b3646",
+    "playing": "#2bb6ff",
+    "button-bg": "#2f2a3b",
+    "button-hover": "#3a3448",
+    "button-press": "#25202e",
+    "button-disabled": "#1b1922",
+    "danger": "#ff5a5f"
+  },
+  "accent-fill": "@linear-gradient(90deg, #fcc402 0%, #fb5a35 20%, #fa0aa8 45%, #7a0afa 72%, #10a8fc 100%)",
+  "accent-fill-stops": [
+    [
+      "#fcc402",
+      0
+    ],
+    [
+      "#fb5a35",
+      20
+    ],
+    [
+      "#fa0aa8",
+      45
+    ],
+    [
+      "#7a0afa",
+      72
+    ],
+    [
+      "#10a8fc",
+      100
+    ]
+  ],
+  "radius": {
+    "radius-control": 4,
+    "radius-panel": 8
+  },
+  "contrast": {
+    "text/bg-bar": 16.58,
+    "text-dim/bg-bar": 5.37,
+    "text-list/bg-list": 9.09,
+    "accent/bg-bar": 5.07,
+    "accent/bg-panel": 4.6,
+    "playing/bg-list": 7.72,
+    "text/selected-bg": 12.74,
+    "danger/bg-panel": 5.43
+  }
+}
