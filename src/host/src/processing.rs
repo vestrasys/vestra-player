@@ -858,6 +858,17 @@ mod tests {
         processing.load = Some((1, ticket(1)));
         processing
     }
+    /// Every test here that builds an mpv holds this for the instance's
+    /// lifetime (take it before `mpv()`, so it drops last). The hardware
+    /// tests (`--include-ignored`) open VideoToolbox / copy-back decoders and
+    /// a GPU renderer with fixed 2 s pumps; run beside the other instances
+    /// they can miss their window (`gpu_decoding_runs_the_owned_chain` failed
+    /// in parallel, passed alone).
+    fn one_mpv_at_a_time() -> std::sync::MutexGuard<'static, ()> {
+        static MPV: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        MPV.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
     fn mpv(hwdec: &str) -> Mpv {
         let mpv = Mpv::builder()
             .unwrap()
@@ -905,6 +916,7 @@ mod tests {
     /// frames back to memory so mpv's software filters can run.
     #[test]
     fn an_empty_video_chain_removes_the_resource_and_hwdec_follows_the_chain() {
+        let _one = one_mpv_at_a_time();
         let mpv = mpv("auto-safe");
         let mut processing = ready();
         let source = Source::Decoded;
@@ -950,6 +962,7 @@ mod tests {
     /// needs no switch and removing it leaves hardware decoding on.
     #[test]
     fn software_rendering_keeps_its_copy_back_mode_with_and_without_a_chain() {
+        let _one = one_mpv_at_a_time();
         let software = crate::renderer::hwdec(None, true);
         let mpv = mpv(&software);
         let mut processing = ready();
@@ -968,6 +981,7 @@ mod tests {
     /// bring back the GPU renderer's zero-copy `auto-safe`.
     #[test]
     fn a_renderer_switch_forgets_the_mode_to_restore() {
+        let _one = one_mpv_at_a_time();
         let mpv = mpv(&crate::renderer::hwdec(None, false));
         let mut processing = ready();
         processing
@@ -987,6 +1001,7 @@ mod tests {
 
     #[test]
     fn hwdec_changed_by_someone_else_is_left_alone() {
+        let _one = one_mpv_at_a_time();
         let mpv = mpv("auto-safe");
         let mut processing = ready();
         processing
@@ -1007,6 +1022,7 @@ mod tests {
 
     #[test]
     fn generated_streams_refuse_chains_but_accept_removal() {
+        let _one = one_mpv_at_a_time();
         let mpv = mpv("no");
         let mut processing = ready();
         processing
@@ -1041,6 +1057,7 @@ mod tests {
     /// (tests/sdk/host-agreement.test.ts runs them against it).
     #[test]
     fn conformance_cases_shared_with_the_sdk_test_host() {
+        let _one = one_mpv_at_a_time();
         let fixture: Value = serde_json::from_str(include_str!(
             "../tests/fixtures/processing-conformance.json"
         ))
@@ -1092,6 +1109,7 @@ mod tests {
     #[ignore = "needs a hardware decoder and ffmpeg"]
     fn software_rendering_decodes_in_hardware() {
         use std::time::{Duration, Instant};
+        let _one = one_mpv_at_a_time();
         let dir = std::env::temp_dir().join(format!("vestra-swdec-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("h264.mkv");
@@ -1163,6 +1181,7 @@ mod tests {
     #[ignore = "needs a GPU, VideoToolbox and ffmpeg"]
     fn gpu_decoding_runs_the_owned_chain() {
         use std::time::{Duration, Instant};
+        let _one = one_mpv_at_a_time();
         let dir = std::env::temp_dir().join(format!("vestra-gblur-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("four3.mp4");
