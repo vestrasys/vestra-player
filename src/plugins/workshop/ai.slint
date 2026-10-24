@@ -1,0 +1,384 @@
+// Vestra Player AI: session sidebar (220 px) | conversation. Assistant
+// messages are Markdown (one document per row, `body`); the rest is text.
+import { ListView, TextEdit } from "std-widgets.slint";
+import { MarkdownBlock, MarkdownBlocks } from "@vestra/markdown.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button } from "@vestra/widgets.slint";
+
+export struct ChatRow {
+    id: string,
+    // "user" | "tools" | "assistant" | "notice" | "error"
+    kind: string,
+    text: string,
+    detail: string,
+    // 0 running, 1 done, 2 failed
+    state: int,
+    expanded: bool,
+    settings: bool,
+    // assistant: the message as Markdown; empty for the other kinds, and
+    // until the plugin made the document (then `text` shows instead).
+    body: [MarkdownBlock],
+}
+
+export struct SessionRow {
+    id: string,
+    title: string,
+    // A group heading (今天 / 更早), not a session.
+    header: bool,
+    active: bool,
+    running: bool,
+}
+
+component Body inherits Text {
+    color: Theme.text;
+    font-size: Theme.font-tab;
+    wrap: word-wrap;
+    line-height-factor: 1.3;
+}
+
+component Small inherits Text {
+    color: Theme.text-dim;
+    font-size: Theme.font-body;
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+component Link inherits Rectangle {
+    in property <string> text;
+    callback clicked();
+    height: 18px;
+    min-width: label.preferred-width;
+    label := Text {
+        text: root.text;
+        color: touch.has-hover ? Theme.accent : Theme.text-dim;
+        font-size: Theme.font-body;
+        vertical-alignment: center;
+    }
+    touch := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+// One conversation row.
+component Message inherits VerticalLayout {
+    in property <ChatRow> item;
+    in property <bool> last;
+    in property <bool> can-retry;
+    callback copy(string);
+    callback copy-code(string);
+    callback open-link(string);
+    callback toggle(string);
+    callback retry();
+    callback open-settings();
+    private property <length> bubble-indent: max(80px, root.width * 0.25);
+    padding-left: 18px;
+    padding-right: 18px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+
+    // The bubble's width comes from the row (a quarter left free), not from
+    // a HorizontalLayout share: wrapped text gets its height for that width,
+    // so a long message pushes the next row down instead of overlapping it.
+    if item.kind == "user": VerticalLayout {
+        padding-left: root.bubble-indent;
+        Rectangle {
+            background: Theme.selected-bg;
+            border-radius: Theme.radius-panel;
+            VerticalLayout {
+                padding: 9px;
+                // An explicit width: the wrapped height is measured for it.
+                Body { text: item.text; width: root.width - 2 * 18px - root.bubble-indent - 2 * 9px; }
+            }
+        }
+    }
+
+    // The rolling tool line: the latest call while running, a count after; click to list all.
+    if item.kind == "tools": VerticalLayout {
+        spacing: 4px;
+        // The whole line toggles the list; the TouchArea is outside the
+        // layout so it takes no cell of its own.
+        Rectangle {
+            height: 20px;
+            HorizontalLayout {
+                spacing: 6px;
+                Small {
+                    width: 14px;
+                    text: item.state == 0 ? "●" : item.state == 2 ? "✗" : "✓";
+                    color: item.state == 2 ? Theme.danger : item.state == 0 ? Theme.accent : Theme.text-dim;
+                }
+                Small { text: item.text; horizontal-stretch: 1; }
+                Small { horizontal-stretch: 0; text: item.expanded ? "收起 ▾" : "全部 ▸"; color: tools-touch.has-hover ? Theme.accent : Theme.text-dim; }
+            }
+            tools-touch := TouchArea { mouse-cursor: pointer; clicked => { root.toggle(item.id); } }
+        }
+        if item.expanded: Rectangle {
+            background: Theme.bg-list;
+            border-radius: Theme.radius-control;
+            VerticalLayout {
+                padding: 8px;
+                Text {
+                    text: item.detail;
+                    width: root.width - 2 * 18px - 2 * 8px;
+                    color: Theme.text-list;
+                    font-family: Theme.font-mono;
+                    font-size: Theme.font-body;
+                    wrap: word-wrap;
+                }
+            }
+        }
+    }
+
+    if item.kind == "assistant": VerticalLayout {
+        spacing: 4px;
+        if item.body.length > 0: MarkdownBlocks {
+            blocks: item.body;
+            code-copy: true;
+            copy-code(code) => { root.copy-code(code); }
+            link-clicked(url) => { root.open-link(url); }
+        }
+        if item.body.length == 0: Body { text: item.text == "" ? "…" : item.text; width: root.width - 2 * 18px; }
+        if item.state != 0: HorizontalLayout {
+            alignment: start;
+            Link { text: "复制"; clicked => { root.copy(item.id); } }
+        }
+    }
+
+    if item.kind == "notice": Small { text: item.text; horizontal-alignment: center; }
+
+    if item.kind == "error": Rectangle {
+        border-width: 1px;
+        border-color: Theme.danger;
+        border-radius: Theme.radius-panel;
+        VerticalLayout {
+            padding: 9px;
+            spacing: 6px;
+            // Explicit widths (row minus paddings and border): wrapped height follows.
+            Body { text: "⚠ " + item.text; color: Theme.danger; width: root.width - 2 * 18px - 2 * 9px - 2px; }
+            if item.detail != "": Small { text: item.detail; wrap: word-wrap; overflow: clip; width: root.width - 2 * 18px - 2 * 9px - 2px; }
+            HorizontalLayout {
+                alignment: start;
+                spacing: 6px;
+                height: Theme.button-small-height;
+                if root.last && root.can-retry: Button { small: true; text: "重试"; clicked => { root.retry(); } }
+                if item.settings: Button { small: true; width: 64px; text: "打开设置"; clicked => { root.open-settings(); } }
+            }
+        }
+    }
+}
+
+export component AiWindow inherits Window {
+    title: "Vestra Player AI";
+    preferred-width: 900px;
+    preferred-height: 620px;
+    min-width: 720px;
+    min-height: 480px;
+    background: Theme.bg-panel;
+
+    in property <[SessionRow]> sessions;
+    in property <[ChatRow]> rows;
+    // A provider and its key (or a local endpoint) are set up.
+    in property <bool> configured: true;
+    // Keychain state or missing setup, shown above the conversation; empty: none.
+    in property <string> banner;
+    // The shown session is generating.
+    in property <bool> busy;
+    // Another session is generating (one run at a time).
+    in property <bool> blocked;
+    in property <string> session-title;
+    in property <string> model-text;
+    in property <bool> has-folder;
+    in property <bool> can-retry;
+    in-out property <string> draft;
+
+    callback send(string);
+    callback stop();
+    callback new-chat();
+    callback select-session(string);
+    callback open-settings();
+    callback retry();
+    callback copy(string);
+    callback copy-code(string);
+    callback open-link(string);
+    callback toggle(string);
+    callback open-folder();
+    callback open-pi();
+    callback draft-changed(string);
+
+    private property <bool> can-send: root.configured && !root.busy && !root.blocked;
+    // Follow new text unless the user scrolled up.
+    private property <bool> stick: true;
+
+    function submit() {
+        if root.can-send && input.text != "" {
+            root.send(input.text);
+        }
+    }
+
+    HorizontalLayout {
+        // ---- sidebar
+        Rectangle {
+            width: 220px;
+            background: Theme.bg-bar;
+            VerticalLayout {
+                padding: 10px;
+                spacing: 8px;
+                // Buttons have a minimum height but no maximum: in a layout
+                // with spare height they need a fixed one.
+                Button { height: Theme.button-primary-height; text: "+ 新对话"; clicked => { root.new-chat(); } }
+                ListView {
+                    vertical-stretch: 1;
+                    for s in root.sessions: Rectangle {
+                        height: s.header ? 24px : 28px;
+                        border-radius: Theme.radius-control;
+                        background: s.active ? Theme.selected-bg : session-touch.has-hover && !s.header ? Theme.hover-bg : transparent;
+                        HorizontalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            spacing: 4px;
+                            Text {
+                                text: s.title;
+                                color: s.header ? Theme.text-dim : Theme.text;
+                                font-size: s.header ? Theme.font-xs : Theme.font-body;
+                                vertical-alignment: s.header ? bottom : center;
+                                overflow: elide;
+                                horizontal-stretch: 1;
+                            }
+                            if s.running: Text { text: "●"; color: Theme.accent; font-size: Theme.font-xs; vertical-alignment: center; }
+                        }
+                        session-touch := TouchArea {
+                            enabled: !s.header;
+                            clicked => { root.select-session(s.id); }
+                        }
+                    }
+                }
+                Button { height: Theme.button-primary-height; text: "⚙ 设置"; clicked => { root.open-settings(); } }
+                HorizontalLayout {
+                    spacing: 6px;
+                    height: 18px;
+                    Image { source: @image-url("assets/pi-logo.svg"); width: 16px; height: 16px; }
+                    Link { text: "powered by pi"; clicked => { root.open-pi(); } }
+                    Rectangle { horizontal-stretch: 1; }
+                }
+            }
+        }
+        Rectangle { width: 1px; background: Theme.line; }
+
+        // ---- conversation
+        VerticalLayout {
+            horizontal-stretch: 1;
+            HorizontalLayout {
+                height: 34px;
+                padding-left: 18px;
+                padding-right: 12px;
+                spacing: 8px;
+                Text {
+                    text: root.session-title;
+                    color: Theme.text;
+                    font-size: Theme.font-title;
+                    vertical-alignment: center;
+                    overflow: elide;
+                    horizontal-stretch: 1;
+                }
+                if root.has-folder: VerticalLayout {
+                    alignment: center;
+                    horizontal-stretch: 0;
+                    Button { small: true; width: 72px; text: "打开文件夹"; clicked => { root.open-folder(); } }
+                }
+            }
+            if root.banner != "": Rectangle {
+                vertical-stretch: 0;
+                background: Theme.bg-list;
+                HorizontalLayout {
+                    padding: 10px;
+                    padding-left: 18px;
+                    spacing: 8px;
+                    Text {
+                        text: root.banner;
+                        color: Theme.text;
+                        font-size: Theme.font-body;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                        wrap: word-wrap;
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        horizontal-stretch: 0;
+                        Button { horizontal-stretch: 0; text: "去设置"; clicked => { root.open-settings(); } }
+                    }
+                }
+            }
+
+            if root.rows.length == 0: VerticalLayout {
+                vertical-stretch: 1;
+                alignment: center;
+                spacing: 12px;
+                HorizontalLayout {
+                    alignment: center;
+                    Image { source: @image-url("assets/pi-logo.svg"); width: 56px; height: 56px; }
+                }
+                Text {
+                    text: "想做什么插件，或者问点什么？";
+                    color: Theme.text;
+                    font-size: Theme.font-title;
+                    horizontal-alignment: center;
+                }
+            }
+            if root.rows.length > 0: list := ListView {
+                vertical-stretch: 1;
+                scrolled => {
+                    root.stick = self.content-y <= self.visible-height - self.content-height + 24px;
+                }
+                changed content-height => {
+                    if root.stick {
+                        self.content-y = min(0px, self.visible-height - self.content-height);
+                    }
+                }
+                for row[index] in root.rows: Message {
+                    item: row;
+                    last: index == root.rows.length - 1;
+                    can-retry: root.can-retry;
+                    copy(id) => { root.copy(id); }
+                    copy-code(code) => { root.copy-code(code); }
+                    open-link(url) => { root.open-link(url); }
+                    toggle(id) => { root.toggle(id); }
+                    retry => { root.retry(); }
+                    open-settings => { root.open-settings(); }
+                }
+            }
+
+            // ---- composer: anchored at the bottom, its own height only
+            VerticalLayout {
+                vertical-stretch: 0;
+                padding: 12px;
+                padding-top: 6px;
+                spacing: 6px;
+                input := TextEdit {
+                    height: 72px;
+                    font-size: Theme.font-tab;
+                    wrap: word-wrap;
+                    enabled: root.configured;
+                    placeholder-text: root.blocked ? "另一会话正在生成，请稍候…" : "输入消息… Enter 发送 · Shift+Enter 换行";
+                    text <=> root.draft;
+                    edited => { root.draft-changed(self.text); }
+                    key-pressed(event) => {
+                        if event.text == Key.Return && !event.modifiers.shift {
+                            root.submit();
+                            return accept;
+                        }
+                        return reject;
+                    }
+                }
+                HorizontalLayout {
+                    height: Theme.button-height;
+                    spacing: 8px;
+                    Small { text: root.model-text; horizontal-stretch: 1; }
+                    if !root.busy: Button {
+                        horizontal-stretch: 0;
+                        text: "发送";
+                        enabled: root.can-send && root.draft != "";
+                        clicked => { root.submit(); }
+                    }
+                    if root.busy: Button { horizontal-stretch: 0; text: "■ 停止"; clicked => { root.stop(); } }
+                }
+            }
+        }
+    }
+}

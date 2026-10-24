@@ -1,264 +1,585 @@
-import type { InstallOptions, PackageCandidate, PackageChange, PackageTrial, Plugin, PluginError } from "@vestra-player/sdk";
-import { WorkshopJob, defaultRequirement, requirement } from "./engine.mjs";
-import * as fs from "node:fs/promises";
+import type { Plugin } from "@vestra-player/sdk";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { AgentWorker } from "./agent.ts";
+import { Chat } from "./chat.ts";
+import { MessageDocs, cut } from "./messages.ts";
+import {
+  DEFAULT_SETTINGS,
+  LEGACY_COMPAT,
+  checkBaseUrl,
+  customList,
+  goneName,
+  goneNotice,
+  listModels,
+  loadProviders,
+  masked,
+  migrate,
+  pickListed,
+  secretName,
+  validSettings,
+  type AiSettings,
+  type Provider,
+} from "./providers.ts";
+import { Sessions, group, titleFrom, type Meta } from "./sessions.ts";
 
-/** Status text is one line (UI-TOOL-05). */
-const oneLine = (text: string) => {
-  const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length > 160 ? `${flat.slice(0, 159)}…` : flat;
-};
+const PI_URL = "https://github.com/earendil-works/pi";
+/** No event from a running agent for this long: stop and say so. */
+export const QUIET_TIMEOUT_MS = 120_000;
+/** Streaming text reaches the window at most this often. */
+const REFRESH_MS = 100;
 
-/** Package change states in Chinese, after 「安装」/「回退」. */
-const changeText: Record<string, string> = {
-  preparing: "：正在准备…",
-  activating: "：正在启用…",
-  restoring: "：正在恢复原版本…",
-  committed: "完成。",
-  cancelled: "已取消。",
-  failed: "失败。",
-  failedDegraded: "失败，未能完全恢复原版本。",
-  tooLate: "已无法取消，操作继续。",
-};
+const SYSTEM_PROMPT = `你是 Vestra Player AI，内置在 Vestra Player 播放器里的助手，基于 pi 运行。
+- 用用户使用的语言回答，默认中文。
+- 你可以用 read、write、edit、ls、find、grep 工具读写当前会话的工作文件夹；只能访问这个文件夹，不能运行命令。
+- 写 Vestra 插件时遵守插件独立规则：插件只依赖公开的插件 SDK（@vestra-player/sdk，只能 import type），不引用其它插件，不调用系统命令。`;
 
-const tools: Record<string, string> = {
-  write_candidate: "写入候选文件",
-  read_candidate: "读取候选文件",
-  validate_candidate: "真实TypeScript校验",
-};
-
-/** One readable log line per engine event, without its internal ids, revisions or digests. */
-export function logLine(event: { phase: string; text: string }) {
-  let value: Record<string, unknown>;
-  try {
-    value = JSON.parse(event.text);
-  } catch {
-    return `${event.phase}：${event.text}`;
-  }
-  if (event.phase === "真实TypeScript诊断") {
-    const output = String(value.stdout ?? "").trim();
-    return value.code === 0 ? "真实TypeScript诊断：通过" : `真实TypeScript诊断：未通过\n${output}`;
-  }
-  const name = tools[String(value.toolName)] ?? String(value.toolName);
-  const file = (value.args as { path?: unknown } | undefined)?.path;
-  if (value.type === "tool_execution_start") return `Pi工具：${name}${typeof file === "string" ? ` ${file}` : ""}`;
-  if (value.type === "tool_execution_end") return `Pi工具：${name}${value.isError ? "失败" : "完成"}`;
-  return event.phase;
+interface Run {
+  worker: AgentWorker;
+  meta: Meta;
+  chat: Chat;
+  running: boolean;
+  watchdog?: ReturnType<typeof setTimeout>;
 }
 
-/** Pi plugin workshop: generate a counter plugin, let the host validate it, trial, install, roll back. */
+/** Vestra Player AI: chat with a model of the user's choice (BYOK); the agent works in the session folder. */
 export default async function activate(plugin: Plugin) {
-  let busy = false;
-  let starting = false; // a trial start is in flight
-  let draft = defaultRequirement;
-  let job: WorkshopJob | undefined;
-  let candidate: PackageCandidate | undefined;
-  let trial: PackageTrial | undefined;
-  let change: PackageChange | undefined;
-  let selectedId = "workshop.counter";
-  let managing = false; // an install or rollback is submitted or waits for the user
-  let log = "";
-  let status = "选择工作区并输入需求后生成。";
-  let workspace = "";
-  const idle = () => !busy && !trial;
+  const providers = loadProviders(import.meta.dirname);
+  const sessions = new Sessions(plugin.dataDirectory);
+  const settings = plugin.storage.json<AiSettings>("settings", { defaults: DEFAULT_SETTINGS, validate: validSettings });
+  // Settings migrate now (a file); keys only later (see moveLegacyKeys).
+  const migrated = migrate(settings.value);
+  if (migrated) settings.save(migrated);
+  /**
+   * provider → key, read from the keychain once, on demand. Never during
+   * activation: a read can wait on the system's authorization dialog
+   * (macOS asks again after the player was re-signed), and activation must
+   * not wait on the user.
+   */
+  const keys = new Map<string, string>();
+  const reading = new Map<string, Promise<string>>();
+  /** The keychain read failed or was denied (cleared by the next attempt or a save). */
+  let keyError = "";
+  const runs = new Map<string, Run>(); // session id → its worker
+  const chats = new Map<string, Chat>(); // session id → rows (loaded once)
 
-  /** Progress inside long handlers is shown right away, not when the handler ends. */
-  const publish = (text: string) => {
-    log = (log + "\n" + text).slice(-16000);
-    plugin.update();
-  };
-  const show = (text: string) => {
-    status = text;
-    plugin.update();
-  };
-  const fail = (error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    show(`错误：${oneLine(message)}`);
-    publish(`错误：${message}`);
-  };
-
-  const window = plugin.windows.create("workshop.slint");
-  window.bind(() => ({
-    requirementText: draft,
-    logText: log,
-    statusText: status,
-    workspaceText: workspace || "尚未选择：请选择专用空文件夹",
-    busy,
-    canTrial: !!candidate && idle(),
-    canStop: !!trial,
-    canRecover: false, // a lost trial reply is recovered by the SDK
-    canInstall: !!candidate && idle(),
-  }));
-
-  const generate = async () => {
-    if (!idle()) throw Error("请先停止试载并等待当前任务完成");
-    if (!workspace) throw Error("请先选择本次工坊专用工作区");
-    requirement(draft);
-    busy = true;
-    candidate = undefined;
-    const current = (job = new WorkshopJob(path.join(workspace, `candidate-${randomUUID()}`), (event) =>
-      publish(logLine(event)),
-    ));
-    try {
-      show("正在生成候选插件（本地模型，不联网）…");
-      const result = await current.run(draft);
-      selectedId = current.requirement.id;
-      show("类型检查通过，正在由播放器校验…");
-      const checked = await plugin.packages.validate(result.directory);
-      if (current.cancelled) throw Error("任务已取消");
-      candidate = checked;
-      publish(`宿主校验通过：${checked.manifest.id} ${checked.manifest.version}（${checked.checks.join("、")}），位于 ${result.directory}`);
-      show(`候选已通过宿主校验：${checked.manifest.id} ${checked.manifest.version}，可试载或安装。`);
-    } catch (error) {
-      candidate = undefined;
-      if (current.cancelled) show("生成已取消。");
-      else fail(error);
-    } finally {
-      busy = false;
-    }
-  };
-
-  const stopTrial = async () => {
-    if (!trial) return;
-    try {
-      await trial.stop(); // waits until the host confirmed cleanup
-    } catch (error) {
-      // Keep the trial: stopping again re-asks the host.
-      if ((error as PluginError).code === "cleanup") throw Error("播放器未确认试载已清理，请再次停止试载。");
-      throw error;
-    }
-    await trial.dispose();
-    trial = undefined;
-    show("试载已停止并清理。");
-  };
+  let metas: Meta[] = await sessions.list();
+  let active: Meta | null = metas.find((m) => m.id === settings.value.lastSession) ?? null;
+  let draft = "";
+  let pageMessage = "";
+  let pageWarn = false;
+  let keyText = "";
+  /** Models a custom endpoint listed (this run only; the chosen one is saved). */
+  const listed = new Map<string, string[]>();
+  let listing = false;
 
   /**
-   * Install as a workshop package (an upgrade when the installed one came from
-   * the workshop too). Resolves `undefined` when the user keeps the installed
-   * plugin of another source; the candidate stays for a later install.
+   * The saved provider. One that is no longer offered stays selected (its
+   * model, Base URL and key are left alone) as a stand-in without models:
+   * nothing is sent until the user picks another one.
    */
-  const install = async (installing: PackageCandidate): Promise<PackageChange | undefined> => {
-    const options: InstallOptions = { source: { kind: "workshop" } };
-    const id = installing.manifest.id;
-    try {
-      return await installing.install(options);
-    } catch (error) {
-      const code = (error as PluginError).code;
-      if (code === "unsupported")
-        throw Error(`${id} 与播放器内置插件同名，不能安装。请在需求中改用别的 id 后重新生成。`);
-      if (code !== "conflict") throw error;
-    }
-    publish(`${id} 已从别处安装，等待用户确认是否替换`);
-    show(`${id} 已从别处安装，请在确认对话框中选择是否替换。`);
-    const answer = await plugin.dialogs.confirm({
-      message: `替换已安装的 ${id}？`,
-      detail:
-        "它是从别处安装的（不是插件工坊生成的）。替换后新插件使用新的空数据目录；原插件的数据保留，以后从原来源重新安装时接上。",
-      confirm: "替换",
-      destructive: true,
-    });
-    if (!answer.confirmed) {
-      publish(`用户取消替换 ${id}，候选保留`);
-      show("未安装：已保留原插件和本次候选，可稍后再安装。");
-      return undefined;
-    }
-    publish(`用户确认替换 ${id}`);
-    return installing.install({ ...options, replace: true });
+  /** The models offered for `p`: those it listed first, then the rest of pi's catalog. */
+  const modelsOf = (p: Provider) => {
+    const fetched = listed.get(p.id) ?? [];
+    return [...fetched, ...p.models.filter((m) => !fetched.includes(m))];
   };
-
-  /** Install or roll back; only ever on an explicit click, and never resubmitted. */
-  const manage = async (rollback: boolean) => {
-    if (!idle()) throw Error("请先等待任务完成并停止试载");
-    if (!rollback && !candidate) throw Error("请先生成并通过宿主校验");
-    busy = managing = true;
-    const action = rollback ? "回退" : "安装";
-    publish(`用户明确${action} ${selectedId}`);
-    let current: PackageChange | undefined;
-    try {
-      current = rollback ? await plugin.packages.rollback(selectedId) : await install(candidate!);
-    } catch (error) {
-      busy = managing = false;
-      throw error;
-    }
-    if (!current) {
-      busy = managing = false;
+  const provider = (): Provider =>
+    providers.find((p) => p.id === settings.value.provider) ?? { id: settings.value.provider, label: settings.value.provider, models: [], defaultModel: "", api: null };
+  const gone = () => !providers.some((p) => p.id === settings.value.provider);
+  const model = () => settings.value.models[provider().id] || provider().defaultModel;
+  /**
+   * The first slice kept the custom endpoint's key under another name: move
+   * it once. Idempotent and retried until it succeeds (settings.migrateKeys).
+   */
+  let moving: Promise<void> | undefined;
+  const moveLegacyKeys = () =>
+    (moving ??= (async () => {
+      if (settings.value.migrateKeys === false) return;
+      for (const old of LEGACY_COMPAT) {
+        const key = await plugin.secrets.get(secretName(old));
+        if (!key) continue;
+        if (!(await plugin.secrets.get(secretName("custom-openai")))) await plugin.secrets.set(secretName("custom-openai"), key);
+        await plugin.secrets.delete(secretName(old));
+        markSaved("custom-openai", true);
+        keys.delete("custom-openai");
+      }
+      settings.save({ ...settings.value, migrateKeys: false });
+    })().finally(() => (moving = undefined)));
+  const markSaved = (id: string, saved: boolean) => {
+    const savedKeys = { ...(settings.value.savedKeys ?? {}) };
+    if (saved) savedKeys[id] = true;
+    else delete savedKeys[id];
+    settings.save({ ...settings.value, savedKeys });
+  };
+  const KEY_UNREADABLE = "无法读取钥匙串中的 key，请在设置中重新保存。";
+  /** The key of `id`, read once; concurrent callers share the read. */
+  const keyFor = (id: string): Promise<string> => {
+    if (keys.has(id)) return Promise.resolve(keys.get(id)!);
+    let pending = reading.get(id);
+    if (!pending) {
+      pending = (async () => {
+        try {
+          // Only the custom OpenAI entry inherits the first slice's key.
+          if (id === "custom-openai") await moveLegacyKeys();
+          const key = (await plugin.secrets.get(secretName(id))) ?? "";
+          if (key) {
+            if (!settings.value.savedKeys?.[id]) markSaved(id, true);
+          } else if (settings.value.savedKeys?.[id]) {
+            // Saved before, gone now (removed outside the player).
+            throw new Error("钥匙串里没有这个 key");
+          }
+          keys.set(id, key);
+          keyError = "";
+          return key;
+        } catch (error) {
+          keyError = `${KEY_UNREADABLE}（${(error as Error).message}）`;
+          throw error;
+        } finally {
+          reading.delete(id);
+          plugin.update();
+        }
+      })();
+      reading.set(id, pending);
       plugin.update();
-      return;
     }
-    const followed = (change = current);
-    const report = () => {
-      const text = `${action}${changeText[followed.status] ?? "状态未知。"}`;
-      publish(followed.message ? `${text}（${followed.message}）` : text);
-      show(followed.message && followed.status.startsWith("failed") ? `${text}原因：${oneLine(followed.message)}` : text);
-    };
-    const listening = followed.onChange(report);
-    report();
-    try {
-      await followed.done;
-    } finally {
-      await listening.dispose();
-      change = undefined;
-      busy = managing = false;
-    }
+    return pending;
+  };
+  /** Starts reading the current provider's key without waiting (window shown, provider chosen). */
+  const loadKey = () => {
+    if (gone()) return; // its key stays where it is, unread
+    keyFor(provider().id).catch(() => {}); // shown through keyError
+  };
+  /**
+   * Ready to send: a model, the key read (a custom endpoint may be a local
+   * server without one, but only when the user never saved a key for it).
+   */
+  const configured = () => {
+    const p = provider();
+    if (gone() || !model() || !keys.has(p.id)) return false;
+    if (p.api) return !!settings.value.baseUrls[p.id] && (!!keys.get(p.id) || !settings.value.savedKeys?.[p.id]);
+    return !!keys.get(p.id);
+  };
+  const running = () => [...runs.values()].find((r) => r.running);
+  /** The line above the conversation: keychain state or missing setup. */
+  const banner = () => {
+    const p = provider();
+    if (gone()) return goneNotice(p.id);
+    if (reading.has(p.id)) return "正在读取钥匙串中的 API key…（系统可能会请求授权）";
+    if (keyError) return keyError;
+    if (!configured()) return !keys.has(p.id) ? "尚未读取 API key。" : "尚未配置服务商：请先在设置中选择服务商并保存 API key。";
+    return "";
   };
 
+  /** Throttled window refresh for events that arrive outside SDK handlers. */
+  let refresh: ReturnType<typeof setTimeout> | undefined;
+  const later = () => {
+    refresh ??= setTimeout(() => {
+      refresh = undefined;
+      // The streaming message gets its new document once per tick.
+      docs
+        .sync(shown.rows)
+        .catch((error) => console.error(`markdown: ${error}`))
+        .finally(() => plugin.update());
+    }, REFRESH_MS);
+  };
+
+  const chatOf = async (meta: Meta): Promise<Chat> => {
+    let chat = chats.get(meta.id);
+    if (!chat) {
+      chat = Chat.fromJsonl(await sessions.transcript(meta));
+      if (meta.running) {
+        // The plugin stopped during a run: the unfinished reply is lost.
+        chat.notice("上次的生成被中断（播放器或插件已退出）");
+        meta.running = false;
+        await sessions.save(meta);
+      }
+      chats.set(meta.id, chat);
+    }
+    return chat;
+  };
+  let shown: Chat = active ? await chatOf(active) : new Chat();
+  const docs = new MessageDocs((text) => plugin.ui.markdown(text, { remoteImages: false }));
+  await docs.sync(shown.rows);
+
+  const sessionRows = () => {
+    const rows: { id: string; title: string; header: boolean; active: boolean; running: boolean }[] = [];
+    let heading = "";
+    for (const meta of metas) {
+      const name = group(meta.updated);
+      if (name !== heading) rows.push({ id: `h-${name}`, title: (heading = name), header: true, active: false, running: false });
+      rows.push({ id: meta.id, title: meta.title, header: false, active: meta.id === active?.id, running: !!runs.get(meta.id)?.running });
+    }
+    return rows;
+  };
+
+  const window = plugin.windows.create("ai.slint");
+  window.bind(() => {
+    const busy = !!(active && runs.get(active.id)?.running);
+    const last = shown.rows.at(-1);
+    return {
+      sessions: sessionRows(),
+      rows: docs.props(shown.rows),
+      configured: configured(),
+      banner: banner(),
+      busy,
+      blocked: !busy && !!running(),
+      sessionTitle: active?.title ?? "新对话",
+      modelText: configured() ? `${provider().label} · ${model()}` : "",
+      hasFolder: !!active,
+      canRetry: !busy && !running() && last?.kind === "error" && !!shown.lastPrompt,
+      draft,
+    };
+  });
+
+  const stopWatchdog = (run: Run) => {
+    clearTimeout(run.watchdog);
+    run.watchdog = undefined;
+  };
+  const feed = (run: Run) => {
+    stopWatchdog(run);
+    if (!run.running) return;
+    run.watchdog = setTimeout(() => {
+      run.chat.apply({ kind: "settled", aborted: true });
+      run.chat.error("timeout", `超过 ${QUIET_TIMEOUT_MS / 1000} 秒没有收到服务商的回复，已停止。`);
+      run.worker.abort();
+      finish(run);
+    }, QUIET_TIMEOUT_MS);
+  };
+  const finish = (run: Run) => {
+    stopWatchdog(run);
+    if (!run.running) return;
+    run.running = false;
+    run.meta.running = false;
+    run.meta.updated = Date.now();
+    sessions.save(run.meta).catch((error) => console.error(`meta.json: ${error}`));
+    later();
+  };
+
+  const startWorker = async (meta: Meta, chat: Chat): Promise<Run> => {
+    const p = provider();
+    // configured() made sure the key is in memory (or that none was ever saved).
+    const key = await keyFor(p.id);
+    const directory = sessions.directory(meta.id);
+    const run: Run = {
+      meta,
+      chat,
+      running: false,
+      worker: new AgentWorker(
+        {
+          sessionDir: directory,
+          workDir: sessions.work(meta.id),
+          sessionFile: meta.file ? path.join(directory, meta.file) : null,
+          provider: p.id,
+          modelId: model(),
+          baseUrl: p.api ? settings.value.baseUrls[p.id] : null,
+          api: p.api,
+          key,
+          systemPrompt: SYSTEM_PROMPT,
+        },
+        {
+          event: (event) => {
+            run.chat.apply(event);
+            if (event.kind === "settled") finish(run);
+            else feed(run);
+            later();
+          },
+          file: (file) => {
+            const name = file.split(/[\\/]/).at(-1)!;
+            if (run.meta.file !== name) {
+              run.meta.file = name;
+              sessions.save(run.meta).catch(() => {});
+            }
+          },
+          failed: (message) => {
+            if (run.running) {
+              run.chat.endTurn();
+              run.chat.error(message);
+              finish(run);
+            }
+            later();
+          },
+          exited: (code) => {
+            if (runs.get(meta.id) === run) runs.delete(meta.id);
+            if (run.running) {
+              run.chat.endTurn();
+              run.chat.error(run.worker.lastError() || `exit ${code}`, "agent 进程意外退出。");
+              finish(run);
+            }
+            later();
+          },
+        },
+      ),
+    };
+    runs.set(meta.id, run);
+    return run;
+  };
+
+  /** Ends the workers that are not generating (another session shown, settings changed). */
+  const releaseIdle = (except?: string) => {
+    for (const [id, run] of runs)
+      if (!run.running && id !== except) {
+        runs.delete(id);
+        run.worker.stop().catch(() => {});
+      }
+  };
+
+  const send = async (text: string) => {
+    const message = text.trim();
+    if (!message) return;
+    if (!configured()) throw Error("请先在设置中配置服务商和 API key");
+    if (running()) throw Error("另一会话正在生成，请稍候");
+    if (!active) {
+      active = await sessions.create(titleFrom(message));
+      chats.set(active.id, shown);
+      settings.save({ ...settings.value, lastSession: active.id });
+    }
+    const meta = active;
+    const chat = shown;
+    draft = "";
+    window.set({ draft: "" }); // clears the field even if the user typed the same text again
+    chat.user(message);
+    chat.model = model();
+    chat.begin();
+    let run = runs.get(meta.id);
+    if (!run || run.worker.exited) run = await startWorker(meta, chat);
+    run.running = true;
+    meta.running = true;
+    meta.updated = Date.now();
+    await sessions.save(meta);
+    metas = [meta, ...metas.filter((m) => m.id !== meta.id)];
+    feed(run);
+    run.worker.prompt(message).catch(() => {}); // start failures arrive through `failed`
+  };
+
+  const select = async (meta: Meta | null) => {
+    active = meta;
+    shown = meta ? await chatOf(meta) : new Chat();
+    await docs.sync(shown.rows);
+    releaseIdle(meta?.id);
+    settings.save({ ...settings.value, lastSession: meta?.id ?? null });
+  };
+
+  window.on("send", send);
   window.on("draftChanged", (text: string) => {
     draft = text;
   });
-  window.on("chooseWorkspace", async () => {
-    if (!idle()) throw Error("活动任务期间不能更换工作区");
-    const chosen = await plugin.dialogs.openDirectory({ title: "选择工坊专用工作区（每个候选写入新子目录）" });
-    if (!chosen) return;
-    workspace = await fs.realpath(chosen);
-    candidate = undefined;
+  window.on("stop", () => {
+    const run = active && runs.get(active.id);
+    if (run?.running) run.worker.abort();
   });
-  window.on("chooseRequirement", async () => {
-    const chosen = await plugin.dialogs.openFile({ title: "选择计数器需求JSON" });
-    if (!chosen) return;
-    if ((await fs.stat(chosen)).size > 65536) throw Error("需求超过64KiB");
-    const text = await fs.readFile(chosen, "utf8");
-    requirement(text);
-    draft = text;
-    show("需求已读取，点击生成。");
+  window.on("retry", () => send(shown.lastPrompt));
+  window.on("newChat", () => select(null));
+  window.on("selectSession", (id: string) => select(metas.find((m) => m.id === id) ?? null));
+  window.on("toggle", (id: string) => shown.toggle(id));
+  window.on("copy", (id: string) => {
+    const row = shown.rows.find((r) => r.id === id);
+    if (row) return plugin.clipboard.writeText(cut(row.text, 1000 * 1000, ""));
   });
-  window.on("generate", generate);
-  window.on("cancelTask", async () => {
-    if (job && busy && !change && !starting && !managing) {
-      job.cancel();
-      await job.agent?.waitForIdle();
-      show("正在取消生成…");
+  window.on("copyCode", (code: string) => plugin.clipboard.writeText(cut(code, 1000 * 1000, "")));
+  window.on("openLink", (url: string) => {
+    // Only web links; the player refuses other schemes too.
+    if (/^https?:\/\//i.test(url)) return plugin.system.openUrl(url);
+  });
+  window.on("openSettings", () => plugin.settings.show("byok"));
+  window.on("openFolder", () => active && plugin.system.openPath(sessions.work(active.id)));
+  window.on("openPi", () => plugin.system.openUrl(PI_URL));
+
+  // ---- settings page (Options ▸ 插件 ▸ Vestra Player AI)
+  const page = plugin.settings.page("settings.slint", { id: "byok", category: "plugins", title: "Vestra Player AI" });
+  page.bind(() => {
+    const p = provider();
+    const key = keys.get(p.id) ?? "";
+    const models = modelsOf(p);
+    return {
+      // A provider no longer offered shows as the first entry, so the list
+      // does not pretend another one is selected.
+      providers: [...(gone() ? [`${goneName(p.id)}（已不再提供）`] : []), ...providers.map((x) => x.label)],
+      providerIndex: gone() ? 0 : providers.indexOf(p),
+      custom: !!p.api,
+      canList: !gone() && (!!p.api || !!p.list),
+      baseUrl: settings.value.baseUrls[p.id] ?? "",
+      keyText,
+      keyState: gone()
+        ? "旧服务商的 key 不会自动删除"
+        : reading.has(p.id)
+        ? "正在读取钥匙串…"
+        : !keys.has(p.id)
+          ? keyError
+            ? "无法读取钥匙串中的 key，请重新保存"
+            : "尚未读取（打开 AI 窗口时读取）"
+          : p.api && !key
+            ? "未保存（本地服务可以不填）"
+            : masked(key),
+      hasKey: !!key,
+      models,
+      modelIndex: models.indexOf(model()),
+      modelText: model(),
+      listing,
+      gone: gone() ? goneNotice(p.id) : "",
+      message: pageMessage,
+      messageWarn: pageWarn,
+    };
+  });
+  const say = (text: string, warn = false) => {
+    pageMessage = text;
+    pageWarn = warn;
+  };
+  /** A change of service, key or model applies to the next message. */
+  const changed = () => releaseIdle();
+  /** Pulls the lists back to the model values (a one-way index stops following after a pick). */
+  const syncIndexes = () => {
+    const p = provider();
+    page.set({ providerIndex: gone() ? 0 : providers.indexOf(p), modelIndex: modelsOf(p).indexOf(model()) });
+  };
+  page.on("chooseProvider", async (index: number) => {
+    const p = providers[gone() ? index - 1 : index];
+    if (!p) return;
+    // The model shown is the model used: a provider chosen for the first
+    // time gets its default model saved at once.
+    const models = settings.value.models[p.id] ? settings.value.models : { ...settings.value.models, [p.id]: p.defaultModel };
+    settings.save({ ...settings.value, provider: p.id, models });
+    keyText = "";
+    keyError = "";
+    say("");
+    changed();
+    syncIndexes();
+    // pi's catalog can be out of date: ask the provider when its key is at hand.
+    keyFor(p.id)
+      .then((key) => (key && p.list && !listed.has(p.id) ? fetchModels(false) : undefined))
+      .catch(() => {}); // a keychain failure shows through keyError
+  });
+  page.on("saveKey", async (text: string) => {
+    const key = text.trim();
+    if (!key) return;
+    if (gone()) {
+      say("请先选择一个服务商，再保存 key。", true);
+      return;
     }
-    if (trial) await stopTrial();
-    if (change) await change.cancel();
+    const p = provider();
+    try {
+      await plugin.secrets.set(secretName(p.id), key);
+    } catch (error) {
+      say(`没能保存到钥匙串：${(error as Error).message}`, true);
+      return;
+    }
+    keys.set(p.id, key);
+    markSaved(p.id, true);
+    keyError = "";
+    keyText = "";
+    page.set({ keyText: "" });
+    say(`${p.label} 的 key 已保存。`);
+    changed();
+    if ((p.api && settings.value.baseUrls[p.id]) || p.list) await fetchModels(false);
   });
-  window.on("startTrial", async () => {
-    if (!candidate || !idle()) throw Error("候选尚未就绪");
-    starting = busy = true;
+  /** The key of a provider that is no longer offered: kept until the user deletes it. */
+  page.on("deleteOldKey", async () => {
+    if (!gone()) return;
+    const id = settings.value.provider;
+    try {
+      await plugin.secrets.delete(secretName(id));
+    } catch (error) {
+      say(`没能从钥匙串删除：${(error as Error).message}`, true);
+      return;
+    }
+    markSaved(id, false);
+    say("旧服务商的 key 已删除。");
+  });
+  page.on("deleteKey", async () => {
+    const p = provider();
+    try {
+      await plugin.secrets.delete(secretName(p.id));
+    } catch (error) {
+      say(`没能从钥匙串删除：${(error as Error).message}`, true);
+      return;
+    }
+    keys.set(p.id, "");
+    markSaved(p.id, false);
+    keyError = "";
+    say(`${p.label} 的 key 已删除。`);
+    changed();
+  });
+  /** Saves a custom Base URL; `loud`: say why an invalid one is not saved. */
+  const saveBaseUrl = (text: string, loud: boolean): boolean => {
+    const p = provider();
+    if (!p.api) return false;
+    let url = "";
+    try {
+      url = text.trim() ? checkBaseUrl(text) : "";
+    } catch (error) {
+      if (loud) say((error as Error).message, true);
+      return false;
+    }
+    // The Anthropic SDK adds /v1/messages itself.
+    if (p.api === "anthropic-messages") url = url.replace(/\/v1$/, "");
+    if (url !== (settings.value.baseUrls[p.id] ?? "")) {
+      settings.save({ ...settings.value, baseUrls: { ...settings.value.baseUrls, [p.id]: url } });
+      listed.delete(p.id);
+      changed();
+    }
+    if (loud) say("");
+    return !!url;
+  };
+  /** Lists a custom endpoint's models; on failure the model id is typed by hand. */
+  /**
+   * Asks the provider for its models: a custom endpoint at its Base URL, a
+   * built-in one where its API lists them. Listed models come first, then
+   * the catalog's others; a current model that is not listed is replaced.
+   */
+  const fetchModels = async (loud: boolean) => {
+    const p = provider();
+    if (gone()) return;
+    const base = settings.value.baseUrls[p.id];
+    const spec = p.api ? (base ? customList(p, base) : undefined) : p.list;
+    if (!spec) {
+      if (loud) say(p.api ? "请先填写 Base URL。" : "这个服务商不提供模型列表。", true);
+      return;
+    }
+    listing = true;
     plugin.update();
     try {
-      trial = await candidate.trial(); // resolves once the trial has started
+      const models = await listModels(spec, await keyFor(p.id).catch(() => ""));
+      if (provider().id !== p.id) return; // another provider was chosen meanwhile
+      listed.set(p.id, models);
+      const before = model();
+      const chosen = pickListed(p, before, models);
+      settings.save({ ...settings.value, models: { ...settings.value.models, [p.id]: chosen } });
+      say(chosen === before ? `获取到 ${models.length} 个模型。` : `获取到 ${models.length} 个模型。「${before}」不在列表中，已改用「${chosen}」。`);
+      changed();
+    } catch (error) {
+      listed.delete(p.id);
+      if (loud || p.api)
+        say(p.api ? `没能获取模型列表（${(error as Error).message}），请直接填写模型 ID。` : `没能获取模型列表（${(error as Error).message}），可以从 pi 自带的列表中选择。`, true);
     } finally {
-      starting = busy = false;
+      listing = false;
+      syncIndexes();
+      plugin.update();
     }
-    publish(`试载已开始：${selectedId}`);
-    show("试载中：请在计数器窗口测试「增加」「归零」。");
+  };
+  page.on("setBaseUrl", (text: string) => {
+    saveBaseUrl(text, false);
   });
-  window.on("recoverTrial", () => {}); // kept for the window; the button stays disabled
-  window.on("stopTrial", stopTrial);
-  window.on("installCandidate", () => manage(false));
-  window.on("rollbackVersion", () => manage(true));
-  plugin.onError(fail);
+  page.on("acceptBaseUrl", async (text: string) => {
+    if (saveBaseUrl(text, true)) await fetchModels(true);
+  });
+  page.on("chooseModel", (id: string) => {
+    settings.save({ ...settings.value, models: { ...settings.value.models, [provider().id]: id.trim() } });
+    changed();
+  });
+  page.on("fetchModels", () => fetchModels(true));
+
   plugin.onDispose(async () => {
-    job?.cancel();
-    await job?.agent?.waitForIdle();
+    clearTimeout(refresh);
+    // Runs still in progress stay marked in meta.json: the next start says so.
+    await Promise.all([...runs.values()].map((run) => (stopWatchdog(run), run.worker.stop(300))));
   });
 
   plugin.commands.add({
     id: "workshop.open",
-    path: ["插件工坊…"],
+    path: ["Vestra Player AI…"],
     order: 820,
     group: "windows",
-    run: () => window.show(),
+    run: () => {
+      loadKey(); // not awaited: a keychain dialog must not hold the window
+      return window.show();
+    },
   });
 }

@@ -1,0 +1,185 @@
+// Options ▸ 插件 ▸ Vestra Player AI: the service, its API key (kept in the
+// system keychain; only the last four characters are ever shown) and the model.
+import { ComboBox, LineEdit } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button } from "@vestra/widgets.slint";
+
+export global AiSettings {
+    in property <[string]> providers;
+    // in-out and two-way below: a one-way index stops following the model
+    // once the user picked an entry (reference §6.4), and the list would then
+    // show another model than the one used.
+    in-out property <int> provider-index;
+    // A custom endpoint (OpenAI or Anthropic format): Base URL, models listed
+    // from it (「获取模型」) or typed by hand.
+    in property <bool> custom;
+    in property <bool> listing;
+    // The provider can list its models (built-in ones where their API does).
+    in property <bool> can-list;
+    in-out property <string> base-url;
+    in-out property <string> key-text;
+    in property <string> key-state;
+    in property <bool> has-key;
+    in property <[string]> models;
+    in-out property <int> model-index;
+    in-out property <string> model-text;
+    // The saved provider is no longer offered: the notice; empty otherwise.
+    in property <string> gone;
+    in property <string> message;
+    in property <bool> message-warn;
+    callback choose-provider(int);
+    callback save-key(string);
+    callback delete-key();
+    callback delete-old-key();
+    callback set-base-url(string);
+    callback accept-base-url(string);
+    callback fetch-models();
+    callback choose-model(string);
+}
+
+component Label inherits Text {
+    color: Theme.text;
+    font-size: Theme.font-body;
+    vertical-alignment: center;
+    width: 76px;
+}
+
+export component AiSettingsPage inherits Rectangle {
+    height: 300px;
+    VerticalLayout {
+        padding: 6px;
+        spacing: 10px;
+        alignment: start;
+        if AiSettings.gone != "": HorizontalLayout {
+            spacing: 8px;
+            Text {
+                text: AiSettings.gone;
+                color: Theme.danger;
+                font-size: Theme.font-body;
+                wrap: word-wrap;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 0;
+                Button { small: true; width: 72px; text: "删除旧 key"; clicked => { AiSettings.delete-old-key(); } }
+            }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            Label { text: "服务商"; }
+            ComboBox {
+                height: Theme.input-height;
+                horizontal-stretch: 1;
+                model: AiSettings.providers;
+                current-index <=> AiSettings.provider-index;
+                selected => { AiSettings.choose-provider(self.current-index); }
+            }
+        }
+        if AiSettings.custom: HorizontalLayout {
+            spacing: 8px;
+            Label { text: "Base URL"; }
+            LineEdit {
+                height: Theme.input-height;
+                horizontal-stretch: 1;
+                font-size: Theme.font-body;
+                placeholder-text: "http://localhost:11434/v1";
+                text <=> AiSettings.base-url;
+                accepted(text) => { AiSettings.accept-base-url(text); }
+                edited(text) => { AiSettings.set-base-url(text); }
+            }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            Label { text: "API Key"; }
+            LineEdit {
+                height: Theme.input-height;
+                horizontal-stretch: 1;
+                font-size: Theme.font-body;
+                input-type: password;
+                placeholder-text: AiSettings.custom ? "本地服务可以留空" : "粘贴 API key";
+                text <=> AiSettings.key-text;
+                accepted(text) => { AiSettings.save-key(text); }
+            }
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 0;
+                Button { width: Theme.button-min-width; text: "保存"; enabled: AiSettings.key-text != ""; clicked => { AiSettings.save-key(AiSettings.key-text); } }
+            }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            Label { text: ""; }
+            Text {
+                text: AiSettings.key-state;
+                color: AiSettings.has-key ? Theme.text : Theme.text-dim;
+                font-size: Theme.font-body;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            if AiSettings.has-key: VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 0;
+                Button { small: true; width: Theme.button-min-width; text: "删除"; clicked => { AiSettings.delete-key(); } }
+            }
+        }
+        if AiSettings.models.length > 0: HorizontalLayout {
+            spacing: 8px;
+            Label { text: "模型"; }
+            ComboBox {
+                height: Theme.input-height;
+                horizontal-stretch: 1;
+                model: AiSettings.models;
+                current-index <=> AiSettings.model-index;
+                selected(value) => { AiSettings.choose-model(value); }
+            }
+            // Custom endpoints have the button on the model id row below.
+            if !AiSettings.custom && AiSettings.can-list: VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 0;
+                Button {
+                    width: Theme.button-min-width;
+                    text: AiSettings.listing ? "获取中…" : "获取模型";
+                    enabled: !AiSettings.listing;
+                    clicked => { AiSettings.fetch-models(); }
+                }
+            }
+        }
+        // Custom endpoints: the id can always be typed (when the endpoint lists none, or another one).
+        if AiSettings.custom: HorizontalLayout {
+            spacing: 8px;
+            Label { text: AiSettings.models.length > 0 ? "模型 ID" : "模型"; }
+            LineEdit {
+                height: Theme.input-height;
+                horizontal-stretch: 1;
+                font-size: Theme.font-body;
+                placeholder-text: "模型 ID，如 qwen3:8b";
+                text <=> AiSettings.model-text;
+                edited(text) => { AiSettings.choose-model(text); }
+            }
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 0;
+                Button {
+                    width: Theme.button-min-width;
+                    text: AiSettings.listing ? "获取中…" : "获取模型";
+                    enabled: !AiSettings.listing && AiSettings.base-url != "";
+                    clicked => { AiSettings.fetch-models(); }
+                }
+            }
+        }
+        Text {
+            text: "key 只保存在系统钥匙串（macOS）或凭据管理器（Windows）里，不写入任何文件、日志或会话记录。";
+            color: Theme.text-dim;
+            font-size: Theme.font-body;
+            wrap: word-wrap;
+        }
+        if AiSettings.message != "": Text {
+            text: AiSettings.message;
+            color: AiSettings.message-warn ? Theme.danger : Theme.text-dim;
+            font-size: Theme.font-body;
+            wrap: word-wrap;
+        }
+    }
+}
