@@ -266,8 +266,9 @@ mod tests {
             .state
             .bindings
             .insert("vestra.playback/toggle-pause".into(), vec!["Space".into()]);
+        // A palette other than the default survives a restart.
         store.state.appearance = Some(Appearance {
-            theme: "vestra".into(),
+            theme: "vestra-light".into(),
         });
         store.state.settings = Some(Settings {
             last_page: Some("vestra.preferences/appearance".into()),

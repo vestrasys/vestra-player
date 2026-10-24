@@ -155,6 +155,7 @@ export component OptionsWindow inherits Window {{
                         for row in root.rows: Rectangle {{
                             height: 20px;
                             background: row.selected ? Theme.selected-bg : touch.has-hover && !row.header ? Theme.hover-bg : transparent;
+                            if row.selected: Rectangle {{ x: 8px; y: 4px; width: 2px; height: 12px; border-radius: 1px; background: Theme.accent; }}
                             Text {{
                                 x: row.header ? 8px : 20px;
                                 width: parent.width - self.x - 4px;
@@ -162,7 +163,7 @@ export component OptionsWindow inherits Window {{
                                 font-size: Theme.font-body;
                                 vertical-alignment: center;
                                 overflow: elide;
-                                color: row.header ? Theme.text-dim : row.selected ? Theme.accent : Theme.text-list;
+                                color: row.header ? Theme.text-dim : row.selected ? Theme.text : Theme.text-list;
                             }}
                             touch := TouchArea {{
                                 enabled: !row.header;

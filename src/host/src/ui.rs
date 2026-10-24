@@ -400,6 +400,49 @@ export component W inherits Window {
         );
     }
 
+    /// R-H6: a light palette also turns the std-widgets light (the host
+    /// compiles them as fluent-dark), switches the gradient, and the default
+    /// palette brings both back.
+    #[test]
+    fn palettes_switch_colours_gradient_and_the_std_widgets_scheme() {
+        headless();
+        let instance = compile_source(
+            r#"import { Palette, CheckBox } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+export component W inherits Window {
+    out property <brush> std-background: Palette.background;
+    out property <brush> fill: Theme.accent-fill;
+    out property <color> bar: Theme.bg-bar;
+    out property <color> video: Theme.bg-video;
+    CheckBox { text: "x"; }
+}"#
+            .into(),
+            &ui_dir().join("w.slint"),
+        )
+        .unwrap();
+        let get = |name: &str| instance.get_property(name).unwrap();
+        let brush = |rgb: u32| {
+            Value::Brush(slint::Brush::SolidColor(slint::Color::from_rgb_u8(
+                (rgb >> 16) as u8,
+                (rgb >> 8) as u8,
+                rgb as u8,
+            )))
+        };
+        let dark_fill = get("fill");
+        assert_eq!(get("bar"), brush(0x16141c));
+        assert_eq!(get("std-background"), brush(0x1c1c1c));
+        crate::theme::apply(&instance, "vestra-light").unwrap();
+        assert_eq!(get("bar"), brush(0xf7f6fa));
+        // The video area stays dark.
+        assert_eq!(get("video"), brush(0x0e0d12));
+        assert_eq!(get("std-background"), brush(0xfafafa));
+        assert_ne!(get("fill"), dark_fill);
+        crate::theme::apply(&instance, "vestra").unwrap();
+        assert_eq!(get("bar"), brush(0x16141c));
+        assert_eq!(get("std-background"), brush(0x1c1c1c));
+        assert_eq!(get("fill"), dark_fill);
+    }
+
     fn headless() {
         thread_local! {
             static PLATFORM: () = {

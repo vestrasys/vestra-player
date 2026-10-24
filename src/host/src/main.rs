@@ -357,8 +357,6 @@ struct Host {
     settings: settings_window::Settings,
     /// The category of the page the options window last showed.
     settings_category: Option<usize>,
-    /// Vestra's `accent-fill` gradient, read from the first instance (R-H6).
-    vestra_fill: Option<SValue>,
     /// A view missed the palette: deliver again on the next tick.
     theme_pending: bool,
 }
@@ -3566,7 +3564,7 @@ impl Host {
                         }
                     }
                 }
-                let (theme, fill) = (self.theme().to_owned(), self.vestra_fill.clone());
+                let theme = self.theme().to_owned();
                 let missed = std::cell::Cell::new(false);
                 let view = ui::open(
                     &path,
@@ -3576,8 +3574,7 @@ impl Host {
                     &callbacks,
                     self.events.clone(),
                     |instance| {
-                        if theme != "vestra"
-                            && theme::apply(instance, &theme, fill.as_ref()).is_err()
+                        if theme != theme::THEMES[0] && theme::apply(instance, &theme).is_err()
                             || theme::apply_fonts(instance).is_err()
                         {
                             missed.set(true);
@@ -4139,7 +4136,6 @@ fn main() -> Result<()> {
         drops: Default::default(),
         settings: Default::default(),
         settings_category: None,
-        vestra_fill: None,
         theme_pending: false,
         commands: commands::Registry::new(),
     };
