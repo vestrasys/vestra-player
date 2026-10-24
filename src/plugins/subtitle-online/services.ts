@@ -2,10 +2,11 @@
 // and assrt.net (optional). Every request needs the user's own key or token;
 // nothing is sent without one. Each request gives up after 15 seconds.
 import { extname } from "node:path";
+import { STATUS, line, raw } from "./messages.ts";
+import type { Line, StatusId } from "./messages.ts";
 
 export type ServiceId = "opensubtitles" | "assrt";
 export const SERVICE_IDS: ServiceId[] = ["opensubtitles", "assrt"];
-export const SERVICE_NAMES: Record<ServiceId, string> = { opensubtitles: "OpenSubtitles", assrt: "射手网(伪)" };
 export const USER_AGENT = "Vestra Player v0.1.0";
 export const REQUEST_TIMEOUT = 15_000;
 
@@ -30,22 +31,32 @@ export type Result = {
 };
 export type Download = { files: { name: string; bytes: Buffer }[]; remaining: number | null };
 
-/** A failure the user can act on; `message` is the Chinese text to show. */
+/** A failure the user can act on; `status` is the line to show (messages.ts). */
 export class ServiceError extends Error {
   readonly kind: "auth" | "quota" | "network" | "invalid" | "aborted";
+  readonly status: Line;
   readonly reset: string | null;
-  constructor(kind: ServiceError["kind"], message: string, reset: string | null = null) {
-    super(message);
+  constructor(kind: ServiceError["kind"], status: StatusId | Line, args: (string | number)[] = [], reset: string | null = null) {
+    const shown = typeof status === "string" ? line(status, args) : status;
+    super(shown.id === "raw" ? String(shown.args[0]) : shown.id ? STATUS[shown.id] : "");
     this.kind = kind;
+    this.status = shown;
     this.reset = reset;
   }
 }
 
+/**
+ * Language names for track titles. The download window has the same names in
+ * ui/messages.slint (`Messages.language`), translated; a track title is data
+ * sent to the player, so it keeps the English name for now.
+ */
+// i18n: needs r2-api (a translatable track title)
 const LANGUAGE_LABELS: Record<string, string> = {
-  "zh-cn": "简体中文", "zh-tw": "繁体中文", zh: "中文", en: "英语", ja: "日语", ko: "韩语", fr: "法语",
-  de: "德语", es: "西班牙语", it: "意大利语", ru: "俄语", pt: "葡萄牙语", "pt-br": "巴西葡语", ar: "阿拉伯语",
-  th: "泰语", vi: "越南语", "zh-ca": "粤语",
+  "zh-cn": "Simplified Chinese", "zh-tw": "Traditional Chinese", zh: "Chinese", en: "English", ja: "Japanese",
+  ko: "Korean", fr: "French", de: "German", es: "Spanish", it: "Italian", ru: "Russian", pt: "Portuguese",
+  "pt-br": "Brazilian Portuguese", ar: "Arabic", th: "Thai", vi: "Vietnamese", "zh-ca": "Cantonese",
 };
+export const LANGUAGE_CODES = Object.keys(LANGUAGE_LABELS);
 export const languageLabel = (code: string) => LANGUAGE_LABELS[code.toLowerCase()] ?? code;
 
 async function request(url: string, init: RequestInit, signal: AbortSignal, service: ServiceId) {
@@ -53,8 +64,8 @@ async function request(url: string, init: RequestInit, signal: AbortSignal, serv
   try {
     return await fetch(url, { ...init, signal: AbortSignal.any([signal, timeout]) });
   } catch {
-    if (signal.aborted) throw new ServiceError("aborted", "已取消");
-    throw new ServiceError("network", `无法连接 ${SERVICE_NAMES[service]}`);
+    if (signal.aborted) throw new ServiceError("aborted", "aborted");
+    throw new ServiceError("network", `connect.${service}` as const);
   }
 }
 async function json(response: Response, service: ServiceId): Promise<Record<string, unknown>> {
@@ -62,7 +73,7 @@ async function json(response: Response, service: ServiceId): Promise<Record<stri
     const value = await response.json();
     return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
   } catch {
-    throw new ServiceError("network", `${SERVICE_NAMES[service]} 返回了无法识别的内容`);
+    throw new ServiceError("network", `unreadable.${service}` as const);
   }
 }
 const record = (value: unknown): Record<string, unknown> =>
@@ -76,8 +87,8 @@ export interface Service {
   readonly id: ServiceId;
   search(query: Query, signal: AbortSignal): Promise<{ results: Result[]; more: boolean }>;
   download(result: Result, signal: AbortSignal): Promise<Download>;
-  /** A short Chinese line: whether the key works, and the remaining downloads when known. */
-  test(signal: AbortSignal): Promise<string>;
+  /** A short line: whether the key works, and the remaining downloads when known. */
+  test(signal: AbortSignal): Promise<Line>;
 }
 
 // ------------------------------------------------------------------ OpenSubtitles
@@ -104,15 +115,15 @@ export class OpenSubtitles implements Service {
   async #check(response: Response) {
     if (response.status === 401 || response.status === 403) {
       this.#session = null;
-      throw new ServiceError("auth", "API 密钥无效，请在在线字幕设置中检查");
+      throw new ServiceError("auth", "osBadKey");
     }
     if (response.status === 406 || response.status === 429) {
       const body = await json(response, this.id).catch(() => ({}) as Record<string, unknown>);
       if (response.status === 406 || num(body.remaining) === 0)
-        throw new ServiceError("quota", "今日下载次数已用完（OpenSubtitles）。登录账号可获得更多次数", str(body.reset_time) || null);
-      throw new ServiceError("network", "OpenSubtitles 请求过于频繁，请稍后再试");
+        throw new ServiceError("quota", "osQuota", [], str(body.reset_time) || null);
+      throw new ServiceError("network", "osTooMany");
     }
-    if (!response.ok) throw new ServiceError("network", `OpenSubtitles 出错（${response.status}）`);
+    if (!response.ok) throw new ServiceError("network", "osError", [response.status]);
   }
   /** Log in when a user name is set; a failed login is reported and searches go on anonymously. */
   async #login(signal: AbortSignal) {
@@ -122,11 +133,11 @@ export class OpenSubtitles implements Service {
     const response = await request(`${OS_BASE}/login`, {
       method: "POST", headers: this.#headers(), body: JSON.stringify({ username, password }),
     }, signal, this.id);
-    if (response.status === 401) throw new ServiceError("auth", "OpenSubtitles 用户名或密码不正确");
+    if (response.status === 401) throw new ServiceError("auth", "osBadLogin");
     await this.#check(response);
     const body = await json(response, this.id);
     const token = str(body.token);
-    if (!token) throw new ServiceError("auth", "OpenSubtitles 登录失败");
+    if (!token) throw new ServiceError("auth", "osLoginFailed");
     const host = str(body.base_url).replace(/^https?:\/\//, "").replace(/\/.*$/, "");
     this.#session = { token, base: host ? `https://${host}/api/v1` : OS_BASE, user: username };
     return this.#session;
@@ -180,26 +191,26 @@ export class OpenSubtitles implements Service {
     await this.#check(response);
     const body = await json(response, this.id);
     const link = str(body.link);
-    if (!link) throw new ServiceError("network", str(body.message) || "OpenSubtitles 没有给出下载地址");
+    if (!link) throw new ServiceError("network", str(body.message) ? raw(str(body.message)) : line("osNoLink"));
     const file = await request(link, { headers: { "User-Agent": USER_AGENT } }, signal, this.id);
-    if (!file.ok) throw new ServiceError("network", `无法下载字幕（${file.status}）`);
+    if (!file.ok) throw new ServiceError("network", "downloadFailed", [file.status]);
     return {
       files: [{ name: str(body.file_name) || result.fileName, bytes: Buffer.from(await file.arrayBuffer()) }],
       remaining: num(body.remaining),
     };
   }
   async test(signal: AbortSignal) {
-    if (!this.#credentials().apiKey) return "请先填写 API 密钥";
+    if (!this.#credentials().apiKey) return line("keyFirst");
     const session = await this.#login(signal);
     if (session) {
       const response = await request(`${session.base}/infos/user`, { headers: this.#headers(session.token) }, signal, this.id);
       await this.#check(response);
       const remaining = num(record((await json(response, this.id)).data).remaining_downloads);
-      return remaining === null ? "密钥与账号有效" : `密钥与账号有效，今日剩余下载 ${remaining} 次`;
+      return remaining === null ? line("keyAccountValid") : line("keyAccountRemaining", [remaining]);
     }
     const response = await request(`${OS_BASE}/infos/formats`, { headers: this.#headers() }, signal, this.id);
     await this.#check(response);
-    return "密钥有效（未登录，匿名下载次数较少）";
+    return line("keyValid");
   }
 }
 
@@ -218,14 +229,14 @@ export class Assrt implements Service {
   async #get(path: string, params: Record<string, string>, signal: AbortSignal) {
     const query = new URLSearchParams({ token: this.#credentials().token, ...params });
     const response = await request(`${ASSRT_BASE}${path}?${query}`, { headers: { "User-Agent": USER_AGENT } }, signal, this.id);
-    if (response.status === 401 || response.status === 403) throw new ServiceError("auth", "射手网(伪) token 无效，请在在线字幕设置中检查");
-    if (response.status === 429) throw new ServiceError("quota", "射手网(伪) 调用次数已达上限，请稍后再试");
-    if (!response.ok) throw new ServiceError("network", `射手网(伪) 出错（${response.status}）`);
+    if (response.status === 401 || response.status === 403) throw new ServiceError("auth", "assrtBadToken");
+    if (response.status === 429) throw new ServiceError("quota", "assrtQuota");
+    if (!response.ok) throw new ServiceError("network", "assrtError", [response.status]);
     const body = await json(response, this.id);
     const status = num(body.status) ?? 0;
-    if (status === 101 || status === 20001) throw new ServiceError("auth", "射手网(伪) token 无效，请在在线字幕设置中检查");
-    if (status === 30900) throw new ServiceError("quota", "射手网(伪) 调用次数已达上限，请稍后再试");
-    if (status !== 0) throw new ServiceError("network", `射手网(伪) 出错（${str(body.errmsg) || status}）`);
+    if (status === 101 || status === 20001) throw new ServiceError("auth", "assrtBadToken");
+    if (status === 30900) throw new ServiceError("quota", "assrtQuota");
+    if (status !== 0) throw new ServiceError("network", "assrtError", [str(body.errmsg) || status]);
     return body;
   }
   async search(query: Query, signal: AbortSignal) {
@@ -237,7 +248,7 @@ export class Assrt implements Service {
       const s = record(item);
       const langs = record(record(s.lang).langlist);
       const language = ASSRT_LANGUAGES.find(([key]) => langs[key] === true)?.[1] ?? "zh-CN";
-      const name = str(s.native_name) || str(s.videoname) || "字幕";
+      const name = str(s.native_name) || str(s.videoname) || "subtitle"; // a file name
       const id = num(s.id) ?? 0;
       return {
         key: `assrt:${id}`, service: this.id, language,
@@ -259,16 +270,16 @@ export class Assrt implements Service {
     for (const target of targets.slice(0, 16)) {
       if (!target.url) continue;
       const response = await request(target.url, { headers: { "User-Agent": USER_AGENT } }, signal, this.id);
-      if (!response.ok) throw new ServiceError("network", `无法下载字幕（${response.status}）`);
+      if (!response.ok) throw new ServiceError("network", "downloadFailed", [response.status]);
       files.push({ name: target.name, bytes: Buffer.from(await response.arrayBuffer()) });
     }
-    if (!files.length) throw new ServiceError("network", "射手网(伪) 没有给出下载地址");
+    if (!files.length) throw new ServiceError("network", "assrtNoLink");
     return { files, remaining: null };
   }
   async test(signal: AbortSignal) {
-    if (!this.#credentials().token) return "请先填写 token";
+    if (!this.#credentials().token) return line("tokenFirst");
     const body = await this.#get("/user/quota", {}, signal);
     const quota = num(record(body.user).quota);
-    return quota === null ? "token 有效" : `token 有效，剩余调用 ${quota} 次`;
+    return quota === null ? line("tokenValid") : line("tokenRemaining", [quota]);
   }
 }

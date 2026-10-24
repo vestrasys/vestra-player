@@ -1,6 +1,6 @@
 // settings.json and result ordering. Secrets are not here (see secrets.ts).
 import type { Result, ServiceId } from "./services.ts";
-import { SERVICE_IDS, languageLabel, SERVICE_NAMES } from "./services.ts";
+import { SERVICE_IDS, languageLabel } from "./services.ts";
 
 export type Settings = {
   version: 1;
@@ -95,19 +95,27 @@ export function rank(results: Result[], settings: Pick<Settings, "languages" | "
     );
 }
 
-/** One row of the result list. */
+/**
+ * One row of the result list (ui/download.slint `ResultRow`): data; the
+ * window names the language (`code`, lower case), the match and the service,
+ * and marks hearing-impaired and machine-translated releases.
+ */
 export const row = (r: Result, checked: boolean) => ({
   checked,
-  language: languageLabel(r.language),
-  release: `${r.release}${r.hearingImpaired ? " [HI]" : ""}${r.machine ? " [机翻]" : ""}`,
+  language: r.language,
+  code: r.language.toLowerCase(),
+  release: r.release,
+  hearing: r.hearingImpaired,
+  machine: r.machine,
   format: r.format,
   fps: r.fps ? String(Math.round(r.fps * 1000) / 1000) : "",
   downloads: r.downloads === null ? "" : String(r.downloads),
-  match: r.hashMatch ? "哈希" : "标题",
-  source: SERVICE_NAMES[r.service],
+  hash: r.hashMatch,
+  service: r.service,
 });
 
-/** Track title: "<语言> · <版本名>", 1–200 characters. */
+/** Track title: "<language> · <release>", 1–200 characters. */
+// i18n: needs r2-api (the language name stays English in the track title)
 export const trackTitle = (r: Result) =>
   `${languageLabel(r.language)} · ${r.release}`.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 200);
 

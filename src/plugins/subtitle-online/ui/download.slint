@@ -1,19 +1,25 @@
-// 字幕下载 (D16): 560×360, at least 480×280. Title field
+// Download Subtitles (D16): 560×360, at least 480×280. Title field
 // and searches on top, result list in the middle, actions and a status line below.
 import { CheckBox, LineEdit, ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
+import { Messages, Status, StatusText } from "messages.slint";
 
+/** One result (model.ts `row`): `language` as the service gives it, `code` in lower case; `service` an id. */
 export struct ResultRow {
     checked: bool,
     language: string,
+    code: string,
     release: string,
+    hearing: bool,
+    machine: bool,
     format: string,
     fps: string,
     downloads: string,
-    match: string,
-    source: string,
+    hash: bool,
+    service: string,
 }
+
 
 component Cell inherits Text {
     color: Theme.text-list;
@@ -23,7 +29,7 @@ component Cell inherits Text {
 }
 
 export component SubtitleDownload inherits Window {
-    title: "字幕下载";
+    title: @tr("Download Subtitles");
     preferred-width: 560px;
     preferred-height: 360px;
     min-width: 480px;
@@ -34,11 +40,10 @@ export component SubtitleDownload inherits Window {
     in-out property <int> selected-index: -1;
     in property <bool> busy: false;
     in property <bool> privacy-pending: false;
-    in property <string> privacy-text: "";
     in property <bool> can-load: false;
     in property <bool> can-more: false;
     in property <bool> has-checked: false;
-    in property <string> status-text: "";
+    in property <Status> status;
     callback search-title(string);
     callback search-again();
     callback accept-privacy();
@@ -53,13 +58,21 @@ export component SubtitleDownload inherits Window {
     callback open-settings();
     callback cancel();
 
+    /** The release name, marked [HI] (hearing impaired) and [MT] (machine translated). */
+    pure function release-text(row: ResultRow) -> string {
+        if row.hearing && row.machine { return @tr("{} [MT]", @tr("{} [HI]", row.release)); }
+        if row.hearing { return @tr("{} [HI]", row.release); }
+        if row.machine { return @tr("{} [MT]", row.release); }
+        return row.release;
+    }
+
     VerticalLayout {
         padding: 8px;
         spacing: 6px;
         HorizontalLayout {
             spacing: 5px;
             Text {
-                text: "标题：";
+                text: @tr("Title:");
                 color: Theme.text;
                 font-size: Theme.font-body;
                 vertical-alignment: center;
@@ -71,13 +84,13 @@ export component SubtitleDownload inherits Window {
                 enabled: !root.busy;
                 accepted => { root.search-title(self.text); }
             }
-            Button { text: "按标题搜索"; enabled: !root.busy; clicked => { root.search-title(root.title-text); } }
-            Button { text: "再次搜索"; enabled: !root.busy; clicked => { root.search-again(); } }
+            Button { text: @tr("Search by Title"); enabled: !root.busy; clicked => { root.search-title(root.title-text); } }
+            Button { text: @tr("Search Again"); enabled: !root.busy; clicked => { root.search-again(); } }
         }
         if root.privacy-pending: HorizontalLayout {
             spacing: 5px;
             Text {
-                text: root.privacy-text;
+                text: @tr("Searching sends the file name keywords and the file hash to the chosen service. You will not be asked again once you agree.");
                 color: Theme.text;
                 font-size: Theme.font-body;
                 vertical-alignment: center;
@@ -85,7 +98,7 @@ export component SubtitleDownload inherits Window {
                 line-height-factor: 1.25;
                 horizontal-stretch: 1;
             }
-            Button { text: "同意并搜索"; clicked => { root.accept-privacy(); } }
+            Button { min-width: 110px; text: @tr("Agree and Search"); clicked => { root.accept-privacy(); } }
         }
         Rectangle {
             vertical-stretch: 1;
@@ -100,13 +113,13 @@ export component SubtitleDownload inherits Window {
                     padding-right: 4px;
                     spacing: 4px;
                     Rectangle { width: 20px; }
-                    Cell { width: 60px; text: "语言"; color: Theme.text-dim; }
-                    Cell { horizontal-stretch: 1; text: "版本名"; color: Theme.text-dim; }
-                    Cell { width: 40px; text: "格式"; color: Theme.text-dim; }
-                    Cell { width: 50px; text: "FPS"; color: Theme.text-dim; }
-                    Cell { width: 60px; text: "下载数"; color: Theme.text-dim; }
-                    Cell { width: 40px; text: "匹配"; color: Theme.text-dim; }
-                    Cell { width: 80px; text: "来源"; color: Theme.text-dim; }
+                    Cell { width: 60px; text: @tr("Language"); color: Theme.text-dim; }
+                    Cell { horizontal-stretch: 1; text: @tr("Release"); color: Theme.text-dim; }
+                    Cell { width: 40px; text: @tr("Format"); color: Theme.text-dim; }
+                    Cell { width: 50px; text: @tr("FPS"); color: Theme.text-dim; }
+                    Cell { width: 60px; text: @tr("Downloads"); color: Theme.text-dim; }
+                    Cell { width: 40px; text: @tr("Match"); color: Theme.text-dim; }
+                    Cell { width: 80px; text: @tr("Source"); color: Theme.text-dim; }
                 }
                 ListView {
                     vertical-stretch: 1;
@@ -126,13 +139,13 @@ export component SubtitleDownload inherits Window {
                                 checked: row.checked;
                                 toggled => { root.toggle-row(index, self.checked); }
                             }
-                            Cell { width: 60px; text: row.language; color: index == root.selected-index ? Theme.text : Theme.text-list; }
-                            Cell { horizontal-stretch: 1; text: row.release; color: index == root.selected-index ? Theme.text : Theme.text-list; }
+                            Cell { width: 60px; text: Messages.language(row.code, row.language); color: index == root.selected-index ? Theme.text : Theme.text-list; }
+                            Cell { horizontal-stretch: 1; text: root.release-text(row); color: index == root.selected-index ? Theme.text : Theme.text-list; }
                             Cell { width: 40px; text: row.format; }
                             Cell { width: 50px; text: row.fps; }
                             Cell { width: 60px; text: row.downloads; horizontal-alignment: right; }
-                            Cell { width: 40px; text: row.match; color: row.match == "哈希" ? Theme.accent : Theme.text-list; }
-                            Cell { width: 80px; text: row.source; }
+                            Cell { width: 40px; text: row.hash ? @tr("Hash") : @tr("Title"); color: row.hash ? Theme.accent : Theme.text-list; }
+                            Cell { width: 80px; text: Messages.service-name(row.service); }
                         }
                     }
                 }
@@ -140,17 +153,17 @@ export component SubtitleDownload inherits Window {
         }
         HorizontalLayout {
             spacing: 5px;
-            Button { height: Theme.button-height; text: "打开字幕"; enabled: root.can-load && root.selected-index >= 0 && !root.busy; clicked => { root.open-selected(); } }
-            Button { height: Theme.button-height; text: "添加字幕"; enabled: root.can-load && root.has-checked && !root.busy; clicked => { root.add-checked(); } }
-            Button { height: Theme.button-height; text: "直接保存"; enabled: root.has-checked && !root.busy; clicked => { root.save-checked(); } }
-            Button { height: Theme.button-height; text: "另存为…"; enabled: root.selected-index >= 0 && !root.busy; clicked => { root.save-as(); } }
-            Button { height: Theme.button-height; text: "更多"; enabled: root.can-more && !root.busy; clicked => { root.more(); } }
+            Button { height: Theme.button-height; text: @tr("Open"); enabled: root.can-load && root.selected-index >= 0 && !root.busy; clicked => { root.open-selected(); } }
+            Button { height: Theme.button-height; text: @tr("Add"); enabled: root.can-load && root.has-checked && !root.busy; clicked => { root.add-checked(); } }
+            Button { height: Theme.button-height; text: @tr("Save Only"); enabled: root.has-checked && !root.busy; clicked => { root.save-checked(); } }
+            Button { height: Theme.button-height; text: @tr("Save As…"); enabled: root.selected-index >= 0 && !root.busy; clicked => { root.save-as(); } }
+            Button { height: Theme.button-height; text: @tr("More"); enabled: root.can-more && !root.busy; clicked => { root.more(); } }
             Rectangle { horizontal-stretch: 1; }
-            if root.busy: Button { height: Theme.button-height; text: "取消"; clicked => { root.cancel(); } }
-            Button { height: Theme.button-height; text: "设置…"; clicked => { root.open-settings(); } }
+            if root.busy: Button { height: Theme.button-height; text: @tr("Cancel"); clicked => { root.cancel(); } }
+            Button { height: Theme.button-height; text: @tr("Settings…"); clicked => { root.open-settings(); } }
         }
-        Text {
-            text: root.status-text;
+        StatusText {
+            status: root.status;
             color: Theme.text-list;
             font-size: Theme.font-body;
             overflow: elide;

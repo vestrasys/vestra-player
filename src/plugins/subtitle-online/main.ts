@@ -6,47 +6,41 @@ import { archiveKind, keywords, movieHash, unzipSubtitles, urlTitle } from "./me
 import { DEFAULTS, fileLanguage, isSettingsFile, parseLanguages, parseSettings, rank, row, trackTitle } from "./model.ts";
 import type { Settings } from "./model.ts";
 import { Secrets } from "./secrets.ts";
-import { Assrt, OpenSubtitles, SERVICE_NAMES, ServiceError } from "./services.ts";
+import { Failure, NONE, STATUS, forSlint, line, lineForSlint, list, raw, sentences, serviceResult } from "./messages.ts";
+import type { Line, Status, StatusId } from "./messages.ts";
+import { Assrt, OpenSubtitles, ServiceError } from "./services.ts";
 import type { Credentials, Query, Result, Service, ServiceId } from "./services.ts";
 
-const PRIVACY = "搜索会把文件名关键字与文件哈希发送给所选服务。";
-const NO_SERVICE = "请先在「服务」中为 OpenSubtitles 填写 API 密钥（在 opensubtitles.com 免费申请），或启用并填写射手网(伪) token。";
-const NO_MEDIA = "没有可载入字幕的媒体";
-const SOURCE_CHANGED = "媒体已切换，未载入字幕。";
-const HELP: Record<ServiceId, string> = {
-  opensubtitles:
-    "在 opensubtitles.com 注册账号后，到「API consumers」页面免费申请 API 密钥。用户名和密码可选，登录后每日下载次数更多。",
-  assrt: "在 assrt.net 注册后，在用户中心取得 API token。服务有调用频率限制。",
-};
 const isRemote = (source: string) => /^[a-z][a-z0-9+.-]*:\/\//i.test(source) && !/^file:\/\//i.test(source);
 const localPath = (source: string) => (/^file:\/\//i.test(source) ? decodeURIComponent(new URL(source).pathname) : source);
 
-/** One short Chinese sentence for a failure. */
-function errorText(e: unknown) {
-  if (e instanceof ServiceError) return e.message;
+/** The line for a failure. */
+function errorText(e: unknown): Line {
+  if (e instanceof ServiceError || e instanceof Failure) return e.status;
   const error = e as { code?: string; name?: string; message?: string };
-  if (error?.name === "AbortError" || error?.code === "aborted") return "已取消。";
+  if (error?.name === "AbortError" || error?.code === "aborted") return line("cancelled");
   switch (error?.code) {
     case undefined:
-      return error?.message ?? String(e); // our own messages (formats.ts) are Chinese
+      return raw(error?.message ?? String(e)); // not ours: the system's own words
     case "stale":
-      return SOURCE_CHANGED;
+      return line("sourceChanged");
     case "invalid":
-      return "播放器拒绝了该字幕（文件过大或内容无效）。";
+      return line("invalid");
     case "unavailable":
     case "unsupported":
-      return "当前媒体不能载入字幕。";
+      return line("unsupported");
     default:
-      return "字幕载入失败。";
+      return line("failed");
   }
 }
+const one = (l: Line): Status => sentences(l);
 const aborted = (e: unknown) =>
   (e instanceof ServiceError && e.kind === "aborted") || (e as { name?: string })?.name === "AbortError";
 
-/** 在线字幕 (D16): search OpenSubtitles / assrt, download, load as this plugin's tracks. */
+/** Online Subtitles (D16): search OpenSubtitles / assrt, download, load as this plugin's tracks. */
 export default async function activate(plugin: Plugin) {
   const { player, subtitles } = plugin;
-  const say = (text: string) => void plugin.osd.show(text).catch(() => {});
+  const say = (id: StatusId, args: (string | number)[] = []) => void plugin.osd.show(STATUS[id], args).catch(() => {});
   let directory: string | null = null;
   try {
     directory = plugin.dataDirectory;
@@ -85,7 +79,7 @@ export default async function activate(plugin: Plugin) {
   const configured = (id: ServiceId, c = credentials) => (id === "opensubtitles" ? !!c.apiKey : !!c.token);
   /** Enabled services that have a key, in the user's order. Nothing else is ever asked. */
   const active = () => settings.services.filter((s) => s.enabled && configured(s.id)).map((s) => services[s.id]);
-  const serviceState: Partial<Record<ServiceId, string>> = {};
+  const serviceState: Partial<Record<ServiceId, Line>> = {};
 
   // ------------------------------------------------------------ download window state
   const download = plugin.windows.create("ui/download.slint", { id: "subtitle-download" });
@@ -96,12 +90,12 @@ export default async function activate(plugin: Plugin) {
   const checked = new Set<string>();
   let selected = -1;
   let more = false;
-  let status = "";
-  let settingsStatus = "";
-  let serviceStatus = "";
+  let status: Status = NONE;
+  let settingsStatus: Status = NONE;
+  let serviceStatus: Status = NONE;
   let busy = false;
   let title = "";
-  /** The last search, for 再次搜索 and 更多. */
+  /** The last search, for Search Again and More. */
   let last: { query: Query; source: number } | null = null;
   let privacyPending: (() => void) | null = null;
   /** The running window operation; closing the window or a new source aborts it. */
@@ -117,33 +111,33 @@ export default async function activate(plugin: Plugin) {
     selectedIndex: selected,
     busy,
     privacyPending: privacyPending !== null,
-    privacyText: `${PRIVACY}同意后不再提示。`,
     canLoad: canLoad(),
     canMore: more && last !== null,
     hasChecked: results.some((r) => checked.has(r.key)),
-    statusText: status || (!canLoad() ? `${NO_MEDIA}，可按标题搜索。` : ""),
+    status: forSlint(status.parts.length || canLoad() ? status : one(line("noMediaSearchTitle"))),
   }));
   download.set({ titleText: "" });
   settingsWindow.bind(() => ({
     services: settings.services.map((s) => ({
-      name: SERVICE_NAMES[s.id],
+      service: s.id,
       enabled: s.enabled,
-      state: serviceState[s.id] ?? (configured(s.id) ? (s.id === "opensubtitles" ? "已填写密钥" : "已填写 token") : s.id === "opensubtitles" ? "未填写密钥" : "未填写 token"),
+      state: lineForSlint(
+        serviceState[s.id] ??
+          line(configured(s.id) ? (s.id === "opensubtitles" ? "keySet" : "tokenSet") : s.id === "opensubtitles" ? "keyMissing" : "tokenMissing"),
+      ),
     })),
     autoIndex: settings.autoSearch === "no-subtitles" ? 1 : 0,
     afterIndex: settings.afterSearch === "load-best" ? 1 : 0,
     exactOnly: settings.exactOnly,
     saveIndex: settings.saveLocation === "data" ? 1 : 0,
-    noteText: `${PRIVACY}密钥与密码存放在：${secrets.location}。`,
-    statusText: settingsStatus,
+    location: secrets.location,
+    status: forSlint(settingsStatus),
     busy,
   }));
   serviceWindow.bind(() => ({
-    serviceName: SERVICE_NAMES[editing],
-    hasAccount: editing === "opensubtitles",
-    keyLabel: editing === "opensubtitles" ? "API 密钥" : "token",
-    helpText: `${HELP[editing]}存放在：${secrets.location}。`,
-    statusText: serviceStatus,
+    service: editing,
+    location: secrets.location,
+    status: forSlint(serviceStatus),
     busy,
   }));
 
@@ -158,10 +152,10 @@ export default async function activate(plugin: Plugin) {
       return await work(mine.controller.signal);
     } catch (e) {
       if (!aborted(e)) {
-        status = errorText(e);
+        status = one(errorText(e));
         if (e instanceof ServiceError && e.kind === "quota") {
-          say(e.message);
-          if (e.reset) status = `${e.message}。将于 ${e.reset} 重置`;
+          if (e.status.id !== "raw" && e.status.id !== "") say(e.status.id, e.status.args);
+          if (e.reset) status = sentences(e.status, line("resetAt", [e.reset]));
         }
       }
       return undefined;
@@ -173,17 +167,17 @@ export default async function activate(plugin: Plugin) {
       plugin.update();
     }
   }
-  function abortOperation(text: string | null) {
+  function abortOperation(next: Status | null) {
     if (!operation) return;
     operation.controller.abort();
     operation = null;
     busy = false;
-    if (text !== null) status = text;
+    if (next !== null) status = next;
     plugin.update();
   }
   // Closing the download window while a request runs aborts it (the window has no close event).
   const watch = setInterval(() => {
-    if (operation?.window && !download.opened && !chooser.opened) abortOperation("");
+    if (operation?.window && !download.opened && !chooser.opened) abortOperation(NONE);
   }, 500);
   watch.unref();
 
@@ -197,30 +191,30 @@ export default async function activate(plugin: Plugin) {
   }
   async function search(query: Query, append: boolean, fromWindow = true) {
     if (!active().length) {
-      status = NO_SERVICE;
-      settingsStatus = NO_SERVICE;
+      status = one(line("noService"));
+      settingsStatus = one(line("noService"));
       void showSettings();
       return [];
     }
     if (!settings.privacyAccepted) {
       privacyPending = () => void search(query, append, fromWindow);
-      status = PRIVACY;
+      status = one(line("privacy"));
       plugin.update();
       return [];
     }
     if (!query.title && !query.hash) {
-      status = "请输入标题后再搜索。";
+      status = one(line("enterTitle"));
       plugin.update();
       return [];
     }
     const source = player.state.sourceId;
     return (
       (await begin(fromWindow, async (signal) => {
-        status = "正在搜索…";
+        status = one(line("searching"));
         plugin.update();
         const outcomes = await Promise.allSettled(active().map((s) => s.search(query, signal)));
         if (signal.aborted) return [];
-        const errors: string[] = [];
+        const errors: Line[] = [];
         const found: Result[] = [];
         more = false;
         for (const outcome of outcomes) {
@@ -235,8 +229,8 @@ export default async function activate(plugin: Plugin) {
           checked.clear();
           selected = results.length ? 0 : -1;
         }
-        const head = results.length ? `找到 ${results.length} 条字幕` : errors.length ? "" : "没有找到字幕，可修改标题后再搜索";
-        status = [head, ...errors].filter(Boolean).join("；");
+        const head = results.length ? [line("found", [results.length])] : errors.length ? [] : [line("notFound")];
+        status = list(...head, ...errors);
         return results;
       })) ?? []
     );
@@ -278,15 +272,15 @@ export default async function activate(plugin: Plugin) {
     for (const file of got.files) {
       const kind = archiveKind(file.bytes);
       if (kind === "zip") files.push(...unzipSubtitles(file.bytes));
-      else if (kind) throw new Error("此压缩格式暂不支持（rar、7z），请下载 zip 或单个字幕文件。");
+      else if (kind) throw new Failure("archiveUnsupported");
       else files.push(file);
     }
-    if (!files.length) throw new Error("压缩包里没有字幕文件。");
+    if (!files.length) throw new Failure("archiveEmpty");
     let index = 0;
     if (files.length > 1) {
       const picked = await choose(files.map((f) => f.name), signal);
       if (picked === null || !files[picked]) {
-        const error = new Error("已取消。");
+        const error = new Error("Cancelled");
         error.name = "AbortError";
         throw error;
       }
@@ -294,7 +288,7 @@ export default async function activate(plugin: Plugin) {
     }
     return { file: files[index]!, remaining: got.remaining };
   }
-  /** Where a downloaded file goes: `<视频名>.<语言>.<扩展名>` beside the video, else the data folder. */
+  /** Where a downloaded file goes: `<video name>.<language>.<extension>` beside the video, else the data folder. */
   async function saveCopy(result: Result, file: { name: string; bytes: Buffer }, folderOverride?: string) {
     const p = player.state;
     const ext = extname(file.name).toLowerCase() || ".srt";
@@ -326,13 +320,13 @@ export default async function activate(plugin: Plugin) {
   }
   /** Download one result and load it; the source must still be the one searched for. */
   async function loadResult(result: Result, select: "primary" | "none", signal: AbortSignal, source: number) {
-    if (player.state.sourceId !== source || !canLoad()) throw new Error(player.state.source ? SOURCE_CHANGED : NO_MEDIA);
+    if (player.state.sourceId !== source || !canLoad()) throw new Failure(player.state.source ? "sourceChanged" : "noMedia");
     const { file } = await fetchFile(result, signal);
     const fps = result.fps ?? (await player.stats().then((s) => s.video?.fps ?? null, () => null));
     const converted = convert(file.bytes, { fallback: "gb18030", fps });
     for (const [i, part] of converted.tracks.entries()) {
       const s = await subtitles.refresh();
-      if (s.sourceId !== source || player.state.sourceId !== source) throw new Error(SOURCE_CHANGED);
+      if (s.sourceId !== source || player.state.sourceId !== source) throw new Failure("sourceChanged");
       const name = part.language ? `${trackTitle(result)} · ${part.language}`.slice(0, 200) : trackTitle(result);
       await subtitles.load(part.bytes, { format: part.format, title: name, select: i === 0 ? select : "none", ifCurrent: s, signal });
     }
@@ -346,14 +340,13 @@ export default async function activate(plugin: Plugin) {
   async function openResult(result: Result) {
     const source = last?.source ?? player.state.sourceId;
     await begin(true, async (signal) => {
-      status = "正在下载字幕…";
+      status = one(line("downloading"));
       plugin.update();
       const { saved, notes } = await loadResult(result, "primary", signal, source);
-      const text = `打开字幕：${trackTitle(result)}`;
-      status = [text, ...notes, saved.fallback ? "字幕已载入，但无法保存到视频所在文件夹" : saved.path ? `已保存到 ${saved.path}` : ""]
-        .filter(Boolean)
-        .join("。");
-      say(saved.fallback ? "字幕已载入，但无法保存到视频所在文件夹" : text);
+      const where = saved.fallback ? [line("notSavedBeside")] : saved.path ? [line("savedTo", [saved.path])] : [];
+      status = sentences(line("opened", [trackTitle(result)]), ...notes.map((note) => line(note)), ...where);
+      if (saved.fallback) say("notSavedBeside");
+      else say("opened", [trackTitle(result)]); // i18n: needs r2-api (the track title's language name stays English)
     });
   }
   async function addChecked() {
@@ -362,13 +355,13 @@ export default async function activate(plugin: Plugin) {
     await begin(true, async (signal) => {
       let added = 0;
       for (const result of picks) {
-        status = `正在下载字幕（${added + 1}/${picks.length}）…`;
+        status = one(line("downloadingOf", [added + 1, picks.length]));
         plugin.update();
         await loadResult(result, "none", signal, source);
         added++;
       }
-      status = `已添加 ${added} 条字幕`;
-      say(status);
+      status = one(line("added", [added]));
+      say("added", [added]);
     });
   }
   async function saveChecked() {
@@ -376,26 +369,26 @@ export default async function activate(plugin: Plugin) {
     await begin(true, async (signal) => {
       const paths: string[] = [];
       for (const result of picks) {
-        status = `正在下载字幕（${paths.length + 1}/${picks.length}）…`;
+        status = one(line("downloadingOf", [paths.length + 1, picks.length]));
         plugin.update();
         const { file } = await fetchFile(result, signal);
         const { path } = await saveCopy(result, file);
         if (path) paths.push(path);
       }
-      status = paths.length ? `已保存 ${paths.length} 个字幕到 ${dirname(paths[0]!)}` : "没有可保存的位置。";
+      status = one(paths.length ? line("savedCount", [paths.length, dirname(paths[0]!)]) : line("nowhereToSave"));
     });
   }
   async function saveAs() {
     const result = selectedResult();
     if (!result) return;
     await begin(true, async (signal) => {
-      status = "正在下载字幕…";
+      status = one(line("downloading"));
       plugin.update();
       const { file } = await fetchFile(result, signal);
-      const path = await plugin.dialogs.saveFile({ title: "另存字幕", fileName: file.name });
-      if (!path || signal.aborted) return void (status = "未保存。");
+      const path = await plugin.dialogs.saveFile({ title: "Save Subtitle As", fileName: file.name });
+      if (!path || signal.aborted) return void (status = one(line("notSaved")));
       await writeFile(path, file.bytes);
-      status = `已保存到 ${path}`;
+      status = one(line("savedTo", [path]));
     });
   }
 
@@ -427,7 +420,7 @@ export default async function activate(plugin: Plugin) {
     const result = results[index];
     if (!result || busy) return;
     selected = index;
-    if (!canLoad()) return void (status = NO_MEDIA);
+    if (!canLoad()) return void (status = one(line("noMedia")));
     void openResult(result);
   });
   download.on("openSelected", () => {
@@ -441,7 +434,7 @@ export default async function activate(plugin: Plugin) {
     if (last && more && !busy) void search({ ...last.query, page: last.query.page + 1 }, true);
   });
   download.on("openSettings", () => void showSettings());
-  download.on("cancel", () => abortOperation("已取消。"));
+  download.on("cancel", () => abortOperation(one(line("cancelled"))));
 
   settingsWindow.on("toggleService", (index: number, on: boolean) => {
     const services = settings.services.map((s, i) => (i === index ? { ...s, enabled: on === true } : s));
@@ -464,7 +457,7 @@ export default async function activate(plugin: Plugin) {
   const currentService = (): ServiceId => settings.services[selectedService]?.id ?? "opensubtitles";
   settingsWindow.on("serviceSettings", async () => {
     editing = currentService();
-    serviceStatus = "";
+    serviceStatus = NONE;
     serviceWindow.set({
       keyText: editing === "opensubtitles" ? credentials.apiKey : credentials.token,
       userText: credentials.username,
@@ -472,7 +465,7 @@ export default async function activate(plugin: Plugin) {
     });
     await serviceWindow.show();
   });
-  async function testService(id: ServiceId, c: Credentials) {
+  async function testService(id: ServiceId, c: Credentials): Promise<Line> {
     const service = id === "opensubtitles" ? new OpenSubtitles(() => c) : new Assrt(() => c);
     const controller = new AbortController();
     try {
@@ -483,17 +476,17 @@ export default async function activate(plugin: Plugin) {
   }
   settingsWindow.on("testService", async () => {
     const id = currentService();
-    settingsStatus = `正在测试 ${SERVICE_NAMES[id]}…`;
+    settingsStatus = one(line(`testing.${id}`));
     plugin.update();
-    const text = await testService(id, credentials);
-    serviceState[id] = text;
-    settingsStatus = `${SERVICE_NAMES[id]}：${text}`;
+    const result = await testService(id, credentials);
+    serviceState[id] = result;
+    settingsStatus = serviceResult(id, result);
     plugin.update();
   });
   settingsWindow.on("changeLanguages", (text: string) => {
     const languages = parseLanguages(String(text));
-    if (!languages) return void (settingsStatus = "首选语言写法如 zh-CN, zh-TW, en（最多 5 个）");
-    settingsStatus = "";
+    if (!languages) return void (settingsStatus = one(line("languagesHint")));
+    settingsStatus = NONE;
     saveSettings({ languages });
   });
   settingsWindow.on("changeAuto", (index: number) => saveSettings({ autoSearch: index === 1 ? "no-subtitles" : "off" }));
@@ -516,16 +509,16 @@ export default async function activate(plugin: Plugin) {
       } else await secrets.set("assrt-token", next.token);
       credentials = next;
       delete serviceState[editing];
-      serviceStatus = `已保存（${secrets.location}）`;
+      serviceStatus = one(line("saved", [secrets.location.kind, secrets.location.value]));
     } catch (e) {
-      serviceStatus = `无法保存：${(e as Error).message}`;
+      serviceStatus = one(line("saveFailed", [(e as Error).message]));
     }
     plugin.update();
   });
   serviceWindow.on("test", async (key: string, user: string, password: string) => {
-    serviceStatus = "正在测试…";
+    serviceStatus = one(line("testing"));
     plugin.update();
-    serviceStatus = await testService(editing, entered(key, user, password));
+    serviceStatus = one(await testService(editing, entered(key, user, password)));
     plugin.update();
   });
 
@@ -535,26 +528,26 @@ export default async function activate(plugin: Plugin) {
   }
   async function showDownload() {
     if (!active().length) {
-      settingsStatus = NO_SERVICE;
+      settingsStatus = one(line("noService"));
       return showSettings();
     }
-    status = "";
+    status = NONE;
     await download.show();
     if (canLoad()) await searchCurrent();
     else {
       results = [];
-      status = `${NO_MEDIA}，可按标题搜索。`;
+      status = one(line("noMediaSearchTitle"));
       plugin.update();
     }
   }
 
   // ------------------------------------------------------------ menu
   plugin.commands.add({
-    id: "search", path: ["字幕", "在线字幕", "搜索与下载字幕…"], order: 360, group: "subtitle-online",
+    id: "search", path: ["@subtitles", "Online Subtitles", "Search and Download Subtitles…"], order: 360, group: "subtitle-online",
     run: showDownload,
   });
   plugin.commands.add({
-    id: "settings", path: ["字幕", "在线字幕", "在线字幕设置…"], order: 361, group: "subtitle-online",
+    id: "settings", path: ["@subtitles", "Online Subtitles", "Online Subtitle Settings…"], order: 361, group: "subtitle-online",
     run: showSettings,
   });
 
@@ -565,7 +558,7 @@ export default async function activate(plugin: Plugin) {
     if (p.sourceId !== seenSource) {
       seenSource = p.sourceId;
       // Requests for the old source must not load into the new one.
-      abortOperation(operation ? SOURCE_CHANGED : null);
+      abortOperation(operation ? one(line("sourceChanged")) : null);
       results = [];
       checked.clear();
       selected = -1;
@@ -577,7 +570,7 @@ export default async function activate(plugin: Plugin) {
       void autoSearch(p);
     }
   });
-  /** 打开没有字幕的视频时: search in the background; act only on a hash match in the first language. */
+  /** "When opening a video without subtitles": search in the background; act only on a hash match in the first language. */
   async function autoSearch(p: PlayerState) {
     if (settings.autoSearch !== "no-subtitles" || !settings.privacyAccepted || !active().length) return;
     if (p.kind !== "media" || !p.source || isRemote(p.source)) return;
@@ -590,12 +583,12 @@ export default async function activate(plugin: Plugin) {
     if (settings.afterSearch === "show") return void download.show();
     await begin(false, async (signal) => {
       await loadResult(best, "primary", signal, p.sourceId);
-      say(`已自动载入在线字幕：${trackTitle(best)}`);
+      say("autoLoaded", [trackTitle(best)]); // i18n: needs r2-api (the track title's language name stays English)
     });
   }
 
   plugin.onError((e) => {
-    status = errorText(e);
+    status = one(errorText(e));
     plugin.update();
   });
   plugin.onDispose(() => {

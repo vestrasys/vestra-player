@@ -62,5 +62,5 @@ test("ranking: hash, then human before machine, then language order, then downlo
   assert.deepEqual(rank(list, settings).map((r) => r.key), ["hash-en", "zh", "tw", "sample", "en-many", "mt-zh"]);
   assert.deepEqual(rank(list, { ...settings, exclude: "sample, foo" }).map((r) => r.key).includes("sample"), false);
   assert.deepEqual(rank(list, { ...settings, exactOnly: true }).map((r) => r.key), ["hash-en"]);
-  assert.equal(rank([...list, list[0]!], settings).length, list.length, "duplicates from 更多 are dropped");
+  assert.equal(rank([...list, list[0]!], settings).length, list.length, "duplicates from More are dropped");
 });

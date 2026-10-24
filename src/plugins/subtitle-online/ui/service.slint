@@ -1,8 +1,9 @@
 // One service's keys (D16): OpenSubtitles API key + optional account, or the
-// assrt token. Saved to the system's secret store on 保存; 测试 shows the remaining downloads.
+// assrt token. Saved to the system's secret store on Save; Test shows the remaining downloads.
 import { LineEdit } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
+import { Location, Messages, Status, StatusText } from "messages.slint";
 
 component RowLabel inherits Text {
     width: 70px;
@@ -13,17 +14,17 @@ component RowLabel inherits Text {
 }
 
 export component ServiceSettings inherits Window {
-    title: root.service-name + " 设置";
+    title: @tr("{} Settings", Messages.service-name(root.service));
     width: 360px;
     background: Theme.bg-panel;
-    in property <string> service-name: "";
-    in property <bool> has-account: true;
-    in property <string> key-label: "API 密钥";
-    in property <string> help-text: "";
+    /** "opensubtitles" (API key and an optional account) or "assrt" (a token). */
+    in property <string> service: "opensubtitles";
+    in property <Location> location;
+    property <bool> has-account: root.service == "opensubtitles";
     in-out property <string> key-text: "";
     in-out property <string> user-text: "";
     in-out property <string> password-text: "";
-    in property <string> status-text: "";
+    in property <Status> status;
     in property <bool> busy: false;
     callback save(string, string, string);
     callback test(string, string, string);
@@ -33,21 +34,23 @@ export component ServiceSettings inherits Window {
         spacing: 5px;
         HorizontalLayout {
             spacing: 5px;
-            RowLabel { text: root.key-label; }
+            RowLabel { text: root.has-account ? @tr("API key") : @tr("Token"); }
             LineEdit { height: Theme.input-height; font-size: Theme.font-body; input-type: password; text <=> root.key-text; }
         }
         if root.has-account: HorizontalLayout {
             spacing: 5px;
-            RowLabel { text: "用户名"; }
-            LineEdit { height: Theme.input-height; font-size: Theme.font-body; placeholder-text: "可选"; text <=> root.user-text; }
+            RowLabel { text: @tr("User name"); }
+            LineEdit { height: Theme.input-height; font-size: Theme.font-body; placeholder-text: @tr("Optional"); text <=> root.user-text; }
         }
         if root.has-account: HorizontalLayout {
             spacing: 5px;
-            RowLabel { text: "密码"; }
-            LineEdit { height: Theme.input-height; font-size: Theme.font-body; input-type: password; placeholder-text: "可选"; text <=> root.password-text; }
+            RowLabel { text: @tr("Password"); }
+            LineEdit { height: Theme.input-height; font-size: Theme.font-body; input-type: password; placeholder-text: @tr("Optional"); text <=> root.password-text; }
         }
         Text {
-            text: root.help-text;
+            text: root.has-account
+                ? @tr("Sign up at opensubtitles.com, then get a free API key on the “API consumers” page. User name and password are optional; logging in gives more downloads per day. Stored in: {}.", Messages.location(root.location.kind, root.location.value))
+                : @tr("Sign up at assrt.net, then get the API token in the user center. The service limits how often it can be called. Stored in: {}.", Messages.location(root.location.kind, root.location.value));
             color: Theme.text-dim;
             font-size: Theme.font-body;
             wrap: word-wrap;
@@ -55,16 +58,16 @@ export component ServiceSettings inherits Window {
         }
         HorizontalLayout {
             spacing: 5px;
-            Text {
-                text: root.status-text;
+            StatusText {
+                status: root.status;
                 color: Theme.text-list;
                 font-size: Theme.font-body;
                 vertical-alignment: center;
                 overflow: elide;
                 horizontal-stretch: 1;
             }
-            Button { text: "测试"; enabled: !root.busy; clicked => { root.test(root.key-text, root.user-text, root.password-text); } }
-            Button { text: "保存"; enabled: !root.busy; clicked => { root.save(root.key-text, root.user-text, root.password-text); } }
+            Button { text: @tr("Test"); enabled: !root.busy; clicked => { root.test(root.key-text, root.user-text, root.password-text); } }
+            Button { text: @tr("Save"); enabled: !root.busy; clicked => { root.save(root.key-text, root.user-text, root.password-text); } }
         }
     }
 }

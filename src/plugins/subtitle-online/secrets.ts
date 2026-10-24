@@ -7,10 +7,9 @@ import type { Secrets as Store, SystemInfo } from "@vestra-player/sdk";
 
 export type SecretName = "opensubtitles-api-key" | "opensubtitles-password" | "assrt-token";
 
-const STORES: Partial<Record<SystemInfo["os"], string>> = {
-  macos: "macOS 钥匙串",
-  windows: "Windows 凭据管理器",
-};
+/** Where secrets are kept; the windows name it (ui/messages.slint `Messages.location`). */
+export type Location = { kind: "macos" | "windows" | "system" | "file" | "memory"; value: string };
+const STORES: Partial<Record<SystemInfo["os"], Location["kind"]>> = { macos: "macos", windows: "windows" };
 /** The system has no usable store: fall back to the file (or this run). */
 const noStore = (e: unknown) => {
   const code = (e as { code?: string })?.code;
@@ -34,10 +33,10 @@ export class Secrets {
     this.#id = id;
     this.#store = store;
   }
-  /** Where secrets are kept, for the settings window. */
-  get location() {
-    if (this.#store) return `${STORES[this.#os] ?? "系统密钥存储"}（${this.#id}）`;
-    return this.#file ? `${this.#file}（仅本人可读）` : "仅本次运行";
+  /** Where secrets are kept, for the settings windows. */
+  get location(): Location {
+    if (this.#store) return { kind: STORES[this.#os] ?? "system", value: this.#id };
+    return this.#file ? { kind: "file", value: this.#file } : { kind: "memory", value: "" };
   }
   async get(name: SecretName): Promise<string> {
     if (this.#store) {
