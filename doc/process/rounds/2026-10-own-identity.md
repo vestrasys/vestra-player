@@ -35,3 +35,7 @@
   - [x] SDK：1.4.0（`ThemeId` 只剩 `"vestra"`），PR vestrasys/vestra-player-sdk#10，待合并、打 tag 发版
   - [ ] 发版后播放器升级依赖（`npm install @vestra-player/sdk@1.4.0`），`test:sdk` 的 Slint 一致性检查在此之前对 1.3.0 不通过
 - [ ] C 历史改写（播放器、SDK）
+
+## 记录
+
+- 2026-10-22：用户考虑过把 SDK 和插件仓库设为私有（担心公开的 API 暴露架构、被人抢先发布）。评估：要订 Team，还要把插件包改放 Pages、去掉 npm 来源证明和插件包证明、收紧 CI 矩阵；npm 上 1.0.0–1.3.0 已公开，收不回。**用户决定暂不处理私有化**，两个仓库保持公开。
