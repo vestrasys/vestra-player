@@ -28,7 +28,7 @@ export function fileName(source: string | null) {
   return source.split(/[\\/]/).filter(Boolean).at(-1) ?? source;
 }
 
-/** The overlay text (ui-alignment §9.2): one fact per line, Chinese labels. */
+/** The overlay text (ui-spec §9.2): one fact per line, Chinese labels. */
 export function describe(state: PlayerState, stats: PlaybackStats) {
   const { video, audio } = stats;
   const size = video?.width && video?.height ? `${video.width}×${video.height}` : "-";

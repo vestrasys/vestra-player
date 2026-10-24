@@ -83,7 +83,7 @@ export class SeekbarMarks {
     return this.#settings.showOnSeekbar;
   }
 
-  /** The menu switch (reference player S:3870). */
+  /** The menu switch. */
   toggle() {
     const show = !this.shown;
     this.#settings.setShowOnSeekbar(show);

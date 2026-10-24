@@ -42,7 +42,7 @@ import type { DeinterlaceMode, DeinterlaceOutput, Fit, Frame, FrameCount, Look, 
 
 type Color = "brightness" | "contrast" | "saturation" | "hue" | "gamma";
 const colors: readonly Color[] = ["brightness", "contrast", "saturation", "hue", "gamma"];
-/** Keyboard steps (reference player W/E, R/T, Y/U; 色调 I/O): label, field, keys for −1 and +1, menu order. */
+/** Keyboard steps (W/E, R/T, Y/U; 色调 I/O): label, field, keys for −1 and +1, menu order. */
 const steps: readonly [string, Color, string, string, number][] = [
   ["亮度", "brightness", "W", "E", 442],
   ["对比度", "contrast", "R", "T", 444],
@@ -796,7 +796,7 @@ export default async function activate(plugin: Plugin) {
   ];
   for (const [id, title, dx, dy] of positions)
     commands.add({ id: `video.reframe.${id}`, path: ["视频", "裁剪/拉伸", title], order: 405, group: "video-reframe-position", repeat: id !== "reset", run: () => move(dx, dy) });
-  // 406 帧位 (E13): reference player's keypad keys plus mpv-style Alt keys for keyboards without one.
+  // 406 帧位 (E13): keypad keys plus mpv-style Alt keys for keyboards without one.
   const frameCommand = (id: string, title: string, group: string, bindings: string[], run: () => void, repeat = true) =>
     commands.add({ id: `video.frame.${id}`, path: ["视频", "帧位", title], order: 406, group, bindings, repeat, run });
   frameCommand("reset", "帧位复位", "video-display", ["Numpad5", "Alt+Backspace"], () => resetFrame(false), false);
@@ -860,7 +860,7 @@ export default async function activate(plugin: Plugin) {
       checked: () => look.geometry.rotate === degrees,
       run: () => rotate(degrees),
     });
-  // 440–449 the window and reference player's colour keys.
+  // 440–449 the window and the colour keys.
   commands.add({ id: "video.picture", path: ["视频", "画面调节…"], order: 440, group: "video-color", run: () => showWindow() });
   commands.add({ id: "video.reset", path: ["视频", "复位"], order: 441, group: "video-color", bindings: ["Q"], run: reset });
   for (const [label, field, down, up, order] of steps) {

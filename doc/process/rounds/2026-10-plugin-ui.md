@@ -1,10 +1,10 @@
 # 本轮任务：插件交互改版（第二步，自下而上）
 
-分支：`rebuild/plugin-ui`（自 `rebuild/core-ui` 8c1a53e）。流程按[社区工作流](../community-workflow.md) §2、§4（自下而上）。每个作者开工前读完：本文、社区工作流 §1、§2、§4、§8，[界面整改文档](../../product/ui-alignment.md) §2、§6、§8、§9 和与自己插件相关的小节（§11 列出各插件的整改项），[API 参考](../../plugins/reference.md)，[核心界面设计](../../architecture/core-ui-design.md) §2–§12。
+分支：`rebuild/plugin-ui`（自 `rebuild/core-ui` 8c1a53e）。流程按[社区工作流](../community-workflow.md) §2、§4（自下而上）。每个作者开工前读完：本文、社区工作流 §1、§2、§4、§8，[界面整改文档](../../product/ui-spec.md) §2、§6、§8、§9 和与自己插件相关的小节（§11 列出各插件的整改项），[API 参考](../../plugins/reference.md)，[核心界面设计](../../architecture/core-ui-design.md) §2–§12。
 
 ## 1. 目标
 
-各插件按整改文档 §11 改版交互与外观，对齐参考播放器。核心第一步已完成，所需公共能力原则上都已具备：绑定表（`bindings`、`focus`、`repeat`）、自由菜单（`path` 可省略、`order`、`group`、`radio`）、主题与控件库（`@vestra/theme.slint`、`@vestra/widgets.slint` 的 Button、Slider、ToolTipArea）、屏幕提示 `plugin.osd.show`、播放序列 `player.next/previous`、面板状态与分离 `plugin.panels.*`、面板右键菜单 `panel.showMenu`。
+各插件按整改文档 §11 改版交互与外观。核心第一步已完成，所需公共能力原则上都已具备：绑定表（`bindings`、`focus`、`repeat`）、自由菜单（`path` 可省略、`order`、`group`、`radio`）、主题与控件库（`@vestra/theme.slint`、`@vestra/widgets.slint` 的 Button、Slider、ToolTipArea）、屏幕提示 `plugin.osd.show`、播放序列 `player.next/previous`、面板状态与分离 `plugin.panels.*`、面板右键菜单 `panel.showMenu`。
 
 ## 2. 规则
 
@@ -12,7 +12,7 @@
 - 按整改文档的目标值做；文档里标「未知」的项用文档给的暂定值。
 - 用现有接口做不到时，先自己想插件内的做法；仍做不到，就在报告的「API 请求」一节按社区工作流 §4.1 写请求（附最小复现与希望的写法），**跳过这一项继续做其它项**。协调者转给 API 维护者，维护者从严把关，可能给出现有接口的写法而不改核心。
 - 菜单位置与快捷键严格按 §3 的分配表，避免插件之间冲突；需要表外的项，在报告中说明并取表内未用的号段。
-- 不用参考播放器的图片素材；图标用 Slint `Path` 自绘。
+- 不用任何外部图片素材；图标用 Slint `Path` 自绘。
 - 颜色、字号、控件尺寸用 `Theme`，不写死颜色（主题未覆盖的特殊色可在报告中说明）。
 - 测试：原有测试覆盖的行为若因改版改变，更新测试；新交互补测试。
 - 完成条件：`npm run plugin -- check|build|test <名字>` 全部通过；报告列出完成的整改项编号、未完成项与原因、API 请求。

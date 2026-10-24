@@ -4,7 +4,7 @@ import type { Chapter, Player, PlayerState } from "@vestra-player/sdk";
 export const hasMedia = (state: PlayerState) =>
   state.kind === "media" && (state.phase === "ready" || state.phase === "ended") && state.source !== null;
 
-/** A chapter's name: its title, `章节 N` when it has none (reference player S:1196). */
+/** A chapter's name: its title, `章节 N` when it has none. */
 export const chapterName = (chapter: Chapter, index: number) => chapter.title?.trim() || `章节 ${index + 1}`;
 
 /**

@@ -1,7 +1,7 @@
 import type { AudioNode, AudioTrack } from "@vestra-player/sdk";
 
 export const bands = [60, 170, 350, 1000, 3500, 10000] as const;
-/** 晶化 (reference player crystalizer, our 3 kHz treble shelf): a switch plus a remembered strength. */
+/** 晶化 (crystalizer, a 3 kHz treble shelf): a switch plus a remembered strength. */
 export type Clarity = { on: boolean; db: number };
 /** G05 声道: routing on a stereo mix; `stereo` leaves the track as it is. */
 export const channelModes = [
@@ -12,7 +12,7 @@ export const channelModes = [
   { id: "swap", label: "左右互换" },
 ] as const;
 export type ChannelMode = (typeof channelModes)[number]["id"];
-/** `equalizer: false` bypasses the bands but keeps their gains (参考播放器均衡器 Shift+E). */
+/** `equalizer: false` bypasses the bands but keeps their gains (均衡器, Shift+E). */
 export type Settings = {
   equalizer: boolean;
   gains: number[];
@@ -57,7 +57,7 @@ export function clamp(value: unknown, min: number, max: number) {
 export const delay = (value: unknown) => Math.round(clamp(value, -DELAY_LIMIT, DELAY_LIMIT) / 10) * 10;
 export const tenth = (value: unknown, min: number, max: number) => Math.round(clamp(value, min, max) * 10) / 10;
 
-/** OSD wording (reference player strings 1724「音频同步：%g秒」): "音频同步: -0.05秒". */
+/** OSD wording: "音频同步: -0.05秒". */
 export const syncText = (ms: number) => `音频同步: ${ms > 0 ? "+" : ms < 0 ? "-" : ""}${Math.abs(ms) / 1000}秒`;
 
 /** True when the equalizer gains equal the preset's (menu check mark). */

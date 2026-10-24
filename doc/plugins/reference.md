@@ -757,7 +757,7 @@ interface SlotState {
 - 插件 → 界面用 `in` / `in-out property`，界面 → 插件用 `callback`。回调参数和属性值必须能用 JSON 表示（基本类型、数组、结构体），回调返回 `void`。
 - 会被插件改值的输入控件用双向绑定（`value <=> root.x`、`checked <=> root.x`）。单向的 `value: root.x` 在用户操作控件后会断开，之后插件改值，控件不会跟着动。属性须为 `in-out`。
 - `in` 属性只能单向绑定时，用 `changed x => { slider.value = root.x; }` 在模型变化时回推。
-- 主题与控件：`import { Theme } from "@vestra/theme.slint";` 提供颜色（由播放器按当前配色下发，§6.8；插件只读，不能给 `Theme` 赋值，硬编码颜色不会随配色变化）（`bg-bar`、`bg-panel`、`text`、`accent`、`playing`、`danger`（错误与危险操作：失败状态、删除按钮；播放器 0.3.0，SDK 1.3）…）、字号（`font-xs` 9px、`font-body` 11px、`font-tab` 12px、`font-title` 13px、`font-mono` 等宽字体名（由播放器按系统设置：macOS Menlo、Windows Consolas、Linux DejaVu Sans Mono；其中的中文按系统字体回退显示））和控件尺寸（`button-height` 21px、`input-height`、`form-row-gap`、`dialog-padding`…），完整列表见 `src/host/ui/vestra/theme.slint`。`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";` 提供参考播放器样式的按钮（文字按钮 21px、`small` 18px；`text` 为空时是图标按钮：`icon` 是 Slint `Path` 的路径数据，画在 `icon-width` × `icon-height`（默认 14×12）的 viewbox 里，`stroked: true` 画 1.5px 线而不填充，`checked` 表示开启态；图标按钮的宽高由调用方设置，悬停提示用 `ToolTipArea` 包住：悬停 600ms 显示，指针离开或按下时关闭，下次悬停再显示；只读属性 `showing` 表示提示正在显示）、2px 线滑块（`panel: true` 为面板样式）和悬停提示，以及输入链接组件 `UrlInputRow`（UI-DLG-02：多行输入 + 「打开」「取消」；`in-out property <string> text`、`placeholder`、`confirm-text`（默认「打开」）、`cancel-text`、`enabled`，`callback accepted(string)`（回车或点确定，Shift+回车换行）、`cancelled()`（Esc 或点取消），`focus-input()`、`select-all()` 两个公共函数；不校验地址，校验由插件做；用法见示例 §29）。
+- 主题与控件：`import { Theme } from "@vestra/theme.slint";` 提供颜色（由播放器按当前配色下发，§6.8；插件只读，不能给 `Theme` 赋值，硬编码颜色不会随配色变化）（`bg-bar`、`bg-panel`、`text`、`accent`、`playing`、`danger`（错误与危险操作：失败状态、删除按钮；播放器 0.3.0，SDK 1.3）…）、字号（`font-xs` 9px、`font-body` 11px、`font-tab` 12px、`font-title` 13px、`font-mono` 等宽字体名（由播放器按系统设置：macOS Menlo、Windows Consolas、Linux DejaVu Sans Mono；其中的中文按系统字体回退显示））和控件尺寸（`button-height` 21px、`input-height`、`form-row-gap`、`dialog-padding`…），完整列表见 `src/host/ui/vestra/theme.slint`。`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";` 提供紧凑样式的按钮（文字按钮 21px、`small` 18px；`text` 为空时是图标按钮：`icon` 是 Slint `Path` 的路径数据，画在 `icon-width` × `icon-height`（默认 14×12）的 viewbox 里，`stroked: true` 画 1.5px 线而不填充，`checked` 表示开启态；图标按钮的宽高由调用方设置，悬停提示用 `ToolTipArea` 包住：悬停 600ms 显示，指针离开或按下时关闭，下次悬停再显示；只读属性 `showing` 表示提示正在显示）、2px 线滑块（`panel: true` 为面板样式）和悬停提示，以及输入链接组件 `UrlInputRow`（UI-DLG-02：多行输入 + 「打开」「取消」；`in-out property <string> text`、`placeholder`、`confirm-text`（默认「打开」）、`cancel-text`、`enabled`，`callback accepted(string)`（回车或点确定，Shift+回车换行）、`cancelled()`（Esc 或点取消），`focus-input()`、`select-all()` 两个公共函数；不校验地址，校验由插件做；用法见示例 §29）。
 - 所有插件 Slint 都以 `fluent-dark` 风格编译：std-widgets 的控件默认是深色。每个窗口都用系统默认字体，字体里没有的字（例如西文字体里的中文）由 Slint 按字符回退到系统里有这个字的字体，插件不需要自己设字体；插件写的 `default-font-family` / `font-family` 照常生效，缺字同样回退。播放器不内置界面字体。
 - 编辑器里要让 `@vestra/...` 导入可解析，给 Slint 语言服务设 `libraryPaths`：`{ "vestra": "<仓库>/src/host/ui/vestra" }`。
 
@@ -830,12 +830,14 @@ Panel.onDrop(listener: (e: { paths: string[]; at: { x: number; y: number }; modi
 ### 6.8 外观 `plugin.appearance`
 
 ```ts
-appearance.theme: "vestra" | "classic";                       // 同步只读，不需要能力
-appearance.onChange(listener: (theme: "vestra" | "classic") => void): Disposable; // 需要 events
-appearance.set(theme: "vestra" | "classic"): Promise<void>;    // 需要 ui.theme；其它值 invalid
+appearance.theme: ThemeId;                                      // 同步只读，不需要能力
+appearance.onChange(listener: (theme: ThemeId) => void): Disposable; // 需要 events
+appearance.set(theme: ThemeId): Promise<void>;                  // 需要 ui.theme；SDK 对其它值抛 invalid
+type ThemeId = "vestra";
 ```
 
-- 两套配色固定：`vestra`（默认）与 `classic`（经典配色，强调色 `#fae100`，`accent-fill` 为纯色）。圆角、字号、控件尺寸不随配色变化，没有单独的圆角选项。
+- 配色固定由播放器提供，目前只有 `vestra`（默认）；以后增加的配色（例如浅色）会加入 `ThemeId`，插件不要假定只有一种，用 `Theme` token 而不是比较配色 id。圆角、字号、控件尺寸不随配色变化，没有单独的圆角选项。
+- 播放器不认识的配色 id（例如早期版本有过、现已去掉的配色）一律按 `vestra` 处理：界面状态文件里保存的旧值读成 `vestra`；用旧 SDK 构建的插件发来的旧 id 也按 `vestra` 执行，不报错。
 - 播放器把配色下发到每个视图（主窗口与其中的底栏、侧栏、背景层，浮动侧栏，工具窗口，选项窗口），新开的窗口一开始就是当前配色；`Theme` 的颜色随之变化，插件 Slint 不用改。切换不打断正在拖动的滑块与打开的菜单。单个视图下发失败只写日志，下一个刷新周期重试。
 - 选择由播放器保存（界面状态文件的 `appearance.theme`），调用 `set` 的插件停用后配色保持。`theme` 在激活前随窗口状态读好；有 `events` 时从第一次读 `theme` 或调用 `onChange` 开始跟随别的插件的切换。
 - 屏幕提示「配色：…」由调用方插件自己显示。
@@ -1433,6 +1435,11 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 
 ## 17. 变更说明
 
+### 只保留 Vestra 配色（2026-10，SDK 1.4.0）
+
+- 去掉第二套配色：`ThemeId` 只剩 `"vestra"`（§6.8），「设置 ▶ 外观」只有 Vestra 一项。拿 `appearance.theme` 与已去掉的 id 比较的插件在类型检查时报错（TypeScript 认为两者没有交集），运行时这个比较永远为假；删掉该分支即可。SDK 1.4.0 的 `appearance.set` 对 `"vestra"` 以外的值抛 `invalid`。
+- 兼容：播放器把不认识的配色 id 当作 `vestra`，用旧 SDK 构建、仍会请求旧配色的插件不会失败；保存过旧配色的用户启动后是 Vestra。
+
 ### 滤镜与示例作者发现的缺口（2026-10，播放器 0.3.0，SDK 1.3.0）
 
 新增与修正，原有写法照常可用。用到新增项的插件设 `"minPlayerVersion": "0.3.0"`。
@@ -1441,7 +1448,7 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 - **视频空链**：`video.filter(id).set([])` 删除这条链（之前以 `invalid` 失败，效果留在画面上）。`TestHost` 与播放器一致：空链删除资源，生成流上的非空链 `unsupported`；一致性由 `tests/sdk/host-agreement.test.ts` 按 `host/tests/fixtures/processing-conformance.json` 的用例检查，宿主的 `processing.rs` 跑同一份用例。
 - **生成流上的滤镜**：以 `unsupported` 失败，不再一直 `waiting` 并轮询（§8）。
 - **内置菜单 id**：路径第一段写 `@video`、`@audio` 等（§4），与界面语言无关。SDK 常量 `MENU_IDS`。
-- **`Theme.danger`**：错误与危险操作的颜色（Vestra `#ff5a4a`，参考播放器 `#e04343`；§6.4）。SDK 1.3.0 带同步的 `theme.slint`、`palette.slint`。
+- **`Theme.danger`**：错误与危险操作的颜色（Vestra `#ff5a4a`；§6.4）。SDK 1.3.0 带同步的 `theme.slint`、`palette.slint`。
 - 文档补齐：滤镜需要 `events`（§8）；`openStream` 另需 `playback.control`（§2、§5.2）；生成流的帧大小与采样限制、`onStop` 不为插件自己的 `stop()` 调用（§5.2）；错误码 `staleDigest`、`noSource`、`released`、`disposed`（§13）。
 - SDK：重复的窗口 id、命令 id 抛出 `conflict`（之前是不带 `code` 的 `Error`）；不合规的生成帧以 `invalid` 结束流（之前 `code` 为 `error`）；生成帧发送时只复制一次（之前两次）。
 
@@ -1488,7 +1495,7 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 
 ### 交互对齐轮 A 线：核心行为（2026-10）
 
-依据[交互对齐整改文档](../product/interaction-alignment.md)附录 C 第 1 轮。签名都不变，只改行为与语义；改了语义的条目写明受影响的插件。
+依据[交互规格](../product/interaction-spec.md)，交互整改第 1 轮。签名都不变，只改行为与语义；改了语义的条目写明受影响的插件。
 
 - **全屏侧栏弹出层**（G-01，§6.3）：全屏时附着的侧栏不再「全屏时不可用」，而是收起在右边缘、指针移过去时弹出。`SlotState` 签名不变，语义变化：`reason: "fullscreen"` 改为「全屏覆盖层当前收起」；弹出时 `effective: true`、`reason: null`。全屏中 `setVisible(true)` 立即弹出。受影响：按 `preferred` / `effective` 画侧栏开关按钮的插件（playback 的列表按钮，见整改文档 G-18：`reason === "fullscreen"` 时按「开」显示）；playlist 的 `setInteraction` 在全屏下开始起作用（锁住弹出层），不用改。
 - **右键菜单**（G-03 第一步、G-15、IA-CORE-01；主菜单与 `showMenu` 的面板菜单相同）：右键松开时弹出；某一级比窗口高时，高度等于窗口高，上下各一条 12px 箭头条，指针停在箭头条上每 50ms 滚一行，滚轮按像素滚动，键盘 ↑↓ 移出可见区时自动滚动。指针停在子菜单行上满 400ms（Windows 读系统设置 `SPI_GETMENUSHOWDELAY`）才展开；已有子菜单展开时，停在同级其它行上同样的时间后才切换，期间指针进入已展开的子菜单则不切换；点击与键盘立即展开。Esc 先关最深一级，只剩顶层时才关闭菜单。插件不用改。
@@ -1651,7 +1658,7 @@ await plugin.player.setStepSeek({ seconds: settings.value.step }); // 第 1 档�
 
 默认行为变化（签名不变）：
 
-- **`Theme` 的颜色由播放器下发**：颜色 token 与 `accent-fill` 现在绑定到播放器设置的配色（宿主内部的 `ui/palette.slint`），默认仍是 Vestra 原值，未切换配色时外观与之前完全相同。插件 Slint 读 `Theme` 的写法不用改；`Theme` 的颜色仍是 `out` 属性，插件不能赋值（之前也不能）。切到参考播放器配色后，用硬编码颜色的插件界面不会跟着变，请改用 `Theme` token。
+- **`Theme` 的颜色由播放器下发**：颜色 token 与 `accent-fill` 现在绑定到播放器设置的配色（宿主内部的 `ui/palette.slint`），默认仍是 Vestra 原值，未切换配色时外观与之前完全相同。插件 Slint 读 `Theme` 的写法不用改；`Theme` 的颜色仍是 `out` 属性，插件不能赋值（之前也不能）。切换配色后，用硬编码颜色的插件界面不会跟着变，请改用 `Theme` token。
 - 每个工具窗口的源码末尾由播放器追加一行导出配色的 `export`（插件文件里不要定义名为 `VestraPalette` 的东西）。
 - `window.state` 的答复多了 `appearance`（内部字段）。
 
@@ -1678,7 +1685,7 @@ await plugin.player.setStepSeek({ seconds: settings.value.step }); // 第 1 档�
 
 ### 第 4a 轮修正：命令上限（2026-10）
 
-- 命令数量上限从每插件 64 / 全部 512 提到每插件 160 / 全部 1024（§4）。video 插件第 2、4a 轮的参考播放器式菜单已注册 71 条，在真实播放器里激活失败（`command registry limit reached`），而 `TestHost` 没有执行上限，插件测试没有发现。
+- 命令数量上限从每插件 64 / 全部 512 提到每插件 160 / 全部 1024（§4）。video 插件第 2、4a 轮的完整菜单已注册 71 条，在真实播放器里激活失败（`command registry limit reached`），而 `TestHost` 没有执行上限，插件测试没有发现。
 - `TestHost` 现在执行与播放器相同的上限；新增常量 `COMMAND_LIMITS`（`sdk/commands.ts`），SDK 测试校验它与播放器一致。
 - 签名不变；超出上限的错误码仍是 `limit`（之前未写入 §13，现补上）。
 

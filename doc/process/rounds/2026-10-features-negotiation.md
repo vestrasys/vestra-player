@@ -60,7 +60,7 @@
 - **初判**：拟接受（随 H1 一起做）
 - **替代方案（已考虑）**：
   - 让 playback 不用核心的 ←/→，自己再注册第 1 档命令并抢绑定：与 H1「卸载 playback 后 ←/→ 仍可用」的目标冲突，两个命令争同一键还要靠加载顺序裁决。
-  - 降低需求：第 1 档固定 5 秒，B06 只开放第 2–4 档。代价是参考播放器用户最常调的就是第 1 档。
+  - 降低需求：第 1 档固定 5 秒，B06 只开放第 2–4 档。代价是用户最常调的就是第 1 档。
 - **理由**：〔核心职责〕H1 把 ←/→ 交给核心之后，步长就是核心动作的参数；只有核心能改它。设置仍由 playback 保存，核心不持久化。
 - **约束**：「调用插件停用后恢复 5 秒」沿用滤镜的撤销规则（每个作用都记在调用者名下）；多个插件调用时最后写入生效。
 - **核心体积影响**：极小。一个数字状态与撤销钩子。
@@ -246,7 +246,7 @@
 - **初判**：拟改写（只加一个节点）
 - **替代方案**：降低需求：「锐化」与「边缘锐化」用同一种滤镜的两组参数实现。
 - **改写建议**：只加 `{ kind: "sharpen"; amount: number; size: "small" | "large" }` → FFmpeg `unsharp`（`size` 决定 `luma_msize_x/y` 3 或 7；`amount` 映射到 `luma_amount`，0–2）。「锐化」用 `small`，「边缘锐化」用 `large`（大窗口的 unsharp 主要增强轮廓）。不加 `cas`。
-- **代价**：参考播放器的「边缘锐化」算法不同，观感有差别；作者如能给出对比截图说明 `unsharp` 大窗口在用户层面明显达不到效果，再考虑 `cas`。
+- **代价**：与专门的边缘锐化算法观感有差别；作者如能给出对比截图说明 `unsharp` 大窗口在用户层面明显达不到效果，再考虑 `cas`。
 - **理由**：〔宿主〕；但两个节点对一个功能是不必要的扩张。
 - **核心体积影响**：极小。
 
@@ -283,7 +283,7 @@
 - **请求方**：video E10
 - **初判**：拟改写（参数收窄）
 - **替代方案**：全局 mpv `deinterlace` 属性不随插件生命周期撤销，不适合作为插件效果；插件内没有替代。
-- **改写建议**：`{ kind: "deinterlace"; when: "interlaced" | "all"; output: "frame" | "field" }`，算法固定 `bwdif`。去掉 `method` 选项（`yadif` 是 `bwdif` 的前代，画质不如后者，两种都提供只是对照参考播放器菜单）。
+- **改写建议**：`{ kind: "deinterlace"; when: "interlaced" | "all"; output: "frame" | "field" }`，算法固定 `bwdif`。去掉 `method` 选项（`yadif` 是 `bwdif` 的前代，画质不如后者，两种都提供没有必要）。
 - **理由**：〔宿主〕。
 - **核心体积影响**：极小。
 
@@ -314,7 +314,7 @@
   - 降低需求：只做裁剪/拉伸（E12），不做显示层。代价是丢掉宽高比覆盖、填满窗口、缩放平移整组功能。
   这些是 mpv vo 级属性，插件内确实没有办法。
 - **改写建议**：
-  - 字段收窄为 `aspect: number | null`、`fit: "keep" | "stretch" | "fill"`、`zoom`、`panX`、`panY`。去掉 `scaleX` / `scaleY`（参考播放器的「帧宽 / 帧高 ±」是很少用的边缘功能；需要时用 `aspect` 达到同样的变形）。E13 相应删掉帧宽、帧高四条命令。
+  - 字段收窄为 `aspect: number | null`、`fit: "keep" | "stretch" | "fill"`、`zoom`、`panX`、`panY`。去掉 `scaleX` / `scaleY`（「帧宽 / 帧高 ±」是很少用的边缘功能；需要时用 `aspect` 达到同样的变形）。E13 相应删掉帧宽、帧高四条命令。
   - 所有权改为**单一拥有者**，与 `provideSequence` 相同：第一个调用 `view()` 的插件拥有它，第二个以 `conflict` 失败；拥有者停用时核心恢复默认。不做「多插件合并、最后写入生效」，省掉字段级的归属记录。
   - 状态沿用 `FilterStatus` 四态。
   - 前提 C-SIZE（H2）。C-SIZE 之前不开放此接口，避免发布一个结果错误的 API（需求文档已说明不在 16:9 窗口里结果是错的）。
@@ -588,7 +588,7 @@
   ```
 - **代价**：新插件加载后、hotkeys 收到 `onChange` 补写之前，有一个很短的窗口默认键会生效；hotkeys 自己被停用时开关失效（但覆盖层仍在，键仍被忽略，状态与菜单勾选一致需要 hotkeys 启动时校对）。
 - **反驳所需证据**：说明用户在什么具体场景下会碰到那个竞态窗口并造成可见问题。
-- **理由**：单个插件的单个开关；它是参考播放器的冷门设置，四条条件只有〔宿主〕勉强沾边，而替代方案在用户层面几乎等价。
+- **理由**：单个插件的单个开关；它是冷门设置，四条条件只有〔宿主〕勉强沾边，而替代方案在用户层面几乎等价。
 - **核心体积影响（若接受）**：小（裁决时一个分支加一个持久字段）。
 
 ### R-K3 可绑定输入 `Mouse:LeftClick`
@@ -623,7 +623,7 @@
 - **替代方案**：插件无法改别的插件窗口的 `Theme`，没有替代；或者降低需求，不做配色切换（只有一套配色）。
 - **改写建议**：
   - `plugin.appearance: { readonly theme: string; onChange(listener); set(theme: string): Promise<void> }`，`set` 需 `ui.theme`。
-  - 去掉 `themes` 列表与 `preview` 元数据：配色表在核心，固定两套 id（`vestra`、`classic`），写进参考文档；preferences 的预览块用自己的 Slint 画（预览只是三块颜色）。以后真有可扩展配色再加列表。
+  - 去掉 `themes` 列表与 `preview` 元数据：配色表在核心，固定两套 id（`vestra` 与第二套配色；第二套后已删除），写进参考文档；preferences 的预览块用自己的 Slint 画（预览只是三块颜色）。以后真有可扩展配色再加列表。
   - 去掉独立的 `corners`：圆角跟随配色，不单独可调（降低需求）。
   - 选择由核心持久化（它影响宿主自己的界面，属于核心状态）。
 - **理由**：〔共享〕Theme 是所有视图共享的全局；〔宿主〕宿主界面也要跟着变。
@@ -698,7 +698,7 @@
 
 - **请求方**：video E13
 - **初判**：拟接受
-- **替代方案**：只用备用键（Alt+Plus、Alt+方向键等），不支持小键盘。代价：外接键盘用户用不了参考播放器习惯的小键盘布局，且现在 `"5"` 与小键盘 5 的匹配关系不确定。
+- **替代方案**：只用备用键（Alt+Plus、Alt+方向键等），不支持小键盘。代价：外接键盘用户用不了习惯的小键盘布局，且现在 `"5"` 与小键盘 5 的匹配关系不确定。
 - **约束**：宿主已在 winit 层拿到 `PhysicalKey`（`main.rs` 的 `KeyboardInput`），把 `Numpad*` 物理键映射为独立输入名；主键盘数字不匹配 `Numpad*`，`Numpad*` 也不匹配主键盘数字。与 H5 同一处改动。
 - **理由**：〔核心职责〕绑定语法属于核心；〔通用〕任何插件都可以用小键盘名。
 - **核心体积影响**：小。
@@ -707,7 +707,7 @@
 
 - **请求方**：所有含 Alt 的默认绑定（多个插件）
 - **初判**：拟接受（按缺陷处理，§4.2 第 1 条）
-- **替代方案**：插件改用不含 Alt 的默认键：大量参考播放器默认键无法沿用，各插件各自找替代键还会互相冲突。
+- **替代方案**：插件改用不含 Alt 的默认键：大量参考播放器的默认键无法沿用，各插件各自找替代键还会互相冲突。
 - **理由**：这是**现有契约的缺陷**：参考文档 §4.1 允许 `Alt+…` 绑定，而 `from_slint_key` 按 `event.text` 识别，Option+键在 macOS 上打出别的字符或死键，绑定根本不触发。按缺陷修，不需要作者论证。修法：识别时并入 winit `PhysicalKey`（与 H4 同一处）；同时核实 `Ctrl+[` 以 `\u{1b}` 到达被误认成 `Ctrl+Escape` 的问题。
 - **核心体积影响**：小。
 
@@ -715,7 +715,7 @@
 
 - **请求方**：preferences H10
 - **初判**：拟改写（随 R-S2 收窄）
-- **改写建议**：只把颜色 token 改为 `in property`；`radius-*` 保持常量（R-S2 已去掉独立圆角，参考播放器配色也沿用 Vestra 圆角，降低需求）。宿主在每个窗口、面板、菜单实例创建时和配色变化时下发；两套配色表放在宿主。
+- **改写建议**：只把颜色 token 改为 `in property`；`radius-*` 保持常量（R-S2 已去掉独立圆角，第二套配色也沿用 Vestra 圆角，降低需求）。宿主在每个窗口、面板、菜单实例创建时和配色变化时下发；两套配色表放在宿主。
 - **替代方案**：不做配色切换。
 - **理由**：〔共享〕Theme 被所有视图共享。
 - **核心体积影响**：中（所有视图实例的下发路径，含面板重建与浮动窗口）。
@@ -999,7 +999,7 @@
 **设置与外观**
 
 - **R-S1 `settings.page`**：接受，440px 宽与需求文档一致。hotkeys J01 的三列表格按 440px 重新排布（命令 220、快捷键 140、状态 60）。
-- **R-S2 `appearance`**：接受：去掉 `themes` 列表与 `corners`，固定 `vestra`、`classic` 两个 id。preferences 的预览块自己画。
+- **R-S2 `appearance`**：接受：去掉 `themes` 列表与 `corners`，固定两个 id（`vestra` 与第二套配色，后者后已删除）。preferences 的预览块自己画。
 - **R-H6 Theme 下发**：接受，圆角保持常量。
 - **R-H7 选项容器窗口**：接受。
 
@@ -1107,7 +1107,7 @@
 | R-K2 忽略默认键 | 拒绝+替代 | 不加接口；hotkeys 用 K1 写空覆盖并在 `ignore-defaults.json` 记录自己写过的条目 | — |
 | R-K3 左键单击 | 接受 | 可绑定输入 `Mouse:LeftClick` | 3a |
 | R-S1 设置页 | 改写后接受 | `plugin.settings.page(file, { id; category: SettingsCategory; title; order? }): View & Disposable & { ready }`；`plugin.settings.show(pageId?)`；能力 `ui.settings` | 3b |
-| R-S2 外观 | 改写后接受 | `plugin.appearance: { readonly theme: "vestra" \| "classic"; onChange(listener); set(theme): Promise<void> }`；`set` 需 `ui.theme` | 3b |
+| R-S2 外观 | 改写后接受 | `plugin.appearance: { readonly theme: ThemeId; onChange(listener); set(theme): Promise<void> }`；`set` 需 `ui.theme` | 3b |
 | R-G1 插件列表 | 改写后接受 | `plugin.packages.list(): Promise<PluginInfo[]>`、`onChange`（不需能力）；`PluginInfo { id; version; origin; state; error; capabilities; directory; previousVersion }` | 3a |
 | R-G2 停用启用 | 接受 | `packages.setEnabled(id: string, enabled: boolean): Promise<void>`（需 `plugins.manage`） | 3a |
 | R-G3 卸载 | 接受 | `packages.uninstall(id: string, options?: { removeData?: boolean }): Promise<PackageChange>` | 3a |

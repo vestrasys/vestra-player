@@ -1,6 +1,6 @@
 import type { JsonStore, Scope } from "@vestra-player/sdk";
 
-/** H05 / IA-WIN-03: the four reference player modes, in `OnTopMode` order (0–3), which is also Ctrl+T's cycle. */
+/** H05 / IA-WIN-03: the four modes, in `OnTopMode` order (0–3), which is also Ctrl+T's cycle. */
 export type OnTop = "never" | "always" | "playing" | "fullscreen";
 export const ON_TOP: readonly OnTop[] = ["never", "always", "playing", "fullscreen"];
 
@@ -15,7 +15,7 @@ export interface Settings {
   autoSize: AutoSize;
   autoSizeOnce: boolean;
 }
-/** reference player's defaults: `OnTopMode=3`, `AutoHideMouse=1`, `PlayScreenSize=2` (1.0x), `PlayScreenSizeFirst=0`. */
+/** The defaults: `OnTopMode=3`, `AutoHideMouse=1`, `PlayScreenSize=2` (1.0x), `PlayScreenSizeFirst=0`. */
 export const DEFAULTS: Settings = { onTop: "fullscreen", hideCursorWhilePlaying: true, autoSize: 1, autoSizeOnce: false };
 
 /** Delays, in milliseconds; tests shorten them. */
