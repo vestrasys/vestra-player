@@ -191,15 +191,14 @@ export class Toolchain {
     return (this.version ??= (JSON.parse(readFileSync(path.join(this.sdk, "package.json"), "utf8")) as { version: string }).version);
   }
 
-  /** The read-only folders the agent may read: the SDK package and the generated reference. */
+  /** The read-only folders the agent may read: the SDK package, which carries the reference. */
   docsRoots(): string[] {
-    return [this.sdk, path.join(this.packageDir, "knowledge")].filter((dir) => existsSync(dir));
+    return [this.sdk];
   }
 
-  /** llms.txt: the SDK's own when it ships one, else the generated one. */
+  /** The SDK's llms.txt (llms-full.txt is next to it). */
   docsIndex(): string {
-    const own = path.join(this.sdk, "llms.txt");
-    return existsSync(own) ? own : path.join(this.packageDir, "knowledge", "llms.txt");
+    return path.join(this.sdk, "llms.txt");
   }
 
   /** <data>/node_modules: the SDK and its types where the projects resolve them. */
@@ -290,12 +289,37 @@ export class Toolchain {
     return { ...baseEnvironment(), NODE_PATH: this.vendor, TMPDIR: tmp, TMP: tmp, TEMP: tmp, NO_COLOR: "1", FORCE_COLOR: "0" };
   }
 
+  /**
+   * The type check (`vestra-plugin check`) runs under Node's permission model:
+   * it reads this plugin's package (vendor/ holds the CLI and its TypeScript;
+   * Node's resolver also reads the node_modules/ it meets on the way up to
+   * NODE_PATH, which a development checkout has), the SDK copy, the project
+   * and the session's tsconfig.json, and writes only its scratch folder; no
+   * network, workers, addons or WASI. Child processes are allowed because the
+   * type checker is one (`tsc`, this Node), and Node passes the same flags on
+   * to it (NODE_OPTIONS). The only other child the CLI starts is `npm ci` for
+   * dependencies, which packageProblems() refuses before.
+   *
+   * build and pack do not, yet: they copy files with fs.cp, which under the
+   * permission model stats every folder above the destination up to the
+   * file system root (Node's checkParentPaths) for a file in a subfolder
+   * (ui/main.slint), and fails. They run the same check first, on the same
+   * fixed arguments.
+   */
+  private async confined(directory: string, session: SessionPaths, tmp: string): Promise<string[]> {
+    const read = [await fs.realpath(this.packageDir), await fs.realpath(path.join(this.dataDir, "node_modules")), directory, tmp];
+    const config = path.join(await fs.realpath(session.dir), "tsconfig.json");
+    if (existsSync(config)) read.push(config);
+    return ["--permission", ...read.map((p) => `--allow-fs-read=${p}`), `--allow-fs-write=${tmp}`, "--allow-child-process"];
+  }
+
   private async cli(command: string, directory: string, session: SessionPaths, extra: string[], signal?: AbortSignal): Promise<RunResult> {
     const tmp = await this.prepare(session);
     try {
       // Trusted code on fixed arguments; it never runs the project's code
-      // (bundling and npm installs are refused before, see rules()).
-      return await runNode([path.join(this.sdk, "bin", "vestra-plugin.mjs"), command, directory, ...extra], {
+      // (bundling and npm installs are refused before, see packageProblems()).
+      const permissions = command === "check" ? await this.confined(directory, session, tmp) : [];
+      return await runNode([...permissions, path.join(this.sdk, "bin", "vestra-plugin.mjs"), command, directory, ...extra], {
         cwd: directory,
         env: this.cliEnvironment(tmp),
         timeoutMs: TIMEOUTS[command as keyof typeof TIMEOUTS] ?? 120_000,
@@ -343,16 +367,7 @@ export class Toolchain {
     const prefix = id.split(".")[0].toLowerCase();
     if (owner && prefix !== owner) warnings.push(`id 前缀「${prefix}」和设置里的 GitHub 用户名「${owner}」不一致；发布前改成 ${owner}.<名字>`);
     if (!owner && prefix === LOCAL_OWNER) warnings.push("id 以 local. 开头：只适合在本机用。要发布，先在设置里填 GitHub 用户名，再把 id 改成 <用户名>.<名字>");
-    if (existsSync(path.join(directory, "package.json"))) {
-      try {
-        const pkg = JSON.parse(await fs.readFile(path.join(directory, "package.json"), "utf8"));
-        const deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies, ...pkg.optionalDependencies, ...pkg.peerDependencies });
-        if (deps.length) errors.push(`package.json 里不要写依赖（${deps.join("、")}）：这里只能用 Node 内置模块和插件 SDK；导出源码时会自动加上 @vestra-player/sdk`);
-        if (pkg.vestra?.bundle) errors.push("package.json 的 vestra.bundle 不可用（没有 esbuild）");
-      } catch (error) {
-        errors.push(`package.json 不是有效的 JSON：${(error as Error).message}`);
-      }
-    }
+    errors.push(...(await packageProblems(directory)));
     if (!(await testFiles(directory)).length) warnings.push("tests/ 里没有 *.test.ts 测试");
     return { errors, warnings };
   }
@@ -383,6 +398,9 @@ export class Toolchain {
   typecheck(session: SessionPaths, id: string, signal?: AbortSignal): Promise<ToolResult> {
     return this.locked(id, async () => {
       const directory = await this.project(session, id);
+      // The CLI would start `npm ci` for dependencies.
+      const problems = await packageProblems(directory);
+      if (problems.length) return result(false, `类型检查前的检查未通过：${problems.length} 个问题`, { problems });
       const run = await this.cli("check", directory, session, [], signal);
       const stop = this.stopped(run, "类型检查");
       if (stop) return stop;
@@ -568,6 +586,21 @@ async function testFiles(directory: string): Promise<string[]> {
       .map((file) => path.join("tests", file));
   } catch {
     return [];
+  }
+}
+
+/** package.json: no npm dependencies (the CLI would install them) and no bundling (no esbuild here). */
+async function packageProblems(directory: string): Promise<string[]> {
+  if (!existsSync(path.join(directory, "package.json"))) return [];
+  try {
+    const pkg = JSON.parse(await fs.readFile(path.join(directory, "package.json"), "utf8"));
+    const problems: string[] = [];
+    const deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies, ...pkg.optionalDependencies, ...pkg.peerDependencies });
+    if (deps.length) problems.push(`package.json 里不要写依赖（${deps.join("、")}）：这里只能用 Node 内置模块和插件 SDK；导出源码时会自动加上 @vestra-player/sdk`);
+    if (pkg.vestra?.bundle) problems.push("package.json 的 vestra.bundle 不可用（没有 esbuild）");
+    return problems;
+  } catch (error) {
+    return [`package.json 不是有效的 JSON：${(error as Error).message}`];
   }
 }
 

@@ -118,6 +118,13 @@ export interface FakeProducer {
     /** `true` once the plugin released the producer (stream stopped or disposed). */
     released: boolean;
     /**
+     * `true` once the player retired the producer, as the real player does at
+     * once: another source replaced it (`open`, another stream, a resolved
+     * file), the source was closed, or {@link TestHost.failStream} failed it.
+     * A retired producer's `producer.state` answers `unavailable`.
+     */
+    retired: boolean;
+    /**
      * `true` if the frame connection closed while this stream was still the
      * player's source: the player reports that as a playback failure
      * ("producer transport closed"). `stop()` closes the source first.
@@ -767,6 +774,27 @@ export declare class TestHost implements Transport {
         hosts?: string[];
     }[];
     /**
+     * What `plugin.resolvers.fileTypes` reports: the extensions of this
+     * plugin's file resolvers and of {@link TestHost.otherResolvers}, sorted,
+     * each once.
+     */
+    fileTypes(): string[];
+    /**
+     * Push `resolvers.fileTypes` when {@link TestHost.fileTypes} changed:
+     * called after this plugin's resolvers come and go; call it yourself
+     * after changing {@link TestHost.otherResolvers} (another plugin started
+     * or stopped).
+     *
+     * @example
+     * ```ts
+     * host.otherResolvers.push({ owner: "vestra.nes", extensions: ["nes"] });
+     * host.updateFileTypes();
+     * await host.settle();
+     * assert.deepEqual(plugin.resolvers.fileTypes, ["nes"]);
+     * ```
+     */
+    updateFileTypes(): void;
+    /**
      * File opens waiting for this plugin's file resolver (`extensions`), by
      * request id: the path and how it was opened. Opening a matching path
      * (`player.open`, {@link TestHost.openElsewhere}) sends
@@ -1026,6 +1054,22 @@ export declare class TestHost implements Transport {
      */
     openElsewhere(source: string, phase?: SourceState["phase"]): void;
     /**
+     * Simulate a generated stream failing in the player (its audio device
+     * lost, its frame connection broken), like the player: the source fails
+     * with `message` (`phase: "error"`) and the producer is retired at once.
+     * The stream's `onStop` listeners get a `stream` error with `message`.
+     *
+     * @param producerId - The producer, from {@link TestHost.producers}.
+     * @param message - The player's failure text.
+     *
+     * @example
+     * ```ts
+     * const [producer] = host.producers.values();
+     * host.failStream(producer.id, "producer transport closed");
+     * ```
+     */
+    failStream(producerId: number, message: string): void;
+    /**
      * Press a binding like the host's table would: panel-focus bindings first
      * when `panel` is true, then global ones; the earliest registration wins a
      * conflict. Resolves after the command ran; rejects when nothing is bound
@@ -1072,7 +1116,7 @@ export declare class TestHost implements Transport {
         /** Its version, `null` when unknown. */
         version: string | null;
         /** Where it was loaded from. */
-        origin: "installed" | "development" | "trial";
+        origin: "installed" | "development";
         /** Its run state. */
         state: "starting" | "running" | "disabled" | "failed" | "stopped";
         /** Why it failed (`state: "failed"`). */

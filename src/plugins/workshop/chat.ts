@@ -60,6 +60,9 @@ export function classify(message: string, model = ""): { text: string; settings:
 }
 
 let serial = 0;
+/** Longest opening line held back (see Chat.opening). */
+const OPENING_MAX = 200;
+
 const nextId = () => `r${++serial}`;
 
 export class Chat {
@@ -71,6 +74,15 @@ export class Chat {
   private live = false;
   /** The latest model output of the live turn is text (not a tool call). */
   private replying = false;
+  /**
+   * The turn's text before its first tool call, held back while it is one
+   * short line: a model message that is only such a line and then calls a
+   * tool is an opening line ("I'll start by reading the SDK documentation."),
+   * which models write in English whatever the prompt says, and the tools row
+   * already shows what happens. It is dropped from the view (the session file
+   * keeps it). Anything longer, or a reply without tool calls, is shown.
+   */
+  private opening = "";
   /** The text of the last user message, for 「重试」. */
   lastPrompt = "";
   /** The model of the current run, named in a "model not available" error. */
@@ -158,8 +170,28 @@ export class Chat {
     this.assistant.text += text;
   }
 
+  /** Text of a model message; see `opening`. */
+  private text(delta: string) {
+    if (this.calls.length || this.assistant) return this.appendText(delta);
+    this.opening += delta;
+    if (this.opening.length > OPENING_MAX || /\S\s*\n\s*\S/.test(this.opening)) this.flushOpening();
+  }
+
+  private flushOpening() {
+    const text = this.opening;
+    this.opening = "";
+    this.appendText(text);
+  }
+
+  /** The end of a model message: an opening line before its tool calls goes, other held text is shown. */
+  private messageEnd(stopReason: string) {
+    if (stopReason === "toolUse" && !this.calls.length && !this.assistant) this.opening = "";
+    else this.flushOpening();
+  }
+
   /** Closes the current turn: no more text or calls join its rows. */
   endTurn() {
+    this.flushOpening();
     if (this.assistant) this.assistant.state = 1;
     this.live = false;
     // A turn without tool calls keeps no status line.
@@ -178,9 +210,10 @@ export class Chat {
         if (this.assistant?.text) this.assistant.text += "\n\n";
         break;
       case "text":
-        this.appendText(event.delta);
+        this.text(event.delta);
         break;
       case "assistant_end":
+        this.messageEnd(event.stopReason);
         if (this.assistant) this.assistant.text = this.assistant.text.replace(/\s+$/, "");
         if (event.error) {
           this.endTurn();
@@ -191,6 +224,7 @@ export class Chat {
         }
         break;
       case "tool_start":
+        this.messageEnd("toolUse");
         this.toolCall(event.id, toolLabel(event.name, event.target), 0);
         break;
       case "tool_end":
@@ -234,13 +268,15 @@ export class Chat {
       else if (message.role === "assistant") {
         chat.apply({ kind: "assistant_start" });
         for (const part of parts) {
-          if (part.type === "text") chat.appendText(String(part.text ?? ""));
+          if (part.type === "text") chat.text(String(part.text ?? ""));
           else if (part.type === "toolCall") {
             const args = (part.arguments ?? {}) as Record<string, unknown>;
             const target = ["path", "pattern", "file", "id", "name"].map((k) => args[k]).find((v) => typeof v === "string") as string | undefined;
+            chat.messageEnd("toolUse");
             chat.toolCall(String(part.id), toolLabel(String(part.name), target ?? ""), 1);
           }
         }
+        chat.messageEnd(String(message.stopReason ?? "stop"));
         if (message.stopReason === "error") {
           chat.endTurn();
           chat.error(String(message.errorMessage ?? "未知错误"));

@@ -7,19 +7,19 @@ import path from "node:path";
 import test from "node:test";
 import { Toolchain } from "../toolchain.ts";
 import { WorkFolder } from "../worker/files.ts";
-import { Folders } from "../worker/tools.ts";
+import { Folders, createTools } from "../worker/tools.ts";
 import { dataDirectory, server, startAi } from "./fixture.mjs";
 import { differences, sources } from "./vendor-sdk.mjs";
 
 const plugin = path.resolve(import.meta.dirname, "..");
 
-test("vendor/ and knowledge/ match a fresh build from the player's SDK (run `npm run vendor:sdk` after an SDK upgrade)", async () => {
+test("vendor/ matches a fresh build from the player's SDK (run `npm run vendor:sdk` after an SDK upgrade)", async () => {
   assert.deepEqual(await differences(), []);
   const installed = JSON.parse(await fs.readFile(path.join(sources().sdk, "package.json"), "utf8")).version;
   assert.equal(new Toolchain(plugin, "/unused").sdkVersion, installed);
 });
 
-test("the reference: an index with the modules and capabilities, the full text with the examples", async () => {
+test("the reference is the SDK's own llms.txt: an index with the modules and capabilities, the full text with the examples", async () => {
   const toolchain = new Toolchain(plugin, "/unused");
   const index = await fs.readFile(toolchain.docsIndex(), "utf8");
   const full = await fs.readFile(path.join(path.dirname(toolchain.docsIndex()), "llms-full.txt"), "utf8");
@@ -43,16 +43,42 @@ test("the agent's tools read the reference but write only the work folder", asyn
   await assert.rejects(folders.work.writeFile(index, "x"), /工作目录以外/);
 });
 
+test("the reference by its short name: sdk/… reads, lists and greps the SDK; writes there are refused", async () => {
+  const root = await dataDirectory();
+  await fs.mkdir(path.join(root, "work"));
+  const toolchain = new Toolchain(plugin, root);
+  const docs = await Promise.all(toolchain.docsRoots().map((r) => WorkFolder.open(r)));
+  const folders = new Folders(await WorkFolder.open(path.join(root, "work")), docs);
+  const tools = Object.fromEntries(createTools(folders).map((t) => [t.name, t]));
+  const run = async (name, args) => (await tools[name].execute("1", args, undefined, undefined, undefined)).content.map((c) => c.text).join("");
+  const index = await fs.readFile(toolchain.docsIndex(), "utf8");
+  assert.equal(await run("read", { path: "sdk/llms.txt", limit: 3 }).then((t) => t.split("\n")[0]), index.split("\n")[0]);
+  assert.equal(await run("read", { path: "@sdk/llms.txt", limit: 1 }).then((t) => t.split("\n")[0]), index.split("\n")[0]);
+  assert.match(await run("ls", { path: "sdk/dist/plugin" }), /types\.d\.ts/);
+  const grep = await run("grep", { pattern: "interface TestHost|class TestHost", path: "sdk/dist/plugin/testing.d.ts", limit: 1 });
+  assert.match(grep, /^sdk\/dist\/plugin\/testing\.d\.ts:\d+: /);
+  await assert.rejects(run("write", { path: "sdk/llms.txt", content: "x" }), /只读/);
+  await assert.rejects(run("write", { path: "sdk/new.txt", content: "x" }), /只读/);
+  await assert.rejects(run("delete", { path: "sdk/llms.txt" }), /只读/);
+  assert.equal(await fs.readFile(toolchain.docsIndex(), "utf8"), index);
+  await assert.rejects(fs.access(path.join(root, "work", "sdk")));
+});
+
 test("a write into the reference fails and the file stays as it is", async () => {
   const toolchain = new Toolchain(plugin, "/unused");
   const index = await fs.realpath(toolchain.docsIndex());
   const before = await fs.readFile(index, "utf8");
-  const mock = await server((req) =>
-    req.body.messages.at(-1).role === "tool" ? { text: ["不能写。"] } : { toolCalls: [{ name: "write", args: { path: index, content: "changed" } }] },
-  );
+  const mock = await server((req) => {
+    const last = req.body.messages.at(-1);
+    if (last.role === "tool") return { text: ["不能写。"] };
+    const content = typeof last.content === "string" ? last.content : last.content.map((p) => p.text).join("");
+    return { toolCalls: [{ name: "write", args: { path: content.includes("短") ? "sdk/llms.txt" : index, content: "changed" } }] };
+  });
   const ai = await startAi({ compat: mock.url });
   await ai.ask("改一下参考资料");
   assert.equal(ai.rows()[1].detail, `✗ 写入 参考资料/${path.basename(path.dirname(index))}/llms.txt`);
+  await ai.ask("用短路径改一下参考资料");
+  assert.equal(ai.rows().at(-2).detail, "✗ 写入 参考资料/sdk/llms.txt");
   assert.equal(await fs.readFile(index, "utf8"), before);
   await ai.stop();
 });

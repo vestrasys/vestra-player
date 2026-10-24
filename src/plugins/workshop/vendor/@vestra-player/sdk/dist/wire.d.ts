@@ -25,12 +25,6 @@ export interface PackageValidation {
     checks: string[];
     trustedExecution: true;
 }
-export interface PackageTrial {
-    trialId: number;
-    activationOwner?: number;
-    status: string;
-    cleanupConfirmed?: boolean;
-}
 export interface InstalledPackage {
     revision: number;
     current: null | {
@@ -102,7 +96,7 @@ export declare class HostError extends Error {
 export interface PackageInfo {
     id: string;
     version: string | null;
-    origin: "installed" | "development" | "trial";
+    origin: "installed" | "development";
     state: "starting" | "running" | "disabled" | "failed" | "stopped";
     error: string | null;
     capabilities: string[];
@@ -175,6 +169,8 @@ export interface WindowFacts {
     };
     /** The palette (`plugin.appearance`), with the `window.state` reply; a newer player may name a palette this SDK does not list. */
     appearance?: string;
+    /** The file resolvers' extensions (`plugin.resolvers.fileTypes`; player 0.4.2). */
+    fileTypes?: string[];
 }
 /** One timeline mark as the player merges them (`timeline.marks`). */
 export interface WireMark {
@@ -530,11 +526,6 @@ export declare function createWire(transport: Transport): {
         validate: (directory: string, apiVersion?: string) => Promise<PackageValidation>;
         /** Player 0.2.0: a `.vxp` file. */
         validateArchive: (file: string) => Promise<PackageValidation>;
-        /** `requestId` recovers a lost first reply in this owner session. */
-        trial: (token: string, requestId: string) => Promise<PackageTrial>;
-        trialStateByRequest: (requestId: string) => Promise<PackageTrial>;
-        trialState: (trialId: number) => Promise<PackageTrial>;
-        stopTrial: (trialId: number) => Promise<PackageTrial>;
         installed: (id: string) => Promise<InstalledPackage>;
         /** `source` and `replace` are sent only when given (player 0.2.0). */
         install: (token: string, expectedRevision: number, requestId: string, options?: {

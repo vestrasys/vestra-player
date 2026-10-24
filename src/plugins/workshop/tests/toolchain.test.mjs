@@ -112,6 +112,9 @@ test("the check refuses vestra. ids, npm dependencies and a manifest id that is 
   await fs.writeFile(path.join(project, "package.json"), JSON.stringify({ name: "x", dependencies: { "left-pad": "1.0.0" } }));
   const manifest = JSON.parse(await fs.readFile(path.join(project, "manifest.json"), "utf8"));
   await fs.writeFile(path.join(project, "manifest.json"), JSON.stringify({ ...manifest, id: "vestra.demo" }));
+  const typed = await toolchain.typecheck(session, "local.demo");
+  assert.equal(typed.ok, false);
+  assert.match(typed.text, /left-pad/);
   const checked = await toolchain.check(session, "local.demo", "");
   assert.equal(checked.ok, false);
   assert.match(checked.text, /left-pad/);
@@ -123,6 +126,25 @@ test("the check refuses vestra. ids, npm dependencies and a manifest id that is 
   assert.match((await toolchain.check(session, "vestra.demo", "")).text, /「vestra\.」留给官方插件/);
   assert.match((await runTool(toolchain, session, "", "typecheck", { id: "../x" }, new AbortController().signal)).text, /不是插件 id/);
   assert.match((await runTool(toolchain, session, "", "typecheck", { id: "a.missing" }, new AbortController().signal)).text, /没有插件项目/);
+});
+
+test("the type check runs under the permission model: it reads the project and the SDK, nothing else", async () => {
+  const { session, toolchain } = await setup();
+  await toolchain.scaffold(session, { name: "demo" }, "");
+  const project = path.join(session.work, "local.demo");
+  // Outside the project: a declaration the project points at. Without the
+  // permission model tsc reads it and the check passes.
+  const outside = path.join(session.dir, "outside.d.ts");
+  await fs.writeFile(outside, "declare const outside: number;\n");
+  const main = await fs.readFile(path.join(project, "main.ts"), "utf8");
+  await fs.writeFile(path.join(project, "main.ts"), `/// <reference path=${JSON.stringify(outside)} />\n${main}export const seen: number = outside;\n`);
+  const typed = await toolchain.typecheck(session, "local.demo");
+  assert.equal(typed.ok, false, typed.text);
+  assert.match(typed.text, /TS6053|TS2304/);
+  // check and pack (not confined yet, see Toolchain.confined) still write dist/ and the .vxp.
+  await fs.writeFile(path.join(project, "main.ts"), main);
+  assert.equal((await toolchain.check(session, "local.demo", "")).ok, true);
+  assert.equal((await toolchain.pack(session, "local.demo", "")).ok, true);
 });
 
 test("a tool call is cancelled with its signal", async () => {

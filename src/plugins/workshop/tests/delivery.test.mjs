@@ -100,6 +100,35 @@ test("install_plugin asks the user first; 回退 removes a first install; a refu
   await ai.stop();
 });
 
+test("after an install, bindings another command holds are reported to the card and the agent", async () => {
+  const mock = await server(
+    scripted({
+      做个插件: [{ toolCalls: [{ name: "scaffold_plugin", args: { name: "demo", title: "演示" } }] }],
+      安装: [{ toolCalls: [{ name: "install_plugin", args: { id: "local.demo" } }] }],
+    }),
+  );
+  const ai = await startAi({ compat: mock.url });
+  await ai.ask("做个插件");
+  player(ai);
+  // The player's table once local.demo runs: its `]` is held by a built-in plugin's command.
+  const info = (plugin, command, title, current, shadowed = []) => ({ plugin, command, title, path: null, scope: "global", defaults: current, current, overridden: false, shadowed, labels: current });
+  ai.host.handle("bindings.list", () => ({
+    commands: [
+      info("vestra.marks", "ab.set-b", "设置 B 点", ["]"]),
+      info("local.demo", "faster", "加快 0.25×", ["]"], [{ input: "]", by: { plugin: "vestra.marks", command: "ab.set-b" } }]),
+      info("local.demo", "slower", "减慢 0.25×", ["{"]),
+    ],
+    orphans: [],
+  }));
+  ai.host.dialogAnswers.push({ confirmed: true, checked: false });
+  await ai.ask("安装");
+  const told = toolText(mock, mock.chats.length - 1);
+  assert.match(told, /安装 演示 0\.1\.0完成/);
+  assert.match(told, /快捷键没有生效：\]（加快 0\.25×）已被vestra\.marks「设置 B 点」占用。/);
+  assert.match(ai.props["card-status"], /快捷键没有生效：\]（加快 0\.25×）/);
+  await ai.stop();
+});
+
 test("导出 .vxp and 导出源码 zip save where the user chose", async () => {
   const mock = await server(scripted({ 做个插件: [{ toolCalls: [{ name: "scaffold_plugin", args: { name: "demo", title: "演示" } }] }] }));
   const ai = await startAi({ compat: mock.url });

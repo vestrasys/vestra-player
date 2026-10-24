@@ -19,6 +19,8 @@ export declare class WindowService {
     start(): void;
     /** The palette, as the `window.state` reply carried it (`plugin.appearance`). */
     appearance: string | undefined;
+    /** The file resolvers' extensions, as the reply carried them (`plugin.resolvers.fileTypes`). */
+    fileTypes: string[] | undefined;
     accept(facts: WindowFacts): void;
     read(): Promise<void>;
     watch(listener: (state: WindowState) => void): {

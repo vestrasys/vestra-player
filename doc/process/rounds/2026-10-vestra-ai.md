@@ -115,3 +115,27 @@
 - **R-l：按缺陷修复（播放器 0.4.2）。** 只保留最近 32 个候选；旧 token 安装时报 `stale`。「只编译 Slint 的检查」：拒绝。
 - **R-m：按缺陷修复（SDK 1.5.8）。** CLI 遇到 `ERR_ACCESS_DENIED` 按文件不存在处理；类型检查在权限模式下仍需要 `--allow-child-process`。
 - **SDK 1.5.8 / 播放器 0.4.2**（PR sdk#24、player#15）：删除试载，R2 `resolvers.fileTypes`，R-l，R-m。
+
+## 实战第 2 轮第 3 题与 2.2.2（2026-10-24，作者）
+
+第 3 题「速度微调」（`zysilm.speed-nudge`，2.2.1，MiniMax-M3.1-Flash）：69 次工具调用，28 次失败；typecheck、6 项测试、check 通过，安装成功，菜单「播放 ▸ 速度微调」在。
+
+**28 次失败的分类**
+- **23 次（ls 1、read 2、grep 20）：参考资料的绝对路径抄错。** 路径约 150 个字符，模型丢掉中间一段（`-Users-ziyang-Develop-vestra-player` 变成 `-Users-vestra-player`），同一个文件对一次错一次。原因在我们：提示词和 grep 结果里给的都是长绝对路径。连带影响：testing.d.ts 没读成，后面 3 次 typecheck 失败（`TestHost.state`、`player`、`playback` 都是猜的）。
+- **3 次 typecheck、2 次 test**：正常迭代，其中 1 次 test 是 `Shift+]` 被 SDK 拒绝（见下）。
+
+**2.2.2 的修复**
+- 参考资料用短路径 `sdk/…`（`sdk/llms.txt`、`sdk/dist/plugin/types.d.ts`），read / ls / find / grep 都认，grep 结果也这样显示；`sdk/` 下的写入和删除一律拒绝。绝对路径仍然可用。
+- 开场白（「I'll start by reading the SDK documentation.」）：提示词已要求过程说明用用户的语言，模型照样用英文写第一句。只靠提示词不可靠，所以两层：提示词加「第一次工具调用之前不输出文字」；界面上，一轮里第一次工具调用之前、只有一行（≤200 字符）的文字不显示，对话记录保留原文。之后的过程说明和不调用工具的回复照常显示。只按「位置 + 一行」判断，不做语言检测。代价：没有工具调用的回复，第一行要等第二行开始（或超过 200 字符、或回复结束）才出现。
+- 快捷键：提示词写明符号键写实际输入的字符（Shift+] 写 `}`，Shift+[ 写 `{`），用户要的键原样实现。模型这次把 SDK 的报错「write the character Shift produces instead of Shift+]」理解成「去掉 Shift」，绑了 `]` 和 `[`，和 A-B 循环冲突，被播放器忽略（只在宿主日志里）。
+- 冲突可见：公开 API 能查到（`bindings.list()` 的 `shadowed`），所以没有提请求。安装完成后插件读一次绑定表，被占用的按键写进卡片状态和 install_plugin 的结果，例如「快捷键没有生效：]（加快 0.25×）已被vestra.marks「设置 B 点」占用」，并让 AI 建议换键。为此 manifest 加了 `bindings.manage`（只读用）。
+
+**作者新提的请求（等维护者答复）**
+
+- **R-n（SDK CLI，不阻塞）：`build` / `pack` 在 `--permission` 下失败。**
+  - 位置：`vestra-plugin build`（`bin/vestra-plugin.mjs` 的 `build()` 用 `fs/promises` 的 `cp` 复制包里的文件）。
+  - 复现：`node --permission --allow-fs-read=<项目>,<SDK> --allow-fs-write=<项目>/dist,<tmp> --allow-child-process vestra-plugin.mjs build <项目>`，项目里有 `ui/main.slint` → `ERR_ACCESS_DENIED`（FileSystemRead，resource 是项目的上级目录）。原因：Node 的 `fs.cp` 检查目标的每一级上级目录（checkParentPaths），对子目录里的文件会一路 stat 到根目录。`copyFile` 和 `cpSync` 不受影响（已实测）。
+  - 希望：复制单个文件改用 `mkdir(dirname, { recursive: true })` + `copyFile`，让 build / pack 也能在 `--permission` 下运行。
+  - 影响：只是实现细节，不改契约。现在工坊只让类型检查（`check`）在权限模式下运行，check 和 pack 仍然不受限。
+  - 验收：上面的命令 build 和 pack 都通过。
+- **R-o（SDK 文案，不阻塞）**：`binding Shift+]: write the character Shift produces instead of Shift+]` 改成直接给出字符，例如 `binding Shift+]: write "}" (the character Shift+] types)`。字符依赖键盘布局时，至少给出美式布局的例子。模型照字面理解成去掉 Shift，绑了 `]`。

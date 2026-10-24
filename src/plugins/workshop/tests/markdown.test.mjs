@@ -37,6 +37,9 @@ test("one document per finished message; only a changed message gets a new one",
   assert.equal(made.filter((t) => t).length, 3, "nothing changed, nothing made");
   chat.user("再问");
   chat.begin();
+  // After a tool call, so the text streams at once (an opening line is held back, see Chat.opening).
+  chat.apply({ kind: "tool_start", id: "t", name: "ls", target: "" });
+  chat.apply({ kind: "tool_end", id: "t", name: "ls", ok: true, summary: "" });
   chat.apply({ kind: "text", delta: "流" });
   await docs.sync(chat.rows);
   chat.apply({ kind: "text", delta: "式" });

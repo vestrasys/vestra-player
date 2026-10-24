@@ -1,9 +1,9 @@
 {
   "id": "vestra.workshop",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
-  "capabilities": ["commands", "ui.window", "ui.settings", "ui.dialog", "secrets", "clipboard", "plugins.manage"],
+  "capabilities": ["commands", "ui.window", "ui.settings", "ui.dialog", "secrets", "clipboard", "plugins.manage", "bindings.manage"],
   "name": "Vestra Player AI",
   "author": "Vestra Player",
   "punchline": "和你选的模型对话，让 AI 写 Vestra 插件：检查、测试、安装（可回退）、导出（自带 API key，实验性）",

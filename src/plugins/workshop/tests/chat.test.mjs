@@ -51,7 +51,8 @@ test("a message streams back; the write tool shows one tool line and the file la
   assert.equal(user.text, "写一个 notes.md");
   assert.equal(tools.text, "1 个工具调用");
   assert.equal(tools.detail, "✓ 写入 notes.md");
-  assert.equal(reply.text, "好的，我来写。\n\n写好了：notes.md。");
+  // 「好的，我来写。」 opened the turn before its first tool call: not shown (Chat.opening).
+  assert.equal(reply.text, "写好了：notes.md。");
 
   const [meta] = (await fs.readdir(path.join(ai.plugin.dataDirectory, "sessions"))).map((id) => path.join(ai.plugin.dataDirectory, "sessions", id));
   assert.equal(await fs.readFile(path.join(meta, "work/notes.md"), "utf8"), "# 笔记\n");
@@ -83,12 +84,13 @@ test("a message streams back; the write tool shows one tool line and the file la
 });
 
 test("text appears while it streams", async () => {
-  const mock = await server(() => ({ text: ["第一段", "第二段", "第三段"], pauseMs: 400 }));
+  // The first line shows once the second starts (an opening line is held back, see Chat.opening).
+  const mock = await server(() => ({ text: ["第一段\n\n", "第二段\n\n", "第三段"], pauseMs: 400 }));
   const ai = await startAi({ compat: mock.url });
   await ai.ask("讲点什么", { wait: false });
-  await ai.until(() => ai.props.busy === true && ai.rows().at(-1)?.text === "第一段", "first chunk", 10_000);
+  await ai.until(() => ai.props.busy === true && ai.rows().at(-1)?.text === "第一段\n\n第二段\n\n", "first chunks", 10_000);
   await ai.until(() => ai.props.busy === false, "end");
-  assert.equal(ai.rows().at(-1).text, "第一段第二段第三段");
+  assert.equal(ai.rows().at(-1).text, "第一段\n\n第二段\n\n第三段");
   await ai.stop();
 });
 
