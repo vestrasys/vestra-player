@@ -543,7 +543,7 @@ interface PlaybackStats {
 | `audio.channelLayout` | `audio-params/hr-channels` | 如 `stereo`、`5.1(side)` |
 | `avSyncMs` | `avsync` × 1000 | 无音频或无视频时为 `null` |
 | `cacheSeconds` | `demuxer-cache-duration` | |
-| `video.hwdec` | `hwdec-current` | 正在用的硬件解码器，如 `videotoolbox`；`"no"` 表示软件解码（软件渲染时总是 `"no"`） |
+| `video.hwdec` | `hwdec-current` | 正在用的硬件解码器，如 `videotoolbox`、软件渲染下的 `d3d11va-copy`；`"no"` 表示软件解码（mpv 解不了的格式、没有可用的硬件解码器） |
 | `video.transfer` | `video-params/gamma` | 传输特性原样给出，如 `bt.1886`、`srgb`、`pq`（HDR10）、`hlg`；判断是不是 HDR 由插件做 |
 
 **渲染方式**（`backend`）：
@@ -551,11 +551,11 @@ interface PlaybackStats {
 | `backend` | 何时 | 画面 |
 | --- | --- | --- |
 | `libmpv · GPU 渲染（OpenGL）` | 默认（macOS） | libmpv 用 OpenGL 在自己的线程里渲染，按视频区的物理像素（窗口尺寸 × 屏幕缩放）渲染，缩放由 mpv 完成；硬件解码 `hwdec=auto-safe`（解不了的格式 mpv 自动改用软件解码，`video.hwdec` 如实报告）。界面固定用 Slint 的 OpenGL 渲染器（femtovg） |
-| `libmpv · 软件渲染` | 后备：无界面模式（`--headless`）；环境变量 `VESTRA_SOFTWARE_RENDER=1`；Windows、Linux（暂未实现 GPU 渲染）；OpenGL 初始化失败（mpv 的 OpenGL 上下文建不起来，或窗口不能显示 OpenGL 纹理）时自动退回，并在标准错误输出写一行 `render: …` | CPU 渲染，不开硬件解码。按视频区的物理像素渲染，再按来源分辨率封顶（不在 CPU 上渲染比来源更多的像素，余下的放大由界面完成），总像素不超过 3840×2160 |
+| `libmpv · 软件渲染` | 后备：无界面模式（`--headless`）；环境变量 `VESTRA_SOFTWARE_RENDER=1`；Windows、Linux（暂未实现 GPU 渲染）；OpenGL 初始化失败（mpv 的 OpenGL 上下文建不起来，或窗口不能显示 OpenGL 纹理）时自动退回，并在标准错误输出写一行 `render: …` | CPU 渲染。硬件解码用回拷模式 `hwdec=auto-copy-safe`（GPU 解码后把帧拷回内存，如 Windows 上的 `d3d11va-copy`、`nvdec-copy`；都不可用时 mpv 改用软件解码）。按视频区的物理像素渲染，再按来源分辨率封顶（不在 CPU 上渲染比来源更多的像素，余下的放大由界面完成），总像素不超过 3840×2160 |
 
 - 两种方式下 `framesShown` 都是播放器交给视频区的帧数（含生成流的帧），播放、截图、导出、滤镜与显示层（§8、§8.1、§10）行为相同。渲染选项（§8.2）只在 GPU 渲染下有效。
 - 运行中退回软件渲染（窗口不能显示纹理）只在第一个窗口出现时发生；如果那时已经在播放，当前来源可能要重新打开。
-- 诊断：`VESTRA_HWDEC` 覆盖 GPU 渲染时的 `hwdec`（如 `no`）；`VESTRA_FRAME_LOG=1` 每秒在标准错误输出一行渲染与显示的帧数和渲染尺寸（两种方式都有）。
+- 诊断：`VESTRA_HWDEC` 覆盖 `hwdec`（如 `no`、`d3d11va`）；软件渲染下取它的回拷模式（`d3d11va` → `d3d11va-copy`，`no` 不变）；`VESTRA_FRAME_LOG=1` 每秒在标准错误输出一行渲染与显示的帧数和渲染尺寸（两种方式都有）。
 
 - 同时只能有一个提供者（例如播放列表）；另一个插件再登记以 `conflict` 失败（「上一个/下一个已由 vestra.playlist 提供」），**不算激活失败**：插件照常运行，只是不提供上一个/下一个；屏幕提示与插件管理的「提示」同面板位置被占（§6.3）。之后它的标志变化时会再登记一次，原提供者撤销后就能接上。启动时内置插件先登记（同 §6.3）。`dispose` 或插件停用时撤销。
 - `canNext` / `canPrevious` 每轮更新重新求值，变化才发送；任何插件从 `player.state.can.next/previous` 读到。
@@ -965,7 +965,7 @@ type FilterStatus =
 - `failed` 之后不会自动重试，直到下一次 `set()`、`retry()` 或来源变化。`error.code === "backend-uncertain"` 表示播放器后端暂时阻塞了该阶段。
 - **空链**（视频 `set([])`，音频 `nodes: []` 且 `delayMs` 为 0）删除本插件的这条链，其它插件不受影响；从未应用过时什么都不发送。播放器 0.3.0 之前视频空链以 `invalid`（「resource must contain a node」）失败，效果留在画面上；音频一直可以。
 - **生成流**（`openStream`，§5.2）的画面和声音不经过播放器的解码管线，处理链对它不起作用：生成流播放期间 `set` 非空链以 `{ state: "failed", error.code: "unsupported" }` 结束（不轮询；播放器 0.3.0 之前一直停在 `waiting` 并每 250 毫秒重试），空链照常删除。值保留，来源换成文件后 SDK 自动重新应用。
-- **硬件解码**：滤镜是 FFmpeg 的软件滤镜，需要内存里的帧。GPU 渲染默认的零拷贝硬件解码（`hwdec=auto-safe`，macOS 上是 VideoToolbox）把帧留在显存里，mpv 配置不了滤镜图，只写一行日志就把它丢掉（播放器 0.3.0 之前的缺陷：状态是 `applied`，画面却没变）。播放器 0.3.0 起，只要有任何插件的视频链，就改用同一解码器的回拷模式（`auto-copy-safe`，仍是硬件解码，`stats().video.hwdec` 报 `videotoolbox-copy`），链全部删除后恢复；切换时解码器重新初始化，画面可能停顿一下。
+- **硬件解码**：滤镜是 FFmpeg 的软件滤镜，需要内存里的帧。GPU 渲染默认的零拷贝硬件解码（`hwdec=auto-safe`，macOS 上是 VideoToolbox）把帧留在显存里，mpv 配置不了滤镜图，只写一行日志就把它丢掉（播放器 0.3.0 之前的缺陷：状态是 `applied`，画面却没变）。播放器 0.3.0 起，只要有任何插件的视频链，就改用同一解码器的回拷模式（`auto-copy-safe`，仍是硬件解码，`stats().video.hwdec` 报 `videotoolbox-copy`），链全部删除后恢复；切换时解码器重新初始化，画面可能停顿一下。软件渲染本来就用回拷模式，有没有链都不切换。
 
 节点类型与取值范围（超出范围以 `invalid` 失败）：
 
@@ -1516,7 +1516,7 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | `app.system()` §3.5 | 版本、构建、机型、显示器 | 版本、构建、机型、显示器 | 只有 `os`、`arch`、显示器 |
 | 截图导出 §10 | 可用 | 可用（需要 FFmpeg 6.1+） | 同 macOS |
 | 生成流 `openStream` §5.2 | Unix 套接字 | 回环 TCP 加令牌 | 同 macOS |
-| 渲染 §5.4 | GPU 渲染（OpenGL），硬件解码 | 软件渲染，不开硬件解码 | 同 Windows |
+| 渲染 §5.4 | GPU 渲染（OpenGL），硬件解码 | 软件渲染，回拷硬件解码（`d3d11va-copy` 等） | 同 Windows |
 | 渲染选项 §8.2 | 可用（`peakDetect` 不起作用） | `unsupported` | `unsupported` |
 | 绑定 §4.1 | `Ctrl` 也认 ⌘ | `Cmd` 是徽标键 | 同 Windows |
 | 关闭工具窗口、浮动面板、选项窗口 §4.1 | ⌘W | Ctrl+W、Ctrl+F4 | Ctrl+W |
@@ -1524,6 +1524,10 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | `Theme.font-mono` §6.4 | Menlo | Consolas | DejaVu Sans Mono |
 
 ## 17. 变更说明
+
+### 软件渲染也开硬件解码（2026-10，播放器 0.4.2 之后）
+
+`apiVersion` 与 SDK 不变。播放器 0.4.2 及之前，`hwdec=auto-safe` 只在 GPU 渲染启动后设置，软件渲染（Windows 总是如此，以及无界面模式、`VESTRA_SOFTWARE_RENDER=1`、退回软件渲染）一直是 `hwdec=no`，`stats().video.hwdec` 恒为 `"no"`，「播放信息」的「硬件解码」显示「未使用」。现在软件渲染用回拷模式 `auto-copy-safe`（§5.4），Windows 上通常报 `d3d11va-copy`（NVIDIA 也可能是 `nvdec-copy`）；GPU 渲染不变。
 
 ### 删除试载；有解析器的文件类型；候选包释放（2026-10，播放器 0.4.2，SDK 1.5.8）
 
