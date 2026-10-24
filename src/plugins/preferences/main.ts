@@ -8,7 +8,7 @@ export const PAGE_ID = "appearance";
 /**
  * 首选项: 设置 ▶ 选项… (J04, F5) opens the player's options window; this
  * plugin's own page there is 外观 (H10: palette radio with previews and
- * 恢复默认), also reachable as 设置 ▶ 外观 ▶ <palette> (Vestra).
+ * 恢复默认), also reachable as 设置 ▶ 外观 ▶ <palette> (Vestra 深色, Vestra 浅色).
  * The palette itself is the player's (`plugin.appearance`): it is saved by
  * the player and stays when this plugin stops.
  */

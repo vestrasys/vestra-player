@@ -1,6 +1,6 @@
 {
   "id": "vestra.store",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -18,5 +18,5 @@
   "description": "从 Vestra Player 官方插件仓库浏览插件：说明、更新日志、版本历史与所需权限。一键安装、更新、回退到上一版本或卸载；可以添加第三方仓库（会明确标为非官方），也可以从链接或本地 .vxp 文件安装，或把 .vxp 文件拖到视频区。官方仓库的索引带数字签名，商城会校验签名与每个插件包的校验和；被仓库撤回的版本会被停用并给出原因。",
   "tags": ["插件", "商城"],
   "icon": "assets/icon.png",
-  "minPlayerVersion": "0.2.0"
+  "minPlayerVersion": "0.4.0"
 }

@@ -3,12 +3,14 @@
 // drop-down is our own (same geometry as the hotkeys plugin's).
 import { ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
+import { Icon } from "@vestra/icons.slint";
 
-// Status colours that do not follow the palette: amber for warnings, red
-// for revoked or tampered things.
+// Status colours: amber for warnings (the theme has no token for it: a
+// darker amber on a light palette's panels), the theme's danger red for
+// revoked or tampered things.
 export global Tone {
-    out property <color> warn: #e3a336;
-    out property <color> danger: #ff6159;
+    out property <color> warn: Theme.bg-panel.to-hsv().value > 0.5 ? #a8670a : #e3a336;
+    out property <color> danger: Theme.danger;
     // 0 plain, 1 accent, 2 warn, 3 danger, 4 dim.
     public pure function color(tone: int) -> color {
         return tone == 1 ? Theme.accent : tone == 2 ? self.warn : tone == 3 ? self.danger : tone == 4 ? Theme.text-dim : Theme.text-list;
@@ -112,7 +114,12 @@ export component Choice {
             vertical-alignment: center;
             overflow: elide;
         }
-        Text { text: "▾"; color: root.enabled ? Theme.text-dim : Theme.icon-disabled; font-size: Theme.font-body; vertical-alignment: center; }
+        // The drop-down arrow: a small V.
+        VerticalLayout {
+            horizontal-stretch: 0;
+            alignment: center;
+            Icon { name: "caret-down"; color: root.enabled ? Theme.text-dim : Theme.icon-disabled; }
+        }
     }
     touch := TouchArea {
         enabled: root.enabled;
@@ -163,19 +170,11 @@ export component Check {
             Rectangle {
                 width: 13px;
                 height: 13px;
-                border-radius: 2px;
-                border-width: 1px;
+                border-radius: 3px;
+                border-width: root.checked ? 0px : 1px;
                 border-color: touch.has-hover && root.enabled ? Theme.accent : Theme.text-dim;
                 background: root.checked ? Theme.accent : Theme.bg-list;
-                if root.checked: Path {
-                    width: 9px;
-                    height: 9px;
-                    viewbox-width: 9;
-                    viewbox-height: 9;
-                    commands: "M 1 4.5 L 3.5 7 L 8 1.5";
-                    stroke: Theme.text;
-                    stroke-width: 1.5px;
-                }
+                if root.checked: Icon { name: "check-box"; color: Colors.white; }
             }
         }
         Text {

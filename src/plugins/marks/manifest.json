@@ -1,6 +1,6 @@
 {
   "id": "vestra.marks",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -22,5 +22,6 @@
     "章节",
     "书签",
     "循环"
-  ]
+  ],
+  "minPlayerVersion": "0.4.0"
 }

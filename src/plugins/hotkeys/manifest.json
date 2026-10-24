@@ -1,6 +1,6 @@
 {
   "id": "vestra.hotkeys",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -18,5 +18,6 @@
     "设置",
     "快捷键",
     "鼠标"
-  ]
+  ],
+  "minPlayerVersion": "0.4.0"
 }
