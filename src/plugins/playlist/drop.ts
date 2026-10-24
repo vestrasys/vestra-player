@@ -12,17 +12,23 @@ import type { Entry } from "./queue.ts";
  */
 export const DROP_EXTENSIONS = [...VIDEO, ...AUDIO, ...LIST_FILES, "webloc", "folder"];
 
-/** The list area of `ui/sidebar.slint` in panel coordinates: rows start below the 31px tab strip. */
+/**
+ * The top of the list area of `ui/sidebar.slint` in panel coordinates while
+ * the panel draws its own 31px tab strip; with the player's tab strip
+ * (`PlaylistBridge.tabbed`) the list starts at 0. The list reports its actual
+ * top through `list-area`; this is the value before the first report.
+ */
 export const LIST_TOP = 31;
 export const ROW_HEIGHT = 20;
 
 /**
  * A15 drop on the list: the shown row under `y` (panel coordinates, the list
- * scrolled by `scroll`), so the drop goes before it; `null` on blank space,
- * the tab strip or the bottom bar (`listHeight` tall list area) = the end.
+ * scrolled by `scroll`, starting at `top`), so the drop goes before it; `null`
+ * on blank space, the tab strip or the bottom bar (`listHeight` tall list
+ * area) = the end.
  */
-export function dropRow(y: number, scroll: number, listHeight: number, shown: number): number | null {
-  const inList = y - LIST_TOP;
+export function dropRow(y: number, scroll: number, listHeight: number, shown: number, top = LIST_TOP): number | null {
+  const inList = y - top;
   if (!Number.isFinite(inList) || inList < 0 || inList >= listHeight) return null;
   const row = Math.floor((inList + Math.max(0, scroll)) / ROW_HEIGHT);
   return row < shown ? row : null;

@@ -1,4 +1,4 @@
-//! Two-slot Slint composition, using the public interpreter API.
+//! Slint composition of the shell's slots, using the public interpreter API.
 //! Host-internal: the public contract is the SDK window/panel API.
 #![forbid(unsafe_code)]
 
@@ -43,8 +43,9 @@ impl Slot {
     }
 }
 
-/// One independent package per owner; this minimal shell allows one component
-/// in each slot. Components inherit a native visual element, not Window.
+/// One independent package per owner. The bottom bar and the backdrop hold
+/// one component each; the sidebar holds one or more, as tabs in the order of
+/// the specs. Components inherit a native visual element, not Window.
 #[derive(Clone, Debug)]
 pub struct CompileSpec {
     pub owner: u64,
@@ -142,6 +143,56 @@ fn import_spec(source: &mut String, spec: &CompileSpec, path: &str) -> Result<()
     Ok(())
 }
 
+/// The shell's slot properties and the sidebar's tab properties (also in
+/// a shell without tabs, so the host binds them alike).
+const SHELL_PROPERTIES: &str = "in property <bool> bottom-visible: true;\n\
+    in property <bool> sidebar-visible: true;\n\
+    in property <bool> sidebar-overlay: false;\n\
+    in property <bool> sidebar-popped: false;\n\
+    in-out property <int> sidebar-active: 0;\n\
+    in property <[string]> sidebar-titles;\n\
+    callback sidebar-tab(int);\n\
+    callback sidebar-detach();\n\
+    callback sidebar-close();";
+
+/// The height of the host's sidebar tab strip (the playlist's, ui-spec §5.2).
+pub const TAB_STRIP_HEIGHT: f64 = 31.0;
+
+/// What fills a sidebar column (docked, fullscreen overlay, floating window):
+/// the one panel as before, or the tab strip over one branch per panel, the
+/// current one shown (`sidebar-active`, its index), so switching tabs only
+/// changes a property. A click on a tab gives the keys to `keys` (the
+/// column's FocusScope): the panel that had them is gone.
+fn sidebar_content(tabs: &[&CompileSpec], keys: &str, detached: &str) -> String {
+    if let [spec] = tabs {
+        return format!(
+            "Owner{}View {{ width: parent.width; height: parent.height; }}",
+            spec.owner
+        );
+    }
+    let views = tabs
+        .iter()
+        .enumerate()
+        .map(|(index, spec)| {
+            format!(
+                "if root.sidebar-active == {index}: Owner{}View {{ width: parent.width; height: parent.height; }}",
+                spec.owner
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    // Placed by hand, not in a layout: a layout here would pass its size
+    // constraints up to the window (it shrank to its minimum height).
+    format!(
+        "SidebarTabs {{ x: 0px; y: 0px; width: parent.width; height: {TAB_STRIP_HEIGHT}px; \
+         titles: root.sidebar-titles; active: root.sidebar-active; detached: {detached}; \
+         tab(index) => {{ root.sidebar-active = index; {keys}.focus(); root.sidebar-tab(index); }} \
+         detach => {{ root.sidebar-detach(); }} close => {{ root.sidebar-close(); }} }} \
+         Rectangle {{ x: 0px; y: {TAB_STRIP_HEIGHT}px; width: parent.width; \
+         height: parent.height - {TAB_STRIP_HEIGHT}px; {views} }}"
+    )
+}
+
 /// Generated source is ordinary Slint, not a layout protocol. Imports use
 /// canonical files; package containment is the package loader's responsibility.
 /// Aliases prevent exported-name collisions, but are not a sandbox. Slint globals
@@ -153,8 +204,8 @@ pub fn shell_source(specs: &[CompileSpec]) -> Result<String> {
     let mut files = BTreeSet::new();
     let mut source = String::new();
     for spec in specs {
-        if !owners.insert(spec.owner) || !slots.insert(spec.slot) {
-            bail!("this shell requires unique owners and at most one component per slot");
+        if !owners.insert(spec.owner) || (spec.slot != Slot::Sidebar && !slots.insert(spec.slot)) {
+            bail!("this shell requires unique owners and at most one bottom bar and one backdrop");
         }
         if !files.insert(dunce::canonicalize(&spec.file).context("composition file unavailable")?) {
             bail!("independent composition owners require distinct Slint files");
@@ -163,47 +214,48 @@ pub fn shell_source(specs: &[CompileSpec]) -> Result<String> {
         import_spec(&mut source, spec, &path)?;
     }
     let mut shell = include_str!("../ui/host.slint").to_owned();
-    let properties = "in property <bool> bottom-visible: true;\n\
-                      in property <bool> sidebar-visible: true;\n\
-                      in property <bool> sidebar-overlay: false;\n\
-                      in property <bool> sidebar-popped: false;";
-    replace_marker(&mut shell, "// VESTRA-MOUNT-PROPERTIES", properties)?;
-    let sidebar_spec = specs.iter().find(|spec| spec.slot == Slot::Sidebar);
-    let sidebar = sidebar_spec
-        .map(|spec| {
-            format!(
-                "if root.sidebar-visible: Rectangle {{ width: 3px; horizontal-stretch: 0; background: Theme.line; \
-                 TouchArea {{ mouse-cursor: MouseCursor.ew-resize; \
-                 moved => {{ if self.pressed {{ root.sidebar-width = clamp(root.width / 1px - (self.absolute-position.x + self.mouse-x) / 1px - 1.5, 317, max(317, root.width / 1px - 321)); }} }} \
-                 pointer-event(event) => {{ if event.kind == PointerEventKind.up {{ root.sidebar-resized(root.sidebar-actual); }} }} }} }}\n\
-                 if root.sidebar-visible: FocusScope {{ width: root.sidebar-actual * 1px; horizontal-stretch: 0; {} \
-                 Owner{}View {{ width: parent.width; height: parent.height; }} }}",
-                key_forward("panel:sidebar"),
-                spec.owner
-            )
-        })
-        .unwrap_or_default();
+    replace_marker(&mut shell, "// VESTRA-MOUNT-PROPERTIES", SHELL_PROPERTIES)?;
+    let tabs = specs
+        .iter()
+        .filter(|spec| spec.slot == Slot::Sidebar)
+        .collect::<Vec<_>>();
+    if tabs.len() > 1 {
+        source.push_str("import { SidebarTabs } from \"sidebar-tabs.slint\";\n");
+    }
+    let sidebar = if tabs.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "if root.sidebar-visible: Rectangle {{ width: 3px; horizontal-stretch: 0; background: Theme.line; \
+             TouchArea {{ mouse-cursor: MouseCursor.ew-resize; \
+             moved => {{ if self.pressed {{ root.sidebar-width = clamp(root.width / 1px - (self.absolute-position.x + self.mouse-x) / 1px - 1.5, 317, max(317, root.width / 1px - 321)); }} }} \
+             pointer-event(event) => {{ if event.kind == PointerEventKind.up {{ root.sidebar-resized(root.sidebar-actual); }} }} }} }}\n\
+             if root.sidebar-visible: sidebar-keys := FocusScope {{ width: root.sidebar-actual * 1px; horizontal-stretch: 0; {} {} }}",
+            key_forward("panel:sidebar"),
+            sidebar_content(&tabs, "sidebar-keys", "false")
+        )
+    };
     replace_marker(&mut shell, "// VESTRA-MOUNT-SIDEBAR", &sidebar)?;
     // G-01: in fullscreen the attached sidebar is an overlay over the right
     // of the video, full height; it slides out when popped and back when
     // collapsed. Its hover area reports to the host (the G-04 mechanism).
-    let overlay = sidebar_spec
-        .map(|spec| {
-            format!(
-                "if root.sidebar-overlay: Rectangle {{ x: root.width; y: 0px; \
-                 width: root.sidebar-pop-width * 1px; height: root.height; \
-                 states [ popped when root.sidebar-popped: {{ x: root.width - self.width; \
-                 in {{ animate x {{ duration: 150ms; easing: ease-out; }} }} \
-                 out {{ animate x {{ duration: 150ms; easing: ease-in; }} }} }} ] \
-                 TouchArea {{ changed has-hover => {{ root.sidebar-hover = self.has-hover; }} \
-                 changed mouse-x => {{ root.window-input(\"activity\"); }} \
-                 changed mouse-y => {{ root.window-input(\"activity\"); }} \
-                 FocusScope {{ {} Owner{}View {{ width: parent.width; height: parent.height; }} }} }} }}",
-                key_forward("panel:sidebar"),
-                spec.owner
-            )
-        })
-        .unwrap_or_default();
+    let overlay = if tabs.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "if root.sidebar-overlay: Rectangle {{ x: root.width; y: 0px; \
+             width: root.sidebar-pop-width * 1px; height: root.height; \
+             states [ popped when root.sidebar-popped: {{ x: root.width - self.width; \
+             in {{ animate x {{ duration: 150ms; easing: ease-out; }} }} \
+             out {{ animate x {{ duration: 150ms; easing: ease-in; }} }} }} ] \
+             TouchArea {{ changed has-hover => {{ root.sidebar-hover = self.has-hover; }} \
+             changed mouse-x => {{ root.window-input(\"activity\"); }} \
+             changed mouse-y => {{ root.window-input(\"activity\"); }} \
+             overlay-keys := FocusScope {{ {} {} }} }} }}",
+            key_forward("panel:sidebar"),
+            sidebar_content(&tabs, "overlay-keys", "false")
+        )
+    };
     replace_marker(&mut shell, "// VESTRA-MOUNT-OVERLAY", &overlay)?;
     let bottom = specs
         .iter()
@@ -243,12 +295,21 @@ pub fn shell_source(specs: &[CompileSpec]) -> Result<String> {
     Ok(source)
 }
 
-/// The detached sidebar (C14): the same component and bridge global in a
-/// window of its own, with the shell's key forwarding and menu layer.
-pub fn floating_source(spec: &CompileSpec, title: &str) -> Result<String> {
+/// The detached sidebar (C14): the same components and bridge globals in a
+/// window of its own, with the shell's key forwarding, menu layer and (two
+/// or more panels) tab strip. `title` is the first window title; the host
+/// sets `panel-title` to the current tab's.
+pub fn floating_source(specs: &[CompileSpec], title: &str) -> Result<String> {
     let mut source = String::new();
-    let path = import_path(&spec.file)?;
-    import_spec(&mut source, spec, &path)?;
+    for spec in specs {
+        let path = import_path(&spec.file)?;
+        import_spec(&mut source, spec, &path)?;
+    }
+    if specs.len() > 1 {
+        source.push_str("import { SidebarTabs } from \"sidebar-tabs.slint\";\n");
+    }
+    let tabs = specs.iter().collect::<Vec<_>>();
+    let content = sidebar_content(&tabs, "panel-keys", "true");
     let title = serde_json::to_string(title)?;
     source.push_str(&format!(
         r#"import {{ MenuView, MenuLevel }} from "menu-view.slint";
@@ -256,7 +317,8 @@ import {{ Theme }} from "@vestra/theme.slint";
 export {{ VestraPalette }} from "palette.slint";
 export {{ MenuChrome }} from "menu-view.slint";
 export component FloatingPanel inherits Window {{
-    title: {title};
+    in property <string> panel-title: {title};
+    title: root.panel-title;
     min-width: 300px; min-height: 250px;
     preferred-width: 300px; preferred-height: 408px;
     background: Theme.bg-list;
@@ -272,9 +334,14 @@ export component FloatingPanel inherits Window {{
     callback menu-back();
     callback menu-dismiss();
     callback key-input(string, string, bool, bool, bool, bool, bool) -> bool;
-    FocusScope {{
+    in-out property <int> sidebar-active: 0;
+    in property <[string]> sidebar-titles;
+    callback sidebar-tab(int);
+    callback sidebar-detach();
+    callback sidebar-close();
+    panel-keys := FocusScope {{
         {keys}
-        Owner{owner}View {{ width: parent.width; height: parent.height; }}
+        {content}
     }}
     if root.menu-open: Rectangle {{
         width: root.width; height: root.height;
@@ -292,7 +359,6 @@ export component FloatingPanel inherits Window {{
 }}
 "#,
         keys = key_forward("panel:sidebar"),
-        owner = spec.owner,
     ));
     Ok(source)
 }
@@ -483,36 +549,49 @@ pub fn compile_json(
 /// Compile and bind the floating panel window; not shown. Bridge callbacks
 /// arrive tagged with `generation`, like a shell generation.
 pub fn compile_floating(
-    spec: &CompileSpec,
+    specs: &[CompileSpec],
     title: &str,
     events: mpsc::SyncSender<JsonCallback>,
     generation: u64,
 ) -> Result<ComponentInstance> {
-    let definition = build(floating_source(spec, title)?, "FloatingPanel")?;
+    let definition = build(floating_source(specs, title)?, "FloatingPanel")?;
     let instance = definition.create()?;
-    let alias = global_alias(spec.owner);
-    crate::ui_values::own_default_models(&instance, Some(&alias))?;
-    let callbacks = definition
-        .global_callbacks(&alias)
-        .with_context(|| format!("composition global unavailable: {alias}"))?;
-    for callback in callbacks {
-        let sender = events.clone();
-        let owner = spec.owner;
-        let name = callback.clone();
-        instance.set_global_callback(&alias, &callback, move |args| {
-            deliver_json(
-                &sender,
-                JsonCallback {
-                    shell_generation: generation,
-                    owner,
-                    callback: name.clone(),
-                    args: json_args(args),
-                },
-            );
-            Value::Void
-        })?;
+    for spec in specs {
+        let alias = global_alias(spec.owner);
+        crate::ui_values::own_default_models(&instance, Some(&alias))?;
+        let callbacks = definition
+            .global_callbacks(&alias)
+            .with_context(|| format!("composition global unavailable: {alias}"))?;
+        for callback in callbacks {
+            let sender = events.clone();
+            let owner = spec.owner;
+            let name = callback.clone();
+            instance.set_global_callback(&alias, &callback, move |args| {
+                deliver_json(
+                    &sender,
+                    JsonCallback {
+                        shell_generation: generation,
+                        owner,
+                        callback: name.clone(),
+                        args: json_args(args),
+                    },
+                );
+                Value::Void
+            })?;
+        }
     }
     Ok(instance)
+}
+
+/// The host-owned `tabbed` property: `true` while the host draws its tab
+/// strip above the panel (the sidebar holds two or more), so a panel with a
+/// tab strip of its own hides it. Set only on globals that declare it.
+pub fn set_tabbed(instance: &ComponentInstance, spec: &CompileSpec, tabbed: bool) -> Result<()> {
+    let alias = global_alias(spec.owner);
+    if spec.global.is_some() && instance.get_global_property(&alias, "tabbed").is_ok() {
+        instance.set_global_property(&alias, "tabbed", Value::Bool(tabbed))?;
+    }
+    Ok(())
 }
 
 pub fn set_json_global(
@@ -647,7 +726,12 @@ mod tests {
         assert!(source.contains("root.bottom-hover = self.has-hover"));
         assert!(source.contains("root.sidebar-hover = self.has-hover"));
         let overlay = source.find("if root.sidebar-overlay:").unwrap();
-        assert!(overlay > source.find("if root.sidebar-visible: FocusScope").unwrap());
+        assert!(
+            overlay
+                > source
+                    .find("if root.sidebar-visible: sidebar-keys := FocusScope")
+                    .unwrap()
+        );
         assert!(overlay < source.find("if root.menu-open: Rectangle").unwrap());
         assert_eq!(source.matches("Owner20View {").count(), 2);
         // Reference §6.3: bottom-bar content may draw above its slot (negative
@@ -697,7 +781,7 @@ mod tests {
         assert!(source.find("Owner30View").unwrap() < source.find("mouse := TouchArea").unwrap());
         assert!(definition.global_properties("Owner30Bridge").is_some());
         build(
-            floating_source(&specs[1], "播放列表").unwrap(),
+            floating_source(&specs[1..], "播放列表").unwrap(),
             "FloatingPanel",
         )
         .unwrap();
@@ -723,5 +807,92 @@ mod tests {
         assert!(json_args(&[Value::Number(f64::NAN)]).is_err());
         drop(receiver);
         assert!(!deliver_json(&sender, event()));
+    }
+
+    fn tab_specs() -> Vec<CompileSpec> {
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
+        vec![
+            CompileSpec {
+                owner: 10,
+                file: base.join("bar.slint"),
+                component: "SourceBar".into(),
+                global: Some("Bridge".into()),
+                slot: Slot::Bottom,
+            },
+            CompileSpec {
+                owner: 20,
+                file: base.join("sidebar.slint"),
+                component: "RowsSidebar".into(),
+                global: Some("Bridge".into()),
+                slot: Slot::Sidebar,
+            },
+            CompileSpec {
+                owner: 30,
+                file: base.join("tab.slint"),
+                component: "NoteTab".into(),
+                global: Some("Bridge".into()),
+                slot: Slot::Sidebar,
+            },
+        ]
+    }
+
+    #[test]
+    fn one_sidebar_panel_has_no_tab_strip_and_two_have_one_branch_each() {
+        let specs = tab_specs();
+        // One panel: the column is the panel itself, as before tabs.
+        let single = shell_source(&specs[..2]).unwrap();
+        assert!(!single.contains("SidebarTabs") && !single.contains("sidebar-active =="));
+        assert!(single.contains(
+            "sidebar-keys := FocusScope { width: root.sidebar-actual * 1px; horizontal-stretch: 0; key-pressed"
+        ));
+        // Two: the strip and one `if` per tab, in the order of the specs,
+        // in the docked column and the fullscreen overlay alike.
+        let tabbed = shell_source(&specs).unwrap();
+        assert_eq!(tabbed.matches("SidebarTabs {").count(), 2);
+        assert_eq!(
+            tabbed
+                .matches("if root.sidebar-active == 0: Owner20View")
+                .count(),
+            2
+        );
+        assert_eq!(
+            tabbed
+                .matches("if root.sidebar-active == 1: Owner30View")
+                .count(),
+            2
+        );
+        assert!(tabbed.contains("sidebar-keys.focus()") && tabbed.contains("overlay-keys.focus()"));
+        let mut swapped = specs.clone();
+        swapped.swap(1, 2);
+        assert!(
+            shell_source(&swapped)
+                .unwrap()
+                .contains("if root.sidebar-active == 0: Owner30View")
+        );
+        // Bottom bar and backdrop stay one each.
+        let mut two_bars = specs.clone();
+        two_bars[2].slot = Slot::Bottom;
+        assert!(shell_source(&two_bars).is_err());
+    }
+
+    #[test]
+    fn tabbed_shell_and_floating_window_compile_and_switch_by_property() {
+        let specs = tab_specs();
+        let definition = compile_definition(&specs).unwrap();
+        for property in ["sidebar-active", "sidebar-titles"] {
+            assert!(definition.properties().any(|(name, _)| name == property));
+        }
+        for callback in ["sidebar-tab", "sidebar-detach", "sidebar-close"] {
+            assert!(definition.callbacks().any(|name| name == callback));
+        }
+        assert!(definition.global_properties("Owner30Bridge").is_some());
+        let floating = build(
+            floating_source(&specs[1..], "播放列表").unwrap(),
+            "FloatingPanel",
+        )
+        .unwrap();
+        assert!(floating.global_properties("Owner20Bridge").is_some());
+        assert!(floating.global_properties("Owner30Bridge").is_some());
+        assert!(floating.properties().any(|(name, _)| name == "panel-title"));
     }
 }

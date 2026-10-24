@@ -287,6 +287,65 @@ test("F6, the tab-strip close button and the menu check share the sidebar prefer
   }
 });
 
+/** SDK 1.5.2 TestHost sidebar tabs; older SDKs have one sidebar panel. */
+type TabHost = TestHost & {
+  mountOther(slot: "sidebar", plugin: string, options?: { title?: string }): void;
+  selectTab(plugin: string): void;
+  unmountOther(plugin: string): void;
+};
+const tabbedHost = (host: TestHost): TabHost | null =>
+  typeof (host as Partial<TabHost>).mountOther === "function" ? (host as TabHost) : null;
+const noTabs = typeof (TestHost.prototype as Partial<TabHost>).mountOther !== "function" && "SDK without sidebar tabs";
+
+test("sidebar tabs: F6 brings the playlist's tab forward, hides the sidebar on it, shows it on it", { skip: noTabs }, async () => {
+  const app = await start();
+  try {
+    const host = tabbedHost(app.host)!;
+    host.mountOther("sidebar", "example.list", { title: "示例列表" });
+    await host.settle();
+    assert.equal((host.layout.sidebar as { panels?: unknown[] } | null)?.panels?.length, 2);
+    // The plugin never writes `tabbed`: the player sets it while it draws its strip.
+    assert.equal(app.prop("tabbed"), undefined);
+    assert.equal(app.command("visibility").state.checked, true);
+    // Another tab current: unchecked; F6 brings the playlist forward, the sidebar stays shown.
+    host.selectTab("example.list");
+    await host.settle();
+    assert.equal(app.command("visibility").state.checked, false);
+    await host.press("F6");
+    await host.settle();
+    assert.equal(host.layout.sidebar?.preferred, true);
+    assert.equal(app.command("visibility").state.checked, true);
+    // The playlist current: F6 hides the whole sidebar.
+    await host.press("F6");
+    await host.settle();
+    assert.equal(host.layout.sidebar?.preferred, false);
+    assert.equal(app.command("visibility").state.checked, false);
+    // Hidden with another tab current: F6 shows the sidebar on the playlist's tab.
+    host.selectTab("example.list");
+    await host.settle();
+    await host.press("F6");
+    await host.settle();
+    assert.equal(host.layout.sidebar?.preferred, true);
+    assert.equal(app.command("visibility").state.checked, true);
+    // Focus in the list: F6 (关闭列表) and the own close button hide the whole sidebar.
+    await app.press("F6");
+    assert.equal(host.layout.sidebar?.preferred, false);
+    await app.run("visibility");
+    assert.equal(host.layout.sidebar?.preferred, true);
+    await app.emit("hide");
+    assert.equal(host.layout.sidebar?.preferred, false);
+    // The other tab gone: back to the one-panel behaviour.
+    host.unmountOther("example.list");
+    await host.settle();
+    await host.press("F6");
+    await host.settle();
+    assert.equal(host.layout.sidebar?.preferred, true);
+    assert.equal(app.command("visibility").state.checked, true);
+  } finally {
+    await app.close();
+  }
+});
+
 test("adding files dedups by realpath and never plays; Enter plays with startPaused false", async () => {
   const app = await start();
   try {

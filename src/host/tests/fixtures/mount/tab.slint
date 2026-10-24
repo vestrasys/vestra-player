@@ -1,0 +1,16 @@
+// A second sidebar panel (a tab next to sidebar.slint), with its own tab
+// strip hidden while the host draws one (`tabbed`, host-owned).
+export global Bridge {
+    in property <bool> tabbed;
+    in-out property <string> note: "second tab";
+    callback picked();
+}
+
+export component NoteTab inherits Rectangle {
+    background: #1a1821;
+    VerticalLayout {
+        if !Bridge.tabbed: Rectangle { height: 31px; background: #16141c; }
+        Text { text: Bridge.note; color: white; }
+        TouchArea { clicked => { Bridge.picked(); } }
+    }
+}

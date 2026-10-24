@@ -485,8 +485,7 @@ impl Host {
                 size.width as f32 / scale,
                 size.height as f32 / scale,
             ));
-            instance.window().set_position(window.position());
-            instance.show()?;
+            self.placements.show_at(&instance, window.position())?;
             crate::platform::shown(instance.window());
             let _ = old.instance.hide();
         }

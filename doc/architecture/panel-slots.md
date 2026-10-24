@@ -22,6 +22,15 @@
 
 ## 第 1 步：侧栏页签
 
+状态（2026-10-24）：宿主与 SDK 1.5.2 已实现（分支 `feat/sidebar-tabs`、SDK `feat/panel-tabs`）；播放列表的适配另行进行。实现中的取舍：
+
+- 页签列表放在 `PanelSlot.panels`（不放进 `SlotState`），这样插件测试里对 `state` 的 `deepEqual` 不会因新字段失败；线上仍是 `LayoutSlot.panels`。
+- `"otherTab"` 只出现在 `Panel.state.reason`；`SlotState.reason` 是整个侧栏的，不变。
+- 侧栏最多 8 个页签，第 9 个以 `conflict`（`slot-occupied`）拒绝，不算激活失败。
+- 页签条右端的关闭按钮提示「关闭侧栏」；非当前页签文字用 `text-dim`、悬停有 `hover-bg` 圆角底；页签放不下 105px 时等分变窄、文字省略。
+- 拖放坐标从页签条下方算起（面板组件自己的坐标系）。
+- Ctrl+Tab 切换页签未做。
+
 ```
 ┌──────────── video ────────────┬[播放列表][示例列表]   ⧉ ✕┐
 │                               │  1. a.mkv                 │

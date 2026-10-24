@@ -710,6 +710,10 @@ panels.backdrop: {                // 背景层
 
 interface Panel extends View, Disposable {
   readonly ready: Promise<void>;                 // 已挂载
+  readonly state: PanelState | null;             // 本面板的状态（SDK 1.5.2）；null：未挂载
+  onChange(listener: (state: PanelState | null) => void): Disposable;
+  show(): Promise<void>;                         // 切到本面板的页签并显示侧栏
+  toggle(): Promise<void>;                       // 本页签正显示 → 隐藏侧栏；否则 show()
   setInteraction(locks: Partial<{ focused; dragging; popupOpen: boolean }>): void;
   showMenu(items: (Command | null)[], at: { x: number; y: number }): Promise<void>;
   onDrop(listener: (e: { paths: string[]; at: { x; y }; modifiers: DropModifiers }) => unknown): Disposable; // §6.7
@@ -717,9 +721,19 @@ interface Panel extends View, Disposable {
 
 interface PanelSlot {
   readonly state: SlotState | null;              // null：该位置没有面板
-  onChange(listener: (state: SlotState | null) => void): Disposable;
+  readonly panels: readonly SlotPanel[] | null;  // 页签，按顺序（SDK 1.5.2）；旧播放器为 null
+  onChange(listener: (state: SlotState | null) => void): Disposable; // 只有页签变化时也调用
   setVisible(visible: boolean): Promise<void>;   // 设置用户偏好
   toggle(): Promise<void>;                       // 按播放器当前值翻转偏好
+  activate(plugin: string): Promise<void>;       // 切换当前页签，不改显示（SDK 1.5.2）
+}
+interface SlotPanel { plugin: string; title: string; active: boolean } // plugin：清单 id
+interface PanelState {
+  active: boolean;      // 本面板是当前页签（底栏、背景层、唯一的侧栏面板总为 true）
+  preferred: boolean;   // 位置的偏好
+  effective: boolean;   // 位置看得见且本面板是当前页签
+  reason: SlotState["reason"] | "otherTab";  // 不是当前页签时为 "otherTab"
+  detached: boolean;
 }
 interface SidebarSlot extends PanelSlot {
   setDetached(detached: boolean): Promise<void>; // 分离为浮动窗口 / 附着回主窗口
@@ -732,7 +746,7 @@ interface SlotState {
 }
 ```
 
-- 面板文件导出**一个 component 和一个 global**。属性和回调声明在 global 上（桥接对象），component 负责布局。名字由 SDK 从文件推断；文件导出多个时用 `options` 指定。`title` 是侧栏分离后浮动窗口的标题。
+- 面板文件导出**一个 component 和一个 global**。属性和回调声明在 global 上（桥接对象），component 负责布局。名字由 SDK 从文件推断；文件导出多个时用 `options` 指定。`title` 是侧栏分离后浮动窗口的标题，也是侧栏页签的文字（不给时用插件的 `name`，再没有时为「Vestra Player」）。
 - `panels.bottom` / `panels.sidebar` 不属于挂载者：任何插件都能读取和切换（例如底栏按钮开关播放列表）。位置为空时 `setVisible` 等以 `missing` 失败；对底栏 `setDetached` 是 `invalid`。没有 `events` 时 `state` 只在本插件自己改动后刷新。侧栏的显示、宽度、分离状态与浮动窗口位置由播放器跨启动记住。
 - 侧栏占视频右侧全高，用户可拖动分隔条改宽度（侧栏至少 317、视频至少 318）；窗口窄到放不下时先压缩视频，再不够才隐藏（`reason: "space"`，偏好不变）。分离后浮动窗口默认 300×408、最小 300×250，显示同一个面板组件，插件的属性和回调不变；点浮动窗口的关闭按钮或按标准关闭键（同 §6.2）等于 `setVisible(false)`。
 - **全屏时的附着侧栏**（交互对齐 G-01）：不挤压视频，而是以覆盖层盖在视频右侧（全高，宽为用户拖出的宽度、至少留 318 给视频）。进入全屏时**收起**（`effective: false`，`reason: "fullscreen"`）；偏好为显示时，指针移到屏幕右边缘 4px 以内**弹出**（向左滑出 150ms，`effective: true`，`reason: null`），弹出期间底栏收窄到弹出层左边。指针离开弹出层（回到它左边的视频或底栏上）500ms 后收起；没有锁时 3 秒无活动也收起。全屏中 `setVisible(true)`（F6、底栏按钮）立即弹出，保持到指针进入后再离开或 3 秒无活动；`setVisible(false)` 立即收起。偏好为隐藏时右边缘不弹出。弹出不抢键盘焦点；收起时焦点交回视频区。浮动侧栏不受影响。是否处于覆盖形态由插件按 `window.state.fullscreen && !state.detached` 自己判断；`reason: "fullscreen"` 表示「覆盖层收起，右边缘可以唤出」，不再表示「全屏时不可用」，所以按偏好画开关按钮的插件把它当作「开」。
@@ -742,8 +756,15 @@ interface SlotState {
 - 面板转发 global 上的所有回调，没有「先绑定再显示」的限制。
 - 底栏面板的内容可以画到槽位上方的视频区（负 `y`），宿主不裁切；侧栏与浮动窗口在其上层。进度条悬停时间提示这类内容可以直接画在底栏组件里（宿主的组合测试保证底栏外层不带 `clip`）。
 - 每个插件至多挂载一个面板（任一位置）。
-- **每个位置同一时间只有一个面板**（底栏、侧栏、背景层各一个）。位置已有别的插件的面板（已显示，或正在挂载）时，`ready` 以 `conflict` 失败，消息说明位置和占用者（「侧栏已被 vestra.playlist 使用」）；这次拒绝**不算激活失败**：插件照常运行，命令、快捷键都在，只是没有面板。播放器同时显示一条屏幕提示、写宿主日志，插件管理里该插件显示「提示：面板未显示：侧栏已被 … 使用」（`PluginInfo.error`，状态仍为 `running`）。占用者卸载后位置空出，插件重新加载即可挂上。`ui-prepare` 只表示文件编译或桥接失败。
-- 启动时**内置插件先挂载**：内置插件激活完成之前，其它插件（已安装的第三方插件、`--plugin` 开发加载）的挂载请求先等着，所以内置面板（播放列表的侧栏）总是保有自己的位置，与各插件进程谁先回应无关。
+- **侧栏页签**（[panel-slots.md](../architecture/panel-slots.md) 第 1 步）：侧栏可以放多个插件的面板，每个是一个页签，最多 8 个。第二个侧栏面板的 `ready` 照常 resolve。只有一个侧栏面板时界面与以前完全一样；两个及以上时宿主在当前面板上方画 31px 页签条（样式同 ui-spec §5.2 的播放列表页签，105px 宽、放不下时等分变窄；当前页签文字下有渐变短线，其余页签文字为 `text-dim`、悬停有底色），右端是作用于整个侧栏的分离/附着和关闭按钮（「关闭侧栏」）。点页签只改宿主属性（`sidebar-active`），不重编主窗口；键盘焦点交给侧栏。
+  - 显示、隐藏、分离是**侧栏级**的：`panels.sidebar.setVisible` / `toggle` / `setDetached` 作用于所有页签，`state` 描述整个侧栏（`SlotState` 形状不变）。`panels.sidebar.panels` 列出页签（`{ plugin, title, active }`），`activate(plugin)` 切换当前页签。
+  - 本面板：`panel.state.active === false`、`effective: false`、`reason: "otherTab"` 表示登记了但当前不显示；变化通过 `panel.onChange` 通知。`panel.show()` 切到本页签并显示侧栏；`panel.toggle()` 在侧栏显示且本页签是当前页签时隐藏侧栏，否则 `show()`（后台页签被切到前面，而不是关掉侧栏）。旧播放器（没有页签）上它们等于 `setVisible(true)` / `toggle()`。
+  - 后台页签：`showMenu` 以 `unavailable` 失败；`setInteraction` 照常记录，但只有当前页签的锁对全屏弹出层起作用；只有当前页签收到 `focus: "panel"` 的按键；拖放交给当前页签，`at` 从页签条下方算起。
+  - `tabbed`：面板的桥接 global 声明了 `in property <bool> tabbed` 时，宿主在画页签条期间把它设为 `true`（插件不要自己写），自带页签条的面板（播放列表）据此隐藏自己的页签条。
+  - 浮动窗口里是整个侧栏，带同样的页签条，标题随当前页签；全屏弹出层同样带页签条、显示当前页签。
+  - 页签顺序：内置插件的在前（播放列表固定第一），其余按第一次出现的顺序；顺序、当前页签、显示和分离状态、浮动窗口位置跨启动保存（`ui-state.json` 的 `sidebarSlot`，旧版本按面板保存的 `panels` 自动迁移，播放列表的状态成为侧栏的状态）。首版不能关闭单个页签、不能拖动排序。
+- **底栏和背景层同一时间只有一个面板**。位置已有别的插件的面板（已显示，或正在挂载）时，`ready` 以 `conflict` 失败，消息说明位置和占用者（「底栏已被 vestra.playback 使用」）；侧栏已有 8 个页签时同样以 `conflict` 失败（「侧栏最多 8 个页签」）。这类拒绝**不算激活失败**：插件照常运行，命令、快捷键都在，只是没有面板。播放器同时显示一条屏幕提示、写宿主日志，插件管理里该插件显示「提示：面板未显示：底栏已被 … 使用」（`PluginInfo.error` 与 `PluginInfo.warnings`，状态仍为 `running`）。占用者卸载后位置空出，插件重新加载即可挂上。`ui-prepare` 只表示文件编译或桥接失败。
+- 启动时**内置插件先挂载**：内置插件激活完成之前，其它插件（已安装的第三方插件、`--plugin` 开发加载）的挂载请求先等着，所以内置面板总是保有自己的位置（播放列表的侧栏页签排第一），与各插件进程谁先回应无关。
 
 **背景层**（`"backdrop"`）：没有视频帧时画在视频区（铺满，替代黑色的视频图像），用于专辑封面、空闲徽标。
 
@@ -1267,7 +1288,7 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 | --- | --- |
 | 操作 | `host.command(id).run()`（禁用或忙碌时同样拒绝）；`host.press(binding, { panel? })`（按绑定表执行，`panel: true` 模拟面板有焦点）；`host.window(id).emit(callback, ...args)`；`host.mounted().emit(...)`；`host.dialogAnswers.push([path] \| null)`；`host.step("next" \| "previous")`（模拟别的插件调用 `player.next()`） |
 | 模拟来源 | `host.openElsewhere(path, phase?)`（另一个插件打开了媒体）；`host.setSource({ phase, position, duration, … })` |
-| 断言 | `host.window(id).props`（kebab-case 名）、`.visible`；`host.command(id).state`、`.declaration`；`host.conflicts`（`[绑定, 赢家, ...被压下]`）；`host.layout.bottom` / `.sidebar`（可直接改后 `host.emit("window.state", {})` 模拟别处的变化）；`host.osd`（显示过的提示）、`host.osdPanel`；`host.sequence`（提供者的标志）；`host.menus`（`showMenu` 记录）；`host.sent(method)`；`host.source`；`host.processing`、`host.subtitles`、`host.snapshots`、`host.jobs`、`host.producers` |
+| 断言 | `host.window(id).props`（kebab-case 名）、`.visible`；`host.command(id).state`、`.declaration`；`host.conflicts`（`[绑定, 赢家, ...被压下]`）；`host.layout.bottom` / `.sidebar`（可直接改后 `host.emit("window.state", {})` 模拟别处的变化；`.panels` 为页签、`.owner` 为当前页签，被测插件是 owner 1）；SDK 1.5.2 起 `host.mountOther(slot, plugin, { title })` / `host.unmountOther(plugin)` 模拟别的插件的面板（侧栏为另一个页签；底栏、背景层被占时被测插件的挂载以 `conflict` 失败，`startPlugin` 不因此失败），`host.selectTab(plugin)` 模拟点页签；`host.osd`（显示过的提示）、`host.osdPanel`；`host.sequence`（提供者的标志）；`host.menus`（`showMenu` 记录）；`host.sent(method)`；`host.source`；`host.processing`、`host.subtitles`、`host.snapshots`、`host.jobs`、`host.producers` |
 | 模拟数据 | `host.stats`（`player.stats()` 的返回值，第 2 轮新增字段可省略，SDK 补 `null`）；`host.dataDirectory`（`plugin.dataDirectory`，`storage.json` 直接读写其中的真实文件）；`host.setSource({ audioTracks })`（`addAudioTrack` / `selectAudioTrack` 有默认处理，可用 `host.handle("audio.addTrack" \| "audio.selectTrack", …)` 注入失败）；`host.subtitles.tracks` 的条目可带 `codec`、`text`、`streamIndex` |
 | 通用能力 | `host.clipboard`（`{ text, images }`，预置 `text` 测 `readText`）；`host.power`（合并后的 `"off"` / `"playing"`）；`host.tools.handle(tool, (args) => ({ stdout, stderr }))`（未注入的工具 `unavailable`；抛 `HostError` 模拟失败），`host.tools.calls`；`host.system.revealed`、`.opened`（播放器收到的 `system.reveal` / `openPath` 路径；用 `host.handle("system.openPath", …)` 等注入失败）；`host.subtitleLoads`（每次 `load` 的 `format`、`title`、`select` 与字节）；`host.system.urls`（`system.openUrl`） |
 | 渲染轮 | `host.videoRender`（`{ owner, values, gpu }`；`gpu: false` 模拟软件渲染，`set` 以 `unsupported` 失败）；`host.setVideoRenderOwner(pluginId \| null)`；`host.failVideoRender("failed" \| "unsupported", message)`（播放器推给拥有者的失败：着色器编译失败、退回软件渲染）；`host.stats.video` 可带 `hwdec`、`transfer`。着色器文件是否存在按真实文件系统检查；`host.producerTransport = "tcp"`（`openStream` 走回环 TCP 加令牌，如 Windows；`producer.admitted` 表示令牌正确） |
@@ -1439,6 +1460,16 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | `Theme.font-mono` §6.4 | Menlo | Consolas | DejaVu Sans Mono |
 
 ## 17. 变更说明
+
+### 侧栏页签（2026-10，播放器 0.4.0 之后，SDK 1.5.2）
+
+只增不改；`apiVersion` 仍为 `vestra/1`，老插件不用改。设计见 [panel-slots.md](../architecture/panel-slots.md) 第 1 步，规则见 §6.3。
+
+- 侧栏可以放多个插件的面板（页签，最多 8 个）：第二个侧栏面板不再以 `conflict` 失败，`ready` 照常 resolve。只有一个侧栏面板时界面不变；两个及以上时宿主画 31px 页签条。显示、隐藏、分离作用于整个侧栏；浮动窗口与全屏弹出层带同样的页签条。
+- 线上：`layout.state` 的 `bottom` / `sidebar` 多了 `panels: [{ owner, plugin, title }]`（按页签顺序），`owner` 改为当前页签的面板；`layout.set` 多了 `active`（插件 id，未知为 `missing`）；后台页签的 `ui.menu` 以 `unavailable` 失败；面板的拖放坐标从页签条下方算起；`ui.mount` 不给 `title` 时浮动窗口与页签用插件的 `name`。
+- 宿主属性 `tabbed`：桥接 global 声明了它时，宿主画页签条期间设为 `true`。
+- SDK 1.5.2：`Panel.state` / `onChange` / `show()` / `toggle()`，`PanelSlot.panels` / `activate(plugin)`，`PanelState.reason` 的 `"otherTab"`，`PluginInfo.warnings`；`TestHost` 模拟页签与被占的底栏、背景层。播放器自带的 SDK 运行时（`@vestra-player/sdk`）升级到 1.5.2 之前，插件里这些成员不存在，插件应先判断（例如 `typeof list.toggle === "function"`），否则退回 `panels.sidebar.toggle()`。
+- `ui-state.json`：侧栏状态改存 `sidebarSlot { visible, detached, active, order, floating }`；旧的 `panels[*]` 读入时迁移（播放列表那一项优先），之后不再写。
 
 ### 面板位置、上一个/下一个被占：不再让激活失败（2026-10，播放器 0.4.x）
 
