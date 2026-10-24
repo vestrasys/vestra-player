@@ -39,6 +39,7 @@ jobs:
       lock: ${{ steps.plan.outputs.lock }}
       run_windows: ${{ steps.plan.outputs.run_windows }}
       run_macos: ${{ steps.plan.outputs.run_macos }}
+      plugins: ${{ steps.plan.outputs.plugins }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -60,6 +61,8 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/_static.yml
+    with:
+      plugins: ${{ needs.plan.outputs.plugins }}
 
   audit:
     needs: plan

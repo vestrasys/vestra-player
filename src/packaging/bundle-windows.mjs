@@ -113,11 +113,13 @@ run(process.execPath, [
 ]);
 console.log(`${stage}: ${megabytes(await directorySize(stage))}`);
 
-// Portable zip: the staged directory as one top-level folder.
+// Portable zip: the staged directory as one top-level folder. Deflate at
+// -mx=5, not 9: on 445 MB of libraries 9 took 8x as long (89 s against 11 s
+// on an M-series Mac; 215 s on the Windows runner) for a 1.5% smaller zip.
 const zip = join(out, `${base}-portable.zip`);
 await rm(zip, { force: true });
 if (!spawnSync("7z", ["i"], { stdio: "ignore" }).error)
-  run("7z", ["a", "-tzip", "-mx=9", "-bso0", "-bsp0", zip, stage]);
+  run("7z", ["a", "-tzip", "-mx=5", "-bso0", "-bsp0", zip, stage]);
 else run("zip", ["-qr9", zip, base], { cwd: out });
 
 if (!options["no-installer"]) {
