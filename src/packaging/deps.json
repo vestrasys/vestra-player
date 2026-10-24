@@ -1,6 +1,6 @@
 {
   "repository": "vestrasys/vestra-player",
-  "release": "deps-20261022",
+  "release": "deps-20261022.2",
   "assets": {
     "macos-arm64": {
       "file": "vestra-deps-macos-arm64.tar.xz",
@@ -8,7 +8,7 @@
     },
     "windows-x64": {
       "file": "vestra-deps-windows-x64.zip",
-      "sha256": "d31aa05c015a74cf5953a726972488078a8309f3edb875ee58679af91e191839"
+      "sha256": "c342b2f6c09e85ff9ba17696e8441bd85812c4421a94159ff745423e0c730538"
     },
     "macos-arm64-sources": {
       "file": "vestra-deps-macos-arm64-sources.tar",
@@ -27,6 +27,12 @@
       "sha256": "242f3b24335b04511de006594b685d19bc3a46538e086322beb5797f91554413",
       "version": "n9.0.2-31-gc89d6ee1ca",
       "build": "https://github.com/BtbN/FFmpeg-Builds/tree/autobuild-2026-10-21-13-06"
+    },
+    "windows-vulkan-loader": {
+      "url": "https://repo.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-vulkan-loader-1~1.4.363.0-1-any.pkg.tar.zst",
+      "sha256": "065076fe13d39ab97eea4740596426d5ae741b5044e48e1c9495d04835c92dbe",
+      "version": "1.4.363.0",
+      "build": "https://packages.msys2.org/base/mingw-w64-vulkan-loader"
     }
   }
 }

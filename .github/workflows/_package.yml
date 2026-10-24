@@ -95,6 +95,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
           $setup = Get-ChildItem "$env:RUNNER_TEMP\upload\*-setup.exe" | Select-Object -First 1
           $dir = "$env:RUNNER_TEMP\smoke-install"
           $p = Start-Process -Wait -PassThru $setup.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART', "/DIR=$dir", "/LOG=$env:RUNNER_TEMP\setup.log"

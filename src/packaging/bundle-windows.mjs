@@ -6,7 +6,8 @@
  *
  *   <install dir>\
  *     vestra-host.exe
- *     libmpv-2.dll
+ *     libmpv-2.dll, vulkan-1.dll   (vulkan-1.dll: libmpv imports it; GPU drivers
+ *                                  install it, but not every Windows has one)
  *     node\node.exe
  *     ffmpeg\ffmpeg.exe, ffprobe.exe, *.dll
  *     resources\ui\, runtime\, plugins\
@@ -80,7 +81,10 @@ const stage = join(out, base);
 await clean(stage);
 
 await copy(binary, join(stage, "vestra-host.exe"));
-await copy(join(deps, "libmpv-2.dll"), join(stage, "libmpv-2.dll"));
+// libmpv-2.dll and the DLLs it needs (vulkan-1.dll), from the deps root.
+for (const file of await readdir(deps))
+  if (file.toLowerCase().endsWith(".dll"))
+    await copy(join(deps, file), join(stage, file));
 for (const file of await readdir(join(deps, "ffmpeg")))
   await copy(join(deps, "ffmpeg", file), join(stage, "ffmpeg", file));
 const nodeDir = join(tmpdir(), `vestra-node-${process.pid}`);
