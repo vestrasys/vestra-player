@@ -32,13 +32,16 @@
 - [ ] A 实施（图标、主题配色）+ 真机像素对比验收
   - [x] 实施：分支 `identity/look`（播放器 0.4.0）；SDK 1.5.0 分支 `identity/look`（`ThemeId` 加 `"vestra-light"`、`@vestra/icons.slint`），PR 待合并发版。说明与最终效果图见 [proposal.md 的「实施」](../../product/identity/proposal.md)
   - [x] 交互几何核对（解释器读元素位置，改动前后对比）：一致；顺带修好播放列表六个图标按钮点击区为 0×0 的缺陷
-  - [ ] SDK 1.5.0 发版后播放器升级依赖（`test:sdk` 与 `sdk:sync-slint` 在此之前对 1.4.0 不通过）
-  - [ ] 协调者真机验收（两套配色）
+  - [x] SDK 1.5.0 发版后播放器升级依赖（main 2848111）
+  - [x] 协调者真机验收（两套配色）
 - [x] B 清理（播放器、SDK）+ SDK 发版：SDK 1.4.0 已发布；播放器 main e17ec0e，全树 0 处提及
   - [x] 播放器：分支 `identity/cleanup`（第二套主题删除，旧设置迁到 vestra；代码、注释、文档清理；新文档 `ui-spec.md`、`interaction-spec.md`、`feature-catalog.md`）
   - [x] SDK：1.4.0（`ThemeId` 只剩 `"vestra"`），PR vestrasys/vestra-player-sdk#10，待合并、打 tag 发版
-  - [ ] 发版后播放器升级依赖（`npm install @vestra-player/sdk@1.4.0`），`test:sdk` 的 Slint 一致性检查在此之前对 1.3.0 不通过
+  - [x] 发版后播放器升级依赖
 - [ ] C 历史改写（播放器、SDK）
+  - [x] 演练（2026-10-24）：镜像备份与 bundle、`git filter-repo` 改写、核对（所有 ref 的全部对象 0 处提及，提交数不变）。脚本在 scratchpad `history/`（`prepare.sh`、`push.sh`、`replacements.txt`）；推送前重跑 `prepare.sh`
+  - [ ] 用户确认后：暂停两个仓库的 Actions 和 SDK 规则集，推送，恢复；本机重新克隆，删掉旧 worktree
+  - 留在 GitHub 上的：SDK 已合并 PR 的 refs/pull 仍指向旧提交，只有 GitHub Support 能清；npm 1.0.0–1.3.0 含提及，72 小时内可 unpublish（窗口 10-24 16:25Z 起陆续关闭），之后只能 deprecate
 
 ## 记录
 
