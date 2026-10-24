@@ -85,3 +85,20 @@
 - **R-l（宿主）**：`validate` 的候选从不释放，每次运行上限 32 个；希望能释放候选，或提供只编译 Slint 的检查。
 - **R-m（SDK CLI，不阻塞）**：在 `--permission` 下，`existsSync` 遇到无权限路径会抛错，所以 CLI 改用不受限子进程运行。
 - 另外：`third-party.toml` 需要补上 vendor 进来的 SDK。
+
+## 实战（2026-10-24，2.2.0，MiniMax-M3.1-Flash，作者 zysilm）
+
+1. **计时器窗口**（`zysilm.timer`：菜单 + 窗口 + 按钮）
+   - 约 1 分钟，24 次工具调用，0 次失败，一次通过：先读 llms.txt、.d.ts 和控件库，再 scaffold、写代码，typecheck、test、check 全部通过。
+   - **试载失败**：卡片提示「试载没有出现在插件列表里」，原因未查明，可能和 R-j 有关。
+   - 安装成功；菜单「工具 ▸ 计时器」可用，+1 计数正确。
+2. **剩余时间 OSD**（`zysilm.remaining-time`：快捷键 Shift+R + ui.osd + playback.read）
+   - 约 2 分钟，51 次工具调用，8 次失败，最后 typecheck、test（6 项）、check 全部通过。
+   - 因为 R-i（试载只支持 commands/ui.window/events），没有试载。
+   - 还没安装，也还没在真机上实际使用。
+3. 第 3 题未做。
+
+**观察到的问题**
+- 回复中混有英文过程语（「I'll start by reading…」）。系统提示应要求过程说明也用用户的语言，或者干脆不输出过程说明。
+- 8 次失败的原因还没逐条分析。
+- 计时器的试载失败要查清原因。
