@@ -1,0 +1,117 @@
+// The sidebar's tab strip (panel-slots.md step 1), drawn by the host above
+// the current panel while the sidebar holds two or more: the playlist's tab
+// strip (ui-spec §5.2) with one tab per panel. The detach/attach and close
+// buttons at its right end act on the whole sidebar.
+import { Theme } from "@vestra/theme.slint";
+import { Icon } from "@vestra/icons.slint";
+import { ToolTipArea } from "@vestra/widgets.slint";
+
+// A 25px icon button, as the playlist's (`ui/sidebar.slint`).
+component StripButton {
+    in property <string> icon;
+    in property <string> tip;
+    callback clicked();
+    width: 25px;
+    accessible-role: button;
+    accessible-label: root.tip;
+    Icon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        name: root.icon;
+        color: touch.has-hover ? (touch.pressed ? Theme.accent-press : Theme.accent) : Theme.text-dim;
+    }
+    ToolTipArea {
+        width: 100%;
+        height: 100%;
+        text: root.tip;
+        touch := TouchArea {
+            clicked => { root.clicked(); }
+        }
+    }
+}
+
+// One tab: the current one has the 28px gradient stroke under its label
+// (1px above the bottom edge); the others are dimmed, with the rounded
+// hover background on hover.
+component Tab {
+    in property <string> text;
+    in property <bool> current;
+    callback clicked();
+    accessible-role: tab;
+    accessible-label: root.text;
+    accessible-item-selected: root.current;
+    accessible-action-default => { root.clicked(); }
+    if !root.current && touch.has-hover: Rectangle {
+        x: 2px;
+        y: 4px;
+        width: parent.width - 4px;
+        height: parent.height - 8px;
+        border-radius: Theme.radius-control;
+        background: Theme.hover-bg;
+    }
+    if root.current: Rectangle {
+        x: (parent.width - 28px) / 2;
+        y: parent.height - 3px;
+        width: 28px;
+        height: 2px;
+        border-radius: 1px;
+        background: Theme.accent-fill;
+    }
+    Text {
+        x: 4px;
+        width: parent.width - 8px;
+        height: 100%;
+        text: root.text;
+        color: root.current ? Theme.text : Theme.text-dim;
+        font-size: Theme.font-tab;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+export component SidebarTabs inherits Rectangle {
+    in property <[string]> titles;
+    in property <int> active;
+    in property <bool> detached;
+    // A tab was clicked (its index), the detach/attach or the close button.
+    callback tab(int);
+    callback detach();
+    callback close();
+    height: 31px;
+    background: Theme.bg-bar;
+    accessible-role: tab-list;
+    // 105px tabs while they fit beside the two buttons (25px each and 3px).
+    private property <length> tab-width: min(105px, max(0px, (self.width - 53px) / max(1, root.titles.length)));
+    // Placed by hand, not in a layout: the tab width follows the strip's
+    // width, which a layout would make depend on the tabs (a binding loop).
+    for title[index] in root.titles: Tab {
+        x: index * root.tab-width;
+        y: 0px;
+        width: root.tab-width;
+        height: root.height;
+        text: title;
+        current: index == root.active;
+        clicked => { root.tab(index); }
+    }
+    StripButton {
+        x: root.width - 53px;
+        y: 0px;
+        height: root.height;
+        tip: root.detached ? "附着到主窗口" : "分离为浮动窗口";
+        // Detached: arrow into the frame; attached: arrow out of it.
+        icon: root.detached ? "attach" : "detach";
+        clicked => { root.detach(); }
+    }
+    StripButton {
+        x: root.width - 28px;
+        y: 0px;
+        height: root.height;
+        tip: "关闭侧栏";
+        icon: "close";
+        clicked => { root.close(); }
+    }
+}

@@ -220,7 +220,7 @@ impl Host {
                 .native
                 .and_then(|id| platform::pointer_in(id).ok())
                 .unwrap_or((0., 0.));
-            Some((floating.owner, at))
+            self.policy.sidebar_active().map(|owner| (owner, at))
         } else if generation == self.shell_generation {
             if let Some(shell) = &self.shell {
                 ui::settle_layout(shell.window());
@@ -255,6 +255,15 @@ impl Host {
             // A tool window or the options window: ignored.
             return;
         };
+        // Sidebar tabs: the current panel starts below the host's tab strip.
+        let tabbed = self.policy.sidebar_panels().len() > 1;
+        let panel = panel.map(|(owner, (x, y))| {
+            if tabbed && Some(owner) == self.policy.sidebar_active() {
+                (owner, (x, y - crate::composition::TAB_STRIP_HEIGHT))
+            } else {
+                (owner, (x, y))
+            }
+        });
         if let Some((owner, (x, y))) = panel
             && self.drops.panels.contains(&owner)
         {

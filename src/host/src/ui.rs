@@ -679,6 +679,55 @@ export component W inherits Window {
         }
     }
 
+    /// Sidebar tabs: the docked column is as wide as with one panel, the
+    /// tab strip takes the top 31px, and switching tabs (a property) keeps
+    /// the layout; the host-owned `tabbed` reaches a global declaring it.
+    #[test]
+    fn sidebar_tabs_switch_by_property_without_changing_the_layout() {
+        headless();
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
+        let mut specs = bar_and_sidebar().to_vec();
+        specs.push(crate::composition::CompileSpec {
+            owner: 30,
+            file: base.join("tab.slint"),
+            component: "NoteTab".into(),
+            global: Some("Bridge".into()),
+            slot: crate::composition::Slot::Sidebar,
+        });
+        let (sender, _receiver) = std::sync::mpsc::sync_channel(8);
+        let shell = crate::composition::compile_json(&specs, sender, 1).unwrap();
+        crate::composition::set_tabbed(&shell, &specs[2], true).unwrap();
+        // The fixture without the property is left alone.
+        crate::composition::set_tabbed(&shell, &specs[1], true).unwrap();
+        assert_eq!(
+            shell
+                .get_global_property("Owner30Bridge", "tabbed")
+                .unwrap(),
+            slint_interpreter::Value::Bool(true)
+        );
+        shell
+            .set_property(
+                "sidebar-titles",
+                crate::ui_values::from_json(&serde_json::json!(["播放列表", "Example list"]))
+                    .unwrap(),
+            )
+            .unwrap();
+        shell
+            .window()
+            .set_size(slint::LogicalSize::new(1470., 956.));
+        shell.show().unwrap();
+        let read = |name: &str| match shell.get_property(name).unwrap() {
+            slint_interpreter::Value::Number(n) => n,
+            other => panic!("{name}: {other:?}"),
+        };
+        for active in [0., 1., 0.] {
+            shell.set_property("sidebar-active", active.into()).unwrap();
+            settle_layout(shell.window());
+            assert_eq!(read("video-width"), 1470. - 320., "tab {active}");
+        }
+        shell.hide().unwrap();
+    }
+
     /// The sources the host generates (main window with panels, floating
     /// panel, options window) compile without warnings, so a Slint upgrade
     /// that deprecates something they use shows up here.
@@ -699,10 +748,20 @@ export component W inherits Window {
             global: "Bridge".into(),
             properties: Default::default(),
         };
+        let mut tabs = specs.to_vec();
+        tabs.push(crate::composition::CompileSpec {
+            owner: 30,
+            file: base.join("tab.slint"),
+            component: "NoteTab".into(),
+            global: Some("Bridge".into()),
+            slot: crate::composition::Slot::Sidebar,
+        });
         for source in [
             crate::composition::shell_source(&specs).unwrap(),
+            crate::composition::shell_source(&tabs).unwrap(),
+            crate::composition::floating_source(&tabs[1..], "列表").unwrap(),
             crate::composition::shell_source(&[]).unwrap(),
-            crate::composition::floating_source(&specs[1], "列表").unwrap(),
+            crate::composition::floating_source(&specs[1..], "列表").unwrap(),
             crate::settings_window::source(&[&page]).unwrap(),
         ] {
             let result = pollster::block_on(

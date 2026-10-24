@@ -116,8 +116,32 @@ type Result<T> = std::result::Result<T, Error>;
 struct Attachment {
     owner: u64,
     preferred: bool,
-    detached: bool,
     locks: Locks,
+}
+
+/// The sidebar: one or more panels as tabs (panel-slots.md step 1). Shown,
+/// hidden and detached as a whole; one tab is current.
+#[derive(Clone, Debug)]
+struct Tabs {
+    /// Tab order, with each panel's own interaction locks.
+    panels: Vec<(u64, Locks)>,
+    active: u64,
+    preferred: bool,
+    detached: bool,
+}
+
+impl Tabs {
+    fn has(&self, owner: u64) -> bool {
+        self.panels.iter().any(|(o, _)| *o == owner)
+    }
+    /// Only the current tab's locks hold the popped-out overlay.
+    fn active_locks(&self) -> Locks {
+        self.panels
+            .iter()
+            .find(|(o, _)| *o == self.active)
+            .map(|(_, locks)| *locks)
+            .unwrap_or_default()
+    }
 }
 
 /// G-01: the attached sidebar in fullscreen is an overlay at the right edge,
@@ -135,7 +159,7 @@ struct Overlay {
 
 pub struct Policy {
     bottom: Option<Attachment>,
-    sidebar: Option<Attachment>,
+    sidebar: Option<Tabs>,
     fullscreen: bool,
     last_activity_ms: u64,
     menu_open: bool,
@@ -173,26 +197,30 @@ impl Policy {
         self.sidebar_user_width
     }
 
+    /// Float or dock the whole sidebar; `owner` is any of its panels.
     pub fn set_detached(&mut self, owner: u64, detached: bool) -> Result<()> {
-        self.owned_mut(Slot::Sidebar, owner)?.detached = detached;
+        self.tabs_mut(owner)?.detached = detached;
         self.overlay = Overlay::default();
         Ok(())
     }
 
-    fn slot_mut(&mut self, slot: Slot) -> &mut Option<Attachment> {
-        match slot {
-            Slot::Bottom => &mut self.bottom,
-            Slot::Sidebar => &mut self.sidebar,
-        }
+    fn tabs_mut(&mut self, owner: u64) -> Result<&mut Tabs> {
+        self.sidebar
+            .as_mut()
+            .filter(|tabs| tabs.has(owner))
+            .ok_or(Error::MissingOwner)
     }
 
-    fn owned_mut(&mut self, slot: Slot, owner: u64) -> Result<&mut Attachment> {
-        self.slot_mut(slot)
+    fn bottom_mut(&mut self, owner: u64) -> Result<&mut Attachment> {
+        self.bottom
             .as_mut()
             .filter(|attachment| attachment.owner == owner)
             .ok_or(Error::MissingOwner)
     }
 
+    /// The bottom bar takes one panel. The sidebar takes another tab; the
+    /// first one sets the slot's `preferred` and `detached` (the slot's
+    /// remembered state) and becomes the current tab.
     pub fn attach(
         &mut self,
         slot: Slot,
@@ -200,19 +228,72 @@ impl Policy {
         preferred: bool,
         detached: bool,
     ) -> Result<()> {
-        let attachment = self.slot_mut(slot);
-        if attachment.is_some() {
-            return Err(Error::Occupied);
+        match slot {
+            Slot::Bottom => {
+                if self.bottom.is_some() {
+                    return Err(Error::Occupied);
+                }
+                self.bottom = Some(Attachment {
+                    owner,
+                    preferred,
+                    locks: Locks::default(),
+                });
+            }
+            Slot::Sidebar => match &mut self.sidebar {
+                Some(tabs) if tabs.has(owner) => return Err(Error::Occupied),
+                Some(tabs) => tabs.panels.push((owner, Locks::default())),
+                None => {
+                    self.sidebar = Some(Tabs {
+                        panels: vec![(owner, Locks::default())],
+                        active: owner,
+                        preferred,
+                        detached,
+                    });
+                }
+            },
         }
-        *attachment = Some(Attachment {
-            owner,
-            preferred,
-            detached: detached && slot == Slot::Sidebar,
-            locks: Locks::default(),
-        });
         Ok(())
     }
 
+    /// Put the sidebar's tabs in this order; tabs it does not list keep
+    /// their relative order after the listed ones.
+    pub fn order_sidebar(&mut self, order: &[u64]) {
+        if let Some(tabs) = &mut self.sidebar {
+            tabs.panels.sort_by_key(|(owner, _)| {
+                order.iter().position(|o| o == owner).unwrap_or(usize::MAX)
+            });
+        }
+    }
+
+    /// Make `owner`'s panel the current sidebar tab.
+    pub fn set_active(&mut self, owner: u64) -> Result<()> {
+        self.tabs_mut(owner)?.active = owner;
+        Ok(())
+    }
+
+    /// The sidebar's panels in tab order (empty without a sidebar).
+    pub fn sidebar_panels(&self) -> Vec<u64> {
+        self.sidebar
+            .iter()
+            .flat_map(|tabs| tabs.panels.iter().map(|(owner, _)| *owner))
+            .collect()
+    }
+
+    /// The sidebar slot's own state: (preferred, detached).
+    pub fn sidebar_state(&self) -> Option<(bool, bool)> {
+        self.sidebar
+            .as_ref()
+            .map(|tabs| (tabs.preferred, tabs.detached))
+    }
+
+    /// The current sidebar tab.
+    pub fn sidebar_active(&self) -> Option<u64> {
+        self.sidebar.as_ref().map(|tabs| tabs.active)
+    }
+
+    /// Removing the current tab makes the next one current (the previous
+    /// one when it was the last); the slot keeps its state while a tab is
+    /// left.
     pub fn remove_owner(&mut self, owner: u64) {
         if self
             .bottom
@@ -220,12 +301,18 @@ impl Policy {
         {
             self.bottom = None;
         }
-        if self
-            .sidebar
-            .is_some_and(|attachment| attachment.owner == owner)
+        if let Some(tabs) = &mut self.sidebar
+            && let Some(index) = tabs.panels.iter().position(|(o, _)| *o == owner)
         {
-            self.sidebar = None;
-            self.overlay = Overlay::default();
+            tabs.panels.remove(index);
+            match tabs.panels.get(index).or(tabs.panels.last()) {
+                None => {
+                    self.sidebar = None;
+                    self.overlay = Overlay::default();
+                }
+                Some((next, _)) if tabs.active == owner => tabs.active = *next,
+                Some(_) => {}
+            }
         }
     }
 
@@ -239,9 +326,12 @@ impl Policy {
         preferred: bool,
         now_ms: u64,
     ) -> Result<()> {
-        let attachment = self.owned_mut(slot, owner)?;
-        let shown = !attachment.preferred && preferred;
-        attachment.preferred = preferred;
+        let current = match slot {
+            Slot::Bottom => &mut self.bottom_mut(owner)?.preferred,
+            Slot::Sidebar => &mut self.tabs_mut(owner)?.preferred,
+        };
+        let shown = !*current && preferred;
+        *current = preferred;
         if slot == Slot::Sidebar {
             if !preferred {
                 self.overlay = Overlay::default();
@@ -259,8 +349,17 @@ impl Policy {
 
     /// Setters do not invent timestamps. To give a released gesture a fresh idle
     /// period, the host first calls activity(release_now), then clears its lock.
+    /// A sidebar panel's locks count only while its tab is current.
     pub fn set_locks(&mut self, slot: Slot, owner: u64, locks: Locks) -> Result<()> {
-        self.owned_mut(slot, owner)?.locks = locks;
+        match slot {
+            Slot::Bottom => self.bottom_mut(owner)?.locks = locks,
+            Slot::Sidebar => {
+                let tabs = self.tabs_mut(owner)?;
+                if let Some(entry) = tabs.panels.iter_mut().find(|(o, _)| *o == owner) {
+                    entry.1 = locks;
+                }
+            }
+        }
         Ok(())
     }
 
@@ -343,7 +442,8 @@ impl Policy {
         self.fullscreen
             && self
                 .sidebar
-                .is_some_and(|attachment| attachment.preferred && !attachment.detached)
+                .as_ref()
+                .is_some_and(|tabs| tabs.preferred && !tabs.detached)
     }
 
     /// The popped-out sidebar stays: pointer over it, the panel's own
@@ -354,7 +454,8 @@ impl Policy {
             || self.hover[Slot::Sidebar as usize]
             || self
                 .sidebar
-                .is_some_and(|attachment| attachment.locks.active())
+                .as_ref()
+                .is_some_and(|tabs| tabs.active_locks().active())
     }
 
     fn bottom_locked(&self) -> bool {
@@ -413,10 +514,10 @@ impl Policy {
         });
         // Compress the video to its minimum before hiding the docked sidebar.
         let has_space = viewport.width >= VIDEO_MIN_WIDTH + SPLITTER_WIDTH + SIDEBAR_MIN_WIDTH;
-        let sidebar = self.sidebar.map(|attachment| {
-            let reason = if !attachment.preferred {
+        let sidebar = self.sidebar.as_ref().map(|tabs| {
+            let reason = if !tabs.preferred {
                 Some(Reason::UserHidden)
-            } else if attachment.detached {
+            } else if tabs.detached {
                 // A floating window follows only the preference.
                 None
             } else if !has_space {
@@ -428,12 +529,12 @@ impl Policy {
                 None
             };
             Visibility {
-                owner: attachment.owner,
-                preferred: attachment.preferred,
+                owner: tabs.active,
+                preferred: tabs.preferred,
                 effective: reason.is_none(),
                 reason,
-                overlay: self.fullscreen && !attachment.detached,
-                detached: attachment.detached,
+                overlay: self.fullscreen && !tabs.detached,
+                detached: tabs.detached,
             }
         });
         let next_deadline_ms = if self.fullscreen
@@ -956,5 +1057,78 @@ mod tests {
         assert_eq!(snapshot.next_deadline_ms, None); // Unrepresentable future time.
         policy.set_fullscreen(false, u64::MAX);
         assert!(!policy.evaluate(roomy(), u64::MAX).unwrap().fullscreen);
+    }
+
+    #[test]
+    fn sidebar_tabs_share_one_state_and_the_next_tab_takes_over_a_removed_current_one() {
+        let mut policy = attached();
+        // Later panels join as tabs; the slot keeps the first one's state.
+        policy.set_preferred(Slot::Sidebar, 2, false, 0).unwrap();
+        policy.attach(Slot::Sidebar, 3, true, true).unwrap();
+        policy.attach(Slot::Sidebar, 4, true, false).unwrap();
+        assert_eq!(
+            policy.attach(Slot::Sidebar, 3, true, false),
+            Err(Error::Occupied)
+        );
+        assert_eq!(policy.sidebar_panels(), [2, 3, 4]);
+        assert_eq!(policy.sidebar_active(), Some(2));
+        let hidden = sidebar(&policy, 0);
+        assert_eq!((hidden.owner, hidden.reason), (2, Some(Reason::UserHidden)));
+        assert!(!hidden.detached);
+        // Any tab's owner shows, hides or detaches the whole slot.
+        policy.set_preferred(Slot::Sidebar, 4, true, 0).unwrap();
+        policy.set_active(3).unwrap();
+        let shown = sidebar(&policy, 0);
+        assert_eq!((shown.owner, shown.effective), (3, true));
+        assert_eq!(policy.set_active(9), Err(Error::MissingOwner));
+        policy.set_detached(4, true).unwrap();
+        assert!(sidebar(&policy, 0).detached);
+        policy.set_detached(2, false).unwrap();
+        // Order: listed owners first, the rest after them in their order.
+        policy.order_sidebar(&[4, 2]);
+        assert_eq!(policy.sidebar_panels(), [4, 2, 3]);
+        policy.order_sidebar(&[2, 3, 4]);
+        // The current tab removed: the next one takes over, the last one's
+        // predecessor when it was the last; a background tab leaves it.
+        policy.remove_owner(3);
+        assert_eq!(policy.sidebar_active(), Some(4));
+        policy.attach(Slot::Sidebar, 5, false, true).unwrap();
+        policy.remove_owner(5);
+        assert_eq!(policy.sidebar_active(), Some(4));
+        policy.remove_owner(4);
+        assert_eq!(policy.sidebar_active(), Some(2));
+        assert!(sidebar(&policy, 0).effective, "the slot keeps its state");
+        policy.remove_owner(2);
+        assert_eq!(policy.sidebar_active(), None);
+        assert!(policy.evaluate(screen(), 0).unwrap().sidebar.is_none());
+        // Empty again: the next panel brings the slot's state.
+        policy.attach(Slot::Sidebar, 6, false, false).unwrap();
+        assert_eq!(sidebar(&policy, 0).reason, Some(Reason::UserHidden));
+    }
+
+    #[test]
+    fn only_the_current_tabs_locks_hold_the_popped_out_sidebar() {
+        let mut policy = attached();
+        policy.attach(Slot::Sidebar, 3, true, false).unwrap();
+        let focused = Locks {
+            focused: true,
+            ..Locks::default()
+        };
+        policy.set_locks(Slot::Sidebar, 3, focused).unwrap();
+        policy.set_fullscreen(true, 0);
+        policy.pointer(1919.0, 1920.0, 0);
+        policy.tick(4000);
+        assert!(
+            !sidebar(&policy, 4000).effective,
+            "a background tab's lock does not hold it"
+        );
+        policy.set_active(3).unwrap();
+        policy.pointer(1919.0, 1920.0, 5000);
+        policy.tick(20_000);
+        assert!(sidebar(&policy, 20_000).effective);
+        assert_eq!(
+            policy.set_locks(Slot::Sidebar, 9, focused),
+            Err(Error::MissingOwner)
+        );
     }
 }

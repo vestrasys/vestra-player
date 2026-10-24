@@ -131,6 +131,15 @@ impl RpcError {
         )
     }
     /// `sequence.set`: another plugin provides next/previous.
+    /// The sidebar has all the tabs it takes (`slot_claims::MAX_SIDEBAR_TABS`);
+    /// like a taken slot, it does not fail activation.
+    fn sidebar_full() -> Self {
+        Self::taken(
+            "slot-occupied",
+            format!("侧栏最多 {} 个页签", slot_claims::MAX_SIDEBAR_TABS),
+            json!({"slot":"sidebar"}),
+        )
+    }
     fn sequence_taken(holder: &str) -> Self {
         Self::taken(
             "sequence-taken",
@@ -187,6 +196,11 @@ enum Event {
     /// A bound input fired: (window generation, owner, command id).
     Binding(u64, u64, String),
     SidebarResized(u64, f64),
+    /// The host's sidebar tab strip (shell or floating window generation): a
+    /// tab clicked (its index), the detach/attach button, the close button.
+    SidebarTab(u64, usize),
+    SidebarDetach(u64),
+    SidebarClose(u64),
     /// IA-CORE-12: a double click on the video during picture-in-picture.
     PipReturn(u64),
     FloatingClosed(u64),
@@ -229,15 +243,22 @@ struct Request {
 struct Mount {
     spec: composition::CompileSpec,
     properties: BTreeMap<String, Value>,
+    /// The bottom bar's preference; a sidebar panel's come from the slot
+    /// (`ui_state::SidebarSlot`, then the policy).
     visible: bool,
     detached: bool,
+    /// The floating window's title and the sidebar tab's label: the mount's
+    /// `title`, else the plugin's name.
     title: String,
     manifest: String,
+    /// A built-in plugin's panel: its tab comes first.
+    builtin: bool,
 }
 /// The detached sidebar's own window (C14).
 struct Floating {
     instance: slint_interpreter::ComponentInstance,
-    owner: u64,
+    /// The sidebar's panels when it opened, in tab order.
+    owners: Vec<u64>,
     generation: u64,
     /// Its native window, for the pointer at a file drop.
     native: Option<platform::HostWindowId>,
@@ -312,6 +333,13 @@ struct Host {
     menu_open: bool,
     /// G-01: the fullscreen sidebar overlay was popped out at the last tick.
     sidebar_popped: bool,
+    /// The current sidebar tab at the last tick, and whether the user just
+    /// clicked a tab (which gave the sidebar the keys already).
+    sidebar_active: Option<u64>,
+    tab_clicked: bool,
+    /// The sidebar's panels in the current shell, in its tab order (its
+    /// `sidebar-active` indexes this; the policy may already have dropped one).
+    shell_tabs: Vec<u64>,
     /// The bottom bar was shown at the last tick.
     bottom_shown: bool,
     native_window: Option<platform::HostWindowId>,
@@ -555,6 +583,7 @@ impl Host {
                 input.sidebar = None;
             }
         }
+        let tabs_before = self.policy.sidebar_panels();
         if self
             .sequence
             .is_some_and(|(provider, ..)| provider == owner)
@@ -565,7 +594,12 @@ impl Host {
         if self.info_panels.remove(&owner).is_some() {
             self.show_info_panels();
         }
-        if self.floating.as_ref().is_some_and(|f| f.owner == owner) {
+        // The floating window opens again without this panel (`sync_floating`).
+        if self
+            .floating
+            .as_ref()
+            .is_some_and(|f| f.owners.contains(&owner))
+        {
             self.close_floating();
         }
         if matches!(&self.menu_mode, MenuMode::Panel(menu_owner, _) if *menu_owner == owner) {
@@ -593,8 +627,11 @@ impl Host {
             self.preparing = None;
         }
         if let Some(mount) = self.mounts.remove(&owner) {
+            // Another sidebar tab stays shown until the shell is rebuilt.
+            let last_tab = tabs_before.iter().all(|&o| o == owner);
             if let Some(shell) = &self.shell
                 && let Some(property) = mount.spec.slot.visible_property()
+                && (mount.spec.slot != composition::Slot::Sidebar || last_tab)
             {
                 let _ = shell.set_property(property, false.into());
             }
@@ -832,21 +869,48 @@ impl Host {
                 }
             }
             Event::FloatingClosed(generation) => {
-                if let Some(owner) = self
+                if self
                     .floating
                     .as_ref()
-                    .filter(|f| f.generation == generation)
-                    .map(|f| f.owner)
+                    .is_some_and(|f| f.generation == generation)
                 {
-                    let now = self.now_ms();
-                    let _ =
-                        self.policy
-                            .set_preferred(window_state::Slot::Sidebar, owner, false, now);
-                    if let Some(mount) = self.mounts.get_mut(&owner) {
-                        mount.visible = false;
-                    }
-                    self.remember_panel(owner);
+                    self.close_sidebar();
                     self.close_floating();
+                }
+            }
+            Event::SidebarTab(generation, index) => {
+                if !self.window_generation_live(generation) {
+                    return;
+                }
+                // The index is in that window's tab order.
+                let tabs = match &self.floating {
+                    Some(floating) if floating.generation == generation => &floating.owners,
+                    _ => &self.shell_tabs,
+                };
+                if let Some(&owner) = tabs.get(index)
+                    && self.policy.set_active(owner).is_ok()
+                {
+                    self.tab_clicked = true;
+                    self.remember_sidebar(true);
+                    self.window_tick();
+                }
+            }
+            Event::SidebarDetach(generation) => {
+                if !self.window_generation_live(generation) {
+                    return;
+                }
+                if let (Some(owner), Some((_, detached))) =
+                    (self.policy.sidebar_active(), self.policy.sidebar_state())
+                    && self.policy.set_detached(owner, !detached).is_ok()
+                {
+                    self.remember_sidebar(false);
+                    self.window_tick();
+                }
+            }
+            Event::SidebarClose(generation) => {
+                if self.window_generation_live(generation) {
+                    self.close_sidebar();
+                    self.window_tick();
                 }
             }
             Event::PluginMessage(owner, event, data) => {
@@ -1350,6 +1414,7 @@ impl Host {
             self.policy.pointer(0., viewport.width, now);
         }
         self.policy.tick(now);
+        self.sync_tabs(&shell);
         let result = (|| -> Result<Value> {
             let snapshot = self.policy.evaluate(viewport, now)?;
             shell.set_property("host-fullscreen", fullscreen.into())?;
@@ -1436,93 +1501,230 @@ impl Host {
             self.ui_state.touch(self.now_ms());
         }
     }
-    /// Keep the sidebar owner's persisted preferences current.
-    fn remember_panel(&mut self, owner: u64) {
-        let Some(mount) = self.mounts.get(&owner) else {
-            return;
-        };
-        if mount.spec.slot != composition::Slot::Sidebar {
-            return;
-        }
-        let floating = self
-            .ui_state
-            .state
-            .panels
-            .get(&mount.manifest)
-            .and_then(|p| p.floating);
-        let prefs = ui_state::PanelPrefs {
-            visible: mount.visible,
-            detached: mount.detached,
-            floating,
-        };
-        self.ui_state
-            .state
-            .panels
-            .insert(mount.manifest.clone(), prefs);
-        self.ui_state.touch(self.now_ms());
+    /// The slot's remembered state (defaults before anything was saved).
+    fn sidebar_slot(&self) -> ui_state::SidebarSlot {
+        self.ui_state.state.sidebar_slot.clone().unwrap_or_default()
     }
-    /// Open or close the floating window so it matches the policy.
-    fn sync_floating(&mut self, want: bool) {
-        let owner = self
-            .mounts
+    /// Keep the sidebar slot's persisted state current: shown, floating, the
+    /// current tab and the tab order.
+    /// `chosen`: the current tab was just chosen (a click, `layout.set`
+    /// `active`), so it is remembered even over one not mounted yet.
+    fn remember_sidebar(&mut self, chosen: bool) {
+        let Some((visible, detached)) = self.policy.sidebar_state() else {
+            return;
+        };
+        let mut slot = self.sidebar_slot();
+        slot.visible = visible;
+        slot.detached = detached;
+        // A remembered tab whose plugin has not mounted (yet: plugins start
+        // one after another) stays remembered, so it is current again once
+        // it does.
+        let manifests = self
+            .policy
+            .sidebar_panels()
+            .iter()
+            .filter_map(|owner| self.mounts.get(owner).map(|m| m.manifest.clone()))
+            .collect::<Vec<_>>();
+        let waiting = slot
+            .active
+            .as_ref()
+            .is_some_and(|active| !manifests.contains(active));
+        if chosen || !waiting {
+            slot.active = self
+                .policy
+                .sidebar_active()
+                .and_then(|owner| self.mounts.get(&owner))
+                .map(|m| m.manifest.clone());
+        }
+        for owner in self.policy.sidebar_panels() {
+            if let Some(mount) = self.mounts.get(&owner) {
+                slot.remember(&mount.manifest);
+            }
+        }
+        if self.ui_state.state.sidebar_slot.as_ref() != Some(&slot) {
+            self.ui_state.state.sidebar_slot = Some(slot);
+            self.ui_state.touch(self.now_ms());
+        }
+    }
+    /// Hide the whole sidebar (its close button, the floating window closed).
+    fn close_sidebar(&mut self) {
+        if let Some(owner) = self.policy.sidebar_active() {
+            let now = self.now_ms();
+            let _ = self
+                .policy
+                .set_preferred(window_state::Slot::Sidebar, owner, false, now);
+            self.remember_sidebar(false);
+        }
+    }
+    /// The sidebar's panels in tab order: the playlist's, other built-in plugins', then as
+    /// remembered (`SidebarSlot::order`), new ones last in mount order.
+    fn tab_order(&self, mounts: &BTreeMap<u64, Mount>) -> Vec<u64> {
+        let slot = self.sidebar_slot();
+        let mut tabs = mounts
             .values()
-            .find(|m| m.spec.slot == composition::Slot::Sidebar)
-            .map(|m| m.spec.owner);
-        match (&self.floating, want, owner) {
-            (Some(floating), true, Some(owner)) if floating.owner == owner => {
+            .filter(|m| m.spec.slot == composition::Slot::Sidebar)
+            .map(|m| {
+                // The playlist is always first (also as a development load).
+                let rank = if m.manifest == "vestra.playlist" {
+                    0
+                } else if m.builtin {
+                    1
+                } else {
+                    2
+                };
+                (
+                    (rank, slot.position(&m.manifest), m.spec.owner),
+                    m.spec.owner,
+                )
+            })
+            .collect::<Vec<_>>();
+        tabs.sort();
+        tabs.into_iter().map(|(_, owner)| owner).collect()
+    }
+    /// The current tab everywhere it matters: the panel keys' owner, the
+    /// shell's and the floating window's `sidebar-active` (and the floating
+    /// window's title). A tab that changed without a click on the strip
+    /// (a plugin, the current panel removed) hands the keys back to the
+    /// video if they were in the sidebar: the panel that had them is gone.
+    fn sync_tabs(&mut self, shell: &slint_interpreter::ComponentInstance) {
+        let tabs = self.policy.sidebar_panels();
+        let active = self.policy.sidebar_active();
+        self.input.borrow_mut().sidebar = active;
+        // Each window indexes its own tab order; a tab it does not have yet
+        // (or any more) leaves it as it is until it is rebuilt.
+        let set_index = |window: &slint_interpreter::ComponentInstance, order: &[u64]| {
+            let Some(index) = active.and_then(|owner| order.iter().position(|&o| o == owner))
+            else {
+                return;
+            };
+            let index = index as f64;
+            if !matches!(window.get_property("sidebar-active"), Ok(SValue::Number(n)) if n == index)
+            {
+                let _ = window.set_property("sidebar-active", SValue::Number(index));
+            }
+        };
+        set_index(shell, &self.shell_tabs);
+        if let Some(floating) = &self.floating {
+            set_index(&floating.instance, &floating.owners);
+            if let Some(mount) = active.and_then(|owner| self.mounts.get(&owner)) {
+                let title = SValue::String(mount.title.as_str().into());
+                if floating.instance.get_property("panel-title").ok().as_ref() != Some(&title) {
+                    let _ = floating.instance.set_property("panel-title", title);
+                }
+            }
+        }
+        if self.sidebar_active != active {
+            let canvas = matches!(shell.get_property("canvas-focused"), Ok(SValue::Bool(true)));
+            if self.sidebar_active.is_some() && !self.tab_clicked && !canvas && tabs.len() > 1 {
+                let _ = shell.invoke("focus-video", &[]);
+            }
+            self.sidebar_active = active;
+        }
+        self.tab_clicked = false;
+    }
+    /// The titles of the sidebar's tabs, in tab order.
+    fn tab_titles(&self, owners: &[u64]) -> Result<SValue> {
+        let titles = owners
+            .iter()
+            .filter_map(|owner| self.mounts.get(owner).map(|m| m.title.clone()))
+            .collect::<Vec<_>>();
+        ui_values::from_json(&json!(titles))
+    }
+    /// The host's tab strip callbacks of a shell or floating window.
+    fn bind_tabs(
+        &self,
+        window: &slint_interpreter::ComponentInstance,
+        generation: u64,
+    ) -> Result<()> {
+        let events = self.events.clone();
+        window.set_callback("sidebar-tab", move |args| {
+            if let Some(SValue::Number(index)) = args.first()
+                && *index >= 0.
+            {
+                let _ = events.send(Event::SidebarTab(generation, *index as usize));
+            }
+            SValue::Void
+        })?;
+        let events = self.events.clone();
+        window.set_callback("sidebar-detach", move |_| {
+            let _ = events.send(Event::SidebarDetach(generation));
+            SValue::Void
+        })?;
+        let events = self.events.clone();
+        window.set_callback("sidebar-close", move |_| {
+            let _ = events.send(Event::SidebarClose(generation));
+            SValue::Void
+        })?;
+        Ok(())
+    }
+    /// Open or close the floating window so it matches the policy; a window
+    /// with other panels than the sidebar's now opens again.
+    fn sync_floating(&mut self, want: bool) {
+        let owners = self.policy.sidebar_panels();
+        match (&self.floating, want) {
+            (Some(floating), true) if floating.owners == owners => {
                 self.remember_floating();
             }
-            (None, true, Some(owner)) => {
-                if let Err(error) = self.open_floating(owner) {
+            (None, true) if !owners.is_empty() => {
+                if let Err(error) = self.open_floating(&owners) {
                     eprintln!("floating panel: {error:#}");
-                    self.send(owner, json!({"event":"ui.error","data":{"message":format!("ui-prepare: {error:#}")}}));
-                    let _ = self.policy.set_detached(owner, false);
-                    if let Some(mount) = self.mounts.get_mut(&owner) {
-                        mount.detached = false;
+                    if let Some(&owner) = owners.first() {
+                        for owner in &owners {
+                            self.send(*owner, json!({"event":"ui.error","data":{"message":format!("ui-prepare: {error:#}")}}));
+                        }
+                        let _ = self.policy.set_detached(owner, false);
+                        self.remember_sidebar(false);
                     }
                 }
             }
-            (Some(_), _, _) => self.close_floating(),
+            (Some(_), _) => self.close_floating(),
             _ => {}
         }
     }
-    fn open_floating(&mut self, owner: u64) -> Result<()> {
-        let mount = self
-            .mounts
-            .get(&owner)
-            .ok_or_else(|| anyhow::anyhow!("no sidebar mount"))?
+    fn open_floating(&mut self, owners: &[u64]) -> Result<()> {
+        let mounts = owners
+            .iter()
+            .map(|owner| {
+                self.mounts
+                    .get(owner)
+                    .cloned()
+                    .ok_or_else(|| anyhow::anyhow!("no sidebar mount"))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let specs = mounts.iter().map(|m| m.spec.clone()).collect::<Vec<_>>();
+        let active = self.policy.sidebar_active();
+        let title = mounts
+            .iter()
+            .find(|m| Some(m.spec.owner) == active)
+            .unwrap_or(&mounts[0])
+            .title
             .clone();
         self.next_shell_generation += 1;
         let generation = self.next_shell_generation;
-        let instance = composition::compile_floating(
-            &mount.spec,
-            &mount.title,
-            self.mount_events.clone(),
-            generation,
-        )?;
-        for (name, value) in self.mount_values(&mount) {
-            composition::set_global_value(&instance, &mount.spec, &name, value)?;
+        let instance =
+            composition::compile_floating(&specs, &title, self.mount_events.clone(), generation)?;
+        for mount in &mounts {
+            for (name, value) in self.mount_values(mount) {
+                composition::set_global_value(&instance, &mount.spec, &name, value)?;
+            }
+            composition::set_tabbed(&instance, &mount.spec, mounts.len() > 1)?;
         }
+        instance.set_property("sidebar-titles", self.tab_titles(owners)?)?;
         self.bind_menu(&instance, generation, false)?;
         self.observe_keys(&instance, generation);
         self.bind_keys(&instance, generation)?;
+        self.bind_tabs(&instance, generation)?;
         let events = self.events.clone();
         instance.window().on_close_requested(move || {
             let _ = events.send(Event::FloatingClosed(generation));
             slint::CloseRequestResponse::KeepWindowShown
         });
-        let frame = self
-            .ui_state
-            .state
-            .panels
-            .get(&mount.manifest)
-            .and_then(|p| p.floating)
-            .unwrap_or(ui_state::Frame {
-                x: 438.,
-                y: 100.,
-                width: 300.,
-                height: 408.,
-            });
+        let frame = self.sidebar_slot().floating.unwrap_or(ui_state::Frame {
+            x: 438.,
+            y: 100.,
+            width: 300.,
+            height: 408.,
+        });
         instance.window().set_size(slint::LogicalSize::new(
             frame.width.max(300.) as f32,
             frame.height.max(250.) as f32,
@@ -1537,7 +1739,7 @@ impl Host {
         let native = before.and_then(|before| platform::associate_new(&before).ok());
         self.floating = Some(Floating {
             instance,
-            owner,
+            owners: owners.to_vec(),
             generation,
             native,
         });
@@ -1559,21 +1761,10 @@ impl Host {
             width: size.width as f64 / scale,
             height: size.height as f64 / scale,
         };
-        let Some(manifest) = self.mounts.get(&floating.owner).map(|m| m.manifest.clone()) else {
-            return;
-        };
-        let prefs = self
-            .ui_state
-            .state
-            .panels
-            .entry(manifest)
-            .or_insert(ui_state::PanelPrefs {
-                visible: true,
-                detached: true,
-                floating: None,
-            });
-        if prefs.floating != Some(frame) {
-            prefs.floating = Some(frame);
+        let mut slot = self.sidebar_slot();
+        if slot.floating != Some(frame) {
+            slot.floating = Some(frame);
+            self.ui_state.state.sidebar_slot = Some(slot);
             self.ui_state.touch(self.now_ms());
         }
     }
@@ -2155,23 +2346,59 @@ impl Host {
         self.next_shell_generation += 1;
         let candidate_generation = self.next_shell_generation;
         let native_before = platform::capture_windows().ok();
-        let values: Vec<_> = next
+        // The sidebar's panels in tab order (after the other slots' panels).
+        let order = self.tab_order(&next);
+        let shown = next
             .values()
-            .map(|mount| self.mount_values(mount))
-            .collect();
+            .filter(|m| m.spec.slot != composition::Slot::Sidebar)
+            .chain(order.iter().filter_map(|owner| next.get(owner)))
+            .cloned()
+            .collect::<Vec<_>>();
+        let values: Vec<_> = shown.iter().map(|mount| self.mount_values(mount)).collect();
+        let slot = self.sidebar_slot();
+        let sidebar = self
+            .policy
+            .sidebar_state()
+            .unwrap_or((slot.visible, slot.detached));
+        let titles = ui_values::from_json(&json!(
+            order
+                .iter()
+                .filter_map(|owner| next.get(owner).map(|m| m.title.clone()))
+                .collect::<Vec<_>>()
+        ));
         let build = || -> Result<slint_interpreter::ComponentInstance> {
-            let specs = next.values().map(|m| m.spec.clone()).collect::<Vec<_>>();
+            let specs = shown.iter().map(|m| m.spec.clone()).collect::<Vec<_>>();
             let shell =
                 composition::compile_json(&specs, self.mount_events.clone(), candidate_generation)?;
-            for (mount, values) in next.values().zip(values) {
+            for (mount, values) in shown.iter().zip(values) {
                 for (name, value) in values {
                     composition::set_global_value(&shell, &mount.spec, &name, value)?;
                 }
+                let visible = match mount.spec.slot {
+                    composition::Slot::Sidebar => {
+                        composition::set_tabbed(&shell, &mount.spec, order.len() > 1)?;
+                        sidebar.0 && !sidebar.1
+                    }
+                    _ => mount.visible && !mount.detached,
+                };
                 if let Some(property) = mount.spec.slot.visible_property() {
-                    shell.set_property(property, (mount.visible && !mount.detached).into())?;
+                    shell.set_property(property, visible.into())?;
                 }
             }
+            shell.set_property("sidebar-titles", titles?)?;
+            // The tab that will be current, so the first frame shows it.
+            let active = order
+                .iter()
+                .position(|&o| Some(o) == self.policy.sidebar_active())
+                .or_else(|| {
+                    order.iter().position(|o| {
+                        next.get(o).map(|m| m.manifest.as_str()) == slot.active.as_deref()
+                    })
+                })
+                .unwrap_or(0);
+            shell.set_property("sidebar-active", SValue::Number(active as f64))?;
             self.bind_shell(&shell, candidate_generation)?;
+            self.bind_tabs(&shell, candidate_generation)?;
             if let Some(old) = &self.shell {
                 let size = old.window().size();
                 let scale = old.window().scale_factor();
@@ -2206,18 +2433,29 @@ impl Host {
                         self.images.release_view(old, "$mount");
                     }
                 }
-                for (id, mount) in &next {
-                    if !self.mounts.contains_key(id) {
-                        let Some(slot) = policy_slot(mount.spec.slot) else {
-                            continue;
-                        };
-                        if let Err(error) =
-                            self.policy.attach(slot, *id, mount.visible, mount.detached)
-                        {
-                            eprintln!("mount policy attach: {error}");
-                        }
+                for mount in &shown {
+                    let id = mount.spec.owner;
+                    if self.mounts.contains_key(&id) {
+                        continue;
+                    }
+                    let Some(policy) = policy_slot(mount.spec.slot) else {
+                        continue;
+                    };
+                    let (visible, detached) = match policy {
+                        window_state::Slot::Sidebar => (slot.visible, slot.detached),
+                        window_state::Slot::Bottom => (mount.visible, false),
+                    };
+                    if let Err(error) = self.policy.attach(policy, id, visible, detached) {
+                        eprintln!("mount policy attach: {error}");
+                    }
+                    // The tab that was current at the last run is current again.
+                    if policy == window_state::Slot::Sidebar
+                        && slot.active.as_deref() == Some(mount.manifest.as_str())
+                    {
+                        let _ = self.policy.set_active(id);
                     }
                 }
+                self.policy.order_sidebar(&order);
                 for (id, mount) in &next {
                     let Some(slot) = policy_slot(mount.spec.slot) else {
                         continue;
@@ -2232,13 +2470,11 @@ impl Host {
                 self.policy.activity(self.now_ms());
                 {
                     let mut input = self.input.borrow_mut();
-                    let owner = |slot| {
-                        next.values()
-                            .find(|m| m.spec.slot == slot)
-                            .map(|m| m.spec.owner)
-                    };
-                    input.bottom = owner(composition::Slot::Bottom);
-                    input.sidebar = owner(composition::Slot::Sidebar);
+                    input.bottom = next
+                        .values()
+                        .find(|m| m.spec.slot == composition::Slot::Bottom)
+                        .map(|m| m.spec.owner);
+                    input.sidebar = self.policy.sidebar_active();
                 }
                 if self.menu_generation == self.shell_generation {
                     self.menu_open = false;
@@ -2246,6 +2482,8 @@ impl Host {
                 }
                 self.mounts = next;
                 self.shell_generation = candidate_generation;
+                self.shell_tabs = order;
+                self.remember_sidebar(false);
                 Ok(
                     json!({"status":"ready","shellGeneration":candidate_generation,"prepareMs":started.elapsed().as_secs_f64()*1000.}),
                 )
@@ -2803,13 +3041,28 @@ impl Host {
                 "current shell layout is not yet confirmed",
             ));
         }
+        // `panels`: the slot's panels in tab order (sidebar tabs); `owner`
+        // is the current one's.
+        let bottom = self
+            .mounts
+            .values()
+            .filter(|m| m.spec.slot == composition::Slot::Bottom)
+            .map(|m| m.spec.owner)
+            .collect::<Vec<_>>();
+        let sidebar = self.policy.sidebar_panels();
         let slot = |name: &str| {
             let slot = &self.window_facts["slots"][name];
             if slot.is_null() {
                 return Value::Null;
             }
+            let owners = if name == "sidebar" { &sidebar } else { &bottom };
+            let panels = owners
+                .iter()
+                .filter_map(|owner| self.mounts.get(owner))
+                .map(|m| json!({"owner":m.spec.owner,"plugin":m.manifest,"title":m.title}))
+                .collect::<Vec<_>>();
             json!({"owner":slot["owner"],"preferred":slot["preferred"],"effective":slot["effective"],
-                "reason":slot["reason"],"detached":slot["detached"]})
+                "reason":slot["reason"],"detached":slot["detached"],"panels":panels})
         };
         Ok(
             json!({"bottom":slot("bottom"),"sidebar":slot("sidebar"),"backdrop":self.backdrop_state()}),
@@ -3138,32 +3391,41 @@ impl Host {
                     "sidebar" => composition::Slot::Sidebar,
                     _ => return Err(RpcError::invalid("unknown slot")),
                 };
-                let owner = self
+                let panels = self
                     .mounts
                     .values()
-                    .find(|m| m.spec.slot == slot)
-                    .map(|m| m.spec.owner)
-                    .ok_or_else(|| RpcError::new("missing", "no panel at this position"))?;
+                    .filter(|m| m.spec.slot == slot)
+                    .map(|m| (m.spec.owner, m.manifest.clone()))
+                    .collect::<Vec<_>>();
+                if panels.is_empty() {
+                    return Err(RpcError::new("missing", "no panel at this position"));
+                }
                 let policy_slot = policy_slot(slot)
                     .ok_or_else(|| RpcError::invalid("the backdrop has no preference"))?;
-                if let Some(detached) = params.get("detached").filter(|v| !v.is_null()) {
-                    let detached = detached
-                        .as_bool()
-                        .ok_or_else(|| RpcError::invalid("detached boolean required"))?;
-                    if slot == composition::Slot::Bottom {
-                        return Err(RpcError::invalid("the bottom bar cannot be detached"));
-                    }
+                let LayoutChange {
+                    visible,
+                    detached,
+                    active,
+                } = layout_change(params, slot, &panels)?;
+                // The slot's state goes through its current panel (any tab's would do).
+                let owner = match slot {
+                    composition::Slot::Sidebar => self.policy.sidebar_active(),
+                    _ => None,
+                }
+                .unwrap_or(panels[0].0);
+                if let Some(active) = active
+                    && slot == composition::Slot::Sidebar
+                {
+                    self.policy
+                        .set_active(active)
+                        .map_err(anyhow::Error::from)?;
+                }
+                if let Some(detached) = detached {
                     self.policy
                         .set_detached(owner, detached)
                         .map_err(anyhow::Error::from)?;
-                    if let Some(mount) = self.mounts.get_mut(&owner) {
-                        mount.detached = detached;
-                    }
                 }
-                if let Some(visible) = params.get("visible").filter(|v| !v.is_null()) {
-                    let visible = visible
-                        .as_bool()
-                        .ok_or_else(|| RpcError::invalid("visible boolean required"))?;
+                if let Some(visible) = visible {
                     let now = self.now_ms();
                     self.policy
                         .set_preferred(policy_slot, owner, visible, now)
@@ -3172,7 +3434,7 @@ impl Host {
                         mount.visible = visible;
                     }
                 }
-                self.remember_panel(owner);
+                self.remember_sidebar(active.is_some());
                 // Answer after the next layout pass so a following layout.state sees it.
                 self.window_tick();
                 Value::Null
@@ -3227,10 +3489,17 @@ impl Host {
                         ));
                     }
                 };
+                // A panel in a background tab is not shown (sidebar tabs).
+                if slot == "sidebar" && self.policy.sidebar_active() != Some(reply.owner) {
+                    return Err(RpcError::new(
+                        "unavailable",
+                        "the panel's tab is not the current one",
+                    ));
+                }
                 let generation = if self
                     .floating
                     .as_ref()
-                    .is_some_and(|f| f.owner == reply.owner)
+                    .is_some_and(|f| f.owners.contains(&reply.owner))
                 {
                     self.floating.as_ref().unwrap().generation
                 } else if self.window_facts["slots"][slot]["effective"] == true {
@@ -3393,8 +3662,9 @@ impl Host {
                         "backdrop" => composition::Slot::Backdrop,
                         _ => return Err(RpcError::invalid("unknown mount slot")),
                     };
-                    // One component per slot (R-U3 for the backdrop), whoever
-                    // mounted it: refused here, not when the shell compiles.
+                    // One component in the bottom bar and the backdrop (R-U3),
+                    // whoever mounted it: refused here, not when the shell
+                    // compiles. The sidebar takes tabs, up to a limit.
                     let pending = self
                         .mount_queue
                         .iter()
@@ -3402,7 +3672,15 @@ impl Host {
                         .map(|c| (c.reply.owner, c.contribution.as_ref().map(|m| m.spec.slot)))
                         .collect::<Vec<_>>();
                     let mounted = self.mounts.values().map(|m| (m.spec.owner, m.spec.slot));
-                    if let Some(holder) =
+                    if slot == composition::Slot::Sidebar {
+                        if slot_claims::tabs(reply.owner, mounted, &pending)
+                            >= slot_claims::MAX_SIDEBAR_TABS
+                        {
+                            let error = RpcError::sidebar_full();
+                            let text = format!("面板未显示：{}", error.message);
+                            return Err(self.refuse_taken(reply.owner, error, text));
+                        }
+                    } else if let Some(holder) =
                         slot_claims::occupant(slot, reply.owner, mounted, &pending)
                     {
                         let error = RpcError::slot_occupied(slot, &self.plugin_id(holder));
@@ -3414,15 +3692,15 @@ impl Host {
                         params.get("properties").cloned().unwrap_or(json!({})),
                     )
                     .map_err(|e| RpcError::invalid(e.to_string()))?;
-                    let title = params["title"].as_str().unwrap_or("Vestra Player");
+                    let title = params["title"].as_str().unwrap_or("");
                     if title.len() > 128 || title.chars().any(char::is_control) {
                         return Err(RpcError::invalid("title requires 0..=128 bytes"));
                     }
                     let manifest = plugin.manifest.id.clone();
-                    // C8: a sidebar panel resumes its last visibility and floating state.
-                    let prefs = (slot == composition::Slot::Sidebar)
-                        .then(|| self.ui_state.state.panels.get(&manifest))
-                        .flatten();
+                    let name = plugin.manifest.name.clone().unwrap_or_default();
+                    let builtin = self.is_builtin(reply.owner);
+                    // C8: a sidebar panel joins the slot's remembered state
+                    // (`remember_sidebar`, applied when it attaches).
                     Some(Mount {
                         spec: composition::CompileSpec {
                             owner: reply.owner,
@@ -3432,14 +3710,17 @@ impl Host {
                             slot,
                         },
                         properties,
-                        visible: prefs.is_none_or(|p| p.visible),
-                        detached: prefs.is_some_and(|p| p.detached),
-                        title: if title.is_empty() {
-                            "Vestra Player".into()
-                        } else {
+                        visible: true,
+                        detached: false,
+                        title: if !title.is_empty() {
                             title.into()
+                        } else if !name.is_empty() {
+                            name
+                        } else {
+                            "Vestra Player".into()
                         },
                         manifest,
+                        builtin,
                     })
                 } else {
                     None
@@ -3468,7 +3749,7 @@ impl Host {
                 if let Some(floating) = self
                     .floating
                     .as_ref()
-                    .filter(|f| f.owner == reply.owner)
+                    .filter(|f| f.owners.contains(&reply.owner))
                     .map(|f| f.instance.clone_strong())
                 {
                     let value =
@@ -3777,6 +4058,55 @@ fn activation_outcome(
         _ => Ok(()),
     }
 }
+/// What a `layout.set` changes: the preference, floating, the current tab.
+#[derive(Debug, PartialEq)]
+struct LayoutChange {
+    visible: Option<bool>,
+    detached: Option<bool>,
+    /// The owner of the panel whose tab becomes current.
+    active: Option<u64>,
+}
+
+/// Read `layout.set`'s `visible`, `detached` and `active` (a plugin id among
+/// the slot's `panels`: owner, manifest id) for `slot`.
+fn layout_change(
+    params: &Value,
+    slot: composition::Slot,
+    panels: &[(u64, String)],
+) -> std::result::Result<LayoutChange, RpcError> {
+    let flag = |key: &str| -> std::result::Result<Option<bool>, RpcError> {
+        match params.get(key).filter(|v| !v.is_null()) {
+            None => Ok(None),
+            Some(value) => value
+                .as_bool()
+                .map(Some)
+                .ok_or_else(|| RpcError::invalid(format!("{key} boolean required"))),
+        }
+    };
+    let (visible, detached) = (flag("visible")?, flag("detached")?);
+    if detached.is_some() && slot == composition::Slot::Bottom {
+        return Err(RpcError::invalid("the bottom bar cannot be detached"));
+    }
+    let active = match params.get("active").filter(|v| !v.is_null()) {
+        None => None,
+        Some(Value::String(id)) => Some(
+            panels
+                .iter()
+                .find(|(_, manifest)| manifest == id)
+                .map(|(owner, _)| *owner)
+                .ok_or_else(|| {
+                    RpcError::new("missing", format!("{id} has no panel at this position"))
+                })?,
+        ),
+        Some(_) => return Err(RpcError::invalid("active requires a plugin id")),
+    };
+    Ok(LayoutChange {
+        visible,
+        detached,
+        active,
+    })
+}
+
 fn policy_slot(slot: composition::Slot) -> Option<window_state::Slot> {
     match slot {
         composition::Slot::Bottom => Some(window_state::Slot::Bottom),
@@ -4215,6 +4545,9 @@ fn main() -> Result<()> {
         measured_shell: None,
         menu_open: false,
         sidebar_popped: false,
+        sidebar_active: None,
+        tab_clicked: false,
+        shell_tabs: Vec::new(),
         bottom_shown: true,
         native_window: None,
         native_before: None,
@@ -4502,5 +4835,58 @@ mod tests {
             activation_outcome(&Err(RpcError::new("conflict", "owner already mounted"))),
             Err("conflict: owner already mounted".into())
         );
+    }
+
+    #[test]
+    fn layout_set_reads_the_current_tab_by_plugin_id() {
+        use composition::Slot;
+        let panels = [
+            (4, "vestra.playlist".to_string()),
+            (9, "examples.panel-menu".into()),
+        ];
+        assert_eq!(
+            layout_change(
+                &json!({"slot":"sidebar","active":"examples.panel-menu","visible":true}),
+                Slot::Sidebar,
+                &panels
+            )
+            .unwrap(),
+            LayoutChange {
+                visible: Some(true),
+                detached: None,
+                active: Some(9)
+            }
+        );
+        assert_eq!(
+            layout_change(
+                &json!({"active":null,"detached":false}),
+                Slot::Sidebar,
+                &panels
+            )
+            .unwrap(),
+            LayoutChange {
+                visible: None,
+                detached: Some(false),
+                active: None
+            }
+        );
+        let code = |params: Value, slot| layout_change(&params, slot, &panels).unwrap_err().code;
+        assert_eq!(
+            code(json!({"active":"other.plugin"}), Slot::Sidebar),
+            "missing"
+        );
+        assert_eq!(code(json!({"active":7}), Slot::Sidebar), "invalid");
+        assert_eq!(code(json!({"visible":"yes"}), Slot::Sidebar), "invalid");
+        assert_eq!(code(json!({"detached":true}), Slot::Bottom), "invalid");
+    }
+
+    #[test]
+    fn a_full_sidebar_is_refused_like_a_taken_slot() {
+        let full = RpcError::sidebar_full();
+        assert_eq!(
+            serde_json::to_value(&full).unwrap(),
+            json!({"code":"conflict","message":"侧栏最多 8 个页签","reason":"slot-occupied","slot":"sidebar"})
+        );
+        assert_eq!(activation_outcome(&Err(full)), Ok(()));
     }
 }
