@@ -432,6 +432,8 @@ struct Host {
     settings_category: Option<usize>,
     /// A view missed the palette: deliver again on the next tick.
     theme_pending: bool,
+    /// New windows to put where the previous ones were (`ui::Placements`).
+    placements: ui::Placements,
 }
 struct AreaReply {
     reply: Reply,
@@ -1729,12 +1731,12 @@ impl Host {
             frame.width.max(300.) as f32,
             frame.height.max(250.) as f32,
         ));
-        instance
-            .window()
-            .set_position(slint::LogicalPosition::new(frame.x as f32, frame.y as f32));
         self.theme_view(&instance);
         let before = platform::capture_windows().ok();
-        instance.show()?;
+        self.placements.show_at(
+            &instance,
+            slint::LogicalPosition::new(frame.x as f32, frame.y as f32),
+        )?;
         platform::shown(instance.window());
         let native = before.and_then(|before| platform::associate_new(&before).ok());
         self.floating = Some(Floating {
@@ -2414,8 +2416,13 @@ impl Host {
             platform::shown(shell.window());
             Ok(shell)
         };
+        // Where the old shell's frame is (`ui::Placements`).
+        let position = self.shell.as_ref().map(|old| old.window().position());
         let result = match build() {
             Ok(shell) => {
+                if let Some(position) = position {
+                    self.placements.track(&shell, position.into());
+                }
                 self.theme_view(&shell);
                 #[cfg(feature = "producer-audio")]
                 self.physical_revoke(producer_input::RevokeReason::WindowHidden);
@@ -4609,6 +4616,7 @@ fn main() -> Result<()> {
         settings: Default::default(),
         settings_category: None,
         theme_pending: false,
+        placements: ui::Placements::default(),
         commands: commands::Registry::new(),
     };
     host.register_host_commands()?;
@@ -4658,19 +4666,20 @@ fn main() -> Result<()> {
     } else {
         let native_before = platform::capture_windows().ok();
         let window = composition::compile_json(&[], host.mount_events.clone(), 1)?;
-        if let Some(frame) = host.ui_state.state.window {
+        let position = host.ui_state.state.window.map(|frame| {
             window.window().set_size(slint::LogicalSize::new(
                 frame.width.max(320.) as f32,
                 frame.height.max(182.) as f32,
             ));
-            window
-                .window()
-                .set_position(slint::LogicalPosition::new(frame.x as f32, frame.y as f32));
-        }
+            slint::LogicalPosition::new(frame.x as f32, frame.y as f32)
+        });
         host.attach_gpu(&window);
         // Title bars follow the palette from the first window on.
         platform::set_dark_title_bars(!theme::is_light(host.theme()));
-        window.show()?;
+        match position {
+            Some(position) => host.placements.show_at(&window, position)?,
+            None => window.show()?,
+        }
         platform::shown(window.window());
         // Interpolation (`video.render()`) resamples to the main display's rate.
         let displays = platform::displays();
@@ -4725,6 +4734,7 @@ fn main() -> Result<()> {
                 for event in receiver.try_iter().take(128) {
                     host.handle(event);
                 }
+                host.placements.tick();
                 host.mount_callbacks();
                 host.prepare_mount_tick();
                 host.window_tick();

@@ -29,6 +29,81 @@ pub fn settle_layout(window: &slint::Window) {
         .ensure_tree_instantiated();
 }
 
+/// New windows whose frame goes where a saved or previous window's was
+/// (`Window::position`, the frame's top-left corner, as `ui_state` saves it).
+///
+/// Slint creates the native window only after `show()`, from the event
+/// loop, and hands a position set before that to winit as a creation
+/// attribute, which macOS takes as the top-left corner of the *content* (the
+/// title bar goes above it) and Windows as the frame's. Every window
+/// restored that way on macOS opened one title bar higher than it was (the
+/// floating sidebar at each launch, the main window at each rebuild). Once
+/// the native window exists a position is the frame's everywhere, so
+/// [`Placements::tick`] sets it again then.
+#[derive(Default)]
+pub struct Placements(Vec<Placement>);
+
+struct Placement {
+    window: slint::Weak<ComponentInstance>,
+    position: slint::WindowPosition,
+    /// Ticks waited for the native window.
+    waited: u32,
+}
+
+/// Give up on a window that never gets a native one (about 2 s of ticks).
+const PLACEMENT_TICKS: u32 = 120;
+
+impl Placements {
+    /// Show `component` with its frame at `position`.
+    pub fn show_at(
+        &mut self,
+        component: &ComponentInstance,
+        position: impl Into<slint::WindowPosition>,
+    ) -> Result<(), slint::PlatformError> {
+        let position = position.into();
+        component.window().set_position(position.clone());
+        component.show()?;
+        self.track(component, position);
+        Ok(())
+    }
+
+    /// Put an already shown `component`'s frame at `position` once its
+    /// native window exists.
+    pub fn track(&mut self, component: &ComponentInstance, position: slint::WindowPosition) {
+        self.0.push(Placement {
+            window: component.as_weak(),
+            position,
+            waited: 0,
+        });
+    }
+
+    /// Set the frame position of each window whose native window now exists
+    /// (not in fullscreen, where it has no frame of its own); windows closed
+    /// meanwhile are forgotten.
+    pub fn tick(&mut self) {
+        use slint::winit_030::WinitWindowAccessor;
+        self.0.retain_mut(|placement| {
+            let Some(component) = placement.window.upgrade() else {
+                return false;
+            };
+            let window = component.window();
+            if window.has_winit_window() {
+                if !window.is_fullscreen() {
+                    window.set_position(placement.position.clone());
+                }
+                return false;
+            }
+            placement.waited += 1;
+            placement.waited < PLACEMENT_TICKS
+        });
+    }
+
+    #[cfg(test)]
+    fn pending(&self) -> usize {
+        self.0.len()
+    }
+}
+
 /// The one Slint compiler configuration for the shell, panels, tool windows and
 /// package validation: `@vestra/...` imports and the dark std-widgets style.
 pub fn compiler() -> Compiler {
@@ -726,6 +801,38 @@ export component W inherits Window {
             assert_eq!(read("video-width"), 1470. - 320., "tab {active}");
         }
         shell.hide().unwrap();
+    }
+
+    /// A window waits for its native window (none on the headless
+    /// platform) to be placed, at most `PLACEMENT_TICKS`; a closed one is
+    /// forgotten at once.
+    #[test]
+    fn placements_wait_for_the_native_window_and_forget_closed_ones() {
+        headless();
+        let make = || {
+            let source = r#"export component W inherits Window { width: 100px; height: 80px; }"#;
+            let result = pollster::block_on(
+                compiler().build_from_source(source.into(), ui_dir().join("t.slint")),
+            );
+            result.component("W").unwrap().create().unwrap()
+        };
+        let mut placements = Placements::default();
+        let kept = make();
+        placements
+            .show_at(&kept, slint::LogicalPosition::new(40., 65.))
+            .unwrap();
+        let closed = make();
+        placements.track(&closed, slint::LogicalPosition::new(1., 2.).into());
+        drop(closed);
+        placements.tick();
+        assert_eq!(placements.pending(), 1);
+        for _ in 1..PLACEMENT_TICKS - 1 {
+            placements.tick();
+        }
+        assert_eq!(placements.pending(), 1);
+        placements.tick();
+        assert_eq!(placements.pending(), 0);
+        kept.hide().unwrap();
     }
 
     /// The sources the host generates (main window with panels, floating
