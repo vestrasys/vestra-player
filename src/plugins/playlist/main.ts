@@ -1,7 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname } from "node:path";
-import type { Command, CommandOptions, ConfirmOptions, Plugin, PluginError } from "@vestra-player/sdk";
-import { dropExtra, DROP_EXTENSIONS, dropRow, expandDrop } from "./drop.ts";
+import type { Command, CommandOptions, ConfirmOptions, Panel, Plugin, PluginError } from "@vestra-player/sdk";
+import { dropExtra, DROP_EXTENSIONS, dropRow, expandDrop, LIST_TOP } from "./drop.ts";
 import { follower, type OpenMode } from "./follow.ts";
 import { linkDialog } from "./link.ts";
 import {
@@ -75,7 +75,10 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   let follow: ReturnType<typeof follower> | null = null;
   const player = playback(plugin, queue, () => void follow?.check());
   const link = linkDialog(plugin, queue);
-  const list = plugin.panels.mount("sidebar", "ui/sidebar.slint", { title: "播放列表" });
+  // SDK 1.5.2 sidebar tabs (`Panel.state`, `Panel.toggle`); absent from older SDKs, which have
+  // one sidebar panel and use the position's state instead.
+  const list = plugin.panels.mount("sidebar", "ui/sidebar.slint", { title: "播放列表" }) as Panel &
+    Partial<{ readonly state: { preferred: boolean; active: boolean } | null; toggle(): Promise<void> }>;
   const sidebar = plugin.panels.sidebar;
   const stop = new AbortController();
   plugin.onDispose(() => stop.abort());
@@ -456,9 +459,11 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     group: "windows",
     order: 800,
     bindings: ["F6"],
-    checked: () => sidebar.state?.preferred ?? true,
+    // With tabs: checked while the sidebar is shown on the playlist's tab; F6 brings the tab
+    // forward from another tab, hides the sidebar on it, shows the sidebar on it when hidden.
+    checked: () => (list.state ? list.state.preferred && list.state.active : (sidebar.state?.preferred ?? true)),
     reason: () => (sidebar.state?.reason === "space" ? "空间不足，放大窗口后可显示" : null),
-    run: () => sidebar.toggle(),
+    run: () => (typeof list.toggle === "function" ? list.toggle() : sidebar.toggle()),
   });
   plugin.commands.add({
     id: "playlist.open-folder",
@@ -648,7 +653,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   page.on("setConfirmClear", (on: boolean) => (on !== settings.confirmClear ? setConfirmClear(on) : undefined));
 
   // G-08: scrolling the list from the plugin (`scroll-to-y` on each `scroll-request`).
-  const listArea = { scroll: 0, height: Number.POSITIVE_INFINITY };
+  const listArea = { scroll: 0, height: Number.POSITIVE_INFINITY, top: LIST_TOP };
   const scroller = { request: 0, to: 0, sentAt: Number.NEGATIVE_INFINITY, userAt: Number.NEGATIVE_INFINITY };
   let lastPlaying: string | null = null;
   /** The scroll this update asks for: the cursor after a key, else a newly playing row out of view. */
@@ -804,12 +809,15 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
 
   // The list reports its scroll and height (drops, G-08). A scroll that is not the one just
   // asked for is the user's (wheel, scroll bar, edge scrolling while dragging).
-  list.on("listArea", (scroll: number, height: number) => {
+  // `top`: where the list starts in the panel (below the panel's own tab strip, 0 under the
+  // player's); checked, since a stale build of the panel may report only two values.
+  list.on("listArea", (scroll: number, height: number, top: number) => {
     const next = Number.isFinite(scroll) ? scroll : 0;
     const ours = Math.abs(next - scroller.to) < 1 && Date.now() - scroller.sentAt < 500;
     if (Math.abs(next - listArea.scroll) >= 1 && !ours) scroller.userAt = Date.now();
     listArea.scroll = next;
     listArea.height = Number.isFinite(height) && height > 0 ? height : Number.POSITIVE_INFINITY;
+    if (typeof top === "number" && Number.isFinite(top) && top >= 0) listArea.top = top;
   });
 
   // A15: drops from the file manager. On the video area (the player groups by extension): G-11
@@ -847,7 +855,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
         let before: number | undefined;
         if (how.at) {
           const shown = queue.visible();
-          const row = dropRow(how.at.y, listArea.scroll, listArea.height, shown.length);
+          const row = dropRow(how.at.y, listArea.scroll, listArea.height, shown.length, listArea.top);
           if (row !== null) before = queue.rows.indexOf(shown[row]!);
         }
         // G-11: replaced without asking; not while another source opens (only added then).

@@ -1094,6 +1094,34 @@ test("A15: the drop point maps to a shown row; tab strip, bottom bar and blank s
   assert.equal(dropRow(31 + 200, 0, 200, 50), null); // bottom bar
   assert.equal(dropRow(31 + 5 * 20, 0, 200, 5), null); // below the last row
   assert.equal(dropRow(35, 60, 200, 5), 3);
+  // Under the player's tab strip (tabbed) the list starts at 0.
+  assert.equal(dropRow(0, 0, 200, 5, 0), 0);
+  assert.equal(dropRow(20, 0, 200, 5, 0), 1);
+  assert.equal(dropRow(-1, 0, 200, 5, 0), null);
+  assert.equal(dropRow(5 * 20, 0, 200, 5, 0), null);
+});
+
+test("G-12: with the player's tab strip the list reports top 0 and drops map from there", async () => {
+  const app = await start();
+  try {
+    const rows = await app.files(["1.mp4", "2.mp4", "3.mp4", "4.mp4"]);
+    await app.addFiles(rows);
+    const [x, y] = await app.files(["x.mp4", "y.mp4"]);
+    app.host.settingsPage("playlist").emit("set-drop-at-pointer", true);
+    await app.host.settle();
+    // Tabbed: no own strip, the list area is at the top of the panel.
+    await app.emit("list-area", 0, 200, 0);
+    await app.host.drop([x!], { target: "panel", at: { x: 40, y: 25 } }); // the second row
+    await app.host.settle(30);
+    assert.deepEqual(app.names(), ["1.mp4", "x.mp4", "2.mp4", "3.mp4", "4.mp4"]);
+    // Own strip back (the other tab gone): rows start at 31 again.
+    await app.emit("list-area", 0, 200, 31);
+    await app.host.drop([y!], { target: "panel", at: { x: 40, y: 25 } }); // on the strip: the end
+    await app.host.settle(30);
+    assert.equal(app.names().at(-1), "y.mp4");
+  } finally {
+    await app.close();
+  }
 });
 
 // ------------------------------------------------------------------ interaction round (G-08, G-11, IA-PL-02)
