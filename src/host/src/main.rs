@@ -801,6 +801,11 @@ impl Host {
                     return;
                 }
                 self.policy.activity(self.now_ms());
+                if debug_menu()
+                    && let MenuAction::Invoke(token) = &action
+                {
+                    eprintln!("menu: invoke {token} open={:?}", self.menu_path);
+                }
                 match action {
                     MenuAction::Reset => {
                         #[cfg(feature = "producer-audio")]
@@ -814,6 +819,13 @@ impl Host {
                     }
                     MenuAction::Dismiss => self.close_menu(),
                     MenuAction::Hover(level, token, now) => {
+                        if debug_menu() {
+                            eprintln!(
+                                "menu: hover level={level} token={token} now={now} open={:?} t={}",
+                                self.menu_path,
+                                self.now_ms()
+                            );
+                        }
                         let Some(path) = menu::hover_target(&self.menu_path, level, &token) else {
                             return;
                         };
@@ -4159,7 +4171,31 @@ fn menu_levels(
 ) -> Result<slint_interpreter::Value> {
     *path = menu::valid_path(roots, path);
     let (origin, size) = menu_frame(window);
-    ui_values::from_json(&menu::levels(roots, path, origin, size, scroll, labels))
+    let value = menu::levels(roots, path, origin, size, scroll, labels);
+    if debug_menu() {
+        let panels: Vec<String> = value
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|level| {
+                let number = |key: &str| level[key].as_f64().unwrap_or(f64::NAN);
+                format!(
+                    "x {:.0}..{:.0} y {:.0}..{:.0}",
+                    number("x"),
+                    number("x") + number("width"),
+                    number("y"),
+                    number("y") + number("height")
+                )
+            })
+            .collect();
+        eprintln!(
+            "menu: open={path:?} window={:.0}x{:.0} panels=[{}]",
+            size.x,
+            size.y,
+            panels.join("; ")
+        );
+    }
+    ui_values::from_json(&value)
 }
 /// Where the menu opens and the window it must fit in, in logical px.
 fn menu_frame(window: &slint_interpreter::ComponentInstance) -> (menu::Point, menu::Point) {
@@ -4349,6 +4385,12 @@ fn double_click_interval() -> Duration {
     })
 }
 /// `VESTRA_DEBUG_KEYS=1`: log every key event and how it resolved to stderr.
+/// `VESTRA_DEBUG_MENU=1`: the context menu's hovers, invocations and panel
+/// geometry on stderr.
+fn debug_menu() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("VESTRA_DEBUG_MENU").is_some_and(|v| v == "1"))
+}
 fn debug_keys() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("VESTRA_DEBUG_KEYS").is_some_and(|v| v == "1"))
@@ -4390,14 +4432,15 @@ fn host_key(input: &Rc<RefCell<InputShared>>, code: &str) -> bool {
     })
 }
 /// Registry revisions include changes outside the open levels and identical
-/// state publications. Reconcile in place so unchanged panels keep their live
-/// elements; a changed level replaces only that level's row.
+/// state publications. Reconcile in place at every depth so the rows keep
+/// their live elements: a state published while a row is pressed must not
+/// cancel the click, nor a switched submenu the hover of its parent's rows.
 fn set_menu_model(
     window: &slint_interpreter::ComponentInstance,
     next: slint_interpreter::Value,
 ) -> Result<()> {
     let current = window.get_property("menu-levels")?;
-    if !ui_values::reconcile(&current, &next)? {
+    if !ui_values::reconcile_nested(&current, &next)? {
         window.set_property("menu-levels", next)?;
     }
     Ok(())
