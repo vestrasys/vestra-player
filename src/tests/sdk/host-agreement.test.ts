@@ -23,6 +23,8 @@ import {
   rewriteSlint,
   scanSlint,
   UI_VALUE_LIMITS,
+  LIST_SEPARATORS,
+  TEXT_LIMITS,
 } from "@vestra-player/sdk/runtime";
 import { TestHost } from "@vestra-player/sdk/testing";
 
@@ -59,6 +61,45 @@ test("UI_VALUE_LIMITS match the player's (host/src/ui_values.rs)", () => {
     },
     { ...UI_VALUE_LIMITS },
   );
+});
+
+test("TEXT_LIMITS and LIST_SEPARATORS match the player's (host/src/i18n/text.rs)", () => {
+  const rust = host("src/i18n/text.rs");
+  const constant = (name: string) =>
+    Number(new RegExp(`pub const ${name}: usize = (\\d+);`).exec(rust)?.[1]);
+  assert.deepEqual(
+    {
+      depth: constant("MAX_DEPTH"),
+      nodes: constant("MAX_NODES"),
+      args: constant("MAX_ARGS"),
+      items: constant("MAX_ITEMS"),
+      stringBytes: constant("MAX_STRING_BYTES"),
+    },
+    { ...TEXT_LIMITS },
+  );
+  const styles = JSON.parse(
+    /pub const STYLES: \[&str; 5\] = (\[[^\]]*\]);/.exec(rust)![1]!,
+  ) as string[];
+  const unescape = (text: string) =>
+    text
+      .replace(/\\u\{([0-9a-f]+)\}/g, (_, hex: string) =>
+        String.fromCodePoint(Number.parseInt(hex, 16)),
+      )
+      .replaceAll("\\n", "\n");
+  const rows = Object.fromEntries(
+    [...rust.matchAll(/\("([^"]+)", \[([^\]]*)\]\)/g)].map(
+      ([, locale, list]) => [
+        locale,
+        Object.fromEntries(
+          [...list!.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(([, sep], i) => [
+            styles[i]!,
+            unescape(sep!),
+          ]),
+        ),
+      ],
+    ),
+  );
+  assert.deepEqual(rows, LIST_SEPARATORS);
 });
 
 test("MENU_IDS are the player's built-in menu ids", () => {

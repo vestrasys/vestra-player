@@ -93,6 +93,8 @@ impl Host {
                     // What the user sees: the interface language.
                     "title":declaration.shown_title(),
                     "path":(!declaration.path.is_empty()).then(|| declaration.shown_path()),
+                    // The keys menus merge by: the same in every language.
+                    "key":(!declaration.path.is_empty()).then(|| declaration.path.clone()),
                     "scope":if info.panel {"panel"} else {"global"},
                     "defaults":texts(&info.defaults),"current":texts(&info.current),
                     "overridden":info.overridden,

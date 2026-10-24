@@ -125,6 +125,19 @@ impl Declaration {
             .collect();
         self.display.title = text(&self.title);
     }
+    /// Overwrite the shown title and segments that were text values (their
+    /// keys are the English renderings): `title`, and `path` by index.
+    /// Call after [`Declaration::localize_declared`].
+    pub fn show_texts(&mut self, title: Option<String>, path: &[Option<String>]) {
+        if let Some(title) = title {
+            self.display.title = title;
+        }
+        for (index, shown) in path.iter().enumerate() {
+            if let (Some(shown), Some(slot)) = (shown, self.display.path.get_mut(index)) {
+                *slot = shown.clone();
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -1412,6 +1425,26 @@ mod tests {
         let mut path = vec!["Playback".to_owned(), "Speed".into(), "x".into()];
         normalize(&mut path).unwrap();
         assert_eq!(path, ["Playback", "Speed", "x"]);
+    }
+
+    /// i18n.md §7: a text value's key is its English rendering, its shown
+    /// text the translation (set by `show_texts` after `localize_declared`).
+    #[test]
+    fn text_value_segments_show_their_rendering() {
+        let mut track = declaration(&["@audio", "Audio Track", "Track 2 (opus)"]);
+        let declared = track.path.clone();
+        normalize(&mut track.path).unwrap();
+        track.localize_declared(&declared, |text| match text {
+            "Audio Track" => "音轨".to_owned(),
+            other => other.to_owned(),
+        });
+        track.show_texts(
+            Some("音轨 2 (opus)".into()),
+            &[None, None, Some("音轨 2 (opus)".into())],
+        );
+        assert_eq!(track.path, ["Audio", "Audio Track", "Track 2 (opus)"]);
+        assert_eq!(track.shown_path()[1..], ["音轨", "音轨 2 (opus)"]);
+        assert_eq!(track.shown_title(), "音轨 2 (opus)");
     }
 
     /// i18n.md §5: menus merge by key and show labels: the player's words for

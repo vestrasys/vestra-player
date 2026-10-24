@@ -247,8 +247,8 @@ commands.add(options: CommandOptions): Command
 
 interface CommandOptions {
   id: string;                         // 插件内唯一
-  path?: string[];                    // 菜单路径（英文原文），1–8 段，最后一项是菜单项；1 段 = 顶层直接命令；省略 = 不进主菜单；第一段可写内置菜单 id，如 "@video"
-  title?: string;                     // 菜单文字（英文原文），默认取 path 最后一项；省略 path 时必填
+  path?: (string | Text)[];           // 菜单路径（英文原文），1–8 段，最后一项是菜单项；1 段 = 顶层直接命令；省略 = 不进主菜单；第一段可写内置菜单 id，如 "@video"；带数据的段用 Text（§6.11）
+  title?: string | Text;              // 菜单文字（英文原文或 Text），默认取 path 最后一项；省略 path 时必填
   order?: number;                     // 同级排序，小的在前；整数，±1 000 000 内，默认 0
   group?: string;                     // 分组名，相邻两项分组不同时画分隔线；默认 "domain"
   radio?: boolean;                    // checked 画成单选圆点而不是 ✓
@@ -258,7 +258,7 @@ interface CommandOptions {
   enabled?: Bindable<boolean>;        // 默认 true
   checked?: Bindable<boolean | null>; // null：无勾选标记（默认）
   busy?: Bindable<boolean>;           // 默认 false
-  reason?: Bindable<string | null>;   // 禁用或忙碌时显示的原因
+  reason?: Bindable<TextValue | null>; // 禁用或忙碌时显示的原因（英文原文，或 Text，§6.11）
   run(): unknown;
 }
 type Bindable<T> = T | (() => T);
@@ -343,7 +343,8 @@ binding  = { 修饰键 "+" } 输入          修饰键按 Ctrl、Alt、Shift、C
 ```ts
 interface BindingRef { plugin: string /* manifest id；播放器自己的命令为 "host" */; command: string }
 interface BindingInfo extends BindingRef {
-  title: string; path: string[] | null;  // 不进菜单的命令 path 为 null
+  title: string; path: string[] | null;  // 显示文字；不进菜单的命令 path 为 null
+  key?: string[] | null;                 // 菜单路径的英文 key，各语言相同（["Playback", "Seek", "Back 5 s"]）；播放器 0.4.3、SDK 1.5.11
   scope: "global" | "panel";
   defaults: string[];   // 命令自己声明的
   current: string[];    // 生效的：有覆盖时为覆盖值，否则为 defaults
@@ -360,6 +361,7 @@ bindings.onChange(listener: () => void): Disposable;
 - `list`：当前声明的全部命令（运行中的插件与播放器），以及 `orphans`：覆盖层里命令当前不存在的条目（插件停用或卸载）。这些条目保留，插件回来后照常生效。
 - `set`：最多 16 个，语法同 §4.1，按规范写法保存（`Ctrl+Shift+A`），重复或不合法时 `invalid`；命令不存在且也不是 orphan 时 `missing`。覆盖优先于所有默认绑定（§4.1 冲突规则），跨启动保存。改「全屏」之类的宿主命令同样可以。
 - 「忽略默认快捷键」：对要忽略的命令 `set(ref, [])`，自己记下写过哪些，恢复时对它们 `reset(ref)`（裁决 R-K2）。
+- `key`（P-2）：按菜单位置找命令时用它，不要用随语言变化的 `path`；内置菜单是 key（`Video`，声明为 `@video` 也一样），Text 段是英文渲染（`Track 2 (opus)`）。
 - `onChange`：命令声明、注销或覆盖层变化后调用（合并为每 200 ms 至多一次），收到后再 `list()`。只发给声明了 `bindings.manage` 的插件。
 
 ## 5. 播放器 `plugin.player`
@@ -607,12 +609,13 @@ timeline.marks: readonly TimelineMark[];      // 所有层合并，按 time 升�
 timeline.onChange(listener: (marks: readonly TimelineMark[]) => void): Disposable; // 需要 events
 timeline.layer(): TimelineLayer;              // 本插件的层（timeline.marks 能力）；第二次调用抛错
 interface TimelineLayer extends Disposable {
-  set(marks: { time: number; kind: MarkKind; title?: string }[], opts?: { ifCurrent?: PlayerState }): void;
+  set(marks: { time: number; kind: MarkKind; title?: string | Text }[], opts?: { ifCurrent?: PlayerState }): void;
 }
 ```
 
 - `marks` 同步只读：有 `playback.read` 的插件在激活前读一次；有 `events` 时从第一次读 `marks` 或调用 `onChange` 开始跟随（播放器在合并结果变化时推送，至多每 100 ms 一次）；没有 `events` 时只有启动时的值。同一时间的标记按插件、再按各层内的顺序排列。
 - `set`：替换本插件的整层，最后写入生效，`[]` 清空。单层至多 1000 个，`title` 至多 100 个字符，`time` 在 `[0, 时长]`（时长未知时只要求 ≥ 0），`kind` 只能是三者之一；不合法时以 `invalid` 交给 `onError`（`set` 本身不抛错、不返回 promise）。`ifCurrent` 只比较来源（`sourceId`）：写入到达时来源已经换了，丢弃本次写入，不报错；同一来源里的暂停、跳转不影响。
+- `title` 是数据（章节、书签自己的名字）；带固定文字的标题用 Text（`text("Chapter {}", [n])`，§6.11），播放器按本插件词典翻译后保存，别的插件读到的是显示文字，100 个字符按显示文字计。
 - 来源变化（新 `sourceId`）时播放器清空**所有**层；`dispose` 或插件停用时清除本插件的层。`kind` 播放器不解释，供读取方配色（建议：章节 `Theme.text-dim`、书签 `Theme.accent`）。
 - 测试：`host.timeline.layers`（插件 id → 标记）、`host.timeline.marks`（合并结果）；`host.setTimelineLayer(pluginId, marks)` 模拟别的插件发布；打开新来源时清空。
 
@@ -830,15 +833,17 @@ interface SlotState {
 需要 `ui.osd`。
 
 ```ts
-osd.show(text: string, args?: TemplateArgs): Promise<void> // 视频左上角一行，2 秒后淡出；新提示替换旧提示
+osd.show(text: TextValue, args?: TemplateArgs): Promise<void> // 视频左上角一行，2 秒后淡出；新提示替换旧提示
 osd.panel(): OsdPanel                   // 本插件的只读信息块，每个插件一个
 interface OsdPanel extends Disposable {
-  set(text: string | null, args?: TemplateArgs): void; // 多行文字；null 隐藏；最后写入生效
+  set(text: TextValue | null, args?: TemplateArgs | null, options?: { maxColumns?: number }): void; // 多行文字；null 隐藏；最后写入生效
 }
-type TemplateArgs = readonly (string | number)[] | Readonly<Record<string, string | number>>;
+type TemplateArgs = readonly TextArg[] | Readonly<Record<string, TextArg>>;  // TextArg = string | number | Text | TextList（§6.11）
 ```
 
 - 模板（播放器 0.4.3）：`text` 是英文模板，播放器先查插件词典（§6.10）得到译文，再用 `args` 填占位符（`{}` 依次，`{0}` 按序号，`{name}` 取对象字段；`{{`、`}}` 是花括号；整数不带小数；没有对应参数的占位符原样保留）。不给 `args` 时不格式化，文字原样显示（旧插件不变）。`args` 至多 16 个字符串或有限数字，否则 `invalid`。不要在 TS 里拼句子（`` `Speed ${rate}×` ``）：译者只能翻译整句模板；参数本身是固定集合里的词时，每个取值写一整句模板。0.4.3 之前的播放器忽略 `args`，显示模板原文。
+- 文字值（SDK 1.5.11，§6.11）：参数可以是 Text / TextList，同样翻译后代入（「下载失败：{}」+ `text("Connection timed out")`）；`text` 本身也可以是 Text 或 TextList（这时不给 `args`，参数在它里面）。
+- `maxColumns`（8–1000，SDK 1.5.11）：播放器在翻译、格式化**之后**把每行截到这么多列，截断处加 `…`；中日韩字符与全角字符算 2 列，组合用符号 0 列（`unicode-width`）。插件按视频区宽度算列数，不用量译文。
 
 - 提示：显示出来的文字 1–200 个字符，换行替换为空格；白字放在半透明深色圆角底板上，底边一条渐变线，左/上边距 10px（播放器 0.4.0 之前是粗体白字黑描边）。字号随视频区高度变化（交互对齐 G-10）：视频区高度的 3%，取整后夹在 12–48px（默认窗口约 18px，1080 高的全屏 32px），底板内边距与圆角随字号缩放。插件停用时已显示的提示照常到时消失。
 - 信息块：位于提示底板下方 4px，与提示同样的半透明深色圆角底板，字号随提示同比例缩放（提示 16px 时 11px，夹在 9–28px），不接收输入，最多 32 行、4096 字节；多个插件各一块时从上到下排列。`dispose` 或插件停用时移除。第二次调用 `panel()` 抛错。
@@ -949,10 +954,42 @@ type Locale = "en" | "zh-Hans" | "ja" | "ko" | "de" | "fr" | "es";
 ```
 
 - 界面语言在播放器启动时决定，整个运行期间不变：保存的选择（§6.8 `appearance.language`）或系统的首选语言里第一个支持的，都没有用英文。繁体中文（`zh-Hant`，台湾、香港、澳门）用英文。0.4.3 之前的播放器报告 `"en"`。
-- **插件不写翻译代码**：没有 `t()`、没有语言变化事件。用户看得到的文字都写英文原文，放在三处，由播放器用插件自己的词典翻译：声明（命令 `title`、`path`、`reason`，设置页与面板标题，manifest 的 `name`、`punchline`、`description`、`tags`）；Slint 的 `@tr`（§6.4）；交给播放器显示的句子（`osd.show`、`OsdPanel.set`、`dialogs.confirm` 的模板与 `args`，文件对话框的 `title`）。`locale` 只用于不是文字的东西（日期、数字的写法）。
+- **插件不写翻译代码**：没有 `t()`、没有语言变化事件（`plugin.i18n.text` 返回的是数据，不是译文，§6.11）。用户看得到的文字都写英文原文，放在三处，由播放器用插件自己的词典翻译：声明（命令 `title`、`path`、`reason`，设置页与面板标题，manifest 的 `name`、`punchline`、`description`、`tags`）；Slint 的 `@tr`（§6.4）；交给播放器显示的句子（`osd.show`、`OsdPanel.set`、`dialogs.confirm` 的模板与 `args`，文件对话框的 `title`）。`locale` 只用于不是文字的东西（日期、数字的写法）。
 - 词典：插件目录的 `locales/messages.pot`（`vestra-plugin i18n extract` 生成）与每种语言一个 `locales/<lang>.po`（gettext 格式；英文是原文，没有 `en.po`）。`vestra-plugin build` 把 `.po` 编译成 `dist/locales/<lang>.json` 放进包里（`.po` 不进包）；开发加载（`--plugin`）直接读 `.po`。格式与加载规则见[多语言设计](../architecture/i18n.md) §3。
 - 不翻译的文字（各语言的本名、产品名）前加 `i18n-ignore` 注释：`extract` 不收录，`check` 不警告。给译者的说明写在文字前以 `TRANSLATORS:` 开头的注释里。
 - 测试：`startPlugin(activate, { directory, locale: "zh-Hans" })` 或 `host.locale = "zh-Hans"`（在 `startPlugin` 之前）加载该语言的词典；`host.command(id).display`（显示出来的菜单）、`host.osd`、`host.osdPanel`、`host.confirmTexts`、`host.translate(text, args)` 是按该语言显示的文字，声明原文在 `.declaration` 与 `host.sent(…)`。没设 `locale` 时插件文字按英文，但播放器自己的文字（核心动作的提示、拒绝消息）保持 SDK 1.5.8 的中文，旧测试不受影响。
+
+### 6.11 文字值 `plugin.i18n.text`、`list`、`error`、`resolve`
+
+播放器 0.4.3、SDK 1.5.11。不需要能力。用于固定文字与数据混排、TS 又不能拼句子的地方（第 2 轮请求 R2-audio-1 等，设计见 [i18n 轮记录](../process/rounds/2026-10-i18n.md)「第 2 轮答复」）。
+
+```ts
+plugin.i18n.text(source: string, args?: TemplateArgs): Text      // { $vestraText: source, args }：纯数据，不是译文
+plugin.i18n.list(items: readonly TextArg[], style?: ListStyle): TextList  // { $vestraList: items, style }
+plugin.i18n.error(source: string, args?: TemplateArgs): TextError // Error，text 字段是 Text，message 是英文渲染
+plugin.i18n.resolve(value: TextValue): string                    // 只给离开播放器的文字（剪贴板、文件）
+type ListStyle = "list" | "clauses" | "semicolons" | "sentences" | "lines";
+type TextArg = string | number | Text | TextList;
+type TextValue = string | Text | TextList;
+```
+
+- **播放器翻译**：显示时用本插件词典查 `source`，再用渲染过的参数格式化（规则同 §6.5；Text 总是格式化）。参数里的字符串、数字是数据；参数里的 Text / TextList 同样翻译，可以嵌套。TextList 用界面语言的分隔符连接各项：
+
+  | style | en（ko、de、es 同） | zh-Hans | ja | fr |
+  | --- | --- | --- | --- | --- |
+  | `list`（列举，默认） | `, ` | `、` | `、` | `, ` |
+  | `clauses`（同一句的分句） | `, ` | `，` | `、` | `, ` |
+  | `semicolons` | `; ` | `；` | `；` | ` ; `（前面是窄不换行空格） |
+  | `sentences`（最后一句不加句号） | `. ` | `。` | `。` | `. ` |
+  | `lines` | 换行 | 换行 | 换行 | 换行 |
+
+- **接受的位置**（任何「播放器显示插件文字」的地方）：命令 `title`、`path` 各段（不能是 TextList；菜单按**英文渲染**合并，`Track 2 (opus)`）、`reason`；`osd.show`、`OsdPanel.set` 的文字与参数；确认框各字段；文件对话框 `title`、`saveFile` 的 `fileName`；窗口、面板、设置页属性值里 Slint 类型是 `string` 的位置（任意深度：`[string]` 模型、结构体字段）；`TimelineLayer.set` 的标题；`subtitles.load({ title })`；解析器 `resolve` 抛出的 `TextError`（`player.state.error` 与打开失败的消息显示译文；流在启动时失败同样）。
+- **属性值**：播放器在任何检查之前把属性值里的 Text / TextList 换成显示的字符串（`ui.open`、`ui.set`、`ui.mount`、`ui.setMount`、`settings.register`、`settings.set`），所以 §6.1 的上限按换好的字符串计；Slint 结构体字段不能以 `$` 开头，`$vestraText` 不会与真实数据冲突。
+- **上限**（`TEXT_LIMITS`）：嵌套 8 层，一个值里文字值与参数共 1024 个，每个 Text 至多 16 个参数，每个 TextList 至多 256 项，`source` 与字符串参数各至多 4096 字节（模板参数原来是 1024 字节）。不合法时在 `text()`/`list()` 处同步抛 `invalid`，播放器也以 `invalid` 拒绝。
+- **`resolve`**：同步返回本次语言的字符串，用插件进程自己读的同一份词典（`locales/<lang>.json`，开发时 `.po`）。**只用于离开播放器的文字**（info 的「复制信息」、hotkeys 导出的 CSV）；界面上一律直接传文字值，否则 `check` 看不出句子是否完整。
+- **提取**：`vestra-plugin i18n extract` 收集每个 `text(…)`、`error(…)`、`resolve("…")` 调用的 `source`（字面量、条件两支、`as const` 表；`plugin.i18n.text` 或解构出来的 `text` 都认）和 `{ $vestraText: "…" }` 字面量；只有占位符和标点的 `source`（`"{} · {}"`）不收录。字段类型是 Text 时不再报「不是字面量」。
+- **旧播放器**：插件代码运行在播放器自带的 SDK 上，0.4.3 之前的播放器没有 `plugin.i18n.text`；用文字值的插件写 `"minPlayerVersion": "0.4.3"`。
+- 测试：TestHost 与播放器同样显示：`FakeCommand.display`（及不可枚举的 `display.reason`）、`host.osd`、`host.osdPanel`、`host.confirmTexts`、`host.fileDialogs`、窗口与面板的 `props`（文字值已换成字符串；原样在 `host.sent(…)`）、时间轴与字幕标题、解析器的 `TextError`、`BindingInfo.key`。
 
 ## 7. 对话框 `plugin.dialogs`
 
@@ -960,17 +997,17 @@ type Locale = "en" | "zh-Hans" | "ja" | "ko" | "de" | "fr" | "es";
 
 ```ts
 dialogs.confirm(options: {
-  message: string;        // 1–200 个字符，粗体
-  detail?: string;        // ≤ 2000 个字符，正文
-  confirm: string;        // 确认按钮（默认按钮，回车），1–40 个字符
-  cancel?: string;        // 取消按钮（Esc），1–40 个字符，默认「取消」
+  message: TextValue;     // 1–200 个字符，粗体
+  detail?: TextValue;     // ≤ 2000 个字符，正文
+  confirm: TextValue;     // 确认按钮（默认按钮，回车），1–40 个字符
+  cancel?: TextValue;     // 取消按钮（Esc），1–40 个字符，默认「取消」
   destructive?: boolean;  // 确认按钮标为破坏性操作（红字）
-  checkbox?: string;      // 文字下方的复选框，1–40 个字符
-  args?: TemplateArgs;    // message、detail 的模板参数（播放器 0.4.3，§6.5）
+  checkbox?: TextValue;   // 文字下方的复选框，1–40 个字符
+  args?: TemplateArgs;    // 字符串 message、detail 的模板参数（播放器 0.4.3，§6.5）；Text 字段自带参数
 }): Promise<{ confirmed: boolean; checked: boolean }>
 ```
 
-- 文字（播放器 0.4.3）：全部字段写英文原文，播放器按插件词典翻译（§6.10）；`message`、`detail` 是模板，用 `args` 填占位符，按钮与复选框只翻译。长度限制按显示出来的文字计。默认的取消按钮是播放器的 Cancel（简体中文「取消」）。文件对话框的 `title` 同样翻译。
+- 文字（播放器 0.4.3）：全部字段写英文原文，播放器按插件词典翻译（§6.10）；`message`、`detail` 是模板，用 `args` 填占位符，按钮与复选框只翻译。长度限制按显示出来的文字计。默认的取消按钮是播放器的 Cancel（简体中文「取消」）。文件对话框的 `title` 同样翻译。任何文字字段都可以是 Text / TextList（SDK 1.5.11，§6.11），例如权限列表 `text("It will be able to:\n{}", [list(perms, "lines")])`。`saveFile` 的 `fileName`：字符串是数据，不翻译；Text 按插件词典翻译（`text("Playlist.m3u8")`），译文里的 `/`、`\` 换成 `-`。
 
 - macOS：系统提示框（`NSAlert`），以当前活动的播放器窗口（发起确认的工具窗口、浮动侧栏，通常就是用户刚点按钮的窗口）为父窗口的表单（sheet），没有活动窗口时挂主窗口；都不可用时为应用模态窗口。`confirmed`：用户点了确认按钮；`checked`：复选框的状态（没有复选框为 `false`，取消时也如实返回）。长度按 Unicode 字符计（一个汉字一个字符），超出 `invalid`。
 - Windows：系统任务对话框（`TaskDialogIndirect`，播放器的可执行文件内嵌 Common Controls v6 的应用清单），挂在当前活动的播放器窗口（没有时挂主窗口）。正文是 `message`，有 `detail` 时空一行接在后面，标题栏是「Vestra Player」；按钮文字是 `confirm`、`cancel`（两者相同时取消按钮末尾多一个看不见的空格，以区分答复）；`destructive` 显示警告图标；按 Esc 或关闭对话框等于取消。有 `checkbox` 时，用户确认后再弹一个「是 / 否」对话框，正文为复选框文字，选「是」即 `checked: true`；取消时不再询问，`checked` 为 `false`。
@@ -1124,7 +1161,7 @@ interface Subtitles {
   onChange(listener: (s: SubtitlesState) => void): Disposable;
   refresh(): Promise<SubtitlesState>;
   select(track: SubtitleTrack | null, opts?: { role?: "primary" | "secondary"; ifCurrent? }): Promise<SubtitlesState>; // null = 关闭
-  load(bytes: Uint8Array, opts?: { format?: "srt" | "ass"; title?: string;
+  load(bytes: Uint8Array, opts?: { format?: "srt" | "ass"; title?: string | Text /* §6.11 */;
        select?: "primary" | "secondary" | "none"; ifCurrent?; signal? }): Promise<SubtitleTrack>;
   remove(track: SubtitleTrack, opts?): Promise<SubtitlesState>;       // 只能删本插件载入的
   setStyle(style: SubtitleStyle | null, opts?): Promise<SubtitlesState>; // null = 撤销本插件的样式层
@@ -1266,7 +1303,7 @@ type ResolvedStream = {
 
 - 一个 scheme + 主机组合、一个扩展名，都只能有一个解析器。别的插件已登记时，`ready` 以 `conflict` 失败（消息如「文件类型 .nes 已由 vestra.nes 解析」），但**不让激活失败**：插件照常运行，播放器显示屏幕提示，插件管理里显示提示（`PluginInfo.error`，以及 `PluginInfo.warnings` 中的 `{ code: "resolver-taken", owner, target }`，`target` 如「文件类型 .nes」或 `https://主机`）。同一插件自己重复登记仍是 `conflict` 且让激活失败。启动时内置插件先登记，其它插件的登记请求等内置插件激活完成后再处理。
 - 解析沿用原来那次 `open` 的仲裁：`ifCurrent`、操作 id 不变；打开方的 `open` 与 `media.ready()` 和打开普通文件一样结束。
-- `resolve` 抛错时这次打开失败：`phase` 为 `"error"`，`state.error` 是错误的 `message` 原文（≤ 2048 字符；播放器 0.4.1 之前带 `resolver failed: ` 前缀，SDK 1.5.3 之前发送的是 `String(error)`）。
+- `resolve` 抛错时这次打开失败：`phase` 为 `"error"`，`state.error` 是错误的 `message` 原文；抛的是 `plugin.i18n.error(…)`（SDK 1.5.11，§6.11）时是按插件词典翻译的文字（≤ 2048 字符；播放器 0.4.1 之前带 `resolver failed: ` 前缀，SDK 1.5.3 之前发送的是 `String(error)`）。
 - 打开被替换、被关闭（包括 `player.close()`、F4）、30 秒内没有答复，或解析器被注销、插件停用时，`signal` 中止，迟到的答复作废。
 - 插件停用时它登记的解析器随之注销：之后这些地址或文件按普通来源打开。
 
@@ -1404,7 +1441,7 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 | --- | --- |
 | 操作 | `host.command(id).run()`（禁用或忙碌时同样拒绝）；`host.press(binding, { panel? })`（按绑定表执行，`panel: true` 模拟面板有焦点）；`host.window(id).emit(callback, ...args)`；`host.mounted().emit(...)`；`host.dialogAnswers.push([path] \| null)`；`host.step("next" \| "previous")`（模拟别的插件调用 `player.next()`） |
 | 模拟来源 | `host.openElsewhere(path, phase?)`（另一个插件打开了媒体）；`host.setSource({ phase, position, duration, … })` |
-| 界面语言 | `startPlugin(…, { locale })` / `host.locale`：加载插件该语言的词典；`host.command(id).display`、`host.translate(text, args)`、`host.confirmTexts`、`host.loadCatalog(directory)`；`host.language`、`host.setLanguage(…)`（§6.10、§6.8）。核心命令的 `declaration.path` 是英文 key |
+| 界面语言 | `startPlugin(…, { locale })` / `host.locale`：加载插件该语言的词典；`host.command(id).display`、`host.translate(text, args)`、`host.confirmTexts`、`host.fileDialogs`、`host.loadCatalog(directory)`；文字值（§6.11）在 `props`、`osd`、时间轴、字幕标题里都按播放器的方式显示；`host.language`、`host.setLanguage(…)`（§6.10、§6.8）。核心命令的 `declaration.path` 是英文 key |
 | 断言 | `host.window(id).props`（kebab-case 名）、`.visible`；`host.command(id).state`、`.declaration`；`host.conflicts`（`[绑定, 赢家, ...被压下]`）；`host.layout.bottom` / `.sidebar`（可直接改后 `host.emit("window.state", {})` 模拟别处的变化；`.panels` 为页签、`.owner` 为当前页签，被测插件是 owner 1）；SDK 1.5.2 起 `host.mountOther(slot, plugin, { title })` / `host.unmountOther(plugin)` 模拟别的插件的面板（侧栏为另一个页签；底栏、背景层被占时被测插件的挂载以 `conflict` 失败，`startPlugin` 不因此失败），`host.selectTab(plugin)` 模拟点页签；`host.osd`（显示过的提示）、`host.osdPanel`；`host.sequence`（提供者的标志）；`host.menus`（`showMenu` 记录）；`host.sent(method)`；`host.source`；`host.processing`、`host.subtitles`、`host.snapshots`、`host.jobs`、`host.producers` |
 | 模拟数据 | `host.stats`（`player.stats()` 的返回值，第 2 轮新增字段可省略，SDK 补 `null`）；`host.dataDirectory`（`plugin.dataDirectory`，`storage.json` 直接读写其中的真实文件）；`host.setSource({ audioTracks })`（`addAudioTrack` / `selectAudioTrack` 有默认处理，可用 `host.handle("audio.addTrack" \| "audio.selectTrack", …)` 注入失败）；`host.subtitles.tracks` 的条目可带 `codec`、`text`、`streamIndex` |
 | 通用能力 | `host.clipboard`（`{ text, images }`，预置 `text` 测 `readText`）；`host.power`（合并后的 `"off"` / `"playing"`）；`host.tools.handle(tool, (args) => ({ stdout, stderr }))`（未注入的工具 `unavailable`；抛 `HostError` 模拟失败），`host.tools.calls`；`host.system.revealed`、`.opened`（播放器收到的 `system.reveal` / `openPath` 路径；用 `host.handle("system.openPath", …)` 等注入失败）；`host.subtitleLoads`（每次 `load` 的 `format`、`title`、`select` 与字节）；`host.system.urls`（`system.openUrl`） |
@@ -1455,7 +1492,7 @@ npm run plugins:build                   # 构建 src/plugins/ 下全部插件
 - 开发时不需要构建：`cargo run --bin vestra-host -- --plugin <插件目录>`（在 `src/host/` 下，可重复 `--plugin`）直接运行 `main.ts`。
 - 每个命令先按 §2 的规则检查 manifest（与宿主同一张表）；`check` 另外打印不算失败的提示（如 id 没有 `<所有者>.` 前缀）。
 - `pack` 的同样输入得到同样字节（条目排序、固定时间戳）。SDK 1.0 的扩展名是 `.zip`，内容相同。
-- 翻译（SDK 1.5.9）：`i18n extract` 找出 `.slint` 里的 `@tr`、交给 `commands.add`（`title`、`path`、`reason`）、`Command.set`、`settings.page`、`panels.mount`、`osd.show`、`OsdPanel.set`、`dialogs.*` 的文字（借 TS 类型检查器：字面量、条件的两支、`as const` 表的字面量联合类型）和 manifest 显示字段，写 `locales/messages.pot`，合并进已有的每个 `.po`（保留译文，新文字未翻译，消失的移到末尾作废，回来时恢复译文）；`--locale <语言>` 新建一种语言（`en` 与不支持的语言报错）。`i18n check` 报告每种语言的覆盖率、占位符不一致、缺复数形式、模板过期，以及无法翻译的文字：TS 里拼接的句子、不是字面量的值、非英文原文、Slint 里没包 `@tr` 的文字；只警告，`.po` 解析失败才失败。插件有 `locales/` 时 `check` 也打印这些警告。`build` 把 `locales/<语言>.po` 编译成 `dist/locales/<语言>.json`，不复制 `.po`/`.pot`。
+- 翻译（SDK 1.5.9）：`i18n extract` 找出 `.slint` 里的 `@tr`、交给 `commands.add`（`title`、`path`、`reason`）、`Command.set`、`settings.page`、`panels.mount`、`osd.show`、`OsdPanel.set`、`dialogs.*` 的文字（借 TS 类型检查器：字面量、条件的两支、`as const` 表的字面量联合类型）和 manifest 显示字段，写 `locales/messages.pot`，合并进已有的每个 `.po`（保留译文，新文字未翻译，消失的移到末尾作废，回来时恢复译文）；`--locale <语言>` 新建一种语言（`en` 与不支持的语言报错）。`i18n check` 报告每种语言的覆盖率、占位符不一致、缺复数形式、模板过期，以及无法翻译的文字：TS 里拼接的句子、不是字面量的值、非英文原文、Slint 里没包 `@tr` 的文字；只警告，`.po` 解析失败才失败。插件有 `locales/` 时 `check` 也打印这些警告。SDK 1.5.11 起还收集 `plugin.i18n.text`/`error`/`resolve` 的 `source` 与 `$vestraText` 字面量，跳过只有占位符和标点的 `source`，并按类型读取展开进调用选项的字段（`commands.add({ ...extra })`），读不出时报告（以前静默跳过）。`build` 把 `locales/<语言>.po` 编译成 `dist/locales/<语言>.json`，不复制 `.po`/`.pot`。
 
 ## 16. 通用能力
 
@@ -1580,6 +1617,14 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | `Theme.font-mono` §6.4 | Menlo | Consolas | DejaVu Sans Mono |
 
 ## 17. 变更说明
+
+### 多语言第 2 轮：文字值（2026-10，播放器 0.4.3，SDK 1.5.11）
+
+- 第 2 轮插件作者的请求（R2-audio-1、R2-video-1、R2-subtitles-1/2、R2-playlist-1/2、R2-store-1、R2-workshop-1、R2-nes-1、capture #1、P-2，info、hotkeys 的导出文字，marks、subtitle-online 的标题）同一根源：固定文字与数据混排而 TS 不能拼句子。合并为一个机制：`plugin.i18n.text` / `list` / `error`（§6.11），播放器在显示处用插件词典翻译；`resolve` 只给离开播放器的文字。
+- 接受文字值：命令标题、路径段、原因（§4）；OSD 文字与参数、`maxColumns`（§6.5）；确认框、文件对话框标题与 `fileName`（§7）；属性值（§6.1，任意深度）；时间轴标题（§5.6）；字幕标题（§9）；解析器错误（§11）。
+- `BindingInfo.key`：与语言无关的菜单 key 路径（§4.2，P-2）。
+- 模板字符串参数上限 1024 → 4096 字节；参数可以是文字值。协议 `vestra/1` 只有新增：新的 JSON 形状只在插件使用新 API 时出现。
+- `i18n extract` 收集文字值的原文，展开字段读不出时报告（§15）。
 
 ### 多语言第 1 轮（2026-10，播放器 0.4.3，SDK 1.5.9）
 

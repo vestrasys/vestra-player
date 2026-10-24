@@ -239,13 +239,12 @@ impl Plugin {
             .map_or(source, |catalog| catalog.text(source))
             .to_owned()
     }
-    /// A sentence this plugin shows (`osd.show`, dialogs): the translated
-    /// template, formatted with `args` when given.
-    pub fn template(&self, text: &str, args: &Value) -> String {
-        match &self.catalog {
-            Some(catalog) => catalog.template(text, args),
-            None if args.is_null() => text.to_owned(),
-            None => crate::i18n::format(text, args),
+    /// Text values in the interface language, with this plugin's catalog
+    /// (`i18n::text`).
+    pub fn texts(&self) -> crate::i18n::text::Texts<'_> {
+        crate::i18n::text::Texts {
+            catalog: self.catalog.as_deref(),
+            locale: crate::i18n::locale(),
         }
     }
 }

@@ -17,6 +17,7 @@
 
 pub mod po;
 pub mod slint_tr;
+pub mod text;
 
 use serde_json::Value;
 use std::{
@@ -170,6 +171,7 @@ impl Catalog {
     /// A plugin sentence: the translated template, formatted with `args`
     /// when there are any (without args the text is shown as it is, braces
     /// included, as before templates existed).
+    #[cfg(test)]
     pub fn template(&self, text: &str, args: &Value) -> String {
         let template = self.text(text);
         if args.is_null() {
@@ -256,25 +258,11 @@ fn argument(value: &Value) -> String {
     }
 }
 
-/// Check plugin template arguments (`args` of `osd.show`, dialogs): absent,
-/// or an array or object of at most 16 strings and numbers.
+/// Check plugin template arguments (`args` of `osd.show`, dialogs):
+/// absent, or an array or object of at most 16 strings, numbers and text
+/// values (`text::check_args`).
 pub fn valid_args(args: &Value) -> Result<(), String> {
-    let values: Vec<&Value> = match args {
-        Value::Null => return Ok(()),
-        Value::Array(values) => values.iter().collect(),
-        Value::Object(fields) => fields.values().collect(),
-        _ => return Err("args is an array or an object".into()),
-    };
-    if values.len() > 16 {
-        return Err("args holds at most 16 values".into());
-    }
-    if values
-        .iter()
-        .any(|v| !(v.is_string() || v.is_number()) || v.as_str().is_some_and(|s| s.len() > 1024))
-    {
-        return Err("args are strings (≤ 1024 bytes) and numbers".into());
-    }
-    Ok(())
+    text::check_args(args)
 }
 
 /// The catalog of a package directory for the effective locale: the

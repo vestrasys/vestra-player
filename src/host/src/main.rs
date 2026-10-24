@@ -3230,13 +3230,22 @@ impl Host {
     }
     /// Refuse what another plugin holds (`RpcError::taken`): recorded for
     /// A sentence of a plugin's (`osd.show`, dialogs) in the interface
-    /// language: its catalog's translation, formatted with `args`.
-    fn plugin_template(&self, owner: u64, text: &str, args: &Value) -> String {
-        match self.plugins.get(&owner) {
-            Some(plugin) => plugin.template(text, args),
-            None if args.is_null() => text.to_owned(),
-            None => i18n::format(text, args),
-        }
+    /// language: a template translated with its catalog and formatted with
+    /// `args`, or a text value (`i18n::text`).
+    fn plugin_sentence(
+        &self,
+        owner: u64,
+        text: &Value,
+        args: &Value,
+    ) -> std::result::Result<String, RpcError> {
+        let texts = self.plugins.get(&owner).map_or(
+            i18n::text::Texts {
+                catalog: None,
+                locale: i18n::locale(),
+            },
+            plugins::Plugin::texts,
+        );
+        texts.sentence(text, args).map_err(RpcError::invalid)
     }
     /// `packages.list`, shown on the OSD and announced as `host.error`.
     fn refuse_taken(&mut self, owner: u64, error: RpcError, text: String) -> RpcError {
@@ -3392,6 +3401,34 @@ impl Host {
                 "capability must be declared in manifest",
             ));
         }
+        // Text values (i18n.md §7) in property values, timeline titles,
+        // subtitle track titles and resolver failures become the strings
+        // they show, in this plugin's catalog, before anything reads them (so
+        // the value and length limits count what is shown).
+        let resolved;
+        let params = if (matches!(
+            method,
+            "ui.open"
+                | "ui.set"
+                | "ui.mount"
+                | "ui.setMount"
+                | "settings.register"
+                | "settings.set"
+                | "timeline.set"
+                | "subtitles.commit"
+        ) && i18n::text::contains(params))
+            || (method == "sourceResolvers.respond" && i18n::text::is_text(&params["error"]))
+        {
+            let mut copy = params.clone();
+            plugin
+                .texts()
+                .resolve(&mut copy)
+                .map_err(RpcError::invalid)?;
+            resolved = copy;
+            &resolved
+        } else {
+            params
+        };
         if method == "ui.markdownScan" {
             return self.markdown_scan(params).map(Some);
         }
@@ -3514,17 +3551,20 @@ impl Host {
                 }
                 // Message and detail are templates (`args`); the button and
                 // checkbox texts are translated as they are.
+                // A text value carries its own arguments.
                 i18n::valid_args(&params["args"]).map_err(RpcError::invalid)?;
                 let mut shown = params.clone();
                 for field in ["message", "detail", "confirm", "cancel", "checkbox"] {
-                    if let Some(text) = params[field].as_str() {
-                        let args = if matches!(field, "message" | "detail") {
-                            &params["args"]
-                        } else {
-                            &Value::Null
-                        };
-                        shown[field] = self.plugin_template(reply.owner, text, args).into();
+                    let text = &params[field];
+                    if text.is_null() {
+                        continue;
                     }
+                    let args = if matches!(field, "message" | "detail") && text.is_string() {
+                        &params["args"]
+                    } else {
+                        &Value::Null
+                    };
+                    shown[field] = self.plugin_sentence(reply.owner, text, args)?.into();
                 }
                 let options = confirm::parse(&shown)?;
                 let events = self.events.clone();
@@ -3686,7 +3726,7 @@ impl Host {
                 // catalog, then formatted with `args` (i18n.md §5).
                 i18n::valid_args(&params["args"]).map_err(RpcError::invalid)?;
                 let text = self
-                    .plugin_template(reply.owner, string(params, "text")?, &params["args"])
+                    .plugin_sentence(reply.owner, &params["text"], &params["args"])?
                     .replace(['\n', '\r'], " ");
                 if text.trim().is_empty() || text.chars().count() > 200 {
                     return Err(RpcError::invalid("osd text needs 1..=200 characters"));
@@ -3712,9 +3752,22 @@ impl Host {
                     Value::Null => {
                         self.info_panels.remove(&reply.owner);
                     }
-                    Value::String(text) => {
-                        i18n::valid_args(&params["args"]).map_err(RpcError::invalid)?;
-                        let text = self.plugin_template(reply.owner, text, &params["args"]);
+                    text if text.is_string() || i18n::text::is_text(text) => {
+                        let mut text = self.plugin_sentence(reply.owner, text, &params["args"])?;
+                        // Cut after translation: the plugin cannot measure
+                        // the translated lines.
+                        match &params["maxColumns"] {
+                            Value::Null => {}
+                            max => {
+                                let max = max
+                                    .as_u64()
+                                    .filter(|m| (8..=1000).contains(m))
+                                    .ok_or_else(|| {
+                                        RpcError::invalid("maxColumns is an integer from 8 to 1000")
+                                    })?;
+                                text = i18n::text::fit_columns(&text, max as usize);
+                            }
+                        }
                         if text.len() > 4096 || text.lines().count() > 32 {
                             return Err(RpcError::invalid("osd panel allows 32 lines, 4096 bytes"));
                         }
@@ -3956,16 +4009,25 @@ impl Host {
                 if !["openFile", "openFiles", "openDirectory", "saveFile"].contains(&kind) {
                     return Err(RpcError::invalid("unsupported dialog kind"));
                 }
-                let title = match params["title"].as_str() {
-                    Some(title) => self.plugin_template(reply.owner, title, &Value::Null),
-                    None => i18n::tr("Select a path"),
+                let title = match &params["title"] {
+                    Value::Null => i18n::tr("Select a path"),
+                    title => self.plugin_sentence(reply.owner, title, &Value::Null)?,
                 };
                 if title.len() > 256 {
                     return Err(RpcError::invalid("dialog title too long"));
                 }
                 let title = title.as_str();
                 let mut dialog = rfd::AsyncFileDialog::new().set_title(title);
-                if let Some(name) = params["fileName"].as_str() {
+                // A string file name is data; a text value is shown
+                // translated, a path separator in the translation replaced.
+                let name = match &params["fileName"] {
+                    name if i18n::text::is_text(name) => Some(
+                        self.plugin_sentence(reply.owner, name, &Value::Null)?
+                            .replace(['/', '\\'], "-"),
+                    ),
+                    name => name.as_str().map(str::to_owned),
+                };
+                if let Some(name) = name.as_deref() {
                     if name.len() > 256 || name.contains(['/', '\\']) {
                         return Err(RpcError::invalid("fileName must be a simple name"));
                     }
@@ -4022,23 +4084,52 @@ impl Host {
                     .as_u64()
                     .filter(|v| *v > 0)
                     .ok_or_else(|| RpcError::invalid("positive revision required"))?;
-                let mut state: commands::CommandState =
-                    serde_json::from_value(params["state"].clone())
-                        .map_err(|e| RpcError::invalid(e.to_string()))?;
-                // The disabled reason is one of the plugin's sentences.
-                if let Some(reason) = &mut state.reason {
-                    *reason = plugin.text(reason);
+                let texts = plugin.texts();
+                // The disabled reason is one of the plugin's sentences: source
+                // text translated as a whole, or a text value.
+                let mut state = params["state"].clone();
+                if let Some(reason) = state.get_mut("reason").filter(|r| !r.is_null()) {
+                    *reason = texts.declared(reason).map_err(RpcError::invalid)?.into();
                 }
+                let state: commands::CommandState =
+                    serde_json::from_value(state).map_err(|e| RpcError::invalid(e.to_string()))?;
                 if method == "commands.register" {
-                    let mut declaration: commands::Declaration =
-                        serde_json::from_value(params["declaration"].clone())
-                            .map_err(|e| RpcError::invalid(e.to_string()))?;
+                    // Text values in the title and path: the key is their
+                    // English rendering, the shown text their translation.
+                    let mut raw = params["declaration"].clone();
+                    let mut shown_title = None;
+                    let mut shown_path = Vec::new();
+                    let menu_text = |value: &mut Value| {
+                        if !i18n::text::is_text(value) {
+                            return Ok(None);
+                        }
+                        if value.get(i18n::text::LIST_KEY).is_some() {
+                            return Err(RpcError::invalid(
+                                "a menu text is a string or a text, not a list",
+                            ));
+                        }
+                        i18n::text::check(value).map_err(RpcError::invalid)?;
+                        let shown = texts.render(value);
+                        *value = i18n::text::Texts::english().render(value).into();
+                        Ok(Some(shown))
+                    };
+                    if let Some(title) = raw.get_mut("title") {
+                        shown_title = menu_text(title)?;
+                    }
+                    if let Some(path) = raw.get_mut("path").and_then(Value::as_array_mut) {
+                        for segment in path {
+                            shown_path.push(menu_text(segment)?);
+                        }
+                    }
+                    let mut declaration: commands::Declaration = serde_json::from_value(raw)
+                        .map_err(|e| RpcError::invalid(e.to_string()))?;
                     // Keys first (`@video`, old Chinese titles), then the
                     // shown text from this plugin's catalog.
                     let declared = declaration.path.clone();
                     commands::normalize(&mut declaration.path)
                         .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
                     declaration.localize_declared(&declared, |text| plugin.text(text));
+                    declaration.show_texts(shown_title, &shown_path);
                     let manifest = plugin.manifest.id.clone();
                     let bindings = declaration.bindings.clone();
                     let panel = declaration.focus == Some(commands::Focus::Panel);

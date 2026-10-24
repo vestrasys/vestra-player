@@ -430,3 +430,165 @@ fn the_simplified_chinese_catalog_keeps_the_old_texts() {
         assert_eq!(zh.text(key), old);
     }
 }
+
+// ------------------------------------------------------------ text values
+
+fn texts_zh() -> Catalog {
+    catalog(&json!({
+        "Download failed: {}": "下载失败：{}",
+        "Connection timed out": "连接超时",
+        "Track {} ({})": "音轨 {} ({})",
+        "Added: {}": "已添加 {} 项",
+        "duplicates skipped: {}": "跳过 {} 个重复",
+        "It will be able to:\n{}": "它将可以：\n{}",
+        "Read and write the clipboard": "读写剪贴板",
+        "Use the network": "访问网络",
+        "No Audio": "无声音",
+    }))
+}
+
+#[test]
+fn text_values_render_nested_translations_and_lists() {
+    let zh = texts_zh();
+    let t = text::Texts {
+        catalog: Some(&zh),
+        locale: "zh-Hans",
+    };
+    let en = text::Texts::english();
+    // OSD: a translated part as an argument (R2-store-1, R2-subtitles-2).
+    let reason = json!([{"$vestraText": "Connection timed out"}]);
+    assert_eq!(
+        t.sentence(&json!("Download failed: {}"), &reason).unwrap(),
+        "下载失败：连接超时"
+    );
+    assert_eq!(
+        en.sentence(&json!("Download failed: {}"), &reason).unwrap(),
+        "Download failed: Connection timed out"
+    );
+    // A list of data per language (R2-video-1).
+    let files = json!({"$vestraList": ["a.glsl", "b.glsl"]});
+    assert_eq!(t.render(&files), "a.glsl、b.glsl");
+    assert_eq!(en.render(&files), "a.glsl, b.glsl");
+    // Clauses of translated parts (R2-playlist-1).
+    let clauses = json!({"$vestraList": [
+        {"$vestraText": "Added: {}", "args": [3]},
+        {"$vestraText": "duplicates skipped: {}", "args": [2]},
+    ], "style": "clauses"});
+    assert_eq!(t.declared(&clauses).unwrap(), "已添加 3 项，跳过 2 个重复");
+    assert_eq!(
+        en.declared(&clauses).unwrap(),
+        "Added: 3, duplicates skipped: 2"
+    );
+    // Lines of a confirm detail (R2-store-1).
+    let detail = json!({"$vestraText": "It will be able to:\n{}", "args": [{"$vestraList": [
+        {"$vestraText": "· {}", "args": [{"$vestraText": "Read and write the clipboard"}]},
+        {"$vestraText": "· {}", "args": [{"$vestraText": "Use the network"}]},
+    ], "style": "lines"}]});
+    assert_eq!(
+        t.declared(&detail).unwrap(),
+        "它将可以：\n· 读写剪贴板\n· 访问网络"
+    );
+    // A string is translated as a whole; a text value takes no outer args.
+    assert_eq!(t.declared(&json!("No Audio")).unwrap(), "无声音");
+    assert!(
+        t.sentence(&json!({"$vestraText": "x"}), &json!(["y"]))
+            .is_err()
+    );
+    // The English rendering is the menu key.
+    let track = json!({"$vestraText": "Track {} ({})", "args": [2, "opus"]});
+    assert_eq!(en.render(&track), "Track 2 (opus)");
+    assert_eq!(t.render(&track), "音轨 2 (opus)");
+    // Every separator row covers the locales, in order.
+    assert_eq!(
+        text::SEPARATORS.map(|(l, _)| l),
+        LOCALES,
+        "one separator row per locale"
+    );
+    assert_eq!(text::separator("fr", "semicolons"), "\u{202f}; ");
+}
+
+#[test]
+fn text_values_in_property_values_become_strings() {
+    let zh = texts_zh();
+    let t = text::Texts {
+        catalog: Some(&zh),
+        locale: "zh-Hans",
+    };
+    let mut value = json!({
+        "labels": [{"$vestraText": "No Audio"}, {"$vestraText": "Track {} ({})", "args": [7, "en"]}],
+        "rows": [{"label": {"$vestraList": [1, 2.5]}, "image": {"$vestraImage": "a.png", "ref": 1}}],
+    });
+    assert!(text::contains(&value));
+    t.resolve(&mut value).unwrap();
+    assert_eq!(
+        value,
+        json!({
+            "labels": ["无声音", "音轨 7 (en)"],
+            "rows": [{"label": "1、2.5", "image": {"$vestraImage": "a.png", "ref": 1}}],
+        })
+    );
+    assert!(!text::contains(&value));
+    let mut bad = json!([{"$vestraText": "x", "extra": 1}]);
+    assert_eq!(
+        t.resolve(&mut bad).unwrap_err(),
+        "a text has only $vestraText and args"
+    );
+}
+
+#[test]
+fn text_values_are_checked_like_the_sdk() {
+    let refused = |value: Value| text::check(&value).unwrap_err();
+    assert_eq!(
+        refused(json!({"$vestraText": ""})),
+        "a text's source is a non-empty string"
+    );
+    assert_eq!(
+        refused(json!({"$vestraText": "x", "args": [[1]]})),
+        "args are strings, numbers, texts and lists"
+    );
+    assert_eq!(
+        refused(json!({"$vestraText": "x", "args": vec![1; 17]})),
+        "args holds at most 16 values"
+    );
+    assert_eq!(
+        refused(json!({"$vestraList": vec!["a"; 257]})),
+        "a list holds at most 256 items"
+    );
+    assert_eq!(
+        refused(json!({"$vestraList": [], "style": "and"})),
+        "a list's style is one of list, clauses, semicolons, sentences, lines"
+    );
+    assert_eq!(
+        refused(json!({"$vestraText": "x", "args": ["a".repeat(4097)]})),
+        "a string argument is at most 4096 bytes"
+    );
+    let mut deep = json!({"$vestraText": "x"});
+    for _ in 0..text::MAX_DEPTH {
+        deep = json!({"$vestraText": "{}", "args": [deep]});
+    }
+    assert!(text::check(&deep).is_ok());
+    assert_eq!(
+        refused(json!({"$vestraText": "{}", "args": [deep]})),
+        "texts nest at most 8 deep"
+    );
+    // 256 items of 4 one-item lists = 1 + 4·(1 + 256)… over 1024 values.
+    let wide = json!({"$vestraList": vec![json!({"$vestraList": vec![1; 256]}); 4]});
+    assert_eq!(refused(wide), "a text holds at most 1024 values");
+    // Template args: old string-and-number args still pass.
+    assert!(valid_args(&json!(["a", 1])).is_ok());
+    assert!(valid_args(&json!({"n": {"$vestraText": "x"}})).is_ok());
+    assert_eq!(
+        valid_args(&json!("a")).unwrap_err(),
+        "args is an array or an object"
+    );
+}
+
+#[test]
+fn osd_panel_lines_are_cut_after_translation() {
+    assert_eq!(text::fit_columns("分辨率：1920×1080", 12), "分辨率：192…");
+    assert_eq!(
+        text::fit_columns("short\n0123456789abc", 10),
+        "short\n012345678…"
+    );
+    assert_eq!(text::fit_columns("e\u{301}tude", 5), "e\u{301}tude");
+}
