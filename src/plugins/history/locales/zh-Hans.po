@@ -1,0 +1,114 @@
+msgid ""
+msgstr ""
+"Language: zh-Hans\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: manifest.json
+msgid "Playback History"
+msgstr "播放历史"
+
+#: manifest.json
+msgid "Recently played items, and resuming where you left off"
+msgstr "最近播放记录，记忆并继续上次的播放位置"
+
+#: manifest.json
+msgid "Open ▸ Recently Played lists the files and links opened recently. Playback ▸ Resume Playback offers Don't Resume, Resume Automatically or Ask Every Time: the next time the same file is opened, it continues where it stopped."
+msgstr "在「打开 ▶ 最近播放」列出最近打开的文件和链接；在「播放 ▶ 记忆播放位置」中选择不记忆、自动继续或每次询问，下次打开同一文件时从上次停下的地方继续。"
+
+#: manifest.json
+msgid "playback"
+msgstr "播放"
+
+#: manifest.json
+msgid "history"
+msgstr "历史"
+
+#: manifest.json
+msgid "resume"
+msgstr "继续播放"
+
+#: menu.ts:91 menu.ts:111 menu.ts:119 menu.ts:130
+msgid "Recently Played"
+msgstr "最近播放"
+
+#: menu.ts:91
+msgid "(No Entries)"
+msgstr "（无记录）"
+
+#: menu.ts:111
+msgid "Remove Invalid Entries"
+msgstr "移除无效记录"
+
+#: menu.ts:115
+msgid "Removed {} invalid entries"
+msgstr "已移除 {} 条无效记录"
+
+#: menu.ts:119
+msgid "Clear Entries"
+msgstr "清除记录"
+
+#: menu.ts:125
+msgid "Playback history cleared"
+msgstr "已清除播放记录"
+
+#: menu.ts:130
+msgid "Record Playback History"
+msgstr "记录播放历史"
+
+#: menu.ts:141
+msgid "File not found: {}"
+msgstr "文件不存在：{}"
+
+#: menu.ts:150 menu.ts:153
+msgid "Cannot open: {}"
+msgstr "无法打开：{}"
+
+#: menu.ts:169 menu.ts:179 menu.ts:187 ui/resume.slint:6
+msgid "Resume Playback"
+msgstr "记忆播放位置"
+
+#: menu.ts:169
+msgid "Don't Resume"
+msgstr "不记忆"
+
+#: menu.ts:169
+msgid "Resume Automatically"
+msgstr "自动继续"
+
+#: menu.ts:169
+msgid "Ask Every Time"
+msgstr "每次询问"
+
+#: menu.ts:179
+msgid "Also Remember Audio Files"
+msgstr "同时记忆音频文件"
+
+#: menu.ts:187
+msgid "Clear All Saved Positions"
+msgstr "清除所有记忆点"
+
+#: menu.ts:192
+msgid "All saved positions cleared"
+msgstr "已清除所有记忆点"
+
+#: resume.ts:226
+msgid "Resuming from {}"
+msgstr "从 {} 继续播放"
+
+#: resume.ts:229
+msgid "Cannot resume: {}"
+msgstr "无法继续播放：{}"
+
+#: ui/resume.slint:31
+msgid "You didn't finish this last time. Continue? ({})"
+msgstr "之前有未播放完的。接着播放吗？（{}）"
+
+#: ui/resume.slint:48
+msgid "Continue"
+msgstr "接着播放"
+
+#: ui/resume.slint:51
+msgid "Start Over"
+msgstr "从头播放"

@@ -1,0 +1,113 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: vestra.history 0.1.3\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: manifest.json
+msgid "Playback History"
+msgstr ""
+
+#: manifest.json
+msgid "Recently played items, and resuming where you left off"
+msgstr ""
+
+#: manifest.json
+msgid "Open ▸ Recently Played lists the files and links opened recently. Playback ▸ Resume Playback offers Don't Resume, Resume Automatically or Ask Every Time: the next time the same file is opened, it continues where it stopped."
+msgstr ""
+
+#: manifest.json
+msgid "playback"
+msgstr ""
+
+#: manifest.json
+msgid "history"
+msgstr ""
+
+#: manifest.json
+msgid "resume"
+msgstr ""
+
+#: menu.ts:91 menu.ts:111 menu.ts:119 menu.ts:130
+msgid "Recently Played"
+msgstr ""
+
+#: menu.ts:91
+msgid "(No Entries)"
+msgstr ""
+
+#: menu.ts:111
+msgid "Remove Invalid Entries"
+msgstr ""
+
+#: menu.ts:115
+msgid "Removed {} invalid entries"
+msgstr ""
+
+#: menu.ts:119
+msgid "Clear Entries"
+msgstr ""
+
+#: menu.ts:125
+msgid "Playback history cleared"
+msgstr ""
+
+#: menu.ts:130
+msgid "Record Playback History"
+msgstr ""
+
+#: menu.ts:141
+msgid "File not found: {}"
+msgstr ""
+
+#: menu.ts:150 menu.ts:153
+msgid "Cannot open: {}"
+msgstr ""
+
+#: menu.ts:169 menu.ts:179 menu.ts:187 ui/resume.slint:6
+msgid "Resume Playback"
+msgstr ""
+
+#: menu.ts:169
+msgid "Don't Resume"
+msgstr ""
+
+#: menu.ts:169
+msgid "Resume Automatically"
+msgstr ""
+
+#: menu.ts:169
+msgid "Ask Every Time"
+msgstr ""
+
+#: menu.ts:179
+msgid "Also Remember Audio Files"
+msgstr ""
+
+#: menu.ts:187
+msgid "Clear All Saved Positions"
+msgstr ""
+
+#: menu.ts:192
+msgid "All saved positions cleared"
+msgstr ""
+
+#: resume.ts:226
+msgid "Resuming from {}"
+msgstr ""
+
+#: resume.ts:229
+msgid "Cannot resume: {}"
+msgstr ""
+
+#: ui/resume.slint:31
+msgid "You didn't finish this last time. Continue? ({})"
+msgstr ""
+
+#: ui/resume.slint:48
+msgid "Continue"
+msgstr ""
+
+#: ui/resume.slint:51
+msgid "Start Over"
+msgstr ""

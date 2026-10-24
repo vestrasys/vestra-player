@@ -11,7 +11,7 @@ export const CAPACITY = 100;
 export const MENU_ITEMS = 20;
 
 /**
- * A12 最近播放历史: every media source (whoever opened it) the first time it
+ * A12 recent history: every media source (whoever opened it) the first time it
  * becomes ready, newest first, in `<dataDirectory>/recent.json`.
  */
 export class Recent {
@@ -39,7 +39,7 @@ export class Recent {
         .slice(0, CAPACITY);
   }
 
-  /** Called on every change of the records or the 记录播放历史 switch. */
+  /** Called on every change of the records or the Record Playback History switch. */
   onChange(listener: () => void) {
     this.#listeners.push(listener);
   }

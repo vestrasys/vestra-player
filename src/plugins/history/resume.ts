@@ -1,5 +1,6 @@
-import type { JsonStore, Player, PlayerState, Plugin, Window } from "@vestra-player/sdk";
+import type { JsonStore, Osd, Player, PlayerState, Plugin, Window } from "@vestra-player/sdk";
 import { clock, fileSize, keyOf, mediaKind } from "./identity.ts";
+import { quiet } from "./menu.ts";
 import { jsonStore, timing } from "./store.ts";
 
 export type Mode = "off" | "auto" | "ask";
@@ -41,7 +42,7 @@ const finished = (position: number, duration: number) =>
   position > duration - END_MARGIN || position >= duration * 0.95;
 
 /**
- * B25 记忆播放位置: remembers where a media source was left and, when it is
+ * B25 resume playback: remembers where a media source was left and, when it is
  * opened again from anywhere, continues there (or asks first), in
  * `<dataDirectory>/positions.json`.
  */
@@ -50,16 +51,17 @@ export class Resume {
   audio = false;
   items = new Map<string, Memo>();
   readonly #player: Player;
-  readonly #osd: (text: string) => void;
+  readonly #osd: Osd;
   readonly #update: () => void;
   readonly #store: JsonStore<Saved>;
   readonly #window: Window;
   readonly #listeners: (() => void)[] = [];
   #track: Track | null = null;
   #ask: { track: Track; memo: Memo; timer: ReturnType<typeof setTimeout> } | null = null;
-  #message = "";
+  /** The remembered point the ask window shows (`12:34`). */
+  #position = "";
 
-  constructor(plugin: Plugin, osd: (text: string) => void) {
+  constructor(plugin: Plugin, osd: Osd) {
     this.#player = plugin.player;
     this.#osd = osd;
     this.#update = () => plugin.update();
@@ -83,7 +85,7 @@ export class Resume {
         .forEach(([key, memo]) => this.items.set(key, memo));
 
     this.#window = plugin.windows.create("ui/resume.slint");
-    this.#window.bind(() => ({ message: this.#message }));
+    this.#window.bind(() => ({ position: this.#position }));
     this.#window.on("resume", () => this.#answer(true));
     this.#window.on("restart", () => this.#answer(false));
 
@@ -221,16 +223,16 @@ export class Resume {
   async #seek(track: Track, memo: Memo) {
     try {
       await this.#player.seek(Math.max(0, memo.position - REWIND), { ifCurrent: track.ready! });
-      this.#osd(`从 ${clock(memo.position)} 继续播放`);
+      quiet(this.#osd.show("Resuming from {}", [clock(memo.position)]));
     } catch (error) {
       if ((error as { code?: string }).code !== "stale")
-        this.#osd(`无法继续播放：${error instanceof Error ? error.message : String(error)}`);
+        quiet(this.#osd.show("Cannot resume: {}", [error instanceof Error ? error.message : String(error)]));
     }
   }
 
   #openAsk(track: Track, memo: Memo) {
     this.#closeAsk();
-    this.#message = `之前有未播放完的。接着播放吗？（${clock(memo.position)}）`;
+    this.#position = clock(memo.position);
     const timer = setTimeout(() => this.#answer(false), timing.askTimeout);
     this.#ask = { track, memo, timer };
     this.#update();

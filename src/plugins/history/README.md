@@ -1,21 +1,22 @@
-# 播放历史
+# Playback History
 
-记住最近播放的文件，下次从上次停下的地方继续。
+Remembers what was played recently, and continues next time where you stopped.
 
-## 功能
+## Features
 
-- **最近播放**：列出最近打开的 20 个文件和链接，点击重新打开；可移除失效记录、清除记录，或关闭记录。
-- **记忆播放位置**：
-  - 不记忆；
-  - 自动继续：再次打开时从上次的位置继续；
-  - 每次询问：打开时询问「接着播放」还是「从头播放」。
-- 默认只记忆视频，可选同时记忆音频文件。时长不到一分钟、或已接近播完的不记忆。
+- **Recently Played**: lists the 20 files and links opened most recently; click one to open it again. Invalid entries can be removed, the list cleared, or recording turned off.
+- **Resume Playback**:
+  - Don't Resume;
+  - Resume Automatically: opened again, it continues from the last position;
+  - Ask Every Time: on opening, asks whether to Continue or Start Over.
+- By default only videos are remembered; audio files can be included. Sources shorter than a minute, or almost played to the end, are not remembered.
 
-## 入口
+## Entry points
 
-- 右键菜单「打开 ▶ 最近播放」。
-- 右键菜单「播放 ▶ 记忆播放位置」。
+- Context menu Open ▸ Recently Played.
+- Context menu Playback ▸ Resume Playback.
 
-## 限制
+## Limits
 
-- 文件被修改（大小变了）后，原来的记忆点作废。
+- Once a file is modified (its size changes), its saved position is dropped.
+- A saved position in a menu entry shows as "(12:34)" in every language until command titles can take arguments.
