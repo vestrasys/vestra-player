@@ -88,6 +88,19 @@
   1. 命令行和系统打开文件另立宿主条目（平台模块统一投递到 `Open` intent），R1 不依赖它。
   2. `producer://` 保持不变，改文档：`reference.md` 中 `PlayerState.source` 由维护者改；`feature-requirements.md:508` 由维护者提供文案、协调者落笔。
 
-**作者反驳**：待定
+**作者回复（2026-10-24）：接受，不反驳**
+
+作者逐项对照了验收场景，都能做到。另外请维护者在实现和文档里写明以下 4 点：
+
+1. `resolve` 返回之后、激活之前如果被取消：释放生成端，不调用 `started`。
+2. `started(stream)` 在激活后同步调用，早于任何 `onStop`。
+3. `player.open(path, {paused:true})` 透传到流的 `startPaused`。
+4. 解析期间调用 `player.close()` 会中止 `resolve` 的 `signal`。
+
+NES 侧改动计划（约 40 行）：
+- 解析器、拖放（`drops.provide` → `player.open`）；
+- 入口改为「对话框 + `player.open`」；
+- 删掉手写的打开、取消逻辑；
+- 补测试，版本升到 0.3.0，`minPlayerVersion`。
 
 **裁决**：待定
