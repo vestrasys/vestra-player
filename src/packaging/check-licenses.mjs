@@ -304,7 +304,7 @@ async function checkDeps(root, platform, licensesDir, allowed) {
   const globs =
     platform === "macos"
       ? ["Frameworks/**", "MacOS/ffmpeg", "MacOS/ffprobe"]
-      : ["libmpv-2.dll", "ffmpeg/**"];
+      : ["*.dll", "ffmpeg/**"];
   for (const file of await walk(root))
     if (matchesAny(file, globs) && !listed.has(file))
       problem(`${file}: shipped but not in deps components.json`);

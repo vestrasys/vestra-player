@@ -7,13 +7,13 @@
  * headless mode answers them).
  *
  *   node packaging/smoke.mjs --exe <vestra-host[.exe]> --plugins <Resources/plugins>
- *     [--seconds 8]
+ *     [--seconds N]   default 15, on Windows 45
  */
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
-import { fail, parseArgs, readJson } from "./lib.mjs";
+import { fail, parseArgs, readJson, walk } from "./lib.mjs";
 
 const options = parseArgs(process.argv.slice(2));
 if (!options.exe || !options.plugins)
@@ -45,16 +45,42 @@ const env = {
       }
     : { TMPDIR: process.env.TMPDIR ?? "/tmp" }),
 };
-const seconds = String(options.seconds ?? 8);
+// A cold start seeds 18 plugin packages and starts 18 Node processes; on a
+// Windows runner antivirus scans every new file, so allow more time there.
+const seconds = String(options.seconds ?? (windows ? 45 : 15));
 console.log(`smoke: ${exe} --headless --seconds ${seconds} (PATH=${env.PATH})`);
-const result = spawnSync(exe, ["--headless", "--seconds", seconds], {
-  env,
-  encoding: "utf8",
-  timeout: (Number(seconds) + 60) * 1000,
+const started = Date.now();
+const lines = [];
+const result = await new Promise((done) => {
+  const child = spawn(exe, ["--headless", "--seconds", seconds], { env });
+  const timer = setTimeout(() => child.kill(), (Number(seconds) + 60) * 1000);
+  for (const stream of [child.stdout, child.stderr]) {
+    let rest = "";
+    stream.setEncoding("utf8");
+    stream.on("data", (chunk) => {
+      const parts = (rest + chunk).split(/\r?\n/);
+      rest = parts.pop();
+      for (const line of parts) {
+        lines.push(line);
+        console.log(`[${((Date.now() - started) / 1000).toFixed(1)}s] ${line}`);
+      }
+    });
+    stream.on("end", () => rest && lines.push(rest));
+  }
+  child.on("error", (error) => {
+    clearTimeout(timer);
+    done({ error });
+  });
+  child.on("close", (status, signal) => {
+    clearTimeout(timer);
+    done({ status, signal });
+  });
 });
-const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
-console.log(output);
-await rm(home, { recursive: true, force: true });
+console.log(`host exited after ${((Date.now() - started) / 1000).toFixed(1)}s`);
+const output = lines.join("\n");
+const dataFiles = (await walk(home).catch(() => [])).filter(
+  (file) => !file.includes("/node_modules/"),
+);
 
 const problems = [];
 if (result.error) problems.push(`could not run: ${result.error.message}`);
@@ -76,7 +102,14 @@ if (ready + headlessOnly < builtins.length)
   problems.push(
     `${ready} ready + ${headlessOnly} headless-only < ${builtins.length} built-in plugins`,
   );
-if (problems.length) fail(`smoke test failed: ${problems.join("; ")}`);
+if (problems.length) {
+  // What the host left in its data directory says how far start-up got.
+  console.log(`data directory (${dataFiles.length} files):`);
+  for (const file of dataFiles.slice(0, 100)) console.log(`  ${file}`);
+  await rm(home, { recursive: true, force: true });
+  fail(`smoke test failed: ${problems.join("; ")}`);
+}
+await rm(home, { recursive: true, force: true });
 console.log(
   `smoke test passed: ${ready} plugins ready, ${headlessOnly} need a native shell, ${builtins.length} built in`,
 );

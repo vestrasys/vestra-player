@@ -34,7 +34,9 @@ pub struct Declaration {
     /// Menu path including the leaf, 0..=8 segments; empty = not in the main menu.
     #[serde(default)]
     pub path: Vec<String>,
-    /// Sibling order, ascending; a submenu sits where its first command sits.
+    /// Sibling order, ascending; a submenu sits where its first command sits,
+    /// except a built-in top-level menu (`MENU_ANCHORS`). Directly inside a
+    /// built-in menu, 0 (the default) sorts after every other order.
     #[serde(default)]
     pub order: i32,
     /// Separator label between adjacent siblings.
@@ -117,7 +119,8 @@ impl MenuNode {
 pub struct MenuSnapshot {
     /// Registry-local sequence for accepted registration/state/removal changes.
     pub revision: u64,
-    /// Sorted by order (a submenu by its first command), then manifest id and
+    /// Sorted by order (a submenu by its first command, a built-in menu by
+    /// its `MENU_ANCHORS` order), then manifest id and
     /// registration sequence; independent of registration timing.
     pub roots: Vec<MenuNode>,
 }
@@ -224,30 +227,43 @@ fn local_id(value: &str) -> Result<()> {
     Ok(())
 }
 
-/// The player's built-in top-level menus. A plugin names one with `@<id>` as
-/// the first path segment (`["@video", "Blur"]`), so its command joins that
-/// menu whatever the player's language; the registry stores the menu's
-/// title. Reference §4. Mirrored by `MENU_IDS` in the SDK package;
-/// tests/sdk/host-agreement.test.ts checks the installed SDK agrees.
-pub const MENU_ANCHORS: [(&str, &str); 7] = [
-    ("open", "打开"),
-    ("playback", "播放"),
-    ("subtitles", "字幕"),
-    ("video", "视频"),
-    ("audio", "声音"),
-    ("screen", "屏幕"),
-    ("settings", "设置"),
+/// The player's built-in top-level menus: id, title, top-level order. A
+/// plugin names one with `@<id>` as the first path segment
+/// (`["@video", "Blur"]`), so its command joins that menu whatever the
+/// player's language; the registry stores the menu's title. Reference §4.
+/// Mirrored by `MENU_IDS` in the SDK package; tests/sdk/host-agreement.test.ts
+/// checks the installed SDK agrees.
+///
+/// A top-level submenu with one of these titles (reached by id or by the
+/// title itself) sits at this order, not at its first command: a plugin
+/// item inside cannot move the menu. doc/product/menus.md lists the orders.
+pub const MENU_ANCHORS: [(&str, &str, i32); 7] = [
+    ("open", "打开", 110),
+    ("playback", "播放", 200),
+    ("subtitles", "字幕", 300),
+    ("video", "视频", 400),
+    ("audio", "声音", 500),
+    ("screen", "屏幕", 710),
+    ("settings", "设置", 830),
 ];
+
+/// Top-level order of a built-in menu, by title.
+fn built_in_menu(title: &str) -> Option<i32> {
+    MENU_ANCHORS
+        .iter()
+        .find(|(_, menu, _)| *menu == title)
+        .map(|(_, _, order)| *order)
+}
 
 /// Replace a leading `@<id>` with the built-in menu's title.
 fn resolve_anchor(path: &mut [String]) -> Result<()> {
     let Some(id) = path.first().and_then(|first| first.strip_prefix('@')) else {
         return Ok(());
     };
-    let Some((_, title)) = MENU_ANCHORS.iter().find(|(anchor, _)| *anchor == id) else {
+    let Some((_, title, _)) = MENU_ANCHORS.iter().find(|(anchor, _, _)| *anchor == id) else {
         let known: Vec<_> = MENU_ANCHORS
             .iter()
-            .map(|(id, _)| format!("@{id}"))
+            .map(|(id, _, _)| format!("@{id}"))
             .collect();
         return Err(CommandError::Invalid(format!(
             "unknown menu id @{id}; the built-in menus are {}",
@@ -459,7 +475,7 @@ impl Registry {
             .collect();
         MenuSnapshot {
             revision: self.revision,
-            roots: tree(&entries, 0),
+            roots: tree(&entries, 0, false),
         }
     }
 
@@ -492,23 +508,27 @@ impl Registry {
 
 type Rank<'a> = (i32, &'a str, u64);
 
-fn rank(entry: &CommandSnapshot) -> Rank<'_> {
-    (
-        entry.declaration.order,
-        entry.manifest.as_str(),
-        entry.sequence,
-    )
+/// `appended`: the level directly inside a built-in menu, where order 0 (the
+/// default) means after every ordered item, so a plugin that gives no order
+/// lands at the end of the menu rather than above the player's own items.
+fn rank(entry: &CommandSnapshot, appended: bool) -> Rank<'_> {
+    let order = match entry.declaration.order {
+        0 if appended => i32::MAX,
+        order => order,
+    };
+    (order, entry.manifest.as_str(), entry.sequence)
 }
 
-/// One level: leaves and submenus, each keyed by its own (or first) command.
-fn tree(entries: &[&CommandSnapshot], depth: usize) -> Vec<MenuNode> {
+/// One level: leaves and submenus, each keyed by its own (or first) command;
+/// a built-in top-level menu by its fixed order (`MENU_ANCHORS`).
+fn tree(entries: &[&CommandSnapshot], depth: usize, appended: bool) -> Vec<MenuNode> {
     let mut groups: Vec<(String, Vec<&CommandSnapshot>)> = Vec::new();
     let mut nodes: Vec<(Rank<'_>, MenuNode)> = Vec::new();
     for entry in entries {
         let path = &entry.declaration.path;
         if path.len() == depth + 1 {
             nodes.push((
-                rank(entry),
+                rank(entry, appended),
                 MenuNode::Command {
                     entry: (*entry).clone(),
                 },
@@ -522,17 +542,26 @@ fn tree(entries: &[&CommandSnapshot], depth: usize) -> Vec<MenuNode> {
         }
     }
     for (title, members) in groups {
+        let built_in = if depth == 0 {
+            built_in_menu(&title)
+        } else {
+            None
+        };
         let first = members
             .iter()
             .copied()
-            .min_by(|a, b| rank(a).cmp(&rank(b)))
+            .min_by(|a, b| rank(a, appended).cmp(&rank(b, appended)))
             .expect("a group has members");
+        let key = match built_in {
+            Some(order) => (order, "", 0),
+            None => rank(first, appended),
+        };
         nodes.push((
-            rank(first),
+            key,
             MenuNode::Group {
-                title,
                 group: first.declaration.group.clone(),
-                children: tree(&members, depth + 1),
+                children: tree(&members, depth + 1, built_in.is_some()),
+                title,
             },
         ));
     }
@@ -861,6 +890,72 @@ mod tests {
         assert_eq!(MENU_ANCHORS.len(), 7);
     }
 
+    /// A plugin item in a built-in menu, with no `order` (0), does not move
+    /// the menu: 视频 stays between 字幕 and 声音 and the item goes last.
+    #[test]
+    fn plugin_items_do_not_move_built_in_menus() {
+        let mut registry = Registry::new();
+        for (owner, manifest, id, path, order) in [
+            (1, "subtitles", "show", vec!["字幕", "显示字幕"], 301),
+            (
+                2,
+                "video",
+                "rotate",
+                vec!["视频", "图像旋转", "按序切换"],
+                405,
+            ),
+            (2, "video", "reset", vec!["视频", "复位"], 440),
+            (3, "audio", "eq", vec!["声音", "均衡器"], 501),
+            (4, "examples.blur", "blur", vec!["@video", "Blur…"], 0),
+            (5, "examples.literal", "sharpen", vec!["视频", "Sharpen"], 0),
+            (6, "examples.first", "first", vec!["@video", "First"], -5),
+            (7, "examples.deep", "a", vec!["@audio", "Tools", "A"], 0),
+            (7, "examples.deep", "b", vec!["@audio", "Tools", "B"], 0),
+            (8, "examples.top", "top", vec!["Tools"], 0),
+            (9, "examples.settings", "x", vec!["@settings", "X"], 0),
+        ] {
+            registry
+                .register(
+                    owner,
+                    manifest,
+                    id.into(),
+                    1,
+                    ordered(&path, order),
+                    state(true),
+                )
+                .unwrap();
+        }
+        let mut titles = Vec::new();
+        flatten(&registry.snapshot().roots, &mut titles);
+        assert_eq!(
+            titles,
+            [
+                // A plugin's own top-level item still sorts by its order.
+                "Tools",
+                "▸字幕",
+                "显示字幕",
+                "▸视频",
+                // A negative order puts an item first inside, nothing more.
+                "First",
+                "▸图像旋转",
+                "按序切换",
+                "复位",
+                // Order 0 by id or by title: after the menu's own items.
+                "Blur…",
+                "Sharpen",
+                "▸声音",
+                "均衡器",
+                "▸Tools",
+                // Below the plugin's own submenu, 0 is an ordinary order.
+                "A",
+                "B",
+                // Only plugins fill 设置 here: it still sits at its own order.
+                "▸设置",
+                "X",
+            ]
+        );
+    }
+
     #[test]
     fn groups_label_submenus_and_pathless_commands_stay_out_of_the_menu() {
         let mut registry = Registry::new();
@@ -1089,10 +1184,14 @@ mod tests {
             ("vestra.nes", "模拟器/打开 NES ROM…", 563),
             ("vestra.workshop", "插件/插件工坊…", 621),
         ];
-        // "播放/暂停" is one leaf title that contains a slash.
+        // "播放/暂停" is one leaf title that contains a slash. The old top-level
+        // titles get a prefix: 播放, 视频 and 字幕 are built-in menus now, placed
+        // by MENU_ANCHORS rather than by their commands' orders.
         let split = |path: &str| -> Vec<String> {
             let path = path.replace("播放/暂停", "播放\u{0}暂停");
-            path.split('/').map(|s| s.replace('\u{0}', "/")).collect()
+            let mut path: Vec<String> = path.split('/').map(|s| s.replace('\u{0}', "/")).collect();
+            path[0] = format!("旧{}", path[0]);
+            path
         };
         // The old algorithm, reimplemented: domain rank, then byte order of path[1..].
         let domains = [
@@ -1107,7 +1206,12 @@ mod tests {
         ];
         let mut old: Vec<Vec<String>> = TABLE.iter().map(|(_, path, _)| split(path)).collect();
         old.sort_by(|a, b| {
-            let rank = |p: &Vec<String>| domains.iter().position(|d| *d == p[0]).unwrap();
+            let rank = |p: &Vec<String>| {
+                domains
+                    .iter()
+                    .position(|d| format!("旧{d}") == p[0])
+                    .unwrap()
+            };
             rank(a).cmp(&rank(b)).then_with(|| a[1..].cmp(&b[1..]))
         });
         let mut expected = Vec::new();

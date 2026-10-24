@@ -15,9 +15,10 @@
  *
  *   node packaging/collect-windows-deps.mjs --out <dir> [--cache <dir>]
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { zstdDecompressSync } from "node:zlib";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import {
   clean,
@@ -72,6 +73,23 @@ for (const file of ["Copyright", "LICENSE.GPL", "LICENSE.LGPL"])
     join(out, "licenses/mpv", file),
   );
 
+// The Vulkan loader: libmpv-2.dll imports vulkan-1.dll, which Windows only
+// has when a GPU driver installed it (not on CI runners or some VMs).
+const vulkan = upstream["windows-vulkan-loader"];
+const vulkanArchive = await fetchPinned(vulkan);
+const vulkanFiles = untar(zstdDecompressSync(await readFile(vulkanArchive)));
+for (const [from, to] of [
+  ["ucrt64/bin/vulkan-1.dll", "vulkan-1.dll"],
+  [
+    "ucrt64/share/licenses/vulkan-loader/LICENSE",
+    "licenses/vulkan-loader/LICENSE",
+  ],
+]) {
+  if (!vulkanFiles.has(from)) fail(`${vulkanArchive} has no ${from}`);
+  await mkdir(dirname(join(out, to)), { recursive: true });
+  await writeFile(join(out, to), vulkanFiles.get(from));
+}
+
 // FFmpeg: the command-line tools and their shared libraries.
 const ffArchive = await fetchPinned(ffmpeg);
 const { entries } = await zipDirectory(ffArchive);
@@ -94,11 +112,53 @@ for (const name of wanted) {
   await writeFile(target, await zipRead(ffArchive, name));
 }
 
+/** Regular files of a (ustar/pax) tar archive: path → bytes. */
+function untar(bytes) {
+  const files = new Map();
+  let longName = null;
+  for (let offset = 0; offset + 512 <= bytes.length;) {
+    const header = bytes.subarray(offset, offset + 512);
+    if (header.every((byte) => byte === 0)) break;
+    const field = (start, length) =>
+      header.toString("utf8", start, start + length).replace(/\0.*$/s, "");
+    const size = parseInt(field(124, 12).trim() || "0", 8);
+    const type = field(156, 1) || "0";
+    const prefix = field(345, 155);
+    let name =
+      longName ?? (prefix ? `${prefix}/${field(0, 100)}` : field(0, 100));
+    longName = null;
+    const data = bytes.subarray(offset + 512, offset + 512 + size);
+    if (type === "x") {
+      const path = /\d+ path=([^\n]*)\n/.exec(data.toString("utf8"));
+      if (path) longName = path[1];
+    } else if (type === "L")
+      longName = data.toString("utf8").replace(/\0.*$/s, "");
+    else if (type === "0") files.set(name.replace(/^\.\//, ""), data);
+    offset += 512 + Math.ceil(size / 512) * 512;
+  }
+  return files;
+}
+
 const manifest = {
   schema: 1,
   platform: "windows-x64",
   generated: new Date().toISOString(),
   components: [
+    {
+      name: "vulkan-loader",
+      version: vulkan.version,
+      license: "Apache-2.0",
+      homepage: "https://github.com/KhronosGroup/Vulkan-Loader",
+      source: {
+        url: `https://github.com/KhronosGroup/Vulkan-Loader/tree/v${vulkan.version}`,
+        build: vulkan.build,
+        archive: vulkan.url,
+        archive_sha256: vulkan.sha256,
+      },
+      note: "vulkan-1.dll from the MSYS2 UCRT64 package; libmpv-2.dll imports it.",
+      files: ["vulkan-1.dll"],
+      license_files: ["licenses/vulkan-loader/LICENSE"],
+    },
     {
       name: "mpv",
       version: `git-${mpv.mpv_commit.slice(0, 10)}`,
