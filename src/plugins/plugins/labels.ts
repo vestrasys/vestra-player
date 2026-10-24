@@ -24,10 +24,9 @@ export const CAPABILITIES: Record<string, string> = {
   "bindings.manage": "修改快捷键",
 };
 
-export const ORIGIN: Record<PluginInfo["origin"], string> = {
+export const ORIGIN: Partial<Record<PluginInfo["origin"], string>> = {
   installed: "已安装",
   development: "开发加载",
-  trial: "试载",
 };
 
 /** Where an installed plugin came from (detail 「来源」). */
@@ -39,7 +38,7 @@ export const SOURCE: Record<PackageSource["kind"], string> = {
   bundled: "内置",
 };
 
-/** 「仓库（https://…/index.json）」; development loads and trials by their origin. */
+/** 「仓库（https://…/index.json）」; development loads by their origin. */
 export function sourceText(info: PluginInfo): string {
   const source = info.source;
   if (!source) return ORIGIN[info.origin] ?? info.origin;
@@ -95,7 +94,6 @@ export function failureText(error: unknown, info?: PluginInfo): string {
   const code = (error as { code?: string }).code;
   if (code === "invalid") return "插件管理不能停用或卸载自身";
   if (code === "unsupported") {
-    if (info?.origin === "trial") return "试载中的插件由插件工坊管理";
     if (info?.origin === "development") return "开发加载的插件不能卸载或回退";
     // An installed plugin refused: built in (the list may not have said so yet).
     return BUILTIN_TIP;

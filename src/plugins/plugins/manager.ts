@@ -12,7 +12,7 @@ const BUSY_TIP = "正在更新";
 
 /**
  * 插件管理 (J07), a page of the options window: every plugin the player knows (running, installed but
- * disabled or failed, development loads, trials) from `packages.list`,
+ * disabled or failed, development loads) from `packages.list`,
  * following `packages.onChange`. The selected plugin can be disabled or
  * enabled, reloaded, rolled back, uninstalled (asks, optionally with its
  * data) and its data folder opened. Its own row cannot be disabled;
@@ -121,9 +121,8 @@ export class PluginsPage {
     const info = this.#info();
     const self = info?.id === this.#plugin.id;
     const busy = !!info && (this.#busy.has(info.id) || info.state === "starting");
-    const trial = info?.origin === "trial";
     const installed = info?.origin === "installed";
-    const canAct = !!info && !busy && !trial;
+    const canAct = !!info && !busy;
     return {
       rows: this.#list.map(
         (p): Row => ({
@@ -155,7 +154,7 @@ export class PluginsPage {
             : info && !installed
               ? "只能卸载已安装的插件"
               : "",
-      canOpen: !!info?.dataDirectory && !trial,
+      canOpen: !!info?.dataDirectory,
       message: this.#message.text,
       messageWarn: this.#message.warn,
     };
@@ -168,7 +167,6 @@ export class PluginsPage {
     // because another plugin holds that position (「面板未显示：侧栏已被 … 使用」).
     if (info.error) line(info.state === "failed" ? "失败原因" : "提示", info.error, true);
     if (info.origin === "development") line("说明", "开发加载：停用只在本次运行有效；不能卸载或回退");
-    if (info.origin === "trial") line("说明", "试载中的插件由插件工坊管理");
     if (info.id === this.#plugin.id) line("说明", SELF_TIP);
     else if (info.builtin) line("说明", "内置插件：随播放器安装和更新，只能停用，不能卸载");
     line("来源", sourceText(info));
@@ -305,7 +303,7 @@ export class PluginsPage {
   async #openData() {
     const info = this.#info();
     const directory = info?.dataDirectory;
-    if (!directory || info?.origin === "trial") return;
+    if (!directory) return;
     try {
       await this.#plugin.system.openPath(directory);
       this.#say("");
