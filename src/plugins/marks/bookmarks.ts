@@ -41,10 +41,16 @@ export function cleanTitle(text: string): string | null {
   return [...title].slice(0, TITLE_MAX).join("");
 }
 
-export type AddResult = { ok: true; bookmark: Bookmark } | { ok: false; reason: string };
+export type AddResult =
+  | { ok: true; bookmark: Bookmark }
+  | {
+      ok: false;
+      reason: "Can't add bookmarks to this source" | "A bookmark already exists here" | "Bookmarks full ({})";
+      args?: [number];
+    };
 
 /**
- * B21 书签: the bookmarks of the current media, kept in
+ * B21 bookmarks: the bookmarks of the current media, kept in
  * `<dataDirectory>/bookmarks.json` (`{ version: 1, media: { <key>: { size,
  * modified, items } } }`), written `timing.bookmarksWrite` after each change.
  * The key is the real path of a local file, the source text of a URL.
@@ -117,11 +123,14 @@ export class Bookmarks {
   }
 
   add(time: number): AddResult {
-    if (this.#key === null) return { ok: false, reason: "当前来源不能添加书签" };
+    if (this.#key === null) return { ok: false, reason: "Can't add bookmarks to this source" };
     const at = round1(Math.max(0, time));
-    if (this.#items.some((item) => Math.abs(item.time - at) <= NEAR)) return { ok: false, reason: "此处已有书签" };
-    if (this.#items.length >= PER_FILE) return { ok: false, reason: `书签已满（${PER_FILE} 个）` };
-    const bookmark = { id: this.#nextId++, time: at, title: `书签 ${this.#items.length + 1}`, created: new Date().toISOString() };
+    if (this.#items.some((item) => Math.abs(item.time - at) <= NEAR)) return { ok: false, reason: "A bookmark already exists here" };
+    if (this.#items.length >= PER_FILE) return { ok: false, reason: "Bookmarks full ({})", args: [PER_FILE] };
+    // The default title is saved as data (the user renames it): it cannot be a template.
+    // i18n: needs r2-api (a translated text as a value to store)
+    const title = `Bookmark ${this.#items.length + 1}`;
+    const bookmark = { id: this.#nextId++, time: at, title, created: new Date().toISOString() };
     this.#set([...this.#items, bookmark]);
     return { ok: true, bookmark };
   }

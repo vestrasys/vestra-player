@@ -1,7 +1,12 @@
 import type { Plugin } from "@vestra-player/sdk";
 import type { Bookmarks } from "./bookmarks.ts";
-import { chapterName, type Chapters, hasMedia, stepPoint } from "./chapters.ts";
+import { type Chapters, chapterTitle, hasMedia, stepPoint } from "./chapters.ts";
 import { clock } from "./format.ts";
+import type { Osd } from "./osd.ts";
+
+/** Why a chapter/bookmark command is unavailable (shown as the command's reason). */
+export type JumpBlocked = "No media open" | "This source can't seek";
+export type AddBlocked = "No media open" | "Can't add bookmarks to this source";
 
 /**
  * The B21 actions shared by the menu, the shortcuts and the list window:
@@ -11,9 +16,9 @@ export class Actions {
   readonly #plugin: Plugin;
   readonly #chapters: Chapters;
   readonly #bookmarks: Bookmarks;
-  readonly #osd: (text: string) => void;
+  readonly #osd: Osd;
 
-  constructor(plugin: Plugin, chapters: Chapters, bookmarks: Bookmarks, osd: (text: string) => void) {
+  constructor(plugin: Plugin, chapters: Chapters, bookmarks: Bookmarks, osd: Osd) {
     this.#plugin = plugin;
     this.#chapters = chapters;
     this.#bookmarks = bookmarks;
@@ -21,39 +26,43 @@ export class Actions {
   }
 
   /** Why jumping is unavailable; `null` when it can run. */
-  jumpBlocked(): string | null {
+  jumpBlocked(): JumpBlocked | null {
     const state = this.#plugin.player.state;
-    if (!hasMedia(state)) return "未打开媒体";
-    if (!state.can.seek) return "当前来源不能跳转";
+    if (!hasMedia(state)) return "No media open";
+    if (!state.can.seek) return "This source can't seek";
     return null;
   }
   /** Why adding a bookmark is unavailable; `null` when it can run. */
-  addBlocked(): string | null {
+  addBlocked(): AddBlocked | null {
     const state = this.#plugin.player.state;
-    if (!hasMedia(state)) return "未打开媒体";
-    if (state.phase !== "ready" || !state.can.seek || state.position === null) return "当前来源不能添加书签";
+    if (!hasMedia(state)) return "No media open";
+    if (state.phase !== "ready" || !state.can.seek || state.position === null)
+      return "Can't add bookmarks to this source";
     return null;
   }
 
   /** Seek, conditional on the state seen now; a refusal because someone else just acted is dropped. */
-  async #seek(time: number, text: string) {
+  async #seek(time: number, done: () => void) {
     try {
       await this.#plugin.player.seek(time);
-      this.#osd(text);
+      done();
     } catch (error) {
-      if ((error as { code?: string }).code !== "stale") this.#osd(`无法跳转：${(error as Error).message}`);
+      if ((error as { code?: string }).code !== "stale") this.#osd("Can't seek: {}", [(error as Error).message]);
     }
   }
 
   jumpChapter(index: number) {
     const chapter = this.#chapters.list[index];
     if (!chapter || this.jumpBlocked()) return;
-    return this.#seek(chapter.start, `章节定位：${chapterName(chapter, index)}`);
+    const title = chapterTitle(chapter);
+    return this.#seek(chapter.start, () =>
+      title === null ? this.#osd("Chapter: Chapter {}", [index + 1]) : this.#osd("Chapter: {}", [title]),
+    );
   }
   jumpBookmark(id: number) {
     const bookmark = this.#bookmarks.get(id);
     if (!bookmark || this.jumpBlocked()) return;
-    return this.#seek(bookmark.time, `书签：定位到 ${bookmark.title}`);
+    return this.#seek(bookmark.time, () => this.#osd("Bookmark: {}", [bookmark.title]));
   }
 
   /** Shift+PgUp / PgDn: chapters and bookmarks merged; Ctrl+PgUp / PgDn: chapters only. */
@@ -72,8 +81,16 @@ export class Actions {
       position,
       direction,
     );
-    const what = chaptersOnly ? "章节" : "书签/章节";
-    if (time === null) return this.#osd(direction < 0 ? `没有上一个${what}` : `没有下一个${what}`);
+    if (time === null)
+      return this.#osd(
+        chaptersOnly
+          ? direction < 0
+            ? "No previous chapter"
+            : "No next chapter"
+          : direction < 0
+            ? "No previous bookmark or chapter"
+            : "No next bookmark or chapter",
+      );
     // A bookmark on a chapter start: the chapter's name is the better hint.
     return points.find((point) => point.time === time)!.jump();
   }
@@ -83,14 +100,14 @@ export class Actions {
     if (this.addBlocked()) return null;
     const result = this.#bookmarks.add(this.#plugin.player.state.position!);
     if (!result.ok) {
-      this.#osd(result.reason);
+      this.#osd(result.reason, result.args);
       return null;
     }
-    this.#osd(`书签：${result.bookmark.title} 已添加（${clock(result.bookmark.time)}）`);
+    this.#osd("Bookmark added: {} ({})", [result.bookmark.title, clock(result.bookmark.time)]);
     return result.bookmark;
   }
 
-  /** Chapter starts and bookmark times, for B23 当前区段. */
+  /** Chapter starts and bookmark times, for the B23 current range. */
   times(): number[] {
     return [...this.#chapters.list.map((chapter) => chapter.start), ...this.#bookmarks.items.map((item) => item.time)];
   }

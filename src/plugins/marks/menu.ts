@@ -1,4 +1,4 @@
-import type { CommandOptions, Plugin, Scope } from "@vestra-player/sdk";
+import type { Plugin, Scope } from "@vestra-player/sdk";
 import type { Actions } from "./actions.ts";
 import type { Bookmarks } from "./bookmarks.ts";
 import { chapterName, type Chapters, currentChapter } from "./chapters.ts";
@@ -6,8 +6,9 @@ import { clock, line } from "./format.ts";
 import type { AbLoop } from "./loop.ts";
 import { COUNTS, timing } from "./store.ts";
 
-export const MARKS = ["播放", "章节/书签"];
-export const AB = ["播放", "A-B 区段循环"];
+/** Shared submenus (English keys, doc/product/menus.md). */
+export const MARKS = ["@playback", "Chapters and Bookmarks"] as const;
+export const AB = ["@playback", "A-B Loop"] as const;
 /** Chapters and bookmarks listed in the menu; past this the last line opens the window. */
 export const MENU_ITEMS = 50;
 
@@ -19,7 +20,7 @@ export function chapterLines(chapters: ChapterLike[]): string[] {
   return chapters.map((chapter, i) => unique(used, `${two(i + 1)}  `, chapterName(chapter, i), `    ${clock(chapter.start)}`));
 }
 type ChapterLike = { title: string | null; start: number };
-/** Menu lines `书签标题    01:23:45`, unique. */
+/** Menu lines `Bookmark title    01:23:45`, unique. */
 export function bookmarkLines(bookmarks: readonly { title: string; time: number }[]): string[] {
   const used = new Set<string>();
   return bookmarks.map((bookmark) => unique(used, "", bookmark.title, `    ${clock(bookmark.time)}`));
@@ -31,10 +32,18 @@ function unique(used: Set<string>, prefix: string, text: string, suffix: string)
   return title;
 }
 
+/** Playback ▸ Chapters and Bookmarks ▸ previous / next (B21). */
+const STEPS = [
+  { id: "marks.previous", title: "Previous Bookmark or Chapter", order: 262, binding: "Shift+PageUp", direction: -1, chaptersOnly: false },
+  { id: "marks.next", title: "Next Bookmark or Chapter", order: 263, binding: "Shift+PageDown", direction: 1, chaptersOnly: false },
+  { id: "marks.previous-chapter", title: "Previous Chapter", order: 264, binding: "Ctrl+PageUp", direction: -1, chaptersOnly: true },
+  { id: "marks.next-chapter", title: "Next Chapter", order: 265, binding: "Ctrl+PageDown", direction: 1, chaptersOnly: true },
+] as const;
+
 /**
- * 播放 ▶ 章节/书签 (B21, orders 260–265; the chapters and bookmarks
- * 10000 + i / 20000 + i in a child scope rebuilt when they change) and
- * 播放 ▶ A-B 区段循环 (B23, orders 270–287).
+ * Playback ▸ Chapters and Bookmarks (B21, orders 260–265; the chapters and
+ * bookmarks 10000 + i / 20000 + i in a child scope rebuilt when they change)
+ * and Playback ▸ A-B Loop (B23, orders 270–287).
  */
 export class MarksMenu {
   readonly #plugin: Plugin;
@@ -66,10 +75,9 @@ export class MarksMenu {
   #addFixed() {
     const { commands } = this.#plugin;
     const actions = this.#actions;
-    const jump = { enabled: () => !actions.jumpBlocked(), reason: () => actions.jumpBlocked() };
     commands.add({
       id: "marks.list",
-      path: [...MARKS, "章节/书签列表…"],
+      path: [...MARKS, "Chapter and Bookmark List…"],
       order: 260,
       group: "marks-list",
       bindings: ["H"],
@@ -77,7 +85,7 @@ export class MarksMenu {
     });
     commands.add({
       id: "marks.add",
-      path: [...MARKS, "添加书签"],
+      path: [...MARKS, "Add Bookmark"],
       order: 261,
       group: "marks-edit",
       bindings: ["P"],
@@ -85,21 +93,16 @@ export class MarksMenu {
       reason: () => actions.addBlocked(),
       run: () => void actions.add(),
     });
-    const steps: [string, string, number, string, -1 | 1, boolean][] = [
-      ["marks.previous", "上一书签/章节", 262, "Shift+PageUp", -1, false],
-      ["marks.next", "下一书签/章节", 263, "Shift+PageDown", 1, false],
-      ["marks.previous-chapter", "上一章节", 264, "Ctrl+PageUp", -1, true],
-      ["marks.next-chapter", "下一章节", 265, "Ctrl+PageDown", 1, true],
-    ];
-    for (const [id, title, order, binding, direction, chaptersOnly] of steps)
+    for (const step of STEPS)
       commands.add({
-        id,
-        path: [...MARKS, title],
-        order,
+        id: step.id,
+        path: [...MARKS, step.title],
+        order: step.order,
         group: "marks-edit",
-        bindings: [binding],
-        ...jump,
-        run: () => actions.step(direction, chaptersOnly),
+        bindings: [step.binding],
+        enabled: () => !actions.jumpBlocked(),
+        reason: () => actions.jumpBlocked(),
+        run: () => actions.step(step.direction, step.chaptersOnly),
       });
   }
 
@@ -124,45 +127,49 @@ export class MarksMenu {
     const old = this.#scope;
     const scope = (this.#scope = this.#plugin.scope());
     if (old) await old.dispose();
-    const add = (options: Omit<CommandOptions, "run" | "path"> & { title: string; run: () => unknown }) =>
-      scope.commands.add({ ...options, path: [...MARKS, options.title] });
     const { player } = this.#plugin;
-    const jump = { enabled: () => !this.#actions.jumpBlocked(), reason: () => this.#actions.jumpBlocked() };
+    const actions = this.#actions;
 
+    // The lines are data (titles and times); "Chapter N" and the "More…" lines
+    // stay English until the player can translate a title with arguments.
     chapterTitles.forEach((title, i) =>
-      add({
+      scope.commands.add({
         id: `chapter.${i}`,
-        title,
+        path: [...MARKS, /* i18n-ignore: data */ title],
         order: 10000 + i,
         group: "marks-chapters",
         radio: true,
         checked: () => currentChapter(this.#chapters.list, player.state.position) === i,
-        ...jump,
-        run: () => this.#actions.jumpChapter(i),
+        enabled: () => !actions.jumpBlocked(),
+        reason: () => actions.jumpBlocked(),
+        run: () => actions.jumpChapter(i),
       }),
     );
     if (chapters.length > MENU_ITEMS)
-      add({
+      scope.commands.add({
         id: "chapter.more",
-        title: `更多章节…（共 ${chapters.length} 项）`,
+        // i18n: needs r2-api (command title with an argument)
+        path: [...MARKS, /* i18n-ignore: needs r2-api */ `More Chapters… (${chapters.length} in all)`],
         order: 10000 + MENU_ITEMS,
         group: "marks-chapters",
         run: () => this.#openList(),
       });
     bookmarks.slice(0, MENU_ITEMS).forEach((bookmark, i) =>
-      add({
+      scope.commands.add({
         id: `bookmark.${i}`,
-        title: bookmarkTitles[i]!,
+        path: [...MARKS, /* i18n-ignore: data */ bookmarkTitles[i]!],
         order: 20000 + i,
         group: "marks-bookmarks",
-        ...jump,
-        run: () => this.#actions.jumpBookmark(bookmark.id),
+        enabled: () => !actions.jumpBlocked(),
+        reason: () => actions.jumpBlocked(),
+        run: () => actions.jumpBookmark(bookmark.id),
       }),
     );
     if (bookmarks.length > MENU_ITEMS)
-      add({
+      scope.commands.add({
         id: "bookmark.more",
-        title: `更多书签…（共 ${bookmarks.length} 项）`,
+        // i18n: needs r2-api (command title with an argument)
+        path: [...MARKS, /* i18n-ignore: needs r2-api */ `More Bookmarks… (${bookmarks.length} in all)`],
         order: 20000 + MENU_ITEMS,
         group: "marks-bookmarks",
         run: () => this.#openList(),
@@ -170,44 +177,66 @@ export class MarksMenu {
   }
 }
 
-/** 播放 ▶ A-B 区段循环 (B23). */
+/** What an A-B command needs besides a usable source, and the reason shown without it. */
+const MISSING = {
+  a: "Start point not set",
+  b: "End point not set",
+  range: "A-B range not set",
+} as const;
+
+/** Playback ▸ A-B Loop ▸ Loop Count (B23), in `COUNTS` order. */
+const COUNT_TITLES = ["Endless", "Once", "2 Times", "3 Times", "5 Times", "10 Times"] as const;
+
+/** Playback ▸ A-B Loop (B23). */
 export function addLoopCommands(plugin: Plugin, loop: AbLoop, actions: Actions) {
   const usable = () => loop.blocked();
-  const needs = (ok: () => boolean, missing: string) => ({
-    enabled: () => !usable() && ok(),
-    reason: () => usable() ?? (ok() ? null : missing),
-  });
   const hasA = () => loop.a !== null;
   const hasB = () => loop.b !== null;
-  const any = { enabled: () => !usable(), reason: usable };
-  const items: [string, string, number, string, string, Partial<CommandOptions>, () => unknown][] = [
-    ["ab.set-a", "设定起点", 270, "ab-a", "[", any, () => loop.setA()],
-    ["ab.clear-a", "解除起点", 271, "ab-a", "{", needs(hasA, "未设定起点"), () => loop.clearA()],
-    ["ab.a-back", "起点后退 0.1 秒", 272, "ab-a", "Ctrl+[", { ...needs(hasA, "未设定起点"), repeat: true }, () => loop.nudgeA(-0.1)],
-    ["ab.a-forward", "起点前进 0.1 秒", 273, "ab-a", "Alt+[", { ...needs(hasA, "未设定起点"), repeat: true }, () => loop.nudgeA(0.1)],
-    ["ab.set-b", "设定止点", 274, "ab-b", "]", any, () => loop.setB()],
-    ["ab.clear-b", "解除止点", 275, "ab-b", "}", needs(hasB, "未设定止点"), () => loop.clearB()],
-    ["ab.b-back", "止点后退 0.1 秒", 276, "ab-b", "Ctrl+]", { ...needs(hasB, "未设定止点"), repeat: true }, () => loop.nudgeB(-0.1)],
-    ["ab.b-forward", "止点前进 0.1 秒", 277, "ab-b", "Alt+]", { ...needs(hasB, "未设定止点"), repeat: true }, () => loop.nudgeB(0.1)],
-    ["ab.back", "区段整体后退 0.1 秒", 278, "ab-both", "Ctrl+Alt+[", { ...needs(() => hasA() && hasB(), "未设定区段"), repeat: true }, () => loop.shift(-0.1)],
-    ["ab.forward", "区段整体前进 0.1 秒", 279, "ab-both", "Ctrl+Alt+]", { ...needs(() => hasA() && hasB(), "未设定区段"), repeat: true }, () => loop.shift(0.1)],
-    ["ab.segment", "循环当前章节/书签区段", 280, "ab-toggle", "Alt+\\", any, () => loop.loopSegment(actions.times())],
-    [
-      "ab.toggle",
-      "区段循环 开/关",
-      281,
-      "ab-toggle",
-      "\\",
-      { ...needs(() => (hasA() && hasB()) || !!plugin.player.state.loop, "未设定区段"), checked: () => !!plugin.player.state.loop },
-      () => loop.toggle(),
-    ],
-  ];
-  for (const [id, title, order, group, binding, options, run] of items)
-    plugin.commands.add({ id, path: [...AB, title], order, group, bindings: [binding], ...options, run });
+  const has = { a: hasA, b: hasB, range: () => hasA() && hasB() };
+  const items = [
+    { id: "ab.set-a", title: "Set Start Point", order: 270, group: "ab-a", binding: "[", needs: null, run: () => loop.setA() },
+    { id: "ab.clear-a", title: "Clear Start Point", order: 271, group: "ab-a", binding: "{", needs: "a", run: () => loop.clearA() },
+    { id: "ab.a-back", title: "Start Point Back 0.1 s", order: 272, group: "ab-a", binding: "Ctrl+[", needs: "a", repeat: true, run: () => loop.nudgeA(-0.1) },
+    { id: "ab.a-forward", title: "Start Point Forward 0.1 s", order: 273, group: "ab-a", binding: "Alt+[", needs: "a", repeat: true, run: () => loop.nudgeA(0.1) },
+    { id: "ab.set-b", title: "Set End Point", order: 274, group: "ab-b", binding: "]", needs: null, run: () => loop.setB() },
+    { id: "ab.clear-b", title: "Clear End Point", order: 275, group: "ab-b", binding: "}", needs: "b", run: () => loop.clearB() },
+    { id: "ab.b-back", title: "End Point Back 0.1 s", order: 276, group: "ab-b", binding: "Ctrl+]", needs: "b", repeat: true, run: () => loop.nudgeB(-0.1) },
+    { id: "ab.b-forward", title: "End Point Forward 0.1 s", order: 277, group: "ab-b", binding: "Alt+]", needs: "b", repeat: true, run: () => loop.nudgeB(0.1) },
+    { id: "ab.back", title: "Move Range Back 0.1 s", order: 278, group: "ab-both", binding: "Ctrl+Alt+[", needs: "range", repeat: true, run: () => loop.shift(-0.1) },
+    { id: "ab.forward", title: "Move Range Forward 0.1 s", order: 279, group: "ab-both", binding: "Ctrl+Alt+]", needs: "range", repeat: true, run: () => loop.shift(0.1) },
+    { id: "ab.segment", title: "Loop Current Chapter or Bookmark Range", order: 280, group: "ab-toggle", binding: "Alt+\\", needs: null, run: () => loop.loopSegment(actions.times()) },
+  ] as const;
+  for (const item of items) {
+    const ok = item.needs === null ? () => true : has[item.needs];
+    plugin.commands.add({
+      id: item.id,
+      path: [...AB, item.title],
+      order: item.order,
+      group: item.group,
+      bindings: [item.binding],
+      ...("repeat" in item ? { repeat: item.repeat } : {}),
+      enabled: () => !usable() && ok(),
+      reason: () => usable() ?? (ok() || item.needs === null ? null : MISSING[item.needs]),
+      run: item.run,
+    });
+  }
+  // `\`: on while any loop runs (another plugin's too), so it can always stop one.
+  const toggleable = () => (hasA() && hasB()) || !!plugin.player.state.loop;
+  plugin.commands.add({
+    id: "ab.toggle",
+    path: [...AB, "A-B Loop On/Off"],
+    order: 281,
+    group: "ab-toggle",
+    bindings: ["\\"],
+    enabled: () => !usable() && toggleable(),
+    reason: () => usable() ?? (toggleable() ? null : MISSING.range),
+    checked: () => !!plugin.player.state.loop,
+    run: () => loop.toggle(),
+  });
   COUNTS.forEach((count, i) =>
     plugin.commands.add({
       id: `ab.count.${count ?? "endless"}`,
-      path: [...AB, "循环次数", count === null ? "无限" : `${count} 次`],
+      path: [...AB, "Loop Count", COUNT_TITLES[i]!],
       order: 282 + i,
       group: "ab-count",
       radio: true,

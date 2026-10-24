@@ -1,17 +1,32 @@
 import type { Plugin } from "@vestra-player/sdk";
 import type { Actions } from "./actions.ts";
 import type { Bookmarks } from "./bookmarks.ts";
-import { chapterName, type Chapters, hasMedia } from "./chapters.ts";
+import { chapterName, type Chapters, chapterTitle, hasMedia } from "./chapters.ts";
 import { parseTime, precise } from "./format.ts";
 
-/** One list row; `rowId` is `c<index>` for a chapter, `b<id>` for a bookmark. */
-type Row = { rowId: string; chapter: boolean; time: string; title: string; selected: boolean };
+/**
+ * One list row; `rowId` is `c<index>` for a chapter, `b<id>` for a bookmark.
+ * A chapter without a title has `title: ""` and is shown as "Chapter <number>".
+ */
+type Row = { rowId: string; chapter: boolean; time: string; title: string; number: number; selected: boolean };
 
 /**
- * B21 「章节/书签」 window (H): chapters (read only) and bookmarks by time,
- * filtered by the search box; double-click jumps; a selected bookmark can be
- * renamed, moved and removed; 清空书签 asks first. It follows the current
- * media; a new source drops the selection and unsaved edits.
+ * The line under the list after an edit (the window words it): `text` and
+ * `count` are its data.
+ */
+type Status = {
+  kind: "" | "empty-title" | "bad-time" | "too-late" | "removed" | "confirm-failed" | "cleared";
+  text?: string;
+  count?: number;
+};
+const NO_STATUS: Status = { kind: "" };
+
+/**
+ * B21 Chapters and Bookmarks window (H): chapters (read only) and bookmarks
+ * by time, filtered by the search box; double-click jumps; a selected
+ * bookmark can be renamed, moved and removed; Clear Bookmarks asks first.
+ * It follows the current media; a new source drops the selection and
+ * unsaved edits.
  */
 export class ListWindow {
   readonly #plugin: Plugin;
@@ -21,7 +36,7 @@ export class ListWindow {
   readonly #window;
   #selected: string | null = null;
   #filter = "";
-  #status = "";
+  #status: Status = NO_STATUS;
   #rows: { key: string; rows: Row[] } = { key: "", rows: [] };
 
   constructor(plugin: Plugin, chapters: Chapters, bookmarks: Bookmarks, actions: Actions) {
@@ -47,17 +62,15 @@ export class ListWindow {
       return {
         rows: this.#rowList(),
         media,
-        note: !media
-          ? "未打开媒体"
-          : bookmarks.fileChanged
-            ? "文件已改变，书签时间可能不准"
-            : "",
+        fileChanged: media && bookmarks.fileChanged,
         filtering: this.#filter !== "",
         canAdd: !actions.addBlocked(),
         canRemove: !!bookmark,
         canClear: bookmarks.items.length > 0,
         editing: !!bookmark,
-        status: this.#status,
+        status: this.#status.kind,
+        statusText: this.#status.text ?? "",
+        statusCount: this.#status.count ?? 0,
       };
     });
     // Another file: forget the selection and whatever was typed.
@@ -66,7 +79,7 @@ export class ListWindow {
       if (bookmarks.media === media) return;
       media = bookmarks.media;
       this.#selected = null;
-      this.#status = "";
+      this.#status = NO_STATUS;
       this.#loadEdit();
     });
     chapters.onChange(() => {
@@ -88,14 +101,17 @@ export class ListWindow {
   #rowList(): Row[] {
     const key = `${this.#chapters.version}/${this.#bookmarks.version}/${this.#filter}/${this.#selected}`;
     if (key === this.#rows.key) return this.#rows.rows;
-    const all: (Row & { at: number; order: number })[] = [
+    const all: (Row & { at: number; order: number; match: string })[] = [
       ...this.#chapters.list.map((chapter, i) => ({
         rowId: `c${i}`,
         chapter: true,
         at: chapter.start,
         order: 0,
         time: precise(chapter.start),
-        title: chapterName(chapter, i),
+        title: chapterTitle(chapter) ?? "",
+        number: i + 1,
+        // The search matches the English "Chapter N" of an untitled chapter.
+        match: chapterName(chapter, i),
         selected: false,
       })),
       ...this.#bookmarks.items.map((bookmark) => ({
@@ -105,13 +121,22 @@ export class ListWindow {
         order: 1,
         time: precise(bookmark.time),
         title: bookmark.title,
+        number: 0,
+        match: bookmark.title,
         selected: false,
       })),
     ];
     const rows = all
-      .filter((row) => !this.#filter || row.title.toLowerCase().includes(this.#filter))
+      .filter((row) => !this.#filter || row.match.toLowerCase().includes(this.#filter))
       .sort((x, y) => x.at - y.at || x.order - y.order)
-      .map(({ rowId, chapter, time, title }) => ({ rowId, chapter, time, title, selected: rowId === this.#selected }));
+      .map(({ rowId, chapter, time, title, number }) => ({
+        rowId,
+        chapter,
+        time,
+        title,
+        number,
+        selected: rowId === this.#selected,
+      }));
     this.#rows = { key, rows };
     return rows;
   }
@@ -128,7 +153,7 @@ export class ListWindow {
   #select(rowId: string) {
     if (rowId === this.#selected) return;
     this.#selected = rowId;
-    this.#status = "";
+    this.#status = NO_STATUS;
     this.#loadEdit();
   }
   #activate(rowId: string) {
@@ -140,8 +165,8 @@ export class ListWindow {
   #commitTitle(text: string) {
     const bookmark = this.#bookmark();
     if (!bookmark) return;
-    if (!this.#bookmarks.rename(bookmark.id, text)) this.#status = "标题不能为空";
-    else this.#status = "";
+    if (!this.#bookmarks.rename(bookmark.id, text)) this.#status = { kind: "empty-title" };
+    else this.#status = NO_STATUS;
     this.#loadEdit();
   }
   #commitTime(text: string) {
@@ -149,11 +174,11 @@ export class ListWindow {
     if (!bookmark) return;
     const time = parseTime(text);
     const duration = this.#plugin.player.state.duration;
-    if (time === null) this.#status = "时间格式为 h:mm:ss.d";
-    else if (duration !== null && time > duration) this.#status = `时间超出时长（${precise(duration)}）`;
+    if (time === null) this.#status = { kind: "bad-time" };
+    else if (duration !== null && time > duration) this.#status = { kind: "too-late", text: precise(duration) };
     else {
       this.#bookmarks.retime(bookmark.id, time);
-      this.#status = "";
+      this.#status = NO_STATUS;
     }
     this.#loadEdit();
   }
@@ -164,7 +189,7 @@ export class ListWindow {
     this.#filter = "";
     this.#window.set({ searchText: "" });
     this.#selected = `b${bookmark.id}`;
-    this.#status = "";
+    this.#status = NO_STATUS;
     this.#loadEdit();
   }
   #remove() {
@@ -176,7 +201,7 @@ export class ListWindow {
     const next = items[index + 1] ?? items[index - 1];
     this.#bookmarks.remove(bookmark.id);
     this.#selected = next ? `b${next.id}` : null;
-    this.#status = `已移除：${bookmark.title}`;
+    this.#status = { kind: "removed", text: bookmark.title };
     this.#loadEdit();
   }
   async #clear() {
@@ -186,20 +211,24 @@ export class ListWindow {
     let answer;
     try {
       answer = await this.#plugin.dialogs.confirm({
-        message: "清空当前文件的全部书签？",
-        detail: `将移除 ${count} 个书签，不能撤销。`,
-        confirm: "清空书签",
+        message: "Clear all bookmarks of this file?",
+        detail:
+          count === 1
+            ? "{} bookmark will be removed. This can't be undone."
+            : "{} bookmarks will be removed. This can't be undone.",
+        confirm: "Clear Bookmarks",
         destructive: true,
+        args: [count],
       });
     } catch (error) {
-      this.#status = `无法确认：${(error as Error).message}`;
+      this.#status = { kind: "confirm-failed", text: (error as Error).message };
       return;
     }
     // The answer is for the file it was asked about.
     if (!answer.confirmed || this.#bookmarks.media !== media) return;
     this.#bookmarks.clear();
     if (this.#selected?.startsWith("b")) this.#selected = null;
-    this.#status = `已清空 ${count} 个书签`;
+    this.#status = { kind: "cleared", count };
     this.#loadEdit();
   }
 }
