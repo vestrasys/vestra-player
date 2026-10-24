@@ -4,15 +4,15 @@ export interface Size {
   height: number;
 }
 
-/** H03: the scales of 屏幕 ▶ 0.5倍 … 2倍, with their menu titles. */
-export const SCALES: readonly { scale: number; title: string }[] = [
-  { scale: 0.5, title: "0.5倍" },
-  { scale: 1, title: "1倍" },
-  { scale: 1.5, title: "1.5倍" },
-  { scale: 2, title: "2倍" },
-];
+/** H03: the scales of Screen ▸ 0.5× … 2×, with their menu titles. */
+export const SCALES = [
+  { scale: 0.5, title: "0.5×" },
+  { scale: 1, title: "1×" },
+  { scale: 1.5, title: "1.5×" },
+  { scale: 2, title: "2×" },
+] as const;
 
-/** The 迷你尺寸 video area fits in this box, keeping the video's aspect ratio. */
+/** The Mini Size video area fits in this box, keeping the video's aspect ratio. */
 export const MINI_BOX: Size = { width: 400, height: 300 };
 
 /** Two sizes are the same when both sides differ by at most one point (H03 6, H04 3). */
@@ -33,15 +33,18 @@ export const fitted = (area: Size, video: Size): Size => ({
   height: Math.max(1, Math.round((area.width * video.height) / video.width)),
 });
 
-/** 迷你尺寸: the largest size of the video's aspect ratio inside `MINI_BOX`. */
+/** Mini Size: the largest size of the video's aspect ratio inside `MINI_BOX`. */
 export function mini(video: Size): Size {
   const k = Math.min(MINI_BOX.width / video.width, MINI_BOX.height / video.height);
   return { width: Math.max(1, Math.round(video.width * k)), height: Math.max(1, Math.round(video.height * k)) };
 }
 
-/** The note after an OSD text when the core changed the requested size. */
-export function clampNote(requested: Size, applied: Size & { clamped: boolean }) {
-  if (!applied.clamped) return "";
+/**
+ * How the core changed the requested size, if it did: `shrunk` to fit the
+ * screen, `enlarged` to the minimum size. Each case has its own OSD template.
+ */
+export function clampNote(requested: Size, applied: Size & { clamped: boolean }): "shrunk" | "enlarged" | null {
+  if (!applied.clamped) return null;
   const smaller = applied.width < requested.width - 1 || applied.height < requested.height - 1;
-  return smaller ? "（已按屏幕缩小）" : "（已按最小尺寸放大）";
+  return smaller ? "shrunk" : "enlarged";
 }

@@ -1,27 +1,26 @@
 import type { Plugin, PluginError } from "@vestra-player/sdk";
+import { quiet } from "./osd.ts";
 import type { VideoSize } from "./video-size.ts";
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /**
- * H07 画中画 where the player supports it (macOS): the system
+ * H07 Picture-in-Picture where the player supports it (macOS): the system
  * picture-in-picture window through `window.setPictureInPicture`. The check
  * mark follows `state.pictureInPicture.active`; when the window closes by
- * itself (its 返回 / close buttons, the video went away) the change is said
+ * itself (its return / close buttons, the video went away) the change is said
  * once. Fullscreen is left by the core, so it does not disable the command.
  */
 export class PictureInPicture {
   readonly #plugin: Plugin;
   readonly #video: VideoSize;
-  readonly #osd: (text: string) => void;
   /** A `setPictureInPicture` call is in flight; its own result is said by `toggle`. */
   switching = false;
   #active: boolean;
 
-  constructor(plugin: Plugin, video: VideoSize, osd: (text: string) => void) {
+  constructor(plugin: Plugin, video: VideoSize) {
     this.#plugin = plugin;
     this.#video = video;
-    this.#osd = osd;
     this.#active = plugin.window.state.pictureInPicture.active;
     plugin.window.onChange((state) => {
       const active = state.pictureInPicture.active;
@@ -40,17 +39,21 @@ export class PictureInPicture {
     if (this.switching) return;
     const on = !this.active;
     if (on && !(await this.#video.refresh().catch(() => this.#video.size))) {
-      this.#osd("没有视频");
+      quiet(this.#plugin.osd.show("No video"));
       return;
     }
     this.switching = true;
     this.#plugin.update();
     try {
       await this.#plugin.window.setPictureInPicture(on);
-      this.#osd(`画中画: ${on ? "开" : "关"}`);
+      quiet(this.#plugin.osd.show(on ? "Picture-in-picture: On" : "Picture-in-picture: Off"));
     } catch (error) {
       if ((error as PluginError).code === "busy") return;
-      this.#osd(`${on ? "无法进入画中画" : "无法退出画中画"}：${message(error)}`);
+      quiet(
+        this.#plugin.osd.show(on ? "Cannot enter picture-in-picture: {}" : "Cannot exit picture-in-picture: {}", [
+          message(error),
+        ]),
+      );
     } finally {
       this.switching = false;
       this.#active = this.active;
@@ -62,6 +65,6 @@ export class PictureInPicture {
   async #closed() {
     const { phase } = this.#plugin.player.state;
     const video = phase === "ready" || phase === "ended" ? await this.#video.refresh().catch(() => null) : null;
-    this.#osd(video ? "画中画: 关" : "画中画: 关（没有视频）");
+    quiet(this.#plugin.osd.show(video ? "Picture-in-picture: Off" : "Picture-in-picture: Off (no video)"));
   }
 }
