@@ -1,5 +1,6 @@
 import type { PluginInfo } from "@vestra-player/sdk";
 import type { IndexEntry, IndexVersion, Revocation } from "./index-format.ts";
+import { reservedId, reservedText } from "./labels.ts";
 import type { Repo } from "./repos.ts";
 import { compareVersions, isVersion, playerAtLeast, satisfies } from "./semver.ts";
 
@@ -51,6 +52,7 @@ export type ItemState =
   | "revoked" // from this repository, the installed version is revoked
   | "otherSource" // the id is installed from somewhere else
   | "builtin" // the id is a built-in plugin
+  | "reserved" // a repository lists a `vestra.` id: only built-ins may use it
   | "incompatible" // no version this player can run
   | "allRevoked" // every compatible version is revoked
   | "local"; // installed, not in any repository (or its repository was removed)
@@ -83,7 +85,7 @@ export interface Item {
   state: ItemState;
   /** The installed version is revoked by this row's repository. */
   revocation: Revocation | null;
-  /** Why nothing can be installed (incompatible / all revoked). */
+  /** Why nothing can be installed (incompatible / all revoked / reserved). */
   blocked: string | null;
   name: string;
   author: string | null;
@@ -116,7 +118,12 @@ export function buildItems(
       let state: ItemState;
       let revocation: Revocation | null = null;
       let blocked: string | null = null;
-      if (info?.builtin) state = "builtin";
+      if (reservedId(entry.id)) {
+        // Never installable from a repository; an installed copy (built-in or
+        // left from before the rule) keeps its own local row below.
+        state = "reserved";
+        blocked = reservedText(entry.id);
+      } else if (info?.builtin) state = "builtin";
       else if (info && sameRepository(info, repo)) {
         covered.add(info.id);
         revocation = info.version ? revocationOf(entry.id, info.version, revoked) : null;

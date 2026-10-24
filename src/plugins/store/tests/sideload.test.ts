@@ -47,7 +47,7 @@ test("从文件安装…: cancel, an invalid file, a built-in id, replacing a re
   publish(net, OFFICIAL, []);
   const { host, store, stop } = await start({
     net,
-    packages: [BUILTIN, info("vestra.youtube", { version: "0.2.0", source: { kind: "repository", url: OFFICIAL } })],
+    packages: [BUILTIN, info("zysilm.youtube", { version: "0.2.0", source: { kind: "repository", url: OFFICIAL } })],
   });
   try {
     await host.command("open").run();
@@ -66,15 +66,15 @@ test("从文件安装…: cancel, an invalid file, a built-in id, replacing a re
 
     host.dialogAnswers.push([packageFile("video.vxp", { id: "vestra.video", version: "9.0.0" })]);
     window.emit("fromFile");
-    await until(host, () => host.osd.includes("「vestra.video」与播放器内置插件同 id，不能安装"));
+    await until(host, () => host.osd.includes("「vestra.video」：vestra. 开头的 id 只留给播放器内置插件，不能安装或试载"));
     await until(host, () => !store.busy);
 
-    host.dialogAnswers.push([packageFile("yt.vxp", { id: "vestra.youtube", version: "0.2.1", name: "YouTube" })], yes);
+    host.dialogAnswers.push([packageFile("yt.vxp", { id: "zysilm.youtube", version: "0.2.1", name: "YouTube" })], yes);
     window.emit("fromFile");
     await until(host, () => installs(host).length === 1);
     assert.equal(host.confirms.at(-1)!["message"], "用插件包「YouTube」0.2.1 替换已安装的版本？");
     assert.match(String(host.confirms.at(-1)!["detail"]), /来自仓库 plugins\.test。替换后，若之前从这个来源安装过，会接上当时的数据；否则使用新的空数据/);
-    assert.deepEqual(installs(host)[0], { method: "install", id: "vestra.youtube", source: { kind: "file" }, replace: true });
+    assert.deepEqual(installs(host)[0], { method: "install", id: "zysilm.youtube", source: { kind: "file" }, replace: true });
   } finally {
     await stop();
   }

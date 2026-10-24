@@ -145,6 +145,15 @@ pub fn valid_id(id: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b".-_".contains(&b))
 }
 
+/// An id reserved for the player's built-in plugins (ecosystem-plan.md,
+/// 2026-10-24 ruling): `vestra` and `vestra.<name>`, ignoring ASCII case. Only
+/// the installation's built-in set installs such a package; development loads
+/// (`--plugin`) may use one but are never installed.
+pub fn reserved_id(id: &str) -> bool {
+    let lower = id.to_ascii_lowercase();
+    lower == "vestra" || lower.starts_with("vestra.")
+}
+
 /// A package-relative path: UTF-8, `/`-separated normal components only.
 pub fn relative_path(text: &str) -> Result<()> {
     ensure!(
@@ -313,6 +322,22 @@ pub fn check(manifest: &Manifest, directory: &Path, package: bool) -> Result<()>
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn vestra_ids_are_reserved_for_built_ins() {
+        for id in ["vestra", "vestra.video", "Vestra.youtube", "VESTRA.x.y"] {
+            assert!(reserved_id(id), "{id}");
+        }
+        for id in [
+            "zysilm.youtube",
+            "vestra-fan.x",
+            "vestrax.y",
+            "my.vestra.z",
+            "workshop.counter",
+        ] {
+            assert!(!reserved_id(id), "{id}");
+        }
+    }
 
     fn package(extra: serde_json::Value) -> (tempfile::TempDir, Manifest) {
         let root = tempfile::tempdir().unwrap();

@@ -13,7 +13,7 @@
 
 - `src/examples/bookmark/`：教程中的书签插件（含测试）。
 - `src/examples/markdown/`：Markdown 显示组件与 manifest 显示字段的演示。
-- `src/plugins/`：内置产品插件。最短的是 `video/`（画面调节），可作为第一个参考。
-- 插件仓库 [vestra-player-plugins](https://github.com/vestrasys/vestra-player-plugins) 的 `plugins/`：不随安装包分发的官方插件 `youtube`、`bilibili`（网络媒体解析器的写法见[插件示例 §9](examples.md)）。
+- `src/plugins/`：内置产品插件，也是仅有的官方插件（id 为 `vestra.<名字>`，这个前缀只留给它们）。最短的是 `video/`（画面调节），可作为第一个参考。
+- 官方插件仓库 [vestra-player-plugins](https://github.com/vestrasys/vestra-player-plugins) 的 `plugins/`：托管在官方仓库、不随安装包分发的第三方插件 `zysilm.youtube`、`zysilm.bilibili`（审核比其它仓库严格；网络媒体解析器的写法见[插件示例 §9](examples.md)）。
 
 设计取舍（为什么这样设计）见 [SDK 设计说明](../architecture/sdk-design.md)。

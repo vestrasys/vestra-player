@@ -29,6 +29,19 @@ export const CAPABILITIES: Record<string, { text: string; risky?: boolean }> = {
   "plugins.manage": { text: "安装、卸载、停用其它插件", risky: true },
 };
 
+/**
+ * `vestra` and `vestra.<name>` (any case) belong to the player's built-in
+ * plugins (ecosystem ruling 2026-10-24): the player refuses to install them
+ * (`reserved`), whichever repository lists them.
+ */
+export function reservedId(id: string): boolean {
+  const lower = id.toLowerCase();
+  return lower === "vestra" || lower.startsWith("vestra.");
+}
+
+/** The player's own wording for `reserved`. */
+export const reservedText = (id: string) => `「${id}」：vestra. 开头的 id 只留给播放器内置插件，不能安装或试载`;
+
 export const TRUST_NOTE = "插件是完整的程序，以上权限只限制它使用播放器的功能，不限制它读写文件和联网。";
 
 /** One line per distinct description (media.read and media.control share one). */

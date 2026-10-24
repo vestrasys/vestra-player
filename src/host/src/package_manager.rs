@@ -156,6 +156,7 @@ impl Host {
                         .map_err(|e| RpcError::invalid(format!("{e:#}")))?;
                     Candidate::capture(extracted.path())?
                 };
+                check_reserved(&candidate.manifest().id, None)?;
                 if params
                     .get("digest")
                     .is_some_and(|v| v.as_str() != Some(candidate.digest()))
@@ -236,6 +237,7 @@ impl Host {
                     .get(token)
                     .cloned()
                     .ok_or_else(|| RpcError::new("stale", "unknown validation token"))?;
+                check_reserved(&candidate.manifest().id, None)?;
                 if let Some(request) = &request_id
                     && let Some((&id, trial)) = self.packages.trials.iter().find(|(_, trial)| {
                         trial.owner == caller && trial.request_id.as_ref() == Some(request)
@@ -349,6 +351,7 @@ impl Host {
                         .get(token)
                         .cloned()
                         .ok_or_else(|| RpcError::new("stale", "unknown validation token"))?;
+                    check_reserved(&candidate.manifest().id, None)?;
                     if self.packages.trials.iter().any(|(id, t)| {
                         t.candidate.digest() == candidate.digest() && !self.cleanup_done(*id)
                     }) {
@@ -371,6 +374,8 @@ impl Host {
                     .as_u64()
                     .ok_or_else(|| RpcError::invalid("expectedRevision required"))?;
                 let before = self.packages.store.get(&id);
+                // A rollback of a reserved id: only the built-in instance's.
+                check_reserved(&id, before.instance.as_ref())?;
                 if before.revision != expected {
                     return Err(RpcError::new(
                         "revisionConflict",
@@ -778,6 +783,7 @@ impl Host {
         }
         let record = self.packages.store.get(id);
         let installed = record.current;
+        let reserved = check_reserved(id, record.instance.as_ref());
         let key = record
             .instance
             .map(|i| DataKey::Instance(i.guid))
@@ -808,6 +814,7 @@ impl Host {
         match (installed, development) {
             (_, Some((directory, _))) => self.load(&directory, 120_000)?,
             (Some(current), None) => {
+                reserved?;
                 self.load_package(&current.directory, &current.manifest, key)?;
             }
             (None, None) => unreachable!("checked above"),
@@ -986,11 +993,15 @@ impl Host {
                     && !self.development.contains_key(&id)
                     && let Some(current) = record.current
                     && let Some(instance) = record.instance
-                    && let Err(error) = self.load_package(
-                        &current.directory,
-                        &current.manifest,
-                        DataKey::Instance(instance.guid),
-                    )
+                    && let Err(error) = check_reserved(&id, Some(&instance))
+                        .map_err(|refusal| anyhow::anyhow!(refusal.message))
+                        .and_then(|()| {
+                            self.load_package(
+                                &current.directory,
+                                &current.manifest,
+                                DataKey::Instance(instance.guid),
+                            )
+                        })
                 {
                     eprintln!("installed package {id} failed to start: {error}");
                     self.failures
@@ -1197,6 +1208,22 @@ fn install_source(params: &Value) -> std::result::Result<Source, RpcError> {
         },
         other => other,
     })
+}
+
+/// The 2026-10-24 ruling (ecosystem-plan.md): a reserved `vestra.` id
+/// (`manifest::reserved_id`) is installed, tried and started only as the
+/// installation's built-in instance, which seeding alone creates. Store,
+/// file, link and workshop installs and trials of one are refused, and an
+/// installed non-built-in one (from before the rule) is not started.
+/// Development loads (`--plugin`) are not checked here (`Host::load`).
+fn check_reserved(id: &str, instance: Option<&Instance>) -> std::result::Result<(), RpcError> {
+    if crate::manifest::reserved_id(id) && !instance.is_some_and(|i| i.builtin) {
+        return Err(RpcError::new(
+            "reserved",
+            format!("「{id}」：vestra. 开头的 id 只留给播放器内置插件，不能安装或试载"),
+        ));
+    }
+    Ok(())
 }
 
 /// The installation's built-in plugin list (written by `scripts/stage-plugins.mjs`).
@@ -1478,6 +1505,29 @@ mod tests {
             let error =
                 install_instance(&store, "vestra.video", &before, source, replace).unwrap_err();
             assert_eq!(error.code, "unsupported");
+        }
+    }
+
+    #[test]
+    fn reserved_ids_run_only_as_built_ins() {
+        let builtin = Instance {
+            builtin: true,
+            ..Instance::new(Source::Bundled)
+        };
+        let installed = Instance::new(Source::Repository {
+            url: "https://example.com/index.json".into(),
+        });
+        for id in ["vestra.youtube", "Vestra.video", "vestra"] {
+            for instance in [None, Some(&installed)] {
+                let error = check_reserved(id, instance).unwrap_err();
+                assert_eq!(error.code, "reserved", "{id}");
+                assert!(error.message.contains(id) && error.message.contains("内置插件"));
+            }
+            assert!(check_reserved(id, Some(&builtin)).is_ok(), "{id}");
+        }
+        for id in ["zysilm.youtube", "workshop.counter", "vestrafan.x"] {
+            assert!(check_reserved(id, None).is_ok());
+            assert!(check_reserved(id, Some(&installed)).is_ok());
         }
     }
 

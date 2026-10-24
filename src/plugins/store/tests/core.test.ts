@@ -45,8 +45,8 @@ test("the embedded key is the plugins repository's key and verifies the live ind
   assert.deepEqual(
     index.plugins.map((p) => [p.id, bestVersion(p, index.revoked, "0.2.0")?.version]),
     [
-      ["vestra.bilibili", "0.2.0"],
-      ["vestra.youtube", "0.2.0"],
+      ["zysilm.bilibili", "0.3.0"],
+      ["zysilm.youtube", "0.3.0"],
     ],
   );
 });

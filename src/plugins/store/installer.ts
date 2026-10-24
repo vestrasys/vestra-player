@@ -5,7 +5,7 @@ import type { PackageCandidate, PackageChange, PackageSource, PluginInfo } from 
 import type { Item } from "./catalog.ts";
 import type { IndexVersion } from "./index-format.ts";
 import { MAX_PACKAGE } from "./index-format.ts";
-import { permissionList, sourceName, TRUST_NOTE } from "./labels.ts";
+import { permissionList, reservedId, reservedText, sourceName, TRUST_NOTE } from "./labels.ts";
 import { get, isHttps, NetError } from "./net.ts";
 import { compareVersions, isVersion } from "./semver.ts";
 import type { Store } from "./store.ts";
@@ -51,6 +51,8 @@ export function failureText(store: Store, error: unknown, id?: string): string {
         ? `这个插件需要 Vestra Player ≥ ${needed}（当前 ${store.plugin.app.version}）`
         : `这个插件需要更新的 Vestra Player（当前 ${store.plugin.app.version}）`;
     }
+    case "reserved":
+      return (error as Error).message || reservedText(id ?? "这个插件");
     case "unsupported":
       return `「${id ?? "这个插件"}」与播放器内置插件同 id，不能安装`;
     case "busy":
@@ -85,8 +87,9 @@ export async function installFromRepository(store: Store, item: Item, version: I
   const repo = item.repo;
   const entry = item.entry;
   if (!repo || !entry) return;
+  // Refused before asking or downloading, whichever repository lists it.
+  if (reservedId(item.id)) return store.report(reservedText(item.id), true);
   const info = installedOf(store, item.id);
-  if (info?.builtin) return store.report(`「${item.id}」与播放器内置插件同 id，不能安装`, true);
   const name = item.name;
   const sameSource = info !== null && identity(info.source) === identity({ kind: "repository", url: repo.url });
   const replace = info !== null && !sameSource;
@@ -314,8 +317,8 @@ export async function installFile(store: Store, path: string) {
     } catch (error) {
       return store.report(failureText(store, error), true);
     }
+    // validateArchive already refused reserved ids, so built-in ones too.
     const info = installedOf(store, candidate.manifest.id);
-    if (info?.builtin) return store.report(`「${candidate.manifest.id}」与播放器内置插件同 id，不能安装`, true);
     const { replace, question } = sideloadQuestion(store, candidate, `文件 ${basename(path)}`);
     const answer = await store.ask(question);
     if (!answer?.confirmed) return;
@@ -345,7 +348,6 @@ export async function installFromLink(store: Store, text: string) {
     store.progress("正在检查插件包…", null);
     const candidate = await store.plugin.packages.validateArchive(file);
     const info = installedOf(store, candidate.manifest.id);
-    if (info?.builtin) return store.report(`「${candidate.manifest.id}」与播放器内置插件同 id，不能安装`, true);
     const { replace, question } = sideloadQuestion(store, candidate, `链接 ${url}`);
     const answer = await store.ask(question);
     if (!answer?.confirmed) return;

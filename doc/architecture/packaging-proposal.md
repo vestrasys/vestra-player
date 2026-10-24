@@ -467,7 +467,7 @@ SHA256SUMS
 5. 字幕：外挂 SRT/ASS 和内嵌字幕。内嵌字幕依赖自带的 ffmpeg。中文字幕用 Noto 字体显示。
 6. 播放列表的时长（依赖 ffprobe）、截图导出、片段导出（依赖 ffmpeg 和 x264）。
 7. NES：加载 ROM，有画面、有声音、键盘能操作。
-8. 商城：从官方仓库安装 youtube 或 bilibili，签名校验通过，安装后能用；卸载。
+8. 商城：从官方仓库安装 `zysilm.youtube` 或 `zysilm.bilibili`（托管在官方仓库的第三方插件），签名校验通过，安装后能用；卸载。
 9. 工坊：打开就行（它会启动 `process.execPath`，也就是自带的 Node）。
 10. 退出再启动：插件状态、侧栏和窗口位置、播放历史都还在。数据在 `~/Library/Application Support/Vestra/{packages,plugin-data,ui-state.json}`，**包内没有任何文件被改动**（`codesign --verify --deep --strict` 仍然通过）。
 11. 用 `ps` 看插件进程，确认是 `Vestra Player.app/Contents/MacOS/node`，不是 Homebrew 的 node。

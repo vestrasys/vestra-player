@@ -469,10 +469,10 @@ export class Store {
 
   #row(item: Item) {
     const installedVersion = item.installed?.version ?? "";
-    const shown = item.state === "otherSource" || item.state === "available" || item.state === "incompatible" || item.state === "allRevoked"
+    const shown = item.state === "otherSource" || item.state === "available" || item.state === "incompatible" || item.state === "allRevoked" || item.state === "reserved"
       ? (item.best ?? item.entry?.versions[0])?.version ?? ""
       : installedVersion;
-    const repoTag = item.repo ? (item.repo.official ? "官方" : `非官方：${item.repo.label}`) : sourceName(item.installed?.source ?? null);
+    const repoTag = item.repo ? (item.repo.official ? "官方仓库" : `非官方：${item.repo.label}`) : sourceName(item.installed?.source ?? null);
     const [badge, tone] = ((): [string, number] => {
       switch (item.state) {
         case "installed":
@@ -487,6 +487,8 @@ export class Store {
           return ["内置", 4];
         case "incompatible":
           return ["不兼容", 4];
+        case "reserved":
+          return ["不能安装", 3];
         case "allRevoked":
           return ["已撤回", 3];
         case "local":
@@ -573,7 +575,8 @@ export class Store {
             : "";
       add(`此版本已被撤回：${item.revocation.reason}。${tail}`, 3);
     }
-    if (item.state === "allRevoked" || item.state === "incompatible") add(item.blocked ?? "", item.state === "allRevoked" ? 3 : 2);
+    if (item.state === "allRevoked" || item.state === "incompatible" || item.state === "reserved")
+      add(item.blocked ?? "", item.state === "incompatible" ? 2 : 3);
     if (item.repo && !item.repo.official) {
       add("非官方仓库：未经 Vestra Player 审核，插件可能读取你的文件或联网", 2);
       if (item.repo.local) add("这是本机上的测试仓库，没有加密", 2);
@@ -630,7 +633,7 @@ export class Store {
         minimum: v.minPlayerVersion ?? "—",
         status,
         tone: check.ok ? 0 : check.why === "revoked" ? 3 : 4,
-        canInstall: check.ok && !current && item.state !== "builtin" && !this.busy,
+        canInstall: check.ok && !current && item.state !== "builtin" && item.state !== "reserved" && !this.busy,
       };
     });
   }

@@ -62,7 +62,7 @@ interface Disposable { dispose(): Promise<void> }
 
 | 字段 | 规则 |
 | --- | --- |
-| `id` | 1–128 个 ASCII 字母、数字与 `.-_`；播放器不强制前缀。发布到官方插件仓库须为 `<GitHub 用户名或组织>.<插件名>`（`vestra-plugin check` 对无前缀的 id 只提示） |
+| `id` | 1–128 个 ASCII 字母、数字与 `.-_`。`vestra` 与 `vestra.` 开头的 id（不分大小写）只留给播放器内置插件（官方插件）：安装、试载这样的包以 `reserved` 失败（§12）。除此之外播放器不强制前缀。第三方插件（包括托管在官方插件仓库里的）用 `<GitHub 用户名或组织>.<插件名>`，发布到官方插件仓库时必须这样取（`vestra-plugin check` 对无前缀的 id 只提示） |
 | `version` | 三段非负整数 `x.y.z`；构建工具写入 `dist/manifest.json` |
 | `apiVersion` | 固定 `vestra/1` |
 | `entry` | 包内相对路径；开发时可为 `.ts`，构建后为 `.js` |
@@ -1297,8 +1297,10 @@ interface PackageChange {
 - `trial.stop()` 以 `code: "cleanup"` 失败表示播放器停止了试载但未确认清理；再次调用会重新请求停止。
 - `validateArchive(file)`：`.vxp` 是 zip，根目录放 `manifest.json`（`vestra-plugin pack` 的产物）。播放器在解压过程中强制上限（包 ≤ 64 MB、≤ 1024 个文件、单文件 ≤ 32 MB、总计 ≤ 64 MB），只收 stored/deflate、不收加密，拒绝绝对路径、`..`、`\`、符号链接、忽略大小写重名；不合格为 `invalid`。之后的检查与 `validate` 相同。播放器不知道包的 sha256，从网络下载的包请先自己核对。
 - `install({ source, replace })`（0.2.0）：来源决定升级还是替换。来源标识：`repository` 按 `url`；`link` 与 `file` 同为「手动安装」；`workshop` 单独一类。同 id 同来源 = 升级（沿用安装实例与数据，可回退）；同 id 不同来源：不带 `replace` 以 `conflict` 失败、什么都不做——插件问过用户后带 `replace: true` 重试；替换后新插件拿新的空数据目录，旧实例转为休眠（数据保留），以后从旧来源再安装时接上。同来源安装**更低**的版本同样按升级处理：播放器不比较版本号，沿用实例与数据，原来的当前版本成为 `previousVersion`（可以再回退过去）；商城的「安装其它版本」依赖这一点。不带参数等于 `{ source: { kind: "file" } }`。`source` 的地址须为 `http(s)`、≤ 2048 字节，`bundled` 为 `invalid`。同一时间每个 id 只运行一个。
-- **内置插件**（`builtin: true`，随播放器安装、来源 `bundled`）：可以停用、启用、回退；`uninstall` 与任何 `install`（带不带 `replace`）都以 `unsupported` 失败。内置插件只随播放器更新：播放器启动时，安装包里的版本比上次播种的版本新才升级（保留用户的停用状态与数据；用户回退后不会被同一安装包再次覆盖）。
-- 开发加载（`--plugin`）与已安装插件同 id 时，本次运行只运行开发加载的那个。
+- **内置插件**（`builtin: true`，随播放器安装、来源 `bundled`）：可以停用、启用、回退；`uninstall` 与任何 `install`（带不带 `replace`）都以 `unsupported` 失败（内置插件的 id 都是保留 id，同 id 的包从 0.4.1 起在 `validate` 时就以 `reserved` 失败，见下条）。内置插件只随播放器更新：播放器启动时，安装包里的版本比上次播种的版本新才升级（保留用户的停用状态与数据；用户回退后不会被同一安装包再次覆盖）。
+- **保留 id**（播放器 0.4.1）：`vestra` 与 `vestra.` 开头的 id（不分大小写）只留给内置插件。`validate`、`validateArchive`、`trial`、`install` 遇到这样的包以 `reserved` 失败，`message` 为「「<id>」：vestra. 开头的 id 只留给播放器内置插件，不能安装或试载」。商城安装、侧载（拖入 `.vxp`、从文件安装、从链接安装）、插件工坊与 AI 的安装和试载都走这几个方法，所以都一样被拒绝。`rollback` 一个保留 id 只对内置实例有效（即回退内置插件，与以前相同）。保留 id 只有一种装进来的途径：安装包的内置插件集合（`builtin.json`，播种时来源 `bundled`）。
+- 这条规则之前装进安装库的非内置保留 id 插件：启动时不运行，在 `list` 里是 `failed`，`error` 为上面那句话；用户可以卸载它。
+- 开发加载（`--plugin`）与已安装插件同 id 时，本次运行只运行开发加载的那个。开发加载保留 id 仍然可以（内置插件的作者用 `--plugin` 开发），播放器在 stderr 打印一条警告；开发加载从不写进安装库，数据在 `plugin-data/development/<id>/`。
 
 ## 13. 错误
 
@@ -1323,6 +1325,7 @@ interface PackageChange {
 | `cleanup` | `trial.stop()` 未确认清理，可再次调用 |
 | `limit` | 超出播放器的数量上限（如命令数，§4；密钥名字数，§16.6） |
 | `versionMismatch` | 包的 `minPlayerVersion` 高于本播放器（`validate`、`validateArchive`；§2） |
+| `reserved` | 包的 id 是保留给内置插件的 `vestra` / `vestra.*`（不分大小写），不能安装或试载（`validate`、`validateArchive`、`trial`、`install`；§2、§12） |
 | `noSource` | `media.capture`：没有可截图的来源 |
 | `released`、`disposed` | 已 `release()` 的 `Snapshot` 再 `export`；已释放的 `ExportJob` 句柄还在等结果 |
 | `unknown`、`rejected`、`expired` | 传输异常后 SDK 查询仍无法确认结果（正常情况下不会出现） |
@@ -1518,6 +1521,12 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | `Theme.font-mono` §6.4 | Menlo | Consolas | DejaVu Sans Mono |
 
 ## 17. 变更说明
+
+### `vestra.` 前缀只留给内置插件（2026-10，播放器 0.4.1，SDK 1.5.5）
+
+- 官方插件只有随播放器安装的内置插件，id 用 `vestra.<名字>`。其余插件都是第三方插件，包括托管在官方插件仓库里的；它们的 id 用 `<GitHub 用户名或组织>.<插件名>`。插件仓库里的 YouTube、Bilibili 改为 `zysilm.youtube`、`zysilm.bilibili`（播放器还没有公开发布，不做迁移）。
+- `packages.validate`、`validateArchive`、`trial`、`install` 拒绝保留 id 的包，错误码 `reserved`（§12、§13）。`rollback` 只对内置实例有效。启动时遗留的非内置保留 id 插件不运行，显示为 `failed`，可以卸载。
+- `--plugin` 开发加载保留 id 仍然可以，stderr 打印警告。
 
 ### Markdown 进列表行（2026-10，播放器 0.4.1，SDK 1.5.4）
 

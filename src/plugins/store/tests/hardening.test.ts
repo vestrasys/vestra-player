@@ -10,7 +10,7 @@ import { banners, choose, FakeNet, OFFICIAL, openStore, other, pair, props, publ
 const scratch = mkdtempSync(join(tmpdir(), "vestra-store-hardening-"));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
 
-const P = (version = "1.0.0") => [{ id: "vestra.p", name: "P", versions: [{ version }] }];
+const P = (version = "1.0.0") => [{ id: "zysilm.p", name: "P", versions: [{ version }] }];
 const REPLAY = "官方仓库返回了旧的索引，已忽略这次更新";
 // A real 1×1 PNG.
 const PNG = Buffer.from(
