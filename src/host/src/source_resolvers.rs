@@ -10,7 +10,6 @@ use crate::RpcError;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::BTreeMap;
-use std::path::Path;
 
 /// File resolvers name at most this many extensions.
 const MAX_EXTENSIONS: usize = 16;
@@ -37,14 +36,34 @@ impl Declaration {
 /// only (no `://`), compared in lower case. Checked before any URL parsing,
 /// because `C:\a.nes` parses as a URL with the scheme `c`.
 fn file_extension(source: &str) -> Option<String> {
-    if source.contains("://") || !Path::new(source).is_absolute() {
+    extension_of(source, cfg!(windows))
+}
+/// [`file_extension`] by one system's path rules, so both are tested on any
+/// system. Unix: absolute paths start with `/`. Windows (as
+/// `Path::is_absolute` there): a drive and a separator (`C:\`, `C:/`), or a
+/// UNC or verbatim prefix (`\\server\share`, `\\?\C:\`, `//server/share`);
+/// both separators count. A rooted path without a drive (`\roms`) or a
+/// drive-relative one (`C:roms`) is not absolute there.
+fn extension_of(source: &str, windows: bool) -> Option<String> {
+    if source.contains("://") {
         return None;
     }
-    Path::new(source)
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(str::to_ascii_lowercase)
-        .filter(|e| !e.is_empty())
+    let separator = |c: char| c == '/' || (windows && c == '\\');
+    let absolute = if windows {
+        let c: Vec<char> = source.chars().take(3).collect();
+        let drive = c.len() == 3 && c[0].is_ascii_alphabetic() && c[1] == ':' && separator(c[2]);
+        let share = c.len() == 3 && separator(c[0]) && separator(c[1]) && !separator(c[2]);
+        drive || share
+    } else {
+        source.starts_with('/')
+    };
+    if !absolute {
+        return None;
+    }
+    let name = source.rsplit(separator).next()?;
+    let dot = name.rfind('.').filter(|&i| i > 0)?;
+    let extension = &name[dot + 1..];
+    (!extension.is_empty()).then(|| extension.to_ascii_lowercase())
 }
 /// `conflict` because another plugin holds it: not an activation failure.
 /// `holder` is the owner number; the main thread names the plugin.
@@ -319,7 +338,7 @@ impl Media {
     }
 }
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     #[test]
     fn exact_host_registration_conflicts_and_owner_disposal() {
@@ -340,6 +359,14 @@ mod tests {
         r.disable(1);
         r.register(2, declaration()).unwrap();
     }
+    /// An absolute path on this system (`/…` or `C:\…`).
+    pub(crate) fn rom(name: &str) -> String {
+        std::env::temp_dir()
+            .join("roms")
+            .join(name)
+            .to_string_lossy()
+            .into_owned()
+    }
     fn files(id: &str, extensions: &[&str]) -> Declaration {
         Declaration {
             id: id.into(),
@@ -356,14 +383,14 @@ mod tests {
         let mut r = Registry::default();
         r.register(1, files("nes", &["nes", "fds", "nes"])).unwrap();
         assert!(r.files(1, "nes"));
-        assert_eq!(r.find("/roms/Mario.NES"), Some((1, "nes".into())));
-        assert_eq!(r.find("/roms/disk.fds"), Some((1, "nes".into())));
+        assert_eq!(r.find(&rom("Mario.NES")), Some((1, "nes".into())));
+        assert_eq!(r.find(&rom("disk.fds")), Some((1, "nes".into())));
         // Relative paths, URLs and other extensions are not files of it.
         assert!(r.find("roms/a.nes").is_none());
         assert!(r.find("file:///roms/a.nes").is_none());
         assert!(r.find("https://example.com/a.nes").is_none());
-        assert!(r.find("/roms/a.nes.zip").is_none());
-        assert!(r.find("/roms/nes").is_none());
+        assert!(r.find(&rom("a.nes.zip")).is_none());
+        assert!(r.find(&rom("nes")).is_none());
         // A web resolver never matches a path, a file resolver never a URL.
         r.register(
             1,
@@ -380,6 +407,52 @@ mod tests {
             r.find("https://media.example/a.nes"),
             Some((1, "web".into()))
         );
+    }
+    #[test]
+    fn unix_paths_are_absolute_from_the_root() {
+        let ext = |s| extension_of(s, false);
+        assert_eq!(ext("/roms/Game.NES").as_deref(), Some("nes"));
+        assert_eq!(ext("/roms.d/game.nes").as_deref(), Some("nes"));
+        for no in [
+            "roms/a.nes",
+            "./a.nes",
+            "/roms/nes",
+            "/roms/.nes",
+            "/roms/a.",
+            "/roms/a.nes/",
+            "file:///roms/a.nes",
+            "C:\\roms\\a.nes", // a relative file name on Unix
+        ] {
+            assert_eq!(ext(no), None, "{no}");
+        }
+        // A backslash is part of a Unix file name.
+        assert_eq!(ext("/roms/a\\b.nes").as_deref(), Some("nes"));
+    }
+    #[test]
+    fn windows_paths_need_a_drive_or_a_share() {
+        let ext = |s| extension_of(s, true);
+        for yes in [
+            "C:\\roms\\Game.NES",
+            "c:/roms/game.nes",
+            "D:\\roms/mixed\\game.nes",
+            "\\\\server\\share\\game.nes",
+            "//server/share/game.nes",
+            "\\\\?\\C:\\roms\\game.nes",
+            "\\\\?\\UNC\\server\\share\\game.nes",
+        ] {
+            assert_eq!(ext(yes).as_deref(), Some("nes"), "{yes}");
+        }
+        for no in [
+            "\\roms\\game.nes", // rooted, no drive
+            "/roms/game.nes",
+            "C:roms\\game.nes", // drive-relative
+            "roms\\game.nes",
+            "C:\\roms\\nes",
+            "C:\\roms\\game.nes\\",
+            "file:///C:/roms/game.nes",
+        ] {
+            assert_eq!(ext(no), None, "{no}");
+        }
     }
     #[test]
     fn file_declarations_are_bounded_and_single_form() {
@@ -431,7 +504,7 @@ mod tests {
         // The holder stops: the extension is free again.
         r.disable(1);
         r.register(2, files("emu", &["gb", "nes"])).unwrap();
-        assert_eq!(r.find("/x/a.nes"), Some((2, "emu".into())));
+        assert_eq!(r.find(&rom("a.nes")), Some((2, "emu".into())));
     }
     #[test]
     fn split_streams_preserve_headers_and_reject_different_audio_headers() {

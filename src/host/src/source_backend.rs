@@ -1744,6 +1744,7 @@ mod audio_track_tests {
 #[cfg(test)]
 mod resolution_tests {
     use super::*;
+    use crate::source_resolvers::tests::rom;
     const PLAYER: u64 = 1;
     const EMULATOR: u64 = 2;
     fn mpv() -> Mpv {
@@ -1810,19 +1811,19 @@ mod resolution_tests {
     #[test]
     fn a_file_open_waits_for_its_resolver_and_keeps_the_path() {
         let (mut sources, mpv) = registered();
-        let request = open(&mut sources, &mpv, 1, "/roms/Game.NES", false);
+        let request = open(&mut sources, &mpv, 1, &rom("Game.NES"), false);
         assert_eq!(request["resolverId"], "nes");
-        assert_eq!(request["url"], "/roms/Game.NES");
+        assert_eq!(request["url"], rom("Game.NES"));
         let state = sources.session.state();
         assert_eq!(state.phase, Phase::Loading);
-        assert_eq!(state.source.as_deref(), Some("/roms/Game.NES"));
+        assert_eq!(state.source.as_deref(), Some(rom("Game.NES").as_str()));
         // Other files still go to mpv.
-        assert!(sources.resolvers.find("/movies/a.mkv").is_none());
+        assert!(sources.resolvers.find(&rom("a.mkv")).is_none());
     }
     #[test]
     fn the_resolvers_error_is_shown_in_its_own_words() {
         let (mut sources, mpv) = registered();
-        let request = open(&mut sources, &mpv, 1, "/roms/bad.nes", false);
+        let request = open(&mut sources, &mpv, 1, &rom("bad.nes"), false);
         let error = call(
             &mut sources,
             &mpv,
@@ -1846,8 +1847,8 @@ mod resolution_tests {
     #[test]
     fn a_file_resolver_answers_with_a_stream_only() {
         let (mut sources, mpv) = registered();
-        let request = open(&mut sources, &mpv, 1, "/roms/a.nes", false);
-        let media = json!({"kind":"media","originalUrl":"/roms/a.nes","primary":{"url":"https://cdn.example/a.mp4"}});
+        let request = open(&mut sources, &mpv, 1, &rom("a.nes"), false);
+        let media = json!({"kind":"media","originalUrl":rom("a.nes"),"primary":{"url":"https://cdn.example/a.mp4"}});
         let error = call(
             &mut sources,
             &mpv,
@@ -1859,7 +1860,7 @@ mod resolution_tests {
         assert_eq!(error.message, "invalid resolved stream descriptor");
         assert_eq!(sources.session.state().phase, Phase::Error);
         // A producer it does not hold is refused the same way, as a failed open.
-        let request = open(&mut sources, &mpv, 2, "/roms/a.nes", false);
+        let request = open(&mut sources, &mpv, 2, &rom("a.nes"), false);
         let error = call(
             &mut sources,
             &mpv,
@@ -1872,13 +1873,13 @@ mod resolution_tests {
         assert_eq!(sources.session.state().phase, Phase::Error);
         assert_eq!(
             sources.session.state().source.as_deref(),
-            Some("/roms/a.nes")
+            Some(rom("a.nes").as_str())
         );
     }
     #[test]
     fn closing_or_disabling_cancels_the_resolution() {
         let (mut sources, mpv) = registered();
-        let request = open(&mut sources, &mpv, 1, "/roms/a.nes", false);
+        let request = open(&mut sources, &mpv, 1, &rom("a.nes"), false);
         call(
             &mut sources,
             &mpv,
@@ -1903,14 +1904,14 @@ mod resolution_tests {
         assert_eq!(sources.session.state().phase, Phase::Empty);
         // The resolver's plugin stops while resolving: cancelled, and the
         // extension goes back to mpv.
-        let request = open(&mut sources, &mpv, 3, "/roms/b.nes", false);
+        let request = open(&mut sources, &mpv, 3, &rom("b.nes"), false);
         sources.disable(EMULATOR);
         let events = sources.resolver_events();
         assert_eq!(events[0].1, "source.resolveCancel");
         assert_eq!(events[0].2["requestId"], request["requestId"]);
         assert_eq!(sources.session.state().phase, Phase::Error);
         assert_eq!(operation(&mut sources, &mpv, 3)["status"], json!("failed"));
-        assert!(sources.resolvers.find("/roms/b.nes").is_none());
+        assert!(sources.resolvers.find(&rom("b.nes")).is_none());
     }
     #[test]
     fn web_resolver_errors_drop_the_old_prefix_too() {
