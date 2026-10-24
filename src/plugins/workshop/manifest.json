@@ -1,6 +1,6 @@
 {
   "id": "vestra.workshop",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": ["commands", "ui.window", "ui.settings", "secrets", "clipboard"],

@@ -55,11 +55,20 @@ export interface AiSettings {
   baseUrls: Record<string, string>;
   /** The session shown when the window opens again. */
   lastSession: string | null;
-  /** The first slice's key still has to move to custom-openai (done lazily, retried). */
+  /**
+   * The first slice's key may still have to move to custom-openai (done
+   * lazily, retried). Undefined: settings from 2.0.1/2.0.2, where a refused
+   * move left no mark, so it is checked once more.
+   */
   migrateKeys?: boolean;
+  /**
+   * Providers the user saved a key for (never the key). A custom endpoint
+   * whose saved key cannot be read must not be called without it.
+   */
+  savedKeys?: Record<string, boolean>;
 }
 
-export const DEFAULT_SETTINGS: AiSettings = { provider: "anthropic", models: {}, baseUrls: {}, lastSession: null };
+export const DEFAULT_SETTINGS: AiSettings = { provider: "anthropic", models: {}, baseUrls: {}, lastSession: null, migrateKeys: false, savedKeys: {} };
 
 const record = (v: unknown) => !!v && typeof v === "object" && Object.values(v).every((x) => typeof x === "string");
 /** Ids the first slice used for its single OpenAI-compatible entry. */
@@ -73,7 +82,8 @@ export function validSettings(value: unknown): value is AiSettings {
     typeof v.provider === "string" &&
     record(v.models) &&
     (record(v.baseUrls) || typeof v.baseUrl === "string") &&
-    (v.lastSession === null || v.lastSession === undefined || typeof v.lastSession === "string")
+    (v.lastSession === null || v.lastSession === undefined || typeof v.lastSession === "string") &&
+    (v.savedKeys === undefined || (!!v.savedKeys && typeof v.savedKeys === "object"))
   );
 }
 

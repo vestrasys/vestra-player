@@ -75,16 +75,24 @@ export default async function activate(plugin: Plugin) {
   let moving: Promise<void> | undefined;
   const moveLegacyKeys = () =>
     (moving ??= (async () => {
-      if (!settings.value.migrateKeys) return;
+      if (settings.value.migrateKeys === false) return;
       for (const old of LEGACY_COMPAT) {
         const key = await plugin.secrets.get(secretName(old));
         if (!key) continue;
         if (!(await plugin.secrets.get(secretName("custom-openai")))) await plugin.secrets.set(secretName("custom-openai"), key);
         await plugin.secrets.delete(secretName(old));
+        markSaved("custom-openai", true);
         keys.delete("custom-openai");
       }
       settings.save({ ...settings.value, migrateKeys: false });
     })().finally(() => (moving = undefined)));
+  const markSaved = (id: string, saved: boolean) => {
+    const savedKeys = { ...(settings.value.savedKeys ?? {}) };
+    if (saved) savedKeys[id] = true;
+    else delete savedKeys[id];
+    settings.save({ ...settings.value, savedKeys });
+  };
+  const KEY_UNREADABLE = "无法读取钥匙串中的 key，请在设置中重新保存。";
   /** The key of `id`, read once; concurrent callers share the read. */
   const keyFor = (id: string): Promise<string> => {
     if (keys.has(id)) return Promise.resolve(keys.get(id)!);
@@ -92,13 +100,20 @@ export default async function activate(plugin: Plugin) {
     if (!pending) {
       pending = (async () => {
         try {
-          await moveLegacyKeys();
+          // Only the custom OpenAI entry inherits the first slice's key.
+          if (id === "custom-openai") await moveLegacyKeys();
           const key = (await plugin.secrets.get(secretName(id))) ?? "";
+          if (key) {
+            if (!settings.value.savedKeys?.[id]) markSaved(id, true);
+          } else if (settings.value.savedKeys?.[id]) {
+            // Saved before, gone now (removed outside the player).
+            throw new Error("钥匙串里没有这个 key");
+          }
           keys.set(id, key);
           keyError = "";
           return key;
         } catch (error) {
-          keyError = `无法读取钥匙串中的 key，请在设置中重新保存。（${(error as Error).message}）`;
+          keyError = `${KEY_UNREADABLE}（${(error as Error).message}）`;
           throw error;
         } finally {
           reading.delete(id);
@@ -114,20 +129,23 @@ export default async function activate(plugin: Plugin) {
   const loadKey = () => {
     keyFor(provider().id).catch(() => {}); // shown through keyError
   };
+  /**
+   * Ready to send: a model, the key read (a custom endpoint may be a local
+   * server without one, but only when the user never saved a key for it).
+   */
   const configured = () => {
     const p = provider();
-    if (!model()) return false;
-    // A custom endpoint may be a local server that takes no key.
-    if (p.api) return !!settings.value.baseUrls[p.id];
+    if (!model() || !keys.has(p.id)) return false;
+    if (p.api) return !!settings.value.baseUrls[p.id] && (!!keys.get(p.id) || !settings.value.savedKeys?.[p.id]);
     return !!keys.get(p.id);
   };
   const running = () => [...runs.values()].find((r) => r.running);
   /** The line above the conversation: keychain state or missing setup. */
   const banner = () => {
     const p = provider();
-    if (!p.api && reading.has(p.id)) return "正在读取钥匙串中的 API key…（系统可能会请求授权）";
-    if (keyError && !p.api) return keyError;
-    if (!configured()) return !p.api && !keys.has(p.id) ? "尚未读取 API key。" : "尚未配置服务商：请先在设置中选择服务商并保存 API key。";
+    if (reading.has(p.id)) return "正在读取钥匙串中的 API key…（系统可能会请求授权）";
+    if (keyError) return keyError;
+    if (!configured()) return !keys.has(p.id) ? "尚未读取 API key。" : "尚未配置服务商：请先在设置中选择服务商并保存 API key。";
     return "";
   };
 
@@ -212,9 +230,8 @@ export default async function activate(plugin: Plugin) {
 
   const startWorker = async (meta: Meta, chat: Chat): Promise<Run> => {
     const p = provider();
-    // Built-in providers: configured() already has the key in memory. A
-    // custom endpoint may run without one when the keychain refuses.
-    const key = await keyFor(p.id).catch(() => "");
+    // configured() made sure the key is in memory (or that none was ever saved).
+    const key = await keyFor(p.id);
     const directory = sessions.directory(meta.id);
     const run: Run = {
       meta,
@@ -390,6 +407,7 @@ export default async function activate(plugin: Plugin) {
       return;
     }
     keys.set(p.id, key);
+    markSaved(p.id, true);
     keyError = "";
     keyText = "";
     page.set({ keyText: "" });
@@ -406,6 +424,8 @@ export default async function activate(plugin: Plugin) {
       return;
     }
     keys.set(p.id, "");
+    markSaved(p.id, false);
+    keyError = "";
     say(`${p.label} 的 key 已删除。`);
     changed();
   });

@@ -77,8 +77,9 @@ test("the first slice's key moves lazily, after a refusal too", async () => {
   const started = await startPlugin(activate, { directory: new URL("..", import.meta.url), host, dataDirectory: data });
   await host.command("workshop.open").run();
   const props = host.window("ai").props;
-  // A custom endpoint works without a key; the refusal is remembered and retried.
-  await until(host, () => props.configured === true, "configured");
+  // The refusal shows and blocks sending (never keyless to a remote URL); it is retried.
+  await until(host, () => /无法读取钥匙串中的 key，请在设置中重新保存/.test(props.banner), "error banner");
+  assert.equal(props.configured, false);
   assert.equal(stored.has("key.vestra-compat"), true, "nothing moved while refused");
   const saved = async () => JSON.parse(await fs.readFile(path.join(data, "settings.json"), "utf8"));
   // settings.json is written debounced; wait for the migrated file.
@@ -87,8 +88,55 @@ test("the first slice's key moves lazily, after a refusal too", async () => {
   assert.equal((await saved()).migrateKeys, true);
   refuse = false;
   await host.command("workshop.open").run();
-  await until(host, () => stored.get("key.custom-openai") === KEY, "moved");
+  await until(host, () => stored.get("key.custom-openai") === KEY && props.configured === true && props.banner === "", "moved");
   assert.equal(stored.has("key.vestra-compat"), false);
   await started.stop();
   assert.equal((await saved()).migrateKeys, false);
+});
+
+/** Settings as 2.0.1 left them after the key move was refused: migrated shape, no marks. */
+async function settingsOf201(mockUrl) {
+  const data = await dataDirectory();
+  await fs.writeFile(
+    path.join(data, "settings.json"),
+    JSON.stringify({ provider: "custom-openai", models: { "custom-openai": "m" }, baseUrls: { "custom-openai": mockUrl }, lastSession: null }),
+  );
+  return data;
+}
+
+test("2.0.1 left the key behind after a refusal: it is found and moved, and nothing is sent without it", async () => {
+  for (const old of ["openai-compatible", "vestra-compat"]) {
+    const mock = await server(() => ({ text: ["好"] }));
+    const ai = await startAi({ data: await settingsOf201(mock.url), deny: true, secrets: { [`key.${old}`]: KEY } });
+    await ai.until(() => /无法读取钥匙串中的 key，请在设置中重新保存/.test(ai.props.banner), "error banner");
+    assert.equal(ai.props.configured, false);
+    await ai.send("send", "hi"); // refused by the plugin, not sent
+    assert.equal(mock.chats.length, 0);
+    ai.host.reset("secrets.get");
+    void ai.host.command("workshop.open").run(); // opening the window again retries
+    await ai.until(() => ai.props.configured === true && ai.props.banner === "", "moved");
+    assert.equal(ai.host.secrets.get("key.custom-openai"), KEY);
+    assert.equal(ai.host.secrets.has(`key.${old}`), false);
+    await ai.ask("hi");
+    assert.equal(mock.chats[0].headers.authorization, `Bearer ${KEY}`);
+    await ai.stop();
+  }
+});
+
+test("a custom endpoint with a saved key that is gone is blocked; one never given a key sends without", async () => {
+  const mock = await server(() => ({ text: ["好"] }));
+  const data = await settingsOf201(mock.url);
+  const file = path.join(data, "settings.json");
+  await fs.writeFile(file, JSON.stringify({ ...JSON.parse(await fs.readFile(file, "utf8")), migrateKeys: false, savedKeys: { "custom-openai": true } }));
+  let ai = await startAi({ data });
+  await ai.until(() => /无法读取钥匙串中的 key/.test(ai.props.banner), "missing key");
+  assert.equal(ai.props.configured, false);
+  assert.match(ai.page.props["key-state"], /无法读取/);
+  // Deleting the key in settings means "no key": a local server is fine then.
+  ai.page.emit("delete-key");
+  await ai.until(() => ai.props.configured === true && ai.props.banner === "", "keyless");
+  await ai.ask("hi");
+  // pi needs some key: a keyless endpoint gets the placeholder "none", never a stored one.
+  assert.equal(mock.chats[0].headers.authorization, "Bearer none");
+  await ai.stop();
 });
