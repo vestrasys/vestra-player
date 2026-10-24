@@ -1,7 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname } from "node:path";
 import type { Command, CommandOptions, ConfirmOptions, Panel, Plugin, PluginError } from "@vestra-player/sdk";
-import { dropExtra, DROP_EXTENSIONS, dropRow, expandDrop, LIST_TOP } from "./drop.ts";
+import { dropExtra, DROP_EXTENSIONS, dropRow, expandDrop, LIST_TOP, ROW_HEIGHT } from "./drop.ts";
 import { follower, type OpenMode } from "./follow.ts";
 import { linkDialog } from "./link.ts";
 import {
@@ -18,8 +18,8 @@ import { extensionOf, folderError, isMedia, LIST_FILES, SCAN_LIMIT, scanFolder, 
 import { playback } from "./playback.ts";
 import { Prober, toolRunner } from "./probe.ts";
 import { clock, lengthOf, Queue, type Placement, type Repeat, type Row, type SortKey } from "./queue.ts";
-import { centered, ensureVisible, inView, USER_SCROLL_HOLD_MS } from "./scroll.ts";
-import { defaults, Store, type Saved } from "./store.ts";
+import { centered, ensureVisible, inView, USER_SCROLL_HOLD_MS, WINDOW_ROWS, windowStart } from "./scroll.ts";
+import { defaults, PERSIST_CHECK_MS, Store, type Saved } from "./store.ts";
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const repeats: [Repeat, string][] = [
@@ -47,6 +47,7 @@ const sortKeys: [SortKey, string, string | null][] = [
 ];
 const STAT_LIMIT = 8;
 const SEARCH_DEBOUNCE_MS = 150;
+
 /** IA-PL-02: the page id of 选项 ▶ 播放 ▶ 播放列表. */
 export const SETTINGS_PAGE = "playlist";
 /** C23: at most this many selected files are shown in the file manager. */
@@ -72,6 +73,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   const prober = new Prober(queue, toolRunner(plugin.tools), () => plugin.update());
   queue.removed = (rowId) => prober.cancel(rowId);
   plugin.onDispose(() => prober.cancelAll());
+  // Durations are read for the rows on screen only (set at each update below).
+  prober.want([]);
   let follow: ReturnType<typeof follower> | null = null;
   const player = playback(plugin, queue, () => void follow?.check());
   const link = linkDialog(plugin, queue);
@@ -121,8 +124,20 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       queue.message = `无法保存列表：${errorText(error)}`;
     }
   };
+  let persistTimer: ReturnType<typeof setTimeout> | null = null;
+  const persistSoon = () => {
+    if (!store || persistTimer) return;
+    persistTimer = setTimeout(() => {
+      persistTimer = null;
+      persist();
+    }, PERSIST_CHECK_MS);
+  };
   // Registered after the stores: disposal runs it first, then the stores write what it handed them.
-  plugin.onDispose(persist);
+  plugin.onDispose(() => {
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = null;
+    persist();
+  });
   prober.scan();
 
   let adding = false,
@@ -284,7 +299,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
         },
       );
       const present = doomed.filter((id) => queue.row(id));
-      removing(() => present.forEach((id) => queue.removeRow(id)));
+      removing(() => queue.removeRows(new Set(present)));
       queue.notice(present.length ? `已移除 ${present.length} 个无效项` : "没有无效项");
     } finally {
       checking = false;
@@ -676,8 +691,13 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     return centered(index, listArea.height, shown.length);
   };
 
+  // The list shows `rows`: at most `WINDOW_ROWS` of the shown rows from `firstRow` on, placed
+  // in a list `rowCount` rows tall (the player takes at most 1024 array rows and 4096 values
+  // per property; the whole list was ~1 MB per update with 3000 rows and was refused).
+  let firstRow = 0;
+  let onScreen = "";
   list.bind(() => {
-    persist();
+    persistSoon();
     player.prepare();
     const shown = queue.visible();
     const target = scrollTarget(shown);
@@ -687,15 +707,36 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       scroller.sentAt = Date.now();
       listArea.scroll = target;
     }
-    const index = new Map(queue.rows.map((row, i) => [row.rowId, i]));
-    const known = shown.map(lengthOf).filter((seconds): seconds is number => seconds !== null);
-    // "+": some row's length is unavailable (ffprobe failed, or a URL that has not played).
-    const partial = shown.some((row) => lengthOf(row) === null && (row.probe === "failed" || row.kind === "url"));
-    const total = known.length ? clock(known.reduce((sum, seconds) => sum + seconds, 0)) + (partial ? "+" : "") : "";
+    firstRow = windowStart(firstRow, listArea.scroll, listArea.height, shown.length);
+    const page = shown.slice(firstRow, firstRow + WINDOW_ROWS);
+    // Durations are read for the rows on screen only (never for the whole list up front).
+    const top = Math.floor(Math.max(0, listArea.scroll) / ROW_HEIGHT);
+    const rowsOnScreen = Number.isFinite(listArea.height) ? Math.ceil(listArea.height / ROW_HEIGHT) + 1 : 50;
+    const ids = shown.slice(top, top + rowsOnScreen).map((row) => row.rowId);
+    if (ids.join("\n") !== onScreen) {
+      onScreen = ids.join("\n");
+      prober.want(ids);
+    }
+    // A row's number is its place in the whole list (also while a search filters).
+    const index = queue.filtering ? new Map(queue.rows.map((row, i) => [row.rowId, i])) : null;
+    let sum = 0,
+      known = 0,
+      partial = false;
+    for (const row of shown) {
+      const seconds = lengthOf(row);
+      if (seconds !== null) {
+        sum += seconds;
+        known++;
+      } else if (row.probe !== "pending") partial = true;
+    }
+    // "+": some row's length is not known (not read: off screen, ffprobe failed, or a URL that has not played).
+    const total = known ? clock(sum) + (partial ? "+" : "") : "";
     return {
-      rows: shown.map((row: Row) => ({
+      rowCount: shown.length,
+      firstRow,
+      rows: page.map((row: Row, i) => ({
         rowId: row.rowId,
-        label: `${index.get(row.rowId)! + 1}. ${row.title}`,
+        label: `${(index ? index.get(row.rowId)! : firstRow + i) + 1}. ${row.title}`,
         duration: lengthOf(row) !== null ? clock(lengthOf(row)!) : row.probe === "failed" ? "--:--" : "",
         tooltip: row.error ? `${row.source}\n${row.error}` : row.source,
         selected: queue.selection.has(row.rowId),

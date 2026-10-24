@@ -327,7 +327,7 @@ binding  = { 修饰键 "+" } 输入          修饰键按 Ctrl、Alt、Shift、C
 - macOS 上 `Ctrl+X` 按 ⌃X 或 ⌘X 都触发，`Cmd+X` 只认 ⌘X。Windows 上 `Ctrl` 就是 Ctrl，`Cmd` 是 Windows 徽标键（大多被系统保留），所以两个系统通用的绑定写 `Ctrl+…`。宿主的「退出」（`Cmd+Q`）在 Windows 上不触发，用窗口的关闭按钮或 Alt+F4。
 - `+` 无论怎样打出都是 `Plus`：美式 ⇧=、德语等布局的独立 `+` 键都是 `Plus`，带 Option 时是 `Alt+Plus`。
 - macOS 系统快捷键先于播放器：⌃F1–⌃F8（键盘导航，如 ⌃F6「将焦点移到浮动窗口」）、⌃↑/⌃↓/⌃←/⌃→（调度中心与切换桌面）、⌘Tab、⌘Space 等默认被系统截走，绑定收不到，默认绑定请避开。
-- `Mouse:LeftClick`（视频区左键单击）：只有它有生效的绑定时，播放器才延迟判定左键按下：系统双击间隔内没有第二次按下、指针移动不超过 4 点，才算单击并触发；第二次按下算双击（`Mouse:LeftDoubleClick` 照常）。没有绑定时左键行为不变（立即聚焦视频区，没有延迟）。
+- `Mouse:LeftClick`（视频区左键单击）：按下与松开相距不超过 4 点才算单击。多数情况下**松开即触发**：同样修饰键的 `Mouse:LeftDoubleClick`（任一半边）没有生效的绑定，或者单击的命令可勾选（状态有 `checked`，如「播放/暂停」、开关、单选项）。可勾选的命令被双击执行两次，状态回到原样，同时双击照常触发：默认绑定下双击仍是全屏，播放状态不变，与常见播放器相同。只有单击的命令不可勾选、又有双击绑定时，才等过系统双击间隔（Windows 默认 0.5 秒）：间隔内没有第二次按下才算单击，第二次按下算双击、单击不触发。没有 `Mouse:LeftClick` 绑定时左键行为不变（立即聚焦视频区）。
 - 鼠标绑定只在视频区生效，可带修饰键；`:LeftHalf` / `:RightHalf` 按双击位置区分左右半边，带区的绑定优先于不带区的。滚轮按累计位移计步。右键保留给菜单：在视频区按下并在视频区松开时，在松开处弹出（交互对齐 G-15）。窗口模式下在视频区按住左键（不带修饰键）移动超过 4px 时拖动窗口（G-05），这次按下不再算 `Mouse:LeftClick`，也不参与双击；全屏与菜单打开时不拖动。
 - 作用范围：默认全局（主窗口或浮动面板窗口获得焦点、且按键没被焦点控件吃掉时，例如输入框里的空格不会触发）；`focus: "panel"` 只在本插件面板（附着或浮动）获得焦点时生效，此时先于全局查找。工具窗口里不触发绑定。
 - 窗口标准快捷键不是绑定：工具窗口、浮动面板、选项窗口按系统的标准关闭键关闭（macOS ⌘W；Windows Ctrl+W、Ctrl+F4；Linux Ctrl+W），这些键在窗口收到时就被播放器处理，不进入绑定表，也不交给该窗口里的插件 Slint。主窗口不响应（关闭主窗口等于退出）：插件绑定 `Ctrl+W` 在主窗口照常触发，在这些窗口里不触发（macOS 上 `Ctrl+W` 也认 ⌘W）。默认绑定都不用这些键。
@@ -544,7 +544,7 @@ interface PlaybackStats {
 | `audio.channelLayout` | `audio-params/hr-channels` | 如 `stereo`、`5.1(side)` |
 | `avSyncMs` | `avsync` × 1000 | 无音频或无视频时为 `null` |
 | `cacheSeconds` | `demuxer-cache-duration` | |
-| `video.hwdec` | `hwdec-current` | 正在用的硬件解码器，如 `videotoolbox`；`"no"` 表示软件解码（软件渲染时总是 `"no"`） |
+| `video.hwdec` | `hwdec-current` | 正在用的硬件解码器，如 `videotoolbox`、软件渲染下的 `d3d11va-copy`；`"no"` 表示软件解码（mpv 解不了的格式、没有可用的硬件解码器） |
 | `video.transfer` | `video-params/gamma` | 传输特性原样给出，如 `bt.1886`、`srgb`、`pq`（HDR10）、`hlg`；判断是不是 HDR 由插件做 |
 
 **渲染方式**（`backend`）：
@@ -552,11 +552,11 @@ interface PlaybackStats {
 | `backend` | 何时 | 画面 |
 | --- | --- | --- |
 | `libmpv · GPU 渲染（OpenGL）` | 默认（macOS） | libmpv 用 OpenGL 在自己的线程里渲染，按视频区的物理像素（窗口尺寸 × 屏幕缩放）渲染，缩放由 mpv 完成；硬件解码 `hwdec=auto-safe`（解不了的格式 mpv 自动改用软件解码，`video.hwdec` 如实报告）。界面固定用 Slint 的 OpenGL 渲染器（femtovg） |
-| `libmpv · 软件渲染` | 后备：无界面模式（`--headless`）；环境变量 `VESTRA_SOFTWARE_RENDER=1`；Windows、Linux（暂未实现 GPU 渲染）；OpenGL 初始化失败（mpv 的 OpenGL 上下文建不起来，或窗口不能显示 OpenGL 纹理）时自动退回，并在标准错误输出写一行 `render: …` | CPU 渲染，不开硬件解码。按视频区的物理像素渲染，再按来源分辨率封顶（不在 CPU 上渲染比来源更多的像素，余下的放大由界面完成），总像素不超过 3840×2160 |
+| `libmpv · 软件渲染` | 后备：无界面模式（`--headless`）；环境变量 `VESTRA_SOFTWARE_RENDER=1`；Windows、Linux（暂未实现 GPU 渲染）；OpenGL 初始化失败（mpv 的 OpenGL 上下文建不起来，或窗口不能显示 OpenGL 纹理）时自动退回，并在标准错误输出写一行 `render: …` | CPU 渲染。硬件解码用回拷模式 `hwdec=auto-copy-safe`（GPU 解码后把帧拷回内存，如 Windows 上的 `d3d11va-copy`、`nvdec-copy`；都不可用时 mpv 改用软件解码）。按视频区的物理像素渲染，再按来源分辨率封顶（不在 CPU 上渲染比来源更多的像素，余下的放大由界面完成），总像素不超过 3840×2160 |
 
 - 两种方式下 `framesShown` 都是播放器交给视频区的帧数（含生成流的帧），播放、截图、导出、滤镜与显示层（§8、§8.1、§10）行为相同。渲染选项（§8.2）只在 GPU 渲染下有效。
 - 运行中退回软件渲染（窗口不能显示纹理）只在第一个窗口出现时发生；如果那时已经在播放，当前来源可能要重新打开。
-- 诊断：`VESTRA_HWDEC` 覆盖 GPU 渲染时的 `hwdec`（如 `no`）；`VESTRA_FRAME_LOG=1` 每秒在标准错误输出一行渲染与显示的帧数和渲染尺寸（两种方式都有）。
+- 诊断：`VESTRA_HWDEC` 覆盖 `hwdec`（如 `no`、`d3d11va`）；软件渲染下取它的回拷模式（`d3d11va` → `d3d11va-copy`，`no` 不变）；`VESTRA_FRAME_LOG=1` 每秒在标准错误输出一行渲染与显示的帧数和渲染尺寸（两种方式都有）。
 
 - 同时只能有一个提供者（例如播放列表）；另一个插件再登记以 `conflict` 失败（「上一个/下一个已由 vestra.playlist 提供」），**不算激活失败**：插件照常运行，只是不提供上一个/下一个；屏幕提示与插件管理的「提示」同面板位置被占（§6.3）。之后它的标志变化时会再登记一次，原提供者撤销后就能接上。启动时内置插件先登记（同 §6.3）。`dispose` 或插件停用时撤销。
 - `canNext` / `canPrevious` 每轮更新重新求值，变化才发送；任何插件从 `player.state.can.next/previous` 读到。
@@ -997,7 +997,7 @@ type FilterStatus =
 - `failed` 之后不会自动重试，直到下一次 `set()`、`retry()` 或来源变化。`error.code === "backend-uncertain"` 表示播放器后端暂时阻塞了该阶段。
 - **空链**（视频 `set([])`，音频 `nodes: []` 且 `delayMs` 为 0）删除本插件的这条链，其它插件不受影响；从未应用过时什么都不发送。播放器 0.3.0 之前视频空链以 `invalid`（「resource must contain a node」）失败，效果留在画面上；音频一直可以。
 - **生成流**（`openStream`，§5.2）的画面和声音不经过播放器的解码管线，处理链对它不起作用：生成流播放期间 `set` 非空链以 `{ state: "failed", error.code: "unsupported" }` 结束（不轮询；播放器 0.3.0 之前一直停在 `waiting` 并每 250 毫秒重试），空链照常删除。值保留，来源换成文件后 SDK 自动重新应用。
-- **硬件解码**：滤镜是 FFmpeg 的软件滤镜，需要内存里的帧。GPU 渲染默认的零拷贝硬件解码（`hwdec=auto-safe`，macOS 上是 VideoToolbox）把帧留在显存里，mpv 配置不了滤镜图，只写一行日志就把它丢掉（播放器 0.3.0 之前的缺陷：状态是 `applied`，画面却没变）。播放器 0.3.0 起，只要有任何插件的视频链，就改用同一解码器的回拷模式（`auto-copy-safe`，仍是硬件解码，`stats().video.hwdec` 报 `videotoolbox-copy`），链全部删除后恢复；切换时解码器重新初始化，画面可能停顿一下。
+- **硬件解码**：滤镜是 FFmpeg 的软件滤镜，需要内存里的帧。GPU 渲染默认的零拷贝硬件解码（`hwdec=auto-safe`，macOS 上是 VideoToolbox）把帧留在显存里，mpv 配置不了滤镜图，只写一行日志就把它丢掉（播放器 0.3.0 之前的缺陷：状态是 `applied`，画面却没变）。播放器 0.3.0 起，只要有任何插件的视频链，就改用同一解码器的回拷模式（`auto-copy-safe`，仍是硬件解码，`stats().video.hwdec` 报 `videotoolbox-copy`），链全部删除后恢复；切换时解码器重新初始化，画面可能停顿一下。软件渲染本来就用回拷模式，有没有链都不切换。
 
 节点类型与取值范围（超出范围以 `invalid` 失败）：
 
@@ -1554,7 +1554,7 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | `app.system()` §3.5 | 版本、构建、机型、显示器 | 版本、构建、机型、显示器 | 只有 `os`、`arch`、显示器 |
 | 截图导出 §10 | 可用 | 可用（需要 FFmpeg 6.1+） | 同 macOS |
 | 生成流 `openStream` §5.2 | Unix 套接字 | 回环 TCP 加令牌 | 同 macOS |
-| 渲染 §5.4 | GPU 渲染（OpenGL），硬件解码 | 软件渲染，不开硬件解码 | 同 Windows |
+| 渲染 §5.4 | GPU 渲染（OpenGL），硬件解码 | 软件渲染，回拷硬件解码（`d3d11va-copy` 等） | 同 Windows |
 | 渲染选项 §8.2 | 可用（`peakDetect` 不起作用） | `unsupported` | `unsupported` |
 | 绑定 §4.1 | `Ctrl` 也认 ⌘ | `Cmd` 是徽标键 | 同 Windows |
 | 关闭工具窗口、浮动面板、选项窗口 §4.1 | ⌘W | Ctrl+W、Ctrl+F4 | Ctrl+W |
@@ -1571,6 +1571,15 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 - `vestra-plugin i18n extract|check`，`build` 编译词典（§15）；TestHost 的 `locale`（§14）。
 - 播放器自己的界面文字改为英文原文 + 简体中文词典（`src/host/locales/`），选项窗口、宿主提示与拒绝消息在简体中文下与之前相同。
 - 迁移：SDK《Migrate a plugin to English source text》（`docs/how-to/i18n-migration.md`）；参考迁移是 `vestra.preferences`。
+
+### 修正：左键单击不再等双击间隔（2026-10）
+
+- `Mouse:LeftClick` 绑定可勾选的命令（如「播放/暂停」），或没有同修饰键的双击绑定时，松开左键即触发（§4.1）。之前每次单击都要等过系统双击间隔（Windows 默认 0.5 秒，可在系统里调得更长），把单击绑定为「播放/暂停」时反应明显变慢。双击「全屏」时可勾选的单击命令会执行两次，状态不变。签名不变；插件不用改。
+- 诊断：`VESTRA_DEBUG_KEYS=1` 时宿主为每次按键、鼠标按下打印各段耗时（`keys: trace #N +12.3 ms …`：winit 事件、绑定匹配、主循环执行、播放线程收到、libmpv 设置 `pause`、`source.state` 发布）；插件调用 `host.run` 也有同样的记录。
+
+### 软件渲染也开硬件解码（2026-10，播放器 0.4.2 之后）
+
+`apiVersion` 与 SDK 不变。播放器 0.4.2 及之前，`hwdec=auto-safe` 只在 GPU 渲染启动后设置，软件渲染（Windows 总是如此，以及无界面模式、`VESTRA_SOFTWARE_RENDER=1`、退回软件渲染）一直是 `hwdec=no`，`stats().video.hwdec` 恒为 `"no"`，「播放信息」的「硬件解码」显示「未使用」。现在软件渲染用回拷模式 `auto-copy-safe`（§5.4），Windows 上通常报 `d3d11va-copy`（NVIDIA 也可能是 `nvdec-copy`）；GPU 渲染不变。
 
 ### 删除试载；有解析器的文件类型；候选包释放（2026-10，播放器 0.4.2，SDK 1.5.8）
 

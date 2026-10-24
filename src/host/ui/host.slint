@@ -60,6 +60,8 @@ export component HostWindow inherits Window {
     callback mouse-input(string, bool, bool, bool, bool) -> bool;
     // A left press on the video (x, y, modifiers): the host decides single clicks.
     callback left-press(float, float, bool, bool, bool, bool);
+    // Its release (x, y), or `true` when the system cancelled the press.
+    callback left-release(float, float, bool);
     // G-05: the pointer dragged the video: the system moves the window.
     callback drag-window();
     // IA-CORE-12: a double click on the video during picture-in-picture.
@@ -191,6 +193,7 @@ export component HostWindow inherits Window {
                                     self.right-armed = false;
                                 }
                                 if event.button == PointerEventButton.left && event.kind == PointerEventKind.up {
+                                    root.left-release(self.mouse-x / 1px, self.mouse-y / 1px, false);
                                     self.drag-armed = false;
                                     if self.swallow-press {
                                         self.drag-swallow = false;
@@ -198,6 +201,7 @@ export component HostWindow inherits Window {
                                     }
                                 }
                                 if event.kind == PointerEventKind.cancel {
+                                    root.left-release(0, 0, true);
                                     self.right-armed = false;
                                     self.drag-armed = false;
                                 }

@@ -71,8 +71,14 @@ function readSettings(raw: Partial<Settings> | undefined): Settings {
 const isSaved = (value: unknown): value is Saved =>
   !!value && typeof value === "object" && (value as Saved).version === 1;
 const isCache = (value: unknown): value is unknown[] => Array.isArray(value);
-/** C17: a change is written within a second (the stores debounce). */
+/** C17: a change is written within a second (the plugin looks for changes, then the stores debounce). */
 export const SAVE_DELAY_MS = 1000;
+/**
+ * How often the plugin compares the list with what was saved: the snapshot covers
+ * every row, so taking it on every update (each scroll step, each player state) cost
+ * milliseconds per update with thousands of rows.
+ */
+export const PERSIST_CHECK_MS = 200;
 
 /**
  * `playlists.json` and `probe-cache.json` in the plugin's data directory
@@ -86,12 +92,12 @@ export class Store {
     this.lists = scope.storage.json<Saved>("playlists", {
       defaults: { version: 1, settings: defaults() },
       validate: isSaved,
-      debounceMs: SAVE_DELAY_MS,
+      debounceMs: SAVE_DELAY_MS - PERSIST_CHECK_MS,
     });
     this.cache = scope.storage.json<unknown[]>("probe-cache", {
       defaults: [],
       validate: isCache,
-      debounceMs: SAVE_DELAY_MS,
+      debounceMs: SAVE_DELAY_MS - PERSIST_CHECK_MS,
     });
   }
 

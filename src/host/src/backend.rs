@@ -68,7 +68,8 @@ impl Backend {
                     crate::subtitle_style::default_for(fonts.asset().metadata().font_id.into());
                 let mut builder = Mpv::builder()?
                     .set_property("vo", "libmpv")?
-                    .set_property("hwdec", "no")?
+                    // Software rendering's mode; the GPU renderer replaces it.
+                    .set_property("hwdec", software_hwdec().as_str())?
                     .set_property("keep-open", true)?
                     .set_property("sub-auto", "no")?
                     .set_property("vf", crate::source_geometry::INITIAL_FILTERS)?
@@ -392,8 +393,12 @@ impl Backend {
                         };
                         if command.method == "host.action" {
                             let action = command.params["action"].as_str().unwrap_or("").to_owned();
+                            crate::input_trace::mark(&format!(
+                                "playback worker: {action} received"
+                            ));
                             let done = Completion::Action(command.reply, action);
                             let result = actions.run(&mut context, &command.params, done);
+                            push.soon();
                             processing.note_source(sources.generation(), sources.phase());
                             subtitles.note_source(sources.generation(), sources.phase());
                             if let Some((done, result)) = result {
@@ -476,6 +481,16 @@ impl Backend {
                     // A fallback to software rendering (a window could not
                     // show GPU frames) ends the render options' effect.
                     let render_is_gpu = out_render.gpu().is_some();
+                    if render_was_gpu && !render_is_gpu {
+                        // Set here, on the worker that also owns the
+                        // processing chain's copy-back switch, so the two
+                        // never undo each other.
+                        processing.renderer_changed();
+                        let hwdec = software_hwdec();
+                        if let Err(error) = mpv.set_property("hwdec", hwdec.as_str()) {
+                            eprintln!("render: hwdec={hwdec} refused: {error}");
+                        }
+                    }
                     if render_was_gpu
                         && !render_is_gpu
                         && let Some(owner) = render_options.owner()
@@ -605,7 +620,7 @@ impl GpuRun<'_> {
                     return false;
                 }
             };
-        let hwdec = crate::renderer::hwdec(std::env::var("VESTRA_HWDEC").ok());
+        let hwdec = crate::renderer::hwdec(std::env::var("VESTRA_HWDEC").ok(), false);
         if let Err(error) = self.mpv.set_property("hwdec", hwdec.as_str()) {
             eprintln!("render: hwdec={hwdec} refused: {error}");
         }
@@ -623,9 +638,14 @@ impl GpuRun<'_> {
         // Stops the GPU renderer on macOS; a no-op type elsewhere.
         #[allow(clippy::drop_non_drop)]
         drop(renderer);
-        let _ = self.mpv.set_property("hwdec", "no");
+        // The control worker sets software rendering's `hwdec` when it sees
+        // the switch (see `software_hwdec`).
         false
     }
+}
+/// `hwdec` while the software renderer draws (`renderer::hwdec`).
+fn software_hwdec() -> String {
+    crate::renderer::hwdec(std::env::var("VESTRA_HWDEC").ok(), true)
 }
 /// Interpolation (`video.render()`) paces the GPU renderer to the display.
 fn pace(render: &crate::renderer::Render, settings: &crate::video_render::Settings) {
@@ -1034,6 +1054,11 @@ impl StatePush {
         }
         changed || periodic
     }
+    /// A core action changed the source (paused, rate, volume): the next
+    /// check publishes at once, so the controls follow without the period.
+    pub fn soon(&mut self) {
+        self.sent = None;
+    }
     /// The phase the published state carries.
     pub fn seen(&mut self, generation: u64, phase: crate::session::Phase) {
         self.last = Some((generation, phase));
@@ -1165,6 +1190,12 @@ mod tests {
         let mut push = StatePush::new();
         assert!(push.due(1, Phase::Ready, start));
         let soon = start + Duration::from_millis(5);
+        assert!(!push.due(1, Phase::Ready, soon));
+        push.soon();
+        assert!(
+            push.due(1, Phase::Ready, soon),
+            "after a core action at once"
+        );
         assert!(!push.due(1, Phase::Ready, soon));
         assert!(
             push.due(1, Phase::Ended, soon),

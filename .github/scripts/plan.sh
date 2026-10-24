@@ -73,10 +73,55 @@ run_macos=false
 { [ "$FULL" = true ] || { [ "$REF" = refs/heads/main ] && [ "$host" = true ]; }; } && run_macos=true
 if [ "$docs_only" = true ]; then run_windows=false; run_macos=false; lock=false; fi
 
+# Plugin tests (the ts job of _static.yml). A plugin imports only its own
+# files and the SDK (npm run boundaries), so a change inside one plugin's
+# directory tests that plugin; a change anywhere else except src/host/ (the
+# SDK version, scripts, CI, ...) tests every plugin.
+plugins=none
+if [ "$all" = true ] || printf '%s\n' "$files" | grep -Ev '^$|^doc/|\.md$|^src/host/|^src/plugins/[^/]+/' | grep -q .; then
+  plugins=all
+else
+  names=""
+  for name in $(printf '%s\n' "$files" | sed -n 's|^src/plugins/\([a-z0-9-]*\)/.*|\1|p' | sort -u); do
+    [ -f "src/plugins/$name/manifest.json" ] && names="$names $name"
+  done
+  [ -n "$names" ] && plugins="${names# }"
+fi
+
+# main only: a squash merge of an up-to-date pull request has the same tree as
+# its head. When a branch run already passed the Windows or macOS build-test
+# on exactly this tree (ci.yml windows, ci.yml full or ci-macos.yml macos),
+# main does not build it again. ci-macos.yml tests the PR's merge commit,
+# whose tree is the head's when the head contains the base, which is the only
+# way main can end up with the head's tree.
+if [ "$REF" = refs/heads/main ] && [ "$EVENT" = push ] && [ -n "${GH_TOKEN:-}" ] \
+  && { [ "$run_windows" = true ] || [ "$run_macos" = true ]; }; then
+  tree="$(git rev-parse 'HEAD^{tree}')"
+  passed="$(
+    for wf in ci.yml ci-macos.yml; do
+      gh api "repos/$REPO/actions/workflows/$wf/runs?status=completed&per_page=50" \
+        --jq ".workflow_runs[] | select(.head_commit.tree_id == \"$tree\") | .id" 2>/dev/null || true
+    done | while read -r id; do
+      gh api "repos/$REPO/actions/runs/$id/jobs?per_page=100" \
+        --jq ".jobs[] | select(.conclusion == \"success\") | \"\\(.name)\t$id\"" 2>/dev/null || true
+    done
+  )"
+  for os in windows macos; do
+    run_var="run_$os"
+    [ "${!run_var}" = true ] || continue
+    id="$(printf '%s\n' "$passed" | awk -F'\t' -v job="$os / $os" '$1 == job { print $2; exit }')"
+    if [ -n "$id" ]; then
+      echo "$os: tree $tree already passed in https://github.com/$REPO/actions/runs/$id; skipped"
+      printf -v "$run_var" false
+    fi
+  done
+fi
+
 {
   echo "docs_only=$docs_only"
   echo "host=$host"
   echo "lock=$lock"
   echo "run_windows=$run_windows"
   echo "run_macos=$run_macos"
+  echo "plugins=$plugins"
 } | tee -a "${GITHUB_OUTPUT:-/dev/null}"

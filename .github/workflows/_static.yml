@@ -4,6 +4,13 @@ name: static
 
 on:
   workflow_call:
+    inputs:
+      plugins:
+        description: >
+          Plugins whose tests run: all, none, or space-separated directory
+          names under src/plugins (plan.sh picks them from the changed paths).
+        type: string
+        default: all
 
 permissions: {}
 
@@ -84,8 +91,19 @@ jobs:
       - run: npm run portability -- --skip-host
       - run: npm run test:sdk
       - run: npm run plugins:build
-      - name: plugin tests (every plugin)
-        run: npm run plugin -- test --all
+      - name: plugin tests (${{ inputs.plugins }})
+        env:
+          PLUGINS: ${{ inputs.plugins }}
+        run: |
+          case "$PLUGINS" in
+            all) npm run plugin -- test --all ;;
+            none) echo "no plugin changed since the last green run; plugin tests skipped" ;;
+            *)
+              [[ "$PLUGINS" =~ ^[a-z0-9-]+( [a-z0-9-]+)*$ ]] || { echo "::error::bad plugins input: $PLUGINS"; exit 1; }
+              read -ra names <<< "$PLUGINS"
+              npm run plugin -- test "${names[@]}"
+              ;;
+          esac
       - name: SDK Slint copy matches host/ui
         run: npm run sdk:sync-slint
       - name: nothing generated differs from git

@@ -101,11 +101,26 @@ pub fn wanted(headless: bool, software: Option<&OsStr>) -> bool {
     platform::GPU_RENDER && !headless && !software
 }
 
-/// mpv `hwdec` for the GPU renderer: `VESTRA_HWDEC`, else `auto-safe`
-/// (mpv falls back to software decoding by itself when it cannot).
-pub fn hwdec(env: Option<String>) -> String {
-    env.filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "auto-safe".into())
+/// mpv `hwdec` for a renderer: `VESTRA_HWDEC`, else `auto-safe` (mpv
+/// falls back to software decoding by itself when no method works).
+///
+/// The software renderer (`RenderContext::new_software`, the only renderer
+/// on systems without `GPU_RENDER`, e.g. Windows) has no hardware-decoding
+/// interop, so it gets the copy-back variant: `auto-copy-safe` picks
+/// `d3d11va-copy`, `nvdec-copy`, `videotoolbox-copy`… (decoding on the GPU,
+/// frames copied to memory), which mpv documents as working "with all video
+/// filters and VOs". The zero-copy methods `auto-safe` lists need a GPU VO
+/// (mpv's `--hwdec` table); asking for copy-back directly does not depend on
+/// mpv working that out. Up to 0.4.2 software rendering kept `hwdec=no`.
+pub fn hwdec(env: Option<String>, software: bool) -> String {
+    let mode = env
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "auto-safe".into());
+    if software {
+        crate::processing::copy_back(&mode).unwrap_or(mode)
+    } else {
+        mode
+    }
 }
 
 #[cfg(test)]
@@ -119,9 +134,30 @@ mod tests {
         assert!(!wanted(false, Some(OsStr::new("1"))));
         assert_eq!(wanted(false, Some(OsStr::new("0"))), platform::GPU_RENDER);
         assert_eq!(wanted(false, Some(OsStr::new(""))), platform::GPU_RENDER);
-        assert_eq!(hwdec(None), "auto-safe");
-        assert_eq!(hwdec(Some(String::new())), "auto-safe");
-        assert_eq!(hwdec(Some("no".into())), "no");
+    }
+
+    #[test]
+    fn hwdec_is_hardware_for_both_renderers_and_copy_back_for_software() {
+        assert_eq!(hwdec(None, false), "auto-safe");
+        assert_eq!(hwdec(Some(String::new()), false), "auto-safe");
+        assert_eq!(hwdec(Some("no".into()), false), "no");
+        assert_eq!(hwdec(Some("d3d11va".into()), false), "d3d11va");
+        // Software rendering (Windows, headless, VESTRA_SOFTWARE_RENDER).
+        assert_eq!(hwdec(None, true), "auto-copy-safe");
+        assert_eq!(hwdec(Some(String::new()), true), "auto-copy-safe");
+        assert_eq!(hwdec(Some("no".into()), true), "no");
+        assert_eq!(hwdec(Some("d3d11va".into()), true), "d3d11va-copy");
+        assert_eq!(hwdec(Some("nvdec-copy".into()), true), "nvdec-copy");
+        assert_eq!(hwdec(Some("auto-copy".into()), true), "auto-copy");
+    }
+
+    /// What the backend starts with on this system before any GPU renderer:
+    /// never `no` (that was the Windows default up to 0.4.2).
+    #[test]
+    fn the_initial_mode_decodes_in_hardware() {
+        let mode = hwdec(None, true);
+        assert_ne!(mode, "no");
+        assert!(mode.contains("copy"), "{mode}");
     }
 
     #[test]

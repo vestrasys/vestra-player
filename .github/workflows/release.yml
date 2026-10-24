@@ -1,7 +1,9 @@
-# Tag v* (or a manual dry run): the same checks as CI without caches, the
-# unsigned packages (macOS .dmg + .app zip, Windows setup.exe + portable
-# zip), SHA256SUMS, and a draft GitHub release in this repository with the
-# notes from doc/releases/v<version>.md. Signing and notarization are TODO
+# Tag v* (or a manual dry run): the static checks and both build-tests (no
+# caches) unless main.yml already passed this commit or one it differs from
+# only in docs (.github/scripts/main-green.sh); the unsigned packages (macOS
+# .dmg + .app zip, Windows setup.exe + portable zip), SHA256SUMS, and a draft
+# GitHub release in this repository with the notes from
+# doc/releases/v<version>.md. Signing and notarization are TODO
 # jobs in the `release` environment. How to cut a release: doc/releases/README.md.
 name: release
 
@@ -21,6 +23,12 @@ on:
         type: choice
         options: [both, windows, macos]
         default: both
+      checks:
+        description: >
+          Run static and build-test even when main.yml already passed this
+          commit.
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -32,15 +40,20 @@ jobs:
   verify:
     name: tag, version, notes, pins
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    # Up to 30 minutes when the tag was pushed with its main commit: waiting
+    # on Linux costs less than the checks on Windows and macOS.
+    timeout-minutes: 40
     permissions:
       contents: read
+      actions: read # main-green.sh: main.yml runs
     outputs:
       version: ${{ steps.version.outputs.version }}
+      tested: ${{ steps.tested.outputs.tested }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - id: version
         env:
           REF_TYPE: ${{ github.ref_type }}
@@ -63,9 +76,19 @@ jobs:
           jq -e '.release and .assets["macos-arm64"] and .assets["windows-x64"]' src/packaging/deps.json > /dev/null \
             || { echo "::error::src/packaging/deps.json pins no deps release"; exit 1; }
           echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: main.yml already passed this commit?
+        id: tested
+        if: ${{ !inputs.checks }}
+        env:
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          WAIT: "1800"
+        run: bash .github/scripts/main-green.sh
 
   static:
     needs: verify
+    if: needs.verify.outputs.tested != 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/_static.yml
@@ -91,8 +114,12 @@ jobs:
       os: macos
       cache: false
 
+  # After build-test, or straight away when main.yml already passed it.
   package-windows:
-    needs: windows
+    needs: [verify, windows]
+    if: >-
+      !cancelled() && needs.verify.result == 'success' && inputs.platforms != 'macos'
+      && (needs.verify.outputs.tested == 'true' || needs.windows.result == 'success')
     permissions:
       contents: read
     uses: ./.github/workflows/_package.yml
@@ -100,7 +127,10 @@ jobs:
       os: windows
 
   package-macos:
-    needs: macos
+    needs: [verify, macos]
+    if: >-
+      !cancelled() && needs.verify.result == 'success' && inputs.platforms != 'windows'
+      && (needs.verify.outputs.tested == 'true' || needs.macos.result == 'success')
     permissions:
       contents: read
     uses: ./.github/workflows/_package.yml
