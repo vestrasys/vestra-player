@@ -987,7 +987,7 @@ type TextValue = string | Text | TextList;
 - **属性值**：播放器在任何检查之前把属性值里的 Text / TextList 换成显示的字符串（`ui.open`、`ui.set`、`ui.mount`、`ui.setMount`、`settings.register`、`settings.set`），所以 §6.1 的上限按换好的字符串计；Slint 结构体字段不能以 `$` 开头，`$vestraText` 不会与真实数据冲突。
 - **上限**（`TEXT_LIMITS`）：嵌套 8 层，一个值里文字值与参数共 1024 个，每个 Text 至多 16 个参数，每个 TextList 至多 256 项，`source` 与字符串参数各至多 4096 字节（模板参数原来是 1024 字节）。不合法时在 `text()`/`list()` 处同步抛 `invalid`，播放器也以 `invalid` 拒绝。
 - **`resolve`**：同步返回本次语言的字符串，用插件进程自己读的同一份词典（`locales/<lang>.json`，开发时 `.po`）。**只用于离开播放器的文字**（info 的「复制信息」、hotkeys 导出的 CSV）；界面上一律直接传文字值，否则 `check` 看不出句子是否完整。
-- **提取**：`vestra-plugin i18n extract` 收集每个 `text(…)`、`error(…)`、`resolve("…")` 调用的 `source`（字面量、条件两支、`as const` 表；`plugin.i18n.text` 或解构出来的 `text` 都认）和 `{ $vestraText: "…" }` 字面量；只有占位符和标点的 `source`（`"{} · {}"`）不收录。字段类型是 Text 时不再报「不是字面量」。
+- **提取**：`vestra-plugin i18n extract` 收集每个 `text(…)`、`error(…)`、`resolve("…")` 调用的 `source`（字面量、条件两支、`as const` 表；`plugin.i18n.text` 或解构出来的 `text` 都认）和 `{ $vestraText: "…" }` 字面量；只有占位符和标点的 `source`（`"{} ({})"`、`"{0}: {1}"`）也照常收录，各语言的标点不同（中文 `"{}（{}）"`）。字段类型是 Text 时不再报「不是字面量」。
 - **旧播放器**：插件代码运行在播放器自带的 SDK 上，0.4.3 之前的播放器没有 `plugin.i18n.text`；用文字值的插件写 `"minPlayerVersion": "0.4.3"`。
 - 测试：TestHost 与播放器同样显示：`FakeCommand.display`（及不可枚举的 `display.reason`）、`host.osd`、`host.osdPanel`、`host.confirmTexts`、`host.fileDialogs`、窗口与面板的 `props`（文字值已换成字符串；原样在 `host.sent(…)`）、时间轴与字幕标题、解析器的 `TextError`、`BindingInfo.key`。
 
@@ -1492,7 +1492,7 @@ npm run plugins:build                   # 构建 src/plugins/ 下全部插件
 - 开发时不需要构建：`cargo run --bin vestra-host -- --plugin <插件目录>`（在 `src/host/` 下，可重复 `--plugin`）直接运行 `main.ts`。
 - 每个命令先按 §2 的规则检查 manifest（与宿主同一张表）；`check` 另外打印不算失败的提示（如 id 没有 `<所有者>.` 前缀）。
 - `pack` 的同样输入得到同样字节（条目排序、固定时间戳）。SDK 1.0 的扩展名是 `.zip`，内容相同。
-- 翻译（SDK 1.5.9）：`i18n extract` 找出 `.slint` 里的 `@tr`、交给 `commands.add`（`title`、`path`、`reason`）、`Command.set`、`settings.page`、`panels.mount`、`osd.show`、`OsdPanel.set`、`dialogs.*` 的文字（借 TS 类型检查器：字面量、条件的两支、`as const` 表的字面量联合类型）和 manifest 显示字段，写 `locales/messages.pot`，合并进已有的每个 `.po`（保留译文，新文字未翻译，消失的移到末尾作废，回来时恢复译文）；`--locale <语言>` 新建一种语言（`en` 与不支持的语言报错）。`i18n check` 报告每种语言的覆盖率、占位符不一致、缺复数形式、模板过期，以及无法翻译的文字：TS 里拼接的句子、不是字面量的值、非英文原文、Slint 里没包 `@tr` 的文字；只警告，`.po` 解析失败才失败。插件有 `locales/` 时 `check` 也打印这些警告。SDK 1.5.11 起还收集 `plugin.i18n.text`/`error`/`resolve` 的 `source` 与 `$vestraText` 字面量，跳过只有占位符和标点的 `source`，并按类型读取展开进调用选项的字段（`commands.add({ ...extra })`），读不出时报告（以前静默跳过）。`build` 把 `locales/<语言>.po` 编译成 `dist/locales/<语言>.json`，不复制 `.po`/`.pot`。
+- 翻译（SDK 1.5.9）：`i18n extract` 找出 `.slint` 里的 `@tr`、交给 `commands.add`（`title`、`path`、`reason`）、`Command.set`、`settings.page`、`panels.mount`、`osd.show`、`OsdPanel.set`、`dialogs.*` 的文字（借 TS 类型检查器：字面量、条件的两支、`as const` 表的字面量联合类型）和 manifest 显示字段，写 `locales/messages.pot`，合并进已有的每个 `.po`（保留译文，新文字未翻译，消失的移到末尾作废，回来时恢复译文）；`--locale <语言>` 新建一种语言（`en` 与不支持的语言报错）。`i18n check` 报告每种语言的覆盖率、占位符不一致、缺复数形式、模板过期，以及无法翻译的文字：TS 里拼接的句子、不是字面量的值、非英文原文、Slint 里没包 `@tr` 的文字；只警告，`.po` 解析失败才失败。插件有 `locales/` 时 `check` 也打印这些警告。SDK 1.5.11 起还收集 `plugin.i18n.text`/`error`/`resolve` 的 `source` 与 `$vestraText` 字面量（只有占位符和标点的也收录），并按类型读取展开进调用选项的字段（`commands.add({ ...extra })`），读不出时报告（以前静默跳过）。`build` 把 `locales/<语言>.po` 编译成 `dist/locales/<语言>.json`，不复制 `.po`/`.pot`。
 
 ## 16. 通用能力
 
