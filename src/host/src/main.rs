@@ -15,6 +15,7 @@ mod drops;
 mod effects;
 pub mod font_asset;
 pub mod font_carrier;
+mod input_trace;
 mod manifest;
 mod media_jobs;
 mod media_tracks;
@@ -71,6 +72,7 @@ mod ui_image;
 mod ui_markdown;
 mod ui_state;
 mod ui_values;
+mod video_click;
 mod video_render;
 mod video_view;
 pub mod window_control;
@@ -276,18 +278,8 @@ struct InputShared {
     /// Slint modifier key codes winit saw released, to hand to Slint.
     released: Vec<char>,
     /// A left press on the video waiting to become `Mouse:LeftClick` (R-H11).
-    click: Option<PendingClick>,
+    click: Option<video_click::Press>,
 }
-#[derive(Clone, Copy)]
-struct PendingClick {
-    at: Instant,
-    x: f64,
-    y: f64,
-    mods: bindings::Mods,
-    generation: u64,
-}
-/// A click moves at most this far (logical px) or it is a drag.
-const CLICK_SLOP: f64 = 4.;
 /// Which window shows the open menu, and what it lists.
 #[derive(Clone, PartialEq)]
 enum MenuMode {
@@ -855,7 +847,10 @@ impl Host {
                     },
                 }
             }
-            Event::ActionDone(reply, action, result) => self.action_done(reply, &action, result),
+            Event::ActionDone(reply, action, result) => {
+                input_trace::mark(&format!("host loop: {action} done"));
+                self.action_done(reply, &action, result)
+            }
             Event::Reply(reply, mut result) => {
                 if self.source_state_replies.remove(&(reply.owner, reply.id))
                     && let Ok(state) = &mut result
@@ -868,6 +863,18 @@ impl Host {
                 if event == "source.state" {
                     self.patch_source(&mut data);
                     let previous = std::mem::replace(&mut self.last_source, data.clone());
+                    if previous["phase"] != data["phase"] {
+                        input_trace::mark(&format!(
+                            "host loop: source.state phase={}",
+                            data["phase"]
+                        ));
+                    }
+                    if previous["paused"] != data["paused"] {
+                        input_trace::mark(&format!(
+                            "host loop: source.state paused={}",
+                            data["paused"]
+                        ));
+                    }
                     self.timeline_source(&previous, &data);
                     self.backdrop_source();
                     self.update_title();
@@ -882,6 +889,7 @@ impl Host {
                 if !self.window_generation_live(generation) {
                     return;
                 }
+                input_trace::mark(&format!("host loop: binding → {owner}/{id}"));
                 self.policy.activity(self.now_ms());
                 if let Err(error) = self.execute_command(owner, &id) {
                     eprintln!("binding execute: {error:?}");
@@ -1307,6 +1315,47 @@ impl Host {
                 .render_sent
                 .is_none_or(|sent| render_target::same_shape(size, sent))
     }
+    /// R-H11: a pending left press on the video becomes `Mouse:LeftClick`
+    /// on release when nothing makes it wait (`video_click`), else once the
+    /// double-click interval passes without a second press. It runs here,
+    /// not through the event queue, so it costs no further loop turn.
+    fn click_tick(&mut self, pointer: (f64, f64)) {
+        let Some(click) = self.input.borrow().click else {
+            return;
+        };
+        let input = bindings::Input {
+            mods: click.mods,
+            name: "Mouse:LeftClick".into(),
+        };
+        let immediate = video_click::immediate(&self.input.borrow().table, &self.commands, &input);
+        let verdict = click.verdict(Instant::now(), pointer, double_click_interval(), immediate);
+        if verdict == video_click::Verdict::Wait {
+            return;
+        }
+        self.input.borrow_mut().click = None;
+        let target = {
+            let shared = self.input.borrow();
+            (!shared.blocked)
+                .then(|| shared.table.resolve(&input, None).cloned())
+                .flatten()
+        };
+        if verdict == video_click::Verdict::Fire
+            && click.generation == self.shell_generation
+            && let Some(target) = target
+        {
+            input_trace::mark(&format!(
+                "click fired ({}) → {}/{}",
+                if immediate {
+                    "on release"
+                } else {
+                    "after the double-click interval"
+                },
+                target.owner,
+                target.id
+            ));
+            self.handle(Event::Binding(click.generation, target.owner, target.id));
+        }
+    }
     fn window_tick(&mut self) {
         self.pip_tick();
         self.menu_tick();
@@ -1390,31 +1439,7 @@ impl Host {
             log.tick(counts, size, Instant::now());
         }
         self.apply_on_top();
-        // R-H11: a left press with no second press within the double-click
-        // interval, and the pointer still within 4 px, is a single click.
-        let due = self
-            .input
-            .borrow()
-            .click
-            .filter(|click| click.at.elapsed() >= double_click_interval());
-        if let Some(click) = due {
-            self.input.borrow_mut().click = None;
-            let moved = (number("pointer-x") - click.x).hypot(number("pointer-y") - click.y);
-            if click.generation == self.shell_generation && moved <= CLICK_SLOP {
-                let input = bindings::Input {
-                    mods: click.mods,
-                    name: "Mouse:LeftClick".into(),
-                };
-                fire(
-                    &self.input,
-                    &self.events,
-                    click.generation,
-                    &input,
-                    false,
-                    None,
-                );
-            }
-        }
+        self.click_tick((number("pointer-x"), number("pointer-y")));
         if self.measured_shell != Some(self.shell_generation)
             && (viewport.width <= 0. || viewport.height <= 0.)
         {
@@ -1991,24 +2016,41 @@ impl Host {
                 return SValue::Void;
             }
             let (x, y) = (number(0), number(1));
-            // A second press within the double-click interval is a double click.
-            let second = shared.click.take().is_some_and(|first| {
-                first.at.elapsed() < double_click_interval()
-                    && (first.x - x).hypot(first.y - y) <= CLICK_SLOP
+            let now = Instant::now();
+            // A second press within the double-click interval is a double
+            // click; a first click still waiting for it is no click.
+            let second = shared
+                .click
+                .take()
+                .is_some_and(|first| first.doubled_by(x, y, now, double_click_interval()));
+            input_trace::mark(if second {
+                "video left press: a double click"
+            } else {
+                "video left press: a click pending"
             });
             if !second {
-                shared.click = Some(PendingClick {
-                    at: Instant::now(),
-                    x,
-                    y,
-                    mods: bindings::Mods {
-                        ctrl,
-                        alt: flag(3),
-                        shift: flag(4),
-                        cmd,
-                    },
-                    generation,
-                });
+                let mods = bindings::Mods {
+                    ctrl,
+                    alt: flag(3),
+                    shift: flag(4),
+                    cmd,
+                };
+                shared.click = Some(video_click::Press::new(now, x, y, mods, generation));
+            }
+            SValue::Void
+        })?;
+        let input = self.input.clone();
+        window.set_callback("left-release", move |args| {
+            let number = |i: usize| match args.get(i) {
+                Some(SValue::Number(n)) if n.is_finite() => *n,
+                _ => 0.,
+            };
+            let mut shared = input.borrow_mut();
+            if matches!(args.get(2), Some(SValue::Bool(true))) {
+                shared.click = None;
+            } else if let Some(click) = shared.click.as_mut().filter(|c| c.released.is_none()) {
+                click.released = Some((number(0), number(1)));
+                input_trace::mark("video left release");
             }
             SValue::Void
         })?;
@@ -2746,6 +2788,9 @@ impl Host {
                 provider,
                 json!({"event":"sequence.step","data":{"direction":action}}),
             );
+            input_trace::mark(&format!(
+                "host loop: sequence.step {action} sent to plugin {provider}"
+            ));
             return Ok(true);
         }
         if core_actions::exclusive(action) && !self.actions_busy.insert(action.to_owned()) {
@@ -2766,6 +2811,7 @@ impl Host {
                     "sequence":{"next":facts.next,"previous":facts.previous}}),
             })
             .map_err(|_| RpcError::new("backend", "playback worker stopped"))?;
+        input_trace::mark(&format!("host loop: {action} sent to the playback worker"));
         Ok(false)
     }
     fn action_done(
@@ -3347,6 +3393,7 @@ impl Host {
             }
             "host.run" => {
                 let action = string(params, "action")?;
+                input_trace::follow(&format!("host.run {action} from plugin {}", reply.owner));
                 if !core_actions::ACTIONS.contains(&action) {
                     return Err(RpcError::invalid(format!("unknown host action {action}")));
                 }
@@ -3959,6 +4006,13 @@ impl Host {
                 if method == "source.state" {
                     self.source_state_replies.insert((reply.owner, reply.id));
                 }
+                if method == "source.submit" {
+                    input_trace::follow(&format!(
+                        "host loop: source.submit {} from plugin {}",
+                        params["intent"]["kind"].as_str().unwrap_or("?"),
+                        reply.owner
+                    ));
+                }
                 self.backend
                     .commands
                     .send(Command {
@@ -4291,6 +4345,9 @@ fn observe_key(
             if *is_synthetic || event.state != ElementState::Pressed {
                 return None;
             }
+            if !event.repeat {
+                input_trace::begin(&format!("winit key {:?} down", event.physical_key));
+            }
             let PhysicalKey::Code(code) = event.physical_key else {
                 input.borrow_mut().physical = None;
                 return None;
@@ -4318,6 +4375,15 @@ fn observe_key(
             }
             input.borrow_mut().physical = Some(physical);
             dead.map(|input| (input, event.repeat))
+        }
+        WindowEvent::MouseInput { state, button, .. } => {
+            match state {
+                ElementState::Pressed => {
+                    input_trace::begin(&format!("winit mouse {button:?} down"))
+                }
+                ElementState::Released => input_trace::mark(&format!("winit mouse {button:?} up")),
+            }
+            None
         }
         _ => None,
     }
@@ -4442,6 +4508,14 @@ fn fire(
     let Some(target) = shared.table.resolve(event, panel) else {
         return false;
     };
+    if !repeat {
+        input_trace::mark(&format!(
+            "fire {} → {}/{}",
+            bindings::text(event),
+            target.owner,
+            target.id
+        ));
+    }
     if !repeat || target.repeat {
         let _ = events.send(Event::Binding(generation, target.owner, target.id.clone()));
     }
