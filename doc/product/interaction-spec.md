@@ -694,7 +694,7 @@ plugin.input.onVideoDrag(
 
 **核心 API**：下载速率徽标依赖 IA-CORE-16；其余不新增。
 
-**跨平台**：Windows 当前为软件渲染，`hwdec` 总是 `"no"`，徽标显示 `SW`，如实反映。
+**跨平台**：Windows 当前为软件渲染，`hwdec` 用回拷模式（`auto-copy-safe`，如 `d3d11va-copy`），徽标显示 `SW`，如实反映。
 
 **验收**：窗口 800 宽播放 HEVC 5.1 声道 HDR 片源：依次显示 `HW` `HDR` `HEVC` `EAC3` `6ch`；拖窄到 650：只剩 `HW` `HEVC`；拖到 450：全部消失。
 

@@ -613,6 +613,12 @@ impl Processing {
         }
         Ok(())
     }
+    /// The renderer switched (GPU to software) and set its own `hwdec`:
+    /// the mode saved before the owned chain is no longer the one to come
+    /// back to, so it is forgotten.
+    pub fn renderer_changed(&mut self) {
+        self.hwdec = None;
+    }
     /// The owned video nodes are FFmpeg software filters: they need decoded
     /// frames in memory. With zero-copy hardware decoding (GPU rendering's
     /// `hwdec=auto-safe`, i.e. VideoToolbox on macOS) mpv hands the graph GPU
@@ -622,8 +628,9 @@ impl Processing {
     /// chain exists, decoding uses the copy-back variant of the configured
     /// mode (still hardware decoding), switched before the graph is
     /// installed; the configured mode comes back once no chain is left,
-    /// unless someone else (the renderer's software fallback) changed `hwdec`
-    /// in between.
+    /// unless someone else changed `hwdec` in between or the renderer
+    /// switched (`renderer_changed`). Software rendering already uses a
+    /// copy-back mode (`renderer::hwdec`), so there nothing switches.
     fn frames_in_memory(&mut self, mpv: &Mpv, needed: bool) {
         let current = mpv.get_property::<String>("hwdec").unwrap_or_default();
         if needed {
@@ -656,7 +663,7 @@ pub enum Source {
 }
 /// The copy-back variant of an mpv `hwdec` mode (a single mode or a
 /// comma-separated list), or `None` when frames are already in memory.
-fn copy_back(mode: &str) -> Option<String> {
+pub(crate) fn copy_back(mode: &str) -> Option<String> {
     let items: Vec<String> = mode
         .split(',')
         .map(str::trim)
@@ -939,6 +946,45 @@ mod tests {
         assert_eq!(mpv.get_property::<String>("hwdec").unwrap(), "auto-safe");
     }
 
+    /// Software rendering (Windows) starts in a copy-back mode: a chain
+    /// needs no switch and removing it leaves hardware decoding on.
+    #[test]
+    fn software_rendering_keeps_its_copy_back_mode_with_and_without_a_chain() {
+        let software = crate::renderer::hwdec(None, true);
+        let mpv = mpv(&software);
+        let mut processing = ready();
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(1, gblur(4.0)))
+            .unwrap();
+        assert_eq!(mpv.get_property::<String>("hwdec").unwrap(), software);
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(2, json!([])))
+            .unwrap();
+        assert_eq!(mpv.get_property::<String>("hwdec").unwrap(), software);
+    }
+
+    /// GPU rendering with a chain (`auto-copy-safe`), then the fallback to
+    /// software rendering sets the same string: removing the chain must not
+    /// bring back the GPU renderer's zero-copy `auto-safe`.
+    #[test]
+    fn a_renderer_switch_forgets_the_mode_to_restore() {
+        let mpv = mpv(&crate::renderer::hwdec(None, false));
+        let mut processing = ready();
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(1, gblur(4.0)))
+            .unwrap();
+        processing.renderer_changed();
+        mpv.set_property("hwdec", crate::renderer::hwdec(None, true).as_str())
+            .unwrap();
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(2, json!([])))
+            .unwrap();
+        assert_eq!(
+            mpv.get_property::<String>("hwdec").unwrap(),
+            "auto-copy-safe"
+        );
+    }
+
     #[test]
     fn hwdec_changed_by_someone_else_is_left_alone() {
         let mpv = mpv("auto-safe");
@@ -946,7 +992,7 @@ mod tests {
         processing
             .replace(&mpv, OWNER, 1, Source::Decoded, &video(1, gblur(4.0)))
             .unwrap();
-        // The renderer fell back to software rendering meanwhile.
+        // Someone (VESTRA_HWDEC-like user setting) turned it off meanwhile.
         mpv.set_property("hwdec", "no").unwrap();
         processing
             .replace(&mpv, OWNER, 1, Source::Decoded, &video(2, json!([])))
@@ -1036,6 +1082,76 @@ mod tests {
     }
 
     /// Real decoding under GPU rendering, as the packaged player plays: a
+    /// Software rendering (the Windows renderer) with the host's initial
+    /// filters (`@vestra-orientation`): `renderer::hwdec(None, true)` decodes
+    /// in hardware with copy-back (`videotoolbox-copy`, `d3d11va-copy`…),
+    /// before and with an owned chain; up to 0.4.2 this was `hwdec=no`.
+    /// Needs a hardware decoder and `ffmpeg`:
+    /// `cargo test --locked -- --ignored software_rendering_decodes`.
+    #[test]
+    #[ignore = "needs a hardware decoder and ffmpeg"]
+    fn software_rendering_decodes_in_hardware() {
+        use std::time::{Duration, Instant};
+        let dir = std::env::temp_dir().join(format!("vestra-swdec-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("h264.mkv");
+        let made = std::process::Command::new("ffmpeg")
+            .args(["-loglevel", "error", "-y", "-f", "lavfi", "-i"])
+            .arg("testsrc2=size=1280x720:rate=25")
+            .args(["-t", "6", "-c:v", "libx264", "-pix_fmt", "yuv420p"])
+            .arg(&file)
+            .status()
+            .unwrap();
+        assert!(made.success());
+        let mpv = std::sync::Arc::new(mpv(&crate::renderer::hwdec(None, true)));
+        mpv.set_property("keep-open", true).unwrap();
+        mpv.set_property("vo", "libmpv").unwrap();
+        mpv.request_log_messages("v").unwrap();
+        let mut render = rsmpv::render::RenderContext::new_software(mpv.clone()).unwrap();
+        mpv.command(&["loadfile", file.to_str().unwrap()]).unwrap();
+        let failed = std::cell::Cell::new(false);
+        let mut pixels = vec![0u8; 640 * 360 * 3];
+        let mut pump = |seconds: u64| {
+            let end = Instant::now() + Duration::from_secs(seconds);
+            while Instant::now() < end {
+                while let Some(event) = mpv.poll_event() {
+                    if let rsmpv::Event::LogMessage(message) = event
+                        && message.text.contains("because it has failed")
+                    {
+                        failed.set(true);
+                    }
+                }
+                if render.update() {
+                    render
+                        .render_software(
+                            640,
+                            360,
+                            rsmpv::render::SwPixelFormat::Rgb24,
+                            640 * 3,
+                            &mut pixels,
+                        )
+                        .unwrap();
+                }
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        };
+        pump(2);
+        let current = || {
+            mpv.get_property::<String>("hwdec-current")
+                .unwrap_or_default()
+        };
+        assert!(current().ends_with("-copy"), "hwdec-current={}", current());
+        let mut processing = ready();
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(1, gblur(4.0)))
+            .unwrap();
+        pump(2);
+        assert!(!failed.get(), "mpv dropped a filter");
+        assert!(vf(&mpv).contains("gblur"));
+        assert!(current().ends_with("-copy"), "with a chain: {}", current());
+        drop(render);
+        let _ = std::fs::remove_dir_all(dir);
+    }
     /// 1440x1080 H.264 file, VideoToolbox (`hwdec=auto-safe`), an owned
     /// gblur chain. Before the copy-back switch the frames reaching the
     /// renderer stayed `videotoolbox` and mpv logged "Disabling filter
@@ -1064,7 +1180,7 @@ mod tests {
         mpv.request_log_messages("v").unwrap();
         let publish = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
         let renderer = crate::platform::gpu_start(mpv.clone(), (720, 540), publish).unwrap();
-        mpv.set_property("hwdec", crate::renderer::hwdec(None).as_str())
+        mpv.set_property("hwdec", crate::renderer::hwdec(None, false).as_str())
             .unwrap();
         mpv.command(&["loadfile", file.to_str().unwrap()]).unwrap();
         let failed = std::cell::Cell::new(false);
