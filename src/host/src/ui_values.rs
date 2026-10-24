@@ -1,6 +1,10 @@
 //! Bounded JSON ↔ Slint value conversion (host-internal).
 //! Equal values retain live properties; same-length Host-owned models reconcile
 //! changed rows. Structural changes replace models; Rc ownership stays with the view.
+//! Values holding Markdown documents (`ui_markdown::Rows`, at any depth) are
+//! updated in place as far as their shape allows: changed rows, rows added or
+//! removed at the end, document rows diffed, so a growing chat message does
+//! not rebuild the list.
 //! This is data conversion only, with no layout or model-control protocol; runtime
 //! images (`ui_image.rs`) are converted by the caller and only installed here.
 //! Slint numbers use f64. Struct keys must already have Slint's canonical spelling
@@ -48,6 +52,15 @@ impl Budget {
             bail!("UI value text exceeds {MAX_TEXT_BYTES} total bytes");
         }
         self.text += value.len();
+        Ok(())
+    }
+
+    /// Text that is not a JSON string (a Markdown document): only the total counts.
+    fn bulk_text(&mut self, bytes: usize) -> Result<()> {
+        if self.text + bytes > MAX_TEXT_BYTES {
+            bail!("UI value text exceeds {MAX_TEXT_BYTES} total bytes");
+        }
+        self.text += bytes;
         Ok(())
     }
 
@@ -124,6 +137,16 @@ pub fn reconcile(current: &Value, next: &Value) -> Result<bool> {
     if matches!(current, Value::Image(_)) || matches!(next, Value::Image(_)) {
         return Ok(false);
     }
+    if has_documents(current) || has_documents(next) {
+        // Checked before anything changes: a different shape is installed
+        // whole, so Slint checks its type.
+        if !fits(current, next) {
+            trace_reconciliation("replace", rows(current));
+            return Ok(false);
+        }
+        trace_reconciliation("in-place", rows(current));
+        return Ok(!merge(current, next).1);
+    }
     // Markdown rows (`plugin.ui.markdown`) carry images and styled text:
     // not JSON, so they are always installed.
     let (Ok(current_json), Ok(next_json)) = (to_json(current), to_json(next)) else {
@@ -156,6 +179,124 @@ pub fn reconcile(current: &Value, next: &Value) -> Result<bool> {
     }
     Ok(false)
 }
+fn rows(value: &Value) -> usize {
+    match value {
+        Value::Model(model) => model.row_count(),
+        _ => 0,
+    }
+}
+
+fn documents(model: &ModelRc<Value>) -> Option<&crate::ui_markdown::Rows> {
+    model.as_any().downcast_ref::<crate::ui_markdown::Rows>()
+}
+
+/// A Markdown document anywhere in the value.
+fn has_documents(value: &Value) -> bool {
+    match value {
+        Value::Model(model) => {
+            documents(model).is_some()
+                || (0..model.row_count())
+                    .any(|row| model.row_data(row).is_some_and(|v| has_documents(&v)))
+        }
+        Value::Struct(object) => object.iter().any(|(_, v)| has_documents(v)),
+        _ => false,
+    }
+}
+
+/// `next` can be written into `current` in place without changing a Slint
+/// type: documents for documents; host models whose shared rows fit and
+/// whose added rows fit the first current row; structs with the same
+/// fields; values of the same kind.
+fn fits(current: &Value, next: &Value) -> bool {
+    match (current, next) {
+        (Value::Model(current), Value::Model(next)) => {
+            match (documents(current), documents(next)) {
+                (Some(_), Some(_)) => return true,
+                (None, None) => {}
+                _ => return false,
+            }
+            if !current.as_any().is::<VecModel<Value>>() {
+                return false;
+            }
+            let shared = current.row_count().min(next.row_count());
+            for row in 0..next.row_count() {
+                let reference = if row < shared { row } else { 0 };
+                let (Some(before), Some(after)) = (current.row_data(reference), next.row_data(row))
+                else {
+                    return false;
+                };
+                if !fits(&before, &after) {
+                    return false;
+                }
+            }
+            true
+        }
+        (Value::Struct(current), Value::Struct(next)) => {
+            current.iter().count() == next.iter().count()
+                && current.iter().all(|(name, before)| {
+                    next.get_field(name)
+                        .is_some_and(|after| fits(before, after))
+                })
+        }
+        (Value::Image(_), _) | (_, Value::Image(_)) => false,
+        (current, next) => current.value_type() == next.value_type(),
+    }
+}
+
+/// Write `next` into `current` (they `fit`). Models change in place; the
+/// result is the value to hold and whether the holder must store it (a
+/// struct field or plain value changed).
+fn merge(current: &Value, next: &Value) -> (Value, bool) {
+    match (current, next) {
+        (Value::Model(model), Value::Model(incoming)) => {
+            if let (Some(rows), Some(new)) = (documents(model), documents(incoming)) {
+                rows.update(new);
+            } else if let Some(rows) = model.as_any().downcast_ref::<VecModel<Value>>() {
+                let shared = rows.row_count().min(incoming.row_count());
+                for index in 0..shared {
+                    let (Some(before), Some(after)) =
+                        (rows.row_data(index), incoming.row_data(index))
+                    else {
+                        continue;
+                    };
+                    let (value, store) = merge(&before, &after);
+                    if store {
+                        rows.set_row_data(index, value);
+                    }
+                }
+                while rows.row_count() > incoming.row_count() {
+                    rows.remove(rows.row_count() - 1);
+                }
+                for index in shared..incoming.row_count() {
+                    if let Some(row) = incoming.row_data(index) {
+                        rows.push(row);
+                    }
+                }
+            }
+            (current.clone(), false)
+        }
+        (Value::Struct(before), Value::Struct(after)) => {
+            let mut merged = Struct::default();
+            let mut store = false;
+            for (name, value) in before.iter() {
+                let Some(incoming) = after.get_field(name) else {
+                    continue;
+                };
+                let (value, changed) = merge(value, incoming);
+                store |= changed;
+                merged.set_field(name.into(), value);
+            }
+            if store {
+                (Value::Struct(merged), true)
+            } else {
+                (current.clone(), false)
+            }
+        }
+        (current, next) if current == next => (current.clone(), false),
+        (_, next) => (next.clone(), true),
+    }
+}
+
 fn trace_reconciliation(mode: &str, rows: usize) {
     static COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     if std::env::var_os("VESTRA_UI_PROPERTY_TRACE").is_some()
@@ -166,11 +307,26 @@ fn trace_reconciliation(mode: &str, rows: usize) {
 }
 
 pub fn from_json(value: &Json) -> Result<Value> {
-    encode(value, 0, &mut Budget::default())
+    from_json_with(value, &mut |_, _| None)
 }
 
-fn encode(value: &Json, depth: usize, budget: &mut Budget) -> Result<Value> {
+/// A value converted by the caller instead (a Markdown document): the
+/// value and its text bytes, or `None` for plain JSON.
+pub type Hook<'a> = dyn FnMut(&Json, usize) -> Option<Result<(Value, usize)>> + 'a;
+
+/// `from_json`, with `hook` converting the nodes it recognises (at any
+/// depth; each is one node of the budget, its text counts toward the total).
+pub fn from_json_with(value: &Json, hook: &mut Hook<'_>) -> Result<Value> {
+    encode(value, 0, &mut Budget::default(), hook)
+}
+
+fn encode(value: &Json, depth: usize, budget: &mut Budget, hook: &mut Hook<'_>) -> Result<Value> {
     budget.node(depth)?;
+    if let Some(converted) = hook(value, depth) {
+        let (value, text) = converted?;
+        budget.bulk_text(text)?;
+        return Ok(value);
+    }
     Ok(match value {
         Json::Null => Value::Void,
         Json::Bool(value) => Value::Bool(*value),
@@ -191,7 +347,7 @@ fn encode(value: &Json, depth: usize, budget: &mut Budget) -> Result<Value> {
             budget.array(values.len())?;
             let mut rows = Vec::with_capacity(values.len());
             for value in values {
-                rows.push(encode(value, depth + 1, budget)?);
+                rows.push(encode(value, depth + 1, budget, hook)?);
             }
             let model: ModelRc<Value> = Rc::new(VecModel::from(rows)).into();
             Value::Model(model)
@@ -206,7 +362,7 @@ fn encode(value: &Json, depth: usize, budget: &mut Budget) -> Result<Value> {
                 if object.get_field(name).is_some() {
                     bail!("UI object field names collide under Slint normalization");
                 }
-                let value = encode(value, depth + 1, budget)?;
+                let value = encode(value, depth + 1, budget, hook)?;
                 object.set_field(name.clone(), value);
                 if !object.iter().any(|(stored, _)| stored == name) {
                     bail!("UI object field {name:?} is not in Slint canonical spelling");

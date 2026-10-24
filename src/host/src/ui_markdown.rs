@@ -12,6 +12,7 @@ use slint::StyledText;
 // (`StyledText::from_markdown` takes no arguments): recheck on every upgrade.
 use slint::private_unstable_api::re_exports::parse_markdown;
 use slint_interpreter::Struct;
+use std::collections::HashMap;
 
 /// The wire form the SDK sends for a `MarkdownRef` (an internal detail).
 pub const WIRE_KEY: &str = "$vestraMarkdown";
@@ -47,7 +48,7 @@ pub fn reference(value: &Value) -> Option<&Value> {
         .then_some(doc)
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct Doc {
     pub text: String,
     /// An http(s) address or an absolute directory relative links and
@@ -98,7 +99,7 @@ pub fn parse_wire(value: &Value) -> std::result::Result<Doc, RpcError> {
 
 /// Inline content: a Slint Markdown format string whose only text is
 /// placeholders, the texts that fill them, and the plain text.
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct Inline {
     pub format: String,
     pub args: Vec<String>,
@@ -176,7 +177,7 @@ impl Inline {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct Block {
     pub kind: &'static str,
     pub level: i32,
@@ -605,98 +606,349 @@ impl Host {
         let doc = parse_wire(params)?;
         Ok(json!({"images": remote_images(&doc.text, doc.base.as_deref())}))
     }
+}
 
-    /// The `[MarkdownBlock]` model for `owner`'s property.
-    pub(super) fn markdown_value(
-        &mut self,
-        owner: u64,
-        view: &str,
-        property: &str,
-        value: &Value,
-    ) -> std::result::Result<SValue, RpcError> {
-        let doc = parse_wire(value)?;
-        let roots = self.image_roots(owner);
-        let mut shown = Vec::new();
-        let images = &mut self.images;
-        let model = model(&doc, |path| {
-            let (key, image) = images.load(owner, &roots, path).ok()?;
-            shown.push(key);
-            Some(image)
+/// What one row shows: the block and the image file it loaded. Equal keys
+/// draw the same, so an update keeps the row.
+#[derive(PartialEq, Eq, Hash)]
+struct RowKey {
+    block: Block,
+    image: Option<ui_image::Key>,
+    shown: bool,
+}
+
+/// One `MarkdownBlock` row: its key and the Slint struct.
+#[derive(Clone)]
+struct Row {
+    key: Rc<RowKey>,
+    value: SValue,
+}
+
+/// The `[MarkdownBlock]` model of one document. The player makes it, so a
+/// new version of the document can change only the rows that differ
+/// (`update`) instead of replacing the model (`ui_values::reconcile`).
+pub struct Rows {
+    rows: RefCell<Vec<Row>>,
+    notify: slint::ModelNotify,
+}
+
+impl Rows {
+    fn new(rows: Vec<Row>) -> Self {
+        Self {
+            rows: RefCell::new(rows),
+            notify: Default::default(),
+        }
+    }
+    /// Take `next`'s rows: changed rows are replaced, rows past the end
+    /// added or removed. False when nothing changed.
+    pub fn update(&self, next: &Rows) -> bool {
+        if std::ptr::eq(self, next) {
+            return false;
+        }
+        let next = next.rows.borrow();
+        let mut changed = Vec::new();
+        let (before, after) = {
+            let mut rows = self.rows.borrow_mut();
+            let before = rows.len();
+            for (index, (row, new)) in rows.iter_mut().zip(next.iter()).enumerate() {
+                if !Rc::ptr_eq(&row.key, &new.key) && row.key != new.key {
+                    *row = new.clone();
+                    changed.push(index);
+                }
+            }
+            rows.truncate(next.len());
+            rows.extend(next.iter().skip(before).cloned());
+            (before, rows.len())
+        };
+        // Notified with the rows released: views read them back at once.
+        for index in &changed {
+            self.notify.row_changed(*index);
+        }
+        if after < before {
+            self.notify.row_removed(after, before - after);
+        } else if after > before {
+            self.notify.row_added(before, after - before);
+        }
+        !changed.is_empty() || after != before
+    }
+}
+
+impl slint::Model for Rows {
+    type Data = SValue;
+    fn row_count(&self) -> usize {
+        self.rows.borrow().len()
+    }
+    fn row_data(&self, row: usize) -> Option<SValue> {
+        self.rows.borrow().get(row).map(|r| r.value.clone())
+    }
+    fn model_tracker(&self) -> &dyn slint::ModelTracker {
+        &self.notify
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+/// A view's property: (owner, view, property), as in `ui_image`.
+type Slot = (u64, String, String);
+
+/// A parsed document and the image files its rows show.
+struct Parsed {
+    doc: Doc,
+    rows: Vec<Row>,
+    /// Each local image path loaded, with the file it was then (`None`:
+    /// it did not load).
+    loads: Vec<(String, Option<Option<ui_image::Key>>)>,
+}
+
+/// The documents each property shows, by fingerprint: a property written
+/// again with an unchanged document (a chat's earlier messages) is not
+/// parsed again. A slot keeps only what its last value showed.
+#[derive(Default)]
+pub struct Cache {
+    slots: BTreeMap<Slot, HashMap<u64, Rc<Parsed>>>,
+    /// Documents parsed and documents reused (tests and `VESTRA_UI_PROPERTY_TRACE`).
+    pub parsed: usize,
+    pub reused: usize,
+}
+
+impl Cache {
+    pub fn release(&mut self, owner: u64, view: Option<&str>, property: Option<&str>) {
+        self.slots.retain(|(o, v, p), _| {
+            !(*o == owner
+                && view.is_none_or(|view| view == v)
+                && property.is_none_or(|property| property == p))
         });
-        self.images.assign_many(owner, view, property, shown);
-        Ok(model)
+    }
+}
+
+/// Loads a local image path: the file it is (`None` in tests) and the image.
+pub type Load<'a> = dyn FnMut(&str) -> Option<(Option<ui_image::Key>, slint::Image)> + 'a;
+
+fn fingerprint(doc: &Doc) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    doc.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// The local file a block's image comes from: remote images only from the
+/// SDK's downloads.
+fn local_image(block: &Block, doc: &Doc) -> Option<String> {
+    let source = block.source.as_deref()?;
+    if source.starts_with("http://") || source.starts_with("https://") {
+        doc.images.get(source).cloned()
+    } else if Path::new(source).is_absolute() {
+        Some(source.to_owned())
+    } else {
+        None
+    }
+}
+
+/// Parse `doc` into rows, reusing the rows of `earlier` that are equal.
+fn parse(doc: Doc, earlier: &HashMap<Rc<RowKey>, Row>, load: &mut Load<'_>) -> Parsed {
+    let mut rows = Vec::new();
+    let mut loads = Vec::new();
+    for block in blocks(&doc.text, doc.base.as_deref()) {
+        let (image, picture) = match local_image(&block, &doc) {
+            Some(path) => {
+                let loaded = load(&path);
+                loads.push((path, loaded.as_ref().map(|(key, _)| key.clone())));
+                match loaded {
+                    Some((key, picture)) => (key, Some(picture)),
+                    None => (None, None),
+                }
+            }
+            None => (None, None),
+        };
+        let key = RowKey {
+            block,
+            image,
+            shown: picture.is_some(),
+        };
+        let row = match earlier.get(&key) {
+            Some(row) => row.clone(),
+            None => Row {
+                value: row_value(&key.block, picture),
+                key: Rc::new(key),
+            },
+        };
+        rows.push(row);
+    }
+    Parsed { doc, rows, loads }
+}
+
+/// A property value with Markdown documents at any depth (a whole
+/// `[MarkdownBlock]` value, or a field of rows such as chat messages):
+/// JSON through `ui_values`, each document as its own `Rows` model. Runtime
+/// images may only be a whole value (`prop_value`): nested ones are
+/// `invalid`. Returns the image files the documents show.
+pub fn convert(
+    cache: &mut Cache,
+    (owner, view, property): (u64, &str, &str),
+    value: &Value,
+    load: &mut Load<'_>,
+) -> std::result::Result<(SValue, Vec<ui_image::Key>), RpcError> {
+    let slot = (owner, view.to_owned(), property.to_owned());
+    let earlier = cache.slots.remove(&slot).unwrap_or_default();
+    let mut index: Option<HashMap<Rc<RowKey>, Row>> = None;
+    let mut fresh: HashMap<u64, Rc<Parsed>> = HashMap::new();
+    let mut shown = Vec::new();
+    let mut failure = None;
+    let (mut parsed, mut reused) = (0, 0);
+    let mut hook = |node: &Value, depth: usize| -> Option<Result<(SValue, usize)>> {
+        let fail = |failure: &mut Option<RpcError>, error: RpcError| {
+            let message = error.message.clone();
+            *failure = Some(error);
+            Some(Err(anyhow::anyhow!(message)))
+        };
+        if depth > 0 && ui_image::reference(node).is_some() {
+            return fail(
+                &mut failure,
+                RpcError::invalid(
+                    "an image reference must be the whole value of an image property",
+                ),
+            );
+        }
+        let doc = match parse_wire(reference(node)?) {
+            Ok(doc) => doc,
+            Err(error) => return fail(&mut failure, error),
+        };
+        let print = fingerprint(&doc);
+        let unchanged = |p: &&Rc<Parsed>, load: &mut Load<'_>| {
+            p.doc == doc
+                && p.loads
+                    .iter()
+                    .all(|(path, key)| load(path).map(|(k, _)| k) == *key)
+        };
+        let found = fresh
+            .get(&print)
+            .filter(|p| p.doc == doc)
+            .or_else(|| earlier.get(&print).filter(|p| unchanged(p, load)))
+            .cloned();
+        let document = match found {
+            Some(document) => {
+                reused += 1;
+                document
+            }
+            None => {
+                parsed += 1;
+                let index = index.get_or_insert_with(|| {
+                    earlier
+                        .values()
+                        .flat_map(|p| p.rows.iter())
+                        .map(|row| (row.key.clone(), row.clone()))
+                        .collect()
+                });
+                Rc::new(parse(doc, index, load))
+            }
+        };
+        shown.extend(document.loads.iter().filter_map(|(_, key)| key.clone()?));
+        let rows = Rows::new(document.rows.clone());
+        let text = document.doc.text.len();
+        fresh.insert(print, document);
+        Some(Ok((SValue::Model(slint::ModelRc::new(rows)), text)))
+    };
+    let converted = crate::ui_values::from_json_with(value, &mut hook);
+    cache.parsed += parsed;
+    cache.reused += reused;
+    match converted {
+        Ok(converted) => {
+            if !fresh.is_empty() {
+                cache.slots.insert(slot, fresh);
+            }
+            trace_cache(cache);
+            Ok((converted, shown))
+        }
+        Err(error) => {
+            // A failed write leaves the property (and so its documents) as it was.
+            if !earlier.is_empty() {
+                cache.slots.insert(slot, earlier);
+            }
+            Err(failure.unwrap_or_else(|| error.into()))
+        }
+    }
+}
+
+fn trace_cache(cache: &Cache) {
+    static COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    if std::env::var_os("VESTRA_UI_PROPERTY_TRACE").is_some()
+        && COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 32
+    {
+        eprintln!(
+            "ui.markdown parsed={} reused={}",
+            cache.parsed, cache.reused
+        );
     }
 }
 
 /// The rows for `doc`; `load` turns a local image path into an image.
+#[cfg(test)]
 pub fn model(doc: &Doc, mut load: impl FnMut(&str) -> Option<slint::Image>) -> SValue {
+    let parsed = parse(doc.clone(), &HashMap::new(), &mut |path| {
+        load(path).map(|image| (None, image))
+    });
+    SValue::Model(slint::ModelRc::new(Rows::new(parsed.rows)))
+}
+
+/// One `MarkdownBlock` struct.
+fn row_value(block: &Block, image: Option<slint::Image>) -> SValue {
     let list =
         |values: Vec<SValue>| SValue::Model(std::rc::Rc::new(slint::VecModel::from(values)).into());
-    let mut rows = Vec::new();
-    for block in blocks(&doc.text, doc.base.as_deref()) {
-        let mut row = Struct::default();
-        let mut set = |name: &str, value: SValue| row.set_field(name.into(), value);
-        set("kind", SValue::String(block.kind.into()));
-        set("level", SValue::Number(block.level.into()));
-        set("indent", SValue::Number(block.indent.into()));
-        set("quote", SValue::Number(block.quote.into()));
-        set("marker", SValue::String(block.marker.as_str().into()));
-        set("task", SValue::Number(block.task.into()));
-        set(
-            "aligns",
-            list(
-                block
-                    .aligns
-                    .iter()
-                    .map(|a| SValue::String((*a).into()))
-                    .collect(),
-            ),
-        );
-        set(
-            "text",
-            SValue::from(block.inline.styled(block.kind == "heading")),
-        );
-        set("code", SValue::String(block.code.as_str().into()));
-        set("alt", SValue::String(block.alt.as_str().into()));
-        // Remote images come only from the SDK's downloads.
-        let local = block.source.as_deref().and_then(|source| {
-            if source.starts_with("http://") || source.starts_with("https://") {
-                doc.images.get(source).cloned()
-            } else if Path::new(source).is_absolute() {
-                Some(source.to_owned())
-            } else {
-                None
-            }
-        });
-        let image = local.and_then(|path| load(&path));
-        let size = image.as_ref().map(slint::Image::size).unwrap_or_default();
-        set("has-image", SValue::Bool(size.width > 0));
-        set("image", SValue::Image(image.unwrap_or_default()));
-        set("image-width", SValue::Number(size.width.into()));
-        set("image-height", SValue::Number(size.height.into()));
-        let table = block
-            .rows
-            .into_iter()
-            .map(|(cells, header)| {
-                let mut row = Struct::default();
-                row.set_field(
-                    "cells".into(),
-                    list(
-                        cells
-                            .into_iter()
-                            .map(|c| SValue::String(c.into()))
-                            .collect(),
-                    ),
-                );
-                row.set_field("header".into(), SValue::Bool(header));
-                SValue::Struct(row)
-            })
-            .collect();
-        set("rows", list(table));
-        rows.push(SValue::Struct(row));
-    }
-    list(rows)
+    let mut row = Struct::default();
+    let mut set = |name: &str, value: SValue| row.set_field(name.into(), value);
+    set("kind", SValue::String(block.kind.into()));
+    set("level", SValue::Number(block.level.into()));
+    set("indent", SValue::Number(block.indent.into()));
+    set("quote", SValue::Number(block.quote.into()));
+    set("marker", SValue::String(block.marker.as_str().into()));
+    set("task", SValue::Number(block.task.into()));
+    set(
+        "aligns",
+        list(
+            block
+                .aligns
+                .iter()
+                .map(|a| SValue::String((*a).into()))
+                .collect(),
+        ),
+    );
+    set(
+        "text",
+        SValue::from(block.inline.styled(block.kind == "heading")),
+    );
+    set("code", SValue::String(block.code.as_str().into()));
+    set("alt", SValue::String(block.alt.as_str().into()));
+    let size = image.as_ref().map(slint::Image::size).unwrap_or_default();
+    set("has-image", SValue::Bool(size.width > 0));
+    set("image", SValue::Image(image.unwrap_or_default()));
+    set("image-width", SValue::Number(size.width.into()));
+    set("image-height", SValue::Number(size.height.into()));
+    let table = block
+        .rows
+        .iter()
+        .map(|(cells, header)| {
+            let mut row = Struct::default();
+            row.set_field(
+                "cells".into(),
+                list(
+                    cells
+                        .iter()
+                        .map(|c| SValue::String(c.as_str().into()))
+                        .collect(),
+                ),
+            );
+            row.set_field("header".into(), SValue::Bool(*header));
+            SValue::Struct(row)
+        })
+        .collect();
+    set("rows", list(table));
+    SValue::Struct(row)
 }
+
+#[cfg(test)]
+#[path = "ui_markdown_rows.rs"]
+mod rows_tests;
 
 #[cfg(test)]
 mod tests {
