@@ -362,8 +362,7 @@ impl Host {
                         .get_global_property(&alias, &property)
                         .map_err(|e| RpcError::new("ui", e.to_string()))?;
                     if !ui_values::reconcile(&current, &value)? {
-                        window
-                            .set_global_property(&alias, &property, value)
+                        ui_values::set(&window, Some(&alias), &property, value)
                             .map_err(|e| RpcError::new("ui", e.to_string()))?;
                     }
                 } else if ui_image::reference(&params["value"]).is_some() {

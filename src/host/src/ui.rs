@@ -258,7 +258,7 @@ pub fn open(
     let instance = compile(path)?;
     crate::ui_values::own_default_models(&instance, None)?;
     for (name, value) in properties {
-        instance.set_property(name, value.clone())?;
+        crate::ui_values::set(&instance, None, name, value.clone())?;
     }
     for callback in callbacks {
         let events = events.clone();

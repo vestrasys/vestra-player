@@ -14,8 +14,14 @@
  * Tools: typos, actionlint, zizmor, cargo-deny, cargo-shear
  * (`brew install typos-cli actionlint zizmor cargo-deny cargo-shear`).
  * Cargo output goes to $CARGO_TARGET_DIR, or <system temp>/vestra-target/ci.
+ *
+ * The plugin tests record the property values the plugins send to their
+ * Slint views (VESTRA_UI_RECORD, scripts/ui-record.mjs); the host's ignored
+ * test `recorded_plugin_props_match_their_slint` (run by `cargo test
+ * -- --include-ignored`) sets each one on the compiled Slint component.
  */
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -23,10 +29,12 @@ const args = new Set(process.argv.slice(2));
 const source = resolve(import.meta.dirname, "..");
 const repo = resolve(source, "..");
 const host = join(source, "host");
+const record = mkdtempSync(join(tmpdir(), "vestra-ui-record-"));
 const env = {
   ...process.env,
   CARGO_TARGET_DIR:
     process.env.CARGO_TARGET_DIR || join(tmpdir(), "vestra-target", "ci"),
+  VESTRA_UI_RECORD: record,
 };
 
 const steps = [
@@ -91,6 +99,7 @@ for (const [cwd, command, extra = {}] of steps) {
   } else console.log(`ok (${seconds}s)`);
 }
 
+rmSync(record, { recursive: true, force: true });
 console.log(
   `\nci:local: ${steps.length - failed.length}/${steps.length} passed`,
 );
