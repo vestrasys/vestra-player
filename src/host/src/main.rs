@@ -819,6 +819,8 @@ impl Host {
                     return;
                 }
                 let _ = kind;
+                // Activity keeps the pointer and the popped-out sidebar; it
+                // never reveals the fullscreen bar (FS-BAR-1).
                 self.policy.activity(self.now_ms());
             }
             Event::MenuAction(generation, action) => {
@@ -1504,9 +1506,18 @@ impl Host {
             window_state::Slot::Sidebar,
             flag("sidebar-hover") && self.sidebar_popped,
         );
-        if flag("video-hover") {
-            self.policy
-                .pointer(number("pointer-x"), viewport.width, now);
+        // FS-BAR-1: the fullscreen bar shows only while the pointer is in
+        // its band (the bar's laid-out height, also while it is hidden).
+        let over_video = flag("video-hover").then(|| (number("pointer-x"), number("pointer-y")));
+        self.policy.bottom_band(
+            bottom_hover,
+            over_video,
+            viewport,
+            number("bottom-band-height"),
+            now,
+        );
+        if let Some((x, _)) = over_video {
+            self.policy.pointer(x, viewport.width, now);
         } else if bottom_hover {
             // The bar lies left of the popped-out sidebar.
             self.policy.pointer(0., viewport.width, now);
@@ -1545,14 +1556,14 @@ impl Host {
             self.sidebar_popped = popped;
             let playing =
                 self.last_source["phase"] == "ready" && self.last_source["paused"] == false;
-            // UI-SHELL-09: the pointer hides with the idle fullscreen bar while playing.
-            let idle = snapshot
-                .bottom
-                .is_some_and(|s| s.reason == Some(window_state::Reason::Idle));
-            // `setCursorAutoHide("playing")`: in a window too, while it has focus.
-            let windowed = self.cursor_playing.get()
-                && self.policy.idle(now)
-                && (fullscreen || native.is_some_and(|facts| facts.active));
+            // UI-SHELL-09: in fullscreen the pointer hides while playing and
+            // idle (3 s without motion or keys, not over the bar or in its
+            // band, no menu, dialog or bar lock); FS-BAR-1 decoupled it from
+            // the bar. `setCursorAutoHide("playing")`: in a window too, while
+            // it has focus.
+            let idle = self.policy.idle(now);
+            let windowed =
+                self.cursor_playing.get() && idle && native.is_some_and(|facts| facts.active);
             shell.set_property(
                 "cursor-hidden",
                 (playing && ((fullscreen && idle) || windowed)).into(),

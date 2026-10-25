@@ -10,7 +10,8 @@ const IDLE_MS: u64 = 3000;
 /// the right edge (Vestra value).
 pub const EDGE_PX: f64 = 4.0;
 /// G-01: the popped-out sidebar collapses this long after the pointer left it
-/// (Vestra value).
+/// (Vestra value). FS-BAR-1: the fullscreen bar hides this long after the
+/// pointer left its band.
 pub const LEAVE_MS: u64 = 500;
 /// UI-SHELL-06/08: video at least 318px, a 3px splitter, sidebar at least 317px.
 pub const VIDEO_MIN_WIDTH: f64 = 318.0;
@@ -86,7 +87,8 @@ pub struct Snapshot {
     /// Actual allocated sidebar width, zero whenever the sidebar is not shown
     /// docked (hidden, floating, or the fullscreen overlay, which takes none).
     pub sidebar_width: f64,
-    /// Future idle transition only; absent while suppressed or already idle.
+    /// The fullscreen bar's pending hide (the leave delay running); absent
+    /// while it is held or already hidden.
     pub next_deadline_ms: Option<u64>,
 }
 
@@ -169,6 +171,24 @@ pub struct Policy {
     /// plugin's `setInteraction`), by slot: bottom, sidebar.
     hover: [bool; 2],
     overlay: Overlay,
+    bar: Bar,
+}
+
+/// FS-BAR-1: the fullscreen bottom bar shows only while the pointer is in
+/// its band (or a bar lock holds it), and hides `LEAVE_MS` after that ends.
+/// Activity (motion elsewhere, keys, menus, dialogs) never reveals it.
+#[derive(Clone, Copy, Debug, Default)]
+struct Bar {
+    /// The pointer is in the bar's band (host-sampled every tick).
+    band: bool,
+    /// A menu or dialog opened while the bar showed holds it until closed.
+    obstructed: bool,
+    /// Something held the bar at the last update.
+    held: bool,
+    /// When the hold ended: the leave delay runs from here.
+    left_at: Option<u64>,
+    /// The bar showed at the last update (for `set_obstructions`).
+    shown: bool,
 }
 
 impl Policy {
@@ -183,6 +203,7 @@ impl Policy {
             sidebar_user_width: SIDEBAR_MIN_WIDTH,
             hover: [false; 2],
             overlay: Overlay::default(),
+            bar: Bar::default(),
         }
     }
 
@@ -347,8 +368,9 @@ impl Policy {
         Ok(())
     }
 
-    /// Setters do not invent timestamps. To give a released gesture a fresh idle
-    /// period, the host first calls activity(release_now), then clears its lock.
+    /// Setters do not invent timestamps. A released gesture counts as activity
+    /// when the host calls activity(release_now) first; the fullscreen bar's
+    /// leave delay starts at the next `tick` or `bottom_band`.
     /// A sidebar panel's locks count only while its tab is current.
     pub fn set_locks(&mut self, slot: Slot, owner: u64, locks: Locks) -> Result<()> {
         match slot {
@@ -363,14 +385,17 @@ impl Policy {
         Ok(())
     }
 
-    /// Repeated observation of the same mode is a no-op; entering reveals the bar.
+    /// Repeated observation of the same mode is a no-op. Entering counts as
+    /// activity (the pointer shows) but does not reveal the bar (FS-BAR-1).
     pub fn set_fullscreen(&mut self, fullscreen: bool, now_ms: u64) {
         if self.fullscreen == fullscreen {
             return;
         }
         self.fullscreen = fullscreen;
-        // Entering fullscreen starts collapsed; leaving forgets the overlay.
+        // Entering fullscreen starts collapsed; leaving forgets the overlay
+        // and the bar's band state.
         self.overlay = Overlay::default();
+        self.bar = Bar::default();
         if fullscreen {
             self.activity(now_ms);
         }
@@ -413,9 +438,73 @@ impl Policy {
         }
     }
 
-    /// Apply the timed transitions (the popped-out sidebar collapsing). The
-    /// host calls this every tick before `evaluate`.
+    /// FS-BAR-1: where the pointer is for the fullscreen bar's band. The band
+    /// is the bar's own rectangle: from `height - band_height` (the bar's
+    /// laid-out height, also while hidden) to the bottom edge, left of a
+    /// popped-out sidebar. `over_bar`: the pointer is over the shown bar;
+    /// `over_video`: the pointer over the video at (x, y), window logical
+    /// px. Outside fullscreen there is no band. The host samples it every
+    /// tick, before `tick`.
+    pub fn bottom_band(
+        &mut self,
+        over_bar: bool,
+        over_video: Option<(f64, f64)>,
+        viewport: Viewport,
+        band_height: f64,
+        now_ms: u64,
+    ) {
+        let right = viewport.width
+            - if self.overlay.open && self.overlay_ready() {
+                overlay_width(viewport.width, self.sidebar_user_width)
+            } else {
+                0.0
+            };
+        let in_video_band = over_video.is_some_and(|(x, y)| {
+            x.is_finite()
+                && y.is_finite()
+                && band_height.is_finite()
+                && band_height > 0.0
+                && y >= viewport.height - band_height
+                && x < right
+        });
+        self.bar.band = self.fullscreen && self.bottom.is_some() && (over_bar || in_video_band);
+        self.update_bar(now_ms);
+    }
+
+    /// Something holds the fullscreen bar now: the pointer in its band or
+    /// over it, a bar lock, or a menu or dialog opened while it showed.
+    fn bar_holding(&self) -> bool {
+        self.bar.band || self.bar.obstructed || self.bottom_locked()
+    }
+
+    /// The fullscreen bar shows: held, or the leave delay still running.
+    /// A hold that ended since the last update still counts until the next
+    /// update starts the delay.
+    fn bar_shown(&self, now_ms: u64) -> bool {
+        self.bar_holding()
+            || self.bar.held
+            || self
+                .bar
+                .left_at
+                .is_some_and(|at| now_ms.saturating_sub(at) < LEAVE_MS)
+    }
+
+    fn update_bar(&mut self, now_ms: u64) {
+        let holding = self.bar_holding();
+        if holding {
+            self.bar.left_at = None;
+        } else if self.bar.held {
+            self.bar.left_at = Some(now_ms);
+        }
+        self.bar.held = holding;
+        self.bar.shown = self.fullscreen && self.bar_shown(now_ms);
+    }
+
+    /// Apply the timed transitions (the popped-out sidebar collapsing, the
+    /// fullscreen bar's leave delay). The host calls this every tick before
+    /// `evaluate`.
     pub fn tick(&mut self, now_ms: u64) {
+        self.update_bar(now_ms);
         if !self.overlay.open {
             return;
         }
@@ -471,17 +560,29 @@ impl Policy {
         self.last_activity_ms = self.last_activity_ms.max(now_ms);
     }
 
+    /// FS-BAR-1: a menu or dialog opening while the fullscreen bar shows
+    /// holds it until both are closed; one opening while it is hidden does
+    /// not reveal it.
     pub fn set_obstructions(&mut self, menu_open: bool, dialog_open: bool) {
+        let opening = (menu_open && !self.menu_open) || (dialog_open && !self.dialog_open);
+        if !menu_open && !dialog_open {
+            self.bar.obstructed = false;
+        } else if opening && self.bar.shown {
+            self.bar.obstructed = true;
+        }
         self.menu_open = menu_open;
         self.dialog_open = dialog_open;
     }
 
-    /// No activity for 3 seconds and nothing holding the bar (menu, dialog,
-    /// panel interaction): the same rule that hides the fullscreen bar.
+    /// No activity for 3 seconds, no menu or dialog, the pointer neither over
+    /// the bar nor in its fullscreen band, and no bar lock: the pointer may
+    /// hide (UI-SHELL-09, `setCursorAutoHide`). The fullscreen bar does not
+    /// follow this (FS-BAR-1).
     pub fn idle(&self, now_ms: u64) -> bool {
         now_ms.saturating_sub(self.last_activity_ms) >= IDLE_MS
             && !self.menu_open
             && !self.dialog_open
+            && !self.bar.band
             && !self.bottom_locked()
     }
 
@@ -493,12 +594,12 @@ impl Policy {
         {
             return Err(Error::Invalid);
         }
-        let recent = now_ms.saturating_sub(self.last_activity_ms) < IDLE_MS;
-        let suppressed = self.menu_open || self.dialog_open || self.bottom_locked();
+        let shown = self.bar_shown(now_ms);
         let bottom = self.bottom.map(|attachment| {
             let reason = if !attachment.preferred {
                 Some(Reason::UserHidden)
-            } else if self.fullscreen && !recent && !suppressed {
+            } else if self.fullscreen && !shown {
+                // FS-BAR-1: fullscreen and the pointer not in the bar's band.
                 Some(Reason::Idle)
             } else {
                 None
@@ -538,12 +639,13 @@ impl Policy {
             }
         });
         let next_deadline_ms = if self.fullscreen
-            && !suppressed
-            && recent
+            && !self.bar_holding()
+            && !self.bar.held
             && self.bottom.is_some_and(|attachment| attachment.preferred)
         {
-            self.last_activity_ms
-                .checked_add(IDLE_MS)
+            self.bar
+                .left_at
+                .and_then(|at| at.checked_add(LEAVE_MS))
                 .filter(|deadline| *deadline > now_ms)
         } else {
             None
@@ -652,164 +754,6 @@ mod tests {
     }
 
     #[test]
-    fn bar_hides_at_three_seconds_without_changing_preference_and_activity_reveals() {
-        let mut policy = attached();
-        policy.set_fullscreen(true, 100);
-        let before = policy.evaluate(roomy(), 3099).unwrap();
-        assert!(before.bottom.unwrap().effective);
-        assert!(before.bottom.unwrap().overlay);
-        assert_eq!(before.next_deadline_ms, Some(3100));
-        let idle = policy.evaluate(roomy(), 3100).unwrap();
-        assert_eq!(idle.bottom.unwrap().reason, Some(Reason::Idle));
-        assert!(idle.bottom.unwrap().preferred);
-        assert_eq!(idle.next_deadline_ms, None);
-        policy.activity(5000);
-        assert!(
-            policy
-                .evaluate(roomy(), 5000)
-                .unwrap()
-                .bottom
-                .unwrap()
-                .effective
-        );
-        policy.set_preferred(Slot::Bottom, 1, false, 0).unwrap();
-        policy.activity(6000);
-        let hidden = policy.evaluate(roomy(), 6000).unwrap();
-        assert_eq!(hidden.bottom.unwrap().reason, Some(Reason::UserHidden));
-        assert_eq!(hidden.next_deadline_ms, None);
-        policy.set_fullscreen(false, 7000);
-        assert!(
-            !policy
-                .evaluate(roomy(), 7000)
-                .unwrap()
-                .bottom
-                .unwrap()
-                .overlay
-        );
-    }
-
-    #[test]
-    fn each_bar_lock_and_global_obstruction_suppresses_idle() {
-        let mut policy = attached();
-        policy.set_fullscreen(true, 0);
-        for locks in [
-            Locks {
-                focused: true,
-                ..Locks::default()
-            },
-            Locks {
-                dragging: true,
-                ..Locks::default()
-            },
-            Locks {
-                popup_open: true,
-                ..Locks::default()
-            },
-        ] {
-            policy.set_locks(Slot::Bottom, 1, locks).unwrap();
-            let snapshot = policy.evaluate(roomy(), 9000).unwrap();
-            assert!(snapshot.bottom.unwrap().effective);
-            assert_eq!(snapshot.next_deadline_ms, None);
-        }
-        policy.set_locks(Slot::Bottom, 1, Locks::default()).unwrap();
-        for (menu, dialog) in [(true, false), (false, true)] {
-            policy.set_obstructions(menu, dialog);
-            assert!(
-                policy
-                    .evaluate(roomy(), 9000)
-                    .unwrap()
-                    .bottom
-                    .unwrap()
-                    .effective
-            );
-        }
-        policy.set_obstructions(false, false);
-        assert_eq!(
-            policy
-                .evaluate(roomy(), 9000)
-                .unwrap()
-                .bottom
-                .unwrap()
-                .reason,
-            Some(Reason::Idle)
-        );
-    }
-
-    #[test]
-    fn release_activity_starts_a_new_idle_period_but_setters_do_not_invent_time() {
-        let mut policy = attached();
-        policy.set_fullscreen(true, 0);
-        policy
-            .set_locks(
-                Slot::Bottom,
-                1,
-                Locks {
-                    dragging: true,
-                    ..Locks::default()
-                },
-            )
-            .unwrap();
-        policy.activity(9000);
-        policy.set_locks(Slot::Bottom, 1, Locks::default()).unwrap();
-        let released = policy.evaluate(roomy(), 9000).unwrap();
-        assert!(released.bottom.unwrap().effective);
-        assert_eq!(released.next_deadline_ms, Some(12000));
-        policy.set_obstructions(true, false);
-        assert!(
-            policy
-                .evaluate(roomy(), 15000)
-                .unwrap()
-                .bottom
-                .unwrap()
-                .effective
-        );
-        policy.set_obstructions(false, false); // No activity: original time still applies.
-        assert_eq!(
-            policy
-                .evaluate(roomy(), 15000)
-                .unwrap()
-                .bottom
-                .unwrap()
-                .reason,
-            Some(Reason::Idle)
-        );
-        policy.set_obstructions(false, true);
-        policy.activity(16000);
-        policy.set_obstructions(false, false);
-        assert_eq!(
-            policy.evaluate(roomy(), 16000).unwrap().next_deadline_ms,
-            Some(19000)
-        );
-        policy.set_preferred(Slot::Bottom, 1, false, 0).unwrap();
-        policy.activity(17000);
-        policy
-            .set_locks(
-                Slot::Bottom,
-                1,
-                Locks {
-                    focused: true,
-                    dragging: true,
-                    popup_open: true,
-                },
-            )
-            .unwrap();
-        policy.set_obstructions(true, true);
-        let hidden = policy.evaluate(roomy(), 17000).unwrap();
-        assert_eq!(hidden.bottom.unwrap().reason, Some(Reason::UserHidden));
-        assert!(!hidden.bottom.unwrap().effective);
-        assert_eq!(hidden.next_deadline_ms, None);
-        policy.set_fullscreen(false, 17000);
-        assert!(
-            policy
-                .evaluate(roomy(), 17000)
-                .unwrap()
-                .sidebar
-                .unwrap()
-                .effective
-        );
-    }
-
-    #[test]
     fn owner_cleanup_cannot_leave_locks_or_remove_another_generation() {
         let mut policy = attached();
         assert_eq!(
@@ -873,36 +817,268 @@ mod tests {
         );
     }
 
+    // FS-BAR-1: the fullscreen bar shows only while the pointer is in its
+    // band. The screen is 1920 x 1080 and the bar 80 high: the band starts
+    // at y = 1000.
+    fn bar(policy: &Policy, now: u64) -> Visibility {
+        policy.evaluate(screen(), now).unwrap().bottom.unwrap()
+    }
+    fn at(policy: &mut Policy, x: f64, y: f64, now: u64) {
+        policy.bottom_band(false, Some((x, y)), screen(), 80.0, now);
+        policy.tick(now);
+    }
+    fn away(policy: &mut Policy, now: u64) {
+        at(policy, 960.0, 500.0, now);
+    }
+    fn dragging() -> Locks {
+        Locks {
+            dragging: true,
+            ..Locks::default()
+        }
+    }
+
     #[test]
-    fn pointer_over_the_bar_keeps_it_and_a_plugin_lock_write_cannot_clear_that() {
+    fn fullscreen_bar_ignores_activity_keys_and_entering_fullscreen() {
+        let mut policy = attached();
+        policy.set_fullscreen(true, 100);
+        let entered = policy.evaluate(screen(), 100).unwrap();
+        let bottom = entered.bottom.unwrap();
+        assert!(
+            !bottom.effective,
+            "entering fullscreen does not reveal the bar"
+        );
+        assert_eq!(bottom.reason, Some(Reason::Idle));
+        assert!(bottom.preferred && bottom.overlay);
+        assert_eq!(entered.next_deadline_ms, None);
+        // Pointer motion outside the band, keys and bindings are activity only.
+        for now in [200, 1000, 5000] {
+            policy.activity(now);
+            away(&mut policy, now);
+            assert!(!bar(&policy, now).effective);
+        }
+        policy.activity(6000); // A key seek with the pointer resting mid-screen.
+        policy.tick(6000);
+        assert!(!bar(&policy, 6000).effective);
+        // At the bottom edge but not over the video (outside the window).
+        policy.bottom_band(false, None, screen(), 80.0, 7000);
+        assert!(!bar(&policy, 7000).effective);
+        // The user's preference still wins over the band.
+        policy.set_preferred(Slot::Bottom, 1, false, 0).unwrap();
+        at(&mut policy, 960.0, 1050.0, 8000);
+        policy.set_locks(Slot::Bottom, 1, dragging()).unwrap();
+        let hidden = policy.evaluate(screen(), 8000).unwrap();
+        assert_eq!(hidden.bottom.unwrap().reason, Some(Reason::UserHidden));
+        assert_eq!(hidden.next_deadline_ms, None);
+        // Windowed mode is unchanged: docked, never idle.
+        policy.set_locks(Slot::Bottom, 1, Locks::default()).unwrap();
+        policy.set_preferred(Slot::Bottom, 1, true, 0).unwrap();
+        policy.set_fullscreen(false, 9000);
+        away(&mut policy, 9000);
+        let windowed = bar(&policy, 60_000);
+        assert!(windowed.effective && !windowed.overlay);
+    }
+
+    #[test]
+    fn the_band_reveals_the_bar_at_once_and_it_hides_500_ms_after_leaving() {
         let mut policy = attached();
         policy.set_fullscreen(true, 0);
-        policy.set_hover(Slot::Bottom, true);
-        // A plugin's setInteraction replaces its own locks only.
-        policy.set_locks(Slot::Bottom, 1, Locks::default()).unwrap();
-        let held = policy.evaluate(roomy(), 10_000).unwrap();
-        assert!(held.bottom.unwrap().effective);
-        assert_eq!(held.next_deadline_ms, None);
+        at(&mut policy, 960.0, 1000.0, 1000);
         assert!(
-            !policy.idle(10_000),
-            "the pointer stays visible over the bar"
-        );
-        // Moving off the bar: the host reports activity, then the hover ends.
-        policy.activity(10_000);
-        policy.set_hover(Slot::Bottom, false);
-        assert_eq!(
-            policy.evaluate(roomy(), 12_999).unwrap().next_deadline_ms,
-            Some(13_000)
+            bar(&policy, 1000).effective,
+            "entering the band shows it at once"
         );
         assert_eq!(
-            policy
-                .evaluate(roomy(), 13_000)
+            policy.evaluate(screen(), 1000).unwrap().next_deadline_ms,
+            None
+        );
+        at(&mut policy, 960.0, 1079.0, 1500);
+        assert!(bar(&policy, 1500).effective);
+        at(&mut policy, 960.0, 999.0, 2000); // Just above the band.
+        assert!(bar(&policy, 2000).effective);
+        assert!(bar(&policy, 2499).effective);
+        assert_eq!(
+            policy.evaluate(screen(), 2499).unwrap().next_deadline_ms,
+            Some(2500)
+        );
+        policy.tick(2500);
+        let hidden = policy.evaluate(screen(), 2500).unwrap();
+        assert_eq!(hidden.bottom.unwrap().reason, Some(Reason::Idle));
+        assert_eq!(hidden.next_deadline_ms, None);
+        // Back in within the delay cancels it.
+        at(&mut policy, 100.0, 1040.0, 3000);
+        away(&mut policy, 3100);
+        at(&mut policy, 100.0, 1040.0, 3400);
+        policy.tick(3700);
+        assert!(bar(&policy, 3700).effective);
+        away(&mut policy, 4000);
+        policy.tick(4499);
+        assert!(bar(&policy, 4499).effective);
+        policy.tick(4500);
+        assert!(!bar(&policy, 4500).effective);
+        // Over the shown bar counts as in the band.
+        policy.bottom_band(true, None, screen(), 80.0, 5000);
+        assert!(bar(&policy, 5000).effective);
+        // The band is the bar's laid-out height in logical px, on any screen.
+        let small = viewport(1280.0, 720.0);
+        let mut policy = attached();
+        policy.set_fullscreen(true, 0);
+        policy.bottom_band(false, Some((10.0, 655.0)), small, 64.0, 100);
+        assert!(
+            !policy
+                .evaluate(small, 100)
                 .unwrap()
                 .bottom
                 .unwrap()
-                .reason,
-            Some(Reason::Idle)
+                .effective
         );
+        policy.bottom_band(false, Some((10.0, 656.0)), small, 64.0, 200);
+        assert!(
+            policy
+                .evaluate(small, 200)
+                .unwrap()
+                .bottom
+                .unwrap()
+                .effective
+        );
+        // No laid-out bar, no band.
+        let mut policy = attached();
+        policy.set_fullscreen(true, 0);
+        policy.bottom_band(false, Some((10.0, 1079.0)), screen(), 0.0, 100);
+        assert!(!bar(&policy, 100).effective);
+    }
+
+    #[test]
+    fn a_bar_lock_holds_it_after_leaving_and_release_starts_the_delay() {
+        let mut policy = attached();
+        policy.set_fullscreen(true, 0);
+        at(&mut policy, 960.0, 1040.0, 1000);
+        policy.set_locks(Slot::Bottom, 1, dragging()).unwrap();
+        away(&mut policy, 1100); // Dragging the seek slider up the screen.
+        policy.tick(5000);
+        let held = policy.evaluate(screen(), 5000).unwrap();
+        assert!(held.bottom.unwrap().effective);
+        assert_eq!(held.next_deadline_ms, None);
+        policy.activity(6000);
+        policy.set_locks(Slot::Bottom, 1, Locks::default()).unwrap();
+        assert!(
+            bar(&policy, 6000).effective,
+            "the release before the next tick still shows"
+        );
+        policy.tick(6000);
+        assert!(bar(&policy, 6499).effective);
+        assert_eq!(
+            policy.evaluate(screen(), 6000).unwrap().next_deadline_ms,
+            Some(6500)
+        );
+        policy.tick(6500);
+        assert!(!bar(&policy, 6500).effective);
+        // Every lock kind holds; the pointer over the bar too, and a
+        // plugin's lock write cannot clear that host-owned hover.
+        for locks in [
+            Locks {
+                focused: true,
+                ..Locks::default()
+            },
+            dragging(),
+            Locks {
+                popup_open: true,
+                ..Locks::default()
+            },
+        ] {
+            policy.set_locks(Slot::Bottom, 1, locks).unwrap();
+            policy.tick(9000);
+            assert!(bar(&policy, 9000).effective);
+        }
+        policy.set_locks(Slot::Bottom, 1, Locks::default()).unwrap();
+        policy.tick(20_000);
+        policy.set_hover(Slot::Bottom, true);
+        policy.set_locks(Slot::Bottom, 1, Locks::default()).unwrap();
+        policy.tick(30_000);
+        assert!(bar(&policy, 30_000).effective);
+        policy.set_hover(Slot::Bottom, false);
+        policy.tick(30_100);
+        assert!(bar(&policy, 30_599).effective);
+        assert!(!bar(&policy, 30_600).effective);
+    }
+
+    #[test]
+    fn a_menu_or_dialog_holds_a_shown_bar_but_never_reveals_a_hidden_one() {
+        let mut policy = attached();
+        policy.set_fullscreen(true, 0);
+        for (menu, dialog) in [(true, false), (false, true)] {
+            policy.set_obstructions(menu, dialog);
+            policy.tick(1000);
+            assert!(!bar(&policy, 1000).effective);
+            policy.set_obstructions(false, false);
+        }
+        // Opened while shown (the bar's own menu, its Open dialog): held.
+        at(&mut policy, 960.0, 1040.0, 2000);
+        policy.set_obstructions(true, false);
+        away(&mut policy, 2100);
+        policy.set_obstructions(true, false); // Sampled again every tick.
+        policy.tick(5000);
+        assert!(bar(&policy, 5000).effective);
+        policy.set_obstructions(true, true);
+        policy.set_obstructions(false, true);
+        policy.tick(5100);
+        assert!(bar(&policy, 5100).effective, "the dialog still holds it");
+        policy.set_obstructions(false, false);
+        policy.tick(6000);
+        assert!(bar(&policy, 6499).effective);
+        assert!(!bar(&policy, 6500).effective);
+        // Opened during the leave delay: the bar still shows, so it holds.
+        at(&mut policy, 960.0, 1040.0, 7000);
+        away(&mut policy, 7100);
+        policy.set_obstructions(false, true);
+        policy.tick(9000);
+        assert!(bar(&policy, 9000).effective);
+    }
+
+    #[test]
+    fn the_band_ends_at_a_popped_out_sidebar() {
+        let mut policy = attached();
+        policy.set_fullscreen(true, 0);
+        policy.pointer(1919.0, 1920.0, 100); // Pop the sidebar out (317 wide).
+        assert!(sidebar(&policy, 100).effective);
+        at(&mut policy, 1700.0, 1050.0, 200);
+        assert!(
+            !bar(&policy, 200).effective,
+            "under the sidebar is not the band"
+        );
+        at(&mut policy, 1602.0, 1050.0, 300);
+        assert!(bar(&policy, 300).effective);
+        away(&mut policy, 400);
+        policy.tick(1000);
+        // A floating sidebar takes nothing from the band.
+        policy.set_detached(2, true).unwrap();
+        at(&mut policy, 1900.0, 1050.0, 1100);
+        assert!(bar(&policy, 1100).effective);
+    }
+
+    #[test]
+    fn the_cursor_hides_after_three_idle_seconds_but_never_in_the_band() {
+        let mut policy = attached();
+        policy.set_fullscreen(true, 0);
+        assert!(!policy.idle(2999));
+        assert!(policy.idle(3000));
+        assert!(!bar(&policy, 3000).effective);
+        // The pointer moves into the band and rests there.
+        policy.activity(4000);
+        at(&mut policy, 960.0, 1040.0, 4000);
+        assert!(!policy.idle(60_000));
+        // A key while the bar is hidden: the cursor counts it, the bar not.
+        policy.activity(60_000);
+        away(&mut policy, 60_000);
+        policy.tick(61_000);
+        assert!(!bar(&policy, 61_000).effective);
+        assert!(!policy.idle(62_999));
+        assert!(policy.idle(63_000));
+        policy.activity(64_000);
+        assert!(!policy.idle(64_000));
+        assert!(!bar(&policy, 64_000).effective);
+        // A menu or dialog keeps the cursor.
+        policy.set_obstructions(true, false);
+        assert!(!policy.idle(90_000));
     }
 
     fn screen() -> Viewport {
@@ -1052,9 +1228,20 @@ mod tests {
         }
         policy.set_fullscreen(true, u64::MAX - 1);
         policy.activity(1); // A delayed sample cannot rewind last activity.
+        assert!(!policy.idle(u64::MAX));
+        policy.bottom_band(false, Some((10.0, 590.0)), roomy(), 80.0, u64::MAX - 1);
+        policy.bottom_band(false, Some((10.0, 10.0)), roomy(), 80.0, u64::MAX - 1);
         let snapshot = policy.evaluate(roomy(), u64::MAX).unwrap();
         assert!(snapshot.bottom.unwrap().effective);
         assert_eq!(snapshot.next_deadline_ms, None); // Unrepresentable future time.
+        policy.bottom_band(
+            false,
+            Some((f64::NAN, 590.0)),
+            roomy(),
+            f64::INFINITY,
+            u64::MAX,
+        );
+        assert!(!policy.bar.band);
         policy.set_fullscreen(false, u64::MAX);
         assert!(!policy.evaluate(roomy(), u64::MAX).unwrap().fullscreen);
     }

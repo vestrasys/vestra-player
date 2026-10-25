@@ -81,7 +81,7 @@
 5. 动画：弹出时向左滑出 150 ms，收起时向右滑回 150 ms。
 6. 收起条件（任一满足）：
    - 指针离开弹出层（x 小于弹出层左边缘，含停在底栏上）500 ms 后；
-   - 弹出层没有锁（第 7 条）且 3000 ms 内没有活动（与底栏共用空闲计时）；
+   - 弹出层没有锁（第 7 条）且 3000 ms 内没有活动（the host's activity idle timer, shared with the pointer auto-hide; the fullscreen bar no longer uses it, FS-BAR-1）；
    - 用户按 F6 或点底栏的列表按钮把偏好改为隐藏；
    - 退出全屏。
 7. 锁：面板通过 `Panel.setInteraction` 报告 `focused`（例如搜索框有焦点）、`dragging`（拖动排序）、`popupOpen`（列表右键菜单）为真时不收起，与底栏的锁规则相同。宿主自己的悬停锁（G-04）同样作用于弹出层。
@@ -109,9 +109,9 @@
 
 **要求**：
 
-1. 指针在底栏矩形范围内时，底栏视为被锁住，不进入空闲隐藏。
-2. 指针在底栏范围内移动同样算活动：离开底栏后重新开始 3000 ms 计时。
-3. 指针在底栏上时不隐藏指针（指针隐藏只作用于视频区）。
+1. 指针在底栏矩形范围内时，底栏视为被锁住，不隐藏。
+2. Since FS-BAR-1 the fullscreen bar shows only while the pointer is in its band and hides 500 ms after the pointer leaves it (see the FS-BAR-1 requirement below); moving over the bar still counts as activity for the pointer auto-hide.
+3. 指针在底栏上（or in its fullscreen band）时不隐藏指针（指针隐藏只作用于视频区）。
 4. 宿主设置页（IA-CORE-06）提供开关「指针在控制栏上时不自动隐藏」，默认开。
 
 **实现约束**：底栏和全屏侧栏弹出层外包一层只做悬停检测的 `TouchArea`（作为内容的父元素，不吃子元素的事件），输出 `bottom-hover` / `sidebar-hover`；视频区输出 `video-hover`。悬停锁是宿主自己的锁，插件的 `setInteraction` 写不掉。
@@ -122,8 +122,16 @@
 
 1. 全屏播放，指针移到底栏上静止 10 秒：底栏不消失，指针不消失。
 2. 指针在底栏上左右移动 10 秒：底栏不消失。
-3. 指针从底栏移到视频中部并静止：3 秒后底栏和指针都消失。
-4. 关掉宿主设置页的开关后重复第 1 条：3 秒后底栏消失（随 IA-CORE-06）。
+3. Move the pointer from the bar to the middle of the video and rest it there: the bar disappears after 500 ms, the pointer after 3 seconds (FS-BAR-1).
+4. With the host settings switch off (IA-CORE-06, not implemented): the bar still shows only while the pointer is in its band (FS-BAR-1); the switch affects only the pointer auto-hide over the bar.
+
+#### FS-BAR-1 The fullscreen bar shows only on hover over its band (2026-10-25)
+
+**Status**: implemented (round record `doc/process/rounds/2026-10-ui-polish.md`).
+
+**Requirement**: in fullscreen the bottom bar is hidden and shows only while the pointer is in its band: the bar's own rectangle, from the bottom edge up by the bar's laid-out height (logical px, any monitor size and scale), across the full width minus a popped-out sidebar (a floating sidebar takes nothing). Entering the band shows it at once; it hides 500 ms after the pointer leaves (the G-01 `LEAVE_MS`), and coming back within that time keeps it. Nothing else reveals it: pointer motion elsewhere, keys and bound commands (seek, volume, pause, speed), the wheel, clicks, menus, dialogs, plugin activity and entering fullscreen. A menu or dialog opened while the bar shows holds it until closed; one opened while it is hidden does not reveal it. A bar lock (`setInteraction`, e.g. a seek or volume drag) holds it until released. The OSD is unchanged. The pointer auto-hide is independent of the bar (3 s without motion or keys, no menu or dialog, not over the bar or in its band, no bar lock). Windowed mode is unchanged.
+
+**Acceptance**: fullscreen on two monitor sizes, with the sidebar popped out and floating: the bar appears only with the pointer at the bottom band; Ctrl+→ shows "Forward 30 s: ..." on the OSD with no bar; a seek drag that leaves the band keeps the bar until release.
 
 ### G-03 右键菜单在小窗口里完整可用；可以超出主窗口（P1）
 
@@ -1252,14 +1260,14 @@ G-02、G-06、IA-WIN-01–04 只用现有 API。
 | # | 元素 | 规格 | 条目 |
 | --- | --- | --- | --- |
 | F-01 | 底栏的布局 | 覆盖在视频底部，视频不缩放 | |
-| F-02 | 底栏的唤出 | 视频区内任何指针移动、按键、滚轮、点击都唤出 | |
-| F-03 | 底栏的隐藏延时 | 空闲 3000 ms | |
+| F-02 | 底栏的唤出 | Only the pointer in the bar's band (its laid-out height at the bottom edge, left of a popped-out sidebar); keys, motion elsewhere, wheel, clicks, menus, dialogs and entering fullscreen do not reveal it | FS-BAR-1 |
+| F-03 | 底栏的隐藏延时 | 500 ms after the pointer leaves the band (a bar lock or a menu or dialog opened while shown holds it) | FS-BAR-1 |
 | F-04 | 显示与隐藏的动画 | 立即出现、立即消失 | |
 | F-05 | 指针停在底栏上 | 底栏不隐藏 | G-04 |
-| F-06 | 暂停时底栏 | 同样在空闲 3 秒后隐藏 | |
+| F-06 | 暂停时底栏 | The same: shows only while the pointer is in the band | FS-BAR-1 |
 | F-07 | 附着的播放列表 | 右边缘弹出 | G-01 |
 | F-08 | 浮动的播放列表 | 保持为独立窗口，右边缘不触发 | G-01 |
-| F-09 | 指针 | 播放中空闲 3 秒后隐藏；暂停时不隐藏；在底栏、弹出层上不隐藏 | G-06 |
+| F-09 | 指针 | 播放中空闲 3 秒后隐藏；暂停时不隐藏；在底栏、弹出层上不隐藏 (nor in the bar's band); independent of the bar | G-06, FS-BAR-1 |
 | F-10 | 标题栏 | 不显示（macOS 指针移到顶端时由系统显示菜单栏） | IA-CORE-07 |
 | F-11 | 屏幕提示与信息层 | 与窗口模式相同；杂项信息可设「仅全屏时显示」（未实现） | IA-INFO-02 |
 | F-12 | 进入全屏 | Enter、Alt+Enter、F11、双击；Esc 退出；Ctrl+Enter 拉伸全屏、Ctrl+Shift+Enter 在其它显示器上全屏（未实现） | IA-CORE-04 |

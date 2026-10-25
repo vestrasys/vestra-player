@@ -64,8 +64,55 @@ The countermeasures are all in the process below; the key point is that whoever 
 - No changes to interaction logic or feature scope, except the parts of the step 1 plugin center the user named.
 - No changes to the theme and colours. If the review finds a problem in ui-spec itself, only register it and ask the user.
 
+## FS-BAR-1: fullscreen bar only on hover over its band (§4.1 request, playback author, 2026-10-25)
+
+User request (exact behaviour): in fullscreen the bottom control bar is hidden and appears **only** while the pointer is over the band where the bar sits. It must not appear on pointer motion elsewhere, on key actions (seek, volume, pause, speed, ...), on entering fullscreen, or on the OSD. It hides again shortly after the pointer leaves the band. Windowed mode is unchanged.
+
+**Requesting plugin / code location**: `vestra.playback` (owner of the `bottom` slot), `src/plugins/playback/bar.ts`, `ui/bar.slint`.
+
+**Who controls it today (evidence)**: only the host. The plugin has no say beyond `setVisible` (the user preference) and `setInteraction` (locks that *keep* the bar).
+
+- `src/host/src/window_state.rs` `Policy::evaluate`: in fullscreen the bottom slot is `effective` unless 3000 ms (`IDLE_MS`) passed since `last_activity_ms` and nothing suppresses it (hover, locks, menu, dialog); so **any** `activity()` reveals the bar.
+- `activity()` callers in `src/host/src/main.rs`: `Event::WindowInput` (line ~814; sent by `host.slint` for pointer motion anywhere on the video, a pointer press, and every key the binding table does not take), `Event::Binding` (~920; every bound key, i.e. seek, volume, pause, the plugin's own commands), `Event::MenuAction` (~822), dialog done (~1047/1052), mounts (~2590), `ui.interaction` (~3868, any plugin lock write), and `set_fullscreen(true)` (entering fullscreen reveals the bar).
+- `src/host/src/composition.rs` (~265): in fullscreen the bar is an overlay (`y: -self.height`) with `visible: root.bottom-visible`; its hover `TouchArea` is inside the invisible element, so a hidden bar has **no hover signal** at all. The video `TouchArea` in `host.slint` exports `pointer-x/pointer-y/video-hover`, which the host already samples every tick (`main.rs` ~1490).
+- Cursor auto-hide (`main.rs` ~1540, UI-SHELL-09) is tied to the bar: in fullscreen the pointer hides when `bottom.reason == Idle`.
+
+**Why the existing API cannot do it**: the plugin cannot stop the host from revealing the bar on activity (no lock *hides* it; `setVisible(false)` changes the remembered user preference and would hide the bar for good, including on hover), and a hidden panel receives no pointer events, so the plugin cannot even detect the hover. Holding a lock forever and drawing the bar transparent would break cursor auto-hide (`bottom_locked` makes `idle()` false) and still eat clicks in the band. Minimal reproduction: fullscreen, playing, pointer resting mid-screen; press Ctrl+→ → `Event::Binding` → `activity()` → `bottom-visible = true` for 3 s.
+
+**Desired behaviour (host only, no API or SDK signature change)**, in fullscreen:
+
+1. **Reveal only by hover over the band**. The band is the bar's own rectangle: full width of the screen minus the popped-out sidebar (`sidebar-pop-width` while `sidebar-popped`), from `logical-height - bar height` to the bottom edge, where the bar height is the bottom panel's laid-out height (`bottom-keys.height`, which Slint computes also while it is invisible; export it, e.g. `out property <length> bottom-band-height`). The host decides "in band" from the samples it already reads: `bottom-hover` while the bar shows, else `video-hover && pointer-y >= logical-height - bottom-band-height` (and the pointer is left of a popped-out sidebar). All in logical px, so it works on any monitor size and scale; a detached sidebar takes nothing from the band; a popped-out sidebar narrows it like it narrows the bar today. No extra `TouchArea` over the video (the band must keep its clicks and double-clicks).
+2. **Hide 500 ms after the pointer leaves the band** (the same value as the sidebar pop-out's `LEAVE_MS`); entering the band shows it at once. Re-entering within the delay cancels it.
+3. **Nothing else reveals it**: `activity()` (pointer motion outside the band, keys, bindings, menu actions, dialogs, mounts, lock writes) and entering fullscreen no longer make the bar effective. Proposed shape: in `Policy`, the fullscreen bottom becomes `effective` iff `in_band || left_band_at + LEAVE_MS > now || bar locks (plugin dragging/focused/popupOpen)`; a menu or dialog opened while the bar is shown **holds** it until closed (so the bar's own popup menu or Open dialog do not pull the bar away), but does not reveal a hidden bar. `next_deadline_ms` covers the leave delay.
+4. **OSD unchanged**: key seeks still show the OSD message (it is a separate host layer, `osd-visible`); only the bar stays hidden.
+5. **Cursor auto-hide keeps working, decoupled from the bar**: in fullscreen the pointer hides when playing and `policy.idle(now)` (3 s without pointer motion or keys, no menu or dialog, the pointer not over the bar, no bar lock), i.e. the windowed `"playing"` rule without the active-window condition; `setCursorAutoHide` semantics unchanged. Keys still count as activity for the cursor and for the popped-out sidebar's idle collapse; they just no longer touch the bar.
+6. **Windowed mode unchanged** (the bar is docked and does not auto-hide; `setCursorAutoHide("playing")` as today).
+
+**State and SDK**: `SlotState` stays as is; a hidden fullscreen bar keeps `effective: false, reason: "idle"` (meaning becomes "fullscreen, pointer not over the band"). Document in `doc/plugins/reference.md` §6.3 and `doc/product/interaction-spec.md` (G-04 acceptance items 3 and 4, F-06), and update the TestHost only if it models the bar's fullscreen idle (it does not today). Failure / missing capability: headless runs have no bar, nothing changes.
+
+**Does it break a contract**: it changes host default behaviour (when the fullscreen bar shows), not a signature. Affected: `vestra.playback` (wants it); the window plugin's `setCursorAutoHide` (behaviour kept, see 5); `vestra.playlist` (sidebar pop-out logic untouched, but the "bar lies left of the popped-out sidebar" pointer case in `main.rs` ~1500 must keep working). No other plugin mounts the bottom slot.
+
+**Minimal acceptance**: host unit tests in `window_state.rs`: (a) fullscreen + `activity()` alone (keys, motion outside the band, entering fullscreen) → bottom `effective: false`; (b) pointer into the band → `effective: true` at once; out of it → still effective at +499 ms, hidden at +500 ms; back in within the delay → stays; (c) a bar lock (dragging) holds it after the pointer leaves, release starts the 500 ms; (d) a menu opened while shown holds it, opened while hidden does not reveal it; (e) band x-range excludes a popped-out sidebar; (f) cursor hides after 3 s idle in fullscreen while the bar is hidden, never while the pointer is in the band. Real GUI (coordinator): fullscreen on two monitor sizes, with the sidebar popped out and detached; Ctrl+→ shows "Forward 30 s: ..." on the OSD with no bar.
+
+**Plugin side (done in `feat/fullscreen-bar-hover`)**: nothing in the plugin reveals the bar; its only locks are real drags on the seek and volume sliders, released on pointer up. `src/plugins/playback/tests/fullscreen-bar.test.ts` pins that: key seeks and speed in fullscreen show the OSD and take no lock; a drag holds the bar and releases it. No plugin code change is needed, so the plugin version stays at 0.1.6.
+
+**Maintainer reply** (2026-10-25): **accepted** as written; classified as a host default-behaviour change with no API or SDK signature change (no existing API can do it: the bar's visibility is host-only, and a hidden panel has no hover signal). Implemented in `feat/fullscreen-bar-hover`:
+
+- `window_state.rs`: `Policy::bottom_band(over_bar, over_video, viewport, band_height, now)` decides "in band" (bar hover, or the video pointer at `y >= height - band_height` and left of a popped-out sidebar; no band outside fullscreen, without a laid-out bar or on non-finite samples). The fullscreen bottom is `effective` iff in band, a bar lock or hover, a menu or dialog opened while it showed, or less than `LEAVE_MS` (500) since that hold ended; otherwise `reason: "idle"`. `activity()` and `set_fullscreen(true)` no longer touch the bar. `next_deadline_ms` now reports the pending leave-delay hide. `idle()` also excludes the pointer in the band.
+- `composition.rs`: the shell exports `out property <float> bottom-band-height: bottom-keys.height / 1px` (0 without a bottom mount); `bottom-keys` keeps its explicit height while invisible, so the band exists while the bar is hidden. No new `TouchArea`.
+- `main.rs`: samples the band every tick before `Policy::tick`; the pointer auto-hide in fullscreen is now `playing && policy.idle(now)` (decoupled from the bar); the windowed `setCursorAutoHide("playing")` rule is unchanged. The activity sources stay (the pointer and the popped-out sidebar's idle collapse use them); they just no longer reveal the bar.
+- Tests (acceptance (a)–(f)) in `window_state.rs`; docs: `doc/plugins/reference.md` §6.3 and §6.6, `doc/product/interaction-spec.md` (G-01 item 6, G-04, new FS-BAR-1, F-02/F-03/F-06/F-09), `doc/product/ui-spec.md` (UI-SHELL-09, C1), `doc/architecture/core-ui-design.md`. TestHost does not model the fullscreen bar, so it is unchanged.
+
+Deviations / notes (none change the requested behaviour):
+
+1. A bar lock (`setInteraction`) also shows a hidden bar, as the proposed shape (`... || bar locks`) says; the plugin locks only during real drags, so in practice it only holds.
+2. The leave delay after a lock release or menu close starts at the next host tick (about one frame later), because lock setters take no timestamp.
+3. A side effect of decoupling: in fullscreen the pointer now also auto-hides when the bar is user-hidden or no bottom panel is mounted (it used to follow the bar's `idle` reason and never hid then).
+4. SDK text that describes the old behaviour, for an SDK patch (not edited here): `SlotState.reason` `idle` ("hidden after 3 seconds without activity"), `Panel.setInteraction` remarks ("The bottom bar hides after 3 seconds without activity in fullscreen"), and `Panels.mount` `"bottom"` ("In fullscreen it floats over the video and hides after 3 seconds without activity"); new wording: "in fullscreen it shows only while the pointer is over its band at the bottom edge and hides 500 ms after the pointer leaves". Same text in the generated `llms-full.txt`.
+
 ## Progress
 
 - [ ] Step 0: screenshot tool
 - [ ] Step 1: plugin center specification → negotiation → implementation → acceptance
 - [ ] Step 2: full screenshots → review → fixes → second review → acceptance
+- [ ] FS-BAR-1: fullscreen bar on hover only (accepted and implemented in `feat/fullscreen-bar-hover`; coordinator GUI test pending)
