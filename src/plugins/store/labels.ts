@@ -1,33 +1,41 @@
 import type { PackageSource } from "@vestra-player/sdk";
+import { IndexError } from "./index-format.ts";
+import { NetError } from "./net.ts";
+import { list, msg, raw, type Arg, type Msg } from "./text.ts";
 
 /** Capabilities in plain words (design §2.4); `risky` ones are drawn amber. */
-export const CAPABILITIES: Record<string, { text: string; risky?: boolean }> = {
-  commands: { text: "添加菜单命令和快捷键" },
-  "ui.window": { text: "打开工具窗口" },
-  "ui.mount": { text: "在底栏、侧栏或视频背景显示面板" },
-  "ui.dialog": { text: "弹出文件选择和确认对话框" },
-  "ui.osd": { text: "在视频上显示提示文字" },
-  "ui.drop": { text: "接收拖到播放器上的文件" },
-  "ui.theme": { text: "切换播放器配色" },
-  "ui.settings": { text: "在「选项」窗口添加设置页" },
-  "playback.read": { text: "读取正在播放的内容和进度" },
-  events: { text: "实时接收播放状态变化" },
-  "playback.control": { text: "打开媒体、控制播放、阻止休眠" },
-  "producer.av": { text: "向播放器提供自己生成的音视频" },
-  "processing.video": { text: "处理画面（滤镜、着色器）" },
-  "processing.audio": { text: "处理声音" },
-  "subtitles.read": { text: "读取字幕" },
-  "subtitles.control": { text: "载入和修改字幕" },
-  "media.read": { text: "截图与导出视频片段" },
-  "media.control": { text: "截图与导出视频片段" },
-  "source.resolve": { text: "解析网络视频地址" },
-  "timeline.marks": { text: "在进度条上显示标记" },
-  "window.control": { text: "调整主窗口（尺寸、置顶、画中画）" },
-  clipboard: { text: "读写剪贴板", risky: true },
-  "bindings.manage": { text: "修改所有快捷键", risky: true },
-  secrets: { text: "在系统钥匙串保存登录信息", risky: true },
-  "plugins.manage": { text: "安装、卸载、停用其它插件", risky: true },
-};
+export const CAPABILITIES = {
+  commands: { text: "Add menu commands and shortcuts" },
+  "ui.window": { text: "Open tool windows" },
+  "ui.mount": { text: "Show panels in the bottom bar, the sidebar or behind the video" },
+  "ui.dialog": { text: "Show file pickers and confirmations" },
+  "ui.osd": { text: "Show messages on the video" },
+  "ui.drop": { text: "Receive files dropped on the player" },
+  "ui.theme": { text: "Change the player's palette" },
+  "ui.settings": { text: "Add pages to the Options window" },
+  "playback.read": { text: "Read what is playing and the position" },
+  events: { text: "Receive playback changes as they happen" },
+  "playback.control": { text: "Open media, control playback, keep the computer awake" },
+  "producer.av": { text: "Provide audio and video it generates itself" },
+  "processing.video": { text: "Process the picture (filters, shaders)" },
+  "processing.audio": { text: "Process the sound" },
+  "subtitles.read": { text: "Read subtitles" },
+  "subtitles.control": { text: "Load and change subtitles" },
+  "media.read": { text: "Take snapshots and export clips" },
+  "media.control": { text: "Take snapshots and export clips" },
+  "source.resolve": { text: "Resolve online video addresses" },
+  "timeline.marks": { text: "Show marks on the progress bar" },
+  "window.control": { text: "Adjust the main window (size, on top, picture-in-picture)" },
+  clipboard: { text: "Read and write the clipboard", risky: true },
+  "bindings.manage": { text: "Change all shortcuts", risky: true },
+  secrets: { text: "Store sign-in details in the system keychain", risky: true },
+  "plugins.manage": { text: "Install, uninstall and disable other plugins", risky: true },
+} as const satisfies Record<string, { text: string; risky?: true }>;
+
+/** The words of a capability (a template of text.ts). */
+export type CapabilityText = (typeof CAPABILITIES)[keyof typeof CAPABILITIES]["text"];
+
+const KNOWN: Partial<Record<string, { text: CapabilityText; risky?: true }>> = CAPABILITIES;
 
 /**
  * `vestra` and `vestra.<name>` (any case) belong to the player's built-in
@@ -40,48 +48,62 @@ export function reservedId(id: string): boolean {
 }
 
 /** The player's own wording for `reserved`. */
-export const reservedText = (id: string) => `「${id}」：vestra. 开头的 id 只留给播放器内置插件，不能安装或试载`;
+export const reservedText = (id: string | undefined): Msg =>
+  id === undefined
+    ? msg(
+        "This plugin: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed or loaded for testing",
+      )
+    : msg(
+        "“{}”: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed or loaded for testing",
+        id,
+      );
 
-export const TRUST_NOTE = "插件是完整的程序，以上权限只限制它使用播放器的功能，不限制它读写文件和联网。";
-
-/** One line per distinct description (media.read and media.control share one). */
-export function permissions(capabilities: readonly string[]): { text: string; risky: boolean }[] {
+/**
+ * One line per distinct description (media.read and media.control share
+ * one): the capability shown (`id`, the first of those sharing a text), its
+ * words and whether it is risky.
+ */
+export function permissions(capabilities: readonly string[]): { id: string; text: Msg; risky: boolean }[] {
   const seen = new Set<string>();
-  const lines: { text: string; risky: boolean }[] = [];
+  const lines: { id: string; text: Msg; risky: boolean }[] = [];
   for (const name of capabilities) {
-    const known = CAPABILITIES[name];
-    const text = known?.text ?? `未知权限：${name}`;
-    if (seen.has(text)) continue;
-    seen.add(text);
-    lines.push({ text, risky: known?.risky === true });
+    const known = KNOWN[name];
+    const key = known?.text ?? `?${name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push({
+      id: name,
+      text: known ? msg(known.text) : msg("Unknown permission: {}", name),
+      risky: known?.risky === true,
+    });
   }
   return lines;
 }
 
 /** Bullet list for a confirmation, at most 20 lines. */
-export function permissionList(capabilities: readonly string[]): string {
+export function permissionList(capabilities: readonly string[]): Arg {
   const lines = permissions(capabilities);
-  if (!lines.length) return "· 不使用播放器的任何功能";
-  const shown = lines.slice(0, 20).map((line) => `· ${line.text}`);
-  if (lines.length > 20) shown.push(`等 ${lines.length} 项`);
-  return shown.join("\n");
+  if (!lines.length) return msg("· Uses none of the player's features");
+  const shown: Arg[] = lines.slice(0, 20).map((line) => msg("· {}", line.text));
+  if (lines.length > 20) shown.push(msg("{} in total", lines.length));
+  return list(shown, "lines");
 }
 
 /** Where a sideloaded or other-source plugin came from. */
-export function sourceName(source: PackageSource | null): string {
+export function sourceName(source: PackageSource | null): Msg {
   switch (source?.kind) {
     case "bundled":
-      return "内置";
+      return msg("Built-in");
     case "file":
-      return "本地文件";
+      return msg("Local file");
     case "link":
-      return "链接";
+      return msg("Link");
     case "workshop":
-      return "插件工坊";
+      return msg("Plugin Workshop");
     case "repository":
-      return `仓库 ${hostOf(source.url)}`;
+      return msg("Repository {}", hostOf(source.url));
     default:
-      return "未知来源";
+      return msg("Unknown source");
   }
 }
 
@@ -110,8 +132,8 @@ export function day(iso: string): string {
   return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
 }
 
-/** Cut to `max` characters (confirmation limits count characters). */
-export function cut(text: string, max: number): string {
-  const chars = [...text];
-  return chars.length > max ? `${chars.slice(0, max - 1).join("")}…` : text;
+/** Why something failed, for a sentence: the store's own reasons, else the error's message. */
+export function reasonOf(error: unknown): Msg {
+  if (error instanceof NetError || error instanceof IndexError) return error.reason;
+  return raw((error as Error).message);
 }

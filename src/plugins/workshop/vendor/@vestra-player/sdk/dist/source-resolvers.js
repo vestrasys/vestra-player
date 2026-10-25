@@ -1,6 +1,14 @@
+/** Trusted extraction providers. Declarations cross JSON; handler code stays in JS. */
+import { isTextValue, textProblem } from "./i18n.js";
 const isProducer = (result) => result?.kind === "stream";
 /** The words of a failure, as the user will read them. */
-const reason = (error) => (error instanceof Error ? error.message : String(error)).slice(0, 2048);
+const reason = (error) => {
+    // `plugin.i18n.error(…)`: the player shows the text translated.
+    const text = error?.text;
+    if (error instanceof Error && isTextValue(text) && !textProblem(text))
+        return text;
+    return (error instanceof Error ? error.message : String(error)).slice(0, 2048);
+};
 export function sourceResolverClient(transport) {
     return {
         /** Requires source.resolve. One registered host/scheme pair, and one file

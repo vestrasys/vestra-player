@@ -38,10 +38,14 @@ export function pickListed(provider: Provider, current: string, listed: string[]
   return PREFERRED.find((m) => listed.includes(m)) ?? (listed.includes(provider.defaultModel) ? provider.defaultModel : listed[0]);
 }
 
-/** Custom endpoints; the worker registers each under its id. */
+/**
+ * Custom endpoints; the worker registers each under its id. Their labels
+ * are never shown as they are: the settings page's provider list names them
+ * with texts (main.ts), the windows in their own words (labels.slint, by id).
+ */
 export const CUSTOM: Provider[] = [
-  { id: "custom-openai", label: "自定义 · OpenAI 格式", models: [], defaultModel: "", api: "openai-completions" },
-  { id: "custom-anthropic", label: "自定义 · Anthropic 格式", models: [], defaultModel: "", api: "anthropic-messages" },
+  { id: "custom-openai", label: "Custom · OpenAI format", models: [], defaultModel: "", api: "openai-completions" },
+  { id: "custom-anthropic", label: "Custom · Anthropic format", models: [], defaultModel: "", api: "anthropic-messages" },
 ];
 
 /** A sensible first choice where pi's catalog has it. */
@@ -84,17 +88,25 @@ const REMOVED: Record<string, string> = {
 
 export const goneName = (id: string) => REMOVED[id] ?? id;
 
-/** The notice for a saved provider that is not offered any more. */
-export function goneNotice(id: string): string {
-  return `之前选择的服务商「${goneName(id)}」已不再提供，请改用其他服务商或「自定义 · OpenAI/Anthropic 格式」。`;
-}
 
 /** Keychain entry of a provider's key (one per provider id, custom entries included). */
 export const secretName = (provider: string) => `key.${provider}`;
 
-/** What the settings page shows for a saved key: never the key itself. */
-export function masked(key: string): string {
-  return key ? `已保存 ••••${key.slice(-4)}` : "未保存";
+/**
+ * A text a window shows: the key of an English template in the Slint file
+ * (which has the words), its arguments (data) and a count for plurals.
+ */
+export type Say = {
+  code: string;
+  args: string[];
+  n: number;
+};
+
+export const say = (code = "", args: (string | number)[] = [], n = 0): Say => ({ code, args: args.map(String), n });
+
+/** What the settings page shows for a saved key: never the key itself (the last four characters). */
+export function masked(key: string): Say {
+  return key ? say("saved", [key.slice(-4)]) : say("not-saved");
 }
 
 export interface AiSettings {
@@ -162,18 +174,30 @@ export function migrate(value: AiSettings & { baseUrl?: string }): AiSettings | 
   };
 }
 
+/** Why a Base URL is refused: `code` is the settings page's message. */
+export class BaseUrlError extends Error {
+  readonly code: "url-invalid" | "url-scheme" | "url-credentials";
+  constructor(code: BaseUrlError["code"], message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
 /** A Base URL the worker can use: http(s), no credentials in it, no trailing slash. */
 export function checkBaseUrl(text: string): string {
   let url: URL;
   try {
     url = new URL(text.trim());
   } catch {
-    throw new Error("Base URL 不是有效地址");
+    throw new BaseUrlError("url-invalid", "Base URL is not a valid address");
   }
-  if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Base URL 须为 http(s) 地址");
-  if (url.username || url.password) throw new Error("Base URL 里不要写用户名或密码，key 请填在 API Key 中");
+  if (url.protocol !== "http:" && url.protocol !== "https:") throw new BaseUrlError("url-scheme", "Base URL must be an http(s) address");
+  if (url.username || url.password) throw new BaseUrlError("url-credentials", "Base URL must not contain a user name or password; put the key in API Key");
   return url.href.replace(/\/+$/, "");
 }
+
+/** An endpoint answered with an empty model list. */
+export class NoModelsError extends Error {}
 
 /**
  * The models a custom endpoint lists: OpenAI format `GET {base}/models`,
@@ -201,6 +225,6 @@ export async function listModels(spec: ListSpec, key: string, timeoutMs = 10_000
     .map((m) => (typeof m.id === "string" ? m.id : typeof (m as { name?: unknown }).name === "string" ? String((m as { name: string }).name) : ""))
     .map((id) => id.replace(/^models\//, ""))
     .filter(Boolean);
-  if (!ids.length) throw new Error("没有列出任何模型");
+  if (!ids.length) throw new NoModelsError("No models listed");
   return [...new Set(ids)].sort();
 }

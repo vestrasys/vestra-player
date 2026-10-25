@@ -7,9 +7,11 @@ import { createHash, generateKeyPairSync, sign, type KeyObject } from "node:cryp
 import { readFileSync } from "node:fs";
 import type { PackageManifest, Plugin } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
+import type { Json, Locale } from "@vestra-player/sdk";
 import { startStore } from "../main.ts";
 import type { Store } from "../store.ts";
 import { timing } from "../store.ts";
+import { textOf, type Msg } from "../text.ts";
 
 export const directory = new URL("..", import.meta.url);
 
@@ -247,6 +249,8 @@ export async function start(
     host?: TestHost;
     now?: () => number;
     keys?: KeyObject[];
+    /** The interface language; the store's tests read Simplified Chinese unless they say otherwise. */
+    locale?: Locale;
   } = {},
 ) {
   const net = options.net ?? new FakeNet();
@@ -293,9 +297,15 @@ export async function start(
         log: (line) => logs.push(line),
       });
     },
-    { directory, host, ...(options.dataDirectory ? { dataDirectory: options.dataDirectory } : {}) },
+    {
+      directory,
+      host,
+      locale: options.locale ?? "zh-Hans",
+      ...(options.dataDirectory ? { dataDirectory: options.dataDirectory } : {}),
+    },
   );
   await host.settle();
+  latest = { host, plugin: started.plugin };
   return { host, net, store, logs, plugin: started.plugin, stop: started.stop };
 }
 
@@ -322,8 +332,28 @@ export async function openStore(host: TestHost) {
   return window;
 }
 
+// ------------------------------------------------------------ window texts as shown
+
+let latest: { host: TestHost; plugin: Plugin } | null = null;
+
+/** A `Msg` as the player shows it, in the language of the store started last. */
+export function said(value: Msg | null): string {
+  const shown = textOf(latest!.plugin.i18n, value);
+  return shown === "" ? "" : latest!.host.translate(shown);
+}
+
+/** The store window's props as shown (the test host renders text values), plus the status line's text. */
+export function props(host: TestHost): Record<string, Json> {
+  const out = { ...host.window("store").props } as Record<string, Json>;
+  out["status-text"] = out["status"] ?? "";
+  return out;
+}
+
+/** The settings page's props as shown. */
+export const pageProps = (host: TestHost) => host.settingsPage("store.repos").props as Record<string, Json>;
+
 export const rows = (host: TestHost) =>
-  (host.window("store").props["rows"] as { key: string; name: string; badge: string; version: string }[]) ?? [];
+  (props(host)["rows"] as { key: string; name: string; badge: string; version: string }[]) ?? [];
 
 /** Select the row with this name in the store window. */
 export async function choose(host: TestHost, name: string) {
@@ -334,6 +364,5 @@ export async function choose(host: TestHost, name: string) {
   return row;
 }
 
-export const props = (host: TestHost) => host.window("store").props;
 export const actions = (host: TestHost) => (props(host)["actions"] as { id: string; text: string; enabled: boolean }[]) ?? [];
 export const banners = (host: TestHost) => ((props(host)["banners"] as { text: string }[]) ?? []).map((b) => b.text);

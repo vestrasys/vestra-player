@@ -1,6 +1,7 @@
 import type { Item } from "./catalog.ts";
 import { compareVersions, isVersion } from "./semver.ts";
 import type { Store } from "./store.ts";
+import { joined, msg, raw, type Msg } from "./text.ts";
 
 /** Identifies one revocation hit: repository, plugin, installed version, range. */
 export const revocationKey = (repo: string, id: string, version: string, range: string) =>
@@ -94,20 +95,27 @@ export class Revocations {
     const store = this.#store;
     const lines = items.map((item) => {
       const fix = this.#fix(item);
-      return `「${item.name}」${item.installed!.version}：${item.revocation!.reason}${fix ? `\n可以在插件商城更新到 ${fix}。` : ""}`;
+      const { name, installed, revocation } = item;
+      return fix
+        ? msg("“{}” {}: {}\nYou can update to {} in the Plugin Store.", name, installed!.version ?? "", revocation!.reason, fix)
+        : msg("“{}” {}: {}", name, installed!.version ?? "", revocation!.reason);
     });
     const first = items[0]!;
     const answer = await store.ask({
       message:
         items.length === 1
-          ? `已停用被撤回的插件「${first.name}」${first.installed!.version}`
-          : `已停用 ${items.length} 个被撤回的插件`,
-      detail: `仓库撤回了这些版本，原因：\n\n${lines.join("\n\n")}\n\n如果仍要使用，可以在插件商城的详情页选择「仍然启用…」。`,
-      confirm: "打开插件商城",
-      cancel: "知道了",
+          ? msg("Disabled the revoked plugin “{}” {}", first.name, first.installed!.version ?? "")
+          : msg("Disabled {} revoked plugins", items.length, ""),
+      detail: msg(
+        "The repository revoked these versions. Reasons:\n\n{2}\n\nTo keep using one anyway, choose “Enable Anyway…” on its page in the Plugin Store.",
+        // One reason after another (at most 20, then the count).
+        joined(lines.length > 20 ? [...lines.slice(0, 20), msg("{} in total", lines.length)] : lines, "{}\n\n{}"),
+      ),
+      confirm: "Open Plugin Store",
+      cancel: "OK",
     });
     if (answer === null) {
-      store.osd(`已停用被撤回的插件「${first.name}」`);
+      store.osd(msg("Disabled the revoked plugin “{}”", first.name));
       // Another dialog was open: show the notice again a little later.
       if (store.lastDialogError === "busy" && !this.#retry)
         this.#retry = setTimeout(() => {
@@ -129,23 +137,41 @@ export class Revocations {
     return best && current && isVersion(current) && compareVersions(best, current) > 0 ? best : null;
   }
 
-  #riskDetail(item: Item): string {
+  /** The risk explained, after the message's two arguments (name and version). */
+  #riskDetail(item: Item, again: boolean): Msg {
     const fix = this.#fix(item);
-    return (
-      `仓库撤回这个版本的原因：${item.revocation!.reason}\n\n` +
-      "继续使用可能有风险。确认后商城不会再自动停用它，详情页会一直显示警告。" +
-      (fix ? `\n\n建议改为更新到 ${fix}。` : "")
-    );
+    const reason = item.revocation!.reason;
+    if (again)
+      return fix
+        ? msg(
+            "It was just enabled again. The repository's reason for revoking this version: {2}\n\nUsing it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning.\n\nUpdating to {3} instead is recommended.",
+            reason,
+            fix,
+          )
+        : msg(
+            "It was just enabled again. The repository's reason for revoking this version: {2}\n\nUsing it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning.",
+            reason,
+          );
+    return fix
+      ? msg(
+          "The repository's reason for revoking this version: {2}\n\nUsing it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning.\n\nUpdating to {3} instead is recommended.",
+          reason,
+          fix,
+        )
+      : msg(
+          "The repository's reason for revoking this version: {2}\n\nUsing it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning.",
+          reason,
+        );
   }
 
-  /** 「仍然启用…」 in the detail page. */
+  /** "Enable Anyway…" in the detail page. */
   async enable(item: Item) {
     const store = this.#store;
     if (!item.revocation || !item.installed || !item.repo) return;
     const answer = await store.ask({
-      message: `仍然启用被撤回的「${item.name}」${item.installed.version}？`,
-      detail: this.#riskDetail(item),
-      confirm: "仍然启用",
+      message: msg("Enable the revoked “{}” {} anyway?", item.name, item.installed.version ?? ""),
+      detail: this.#riskDetail(item, false),
+      confirm: "Enable Anyway",
       destructive: true,
     });
     if (!answer?.confirmed) return;
@@ -153,19 +179,19 @@ export class Revocations {
     this.#mark(key, "accepted");
     try {
       await store.plugin.packages.setEnabled(item.id, true);
-      store.report(`已重新启用「${item.name}」`);
+      store.report(msg("Enabled “{}” again", item.name));
     } catch (error) {
-      store.report(`无法启用「${item.name}」：${(error as Error).message}`, true);
+      store.report(msg("Couldn't enable “{}”: {}", item.name, raw((error as Error).message)), true);
     }
   }
 
   async #confirmReenabled(item: Item, key: string) {
     const store = this.#store;
     const answer = await store.ask({
-      message: `「${item.name}」${item.installed!.version} 已被撤回，确定继续使用吗？`,
-      detail: `它刚被重新启用。${this.#riskDetail(item)}`,
-      confirm: "继续使用",
-      cancel: "停用",
+      message: msg("“{}” {} has been revoked. Keep using it?", item.name, item.installed!.version ?? ""),
+      detail: this.#riskDetail(item, true),
+      confirm: "Keep Using",
+      cancel: "Disable",
       destructive: true,
     });
     if (answer === null) {

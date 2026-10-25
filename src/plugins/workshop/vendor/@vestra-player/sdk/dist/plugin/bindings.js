@@ -110,6 +110,7 @@ export const bindingsApi = (scope) => ({
                 command: info.command,
                 title: info.title,
                 path: info.path,
+                key: info.key ?? null,
                 scope: info.scope,
                 defaults: info.defaults,
                 current: info.current,

@@ -1,0 +1,181 @@
+# Reviewed by an AI reviewer on 2026-10-25
+msgid ""
+msgstr ""
+"Language: ja\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: core.ts:9
+#, x-machine
+msgid "The emulator frame has an invalid size."
+msgstr "エミュレータの画面サイズが無効です。"
+
+#: core.ts:29
+#, x-machine
+msgid "This is not an NES ROM in iNES format."
+msgstr "iNES 形式の NES ROM ではありません。"
+
+#: core.ts:32
+#, x-machine
+msgid "The ROM file is incomplete: shorter than its header says."
+msgstr "ROM ファイルが不完全です（ヘッダーに記載されたサイズより短い）。"
+
+#: core.ts:45
+#, x-machine
+msgid "JSNES does not support mapper {} of this ROM."
+msgstr "JSNES はこの ROM のマッパー {} に対応していません。"
+
+#: core.ts:45
+#, x-machine
+msgid "JSNES could not load this ROM: {}"
+msgstr "JSNES はこの ROM を読み込めませんでした：{}"
+
+#: core.ts:53
+#, x-machine
+msgid "The emulator produced invalid audio data."
+msgstr "エミュレータが無効なオーディオデータを出力しました。"
+
+#: main.ts:83
+#, x-machine
+msgid "Open NES ROM"
+msgstr "NES ROM を開く"
+
+#: main.ts:116 main.ts:117 main.ts:118 manifest.json
+#, x-machine
+msgid "Emulator"
+msgstr "エミュレータ"
+
+#: main.ts:116
+#, x-machine
+msgid "Open NES ROM…"
+msgstr "NES ROM を開く…"
+
+#: main.ts:117
+#, x-machine
+msgid "Stop NES"
+msgstr "NES を停止"
+
+#: main.ts:118
+#, x-machine
+msgid "NES Tools…"
+msgstr "NES ツール…"
+
+#: main.ts:123
+#, x-machine
+msgid "The ROM file is larger than the 16 MiB limit."
+msgstr "ROM ファイルが上限の 16 MiB を超えています。"
+
+#: main.ts:131
+#, x-machine
+msgid "The ROM file was not found."
+msgstr "ROM ファイルが見つかりません。"
+
+#: main.ts:132
+#, x-machine
+msgid "No permission to read the ROM file."
+msgstr "ROM ファイルを読み取る権限がありません。"
+
+#: main.ts:133
+#, x-machine
+msgid "This is a folder, not a ROM file."
+msgstr "これはフォルダです。ROM ファイルではありません。"
+
+#: manifest.json
+#, x-machine
+msgid "NES Emulator"
+msgstr "NES エミュレータ"
+
+#: manifest.json
+#, x-machine
+msgid "Play NES game ROMs in the player"
+msgstr "NES ゲームの ROM をプレーヤーで遊ぶ"
+
+#: manifest.json
+#, x-machine
+msgid ""
+"Runs iNES ROMs with JSNES; picture and sound play in the player like any other media.\n"
+".nes files open like media: Open File, a drop on the video, the playlist; the Emulator context menu opens and stops them too. No keyboard controls or save states yet; no games included."
+msgstr ""
+"JSNES で iNES 形式の ROM を実行し、映像と音声を通常のメディアと同じようにプレーヤーで再生します。\n"
+".nes ファイルはメディアと同じように開けます（「ファイルを開く」、ビデオへのドロップ、プレイリスト）。コンテキストメニューの「エミュレータ」からも開始・停止できます。キーボード操作とセーブステートにはまだ対応しておらず、ゲームは付属していません。"
+
+#: manifest.json
+#, x-machine
+msgid "Games"
+msgstr "ゲーム"
+
+#: nes.slint:5
+#, x-machine
+msgid "NES"
+msgstr "NES"
+
+#: nes.slint:15
+#, x-machine
+msgid "Running {} · 256×240 · 48 kHz stereo"
+msgstr "{} を実行中 · 256×240 · 48 kHz ステレオ"
+
+#: nes.slint:16
+#, x-machine
+msgid "Stopped."
+msgstr "停止しました。"
+
+#: nes.slint:17
+#, x-machine
+msgid "Replaced by another source."
+msgstr "別のソースに置き換えられました。"
+
+#: nes.slint:18
+#, x-machine
+msgid "Emulator stopped: {}"
+msgstr "エミュレータが停止しました：{}"
+
+#: nes.slint:19
+#, x-machine
+msgid "Emulator stopped: the source ended."
+msgstr "エミュレータが停止しました：ソースが終了しました。"
+
+#: nes.slint:20
+#, x-machine
+msgid "Error: {}"
+msgstr "エラー：{}"
+
+#: nes.slint:21
+#, x-machine
+msgid "Error: could not open the ROM."
+msgstr "エラー：ROM を開けませんでした。"
+
+#: nes.slint:22
+#, x-machine
+msgid "Error: timed out preparing the first audio and video buffers."
+msgstr "エラー：最初のオーディオ/ビデオバッファの準備がタイムアウトしました。"
+
+#: nes.slint:23
+#, x-machine
+msgid "Error: timed out waiting for the emulator source to start."
+msgstr "エラー：エミュレータのソースの開始待ちがタイムアウトしました。"
+
+#: nes.slint:24
+#, x-machine
+msgid "Error: start-up timed out."
+msgstr "エラー：起動がタイムアウトしました。"
+
+#: nes.slint:25
+#, x-machine
+msgid "Error: the audio device is not ready."
+msgstr "エラー：オーディオデバイスの準備ができていません。"
+
+#: nes.slint:26
+#, x-machine
+msgid "Choose an iNES ROM file."
+msgstr "iNES ROM ファイルを選択してください。"
+
+#: nes.slint:47
+#, x-machine
+msgid "Open ROM…"
+msgstr "ROM を開く…"
+
+#: nes.slint:48
+#, x-machine
+msgid "Stop"
+msgstr "停止"

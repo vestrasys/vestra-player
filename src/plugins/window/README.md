@@ -1,23 +1,23 @@
-# 主窗口
+# Main Window
 
-调整窗口尺寸、置顶方式，以及迷你尺寸和画中画。
+Window size, always on top, mini size and picture-in-picture.
 
-## 功能
+## Features
 
-- **倍数尺寸**：把窗口调整为视频的 0.5、1、1.5、2 倍，或适应视频比例。
-- **开始播放时**：打开新文件时自动调整窗口尺寸（默认 1 倍），可设为只调整一次。
-- **置顶**：不置顶、总是置顶、播放时置顶、全屏播放时置顶（默认）。
-- **迷你尺寸**：把窗口缩小到 400×300 以内，再按一次恢复。
-- **画中画**：把画面放进系统画中画小窗（系统支持时才出现）。
-- **播放时隐藏鼠标指针**（默认开）。
+- **Scaled sizes**: resize the window to 0.5, 1, 1.5 or 2 times the video, or fit it to the video's aspect ratio.
+- **When playback starts**: resize the window automatically when a new file opens (1× by default); can be limited to once per run.
+- **Always on top**: never, always, while playing, or while playing in fullscreen (the default).
+- **Mini size**: shrink the window to fit within 400×300; press again to restore it.
+- **Picture-in-picture**: put the video in the system's picture-in-picture window (only where the system supports it).
+- **Hide the pointer while playing** (on by default).
 
-## 入口
+## Entry points
 
-- 右键菜单「屏幕」：画中画、迷你尺寸（`` ` ``）、0.5倍 · 1倍 · 1.5倍 · 2倍（1 · 2 · 3 · 4）、适应视频比例（8）、开始播放时、置顶（切换置顶方式 Ctrl+T）。
-- 右键菜单「播放 ▶ 播放时隐藏鼠标指针」。
-- 选项窗口「播放 ▶ 窗口」。
+- Context menu **Screen**: Picture-in-Picture, Mini Size (`` ` ``), 0.5× · 1× · 1.5× · 2× (1 · 2 · 3 · 4), Fit to Video Aspect Ratio (8), When Playback Starts, Always on Top (Cycle Mode: Ctrl+T).
+- Context menu **Playback ▸ Hide Pointer While Playing**.
+- Options window **Playback ▸ Window**.
 
-## 限制
+## Limits
 
-- 全屏时不能调整窗口尺寸。
-- macOS 的全屏是独立空间，「全屏播放时置顶」在那里看不出效果。
+- The window cannot be resized in fullscreen.
+- On macOS fullscreen is a separate space, so "while playing in fullscreen" shows no visible effect there.

@@ -1,0 +1,97 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: vestra.preferences 0.3.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: main.ts:42
+msgid "Palette: Vestra Light"
+msgstr ""
+
+#: main.ts:42
+msgid "Palette: Vestra Dark"
+msgstr ""
+
+#: main.ts:51
+msgid "Language: Follow System. Takes effect after restart"
+msgstr ""
+
+#: main.ts:52
+msgid "Language: {}. Takes effect after restart"
+msgstr ""
+
+#: main.ts:59 main.ts:93 ui/appearance.slint:98
+msgid "Appearance"
+msgstr ""
+
+#: main.ts:73 main.ts:103 main.ts:113 ui/language.slint:59
+msgid "Language"
+msgstr ""
+
+#: main.ts:84
+msgid "Options…"
+msgstr ""
+
+#: main.ts:93 ui/appearance.slint:87
+msgid "Vestra Dark"
+msgstr ""
+
+#: main.ts:93 ui/appearance.slint:87
+msgid "Vestra Light"
+msgstr ""
+
+#: main.ts:103 ui/language.slint:66
+msgid "Follow System"
+msgstr ""
+
+#: manifest.json
+msgid "Preferences"
+msgstr ""
+
+#: manifest.json
+msgid "Open the options window, change the palette and the language"
+msgstr ""
+
+#: manifest.json
+msgid "Settings ▸ Options… (F5) opens the player's options window. Settings ▸ Appearance picks the palette (Vestra Dark, Vestra Light); the options window also has an Appearance page with previews. Settings ▸ Language picks the interface language, used from the next start."
+msgstr ""
+
+#: manifest.json
+msgid "settings"
+msgstr ""
+
+#: manifest.json
+msgid "appearance"
+msgstr ""
+
+#: manifest.json
+msgid "palette"
+msgstr ""
+
+#: manifest.json
+msgid "language"
+msgstr ""
+
+#: ui/appearance.slint:90
+msgid "For bright rooms; the video area stays dark"
+msgstr ""
+
+#: ui/appearance.slint:90
+msgid "Default, from the logo's aurora colours"
+msgstr ""
+
+#: ui/appearance.slint:106
+msgid "Palette"
+msgstr ""
+
+#: ui/appearance.slint:152
+msgid "Changes apply to every window at once. Corner radii, font sizes and control sizes stay the same in every palette."
+msgstr ""
+
+#: ui/appearance.slint:162
+msgid "Restore Defaults"
+msgstr ""
+
+#: ui/language.slint:77
+msgid "Takes effect after restart."
+msgstr ""

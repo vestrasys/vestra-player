@@ -1,25 +1,25 @@
-# 章节、书签与区段
+# Chapters, Bookmarks and A-B Loop
 
-在章节和书签之间跳转，循环播放一段区间。
+Jump between chapters and bookmarks, and loop a range.
 
-## 功能
+## Features
 
-- **章节**：列出媒体自带的章节，点击跳转，跳到上一章节或下一章节。
-- **书签**：为每个文件添加书签，在列表窗口里搜索、改名、改时间、移除；文件改变后会提示书签时间可能不准。
-- **进度条标记**：在进度条上标出章节和书签。
-- **A-B 区段循环**：设定起点和止点并微调，循环当前章节或书签区间，可设循环次数。
+- **Chapters**: lists the media's own chapters; click one to jump to it, or step to the previous or next chapter.
+- **Bookmarks**: add bookmarks to each file; search, rename, retime and remove them in the list window. When the file has changed, the window warns that bookmark times may be off.
+- **Seek-bar marks**: shows chapters and bookmarks as marks on the seek bar.
+- **A-B loop**: set a start and an end point and fine-tune them, loop the current chapter or bookmark range, and choose how many times to loop.
 
-## 入口
+## Where to find it
 
-右键菜单「播放 ▶ 章节/书签」：
+Context menu "Playback ▸ Chapters and Bookmarks":
 
-- 章节/书签列表…（H）、添加书签（P）
-- 上一书签/章节、下一书签/章节（Shift+PgUp、Shift+PgDn）
-- 上一章节、下一章节（Ctrl+PgUp、Ctrl+PgDn）
-- 在进度条上显示标记
+- Chapter and Bookmark List… (H), Add Bookmark (P)
+- Previous Bookmark or Chapter, Next Bookmark or Chapter (Shift+PgUp, Shift+PgDn)
+- Previous Chapter, Next Chapter (Ctrl+PgUp, Ctrl+PgDn)
+- Show Marks on Seek Bar
 
-右键菜单「播放 ▶ A-B 区段循环」：设定起点 `[`、设定止点 `]`、解除 `{` `}`、循环当前章节/书签区段 Alt+\、区段循环开/关 `\`、循环次数。
+Context menu "Playback ▸ A-B Loop": Set Start Point `[`, Set End Point `]`, clear them with `{` `}`, Loop Current Chapter or Bookmark Range Alt+\, A-B Loop On/Off `\`, Loop Count.
 
-## 限制
+## Limits
 
-- 菜单里最多各列 50 个章节和书签，更多的在列表窗口里查看。
+- The menu lists at most 50 chapters and 50 bookmarks; see the rest in the list window.

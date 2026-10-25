@@ -38,7 +38,7 @@ export async function runTool(
         if (delivery) return await delivery.install(session, id, signal);
         break;
     }
-    return { ok: false, text: `没有工具 ${name}` };
+    return { ok: false, text: `No tool named ${name}` };
   } catch (error) {
     return { ok: false, text: (error as Error).message };
   }

@@ -1,4 +1,4 @@
-# @vestra-player/sdk 1.5.8: full reference
+# @vestra-player/sdk 1.5.13: full reference
 
 > Everything needed to write a Vestra Player plugin (plugin API `vestra/1`): the guides, every public declaration of `@vestra-player/sdk` and `@vestra-player/sdk/testing` with its documentation, and the complete source of the example plugins. Generated from the SDK's sources by scripts/llms.mjs; the short index is llms.txt.
 
@@ -998,11 +998,11 @@ change).
 | `timeout` | A time limit ran out (`openStream` start-up, `tools.run`, `system.*` after 10 s). |
 | `stream`, `device` | `openStream`: the producer failed / the audio device is not ready. |
 | `backend-uncertain` | The player's backend blocked a filter stage; call `retry()`. |
-| `limit` | A player-wide limit was reached (for example the number of commands). |
+| `limit` | A player-wide limit was reached (for example the number of commands), a property value is over the limits of PropValue, or a request is longer than the player's 1 MiB message. |
 | `reserved` | Packages.validate, PackageCandidate.install: the id is `vestra` or starts with `vestra.` (any case), which only the player's built-in plugins use (player 0.4.1). |
 | `versionMismatch` | The package needs a newer player (`minPlayerVersion`) or another `apiVersion`. |
 | `ui-prepare` | The player could not prepare a mounted panel or a settings page (its Slint file does not compile, a bound property is not declared, or another plugin's panel holds the slot); `message` has the diagnostics. |
-| `ui` | The player could not apply a property to a tool window or a settings page, or could not build the Options window (a property the Slint file does not declare, a value of the wrong type); `message` has Slint's reason. |
+| `ui` | The player could not apply a property to a tool window or a settings page, or could not build the Options window (a property the Slint file does not declare, a value of the wrong type); `message` has Slint's reason. Also reported to Scope.onError without a request: a callback whose arguments the player could not convert, a property it could not show again when it rebuilt a view (an image file removed since). |
 | `host` | Any other failure inside the player; `message` is the player's reason. |
 | `disabled` | The plugin is being stopped; pending requests fail with it. |
 | `unknown`, `rejected`, `expired` | After a transport problem the SDK could not confirm the outcome (does not happen in normal operation). |
@@ -1109,8 +1109,10 @@ interface Scope extends Disposable {
   readonly timeline: Timeline;
   /** Files dropped on the video area, by extension (`ui.drop`). */
   readonly drops: Drops;
-  /** The player's palette. */
+  /** The player's palette and the saved interface language. */
   readonly appearance: Appearance;
+  /** The interface language of this run (read-only). */
+  readonly i18n: I18n;
   /** Pages in the player's options window (`ui.settings`). */
   readonly settings: Settings;
   /** A child scope; disposing it releases only what was created through it. The child is itself owned by this scope. */
@@ -1199,8 +1201,8 @@ interface CommandState {
   checked: boolean | null;
   /** Shown as busy; like `enabled: false`, the player does not call `run`. Default false. */
   busy: boolean;
-  /** Shown when the command is disabled or busy. */
-  reason: string | null;
+  /** Shown when the command is disabled or busy: English source text the player translates, or a Text (SDK 1.5.11). */
+  reason: TextValue | null;
 }
 ```
 
@@ -1216,9 +1218,9 @@ type Bindable<T> = T | (() => T);
 ### MenuId
 
 A built-in top-level menu of the player, named in a command path as
-`@<id>` (see CommandOptions.path): Open (打开), Playback (播放),
-Subtitles (字幕), Video (视频), Audio (声音), Screen (屏幕), Settings (设置).
-The list is `MENU_IDS` in `@vestra-player/sdk/testing`.
+`@<id>` or by its English key (see CommandOptions.path): Open,
+Playback, Subtitles, Video, Audio, Screen, Settings. The list is
+`MENU_IDS` in `@vestra-player/sdk/testing`.
 
 ```ts
 type MenuId = "open" | "playback" | "subtitles" | "video" | "audio" | "screen" | "settings";
@@ -1239,7 +1241,7 @@ Built-in menus keep their place. The seven built-in top-level menus
 (MenuId) sit at fixed orders, whatever is inside them: Open 110,
 Playback 200, Subtitles 300, Video 400, Audio 500, Screen 710, Settings
 830 (player 0.3.0). This holds whether the path names the menu by id
-(`["@video", "Blur"]`) or by its title (`["视频", "Blur"]`), so a plugin's
+(`["@video", "Blur"]`) or by its key (`["Video", "Blur"]`), so a plugin's
 item never moves the player's menu. Directly inside a built-in menu,
 `order` 0 (the default) sorts after every other order: an item without
 `order` goes at the end, after the player's own items (which all use 100
@@ -1263,17 +1265,29 @@ interface CommandOptions {
    * one segment is a top-level item. Omit it for a command that is not in the
    * main menu (bindings and panel menus only); `title` is then required.
    *
-   * Segments are menu titles, matched exactly. The player's own menus have
-   * Chinese titles, so `["Video", "Blur"]` would add a second top-level menu
-   * "Video". To join a built-in menu, start the path with its id, `@` plus a
-   * MenuId: `@open`, `@playback`, `@subtitles`, `@video`, `@audio`,
-   * `@screen` or `@settings`. Only the first segment is read as an id; an
-   * unknown id, or an id with nothing after it, fails with `invalid`. Needs
-   * player 0.3.0 (set `"minPlayerVersion": "0.3.0"`).
+   * Segments are English source text, and menus merge by them: commands
+   * of different plugins with the same leading segments share a submenu.
+   * The player shows each segment and the title in the interface language
+   * from the declaring plugin's catalog (`locales/<lang>.po`, see the
+   * i18n guide); the player's own menus
+   * (Open, Playback, Subtitles, Video, Audio, Screen, Settings, and
+   * Playback ▸ Speed, Playback ▸ Seek) always show the player's words.
+   * A built-in menu can also be named by its id, `@` plus a MenuId:
+   * `@open`, `@playback`, `@subtitles`, `@video`, `@audio`, `@screen` or
+   * `@settings`. Only the first segment is read as an id; an unknown id, or
+   * an id with nothing after it, fails with `invalid`. Players up to 0.4.2
+   * titled their menus in Chinese (视频…): there `["Video", "Blur"]` is a
+   * menu of its own, so plugins for those players write `@video`; player
+   * 0.4.3 still accepts the old Chinese titles of its own menus.
+   *
+   * A segment that mixes words with data (a track number, a count) is a
+   * Text (SDK 1.5.11, player 0.4.3): `plugin.i18n.text("Track {}
+   * ({})", [n, codec])`. The menu shows it translated and filled in; it
+   * merges by its English rendering ("Track 2 (opus)").
    */
-  path?: string[];
-  /** Menu label; defaults to the last path segment. */
-  title?: string;
+  path?: (string | Text)[];
+  /** Menu label (English source text, shown translated, or a Text); defaults to the last path segment. */
+  title?: string | Text;
   /**
    * Sibling order in the menu, ascending (integer, default 0). A submenu sits where its first command sits, except a built-in menu, which keeps its fixed place. Directly inside a built-in menu, 0 (the default) sorts last. Equal orders: plugin id, then declaration order. Range ±1,000,000. See CommandOptions for the menu order rules.
    */
@@ -1315,8 +1329,8 @@ interface CommandOptions {
   checked?: Bindable<boolean | null>;
   /** Busy state (default false); the player does not call `run` while busy. */
   busy?: Bindable<boolean>;
-  /** Why the command is disabled or busy (shown to the user). */
-  reason?: Bindable<string | null>;
+  /** Why the command is disabled or busy (shown to the user): English source text, or a Text for one with data in it (SDK 1.5.11). */
+  reason?: Bindable<TextValue | null>;
   /**
    * Run the command (menu item, binding, panel menu or `host.command(id).run()` in tests). It may return a promise; errors and rejections go to Scope.onError, and bound values are re-evaluated when it returns and when its promise settles.
    */
@@ -1423,7 +1437,7 @@ JSON whose values may also be Markdown documents, at any depth: the part
 of PropValue that nests.
 
 ```ts
-type PropData = null | boolean | number | string | MarkdownRef | PropData[] | {
+type PropData = null | boolean | number | string | MarkdownRef | Text | TextList | PropData[] | {
   [key: string]: PropData;
 };
 ```
@@ -1901,6 +1915,196 @@ interface Appearance {
    * @throws capability (rejects) The manifest does not declare `ui.theme`.
    */
   set(theme: ThemeId): Promise<void>;
+  /** The saved interface language: `"system"` (follow the system's languages, the default) or a Locale. */
+  readonly language: LanguagePreference;
+  /**
+   * Save the interface language for the next start.
+   * @capability ui.theme
+   * @player 0.4.3
+   * @param language - `"system"` or a Locale.
+   * @returns Resolves once the player saved it; Appearance.language has the new value.
+   * @throws invalid (rejects) `language` is not `"system"` or a Locale.
+   * @throws capability (rejects) The manifest does not declare `ui.theme`.
+   * @throws unsupported (rejects) A player before 0.4.3.
+   */
+  setLanguage(language: LanguagePreference): Promise<void>;
+}
+```
+
+### Locale
+
+An interface language of the player: English (`en`, the source language
+of every plugin text) or a translation. The list is `LOCALES` in
+`@vestra-player/sdk/testing`.
+
+```ts
+type Locale = "en" | "zh-Hans" | "ja" | "ko" | "de" | "fr" | "es";
+```
+
+### LanguagePreference
+
+The saved interface language (Appearance.language): follow the
+system, or one Locale.
+
+```ts
+type LanguagePreference = "system" | Locale;
+```
+
+### TemplateArgs
+
+Arguments of a template sentence (Osd.show,
+OsdPanel.set, ConfirmOptions.args, I18n.text): an
+array for `{}` and `{0}`, `{1}` placeholders, or an object for `{name}`
+placeholders. At most 16. Strings and finite numbers are data, shown as
+they are (whole numbers without a fraction); a Text or
+TextList argument (SDK 1.5.11, player 0.4.3) is translated too,
+so a sentence can be built from translated parts.
+
+```ts
+type TemplateArgs = readonly TextArg[] | Readonly<Record<string, TextArg>>;
+```
+
+### Text
+
+A text the player translates with the plugin's catalog and fills in:
+English source text with its arguments. Made by I18n.text; plain
+data, not a translation (the plugin never sees the translated string).
+
+```ts
+interface Text {
+  /** The English source text: a template with `{}`, `{0}` or `{name}`. */
+  readonly $vestraText: string;
+  /** Values for its placeholders. */
+  readonly args?: TemplateArgs;
+}
+```
+
+### TextList
+
+Values joined the way the interface language joins them ("a, b" in
+English, "a、b" in Chinese). Made by I18n.list; accepted where a
+Text is.
+
+```ts
+interface TextList {
+  /** The items: data, or texts the player translates. */
+  readonly $vestraList: readonly TextArg[];
+  /** How they are joined; `"list"` by default. */
+  readonly style?: ListStyle;
+}
+```
+
+### ListStyle
+
+How a TextList is joined, per interface language:
+
+| style | English | 简体中文 | 日本語 |
+| --- | --- | --- | --- |
+| `list` (enumeration) | `, ` | `、` | `、` |
+| `clauses` (parts of one sentence) | `, ` | `，` | `、` |
+| `semicolons` | `; ` | `；` | `；` |
+| `sentences` (no final full stop) | `. ` | `。` | `。` |
+| `lines` | line break | line break | line break |
+
+Korean, German and Spanish join as English; French puts a narrow space
+before `;`.
+
+```ts
+type ListStyle = "list" | "clauses" | "semicolons" | "sentences" | "lines";
+```
+
+### TextArg
+
+An argument of a template: data (a string or a finite number, shown as it
+is) or a Text or TextList (translated).
+
+```ts
+type TextArg = string | number | Text | TextList;
+```
+
+### TextValue
+
+A text the player shows: English source text (translated as a whole), a
+Text or a TextList.
+
+```ts
+type TextValue = string | Text | TextList;
+```
+
+### I18n
+
+The interface language of this run. `plugin.i18n`.
+
+- @capability None.
+
+```ts
+interface I18n {
+  /**
+   * The interface language of this run, chosen at start-up from the saved Appearance.language or the system's languages; English when neither names a Locale. Players before 0.4.3 report `"en"`.
+   */
+  readonly locale: Locale;
+  /**
+   * A text that mixes words with data, for the player to translate: the
+   * English source text (a template) and its arguments. It returns a plain
+   * Text value, not a translation; pass it where the player shows
+   * text (see Text) and the player shows it translated with this
+   * plugin's catalog. `vestra-plugin i18n extract` collects `source` from
+   * every call, so write it as a literal (or a conditional of literals, or
+   * an `as const` table entry).
+   *
+   * Arguments are data unless they are texts themselves, so a sentence can
+   * be built from translated parts without composing it in TypeScript.
+   * `text` does not use `this`: `const { text, list } = plugin.i18n` works.
+   * @param source - English source text; `{}`, `{0}` or `{name}` for the arguments, `{{` and `}}` for braces.
+   * @param args - Values for its placeholders.
+   * @throws invalid A malformed or over-limit value (`TEXT_LIMITS`).
+   * @capability None.
+   */
+  text(source: string, args?: TemplateArgs): Text;
+  /**
+   * Items joined the way the interface language joins them (see ListStyle): `list(["a.glsl", "b.glsl"])` shows "a.glsl, b.glsl" in English and "a.glsl、b.glsl" in Chinese. Items are data, or texts the player translates. Accepted where a Text is.
+   * @param items - At most 256.
+   * @param style - `"list"` by default.
+   * @throws invalid A malformed or over-limit value.
+   * @capability None.
+   */
+  list(items: readonly TextArg[], style?: ListStyle): TextList;
+  /**
+   * An `Error` whose words the player shows translated: throw it where the player shows a plugin's failure to the user, such as from a file or web resolver's `resolve` (FileResolverOptions, WebResolverOptions) (also when a stream fails while it starts). The player shows `text` translated with this plugin's catalog (as `player.state.error` and the failure message); `message` is the English rendering, for logs and older players. Elsewhere it is an ordinary `Error`.
+   * @param source - English source text, as I18n.text's.
+   * @param args - Values for its placeholders.
+   * @throws invalid A malformed or over-limit value.
+   * @capability None.
+   */
+  error(source: string, args?: TemplateArgs): TextError;
+  /**
+   * The string a text shows in this run's language, for text that leaves
+   * the player: what the plugin copies to the clipboard or writes to a file
+   * ("Copy info", "Save as…"). Translated with this plugin's catalog (a
+   * string as a whole, a Text or TextList with its
+   * arguments), the way the player would show it.
+   *
+   * Only for text leaving the player. Never use it for the interface (a
+   * window, the menu, the OSD, a dialog): pass the value itself there, so
+   * the player translates it and `vestra-plugin i18n check` can see the
+   * sentence is whole.
+   * @param value - Source text, or a text value.
+   * @returns The translated string.
+   * @throws invalid A malformed value.
+   * @capability None.
+   */
+  resolve(value: TextValue): string;
+}
+```
+
+### TextError
+
+An `Error` the player shows translated (I18n.error).
+
+```ts
+interface TextError extends Error {
+  /** What the player shows. */
+  readonly text: Text;
 }
 ```
 
@@ -2068,12 +2272,12 @@ This plugin's own marks; disposing it removes them.
 ```ts
 interface TimelineLayer extends Disposable {
   /**
-   * Replace the layer (last write wins; `[]` clears it). At most 1000 marks, titles ≤ 100 characters, times within the media. Failures go to `onError`; with `ifCurrent`, a write for another source is dropped silently.
+   * Replace the layer (last write wins; `[]` clears it). At most 1000 marks, titles ≤ 100 characters, times within the media. Failures go to `onError`; with `ifCurrent`, a write for another source is dropped silently. A title is data (a chapter's or bookmark's own name), or a Text the player translates (`text("Chapter {}", [n])`, SDK 1.5.11); other plugins read the shown string.
    */
   set(marks: {
     time: number;
     kind: MarkKind;
-    title?: string;
+    title?: string | Text;
   }[], options?: {
     ifCurrent?: PlayerState;
   }): void;
@@ -2268,17 +2472,21 @@ Chinese character is one character).
 ```ts
 interface ConfirmOptions {
   /** The question, shown in bold; 1–200 characters. */
-  message: string;
+  message: TextValue;
   /** More text under the message; at most 2000 characters. */
-  detail?: string;
+  detail?: TextValue;
   /** The confirm button's text (the default button: Enter picks it); 1–40 characters. */
-  confirm: string;
+  confirm: TextValue;
   /** The cancel button's text (Escape picks it); 1–40 characters. */
-  cancel?: string;
+  cancel?: TextValue;
   /** Mark the confirm button as destructive: red text on macOS, a warning icon on Windows. */
   destructive?: boolean;
   /** A checkbox under the text, such as "Don't ask again"; 1–40 characters. */
-  checkbox?: string;
+  checkbox?: TextValue;
+  /**
+   * Values for the placeholders of `message` and `detail` (player 0.4.3). Any of the texts may instead be a Text (SDK 1.5.11), which carries its own arguments; `args` only fills the string ones. Every text of the dialog is English source text that the player shows translated from the plugin's catalog; `message` and `detail` are templates like Osd.show's. The length limits apply to the shown text.
+   */
+  args?: TemplateArgs;
 }
 ```
 
@@ -2319,8 +2527,8 @@ interface Dialogs {
    * @throws capability (rejects) The manifest does not declare `ui.dialog`.
    */
   openFile(options?: {
-    /** The dialog's title, at most 256 bytes. */
-    title?: string;
+    /** The dialog's title (English source text or a Text), at most 256 bytes. */
+    title?: TextValue;
   }): Promise<string | null>;
   /**
    * Ask the user for one or more files to open.
@@ -2333,8 +2541,8 @@ interface Dialogs {
    * @throws capability (rejects) The manifest does not declare `ui.dialog`.
    */
   openFiles(options?: {
-    /** The dialog's title, at most 256 bytes. */
-    title?: string;
+    /** The dialog's title (English source text or a Text), at most 256 bytes. */
+    title?: TextValue;
   }): Promise<string[]>;
   /**
    * Ask the user for a folder.
@@ -2347,8 +2555,8 @@ interface Dialogs {
    * @throws capability (rejects) The manifest does not declare `ui.dialog`.
    */
   openDirectory(options?: {
-    /** The dialog's title, at most 256 bytes. */
-    title?: string;
+    /** The dialog's title (English source text or a Text), at most 256 bytes. */
+    title?: TextValue;
   }): Promise<string | null>;
   /**
    * Ask the user where to save a file.
@@ -2361,10 +2569,12 @@ interface Dialogs {
    * @throws capability (rejects) The manifest does not declare `ui.dialog`.
    */
   saveFile(options?: {
-    /** The dialog's title, at most 256 bytes. */
-    title?: string;
-    /** The proposed file name: a plain name, at most 256 bytes. */
-    fileName?: string;
+    /** The dialog's title (English source text or a Text), at most 256 bytes. */
+    title?: TextValue;
+    /**
+     * The proposed file name: a plain name, at most 256 bytes. A string is data (not translated); a Text (SDK 1.5.11) is shown translated, `text("Playlist.m3u8")` (a `/` or `\\` in a translation becomes `-`).
+     */
+    fileName?: TextValue;
   }): Promise<string | null>;
 }
 ```
@@ -2901,9 +3111,24 @@ interface OsdPanel extends Disposable {
   /**
    * Show the block with this text, change it, or hide it.
    * @capability ui.osd
-   * @param text - The text, with `\n` between lines: at most 32 lines and 4096 bytes. `null` hides the block.
+   * @param text - The text, with `\n` between lines: at most 32 lines and 4096 bytes once translated and formatted. `null` hides the block. A template, like Osd.show's.
+   * @param args - Values for its placeholders (player 0.4.3); `null` or omitted for none.
+   * @param options - `maxColumns`: cut long lines (SDK 1.5.11).
    */
-  set(text: string | null): void;
+  set(text: TextValue | null, args?: TemplateArgs | null, options?: OsdPanelOptions): void;
+}
+```
+
+### OsdPanelOptions
+
+Options of OsdPanel.set.
+
+```ts
+interface OsdPanelOptions {
+  /**
+   * Cut every line longer than this many columns, after translation and formatting, ending it with `…`: a wide character (Chinese, Japanese, Korean, full-width forms) is two columns, a combining mark none, any other one. An integer from 8 to 1000 (player 0.4.3; older players show whole lines). Measure the video area to choose it.
+   */
+  maxColumns?: number;
 }
 ```
 
@@ -2919,13 +3144,14 @@ interface Osd {
   /**
    * Show a one-line message at the top left of the video for 2 seconds.
    * @capability ui.osd
-   * @param text - 1–200 characters; line breaks become spaces.
+   * @param text - The template, 1–200 characters once translated and formatted; line breaks become spaces.
+   * @param args - Values for its placeholders (player 0.4.3; older players show the template as it is).
    * @returns Resolves once the message is on screen.
-   * @throws invalid (rejects) `text` is empty, only white space, or longer than 200 characters.
+   * @throws invalid (rejects) The shown text is empty, only white space, or longer than 200 characters, or `args` is not a TemplateArgs.
    * @throws unavailable (rejects) The player runs without a user interface.
    * @throws capability (rejects) The manifest does not declare `ui.osd`.
    */
-  show(text: string): Promise<void>;
+  show(text: TextValue, args?: TemplateArgs): Promise<void>;
   /**
    * Create this plugin's information block.
    * @capability ui.osd
@@ -3195,7 +3421,9 @@ interface Subtitles {
   /**
    * Upload a subtitle file's bytes (UTF-8 SRT, or ASS/SSA with
    * `format: "ass"`) for the current source; select it unless
-   * `select: "none"`. `title` (1–200 characters) names the track. Aborting
+   * `select: "none"`. `title` (1–200 characters) names the track: data, or
+   * a Text the player translates (`text("{} · {}", [text("Simplified
+   * Chinese"), file])`, SDK 1.5.11). Aborting
    * `signal` before the commit discards the upload (rejects with AbortError);
    * once the commit was sent it completes.
    *
@@ -3205,7 +3433,7 @@ interface Subtitles {
    */
   load(bytes: Uint8Array, options?: SubtitleConditional & {
     format?: "srt" | "ass";
-    title?: string;
+    title?: string | Text;
     select?: "primary" | "secondary" | "none";
     signal?: AbortSignal;
   }): Promise<SubtitleTrack>;
@@ -3634,6 +3862,28 @@ interface PluginInfo {
    * What a running plugin was refused because another plugin holds it: a panel position (`slot-occupied`, with `slot`) or the next/previous sequence (`sequence-taken`). Neither fails activation; `error` has the same as text. Empty from players before 0.4.x (after 0.4.0). Always set by the SDK; optional so that code building `PluginInfo` values itself (tests) keeps compiling.
    */
   warnings?: readonly PluginWarning[];
+  /**
+   * The manifest's display texts in the interface language, translated with that package's catalog; absent from players before 0.4.3 (read `manifest.json` there).
+   */
+  display?: PluginDisplay;
+}
+```
+
+### PluginDisplay
+
+PluginInfo.display: a package's `name`, `punchline`,
+`description` and `tags` as the player shows them.
+
+```ts
+interface PluginDisplay {
+  /** `name`, translated; `null` when the manifest has none. */
+  readonly name: string | null;
+  /** `punchline`, translated; `null` when the manifest has none. */
+  readonly punchline: string | null;
+  /** `description`, translated; `null` when the manifest has none. */
+  readonly description: string | null;
+  /** `tags`, each translated. */
+  readonly tags: readonly string[];
 }
 ```
 
@@ -3715,8 +3965,12 @@ One command's bindings, from Bindings.list.
 interface BindingInfo extends BindingRef {
   /** Menu title. */
   title: string;
-  /** Menu path; `null` for a command outside the menu. */
+  /** Menu path as shown; `null` for a command outside the menu. */
   path: string[] | null;
+  /**
+   * The menu path's keys: the English text menus merge by, the same in every interface language (`["Playback", "Seek", "Back 5 s"]`; a built-in menu by its key, `"Video"`, also when declared as `@video`). `null` for a command outside the menu, and from players before 0.4.3. Find a command by where it is in the menu with this, not with `path`. Always set by `list()`; optional so that test fakes written for older SDKs still type-check.
+   */
+  key?: string[] | null;
   /** Global, or only while the plugin's panel has focus. */
   scope: "global" | "panel";
   /** The command's own bindings. */
@@ -4192,8 +4446,9 @@ and its semantics are simplified:
   value ranges (an out-of-range `filter.set` ends in `failed` with
   `invalid`), an empty chain removes the plugin's chain, a chain on a
   generated stream fails `unsupported` (the player's own conformance
-  cases check all three), and the command limits (COMMAND_LIMITS)
-  and menu ids (MENU_IDS) are enforced.
+  cases check all three), and the command limits (COMMAND_LIMITS),
+  property value limits (UI_VALUE_LIMITS) and menu ids
+  (MENU_IDS) are enforced.
 
 Typical workflow: start the plugin with startPlugin (it reads the
 plugin's `manifest.json`), drive it the way the user or another plugin
@@ -4234,6 +4489,21 @@ interface FakeWindow {
 }
 ```
 
+### FileDialogText
+
+A file dialog as the player shows it (TestHost.fileDialogs).
+
+```ts
+interface FileDialogText {
+  /** Which dialog. */
+  kind: "openFile" | "openFiles" | "openDirectory" | "saveFile";
+  /** Its title as shown, if the plugin gave one. */
+  title?: string;
+  /** The proposed file name as shown, if the plugin gave one. */
+  fileName?: string;
+}
+```
+
 ### FakeCommand
 
 A command the plugin registered with `plugin.commands.add`, as the test
@@ -4244,6 +4514,19 @@ TestHost.coreAction (the player's core actions).
 interface FakeCommand {
   /** What the plugin declared: id, menu path, title, order, group, default bindings, focus and repeat. Wire-level shape; it may gain fields in minor versions. */
   declaration: CommandDeclaration;
+  /**
+   * What the menu shows, as the player shows it in the test host's TestHost.locale: the title and each path segment translated with the plugin's catalog (the player's own menus in the player's words), the keys normalized (`@video` is "Video").
+   */
+  readonly display: {
+    /** The menu text of the item. */
+    title: string;
+    /** Each segment of the path as shown; empty without a path. */
+    path: string[];
+    /**
+     * The disabled or busy reason as shown, `null` without one (a plugin command's; not enumerable, so comparing `display` with `{ title, path }` still works).
+     */
+    reason?: string | null;
+  };
   /** The command state the player last received (after the update pass). */
   state: {
     /** `false` when the plugin disabled the command. */
@@ -4252,8 +4535,8 @@ interface FakeCommand {
     checked: boolean | null;
     /** `true` while the plugin reports the command as busy. */
     busy: boolean;
-    /** The reason shown when the command is disabled or busy. */
-    reason: string | null;
+    /** The reason the plugin sent (source text or a text value; see `display.reason`). */
+    reason: TextValue | null;
   };
   /** The state revision the player holds; increases with every state update the SDK sends. */
   revision: number;
@@ -4381,10 +4664,66 @@ class TestHost implements Transport {
      */
     sidebar: LayoutSlot | null;
   };
-  /** Every `osd.show` text, newest last. */
+  /**
+   * Every `osd.show` text as the player shows it (translated with the plugin's catalog and formatted with its args), newest last. The template and args the plugin sent are in `host.sent("osd.show")`.
+   */
   readonly osd: string[];
-  /** The text of this plugin's osd panel, `null` when hidden. */
+  /** The text of this plugin's osd panel as shown, `null` when hidden. */
   osdPanel: string | null;
+  /**
+   * The interface language the test host plays (`plugin.i18n.locale`), `"en"`
+   * by default. Set it before startPlugin (or pass its `locale`
+   * option): the plugin's catalog for it is read from the package's
+   * `locales/` then, and the menus (FakeCommand.display), OSD
+   * messages, dialog texts, settings page and panel titles show its
+   * translations, the way the player shows them.
+   *
+   * The player's own texts (core actions' messages and menus, its
+   * refusals) are English, or the player's Simplified Chinese for
+   * `"zh-Hans"`. While `locale` was never set they stay in Chinese, as
+   * players up to 0.4.2 showed them, so tests written for SDK 1.5.8 keep
+   * passing; set `locale` to test what a user sees now.
+   */
+  get locale(): Locale;
+  set locale(locale: Locale);
+  /**
+   * Read the plugin's translations for TestHost.locale from a package directory, as the player would (`locales/<locale>.json` of a built package, else the source `locales/<locale>.po`); `startPlugin` does this. None for English; a missing file means none; a broken `.po` throws.
+   * @param directory - The package directory (holding `locales/`).
+   */
+  loadCatalog(directory: string): void;
+  /**
+   * A text of the plugin as the player shows it: translated with the plugin's catalog (TestHost.loadCatalog), then formatted with `args` when given.
+   * @param text - English source text or template.
+   * @param args - Values for its placeholders.
+   * @returns The shown text.
+   */
+  translate(text: TextValue, args?: TemplateArgs): string;
+  /** The saved interface language (`plugin.appearance.language`), changed by `appearance.setLanguage` or TestHost.setLanguage. */
+  language: LanguagePreference;
+  /**
+   * Simulate another plugin (or the user) saving the interface language: pushes `appearance.changed`.
+   * @param language - `"system"` or a locale.
+   */
+  setLanguage(language: LanguagePreference): void;
+  /**
+   * Every `dialogs.confirm` as the player shows it: its texts translated (message and detail formatted with `args`), newest last. The options the plugin sent are in TestHost.confirms.
+   */
+  readonly confirmTexts: {
+    /** The question. */
+    message: string;
+    /** The text under it, if any. */
+    detail?: string;
+    /** The confirm button. */
+    confirm: string;
+    /** The cancel button (the player's "Cancel" by default). */
+    cancel: string;
+    /** The checkbox, if any. */
+    checkbox?: string;
+  }[];
+  /**
+   * Every file dialog (`openFile`, `openFiles`, `openDirectory`, `saveFile`) as the player shows it: the title translated, a text file name translated, newest last. The options the plugin sent are in `host.sent("dialogs.open")`.
+   */
+  readonly fileDialogs: FileDialogText[];
   /** The sequence provider's flags, `null` without a provider. */
   sequence: {
     /** The provider's `canNext`, as last evaluated. */
@@ -4891,11 +5230,12 @@ class TestHost implements Transport {
    */
   failStream(producerId: number, message: string): void;
   /**
-   * Press a binding like the host's table would: panel-focus bindings first when `panel` is true, then global ones; the earliest registration wins a conflict. Resolves after the command ran; rejects when nothing is bound or the command is disabled or busy. Bindings use the reference syntax (`"Space"`, `"Ctrl+O"`, `"Mouse:WheelUp"`); the player's core actions match first, and user overrides in `bindings.overlay` apply.
+   * Press a binding like the host's table would: panel-focus bindings first when `panel` is true, then global ones; within a scope the earliest registration first (the player's own commands before the plugin's), as the conflict rule orders them. A disabled command lets the key pass to the next command bound to it (SDK 1.5.12, as player 0.4.3): the one it shadowed, then the global scope. The first enabled one runs; `press` resolves after it ran (`"ran"`), or rejects when it is busy. When only disabled commands hold the key, the first one with a `reason` shows the reason on the OSD and eats the key (`"reason"`, see `host.osd`); without a reason the key goes on to the focused control (`"passed"`, nothing runs). Rejects when nothing is bound. Bindings use the reference syntax (`"Space"`, `"Ctrl+O"`, `"Mouse:WheelUp"`), and user overrides in `bindings.overlay` apply.
+   * @returns What the key did: `"ran"`, `"reason"` or `"passed"`.
    */
   press(binding: string, options?: {
     panel?: boolean;
-  }): Promise<void>;
+  }): Promise<"ran" | "reason" | "passed">;
   /** Bindings declared by more than one command, each as `[binding, winner, ...ignored]` (command ids; core actions as `host/<id>`). Empty when there are none. */
   get conflicts(): string[][];
   /** The binding overlay `plugin.bindings.set` writes (`"<plugin>/<command>"` to inputs; preset it to simulate saved overrides). `press` honours it. */
@@ -5042,6 +5382,10 @@ function startPlugin(activate: (plugin: Plugin) => unknown, options?: {
   host?: TestHost;
   /** Use an existing directory as `plugin.dataDirectory` (to test a restart). */
   dataDirectory?: string;
+  /**
+   * The interface language to play (TestHost.locale): the plugin's `locales/<locale>.po` (or `.json`) in `directory` is loaded and its menus, messages and titles show translated. Default: the host's.
+   */
+  locale?: Locale;
 }): Promise<{
   /** The test host the plugin talks to. */
   host: TestHost;
@@ -5085,6 +5429,80 @@ agrees with the player's.
 
 ```ts
 const MENU_IDS: readonly ["open", "playback", "subtitles", "video", "audio", "screen", "settings"];
+```
+
+### LOCALES
+
+The player's interface languages: English (the source language) first,
+then the translations, as the player's own table (its tests check that
+they agree).
+
+```ts
+const LOCALES: readonly ["en", "zh-Hans", "ja", "ko", "de", "fr", "es"];
+```
+
+### LIST_SEPARATORS
+
+The separator of each list style per interface language, as the player's
+table (`i18n::text::SEPARATORS`; its tests check that they agree).
+
+```ts
+const LIST_SEPARATORS: Readonly<Record<Locale, Readonly<Record<ListStyle, string>>>>;
+```
+
+### TEXT_LIMITS
+
+The player's limits on one text value (a
+Text or
+TextList with everything nested in it), as the player's
+`i18n::text` (its tests check that they agree).
+
+```ts
+const TEXT_LIMITS: {
+  /** Nesting depth of texts and lists; the value itself is depth 0 (8). */
+  readonly depth: 8;
+  /** Texts, lists and arguments in all, the value itself included (1024). */
+  readonly nodes: 1024;
+  /** Arguments of one text (16). */
+  readonly args: 16;
+  /** Items of one list (256). */
+  readonly items: 256;
+  /** UTF-8 bytes of a source text or a string argument (4096). */
+  readonly stringBytes: 4096;
+};
+```
+
+### UI_VALUE_LIMITS
+
+The player's limits on one property value (a `PropValue` as written
+by `View.set` or `View.bind`, or an initial property of a
+window, panel or settings page). The player's tests check that these
+agree with the player; TestHost enforces them the same way.
+
+A value over a limit is refused whole with code `limit` (the property
+keeps what it showed) and reported to `Scope.onError`: a write by
+`View.set` or `View.bind` as described there. As an initial property it
+makes `Window.show` reject; a panel or settings page opens without it and
+the failure goes to the plugin's `onError`.
+
+They bound the work one write costs the player's interface thread; they
+are not meant as list sizes to aim for. A list that can grow without
+bound (a playlist, a history) should send the rows near the view and say
+how many there are, not the whole list.
+
+```ts
+const UI_VALUE_LIMITS: {
+  /** Nesting depth; the value itself is depth 0 (8). */
+  readonly depth: 8;
+  /** Values in all, counting every array, object, string, number, boolean and null, the value itself included; a Markdown document is one (16384). */
+  readonly values: 16384;
+  /** Rows of one array (4096). */
+  readonly arrayRows: 4096;
+  /** UTF-8 bytes of one string or object field name (64 KiB). */
+  readonly stringBytes: number;
+  /** UTF-8 bytes of all strings and field names together, the text of the value's Markdown documents included (1 MiB). */
+  readonly textBytes: number;
+};
 ```
 
 ### HostError
@@ -5221,6 +5639,8 @@ interface Transport {
   on(event: string, listener: (data: unknown) => void): () => void;
   /** Replaces the real local services (test host). */
   local?: LocalServices;
+  /** The interface language of this run (`plugin.i18n.locale`): the runner passes the player's `VESTRA_LOCALE`, the test host its `locale`. */
+  locale?: string;
 }
 ```
 
@@ -5481,9 +5901,10 @@ interface WireSystemInfo {
 
 ```ts
 type CommandDeclaration = {
-  title: string;
-  /** Complete primary menu path INCLUDING its leaf; empty = not in the main menu. */
-  path: string[];
+  /** Source text, or a text value (player 0.4.3). */
+  title: string | TextJson;
+  /** Complete primary menu path INCLUDING its leaf; empty = not in the main menu. Segments may be text values (player 0.4.3). */
+  path: (string | TextJson)[];
   /** Sibling order, ascending; a submenu takes its first command's order (a built-in menu keeps a fixed one). */
   order: number;
   /** Separator label: adjacent siblings of different groups get a line. */
@@ -7121,6 +7542,174 @@ test("the window shows sample.md, with the package as its base", async () => {
   assert.ok(doc);
   assert.match(doc.text, /^# Markdown example/);
   assert.equal(doc.base, fileURLToPath(directory));
+  await stop();
+});
+```
+
+### Example: i18n
+
+A plugin in the player's language: **Tools → Counter…** opens a window with one button that counts clicks. Every text is English in the source; `locales/zh-Hans.po` translates it into Simplified Chinese, and the player shows the translation when its interface language is Simplified Chinese.
+
+| Capabilities | API |
+| --- | --- |
+| `commands`, `ui.window`, `ui.osd` | `commands.add`, `windows.create`, `osd.show(template, args)`; Slint `@tr`; `vestra-plugin i18n extract` and `check`; tests with `startPlugin({ locale })` |
+
+#### Walkthrough
+
+A plugin in the player's language. **Tools ▸ Counter…** opens a window with one button; each click counts and shows the count on the video. All texts are English in the source, and `locales/zh-Hans.po` translates them: with the player in Simplified Chinese the menu reads **工具 ▸ 计数器…** and the window **2 次点击**. The plugin contains no translation code.
+
+#### The code
+
+(code: `main.ts`, below)
+
+- The menu path is English. The player shows each segment translated with the plugin's catalog; menus of all plugins merge by these English words.
+- The window gets data (`count`), not text.
+- plugin.osd.show takes a template and its arguments. The player translates `"Count: {}"`, then puts `count` into `{}`. A sentence built in TypeScript (`` `Count: ${count}` ``) could not be translated.
+
+#### The window
+
+(code: `ui/counter.slint`, below)
+
+Every text is in `@tr("…")`. The player replaces the English literal with the translation when it loads the file; Slint then fills in the arguments. `"{n} click" | "{n} clicks" % root.count` has two forms: the first for 1, the second for every other number (`{n}` is the number).
+
+#### The translation
+
+`vestra-plugin i18n extract` collected the texts into `locales/messages.pot`; `extract --locale zh-Hans` started `locales/zh-Hans.po`, and each `msgstr` was then filled in:
+
+(code: `locales/zh-Hans.po`, below)
+
+Chinese has one plural form, so `msgstr[0]` is enough. `vestra-plugin i18n check` reports what is missing; `vestra-plugin build` compiles the file into `dist/locales/zh-Hans.json`, which the player reads.
+
+#### The test
+
+(code: `tests/main.test.ts`, below)
+
+`startPlugin(activate, { directory, locale })` loads the catalog of that language. `host.command(id).display` is the menu as the user sees it, `declaration` what the code declared; `host.osd` lists the messages as shown.
+
+#### examples/i18n/manifest.json
+
+```json
+{
+  "id": "examples.i18n",
+  "version": "0.1.0",
+  "apiVersion": "vestra/1",
+  "entry": "main.ts",
+  "minPlayerVersion": "0.4.3",
+  "capabilities": ["commands", "ui.window", "ui.osd"],
+  "name": "Counter",
+  "author": "Vestra Player SDK examples",
+  "punchline": "A click counter in the player's language",
+  "description": "Tools ▸ Counter… opens a window with one button that counts clicks.\nSDK example: a plugin translated into Simplified Chinese.",
+  "tags": ["example"]
+}
+```
+
+#### examples/i18n/main.ts
+
+```ts
+/**
+ * Counter: Tools ▸ Counter… opens a window with one button that counts
+ * clicks, in the player's language. The texts are English; the player
+ * translates them with locales/<lang>.po. Walkthrough: docs/examples/i18n.md.
+ */
+import type { Plugin } from "@vestra-player/sdk";
+
+export default function activate(plugin: Plugin) {
+  let count = 0;
+
+  // The window's texts are in its Slint file (@tr); TypeScript passes data.
+  const window = plugin.windows.create("ui/counter.slint");
+  window.bind(() => ({ count }));
+  window.on("add", () => {
+    count += 1;
+    // A template and its arguments, never a sentence built in TypeScript.
+    return plugin.osd.show("Count: {}", [count]);
+  });
+
+  // Declared texts are English; the player shows them translated.
+  plugin.commands.add({
+    id: "counter",
+    path: ["Tools", "Counter…"],
+    run: () => window.show(),
+  });
+}
+```
+
+#### examples/i18n/ui/counter.slint
+
+```slint
+// The Counter window. Every text is @tr("English"): the player puts the
+// translation in its place when it loads the file. Walkthrough:
+// docs/examples/i18n.md.
+import { Theme } from "@vestra/theme.slint";
+import { Button } from "@vestra/widgets.slint";
+
+export component CounterWindow inherits Window {
+    title: @tr("Counter");
+    width: 240px;
+    background: Theme.bg-panel;
+
+    in property <int> count;
+    callback add();
+
+    VerticalLayout {
+        padding: Theme.dialog-padding;
+        spacing: 8px;
+        Text {
+            // One form for 1, the other for every other number.
+            text: @tr("{n} click" | "{n} clicks" % root.count);
+            color: Theme.text;
+            font-size: Theme.font-body;
+        }
+        Button {
+            text: @tr("Add one");
+            clicked => { root.add(); }
+        }
+    }
+}
+```
+
+#### examples/i18n/tests/main.test.ts
+
+```ts
+import assert from "node:assert/strict";
+import test from "node:test";
+import { startPlugin } from "@vestra-player/sdk/testing";
+import activate from "../main.ts";
+
+const directory = new URL("..", import.meta.url); // manifest.json and locales/
+
+test("English: the texts as written", async () => {
+  const { host, stop } = await startPlugin(activate, {
+    directory,
+    locale: "en",
+  });
+  const counter = host.command("counter");
+  assert.deepEqual(counter.display.path, ["Tools", "Counter…"]);
+  await counter.run();
+  host.window("counter").emit("add");
+  await host.settle();
+  assert.deepEqual(host.osd, ["Count: 1"]);
+  await stop();
+});
+
+test("Simplified Chinese: the menu and the message from locales/zh-Hans.po", async () => {
+  const { host, plugin, stop } = await startPlugin(activate, {
+    directory,
+    locale: "zh-Hans",
+  });
+  assert.equal(plugin.i18n.locale, "zh-Hans");
+  const counter = host.command("counter");
+  // The key stays English; the menu shows the translation.
+  assert.deepEqual(counter.declaration.path, ["Tools", "Counter…"]);
+  assert.deepEqual(counter.display.path, ["工具", "计数器…"]);
+  await counter.run();
+  const window = host.window("counter");
+  window.emit("add");
+  window.emit("add");
+  await host.settle();
+  assert.equal(window.props["count"], 2);
+  assert.deepEqual(host.osd, ["计数：1", "计数：2"]);
   await stop();
 });
 ```

@@ -1,24 +1,24 @@
-# 在线字幕
+# Online Subtitles
 
-按当前视频在网上搜索字幕，下载后直接载入。
+Searches the web for subtitles for the current video and loads them right away.
 
-## 功能
+## Features
 
-- 支持 OpenSubtitles.com（默认）和射手网(伪)。本地文件按文件哈希和片名搜索，也可只按标题搜索。
-- 结果按与文件的匹配程度、人工翻译、首选语言和下载次数排序；可只看与文件完全匹配的结果，或按关键字排除。
-- 双击载入字幕，并在视频旁保存一份；也可只添加、只保存或另存为。压缩包里有多个字幕时让你选择。
-- 可选：打开没有字幕的本地视频时自动搜索，并自动载入或显示结果。
+- OpenSubtitles.com (the default) and Assrt (射手网(伪)). Local files are searched by file hash and title; searching by title alone works too.
+- Results are ordered by how well they match the file, human before machine translation, your preferred languages and the number of downloads; you can show only exact matches with the file, or exclude keywords.
+- Double-click loads a subtitle and saves a copy beside the video; you can also only add, only save, or save as. When an archive holds several subtitles, you choose one.
+- Optional: search automatically when you open a local video without subtitles, and load the result automatically or show the results.
 
-## 入口
+## Where to find it
 
-右键菜单「字幕 ▶ 在线字幕」：搜索与下载字幕…、在线字幕设置…
+Right-click menu, Subtitles ▸ Online Subtitles: Search and Download Subtitles…, Online Subtitle Settings…
 
-## 使用前
+## Before you start
 
-- 需要你自己在所选服务申请的 API 密钥（在「在线字幕设置…」里填写）。没有密钥时不会发送任何请求。
-- 第一次搜索前会提示：搜索会把文件名关键字和文件哈希发送给所选服务。
-- 密钥和密码保存在系统的密钥存储中。
+- You need your own API key from the chosen service (enter it in Online Subtitle Settings…). Without a key nothing is sent.
+- Before the first search you are told that searching sends the file name keywords and the file hash to the chosen service.
+- Keys and passwords are kept in the system's secret store.
 
-## 限制
+## Limits
 
-- 不支持 rar、7z 压缩包；不支持上传字幕。
+- No rar or 7z archives; no uploading of subtitles.

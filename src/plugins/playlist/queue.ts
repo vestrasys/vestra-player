@@ -1,7 +1,8 @@
 import { realpath } from "node:fs/promises";
 import { basename, dirname, extname, resolve } from "node:path";
-import type { Disposable, Media, PlayerState } from "@vestra-player/sdk";
-import { collator, compareByFolder } from "./media.ts";
+import type { Disposable, Media, PlayerState, Text, TextList } from "@vestra-player/sdk";
+import { collator, compareByFolder, SCAN_LIMIT } from "./media.ts";
+import { failureText, fitName, type Notice, type NoticeArgs, type NoticeText, type ReadFailure, type Texts } from "./notices.ts";
 
 export type Row = {
   rowId: string;
@@ -12,8 +13,9 @@ export type Row = {
   /** Title given by a list file (C18), kept across restarts (C17). */
   named: string | null;
   kind: "file" | "url";
-  status: string;
-  error: string;
+  status: Status;
+  /** Why it cannot be read or played (shown in its tooltip), null when nothing failed. */
+  error: RowError;
   /** Seconds, once the player reported it while this row played. */
   duration: number | null;
   /** Seconds read by ffprobe before playing; `duration` overrides it. */
@@ -23,6 +25,10 @@ export type Row = {
   /** Started playing at least once (drawn grey when no longer current). */
   played: boolean;
 };
+/** A row's state (not shown as text: the list draws current, played and failed rows). */
+export type Status = "ready" | "retry" | "opening" | "paused" | "playing" | "ended" | "failed" | "switched";
+/** Fixed reasons, each a sentence of the list's own; else the player's (or the system's) message. */
+export type RowError = null | { kind: "missing" | "unreadable" | "unplayable" } | { kind: "message"; text: string };
 /**
  * The source a row follows: media this list opened (`end` is its natural-end
  * listener), or an adopted source another plugin opened (A13: `media` null, followed
@@ -50,8 +56,15 @@ export type Entry = {
   key?: string;
   named?: string | null;
   duration?: number | null;
-  /** Error shown when the file cannot be read (instead of the default). */
-  missing?: string;
+  /** A file that cannot be read is "missing" (list files), not "unreadable, can retry". */
+  missing?: boolean;
+};
+/** What a drop or a folder scan could not take (the notice after adding names each problem). */
+export type Problems = {
+  skipped?: number;
+  unreadable?: number;
+  truncated?: boolean;
+  failed?: { name: string; failure: ReadFailure }[];
 };
 export type Added = {
   /** Per entry: its new or existing row (undefined beyond the size limit). */
@@ -67,7 +80,24 @@ export type Added = {
 
 /** C17: the list holds at most this many rows. */
 export const ROW_LIMIT = 20_000;
-const UNREADABLE = "文件不存在或暂不可读取，可重试";
+/** Unreadable folders and list files named in one notice (more could not fit on screen anyway). */
+const FAILED_SHOWN = 20;
+
+/**
+ * The clauses for what a drop or a folder scan could not take, in the order
+ * the notice gives them: unsupported items, unreadable subfolders, the scan
+ * limit, then each folder or list file that could not be read (with why).
+ */
+export function problemClauses(texts: Texts, problems: Problems): Text[] {
+  const { text } = texts;
+  const clauses: Text[] = [];
+  if (problems.skipped) clauses.push(text("unsupported items skipped: {}", [problems.skipped]));
+  if (problems.unreadable) clauses.push(text("subfolders that could not be read: {}", [problems.unreadable]));
+  if (problems.truncated) clauses.push(text("limit of {} reached", [SCAN_LIMIT]));
+  for (const { name, failure } of problems.failed?.slice(0, FAILED_SHOWN) ?? [])
+    clauses.push(text("cannot read {}: {}", [fitName(name, 60), failureText(texts, failure, 60)]));
+  return clauses;
+}
 /** Paths resolved at once while adding. */
 const RESOLVE_LIMIT = 16;
 
@@ -92,10 +122,12 @@ export class Queue {
   binding: Binding | null = null;
   failed: string | null = null;
   epoch = 0;
-  /** Last status text; only notices (see `notice`) reach the user, as on-screen text. */
-  message = "";
+  /** Last status (an English template or a text value); only notices (see `notice`) reach the user, as on-screen text. */
+  message: string | NoticeText = "";
   /** Shows a notice to the user; the plugin wires this to `osd.show`. */
-  say: (text: string) => void = () => {};
+  say: (text: NoticeText, args?: NoticeArgs) => void = () => {};
+  /** Shows a row's title (data, not translated) on screen. */
+  sayTitle: (title: string) => void = () => {};
   /** Called with each row that leaves the list (removal, dedup or clear). */
   removed: (rowId: string) => void = () => {};
   repeat: Repeat = "none";
@@ -150,9 +182,15 @@ export class Queue {
     this.anchor = id;
     this.selection = new Set(id ? [id] : []);
   }
-  notice(text: string) {
+  /** `plugin.i18n`, for the notices made of parts. */
+  readonly texts: Texts;
+  constructor(texts: Texts) {
+    this.texts = texts;
+  }
+
+  notice(text: NoticeText, args?: NoticeArgs) {
     this.message = text;
-    this.say(text);
+    this.say(text, args);
   }
   row(id: string | null) {
     return id === null ? undefined : this.byId.get(id);
@@ -264,14 +302,14 @@ export class Queue {
     );
     for (const [i, entry] of entries.entries()) {
       let key = entry.key ?? (entry.kind === "url" ? this.urlKey(entry.source) : entry.source),
-        error = "";
+        error: RowError = null;
       const source = sources[i]!;
       if (real.has(i)) {
         const found = real.get(i);
         if (found) key = found;
         else {
           key = source;
-          error = entry.missing ?? UNREADABLE;
+          error = { kind: entry.missing ? "missing" : "unreadable" };
         }
       }
       const known = (entry.kind === "file" ? files : links).get(key);
@@ -301,16 +339,21 @@ export class Queue {
     }
     return result;
   }
-  /** The notice after adding: `已添加 N 项，跳过 M 个重复…`, then the limit when reached. */
-  summary(result: Added, extra = "") {
-    const parts = [`已添加 ${result.added} 项`];
-    if (result.duplicate) parts.push(`跳过 ${result.duplicate} 个重复`);
-    if (result.invalid) parts.push(`${result.invalid} 项暂不可读`);
-    if (extra) parts.push(extra);
-    if (result.refused) parts.push(`列表已达上限 ${ROW_LIMIT} 项`);
-    return parts.join("，");
+  /**
+   * The notice after adding: how many were added, skipped as duplicates and
+   * not readable for now, every problem of a drop or scan, then the list
+   * limit when reached (one clause each, joined the interface language's way).
+   */
+  summary(result: Added, problems: Problems = {}): TextList {
+    const { text, list } = this.texts;
+    const clauses = [text("Added: {}", [result.added])];
+    if (result.duplicate) clauses.push(text("duplicates skipped: {}", [result.duplicate]));
+    if (result.invalid) clauses.push(text("not readable for now: {}", [result.invalid]));
+    clauses.push(...problemClauses(this.texts, problems));
+    if (result.refused) clauses.push(text("the list is full at {} items", [ROW_LIMIT]));
+    return list(clauses, "clauses");
   }
-  /** The first row a batch created is selected when the list was empty (as "添加文件"). */
+  /** The first row a batch created is selected when the list was empty (as "Add Files…"). */
   selectFirstAdded(result: Added, wasEmpty: boolean) {
     const first = result.fresh[0];
     if (wasEmpty && first) this.selected = first.rowId;
@@ -328,21 +371,21 @@ export class Queue {
     try {
       url = new URL(source);
     } catch {
-      throw new Error("请输入完整 HTTP(S) 链接");
+      throw new LinkError("incomplete");
     }
-    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password)
-      throw new Error("只接受不含账户密码的 HTTP(S) 链接");
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) throw new LinkError("refused");
     const key = url.href;
     const existing = this.rows.find((row) => row.kind === "url" && row.key === key);
-    if (!existing && this.full) throw new Error(`列表已达上限 ${ROW_LIMIT} 项`);
-    const row = existing ?? this.append({ source, key, named: null, kind: "url", error: "" });
+    if (!existing && this.full) throw new LinkError("full");
+    const row = existing ?? this.append({ source, key, named: null, kind: "url", error: null });
     this.selected = row.rowId;
-    this.notice(existing ? "已选择已有链接" : "已添加链接");
+    if (existing) this.notice("Existing link selected");
+    else this.notice("Link added");
   }
   /** C17: a saved row, trusted as is (its realpath is learnt when probed). */
   restoreRow(entry: Required<Pick<Entry, "kind" | "source" | "named" | "duration">>) {
     const key = entry.kind === "url" ? this.urlKey(entry.source) : entry.source;
-    const row = this.append({ source: entry.source, key, named: entry.named, kind: entry.kind, error: "" });
+    const row = this.append({ source: entry.source, key, named: entry.named, kind: entry.kind, error: null });
     row.probed = entry.duration;
     return row;
   }
@@ -360,7 +403,7 @@ export class Queue {
       ...input,
       title: input.named ?? (input.kind === "file" ? basename(input.source) : input.source),
       rowId: `row-${++this.nextId}`,
-      status: input.error ? "待重试" : "待播放",
+      status: input.error ? "retry" : "ready",
       duration: null,
       probed: null,
       probe: null,
@@ -478,7 +521,7 @@ export class Queue {
     this.removeRows(new Set(doomed.map((row) => row.rowId)));
     return doomed.length;
   }
-  /** Whether "移除未选" would remove anything and keep something. */
+  /** Whether "Remove Unselected" would remove anything and keep something. */
   canRemoveUnselected() {
     const rows = this.visible();
     const marked = rows.filter((row) => this.selection.has(row.rowId)).length;
@@ -504,7 +547,7 @@ export class Queue {
       if (rowId === bound) detach = true;
       if (rowId === this.failed) this.failed = null;
     }
-    if (detach) this.detach("当前媒体已移出列表", true);
+    if (detach) this.detach("The current media was removed from the list", true);
   }
   /** `loud`: say that the current media goes on (not when something new plays right after). */
   clear(loud = true) {
@@ -514,35 +557,39 @@ export class Queue {
     this.selected = null;
     this.failed = null;
     this.shuffled.clear();
-    this.detach("列表已清空，当前媒体继续", loud);
+    this.detach("List cleared; the current media continues", loud);
   }
-  /** Stop following the bound media; `loud` shows `message` on screen. */
+  /** Stop following the bound media; `loud` shows `message` on screen (else it is only the status). */
   detach(message: string, loud = false) {
     const row = this.row(this.binding?.rowId ?? null);
-    if (row) row.status = "已切换";
+    if (row) row.status = "switched";
     this.unbind();
     this.epoch++;
-    if (loud) this.notice(message);
+    if (loud) this.notice(message as Notice);
     else this.message = message;
   }
   begin(rowId: string) {
-    this.detach("正在打开…");
+    this.detach("Opening…");
     this.failed = null;
     const row = this.row(rowId);
     if (row) {
-      row.status = "正在打开";
-      row.error = "";
+      row.status = "opening";
+      row.error = null;
     }
     return this.epoch;
   }
-  fail(rowId: string, message: string) {
+  /** `error`: a message of the player, else a fixed reason. */
+  fail(rowId: string, error: string | { kind: "missing" | "unplayable" }) {
     const row = this.row(rowId);
     if (!row) return;
-    row.status = "失败";
-    row.error = message;
+    row.status = "failed";
+    row.error = typeof error === "string" ? { kind: "message", text: error } : error;
     this.failed = rowId;
     this.unbind();
-    this.notice(`无法打开 ${row.title}：${message}`);
+    const title = fitName(row.title);
+    if (typeof error === "string") this.notice("Cannot open {}: {}", [title, fitName(error, 60)]);
+    else if (error.kind === "missing") this.notice("Cannot open {}: the file does not exist", [title]);
+    else this.notice("Cannot open {}: cannot open this media", [title]);
   }
   bind(binding: Binding) {
     this.unbind();
@@ -563,31 +610,46 @@ export class Queue {
     const binding = this.binding;
     if (!binding) return;
     const row = this.row(binding.rowId);
-    if (!row) return this.detach("当前媒体已移出列表");
+    if (!row) return this.detach("The current media was removed from the list");
     // Another open (even of the same path) is a new source; a restart is not.
     // UI-PL-20: switching to an outside source is not announced. The bound source may
     // be a generated stream: a file a plugin's file resolver turned into one (§11),
     // e.g. a ROM in a mixed list. It never ends naturally, so only its phases count.
     if (!this.following(state)) {
       this.failed = null;
-      return this.detach("已切换到列表外来源");
+      return this.detach("Switched to a source outside the list");
     }
     if (state.duration !== null && state.duration > 0) row.duration = state.duration;
     if (state.phase === "error") {
-      this.fail(row.rowId, state.error ?? "无法打开此媒体");
+      this.fail(row.rowId, state.error ?? { kind: "unplayable" });
     } else if (state.phase === "ready") {
-      row.status = state.paused ? "已暂停" : "播放中";
-      row.error = "";
+      row.status = state.paused ? "paused" : "playing";
+      row.error = null;
       row.played = true;
       this.message = row.status;
     } else if (state.phase === "loading") {
-      row.status = "正在打开";
+      row.status = "opening";
     } else if (state.phase === "ended") {
-      row.status = "已结束";
+      row.status = "ended";
       row.played = true;
     } else if (state.phase === "empty") {
-      this.detach("当前来源已关闭");
+      this.detach("The current source was closed");
     }
+  }
+}
+
+/** Why a link was not added (the link window shows it). */
+export class LinkError extends Error {
+  readonly code: "incomplete" | "refused" | "full";
+  constructor(code: "incomplete" | "refused" | "full") {
+    super(
+      code === "incomplete"
+        ? "Enter a complete HTTP(S) link"
+        : code === "refused"
+          ? "Only HTTP(S) links without a user name or password are accepted"
+          : `The list is full at ${ROW_LIMIT} items`,
+    );
+    this.code = code;
   }
 }
 

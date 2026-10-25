@@ -1,12 +1,15 @@
-// 字幕设置: font, bold, colour, outline, shadow, box, margin, ASS style, sync step,
+// Subtitle Settings: font, bold, colour, outline, shadow, box, margin, ASS style, sync step,
 // fallback encoding (ui-spec §7.4, UI-TOOL-08).
-// Changes apply at once; every row has its own 默认 (UI-TOOL-04).
+// Changes apply at once; every row has its own Default (UI-TOOL-04). Every
+// text is @tr (English source; locales/<lang>.po translate it).
 import { CheckBox, ComboBox } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button, Slider } from "@vestra/widgets.slint";
 
+// The row label; `column` is the window's label column (65px, wider for longer translations).
 component RowLabel inherits Text {
-    width: 65px;
+    in property <length> column: 65px;
+    width: root.column;
     color: Theme.text;
     font-size: Theme.font-body;
     horizontal-alignment: right;
@@ -15,26 +18,30 @@ component RowLabel inherits Text {
 }
 
 export component SubtitleSettings inherits Window {
-    title: "字幕设置";
-    width: 301px;
+    title: @tr("Subtitle Settings");
+    // 301px, wider by what a longer translated label or Default button needs, or for the
+    // longest check box (indented to the controls, 10px padding each side).
+    width: max(301px + (root.column - 65px) + (root.default-width - 41px),
+        root.column + 3px + max(box-check.preferred-width, reload-check.preferred-width) + 20px);
     background: Theme.bg-panel;
     in property <bool> can-style: false;
-    in property <string> font-note: "";
+    // The selected track is ASS/SSA with its own styles kept: the note under the font.
+    in property <bool> ass-note: false;
     in-out property <bool> bold: false;
     in-out property <float> shadow-size: 0;
     in-out property <bool> box-on: false;
     in-out property <float> box-opacity: 50;
     in property <int> ass-index: 0;
-    in property <[string]> encoding-labels: [];
     in property <int> encoding-index: 0;
-    in property <string> style-reason: "";
-    in property <string> status-text: "";
+    /** Why styling is off (a text value); "" when it is on. */
+    in property <string> style-reason;
+    /** The status line (a text value, the player translates it); "" for none. */
+    in property <string> status;
     in property <[string]> font-labels: [];
     in property <int> selected-font: 0;
     in property <int> selected-color: 0;
     in-out property <float> outline-size: 2;
     in-out property <float> margin-percent: 5;
-    in property <[string]> sync-step-labels: [];
     in property <int> sync-step-index: 3;
     in-out property <bool> auto-reload: false;
     changed font-labels => { font-combo.current-index = root.selected-font; }
@@ -42,7 +49,6 @@ export component SubtitleSettings inherits Window {
     changed selected-color => { color-combo.current-index = root.selected-color; }
     changed sync-step-index => { step-combo.current-index = root.sync-step-index; }
     changed ass-index => { ass-combo.current-index = root.ass-index; }
-    changed encoding-labels => { encoding-combo.current-index = root.encoding-index; }
     changed encoding-index => { encoding-combo.current-index = root.encoding-index; }
     callback change-font(int);
     callback change-color(int);
@@ -60,13 +66,31 @@ export component SubtitleSettings inherits Window {
     callback change-box-opacity(float);
     callback change-ass-override(int);
     callback change-encoding(int);
+    // The label column: 65px, or the widest label.
+    private property <length> column: max(65px, label-measure.preferred-width);
+    // The Default buttons: 41px, or their label with the button padding.
+    private property <length> default-width: max(41px, default-measure.preferred-width + 2 * Theme.button-padding);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        label-measure := VerticalLayout {
+            for text in [@tr("Font"), @tr("Colour"), @tr("Outline {}", round(root.outline-size)), @tr("Shadow {}", round(root.shadow-size)),
+                @tr("Opacity {}%", round(root.box-opacity)), @tr("Margin {}%", round(root.margin-percent)), @tr("ASS style"), @tr("Sync step"),
+                @tr("Default encoding")]: Text {
+                text: text;
+                font-size: Theme.font-body;
+            }
+        }
+        default-measure := Text { text: @tr("Default"); font-size: Theme.font-body; }
+    }
 
     VerticalLayout {
         padding: 10px;
         spacing: 4px;
         HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: "字体"; }
+            RowLabel { column: root.column; text: @tr("Font"); }
             font-combo := ComboBox {
                 height: 22px;
                 model: root.font-labels;
@@ -74,12 +98,12 @@ export component SubtitleSettings inherits Window {
                 enabled: root.can-style;
                 selected(value) => { root.change-font(self.current-index); }
             }
-            Button { width: 41px; height: 22px; text: "默认"; enabled: root.can-style; clicked => { root.reset-field("font"); } }
+            Button { width: root.default-width; height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("font"); } }
         }
-        if root.font-note != "": HorizontalLayout {
-            padding-left: 68px;
+        if root.ass-note: HorizontalLayout {
+            padding-left: root.column + 3px;
             Text {
-                text: root.font-note;
+                text: @tr("With the original ASS styles on: fonts follow the subtitle file (missing fonts use the default font); colour, outline, bold, shadow, background box and position have no effect.");
                 color: Theme.text-dim;
                 font-size: Theme.font-xs;
                 wrap: word-wrap;
@@ -87,10 +111,10 @@ export component SubtitleSettings inherits Window {
             }
         }
         HorizontalLayout {
-            padding-left: 68px;
+            padding-left: root.column + 3px;
             CheckBox {
                 height: Theme.checkbox-row-height;
-                text: "粗体";
+                text: @tr("Bold");
                 enabled: root.can-style;
                 checked <=> root.bold;
                 toggled => { root.change-bold(self.checked); }
@@ -98,19 +122,20 @@ export component SubtitleSettings inherits Window {
         }
         HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: "颜色"; }
+            RowLabel { column: root.column; text: @tr("Colour"); }
+            // In the order of main.ts COLORS.
             color-combo := ComboBox {
                 height: 22px;
-                model: ["白色", "黄色", "青色"];
+                model: [@tr("White"), @tr("Yellow"), @tr("Cyan")];
                 current-index: root.selected-color;
                 enabled: root.can-style;
                 selected(value) => { root.change-color(self.current-index); }
             }
-            Button { width: 41px; height: 22px; text: "默认"; enabled: root.can-style; clicked => { root.reset-field("color"); } }
+            Button { width: root.default-width; height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("color"); } }
         }
         HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: "描边 " + round(root.outline-size); }
+            RowLabel { column: root.column; text: @tr("Outline {}", round(root.outline-size)); }
             Slider {
                 panel: true; minimum: 0; maximum: 4;
                 value <=> root.outline-size;
@@ -118,11 +143,11 @@ export component SubtitleSettings inherits Window {
                 changed(value) => { root.change-outline(value); }
                 released => { root.slider-released(); }
             }
-            Button { width: 41px; height: 22px; text: "默认"; enabled: root.can-style; clicked => { root.reset-field("outline"); } }
+            Button { width: root.default-width; height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("outline"); } }
         }
         HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: "阴影 " + round(root.shadow-size); }
+            RowLabel { column: root.column; text: @tr("Shadow {}", round(root.shadow-size)); }
             Slider {
                 panel: true; minimum: 0; maximum: 4;
                 value <=> root.shadow-size;
@@ -130,13 +155,13 @@ export component SubtitleSettings inherits Window {
                 changed(value) => { root.change-shadow(value); }
                 released => { root.slider-released(); }
             }
-            Button { width: 41px; height: 22px; text: "默认"; enabled: root.can-style; clicked => { root.reset-field("shadow"); } }
+            Button { width: root.default-width; height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("shadow"); } }
         }
         HorizontalLayout {
-            padding-left: 68px;
-            CheckBox {
+            padding-left: root.column + 3px;
+            box-check := CheckBox {
                 height: Theme.checkbox-row-height;
-                text: "背景框（替代描边与阴影）";
+                text: @tr("Background box (replaces outline and shadow)");
                 enabled: root.can-style;
                 checked <=> root.box-on;
                 toggled => { root.change-box(self.checked); }
@@ -144,7 +169,7 @@ export component SubtitleSettings inherits Window {
         }
         HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: "不透明 " + round(root.box-opacity) + "%"; }
+            RowLabel { column: root.column; text: @tr("Opacity {}%", round(root.box-opacity)); }
             Slider {
                 panel: true; minimum: 0; maximum: 100;
                 value <=> root.box-opacity;
@@ -152,11 +177,11 @@ export component SubtitleSettings inherits Window {
                 changed(value) => { root.change-box-opacity(value); }
                 released => { root.slider-released(); }
             }
-            Button { width: 41px; height: 22px; text: "默认"; enabled: root.can-style && root.box-on; clicked => { root.reset-field("boxOpacity"); } }
+            Button { width: root.default-width; height: 22px; text: @tr("Default"); enabled: root.can-style && root.box-on; clicked => { root.reset-field("boxOpacity"); } }
         }
         HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: "边距 " + round(root.margin-percent) + "%"; }
+            RowLabel { column: root.column; text: @tr("Margin {}%", round(root.margin-percent)); }
             Slider {
                 panel: true; minimum: 2; maximum: 15;
                 value <=> root.margin-percent;
@@ -164,47 +189,57 @@ export component SubtitleSettings inherits Window {
                 changed(value) => { root.change-margin(value); }
                 released => { root.slider-released(); }
             }
-            Button { width: 41px; height: 22px; text: "默认"; enabled: root.can-style; clicked => { root.reset-field("margin"); } }
+            Button { width: root.default-width; height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("margin"); } }
         }
         HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: "ASS 样式"; }
+            RowLabel { column: root.column; text: @tr("ASS style"); }
             ass-combo := ComboBox {
                 height: 22px;
-                model: ["保留原样式", "统一为字幕设置"];
+                model: [@tr("Keep original styles"), @tr("Use subtitle settings")];
                 current-index: root.ass-index;
                 selected(value) => { root.change-ass-override(self.current-index); }
             }
-            Button { width: 41px; height: 22px; text: "默认"; clicked => { root.change-ass-override(0); } }
+            Button { width: root.default-width; height: 22px; text: @tr("Default"); clicked => { root.change-ass-override(0); } }
         }
         // Not style fields: they work without a selected track.
         HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: "同步单位"; }
+            RowLabel { column: root.column; text: @tr("Sync step"); }
+            // In the order of model.ts SYNC_STEPS.
             step-combo := ComboBox {
                 height: 22px;
-                model: root.sync-step-labels;
+                model: [@tr("{} s", "0.05"), @tr("{} s", "0.1"), @tr("{} s", "0.25"), @tr("{} s", "0.5"), @tr("{} s", "1"), @tr("{} s", "5")];
                 current-index: root.sync-step-index;
                 selected(value) => { root.change-sync-step(self.current-index); }
             }
-            Button { width: 41px; height: 22px; text: "默认"; clicked => { root.change-sync-step(3); } }
+            Button { width: root.default-width; height: 22px; text: @tr("Default"); clicked => { root.change-sync-step(3); } }
         }
         HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: "默认编码"; }
+            RowLabel { column: root.column; text: @tr("Default encoding"); }
+            // In the order of formats.ts ENCODINGS.
             encoding-combo := ComboBox {
                 height: 22px;
-                model: root.encoding-labels;
+                model: [
+                    @tr("Simplified Chinese (GB18030)"),
+                    @tr("Traditional Chinese (Big5)"),
+                    @tr("Japanese (Shift_JIS)"),
+                    @tr("Korean (EUC-KR)"),
+                    @tr("Western (Windows-1252)"),
+                    @tr("Cyrillic (Windows-1251)"),
+                    @tr("Western (ISO-8859-1)"),
+                ];
                 current-index: root.encoding-index;
                 selected(value) => { root.change-encoding(self.current-index); }
             }
-            Button { width: 41px; height: 22px; text: "默认"; clicked => { root.change-encoding(0); } }
+            Button { width: root.default-width; height: 22px; text: @tr("Default"); clicked => { root.change-encoding(0); } }
         }
         HorizontalLayout {
-            padding-left: 68px;
-            CheckBox {
+            padding-left: root.column + 3px;
+            reload-check := CheckBox {
                 height: Theme.checkbox-row-height;
-                text: "字幕文件改动后自动重载";
+                text: @tr("Reload automatically when the subtitle file changes");
                 checked <=> root.auto-reload;
                 toggled => { root.change-auto-reload(self.checked); }
             }
@@ -212,14 +247,14 @@ export component SubtitleSettings inherits Window {
         HorizontalLayout {
             spacing: 3px;
             Text {
-                text: root.status-text != "" ? root.status-text : root.style-reason;
+                text: root.status != "" ? root.status : root.style-reason;
                 color: Theme.text-list;
                 font-size: Theme.font-body;
                 vertical-alignment: center;
                 overflow: elide;
                 horizontal-stretch: 1;
             }
-            Button { height: 22px; text: "全部默认"; clicked => { root.reset-style(); } }
+            Button { height: 22px; text: @tr("Reset All"); clicked => { root.reset-style(); } }
         }
     }
 }

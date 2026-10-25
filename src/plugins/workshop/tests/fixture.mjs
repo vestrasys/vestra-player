@@ -7,6 +7,7 @@ import { after } from "node:test";
 import { HostError, TestHost, startPlugin } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 import { mockOpenAI } from "./mock-openai.mjs";
+import * as texts from "./texts.mjs";
 
 export const KEY = "sk-test-0123456789-SECRET";
 const cleanup = [];
@@ -37,11 +38,15 @@ export async function until(host, condition, what = "condition", ms = 20_000) {
   }
 }
 
+/** The settings page's messages after a key was saved or models were listed. */
+const SETTLED = ["key-saved", "fetched", "fetched-replaced", "fetch-failed-custom", "fetch-empty-custom"];
+
 /**
  * The plugin, its window opened. `compat`: a mock server URL to configure as
- * 「自定义 · OpenAI 格式」 (its first listed model, mock-1) with KEY.
+ * "Custom · OpenAI format" (its first listed model, mock-1) with KEY.
+ * `locale`: the interface language (English when unset).
  */
-export async function startAi({ data, compat, secrets = {}, deny = false } = {}) {
+export async function startAi({ data, compat, secrets = {}, deny = false, locale } = {}) {
   const host = new TestHost();
   // `deny`: the user refuses the keychain's authorization dialog.
   if (deny)
@@ -49,7 +54,7 @@ export async function startAi({ data, compat, secrets = {}, deny = false } = {})
       throw new HostError("failed", "User canceled the operation.");
     });
   for (const [name, value] of Object.entries(secrets)) host.secrets.set(name, value);
-  const started = await startPlugin(activate, { directory: new URL("..", import.meta.url), host, ...(data ? { dataDirectory: data } : {}) });
+  const started = await startPlugin(activate, { directory: new URL("..", import.meta.url), host, ...(data ? { dataDirectory: data } : {}), ...(locale ? { locale } : {}) });
   // Also after a failed test: the plugin's workers end with it.
   let stopped = false;
   const stop = () => (stopped ? undefined : ((stopped = true), started.stop()));
@@ -64,13 +69,13 @@ export async function startAi({ data, compat, secrets = {}, deny = false } = {})
   };
   /** A custom endpoint: Base URL (Enter lists its models), then the key. */
   const configure = async (url, { format = "OpenAI", model } = {}) => {
-    page.emit("choose-provider", page.props.providers.indexOf(`自定义 · ${format} 格式`));
+    page.emit("choose-provider", page.props.providers.indexOf(host.translate(`Custom · ${format} format`)));
     await host.settle();
     page.emit("accept-base-url", url);
-    await until(host, () => page.props.listing === false && page.props.message !== "", "model list");
+    await until(host, () => page.props.listing === false && page.props.message.code !== "", "model list");
     if (model) page.emit("choose-model", model);
     page.emit("save-key", KEY);
-    await until(host, () => props.configured === true && page.props.listing === false && /key 已保存|获取到|没能获取/.test(page.props.message), "configured");
+    await until(host, () => props.configured === true && page.props.listing === false && SETTLED.includes(page.props.message.code), "configured");
   };
   if (compat) await configure(compat);
   const ai = {
@@ -85,6 +90,30 @@ export async function startAi({ data, compat, secrets = {}, deny = false } = {})
     /** The rows, assistant text read back from its Markdown document (`body`). */
     rows: () => props.rows.map((row) => ({ ...row, text: host.markdown(row.body)?.text || row.text })),
     kinds: () => props.rows.map((r) => r.kind).join(","),
+    /** What the windows show, in the test's language (see texts.mjs). */
+    banner: () => texts.banner(host, props.banner),
+    card: () => texts.card(host, props["card-status"], props["card-keys"]),
+    keyState: () => texts.keyState(host, page.props["key-state"]),
+    message: () => texts.message(host, page.props.message),
+    ownerHint: () => texts.ownerHint(host, page.props["owner-hint"]),
+    /** The text of row `i`: the message, or the line its code makes. */
+    shown: (i) => {
+      const row = ai.rows().at(i);
+      return row.kind === "tools" ? texts.toolLine(host, row) : row.kind === "error" ? texts.error(host, row) : row.kind === "notice" ? texts.notice(host, row) : row.text;
+    },
+    /** The expanded call list of tool row `i` (a collapsed row is expanded for the reading, then collapsed again). */
+    async calls(i) {
+      const { id, expanded } = props.rows.at(i);
+      if (!expanded) await send("toggle", id);
+      const list = texts.toolList(host, props.rows.find((r) => r.id === id));
+      if (!expanded) await send("toggle", id);
+      return list;
+    },
+    /** The provider and model line under the input. */
+    modelLine: () => {
+      if (!props["model-text"]) return "";
+      return `${texts.providerName(host, props["provider-id"], props["provider-name"])} · ${props["model-text"]}`;
+    },
     /** Type and send a message, then wait until the run is over. */
     async ask(text, { wait = true } = {}) {
       window.emit("draft-changed", text);

@@ -1,0 +1,149 @@
+# French translation of the messages in messages.pot.
+# Machine translated (each entry flagged x-machine); awaiting human review.
+# Reviewed by an AI reviewer on 2026-10-25
+msgid ""
+msgstr ""
+"Language: fr\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: manifest.json
+#, x-machine
+msgid "Playback History"
+msgstr "Historique de lecture"
+
+#: manifest.json
+#, x-machine
+msgid "Recently played items, and resuming where you left off"
+msgstr "Éléments lus récemment et reprise là où vous vous étiez arrêté"
+
+#: manifest.json
+#, x-machine
+msgid "Open ▸ Recently Played lists the files and links opened recently. Playback ▸ Resume Playback offers Don't Resume, Resume Automatically or Ask Every Time: the next time the same file is opened, it continues where it stopped."
+msgstr "Ouvrir ▸ Lus récemment liste les fichiers et liens ouverts récemment. Lecture ▸ Reprise de la lecture propose Ne pas reprendre, Reprendre automatiquement ou Toujours demander : la prochaine fois que le même fichier est ouvert, la lecture reprend là où elle s'était arrêtée."
+
+#: manifest.json
+#, x-machine
+msgid "playback"
+msgstr "lecture"
+
+#: manifest.json
+#, x-machine
+msgid "history"
+msgstr "historique"
+
+#: manifest.json
+#, x-machine
+msgid "resume"
+msgstr "reprise"
+
+#: menu.ts:36
+#, x-machine
+msgid "{} ({})"
+msgstr "{} ({})"
+
+#: menu.ts:94 menu.ts:114 menu.ts:122 menu.ts:133
+#, x-machine
+msgid "Recently Played"
+msgstr "Lus récemment"
+
+#: menu.ts:94
+#, x-machine
+msgid "(No Entries)"
+msgstr "(Aucune entrée)"
+
+#: menu.ts:114
+#, x-machine
+msgid "Remove Invalid Entries"
+msgstr "Supprimer les entrées invalides"
+
+#: menu.ts:118
+#, x-machine
+msgid "Removed {} invalid entries"
+msgstr "{} entrées invalides supprimées"
+
+#: menu.ts:122
+#, x-machine
+msgid "Clear Entries"
+msgstr "Effacer les entrées"
+
+#: menu.ts:128
+#, x-machine
+msgid "Playback history cleared"
+msgstr "Historique de lecture effacé"
+
+#: menu.ts:133
+#, x-machine
+msgid "Record Playback History"
+msgstr "Conserver l'historique de lecture"
+
+#: menu.ts:144
+#, x-machine
+msgid "File not found: {}"
+msgstr "Fichier introuvable : {}"
+
+#: menu.ts:153 menu.ts:156
+#, x-machine
+msgid "Cannot open: {}"
+msgstr "Impossible d'ouvrir : {}"
+
+#: menu.ts:172 menu.ts:182 menu.ts:190 ui/resume.slint:6
+#, x-machine
+msgid "Resume Playback"
+msgstr "Reprise de la lecture"
+
+#: menu.ts:172
+#, x-machine
+msgid "Don't Resume"
+msgstr "Ne pas reprendre"
+
+#: menu.ts:172
+#, x-machine
+msgid "Resume Automatically"
+msgstr "Reprendre automatiquement"
+
+#: menu.ts:172
+#, x-machine
+msgid "Ask Every Time"
+msgstr "Toujours demander"
+
+#: menu.ts:182
+#, x-machine
+msgid "Also Remember Audio Files"
+msgstr "Mémoriser aussi les fichiers audio"
+
+#: menu.ts:190
+#, x-machine
+msgid "Clear All Saved Positions"
+msgstr "Effacer toutes les positions enregistrées"
+
+#: menu.ts:195
+#, x-machine
+msgid "All saved positions cleared"
+msgstr "Toutes les positions enregistrées ont été effacées"
+
+#: resume.ts:226
+#, x-machine
+msgid "Resuming from {}"
+msgstr "Reprise à {}"
+
+#: resume.ts:229
+#, x-machine
+msgid "Cannot resume: {}"
+msgstr "Impossible de reprendre : {}"
+
+#: ui/resume.slint:31
+#, x-machine
+msgid "You didn't finish this last time. Continue? ({})"
+msgstr "Vous n'aviez pas terminé la dernière fois. Continuer ? ({})"
+
+#: ui/resume.slint:48
+#, x-machine
+msgid "Continue"
+msgstr "Continuer"
+
+#: ui/resume.slint:51
+#, x-machine
+msgid "Start Over"
+msgstr "Recommencer"

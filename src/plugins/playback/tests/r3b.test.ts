@@ -11,7 +11,8 @@ import { clock, ffmpegArgs, MAX_FAILURES, NEEDS_FFMPEG, SETTLE_MS, slotOf } from
 
 const directory = new URL("..", import.meta.url);
 const start = (host = new TestHost(), dataDirectory?: string) =>
-  startPlugin(activate, { directory, host, ...(dataDirectory ? { dataDirectory } : {}) });
+  // The Chinese texts are what the plugin showed before English became the source.
+  startPlugin(activate, { directory, host, locale: "zh-Hans", ...(dataDirectory ? { dataDirectory } : {}) });
 const VIDEO = {
   codec: "h264",
   width: 1920,
@@ -392,7 +393,7 @@ test("A02 the window uses the shared UrlInputRow instead of its own input row", 
   const slint = readFileSync(new URL("../ui/open-url.slint", import.meta.url), "utf8");
   assert.match(slint, /import \{ UrlInputRow \} from "@vestra\/widgets\.slint"/);
   assert.match(slint, /enabled: !root\.busy/);
-  assert.match(slint, /confirm-text: root\.busy \? "正在打开…" : "打开"/);
+  assert.match(slint, /confirm-text: root\.busy \? @tr\("Opening…"\) : @tr\("Open"\)/);
   assert.doesNotMatch(slint, /TextEdit|Button/);
 });
 

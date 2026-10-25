@@ -49,7 +49,7 @@ test("D18: VTT, ASS and two-language SAMI files load with titles, formats and no
     "c.smi": "<SAMI><HEAD><STYLE>.EN { Name: English; } .ZH { Name: 中文; }</STYLE></HEAD><BODY><SYNC Start=0><P Class=EN>Hi<SYNC Start=0><P Class=ZH>嗨<SYNC Start=900><P Class=EN>&nbsp;<P Class=ZH>&nbsp;</BODY></SAMI>",
   });
   const host = sourceHost();
-  const { stop } = await startPlugin(activate, { directory, host });
+  const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
   try {
     await loadFile(host, files.path("a.vtt"));
     assert.equal(host.osd.at(-1), "打开字幕：a.vtt");
@@ -75,7 +75,7 @@ test("D18: VTT, ASS and two-language SAMI files load with titles, formats and no
 
 test("D09/D11: Alt+B, 阴影 and 字幕边框不透明 toggle with OSD and check marks; the window sliders agree", async () => {
   const host = sourceHost();
-  const { stop } = await startPlugin(activate, { directory, host });
+  const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
   await host.press("Alt+B");
   assert.equal(host.osd.at(-1), "粗体字幕");
   assert.equal(host.command("bold").state.checked, true);
@@ -116,18 +116,18 @@ test("D17: 开启 ASS/SSA 原样式 switches the ASS override; the settings comb
   const host = sourceHost();
   host.subtitles.tracks[0]!.codec = "ass";
   host.subtitles.tracks[0]!.text = true;
-  const { stop } = await startPlugin(activate, { directory, host });
+  const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
   assert.equal(host.command("ass-original").state.checked, true, "on by default (keep)");
   await host.command("settings").run();
   const settings = host.window("subtitle-settings");
-  assert.match(String(settings.props["font-note"]), /按字幕文件/);
+  assert.equal(settings.props["ass-note"], true);
   await host.command("ass-original").run();
   assert.equal(host.osd.at(-1), "ASS/SSA 动态字幕：关");
   await host.settle(170);
   assert.equal(style(host)?.assOverride, "force");
   assert.equal(host.command("ass-original").state.checked, false);
   assert.equal(settings.props["ass-index"], 1);
-  assert.equal(settings.props["font-note"], "", "the plugin style applies to ASS again");
+  assert.equal(settings.props["ass-note"], false, "the plugin style applies to ASS again");
   settings.emit("change-ass-override", 0);
   await host.settle(170);
   assert.equal(style(host)?.assOverride, "keep");
@@ -139,7 +139,7 @@ test("style.json: the style (not the sync) is restored when a stylable track is 
   const data = await mkdtemp(join(tmpdir(), "vestra-subtitles-data-"));
   try {
     let host = sourceHost();
-    let started = await startPlugin(activate, { directory, host, dataDirectory: data });
+    let started = await startPlugin(activate, { directory, host, dataDirectory: data, locale: "zh-Hans" });
     await host.press("Alt+B");
     await host.press("Alt+PageUp");
     await host.press(",");
@@ -152,7 +152,7 @@ test("style.json: the style (not the sync) is restored when a stylable track is 
 
     host = sourceHost();
     host.subtitles.selection.target = null; // nothing selected yet: nothing to restore onto
-    started = await startPlugin(activate, { directory, host, dataDirectory: data });
+    started = await startPlugin(activate, { directory, host, dataDirectory: data, locale: "zh-Hans" });
     await host.settle(170);
     assert.equal(host.sent("subtitles.style").length, 0);
     await host.command("track-1").run();
@@ -168,7 +168,7 @@ test("style.json: the style (not the sync) is restored when a stylable track is 
     // A broken file is set aside and the defaults are used.
     await writeFile(join(data, "style.json"), "{ nope");
     host = sourceHost();
-    started = await startPlugin(activate, { directory, host, dataDirectory: data });
+    started = await startPlugin(activate, { directory, host, dataDirectory: data, locale: "zh-Hans" });
     await host.settle(170);
     assert.equal(host.sent("subtitles.style").length, 0);
     await started.stop();
@@ -179,7 +179,7 @@ test("style.json: the style (not the sync) is restored when a stylable track is 
 
 test("D05: sync values up to ±600 000 ms are accepted", async () => {
   const host = sourceHost();
-  const { stop } = await startPlugin(activate, { directory, host });
+  const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
   await host.command("sync-input").run();
   const sync = host.window("subtitle-sync");
   sync.emit("apply", "-90000");
@@ -192,10 +192,10 @@ test("D05: sync values up to ±600 000 ms are accepted", async () => {
 test("B11: End / Home / Ctrl+Home jump between the cues of a loaded file, shifted by the sync", async () => {
   const files = await tempFiles({ "three.srt": THREE });
   const host = sourceHost();
-  const { stop } = await startPlugin(activate, { directory, host });
+  const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
   try {
     assert.equal(host.command("dialogue-next").state.enabled, false, "an embedded track without a stream number");
-    assert.equal(host.command("dialogue-next").state.reason, "没有可用的文本字幕");
+    assert.equal(host.translate(host.command("dialogue-next").state.reason!), "没有可用的文本字幕");
     await loadFile(host, files.path("three.srt"));
     host.setSource({ position: 25, duration: 100 });
     await host.settle();
@@ -247,7 +247,7 @@ test("B11: embedded text tracks are read once with ffmpeg -map 0:<streamIndex>; 
   const files = await tempFiles({ "movie.mkv": "fake media" });
   const host = sourceHost(files.path("movie.mkv"));
   Object.assign(host.subtitles.tracks[0]!, { codec: "ass", text: true, streamIndex: 3 });
-  const { stop } = await startPlugin(activate, { directory, host });
+  const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
   try {
     host.setSource({ position: 25, duration: 100 });
     await host.press("End");
@@ -292,17 +292,17 @@ function switchTrack(host: TestHost) {
 test("B11: graphic tracks, network sources and unseekable media disable the jumps", async () => {
   const host = sourceHost("https://example.com/live.m3u8");
   Object.assign(host.subtitles.tracks[0]!, { codec: "subrip", text: true, streamIndex: 2 });
-  const { stop } = await startPlugin(activate, { directory, host });
-  assert.equal(host.command("dialogue-previous").state.reason, "没有可用的文本字幕", "network source");
+  const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
+  assert.equal(host.translate(host.command("dialogue-previous").state.reason!), "没有可用的文本字幕", "network source");
   host.setSource({ capabilities: { ...host.source.capabilities, seek: false } });
   await host.settle();
   await pause();
-  assert.equal(host.command("dialogue-previous").state.reason, "当前媒体不能跳转");
+  assert.equal(host.translate(host.command("dialogue-previous").state.reason!), "当前媒体不能跳转");
   await stop();
 
   const local = sourceHost();
   Object.assign(local.subtitles.tracks[0]!, { codec: "hdmv_pgs_subtitle", text: false, streamIndex: 2 });
-  const second = await startPlugin(activate, { directory, host: local });
-  assert.equal(local.command("dialogue-current").state.reason, "没有可用的文本字幕", "graphic track");
+  const second = await startPlugin(activate, { directory, host: local, locale: "zh-Hans" });
+  assert.equal(local.translate(local.command("dialogue-current").state.reason!), "没有可用的文本字幕", "graphic track");
   await second.stop();
 });

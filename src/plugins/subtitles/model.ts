@@ -2,18 +2,33 @@ import type { SubtitleStyle } from "@vestra-player/sdk";
 import type { Cue } from "./formats.ts";
 import { DEFAULT_ENCODING, isEncoding } from "./formats.ts";
 import type { Encoding } from "./formats.ts";
+import { status } from "./messages.ts";
+import type { Status } from "./messages.ts";
 
-/** 同步单位 choices in ms (「同步调整单位」); 0.5 s is the default. */
+/** Sync step choices in ms (Subtitle Settings ▸ Sync step); 0.5 s is the default. */
 export const SYNC_STEPS = [50, 100, 250, 500, 1000, 5000] as const;
 export const DEFAULT_SYNC_STEP = 500;
 /** The host's accepted `offsetMs` range (reference §9). */
 export const SYNC_LIMIT = 600000;
 
-/** A08: where the secondary subtitle sits (`SubtitleStyle.secondaryPosition`). */
+/**
+ * The Subtitles ▸ Sync menu titles of each step (the step is in the title,
+ * so each is a whole text); same order as `SYNC_STEPS`.
+ */
+export const SYNC_MENU = [
+  { step: 50, earlier: "Earlier 0.05 s", later: "Later 0.05 s" },
+  { step: 100, earlier: "Earlier 0.1 s", later: "Later 0.1 s" },
+  { step: 250, earlier: "Earlier 0.25 s", later: "Later 0.25 s" },
+  { step: 500, earlier: "Earlier 0.5 s", later: "Later 0.5 s" },
+  { step: 1000, earlier: "Earlier 1 s", later: "Later 1 s" },
+  { step: 5000, earlier: "Earlier 5 s", later: "Later 5 s" },
+] as const;
+
+/** A08: where the secondary subtitle sits (`SubtitleStyle.secondaryPosition`), with its menu title. */
 export type SecondaryPosition = "top" | "aboveMain";
 export const SECONDARY_POSITIONS = [
-  { id: "top", label: "顶部" },
-  { id: "aboveMain", label: "主字幕上方" },
+  { id: "top", label: "Top" },
+  { id: "aboveMain", label: "Above Main Subtitle" },
 ] as const;
 export type Stored = {
   syncStepMs: number;
@@ -44,18 +59,18 @@ export const serialize = ({ syncStepMs, autoReload, fallbackEncoding, secondaryP
   secondaryPosition,
 });
 
-/** Seconds for menu titles and the step list: 0.05, 0.5, 5. */
+/** Seconds of a step: 0.05, 0.5, 5. */
 export const stepSeconds = (ms: number) => `${ms / 1000}`;
 
 /**
- * 手动调整同步 input: whole milliseconds with an optional sign (ASCII or U+2212).
- * Returns the value, or the Chinese reason it was refused.
+ * Adjust Sync input: whole milliseconds with an optional sign (ASCII or U+2212).
+ * Returns the value, or the status saying why it was refused.
  */
-export function parseSync(text: string): { value: number } | { error: string } {
+export function parseSync(text: string): { value: number } | { error: Status } {
   const trimmed = String(text).trim().replace(/^−/, "-");
-  if (!/^[+-]?\d{1,9}$/.test(trimmed)) return { error: "请输入整数毫秒，例如 1250 或 -500。" };
+  if (!/^[+-]?\d{1,9}$/.test(trimmed)) return { error: status("syncInteger") };
   const value = Number(trimmed);
-  if (Math.abs(value) > SYNC_LIMIT) return { error: `同步值须在 −${SYNC_LIMIT} 至 ${SYNC_LIMIT} 毫秒之间` };
+  if (Math.abs(value) > SYNC_LIMIT) return { error: status("syncRange", [SYNC_LIMIT, SYNC_LIMIT]) };
   return { value };
 }
 
@@ -95,7 +110,7 @@ export const saveable = (style: SubtitleStyle): SavedStyle => {
   return { ...rest, bold: rest.bold === true, shadow: rest.shadow ?? 0, box: rest.box ?? null, assOverride: rest.assOverride ?? "keep" };
 };
 
-// ------------------------------------------------------------------ B11 上一句 / 下一句
+// ------------------------------------------------------------------ B11 previous / next dialogue
 export type Jump = "previous" | "next" | "current";
 /**
  * The cue to jump to from `position` (seconds), with cue times shifted by the

@@ -25,7 +25,7 @@ export global PlaybackBridge {
     in-out property <string> total-label: "--:--";
     in-out property <float> progress;
     in-out property <bool> can-seek;
-    // I06: source duration in seconds and the 进度条悬停显示时间 option.
+    // I06: source duration in seconds and the Show Time on Seek Bar Hover option.
     in-out property <float> duration;
     in-out property <bool> hover-time;
     // I07: the picture box (option on, a local file with video) and the picture once made.
@@ -52,16 +52,36 @@ export global PlaybackBridge {
     in-out property <bool> sidebar-on;
     // G-18: on, but hidden because the window is too narrow (drawn at half opacity).
     in-out property <bool> sidebar-hidden;
-    // G-07: tooltips (600 ms, ToolTipArea), with the keys the user has bound.
-    in-out property <string> tip-play-pause;
-    in-out property <string> tip-stop;
-    in-out property <string> tip-back;
-    in-out property <string> tip-forward;
-    in-out property <string> tip-open;
-    in-out property <string> tip-time;
-    in-out property <string> tip-mute;
-    in-out property <string> tip-volume;
-    in-out property <string> tip-sidebar;
+    // G-07: tooltips (600 ms, ToolTipArea) name the keys the user has bound
+    // (the menu text, "" for none), the first seek step and the volume.
+    in-out property <string> key-play-pause;
+    in-out property <string> key-stop;
+    in-out property <string> key-back;
+    in-out property <string> key-forward;
+    in-out property <string> key-previous;
+    in-out property <string> key-next;
+    in-out property <string> key-open;
+    in-out property <string> key-mute;
+    in-out property <string> key-sidebar;
+    in-out property <string> step-text: "5";
+    in-out property <int> volume-percent: 100;
+    // G-14: the time label shows the remaining time.
+    in-out property <bool> remaining-time;
+    // `title (key)`, or the title alone without a key.
+    pure function with-key(title: string, key: string) -> string {
+        // TRANSLATORS: a tooltip: a button's action and its key, e.g. "Pause (Space)".
+        return key == "" ? title : @tr("{} ({})", title, key);
+    }
+    out property <string> tip-play-pause: with-key(playing ? @tr("Pause") : @tr("Play"), key-play-pause);
+    out property <string> tip-stop: with-key(@tr("Stop"), key-stop);
+    // TRANSLATORS: a tooltip of two lines: the click's action, then the right click's.
+    out property <string> tip-back: @tr("{}\nRight-click: {}", with-key(@tr("Back {} seconds", step-text), key-back), with-key(@tr("Play previous"), key-previous));
+    out property <string> tip-forward: @tr("{}\nRight-click: {}", with-key(@tr("Forward {} seconds", step-text), key-forward), with-key(@tr("Play next"), key-next));
+    out property <string> tip-open: with-key(@tr("Open file"), key-open);
+    out property <string> tip-time: remaining-time ? @tr("Click to show the elapsed time") : @tr("Click to show the remaining time");
+    out property <string> tip-mute: with-key(muted ? @tr("Unmute") : @tr("Mute"), key-mute);
+    out property <string> tip-volume: @tr("Volume: {}%", volume-percent);
+    out property <string> tip-sidebar: sidebar-hidden ? @tr("{} (the window is too narrow for the playlist)", with-key(@tr("Playlist"), key-sidebar)) : with-key(@tr("Playlist"), key-sidebar);
     // A core action id (`host.run`), or "open".
     callback action(string);
     callback seek-changed(float);
@@ -306,7 +326,7 @@ component MuteButton inherits Rectangle {
         : touch.pressed ? Theme.accent-press
         : touch.has-hover ? Theme.accent : Theme.text-dim;
     accessible-role: button;
-    accessible-label: PlaybackBridge.muted ? "解除静音" : "静音";
+    accessible-label: PlaybackBridge.muted ? @tr("accessibility" => "Unmute") : @tr("Mute");
     accessible-action-default => { if PlaybackBridge.can-mute { PlaybackBridge.action("mute"); } }
     Icon {
         name: PlaybackBridge.muted ? "mute" : "volume";
@@ -330,7 +350,7 @@ component SidebarToggle inherits Rectangle {
     height: 22px;
     opacity: PlaybackBridge.sidebar-hidden ? 0.5 : 1;
     accessible-role: button;
-    accessible-label: "播放列表";
+    accessible-label: @tr("Playlist");
     accessible-checked: PlaybackBridge.sidebar-on;
     accessible-enabled: PlaybackBridge.has-sidebar;
     accessible-action-default => { if PlaybackBridge.has-sidebar { PlaybackBridge.toggle-sidebar(); } }
@@ -469,7 +489,7 @@ export component PlaybackBar inherits Rectangle {
     // I06 hover time: centred on the pointer, 2px inside the bar's edges, its
     // bottom 4px above the line, so it draws over the video above the bar. It
     // takes no input and follows the pointer without a plugin round trip.
-    // B22: within 3px of a mark it reads 「标题  01:23」 (the mark's time).
+    // B22: within 3px of a mark it reads "Title  01:23" (the mark's time).
     // I07: a 160×90 picture above the text (a dark box until one is made).
     if (PlaybackBridge.hover-time || PlaybackBridge.hover-thumbnail || seek-bar.near-mark >= 0) && PlaybackBridge.can-seek && PlaybackBridge.duration > 0 && seek-bar.pointing: Rectangle {
         x: clamp(seek-bar.x + seek-bar.pointer-x - self.width / 2, 2px, max(2px, root.width - self.width - 2px));

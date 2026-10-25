@@ -1,37 +1,38 @@
-// 快捷键 (J01) as a page of the options window (category 快捷键与鼠标, id
-// hotkeys.keyboard): filters, the command list (命令 | 快捷键 | 状态), the
-// selected command's bindings with capture, and the global buttons.
+// Keyboard Shortcuts (J01) as a page of the options window (category Keys and Mouse,
+// id hotkeys.keyboard): filters, the command list (Command | Shortcut |
+// Status), the selected command's bindings with capture, and the global
+// buttons. Texts are @tr; the plugin passes codes and data.
 // Page width 440: 6px padding and the list border leave 426; row padding
 // 3 + 6 (clear of the overlay scroll bar) and two 4px gaps leave 409, so
-// 快捷键 140 + 状态 60 give 命令 ≈ 209. Top row: 190 + 90 + 128 + 2×6 = 420.
+// Shortcut 140 + Status 60 give Command ≈ 209. Top row: 190 + 90 + 128 + 2×6 = 420.
 // Edit row: 72 + 150 + 41 + 66 + 66 + 4×6 = 419. Height 436 (fits the
 // options window's page area at its default size; it scrolls when smaller).
 import { LineEdit, ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
 import { Button, ToolTipArea } from "@vestra/widgets.slint";
-import { Cell, Check, Choice, Label } from "parts.slint";
+import { Cell, Check, Choice, Conflict, Input, Label, Message, Words } from "parts.slint";
 
 export struct KeyRow {
     key: string,
     command: string,
     keys: string,
-    status: string,
-    // 0 default (text-list), 1 changed (text), 2 conflict (accent), 3 ignored / not loaded (dim)
-    tone: int,
+    // 0 default (text-list), 1 changed (text), 2 conflict (accent), 3 ignored, 4 not loaded (dim)
+    state: int,
     selected: bool,
-    tip: string,
+    // state 2: the inputs taken by other commands
+    conflicts: [Conflict],
 }
 
 export struct KeyTag {
     input: string,
-    label: string,
+    label: Input,
 }
 
 export global Keys {
     in property <[KeyRow]> rows;
-    in property <string> empty-text;
-    in property <[string]> status-model;
+    // The list is still being read (otherwise nothing matches the filters).
+    in property <bool> loading;
     in-out property <int> status-index;
     in property <[string]> source-model;
     in-out property <int> source-index;
@@ -39,17 +40,25 @@ export global Keys {
     in property <string> sort;
     in property <bool> descending;
     in property <bool> has-selection;
-    in property <string> edit-title;
+    // The selected command: its path, source (plugin id or "host"), panel
+    // scope, and whether its plugin is loaded.
+    in property <string> edit-command;
+    in property <string> edit-source;
+    in property <bool> edit-panel;
+    in property <bool> edit-loaded;
     in property <[KeyTag]> tags;
     in property <bool> can-add;
     in property <bool> can-reset;
     in property <bool> can-unbind;
-    in property <string> reset-text: "恢复默认";
+    // A command of a plugin that is not loaded: its change can be deleted.
+    in property <bool> orphan;
     in property <bool> capturing;
     in property <bool> pending;
-    in property <string> pending-text;
-    in property <string> message;
-    in property <bool> message-warn;
+    // "quit" (⌘Q of Quit) or "used"; the key and the command holding it.
+    in property <string> pending-kind;
+    in property <string> pending-key;
+    in property <string> pending-command;
+    in property <Message> message;
     in property <bool> ignore;
     callback search(string);
     callback status-filter(int);
@@ -72,10 +81,12 @@ export global Keys {
 
 component Row inherits Rectangle {
     in property <KeyRow> item;
+    // The status column (measured in the page).
+    in property <length> status-width: 60px;
     callback select();
-    private property <color> ink: root.item.tone == 1 ? Theme.text
-        : root.item.tone == 2 ? Theme.accent
-        : root.item.tone == 3 ? Theme.text-dim : Theme.text-list;
+    private property <color> ink: root.item.state == 1 ? Theme.text
+        : root.item.state == 2 ? Theme.accent
+        : root.item.state >= 3 ? Theme.text-dim : Theme.text-list;
     height: 18px;
     background: root.item.selected ? Theme.selected-bg : transparent;
     HorizontalLayout {
@@ -83,15 +94,24 @@ component Row inherits Rectangle {
         padding-right: 6px;
         spacing: 4px;
         Cell { horizontal-stretch: 1; text: root.item.command; color: root.ink; }
-        Cell { width: 140px; text: root.item.keys; color: root.ink; }
-        Cell { width: 60px; text: root.item.status; color: root.ink; }
+        Cell { width: 140px; text: root.item.state == 3 && root.item.keys != "" ? @tr("({})", root.item.keys) : root.item.keys; color: root.ink; }
+        Cell {
+            width: root.status-width;
+            text: root.item.state == 1 ? @tr("Changed")
+                : root.item.state == 2 ? @tr("Conflict")
+                : root.item.state == 3 ? @tr("Ignored")
+                : root.item.state == 4 ? @tr("Not loaded") : @tr("Default");
+            color: root.ink;
+        }
     }
     // ToolTipArea has no size of its own: without the explicit 100% it was
     // 0×0 and the row could not be clicked.
     ToolTipArea {
         width: 100%;
         height: 100%;
-        text: root.item.tip;
+        text: root.item.state == 2 ? Words.conflicts(root.item.conflicts)
+            : root.item.state == 3 ? @tr("Default shortcuts are ignored (Settings ▸ Ignore Default Shortcuts)")
+            : root.item.state == 4 ? @tr("The plugin is not loaded; this change works again when it is back") : "";
         TouchArea {
             width: 100%;
             height: 100%;
@@ -159,6 +179,35 @@ export component KeysPage inherits Rectangle {
     changed capturing => {
         if self.capturing { capture.focus(); }
     }
+    // Widths that follow the interface language, never under the original ones. The status
+    // column fits its header and every status; a drop-down its widest item + 21px (6 + 5
+    // padding, 2 gap, 8 caret).
+    private property <length> status-width: max(60px, status-measure.preferred-width);
+    private property <length> filter-width: max(90px, filter-measure.preferred-width + 21px);
+    // The edit buttons' row (Add Key…, the capture field at its 40px minimum, Restore Default /
+    // Delete Entry, Unbind All) does not fit the page: it takes two rows.
+    private property <bool> edit-wrap: edit-measure.preferred-width > root.width - 12px;
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        status-measure := VerticalLayout {
+            for text in [@tr("Status"), @tr("Changed"), @tr("Conflict"), @tr("Ignored"), @tr("Not loaded"), @tr("Default")]: Cell { text: text; }
+        }
+        edit-measure := HorizontalLayout {
+            spacing: 6px;
+            Button { width: max(72px, self.preferred-width); text: @tr("Add Key…"); }
+            Rectangle { width: 40px; }
+            VerticalLayout {
+                Button { text: @tr("Delete Entry"); }
+                Button { text: @tr("Restore Default"); }
+            }
+            Button { text: @tr("Unbind All"); }
+        }
+        filter-measure := VerticalLayout {
+            for text in [@tr("All"), @tr("Changed"), @tr("Conflicts"), @tr("Unbound")]: Cell { text: text; }
+        }
+    }
 
     VerticalLayout {
         padding: 6px;
@@ -170,19 +219,20 @@ export component KeysPage inherits Rectangle {
                 width: 190px;
                 height: Theme.input-height;
                 font-size: Theme.font-body;
-                placeholder-text: "搜索命令或按键（如 Ctrl+）";
+                placeholder-text: @tr("Search commands or keys (e.g. Ctrl+)");
                 text <=> Keys.search-text;
                 edited(text) => { Keys.search(text); }
             }
             Choice {
-                width: 90px;
-                model: Keys.status-model;
+                width: root.filter-width;
+                model: [@tr("All"), @tr("Changed"), @tr("Conflicts"), @tr("Unbound")];
                 current-index <=> Keys.status-index;
                 selected(index) => { Keys.status-filter(index); }
             }
             Choice {
                 width: 128px;
                 popup-height: 240px;
+                sources: true;
                 model: Keys.source-model;
                 current-index <=> Keys.source-index;
                 selected(index) => { Keys.source-filter(index); }
@@ -203,7 +253,7 @@ export component KeysPage inherits Rectangle {
                     spacing: 4px;
                     Head {
                         horizontal-stretch: 1;
-                        text: "命令";
+                        text: @tr("Command");
                         sortable: true;
                         sorted: Keys.sort == "command";
                         descending: Keys.descending;
@@ -211,19 +261,20 @@ export component KeysPage inherits Rectangle {
                     }
                     Head {
                         width: 140px;
-                        text: "快捷键";
+                        text: @tr("Shortcut");
                         sortable: true;
                         sorted: Keys.sort == "keys";
                         descending: Keys.descending;
                         clicked => { Keys.sort-by("keys"); }
                     }
-                    Head { width: 60px; text: "状态"; }
+                    Head { width: root.status-width; text: @tr("Status"); }
                 }
                 Rectangle { height: 1px; background: Theme.line; }
                 ListView {
                     vertical-stretch: 1;
                     for row in Keys.rows: Row {
                         item: row;
+                        status-width: root.status-width;
                         select => { Keys.select(row.key); }
                     }
                 }
@@ -234,7 +285,7 @@ export component KeysPage inherits Rectangle {
                 height: parent.height - 19px;
                 horizontal-alignment: center;
                 color: Theme.text-dim;
-                text: Keys.empty-text;
+                text: Keys.loading ? @tr("Loading…") : @tr("No matching commands");
             }
         }
         // Edit area (87px): path · source · scope, bindings, actions, message.
@@ -242,7 +293,11 @@ export component KeysPage inherits Rectangle {
             spacing: 4px;
             Text {
                 height: 18px;
-                text: Keys.has-selection ? Keys.edit-title : "选择一条命令以修改它的快捷键";
+                text: !Keys.has-selection ? @tr("Select a command to change its shortcuts")
+                    : !Keys.edit-loaded ? @tr("{} (not loaded)", Keys.edit-command)
+                    : Keys.edit-source == "host" ? (Keys.edit-panel ? @tr("{} (Player · in panel)", Keys.edit-command) : @tr("{} (Player)", Keys.edit-command))
+                    : Keys.edit-panel ? @tr("{0} ({1} · in panel)", Keys.edit-command, Keys.edit-source)
+                    : @tr("{0} ({1})", Keys.edit-command, Keys.edit-source);
                 color: Keys.has-selection ? Theme.text : Theme.text-dim;
                 font-size: Theme.font-body;
                 font-weight: Keys.has-selection ? 700 : 400;
@@ -255,27 +310,34 @@ export component KeysPage inherits Rectangle {
                 HorizontalLayout {
                     spacing: 4px;
                     for tag in Keys.tags: Tag {
-                        text: tag.label;
+                        text: Words.input(tag.label);
                         remove => { Keys.remove-tag(tag.input); }
                     }
-                    if Keys.has-selection && Keys.tags.length == 0: Label { text: "未绑定"; color: Theme.text-dim; }
+                    if Keys.has-selection && Keys.tags.length == 0: Label { text: @tr("Unbound"); color: Theme.text-dim; }
                     Rectangle { horizontal-stretch: 1; }
                 }
             }
+            // One row; two when the translated buttons do not fit beside the capture field
+            // (Restore Default and Unbind All go to the second row).
             Rectangle {
-                height: Theme.button-height;
+                height: root.edit-wrap && !Keys.pending ? 2 * Theme.button-height + 4px : Theme.button-height;
                 HorizontalLayout {
+                    y: 0;
+                    height: Theme.button-height;
                     visible: !Keys.pending;
                     spacing: 6px;
                     Button {
                         horizontal-stretch: 0;
-                        width: 72px;
-                        text: "添加按键…";
+                        width: max(72px, self.preferred-width);
+                        text: @tr("Add Key…");
                         enabled: Keys.can-add;
                         clicked => { Keys.add-key(); }
                     }
+                    // 150px; narrower when longer translated buttons need the room.
                     Rectangle {
-                        width: 150px;
+                        min-width: 40px;
+                        preferred-width: 150px;
+                        max-width: 150px;
                         border-radius: Theme.radius-control;
                         border-width: 1px;
                         border-color: Keys.capturing ? Theme.accent : Theme.line;
@@ -283,7 +345,7 @@ export component KeysPage inherits Rectangle {
                         Text {
                             x: 4px;
                             width: parent.width - 8px;
-                            text: Keys.capturing ? "请按下快捷键（Esc 取消）" : "";
+                            text: Keys.capturing ? @tr("Press a shortcut (Esc cancels)") : "";
                             color: Theme.accent;
                             font-size: Theme.font-body;
                             vertical-alignment: center;
@@ -307,55 +369,84 @@ export component KeysPage inherits Rectangle {
                     if Keys.capturing: Button {
                         horizontal-stretch: 0;
                         small: true;
+                        // i18n-ignore: the key's name
                         text: "Esc";
                         clicked => { Keys.bind-escape(); }
                     }
+                    if !root.edit-wrap: Button {
+                        horizontal-stretch: 0;
+                        text: Keys.orphan ? @tr("Delete Entry") : @tr("Restore Default");
+                        enabled: Keys.can-reset;
+                        clicked => { Keys.reset-one(); }
+                    }
+                    if !root.edit-wrap: Button {
+                        horizontal-stretch: 0;
+                        text: @tr("Unbind All");
+                        enabled: Keys.can-unbind;
+                        clicked => { Keys.unbind-all(); }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                }
+                if root.edit-wrap: HorizontalLayout {
+                    y: Theme.button-height + 4px;
+                    height: Theme.button-height;
+                    visible: !Keys.pending;
+                    spacing: 6px;
                     Button {
                         horizontal-stretch: 0;
-                        text: Keys.reset-text;
+                        text: Keys.orphan ? @tr("Delete Entry") : @tr("Restore Default");
                         enabled: Keys.can-reset;
                         clicked => { Keys.reset-one(); }
                     }
                     Button {
                         horizontal-stretch: 0;
-                        text: "全部解绑";
+                        text: @tr("Unbind All");
                         enabled: Keys.can-unbind;
                         clicked => { Keys.unbind-all(); }
                     }
                     Rectangle { horizontal-stretch: 1; }
                 }
                 HorizontalLayout {
+                    y: 0;
+                    height: Theme.button-height;
                     visible: Keys.pending;
                     spacing: 6px;
                     Text {
                         horizontal-stretch: 1;
-                        text: Keys.pending-text;
+                        text: Keys.pending-kind == "quit" ? @tr("⌘Q is the default shortcut to quit Vestra Player. Change it to “{}”?", Keys.pending-command)
+                            : Keys.pending-kind == "used" ? @tr("{0} is already used by “{1}”", Keys.pending-key, Keys.pending-command) : "";
                         color: Theme.accent;
                         font-size: Theme.font-body;
                         vertical-alignment: center;
                         overflow: elide;
                     }
-                    Button { horizontal-stretch: 0; text: "替换"; enabled: Keys.pending; clicked => { Keys.replace(); } }
-                    Button { horizontal-stretch: 0; text: "取消"; enabled: Keys.pending; clicked => { Keys.cancel-replace(); } }
+                    Button { horizontal-stretch: 0; text: @tr("Replace"); enabled: Keys.pending; clicked => { Keys.replace(); } }
+                    Button { horizontal-stretch: 0; text: @tr("Cancel"); enabled: Keys.pending; clicked => { Keys.cancel-replace(); } }
                 }
             }
             Text {
                 height: 18px;
-                text: Keys.message;
-                color: Keys.message-warn ? Theme.accent : Theme.text-dim;
+                text: Words.message(Keys.message);
+                color: Keys.message.warn ? Theme.accent : Theme.text-dim;
                 font-size: Theme.font-body;
                 vertical-alignment: center;
                 overflow: elide;
             }
         }
+        // One row; taller only when the check box's label wraps.
         HorizontalLayout {
-            height: Theme.button-height;
+            min-height: Theme.button-height;
             spacing: 6px;
-            Button { horizontal-stretch: 0; width: 94px; text: "恢复全部默认…"; clicked => { Keys.reset-all(); } }
-            Button { horizontal-stretch: 0; width: 72px; text: "导出列表…"; clicked => { Keys.export(); } }
+            VerticalLayout {
+                alignment: center;
+                Button { horizontal-stretch: 0; width: max(94px, self.preferred-width); text: @tr("Restore All Defaults…"); clicked => { Keys.reset-all(); } }
+            }
+            VerticalLayout {
+                alignment: center;
+                Button { horizontal-stretch: 0; width: max(72px, self.preferred-width); text: @tr("Export List…"); clicked => { Keys.export(); } }
+            }
             Check {
-                y: (Theme.button-height - self.height) / 2;
-                text: "忽略默认快捷键";
+                text: @tr("Ignore default shortcuts");
                 checked: Keys.ignore;
                 clicked => { Keys.toggle-ignore(); }
             }

@@ -1,14 +1,19 @@
-# 更新日志
+# Changelog
+
+## 0.1.4
+
+- English source text with a Simplified Chinese translation (`locales/zh-Hans.po`); the Chinese interface reads as before. Needs Vestra Player 0.4.3.
+- Sentences built at run time go to the player as text values (SDK 1.5.11), so the permission lists, the paragraphs of the install confirmations, the revocation reasons, the download failure reasons and the update count in the menu title are translated too; the windows no longer need a Slint word table.
 
 ## 0.1.3
 
-- `vestra.` 开头的 id 只留给播放器内置插件：仓库列出这样的插件时显示「不能安装」和原因，不再下载；安装包被播放器以 `reserved` 拒绝时显示播放器给的原因。
-- 列表里官方仓库的插件标为「官方仓库」（原来是「官方」），不再让人误以为是官方插件；官方插件只有内置插件。
+- Ids starting with `vestra.` are reserved for the player's built-in plugins: a repository listing one shows Cannot be installed with the reason and nothing is downloaded; a package the player refuses as `reserved` shows the player's reason.
+- Plugins of the official repository are marked Official repository (was Official), so they are not taken for official plugins; the only official plugins are the built-in ones.
 
 ## 0.1.1
 
-- 设置页「添加仓库」输入行不再压住下面的警告文字；折行的说明文字加大行距（1.25 倍），系统字体下各行不再挤在一起。
+- The settings page's add-repository row no longer covers the warning below it; wrapped notes have looser line spacing (1.25), so lines no longer crowd with the system font.
 
 ## 0.1.0
 
-- 第一个版本：官方仓库（签名校验）、第三方仓库、安装 / 更新 / 回退 / 卸载、从文件或链接安装、拖入安装、撤回处理、自动检查更新。
+- First version: the official repository (signature checked), third-party repositories, install / update / roll back / uninstall, install from a file or a link, drop to install, revocations, automatic update check.

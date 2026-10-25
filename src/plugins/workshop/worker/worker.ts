@@ -35,11 +35,11 @@ let calls = 0;
 function askPlugin(name: string, args: Record<string, unknown>, signal: AbortSignal | undefined): Promise<ToolReply> {
   const call = `c${++calls}`;
   return new Promise((resolve) => {
-    if (signal?.aborted) return resolve({ ok: false, text: "已取消" });
+    if (signal?.aborted) return resolve({ ok: false, text: "Cancelled" });
     const abort = () => {
       waiting.delete(call);
       send({ type: "toolCancel", call });
-      resolve({ ok: false, text: "已取消" });
+      resolve({ ok: false, text: "Cancelled" });
     };
     signal?.addEventListener("abort", abort, { once: true });
     waiting.set(call, (reply) => {
@@ -71,18 +71,21 @@ function textOf(content: unknown): string {
 /** The reference folders (StartMessage.docsRoots), for short labels. */
 let docsRoots: string[] = [];
 
-/** The file, pattern or plugin a tool call is about, for its one-line label (reference files as 「参考资料/…」). */
-function targetOf(args: unknown): string {
-  if (!args || typeof args !== "object") return "";
+/**
+ * The file, pattern or plugin a tool call is about, for its one-line label;
+ * `reference`: a file of the reference, by its short name (the window says so).
+ */
+function targetOf(args: unknown): { target: string; reference: boolean } {
+  if (!args || typeof args !== "object") return { target: "", reference: false };
   const value = args as Record<string, unknown>;
   const p = typeof value.path === "string" ? value.path : "";
   const root = p && docsRoots.find((r) => p === r || p.startsWith(r + path.sep) || p.startsWith(r + "/"));
-  if (root) return `参考资料/${path.basename(root)}${p.slice(root.length).split(path.sep).join("/")}`;
+  if (root) return { target: `${path.basename(root)}${p.slice(root.length).split(path.sep).join("/")}`, reference: true };
   // The short name, sdk/… (see Folders).
   const short = p.replace(/^@/, "").replace(/^\.\//, "");
-  if (docsRoots.some((r) => short === path.basename(r) || short.startsWith(`${path.basename(r)}/`))) return `参考资料/${short}`;
-  for (const key of ["path", "pattern", "file", "id", "name"]) if (typeof value[key] === "string") return value[key] as string;
-  return "";
+  if (docsRoots.some((r) => short === path.basename(r) || short.startsWith(`${path.basename(r)}/`))) return { target: short, reference: true };
+  for (const key of ["path", "pattern", "file", "id", "name"]) if (typeof value[key] === "string") return { target: value[key] as string, reference: false };
+  return { target: "", reference: false };
 }
 
 function forward(e: AgentSessionEvent) {
@@ -101,13 +104,13 @@ function forward(e: AgentSessionEvent) {
           kind: "assistant_end",
           text: textOf(message.content),
           stopReason: message.stopReason ?? "stop",
-          error: message.stopReason === "error" ? (message.errorMessage ?? "未知错误") : null,
+          error: message.stopReason === "error" ? (message.errorMessage ?? "Unknown error") : null,
         });
         if (session?.sessionFile) send({ type: "file", sessionFile: session.sessionFile });
       }
       break;
     case "tool_execution_start":
-      event({ kind: "tool_start", id: e.toolCallId, name: e.toolName, target: targetOf(e.args) });
+      event({ kind: "tool_start", id: e.toolCallId, name: e.toolName, ...targetOf(e.args) });
       break;
     case "tool_execution_end":
       event({ kind: "tool_end", id: e.toolCallId, name: e.toolName, ok: !e.isError, summary: textOf(e.result?.content).slice(0, 2000) });
@@ -158,7 +161,7 @@ async function start(message: StartMessage) {
     } as Parameters<ModelRuntime["registerProvider"]>[1]);
   }
   const model = resolveModel(modelRuntime, message.provider, message.modelId);
-  if (!model) throw new Error(`未知模型：${message.provider}/${message.modelId}`);
+  if (!model) throw new Error(`Unknown model: ${message.provider}/${message.modelId}`);
   // Local servers (Ollama, LM Studio) take any key.
   await modelRuntime.setRuntimeApiKey(message.provider, message.key || "none");
 
@@ -189,7 +192,7 @@ async function start(message: StartMessage) {
     modelRuntime,
     resourceLoader,
     sessionManager,
-    // Two automatic retries for transient failures (1.5 s, 3 s), then the error row with 「重试」.
+    // Two automatic retries for transient failures (1.5 s, 3 s), then the error row with Retry.
     settingsManager: SettingsManager.inMemory({ retry: { enabled: true, maxRetries: 2, baseDelayMs: 1500 } }),
     noTools: "builtin",
     customTools: createTools(folders, pluginTools(message.pluginTools ?? [], askPlugin)),
@@ -200,7 +203,7 @@ async function start(message: StartMessage) {
 }
 
 async function prompt(text: string) {
-  if (!session) throw new Error("会话尚未就绪");
+  if (!session) throw new Error("The session is not ready yet");
   try {
     await session.prompt(text);
   } finally {

@@ -1,12 +1,15 @@
-// 打开链接 (A02, UI-DLG-02 "输入链接" window): explanation, the shared
-// UrlInputRow (multi-line input + [打开] [取消]), the clipboard option and a
+// Open URL (A02, UI-DLG-02 "输入链接" window): explanation, the shared
+// UrlInputRow (multi-line input + [Open] [Cancel]), the clipboard option and a
 // message line. Enter in the input opens, Shift+Enter starts a new line, Esc cancels.
 import { CheckBox } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { UrlInputRow } from "@vestra/widgets.slint";
 
 export component OpenUrlWindow inherits Window {
-    in property <string> message;
+    // The message line (open-url.ts `UrlNotice`): "", "invalid", "firstLine", "failed".
+    in property <string> notice;
+    // The player's message for "failed".
+    in property <string> detail;
     in property <bool> busy;
     // The input was filled from the clipboard: select it all when the window opens.
     in property <bool> select-all;
@@ -15,7 +18,7 @@ export component OpenUrlWindow inherits Window {
     callback confirm(string);
     callback cancel(string);
     callback paste-changed(bool);
-    title: "打开链接";
+    title: @tr("Open URL");
     width: 464px;
     background: Theme.bg-bar;
     // Esc also cancels while the focus is outside the input (the option, or the busy, disabled input).
@@ -31,34 +34,37 @@ export component OpenUrlWindow inherits Window {
             padding: Theme.dialog-padding;
             spacing: 6px;
             Text {
-                text: "在下方输入您需要播放的文件网址。";
+                text: @tr("Enter the address of the file to play below.");
                 color: Theme.text;
                 font-size: Theme.font-body;
                 height: Theme.label-height;
             }
             Text {
-                text: "例) https://example.com/video.mp4";
+                text: @tr("Example: {}", "https://example.com/video.mp4");
                 color: Theme.text-dim;
                 font-size: Theme.font-body;
                 height: Theme.label-height;
             }
             row := UrlInputRow {
                 text <=> root.value;
-                placeholder: "https://…";
-                // While opening: 「正在打开…」, and Enter or the button are ignored.
+                placeholder: "https://…"; // i18n-ignore: an address, not text
+                // While opening: "Opening…", and Enter or the button are ignored.
                 enabled: !root.busy;
-                confirm-text: root.busy ? "正在打开…" : "打开";
+                confirm-text: root.busy ? @tr("Opening…") : @tr("Open");
                 accepted(text) => { root.confirm(text); }
                 cancelled => { root.cancel(root.value); }
             }
             CheckBox {
                 height: Theme.checkbox-row-height;
-                text: "默认使用剪贴板中可用地址";
+                text: @tr("Use an address from the clipboard by default");
                 checked <=> root.paste-from-clipboard;
                 toggled => { root.paste-changed(self.checked); }
             }
             Text {
-                text: root.message;
+                text: root.notice == "invalid" ? @tr("Not a valid link")
+                    : root.notice == "firstLine" ? @tr("Only the first line is opened; to open several links, add them to the playlist")
+                    : root.notice == "failed" ? @tr("Open failed: {}", root.detail)
+                    : "";
                 color: Theme.text-dim;
                 font-size: Theme.font-body;
                 min-height: Theme.label-height;

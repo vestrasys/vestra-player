@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { open, rm } from "node:fs/promises";
+import { msg, raw, type Msg } from "./text.ts";
 
 /**
  * Every request of the store goes through `get` (design §3.2): https only on
@@ -25,12 +26,18 @@ export type NetErrorCode =
 export class NetError extends Error {
   readonly code: NetErrorCode;
   readonly status: number | null;
-  constructor(code: NetErrorCode, message: string, status: number | null = null) {
-    super(message);
+  /** The reason for the user; `message` is the same in English, for logs. */
+  readonly reason: Msg;
+  constructor(code: NetErrorCode, reason: Msg, status: number | null = null) {
+    super((reason.text as string) === "{}" ? String(reason.args[0]) : englishReason(reason));
     this.code = code;
     this.status = status;
+    this.reason = reason;
   }
 }
+
+/** The English of a reason (they take at most one plain argument). */
+const englishReason = (reason: Msg) => reason.text.replace("{}", String(reason.args[0] ?? ""));
 
 export const MAX_REDIRECTS = 5;
 const REDIRECT = new Set([301, 302, 303, 307, 308]);
@@ -94,7 +101,7 @@ export async function get(fetch: Fetch, url: string, options: GetOptions): Promi
     controller.abort();
   };
   const outer = () => controller.abort();
-  if (options.signal?.aborted) throw new NetError("aborted", "已取消");
+  if (options.signal?.aborted) throw new NetError("aborted", msg("Cancelled"));
   options.signal?.addEventListener("abort", outer, { once: true });
   const total = setTimeout(expire, options.timeoutMs);
   const headerTimer = setTimeout(expire, Math.min(options.headerTimeoutMs ?? 15_000, options.timeoutMs));
@@ -105,7 +112,7 @@ export async function get(fetch: Fetch, url: string, options: GetOptions): Promi
     for (let hop = 0; ; hop++) {
       const allowed = isHttps(current) || (options.allowLocalHttp === true && isLocalHttp(current));
       if (!allowed)
-        throw new NetError("protocol", hop === 0 ? "只支持 https:// 地址" : "下载地址跳转到了不安全的地址");
+        throw new NetError("protocol", msg(hop === 0 ? "Only https:// addresses are supported" : "Redirected to an insecure address"));
       const response = await fetch(current, {
         redirect: "manual",
         signal: controller.signal,
@@ -114,8 +121,8 @@ export async function get(fetch: Fetch, url: string, options: GetOptions): Promi
       if (REDIRECT.has(response.status)) {
         const location = response.headers.get("location");
         await response.body?.cancel().catch(() => {});
-        if (!location) throw new NetError("http", `跳转缺少目标地址（${response.status}）`, response.status);
-        if (hop >= MAX_REDIRECTS) throw new NetError("redirects", "跳转次数过多");
+        if (!location) throw new NetError("http", msg("Redirect without a target address ({})", response.status), response.status);
+        if (hop >= MAX_REDIRECTS) throw new NetError("redirects", msg("Too many redirects"));
         current = new URL(location, current).href;
         continue;
       }
@@ -128,7 +135,7 @@ export async function get(fetch: Fetch, url: string, options: GetOptions): Promi
       }
       if (!response.ok) {
         await response.body?.cancel().catch(() => {});
-        throw new NetError("http", `HTTP ${response.status}`, response.status);
+        throw new NetError("http", raw(`HTTP ${response.status}`), response.status);
       }
       // With a Content-Encoding (GitHub Pages serves gzip) fetch hands us the
       // decoded body while Content-Length counts the encoded bytes: only the
@@ -139,11 +146,11 @@ export async function get(fetch: Fetch, url: string, options: GetOptions): Promi
       if (length !== null && Number.isFinite(length)) {
         if (options.exactSize !== undefined && length !== options.exactSize) {
           await response.body?.cancel().catch(() => {});
-          throw new NetError("size", "大小与描述不符");
+          throw new NetError("size", msg("Size does not match the description"));
         }
         if (length > options.maxBytes) {
           await response.body?.cancel().catch(() => {});
-          throw new NetError("tooLarge", "文件超过大小上限");
+          throw new NetError("tooLarge", msg("File exceeds the size limit"));
         }
       }
       const hash = createHash("sha256");
@@ -155,7 +162,7 @@ export async function get(fetch: Fetch, url: string, options: GetOptions): Promi
           fileCreated = true;
         } catch (error) {
           await response.body?.cancel().catch(() => {});
-          throw new NetError("disk", (error as Error).message);
+          throw new NetError("disk", raw((error as Error).message));
         }
       }
       let received = 0;
@@ -168,8 +175,8 @@ export async function get(fetch: Fetch, url: string, options: GetOptions): Promi
           if (received > limit) {
             await reader.cancel().catch(() => {});
             throw options.exactSize !== undefined
-              ? new NetError("size", "大小与描述不符")
-              : new NetError("tooLarge", "文件超过大小上限");
+              ? new NetError("size", msg("Size does not match the description"))
+              : new NetError("tooLarge", msg("File exceeds the size limit"));
           }
           const chunk = Buffer.from(value.buffer, value.byteOffset, value.byteLength);
           hash.update(chunk);
@@ -178,7 +185,7 @@ export async function get(fetch: Fetch, url: string, options: GetOptions): Promi
               await handle.write(chunk);
             } catch (error) {
               await reader.cancel().catch(() => {});
-              throw new NetError("disk", (error as Error).message);
+              throw new NetError("disk", raw((error as Error).message));
             }
           } else chunks.push(Buffer.from(chunk));
           options.onProgress?.(received, length);
@@ -187,10 +194,10 @@ export async function get(fetch: Fetch, url: string, options: GetOptions): Promi
         await handle?.close().catch(() => {});
       }
       if (options.exactSize !== undefined && received !== options.exactSize)
-        throw new NetError("size", "大小与描述不符");
+        throw new NetError("size", msg("Size does not match the description"));
       const digest = hash.digest("hex");
       if (options.sha256 !== undefined && digest !== options.sha256)
-        throw new NetError("sha256", "校验和与描述不符");
+        throw new NetError("sha256", msg("Checksum does not match the description"));
       return {
         status: response.status,
         url: current,
@@ -205,7 +212,7 @@ export async function get(fetch: Fetch, url: string, options: GetOptions): Promi
     if (fileCreated && options.file) await rm(options.file, { force: true }).catch(() => {});
     if (error instanceof NetError) throw error;
     if (controller.signal.aborted)
-      throw timedOut ? new NetError("timeout", "连接超时") : new NetError("aborted", "已取消");
+      throw timedOut ? new NetError("timeout", msg("Connection timed out")) : new NetError("aborted", msg("Cancelled"));
     throw new NetError("network", networkReason(error));
   } finally {
     clearTimeout(total);
@@ -215,11 +222,11 @@ export async function get(fetch: Fetch, url: string, options: GetOptions): Promi
 }
 
 /** `fetch failed` hides the reason in `cause` (ENOTFOUND, ECONNREFUSED, a TLS error). */
-function networkReason(error: unknown): string {
+function networkReason(error: unknown): Msg {
   const cause = (error as { cause?: { code?: string; message?: string } }).cause;
-  if (cause?.code === "ENOTFOUND" || cause?.code === "EAI_AGAIN") return "找不到服务器";
-  if (cause?.code === "ECONNREFUSED") return "连接被拒绝";
-  if (cause?.code === "ECONNRESET") return "连接被重置";
-  if (cause?.code && /CERT|SSL|TLS/i.test(cause.code)) return "安全连接失败";
-  return cause?.message || (error as Error).message || String(error);
+  if (cause?.code === "ENOTFOUND" || cause?.code === "EAI_AGAIN") return msg("Server not found");
+  if (cause?.code === "ECONNREFUSED") return msg("Connection refused");
+  if (cause?.code === "ECONNRESET") return msg("Connection reset");
+  if (cause?.code && /CERT|SSL|TLS/i.test(cause.code)) return msg("Secure connection failed");
+  return raw(cause?.message || (error as Error).message || String(error));
 }

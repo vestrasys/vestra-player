@@ -106,6 +106,12 @@ impl Placements {
 
 /// The one Slint compiler configuration for the shell, panels, tool windows and
 /// package validation: `@vestra/...` imports and the dark std-widgets style.
+///
+/// Every imported `.slint` file comes through the file loader, which puts
+/// the interface language's translations into its `@tr` literals with the
+/// catalog of the package that holds it (`ui/` files: the player's own;
+/// doc/architecture/i18n.md §4). The file a compile starts from is given as
+/// source: `build_from_source` callers pass it through [`translate`].
 pub fn compiler() -> Compiler {
     let mut compiler = Compiler::default();
     compiler.set_library_paths(
@@ -114,13 +120,33 @@ pub fn compiler() -> Compiler {
             .collect(),
     );
     compiler.set_style("fluent-dark".into());
+    compiler.set_file_loader(|path: &Path| {
+        let path = path.to_owned();
+        Box::pin(async move {
+            // No catalog (English, or a package without this language): the
+            // compiler reads the file itself.
+            let catalog = crate::i18n::catalog_for(&path)?;
+            // Not readable here: the compiler's own loader reports it.
+            let source = std::fs::read_to_string(&path).ok()?;
+            if !source.contains("@tr") {
+                return None;
+            }
+            Some(Ok(catalog.rewrite(&source)))
+        })
+    });
     compiler
 }
 
+/// Source of the file at `path` (a package's, or the player's when it is
+/// under `ui/`) in the interface language: see [`compiler`].
+pub fn translate(source: String, path: &Path) -> String {
+    crate::i18n::translate_slint(path, source)
+}
+
 /// Fonts: no window sets `default-font-family`, so every window uses the
-/// system UI font and Slint's per-character fallback for scripts it lacks
-/// (CJK included since Slint 1.18; architecture README "fonts" has how to
-/// add a fallback font for one platform only).
+/// system UI font and Slint's per-character fallback for scripts it lacks;
+/// the CJK fallback chains are the host's (`ui_fonts`, architecture README
+/// "fonts").
 pub fn compile(path: &Path) -> Result<ComponentInstance> {
     compile_source(std::fs::read_to_string(path)?, path)
 }
@@ -130,6 +156,7 @@ pub fn compile_source(mut source: String, path: &Path) -> Result<ComponentInstan
         source.push('\n');
         source.push_str(&crate::theme::export_line());
     }
+    let source = translate(source, path);
     let result = pollster::block_on(compiler().build_from_source(source, path.to_owned()));
     if result.components().count() > 1 {
         bail!("Slint file must export exactly one component");
@@ -544,6 +571,69 @@ export component W inherits Window {
         assert_eq!(alpha(), 0x80);
     }
 
+    /// i18n.md §4: a package's `.slint` files, the one opened and the ones
+    /// it imports, show its catalog's translations; the player's library
+    /// keeps the player's own (none in an English run).
+    #[test]
+    fn plugin_slint_files_show_their_packages_translations() {
+        headless();
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(root.join("ui")).unwrap();
+        std::fs::write(
+            root.join("ui/part.slint"),
+            r#"export global Part { out property <string> label: @tr("Hello {}", "Ann"); }"#,
+        )
+        .unwrap();
+        let main = root.join("ui/w.slint");
+        std::fs::write(
+            &main,
+            r#"import { Part } from "part.slint";
+import { UrlInputRow } from "@vestra/widgets.slint";
+export component W inherits Window {
+    in property <int> count: 2;
+    out property <string> label: Part.label;
+    out property <string> files: @tr("{n} file" | "{n} files" % count);
+    out property <string> quote: @tr("Quote");
+    out property <string> english: @tr("Untranslated");
+    out property <string> library: row.confirm-text;
+    row := UrlInputRow {}
+}"#,
+        )
+        .unwrap();
+        let po = r#"msgid "Hello {}"
+msgstr "你好 {}"
+
+msgid "{n} file"
+msgid_plural "{n} files"
+msgstr[0] "{n} 个文件"
+
+msgid "Quote"
+msgstr "引 \"号\" \\ 后"
+"#;
+        let catalog = std::sync::Arc::new(crate::i18n::Catalog::from_entries(
+            &crate::i18n::po::parse(po).unwrap(),
+        ));
+        crate::i18n::register(&root, catalog.clone());
+        let instance = compile(&main).unwrap();
+        crate::i18n::unregister(&root, &catalog);
+        let get = |name: &str| match instance.get_property(name).unwrap() {
+            Value::String(text) => text.to_string(),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(get("label"), "你好 Ann");
+        assert_eq!(get("files"), "2 个文件");
+        assert_eq!(get("quote"), "引 \"号\" \\ 后");
+        assert_eq!(get("english"), "Untranslated");
+        assert_eq!(get("library"), "Open");
+        // Without the catalog the same files are English.
+        let english = compile(&main).unwrap();
+        assert_eq!(
+            english.get_property("files").unwrap(),
+            Value::String("2 files".into())
+        );
+    }
+
     fn headless() {
         thread_local! {
             static PLATFORM: () = {
@@ -590,6 +680,7 @@ export component W inherits Window {
             .set_size(slint::LogicalSize::new(600., 400.));
         let group = |title: &str, children| crate::commands::MenuNode::Group {
             title: title.into(),
+            label: title.into(),
             group: "g".into(),
             children,
         };
@@ -755,6 +846,7 @@ export component W inherits Window {
         roots.push(leaf("插件商城…".into(), "c"));
         roots.push(MenuNode::Group {
             title: "设置".into(),
+            label: "设置".into(),
             group: "d".into(),
             children: vec![leaf("偏好".into(), "d")],
         });
@@ -881,6 +973,7 @@ export component W inherits Window {
         };
         let group = |title: &str, children| MenuNode::Group {
             title: title.into(),
+            label: title.into(),
             group: "g".into(),
             children,
         };
@@ -1292,6 +1385,55 @@ export component W inherits Window {
     }
 
     /// Every plugin and example Slint file compiles with the host's configuration.
+    /// A translated label longer than the minimum widens its button.
+    #[test]
+    fn button_width_follows_its_text_above_the_minimum() {
+        headless();
+        let source = r#"
+import { Button } from "vestra/widgets.slint";
+export component W inherits Window {
+    HorizontalLayout {
+        alignment: start;
+        short := Button { text: "OK"; }
+        long := Button { text: "Ignore Default Shortcuts and Restart Now"; }
+        small := Button { text: "Ignore Default Shortcuts and Restart Now"; small: true; }
+        icon := Button { icon: "M 0 0 L 14 6 L 0 12 Z"; }
+    }
+    out property <length> short-width: short.width;
+    out property <length> long-width: long.width;
+    out property <length> small-width: small.width;
+    out property <length> icon-width: icon.width;
+}"#;
+        let result = pollster::block_on(
+            compiler().build_from_source(source.into(), ui_dir().join("t.slint")),
+        );
+        let errors: Vec<_> = result
+            .diagnostics()
+            .filter(|d| d.level() == slint_interpreter::DiagnosticLevel::Error)
+            .map(|d| d.to_string())
+            .collect();
+        assert!(errors.is_empty(), "{errors:?}");
+        let instance = result.component("W").unwrap().create().unwrap();
+        let length = |name: &str| match instance.get_property(name).unwrap() {
+            slint_interpreter::Value::Number(n) => n,
+            other => panic!("{name}: {other:?}"),
+        };
+        instance
+            .window()
+            .set_size(slint::LogicalSize::new(900., 100.));
+        // The minimum stays; a longer label is not cut off.
+        assert_eq!(length("short-width"), 66.);
+        assert!(length("long-width") > 150., "{}", length("long-width"));
+        assert!(length("small-width") > 150., "{}", length("small-width"));
+        assert_eq!(length("icon-width"), 14.);
+        // Squeezed, it can still shrink to the old minimum width.
+        instance
+            .window()
+            .set_size(slint::LogicalSize::new(200., 100.));
+        assert!(length("long-width") < 100., "{}", length("long-width"));
+        assert!(length("long-width") >= 66.);
+    }
+
     #[test]
     fn all_plugin_and_example_slint_files_compile() {
         fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -1320,6 +1462,10 @@ export component W inherits Window {
                 .diagnostics()
                 .filter(|d| d.level() == slint_interpreter::DiagnosticLevel::Error)
                 .map(|d| d.to_string())
+                // A library file (only globals or exported components for other
+                // files to import) has no component of its own; its importers
+                // compile it, so any real error in it still fails here.
+                .filter(|e| e != "No component found")
                 .collect();
             assert!(errors.is_empty(), "{}: {errors:?}", file.display());
         }

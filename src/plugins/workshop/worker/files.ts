@@ -20,7 +20,7 @@ export class WorkFolder {
   /** `directory` must exist and not be a link; it is used by its real path. */
   static async open(directory: string): Promise<WorkFolder> {
     const stat = await fs.lstat(directory);
-    if (stat.isSymbolicLink() || !stat.isDirectory()) throw new OutsideError("工作目录不是普通文件夹");
+    if (stat.isSymbolicLink() || !stat.isDirectory()) throw new OutsideError("The working folder is not a plain folder");
     return new WorkFolder(await fs.realpath(directory));
   }
 
@@ -37,41 +37,41 @@ export class WorkFolder {
     const target = path.resolve(this.root, file);
     const rel = path.relative(this.root, target);
     if (rel === "") return this.checkRoot();
-    if (rel.startsWith("..") || path.isAbsolute(rel)) throw new OutsideError(`拒绝访问工作目录以外的路径：${file}`);
+    if (rel.startsWith("..") || path.isAbsolute(rel)) throw new OutsideError(`Access denied: ${file} is outside the working folder`);
     const parts = rel.split(path.sep);
     let current = await this.checkRoot();
     for (const [index, part] of parts.entries()) {
-      if (part.startsWith(".")) throw new OutsideError(`拒绝以「.」开头的名称：${part}`);
+      if (part.startsWith(".")) throw new OutsideError(`Access denied: names starting with "." are not allowed: ${part}`);
       current = path.join(current, part);
       let stat;
       try {
         stat = await fs.lstat(current);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-        if (!create) throw Object.assign(new Error(`不存在：${this.relative(current)}`), { code: "ENOENT" });
+        if (!create) throw Object.assign(new Error(`Not found: ${this.relative(current)}`), { code: "ENOENT" });
         return path.join(current, ...parts.slice(index + 1));
       }
-      if (stat.isSymbolicLink()) throw new OutsideError(`拒绝符号链接：${this.relative(current)}`);
-      if (index < parts.length - 1 && !stat.isDirectory()) throw new OutsideError(`不是文件夹：${this.relative(current)}`);
+      if (stat.isSymbolicLink()) throw new OutsideError(`Access denied: symbolic link: ${this.relative(current)}`);
+      if (index < parts.length - 1 && !stat.isDirectory()) throw new OutsideError(`Not a folder: ${this.relative(current)}`);
     }
     return current;
   }
 
   private async checkRoot(): Promise<string> {
-    if ((await fs.realpath(this.root)) !== this.root) throw new OutsideError("工作目录已被替换");
+    if ((await fs.realpath(this.root)) !== this.root) throw new OutsideError("The working folder was replaced");
     return this.root;
   }
 
   async readFile(file: string): Promise<Buffer> {
     const absolute = await this.resolve(file);
     const stat = await fs.stat(absolute);
-    if (!stat.isFile()) throw new Error(`不是文件：${this.relative(absolute)}`);
-    if (stat.size > MAX_FILE) throw new Error(`文件超过 1 MB：${this.relative(absolute)}`);
+    if (!stat.isFile()) throw new Error(`Not a file: ${this.relative(absolute)}`);
+    if (stat.size > MAX_FILE) throw new Error(`File larger than 1 MB: ${this.relative(absolute)}`);
     return fs.readFile(absolute);
   }
 
   async writeFile(file: string, content: string): Promise<void> {
-    if (Buffer.byteLength(content) > MAX_FILE) throw new Error("写入内容超过 1 MB");
+    if (Buffer.byteLength(content) > MAX_FILE) throw new Error("Content larger than 1 MB");
     const absolute = await this.resolve(file, true);
     await this.mkdir(path.dirname(absolute));
     // Re-checked after mkdir: nothing on the way may have become a link.
@@ -85,13 +85,13 @@ export class WorkFolder {
    */
   async remove(file: string): Promise<string> {
     const absolute = await this.resolve(file);
-    if (absolute === this.root) throw new OutsideError("不能删除工作目录本身");
+    if (absolute === this.root) throw new OutsideError("Cannot delete the working folder itself");
     const stat = await fs.lstat(absolute);
     if (stat.isDirectory()) {
-      if ((await fs.readdir(absolute)).length) throw new Error(`文件夹不是空的：${this.relative(absolute)}（先删除里面的文件）`);
+      if ((await fs.readdir(absolute)).length) throw new Error(`Folder not empty: ${this.relative(absolute)} (delete its files first)`);
       await fs.rmdir(absolute);
     } else if (stat.isFile()) await fs.unlink(absolute);
-    else throw new Error(`不是普通文件：${this.relative(absolute)}`);
+    else throw new Error(`Not a plain file: ${this.relative(absolute)}`);
     return this.relative(absolute);
   }
 
@@ -107,7 +107,7 @@ export class WorkFolder {
         if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
       }
       const stat = await fs.lstat(current);
-      if (stat.isSymbolicLink() || !stat.isDirectory()) throw new OutsideError(`不是文件夹：${this.relative(current)}`);
+      if (stat.isSymbolicLink() || !stat.isDirectory()) throw new OutsideError(`Not a folder: ${this.relative(current)}`);
     }
   }
 

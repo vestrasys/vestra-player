@@ -1,4 +1,5 @@
 import type { SourceAudioTrack, SourceStamp } from "./source.ts";
+import type { ArgJson, ListJson, TextJson } from "./i18n.ts";
 export type { ResolvedMedia, ResolvedResource, SourceResolverDeclaration, } from "./source-resolvers.ts";
 /** Working contract. Trusted plugin runtime, not a permissions sandbox. */
 export declare const API_VERSION: "vestra/1";
@@ -112,6 +113,13 @@ export interface PackageInfo {
         slot?: string;
         owner?: string;
     }[];
+    /** The manifest's display texts in the interface language (player 0.4.3). */
+    display?: {
+        name: string | null;
+        punchline: string | null;
+        description: string | null;
+        tags: string[];
+    };
 }
 /** Where an installed package came from (`packages.install` `source`). */
 export type WireSource = {
@@ -134,6 +142,8 @@ export interface BindingTable {
         command: string;
         title: string;
         path: string[] | null;
+        /** The path's keys (player 0.4.3). */
+        key?: string[] | null;
         scope: "global" | "panel";
         defaults: string[];
         current: string[];
@@ -171,6 +181,10 @@ export interface WindowFacts {
     appearance?: string;
     /** The file resolvers' extensions (`plugin.resolvers.fileTypes`; player 0.4.2). */
     fileTypes?: string[];
+    /** The saved interface language, `"system"` or a locale (player 0.4.3). */
+    language?: string;
+    /** The interface language of this run (player 0.4.3). */
+    locale?: string;
 }
 /** One timeline mark as the player merges them (`timeline.marks`). */
 export interface WireMark {
@@ -276,11 +290,25 @@ export interface WireSystemInfo {
         primary: boolean;
     }[];
 }
+/**
+ * Template arguments on the wire (`osd.show`, `osd.panel`, `dialogs.confirm`,
+ * a text's `args`): data, or text values (player 0.4.3).
+ */
+export type TemplateArgsJson = ArgJson[] | {
+    [name: string]: ArgJson;
+};
+/** A text the player shows: source text, or a text value (player 0.4.3). */
+export type TextValueJson = string | TextJson | ListJson;
 export interface Transport {
     request<T>(method: string, params?: Json): Promise<T>;
     on(event: string, listener: (data: unknown) => void): () => void;
     /** Replaces the real local services (test host). */
     local?: LocalServices;
+    /**
+     * The interface language of this run (`plugin.i18n.locale`): the runner
+     * passes the player's `VESTRA_LOCALE`, the test host its `locale`.
+     */
+    locale?: string;
 }
 export declare function createWire(transport: Transport): {
     processing: {
@@ -300,12 +328,13 @@ export declare function createWire(transport: Transport): {
     dialogs: {
         open: (options: {
             kind: "openFile" | "openFiles" | "openDirectory" | "saveFile";
-            title?: string;
-            fileName?: string;
+            title?: TextValueJson;
+            fileName?: TextValueJson;
         }) => Promise<{
             cancelled: boolean;
             paths: string[];
         }>;
+        /** Message and detail are templates formatted with `args` (player 0.4.3). */
         confirm: (options: {
             [key: string]: Json;
         }) => Promise<{
@@ -351,6 +380,8 @@ export declare function createWire(transport: Transport): {
     /** The palette (`ui.theme` to change it). */
     appearance: {
         set: (theme: string) => Promise<void>;
+        /** The interface language for the next start (player 0.4.3). */
+        setLanguage: (language: string) => Promise<void>;
     };
     /** Settings pages in the player's options window (`ui.settings`). */
     settings: {
@@ -400,7 +431,7 @@ export declare function createWire(transport: Transport): {
         set: (marks: {
             time: number;
             kind: string;
-            title?: string;
+            title?: string | TextJson;
         }[], sourceId?: number) => Promise<{
             applied: boolean;
         }>;
@@ -469,9 +500,10 @@ export declare function createWire(transport: Transport): {
         } | null) => Promise<void>;
         step: (direction: "next" | "previous") => Promise<void>;
     };
+    /** `text` is a template in the plugin's catalog, formatted with `args` (player 0.4.3). */
     osd: {
-        show: (text: string) => Promise<void>;
-        panel: (text: string | null) => Promise<void>;
+        show: (text: TextValueJson, args?: TemplateArgsJson) => Promise<void>;
+        panel: (text: TextValueJson | null, args?: TemplateArgsJson, maxColumns?: number) => Promise<void>;
     };
     layout: {
         state: () => Promise<{
@@ -642,7 +674,7 @@ export declare function createWire(transport: Transport): {
             expected: import("./subtitles.ts").SubtitleStamp;
             inputOrigin?: import("./subtitles.ts").SubtitleTrack;
             format?: "srt" | "ass";
-            title?: string;
+            title?: string | TextJson;
             select?: "primary" | "secondary" | "none";
         }) => Promise<import("./subtitles.ts").SubtitleState>;
         select: (target: import("./subtitles.ts").SubtitleTrack | null, expected: import("./subtitles.ts").SubtitleStamp, operationId: number, role?: "primary" | "secondary") => Promise<import("./subtitles.ts").SubtitleState>;

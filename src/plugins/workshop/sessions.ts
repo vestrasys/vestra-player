@@ -27,7 +27,7 @@ export class Sessions {
   }
 
   directory(id: string): string {
-    if (!ID.test(id)) throw new Error(`不是会话 id：${id}`);
+    if (!ID.test(id)) throw new Error(`Not a session id: ${id}`);
     return path.join(this.root, id);
   }
 
@@ -94,15 +94,15 @@ export class Sessions {
   }
 }
 
-/** "今天" for today's sessions, "更早" otherwise. */
-export function group(time: number, now = Date.now()): string {
+/** The sidebar group of a session: "today" or "earlier" (ai.slint names them). */
+export function group(time: number, now = Date.now()): "today" | "earlier" {
   const day = (t: number) => new Date(t).toDateString();
-  return day(time) === day(now) ? "今天" : "更早";
+  return day(time) === day(now) ? "today" : "earlier";
 }
 
-/** A title from the first message: one line, at most 24 characters. */
+/** A title from the first message: one line, at most 24 characters ("" shows as New Chat). */
 export function titleFrom(text: string): string {
   const line = text.replace(/\s+/g, " ").trim();
   const chars = [...line];
-  return chars.length > 24 ? `${chars.slice(0, 23).join("")}…` : line || "新对话";
+  return chars.length > 24 ? `${chars.slice(0, 23).join("")}…` : line;
 }

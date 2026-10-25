@@ -1,15 +1,22 @@
-import type { JsonStore, Scope } from "@vestra-player/sdk";
+import type { I18n, JsonStore, Scope, Text } from "@vestra-player/sdk";
 import { fileSize, mediaKey, round1 } from "./format.ts";
 import { jsonStore, timing } from "./store.ts";
 
-/** A bookmark of the current media; `id` lives for this run only (list rows, selection). */
+/**
+ * A bookmark of the current media; `id` lives for this run only (list rows,
+ * selection). `title` is the user's own; it is "" until the user names the
+ * bookmark, which meanwhile is shown as "Bookmark <number>" in the interface
+ * language (`bookmarkName`).
+ */
 export interface Bookmark {
   readonly id: number;
   readonly time: number;
   readonly title: string;
+  readonly number: number;
   readonly created: string;
 }
-type SavedItem = { time: number; title: string; created: string };
+/** Saved: an untitled bookmark has `title: ""` and its `number`. */
+type SavedItem = { time: number; title: string; number?: number; created: string };
 type Entry = { size: number | null; modified: string; items: SavedItem[] };
 type Saved = { version: 1; media: Record<string, Entry> };
 
@@ -28,11 +35,15 @@ const validItem = (item: unknown): item is SavedItem => {
     Number.isFinite(it.time) &&
     it.time >= 0 &&
     typeof it.title === "string" &&
-    [...it.title.trim()].length >= 1 &&
+    ([...it.title.trim()].length >= 1 || (it.title === "" && Number.isInteger(it.number) && it.number! >= 1)) &&
     [...it.title].length <= TITLE_MAX &&
     typeof it.created === "string"
   );
 };
+
+/** The name a bookmark is shown by: its title, or "Bookmark <number>" (a text the player translates). */
+export const bookmarkName = (text: I18n["text"], bookmark: { title: string; number: number }): string | Text =>
+  bookmark.title || text("Bookmark {}", [bookmark.number]);
 
 /** A title as typed: trimmed, 1–100 characters; `null` when empty. */
 export function cleanTitle(text: string): string | null {
@@ -41,10 +52,16 @@ export function cleanTitle(text: string): string | null {
   return [...title].slice(0, TITLE_MAX).join("");
 }
 
-export type AddResult = { ok: true; bookmark: Bookmark } | { ok: false; reason: string };
+export type AddResult =
+  | { ok: true; bookmark: Bookmark }
+  | {
+      ok: false;
+      reason: "Can't add bookmarks to this source" | "A bookmark already exists here" | "Bookmarks full ({})";
+      args?: [number];
+    };
 
 /**
- * B21 书签: the bookmarks of the current media, kept in
+ * B21 bookmarks: the bookmarks of the current media, kept in
  * `<dataDirectory>/bookmarks.json` (`{ version: 1, media: { <key>: { size,
  * modified, items } } }`), written `timing.bookmarksWrite` after each change.
  * The key is the real path of a local file, the source text of a URL.
@@ -97,7 +114,13 @@ export class Bookmarks {
     this.#savedSize = entry && typeof entry.size === "number" ? entry.size : null;
     const items = entry && Array.isArray(entry.items) ? entry.items.filter(validItem).slice(0, PER_FILE) : [];
     this.#items = items
-      .map((item) => ({ id: this.#nextId++, time: round1(item.time), title: item.title.trim(), created: item.created }))
+      .map((item) => ({
+        id: this.#nextId++,
+        time: round1(item.time),
+        title: item.title.trim(),
+        number: item.title ? 0 : item.number!,
+        created: item.created,
+      }))
       .sort((a, b) => a.time - b.time);
     this.#changed();
   }
@@ -117,11 +140,12 @@ export class Bookmarks {
   }
 
   add(time: number): AddResult {
-    if (this.#key === null) return { ok: false, reason: "当前来源不能添加书签" };
+    if (this.#key === null) return { ok: false, reason: "Can't add bookmarks to this source" };
     const at = round1(Math.max(0, time));
-    if (this.#items.some((item) => Math.abs(item.time - at) <= NEAR)) return { ok: false, reason: "此处已有书签" };
-    if (this.#items.length >= PER_FILE) return { ok: false, reason: `书签已满（${PER_FILE} 个）` };
-    const bookmark = { id: this.#nextId++, time: at, title: `书签 ${this.#items.length + 1}`, created: new Date().toISOString() };
+    if (this.#items.some((item) => Math.abs(item.time - at) <= NEAR)) return { ok: false, reason: "A bookmark already exists here" };
+    if (this.#items.length >= PER_FILE) return { ok: false, reason: "Bookmarks full ({})", args: [PER_FILE] };
+    // No title until the user gives it one: it is shown as "Bookmark <number>".
+    const bookmark = { id: this.#nextId++, time: at, title: "", number: this.#items.length + 1, created: new Date().toISOString() };
     this.#set([...this.#items, bookmark]);
     return { ok: true, bookmark };
   }
@@ -165,7 +189,7 @@ export class Bookmarks {
       media[this.#key] = {
         size: this.#size,
         modified: new Date().toISOString(),
-        items: this.#items.map(({ time, title, created }) => ({ time, title, created })),
+        items: this.#items.map(({ time, title, number, created }) => (title ? { time, title, created } : { time, title, number, created })),
       };
     const keys = Object.keys(media);
     if (keys.length > FILES) {

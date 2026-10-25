@@ -1,0 +1,438 @@
+# Reviewed by an AI reviewer on 2026-10-25
+msgid ""
+msgstr ""
+"Language: ja\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#. The top-level menu, and the link input's confirm button.
+#: src/commands.rs:327 ui/vestra/widgets.slint:192
+#, x-machine
+msgid "Open"
+msgstr "開く"
+
+#: src/commands.rs:328 src/settings_window.rs:27
+#, x-machine
+msgid "Playback"
+msgstr "再生"
+
+#: src/commands.rs:329 src/settings_window.rs:28
+#, x-machine
+msgid "Subtitles"
+msgstr "字幕"
+
+#: src/commands.rs:330 src/settings_window.rs:29
+#, x-machine
+msgid "Video"
+msgstr "ビデオ"
+
+#: src/commands.rs:331 src/settings_window.rs:30
+#, x-machine
+msgid "Audio"
+msgstr "オーディオ"
+
+#: src/commands.rs:332
+#, x-machine
+msgid "Screen"
+msgstr "画面"
+
+#: src/commands.rs:333
+#, x-machine
+msgid "Settings"
+msgstr "設定"
+
+#: src/commands.rs:334
+#, x-machine
+msgid "Speed"
+msgstr "速度"
+
+#: src/commands.rs:335
+#, x-machine
+msgid "Seek"
+msgstr "シーク"
+
+#: src/composition.rs:39
+#, x-machine
+msgid "bottom bar"
+msgstr "下部バー"
+
+#: src/composition.rs:40
+#, x-machine
+msgid "sidebar"
+msgstr "サイドバー"
+
+#: src/composition.rs:41
+#, x-machine
+msgid "video backdrop"
+msgstr "ビデオ背景"
+
+#: src/confirm.rs:47 ui/vestra/widgets.slint:193
+#, x-machine
+msgid "Cancel"
+msgstr "キャンセル"
+
+#. A menu item; {} is a number of seconds.
+#: src/core_actions.rs:142
+#, x-machine
+msgid "Forward {} s"
+msgstr "{} 秒進む"
+
+#. A menu item; {} is a number of seconds.
+#: src/core_actions.rs:147
+#, x-machine
+msgid "Back {} s"
+msgstr "{} 秒戻る"
+
+#: src/core_actions.rs:174
+#, x-machine
+msgid "Normal"
+msgstr "標準"
+
+#: src/core_actions.rs:184 src/settings_window.rs:218 src/settings_window.rs:218
+#, x-machine
+msgid "Close"
+msgstr "閉じる"
+
+#: src/core_actions.rs:190
+#, x-machine
+msgid "Play/Pause"
+msgstr "再生/一時停止"
+
+#: src/core_actions.rs:201
+#, x-machine
+msgid "Previous"
+msgstr "前へ"
+
+#: src/core_actions.rs:212
+#, x-machine
+msgid "Next"
+msgstr "次へ"
+
+#: src/core_actions.rs:223
+#, x-machine
+msgid "Previous Frame"
+msgstr "前のフレーム"
+
+#: src/core_actions.rs:234
+#, x-machine
+msgid "Next Frame"
+msgstr "次のフレーム"
+
+#: src/core_actions.rs:268
+#, x-machine
+msgid "Slower 0.1"
+msgstr "0.1 遅く"
+
+#: src/core_actions.rs:279
+#, x-machine
+msgid "Faster 0.1"
+msgstr "0.1 速く"
+
+#: src/core_actions.rs:290
+#, x-machine
+msgid "Volume +"
+msgstr "音量 +"
+
+#: src/core_actions.rs:301
+#, x-machine
+msgid "Volume −"
+msgstr "音量 −"
+
+#: src/core_actions.rs:31
+#, x-machine
+msgid "Not supported by the current source"
+msgstr "現在のソースではこの操作はできません"
+
+#: src/core_actions.rs:310
+#, x-machine
+msgid "Mute"
+msgstr "ミュート"
+
+#: src/core_actions.rs:339
+#, x-machine
+msgid "No previous item"
+msgstr "前の項目はありません"
+
+#: src/core_actions.rs:340
+#, x-machine
+msgid "No next item"
+msgstr "次の項目はありません"
+
+#. On-screen message after Play/Pause resumes playback.
+#: src/core_actions.rs:389 src/core_actions.rs:393
+#, x-machine
+msgid "Playing"
+msgstr "再生"
+
+#: src/core_actions.rs:395
+#, x-machine
+msgid "Paused"
+msgstr "一時停止"
+
+#. On-screen message: the step in seconds, then the new position and the duration.
+#: src/core_actions.rs:412
+#, x-machine
+msgid "Forward {} s: {} / {}"
+msgstr "{} 秒進む：{} / {}"
+
+#. On-screen message: the step in seconds, then the new position and the duration.
+#: src/core_actions.rs:414
+#, x-machine
+msgid "Back {} s: {} / {}"
+msgstr "{} 秒戻る：{} / {}"
+
+#: src/core_actions.rs:428
+#, x-machine
+msgid "Speed: {}x"
+msgstr "速度：{}x"
+
+#: src/core_actions.rs:445
+#, x-machine
+msgid "Volume: {}%"
+msgstr "音量：{}%"
+
+#: src/core_actions.rs:454
+#, x-machine
+msgid "Mute: Off"
+msgstr "ミュート：オフ"
+
+#: src/core_actions.rs:456
+#, x-machine
+msgid "Mute: On"
+msgstr "ミュート：オン"
+
+#: src/core_actions.rs:471 src/pip.rs:192 src/pip.rs:299
+#, x-machine
+msgid "No video"
+msgstr "ビデオがありません"
+
+#: src/core_actions.rs:474
+#, x-machine
+msgid "The current source cannot step back a frame"
+msgstr "現在のソースではフレームを戻せません"
+
+#: src/core_actions.rs:477
+#, x-machine
+msgid "Already at the last frame"
+msgstr "すでに最後のフレームです"
+
+#: src/core_actions.rs:480
+#, x-machine
+msgid "Already at the first frame"
+msgstr "すでに最初のフレームです"
+
+#: src/core_actions.rs:585
+#, x-machine
+msgid "Next frame: {}"
+msgstr "次のフレーム：{}"
+
+#: src/core_actions.rs:587
+#, x-machine
+msgid "Previous frame: {}"
+msgstr "前のフレーム：{}"
+
+#: src/main.rs:140
+#, x-machine
+msgid "The sidebar holds at most {} tabs"
+msgstr "サイドバーのタブは最大 {} 個です"
+
+#: src/main.rs:150
+#, x-machine
+msgid "Previous/Next is provided by {}"
+msgstr "前へ/次へは {} が提供しています"
+
+#: src/main.rs:2604
+#, x-machine
+msgid "Toggle Fullscreen"
+msgstr "フルスクリーン切り替え"
+
+#: src/main.rs:2607
+#, x-machine
+msgid "Leave Fullscreen"
+msgstr "フルスクリーンを終了"
+
+#: src/main.rs:2609
+#, x-machine
+msgid "Quit"
+msgstr "終了"
+
+#: src/main.rs:3029
+#, x-machine
+msgid "Not available in fullscreen"
+msgstr "フルスクリーンでは使用できません"
+
+#. A plugin's id, then what was refused (on the OSD).
+#: src/main.rs:3176
+#, x-machine
+msgid "{}: {}"
+msgstr "{}：{}"
+
+#. Between two warnings of one plugin.
+#: src/main.rs:3204
+#, x-machine
+msgid "; "
+msgstr "／"
+
+#. {0}: “File type .nes” or a site such as https://example.com; {1}: a plugin id.
+#: src/main.rs:3220 src/source_resolvers.rs:73
+#, x-machine
+msgid "{} is resolved by {}"
+msgstr "{} は {} が処理しています"
+
+#: src/main.rs:3221
+#, x-machine
+msgid "{} not taken over: resolved by {}"
+msgstr "{} は引き継がれません：{} が処理しています"
+
+#: src/main.rs:3656
+#, x-machine
+msgid "Previous/Next not taken over: provided by {}"
+msgstr "前へ/次へは引き継がれません：{} が提供しています"
+
+#: src/main.rs:3776 src/main.rs:3783
+#, x-machine
+msgid "Panel not shown: {}"
+msgstr "パネルを表示しません：{}"
+
+#: src/main.rs:3880
+#, x-machine
+msgid "Select a path"
+msgstr "パスを選択"
+
+#: src/package_manager.rs:1104
+#, x-machine
+msgid "“{}”: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed"
+msgstr "「{}」：vestra. で始まる ID はプレーヤー内蔵プラグイン用に予約されているため、インストールできません"
+
+#: src/pip.rs:162
+#, x-machine
+msgid "Picture-in-picture is switching"
+msgstr "ピクチャ・イン・ピクチャを切り替え中です"
+
+#: src/pip.rs:188
+#, x-machine
+msgid "Picture-in-picture is not supported on this system"
+msgstr "このシステムはピクチャ・イン・ピクチャに対応していません"
+
+#: src/pip.rs:281
+#, x-machine
+msgid "The picture-in-picture window was closed"
+msgstr "ピクチャ・イン・ピクチャのウインドウが閉じられました"
+
+#: src/pip.rs:289
+#, x-machine
+msgid "Cannot enter picture-in-picture: {}"
+msgstr "ピクチャ・イン・ピクチャを開始できません：{}"
+
+#: src/pip.rs:313
+#, x-machine
+msgid "Picture-in-picture did not start"
+msgstr "ピクチャ・イン・ピクチャが開始されませんでした"
+
+#: src/platform/macos.rs:104
+#, x-machine
+msgid "Picture-in-picture needs macOS 14 or later"
+msgstr "ピクチャ・イン・ピクチャには macOS 14 以降が必要です"
+
+#: src/renderer.rs:17
+#, x-machine
+msgid "libmpv · GPU rendering (OpenGL)"
+msgstr "libmpv · GPU レンダリング（OpenGL）"
+
+#: src/renderer.rs:20
+#, x-machine
+msgid "libmpv · software rendering"
+msgstr "libmpv · ソフトウェアレンダリング"
+
+#: src/settings_window.rs:156 src/settings_window.rs:156
+#, x-machine
+msgid "Options"
+msgstr "オプション"
+
+#: src/settings_window.rs:204 src/settings_window.rs:204
+#, x-machine
+msgid "Nothing to set here"
+msgstr "設定できる項目はありません"
+
+#: src/settings_window.rs:26
+#, x-machine
+msgid "General"
+msgstr "一般"
+
+#: src/settings_window.rs:31
+#, x-machine
+msgid "Keys and Mouse"
+msgstr "キーとマウス"
+
+#: src/settings_window.rs:32
+#, x-machine
+msgid "Appearance"
+msgstr "外観"
+
+#: src/settings_window.rs:33
+#, x-machine
+msgid "Plugins"
+msgstr "プラグイン"
+
+#: src/settings_window.rs:34
+#, x-machine
+msgid "Other"
+msgstr "その他"
+
+#. {0}: “bottom bar”, “sidebar” or “video backdrop”; {1}: a plugin id.
+#: src/slot_claims.rs:77
+#, x-machine
+msgid "The {} is used by {}"
+msgstr "{}は {} が使用中です"
+
+#. A file extension, such as nes.
+#: src/source_resolvers.rs:156
+#, x-machine
+msgid "File type .{}"
+msgstr "ファイルタイプ .{}"
+
+#: src/ui_markdown.rs:27
+#, x-machine
+msgid "… (too long, cut off)"
+msgstr "…（長すぎるため省略しました）"
+
+#: ui/host.slint:110
+#, x-machine
+msgid "Playing in picture-in-picture"
+msgstr "ピクチャ・イン・ピクチャで再生中"
+
+#: ui/menu-view.slint:329
+#, x-machine
+msgid "(No commands available)"
+msgstr "（使用できるコマンドはありません）"
+
+#: ui/sidebar-tabs.slint:104
+#, x-machine
+msgid "Attach to the main window"
+msgstr "メインウインドウに戻す"
+
+#: ui/sidebar-tabs.slint:104
+#, x-machine
+msgid "Detach as a floating window"
+msgstr "フローティングウインドウとして切り離す"
+
+#: ui/sidebar-tabs.slint:113
+#, x-machine
+msgid "Close the sidebar"
+msgstr "サイドバーを閉じる"
+
+#: ui/vestra/markdown.slint:142
+#, x-machine
+msgid "Copy"
+msgstr "コピー"
+
+#: ui/vestra/markdown.slint:163
+#, x-machine
+msgid "[Image]"
+msgstr "[画像]"
+
+#: ui/vestra/markdown.slint:163
+#, x-machine
+msgid "[Image] {}"
+msgstr "[画像] {}"

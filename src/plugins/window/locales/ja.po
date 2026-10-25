@@ -1,0 +1,341 @@
+# Reviewed by an AI reviewer on 2026-10-25
+msgid ""
+msgstr ""
+"Language: ja\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: main.ts:65
+#, x-machine
+msgid "Mini Size"
+msgstr "ミニサイズ"
+
+#: main.ts:72 main.ts:99
+#, x-machine
+msgid "Switching picture-in-picture"
+msgstr "ピクチャ・イン・ピクチャを切り替え中"
+
+#: main.ts:72 main.ts:99 main.ts:128 main.ts:140
+#, x-machine
+msgid "Resizing the window"
+msgstr "ウインドウのサイズを変更中"
+
+#: main.ts:72 main.ts:128 main.ts:140
+#, x-machine
+msgid "Not available in fullscreen"
+msgstr "フルスクリーンでは使用できません"
+
+#: main.ts:72 main.ts:99 main.ts:128 main.ts:140 pip.ts:42 size.ts:124
+#, x-machine
+msgid "No video"
+msgstr "ビデオがありません"
+
+#: main.ts:93
+#, x-machine
+msgid "Picture-in-Picture"
+msgstr "ピクチャ・イン・ピクチャ"
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: main.ts:120 main.ts:159 ui/page.slint:99
+#, x-machine
+msgid "0.5×"
+msgstr "0.5×"
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: main.ts:120 main.ts:159 ui/page.slint:99
+#, x-machine
+msgid "1×"
+msgstr "1×"
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: main.ts:120 main.ts:159 ui/page.slint:99
+#, x-machine
+msgid "1.5×"
+msgstr "1.5×"
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: main.ts:120 main.ts:159 ui/page.slint:99
+#, x-machine
+msgid "2×"
+msgstr "2×"
+
+#: main.ts:134 main.ts:159
+#, x-machine
+msgid "Fit to Video Aspect Ratio"
+msgstr "ビデオのアスペクト比に合わせる"
+
+#: main.ts:148
+#, x-machine
+msgid "When playback starts: Don't resize the window"
+msgstr "再生開始時：ウインドウのサイズを変更しない"
+
+#: main.ts:149
+#, x-machine
+msgid "When playback starts: Fit to video aspect ratio"
+msgstr "再生開始時：ビデオのアスペクト比に合わせる"
+
+#: main.ts:150
+#, x-machine
+msgid "When playback starts: {}×"
+msgstr "再生開始時：{}×"
+
+#: main.ts:154
+#, x-machine
+msgid "Resize only once when playback starts: On"
+msgstr "再生開始時に一度だけサイズを変更：オン"
+
+#: main.ts:154
+#, x-machine
+msgid "Resize only once when playback starts: Off"
+msgstr "再生開始時に一度だけサイズを変更：オフ"
+
+#: main.ts:159 main.ts:169
+#, x-machine
+msgid "When Playback Starts"
+msgstr "再生開始時"
+
+#: main.ts:159
+#, x-machine
+msgid "Don't Resize"
+msgstr "サイズを変更しない"
+
+#: main.ts:169
+#, x-machine
+msgid "Only Once"
+msgstr "一度だけ"
+
+#: main.ts:180
+#, x-machine
+msgid "Always on top: Off"
+msgstr "常に手前に表示：オフ"
+
+#: main.ts:180
+#, x-machine
+msgid "Always on top: Always"
+msgstr "常に手前に表示：常に"
+
+#: main.ts:180
+#, x-machine
+msgid "Always on top: While playing"
+msgstr "常に手前に表示：再生中"
+
+#: main.ts:180
+#, x-machine
+msgid "Always on top: While playing in fullscreen"
+msgstr "常に手前に表示：フルスクリーン再生中"
+
+#: main.ts:184 main.ts:193
+#, x-machine
+msgid "Always on Top"
+msgstr "常に手前に表示"
+
+#: main.ts:184
+#, x-machine
+msgid "Cycle Mode"
+msgstr "モードを順に切り替え"
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: main.ts:193 ui/page.slint:121
+#, x-machine
+msgid "Never"
+msgstr "しない"
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: main.ts:193 ui/page.slint:121
+#, x-machine
+msgid "Always"
+msgstr "常に"
+
+#: main.ts:193
+#, x-machine
+msgid "While Playing"
+msgstr "再生中"
+
+#: main.ts:193
+#, x-machine
+msgid "While Playing in Fullscreen"
+msgstr "フルスクリーン再生中"
+
+#: main.ts:206
+#, x-machine
+msgid "Hide pointer while playing: On"
+msgstr "再生中はポインタを隠す：オン"
+
+#: main.ts:206
+#, x-machine
+msgid "Hide pointer while playing: Off"
+msgstr "再生中はポインタを隠す：オフ"
+
+#: main.ts:211
+#, x-machine
+msgid "Hide Pointer While Playing"
+msgstr "再生中はポインタを隠す"
+
+#: main.ts:219 ui/page.slint:90
+#, x-machine
+msgid "Window"
+msgstr "ウインドウ"
+
+#: manifest.json
+#, x-machine
+msgid "Main Window"
+msgstr "メインウインドウ"
+
+#: manifest.json
+#, x-machine
+msgid "Window sizes by video scale, always on top, mini size and picture-in-picture"
+msgstr "ビデオの倍率によるウインドウサイズ、常に手前に表示、ミニサイズ、ピクチャ・イン・ピクチャ"
+
+#: manifest.json
+#, x-machine
+msgid ""
+"Resizes the window to 0.5–2× the video or fits it to the video's aspect ratio, and resizes it automatically when playback starts; never on top, always on top, on top while playing or while playing in fullscreen; mini size and the system's picture-in-picture; hides the pointer while playing.\n"
+"The items are in the context menu under Screen."
+msgstr ""
+"ウインドウをビデオの 0.5〜2 倍のサイズにしたり、ビデオのアスペクト比に合わせたりでき、再生開始時に自動でサイズを変更することもできます。常に手前に表示（しない、常に、再生中、フルスクリーン再生中）、ミニサイズとシステムのピクチャ・イン・ピクチャ、再生中のポインタの非表示に対応しています。\n"
+"項目はコンテキストメニューの「画面」にあります。"
+
+#: manifest.json
+#, x-machine
+msgid "screen"
+msgstr "画面"
+
+#: manifest.json
+#, x-machine
+msgid "window"
+msgstr "ウインドウ"
+
+#: manifest.json
+#, x-machine
+msgid "always on top"
+msgstr "常に手前に表示"
+
+#: pip.ts:49
+#, x-machine
+msgid "Picture-in-picture: On"
+msgstr "ピクチャ・イン・ピクチャ：オン"
+
+#: pip.ts:49 pip.ts:68
+#, x-machine
+msgid "Picture-in-picture: Off"
+msgstr "ピクチャ・イン・ピクチャ：オフ"
+
+#: pip.ts:53
+#, x-machine
+msgid "Cannot enter picture-in-picture: {}"
+msgstr "ピクチャ・イン・ピクチャを開始できません：{}"
+
+#: pip.ts:53
+#, x-machine
+msgid "Cannot exit picture-in-picture: {}"
+msgstr "ピクチャ・イン・ピクチャを終了できません：{}"
+
+#: pip.ts:68
+#, x-machine
+msgid "Picture-in-picture: Off (no video)"
+msgstr "ピクチャ・イン・ピクチャ：オフ（ビデオがありません）"
+
+#: size.ts:47
+#, x-machine
+msgid "Window: {}× (shrunk to fit the screen)"
+msgstr "ウインドウ：{}×（画面に収まるよう縮小しました）"
+
+#: size.ts:47
+#, x-machine
+msgid "Window: {}× (enlarged to the minimum size)"
+msgstr "ウインドウ：{}×（最小サイズまで拡大しました）"
+
+#: size.ts:47
+#, x-machine
+msgid "Window: {}×"
+msgstr "ウインドウ：{}×"
+
+#: size.ts:64
+#, x-machine
+msgid "The window already fits the video aspect ratio"
+msgstr "ウインドウはすでにビデオのアスペクト比に合っています"
+
+#: size.ts:72
+#, x-machine
+msgid "Window: Fit to video aspect ratio (shrunk to fit the screen)"
+msgstr "ウインドウ：ビデオのアスペクト比に合わせる（画面に収まるよう縮小しました）"
+
+#: size.ts:72
+#, x-machine
+msgid "Window: Fit to video aspect ratio (enlarged to the minimum size)"
+msgstr "ウインドウ：ビデオのアスペクト比に合わせる（最小サイズまで拡大しました）"
+
+#: size.ts:72
+#, x-machine
+msgid "Window: Fit to video aspect ratio"
+msgstr "ウインドウ：ビデオのアスペクト比に合わせる"
+
+#: size.ts:87
+#, x-machine
+msgid "Mini size: Off"
+msgstr "ミニサイズ：オフ"
+
+#: size.ts:97
+#, x-machine
+msgid "Mini size: On"
+msgstr "ミニサイズ：オン"
+
+#: size.ts:137
+#, x-machine
+msgid "Cannot resize the window: {}"
+msgstr "ウインドウのサイズを変更できません：{}"
+
+#: ui/page.slint:96
+#, x-machine
+msgid "Window size when playback starts"
+msgstr "再生開始時のウインドウサイズ"
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: ui/page.slint:99
+#, x-machine
+msgid "Off"
+msgstr "オフ"
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: ui/page.slint:99
+#, x-machine
+msgid "Fit aspect ratio"
+msgstr "比率に合わせる"
+
+#: ui/page.slint:105
+#, x-machine
+msgid "Only once (only the first video of this run)"
+msgstr "一度だけ（今回の起動で最初のビデオのみ）"
+
+#: ui/page.slint:111
+#, x-machine
+msgid "Each new file is resized once, when its video size is known, keeping the window's top left corner. Not in fullscreen, mini size or picture-in-picture; after you drag the window while it plays, that file is left alone."
+msgstr "新しいファイルごとに、ビデオのサイズがわかった時点で一度だけ、ウインドウの左上の位置を保ったままサイズを変更します。フルスクリーン、ミニサイズ、ピクチャ・イン・ピクチャのときは変更しません。再生中にウインドウをドラッグした場合、そのファイルではそれ以上変更しません。"
+
+#: ui/page.slint:118
+#, x-machine
+msgid "Always on top"
+msgstr "常に手前に表示"
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: ui/page.slint:121
+#, x-machine
+msgid "While playing"
+msgstr "再生中"
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: ui/page.slint:121
+#, x-machine
+msgid "Playing in fullscreen"
+msgstr "フルスクリーン再生中"
+
+#: ui/page.slint:126
+#, x-machine
+msgid "Mouse pointer"
+msgstr "マウスポインタ"
+
+#: ui/page.slint:129
+#, x-machine
+msgid "Hide the pointer while playing"
+msgstr "再生中はポインタを隠す"

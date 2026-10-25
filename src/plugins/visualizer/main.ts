@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import type { ImageRef, Panel, PlayerState, Plugin } from "@vestra-player/sdk";
 import { CoverCache, fileName, type Track } from "./covers.ts";
 import { imageProblem } from "./images.ts";
-import { Logo } from "./logo.ts";
+import { Logo, type LogoNotice } from "./logo.ts";
 import { SettingsStore } from "./settings.ts";
 
 /** What the backdrop draws: the idle logo, the audio cover, the loading screen, or nothing (plain Theme.bg-video). */
@@ -13,7 +13,7 @@ type Kind = "idle" | "audio" | "video" | "loading";
 /** Longest source name on the loading screen (the Slint text elides as well). */
 const LOADING_NAME = 60;
 /**
- * G-16b: the name after 「正在打开：」: a file's name; a link's host and last
+ * G-16b: the name after "Opening: ": a file's name; a link's host and last
  * path segment (just the host when it has no path). Cut with "…".
  */
 export function loadingName(source: string | null) {
@@ -30,17 +30,25 @@ export function loadingName(source: string | null) {
 }
 
 export const PAGE_ID = "logo-cover";
-const SOUND = "声音";
-const LOOK = ["设置", "外观"];
+const LOOK = ["@settings", "Appearance"] as const;
 
-/** "12.3 MB" for the page's cache line. */
+/** The notices of this plugin (a union of literals, so `i18n extract` finds them). */
+type Notice =
+  | LogoNotice
+  | "Album cover for audio only: On"
+  | "Album cover for audio only: Off"
+  | "Logo when idle: On"
+  | "Logo when idle: Off"
+  | "Cover cache cleared";
+
+/** "12.3 MB" for the page's cache line (units are not translated). */
 function size(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 /**
- * 专辑封面与空闲画面: one backdrop panel (R-U3) that the player shows when
+ * Album Cover and Idle Screen: one backdrop panel (R-U3) that the player shows when
  * there is no video frame. There is no `mode` from the player: the source
  * phase `empty` is the idle screen (H12, logo), `loading` is the loading
  * screen (G-16b: the player shows the backdrop while loading, G-16a), and a
@@ -55,8 +63,10 @@ function size(bytes: number) {
 export default async function activate(plugin: Plugin) {
   const { player } = plugin;
   // Headless hosts refuse the display; that never fails the action itself.
-  const osd = (text: string) => void plugin.osd.show(text).catch(() => {});
-  plugin.onError((error) => osd(error.message));
+  const osd = (text: Notice) => void plugin.osd.show(text).catch(() => {});
+  // i18n-ignore: the player's (or the SDK's) own message
+  const report = (message: string) => void plugin.osd.show(message).catch(() => {});
+  plugin.onError((error) => report(error.message));
 
   const settings = new SettingsStore(plugin);
   const logo = new Logo(plugin, settings, osd);
@@ -175,7 +185,7 @@ export default async function activate(plugin: Plugin) {
   );
   /** The player could not show a picture: check both again, drop what is broken. */
   view.onError((error) => {
-    if (error.code !== "invalid" && error.code !== "missing") return osd(error.message);
+    if (error.code !== "invalid" && error.code !== "missing") return report(error.message);
     const broken = (path: string) => !existsSync(path) || imageProblem(readFileSync(path)) !== null;
     if (logo.image && broken(logo.image.path)) logo.fallBack();
     if (cover && broken(cover.path)) cover = null;
@@ -192,14 +202,14 @@ export default async function activate(plugin: Plugin) {
   function setAudio(on: boolean) {
     if (on === settings.value.audio.on) return;
     settings.update((s) => void (s.audio.on = on));
-    osd(`纯音频时显示专辑封面：${on ? "开" : "关"}`);
+    osd(on ? "Album cover for audio only: On" : "Album cover for audio only: Off");
     // Turned on while an audio file plays: read its cover now.
     if (on && kind === "audio" && !cover && !preparing) void prepare(player.state);
   }
   function setIdle(on: boolean) {
     if (on === settings.value.idle.on) return;
     settings.update((s) => void (s.idle.on = on));
-    osd(`空闲时显示徽标：${on ? "开" : "关"}`);
+    osd(on ? "Logo when idle: On" : "Logo when idle: Off");
   }
   let choosing = false;
   async function chooseLogo() {
@@ -214,7 +224,7 @@ export default async function activate(plugin: Plugin) {
 
   plugin.commands.add({
     id: "audio-cover",
-    path: [SOUND, "纯音频时显示专辑封面"],
+    path: ["@audio", "Show Album Cover for Audio Only"],
     order: 530,
     group: "visual",
     checked: () => settings.value.audio.on,
@@ -222,7 +232,7 @@ export default async function activate(plugin: Plugin) {
   });
   plugin.commands.add({
     id: "idle-logo",
-    path: [...LOOK, "空闲时显示徽标"],
+    path: [...LOOK, "Show Logo When Idle"],
     order: 845,
     group: "settings-logo",
     checked: () => settings.value.idle.on,
@@ -230,7 +240,7 @@ export default async function activate(plugin: Plugin) {
   });
   plugin.commands.add({
     id: "choose-logo",
-    path: [...LOOK, "选择徽标图片…"],
+    path: [...LOOK, "Choose Logo Image…"],
     order: 846,
     group: "settings-logo",
     busy: () => choosing,
@@ -238,11 +248,11 @@ export default async function activate(plugin: Plugin) {
   });
   plugin.commands.add({
     id: "reset-logo",
-    path: [...LOOK, "恢复默认徽标"],
+    path: [...LOOK, "Restore Default Logo"],
     order: 847,
     group: "settings-logo",
     enabled: () => logo.custom,
-    reason: () => (logo.custom ? null : "正在使用默认徽标"),
+    reason: () => (logo.custom ? null : "Using the default logo"),
     run: () => logo.reset(),
   });
 
@@ -250,7 +260,7 @@ export default async function activate(plugin: Plugin) {
   const page = plugin.settings.page("ui/page.slint", {
     id: PAGE_ID,
     category: "appearance",
-    title: "徽标与专辑封面",
+    title: "Logo and Album Cover",
     order: 20,
   });
   let pageReady = false;
@@ -263,7 +273,10 @@ export default async function activate(plugin: Plugin) {
     audioOn: settings.value.audio.on,
     customLogo: pageReady && logo.image !== null,
     ...(pageReady && logo.image ? { logo: logo.image } : {}),
-    cacheNote: covers ? (usage.entries ? `封面缓存：${usage.entries} 首，${size(usage.bytes)}` : "封面缓存：空") : "封面缓存不可用",
+    // The sentence is in ui/page.slint; this side passes the numbers.
+    cacheAvailable: covers !== null,
+    cacheEntries: usage.entries,
+    cacheSize: size(usage.bytes),
     canClear: usage.entries > 0,
   }));
   void page.ready.then(
@@ -287,7 +300,7 @@ export default async function activate(plugin: Plugin) {
     if (!covers) return;
     await covers.clear();
     refreshUsage();
-    osd("已清除封面缓存");
+    osd("Cover cache cleared");
   });
   player.onChange(observe);
   observe(player.state);

@@ -391,6 +391,18 @@ pub fn open_url(url: &str) -> std::result::Result<(), RpcError> {
     opener::open_browser(url).map_err(failed)
 }
 
+// ------------------------------------------------------- opening the player
+
+/// Explorer puts the file of "Open With" and associations on the command
+/// line of a new process (`launch.rs`, `single_instance`); no event.
+pub fn on_open_files(_deliver: impl Fn(Vec<PathBuf>) + 'static) {}
+
+/// A second launch lets the running player take the foreground: Windows
+/// lets only the process the user just started do it.
+pub fn allow_handoff_foreground() {
+    let _ = vestra_win32::allow_any_foreground();
+}
+
 // -------------------------------------------------------------------- facts
 
 /// From `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion` (version

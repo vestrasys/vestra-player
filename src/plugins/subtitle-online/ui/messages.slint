@@ -1,0 +1,10 @@
+// The names the windows show for data. The status lines are text values from
+// messages.ts (`statusText`), translated by the player.
+
+export global Messages {
+    /** A service's name, by id (messages.ts `serviceName` has the same). */
+    pure public function service-name(id: string) -> string {
+        if id == "assrt" { return @tr("Assrt"); }
+        return "OpenSubtitles";
+    }
+}

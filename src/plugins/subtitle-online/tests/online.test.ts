@@ -49,6 +49,8 @@ type SetupOptions = {
   os?: "macos" | "windows" | "linux";
   /** Keys already in `secrets.json` (an older fallback). */
   file?: Record<string, string>;
+  /** The interface language (default English). */
+  locale?: "zh-Hans";
 };
 async function setup(options: SetupOptions = {}) {
   const folder = await mkdtemp(join(tmpdir(), "vestra-online-"));
@@ -70,7 +72,7 @@ async function setup(options: SetupOptions = {}) {
       });
   host.openElsewhere(video);
   host.subtitles.selection = { stamp: { generation: 1, revision: 1 }, target: null };
-  const { stop } = await startPlugin(activate, { directory, host, dataDirectory: data });
+  const { stop } = await startPlugin(activate, { directory, host, dataDirectory: data, ...(options.locale ? { locale: options.locale } : {}) });
   return { host, folder, data, video, stop, cleanup: () => rm(folder, { recursive: true, force: true }) };
 }
 /** The window binds exactly the callbacks its Slint file declares. */
@@ -79,6 +81,9 @@ async function sameCallbacks(host: TestHost, id: string, file: string) {
   const callbacks = [...slint.matchAll(/callback\s+([\w-]+)\s*\(/g)].map((m) => m[1]!);
   assert.deepEqual([...host.window(id).callbacks].sort(), callbacks.sort(), file);
 }
+/** A window's status line as it shows. */
+const shown = (host: TestHost, id: string) => host.window(id).props.status as string;
+const zh = { locale: "zh-Hans" } as const;
 const waitFor = async (check: () => boolean, what: string) => {
   const ok = () => {
     try {
@@ -92,19 +97,19 @@ const waitFor = async (check: () => boolean, what: string) => {
   assert.ok(ok(), what);
 };
 
-test("menu: two items under 字幕 ▶ 在线字幕 without shortcuts; windows bind their Slint callbacks", async () => {
+test("menu: two items under Subtitles ▸ Online Subtitles without shortcuts; windows bind their Slint callbacks", async () => {
   const fetch = fakeFetch({});
   const t = await setup({ key: false });
   try {
     const declared = [...t.host.commands.values()].map(({ declaration: d }) => [d.path.join(" > "), d.order, d.group, d.bindings.join(",")]);
     assert.deepEqual(declared, [
-      ["字幕 > 在线字幕 > 搜索与下载字幕…", 360, "subtitle-online", ""],
-      ["字幕 > 在线字幕 > 在线字幕设置…", 361, "subtitle-online", ""],
+      ["@subtitles > Online Subtitles > Search and Download Subtitles…", 360, "subtitle-online", ""],
+      ["@subtitles > Online Subtitles > Online Subtitle Settings…", 361, "subtitle-online", ""],
     ]);
     await t.host.command("search").run();
     await t.host.settle();
     assert.equal(t.host.window("subtitle-online-settings").visible, true, "no key: the settings window opens instead");
-    assert.match(String(t.host.window("subtitle-online-settings").props["status-text"]), /API 密钥/);
+    assert.match(shown(t.host, "subtitle-online-settings"), /^First enter an API key for OpenSubtitles/);
     assert.equal(fetch.calls.length, 0, "nothing is sent without a key");
     for (const [id, file] of [["subtitle-online-settings", "settings"]] as const) {
       const slint = await readFile(new URL(`../ui/${file}.slint`, import.meta.url), "utf8");
@@ -120,25 +125,25 @@ test("menu: two items under 字幕 ▶ 在线字幕 without shortcuts; windows b
 
 test("keys are saved in the player's secret store, never in settings.json", async () => {
   const fetch = fakeFetch({ [`${OS}/infos/formats`]: () => jsonResponse({ data: {} }) });
-  const t = await setup({ key: false });
+  const t = await setup({ key: false, ...zh });
   try {
     await t.host.command("settings").run();
     const settings = t.host.window("subtitle-online-settings");
     settings.emit("service-settings");
     await t.host.settle();
     const service = t.host.window("subtitle-online-service");
-    assert.equal(service.props["service-name"], "OpenSubtitles");
+    assert.equal(service.props["service"], "opensubtitles");
     await sameCallbacks(t.host, "subtitle-online-service", "service");
     service.emit("test", "SECRET", "", "");
     await t.host.settle();
-    await waitFor(() => service.props["status-text"] === "密钥有效（未登录，匿名下载次数较少）", "test result");
+    await waitFor(() => shown(t.host, "subtitle-online-service") === "密钥有效（未登录，匿名下载次数较少）", "test result");
     assert.equal(fetch.calls[0]!.headers["Api-Key"], "SECRET");
     assert.equal(fetch.calls[0]!.headers["User-Agent"], "Vestra Player v0.1.0");
     service.emit("save", "SECRET", "me", "pw");
     await t.host.settle();
-    await waitFor(() => String(service.props["status-text"]).startsWith("已保存"), "saved");
-    assert.equal(service.props["status-text"], "已保存（macOS 钥匙串（vestra.subtitle-online））");
-    assert.match(String(service.props["help-text"]), /存放在：macOS 钥匙串（vestra\.subtitle-online）。$/);
+    await waitFor(() => shown(t.host, "subtitle-online-service").startsWith("已保存"), "saved");
+    assert.equal(shown(t.host, "subtitle-online-service"), "已保存（macOS 钥匙串（vestra.subtitle-online））");
+    assert.equal(service.props["location"], "macOS 钥匙串（vestra.subtitle-online）", "the help text names it");
     assert.deepEqual(Object.fromEntries(t.host.secrets), { "opensubtitles-api-key": "SECRET", "opensubtitles-password": "pw" });
     assert.equal(await stat(join(t.data, "secrets.json")).catch(() => null), null, "nothing in a file");
     service.emit("save", "SECRET", "me", "");
@@ -154,7 +159,7 @@ test("keys are saved in the player's secret store, never in settings.json", asyn
   }
 });
 
-/** Open 服务 for OpenSubtitles and save `key` / `password`; the service window. */
+/** Open the service settings for OpenSubtitles and save `key` / `password`; the service window. */
 async function saveKey(t: Awaited<ReturnType<typeof setup>>, key: string, password: string) {
   await t.host.command("settings").run();
   t.host.window("subtitle-online-settings").emit("service-settings");
@@ -162,18 +167,18 @@ async function saveKey(t: Awaited<ReturnType<typeof setup>>, key: string, passwo
   const service = t.host.window("subtitle-online-service");
   service.emit("save", key, "", password);
   await t.host.settle();
-  await waitFor(() => /^(已保存|无法保存)/.test(String(service.props["status-text"])), "save finished");
+  await waitFor(() => /^(已保存|无法保存)/.test(shown(t.host, "subtitle-online-service")), "save finished");
   return service;
 }
 
 for (const code of ["unavailable", "unsupported"] as const)
   test(`no secret store (${code}): keys go to secrets.json (0600) in the data directory`, async () => {
     const fetch = fakeFetch({});
-    const t = await setup({ key: false, store: code });
+    const t = await setup({ key: false, store: code, ...zh });
     try {
-      const service = await saveKey(t, "SECRET", "pw");
+      await saveKey(t, "SECRET", "pw");
       const file = join(t.data, "secrets.json");
-      assert.equal(service.props["status-text"], `已保存（${file}（仅本人可读））`);
+      assert.equal(shown(t.host, "subtitle-online-service"), `已保存（${file}（仅本人可读））`);
       assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { "opensubtitles-api-key": "SECRET", "opensubtitles-password": "pw" });
       assert.equal((await stat(file)).mode & 0o777, 0o600);
       assert.equal(t.host.secrets.size, 0);
@@ -186,13 +191,13 @@ for (const code of ["unavailable", "unsupported"] as const)
 
 test("a key left in secrets.json by the fallback is still read; saving to the store removes the copy", async () => {
   const fetch = fakeFetch({});
-  const t = await setup({ key: false, file: { "opensubtitles-api-key": "OLD", "assrt-token": "TOKEN" } });
+  const t = await setup({ key: false, file: { "opensubtitles-api-key": "OLD", "assrt-token": "TOKEN" }, ...zh });
   try {
     await t.host.command("settings").run();
     const settings = t.host.window("subtitle-online-settings");
     await waitFor(() => settings.props.services !== undefined, "settings bound");
     const states = (settings.props.services as { state: string }[]).map((s) => s.state);
-    assert.deepEqual(states.sort(), ["已填写 token", "已填写密钥"]);
+    assert.deepEqual(states, ["已填写密钥", "已填写 token"]);
     await saveKey(t, "NEW", "");
     assert.equal(t.host.secrets.get("opensubtitles-api-key"), "NEW");
     assert.deepEqual(JSON.parse(await readFile(join(t.data, "secrets.json"), "utf8")), { "assrt-token": "TOKEN" });
@@ -205,19 +210,19 @@ test("a key left in secrets.json by the fallback is still read; saving to the st
 
 test("the store's location is named after the system; a refused save is reported, not moved to a file", async () => {
   const fetch = fakeFetch({});
-  const windows = await setup({ key: false, os: "windows" });
+  const windows = await setup({ key: false, os: "windows", ...zh });
   try {
-    const service = await saveKey(windows, "SECRET", "");
-    assert.equal(service.props["status-text"], "已保存（Windows 凭据管理器（vestra.subtitle-online））");
-    assert.match(String(windows.host.window("subtitle-online-settings").props["note-text"]), /Windows 凭据管理器/);
+    await saveKey(windows, "SECRET", "");
+    assert.equal(shown(windows.host, "subtitle-online-service"), "已保存（Windows 凭据管理器（vestra.subtitle-online））");
+    assert.match(windows.host.window("subtitle-online-settings").props["location"] as string, /Windows 凭据管理器/);
   } finally {
     await windows.stop();
     await windows.cleanup();
   }
-  const refused = await setup({ key: false, store: "failed" });
+  const refused = await setup({ key: false, store: "failed", ...zh });
   try {
-    const service = await saveKey(refused, "SECRET", "");
-    assert.equal(service.props["status-text"], "无法保存：secrets.set: failed");
+    await saveKey(refused, "SECRET", "");
+    assert.equal(shown(refused.host, "subtitle-online-service"), "无法保存：secrets.set: failed");
     assert.equal(await stat(join(refused.data, "secrets.json")).catch(() => null), null);
   } finally {
     await refused.stop();
@@ -239,25 +244,34 @@ test("search sends hash + keywords + languages once privacy is accepted; hash ma
         ],
       }),
   });
-  const t = await setup({ privacy: false });
+  const t = await setup({ privacy: false, ...zh });
   try {
     await t.host.command("search").run();
     await t.host.settle();
     const window = t.host.window("subtitle-download");
     assert.equal(window.props["privacy-pending"], true);
+    assert.equal(shown(t.host, "subtitle-download"), "搜索会把文件名关键字与文件哈希发送给所选服务。");
     assert.equal(fetch.calls.length, 0, "nothing is sent before the user agrees");
     window.emit("accept-privacy");
-    await waitFor(() => String(window.props["status-text"]).startsWith("找到") && window.props["busy"] === false, "results");
+    await waitFor(() => shown(t.host, "subtitle-download") === "找到 4 条字幕" && window.props["busy"] === false, "results");
     const url = new URL(fetch.calls[0]!.url);
     assert.equal(url.searchParams.get("languages"), "en,zh-cn,zh-tw");
     assert.match(url.searchParams.get("moviehash")!, /^[0-9a-f]{16}$/);
     assert.equal(url.searchParams.get("query"), "the movie 2019");
     assert.deepEqual([...url.searchParams.keys()], ["languages", "moviehash", "query"], "sorted parameters");
     assert.equal(window.props["title-text"], "The Movie 2019");
-    const rows = window.props["rows"] as { release: string; match: string; language: string }[];
-    assert.deepEqual(rows.map((r) => r.release), ["Movie.Hash.CN [HI]", "Movie.Hash.EN", "Movie.MT [机翻]", "Movie.EN"]);
-    assert.equal(rows[0]!.match, "哈希");
-    assert.equal(rows[0]!.language, "简体中文");
+    const rows = window.props["rows"] as { release: string; hearing: boolean; machine: boolean; hash: boolean; language: string; service: string }[];
+    assert.deepEqual(rows.map((r) => [r.release, r.hearing, r.machine, r.hash]), [
+      ["Movie.Hash.CN", true, false, true],
+      ["Movie.Hash.EN", false, false, true],
+      ["Movie.MT", false, true, true],
+      ["Movie.EN", false, false, false],
+    ]);
+    assert.deepEqual([rows[0]!.language, rows[0]!.service], ["简体中文", "opensubtitles"], "the language named");
+    // ui/download.slint names them (ResultRow): the same catalog texts.
+    assert.deepEqual(["{} [HI]", "{} [MT]", "Hash"].map((text) => t.host.translate(text, ["Movie"])), [
+      "Movie [HI]", "Movie [机翻]", "哈希",
+    ]);
     assert.equal(window.props["can-more"], true);
     window.emit("more");
     await waitFor(() => fetch.calls.length === 2, "page 2");
@@ -279,9 +293,9 @@ function searchAndDownload(file: Buffer | string = SRT, name = "Movie.CN.srt") {
   });
 }
 
-test("double-click downloads, loads and selects the subtitle, and saves <视频名>.zh.srt beside the video", async () => {
+test("double-click downloads, loads and selects the subtitle, and saves <video name>.zh.srt beside the video", async () => {
   const fetch = searchAndDownload();
-  const t = await setup();
+  const t = await setup(zh);
   try {
     await t.host.command("search").run();
     const window = t.host.window("subtitle-download");
@@ -292,6 +306,8 @@ test("double-click downloads, loads and selects the subtitle, and saves <视频�
     assert.deepEqual(t.host.subtitleLoads.map((l) => [l.format, l.title, l.select, l.bytes.toString()]), [["srt", "简体中文 · Movie.CN", "primary", SRT]]);
     assert.equal(JSON.parse(fetch.calls.find((c) => c.url.endsWith("/download"))!.body!).file_id, 7);
     assert.equal(t.host.osd.at(-1), "打开字幕：简体中文 · Movie.CN");
+    const video = join(t.folder, "The.Movie.2019.1080p.BluRay.x264-GRP.zh.srt");
+    assert.equal(shown(t.host, "subtitle-download"), `打开字幕：简体中文 · Movie.CN。已保存到 ${video}`);
     const files = await readdir(t.folder);
     assert.ok(files.includes("The.Movie.2019.1080p.BluRay.x264-GRP.zh.srt"), files.join());
     window.emit("open-row", 0);
@@ -304,9 +320,9 @@ test("double-click downloads, loads and selects the subtitle, and saves <视频�
   }
 });
 
-test("添加字幕 adds the checked results without selecting them; 直接保存 only saves", async () => {
+test("Add adds the checked results without selecting them; Save Only only saves", async () => {
   const fetch = searchAndDownload();
-  const t = await setup({ settings: { saveLocation: "data" } });
+  const t = await setup({ settings: { saveLocation: "data" }, ...zh });
   try {
     await t.host.command("search").run();
     const window = t.host.window("subtitle-download");
@@ -320,9 +336,9 @@ test("添加字幕 adds the checked results without selecting them; 直接保存
     assert.deepEqual(t.host.subtitleLoads.map((l) => l.select), ["none", "none"]);
     assert.equal(t.host.subtitles.selection.target, null);
     window.emit("save-checked");
-    await waitFor(() => String(window.props["status-text"]).startsWith("已保存 2 个字幕"), "saved");
-    assert.equal(t.host.subtitleLoads.length, 2, "直接保存 does not load");
-    assert.equal((await readdir(join(t.data, "downloads"))).length, 4, "two from 添加字幕, two from 直接保存");
+    await waitFor(() => shown(t.host, "subtitle-download") === `已保存 2 个字幕到 ${join(t.data, "downloads")}`, "saved");
+    assert.equal(t.host.subtitleLoads.length, 2, "Save Only does not load");
+    assert.equal((await readdir(join(t.data, "downloads"))).length, 4, "two from Add, two from Save Only");
   } finally {
     await t.stop();
     fetch.restore();
@@ -336,23 +352,23 @@ test("quota, bad key and network failures are explained; other services' results
     [`${OS}/subtitles`]: () => (mode === "auth" ? jsonResponse({ message: "nope" }, 401) : jsonResponse({ data: [osResult(7, "zh-CN", "Movie.CN")] })),
     [`${OS}/download`]: () => jsonResponse({ remaining: 0, message: "quota", reset_time: "23 小时" }, 406),
   });
-  const t = await setup();
+  const t = await setup(zh);
   try {
     await t.host.command("search").run();
     const window = t.host.window("subtitle-download");
     await waitFor(() => (window.props["rows"] as unknown[])?.length === 1 && window.props["busy"] === false, "results");
     window.emit("open-row", 0);
-    await waitFor(() => /重置/.test(String(window.props["status-text"])), "quota");
+    await waitFor(() => /重置/.test(shown(t.host, "subtitle-download")), "quota");
     assert.equal(t.host.osd.at(-1), "今日下载次数已用完（OpenSubtitles）。登录账号可获得更多次数");
-    assert.match(String(window.props["status-text"]), /23 小时 重置/);
+    assert.equal(shown(t.host, "subtitle-download"), "今日下载次数已用完（OpenSubtitles）。登录账号可获得更多次数。将于 23 小时 重置");
     assert.equal(t.host.subtitleLoads.length, 0);
     mode = "auth";
     window.emit("search-again");
-    await waitFor(() => window.props["status-text"] === "API 密钥无效，请在在线字幕设置中检查", "auth");
+    await waitFor(() => shown(t.host, "subtitle-download") === "API 密钥无效，请在在线字幕设置中检查", "auth");
     fetch.restore();
     const offline = fakeFetch({});
     window.emit("search-title", "Movie");
-    await waitFor(() => window.props["status-text"] === "无法连接 OpenSubtitles", "offline");
+    await waitFor(() => shown(t.host, "subtitle-download") === "无法连接 OpenSubtitles", "offline");
     offline.restore();
   } finally {
     await t.stop();
@@ -386,7 +402,7 @@ test("a source change during the download aborts it; nothing is loaded into the 
     await pause(50);
     await t.host.settle();
     assert.equal(t.host.subtitleLoads.length, 0);
-    assert.equal(window.props["status-text"], "媒体已切换，未载入字幕。");
+    assert.equal(shown(t.host, "subtitle-download"), "The media changed; no subtitle was loaded.");
     assert.deepEqual(window.props["rows"], [], "results of the old source are dropped");
   } finally {
     await t.stop();
@@ -459,7 +475,8 @@ test("a zip with several subtitle files asks which one to load; rar is refused w
     await waitFor(() => window.props["busy"] === false, "first download finished");
     body = Buffer.from("Rar!\u001a\u0007\u0000");
     window.emit("open-row", 0);
-    await waitFor(() => /rar/.test(String(window.props["status-text"])), "rar refused");
+    await waitFor(() => /rar/.test(shown(t.host, "subtitle-download")), "rar refused");
+    assert.equal(shown(t.host, "subtitle-download"), "This archive format (rar, 7z) is not supported yet; download a zip or a single subtitle file.");
     assert.equal(t.host.subtitleLoads.length, 1);
   } finally {
     await t.stop();
@@ -470,7 +487,7 @@ test("a zip with several subtitle files asks which one to load; rar is refused w
 
 test("automatic search: a hash match in the first language is loaded when a video without subtitles opens", async () => {
   const fetch = searchAndDownload();
-  const t = await setup({ settings: { autoSearch: "no-subtitles", afterSearch: "load-best" } });
+  const t = await setup({ settings: { autoSearch: "no-subtitles", afterSearch: "load-best" }, ...zh });
   try {
     assert.equal(fetch.calls.length, 0, "the source open at start is left alone");
     t.host.openElsewhere(t.video);

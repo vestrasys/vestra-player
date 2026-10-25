@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { convert, cuesOf, decode, parseAss, parseSrt } from "../formats.ts";
+import { Failure } from "../messages.ts";
+import type { StatusId } from "../messages.ts";
 import { clock, dialogueTarget, parseStyle } from "../model.ts";
+import { zh } from "./status.ts";
 
 const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
+/** A `Failure` with this status (the file errors are status ids, shown in the old Chinese words). */
+const failure = (id: StatusId) => (e: unknown) => e instanceof Failure && e.status.id === id && zh(e.status).length > 0;
 const options = { fallback: "gb18030" as const, fps: null };
 
 test("encodings: BOMs, strict UTF-8, then the fallback (GB18030 by default)", () => {
@@ -40,7 +45,7 @@ test("ASS/SSA pass through without [Fonts] and [Graphics]; UTF-16LE is re-encode
   const out = text(result.tracks[0]!.bytes);
   assert.doesNotMatch(out, /\[Fonts\]|\[Graphics\]|a\.ttf|logo\.png/);
   assert.match(out, /\\pos\(10,10\)/, "override tags are kept for the renderer");
-  assert.deepEqual(result.notes, ["已忽略字幕内嵌字体"]);
+  assert.deepEqual(result.notes, ["noteFonts"]);
   assert.deepEqual(parseAss(out), [{ start: 1.5, end: 3, text: "你好,世界\n第二行" }]);
   assert.equal(convert(Buffer.from(ass.replace("v4.00+", "v4.00")), options).kind, "SSA");
 });
@@ -82,16 +87,19 @@ test("MicroDVD uses the video frame rate, then the declared one, then 23.976 wit
   const video = convert(Buffer.from(sub), { ...options, fps: 50 });
   assert.equal(text(video.tracks[0]!.bytes).split("\n")[1], "00:00:00,500 --> 00:00:01,000");
   const plain = convert(Buffer.from("{24}{48}Hi\n"), options);
-  assert.deepEqual(plain.notes, ["视频帧率未知，已按 23.976 换算 MicroDVD 字幕"]);
+  assert.deepEqual(plain.notes, ["noteFps"]);
+  assert.equal(zh({ id: "noteFps", args: [] }), "视频帧率未知，已按 23.976 换算 MicroDVD 字幕");
   assert.match(text(plain.tracks[0]!.bytes), /Hi/);
 });
 
 test("graphic, unknown and empty files are refused with a reason", () => {
-  assert.throws(() => convert(Buffer.from("# VobSub index file, v7\nsize: 720x480\n"), options), /暂不支持图形字幕文件/);
-  assert.throws(() => convert(Buffer.from([0x00, 0x00, 0x01, 0xba, 0x44]), options), /暂不支持图形字幕文件/);
-  assert.throws(() => convert(Buffer.from("PG\u0000\u0000"), options), /暂不支持图形字幕文件/);
-  assert.throws(() => convert(Buffer.from("00:01 hello\n00:02 world\n"), options), /无法识别的字幕格式/);
-  assert.throws(() => convert(Buffer.from("WEBVTT\n\n"), options), /没有字幕/);
+  assert.throws(() => convert(Buffer.from("# VobSub index file, v7\nsize: 720x480\n"), options), failure("bitmap"));
+  assert.throws(() => convert(Buffer.from([0x00, 0x00, 0x01, 0xba, 0x44]), options), failure("bitmap"));
+  assert.throws(() => convert(Buffer.from("PG\u0000\u0000"), options), failure("bitmap"));
+  assert.throws(() => convert(Buffer.from("00:01 hello\n00:02 world\n"), options), failure("unknownFormat"));
+  assert.throws(() => convert(Buffer.from("WEBVTT\n\n"), options), failure("noCues"));
+  assert.equal(zh({ id: "bitmap", args: [] }), "暂不支持图形字幕文件");
+  assert.equal(zh({ id: "noCues", args: [] }), "字幕文件里没有字幕。");
 });
 
 test("cues for B11: SRT and ASS times; dialogue targets follow the sync offset", () => {

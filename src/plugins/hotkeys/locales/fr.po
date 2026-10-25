@@ -1,0 +1,557 @@
+# French translation of the messages in messages.pot.
+# Machine translated (each entry flagged x-machine); awaiting human review.
+# Reviewed by an AI reviewer on 2026-10-25
+msgid ""
+msgstr ""
+"Language: fr\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: export.ts:16 ui/keys.slint:97
+#, x-machine
+msgid "({})"
+msgstr "({})"
+
+#: export.ts:17 ui/keys.slint:103 ui/keys.slint:195 ui/mouse.slint:111 ui/mouse.slint:157
+#, x-machine
+msgid "Default"
+msgstr "Par défaut"
+
+#: export.ts:17 ui/keys.slint:100 ui/keys.slint:195 ui/keys.slint:208 ui/keys.slint:228
+#, x-machine
+msgid "Changed"
+msgstr "Modifié"
+
+#: export.ts:17 ui/keys.slint:101 ui/keys.slint:195
+#, x-machine
+msgid "Conflict"
+msgstr "Conflit"
+
+#: export.ts:17 ui/keys.slint:102 ui/keys.slint:195
+#, x-machine
+msgid "Ignored"
+msgstr "Ignoré"
+
+#: export.ts:17 ui/keys.slint:103 ui/keys.slint:195
+#, x-machine
+msgid "Not loaded"
+msgstr "Non chargé"
+
+#: export.ts:21
+#, x-machine
+msgid "In panel"
+msgstr "Dans le panneau"
+
+#: export.ts:21
+#, x-machine
+msgid "Global"
+msgstr "Global"
+
+#: export.ts:22 ui/parts.slint:60
+#, x-machine
+msgid "Player"
+msgstr "Lecteur"
+
+#: export.ts:30 export.ts:40 ui/keys.slint:256
+#, x-machine
+msgid "Command"
+msgstr "Commande"
+
+#: export.ts:30 export.ts:40 ui/keys.slint:264
+#, x-machine
+msgid "Shortcut"
+msgstr "Raccourci"
+
+#: export.ts:30 export.ts:40
+#, x-machine
+msgid "Scope"
+msgstr "Portée"
+
+#: export.ts:30 export.ts:40
+#, x-machine
+msgid "Source"
+msgstr "Source"
+
+#: export.ts:30 export.ts:40 ui/keys.slint:195 ui/keys.slint:270
+#, x-machine
+msgid "Status"
+msgstr "État"
+
+#: export.ts:41
+#, x-machine
+msgid "Vestra Player shortcuts"
+msgstr "Raccourcis de Vestra Player"
+
+#: ignore.ts:47
+#, x-machine
+msgid "Ignore default shortcuts?"
+msgstr "Ignorer les raccourcis par défaut ?"
+
+#: ignore.ts:49
+#, x-machine
+msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Leave Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts."
+msgstr "Seules les touches que vous avez modifiées dans Raccourcis clavier fonctionneront ; les touches par défaut comme Espace et les flèches cesseront de fonctionner. Quitter (⌘Q) et Quitter le plein écran (Esc) ne sont pas concernés. Vous pouvez désactiver cette option à tout moment dans Paramètres ▸ Ignorer les raccourcis par défaut."
+
+#: ignore.ts:50
+#, x-machine
+msgid "Ignore"
+msgstr "Ignorer"
+
+#: ignore.ts:58
+#, x-machine
+msgid "Ignore default shortcuts: On"
+msgstr "Ignorer les raccourcis par défaut : activé"
+
+#: ignore.ts:58
+#, x-machine
+msgid "Ignore default shortcuts: Off"
+msgstr "Ignorer les raccourcis par défaut : désactivé"
+
+#: keys-page.ts:116
+#, x-machine
+msgid "Keyboard Shortcuts"
+msgstr "Raccourcis clavier"
+
+#: keys-page.ts:405
+#, x-machine
+msgid "Shortcut updated: {0} = {1}"
+msgstr "Raccourci modifié : {0} = {1}"
+
+#: keys-page.ts:408
+#, x-machine
+msgid "Shortcut updated: {} = (none)"
+msgstr "Raccourci modifié : {} = (aucun)"
+
+#: keys-page.ts:460
+#, x-machine
+msgid "Restore all default shortcuts?"
+msgstr "Rétablir tous les raccourcis par défaut ?"
+
+#: keys-page.ts:461
+#, x-machine
+msgid "This clears your changes to the shortcuts and mouse actions of every command, including those of plugins that are not loaded."
+msgstr "Cela efface vos modifications des raccourcis et des actions de la souris de toutes les commandes, y compris celles des plugins non chargés."
+
+#: keys-page.ts:462
+#, x-machine
+msgid "Restore All Defaults"
+msgstr "Tout rétablir par défaut"
+
+#: keys-page.ts:474
+#, x-machine
+msgid "Shortcuts restored to defaults"
+msgstr "Raccourcis par défaut rétablis"
+
+#. only the part before the extension.
+#: keys-page.ts:485
+#, x-machine
+msgid "Export Shortcut List"
+msgstr "Exporter la liste des raccourcis"
+
+#. only the part before the extension.
+#: keys-page.ts:485
+#, x-machine
+msgid "Vestra Player Shortcuts.csv"
+msgstr "Raccourcis Vestra Player.csv"
+
+#: main.ts:32
+#, x-machine
+msgid "Keyboard Shortcuts…"
+msgstr "Raccourcis clavier…"
+
+#: main.ts:39
+#, x-machine
+msgid "Mouse…"
+msgstr "Souris…"
+
+#: main.ts:46
+#, x-machine
+msgid "Ignore Default Shortcuts"
+msgstr "Ignorer les raccourcis par défaut"
+
+#: manifest.json
+#, x-machine
+msgid "Shortcut Settings"
+msgstr "Paramètres des raccourcis"
+
+#: manifest.json
+#, x-machine
+msgid "View and rebind keyboard shortcuts and mouse actions"
+msgstr "Afficher et réassocier les raccourcis clavier et les actions de la souris"
+
+#: manifest.json
+#, x-machine
+msgid ""
+"Lists the commands of the player and of every plugin in the Keys and Mouse category of the options window: search by command or key, rebind, unbind, restore defaults, check conflicts and export the list. Assigns commands to mouse clicks and the wheel on the video, and can ignore every default shortcut at once.\n"
+"Open it from the context menu: Settings ▸ Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts."
+msgstr ""
+"Liste les commandes du lecteur et de chaque plugin dans la catégorie Clavier et souris de la fenêtre des options : recherche par commande ou par touche, réassociation, dissociation, rétablissement des valeurs par défaut, vérification des conflits et exportation de la liste. Associe des commandes aux clics et à la molette de la souris sur la vidéo, et peut ignorer d'un coup tous les raccourcis par défaut.\n"
+"Accessible depuis le menu contextuel : Paramètres ▸ Raccourcis clavier… / Souris… / Ignorer les raccourcis par défaut."
+
+#: manifest.json
+#, x-machine
+msgid "settings"
+msgstr "paramètres"
+
+#: manifest.json
+#, x-machine
+msgid "shortcuts"
+msgstr "raccourcis"
+
+#: manifest.json
+#, x-machine
+msgid "mouse"
+msgstr "souris"
+
+#: mouse-page.ts:38
+#, x-machine
+msgid "Mouse"
+msgstr "Souris"
+
+#: mouse-page.ts:178 ui/parts.slint:41
+#, x-machine
+msgid "Left click"
+msgstr "Clic gauche"
+
+#: mouse-page.ts:178 ui/parts.slint:42
+#, x-machine
+msgid "Left double-click"
+msgstr "Double-clic gauche"
+
+#: mouse-page.ts:178 ui/parts.slint:43
+#, x-machine
+msgid "Left double-click (left half)"
+msgstr "Double-clic gauche (moitié gauche)"
+
+#: mouse-page.ts:178 ui/parts.slint:44
+#, x-machine
+msgid "Left double-click (right half)"
+msgstr "Double-clic gauche (moitié droite)"
+
+#: mouse-page.ts:178 ui/parts.slint:45
+#, x-machine
+msgid "Middle click"
+msgstr "Clic central"
+
+#: mouse-page.ts:178 ui/parts.slint:46
+#, x-machine
+msgid "Back button"
+msgstr "Bouton Précédent"
+
+#: mouse-page.ts:178 ui/parts.slint:47
+#, x-machine
+msgid "Forward button"
+msgstr "Bouton Suivant"
+
+#: mouse-page.ts:178 ui/parts.slint:48
+#, x-machine
+msgid "Wheel up"
+msgstr "Molette vers le haut"
+
+#: mouse-page.ts:178 ui/parts.slint:49
+#, x-machine
+msgid "Wheel down"
+msgstr "Molette vers le bas"
+
+#: mouse-page.ts:178 ui/parts.slint:50
+#, x-machine
+msgid "Wheel left"
+msgstr "Molette vers la gauche"
+
+#: mouse-page.ts:178 ui/parts.slint:51
+#, x-machine
+msgid "Wheel right"
+msgstr "Molette vers la droite"
+
+#: mouse-page.ts:179
+#, x-machine
+msgid "{}+{}"
+msgstr "{}+{}"
+
+#: mouse-page.ts:182
+#, x-machine
+msgid "Mouse action updated: {0} = {1}"
+msgstr "Action de la souris modifiée : {0} = {1}"
+
+#: mouse-page.ts:183
+#, x-machine
+msgid "Mouse action updated: {} = (none)"
+msgstr "Action de la souris modifiée : {} = (aucune)"
+
+#: ui/keys.slint:113
+#, x-machine
+msgid "Default shortcuts are ignored (Settings ▸ Ignore Default Shortcuts)"
+msgstr "Les raccourcis par défaut sont ignorés (Paramètres ▸ Ignorer les raccourcis par défaut)"
+
+#: ui/keys.slint:114
+#, x-machine
+msgid "The plugin is not loaded; this change works again when it is back"
+msgstr "Le plugin n'est pas chargé ; cette modification s'appliquera de nouveau à son retour"
+
+#: ui/keys.slint:199 ui/keys.slint:332
+#, x-machine
+msgid "Add Key…"
+msgstr "Ajouter une touche…"
+
+#: ui/keys.slint:202 ui/keys.slint:378 ui/keys.slint:397
+#, x-machine
+msgid "Delete Entry"
+msgstr "Supprimer l'entrée"
+
+#: ui/keys.slint:203 ui/keys.slint:378 ui/keys.slint:397
+#, x-machine
+msgid "Restore Default"
+msgstr "Rétablir par défaut"
+
+#: ui/keys.slint:205 ui/keys.slint:384 ui/keys.slint:403
+#, x-machine
+msgid "Unbind All"
+msgstr "Tout dissocier"
+
+#: ui/keys.slint:208 ui/keys.slint:228
+#, x-machine
+msgid "All"
+msgstr "Tout"
+
+#: ui/keys.slint:208 ui/keys.slint:228
+#, x-machine
+msgid "Conflicts"
+msgstr "Conflits"
+
+#: ui/keys.slint:208 ui/keys.slint:228 ui/keys.slint:316
+#, x-machine
+msgid "Unbound"
+msgstr "Sans raccourci"
+
+#: ui/keys.slint:222
+#, x-machine
+msgid "Search commands or keys (e.g. Ctrl+)"
+msgstr "Rechercher des commandes ou des touches (p. ex. Ctrl+)"
+
+#: ui/keys.slint:288
+#, x-machine
+msgid "Loading…"
+msgstr "Chargement…"
+
+#: ui/keys.slint:288
+#, x-machine
+msgid "No matching commands"
+msgstr "Aucune commande correspondante"
+
+#: ui/keys.slint:296
+#, x-machine
+msgid "Select a command to change its shortcuts"
+msgstr "Sélectionnez une commande pour modifier ses raccourcis"
+
+#: ui/keys.slint:297
+#, x-machine
+msgid "{} (not loaded)"
+msgstr "{} (non chargé)"
+
+#: ui/keys.slint:298
+#, x-machine
+msgid "{} (Player · in panel)"
+msgstr "{} (Lecteur · dans le panneau)"
+
+#: ui/keys.slint:298
+#, x-machine
+msgid "{} (Player)"
+msgstr "{} (Lecteur)"
+
+#: ui/keys.slint:299
+#, x-machine
+msgid "{0} ({1} · in panel)"
+msgstr "{0} ({1} · dans le panneau)"
+
+#: ui/keys.slint:300
+#, x-machine
+msgid "{0} ({1})"
+msgstr "{0} ({1})"
+
+#: ui/keys.slint:348
+#, x-machine
+msgid "Press a shortcut (Esc cancels)"
+msgstr "Appuyez… (Esc annule)"
+
+#: ui/keys.slint:416
+#, x-machine
+msgid "⌘Q is the default shortcut to quit Vestra Player. Change it to “{}”?"
+msgstr "⌘Q est le raccourci par défaut pour quitter Vestra Player. Le remplacer par « {} » ?"
+
+#: ui/keys.slint:417
+#, x-machine
+msgid "{0} is already used by “{1}”"
+msgstr "{0} est déjà utilisé par « {1} »"
+
+#: ui/keys.slint:423
+#, x-machine
+msgid "Replace"
+msgstr "Remplacer"
+
+#: ui/keys.slint:424 ui/mouse.slint:182
+#, x-machine
+msgid "Cancel"
+msgstr "Annuler"
+
+#: ui/keys.slint:442
+#, x-machine
+msgid "Restore All Defaults…"
+msgstr "Tout rétablir…"
+
+#: ui/keys.slint:446
+#, x-machine
+msgid "Export List…"
+msgstr "Exporter…"
+
+#: ui/keys.slint:449
+#, x-machine
+msgid "Ignore default shortcuts"
+msgstr "Ignorer les raccourcis par défaut"
+
+#: ui/mouse.slint:67 ui/mouse.slint:146
+#, x-machine
+msgid "(None)"
+msgstr "(Aucun)"
+
+#: ui/mouse.slint:120
+#, x-machine
+msgid "Modifier"
+msgstr "Touche"
+
+#: ui/mouse.slint:123
+#, x-machine
+msgid "None"
+msgstr "Aucun"
+
+#: ui/mouse.slint:173
+#, x-machine
+msgid "Command run by “{}”:"
+msgstr "Commande exécutée par « {} » :"
+
+#: ui/mouse.slint:178
+#, x-machine
+msgid "Type to filter"
+msgstr "Tapez pour filtrer"
+
+#: ui/mouse.slint:205
+#, x-machine
+msgid "A bound left click responds only after the system's double-click interval; the right button always opens the menu."
+msgstr "Un clic gauche associé ne réagit qu'après le délai de double-clic du système ; le bouton droit ouvre toujours le menu."
+
+#: ui/parts.slint:59
+#, x-machine
+msgid "All sources"
+msgstr "Toutes les sources"
+
+#: ui/parts.slint:61
+#, x-machine
+msgid "Plugins not loaded"
+msgstr "Plugins non chargés"
+
+#: ui/parts.slint:64
+#, x-machine
+msgid "{0} is taken by “{1}” and has no effect"
+msgstr "{0} est déjà utilisé par « {1} » et n'a aucun effet"
+
+#: ui/parts.slint:67
+#, x-machine
+msgid "{0}; {1}"
+msgstr "{0} ; {1}"
+
+#: ui/parts.slint:74
+#, x-machine
+msgid "The command no longer exists"
+msgstr "La commande n'existe plus"
+
+#: ui/parts.slint:75
+#, x-machine
+msgid "This key cannot be used"
+msgstr "Cette touche ne peut pas être utilisée"
+
+#: ui/parts.slint:76
+#, x-machine
+msgid "This key is not recognized"
+msgstr "Cette touche n'est pas reconnue"
+
+#: ui/parts.slint:77
+#, x-machine
+msgid "Change failed: {}"
+msgstr "Échec de la modification : {}"
+
+#: ui/parts.slint:79
+#, x-machine
+msgid "Press Esc to cancel; to bind Esc itself, click “Esc” next to the box"
+msgstr "Appuyez sur Esc pour annuler ; pour associer la touche Esc elle-même, cliquez sur « Esc » à côté du champ"
+
+#: ui/parts.slint:80
+#, x-machine
+msgid "{} is already a shortcut of this command"
+msgstr "{} est déjà un raccourci de cette commande"
+
+#: ui/parts.slint:81
+#, x-machine
+msgid "At most {} bindings per command"
+msgstr "{} associations au maximum par commande"
+
+#: ui/parts.slint:82
+#, x-machine
+msgid "This key does something else while the “{0}” panel has focus: {1}"
+msgstr "Cette touche a une autre fonction quand le panneau « {0} » a le focus : {1}"
+
+#: ui/parts.slint:83
+#, x-machine
+msgid "This key does something else while a panel of the player has focus: {}"
+msgstr "Cette touche a une autre fonction quand un panneau du lecteur a le focus : {}"
+
+#: ui/parts.slint:84
+#, x-machine
+msgid "This key does something else outside the panel: {}"
+msgstr "Cette touche a une autre fonction hors du panneau : {}"
+
+#: ui/parts.slint:85
+#, x-machine
+msgid "Updated: {}"
+msgstr "Modifié : {}"
+
+#: ui/parts.slint:86
+#, x-machine
+msgid "Updated: (none)"
+msgstr "Modifié : (aucun)"
+
+#: ui/parts.slint:87
+#, x-machine
+msgid "Updated: {0} = {1}"
+msgstr "Modifié : {0} = {1}"
+
+#: ui/parts.slint:88
+#, x-machine
+msgid "Updated: {} = (none)"
+msgstr "Modifié : {} = (aucun)"
+
+#: ui/parts.slint:89
+#, x-machine
+msgid "Deleted the changes of {}"
+msgstr "Modifications de {} supprimées"
+
+#: ui/parts.slint:90
+#, x-machine
+msgid "Cannot confirm: {}"
+msgstr "Impossible de confirmer : {}"
+
+#: ui/parts.slint:91
+#, x-machine
+msgid "All defaults restored"
+msgstr "Toutes les valeurs par défaut ont été rétablies"
+
+#: ui/parts.slint:92
+#, x-machine
+msgid "Cannot export: {}"
+msgstr "Impossible d'exporter : {}"
+
+#: ui/parts.slint:93
+#, x-machine
+msgid "Exported {n} command"
+msgid_plural "Exported {n} commands"
+msgstr[0] "{n} commande exportée"
+msgstr[1] "{n} commandes exportées"

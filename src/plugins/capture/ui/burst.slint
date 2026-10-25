@@ -1,25 +1,28 @@
-// 连拍: the continuous capture dialog (438 wide, B§6.8; UI-DLG-04).
+// Burst: the continuous capture dialog (438 wide, B§6.8; UI-DLG-04).
 import { CheckBox, ComboBox, LineEdit } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
-import { FormLabel, Group, Note } from "parts.slint";
+import { FormLabel, Group, Note, Progress, Status, Words } from "parts.slint";
 
 export component BurstDialog inherits Window {
-    title: "连拍";
-    width: 438px;
+    title: @tr("Burst");
+    // 438px, wider only when the content needs it in this language. The format drop-down's
+    // fluent minimum is 10px more than this dialog ever gave it (it is narrower in every
+    // language), so that much is not counted.
+    width: max(438px, body.min-width - 10px);
     background: Theme.bg-panel;
     in property <string> folder;
     in property <bool> busy;
     in property <bool> can-capture;
-    in property <string> progress;
-    in property <string> status;
+    in property <Progress> progress;
+    in property <Status> status;
     in-out property <string> burst-count: "10";
     in-out property <string> burst-step: "1";
     in-out property <string> start-time: "0";
     in-out property <bool> current-time: true;
     in-out property <bool> processed: false;
     in-out property <bool> subtitles: false;
-    // Shared with 截取为 PNG / JPEG / BMP and 截图设置 (F07).
+    // Shared with Capture as PNG / JPEG / BMP and Snapshot Settings (F07).
     in-out property <int> format-index: 0;
     callback pick-folder();
     callback open-folder();
@@ -27,12 +30,26 @@ export component BurstDialog inherits Window {
     callback mark-start();
     callback choose-format(int);
     callback start-burst(string, string, string, bool, bool, bool);
+    // Label columns: at least their original width, or the widest label.
+    private property <length> setting-column: max(60px, setting-measure.preferred-width);
+    private property <length> info-column: max(60px, info-measure.preferred-width);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        setting-measure := VerticalLayout {
+            for text in [@tr("Count:"), @tr("Interval:"), @tr("Start:")]: FormLabel { text: text; }
+        }
+        info-measure := VerticalLayout {
+            for text in [@tr("Progress:"), @tr("Status:")]: FormLabel { text: text; }
+        }
+    }
 
-    VerticalLayout {
+    body := VerticalLayout {
         padding: Theme.dialog-padding;
         spacing: 5px;
         Group {
-            title: "保存设置";
+            title: @tr("Save to");
             HorizontalLayout {
                 spacing: 4px;
                 LineEdit { height: Theme.input-height; font-size: Theme.font-body; text: root.folder; read-only: true; }
@@ -42,32 +59,32 @@ export component BurstDialog inherits Window {
         HorizontalLayout {
             spacing: 9px;
             Group {
-                title: "截图设置";
+                title: @tr("Snapshot settings");
                 HorizontalLayout {
                     spacing: 4px;
-                    FormLabel { width: 60px; text: "数量："; }
+                    FormLabel { width: root.setting-column; text: @tr("Count:"); }
                     LineEdit { width: 65px; height: Theme.input-height; font-size: Theme.font-body; text <=> root.burst-count; enabled: !root.busy; }
-                    Note { text: "张（2–20）"; }
+                    Note { text: @tr("frames (2–20)"); }
                 }
                 HorizontalLayout {
                     spacing: 4px;
-                    FormLabel { width: 60px; text: "间隔："; }
+                    FormLabel { width: root.setting-column; text: @tr("Interval:"); }
                     LineEdit { width: 65px; height: Theme.input-height; font-size: Theme.font-body; text <=> root.burst-step; enabled: !root.busy; }
-                    Note { text: "秒（0.1–10）"; }
+                    Note { text: @tr("s (0.1–10)"); }
                 }
-                CheckBox { height: Theme.checkbox-row-height; text: "从当前位置开始"; checked <=> root.current-time; enabled: !root.busy; }
+                CheckBox { height: Theme.checkbox-row-height; text: @tr("Start at the current position"); checked <=> root.current-time; enabled: !root.busy; }
                 HorizontalLayout {
                     spacing: 4px;
-                    FormLabel { width: 60px; text: "起点："; }
+                    FormLabel { width: root.setting-column; text: @tr("Start:"); }
                     LineEdit { width: 65px; height: Theme.input-height; font-size: Theme.font-body; text <=> root.start-time; enabled: !root.busy && !root.current-time; }
-                    Button { small: true; height: Theme.input-height; text: "当前"; enabled: !root.busy && !root.current-time; clicked => { root.mark-start(); } }
+                    Button { small: true; height: Theme.input-height; text: @tr("Current"); enabled: !root.busy && !root.current-time; clicked => { root.mark-start(); } }
                 }
             }
             Group {
-                title: "其他设置";
+                title: @tr("Other settings");
                 HorizontalLayout {
                     spacing: 4px;
-                    FormLabel { width: 40px; text: "格式："; }
+                    FormLabel { width: max(40px, self.preferred-width); text: @tr("Format:"); }
                     ComboBox {
                         height: Theme.input-height;
                         model: ["PNG", "JPEG", "BMP"];
@@ -76,32 +93,32 @@ export component BurstDialog inherits Window {
                         selected => { root.choose-format(self.current-index); }
                     }
                 }
-                CheckBox { height: Theme.checkbox-row-height; text: "包含画面效果"; checked <=> root.processed; enabled: !root.busy; }
-                CheckBox { height: Theme.checkbox-row-height; text: "同时截取字幕"; checked <=> root.subtitles; enabled: root.processed && !root.busy; }
+                CheckBox { height: Theme.checkbox-row-height; text: @tr("Include video effects"); checked <=> root.processed; enabled: !root.busy; }
+                CheckBox { height: Theme.checkbox-row-height; text: @tr("Capture subtitles too"); checked <=> root.subtitles; enabled: root.processed && !root.busy; }
                 Rectangle { vertical-stretch: 1; }
             }
         }
         Group {
-            title: "信息";
+            title: @tr("Information");
             HorizontalLayout {
                 spacing: 4px;
-                FormLabel { width: 60px; text: "进度："; }
-                Note { text: root.progress; }
+                FormLabel { width: root.info-column; text: @tr("Progress:"); }
+                Note { text: Words.progress(root.progress); }
             }
             HorizontalLayout {
                 spacing: 4px;
-                FormLabel { width: 60px; text: "状态："; }
-                Note { text: root.status; }
+                FormLabel { width: root.info-column; text: @tr("Status:"); }
+                Note { text: Words.status(root.status); }
             }
         }
         Rectangle { height: 2px; background: Theme.line; }
         HorizontalLayout {
             spacing: 4px;
-            Button { height: Theme.button-primary-height; text: "打开存档文件夹"; clicked => { root.open-folder(); } }
-            Button { height: Theme.button-primary-height; text: "截取当前画面"; enabled: root.can-capture; clicked => { root.capture-frame(); } }
+            Button { height: Theme.button-primary-height; text: @tr("Open Save Folder"); clicked => { root.open-folder(); } }
+            Button { height: Theme.button-primary-height; text: @tr("Capture Current Frame"); enabled: root.can-capture; clicked => { root.capture-frame(); } }
             Button {
                 height: Theme.button-primary-height;
-                text: "开始";
+                text: @tr("Start");
                 enabled: root.can-capture && !root.busy;
                 clicked => { root.start-burst(root.start-time, root.burst-count, root.burst-step, root.current-time, root.processed, root.subtitles); }
             }

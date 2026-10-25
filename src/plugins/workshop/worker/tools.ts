@@ -54,7 +54,7 @@ export class Folders {
   }
   /** The work folder for a write; a reference path is refused. */
   writable(file: string): string {
-    if (this.of(file) !== this.work) throw new Error(`参考资料是只读的：${file}`);
+    if (this.of(file) !== this.work) throw new Error(`The reference is read-only: ${file}`);
     return file;
   }
 }

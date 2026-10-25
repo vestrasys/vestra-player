@@ -10,7 +10,7 @@ export const timing = {
   positionsWrite: 300,
   /** B25: the playing position is remembered this often. */
   positionTick: 5000,
-  /** B25: the 每次询问 window closes itself after this long. */
+  /** B25: the Ask Every Time window closes itself after this long. */
   askTimeout: 10000,
 };
 

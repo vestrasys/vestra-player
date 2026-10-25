@@ -31,6 +31,7 @@ import { chmod, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fetchNode } from "./fetch-node.mjs";
+import { DISPLAY_NAME, infoPlist } from "./macos-plist.mjs";
 import { writeIcons } from "./icon.mjs";
 import {
   capture,
@@ -54,8 +55,6 @@ import {
   stageResources,
 } from "./stage.mjs";
 
-export const BUNDLE_ID = "com.vestraplayer.player";
-export const DISPLAY_NAME = "Vestra Player";
 /** Floor for LSMinimumSystemVersion (picture in picture needs 14). */
 const MIN_MACOS = "14.0";
 
@@ -257,38 +256,4 @@ function newer(a, b) {
     if ((x[index] ?? 0) !== (y[index] ?? 0))
       return (x[index] ?? 0) > (y[index] ?? 0);
   return false;
-}
-
-function infoPlist(version, minimum) {
-  const entries = {
-    CFBundleDevelopmentRegion: "en",
-    CFBundleDisplayName: DISPLAY_NAME,
-    CFBundleExecutable: "vestra-host",
-    CFBundleIconFile: "AppIcon",
-    CFBundleIdentifier: BUNDLE_ID,
-    CFBundleInfoDictionaryVersion: "6.0",
-    CFBundleName: DISPLAY_NAME,
-    CFBundlePackageType: "APPL",
-    CFBundleShortVersionString: version,
-    CFBundleVersion: version,
-    LSApplicationCategoryType: "public.app-category.video",
-    LSMinimumSystemVersion: minimum,
-    NSHighResolutionCapable: true,
-    NSHumanReadableCopyright: `© ${new Date().getUTCFullYear()} Vestra Player contributors · GPL-3.0-or-later`,
-    NSSupportsAutomaticGraphicsSwitching: true,
-  };
-  const value = (item) =>
-    typeof item === "boolean"
-      ? `<${item}/>`
-      : `<string>${String(item).replace(/&/g, "&amp;").replace(/</g, "&lt;")}</string>`;
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-${Object.entries(entries)
-  .map(([key, item]) => `  <key>${key}</key>\n  ${value(item)}`)
-  .join("\n")}
-</dict>
-</plist>
-`;
 }

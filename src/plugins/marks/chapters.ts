@@ -1,14 +1,18 @@
-import type { Chapter, Player, PlayerState } from "@vestra-player/sdk";
+import type { Chapter, I18n, Player, PlayerState, Text } from "@vestra-player/sdk";
 
 /** The media is open far enough for chapters, bookmarks and seeking to mean something. */
 export const hasMedia = (state: PlayerState) =>
   state.kind === "media" && (state.phase === "ready" || state.phase === "ended") && state.source !== null;
 
-/** A chapter's name: its title, `章节 N` when it has none. */
-export const chapterName = (chapter: Chapter, index: number) => chapter.title?.trim() || `章节 ${index + 1}`;
+/** A chapter's own title; `null` when it has none (it is then called "Chapter N"). */
+export const chapterTitle = (chapter: Chapter): string | null => chapter.title?.trim() || null;
+
+/** A chapter's name (seek-bar marks): its title, or "Chapter N" (a text the player translates). */
+export const chapterName = (text: I18n["text"], chapter: Chapter, index: number): string | Text =>
+  chapterTitle(chapter) ?? text("Chapter {}", [index + 1]);
 
 /**
- * B21 章节: read with `player.chapters()` once per source, when it first is
+ * B21 chapters: read with `player.chapters()` once per source, when it first is
  * ready (the player does not push them). Cleared as soon as the source
  * changes, so an old file's chapters never show for a new one.
  */
@@ -73,7 +77,7 @@ export function currentChapter(chapters: readonly Chapter[], position: number | 
 }
 
 /**
- * B21 上一 / 下一: the point before `position − 1` (so repeated presses move
+ * B21 previous / next: the point before `position − 1` (so repeated presses move
  * past the point just reached) or after `position + 0.5`; `null` when none.
  */
 export function stepPoint(times: readonly number[], position: number, direction: -1 | 1): number | null {
@@ -87,7 +91,7 @@ export function stepPoint(times: readonly number[], position: number, direction:
 }
 
 /**
- * B23 当前区段: the span between the adjacent marks around `position`, the
+ * B23 current range: the span between the adjacent marks around `position`, the
  * start and end of the media counting as marks; `null` without marks.
  */
 export function segmentAt(

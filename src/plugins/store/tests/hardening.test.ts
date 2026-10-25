@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { officialKeys, OFFICIAL_KEYS_DIRECTORY, verifyIndex } from "../signing.ts";
-import { banners, choose, FakeNet, OFFICIAL, openStore, other, pair, props, publish, signWith, start, until } from "./helpers.ts";
+import { banners, choose, FakeNet, OFFICIAL, openStore, other, pair, props, publish, said, signWith, start, until } from "./helpers.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "vestra-store-hardening-"));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -30,11 +30,11 @@ test("generated: lower is a replay, equal and higher are fine, missing after one
     assert.equal(official.meta?.generated, 5);
     publish(net, OFFICIAL, P(), { extra: { generated: 4 } });
     await store.refreshAll(true);
-    assert.equal(official.status.text, REPLAY);
+    assert.equal(said(official.status.text), REPLAY);
     assert.ok(logs.some((l) => l.includes("generated 4 < 5")));
     publish(net, OFFICIAL, P(), { extra: { generated: 5 } });
     await store.refreshAll(true);
-    assert.match(official.status.text, /已更新$/);
+    assert.match(said(official.status.text), /已更新$/);
     publish(net, OFFICIAL, P("1.1.0").map((p) => ({ ...p, versions: [{ version: "1.1.0" }, { version: "1.0.0" }] })), { extra: { generated: 6 } });
     await store.refreshAll(true);
     assert.equal(official.meta?.generated, 6);
@@ -43,7 +43,7 @@ test("generated: lower is a replay, equal and higher are fine, missing after one
         extra: generated === undefined ? {} : { generated },
       });
       await store.refreshAll(true);
-      assert.equal(official.status.text, REPLAY, `generated ${String(generated)}`);
+      assert.equal(said(official.status.text), REPLAY, `generated ${String(generated)}`);
     }
     assert.equal(official.meta?.generated, 6);
   } finally {
@@ -57,7 +57,7 @@ test("generated: an old index without it is accepted on a fresh store; a cached 
   const data = join(scratch, "cache");
   const first = await start({ net, dataDirectory: data });
   await first.store.refreshAll(true);
-  assert.match(first.store.repos.official.status.text, /已更新$/);
+  assert.match(said(first.store.repos.official.status.text), /已更新$/);
   assert.equal(first.store.repos.official.meta?.generated, 0);
   await first.stop();
   // The cached index is older (0) than the highest accepted (says meta.json): not used.
@@ -164,7 +164,7 @@ test("key rotation: a two-line .sig where only the second key is trusted; every 
   const { store, stop } = await start({ net, keys: [pair.publicKey, other.publicKey] });
   try {
     await store.refreshAll(true);
-    assert.match(store.repos.official.status.text, /已更新$/);
+    assert.match(said(store.repos.official.status.text), /已更新$/);
   } finally {
     await stop();
   }

@@ -1,22 +1,22 @@
-# NES 模拟器
+# NES Emulator
 
-在播放器里运行 NES（红白机）游戏 ROM。
+Play NES (Famicom) game ROMs in the player.
 
-## 功能
+## Features
 
-- 打开 iNES 格式（`.nes`）的 ROM，画面和声音像普通媒体一样在播放器里播放。
-- 「NES 工具」小窗显示运行状态，可打开 ROM 或停止。
+- Opens ROMs in iNES format (`.nes`); picture and sound play in the player like any other media.
+- The small "NES Tools" window shows what is running and can open a ROM or stop it.
 
-## 入口
+## Entries
 
-- `.nes` 文件像普通媒体一样打开：打开文件（⌘O / Ctrl+O）、拖到视频区、播放列表（包括上一个/下一个）。
-- 右键菜单「模拟器」：打开 NES ROM…、停止 NES、NES 工具…
-- 关闭来源（F4）同样停止游戏。停用本插件后，`.nes` 文件按普通文件打开（会失败）。
+- `.nes` files open like any other media: Open File (⌘O / Ctrl+O), a drop on the video, the playlist (including Previous / Next).
+- Context menu "Emulator": Open NES ROM…, Stop NES, NES Tools…
+- Closing the source (F4) stops the game as well. With this plugin disabled, `.nes` files open as ordinary files (and fail).
 
-## 限制
+## Limits
 
-- 需要播放器 0.4.1 或更新版本。
-- ROM 最大 16 MiB。
-- 暂不支持键盘操作和存档。
-- 不附带游戏 ROM。
-- 兼容性以 [JSNES](https://github.com/bfirsh/jsnes) 为准：只支持 NTSC，支持的 mapper 有限。
+- Needs player 0.4.3 or later.
+- ROMs up to 16 MiB.
+- No keyboard controls or save states yet.
+- No game ROMs included.
+- Compatibility is that of [JSNES](https://github.com/bfirsh/jsnes): NTSC only, a limited set of mappers.

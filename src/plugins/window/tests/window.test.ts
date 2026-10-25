@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import type { Locale } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import { clampNote, currentScale, fitted, mini, near, scaled } from "../geometry.ts";
 import activate, { PAGE_ID } from "../main.ts";
@@ -10,14 +11,63 @@ import { normalize, timing } from "../settings.ts";
 import { displaySize } from "../video-size.ts";
 
 Object.assign(timing, { probeRetry: 10, probeAttempts: 5 });
+const realLater = timing.later;
+
+/**
+ * A clock the test advances: the plugin's delays (`timing.later`) wait until
+ * `fire()` instead of for real time, so a busy machine cannot run them early
+ * or late. Restored after each test.
+ */
+function manualClock(host: TestHost) {
+  const pending: { run: () => void; ms: number }[] = [];
+  timing.later = (run, ms) => {
+    const entry = { run, ms };
+    pending.push(entry);
+    return () => {
+      const index = pending.indexOf(entry);
+      if (index >= 0) pending.splice(index, 1);
+    };
+  };
+  return {
+    pending,
+    /** Run every delay due now, then wait for what they asked the host. */
+    async fire() {
+      for (const entry of pending.splice(0)) entry.run();
+      await host.settle();
+    },
+  };
+}
+
+/**
+ * Hold the host's answer to `method` until `release()`. `reached` resolves
+ * once the plugin's request is with the host: wait for that, not for time.
+ */
+function hold(host: TestHost, method: string, answer: (params: Record<string, unknown>) => unknown) {
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => (release = resolve));
+  let reach!: () => void;
+  const reached = new Promise<void>((resolve) => (reach = resolve));
+  host.handle(method, async (params) => {
+    reach();
+    await released;
+    return answer(params);
+  });
+  return { reached, release };
+}
+
+/** Wait (in event-loop turns, not time) until the player has received a state that passes `ready`. */
+async function published(ready: () => boolean) {
+  for (let turn = 0; turn < 1000 && !ready(); turn++) await new Promise((resolve) => setImmediate(resolve));
+}
 
 const directory = new URL("..", import.meta.url);
 const scratch = mkdtempSync(join(tmpdir(), "vestra-window-test-"));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
 
 const running = new Set<() => Promise<void>>();
-async function start(host = new TestHost(), dataDirectory?: string) {
-  const started = await startPlugin(activate, { directory, host, ...(dataDirectory ? { dataDirectory } : {}) });
+/** Start in English (the source texts, and the player's English) unless a locale is given. */
+async function start(host = new TestHost(), dataDirectory?: string, locale: Locale = "en") {
+  const started = await startPlugin(activate, { directory, host, locale, ...(dataDirectory ? { dataDirectory } : {}) });
   const stop = async () => {
     running.delete(stop);
     await started.stop();
@@ -35,6 +85,7 @@ async function manual(host = new TestHost()) {
 }
 test.afterEach(async () => {
   for (const stop of [...running]) await stop();
+  timing.later = realLater;
 });
 
 type Video = { width: number; height: number; displayWidth?: number | null; displayHeight?: number | null };
@@ -85,9 +136,9 @@ test("geometry: scales, nearness, aspect fit, mini box, clamp notes, display siz
   assert.deepEqual(mini({ width: 640, height: 480 }), { width: 400, height: 300 });
   assert.deepEqual(mini({ width: 1080, height: 1920 }), { width: 169, height: 300 });
   const asked = { width: 3840, height: 2160 };
-  assert.equal(clampNote(asked, { ...asked, clamped: false }), "");
-  assert.equal(clampNote(asked, { width: 1600, height: 900, clamped: true }), "（已按屏幕缩小）");
-  assert.equal(clampNote({ width: 160, height: 90 }, { width: 318, height: 120, clamped: true }), "（已按最小尺寸放大）");
+  assert.equal(clampNote(asked, { ...asked, clamped: false }), null);
+  assert.equal(clampNote(asked, { width: 1600, height: 900, clamped: true }), "shrunk");
+  assert.equal(clampNote({ width: 160, height: 90 }, { width: 318, height: 120, clamped: true }), "enlarged");
   assert.deepEqual(displaySize({ width: 720, height: 576, displayWidth: 1024, displayHeight: 576 } as never), {
     width: 1024,
     height: 576,
@@ -124,7 +175,7 @@ test("settings: the spec defaults; a bad field falls back to its default, the ot
 const rows = (host: TestHost) =>
   [...host.commands.entries()].map(([id, c]) => [
     id,
-    c.declaration.path?.join(" ▶ "),
+    c.display.path.join(" ▶ "),
     c.declaration.order,
     c.declaration.group,
     c.declaration.bindings.join(","),
@@ -133,26 +184,26 @@ const rows = (host: TestHost) =>
 test("menus: paths, orders, groups and bindings as in the window chapter; no conflicts", async () => {
   const { host } = await start();
   assert.deepEqual(rows(host), [
-    ["mini", "屏幕 ▶ 迷你尺寸", 710, "screen", "`"],
-    ["pip", "屏幕 ▶ 画中画", 709, "screen", ""],
-    ["size.0.5", "屏幕 ▶ 0.5倍", 711, "screen-size", "1"],
-    ["size.1", "屏幕 ▶ 1倍", 712, "screen-size", "2"],
-    ["size.1.5", "屏幕 ▶ 1.5倍", 713, "screen-size", "3"],
-    ["size.2", "屏幕 ▶ 2倍", 714, "screen-size", "4"],
-    ["fit", "屏幕 ▶ 适应视频比例", 715, "screen-size", "8"],
-    ["auto.off", "屏幕 ▶ 开始播放时 ▶ 不调整", 716, "screen-auto", ""],
-    ["auto.0.5", "屏幕 ▶ 开始播放时 ▶ 0.5倍", 717, "screen-auto", ""],
-    ["auto.1", "屏幕 ▶ 开始播放时 ▶ 1倍", 718, "screen-auto", ""],
-    ["auto.1.5", "屏幕 ▶ 开始播放时 ▶ 1.5倍", 719, "screen-auto", ""],
-    ["auto.2", "屏幕 ▶ 开始播放时 ▶ 2倍", 720, "screen-auto", ""],
-    ["auto.fit", "屏幕 ▶ 开始播放时 ▶ 适应视频比例", 721, "screen-auto", ""],
-    ["auto.once", "屏幕 ▶ 开始播放时 ▶ 只调整一次", 722, "screen-auto-once", ""],
-    ["top.cycle", "屏幕 ▶ 置顶 ▶ 切换置顶方式", 725, "screen-top", "Ctrl+T"],
-    ["top.never", "屏幕 ▶ 置顶 ▶ 不置顶", 726, "screen-top-mode", ""],
-    ["top.always", "屏幕 ▶ 置顶 ▶ 总是置顶", 727, "screen-top-mode", ""],
-    ["top.playing", "屏幕 ▶ 置顶 ▶ 播放时置顶", 728, "screen-top-mode", ""],
-    ["top.fullscreen", "屏幕 ▶ 置顶 ▶ 全屏播放时置顶", 729, "screen-top-mode", ""],
-    ["hide-cursor", "播放 ▶ 播放时隐藏鼠标指针", 241, "playback-options", ""],
+    ["mini", "Screen ▶ Mini Size", 710, "screen", "`"],
+    ["pip", "Screen ▶ Picture-in-Picture", 709, "screen", ""],
+    ["size.0.5", "Screen ▶ 0.5×", 711, "screen-size", "1"],
+    ["size.1", "Screen ▶ 1×", 712, "screen-size", "2"],
+    ["size.1.5", "Screen ▶ 1.5×", 713, "screen-size", "3"],
+    ["size.2", "Screen ▶ 2×", 714, "screen-size", "4"],
+    ["fit", "Screen ▶ Fit to Video Aspect Ratio", 715, "screen-size", "8"],
+    ["auto.off", "Screen ▶ When Playback Starts ▶ Don't Resize", 716, "screen-auto", ""],
+    ["auto.0.5", "Screen ▶ When Playback Starts ▶ 0.5×", 717, "screen-auto", ""],
+    ["auto.1", "Screen ▶ When Playback Starts ▶ 1×", 718, "screen-auto", ""],
+    ["auto.1.5", "Screen ▶ When Playback Starts ▶ 1.5×", 719, "screen-auto", ""],
+    ["auto.2", "Screen ▶ When Playback Starts ▶ 2×", 720, "screen-auto", ""],
+    ["auto.fit", "Screen ▶ When Playback Starts ▶ Fit to Video Aspect Ratio", 721, "screen-auto", ""],
+    ["auto.once", "Screen ▶ When Playback Starts ▶ Only Once", 722, "screen-auto-once", ""],
+    ["top.cycle", "Screen ▶ Always on Top ▶ Cycle Mode", 725, "screen-top", "Ctrl+T"],
+    ["top.never", "Screen ▶ Always on Top ▶ Never", 726, "screen-top-mode", ""],
+    ["top.always", "Screen ▶ Always on Top ▶ Always", 727, "screen-top-mode", ""],
+    ["top.playing", "Screen ▶ Always on Top ▶ While Playing", 728, "screen-top-mode", ""],
+    ["top.fullscreen", "Screen ▶ Always on Top ▶ While Playing in Fullscreen", 729, "screen-top-mode", ""],
+    ["hide-cursor", "Playback ▶ Hide Pointer While Playing", 241, "playback-options", ""],
   ]);
   for (const id of ["size.1", "auto.1", "top.never"]) assert.equal(host.command(id).declaration.radio, true);
   assert.equal(host.command("auto.once").declaration.radio, false);
@@ -171,8 +222,8 @@ test("menus: paths, orders, groups and bindings as in the window chapter; no con
 test("menus: without system picture-in-picture there is no 画中画; ` is still 迷你尺寸", async () => {
   const { host } = await start(withoutPip());
   assert.equal(host.commands.has("pip"), false);
-  const mini = host.command("mini").declaration;
-  assert.deepEqual([mini.path?.join(" ▶ "), mini.order, mini.group, mini.bindings], ["屏幕 ▶ 迷你尺寸", 710, "screen", ["`"]]);
+  const mini = host.command("mini");
+  assert.deepEqual([mini.display.path.join(" ▶ "), mini.declaration.order, mini.declaration.group, mini.declaration.bindings], ["Screen ▶ Mini Size", 710, "screen", ["`"]]);
   assert.deepEqual(host.conflicts, []);
 });
 
@@ -268,7 +319,7 @@ test("G-02: the six choices and 只调整一次 by menu; OSD; kept after a resta
   const host = new TestHost();
   const { stop } = await start(host, data);
   await host.command("auto.2").run();
-  assert.equal(lastOsd(host), "开始播放时: 2倍");
+  assert.equal(lastOsd(host), "When playback starts: 2×");
   assert.deepEqual(
     ["auto.off", "auto.0.5", "auto.1", "auto.1.5", "auto.2", "auto.fit"].map((id) => state(host, id).checked),
     [false, false, false, false, true, false],
@@ -283,13 +334,13 @@ test("G-02: the six choices and 只调整一次 by menu; OSD; kept after a resta
   await play(host, { width: 1920, height: 1080 });
   assert.deepEqual(host.mainWindow.videoArea, { width: 800, height: 450 });
   await host.command("auto.off").run();
-  assert.equal(lastOsd(host), "开始播放时: 不调整窗口");
+  assert.equal(lastOsd(host), "When playback starts: Don't resize the window");
   const sent = host.sent("window.setVideoArea").length;
   await play(host, { width: 640, height: 360 });
   assert.equal(host.sent("window.setVideoArea").length, sent);
   await host.command("auto.1").run();
   await host.command("auto.once").run();
-  assert.equal(lastOsd(host), "开始播放时只调整一次: 开");
+  assert.equal(lastOsd(host), "Resize only once when playback starts: On");
   assert.equal(state(host, "auto.once").checked, true);
   await stop();
   assert.deepEqual(JSON.parse(readFileSync(join(data, "settings.json"), "utf8")), {
@@ -325,7 +376,7 @@ test("G-02: a source already playing at activation is sized", async () => {
 test("settings page: 选项 ▶ 播放 ▶ 窗口 shows and sets the same preferences as the menu", async () => {
   const { host } = await start();
   const page = host.settingsPage(PAGE_ID);
-  assert.deepEqual([page.category, page.title, page.order, page.file], ["playback", "窗口", 30, "ui/page.slint"]);
+  assert.deepEqual([page.category, page.title, page.order, page.file], ["playback", "Window", 30, "ui/page.slint"]);
   assert.deepEqual(
     [page.props["auto-index"], page.props["auto-once"], page.props["top-index"], page.props["hide-cursor"]],
     [2, false, 3, true],
@@ -356,21 +407,21 @@ test("H03: disabled without video and in fullscreen; enabled once the video size
   const { host } = await manual(withoutPip());
   assert.deepEqual(
     [state(host, "size.1").enabled, state(host, "size.1").reason, state(host, "fit").enabled, state(host, "mini").enabled],
-    [false, "没有视频", false, false],
+    [false, "No video", false, false],
   );
   await play(host, null); // audio only
-  assert.equal(state(host, "size.2").reason, "没有视频");
+  assert.equal(state(host, "size.2").reason, "No video");
   await play(host);
   assert.equal(state(host, "size.2").enabled, true);
   host.setMainWindow({ fullscreen: true });
   await host.settle();
-  assert.deepEqual([state(host, "size.2").enabled, state(host, "size.2").reason], [false, "全屏时不可用"]);
-  assert.deepEqual([state(host, "mini").enabled, state(host, "fit").reason], [false, "全屏时不可用"]);
+  assert.deepEqual([state(host, "size.2").enabled, state(host, "size.2").reason], [false, "Not available in fullscreen"]);
+  assert.deepEqual([state(host, "mini").enabled, state(host, "fit").reason], [false, "Not available in fullscreen"]);
   host.setMainWindow({ fullscreen: false });
   await host.settle();
   host.setSource({ phase: "empty" });
   await host.settle();
-  assert.equal(state(host, "size.2").reason, "没有视频");
+  assert.equal(state(host, "size.2").reason, "No video");
 });
 
 test("H03: still enabled after the video ends and plays again (restart passes through loading, or a seek back)", async () => {
@@ -383,7 +434,7 @@ test("H03: still enabled after the video ends and plays again (restart passes th
   // Space at EOF: the host restarts the same source (same id) through loading.
   host.setSource({ phase: "loading", position: null });
   await host.settle();
-  assert.equal(state(host, "size.1").reason, "没有视频");
+  assert.equal(state(host, "size.1").reason, "No video");
   host.setSource({ phase: "ready", position: 0 });
   await host.settle(30);
   assert.deepEqual([state(host, "size.1").enabled, state(host, "mini").enabled], [true, true]);
@@ -396,11 +447,34 @@ test("H03: still enabled after the video ends and plays again (restart passes th
 });
 
 test("H03: the size is read again while mpv has not reported it yet", async () => {
-  const { host } = await manual();
+  const host = new TestHost();
+  const clock = manualClock(host);
+  await manual(host);
   await play(host, null);
+  // The probe at `ready` found no video: one retry is waiting, after `probeRetry`.
+  assert.deepEqual(
+    clock.pending.map((entry) => entry.ms),
+    [timing.probeRetry],
+  );
+  assert.equal(state(host, "size.1").reason, "No video");
   setVideo(host, { width: 1280, height: 720 });
-  await host.settle(40);
+  await clock.fire();
   assert.equal(state(host, "size.1").enabled, true);
+  assert.equal(clock.pending.length, 0, "found: no more retries");
+});
+
+test("H03: the size is asked at most `probeAttempts` times", async () => {
+  const host = new TestHost();
+  const clock = manualClock(host);
+  await manual(host);
+  await play(host, null);
+  let retries = 0;
+  while (clock.pending.length > 0) {
+    retries++;
+    await clock.fire();
+  }
+  assert.equal(retries, timing.probeAttempts - 1);
+  assert.equal(state(host, "size.1").reason, "No video");
 });
 
 test("H03: 1–4 set the video area to the display size times 0.5–2; the radio dot follows", async () => {
@@ -409,7 +483,7 @@ test("H03: 1–4 set the video area to the display size times 0.5–2; the radio
   await host.press("2");
   await host.settle();
   assert.deepEqual(host.mainWindow.videoArea, { width: 1024, height: 576 });
-  assert.equal(lastOsd(host), "窗口: 1倍");
+  assert.equal(lastOsd(host), "Window: 1×");
   assert.deepEqual(
     ["size.0.5", "size.1", "size.1.5", "size.2"].map((id) => state(host, id).checked),
     [false, true, false, false],
@@ -417,7 +491,7 @@ test("H03: 1–4 set the video area to the display size times 0.5–2; the radio
   await host.press("3");
   await host.settle();
   assert.deepEqual(host.mainWindow.videoArea, { width: 1536, height: 864 });
-  assert.equal(lastOsd(host), "窗口: 1.5倍");
+  assert.equal(lastOsd(host), "Window: 1.5×");
   assert.equal(state(host, "size.1.5").checked, true);
   // The user drags the window: no dot.
   host.setMainWindow({ videoArea: { width: 900, height: 600 } });
@@ -443,29 +517,30 @@ test("H03: clamped sizes say why; refusals are shown", async () => {
   await host.press("1"); // 160×90 → the core's minimum
   await host.settle();
   assert.deepEqual(host.mainWindow.videoArea, { width: 318, height: 120 });
-  assert.equal(lastOsd(host), "窗口: 0.5倍（已按最小尺寸放大）");
+  assert.equal(lastOsd(host), "Window: 0.5× (enlarged to the minimum size)");
   host.handle("window.setVideoArea", () => ({ width: 560, height: 315, clamped: true }));
   await host.press("4");
   await host.settle();
-  assert.equal(lastOsd(host), "窗口: 2倍（已按屏幕缩小）");
+  assert.equal(lastOsd(host), "Window: 2× (shrunk to fit the screen)");
   host.handle("window.setVideoArea", () => {
-    throw new HostError("unavailable", "全屏时不可用");
+    throw new HostError("unavailable", "Not available in fullscreen");
   });
   await host.press("2");
   await host.settle();
-  assert.equal(lastOsd(host), "无法调整窗口：全屏时不可用");
+  assert.equal(lastOsd(host), "Cannot resize the window: Not available in fullscreen");
 });
 
 test("H03: busy while a resize is in flight", async () => {
   const { host } = await manual();
   await play(host);
-  let release!: () => void;
-  host.handle("window.setVideoArea", async (p) => {
-    await new Promise<void>((resolve) => (release = resolve));
-    return { width: Number(p.width), height: Number(p.height), clamped: false };
-  });
+  const { reached, release } = hold(host, "window.setVideoArea", (p) => ({
+    width: Number(p.width),
+    height: Number(p.height),
+    clamped: false,
+  }));
   const first = host.press("2");
-  await new Promise((resolve) => setTimeout(resolve, 20)); // settle() would wait for the held request
+  await reached; // settle() would wait for the held request
+  await published(() => state(host, "size.2").busy);
   assert.deepEqual([state(host, "size.2").busy, state(host, "fit").busy], [true, true]);
   await assert.rejects(host.press("4"));
   release();
@@ -484,11 +559,11 @@ test("H04: 8 keeps the width and takes the video's aspect ratio; a second press 
   await host.press("8");
   await host.settle();
   assert.deepEqual(host.mainWindow.videoArea, { width: 800, height: 450 });
-  assert.equal(lastOsd(host), "窗口: 适应视频比例");
+  assert.equal(lastOsd(host), "Window: Fit to video aspect ratio");
   await host.press("8");
   await host.settle();
   assert.equal(host.sent("window.setVideoArea").length, 1);
-  assert.equal(lastOsd(host), "窗口已适应视频比例");
+  assert.equal(lastOsd(host), "The window already fits the video aspect ratio");
 });
 
 // ------------------------------------------------------------------ H05 / IA-WIN-03
@@ -519,14 +594,14 @@ test("H05: modes by menu and Ctrl+T in `OnTopMode` order, OSD texts, playing mod
   await host.command("top.always").run();
   await host.settle();
   assert.equal(host.mainWindow.onTop, true);
-  assert.equal(lastOsd(host), "置顶: 总是");
+  assert.equal(lastOsd(host), "Always on top: Always");
   assert.deepEqual(
     ["top.never", "top.always", "top.playing", "top.fullscreen"].map((id) => state(host, id).checked),
     [false, true, false, false],
   );
   await host.press("Ctrl+T"); // always → playing, nothing playing
   await host.settle();
-  assert.equal(lastOsd(host), "置顶: 播放时");
+  assert.equal(lastOsd(host), "Always on top: While playing");
   assert.equal(host.mainWindow.onTop, false);
   await play(host);
   assert.equal(host.mainWindow.onTop, true);
@@ -547,14 +622,14 @@ test("H05: modes by menu and Ctrl+T in `OnTopMode` order, OSD texts, playing mod
   assert.equal(again.command("top.playing").state.checked, true);
   await again.press("Ctrl+T"); // playing → fullscreen
   await again.settle();
-  assert.equal(lastOsd(again), "置顶: 全屏播放时");
+  assert.equal(lastOsd(again), "Always on top: While playing in fullscreen");
   await again.press("Ctrl+T"); // fullscreen → never
   await again.settle();
-  assert.equal(lastOsd(again), "置顶: 关闭");
+  assert.equal(lastOsd(again), "Always on top: Off");
   await again.press("Ctrl+T");
   await again.settle();
   assert.equal(again.mainWindow.onTop, true);
-  assert.equal(lastOsd(again), "置顶: 总是");
+  assert.equal(lastOsd(again), "Always on top: Always");
 });
 
 test("H05: only changes are sent; a refusing (headless) player does not break the menu", async () => {
@@ -592,7 +667,7 @@ test("B30 / G-06: on by default; the toggle sets the core's cursor mode, says so
   await host.command("hide-cursor").run();
   await host.settle();
   assert.equal(host.mainWindow.cursorAutoHide, "fullscreen");
-  assert.equal(lastOsd(host), "播放时隐藏鼠标: 关");
+  assert.equal(lastOsd(host), "Hide pointer while playing: Off");
   assert.equal(state(host, "hide-cursor").checked, false);
   await stop();
 
@@ -603,7 +678,7 @@ test("B30 / G-06: on by default; the toggle sets the core's cursor mode, says so
   await again.command("hide-cursor").run();
   await again.settle();
   assert.equal(again.mainWindow.cursorAutoHide, "playing");
-  assert.equal(lastOsd(again), "播放时隐藏鼠标: 开");
+  assert.equal(lastOsd(again), "Hide pointer while playing: On");
 });
 
 // ------------------------------------------------------------------ 迷你尺寸 (IA-WIN-01, IA-WIN-02)
@@ -617,15 +692,15 @@ test("mini: ` shrinks to the mini box without floating, on every system; again r
     await host.settle();
     assert.deepEqual(host.mainWindow.videoArea, { width: 400, height: 225 });
     assert.equal(state(host, "mini").checked, true);
-    assert.equal(lastOsd(host), "迷你尺寸: 开");
+    assert.equal(lastOsd(host), "Mini size: On");
     assert.equal(state(host, "size.1").checked, false);
     assert.equal(host.mainWindow.pictureInPicture.active, false);
     await host.press("`");
     await host.settle();
     assert.deepEqual(host.mainWindow.videoArea, { width: 1280, height: 720 });
     assert.equal(state(host, "mini").checked, false);
-    assert.equal(lastOsd(host), "迷你尺寸: 关");
-    assert.deepEqual(host.sent("window.setAlwaysOnTop"), [], "IA-WIN-02: 迷你尺寸 never floats the window");
+    assert.equal(lastOsd(host), "Mini size: Off");
+    assert.deepEqual(host.sent("window.setAlwaysOnTop"), [], "IA-WIN-02: Mini Size never floats the window");
     assert.deepEqual(host.sent("window.setPictureInPicture"), []);
   }
 });
@@ -686,7 +761,7 @@ test("mini: can be left after the source lost its video", async () => {
 
 test("H07: 屏幕 ▶ 画中画 opens and closes picture-in-picture; the check follows; no resize, no floating", async () => {
   const { host } = await manual();
-  assert.deepEqual([state(host, "pip").enabled, state(host, "pip").reason], [false, "没有视频"]);
+  assert.deepEqual([state(host, "pip").enabled, state(host, "pip").reason], [false, "No video"]);
   await play(host, null);
   assert.equal(state(host, "pip").enabled, false);
   await play(host);
@@ -696,17 +771,17 @@ test("H07: 屏幕 ▶ 画中画 opens and closes picture-in-picture; the check f
   await host.settle();
   assert.equal(host.mainWindow.pictureInPicture.active, true);
   assert.equal(state(host, "pip").checked, true);
-  assert.equal(lastOsd(host), "画中画: 开");
+  assert.equal(lastOsd(host), "Picture-in-picture: On");
   await host.command("pip").run();
   await host.settle();
   assert.equal(host.mainWindow.pictureInPicture.active, false);
   assert.equal(state(host, "pip").checked, false);
-  assert.equal(lastOsd(host), "画中画: 关");
+  assert.equal(lastOsd(host), "Picture-in-picture: Off");
   assert.deepEqual(host.sent("window.setPictureInPicture").map((p) => p.on), [true, false]);
   assert.deepEqual(host.mainWindow.videoArea, area);
   assert.deepEqual(host.sent("window.setVideoArea"), []);
   assert.deepEqual(host.sent("window.setAlwaysOnTop"), []);
-  assert.equal(host.osd.filter((text) => text.startsWith("画中画")).length, 2);
+  assert.equal(host.osd.filter((text) => text.startsWith("Picture-in-picture")).length, 2);
 });
 
 test("H07: available in fullscreen (the core leaves it first)", async () => {
@@ -729,7 +804,7 @@ test("H07: closed from the small window or by the core: the check clears and it 
   host.setMainWindow({ pictureInPicture: { supported: true, active: false } });
   await host.settle(20);
   assert.equal(state(host, "pip").checked, false);
-  assert.equal(lastOsd(host), "画中画: 关");
+  assert.equal(lastOsd(host), "Picture-in-picture: Off");
 
   await host.command("pip").run();
   await host.settle();
@@ -737,7 +812,7 @@ test("H07: closed from the small window or by the core: the check clears and it 
   await play(host, null);
   host.setMainWindow({ pictureInPicture: { supported: true, active: false } });
   await host.settle(20);
-  assert.equal(lastOsd(host), "画中画: 关（没有视频）");
+  assert.equal(lastOsd(host), "Picture-in-picture: Off (no video)");
   assert.equal(state(host, "pip").enabled, false);
 });
 
@@ -745,15 +820,15 @@ test("H07: a refusal is shown and the check stays; busy is ignored", async () =>
   const { host } = await manual();
   await play(host);
   host.handle("window.setPictureInPicture", () => {
-    throw new HostError("failed", "系统拒绝");
+    throw new HostError("failed", "refused by the system");
   });
   await host.command("pip").run();
   await host.settle();
-  assert.equal(lastOsd(host), "无法进入画中画：系统拒绝");
+  assert.equal(lastOsd(host), "Cannot enter picture-in-picture: refused by the system");
   assert.equal(state(host, "pip").checked, false);
   const shown = host.osd.length;
   host.handle("window.setPictureInPicture", () => {
-    throw new HostError("busy", "正在切换");
+    throw new HostError("busy", "switching");
   });
   await host.command("pip").run();
   await host.settle();
@@ -763,23 +838,23 @@ test("H07: a refusal is shown and the check stays; busy is ignored", async () =>
 test("H07: busy while the switch is in flight; a second run sends nothing", async () => {
   const { host } = await manual();
   await play(host);
-  let release!: () => void;
-  host.handle("window.setPictureInPicture", async (p) => {
-    await new Promise<void>((resolve) => (release = resolve));
+  const { reached, release } = hold(host, "window.setPictureInPicture", (p) => {
     host.setMainWindow({ pictureInPicture: { supported: true, active: p.on === true } });
+    return null;
   });
   const first = host.command("pip").run();
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.deepEqual([state(host, "pip").busy, state(host, "pip").reason], [true, "正在切换画中画"]);
-  assert.deepEqual([state(host, "mini").busy, state(host, "mini").reason], [true, "正在切换画中画"]);
+  await reached;
+  await published(() => state(host, "pip").busy);
+  assert.deepEqual([state(host, "pip").busy, state(host, "pip").reason], [true, "Switching picture-in-picture"]);
+  assert.deepEqual([state(host, "mini").busy, state(host, "mini").reason], [true, "Switching picture-in-picture"]);
   await assert.rejects(host.command("pip").run());
   await assert.rejects(host.press("`"));
   release();
   await first;
   await host.settle();
   assert.equal(host.sent("window.setPictureInPicture").length, 1);
-  assert.deepEqual([state(host, "pip").busy, state(host, "pip").checked, lastOsd(host)], [false, true, "画中画: 开"]);
-  assert.equal(host.osd.filter((text) => text.startsWith("画中画")).length, 1);
+  assert.deepEqual([state(host, "pip").busy, state(host, "pip").checked, lastOsd(host)], [false, true, "Picture-in-picture: On"]);
+  assert.equal(host.osd.filter((text) => text.startsWith("Picture-in-picture")).length, 1);
 });
 
 test("H07: 画中画 appears once the main window reports support, and goes away with it; ` stays 迷你尺寸", async () => {
@@ -787,14 +862,14 @@ test("H07: 画中画 appears once the main window reports support, and goes away
   assert.equal(host.commands.has("pip"), false);
   host.setMainWindow({ pictureInPicture: { supported: true, active: false } });
   await host.settle();
-  const pip = host.command("pip").declaration;
-  assert.deepEqual([pip.path?.join(" ▶ "), pip.order, pip.group, pip.bindings], ["屏幕 ▶ 画中画", 709, "screen", []]);
-  assert.equal(host.command("mini").declaration.path?.join(" ▶ "), "屏幕 ▶ 迷你尺寸");
+  const pip = host.command("pip");
+  assert.deepEqual([pip.display.path.join(" ▶ "), pip.declaration.order, pip.declaration.group, pip.declaration.bindings], ["Screen ▶ Picture-in-Picture", 709, "screen", []]);
+  assert.equal(host.command("mini").display.path.join(" ▶ "), "Screen ▶ Mini Size");
   assert.deepEqual(host.conflicts, []);
   await play(host);
   await host.press("`");
   await host.settle();
-  assert.deepEqual(host.sent("window.setPictureInPicture"), [], "` is 迷你尺寸");
+  assert.deepEqual(host.sent("window.setPictureInPicture"), [], "` is Mini Size");
   assert.equal(state(host, "mini").checked, true);
   // The window goes away again (headless): no 画中画.
   host.setMainWindow({ pictureInPicture: { supported: false, active: false } });
@@ -826,10 +901,181 @@ test("IA-WIN-01: 画中画 and 迷你尺寸 exclude each other: each leaves the 
   await host.command("pip").run();
   await host.settle();
   host.handle("window.setPictureInPicture", () => {
-    throw new HostError("failed", "系统拒绝");
+    throw new HostError("failed", "refused by the system");
   });
   await host.press("`");
   await host.settle();
   assert.deepEqual([state(host, "mini").checked, state(host, "pip").checked], [false, true]);
-  assert.equal(lastOsd(host), "无法退出画中画：系统拒绝");
+  assert.equal(lastOsd(host), "Cannot exit picture-in-picture: refused by the system");
+});
+
+// ------------------------------------------------------------------ zh-Hans
+
+test("zh-Hans: the menus, the settings page and the OSD texts are the Chinese ones from before", async () => {
+  const { host } = await start(new TestHost(), undefined, "zh-Hans");
+  assert.deepEqual(
+    [...host.commands.entries()].map(([id, c]) => [id, c.display.path.join(" ▶ ")]),
+    [
+      ["mini", "屏幕 ▶ 迷你尺寸"],
+      ["pip", "屏幕 ▶ 画中画"],
+      ["size.0.5", "屏幕 ▶ 0.5倍"],
+      ["size.1", "屏幕 ▶ 1倍"],
+      ["size.1.5", "屏幕 ▶ 1.5倍"],
+      ["size.2", "屏幕 ▶ 2倍"],
+      ["fit", "屏幕 ▶ 适应视频比例"],
+      ["auto.off", "屏幕 ▶ 开始播放时 ▶ 不调整"],
+      ["auto.0.5", "屏幕 ▶ 开始播放时 ▶ 0.5倍"],
+      ["auto.1", "屏幕 ▶ 开始播放时 ▶ 1倍"],
+      ["auto.1.5", "屏幕 ▶ 开始播放时 ▶ 1.5倍"],
+      ["auto.2", "屏幕 ▶ 开始播放时 ▶ 2倍"],
+      ["auto.fit", "屏幕 ▶ 开始播放时 ▶ 适应视频比例"],
+      ["auto.once", "屏幕 ▶ 开始播放时 ▶ 只调整一次"],
+      ["top.cycle", "屏幕 ▶ 置顶 ▶ 切换置顶方式"],
+      ["top.never", "屏幕 ▶ 置顶 ▶ 不置顶"],
+      ["top.always", "屏幕 ▶ 置顶 ▶ 总是置顶"],
+      ["top.playing", "屏幕 ▶ 置顶 ▶ 播放时置顶"],
+      ["top.fullscreen", "屏幕 ▶ 置顶 ▶ 全屏播放时置顶"],
+      ["hide-cursor", "播放 ▶ 播放时隐藏鼠标指针"],
+    ],
+  );
+  assert.equal(host.settingsPage(PAGE_ID).title, "窗口");
+
+  // G-02, H05, B30 by menu.
+  await host.command("auto.2").run();
+  await host.command("auto.fit").run();
+  await host.command("auto.off").run();
+  await host.command("auto.once").run();
+  await host.command("auto.once").run();
+  await host.command("top.never").run();
+  for (let i = 0; i < 4; i++) await host.press("Ctrl+T");
+  await host.command("hide-cursor").run();
+  await host.command("hide-cursor").run();
+  await host.settle();
+  assert.deepEqual(host.osd.splice(0), [
+    "开始播放时: 2倍",
+    "开始播放时: 适应视频比例",
+    "开始播放时: 不调整窗口",
+    "开始播放时只调整一次: 开",
+    "开始播放时只调整一次: 关",
+    "置顶: 关闭",
+    "置顶: 总是",
+    "置顶: 播放时",
+    "置顶: 全屏播放时",
+    "置顶: 关闭",
+    "播放时隐藏鼠标: 关",
+    "播放时隐藏鼠标: 开",
+  ]);
+
+  // H03 / H04 / mini.
+  host.setMainWindow({ videoArea: { width: 800, height: 800 } });
+  await play(host, { width: 320, height: 180 });
+  await host.press("1"); // 160×90 → the core's minimum
+  await host.settle();
+  host.handle("window.setVideoArea", () => ({ width: 560, height: 315, clamped: true }));
+  await host.press("4");
+  await host.settle();
+  host.handle("window.setVideoArea", (p) => ({ width: Number(p.width), height: Number(p.height), clamped: false }));
+  await host.press("2");
+  await host.settle();
+  host.setMainWindow({ videoArea: { width: 800, height: 800 } });
+  await host.press("8");
+  await host.settle();
+  host.setMainWindow({ videoArea: { width: 800, height: 450 } });
+  await host.press("8"); // already fits
+  await host.settle();
+  host.setMainWindow({ videoArea: { width: 800, height: 800 } });
+  host.handle("window.setVideoArea", () => ({ width: 400, height: 225, clamped: true }));
+  await host.press("8");
+  await host.settle();
+  host.setMainWindow({ videoArea: { width: 800, height: 800 } });
+  host.handle("window.setVideoArea", () => ({ width: 900, height: 506, clamped: true }));
+  await host.press("8");
+  await host.settle();
+  host.handle("window.setVideoArea", (p) => ({ width: Number(p.width), height: Number(p.height), clamped: false }));
+  await host.press("`");
+  await host.settle();
+  await host.press("`");
+  await host.settle();
+  host.handle("window.setVideoArea", () => {
+    throw new HostError("unavailable", "全屏时不可用");
+  });
+  await host.press("2");
+  await host.settle();
+  assert.deepEqual(host.osd.splice(0), [
+    "窗口: 0.5倍（已按最小尺寸放大）",
+    "窗口: 2倍（已按屏幕缩小）",
+    "窗口: 1倍",
+    "窗口: 适应视频比例",
+    "窗口已适应视频比例",
+    "窗口: 适应视频比例（已按屏幕缩小）",
+    "窗口: 适应视频比例（已按最小尺寸放大）",
+    "迷你尺寸: 开",
+    "迷你尺寸: 关",
+    "无法调整窗口：全屏时不可用",
+  ]);
+
+  // H07.
+  await host.command("pip").run();
+  await host.settle();
+  await host.command("pip").run();
+  await host.settle();
+  await host.command("pip").run();
+  await host.settle();
+  host.setMainWindow({ pictureInPicture: { supported: true, active: false } });
+  await host.settle(20);
+  await host.command("pip").run();
+  await host.settle();
+  await play(host, null);
+  host.setMainWindow({ pictureInPicture: { supported: true, active: false } });
+  await host.settle(20);
+  await play(host);
+  host.handle("window.setPictureInPicture", () => {
+    throw new HostError("failed", "系统拒绝");
+  });
+  await host.command("pip").run();
+  await host.settle();
+  host.setMainWindow({ pictureInPicture: { supported: true, active: true } });
+  await host.settle();
+  await host.command("pip").run();
+  await host.settle();
+  assert.deepEqual(host.osd.splice(0), [
+    "画中画: 开",
+    "画中画: 关",
+    "画中画: 开",
+    "画中画: 关",
+    "画中画: 开",
+    "画中画: 关（没有视频）",
+    "无法进入画中画：系统拒绝",
+    "无法退出画中画：系统拒绝",
+  ]);
+});
+
+test("zh-Hans: the reasons and the settings page texts are translated", async () => {
+  const { host } = await start(new TestHost(), undefined, "zh-Hans");
+  for (const text of [
+    "No video",
+    "Not available in fullscreen",
+    "Resizing the window",
+    "Switching picture-in-picture",
+    "Window size when playback starts",
+    "Off",
+    "Fit aspect ratio",
+    "Only once (only the first video of this run)",
+    "Always on top",
+    "Never",
+    "Always",
+    "While playing",
+    "Playing in fullscreen",
+    "Mouse pointer",
+    "Hide the pointer while playing",
+  ])
+    assert.notEqual(host.translate(text), text, text);
+  assert.deepEqual(
+    ["No video", "Not available in fullscreen", "Resizing the window", "Switching picture-in-picture"].map((text) => host.translate(text)),
+    ["没有视频", "全屏时不可用", "正在调整窗口", "正在切换画中画"],
+  );
+  assert.equal(
+    host.translate("Each new file is resized once, when its video size is known, keeping the window's top left corner. Not in fullscreen, mini size or picture-in-picture; after you drag the window while it plays, that file is left alone."),
+    "每个新文件拿到视频尺寸时调整一次，保持窗口左上角。全屏、迷你尺寸、画中画时不调整；播放中拖动过窗口后，这个文件不再调整。",
+  );
 });

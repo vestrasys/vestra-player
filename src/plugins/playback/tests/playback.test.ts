@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { Text } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 import { parseTime, rateText, time } from "../format.ts";
@@ -7,7 +8,9 @@ import { parseTime, rateText, time } from "../format.ts";
 const directory = new URL("..", import.meta.url);
 /** The player registers the basic actions itself (`host.coreCommands`). */
 const newHost = () => new TestHost();
-const start = (host = newHost()) => startPlugin(activate, { directory, host });
+/** In Chinese: the texts the plugin showed before English became the source. */
+const start = (host = newHost(), locale: "en" | "zh-Hans" = "zh-Hans") =>
+  startPlugin(activate, { directory, host, locale });
 /** A ready 100-second source opened by someone else. */
 function withMedia(host = newHost()) {
   host.openElsewhere("/movie.mp4");
@@ -44,8 +47,9 @@ test("time input and labels", () => {
 
 test("menu follows the allocation table: positions, groups, radio items, bindings, repeat", async () => {
   const { host, stop } = await start();
+  // The menu as a Chinese user sees it: the texts before English became the source.
   assert.deepEqual(
-    own(host).map(([id, { declaration: d }]) => [id, d.path.join("/"), d.order, d.group, d.radio, d.bindings, d.repeat]),
+    own(host).map(([id, { declaration: d, display }]) => [id, display.path.join("/"), d.order, d.group, d.radio, d.bindings, d.repeat]),
     [
       ["open", "打开文件…", 100, "open", false, ["Ctrl+O", "F3"], false],
       ["open-url", "打开/打开链接…", 110, "open", false, ["Ctrl+U"], false],
@@ -73,15 +77,50 @@ test("menu follows the allocation table: positions, groups, radio items, binding
       ["forward-4", "播放/跳转/前进300秒", 217, "step", false, ["Ctrl+Alt+ArrowRight"], false],
     ],
   );
+  // The declared English paths, in the player's menus and submenus (a text value as its source and args).
+  const english = (segment: string | Text) =>
+    typeof segment === "string" ? segment : segment.$vestraText.replace("{}", String(Object.values(segment.args ?? {})[0]));
+  assert.deepEqual(
+    own(host).map(([id, { declaration: d }]) => [id, d.path.map(english).join("/")]),
+    [
+      ["open", "Open File…"],
+      ["open-url", "@open/Open URL…"],
+      ["reopen", "Reopen Current/Last File"],
+      ["copy-name", "Copy to Clipboard/File Name"],
+      ["copy-folder", "Copy to Clipboard/Folder Path"],
+      ["copy-path", "Copy to Clipboard/Full Path"],
+      ["keyframe-back", "@playback/Seek/Previous Keyframe"],
+      ["keyframe-forward", "@playback/Seek/Next Keyframe"],
+      ["jump", "@playback/Jump to Time…"],
+      ["jump-start", "@playback/Seek/Jump to Start"],
+      ["time-jump", "@playback/Seek/Seek Steps…"],
+      ["rate-05", "@playback/Speed/0.5×"],
+      ["rate-15", "@playback/Speed/1.5×"],
+      ["rate-20", "@playback/Speed/2×"],
+      ["rate-custom", "@playback/Speed/Custom…"],
+      ["prevent-sleep", "@playback/Disable Screen Saver While Playing"],
+      ["hover-time", "@playback/Show Time on Seek Bar Hover"],
+      ["hover-thumbnail", "@playback/Show Thumbnail on Seek Bar Hover"],
+      ["backward-2", "@playback/Seek/Back 30 s"],
+      ["forward-2", "@playback/Seek/Forward 30 s"],
+      ["backward-3", "@playback/Seek/Back 60 s"],
+      ["forward-3", "@playback/Seek/Forward 60 s"],
+      ["backward-4", "@playback/Seek/Back 300 s"],
+      ["forward-4", "@playback/Seek/Forward 300 s"],
+    ],
+  );
   // No command clashes with the core's basic actions.
   assert.deepEqual(host.conflicts, []);
+  const reasonOf = (id: string) => {
+    const { enabled, reason } = host.command(id).state;
+    return [enabled, reason === null ? null : host.translate(reason)];
+  };
   const reason = "当前来源不支持此操作";
   for (const id of ["jump", "jump-start", "backward-2", "forward-4", "rate-05", "rate-custom", "keyframe-back"])
-    assert.deepEqual([host.command(id).state.enabled, host.command(id).state.reason], [false, reason], id);
+    assert.deepEqual(reasonOf(id), [false, reason], id);
   // First run: nothing played yet, so nothing to reopen.
-  assert.deepEqual([host.command("reopen").state.enabled, host.command("reopen").state.reason], [false, "没有可重开的文件"]);
-  for (const id of ["copy-name", "copy-folder", "copy-path"])
-    assert.deepEqual([host.command(id).state.enabled, host.command(id).state.reason], [false, "没有打开的文件"], id);
+  assert.deepEqual(reasonOf("reopen"), [false, "没有可重开的文件"]);
+  for (const id of ["copy-name", "copy-folder", "copy-path"]) assert.deepEqual(reasonOf(id), [false, "没有打开的文件"], id);
   assert.equal(host.command("prevent-sleep").state.checked, true);
   // IA-PB-01: the hover time is off by default.
   assert.equal(host.command("hover-time").state.checked, false);
@@ -143,11 +182,30 @@ test("the basic actions are the core's: the keys reach it with or without this p
   assert.equal(lastOsd(host), "已暂停");
 });
 
+test("in English the menus, reasons and messages are the source texts", async () => {
+  const { host, stop } = await start(withMedia(), "en");
+  assert.deepEqual(host.command("open").display.path, ["Open File…"]);
+  assert.deepEqual(host.command("open-url").display.path, ["Open", "Open URL…"]);
+  assert.deepEqual(host.command("backward-2").display.path, ["Playback", "Seek", "Back 30 s"]);
+  assert.deepEqual(host.command("rate-05").display.path, ["Playback", "Speed", "0.5×"]);
+  assert.deepEqual(host.command("copy-path").display.path, ["Copy to Clipboard", "Full Path"]);
+  await host.command("rate-05").run();
+  assert.equal(lastOsd(host), "Speed: 0.5x");
+  await host.press("Ctrl+ArrowRight");
+  await host.settle(80);
+  assert.equal(lastOsd(host), "Forward 30 s: 00:30 / 01:40");
+  await host.press("F4");
+  await host.settle();
+  assert.equal(host.translate(host.command("jump").state.reason!), "Not supported by the current source");
+  await stop();
+});
+
 test("open asks for a file (Ctrl+O, F3), is busy while selecting, and cancelling changes nothing", async () => {
   const { host, stop } = await start();
   host.dialogAnswers.push(null);
   await host.press("Ctrl+O");
-  assert.equal(host.sent("dialogs.open")[0]!.title, "打开媒体");
+  assert.equal(host.sent("dialogs.open")[0]!.title, "Open Media");
+  assert.equal(host.translate("Open Media"), "打开媒体");
   assert.equal(host.sent("source.submit").length, 0);
   host.dialogAnswers.push(["/a.mp4"]);
   await host.press("F3");
@@ -161,8 +219,15 @@ test("open asks for a file (Ctrl+O, F3), is busy while selecting, and cancelling
   host.handle("dialogs.open", () => new Promise((resolve) => (answer = (paths) => resolve(paths ? { cancelled: false, paths } : { cancelled: true, paths: [] }))));
   host.mounted().emit("action", "open");
   await until(() => host.command("open").state.busy);
-  assert.equal(host.sent("dialogs.open").at(-1)!.title, "打开媒体（将替换当前来源）");
-  assert.deepEqual(host.command("open").state, { enabled: false, checked: null, busy: true, reason: "当前来源不支持此操作" });
+  assert.equal(host.sent("dialogs.open").at(-1)!.title, "Open Media (replaces the current source)");
+  assert.equal(host.translate("Open Media (replaces the current source)"), "打开媒体（将替换当前来源）");
+  assert.deepEqual(host.command("open").state, {
+    enabled: false,
+    checked: null,
+    busy: true,
+    reason: "Not supported by the current source",
+  });
+  assert.equal(host.translate("Not supported by the current source"), "当前来源不支持此操作");
   assert.equal(host.mounted().props["can-open"], false);
   answer(null);
   await host.settle();
@@ -217,7 +282,11 @@ test("stop closes the source (button and F4)", async () => {
   assert.equal(host.source.phase, "empty");
   assert.deepEqual(host.coreRuns, ["stop"]);
   assert.equal(host.mounted().props["can-stop"], false);
-  await assert.rejects(host.press("F4")); // disabled now
+  // disabled now: the key shows the reason on the video and runs nothing (SDK 1.5.12, as the player)
+  const shown = host.osd.length;
+  assert.equal(await host.press("F4"), "reason");
+  assert.deepEqual(host.coreRuns, ["stop"]);
+  assert.deepEqual(host.osd.slice(shown), ["当前来源不支持此操作"]);
   await stop();
 });
 
@@ -383,7 +452,10 @@ test("relative seeks accumulate from the pending target, clamp to the source and
 test("previous/next are the core's: PageUp/PageDown and right-click on back/forward", async () => {
   const { host, stop } = await start(withMedia());
   const bar = host.mounted();
-  await assert.rejects(host.press("PageDown"));
+  // no next item: 下一个 is disabled, so PageDown shows why and runs nothing (SDK 1.5.12, as the player)
+  assert.equal(await host.press("PageDown"), "reason");
+  assert.deepEqual(host.coreRuns, []);
+  assert.deepEqual(host.osd, ["没有下一个"]);
   host.sequence = { canNext: true, canPrevious: true };
   host.setSource({ sequence: { next: true, previous: true } } as never);
   await host.settle();
@@ -476,7 +548,8 @@ test("G-13b the volume slider runs 0–100 (volume before unmute); a louder volu
   host.setSource({ output: { volume: 150, muted: false } });
   await host.settle();
   assert.equal(bar.props.volume, 100);
-  assert.equal(bar.props["tip-volume"], "音量: 150%");
+  assert.equal(bar.props["volume-percent"], 150);
+  assert.equal(host.translate("Volume: {}%", [150]), "音量: 150%");
   await stop();
 });
 
@@ -500,7 +573,7 @@ test("speed: the fixed rates are radio items next to the core's 正常, Z/X/C ar
   await stop();
 });
 
-test("跳转到 (G) is a separate window bound to the source it opened for", async () => {
+test("Jump to Time (G) is a separate window bound to the source it opened for", async () => {
   const { host, stop } = await start(withMedia());
   host.setSource({ position: 30 });
   await host.settle();
@@ -509,14 +582,18 @@ test("跳转到 (G) is a separate window bound to the source it opened for", asy
   const window = host.window("playback-jump");
   assert.equal(window.file, "ui/prompt.slint");
   assert.equal(window.visible, true);
-  assert.equal(window.props["window-title"], "跳转到");
-  assert.equal(window.props["group-title"], "时间定位(时:分:秒.毫秒)");
-  assert.equal(window.props["action-label"], "定位");
+  // ui/prompt.slint words the window for its kind.
+  assert.equal(window.props.kind, "jump");
+  assert.deepEqual(
+    ["Jump to Time", "Time (h:mm:ss.ms)", "Go"].map((text) => host.translate(text)),
+    ["跳转到", "时间定位(时:分:秒.毫秒)", "定位"],
+  );
   assert.equal(window.props.value, "00:30");
   assert.equal(host.mounted().props["can-seek"], true); // the bar stays as it was: no editor row
   window.emit("confirm", "2:00");
   await host.settle();
-  assert.equal(window.props.message, "请输入来源时长范围内的HH:MM:SS.mmm");
+  assert.equal(window.props.notice, "time-range");
+  assert.equal(host.translate("Enter a time within the source's duration as HH:MM:SS.mmm"), "请输入来源时长范围内的HH:MM:SS.mmm");
   assert.equal(window.visible, true);
   window.emit("confirm", "1:05");
   await host.settle(80);
@@ -529,7 +606,7 @@ test("跳转到 (G) is a separate window bound to the source it opened for", asy
   await host.settle();
   assert.equal(window.visible, true);
   assert.equal(window.props.value, "01:05");
-  assert.equal(window.props.message, "");
+  assert.equal(window.props.notice, "");
   // A pause by someone else does not invalidate it; the jump applies to the current state.
   host.setSource({ paused: true, stamp: { ...host.source.stamp, intentVersion: host.source.stamp.intentVersion + 1 } });
   await host.settle();
@@ -546,7 +623,8 @@ test("跳转到 (G) is a separate window bound to the source it opened for", asy
   const before = seeks(host).length;
   window.emit("confirm", "0:20");
   await host.settle(80);
-  assert.equal(window.props.message, "来源已变化，请重新打开");
+  assert.equal(window.props.notice, "stale");
+  assert.equal(host.translate("The source changed; open this window again"), "来源已变化，请重新打开");
   assert.equal(seeks(host).length, before);
 
   // Cancel (Escape) hides it.
@@ -562,14 +640,19 @@ test("custom speed uses its own small window, validated, conditional on the curr
   await host.command("rate-custom").run();
   await host.settle();
   const window = host.window("playback-rate");
-  assert.equal(window.props["window-title"], "自定义速度");
+  assert.equal(window.props.kind, "rate");
+  assert.deepEqual(
+    ["Custom Speed", "Speed (0.25–4×)", "OK"].map((text) => host.translate(text)),
+    ["自定义速度", "播放速度(0.25–4倍)", "确定"],
+  );
   assert.equal(window.props.value, "1");
   window.emit("confirm", "9");
   await host.settle();
-  assert.equal(window.props.message, "速度范围为0.25–4倍");
+  assert.equal(window.props.notice, "rate-range");
+  assert.equal(host.translate("Speed must be between 0.25× and 4×"), "速度范围为0.25–4倍");
   window.emit("confirm", "");
   await host.settle();
-  assert.equal(window.props.message, "速度范围为0.25–4倍");
+  assert.equal(window.props.notice, "rate-range");
   window.emit("confirm", "1.25");
   await host.settle();
   assert.equal(host.source.rate, 1.25);

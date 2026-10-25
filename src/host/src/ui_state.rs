@@ -121,10 +121,14 @@ impl SidebarSlot {
     }
 }
 
-/// `plugin.appearance` (R-S2): the palette, kept when the choosing plugin stops.
+/// `plugin.appearance` (R-S2): the palette, kept when the choosing plugin
+/// stops; and the interface language (`"system"` or a locale of
+/// `i18n::LOCALES`, absent = system), read once at start-up.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Appearance {
     pub theme: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
 }
 
 /// The options window (R-H7): the page it showed last, `<manifest id>/<page id>`.
@@ -200,6 +204,10 @@ impl UiState {
             .ok()
             .map(|a| Appearance {
                 theme: crate::theme::known(&a.theme).into(),
+                // A language this player does not have follows the system.
+                language: a
+                    .language
+                    .filter(|l| crate::i18n::valid_preference(l) && l != crate::i18n::SYSTEM),
             });
         let settings = serde_json::from_value::<Settings>(field("settings")).ok();
         // The per-panel entries of older players become the slot's state;
@@ -354,6 +362,7 @@ mod tests {
         // A palette other than the default survives a restart.
         store.state.appearance = Some(Appearance {
             theme: "vestra-light".into(),
+            language: Some("ja".into()),
         });
         store.state.settings = Some(Settings {
             last_page: Some("vestra.preferences/appearance".into()),

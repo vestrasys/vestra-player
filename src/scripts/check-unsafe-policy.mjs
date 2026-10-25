@@ -28,6 +28,7 @@ import { readFileSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
 
 const UNSAFE_CRATES = new Map([
+  ["vestra-open-files", "src/host/unsafe/open"],
   ["vestra-pip", "src/host/unsafe/pip"],
   ["vestra-gpu-render", "src/host/unsafe/render"],
   ["vestra-win32", "src/host/unsafe/win32"],

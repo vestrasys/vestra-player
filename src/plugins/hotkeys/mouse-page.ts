@@ -1,9 +1,9 @@
 import type { BindingInfo, Plugin } from "@vestra-player/sdk";
-import { commandText, MODIFIERS, MOUSE, refKey, winner } from "./keys.ts";
-import { type BindingsModel, failureText } from "./model.ts";
+import { commandText, inputOf, type Message, MODIFIERS, MOUSE, message, refKey, winner } from "./keys.ts";
+import type { Osd } from "./main.ts";
+import { type BindingsModel, failure } from "./model.ts";
 
-const NONE = "（无）";
-/** The J02 page in the options window (category 快捷键与鼠标). */
+/** The J02 page in the options window (category Keys and Mouse). */
 export const MOUSE_PAGE = "hotkeys.mouse";
 
 /** `Ctrl+Mouse:WheelUp` for a modifier choice and a mouse input. */
@@ -11,30 +11,31 @@ export const mouseInput = (modifier: number, input: string) =>
   MODIFIERS[modifier] ? `${MODIFIERS[modifier]}+${input}` : input;
 
 /**
- * 鼠标 (J02), a page of the options window: for each mouse input (under the chosen modifier) the
+ * Mouse (J02), a page of the options window: for each mouse input (under the chosen modifier) the
  * global command it runs. Choosing a command first takes the input from
- * whoever holds it, then adds it to the chosen one (（无） only takes it).
- * 默认 gives the input back to the command that declares it.
+ * whoever holds it, then adds it to the chosen one ((None) only takes it).
+ * Default gives the input back to the command that declares it. Texts are
+ * in ui/mouse.slint; this passes data.
  */
 export class MousePage {
   readonly #plugin: Plugin;
   readonly #model: BindingsModel;
-  readonly #osd: (text: string) => void;
+  readonly #osd: Osd;
   readonly #page;
   #modifier = 0;
   /** Row being picked for, or null. */
   #picking: number | null = null;
   #filter = "";
-  #message = { text: "", warn: false };
+  #message = message();
 
-  constructor(plugin: Plugin, model: BindingsModel, osd: (text: string) => void) {
+  constructor(plugin: Plugin, model: BindingsModel, osd: Osd) {
     this.#plugin = plugin;
     this.#model = model;
     this.#osd = osd;
     const page = (this.#page = plugin.settings.page("ui/mouse.slint", {
       id: MOUSE_PAGE,
       category: "input",
-      title: "鼠标",
+      title: "Mouse",
       order: 20,
     }));
     page.on("setModifier", (index: number) => {
@@ -59,14 +60,14 @@ export class MousePage {
     page.bind(() => this.#props());
   }
 
-  /** 设置 ▶ 鼠标…: the options window on this page, with a fresh list. */
+  /** Settings ▸ Mouse…: the options window on this page, with a fresh list. */
   async show() {
-    await this.#model.reload().catch((error) => this.#say(failureText(error), true));
+    await this.#model.reload().catch((error) => this.#say(failure(error)));
     await this.#plugin.settings.show(MOUSE_PAGE);
   }
 
-  #say(text: string, warn = false) {
-    this.#message = { text, warn };
+  #say(next: Message) {
+    this.#message = next;
   }
 
   #global(): BindingInfo[] {
@@ -89,12 +90,12 @@ export class MousePage {
   }
 
   rows() {
-    return MOUSE.map((mouse) => {
+    return MOUSE.map((mouse, index) => {
       const input = mouseInput(this.#modifier, mouse.input);
       const owner = winner(this.#model.commands, input, "global");
       return {
-        label: mouse.label,
-        command: owner ? commandText(owner) : NONE,
+        input: index,
+        command: owner ? commandText(owner) : "",
         bound: !!owner,
         resettable: !this.#isDefault(input),
       };
@@ -110,26 +111,20 @@ export class MousePage {
       row === null
         ? []
         : [
-            { key: "", text: NONE, selected: !owner },
+            { key: "", text: "", selected: !owner },
             ...this.#global()
               .map((c) => ({ key: refKey(c), text: commandText(c), selected: !!owner && refKey(owner) === refKey(c) }))
               .sort((a, b) => a.text.localeCompare(b.text, "zh-Hans-CN")),
           ].filter((item) => !filter || item.key === "" || item.text.toLowerCase().includes(filter));
     return {
-      modifiers: MODIFIERS.map((m) => m || "无"),
+      modifiers: [...MODIFIERS],
       modifier: this.#modifier,
       rows: this.rows(),
       picking: row !== null,
-      pickTitle: row === null ? "" : `「${this.#inputName(row)}」触发的命令：`,
+      pickInput: inputOf(input ?? ""),
       pickItems: items,
-      message: this.#message.text,
-      messageWarn: this.#message.warn,
+      message: this.#message,
     };
-  }
-
-  #inputName(row: number) {
-    const modifier = MODIFIERS[this.#modifier];
-    return `${modifier ? `${modifier}+` : ""}${MOUSE[row]!.label}`;
   }
 
   async #choose(key: string) {
@@ -138,11 +133,11 @@ export class MousePage {
     if (row === null) return;
     const input = mouseInput(this.#modifier, MOUSE[row]!.input);
     const target = key ? (this.#global().find((c) => refKey(c) === key) ?? null) : null;
-    if (key && !target) return this.#say("该命令已不存在", true);
+    if (key && !target) return this.#say(message("missing", { warn: true }));
     await this.#move(row, input, target);
   }
 
-  /** 默认: the declaring command gets the input back; anyone else loses it. */
+  /** Default: the declaring command gets the input back; anyone else loses it. */
   async #default(row: number) {
     const mouse = MOUSE[row];
     if (!mouse) return;
@@ -160,7 +155,7 @@ export class MousePage {
       }
       this.#updated(row, input);
     } catch (error) {
-      this.#say(failureText(error), true);
+      this.#say(failure(error));
       await this.#model.reload().catch(() => {});
     }
   }
@@ -170,14 +165,22 @@ export class MousePage {
       await this.#model.move(input, this.#claimers(input), target, (each) => each === input);
       this.#updated(row, input);
     } catch (error) {
-      this.#say(failureText(error), true);
+      this.#say(failure(error));
     }
   }
 
   #updated(row: number, input: string) {
     const owner = winner(this.#model.commands, input, "global");
-    const text = `${this.#inputName(row)} = ${owner ? commandText(owner) : NONE}`;
-    this.#say(`已更新：${text}`);
-    this.#osd(`鼠标动作已更新：${text}`);
+    const command = owner ? commandText(owner) : "";
+    this.#say(message(owner ? "mouse-updated" : "mouse-updated-none", { input: inputOf(input), text: command }));
+    const { text } = this.#plugin.i18n;
+    const modifier = MODIFIERS[this.#modifier];
+    const mouse = text(MOUSE[row]!.label);
+    const name = modifier ? text("{}+{}", [modifier, mouse]) : mouse;
+    this.#osd(
+      owner
+        ? this.#plugin.osd.show("Mouse action updated: {0} = {1}", [name, command])
+        : this.#plugin.osd.show("Mouse action updated: {} = (none)", [name]),
+    );
   }
 }

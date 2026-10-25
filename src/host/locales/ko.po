@@ -1,0 +1,438 @@
+# Reviewed by an AI reviewer on 2026-10-25
+# Korean: machine translated (x-machine), awaiting human review.
+msgid ""
+msgstr ""
+"Language: ko\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#. The top-level menu, and the link input's confirm button.
+#: src/commands.rs:327 ui/vestra/widgets.slint:192
+#, x-machine
+msgid "Open"
+msgstr "열기"
+
+#: src/commands.rs:328 src/settings_window.rs:27
+#, x-machine
+msgid "Playback"
+msgstr "재생"
+
+#: src/commands.rs:329 src/settings_window.rs:28
+#, x-machine
+msgid "Subtitles"
+msgstr "자막"
+
+#: src/commands.rs:330 src/settings_window.rs:29
+#, x-machine
+msgid "Video"
+msgstr "비디오"
+
+#: src/commands.rs:331 src/settings_window.rs:30
+#, x-machine
+msgid "Audio"
+msgstr "오디오"
+
+#: src/commands.rs:332
+#, x-machine
+msgid "Screen"
+msgstr "화면"
+
+#: src/commands.rs:333
+#, x-machine
+msgid "Settings"
+msgstr "설정"
+
+#: src/commands.rs:334
+#, x-machine
+msgid "Speed"
+msgstr "속도"
+
+#: src/commands.rs:335
+#, x-machine
+msgid "Seek"
+msgstr "탐색"
+
+#: src/composition.rs:39
+#, x-machine
+msgid "bottom bar"
+msgstr "하단 바"
+
+#: src/composition.rs:40
+#, x-machine
+msgid "sidebar"
+msgstr "사이드바"
+
+#: src/composition.rs:41
+#, x-machine
+msgid "video backdrop"
+msgstr "비디오 배경"
+
+#: src/confirm.rs:47 ui/vestra/widgets.slint:193
+#, x-machine
+msgid "Cancel"
+msgstr "취소"
+
+#. A menu item; {} is a number of seconds.
+#: src/core_actions.rs:142
+#, x-machine
+msgid "Forward {} s"
+msgstr "{}초 앞으로"
+
+#. A menu item; {} is a number of seconds.
+#: src/core_actions.rs:147
+#, x-machine
+msgid "Back {} s"
+msgstr "{}초 뒤로"
+
+#: src/core_actions.rs:174
+#, x-machine
+msgid "Normal"
+msgstr "보통"
+
+#: src/core_actions.rs:184 src/settings_window.rs:218 src/settings_window.rs:218
+#, x-machine
+msgid "Close"
+msgstr "닫기"
+
+#: src/core_actions.rs:190
+#, x-machine
+msgid "Play/Pause"
+msgstr "재생/일시 정지"
+
+#: src/core_actions.rs:201
+#, x-machine
+msgid "Previous"
+msgstr "이전"
+
+#: src/core_actions.rs:212
+#, x-machine
+msgid "Next"
+msgstr "다음"
+
+#: src/core_actions.rs:223
+#, x-machine
+msgid "Previous Frame"
+msgstr "이전 프레임"
+
+#: src/core_actions.rs:234
+#, x-machine
+msgid "Next Frame"
+msgstr "다음 프레임"
+
+#: src/core_actions.rs:268
+#, x-machine
+msgid "Slower 0.1"
+msgstr "0.1 느리게"
+
+#: src/core_actions.rs:279
+#, x-machine
+msgid "Faster 0.1"
+msgstr "0.1 빠르게"
+
+#: src/core_actions.rs:290
+#, x-machine
+msgid "Volume +"
+msgstr "볼륨 +"
+
+#: src/core_actions.rs:301
+#, x-machine
+msgid "Volume −"
+msgstr "볼륨 −"
+
+#: src/core_actions.rs:31
+#, x-machine
+msgid "Not supported by the current source"
+msgstr "현재 소스에서는 지원되지 않습니다"
+
+#: src/core_actions.rs:310
+#, x-machine
+msgid "Mute"
+msgstr "음소거"
+
+#: src/core_actions.rs:339
+#, x-machine
+msgid "No previous item"
+msgstr "이전 항목이 없습니다"
+
+#: src/core_actions.rs:340
+#, x-machine
+msgid "No next item"
+msgstr "다음 항목이 없습니다"
+
+#. On-screen message after Play/Pause resumes playback.
+#: src/core_actions.rs:389 src/core_actions.rs:393
+#, x-machine
+msgid "Playing"
+msgstr "재생 중"
+
+#: src/core_actions.rs:395
+#, x-machine
+msgid "Paused"
+msgstr "일시 정지됨"
+
+#. On-screen message: the step in seconds, then the new position and the duration.
+#: src/core_actions.rs:412
+#, x-machine
+msgid "Forward {} s: {} / {}"
+msgstr "{}초 앞으로: {} / {}"
+
+#. On-screen message: the step in seconds, then the new position and the duration.
+#: src/core_actions.rs:414
+#, x-machine
+msgid "Back {} s: {} / {}"
+msgstr "{}초 뒤로: {} / {}"
+
+#: src/core_actions.rs:428
+#, x-machine
+msgid "Speed: {}x"
+msgstr "재생 속도: {}x"
+
+#: src/core_actions.rs:445
+#, x-machine
+msgid "Volume: {}%"
+msgstr "볼륨: {}%"
+
+#: src/core_actions.rs:454
+#, x-machine
+msgid "Mute: Off"
+msgstr "음소거: 끔"
+
+#: src/core_actions.rs:456
+#, x-machine
+msgid "Mute: On"
+msgstr "음소거: 켬"
+
+#: src/core_actions.rs:471 src/pip.rs:192 src/pip.rs:299
+#, x-machine
+msgid "No video"
+msgstr "비디오가 없습니다"
+
+#: src/core_actions.rs:474
+#, x-machine
+msgid "The current source cannot step back a frame"
+msgstr "현재 소스에서는 이전 프레임으로 이동할 수 없습니다"
+
+#: src/core_actions.rs:477
+#, x-machine
+msgid "Already at the last frame"
+msgstr "이미 마지막 프레임입니다"
+
+#: src/core_actions.rs:480
+#, x-machine
+msgid "Already at the first frame"
+msgstr "이미 첫 프레임입니다"
+
+#: src/core_actions.rs:585
+#, x-machine
+msgid "Next frame: {}"
+msgstr "다음 프레임: {}"
+
+#: src/core_actions.rs:587
+#, x-machine
+msgid "Previous frame: {}"
+msgstr "이전 프레임: {}"
+
+#: src/main.rs:140
+#, x-machine
+msgid "The sidebar holds at most {} tabs"
+msgstr "사이드바에는 탭을 최대 {}개까지 둘 수 있습니다"
+
+#: src/main.rs:150
+#, x-machine
+msgid "Previous/Next is provided by {}"
+msgstr "이전/다음은 {}에서 제공합니다"
+
+#: src/main.rs:2604
+#, x-machine
+msgid "Toggle Fullscreen"
+msgstr "전체 화면"
+
+#: src/main.rs:2607
+#, x-machine
+msgid "Leave Fullscreen"
+msgstr "전체 화면 종료"
+
+#: src/main.rs:2609
+#, x-machine
+msgid "Quit"
+msgstr "종료"
+
+#: src/main.rs:3029
+#, x-machine
+msgid "Not available in fullscreen"
+msgstr "전체 화면에서는 사용할 수 없습니다"
+
+#. A plugin's id, then what was refused (on the OSD).
+#: src/main.rs:3176
+#, x-machine
+msgid "{}: {}"
+msgstr "{}: {}"
+
+#. Between two warnings of one plugin.
+#: src/main.rs:3204
+#, x-machine
+msgid "; "
+msgstr "; "
+
+#. {0}: “File type .nes” or a site such as https://example.com; {1}: a plugin id.
+#: src/main.rs:3220 src/source_resolvers.rs:73
+#, x-machine
+msgid "{} is resolved by {}"
+msgstr "{}: {}에서 처리합니다"
+
+#: src/main.rs:3221
+#, x-machine
+msgid "{} not taken over: resolved by {}"
+msgstr "{}: 넘겨받지 않음 ({}에서 처리)"
+
+#: src/main.rs:3656
+#, x-machine
+msgid "Previous/Next not taken over: provided by {}"
+msgstr "이전/다음을 넘겨받지 않음: {}에서 제공합니다"
+
+#: src/main.rs:3776 src/main.rs:3783
+#, x-machine
+msgid "Panel not shown: {}"
+msgstr "패널을 표시하지 않음: {}"
+
+#: src/main.rs:3880
+#, x-machine
+msgid "Select a path"
+msgstr "경로 선택"
+
+#: src/package_manager.rs:1104
+#, x-machine
+msgid "“{}”: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed"
+msgstr "“{}”: vestra.로 시작하는 ID는 플레이어 내장 플러그인용으로 예약되어 있어 설치할 수 없습니다"
+
+#: src/pip.rs:162
+#, x-machine
+msgid "Picture-in-picture is switching"
+msgstr "PIP 모드 전환 중"
+
+#: src/pip.rs:188
+#, x-machine
+msgid "Picture-in-picture is not supported on this system"
+msgstr "이 시스템에서는 PIP 모드를 지원하지 않습니다"
+
+#: src/pip.rs:281
+#, x-machine
+msgid "The picture-in-picture window was closed"
+msgstr "PIP 창이 닫혔습니다"
+
+#: src/pip.rs:289
+#, x-machine
+msgid "Cannot enter picture-in-picture: {}"
+msgstr "PIP 모드로 전환할 수 없습니다: {}"
+
+#: src/pip.rs:313
+#, x-machine
+msgid "Picture-in-picture did not start"
+msgstr "PIP 모드가 시작되지 않았습니다"
+
+#: src/platform/macos.rs:104
+#, x-machine
+msgid "Picture-in-picture needs macOS 14 or later"
+msgstr "PIP 모드를 사용하려면 macOS 14 이상이 필요합니다"
+
+#: src/renderer.rs:17
+#, x-machine
+msgid "libmpv · GPU rendering (OpenGL)"
+msgstr "libmpv · GPU 렌더링 (OpenGL)"
+
+#: src/renderer.rs:20
+#, x-machine
+msgid "libmpv · software rendering"
+msgstr "libmpv · 소프트웨어 렌더링"
+
+#: src/settings_window.rs:156 src/settings_window.rs:156
+#, x-machine
+msgid "Options"
+msgstr "옵션"
+
+#: src/settings_window.rs:204 src/settings_window.rs:204
+#, x-machine
+msgid "Nothing to set here"
+msgstr "설정할 항목이 없습니다"
+
+#: src/settings_window.rs:26
+#, x-machine
+msgid "General"
+msgstr "일반"
+
+#: src/settings_window.rs:31
+#, x-machine
+msgid "Keys and Mouse"
+msgstr "키보드 및 마우스"
+
+#: src/settings_window.rs:32
+#, x-machine
+msgid "Appearance"
+msgstr "모양"
+
+#: src/settings_window.rs:33
+#, x-machine
+msgid "Plugins"
+msgstr "플러그인"
+
+#: src/settings_window.rs:34
+#, x-machine
+msgid "Other"
+msgstr "기타"
+
+#. {0}: “bottom bar”, “sidebar” or “video backdrop”; {1}: a plugin id.
+#: src/slot_claims.rs:77
+#, x-machine
+msgid "The {} is used by {}"
+msgstr "{}: {}에서 사용 중입니다"
+
+#. A file extension, such as nes.
+#: src/source_resolvers.rs:156
+#, x-machine
+msgid "File type .{}"
+msgstr "파일 형식 .{}"
+
+#: src/ui_markdown.rs:27
+#, x-machine
+msgid "… (too long, cut off)"
+msgstr "… (너무 길어서 잘림)"
+
+#: ui/host.slint:110
+#, x-machine
+msgid "Playing in picture-in-picture"
+msgstr "PIP 모드로 재생 중"
+
+#: ui/menu-view.slint:329
+#, x-machine
+msgid "(No commands available)"
+msgstr "(사용할 수 있는 명령 없음)"
+
+#: ui/sidebar-tabs.slint:104
+#, x-machine
+msgid "Attach to the main window"
+msgstr "기본 창에 붙이기"
+
+#: ui/sidebar-tabs.slint:104
+#, x-machine
+msgid "Detach as a floating window"
+msgstr "플로팅 창으로 분리"
+
+#: ui/sidebar-tabs.slint:113
+#, x-machine
+msgid "Close the sidebar"
+msgstr "사이드바 닫기"
+
+#: ui/vestra/markdown.slint:142
+#, x-machine
+msgid "Copy"
+msgstr "복사"
+
+#: ui/vestra/markdown.slint:163
+#, x-machine
+msgid "[Image]"
+msgstr "[이미지]"
+
+#: ui/vestra/markdown.slint:163
+#, x-machine
+msgid "[Image] {}"
+msgstr "[이미지] {}"

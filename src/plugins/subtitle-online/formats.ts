@@ -1,43 +1,49 @@
 // Subtitle files → what the player accepts (D18): UTF-8 SRT, or ASS/SSA as is.
-// The same file is in subtitle-online (plugins share no code); keep the two copies equal.
+// The same file is in subtitle-online (plugins share no code); keep the two copies equal
+// (here the errors and notes are status ids, messages.ts, since the i18n migration).
 import { open } from "node:fs/promises";
+import { Failure } from "./messages.ts";
+import type { NoteId } from "./messages.ts";
 
 /** Largest file read from disk. */
 export const MAX_FILE = 8 * 1024 * 1024;
 /** The player's upload limit (reference §9). */
 export const MAX_UPLOAD = 2 * 1024 * 1024;
 
-/** 默认编码 choices for files that are neither BOM-marked nor valid UTF-8; GB18030 first. */
+/**
+ * Default encoding choices for files that are neither BOM-marked nor valid
+ * UTF-8; GB18030 first. Their names are in ui/settings.slint, in this order.
+ */
 export const ENCODINGS = [
-  { id: "gb18030", label: "简体中文 (GB18030)" },
-  { id: "big5", label: "繁体中文 (Big5)" },
-  { id: "shift_jis", label: "日文 (Shift_JIS)" },
-  { id: "euc-kr", label: "韩文 (EUC-KR)" },
-  { id: "windows-1252", label: "西欧 (Windows-1252)" },
-  { id: "windows-1251", label: "西里尔 (Windows-1251)" },
-  { id: "iso-8859-1", label: "西欧 (ISO-8859-1)" },
+  { id: "gb18030" },
+  { id: "big5" },
+  { id: "shift_jis" },
+  { id: "euc-kr" },
+  { id: "windows-1252" },
+  { id: "windows-1251" },
+  { id: "iso-8859-1" },
 ] as const;
 export type Encoding = (typeof ENCODINGS)[number]["id"];
 export const DEFAULT_ENCODING: Encoding = "gb18030";
 export const isEncoding = (value: unknown): value is Encoding => ENCODINGS.some((e) => e.id === value);
 
-export const NOTE_FONTS = "已忽略字幕内嵌字体";
-export const NOTE_ENCODING = "字幕编码可能不正确，可在字幕设置中更改默认编码";
-export const NOTE_FPS = "视频帧率未知，已按 23.976 换算 MicroDVD 字幕";
+export const NOTE_FONTS: NoteId = "noteFonts";
+export const NOTE_ENCODING: NoteId = "noteEncoding";
+export const NOTE_FPS: NoteId = "noteFps";
 
 /** One track to upload. SAMI files with several languages give one per language. */
 export type Converted = { format: "srt" | "ass"; bytes: Buffer; language: string | null };
-export type Conversion = { kind: string; tracks: Converted[]; notes: string[] };
+export type Conversion = { kind: string; tracks: Converted[]; notes: NoteId[] };
 
-/** Read a regular file of 1 byte – 8 MiB. Errors are short Chinese sentences. */
+/** Read a regular file of 1 byte – 8 MiB. Errors are `Failure`s (messages.ts). */
 export async function readFileBytes(path: string): Promise<Buffer> {
   const file = await open(path, "r").catch(() => {
-    throw new Error("无法读取字幕文件。");
+    throw new Failure("readFailed");
   });
   try {
     const stat = await file.stat();
     if (!stat.isFile() || stat.size < 1 || stat.size > MAX_FILE)
-      throw new Error("字幕文件须为 1 字节至 8 MiB 的普通文件。");
+      throw new Failure("notRegular");
     const buffer = Buffer.alloc(MAX_FILE + 1);
     let length = 0;
     while (length < buffer.length) {
@@ -45,7 +51,7 @@ export async function readFileBytes(path: string): Promise<Buffer> {
       if (!result.bytesRead) break;
       length += result.bytesRead;
     }
-    if (length < 1 || length > MAX_FILE) throw new Error("字幕文件为空或超过 8 MiB。");
+    if (length < 1 || length > MAX_FILE) throw new Failure("emptyOrLarge");
     return buffer.subarray(0, length);
   } finally {
     await file.close();
@@ -82,15 +88,15 @@ const isBitmap = (b: Uint8Array) =>
 /**
  * Detect the format by content (the file name is only a hint) and convert:
  * SRT and ASS/SSA pass through (ASS without [Fonts]/[Graphics]); WebVTT, SAMI
- * and MicroDVD become SRT. Throws a Chinese sentence for unsupported files.
+ * and MicroDVD become SRT. Throws a `Failure` for unsupported files.
  */
 export function convert(bytes: Uint8Array, options: { fallback: Encoding; fps: number | null }): Conversion {
-  if (isBitmap(bytes)) throw new Error("暂不支持图形字幕文件");
+  if (isBitmap(bytes)) throw new Failure("bitmap");
   const decoded = decode(bytes, options.fallback);
   const text = decoded.text.replace(/^﻿/, "");
-  const notes: string[] = decoded.suspicious ? [NOTE_ENCODING] : [];
-  if (/^\s*# VobSub index file/i.test(text)) throw new Error("暂不支持图形字幕文件");
-  if (!decoded.utf8 && /\u0000/.test(text)) throw new Error("暂不支持图形字幕文件");
+  const notes: NoteId[] = decoded.suspicious ? [NOTE_ENCODING] : [];
+  if (/^\s*# VobSub index file/i.test(text)) throw new Failure("bitmap");
+  if (!decoded.utf8 && /\u0000/.test(text)) throw new Failure("bitmap");
   const keep = () => (decoded.utf8 ? Buffer.from(bytes) : Buffer.from(text, "utf8"));
   let kind: string;
   let tracks: Converted[];
@@ -113,10 +119,10 @@ export function convert(bytes: Uint8Array, options: { fallback: Encoding; fps: n
   } else if (SRT_TIME.test(text)) {
     kind = "SRT";
     tracks = [{ format: "srt", bytes: keep(), language: null }];
-  } else throw new Error("无法识别的字幕格式");
+  } else throw new Failure("unknownFormat");
   tracks = tracks.filter((t) => t.bytes.length > 0);
-  if (!tracks.length) throw new Error("字幕文件里没有字幕。");
-  if (tracks.some((t) => t.bytes.length > MAX_UPLOAD)) throw new Error("字幕文件超过 2 MiB");
+  if (!tracks.length) throw new Failure("noCues");
+  if (tracks.some((t) => t.bytes.length > MAX_UPLOAD)) throw new Failure("tooLarge");
   return { kind, tracks, notes };
 }
 

@@ -1,0 +1,273 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: vestra.window 0.1.4\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: main.ts:65
+msgid "Mini Size"
+msgstr ""
+
+#: main.ts:72 main.ts:99
+msgid "Switching picture-in-picture"
+msgstr ""
+
+#: main.ts:72 main.ts:99 main.ts:128 main.ts:140
+msgid "Resizing the window"
+msgstr ""
+
+#: main.ts:72 main.ts:128 main.ts:140
+msgid "Not available in fullscreen"
+msgstr ""
+
+#: main.ts:72 main.ts:99 main.ts:128 main.ts:140 pip.ts:42 size.ts:124
+msgid "No video"
+msgstr ""
+
+#: main.ts:93
+msgid "Picture-in-Picture"
+msgstr ""
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: main.ts:120 main.ts:159 ui/page.slint:99
+msgid "0.5×"
+msgstr ""
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: main.ts:120 main.ts:159 ui/page.slint:99
+msgid "1×"
+msgstr ""
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: main.ts:120 main.ts:159 ui/page.slint:99
+msgid "1.5×"
+msgstr ""
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: main.ts:120 main.ts:159 ui/page.slint:99
+msgid "2×"
+msgstr ""
+
+#: main.ts:134 main.ts:159
+msgid "Fit to Video Aspect Ratio"
+msgstr ""
+
+#: main.ts:148
+msgid "When playback starts: Don't resize the window"
+msgstr ""
+
+#: main.ts:149
+msgid "When playback starts: Fit to video aspect ratio"
+msgstr ""
+
+#: main.ts:150
+msgid "When playback starts: {}×"
+msgstr ""
+
+#: main.ts:154
+msgid "Resize only once when playback starts: On"
+msgstr ""
+
+#: main.ts:154
+msgid "Resize only once when playback starts: Off"
+msgstr ""
+
+#: main.ts:159 main.ts:169
+msgid "When Playback Starts"
+msgstr ""
+
+#: main.ts:159
+msgid "Don't Resize"
+msgstr ""
+
+#: main.ts:169
+msgid "Only Once"
+msgstr ""
+
+#: main.ts:180
+msgid "Always on top: Off"
+msgstr ""
+
+#: main.ts:180
+msgid "Always on top: Always"
+msgstr ""
+
+#: main.ts:180
+msgid "Always on top: While playing"
+msgstr ""
+
+#: main.ts:180
+msgid "Always on top: While playing in fullscreen"
+msgstr ""
+
+#: main.ts:184 main.ts:193
+msgid "Always on Top"
+msgstr ""
+
+#: main.ts:184
+msgid "Cycle Mode"
+msgstr ""
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: main.ts:193 ui/page.slint:121
+msgid "Never"
+msgstr ""
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: main.ts:193 ui/page.slint:121
+msgid "Always"
+msgstr ""
+
+#: main.ts:193
+msgid "While Playing"
+msgstr ""
+
+#: main.ts:193
+msgid "While Playing in Fullscreen"
+msgstr ""
+
+#: main.ts:206
+msgid "Hide pointer while playing: On"
+msgstr ""
+
+#: main.ts:206
+msgid "Hide pointer while playing: Off"
+msgstr ""
+
+#: main.ts:211
+msgid "Hide Pointer While Playing"
+msgstr ""
+
+#: main.ts:219 ui/page.slint:90
+msgid "Window"
+msgstr ""
+
+#: manifest.json
+msgid "Main Window"
+msgstr ""
+
+#: manifest.json
+msgid "Window sizes by video scale, always on top, mini size and picture-in-picture"
+msgstr ""
+
+#: manifest.json
+msgid ""
+"Resizes the window to 0.5–2× the video or fits it to the video's aspect ratio, and resizes it automatically when playback starts; never on top, always on top, on top while playing or while playing in fullscreen; mini size and the system's picture-in-picture; hides the pointer while playing.\n"
+"The items are in the context menu under Screen."
+msgstr ""
+
+#: manifest.json
+msgid "screen"
+msgstr ""
+
+#: manifest.json
+msgid "window"
+msgstr ""
+
+#: manifest.json
+msgid "always on top"
+msgstr ""
+
+#: pip.ts:49
+msgid "Picture-in-picture: On"
+msgstr ""
+
+#: pip.ts:49 pip.ts:68
+msgid "Picture-in-picture: Off"
+msgstr ""
+
+#: pip.ts:53
+msgid "Cannot enter picture-in-picture: {}"
+msgstr ""
+
+#: pip.ts:53
+msgid "Cannot exit picture-in-picture: {}"
+msgstr ""
+
+#: pip.ts:68
+msgid "Picture-in-picture: Off (no video)"
+msgstr ""
+
+#: size.ts:47
+msgid "Window: {}× (shrunk to fit the screen)"
+msgstr ""
+
+#: size.ts:47
+msgid "Window: {}× (enlarged to the minimum size)"
+msgstr ""
+
+#: size.ts:47
+msgid "Window: {}×"
+msgstr ""
+
+#: size.ts:64
+msgid "The window already fits the video aspect ratio"
+msgstr ""
+
+#: size.ts:72
+msgid "Window: Fit to video aspect ratio (shrunk to fit the screen)"
+msgstr ""
+
+#: size.ts:72
+msgid "Window: Fit to video aspect ratio (enlarged to the minimum size)"
+msgstr ""
+
+#: size.ts:72
+msgid "Window: Fit to video aspect ratio"
+msgstr ""
+
+#: size.ts:87
+msgid "Mini size: Off"
+msgstr ""
+
+#: size.ts:97
+msgid "Mini size: On"
+msgstr ""
+
+#: size.ts:137
+msgid "Cannot resize the window: {}"
+msgstr ""
+
+#: ui/page.slint:96
+msgid "Window size when playback starts"
+msgstr ""
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: ui/page.slint:99
+msgid "Off"
+msgstr ""
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: ui/page.slint:99
+msgid "Fit aspect ratio"
+msgstr ""
+
+#: ui/page.slint:105
+msgid "Only once (only the first video of this run)"
+msgstr ""
+
+#: ui/page.slint:111
+msgid "Each new file is resized once, when its video size is known, keeping the window's top left corner. Not in fullscreen, mini size or picture-in-picture; after you drag the window while it plays, that file is left alone."
+msgstr ""
+
+#: ui/page.slint:118
+msgid "Always on top"
+msgstr ""
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: ui/page.slint:121
+msgid "While playing"
+msgstr ""
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: ui/page.slint:121
+msgid "Playing in fullscreen"
+msgstr ""
+
+#: ui/page.slint:126
+msgid "Mouse pointer"
+msgstr ""
+
+#: ui/page.slint:129
+msgid "Hide the pointer while playing"
+msgstr ""

@@ -1,27 +1,28 @@
 import type { BindingRef, JsonStore, Plugin } from "@vestra-player/sdk";
 import { exempt, refKey, sameRef } from "./keys.ts";
+import type { Osd } from "./main.ts";
 import type { BindingsModel } from "./model.ts";
 import { type IgnoreRecord, jsonStore, readRecord } from "./store.ts";
 
 /**
- * J03 忽略默认快捷键, as ruled in R-K2: no player switch. While on, every
+ * J03 Ignore Default Shortcuts, as ruled in R-K2: no player switch. While on, every
  * command that still runs on its defaults gets an empty override, and
  * ignore-defaults.json records which overrides this plugin wrote. Turning
  * it off resets only those (a command the user changed meanwhile left the
  * record). Commands that appear later (a plugin loaded or enabled) are
- * caught on `bindings.onChange`. 退出 and 退出全屏 are never ignored.
+ * caught on `bindings.onChange`. Quit and Leave Fullscreen are never ignored.
  */
 export class IgnoreDefaults {
   readonly #plugin: Plugin;
   readonly #model: BindingsModel;
-  readonly #osd: (text: string) => void;
+  readonly #osd: Osd;
   readonly #store: JsonStore<IgnoreRecord>;
   #record: IgnoreRecord;
   #queue: Promise<void> = Promise.resolve();
   #again = false;
   #pending = false;
 
-  constructor(plugin: Plugin, model: BindingsModel, osd: (text: string) => void) {
+  constructor(plugin: Plugin, model: BindingsModel, osd: Osd) {
     this.#plugin = plugin;
     this.#model = model;
     this.#osd = osd;
@@ -34,7 +35,7 @@ export class IgnoreDefaults {
   get enabled() {
     return this.#record.enabled;
   }
-  /** The command's defaults are switched off by J03 (shown as 已忽略). */
+  /** The command's defaults are switched off by J03 (shown as Ignored). */
   ignores(ref: BindingRef) {
     return this.#record.written.some((each) => sameRef(each, ref));
   }
@@ -43,10 +44,10 @@ export class IgnoreDefaults {
   async toggle() {
     if (this.enabled) return this.set(false);
     const answer = await this.#plugin.dialogs.confirm({
-      message: "忽略默认快捷键？",
+      message: "Ignore default shortcuts?",
       detail:
-        "忽略后，只有你在快捷键设置中修改过的按键生效，Space、方向键等默认按键都将失效。「退出」（⌘Q）与「退出全屏」（Esc）不受影响，可随时从「设置 ▶ 忽略默认快捷键」关闭。",
-      confirm: "忽略",
+        "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Leave Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts.",
+      confirm: "Ignore",
     });
     if (answer.confirmed) await this.set(true);
   }
@@ -54,7 +55,7 @@ export class IgnoreDefaults {
   async set(enabled: boolean) {
     this.#save({ ...this.#record, enabled });
     await this.sync();
-    this.#osd(`忽略默认快捷键：${enabled ? "开" : "关"}`);
+    this.#osd(this.#plugin.osd.show(enabled ? "Ignore default shortcuts: On" : "Ignore default shortcuts: Off"));
   }
 
   /** The user changed this command: its override is theirs now. */

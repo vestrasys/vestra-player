@@ -1,0 +1,817 @@
+# Reviewed by an AI reviewer on 2026-10-25
+msgid ""
+msgstr ""
+"Language: ko\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Searching sends the file name keywords and the file hash to the chosen service."
+msgstr "검색하면 파일 이름 키워드와 파일 해시가 선택한 서비스로 전송됩니다."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "First enter an API key for OpenSubtitles under Services (free at opensubtitles.com), or turn on Assrt and enter its token."
+msgstr "먼저 서비스에서 OpenSubtitles API 키를 입력하거나(opensubtitles.com에서 무료로 발급), Assrt를 켜고 토큰을 입력하세요."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No media to load subtitles into"
+msgstr "자막을 불러올 미디어가 없습니다"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No media to load subtitles into; you can search by title."
+msgstr "자막을 불러올 미디어가 없습니다. 제목으로 검색할 수 있습니다."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The media changed; no subtitle was loaded."
+msgstr "미디어가 바뀌어 자막을 불러오지 않았습니다."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Cancelled."
+msgstr "취소했습니다."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The player refused the subtitle (file too large or invalid)."
+msgstr "플레이어가 자막을 거부했습니다 (파일이 너무 크거나 올바르지 않음)."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Subtitles cannot be loaded into the current media."
+msgstr "현재 미디어에는 자막을 불러올 수 없습니다."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Loading the subtitle failed."
+msgstr "자막을 불러오지 못했습니다."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Enter a title, then search."
+msgstr "제목을 입력한 뒤 검색하세요."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Searching…"
+msgstr "검색 중…"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Subtitles found: {}"
+msgstr "찾은 자막: {}개"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No subtitles found; change the title and search again"
+msgstr "자막을 찾지 못했습니다. 제목을 바꿔 다시 검색하세요"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Downloading subtitle…"
+msgstr "자막 다운로드 중…"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Downloading subtitles ({}/{})…"
+msgstr "자막 다운로드 중 ({}/{})…"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Opened subtitle: {}"
+msgstr "자막을 열었습니다: {}"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Subtitle loaded, but it could not be saved in the video's folder"
+msgstr "자막을 불러왔지만 비디오 폴더에 저장하지 못했습니다"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Saved to {}"
+msgstr "{}에 저장했습니다"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Subtitles added: {}"
+msgstr "추가한 자막: {}개"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Subtitles saved: {} (in {})"
+msgstr "저장한 자막: {}개 ({})"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No place to save to."
+msgstr "저장할 위치가 없습니다."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Not saved."
+msgstr "저장하지 않았습니다."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Resets at {}"
+msgstr "{}에 초기화됨"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Online subtitle loaded automatically: {}"
+msgstr "온라인 자막을 자동으로 불러왔습니다: {}"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "This archive format (rar, 7z) is not supported yet; download a zip or a single subtitle file."
+msgstr "이 압축 형식(rar, 7z)은 아직 지원하지 않습니다. zip이나 자막 파일 하나를 다운로드하세요."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The archive has no subtitle files."
+msgstr "압축 파일에 자막 파일이 없습니다."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The archive is damaged"
+msgstr "압축 파일이 손상되었습니다"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Write preferred languages like zh-CN, zh-TW, en (at most 5)"
+msgstr "선호 언어를 ko, en, ja처럼 입력하세요 (최대 5개)"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Testing…"
+msgstr "테스트 중…"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Testing OpenSubtitles…"
+msgstr "OpenSubtitles 테스트 중…"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Testing Assrt…"
+msgstr "Assrt 테스트 중…"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Saved ({})"
+msgstr "저장했습니다 ({})"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Could not save: {}"
+msgstr "저장할 수 없습니다: {}"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Key entered"
+msgstr "키 입력됨"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Token entered"
+msgstr "토큰 입력됨"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No key"
+msgstr "키 없음"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No token"
+msgstr "토큰 없음"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Enter the API key first"
+msgstr "먼저 API 키를 입력하세요"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Key and account are valid"
+msgstr "키와 계정이 유효합니다"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Key and account are valid; downloads left today: {}"
+msgstr "키와 계정이 유효합니다. 오늘 남은 다운로드: {}회"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Key is valid (not logged in: fewer anonymous downloads)"
+msgstr "키가 유효합니다 (로그인 안 함: 익명 다운로드 횟수가 적음)"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Enter the token first"
+msgstr "먼저 토큰을 입력하세요"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Token is valid"
+msgstr "토큰이 유효합니다"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Token is valid; calls left: {}"
+msgstr "토큰이 유효합니다. 남은 호출: {}회"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Cancelled"
+msgstr "취소됨"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Cannot connect to OpenSubtitles"
+msgstr "OpenSubtitles에 연결할 수 없습니다"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Cannot connect to Assrt"
+msgstr "Assrt에 연결할 수 없습니다"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "OpenSubtitles returned an unreadable response"
+msgstr "OpenSubtitles에서 읽을 수 없는 응답을 반환했습니다"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Assrt returned an unreadable response"
+msgstr "Assrt에서 읽을 수 없는 응답을 반환했습니다"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Invalid API key; check it in Online Subtitle Settings"
+msgstr "API 키가 올바르지 않습니다. 온라인 자막 설정에서 확인하세요"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No downloads left today (OpenSubtitles). Log in for more downloads"
+msgstr "오늘 다운로드 횟수를 모두 사용했습니다 (OpenSubtitles). 로그인하면 더 많이 다운로드할 수 있습니다"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Too many requests to OpenSubtitles; try again later"
+msgstr "OpenSubtitles 요청이 너무 많습니다. 나중에 다시 시도하세요"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "OpenSubtitles error ({})"
+msgstr "OpenSubtitles 오류 ({})"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Wrong OpenSubtitles user name or password"
+msgstr "OpenSubtitles 사용자 이름 또는 암호가 틀렸습니다"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "OpenSubtitles login failed"
+msgstr "OpenSubtitles 로그인 실패"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "OpenSubtitles gave no download link"
+msgstr "OpenSubtitles에서 다운로드 링크를 주지 않았습니다"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Cannot download the subtitle ({})"
+msgstr "자막을 다운로드할 수 없습니다 ({})"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Invalid Assrt token; check it in Online Subtitle Settings"
+msgstr "Assrt 토큰이 올바르지 않습니다. 온라인 자막 설정에서 확인하세요"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Assrt call limit reached; try again later"
+msgstr "Assrt 호출 한도에 도달했습니다. 나중에 다시 시도하세요"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Assrt error ({})"
+msgstr "Assrt 오류 ({})"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Assrt gave no download link"
+msgstr "Assrt에서 다운로드 링크를 주지 않았습니다"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Cannot read the subtitle file."
+msgstr "자막 파일을 읽을 수 없습니다."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The subtitle file must be a regular file of 1 byte to 8 MiB."
+msgstr "자막 파일은 1바이트에서 8MiB 사이의 일반 파일이어야 합니다."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The subtitle file is empty or larger than 8 MiB."
+msgstr "자막 파일이 비어 있거나 8MiB보다 큽니다."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Image subtitle files are not supported yet"
+msgstr "이미지 자막 파일은 아직 지원하지 않습니다"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Unknown subtitle format"
+msgstr "알 수 없는 자막 형식"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The subtitle file has no subtitles."
+msgstr "자막 파일에 자막이 없습니다."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The subtitle file is larger than 2 MiB"
+msgstr "자막 파일이 2MiB보다 큽니다"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The subtitle encoding may be wrong; change the default encoding in Subtitle Settings"
+msgstr "자막 인코딩이 잘못되었을 수 있습니다. 자막 설정에서 기본 인코딩을 변경하세요"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Fonts embedded in the subtitle were ignored"
+msgstr "자막에 포함된 글꼴을 무시했습니다"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Unknown video frame rate; the MicroDVD subtitle was converted at 23.976"
+msgstr "비디오 프레임 속도를 알 수 없어 MicroDVD 자막을 23.976으로 변환했습니다"
+
+#: main.ts:333 model.ts:130
+#, x-machine
+msgid "{} · {}"
+msgstr "{} · {}"
+
+#: main.ts:392
+#, x-machine
+msgid "Save Subtitle As"
+msgstr "자막을 다른 이름으로 저장"
+
+#: main.ts:550 main.ts:554 manifest.json
+#, x-machine
+msgid "Online Subtitles"
+msgstr "온라인 자막"
+
+#: main.ts:550
+#, x-machine
+msgid "Search and Download Subtitles…"
+msgstr "자막 검색 및 다운로드…"
+
+#: main.ts:554
+#, x-machine
+msgid "Online Subtitle Settings…"
+msgstr "온라인 자막 설정…"
+
+#: manifest.json
+#, x-machine
+msgid "Search and download subtitles for the current video"
+msgstr "현재 비디오의 자막 검색 및 다운로드"
+
+#: manifest.json
+#, x-machine
+msgid ""
+"Search OpenSubtitles.com or Assrt for subtitles by file hash and title, load them right away and keep a copy beside the video. Needs your own API key, kept in the system's secret store.\n"
+"Find it in the right-click menu under Subtitles ▸ Online Subtitles."
+msgstr ""
+"OpenSubtitles.com이나 Assrt에서 파일 해시와 제목으로 자막을 검색하고, 바로 불러오며 비디오 옆에 사본을 저장합니다. 본인의 API 키가 필요하며, 키는 시스템 보안 저장소에 보관됩니다.\n"
+"오른쪽 클릭 메뉴의 자막 ▸ 온라인 자막에서 찾을 수 있습니다."
+
+#: manifest.json
+#, x-machine
+msgid "subtitles"
+msgstr "자막"
+
+#: manifest.json
+#, x-machine
+msgid "download"
+msgstr "다운로드"
+
+#: messages.ts:132
+#, x-machine
+msgid "This run only"
+msgstr "이번 실행에서만"
+
+#: messages.ts:132
+#, x-machine
+msgid "macOS Keychain ({})"
+msgstr "macOS 키체인 ({})"
+
+#: messages.ts:132
+#, x-machine
+msgid "Windows Credential Manager ({})"
+msgstr "Windows 자격 증명 관리자 ({})"
+
+#: messages.ts:132
+#, x-machine
+msgid "System secret store ({})"
+msgstr "시스템 보안 저장소 ({})"
+
+#: messages.ts:132
+#, x-machine
+msgid "{} (readable only by you)"
+msgstr "{} (본인만 읽기 가능)"
+
+#: messages.ts:135 ui/messages.slint:7
+#, x-machine
+msgid "Assrt"
+msgstr "Assrt"
+
+#. {0} is a service name, {1} the result of testing it
+#: messages.ts:147
+#, x-machine
+msgid "{0}: {1}"
+msgstr "{0}: {1}"
+
+#: model.ts:102
+#, x-machine
+msgid "Simplified Chinese"
+msgstr "중국어(간체)"
+
+#: model.ts:102
+#, x-machine
+msgid "Traditional Chinese"
+msgstr "중국어(번체)"
+
+#: model.ts:102
+#, x-machine
+msgid "Chinese"
+msgstr "중국어"
+
+#: model.ts:102
+#, x-machine
+msgid "English"
+msgstr "영어"
+
+#: model.ts:102
+#, x-machine
+msgid "Japanese"
+msgstr "일본어"
+
+#: model.ts:102
+#, x-machine
+msgid "Korean"
+msgstr "한국어"
+
+#: model.ts:102
+#, x-machine
+msgid "French"
+msgstr "프랑스어"
+
+#: model.ts:102
+#, x-machine
+msgid "German"
+msgstr "독일어"
+
+#: model.ts:102
+#, x-machine
+msgid "Spanish"
+msgstr "스페인어"
+
+#: model.ts:102
+#, x-machine
+msgid "Italian"
+msgstr "이탈리아어"
+
+#: model.ts:102
+#, x-machine
+msgid "Russian"
+msgstr "러시아어"
+
+#: model.ts:102
+#, x-machine
+msgid "Portuguese"
+msgstr "포르투갈어"
+
+#: model.ts:102
+#, x-machine
+msgid "Brazilian Portuguese"
+msgstr "포르투갈어(브라질)"
+
+#: model.ts:102
+#, x-machine
+msgid "Arabic"
+msgstr "아랍어"
+
+#: model.ts:102
+#, x-machine
+msgid "Thai"
+msgstr "태국어"
+
+#: model.ts:102
+#, x-machine
+msgid "Vietnamese"
+msgstr "베트남어"
+
+#: model.ts:102
+#, x-machine
+msgid "Cantonese"
+msgstr "광둥어"
+
+#: ui/choose.slint:7
+#, x-machine
+msgid "Choose Subtitle File"
+msgstr "자막 파일 선택"
+
+#: ui/choose.slint:20
+#, x-machine
+msgid "The archive has several subtitle files:"
+msgstr "압축 파일에 자막 파일이 여러 개 있습니다:"
+
+#: ui/choose.slint:52 ui/download.slint:183
+#, x-machine
+msgid "Cancel"
+msgstr "취소"
+
+#: ui/choose.slint:53
+#, x-machine
+msgid "OK"
+msgstr "확인"
+
+#: ui/download.slint:31
+#, x-machine
+msgid "Download Subtitles"
+msgstr "자막 다운로드"
+
+#: ui/download.slint:63 ui/download.slint:65
+#, x-machine
+msgid "{} [MT]"
+msgstr "{} [기계 번역]"
+
+#: ui/download.slint:63 ui/download.slint:64
+#, x-machine
+msgid "{} [HI]"
+msgstr "{} [CC]"
+
+#: ui/download.slint:80 ui/download.slint:137
+#, x-machine
+msgid "Language"
+msgstr "언어"
+
+#: ui/download.slint:81 ui/download.slint:139
+#, x-machine
+msgid "Format"
+msgstr "형식"
+
+#: ui/download.slint:82 ui/download.slint:140
+#, x-machine
+msgid "FPS"
+msgstr "FPS"
+
+#: ui/download.slint:83 ui/download.slint:141
+#, x-machine
+msgid "Downloads"
+msgstr "다운로드"
+
+#: ui/download.slint:85 ui/download.slint:142
+#, x-machine
+msgid "Match"
+msgstr "일치"
+
+#: ui/download.slint:85 ui/download.slint:168
+#, x-machine
+msgid "Hash"
+msgstr "해시"
+
+#: ui/download.slint:85 ui/download.slint:168
+#, x-machine
+msgid "Title"
+msgstr "제목"
+
+#: ui/download.slint:87 ui/download.slint:143
+#, x-machine
+msgid "Source"
+msgstr "출처"
+
+#: ui/download.slint:96
+#, x-machine
+msgid "Title:"
+msgstr "제목:"
+
+#: ui/download.slint:108
+#, x-machine
+msgid "Search by Title"
+msgstr "제목으로 검색"
+
+#: ui/download.slint:109
+#, x-machine
+msgid "Search Again"
+msgstr "다시 검색"
+
+#: ui/download.slint:114
+#, x-machine
+msgid "Searching sends the file name keywords and the file hash to the chosen service. You will not be asked again once you agree."
+msgstr "검색하면 파일 이름 키워드와 파일 해시가 선택한 서비스로 전송됩니다. 한 번 동의하면 다시 묻지 않습니다."
+
+#: ui/download.slint:122
+#, x-machine
+msgid "Agree and Search"
+msgstr "동의하고 검색"
+
+#: ui/download.slint:138
+#, x-machine
+msgid "Release"
+msgstr "릴리스"
+
+#: ui/download.slint:177
+#, x-machine
+msgid "Open"
+msgstr "열기"
+
+#: ui/download.slint:178
+#, x-machine
+msgid "Add"
+msgstr "추가"
+
+#: ui/download.slint:179
+#, x-machine
+msgid "Save Only"
+msgstr "저장만"
+
+#: ui/download.slint:180
+#, x-machine
+msgid "Save As…"
+msgstr "다른 이름으로 저장…"
+
+#: ui/download.slint:181
+#, x-machine
+msgid "More"
+msgstr "더 보기"
+
+#: ui/download.slint:184 ui/settings.slint:118
+#, x-machine
+msgid "Settings…"
+msgstr "설정…"
+
+#: ui/service.slint:19
+#, x-machine
+msgid "{} Settings"
+msgstr "{} 설정"
+
+#: ui/service.slint:42 ui/service.slint:51
+#, x-machine
+msgid "API key"
+msgstr "API 키"
+
+#: ui/service.slint:42 ui/service.slint:51
+#, x-machine
+msgid "Token"
+msgstr "토큰"
+
+#: ui/service.slint:42 ui/service.slint:56
+#, x-machine
+msgid "User name"
+msgstr "사용자 이름"
+
+#: ui/service.slint:42 ui/service.slint:61
+#, x-machine
+msgid "Password"
+msgstr "암호"
+
+#: ui/service.slint:57 ui/service.slint:62
+#, x-machine
+msgid "Optional"
+msgstr "선택 사항"
+
+#: ui/service.slint:66
+#, x-machine
+msgid "Sign up at opensubtitles.com, then get a free API key on the “API consumers” page. User name and password are optional; logging in gives more downloads per day. Stored in: {}."
+msgstr "opensubtitles.com에 가입한 뒤 “API consumers” 페이지에서 무료 API 키를 받으세요. 사용자 이름과 암호는 선택 사항이며, 로그인하면 하루 다운로드 횟수가 늘어납니다. 저장 위치: {}."
+
+#: ui/service.slint:67
+#, x-machine
+msgid "Sign up at assrt.net, then get the API token in the user center. The service limits how often it can be called. Stored in: {}."
+msgstr "assrt.net에 가입한 뒤 사용자 센터에서 API 토큰을 받으세요. 이 서비스는 호출 빈도를 제한합니다. 저장 위치: {}."
+
+#: ui/service.slint:83 ui/settings.slint:119
+#, x-machine
+msgid "Test"
+msgstr "테스트"
+
+#: ui/service.slint:84
+#, x-machine
+msgid "Save"
+msgstr "저장"
+
+#: ui/settings.slint:32
+#, x-machine
+msgid "Online Subtitle Settings"
+msgstr "온라인 자막 설정"
+
+#: ui/settings.slint:71 ui/settings.slint:126
+#, x-machine
+msgid "Languages"
+msgstr "선호 언어"
+
+#: ui/settings.slint:71 ui/settings.slint:138
+#, x-machine
+msgid "Auto search"
+msgstr "자동 검색"
+
+#: ui/settings.slint:71 ui/settings.slint:148
+#, x-machine
+msgid "After search"
+msgstr "검색 후"
+
+#: ui/settings.slint:71 ui/settings.slint:167
+#, x-machine
+msgid "Exclude"
+msgstr "제외할 키워드"
+
+#: ui/settings.slint:71 ui/settings.slint:179
+#, x-machine
+msgid "Save to"
+msgstr "저장 위치"
+
+#: ui/settings.slint:81
+#, x-machine
+msgid "Services"
+msgstr "서비스"
+
+#: ui/settings.slint:113
+#, x-machine
+msgid "Move Up"
+msgstr "위로 이동"
+
+#: ui/settings.slint:114
+#, x-machine
+msgid "Move Down"
+msgstr "아래로 이동"
+
+#: ui/settings.slint:123
+#, x-machine
+msgid "Search"
+msgstr "검색"
+
+#: ui/settings.slint:141
+#, x-machine
+msgid "Off"
+msgstr "사용 안 함"
+
+#: ui/settings.slint:141
+#, x-machine
+msgid "When opening a video without subtitles"
+msgstr "자막 없는 비디오를 열 때"
+
+#: ui/settings.slint:151
+#, x-machine
+msgid "Show the download window"
+msgstr "다운로드 창 표시"
+
+#: ui/settings.slint:151
+#, x-machine
+msgid "Load the best result automatically"
+msgstr "가장 좋은 결과를 자동으로 불러오기"
+
+#: ui/settings.slint:160
+#, x-machine
+msgid "Only subtitles that exactly match the file (hash)"
+msgstr "파일과 정확히 일치하는 자막만 (해시)"
+
+#: ui/settings.slint:171
+#, x-machine
+msgid "Separate with commas or spaces"
+msgstr "쉼표나 공백으로 구분"
+
+#: ui/settings.slint:176
+#, x-machine
+msgid "Saving"
+msgstr "저장"
+
+#: ui/settings.slint:182
+#, x-machine
+msgid "Beside the video when possible"
+msgstr "가능하면 비디오와 같은 폴더"
+
+#: ui/settings.slint:182
+#, x-machine
+msgid "Plugin data folder"
+msgstr "플러그인 데이터 폴더"
+
+#: ui/settings.slint:188
+#, x-machine
+msgid "Searching sends the file name keywords and the file hash to the chosen service. Keys and passwords are stored in: {}."
+msgstr "검색하면 파일 이름 키워드와 파일 해시가 선택한 서비스로 전송됩니다. 키와 암호 저장 위치: {}."

@@ -1,6 +1,7 @@
 // settings.json and result ordering. Secrets are not here (see secrets.ts).
+import type { I18n, Text } from "@vestra-player/sdk";
 import type { Result, ServiceId } from "./services.ts";
-import { SERVICE_IDS, languageLabel, SERVICE_NAMES } from "./services.ts";
+import { SERVICE_IDS, languageLabel } from "./services.ts";
 
 export type Settings = {
   version: 1;
@@ -95,21 +96,39 @@ export function rank(results: Result[], settings: Pick<Settings, "languages" | "
     );
 }
 
-/** One row of the result list. */
-export const row = (r: Result, checked: boolean) => ({
+/** A language's name by its code (any case), else the code as given. */
+function languageName(text: I18n["text"], code: string): Text | string {
+  const name = languageLabel(code);
+  return name ? text(name) : code;
+}
+
+/**
+ * One row of the result list (ui/download.slint `ResultRow`): data, and the
+ * language's name (translated by the player; an unknown code as given); the
+ * window names the match and the service, and marks hearing-impaired and
+ * machine-translated releases.
+ */
+export const row = (text: I18n["text"], r: Result, checked: boolean) => ({
   checked,
-  language: languageLabel(r.language),
-  release: `${r.release}${r.hearingImpaired ? " [HI]" : ""}${r.machine ? " [机翻]" : ""}`,
+  language: languageName(text, r.language),
+  release: r.release,
+  hearing: r.hearingImpaired,
+  machine: r.machine,
   format: r.format,
   fps: r.fps ? String(Math.round(r.fps * 1000) / 1000) : "",
   downloads: r.downloads === null ? "" : String(r.downloads),
-  match: r.hashMatch ? "哈希" : "标题",
-  source: SERVICE_NAMES[r.service],
+  hash: r.hashMatch,
+  service: r.service,
 });
 
-/** Track title: "<语言> · <版本名>", 1–200 characters. */
-export const trackTitle = (r: Result) =>
-  `${languageLabel(r.language)} · ${r.release}`.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 200);
+/**
+ * Track title: "<language> · <release>" (the language name translated, the
+ * release data), at most 200 characters with a SAMI language after it.
+ */
+export function trackTitle(text: I18n["text"], r: Result): Text {
+  const release = r.release.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 150);
+  return text("{} · {}", [languageName(text, r.language.slice(0, 20)), release]);
+}
 
 /** The language part of a saved file name: "zh-CN" → "zh". */
 export const fileLanguage = (code: string) => code.split("-")[0]!.toLowerCase() || "und";

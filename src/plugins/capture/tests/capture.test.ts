@@ -4,17 +4,25 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { isDeepStrictEqual } from "node:util";
+import type { Locale } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
-import { clock, frameName, parseRange, sampleTimes, uniqueFile } from "../model.ts";
+import { clock, frameName, parseRange, REASON, sampleTimes, uniqueFile } from "../model.ts";
+import { words } from "./fakes.ts";
 
 /** A job as the test host records it. */
 type MediaJob = NonNullable<ReturnType<TestHost["jobs"]["get"]>>;
 
 const directory = new URL("..", import.meta.url);
-const start = (host = new TestHost()) => startPlugin(activate, { directory, host });
+/** Most tests check what a Chinese user sees (the texts from before the English sources); English is tested on its own. */
+const start = (host = new TestHost(), locale: Locale = "zh-Hans", dataDirectory?: string) => startPlugin(activate, { directory, host, locale, dataDirectory });
+type Data = Parameters<ReturnType<typeof words>["row"]>[0];
 type Row = { id: string; title: string; detail: string; retryable: boolean; openable: boolean };
-const rows = (host: TestHost) => host.window("tasks").props["task-rows"] as Row[];
+/** The task rows as the window shows them (title and detail in the test host's language). */
+const rows = (host: TestHost): Row[] =>
+  (host.window("tasks").props["task-rows"] as (Data & Row)[]).map((row) => ({ ...row, ...words(host).row(row) }));
+/** A dialog's status line as shown. */
+const statusOf = (host: TestHost, window: string) => words(host).status(host.window(window).props.status as never);
 const tick = () => new Promise((done) => setTimeout(done, 5));
 /**
  * Poll an observable result. `host.settle()` waits only for host calls, not for
@@ -80,7 +88,7 @@ test("menu per the allocation table; each dialog binds exactly its Slint callbac
   const host = new TestHost();
   ready(host);
   const { stop } = await start(host);
-  const declared = [...host.commands.values()].map(({ declaration: d }) => [d.path.join(" > "), d.order, d.group, d.bindings.join(",")]);
+  const declared = [...host.commands.values()].map(({ declaration: d, display }) => [display.path.join(" > "), d.order, d.group, d.bindings.join(",")]);
   assert.deepEqual(declared, [
     ["视频 > 截图 > 保存当前画面", 420, "capture-source", "Ctrl+E"],
     ["视频 > 截图 > 当前画面另存为…", 421, "capture-source", ""],
@@ -111,10 +119,53 @@ test("menu per the allocation table; each dialog binds exactly its Slint callbac
     assert.deepEqual([...host.window(name).callbacks].sort(), callbacks.sort(), name);
     assert.doesNotMatch(slint, /#[0-9a-f]{3,8}\b/i, `${name}: colours come from Theme`);
     assert.doesNotMatch(slint, /font-size:\s*\d/, `${name}: font sizes come from Theme`);
-    assert.doesNotMatch(slint, /text:\s*"[^"]*[a-z]{3,}[^"]*"/, `${name}: no English labels (format names like PNG are fine)`);
+    assert.doesNotMatch(slint, /(text|title):\s*"[^"]*[a-z]{3,}[^"]*"/, `${name}: every label in @tr (format names like PNG are fine)`);
   }
   assert.equal(host.window("clip").props["start-time"], "2");
   assert.equal(host.window("clip").props["end-time"], "12");
+  await stop();
+});
+
+test("English by default: menus, dialog titles, OSD and window texts are the English source texts", async () => {
+  const host = new TestHost();
+  ready(host);
+  host.setSource({ audioTracks: [{ trackId: 7, selected: true, external: false, streamIndex: 1, codec: "aac", title: null, language: "en" }, { trackId: 8, selected: false, external: false, streamIndex: 2, codec: "opus", title: null, language: null }] });
+  const { stop } = await start(host, "en");
+  try {
+    assert.deepEqual(host.command("capture.save").declaration.path, ["@video", "Snapshot", "Save Current Frame"]);
+    assert.deepEqual(host.command("capture.saveScreenAs").display.path, ["Video", "Snapshot", "Save Rendered Frame As…"]);
+    assert.deepEqual(host.command("capture.format.jpeg").display.path, ["Video", "Snapshot", "Capture as JPEG"]);
+    await host.command("capture.format.jpeg").run();
+    await host.settle();
+    assert.equal(host.osd.at(-1), "Snapshot format: JPEG");
+    await host.command("capture.clip").run();
+    host.dialogAnswers.push(null);
+    host.window("clip").emit("export-clip", "1", "4", false, false, 0);
+    await until(() => statusOf(host, "clip") === "No save location chosen.");
+    assert.equal(host.sent("dialogs.open").at(-1)!.title, "Export Clip");
+    assert.deepEqual(host.window("clip").props["audio-labels"], ["No Audio", "Current Track", "Track 7 · en", "Track 8"]);
+    host.window("clip").emit("export-clip", "5", "1", false, false, 0);
+    await until(() => statusOf(host, "clip") === REASON.range);
+    assert.deepEqual(host.window("clip").props.status, { kind: "error", reason: "range", raw: "", count: 0, name: "" }, "data, not words");
+  } finally {
+    await stop();
+  }
+});
+
+test("the reasons in model.ts and the windows' Words.reason in ui/parts.slint are the same texts; all are translated", async () => {
+  const slint = await readFile(new URL("../ui/parts.slint", import.meta.url), "utf8");
+  const said = Object.fromEntries([...slint.matchAll(/code == "(\w+)"\) \{ return @tr\("([^"]+)"\)/g)].map((m) => [m[1], m[2]]));
+  assert.deepEqual(said, { ...REASON });
+  const zh = await readFile(new URL("../locales/zh-Hans.po", import.meta.url), "utf8");
+  assert.doesNotMatch(zh, /msgstr ""\n\n/, "every text translated");
+  const { host, stop } = await start();
+  const { reason, progress, status } = words(host);
+  assert.equal(reason("space", ""), "磁盘空间不足");
+  assert.equal(reason("", "a message of the player"), "a message of the player");
+  assert.equal(progress({ status: "running", reason: "", raw: "", done: 3, total: 10 }), "导出中 · 3/10");
+  assert.equal(progress({ status: "failed", reason: "exportFailed", raw: "", done: 0, total: 1 }), "失败：导出失败");
+  assert.equal(status({ kind: "clip-failed", reason: "space", raw: "", count: 0, name: "" }), "导出失败：磁盘空间不足");
+  assert.equal(status({ kind: "started", reason: "", raw: "", count: 4, name: "" }), "已开始连拍 4 张");
   await stop();
 });
 
@@ -146,7 +197,7 @@ test("the chosen capture folder is kept in the data directory and restored on th
   const data = await mkdtemp(join(tmpdir(), "capture-data-")); // outlives each test host, like the player's
   const host = new TestHost();
   ready(host);
-  const first = await startPlugin(activate, { directory, host, dataDirectory: data });
+  const first = await start(host, "zh-Hans", data);
   const { folder, cleanup } = await withFolder(host);
   const restart = new TestHost();
   ready(restart);
@@ -173,7 +224,8 @@ test("the chosen capture folder is kept in the data directory and restored on th
 test("save commands are disabled without a capturable source", async () => {
   const { host, stop } = await start();
   assert.equal(host.command("capture.save").state.enabled, false);
-  assert.equal(host.command("capture.save").state.reason, "没有可截取的画面");
+  assert.equal(host.command("capture.save").state.reason, "No frame to capture");
+  assert.equal(host.translate(host.command("capture.save").state.reason!), "没有可截取的画面");
   assert.equal(host.command("capture.saveAs").state.enabled, false);
   ready(host);
   await host.settle();
@@ -211,18 +263,18 @@ test("另存为 asks for a file; a source change while it is open captures nothi
 test("clip: the snapshot is conditional on the seen source and honours the dialog options", async () => {
   const host = new TestHost();
   ready(host);
-  host.setSource({ audioTracks: [{ trackId: 7, selected: true, external: false, streamIndex: 1, codec: "aac", title: null, language: "en" }] });
+  host.setSource({ audioTracks: [{ trackId: 7, selected: true, external: false, streamIndex: 1, codec: "aac", title: null, language: "en" }, { trackId: 8, selected: false, external: false, streamIndex: 2, codec: "opus", title: null, language: null }] });
   const setJob = manualJobs(host);
   const { stop } = await start(host);
   const folder = await mkdtemp(join(tmpdir(), "capture-options-"));
   try {
     await host.command("capture.clip").run();
     const clip = host.window("clip");
-    assert.deepEqual(clip.props["audio-labels"], ["无声音", "当前音轨", "音轨 7 · en"]);
+    assert.deepEqual(clip.props["audio-labels"], ["无声音", "当前音轨", "音轨 7 · en", "音轨 8"]);
     host.dialogAnswers.push([join(folder, "clip.mp4")]);
     clip.emit("export-clip", "1", "4", true, false, 2);
     // The status follows the job start (the name is checked on disk first); the job waits for setJob.
-    await until(() => host.sent("jobs.start").length === 1 && clip.props.status === "已开始导出，可在导出任务中查看。");
+    await until(() => host.sent("jobs.start").length === 1 && statusOf(host, "clip") === "已开始导出，可在导出任务中查看。");
     const capture = host.sent("snapshot.capture")[0]!;
     assert.deepEqual(capture.expected, host.source.stamp);
     assert.equal(capture.mode, "processed");
@@ -231,7 +283,7 @@ test("clip: the snapshot is conditional on the seen source and honours the dialo
     assert.deepEqual(capture.audio, { kind: "track", trackId: 7 });
     assert.deepEqual({ kind: host.sent("jobs.start")[0]!.kind, end: host.sent("jobs.start")[0]!.end }, { kind: "processedMp4", end: 4 });
     setJob(1, { status: "completed", publicationStarted: true, outcome: { destination: join(folder, "clip.mp4") } });
-    await until(() => host.osd.at(-1) === `片段已导出为 ${join(folder, "clip.mp4")}` && clip.props.status === "已导出 clip.mp4");
+    await until(() => host.osd.at(-1) === `片段已导出为 ${join(folder, "clip.mp4")}` && statusOf(host, "clip") === "已导出 clip.mp4");
   } finally {
     await stop();
     await rm(folder, { recursive: true, force: true });
@@ -247,7 +299,7 @@ test("the clip guard is taken before the first await; a rejected source releases
   clip.emit("export-clip", "0", "1", false, false, 0);
   await host.settle();
   assert.equal(host.sent("source.state").length - reads, 1, "duplicate entry excluded before the source read");
-  assert.equal(clip.props.status, "当前画面无法导出，请先打开本地视频文件。");
+  assert.equal(statusOf(host, "clip"), "当前画面无法导出，请先打开本地视频文件。");
   assert.equal(clip.props.busy, false);
   clip.emit("export-clip", "0", "1", false, false, 0);
   await host.settle();
@@ -309,17 +361,18 @@ test("burst: unique folder under the capture folder, one snapshot, sample times 
     assert.equal(burst.props.folder, folder);
     assert.equal(burst.props["burst-count"], undefined, "the dialog keeps its own defaults");
     burst.emit("start-burst", "1", "3", "0.5", false, false, false);
-    await until(() => burst.props.progress === "已完成 · 3/3" && burst.props.status === "已保存 3 张" && host.osd.at(-1)!.startsWith("连拍已保存"));
+    const progress = () => words(host).progress(burst.props.progress as never);
+    await until(() => progress() === "已完成 · 3/3" && statusOf(host, "burst") === "已保存 3 张" && host.osd.at(-1)!.startsWith("连拍已保存"));
     assert.equal(host.sent("snapshot.capture").length, 1);
     const starts = host.sent("jobs.start");
     assert.deepEqual(starts.map((s) => s.sampleTime), [1, 1.5, 2]);
     const [child] = await readdir(folder);
     assert.match(child!, /^Capture-/);
     assert.deepEqual(starts.map((s) => s.destination), ["001-1.000s.png", "002-1.500s.png", "003-2.000s.png"].map((name) => join(folder, child!, name)));
-    assert.equal(burst.props.status, "已保存 3 张");
+    assert.equal(statusOf(host, "burst"), "已保存 3 张");
     assert.match(host.osd.at(-1)!, /^连拍已保存 3 张到 /);
     burst.emit("start-burst", "29", "3", "1", false, false, false);
-    await until(() => burst.props.status === "连拍超出媒体时长，请减少张数或间隔。"); // after creating the folder
+    await until(() => statusOf(host, "burst") === "连拍超出媒体时长，请减少张数或间隔。"); // after creating the folder
     burst.emit("capture-frame");
     await until(() => host.osd.at(-1)?.startsWith("帧已保存为") ?? false);
   } finally {
@@ -345,7 +398,7 @@ test("a failed task keeps its input; retry reuses it after the source changed", 
     host.openElsewhere("/contract/source-two.mp4");
     host.window("tasks").emit("retry-task", "1");
     // The new task starts its job before retry() returns; the status follows.
-    await until(() => host.sent("jobs.start").length === 2 && rows(host).length === 2 && host.window("tasks").props.status === "已重新开始。");
+    await until(() => host.sent("jobs.start").length === 2 && rows(host).length === 2 && statusOf(host, "tasks") === "已重新开始。");
     assert.equal(host.sent("snapshot.capture").length, 1, "no new snapshot");
     assert.equal(host.sent("jobs.start")[1]!.snapshotId, 1);
     assert.equal(host.sent("jobs.start")[1]!.destination, join(folder, "source-one_00.02.000 (1).png"));
@@ -368,7 +421,11 @@ test("a dialog that cannot open is reported in a visible error window", async ()
   const error = host.window("error");
   assert.equal(error.file, "ui/error.slint");
   assert.deepEqual(error.callbacks, []);
-  assert.equal(error.props.message, "截图窗口无法打开，请关闭此提示后重试。");
+  // Its one text is in the Slint file.
+  assert.equal(error.props.message, undefined);
+  const text = "The snapshot window could not open. Close this notice and try again.";
+  assert.match(await readFile(new URL("../ui/error.slint", import.meta.url), "utf8"), new RegExp(`@tr\\("${text}"\\)`));
+  assert.equal(host.translate(text), "截图窗口无法打开，请关闭此提示后重试。");
   // A later successful open closes the error window.
   await host.command("capture.burst").run();
   await host.settle();
@@ -396,7 +453,7 @@ test("times the user changed survive other callbacks", async () => {
   }
 });
 
-test("连拍… is checked while its dialog is open; a title-bar close clears it (onClose)", async () => {
+test("Burst… is checked while its dialog is open; a title-bar close clears it (onClose)", async () => {
   const host = new TestHost();
   ready(host);
   const { stop } = await start(host);

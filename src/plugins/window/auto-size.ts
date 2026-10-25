@@ -5,11 +5,11 @@ import type { Preferences } from "./settings.ts";
 import type { Sizer } from "./size.ts";
 
 /**
- * G-02 开始播放时的窗口尺寸 (default 1.0x): each
+ * G-02 window size when playback starts (default 1.0x): each
  * new source (`sourceId`) is sized once, when its video size first becomes
- * known. Not when the source has no video, in fullscreen, with 迷你尺寸 on,
- * in 画中画, or when the user dragged the window while it played (the size
- * commands stay disabled until the size is known); with 只调整一次, only the
+ * known. Not when the source has no video, in fullscreen, with Mini Size on,
+ * in picture-in-picture, or when the user dragged the window while it played (the size
+ * commands stay disabled until the size is known); with Only Once, only the
  * run's first video source. Replaying the same source, pausing and seeking do not trigger it
  * (the size is probed once per source).
  */
@@ -21,7 +21,7 @@ export class AutoSize {
   /** The source waiting for its size, `null` once it was handled or given up. */
   #pending: { source: number } | null = null;
   #source = -1;
-  /** A video source was seen in this run (只调整一次). */
+  /** A video source was seen in this run (Only Once). */
   #seenVideo = false;
   #window: { fullscreen: boolean; area: Size };
 

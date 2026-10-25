@@ -22,9 +22,9 @@ async function setup() {
 test("the GitHub name becomes the id prefix; vestra and local are refused", () => {
   assert.equal(checkOwner(""), "");
   assert.equal(checkOwner(" OctoCat "), "octocat");
-  assert.throws(() => checkOwner("vestra"), /官方插件/);
+  assert.throws(() => checkOwner("vestra"), /reserved for official plugins/);
   assert.throws(() => checkOwner("local"), /local/);
-  assert.throws(() => checkOwner("a b"), /字母、数字/);
+  assert.throws(() => checkOwner("a b"), /only letters, digits/);
 });
 
 test("scaffold → typecheck → test → check → pack: the template passes everything", async () => {
@@ -38,11 +38,11 @@ test("scaffold → typecheck → test → check → pack: the template passes ev
   // The SDK copy where the project resolves it, without the CLI.
   await fs.access(path.join(data, "node_modules/@vestra-player/sdk/dist/plugin/testing.js"));
   await assert.rejects(fs.access(path.join(data, "node_modules/@vestra-player/sdk/bin")));
-  assert.match((await toolchain.scaffold(session, { name: "demo" }, "octocat")).text, /已存在/);
-  assert.match((await toolchain.scaffold(session, { name: "Bad Name" }, "")).text, /小写字母/);
+  assert.match((await toolchain.scaffold(session, { name: "demo" }, "octocat")).text, /already exists/);
+  assert.match((await toolchain.scaffold(session, { name: "Bad Name" }, "")).text, /lower-case letters/);
 
-  assert.deepEqual(await toolchain.typecheck(session, "octocat.demo"), { ok: true, text: "类型检查通过（2 个文件）" });
-  assert.deepEqual(await toolchain.test(session, "octocat.demo"), { ok: true, text: "测试全部通过（1 个）" });
+  assert.deepEqual(await toolchain.typecheck(session, "octocat.demo"), { ok: true, text: "Type check passed (2 files)" });
+  assert.deepEqual(await toolchain.test(session, "octocat.demo"), { ok: true, text: "All tests passed (1)" });
   const checked = await toolchain.check(session, "octocat.demo", "octocat");
   assert.equal(checked.ok, true, checked.text);
   const packed = await toolchain.pack(session, "octocat.demo", "octocat");
@@ -62,7 +62,7 @@ test("type errors and failed tests come back structured; the test process cannot
   await fs.appendFile(path.join(project, "main.ts"), "const n: number = 'x';\n");
   const typed = await toolchain.typecheck(session, "local.demo");
   assert.equal(typed.ok, false);
-  assert.match(typed.text, /^类型检查未通过：1 个错误\n/);
+  assert.match(typed.text, /^Type check failed: 1 error\(s\)\n/);
   const details = JSON.parse(typed.text.split("\n").slice(1).join("\n"));
   assert.deepEqual(details.errors, [{ file: "main.ts", line: 14, column: 7, code: "TS2322", message: "Type 'string' is not assignable to type 'number'." }]);
 
@@ -87,7 +87,7 @@ test("object diff", () => {
   );
   const tested = await toolchain.test(session, "local.demo");
   assert.equal(tested.ok, false);
-  assert.match(tested.text, /^测试未通过：6 个失败，1 个通过/);
+  assert.match(tested.text, /^Tests failed: 6 failed, 1 passed/);
   const report = JSON.parse(tested.text.split("\n").slice(1).join("\n"));
   const failure = (name) => report.failures.find((f) => f.name === name);
   assert.match(failure("one is two").error, /one is not two/);
@@ -118,14 +118,19 @@ test("the check refuses vestra. ids, npm dependencies and a manifest id that is 
   const checked = await toolchain.check(session, "local.demo", "");
   assert.equal(checked.ok, false);
   assert.match(checked.text, /left-pad/);
-  assert.match(checked.text, /要和文件夹名「local\.demo」一致/);
+  assert.match(checked.text, /must match the folder name \\?"local\.demo\\?"/);
   assert.equal((await toolchain.pack(session, "local.demo", "")).ok, false);
 
   await fs.mkdir(path.join(session.work, "vestra.demo"));
   await fs.writeFile(path.join(session.work, "vestra.demo/manifest.json"), JSON.stringify({ ...manifest, id: "vestra.demo" }));
-  assert.match((await toolchain.check(session, "vestra.demo", "")).text, /「vestra\.」留给官方插件/);
-  assert.match((await runTool(toolchain, session, "", "typecheck", { id: "../x" }, new AbortController().signal)).text, /不是插件 id/);
-  assert.match((await runTool(toolchain, session, "", "typecheck", { id: "a.missing" }, new AbortController().signal)).text, /没有插件项目/);
+  assert.match((await toolchain.check(session, "vestra.demo", "")).text, /\\?"vestra\.\\?" is reserved for official plugins/);
+  assert.match((await runTool(toolchain, session, "", "typecheck", { id: "../x" }, new AbortController().signal)).text, /Not a plugin id/);
+  assert.match((await runTool(toolchain, session, "", "typecheck", { id: "a.missing" }, new AbortController().signal)).text, /No plugin project/);
+  // Model-facing results are English, like the rest of the tools' text.
+  const unknown = await runTool(toolchain, session, "", "rm_rf", {}, new AbortController().signal);
+  assert.deepEqual(unknown, { ok: false, text: "No tool named rm_rf" });
+  // install_plugin without a player (the eval runner) is not a tool either.
+  assert.equal((await runTool(toolchain, session, "", "install_plugin", { id: "local.demo" }, new AbortController().signal)).text, "No tool named install_plugin");
 });
 
 test("the type check runs under the permission model: it reads the project and the SDK, nothing else", async () => {
@@ -155,7 +160,7 @@ test("a tool call is cancelled with its signal", async () => {
   const running = toolchain.test(session, "local.demo", controller.signal);
   setTimeout(() => controller.abort(), 500);
   const started = Date.now();
-  assert.deepEqual(await running, { ok: false, text: "测试已取消" });
+  assert.deepEqual(await running, { ok: false, text: "Tests cancelled", say: { code: "cancelled", args: ["Tests"] } });
   assert.ok(Date.now() - started < 5000);
 });
 
@@ -163,7 +168,7 @@ test("the source export is the user's own repository: README, tests, CI, LICENSE
   const { session, toolchain } = await setup();
   await toolchain.scaffold(session, { name: "demo", title: "演示" }, "");
   await toolchain.pack(session, "local.demo", ""); // leaves work/local.demo/dist/
-  const { data, fileName, notes } = await toolchain.exportSource(session, "local.demo");
+  const { data, fileName, local } = await toolchain.exportSource(session, "local.demo");
   assert.equal(fileName, "local.demo-0.1.0-source.zip");
   const files = unzip(data);
   assert.deepEqual([...files.keys()].sort(), [
@@ -184,7 +189,7 @@ test("the source export is the user's own repository: README, tests, CI, LICENSE
   assert.equal(pkg.scripts.test, "vestra-plugin test");
   assert.match(files.get("demo/.github/workflows/ci.yml").toString(), /npx vestra-plugin check[\s\S]*npx vestra-plugin test[\s\S]*npx vestra-plugin pack/);
   assert.match(files.get("demo/LICENSE").toString(), /TODO: choose a license/);
-  assert.ok(notes.some((n) => /local\./.test(n)));
+  assert.equal(local, true, "the card says what to change for a local. id");
   // The same bytes for the same project.
   assert.deepEqual((await toolchain.exportSource(session, "local.demo")).data, data);
 });

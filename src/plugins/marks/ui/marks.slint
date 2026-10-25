@@ -1,4 +1,4 @@
-// 章节/书签 (B21): search box, the chapter (read only, dim) and bookmark rows
+// Chapters and Bookmarks (B21): search box, the chapter (read only, dim) and bookmark rows
 // by time, the selected bookmark's time and title inputs, and the bottom
 // buttons. 380×420, at least 320×300.
 import { LineEdit, ListView } from "std-widgets.slint";
@@ -10,7 +10,9 @@ export struct MarkRow {
     rowId: string,
     chapter: bool,
     time: string,
+    // "" for a chapter or bookmark without a title: shown as "Chapter <number>" / "Bookmark <number>".
     title: string,
+    number: int,
     selected: bool,
 }
 
@@ -49,7 +51,9 @@ component Row inherits Rectangle {
         }
         Text {
             horizontal-stretch: 1;
-            text: root.mark.title;
+            text: root.mark.title != "" ? root.mark.title
+                : root.mark.chapter ? @tr("Chapter {}", root.mark.number)
+                : @tr("Bookmark {}", root.mark.number);
             color: root.mark.chapter ? Theme.text-dim : Theme.text;
             font-size: Theme.font-body;
             vertical-alignment: center;
@@ -63,7 +67,7 @@ component Row inherits Rectangle {
 }
 
 export component MarksWindow inherits Window {
-    title: "章节/书签";
+    title: @tr("Chapters and Bookmarks");
     preferred-width: 380px;
     preferred-height: 420px;
     min-width: 320px;
@@ -72,16 +76,26 @@ export component MarksWindow inherits Window {
 
     in property <[MarkRow]> rows;
     in property <bool> media;
-    in property <string> note;
+    // The saved bookmarks were made for a file of another size.
+    in property <bool> file-changed;
     in property <bool> filtering;
     in property <bool> can-add;
     in property <bool> can-remove;
     in property <bool> can-clear;
     in property <bool> editing;
+    // The line under the list after an edit: "", "empty-title", "bad-time",
+    // "too-late" (status-text: the duration), "removed" (status-text: the
+    // title), "confirm-failed" (status-text: the error), "cleared"
+    // (status-count: how many).
     in property <string> status;
+    in property <string> status-text;
+    in property <int> status-count;
     in-out property <string> search-text;
     in-out property <string> edit-time;
     in-out property <string> edit-title;
+    // A bookmark without a title: its number (the title input is empty and
+    // shows "Bookmark <number>" as its placeholder); 0 otherwise.
+    in property <int> edit-number;
     callback select(string);
     callback activate(string);
     callback search(string);
@@ -90,6 +104,16 @@ export component MarksWindow inherits Window {
     callback add();
     callback remove();
     callback clear();
+    // The edit labels' column: 28px, or the wider of Time and Title.
+    private property <length> edit-column: max(28px, edit-measure.preferred-width);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        edit-measure := VerticalLayout {
+            for text in [@tr("Time"), @tr("Title")]: Label { text: text; }
+        }
+    }
 
     VerticalLayout {
         padding: 10px;
@@ -97,13 +121,13 @@ export component MarksWindow inherits Window {
         LineEdit {
             height: Theme.input-height;
             font-size: Theme.font-body;
-            placeholder-text: "按标题搜索";
+            placeholder-text: @tr("Search by title");
             text <=> root.search-text;
             edited(text) => { root.search(text); }
         }
-        if root.note != "" && root.media: Label {
+        if root.file-changed && root.media: Label {
             height: Theme.label-height;
-            text: root.note;
+            text: @tr("The file has changed; bookmark times may be off");
             color: Theme.accent;
         }
         Rectangle {
@@ -127,19 +151,19 @@ export component MarksWindow inherits Window {
                 height: 100%;
                 horizontal-alignment: center;
                 color: Theme.text-dim;
-                text: !root.media ? "未打开媒体" : root.filtering ? "无匹配项" : "没有章节或书签";
+                text: !root.media ? @tr("No media open") : root.filtering ? @tr("No matches") : @tr("No chapters or bookmarks");
             }
         }
         if root.editing: VerticalLayout {
             spacing: Theme.form-row-gap - Theme.input-height;
             HorizontalLayout {
                 spacing: 6px;
-                Label { width: 28px; text: "时间"; }
+                Label { width: root.edit-column; text: @tr("Time"); }
                 time-input := LineEdit {
                     width: 100px;
                     height: Theme.input-height;
                     font-size: Theme.font-body;
-                    placeholder-text: "h:mm:ss.d";
+                    placeholder-text: "h:mm:ss.d"; // i18n-ignore: a format, not words
                     text <=> root.edit-time;
                     accepted(text) => { root.commit-time(text); }
                     changed has-focus => {
@@ -150,12 +174,13 @@ export component MarksWindow inherits Window {
             }
             HorizontalLayout {
                 spacing: 6px;
-                Label { width: 28px; text: "标题"; }
+                Label { width: root.edit-column; text: @tr("Title"); }
                 LineEdit {
                     horizontal-stretch: 1;
                     height: Theme.input-height;
                     font-size: Theme.font-body;
                     text <=> root.edit-title;
+                    placeholder-text: root.edit-number > 0 ? @tr("Bookmark {}", root.edit-number) : "";
                     accepted(text) => { root.commit-title(text); }
                     changed has-focus => {
                         if !self.has-focus { root.commit-title(self.text); }
@@ -165,15 +190,21 @@ export component MarksWindow inherits Window {
         }
         Label {
             height: Theme.label-height;
-            text: root.status;
+            text: root.status == "empty-title" ? @tr("Title can't be empty")
+                : root.status == "bad-time" ? @tr("Time format is h:mm:ss.d")
+                : root.status == "too-late" ? @tr("Time exceeds the duration ({})", root.status-text)
+                : root.status == "removed" ? @tr("Removed: {}", root.status-text)
+                : root.status == "confirm-failed" ? @tr("Can't confirm: {}", root.status-text)
+                : root.status == "cleared" ? @tr("{n} bookmark cleared" | "{n} bookmarks cleared" % root.status-count)
+                : "";
             color: Theme.text-dim;
         }
         HorizontalLayout {
             height: Theme.button-height;
             spacing: 6px;
-            Button { text: "添加书签"; enabled: root.can-add; clicked => { root.add(); } }
-            Button { text: "移除"; enabled: root.can-remove; clicked => { root.remove(); } }
-            Button { text: "清空书签"; enabled: root.can-clear; clicked => { root.clear(); } }
+            Button { text: @tr("Add Bookmark"); enabled: root.can-add; clicked => { root.add(); } }
+            Button { text: @tr("Remove"); enabled: root.can-remove; clicked => { root.remove(); } }
+            Button { text: @tr("Clear Bookmarks"); enabled: root.can-clear; clicked => { root.clear(); } }
             Rectangle { horizontal-stretch: 1; }
         }
     }

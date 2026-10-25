@@ -1,15 +1,28 @@
 // Vestra Player AI: session sidebar (220 px) | conversation. Assistant
 // messages are Markdown (one document per row, `body`); the rest is text.
+// The plugin passes data and codes; the words are here (@tr).
 import { ComboBox, ListView, TextEdit } from "std-widgets.slint";
 import { MarkdownBlock, MarkdownBlocks } from "@vestra/markdown.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
+import { Labels } from "labels.slint";
+
+// One tool call: the tool, what it is about, 0 running / 1 done / 2 failed.
+export struct ToolCall {
+    tool: string,
+    target: string,
+    // `target` is a file of the read-only reference (sdk/…).
+    reference: bool,
+    state: int,
+}
 
 export struct ChatRow {
     id: string,
     // "user" | "tools" | "assistant" | "notice" | "error"
     kind: string,
+    // user, assistant: the message.
     text: string,
+    // error: the provider's message.
     detail: string,
     // 0 running, 1 done, 2 failed
     state: int,
@@ -18,15 +31,44 @@ export struct ChatRow {
     // assistant: the message as Markdown; empty for the other kinds, and
     // until the plugin made the document (then `text` shows instead).
     body: [MarkdownBlock],
+    // notice, error: what to say; tools: "running" | "after" | "phase" | "done".
+    code: string,
+    args: [string],
+    // notice: a count; tools: the number of calls.
+    n: int,
+    // tools: every call (sent while expanded) and the one the line shows.
+    calls: [ToolCall],
+    call: ToolCall,
+    // tools: "thinking" | "replying" while the turn runs.
+    phase: string,
+    failed: int,
+    // The message is longer than shown.
+    truncated: bool,
 }
 
 export struct SessionRow {
     id: string,
+    // A heading: its group, "today" or "earlier".
     title: string,
-    // A group heading (今天 / 更早), not a session.
+    // A group heading, not a session.
     header: bool,
     active: bool,
     running: bool,
+}
+
+// What the result card says: a code and its arguments.
+export struct CardSay {
+    code: string,
+    args: [string],
+}
+
+// A binding of the installed plugin that another command holds.
+export struct Shadowed {
+    input: string,
+    title: string,
+    // "host" (the player) or a plugin id, and its command's title.
+    plugin: string,
+    holder: string,
 }
 
 component Body inherits Text {
@@ -59,6 +101,68 @@ component Link inherits Rectangle {
 
 // One conversation row.
 component Message inherits VerticalLayout {
+    // A tool's name in the status line (an unknown tool by its own name).
+    pure function verb(tool: string) -> string {
+        tool == "read" ? @tr("Read")
+            : tool == "write" ? @tr("Write")
+            : tool == "edit" ? @tr("Edit")
+            : tool == "ls" ? @tr("List")
+            : tool == "find" ? @tr("Find")
+            : tool == "grep" ? @tr("Search")
+            : tool == "delete" ? @tr("Delete")
+            : tool == "scaffold_plugin" ? @tr("Create plugin")
+            : tool == "typecheck" ? @tr("Type check")
+            : tool == "test" ? @tr("Run tests")
+            : tool == "check" ? @tr("Check")
+            : tool == "pack" ? @tr("Pack")
+            : tool == "install_plugin" ? @tr("Install")
+            : tool
+    }
+    pure function target(call: ToolCall) -> string {
+        // TRANSLATORS: a file of the read-only reference, e.g. "reference/sdk/llms.txt".
+        call.reference ? @tr("reference/{}", call.target) : call.target
+    }
+    pure function label(call: ToolCall) -> string {
+        // TRANSLATORS: a tool and what it is about, e.g. "Read main.ts".
+        call.target == "" ? root.verb(call.tool) : @tr("{0} {1}", root.verb(call.tool), root.target(call))
+    }
+    pure function mark(state: int) -> string {
+        state == 0 ? "…" : state == 1 ? "✓" : "✗"
+    }
+    pure function phase-text(phase: string) -> string {
+        phase == "replying" ? @tr("Replying…") : @tr("Thinking…")
+    }
+    // The tool line: the call in progress, else the latest call and what the model does now; a count after the turn.
+    pure function tools-text(row: ChatRow) -> string {
+        row.code == "running" ? root.label(row.call) + "…"
+            : row.code == "after" ? root.label(row.call) + (row.call.state == 2 ? " ✗" : " ✓") + " · " + root.phase-text(row.phase)
+            : row.code == "phase" ? root.phase-text(row.phase)
+            : row.failed > 0 ? @tr("{0}, {1} failed", root.calls-text(row.n), row.failed)
+            : root.calls-text(row.n)
+    }
+    pure function calls-text(n: int) -> string {
+        @tr("{n} tool call" | "{n} tool calls" % n)
+    }
+    pure function notice-text(row: ChatRow) -> string {
+        row.code == "stopped" ? @tr("Stopped")
+            : row.code == "interrupted" ? @tr("The last reply was interrupted (the player or the plugin quit)")
+            : row.code == "retry" ? @tr("Connection failed; retrying ({0}/{1})…", row.args[0], row.args[1])
+            : row.code == "compacting" ? @tr("Compacting the context…")
+            : row.code == "compacted" ? @tr("Context compacted")
+            : row.code == "hidden" ? @tr("{n} earlier message is not shown (the full record is in the session folder)" | "{n} earlier messages are not shown (the full record is in the session folder)" % row.n)
+            : row.code
+    }
+    pure function error-text(row: ChatRow) -> string {
+        row.code == "key" ? @tr("The API key is invalid or has no permission; check it in the settings.")
+            : row.code == "model" ? @tr("The model “{}” is not available; choose another model in the settings.", row.args[0])
+            : row.code == "model-unnamed" ? @tr("The model is not available; choose another model in the settings.")
+            : row.code == "quota" ? @tr("Out of quota or too many requests; try again later.")
+            : row.code == "network" ? @tr("Network error: cannot reach the provider.")
+            : row.code == "timeout" ? @tr("No reply from the provider for {} seconds; stopped.", row.args[0])
+            : row.code == "exited" ? @tr("The agent process quit unexpectedly.")
+            // "failed" and any other: the generic text.
+            : @tr("Something went wrong.")
+    }
     in property <ChatRow> item;
     in property <bool> last;
     in property <bool> can-retry;
@@ -104,8 +208,8 @@ component Message inherits VerticalLayout {
                     text: item.state == 0 ? "●" : item.state == 2 ? "✗" : "✓";
                     color: item.state == 2 ? Theme.danger : item.state == 0 ? Theme.accent : Theme.text-dim;
                 }
-                Small { text: item.text; horizontal-stretch: 1; }
-                Small { horizontal-stretch: 0; text: item.expanded ? "收起 ▾" : "全部 ▸"; color: tools-touch.has-hover ? Theme.accent : Theme.text-dim; }
+                Small { text: root.tools-text(item); horizontal-stretch: 1; }
+                Small { horizontal-stretch: 0; text: item.expanded ? @tr("Collapse ▾") : @tr("All ▸"); color: tools-touch.has-hover ? Theme.accent : Theme.text-dim; }
             }
             tools-touch := TouchArea { mouse-cursor: pointer; clicked => { root.toggle(item.id); } }
         }
@@ -114,8 +218,8 @@ component Message inherits VerticalLayout {
             border-radius: Theme.radius-control;
             VerticalLayout {
                 padding: 8px;
-                Text {
-                    text: item.detail;
+                for call in item.calls: Text {
+                    text: root.mark(call.state) + " " + root.label(call);
                     width: root.width - 2 * 18px - 2 * 8px;
                     color: Theme.text-list;
                     font-family: Theme.font-mono;
@@ -135,13 +239,16 @@ component Message inherits VerticalLayout {
             link-clicked(url) => { root.open-link(url); }
         }
         if item.body.length == 0: Body { text: item.text == "" ? "…" : item.text; width: root.width - 2 * 18px; }
+        if item.truncated: Small { text: @tr("… (too long; the rest is not shown)"); }
         if item.state != 0: HorizontalLayout {
             alignment: start;
-            Link { text: "复制"; clicked => { root.copy(item.id); } }
+            Link { text: @tr("Copy"); clicked => { root.copy(item.id); } }
         }
     }
 
-    if item.kind == "notice": Small { text: item.text; horizontal-alignment: center; }
+    if item.kind == "user" && item.truncated: Small { text: @tr("… (too long; the rest is not shown)"); horizontal-alignment: right; }
+
+    if item.kind == "notice": Small { text: root.notice-text(item); horizontal-alignment: center; }
 
     if item.kind == "error": Rectangle {
         border-width: 1px;
@@ -151,24 +258,40 @@ component Message inherits VerticalLayout {
             padding: 9px;
             spacing: 6px;
             // Explicit widths (row minus paddings and border): wrapped height follows.
-            Body { text: "⚠ " + item.text; color: Theme.danger; width: root.width - 2 * 18px - 2 * 9px - 2px; }
+            Body { text: "⚠ " + root.error-text(item); color: Theme.danger; width: root.width - 2 * 18px - 2 * 9px - 2px; }
             if item.detail != "": Small { text: item.detail; wrap: word-wrap; overflow: clip; width: root.width - 2 * 18px - 2 * 9px - 2px; }
             HorizontalLayout {
                 alignment: start;
                 spacing: 6px;
                 height: Theme.button-small-height;
-                if root.last && root.can-retry: Button { small: true; text: "重试"; clicked => { root.retry(); } }
-                if item.settings: Button { small: true; width: 64px; text: "打开设置"; clicked => { root.open-settings(); } }
+                if root.last && root.can-retry: Button { small: true; text: @tr("Retry"); clicked => { root.retry(); } }
+                if item.settings: Button { small: true; width: max(64px, self.preferred-width); text: @tr("Open Settings"); clicked => { root.open-settings(); } }
             }
         }
     }
 }
 
 export component AiWindow inherits Window {
+    // i18n-ignore: the product's name
     title: "Vestra Player AI";
-    preferred-width: 900px;
+    // 900px (at least 720), wider only when the result card's buttons need it in this language (sessions 220 +
+    // line 1 + card padding 2 × 12 + border 2 × 1 + padding 2 × 8).
+    preferred-width: max(900px, card-measure.preferred-width + 263px);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        card-measure := HorizontalLayout {
+            spacing: 6px;
+            Button { small: true; width: max(52px, self.preferred-width); text: @tr("Install"); }
+            Button { small: true; width: max(112px, self.preferred-width); text: @tr("Roll Back (Undo Install)"); }
+            Button { small: true; width: max(80px, self.preferred-width); text: @tr("Export .vxp"); }
+            Button { small: true; width: max(96px, self.preferred-width); text: @tr("Export Source .zip"); }
+            Button { small: true; width: max(72px, self.preferred-width); text: @tr("Open Folder"); }
+        }
+    }
     preferred-height: 620px;
-    min-width: 720px;
+    min-width: max(720px, card-measure.preferred-width + 263px);
     min-height: 480px;
     background: Theme.bg-panel;
 
@@ -176,14 +299,18 @@ export component AiWindow inherits Window {
     in property <[ChatRow]> rows;
     // A provider and its key (or a local endpoint) are set up.
     in property <bool> configured: true;
-    // Keychain state or missing setup, shown above the conversation; empty: none.
-    in property <string> banner;
+    // Keychain state or missing setup, shown above the conversation; code "": none.
+    in property <CardSay> banner;
     // The shown session is generating.
     in property <bool> busy;
     // Another session is generating (one run at a time).
     in property <bool> blocked;
+    // "": a new conversation.
     in property <string> session-title;
+    // The model ("" until set up) and its provider.
     in property <string> model-text;
+    in property <string> provider-id;
+    in property <string> provider-name;
     in property <bool> has-folder;
     in property <bool> can-retry;
     in-out property <string> draft;
@@ -193,10 +320,12 @@ export component AiWindow inherits Window {
     in property <[string]> projects;
     in-out property <int> project-index;
     in property <string> project-title;
-    // What the last card action (or the agent's install) did.
-    in property <string> card-status;
+    // What the last card action (or the agent's install) did; code "": nothing.
+    in property <CardSay> card-status;
+    // After an install: the bindings that did not take effect.
+    in property <[Shadowed]> card-keys;
     in property <bool> card-busy;
-    // Installed in this run: 「回退」 undoes it.
+    // Installed in this run: Roll Back undoes it.
     in property <bool> can-rollback;
 
     callback send(string);
@@ -220,6 +349,65 @@ export component AiWindow inherits Window {
     callback open-project();
 
     private property <bool> can-send: root.configured && !root.busy && !root.blocked;
+
+    pure function banner-text(s: CardSay) -> string {
+        s.code == "gone" ? Labels.gone(s.args[0])
+            : s.code == "reading" ? @tr("Reading the API key from the keychain… (the system may ask for permission)")
+            : s.code == "key-unreadable" ? @tr("Cannot read the key from the keychain; save it again in the settings. ({})", s.args[0])
+            : s.code == "key-missing" ? @tr("Cannot read the key from the keychain; save it again in the settings. (The key is not in the keychain)")
+            : s.code == "not-read" ? @tr("The API key has not been read yet.")
+            : s.code == "not-configured" ? @tr("No provider set up: choose a provider in the settings and save its API key first.")
+            : ""
+    }
+    // An install, rollback or uninstall (args: action, a, b, status, message).
+    pure function action-text(s: CardSay) -> string {
+        s.args[0] == "install" ? @tr("Install {0} {1}", s.args[1], s.args[2])
+            : s.args[0] == "rollback" ? @tr("Roll back to {}", s.args[1])
+            : @tr("Uninstall {}", s.args[1])
+    }
+    pure function outcome-text(status: string) -> string {
+        status == "committed" ? @tr("done")
+            : status == "cancelled" ? @tr("cancelled")
+            : status == "failed" ? @tr("failed")
+            : status == "failedDegraded" ? @tr("failed; the previous version could not be fully restored")
+            : status == "tooLate" ? @tr("too late to cancel")
+            : status
+    }
+    pure function card-text(s: CardSay) -> string {
+        s.code == "packing" ? @tr("Packing {}…", s.args[0])
+            : s.code == "validating" ? @tr("The player is validating {}…", s.args[0])
+            : s.code == "invalid" ? @tr("The player's validation failed ({0}): {1}", s.args[0], s.args[1])
+            : s.code == "pack-problems" ? @tr("Checks before packing failed: {} problem(s)", s.args[0])
+            : s.code == "pack-type-errors" ? @tr("Packing failed: {} type error(s)", s.args[0])
+            : s.code == "pack-failed" ? @tr("Packing failed")
+            : s.code == "pack-no-vxp" ? @tr("Packing failed: no .vxp was written")
+            : s.code == "cancelled" ? @tr("Packing cancelled")
+            : s.code == "timed-out" ? @tr("Packing timed out and was stopped")
+            : s.code == "install-cancelled" ? @tr("Not installed (cancelled).")
+            : s.code == "installing" ? @tr("Installing {}…", s.args[0])
+            : s.code == "builtin-id" ? @tr("{} has the name of a plugin built into the player and cannot be installed; choose another id.", s.args[0])
+            : s.code == "kept-installed" ? @tr("Not installed: the installed plugin was kept.")
+            : s.code == "progress" ? @tr("{0}: {1}…", root.action-text(s), s.args[3])
+            : s.code == "result" && s.args[4] != "" ? @tr("{0}: {1} ({2})", root.action-text(s), root.outcome-text(s.args[3]), s.args[4])
+            : s.code == "result" ? @tr("{0}: {1}", root.action-text(s), root.outcome-text(s.args[3]))
+            : s.code == "installed" && root.card-keys.length > 0 ? @tr("Installed {0} {1}; you can click Roll Back (Undo Install). Shortcuts not in effect:", s.args[0], s.args[1])
+            : s.code == "installed" ? @tr("Installed {0} {1}; you can click Roll Back (Undo Install).", s.args[0], s.args[1])
+            : s.code == "not-installed" ? @tr("{} is no longer among the installed plugins.", s.args[0])
+            : s.code == "rolling-back" ? @tr("Rolling back {}…", s.args[0])
+            : s.code == "exported" ? @tr("Exported {}", s.args[0])
+            : s.code == "exported-source-local" ? @tr("Exported {}. The id starts with local.: before publishing, change the id in manifest.json to <your GitHub name>.<name>; LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json.", s.args[0])
+            : s.code == "exported-source" ? @tr("Exported {}. LICENSE is a placeholder: before publishing, replace it with the full text of the license you chose, and set license in manifest.json.", s.args[0])
+            : s.code == "error" ? @tr("Something went wrong: {}", s.args[0])
+            : s.code == "failed" ? s.args[0]
+            : ""
+    }
+    // A binding that did not take effect, and who holds its key.
+    pure function shadowed-text(k: Shadowed) -> string {
+        @tr("{0} ({1}) is taken by {2}", k.input, k.title, root.holder-text(k))
+    }
+    pure function holder-text(k: Shadowed) -> string {
+        k.plugin == "host" ? @tr("the player “{}”", k.holder) : @tr("{0} “{1}”", k.plugin, k.holder)
+    }
     // Follow new text unless the user scrolled up.
     private property <bool> stick: true;
 
@@ -239,7 +427,7 @@ export component AiWindow inherits Window {
                 spacing: 8px;
                 // Buttons have a minimum height but no maximum: in a layout
                 // with spare height they need a fixed one.
-                Button { height: Theme.button-primary-height; text: "+ 新对话"; clicked => { root.new-chat(); } }
+                Button { height: Theme.button-primary-height; text: @tr("+ New Chat"); clicked => { root.new-chat(); } }
                 ListView {
                     vertical-stretch: 1;
                     for s in root.sessions: Rectangle {
@@ -251,7 +439,7 @@ export component AiWindow inherits Window {
                             padding-right: 8px;
                             spacing: 4px;
                             Text {
-                                text: s.title;
+                                text: !s.header ? (s.title == "" ? @tr("New chat") : s.title) : s.title == "today" ? @tr("Today") : @tr("Earlier");
                                 color: s.header ? Theme.text-dim : Theme.text;
                                 font-size: s.header ? Theme.font-xs : Theme.font-body;
                                 vertical-alignment: s.header ? bottom : center;
@@ -266,11 +454,12 @@ export component AiWindow inherits Window {
                         }
                     }
                 }
-                Button { height: Theme.button-primary-height; text: "⚙ 设置"; clicked => { root.open-settings(); } }
+                Button { height: Theme.button-primary-height; text: @tr("⚙ Settings"); clicked => { root.open-settings(); } }
                 HorizontalLayout {
                     spacing: 6px;
                     height: 18px;
                     Image { source: @image-url("assets/pi-logo.svg"); width: 16px; height: 16px; }
+                    // i18n-ignore: pi's own wording
                     Link { text: "powered by pi"; clicked => { root.open-pi(); } }
                     Rectangle { horizontal-stretch: 1; }
                 }
@@ -287,7 +476,7 @@ export component AiWindow inherits Window {
                 padding-right: 12px;
                 spacing: 8px;
                 Text {
-                    text: root.session-title;
+                    text: root.session-title == "" ? @tr("New chat") : root.session-title;
                     color: Theme.text;
                     font-size: Theme.font-title;
                     vertical-alignment: center;
@@ -297,10 +486,10 @@ export component AiWindow inherits Window {
                 if root.has-folder: VerticalLayout {
                     alignment: center;
                     horizontal-stretch: 0;
-                    Button { small: true; width: 72px; text: "打开文件夹"; clicked => { root.open-folder(); } }
+                    Button { small: true; width: max(72px, self.preferred-width); text: @tr("Open Folder"); clicked => { root.open-folder(); } }
                 }
             }
-            if root.banner != "": Rectangle {
+            if root.banner.code != "": Rectangle {
                 vertical-stretch: 0;
                 background: Theme.bg-list;
                 HorizontalLayout {
@@ -308,7 +497,7 @@ export component AiWindow inherits Window {
                     padding-left: 18px;
                     spacing: 8px;
                     Text {
-                        text: root.banner;
+                        text: root.banner-text(root.banner);
                         color: Theme.text;
                         font-size: Theme.font-body;
                         vertical-alignment: center;
@@ -318,7 +507,7 @@ export component AiWindow inherits Window {
                     VerticalLayout {
                         alignment: center;
                         horizontal-stretch: 0;
-                        Button { horizontal-stretch: 0; text: "去设置"; clicked => { root.open-settings(); } }
+                        Button { horizontal-stretch: 0; text: @tr("Go to Settings"); clicked => { root.open-settings(); } }
                     }
                 }
             }
@@ -332,7 +521,7 @@ export component AiWindow inherits Window {
                     Image { source: @image-url("assets/pi-logo.svg"); width: 56px; height: 56px; }
                 }
                 Text {
-                    text: "想做什么插件，或者问点什么？";
+                    text: @tr("What plugin would you like to make, or what would you like to ask?");
                     color: Theme.text;
                     font-size: Theme.font-title;
                     horizontal-alignment: center;
@@ -379,7 +568,7 @@ export component AiWindow inherits Window {
                         spacing: 8px;
                         height: Theme.input-height;
                         Text {
-                            text: "插件：" + root.project-title;
+                            text: @tr("Plugin: {}", root.project-title);
                             color: Theme.text;
                             font-size: Theme.font-body;
                             vertical-alignment: center;
@@ -399,17 +588,25 @@ export component AiWindow inherits Window {
                         alignment: start;
                         spacing: 6px;
                         height: Theme.button-small-height;
-                        Button { small: true; width: 52px; text: "安装"; enabled: !root.card-busy; clicked => { root.install(); } }
-                        if root.can-rollback: Button { small: true; width: 112px; text: "回退（撤销安装）"; enabled: !root.card-busy; clicked => { root.rollback(); } }
-                        Button { small: true; width: 80px; text: "导出 .vxp"; enabled: !root.card-busy; clicked => { root.export-vxp(); } }
-                        Button { small: true; width: 96px; text: "导出源码 zip"; enabled: !root.card-busy; clicked => { root.export-source(); } }
-                        Button { small: true; width: 72px; text: "打开文件夹"; clicked => { root.open-project(); } }
+                        Button { small: true; width: max(52px, self.preferred-width); text: @tr("Install"); enabled: !root.card-busy; clicked => { root.install(); } }
+                        if root.can-rollback: Button { small: true; width: max(112px, self.preferred-width); text: @tr("Roll Back (Undo Install)"); enabled: !root.card-busy; clicked => { root.rollback(); } }
+                        Button { small: true; width: max(80px, self.preferred-width); text: @tr("Export .vxp"); enabled: !root.card-busy; clicked => { root.export-vxp(); } }
+                        Button { small: true; width: max(96px, self.preferred-width); text: @tr("Export Source .zip"); enabled: !root.card-busy; clicked => { root.export-source(); } }
+                        Button { small: true; width: max(72px, self.preferred-width); text: @tr("Open Folder"); clicked => { root.open-project(); } }
                     }
-                    if root.card-status != "": Text {
-                        text: root.card-status;
+                    if root.card-status.code != "": Text {
+                        text: root.card-text(root.card-status);
                         color: Theme.text-dim;
                         font-size: Theme.font-body;
                         wrap: word-wrap;
+                    }
+                    if root.card-status.code == "installed": VerticalLayout {
+                        for key in root.card-keys: Text {
+                            text: root.shadowed-text(key);
+                            color: Theme.text-dim;
+                            font-size: Theme.font-body;
+                            wrap: word-wrap;
+                        }
                     }
                 }
               }
@@ -426,7 +623,7 @@ export component AiWindow inherits Window {
                     font-size: Theme.font-tab;
                     wrap: word-wrap;
                     enabled: root.configured;
-                    placeholder-text: root.blocked ? "另一会话正在生成，请稍候…" : "输入消息… Enter 发送 · Shift+Enter 换行";
+                    placeholder-text: root.blocked ? @tr("Another conversation is generating; please wait…") : @tr("Type a message… Enter to send · Shift+Enter for a new line");
                     text <=> root.draft;
                     edited => { root.draft-changed(self.text); }
                     key-pressed(event) => {
@@ -440,14 +637,14 @@ export component AiWindow inherits Window {
                 HorizontalLayout {
                     height: Theme.button-height;
                     spacing: 8px;
-                    Small { text: root.model-text; horizontal-stretch: 1; }
+                    Small { text: root.model-text == "" ? "" : Labels.provider(root.provider-id, root.provider-name) + " · " + root.model-text; horizontal-stretch: 1; }
                     if !root.busy: Button {
                         horizontal-stretch: 0;
-                        text: "发送";
+                        text: @tr("Send");
                         enabled: root.can-send && root.draft != "";
                         clicked => { root.submit(); }
                     }
-                    if root.busy: Button { horizontal-stretch: 0; text: "■ 停止"; clicked => { root.stop(); } }
+                    if root.busy: Button { horizontal-stretch: 0; text: @tr("■ Stop"); clicked => { root.stop(); } }
                 }
             }
         }

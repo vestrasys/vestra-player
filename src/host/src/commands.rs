@@ -51,6 +51,20 @@ pub struct Declaration {
     pub focus: Option<Focus>,
     #[serde(default)]
     pub repeat: bool,
+    /// What the menu shows (doc/architecture/i18n.md §5), in the interface
+    /// language; `title` and `path` stay as declared (English source text),
+    /// the keys menus merge by. Filled by the player (`localize`), never by
+    /// the plugin; empty = show the keys.
+    #[serde(skip)]
+    pub display: Display,
+}
+
+/// The shown text of a [`Declaration`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Display {
+    pub title: String,
+    /// One per path segment.
+    pub path: Vec<String>,
 }
 
 impl Declaration {
@@ -64,6 +78,64 @@ impl Declaration {
             bindings: Vec::new(),
             focus: None,
             repeat: false,
+            display: Display::default(),
+        }
+    }
+    /// The menu text of this command.
+    pub fn shown_title(&self) -> &str {
+        if self.display.title.is_empty() {
+            &self.title
+        } else {
+            &self.display.title
+        }
+    }
+    /// The shown path (the keys where nothing was translated).
+    pub fn shown_path(&self) -> Vec<String> {
+        (0..self.path.len())
+            .map(|i| self.shown_segment(i).to_owned())
+            .collect()
+    }
+    fn shown_segment(&self, index: usize) -> &str {
+        self.display
+            .path
+            .get(index)
+            .filter(|s| !s.is_empty())
+            .unwrap_or(&self.path[index])
+    }
+    /// Fill `display` from `text` (the declaring plugin's catalog): the
+    /// title and each segment, except the player's own submenus
+    /// ([`host_group_label`]), which keep the player's words whoever
+    /// declares into them. Call after [`normalize`].
+    pub fn localize(&mut self, text: impl Fn(&str) -> String) {
+        let declared = self.path.clone();
+        self.localize_declared(&declared, text);
+    }
+    /// [`Declaration::localize`] for a path [`normalize`] changed: the shown
+    /// text comes from the segments as `declared` (an old Chinese title
+    /// stays itself), the player's submenus from the keys.
+    pub fn localize_declared(&mut self, declared: &[String], text: impl Fn(&str) -> String) {
+        let path = &self.path;
+        self.display.path = (0..path.len())
+            .map(|i| {
+                (i + 1 < path.len())
+                    .then(|| host_group_label(&path[..=i]))
+                    .flatten()
+                    .unwrap_or_else(|| text(declared.get(i).unwrap_or(&path[i])))
+            })
+            .collect();
+        self.display.title = text(&self.title);
+    }
+    /// Overwrite the shown title and segments that were text values (their
+    /// keys are the English renderings): `title`, and `path` by index.
+    /// Call after [`Declaration::localize_declared`].
+    pub fn show_texts(&mut self, title: Option<String>, path: &[Option<String>]) {
+        if let Some(title) = title {
+            self.display.title = title;
+        }
+        for (index, shown) in path.iter().enumerate() {
+            if let (Some(shown), Some(slot)) = (shown, self.display.path.get_mut(index)) {
+                *slot = shown.clone();
+            }
         }
     }
 }
@@ -94,7 +166,11 @@ pub struct CommandSnapshot {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum MenuNode {
     Group {
+        /// The key: the declared segment (English source text).
         title: String,
+        /// What the menu shows: the player's word for its own submenus,
+        /// else the first command's (in menu order) translation.
+        label: String,
         /// Taken from the first command (in menu order) below this group.
         group: String,
         children: Vec<MenuNode>,
@@ -227,27 +303,64 @@ fn local_id(value: &str) -> Result<()> {
     Ok(())
 }
 
-/// The player's built-in top-level menus: id, title, top-level order. A
+/// The player's built-in top-level menus: id, key, top-level order. A
 /// plugin names one with `@<id>` as the first path segment
-/// (`["@video", "Blur"]`), so its command joins that menu whatever the
-/// player's language; the registry stores the menu's title. Reference §4.
-/// Mirrored by `MENU_IDS` in the SDK package; tests/sdk/host-agreement.test.ts
-/// checks the installed SDK agrees.
+/// (`["@video", "Blur"]`) or with its key (`["Video", "Blur"]`); either way
+/// its command joins that menu, shown in the interface language
+/// ([`host_group_label`]). Reference §4. Mirrored by `MENU_IDS` in the SDK
+/// package; tests/sdk/host-agreement.test.ts checks the installed SDK agrees.
 ///
-/// A top-level submenu with one of these titles (reached by id or by the
-/// title itself) sits at this order, not at its first command: a plugin
-/// item inside cannot move the menu. doc/product/menus.md lists the orders.
+/// A top-level submenu with one of these keys sits at this order, not at its
+/// first command: a plugin item inside cannot move the menu.
+/// doc/product/menus.md lists the orders.
 pub const MENU_ANCHORS: [(&str, &str, i32); 7] = [
-    ("open", "打开", 110),
-    ("playback", "播放", 200),
-    ("subtitles", "字幕", 300),
-    ("video", "视频", 400),
-    ("audio", "声音", 500),
-    ("screen", "屏幕", 710),
-    ("settings", "设置", 830),
+    ("open", "Open", 110),
+    ("playback", "Playback", 200),
+    ("subtitles", "Subtitles", 300),
+    ("video", "Video", 400),
+    ("audio", "Audio", 500),
+    ("screen", "Screen", 710),
+    ("settings", "Settings", 830),
 ];
 
-/// Top-level order of a built-in menu, by title.
+/// The player's Chinese menu titles from before English keys (players up
+/// to 0.4.2): a plugin that still declares one lands in the same menu.
+/// Parent path, old title, key. The last entries are submenus that a
+/// migrated built-in plugin shares with plugins not migrated yet (i18n
+/// round 2 removes the need; doc/product/menus.md has the English keys).
+const LEGACY_MENUS: [(&[&str], &str, &str); 10] = [
+    (&[], "打开", "Open"),
+    (&[], "播放", "Playback"),
+    (&[], "字幕", "Subtitles"),
+    (&[], "视频", "Video"),
+    (&[], "声音", "Audio"),
+    (&[], "屏幕", "Screen"),
+    (&[], "设置", "Settings"),
+    (&["Playback"], "速度", "Speed"),
+    (&["Playback"], "跳转", "Seek"),
+    (&["Settings"], "外观", "Appearance"),
+];
+
+/// How the player shows its own submenus (the built-in menus and the
+/// submenus of its core actions), whoever declares commands into them.
+pub fn host_group_label(path: &[String]) -> Option<String> {
+    use crate::i18n::tr;
+    let path: Vec<&str> = path.iter().map(String::as_str).collect();
+    Some(match path.as_slice() {
+        ["Open"] => tr("Open"),
+        ["Playback"] => tr("Playback"),
+        ["Subtitles"] => tr("Subtitles"),
+        ["Video"] => tr("Video"),
+        ["Audio"] => tr("Audio"),
+        ["Screen"] => tr("Screen"),
+        ["Settings"] => tr("Settings"),
+        ["Playback", "Speed"] => tr("Speed"),
+        ["Playback", "Seek"] => tr("Seek"),
+        _ => return None,
+    })
+}
+
+/// Top-level order of a built-in menu, by key.
 fn built_in_menu(title: &str) -> Option<i32> {
     MENU_ANCHORS
         .iter()
@@ -255,27 +368,35 @@ fn built_in_menu(title: &str) -> Option<i32> {
         .map(|(_, _, order)| *order)
 }
 
-/// Replace a leading `@<id>` with the built-in menu's title.
-fn resolve_anchor(path: &mut [String]) -> Result<()> {
-    let Some(id) = path.first().and_then(|first| first.strip_prefix('@')) else {
-        return Ok(());
-    };
-    let Some((_, title, _)) = MENU_ANCHORS.iter().find(|(anchor, _, _)| *anchor == id) else {
-        let known: Vec<_> = MENU_ANCHORS
-            .iter()
-            .map(|(id, _, _)| format!("@{id}"))
-            .collect();
-        return Err(CommandError::Invalid(format!(
-            "unknown menu id @{id}; the built-in menus are {}",
-            known.join(", ")
-        )));
-    };
-    if path.len() < 2 {
-        return Err(CommandError::Invalid(format!(
-            "menu id @{id} needs an item after it"
-        )));
+/// The keys a path merges by: a leading `@<id>` becomes the built-in menu's
+/// key, and the player's old Chinese titles of its own menus become theirs
+/// (`LEGACY_MENUS`). Idempotent.
+pub fn normalize(path: &mut [String]) -> Result<()> {
+    if let Some(id) = path.first().and_then(|first| first.strip_prefix('@')) {
+        let Some((_, key, _)) = MENU_ANCHORS.iter().find(|(anchor, _, _)| *anchor == id) else {
+            let known: Vec<_> = MENU_ANCHORS
+                .iter()
+                .map(|(id, _, _)| format!("@{id}"))
+                .collect();
+            return Err(CommandError::Invalid(format!(
+                "unknown menu id @{id}; the built-in menus are {}",
+                known.join(", ")
+            )));
+        };
+        if path.len() < 2 {
+            return Err(CommandError::Invalid(format!(
+                "menu id @{id} needs an item after it"
+            )));
+        }
+        path[0] = (*key).to_owned();
     }
-    path[0] = (*title).to_owned();
+    for (parent, old, key) in LEGACY_MENUS {
+        let depth = parent.len();
+        // Only a submenu (a segment with something below it) is renamed.
+        if path.len() > depth + 1 && path[..depth] == *parent && path[depth] == old {
+            path[depth] = key.to_owned();
+        }
+    }
     Ok(())
 }
 
@@ -317,7 +438,7 @@ impl Registry {
         state: CommandState,
     ) -> Result<()> {
         local_id(&id)?;
-        resolve_anchor(&mut declaration.path)?;
+        normalize(&mut declaration.path)?;
         if revision == 0 {
             return Err(CommandError::Invalid("command revision starts at 1".into()));
         }
@@ -467,6 +588,20 @@ impl Registry {
         self.revision
     }
 
+    /// Disabled commands (owner, id → reason), for the key bindings to skip.
+    pub fn disabled(&self) -> BTreeMap<(OwnerGeneration, String), Option<String>> {
+        self.commands
+            .iter()
+            .filter(|(_, entry)| !entry.state.enabled)
+            .map(|(key, entry)| {
+                (
+                    (key.owner, key.local_id.clone()),
+                    entry.state.reason.clone(),
+                )
+            })
+            .collect()
+    }
+
     pub fn snapshot(&self) -> MenuSnapshot {
         let entries: Vec<_> = self
             .commands
@@ -556,12 +691,15 @@ fn tree(entries: &[&CommandSnapshot], depth: usize, appended: bool) -> Vec<MenuN
             Some(order) => (order, "", 0),
             None => rank(first, appended),
         };
+        let label = host_group_label(&first.declaration.path[..=depth])
+            .unwrap_or_else(|| first.declaration.shown_segment(depth).to_owned());
         nodes.push((
             key,
             MenuNode::Group {
                 group: first.declaration.group.clone(),
                 children: tree(&members, depth + 1, built_in.is_some()),
                 title,
+                label,
             },
         ));
     }
@@ -707,6 +845,12 @@ mod tests {
                 reason: Some("No source".into())
             })
         );
+        assert_eq!(
+            registry.disabled(),
+            [((1, "play".to_owned()), Some("No source".to_owned()))]
+                .into_iter()
+                .collect()
+        );
         let mut busy = state(true);
         busy.busy = true;
         busy.reason = Some("Preparing".into());
@@ -717,6 +861,7 @@ mod tests {
                 reason: Some("Preparing".into())
             })
         );
+        assert!(registry.disabled().is_empty());
     }
 
     #[test]
@@ -818,8 +963,8 @@ mod tests {
         assert_eq!(titles, ["M zero", "Z first", "A second"]);
     }
 
-    /// An English plugin's `["@video", "Blur"]` lands in the same 视频 menu
-    /// as the built-in video plugin's `["视频", …]` commands.
+    /// An English plugin's `["@video", "Blur"]` lands in the same Video menu
+    /// as the built-in video plugin's old `["视频", …]` commands.
     #[test]
     fn menu_ids_name_the_built_in_menus_in_any_language() {
         let mut registry = Registry::new();
@@ -845,12 +990,12 @@ mod tests {
             .unwrap();
         assert_eq!(
             registry.get(2, "toggle").unwrap().declaration.path,
-            ["视频", "Blur"]
+            ["Video", "Blur"]
         );
         let roots = registry.snapshot().roots;
         let mut titles = Vec::new();
         flatten(&roots, &mut titles);
-        assert_eq!(titles, ["▸视频", "旋转", "Blur"]);
+        assert_eq!(titles, ["▸Video", "旋转", "Blur"]);
         // The same leaf again collides whichever way the menu is named.
         assert!(matches!(
             registry.register(
@@ -885,13 +1030,13 @@ mod tests {
             .unwrap();
         assert_eq!(
             registry.get(3, "at").unwrap().declaration.path,
-            ["声音", "@home", "X"]
+            ["Audio", "@home", "X"]
         );
         assert_eq!(MENU_ANCHORS.len(), 7);
     }
 
     /// A plugin item in a built-in menu, with no `order` (0), does not move
-    /// the menu: 视频 stays between 字幕 and 声音 and the item goes last.
+    /// the menu: Video stays between Subtitles and Audio and the item goes last.
     #[test]
     fn plugin_items_do_not_move_built_in_menus() {
         let mut registry = Registry::new();
@@ -932,9 +1077,9 @@ mod tests {
             [
                 // A plugin's own top-level item still sorts by its order.
                 "Tools",
-                "▸字幕",
+                "▸Subtitles",
                 "显示字幕",
-                "▸视频",
+                "▸Video",
                 // A negative order puts an item first inside, nothing more.
                 "First",
                 "▸图像旋转",
@@ -943,14 +1088,14 @@ mod tests {
                 // Order 0 by id or by title: after the menu's own items.
                 "Blur…",
                 "Sharpen",
-                "▸声音",
+                "▸Audio",
                 "均衡器",
                 "▸Tools",
                 // Below the plugin's own submenu, 0 is an ordinary order.
                 "A",
                 "B",
-                // Only plugins fill 设置 here: it still sits at its own order.
-                "▸设置",
+                // Only plugins fill Settings here: it still sits at its own order.
+                "▸Settings",
                 "X",
             ]
         );
@@ -1244,5 +1389,134 @@ mod tests {
         flatten(&registry.snapshot().roots, &mut actual);
         assert_eq!(actual, expected);
         assert_eq!(TABLE.len(), 46);
+    }
+
+    /// i18n.md §5: the player's old Chinese titles of its own menus are
+    /// aliases of their English keys, so an unmigrated plugin's items land
+    /// in the player's submenus (and `@id` still works).
+    #[test]
+    fn old_chinese_titles_of_the_players_menus_merge_with_the_english_keys() {
+        let mut registry = Registry::new();
+        for (owner, id, path) in [
+            (1, "normal", vec!["Playback", "Speed", "Normal"]),
+            (2, "half", vec!["播放", "速度", "0.5x"]),
+            (2, "jump", vec!["播放", "跳转", "跳到开头"]),
+            (3, "frame", vec!["@playback", "Seek", "Next Frame"]),
+            // Only a submenu is renamed: a leaf titled 速度 stays itself.
+            (4, "leaf", vec!["播放", "速度…"]),
+            // A submenu shared with a migrated plugin.
+            (5, "logo", vec!["设置", "外观", "显示徽标"]),
+            (6, "dark", vec!["Settings", "Appearance", "Vestra Dark"]),
+        ] {
+            registry
+                .register(owner, "m", id.into(), 1, declaration(&path), state(true))
+                .unwrap();
+        }
+        assert_eq!(
+            registry.get(2, "half").unwrap().declaration.path,
+            ["Playback", "Speed", "0.5x"]
+        );
+        let mut titles = Vec::new();
+        flatten(&registry.snapshot().roots, &mut titles);
+        assert_eq!(
+            titles,
+            [
+                "▸Playback",
+                "▸Speed",
+                "Normal",
+                "0.5x",
+                "▸Seek",
+                "跳到开头",
+                "Next Frame",
+                "速度…",
+                "▸Settings",
+                "▸Appearance",
+                "显示徽标",
+                "Vestra Dark"
+            ]
+        );
+        // The unmigrated plugin's own words still show.
+        let mut logo = declaration(&["设置", "外观", "显示徽标"]);
+        let declared = logo.path.clone();
+        normalize(&mut logo.path).unwrap();
+        logo.localize_declared(&declared, |text| text.to_owned());
+        assert_eq!(logo.path, ["Settings", "Appearance", "显示徽标"]);
+        assert_eq!(logo.shown_path(), ["Settings", "外观", "显示徽标"]);
+        // Normalizing twice changes nothing.
+        let mut path = vec!["Playback".to_owned(), "Speed".into(), "x".into()];
+        normalize(&mut path).unwrap();
+        assert_eq!(path, ["Playback", "Speed", "x"]);
+    }
+
+    /// i18n.md §7: a text value's key is its English rendering, its shown
+    /// text the translation (set by `show_texts` after `localize_declared`).
+    #[test]
+    fn text_value_segments_show_their_rendering() {
+        let mut track = declaration(&["@audio", "Audio Track", "Track 2 (opus)"]);
+        let declared = track.path.clone();
+        normalize(&mut track.path).unwrap();
+        track.localize_declared(&declared, |text| match text {
+            "Audio Track" => "音轨".to_owned(),
+            other => other.to_owned(),
+        });
+        track.show_texts(
+            Some("音轨 2 (opus)".into()),
+            &[None, None, Some("音轨 2 (opus)".into())],
+        );
+        assert_eq!(track.path, ["Audio", "Audio Track", "Track 2 (opus)"]);
+        assert_eq!(track.shown_path()[1..], ["音轨", "音轨 2 (opus)"]);
+        assert_eq!(track.shown_title(), "音轨 2 (opus)");
+    }
+
+    /// i18n.md §5: menus merge by key and show labels: the player's words for
+    /// its own submenus, the declaring plugin's catalog for the rest.
+    #[test]
+    fn groups_and_items_show_their_translations() {
+        let mut registry = Registry::new();
+        let catalog = |text: &str| match text {
+            "Tools" => "工具".to_owned(),
+            "Blur…" => "模糊…".to_owned(),
+            other => other.to_owned(),
+        };
+        let mut blur = declaration(&["@video", "Tools", "Blur…"]);
+        normalize(&mut blur.path).unwrap();
+        blur.localize(catalog);
+        assert_eq!(blur.shown_title(), "模糊…");
+        // English run: the player's own "Video" is itself.
+        assert_eq!(blur.shown_path(), ["Video", "工具", "模糊…"]);
+        registry
+            .register(1, "m", "blur".into(), 1, blur, state(true))
+            .unwrap();
+        // Another plugin without a translation joins the same submenu by key.
+        let mut other = declaration(&["Video", "Tools", "Sharpen"]);
+        other.localize(|text| text.to_owned());
+        registry
+            .register(2, "n", "sharpen".into(), 1, other, state(true))
+            .unwrap();
+        let roots = registry.snapshot().roots;
+        let MenuNode::Group {
+            label, children, ..
+        } = &roots[0]
+        else {
+            panic!("a group")
+        };
+        assert_eq!(label, "Video");
+        let MenuNode::Group {
+            title,
+            label,
+            children,
+            ..
+        } = &children[0]
+        else {
+            panic!("a group")
+        };
+        assert_eq!((title.as_str(), label.as_str()), ("Tools", "工具"));
+        assert_eq!(children.len(), 2);
+        // Undeclared display: the keys show.
+        let plain = declaration(&["A", "B"]);
+        assert_eq!(
+            (plain.shown_title(), plain.shown_path()),
+            ("B", vec!["A".to_owned(), "B".into()])
+        );
     }
 }

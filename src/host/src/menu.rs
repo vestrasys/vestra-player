@@ -67,10 +67,18 @@ pub fn valid_path(roots: &[MenuNode], path: &[String]) -> Vec<String> {
     valid
 }
 
-/// Rough text advance at the 12px menu font: CJK is about one em, Latin about half.
+/// Rough text advance at the 12px menu font: wide characters (East Asian
+/// Width W/F: CJK, kana, Hangul, fullwidth forms) are about one em, the rest
+/// (Latin, accented Latin, Cyrillic, symbols) about half; combining marks
+/// add nothing.
 fn text_width(text: &str) -> f64 {
+    use unicode_width::UnicodeWidthChar;
     text.chars()
-        .map(|c| if c.is_ascii() { 7. } else { 12.5 })
+        .map(|c| match c.width() {
+            Some(0) if !c.is_ascii() => 0.,
+            Some(2) => 12.5,
+            _ => 7.,
+        })
         .sum()
 }
 
@@ -79,7 +87,7 @@ pub type Labels<'a> = &'a dyn Fn(u64, &str) -> Option<String>;
 
 fn command_row(entry: &CommandSnapshot, labels: Labels<'_>) -> Value {
     json!({"token":format!("c:{}:{}",entry.key.owner,entry.key.local_id),
-        "title":entry.declaration.title,"enabled":entry.state.enabled,
+        "title":entry.declaration.shown_title(),"enabled":entry.state.enabled,
         "checked":entry.state.checked.unwrap_or(false),"radio":entry.declaration.radio,
         "busy":entry.state.busy,"reason":entry.state.reason.clone().unwrap_or_default(),
         "has-children":false,"open":false,
@@ -88,10 +96,10 @@ fn command_row(entry: &CommandSnapshot, labels: Labels<'_>) -> Value {
 
 fn row(node: &MenuNode, path: &[String], open: bool, labels: Labels<'_>) -> Value {
     match node {
-        MenuNode::Group { title, .. } => {
+        MenuNode::Group { title, label, .. } => {
             let mut next = path.to_vec();
             next.push(title.clone());
-            json!({"token":format!("g:{}",json!(next)),"title":title,"enabled":true,"checked":false,
+            json!({"token":format!("g:{}",json!(next)),"title":label,"enabled":true,"checked":false,
                 "radio":false,"busy":false,"reason":"","has-children":true,"open":open,"keys":""})
         }
         MenuNode::Command { entry } => command_row(entry, labels),
@@ -342,6 +350,7 @@ mod tests {
     fn group(title: &str, children: Vec<MenuNode>) -> MenuNode {
         MenuNode::Group {
             title: title.into(),
+            label: title.into(),
             group: "domain".into(),
             children,
         }

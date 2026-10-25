@@ -2,6 +2,7 @@
 import { open } from "node:fs/promises";
 import { basename, extname } from "node:path";
 import { inflateRawSync } from "node:zlib";
+import { Failure } from "./messages.ts";
 
 const CHUNK = 64 * 1024;
 
@@ -84,12 +85,12 @@ export function unzipSubtitles(bytes: Uint8Array): { name: string; bytes: Buffer
       end = i;
       break;
     }
-  if (end < 0) throw new Error("压缩包已损坏");
+  if (end < 0) throw new Failure("archiveBroken");
   const count = data.readUInt16LE(end + 10);
   let at = data.readUInt32LE(end + 16);
   const files: { name: string; bytes: Buffer }[] = [];
   for (let n = 0; n < count && at + 46 <= data.length; n++) {
-    if (data.readUInt32LE(at) !== 0x02014b50) throw new Error("压缩包已损坏");
+    if (data.readUInt32LE(at) !== 0x02014b50) throw new Failure("archiveBroken");
     const flags = data.readUInt16LE(at + 8), method = data.readUInt16LE(at + 10);
     const compressed = data.readUInt32LE(at + 20), size = data.readUInt32LE(at + 24);
     const nameLength = data.readUInt16LE(at + 28), extra = data.readUInt16LE(at + 30), comment = data.readUInt16LE(at + 32);

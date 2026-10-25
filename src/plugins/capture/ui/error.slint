@@ -2,15 +2,14 @@
 import { Theme } from "@vestra/theme.slint";
 
 export component CaptureError inherits Window {
-    title: "截图";
+    title: @tr("Snapshot");
     width: 360px;
     height: 80px;
     background: Theme.bg-panel;
-    in property <string> message: "截图窗口无法打开。";
     Text {
         x: Theme.dialog-padding;
         width: parent.width - 2 * Theme.dialog-padding;
-        text: root.message;
+        text: @tr("The snapshot window could not open. Close this notice and try again.");
         color: Theme.text;
         font-size: Theme.font-body;
         vertical-alignment: center;

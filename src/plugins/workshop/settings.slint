@@ -1,8 +1,17 @@
-// Options ▸ 插件 ▸ Vestra Player AI: the service, its API key (kept in the
+// Options ▸ Plugins ▸ Vestra Player AI: the service, its API key (kept in the
 // system keychain; only the last four characters are ever shown) and the model.
+// The plugin passes data and codes; the words are here (@tr).
 import { ComboBox, LineEdit } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
+import { Labels } from "labels.slint";
+
+// A text: a code, its arguments and a count.
+export struct PageSay {
+    code: string,
+    args: [string],
+    n: int,
+}
 
 export global AiSettings {
     in property <[string]> providers;
@@ -11,25 +20,25 @@ export global AiSettings {
     // show another model than the one used.
     in-out property <int> provider-index;
     // A custom endpoint (OpenAI or Anthropic format): Base URL, models listed
-    // from it (「获取模型」) or typed by hand.
+    // from it (Fetch Models) or typed by hand.
     in property <bool> custom;
     in property <bool> listing;
     // The provider can list its models (built-in ones where their API does).
     in property <bool> can-list;
     in-out property <string> base-url;
     in-out property <string> key-text;
-    in property <string> key-state;
+    in property <PageSay> key-state;
     in property <bool> has-key;
     in property <[string]> models;
     in-out property <int> model-index;
     in-out property <string> model-text;
-    // The saved provider is no longer offered: the notice; empty otherwise.
+    // The saved provider is no longer offered: its name; empty otherwise.
     in property <string> gone;
-    in property <string> message;
+    in property <PageSay> message;
     in property <bool> message-warn;
     // The user's GitHub name, the id prefix of new plugins; the hint says what it gives.
     in-out property <string> owner-text;
-    in property <string> owner-hint;
+    in property <PageSay> owner-hint;
     callback set-owner(string);
     callback choose-provider(int);
     callback save-key(string);
@@ -41,15 +50,68 @@ export global AiSettings {
     callback choose-model(string);
 }
 
+// The row label; `column` is the page's label column (76px, wider for longer translations).
 component Label inherits Text {
+    in property <length> column: 76px;
     color: Theme.text;
     font-size: Theme.font-body;
     vertical-alignment: center;
-    width: 76px;
+    width: root.column;
 }
 
 export component AiSettingsPage inherits Rectangle {
+    pure function key-text(s: PageSay) -> string {
+        s.code == "gone-key" ? @tr("The old provider's key is not deleted automatically")
+            : s.code == "reading" ? @tr("Reading the keychain…")
+            : s.code == "unreadable" ? @tr("Cannot read the key from the keychain; save it again")
+            : s.code == "not-read" ? @tr("Not read yet (read when the AI window opens)")
+            : s.code == "local-empty" ? @tr("Not saved (a local service may need none)")
+            : s.code == "saved" ? @tr("Saved ••••{}", s.args[0])
+            : s.code == "not-saved" ? @tr("Not saved")
+            : ""
+    }
+    pure function message-text(s: PageSay) -> string {
+        s.code == "need-provider" ? @tr("Choose a provider first, then save the key.")
+            : s.code == "save-failed" ? @tr("Could not save to the keychain: {}", s.args[0])
+            : s.code == "delete-failed" ? @tr("Could not delete from the keychain: {}", s.args[0])
+            : s.code == "old-key-deleted" ? @tr("The old provider's key was deleted.")
+            : s.code == "key-saved" ? @tr("The key for {} was saved.", Labels.provider(s.args[0], s.args[1]))
+            : s.code == "key-deleted" ? @tr("The key for {} was deleted.", Labels.provider(s.args[0], s.args[1]))
+            : s.code == "url-invalid" ? @tr("Base URL is not a valid address")
+            : s.code == "url-scheme" ? @tr("Base URL must be an http(s) address")
+            : s.code == "url-credentials" ? @tr("Do not put a user name or password in the Base URL; enter the key under API Key")
+            : s.code == "need-url" ? @tr("Enter the Base URL first.")
+            : s.code == "no-list" ? @tr("This provider does not list its models.")
+            : s.code == "fetched" ? root.found-text(s.n)
+            : s.code == "fetched-replaced" ? @tr("{0} “{1}” is not in the list; now using “{2}”.", root.found-text(s.n), s.args[0], s.args[1])
+            : s.code == "fetch-failed-custom" ? @tr("Could not get the model list ({}); enter the model ID directly.", s.args[0])
+            : s.code == "fetch-failed" ? @tr("Could not get the model list ({}); you can choose from pi's own list.", s.args[0])
+            : s.code == "fetch-empty-custom" ? @tr("Could not get the model list (no models listed); enter the model ID directly.")
+            : s.code == "fetch-empty" ? @tr("Could not get the model list (no models listed); you can choose from pi's own list.")
+            : ""
+    }
+    pure function found-text(n: int) -> string {
+        @tr("Found {n} model." | "Found {n} models." % n)
+    }
+    pure function owner-text(s: PageSay) -> string {
+        s.code == "owner" ? @tr("New plugins get the id {}.<name> (the official plugin repository requires the id prefix to be the GitHub user or organization that owns the source repository).", s.args[0])
+            : s.code == "owner-none" ? @tr("Not set: new plugins get the id local.<name>, for this computer only; to publish to the official plugin repository, enter your GitHub name.")
+            : s.code == "owner-vestra" ? @tr("“vestra” is reserved for official plugins; enter your own GitHub name (new plugins use local.<name> for now)")
+            : s.code == "owner-local" ? @tr("“local” means no name was entered; enter your own GitHub name (new plugins use local.<name> for now)")
+            : s.code == "owner-chars" ? @tr("A GitHub name has only letters, digits and “-”, at most 39 characters (new plugins use local.<name> for now)")
+            : ""
+    }
     height: 380px;
+    // The label column: 76px, or the widest label.
+    private property <length> column: max(76px, label-measure.preferred-width);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        label-measure := VerticalLayout {
+            for text in [@tr("Provider"), @tr("Base URL"), @tr("API key"), @tr("Model"), @tr("Model ID"), @tr("Plugin author")]: Text { text: text; font-size: Theme.font-body; }
+        }
+    }
     VerticalLayout {
         padding: 6px;
         spacing: 10px;
@@ -57,7 +119,7 @@ export component AiSettingsPage inherits Rectangle {
         if AiSettings.gone != "": HorizontalLayout {
             spacing: 8px;
             Text {
-                text: AiSettings.gone;
+                text: Labels.gone(AiSettings.gone);
                 color: Theme.danger;
                 font-size: Theme.font-body;
                 wrap: word-wrap;
@@ -67,12 +129,12 @@ export component AiSettingsPage inherits Rectangle {
             VerticalLayout {
                 alignment: center;
                 horizontal-stretch: 0;
-                Button { small: true; width: 72px; text: "删除旧 key"; clicked => { AiSettings.delete-old-key(); } }
+                Button { small: true; width: max(72px, self.preferred-width); text: @tr("Delete Old Key"); clicked => { AiSettings.delete-old-key(); } }
             }
         }
         HorizontalLayout {
             spacing: 8px;
-            Label { text: "服务商"; }
+            Label { column: root.column; text: @tr("Provider"); }
             ComboBox {
                 height: Theme.input-height;
                 horizontal-stretch: 1;
@@ -83,11 +145,12 @@ export component AiSettingsPage inherits Rectangle {
         }
         if AiSettings.custom: HorizontalLayout {
             spacing: 8px;
-            Label { text: "Base URL"; }
+            Label { column: root.column; text: @tr("Base URL"); }
             LineEdit {
                 height: Theme.input-height;
                 horizontal-stretch: 1;
                 font-size: Theme.font-body;
+                // i18n-ignore: an address
                 placeholder-text: "http://localhost:11434/v1";
                 text <=> AiSettings.base-url;
                 accepted(text) => { AiSettings.accept-base-url(text); }
@@ -96,27 +159,27 @@ export component AiSettingsPage inherits Rectangle {
         }
         HorizontalLayout {
             spacing: 8px;
-            Label { text: "API Key"; }
+            Label { column: root.column; text: @tr("API key"); }
             LineEdit {
                 height: Theme.input-height;
                 horizontal-stretch: 1;
                 font-size: Theme.font-body;
                 input-type: password;
-                placeholder-text: AiSettings.custom ? "本地服务可以留空" : "粘贴 API key";
+                placeholder-text: AiSettings.custom ? @tr("A local service may leave this empty") : @tr("Paste the API key");
                 text <=> AiSettings.key-text;
                 accepted(text) => { AiSettings.save-key(text); }
             }
             VerticalLayout {
                 alignment: center;
                 horizontal-stretch: 0;
-                Button { width: Theme.button-min-width; text: "保存"; enabled: AiSettings.key-text != ""; clicked => { AiSettings.save-key(AiSettings.key-text); } }
+                Button { width: max(Theme.button-min-width, self.preferred-width); text: @tr("Save"); enabled: AiSettings.key-text != ""; clicked => { AiSettings.save-key(AiSettings.key-text); } }
             }
         }
         HorizontalLayout {
             spacing: 8px;
-            Label { text: ""; }
+            Label { column: root.column; text: ""; }
             Text {
-                text: AiSettings.key-state;
+                text: root.key-text(AiSettings.key-state);
                 color: AiSettings.has-key ? Theme.text : Theme.text-dim;
                 font-size: Theme.font-body;
                 vertical-alignment: center;
@@ -125,12 +188,12 @@ export component AiSettingsPage inherits Rectangle {
             if AiSettings.has-key: VerticalLayout {
                 alignment: center;
                 horizontal-stretch: 0;
-                Button { small: true; width: Theme.button-min-width; text: "删除"; clicked => { AiSettings.delete-key(); } }
+                Button { small: true; width: max(Theme.button-min-width, self.preferred-width); text: @tr("Delete"); clicked => { AiSettings.delete-key(); } }
             }
         }
         if AiSettings.models.length > 0: HorizontalLayout {
             spacing: 8px;
-            Label { text: "模型"; }
+            Label { column: root.column; text: @tr("Model"); }
             ComboBox {
                 height: Theme.input-height;
                 horizontal-stretch: 1;
@@ -143,8 +206,8 @@ export component AiSettingsPage inherits Rectangle {
                 alignment: center;
                 horizontal-stretch: 0;
                 Button {
-                    width: Theme.button-min-width;
-                    text: AiSettings.listing ? "获取中…" : "获取模型";
+                    width: max(Theme.button-min-width, self.preferred-width);
+                    text: AiSettings.listing ? @tr("Fetching…") : @tr("Fetch Models");
                     enabled: !AiSettings.listing;
                     clicked => { AiSettings.fetch-models(); }
                 }
@@ -153,12 +216,12 @@ export component AiSettingsPage inherits Rectangle {
         // Custom endpoints: the id can always be typed (when the endpoint lists none, or another one).
         if AiSettings.custom: HorizontalLayout {
             spacing: 8px;
-            Label { text: AiSettings.models.length > 0 ? "模型 ID" : "模型"; }
+            Label { column: root.column; text: AiSettings.models.length > 0 ? @tr("Model ID") : @tr("Model"); }
             LineEdit {
                 height: Theme.input-height;
                 horizontal-stretch: 1;
                 font-size: Theme.font-body;
-                placeholder-text: "模型 ID，如 qwen3:8b";
+                placeholder-text: @tr("Model ID, e.g. qwen3:8b");
                 text <=> AiSettings.model-text;
                 edited(text) => { AiSettings.choose-model(text); }
             }
@@ -166,8 +229,8 @@ export component AiSettingsPage inherits Rectangle {
                 alignment: center;
                 horizontal-stretch: 0;
                 Button {
-                    width: Theme.button-min-width;
-                    text: AiSettings.listing ? "获取中…" : "获取模型";
+                    width: max(Theme.button-min-width, self.preferred-width);
+                    text: AiSettings.listing ? @tr("Fetching…") : @tr("Fetch Models");
                     enabled: !AiSettings.listing && AiSettings.base-url != "";
                     clicked => { AiSettings.fetch-models(); }
                 }
@@ -175,12 +238,12 @@ export component AiSettingsPage inherits Rectangle {
         }
         HorizontalLayout {
             spacing: 8px;
-            Label { text: "插件作者"; }
+            Label { column: root.column; text: @tr("Plugin author"); }
             LineEdit {
                 height: Theme.input-height;
                 horizontal-stretch: 1;
                 font-size: Theme.font-body;
-                placeholder-text: "你的 GitHub 用户名（插件 id 的前缀）";
+                placeholder-text: @tr("Your GitHub name (the prefix of plugin ids)");
                 text <=> AiSettings.owner-text;
                 edited(text) => { AiSettings.set-owner(text); }
                 accepted(text) => { AiSettings.set-owner(text); }
@@ -188,9 +251,9 @@ export component AiSettingsPage inherits Rectangle {
         }
         HorizontalLayout {
             spacing: 8px;
-            Label { text: ""; }
+            Label { column: root.column; text: ""; }
             Text {
-                text: AiSettings.owner-hint;
+                text: root.owner-text(AiSettings.owner-hint);
                 color: Theme.text-dim;
                 font-size: Theme.font-body;
                 wrap: word-wrap;
@@ -198,13 +261,13 @@ export component AiSettingsPage inherits Rectangle {
             }
         }
         Text {
-            text: "key 只保存在系统钥匙串（macOS）或凭据管理器（Windows）里，不写入任何文件、日志或会话记录。";
+            text: @tr("The key is kept only in the system keychain (macOS) or Credential Manager (Windows), never in a file, log or conversation record.");
             color: Theme.text-dim;
             font-size: Theme.font-body;
             wrap: word-wrap;
         }
-        if AiSettings.message != "": Text {
-            text: AiSettings.message;
+        if AiSettings.message.code != "": Text {
+            text: root.message-text(AiSettings.message);
             color: AiSettings.message-warn ? Theme.danger : Theme.text-dim;
             font-size: Theme.font-body;
             wrap: word-wrap;

@@ -69,6 +69,7 @@ export function createWire(transport) {
         commands: commandClient(transport),
         dialogs: {
             open: (options) => transport.request("dialogs.open", options),
+            /** Message and detail are templates formatted with `args` (player 0.4.3). */
             confirm: (options) => transport.request("dialogs.confirm", options),
         },
         /** The main window: its state, size, level, pointer hiding and picture-in-picture. */
@@ -99,6 +100,8 @@ export function createWire(transport) {
         /** The palette (`ui.theme` to change it). */
         appearance: {
             set: (theme) => transport.request("appearance.set", { theme }),
+            /** The interface language for the next start (player 0.4.3). */
+            setLanguage: (language) => transport.request("appearance.setLanguage", { language }),
         },
         /** Settings pages in the player's options window (`ui.settings`). */
         settings: {
@@ -190,9 +193,17 @@ export function createWire(transport) {
             set: (flags) => transport.request("sequence.set", { flags }),
             step: (direction) => transport.request("sequence.step", { direction }),
         },
+        /** `text` is a template in the plugin's catalog, formatted with `args` (player 0.4.3). */
         osd: {
-            show: (text) => transport.request("osd.show", { text }),
-            panel: (text) => transport.request("osd.panel", { text }),
+            show: (text, args) => transport.request("osd.show", {
+                text,
+                ...(args === undefined ? {} : { args }),
+            }),
+            panel: (text, args, maxColumns) => transport.request("osd.panel", {
+                text,
+                ...(args === undefined ? {} : { args }),
+                ...(maxColumns === undefined ? {} : { maxColumns }),
+            }),
         },
         layout: {
             state: () => transport.request("layout.state"),

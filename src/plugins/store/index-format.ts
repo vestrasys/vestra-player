@@ -1,5 +1,6 @@
 import { isHttps, isLocalHttp } from "./net.ts";
 import { compareVersions, isVersion, parseRange } from "./semver.ts";
+import { msg, raw, type Msg } from "./text.ts";
 
 /**
  * Reading a repository's index.json (ecosystem plan 1.3; the plugins
@@ -66,9 +67,12 @@ export interface RepoIndex {
 
 export class IndexError extends Error {
   readonly kind: "format" | "schema";
-  constructor(kind: "format" | "schema", message: string) {
-    super(message);
+  /** The reason for the user; `message` is the same in English, for logs. */
+  readonly reason: Msg;
+  constructor(kind: "format" | "schema", reason: Msg) {
+    super(reason.text.replace("{}", String(reason.args[0] ?? "")));
     this.kind = kind;
+    this.reason = reason;
   }
 }
 
@@ -100,15 +104,15 @@ export function parseIndex(text: string, options: ParseOptions = {}): { index: R
   try {
     data = JSON.parse(text);
   } catch {
-    throw new IndexError("format", "不是 JSON");
+    throw new IndexError("format", msg("Not JSON"));
   }
-  if (!object(data)) throw new IndexError("format", "顶层不是对象");
+  if (!object(data)) throw new IndexError("format", msg("The top level is not an object"));
   if (data.schema !== SCHEMA)
     throw typeof data.schema === "number" && data.schema > SCHEMA
-      ? new IndexError("schema", `schema ${data.schema}`)
-      : new IndexError("format", "schema 不正确");
-  if (!Array.isArray(data.plugins)) throw new IndexError("format", "plugins 不是数组");
-  if (data.revoked !== undefined && !Array.isArray(data.revoked)) throw new IndexError("format", "revoked 不是数组");
+      ? new IndexError("schema", raw(`schema ${data.schema}`))
+      : new IndexError("format", msg("Wrong schema"));
+  if (!Array.isArray(data.plugins)) throw new IndexError("format", msg("plugins is not an array"));
+  if (data.revoked !== undefined && !Array.isArray(data.revoked)) throw new IndexError("format", msg("revoked is not an array"));
   const url = (value: unknown): string | null =>
     typeof value === "string" && value.length <= 2048 && (isHttps(value) || (options.allowLocalHttp === true && isLocalHttp(value)))
       ? new URL(value).href
@@ -162,7 +166,7 @@ export function parseIndex(text: string, options: ParseOptions = {}): { index: R
   const revoked: Revocation[] = [];
   const listed = (data.revoked as unknown[] | undefined) ?? [];
   // Fail closed: ignoring revocations past a cap would let an index hide them.
-  if (listed.length > MAX_REVOKED) throw new IndexError("format", `revoked 超过 ${MAX_REVOKED} 条`);
+  if (listed.length > MAX_REVOKED) throw new IndexError("format", msg("revoked has more than {} entries", MAX_REVOKED));
   for (const [i, item] of listed.entries()) {
     const reason = object(item) ? clean(item.reason, 500, true) : null;
     let range = false;

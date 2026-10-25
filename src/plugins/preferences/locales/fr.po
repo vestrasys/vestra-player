@@ -1,0 +1,124 @@
+# French translation of the messages in messages.pot.
+# Machine translated (each entry flagged x-machine); awaiting human review.
+# Reviewed by an AI reviewer on 2026-10-25
+msgid ""
+msgstr ""
+"Language: fr\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: main.ts:42
+#, x-machine
+msgid "Palette: Vestra Light"
+msgstr "Palette : Vestra Light"
+
+#: main.ts:42
+#, x-machine
+msgid "Palette: Vestra Dark"
+msgstr "Palette : Vestra Dark"
+
+#: main.ts:51
+#, x-machine
+msgid "Language: Follow System. Takes effect after restart"
+msgstr "Langue : selon le système. Prend effet après redémarrage"
+
+#: main.ts:52
+#, x-machine
+msgid "Language: {}. Takes effect after restart"
+msgstr "Langue : {}. Prend effet après redémarrage"
+
+#: main.ts:59 main.ts:93 ui/appearance.slint:98
+#, x-machine
+msgid "Appearance"
+msgstr "Apparence"
+
+#: main.ts:73 main.ts:103 main.ts:113 ui/language.slint:59
+#, x-machine
+msgid "Language"
+msgstr "Langue"
+
+#: main.ts:84
+#, x-machine
+msgid "Options…"
+msgstr "Options…"
+
+#: main.ts:93 ui/appearance.slint:87
+#, x-machine
+msgid "Vestra Dark"
+msgstr "Vestra Dark"
+
+#: main.ts:93 ui/appearance.slint:87
+#, x-machine
+msgid "Vestra Light"
+msgstr "Vestra Light"
+
+#: main.ts:103 ui/language.slint:66
+#, x-machine
+msgid "Follow System"
+msgstr "Selon le système"
+
+#: manifest.json
+#, x-machine
+msgid "Preferences"
+msgstr "Préférences"
+
+#: manifest.json
+#, x-machine
+msgid "Open the options window, change the palette and the language"
+msgstr "Ouvrir la fenêtre des options, changer la palette et la langue"
+
+#: manifest.json
+#, x-machine
+msgid "Settings ▸ Options… (F5) opens the player's options window. Settings ▸ Appearance picks the palette (Vestra Dark, Vestra Light); the options window also has an Appearance page with previews. Settings ▸ Language picks the interface language, used from the next start."
+msgstr "Paramètres ▸ Options… (F5) ouvre la fenêtre des options du lecteur. Paramètres ▸ Apparence permet de choisir la palette (Vestra Dark, Vestra Light) ; la fenêtre des options comporte aussi une page Apparence avec des aperçus. Paramètres ▸ Langue permet de choisir la langue de l'interface, utilisée à partir du prochain démarrage."
+
+#: manifest.json
+#, x-machine
+msgid "settings"
+msgstr "paramètres"
+
+#: manifest.json
+#, x-machine
+msgid "appearance"
+msgstr "apparence"
+
+#: manifest.json
+#, x-machine
+msgid "palette"
+msgstr "palette"
+
+#: manifest.json
+#, x-machine
+msgid "language"
+msgstr "langue"
+
+#: ui/appearance.slint:90
+#, x-machine
+msgid "For bright rooms; the video area stays dark"
+msgstr "Pour les pièces lumineuses ; la zone vidéo reste sombre"
+
+#: ui/appearance.slint:90
+#, x-machine
+msgid "Default, from the logo's aurora colours"
+msgstr "Par défaut, inspirée des couleurs d'aurore boréale du logo"
+
+#: ui/appearance.slint:106
+#, x-machine
+msgid "Palette"
+msgstr "Palette"
+
+#: ui/appearance.slint:152
+#, x-machine
+msgid "Changes apply to every window at once. Corner radii, font sizes and control sizes stay the same in every palette."
+msgstr "Les modifications s'appliquent immédiatement à toutes les fenêtres. Les rayons des coins, les tailles de police et les tailles des commandes restent identiques dans chaque palette."
+
+#: ui/appearance.slint:162
+#, x-machine
+msgid "Restore Defaults"
+msgstr "Rétablir les valeurs par défaut"
+
+#: ui/language.slint:77
+#, x-machine
+msgid "Takes effect after restart."
+msgstr "Prend effet après redémarrage."

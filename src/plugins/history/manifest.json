@@ -1,6 +1,6 @@
 {
   "id": "vestra.history",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -12,13 +12,14 @@
     "ui.osd",
     "ui.dialog"
   ],
-  "name": "播放历史",
+  "name": "Playback History",
   "author": "Vestra Player",
-  "punchline": "最近播放记录，记忆并继续上次的播放位置",
-  "description": "在「打开 ▶ 最近播放」列出最近打开的文件和链接；在「播放 ▶ 记忆播放位置」中选择不记忆、自动继续或每次询问，下次打开同一文件时从上次停下的地方继续。",
+  "punchline": "Recently played items, and resuming where you left off",
+  "description": "Open ▸ Recently Played lists the files and links opened recently. Playback ▸ Resume Playback offers Don't Resume, Resume Automatically or Ask Every Time: the next time the same file is opened, it continues where it stopped.",
   "tags": [
-    "播放",
-    "历史",
-    "继续播放"
-  ]
+    "playback",
+    "history",
+    "resume"
+  ],
+  "minPlayerVersion": "0.4.3"
 }

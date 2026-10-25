@@ -1,6 +1,6 @@
 {
   "id": "vestra.subtitle-online",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -14,12 +14,13 @@
     "subtitles.control",
     "secrets"
   ],
-  "name": "在线字幕",
+  "name": "Online Subtitles",
   "author": "Vestra Player",
-  "punchline": "按当前视频搜索并下载字幕",
-  "description": "用 OpenSubtitles.com 或射手网(伪)按文件哈希和片名搜索字幕，下载后直接载入，并在视频旁保存一份。需要用户自己的 API 密钥，密钥保存在系统的密钥存储中。\n入口在右键菜单「字幕 ▶ 在线字幕」。",
+  "punchline": "Search and download subtitles for the current video",
+  "description": "Search OpenSubtitles.com or Assrt for subtitles by file hash and title, load them right away and keep a copy beside the video. Needs your own API key, kept in the system's secret store.\nFind it in the right-click menu under Subtitles ▸ Online Subtitles.",
   "tags": [
-    "字幕",
-    "下载"
-  ]
+    "subtitles",
+    "download"
+  ],
+  "minPlayerVersion": "0.4.3"
 }

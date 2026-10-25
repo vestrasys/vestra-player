@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import type { Locale } from "@vestra-player/sdk";
 import { TestHost, startPlugin } from "@vestra-player/sdk/testing";
 import { clock, displayName, keyOf, mediaKind, middle } from "../identity.ts";
 import activate from "../main.ts";
@@ -24,9 +25,12 @@ function file(name: string, bytes = 10) {
   return keyOf(path);
 }
 const running = new Set<() => Promise<void>>();
-/** Start the plugin; a failed test still stops it (its timers would keep the run alive). */
-async function start(host = new TestHost(), dataDirectory?: string) {
-  const started = await startPlugin(activate, { directory, host, ...(dataDirectory ? { dataDirectory } : {}) });
+/**
+ * Start the plugin; a failed test still stops it (its timers would keep the run alive).
+ * In Simplified Chinese by default: these tests check what that user sees (the English is checked separately).
+ */
+async function start(host = new TestHost(), dataDirectory?: string, locale: Locale = "zh-Hans") {
+  const started = await startPlugin(activate, { directory, host, locale, ...(dataDirectory ? { dataDirectory } : {}) });
   const stop = async () => {
     running.delete(stop);
     await started.stop();
@@ -45,14 +49,14 @@ async function play(host: TestHost, source: string, duration: number | null = 60
   if (duration !== null) host.setSource({ duration, position });
   await host.settle(WAIT);
 }
-/** Lines of 打开 ▶ 最近播放 in menu order (one order: declaration order). */
+/** Lines of Open ▸ Recently Played as shown, in menu order (one order: declaration order). */
 const recentMenu = (host: TestHost) =>
   [...host.commands.values()]
-    .filter((c) => c.declaration.path?.[1] === "最近播放")
-    .map((c) => c.declaration.path!.at(-1)!);
+    .filter((c) => c.declaration.path?.[1] === "Recently Played")
+    .map((c) => c.display.path.at(-1)!);
 const records = (host: TestHost) => recentMenu(host).slice(0, -3);
 const commandFor = (host: TestHost, title: string) =>
-  [...host.commands.entries()].find(([, c]) => c.declaration.path?.at(-1) === title)![0];
+  [...host.commands.entries()].find(([, c]) => c.display.path.at(-1) === title)![0];
 const userSeek = (host: TestHost, seconds: number) =>
   host.request("source.submit", { operationId: 900000 + seconds, intent: { kind: "control", control: { kind: "seek", seconds } } });
 const pluginSeeks = (host: TestHost) =>
@@ -86,7 +90,48 @@ test("identity: real path for files, link without fragment; names, clock, media 
 
 // ------------------------------------------------------------------ A12
 
-test("A12 menu entries: one order 114 under 打开 ▶ 最近播放, records then the management group", async () => {
+test("English by default: menus, messages and the ask window in the source text", async () => {
+  const [a, b] = [file("a.mkv"), file("b.mkv")];
+  const { host, plugin, stop } = await start(undefined, undefined, "en");
+  assert.equal(plugin.i18n.locale, "en");
+  const shown = (id: string) => host.command(id).display.path;
+  assert.deepEqual(host.command("recent.prune").declaration.path, ["@open", "Recently Played", "Remove Invalid Entries"]);
+  assert.deepEqual(
+    ["recent.empty", "recent.prune", "recent.clear", "recent.enabled"].map(shown),
+    [
+      ["Open", "Recently Played", "(No Entries)"],
+      ["Open", "Recently Played", "Remove Invalid Entries"],
+      ["Open", "Recently Played", "Clear Entries"],
+      ["Open", "Recently Played", "Record Playback History"],
+    ],
+  );
+  assert.deepEqual(host.command("resume.off").declaration.path, ["@playback", "Resume Playback", "Don't Resume"]);
+  assert.deepEqual(
+    ["resume.off", "resume.auto", "resume.ask", "resume.audio", "resume.clear"].map((id) => shown(id).at(-1)),
+    ["Don't Resume", "Resume Automatically", "Ask Every Time", "Also Remember Audio Files", "Clear All Saved Positions"],
+  );
+  assert.equal(shown("resume.off")[1], "Resume Playback");
+
+  await play(host, a);
+  host.setSource({ position: 300 });
+  await play(host, b);
+  assert.deepEqual(records(host), ["1  b.mkv", "2  a.mkv (05:00)"]);
+  await play(host, a);
+  assert.equal(host.osd.at(-1), "Resuming from 05:00");
+  await host.command("resume.clear").run();
+  assert.equal(host.osd.at(-1), "All saved positions cleared");
+  await host.command("recent.prune").run();
+  assert.equal(host.osd.at(-1), "Removed 0 invalid entries");
+  await host.command("recent.clear").run();
+  assert.equal(host.osd.at(-1), "Playback history cleared");
+  assert.equal(
+    host.translate("You didn't finish this last time. Continue? ({})", ["05:00"]),
+    "You didn't finish this last time. Continue? (05:00)",
+  );
+  await stop();
+});
+
+test("A12 menu entries: one order 114 under 打开 ▸ 最近播放, records then the management group", async () => {
   const { host, stop } = await start();
   assert.deepEqual(recentMenu(host), ["（无记录）", "移除无效记录", "清除记录", "记录播放历史"]);
   const empty = host.command("recent.empty");
@@ -247,8 +292,8 @@ test("B25 menu: 不记忆 / 自动继续 / 每次询问 radios 250–252, audio 
     ["resume.clear", "清除所有记忆点", 254, "resume-options"],
   ];
   for (const [id, title, order, group] of expected) {
-    const { declaration } = host.command(id);
-    assert.deepEqual(declaration.path, ["播放", "记忆播放位置", title]);
+    const { declaration, display } = host.command(id);
+    assert.deepEqual(display.path, ["播放", "记忆播放位置", title]);
     assert.equal(declaration.order, order);
     assert.equal(declaration.group, group);
   }
@@ -379,7 +424,8 @@ test("B25 每次询问: plays from the start and asks; 接着播放 seeks, a tim
   const window = host.window("resume");
   assert.equal(window.file, "ui/resume.slint");
   assert.equal(window.visible, true);
-  assert.equal(window.props.message, "之前有未播放完的。接着播放吗？（05:00）");
+  assert.equal(window.props.position, "05:00");
+  assert.equal(host.translate("You didn't finish this last time. Continue? ({})", ["05:00"]), "之前有未播放完的。接着播放吗？（05:00）");
   assert.deepEqual(pluginSeeks(host), []);
   // Still playing from the start while asking: the point is not overwritten.
   host.setSource({ position: 3 });

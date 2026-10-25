@@ -63,8 +63,9 @@ const VIDEO_STATS = {
 };
 
 const running = new Set<() => Promise<void>>();
-async function start(host = new TestHost(), dataDirectory?: string) {
-  const started = await startPlugin(activate, { directory, host, ...(dataDirectory ? { dataDirectory } : {}) });
+/** Started in English unless a locale is given. */
+async function start(host = new TestHost(), dataDirectory?: string, locale: "en" | "zh-Hans" = "en") {
+  const started = await startPlugin(activate, { directory, host, locale, ...(dataDirectory ? { dataDirectory } : {}) });
   const stop = async () => {
     running.delete(stop);
     await started.stop();
@@ -121,7 +122,7 @@ test("settings: defaults, field by field", () => {
 
 // ------------------------------------------------------------------ plugin
 
-test("activation: backdrop, settings page and menu entries", async () => {
+test("activation: backdrop, settings page and menu entries, in English", async () => {
   const host = new TestHost();
   await start(host);
   assert.equal(host.mounted().slot, "backdrop");
@@ -129,14 +130,24 @@ test("activation: backdrop, settings page and menu entries", async () => {
   assert.equal(props(host).mode, "idle");
   assert.equal(props(host)["custom-logo"], false);
   const page = host.settingsPage(PAGE_ID);
-  assert.deepEqual([page.category, page.title, page.order], ["appearance", "徽标与专辑封面", 20]);
-  const menu = [...host.commands.values()].map((c) => [c.declaration.path!.join(" ▶ "), c.declaration.order, c.declaration.group]);
+  assert.deepEqual([page.category, page.title, page.order], ["appearance", "Logo and Album Cover", 20]);
+  const menu = [...host.commands.values()].map((c) => [c.declaration.path!.join(" ▸ "), c.declaration.order, c.declaration.group]);
   assert.deepEqual(menu, [
-    ["声音 ▶ 纯音频时显示专辑封面", 530, "visual"],
-    ["设置 ▶ 外观 ▶ 空闲时显示徽标", 845, "settings-logo"],
-    ["设置 ▶ 外观 ▶ 选择徽标图片…", 846, "settings-logo"],
-    ["设置 ▶ 外观 ▶ 恢复默认徽标", 847, "settings-logo"],
+    ["@audio ▸ Show Album Cover for Audio Only", 530, "visual"],
+    ["@settings ▸ Appearance ▸ Show Logo When Idle", 845, "settings-logo"],
+    ["@settings ▸ Appearance ▸ Choose Logo Image…", 846, "settings-logo"],
+    ["@settings ▸ Appearance ▸ Restore Default Logo", 847, "settings-logo"],
   ]);
+  assert.deepEqual(
+    [...host.commands.values()].map((c) => c.display.path.join(" ▸ ")),
+    [
+      "Audio ▸ Show Album Cover for Audio Only",
+      "Settings ▸ Appearance ▸ Show Logo When Idle",
+      "Settings ▸ Appearance ▸ Choose Logo Image…",
+      "Settings ▸ Appearance ▸ Restore Default Logo",
+    ],
+  );
+  assert.equal(host.command("reset-logo").state.reason, "Using the default logo");
   assert.equal(host.command("audio-cover").state.checked, true);
   assert.equal(host.command("reset-logo").state.enabled, false);
   assert.equal(Object.values(host.command("audio-cover").declaration.bindings ?? {}).length, 0);
@@ -227,7 +238,7 @@ test("J11: video sources, URLs and the switch", async () => {
   await host.command("audio-cover").run();
   await host.settle();
   assert.equal(props(host).mode, "none");
-  assert.equal(host.osd.at(-1), "纯音频时显示专辑封面：关");
+  assert.equal(host.osd.at(-1), "Album cover for audio only: Off");
   assert.equal(host.command("audio-cover").state.checked, false);
   // Switched off: a new audio file is not probed.
   host.openElsewhere(join(folder({ "c.mp3": "x" }), "c.mp3"));
@@ -297,7 +308,7 @@ test("G-16b: loading shows the loading screen with the source name; ready judges
   await host.command("idle-logo").run();
   await host.settle();
   assert.equal(props(host).mode, "none");
-  assert.equal(host.osd.at(-1), "空闲时显示徽标：关");
+  assert.equal(host.osd.at(-1), "Logo when idle: Off");
   host.openElsewhere(join(folder({ "c.mp3": "x" }), "c.mp3"), "loading");
   await settle(host);
   assert.equal(props(host).mode, "loading");
@@ -412,7 +423,7 @@ test("H12: custom logo is checked, copied, shown, kept over restarts and reset",
   await again.settle();
   assert.equal(props(again)["custom-logo"], false);
   assert.equal(existsSync(join(data, "logo.png")), false);
-  assert.equal(again.osd.at(-1), "已恢复默认徽标");
+  assert.equal(again.osd.at(-1), "Default logo restored");
 });
 
 test("H12: an unreadable custom logo falls back once", async () => {
@@ -433,7 +444,7 @@ test("settings page: switches, cache line and clearing", async () => {
   host.tools.handle("ffmpeg", () => ({ stdout: jpeg(100, 100) }));
   await start(host);
   const page = host.settingsPage(PAGE_ID);
-  assert.equal(page.props["cache-note"], "封面缓存：空");
+  assert.deepEqual([page.props["cache-available"], page.props["cache-entries"]], [true, 0]);
   page.emit("setAudio", false);
   await host.settle();
   assert.equal(host.command("audio-cover").state.checked, false);
@@ -444,12 +455,13 @@ test("settings page: switches, cache line and clearing", async () => {
   assert.equal(host.command("idle-logo").state.checked, false);
   host.openElsewhere(join(folder({ "s.mp3": "x" }), "s.mp3"));
   await settle(host);
-  assert.match(String(page.props["cache-note"]), /^封面缓存：1 首/);
+  assert.equal(page.props["cache-entries"], 1);
+  assert.match(String(page.props["cache-size"]), /^\d+(\.\d)? [KM]B$/);
   assert.equal(page.props["can-clear"], true);
   page.emit("clearCache");
   await settle(host);
-  assert.equal(page.props["cache-note"], "封面缓存：空");
-  assert.equal(host.osd.at(-1), "已清除封面缓存");
+  assert.equal(page.props["cache-entries"], 0);
+  assert.equal(host.osd.at(-1), "Cover cache cleared");
 });
 
 test("cache: least recently used dropped beyond the size limit; orphans removed on load", async () => {
@@ -493,4 +505,38 @@ test("a failing ffprobe is not cached; the folder cover still shows", async () =
   host.openElsewhere(join(dir, "x.mp3"));
   await settle(host);
   assert.equal(host.tools.calls.filter((c) => c.tool === "ffprobe").length, 2);
+});
+
+test("Simplified Chinese: menus, settings page and messages from locales/zh-Hans.po", async () => {
+  const data = mkdtempSync(join(scratch, "data-"));
+  writeFileSync(join(data, "visualizer.json"), JSON.stringify({ audio: { on: true }, idle: { on: true, logo: "logo.jpg" } }));
+  writeFileSync(join(data, "logo.jpg"), "broken");
+  const host = new TestHost();
+  const { plugin } = await start(host, data, "zh-Hans");
+  assert.equal(plugin.i18n.locale, "zh-Hans");
+  assert.deepEqual(host.osd, ["徽标图片无法读取，已使用默认徽标"]);
+  assert.equal(host.settingsPage(PAGE_ID).title, "徽标与专辑封面");
+  assert.deepEqual(
+    [...host.commands.values()].map((c) => c.display.path.join(" ▸ ")),
+    ["声音 ▸ 纯音频时显示专辑封面", "设置 ▸ 外观 ▸ 空闲时显示徽标", "设置 ▸ 外观 ▸ 选择徽标图片…", "设置 ▸ 外观 ▸ 恢复默认徽标"],
+  );
+  // The player translates the reason with the plugin's catalog when it shows it.
+  assert.equal(host.translate(host.command("reset-logo").state.reason!), "正在使用默认徽标");
+  await host.command("audio-cover").run();
+  await host.command("idle-logo").run();
+  await host.settle();
+  assert.deepEqual(host.osd.slice(1), ["纯音频时显示专辑封面：关", "空闲时显示徽标：关"]);
+  const pictures = folder({ "huge.png": png(5000, 5000), "a.gif": "GIF89a", "ok.png": png(10, 10) });
+  host.dialogAnswers.push([join(pictures, "huge.png")]);
+  await host.command("choose-logo").run();
+  host.dialogAnswers.push([join(pictures, "a.gif")]);
+  await host.command("choose-logo").run();
+  host.dialogAnswers.push([join(pictures, "ok.png")]);
+  await host.command("choose-logo").run();
+  await host.command("reset-logo").run();
+  await settle(host);
+  assert.deepEqual(host.osd.slice(3), ["图片过大（最大 4096×4096、16 MB）", "只能使用 PNG 或 JPEG 图片", "已使用自定义徽标", "已恢复默认徽标"]);
+  // The window texts are @tr in ui/*.slint; the same catalog translates them.
+  assert.equal(host.translate("Opening: {}", ["a.mp3"]), "正在打开：a.mp3");
+  assert.equal(host.translate("Cover cache: empty"), "封面缓存：空");
 });

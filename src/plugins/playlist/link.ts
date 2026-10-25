@@ -1,18 +1,22 @@
 import type { Scope, Window } from "@vestra-player/sdk";
-import type { Queue } from "./queue.ts";
-
-const HINT = "输入 HTTP(S) 链接；添加只选择，不自动播放";
+import { LinkError, type Queue, ROW_LIMIT } from "./queue.ts";
 
 /**
- * "添加链接…" (`ui/link.slint`, the shared `UrlInputRow`): one link per
+ * "Add Link…" (`ui/link.slint`, the shared `UrlInputRow`): one link per
  * line, added in order; adding only selects the row, it never plays. A bad
  * line stops there with its reason (the lines before it are in the list,
  * adding them again only selects them) and the window stays open.
  */
 export function linkDialog(scope: Scope, queue: Queue): Window {
   const window = scope.windows.create("ui/link.slint", { id: "playlist-link" });
-  let message = HINT;
-  window.bind(() => ({ message }));
+  // What the message line says (`ui/link.slint` words it): the hint, why line `line`
+  // (0: the only one) was not added, or that `count` links were added.
+  let message: { notice: "hint" | "incomplete" | "refused" | "full" | "added"; line: number; count: number } = {
+    notice: "hint",
+    line: 0,
+    count: 0,
+  };
+  window.bind(() => ({ ...message, limit: ROW_LIMIT }));
   window.on("cancel", () => window.hide());
   window.on("addLink", (text: string) => {
     const lines = String(text)
@@ -24,15 +28,12 @@ export function linkDialog(scope: Scope, queue: Queue): Window {
       try {
         queue.addUrl(line);
       } catch (error) {
-        const reason = (error as Error).message;
-        message = lines.length > 1 ? `第 ${i + 1} 行：${reason}` : reason;
+        if (!(error instanceof LinkError)) throw error;
+        message = { notice: error.code, line: lines.length > 1 ? i + 1 : 0, count: 0 };
         return;
       }
     }
-    message =
-      lines.length > 1
-        ? `已添加 ${lines.length} 个链接，仅选中；显式播放需可用的来源提供者`
-        : "链接已添加，仅选中；显式播放需可用的来源提供者";
+    message = { notice: "added", line: 0, count: lines.length };
     return window.hide();
   });
   return window;

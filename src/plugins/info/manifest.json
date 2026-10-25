@@ -1,6 +1,6 @@
 {
   "id": "vestra.info",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -13,14 +13,14 @@
     "ui.dialog",
     "clipboard"
   ],
-  "name": "播放信息",
+  "name": "Playback Info",
   "author": "Vestra Player",
-  "punchline": "播放信息层、播放属性与关于窗口",
-  "description": "在视频左上角显示文件、时间、编码、帧率等实时信息（Tab），或按 Shift+Tab 显示简要信息；「播放属性…」列出解码状态、文件的流与元数据、系统信息，可复制或保存为文本；「关于 Vestra Player…」显示版本、组件与已加载的插件。",
+  "punchline": "Playback info overlay, playback properties and the About window",
+  "description": "Shows live facts at the top left of the video (Tab): file, time, codecs, frame rate and more, or a short summary with Shift+Tab. Playback Properties… lists the decoding state, the file's streams and metadata, and system information, to copy or save as text. About Vestra Player… shows the version, components and loaded plugins.",
   "tags": [
-    "信息",
-    "媒体信息",
-    "关于"
+    "Info",
+    "Media info",
+    "About"
   ],
-  "minPlayerVersion": "0.4.0"
+  "minPlayerVersion": "0.4.3"
 }

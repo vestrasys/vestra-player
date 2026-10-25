@@ -3,7 +3,7 @@ import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync }
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { BUILTIN, FakeNet, info, OFFICIAL, openStore, publish, rows, signWith, start, THIRD, until, other } from "./helpers.ts";
+import { BUILTIN, FakeNet, info, OFFICIAL, openStore, other, props, publish, rows, said, signWith, start, THIRD, until } from "./helpers.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "vestra-store-repos-"));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -22,7 +22,7 @@ test("the official index is read, verified and listed when the window opens", as
       rows(host).map((r) => r.name),
       ["Bilibili 视频", "vestra.video", "YouTube"],
     );
-    assert.match(String(host.window("store").props["status-text"]), /^官方仓库 \d\d:\d\d 已更新$/);
+    assert.match(String(props(host)["status-text"]), /^官方仓库 \d\d:\d\d 已更新$/);
     assert.equal(store.repos.official.index?.plugins.length, 2);
     const manifest = readFileSync(new URL("../manifest.json", import.meta.url), "utf8");
     const { version } = JSON.parse(manifest) as { version: string };
@@ -45,18 +45,18 @@ test("a tampered index, a wrong key or a missing signature keep the last verifie
   net.route(OFFICIAL, { body: forged });
   await first.store.refreshAll(true);
   const official = first.store.repos.official;
-  assert.equal(official.status.text, "官方仓库的签名校验失败，可能被篡改，已忽略这次更新");
+  assert.equal(said(official.status.text), "官方仓库的签名校验失败，可能被篡改，已忽略这次更新");
   assert.deepEqual(official.index?.plugins.map((p) => p.id), ["zysilm.youtube"]);
 
   // Signed with a key the store does not trust.
   net.route(OFFICIAL, { body: forged });
   net.route(`${OFFICIAL}.sig`, { body: signWith(forged, other.privateKey) });
   await first.store.refreshAll(true);
-  assert.match(official.status.text, /签名校验失败/);
+  assert.match(said(official.status.text), /签名校验失败/);
 
   net.route(`${OFFICIAL}.sig`, { status: 404 });
   await first.store.refreshAll(true);
-  assert.equal(official.status.text, "官方仓库缺少签名文件，已忽略这次更新");
+  assert.equal(said(official.status.text), "官方仓库缺少签名文件，已忽略这次更新");
   assert.deepEqual(official.index?.plugins.map((p) => p.id), ["zysilm.youtube"]);
   await first.stop();
 });
@@ -71,7 +71,7 @@ test("a replayed older index is refused", async () => {
     // An old, genuinely signed index that does not list 0.2.0 yet.
     publish(net, OFFICIAL, [{ ...YT, versions: [{ version: "0.1.0" }] }]);
     await store.refreshAll(true);
-    assert.equal(store.repos.official.status.text, "官方仓库返回了旧的索引，已忽略这次更新");
+    assert.equal(said(store.repos.official.status.text), "官方仓库返回了旧的索引，已忽略这次更新");
     assert.equal(store.repos.official.index?.plugins[0]?.versions.length, 2);
     assert.ok(logs.some((line) => line.includes("replayed index")));
   } finally {
@@ -98,8 +98,8 @@ test("offline: the verified cache is used after a restart; a tampered cache is n
     // Fresh enough not to be refreshed on opening; 「刷新」 tries the network.
     assert.equal(net.count(OFFICIAL), before);
     second.host.window("store").emit("refresh");
-    await until(second.host, () => !second.store.repos.official.refreshing && /无法连接/.test(second.store.repos.official.status.text));
-    assert.match(second.store.repos.official.status.text, /^无法连接 官方仓库（找不到服务器），显示 .+ 的缓存$/);
+    await until(second.host, () => !second.store.repos.official.refreshing && /无法连接/.test(said(second.store.repos.official.status.text)));
+    assert.match(said(second.store.repos.official.status.text), /^无法连接 官方仓库（找不到服务器），显示 .+ 的缓存$/);
     assert.equal(rows(second.host).length, 3);
   } finally {
     await second.stop();
@@ -115,7 +115,7 @@ test("offline: the verified cache is used after a restart; a tampered cache is n
     assert.equal(third.store.repos.official.index, null);
     assert.ok(third.logs.some((line) => line.includes("cached index does not verify")));
     await openStore(third.host);
-    await until(third.host, () => /暂时看不到/.test(third.store.repos.official.status.text));
+    await until(third.host, () => /暂时看不到/.test(said(third.store.repos.official.status.text)));
     // Only the built-in plugin is left in the list.
     assert.deepEqual(rows(third.host).map((r) => r.name), ["vestra.video"]);
   } finally {
@@ -133,7 +133,7 @@ test("conditional requests: 304 keeps the copy", async () => {
     assert.ok(etag);
     net.route(OFFICIAL, (headers) => (headers["if-none-match"] === etag ? { status: 304 } : { body: bytes }));
     await store.refreshAll(true);
-    assert.match(store.repos.official.status.text, /已是最新$/);
+    assert.match(said(store.repos.official.status.text), /已是最新$/);
     assert.equal(store.repos.official.index?.plugins.length, 1);
   } finally {
     await stop();
@@ -153,7 +153,7 @@ test("third-party repositories: no signature read, `official: true` ignored, lab
     await store.refreshAll(true);
     const third = store.repos.find(THIRD)!;
     assert.equal(third.official, false);
-    assert.equal(third.label, "Vestra 官方（third.example）");
+    assert.equal(said(third.label), "Vestra 官方（third.example）");
     assert.equal(net.count(`${THIRD}.sig`), 0);
     await openStore(host);
     const row = rows(host).find((r) => r.name === "Viz") as { meta: string } | undefined;
@@ -181,11 +181,11 @@ test("review B: replaying an older signed index cannot hide a revocation", async
     net.route(OFFICIAL, old[0]!);
     net.route(`${OFFICIAL}.sig`, old[1]!);
     await store.refreshAll(true);
-    assert.equal(store.repos.official.status.text, "官方仓库返回了旧的索引，已忽略这次更新");
+    assert.equal(said(store.repos.official.status.text), "官方仓库返回了旧的索引，已忽略这次更新");
     assert.equal(store.items.find((i) => i.id === "zysilm.p")?.state, "revoked");
     await openStore(host);
-    assert.match(String(host.window("store").props["status-text"]), /官方仓库返回了旧的索引/);
-    assert.equal(host.window("store").props["status-warn"], true);
+    assert.match(String(props(host)["status-text"]), /官方仓库返回了旧的索引/);
+    assert.equal(props(host)["status-warn"], true);
   } finally {
     await stop();
   }
@@ -200,14 +200,14 @@ test("review C: a plugin absent for a while keeps its seen versions; an even old
     const v1 = [net.routes.get(OFFICIAL)!, net.routes.get(`${OFFICIAL}.sig`)!];
     publish(net, OFFICIAL, [{ id: "zysilm.q", versions: [{ version: "1.0.0" }] }]); // p delisted: accepted
     await store.refreshAll(true);
-    assert.match(store.repos.official.status.text, /已更新$/);
+    assert.match(said(store.repos.official.status.text), /已更新$/);
     publish(net, OFFICIAL, [{ id: "zysilm.p", versions: [{ version: "0.2.0" }, { version: "0.1.0" }] }, { id: "zysilm.q", versions: [{ version: "1.0.0" }] }]);
     await store.refreshAll(true);
     assert.deepEqual(store.repos.official.meta?.seen?.versions["zysilm.p"]?.sort(), ["0.1.0", "0.2.0"]);
     net.route(OFFICIAL, v1[0]!);
     net.route(`${OFFICIAL}.sig`, v1[1]!);
     await store.refreshAll(true);
-    assert.equal(store.repos.official.status.text, "官方仓库返回了旧的索引，已忽略这次更新");
+    assert.equal(said(store.repos.official.status.text), "官方仓库返回了旧的索引，已忽略这次更新");
     assert.deepEqual(store.repos.official.index?.plugins.map((p) => p.id), ["zysilm.p", "zysilm.q"]);
   } finally {
     await stop();

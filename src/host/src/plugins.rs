@@ -80,6 +80,10 @@ pub fn set_app_info(info: &Value) {
 pub struct Plugin {
     pub manifest: Manifest,
     pub directory: PathBuf,
+    /// This package's translations for the interface language (`None`:
+    /// English, or the package has none). Its `.slint` files and the
+    /// strings it hands the player (menus, OSD) are translated with it.
+    pub catalog: Option<std::sync::Arc<crate::i18n::Catalog>>,
     pub data_key: DataKey,
     /// `plugin.dataDirectory`.
     data_directory: Option<PathBuf>,
@@ -133,6 +137,8 @@ impl Plugin {
         if let Some(info) = APP_INFO.get() {
             command.env("VESTRA_APP_INFO", info);
         }
+        // `plugin.i18n.locale`: fixed for the run.
+        command.env("VESTRA_LOCALE", crate::i18n::locale());
         let mut child = command
             .arg(&paths.runner)
             .arg(&directory)
@@ -197,9 +203,14 @@ impl Plugin {
             }
             let _ = events.send(Event::Exited(generation));
         });
+        let catalog = crate::i18n::load(&directory);
+        if let Some(catalog) = &catalog {
+            crate::i18n::register(&directory, catalog.clone());
+        }
         Ok(Self {
             manifest,
             directory,
+            catalog,
             data_key,
             data_directory,
             subscriptions: BTreeSet::new(),
@@ -220,9 +231,28 @@ impl Plugin {
     pub fn allows(&self, capability: &str) -> bool {
         self.manifest.capabilities.iter().any(|c| c == capability)
     }
+    /// A string this plugin declared (menu title, page or tab title), in the
+    /// interface language.
+    pub fn text(&self, source: &str) -> String {
+        self.catalog
+            .as_ref()
+            .map_or(source, |catalog| catalog.text(source))
+            .to_owned()
+    }
+    /// Text values in the interface language, with this plugin's catalog
+    /// (`i18n::text`).
+    pub fn texts(&self) -> crate::i18n::text::Texts<'_> {
+        crate::i18n::text::Texts {
+            catalog: self.catalog.as_deref(),
+            locale: crate::i18n::locale(),
+        }
+    }
 }
 impl Drop for Plugin {
     fn drop(&mut self) {
+        if let Some(catalog) = &self.catalog {
+            crate::i18n::unregister(&self.directory, catalog);
+        }
         let _ = self.send(json!({"event":"runtime.stop","data":null}));
         let deadline = Instant::now() + Duration::from_millis(300);
         let mut exited = false;

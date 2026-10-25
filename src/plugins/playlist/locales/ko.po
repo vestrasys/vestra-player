@@ -1,0 +1,848 @@
+# Reviewed by an AI reviewer on 2026-10-25
+msgid ""
+msgstr ""
+"Language: ko\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: drop.ts:197
+#, x-machine
+msgid "Nothing to add: {}"
+msgstr "추가할 항목이 없습니다: {}"
+
+#: main.ts:134
+#, x-machine
+msgid "Added {count} files from the same folder"
+msgstr "같은 폴더의 파일 {count}개를 추가했습니다"
+
+#: main.ts:134
+#, x-machine
+msgid "Added {count} files from the same folder, limit of {limit} reached"
+msgstr "같은 폴더의 파일 {count}개를 추가했습니다. 최대 {limit}개에 도달했습니다"
+
+#: main.ts:134
+#, x-machine
+msgid "Nothing to add"
+msgstr "추가할 항목이 없습니다"
+
+#: main.ts:134
+#, x-machine
+msgid "Link added"
+msgstr "링크를 추가했습니다"
+
+#: main.ts:134
+#, x-machine
+msgid "Existing link selected"
+msgstr "기존 링크를 선택했습니다"
+
+#: main.ts:134
+#, x-machine
+msgid "Scanning folder…"
+msgstr "폴더 스캔 중…"
+
+#: main.ts:134
+#, x-machine
+msgid "No playable files in the folder"
+msgstr "폴더에 재생할 수 있는 파일이 없습니다"
+
+#: main.ts:134
+#, x-machine
+msgid "Cannot read the folder: {}"
+msgstr "폴더를 읽을 수 없습니다: {}"
+
+#: main.ts:134
+#, x-machine
+msgid "Removed: {}"
+msgstr "제거됨: {}"
+
+#: main.ts:134
+#, x-machine
+msgid "Invalid items removed: {}"
+msgstr "유효하지 않은 항목 제거됨: {}"
+
+#: main.ts:134
+#, x-machine
+msgid "No invalid items"
+msgstr "유효하지 않은 항목이 없습니다"
+
+#: main.ts:134
+#, x-machine
+msgid "The media being opened was removed from the list"
+msgstr "여는 중인 미디어가 목록에서 제거되었습니다"
+
+#: main.ts:134
+#, x-machine
+msgid "The current media was removed from the list"
+msgstr "현재 미디어가 목록에서 제거되었습니다"
+
+#: main.ts:134
+#, x-machine
+msgid "List cleared; the current media continues"
+msgstr "목록을 비웠습니다. 현재 미디어는 계속 재생됩니다"
+
+#: main.ts:134
+#, x-machine
+msgid "Unsupported list format"
+msgstr "지원하지 않는 목록 형식입니다"
+
+#: main.ts:134
+#, x-machine
+msgid "Cannot open the list: the file is larger than 16 MB"
+msgstr "목록을 열 수 없습니다: 파일이 16MB보다 큽니다"
+
+#: main.ts:134
+#, x-machine
+msgid "Cannot open the list: {}"
+msgstr "목록을 열 수 없습니다: {}"
+
+#: main.ts:134
+#, x-machine
+msgid "Opened list: {name} ({count} items)"
+msgstr "목록을 열었습니다: {name} ({count}개 항목)"
+
+#: main.ts:134
+#, x-machine
+msgid "Opened list: {name} ({count} items), skipped: {skipped}"
+msgstr "목록을 열었습니다: {name} ({count}개 항목), 건너뜀: {skipped}"
+
+#: main.ts:134
+#, x-machine
+msgid "Cannot save the list: {}"
+msgstr "목록을 저장할 수 없습니다: {}"
+
+#: main.ts:134
+#, x-machine
+msgid "Saved list: {}"
+msgstr "목록을 저장했습니다: {}"
+
+#: main.ts:134
+#, x-machine
+msgid "Repeat: Off"
+msgstr "반복: 끔"
+
+#: main.ts:134
+#, x-machine
+msgid "Repeat: All"
+msgstr "반복: 전체"
+
+#: main.ts:134
+#, x-machine
+msgid "Repeat: One"
+msgstr "반복: 한 항목"
+
+#: main.ts:134
+#, x-machine
+msgid "Shuffle: On"
+msgstr "무작위 재생: 켬"
+
+#: main.ts:134
+#, x-machine
+msgid "Shuffle: Off"
+msgstr "무작위 재생: 끔"
+
+#: main.ts:134
+#, x-machine
+msgid "Fast advance to next: On"
+msgstr "다음 항목으로 빠르게 넘어가기: 켬"
+
+#: main.ts:134
+#, x-machine
+msgid "Fast advance to next: Off"
+msgstr "다음 항목으로 빠르게 넘어가기: 끔"
+
+#: main.ts:134
+#, x-machine
+msgid "The list will be remembered"
+msgstr "목록을 기억합니다"
+
+#: main.ts:134
+#, x-machine
+msgid "The list will no longer be remembered"
+msgstr "더 이상 목록을 기억하지 않습니다"
+
+#: main.ts:134
+#, x-machine
+msgid "Confirm before removing all: On"
+msgstr "모두 제거하기 전에 확인: 켬"
+
+#: main.ts:134
+#, x-machine
+msgid "Confirm before removing all: Off"
+msgstr "모두 제거하기 전에 확인: 끔"
+
+#: main.ts:134
+#, x-machine
+msgid "End of the list"
+msgstr "목록의 끝입니다"
+
+#: main.ts:134
+#, x-machine
+msgid "Cannot replay: {}"
+msgstr "다시 재생할 수 없습니다: {}"
+
+#: main.ts:134
+#, x-machine
+msgid "Cannot open {}: the file does not exist"
+msgstr "{} 열기 실패: 파일이 없습니다"
+
+#: main.ts:134
+#, x-machine
+msgid "Cannot open {}: cannot open this media"
+msgstr "{} 열기 실패: 이 미디어를 열 수 없습니다"
+
+#: main.ts:134
+#, x-machine
+msgid "Cannot open {}: {}"
+msgstr "{} 열기 실패: {}"
+
+#: main.ts:134
+#, x-machine
+msgid "The file's canonical path matches an existing item; that item is selected"
+msgstr "파일의 실제 경로가 기존 항목과 같아 그 항목을 선택했습니다"
+
+#: main.ts:134
+#, x-machine
+msgid "Close the other dialog first"
+msgstr "먼저 다른 대화 상자를 닫으세요"
+
+#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:114 ui/sidebar.slint:242
+#, x-machine
+msgid "Playlist"
+msgstr "재생목록"
+
+#: main.ts:246
+#, x-machine
+msgid "Remove all {} items from the playlist?"
+msgstr "재생목록에서 항목 {}개를 모두 제거할까요?"
+
+#: main.ts:246
+#, x-machine
+msgid "Replace the current list with {}?"
+msgstr "현재 목록을 {} 목록으로 바꿀까요?"
+
+#: main.ts:246
+#, x-machine
+msgid "The media that is playing continues to play."
+msgstr "재생 중인 미디어는 계속 재생됩니다."
+
+#: main.ts:246 main.ts:527
+#, x-machine
+msgid "Remove All"
+msgstr "모두 제거"
+
+#: main.ts:246
+#, x-machine
+msgid "Replace"
+msgstr "바꾸기"
+
+#: main.ts:246
+#, x-machine
+msgid "Don't ask again"
+msgstr "다시 묻지 않음"
+
+#: main.ts:275
+#, x-machine
+msgid "Add to Playlist"
+msgstr "재생목록에 추가"
+
+#: main.ts:289
+#, x-machine
+msgid "Open Folder"
+msgstr "폴더 열기"
+
+#: main.ts:289
+#, x-machine
+msgid "Add Folder to Playlist"
+msgstr "재생목록에 폴더 추가"
+
+#: main.ts:318
+#, x-machine
+msgid "another source is opening, only added to the list"
+msgstr "다른 소스를 여는 중이어서 목록에만 추가했습니다"
+
+#: main.ts:416
+#, x-machine
+msgid "Only the first {} files are shown"
+msgstr "처음 {}개 파일만 표시됩니다"
+
+#: main.ts:438
+#, x-machine
+msgid "File not found: {}"
+msgstr "파일을 찾을 수 없습니다: {}"
+
+#: main.ts:449
+#, x-machine
+msgid "Open Playlist File"
+msgstr "재생목록 파일 열기"
+
+#: main.ts:495
+#, x-machine
+msgid "Save Playlist"
+msgstr "재생목록 저장"
+
+#: main.ts:497
+#, x-machine
+msgid "Playlist.m3u8"
+msgstr "재생목록.m3u8"
+
+#: main.ts:527
+#, x-machine
+msgid "Play"
+msgstr "재생"
+
+#: main.ts:527 main.ts:561
+#, x-machine
+msgid "Add Files…"
+msgstr "파일 추가…"
+
+#: main.ts:527 main.ts:561
+#, x-machine
+msgid "Add Folder…"
+msgstr "폴더 추가…"
+
+#: main.ts:527 main.ts:561
+#, x-machine
+msgid "Add Link…"
+msgstr "링크 추가…"
+
+#: main.ts:527
+#, x-machine
+msgid "Remove Selected"
+msgstr "선택 항목 제거"
+
+#: main.ts:527
+#, x-machine
+msgid "Remove Unselected"
+msgstr "선택하지 않은 항목 제거"
+
+#: main.ts:527
+#, x-machine
+msgid "Remove Invalid Items"
+msgstr "유효하지 않은 항목 제거"
+
+#: main.ts:527
+#, x-machine
+msgid "Show in Finder"
+msgstr "Finder에서 보기"
+
+#: main.ts:527
+#, x-machine
+msgid "Move to Top"
+msgstr "맨 위로 이동"
+
+#: main.ts:527
+#, x-machine
+msgid "Move Up"
+msgstr "위로 이동"
+
+#: main.ts:527
+#, x-machine
+msgid "Move Down"
+msgstr "아래로 이동"
+
+#: main.ts:527
+#, x-machine
+msgid "Move to Bottom"
+msgstr "맨 아래로 이동"
+
+#: main.ts:527
+#, x-machine
+msgid "Ascending"
+msgstr "오름차순"
+
+#: main.ts:527
+#, x-machine
+msgid "Descending"
+msgstr "내림차순"
+
+#: main.ts:527
+#, x-machine
+msgid "By Title"
+msgstr "제목순"
+
+#: main.ts:527
+#, x-machine
+msgid "By File Name"
+msgstr "파일 이름순"
+
+#: main.ts:527
+#, x-machine
+msgid "By Extension"
+msgstr "확장자순"
+
+#: main.ts:527
+#, x-machine
+msgid "By Size"
+msgstr "크기순"
+
+#: main.ts:527
+#, x-machine
+msgid "By Duration"
+msgstr "길이순"
+
+#: main.ts:527
+#, x-machine
+msgid "By Date"
+msgstr "날짜순"
+
+#: main.ts:527
+#, x-machine
+msgid "Random Order"
+msgstr "무작위 순서"
+
+#: main.ts:527
+#, x-machine
+msgid "By Folder"
+msgstr "폴더순"
+
+#: main.ts:527
+#, x-machine
+msgid "Sort by Path"
+msgstr "경로순 정렬"
+
+#: main.ts:527
+#, x-machine
+msgid "Reverse Current Order"
+msgstr "현재 순서 뒤집기"
+
+#: main.ts:527
+#, x-machine
+msgid "Select All"
+msgstr "모두 선택"
+
+#: main.ts:527 ui/sidebar.slint:541
+#, x-machine
+msgid "Search"
+msgstr "검색"
+
+#: main.ts:527 main.ts:561
+#, x-machine
+msgid "Open List File…"
+msgstr "목록 파일 열기…"
+
+#: main.ts:527 main.ts:561
+#, x-machine
+msgid "Save List…"
+msgstr "목록 저장…"
+
+#: main.ts:527
+#, x-machine
+msgid "Close List"
+msgstr "목록 닫기"
+
+#: main.ts:527
+#, x-machine
+msgid "Playlist Settings…"
+msgstr "재생목록 설정…"
+
+#: main.ts:529 main.ts:532 main.ts:564 main.ts:565
+#, x-machine
+msgid "Opening, or the result is not known yet"
+msgstr "여는 중이거나 아직 결과를 알 수 없습니다"
+
+#: main.ts:529 main.ts:532 main.ts:564 main.ts:565
+#, x-machine
+msgid "Nothing to act on"
+msgstr "작업할 항목이 없습니다"
+
+#: main.ts:529 main.ts:532 main.ts:555 main.ts:564 main.ts:565
+#, x-machine
+msgid "Scanning folder"
+msgstr "폴더 스캔 중"
+
+#: main.ts:529 main.ts:532 main.ts:564 main.ts:565
+#, x-machine
+msgid "Links have no local location"
+msgstr "링크에는 로컬 위치가 없습니다"
+
+#: main.ts:529 main.ts:532 main.ts:564 main.ts:565
+#, x-machine
+msgid "The order cannot change while searching"
+msgstr "검색 중에는 순서를 바꿀 수 없습니다"
+
+#: main.ts:545
+#, x-machine
+msgid "Not enough room; enlarge the window to show it"
+msgstr "공간이 부족합니다. 창을 키우면 표시됩니다"
+
+#: main.ts:550
+#, x-machine
+msgid "Open Folder…"
+msgstr "폴더 열기…"
+
+#: main.ts:561
+#, x-machine
+msgid "Repeat"
+msgstr "반복"
+
+#: main.ts:561 ui/settings.slint:150
+#, x-machine
+msgid "Off"
+msgstr "끔"
+
+#: main.ts:561 ui/settings.slint:150
+#, x-machine
+msgid "All"
+msgstr "전체"
+
+#: main.ts:561 ui/settings.slint:150
+#, x-machine
+msgid "One"
+msgstr "한 항목"
+
+#: main.ts:561 ui/settings.slint:156
+#, x-machine
+msgid "Shuffle"
+msgstr "무작위 재생"
+
+#: main.ts:561
+#, x-machine
+msgid "When Opening a File"
+msgstr "파일을 열 때"
+
+#: main.ts:561
+#, x-machine
+msgid "Open Only That File"
+msgstr "그 파일만 열기"
+
+#: main.ts:561
+#, x-machine
+msgid "Add Similar Files"
+msgstr "비슷한 파일 추가"
+
+#: main.ts:561
+#, x-machine
+msgid "Add All Files in the Folder"
+msgstr "폴더의 모든 파일 추가"
+
+#: main.ts:561
+#, x-machine
+msgid "Fast Advance to Next"
+msgstr "다음 항목으로 빠르게 넘어가기"
+
+#: main.ts:561
+#, x-machine
+msgid "Remember List"
+msgstr "목록 기억"
+
+#: main.ts:561
+#, x-machine
+msgid "Confirm Before Removing All"
+msgstr "모두 제거하기 전에 확인"
+
+#: main.ts:988
+#, x-machine
+msgid "opening, added to the list"
+msgstr "여는 중, 목록에 추가했습니다"
+
+#: manifest.json
+#, x-machine
+msgid "Sidebar playlist: add, sort, repeat and shuffle"
+msgstr "사이드바 재생목록: 추가, 정렬, 반복, 무작위 재생"
+
+#: manifest.json
+#, x-machine
+msgid ""
+"A playlist in the right sidebar: add files, folders and links, drag and drop, sort and search, repeat and shuffle, and add the similar files of the same folder when a file is opened; reads and writes M3U, M3U8 and PLS list files and restores the list after a restart.\n"
+"Entry points: \"Playlist\" (F6) in the context menu and Playback ▸ Playlist."
+msgstr ""
+"오른쪽 사이드바의 재생목록입니다. 파일, 폴더, 링크 추가, 끌어서 놓기, 정렬과 검색, 반복과 무작위 재생을 지원하며, 파일을 열 때 같은 폴더의 비슷한 파일을 추가할 수 있습니다. M3U, M3U8, PLS 목록 파일을 읽고 쓰며, 다시 실행한 뒤에도 목록을 복원합니다.\n"
+"여는 방법: 컨텍스트 메뉴의 ‘재생목록’(F6), 재생 ▸ 재생목록."
+
+#: manifest.json
+#, x-machine
+msgid "playlist"
+msgstr "재생목록"
+
+#: manifest.json
+#, x-machine
+msgid "open"
+msgstr "열기"
+
+#: manifest.json
+#, x-machine
+msgid "drag and drop"
+msgstr "끌어서 놓기"
+
+#: notices.ts:82
+#, x-machine
+msgid "access to this location is not allowed (System Settings ▸ Privacy & Security ▸ Files & Folders)"
+msgstr "이 위치에 접근할 수 있는 권한이 없습니다 (시스템 설정 ▸ 개인정보 보호 및 보안 ▸ 파일 및 폴더)"
+
+#: notices.ts:84
+#, x-machine
+msgid "no permission to read"
+msgstr "읽기 권한이 없습니다"
+
+#: notices.ts:86
+#, x-machine
+msgid "the folder does not exist"
+msgstr "폴더가 없습니다"
+
+#: notices.ts:88
+#, x-machine
+msgid "not a folder"
+msgstr "폴더가 아닙니다"
+
+#: notices.ts:90
+#, x-machine
+msgid "the file is larger than 16 MB"
+msgstr "파일이 16MB보다 큽니다"
+
+#: queue.ts:94
+#, x-machine
+msgid "unsupported items skipped: {}"
+msgstr "지원하지 않는 항목 건너뜀: {}"
+
+#: queue.ts:95
+#, x-machine
+msgid "subfolders that could not be read: {}"
+msgstr "읽을 수 없는 하위 폴더: {}"
+
+#: queue.ts:96
+#, x-machine
+msgid "limit of {} reached"
+msgstr "최대 {}개에 도달했습니다"
+
+#: queue.ts:98
+#, x-machine
+msgid "cannot read {}: {}"
+msgstr "{} 읽기 실패: {}"
+
+#: queue.ts:349
+#, x-machine
+msgid "Added: {}"
+msgstr "추가됨: {}"
+
+#: queue.ts:350
+#, x-machine
+msgid "duplicates skipped: {}"
+msgstr "중복 항목 건너뜀: {}"
+
+#: queue.ts:351
+#, x-machine
+msgid "not readable for now: {}"
+msgstr "지금은 읽을 수 없음: {}"
+
+#: queue.ts:353
+#, x-machine
+msgid "the list is full at {} items"
+msgstr "목록이 가득 찼습니다 (최대 {}개)"
+
+#: ui/link.slint:18
+#, x-machine
+msgid "{} links added, only selected; playing them needs an available source provider"
+msgstr "링크 {}개를 추가하고 선택만 했습니다. 재생하려면 사용 가능한 소스 제공자가 필요합니다"
+
+#: ui/link.slint:18
+#, x-machine
+msgid "Link added, only selected; playing it needs an available source provider"
+msgstr "링크를 추가하고 선택만 했습니다. 재생하려면 사용 가능한 소스 제공자가 필요합니다"
+
+#: ui/link.slint:20
+#, x-machine
+msgid "Line {}: Enter a complete HTTP(S) link"
+msgstr "{}번째 줄: 완전한 HTTP(S) 링크를 입력하세요"
+
+#: ui/link.slint:20
+#, x-machine
+msgid "Enter a complete HTTP(S) link"
+msgstr "완전한 HTTP(S) 링크를 입력하세요"
+
+#: ui/link.slint:22
+#, x-machine
+msgid "Line {}: Only HTTP(S) links without a user name or password are accepted"
+msgstr "{}번째 줄: 사용자 이름이나 암호가 없는 HTTP(S) 링크만 사용할 수 있습니다"
+
+#: ui/link.slint:22
+#, x-machine
+msgid "Only HTTP(S) links without a user name or password are accepted"
+msgstr "사용자 이름이나 암호가 없는 HTTP(S) 링크만 사용할 수 있습니다"
+
+#: ui/link.slint:24
+#, x-machine
+msgid "Line {}: The list is full at {} items"
+msgstr "{}번째 줄: 목록이 가득 찼습니다 (최대 {}개)"
+
+#: ui/link.slint:24
+#, x-machine
+msgid "The list is full at {} items"
+msgstr "목록이 가득 찼습니다 (최대 {}개)"
+
+#: ui/link.slint:25 ui/link.slint:34
+#, x-machine
+msgid "Enter HTTP(S) links; adding only selects, it does not play"
+msgstr "HTTP(S) 링크를 입력하세요. 추가하면 선택만 하고 재생하지는 않습니다"
+
+#: ui/link.slint:26
+#, x-machine
+msgid "Add Links to Playlist"
+msgstr "재생목록에 링크 추가"
+
+#: ui/link.slint:50
+#, x-machine
+msgid "Enter the web addresses to add to the playlist below, one per line."
+msgstr "재생목록에 추가할 웹 주소를 아래에 한 줄에 하나씩 입력하세요."
+
+#: ui/link.slint:56
+#, x-machine
+msgid "Example: {}"
+msgstr "예: {}"
+
+#: ui/link.slint:63 ui/sidebar.slint:466
+#, x-machine
+msgid "Add"
+msgstr "추가"
+
+#: ui/settings.slint:105 ui/settings.slint:124
+#, x-machine
+msgid "When opening a file:"
+msgstr "파일을 열 때:"
+
+#: ui/settings.slint:105 ui/settings.slint:147
+#, x-machine
+msgid "Repeat:"
+msgstr "반복:"
+
+#: ui/settings.slint:120
+#, x-machine
+msgid "Open and drop"
+msgstr "열기 및 끌어서 놓기"
+
+#: ui/settings.slint:127
+#, x-machine
+msgid "Open only that file"
+msgstr "그 파일만 열기"
+
+#: ui/settings.slint:127
+#, x-machine
+msgid "Add similar files"
+msgstr "비슷한 파일 추가"
+
+#: ui/settings.slint:127
+#, x-machine
+msgid "Add all files in the folder"
+msgstr "폴더의 모든 파일 추가"
+
+#: ui/settings.slint:133
+#, x-machine
+msgid "Append when opening or dropping; don't clear the list"
+msgstr "열거나 끌어다 놓을 때 목록을 비우지 않고 뒤에 추가"
+
+#: ui/settings.slint:138
+#, x-machine
+msgid "Insert at the drop position when dropping on the list"
+msgstr "목록에 끌어다 놓으면 놓은 위치에 삽입"
+
+#: ui/settings.slint:143
+#, x-machine
+msgid "Playback"
+msgstr "재생"
+
+#: ui/settings.slint:161
+#, x-machine
+msgid "Fast advance to next"
+msgstr "다음 항목으로 빠르게 넘어가기"
+
+#: ui/settings.slint:166
+#, x-machine
+msgid "List"
+msgstr "목록"
+
+#: ui/settings.slint:168
+#, x-machine
+msgid "Remember list"
+msgstr "목록 기억"
+
+#: ui/settings.slint:173
+#, x-machine
+msgid "Confirm before removing all"
+msgstr "모두 제거하기 전에 확인"
+
+#: ui/sidebar.slint:190
+#, x-machine
+msgid "Filtered {}"
+msgstr "검색 결과 {}"
+
+#: ui/sidebar.slint:251
+#, x-machine
+msgid "Attach to main window"
+msgstr "기본 창에 붙이기"
+
+#: ui/sidebar.slint:251
+#, x-machine
+msgid "Detach as floating window"
+msgstr "플로팅 창으로 분리"
+
+#: ui/sidebar.slint:257
+#, x-machine
+msgid "Close list"
+msgstr "목록 닫기"
+
+#: ui/sidebar.slint:314
+#, x-machine
+msgid ""
+"{}\n"
+"The file does not exist"
+msgstr ""
+"{}\n"
+"파일이 없습니다"
+
+#: ui/sidebar.slint:315
+#, x-machine
+msgid ""
+"{}\n"
+"The file does not exist or cannot be read now; can retry"
+msgstr ""
+"{}\n"
+"파일이 없거나 지금은 읽을 수 없습니다. 다시 시도할 수 있습니다"
+
+#: ui/sidebar.slint:316
+#, x-machine
+msgid ""
+"{}\n"
+"Cannot open this media"
+msgstr ""
+"{}\n"
+"이 미디어를 열 수 없습니다"
+
+#: ui/sidebar.slint:414
+#, x-machine
+msgid "No matches"
+msgstr "일치하는 항목 없음"
+
+#: ui/sidebar.slint:441
+#, x-machine
+msgid "Move to top (Ctrl+Home)"
+msgstr "맨 위로 이동 (Ctrl+Home)"
+
+#: ui/sidebar.slint:447
+#, x-machine
+msgid "Move up (Ctrl+↑)"
+msgstr "위로 이동 (Ctrl+↑)"
+
+#: ui/sidebar.slint:453
+#, x-machine
+msgid "Move down (Ctrl+↓)"
+msgstr "아래로 이동 (Ctrl+↓)"
+
+#: ui/sidebar.slint:459
+#, x-machine
+msgid "Move to bottom (Ctrl+End)"
+msgstr "맨 아래로 이동 (Ctrl+End)"
+
+#: ui/sidebar.slint:473
+#, x-machine
+msgid "Delete"
+msgstr "삭제"
+
+#: ui/sidebar.slint:480
+#, x-machine
+msgid "Sort"
+msgstr "정렬"
+
+#: ui/sidebar.slint:492
+#, x-machine
+msgid "Search (Ctrl+S)"
+msgstr "검색 (Ctrl+S)"

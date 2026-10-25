@@ -1,0 +1,122 @@
+# Reviewed by an AI reviewer on 2026-10-25
+msgid ""
+msgstr ""
+"Language: ko\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: main.ts:42
+#, x-machine
+msgid "Palette: Vestra Light"
+msgstr "팔레트: Vestra 라이트"
+
+#: main.ts:42
+#, x-machine
+msgid "Palette: Vestra Dark"
+msgstr "팔레트: Vestra 다크"
+
+#: main.ts:51
+#, x-machine
+msgid "Language: Follow System. Takes effect after restart"
+msgstr "언어: 시스템 설정 따르기. 다시 시작하면 적용됩니다"
+
+#: main.ts:52
+#, x-machine
+msgid "Language: {}. Takes effect after restart"
+msgstr "언어: {}. 다시 시작하면 적용됩니다"
+
+#: main.ts:59 main.ts:93 ui/appearance.slint:98
+#, x-machine
+msgid "Appearance"
+msgstr "모양"
+
+#: main.ts:73 main.ts:103 main.ts:113 ui/language.slint:59
+#, x-machine
+msgid "Language"
+msgstr "언어"
+
+#: main.ts:84
+#, x-machine
+msgid "Options…"
+msgstr "옵션…"
+
+#: main.ts:93 ui/appearance.slint:87
+#, x-machine
+msgid "Vestra Dark"
+msgstr "Vestra 다크"
+
+#: main.ts:93 ui/appearance.slint:87
+#, x-machine
+msgid "Vestra Light"
+msgstr "Vestra 라이트"
+
+#: main.ts:103 ui/language.slint:66
+#, x-machine
+msgid "Follow System"
+msgstr "시스템 설정 따르기"
+
+#: manifest.json
+#, x-machine
+msgid "Preferences"
+msgstr "환경설정"
+
+#: manifest.json
+#, x-machine
+msgid "Open the options window, change the palette and the language"
+msgstr "옵션 창 열기, 팔레트와 언어 변경"
+
+#: manifest.json
+#, x-machine
+msgid "Settings ▸ Options… (F5) opens the player's options window. Settings ▸ Appearance picks the palette (Vestra Dark, Vestra Light); the options window also has an Appearance page with previews. Settings ▸ Language picks the interface language, used from the next start."
+msgstr "설정 ▸ 옵션…(F5)으로 플레이어의 옵션 창을 엽니다. 설정 ▸ 모양에서 팔레트(Vestra 다크, Vestra 라이트)를 고르며, 옵션 창에도 미리보기가 있는 모양 페이지가 있습니다. 설정 ▸ 언어에서 인터페이스 언어를 고르면 다음 실행부터 적용됩니다."
+
+#: manifest.json
+#, x-machine
+msgid "settings"
+msgstr "설정"
+
+#: manifest.json
+#, x-machine
+msgid "appearance"
+msgstr "모양"
+
+#: manifest.json
+#, x-machine
+msgid "palette"
+msgstr "팔레트"
+
+#: manifest.json
+#, x-machine
+msgid "language"
+msgstr "언어"
+
+#: ui/appearance.slint:90
+#, x-machine
+msgid "For bright rooms; the video area stays dark"
+msgstr "밝은 환경용. 비디오 영역은 어둡게 유지됩니다"
+
+#: ui/appearance.slint:90
+#, x-machine
+msgid "Default, from the logo's aurora colours"
+msgstr "기본값. 로고의 오로라 색상에서 가져왔습니다"
+
+#: ui/appearance.slint:106
+#, x-machine
+msgid "Palette"
+msgstr "팔레트"
+
+#: ui/appearance.slint:152
+#, x-machine
+msgid "Changes apply to every window at once. Corner radii, font sizes and control sizes stay the same in every palette."
+msgstr "변경 사항은 모든 창에 즉시 적용됩니다. 모서리 둥글기, 글꼴 크기, 컨트롤 크기는 어느 팔레트에서나 같습니다."
+
+#: ui/appearance.slint:162
+#, x-machine
+msgid "Restore Defaults"
+msgstr "기본값 복원"
+
+#: ui/language.slint:77
+#, x-machine
+msgid "Takes effect after restart."
+msgstr "다시 시작하면 적용됩니다."

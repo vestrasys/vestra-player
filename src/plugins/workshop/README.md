@@ -47,7 +47,7 @@
 - 一轮回复里第一次工具调用之前的那一行开场白（「I'll start by reading…」）不显示：模型常用英文写它，工具状态行已经说明在做什么。对话记录里仍保留原文。
 - AI 的回复按 Markdown 显示（标题、列表、表格、代码块等），代码块右上角可以「复制」，链接用浏览器打开。回复里的网络图片不会下载，只显示替代文字。很长的对话只显示最近的消息，完整记录在会话文件夹里。
 - 服务商列表只有按量付费的 API；编程套餐、Token Plan 等订阅套餐不在列表里，需要时用「自定义 · OpenAI 格式」或「自定义 · Anthropic 格式」接入。
-- 需要 Vestra Player 0.4.1 或更新版本。
+- 需要 Vestra Player 0.4.3 或更新版本。界面文字的原文是英文，简体中文译文在 `locales/zh-Hans.po`（`vestra-plugin i18n extract` 更新 `locales/messages.pot`）。
 - 插件 SDK（`vendor/@vestra-player/sdk`，含 `vestra-plugin` 命令行）、TypeScript 和 `@types/node` 随插件一起提供，与播放器使用的 SDK 版本相同（`npm run vendor:sdk` 更新，`tests/vendor-sdk.mjs`）。AI 读的参考资料是 SDK 包自带的 `llms.txt` 和 `llms-full.txt`。
 - 评估：`tests/eval/` 有 6 道固定题目，`npm run eval` 用真实模型跑（会花你服务商账户的钱，只在改提示词或工具后手动跑），见 `tests/eval/run.mjs` 开头的说明。
 - 第三方组件的许可证见 `licenses/`（随插件包一起发布），pi 的 logo 出处见 `licenses/pi-logo/NOTICE.md`；随插件提供的 SDK、TypeScript、`@types/node`、`undici-types` 的许可证在 `vendor/` 下各自的文件夹里（`LICENSE`、`LICENSE.txt`、`ThirdPartyNoticeText.txt`）。

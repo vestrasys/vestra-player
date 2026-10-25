@@ -25,6 +25,8 @@ export interface ToolResult {
   ok: boolean;
   /** For the model: a one-line summary, then details (JSON). */
   text: string;
+  /** For the window (the result card): the summary as a template key and its arguments (ai.slint). */
+  say?: { code: string; args: string[] };
 }
 
 export interface SessionPaths {
@@ -49,13 +51,22 @@ const OWNER = /^[a-z0-9](?:[a-z0-9-]{0,38})$/;
 const NAME = /^[a-z][a-z0-9-]{1,38}$/;
 const ID = /^[A-Za-z0-9][A-Za-z0-9-]*\.[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-/** A GitHub user or organization name usable as id prefix, lower case; "" when unset; throws when invalid. */
+/** Why a GitHub name cannot be the id prefix: `code` is the settings page's hint. */
+export class OwnerError extends Error {
+  readonly code: "owner-chars" | "owner-vestra" | "owner-local";
+  constructor(code: OwnerError["code"], message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+/** A GitHub user or organization name usable as id prefix, lower case; "" when unset; throws an OwnerError when invalid. */
 export function checkOwner(text: string): string {
   const owner = text.trim().toLowerCase();
   if (!owner) return "";
-  if (!OWNER.test(owner)) throw new Error("GitHub 用户名只能有字母、数字和「-」，最多 39 个字符");
-  if (owner === "vestra") throw new Error("「vestra」留给官方插件，请填你自己的 GitHub 用户名");
-  if (owner === LOCAL_OWNER) throw new Error("「local」表示没有填用户名，请填你自己的 GitHub 用户名");
+  if (!OWNER.test(owner)) throw new OwnerError("owner-chars", 'A GitHub name has only letters, digits and "-", at most 39 characters');
+  if (owner === "vestra") throw new OwnerError("owner-vestra", '"vestra" is reserved for official plugins; enter your own GitHub name');
+  if (owner === LOCAL_OWNER) throw new OwnerError("owner-local", '"local" means no name was entered; enter your own GitHub name');
   return owner;
 }
 
@@ -66,7 +77,7 @@ const MAX_RESULT = 12_000;
 const json = (value: unknown) => JSON.stringify(value, null, 1);
 const result = (ok: boolean, summary: string, details?: unknown): ToolResult => {
   let text = details === undefined ? summary : `${summary}\n${json(details)}`;
-  if (text.length > MAX_RESULT) text = `${text.slice(0, MAX_RESULT)}\n…（输出过长，已截断）`;
+  if (text.length > MAX_RESULT) text = `${text.slice(0, MAX_RESULT)}\n… (output too long, cut)`;
   return { ok, text };
 };
 
@@ -126,7 +137,7 @@ export function testOutput(stdout: string, stderr: string): string {
   for (const line of stderr.split(/\r?\n/)) if (line.trim() && !/^\(node:\d+\) (ExperimentalWarning|SecurityWarning)|^\(Use `node --trace-warnings/.test(line)) lines.push(line);
   let text = lines.slice(0, MAX_OUTPUT.lines).join("\n");
   if (text.length > MAX_OUTPUT.chars) text = `${text.slice(0, MAX_OUTPUT.chars)}…`;
-  else if (lines.length > MAX_OUTPUT.lines) text += `\n…（还有 ${lines.length - MAX_OUTPUT.lines} 行）`;
+  else if (lines.length > MAX_OUTPUT.lines) text += `\n… (${lines.length - MAX_OUTPUT.lines} more lines)`;
   return text;
 }
 
@@ -225,11 +236,11 @@ export class Toolchain {
 
   /** The project folder of `id`, which must exist. */
   async project(session: SessionPaths, id: string): Promise<string> {
-    if (typeof id !== "string" || !ID.test(id) || id.length > 128) throw new Error(`不是插件 id：${id}（形如 <owner>.<name>）`);
+    if (typeof id !== "string" || !ID.test(id) || id.length > 128) throw new Error(`Not a plugin id: ${id} (it looks like <owner>.<name>)`);
     const directory = path.join(session.work, id);
     const stat = await fs.lstat(directory).catch(() => null);
-    if (!stat?.isDirectory() || stat.isSymbolicLink()) throw new Error(`没有插件项目 work/${id}/（先用 scaffold_plugin 创建）`);
-    if (!existsSync(path.join(directory, "manifest.json"))) throw new Error(`work/${id}/ 里没有 manifest.json`);
+    if (!stat?.isDirectory() || stat.isSymbolicLink()) throw new Error(`No plugin project work/${id}/ (create it with scaffold_plugin first)`);
+    if (!existsSync(path.join(directory, "manifest.json"))) throw new Error(`work/${id}/ has no manifest.json`);
     // Real paths: tsc reports files relative to the real working directory,
     // and the permission model compares real paths (macOS: /var is /private/var).
     return fs.realpath(directory);
@@ -346,9 +357,10 @@ export class Toolchain {
     return { errors: errors.slice(0, 50), errorCount: errors.length, problems, hints };
   }
 
+  /** `what`: the step, as in "Type check cancelled". */
   private stopped(run: RunResult, what: string): ToolResult | null {
-    if (run.cancelled) return result(false, `${what}已取消`);
-    if (run.timedOut) return result(false, `${what}超时，已停止`);
+    if (run.cancelled) return { ...result(false, `${what} cancelled`), say: { code: "cancelled", args: [what] } };
+    if (run.timedOut) return { ...result(false, `${what} timed out and was stopped`), say: { code: "timed-out", args: [what] } };
     return null;
   }
 
@@ -360,38 +372,38 @@ export class Toolchain {
     try {
       manifest = JSON.parse(await fs.readFile(path.join(directory, "manifest.json"), "utf8"));
     } catch (error) {
-      errors.push(`manifest.json 不是有效的 JSON：${(error as Error).message}`);
+      errors.push(`manifest.json is not valid JSON: ${(error as Error).message}`);
     }
-    if (manifest.id !== id) errors.push(`manifest.json 的 id「${String(manifest.id)}」要和文件夹名「${id}」一致`);
-    if (/^vestra\./i.test(id)) errors.push("「vestra.」留给官方插件，不能使用");
+    if (manifest.id !== id) errors.push(`The id "${String(manifest.id)}" in manifest.json must match the folder name "${id}"`);
+    if (/^vestra\./i.test(id)) errors.push('"vestra." is reserved for official plugins and cannot be used');
     const prefix = id.split(".")[0].toLowerCase();
-    if (owner && prefix !== owner) warnings.push(`id 前缀「${prefix}」和设置里的 GitHub 用户名「${owner}」不一致；发布前改成 ${owner}.<名字>`);
-    if (!owner && prefix === LOCAL_OWNER) warnings.push("id 以 local. 开头：只适合在本机用。要发布，先在设置里填 GitHub 用户名，再把 id 改成 <用户名>.<名字>");
+    if (owner && prefix !== owner) warnings.push(`The id prefix "${prefix}" differs from the GitHub name "${owner}" in the settings; change it to ${owner}.<name> before publishing`);
+    if (!owner && prefix === LOCAL_OWNER) warnings.push("The id starts with local.: for this computer only. To publish, enter a GitHub name in the settings, then change the id to <name>.<plugin>");
     errors.push(...(await packageProblems(directory)));
-    if (!(await testFiles(directory)).length) warnings.push("tests/ 里没有 *.test.ts 测试");
+    if (!(await testFiles(directory)).length) warnings.push("No *.test.ts tests in tests/");
     return { errors, warnings };
   }
 
   async scaffold(session: SessionPaths, args: { name: string; title?: string }, owner: string): Promise<ToolResult> {
     const name = String(args?.name ?? "").trim();
-    if (!NAME.test(name)) return result(false, "name 只能用小写字母、数字和「-」，以字母开头，2–39 个字符，例如 subtitle-delay");
+    if (!NAME.test(name)) return result(false, 'name has only lower-case letters, digits and "-", starts with a letter, 2–39 characters, e.g. subtitle-delay');
     const title = String(args?.title ?? "").trim() || name;
-    if ([...title].length > 40) return result(false, "title 最多 40 个字符");
+    if ([...title].length > 40) return result(false, "title has at most 40 characters");
     const id = `${owner || LOCAL_OWNER}.${name}`;
     const directory = path.join(session.work, id);
-    if (existsSync(directory)) return result(false, `work/${id}/ 已存在；继续修改它，或换一个 name`);
+    if (existsSync(directory)) return result(false, `work/${id}/ already exists; keep working on it, or choose another name`);
     await this.mirror();
     const files = template(id, name, title, this.sdkVersion);
     for (const [rel, text] of Object.entries(files)) {
       await fs.mkdir(path.dirname(path.join(directory, rel)), { recursive: true });
       await fs.writeFile(path.join(directory, rel), text);
     }
-    return result(true, `已创建插件项目 work/${id}/`, {
+    return result(true, `Created the plugin project work/${id}/`, {
       id,
       folder: `work/${id}`,
       files: Object.keys(files),
-      next: "改 manifest.json 的 capabilities、main.ts、ui/main.slint 和 tests/main.test.ts，然后 typecheck → test → check",
-      ...(owner ? {} : { note: "设置里没有 GitHub 用户名，id 用了 local. 前缀（只适合本机）" }),
+      next: "Edit the capabilities in manifest.json, main.ts, ui/main.slint and tests/main.test.ts, then typecheck → test → check",
+      ...(owner ? {} : { note: "No GitHub name in the settings: the id has the local. prefix (for this computer only)" }),
     });
   }
 
@@ -400,13 +412,13 @@ export class Toolchain {
       const directory = await this.project(session, id);
       // The CLI would start `npm ci` for dependencies.
       const problems = await packageProblems(directory);
-      if (problems.length) return result(false, `类型检查前的检查未通过：${problems.length} 个问题`, { problems });
+      if (problems.length) return result(false, `Checks before the type check failed: ${problems.length} problem(s)`, { problems });
       const run = await this.cli("check", directory, session, [], signal);
-      const stop = this.stopped(run, "类型检查");
+      const stop = this.stopped(run, "Type check");
       if (stop) return stop;
       const report = this.cliReport(run, directory);
-      if (run.code === 0) return result(true, `类型检查通过（${/\((\d+) files?\)/.exec(run.stdout)?.[1] ?? "?"} 个文件）`, report.hints.length ? { hints: report.hints } : undefined);
-      const summary = report.errorCount ? `类型检查未通过：${report.errorCount} 个错误` : "检查未通过";
+      if (run.code === 0) return result(true, `Type check passed (${/\((\d+) files?\)/.exec(run.stdout)?.[1] ?? "?"} files)`, report.hints.length ? { hints: report.hints } : undefined);
+      const summary = report.errorCount ? `Type check failed: ${report.errorCount} error(s)` : "Check failed";
       return result(false, summary, report);
     });
   }
@@ -415,7 +427,7 @@ export class Toolchain {
     return this.locked(id, async () => {
       const directory = await this.project(session, id);
       const tests = await testFiles(directory);
-      if (!tests.length) return result(false, "没有测试：在 tests/ 里写 *.test.ts（用 @vestra-player/sdk/testing 的 startPlugin / TestHost）");
+      if (!tests.length) return result(false, "No tests: write *.test.ts in tests/ (startPlugin / TestHost from @vestra-player/sdk/testing)");
       const tmp = await this.prepare(session);
       try {
         const modules = await fs.realpath(path.join(this.dataDir, "node_modules"));
@@ -439,19 +451,19 @@ export class Toolchain {
           ],
           { cwd: directory, env: { ...baseEnvironment(), TMPDIR: tmp, TMP: tmp, TEMP: tmp, NO_COLOR: "1" }, timeoutMs: TIMEOUTS.test, signal },
         );
-        const stop = this.stopped(run, "测试");
+        const stop = this.stopped(run, "Tests");
         if (stop) return stop;
         const report = parseTap(run.stdout, directory);
-        if (run.code === 0) return result(true, `测试全部通过（${report.passed} 个）`);
+        if (run.code === 0) return result(true, `All tests passed (${report.passed})`);
         if (!report.passed && !report.failed) {
           // Did not get to run: a syntax error, a missing module, a denied access.
           const stderr = run.stderr.trim().split("\n").slice(0, 30).join("\n");
           const tap = run.stdout.trim().split("\n").filter((l) => !/^# (tests|suites|pass|fail|cancelled|skipped|todo|duration_ms) /.test(l)).slice(0, 40).join("\n");
-          return result(false, "测试没能运行", { stderr, output: tap });
+          return result(false, "The tests did not run", { stderr, output: tap });
         }
         const printed = testOutput(run.stdout, run.stderr);
         if (printed) report.output = printed;
-        return result(false, `测试未通过：${report.failed} 个失败，${report.passed} 个通过`, report);
+        return result(false, `Tests failed: ${report.failed} failed, ${report.passed} passed`, report);
       } finally {
         await fs.rm(tmp, { recursive: true, force: true });
       }
@@ -462,15 +474,15 @@ export class Toolchain {
     return this.locked(id, async () => {
       const directory = await this.project(session, id);
       const rules = await this.rules(directory, id, owner);
-      if (rules.errors.length) return result(false, `检查未通过：${rules.errors.length} 个问题`, { problems: rules.errors, warnings: rules.warnings });
+      if (rules.errors.length) return result(false, `Check failed: ${rules.errors.length} problem(s)`, { problems: rules.errors, warnings: rules.warnings });
       // build: manifest rules, strict types, transpiling, no runtime import of the SDK.
       const run = await this.cli("build", directory, session, [], signal);
-      const stop = this.stopped(run, "检查");
+      const stop = this.stopped(run, "Check");
       if (stop) return stop;
       const report = this.cliReport(run, directory);
       const warnings = [...rules.warnings, ...report.hints];
-      if (run.code !== 0) return result(false, report.errorCount ? `检查未通过：${report.errorCount} 个类型错误` : "检查未通过", { ...report, warnings });
-      return result(true, "检查通过（manifest、严格类型检查、构建）。Slint 由播放器在安装时编译检查。", warnings.length ? { warnings } : undefined);
+      if (run.code !== 0) return result(false, report.errorCount ? `Check failed: ${report.errorCount} type error(s)` : "Check failed", { ...report, warnings });
+      return result(true, "Check passed (manifest, strict type check, build). The player compiles and checks Slint at install.", warnings.length ? { warnings } : undefined);
     });
   }
 
@@ -479,21 +491,24 @@ export class Toolchain {
     return this.locked(id, async () => {
       const directory = await this.project(session, id);
       const rules = await this.rules(directory, id, owner);
-      if (rules.errors.length) return result(false, `打包前的检查未通过：${rules.errors.length} 个问题`, { problems: rules.errors });
+      if (rules.errors.length)
+        return { ...result(false, `Checks before packing failed: ${rules.errors.length} problem(s)`, { problems: rules.errors }), say: { code: "pack-problems", args: [String(rules.errors.length)] } };
       const out = path.join(session.dir, "dist");
       await fs.mkdir(out, { recursive: true });
       const run = await this.cli("pack", directory, session, ["--out", out], signal);
-      const stop = this.stopped(run, "打包");
+      const stop = this.stopped(run, "Packing");
       if (stop) return stop;
       if (run.code !== 0) {
         const report = this.cliReport(run, directory);
-        return result(false, report.errorCount ? `打包失败：${report.errorCount} 个类型错误` : "打包失败", report);
+        return report.errorCount
+          ? { ...result(false, `Packing failed: ${report.errorCount} type error(s)`, report), say: { code: "pack-type-errors", args: [String(report.errorCount)] } }
+          : { ...result(false, "Packing failed", report), say: { code: "pack-failed", args: [] } };
       }
       const packed = /packed (.+\.vxp) \((\d+) bytes, sha256 ([0-9a-f]{64})\)/.exec(run.stdout);
       const version = JSON.parse(await fs.readFile(path.join(directory, "manifest.json"), "utf8")).version as string;
       const file = path.join(out, `${id}-${version}.vxp`);
-      if (!existsSync(file)) return result(false, "打包失败：没有生成 .vxp", { output: run.stdout.slice(-2000) });
-      return { ...result(true, `已打包 dist/${id}-${version}.vxp`, { file: `dist/${id}-${version}.vxp`, bytes: Number(packed?.[2] ?? 0), sha256: packed?.[3] ?? "" }), file };
+      if (!existsSync(file)) return { ...result(false, "Packing failed: no .vxp was written", { output: run.stdout.slice(-2000) }), say: { code: "pack-no-vxp", args: [] } };
+      return { ...result(true, `Packed dist/${id}-${version}.vxp`, { file: `dist/${id}-${version}.vxp`, bytes: Number(packed?.[2] ?? 0), sha256: packed?.[3] ?? "" }), file };
     });
   }
 
@@ -504,7 +519,7 @@ export class Toolchain {
    * tsconfig.json, .gitignore, a CI workflow, README/CHANGELOG/LICENSE
    * placeholders where missing.
    */
-  async exportSource(session: SessionPaths, id: string): Promise<{ data: Buffer; fileName: string; notes: string[] }> {
+  async exportSource(session: SessionPaths, id: string): Promise<{ data: Buffer; fileName: string; local: boolean }> {
     const directory = await this.project(session, id);
     const manifest = JSON.parse(await fs.readFile(path.join(directory, "manifest.json"), "utf8"));
     const name = id.split(".").slice(1).join(".") || id;
@@ -540,13 +555,11 @@ export class Toolchain {
     files.set(".gitignore", Buffer.from("node_modules/\ndist/\n*.vxp\n"));
     files.set(".github/workflows/ci.yml", Buffer.from(CI_WORKFLOW));
     if (!files.has("LICENSE")) files.set("LICENSE", Buffer.from(LICENSE_PLACEHOLDER));
-    if (!files.has("CHANGELOG.md")) files.set("CHANGELOG.md", Buffer.from(`# Changelog\n\n## ${manifest.version ?? "0.1.0"}\n\n- 第一版。\n`));
-    if (!files.has("README.md")) files.set("README.md", Buffer.from(`# ${manifest.name ?? name}\n\n一个 Vestra Player 插件。\n`));
-    const notes: string[] = [];
-    if (id.startsWith(`${LOCAL_OWNER}.`)) notes.push("id 以 local. 开头：发布前把 manifest.json 的 id 改成 <你的 GitHub 用户名>.<名字>");
-    notes.push("LICENSE 是占位文件：发布前换成你选的许可证全文，并在 manifest.json 填 license");
+    if (!files.has("CHANGELOG.md")) files.set("CHANGELOG.md", Buffer.from(`# Changelog\n\n## ${manifest.version ?? "0.1.0"}\n\n- First version.\n`));
+    if (!files.has("README.md")) files.set("README.md", Buffer.from(`# ${manifest.name ?? name}\n\nA Vestra Player plugin.\n`));
     const entries: ZipEntry[] = [...files.keys()].sort().map((rel) => ({ name: `${name}/${rel}`, data: files.get(rel)! }));
-    return { data: zip(entries), fileName: `${id}-${manifest.version ?? "0.1.0"}-source.zip`, notes };
+    // The window tells the user what to change before publishing (ai.slint).
+    return { data: zip(entries), fileName: `${id}-${manifest.version ?? "0.1.0"}-source.zip`, local: id.startsWith(`${LOCAL_OWNER}.`) };
   }
 }
 
@@ -571,7 +584,7 @@ async function projectFiles(directory: string): Promise<string[]> {
       if (item.isDirectory()) {
         if (!["node_modules", "dist"].includes(item.name)) await visit(child);
       } else if (item.isFile()) out.push(child);
-      if (out.length > 2000) throw new Error("项目文件太多（超过 2000 个）");
+      if (out.length > 2000) throw new Error("Too many project files (more than 2000)");
     }
   };
   await visit("");
@@ -596,11 +609,11 @@ async function packageProblems(directory: string): Promise<string[]> {
     const pkg = JSON.parse(await fs.readFile(path.join(directory, "package.json"), "utf8"));
     const problems: string[] = [];
     const deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies, ...pkg.optionalDependencies, ...pkg.peerDependencies });
-    if (deps.length) problems.push(`package.json 里不要写依赖（${deps.join("、")}）：这里只能用 Node 内置模块和插件 SDK；导出源码时会自动加上 @vestra-player/sdk`);
-    if (pkg.vestra?.bundle) problems.push("package.json 的 vestra.bundle 不可用（没有 esbuild）");
+    if (deps.length) problems.push(`No dependencies in package.json (${deps.join(", ")}): only Node's built-in modules and the plugin SDK can be used here; the source export adds @vestra-player/sdk itself`);
+    if (pkg.vestra?.bundle) problems.push("vestra.bundle in package.json is not available (no esbuild)");
     return problems;
   } catch (error) {
-    return [`package.json 不是有效的 JSON：${(error as Error).message}`];
+    return [`package.json is not valid JSON: ${(error as Error).message}`];
   }
 }
 
@@ -638,7 +651,7 @@ export function template(id: string, name: string, title: string, sdkVersion: st
 /** ${title}: a menu command opens a tool window. */
 export default async function activate(plugin: Plugin) {
   const window = plugin.windows.create("ui/main.slint");
-  window.bind(() => ({ message: "你好" }));
+  window.bind(() => ({ message: "Hello" }));
 
   plugin.commands.add({
     id: "${name}.open",
@@ -666,28 +679,28 @@ import activate from "../main.ts";
 test("the menu command opens the window", async () => {
   const { host, stop } = await startPlugin(activate, { directory: new URL("..", import.meta.url) });
   await host.command("${name}.open").run();
-  assert.equal(host.window("main").props.message, "你好");
+  assert.equal(host.window("main").props.message, "Hello");
   await stop();
 });
 `,
     "README.md": `# ${title}
 
-一个 Vestra Player 插件（id \`${id}\`）。
+A Vestra Player plugin (id \`${id}\`).
 
-## 用法
+## Usage
 
-菜单「${title}…」打开窗口。
+The menu item "${title}…" opens the window.
 
-## 开发
+## Development
 
 \`\`\`sh
 npm install
 npm run check && npm test && npm run pack
 \`\`\`
 
-在播放器里试用：\`--plugin <这个文件夹>\`。插件 SDK：@vestra-player/sdk ${sdkVersion}。
+Try it in the player: \`--plugin <this folder>\`. Plugin SDK: @vestra-player/sdk ${sdkVersion}.
 `,
-    "CHANGELOG.md": `# Changelog\n\n## 0.1.0\n\n- 第一版。\n`,
+    "CHANGELOG.md": `# Changelog\n\n## 0.1.0\n\n- First version.\n`,
     "package.json": `${JSON.stringify({ name: `vestra-plugin-${name}`, version: "0.1.0", private: true, type: "module" }, null, 2)}\n`,
     "tsconfig.json": `${JSON.stringify(TSCONFIG, null, 2)}\n`,
   };

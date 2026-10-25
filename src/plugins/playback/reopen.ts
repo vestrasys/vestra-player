@@ -1,6 +1,7 @@
 import { basename } from "node:path";
 import type { JsonStore, PlayerState, Scope } from "@vestra-player/sdk";
 import { openStore } from "./settings.ts";
+import { type Osd, sourceFailure } from "./texts.ts";
 
 type Last = { source: string | null; openedAt?: string };
 const isLast = (value: unknown): value is Last =>
@@ -10,7 +11,7 @@ const isLast = (value: unknown): value is Last =>
 export const displayName = (source: string) => (source.startsWith("/") ? basename(source) : source);
 
 /**
- * A10 重开当前/最后文件: reload the current source (back to where it was), or
+ * A10 Reopen Current/Last File: reload the current source (back to where it was), or
  * open the last source played, remembered across launches in `last.json`.
  */
 export class Reopener {
@@ -19,10 +20,10 @@ export class Reopener {
   last: string | null = null;
   readonly #scope: Scope;
   readonly #store: JsonStore<Last>;
-  readonly #osd: (text: string) => void;
+  readonly #osd: Osd;
   #recorded: number | null = null;
 
-  constructor(scope: Scope, osd: (text: string) => void) {
+  constructor(scope: Scope, osd: Osd) {
     this.#scope = scope;
     this.#osd = osd;
     // `last.json`; without a data directory only the current source can be reopened.
@@ -60,7 +61,7 @@ export class Reopener {
       if (current) {
         const { source, position, paused } = current;
         const media = await player.open(source!, { paused });
-        this.#osd(`重新打开: ${displayName(source!)}`);
+        this.#osd("Reopened: {}", [displayName(source!)]);
         // Back to where it was, e.g. a file still being written now plays further.
         media.ready().then(
           async () => {
@@ -68,7 +69,7 @@ export class Reopener {
             if (position !== null && position > 0 && duration !== null && position < duration && media.current)
               await player.seek(position).catch((error: Error & { code?: string }) => {
                 // Someone acted on the new source first: their change stands.
-                if (error?.code !== "stale") this.#osd(`来源操作失败：${error.message}`);
+                if (error?.code !== "stale") sourceFailure(error).show(this.#osd);
               });
           },
           () => {}, // a failed load is announced by the phase change
@@ -76,10 +77,10 @@ export class Reopener {
       } else {
         const source = this.last!;
         await player.open(source);
-        this.#osd(`重开最后文件: ${displayName(source)}`);
+        this.#osd("Reopened the last file: {}", [displayName(source)]);
       }
     } catch (error) {
-      throw new Error(`来源操作失败：${error instanceof Error ? error.message : String(error)}`);
+      throw sourceFailure(error);
     } finally {
       this.busy = false;
     }

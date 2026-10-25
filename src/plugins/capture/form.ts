@@ -1,27 +1,25 @@
 import { mkdtemp, rmdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import type { PlayerState, Scope, Snapshot } from "@vestra-player/sdk";
-import { chooseAudio, sampleTimes, uniqueFile, validate } from "./model.ts";
+import { chooseAudio, Failure, sampleTimes, uniqueFile, validate } from "./model.ts";
 import type { Spec } from "./model.ts";
 import type { Task, Tasks } from "./tasks.ts";
 
-const CHANGED = "播放内容已变化，未开始。";
-
-/** A host refusal of the snapshot in one Chinese sentence. */
+/** A host refusal of the snapshot as one of the plugin's reasons. */
 export function captureError(error: unknown) {
   switch ((error as { code?: string }).code) {
     case undefined:
       return error;
     case "stale":
-      return new Error(CHANGED);
+      return new Failure("changed");
     case "busy":
-      return new Error("播放器忙，请稍后再试。");
+      return new Failure("busy");
     case "unavailable":
     case "unsupported":
-      return new Error("当前画面无法截取。");
+      return new Failure("unavailable");
     default:
       console.error(`[capture] snapshot: ${(error as Error).message}`);
-      return new Error("截取画面失败。");
+      return new Failure("captureFailed");
   }
 }
 
@@ -36,7 +34,7 @@ export function capturer(plugin: Scope, tasks: Tasks) {
 
   /** `destination`: the file for an image or clip, the parent of a new `Capture-*` folder for a burst. */
   async function start(spec: Spec, seen: PlayerState | null, destination: string, reuse?: Snapshot): Promise<Task> {
-    if (tasks.active().length >= 5) throw new Error("已有一个导出在进行、四个在排队，请稍候。");
+    if (tasks.active().length >= 5) throw new Failure("queueFull");
     let snapshot = reuse;
     let directory: string | undefined;
     try {
@@ -45,15 +43,15 @@ export function capturer(plugin: Scope, tasks: Tasks) {
         validate(spec, seen);
         audio = chooseAudio(spec, seen);
         await player.refresh();
-        if (!player.isCurrent(seen)) throw new Error(CHANGED);
+        if (!player.isCurrent(seen)) throw new Failure("changed");
         snapshot = await plugin.media
           .capture({ ifCurrent: seen, processed: spec.processed, subtitles: spec.processed && spec.subtitles, audio, ...(spec.current ? {} : { at: spec.start }) })
           .catch((error) => {
             throw captureError(error);
           });
       }
-      if (!snapshot) throw new Error("保留的画面已过期，请用当前画面重试。");
-      if (stopped) throw new Error("已取消。");
+      if (!snapshot) throw new Failure("expired");
+      if (stopped) throw new Failure("cancelled");
       const frozen: Spec = { ...spec, start: snapshot.time, current: false };
       let target: string;
       if (frozen.kind === "burst") {

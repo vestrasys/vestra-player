@@ -85,6 +85,10 @@ pub fn sleep_launcher() -> Launcher {
     })
 }
 
+/// Files come on the command line (`launch.rs`); no event.
+pub fn on_open_files(_deliver: impl Fn(Vec<PathBuf>) + 'static) {}
+pub fn allow_handoff_foreground() {}
+
 pub fn reveal(_paths: &[PathBuf]) -> std::result::Result<(), RpcError> {
     Err(unsupported("showing files"))
 }

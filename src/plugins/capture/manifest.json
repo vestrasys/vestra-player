@@ -1,6 +1,6 @@
 {
   "id": "vestra.capture",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -15,13 +15,14 @@
     "ui.osd",
     "clipboard"
   ],
-  "name": "截图",
+  "name": "Snapshot",
   "author": "Vestra Player",
-  "punchline": "保存或复制当前画面、连拍、导出片段",
-  "description": "保存、另存或复制当前画面（原始画面或含画面效果与字幕的实际画面），支持 PNG、JPEG、BMP；连拍多张；把一段视频导出为 MP4，并在任务列表里查看进度。\n入口在右键菜单「视频 ▶ 截图」。",
+  "punchline": "Save or copy the current frame, capture bursts, export clips",
+  "description": "Saves, saves as or copies the current frame (the source frame, or the rendered frame with video effects and subtitles) as PNG, JPEG or BMP; captures a burst of frames; exports part of a video as MP4 and shows its progress in a task list.\nRight-click menu: Video ▸ Snapshot.",
   "tags": [
-    "视频",
-    "截图",
-    "导出"
-  ]
+    "video",
+    "snapshot",
+    "export"
+  ],
+  "minPlayerVersion": "0.4.3"
 }

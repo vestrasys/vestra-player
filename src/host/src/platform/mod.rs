@@ -12,14 +12,15 @@
 //!
 //! | area | functions |
 //! | --- | --- |
-//! | per-system tables | `SYSTEM` → `standard_window_shortcut` (table in `shortcuts.rs`), `ui_monospace_font` (`monospace_font`); the tables are the same code on every system; `KEY_LABELS` (how menus write shortcuts) |
+//! | per-system tables | `SYSTEM` → `standard_window_shortcut` (table in `shortcuts.rs`), `ui_monospace_font` (`monospace_font`), `ui_cjk_fallback_families` / `ui_bundled_cjk_fallback` (table in `fonts.rs`); the tables are the same code on every system; `KEY_LABELS` (how menus write shortcuts) |
 //! | windows | `shown`, `capture_windows`, `associate_new`, `set_floating`, `set_dark_title_bars`, `window_count`, `resize_content`, `screen_for`, `pointer_in`, `modifier_keys`, `double_click_seconds`, `menu_show_delay_ms` |
 //! | clipboard | `clipboard_read_text`, `clipboard_write_text`, `clipboard_write_image` |
 //! | dialogs | `confirm` |
 //! | power | `sleep_launcher` |
 //! | files and links | `reveal`, `open_path`, `open_url` (blocking, run on a worker thread) |
+//! | opening the player | `on_open_files` (macOS: open-documents Apple events through `vestra-open-files`; elsewhere files come on the command line), `single_instance` → `Launch` / `Primary` (shared, in `instance.rs`), `allow_handoff_foreground` (Windows: `AllowSetForegroundWindow`) |
 //! | secrets | `secret_get`, `secret_set`, `secret_delete` (blocking) |
-//! | facts | `os_facts` (blocking), `displays` (UI thread), `app_data_dir`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD` |
+//! | facts | `os_facts` (blocking), `displays` (UI thread), `app_data_dir`, `SLINT_CONTROL_IS_COMMAND`, `CTRL_ACCEPTS_CMD`, `preferred_languages` (here, through sys-locale on every system) |
 //! | installation | `install_layout` (pure, in `layout.rs`, for every system) → `current_install_layout` |
 //! | child processes | `tool_command`, `hide_console` (Windows: `CREATE_NO_WINDOW` when the host has no console; elsewhere nothing) |
 //! | storage | `sync_dir` (Unix: `fsync` below; Windows: `FlushFileBuffers` on a directory handle) |
@@ -76,8 +77,23 @@ pub enum KeyLabels {
 mod shortcuts;
 pub use shortcuts::*;
 
+/// The user's preferred interface languages, most preferred first, as BCP 47
+/// tags the way the system reports them (`zh-Hans-CN`, `de-DE`, `en_US`):
+/// macOS the language list of System Settings, Windows the user's display
+/// languages, Linux `LANGUAGE`, `LC_ALL`, `LC_MESSAGES` and `LANG`. sys-locale
+/// keeps the per-system calls; `i18n::resolve` picks the locale.
+pub fn preferred_languages() -> Vec<String> {
+    sys_locale::get_locales().collect()
+}
+
 mod layout;
 pub use layout::*;
+
+mod fonts;
+pub use fonts::*;
+
+mod instance;
+pub use instance::*;
 
 /// The installation this executable runs from (`layout.rs`); `None` for a
 /// development build.
@@ -108,6 +124,17 @@ pub fn monospace_font(system: System) -> &'static str {
 /// The running system's monospace family (`theme::apply_fonts`).
 pub fn ui_monospace_font() -> &'static str {
     monospace_font(imp::SYSTEM)
+}
+
+/// The running system's CJK fallback families for `script` in an interface
+/// in `locale` (`ui_fonts::install`; table in `fonts.rs`).
+pub fn ui_cjk_fallback_families(script: CjkScript, locale: &str) -> Vec<&'static str> {
+    cjk_fallback_families(imp::SYSTEM, script, locale)
+}
+
+/// Whether the bundled CJK font ends the running system's fallback chains.
+pub fn ui_bundled_cjk_fallback() -> bool {
+    bundled_cjk_fallback(imp::SYSTEM)
 }
 
 /// The running system's standard window shortcut for `press`, if any.

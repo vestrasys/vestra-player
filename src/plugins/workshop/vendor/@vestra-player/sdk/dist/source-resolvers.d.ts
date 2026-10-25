@@ -1,4 +1,3 @@
-/** Trusted extraction providers. Declarations cross JSON; handler code stays in JS. */
 import type { Transport } from "./wire.ts";
 /** One stream of a {@link ResolvedMedia}. */
 export type ResolvedResource = {

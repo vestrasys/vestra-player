@@ -1,4 +1,4 @@
-// 选项 ▶ 外观 ▶ 徽标与专辑封面: the settings page for H12 and J11 (440 wide,
+// Options ▸ Appearance ▸ Logo and Album Cover: the settings page for H12 and J11 (440 wide,
 // the options window's page area). The same switches as the menu items.
 // Heights (padding 14): title 24 + 6 + section 14 + 6 + check 18 + 8 + logo row 64
 //   + 6 + note 14 + 14 + section 14 + 6 + check 18 + 6 + note 28 + 8 + cache row 21 = 297 + 28.
@@ -11,7 +11,10 @@ export global LogoPage {
     in-out property <bool> audio-on: true;
     in property <bool> custom-logo: false;
     in property <image> logo;
-    in property <string> cache-note;
+    // The cover cache: unavailable without a data directory; else its tracks and size ("12.3 MB").
+    in property <bool> cache-available: true;
+    in property <int> cache-entries: 0;
+    in property <string> cache-size;
     in property <bool> can-clear: false;
     callback set-idle(bool);
     callback set-audio(bool);
@@ -34,16 +37,16 @@ export component LogoCoverPage inherits Rectangle {
         alignment: start;
         Text {
             height: 24px;
-            text: "徽标与专辑封面";
+            text: @tr("Logo and Album Cover");
             font-size: Theme.font-title;
             font-weight: 700;
             vertical-alignment: center;
             color: Theme.text;
         }
-        Section { text: "空闲画面"; }
+        Section { text: @tr("Idle screen"); }
         CheckBox {
             height: Theme.checkbox-row-height;
-            text: "空闲时显示徽标";
+            text: @tr("Show logo when idle");
             checked <=> LogoPage.idle-on;
             toggled => { LogoPage.set-idle(self.checked); }
         }
@@ -70,7 +73,7 @@ export component LogoCoverPage inherits Rectangle {
                 alignment: center;
                 spacing: 6px;
                 Text {
-                    text: LogoPage.custom-logo ? "当前：自定义图片" : "当前：Vestra Player 徽标";
+                    text: LogoPage.custom-logo ? @tr("Current: custom image") : @tr("Current: Vestra Player logo");
                     font-size: Theme.font-body;
                     color: Theme.text-list;
                     overflow: elide;
@@ -78,29 +81,30 @@ export component LogoCoverPage inherits Rectangle {
                 HorizontalLayout {
                     spacing: 6px;
                     alignment: start;
-                    Button { width: 96px; text: "选择图片…"; clicked => { LogoPage.choose-logo(); } }
-                    Button { width: 96px; text: "恢复默认"; enabled: LogoPage.custom-logo; clicked => { LogoPage.reset-logo(); } }
+                    Button { width: max(96px, self.preferred-width); text: @tr("Choose Image…"); clicked => { LogoPage.choose-logo(); } }
+                    Button { width: max(96px, self.preferred-width); text: @tr("Restore Default"); enabled: LogoPage.custom-logo; clicked => { LogoPage.reset-logo(); } }
                 }
             }
         }
+        // One line; wraps when the text is longer than the page.
         Text {
-            height: Theme.label-height;
-            text: "PNG 或 JPEG，最大 4096×4096、16 MB；图片会复制保存，原文件可以移走。";
+            min-height: Theme.label-height;
+            text: @tr("PNG or JPEG, up to 4096×4096 and 16 MB. The image is copied, so the original can be moved.");
             font-size: Theme.font-body;
             color: Theme.text-dim;
-            overflow: elide;
+            wrap: word-wrap;
         }
         Rectangle { height: 8px; }
-        Section { text: "纯音频"; }
+        Section { text: @tr("Audio only"); }
         CheckBox {
             height: Theme.checkbox-row-height;
-            text: "纯音频时显示专辑封面";
+            text: @tr("Show album cover for audio only");
             checked <=> LogoPage.audio-on;
             toggled => { LogoPage.set-audio(self.checked); }
         }
         // No fixed height: the layout gives the wrapped text all its lines.
         Text {
-            text: "封面取自文件内嵌图片，或同一文件夹中的 cover、folder、front 图片；没有时显示徽标占位。";
+            text: @tr("The cover comes from the picture embedded in the file, or a cover, folder or front image in the same folder; without one the logo is shown as a placeholder.");
             font-size: Theme.font-body;
             color: Theme.text-dim;
             wrap: word-wrap;
@@ -111,13 +115,15 @@ export component LogoCoverPage inherits Rectangle {
             spacing: 6px;
             Text {
                 horizontal-stretch: 1;
-                text: LogoPage.cache-note;
+                text: !LogoPage.cache-available ? @tr("Cover cache unavailable")
+                    : LogoPage.cache-entries == 0 ? @tr("Cover cache: empty")
+                    : @tr("Cover cache: {n} track, {0}" | "Cover cache: {n} tracks, {0}" % LogoPage.cache-entries, LogoPage.cache-size);
                 font-size: Theme.font-body;
                 color: Theme.text-list;
                 vertical-alignment: center;
                 overflow: elide;
             }
-            Button { width: 96px; text: "清除封面缓存"; enabled: LogoPage.can-clear; clicked => { LogoPage.clear-cache(); } }
+            Button { width: max(96px, self.preferred-width); text: @tr("Clear Cover Cache"); enabled: LogoPage.can-clear; clicked => { LogoPage.clear-cache(); } }
         }
     }
 }

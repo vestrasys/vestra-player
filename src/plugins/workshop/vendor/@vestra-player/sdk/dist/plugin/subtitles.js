@@ -1,5 +1,6 @@
 /** Subtitle selection, external SRT resources and this plugin's style layer. */
 import { createHash } from "node:crypto";
+import { isTextValue, textProblem } from "../i18n.js";
 import { Latest, failure, sleep, uncertain } from "./runtime.js";
 import { abortError } from "./player.js";
 const raws = new WeakMap();
@@ -226,7 +227,14 @@ export function subtitles(scope) {
             if (select !== "primary" && select !== "secondary" && select !== "none")
                 throw failure("invalid", 'select must be "primary", "secondary" or "none"');
             const title = options?.title;
-            if (title !== undefined &&
+            // A text value (`plugin.i18n.text`) is checked here and its shown
+            // length by the player.
+            if (isTextValue(title)) {
+                const problem = textProblem(title);
+                if (problem)
+                    throw failure("invalid", `title: ${problem}`);
+            }
+            else if (title !== undefined &&
                 (typeof title !== "string" ||
                     [...title].length < 1 ||
                     [...title].length > 200))

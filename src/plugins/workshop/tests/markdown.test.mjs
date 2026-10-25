@@ -6,6 +6,7 @@ import test from "node:test";
 import { Chat } from "../chat.ts";
 import { MAX_DOC_BYTES, MAX_FIELD_BYTES, MAX_ROWS, MAX_TEXT_BYTES, MessageDocs } from "../messages.ts";
 import { server, startAi } from "./fixture.mjs";
+import { hidden, translator } from "./texts.mjs";
 
 /** MessageDocs with a fake ui.markdown that counts its calls. */
 function counted() {
@@ -66,10 +67,13 @@ test("the value stays inside the player's limits: newest rows first, a notice fo
   const rows = docs.props(chat.rows);
   assert.ok(rows.length <= MAX_ROWS + 1);
   assert.equal(rows[0].kind, "notice");
-  assert.match(rows[0].text, /^更早的 \d+ 条消息没有显示/);
+  assert.equal(rows[0].code, "hidden");
+  assert.match(hidden(translator("zh-Hans"), rows[0].n), /^更早的 \d+ 条消息没有显示（完整记录在会话文件夹里）$/);
+  assert.match(hidden(translator("en"), rows[0].n), /^\d+ earlier messages are not shown/);
   assert.equal(rows.at(-1).kind, "assistant");
   assert.ok(Buffer.byteLength(rows.at(-1).body.text) <= MAX_DOC_BYTES);
-  assert.match(rows.at(-1).body.text, /内容过长/);
+  assert.equal(rows.at(-1).truncated, true, "the window says the message is cut");
+  assert.ok(rows.slice(1, -1).every((r) => !r.truncated));
   let total = 0;
   for (const row of rows) {
     for (const field of [row.text, row.detail]) {

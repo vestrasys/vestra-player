@@ -8,8 +8,10 @@ import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
 
 // A plain 20px-row list: click selects, double-click activates; `empty` shows when there are no rows.
+// A row whose `missing` entry is true is a file that no longer exists.
 component NameList {
     in property <[string]> model;
+    in property <[bool]> missing;
     in property <int> selected: -1;
     in property <string> empty;
     callback picked(int);
@@ -35,7 +37,7 @@ component NameList {
                 Text {
                     x: 5px;
                     width: parent.width - 10px;
-                    text: name;
+                    text: index < root.missing.length && root.missing[index] ? @tr("{} (file missing)", name) : name;
                     color: Theme.text-list;
                     font-size: Theme.font-body;
                     vertical-alignment: center;
@@ -58,15 +60,19 @@ component NameList {
 }
 
 export component ShadersWindow inherits Window {
-    title: "着色器列表";
-    width: 301px;
+    title: @tr("Shader List");
+    // 301px, wider only when a translation needs it.
+    width: Math.max(301px, body.min-width);
     height: 260px;
     background: Theme.bg-panel;
     in property <[string]> names;
     in property <int> selected: -1;
     in property <[string]> available;
-    in property <string> heading: "已启用 0/16（按顺序执行）";
-    in property <string> note;
+    in property <[bool]> missing;
+    in property <int> count: 0;
+    in property <int> max: 16;
+    in property <bool> render-ready: true;
+    in property <bool> shaders-enabled;
     callback select(int);
     callback add();
     callback pick(int);
@@ -75,35 +81,46 @@ export component ShadersWindow inherits Window {
     callback down();
     callback clear();
     callback open-folder();
-    VerticalLayout {
+    // The side buttons' column: 60px, or the widest label with the button padding.
+    private property <length> side-width: Math.max(60px, side-measure.preferred-width + 2 * Theme.button-padding);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        side-measure := VerticalLayout {
+            for text in [@tr("Add…"), @tr("Remove"), @tr("Move Up"), @tr("Move Down"), @tr("Clear")]: Text { text: text; font-size: Theme.font-body; }
+        }
+    }
+    body := VerticalLayout {
         padding: 8px;
         spacing: 4px;
-        Text { height: 16px; text: root.heading; color: Theme.text; font-size: Theme.font-body; vertical-alignment: center; }
+        Text { height: 16px; text: @tr("Enabled {}/{} (run in order)", root.count, root.max); color: Theme.text; font-size: Theme.font-body; vertical-alignment: center; }
         HorizontalLayout {
             height: 113px;
             spacing: 6px;
             NameList {
                 width: 219px;
                 model: root.names;
+                missing: root.missing;
                 selected: root.selected;
-                empty: "没有着色器";
+                empty: @tr("No shaders");
                 picked(i) => { root.select(i); }
             }
             VerticalLayout {
-                width: 60px;
+                width: root.side-width;
                 spacing: 2px;
-                Button { text: "添加…"; height: 21px; clicked => { root.add(); } }
-                Button { text: "移除"; height: 21px; enabled: root.selected >= 0; clicked => { root.remove(); } }
-                Button { text: "上移"; height: 21px; enabled: root.selected > 0; clicked => { root.up(); } }
-                Button { text: "下移"; height: 21px; enabled: root.selected >= 0 && root.selected < root.names.length - 1; clicked => { root.down(); } }
-                Button { text: "清空"; height: 21px; enabled: root.names.length > 0; clicked => { root.clear(); } }
+                Button { text: @tr("Add…"); height: 21px; clicked => { root.add(); } }
+                Button { text: @tr("Remove"); height: 21px; enabled: root.selected >= 0; clicked => { root.remove(); } }
+                Button { text: @tr("Move Up"); height: 21px; enabled: root.selected > 0; clicked => { root.up(); } }
+                Button { text: @tr("Move Down"); height: 21px; enabled: root.selected >= 0 && root.selected < root.names.length - 1; clicked => { root.down(); } }
+                Button { text: @tr("Clear"); height: 21px; enabled: root.names.length > 0; clicked => { root.clear(); } }
             }
         }
-        Text { height: 16px; text: "着色器文件夹里的其它文件（双击加入）"; color: Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; }
+        Text { height: 16px; text: @tr("Other files in the shader folder (double-click to add)"); color: Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; }
         NameList {
             height: 62px;
             model: root.available;
-            empty: "没有其它 .glsl 文件";
+            empty: @tr("No other .glsl files");
             activated(i) => { root.pick(i); }
         }
         HorizontalLayout {
@@ -111,13 +128,13 @@ export component ShadersWindow inherits Window {
             spacing: 6px;
             Text {
                 horizontal-stretch: 1;
-                text: root.note;
+                text: !root.render-ready ? @tr("Needs GPU rendering (currently software rendering)") : root.shaders-enabled ? "" : @tr("“Use Shaders” is off");
                 color: Theme.accent;
                 font-size: Theme.font-body;
                 vertical-alignment: center;
                 overflow: elide;
             }
-            Button { text: "打开文件夹"; width: 80px; clicked => { root.open-folder(); } }
+            Button { text: @tr("Open Folder"); width: Math.max(80px, self.preferred-width); clicked => { root.open-folder(); } }
         }
     }
 }

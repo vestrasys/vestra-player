@@ -3,16 +3,52 @@ import { HostError } from "../wire.ts";
 import type { PackageManifest, PackageSource } from "./types.ts";
 import type { Json, LayoutSlot, LocalServices, PlaybackStats, Transport, WireSystemInfo } from "../wire.ts";
 import { COMMAND_LIMITS, MENU_IDS } from "../commands.ts";
+import { UI_VALUE_LIMITS } from "./values.ts";
 import type { CommandDeclaration } from "../commands.ts";
 import type { SourceState } from "../source.ts";
 import type { SubtitleState } from "../subtitles.ts";
 import type { RenderSettings, ViewSettings } from "./types.ts";
 import type { MediaJob } from "../media.ts";
-import type { Plugin, ThemeId } from "./types.ts";
+import type { LanguagePreference, Locale, Plugin, TemplateArgs, TextValue, ThemeId } from "./types.ts";
+import { LOCALES, LIST_SEPARATORS, TEXT_LIMITS } from "../i18n.ts";
 /** Throw one of these from `host.handle(...)` to simulate a definite refusal. */
 export { HostError };
 /** The player's command caps, which the test host enforces as well. */
 export { COMMAND_LIMITS, MENU_IDS };
+/** The player's property value limits, which the test host enforces as well. */
+export { UI_VALUE_LIMITS };
+/**
+ * The player's limits on one text value ({@link Text}, {@link TextList},
+ * with everything nested in it), which the test host enforces as well:
+ * nesting depth 8, 1024 texts, lists and arguments in all, 16 arguments per
+ * text, 256 items per list, 4096 bytes per source text or string argument.
+ *
+ * @since 1.5.11
+ */
+export { TEXT_LIMITS };
+/**
+ * The separator of each {@link ListStyle} per interface language, as the
+ * player joins a {@link TextList}.
+ *
+ * @since 1.5.11
+ */
+export { LIST_SEPARATORS };
+/**
+ * The player's interface languages, English (the source) first, as the
+ * player's own table: `["en", "zh-Hans", "ja", "ko", "de", "fr", "es"]`.
+ *
+ * @example
+ * ```ts
+ * import { LOCALES } from "@vestra-player/sdk/testing";
+ *
+ * for (const locale of LOCALES.slice(1)) {
+ *   const { host, stop } = await startPlugin(activate, { directory, locale });
+ *   assert.notEqual(host.command("open").display.title, "Open…");
+ *   await stop();
+ * }
+ * ```
+ */
+export { LOCALES };
 type Handler = (params: Record<string, Json>) => unknown;
 type Call = {
     method: string;
@@ -60,6 +96,19 @@ export interface FakeWindow {
     userClose(): void;
 }
 /**
+ * A file dialog as the player shows it ({@link TestHost.fileDialogs}).
+ *
+ * @since 1.5.11
+ */
+export interface FileDialogText {
+    /** Which dialog. */
+    kind: "openFile" | "openFiles" | "openDirectory" | "saveFile";
+    /** Its title as shown, if the plugin gave one. */
+    title?: string;
+    /** The proposed file name as shown, if the plugin gave one. */
+    fileName?: string;
+}
+/**
  * A command the plugin registered with `plugin.commands.add`, as the test
  * host keeps it. Get one with {@link TestHost.command} (the plugin's own) or
  * {@link TestHost.coreAction} (the player's core actions).
@@ -80,6 +129,28 @@ export interface FakeCommand {
      * versions.
      */
     declaration: CommandDeclaration;
+    /**
+     * What the menu shows, as the player shows it in the test host's
+     * {@link TestHost.locale}: the title and each path segment translated with
+     * the plugin's catalog (the player's own menus in the player's words), the
+     * keys normalized (`@video` is "Video").
+     *
+     * @since 1.5.9
+     */
+    readonly display: {
+        /** The menu text of the item. */
+        title: string;
+        /** Each segment of the path as shown; empty without a path. */
+        path: string[];
+        /**
+         * The disabled or busy reason as shown, `null` without one (a plugin
+         * command's; not enumerable, so comparing `display` with
+         * `{ title, path }` still works).
+         *
+         * @since 1.5.11
+         */
+        reason?: string | null;
+    };
     /** The command state the player last received (after the update pass). */
     state: {
         /** `false` when the plugin disabled the command. */
@@ -88,8 +159,8 @@ export interface FakeCommand {
         checked: boolean | null;
         /** `true` while the plugin reports the command as busy. */
         busy: boolean;
-        /** The reason shown when the command is disabled or busy. */
-        reason: string | null;
+        /** The reason the plugin sent (source text or a text value; see `display.reason`). */
+        reason: TextValue | null;
     };
     /**
      * The state revision the player holds; increases with every state update
@@ -257,10 +328,110 @@ export declare class TestHost implements Transport {
          */
         sidebar: LayoutSlot | null;
     };
-    /** Every `osd.show` text, newest last. */
+    /**
+     * Every `osd.show` text as the player shows it (translated with the
+     * plugin's catalog and formatted with its args), newest last. The
+     * template and args the plugin sent are in `host.sent("osd.show")`.
+     */
     readonly osd: string[];
-    /** The text of this plugin's osd panel, `null` when hidden. */
+    /** The text of this plugin's osd panel as shown, `null` when hidden. */
     osdPanel: string | null;
+    /**
+     * The interface language the test host plays (`plugin.i18n.locale`), `"en"`
+     * by default. Set it before {@link startPlugin} (or pass its `locale`
+     * option): the plugin's catalog for it is read from the package's
+     * `locales/` then, and the menus ({@link FakeCommand.display}), OSD
+     * messages, dialog texts, settings page and panel titles show its
+     * translations, the way the player shows them.
+     *
+     * The player's own texts (core actions' messages and menus, its
+     * refusals) are English, or the player's Simplified Chinese for
+     * `"zh-Hans"`. While `locale` was never set they stay in Chinese, as
+     * players up to 0.4.2 showed them, so tests written for SDK 1.5.8 keep
+     * passing; set `locale` to test what a user sees now.
+     *
+     * @example
+     * ```ts
+     * const { host, stop } = await startPlugin(activate, { directory, locale: "zh-Hans" });
+     * assert.deepEqual(host.command("blur").display.path, ["视频", "模糊…"]);
+     * await stop();
+     * ```
+     *
+     * @since 1.5.9
+     */
+    get locale(): Locale;
+    set locale(locale: Locale);
+    /**
+     * Read the plugin's translations for {@link TestHost.locale} from a
+     * package directory, as the player would (`locales/<locale>.json` of a
+     * built package, else the source `locales/<locale>.po`); `startPlugin`
+     * does this. None for English; a missing file means none; a broken `.po`
+     * throws.
+     *
+     * @param directory - The package directory (holding `locales/`).
+     * @since 1.5.9
+     */
+    loadCatalog(directory: string): void;
+    /**
+     * A text of the plugin as the player shows it: translated with the
+     * plugin's catalog ({@link TestHost.loadCatalog}), then formatted with
+     * `args` when given.
+     *
+     * @param text - English source text or template.
+     * @param args - Values for its placeholders.
+     * @returns The shown text.
+     *
+     * @example
+     * ```ts
+     * assert.equal(host.translate("Speed {}×", [2]), "倍速 2×");
+     * ```
+     *
+     * @since 1.5.9
+     */
+    translate(text: TextValue, args?: TemplateArgs): string;
+    /**
+     * The saved interface language (`plugin.appearance.language`), changed by
+     * `appearance.setLanguage` or {@link TestHost.setLanguage}.
+     *
+     * @since 1.5.9
+     */
+    language: LanguagePreference;
+    /**
+     * Simulate another plugin (or the user) saving the interface language:
+     * pushes `appearance.changed`.
+     *
+     * @param language - `"system"` or a locale.
+     * @since 1.5.9
+     */
+    setLanguage(language: LanguagePreference): void;
+    /**
+     * Every `dialogs.confirm` as the player shows it: its texts translated
+     * (message and detail formatted with `args`), newest last. The options
+     * the plugin sent are in {@link TestHost.confirms}.
+     *
+     * @since 1.5.9
+     */
+    readonly confirmTexts: {
+        /** The question. */
+        message: string;
+        /** The text under it, if any. */
+        detail?: string;
+        /** The confirm button. */
+        confirm: string;
+        /** The cancel button (the player's "Cancel" by default). */
+        cancel: string;
+        /** The checkbox, if any. */
+        checkbox?: string;
+    }[];
+    /**
+     * Every file dialog (`openFile`, `openFiles`, `openDirectory`,
+     * `saveFile`) as the player shows it: the title translated, a text file
+     * name translated, newest last. The options the plugin sent are in
+     * `host.sent("dialogs.open")`.
+     *
+     * @since 1.5.11
+     */
+    readonly fileDialogs: FileDialogText[];
     /** The sequence provider's flags, `null` without a provider. */
     sequence: {
         /** The provider's `canNext`, as last evaluated. */
@@ -1071,11 +1242,20 @@ export declare class TestHost implements Transport {
     failStream(producerId: number, message: string): void;
     /**
      * Press a binding like the host's table would: panel-focus bindings first
-     * when `panel` is true, then global ones; the earliest registration wins a
-     * conflict. Resolves after the command ran; rejects when nothing is bound
-     * or the command is disabled or busy. Bindings use the reference syntax
-     * (`"Space"`, `"Ctrl+O"`, `"Mouse:WheelUp"`); the player's core actions
-     * match first, and user overrides in `bindings.overlay` apply.
+     * when `panel` is true, then global ones; within a scope the earliest
+     * registration first (the player's own commands before the plugin's), as
+     * the conflict rule orders them. A disabled command lets the key pass to
+     * the next command bound to it (SDK 1.5.12, as player 0.4.3): the one it
+     * shadowed, then the global scope. The first enabled one runs; `press`
+     * resolves after it ran (`"ran"`), or rejects when it is busy. When only
+     * disabled commands hold the key, the first one with a `reason` shows the
+     * reason on the OSD and eats the key (`"reason"`, see `host.osd`);
+     * without a reason the key goes on to the focused control (`"passed"`,
+     * nothing runs). Rejects when nothing is bound. Bindings use the
+     * reference syntax (`"Space"`, `"Ctrl+O"`, `"Mouse:WheelUp"`), and user
+     * overrides in `bindings.overlay` apply.
+     *
+     * @returns What the key did: `"ran"`, `"reason"` or `"passed"`.
      *
      * @example
      * ```ts
@@ -1085,7 +1265,7 @@ export declare class TestHost implements Transport {
      */
     press(binding: string, options?: {
         panel?: boolean;
-    }): Promise<void>;
+    }): Promise<"ran" | "reason" | "passed">;
     /**
      * Bindings declared by more than one command, each as
      * `[binding, winner, ...ignored]` (command ids; core actions as
@@ -1341,6 +1521,14 @@ export declare function startPlugin(activate: (plugin: Plugin) => unknown, optio
     host?: TestHost;
     /** Use an existing directory as `plugin.dataDirectory` (to test a restart). */
     dataDirectory?: string;
+    /**
+     * The interface language to play ({@link TestHost.locale}): the plugin's
+     * `locales/<locale>.po` (or `.json`) in `directory` is loaded and its
+     * menus, messages and titles show translated. Default: the host's.
+     *
+     * @since 1.5.9
+     */
+    locale?: Locale;
 }): Promise<{
     /** The test host the plugin talks to. */
     host: TestHost;

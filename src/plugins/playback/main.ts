@@ -10,41 +10,44 @@ import { Prompt } from "./prompt.ts";
 import { Reopener } from "./reopen.ts";
 import { DEFAULT_STEPS, type SeekSteps, SettingsStore } from "./settings.ts";
 import { Thumbnails } from "./thumbs.ts";
+import { Failure, type Osd } from "./texts.ts";
 import { TimeJump } from "./time-jump.ts";
 
 /**
  * Playback: the bottom bar and the commands around the core's basic actions
  * (play/pause, stop, ±N seconds, frames, previous/next, speed ±, volume and
  * mute are the player's own, run from the bar with `host.run`): open, the
- * 跳转到 and custom speed windows, and the 播放控制 chapter's features (打开链接,
- * 重开当前/最后文件, 复制到剪贴板, 关键帧, 跳转秒数, 跳到开头, 播放时禁止屏保,
- * 进度条悬停显示时间 and 缩略图), and the seek line's marks (B22: `timeline.marks`
- * and the A-B loop).
+ * Jump to Time and custom speed windows, and the 播放控制 chapter's features (Open
+ * URL, Reopen Current/Last File, Copy to Clipboard, keyframes, seek steps, Jump
+ * to Start, Disable Screen Saver While Playing, the seek bar's hover time and
+ * thumbnail), and the seek line's marks (B22: `timeline.marks` and the A-B loop).
  */
 export default async function activate(plugin: Plugin) {
   const { player } = plugin;
   const bar = plugin.panels.mount("bottom", "ui/bar.slint");
   // Headless hosts refuse the display; that never fails the action itself.
-  const osd = (text: string) => void plugin.osd.show(text).catch(() => {});
-  const playback = new Playback(player, plugin.dialogs, () => plugin.update(), osd);
+  const osd: Osd = (text, args) => void (args ? plugin.osd.show(text, args) : plugin.osd.show(text)).catch(() => {});
+  // i18n-ignore: the player's (or the SDK's) own message
+  const raw = (text: string) => void plugin.osd.show(text).catch(() => {});
+  const playback = new Playback(player, plugin.dialogs, () => plugin.update(), osd, raw);
 
   const jump = new Prompt(
     plugin,
     "playback-jump",
-    { windowTitle: "跳转到", groupTitle: "时间定位(时:分:秒.毫秒)", actionLabel: "定位" },
+    "jump",
     () => time(player.state.position),
     (value) => {
       const seconds = parseTime(value);
       if (seconds === null || !playback.canSeek() || seconds > player.state.duration!)
-        throw new Error("请输入来源时长范围内的HH:MM:SS.mmm");
+        throw new Failure("time-range");
       const target = playback.seek(seconds);
-      if (target !== null) playback.notify(`跳转: ${playback.positionText(target)}`);
+      if (target !== null) playback.notify("Seek: {} / {}", playback.positionArgs(target));
     },
   );
   const customRate = new Prompt(
     plugin,
     "playback-rate",
-    { windowTitle: "自定义速度", groupTitle: "播放速度(0.25–4倍)", actionLabel: "确定" },
+    "rate",
     () => rateText(player.state.rate),
     (value) => playback.setRate(value.trim() ? Number(value) : Number.NaN),
   );
@@ -64,7 +67,7 @@ export default async function activate(plugin: Plugin) {
     await commands?.setSteps(steps);
   });
 
-  commands = addCommands(plugin, playback, jump, customRate, {
+  commands = addCommands(plugin, plugin.i18n, playback, jump, customRate, {
     openUrl,
     reopener,
     keyframes,
@@ -92,7 +95,8 @@ export default async function activate(plugin: Plugin) {
   player.onChange(async (state) => {
     const replaced = state.sourceId !== sourceId;
     if (state.phase === "error" && (replaced || phase !== "error"))
-      osd(state.error ? `打开失败：${state.error}` : "打开失败");
+      if (state.error) osd("Open failed: {}", [state.error]);
+      else osd("Open failed");
     sourceId = state.sourceId;
     phase = state.phase;
     reopener.observe(state);

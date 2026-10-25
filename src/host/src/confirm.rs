@@ -44,7 +44,7 @@ pub fn parse(params: &Value) -> Result<Options, RpcError> {
         message: required("message", 200)?,
         detail: text("detail", 0, 2000)?.filter(|detail| !detail.is_empty()),
         confirm: required("confirm", 40)?,
-        cancel: text("cancel", 1, 40)?.unwrap_or_else(|| "取消".into()),
+        cancel: text("cancel", 1, 40)?.unwrap_or_else(|| crate::i18n::tr("Cancel")),
         destructive,
         checkbox: text("checkbox", 1, 40)?,
     })
@@ -78,7 +78,7 @@ mod tests {
     #[test]
     fn options_are_bounded_and_cancel_defaults() {
         let options = parse(&json!({"message":"清空播放列表？","confirm":"清空"})).unwrap();
-        assert_eq!(options.cancel, "取消");
+        assert_eq!(options.cancel, "Cancel");
         assert_eq!((options.detail, options.checkbox), (None, None));
         assert!(!options.destructive);
         let full = parse(

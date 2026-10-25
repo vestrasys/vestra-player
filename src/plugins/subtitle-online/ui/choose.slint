@@ -1,10 +1,10 @@
-// 选择字幕文件: an archive held several subtitle files; pick the one to use.
+// Choose Subtitle File: an archive held several subtitle files; pick the one to use.
 import { ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
 
 export component ChooseFile inherits Window {
-    title: "选择字幕文件";
+    title: @tr("Choose Subtitle File");
     width: 320px;
     height: 240px;
     background: Theme.bg-panel;
@@ -17,7 +17,7 @@ export component ChooseFile inherits Window {
         padding: Theme.dialog-padding;
         spacing: 6px;
         Text {
-            text: "压缩包里有多个字幕文件：";
+            text: @tr("The archive has several subtitle files:");
             color: Theme.text;
             font-size: Theme.font-body;
         }
@@ -49,8 +49,8 @@ export component ChooseFile inherits Window {
         HorizontalLayout {
             spacing: 5px;
             alignment: end;
-            Button { text: "取消"; clicked => { root.dismiss(); } }
-            Button { text: "确定"; enabled: root.names.length > 0; clicked => { root.choose(root.selected-index); } }
+            Button { text: @tr("Cancel"); clicked => { root.dismiss(); } }
+            Button { text: @tr("OK"); enabled: root.names.length > 0; clicked => { root.choose(root.selected-index); } }
         }
     }
 }

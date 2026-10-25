@@ -34,11 +34,11 @@ impl Slot {
         }
     }
     /// What the user calls it, in host messages.
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Bottom => "底栏",
-            Self::Sidebar => "侧栏",
-            Self::Backdrop => "视频背景",
+            Self::Bottom => crate::i18n::tr("bottom bar"),
+            Self::Sidebar => crate::i18n::tr("sidebar"),
+            Self::Backdrop => crate::i18n::tr("video backdrop"),
         }
     }
 }
@@ -395,6 +395,8 @@ fn replace_marker(source: &mut String, marker: &str, replacement: &str) -> Resul
 
 pub(crate) fn build(source: String, component: &str) -> Result<ComponentDefinition> {
     let base = crate::ui::ui_dir().join("host.slint");
+    // The player's own source (shell, options window): its catalog.
+    let source = crate::ui::translate(source, &base);
     let result = pollster::block_on(crate::ui::compiler().build_from_source(source, base));
     if result
         .diagnostics()

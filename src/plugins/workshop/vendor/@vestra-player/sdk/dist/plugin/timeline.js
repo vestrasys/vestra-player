@@ -104,7 +104,9 @@ class Layer {
             marks: marks.map((mark) => ({
                 time: mark?.time,
                 kind: mark?.kind,
-                ...(mark?.title === undefined ? {} : { title: mark.title }),
+                ...(mark?.title === undefined
+                    ? {}
+                    : { title: mark.title }),
             })),
         };
         if (options.ifCurrent)

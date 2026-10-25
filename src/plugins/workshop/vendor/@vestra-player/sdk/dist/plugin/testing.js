@@ -18,8 +18,9 @@
  *   value ranges (an out-of-range `filter.set` ends in `failed` with
  *   `invalid`), an empty chain removes the plugin's chain, a chain on a
  *   generated stream fails `unsupported` (the player's own conformance
- *   cases check all three), and the command limits ({@link COMMAND_LIMITS})
- *   and menu ids ({@link MENU_IDS}) are enforced.
+ *   cases check all three), and the command limits ({@link COMMAND_LIMITS}),
+ *   property value limits ({@link UI_VALUE_LIMITS}) and menu ids
+ *   ({@link MENU_IDS}) are enforced.
  *
  * Typical workflow: start the plugin with {@link startPlugin} (it reads the
  * plugin's `manifest.json`), drive it the way the user or another plugin
@@ -65,14 +66,50 @@ import { extname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HostError } from "../wire.js";
 import { COMMAND_LIMITS, MENU_IDS } from "../commands.js";
+import { UI_VALUE_LIMITS, valueLimitProblem } from "./values.js";
 import { nodeProblem } from "../processing.js";
 import { RENDER_DEFAULTS, renderProblem, VIEW_DEFAULTS, viewProblem, } from "./view.js";
 import { createPlugin } from "./index.js";
 import { THEMES } from "./appearance.js";
+import { Catalog, format as formatTemplate, HOST_GROUPS, HOST_ZH_HANS, LOCALES, fitColumns, isTextValue, LIST_SEPARATORS, loadPackageCatalog, menuKeys, renderTemplateArgs, renderText, resolveTexts, TEXT_LIMITS, textKey, textProblem, } from "../i18n.js";
 /** Throw one of these from `host.handle(...)` to simulate a definite refusal. */
 export { HostError };
 /** The player's command caps, which the test host enforces as well. */
 export { COMMAND_LIMITS, MENU_IDS };
+/** The player's property value limits, which the test host enforces as well. */
+export { UI_VALUE_LIMITS };
+/**
+ * The player's limits on one text value ({@link Text}, {@link TextList},
+ * with everything nested in it), which the test host enforces as well:
+ * nesting depth 8, 1024 texts, lists and arguments in all, 16 arguments per
+ * text, 256 items per list, 4096 bytes per source text or string argument.
+ *
+ * @since 1.5.11
+ */
+export { TEXT_LIMITS };
+/**
+ * The separator of each {@link ListStyle} per interface language, as the
+ * player joins a {@link TextList}.
+ *
+ * @since 1.5.11
+ */
+export { LIST_SEPARATORS };
+/**
+ * The player's interface languages, English (the source) first, as the
+ * player's own table: `["en", "zh-Hans", "ja", "ko", "de", "fr", "es"]`.
+ *
+ * @example
+ * ```ts
+ * import { LOCALES } from "@vestra-player/sdk/testing";
+ *
+ * for (const locale of LOCALES.slice(1)) {
+ *   const { host, stop } = await startPlugin(activate, { directory, locale });
+ *   assert.notEqual(host.command("open").display.title, "Open…");
+ *   await stop();
+ * }
+ * ```
+ */
+export { LOCALES };
 const kebab = (name) => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 function initialSource() {
@@ -121,9 +158,15 @@ const taken = (message) => {
     return error;
 };
 const SLOT_LABELS = {
-    bottom: "底栏",
-    sidebar: "侧栏",
-    backdrop: "视频背景",
+    bottom: "bottom bar",
+    sidebar: "sidebar",
+    backdrop: "video backdrop",
+};
+/** Texts only the test host uses, with their Chinese of SDK 1.5.8. */
+const TEST_ZH_HANS = {
+    "this site": "这个网站",
+    "External SRT": "外部 SRT",
+    "External ASS": "外部 ASS",
 };
 /** The player's limit of sidebar tabs. */
 const MAX_SIDEBAR_TABS = 8;
@@ -227,10 +270,177 @@ export class TestHost {
         bottom: null,
         sidebar: null,
     };
-    /** Every `osd.show` text, newest last. */
+    /**
+     * Every `osd.show` text as the player shows it (translated with the
+     * plugin's catalog and formatted with its args), newest last. The
+     * template and args the plugin sent are in `host.sent("osd.show")`.
+     */
     osd = [];
-    /** The text of this plugin's osd panel, `null` when hidden. */
+    /** The text of this plugin's osd panel as shown, `null` when hidden. */
     osdPanel = null;
+    #locale;
+    /**
+     * The interface language the test host plays (`plugin.i18n.locale`), `"en"`
+     * by default. Set it before {@link startPlugin} (or pass its `locale`
+     * option): the plugin's catalog for it is read from the package's
+     * `locales/` then, and the menus ({@link FakeCommand.display}), OSD
+     * messages, dialog texts, settings page and panel titles show its
+     * translations, the way the player shows them.
+     *
+     * The player's own texts (core actions' messages and menus, its
+     * refusals) are English, or the player's Simplified Chinese for
+     * `"zh-Hans"`. While `locale` was never set they stay in Chinese, as
+     * players up to 0.4.2 showed them, so tests written for SDK 1.5.8 keep
+     * passing; set `locale` to test what a user sees now.
+     *
+     * @example
+     * ```ts
+     * const { host, stop } = await startPlugin(activate, { directory, locale: "zh-Hans" });
+     * assert.deepEqual(host.command("blur").display.path, ["视频", "模糊…"]);
+     * await stop();
+     * ```
+     *
+     * @since 1.5.9
+     */
+    get locale() {
+        return this.#locale ?? "en";
+    }
+    set locale(locale) {
+        if (!LOCALES.includes(locale))
+            throw new Error(`test host: unknown locale ${locale}`);
+        this.#locale = locale;
+    }
+    /** The plugin's translations for `locale` (see `loadCatalog`). */
+    #catalog = new Catalog();
+    /**
+     * Read the plugin's translations for {@link TestHost.locale} from a
+     * package directory, as the player would (`locales/<locale>.json` of a
+     * built package, else the source `locales/<locale>.po`); `startPlugin`
+     * does this. None for English; a missing file means none; a broken `.po`
+     * throws.
+     *
+     * @param directory - The package directory (holding `locales/`).
+     * @since 1.5.9
+     */
+    loadCatalog(directory) {
+        this.#catalog = loadPackageCatalog(directory, this.locale);
+    }
+    /**
+     * A text of the plugin as the player shows it: translated with the
+     * plugin's catalog ({@link TestHost.loadCatalog}), then formatted with
+     * `args` when given.
+     *
+     * @param text - English source text or template.
+     * @param args - Values for its placeholders.
+     * @returns The shown text.
+     *
+     * @example
+     * ```ts
+     * assert.equal(host.translate("Speed {}×", [2]), "倍速 2×");
+     * ```
+     *
+     * @since 1.5.9
+     */
+    translate(text, args) {
+        if (typeof text !== "string")
+            return renderText(text, this.#catalog, this.locale);
+        const values = renderTemplateArgs(args, this.#catalog, this.locale);
+        return this.#catalog.template(text, values ?? null);
+    }
+    /**
+     * A text of a request as the player shows it, refused as the player
+     * refuses it: a string is a template (formatted with `args`, if given), a
+     * text value carries its own arguments.
+     */
+    #shown(text, args, what) {
+        if (args !== undefined && args !== null) {
+            const problem = textProblem(args, "args");
+            if (problem)
+                throw new HostError("invalid", problem);
+        }
+        if (typeof text === "string")
+            return this.translate(text, (args ?? undefined));
+        if (!isTextValue(text))
+            throw new HostError("invalid", `${what} requires a string or a text`);
+        const problem = textProblem(text);
+        if (problem)
+            throw new HostError("invalid", `${what}: ${problem}`);
+        if (args !== undefined && args !== null)
+            throw new HostError("invalid", `${what}: a text value takes no args`);
+        return this.translate(text);
+    }
+    /** A declared text: a string is translated as it is, a text rendered. */
+    #declared(text, what) {
+        return this.#shown(text, undefined, what);
+    }
+    /** Property values with their text values shown, as the player does first. */
+    #shownValues(values) {
+        const resolved = resolveTexts(values, this.#catalog, this.locale);
+        if ("problem" in resolved)
+            throw new HostError("invalid", resolved.problem);
+        return resolved.value;
+    }
+    /** A text of the player itself, in the player's language (see `locale`). */
+    #hostText(text, args) {
+        const zh = this.#locale === undefined || this.#locale === "zh-Hans";
+        const shown = (zh && (HOST_ZH_HANS[text] ?? TEST_ZH_HANS[text])) || text;
+        return args === undefined
+            ? shown
+            : formatTemplate(shown, args);
+    }
+    /** A declared menu path and title as the player shows them. */
+    #display(path, title, reason = null) {
+        const keys = menuKeys(path.map((segment) => typeof segment === "string" ? segment : textKey(segment)));
+        const display = {
+            title: this.translate(title),
+            // The player's submenus by key, everything else as declared.
+            path: keys.map((segment, index) => index < keys.length - 1 &&
+                HOST_GROUPS.includes(keys.slice(0, index + 1).join("/"))
+                ? this.#hostText(segment)
+                : this.translate((path[index] ?? segment))),
+        };
+        // Not enumerable: `deepEqual(display, { title, path })` keeps passing.
+        Object.defineProperty(display, "reason", {
+            value: reason === null ? null : this.translate(reason),
+            enumerable: false,
+        });
+        return display;
+    }
+    /**
+     * The saved interface language (`plugin.appearance.language`), changed by
+     * `appearance.setLanguage` or {@link TestHost.setLanguage}.
+     *
+     * @since 1.5.9
+     */
+    language = "system";
+    /**
+     * Simulate another plugin (or the user) saving the interface language:
+     * pushes `appearance.changed`.
+     *
+     * @param language - `"system"` or a locale.
+     * @since 1.5.9
+     */
+    setLanguage(language) {
+        this.language = language;
+        this.emit("appearance.changed", { theme: this.appearance, language });
+    }
+    /**
+     * Every `dialogs.confirm` as the player shows it: its texts translated
+     * (message and detail formatted with `args`), newest last. The options
+     * the plugin sent are in {@link TestHost.confirms}.
+     *
+     * @since 1.5.9
+     */
+    confirmTexts = [];
+    /**
+     * Every file dialog (`openFile`, `openFiles`, `openDirectory`,
+     * `saveFile`) as the player shows it: the title translated, a text file
+     * name translated, newest last. The options the plugin sent are in
+     * `host.sent("dialogs.open")`.
+     *
+     * @since 1.5.11
+     */
+    fileDialogs = [];
     /** The sequence provider's flags, `null` without a provider. */
     sequence = null;
     /**
@@ -431,6 +641,42 @@ export class TestHost {
             checks: ["manifest", "digest", "productionJavaScript", "slintCompile"],
             trustedExecution: true,
         };
+    }
+    /** A command state's reason, refused as the player refuses it. */
+    #checkReason(state) {
+        const reason = state?.reason;
+        if (reason !== null && reason !== undefined)
+            this.#declared(reason, "reason");
+    }
+    /**
+     * Refuse property values over the player's limits ({@link UI_VALUE_LIMITS})
+     * with `limit`, naming the property, as the player does.
+     */
+    #checkValues(values) {
+        for (const [property, value] of Object.entries(values)) {
+            const problem = valueLimitProblem(value);
+            if (problem)
+                throw new HostError("limit", `${property}: ${problem}`);
+        }
+    }
+    /**
+     * A panel's or settings page's initial properties, as the player keeps
+     * them: one over the limits is left out (the property keeps its default)
+     * and reported with `ui.error`, the request itself succeeds.
+     */
+    #initialValues(values) {
+        const kept = {};
+        for (const [property, value] of Object.entries(values)) {
+            const problem = valueLimitProblem(value);
+            if (problem)
+                this.emit("ui.error", {
+                    code: "limit",
+                    message: `${property}: ${problem}`,
+                });
+            else
+                kept[property] = value;
+        }
+        return kept;
     }
     #seeImages(values) {
         for (const value of Object.values(values)) {
@@ -1013,14 +1259,14 @@ export class TestHost {
     /** Why one frame that way is impossible (B07), or null; the player's rules. */
     #frameCheck(forward) {
         const s = this.source;
-        const unsupported = "当前来源不支持此操作";
-        const noBack = "当前来源不支持逐帧后退";
+        const unsupported = this.#hostText("Not supported by the current source");
+        const noBack = this.#hostText("The current source cannot step back a frame");
         if (s.phase !== "ready" && s.phase !== "ended")
             return unsupported;
         if (s.kind !== "media")
             return forward ? unsupported : noBack;
         if (s.hasVideo === false)
-            return "没有视频";
+            return this.#hostText("No video");
         if (forward && s.phase !== "ready")
             return unsupported;
         if (!forward && !s.capabilities.seek)
@@ -1031,12 +1277,16 @@ export class TestHost {
     #coreState(action) {
         const f = this.#facts();
         const s = this.source;
-        const unsupported = "当前来源不支持此操作";
+        const unsupported = this.#hostText("Not supported by the current source");
         const rule = {
             "play-pause": [f.toggle, f.ready ? s.paused : null, unsupported],
             stop: [f.close, null, unsupported],
-            previous: [!!this.sequence?.canPrevious, null, "没有上一个"],
-            next: [!!this.sequence?.canNext, null, "没有下一个"],
+            previous: [
+                !!this.sequence?.canPrevious,
+                null,
+                this.#hostText("No previous item"),
+            ],
+            next: [!!this.sequence?.canNext, null, this.#hostText("No next item")],
             "frame-back": [
                 !this.#frameCheck(false),
                 null,
@@ -1061,11 +1311,18 @@ export class TestHost {
     }
     #registerCoreActions() {
         const table = [
-            ["stop", ["关闭"], 120, "open", ["F4"], false],
-            ["play-pause", ["播放", "播放/暂停"], 201, "domain", ["Space"], false],
+            ["stop", ["Close"], 120, "open", ["F4"], false],
+            [
+                "play-pause",
+                ["Playback", "Play/Pause"],
+                201,
+                "domain",
+                ["Space"],
+                false,
+            ],
             [
                 "previous",
-                ["播放", "上一个"],
+                ["Playback", "Previous"],
                 202,
                 "domain",
                 ["PageUp", "Mouse:X1"],
@@ -1073,17 +1330,31 @@ export class TestHost {
             ],
             [
                 "next",
-                ["播放", "下一个"],
+                ["Playback", "Next"],
                 203,
                 "domain",
                 ["PageDown", "Mouse:X2"],
                 false,
             ],
-            ["frame-back", ["播放", "跳转", "上一帧"], 204, "frame", ["D"], true],
-            ["frame-forward", ["播放", "跳转", "下一帧"], 205, "frame", ["F"], true],
+            [
+                "frame-back",
+                ["Playback", "Seek", "Previous Frame"],
+                204,
+                "frame",
+                ["D"],
+                true,
+            ],
+            [
+                "frame-forward",
+                ["Playback", "Seek", "Next Frame"],
+                205,
+                "frame",
+                ["F"],
+                true,
+            ],
             [
                 "seek-backward",
-                ["播放", "跳转", "后退5秒"],
+                ["Playback", "Seek", "Back 5 s"],
                 210,
                 "step",
                 ["ArrowLeft"],
@@ -1091,7 +1362,7 @@ export class TestHost {
             ],
             [
                 "seek-forward",
-                ["播放", "跳转", "前进5秒"],
+                ["Playback", "Seek", "Forward 5 s"],
                 211,
                 "step",
                 ["ArrowRight"],
@@ -1099,18 +1370,32 @@ export class TestHost {
             ],
             [
                 "rate-normal",
-                ["播放", "速度", "正常"],
+                ["Playback", "Speed", "Normal"],
                 220,
                 "domain",
                 ["Z"],
                 false,
                 true,
             ],
-            ["rate-down", ["播放", "速度", "减速 0.1"], 221, "domain", ["X"], false],
-            ["rate-up", ["播放", "速度", "加速 0.1"], 222, "domain", ["C"], false],
+            [
+                "rate-down",
+                ["Playback", "Speed", "Slower 0.1"],
+                221,
+                "domain",
+                ["X"],
+                false,
+            ],
+            [
+                "rate-up",
+                ["Playback", "Speed", "Faster 0.1"],
+                222,
+                "domain",
+                ["C"],
+                false,
+            ],
             [
                 "volume-up",
-                ["声音", "音量 +"],
+                ["Audio", "Volume +"],
                 501,
                 "domain",
                 ["ArrowUp", "Mouse:WheelUp"],
@@ -1118,13 +1403,13 @@ export class TestHost {
             ],
             [
                 "volume-down",
-                ["声音", "音量 −"],
+                ["Audio", "Volume −"],
                 502,
                 "domain",
                 ["ArrowDown", "Mouse:WheelDown"],
                 true,
             ],
-            ["mute", ["声音", "静音"], 503, "domain", ["M"], false],
+            ["mute", ["Audio", "Mute"], 503, "domain", ["M"], false],
         ];
         const host = this;
         for (const [id, path, order, group, bindings, repeat, radio] of table) {
@@ -1137,6 +1422,18 @@ export class TestHost {
                     radio: radio ?? false,
                     bindings,
                     repeat,
+                },
+                // The player's own words in the player's language.
+                get display() {
+                    const leaf = path.at(-1);
+                    const step = /^(Back|Forward) (\S+) s$/.exec(leaf);
+                    const title = step
+                        ? host.#hostText(`${step[1]} {} s`, [step[2]])
+                        : host.#hostText(leaf);
+                    return {
+                        title,
+                        path: [...path.slice(0, -1).map((s) => host.#hostText(s)), title],
+                    };
                 },
                 get state() {
                     return host.#coreState(id);
@@ -1175,7 +1472,7 @@ export class TestHost {
                         kind: "control",
                         control: { kind: "pause", paused: !s.paused },
                     });
-                this.osd.push(s.phase !== "ended" && !s.paused ? "已暂停" : "播放");
+                this.osd.push(this.#hostText(s.phase !== "ended" && !s.paused ? "Paused" : "Playing"));
                 return;
             case "stop":
                 this.#intent({ kind: "close" });
@@ -1200,7 +1497,7 @@ export class TestHost {
                     kind: "control",
                     control: { kind: "seek", seconds: target },
                 });
-                this.osd.push(`${delta < 0 ? "后退" : "前进"} ${Math.abs(delta)}秒: ${time(target)} / ${time(s.duration)}`);
+                this.osd.push(this.#hostText(delta < 0 ? "Back {} s: {} / {}" : "Forward {} s: {} / {}", [Math.abs(delta), time(target), time(s.duration)]));
                 return;
             }
             case "rate-normal":
@@ -1210,7 +1507,7 @@ export class TestHost {
                     ? 1
                     : Math.max(0.25, Math.min(4, Math.round((s.rate + (action === "rate-up" ? 0.1 : -0.1)) * 100) / 100));
                 this.#intent({ kind: "control", control: { kind: "rate", rate } });
-                this.osd.push(`播放速度: ${rateText(rate)}x`);
+                this.osd.push(this.#hostText("Speed: {}x", [rateText(rate)]));
                 return;
             }
             case "volume-up":
@@ -1221,12 +1518,12 @@ export class TestHost {
                     ? Math.max(s.output.volume, Math.min(100, Math.round(s.output.volume + 5)))
                     : Math.max(0, Math.min(200, Math.round(s.output.volume - 5)));
                 this.setSource({ output: { volume, muted: false } });
-                this.osd.push(`音量: ${volume}%`);
+                this.osd.push(this.#hostText("Volume: {}%", [volume]));
                 return;
             }
             case "mute":
                 this.setSource({ output: { ...s.output, muted: !s.output.muted } });
-                this.osd.push(s.output.muted ? "静音: 关" : "静音: 开");
+                this.osd.push(this.#hostText(s.output.muted ? "Mute: Off" : "Mute: On"));
                 return;
         }
     }
@@ -1399,6 +1696,8 @@ export class TestHost {
             pictureInPicture: { ...this.mainWindow.pictureInPicture },
             appearance: this.appearance,
             fileTypes: this.fileTypes(),
+            language: this.language,
+            locale: this.locale,
         };
     }
     /**
@@ -1450,11 +1749,20 @@ export class TestHost {
     }
     /**
      * Press a binding like the host's table would: panel-focus bindings first
-     * when `panel` is true, then global ones; the earliest registration wins a
-     * conflict. Resolves after the command ran; rejects when nothing is bound
-     * or the command is disabled or busy. Bindings use the reference syntax
-     * (`"Space"`, `"Ctrl+O"`, `"Mouse:WheelUp"`); the player's core actions
-     * match first, and user overrides in `bindings.overlay` apply.
+     * when `panel` is true, then global ones; within a scope the earliest
+     * registration first (the player's own commands before the plugin's), as
+     * the conflict rule orders them. A disabled command lets the key pass to
+     * the next command bound to it (SDK 1.5.12, as player 0.4.3): the one it
+     * shadowed, then the global scope. The first enabled one runs; `press`
+     * resolves after it ran (`"ran"`), or rejects when it is busy. When only
+     * disabled commands hold the key, the first one with a `reason` shows the
+     * reason on the OSD and eats the key (`"reason"`, see `host.osd`);
+     * without a reason the key goes on to the focused control (`"passed"`,
+     * nothing runs). Rejects when nothing is bound. Bindings use the
+     * reference syntax (`"Space"`, `"Ctrl+O"`, `"Mouse:WheelUp"`), and user
+     * overrides in `bindings.overlay` apply.
+     *
+     * @returns What the key did: `"ran"`, `"reason"` or `"passed"`.
      *
      * @example
      * ```ts
@@ -1464,11 +1772,28 @@ export class TestHost {
      */
     async press(binding, options = {}) {
         const claims = this.#claims();
-        const id = (options.panel ? claims.get(`panel ${binding}`)?.[0] : undefined) ??
-            claims.get(`global ${binding}`)?.[0];
-        if (!id)
+        const ids = [
+            ...(options.panel ? (claims.get(`panel ${binding}`) ?? []) : []),
+            ...(claims.get(`global ${binding}`) ?? []),
+        ];
+        if (!ids.length)
             throw new Error(`test host: nothing is bound to ${binding}`);
-        await (this.coreCommands.get(id) ?? this.command(id)).run();
+        const command = (id) => this.coreCommands.get(id) ?? this.command(id);
+        const enabled = ids.find((id) => command(id).state.enabled);
+        if (enabled !== undefined) {
+            await command(enabled).run();
+            return "ran";
+        }
+        for (const id of ids) {
+            const reason = this.commands.has(id)
+                ? command(id).display.reason
+                : command(id).state.reason;
+            if (typeof reason === "string" && reason !== "") {
+                this.osd.push(reason);
+                return "reason";
+            }
+        }
+        return "passed";
     }
     /**
      * Bindings declared by more than one command, each as
@@ -1586,10 +1911,17 @@ export class TestHost {
             const key = this.#bindingKey(id);
             const scope = declaration.focus ? "panel" : "global";
             const current = this.bindings.overlay.get(key) ?? declaration.bindings;
+            const shown = this.commands.get(id) ?? this.coreCommands.get(id);
             return {
                 ...this.#split(key),
-                title: declaration.title,
-                path: declaration.path?.length ? declaration.path : null,
+                // What the user sees, like the player's binding table.
+                title: shown?.display.title ?? String(declaration.title),
+                path: declaration.path?.length
+                    ? (shown?.display.path ?? declaration.path.map(String))
+                    : null,
+                key: declaration.path?.length
+                    ? menuKeys(declaration.path.map((segment) => typeof segment === "string" ? segment : textKey(segment)))
+                    : null,
                 scope: scope,
                 defaults: declaration.bindings,
                 current,
@@ -1898,8 +2230,10 @@ export class TestHost {
         for (const other of this.otherResolvers) {
             const what = claims(other);
             if (what) {
-                const target = what === "host" ? "这个网站" : `文件类型 .${what}`;
-                throw taken(`${target} 已由 ${other.owner} 解析`);
+                const target = what === "host"
+                    ? this.#hostText("this site")
+                    : this.#hostText("File type .{}", [what]);
+                throw taken(this.#hostText("{} is resolved by {}", [target, other.owner]));
             }
         }
         this.resolvers.set(id, p);
@@ -1922,8 +2256,12 @@ export class TestHost {
             });
             throw new HostError("resolution", message);
         };
-        if (typeof p.error === "string")
-            fail(p.error.trim() ? p.error.slice(0, 2048) : "resolver failed");
+        // A text value (`plugin.i18n.error`) is shown translated, like the player.
+        const error = isTextValue(p.error)
+            ? this.#declared(p.error, "error")
+            : p.error;
+        if (typeof error === "string")
+            fail(error.trim() ? [...error].slice(0, 2048).join("") : "resolver failed");
         const result = (p.result ?? {});
         const producer = this.producers.get(Number(result.producerId));
         if (result.kind !== "stream")
@@ -2026,8 +2364,17 @@ export class TestHost {
                 this.commands.size + this.coreCommands.size >= COMMAND_LIMITS.total)
                 throw new HostError("limit", "command registry limit reached");
             const host = this;
+            const declaration = p.declaration;
+            // Like the player: the menu texts and the reason are checked (and
+            // shown) when they arrive.
+            for (const segment of [declaration.title, ...(declaration.path ?? [])])
+                this.#declared(segment, "a menu text");
+            this.#checkReason(p.state);
             this.commands.set(id, {
-                declaration: p.declaration,
+                declaration,
+                get display() {
+                    return host.#display(declaration.path ?? [], declaration.title, this.state.reason);
+                },
                 state: p.state,
                 revision: Number(p.revision),
                 async run() {
@@ -2047,6 +2394,7 @@ export class TestHost {
             const command = this.command(String(p.id));
             if (Number(p.revision) <= command.revision)
                 throw new HostError("command", `stale command revision ${p.revision}`);
+            this.#checkReason(p.state);
             command.revision = Number(p.revision);
             command.state = p.state;
             return { revision: command.revision };
@@ -2055,12 +2403,14 @@ export class TestHost {
             const id = String(p.id);
             if (this.windows.has(id))
                 throw new HostError("conflict", "view already exists");
-            this.#seeImages(p.properties);
+            const properties = this.#shownValues(p.properties);
+            this.#checkValues(properties);
+            this.#seeImages(properties);
             const host = this;
             this.windows.set(id, {
                 file: String(p.file),
                 visible: true,
-                props: { ...p.properties },
+                props: { ...properties },
                 callbacks: p.callbacks,
                 userClose() {
                     host.windows.delete(id);
@@ -2078,8 +2428,10 @@ export class TestHost {
             const window = this.windows.get(String(p.id));
             if (!window)
                 throw new HostError("missing", "view not found");
-            this.#seeImages([p.value]);
-            window.props[String(p.property)] = p.value;
+            const value = this.#shownValues(p.value);
+            this.#checkValues({ [String(p.property)]: value });
+            this.#seeImages([value]);
+            window.props[String(p.property)] = value;
         },
         "ui.show": (p) => {
             const window = this.windows.get(String(p.id));
@@ -2102,18 +2454,24 @@ export class TestHost {
                     ? this.layout.bottom?.panels?.[0]?.plugin
                     : undefined;
             if (holder !== undefined || (p.slot === "bottom" && this.layout.bottom))
-                throw taken(`${SLOT_LABELS[String(p.slot)]}已被 ${holder} 使用`);
+                throw taken(this.#hostText("The {} is used by {}", [
+                    this.#hostText(SLOT_LABELS[String(p.slot)]),
+                    String(holder),
+                ]));
             if (p.slot === "sidebar" &&
                 (this.layout.sidebar?.panels?.length ?? 0) >= MAX_SIDEBAR_TABS)
-                throw taken(`侧栏最多 ${MAX_SIDEBAR_TABS} 个页签`);
-            this.#seeImages(p.properties);
+                throw taken(this.#hostText("The sidebar holds at most {} tabs", [
+                    MAX_SIDEBAR_TABS,
+                ]));
+            const properties = this.#initialValues(this.#shownValues(p.properties));
+            this.#seeImages(properties);
             const host = this;
             this.panel = {
                 slot: String(p.slot),
                 file: String(p.file),
                 component: String(p.component),
                 visible: true,
-                props: { ...p.properties },
+                props: { ...properties },
                 locks: null,
                 emit(callback, ...args) {
                     host.emit("ui.callback", {
@@ -2131,7 +2489,9 @@ export class TestHost {
             this.#addPanel(slot, {
                 owner: 1,
                 plugin: this.manifestId,
-                title: typeof p.title === "string" && p.title ? p.title : this.manifestId,
+                title: typeof p.title === "string" && p.title
+                    ? this.translate(p.title)
+                    : this.manifestId,
             });
             return { status: "ready", prepareMs: 0, shellGeneration: 1 };
         },
@@ -2184,12 +2544,21 @@ export class TestHost {
                 state.detached = p.detached;
         },
         "osd.show": (p) => {
-            const text = String(p.text);
-            if (!text || [...text].length > 200)
+            const text = this.#shown(p.text, p.args, "text").replace(/[\n\r]/g, " ");
+            if (!text.trim() || [...text].length > 200)
                 throw new HostError("invalid", "osd text needs 1..200 characters");
             this.osd.push(text);
         },
-        "osd.panel": (p) => void (this.osdPanel = p.text === null ? null : String(p.text)),
+        "osd.panel": (p) => {
+            if (p.text === null)
+                return void (this.osdPanel = null);
+            const max = p.maxColumns;
+            if (max !== undefined &&
+                !(Number.isInteger(max) && Number(max) >= 8 && Number(max) <= 1000))
+                throw new HostError("invalid", "maxColumns is an integer from 8 to 1000");
+            const text = this.#shown(p.text, p.args, "text");
+            this.osdPanel = max === undefined ? text : fitColumns(text, Number(max));
+        },
         "playback.stats": () => this.stats,
         "audio.addTrack": (p) => {
             this.#audioCondition(p.expected);
@@ -2292,7 +2661,7 @@ export class TestHost {
             const reason = p.unit === "keyframe"
                 ? s.phase === "ready" && s.capabilities.seek && s.hasVideo !== false
                     ? null
-                    : "当前来源不支持此操作"
+                    : this.#hostText("Not supported by the current source")
                 : this.#frameCheck(p.direction === "forward");
             if (reason)
                 throw new HostError("unsupported", reason);
@@ -2322,8 +2691,11 @@ export class TestHost {
             this.emit("sequence.step", { direction });
         },
         "ui.setMount": (p) => {
-            this.#seeImages([p.value]);
-            this.mounted().props[String(p.property)] = p.value;
+            this.mounted();
+            const value = this.#shownValues(p.value);
+            this.#checkValues({ [String(p.property)]: value });
+            this.#seeImages([value]);
+            this.mounted().props[String(p.property)] = value;
         },
         "timeline.marks": () => ({ marks: this.timeline.marks }),
         "drops.provide": (p) => {
@@ -2339,6 +2711,14 @@ export class TestHost {
                 this.dropProviders.splice(index, 1);
         },
         "drops.listen": (p) => void (this.panelDrops = p.listen === true),
+        "appearance.setLanguage": (p) => {
+            const language = String(p.language);
+            if (language !== "system" &&
+                !LOCALES.includes(language))
+                throw new HostError("invalid", `unknown language ${language}`);
+            if (language !== this.language)
+                this.setLanguage(language);
+        },
         "appearance.set": (p) => {
             // Like the player: an id it does not have selects the default (the
             // SDK's own `set` refuses one before it gets here).
@@ -2352,16 +2732,17 @@ export class TestHost {
                 throw new HostError("invalid", `page ${id} already exists`);
             if (this.settings.pages.size >= 8)
                 throw new HostError("invalid", "a plugin has at most 8 settings pages");
-            this.#seeImages(p.properties);
+            const properties = this.#initialValues(this.#shownValues(p.properties));
+            this.#seeImages(properties);
             const host = this;
             this.settings.pages.set(id, {
                 category: String(p.category),
-                title: String(p.title),
+                title: this.translate(String(p.title)),
                 order: Number(p.order ?? 0),
                 file: String(p.file),
                 component: String(p.component),
                 global: String(p.global),
-                props: { ...p.properties },
+                props: { ...properties },
                 emit(callback, ...args) {
                     host.emit("ui.callback", {
                         view: `$settings:${id}`,
@@ -2375,8 +2756,10 @@ export class TestHost {
             const page = this.settings.pages.get(String(p.id));
             if (!page)
                 throw new HostError("missing", "page not registered");
-            this.#seeImages([p.value]);
-            page.props[String(p.property)] = p.value;
+            const value = this.#shownValues(p.value);
+            this.#checkValues({ [String(p.property)]: value });
+            this.#seeImages([value]);
+            page.props[String(p.property)] = value;
         },
         "settings.unregister": (p) => {
             this.settings.pages.delete(String(p.id));
@@ -2440,10 +2823,11 @@ export class TestHost {
             if (p.sourceId !== undefined &&
                 p.sourceId !== this.source.stamp.generation)
                 return { applied: false };
-            const marks = p.marks;
+            const sent = p.marks;
             const duration = this.source.duration;
-            if (!Array.isArray(marks) || marks.length > 1000)
+            if (!Array.isArray(sent) || sent.length > 1000)
                 throw new HostError("invalid", "a layer holds at most 1000 marks");
+            const marks = sent.map((mark) => ({ ...mark }));
             for (const mark of marks) {
                 const time = mark.time;
                 if (typeof time !== "number" ||
@@ -2453,6 +2837,9 @@ export class TestHost {
                     throw new HostError("invalid", `time ${time} is outside the media`);
                 if (!["chapter", "bookmark", "marker"].includes(String(mark.kind)))
                     throw new HostError("invalid", "kind is chapter, bookmark or marker");
+                // A text value is shown translated (`plugin.i18n.text`).
+                if (isTextValue(mark.title))
+                    mark.title = this.#declared(mark.title, "title");
                 if (mark.title !== undefined &&
                     mark.title !== null &&
                     (typeof mark.title !== "string" || [...mark.title].length > 100))
@@ -2468,6 +2855,16 @@ export class TestHost {
         "ui.interaction": (p) => void (this.mounted().locks = p),
         "dialogs.confirm": (p) => {
             this.confirms.push(p);
+            const shown = (field, formatted = false) => p[field] === undefined
+                ? undefined
+                : this.#shown(p[field], formatted && typeof p[field] === "string" ? p.args : undefined, field);
+            this.confirmTexts.push({
+                message: shown("message", true),
+                ...(p.detail === undefined ? {} : { detail: shown("detail", true) }),
+                confirm: shown("confirm"),
+                cancel: shown("cancel") ?? this.#hostText("Cancel"),
+                ...(p.checkbox === undefined ? {} : { checkbox: shown("checkbox") }),
+            });
             const answer = this.dialogAnswers.shift();
             if (answer === undefined)
                 throw new Error("test host: no dialog answer queued");
@@ -2478,7 +2875,7 @@ export class TestHost {
         "window.state": () => this.#windowFacts(),
         "window.setVideoArea": (p) => {
             if (this.mainWindow.fullscreen)
-                throw new HostError("unavailable", "全屏时不可用");
+                throw new HostError("unavailable", this.#hostText("Not available in fullscreen"));
             const width = Math.max(318, Number(p.width));
             const height = Math.max(120, Number(p.height));
             const clamped = width !== p.width || height !== p.height;
@@ -2498,10 +2895,10 @@ export class TestHost {
             if (p.on === pip.active)
                 return;
             if (p.on && !pip.supported)
-                throw new HostError("unsupported", "此系统不支持画中画");
+                throw new HostError("unsupported", this.#hostText("Picture-in-picture is not supported on this system"));
             const video = this.source.phase !== "empty" && this.source.hasVideo !== false;
             if (p.on && !video)
-                throw new HostError("unavailable", "没有视频");
+                throw new HostError("unavailable", this.#hostText("No video"));
             this.setMainWindow({
                 // The player leaves fullscreen before the window opens.
                 fullscreen: p.on ? false : this.mainWindow.fullscreen,
@@ -2531,7 +2928,20 @@ export class TestHost {
                 loop: loop && { a: loop.a, b: loop.b, count: loop.count ?? null },
             });
         },
-        "dialogs.open": () => {
+        "dialogs.open": (p) => {
+            const title = p.title === undefined ? undefined : this.#declared(p.title, "title");
+            // A string file name is data; a text is shown translated, a path
+            // separator in the translation replaced.
+            const fileName = p.fileName === undefined
+                ? undefined
+                : typeof p.fileName === "string"
+                    ? p.fileName
+                    : this.#declared(p.fileName, "fileName").replace(/[/\\]/g, "-");
+            this.fileDialogs.push({
+                kind: String(p.kind),
+                ...(title === undefined ? {} : { title }),
+                ...(fileName === undefined ? {} : { fileName }),
+            });
             const answer = this.dialogAnswers.shift();
             if (answer === undefined)
                 throw new Error("test host: no dialog answer queued");
@@ -2860,7 +3270,11 @@ export class TestHost {
                 : p.select === "secondary"
                     ? "secondary"
                     : "primary";
-            const title = typeof p.title === "string" ? p.title : null;
+            const title = isTextValue(p.title)
+                ? this.#declared(p.title, "title")
+                : typeof p.title === "string"
+                    ? p.title
+                    : null;
             if (title !== null && ([...title].length < 1 || [...title].length > 200))
                 throw new HostError("invalid", "subtitle title needs 1..200 characters");
             const bytes = Buffer.concat(upload.bytes);
@@ -2877,7 +3291,8 @@ export class TestHost {
             };
             this.subtitles.tracks.push({
                 target,
-                title: title ?? (format === "ass" ? "外部 ASS" : "外部 SRT"),
+                title: title ??
+                    this.#hostText(format === "ass" ? "External ASS" : "External SRT"),
                 language: null,
                 styleSupported: true,
                 styleReason: null,
@@ -3157,6 +3572,8 @@ export class TestHost {
  */
 export async function startPlugin(activate, options = {}) {
     const host = options.host ?? new TestHost();
+    if (options.locale !== undefined)
+        host.locale = options.locale;
     const directory = options.directory instanceof URL
         ? fileURLToPath(options.directory)
         : (options.directory ?? process.cwd());
@@ -3169,6 +3586,7 @@ export async function startPlugin(activate, options = {}) {
         manifest = { id: read.id, capabilities: read.capabilities };
     }
     host.manifestId = manifest.id;
+    host.loadCatalog(directory);
     const data = options.dataDirectory ?? host.dataDirectory;
     mkdirSync(data, { recursive: true });
     const instance = await createPlugin(host, manifest, directory, data, host.app);

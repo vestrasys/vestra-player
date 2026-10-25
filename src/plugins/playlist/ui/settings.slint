@@ -1,15 +1,15 @@
-// 选项 ▶ 播放 ▶ 播放列表 (IA-PL-02; 播放列表设置): the open
-// and drop options and the same switches as the 播放 ▶ 播放列表 menu items. 440 wide
+// Options ▸ Playback ▸ Playlist (IA-PL-02; Playlist Settings…): the open
+// and drop options and the same switches as the Playback ▸ Playlist menu items. 440 wide
 // (the options window's page area). Combo boxes hold indexes into the plugin's lists.
-import { CheckBox, ComboBox } from "std-widgets.slint";
+import { CheckBox, ComboBox, Palette } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 
 export global PlaylistSettings {
-    // 0 仅打开该文件, 1 加入相似文件, 2 加入同文件夹全部文件
+    // 0 Open Only That File, 1 Add Similar Files, 2 Add All Files in the Folder
     in-out property <int> open-mode;
     in-out property <bool> append-on-open;
     in-out property <bool> drop-at-pointer;
-    // 0 不循环, 1 全部, 2 单个
+    // 0 Off, 1 All, 2 One
     in-out property <int> repeat;
     in-out property <bool> shuffle;
     in-out property <bool> fast-advance;
@@ -31,15 +31,62 @@ component Section inherits Text {
     color: Theme.text-dim;
 }
 
+// The row label; `column` is the page's label column (96px, wider for longer translations).
 component Label inherits Text {
-    width: 96px;
+    in property <length> column: 96px;
+    width: root.column;
     font-size: Theme.font-body;
     color: Theme.text;
     vertical-alignment: center;
 }
 
-component Check inherits CheckBox {
-    height: Theme.checkbox-row-height;
+// A check box row. The std CheckBox does not wrap its label: when the label is wider than
+// the page, the box is drawn without it and the label wraps beside it (same 18px box,
+// 12px gap and text as the CheckBox).
+component Check {
+    in property <string> text;
+    in-out property <bool> checked;
+    callback toggled();
+    private property <bool> fits: root.width >= measure.preferred-width;
+    preferred-width: measure.preferred-width;
+    min-width: 18px;
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        measure := CheckBox { text: root.text; }
+    }
+    VerticalLayout {
+        if root.fits: CheckBox {
+            height: Theme.checkbox-row-height;
+            text: root.text;
+            checked <=> root.checked;
+            toggled => { root.toggled(); }
+        }
+        if !root.fits: HorizontalLayout {
+            spacing: 12px;
+            VerticalLayout {
+                alignment: start;
+                CheckBox {
+                    width: 18px;
+                    height: Theme.checkbox-row-height;
+                    checked <=> root.checked;
+                    toggled => { root.toggled(); }
+                }
+            }
+            Text {
+                text: root.text;
+                color: Palette.foreground;
+                wrap: word-wrap;
+                TouchArea {
+                    clicked => {
+                        root.checked = !root.checked;
+                        root.toggled();
+                    }
+                }
+            }
+        }
+    }
 }
 
 export component PlaylistSettingsPage inherits Rectangle {
@@ -48,72 +95,82 @@ export component PlaylistSettingsPage inherits Rectangle {
     private property <int> repeat: PlaylistSettings.repeat;
     changed open-mode => { open-combo.current-index = self.open-mode; }
     changed repeat => { repeat-combo.current-index = self.repeat; }
+    // The label column: 96px, or the wider label.
+    private property <length> column: max(96px, label-measure.preferred-width);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        label-measure := VerticalLayout {
+            for text in [@tr("When opening a file:"), @tr("Repeat:")]: Text { text: text; font-size: Theme.font-body; }
+        }
+    }
     VerticalLayout {
         padding: Theme.dialog-padding;
         spacing: 6px;
         alignment: start;
         Text {
             height: 24px;
-            text: "播放列表";
+            text: @tr("Playlist");
             font-size: Theme.font-title;
             font-weight: 700;
             vertical-alignment: center;
             color: Theme.text;
         }
-        Section { text: "打开与拖放"; }
+        Section { text: @tr("Open and drop"); }
         HorizontalLayout {
             height: Theme.input-height;
             spacing: 4px;
-            Label { text: "打开文件时："; }
+            Label { column: root.column; text: @tr("When opening a file:"); }
             open-combo := ComboBox {
                 width: 200px;
-                model: ["仅打开该文件", "加入相似文件", "加入同文件夹全部文件"];
+                model: [@tr("Open only that file"), @tr("Add similar files"), @tr("Add all files in the folder")];
                 current-index: PlaylistSettings.open-mode;
                 selected => { PlaylistSettings.set-open-mode(self.current-index); }
             }
         }
         Check {
-            text: "打开或拖入时追加，不清空列表";
+            text: @tr("Append when opening or dropping; don't clear the list");
             checked <=> PlaylistSettings.append-on-open;
             toggled => { PlaylistSettings.set-append-on-open(self.checked); }
         }
         Check {
-            text: "拖到列表时插入到拖放位置";
+            text: @tr("Insert at the drop position when dropping on the list");
             checked <=> PlaylistSettings.drop-at-pointer;
             toggled => { PlaylistSettings.set-drop-at-pointer(self.checked); }
         }
         Rectangle { height: 8px; }
-        Section { text: "播放"; }
+        Section { text: @tr("Playback"); }
         HorizontalLayout {
             height: Theme.input-height;
             spacing: 4px;
-            Label { text: "循环："; }
+            Label { column: root.column; text: @tr("Repeat:"); }
             repeat-combo := ComboBox {
                 width: 200px;
-                model: ["不循环", "全部", "单个"];
+                model: [@tr("Off"), @tr("All"), @tr("One")];
                 current-index: PlaylistSettings.repeat;
                 selected => { PlaylistSettings.set-repeat(self.current-index); }
             }
         }
         Check {
-            text: "随机";
+            text: @tr("Shuffle");
             checked <=> PlaylistSettings.shuffle;
             toggled => { PlaylistSettings.set-shuffle(self.checked); }
         }
         Check {
-            text: "快速推进到下一个";
+            text: @tr("Fast advance to next");
             checked <=> PlaylistSettings.fast-advance;
             toggled => { PlaylistSettings.set-fast-advance(self.checked); }
         }
         Rectangle { height: 8px; }
-        Section { text: "列表"; }
+        Section { text: @tr("List"); }
         Check {
-            text: "记住列表";
+            text: @tr("Remember list");
             checked <=> PlaylistSettings.remember;
             toggled => { PlaylistSettings.set-remember(self.checked); }
         }
         Check {
-            text: "移除全部前确认";
+            text: @tr("Confirm before removing all");
             checked <=> PlaylistSettings.confirm-clear;
             toggled => { PlaylistSettings.set-confirm-clear(self.checked); }
         }

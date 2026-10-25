@@ -16,6 +16,13 @@ const DIGEST: &str = "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d03
 const MAX_TEXT_BYTES: usize = 2 * 1024 * 1024;
 static BUNDLED: OnceLock<FontAsset> = OnceLock::new();
 
+/// The bundled font's bytes as compiled in, without the digest check or a
+/// copy: the interface's last-resort CJK fallback (`ui_fonts`) hands them to
+/// Slint's font collection, which parses them itself.
+pub fn bundled_bytes() -> &'static [u8] {
+    FONT_BYTES
+}
+
 /// The bundled OFL asset is retained independently of plugin/temporary-file life.
 /// Copies share one immutable allocation, rather than copying 16 MiB per snapshot.
 #[derive(Clone)]

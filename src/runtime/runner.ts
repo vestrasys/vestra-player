@@ -37,6 +37,11 @@ const listeners = new Map<string, Set<(data: unknown) => void>>();
  */
 const TAKEN = new Set(["slot-occupied", "sequence-taken", "resolver-taken"]);
 const taken = new WeakSet<Error>();
+/**
+ * The player reads protocol lines of at most 1 MiB, newline included, and
+ * stops a plugin that writes a longer one (`host/src/plugins.rs`).
+ */
+const MAX_LINE = 1024 * 1024;
 const send = (message: unknown) =>
   process.stdout.write(`${JSON.stringify(message)}\n`);
 /**
@@ -48,6 +53,16 @@ const send = (message: unknown) =>
 function request<T>(method: string, params: Json = {}): Promise<T> {
   if (stopping)
     return Promise.reject(new HostError("disabled", "plugin is stopping"));
+  // Refused here rather than sent: an oversized line would stop the plugin.
+  // Property values meet their own limits first (`UI_VALUE_LIMITS`).
+  const line = JSON.stringify({ id: nextId + 1, method, params });
+  if (Buffer.byteLength(line, "utf8") + 1 > MAX_LINE)
+    return Promise.reject(
+      new HostError(
+        "limit",
+        `${method}: request exceeds the player's 1 MiB message limit`,
+      ),
+    );
   const id = ++nextId;
   if (process.env.VESTRA_TRACE) console.error("rpc request", method, id);
   return new Promise<T>((resolve, reject) => {
@@ -64,7 +79,7 @@ function request<T>(method: string, params: Json = {}): Promise<T> {
       reject,
       timer,
     });
-    send({ id, method, params });
+    process.stdout.write(`${line}\n`);
   });
 }
 const on: Transport["on"] = (event, listener) => {
@@ -154,7 +169,8 @@ try {
     console.error("unhandled rejection:", error),
   );
   const instance = await createPlugin(
-    { request, on },
+    // `plugin.i18n.locale`: the interface language the player fixed for this run.
+    { request, on, locale: process.env.VESTRA_LOCALE || undefined },
     manifest,
     directory,
     process.env.VESTRA_PLUGIN_DATA_DIR || undefined,

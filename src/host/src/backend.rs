@@ -70,6 +70,10 @@ impl Backend {
                     .set_property("vo", "libmpv")?
                     // Software rendering's mode; the GPU renderer replaces it.
                     .set_property("hwdec", software_hwdec().as_str())?
+                    .set_property(
+                        "hwdec-software-fallback",
+                        crate::processing::HWDEC_SOFTWARE_FALLBACK,
+                    )?
                     .set_property("keep-open", true)?
                     .set_property("sub-auto", "no")?
                     .set_property("vf", crate::source_geometry::INITIAL_FILTERS)?
@@ -88,6 +92,7 @@ impl Backend {
                 no_builtin_scripts(&builder)?;
                 let mpv = Arc::new(builder.build()?);
                 mpv.request_log_messages("v")?;
+                crate::processing::observe_hwdec(&mpv)?;
                 let version = |name: &str| mpv.get_property::<String>(name).ok();
                 let versions =
                     json!({"mpv":version("mpv-version"),"ffmpeg":version("ffmpeg-version")});
@@ -448,6 +453,12 @@ impl Backend {
                             }
                             continue;
                         }
+                        processing.hwdec_event(&mpv, &event);
+                        if let rsmpv::Event::PropertyChange { userdata, .. } = &event
+                            && *userdata == crate::processing::HWDEC_OBSERVATION
+                        {
+                            continue;
+                        }
                         let accepted = sources.event(&event);
                         processing.note_source(sources.generation(), sources.phase());
                         subtitles.note_source(sources.generation(), sources.phase());
@@ -557,6 +568,10 @@ impl Backend {
                     if push.due(sources.generation(), sources.phase(), Instant::now()) {
                         view_target.set_picture(picture_size(&mpv));
                         let source_snapshot = sources.snapshot(&mpv);
+                        // A watched hwdec switch's window also ends without an event.
+                        if processing.hwdec_watching() {
+                            processing.hwdec_check(&mpv);
+                        }
                         processing.note_source(sources.generation(), sources.phase());
                         subtitles.note_source(sources.generation(), sources.phase());
                         // Natural EOF is found by the snapshot itself and is in it.
@@ -918,7 +933,7 @@ impl CoreActions {
         params: &Value,
         done: &mut Option<Completion>,
     ) -> Result<Option<Value>, RpcError> {
-        use crate::core_actions::{FIRST_FRAME, Facts, StepPlan, step_plan};
+        use crate::core_actions::{Facts, StepPlan, first_frame, step_plan};
         if self.stepping.is_some() {
             return Err(RpcError::new("busy", "the previous step is still running"));
         }
@@ -934,7 +949,7 @@ impl CoreActions {
         let before = context.mpv.get_property::<f64>("time-pos").ok();
         match plan {
             StepPlan::AtStart => {
-                return Ok(Some(json!({ "osd": FIRST_FRAME })));
+                return Ok(Some(json!({ "osd": first_frame() })));
             }
             StepPlan::Command(command) => context
                 .mpv

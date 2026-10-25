@@ -1,0 +1,84 @@
+// Options ▸ General ▸ Language: Follow System or one interface language,
+// used from the next start. The languages are named in their own words (the
+// plugin passes them; they are not translated); every other text is @tr.
+import { Theme } from "@vestra/theme.slint";
+
+struct LanguageRow { id: string, name: string }
+
+export global LanguageBridge {
+    in property <[LanguageRow]> languages;
+    in property <string> language: "system";
+    callback pick(string);
+}
+
+component Radio inherits Rectangle {
+    in property <bool> checked;
+    width: 14px;
+    height: 14px;
+    border-radius: 7px;
+    border-width: root.checked ? 1.5px : 1px;
+    border-color: root.checked ? Theme.accent : Theme.text-dim;
+    background: Theme.bg-list;
+    Rectangle {
+        width: 6px; height: 6px; border-radius: 3px;
+        visible: root.checked;
+        background: Theme.accent;
+    }
+}
+
+component Choice inherits Rectangle {
+    in property <string> text;
+    in property <bool> checked;
+    callback clicked();
+    height: 24px;
+    border-radius: Theme.radius-control;
+    background: touch.has-hover ? Theme.hover-bg : transparent;
+    touch := TouchArea { clicked => { root.clicked(); } }
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 8px;
+        Radio { y: (parent.height - self.height) / 2; checked: root.checked; }
+        Text {
+            text: root.text;
+            font-size: Theme.font-tab;
+            vertical-alignment: center;
+            color: root.checked ? Theme.text : Theme.text-list;
+            overflow: elide;
+        }
+    }
+}
+
+export component LanguagePage inherits Rectangle {
+    background: Theme.bg-panel;
+    VerticalLayout {
+        padding: Theme.dialog-padding;
+        spacing: 6px;
+        Text {
+            height: 24px;
+            text: @tr("Language");
+            font-size: Theme.font-title;
+            font-weight: 700;
+            vertical-alignment: center;
+            color: Theme.text;
+        }
+        Choice {
+            text: @tr("Follow System");
+            checked: LanguageBridge.language == "system";
+            clicked => { LanguageBridge.pick("system"); }
+        }
+        for row in LanguageBridge.languages: Choice {
+            text: row.name;
+            checked: LanguageBridge.language == row.id;
+            clicked => { LanguageBridge.pick(row.id); }
+        }
+        Text {
+            min-height: 32px;
+            text: @tr("Takes effect after restart.");
+            font-size: Theme.font-body;
+            color: Theme.text-dim;
+            vertical-alignment: center;
+            wrap: word-wrap;
+        }
+    }
+}

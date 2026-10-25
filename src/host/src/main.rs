@@ -15,7 +15,9 @@ mod drops;
 mod effects;
 pub mod font_asset;
 pub mod font_carrier;
+mod i18n;
 mod input_trace;
+mod launch;
 mod manifest;
 mod media_jobs;
 mod media_tracks;
@@ -24,6 +26,7 @@ mod menu;
 mod native_subtitle;
 mod offline_audio;
 mod offline_descriptor;
+mod open_files;
 pub mod package_activation;
 mod package_archive;
 mod package_manager;
@@ -68,6 +71,7 @@ mod system;
 mod theme;
 mod timeline;
 mod ui;
+mod ui_fonts;
 mod ui_image;
 mod ui_markdown;
 mod ui_state;
@@ -138,14 +142,17 @@ impl RpcError {
     fn sidebar_full() -> Self {
         Self::taken(
             "slot-occupied",
-            format!("侧栏最多 {} 个页签", slot_claims::MAX_SIDEBAR_TABS),
+            i18n::tr_args(
+                "The sidebar holds at most {} tabs",
+                &json!([slot_claims::MAX_SIDEBAR_TABS]),
+            ),
             json!({"slot":"sidebar"}),
         )
     }
     fn sequence_taken(holder: &str) -> Self {
         Self::taken(
             "sequence-taken",
-            format!("上一个/下一个已由 {holder} 提供"),
+            i18n::tr_args("Previous/Next is provided by {}", &json!([holder])),
             json!({"owner":holder}),
         )
     }
@@ -160,11 +167,24 @@ impl RpcError {
     fn invalid(message: impl Into<String>) -> Self {
         Self::new("invalid", message)
     }
+    /// The same failure, naming the property it is about.
+    fn for_property(mut self, property: &str) -> Self {
+        self.message = format!("{property}: {}", self.message);
+        self
+    }
+    /// A property value the player stores now and converts later, checked
+    /// against the value limits now (`ui_values::check`).
+    fn check_property(property: &str, value: &Value) -> std::result::Result<(), Self> {
+        ui_values::check(value).map_err(|error| Self::from(error).for_property(property))
+    }
 }
 impl From<anyhow::Error> for RpcError {
     fn from(value: anyhow::Error) -> Self {
         if value.downcast_ref::<manifest::NeedsPlayer>().is_some() {
             return Self::new("versionMismatch", value.to_string());
+        }
+        if value.downcast_ref::<ui_values::OverLimit>().is_some() {
+            return Self::new("limit", value.to_string());
         }
         Self::new("host", value.to_string())
     }
@@ -229,6 +249,9 @@ enum Event {
     ConfirmDone(Reply, bool, bool),
     /// A file dropped on a window: (window generation, path).
     Dropped(u64, PathBuf),
+    /// Files to open (`open_files.rs`); `true`: from another launch, which
+    /// also wants the window in front.
+    OpenFiles(Vec<PathBuf>, bool),
     /// The options window: (generation, tree index to show, or `None` = close).
     Settings(u64, Option<usize>),
     RuntimeFault(u64, String),
@@ -420,6 +443,8 @@ struct Host {
     pip_gpu: (Arc<AtomicBool>, bool),
     /// File drops (R-U2).
     drops: drops::Drops,
+    /// Files the system or another launch asked to open.
+    opens: open_files::OpenFiles,
     /// Settings pages and the options window (R-S1, R-H7).
     settings: settings_window::Settings,
     /// The category of the page the options window last showed.
@@ -891,8 +916,16 @@ impl Host {
                 }
                 input_trace::mark(&format!("host loop: binding → {owner}/{id}"));
                 self.policy.activity(self.now_ms());
-                if let Err(error) = self.execute_command(owner, &id) {
-                    eprintln!("binding execute: {error:?}");
+                match self.commands.resolve_execution(owner, &id) {
+                    // A key never fails silently: the command's reason shows.
+                    Err(commands::CommandError::Disabled {
+                        reason: Some(reason),
+                    }) => self.show_osd(&reason),
+                    _ => {
+                        if let Err(error) = self.execute_command(owner, &id) {
+                            eprintln!("binding execute: {error:?}");
+                        }
+                    }
                 }
             }
             Event::SidebarResized(generation, width) => {
@@ -1006,6 +1039,7 @@ impl Host {
                 }
             }
             Event::Dropped(generation, path) => self.drops.arrived(generation, path),
+            Event::OpenFiles(files, front) => self.open_files(files, front),
             Event::Settings(generation, index) => self.settings_event(generation, index),
             Event::ConfirmDone(reply, confirmed, checked) => {
                 self.policy.activity(self.now_ms());
@@ -1724,7 +1758,7 @@ impl Host {
                     eprintln!("floating panel: {error:#}");
                     if let Some(&owner) = owners.first() {
                         for owner in &owners {
-                            self.send(*owner, json!({"event":"ui.error","data":{"message":format!("ui-prepare: {error:#}")}}));
+                            self.send(*owner, json!({"event":"ui.error","data":{"code":"ui-prepare","message":format!("ui-prepare: {error:#}")}}));
                         }
                         let _ = self.policy.set_detached(owner, false);
                         self.remember_sidebar(false);
@@ -2272,7 +2306,7 @@ impl Host {
                 }
             };
             if let Some(typed) = typed
-                && input.borrow().table.resolve(&typed, panel).is_some()
+                && input.borrow().table.lookup(&typed, panel) != bindings::Lookup::Unbound
             {
                 event = typed;
             }
@@ -2586,23 +2620,32 @@ impl Host {
             self.respond(change.reply, result);
         }
     }
-    /// A mount's properties converted for a new instance; a value that no
-    /// longer converts (an image file removed since) is left out and logged.
+    /// Initial properties `refuse_initial` left out: logged and reported
+    /// to the plugin (`ui.error`, its `onError`).
+    fn report_refused(&mut self, owner: u64, refused: Vec<RpcError>) {
+        for error in refused {
+            eprintln!("initial property {owner}: {}", error.message);
+            self.send(owner, ui_error(&error));
+        }
+    }
+    /// A mount's properties converted for a new instance. They were checked
+    /// when written, so a value that no longer converts is an image file
+    /// removed since (or a document over the text total): it is left out (the
+    /// property keeps its default), logged and reported to the plugin
+    /// (`ui.error`, its `onError`).
     fn mount_values(&mut self, mount: &Mount) -> Vec<(String, SValue)> {
         let owner = mount.spec.owner;
-        mount
-            .properties
-            .iter()
-            .filter_map(
-                |(name, value)| match self.prop_value(owner, "$mount", name, value) {
-                    Ok(value) => Some((name.clone(), value)),
-                    Err(error) => {
-                        eprintln!("mount property {owner}/{name}: {}", error.message);
-                        None
-                    }
-                },
-            )
-            .collect()
+        let mut values = Vec::new();
+        for (name, value) in &mount.properties {
+            match self.prop_value(owner, "$mount", name, value) {
+                Ok(value) => values.push((name.clone(), value)),
+                Err(error) => {
+                    eprintln!("mount property {owner}/{name}: {}", error.message);
+                    self.send(owner, ui_error(&error));
+                }
+            }
+        }
+        values
     }
     fn mount_callbacks(&mut self) {
         for event in self.mount_input.try_iter().take(64).collect::<Vec<_>>() {
@@ -2613,7 +2656,7 @@ impl Host {
             }
             match event.args {
                 Ok(args)=>self.send(event.owner,json!({"event":"ui.callback","data":{"view":"$mount","callback":event.callback,"args":args}})),
-                Err(error)=>self.send(event.owner,json!({"event":"ui.error","data":{"message":error}})),
+                Err(error)=>self.send(event.owner,json!({"event":"ui.error","data":{"code":"ui","message":format!("callback {}: {error}",event.callback)}})),
             }
         }
     }
@@ -2637,7 +2680,8 @@ impl Host {
             busy: false,
             reason: None,
         };
-        let mut fullscreen = commands::Declaration::new("全屏", &["全屏"]);
+        let mut fullscreen =
+            commands::Declaration::new("Toggle Fullscreen", &["Toggle Fullscreen"]);
         fullscreen.group = "screen".into();
         fullscreen.order = 700;
         // IA-CORE-04: Enter and Alt+Enter toggle full screen; F11 too.
@@ -2647,9 +2691,12 @@ impl Host {
             "F11".into(),
             "Mouse:LeftDoubleClick".into(),
         ];
-        let mut exit = commands::Declaration::new("退出全屏", &[]);
+        fullscreen.localize(|_| i18n::tr("Toggle Fullscreen"));
+        let mut exit = commands::Declaration::new("Leave Fullscreen", &[]);
         exit.bindings = vec!["Escape".into()];
-        let mut quit = commands::Declaration::new("退出", &["退出"]);
+        exit.localize(|_| i18n::tr("Leave Fullscreen"));
+        let mut quit = commands::Declaration::new("Quit", &["Quit"]);
+        quit.localize(|_| i18n::tr("Quit"));
         quit.group = "exit".into();
         quit.order = 990;
         quit.bindings = vec!["Cmd+Q".into()];
@@ -3043,7 +3090,9 @@ impl Host {
             "videoArea":{"width":facts["videoArea"]["width"].as_f64().unwrap_or(0.),
                 "height":facts["videoArea"]["height"].as_f64().unwrap_or(0.)},
             "pictureInPicture":self.pip_state(),
-            "appearance":self.theme(),"fileTypes":self.file_types})
+            "appearance":self.theme(),"fileTypes":self.file_types,
+            "language":self.language_preference().unwrap_or_else(|| i18n::SYSTEM.into()),
+            "locale":i18n::locale()})
     }
     /// `WindowState.pictureInPicture`: offered here, and the window showing.
     fn pip_state(&self) -> Value {
@@ -3071,7 +3120,7 @@ impl Host {
             .as_ref()
             .ok_or_else(|| unavailable("the video area needs a native window"))?;
         if shell.window().is_fullscreen() {
-            return Err(unavailable("全屏时不可用"));
+            return Err(unavailable(&i18n::tr("Not available in fullscreen")));
         }
         ui::settle_layout(shell.window());
         let number = |name: &str| match shell.get_property(name) {
@@ -3198,6 +3247,24 @@ impl Host {
             .map_or_else(|| owner.to_string(), |p| p.manifest.id.clone())
     }
     /// Refuse what another plugin holds (`RpcError::taken`): recorded for
+    /// A sentence of a plugin's (`osd.show`, dialogs) in the interface
+    /// language: a template translated with its catalog and formatted with
+    /// `args`, or a text value (`i18n::text`).
+    fn plugin_sentence(
+        &self,
+        owner: u64,
+        text: &Value,
+        args: &Value,
+    ) -> std::result::Result<String, RpcError> {
+        let texts = self.plugins.get(&owner).map_or(
+            i18n::text::Texts {
+                catalog: None,
+                locale: i18n::locale(),
+            },
+            plugins::Plugin::texts,
+        );
+        texts.sentence(text, args).map_err(RpcError::invalid)
+    }
     /// `packages.list`, shown on the OSD and announced as `host.error`.
     fn refuse_taken(&mut self, owner: u64, error: RpcError, text: String) -> RpcError {
         let id = self.plugin_id(owner);
@@ -3209,7 +3276,7 @@ impl Host {
         warnings.retain(|(w, _)| w["code"] != warning["code"] || w["slot"] != warning["slot"]);
         warnings.push((warning.clone(), text.clone()));
         eprintln!("{id}: {}", error.message);
-        self.show_osd(&format!("{id} 的{text}"));
+        self.show_osd(&i18n::tr_args("{}: {}", &json!([id, text])));
         warning["plugin"] = id.into();
         warning["message"] = error.message.clone().into();
         self.broadcast("host.error", warning);
@@ -3237,7 +3304,7 @@ impl Host {
             .iter()
             .map(|(_, text)| text.as_str())
             .collect::<Vec<_>>();
-        (!text.is_empty()).then(|| text.join("；"))
+        (!text.is_empty()).then(|| text.join(&i18n::tr("; ")))
     }
     fn respond(&mut self, reply: Reply, mut result: std::result::Result<Value, RpcError>) {
         // The backend names the holder of a taken resolver by owner number.
@@ -3253,8 +3320,8 @@ impl Host {
             let id = self.plugin_id(holder);
             detail.insert("owner".into(), id.clone().into());
             detail.insert("target".into(), target.clone().into());
-            error.message = format!("{target} 已由 {id} 解析");
-            let text = format!("{target} 未接管：已由 {id} 解析");
+            error.message = i18n::tr_args("{} is resolved by {}", &json!([target, id]));
+            let text = i18n::tr_args("{} not taken over: resolved by {}", &json!([target, id]));
             let refusal = error.clone();
             result = Err(self.refuse_taken(reply.owner, refusal, text));
         }
@@ -3304,7 +3371,7 @@ impl Host {
             "timeline.set" => Some("timeline.marks"),
             "drops.provide" | "drops.withdraw" | "drops.listen" => Some("ui.drop"),
             method if method.starts_with("settings.") => Some("ui.settings"),
-            "appearance.set" => Some("ui.theme"),
+            "appearance.set" | "appearance.setLanguage" => Some("ui.theme"),
             "player.setLoop" | "player.setAudioDevice" => Some("playback.control"),
             "ui.mount" | "ui.setMount" | "ui.unmount" | "ui.interaction" | "ui.menu"
             | "layout.state" | "layout.set" => Some("ui.mount"),
@@ -3352,6 +3419,34 @@ impl Host {
                 "capability must be declared in manifest",
             ));
         }
+        // Text values (i18n.md §7) in property values, timeline titles,
+        // subtitle track titles and resolver failures become the strings
+        // they show, in this plugin's catalog, before anything reads them (so
+        // the value and length limits count what is shown).
+        let resolved;
+        let params = if (matches!(
+            method,
+            "ui.open"
+                | "ui.set"
+                | "ui.mount"
+                | "ui.setMount"
+                | "settings.register"
+                | "settings.set"
+                | "timeline.set"
+                | "subtitles.commit"
+        ) && i18n::text::contains(params))
+            || (method == "sourceResolvers.respond" && i18n::text::is_text(&params["error"]))
+        {
+            let mut copy = params.clone();
+            plugin
+                .texts()
+                .resolve(&mut copy)
+                .map_err(RpcError::invalid)?;
+            resolved = copy;
+            &resolved
+        } else {
+            params
+        };
         if method == "ui.markdownScan" {
             return self.markdown_scan(params).map(Some);
         }
@@ -3429,6 +3524,7 @@ impl Host {
                 self.drops_dispatch(reply.owner, method, params)?
             }
             "appearance.set" => self.appearance_set(params)?,
+            "appearance.setLanguage" => self.language_set(params)?,
             method if method.starts_with("settings.") => {
                 return self.settings_dispatch(reply, method, params);
             }
@@ -3471,7 +3567,24 @@ impl Host {
                 if self.dialog_busy {
                     return Err(RpcError::new("busy", "a native dialog is already open"));
                 }
-                let options = confirm::parse(params)?;
+                // Message and detail are templates (`args`); the button and
+                // checkbox texts are translated as they are.
+                // A text value carries its own arguments.
+                i18n::valid_args(&params["args"]).map_err(RpcError::invalid)?;
+                let mut shown = params.clone();
+                for field in ["message", "detail", "confirm", "cancel", "checkbox"] {
+                    let text = &params[field];
+                    if text.is_null() {
+                        continue;
+                    }
+                    let args = if matches!(field, "message" | "detail") && text.is_string() {
+                        &params["args"]
+                    } else {
+                        &Value::Null
+                    };
+                    shown[field] = self.plugin_sentence(reply.owner, text, args)?.into();
+                }
+                let options = confirm::parse(&shown)?;
                 let events = self.events.clone();
                 let answer = reply.clone();
                 self.dialog_busy = true;
@@ -3627,7 +3740,12 @@ impl Host {
                 Value::Null
             }
             "osd.show" => {
-                let text = string(params, "text")?.replace(['\n', '\r'], " ");
+                // A template in the plugin's language: translated with its
+                // catalog, then formatted with `args` (i18n.md §5).
+                i18n::valid_args(&params["args"]).map_err(RpcError::invalid)?;
+                let text = self
+                    .plugin_sentence(reply.owner, &params["text"], &params["args"])?
+                    .replace(['\n', '\r'], " ");
                 if text.trim().is_empty() || text.chars().count() > 200 {
                     return Err(RpcError::invalid("osd text needs 1..=200 characters"));
                 }
@@ -3652,11 +3770,26 @@ impl Host {
                     Value::Null => {
                         self.info_panels.remove(&reply.owner);
                     }
-                    Value::String(text) => {
+                    text if text.is_string() || i18n::text::is_text(text) => {
+                        let mut text = self.plugin_sentence(reply.owner, text, &params["args"])?;
+                        // Cut after translation: the plugin cannot measure
+                        // the translated lines.
+                        match &params["maxColumns"] {
+                            Value::Null => {}
+                            max => {
+                                let max = max
+                                    .as_u64()
+                                    .filter(|m| (8..=1000).contains(m))
+                                    .ok_or_else(|| {
+                                        RpcError::invalid("maxColumns is an integer from 8 to 1000")
+                                    })?;
+                                text = i18n::text::fit_columns(&text, max as usize);
+                            }
+                        }
                         if text.len() > 4096 || text.lines().count() > 32 {
                             return Err(RpcError::invalid("osd panel allows 32 lines, 4096 bytes"));
                         }
-                        self.info_panels.insert(reply.owner, text.clone());
+                        self.info_panels.insert(reply.owner, text);
                     }
                     _ => return Err(RpcError::invalid("text requires string or null")),
                 }
@@ -3668,7 +3801,10 @@ impl Host {
                     && provider != reply.owner
                 {
                     let holder = self.plugin_id(provider);
-                    let text = format!("上一个/下一个未接管：已由 {holder} 提供");
+                    let text = i18n::tr_args(
+                        "Previous/Next not taken over: provided by {}",
+                        &json!([holder]),
+                    );
                     return Err(self.refuse_taken(
                         reply.owner,
                         RpcError::sequence_taken(&holder),
@@ -3760,6 +3896,7 @@ impl Host {
                 if self.mount_queue.len() >= 8 {
                     return Err(RpcError::new("busy", "UI preparation queue full"));
                 }
+                let mut refused = Vec::new();
                 let contribution = if method == "ui.mount" {
                     if self.mounts.contains_key(&reply.owner) {
                         return Err(RpcError::new("conflict", "owner already mounted"));
@@ -3785,18 +3922,19 @@ impl Host {
                             >= slot_claims::MAX_SIDEBAR_TABS
                         {
                             let error = RpcError::sidebar_full();
-                            let text = format!("面板未显示：{}", error.message);
+                            let text =
+                                i18n::tr_args("Panel not shown: {}", &json!([error.message]));
                             return Err(self.refuse_taken(reply.owner, error, text));
                         }
                     } else if let Some(holder) =
                         slot_claims::occupant(slot, reply.owner, mounted, &pending)
                     {
                         let error = RpcError::slot_occupied(slot, &self.plugin_id(holder));
-                        let text = format!("面板未显示：{}", error.message);
+                        let text = i18n::tr_args("Panel not shown: {}", &json!([error.message]));
                         return Err(self.refuse_taken(reply.owner, error, text));
                     }
                     let file = plugins::package_file(&plugin.directory, string(params, "file")?)?;
-                    let properties = serde_json::from_value(
+                    let mut properties: BTreeMap<String, Value> = serde_json::from_value(
                         params.get("properties").cloned().unwrap_or(json!({})),
                     )
                     .map_err(|e| RpcError::invalid(e.to_string()))?;
@@ -3804,6 +3942,7 @@ impl Host {
                     if title.len() > 128 || title.chars().any(char::is_control) {
                         return Err(RpcError::invalid("title requires 0..=128 bytes"));
                     }
+                    refused = refuse_initial(&mut properties);
                     let manifest = plugin.manifest.id.clone();
                     let name = plugin.manifest.name.clone().unwrap_or_default();
                     let builtin = self.is_builtin(reply.owner);
@@ -3820,10 +3959,12 @@ impl Host {
                         properties,
                         visible: true,
                         detached: false,
+                        // The tab label and the floating window's title, in
+                        // the interface language (this plugin's catalog).
                         title: if !title.is_empty() {
-                            title.into()
+                            plugin.text(title)
                         } else if !name.is_empty() {
-                            name
+                            plugin.text(&name)
                         } else {
                             "Vestra Player".into()
                         },
@@ -3833,6 +3974,7 @@ impl Host {
                 } else {
                     None
                 };
+                self.report_refused(reply.owner, refused);
                 self.mount_queue.push_back(MountChange {
                     reply: reply.clone(),
                     contribution,
@@ -3885,12 +4027,25 @@ impl Host {
                 if !["openFile", "openFiles", "openDirectory", "saveFile"].contains(&kind) {
                     return Err(RpcError::invalid("unsupported dialog kind"));
                 }
-                let title = params["title"].as_str().unwrap_or("Select a path");
+                let title = match &params["title"] {
+                    Value::Null => i18n::tr("Select a path"),
+                    title => self.plugin_sentence(reply.owner, title, &Value::Null)?,
+                };
                 if title.len() > 256 {
                     return Err(RpcError::invalid("dialog title too long"));
                 }
+                let title = title.as_str();
                 let mut dialog = rfd::AsyncFileDialog::new().set_title(title);
-                if let Some(name) = params["fileName"].as_str() {
+                // A string file name is data; a text value is shown
+                // translated, a path separator in the translation replaced.
+                let name = match &params["fileName"] {
+                    name if i18n::text::is_text(name) => Some(
+                        self.plugin_sentence(reply.owner, name, &Value::Null)?
+                            .replace(['/', '\\'], "-"),
+                    ),
+                    name => name.as_str().map(str::to_owned),
+                };
+                if let Some(name) = name.as_deref() {
                     if name.len() > 256 || name.contains(['/', '\\']) {
                         return Err(RpcError::invalid("fileName must be a simple name"));
                     }
@@ -3947,12 +4102,52 @@ impl Host {
                     .as_u64()
                     .filter(|v| *v > 0)
                     .ok_or_else(|| RpcError::invalid("positive revision required"))?;
-                let state = serde_json::from_value(params["state"].clone())
-                    .map_err(|e| RpcError::invalid(e.to_string()))?;
+                let texts = plugin.texts();
+                // The disabled reason is one of the plugin's sentences: source
+                // text translated as a whole, or a text value.
+                let mut state = params["state"].clone();
+                if let Some(reason) = state.get_mut("reason").filter(|r| !r.is_null()) {
+                    *reason = texts.declared(reason).map_err(RpcError::invalid)?.into();
+                }
+                let state: commands::CommandState =
+                    serde_json::from_value(state).map_err(|e| RpcError::invalid(e.to_string()))?;
                 if method == "commands.register" {
-                    let declaration: commands::Declaration =
-                        serde_json::from_value(params["declaration"].clone())
-                            .map_err(|e| RpcError::invalid(e.to_string()))?;
+                    // Text values in the title and path: the key is their
+                    // English rendering, the shown text their translation.
+                    let mut raw = params["declaration"].clone();
+                    let mut shown_title = None;
+                    let mut shown_path = Vec::new();
+                    let menu_text = |value: &mut Value| {
+                        if !i18n::text::is_text(value) {
+                            return Ok(None);
+                        }
+                        if value.get(i18n::text::LIST_KEY).is_some() {
+                            return Err(RpcError::invalid(
+                                "a menu text is a string or a text, not a list",
+                            ));
+                        }
+                        i18n::text::check(value).map_err(RpcError::invalid)?;
+                        let shown = texts.render(value);
+                        *value = i18n::text::Texts::english().render(value).into();
+                        Ok(Some(shown))
+                    };
+                    if let Some(title) = raw.get_mut("title") {
+                        shown_title = menu_text(title)?;
+                    }
+                    if let Some(path) = raw.get_mut("path").and_then(Value::as_array_mut) {
+                        for segment in path {
+                            shown_path.push(menu_text(segment)?);
+                        }
+                    }
+                    let mut declaration: commands::Declaration = serde_json::from_value(raw)
+                        .map_err(|e| RpcError::invalid(e.to_string()))?;
+                    // Keys first (`@video`, old Chinese titles), then the
+                    // shown text from this plugin's catalog.
+                    let declared = declaration.path.clone();
+                    commands::normalize(&mut declaration.path)
+                        .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
+                    declaration.localize_declared(&declared, |text| plugin.text(text));
+                    declaration.show_texts(shown_title, &shown_path);
                     let manifest = plugin.manifest.id.clone();
                     let bindings = declaration.bindings.clone();
                     let panel = declaration.focus == Some(commands::Focus::Panel);
@@ -4151,6 +4346,28 @@ impl Host {
         };
         Ok(Some(value))
     }
+}
+/// Initial properties of a panel or settings page are converted when the
+/// view is built. A value over the limits is left out now (the property
+/// keeps its default) and returned, to be reported (`report_refused`),
+/// rather than failing the mount: a mount failing during activation would
+/// fail the whole plugin.
+fn refuse_initial(properties: &mut BTreeMap<String, Value>) -> Vec<RpcError> {
+    let mut refused = Vec::new();
+    properties.retain(|name, value| match RpcError::check_property(name, value) {
+        Ok(()) => true,
+        Err(error) => {
+            refused.push(error);
+            false
+        }
+    });
+    refused
+}
+/// A `ui.error` event: a failure the plugin did not ask about (a property
+/// the player could not show when it rebuilt a view, a callback whose
+/// arguments it could not convert). The SDK reports it to `onError`.
+fn ui_error(error: &RpcError) -> Value {
+    json!({"event":"ui.error","data":{"code":error.code,"message":error.message}})
 }
 /// The window policy's slot (the backdrop has no preference or auto-hide).
 /// What an initial UI request means for activation. A slot another plugin
@@ -4505,8 +4722,28 @@ fn fire(
     if shared.blocked {
         return false;
     }
-    let Some(target) = shared.table.resolve(event, panel) else {
-        return false;
+    let target = match shared.table.lookup(event, panel) {
+        bindings::Lookup::Fire(target) => target,
+        // Only disabled commands hold it: one with a reason says why on the
+        // OSD (the host loop's execution reports it); otherwise the key passes.
+        bindings::Lookup::Disabled {
+            target,
+            reason: Some(_),
+        } => {
+            if !repeat {
+                input_trace::mark(&format!(
+                    "disabled {} → {}/{}",
+                    bindings::text(event),
+                    target.owner,
+                    target.id
+                ));
+                let _ = events.send(Event::Binding(generation, target.owner, target.id.clone()));
+            }
+            return true;
+        }
+        bindings::Lookup::Disabled { reason: None, .. } | bindings::Lookup::Unbound => {
+            return false;
+        }
     };
     if !repeat {
         input_trace::mark(&format!(
@@ -4610,47 +4847,37 @@ impl FrameEvidence {
 }
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let mut directories = Vec::<PathBuf>::new();
-    let mut headless = false;
-    let mut silent = false;
-    let mut seconds = None;
-    let mut snapshot = None;
-    let mut frame_evidence = None;
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--frame-evidence-dir" => {
-                frame_evidence =
-                    Some(PathBuf::from(args.next().ok_or_else(|| {
-                        anyhow::anyhow!("--frame-evidence-dir requires path")
-                    })?));
-            }
-            "--snapshot" => {
-                snapshot =
-                    Some(PathBuf::from(args.next().ok_or_else(|| {
-                        anyhow::anyhow!("--snapshot requires PNG path")
-                    })?))
-            }
-            "--headless" => headless = true,
-            "--silent" => silent = true,
-            "--plugin" => directories
-                .push(PathBuf::from(args.next().ok_or_else(|| {
-                    anyhow::anyhow!("--plugin requires directory")
-                })?)),
-            "--seconds" => {
-                seconds = Some(
-                    args.next()
-                        .ok_or_else(|| anyhow::anyhow!("--seconds requires number"))?
-                        .parse::<f64>()?,
-                )
-            }
-            _ => bail!(
-                "unknown argument {arg}; use --plugin DIR [--headless] [--silent] [--seconds N]"
-            ),
-        }
+    let launch::Launch {
+        directories,
+        headless,
+        silent,
+        seconds,
+        snapshot,
+        frame_evidence,
+        files,
+        urls,
+    } = launch::parse(&args, &std::env::current_dir()?)?;
+    for url in &urls {
+        eprintln!("host.warning open: {url} is not a file; open links from a plugin's command");
     }
-    if frame_evidence.is_some() && !headless {
-        bail!("--frame-evidence-dir is headless diagnostic only");
+    // One player per user (`platform::single_instance`): a later launch
+    // hands its files to the running one and exits. Development runs
+    // (`--plugin`) and headless ones stay on their own unless
+    // `VESTRA_INSTANCE_DIR` names the directory to coordinate in (tests).
+    let instance_dir = std::env::var_os("VESTRA_INSTANCE_DIR")
+        .map(PathBuf::from)
+        .or_else(|| {
+            (!headless && directories.is_empty())
+                .then(platform::app_data_dir)
+                .flatten()
+        });
+    let mut primary = None;
+    if let Some(directory) = instance_dir {
+        match platform::single_instance(&directory, &files, Duration::from_secs(5)) {
+            Ok(platform::Launch::HandedOff) => return Ok(()),
+            Ok(platform::Launch::Primary(claimed)) => primary = Some(claimed),
+            Err(error) => eprintln!("single instance: {error}; running on its own"),
+        }
     }
     let mut evidence = frame_evidence.map(FrameEvidence::new).transpose()?;
     // A packaged player missing its own files (the bundled Node above all)
@@ -4691,6 +4918,19 @@ fn main() -> Result<()> {
     }
     let mut observed_source = Value::Null;
     let (events, receiver) = mpsc::channel();
+    if !headless {
+        // Before the event loop: the launch's own open-documents event (macOS).
+        let events = events.clone();
+        platform::on_open_files(move |files| {
+            let _ = events.send(Event::OpenFiles(files, false));
+        });
+    }
+    if let Some(primary) = primary {
+        let events = events.clone();
+        primary.serve(move |files| {
+            let _ = events.send(Event::OpenFiles(files, true));
+        });
+    }
     let backend = Backend::start(events.clone(), silent, gpu)?;
     // `plugin.app`, handed to every plugin process when it starts.
     let ffmpeg = &backend.versions["ffmpeg"];
@@ -4789,12 +5029,32 @@ fn main() -> Result<()> {
         render_sent: None,
         pip_gpu: Default::default(),
         drops: Default::default(),
+        opens: Default::default(),
         settings: Default::default(),
         settings_category: None,
         theme_pending: false,
         placements: ui::Placements::default(),
         commands: commands::Registry::new(),
     };
+    // The interface language of this run (doc/architecture/i18n.md §2):
+    // `VESTRA_LANGUAGE` (development and tests), else the saved choice, else
+    // the system's languages. Headless runs ignore the system: English
+    // unless asked, so diagnostics read the same on every machine.
+    let preference = std::env::var("VESTRA_LANGUAGE")
+        .ok()
+        .or_else(|| host.language_preference());
+    let system = if headless {
+        Vec::new()
+    } else {
+        platform::preferred_languages()
+    };
+    i18n::init(i18n::resolve(preference.as_deref(), &system));
+    if !headless {
+        // CJK fallback fonts for every window, before the first one exists
+        // (`ui_fonts`), ordered for the interface language (Japanese fonts
+        // first in `ja`, Korean in `ko`, Simplified Chinese otherwise).
+        ui_fonts::install(i18n::locale());
+    }
     host.register_host_commands()?;
     {
         if core_actions::migrate_overlay(&mut host.ui_state.state.bindings) {
@@ -4812,6 +5072,7 @@ fn main() -> Result<()> {
     for directory in directories {
         host.load(&directory, 120_000)?;
     }
+    host.open_files(files, false);
     let start = Instant::now();
     if headless {
         loop {
@@ -4835,6 +5096,7 @@ fn main() -> Result<()> {
             host.package_tick();
             host.notify_tick();
             host.timeline_tick();
+            host.open_files_tick();
             if let Some(evidence) = evidence.as_mut() {
                 evidence.sample(&host.backend, &observed_source, start)?;
             }
@@ -4902,6 +5164,7 @@ fn main() -> Result<()> {
         let tick_host = host.clone();
         let timer = slint::Timer::default();
         let mut menu_revision = u64::MAX;
+        let mut binding_revision = u64::MAX;
         timer.start(
             slint::TimerMode::Repeated,
             Duration::from_millis(16),
@@ -4920,9 +5183,15 @@ fn main() -> Result<()> {
                 host.notify_tick();
                 host.timeline_tick();
                 host.drops_tick();
+                host.open_files_tick();
                 host.settings_tick();
                 if host.theme_pending {
                     host.theme_all();
+                }
+                if host.commands.revision() != binding_revision {
+                    binding_revision = host.commands.revision();
+                    let disabled = host.commands.disabled();
+                    host.input.borrow_mut().table.set_disabled(disabled);
                 }
                 if host.shell.is_some() {
                     let revision = host.commands.snapshot().revision;
@@ -4985,11 +5254,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_value_over_the_limits_is_limit_naming_the_property() {
+        // D1: 3000 playlist rows of 8 fields; refused when stored, not later.
+        let row = json!({"a":"1","b":"","c":"","d":"","e":false,"f":false,"g":false,"h":false});
+        let rows = Value::Array(vec![row; 3000]);
+        let error = RpcError::check_property("rows", &rows).unwrap_err();
+        assert_eq!(error.code, "limit");
+        assert!(error.message.starts_with("rows: UI "), "{}", error.message);
+        assert!(RpcError::check_property("rows", &json!([1, 2])).is_ok());
+        // Other conversion failures keep their code.
+        let error = RpcError::check_property("x", &json!({"a_b": 1})).unwrap_err();
+        assert_eq!(error.code, "host");
+        assert_eq!(
+            ui_error(&error),
+            json!({"event":"ui.error","data":{"code":"host","message":error.message}})
+        );
+    }
+
+    #[test]
     fn a_slot_refusal_is_a_conflict_naming_the_slot_and_its_holder() {
         let refusal = RpcError::slot_occupied(composition::Slot::Sidebar, "vestra.playlist");
         assert_eq!(
             serde_json::to_value(&refusal).unwrap(),
-            json!({"code":"conflict","message":"侧栏已被 vestra.playlist 使用",
+            json!({"code":"conflict","message":"The sidebar is used by vestra.playlist",
                 "reason":"slot-occupied","slot":"sidebar","owner":"vestra.playlist"})
         );
         let plain = RpcError::new("conflict", "owner already mounted");
@@ -5000,7 +5287,7 @@ mod tests {
         let sequence = RpcError::sequence_taken("vestra.playlist");
         assert_eq!(
             serde_json::to_value(&sequence).unwrap(),
-            json!({"code":"conflict","message":"上一个/下一个已由 vestra.playlist 提供",
+            json!({"code":"conflict","message":"Previous/Next is provided by vestra.playlist",
                 "reason":"sequence-taken","owner":"vestra.playlist"})
         );
         assert!(refusal.is_taken() && sequence.is_taken() && !plain.is_taken());
@@ -5074,7 +5361,7 @@ mod tests {
         let full = RpcError::sidebar_full();
         assert_eq!(
             serde_json::to_value(&full).unwrap(),
-            json!({"code":"conflict","message":"侧栏最多 8 个页签","reason":"slot-occupied","slot":"sidebar"})
+            json!({"code":"conflict","message":"The sidebar holds at most 8 tabs","reason":"slot-occupied","slot":"sidebar"})
         );
         assert_eq!(activation_outcome(&Err(full)), Ok(()));
     }

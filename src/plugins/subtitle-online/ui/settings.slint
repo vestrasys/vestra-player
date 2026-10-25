@@ -1,11 +1,13 @@
-// 在线字幕设置 (D16): 420 wide. 服务 (order, on/off,
-// keys, test), 搜索 (languages, automatic search, filters), 保存 (location).
+// Online Subtitle Settings (D16): 420 wide. Services (order, on/off,
+// keys, test), Search (languages, automatic search, filters), Saving (location).
 import { CheckBox, ComboBox, LineEdit } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
+import { Messages } from "messages.slint";
 
+/** A service (by id), whether it is on, and its key state or last test result (a text value). */
 export struct ServiceRow {
-    name: string,
+    service: string,
     enabled: bool,
     state: string,
 }
@@ -16,8 +18,10 @@ component Heading inherits Text {
     font-weight: 700;
 }
 
+// The row label; `column` is the window's label column (90px, wider for longer translations).
 component RowLabel inherits Text {
-    width: 90px;
+    in property <length> column: 90px;
+    width: root.column;
     color: Theme.text;
     font-size: Theme.font-body;
     horizontal-alignment: right;
@@ -25,8 +29,9 @@ component RowLabel inherits Text {
 }
 
 export component OnlineSettings inherits Window {
-    title: "在线字幕设置";
-    width: 420px;
+    title: @tr("Online Subtitle Settings");
+    // 420px, wider only when the indented check box needs it in this language.
+    width: max(420px, root.column + 5px + exact-check.preferred-width + 2 * Theme.dialog-padding);
     background: Theme.bg-panel;
     in property <[ServiceRow]> services: [];
     in-out property <int> selected-service: 0;
@@ -36,8 +41,10 @@ export component OnlineSettings inherits Window {
     in-out property <bool> exact-only: false;
     in-out property <string> exclude-text: "";
     in property <int> save-index: 0;
-    in property <string> note-text: "";
-    in property <string> status-text: "";
+    /** Where the keys are kept (a text value). */
+    in property <string> location;
+    /** The status line (a text value). */
+    in property <string> status;
     in property <bool> busy: false;
     changed auto-index => { auto-combo.current-index = root.auto-index; }
     changed after-index => { after-combo.current-index = root.after-index; }
@@ -53,11 +60,25 @@ export component OnlineSettings inherits Window {
     callback change-exact(bool);
     callback change-exclude(string);
     callback change-save(int);
+    // The label column: 90px, or the widest label; the service name: 110px, or the longest name.
+    private property <length> column: max(90px, label-measure.preferred-width);
+    private property <length> name-width: max(110px, name-measure.preferred-width);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        label-measure := VerticalLayout {
+            for text in [@tr("Languages"), @tr("Auto search"), @tr("After search"), @tr("Exclude"), @tr("Save to")]: Text { text: text; font-size: Theme.font-body; }
+        }
+        name-measure := VerticalLayout {
+            for id in ["opensubtitles", "assrt"]: Text { text: Messages.service-name(id); font-size: Theme.font-body; }
+        }
+    }
 
     VerticalLayout {
         padding: Theme.dialog-padding;
         spacing: 5px;
-        Heading { text: "服务"; }
+        Heading { text: @tr("Services"); }
         HorizontalLayout {
             spacing: 6px;
             Rectangle {
@@ -79,7 +100,7 @@ export component OnlineSettings inherits Window {
                                 checked: service.enabled;
                                 toggled => { root.toggle-service(index, self.checked); }
                             }
-                            Text { text: service.name; color: Theme.text; font-size: Theme.font-body; vertical-alignment: center; width: 110px; }
+                            Text { text: Messages.service-name(service.service); color: Theme.text; font-size: Theme.font-body; vertical-alignment: center; width: root.name-width; }
                             Text { text: service.state; color: Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
                         }
                     }
@@ -89,20 +110,20 @@ export component OnlineSettings inherits Window {
                 spacing: 2px;
                 HorizontalLayout {
                     spacing: 3px;
-                    Button { small: true; text: "上移"; enabled: root.selected-service > 0; clicked => { root.move-service(-1); } }
-                    Button { small: true; text: "下移"; enabled: root.selected-service < root.services.length - 1; clicked => { root.move-service(1); } }
+                    Button { small: true; text: @tr("Move Up"); enabled: root.selected-service > 0; clicked => { root.move-service(-1); } }
+                    Button { small: true; text: @tr("Move Down"); enabled: root.selected-service < root.services.length - 1; clicked => { root.move-service(1); } }
                 }
                 HorizontalLayout {
                     spacing: 3px;
-                    Button { small: true; text: "设置…"; clicked => { root.service-settings(); } }
-                    Button { small: true; text: "测试"; enabled: !root.busy; clicked => { root.test-service(); } }
+                    Button { small: true; text: @tr("Settings…"); clicked => { root.service-settings(); } }
+                    Button { small: true; text: @tr("Test"); enabled: !root.busy; clicked => { root.test-service(); } }
                 }
             }
         }
-        Heading { text: "搜索"; }
+        Heading { text: @tr("Search"); }
         HorizontalLayout {
             spacing: 5px;
-            RowLabel { text: "首选语言"; }
+            RowLabel { column: root.column; text: @tr("Languages"); }
             LineEdit {
                 height: Theme.input-height;
                 font-size: Theme.font-body;
@@ -114,64 +135,64 @@ export component OnlineSettings inherits Window {
         }
         HorizontalLayout {
             spacing: 5px;
-            RowLabel { text: "自动搜索"; }
+            RowLabel { column: root.column; text: @tr("Auto search"); }
             auto-combo := ComboBox {
                 height: 22px;
-                model: ["不使用", "打开没有字幕的视频时"];
+                model: [@tr("Off"), @tr("When opening a video without subtitles")];
                 current-index: root.auto-index;
                 selected(value) => { root.change-auto(self.current-index); }
             }
         }
         HorizontalLayout {
             spacing: 5px;
-            RowLabel { text: "搜索后"; }
+            RowLabel { column: root.column; text: @tr("After search"); }
             after-combo := ComboBox {
                 height: 22px;
-                model: ["显示下载窗口", "自动载入最佳结果"];
+                model: [@tr("Show the download window"), @tr("Load the best result automatically")];
                 current-index: root.after-index;
                 selected(value) => { root.change-after(self.current-index); }
             }
         }
         HorizontalLayout {
-            padding-left: 95px;
-            CheckBox {
+            padding-left: root.column + 5px;
+            exact-check := CheckBox {
                 height: Theme.checkbox-row-height;
-                text: "仅查找与文件完全匹配（哈希）的字幕";
+                text: @tr("Only subtitles that exactly match the file (hash)");
                 checked <=> root.exact-only;
                 toggled => { root.change-exact(self.checked); }
             }
         }
         HorizontalLayout {
             spacing: 5px;
-            RowLabel { text: "排除关键字"; }
+            RowLabel { column: root.column; text: @tr("Exclude"); }
             LineEdit {
                 height: Theme.input-height;
                 font-size: Theme.font-body;
-                placeholder-text: "用逗号或空格分隔";
+                placeholder-text: @tr("Separate with commas or spaces");
                 text <=> root.exclude-text;
                 edited => { root.change-exclude(self.text); }
             }
         }
-        Heading { text: "保存"; }
+        Heading { text: @tr("Saving"); }
         HorizontalLayout {
             spacing: 5px;
-            RowLabel { text: "保存位置"; }
+            RowLabel { column: root.column; text: @tr("Save to"); }
             save-combo := ComboBox {
                 height: 22px;
-                model: ["尽可能保存在视频同目录", "插件数据目录"];
+                model: [@tr("Beside the video when possible"), @tr("Plugin data folder")];
                 current-index: root.save-index;
                 selected(value) => { root.change-save(self.current-index); }
             }
         }
         Text {
-            text: root.note-text;
+            text: @tr("Searching sends the file name keywords and the file hash to the chosen service. Keys and passwords are stored in: {}.", root.location);
             color: Theme.text-dim;
             font-size: Theme.font-body;
             wrap: word-wrap;
             line-height-factor: 1.25;
         }
         Text {
-            text: root.status-text;
+            text: root.status;
             color: Theme.text-list;
             font-size: Theme.font-body;
             overflow: elide;

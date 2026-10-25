@@ -5145,7 +5145,7 @@ dependencies = [
 
 [[package]]
 name = "vestra-host"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "arboard",
@@ -5173,14 +5173,25 @@ dependencies = [
  "slint",
  "slint-interpreter",
  "subtp",
+ "sys-locale",
  "tempfile",
+ "unicode-width",
  "url",
  "uuid",
  "vestra-gpu-render",
+ "vestra-open-files",
  "vestra-pip",
  "vestra-win32",
  "windows-registry",
  "zip",
+]
+
+[[package]]
+name = "vestra-open-files"
+version = "0.1.0"
+dependencies = [
+ "objc2 0.6.5",
+ "objc2-foundation 0.3.2",
 ]
 
 [[package]]

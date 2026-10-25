@@ -1,0 +1,122 @@
+# Reviewed by an AI reviewer on 2026-10-25
+msgid ""
+msgstr ""
+"Language: es\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: main.ts:42
+#, x-machine
+msgid "Palette: Vestra Light"
+msgstr "Paleta: Vestra Light"
+
+#: main.ts:42
+#, x-machine
+msgid "Palette: Vestra Dark"
+msgstr "Paleta: Vestra Dark"
+
+#: main.ts:51
+#, x-machine
+msgid "Language: Follow System. Takes effect after restart"
+msgstr "Idioma: el del sistema. Se aplicará al reiniciar"
+
+#: main.ts:52
+#, x-machine
+msgid "Language: {}. Takes effect after restart"
+msgstr "Idioma: {}. Se aplicará al reiniciar"
+
+#: main.ts:59 main.ts:93 ui/appearance.slint:98
+#, x-machine
+msgid "Appearance"
+msgstr "Apariencia"
+
+#: main.ts:73 main.ts:103 main.ts:113 ui/language.slint:59
+#, x-machine
+msgid "Language"
+msgstr "Idioma"
+
+#: main.ts:84
+#, x-machine
+msgid "Options…"
+msgstr "Opciones…"
+
+#: main.ts:93 ui/appearance.slint:87
+#, x-machine
+msgid "Vestra Dark"
+msgstr "Vestra Dark"
+
+#: main.ts:93 ui/appearance.slint:87
+#, x-machine
+msgid "Vestra Light"
+msgstr "Vestra Light"
+
+#: main.ts:103 ui/language.slint:66
+#, x-machine
+msgid "Follow System"
+msgstr "Idioma del sistema"
+
+#: manifest.json
+#, x-machine
+msgid "Preferences"
+msgstr "Preferencias"
+
+#: manifest.json
+#, x-machine
+msgid "Open the options window, change the palette and the language"
+msgstr "Abre la ventana de opciones y cambia la paleta y el idioma"
+
+#: manifest.json
+#, x-machine
+msgid "Settings ▸ Options… (F5) opens the player's options window. Settings ▸ Appearance picks the palette (Vestra Dark, Vestra Light); the options window also has an Appearance page with previews. Settings ▸ Language picks the interface language, used from the next start."
+msgstr "Configuración ▸ Opciones… (F5) abre la ventana de opciones del reproductor. Configuración ▸ Apariencia elige la paleta (Vestra Dark, Vestra Light); la ventana de opciones también tiene una página Apariencia con vistas previas. Configuración ▸ Idioma elige el idioma de la interfaz, que se usa a partir del siguiente inicio."
+
+#: manifest.json
+#, x-machine
+msgid "settings"
+msgstr "configuración"
+
+#: manifest.json
+#, x-machine
+msgid "appearance"
+msgstr "apariencia"
+
+#: manifest.json
+#, x-machine
+msgid "palette"
+msgstr "paleta"
+
+#: manifest.json
+#, x-machine
+msgid "language"
+msgstr "idioma"
+
+#: ui/appearance.slint:90
+#, x-machine
+msgid "For bright rooms; the video area stays dark"
+msgstr "Para espacios luminosos; la zona del video sigue oscura"
+
+#: ui/appearance.slint:90
+#, x-machine
+msgid "Default, from the logo's aurora colours"
+msgstr "Predeterminada, con los colores de aurora del logotipo"
+
+#: ui/appearance.slint:106
+#, x-machine
+msgid "Palette"
+msgstr "Paleta"
+
+#: ui/appearance.slint:152
+#, x-machine
+msgid "Changes apply to every window at once. Corner radii, font sizes and control sizes stay the same in every palette."
+msgstr "Los cambios se aplican a todas las ventanas a la vez. Los radios de las esquinas, los tamaños de letra y los tamaños de los controles son iguales en todas las paletas."
+
+#: ui/appearance.slint:162
+#, x-machine
+msgid "Restore Defaults"
+msgstr "Restaurar predeterminados"
+
+#: ui/language.slint:77
+#, x-machine
+msgid "Takes effect after restart."
+msgstr "Se aplicará al reiniciar."

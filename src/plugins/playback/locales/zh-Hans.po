@@ -1,0 +1,432 @@
+msgid ""
+msgstr ""
+"Language: zh-Hans\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: commands.ts:65
+msgid "Back {} s"
+msgstr "后退{}秒"
+
+#: commands.ts:65
+msgid "Forward {} s"
+msgstr "前进{}秒"
+
+#: commands.ts:229
+msgid "Seek"
+msgstr "跳转"
+
+#: commands.ts:229
+msgid "Speed"
+msgstr "速度"
+
+#: commands.ts:229
+msgid "Open File…"
+msgstr "打开文件…"
+
+#: commands.ts:229
+msgid "Open URL…"
+msgstr "打开链接…"
+
+#: commands.ts:229
+msgid "Reopen Current/Last File"
+msgstr "重开当前/最后文件"
+
+#: commands.ts:229
+msgid "Copy to Clipboard"
+msgstr "复制到剪贴板"
+
+#: commands.ts:229
+msgid "File Name"
+msgstr "文件名"
+
+#: commands.ts:229
+msgid "Folder Path"
+msgstr "文件夹路径"
+
+#: commands.ts:229
+msgid "Full Path"
+msgstr "完整路径"
+
+#: commands.ts:229
+msgid "Previous Keyframe"
+msgstr "上一关键帧"
+
+#: commands.ts:229
+msgid "Next Keyframe"
+msgstr "下一关键帧"
+
+#: commands.ts:229
+msgid "Jump to Time…"
+msgstr "跳转到…"
+
+#: commands.ts:229
+msgid "Jump to Start"
+msgstr "跳到开头"
+
+#: commands.ts:229
+msgid "Seek Steps…"
+msgstr "时间跨度设置…"
+
+#: commands.ts:229
+msgid "0.5×"
+msgstr "0.5倍"
+
+#: commands.ts:229
+msgid "1.5×"
+msgstr "1.5倍"
+
+#: commands.ts:229
+msgid "2×"
+msgstr "2倍"
+
+#: commands.ts:229
+msgid "Custom…"
+msgstr "自定义…"
+
+#: commands.ts:229
+msgid "Disable Screen Saver While Playing"
+msgstr "播放时禁止屏保"
+
+#: commands.ts:229
+msgid "Show Time on Seek Bar Hover"
+msgstr "进度条悬停显示时间"
+
+#: commands.ts:229
+msgid "Show Thumbnail on Seek Bar Hover"
+msgstr "进度条悬停显示缩略图"
+
+#: commands.ts:238
+msgid "Not supported by the current source"
+msgstr "当前来源不支持此操作"
+
+#: commands.ts:238
+msgid "No file to reopen"
+msgstr "没有可重开的文件"
+
+#: commands.ts:238
+msgid "No open file"
+msgstr "没有打开的文件"
+
+#: commands.ts:238
+msgid "A network source has no file name"
+msgstr "网络来源没有文件名"
+
+#: commands.ts:238
+msgid "No video"
+msgstr "没有视频"
+
+#: commands.ts:238
+msgid "Needs ffmpeg"
+msgstr "需要 ffmpeg"
+
+#: controller.ts:148
+msgid "Open Media"
+msgstr "打开媒体"
+
+#: controller.ts:148
+msgid "Open Media (replaces the current source)"
+msgstr "打开媒体（将替换当前来源）"
+
+#: main.ts:29
+msgid "Seek: {} / {}"
+msgstr "跳转: {} / {}"
+
+#: main.ts:29
+msgid "Back {} s: {} / {}"
+msgstr "后退 {}秒: {} / {}"
+
+#: main.ts:29
+msgid "Forward {} s: {} / {}"
+msgstr "前进 {}秒: {} / {}"
+
+#: main.ts:29
+msgid "Jumped to the start"
+msgstr "定位: 开始处"
+
+#: main.ts:29
+msgid "Previous keyframe: {} / {}"
+msgstr "定位: 上一关键帧 {} / {}"
+
+#: main.ts:29
+msgid "Next keyframe: {} / {}"
+msgstr "定位: 下一关键帧 {} / {}"
+
+#: main.ts:29
+msgid "Already at the last keyframe"
+msgstr "已是最后一个关键帧"
+
+#: main.ts:29
+msgid "Speed: {}x"
+msgstr "播放速度: {}x"
+
+#: main.ts:29 ui/bar.slint:83
+msgid "Volume: {}%"
+msgstr "音量: {}%"
+
+#: main.ts:29
+msgid "Open failed"
+msgstr "打开失败"
+
+#: main.ts:29 ui/open-url.slint:66
+msgid "Open failed: {}"
+msgstr "打开失败：{}"
+
+#: main.ts:29
+msgid "Reopened: {}"
+msgstr "重新打开: {}"
+
+#: main.ts:29
+msgid "Reopened the last file: {}"
+msgstr "重开最后文件: {}"
+
+#: main.ts:29
+msgid "Copied: {}"
+msgstr "已复制: {}"
+
+#: main.ts:29
+msgid "Copy failed: {}"
+msgstr "复制失败：{}"
+
+#: main.ts:29 ui/open-url.slint:65
+msgid "Only the first line is opened; to open several links, add them to the playlist"
+msgstr "只打开第一行；多个链接请用播放列表的「添加链接…」"
+
+#: main.ts:29
+msgid "Disable screen saver while playing: On"
+msgstr "播放时禁止屏保: 开"
+
+#: main.ts:29
+msgid "Disable screen saver while playing: Off"
+msgstr "播放时禁止屏保: 关"
+
+#: main.ts:29
+msgid "Show time on seek bar hover: On"
+msgstr "进度条悬停显示时间: 开"
+
+#: main.ts:29
+msgid "Show time on seek bar hover: Off"
+msgstr "进度条悬停显示时间: 关"
+
+#: main.ts:29
+msgid "Show thumbnail on seek bar hover: On"
+msgstr "进度条悬停显示缩略图: 开"
+
+#: main.ts:29
+msgid "Show thumbnail on seek bar hover: Off"
+msgstr "进度条悬停显示缩略图: 关"
+
+#: main.ts:29 ui/prompt.slint:17
+msgid "Source operation failed: {}"
+msgstr "来源操作失败：{}"
+
+#: main.ts:29 ui/prompt.slint:18
+msgid "Enter a time within the source's duration as HH:MM:SS.mmm"
+msgstr "请输入来源时长范围内的HH:MM:SS.mmm"
+
+#: main.ts:29 ui/prompt.slint:19
+msgid "Speed must be between 0.25× and 4×"
+msgstr "速度范围为0.25–4倍"
+
+#: manifest.json
+msgid "Basic Playback"
+msgstr "基础播放"
+
+#: manifest.json
+msgid "Bottom control bar, open files and links, seek and speed"
+msgstr "底部控制栏、打开文件与链接、跳转与速度"
+
+#: manifest.json
+msgid "The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; time or thumbnail on seek bar hover; no screen saver while playing."
+msgstr "主窗口底部的控制栏（进度条、播放按钮、音量）；打开文件、打开链接、重开最后的文件；多档跳转秒数、关键帧跳转、跳转到指定时间、固定与自定义播放速度；进度条悬停显示时间或缩略图；播放时禁止屏保。"
+
+#: manifest.json
+msgid "playback"
+msgstr "播放"
+
+#: manifest.json
+msgid "control bar"
+msgstr "控制栏"
+
+#: manifest.json
+msgid "seek"
+msgstr "跳转"
+
+#: manifest.json
+msgid "speed"
+msgstr "速度"
+
+#. a tooltip: a button's action and its key, e.g. "Pause (Space)".
+#: ui/bar.slint:73
+msgid "{} ({})"
+msgstr "{} ({})"
+
+#: ui/bar.slint:75
+msgid "Pause"
+msgstr "暂停"
+
+#: ui/bar.slint:75
+msgid "Play"
+msgstr "播放"
+
+#: ui/bar.slint:76
+msgid "Stop"
+msgstr "停止"
+
+#. a tooltip of two lines: the click's action, then the right click's.
+#: ui/bar.slint:78 ui/bar.slint:79
+msgid ""
+"{}\n"
+"Right-click: {}"
+msgstr ""
+"{}\n"
+"右键：{}"
+
+#. a tooltip of two lines: the click's action, then the right click's.
+#: ui/bar.slint:78
+msgid "Back {} seconds"
+msgstr "后退 {} 秒"
+
+#. a tooltip of two lines: the click's action, then the right click's.
+#: ui/bar.slint:78
+msgid "Play previous"
+msgstr "播放上一个"
+
+#: ui/bar.slint:79
+msgid "Forward {} seconds"
+msgstr "前进 {} 秒"
+
+#: ui/bar.slint:79
+msgid "Play next"
+msgstr "播放下一个"
+
+#: ui/bar.slint:80
+msgid "Open file"
+msgstr "打开文件"
+
+#: ui/bar.slint:81
+msgid "Click to show the elapsed time"
+msgstr "点击切换已播放时间"
+
+#: ui/bar.slint:81
+msgid "Click to show the remaining time"
+msgstr "点击切换剩余时间"
+
+#: ui/bar.slint:82
+msgid "Unmute"
+msgstr "取消静音"
+
+#: ui/bar.slint:82 ui/bar.slint:329
+msgid "Mute"
+msgstr "静音"
+
+#: ui/bar.slint:84
+msgid "{} (the window is too narrow for the playlist)"
+msgstr "{}（窗口太窄，放不下播放列表）"
+
+#: ui/bar.slint:84 ui/bar.slint:353
+msgid "Playlist"
+msgstr "播放列表"
+
+#: ui/bar.slint:329
+msgctxt "accessibility"
+msgid "Unmute"
+msgstr "解除静音"
+
+#: ui/open-url.slint:21
+msgid "Open URL"
+msgstr "打开链接"
+
+#: ui/open-url.slint:37
+msgid "Enter the address of the file to play below."
+msgstr "在下方输入您需要播放的文件网址。"
+
+#: ui/open-url.slint:43
+msgid "Example: {}"
+msgstr "例) {}"
+
+#: ui/open-url.slint:53
+msgid "Opening…"
+msgstr "正在打开…"
+
+#: ui/open-url.slint:53
+msgid "Open"
+msgstr "打开"
+
+#: ui/open-url.slint:59
+msgid "Use an address from the clipboard by default"
+msgstr "默认使用剪贴板中可用地址"
+
+#: ui/open-url.slint:64
+msgid "Not a valid link"
+msgstr "不是有效的链接"
+
+#: ui/prompt.slint:16
+msgid "The source changed; open this window again"
+msgstr "来源已变化，请重新打开"
+
+#: ui/prompt.slint:21
+msgid "Custom Speed"
+msgstr "自定义速度"
+
+#: ui/prompt.slint:21
+msgid "Jump to Time"
+msgstr "跳转到"
+
+#: ui/prompt.slint:44
+msgid "Speed (0.25–4×)"
+msgstr "播放速度(0.25–4倍)"
+
+#: ui/prompt.slint:44
+msgid "Time (h:mm:ss.ms)"
+msgstr "时间定位(时:分:秒.毫秒)"
+
+#: ui/prompt.slint:60 ui/time-jump.slint:148
+msgid "OK"
+msgstr "确定"
+
+#: ui/prompt.slint:60
+msgid "Go"
+msgstr "定位"
+
+#. the unit after a number of seconds.
+#: ui/time-jump.slint:34
+msgid "s"
+msgstr "秒"
+
+#: ui/time-jump.slint:40
+msgid "Default"
+msgstr "默认值"
+
+#: ui/time-jump.slint:67
+msgid "Seek Steps"
+msgstr "时间跨度设置"
+
+#: ui/time-jump.slint:78 ui/time-jump.slint:106
+msgid "Left/Right arrow keys:"
+msgstr "左/右 方向键："
+
+#: ui/time-jump.slint:78 ui/time-jump.slint:114
+msgid "Ctrl + Left/Right arrow keys:"
+msgstr "Ctrl + 左/右 方向键："
+
+#: ui/time-jump.slint:78 ui/time-jump.slint:122
+msgid "Shift + Left/Right arrow keys:"
+msgstr "Shift + 左/右 方向键："
+
+#: ui/time-jump.slint:78 ui/time-jump.slint:130
+msgid "Ctrl + Alt + Left/Right arrow keys:"
+msgstr "Ctrl + Alt + 左/右 方向键："
+
+#: ui/time-jump.slint:99
+msgid "Set how far each seek key moves during playback."
+msgstr "可设置播放时以时间为单位的移动跨度。"
+
+#: ui/time-jump.slint:137
+msgid "Range 0.1–3600 s, at most one decimal place"
+msgstr "范围 0.1–3600 秒，最多一位小数"
+
+#: ui/time-jump.slint:152
+msgid "Cancel"
+msgstr "取消"

@@ -83,7 +83,7 @@ test("HTTP errors, 304, time-outs, cancel and offline", async () => {
   setTimeout(() => controller.abort(), 20);
   await assert.rejects(get(net.fetch, "https://d.test/slow", { maxBytes: 10, timeoutMs: 1000, signal: controller.signal }), code("aborted"));
   net.offline = true;
-  await assert.rejects(get(net.fetch, "https://d.test/same", { maxBytes: 10, timeoutMs: 30_000 }), (e: NetError) => e.code === "network" && e.message === "找不到服务器");
+  await assert.rejects(get(net.fetch, "https://d.test/same", { maxBytes: 10, timeoutMs: 30_000 }), (e: NetError) => e.code === "network" && e.message === "Server not found" && e.reason.text === "Server not found");
 });
 
 test("real fetch against a server on 127.0.0.1: local http allowed only when asked, streaming cut off", async () => {

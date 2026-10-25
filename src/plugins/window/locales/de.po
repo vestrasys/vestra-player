@@ -1,0 +1,341 @@
+# Reviewed by an AI reviewer on 2026-10-25
+msgid ""
+msgstr ""
+"Language: de\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: main.ts:65
+#, x-machine
+msgid "Mini Size"
+msgstr "Minigröße"
+
+#: main.ts:72 main.ts:99
+#, x-machine
+msgid "Switching picture-in-picture"
+msgstr "Bild-in-Bild wird umgeschaltet"
+
+#: main.ts:72 main.ts:99 main.ts:128 main.ts:140
+#, x-machine
+msgid "Resizing the window"
+msgstr "Fenstergröße wird geändert"
+
+#: main.ts:72 main.ts:128 main.ts:140
+#, x-machine
+msgid "Not available in fullscreen"
+msgstr "Im Vollbild nicht verfügbar"
+
+#: main.ts:72 main.ts:99 main.ts:128 main.ts:140 pip.ts:42 size.ts:124
+#, x-machine
+msgid "No video"
+msgstr "Kein Video"
+
+#: main.ts:93
+#, x-machine
+msgid "Picture-in-Picture"
+msgstr "Bild-in-Bild"
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: main.ts:120 main.ts:159 ui/page.slint:99
+#, x-machine
+msgid "0.5×"
+msgstr "0,5×"
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: main.ts:120 main.ts:159 ui/page.slint:99
+#, x-machine
+msgid "1×"
+msgstr "1×"
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: main.ts:120 main.ts:159 ui/page.slint:99
+#, x-machine
+msgid "1.5×"
+msgstr "1,5×"
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: main.ts:120 main.ts:159 ui/page.slint:99
+#, x-machine
+msgid "2×"
+msgstr "2×"
+
+#: main.ts:134 main.ts:159
+#, x-machine
+msgid "Fit to Video Aspect Ratio"
+msgstr "An Seitenverhältnis des Videos anpassen"
+
+#: main.ts:148
+#, x-machine
+msgid "When playback starts: Don't resize the window"
+msgstr "Bei Wiedergabestart: Fenstergröße nicht ändern"
+
+#: main.ts:149
+#, x-machine
+msgid "When playback starts: Fit to video aspect ratio"
+msgstr "Bei Wiedergabestart: An Seitenverhältnis des Videos anpassen"
+
+#: main.ts:150
+#, x-machine
+msgid "When playback starts: {}×"
+msgstr "Bei Wiedergabestart: {}×"
+
+#: main.ts:154
+#, x-machine
+msgid "Resize only once when playback starts: On"
+msgstr "Nur einmal bei Wiedergabestart anpassen: Ein"
+
+#: main.ts:154
+#, x-machine
+msgid "Resize only once when playback starts: Off"
+msgstr "Nur einmal bei Wiedergabestart anpassen: Aus"
+
+#: main.ts:159 main.ts:169
+#, x-machine
+msgid "When Playback Starts"
+msgstr "Bei Wiedergabestart"
+
+#: main.ts:159
+#, x-machine
+msgid "Don't Resize"
+msgstr "Nicht anpassen"
+
+#: main.ts:169
+#, x-machine
+msgid "Only Once"
+msgstr "Nur einmal"
+
+#: main.ts:180
+#, x-machine
+msgid "Always on top: Off"
+msgstr "Immer im Vordergrund: Aus"
+
+#: main.ts:180
+#, x-machine
+msgid "Always on top: Always"
+msgstr "Immer im Vordergrund: Immer"
+
+#: main.ts:180
+#, x-machine
+msgid "Always on top: While playing"
+msgstr "Immer im Vordergrund: Während der Wiedergabe"
+
+#: main.ts:180
+#, x-machine
+msgid "Always on top: While playing in fullscreen"
+msgstr "Immer im Vordergrund: Während der Wiedergabe im Vollbild"
+
+#: main.ts:184 main.ts:193
+#, x-machine
+msgid "Always on Top"
+msgstr "Immer im Vordergrund"
+
+#: main.ts:184
+#, x-machine
+msgid "Cycle Mode"
+msgstr "Modus durchschalten"
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: main.ts:193 ui/page.slint:121
+#, x-machine
+msgid "Never"
+msgstr "Nie"
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: main.ts:193 ui/page.slint:121
+#, x-machine
+msgid "Always"
+msgstr "Immer"
+
+#: main.ts:193
+#, x-machine
+msgid "While Playing"
+msgstr "Während der Wiedergabe"
+
+#: main.ts:193
+#, x-machine
+msgid "While Playing in Fullscreen"
+msgstr "Während der Wiedergabe im Vollbild"
+
+#: main.ts:206
+#, x-machine
+msgid "Hide pointer while playing: On"
+msgstr "Mauszeiger bei Wiedergabe ausblenden: Ein"
+
+#: main.ts:206
+#, x-machine
+msgid "Hide pointer while playing: Off"
+msgstr "Mauszeiger bei Wiedergabe ausblenden: Aus"
+
+#: main.ts:211
+#, x-machine
+msgid "Hide Pointer While Playing"
+msgstr "Mauszeiger bei Wiedergabe ausblenden"
+
+#: main.ts:219 ui/page.slint:90
+#, x-machine
+msgid "Window"
+msgstr "Fenster"
+
+#: manifest.json
+#, x-machine
+msgid "Main Window"
+msgstr "Hauptfenster"
+
+#: manifest.json
+#, x-machine
+msgid "Window sizes by video scale, always on top, mini size and picture-in-picture"
+msgstr "Fenstergröße nach Videomaßstab, immer im Vordergrund, Minigröße und Bild-in-Bild"
+
+#: manifest.json
+#, x-machine
+msgid ""
+"Resizes the window to 0.5–2× the video or fits it to the video's aspect ratio, and resizes it automatically when playback starts; never on top, always on top, on top while playing or while playing in fullscreen; mini size and the system's picture-in-picture; hides the pointer while playing.\n"
+"The items are in the context menu under Screen."
+msgstr ""
+"Passt das Fenster auf das 0,5- bis 2-Fache des Videos oder an das Seitenverhältnis des Videos an, auf Wunsch automatisch bei Wiedergabestart; nie, immer, während der Wiedergabe oder während der Wiedergabe im Vollbild im Vordergrund; Minigröße und Bild-in-Bild des Systems; blendet den Mauszeiger während der Wiedergabe aus.\n"
+"Die Befehle stehen im Kontextmenü unter „Bildschirm“."
+
+#: manifest.json
+#, x-machine
+msgid "screen"
+msgstr "Bildschirm"
+
+#: manifest.json
+#, x-machine
+msgid "window"
+msgstr "Fenster"
+
+#: manifest.json
+#, x-machine
+msgid "always on top"
+msgstr "Immer im Vordergrund"
+
+#: pip.ts:49
+#, x-machine
+msgid "Picture-in-picture: On"
+msgstr "Bild-in-Bild: Ein"
+
+#: pip.ts:49 pip.ts:68
+#, x-machine
+msgid "Picture-in-picture: Off"
+msgstr "Bild-in-Bild: Aus"
+
+#: pip.ts:53
+#, x-machine
+msgid "Cannot enter picture-in-picture: {}"
+msgstr "Bild-in-Bild kann nicht gestartet werden: {}"
+
+#: pip.ts:53
+#, x-machine
+msgid "Cannot exit picture-in-picture: {}"
+msgstr "Bild-in-Bild kann nicht beendet werden: {}"
+
+#: pip.ts:68
+#, x-machine
+msgid "Picture-in-picture: Off (no video)"
+msgstr "Bild-in-Bild: Aus (kein Video)"
+
+#: size.ts:47
+#, x-machine
+msgid "Window: {}× (shrunk to fit the screen)"
+msgstr "Fenster: {}× (auf Bildschirmgröße verkleinert)"
+
+#: size.ts:47
+#, x-machine
+msgid "Window: {}× (enlarged to the minimum size)"
+msgstr "Fenster: {}× (auf die Mindestgröße vergrößert)"
+
+#: size.ts:47
+#, x-machine
+msgid "Window: {}×"
+msgstr "Fenster: {}×"
+
+#: size.ts:64
+#, x-machine
+msgid "The window already fits the video aspect ratio"
+msgstr "Das Fenster hat bereits das Seitenverhältnis des Videos"
+
+#: size.ts:72
+#, x-machine
+msgid "Window: Fit to video aspect ratio (shrunk to fit the screen)"
+msgstr "Fenster: An Seitenverhältnis angepasst (auf Bildschirmgröße verkleinert)"
+
+#: size.ts:72
+#, x-machine
+msgid "Window: Fit to video aspect ratio (enlarged to the minimum size)"
+msgstr "Fenster: An Seitenverhältnis angepasst (auf die Mindestgröße vergrößert)"
+
+#: size.ts:72
+#, x-machine
+msgid "Window: Fit to video aspect ratio"
+msgstr "Fenster: An Seitenverhältnis angepasst"
+
+#: size.ts:87
+#, x-machine
+msgid "Mini size: Off"
+msgstr "Minigröße: Aus"
+
+#: size.ts:97
+#, x-machine
+msgid "Mini size: On"
+msgstr "Minigröße: Ein"
+
+#: size.ts:137
+#, x-machine
+msgid "Cannot resize the window: {}"
+msgstr "Fenstergröße kann nicht geändert werden: {}"
+
+#: ui/page.slint:96
+#, x-machine
+msgid "Window size when playback starts"
+msgstr "Fenstergröße bei Wiedergabestart"
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: ui/page.slint:99
+#, x-machine
+msgid "Off"
+msgstr "Aus"
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: ui/page.slint:99
+#, x-machine
+msgid "Fit aspect ratio"
+msgstr "Seitenverhältnis"
+
+#: ui/page.slint:105
+#, x-machine
+msgid "Only once (only the first video of this run)"
+msgstr "Nur einmal (nur das erste Video dieser Sitzung)"
+
+#: ui/page.slint:111
+#, x-machine
+msgid "Each new file is resized once, when its video size is known, keeping the window's top left corner. Not in fullscreen, mini size or picture-in-picture; after you drag the window while it plays, that file is left alone."
+msgstr "Für jede neue Datei wird die Größe einmal angepasst, sobald die Videogröße bekannt ist; die linke obere Fensterecke bleibt dabei an ihrem Platz. Nicht im Vollbild, in Minigröße oder Bild-in-Bild; wenn Sie das Fenster während der Wiedergabe verschieben, bleibt es für diese Datei unverändert."
+
+#: ui/page.slint:118
+#, x-machine
+msgid "Always on top"
+msgstr "Immer im Vordergrund"
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: ui/page.slint:121
+#, x-machine
+msgid "While playing"
+msgstr "Bei Wiedergabe"
+
+#. one row of radio buttons on a 412-point-wide page; keep them short.
+#: ui/page.slint:121
+#, x-machine
+msgid "Playing in fullscreen"
+msgstr "Im Vollbild"
+
+#: ui/page.slint:126
+#, x-machine
+msgid "Mouse pointer"
+msgstr "Mauszeiger"
+
+#: ui/page.slint:129
+#, x-machine
+msgid "Hide the pointer while playing"
+msgstr "Mauszeiger während der Wiedergabe ausblenden"

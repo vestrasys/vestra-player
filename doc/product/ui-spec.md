@@ -25,7 +25,7 @@
 
 ### 2.1 颜色表
 
-宿主有两套配色，都叫 Aurora、取自标志的完整色谱：`vestra`（深色，默认）和 `vestra-light`（浅色，2026-10-24 加入）。颜色由宿主下发给每个视图（主窗口外壳与面板、浮动侧栏、工具窗口、选项窗口），插件通过 `@vestra/theme.slint` 的 `Theme` 读取；`Theme` 的颜色是只读的 `out` 属性。用户在「设置 ▶ 外观 ▶ Vestra 深色 / Vestra 浅色」或选项窗口「外观」页切换，所有窗口立即生效，选择跨启动保存。
+宿主有两套配色，都叫 Aurora、取自标志的完整色谱：`vestra`（深色，默认）和 `vestra-light`（浅色，2026-10-24 加入）。颜色由宿主下发给每个视图（主窗口外壳与面板、浮动侧栏、工具窗口、选项窗口），插件通过 `@vestra/theme.slint` 的 `Theme` 读取；`Theme` 的颜色是只读的 `out` 属性。用户在「设置 ▸ 外观 ▸ Vestra 深色 / Vestra 浅色」或选项窗口「外观」页切换，所有窗口立即生效，选择跨启动保存。
 
 | token | `vestra`（深色） | `vestra-light`（浅色） | 用途 |
 | --- | --- | --- | --- |
@@ -74,7 +74,7 @@ std-widgets 控件（`LineEdit`、`ComboBox`、`CheckBox`、`ScrollView`、`List
 ### 2.3 控件尺寸
 
 ```css
-button          { height: 21px; min-width: 66px; padding: 0 8px; }   /* 对话框普通按钮 */
+button          { height: 21px; min-width: 66px; padding: 0 8px; }   /* 对话框普通按钮；首选宽度 = max(最小宽度, 文字宽 + 内边距) */
 button.primary  { height: 24px; }                                    /* 底部主操作按钮 */
 button.small    { height: 18px; min-width: 41px; }                   /* 面板内「默认」按钮 */
 input, select   { height: 21px; }
@@ -130,7 +130,7 @@ label           { height: 14px; }                                    /* 表单�
 | UI-SHELL-06 | 侧栏与视频之间 3px 可拖分隔条（`line`）；视频至少 318px，侧栏至少 317px；拖动后的宽度跨启动保存 | 宿主 |
 | UI-SHELL-07 | 侧栏默认宽 317px | 宿主 |
 | UI-SHELL-08 | 窗口宽度放不下视频 318px + 分隔条 + 侧栏 317px 时，保持用户的显示选择：先压缩视频到 318px，再不够才隐藏侧栏，菜单勾选仍为「显示」 | 宿主 |
-| UI-SHELL-09 | 全屏：控制栏覆盖在视频底部，空闲 3000ms 后隐藏，鼠标移动后出现；播放时同时隐藏鼠标指针（「播放 ▶ 播放时隐藏鼠标指针」，默认开）。全屏时播放列表的弹出方式见交互规格 G-01 | 宿主 |
+| UI-SHELL-09 | 全屏：控制栏覆盖在视频底部，空闲 3000ms 后隐藏，鼠标移动后出现；播放时同时隐藏鼠标指针（「播放 ▸ 播放时隐藏鼠标指针」，默认开）。全屏时播放列表的弹出方式见交互规格 G-01 | 宿主 |
 
 ## 4. 底部控制栏（基础播放插件 playback）
 
@@ -222,36 +222,36 @@ label           { height: 14px; }                                    /* 表单�
 | UI-PL-16 | Ctrl+A、Shift/Ctrl+点击 | 多选；DEL、移动作用于所选 | playlist |
 | UI-PL-17 | 拖动 | 拖动重排（搜索过滤时关闭） | playlist |
 | UI-PL-18 | 列表右键菜单 | 本插件的命令，与主菜单同一样式（清单见 [menus.md](menus.md) 的列表右键菜单表） | playlist（C11） |
-| UI-PL-19 | 列表结束 | 默认播完停止；「播放 ▶ 播放列表」下有循环（不循环/全部/单个，单选）和随机（勾选），默认关 | playlist |
-| UI-PL-20 | 打开新文件时 | 按「播放 ▶ 播放列表 ▶ 打开文件时」的设置处理列表，默认值见交互规格 IA-PL-01 | playlist |
+| UI-PL-19 | 列表结束 | 默认播完停止；「播放 ▸ 播放列表」下有循环（不循环/全部/单个，单选）和随机（勾选），默认关 | playlist |
+| UI-PL-20 | 打开新文件时 | 按「播放 ▸ 播放列表 ▸ 打开文件时」的设置处理列表，默认值见交互规格 IA-PL-01 | playlist |
 
 ## 6. 右键菜单
 
 ### 6.1 结构原则
 
 - 常用的直接命令（打开文件、关闭、全屏、窗口入口）放在顶层；领域功能放子菜单。
-- 没有「文件」「视图」这两个子菜单：打开类放在「打开 ▶」，窗口开关直接放顶层。
+- 没有「文件」「视图」这两个子菜单：打开类放在「打开 ▸」，窗口开关直接放顶层。
 - 命令按 `group` 分组，组间画分隔线；组内按 `order` 排序（C4）。
 
 ### 6.2 顶层结构
 
 ```
 打开文件...            Ctrl+O / F3      playback
-打开 ▶                                  playback、playlist、subtitles、audio、history 等（打开链接 Ctrl+U、打开文件夹 F2、打开字幕 Alt+O、最近播放 ▶ …）
+打开 ▸                                  playback、playlist、subtitles、audio、history 等（打开链接 Ctrl+U、打开文件夹 F2、打开字幕 Alt+O、最近播放 ▸ …）
 关闭                    F4               核心
 重开当前/最后文件       Ctrl+Y           playback
-复制到剪贴板 ▶                           playback
+复制到剪贴板 ▸                           playback
 ——
-播放 ▶                                  核心、playback、playlist、subtitles、window（播放/暂停 Space、跳转 ▶、跳转到... G、速度 ▶、上一个 PgUp、下一个 PgDn、播放列表 ▶ …）
-字幕 ▶                                  subtitles
+播放 ▸                                  核心、playback、playlist、subtitles、window（播放/暂停 Space、跳转 ▸、跳转到... G、速度 ▸、上一个 PgUp、下一个 PgDn、播放列表 ▸ …）
+字幕 ▸                                  subtitles
 ——
-视频 ▶                                  video、capture
+视频 ▸                                  video、capture
 ——
-声音 ▶                                  核心（音量 ↑/↓、静音 M）、audio
-模拟器 ▶                                nes
+声音 ▸                                  核心（音量 ↑/↓、静音 M）、audio
+模拟器 ▸                                nes
 ——
 全屏                    Enter            宿主
-屏幕 ▶                                  window
+屏幕 ▸                                  window
 ——
 播放列表 ✓              F6               playlist
 播放信息 ✓              Tab              info（§9）
@@ -259,7 +259,7 @@ label           { height: 14px; }                                    /* 表单�
 插件工坊...                              workshop
 插件商城...                              store
 ——
-设置 ▶                                  preferences、hotkeys、plugins、visualizer（选项... F5、快捷键...、外观 ▶ …）
+设置 ▸                                  preferences、hotkeys、plugins、visualizer（选项... F5、快捷键...、外观 ▸ …）
 ——
 关于 Vestra Player...   F1               info
 ——
@@ -273,7 +273,7 @@ label           { height: 14px; }                                    /* 表单�
 | UI-MENU-01 | 各插件的命令路径与快捷键按 §6.2；新增或移动入口时同步更新 [menus.md](menus.md) | 各插件 |
 | UI-MENU-02 | 顶层可放直接命令（不只是子菜单），有分隔线和分组顺序（C4） | 宿主 + SDK（C4） |
 | UI-MENU-03 | 没有隐藏底栏的命令；全屏时底栏自动隐藏（UI-SHELL-09） | playback |
-| UI-MENU-04 | 「字幕 ▶ 显示字幕」是勾选项，Alt+H | subtitles |
+| UI-MENU-04 | 「字幕 ▸ 显示字幕」是勾选项，Alt+H | subtitles |
 | UI-MENU-05 | 速度菜单：「正常」Z、「减速 0.1」X、「加速 0.1」C，另有固定倍率单选组（与「正常」同组）和「自定义…」 | 核心 + playback |
 | UI-MENU-06 | 勾选项用勾选框，互斥选项（倍速、循环方式、截图格式、配色）用单选圆点 | 宿主（C4） |
 
@@ -421,7 +421,7 @@ label           { height: 14px; }                                    /* 表单�
 | --- | --- | --- | --- |
 | UI-MOUSE-01 | 双击视频 | 切换全屏 | 宿主 |
 | UI-MOUSE-02 | 滚轮 | 音量 +/− | 核心（C3 绑定表） |
-| UI-MOUSE-03 | 单击视频 | 默认不绑定；用户可在「设置 ▶ 鼠标…」绑定 | 宿主（C3） |
+| UI-MOUSE-03 | 单击视频 | 默认不绑定；用户可在「设置 ▸ 鼠标…」绑定 | 宿主（C3） |
 | UI-MOUSE-04 | 右键 | 菜单 | 宿主 |
 | UI-MOUSE-05 | 窗口模式下拖动视频 | 移动窗口 | 宿主 |
 

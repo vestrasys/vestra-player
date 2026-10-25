@@ -1,11 +1,15 @@
-// 字幕微调: the control box's subtitle page (ui-spec §7.4, UI-TOOL-08).
-// Changes apply at once; every row has its own 默认 (UI-TOOL-04).
+// Subtitle Tuning: the control box's subtitle page (ui-spec §7.4, UI-TOOL-08).
+// Changes apply at once; every row has its own Default (UI-TOOL-04). Every
+// text is @tr (English source; locales/<lang>.po translate it); the plugin
+// passes data.
 import { ComboBox } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button, ToolTipArea } from "@vestra/widgets.slint";
 
+// The row label; `column` is the window's label column (65px, wider for longer translations).
 component RowLabel inherits Text {
-    width: 65px;
+    in property <length> column: 65px;
+    width: root.column;
     color: Theme.text;
     font-size: Theme.font-body;
     horizontal-alignment: right;
@@ -14,21 +18,26 @@ component RowLabel inherits Text {
 }
 
 export component SubtitleTune inherits Window {
-    title: "字幕微调";
-    width: 301px;
+    title: @tr("Subtitle Tuning");
+    // 301px, wider only when a translated label or button needs it.
+    width: max(301px, max(size-row.min-width, position-row.min-width, sync-row.min-width) + 20px);
     background: Theme.bg-panel;
-    in property <[string]> track-labels: ["关闭字幕"];
+    // The first entry (off) comes from the plugin with the track names (text values, translated by the player).
+    in property <[string]> track-labels: [];
     in property <int> selected-track: 0;
-    in property <[string]> secondary-labels: ["关闭次字幕"];
+    in property <[string]> secondary-labels: [];
     in property <int> selected-secondary: 0;
     in property <bool> busy: false;
     in property <bool> can-style: false;
     in property <bool> can-remove: false;
-    in property <string> style-reason: "";
-    in property <string> size-text: "字号 36";
-    in property <string> position-text: "位置 5%";
-    in property <string> sync-text: "同步 0";
-    in property <string> status-text: "";
+    /** Why styling is off (a text value); "" when it is on. */
+    in property <string> style-reason;
+    in property <int> subtitle-size: 36;
+    in property <int> margin-percent: 5;
+    // The offset in seconds with its sign: "+0.5", "−1", "0".
+    in property <string> sync-seconds: "0";
+    /** The status line (a text value, the player translates it); "" for none. */
+    in property <string> status;
     // A user pick or a model change detaches ComboBox.current-index; re-push model changes.
     changed track-labels => { track-combo.current-index = root.selected-track; }
     changed selected-track => { track-combo.current-index = root.selected-track; }
@@ -45,6 +54,26 @@ export component SubtitleTune inherits Window {
     callback remove-selected();
     callback open-settings();
     callback open-sync();
+    // The label column: 65px, or the widest label.
+    private property <length> column: max(65px, label-measure.preferred-width);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        label-measure := VerticalLayout {
+            for text in [@tr("Size {}", root.subtitle-size), @tr("Position {}%", root.margin-percent), @tr("Sync {}", root.sync-seconds)]: Text {
+                text: text;
+                font-size: Theme.font-body;
+            }
+        }
+        // Button labels narrower than the 66px button minimum.
+        load-measure := VerticalLayout {
+            for text in [@tr("Cancel"), @tr("Load…")]: Text { text: text; font-size: Theme.font-body; }
+        }
+        up-measure := Text { text: @tr("Up"); font-size: Theme.font-body; }
+        down-measure := Text { text: @tr("Down"); font-size: Theme.font-body; }
+        default-measure := Text { text: @tr("Default"); font-size: Theme.font-body; }
+    }
 
     VerticalLayout {
         padding: 10px;
@@ -59,13 +88,13 @@ export component SubtitleTune inherits Window {
                 selected(value) => { root.select-track(self.current-index); }
             }
             // While an operation runs the same button cancels it.
-            Button {
-                width: 51px; height: 22px;
-                text: root.busy ? "取消" : "载入…";
+            load-button := Button {
+                width: max(51px, load-measure.preferred-width + 2 * Theme.button-padding); height: 22px;
+                text: root.busy ? @tr("Cancel") : @tr("Load…");
                 clicked => { if root.busy { root.cancel(); } else { root.load-file(); } }
             }
         }
-        // 次字幕 (A08): as wide as the track list, nothing on the right. The pick shows once
+        // Secondary subtitle (A08): as wide as the track list, nothing on the right. The pick shows once
         // the player has it; a refused one (the primary, a bitmap track) snaps back.
         HorizontalLayout {
             spacing: 3px;
@@ -79,32 +108,33 @@ export component SubtitleTune inherits Window {
                     self.current-index = root.selected-secondary;
                 }
             }
-            Rectangle { width: 51px; }
+            Rectangle { width: load-button.width; }
         }
-        HorizontalLayout {
+        size-row := HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: root.size-text; }
+            RowLabel { column: root.column; text: @tr("Size {}", root.subtitle-size); }
             Button { width: 51px; height: 22px; text: "−"; enabled: root.can-style; clicked => { root.size-step(-1); } }
             Button { width: 51px; height: 22px; text: "+"; enabled: root.can-style; clicked => { root.size-step(1); } }
             Rectangle { }
-            Button { width: 41px; height: 22px; text: "默认"; enabled: root.can-style; clicked => { root.reset-field("size"); } }
+            Button { width: max(41px, default-measure.preferred-width + 2 * Theme.button-padding); height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("size"); } }
         }
-        HorizontalLayout {
+        position-row := HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: root.position-text; }
-            Button { width: 51px; height: 22px; text: "上"; enabled: root.can-style; clicked => { root.position-step(1); } }
-            Button { width: 51px; height: 22px; text: "下"; enabled: root.can-style; clicked => { root.position-step(-1); } }
+            RowLabel { column: root.column; text: @tr("Position {}%", root.margin-percent); }
+            Button { width: max(51px, up-measure.preferred-width + 2 * Theme.button-padding); height: 22px; text: @tr("Up"); enabled: root.can-style; clicked => { root.position-step(1); } }
+            Button { width: max(51px, down-measure.preferred-width + 2 * Theme.button-padding); height: 22px; text: @tr("Down"); enabled: root.can-style; clicked => { root.position-step(-1); } }
             Rectangle { }
-            Button { width: 41px; height: 22px; text: "默认"; enabled: root.can-style; clicked => { root.reset-field("position"); } }
+            Button { width: max(41px, default-measure.preferred-width + 2 * Theme.button-padding); height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("position"); } }
         }
-        HorizontalLayout {
+        sync-row := HorizontalLayout {
             spacing: 3px;
-            // The value opens 手动调整同步 (D05).
+            // The value opens Adjust Sync (D05).
             ToolTipArea {
-                text: "单位：秒。正值字幕滞后，负值超前。点击输入数值。";
-                width: 65px;
+                text: @tr("In seconds. Positive delays the subtitles, negative advances them. Click to enter a value.");
+                width: root.column;
                 RowLabel {
-                    text: root.sync-text;
+                    column: root.column;
+                    text: @tr("Sync {}", root.sync-seconds);
                     color: sync-touch.has-hover ? Theme.accent : Theme.text;
                 }
                 sync-touch := TouchArea {
@@ -112,22 +142,22 @@ export component SubtitleTune inherits Window {
                     clicked => { root.open-sync(); }
                 }
             }
-            Button { width: 69px; height: 22px; text: "慢"; enabled: root.can-style; clicked => { root.sync-step(1); } }
-            Button { width: 69px; height: 22px; text: "快"; enabled: root.can-style; clicked => { root.sync-step(-1); } }
-            Button { width: 69px; height: 22px; text: "默认"; enabled: root.can-style; clicked => { root.reset-field("sync"); } }
+            Button { width: max(69px, self.preferred-width); height: 22px; text: @tr("Later"); enabled: root.can-style; clicked => { root.sync-step(1); } }
+            Button { width: max(69px, self.preferred-width); height: 22px; text: @tr("Earlier"); enabled: root.can-style; clicked => { root.sync-step(-1); } }
+            Button { width: max(69px, self.preferred-width); height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("sync"); } }
         }
         HorizontalLayout {
             spacing: 3px;
             Text {
-                text: root.status-text != "" ? root.status-text : root.style-reason;
+                text: root.status != "" ? root.status : root.style-reason;
                 color: Theme.text-list;
                 font-size: Theme.font-body;
                 vertical-alignment: center;
                 overflow: elide;
                 horizontal-stretch: 1;
             }
-            Button { height: 22px; text: "移除"; small: true; enabled: root.can-remove && !root.busy; clicked => { root.remove-selected(); } }
-            Button { height: 22px; text: "设置…"; small: true; clicked => { root.open-settings(); } }
+            Button { height: 22px; text: @tr("Remove"); small: true; enabled: root.can-remove && !root.busy; clicked => { root.remove-selected(); } }
+            Button { height: 22px; text: @tr("Settings…"); small: true; clicked => { root.open-settings(); } }
         }
     }
 }

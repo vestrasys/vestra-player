@@ -1,0 +1,173 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: vestra.visualizer 0.1.6\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: logo.ts:63
+msgid "Choose Logo Image"
+msgstr ""
+
+#: main.ts:66
+msgid "Image too large (max 4096×4096, 16 MB)"
+msgstr ""
+
+#: main.ts:66
+msgid "Only PNG or JPEG images can be used"
+msgstr ""
+
+#: main.ts:66
+msgid "The logo image cannot be read; using the default logo"
+msgstr ""
+
+#: main.ts:66
+msgid "Cannot read the selected image"
+msgstr ""
+
+#: main.ts:66
+msgid "Using the custom logo"
+msgstr ""
+
+#: main.ts:66
+msgid "Default logo restored"
+msgstr ""
+
+#: main.ts:66
+msgid "Album cover for audio only: On"
+msgstr ""
+
+#: main.ts:66
+msgid "Album cover for audio only: Off"
+msgstr ""
+
+#: main.ts:66
+msgid "Logo when idle: On"
+msgstr ""
+
+#: main.ts:66
+msgid "Logo when idle: Off"
+msgstr ""
+
+#: main.ts:66
+msgid "Cover cache cleared"
+msgstr ""
+
+#: main.ts:227
+msgid "Show Album Cover for Audio Only"
+msgstr ""
+
+#: main.ts:235 main.ts:243 main.ts:251
+msgid "Appearance"
+msgstr ""
+
+#: main.ts:235
+msgid "Show Logo When Idle"
+msgstr ""
+
+#: main.ts:243
+msgid "Choose Logo Image…"
+msgstr ""
+
+#: main.ts:251
+msgid "Restore Default Logo"
+msgstr ""
+
+#: main.ts:255
+msgid "Using the default logo"
+msgstr ""
+
+#: main.ts:263 ui/page.slint:40
+msgid "Logo and Album Cover"
+msgstr ""
+
+#: manifest.json
+msgid "Album Cover and Idle Screen"
+msgstr ""
+
+#: manifest.json
+msgid "Shows the album cover for audio only and a logo when idle"
+msgstr ""
+
+#: manifest.json
+msgid ""
+"While audio without a picture plays, shows the album cover with title, artist and album; with no media open, shows a logo (which can be replaced with your own image); while media opens, shows a loading screen.\n"
+"Entries: Audio ▸ Show Album Cover for Audio Only, Settings ▸ Appearance."
+msgstr ""
+
+#: manifest.json
+msgid "audio"
+msgstr ""
+
+#: manifest.json
+msgid "appearance"
+msgstr ""
+
+#: manifest.json
+msgid "cover"
+msgstr ""
+
+#: ui/backdrop.slint:227
+msgid "Opening"
+msgstr ""
+
+#: ui/backdrop.slint:245
+msgid "Opening: {}"
+msgstr ""
+
+#: ui/page.slint:46
+msgid "Idle screen"
+msgstr ""
+
+#: ui/page.slint:49
+msgid "Show logo when idle"
+msgstr ""
+
+#: ui/page.slint:76
+msgid "Current: custom image"
+msgstr ""
+
+#: ui/page.slint:76
+msgid "Current: Vestra Player logo"
+msgstr ""
+
+#: ui/page.slint:84
+msgid "Choose Image…"
+msgstr ""
+
+#: ui/page.slint:85
+msgid "Restore Default"
+msgstr ""
+
+#: ui/page.slint:92
+msgid "PNG or JPEG, up to 4096×4096 and 16 MB. The image is copied, so the original can be moved."
+msgstr ""
+
+#: ui/page.slint:98
+msgid "Audio only"
+msgstr ""
+
+#: ui/page.slint:101
+msgid "Show album cover for audio only"
+msgstr ""
+
+#: ui/page.slint:107
+msgid "The cover comes from the picture embedded in the file, or a cover, folder or front image in the same folder; without one the logo is shown as a placeholder."
+msgstr ""
+
+#: ui/page.slint:118
+msgid "Cover cache unavailable"
+msgstr ""
+
+#: ui/page.slint:119
+msgid "Cover cache: empty"
+msgstr ""
+
+#: ui/page.slint:120
+msgid "Cover cache: {n} track, {0}"
+msgid_plural "Cover cache: {n} tracks, {0}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: ui/page.slint:126
+msgid "Clear Cover Cache"
+msgstr ""

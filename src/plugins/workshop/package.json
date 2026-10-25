@@ -1,6 +1,6 @@
 {
   "name": "vestra-workshop",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "private": true,
   "type": "module",
   "scripts": {

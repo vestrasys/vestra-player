@@ -8,7 +8,7 @@ import { actions, banners, BUILTIN, choose, FakeNet, info, OFFICIAL, openStore, 
 
 const path = (host: Awaited<ReturnType<typeof start>>["host"]) => host.command("open").declaration.path;
 
-test("menu 「插件商城…」 counts updates from the same source only, announces them once", async () => {
+test("menu Plugin Store… counts updates from the same source only, announces them once", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, [
     { id: "zysilm.youtube", name: "YouTube", versions: [{ version: "0.3.0" }, { version: "0.2.0" }] },
@@ -26,14 +26,15 @@ test("menu 「插件商城…」 counts updates from the same source only, annou
   });
   try {
     const command = host.command("open");
-    assert.deepEqual(command.declaration.path, ["插件商城…"]);
+    assert.deepEqual(command.declaration.path, ["Plugin Store…"]);
+    assert.deepEqual(command.display.path, ["插件商城…"]);
     assert.equal(command.declaration.order, 822);
     assert.equal(command.declaration.group, "windows");
     store.settings.save({ ...store.settings.value, repos: [THIRD] });
     store.repos.sync([THIRD]);
     await store.refreshAll(true);
-    await until(host, () => path(host)?.[0] !== "插件商城…", "menu title");
-    assert.deepEqual(path(host), ["插件商城（1 个可更新）…"]);
+    await until(host, () => path(host)?.[0] !== "Plugin Store…", "menu title");
+    assert.deepEqual(host.command("open").display.path, ["插件商城（1 个可更新）…"]);
     assert.deepEqual(host.osd, ["插件商城：1 个插件可以更新"]);
     await store.refreshAll(true);
     await host.settle(20);
@@ -46,7 +47,7 @@ test("menu 「插件商城…」 counts updates from the same source only, annou
     await choose(host, "YouTube");
     host.dialogAnswers.push(yes);
     host.window("store").emit("act", "update");
-    await until(host, () => path(host)?.[0] === "插件商城…", "count gone after the update");
+    await until(host, () => path(host)?.[0] === "Plugin Store…", "count gone after the update");
     await until(host, () => !store.busy);
     assert.equal(props(host)["empty-text"], "所有插件都是最新的");
   } finally {
@@ -127,7 +128,8 @@ test("list: filters, search, tags, sort; incompatible and fully revoked plugins"
     await until(host, () => rows(host).length === 5);
     const window = host.window("store");
     assert.deepEqual(rows(host).map((r) => r.name), ["Alpha", "Beta", "Delta", "Gamma", "vestra.video"]);
-    assert.deepEqual(props(host)["tag-model"], ["标签：全部", "网络视频", "字幕"]);
+    // The first entry is the window's "Tags: All".
+    assert.deepEqual(props(host)["tag-model"], ["", "网络视频", "字幕"]);
     window.emit("setTag", 2);
     await host.settle();
     assert.deepEqual(rows(host).map((r) => r.name), ["Beta"]);

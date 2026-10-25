@@ -18,12 +18,19 @@ export interface Settings {
 /** The defaults: `OnTopMode=3`, `AutoHideMouse=1`, `PlayScreenSize=2` (1.0x), `PlayScreenSizeFirst=0`. */
 export const DEFAULTS: Settings = { onTop: "fullscreen", hideCursorWhilePlaying: true, autoSize: 1, autoSizeOnce: false };
 
-/** Delays, in milliseconds; tests shorten them. */
-export const timing = {
+/** Runs `run` after `ms` milliseconds; the result cancels it. */
+export type Later = (run: () => void, ms: number) => () => void;
+
+/** Delays, in milliseconds, and the clock that waits them; tests replace them. */
+export const timing: { probeRetry: number; probeAttempts: number; later: Later } = {
   /** After a source becomes ready, `stats()` is asked again this often until it reports the video size. */
   probeRetry: 500,
   /** …at most this many times. */
   probeAttempts: 10,
+  later: (run, ms) => {
+    const timer = setTimeout(run, ms);
+    return () => clearTimeout(timer);
+  },
 };
 
 const isObject = (value: unknown): value is Settings =>

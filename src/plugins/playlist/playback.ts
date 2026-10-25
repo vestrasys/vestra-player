@@ -30,7 +30,7 @@ const timing = !!process.env.VESTRA_PLAYLIST_TIMING;
  */
 export function playback(scope: Scope, queue: Queue, settled: () => void = () => {}) {
   const { player } = scope;
-  // B26 "快速推进到下一个" is on; `plan` is the row prepared for the next natural end.
+  // B26 "Fast Advance to Next" is on; `plan` is the row prepared for the next natural end.
   let fast = false;
   let plan: Plan | null = null;
   // GUI measurement of the last automatic advance (see `timing`).
@@ -88,13 +88,13 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
     plan = null;
     if (prepared?.plan.missing) {
       // B26: the next file is gone; say so and go on to the one after it.
-      queue.fail(prepared.row.rowId, "文件不存在");
+      queue.fail(prepared.row.rowId, { kind: "missing" });
       failedSource = player.state.sourceId;
       const after = queue.neighbor(1);
       return after && after.rowId !== prepared.row.rowId ? play(after.rowId, ended) : undefined;
     }
     const next = prepared?.row ?? queue.neighbor(1);
-    if (!next) queue.notice("列表已播完");
+    if (!next) queue.notice("End of the list");
     else return play(next.rowId, ended, { key: prepared?.plan.key ?? undefined });
   };
 
@@ -142,8 +142,8 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
     try {
       await player.restart({ ifCurrent: ended });
     } catch (error) {
-      if ((error as PluginError).code === "stale") queue.detach("自动推进已过期，保留较新的来源");
-      else queue.notice(`无法重播：${(error as PluginError).message}`);
+      if ((error as PluginError).code === "stale") queue.detach("The automatic advance expired; the newer source stays");
+      else queue.notice("Cannot replay: {}", [(error as PluginError).message]);
     }
   }
 
@@ -174,7 +174,7 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
           if (duplicate) {
             queue.removeRow(rowId);
             queue.selected = duplicate.rowId;
-            queue.notice("文件规范路径与已有项重复，已选择已有项");
+            queue.notice("The file's canonical path matches an existing item; that item is selected");
             return;
           }
           row.key = key;
@@ -194,11 +194,11 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
         const { code, message } = error as PluginError;
         // A failed load of this row is still this plugin's source.
         if (player.state.source === row.source) own.add(player.state.sourceId);
-        if (code === "stale") queue.detach("自动推进已过期，保留较新的来源");
+        if (code === "stale") queue.detach("The automatic advance expired; the newer source stays");
         // Accepted, then superseded by another source before it loaded: not a failure of this row.
-        else if (code === "replaced") queue.detach("已切换到列表外来源");
+        else if (code === "replaced") queue.detach("Switched to a source outside the list");
         // A file resolution (§11) cancelled by a close (F4, player.close()): not a failure of this row.
-        else if (cancelled(code)) queue.detach("当前来源已关闭");
+        else if (cancelled(code)) queue.detach("The current source was closed");
         else {
           queue.fail(rowId, message);
           failedSource = player.state.sourceId;
@@ -213,7 +213,7 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
         advancing.sourceId = player.state.sourceId;
       }
       if (request.epoch !== queue.epoch || !queue.row(rowId)) {
-        queue.message = "当前媒体已移出列表";
+        queue.message = "The current media was removed from the list";
         return;
       }
       if (media.current) own.add(player.state.sourceId);
@@ -221,7 +221,7 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
       binding.end = media.onEnd((ended) => advance(binding, ended));
       queue.bind(binding);
       queue.played(rowId);
-      if (!options.quiet) queue.say(row.title);
+      if (!options.quiet) queue.sayTitle(row.title);
       if (media.current) loading = { rowId, sourceId: player.state.sourceId };
       observe(player.state);
       prepare();
@@ -237,7 +237,7 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
   /** A13: follow `rowId` as the row of a source another plugin opened. */
   function adopt(rowId: string, state: PlayerState) {
     if (!queue.row(rowId) || busy()) return;
-    queue.detach("已接管");
+    queue.detach("Taken over");
     queue.failed = null;
     adoptedEnded = state.phase === "ended";
     queue.bind({ rowId, media: null, sourceId: state.sourceId });
@@ -255,7 +255,7 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
     busy,
     adopt,
     prepare,
-    /** B26: turn "快速推进到下一个" on or off (off drops the plan). */
+    /** B26: turn "Fast Advance to Next" on or off (off drops the plan). */
     setFast(on: boolean) {
       fast = on;
       prepare();

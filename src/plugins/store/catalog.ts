@@ -3,6 +3,7 @@ import type { IndexEntry, IndexVersion, Revocation } from "./index-format.ts";
 import { reservedId, reservedText } from "./labels.ts";
 import type { Repo } from "./repos.ts";
 import { compareVersions, isVersion, playerAtLeast, satisfies } from "./semver.ts";
+import { msg, type Msg } from "./text.ts";
 
 /**
  * Repositories × the install library → the store's rows and their states
@@ -14,8 +15,8 @@ export const API = "vestra/1";
 
 export type VersionCheck =
   | { ok: true }
-  | { ok: false; why: "api" | "player"; text: string }
-  | { ok: false; why: "revoked"; text: string; revocation: Revocation };
+  | { ok: false; why: "api" | "player"; text: Msg }
+  | { ok: false; why: "revoked"; text: Msg; revocation: Revocation };
 
 /** The first `revoked` entry of the same id whose range holds `version`. */
 export function revocationOf(id: string, version: string, revoked: readonly Revocation[]): Revocation | null {
@@ -32,11 +33,11 @@ function safeSatisfies(version: string, range: string): boolean {
 }
 
 export function checkVersion(id: string, v: IndexVersion, revoked: readonly Revocation[], player: string): VersionCheck {
-  if (v.apiVersion !== API) return { ok: false, why: "api", text: `需要更新的插件 API（${v.apiVersion}）` };
+  if (v.apiVersion !== API) return { ok: false, why: "api", text: msg("Needs a newer plugin API ({})", v.apiVersion) };
   if (v.minPlayerVersion !== null && !playerAtLeast(player, v.minPlayerVersion))
-    return { ok: false, why: "player", text: `需要 Vestra Player ≥ ${v.minPlayerVersion}（当前 ${player}）` };
+    return { ok: false, why: "player", text: msg("Needs Vestra Player ≥ {} (current {})", v.minPlayerVersion, player) };
   const revocation = revocationOf(id, v.version, revoked);
-  if (revocation) return { ok: false, why: "revoked", text: `已撤回：${revocation.reason}`, revocation };
+  if (revocation) return { ok: false, why: "revoked", text: msg("Revoked: {}", revocation.reason), revocation };
   return { ok: true };
 }
 
@@ -86,7 +87,7 @@ export interface Item {
   /** The installed version is revoked by this row's repository. */
   revocation: Revocation | null;
   /** Why nothing can be installed (incompatible / all revoked / reserved). */
-  blocked: string | null;
+  blocked: Msg | null;
   name: string;
   author: string | null;
   punchline: string | null;
@@ -117,7 +118,7 @@ export function buildItems(
       const best = bestVersion(entry, revoked, player);
       let state: ItemState;
       let revocation: Revocation | null = null;
-      let blocked: string | null = null;
+      let blocked: Msg | null = null;
       if (reservedId(entry.id)) {
         // Never installable from a repository; an installed copy (built-in or
         // left from before the rule) keeps its own local row below.
@@ -137,8 +138,8 @@ export function buildItems(
         const compatible = entry.versions.filter((v) => checkVersion(entry.id, v, [], player).ok);
         state = compatible.length ? "allRevoked" : "incompatible";
         blocked = compatible.length
-          ? `此插件已被撤回：${revocationOf(entry.id, compatible[0]!.version, revoked)?.reason ?? ""}`
-          : (checkVersion(entry.id, entry.versions[0]!, [], player) as { text: string }).text;
+          ? msg("This plugin has been revoked: {}", revocationOf(entry.id, compatible[0]!.version, revoked)?.reason ?? "")
+          : (checkVersion(entry.id, entry.versions[0]!, [], player) as { text: Msg }).text;
       }
       items.push({
         key: `${repo.url}\n${entry.id}`,
@@ -192,7 +193,7 @@ export function buildItems(
   return items;
 }
 
-/** Rows that stand for the installed instance (the 「已安装」 filter). */
+/** Rows that stand for the installed instance (the Installed filter). */
 export const isInstalledRow = (item: Item) =>
   item.state === "installed" ||
   item.state === "update" ||

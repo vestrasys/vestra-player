@@ -1,20 +1,24 @@
-# 快捷键设置
+# Shortcut Settings
 
-查看和修改播放器与所有插件的快捷键、鼠标动作。
+View and change the keyboard shortcuts and mouse actions of the player and of every plugin.
 
-## 功能
+## Features
 
-- **快捷键**：列出全部命令及其按键，按命令文字或按键搜索，按状态（已修改、有冲突、未绑定）和来源筛选；为命令添加、删除按键，恢复默认或全部解绑。按键已被别的命令使用时提示并可替换。可导出为 CSV 或文本。
-- **鼠标**：为视频区的单击、双击、中键、侧键、滚轮（可带修饰键）指定命令。
-- **忽略默认快捷键**：一键停用所有默认按键（「退出」「退出全屏」除外），关闭后还原。
-- 修改即时生效，跨重启保留。
+- **Keyboard Shortcuts**: lists every command with its keys; search by command text or key, filter by status (changed, conflicts, unbound) and source; add and remove keys of a command, restore its defaults or unbind it. A key already used by another command is reported and can be moved. The list can be exported as CSV or text.
+- **Mouse**: assigns commands to left click, double-click, middle click, the side buttons and the wheel on the video (optionally with a modifier).
+- **Ignore Default Shortcuts**: switches off every default key at once (except Quit and Leave Fullscreen); turning it off restores them.
+- Changes apply at once and are kept across restarts.
 
-## 入口
+## Entry points
 
-- 右键菜单「设置 ▶ 快捷键… / 鼠标…」，或选项窗口的「快捷键与鼠标」分类。
-- 右键菜单「设置 ▶ 忽略默认快捷键」。
+- Context menu Settings ▸ Keyboard Shortcuts… / Mouse…, or the Keys and Mouse category of the options window.
+- Context menu Settings ▸ Ignore Default Shortcuts.
 
-## 限制
+## Languages
 
-- 小键盘按键录入为主键盘的键名；⌃P–⌃X 录不到，可改用 ⌘（`Ctrl+` 绑定 ⌘ 和 ⌃ 都能触发）。
-- 被系统占用的按键（如 ⌘Tab、⌘Space）录不到。
+English source texts; Simplified Chinese in `locales/zh-Hans.po`. The exported list is in the interface language too.
+
+## Limitations
+
+- Numeric keypad keys are recorded as the main keyboard's keys; ⌃P–⌃X cannot be recorded, use ⌘ instead (a `Ctrl+` binding answers to both ⌘ and ⌃).
+- Keys the system takes (such as ⌘Tab, ⌘Space) cannot be recorded.

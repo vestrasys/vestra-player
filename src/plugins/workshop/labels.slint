@@ -1,0 +1,13 @@
+// Words both windows use: the custom providers' names (the plugin passes
+// ids) and the notice for a provider that is no longer offered.
+export global Labels {
+    // A provider by id; pi's providers by their own name (data).
+    public pure function provider(id: string, name: string) -> string {
+        id == "custom-openai" ? @tr("Custom · OpenAI format")
+            : id == "custom-anthropic" ? @tr("Custom · Anthropic format")
+            : name
+    }
+    public pure function gone(name: string) -> string {
+        @tr("The provider you chose before, “{}”, is no longer offered; use another provider or “Custom · OpenAI/Anthropic format”.", name)
+    }
+}

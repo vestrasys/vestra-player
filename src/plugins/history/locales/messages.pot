@@ -1,0 +1,117 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: vestra.history 0.1.3\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: manifest.json
+msgid "Playback History"
+msgstr ""
+
+#: manifest.json
+msgid "Recently played items, and resuming where you left off"
+msgstr ""
+
+#: manifest.json
+msgid "Open ▸ Recently Played lists the files and links opened recently. Playback ▸ Resume Playback offers Don't Resume, Resume Automatically or Ask Every Time: the next time the same file is opened, it continues where it stopped."
+msgstr ""
+
+#: manifest.json
+msgid "playback"
+msgstr ""
+
+#: manifest.json
+msgid "history"
+msgstr ""
+
+#: manifest.json
+msgid "resume"
+msgstr ""
+
+#: menu.ts:36
+msgid "{} ({})"
+msgstr ""
+
+#: menu.ts:94 menu.ts:114 menu.ts:122 menu.ts:133
+msgid "Recently Played"
+msgstr ""
+
+#: menu.ts:94
+msgid "(No Entries)"
+msgstr ""
+
+#: menu.ts:114
+msgid "Remove Invalid Entries"
+msgstr ""
+
+#: menu.ts:118
+msgid "Removed {} invalid entries"
+msgstr ""
+
+#: menu.ts:122
+msgid "Clear Entries"
+msgstr ""
+
+#: menu.ts:128
+msgid "Playback history cleared"
+msgstr ""
+
+#: menu.ts:133
+msgid "Record Playback History"
+msgstr ""
+
+#: menu.ts:144
+msgid "File not found: {}"
+msgstr ""
+
+#: menu.ts:153 menu.ts:156
+msgid "Cannot open: {}"
+msgstr ""
+
+#: menu.ts:172 menu.ts:182 menu.ts:190 ui/resume.slint:6
+msgid "Resume Playback"
+msgstr ""
+
+#: menu.ts:172
+msgid "Don't Resume"
+msgstr ""
+
+#: menu.ts:172
+msgid "Resume Automatically"
+msgstr ""
+
+#: menu.ts:172
+msgid "Ask Every Time"
+msgstr ""
+
+#: menu.ts:182
+msgid "Also Remember Audio Files"
+msgstr ""
+
+#: menu.ts:190
+msgid "Clear All Saved Positions"
+msgstr ""
+
+#: menu.ts:195
+msgid "All saved positions cleared"
+msgstr ""
+
+#: resume.ts:226
+msgid "Resuming from {}"
+msgstr ""
+
+#: resume.ts:229
+msgid "Cannot resume: {}"
+msgstr ""
+
+#: ui/resume.slint:31
+msgid "You didn't finish this last time. Continue? ({})"
+msgstr ""
+
+#: ui/resume.slint:48
+msgid "Continue"
+msgstr ""
+
+#: ui/resume.slint:51
+msgid "Start Over"
+msgstr ""

@@ -1,0 +1,681 @@
+# Reviewed by an AI reviewer on 2026-10-25
+msgid ""
+msgstr ""
+"Language: ja\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:57
+#, x-machine
+msgid "Enter valid seconds; the end must be after the start."
+msgstr "有効な秒数を入力してください。終了は開始より後にしてください。"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:58
+#, x-machine
+msgid "A burst needs 2–20 frames, an interval of 0.1–10 s and a known media duration."
+msgstr "連写には 2〜20 枚、0.1〜10 秒の間隔、および長さがわかっているメディアが必要です。"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:59
+#, x-machine
+msgid "The burst runs past the end of the media. Use fewer frames or a shorter interval."
+msgstr "連写がメディアの終わりを越えます。枚数を減らすか、間隔を短くしてください。"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:60
+#, x-machine
+msgid "No free file name found."
+msgstr "使用できるファイル名が見つかりません。"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:61
+#, x-machine
+msgid "The current frame cannot be captured. Open a local video file first."
+msgstr "現在のフレームはキャプチャできません。先にローカルのビデオファイルを開いてください。"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:62
+#, x-machine
+msgid "The current frame cannot be exported. Open a local video file first."
+msgstr "現在のフレームは書き出せません。先にローカルのビデオファイルを開いてください。"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:63
+#, x-machine
+msgid "Bursts and clips need a known media duration."
+msgstr "連写とクリップには、長さがわかっているメディアが必要です。"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:64
+#, x-machine
+msgid "The selected range is past the end of the media."
+msgstr "選択した範囲がメディアの終わりを越えています。"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:65
+#, x-machine
+msgid "The selected audio track cannot be exported. Choose another track or No Audio."
+msgstr "選択した音声トラックは書き出せません。別のトラックか「音声なし」を選んでください。"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:66
+#, x-machine
+msgid "The media changed; nothing was started."
+msgstr "メディアが変わったため、開始しませんでした。"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:67
+#, x-machine
+msgid "The player is busy. Try again later."
+msgstr "プレーヤーがビジー状態です。しばらくしてからもう一度お試しください。"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:68
+#, x-machine
+msgid "The current frame cannot be captured."
+msgstr "現在のフレームはキャプチャできません。"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:69
+#, x-machine
+msgid "Could not capture the frame."
+msgstr "フレームをキャプチャできませんでした。"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:70
+#, x-machine
+msgid "One export is running and four are queued. Please wait."
+msgstr "1 件を書き出し中で、4 件が待機中です。しばらくお待ちください。"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:71
+#, x-machine
+msgid "The kept frame has expired. Retry with the current frame."
+msgstr "保持していたフレームの有効期限が切れました。現在のフレームで再試行してください。"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:72
+#, x-machine
+msgid "The kept frame was released."
+msgstr "保持していたフレームは解放されました。"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:73
+#, x-machine
+msgid "Cancelled."
+msgstr "キャンセルしました。"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:74
+#, x-machine
+msgid "Could not write to the clipboard"
+msgstr "クリップボードに書き込めませんでした"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:75
+#, x-machine
+msgid "Not enough disk space"
+msgstr "ディスクの空き容量が不足しています"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:76
+#, x-machine
+msgid "The target file already exists"
+msgstr "保存先のファイルはすでに存在します"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:77
+#, x-machine
+msgid "No write permission"
+msgstr "書き込み権限がありません"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:78
+#, x-machine
+msgid "This media cannot be encoded"
+msgstr "このメディアはエンコードできません"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:79
+#, x-machine
+msgid "Export failed"
+msgstr "書き出しに失敗しました"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:80
+#, x-machine
+msgid "This task has no output file yet."
+msgstr "このタスクにはまだ出力ファイルがありません。"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:81
+#, x-machine
+msgid "The output file no longer exists."
+msgstr "出力ファイルはもう存在しません。"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:82
+#, x-machine
+msgid "Could not open the folder."
+msgstr "フォルダを開けませんでした。"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:83
+#, x-machine
+msgid "The snapshot folder is unavailable. Please choose it again."
+msgstr "スナップショットのフォルダを使用できません。もう一度選択してください。"
+
+#: main.ts:73
+#, x-machine
+msgid "Snapshot failed: {}"
+msgstr "スナップショットに失敗しました：{}"
+
+#: main.ts:73 ui/parts.slint:115
+#, x-machine
+msgid "Burst failed: {}"
+msgstr "連写に失敗しました：{}"
+
+#: main.ts:73 ui/parts.slint:117
+#, x-machine
+msgid "Export failed: {}"
+msgstr "書き出しに失敗しました：{}"
+
+#: main.ts:88
+#, x-machine
+msgid "Frame saved as {}"
+msgstr "フレームを {} として保存しました"
+
+#. {0} is the number of frames (2–20), {1} the folder.
+#: main.ts:93
+#, x-machine
+msgid "Burst of {0} frames saved to {1}"
+msgstr "{0} 枚の連写を {1} に保存しました"
+
+#: main.ts:97
+#, x-machine
+msgid "Clip exported as {}"
+msgstr "クリップを {} として書き出しました"
+
+#: main.ts:127
+#, x-machine
+msgid "Snapshot format: {}"
+msgstr "スナップショットの形式：{}"
+
+#: main.ts:149
+#, x-machine
+msgid "The previous snapshot is still being processed"
+msgstr "前のスナップショットをまだ処理中です"
+
+#: main.ts:168
+#, x-machine
+msgid "Snapshot queued"
+msgstr "スナップショットをキューに追加しました"
+
+#: main.ts:176
+#, x-machine
+msgid "Save Rendered Frame As"
+msgstr "レンダリング後のフレームを別名で保存"
+
+#: main.ts:176
+#, x-machine
+msgid "Save Current Frame As"
+msgstr "現在のフレームを別名で保存"
+
+#: main.ts:187
+#, x-machine
+msgid "Frame copied to the clipboard"
+msgstr "フレームをクリップボードにコピーしました"
+
+#: main.ts:190
+#, x-machine
+msgid "Choose Snapshot Folder"
+msgstr "スナップショットのフォルダを選択"
+
+#: main.ts:192
+#, x-machine
+msgid "Please choose an existing folder."
+msgstr "既存のフォルダを選択してください。"
+
+#: main.ts:195
+#, x-machine
+msgid "Snapshot folder: {}"
+msgstr "スナップショットのフォルダ：{}"
+
+#: main.ts:280 ui/clip.slint:8
+#, x-machine
+msgid "Export Clip"
+msgstr "クリップを書き出す"
+
+#: main.ts:329
+#, x-machine
+msgid "The snapshot window could not open."
+msgstr "スナップショットのウインドウを開けませんでした。"
+
+#: main.ts:346 manifest.json ui/error.slint:5
+#, x-machine
+msgid "Snapshot"
+msgstr "スナップショット"
+
+#: main.ts:346
+#, x-machine
+msgid "Save Current Frame"
+msgstr "現在のフレームを保存"
+
+#: main.ts:346
+#, x-machine
+msgid "Save Current Frame As…"
+msgstr "現在のフレームを別名で保存…"
+
+#: main.ts:346
+#, x-machine
+msgid "Copy Current Frame"
+msgstr "現在のフレームをコピー"
+
+#: main.ts:346
+#, x-machine
+msgid "Save Rendered Frame"
+msgstr "レンダリング後のフレームを保存"
+
+#: main.ts:346
+#, x-machine
+msgid "Save Rendered Frame As…"
+msgstr "レンダリング後のフレームを別名で保存…"
+
+#: main.ts:346
+#, x-machine
+msgid "Copy Rendered Frame"
+msgstr "レンダリング後のフレームをコピー"
+
+#: main.ts:346
+#, x-machine
+msgid "Burst…"
+msgstr "連写…"
+
+#: main.ts:346
+#, x-machine
+msgid "Export Clip…"
+msgstr "クリップを書き出す…"
+
+#: main.ts:346 ui/clip.slint:85
+#, x-machine
+msgid "Export Tasks…"
+msgstr "書き出しタスク…"
+
+#: main.ts:346
+#, x-machine
+msgid "Capture as PNG"
+msgstr "PNG でキャプチャ"
+
+#: main.ts:346
+#, x-machine
+msgid "Capture as JPEG"
+msgstr "JPEG でキャプチャ"
+
+#: main.ts:346
+#, x-machine
+msgid "Capture as BMP"
+msgstr "BMP でキャプチャ"
+
+#: main.ts:346
+#, x-machine
+msgid "Include Subtitles in Rendered Frame"
+msgstr "レンダリング後のフレームに字幕を含める"
+
+#: main.ts:346
+#, x-machine
+msgid "Snapshot Settings…"
+msgstr "スナップショットの設定…"
+
+#: main.ts:346
+#, x-machine
+msgid "Snapshot Folder…"
+msgstr "スナップショットのフォルダ…"
+
+#: main.ts:346
+#, x-machine
+msgid "Open Snapshot Folder"
+msgstr "スナップショットのフォルダを開く"
+
+#: main.ts:346
+#, x-machine
+msgid "No frame to capture"
+msgstr "キャプチャできるフレームがありません"
+
+#: manifest.json
+#, x-machine
+msgid "Save or copy the current frame, capture bursts, export clips"
+msgstr "現在のフレームの保存・コピー、連写、クリップの書き出し"
+
+#: manifest.json
+#, x-machine
+msgid ""
+"Saves, saves as or copies the current frame (the source frame, or the rendered frame with video effects and subtitles) as PNG, JPEG or BMP; captures a burst of frames; exports part of a video as MP4 and shows its progress in a task list.\n"
+"Right-click menu: Video ▸ Snapshot."
+msgstr ""
+"現在のフレーム（元のフレーム、またはビデオエフェクトと字幕を含むレンダリング後のフレーム）を PNG、JPEG、BMP で保存・別名で保存・コピーできます。連写や、ビデオの一部を MP4 として書き出すこともでき、進行状況はタスク一覧で確認できます。\n"
+"右クリックメニュー：ビデオ ▸ スナップショット。"
+
+#: manifest.json
+#, x-machine
+msgid "video"
+msgstr "ビデオ"
+
+#: manifest.json
+#, x-machine
+msgid "snapshot"
+msgstr "スナップショット"
+
+#: manifest.json
+#, x-machine
+msgid "export"
+msgstr "書き出し"
+
+#: model.ts:178 ui/clip.slint:14
+#, x-machine
+msgid "No Audio"
+msgstr "音声なし"
+
+#: model.ts:179 ui/clip.slint:14
+#, x-machine
+msgid "Current Track"
+msgstr "現在のトラック"
+
+#: model.ts:180
+#, x-machine
+msgid "Track {} · {}"
+msgstr "トラック {} · {}"
+
+#: model.ts:180
+#, x-machine
+msgid "Track {}"
+msgstr "トラック {}"
+
+#: ui/burst.slint:8
+#, x-machine
+msgid "Burst"
+msgstr "連写"
+
+#: ui/burst.slint:41 ui/burst.slint:65
+#, x-machine
+msgid "Count:"
+msgstr "枚数："
+
+#: ui/burst.slint:41 ui/burst.slint:71
+#, x-machine
+msgid "Interval:"
+msgstr "間隔："
+
+#: ui/burst.slint:41 ui/burst.slint:78
+#, x-machine
+msgid "Start:"
+msgstr "開始："
+
+#: ui/burst.slint:44 ui/burst.slint:105
+#, x-machine
+msgid "Progress:"
+msgstr "進行状況："
+
+#: ui/burst.slint:44 ui/burst.slint:110 ui/clip.slint:32 ui/clip.slint:77
+#, x-machine
+msgid "Status:"
+msgstr "状態："
+
+#: ui/burst.slint:52
+#, x-machine
+msgid "Save to"
+msgstr "保存先"
+
+#: ui/burst.slint:62
+#, x-machine
+msgid "Snapshot settings"
+msgstr "スナップショットの設定"
+
+#: ui/burst.slint:67
+#, x-machine
+msgid "frames (2–20)"
+msgstr "枚（2〜20）"
+
+#: ui/burst.slint:73
+#, x-machine
+msgid "s (0.1–10)"
+msgstr "秒（0.1〜10）"
+
+#: ui/burst.slint:75
+#, x-machine
+msgid "Start at the current position"
+msgstr "現在の位置から開始"
+
+#: ui/burst.slint:80 ui/clip.slint:45 ui/clip.slint:51
+#, x-machine
+msgid "Current"
+msgstr "現在"
+
+#: ui/burst.slint:84
+#, x-machine
+msgid "Other settings"
+msgstr "その他の設定"
+
+#: ui/burst.slint:87 ui/clip.slint:32 ui/clip.slint:58 ui/settings.slint:29 ui/settings.slint:40
+#, x-machine
+msgid "Format:"
+msgstr "形式："
+
+#: ui/burst.slint:96 ui/clip.slint:69
+#, x-machine
+msgid "Include video effects"
+msgstr "ビデオエフェクトを含める"
+
+#: ui/burst.slint:97
+#, x-machine
+msgid "Capture subtitles too"
+msgstr "字幕もキャプチャ"
+
+#: ui/burst.slint:102 ui/clip.slint:74
+#, x-machine
+msgid "Information"
+msgstr "情報"
+
+#: ui/burst.slint:117 ui/tasks.slint:80
+#, x-machine
+msgid "Open Save Folder"
+msgstr "保存フォルダを開く"
+
+#: ui/burst.slint:118
+#, x-machine
+msgid "Capture Current Frame"
+msgstr "現在のフレームをキャプチャ"
+
+#: ui/burst.slint:121
+#, x-machine
+msgid "Start"
+msgstr "開始"
+
+#: ui/clip.slint:32 ui/clip.slint:43
+#, x-machine
+msgid "Start (s):"
+msgstr "開始（秒）："
+
+#: ui/clip.slint:32 ui/clip.slint:49
+#, x-machine
+msgid "End (s):"
+msgstr "終了（秒）："
+
+#: ui/clip.slint:32 ui/clip.slint:63
+#, x-machine
+msgid "Audio:"
+msgstr "音声："
+
+#: ui/clip.slint:40
+#, x-machine
+msgid "Range"
+msgstr "範囲"
+
+#: ui/clip.slint:55
+#, x-machine
+msgid "Output"
+msgstr "出力"
+
+#: ui/clip.slint:59
+#, x-machine
+msgid "MP4 (H.264 + AAC)"
+msgstr "MP4（H.264 + AAC）"
+
+#: ui/clip.slint:70
+#, x-machine
+msgid "Export subtitles too"
+msgstr "字幕も書き出す"
+
+#: ui/clip.slint:88
+#, x-machine
+msgid "Export…"
+msgstr "書き出す…"
+
+#: ui/error.slint:12
+#, x-machine
+msgid "The snapshot window could not open. Close this notice and try again."
+msgstr "スナップショットのウインドウを開けませんでした。この通知を閉じてからもう一度お試しください。"
+
+#: ui/parts.slint:89
+#, x-machine
+msgid "Queued"
+msgstr "待機中"
+
+#: ui/parts.slint:90
+#, x-machine
+msgid "Preparing"
+msgstr "準備中"
+
+#: ui/parts.slint:91
+#, x-machine
+msgid "Exporting"
+msgstr "書き出し中"
+
+#: ui/parts.slint:92
+#, x-machine
+msgid "Cancelling"
+msgstr "キャンセル中"
+
+#: ui/parts.slint:93
+#, x-machine
+msgid "Completed"
+msgstr "完了"
+
+#: ui/parts.slint:94
+#, x-machine
+msgid "Failed"
+msgstr "失敗"
+
+#: ui/parts.slint:95
+#, x-machine
+msgid "Cancelled"
+msgstr "キャンセル済み"
+
+#: ui/parts.slint:103
+#, x-machine
+msgid "Failed: {}"
+msgstr "失敗：{}"
+
+#. {0} is a task state (Exporting), {1} the frames done, {2} the frames in all.
+#: ui/parts.slint:105
+#, x-machine
+msgid "{0} · {1}/{2}"
+msgstr "{0} · {1}/{2}"
+
+#. {} is the number of frames (2–20).
+#: ui/parts.slint:112
+#, x-machine
+msgid "{} frames saved"
+msgstr "{} 枚を保存しました"
+
+#. {} is the number of frames (2–20).
+#: ui/parts.slint:114
+#, x-machine
+msgid "Burst of {} frames started"
+msgstr "{} 枚の連写を開始しました"
+
+#: ui/parts.slint:116
+#, x-machine
+msgid "Exported {}"
+msgstr "{} を書き出しました"
+
+#: ui/parts.slint:118
+#, x-machine
+msgid "No save location chosen."
+msgstr "保存場所が選択されていません。"
+
+#: ui/parts.slint:119
+#, x-machine
+msgid "Export started. Follow it in Export Tasks."
+msgstr "書き出しを開始しました。「書き出しタスク」で確認できます。"
+
+#: ui/parts.slint:120
+#, x-machine
+msgid "Restarted."
+msgstr "もう一度開始しました。"
+
+#: ui/settings.slint:8
+#, x-machine
+msgid "Snapshot Settings"
+msgstr "スナップショットの設定"
+
+#: ui/settings.slint:29 ui/settings.slint:50
+#, x-machine
+msgid "Quality:"
+msgstr "画質："
+
+#: ui/settings.slint:37
+#, x-machine
+msgid "Format"
+msgstr "形式"
+
+#: ui/settings.slint:61
+#, x-machine
+msgid "Quality applies to JPEG only; copies to the clipboard are always PNG."
+msgstr "画質は JPEG にのみ適用されます。クリップボードへのコピーは常に PNG です。"
+
+#: ui/settings.slint:64
+#, x-machine
+msgid "Save location"
+msgstr "保存場所"
+
+#: ui/settings.slint:72
+#, x-machine
+msgid "Save to the media folder when possible"
+msgstr "可能な場合はメディアと同じフォルダに保存"
+
+#: ui/settings.slint:78
+#, x-machine
+msgid "Rendered frame"
+msgstr "レンダリング後のフレーム"
+
+#: ui/settings.slint:81
+#, x-machine
+msgid "Include subtitles"
+msgstr "字幕を含める"
+
+#: ui/settings.slint:86
+#, x-machine
+msgid "The rendered frame is made offline: it includes the plugins' video effects, and subtitles are drawn again in the plugins' style, always inside the picture, so it is not pixel for pixel what the screen shows. On-screen messages are not included."
+msgstr "レンダリング後のフレームはオフラインで生成されます。プラグインのビデオエフェクトを含み、字幕はプラグインのスタイルで描き直され、常に映像の内側に表示されるため、画面の表示とピクセル単位で一致するわけではありません。画面上のメッセージは含まれません。"
+
+#: ui/tasks.slint:20
+#, x-machine
+msgid "Export Tasks"
+msgstr "書き出しタスク"
+
+#: ui/tasks.slint:41
+#, x-machine
+msgid "No export tasks yet."
+msgstr "書き出しタスクはまだありません。"
+
+#: ui/tasks.slint:56
+#, x-machine
+msgid "Burst · {}"
+msgstr "連写 · {}"
+
+#: ui/tasks.slint:56
+#, x-machine
+msgid "Clip · {}"
+msgstr "クリップ · {}"
+
+#: ui/tasks.slint:56
+#, x-machine
+msgid "Snapshot · {}"
+msgstr "スナップショット · {}"
+
+#. {0} is the time or time range, {1} the progress (Completed).
+#: ui/tasks.slint:60
+#, x-machine
+msgid "{0} · {1}"
+msgstr "{0} · {1}"
+
+#: ui/tasks.slint:66
+#, x-machine
+msgid "Cancel"
+msgstr "キャンセル"
+
+#: ui/tasks.slint:67
+#, x-machine
+msgid "Open"
+msgstr "開く"
+
+#: ui/tasks.slint:68
+#, x-machine
+msgid "Retry"
+msgstr "再試行"

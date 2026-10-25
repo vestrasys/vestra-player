@@ -1,14 +1,13 @@
-import type { Conditional, Dialogs, Player, Scrub } from "@vestra-player/sdk";
+import type { Conditional, Dialogs, Player, Scrub, TemplateArgs } from "@vestra-player/sdk";
 import { rateText, time } from "./format.ts";
+import { errorMessage, Failure, type Osd, type OsdText, sourceFailure } from "./texts.ts";
 
-const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
-
-/** Source control failures keep the "来源操作失败：" prefix the bar has always shown. */
+/** Source control failures keep the "Source operation failed: …" sentence the bar has always shown. */
 async function source<T>(work: Promise<T>): Promise<T> {
   try {
     return await work;
   } catch (error) {
-    throw new Error(`来源操作失败：${message(error)}`);
+    throw sourceFailure(error);
   }
 }
 
@@ -23,7 +22,7 @@ export const MAX_RATE = 4;
  */
 export class Playback {
   selecting = false;
-  /** 跳到开头 is replaying an ended source. */
+  /** Jump to Start is replaying an ended source. */
   restartBusy = false;
   rateBusy = false;
   /** The bar's mute (a core action) is in flight: the volume slider waits. */
@@ -40,13 +39,16 @@ export class Playback {
   readonly #player: Player;
   readonly #dialogs: Dialogs;
   readonly #update: () => void;
-  readonly #osd: (text: string) => void;
+  readonly #osd: Osd;
+  readonly #raw: (text: string) => void;
 
-  constructor(player: Player, dialogs: Dialogs, update: () => void, osd: (text: string) => void) {
+  /** `raw` shows a message that is not this plugin's text (the player's error messages). */
+  constructor(player: Player, dialogs: Dialogs, update: () => void, osd: Osd, raw: (text: string) => void) {
     this.#player = player;
     this.#dialogs = dialogs;
     this.#update = update;
     this.#osd = osd;
+    this.#raw = raw;
   }
 
   get state() {
@@ -68,7 +70,7 @@ export class Playback {
   canToggle() {
     return this.can("pause") || (this.state.phase === "ended" && this.state.can.restart);
   }
-  /** 跳到开头: a seek to 0 while ready, a replay after the end. */
+  /** Jump to Start: a seek to 0 while ready, a replay after the end. */
   canRestart() {
     const { can, phase } = this.state;
     return phase === "ready" ? can.seek : phase === "ended" && can.restart;
@@ -78,17 +80,18 @@ export class Playback {
     return !!this.#scrub && !this.#scrub.active;
   }
   /** One line on the video; headless hosts refuse it, which is not a failure of the action. */
-  notify(text: string) {
-    this.#osd(text);
+  notify(text: OsdText, args?: TemplateArgs) {
+    this.#osd(text, args);
   }
-  /** For failures of any action: shown on the video. */
+  /** For failures of any action: shown on the video (the player's own messages as they are). */
   report(error: unknown) {
-    this.notify(message(error));
+    if (error instanceof Failure) error.show(this.#osd);
+    else this.#raw(errorMessage(error));
     this.#update();
   }
-  /** `00:37 / 01:40` for seek feedback. */
-  positionText(seconds: number) {
-    return `${time(seconds)} / ${time(this.state.duration)}`;
+  /** `["00:37", "01:40"]`: the position and the duration, for seek feedback ("… {} / {}"). */
+  positionArgs(seconds: number): [string, string] {
+    return [time(seconds), time(this.state.duration)];
   }
 
   clearSeek() {
@@ -131,7 +134,10 @@ export class Playback {
   seekBy(delta: number) {
     const target = this.seek((this.seekTarget ?? this.state.position ?? 0) + delta);
     if (target !== null)
-      this.notify(`${delta < 0 ? "后退" : "前进"} ${Math.abs(delta)}秒: ${this.positionText(target)}`);
+      this.notify(delta < 0 ? "Back {} s: {} / {}" : "Forward {} s: {} / {}", [
+        String(Math.abs(delta)),
+        ...this.positionArgs(target),
+      ]);
   }
 
   async open() {
@@ -139,7 +145,7 @@ export class Playback {
     this.selecting = true;
     try {
       const path = await this.#dialogs.openFile({
-        title: this.state.phase === "empty" ? "打开媒体" : "打开媒体（将替换当前来源）",
+        title: this.state.phase === "empty" ? "Open Media" : "Open Media (replaces the current source)",
       });
       if (path) {
         this.clearSeek();
@@ -161,16 +167,16 @@ export class Playback {
         this.restartBusy = false;
       }
     } else if (this.seek(0) === null) return;
-    this.notify("定位: 开始处");
+    this.notify("Jumped to the start");
   }
   async setRate(rate: number, options?: Conditional) {
     if (!this.can("rate") || this.rateBusy) return;
-    if (!Number.isFinite(rate) || rate < MIN_RATE || rate > MAX_RATE) throw new Error("速度范围为0.25–4倍");
+    if (!Number.isFinite(rate) || rate < MIN_RATE || rate > MAX_RATE) throw new Failure("rate-range");
     this.clearSeek();
     this.rateBusy = true;
     try {
       await source(this.#player.setRate(rate, options));
-      this.notify(`播放速度: ${rateText(rate)}x`);
+      this.notify("Speed: {}x", [rateText(rate)]);
     } finally {
       this.rateBusy = false;
     }
@@ -179,7 +185,7 @@ export class Playback {
   setVolume(value: number, announce = false) {
     if (this.muteBusy || !Number.isFinite(value)) return;
     const volume = (this.volumeDraft = Math.max(0, Math.min(100, Math.round(value))));
-    if (announce) this.notify(`音量: ${volume}%`);
+    if (announce) this.notify("Volume: {}%", [volume]);
     const request = ++this.#volumeRequest;
     this.#player.setOutput({ volume, muted: false }).then(
       (applied) => {

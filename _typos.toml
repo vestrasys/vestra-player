@@ -5,6 +5,9 @@ extend-exclude = [
   "src/plugins/*/vendor/",
   "*.lock",
   "package-lock.json",
+  # Translated catalogs: German/French/Spanish words are not English typos.
+  # The `.pot` templates (English msgids) are still checked.
+  "*.po",
 ]
 
 [default]

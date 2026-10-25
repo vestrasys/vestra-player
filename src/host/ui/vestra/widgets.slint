@@ -81,13 +81,17 @@ export component Button {
     min-height: root.icon-only ? root.icon-height : root.small ? Theme.button-small-height : Theme.button-height;
     min-width: root.icon-only ? root.icon-width : root.small ? Theme.button-small-min-width : Theme.button-min-width;
     preferred-height: self.min-height;
+    // A longer (translated) label widens the button instead of overflowing it.
+    preferred-width: root.icon-only ? self.min-width
+        : max(self.min-width, label.preferred-width + 2 * Theme.button-padding);
     accessible-role: button;
     accessible-label: root.text;
     accessible-enabled: root.enabled;
     accessible-checkable: root.icon-only;
     accessible-checked: root.checked;
     accessible-action-default => { if root.enabled { root.clicked(); } }
-    if !root.icon-only: Rectangle {
+    Rectangle {
+        visible: !root.icon-only;
         border-radius: Theme.radius-control;
         background: !root.enabled ? Theme.button-disabled
             : touch.pressed ? Theme.button-press
@@ -96,7 +100,7 @@ export component Button {
             padding-left: Theme.button-padding;
             padding-right: Theme.button-padding;
             alignment: center;
-            Text {
+            label := Text {
                 text: root.text;
                 color: root.enabled ? Theme.text-list : Theme.text-dim;
                 font-size: Theme.font-body;
@@ -183,14 +187,14 @@ export component Slider {
     }
 }
 
-// Link input (UI-DLG-02): a multi-line input and [打开] [取消]. Enter or the
-// confirm button accepts (Shift+Enter starts a new line), Esc or 取消 cancels.
+// Link input (UI-DLG-02): a multi-line input and [Open] [Cancel]. Enter or the
+// confirm button accepts (Shift+Enter starts a new line), Esc or Cancel cancels.
 // No validation here: the plugin checks the address.
 export component UrlInputRow {
     in-out property <string> text;
     in property <string> placeholder;
-    in property <string> confirm-text: "打开";
-    in property <string> cancel-text: "取消";
+    in property <string> confirm-text: @tr("Open");
+    in property <string> cancel-text: @tr("Cancel");
     in property <bool> enabled: true;
     callback accepted(string);
     callback cancelled();

@@ -23,7 +23,9 @@ pub const MAX_COLUMNS: usize = 16;
 pub const MAX_ROWS: usize = 500;
 const MAX_INDENT: i32 = 3;
 const MAX_QUOTE: i32 = 4;
-const TRUNCATED: &str = "…（内容过长，已截断）";
+fn truncated_text() -> String {
+    crate::i18n::tr("… (too long, cut off)")
+}
 /// Slint's interpolation placeholder (U+E541): user text never reaches the
 /// format string, so it cannot inject Markdown into the inline renderer.
 const SLOT: char = '\u{e541}';
@@ -575,7 +577,7 @@ pub fn blocks(text: &str, base: Option<&str>) -> Vec<Block> {
     builder.flush();
     if builder.truncated {
         let mut inline = Inline::default();
-        inline.text(TRUNCATED);
+        inline.text(&truncated_text());
         builder.blocks.push(Block {
             kind: "paragraph",
             inline,
@@ -1163,9 +1165,12 @@ mod tests {
         let long = "段落\n\n".repeat(MAX_BLOCKS + 10);
         let all = blocks(&long, None);
         assert_eq!(all.len(), MAX_BLOCKS);
-        assert_eq!(all.last().unwrap().inline.plain, TRUNCATED);
+        assert_eq!(all.last().unwrap().inline.plain, truncated_text());
         let huge = "x".repeat(MAX_TEXT + 100);
-        assert_eq!(blocks(&huge, None).last().unwrap().inline.plain, TRUNCATED);
+        assert_eq!(
+            blocks(&huge, None).last().unwrap().inline.plain,
+            truncated_text()
+        );
         let images = "![i](https://x/i.png)\n\n".repeat(MAX_IMAGES + 2);
         let all = blocks(&images, None);
         assert!(all[MAX_IMAGES - 1].source.is_some());

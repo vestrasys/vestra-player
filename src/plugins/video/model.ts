@@ -40,7 +40,6 @@ export const clamp = (n: number, min: number, max: number) =>
 export type Toggle = { on: boolean; strength: number };
 export const DENOISE_MODES = ["d3", "gradual", "temporal"] as const;
 export type DenoiseMode = (typeof DENOISE_MODES)[number];
-export const denoiseLabels: Record<DenoiseMode, string> = { d3: "3D 降噪", gradual: "渐进降噪", temporal: "瞬态降噪" };
 export interface Effects {
   sharpen: Toggle;
   edge: Toggle;
@@ -88,24 +87,25 @@ export interface Geometry {
 export const upright = (): Geometry => ({ flipH: false, flipV: false, rotate: 0 });
 
 export const DEINTERLACE_MODES = [
-  { id: "auto", label: "自动" },
-  { id: "on", label: "总是使用" },
-  { id: "off", label: "不使用" },
+  { id: "auto", label: "Auto", osd: "Deinterlace: auto" },
+  { id: "on", label: "Always", osd: "Deinterlace: always" },
+  { id: "off", label: "Never", osd: "Deinterlace: never" },
 ] as const;
 export type DeinterlaceMode = (typeof DEINTERLACE_MODES)[number]["id"];
 export const DEINTERLACE_OUTPUTS = [
-  { id: "frame", label: "按帧" },
-  { id: "field", label: "按场（倍帧率）" },
+  { id: "frame", label: "By Frame", osd: "Deinterlace output: by frame" },
+  { id: "field", label: "By Field (Double Rate)", osd: "Deinterlace output: by field (double rate)" },
 ] as const;
 export type DeinterlaceOutput = (typeof DEINTERLACE_OUTPUTS)[number]["id"];
 export type Deinterlace = { mode: DeinterlaceMode; output: DeinterlaceOutput };
 
+/** `label` is the ratio itself (not translated); `pad` and `crop` are the 裁剪/拉伸 menu titles. */
 export const RATIOS = [
-  { label: "4:3", aspect: 4 / 3 },
-  { label: "16:9", aspect: 16 / 9 },
-  { label: "16:10", aspect: 16 / 10 },
-  { label: "1.85:1", aspect: 1.85 },
-  { label: "2.35:1", aspect: 2.35 },
+  { label: "4:3", aspect: 4 / 3, pad: "Stretch to 4:3", crop: "Crop to 4:3" },
+  { label: "16:9", aspect: 16 / 9, pad: "Stretch to 16:9", crop: "Crop to 16:9" },
+  { label: "16:10", aspect: 16 / 10, pad: "Stretch to 16:10", crop: "Crop to 16:10" },
+  { label: "1.85:1", aspect: 1.85, pad: "Stretch to 1.85:1", crop: "Crop to 1.85:1" },
+  { label: "2.35:1", aspect: 2.35, pad: "Stretch to 2.35:1", crop: "Crop to 2.35:1" },
 ] as const;
 export const REFRAME_MODES = ["none", "pad", "crop"] as const;
 export type ReframeMode = (typeof REFRAME_MODES)[number];
@@ -113,9 +113,11 @@ export type ReframeMode = (typeof REFRAME_MODES)[number];
 export type Reframe = { mode: ReframeMode; ratio: number; x: number; y: number };
 export const POSITION_STEP = 5;
 
-export function reframeLabel(reframe: Reframe) {
-  if (reframe.mode === "none") return "不使用";
-  return `按 ${RATIOS[reframe.ratio]!.label} ${reframe.mode === "pad" ? "拉伸" : "裁剪"}`;
+/** The OSD after a 裁剪/拉伸 change (裁剪/拉伸: 按 16:9 拉伸): a template and its argument, the ratio. */
+export function reframeMessage(reframe: Reframe) {
+  const args = [RATIOS[reframe.ratio]!.label];
+  if (reframe.mode === "none") return { text: "Crop/stretch: none", args } as const;
+  return reframe.mode === "pad" ? ({ text: "Crop/stretch: stretch to {}", args } as const) : ({ text: "Crop/stretch: crop to {}", args } as const);
 }
 
 // ---------------------------------------------------------------- 倍帧 (E18)
@@ -134,10 +136,11 @@ export function blendFps(sourceFps: number | null) {
 
 // ---------------------------------------------------------------- display layer (E11, E13)
 
+/** `label` is the OSD text and the window's choice; the 比例 menu titles `fill` 填满窗口（裁去多余）. */
 export const FITS = [
-  { id: "keep", label: "保持宽高比" },
-  { id: "stretch", label: "不保持宽高比" },
-  { id: "fill", label: "填满窗口" },
+  { id: "keep", label: "Keep Aspect Ratio", menu: "Keep Aspect Ratio" },
+  { id: "stretch", label: "Ignore Aspect Ratio", menu: "Ignore Aspect Ratio" },
+  { id: "fill", label: "Fill Window", menu: "Fill Window (Crop Excess)" },
 ] as const;
 export type Fit = (typeof FITS)[number]["id"];
 /** E11, global: `aspect` null = 按来源; `customAspect` is the last 自定义 text ("" = none). */
@@ -182,11 +185,13 @@ export function aspectIndex(display: Display) {
   const preset = RATIOS.findIndex((r) => Math.abs(r.aspect - display.aspect!) < 1e-3);
   return preset >= 0 ? preset + 1 : RATIOS.length + 1;
 }
-/** OSD wording: 默认, 4:3 …, 自定义 - 21:9. */
-export function aspectLabel(display: Display) {
+/** The OSD after a 宽高比 change (宽高比：默认, 宽高比：4:3 …, 宽高比：自定义 - 21:9): a template and its argument. */
+export function aspectMessage(display: Display) {
   const index = aspectIndex(display);
-  if (index === 0) return "默认";
-  return index <= RATIOS.length ? RATIOS[index - 1]!.label : `自定义 - ${display.customAspect}`;
+  if (index === 0) return { text: "Aspect ratio: Default", args: [] } as const;
+  return index <= RATIOS.length
+    ? ({ text: "Aspect ratio: {}", args: [RATIOS[index - 1]!.label] } as const)
+    : ({ text: "Aspect ratio: Custom - {}", args: [display.customAspect] } as const);
 }
 /** Shift+F6: 默认 → 4:3 → … → 2.35:1 → (自定义, once set) → 默认. */
 export function nextAspect(display: Display): number | null {
@@ -199,15 +204,16 @@ export function nextAspect(display: Display): number | null {
 
 // ---------------------------------------------------------------- GPU render options (E16, E17, E18 运动补偿)
 
+/** `osd` after a change, `sdr` the same on a source known not to be HDR. */
 export const TONE_MAPPINGS = [
-  { id: "auto", label: "自动" },
-  { id: "off", label: "关" },
-  { id: "bt.2390", label: "BT.2390" },
-  { id: "hable", label: "Hable" },
-  { id: "mobius", label: "Mobius" },
-  { id: "reinhard", label: "Reinhard" },
-  { id: "clip", label: "裁剪" },
-] as const satisfies readonly { id: RenderSettings["toneMapping"]; label: string }[];
+  { id: "auto", label: "Auto", osd: "HDR tone mapping: auto", sdr: "HDR tone mapping: auto (not an HDR source)" },
+  { id: "off", label: "Off", osd: "HDR tone mapping: off", sdr: "HDR tone mapping: off (not an HDR source)" },
+  { id: "bt.2390", label: "BT.2390", osd: "HDR tone mapping: BT.2390", sdr: "HDR tone mapping: BT.2390 (not an HDR source)" },
+  { id: "hable", label: "Hable", osd: "HDR tone mapping: Hable", sdr: "HDR tone mapping: Hable (not an HDR source)" },
+  { id: "mobius", label: "Mobius", osd: "HDR tone mapping: Mobius", sdr: "HDR tone mapping: Mobius (not an HDR source)" },
+  { id: "reinhard", label: "Reinhard", osd: "HDR tone mapping: Reinhard", sdr: "HDR tone mapping: Reinhard (not an HDR source)" },
+  { id: "clip", label: "Clip", osd: "HDR tone mapping: clip", sdr: "HDR tone mapping: clip (not an HDR source)" },
+] as const satisfies readonly { id: RenderSettings["toneMapping"]; label: string; osd: string; sdr: string }[];
 export type ToneMapping = (typeof TONE_MAPPINGS)[number]["id"];
 export const PEAK_MIN = 100;
 export const PEAK_MAX = 400;

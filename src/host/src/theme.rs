@@ -224,13 +224,53 @@ impl Host {
         // plugins built for an older SDK may still send a retired palette.
         let theme = known(string(params, "theme")?);
         if theme != self.theme() {
+            let language = self.language_preference();
             self.ui_state.state.appearance = Some(ui_state::Appearance {
                 theme: theme.into(),
+                language,
             });
             let now = self.now_ms();
             self.ui_state.touch(now);
             self.theme_all();
-            self.broadcast("appearance.changed", json!({"theme":theme}));
+            let language = self.language_preference();
+            let language = language.as_deref().unwrap_or(crate::i18n::SYSTEM);
+            self.broadcast(
+                "appearance.changed",
+                json!({"theme":theme,"language":language}),
+            );
+        }
+        Ok(Value::Null)
+    }
+    /// The saved interface language, `None` = follow the system.
+    pub(super) fn language_preference(&self) -> Option<String> {
+        self.ui_state
+            .state
+            .appearance
+            .as_ref()
+            .and_then(|a| a.language.clone())
+    }
+    /// `appearance.setLanguage`: saved for the next start (the language of
+    /// this run never changes); every plugin hears `appearance.changed`.
+    pub(super) fn language_set(&mut self, params: &Value) -> std::result::Result<Value, RpcError> {
+        let value = string(params, "language")?;
+        if !crate::i18n::valid_preference(value) {
+            return Err(RpcError::invalid(format!(
+                "language is \"system\" or one of {}",
+                crate::i18n::LOCALES.join(", ")
+            )));
+        }
+        let language = (value != crate::i18n::SYSTEM).then(|| value.to_owned());
+        if language != self.language_preference() {
+            self.ui_state.state.appearance = Some(ui_state::Appearance {
+                theme: self.theme().into(),
+                language,
+            });
+            let now = self.now_ms();
+            self.ui_state.touch(now);
+            self.broadcast(
+                "appearance.changed",
+                json!({"theme":self.theme(),"language":value}),
+            );
         }
         Ok(Value::Null)
     }

@@ -1,81 +1,28 @@
-import type { PackageChange, PackageSource, PluginInfo } from "@vestra-player/sdk";
+import type { PluginInfo } from "@vestra-player/sdk";
 
-/** What each capability lets a plugin do (J07 detail area). */
-export const CAPABILITIES: Record<string, string> = {
-  commands: "菜单命令与快捷键",
-  "ui.window": "打开工具窗口",
-  "ui.mount": "底栏与侧栏面板",
-  "ui.dialog": "系统对话框",
-  "ui.osd": "屏幕提示",
-  "playback.read": "读取播放状态",
-  events: "接收实时状态",
-  "playback.control": "控制播放",
-  "producer.av": "生成音视频流",
-  "processing.video": "处理画面",
-  "processing.audio": "处理声音",
-  "subtitles.read": "读取字幕",
-  "subtitles.control": "控制字幕",
-  "media.read": "读取画面（截图）",
-  "media.control": "截图与导出",
-  "source.resolve": "解析网络地址",
-  "plugins.manage": "管理插件",
-  clipboard: "剪贴板",
-  "window.control": "控制主窗口",
-  "bindings.manage": "修改快捷键",
-};
+/**
+ * The page's words live in ui/plugins.slint (`@tr`); TypeScript hands it
+ * codes and data. These helpers pick the codes.
+ */
 
-export const ORIGIN: Partial<Record<PluginInfo["origin"], string>> = {
-  installed: "已安装",
-  development: "开发加载",
-};
+/**
+ * The list's narrow source column, as a code the page turns into a word:
+ * a `PackageSource` kind (`repository`, `link`, `file`, `workshop`,
+ * `bundled`; `bundled` for every built-in plugin), else the origin
+ * (`installed` from an older player without sources, `development`).
+ */
+export function sourceCode(info: Pick<PluginInfo, "origin" | "builtin" | "source">): string {
+  if (info.builtin) return "bundled";
+  return info.source?.kind ?? info.origin;
+}
 
-/** Where an installed plugin came from (detail 「来源」). */
-export const SOURCE: Record<PackageSource["kind"], string> = {
-  repository: "仓库",
-  link: "链接",
-  file: "本地文件",
-  workshop: "插件工坊",
-  bundled: "内置",
-};
-
-/** 「仓库（https://…/index.json）」; development loads by their origin. */
-export function sourceText(info: PluginInfo): string {
+/** The address shown after a repository or link source (detail 「Source」); "" otherwise. */
+export function sourceUrl(info: Pick<PluginInfo, "source">): string {
   const source = info.source;
-  if (!source) return ORIGIN[info.origin] ?? info.origin;
-  const kind = SOURCE[source.kind] ?? source.kind;
-  return "url" in source ? `${kind}（${source.url}）` : kind;
+  return source && "url" in source ? source.url : "";
 }
 
-/** The list's narrow 「来源」 column: the same words without the address; 内置 for built-ins. */
-export function sourceShort(info: Pick<PluginInfo, "origin" | "builtin" | "source">): string {
-  if (info.builtin) return SOURCE.bundled;
-  if (info.source) return SOURCE[info.source.kind] ?? info.source.kind;
-  return ORIGIN[info.origin] ?? info.origin;
-}
-
-/** The hint on 「卸载…」 for built-in plugins. */
-export const BUILTIN_TIP = "内置插件只能停用";
-
-export const STATE: Record<PluginInfo["state"], string> = {
-  running: "运行中",
-  starting: "启动中",
-  disabled: "已停用",
-  failed: "启动失败",
-  stopped: "已停止",
-};
-
-export const CHANGE: Record<PackageChange["status"], string> = {
-  preparing: "准备中",
-  activating: "激活中",
-  restoring: "恢复中",
-  committed: "已完成",
-  cancelled: "已取消",
-  failed: "失败",
-  failedDegraded: "失败（已恢复原版本）",
-  tooLate: "已无法取消",
-};
-
-/** `12 KB`, `3.4 MB`; `—` when unknown. */
+/** `12 KB`, `3.4 MB`; `—` when unknown. Units are symbols, not translated. */
 export function bytes(size: number | null): string {
   if (size === null) return "—";
   if (size < 1024) return `${size} B`;
@@ -89,16 +36,19 @@ export function bytes(size: number | null): string {
   return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
 }
 
-/** User-facing text for a refused package call. */
-export function failureText(error: unknown, info?: PluginInfo): string {
+/**
+ * A refused package call, as the code the page words (`self`,
+ * `development`, `builtin`, `missing`, `busy`) or `error` with the
+ * player's own message.
+ */
+export function failure(error: unknown, info?: PluginInfo): { code: string; text: string } {
   const code = (error as { code?: string }).code;
-  if (code === "invalid") return "插件管理不能停用或卸载自身";
+  if (code === "invalid") return { code: "self", text: "" };
   if (code === "unsupported") {
-    if (info?.origin === "development") return "开发加载的插件不能卸载或回退";
+    if (info?.origin === "development") return { code: "development", text: "" };
     // An installed plugin refused: built in (the list may not have said so yet).
-    return BUILTIN_TIP;
+    return { code: "builtin", text: "" };
   }
-  if (code === "missing") return "该插件已不存在";
-  if (code === "busy") return "正在安装或回退，请稍后再试";
-  return (error as Error).message || String(error);
+  if (code === "missing" || code === "busy") return { code, text: "" };
+  return { code: "error", text: (error as Error).message || String(error) };
 }

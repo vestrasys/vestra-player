@@ -6,6 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
+import { shownStatus } from "./status.ts";
 
 const directory = new URL("..", import.meta.url);
 /**
@@ -39,8 +40,9 @@ function dualHost() {
 }
 const items = (host: TestHost, path: string) =>
   [...host.commands.entries()]
-    .filter(([, { declaration: d }]) => d.path.slice(0, -1).join(" > ") === path)
-    .map(([id, { declaration: d, state }]) => [id, d.path.at(-1), d.order, d.group, d.radio, state.enabled, state.checked, state.reason] as const);
+    .filter(([, { display }]) => display.path.slice(0, -1).join(" > ") === path)
+    .map(([id, { declaration: d, display, state }]) =>
+      [id, display.path.at(-1), d.order, d.group, d.radio, state.enabled, state.checked, state.reason && host.translate(state.reason)] as const);
 const secondary = (host: TestHost) => host.subtitles.selection.secondary ?? null;
 const styleSent = (host: TestHost) => host.sent("subtitles.style").map((p) => (p.style as Record<string, unknown> | null)?.secondaryPosition);
 async function srt(name: string, body: string) {
@@ -50,9 +52,9 @@ async function srt(name: string, body: string) {
   return { path, cleanup: () => rm(folder, { recursive: true, force: true }) };
 }
 
-test("A08: 次字幕 ▶ lists the tracks; the primary and bitmap tracks are disabled with the reason", async () => {
+test("A08: 次字幕 ▸ lists the tracks; the primary and bitmap tracks are disabled with the reason", async () => {
   const host = dualHost();
-  const { stop } = await startPlugin(activate, { directory, host });
+  const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
   await host.settle();
   assert.deepEqual(items(host, "字幕 > 次字幕"), [
     ["second-off", "不显示", 312, "subtitle-second", true, true, true, null],
@@ -97,11 +99,11 @@ test("A08: 次字幕 ▶ lists the tracks; the primary and bitmap tracks are dis
 
 test("A08: choosing the secondary as the primary turns the secondary off; 依次切换 skips it", async () => {
   const host = dualHost();
-  const { stop } = await startPlugin(activate, { directory, host });
+  const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
   await host.settle();
   await host.command("second-2").run();
   await host.settle();
-  await host.command("track-2").run(); // 选择字幕轨 ▶ English
+  await host.command("track-2").run(); // 选择字幕轨 ▸ English
   await host.settle();
   assert.deepEqual(host.subtitles.selection.target, EN);
   assert.equal(secondary(host), null);
@@ -131,15 +133,15 @@ test("A08: choosing the secondary as the primary turns the secondary off; 依次
 test("A08: 添加次字幕… loads a file as the secondary and leaves the primary; it needs media", async () => {
   const file = await srt("english.srt", "1\n00:00:01,000 --> 00:00:02,000\nHello\n");
   const empty = new TestHost();
-  let started = await startPlugin(activate, { directory, host: empty });
+  let started = await startPlugin(activate, { directory, host: empty, locale: "zh-Hans" });
   assert.equal(empty.command("load-secondary").state.enabled, false);
-  assert.equal(empty.command("load-secondary").state.reason, "没有可播放的媒体");
+  assert.equal(empty.translate(empty.command("load-secondary").state.reason!), "没有可播放的媒体");
   assert.deepEqual(items(empty, "字幕 > 次字幕").map((i) => i[1]), ["不显示"], "no text track: only 不显示");
   await started.stop();
   const host = dualHost();
-  started = await startPlugin(activate, { directory, host });
+  started = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
   try {
-    assert.deepEqual(host.command("load-secondary").declaration.path, ["打开", "添加次字幕…"]);
+    assert.deepEqual(host.command("load-secondary").display.path, ["打开", "添加次字幕…"]);
     assert.equal(host.command("load-secondary").declaration.order, 114);
     host.dialogAnswers.push([file.path]);
     await withOsd(host, () => host.command("load-secondary").run());
@@ -154,11 +156,11 @@ test("A08: 添加次字幕… loads a file as the secondary and leaves the prima
   }
 });
 
-test("A08: 位置 ▶ 主字幕上方 is applied as a style field, saved, and re-applied for a later secondary", async () => {
+test("A08: 位置 ▸ 主字幕上方 is applied as a style field, saved, and re-applied for a later secondary", async () => {
   const data = await mkdtemp(join(tmpdir(), "vestra-subtitles-data-"));
   try {
     let host = dualHost();
-    let started = await startPlugin(activate, { directory, host, dataDirectory: data });
+    let started = await startPlugin(activate, { directory, host, dataDirectory: data, locale: "zh-Hans" });
     await host.command("second-position-aboveMain").run();
     await host.settle(170);
     assert.equal(host.osd.at(-1), "次字幕位置：主字幕上方");
@@ -176,7 +178,7 @@ test("A08: 位置 ▶ 主字幕上方 is applied as a style field, saved, and re
     // Next start: nothing is sent until a secondary is shown, then the position once.
     await rm(join(data, "style.json"), { force: true });
     host = dualHost();
-    started = await startPlugin(activate, { directory, host, dataDirectory: data });
+    started = await startPlugin(activate, { directory, host, dataDirectory: data, locale: "zh-Hans" });
     await host.settle(170);
     assert.deepEqual(styleSent(host), []);
     await host.command("second-2").run();
@@ -195,7 +197,7 @@ test("A08: 位置 ▶ 主字幕上方 is applied as a style field, saved, and re
 
 test("A08: the 字幕微调 次字幕 row selects, refuses the primary with a reason, and turns off", async () => {
   const host = dualHost();
-  const { stop } = await startPlugin(activate, { directory, host });
+  const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
   await host.command("tune").run();
   const window = host.window("subtitle-tune");
   assert.deepEqual(window.props["secondary-labels"], ["关闭次字幕", "中文 · zh", "English · en", "PGS"]);
@@ -204,13 +206,13 @@ test("A08: the 字幕微调 次字幕 row selects, refuses the primary with a re
   await host.settle();
   assert.deepEqual(secondary(host), EN);
   assert.equal(window.props["selected-secondary"], 2);
-  assert.equal(window.props["status-text"], "次字幕：English · en");
+  assert.equal(shownStatus(window.props), "次字幕：English · en");
   window.emit("select-secondary", 1);
   await host.settle();
-  assert.equal(window.props["status-text"], "无法设为次字幕：已作为主字幕");
+  assert.equal(shownStatus(window.props), "无法设为次字幕：已作为主字幕");
   window.emit("select-secondary", 3);
   await host.settle();
-  assert.equal(window.props["status-text"], "无法设为次字幕：次字幕仅支持文本字幕");
+  assert.equal(shownStatus(window.props), "无法设为次字幕：次字幕仅支持文本字幕");
   assert.deepEqual(secondary(host), EN, "refusals change nothing");
   window.emit("select-secondary", 0);
   await host.settle();
@@ -223,7 +225,7 @@ test("A08: an automatic reload of the secondary keeps it the secondary and the p
   const data = await mkdtemp(join(tmpdir(), "vestra-subtitles-data-"));
   const file = await srt("english.srt", "1\n00:00:01,000 --> 00:00:02,000\nHello\n");
   const host = dualHost();
-  const { stop } = await startPlugin(activate, { directory, host, dataDirectory: data });
+  const { stop } = await startPlugin(activate, { directory, host, dataDirectory: data, locale: "zh-Hans" });
   try {
     await host.command("settings").run();
     host.window("subtitle-settings").emit("change-auto-reload", true);

@@ -4,26 +4,29 @@ import path from "node:path";
 import { AgentWorker } from "./agent.ts";
 import { Delivering } from "./delivery.ts";
 import { systemPrompt } from "./prompt.ts";
-import { Toolchain, checkOwner, type Project, type SessionPaths } from "./toolchain.ts";
+import { OwnerError, Toolchain, checkOwner, type Project, type SessionPaths } from "./toolchain.ts";
 import { BUILD_TOOLS, DELIVERY_TOOLS, runTool } from "./toolhost.ts";
 import { Chat } from "./chat.ts";
 import { MessageDocs, cut } from "./messages.ts";
 import {
+  BaseUrlError,
   DEFAULT_SETTINGS,
   LEGACY_COMPAT,
+  NoModelsError,
   checkBaseUrl,
   customList,
   goneName,
-  goneNotice,
   listModels,
   loadProviders,
   masked,
   migrate,
   pickListed,
+  say as text,
   secretName,
   validSettings,
   type AiSettings,
   type Provider,
+  type Say,
 } from "./providers.ts";
 import { Sessions, group, titleFrom, type Meta } from "./sessions.ts";
 
@@ -73,15 +76,15 @@ export default async function activate(plugin: Plugin) {
    */
   const keys = new Map<string, string>();
   const reading = new Map<string, Promise<string>>();
-  /** The keychain read failed or was denied (cleared by the next attempt or a save). */
-  let keyError = "";
+  /** The keychain read failed or was denied (cleared by the next attempt or a save): the banner's text. */
+  let keyError: Say | null = null;
   const runs = new Map<string, Run>(); // session id → its worker
   const chats = new Map<string, Chat>(); // session id → rows (loaded once)
 
   let metas: Meta[] = await sessions.list();
   let active: Meta | null = metas.find((m) => m.id === settings.value.lastSession) ?? null;
   let draft = "";
-  let pageMessage = "";
+  let pageMessage: Say = text();
   let pageWarn = false;
   let keyText = "";
   /** Models a custom endpoint listed (this run only; the chosen one is saved). */
@@ -126,7 +129,6 @@ export default async function activate(plugin: Plugin) {
     else delete savedKeys[id];
     settings.save({ ...settings.value, savedKeys });
   };
-  const KEY_UNREADABLE = "无法读取钥匙串中的 key，请在设置中重新保存。";
   /** The key of `id`, read once; concurrent callers share the read. */
   const keyFor = (id: string): Promise<string> => {
     if (keys.has(id)) return Promise.resolve(keys.get(id)!);
@@ -141,13 +143,13 @@ export default async function activate(plugin: Plugin) {
             if (!settings.value.savedKeys?.[id]) markSaved(id, true);
           } else if (settings.value.savedKeys?.[id]) {
             // Saved before, gone now (removed outside the player).
-            throw new Error("钥匙串里没有这个 key");
+            throw Object.assign(new Error("The key is not in the keychain"), { missing: true });
           }
           keys.set(id, key);
-          keyError = "";
+          keyError = null;
           return key;
         } catch (error) {
-          keyError = `${KEY_UNREADABLE}（${(error as Error).message}）`;
+          keyError = (error as { missing?: boolean }).missing ? text("key-missing") : text("key-unreadable", [(error as Error).message]);
           throw error;
         } finally {
           reading.delete(id);
@@ -175,14 +177,14 @@ export default async function activate(plugin: Plugin) {
     return !!keys.get(p.id);
   };
   const running = () => [...runs.values()].find((r) => r.running);
-  /** The line above the conversation: keychain state or missing setup. */
-  const banner = () => {
+  /** The line above the conversation: keychain state or missing setup (ai.slint has the words). */
+  const banner = (): Say => {
     const p = provider();
-    if (gone()) return goneNotice(p.id);
-    if (reading.has(p.id)) return "正在读取钥匙串中的 API key…（系统可能会请求授权）";
+    if (gone()) return text("gone", [goneName(p.id)]);
+    if (reading.has(p.id)) return text("reading");
     if (keyError) return keyError;
-    if (!configured()) return !keys.has(p.id) ? "尚未读取 API key。" : "尚未配置服务商：请先在设置中选择服务商并保存 API key。";
-    return "";
+    if (!configured()) return !keys.has(p.id) ? text("not-read") : text("not-configured");
+    return text();
   };
 
   /** Throttled window refresh for events that arrive outside SDK handlers. */
@@ -204,7 +206,7 @@ export default async function activate(plugin: Plugin) {
       chat = Chat.fromJsonl(await sessions.transcript(meta));
       if (meta.running) {
         // The plugin stopped during a run: the unfinished reply is lost.
-        chat.notice("上次的生成被中断（播放器或插件已退出）");
+        chat.notice("interrupted");
         meta.running = false;
         await sessions.save(meta);
       }
@@ -217,6 +219,7 @@ export default async function activate(plugin: Plugin) {
   await docs.sync(shown.rows);
 
   const sessionRows = () => {
+    // A heading's title is its group, "today" or "earlier" (ai.slint names it).
     const rows: { id: string; title: string; header: boolean; active: boolean; running: boolean }[] = [];
     let heading = "";
     for (const meta of metas) {
@@ -245,10 +248,7 @@ export default async function activate(plugin: Plugin) {
       plugin.update();
     })().catch((error) => console.error(`projects: ${error}`));
   };
-  const cardSay = (text: string) => {
-    delivering.status = text;
-    plugin.update();
-  };
+  const cardSay = (code: string, args: string[] = []) => delivering.say(code, args);
   /** A card action: failures show on the card's line. */
   const action = (work: (meta: Meta, p: Project) => Promise<unknown>) => async () => {
     const p = project();
@@ -256,7 +256,7 @@ export default async function activate(plugin: Plugin) {
     try {
       await work(active, p);
     } catch (error) {
-      cardSay(`出错了：${(error as Error).message}`);
+      cardSay("error", [(error as Error).message]);
     } finally {
       refreshProjects();
     }
@@ -273,6 +273,7 @@ export default async function activate(plugin: Plugin) {
       projectIndex: Math.max(0, projects.findIndex((x) => x.id === chosen)),
       projectTitle: p ? `${p.name} · ${p.id} ${p.version}` : "",
       cardStatus: delivering.status,
+      cardKeys: delivering.shadowedKeys,
       cardBusy: delivering.busy || exporting,
       canRollback: !!p && delivering.installed.has(p.id),
       sessions: sessionRows(),
@@ -281,8 +282,12 @@ export default async function activate(plugin: Plugin) {
       banner: banner(),
       busy,
       blocked: !busy && !!running(),
-      sessionTitle: active?.title ?? "新对话",
-      modelText: configured() ? `${provider().label} · ${model()}` : "",
+      // "": a new conversation (the window says so).
+      sessionTitle: active?.title ?? "",
+      // The provider by id (the window names the custom ones) and its label, the model.
+      providerId: provider().id,
+      providerName: provider().label,
+      modelText: configured() ? model() : "",
       hasFolder: !!active,
       canRetry: !busy && !running() && last?.kind === "error" && !!shown.lastPrompt,
       draft,
@@ -299,7 +304,7 @@ export default async function activate(plugin: Plugin) {
     run.watchdog = setTimeout(() => {
       if (run.tools > 0) return feed(run); // a tool runs (with its own time limit) or waits for the user
       run.chat.apply({ kind: "settled", aborted: true });
-      run.chat.error("timeout", `超过 ${QUIET_TIMEOUT_MS / 1000} 秒没有收到服务商的回复，已停止。`);
+      run.chat.error("timeout", "timeout", [QUIET_TIMEOUT_MS / 1000]);
       run.worker.abort();
       finish(run);
     }, QUIET_TIMEOUT_MS);
@@ -334,7 +339,14 @@ export default async function activate(plugin: Plugin) {
           baseUrl: p.api ? settings.value.baseUrls[p.id] : null,
           api: p.api,
           key,
-          systemPrompt: systemPrompt({ sdk: toolchain.sdk, index: toolchain.docsIndex(), sdkVersion: toolchain.sdkVersion, owner: owner(), delivery: true }),
+          systemPrompt: systemPrompt({
+            sdk: toolchain.sdk,
+            index: toolchain.docsIndex(),
+            sdkVersion: toolchain.sdkVersion,
+            owner: owner(),
+            delivery: true,
+            locale: plugin.i18n.locale,
+          }),
           docsRoots: toolchain.docsRoots(),
           pluginTools: [...BUILD_TOOLS, ...DELIVERY_TOOLS],
         },
@@ -375,7 +387,7 @@ export default async function activate(plugin: Plugin) {
             if (runs.get(meta.id) === run) runs.delete(meta.id);
             if (run.running) {
               run.chat.endTurn();
-              run.chat.error(run.worker.lastError() || `exit ${code}`, "agent 进程意外退出。");
+              run.chat.error(run.worker.lastError() || `exit ${code}`, "exited");
               finish(run);
             }
             later();
@@ -399,8 +411,9 @@ export default async function activate(plugin: Plugin) {
   const send = async (text: string) => {
     const message = text.trim();
     if (!message) return;
-    if (!configured()) throw Error("请先在设置中配置服务商和 API key");
-    if (running()) throw Error("另一会话正在生成，请稍候");
+    // The window offers no Send then; a call anyway fails (developer messages).
+    if (!configured()) throw Error("Set up a provider and its API key in the settings first");
+    if (running()) throw Error("Another conversation is generating; wait a moment");
     if (!active) {
       active = await sessions.create(titleFrom(message));
       chats.set(active.id, shown);
@@ -431,7 +444,7 @@ export default async function activate(plugin: Plugin) {
     releaseIdle(meta?.id);
     projects = [];
     chosen = null;
-    delivering.status = "";
+    delivering.say("");
     refreshProjects();
     settings.save({ ...settings.value, lastSession: meta?.id ?? null });
   };
@@ -450,9 +463,9 @@ export default async function activate(plugin: Plugin) {
   window.on("toggle", (id: string) => shown.toggle(id));
   window.on("copy", (id: string) => {
     const row = shown.rows.find((r) => r.id === id);
-    if (row) return plugin.clipboard.writeText(cut(row.text, 1000 * 1000, ""));
+    if (row) return plugin.clipboard.writeText(cut(row.text, 1000 * 1000));
   });
-  window.on("copyCode", (code: string) => plugin.clipboard.writeText(cut(code, 1000 * 1000, "")));
+  window.on("copyCode", (code: string) => plugin.clipboard.writeText(cut(code, 1000 * 1000)));
   window.on("openLink", (url: string) => {
     // Only web links; the player refuses other schemes too.
     if (/^https?:\/\//i.test(url)) return plugin.system.openUrl(url);
@@ -461,7 +474,7 @@ export default async function activate(plugin: Plugin) {
   window.on("openFolder", () => active && plugin.system.openPath(sessions.work(active.id)));
   window.on("chooseProject", (index: number) => {
     chosen = projects[index]?.id ?? chosen;
-    delivering.status = "";
+    delivering.say("");
   });
   window.on("install", action((meta, p) => delivering.install(pathsOf(meta.id), p.id, false)));
   window.on("rollback", action((_meta, p) => delivering.rollback(p.id)));
@@ -470,13 +483,13 @@ export default async function activate(plugin: Plugin) {
     action(async (meta, p) => {
       exporting = true;
       try {
-        cardSay(`正在打包 ${p.id}…`);
+        cardSay("packing", [p.id]);
         const packed = await toolchain.pack(pathsOf(meta.id), p.id, owner());
-        if (!packed.ok || !packed.file) return cardSay(packed.text.split("\n")[0]);
-        const target = await plugin.dialogs.saveFile({ title: "导出插件包", fileName: path.basename(packed.file) });
+        if (!packed.ok || !packed.file) return cardSay(packed.say?.code ?? "failed", packed.say?.args ?? [packed.text.split("\n")[0]]);
+        const target = await plugin.dialogs.saveFile({ title: "Export Plugin Package", fileName: path.basename(packed.file) });
         if (!target) return cardSay("");
         await fs.copyFile(packed.file, target);
-        cardSay(`已导出 ${path.basename(target)}`);
+        cardSay("exported", [path.basename(target)]);
       } finally {
         exporting = false;
       }
@@ -487,11 +500,12 @@ export default async function activate(plugin: Plugin) {
     action(async (meta, p) => {
       exporting = true;
       try {
-        const { data, fileName, notes } = await toolchain.exportSource(pathsOf(meta.id), p.id);
-        const target = await plugin.dialogs.saveFile({ title: "导出源码（可以直接作为 GitHub 仓库）", fileName });
+        const { data, fileName, local } = await toolchain.exportSource(pathsOf(meta.id), p.id);
+        const target = await plugin.dialogs.saveFile({ title: "Export Source (Ready to Use as a GitHub Repository)", fileName });
         if (!target) return cardSay("");
         await fs.writeFile(target, data);
-        cardSay(`已导出 ${path.basename(target)}。${notes.join("；")}。`);
+        // What to change before publishing: the LICENSE placeholder, and a local. id.
+        cardSay(local ? "exported-source-local" : "exported-source", [path.basename(target)]);
       } finally {
         exporting = false;
       }
@@ -500,7 +514,14 @@ export default async function activate(plugin: Plugin) {
   window.on("openProject", action((_meta, p) => plugin.system.openPath(p.directory)));
   window.on("openPi", () => plugin.system.openUrl(PI_URL));
 
-  // ---- settings page (Options ▸ 插件 ▸ Vestra Player AI)
+  // ---- settings page (Options ▸ Plugins ▸ Vestra Player AI)
+  /** A provider list entry: pi's providers by their own name (data), the custom endpoints in words. */
+  const entry = (x: Provider) =>
+    x.id === "custom-openai"
+      ? plugin.i18n.text("Custom · OpenAI format")
+      : x.id === "custom-anthropic"
+        ? plugin.i18n.text("Custom · Anthropic format")
+        : x.label;
   const page = plugin.settings.page("settings.slint", { id: "byok", category: "plugins", title: "Vestra Player AI" });
   page.bind(() => {
     const p = provider();
@@ -509,29 +530,30 @@ export default async function activate(plugin: Plugin) {
     return {
       // A provider no longer offered shows as the first entry, so the list
       // does not pretend another one is selected.
-      providers: [...(gone() ? [`${goneName(p.id)}（已不再提供）`] : []), ...providers.map((x) => x.label)],
+      providers: [...(gone() ? [plugin.i18n.text("{} (no longer offered)", [goneName(p.id)])] : []), ...providers.map(entry)],
       providerIndex: gone() ? 0 : providers.indexOf(p),
       custom: !!p.api,
       canList: !gone() && (!!p.api || !!p.list),
       baseUrl: settings.value.baseUrls[p.id] ?? "",
       keyText,
       keyState: gone()
-        ? "旧服务商的 key 不会自动删除"
+        ? text("gone-key")
         : reading.has(p.id)
-        ? "正在读取钥匙串…"
-        : !keys.has(p.id)
-          ? keyError
-            ? "无法读取钥匙串中的 key，请重新保存"
-            : "尚未读取（打开 AI 窗口时读取）"
-          : p.api && !key
-            ? "未保存（本地服务可以不填）"
-            : masked(key),
+          ? text("reading")
+          : !keys.has(p.id)
+            ? keyError
+              ? text("unreadable")
+              : text("not-read")
+            : p.api && !key
+              ? text("local-empty")
+              : masked(key),
       hasKey: !!key,
       models,
       modelIndex: models.indexOf(model()),
       modelText: model(),
       listing,
-      gone: gone() ? goneNotice(p.id) : "",
+      // The name of a saved provider no longer offered ("" otherwise).
+      gone: gone() ? goneName(p.id) : "",
       message: pageMessage,
       messageWarn: pageWarn,
       ownerText: settings.value.owner ?? "",
@@ -539,14 +561,12 @@ export default async function activate(plugin: Plugin) {
     };
   });
   /** What the owner field means now. */
-  const ownerHint = () => {
+  const ownerHint = (): Say => {
     try {
       const name = checkOwner(settings.value.owner ?? "");
-      return name
-        ? `新插件的 id 是 ${name}.<名字>（官方插件仓库要求 id 前缀就是源码仓库所属的 GitHub 用户或组织）。`
-        : "没有填写：新插件的 id 用 local.<名字>，只适合在本机使用；要发布到官方插件仓库，请填你的 GitHub 用户名。";
+      return name ? text("owner", [name]) : text("owner-none");
     } catch (error) {
-      return `${(error as Error).message}（新插件暂时用 local.<名字>）`;
+      return text(error instanceof OwnerError ? error.code : "owner-chars");
     }
   };
   page.on("setOwner", (text: string) => {
@@ -554,8 +574,9 @@ export default async function activate(plugin: Plugin) {
     settings.save({ ...settings.value, owner: text.trim() });
     changed(); // the next message gets a system prompt with the new owner
   });
-  const say = (text: string, warn = false) => {
-    pageMessage = text;
+  /** The page's message line: a template key of settings.slint and its arguments. */
+  const say = (code: string, args: (string | number)[] = [], warn = false, n = 0) => {
+    pageMessage = text(code, args, n);
     pageWarn = warn;
   };
   /** A change of service, key or model applies to the next message. */
@@ -573,7 +594,7 @@ export default async function activate(plugin: Plugin) {
     const models = settings.value.models[p.id] ? settings.value.models : { ...settings.value.models, [p.id]: p.defaultModel };
     settings.save({ ...settings.value, provider: p.id, models });
     keyText = "";
-    keyError = "";
+    keyError = null;
     say("");
     changed();
     syncIndexes();
@@ -586,22 +607,22 @@ export default async function activate(plugin: Plugin) {
     const key = text.trim();
     if (!key) return;
     if (gone()) {
-      say("请先选择一个服务商，再保存 key。", true);
+      say("need-provider", [], true);
       return;
     }
     const p = provider();
     try {
       await plugin.secrets.set(secretName(p.id), key);
     } catch (error) {
-      say(`没能保存到钥匙串：${(error as Error).message}`, true);
+      say("save-failed", [(error as Error).message], true);
       return;
     }
     keys.set(p.id, key);
     markSaved(p.id, true);
-    keyError = "";
+    keyError = null;
     keyText = "";
     page.set({ keyText: "" });
-    say(`${p.label} 的 key 已保存。`);
+    say("key-saved", [p.id, p.label]);
     changed();
     if ((p.api && settings.value.baseUrls[p.id]) || p.list) await fetchModels(false);
   });
@@ -612,24 +633,24 @@ export default async function activate(plugin: Plugin) {
     try {
       await plugin.secrets.delete(secretName(id));
     } catch (error) {
-      say(`没能从钥匙串删除：${(error as Error).message}`, true);
+      say("delete-failed", [(error as Error).message], true);
       return;
     }
     markSaved(id, false);
-    say("旧服务商的 key 已删除。");
+    say("old-key-deleted");
   });
   page.on("deleteKey", async () => {
     const p = provider();
     try {
       await plugin.secrets.delete(secretName(p.id));
     } catch (error) {
-      say(`没能从钥匙串删除：${(error as Error).message}`, true);
+      say("delete-failed", [(error as Error).message], true);
       return;
     }
     keys.set(p.id, "");
     markSaved(p.id, false);
-    keyError = "";
-    say(`${p.label} 的 key 已删除。`);
+    keyError = null;
+    say("key-deleted", [p.id, p.label]);
     changed();
   });
   /** Saves a custom Base URL; `loud`: say why an invalid one is not saved. */
@@ -640,7 +661,7 @@ export default async function activate(plugin: Plugin) {
     try {
       url = text.trim() ? checkBaseUrl(text) : "";
     } catch (error) {
-      if (loud) say((error as Error).message, true);
+      if (loud) say(error instanceof BaseUrlError ? error.code : "url-invalid", [], true);
       return false;
     }
     // The Anthropic SDK adds /v1/messages itself.
@@ -665,7 +686,7 @@ export default async function activate(plugin: Plugin) {
     const base = settings.value.baseUrls[p.id];
     const spec = p.api ? (base ? customList(p, base) : undefined) : p.list;
     if (!spec) {
-      if (loud) say(p.api ? "请先填写 Base URL。" : "这个服务商不提供模型列表。", true);
+      if (loud) say(p.api ? "need-url" : "no-list", [], true);
       return;
     }
     listing = true;
@@ -677,12 +698,15 @@ export default async function activate(plugin: Plugin) {
       const before = model();
       const chosen = pickListed(p, before, models);
       settings.save({ ...settings.value, models: { ...settings.value.models, [p.id]: chosen } });
-      say(chosen === before ? `获取到 ${models.length} 个模型。` : `获取到 ${models.length} 个模型。「${before}」不在列表中，已改用「${chosen}」。`);
+      if (chosen === before) say("fetched", [], false, models.length);
+      else say("fetched-replaced", [before, chosen], false, models.length);
       changed();
     } catch (error) {
       listed.delete(p.id);
-      if (loud || p.api)
-        say(p.api ? `没能获取模型列表（${(error as Error).message}），请直接填写模型 ID。` : `没能获取模型列表（${(error as Error).message}），可以从 pi 自带的列表中选择。`, true);
+      if (loud || p.api) {
+        if (error instanceof NoModelsError) say(p.api ? "fetch-empty-custom" : "fetch-empty", [], true);
+        else say(p.api ? "fetch-failed-custom" : "fetch-failed", [(error as Error).message], true);
+      }
     } finally {
       listing = false;
       syncIndexes();

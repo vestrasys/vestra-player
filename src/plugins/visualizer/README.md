@@ -1,20 +1,24 @@
-# 专辑封面与空闲画面
+# Album Cover and Idle Screen
 
-视频区没有画面时显示的内容。
+What the video area shows when there is no picture.
 
-## 功能
+## Features
 
-- **专辑封面**：播放没有画面的音频时，显示封面（取自音频文件内嵌的图片或同文件夹的 cover、folder、front 图片）和标题、艺术家、专辑。
-- **空闲徽标**：没有打开媒体时显示徽标，可换成自己的 PNG 或 JPEG 图片。
-- **加载画面**：打开媒体期间显示正在打开的文件名。
+- **Album cover**: while audio without a picture plays, shows the cover (the picture embedded in the audio file, or a cover, folder or front image in the same folder) with title, artist and album.
+- **Idle logo**: with no media open, shows a logo, which can be replaced with your own PNG or JPEG image.
+- **Loading screen**: while media opens, shows the name of the file being opened.
 
-## 入口
+## Entries
 
-- 右键菜单「声音 ▶ 纯音频时显示专辑封面」。
-- 右键菜单「设置 ▶ 外观 ▶ 空闲时显示徽标 / 选择徽标图片… / 恢复默认徽标」。
-- 选项窗口「外观 ▶ 徽标与专辑封面」：上面的开关、徽标预览和清除封面缓存。
+- Context menu Audio ▸ Show Album Cover for Audio Only.
+- Context menu Settings ▸ Appearance ▸ Show Logo When Idle / Choose Logo Image… / Restore Default Logo.
+- Options window Appearance ▸ Logo and Album Cover: the switches above, a logo preview and clearing the cover cache.
 
-## 限制
+## Languages
 
-- 带封面的音频文件由播放器直接把封面作为画面显示，此时看不到本插件的标签文字。
-- 网络来源只显示占位图和地址。
+English source text; Simplified Chinese in `locales/zh-Hans.po`.
+
+## Limits
+
+- For audio files with a cover picture the player shows the cover itself as the video, so this plugin's tag text is not visible.
+- Network sources show only the placeholder and the address.

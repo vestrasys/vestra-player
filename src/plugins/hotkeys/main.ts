@@ -4,20 +4,23 @@ import { KeysPage } from "./keys-page.ts";
 import { BindingsModel } from "./model.ts";
 import { MousePage } from "./mouse-page.ts";
 
-/** 设置 ▶ (orders 832–834, group settings-input; no default bindings of its own). */
-export const SETTINGS = "设置";
+/** Settings ▸ (orders 832–834, group settings-input; no default bindings of its own). */
+export const SETTINGS = "@settings";
+
+/** Shows an OSD message (`plugin.osd.show(…)`); headless hosts refuse the display, which never fails the action itself. */
+export type Osd = (shown: Promise<unknown>) => void;
 
 /**
- * 快捷键设置: 设置 ▶ 快捷键… (J01), 鼠标… (J02) and 忽略默认快捷键 (J03).
- * 快捷键… and 鼠标… open the options window on this plugin's pages
- * (hotkeys.keyboard, hotkeys.mouse; category 快捷键与鼠标).
- * Talks only to the player's binding table (`plugin.bindings`); never to
- * other plugins. Their commands appear and go as they load and stop.
+ * Shortcut Settings: Settings ▸ Keyboard Shortcuts… (J01), Mouse… (J02) and Ignore
+ * Default Shortcuts (J03). Keyboard Shortcuts… and Mouse… open the options
+ * window on this plugin's pages (hotkeys.keyboard, hotkeys.mouse; category
+ * Keys and Mouse). Talks only to the player's binding table (`plugin.bindings`);
+ * never to other plugins. Their commands appear and go as they load and stop.
  */
 export default async function activate(plugin: Plugin) {
-  // Headless hosts refuse the display; that never fails the action itself.
-  const osd = (text: string) => void plugin.osd.show(text).catch(() => {});
-  plugin.onError((error) => osd(error.message));
+  const osd: Osd = (shown) => void shown.catch(() => {});
+  // i18n-ignore: the player's (or the SDK's) own message
+  plugin.onError((error) => osd(plugin.osd.show(error.message)));
 
   const model = new BindingsModel(plugin);
   const ignore = new IgnoreDefaults(plugin, model, osd);
@@ -26,21 +29,21 @@ export default async function activate(plugin: Plugin) {
 
   plugin.commands.add({
     id: "keys",
-    path: [SETTINGS, "快捷键…"],
+    path: [SETTINGS, "Keyboard Shortcuts…"],
     order: 832,
     group: "settings-input",
     run: () => keys.show(),
   });
   plugin.commands.add({
     id: "mouse",
-    path: [SETTINGS, "鼠标…"],
+    path: [SETTINGS, "Mouse…"],
     order: 833,
     group: "settings-input",
     run: () => mouse.show(),
   });
   plugin.commands.add({
     id: "ignore-defaults",
-    path: [SETTINGS, "忽略默认快捷键"],
+    path: [SETTINGS, "Ignore Default Shortcuts"],
     order: 834,
     group: "settings-input",
     checked: () => ignore.enabled,

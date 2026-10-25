@@ -1,7 +1,7 @@
 // Installing a session's plugin in the player (plugins.manage): pack →
 // packages.validateArchive (the player's checks, Slint included) → an
-// install the user confirmed, reversible with 回退 (rollback, or uninstall
-// after a first install). Used by the agent's install_plugin and by the
+// install the user confirmed, reversible with Roll Back (rollback, or
+// uninstall after a first install). Used by the agent's install_plugin and by the
 // result card's buttons. After an install, bindings the player ignored
 // because another command holds the key (bindings.list, `shadowed`) are
 // reported to the user and the agent.
@@ -10,25 +10,52 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { SessionPaths, ToolResult, Toolchain } from "./toolchain.ts";
 
+/** What the model reads for the end state of an install, rollback or uninstall. */
 const CHANGE_TEXT: Record<string, string> = {
-  committed: "完成",
-  cancelled: "已取消",
-  failed: "失败",
-  failedDegraded: "失败，未能完全恢复原版本",
-  tooLate: "已无法取消",
+  committed: "done",
+  cancelled: "cancelled",
+  failed: "failed",
+  failedDegraded: "failed, the previous version could not be fully restored",
+  tooLate: "too late to cancel",
 };
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const code = (error: unknown) => (error as PluginError)?.code;
 
+/** A binding of the installed plugin that another command holds (the player ignores it). */
+export type Shadowed = {
+  /** The input, e.g. "]". */
+  input: string;
+  /** The installed plugin's command. */
+  title: string;
+  /** The holder: "host" (the player) or a plugin id, and its command's title. */
+  plugin: string;
+  holder: string;
+};
+
+/**
+ * What the card says: a template key of ai.slint and its arguments (data).
+ * Installs, rollbacks and uninstalls (`progress`, `result`): args are
+ * [action, a, b, status, message] with action "install" (a name, b version),
+ * "rollback" (a version) or "uninstall" (a id).
+ */
+export type CardSay = {
+  code: string;
+  args: string[];
+};
+
+type Action = [action: "install" | "rollback" | "uninstall", a: string, b: string];
+
 export class Delivering {
   private readonly plugin: Plugin;
   private readonly toolchain: Toolchain;
   private readonly owner: () => string;
-  /** Ids installed during this run: 「回退」 is offered for them. */
+  /** Ids installed during this run: Roll Back is offered for them. */
   readonly installed = new Set<string>();
   /** The result card's line: what the last action did. */
-  status = "";
+  status: CardSay = { code: "", args: [] };
+  /** After an install: the bindings that did not take effect (listed under the line). */
+  shadowedKeys: Shadowed[] = [];
   busy = false;
 
   constructor(plugin: Plugin, toolchain: Toolchain, owner: () => string) {
@@ -37,14 +64,15 @@ export class Delivering {
     this.owner = owner;
   }
 
-  private say(text: string) {
-    this.status = text;
+  say(code: string, args: (string | number)[] = [], keys: Shadowed[] = []) {
+    this.status = { code, args: args.map(String) };
+    this.shadowedKeys = keys;
     this.plugin.update();
   }
 
   /** One action at a time; the card's buttons are disabled meanwhile. */
   private async exclusive(work: () => Promise<ToolResult>): Promise<ToolResult> {
-    if (this.busy) return { ok: false, text: "另一个安装或回退正在进行，请稍候" };
+    if (this.busy) return { ok: false, text: "Another install or rollback is in progress; wait a moment" };
     this.busy = true;
     this.plugin.update();
     try {
@@ -57,24 +85,27 @@ export class Delivering {
 
   /** Packs the project and lets the player validate the package. */
   private async candidate(session: SessionPaths, id: string, signal?: AbortSignal): Promise<{ candidate?: PackageCandidate; failure?: ToolResult }> {
-    this.say(`正在打包 ${id}…`);
+    this.say("packing", [id]);
     const packed = await this.toolchain.pack(session, id, this.owner(), signal);
     if (!packed.ok || !packed.file) return { failure: packed };
-    this.say(`正在由播放器校验 ${id}…`);
+    this.say("validating", [id]);
     try {
       return { candidate: await this.plugin.packages.validateArchive(packed.file) };
     } catch (error) {
       // Manifest, package and Slint problems the player found.
-      return { failure: { ok: false, text: `播放器校验没有通过（${code(error) ?? "error"}）：${errorText(error)}` } };
+      const kind = code(error) ?? "error";
+      return {
+        failure: { ok: false, text: `The player's validation failed (${kind}): ${errorText(error)}`, say: { code: "invalid", args: [kind, errorText(error)] } },
+      };
     }
   }
 
   /**
-   * Inputs of `id`'s commands that another command holds, as text: the
-   * player ignores them silently (its log only). Read once the plugin has
-   * left "starting"; [] when it is not running or the list is unavailable.
+   * Inputs of `id`'s commands that another command holds: the player
+   * ignores them silently (its log only). Read once the plugin has left
+   * "starting"; [] when it is not running or the list is unavailable.
    */
-  private async shadowed(id: string): Promise<string[]> {
+  private async shadowed(id: string): Promise<Shadowed[]> {
     try {
       for (let wait = 0; wait < 25; wait++) {
         const entry = (await this.plugin.packages.list()).find((p) => p.id === id);
@@ -85,26 +116,26 @@ export class Delivering {
         await new Promise((resolve) => setTimeout(resolve, 200));
       }
       const { commands } = await this.plugin.bindings.list();
-      const title = (ref: { plugin: string; command: string }) => {
-        const holder = commands.find((c) => c.plugin === ref.plugin && c.command === ref.command);
-        const owner = ref.plugin === "host" ? "播放器" : ref.plugin;
-        return `${owner}「${holder?.title || ref.command}」`;
-      };
+      const holder = (ref: { plugin: string; command: string }) =>
+        commands.find((c) => c.plugin === ref.plugin && c.command === ref.command)?.title || ref.command;
       return commands
         .filter((c) => c.plugin === id)
-        .flatMap((c) => c.shadowed.map((s) => `${s.input}（${c.title}）已被${title(s.by)}占用`));
+        .flatMap((c) => c.shadowed.map((s) => ({ input: s.input, title: c.title, plugin: s.by.plugin, holder: holder(s.by) })));
     } catch {
       return [];
     }
   }
 
-  /** Follows an install or rollback to its end. */
-  private async follow(change: PackageChange, action: string): Promise<{ ok: boolean; text: string }> {
-    const listening = change.onChange((status) => this.say(`${action}：${status}…`));
+  /** Follows an install or rollback to its end; the card shows each status. */
+  private async follow(change: PackageChange, action: Action): Promise<{ ok: boolean; text: string; status: string }> {
+    const listening = change.onChange((status) => this.say("progress", [...action, status]));
     try {
       const status = await change.done;
-      const text = `${action}${CHANGE_TEXT[status] ?? status}${change.message ? `（${change.message}）` : ""}`;
-      return { ok: status === "committed", text };
+      const [kind, a, b] = action;
+      const what = kind === "install" ? `Install ${a} ${b}` : kind === "rollback" ? `Roll back to ${a}` : `Uninstall ${a}`;
+      const text = `${what}: ${CHANGE_TEXT[status] ?? status}${change.message ? ` (${change.message})` : ""}`;
+      this.status = { code: "result", args: [...action, status, change.message ?? ""] };
+      return { ok: status === "committed", text, status };
     } finally {
       await listening.dispose();
     }
@@ -112,7 +143,7 @@ export class Delivering {
 
   /**
    * Installs the project. `ask`: the agent asked, so the user confirms in a
-   * dialog first (a click on 「安装」 is the user's own decision). Another
+   * dialog first (a click on Install is the user's own decision). Another
    * source's plugin of the same id is replaced only after asking.
    */
   install(session: SessionPaths, id: string, ask: boolean, signal?: AbortSignal): Promise<ToolResult> {
@@ -120,60 +151,69 @@ export class Delivering {
       const directory = await this.toolchain.project(session, id);
       const manifest = JSON.parse(await fs.readFile(path.join(directory, "manifest.json"), "utf8"));
       const name = String(manifest.name ?? id);
+      const version = String(manifest.version);
       if (ask) {
+        const capabilities: string[] = manifest.capabilities ?? [];
         const answer = await this.plugin.dialogs.confirm({
-          message: `安装 AI 生成的插件「${name}」？`,
-          detail: `${id} ${manifest.version}\n能力：${(manifest.capabilities ?? []).join("、") || "无"}\n安装后可以在 AI 窗口里点「回退（撤销安装）」。`,
-          confirm: "安装",
+          message: "Install the AI-generated plugin “{}”?",
+          detail: capabilities.length
+            ? "{1} {2}\nCapabilities: {3}\nTo undo the install, click Roll Back (Undo Install) in the AI window."
+            : "{1} {2}\nCapabilities: none\nTo undo the install, click Roll Back (Undo Install) in the AI window.",
+          confirm: "Install",
+          // {0} (the message's {}) = name, {1} = id, {2} = version, {3} = capabilities.
+          args: [name, id, version, this.plugin.i18n.list(capabilities)],
         });
         if (!answer.confirmed) {
-          this.say("没有安装（已取消）。");
-          return { ok: false, text: "用户取消了安装" };
+          this.say("install-cancelled");
+          return { ok: false, text: "The user cancelled the install" };
         }
       }
       const { candidate, failure } = await this.candidate(session, id, signal);
       if (!candidate) {
-        this.say(failure!.text.split("\n")[0]);
+        this.say(failure!.say?.code ?? "failed", failure!.say?.args ?? [failure!.text.split("\n")[0]]);
         return failure!;
       }
-      this.say(`正在安装 ${name}…`);
+      this.say("installing", [name]);
       const options = { source: { kind: "workshop" as const } };
       let change: PackageChange;
       try {
         change = await candidate.install(options);
       } catch (error) {
         if (code(error) === "unsupported") {
-          const text = `${id} 和播放器内置插件同名，不能安装，请换一个 id。`;
-          this.say(text);
-          return { ok: false, text };
+          this.say("builtin-id", [id]);
+          return { ok: false, text: `${id} has the name of a plugin built into the player and cannot be installed; choose another id.` };
         }
         if (code(error) !== "conflict") throw error;
         const answer = await this.plugin.dialogs.confirm({
-          message: `替换已安装的 ${id}？`,
-          detail: "它是从别处安装的（不是 Vestra Player AI 生成的）。替换后新插件使用新的空数据目录；原插件的数据保留，以后从原来源重新安装时接上。",
-          confirm: "替换",
+          message: "Replace the installed {}?",
+          detail:
+            "It was installed from elsewhere (not made by Vestra Player AI). After the replacement the new plugin starts with a new, empty data folder; the original plugin's data is kept and is used again when you reinstall it from its original source.",
+          confirm: "Replace",
           destructive: true,
+          args: [id],
         });
         if (!answer.confirmed) {
-          this.say("没有安装：保留了已安装的插件。");
-          return { ok: false, text: `用户没有替换从别处安装的 ${id}` };
+          this.say("kept-installed");
+          return { ok: false, text: `The user did not replace ${id}, which was installed from elsewhere` };
         }
         change = await candidate.install({ ...options, replace: true });
       }
-      const { ok, text } = await this.follow(change, `安装 ${name} ${manifest.version}`);
+      const { ok, text } = await this.follow(change, ["install", name, version]);
       if (!ok) {
-        this.say(text);
+        this.plugin.update();
         return { ok, text };
       }
       this.installed.add(id);
       const shadowed = await this.shadowed(id);
-      const keys = shadowed.length ? `快捷键没有生效：${shadowed.join("；")}。` : "";
-      this.say(`已安装 ${name} ${manifest.version}，可以点「回退（撤销安装）」。${keys}`);
+      this.say("installed", [name, version], shadowed);
+      const keys = shadowed.map((s) => `${s.input} (${s.title}) is taken by ${s.plugin === "host" ? "the player" : s.plugin} "${s.holder}"`);
       return {
         ok,
         text:
-          `${text}。插件已在播放器里启用；用户可以在 AI 窗口点「回退（撤销安装）」回到安装前的状态。` +
-          (keys ? `\n${keys}播放器忽略了这些按键（冲突时先用户设置，再播放器和先加载的插件）。告诉用户，并建议换成没有被占用的按键后重新安装。` : ""),
+          `${text}. The plugin is enabled in the player; the user can click Roll Back (Undo Install) in the AI window to return to the state before the install.` +
+          (keys.length
+            ? `\nShortcuts not in effect: ${keys.join("; ")}. The player ignored these keys (on a conflict the user's settings come first, then the player and the plugins loaded earlier). Tell the user and suggest keys that are free, then install again.`
+            : ""),
       };
     });
   }
@@ -188,14 +228,14 @@ export class Delivering {
       const entry = (await this.plugin.packages.list()).find((p) => p.id === id && p.origin === "installed");
       if (!entry) {
         this.installed.delete(id);
-        this.say(`${id} 已经不在已安装的插件里。`);
-        return { ok: false, text: `${id} 没有安装` };
+        this.say("not-installed", [id]);
+        return { ok: false, text: `${id} is not installed` };
       }
-      this.say(`正在回退 ${id}…`);
+      this.say("rolling-back", [id]);
       const change = entry.previousVersion ? await this.plugin.packages.rollback(id) : await this.plugin.packages.uninstall(id);
-      const { ok, text } = await this.follow(change, entry.previousVersion ? `回退到 ${entry.previousVersion}` : `卸载 ${id}`);
+      const { ok, text } = await this.follow(change, entry.previousVersion ? ["rollback", entry.previousVersion, ""] : ["uninstall", id, ""]);
       if (ok) this.installed.delete(id);
-      this.say(text);
+      this.plugin.update();
       return { ok, text };
     });
   }

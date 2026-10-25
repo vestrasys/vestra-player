@@ -1,10 +1,14 @@
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Media, PlayerState } from "@vestra-player/sdk";
-import { Queue } from "../queue.ts";
+import { type LinkError, Queue, ROW_LIMIT } from "../queue.ts";
+import { chineseTexts } from "./texts.ts";
+
+const zh = await chineseTexts();
+after(() => zh.stop());
 
 function state(overrides: Partial<PlayerState> = {}): PlayerState {
   return {
@@ -29,7 +33,7 @@ function media(current = true): Media & { current: boolean } {
   return { current, ready: async () => {}, onEnd: () => ({ dispose: async () => {} }), close: async () => {} };
 }
 function fixture() {
-  const queue = new Queue();
+  const queue = new Queue(zh.texts);
   for (const name of ["a", "b", "c", "d"]) queue.addUrl(`https://example.org/${name}`);
   return queue;
 }
@@ -41,31 +45,72 @@ test("realpath deduplicates same batch and symlink while inaccessible rows remai
       alias = join(directory, "alias.mp4");
     await writeFile(path, "not decoded by plugin");
     await symlink(path, alias);
-    const queue = new Queue();
+    const queue = new Queue(zh.texts);
+    const said: Parameters<Queue["say"]>[] = [];
+    queue.say = (text, args) => void said.push([text, args]);
     await queue.addFiles([path, path, alias, join(directory, "missing.mp4")]);
     assert.equal(queue.rows.length, 2);
     assert.equal(queue.selected, queue.rows[0].rowId);
     assert.equal(queue.binding, null);
-    assert.match(queue.rows[1].error, /文件不存在/);
-    assert.equal(queue.rows[1].status, "待重试");
-    assert.match(queue.message, /已添加 2 项，跳过 2 个重复，1 项暂不可读/);
+    assert.deepEqual(queue.rows[1].error, { kind: "unreadable" });
+    assert.equal(queue.rows[1].status, "retry");
+    assert.equal(said.length, 1);
+    assert.equal(zh.host.translate(said[0]![0]), "已添加 2 项，跳过 2 个重复，1 项暂不可读");
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
 });
 
+test("the summary after adding names every clause, in the old order; English is the source", () => {
+  const queue = new Queue(zh.texts);
+  const all = queue.summary(
+    { rows: [], fresh: [], added: 3, duplicate: 2, invalid: 1, refused: 4 },
+    {
+      skipped: 1,
+      unreadable: 2,
+      truncated: true,
+      failed: [
+        { name: "a", failure: { reason: "access" } },
+        { name: "b.m3u", failure: { reason: "message", message: "bad line" } },
+        { name: "c", failure: { reason: "permission" } },
+      ],
+    },
+  );
+  assert.equal(
+    zh.host.translate(all),
+    "已添加 3 项，跳过 2 个重复，1 项暂不可读，跳过 1 个不支持的项目，2 个子文件夹无法读取，已达上限 5000，" +
+      "无法读取 a：没有读取权限，无法读取 b.m3u：bad line，" +
+      "无法读取 c：未获准访问此位置（系统设置 ▸ 隐私与安全性 ▸ 文件与文件夹），" +
+      `列表已达上限 ${ROW_LIMIT} 项`,
+  );
+  const english = new Queue(zh.texts).summary(
+    { rows: [], fresh: [], added: 1, duplicate: 1, invalid: 0, refused: 0 },
+    { unreadable: 1, truncated: true },
+  );
+  assert.deepEqual(english, {
+    $vestraList: [
+      { $vestraText: "Added: {}", args: [1] },
+      { $vestraText: "duplicates skipped: {}", args: [1] },
+      { $vestraText: "subfolders that could not be read: {}", args: [1] },
+      { $vestraText: "limit of {} reached", args: [5000] },
+    ],
+    style: "clauses",
+  });
+  assert.equal(zh.host.translate(english), "已添加 1 项，跳过 1 个重复，1 个子文件夹无法读取，已达上限 5000");
+});
+
 test("link addition preserves original URL, selects without binding, and rejects credentials/non-http", () => {
-  const queue = new Queue();
+  const queue = new Queue(zh.texts);
   queue.addUrl("https://example.org/a?x=1");
   assert.equal(queue.rows[0].source, "https://example.org/a?x=1");
   assert.equal(queue.selected, queue.rows[0].rowId);
   assert.equal(queue.binding, null);
   queue.addUrl("https://example.org/a?x=1");
   assert.equal(queue.rows.length, 1);
-  assert.equal(queue.message, "已选择已有链接");
-  assert.throws(() => queue.addUrl("file:///tmp/a"), /只接受不含账户密码的 HTTP\(S\) 链接/);
-  assert.throws(() => queue.addUrl("https://user:password@example.org/a"), /只接受/);
-  assert.throws(() => queue.addUrl("not a url"), /请输入完整 HTTP\(S\) 链接/);
+  assert.equal(queue.message, "Existing link selected");
+  assert.throws(() => queue.addUrl("file:///tmp/a"), (error: LinkError) => error.code === "refused");
+  assert.throws(() => queue.addUrl("https://user:password@example.org/a"), (error: LinkError) => error.code === "refused");
+  assert.throws(() => queue.addUrl("not a url"), (error: LinkError) => error.code === "incomplete");
 });
 
 test("failed navigation anchor survives a different selection, movement uses stable IDs", () => {
@@ -88,25 +133,25 @@ test("bound row follows ready, paused, loading, ended, error and closed states",
     row = queue.rows[0];
   queue.bind({ rowId: row.rowId, media: media() });
   queue.observe(state({ phase: "loading" }));
-  assert.equal(row.status, "正在打开");
+  assert.equal(row.status, "opening");
   queue.observe(state({ paused: true }));
-  assert.equal(row.status, "已暂停");
-  assert.equal(queue.message, "已暂停");
+  assert.equal(row.status, "paused");
+  assert.equal(queue.message, "paused");
   queue.observe(state());
-  assert.equal(row.status, "播放中");
+  assert.equal(row.status, "playing");
   queue.observe(state({ phase: "ended", endReason: "natural" }));
-  assert.equal(row.status, "已结束");
+  assert.equal(row.status, "ended");
   assert.equal(queue.binding?.rowId, row.rowId, "the natural end itself is handled by media.onEnd");
   queue.observe(state({ phase: "error", error: "broken" }));
-  assert.equal(row.status, "失败");
-  assert.equal(row.error, "broken");
+  assert.equal(row.status, "failed");
+  assert.deepEqual(row.error, { kind: "message", text: "broken" });
   assert.equal(queue.failed, row.rowId);
   assert.equal(queue.binding, null);
 
   queue.bind({ rowId: row.rowId, media: media() });
   queue.observe(state({ phase: "empty" }));
   assert.equal(queue.binding, null);
-  assert.equal(queue.message, "当前来源已关闭");
+  assert.equal(queue.message, "The current source was closed");
 });
 
 test("another source, even of the same path, detaches the row and releases its end listener", () => {
@@ -117,8 +162,8 @@ test("another source, even of the same path, detaches the row and releases its e
   replaced.current = false;
   queue.observe(state({ sourceId: 5, source: "/a" }));
   assert.equal(queue.binding, null);
-  assert.equal(queue.rows[0].status, "已切换");
-  assert.equal(queue.message, "已切换到列表外来源");
+  assert.equal(queue.rows[0].status, "switched");
+  assert.equal(queue.message, "Switched to a source outside the list");
   assert.equal(released, true);
 });
 
@@ -131,11 +176,11 @@ test("removing current and clearing revoke progression without requesting public
   assert.equal(queue.binding, null);
   assert.ok(queue.epoch > epoch);
   assert.equal(queue.selected, queue.rows[1].rowId);
-  assert.match(queue.message, /当前媒体已移出/);
+  assert.equal(queue.message, "The current media was removed from the list");
   queue.clear();
   assert.equal(queue.rows.length, 0);
   assert.equal(queue.selected, null);
-  assert.match(queue.message, /当前媒体继续/);
+  assert.equal(queue.message, "List cleared; the current media continues");
 });
 
 const names = (queue: Queue) => queue.rows.map((row) => row.source.slice(-1));

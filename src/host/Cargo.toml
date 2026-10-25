@@ -1,6 +1,6 @@
 [package]
 name = "vestra-host"
-version = "0.4.2"
+version = "0.5.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 publish = false
@@ -15,7 +15,9 @@ image = { version = "=0.25.10", default-features = false, features = ["png", "jp
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rsmpv = { version = "=0.2.1", features = ["render"] }
-slint = { version = "=1.18.1", features = ["unstable-winit-030"] }
+# `unstable-fontique-011`: `slint::fontique_011::shared_collection()`, the
+# per-script CJK fallback chains of `ui_fonts.rs`.
+slint = { version = "=1.18.1", features = ["unstable-winit-030", "unstable-fontique-011"] }
 slint-interpreter = "=1.18.1"
 rfd = "0.17.2"
 base64 = "=0.22.1"
@@ -36,12 +38,17 @@ skrifa = { version = "=0.44.0", default-features = false, features = ["std"] }
 # ordinary path means the same file (Slint imports, mpv, FFmpeg); same as std
 # elsewhere. `clippy.toml` disallows std's canonicalize.
 dunce = "=1.0.5"
+# Interface language (doc/architecture/i18n.md): the system's preferred
+# languages (platform::preferred_languages), already in the tree via Slint.
+sys-locale = "=0.3.2"
+# Menu width estimate (menu.rs): East Asian Width, already in the tree.
+unicode-width = { version = "=0.2.2", default-features = false }
 cpal = { version = "=0.18.2", optional = true }
 rtrb = { version = "=0.4.0", optional = true }
 
 # The unsafe/ crates share this lock file; `cargo test` here still runs only the host.
 [workspace]
-members = ["unsafe/pip", "unsafe/render", "unsafe/win32"]
+members = ["unsafe/open", "unsafe/pip", "unsafe/render", "unsafe/win32"]
 
 # Lints for every first-party crate outside src/host/unsafe/ (`[lints] workspace = true`).
 # The unsafe/ crates do not inherit these: Cargo cannot override single lints of an
@@ -73,6 +80,8 @@ keyring = { version = "=3.6.3", features = ["apple-native"] }
 vestra-gpu-render = { path = "unsafe/render" }
 # Picture-in-picture (window.setPictureInPicture): AVKit, the unsafe part in unsafe/pip.
 vestra-pip = { path = "unsafe/pip" }
+# Finder "Open With" and double-click: open-documents Apple events (unsafe/open).
+vestra-open-files = { path = "unsafe/open" }
 
 # The Windows platform module (src/platform/windows.rs). Safe crates first;
 # the few Win32 calls none of them wraps are in unsafe/win32.

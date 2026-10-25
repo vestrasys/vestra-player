@@ -7,11 +7,12 @@ import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import { shorten } from "../copy.ts";
 import activate from "../main.ts";
 import { NO_VIDEO } from "../keyframes.ts";
-import { FIRST_LINE_ONLY, INVALID, parseAddress } from "../open-url.ts";
-import { parseStep, RANGE, stepText } from "../time-jump.ts";
+import { FIRST_LINE_ONLY, parseAddress } from "../open-url.ts";
+import { parseStep, stepText } from "../time-jump.ts";
 const directory = new URL("..", import.meta.url);
 const start = (host = new TestHost(), dataDirectory?: string) =>
-  startPlugin(activate, { directory, host, ...(dataDirectory ? { dataDirectory } : {}) });
+  // The Chinese texts are what the plugin showed before English became the source.
+  startPlugin(activate, { directory, host, locale: "zh-Hans", ...(dataDirectory ? { dataDirectory } : {}) });
 function withMedia(host = new TestHost(), source = "/movie.mp4") {
   host.openElsewhere(source);
   host.setSource({ duration: 100, position: 0 });
@@ -30,9 +31,10 @@ const seeks = (host: TestHost) =>
     .filter((i) => i.kind === "control" && (i.control as { kind: string }).kind === "seek")
     .map((i) => (i.control as { seconds: number }).seconds);
 const lastOsd = (host: TestHost) => host.osd.at(-1);
+/** The command state, its reason as the menu shows it. */
 const state = (host: TestHost, id: string) => {
   const { enabled, checked, busy, reason } = host.command(id).state;
-  return { enabled, checked, busy, reason };
+  return { enabled, checked, busy, reason: reason === null ? null : host.translate(reason) };
 };
 /** A JSON file in the data directory once its debounced write satisfies `ready`. */
 async function saved(file: string, ready: (value: Record<string, unknown>) => boolean = () => true) {
@@ -100,17 +102,19 @@ test("A02 an invalid address keeps the window with a message; only the first lin
   assert.equal(window.props["select-all"], false);
   window.emit("confirm", "abc");
   await host.settle();
-  assert.equal(window.props.message, INVALID);
+  assert.equal(window.props.notice, "invalid");
   assert.equal(window.visible, true);
   window.emit("confirm", "   \n  ");
   await host.settle();
-  assert.equal(window.props.message, INVALID);
+  assert.equal(window.props.notice, "invalid");
   assert.equal(host.sent("source.submit").length, 0);
   window.emit("confirm", "\n  /a.mp4  \nhttps://x/b.mp4");
   await host.settle();
   assert.deepEqual([intents(host).at(-1)!.kind, intents(host).at(-1)!.source], ["open", "/a.mp4"]);
   assert.equal(host.windows.has(URL_WINDOW), false);
-  assert.equal(lastOsd(host), FIRST_LINE_ONLY); // the window is gone, so the note is on the video
+  // The window is gone, so the note is on the video.
+  assert.equal(host.sent("osd.show").at(-1)!.text, FIRST_LINE_ONLY);
+  assert.equal(lastOsd(host), "只打开第一行；多个链接请用播放列表的「添加链接…」");
   await stop();
 });
 
@@ -130,7 +134,8 @@ test("A02 while opening the button is busy and repeats are ignored; a refusal is
   release();
   await host.settle();
   assert.equal(window.props.busy, false);
-  assert.match(String(window.props.message), /^打开失败：/);
+  assert.deepEqual([window.props.notice, window.props.detail], ["failed", "播放器忙"]);
+  assert.equal(host.translate("Open failed: {}", ["播放器忙"]), "打开失败：播放器忙");
   assert.equal(window.visible, true);
   await stop();
 });
@@ -300,7 +305,12 @@ test("A10 a plugin stream is not remembered and cannot be reloaded; repeats whil
   void host.command("reopen").run();
   await until(() => host.command("reopen").state.busy);
   assert.equal(host.command("reopen").state.enabled, false);
-  await assert.rejects(host.press("Ctrl+Y")); // busy: the host does not run it
+  // busy, so disabled: the key passes on (SDK 1.5.12, as the player) and nothing runs again
+  const shownBusy = host.osd.length;
+  const submitted = host.sent("source.submit").length;
+  assert.equal(await host.press("Ctrl+Y"), "passed");
+  assert.equal(host.osd.length, shownBusy);
+  assert.equal(host.sent("source.submit").length, submitted);
   release();
   host.reset("source.submit");
   await host.settle();
@@ -339,10 +349,11 @@ test("B06 the window saves four steps: tier 1 goes to the core, tiers 2–4 reti
     window.emit("confirm", "10", "abc", "4000", "300");
     await host.settle();
     assert.deepEqual([window.props.invalid1, window.props.invalid2, window.props.invalid3, window.props.invalid4], [false, true, true, false]);
-    assert.equal(window.props.message, RANGE);
+    assert.equal(window.props["out-of-range"], true);
+    assert.equal(host.translate("Range 0.1–3600 s, at most one decimal place"), "范围 0.1–3600 秒，最多一位小数");
     assert.equal(window.visible, true);
     assert.deepEqual(host.sent("player.setStepSeek"), []);
-    // 默认值 restores only its own row.
+    // Default restores only its own row.
     window.emit("reset", 1);
     await host.settle();
     assert.equal(window.props.value2, "30");
@@ -354,7 +365,8 @@ test("B06 the window saves four steps: tier 1 goes to the core, tiers 2–4 reti
     assert.equal(window.visible, false);
     assert.equal(host.stepSeek, 10);
     const titles = () =>
-      ["backward-2", "forward-2", "backward-3", "forward-3", "backward-4", "forward-4"].map((id) => host.command(id).declaration.path.at(-1));
+      ["backward-2", "forward-2", "backward-3", "forward-3", "backward-4", "forward-4"].map((id) => host.command(id).display.path.at(-1));
+    // Any seconds are translated: the title is a text value with the seconds as data.
     assert.deepEqual(titles(), ["后退2.5秒", "前进2.5秒", "后退90秒", "前进90秒", "后退300秒", "前进300秒"]);
     assert.deepEqual(host.command("forward-3").declaration.bindings, ["Shift+ArrowRight"]);
     assert.equal(host.command("forward-3").declaration.order, 215);
@@ -377,7 +389,7 @@ test("B06 the window saves four steps: tier 1 goes to the core, tiers 2–4 reti
     const second = await start(new TestHost(), data);
     await second.host.settle();
     assert.deepEqual(second.host.sent("player.setStepSeek").map((p) => p.seconds), [10]);
-    assert.equal(second.host.command("backward-2").declaration.path.at(-1), "后退2.5秒");
+    assert.equal(second.host.command("backward-2").display.path.at(-1), "后退2.5秒");
     await second.stop();
 
     // A set with one value out of range falls back as a whole.
@@ -385,7 +397,7 @@ test("B06 the window saves four steps: tier 1 goes to the core, tiers 2–4 reti
     const third = await start(new TestHost(), data);
     await third.host.settle();
     assert.deepEqual(third.host.sent("player.setStepSeek"), []);
-    assert.equal(third.host.command("forward-4").declaration.path.at(-1), "前进300秒");
+    assert.equal(third.host.command("forward-4").display.path.at(-1), "前进300秒");
     await third.stop();
   } finally {
     rmSync(data, { recursive: true, force: true });
@@ -401,7 +413,7 @@ test("B06 cancel and Escape close the window without saving", async () => {
   await host.settle();
   assert.equal(window.visible, false);
   assert.deepEqual(host.sent("player.setStepSeek"), []);
-  assert.equal(host.command("forward-2").declaration.path.at(-1), "前进30秒");
+  assert.equal(host.command("forward-2").display.path.at(-1), "前进30秒");
   await stop();
 });
 
@@ -428,7 +440,8 @@ test("B08 keyframe steps need video, known once per source from stats(); a seeka
   host.setSource({ duration: 100, position: 0 });
   await host.settle();
   assert.equal(host.sent("playback.stats").length, asked + 1);
-  assert.deepEqual(state(host, "keyframe-back"), { enabled: false, checked: null, busy: false, reason: NO_VIDEO });
+  assert.deepEqual(state(host, "keyframe-back"), { enabled: false, checked: null, busy: false, reason: "没有视频" });
+  assert.equal(host.command("keyframe-back").state.reason, NO_VIDEO);
 
   // A plugin stream or an unseekable source is not supported.
   host.stats = { ...host.stats, video: VIDEO } as never;
@@ -500,7 +513,11 @@ test("B08 repeats while a step is in flight are dropped; a refusal is shown, a s
   void host.command("keyframe-forward").run();
   await until(() => host.command("keyframe-forward").state.busy);
   assert.equal(host.command("keyframe-back").state.enabled, false);
-  await assert.rejects(host.press("Ctrl+Shift+ArrowRight")); // the held key's repeat: refused while busy
+  // the held key's repeat: the busy command is disabled, so the key passes on and no second step starts
+  const shownBusy = host.osd.length;
+  assert.equal(await host.press("Ctrl+Shift+ArrowRight"), "passed");
+  assert.equal(host.osd.length, shownBusy);
+  assert.equal(host.sent("player.step").length, 1);
   release();
   await host.settle();
   assert.equal(host.sent("player.step").length, 1);

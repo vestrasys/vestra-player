@@ -35,9 +35,9 @@ export type Prefs = {
   version: 1;
   sort: "command" | "keys";
   descending: boolean;
-  /** 0 全部, 1 已修改, 2 有冲突, 3 未绑定. */
+  /** 0 all, 1 changed, 2 conflicts, 3 unbound. */
   status: number;
-  /** `""` all sources, `"host"`, a plugin id, or `"*orphans"` (未加载的插件). */
+  /** `""` all sources, `"host"`, a plugin id, or `"*orphans"` (plugins not loaded). */
   source: string;
 };
 export const PREFS: Prefs = { version: 1, sort: "command", descending: false, status: 0, source: "" };

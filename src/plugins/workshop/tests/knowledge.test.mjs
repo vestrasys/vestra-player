@@ -40,7 +40,7 @@ test("the agent's tools read the reference but write only the work folder", asyn
   assert.match((await folders.of(index).readFile(index)).toString(), /SDK/);
   assert.equal(folders.of("notes.md"), folders.work);
   // write and edit go to the work folder only, which refuses the path.
-  await assert.rejects(folders.work.writeFile(index, "x"), /工作目录以外/);
+  await assert.rejects(folders.work.writeFile(index, "x"), /outside the working folder/);
 });
 
 test("the reference by its short name: sdk/… reads, lists and greps the SDK; writes there are refused", async () => {
@@ -57,9 +57,9 @@ test("the reference by its short name: sdk/… reads, lists and greps the SDK; w
   assert.match(await run("ls", { path: "sdk/dist/plugin" }), /types\.d\.ts/);
   const grep = await run("grep", { pattern: "interface TestHost|class TestHost", path: "sdk/dist/plugin/testing.d.ts", limit: 1 });
   assert.match(grep, /^sdk\/dist\/plugin\/testing\.d\.ts:\d+: /);
-  await assert.rejects(run("write", { path: "sdk/llms.txt", content: "x" }), /只读/);
-  await assert.rejects(run("write", { path: "sdk/new.txt", content: "x" }), /只读/);
-  await assert.rejects(run("delete", { path: "sdk/llms.txt" }), /只读/);
+  await assert.rejects(run("write", { path: "sdk/llms.txt", content: "x" }), /read-only/);
+  await assert.rejects(run("write", { path: "sdk/new.txt", content: "x" }), /read-only/);
+  await assert.rejects(run("delete", { path: "sdk/llms.txt" }), /read-only/);
   assert.equal(await fs.readFile(toolchain.docsIndex(), "utf8"), index);
   await assert.rejects(fs.access(path.join(root, "work", "sdk")));
 });
@@ -74,11 +74,11 @@ test("a write into the reference fails and the file stays as it is", async () =>
     const content = typeof last.content === "string" ? last.content : last.content.map((p) => p.text).join("");
     return { toolCalls: [{ name: "write", args: { path: content.includes("短") ? "sdk/llms.txt" : index, content: "changed" } }] };
   });
-  const ai = await startAi({ compat: mock.url });
+  const ai = await startAi({ compat: mock.url, locale: "zh-Hans" });
   await ai.ask("改一下参考资料");
-  assert.equal(ai.rows()[1].detail, `✗ 写入 参考资料/${path.basename(path.dirname(index))}/llms.txt`);
+  assert.equal(await ai.calls(1), `✗ 写入 参考资料/${path.basename(path.dirname(index))}/llms.txt`);
   await ai.ask("用短路径改一下参考资料");
-  assert.equal(ai.rows().at(-2).detail, "✗ 写入 参考资料/sdk/llms.txt");
+  assert.equal(await ai.calls(-2), "✗ 写入 参考资料/sdk/llms.txt");
   assert.equal(await fs.readFile(index, "utf8"), before);
   await ai.stop();
 });

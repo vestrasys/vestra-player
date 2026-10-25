@@ -1,23 +1,39 @@
 //! Settings pages (R-S1, `plugin.settings`) and the options window that holds
 //! them (R-H7): a category tree on the left, the page (440 wide, scrolling) on
-//! the right, 关闭 at the bottom. The player owns the window; each page is a
+//! the right, Close at the bottom. The player owns the window; each page is a
 //! plugin Slint component with its own bridge global, composed like panels.
 #![forbid(unsafe_code)]
 use super::*;
 use anyhow::Context;
 
-/// Fixed order and labels of the tree (J04).
-pub const CATEGORIES: [(&str, &str); 9] = [
-    ("general", "常规"),
-    ("playback", "播放"),
-    ("subtitles", "字幕"),
-    ("video", "视频"),
-    ("audio", "声音"),
-    ("input", "快捷键与鼠标"),
-    ("appearance", "外观"),
-    ("plugins", "插件"),
-    ("other", "其它"),
+/// Fixed order of the tree (J04); `category_label` has the headers.
+pub const CATEGORIES: [&str; 9] = [
+    "general",
+    "playback",
+    "subtitles",
+    "video",
+    "audio",
+    "input",
+    "appearance",
+    "plugins",
+    "other",
 ];
+
+/// A category header of the tree, in the interface language.
+fn category_label(name: &str) -> String {
+    use crate::i18n::tr;
+    match name {
+        "general" => tr("General"),
+        "playback" => tr("Playback"),
+        "subtitles" => tr("Subtitles"),
+        "video" => tr("Video"),
+        "audio" => tr("Audio"),
+        "input" => tr("Keys and Mouse"),
+        "appearance" => tr("Appearance"),
+        "plugins" => tr("Plugins"),
+        _ => tr("Other"),
+    }
+}
 pub const MAX_PAGES: usize = 8;
 
 #[derive(Clone, Debug)]
@@ -26,6 +42,8 @@ pub struct Page {
     pub manifest: String,
     pub id: String,
     pub category: usize,
+    /// As shown: the declared title in the interface language (the
+    /// plugin's catalog).
     pub title: String,
     pub order: i64,
     /// Unique per registration: names the page's alias in generated source.
@@ -90,7 +108,8 @@ fn pick<'a>(pages: &[&'a Page], wanted: Option<&str>, category: Option<usize>) -
 /// The tree model: a header per non-empty category, then its pages.
 fn rows(pages: &[&Page], current: Option<u64>) -> Value {
     let mut rows = Vec::new();
-    for (index, (_, label)) in CATEGORIES.iter().enumerate() {
+    for (index, name) in CATEGORIES.iter().enumerate() {
+        let label = category_label(name);
         let mut first = true;
         for (position, page) in pages
             .iter()
@@ -133,7 +152,7 @@ import {{ Button }} from "@vestra/widgets.slint";
 export {{ VestraPalette }} from "palette.slint";
 struct SettingsRow {{ label: string, page: int, header: bool, selected: bool }}
 export component OptionsWindow inherits Window {{
-    title: "选项";
+    title: @tr("Options");
     preferred-width: 640px; preferred-height: 480px;
     min-width: 600px; min-height: 420px;
     background: Theme.bg-panel;
@@ -181,7 +200,7 @@ export component OptionsWindow inherits Window {{
                     alignment: start;
 {views}                    if root.current < 0: Text {{
                         width: 440px; height: 80px;
-                        text: "没有可设置的项目";
+                        text: @tr("Nothing to set here");
                         color: Theme.text-dim; font-size: Theme.font-body;
                         horizontal-alignment: center; vertical-alignment: center;
                     }}
@@ -195,7 +214,7 @@ export component OptionsWindow inherits Window {{
             vertical-stretch: 0;
             padding: 8px;
             alignment: end;
-            close := Button {{ height: Theme.button-height; text: "关闭"; clicked => {{ root.close-window(); }} }}
+            close := Button {{ height: Theme.button-height; text: @tr("Close"); clicked => {{ root.close-window(); }} }}
         }}
     }}
 }}
@@ -256,7 +275,7 @@ impl Host {
                 let id = params_page(params)?.to_owned();
                 let category = CATEGORIES
                     .iter()
-                    .position(|(name, _)| params["category"] == *name)
+                    .position(|name| params["category"] == *name)
                     .ok_or_else(|| RpcError::invalid("unknown settings category"))?;
                 let title = string(params, "title")?;
                 if title.trim().is_empty() || title.chars().count() > 24 {
@@ -288,16 +307,17 @@ impl Host {
                     .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
                 let file = plugins::package_file(&plugin.directory, string(params, "file")?)?;
                 let manifest = plugin.manifest.id.clone();
-                let properties =
+                let mut properties: BTreeMap<String, Value> =
                     serde_json::from_value(params.get("properties").cloned().unwrap_or(json!({})))
                         .map_err(|e| RpcError::invalid(e.to_string()))?;
+                let refused = crate::refuse_initial(&mut properties);
                 self.settings.next_serial += 1;
                 let page = Page {
                     owner,
                     manifest,
                     id,
                     category,
-                    title: title.into(),
+                    title: plugin.text(title),
                     order,
                     serial: self.settings.next_serial,
                     file,
@@ -311,6 +331,7 @@ impl Host {
                     .map_err(|e| RpcError::new("ui-prepare", format!("{e:#}")))?;
                 self.settings.pages.push(page);
                 self.settings.stale |= self.settings.open.is_some();
+                self.report_refused(owner, refused);
                 Ok(Some(Value::Null))
             }
             "settings.unregister" => {
@@ -348,6 +369,8 @@ impl Host {
                 } else if ui_image::reference(&params["value"]).is_some() {
                     // Checked now, shown when the window opens.
                     self.prop_value(owner, &view, &property, &params["value"])?;
+                } else {
+                    RpcError::check_property(&property, &params["value"])?;
                 }
                 if let Some(page) = self.settings.page_mut(owner, &id) {
                     page.properties.insert(property, params["value"].clone());
@@ -407,6 +430,7 @@ impl Host {
         let refs: Vec<&Page> = pages.iter().collect();
         let definition = composition::build(source(&refs)?, "OptionsWindow")?;
         let instance = definition.create()?;
+        let mut reports = Vec::new();
         for page in &pages {
             let alias = alias(page.serial);
             crate::ui_values::own_default_models(&instance, Some(&alias))?;
@@ -414,7 +438,10 @@ impl Host {
                 match self.prop_value(page.owner, &page.view(), name, value) {
                     Ok(value) => composition::set_alias_value(&instance, &alias, name, value)?,
                     Err(error) => {
-                        eprintln!("settings property {}/{name}: {}", page.key(), error.message)
+                        // Checked when written (`check_property`): an image
+                        // removed since. Logged and reported to the plugin.
+                        eprintln!("settings property {}/{name}: {}", page.key(), error.message);
+                        reports.push((page.owner, crate::ui_error(&error)));
                     }
                 }
             }
@@ -431,7 +458,7 @@ impl Host {
                             let _ = events.send(Event::PluginMessage(
                                 owner,
                                 "ui.error".into(),
-                                json!({"message":error}),
+                                json!({"code":"ui","message":format!("callback {name}: {error}")}),
                             ));
                             return SValue::Void;
                         }
@@ -440,6 +467,9 @@ impl Host {
                     SValue::Void
                 })?;
             }
+        }
+        for (owner, report) in reports {
+            self.send(owner, report);
         }
         self.next_shell_generation += 1;
         let generation = self.next_shell_generation;
@@ -611,7 +641,14 @@ mod tests {
             .collect();
         assert_eq!(
             labels,
-            ["快捷键与鼠标", "keys", "外观", "first", "look", "logo"]
+            [
+                "Keys and Mouse",
+                "keys",
+                "Appearance",
+                "first",
+                "look",
+                "logo"
+            ]
         );
         assert_eq!(tree[4]["selected"], true);
         assert_eq!(tree[4]["page"], 2);

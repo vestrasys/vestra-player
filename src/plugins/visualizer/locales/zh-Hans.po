@@ -1,0 +1,175 @@
+msgid ""
+msgstr ""
+"Language: zh-Hans\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: logo.ts:63
+msgid "Choose Logo Image"
+msgstr "选择徽标图片"
+
+#: main.ts:66
+msgid "Image too large (max 4096×4096, 16 MB)"
+msgstr "图片过大（最大 4096×4096、16 MB）"
+
+#: main.ts:66
+msgid "Only PNG or JPEG images can be used"
+msgstr "只能使用 PNG 或 JPEG 图片"
+
+#: main.ts:66
+msgid "The logo image cannot be read; using the default logo"
+msgstr "徽标图片无法读取，已使用默认徽标"
+
+#: main.ts:66
+msgid "Cannot read the selected image"
+msgstr "无法读取所选图片"
+
+#: main.ts:66
+msgid "Using the custom logo"
+msgstr "已使用自定义徽标"
+
+#: main.ts:66
+msgid "Default logo restored"
+msgstr "已恢复默认徽标"
+
+#: main.ts:66
+msgid "Album cover for audio only: On"
+msgstr "纯音频时显示专辑封面：开"
+
+#: main.ts:66
+msgid "Album cover for audio only: Off"
+msgstr "纯音频时显示专辑封面：关"
+
+#: main.ts:66
+msgid "Logo when idle: On"
+msgstr "空闲时显示徽标：开"
+
+#: main.ts:66
+msgid "Logo when idle: Off"
+msgstr "空闲时显示徽标：关"
+
+#: main.ts:66
+msgid "Cover cache cleared"
+msgstr "已清除封面缓存"
+
+#: main.ts:227
+msgid "Show Album Cover for Audio Only"
+msgstr "纯音频时显示专辑封面"
+
+#: main.ts:235 main.ts:243 main.ts:251
+msgid "Appearance"
+msgstr "外观"
+
+#: main.ts:235
+msgid "Show Logo When Idle"
+msgstr "空闲时显示徽标"
+
+#: main.ts:243
+msgid "Choose Logo Image…"
+msgstr "选择徽标图片…"
+
+#: main.ts:251
+msgid "Restore Default Logo"
+msgstr "恢复默认徽标"
+
+#: main.ts:255
+msgid "Using the default logo"
+msgstr "正在使用默认徽标"
+
+#: main.ts:263 ui/page.slint:40
+msgid "Logo and Album Cover"
+msgstr "徽标与专辑封面"
+
+#: manifest.json
+msgid "Album Cover and Idle Screen"
+msgstr "专辑封面与空闲画面"
+
+#: manifest.json
+msgid "Shows the album cover for audio only and a logo when idle"
+msgstr "纯音频时显示专辑封面，空闲时显示徽标"
+
+#: manifest.json
+msgid ""
+"While audio without a picture plays, shows the album cover with title, artist and album; with no media open, shows a logo (which can be replaced with your own image); while media opens, shows a loading screen.\n"
+"Entries: Audio ▸ Show Album Cover for Audio Only, Settings ▸ Appearance."
+msgstr ""
+"播放没有画面的音频时显示专辑封面与标题、艺术家、专辑；没有打开媒体时显示徽标（可换成自己的图片）；打开媒体期间显示加载画面。\n"
+"入口：「声音 ▸ 纯音频时显示专辑封面」「设置 ▸ 外观」。"
+
+#: manifest.json
+msgid "audio"
+msgstr "声音"
+
+#: manifest.json
+msgid "appearance"
+msgstr "外观"
+
+#: manifest.json
+msgid "cover"
+msgstr "封面"
+
+#: ui/backdrop.slint:227
+msgid "Opening"
+msgstr "正在打开"
+
+#: ui/backdrop.slint:245
+msgid "Opening: {}"
+msgstr "正在打开：{}"
+
+#: ui/page.slint:46
+msgid "Idle screen"
+msgstr "空闲画面"
+
+#: ui/page.slint:49
+msgid "Show logo when idle"
+msgstr "空闲时显示徽标"
+
+#: ui/page.slint:76
+msgid "Current: custom image"
+msgstr "当前：自定义图片"
+
+#: ui/page.slint:76
+msgid "Current: Vestra Player logo"
+msgstr "当前：Vestra Player 徽标"
+
+#: ui/page.slint:84
+msgid "Choose Image…"
+msgstr "选择图片…"
+
+#: ui/page.slint:85
+msgid "Restore Default"
+msgstr "恢复默认"
+
+#: ui/page.slint:92
+msgid "PNG or JPEG, up to 4096×4096 and 16 MB. The image is copied, so the original can be moved."
+msgstr "PNG 或 JPEG，最大 4096×4096、16 MB；图片会复制保存，原文件可以移走。"
+
+#: ui/page.slint:98
+msgid "Audio only"
+msgstr "纯音频"
+
+#: ui/page.slint:101
+msgid "Show album cover for audio only"
+msgstr "纯音频时显示专辑封面"
+
+#: ui/page.slint:107
+msgid "The cover comes from the picture embedded in the file, or a cover, folder or front image in the same folder; without one the logo is shown as a placeholder."
+msgstr "封面取自文件内嵌图片，或同一文件夹中的 cover、folder、front 图片；没有时显示徽标占位。"
+
+#: ui/page.slint:118
+msgid "Cover cache unavailable"
+msgstr "封面缓存不可用"
+
+#: ui/page.slint:119
+msgid "Cover cache: empty"
+msgstr "封面缓存：空"
+
+#: ui/page.slint:120
+msgid "Cover cache: {n} track, {0}"
+msgid_plural "Cover cache: {n} tracks, {0}"
+msgstr[0] "封面缓存：{n} 首，{0}"
+
+#: ui/page.slint:126
+msgid "Clear Cover Cache"
+msgstr "清除封面缓存"

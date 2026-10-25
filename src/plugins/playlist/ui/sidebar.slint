@@ -9,7 +9,10 @@ export struct PlaylistRow {
     rowId: string,
     label: string,
     duration: string,
+    // The source, and the player's message when it failed to play.
     tooltip: string,
+    // A reason of the list's own, worded here: "missing", "unreadable", "unplayable" or "".
+    problem: string,
     selected: bool,
     current: bool,
     played: bool,
@@ -22,6 +25,7 @@ export global PlaylistBridge {
     in property <[PlaylistRow]> rows;
     in property <int> row-count;
     in property <int> first-row;
+    // The total duration ("" when none is known), shown as "Filtered …" while `filtering`.
     in property <string> total;
     in property <bool> detached;
     // Set by the player while it draws its own tab strip above the panel (sidebar tabs):
@@ -36,9 +40,9 @@ export global PlaylistBridge {
     in property <bool> can-bottom;
     // Drag reorder is off while a search filters (C21).
     in property <bool> can-drag: true;
-    // A search filters the rows (shows "无匹配项" when none match).
+    // A search filters the rows (shows "No matches" when none match).
     in property <bool> filtering;
-    // Incremented by "搜索" (Ctrl+S): focus the search box and select its text.
+    // Incremented by "Search" (Ctrl+S): focus the search box and select its text.
     in property <int> focus-search;
     // G-08: each increment of `scroll-request` scrolls the list to `scroll-to-y` (logical px).
     in property <float> scroll-to-y;
@@ -182,6 +186,8 @@ export component PlaylistSidebar inherits Rectangle {
     // box is empty and loses focus (or Esc clears it). A search term keeps it unfolded.
     // Left edge of the search area: the measured controls plus a 4px gap.
     private property <length> bar-fixed: controls.preferred-width + 4px;
+    // The total as shown: "Filtered 01:30" while a search filters.
+    private property <string> total-text: PlaylistBridge.filtering && PlaylistBridge.total != "" ? @tr("Filtered {}", PlaylistBridge.total) : PlaylistBridge.total;
     // Gap before the total plus its width.
     private property <length> total-width: PlaylistBridge.total == "" ? 0px : total-measure.preferred-width + 4px;
     private property <length> search-room: bar.width - root.bar-fixed - 6px;
@@ -221,7 +227,7 @@ export component PlaylistSidebar inherits Rectangle {
                 HorizontalLayout {
                     // The one tab: its label over a 28px gradient stroke.
                     Rectangle {
-                        width: 105px;
+                        width: max(105px, tab-label.preferred-width + 12px);
                         Rectangle {
                             x: (parent.width - 28px) / 2;
                             y: parent.height - 3px;
@@ -230,10 +236,10 @@ export component PlaylistSidebar inherits Rectangle {
                             border-radius: 1px;
                             background: Theme.accent-fill;
                         }
-                        Text {
+                        tab-label := Text {
                             width: 100%;
                             height: 100%;
-                            text: "播放列表";
+                            text: @tr("Playlist");
                             color: Theme.text;
                             font-size: Theme.font-tab;
                             horizontal-alignment: center;
@@ -242,13 +248,13 @@ export component PlaylistSidebar inherits Rectangle {
                     }
                     Rectangle { horizontal-stretch: 1; }
                     IconButton {
-                        tip: PlaylistBridge.detached ? "附着到主窗口" : "分离为浮动窗口";
+                        tip: PlaylistBridge.detached ? @tr("Attach to main window") : @tr("Detach as floating window");
                         // Detached: arrow into the frame; attached: arrow out of it.
                         icon: PlaylistBridge.detached ? "attach" : "detach";
                         clicked => { PlaylistBridge.toggle-detached(); }
                     }
                     IconButton {
-                        tip: "关闭列表";
+                        tip: @tr("Close list");
                         icon: "close";
                         clicked => { PlaylistBridge.hide(); }
                     }
@@ -305,7 +311,10 @@ export component PlaylistSidebar inherits Rectangle {
                         ToolTipArea {
                             width: parent.width;
                             height: parent.height;
-                            text: row.tooltip;
+                            text: row.problem == "missing" ? @tr("{}\nThe file does not exist", row.tooltip)
+                                : row.problem == "unreadable" ? @tr("{}\nThe file does not exist or cannot be read now; can retry", row.tooltip)
+                                : row.problem == "unplayable" ? @tr("{}\nCannot open this media", row.tooltip)
+                                : row.tooltip;
                             HorizontalLayout {
                                 width: 100%;
                                 height: 100%;
@@ -402,7 +411,7 @@ export component PlaylistSidebar inherits Rectangle {
                 if PlaylistBridge.filtering && PlaylistBridge.row-count == 0: Text {
                     width: 100%;
                     height: 100%;
-                    text: "无匹配项";
+                    text: @tr("No matches");
                     color: Theme.text-dim;
                     font-size: Theme.font-tab;
                     horizontal-alignment: center;
@@ -429,46 +438,46 @@ export component PlaylistSidebar inherits Rectangle {
                     padding-left: 6px;
                     padding-top: 1px;
                     IconButton {
-                        tip: "置顶 (Ctrl+Home)";
+                        tip: @tr("Move to top (Ctrl+Home)");
                         enabled: PlaylistBridge.can-top;
                         icon: "move-top";
                         clicked => { PlaylistBridge.place("top"); }
                     }
                     IconButton {
-                        tip: "上移 (Ctrl+↑)";
+                        tip: @tr("Move up (Ctrl+↑)");
                         enabled: PlaylistBridge.can-up;
                         icon: "move-up";
                         clicked => { PlaylistBridge.place("up"); }
                     }
                     IconButton {
-                        tip: "下移 (Ctrl+↓)";
+                        tip: @tr("Move down (Ctrl+↓)");
                         enabled: PlaylistBridge.can-down;
                         icon: "move-down";
                         clicked => { PlaylistBridge.place("down"); }
                     }
                     IconButton {
-                        tip: "置底 (Ctrl+End)";
+                        tip: @tr("Move to bottom (Ctrl+End)");
                         enabled: PlaylistBridge.can-bottom;
                         icon: "move-bottom";
                         clicked => { PlaylistBridge.place("bottom"); }
                     }
                     Rectangle { width: 6px; }
                     BarButton {
-                        text: "添加";
+                        text: @tr("Add");
                         icon: "add";
                         enabled: PlaylistBridge.can-add;
                         clicked(x, y) => { PlaylistBridge.add-menu(x, y); }
                     }
                     Rectangle { width: 4px; }
                     BarButton {
-                        text: "删除";
+                        text: @tr("Delete");
                         icon: "remove";
                         enabled: PlaylistBridge.can-remove;
                         clicked => { PlaylistBridge.remove(); }
                     }
                     Rectangle { width: 4px; }
                     BarButton {
-                        text: "排序";
+                        text: @tr("Sort");
                         icon: "sort";
                         enabled: PlaylistBridge.can-sort;
                         clicked(x, y) => { PlaylistBridge.sort-menu(x, y); }
@@ -480,7 +489,7 @@ export component PlaylistSidebar inherits Rectangle {
                     x: root.bar-fixed;
                     y: 1px;
                     height: parent.height - 1px;
-                    tip: "搜索 (Ctrl+S)";
+                    tip: @tr("Search (Ctrl+S)");
                     icon: "search";
                     clicked => { root.open-search(); }
                 }
@@ -529,7 +538,7 @@ export component PlaylistSidebar inherits Rectangle {
                         if search.text == "" && root.search-width >= 56px: Text {
                             x: 6px;
                             height: 100%;
-                            text: "搜索";
+                            text: @tr("Search");
                             color: Theme.text-dim;
                             font-size: Theme.font-body;
                             vertical-alignment: center;
@@ -542,7 +551,7 @@ export component PlaylistSidebar inherits Rectangle {
                     y: 0;
                     width: total-measure.preferred-width;
                     height: parent.height;
-                    text: PlaylistBridge.total;
+                    text: root.total-text;
                     color: Theme.text-list;
                     font-size: Theme.font-body;
                     vertical-alignment: center;
@@ -550,7 +559,7 @@ export component PlaylistSidebar inherits Rectangle {
                 }
                 total-measure := Text {
                     visible: false;
-                    text: PlaylistBridge.total;
+                    text: root.total-text;
                     font-size: Theme.font-body;
                 }
             }

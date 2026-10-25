@@ -1,0 +1,98 @@
+msgid ""
+msgstr ""
+"Language: zh-Hans\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: main.ts:42
+msgid "Palette: Vestra Light"
+msgstr "配色：Vestra 浅色"
+
+#: main.ts:42
+msgid "Palette: Vestra Dark"
+msgstr "配色：Vestra 深色"
+
+#: main.ts:51
+msgid "Language: Follow System. Takes effect after restart"
+msgstr "界面语言：跟随系统，重启后生效"
+
+#: main.ts:52
+msgid "Language: {}. Takes effect after restart"
+msgstr "界面语言：{}，重启后生效"
+
+#: main.ts:59 main.ts:93 ui/appearance.slint:98
+msgid "Appearance"
+msgstr "外观"
+
+#: main.ts:73 main.ts:103 main.ts:113 ui/language.slint:59
+msgid "Language"
+msgstr "语言"
+
+#: main.ts:84
+msgid "Options…"
+msgstr "选项…"
+
+#: main.ts:93 ui/appearance.slint:87
+msgid "Vestra Dark"
+msgstr "Vestra 深色"
+
+#: main.ts:93 ui/appearance.slint:87
+msgid "Vestra Light"
+msgstr "Vestra 浅色"
+
+#: main.ts:103 ui/language.slint:66
+msgid "Follow System"
+msgstr "跟随系统"
+
+#: manifest.json
+msgid "Preferences"
+msgstr "首选项"
+
+#: manifest.json
+msgid "Open the options window, change the palette and the language"
+msgstr "打开选项窗口，切换界面配色和界面语言"
+
+#: manifest.json
+msgid "Settings ▸ Options… (F5) opens the player's options window. Settings ▸ Appearance picks the palette (Vestra Dark, Vestra Light); the options window also has an Appearance page with previews. Settings ▸ Language picks the interface language, used from the next start."
+msgstr "「设置 ▸ 选项…」（F5）打开播放器的选项窗口；「设置 ▸ 外观」选择界面配色（Vestra 深色、Vestra 浅色），选项窗口里也有带预览的「外观」页；「设置 ▸ 语言」选择界面语言，重启后生效。"
+
+#: manifest.json
+msgid "settings"
+msgstr "设置"
+
+#: manifest.json
+msgid "appearance"
+msgstr "外观"
+
+#: manifest.json
+msgid "palette"
+msgstr "配色"
+
+#: manifest.json
+msgid "language"
+msgstr "语言"
+
+#: ui/appearance.slint:90
+msgid "For bright rooms; the video area stays dark"
+msgstr "适合明亮环境；视频区保持深色"
+
+#: ui/appearance.slint:90
+msgid "Default, from the logo's aurora colours"
+msgstr "默认，取自标志的极光色谱"
+
+#: ui/appearance.slint:106
+msgid "Palette"
+msgstr "配色"
+
+#: ui/appearance.slint:152
+msgid "Changes apply to every window at once. Corner radii, font sizes and control sizes stay the same in every palette."
+msgstr "切换后所有窗口立即生效。圆角、字号与控件尺寸不随配色变化。"
+
+#: ui/appearance.slint:162
+msgid "Restore Defaults"
+msgstr "恢复默认"
+
+#: ui/language.slint:77
+msgid "Takes effect after restart."
+msgstr "重启后生效。"

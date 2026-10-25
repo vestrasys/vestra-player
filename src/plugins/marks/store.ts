@@ -58,7 +58,7 @@ export class Settings {
   setAbCount(count: Count) {
     this.#save({ abCount: count });
   }
-  /** B22 在进度条上显示标记: on unless saved as `false`. */
+  /** B22 Show Marks on Seek Bar: on unless saved as `false`. */
   get showOnSeekbar(): boolean {
     return (this.#store.value as { showOnSeekbar?: unknown }).showOnSeekbar !== false;
   }
