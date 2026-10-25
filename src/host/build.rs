@@ -98,11 +98,15 @@ fn windows_resources(manifest_dir: &str, out_dir: &str) {
 }
 
 /// The player's own catalogs (doc/architecture/i18n.md §6): every
-/// `locales/<lang>.po` compiled to `$OUT_DIR/locales/<lang>.json`, which
-/// `src/i18n/mod.rs` includes. A broken file fails the build.
+/// `locales/<lang>.po` compiled to `$OUT_DIR/locales/<lang>.json`, and
+/// `$OUT_DIR/host_catalogs.rs` listing them all (`HOST_CATALOGS`, included by
+/// `src/i18n/mod.rs`), so a new `.po` is embedded without touching the code.
+/// A test checks the list matches `i18n::LOCALES`. A broken file fails the
+/// build.
 fn locales() {
     println!("cargo:rerun-if-changed=locales");
-    let out = std::path::Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("locales");
+    let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR"));
+    let out = out_dir.join("locales");
     std::fs::create_dir_all(&out).expect("create OUT_DIR/locales");
     let mut found = Vec::new();
     for entry in std::fs::read_dir("locales").expect("read locales/") {
@@ -128,4 +132,13 @@ fn locales() {
         found.iter().any(|l| l == "zh-Hans"),
         "locales/zh-Hans.po is missing"
     );
+    found.sort();
+    let mut list = String::from("pub const HOST_CATALOGS: &[(&str, &str)] = &[\n");
+    for language in &found {
+        list.push_str(&format!(
+            "    ({language:?}, include_str!(concat!(env!(\"OUT_DIR\"), \"/locales/{language}.json\"))),\n"
+        ));
+    }
+    list.push_str("];\n");
+    std::fs::write(out_dir.join("host_catalogs.rs"), list).expect("write host_catalogs.rs");
 }

@@ -231,6 +231,36 @@ fn package_catalogs_load_compiled_json_before_the_source_po() {
     assert!(load_locale(dir.path(), "ja").is_none());
 }
 
+/// A plugin's catalog for every translated interface language is found,
+/// compiled (`dist/locales/<lang>.json`, an installed package) or source
+/// (`locales/<lang>.po`, a development load).
+#[test]
+fn package_catalogs_load_for_every_interface_language() {
+    let built = tempfile::tempdir().unwrap();
+    let source = tempfile::tempdir().unwrap();
+    for dir in [&built, &source] {
+        std::fs::create_dir_all(dir.path().join("locales")).unwrap();
+    }
+    for locale in &LOCALES[1..] {
+        let json = json!({ "language": locale, "messages": { "Open": format!("json {locale}") } });
+        std::fs::write(
+            built.path().join(format!("locales/{locale}.json")),
+            json.to_string(),
+        )
+        .unwrap();
+        std::fs::write(
+            source.path().join(format!("locales/{locale}.po")),
+            format!("msgid \"Open\"\nmsgstr \"po {locale}\"\n"),
+        )
+        .unwrap();
+    }
+    for locale in &LOCALES[1..] {
+        let shown = |dir: &Path| load_locale(dir, locale).map(|c| c.text("Open").to_owned());
+        assert_eq!(shown(built.path()), Some(format!("json {locale}")));
+        assert_eq!(shown(source.path()), Some(format!("po {locale}")));
+    }
+}
+
 /// Every player string the code asks for (`tr("…")`, `tr_args("…", …)`, a
 /// `@tr` in `ui/` or in Slint source written by the player) is in
 /// `locales/messages.pot`, and every entry there is still used; each
@@ -428,6 +458,34 @@ fn the_simplified_chinese_catalog_keeps_the_old_texts() {
         ("Options", "选项"),
     ] {
         assert_eq!(zh.text(key), old);
+    }
+}
+
+/// `build.rs` embeds every `locales/<lang>.po`; that set is exactly the
+/// translated interface languages, so a new language cannot ship without the
+/// player's own strings (or a stray `.po` without a language setting).
+#[test]
+fn every_interface_language_has_an_embedded_host_catalog() {
+    let mut embedded: Vec<&str> = HOST_CATALOGS.iter().map(|(locale, _)| *locale).collect();
+    let mut translated: Vec<&str> = LOCALES.iter().copied().filter(|l| *l != "en").collect();
+    embedded.sort_unstable();
+    translated.sort_unstable();
+    assert_eq!(embedded, translated);
+}
+
+/// The player's strings show in each language (one msgid each).
+#[test]
+fn host_strings_show_in_every_language() {
+    for (locale, paused) in [
+        ("zh-Hans", "已暂停"),
+        ("ja", "一時停止"),
+        ("ko", "일시 정지됨"),
+        ("de", "Pausiert"),
+        ("fr", "Pause"),
+        ("es", "En pausa"),
+    ] {
+        let catalog = host_catalog(locale).unwrap_or_else(|| panic!("{locale}: no catalog"));
+        assert_eq!(catalog.text("Paused"), paused, "{locale}");
     }
 }
 
