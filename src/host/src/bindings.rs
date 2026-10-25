@@ -602,12 +602,30 @@ pub struct Table {
     /// `"<manifest id>/<command id>"` → bindings; `[]` unbinds.
     overlay: BTreeMap<String, Vec<String>>,
     active: BTreeMap<(Scope, Input), Target>,
+    /// Commands that lost an input to the active one, in claim order: the
+    /// key goes to them while the winner is disabled.
+    fallback: BTreeMap<(Scope, Input), Vec<Target>>,
+    /// Disabled commands and their reasons, mirrored from the registry.
+    disabled: BTreeMap<(Owner, String), Option<String>>,
     conflicts: Vec<String>,
     /// Inputs a command claims but another command holds: (input, winner).
     shadowed: Shadows,
     next: u64,
     /// Advances on every rebuild (declarations or overlay changed).
     revision: u64,
+}
+
+/// What an input resolves to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Lookup<'a> {
+    /// An enabled command takes it.
+    Fire(&'a Target),
+    /// Every command bound to it is disabled: the first one and its reason.
+    Disabled {
+        target: &'a Target,
+        reason: Option<&'a str>,
+    },
+    Unbound,
 }
 
 /// Per command: inputs it claims that another command holds, and the winner.
@@ -797,6 +815,7 @@ impl Table {
         let mut active: BTreeMap<(Scope, Input), (bool, Target)> = BTreeMap::new();
         let mut conflicts = Vec::new();
         let mut shadowed: Shadows = BTreeMap::new();
+        let mut fallback: BTreeMap<(Scope, Input), Vec<Target>> = BTreeMap::new();
         for (default, owner, _, scope, input, id) in claims {
             let target = Target {
                 owner,
@@ -809,6 +828,10 @@ impl Table {
                     winner.owner,
                     winner.id.clone(),
                 ));
+                fallback
+                    .entry((scope, input.clone()))
+                    .or_default()
+                    .push(target.clone());
             }
             match active.get(&(scope, input.clone())) {
                 None => {
@@ -839,6 +862,7 @@ impl Table {
         }
         self.conflicts = conflicts;
         self.shadowed = shadowed;
+        self.fallback = fallback;
         self.revision += 1;
         self.active = active
             .into_iter()
@@ -851,9 +875,25 @@ impl Table {
         &self.conflicts
     }
 
-    /// The focused panel's bindings first, then global ones. On macOS an event
-    /// with ⌘ falls back to the `Ctrl` form ("Ctrl" accepts Cmd there).
+    /// The registry's disabled commands (owner, id → reason). Keys bound to
+    /// them pass to the next command bound to the same input.
+    pub fn set_disabled(&mut self, disabled: BTreeMap<(Owner, String), Option<String>>) {
+        self.disabled = disabled;
+    }
+
+    /// The enabled command an input fires, if any (see [`Table::lookup`]).
     pub fn resolve(&self, input: &Input, panel: Option<Owner>) -> Option<&Target> {
+        match self.lookup(input, panel) {
+            Lookup::Fire(target) => Some(target),
+            _ => None,
+        }
+    }
+
+    /// The focused panel's bindings first, then global ones. On macOS an event
+    /// with ⌘ falls back to the `Ctrl` form ("Ctrl" accepts Cmd there). A
+    /// disabled command is skipped: the input goes to the next command bound
+    /// to it (one that lost the conflict, then the wider scope).
+    pub fn lookup(&self, input: &Input, panel: Option<Owner>) -> Lookup<'_> {
         let mut candidates = vec![input.clone()];
         if crate::platform::CTRL_ACCEPTS_CMD && input.mods.cmd && !input.mods.ctrl {
             let mut alias = input.clone();
@@ -870,15 +910,30 @@ impl Table {
             wider.name = zoneless.into();
             candidates.push(wider);
         }
+        let mut disabled = None;
         let scopes = panel.map(Scope::Panel).into_iter().chain([Scope::Global]);
         for scope in scopes {
             for candidate in &candidates {
-                if let Some(target) = self.active.get(&(scope, candidate.clone())) {
-                    return Some(target);
+                let key = (scope, candidate.clone());
+                let targets = self
+                    .active
+                    .get(&key)
+                    .into_iter()
+                    .chain(self.fallback.get(&key).into_iter().flatten());
+                for target in targets {
+                    match self.disabled.get(&(target.owner, target.id.clone())) {
+                        None => return Lookup::Fire(target),
+                        Some(reason) => {
+                            disabled.get_or_insert(Lookup::Disabled {
+                                target,
+                                reason: reason.as_deref(),
+                            });
+                        }
+                    }
                 }
             }
         }
-        None
+        disabled.unwrap_or(Lookup::Unbound)
     }
 
     /// Whether any active binding uses this mouse wheel axis (`Mouse:WheelUp`…).
@@ -1407,6 +1462,63 @@ mod tests {
         assert!(table.resolve(&key("Tab"), None).is_none());
         assert!(table.conflicts().is_empty());
         assert_eq!(table.label(1, "pause"), None);
+    }
+
+    #[test]
+    fn disabled_commands_pass_the_key_on_or_report_their_reason() {
+        let mut table = Table::default();
+        table
+            .declare(HOST, "exit", "host", &["Escape".into()], false, false)
+            .unwrap();
+        table
+            .declare(4, "close", "p.panel", &["Escape".into()], false, false)
+            .unwrap();
+        table
+            .declare(5, "next", "p.list", &["N".into()], true, false)
+            .unwrap();
+        table
+            .declare(6, "skip", "p.skip", &["N".into()], false, false)
+            .unwrap();
+        table
+            .declare(7, "save", "p.save", &["S".into()], false, false)
+            .unwrap();
+        assert_eq!(table.resolve(&key("Escape"), None).unwrap().id, "exit");
+        table.set_disabled(
+            [
+                ((HOST, "exit".to_owned()), None),
+                ((5, "next".to_owned()), Some("Empty list".to_owned())),
+                ((7, "save".to_owned()), Some("Nothing to save".to_owned())),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        // The conflict's loser takes the key while the winner is disabled.
+        assert_eq!(table.resolve(&key("Escape"), None).unwrap().id, "close");
+        // The focused panel's disabled command yields to the global one.
+        assert_eq!(table.resolve(&key("N"), Some(5)).unwrap().id, "skip");
+        let Lookup::Disabled { target, reason } = table.lookup(&key("S"), None) else {
+            panic!("only a disabled command holds S");
+        };
+        assert_eq!(
+            (target.id.as_str(), reason),
+            ("save", Some("Nothing to save"))
+        );
+        assert!(table.resolve(&key("S"), None).is_none());
+        table.set_disabled([((4, "close".to_owned()), None)].into_iter().collect());
+        assert_eq!(table.resolve(&key("Escape"), None).unwrap().id, "exit");
+        table.set_disabled(
+            [
+                ((HOST, "exit".to_owned()), None),
+                ((4, "close".to_owned()), None),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        assert!(matches!(
+            table.lookup(&key("Escape"), None),
+            Lookup::Disabled { reason: None, .. }
+        ));
+        assert_eq!(table.lookup(&key("X"), None), Lookup::Unbound);
     }
 
     #[test]

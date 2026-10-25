@@ -588,6 +588,20 @@ impl Registry {
         self.revision
     }
 
+    /// Disabled commands (owner, id → reason), for the key bindings to skip.
+    pub fn disabled(&self) -> BTreeMap<(OwnerGeneration, String), Option<String>> {
+        self.commands
+            .iter()
+            .filter(|(_, entry)| !entry.state.enabled)
+            .map(|(key, entry)| {
+                (
+                    (key.owner, key.local_id.clone()),
+                    entry.state.reason.clone(),
+                )
+            })
+            .collect()
+    }
+
     pub fn snapshot(&self) -> MenuSnapshot {
         let entries: Vec<_> = self
             .commands
@@ -831,6 +845,12 @@ mod tests {
                 reason: Some("No source".into())
             })
         );
+        assert_eq!(
+            registry.disabled(),
+            [((1, "play".to_owned()), Some("No source".to_owned()))]
+                .into_iter()
+                .collect()
+        );
         let mut busy = state(true);
         busy.busy = true;
         busy.reason = Some("Preparing".into());
@@ -841,6 +861,7 @@ mod tests {
                 reason: Some("Preparing".into())
             })
         );
+        assert!(registry.disabled().is_empty());
     }
 
     #[test]

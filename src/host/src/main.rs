@@ -908,8 +908,16 @@ impl Host {
                 }
                 input_trace::mark(&format!("host loop: binding → {owner}/{id}"));
                 self.policy.activity(self.now_ms());
-                if let Err(error) = self.execute_command(owner, &id) {
-                    eprintln!("binding execute: {error:?}");
+                match self.commands.resolve_execution(owner, &id) {
+                    // A key never fails silently: the command's reason shows.
+                    Err(commands::CommandError::Disabled {
+                        reason: Some(reason),
+                    }) => self.show_osd(&reason),
+                    _ => {
+                        if let Err(error) = self.execute_command(owner, &id) {
+                            eprintln!("binding execute: {error:?}");
+                        }
+                    }
                 }
             }
             Event::SidebarResized(generation, width) => {
@@ -2289,7 +2297,7 @@ impl Host {
                 }
             };
             if let Some(typed) = typed
-                && input.borrow().table.resolve(&typed, panel).is_some()
+                && input.borrow().table.lookup(&typed, panel) != bindings::Lookup::Unbound
             {
                 event = typed;
             }
@@ -4704,8 +4712,28 @@ fn fire(
     if shared.blocked {
         return false;
     }
-    let Some(target) = shared.table.resolve(event, panel) else {
-        return false;
+    let target = match shared.table.lookup(event, panel) {
+        bindings::Lookup::Fire(target) => target,
+        // Only disabled commands hold it: one with a reason says why on the
+        // OSD (the host loop's execution reports it); otherwise the key passes.
+        bindings::Lookup::Disabled {
+            target,
+            reason: Some(_),
+        } => {
+            if !repeat {
+                input_trace::mark(&format!(
+                    "disabled {} → {}/{}",
+                    bindings::text(event),
+                    target.owner,
+                    target.id
+                ));
+                let _ = events.send(Event::Binding(generation, target.owner, target.id.clone()));
+            }
+            return true;
+        }
+        bindings::Lookup::Disabled { reason: None, .. } | bindings::Lookup::Unbound => {
+            return false;
+        }
     };
     if !repeat {
         input_trace::mark(&format!(
@@ -5114,6 +5142,7 @@ fn main() -> Result<()> {
         let tick_host = host.clone();
         let timer = slint::Timer::default();
         let mut menu_revision = u64::MAX;
+        let mut binding_revision = u64::MAX;
         timer.start(
             slint::TimerMode::Repeated,
             Duration::from_millis(16),
@@ -5135,6 +5164,11 @@ fn main() -> Result<()> {
                 host.settings_tick();
                 if host.theme_pending {
                     host.theme_all();
+                }
+                if host.commands.revision() != binding_revision {
+                    binding_revision = host.commands.revision();
+                    let disabled = host.commands.disabled();
+                    host.input.borrow_mut().table.set_disabled(disabled);
                 }
                 if host.shell.is_some() {
                     let revision = host.commands.snapshot().revision;
