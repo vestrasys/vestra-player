@@ -69,6 +69,7 @@ mod system;
 mod theme;
 mod timeline;
 mod ui;
+mod ui_fonts;
 mod ui_image;
 mod ui_markdown;
 mod ui_state;
@@ -908,8 +909,16 @@ impl Host {
                 }
                 input_trace::mark(&format!("host loop: binding → {owner}/{id}"));
                 self.policy.activity(self.now_ms());
-                if let Err(error) = self.execute_command(owner, &id) {
-                    eprintln!("binding execute: {error:?}");
+                match self.commands.resolve_execution(owner, &id) {
+                    // A key never fails silently: the command's reason shows.
+                    Err(commands::CommandError::Disabled {
+                        reason: Some(reason),
+                    }) => self.show_osd(&reason),
+                    _ => {
+                        if let Err(error) = self.execute_command(owner, &id) {
+                            eprintln!("binding execute: {error:?}");
+                        }
+                    }
                 }
             }
             Event::SidebarResized(generation, width) => {
@@ -2289,7 +2298,7 @@ impl Host {
                 }
             };
             if let Some(typed) = typed
-                && input.borrow().table.resolve(&typed, panel).is_some()
+                && input.borrow().table.lookup(&typed, panel) != bindings::Lookup::Unbound
             {
                 event = typed;
             }
@@ -2663,7 +2672,8 @@ impl Host {
             busy: false,
             reason: None,
         };
-        let mut fullscreen = commands::Declaration::new("Fullscreen", &["Fullscreen"]);
+        let mut fullscreen =
+            commands::Declaration::new("Toggle Fullscreen", &["Toggle Fullscreen"]);
         fullscreen.group = "screen".into();
         fullscreen.order = 700;
         // IA-CORE-04: Enter and Alt+Enter toggle full screen; F11 too.
@@ -2673,10 +2683,10 @@ impl Host {
             "F11".into(),
             "Mouse:LeftDoubleClick".into(),
         ];
-        fullscreen.localize(|_| i18n::tr("Fullscreen"));
-        let mut exit = commands::Declaration::new("Exit Fullscreen", &[]);
+        fullscreen.localize(|_| i18n::tr("Toggle Fullscreen"));
+        let mut exit = commands::Declaration::new("Leave Fullscreen", &[]);
         exit.bindings = vec!["Escape".into()];
-        exit.localize(|_| i18n::tr("Exit Fullscreen"));
+        exit.localize(|_| i18n::tr("Leave Fullscreen"));
         let mut quit = commands::Declaration::new("Quit", &["Quit"]);
         quit.localize(|_| i18n::tr("Quit"));
         quit.group = "exit".into();
@@ -4704,8 +4714,28 @@ fn fire(
     if shared.blocked {
         return false;
     }
-    let Some(target) = shared.table.resolve(event, panel) else {
-        return false;
+    let target = match shared.table.lookup(event, panel) {
+        bindings::Lookup::Fire(target) => target,
+        // Only disabled commands hold it: one with a reason says why on the
+        // OSD (the host loop's execution reports it); otherwise the key passes.
+        bindings::Lookup::Disabled {
+            target,
+            reason: Some(_),
+        } => {
+            if !repeat {
+                input_trace::mark(&format!(
+                    "disabled {} → {}/{}",
+                    bindings::text(event),
+                    target.owner,
+                    target.id
+                ));
+                let _ = events.send(Event::Binding(generation, target.owner, target.id.clone()));
+            }
+            return true;
+        }
+        bindings::Lookup::Disabled { reason: None, .. } | bindings::Lookup::Unbound => {
+            return false;
+        }
     };
     if !repeat {
         input_trace::mark(&format!(
@@ -5007,6 +5037,12 @@ fn main() -> Result<()> {
         platform::preferred_languages()
     };
     i18n::init(i18n::resolve(preference.as_deref(), &system));
+    if !headless {
+        // CJK fallback fonts for every window, before the first one exists
+        // (`ui_fonts`), ordered for the interface language (Japanese fonts
+        // first in `ja`, Korean in `ko`, Simplified Chinese otherwise).
+        ui_fonts::install(i18n::locale());
+    }
     host.register_host_commands()?;
     {
         if core_actions::migrate_overlay(&mut host.ui_state.state.bindings) {
@@ -5114,6 +5150,7 @@ fn main() -> Result<()> {
         let tick_host = host.clone();
         let timer = slint::Timer::default();
         let mut menu_revision = u64::MAX;
+        let mut binding_revision = u64::MAX;
         timer.start(
             slint::TimerMode::Repeated,
             Duration::from_millis(16),
@@ -5135,6 +5172,11 @@ fn main() -> Result<()> {
                 host.settings_tick();
                 if host.theme_pending {
                     host.theme_all();
+                }
+                if host.commands.revision() != binding_revision {
+                    binding_revision = host.commands.revision();
+                    let disabled = host.commands.disabled();
+                    host.input.borrow_mut().table.set_disabled(disabled);
                 }
                 if host.shell.is_some() {
                     let revision = host.commands.snapshot().revision;

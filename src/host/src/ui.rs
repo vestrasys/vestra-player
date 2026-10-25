@@ -144,9 +144,9 @@ pub fn translate(source: String, path: &Path) -> String {
 }
 
 /// Fonts: no window sets `default-font-family`, so every window uses the
-/// system UI font and Slint's per-character fallback for scripts it lacks
-/// (CJK included since Slint 1.18; architecture README "fonts" has how to
-/// add a fallback font for one platform only).
+/// system UI font and Slint's per-character fallback for scripts it lacks;
+/// the CJK fallback chains are the host's (`ui_fonts`, architecture README
+/// "fonts").
 pub fn compile(path: &Path) -> Result<ComponentInstance> {
     compile_source(std::fs::read_to_string(path)?, path)
 }
@@ -1385,6 +1385,55 @@ export component W inherits Window {
     }
 
     /// Every plugin and example Slint file compiles with the host's configuration.
+    /// A translated label longer than the minimum widens its button.
+    #[test]
+    fn button_width_follows_its_text_above_the_minimum() {
+        headless();
+        let source = r#"
+import { Button } from "vestra/widgets.slint";
+export component W inherits Window {
+    HorizontalLayout {
+        alignment: start;
+        short := Button { text: "OK"; }
+        long := Button { text: "Ignore Default Shortcuts and Restart Now"; }
+        small := Button { text: "Ignore Default Shortcuts and Restart Now"; small: true; }
+        icon := Button { icon: "M 0 0 L 14 6 L 0 12 Z"; }
+    }
+    out property <length> short-width: short.width;
+    out property <length> long-width: long.width;
+    out property <length> small-width: small.width;
+    out property <length> icon-width: icon.width;
+}"#;
+        let result = pollster::block_on(
+            compiler().build_from_source(source.into(), ui_dir().join("t.slint")),
+        );
+        let errors: Vec<_> = result
+            .diagnostics()
+            .filter(|d| d.level() == slint_interpreter::DiagnosticLevel::Error)
+            .map(|d| d.to_string())
+            .collect();
+        assert!(errors.is_empty(), "{errors:?}");
+        let instance = result.component("W").unwrap().create().unwrap();
+        let length = |name: &str| match instance.get_property(name).unwrap() {
+            slint_interpreter::Value::Number(n) => n,
+            other => panic!("{name}: {other:?}"),
+        };
+        instance
+            .window()
+            .set_size(slint::LogicalSize::new(900., 100.));
+        // The minimum stays; a longer label is not cut off.
+        assert_eq!(length("short-width"), 66.);
+        assert!(length("long-width") > 150., "{}", length("long-width"));
+        assert!(length("small-width") > 150., "{}", length("small-width"));
+        assert_eq!(length("icon-width"), 14.);
+        // Squeezed, it can still shrink to the old minimum width.
+        instance
+            .window()
+            .set_size(slint::LogicalSize::new(200., 100.));
+        assert!(length("long-width") < 100., "{}", length("long-width"));
+        assert!(length("long-width") >= 66.);
+    }
+
     #[test]
     fn all_plugin_and_example_slint_files_compile() {
         fn walk(dir: &Path, out: &mut Vec<PathBuf>) {

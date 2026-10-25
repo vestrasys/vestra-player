@@ -61,7 +61,7 @@ ADD / DEL / SORT 改成图标是独立的可选项，也可以保留文字（比
 
 最终效果：[final-dark.png](final-dark.png)（`vestra`）、[final-light.png](final-light.png)（`vestra-light`），由 Slint 1.18.1 软件渲染器加载真实的库与插件 .slint 画出，2×。规格写进了[界面规格](../ui-spec.md) §2.1（两套配色的全部 token）、§2.5（图标规则与清单）、§4–§7、§9（屏幕提示）。
 
-- **配色**：`vestra` 换成 Aurora（`palette-aurora.json`），新增配色 id `vestra-light`（`palette-aurora-light.json`）：宿主 `theme.rs` 的两张表、`ui/palette.slint` 的两条渐变常量；「设置 ▶ 外观 ▶ Vestra 深色 / Vestra 浅色」与选项窗口外观页（带预览）；选择存在 `ui-state.json`；SDK `ThemeId` 增加 `"vestra-light"`。
+- **配色**：`vestra` 换成 Aurora（`palette-aurora.json`），新增配色 id `vestra-light`（`palette-aurora-light.json`）：宿主 `theme.rs` 的两张表、`ui/palette.slint` 的两条渐变常量；「设置 ▸ 外观 ▸ Vestra 深色 / Vestra 浅色」与选项窗口外观页（带预览）；选择存在 `ui-state.json`；SDK `ThemeId` 增加 `"vestra-light"`。
 - **浅色下的 std-widgets**：Slint 1.18 的 fluent 风格在运行时读 `Palette.color-scheme`（`fluent-dark` 只决定它的初值），所以宿主仍以 `fluent-dark` 编译，在 `VestraPalette` 里把 `color-scheme` 与 std-widgets 的 `Palette.color-scheme` 双向绑定，切到浅色时设为 `light`。输入框、下拉框、复选框、滚动条随之变浅，不用重新编译、不用替换控件。剩下的差别：fluent 控件用自己的中性灰和蓝色强调，两套配色都一样。
 - **图标**：新库文件 `@vestra/icons.slint`（`Icon`、`Icons`，源自 `icons-v-line.json`），底栏、播放列表、章节/书签、快捷键、商城、Markdown 任务框、菜单勾选/单选/子菜单箭头/滚动箭头、下拉箭头、排序箭头、标签 ×、外观预览全部换用，字体字符 ✓ › ▲▼ ▾ × ▶ 不再用作图标。ADD / DEL / SORT 改为 41×18 的图标按钮（＋ − ⇅，悬停提示「添加」「删除」「排序」）。
 - **其它外观**：底栏去掉按钮间的整高分隔线与进度条行下沿的线，悬停为 32×32 圆角底；进度条与音量 thumb 为白芯 + 2px 强调色环；播放列表页签和工具窗口页签为文字下的 28px 渐变短线；正在播放的行左侧 2px 青色竖条；菜单当前项左侧 2px 强调色竖条、分隔线缩进；选项树选中项为竖条 + 正文色；屏幕提示与信息层为半透明深色圆角底板，屏幕提示底边一条渐变线；圆角 4/8px。

@@ -196,11 +196,11 @@ msgid "Previous/Next is provided by {}"
 msgstr ""
 
 #: src/main.rs:2604
-msgid "Fullscreen"
+msgid "Toggle Fullscreen"
 msgstr ""
 
 #: src/main.rs:2607
-msgid "Exit Fullscreen"
+msgid "Leave Fullscreen"
 msgstr ""
 
 #: src/main.rs:2609

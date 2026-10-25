@@ -333,7 +333,8 @@ binding  = { 修饰键 "+" } 输入          修饰键按 Ctrl、Alt、Shift、C
 - 窗口标准快捷键不是绑定：工具窗口、浮动面板、选项窗口按系统的标准关闭键关闭（macOS ⌘W；Windows Ctrl+W、Ctrl+F4；Linux Ctrl+W），这些键在窗口收到时就被播放器处理，不进入绑定表，也不交给该窗口里的插件 Slint。主窗口不响应（关闭主窗口等于退出）：插件绑定 `Ctrl+W` 在主窗口照常触发，在这些窗口里不触发（macOS 上 `Ctrl+W` 也认 ⌘W）。默认绑定都不用这些键。
 - 菜单或系统对话框打开时绑定暂停。默认只在按下时触发；`repeat: true` 时按住会重复触发。
 - 冲突（同一输入、同一范围被两个命令声明）不报错：用户覆盖层优先，其次宿主自己的命令，再次先加载的插件；被压下的绑定写一行宿主日志，赢家停用后自动生效。测试里用 `host.conflicts` 检查。
-- 宿主自己的命令：「全屏」（`Enter`、`Alt+Enter`、`F11`、`Mouse:LeftDoubleClick`；画中画期间视频区双击改为把画面放回主窗口，§6.6）、「退出全屏」（`Escape`，不在菜单）、「退出」（`Cmd+Q`），以及 14 个基础播放动作（§5.5）。
+- 命令 `enabled: false` 时它的绑定让出按键：同一输入依次交给被它压下的命令、再到全局范围；没有可用的命令时，若禁用的命令带 `reason`，宿主把原因显示在 OSD 上并吃掉按键，不带 `reason` 则按键照常交给焦点控件（例如窗口模式下 `Escape` 不再被「仅退出全屏」吞掉）。
+- 宿主自己的命令：「全屏」（`fullscreen`，英文 Toggle Fullscreen；`Enter`、`Alt+Enter`、`F11`、`Mouse:LeftDoubleClick`；画中画期间视频区双击改为把画面放回主窗口，§6.6）、「仅退出全屏」（`exit-fullscreen`，英文 Leave Fullscreen；`Escape`，不在菜单，只在全屏时可用）、「退出」（`Cmd+Q`），以及 14 个基础播放动作（§5.5）。
 - 用户覆盖层保存在界面状态文件（[架构总览 §6](../architecture/README.md)），由 `plugin.bindings`（§4.2）读写。
 
 ### 4.2 绑定管理 `plugin.bindings`
@@ -584,14 +585,14 @@ plugin.host.run(action: HostAction): Promise<void>;
 | 动作 | 菜单路径 | order / group | 默认绑定 | 行为与提示 |
 | --- | --- | --- | --- | --- |
 | `stop` | 关闭 | 120 / open | F4 | 关闭来源；没有来源时禁用 |
-| `play-pause` | 播放 ▶ 播放/暂停 | 201 | Space | 暂停/继续，播完后重播；「已暂停」/「播放」；勾选 = 已暂停 |
-| `previous` / `next` | 播放 ▶ 上一个 / 下一个 | 202 / 203 | PageUp、Mouse:X1 / PageDown、Mouse:X2 | 交给播放序列提供者（§5.4）；不可用时原因「没有上一个」/「没有下一个」 |
-| `frame-back` / `frame-forward` | 播放 ▶ 跳转 ▶ 上一帧 / 下一帧 | 204 / 205，frame | D / F（按住重复） | `player.step("frame", …)`；在途时丢弃重复触发；完成后提示「定位: 下一帧 00:01:23.456」/「定位: 上一帧 …」（完成后的位置，精确到毫秒），没动时「已是最后一帧」/「已是第一帧」。两个方向分别判断：没有视频轨（纯音频、只有封面）禁用，原因「没有视频」；下一帧需要就绪（直播也可以，播完后不可）；上一帧播完后也可用，需要可跳转（生成流、不可跳转的直播原因「当前来源不支持逐帧后退」） |
-| `seek-backward` / `seek-forward` | 播放 ▶ 跳转 ▶ 后退/前进 N秒 | 210 / 211，step | ← / →（按住重复） | 从最新未完成的目标累加，夹在 0 与时长之间；「前进 5秒: 00:37 / 01:40」；N 见 `setStepSeek` |
-| `rate-normal` | 播放 ▶ 速度 ▶ 正常（单选） | 220 | Z | 1 倍；「播放速度: 1x」 |
-| `rate-down` / `rate-up` | 播放 ▶ 速度 ▶ 减速 0.1 / 加速 0.1 | 221 / 222 | X / C | ±0.1，取两位小数，夹在 0.25–4；「播放速度: 1.1x」 |
-| `volume-up` / `volume-down` | 声音 ▶ 音量 + / 音量 − | 501 / 502 | ↑、滚轮上 / ↓、滚轮下（按住重复） | ±5，先设音量再取消静音；「音量: 85%」。`volume-up` 上限 100（交互对齐 G-13a）：已经 ≥ 100（别的插件用 `setOutput` 设到 100 以上）时不再增加、照常提示；`volume-down` 不低于 0。`setOutput` 的范围仍是 0–200 |
-| `mute` | 声音 ▶ 静音（勾选） | 503 | M | 「静音: 开」/「静音: 关」 |
+| `play-pause` | 播放 ▸ 播放/暂停 | 201 | Space | 暂停/继续，播完后重播；「已暂停」/「播放」；勾选 = 已暂停 |
+| `previous` / `next` | 播放 ▸ 上一个 / 下一个 | 202 / 203 | PageUp、Mouse:X1 / PageDown、Mouse:X2 | 交给播放序列提供者（§5.4）；不可用时原因「没有上一个」/「没有下一个」 |
+| `frame-back` / `frame-forward` | 播放 ▸ 跳转 ▸ 上一帧 / 下一帧 | 204 / 205，frame | D / F（按住重复） | `player.step("frame", …)`；在途时丢弃重复触发；完成后提示「定位: 下一帧 00:01:23.456」/「定位: 上一帧 …」（完成后的位置，精确到毫秒），没动时「已是最后一帧」/「已是第一帧」。两个方向分别判断：没有视频轨（纯音频、只有封面）禁用，原因「没有视频」；下一帧需要就绪（直播也可以，播完后不可）；上一帧播完后也可用，需要可跳转（生成流、不可跳转的直播原因「当前来源不支持逐帧后退」） |
+| `seek-backward` / `seek-forward` | 播放 ▸ 跳转 ▸ 后退/前进 N秒 | 210 / 211，step | ← / →（按住重复） | 从最新未完成的目标累加，夹在 0 与时长之间；「前进 5秒: 00:37 / 01:40」；N 见 `setStepSeek` |
+| `rate-normal` | 播放 ▸ 速度 ▸ 正常（单选） | 220 | Z | 1 倍；「播放速度: 1x」 |
+| `rate-down` / `rate-up` | 播放 ▸ 速度 ▸ 减速 0.1 / 加速 0.1 | 221 / 222 | X / C | ±0.1，取两位小数，夹在 0.25–4；「播放速度: 1.1x」 |
+| `volume-up` / `volume-down` | 声音 ▸ 音量 + / 音量 − | 501 / 502 | ↑、滚轮上 / ↓、滚轮下（按住重复） | ±5，先设音量再取消静音；「音量: 85%」。`volume-up` 上限 100（交互对齐 G-13a）：已经 ≥ 100（别的插件用 `setOutput` 设到 100 以上）时不再增加、照常提示；`volume-down` 不低于 0。`setOutput` 的范围仍是 0–200 |
+| `mute` | 声音 ▸ 静音（勾选） | 503 | M | 「静音: 开」/「静音: 关」 |
 
 - 禁用时 `run` 以 `unavailable` 失败（`message` 为原因），未知 id 为 `invalid`。动作执行完才 resolve（之后 `player.state` 已刷新）；同一动作在途时的重复调用被丢弃并直接 resolve（相对跳转与音量除外，它们排队累加）。
 - 执行失败（如来源拒绝）显示在视频上。
@@ -822,7 +823,7 @@ interface SlotState {
 - 插件 → 界面用 `in` / `in-out property`，界面 → 插件用 `callback`。回调参数和属性值必须能用 JSON 表示（基本类型、数组、结构体），回调返回 `void`。
 - 会被插件改值的输入控件用双向绑定（`value <=> root.x`、`checked <=> root.x`）。单向的 `value: root.x` 在用户操作控件后会断开，之后插件改值，控件不会跟着动。属性须为 `in-out`。
 - `in` 属性只能单向绑定时，用 `changed x => { slider.value = root.x; }` 在模型变化时回推。
-- 主题与控件：`import { Theme } from "@vestra/theme.slint";` 提供颜色（由播放器按当前配色下发，§6.8；插件只读，不能给 `Theme` 赋值，硬编码颜色不会随配色变化）（`bg-bar`、`bg-panel`、`text`、`accent`、`playing`、`danger`（错误与危险操作：失败状态、删除按钮；播放器 0.3.0，SDK 1.3）…）、字号（`font-xs` 9px、`font-body` 11px、`font-tab` 12px、`font-title` 13px、`font-mono` 等宽字体名（由播放器按系统设置：macOS Menlo、Windows Consolas、Linux DejaVu Sans Mono；其中的中文按系统字体回退显示））和控件尺寸（`button-height` 21px、`input-height`、`form-row-gap`、`dialog-padding`…），完整列表见 `src/host/ui/vestra/theme.slint`。`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";` 提供紧凑样式的按钮（文字按钮 21px、`small` 18px；`text` 为空时是图标按钮：`icon` 是 Slint `Path` 的路径数据，画在 `icon-width` × `icon-height`（默认 14×12）的 viewbox 里，`stroked: true` 画 1.5px 线而不填充，`checked` 表示开启态；图标按钮的宽高由调用方设置，悬停提示用 `ToolTipArea` 包住：悬停 600ms 显示，指针离开或按下时关闭，下次悬停再显示；只读属性 `showing` 表示提示正在显示）、2px 线滑块（`panel: true` 为面板样式）和悬停提示，以及输入链接组件 `UrlInputRow`（UI-DLG-02：多行输入 + 「打开」「取消」；`in-out property <string> text`、`placeholder`、`confirm-text`（默认「打开」）、`cancel-text`、`enabled`，`callback accepted(string)`（回车或点确定，Shift+回车换行）、`cancelled()`（Esc 或点取消），`focus-input()`、`select-all()` 两个公共函数；不校验地址，校验由插件做；用法见示例 §29）。
+- 主题与控件：`import { Theme } from "@vestra/theme.slint";` 提供颜色（由播放器按当前配色下发，§6.8；插件只读，不能给 `Theme` 赋值，硬编码颜色不会随配色变化）（`bg-bar`、`bg-panel`、`text`、`accent`、`playing`、`danger`（错误与危险操作：失败状态、删除按钮；播放器 0.3.0，SDK 1.3）…）、字号（`font-xs` 9px、`font-body` 11px、`font-tab` 12px、`font-title` 13px、`font-mono` 等宽字体名（由播放器按系统设置：macOS Menlo、Windows Consolas、Linux DejaVu Sans Mono；其中的中文按系统字体回退显示））和控件尺寸（`button-height` 21px、`input-height`、`form-row-gap`、`dialog-padding`…），完整列表见 `src/host/ui/vestra/theme.slint`。`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";` 提供紧凑样式的按钮（文字按钮 21px、`small` 18px；文字按钮的首选宽度随文字变宽（至少 66px，`small` 41px，最小宽度不变），译文较长时不溢出，设了固定 `width` 的不受影响（播放器 0.5.0）；`text` 为空时是图标按钮：`icon` 是 Slint `Path` 的路径数据，画在 `icon-width` × `icon-height`（默认 14×12）的 viewbox 里，`stroked: true` 画 1.5px 线而不填充，`checked` 表示开启态；图标按钮的宽高由调用方设置，悬停提示用 `ToolTipArea` 包住：悬停 600ms 显示，指针离开或按下时关闭，下次悬停再显示；只读属性 `showing` 表示提示正在显示）、2px 线滑块（`panel: true` 为面板样式）和悬停提示，以及输入链接组件 `UrlInputRow`（UI-DLG-02：多行输入 + 「打开」「取消」；`in-out property <string> text`、`placeholder`、`confirm-text`（默认「打开」）、`cancel-text`、`enabled`，`callback accepted(string)`（回车或点确定，Shift+回车换行）、`cancelled()`（Esc 或点取消），`focus-input()`、`select-all()` 两个公共函数；不校验地址，校验由插件做；用法见示例 §29）。
 - 图标：`import { Icon } from "@vestra/icons.slint";`（播放器 0.4.0，SDK 1.5）：`Icon { name: "play"; color: Theme.text; }` 画播放器自己的 V-Line 图标（圆头 1.5px 线条，不填充），默认大小是图标的绘制框，设 `width`/`height` 可缩放；`Icons.commands(name)`、`Icons.box-width(name)`、`Icons.box-height(name)`、`Icons.line(name)` 给出路径数据，供自己的 `Path` 用。名称与绘制框见[界面规格](../product/ui-spec.md) §2.5。
 - 所有插件 Slint 都以 `fluent-dark` 风格编译：std-widgets 的控件在深色配色下是深色；选浅色配色 `vestra-light` 时，播放器在运行时把 std-widgets 的配色方案（`Palette.color-scheme`）切到浅色，切回时复原（插件不要自己改 `Palette.color-scheme`）。每个窗口都用系统默认字体，字体里没有的字（例如西文字体里的中文）由 Slint 按字符回退到系统里有这个字的字体，插件不需要自己设字体；插件写的 `default-font-family` / `font-family` 照常生效，缺字同样回退。播放器不内置界面字体。
 - 编辑器里要让 `@vestra/...` 导入可解析，给 Slint 语言服务设 `libraryPaths`：`{ "vestra": "<仓库>/src/host/ui/vestra" }`。
@@ -1704,7 +1705,7 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 
 只增不改，原有写法照常可用。用到新增项的插件设 `"minPlayerVersion": "0.4.0"`。
 
-- 新配色 `vestra-light`（浅色，视频区仍是深色），`ThemeId` 变为 `"vestra" | "vestra-light"`（§6.8）；「设置 ▶ 外观」有「Vestra 深色」「Vestra 浅色」两项。浅色时 std-widgets 控件由播放器切到浅色。
+- 新配色 `vestra-light`（浅色，视频区仍是深色），`ThemeId` 变为 `"vestra" | "vestra-light"`（§6.8）；「设置 ▸ 外观」有「Vestra 深色」「Vestra 浅色」两项。浅色时 std-widgets 控件由播放器切到浅色。
 - `vestra` 的颜色值换成 Aurora（取标志的完整色谱）：强调色 `#f72aa6`，`playing` 由紫色改为青色 `#2bb6ff`，`accent-fill` 为琥珀→洋红→紫→青，`line` 由近黑改为可见的细线色 `#2b2734`。token 名不变，读 `Theme` 的插件不用改。
 - 圆角：`radius-control` 4px（原 3px），`radius-panel` 8px（原 6px）。尺寸 token 不变。
 - 新库文件 `@vestra/icons.slint`：`Icon` 组件与 `Icons` 全局（§6.4 主题与控件）。
@@ -1714,7 +1715,7 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 
 ### 只保留 Vestra 配色（2026-10，SDK 1.4.0）
 
-- 去掉第二套配色：`ThemeId` 只剩 `"vestra"`（§6.8），「设置 ▶ 外观」只有 Vestra 一项。拿 `appearance.theme` 与已去掉的 id 比较的插件在类型检查时报错（TypeScript 认为两者没有交集），运行时这个比较永远为假；删掉该分支即可。SDK 1.4.0 的 `appearance.set` 对 `"vestra"` 以外的值抛 `invalid`。
+- 去掉第二套配色：`ThemeId` 只剩 `"vestra"`（§6.8），「设置 ▸ 外观」只有 Vestra 一项。拿 `appearance.theme` 与已去掉的 id 比较的插件在类型检查时报错（TypeScript 认为两者没有交集），运行时这个比较永远为假；删掉该分支即可。SDK 1.4.0 的 `appearance.set` 对 `"vestra"` 以外的值抛 `invalid`。
 - 兼容：播放器把不认识的配色 id 当作 `vestra`，用旧 SDK 构建、仍会请求旧配色的插件不会失败；保存过旧配色的用户启动后是 Vestra。
 
 ### 滤镜与示例作者发现的缺口（2026-10，播放器 0.3.0，SDK 1.3.0）

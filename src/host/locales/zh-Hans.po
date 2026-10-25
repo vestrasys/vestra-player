@@ -197,12 +197,12 @@ msgid "Previous/Next is provided by {}"
 msgstr "上一个/下一个已由 {} 提供"
 
 #: src/main.rs:2604
-msgid "Fullscreen"
+msgid "Toggle Fullscreen"
 msgstr "全屏"
 
 #: src/main.rs:2607
-msgid "Exit Fullscreen"
-msgstr "退出全屏"
+msgid "Leave Fullscreen"
+msgstr "仅退出全屏"
 
 #: src/main.rs:2609
 msgid "Quit"
