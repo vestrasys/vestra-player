@@ -652,6 +652,19 @@ impl Processing {
         }
     }
 }
+/// How many hardware decoding failures in a row mpv tolerates before it
+/// falls back to the next method and finally to software
+/// (`hwdec-software-fallback`, mpv's default 3); the player sets it at
+/// start. A runtime `hwdec` switch (`frames_in_memory`) reopens the decoder
+/// in place, usually mid-GOP, and the frames already in flight fail on the
+/// new VideoToolbox session (`vt decoder cb: output image buffer is null:
+/// -12909`, 14-17 frames measured) before it recovers on its own. With 3,
+/// removing the last chain left the file on software decoding, more often
+/// the busier the machine. 32 is the most that keeps mpv's packet replay
+/// for a decoder that fails while probing (`software_fallback <= 32` in
+/// vd_lavc.c), so a decoder that really cannot decode still loses no frames
+/// at file start.
+pub(crate) const HWDEC_SOFTWARE_FALLBACK: &str = "32";
 /// What the current source is, for `processing.replace`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Source {
@@ -861,9 +874,8 @@ mod tests {
     /// Every test here that builds an mpv holds this for the instance's
     /// lifetime (take it before `mpv()`, so it drops last). The hardware
     /// tests (`--include-ignored`) open VideoToolbox / copy-back decoders and
-    /// a GPU renderer with fixed 2 s pumps; run beside the other instances
-    /// they can miss their window (`gpu_decoding_runs_the_owned_chain` failed
-    /// in parallel, passed alone).
+    /// a GPU renderer and wait on playback; one instance at a time keeps
+    /// their timing independent of the rest of this module.
     fn one_mpv_at_a_time() -> std::sync::MutexGuard<'static, ()> {
         static MPV: std::sync::Mutex<()> = std::sync::Mutex::new(());
         MPV.lock()
@@ -871,6 +883,8 @@ mod tests {
     }
     fn mpv(hwdec: &str) -> Mpv {
         let mpv = Mpv::builder()
+            .unwrap()
+            .set_property("hwdec-software-fallback", HWDEC_SOFTWARE_FALLBACK)
             .unwrap()
             .set_property("vo", "null")
             .unwrap()
@@ -1185,10 +1199,13 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("vestra-gblur-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("four3.mp4");
+        // One GOP (libx264's keyint 250 > 150 frames): both switches below
+        // land mid-GOP while playing, where the reopened VideoToolbox
+        // decoder fails a few frames (`HWDEC_SOFTWARE_FALLBACK`).
         let made = std::process::Command::new("ffmpeg")
             .args(["-loglevel", "error", "-y", "-f", "lavfi", "-i"])
             .arg("testsrc2=size=1440x1080:rate=25")
-            .args(["-t", "4", "-c:v", "libx264", "-pix_fmt", "yuv420p"])
+            .args(["-t", "6", "-c:v", "libx264", "-pix_fmt", "yuv420p"])
             .arg(&file)
             .status()
             .unwrap();
@@ -1203,9 +1220,19 @@ mod tests {
             .unwrap();
         mpv.command(&["loadfile", file.to_str().unwrap()]).unwrap();
         let failed = std::cell::Cell::new(false);
-        let pump = |seconds: u64| {
-            let end = Instant::now() + Duration::from_secs(seconds);
-            while Instant::now() < end {
+        let format = || {
+            mpv.get_property::<String>("video-out-params/pixelformat")
+                .unwrap_or_default()
+        };
+        let current = || {
+            mpv.get_property::<String>("hwdec-current")
+                .unwrap_or_default()
+        };
+        let position = || mpv.get_property::<f64>("time-pos").unwrap_or(0.);
+        // Pumps events until `done` holds or 10 s pass.
+        let until = |done: &dyn Fn() -> bool| {
+            let end = Instant::now() + Duration::from_secs(10);
+            while Instant::now() < end && !done() {
                 while let Some(event) = mpv.poll_event() {
                     if let rsmpv::Event::LogMessage(message) = event
                         && message.text.contains("because it has failed")
@@ -1216,11 +1243,7 @@ mod tests {
                 std::thread::sleep(Duration::from_millis(20));
             }
         };
-        pump(2);
-        let format = || {
-            mpv.get_property::<String>("video-out-params/pixelformat")
-                .unwrap_or_default()
-        };
+        until(&|| position() >= 1.);
         assert_eq!(
             format(),
             "videotoolbox",
@@ -1230,19 +1253,21 @@ mod tests {
         processing
             .replace(&mpv, OWNER, 1, Source::Decoded, &video(1, gblur(4.0)))
             .unwrap();
-        pump(2);
+        until(&|| position() >= 2.5);
         assert!(!failed.get(), "mpv dropped the owned filter");
-        assert_ne!(
-            format(),
-            "videotoolbox",
+        // Still hardware decoding, copied back: not mpv's software fallback.
+        assert_eq!(
+            current(),
+            "videotoolbox-copy",
             "frames reach the filter in memory"
         );
         assert!(vf(&mpv).contains("gblur"));
         processing
             .replace(&mpv, OWNER, 1, Source::Decoded, &video(2, json!([])))
             .unwrap();
-        pump(2);
+        until(&|| position() >= 4.);
         assert_eq!(format(), "videotoolbox", "zero-copy again without a chain");
+        assert_eq!(current(), "videotoolbox");
         drop(renderer);
         let _ = std::fs::remove_dir_all(dir);
     }

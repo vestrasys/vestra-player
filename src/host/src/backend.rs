@@ -70,6 +70,10 @@ impl Backend {
                     .set_property("vo", "libmpv")?
                     // Software rendering's mode; the GPU renderer replaces it.
                     .set_property("hwdec", software_hwdec().as_str())?
+                    .set_property(
+                        "hwdec-software-fallback",
+                        crate::processing::HWDEC_SOFTWARE_FALLBACK,
+                    )?
                     .set_property("keep-open", true)?
                     .set_property("sub-auto", "no")?
                     .set_property("vf", crate::source_geometry::INITIAL_FILTERS)?
