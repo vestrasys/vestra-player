@@ -4,6 +4,10 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+#: main.ts:54 main.ts:308
+msgid "{}"
+msgstr ""
+
 #: main.ts:54 ui/workbench.slint:13
 msgid "Track {} ({})"
 msgstr ""
@@ -106,6 +110,10 @@ msgstr ""
 
 #: main.ts:307 ui/workbench.slint:19
 msgid "Selected device"
+msgstr ""
+
+#: main.ts:308
+msgid "{} ({})"
 msgstr ""
 
 #: main.ts:311 ui/workbench.slint:17

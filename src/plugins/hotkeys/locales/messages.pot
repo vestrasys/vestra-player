@@ -69,7 +69,7 @@ msgid "Ignore default shortcuts?"
 msgstr ""
 
 #: ignore.ts:49
-msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Exit Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts."
+msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Leave Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts."
 msgstr ""
 
 #: ignore.ts:50

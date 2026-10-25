@@ -10,7 +10,7 @@ import { type IgnoreRecord, jsonStore, readRecord } from "./store.ts";
  * ignore-defaults.json records which overrides this plugin wrote. Turning
  * it off resets only those (a command the user changed meanwhile left the
  * record). Commands that appear later (a plugin loaded or enabled) are
- * caught on `bindings.onChange`. Quit and Exit Fullscreen are never ignored.
+ * caught on `bindings.onChange`. Quit and Leave Fullscreen are never ignored.
  */
 export class IgnoreDefaults {
   readonly #plugin: Plugin;
@@ -46,7 +46,7 @@ export class IgnoreDefaults {
     const answer = await this.#plugin.dialogs.confirm({
       message: "Ignore default shortcuts?",
       detail:
-        "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Exit Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts.",
+        "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Leave Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts.",
       confirm: "Ignore",
     });
     if (answer.confirmed) await this.set(true);

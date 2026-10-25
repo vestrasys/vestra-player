@@ -69,6 +69,18 @@ msgid "Seek Steps…"
 msgstr ""
 
 #: commands.ts:229
+msgid "0.5×"
+msgstr ""
+
+#: commands.ts:229
+msgid "1.5×"
+msgstr ""
+
+#: commands.ts:229
+msgid "2×"
+msgstr ""
+
+#: commands.ts:229
 msgid "Custom…"
 msgstr ""
 
@@ -242,6 +254,11 @@ msgstr ""
 
 #: manifest.json
 msgid "speed"
+msgstr ""
+
+#. a tooltip: a button's action and its key, e.g. "Pause (Space)".
+#: ui/bar.slint:73
+msgid "{} ({})"
 msgstr ""
 
 #: ui/bar.slint:75

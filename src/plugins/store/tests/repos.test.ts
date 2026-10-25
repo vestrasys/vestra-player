@@ -153,9 +153,7 @@ test("third-party repositories: no signature read, `official: true` ignored, lab
     await store.refreshAll(true);
     const third = store.repos.find(THIRD)!;
     assert.equal(third.official, false);
-    // "{} ({})" has no words, so extract (SDK 1.5.11) leaves it out of the catalog and the player
-    // formats the English parentheses (was “Vestra 官方（third.example）”).
-    assert.equal(said(third.label), "Vestra 官方 (third.example)");
+    assert.equal(said(third.label), "Vestra 官方（third.example）");
     assert.equal(net.count(`${THIRD}.sig`), 0);
     await openStore(host);
     const row = rows(host).find((r) => r.name === "Viz") as { meta: string } | undefined;

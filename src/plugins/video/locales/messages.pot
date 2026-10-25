@@ -706,6 +706,18 @@ msgstr ""
 msgid "No Rotation"
 msgstr ""
 
+#: main.ts:1083
+msgid "90°"
+msgstr ""
+
+#: main.ts:1083
+msgid "180°"
+msgstr ""
+
+#: main.ts:1083
+msgid "270°"
+msgstr ""
+
 #: main.ts:1091
 msgid "Picture Adjustments…"
 msgstr ""

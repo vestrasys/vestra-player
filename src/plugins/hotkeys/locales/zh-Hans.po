@@ -70,8 +70,8 @@ msgid "Ignore default shortcuts?"
 msgstr "忽略默认快捷键？"
 
 #: ignore.ts:49
-msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Exit Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts."
-msgstr "忽略后，只有你在快捷键设置中修改过的按键生效，Space、方向键等默认按键都将失效。「退出」（⌘Q）与「退出全屏」（Esc）不受影响，可随时从「设置 ▸ 忽略默认快捷键」关闭。"
+msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Leave Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts."
+msgstr "忽略后，只有你在快捷键设置中修改过的按键生效，Space、方向键等默认按键都将失效。「退出」（⌘Q）与「仅退出全屏」（Esc）不受影响，可随时从「设置 ▸ 忽略默认快捷键」关闭。"
 
 #: ignore.ts:50
 msgid "Ignore"

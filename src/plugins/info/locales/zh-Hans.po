@@ -688,4 +688,3 @@ msgstr "复制到剪贴板"
 #: ui/properties.slint:157
 msgid "Save As…"
 msgstr "保存为…"
-

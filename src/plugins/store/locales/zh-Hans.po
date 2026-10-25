@@ -366,6 +366,10 @@ msgid "{0}'s index exceeds 4 MB; refused; showing the data from {1}"
 msgstr "{0} 的索引超过 4 MB，已拒绝，继续显示 {1} 的数据"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid "{0}: {1}"
+msgstr "{0}：{1}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "{0}: {1}; showing the data from {2}"
 msgstr "{0}：{1}，继续显示 {2} 的数据"
 
@@ -424,6 +428,10 @@ msgstr "无法连接仓库，也没有缓存。连上网络后点「刷新」。
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The repositories have no plugins yet"
 msgstr "仓库里还没有插件"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid "{} · {}"
+msgstr "{} · {}"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:222
 msgid "Installed"
@@ -636,6 +644,10 @@ msgstr "新版本需要新的权限：{}"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Official repository"
 msgstr "官方仓库"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid "{} ({})"
+msgstr "{}（{}）"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Unnamed repository ({})"
@@ -932,6 +944,20 @@ msgid "Install “{}” {} from an unofficial repository?"
 msgstr "安装来自非官方仓库的「{}」{}？"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid ""
+"{2}\n"
+"\n"
+"{3}"
+msgstr ""
+"{2}\n"
+"\n"
+"{3}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid "{1}"
+msgstr "{1}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "This plugin has already been installed from another source. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source."
 msgstr "这个插件已从其它来源安装。替换后，若之前从这个来源安装过，会接上当时的数据；否则使用新的空数据。原插件的数据保留，以后从原来源重新安装时接上。"
 
@@ -964,6 +990,10 @@ msgid "Unknown"
 msgstr "未知"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid "· {}"
+msgstr "· {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "· Uses none of the player's features"
 msgstr "· 不使用播放器的任何功能"
 
@@ -974,6 +1004,20 @@ msgstr "等 {} 项"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Replace the installed version with the plugin package “{}” {}?"
 msgstr "用插件包「{}」{} 替换已安装的版本？"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid ""
+"{2}\n"
+"\n"
+"{3}\n"
+"\n"
+"{4}"
+msgstr ""
+"{2}\n"
+"\n"
+"{3}\n"
+"\n"
+"{4}"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Install the plugin package “{}” {}?"
@@ -1076,12 +1120,26 @@ msgstr ""
 "如果仍要使用，可以在插件商城的详情页选择「仍然启用…」。"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid "“{}” {}: {}"
+msgstr "「{}」{}：{}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid ""
 "“{}” {}: {}\n"
 "You can update to {} in the Plugin Store."
 msgstr ""
 "「{}」{}：{}\n"
 "可以在插件商城更新到 {}。"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid ""
+"{}\n"
+"\n"
+"{}"
+msgstr ""
+"{}\n"
+"\n"
+"{}"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Enable the revoked “{}” {} anyway?"
@@ -1406,47 +1464,3 @@ msgstr "插件是完整的程序，以上权限只限制它使用播放器的功
 #: ui/store.slint:497
 msgid "Disable, reload, open the data folder: Settings ▸ Plugin Manager…"
 msgstr "停用、重新加载、查看数据目录：设置 ▸ 插件管理…"
-
-#. a repository and what went wrong with it
-#~ msgid "{0}: {1}"
-#~ msgstr "{0}：{1}"
-
-#. author · where the plugin comes from
-#~ msgid "{} · {}"
-#~ msgstr "{} · {}"
-
-#. a third-party repository: its own name (host)
-#~ msgid "{} ({})"
-#~ msgstr "{}（{}）"
-
-#~ msgid ""
-#~ "{2}\n"
-#~ "\n"
-#~ "{3}"
-#~ msgstr ""
-#~ "{2}\n"
-#~ "\n"
-#~ "{3}"
-
-#~ msgid "{1}"
-#~ msgstr "{1}"
-
-#~ msgid ""
-#~ "{2}\n"
-#~ "\n"
-#~ "{3}\n"
-#~ "\n"
-#~ "{4}"
-#~ msgstr ""
-#~ "{2}\n"
-#~ "\n"
-#~ "{3}\n"
-#~ "\n"
-#~ "{4}"
-
-#~ msgid "“{}” {}: {}"
-#~ msgstr "「{}」{}：{}"
-
-#. between two permissions in a list
-#~ msgid ", "
-#~ msgstr "、"

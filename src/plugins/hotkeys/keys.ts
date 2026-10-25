@@ -232,5 +232,5 @@ export function winner(commands: readonly BindingInfo[], input: string, scope: B
   return claimers.find((c) => !c.shadowed.some((s) => s.input === input)) ?? claimers[0] ?? null;
 }
 
-/** The player's safe exits, never ignored by J03: Quit (⌘Q) and Exit Fullscreen (Esc). */
+/** The player's safe exits, never ignored by J03: Quit (⌘Q) and Leave Fullscreen (Esc). */
 export const exempt = (ref: BindingRef) => ref.plugin === "host" && (ref.command === "quit" || ref.command === "exit-fullscreen");

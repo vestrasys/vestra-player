@@ -365,6 +365,10 @@ msgid "{0}'s index exceeds 4 MB; refused; showing the data from {1}"
 msgstr ""
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid "{0}: {1}"
+msgstr ""
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "{0}: {1}; showing the data from {2}"
 msgstr ""
 
@@ -422,6 +426,10 @@ msgstr ""
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The repositories have no plugins yet"
+msgstr ""
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid "{} · {}"
 msgstr ""
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:222
@@ -634,6 +642,10 @@ msgstr ""
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Official repository"
+msgstr ""
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid "{} ({})"
 msgstr ""
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
@@ -902,6 +914,17 @@ msgid "Install “{}” {} from an unofficial repository?"
 msgstr ""
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid ""
+"{2}\n"
+"\n"
+"{3}"
+msgstr ""
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid "{1}"
+msgstr ""
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "This plugin has already been installed from another source. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source."
 msgstr ""
 
@@ -930,6 +953,10 @@ msgid "Unknown"
 msgstr ""
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid "· {}"
+msgstr ""
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "· Uses none of the player's features"
 msgstr ""
 
@@ -939,6 +966,15 @@ msgstr ""
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Replace the installed version with the plugin package “{}” {}?"
+msgstr ""
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid ""
+"{2}\n"
+"\n"
+"{3}\n"
+"\n"
+"{4}"
 msgstr ""
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
@@ -1024,9 +1060,20 @@ msgid ""
 msgstr ""
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid "“{}” {}: {}"
+msgstr ""
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid ""
 "“{}” {}: {}\n"
 "You can update to {} in the Plugin Store."
+msgstr ""
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid ""
+"{}\n"
+"\n"
+"{}"
 msgstr ""
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370

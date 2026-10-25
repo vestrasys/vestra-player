@@ -5,16 +5,6 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-# Not collected by `i18n extract` (SDK 1.5.11 skips sources without a letter); kept by hand.
-msgid "0.5×"
-msgstr "0.5倍"
-
-msgid "1.5×"
-msgstr "1.5倍"
-
-msgid "2×"
-msgstr "2倍"
-
 #: commands.ts:65
 msgid "Back {} s"
 msgstr "后退{}秒"
@@ -78,6 +68,18 @@ msgstr "跳到开头"
 #: commands.ts:229
 msgid "Seek Steps…"
 msgstr "时间跨度设置…"
+
+#: commands.ts:229
+msgid "0.5×"
+msgstr "0.5倍"
+
+#: commands.ts:229
+msgid "1.5×"
+msgstr "1.5倍"
+
+#: commands.ts:229
+msgid "2×"
+msgstr "2倍"
 
 #: commands.ts:229
 msgid "Custom…"
@@ -254,6 +256,11 @@ msgstr "跳转"
 #: manifest.json
 msgid "speed"
 msgstr "速度"
+
+#. a tooltip: a button's action and its key, e.g. "Pause (Space)".
+#: ui/bar.slint:73
+msgid "{} ({})"
+msgstr "{} ({})"
 
 #: ui/bar.slint:75
 msgid "Pause"

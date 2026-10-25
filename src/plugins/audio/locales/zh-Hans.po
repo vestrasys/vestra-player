@@ -5,6 +5,10 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
+#: main.ts:54 main.ts:308
+msgid "{}"
+msgstr "{}"
+
 #: main.ts:54 ui/workbench.slint:13
 msgid "Track {} ({})"
 msgstr "音轨 {} ({})"
@@ -108,6 +112,10 @@ msgstr "未命名设备"
 #: main.ts:307 ui/workbench.slint:19
 msgid "Selected device"
 msgstr "所选设备"
+
+#: main.ts:308
+msgid "{} ({})"
+msgstr "{} ({})"
 
 #: main.ts:311 ui/workbench.slint:17
 msgid "System Default"

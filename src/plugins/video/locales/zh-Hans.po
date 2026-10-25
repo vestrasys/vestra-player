@@ -707,6 +707,18 @@ msgstr "图像旋转"
 msgid "No Rotation"
 msgstr "不旋转"
 
+#: main.ts:1083
+msgid "90°"
+msgstr "90°"
+
+#: main.ts:1083
+msgid "180°"
+msgstr "180°"
+
+#: main.ts:1083
+msgid "270°"
+msgstr "270°"
+
 #: main.ts:1091
 msgid "Picture Adjustments…"
 msgstr "画面调节…"

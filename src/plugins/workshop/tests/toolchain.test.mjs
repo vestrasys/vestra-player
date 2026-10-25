@@ -126,6 +126,11 @@ test("the check refuses vestra. ids, npm dependencies and a manifest id that is 
   assert.match((await toolchain.check(session, "vestra.demo", "")).text, /\\?"vestra\.\\?" is reserved for official plugins/);
   assert.match((await runTool(toolchain, session, "", "typecheck", { id: "../x" }, new AbortController().signal)).text, /Not a plugin id/);
   assert.match((await runTool(toolchain, session, "", "typecheck", { id: "a.missing" }, new AbortController().signal)).text, /No plugin project/);
+  // Model-facing results are English, like the rest of the tools' text.
+  const unknown = await runTool(toolchain, session, "", "rm_rf", {}, new AbortController().signal);
+  assert.deepEqual(unknown, { ok: false, text: "No tool named rm_rf" });
+  // install_plugin without a player (the eval runner) is not a tool either.
+  assert.equal((await runTool(toolchain, session, "", "install_plugin", { id: "local.demo" }, new AbortController().signal)).text, "No tool named install_plugin");
 });
 
 test("the type check runs under the permission model: it reads the project and the SDK, nothing else", async () => {

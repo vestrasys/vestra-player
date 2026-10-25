@@ -439,6 +439,11 @@ msgstr ""
 msgid "Failed: {}"
 msgstr ""
 
+#. {0} is a task state (Exporting), {1} the frames done, {2} the frames in all.
+#: ui/parts.slint:105
+msgid "{0} · {1}/{2}"
+msgstr ""
+
 #. {} is the number of frames (2–20).
 #: ui/parts.slint:112
 msgid "{} frames saved"
@@ -519,6 +524,11 @@ msgstr ""
 
 #: ui/tasks.slint:56
 msgid "Snapshot · {}"
+msgstr ""
+
+#. {0} is the time or time range, {1} the progress (Completed).
+#: ui/tasks.slint:60
+msgid "{0} · {1}"
 msgstr ""
 
 #: ui/tasks.slint:66

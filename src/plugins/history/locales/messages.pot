@@ -28,6 +28,10 @@ msgstr ""
 msgid "resume"
 msgstr ""
 
+#: menu.ts:36
+msgid "{} ({})"
+msgstr ""
+
 #: menu.ts:94 menu.ts:114 menu.ts:122 menu.ts:133
 msgid "Recently Played"
 msgstr ""

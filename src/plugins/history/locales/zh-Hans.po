@@ -5,11 +5,6 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-# Not collected by `i18n extract` (SDK 1.5.11 skips sources without a letter); kept by hand.
-# The recent record and its saved position (menu.ts recentTitles).
-msgid "{} ({})"
-msgstr "{}（{}）"
-
 #: manifest.json
 msgid "Playback History"
 msgstr "播放历史"
@@ -33,6 +28,10 @@ msgstr "历史"
 #: manifest.json
 msgid "resume"
 msgstr "继续播放"
+
+#: menu.ts:36
+msgid "{} ({})"
+msgstr "{}（{}）"
 
 #: menu.ts:94 menu.ts:114 menu.ts:122 menu.ts:133
 msgid "Recently Played"

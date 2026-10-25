@@ -50,9 +50,7 @@ test("the settings page: add a third-party repository with a warning, refuse bad
 
   host.dialogAnswers.push(yes);
   page.emit("add", "https://third.example/repo/");
-  // "{} ({})" has no words, so extract (SDK 1.5.11) leaves it out of the catalog and the player
-  // formats the English parentheses (was “Foo 仓库（third.example）”).
-  await until(host, () => pageProps(host)["message"] === "已添加 Foo 仓库 (third.example)");
+  await until(host, () => pageProps(host)["message"] === "已添加 Foo 仓库（third.example）");
   assert.deepEqual(store.settings.value.repos, [THIRD]);
   assert.equal(pageProps(host)["adding"], false);
   assert.deepEqual(
