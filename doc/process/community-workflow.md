@@ -1,285 +1,287 @@
-# 模拟社区：插件作者与 API 维护者的多 agent 工作流
+# Simulated community: a multi-agent workflow for plugin authors and the API maintainer
 
-本项目用多个 agent 模拟一个插件社区来开发播放器：**插件作者**是只依赖公开插件 API 的独立消费者，**API 维护者**单点维护宿主与 SDK，**协调者**调度并集成。目的不只是把功能做出来，还要检验 API 是否好理解、变更是否可控、维护者能否在不给某个插件开后门的前提下满足不同需求。
+This project develops the player with several agents that simulate a plugin community: **plugin authors** are independent consumers who depend only on the public plugin API, the **API maintainer** is the single point that maintains the host and the SDK, and the **coordinator** schedules and integrates. The goal is not only to build the features, but also to test whether the API is easy to understand, whether changes stay under control, and whether the maintainer can meet different needs without opening a back door for any one plugin.
 
-本文适用于长程任务（Claude Code loop、Codex goal 等）。每个 agent 开工前读完本文和自己角色对应的小节。
+This document applies to long-running tasks (Claude Code loop, Codex goal, and so on). Every agent reads this document and the section for its own role before starting work.
 
-API 的演进有两种方向，流程不同：
+The API evolves in two directions, with different processes:
 
-| | 自下而上（§4，常规） | 自上而下（§5，重构 API 本身） |
+| | Bottom-up (§4, the usual case) | Top-down (§5, refactoring the API itself) |
 | --- | --- | --- |
-| 触发 | 插件实现时遇到 API 缺口 | API 本身难用或架构需要重构 |
-| 谁发起 | 插件作者提交请求 | 维护者设计并发布新 API |
-| 插件作者能否提新能力 | 能 | **不能**，只能报「迁移阻塞」 |
-| 产品行为 | 随插件演进 | **保持不变**（等价迁移） |
+| Trigger | A plugin hits an API gap during implementation | The API itself is hard to use or the architecture needs refactoring |
+| Who starts it | The plugin author submits a request | The maintainer designs and releases the new API |
+| Can plugin authors propose new capabilities | Yes | **No**, they can only report a "migration blocker" |
+| Product behavior | Evolves with the plugin | **Stays unchanged** (equivalent migration) |
 
-## 1. 角色与文件所有权
+## 1. Roles and file ownership
 
-| 角色 | 可写范围 | 职责 |
+| Role | Writable scope | Responsibilities |
 | --- | --- | --- |
-| 协调者（主会话） | 记录文件；git 提交与推送；GUI 测试 | 分派任务、审查交付、裁决阻塞、集成、执行真实 GUI 测试、向用户报告。不代替维护者写 SDK，不代替作者写插件 |
-| API 维护者（1 个） | SDK 仓库 `vestra-player-sdk`、`src/runtime/`、`src/host/`、`src/scripts/`、`src/tests/`、`doc/plugins/`、`doc/architecture/` | 维护宿主、SDK、wire 协议、manifest 规则、构建工具；处理能力请求；保持 SDK、宿主、文档、示例一致 |
-| 插件作者（每插件 1 个） | 只能写自己的插件目录：内置插件在 `src/plugins/<名字>/`；插件仓库 [vestra-player-plugins](https://github.com/vestrasys/vestra-player-plugins) 托管的第三方插件（`zysilm.youtube`、`zysilm.bilibili`）在 `plugins/<名字>/` | 设计并实现自己的插件、写测试；缺能力时提请求 |
-| 基础设施维护者（1 个，2026-10-24 补） | 三个仓库的 `.github/`、`src/packaging/`、插件仓库的 `scripts/`、`registry/`、`plugins/owners.toml`、`revoked.json`；`doc/process/ci.md` | CI 与成本、打包与第三方许可证、发布流程、签名索引与插件仓库规则、git 历史这类仓库级操作的演练。不改插件 API，不改插件业务 |
-| 调研员（按需，2026-10-24 补） | 无（只读；产物写在报告里，由协调者落进文档） | 外部资料、条款、可行性调研。每条结论给出处，证据不足要明说 |
-| 交互设计负责人（可由协调者兼任） | `doc/product/` | 维护全局菜单领域与界面规范，审查插件设计的一致性 |
-| 独立验收者（按批次） | 验收记录 | 不参与实现。自己读源码、跑命令、检查产物，不接受「别人说通过了」。合并前复核检查项与测试证据；真实 GUI 测试仍归协调者 |
+| Coordinator (main session) | Record files; git commit and push; GUI tests | Assigns tasks, reviews deliveries, rules on blockers, integrates, runs real GUI tests, reports to the user. Does not write the SDK in place of the maintainer, and does not write plugins in place of the authors |
+| API maintainer (1) | SDK repository `vestra-player-sdk`, `src/runtime/`, `src/host/`, `src/scripts/`, `src/tests/`, `doc/plugins/`, `doc/architecture/` | Maintains the host, the SDK, the wire protocol, the manifest rules and the build tools; handles capability requests; keeps the SDK, host, docs and examples consistent |
+| Plugin author (1 per plugin) | Only its own plugin directory: built-in plugins in `src/plugins/<name>/`; third-party plugins hosted in the plugin repository [vestra-player-plugins](https://github.com/vestrasys/vestra-player-plugins) (`zysilm.youtube`, `zysilm.bilibili`) in `plugins/<name>/` | Designs and implements its own plugin and writes its tests; submits a request when a capability is missing |
+| Infrastructure maintainer (1, added 2026-10-24) | `.github/` in all three repositories, `src/packaging/`, and in the plugin repository `scripts/`, `registry/`, `plugins/owners.toml`, `revoked.json`; `doc/process/ci.md` | CI and its cost, packaging and third-party licenses, the release process, the signed index and the plugin repository rules, rehearsals of repository-level operations such as git history changes. Does not change the plugin API or plugin business logic |
+| Researcher (on demand, added 2026-10-24) | None (read-only; output goes in the report, and the coordinator puts it into the docs) | Research on external sources, terms and feasibility. Every conclusion cites its source; insufficient evidence is stated plainly |
+| Interaction design lead (the coordinator may also take this role) | `doc/product/` | Maintains the global menu domains and the interface guidelines, reviews plugin designs for consistency |
+| Independent reviewer (per batch) | Review records | Does not take part in implementation. Reads the source, runs the commands and checks the outputs personally, and does not accept "someone else said it passed". Rechecks the check items and test evidence before merge; real GUI tests still belong to the coordinator |
 
-所有 agent 的共同约束：
+Constraints shared by all agents:
 
-- **插件独立**：插件之间不 import、不读对方目录、不直接通信（无私有消息、共享文件、专用连接）；共享的只有公开 SDK、公开宿主状态和成熟第三方依赖。每个插件在其它插件都不存在时也能加载、运行、停用。停用一个插件只撤销它自己的资源。
-- **核心不认插件**：宿主按能力和注册路由，不按插件 id 写特殊业务。
-- **安全**：第一方 Rust 禁止 `unsafe`；TS 用可擦除语法（`erasableSyntaxOnly`）。
-- **git**：子 agent 不运行 `git commit`、`push`、`reset`、`checkout -- <path>` 等改变历史或丢弃他人改动的命令；提交由协调者统一做。
-- **GUI**：只有协调者操作屏幕。子 agent 不启动播放器窗口、不模拟鼠标键盘，避免多个 agent 抢同一窗口。
-- **构建**：Rust 用 `CARGO_TARGET_DIR=/tmp/vestra-review-target`，不在仓库里产生 `target/`。
-- **付费服务**：插件工坊等涉及模型的功能用本地 mock，不调用付费 LLM。
-- 关键决定写进文件，不只留在 agent 消息里。
+- **Plugin independence**: plugins do not import each other, do not read each other's directories and do not communicate directly (no private messages, shared files or dedicated connections); the only shared things are the public SDK, public host state and mature third-party dependencies. Every plugin can load, run and be deactivated when no other plugin exists. Deactivating a plugin revokes only its own resources.
+- **The core does not know plugins**: the host routes by capability and registration, and does not write special business logic keyed on a plugin id.
+- **Safety**: first-party Rust forbids `unsafe`; TS uses erasable syntax (`erasableSyntaxOnly`).
+- **git**: sub-agents do not run `git commit`, `push`, `reset`, `checkout -- <path>` or other commands that change history or discard other people's changes; the coordinator makes all commits.
+- **GUI**: only the coordinator operates the screen. Sub-agents do not start player windows and do not simulate mouse or keyboard input, so that several agents do not fight over the same window.
+- **Builds**: Rust uses `CARGO_TARGET_DIR=/tmp/vestra-review-target` and does not create `target/` in the repository.
+- **Paid services**: model-based features such as the plugin workshop use a local mock and do not call a paid LLM.
+- Key decisions are written into files, not left only in agent messages.
 
-## 1.4 信息怎么流动（2026-10-24）
+## 1.4 How information flows (2026-10-24)
 
-控制走星型，状态放在「黑板」上：
+Control is a star; state lives on a "blackboard":
 
 ```text
-                    用户
-                     │ 需求、裁决
+                    User
+                     │ requirements, rulings
                      ▼
-             ┌──────────────┐  git 提交 / 推送、发版、真实 GUI 测试
-             │    协调者     │─────────────────────────────▶ 仓库、npm、Pages
+             ┌──────────────┐  git commit / push, releases, real GUI tests
+             │  Coordinator  │─────────────────────────────▶ repositories, npm, Pages
              └──────────────┘
-      派活 │ ▲ §8 报告         │ 只在僵持、升级时介入
+  assigns │ ▲ §8 reports       │ steps in only on deadlock or escalation
            ▼ │                 ▼
   ┌──────────┬──────────┬──────────┬──────────┬──────────┐
-  │ API 维护者│ 插件作者 ×N│基础设施维护者│  调研员  │ 独立验收者 │
+  │   API    │  Plugin  │  Infra   │Researcher│Independent│
+  │maintainer│authors ×N│maintainer│          │ reviewer  │
   └────┬─────┴────┬─────┴────┬─────┴──────────┴────┬─────┘
-       │ 读写      │ 读写      │ 读写                  │ 只读
+       │ read/write│ read/write│ read/write           │ read-only
        ▼          ▼          ▼                      ▼
   ┌─────────────────────────────────────────────────────────┐
-  │ 黑板：本轮记录 doc/process/rounds/…（请求、答复、反驳、裁决、│
-  │ 进度）＋ 各自的 worktree / 分支（未提交的改动）              │
+  │ Blackboard: this round's record doc/process/rounds/…     │
+  │ (requests, replies, rebuttals, rulings, progress)        │
+  │ + each agent's own worktree / branch (uncommitted work)  │
   └─────────────────────────────────────────────────────────┘
 ```
 
-- **控制（星型）**：派活、裁决、合并、发版只经协调者；子 agent 之间不互发消息。这与插件独立同理：每个角色只依赖公开的约定（本文、本轮记录、公开 API），不依赖别的 agent 的私下说明。
-- **状态（黑板）**：§4 的请求、答复、反驳、裁决都直接写在本轮记录里。作者写请求，维护者读后在同一处答复，作者在同一处接受或反驳；协调者不转述，只在 §4.3 第 6 条的僵持或 §7 的情况介入。答复原文就是依据，避免转一手走样。
-- **协调者是瓶颈也是单点**：多个交付同时到达时排队等审查、提交、GUI 测试；一次误操作影响全局。所以：
-  - 能并行的审查交给独立验收者，协调者只做 git、发版和 GUI；
-  - 改变仓库状态的命令逐步检查结果，不用管道串联（`rebase … | tail && push` 曾因管道吞掉退出码而在冲突时照样推送）；
-  - 进度和记录攒成一批再推，少触发 CI（§8）。
+- **Control (star)**: assigning work, rulings, merges and releases go only through the coordinator; sub-agents do not message each other. This follows the same idea as plugin independence: each role depends only on public agreements (this document, this round's record, the public API), not on another agent's private explanations.
+- **State (blackboard)**: §4 requests, replies, rebuttals and rulings are written directly in this round's record. The author writes the request, the maintainer reads it and replies in the same place, and the author accepts or rebuts in the same place; the coordinator does not relay, and steps in only for the deadlock in §4.3 item 6 or the cases in §7. The original reply is the basis, which avoids distortion through retelling.
+- **The coordinator is both a bottleneck and a single point of failure**: when several deliveries arrive at once, they queue for review, commit and GUI tests; one wrong operation affects everything. Therefore:
+  - reviews that can run in parallel go to the independent reviewer, and the coordinator does only git, releases and GUI;
+  - commands that change repository state are checked step by step, not chained with pipes (`rebase … | tail && push` once pushed anyway during a conflict because the pipe swallowed the exit code);
+  - progress and records are collected into one batch before pushing, to trigger CI less often (§8).
 
-## 1.5 跨平台规则（2026-10-21）
+## 1.5 Cross-platform rule (2026-10-21)
 
-Vestra 要同时支持 macOS 和 Windows，以后可能还有 Linux。
+Vestra must support both macOS and Windows, and possibly Linux later.
 
-- **插件 API 与系统无关**：签名、语义、错误码不得出现某个系统专有的概念。系统差异由宿主吸收；确实做不到的，返回统一的 `unsupported`，并在参考文档写明是哪个系统。
-- **系统相关代码只放在宿主的平台模块里**：每个系统一份实现，用 `cfg(target_os)` 分开，公共代码不直接调用系统接口。SDK 和插件运行器（Node 侧）同理：系统差异集中在一个平台文件里，不散落在各处。
-- **插件不直接调用系统命令**：例如 `sips`、`plutil`、`sw_vers`、`security`、`/usr/bin/open`。需要的话，按 §4 提请求，由核心提供跨平台能力；也可以用跨平台的纯 Node 实现。
-- **每次公共改动都要过跨平台检查**：在 Windows 目标下编译宿主，并扫描插件、SDK 中的系统命令。检查脚本在 `src/scripts/`，见 §6.1。
+- **The plugin API is OS-independent**: signatures, semantics and error codes must not contain concepts specific to one operating system. The host absorbs OS differences; where that is truly impossible, it returns a uniform `unsupported` and the reference docs state which OS is affected.
+- **OS-specific code lives only in the host's platform modules**: one implementation per OS, separated with `cfg(target_os)`; shared code does not call OS interfaces directly. The same applies to the SDK and the plugin runner (Node side): OS differences are concentrated in one platform file, not scattered around.
+- **Plugins do not call OS commands directly**: for example `sips`, `plutil`, `sw_vers`, `security`, `/usr/bin/open`. If needed, submit a request per §4 and the core provides a cross-platform capability; a cross-platform pure Node implementation is also fine.
+- **Every shared change passes the cross-platform check**: compile the host for the Windows target, and scan plugins and the SDK for OS commands. The check scripts are in `src/scripts/`, see §6.1.
 
-## 1.6 SDK 在独立仓库（2026-10-21）
+## 1.6 The SDK lives in its own repository (2026-10-21)
 
-插件 SDK `@vestra-player/sdk` 的源码只在 [vestra-player-sdk](https://github.com/vestrasys/vestra-player-sdk) 仓库。播放器在 `src/package.json` 里依赖 npm 上的版本（`"@vestra-player/sdk": "^1.0.0"`，由 `package-lock.json` 锁定），`npm ci` 装到 `src/node_modules/@vestra-player/sdk`；runner、插件、示例、工坊、打包布局都用这份安装好的包。本仓库没有 SDK 源码，也不要再复制一份进来。
+The source of the plugin SDK `@vestra-player/sdk` exists only in the [vestra-player-sdk](https://github.com/vestrasys/vestra-player-sdk) repository. The player depends on the npm version in `src/package.json` (`"@vestra-player/sdk": "^1.0.0"`, locked by `package-lock.json`), and `npm ci` installs it into `src/node_modules/@vestra-player/sdk`; the runner, plugins, examples, workshop and packaging layout all use this installed package. This repository has no SDK source, and you must not copy one in again.
 
-**改 SDK（类型、TestHost、CLI、wire 客户端、`./runtime`）**
+**Changing the SDK (types, TestHost, CLI, wire client, `./runtime`)**
 
-1. 先在 SDK 仓库改：代码、测试、README；`npm run check`、`format:check`、`test`、`npm pack --dry-run` 通过。需要宿主配合的改动（新能力、新命令上限、`apiVersion`），宿主和 SDK 各改各的，两边一起发。
-2. SDK 发版：改 `package.json` 的 `version`（插件 API 新增升小版本，破坏性变更升大版本并换 `apiVersion`），提交，打标签 `v<版本>` 并推送；推送标签后 `publish.yml` 发布到 npm（有 `NPM_TOKEN` 之后）。
-3. 再在播放器升级依赖：`src/package.json` 指向新版本（git 标签期间改 URL 的 `#v<版本>`，发布到 npm 后用 `npm install @vestra-player/sdk@<版本>`），`npm install` 刷新 `package-lock.json`，跑 §6.1 全部检查，和宿主改动一起提交。
-4. 本地联调未发版的 SDK：在播放器 `src/` 下临时 `npm install <SDK 仓库目录>`（或 `npm link`），验证后**改回**锁定的版本，不要提交 `file:` 依赖。
+1. First change the SDK repository: code, tests, README; `npm run check`, `format:check`, `test` and `npm pack --dry-run` pass. For changes that need the host to cooperate (a new capability, a new command limit, `apiVersion`), the host and the SDK each change their own side and both are released together.
+2. SDK release: change `version` in `package.json` (a plugin API addition bumps the minor version; a breaking change bumps the major version and changes `apiVersion`), commit, create the tag `v<version>` and push it; after the tag is pushed, `publish.yml` publishes to npm (once `NPM_TOKEN` exists).
+3. Then upgrade the dependency in the player: point `src/package.json` at the new version (while on git tags, change the `#v<version>` in the URL; after publishing to npm, use `npm install @vestra-player/sdk@<version>`), run `npm install` to refresh `package-lock.json`, run all §6.1 checks, and commit together with the host changes.
+4. Testing an unreleased SDK locally: in the player's `src/`, temporarily run `npm install <SDK repository directory>` (or `npm link`), and after verifying, **change it back** to the locked version; do not commit a `file:` dependency.
 
-**宿主改 Slint 控件库（`src/host/ui/palette.slint`、`src/host/ui/vestra/`）**
+**The host changes the Slint widget library (`src/host/ui/palette.slint`, `src/host/ui/vestra/`)**
 
-SDK 包带一份只读副本给作者的编辑器用，内容以播放器为准。改了控件库：
+The SDK package carries a read-only copy for authors' editors; the player's version is authoritative. When you change the widget library:
 
-1. `cd src && node scripts/sync-sdk-slint.mjs --write <SDK 仓库目录>`，把 `host/ui` 的文件复制进 SDK 仓库的 `slint/`；新增库文件时先把它加进脚本的 `SLINT_FILES`。
-2. 按上面的流程给 SDK 发版并在播放器升级依赖。
-3. `npm run sdk:sync-slint`（不带参数）校验已安装 SDK 的副本与 `host/ui` 逐字节一致；`tests/sdk/host-agreement.test.ts`（`npm run test:sdk`）也跑这项，同时检查能力表、`apiVersion`、命令上限与宿主一致。宿主与 SDK 不一致时这项测试失败，不能合并。
+1. `cd src && node scripts/sync-sdk-slint.mjs --write <SDK repository directory>` copies the files from `host/ui` into `slint/` in the SDK repository; when adding a new library file, first add it to the script's `SLINT_FILES`.
+2. Release the SDK and upgrade the dependency in the player as described above.
+3. `npm run sdk:sync-slint` (without arguments) verifies that the installed SDK's copy is byte-for-byte identical to `host/ui`; `tests/sdk/host-agreement.test.ts` (`npm run test:sdk`) also runs this check, and also checks that the capability table, `apiVersion` and command limits match the host. When the host and the SDK disagree, this test fails and the change cannot be merged.
 
-SDK 仓库的提交、标签和推送和本仓库一样由协调者做。
+Commits, tags and pushes in the SDK repository are made by the coordinator, the same as in this repository.
 
-## 2. 插件开发流程
+## 2. Plugin development process
 
-1. **设计**（新插件或新功能）：作者按 §2.1 模板写方案，交互负责人检查菜单领域和界面一致性，维护者检查需要的能力。只审受影响部分，不重开所有插件的设计。
-2. **纵向切片**：作者第一项交付必须是一条真实用户路径：菜单入口 → 插件代码 → 公共 API 调用 → 可观察的结果。探针脚本不算产品进度。
-3. **扩展**：在切片基础上补齐其它功能。缺能力时按 §4 提请求，同时继续不依赖它的部分。
-4. **自检**：`npm run plugin -- check|test|build <名字>` 全部通过。
-5. **验收**：协调者做真实 GUI 测试（§6），独立验收者按批次复核。
+1. **Design** (new plugin or new feature): the author writes a proposal using the §2.1 template, the interaction lead checks menu domains and interface consistency, and the maintainer checks the required capabilities. Only the affected parts are reviewed; the designs of all plugins are not reopened.
+2. **Vertical slice**: the author's first delivery must be a real user path: menu entry → plugin code → public API call → observable result. Probe scripts do not count as product progress.
+3. **Extension**: fill in the other features on top of the slice. When a capability is missing, submit a request per §4 and continue with the parts that do not depend on it.
+4. **Self-check**: `npm run plugin -- check|test|build <name>` all pass.
+5. **Acceptance**: the coordinator runs real GUI tests (§6), and the independent reviewer rechecks per batch.
 
-### 2.1 插件方案模板
-
-```text
-1. 职责与场景：用户要完成什么、插件负责什么、非目标、不依赖其它插件的使用前提
-2. 入口表：功能 | 主菜单路径 | 其它入口（按钮/快捷键） | 直接执行还是打开界面 | 启用条件 | 状态来源
-3. 界面：草图与控件顺序、窗口还是底栏/侧栏、默认是否显示、打开/关闭/再次打开、焦点
-4. 状态与失败：无媒体/加载中/播放中/暂停/换源/连续拖动/重复点击；何时提交、何时生效；取消与失败恢复
-5. API 用法：最少的 TS/Slint 例子；逐项标「已有」或「请求扩展」
-6. 验收场景：用户操作 | 可观察结果 | 证据（截图/产物/测试）
-```
-
-菜单按用户领域组织（文件、播放、视频、音频、字幕、视图、模拟器、插件），复位、预设等子功能留在所属领域。改全局菜单路径需提建议，不自行批准。
-
-## 3. 开发准入与验收要分开
-
-这是本项目踩过的最大的坑（2026-10-18 复盘）：把「最终产品验收」误当成「允许开始写插件的前提」，结果公共 API 阶段持续两天，没有一个插件开工。规则：
-
-- **开工门槛只看实际依赖**：宿主和 SDK 能构建，真实播放、插件加载、菜单、Slint 窗口的最小调用能跑，交付的接口有用法说明和已知缺口清单，就可以开工。不把全部能力的完整验收当作所有插件的开工条件。
-- **缺口只阻塞依赖它的部分**：标注「已实现待验 / 已验证 / 缺失 / 真实阻塞」，能力缺失不得返回假成功，但不妨碍作者写不依赖它的部分。
-- **维护者不包办插件业务**：存档、解析、下载、预设等留在插件里。
-- **同一路径第二次失败**，协调者必须决定：修明确的缺陷、换实现方案、标为只影响该路径的待验项，或升级给用户（§7）。不自动追加更细的探针。
-- **汇报看产品进度**：每次汇报给出「已分派 / 有可运行切片 / 已验收」的插件数，以及公共阻塞影响哪些插件。连续两次没有新切片，协调者必须审查并移除无关的前置条件；测试和文档数量的增长不算进度。
-- 最终交付标准不因准入放宽而降低：播放连续性、资源清理等产品要求仍须实测通过才能宣布完成。
-
-## 4. 自下而上：插件扩展 API
-
-### 4.1 请求格式
+### 2.1 Plugin proposal template
 
 ```text
-请求插件 / 代码位置
-用户操作与预期结果
-现有 API 为什么做不到（附最小复现）
-希望的用法（usage example）
-状态与资源归谁；失败、取消、能力缺失时的行为
-是否破坏现有契约、影响哪些插件
-最小验收场景
+1. Purpose and scenarios: what the user wants to do, what the plugin is responsible for, non-goals, preconditions for use that do not depend on other plugins
+2. Entry table: feature | main menu path | other entries (buttons/shortcuts) | runs directly or opens an interface | enabling condition | state source
+3. Interface: sketch and control order, window or bottom bar/sidebar, shown by default or not, open/close/reopen, focus
+4. State and failure: no media/loading/playing/paused/source change/continuous dragging/repeated clicks; when changes are submitted and when they take effect; cancellation and failure recovery
+5. API usage: the smallest TS/Slint example; mark each item "existing" or "extension requested"
+6. Acceptance scenarios: user action | observable result | evidence (screenshot/output/test)
 ```
 
-### 4.2 维护者如何处理
+Menus are organized by user domain (File, Playback, Video, Audio, Subtitles, View, Emulator, Plugins); sub-features such as reset and presets stay in their own domain. Changing a global menu path requires a proposal and cannot be self-approved.
 
-1. **先分类**：现有实现违反契约（按缺陷修，不能让作者用新请求绕开）、文档或用法问题、能力缺口、破坏性设计调整。
-2. **先找现成办法**：现有 API、插件内部实现或第三方库能否完成；确需公共能力才做最小扩展。只有一个插件用的能力也可以进核心，关键看职责是否属于基础能力；不因一个需求无限泛化。
-3. **兼容扩展及时发布**：新增可选参数或独立能力，跑受影响插件的回归后发布，不用它的插件不必改。注意：改默认行为、错误语义、资源归属或生命周期同样会破坏兼容，不能只看类型签名。
-4. **破坏性变更集中切换**：写明方案、受影响插件和迁移例子，按 §5 统一迁移；切换前旧用法继续可用。
-5. **防止补丁循环**：多个请求指向同一能力，或一个变更接连引出新的破坏性请求时，暂停这部分变更，合并成一个设计议题再决定。
-6. **拒绝要给替代方案**，不能让作者私自加隐藏入口。
+## 3. Keep the start gate and acceptance separate
 
-一条请求以请求插件的实际调用跑通、必要回归通过为闭环；其它插件不等它。
+This is the biggest pitfall this project has hit (retrospective of 2026-10-18): "final product acceptance" was mistaken for "the precondition for starting to write plugins", so the public API phase lasted two days and not a single plugin was started. Rules:
 
-### 4.3 协商：维护者默认保守
+- **The start gate looks only at actual dependencies**: work can start once the host and the SDK build, minimal calls for real playback, plugin loading, menus and Slint windows run, and the delivered interfaces come with usage notes and a list of known gaps. Full acceptance of all capabilities is not a start condition for all plugins.
+- **A gap blocks only the parts that depend on it**: mark items "implemented, pending verification / verified / missing / truly blocked"; a missing capability must not return a fake success, but it does not stop authors from writing the parts that do not depend on it.
+- **The maintainer does not take over plugin business logic**: saving, parsing, downloading, presets and so on stay in the plugins.
+- **When the same path fails a second time**, the coordinator must decide: fix a clear defect, switch the implementation approach, mark it as a pending item that affects only that path, or escalate to the user (§7). Do not automatically add finer-grained probes.
+- **Reports track product progress**: every report gives the number of plugins "assigned / with a runnable slice / accepted", and which plugins the shared blockers affect. If two reports in a row have no new slice, the coordinator must review and remove unrelated preconditions; growth in the number of tests and docs does not count as progress.
+- The final delivery standard is not lowered because the start gate is relaxed: product requirements such as playback continuity and resource cleanup must still pass real tests before completion is announced.
 
-核心要保持精简，所以维护者对 API 请求**默认不接受**。作者要证明非改不可，维护者不负责证明可以不改。请求按下面的流程处理：
+## 4. Bottom-up: plugins extend the API
 
-1. **草案不是批准**。需求文档里写的核心接口（如[功能需求](../product/feature-requirements.md)附录 A），只是作者一方的请求草案。每一条都要按 §4.1 单独提交，走完本节流程。
-2. **维护者先回复方案，不先动手实现**。对每条请求，维护者先给出不改 API 的做法，并写明这样做的代价：
-   - 用现有 API 组合；
-   - 插件自己用 Node、ffmpeg 或系统命令实现；
-   - 降低需求，例如去掉边缘情况、改交互；
-   - 直接说明不做。
-3. **作者可以反驳一次**，但必须给出具体证据：最小复现，或者说明替代方案在用户层面做不到什么（行为、性能、可靠性）。只说「不方便」或「代码会多」不构成理由。
-4. **维护者裁决**，结论只能是三种：拒绝并给出替代方案、改写后接受（缩小范围、换形态）、接受。只有满足下列至少一条时才改核心：
-   - 需要宿主内部状态或宿主独有能力，如窗口、渲染、mpv 属性、绑定表；
-   - 插件之间不能通信，而这项能力本身就要跨插件共享，如时间轴标记、设置页汇总；
-   - 职责本来就属于核心，如基础播放动作。
-   - 多个插件需要，或这是一项通用基础能力、以后大量插件都会用到，如剪贴板、运行时图片、设置页。这种能力如果让每个插件各自用系统命令实现，就是重复造轮子，行为也会不一致，应该进核心。
+### 4.1 Request format
 
-   保守的意思是不为单个插件的特殊需求扩张核心，并不是什么都推给插件自己做。
+```text
+Requesting plugin / code location
+User action and expected result
+Why the existing API cannot do it (with a minimal reproduction)
+Desired usage (usage example)
+Who owns the state and resources; behavior on failure, cancellation and missing capability
+Whether it breaks an existing contract, and which plugins it affects
+Minimal acceptance scenario
+```
 
-   能做成可选扩展的，不做破坏性改动。几条请求指向同一能力时，合并成一个设计议题（§4.2 第 5 条）。
-5. **记录结论**。每条请求的结论写进本轮记录：请求、维护者的替代方案、作者的反驳、裁决和理由。被拒绝的请求再次提出时，必须带新证据。
-6. **协调者只处理僵持**。作者反驳后维护者仍拒绝，而作者认为替代方案会让用户可见的功能缺失时，由协调者裁决或升级给用户（§7）。协调者不替双方写方案。
+### 4.2 How the maintainer handles requests
 
-协商不阻塞开工：作者在等待结论时，先做不依赖这条请求的部分（§3）。
+1. **Classify first**: the existing implementation violates its contract (fix it as a defect; authors must not be made to work around it with a new request), a docs or usage problem, a capability gap, or a breaking design change.
+2. **Look for an existing way first**: can the existing API, an implementation inside the plugin, or a third-party library do it; make a minimal extension only when a shared capability is truly needed. A capability used by only one plugin can still go into the core; what matters is whether the responsibility belongs to the basic capabilities. Do not generalize endlessly because of one need.
+3. **Release compatible extensions promptly**: new optional parameters or independent capabilities are released after the regression tests of the affected plugins pass; plugins that do not use them need no change. Note: changing default behavior, error semantics, resource ownership or lifecycle also breaks compatibility; looking only at type signatures is not enough.
+4. **Switch breaking changes all at once**: write down the plan, the affected plugins and migration examples, and migrate together per §5; the old usage keeps working until the switch.
+5. **Prevent patch loops**: when several requests point to the same capability, or one change keeps leading to new breaking requests, pause changes in that area and merge them into one design topic before deciding.
+6. **A rejection must come with an alternative**; authors must not be left to add hidden entry points on their own.
 
-## 5. 自上而下：重构 API 本身
+A request is closed when the requesting plugin's actual call works and the necessary regression tests pass; other plugins do not wait for it.
 
-用于 API 整体难用、需要换形态的情况（例如 2026-10-20 从扁平 RPC 绑定换成句柄式 SDK v2）。
+### 4.3 Negotiation: the maintainer is conservative by default
 
-### 5.1 阶段
+The core must stay lean, so the maintainer **does not accept** API requests by default. The author has to prove that the change is unavoidable; the maintainer does not have to prove that it can be avoided. Requests go through the following process:
 
-| 阶段 | 负责 | 内容 | 完成条件 |
+1. **A draft is not an approval**. Core interfaces written in a requirements document (such as Appendix A of the [feature requirements](../product/feature-requirements.md)) are only the author's draft requests. Each one must be submitted separately per §4.1 and go through the whole process in this section.
+2. **The maintainer first replies with an approach, and does not start implementing first**. For each request, the maintainer first gives a way to do it without changing the API, and states the cost of doing it that way:
+   - combine existing APIs;
+   - the plugin implements it itself with Node, ffmpeg or OS commands;
+   - reduce the requirement, for example drop edge cases or change the interaction;
+   - state directly that it will not be done.
+3. **The author may rebut once**, but must give concrete evidence: a minimal reproduction, or an explanation of what the alternative cannot do at the user level (behavior, performance, reliability). Saying only "it is inconvenient" or "it means more code" is not a reason.
+4. **The maintainer rules**, and the result can only be one of three: reject and give an alternative, accept in rewritten form (narrower scope, different shape), or accept. The core is changed only when at least one of the following holds:
+   - it needs the host's internal state or a capability only the host has, such as windows, rendering, mpv properties, the binding table;
+   - plugins cannot communicate with each other, and the capability itself has to be shared across plugins, such as timeline markers or the settings page summary;
+   - the responsibility belongs to the core in the first place, such as basic playback actions.
+   - several plugins need it, or it is a general basic capability that many plugins will use later, such as the clipboard, runtime images, the settings page. If each plugin implemented such a capability with OS commands on its own, that would be reinventing the wheel with inconsistent behavior, so it should go into the core.
+
+   Conservative means not expanding the core for the special needs of a single plugin; it does not mean pushing everything onto the plugins.
+
+   Whatever can be done as an optional extension is not done as a breaking change. When several requests point to the same capability, merge them into one design topic (§4.2 item 5).
+5. **Record the result**. The result of each request is written into this round's record: the request, the maintainer's alternative, the author's rebuttal, the ruling and its reasons. A rejected request can be raised again only with new evidence.
+6. **The coordinator handles only deadlocks**. When the maintainer still rejects after the author's rebuttal, and the author believes the alternative would leave a user-visible feature missing, the coordinator rules or escalates to the user (§7). The coordinator does not write proposals for either side.
+
+Negotiation does not block starting work: while waiting for the result, the author first does the parts that do not depend on the request (§3).
+
+## 5. Top-down: refactoring the API itself
+
+Used when the API as a whole is hard to use and needs a new shape (for example, on 2026-10-20 the flat RPC bindings were replaced with the handle-based SDK v2).
+
+### 5.1 Phases
+
+| Phase | Owner | Content | Completion condition |
 | --- | --- | --- | --- |
-| P0 准备 | 协调者 | 新建分支；记录基线：全部静态检查、各插件测试结果、代码行数 | 基线记录 |
-| P1 设计实现 | 维护者 | 新 SDK 与单元测试、假宿主测试工具、设计说明、用法示例、迁移指南；**亲自迁移一个参考插件** | 全部静态检查通过；参考插件构建测试通过，源码中不再出现旧协议概念 |
-| P2 设计审查 | 协调者 | 对照设计要求逐条审查，重点看用法示例是否短而易读（单个示例超过约 30 行说明封装不够） | 通过前不分派迁移 |
-| P3 插件迁移 | 每插件 1 个迁移者，并发不超过 4 | 按迁移指南等价迁移；先小插件后大插件 | 见 §5.3 |
-| P4 删除旧 API | 维护者 | 删除旧 API 与只服务于它的代码、示例、脚本；全量静态检查 | 没有任何代码引用旧 API |
-| P5 全量 GUI 测试 | 协调者 | §6 | 全部场景通过，缺陷修复后复测受影响项 |
-| P6 提交 | 协调者 | 更新文档与状态，提交推送，向用户报告 | 合并到主线由用户决定 |
+| P0 Preparation | Coordinator | Create a branch; record the baseline: all static checks, each plugin's test results, line counts | Baseline recorded |
+| P1 Design and implementation | Maintainer | New SDK and unit tests, fake-host test tools, design notes, usage examples, migration guide; **migrates one reference plugin personally** | All static checks pass; the reference plugin builds and its tests pass, and old protocol concepts no longer appear in its source |
+| P2 Design review | Coordinator | Reviews item by item against the design requirements, focusing on whether the usage examples are short and readable (a single example longer than about 30 lines means the abstraction is not good enough) | No migration is assigned before it passes |
+| P3 Plugin migration | 1 migrator per plugin, at most 4 at a time | Equivalent migration following the migration guide; small plugins first, large plugins later | See §5.3 |
+| P4 Remove the old API | Maintainer | Remove the old API and the code, examples and scripts that serve only it; full static checks | No code references the old API |
+| P5 Full GUI test | Coordinator | §6 | All scenarios pass; after defects are fixed, the affected items are retested |
+| P6 Commit | Coordinator | Update docs and status, commit and push, report to the user | Merging into the mainline is the user's decision |
 
-兼容层只在迁移期间存在，退出条件是「全部插件迁移完成」，P4 删除。
+The compatibility layer exists only during the migration; its exit condition is "all plugins migrated", and it is removed in P4.
 
-SDK 在独立仓库（§1.6）：P1、P4 的 SDK 部分在 SDK 仓库的分支上做；迁移期间播放器依赖该分支的预发布标签（例如 `v2.0.0-rc.1`），P4 之后 SDK 正式发版，播放器改依赖正式版本再进入 P5。
+The SDK is in its own repository (§1.6): the SDK parts of P1 and P4 are done on a branch in the SDK repository; during the migration the player depends on a pre-release tag of that branch (for example `v2.0.0-rc.1`); after P4 the SDK is released officially, and the player switches to the official version before entering P5.
 
-### 5.2 迁移者的规则
+### 5.2 Rules for migrators
 
-- 行为保持不变：同样的菜单项（路径、标题、启用条件）、窗口与控件、回调效果、错误提示语义。可以改善代码结构，不能增减用户可见功能。
-- 删除插件里已由 SDK 提供的自制轮子（合并更新、结果查询重试、过期事件过滤、名称转换、手写清理清单）。
-- 现有测试改用 SDK 的假宿主，原有覆盖不能减少。
-- **不新增功能、不提新能力请求、不「顺手」修无关行为。** 发现现有 bug 记在报告里，本轮不修。
-- 不改 SDK 仓库、`src/runtime`、`src/host`、`src/scripts` 或兄弟插件，不绕开 SDK 直接调用底层传输。
-- 现有行为用新 SDK **表达不了**时，这是「迁移阻塞」：停下这部分，写明哪个行为、旧代码位置、新 SDK 为什么表达不了、最小复现，然后继续迁移其它部分。由协调者转维护者裁决（补 SDK 或给写法），迁移者不自行发明替代方案。
+- Behavior stays unchanged: the same menu items (path, title, enabling condition), windows and controls, callback effects, and error message semantics. Code structure may improve, but user-visible features must not be added or removed.
+- Remove home-made wheels in the plugin that the SDK already provides (update merging, result query retries, stale event filtering, name conversion, hand-written cleanup lists).
+- Existing tests switch to the SDK's fake host, and the original coverage must not shrink.
+- **No new features, no new capability requests, no "while I'm here" fixes to unrelated behavior.** Existing bugs that are found are noted in the report and not fixed in this round.
+- Do not change the SDK repository, `src/runtime`, `src/host`, `src/scripts` or sibling plugins, and do not bypass the SDK to call the underlying transport directly.
+- When existing behavior **cannot be expressed** with the new SDK, this is a "migration blocker": stop that part, write down which behavior, where the old code is, why the new SDK cannot express it, and a minimal reproduction, then continue migrating the other parts. The coordinator passes it to the maintainer for a ruling (extend the SDK or give a way to write it); the migrator does not invent an alternative on its own.
 
-### 5.3 迁移完成条件（迁移者自检，协调者复核）
+### 5.3 Migration completion conditions (self-checked by the migrator, rechecked by the coordinator)
 
-- `npm run plugin -- check|build|test <名字>` 全部通过。
-- 在插件源码（不含测试）里 grep 旧协议概念，结果为空；必要的例外逐条说明理由。
-- 插件目录只保留：`manifest.json`、源码（`.ts`、`.slint`、确属手写源码的 `.mjs`）、`tests/`、简短 `README.md`（功能、入口、限制）；有 npm 依赖时加 `package.json`、`package-lock.json`；有许可证义务时加 `licenses/` 与依赖清单。交接产物、各自的构建脚本、已提交的 `dist/` 一律删除。
-- 报告迁移前后代码行数（不含测试）和删除的自制轮子。
+- `npm run plugin -- check|build|test <name>` all pass.
+- A grep for old protocol concepts in the plugin source (excluding tests) returns nothing; each necessary exception is explained with its reason.
+- The plugin directory keeps only: `manifest.json`, source (`.ts`, `.slint`, `.mjs` that is genuinely hand-written source), `tests/`, a short `README.md` (features, entries, limits); plus `package.json` and `package-lock.json` when there are npm dependencies; plus `licenses/` and the dependency list when there are license obligations. Handover artifacts, per-plugin build scripts and committed `dist/` are all removed.
+- Report the line counts (excluding tests) before and after the migration, and the home-made wheels that were removed.
 
-## 6. 验证
+## 6. Verification
 
-### 6.1 静态检查（每次公共改动后，维护者执行，协调者复核）
+### 6.1 Static checks (after every shared change; run by the maintainer, rechecked by the coordinator)
 
-在 `src/` 下：`npm run check`、`npm run format:check`、`npm run boundaries`、`npm run test:sdk`、`npm run plugins:build`、每个插件 `npm run plugin -- test <名字>`、`npm run portability`（构建输出在 `$CARGO_TARGET_DIR/portability`，未设时在系统临时目录的 `vestra-target/portability`，不进仓库）。
-在 `src/host/` 下：`cargo fmt --check`、`cargo clippy --locked --all-targets -- -D warnings`、`cargo test --locked`。
-CI（GitHub Actions）跑同样的检查，另加 typos、cargo-deny、cargo-shear、unsafe 规则；本地一次跑完用 `cd src && npm run ci:local`，见 [ci.md](ci.md)。
-改了插件仓库里的插件（`youtube`、`bilibili`）或可能影响它们的公共 API 时，另在插件仓库下：`npm ci`、`npm run check`、`npm run format:check`、`npm run boundaries`、`npm run portability`、`npm run build`、`npm test`（与它的 CI 相同）。
-改了 SDK 时，另在 SDK 仓库下：`npm ci`、`npm run check`、`npm run format:check`、`npm test`、`npm pack --dry-run`（与它的 CI 相同）。
+In `src/`: `npm run check`, `npm run format:check`, `npm run boundaries`, `npm run test:sdk`, `npm run plugins:build`, `npm run plugin -- test <name>` for each plugin, `npm run portability` (build output goes to `$CARGO_TARGET_DIR/portability`, or to `vestra-target/portability` in the system temp directory when it is not set, never into the repository).
+In `src/host/`: `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked`.
+CI (GitHub Actions) runs the same checks, plus typos, cargo-deny, cargo-shear and the unsafe rule; to run them all locally at once use `cd src && npm run ci:local`, see [ci.md](ci.md).
+When you change a plugin in the plugin repository (`youtube`, `bilibili`) or a public API that may affect them, also run in the plugin repository: `npm ci`, `npm run check`, `npm run format:check`, `npm run boundaries`, `npm run portability`, `npm run build`, `npm test` (the same as its CI).
+When you change the SDK, also run in the SDK repository: `npm ci`, `npm run check`, `npm run format:check`, `npm test`, `npm pack --dry-run` (the same as its CI).
 
-### 6.2 真实 GUI 测试（协调者）
+### 6.2 Real GUI tests (coordinator)
 
-在同一个播放器进程里加载全部插件，用真实鼠标键盘事件逐项操作并截图。测试期间用户不要操作电脑，用 `caffeinate -d` 防止显示器休眠。
+Load all plugins in the same player process, operate each item with real mouse and keyboard events, and take screenshots. The user does not use the computer during the test; use `caffeinate -d` to keep the display from sleeping.
 
-| 范围 | 必测场景 |
+| Scope | Required scenarios |
 | --- | --- |
-| 全部 | 全部插件激活；右键菜单各领域分组正确、每个插件的菜单项都在且可用 |
-| 基础播放 | 打开、播放/暂停、拖动跳转、倍速、静音与音量 |
-| 播放列表 | 添加、选播、上/下一项、播完提示、切到列表外来源的提示 |
-| 画面 / 音频处理 | 效果实际作用于画面或声音；复位后控件复原；连续拖动时播放不中断 |
-| 字幕 | 载入外部 SRT、中英混排显示、轨道选择、样式与撤销 |
-| 截图导出 | 产物与源帧逐像素一致 |
-| NES | 打开 ROM 出画面，停止后清屏 |
-| 网络视频 | 公开视频能播放（`youtube`、`bilibili` 在插件仓库：用 `--plugin <插件仓库检出>/plugins/<名字>` 加载，检出里先 `npm ci`） |
-| 插件工坊 | 生成 → 校验 → 安装 → 生成的插件可用 |
-| 停用 | 停用一个处理插件只撤销它自己的效果，其它插件效果保留（目前没有对外的停用入口，需要测试插件或宿主测试驱动） |
+| All | All plugins active; the right-click menu domain groups are correct, and every plugin's menu items are present and usable |
+| Basic playback | Open, play/pause, drag to seek, speed, mute and volume |
+| Playlist | Add, select to play, previous/next item, end-of-playback notice, the notice when switching to a source outside the list |
+| Video / audio processing | Effects actually apply to the picture or sound; controls return to default after reset; playback does not stop during continuous dragging |
+| Subtitles | Load an external SRT, mixed Chinese and English display, track selection, style and undo |
+| Screenshot export | The output matches the source frame pixel for pixel |
+| NES | Opening a ROM shows a picture; the screen clears after stopping |
+| Online video | Public videos play (`youtube` and `bilibili` are in the plugin repository: load them with `--plugin <plugin repository checkout>/plugins/<name>`, after running `npm ci` in the checkout) |
+| Plugin workshop | Generate → validate → install → the generated plugin works |
+| Deactivation | Deactivating one processing plugin revokes only its own effect, and the other plugins' effects remain (there is currently no public deactivation entry, so a test plugin or the host test driver is needed) |
 
-每项记录操作、截图、结果。证据要分清来源：物理操作、系统文件面板、回调模拟、headless、mock 不能互相冒充。底层参数正确不证明拖动时不卡顿；菜单能展开不证明展开时画面仍在更新。
+Record the action, screenshot and result for each item. Keep evidence sources apart: physical input, the system file panel, callback simulation, headless runs and mocks must not stand in for each other. Correct low-level parameters do not prove that dragging does not stutter; a menu that opens does not prove the picture keeps updating while it is open.
 
-缺陷归属：插件的退回该插件作者（或新开一个只修该缺陷的 agent，附复现步骤），SDK 和宿主的退回维护者；一两行的明显 UI 修正可由协调者直接改并记录。修复后只复测受影响项。
+Defect ownership: plugin defects go back to that plugin's author (or to a new agent that fixes only that defect, with reproduction steps attached); SDK and host defects go back to the maintainer; obvious UI fixes of one or two lines may be made directly by the coordinator and recorded. After a fix, only the affected items are retested.
 
-## 7. 什么时候请用户裁决
+## 7. When to ask the user for a ruling
 
-先复现、澄清契约、比较方案，仍属于下列情况时才升级：
+First reproduce, clarify the contract and compare options; escalate only if the issue still falls into one of the following:
 
-- 要改变已定原则（插件直接依赖、核心包含特定插件业务、放宽 Safe Rust 等）。
-- 产品需求互相冲突，需要在自由度、学习成本、性能、体验之间取舍。
-- 明显扩大核心或范围，引入新平台、许可证义务、收费服务。
-- 有证据表明既定技术路线（Slint、TS/Rust 分工等）满足不了关键场景。
-- 维护者与验收者补充证据后仍有实质分歧。
+- It would change an established principle (direct dependencies between plugins, plugin-specific business logic in the core, relaxing Safe Rust, and so on).
+- Product requirements conflict with each other and need a trade-off between freedom, learning cost, performance and experience.
+- It clearly expands the core or the scope, or introduces a new platform, license obligations or paid services.
+- There is evidence that the established technical route (Slint, the TS/Rust split, and so on) cannot meet a key scenario.
+- The maintainer and the reviewer still disagree substantially after adding evidence.
 
-升级时给出：具体问题、复现证据、可选方案及代价、推荐方案、需要用户回答的一句话问题。只暂停依赖该决定的工作。普通 bug、文档澄清、兼容扩展和已授权范围内的实现选择由团队自己解决。
+When escalating, give: the specific problem, reproduction evidence, the options and their costs, the recommended option, and a one-sentence question the user needs to answer. Pause only the work that depends on the decision. Ordinary bugs, docs clarifications, compatible extensions and implementation choices within the authorized scope are resolved by the team itself.
 
-## 8. 并发与报告
+## 8. Concurrency and reports
 
-- 同时运行的 agent 通常不超过 4 个（含协调者）。维护者忙于一个模块时，不能让所有作者干等；共享模块可按文件或接口划分后委托。
-- 构建、集成、使用真实设备的时段由协调者集中调度。
-- **CI 成本**：私有仓库 macOS 计费 10 倍、Windows 2 倍。一个分支一次推送只跑一次 CI；记录类改动攒成一批再推；不要同时重跑 push 与 PR 两份；macOS 只在 PR 打开、加 `ci:macos` 标签、main、nightly、release 时跑（[ci.md](ci.md)）。
+- Usually no more than 4 agents run at the same time (including the coordinator). While the maintainer is busy with one module, the authors must not all be left waiting; shared modules can be split by file or interface and delegated.
+- The coordinator schedules the time slots for building, integration and use of real devices centrally.
+- **CI cost**: in private repositories macOS is billed at 10x and Windows at 2x. One push to a branch runs CI only once; record-only changes are collected into one batch before pushing; do not rerun both the push and the PR runs at the same time; macOS runs only when a PR is opened, when the `ci:macos` label is added, and on main, nightly and release ([ci.md](ci.md)).
 
-每个子 agent 结束时按以下格式报告：
+Every sub-agent reports at the end in the following format:
 
 ```
-## 结果
-一句话：完成 / 部分完成 / 阻塞。
+## Result
+One sentence: done / partly done / blocked.
 
-## 改动
-- 新增 / 修改 / 删除的文件
+## Changes
+- Files added / modified / deleted
 
-## 检查
-- 实际执行的命令 → 结果（退出码、通过/失败数）
-- 未执行的检查及原因
+## Checks
+- Commands actually run → result (exit code, pass/fail counts)
+- Checks not run and why
 
-## 迁移阻塞或 API 请求（若有）
+## Migration blockers or API requests (if any)
 
-## 发现但未修的问题（若有）
+## Problems found but not fixed (if any)
 ```
 
-只陈述实际执行过的检查；没执行的写「未执行」。
+State only checks that were actually run; write "not run" for those that were not.

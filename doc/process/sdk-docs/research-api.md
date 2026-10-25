@@ -1,43 +1,43 @@
-# `@vestra-player/sdk` API 文档重写调研
+# Research: rewriting the `@vestra-player/sdk` API documentation
 
-日期：2026-10-22。范围：只读调研，不改代码。
-对象：SDK 仓库克隆 `scratchpad/sdkrepo`（v1.2.0，TypeDoc 0.28.20，站点 https://vestrasys.github.io/vestra-player-sdk/），以及播放器仓库的长篇参考 `doc/plugins/reference.md`（1658 行）、`tutorial.md`（357 行）、`examples.md`（939 行，34 节）。
-
----
-
-## 0. 结论先行
-
-1. **问题不只是注释写得短，而是概念材料放错了地方。** 背景知识（更新轮、名称转换、句柄、面板的 global 桥接、全屏侧栏、错误码的真实含义）都写在播放器仓库的中文 `reference.md` / `tutorial.md` / `examples.md` 里，SDK 站点一个也链接不到。SDK 站点上只有英文的 TSDoc 加一篇 getting-started，而 TSDoc 本身是"规格说明"的文风：短、密、默认读者已经懂概念。
-2. 好文档的共同做法（MATLAB、man、Rust、MDN、Stripe、Qt、VS Code、OpenCV、Django、Node）是：**概念页和参考页分开写，而且互相链接**。每个符号的参考条目都按固定的小节顺序写（摘要、说明、参数、返回值、错误、示例、另见、版本），示例都是完整可运行的，并且由机器检查。
-3. 建议的做法：
-   - 站点按 Diátaxis 分成四类：教程、概念、操作指南、API 参考。
-   - 播放器仓库里的中文长文档迁到 SDK 仓库，成为**唯一的权威来源**；`reference.md` 降级为跳转页。
-   - TSDoc 按统一模板补齐 `@remarks`、`@throws`（我们的错误码）、自定义 `@capability`、`@example`、`@see`、`@since`。
-   - 示例写成 `examples/` 下真实的 `.ts` 文件，用 `{@includeCode}` 引入文档，CI 里用 `tsc` 检查，并用 `startPlugin` 测试宿主实际运行一遍（相当于 doctest）。
-   - 语言：**中文为主**，设 `lang: "zh"`；README 和 npm 入口保留英文简介。
-4. 工作量：需要完整按模板重写约 30 个"模块入口"类型和约 140 个方法；补单位和默认值的属性约 60 个；另写概念页约 9 篇、操作指南约 20 篇（大部分可以从 `examples.md` 改写）。
+Date: 2026-10-22. Scope: read-only research, no code changes.
+Subject: the SDK repository clone `scratchpad/sdkrepo` (v1.2.0, TypeDoc 0.28.20, site https://vestrasys.github.io/vestra-player-sdk/), and the long-form references in the player repository: `doc/plugins/reference.md` (1658 lines), `tutorial.md` (357 lines), `examples.md` (939 lines, 34 sections).
 
 ---
 
-## 1. 现状评估
+## 0. Conclusions first
 
-### 1.1 量化
+1. **The problem is not only that the comments are short; the conceptual material is in the wrong place.** The background knowledge (update passes, name conversion, handles, the global bridge for panels, the full-screen sidebar, what the error codes actually mean) is all written in the Chinese `reference.md` / `tutorial.md` / `examples.md` in the player repository, and the SDK site links to none of it. The SDK site has only the English TSDoc plus one getting-started page, and the TSDoc itself is written in a "specification" style: short, dense, and assuming the reader already knows the concepts.
+2. What good documentation has in common (MATLAB, man, Rust, MDN, Stripe, Qt, VS Code, OpenCV, Django, Node): **concept pages and reference pages are written separately and link to each other.** Every symbol's reference entry follows a fixed section order (summary, description, parameters, return value, errors, examples, see also, version), and the examples are complete, runnable, and checked by machine.
+3. Recommended approach:
+   - Split the site by Diátaxis into four kinds: tutorials, concepts, how-to guides, API reference.
+   - Move the long Chinese documents from the player repository into the SDK repository, where they become the **single source of truth**; `reference.md` is reduced to a redirect page.
+   - Complete the TSDoc with a uniform template: `@remarks`, `@throws` (our error codes), a custom `@capability`, `@example`, `@see`, `@since`.
+   - Write examples as real `.ts` files under `examples/`, pull them into the docs with `{@includeCode}`, check them with `tsc` in CI, and actually run them once against the `startPlugin` test host (the equivalent of a doctest).
+   - Language: **Chinese as the primary language**, set `lang: "zh"`; keep an English introduction in the README and on the npm entry.
+4. Effort: about 30 "module entry" types and about 140 methods need a full rewrite to the template; about 60 properties need units and defaults; in addition about 9 concept pages and about 20 how-to guides (most can be adapted from `examples.md`).
 
-| 指标 | 数值 | 说明 |
+---
+
+## 1. Current state
+
+### 1.1 Numbers
+
+| Metric | Value | Notes |
 | --- | --- | --- |
-| `types.ts` 导出类型 | 103 个 | 大约 390 个成员，其中约 137 个是方法 |
-| 单行 `/** … */` 注释 | 434 条（types.ts），172 条（testing.ts） | 多数方法只有一句话 |
-| `@example` | 79 处（types.ts 44，testing.ts 28） | 示例**不做类型检查**：`tsconfig.check.json` 只覆盖 `src/`、`test/`，示例里常出现未定义的变量（`store`、`load`、`stopPolling`、`askUser`、`chain`、`settings`） |
-| `@throws` / `@returns` / `@param` | 3 / 7 / 23 | 错误大多写在正文里，比如 "`invalid` for …" |
-| `@remarks`、`@see`、`@since`、`@defaultValue`、`@category` | **全部为 0** | 没有版本信息，也没有分组，侧栏按源码顺序平铺 103 个类型 |
-| 站点里的手写页面 | 1 篇（`docs/getting-started.md`，239 行） | `projectDocuments` 里只有这一篇 |
-| TypeDoc 校验 | `notDocumented`、`invalidLink` 开启，警告视为错误 | 底子不错：每个导出都有注释，链接也不会断 |
+| Exported types in `types.ts` | 103 | About 390 members, of which about 137 are methods |
+| Single-line `/** … */` comments | 434 (types.ts), 172 (testing.ts) | Most methods have only one sentence |
+| `@example` | 79 (types.ts 44, testing.ts 28) | Examples are **not type-checked**: `tsconfig.check.json` only covers `src/` and `test/`, and examples often use undefined variables (`store`, `load`, `stopPolling`, `askUser`, `chain`, `settings`) |
+| `@throws` / `@returns` / `@param` | 3 / 7 / 23 | Errors are mostly written in the body text, e.g. "`invalid` for …" |
+| `@remarks`, `@see`, `@since`, `@defaultValue`, `@category` | **all 0** | No version information and no grouping; the sidebar lists 103 types flat in source order |
+| Hand-written pages on the site | 1 (`docs/getting-started.md`, 239 lines) | `projectDocuments` contains only this one |
+| TypeDoc validation | `notDocumented` and `invalidLink` on, warnings treated as errors | A good base: every export has a comment and links do not break |
 
-结论：**覆盖率没有问题，问题在深度和结构。** 每个符号都有注释，但几乎都只有"是什么"，没有"为什么、在整体里处于什么位置、怎么用、会怎么失败"。
+Conclusion: **coverage is not the problem; depth and structure are.** Every symbol has a comment, but almost all of them only say "what it is", not "why, where it sits in the whole, how to use it, how it fails".
 
-### 1.2 五个典型薄弱点（附原文）
+### 1.2 Five typical weak spots (with the original text)
 
-#### ① `Windows.create` / `Window`：没有回答"工具窗口到底是什么"
+#### ① `Windows.create` / `Window`: does not answer "what exactly is a tool window"
 
 ```ts
 /** `plugin.windows`: tool windows. Needs `ui.window`. */
@@ -57,16 +57,16 @@ export interface Windows {
  * info.onClose(() => stopPolling());
 ```
 
-缺了什么：
+What is missing:
 
-- **概念**：注释没说它是一个独立的系统级顶层窗口。看播放器源码 `src/host/src/ui.rs::open`，它是 Slint 实例自己的原生窗口：有自己的标题栏，非模态，不依附主窗口；尺寸和标题来自 Slint 的 `Window` 组件；显示之前播放器会套上主题色和系统字体。注释也没说它和面板、设置页、对话框有什么区别，什么时候该选哪个。
-- **生命周期**：`create → on → show → hide/close → 用户关闭 → dispose` 这条线没有完整讲过，"关闭后再 `show()` 是一个全新实例"散落在三个成员的注释里。
-- **标准关闭键**：用户按 ⌘W，或 Windows 上的 Ctrl+W / Ctrl+F4，等同于点标题栏关闭，会触发 `onClose`。这一点只写在 `reference.md` §6.2。
-- **错误**：`show()` 可能以哪些 code 拒绝，完全没写。按宿主代码（`main.rs` 的 `"ui.open"` 分支）推断，至少有：`unavailable`（无界面模式）、`capability`、文件越界或不存在（`plugins::package_file` 的错误）、Slint 编译失败。后者由 `From<anyhow::Error>` 映射成 **`host`**，而这个 code 不在 `PluginError` 的错误表里。
-- 重复 id 抛出的是**不带 `code` 的普通 `Error`**（`ui.ts`：`throw new Error(\`window ${id} already exists…\`)`），与 `PluginError` 承诺的"每个失败都有稳定的 code"相矛盾。
-- **示例**：只有 TS 一半，没有对应的 `.slint` 文件；`load`、`stopPolling` 未定义，示例复制下来跑不起来。
+- **Concept**: the comment does not say that it is an independent, system-level top-level window. From the player source `src/host/src/ui.rs::open`, it is the Slint instance's own native window: it has its own title bar, is non-modal, and is not attached to the main window; size and title come from the Slint `Window` component; before showing it, the player applies the theme colors and the system font. The comment also does not say how it differs from panels, settings pages and dialogs, or when to choose which.
+- **Lifecycle**: the sequence `create → on → show → hide/close → user closes → dispose` is never explained as a whole; "calling `show()` after closing gives a brand-new instance" is scattered across the comments of three members.
+- **Standard close keys**: the user pressing ⌘W, or Ctrl+W / Ctrl+F4 on Windows, is the same as clicking close in the title bar and triggers `onClose`. This is only written in `reference.md` §6.2.
+- **Errors**: which codes `show()` can reject with is not documented at all. Inferred from the host code (the `"ui.open"` branch in `main.rs`), at least: `unavailable` (headless mode), `capability`, file outside the package or missing (errors from `plugins::package_file`), Slint compile failure. The last one is mapped by `From<anyhow::Error>` to **`host`**, and this code is not in the `PluginError` error table.
+- A duplicate id throws **a plain `Error` without a `code`** (`ui.ts`: `throw new Error(\`window ${id} already exists…\`)`), which contradicts `PluginError`'s promise that "every failure has a stable code".
+- **Example**: only the TS half, with no matching `.slint` file; `load` and `stopPolling` are undefined, so the example does not run when copied.
 
-#### ② `Player` 的控制方法：一句话，没有范围、错误和条件语义
+#### ② `Player` control methods: one sentence, no ranges, errors or conditional semantics
 
 ```ts
 /** Pause or resume. */
@@ -77,9 +77,9 @@ seek(seconds: number, options?: Conditional): Promise<void>;
 setRate(rate: number, options?: Conditional): Promise<void>;
 ```
 
-`setRate` 接受的范围、`seek` 超出时长时的行为、不可跳转的来源会不会 `unsupported`、没有媒体时是不是 `unavailable`，都没写。`stale` 的条件提交语义只在 `Player` 接口顶部提了一句。长篇参考 §5.2 同样只写了"跳转""倍速"。这类方法正是 MATLAB 的 Input Arguments 和 man 的 ERRORS 最擅长覆盖的部分。
+Not documented: the range `setRate` accepts, what `seek` does beyond the duration, whether a non-seekable source gives `unsupported`, whether no media gives `unavailable`. The conditional-commit semantics of `stale` are mentioned only once, at the top of the `Player` interface. The long reference §5.2 likewise only says "seek" and "speed". These methods are exactly what MATLAB's Input Arguments and man's ERRORS cover best.
 
-#### ③ `Settings.page` / `Panels`："one component and one global" 的桥接概念从来没解释
+#### ③ `Settings.page` / `Panels`: the "one component and one global" bridge concept is never explained
 
 ```ts
 /**
@@ -90,10 +90,10 @@ setRate(rate: number, options?: Conditional): Promise<void>;
  * page.on("resumeChanged", (on: boolean) => store.save({ ...store.value, resume: on }));
 ```
 
-- 为什么窗口是"一个组件"，而面板和设置页是"组件 + global"？global 在这里起什么作用，属性该写在哪？这些都是 Slint 新手最大的障碍。tutorial.md 有"界面和插件之间只有两个方向"一节，但 SDK 站点上看不到。
-- 示例里的 `store` 是未定义变量，暗中依赖 `plugin.storage.json(...)`。示例没有给出 `.slint` 文件，也没有处理 `page.ready`（文件编译失败时会以 `ui-prepare` 拒绝）。
+- Why is a window "one component" while panels and settings pages are "component + global"? What role does the global play here, and where should the properties go? These are the biggest obstacles for Slint beginners. tutorial.md has a section "there are only two directions between the UI and the plugin", but it is not visible on the SDK site.
+- `store` in the example is an undefined variable that silently relies on `plugin.storage.json(...)`. The example gives no `.slint` file and does not handle `page.ready` (which rejects with `ui-prepare` when the file fails to compile).
 
-#### ④ `Packages`：流程类 API 缺少流程说明，字段值没有枚举
+#### ④ `Packages`: a process-style API without a description of the process, and field values without enumerations
 
 ```ts
 /** Validate a package directory (`plugins.manage`). */
@@ -107,410 +107,410 @@ readonly checks: string[];
 readonly status: string;
 ```
 
-- 文档没讲"校验 → 试载（trial）或安装 → `change.done` 结果"这条状态机，也没说 validate 具体检查什么（manifest、`minPlayerVersion`，会出 `versionMismatch`）。
-- `checks`、`status` 是开放的 `string`，可能取哪些值没有列出。
-- 一个"插件商店"插件的作者必须去播放器仓库读 `store-design.md` 才能写对。
+- The docs do not describe the state machine "validate → trial load (trial) or install → `change.done` result", nor what validate actually checks (manifest, `minPlayerVersion`, which gives `versionMismatch`).
+- `checks` and `status` are open `string`s; their possible values are not listed.
+- The author of a "plugin store" plugin has to read `store-design.md` in the player repository to get it right.
 
-#### ⑤ 错误模型和事实在多处漂移
+#### ⑤ The error model and facts drift across places
 
-- `PluginError` 的错误表没有 `versionMismatch`，但 `reference.md` §13 有，宿主 `main.rs` 也确实会返回它。宿主还会返回 `host`（Slint 编译失败等）、`ui-prepare`、`ui-value`，SDK 的表里都没有。
-- `docs/getting-started.md` 写的是 "Node.js process (**Node 22.18** or newer)"，而 `package.json` 是 `"node": ">=26"`，`reference.md` 也写"内置 Node 26"。示例 `package.json` 里还是 `"@vestra-player/sdk": "^1.0.1"`，当前版本是 1.2.0。
-- 同一条规格写在两处（TSDoc 英文，`reference.md` 中文），`reference.md` 开头自己也承认"本文与它不一致时以代码为准"。这是**结构性的漂移来源**。
+- The `PluginError` error table has no `versionMismatch`, but `reference.md` §13 has it, and the host `main.rs` does return it. The host also returns `host` (Slint compile failures and others), `ui-prepare` and `ui-value`, none of which are in the SDK table.
+- `docs/getting-started.md` says "Node.js process (**Node 22.18** or newer)", while `package.json` has `"node": ">=26"`, and `reference.md` also says "built-in Node 26". The example `package.json` still has `"@vestra-player/sdk": "^1.0.1"`, while the current version is 1.2.0.
+- The same specification is written in two places (TSDoc in English, `reference.md` in Chinese), and `reference.md` itself admits at the top "where this document disagrees with the code, the code wins". This is a **structural source of drift**.
 
-> 已经写得好的地方，可以当作模板的种子：`Disposable`（列出了每种句柄释放时做什么）、`PluginError`（错误码表）、`Scope`（带子作用域的完整示例）、`CommandOptions.bindings`（语法、平台差异、冲突规则齐全）、`Ui.markdown`（限制、缓存、版本要求齐全）。问题在于这些是例外，不是规范。
+> Places that are already written well and can seed the template: `Disposable` (lists what each kind of handle does when released), `PluginError` (error code table), `Scope` (a complete example with child scopes), `CommandOptions.bindings` (syntax, platform differences and conflict rules all covered), `Ui.markdown` (limits, caching and version requirements all covered). The problem is that these are the exception, not the norm.
 
 ---
 
-## 2. 各家优秀文档的做法
+## 2. How good documentation does it
 
-### 2.1 MATLAB 函数参考
+### 2.1 MATLAB function reference
 
-来源：https://www.mathworks.com/help/matlab/ref/double.interp1.html
+Source: https://www.mathworks.com/help/matlab/ref/double.interp1.html
 
-- 固定的小节顺序：**Syntax → Description → Examples → Input Arguments → Output Arguments → More About / Tips / Algorithms → References → Extended Capabilities → Version History → See Also**。
-- **Syntax 和 Description 一一对应**：每种调用形式（`vq = interp1(x,v,xq)`、`vq = interp1(v,xq)`、`pp = interp1(x,v,method,"pp")`）各配一段描述，读者按"我想这样调用"来查。
-- **示例写成任务标题**，比如 "Interpolation of Coarsely Sampled Sine Function"、"Designate Constant Value for All Queries Outside the Domain of x"。每个示例自成一体，可以直接运行。
-- **Input Arguments 每项都有固定字段**：名称、形状或类别、说明、约束、数据类型、默认值、示例值，可以折叠。
-- **Extended Capabilities** 专门列出平台或环境差异（例如 GPU 上不支持 `"pchip"`）。对应到我们，就是 macOS 和 Windows 的差异，以及无界面模式、软件渲染下的差异。
-- **Version History** 按版本列出"Introduced in R20xx"和后续的行为变化。
+- Fixed section order: **Syntax → Description → Examples → Input Arguments → Output Arguments → More About / Tips / Algorithms → References → Extended Capabilities → Version History → See Also**.
+- **Syntax and Description correspond one to one**: each calling form (`vq = interp1(x,v,xq)`, `vq = interp1(v,xq)`, `pp = interp1(x,v,method,"pp")`) has its own paragraph of description, so readers look things up by "I want to call it like this".
+- **Examples are titled as tasks**, for example "Interpolation of Coarsely Sampled Sine Function", "Designate Constant Value for All Queries Outside the Domain of x". Each example is self-contained and can be run directly.
+- **Each Input Argument has fixed fields**: name, shape or class, description, constraints, data types, default, example value; collapsible.
+- **Extended Capabilities** lists platform or environment differences separately (for example `"pchip"` is not supported on GPU). For us, that means the differences between macOS and Windows, and under headless mode and software rendering.
+- **Version History** lists "Introduced in R20xx" and later behavior changes by version.
 
-对我们的启发：
+Takeaways for us:
 
-- 错误和平台差异放在独立的小节，不要埋在正文段落里。
-- 示例要用"任务"做标题。
-- 参数写清范围、单位和默认值。
+- Put errors and platform differences in their own sections, not buried in body paragraphs.
+- Title examples as "tasks".
+- State the range, unit and default of each parameter.
 
-### 2.2 Linux man-pages 约定
+### 2.2 Linux man-pages conventions
 
-来源：https://man7.org/linux/man-pages/man7/man-pages.7.html
+Source: https://man7.org/linux/man-pages/man7/man-pages.7.html
 
-- 小节顺序：NAME、LIBRARY、SYNOPSIS、DESCRIPTION、RETURN VALUE、**ERRORS**、ENVIRONMENT、FILES、ATTRIBUTES、VERSIONS、STANDARDS、HISTORY、NOTES、**CAVEATS**、BUGS、**EXAMPLES**、SEE ALSO。
-- **ERRORS 的规范**：列出 errno 的每个可能值及其原因。同一个错误码对应不同条件时，分成多个条目（"separate list entries (with duplicate error names) for each of the conditions"），并按字母排序。这正好对应我们按 `code` 分支的错误模型。
-- **EXAMPLES 的规范**：示例程序要短、完整、能无警告编译、带错误检查。
-- **CAVEATS / BUGS**：常见误用和已知限制单独成节。对应到我们，就是"回调必须在第一次 `show()` 前绑定"这类陷阱。
-- HISTORY / VERSIONS：记录何时出现、何时发生显著变化。
+- Section order: NAME, LIBRARY, SYNOPSIS, DESCRIPTION, RETURN VALUE, **ERRORS**, ENVIRONMENT, FILES, ATTRIBUTES, VERSIONS, STANDARDS, HISTORY, NOTES, **CAVEATS**, BUGS, **EXAMPLES**, SEE ALSO.
+- **Rule for ERRORS**: list every possible errno value and its cause. When the same error code corresponds to different conditions, split it into several entries ("separate list entries (with duplicate error names) for each of the conditions"), sorted alphabetically. This maps directly onto our error model, which branches on `code`.
+- **Rule for EXAMPLES**: example programs should be short, complete, compile without warnings, and include error checking.
+- **CAVEATS / BUGS**: common misuse and known limitations get their own sections. For us, that is traps like "callbacks must be bound before the first `show()`".
+- HISTORY / VERSIONS: record when something appeared and when it changed significantly.
 
 ### 2.3 Rust std / rustdoc
 
-来源：https://doc.rust-lang.org/rustdoc/how-to-write-documentation.html ，https://doc.rust-lang.org/std/fs/struct.File.html
+Sources: https://doc.rust-lang.org/rustdoc/how-to-write-documentation.html , https://doc.rust-lang.org/std/fs/struct.File.html
 
-- 推荐的模板：一句话说明它是什么；更详细的解释；至少一个可以复制试用的示例；必要时再写进阶说明。
-- **摘要行**（第一个空行之前的内容）会被复用到搜索结果和模块概览里，所以必须独立成句。
-- 惯用的标题小节：`# Errors`、`# Panics`、`# Safety`、`# Examples`。`File::open` 的 Errors 写的是 "This function will return an error if `path` does not already exist. Other errors may also be returned according to `OpenOptions::open`."
-- **类型级文档先讲概念**。`File` 页面在方法列表之前，先讲"离开作用域自动关闭、关闭时的错误会被忽略、需要错误就用 `sync_all`"，以及"不缓冲，请包一层 `BufReader`"和 Windows 的特殊行为。这正是我们 `Window` 缺的那段。
-- **示例就是测试**：rustdoc 会编译并运行文档里的代码块，示例因此不会腐烂。
-- crate 和模块级文档（`//!`）先用不太技术化的语言讲清"这个模块在生态里的位置"。
+- Recommended template: one sentence on what it is; a more detailed explanation; at least one example that can be copied and tried; advanced notes if needed.
+- The **summary line** (everything before the first blank line) is reused in search results and module overviews, so it must stand on its own as a sentence.
+- Conventional heading sections: `# Errors`, `# Panics`, `# Safety`, `# Examples`. The Errors section of `File::open` says "This function will return an error if `path` does not already exist. Other errors may also be returned according to `OpenOptions::open`."
+- **Type-level documentation explains the concept first.** Before the method list, the `File` page explains "closed automatically when it goes out of scope, errors on close are ignored, use `sync_all` if you need the error", plus "not buffered, wrap it in a `BufReader`" and the Windows-specific behavior. This is exactly the paragraph our `Window` lacks.
+- **Examples are tests**: rustdoc compiles and runs the code blocks in the documentation, so examples do not rot.
+- Crate and module-level documentation (`//!`) first explains, in less technical language, "where this module sits in the ecosystem".
 
 ### 2.4 MDN Web API
 
-来源：https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch ，https://developer.mozilla.org/en-US/docs/Web/API/Window
+Sources: https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch , https://developer.mozilla.org/en-US/docs/Web/API/Window
 
-- 方法页的小节：Syntax → Parameters → Return value → **Exceptions** → Examples → Specifications → Browser compatibility → See also。
-- **Exceptions 的格式是"异常类型 + 触发条件列表"**，例如 `TypeError` 下逐条列出 "The requested URL is invalid"、"…includes credentials" 等。可以直接照搬成"错误码 + 条件"。
-- 接口页（`Window`）开头先用两句话定义概念："The `Window` interface represents a window containing a DOM document…"。然后是继承关系，以及按类别分组的属性、方法、事件清单，每项一行摘要，带 Read only / Deprecated / Experimental 徽标。
-- **参考页和概念指南互相链接**：`fetch()` 页链接到长篇指南 "Using Fetch"；每个 API 家族还有一个 "X API" 概览页，讲概念和用法、列出接口。示例同时有在线可运行版和 GitHub 源码。
+- Sections of a method page: Syntax → Parameters → Return value → **Exceptions** → Examples → Specifications → Browser compatibility → See also.
+- **Exceptions are formatted as "exception type + list of trigger conditions"**, for example under `TypeError` it lists "The requested URL is invalid", "…includes credentials" and so on, one per item. This can be copied directly as "error code + conditions".
+- An interface page (`Window`) starts with a two-sentence definition of the concept: "The `Window` interface represents a window containing a DOM document…". Then the inheritance, and lists of properties, methods and events grouped by category, one-line summary each, with Read only / Deprecated / Experimental badges.
+- **Reference pages and concept guides link to each other**: the `fetch()` page links to the long guide "Using Fetch"; every API family also has an "X API" overview page that explains the concepts and usage and lists the interfaces. Examples have both a live runnable version and GitHub source.
 
-### 2.5 Stripe API 参考
+### 2.5 Stripe API reference
 
-来源：https://docs.stripe.com/api/refunds/create
+Source: https://docs.stripe.com/api/refunds/create
 
-- 双栏布局：左边是说明和参数，右边是请求代码和**完整的示例响应对象**。
-- 开头先讲业务语义，而不是语法："You can optionally refund only part of a charge … Once entirely refunded, a charge can't be refunded again. This method will raise an error when…"。
-- **前置条件**（Prerequisites）：明确告诉读者运行这段代码之前要先创建什么对象。
-- 参数格式统一为"名称（类型，required/optional）+ 说明 + 可选的枚举值"，嵌套参数可以展开。
-- Returns 一节同时写成功返回什么、何时报错，并链接到统一的错误页。
+- Two-column layout: description and parameters on the left, request code and a **complete example response object** on the right.
+- It starts with the business meaning, not the syntax: "You can optionally refund only part of a charge … Once entirely refunded, a charge can't be refunded again. This method will raise an error when…".
+- **Prerequisites**: it tells the reader explicitly which objects must be created before this code runs.
+- Parameters follow one format: "name (type, required/optional) + description + optional enum values"; nested parameters can be expanded.
+- The Returns section says both what is returned on success and when it errors, and links to a shared errors page.
 
-对我们的启发：
+Takeaways for us:
 
-- 方法注释的第一段先写"这个操作在业务上意味着什么，以及何时失败"。
-- 示例写上前置条件，例如"需要 manifest 里声明 `ui.window`，以及包内有 `ui/info.slint`"。
+- The first paragraph of a method comment says "what this operation means in business terms, and when it fails".
+- Examples state their prerequisites, for example "needs `ui.window` declared in the manifest, and `ui/info.slint` in the package".
 
 ### 2.6 VS Code Extension API
 
-来源：https://code.visualstudio.com/api/extension-capabilities/overview ，https://code.visualstudio.com/api/extension-guides/webview ，`vscode.d.ts`（https://github.com/microsoft/vscode/blob/main/src/vscode-dts/vscode.d.ts）
+Sources: https://code.visualstudio.com/api/extension-capabilities/overview , https://code.visualstudio.com/api/extension-guides/webview , `vscode.d.ts` (https://github.com/microsoft/vscode/blob/main/src/vscode-dts/vscode.d.ts)
 
-- **关键事实：`vscode.d.ts` 本身也很简短。** 例如 `createWebviewPanel` 的注释只有 "Create and show a new webview panel." 加上 `@param` 和 `@returns`。它的深度全部在**概念指南**里：Webview 指南先用一句话定义（"Think of a webview as an `iframe` within VS Code that your extension controls…"），再讲 "Should I use a webview?"，然后依次是生命周期、消息传递、安全、持久化、可访问性。指南链接到 `vscode-extension-samples` 里可以运行的样例。
-- 站点结构：Get Started（教程）→ Extension Capabilities（能做什么，概念）→ Extension Guides（每种能力怎么做）→ UX Guidelines → References（API、Contribution Points、Activation Events）。
-- 对我们最有用的一点：我们和 VS Code 是同一类"宿主 + 插件 API"。**参考可以写得紧凑，前提是有概念指南并且互相链接。** 我们现在的情况是概念指南存在，但不在站点上，也没有链接。
+- **Key fact: `vscode.d.ts` itself is also brief.** For example, the comment on `createWebviewPanel` is only "Create and show a new webview panel." plus `@param` and `@returns`. All its depth is in the **concept guides**: the Webview guide starts with a one-sentence definition ("Think of a webview as an `iframe` within VS Code that your extension controls…"), then "Should I use a webview?", then lifecycle, message passing, security, persistence and accessibility in turn. The guide links to runnable samples in `vscode-extension-samples`.
+- Site structure: Get Started (tutorials) → Extension Capabilities (what you can do, concepts) → Extension Guides (how to do each capability) → UX Guidelines → References (API, Contribution Points, Activation Events).
+- The most useful point for us: we are the same kind of "host + plugin API" as VS Code. **The reference can be compact, provided there are concept guides and they link to each other.** Our current situation is that concept guides exist, but they are not on the site and are not linked.
 
 ### 2.7 Qt
 
-来源：https://doc.qt.io/qt-6/qwidget.html
+Source: https://doc.qt.io/qt-6/qwidget.html
 
-- 类页面的结构：头部表格（Header、Module、Inherits、Inherited By）→ 属性和函数清单 → **很长的 Detailed Description**，下面分概念小节（Top-Level and Child Widgets、Composite Widgets、Size Hints and Size Policies、Events…）→ 成员详述。
-- 概念就写在类页面里。例如 "A widget without a parent widget is always an independent window (top-level widget)… Non-window widgets are child widgets, displayed within their parent widgets."，这正是我们 "what exactly is a window" 想要的那种回答。
-- 每个成员都带 "See also" 和 "This function was introduced in Qt 6.x"。
+- Structure of a class page: header table (Header, Module, Inherits, Inherited By) → list of properties and functions → **a long Detailed Description** with concept subsections (Top-Level and Child Widgets, Composite Widgets, Size Hints and Size Policies, Events…) → member details.
+- The concepts are written on the class page itself. For example, "A widget without a parent widget is always an independent window (top-level widget)… Non-window widgets are child widgets, displayed within their parent widgets." This is exactly the kind of answer we want for "what exactly is a window".
+- Every member has "See also" and "This function was introduced in Qt 6.x".
 
 ### 2.8 OpenCV
 
-来源：教程源码 https://github.com/opencv/opencv/blob/4.x/doc/tutorials/imgproc/imgtrans/canny_detector/canny_detector.markdown ，Python 教程 https://github.com/opencv/opencv/blob/4.x/doc/py_tutorials/py_imgproc/py_canny/py_canny.markdown ，参考注释 https://github.com/opencv/opencv/blob/4.x/modules/imgproc/include/opencv2/imgproc.hpp 。docs.opencv.org 前面有 Cloudflare 挡着，抓取会返回 403，所以这里引用的是生成站点用的源码。
+Sources: tutorial source https://github.com/opencv/opencv/blob/4.x/doc/tutorials/imgproc/imgtrans/canny_detector/canny_detector.markdown , Python tutorial https://github.com/opencv/opencv/blob/4.x/doc/py_tutorials/py_imgproc/py_canny/py_canny.markdown , reference comments https://github.com/opencv/opencv/blob/4.x/modules/imgproc/include/opencv2/imgproc.hpp . docs.opencv.org sits behind Cloudflare and fetching it returns 403, so the sources used to generate the site are cited here.
 
-- 教程的固定结构：**Goal → Theory → Code → Explanation → Result**，并用 `@prev_tutorial` / `@next_tutorial` 串成学习路径。
-- **教程里的代码不手写**：用 `@include samples/cpp/tutorial_code/ImgTrans/CannyDetector_Demo.cpp` 引入整个文件，用 `@snippet … variables` 引入文件中的命名片段，逐段讲解；`@add_toggle_cpp/java/python` 提供多语言切换。样例是真实的、会被编译的程序，所以文档里的代码不会和 API 脱节。
-- 参考条目（`Canny`）：`@brief` 一句话，然后是算法说明加外链，逐个 `@param`；类头部还有 `@example samples/cpp/edge.cpp … Check the corresponding tutorial`，把参考链接回教程。
-- **TypeDoc 0.28 的 `{@includeCode file.ts#region}` 就是这套机制的等价物**，见 §4.3。
+- Fixed tutorial structure: **Goal → Theory → Code → Explanation → Result**, chained into a learning path with `@prev_tutorial` / `@next_tutorial`.
+- **Code in tutorials is not hand-written**: `@include samples/cpp/tutorial_code/ImgTrans/CannyDetector_Demo.cpp` pulls in a whole file, `@snippet … variables` pulls in a named fragment of a file, and each part is explained in turn; `@add_toggle_cpp/java/python` provides language switching. The samples are real programs that get compiled, so the code in the documentation does not drift from the API.
+- Reference entry (`Canny`): one sentence of `@brief`, then the algorithm description with external links, and each `@param`; the class header also has `@example samples/cpp/edge.cpp … Check the corresponding tutorial`, linking the reference back to the tutorial.
+- **TypeDoc 0.28's `{@includeCode file.ts#region}` is the equivalent of this mechanism**, see §4.3.
 
-### 2.9 Django 和 Diátaxis
+### 2.9 Django and Diátaxis
 
-来源：https://docs.djangoproject.com/en/stable/ ，https://diataxis.fr/
+Sources: https://docs.djangoproject.com/en/stable/ , https://diataxis.fr/
 
-- Django 的四类文档：
-  - **Tutorials**："take you by the hand through a series of steps…"；
-  - **Topic guides**："discuss key topics and concepts at a fairly high level and provide useful background information and explanation"；
-  - **Reference guides**："technical reference for APIs… assume that you have a basic understanding of key concepts"；
-  - **How-to guides**："recipes… guide you through the steps involved in addressing key problems"。
-- Diátaxis 的两条轴是"行动 / 认知"和"学习 / 应用"。对参考文档的要求是：**描述**而非指导、**简朴**、**结构一致**、**结构镜像产品本身**。
-- 对我们的意义：用户的批评（"没有背景""不知道窗口是什么"）属于 **Explanation** 层缺失，不能全靠往参考注释里塞长文来解决。参考里放"必要背景（几句话）+ 链接到概念页"，完整的解释放在概念页。
+- Django's four kinds of documentation:
+  - **Tutorials**: "take you by the hand through a series of steps…";
+  - **Topic guides**: "discuss key topics and concepts at a fairly high level and provide useful background information and explanation";
+  - **Reference guides**: "technical reference for APIs… assume that you have a basic understanding of key concepts";
+  - **How-to guides**: "recipes… guide you through the steps involved in addressing key problems".
+- The two axes of Diátaxis are "action / cognition" and "acquisition / application". Its requirements for reference documentation: **describe** rather than instruct, be **austere**, be **consistent in structure**, and **mirror the structure of the product**.
+- What this means for us: the user's criticism ("no background", "don't know what a window is") is a missing **Explanation** layer, and it cannot be solved only by stuffing long text into reference comments. The reference holds "the necessary background (a few sentences) + a link to the concept page"; the full explanation goes on the concept page.
 
-### 2.10 Node.js API 文档
+### 2.10 Node.js API docs
 
-来源：https://nodejs.org/api/fs.html
+Source: https://nodejs.org/api/fs.html
 
-- 每个 API 都标 **Stability**（"Stability: 2 - Stable"），并有 **"Added in: vX" 加版本变化表**，例如 "v21.1.0 The `flush` option is now supported."
-- 参数格式统一为 "`` `position` <integer> | <null> … **Default:** `null` ``"，返回值写成 "Returns: <Promise> Fulfills upon success with…"。
-- 示例同时提供 ESM 和 CJS 两种写法。示例里包含 `try/finally` 释放资源，展示的是正确用法，而不只是最小用法。
+- Every API is marked with a **Stability** ("Stability: 2 - Stable") and has **"Added in: vX" plus a version history table**, for example "v21.1.0 The `flush` option is now supported."
+- Parameters follow one format, "`` `position` <integer> | <null> … **Default:** `null` ``", and return values are written as "Returns: <Promise> Fulfills upon success with…".
+- Examples are given in both ESM and CJS. Examples include `try/finally` to release resources, showing the correct usage rather than only the minimal one.
 
-### 2.11 TypeDoc / TSDoc 能提供什么
+### 2.11 What TypeDoc / TSDoc provide
 
-来源：https://typedoc.org/documents/Tags.html ，https://typedoc.org/documents/Options.Output.html ，以及本地 `node_modules/typedoc`（0.28.20）源码核对。
+Sources: https://typedoc.org/documents/Tags.html , https://typedoc.org/documents/Options.Output.html , and checked against the local `node_modules/typedoc` (0.28.20) source.
 
-| 需求 | TypeDoc 0.28 支持 | 备注 |
+| Need | TypeDoc 0.28 support | Notes |
 | --- | --- | --- |
-| 摘要和详细说明 | 第一段即摘要；`@remarks`；`@summary`（用于列表摘要） | |
-| 参数和返回值 | `@param`、`@returns`、`@typeParam`、`@defaultValue` | 内联对象参数可以用 `@param options.id -` 的写法 |
-| 错误 | `@throws` | 每个 code 写一条 `@throws`，相当于 man 的 ERRORS |
-| 示例 | `@example 标题`（标题会显示出来） | 可以有多个 |
-| 引入外部代码 | **`{@includeCode ../examples/windows.ts#basic}`**（按 `#region` 名截取，多个 region 用逗号分隔），`{@includeCode file:10-20}`（按行），`{@include doc.md}` | 已在本地源码核对：路径相对于注释所在文件；按 region 截取支持 `ts`、`css`、`md`、`c`、`cs` 等扩展名，**不支持 `.slint`**，`.slint` 只能按行号或整文件引入 |
-| 交叉链接 | `{@link X}`、`{@linkcode}`、`@see` | 已开启 `validation.invalidLink` |
-| 版本 | `@since` | 已内置 |
-| 分组 | `@category` / `@categoryDescription`、`@group` / `@groupDescription`，`navigation.includeCategories` | 解决 103 个类型平铺的问题 |
-| 自定义标签 | `blockTags` 选项加上 `tsdoc.json` 声明 | 用于 `@capability`、`@player`（需要的播放器版本） |
-| 手写页面 | `projectDocuments`，frontmatter 支持 `group`、`category`、`children` | 教程、概念、操作指南都可以放进同一个站点 |
-| 本地化 | `lang: "zh"`，**内置中文界面翻译** | 本地已核对：`dist/browser-locales/zh.js` 存在 |
-| 搜索 | `searchInComments`、`searchInDocuments` | 开启后中文正文也能搜到 |
-| 外部类型链接 | `typedoc-plugin-mdn-links` 5.1.1（peer `0.27.x \|\| 0.28.x`） | `AbortSignal`、`Error`、`Promise` 自动链接到 MDN |
-| 主题 | 默认主题；`typedoc-github-theme` 0.4.0（`~0.28.0`）；`typedoc-material-theme` 1.4.1（`^0.28.x`） | 另一条路线：`typedoc-plugin-markdown` 4.14 加 `typedoc-vitepress-theme` 1.1.4，交给 VitePress 生成（自带 i18n 和更好的手写页体验） |
-| 覆盖率 | `typedoc-plugin-coverage` 4.0.3 | 生成文档覆盖率徽章 |
+| Summary and detailed description | First paragraph is the summary; `@remarks`; `@summary` (for list summaries) | |
+| Parameters and return value | `@param`, `@returns`, `@typeParam`, `@defaultValue` | Inline object parameters can be written as `@param options.id -` |
+| Errors | `@throws` | One `@throws` per code, the equivalent of man's ERRORS |
+| Examples | `@example Title` (the title is shown) | Several allowed |
+| Including external code | **`{@includeCode ../examples/windows.ts#basic}`** (cut by `#region` name, several regions separated by commas), `{@includeCode file:10-20}` (by lines), `{@include doc.md}` | Checked in the local source: paths are relative to the file containing the comment; cutting by region supports extensions such as `ts`, `css`, `md`, `c`, `cs`, **but not `.slint`**; `.slint` can only be included by line numbers or as a whole file |
+| Cross-links | `{@link X}`, `{@linkcode}`, `@see` | `validation.invalidLink` is already on |
+| Versions | `@since` | Built in |
+| Grouping | `@category` / `@categoryDescription`, `@group` / `@groupDescription`, `navigation.includeCategories` | Solves the problem of 103 types listed flat |
+| Custom tags | `blockTags` option plus a `tsdoc.json` declaration | For `@capability` and `@player` (required player version) |
+| Hand-written pages | `projectDocuments`; frontmatter supports `group`, `category`, `children` | Tutorials, concepts and how-to guides can all live on the same site |
+| Localization | `lang: "zh"`, **built-in Chinese UI translation** | Checked locally: `dist/browser-locales/zh.js` exists |
+| Search | `searchInComments`, `searchInDocuments` | When on, Chinese body text is searchable too |
+| Links to external types | `typedoc-plugin-mdn-links` 5.1.1 (peer `0.27.x \|\| 0.28.x`) | `AbortSignal`, `Error`, `Promise` link to MDN automatically |
+| Themes | Default theme; `typedoc-github-theme` 0.4.0 (`~0.28.0`); `typedoc-material-theme` 1.4.1 (`^0.28.x`) | Another route: `typedoc-plugin-markdown` 4.14 plus `typedoc-vitepress-theme` 1.1.4, generated by VitePress (built-in i18n and a better experience for hand-written pages) |
+| Coverage | `typedoc-plugin-coverage` 4.0.3 | Generates a documentation coverage badge |
 
 ---
 
-## 3. 我们的文档标准
+## 3. Our documentation standard
 
-### 3.1 站点结构（Diátaxis）
+### 3.1 Site structure (Diátaxis)
 
 ```
-vestra-player-sdk 文档站
-├── 入门（Tutorial）
-│   ├── 1. 第一个插件：命令 + 屏幕提示（10 分钟）
-│   ├── 2. 加一个工具窗口（Slint ⇄ TS 双向）
-│   ├── 3. 测试：用 TestHost 不启动播放器
-│   └── 4. 检查、运行、打包、发布到商城
-├── 概念（Explanation / Topic guides）
-│   ├── 插件是怎么运行的：进程、activate、能力、可信模型、平台
-│   ├── 句柄与作用域：Disposable、Scope、子作用域、停用时的清理
-│   ├── 更新轮与绑定：bind / set / Bindable、何时重新求值、合并发送
-│   ├── 界面总览：工具窗口 / 面板（底栏、侧栏、背景层）/ 设置页 / 对话框 / OSD —— 怎么选
-│   ├── Slint 桥接：属性与回调、in / in-out、名称转换、component + global、主题与控件库
-│   ├── 命令、菜单与快捷键：路径、order / group、绑定语法、冲突优先级、用户改绑
-│   ├── 播放器状态：PlayerState、sourceId、条件提交（ifCurrent / stale）、事件与 events 能力
-│   ├── 媒体处理：滤镜链、显示层、渲染选项、生成流
-│   ├── 错误模型：code 一览、onError、未 await 的 promise、超时
-│   └── 设置与数据：storage、secrets、dataDirectory、settings 页面的分工
-├── 操作指南（How-to，大部分从 examples.md 的 34 节改写）
-│   ├── 按视频尺寸调整窗口 / 置顶
-│   ├── 侧栏播放列表：列表模型、选中、自动推进、右键菜单
-│   ├── 在「选项」窗口里加一页设置
-│   ├── 保存 API key 到系统密钥库
-│   ├── 解析网络地址（Resolver）并等待就绪
-│   ├── 截图与导出，显示进度、支持取消
-│   ├── 校验、试载、安装插件包
+vestra-player-sdk documentation site
+├── Getting started (Tutorial)
+│   ├── 1. First plugin: a command + an on-screen message (10 minutes)
+│   ├── 2. Add a tool window (Slint ⇄ TS in both directions)
+│   ├── 3. Testing: use TestHost without starting the player
+│   └── 4. Check, run, package, publish to the store
+├── Concepts (Explanation / Topic guides)
+│   ├── How a plugin runs: process, activate, capabilities, trust model, platforms
+│   ├── Handles and scopes: Disposable, Scope, child scopes, cleanup on deactivation
+│   ├── Update passes and bindings: bind / set / Bindable, when values are re-evaluated, batched sends
+│   ├── UI overview: tool window / panel (bottom bar, sidebar, background layer) / settings page / dialog / OSD — how to choose
+│   ├── Slint bridge: properties and callbacks, in / in-out, name conversion, component + global, theme and widget library
+│   ├── Commands, menus and shortcuts: paths, order / group, binding syntax, conflict priority, user rebinding
+│   ├── Player state: PlayerState, sourceId, conditional commits (ifCurrent / stale), events and the events capability
+│   ├── Media processing: filter chains, display layers, render options, generated streams
+│   ├── Error model: list of codes, onError, un-awaited promises, timeouts
+│   └── Settings and data: division of roles between storage, secrets, dataDirectory and settings pages
+├── How-to guides (mostly adapted from the 34 sections of examples.md)
+│   ├── Resize the window to the video size / keep it on top
+│   ├── Sidebar playlist: list model, selection, auto-advance, context menu
+│   ├── Add a settings page to the Options window
+│   ├── Save an API key in the system keychain
+│   ├── Resolve a network address (Resolver) and wait until ready
+│   ├── Take and export screenshots, show progress, support cancel
+│   ├── Validate, trial-load and install a plugin package
 │   └── …
-├── API 参考（TypeDoc，按 @category 分组）
-│   ├── 核心：Plugin、Scope、Disposable、PluginError
-│   ├── 命令与快捷键：Commands、Command、CommandOptions、Bindings
-│   ├── 界面：Windows、Window、View、Panels、Panel、Settings、Dialogs、Osd、Ui、Drops、Appearance、MainWindow
-│   ├── 播放：Player、Media、Scrub、Stream、Timeline、Host
-│   ├── 处理：VideoFilter、AudioFilter、VideoView、RenderOptions、Subtitles、MediaCapture
-│   ├── 系统：Storage、Secrets、System、Clipboard、Power、Tools、App
-│   ├── 插件管理：Packages、Resolvers
-│   └── 测试：@vestra-player/sdk/testing
-└── 附录：错误码总表、能力（capability）总表、平台差异表、版本历史（CHANGELOG）
+├── API reference (TypeDoc, grouped by @category)
+│   ├── Core: Plugin, Scope, Disposable, PluginError
+│   ├── Commands and shortcuts: Commands, Command, CommandOptions, Bindings
+│   ├── UI: Windows, Window, View, Panels, Panel, Settings, Dialogs, Osd, Ui, Drops, Appearance, MainWindow
+│   ├── Playback: Player, Media, Scrub, Stream, Timeline, Host
+│   ├── Processing: VideoFilter, AudioFilter, VideoView, RenderOptions, Subtitles, MediaCapture
+│   ├── System: Storage, Secrets, System, Clipboard, Power, Tools, App
+│   ├── Plugin management: Packages, Resolvers
+│   └── Testing: @vestra-player/sdk/testing
+└── Appendices: error code table, capability table, platform differences table, version history (CHANGELOG)
 ```
 
-几条规则：
+A few rules:
 
-- **单一权威来源**：概念和操作指南的正文迁到 SDK 仓库的 `docs/` 下。播放器仓库的 `doc/plugins/reference.md` 只保留实现侧的笔记和"变更说明"，对外的规格一律链接到 SDK 站点。
-- **双向链接**：
-  - 每个参考条目至少有一个 `@see`，指向对应的概念页；
-  - 每篇概念页列出"本页涉及的 API"，用 `{@link}`；
-  - 每篇操作指南的代码来自 `examples/`，与参考里的示例共用同一份文件。
-- 错误码、能力、平台差异各自有**一张总表**，参考条目只写"本方法会出现哪些 code、在什么条件下"，并链接到总表。
+- **Single source of truth**: the body text of concepts and how-to guides moves to `docs/` in the SDK repository. The player repository's `doc/plugins/reference.md` keeps only implementation-side notes and "change notes"; the public specification always links to the SDK site.
+- **Two-way links**:
+  - every reference entry has at least one `@see` pointing to the matching concept page;
+  - every concept page lists "APIs covered on this page", using `{@link}`;
+  - the code in every how-to guide comes from `examples/` and shares the same files with the examples in the reference.
+- Error codes, capabilities and platform differences each have **one master table**; a reference entry only says "which codes this method produces, and under what conditions", and links to the master table.
 
-### 3.2 每个符号的注释模板
+### 3.2 Comment template for each symbol
 
-适用范围：模块入口（`Windows`、`Player`…）和所有方法。纯数据字段只需要摘要，以及单位、范围、默认值。
+Applies to: module entries (`Windows`, `Player`…) and all methods. Plain data fields only need a summary, plus unit, range and default.
 
 ````ts
 /**
- * 〔摘要：一句话，动词开头，说清做什么。会被列表和搜索复用，必须独立成句。〕
+ * â¨Summary: one sentence, starting with a verb, saying what it does. Reused in lists and search, so it must stand on its own.â©
  *
  * @remarks
- * 〔背景：2–6 句。它在整体里处于什么位置；生命周期或状态变化；和相近 API 的区别（何时改用 X）；
- *   持续期间的约束（例如"回调必须在第一次 show() 前绑定"）。长背景只写结论，细节链接到概念页。〕
+ * â¨Background: 2–6 sentences. Where it sits in the whole; lifecycle or state changes; how it differs from similar APIs (when to use X instead);
+ *   constraints that hold throughout (for example "callbacks must be bound before the first show()"). For long background, write only the conclusion and link to the concept page for details.â©
  *
- * **平台**：〔macOS / Windows / 无界面模式 / 软件渲染下的差异。没有差异时省略。〕
+ * **Platform**: â¨Differences under macOS / Windows / headless mode / software rendering. Omit when there are none.â©
  *
- * @capability 〔manifest 能力，例如 ui.window。不需要能力时写"无"。〕
- * @player 〔需要的最低播放器版本，只在高于 vestra/1 基线时写〕
+ * @capability â¨Manifest capability, for example ui.window. Write "none" when no capability is needed.â©
+ * @player â¨Minimum required player version, only when higher than the vestra/1 baselineâ©
  *
- * @param name - 〔含义；单位；范围；默认值；格式。是否可选由类型表达，这里不重复〕
- * @param options.id - 〔内联对象参数逐个字段写〕
- * @returns 〔resolve 的时机和值。"resolve 时什么已经生效"必须写清〕
+ * @param name - â¨Meaning; unit; range; default; format. Whether it is optional is expressed by the type and not repeated hereâ©
+ * @param options.id - â¨Document inline object parameters field by fieldâ©
+ * @returns â¨When it resolves and with what value. "What has taken effect when it resolves" must be stated clearlyâ©
  *
- * @throws `invalid` 〔同步抛出 / 异步拒绝，二者分清〕〔条件〕
- * @throws `unavailable` 〔条件〕
- *   〔每个 code 一条；同一 code 有不同条件时分成多条（man-pages 规则）；按"调用方最可能遇到"排序〕
+ * @throws `invalid` â¨Synchronous throw / asynchronous rejection, keep the two apartâ©â¨conditionâ©
+ * @throws `unavailable` â¨conditionâ©
+ *   â¨One entry per code; when the same code has different conditions, split it into several entries (the man-pages rule); order by "most likely for the caller to hit"â©
  *
- * @example 〔任务式标题，例如"在菜单里打开信息窗口"〕
+ * @example â¨Task-style title, for example "Open an info window from the menu"â©
  * {@includeCode ../../examples/snippets/windows.ts#info-window}
  *
- * @see {@link 相关符号}、[概念：界面总览](../documents/界面总览.html)
+ * @see {@link RelatedSymbol}, [Concept: UI overview](../documents/ui-overview.html)
  * @since 1.0.0
- * @category 界面
+ * @category UI
  */
 ````
 
-写作规则：
+Writing rules:
 
-- **摘要**：不超过一行，不以"This"或"一个"开头，不复述类型名。
-- **`@remarks`**：必须回答"什么时候用它，什么时候不用"。
-- **`@throws`**：只用 `PluginError` 错误码总表里的 code；要写清是同步 `throw` 还是 Promise 拒绝。表外的 code（`host`、`ui-prepare`、`versionMismatch`）先补进总表。
-- **`@example`**：
-  - 必须能编译：用 `{@includeCode}` 引入 `examples/`，或者内联代码块在 CI 里抽出来用 `tsc` 检查；
-  - 必须自成一体，不出现未定义的变量；
-  - 涉及界面时同时给出 `.slint`，用 `{@includeCode ../../examples/ui/info.slint:1-12}` 按行号引入；
-  - 第一个示例写最常见的用法，第二个示例展示一个陷阱或进阶用法。
-- **方法与模块的分工**：模块入口（`Windows`、`Player`）写概念段和整体示例；方法写各自的参数、错误和小示例，不重复概念段。
-- **术语表**（中文文档）：
-  - 句柄（handle）、作用域（scope）、能力（capability）、更新轮（update pass）、绑定（binding）；
-  - 工具窗口（tool window）、面板（panel）、桥接 global（bridge global）、条件提交（conditional）、来源（source）。
-  - 代码标识符和错误码保持英文原样。
+- **Summary**: at most one line, does not start with "This" or "A", does not repeat the type name.
+- **`@remarks`**: must answer "when to use it, and when not to".
+- **`@throws`**: use only codes from the `PluginError` master error table; state clearly whether it is a synchronous `throw` or a Promise rejection. Codes outside the table (`host`, `ui-prepare`, `versionMismatch`) are added to the table first.
+- **`@example`**:
+  - must compile: include it from `examples/` with `{@includeCode}`, or extract inline code blocks in CI and check them with `tsc`;
+  - must be self-contained, with no undefined variables;
+  - for UI, also give the `.slint` file, included by line numbers with `{@includeCode ../../examples/ui/info.slint:1-12}`;
+  - the first example shows the most common usage; the second shows a trap or an advanced usage.
+- **Division between methods and modules**: module entries (`Windows`, `Player`) carry the concept paragraph and an overall example; methods carry their own parameters, errors and small examples, and do not repeat the concept paragraph.
+- **Glossary** (for the Chinese docs):
+  - 句柄 (handle), 作用域 (scope), 能力 (capability), 更新轮 (update pass), 绑定 (binding);
+  - 工具窗口 (tool window), 面板 (panel), 桥接 global (bridge global), 条件提交 (conditional), 来源 (source).
+  - Code identifiers and error codes stay in English as they are.
 
-### 3.3 完整示例：用模板重写 `Windows` / `Windows.create` / `Window`
+### 3.3 Full example: rewriting `Windows` / `Windows.create` / `Window` with the template
 
-以下内容的事实依据：SDK `src/plugin/ui.ts` 的 `WindowHandle`、`types.ts`、`reference.md` §6.2 和 §6.4、播放器 `src/host/src/ui.rs::open` 与 `main.rs` 的 `"ui.open"` 分支。标【待核实】的条目需要实现方确认，或者先修代码。
+The facts below are based on: `WindowHandle` in SDK `src/plugin/ui.ts`, `types.ts`, `reference.md` §6.2 and §6.4, and the player's `src/host/src/ui.rs::open` and the `"ui.open"` branch in `main.rs`. Entries marked [to verify] need confirmation from the implementer, or a code fix first.
 
 ````ts
 /**
- * 工具窗口：插件用 `.slint` 文件定义、由播放器打开的独立窗口。
+ * Tool windows: independent windows that a plugin defines in a `.slint` file and the player opens.
  *
  * @remarks
- * **什么是工具窗口。** 它是一个独立的顶层系统窗口：有自己的标题栏，可以移动、调整大小，
- * 非模态（打开时主窗口照常可以操作、照常播放），不嵌在主窗口里。窗口的内容、初始尺寸和标题
- * 都由 `.slint` 文件里那个 `inherits Window` 的组件决定（`title`、`preferred-width` 等）。
- * 播放器在窗口显示之前套上当前配色（{@link Appearance}）和系统字体，所以插件不需要处理主题。
+ * **What a tool window is.** It is an independent top-level system window: it has its own title bar, can be moved and resized,
+ * is non-modal (while it is open the main window can still be used and keeps playing), and is not embedded in the main window. The window's content, initial size and title
+ * are all determined by the `inherits Window` component in the `.slint` file (`title`, `preferred-width` and so on).
+ * Before showing the window, the player applies the current color scheme ({@link Appearance}) and the system font, so the plugin does not need to handle themes.
  *
- * **怎么选界面形式。**
- * - 需要"打开 → 操作 → 关掉"的独立工具（画面调节、信息面板、编辑器），用工具窗口；
- * - 需要常驻在播放器里、随主窗口布局变化的内容（播放列表、进度条、封面），用
- *   {@link Panels.mount | 面板}；
- * - 偏好设置用 {@link Settings.page | 设置页}；
- * - 只需要问一句"确定吗"，用 {@link Dialogs.confirm}。
- * 对比见 [概念：界面总览](../documents/界面总览.html)。
+ * **Choosing a UI form.**
+ * - For a standalone tool that you "open → use → close" (picture adjustment, info panel, editor), use a tool window;
+ * - For content that stays in the player and follows the main window layout (playlist, progress bar, cover art), use a
+ *   {@link Panels.mount | panel};
+ * - For preferences, use a {@link Settings.page | settings page};
+ * - To ask just "are you sure?", use {@link Dialogs.confirm}.
+ * For a comparison see [Concept: UI overview](../documents/ui-overview.html).
  *
- * **生命周期。** `create()` 只在本地建立句柄，不打开任何东西。之后的流程：
- * 1. 用 {@link View.on} 绑定回调，用 {@link View.bind} 声明属性；
- * 2. 第一次 {@link Window.show} 用当前绑定的属性作为初始值打开窗口，不会闪一下默认值；
- * 3. {@link Window.hide} 隐藏窗口，但保留状态；
- * 4. {@link Window.close}、用户点标题栏关闭、或按标准关闭键（macOS ⌘W；Windows Ctrl+W 或 Ctrl+F4）
- *    都会销毁窗口实例。之后再 `show()` 会用最新属性打开一个全新实例。只有用户关闭时才会调用
- *    {@link Window.onClose}。
+ * **Lifecycle.** `create()` only creates a local handle and opens nothing. After that:
+ * 1. bind callbacks with {@link View.on} and declare properties with {@link View.bind};
+ * 2. the first {@link Window.show} opens the window with the currently bound properties as initial values, without flashing the defaults;
+ * 3. {@link Window.hide} hides the window but keeps its state;
+ * 4. {@link Window.close}, the user clicking close in the title bar, or the standard close keys (macOS ⌘W; Windows Ctrl+W or Ctrl+F4)
+ *    all destroy the window instance. A later `show()` opens a brand-new instance with the latest properties. {@link Window.onClose}
+ *    is called only when the user closes it.
  *
- * 句柄属于创建它的 {@link Scope}。作用域释放或插件停用时窗口自动关闭，插件不需要自己清理。
+ * The handle belongs to the {@link Scope} that created it. When the scope is released or the plugin is deactivated, the window closes automatically; the plugin does not need to clean up.
  *
- * **平台**：macOS 与 Windows 行为相同。无界面模式（headless）下 `show()` 以 `unavailable` 失败。
+ * **Platform**: macOS and Windows behave the same. In headless mode, `show()` fails with `unavailable`.
  *
  * @capability ui.window
- * @see [概念：Slint 桥接](../documents/Slint桥接.html)、{@link Window}、{@link View}
+ * @see [Concept: Slint bridge](../documents/slint-bridge.html), {@link Window}, {@link View}
  * @since 1.0.0
- * @category 界面
+ * @category UI
  */
 export interface Windows {
   /**
-   * 为包内的一个 `.slint` 文件创建工具窗口句柄；在调用 {@link Window.show} 之前不会打开窗口。
+   * Create a tool window handle for a `.slint` file in the package; no window opens until {@link Window.show} is called.
    *
    * @remarks
-   * 文件必须**恰好导出一个组件**，通常写成 `export component X inherits Window`。不带
-   * `export` 的辅助组件数量不限。这一点和面板、设置页不同：面板和设置页要求导出
-   * "一个 component 加一个 global"。
+   * The file must **export exactly one component**, usually written as `export component X inherits Window`. Helper components
+   * without `export` are unlimited. This differs from panels and settings pages, which require exporting
+   * "one component plus one global".
    *
-   * 窗口只转发**第一次 `show()` 时已经绑定过名字的回调**。这是因为播放器在打开窗口时一次性
-   * 登记回调名。所以要在 `show()` 之前用 {@link View.on} 绑定全部回调。之后再绑定新的名字
-   * 会同步抛错；同一个名字可以重新绑定。属性没有这个限制。
+   * The window only forwards **callbacks whose names were bound by the first `show()`**. This is because the player registers
+   * the callback names once when it opens the window. So bind all callbacks with {@link View.on} before `show()`. Binding a new name afterwards
+   * throws synchronously; the same name can be rebound. Properties have no such restriction.
    *
-   * 同一个文件要开多个窗口时（例如每个文件一个信息窗口），用 `options.id` 区分。
+   * To open several windows from the same file (for example one info window per file), distinguish them with `options.id`.
    *
-   * @param file - 相对于插件包目录的路径，例如 `"ui/picture.slint"`。不能越出包目录。
-   * @param options.id - 窗口 id，在本插件内唯一。默认取不带扩展名的文件名
-   *   （`ui/picture.slint` → `picture`）。窗口 dispose 之后这个 id 可以再用。
-   * @returns 属于当前作用域的 {@link Window} 句柄。
+   * @param file - Path relative to the plugin package directory, for example `"ui/picture.slint"`. Must not go outside the package directory.
+   * @param options.id - Window id, unique within this plugin. Defaults to the file name without extension
+   *   (`ui/picture.slint` → `picture`). The id can be reused after the window is disposed.
+   * @returns A {@link Window} handle that belongs to the current scope.
    *
-   * @throws （同步）本插件已有同 id 的窗口。
-   *   【待核实/待修：目前抛出的是不带 `code` 的普通 Error，应改为 `invalid`】
+   * @throws (synchronous) This plugin already has a window with the same id.
+   *   [To verify / to fix: currently throws a plain Error without `code`; should be `invalid`]
    *
-   * @example 在菜单里打开一个信息窗口
+   * @example Open an info window from the menu
    * {@includeCode ../../examples/snippets/windows.ts#info-window}
    *
-   * 对应的 `ui/info.slint`：
+   * The matching `ui/info.slint`:
    * {@includeCode ../../examples/snippets/ui/info.slint}
    *
-   * @example 同一个文件开多个窗口
+   * @example Open several windows from the same file
    * ```ts
    * const left = plugin.windows.create("ui/compare.slint", { id: "compare-left" });
    * const right = plugin.windows.create("ui/compare.slint", { id: "compare-right" });
    * ```
    *
-   * @see {@link Panels.mount}、{@link Settings.page}
+   * @see {@link Panels.mount}, {@link Settings.page}
    * @since 1.0.0
    */
   create(file: string, options?: { id?: string }): Window;
 }
 
 /**
- * 一个工具窗口的句柄，由 {@link Windows.create} 得到。
+ * A handle to one tool window, from {@link Windows.create}.
  *
  * @remarks
- * 属性和回调的规则（`bind` 与 `set` 的区别、名称转换、写入失败重试）继承自 {@link View}。
- * 窗口特有的规则只有两条：
- * - 回调要在第一次 `show()` 前绑定；
- * - 用户可以自己关闭窗口。
+ * The rules for properties and callbacks (the difference between `bind` and `set`, name conversion, retry on failed writes) are inherited from {@link View}.
+ * There are only two window-specific rules:
+ * - callbacks must be bound before the first `show()`;
+ * - the user can close the window themselves.
  *
- * 用户关闭之后，`opened` 变为 `false`，句柄依然可用：再次 `show()` 会打开一个新实例。
- * 窗口里正在进行的工作（轮询、计时器）应该在 {@link Window.onClose} 里停掉。
+ * After the user closes it, `opened` becomes `false` and the handle remains usable: calling `show()` again opens a new instance.
+ * Work running in the window (polling, timers) should be stopped in {@link Window.onClose}.
  *
- * `dispose()` 等于 `close()` 再加上释放句柄：之后 `show()` 什么也不做，这个 id 可以重新 `create`。
+ * `dispose()` equals `close()` plus releasing the handle: afterwards `show()` does nothing, and the id can be used in a new `create`.
  *
- * **测试**：`host.window(id).props` 读当前属性，`host.window(id).userClose()` 模拟用户关闭。
- * 参见 {@link "@vestra-player/sdk/testing"!TestHost}。
+ * **Testing**: `host.window(id).props` reads the current properties, `host.window(id).userClose()` simulates the user closing it.
+ * See {@link "@vestra-player/sdk/testing"!TestHost}.
  *
  * @capability ui.window
  * @since 1.0.0
- * @category 界面
+ * @category UI
  */
 export interface Window extends View, Disposable {
   /**
-   * 打开窗口（第一次调用，或在 `close()` / 用户关闭之后），或者把隐藏的窗口重新显示出来。
+   * Open the window (on the first call, or after `close()` / the user closing it), or show a hidden window again.
    *
    * @remarks
-   * 打开时用当前的 `bind` 值和最近一次 `set` 的值作为初始属性。
-   * 同一窗口的 `show`、`hide`、`close` 严格按调用顺序执行；同时发起的多次 `show()` 共用一次打开。
-   * 句柄 dispose 之后调用 `show()` 什么也不做，直接 resolve。
+   * On opening, the current `bind` values and the most recent `set` values are used as the initial properties.
+   * `show`, `hide` and `close` on the same window run strictly in call order; several concurrent `show()` calls share one open.
+   * Calling `show()` after the handle is disposed does nothing and resolves immediately.
    *
-   * @returns 窗口已在屏幕上时 resolve。
+   * @returns Resolves when the window is on screen.
    *
-   * @throws `capability` manifest 没有声明 `ui.window`。
-   * @throws `unavailable` 播放器在无界面模式下运行。
-   * @throws `invalid` `file` 越出插件包目录。【待核实：code 取自 `plugins::package_file`】
-   * @throws `missing` `file` 不存在。【待核实】
-   * @throws `host` `.slint` 编译失败或组件不满足规则，`message` 是编译器的输出。
-   *   【待修：`host` 不在 {@link PluginError} 错误表里，应该补进表中，或者统一成 `ui-prepare`】
+   * @throws `capability` The manifest does not declare `ui.window`.
+   * @throws `unavailable` The player is running in headless mode.
+   * @throws `invalid` `file` goes outside the plugin package directory. [To verify: the code comes from `plugins::package_file`]
+   * @throws `missing` `file` does not exist. [To verify]
+   * @throws `host` The `.slint` file failed to compile or the component does not follow the rules; `message` is the compiler output.
+   *   [To fix: `host` is not in the {@link PluginError} error table; add it to the table, or unify it as `ui-prepare`]
    *
-   * @example 打开失败时提示用户
+   * @example Tell the user when opening fails
    * ```ts
    * try {
    *   await info.show();
    * } catch (error) {
-   *   void plugin.osd.show(`无法打开窗口：${(error as PluginError).code}`);
+   *   void plugin.osd.show(`Cannot open the window: ${(error as PluginError).code}`);
    * }
    * ```
    */
   show(): Promise<void>;
-  /** 隐藏窗口；状态和属性都保留，`show()` 会原样显示回来。`opened` 仍为 `true`。 */
+  /** Hide the window; state and properties are kept, and `show()` shows it again unchanged. `opened` stays `true`. */
   hide(): Promise<void>;
   /**
-   * 关闭并销毁窗口实例；句柄保留，之后 `show()` 用最新属性打开一个新实例。
-   * 不会调用 {@link Window.onClose}。没有打开时调用什么也不做。
+   * Close and destroy the window instance; the handle is kept, and a later `show()` opens a new instance with the latest properties.
+   * Does not call {@link Window.onClose}. Does nothing when the window is not open.
    */
   close(): Promise<void>;
-  /** 窗口实例是否存在（显示或隐藏都算）。第一次 `show()` 前、`close()` 后、用户关闭后为 `false`。 */
+  /** Whether the window instance exists (shown or hidden both count). `false` before the first `show()`, after `close()`, and after the user closes it. */
   readonly opened: boolean;
   /**
-   * 用户关闭了窗口（标题栏的关闭按钮，或标准关闭键 ⌘W / Ctrl+W / Ctrl+F4）。
+   * The user closed the window (the close button in the title bar, or the standard close keys ⌘W / Ctrl+W / Ctrl+F4).
    *
    * @remarks
-   * 监听器被调用时 `opened` 已经是 `false`。插件自己调用 `close()` 或 `dispose()` 时不会调用它。
-   * 监听器里抛出的错误交给 {@link Scope.onError}。
+   * When the listener is called, `opened` is already `false`. It is not called when the plugin itself calls `close()` or `dispose()`.
+   * Errors thrown in the listener go to {@link Scope.onError}.
    *
-   * @returns 用于取消监听的句柄。
+   * @returns A handle for removing the listener.
    *
-   * @example 关闭窗口时停止轮询
+   * @example Stop polling when the window closes
    * {@includeCode ../../examples/snippets/windows.ts#stop-polling}
    */
   onClose(listener: () => unknown): Disposable;
 }
 ````
 
-`examples/snippets/windows.ts` 和 `examples/snippets/ui/info.slint` 都是真实文件，CI 会编译、运行。
+`examples/snippets/windows.ts` and `examples/snippets/ui/info.slint` are both real files that CI compiles and runs.
 
 ````ts
 import type { Plugin } from "@vestra-player/sdk";
@@ -518,11 +518,11 @@ import type { Plugin } from "@vestra-player/sdk";
 export default async function activate(plugin: Plugin) {
   // #region info-window
   const info = plugin.windows.create("ui/info.slint");
-  info.bind(() => ({ source: plugin.player.state.source ?? "（无来源）" }));
+  info.bind(() => ({ source: plugin.player.state.source ?? "(no source)" }));
   info.on("copySource", (text: string) => plugin.clipboard.writeText(text));
   plugin.commands.add({
     id: "info",
-    path: ["Tools", "媒体信息…"],
+    path: ["Tools", "Media Info…"],
     run: () => info.show(),
   });
   // #endregion info-window
@@ -536,159 +536,159 @@ export default async function activate(plugin: Plugin) {
 }
 ````
 
-对照原文，这次重写补上了：
+Compared with the original, this rewrite adds:
 
-- 概念定义：独立的顶层窗口、非模态、尺寸来自 Slint；
-- 与面板、设置页、对话框的选型；
-- 完整的生命周期，以及标准关闭键；
-- 错误码（并暴露出两个需要修代码的不一致）；
-- 测试方法；
-- 能自成一体、可以编译的示例，以及对应的 `.slint` 文件；
-- `@since`、`@category`、`@see`。
+- the concept definition: an independent top-level window, non-modal, size from Slint;
+- how to choose between it and panels, settings pages and dialogs;
+- the complete lifecycle, and the standard close keys;
+- error codes (exposing two inconsistencies that need code fixes);
+- how to test it;
+- self-contained, compilable examples, and the matching `.slint` file;
+- `@since`, `@category`, `@see`.
 
-参考条目的总长度大约是原来的 4 倍。按 VS Code 的经验，更长的教学内容应该放在"概念：界面总览"和"Slint 桥接"两篇里，不要继续往注释里堆。
+The total length of the reference entry is about 4 times the original. Following VS Code's experience, longer teaching material should go in the two pages "Concept: UI overview" and "Slint bridge", rather than piling more into the comments.
 
 ---
 
-## 4. 工具链
+## 4. Toolchain
 
-### 4.1 `typedoc.json` 的改动
+### 4.1 Changes to `typedoc.json`
 
 ```jsonc
 {
-  "lang": "zh",                                  // 内置中文界面
-  "projectDocuments": ["docs/**/*.md"],          // 教程、概念、操作指南；用 frontmatter 的 group/category/children 组织
+  "lang": "zh",                                  // built-in Chinese UI
+  "projectDocuments": ["docs/**/*.md"],          // tutorials, concepts, how-to guides; organized with frontmatter group/category/children
   "categorizeByGroup": false,
   "navigation": { "includeCategories": true, "includeGroups": false, "includeFolders": true },
-  "defaultCategory": "其他",
-  "categoryOrder": ["核心", "命令与快捷键", "界面", "播放", "处理", "系统", "插件管理", "测试", "*"],
-  "blockTags": ["@capability", "@player" /* 加上 TypeDoc 默认的标签 */],
-  // 同时在 tsdoc.json 里声明 @capability、@player，让编辑器和 lint 都认识
+  "defaultCategory": "Other",
+  "categoryOrder": ["Core", "Commands and shortcuts", "UI", "Playback", "Processing", "System", "Plugin management", "Testing", "*"],
+  "blockTags": ["@capability", "@player" /* plus TypeDoc's default tags */],
+  // also declare @capability and @player in tsdoc.json so that editors and lint recognize them
   "searchInComments": true,
   "searchInDocuments": true,
   "plugin": ["typedoc-plugin-mdn-links", "typedoc-github-theme"],
-  "sidebarLinks": { "错误码": "documents/错误码.html", "能力一览": "documents/能力一览.html" },
-  "sort": ["source-order"]                       // 保留：源码顺序就是"常用的在前"
+  "sidebarLinks": { "Error codes": "documents/error-codes.html", "Capabilities": "documents/capabilities.html" },
+  "sort": ["source-order"]                       // keep: source order is "most used first"
 }
 ```
 
-- 每个导出类型都加上 `@category`（约 100 处，机械性工作）。
-- `@capability` 用 `blockTags` 渲染成独立小节。如果想做成徽标，可以写一个约 30 行的 `customJs`，或者写一个 TypeDoc 插件，把它渲染到签名下方。
-- 自定义 `@player 0.2.0` 统一替换正文里的 "Requires player 0.2.0"。
+- Add `@category` to every exported type (about 100 places, mechanical work).
+- `@capability` is rendered as its own section through `blockTags`. To make it a badge, write a `customJs` of about 30 lines, or a TypeDoc plugin that renders it below the signature.
+- A custom `@player 0.2.0` replaces the "Requires player 0.2.0" phrases in the body text.
 
-**主题**：首选 `typedoc-github-theme`。它改动小，与 0.28 同步，外观接近 GitHub，和仓库观感一致。
+**Theme**: `typedoc-github-theme` first. It changes little, keeps up with 0.28, looks close to GitHub, and matches the look of the repository.
 
-**另一条路线（中期再考虑）**：用 `typedoc-plugin-markdown` 加 `typedoc-vitepress-theme`，生成 Markdown，交给 VitePress。
+**Another route (to consider in the medium term)**: `typedoc-plugin-markdown` plus `typedoc-vitepress-theme`, generating Markdown for VitePress.
 
-- 好处：
-  - 手写页面的排版、目录和全文搜索更好；
-  - 原生支持多语言站点（`/` 中文，`/en/` 英文）；
-  - 能做"API 参考 + 指南"统一导航，最接近 VS Code 或 MDN 的体验。
-- 代价：多一层构建，TypeDoc 的部分校验需要在 Markdown 输出之后再做。
+- Benefits:
+  - better layout, table of contents and full-text search for hand-written pages;
+  - native support for multilingual sites (`/` Chinese, `/en/` English);
+  - a unified "API reference + guides" navigation, closest to the VS Code or MDN experience.
+- Cost: one more build layer, and some of TypeDoc's validation has to run after the Markdown output.
 
-建议先在 TypeDoc 默认 HTML 上完成内容重写，**内容和工具链分两步走**。
+Recommendation: finish the content rewrite on TypeDoc's default HTML first; **do content and toolchain in two separate steps**.
 
-### 4.2 示例必须能编译、能运行
+### 4.2 Examples must compile and run
 
-做三层，从易到难：
+Three layers, from easy to hard:
 
-1. **`examples/` 是一个真实的 TS 工程**：
-   - `examples/snippets/*.ts`，按 `// #region 名字` 切出片段；对应的 `.slint` 放在 `examples/snippets/ui/`；
-   - 加一个 `tsconfig.examples.json`，在 `npm run check` 里一起跑 `tsc --noEmit`；
-   - TSDoc 和 Markdown 页面一律用 `{@includeCode ../../examples/snippets/x.ts#region}` 引入。
-   - 这就是 OpenCV `@snippet` 的做法。类型错误或 region 名打错，`typedoc` 都会直接报错，`treatWarningsAsErrors` 已经开启。
-2. **内联代码块的抽取检查**（覆盖历史上那 79 个内联 `@example` 和 `docs/*.md` 里的代码块）：
-   - 写一个 `scripts/check-examples.mjs`：
-     - 用 `typedoc --json` 或 TypeScript API 遍历注释，找出 `` ```ts `` 代码块；
-     - 同时扫描 `docs/**/*.md`；
-     - 每个代码块写成 `.tmp/examples/<symbol>-<n>.ts`，开头注入统一的前导：
+1. **`examples/` is a real TS project**:
+   - `examples/snippets/*.ts`, cut into fragments with `// #region name`; the matching `.slint` files go in `examples/snippets/ui/`;
+   - add a `tsconfig.examples.json` and run `tsc --noEmit` on it as part of `npm run check`;
+   - TSDoc and Markdown pages always include code with `{@includeCode ../../examples/snippets/x.ts#region}`.
+   - This is OpenCV's `@snippet` approach. A type error or a mistyped region name makes `typedoc` fail directly, since `treatWarningsAsErrors` is already on.
+2. **Extract-and-check for inline code blocks** (covering the existing 79 inline `@example`s and the code blocks in `docs/*.md`):
+   - write a `scripts/check-examples.mjs` that:
+     - walks the comments with `typedoc --json` or the TypeScript API and finds `` ```ts `` code blocks;
+     - also scans `docs/**/*.md`;
+     - writes each code block to `.tmp/examples/<symbol>-<n>.ts`, prefixed with a shared preamble:
        ```ts
        import type * as SDK from "@vestra-player/sdk";
        declare const plugin: SDK.Plugin;
        ```
-       必要时再加 `declare const` 补齐少量约定的变量，但要尽量消灭这类变量；
-     - 最后跑 `tsc --noEmit`。
-   - 有意不完整的片段用 `` ```ts nocheck `` 显式标注，数量要尽量少。
-   - 这一层就是 rustdoc 的"示例即测试"（编译部分）。
-3. **运行级 doctest**：对 `examples/snippets` 里每个默认导出 `activate` 的文件，在 `node --test` 里用 `startPlugin` 加 `TestHost` 激活一次，并断言几个关键的副作用（命令已注册、`host.window(id)` 存在，`userClose()` 之后轮询已经停止）。SDK 自带测试宿主，正好可以做到 Rust 的"示例会运行"。
+       adding `declare const` for a small set of agreed variables when needed, but such variables should be eliminated as far as possible;
+     - finally runs `tsc --noEmit`.
+   - Fragments that are intentionally incomplete are marked explicitly with `` ```ts nocheck ``, and there should be as few of them as possible.
+   - This layer is rustdoc's "examples are tests" (the compile part).
+3. **Run-level doctest**: for every file in `examples/snippets` whose default export is `activate`, activate it once in `node --test` with `startPlugin` plus `TestHost`, and assert a few key side effects (command registered, `host.window(id)` exists, polling stopped after `userClose()`). The SDK ships its own test host, which is exactly what makes Rust's "examples are run" possible here.
 
-**Slint 片段**：SDK CI 目前没有 Slint 编译器。
+**Slint fragments**: the SDK CI currently has no Slint compiler.
 
-- 一种办法是在播放器仓库的插件测试里编译 `examples/snippets/ui/*.slint`，SDK 发版前跑一次；
-- 另一种办法是引入 Slint 的 Node 包或 `slint-lsp`，只做语法检查。这一项可以放到第二期。
+- One option is to compile `examples/snippets/ui/*.slint` in the player repository's plugin tests, run once before an SDK release;
+- another is to bring in Slint's Node package or `slint-lsp` for syntax checking only. This can wait for phase two.
 
-### 4.3 链接检查
+### 4.3 Link checking
 
-- 站内链接：`validation.invalidLink` 已经覆盖 `{@link}`。手写 Markdown 里的相对链接，TypeDoc 0.28 也会校验，失败时作为警告，进而导致失败。
-- 外链：在 `_docs.yml` 生成 `docs-site` 之后，加一步 lychee（`lycheeverse/lychee-action`）扫描 HTML，忽略 `localhost`。外链偶尔会抖动，所以建议放在定时任务（每周）里跑，PR 里只跑站内检查，以免误报阻塞合并。
-- 漂移检查：一个小脚本断言 `docs/getting-started.md` 里的 Node 版本等于 `package.json` 的 `engines.node`，示例里的 SDK 版本等于当前大版本。§1.2 ⑤ 里的那类漂移就是这样被发现的。
-- 覆盖率：`typedoc-plugin-coverage` 出徽章。另写一个 `scripts/doc-lint.mjs` 读 `typedoc --json`，强制执行以下规则：
-  - 每个返回 `Promise` 的方法必须有 `@throws`；
-  - 每个模块入口必须有 `@remarks`、`@example`、`@capability`、`@category`；
-  - 每个方法必须有 `@since`。
+- Internal links: `validation.invalidLink` already covers `{@link}`. TypeDoc 0.28 also validates relative links in hand-written Markdown, reporting failures as warnings, which in turn fail the build.
+- External links: after `_docs.yml` generates `docs-site`, add a lychee step (`lycheeverse/lychee-action`) that scans the HTML, ignoring `localhost`. External links occasionally flap, so this is best run on a schedule (weekly); PRs run only the internal checks, so false positives do not block merges.
+- Drift check: a small script asserts that the Node version in `docs/getting-started.md` equals `engines.node` in `package.json`, and that the SDK version in the examples equals the current major version. This is how the kind of drift in §1.2 ⑤ was found.
+- Coverage: `typedoc-plugin-coverage` produces a badge. Also write a `scripts/doc-lint.mjs` that reads `typedoc --json` and enforces these rules:
+  - every method that returns a `Promise` must have `@throws`;
+  - every module entry must have `@remarks`, `@example`, `@capability`, `@category`;
+  - every method must have `@since`.
 
-### 4.4 文档语言
+### 4.4 Documentation language
 
-建议：**中文为主，API 参考的注释也用中文**；README 和 npm 页面保留英文简介。理由：
+Recommendation: **Chinese as the primary language, including the comments in the API reference**; keep an English introduction in the README and on the npm page. Reasons:
 
-1. 产品、插件商城和用户都以中文为主。现有最完整的长文档（`reference.md`、`tutorial.md`、`examples.md`，约 2950 行）已经是中文，迁过来几乎不用翻译；反过来，把它们译成英文是最大的一块工作量。
-2. TSDoc 的语言会直接出现在编辑器的悬停提示里。中文插件作者在 VS Code 里看到中文说明，收益最直接。
-3. TypeDoc 内置 `lang: "zh"`，站点的界面文字也能统一成中文。
-4. 代码标识符、错误码、能力名、Slint 关键字都保持英文。示例里的界面文字用中文，与播放器一致。
+1. The product, the plugin store and the users are mainly Chinese-speaking. The most complete existing long documents (`reference.md`, `tutorial.md`, `examples.md`, about 2950 lines) are already in Chinese and need almost no translation to move over; conversely, translating them into English is the largest single piece of work.
+2. The TSDoc language shows up directly in editor hover tooltips. Chinese plugin authors seeing Chinese descriptions in VS Code is the most direct benefit.
+3. TypeDoc has built-in `lang: "zh"`, so the site's UI text can be Chinese throughout.
+4. Code identifiers, error codes, capability names and Slint keywords all stay in English. UI text in the examples is Chinese, consistent with the player.
 
-需要英文时，按投入从小到大排列：
+When English is needed, in increasing order of effort:
 
-- (a) 只维护英文的 README 和英文 getting-started（一个页面），不翻译参考；
-- (b) 走 VitePress 路线，用 `/en/` 子站放英文的教程和概念页，API 参考仍然是中文 TSDoc；
-- (c) 完整双语：TSDoc 写两份不现实。可行的做法是参考注释保持一种语言，另一种语言只覆盖教程、概念和操作指南。
+- (a) maintain only an English README and an English getting-started (one page), without translating the reference;
+- (b) take the VitePress route, with an `/en/` subsite for English tutorials and concept pages, while the API reference stays in Chinese TSDoc;
+- (c) fully bilingual: writing TSDoc twice is not realistic. A workable approach is to keep the reference comments in one language and cover only tutorials, concepts and how-to guides in the other.
 
-**不建议**在同一条注释里中英混写。
+Mixing Chinese and English in the same comment is **not recommended**.
 
-如果团队判断海外开发者是重要目标：TSDoc 用英文，教程、概念和操作指南用中文，各自独立成站点区域。这样做的代价是参考和概念之间的互链会跨语言。
+If the team judges overseas developers to be an important audience: TSDoc in English, tutorials, concepts and how-to guides in Chinese, each as its own area of the site. The cost is that the links between reference and concepts cross languages.
 
 ---
 
-## 5. 工作量估算
+## 5. Effort estimate
 
-| 项目 | 数量 | 说明 |
+| Item | Count | Notes |
 | --- | --- | --- |
-| A：模块入口和核心类型，按完整模板重写（概念段、选型、生命周期、整体示例） | 约 30 个 | Plugin、Scope、Disposable、PluginError、View、Windows、Window、Panels、Panel、PanelSlot、Settings、Dialogs、Osd、Ui、Drops、MainWindow、Commands、Command、CommandOptions、Bindings、Player、Media、Conditional、Stream、Subtitles、VideoFilter、AudioFilter、VideoView、MediaCapture、Packages、Resolvers、Storage、Secrets、System、Tools，以及 testing 的 TestHost |
-| B：方法，补 `@throws`、`@capability`、`@since`，以及参数的范围、单位、默认值 | 约 137 个（types.ts）+ 约 40 个（testing） | 约 90 个需要新增或改写可以编译的示例；Player、Packages、Subtitles 的一行式方法最多 |
-| C：数据字段，补单位、范围、枚举值 | 约 60 个（总计约 390 个成员） | 例如 `checks: string[]`、`status: string`、`stats` 的各个字段；其余已经够用 |
-| 修正事实漂移 | 约 6 处 | Node 版本、SDK 版本号、错误码表缺 `versionMismatch` / `host` / `ui-prepare`、重复窗口 id 不带 code |
-| 分类标签 `@category` | 约 108 处 | 机械性工作 |
-| 新写或迁移概念页 | 9 篇 | 主要来自 `reference.md` §1–3、§6、§13，以及 `tutorial.md` 的部分章节 |
-| 操作指南 | 约 20 篇 | 从 `examples.md` 的 34 节合并改写，代码统一迁入 `examples/snippets` |
-| 教程 | 4 篇 | 从 `tutorial.md` 和 `getting-started.md` 合并 |
-| 工具链 | typedoc 配置、`tsdoc.json`、`check-examples.mjs`、`doc-lint.mjs`、示例的 doctest、lychee、主题 | 约 1–2 天 |
+| A: module entries and core types, rewritten to the full template (concept paragraph, choosing, lifecycle, overall example) | about 30 | Plugin, Scope, Disposable, PluginError, View, Windows, Window, Panels, Panel, PanelSlot, Settings, Dialogs, Osd, Ui, Drops, MainWindow, Commands, Command, CommandOptions, Bindings, Player, Media, Conditional, Stream, Subtitles, VideoFilter, AudioFilter, VideoView, MediaCapture, Packages, Resolvers, Storage, Secrets, System, Tools, plus TestHost from testing |
+| B: methods, adding `@throws`, `@capability`, `@since`, and parameter ranges, units and defaults | about 137 (types.ts) + about 40 (testing) | About 90 need new or rewritten compilable examples; the one-line methods of Player, Packages and Subtitles are the most numerous |
+| C: data fields, adding units, ranges and enum values | about 60 (out of about 390 members in total) | For example `checks: string[]`, `status: string`, the fields of `stats`; the rest are good enough |
+| Fixing factual drift | about 6 places | Node version, SDK version number, error table missing `versionMismatch` / `host` / `ui-prepare`, duplicate window id without code |
+| `@category` tags | about 108 places | Mechanical work |
+| New or migrated concept pages | 9 | Mainly from `reference.md` §1–3, §6, §13, and some chapters of `tutorial.md` |
+| How-to guides | about 20 | Merged and rewritten from the 34 sections of `examples.md`; all code moves into `examples/snippets` |
+| Tutorials | 4 | Merged from `tutorial.md` and `getting-started.md` |
+| Toolchain | typedoc configuration, `tsdoc.json`, `check-examples.mjs`, `doc-lint.mjs`, example doctests, lychee, theme | about 1–2 days |
 
-粗略节奏：
+Rough schedule:
 
-- 先完成工具链和"界面"这一类（Windows、Panels、Settings、View，共 8 个 A 类加上它们的方法），作为样板，交给用户评审文风。
-- 然后按类别推进：播放、命令、处理、系统、插件管理、测试。每一类同时交付"概念页 + 操作指南 + 参考"。
+- First finish the toolchain and the "UI" category (Windows, Panels, Settings, View: 8 type-A items plus their methods) as a model, and give it to the user to review the writing style.
+- Then proceed category by category: playback, commands, processing, system, plugin management, testing. Each category delivers "concept pages + how-to guides + reference" together.
 
 ---
 
-## 6. 参考链接
+## 6. Reference links
 
-- MATLAB `interp1`：https://www.mathworks.com/help/matlab/ref/double.interp1.html
-- man-pages(7)：https://man7.org/linux/man-pages/man7/man-pages.7.html
-- rustdoc 写作指南：https://doc.rust-lang.org/rustdoc/how-to-write-documentation.html
-- Rust `std::fs::File`：https://doc.rust-lang.org/std/fs/struct.File.html
-- MDN `fetch()`：https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch
-- MDN `Window`：https://developer.mozilla.org/en-US/docs/Web/API/Window
-- Stripe 创建退款：https://docs.stripe.com/api/refunds/create
-- VS Code 扩展能力总览：https://code.visualstudio.com/api/extension-capabilities/overview
-- VS Code Webview 指南：https://code.visualstudio.com/api/extension-guides/webview
-- `vscode.d.ts`：https://github.com/microsoft/vscode/blob/main/src/vscode-dts/vscode.d.ts
-- Qt `QWidget`：https://doc.qt.io/qt-6/qwidget.html
-- OpenCV Canny 教程源码：https://github.com/opencv/opencv/blob/4.x/doc/tutorials/imgproc/imgtrans/canny_detector/canny_detector.markdown
-- OpenCV Python 版 Canny 教程源码：https://github.com/opencv/opencv/blob/4.x/doc/py_tutorials/py_imgproc/py_canny/py_canny.markdown
-- OpenCV `imgproc.hpp`：https://github.com/opencv/opencv/blob/4.x/modules/imgproc/include/opencv2/imgproc.hpp
-- Django 文档首页：https://docs.djangoproject.com/en/stable/
-- Diátaxis：https://diataxis.fr/
-- Node.js `fs`：https://nodejs.org/api/fs.html
-- TypeDoc 标签：https://typedoc.org/documents/Tags.html
-- TypeDoc 输出选项：https://typedoc.org/documents/Options.Output.html
-- TypeDoc 输入选项：https://typedoc.org/documents/Options.Input.html
-- npm 包版本（2026-10-22 查询）：typedoc-plugin-mdn-links 5.1.1、typedoc-github-theme 0.4.0、typedoc-material-theme 1.4.1、typedoc-plugin-markdown 4.14.1、typedoc-vitepress-theme 1.1.4、typedoc-plugin-coverage 4.0.3
+- MATLAB `interp1`: https://www.mathworks.com/help/matlab/ref/double.interp1.html
+- man-pages(7): https://man7.org/linux/man-pages/man7/man-pages.7.html
+- rustdoc writing guide: https://doc.rust-lang.org/rustdoc/how-to-write-documentation.html
+- Rust `std::fs::File`: https://doc.rust-lang.org/std/fs/struct.File.html
+- MDN `fetch()`: https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch
+- MDN `Window`: https://developer.mozilla.org/en-US/docs/Web/API/Window
+- Stripe create refund: https://docs.stripe.com/api/refunds/create
+- VS Code extension capabilities overview: https://code.visualstudio.com/api/extension-capabilities/overview
+- VS Code Webview guide: https://code.visualstudio.com/api/extension-guides/webview
+- `vscode.d.ts`: https://github.com/microsoft/vscode/blob/main/src/vscode-dts/vscode.d.ts
+- Qt `QWidget`: https://doc.qt.io/qt-6/qwidget.html
+- OpenCV Canny tutorial source: https://github.com/opencv/opencv/blob/4.x/doc/tutorials/imgproc/imgtrans/canny_detector/canny_detector.markdown
+- OpenCV Python Canny tutorial source: https://github.com/opencv/opencv/blob/4.x/doc/py_tutorials/py_imgproc/py_canny/py_canny.markdown
+- OpenCV `imgproc.hpp`: https://github.com/opencv/opencv/blob/4.x/modules/imgproc/include/opencv2/imgproc.hpp
+- Django documentation home: https://docs.djangoproject.com/en/stable/
+- Diátaxis: https://diataxis.fr/
+- Node.js `fs`: https://nodejs.org/api/fs.html
+- TypeDoc tags: https://typedoc.org/documents/Tags.html
+- TypeDoc output options: https://typedoc.org/documents/Options.Output.html
+- TypeDoc input options: https://typedoc.org/documents/Options.Input.html
+- npm package versions (checked 2026-10-22): typedoc-plugin-mdn-links 5.1.1, typedoc-github-theme 0.4.0, typedoc-material-theme 1.4.1, typedoc-plugin-markdown 4.14.1, typedoc-vitepress-theme 1.1.4, typedoc-plugin-coverage 4.0.3
