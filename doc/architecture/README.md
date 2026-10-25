@@ -1,6 +1,6 @@
 # 架构总览（维护者）
 
-给 API 维护者的地图：组件怎么分工、插件怎么被加载和停止、SDK 与宿主之间说什么协议、代码在哪。插件作者看 [doc/plugins/](../plugins/README.md)；SDK 的设计取舍见 [sdk-design.md](sdk-design.md)；项目原则见 [doc/product/](../product/direction.md)。
+给 API 维护者的地图：组件怎么分工、插件怎么被加载和停止、SDK 与宿主之间说什么协议、代码在哪。插件作者看 [SDK 文档站](https://vestrasys.github.io/vestra-player-sdk/)；SDK 的设计取舍见 [sdk-design.md](sdk-design.md)；项目原则见 [doc/product/](../product/direction.md)。
 
 ## 1. 组件
 
@@ -29,7 +29,7 @@
 - **激活**：宿主启动 `node runner.ts <包目录>` → 运行器读取 manifest、按能力读初始状态和订阅事件 → 调用默认导出的 `activate(plugin)` → 激活期间的注册全部成功后发送 `runtime.ready`，否则 `runtime.failed`。
 - **停用**：宿主按 owner 撤销该插件的全部资源（菜单与绑定、窗口、面板与浮动面板窗口、处理资源、字幕层、快照、任务、解析器、producer、播放序列提供者、屏幕信息块），发送 `runtime.stop`；运行器释放句柄，300 ms 内未退出则被结束。每次运行有新的 owner 代次，旧进程的迟到消息不会路由给重新加载的同名插件。
 
-manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力)。能力是契约声明，宿主据此拒绝未声明的调用（`code: "capability"`），不是安全沙箱。
+manifest 规则见 [Manifest](https://vestrasys.github.io/vestra-player-sdk/documents/Manifest.html)，能力见 [Capabilities](https://vestrasys.github.io/vestra-player-sdk/documents/Capabilities.html)。能力是契约声明，宿主据此拒绝未声明的调用（`code: "capability"`），不是安全沙箱。
 
 ## 3. wire 协议
 
@@ -91,7 +91,7 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 | `src/scripts/plugin.mjs`、`check-boundaries.mjs` | 仓库内调用 `vestra-plugin` 的快捷方式（按插件名）、导入边界检查 |
 | `src/scripts/stage-plugins.mjs` | 按打包布局生成 `Resources/plugins/`：`src/plugins/` 每个插件的 `.vxp` 与 `builtin.json` |
 | `src/scripts/sync-sdk-slint.mjs`、`stage-runtime.mjs` | 校验已安装 SDK 的控件库副本与 `host/ui` 一致（`--write <SDK 仓库>` 把 `host/ui` 复制进 SDK 仓库）；从已安装的 SDK 按打包布局生成 `Resources/runtime` |
-| `src/tests/sdk/` | 播放器侧测试：runner、打包布局、已安装 SDK 的常量（能力表、`apiVersion`、命令上限）与控件库副本和宿主一致 |
+| `src/tests/sdk/` | 播放器侧测试：runner、打包布局、已安装 SDK 的常量（SDK 文档站 Reference 各表的来源：能力与每个成员的请求、各种上限、绑定名、内置命令与子菜单、配色、错误码）与控件库副本和宿主一致；`doc/` 不复制作者文档（`scripts/check-docs.mjs`） |
 | `src/plugins/` | 内置产品插件，也是仅有的官方插件（id `vestra.<名字>`，前缀只留给它们）。`zysilm.youtube`、`zysilm.bilibili` 是托管在官方插件仓库 [vestra-player-plugins](https://github.com/vestrasys/vestra-player-plugins) 的第三方插件 |
 | `src/examples/bookmark/` | 教程示例插件 |
 | `src/examples/core-ui/`、`src/examples/panel-menu/` | 核心界面接口的演示插件（菜单、绑定、屏幕提示、播放序列、侧栏状态与分离、面板右键菜单、主题控件） |

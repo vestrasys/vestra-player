@@ -1,19 +1,21 @@
-# 插件开发文档
+# Plugin documentation
 
-给插件作者的文档。按这个顺序读：
+Everything a plugin author needs is on the SDK's documentation site, [vestrasys.github.io/vestra-player-sdk](https://vestrasys.github.io/vestra-player-sdk/), and only there. This repository does not repeat it; link to the site instead.
 
-| 文档 | 内容 | 什么时候读 |
-| --- | --- | --- |
-| [入门教程](tutorial.md) | 从零写一个「书签」插件，逐行解释 manifest、Slint 界面和 `main.ts`，以及测试、运行、打包 | 第一次写插件 |
-| [插件示例](examples.md) | 12 个按功能分类的完整示例：播放栏、滤镜、播放列表、截图导出、模拟器、字幕、网络视频、插件工坊、拆分模块、测试 | 要实现某种功能，找现成写法 |
-| [API 参考](reference.md) | 每个模块和方法的签名、参数、返回值、取值范围、错误码；能力对照表；测试工具；构建工具 | 查精确定义（权威规格） |
-| [插件商城核心改动（S4）](store-changes.md) | 安装实例与数据目录、安装来源与替换、内置插件、manifest 显示字段、Markdown 组件：变了什么、要做什么 | 维护现有插件、准备发布到商城 |
+| To | Read |
+| --- | --- |
+| Write a first plugin | [Getting started](https://vestrasys.github.io/vestra-player-sdk/documents/Getting_started.html) |
+| Understand how plugins run, commands, playback, processing, the user interface | [Concepts](https://vestrasys.github.io/vestra-player-sdk/documents/Concepts.html) |
+| Do one task (translate, test, publish, ...) | [How-to guides](https://vestrasys.github.io/vestra-player-sdk/documents/How-to_guides.html) |
+| Follow the interface and menu rules | [Guidelines](https://vestrasys.github.io/vestra-player-sdk/documents/Guidelines.html) |
+| Read complete example plugins | [Examples](https://vestrasys.github.io/vestra-player-sdk/documents/Examples.html) |
+| Look up capabilities, limits, menu keys, bindings, platforms, theme, the CLI | [Reference](https://vestrasys.github.io/vestra-player-sdk/documents/Reference.html) |
+| Look up one interface or member | [API](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html) |
 
-可以直接运行的代码：
+In this repository:
 
-- `src/examples/bookmark/`：教程中的书签插件（含测试）。
-- `src/examples/markdown/`：Markdown 显示组件与 manifest 显示字段的演示。
-- `src/plugins/`：内置产品插件，也是仅有的官方插件（id 为 `vestra.<名字>`，这个前缀只留给它们）。最短的是 `video/`（画面调节），可作为第一个参考。
-- 官方插件仓库 [vestra-player-plugins](https://github.com/vestrasys/vestra-player-plugins) 的 `plugins/`：托管在官方仓库、不随安装包分发的第三方插件 `zysilm.youtube`、`zysilm.bilibili`（审核比其它仓库严格；网络媒体解析器的写法见[插件示例 §9](examples.md)）。
+- `src/plugins/`: the built-in plugins (ids `vestra.<name>`, a prefix only they may use). `video/` is the shortest.
+- `src/examples/`: small plugins the player's tests run (`bookmark/`, `markdown/`, ...).
+- How the player implements the plugin API: [doc/architecture/](../architecture/README.md); why the SDK is designed as it is: [sdk-design.md](../architecture/sdk-design.md).
 
-设计取舍（为什么这样设计）见 [SDK 设计说明](../architecture/sdk-design.md)。
+`src/tests/sdk/host-agreement.test.ts` checks that the SDK's constants (the source of the site's Reference tables) agree with this player; `src/scripts/check-docs.mjs` keeps author documentation out of `doc/`.

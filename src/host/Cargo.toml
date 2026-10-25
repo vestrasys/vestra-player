@@ -75,7 +75,7 @@ objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std
 objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSString", "NSData", "NSGeometry", "NSProcessInfo"] }
 # `plugin.secrets`: generic passwords in the login keychain.
 keyring = { version = "=3.6.3", features = ["apple-native"] }
-# GPU rendering (reference §5.4): libmpv draws with OpenGL into IOSurfaces
+# GPU rendering (SDK site, Concepts: render options): libmpv draws with OpenGL into IOSurfaces
 # that Slint's femtovg renderer shows; the `unsafe` stays in unsafe/render.
 vestra-gpu-render = { path = "unsafe/render" }
 # Picture-in-picture (window.setPictureInPicture): AVKit, the unsafe part in unsafe/pip.

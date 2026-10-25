@@ -14,6 +14,9 @@ use std::sync::OnceLock;
 pub const MAX_REVEAL: usize = 256;
 pub const MAX_URL: usize = 8192;
 pub const MAX_SECRET_BYTES: usize = 1024;
+/// Characters (ASCII) of a secret name. The SDK repeats this and the two
+/// secret limits (`SECRET_LIMITS`); src/tests/sdk/host-agreement.test.ts checks them.
+pub const MAX_SECRET_NAME: usize = 64;
 
 /// An absolute path that exists (`missing` otherwise).
 pub fn existing(value: &Value) -> std::result::Result<PathBuf, RpcError> {
@@ -73,7 +76,7 @@ pub fn secret_name(params: &Value) -> std::result::Result<&str, RpcError> {
     params["name"]
         .as_str()
         .filter(|name| {
-            (1..=64).contains(&name.len())
+            (1..=MAX_SECRET_NAME).contains(&name.len())
                 && name
                     .bytes()
                     .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"._-".contains(&b))

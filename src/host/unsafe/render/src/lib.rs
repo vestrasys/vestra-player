@@ -1,5 +1,5 @@
 //! libmpv draws with OpenGL and Slint shows the result as a texture (the
-//! host's GPU rendering, reference §5.4; the host reaches it only through its
+//! host's GPU rendering, SDK site, Concepts: render options; the host reaches it only through its
 //! macOS platform module).
 //!
 //! libmpv renders on its own thread, in a private offscreen CGL context, into a

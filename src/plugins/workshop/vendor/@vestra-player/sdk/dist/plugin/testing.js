@@ -65,7 +65,12 @@ import { tmpdir } from "node:os";
 import { extname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HostError } from "../wire.js";
-import { COMMAND_LIMITS, MENU_IDS } from "../commands.js";
+import { BUILTIN_COMMANDS, BUILTIN_SUBMENUS, COMMAND_LIMITS, MENU_IDS, } from "../commands.js";
+import { CAPABILITY_INFO, MESSAGE_LIMIT } from "../capabilities.js";
+import { OSD_LIMITS } from "./osd.js";
+import { SECRET_LIMITS } from "./services.js";
+import { BINDING_INPUTS } from "./bindings.js";
+import { THEME_PALETTES } from "../palettes.js";
 import { UI_VALUE_LIMITS, valueLimitProblem } from "./values.js";
 import { nodeProblem } from "../processing.js";
 import { RENDER_DEFAULTS, renderProblem, VIEW_DEFAULTS, viewProblem, } from "./view.js";
@@ -76,6 +81,20 @@ import { Catalog, format as formatTemplate, HOST_GROUPS, HOST_ZH_HANS, LOCALES, 
 export { HostError };
 /** The player's command caps, which the test host enforces as well. */
 export { COMMAND_LIMITS, MENU_IDS };
+/** The submenus of the player's built-in plugins, by key path. */
+export { BUILTIN_COMMANDS, BUILTIN_SUBMENUS };
+/** The manifest capabilities: what each opens and how the store shows it. */
+export { CAPABILITY_INFO };
+/** The longest message a plugin may send the player. */
+export { MESSAGE_LIMIT };
+/** The player's limits on the on-screen display. */
+export { OSD_LIMITS };
+/** The player's limits on stored secrets. */
+export { SECRET_LIMITS };
+/** The names bindings are made of. */
+export { BINDING_INPUTS };
+/** The colours of the player's palettes, by `Theme` token. */
+export { THEME_PALETTES };
 /** The player's property value limits, which the test host enforces as well. */
 export { UI_VALUE_LIMITS };
 /**
@@ -2545,8 +2564,8 @@ export class TestHost {
         },
         "osd.show": (p) => {
             const text = this.#shown(p.text, p.args, "text").replace(/[\n\r]/g, " ");
-            if (!text.trim() || [...text].length > 200)
-                throw new HostError("invalid", "osd text needs 1..200 characters");
+            if (!text.trim() || [...text].length > OSD_LIMITS.messageChars)
+                throw new HostError("invalid", `osd text needs 1..${OSD_LIMITS.messageChars} characters`);
             this.osd.push(text);
         },
         "osd.panel": (p) => {
@@ -2554,10 +2573,20 @@ export class TestHost {
                 return void (this.osdPanel = null);
             const max = p.maxColumns;
             if (max !== undefined &&
-                !(Number.isInteger(max) && Number(max) >= 8 && Number(max) <= 1000))
-                throw new HostError("invalid", "maxColumns is an integer from 8 to 1000");
-            const text = this.#shown(p.text, p.args, "text");
-            this.osdPanel = max === undefined ? text : fitColumns(text, Number(max));
+                !(Number.isInteger(max) &&
+                    Number(max) >= OSD_LIMITS.minColumns &&
+                    Number(max) <= OSD_LIMITS.maxColumns))
+                throw new HostError("invalid", `maxColumns is an integer from ${OSD_LIMITS.minColumns} to ${OSD_LIMITS.maxColumns}`);
+            const shown = this.#shown(p.text, p.args, "text");
+            const text = max === undefined ? shown : fitColumns(shown, Number(max));
+            // As the player: \n separates lines, a trailing one ends the last.
+            const lines = text.split("\n");
+            if (text.endsWith("\n"))
+                lines.pop();
+            if (Buffer.byteLength(text) > OSD_LIMITS.panelBytes ||
+                lines.length > OSD_LIMITS.panelLines)
+                throw new HostError("invalid", `osd panel allows ${OSD_LIMITS.panelLines} lines, ${OSD_LIMITS.panelBytes} bytes`);
+            this.osdPanel = text;
         },
         "playback.stats": () => this.stats,
         "audio.addTrack": (p) => {

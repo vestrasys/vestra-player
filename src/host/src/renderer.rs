@@ -1,4 +1,4 @@
-//! Which renderer draws the video (reference §5.4). GPU rendering (libmpv
+//! Which renderer draws the video (SDK site, Concepts: render options). GPU rendering (libmpv
 //! OpenGL, through the platform module) is the default; software rendering
 //! (`RenderContext::new_software`) is the fallback: headless runs,
 //! `VESTRA_SOFTWARE_RENDER=1`, systems without a GPU implementation, and a GL

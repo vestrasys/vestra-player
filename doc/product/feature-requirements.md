@@ -4150,7 +4150,7 @@ manifest：`commands`、`events`、`ui.window`、`ui.dialog`、`ui.osd`、`playb
 
 ## 附录 A：核心 API 请求总表
 
-> **注意**：本表是协商前作者一方的请求草案（社区工作流 §4.3）。每条的最终结论（拒绝并给替代 / 改写后接受 / 接受）、最终签名和所在轮次，以 [协商记录](../process/rounds/2026-10-features-negotiation.md) 第 3 步为准；已实现接口的权威说明在 [API 参考](../plugins/reference.md)。
+> **注意**：本表是协商前作者一方的请求草案（社区工作流 §4.3）。每条的最终结论（拒绝并给替代 / 改写后接受 / 接受）、最终签名和所在轮次，以 [协商记录](../process/rounds/2026-10-features-negotiation.md) 第 3 步为准；已实现接口的权威说明在 [API 参考](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html)。
 
 日期：2026-10-20。来源：本文各章「核心依赖」与「本章核心 API 请求汇总」，已删除功能（A04 A05 A06 A14 B10 B13 B14 B15 B18 B19 B20 B24 B27 B28 C08 C13 C19 C20 C22 C24 C25 C26 D08 D12 D13 D14 D15 D19 D21 E07 E14 E15 F06 F08 F10 F12 G06 G07 G12 G13 G14 H02 H06 H11 I04 J05 J10，以及 files、scenes、timer 三个插件）所需的接口不列入。同一接口被多章使用时只列一次。
 
@@ -4301,7 +4301,7 @@ manifest：`commands`、`events`、`ui.window`、`ui.dialog`、`ui.osd`、`playb
 
 ## 附录 B：通用约定
 
-现状依据：`main`（1a149a3）的插件源码和宿主代码，以及 [API 参考](../plugins/reference.md)。
+现状依据：`main`（1a149a3）的插件源码和宿主代码，以及 [API 参考](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html)。
 
 ### B.1 当前宿主事实（读代码确认）
 
@@ -4328,7 +4328,7 @@ manifest：`commands`、`events`、`ui.window`、`ui.dialog`、`ui.osd`、`playb
 
 ### B.3 快捷键
 
-- **写法**：按 [API 参考 §4.1](../plugins/reference.md#41-绑定)，符号键写打出的字符，不写 Shift。例如 `Shift+[` 写成 `{`，`Shift+'` 写成 `"`。
+- **写法**：按 [Binding syntax](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_bindings.html#binding-syntax)，符号键写打出的字符，不写 Shift。例如 `Shift+[` 写成 `{`，`Shift+'` 写成 `"`。
 - **Ctrl 与 Cmd**：macOS 上 `Ctrl+X` 同时匹配 ⌃X 和 ⌘X。所以不要绑定 `Ctrl+Q`，否则会截走 ⌘Q（退出）。
 - **Option 键风险**：在 macOS 上，Option 加字母或符号通常会打出另一个字符，比如 Option+[ 打出 `“`，Option+E、Option+N 是死键。`bindings.rs::from_slint_key` 按 `event.text` 识别按键，所以 `Alt+…` 绑定可能不触发。所有含 Alt 的绑定都要实机验收。如果不触发，由核心改为按物理键识别（见附录 A），不改用别的默认键。
 

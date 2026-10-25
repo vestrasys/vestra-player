@@ -7,7 +7,7 @@ import type { NoteId } from "./messages.ts";
 
 /** Largest file read from disk. */
 export const MAX_FILE = 8 * 1024 * 1024;
-/** The player's upload limit (reference §9). */
+/** The player's upload limit (Subtitles.load). */
 export const MAX_UPLOAD = 2 * 1024 * 1024;
 
 /**

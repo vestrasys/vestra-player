@@ -2,7 +2,7 @@
 
 本文记录项目已经确定的原则与大方向架构，作为后续讨论、设计和实现的共同依据。它不是详细设计，也不是首版功能承诺。
 
-技术组合（Rust 宿主 + Slint 原生界面 + TypeScript 插件）见[技术选型](technical-decisions.md)；插件 API 见 [doc/plugins/](../plugins/README.md)；当前进度见[状态](../status.md)。
+技术组合（Rust 宿主 + Slint 原生界面 + TypeScript 插件）见[技术选型](technical-decisions.md)；插件 API 见 [SDK 文档站](https://vestrasys.github.io/vestra-player-sdk/)；当前进度见[状态](../status.md)。
 
 文中的代码均为 **usage examples（使用方式示例）**，用于说明未来开发者如何使用平台，不是现有实现或已经冻结的 API。命名、参数、包格式和通信细节仍可在设计阶段调整。
 
@@ -119,7 +119,7 @@ window.getContextMenu().addAction("暂停", () => {
 
 这种写法让插件知道窗口、播放器、mpv 控制器和菜单对象如何组织。
 
-我们的写法（[插件 API](../plugins/reference.md)）：
+我们的写法（[插件 API](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html)）：
 
 ```ts
 export default async function activate(plugin: Plugin) {

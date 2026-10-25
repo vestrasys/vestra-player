@@ -44,6 +44,95 @@ export declare const COMMAND_LIMITS: {
  * ```
  */
 export declare const MENU_IDS: readonly ["open", "playback", "subtitles", "video", "audio", "screen", "settings"];
+/**
+ * A submenu that one of the player's built-in plugins declares: an entry of
+ * {@link BUILTIN_SUBMENUS}.
+ *
+ * @since 1.5.14
+ */
+export interface BuiltinSubmenu {
+    /**
+     * The submenu's key path: the English texts paths merge by, the
+     * built-in menu first by its key (`"Playback"` for `@playback`). Write
+     * these segments, followed by your command's title, to put a command into
+     * this submenu.
+     */
+    readonly path: readonly string[];
+    /** The built-in plugins that declare it (`vestra.history`). */
+    readonly plugins: readonly string[];
+}
+/**
+ * The submenus the player's built-in plugins declare, by key path, in menu
+ * order (built-in menus as in {@link MENU_IDS}, then top-level submenus).
+ * Menu paths merge by their English key, so a command whose path starts
+ * with the same keys appears in the same submenu, whatever the interface
+ * language; the submenu's title is the declaring plugin's translation. The
+ * player's own submenus (`Playback ▸ Speed`, `Playback ▸ Seek`) are not
+ * listed. The player's tests check that this list agrees with what its
+ * built-in plugins declare.
+ *
+ * @example
+ * ```ts
+ * import { BUILTIN_SUBMENUS } from "@vestra-player/sdk/testing";
+ *
+ * const snapshot = BUILTIN_SUBMENUS.find((menu) => menu.path.at(-1) === "Snapshot")!;
+ * plugin.commands.add({
+ *   id: "snapshot-to-clipboard",
+ *   path: ["@video", ...snapshot.path.slice(1), "Copy Snapshot"],
+ *   run: copySnapshot,
+ * });
+ * ```
+ *
+ * @since 1.5.14
+ */
+export declare const BUILTIN_SUBMENUS: readonly BuiltinSubmenu[];
+/**
+ * A command the player or one of its built-in plugins registers: an entry
+ * of {@link BUILTIN_COMMANDS}.
+ *
+ * @since 1.5.14
+ */
+export interface BuiltinCommand {
+    /** `"host"` for the player's own commands, else the built-in plugin's id. */
+    readonly owner: string;
+    /** The command's id within its owner (`"play-pause"`, `"capture.save"`). */
+    readonly id: string;
+    /**
+     * The menu path by key (the English texts paths merge by), the leaf
+     * included; a built-in menu by its key (`"Video"`, not `"@video"`).
+     * Empty for a command that is not in the main menu (a panel shortcut).
+     */
+    readonly path: readonly string[];
+    /** The English title (the last segment of `path` when there is one). */
+    readonly title: string;
+    /** The default bindings, canonical, in the order the command declares them. */
+    readonly bindings: readonly string[];
+    /** `"panel"`: the bindings apply only while the owner's panel has focus. */
+    readonly focus: "panel" | null;
+}
+/**
+ * The commands the player and its built-in plugins register when the
+ * player starts with nothing open, in menu order (commands outside the main
+ * menu last): their key paths, default bindings and owners. Use it to pick
+ * a menu place and default keys that do not collide with the player's (the
+ * user's own changes come on top; see {@link @vestra-player/sdk!Bindings | Bindings}). Menu items built
+ * from content (tracks, recent files, output devices) are not listed; their
+ * placeholders (`No Audio Tracks`) are. The player's tests check that this
+ * list agrees with what the player and its built-in plugins register.
+ *
+ * @example
+ * ```ts
+ * import assert from "node:assert/strict";
+ * import { BUILTIN_COMMANDS } from "@vestra-player/sdk/testing";
+ *
+ * const taken = BUILTIN_COMMANDS.filter((command) => command.focus === null)
+ *   .flatMap((command) => command.bindings);
+ * assert.ok(!taken.includes("Ctrl+K"));
+ * ```
+ *
+ * @since 1.5.14
+ */
+export declare const BUILTIN_COMMANDS: readonly BuiltinCommand[];
 export type CommandState = {
     enabled: boolean;
     checked: boolean | null;

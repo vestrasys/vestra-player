@@ -27,31 +27,33 @@
 
 宿主有两套配色，都叫 Aurora、取自标志的完整色谱：`vestra`（深色，默认）和 `vestra-light`（浅色，2026-10-24 加入）。颜色由宿主下发给每个视图（主窗口外壳与面板、浮动侧栏、工具窗口、选项窗口），插件通过 `@vestra/theme.slint` 的 `Theme` 读取；`Theme` 的颜色是只读的 `out` 属性。用户在「设置 ▸ 外观 ▸ Vestra 深色 / Vestra 浅色」或选项窗口「外观」页切换，所有窗口立即生效，选择跨启动保存。
 
-| token | `vestra`（深色） | `vestra-light`（浅色） | 用途 |
-| --- | --- | --- | --- |
-| `bg-bar` | `#16141c` | `#f7f6fa` | 控制栏、页签条、窗口背景 |
-| `bg-video` | `#0a090e` | `#0e0d12` | 视频区、空闲画面（两套都是深色） |
-| `bg-list` | `#1a1821` | `#ffffff` | 播放列表内容区、浮动面板、选项树 |
-| `bg-panel` | `#201d28` | `#f1eff5` | 工具页面、列表底栏、菜单、悬停提示 |
-| `line` | `#2b2734` | `#dcd8e4` | 1px 分隔线与外框、进度条和滑块的轨道、菜单分隔线、侧栏分隔条 |
-| `hover-bg` | `#28232f` | `#e9e6f0` | 悬停底色（底栏按钮的圆角底、页签）；搜索框底色 |
-| `press-bg` | `#110f16` | `#dcd8e6` | 按下底色 |
-| `selected-bg` | `#2f2840` | `#efe4fb` | 列表选中行、菜单当前项、选项树选中项 |
-| `text` | `#f5f3fa` | `#1c1924` | 主文字、图标常态、面板滑块 thumb |
-| `text-dim` | `#8e88a0` | `#6f6a7f` | 次要文字、小图标常态、总时长、快捷键文字 |
-| `text-list` | `#bdb8cb` | `#3b3748` | 列表文字、按钮文字、菜单文字 |
-| `text-played` | `#6e6980` | `#9a95a8` | 列表中播放过的项 |
-| `accent` | `#f72aa6` | `#d4128a` | 悬停图标、开启状态、勾选框、书签、当前项竖条、滑块外环 |
-| `accent-press` | `#c41a83` | `#a80d6c` | 按下的强调色 |
-| `accent-disabled` | `#5a1d48` | `#ecbcd9` | 禁用的强调色 |
-| `icon-disabled` | `#3b3646` | `#c9c5d2` | 禁用图标、禁用滑块 |
-| `playing` | `#2bb6ff` | `#0773ba` | 正在播放的列表项及其左侧竖条；AB 循环区间与标记 |
-| `button-bg` | `#2f2a3b` | `#e6e3ec` | 面板内小按钮、标签 |
-| `button-hover` | `#3a3448` | `#dcd8e4` | |
-| `button-press` | `#25202e` | `#cfcadb` | |
-| `button-disabled` | `#1b1922` | `#efedf3` | |
-| `danger` | `#ff5a5f` | `#c42b2b` | 失败状态、删除类按钮 |
-| `accent-fill` | 琥珀 `#fcc402` 0% → `#fb5a35` 20% → 洋红 `#fa0aa8` 45% → 紫 `#7a0afa` 72% → 青 `#10a8fc` 100% | `#f5a700` → `#f0442f` → `#e0089a` → `#6a08e8` → `#0a95e6`（同位置） | 进度类填充（进度条已播放段、音量、滑块）、页签和 OSD 的渐变短线 |
+两套配色的色值见 SDK 文档站 [Reference: Theme → Colours](https://vestrasys.github.io/vestra-player-sdk/documents/Theme.html#colours)（SDK `THEME_PALETTES`，与宿主 `theme.rs` 由 host-agreement 核对）；下表只记播放器界面怎么用每个 token。
+
+| token | 用途 |
+| --- | --- |
+| `bg-bar` | 控制栏、页签条、窗口背景 |
+| `bg-video` | 视频区、空闲画面（两套都是深色） |
+| `bg-list` | 播放列表内容区、浮动面板、选项树 |
+| `bg-panel` | 工具页面、列表底栏、菜单、悬停提示 |
+| `line` | 1px 分隔线与外框、进度条和滑块的轨道、菜单分隔线、侧栏分隔条 |
+| `hover-bg` | 悬停底色（底栏按钮的圆角底、页签）；搜索框底色 |
+| `press-bg` | 按下底色 |
+| `selected-bg` | 列表选中行、菜单当前项、选项树选中项 |
+| `text` | 主文字、图标常态、面板滑块 thumb |
+| `text-dim` | 次要文字、小图标常态、总时长、快捷键文字 |
+| `text-list` | 列表文字、按钮文字、菜单文字 |
+| `text-played` | 列表中播放过的项 |
+| `accent` | 悬停图标、开启状态、勾选框、书签、当前项竖条、滑块外环 |
+| `accent-press` | 按下的强调色 |
+| `accent-disabled` | 禁用的强调色 |
+| `icon-disabled` | 禁用图标、禁用滑块 |
+| `playing` | 正在播放的列表项及其左侧竖条；AB 循环区间与标记 |
+| `button-bg` | 面板内小按钮、标签 |
+| `button-hover` |  |
+| `button-press` |  |
+| `button-disabled` |  |
+| `danger` | 失败状态、删除类按钮 |
+| `accent-fill` | 进度类填充（进度条已播放段、音量、滑块）、页签和 OSD 的渐变短线 |
 
 对比度（WCAG）：深色 `text`/`bg-bar` 16.6:1，`accent`/`bg-bar` 5.1:1，`playing`/`bg-list` 7.7:1；浅色 `text`/`bg-bar` 16.1:1，`accent`/`bg-bar` 4.6:1，`playing`/`bg-list` 5.0:1。
 
@@ -105,7 +107,7 @@ label           { height: 14px; }                                    /* 表单�
 - **绘制框**：每个图标有自己的绘制框（`Icons.box-width` × `Icons.box-height`），就是它的默认大小；和被替换的旧图标完全相同，所以按钮和行的布局不变。线条离框边至少半个线宽，不出框。
 - **颜色**：图标颜色由调用方给（`color`），规则与旧图标相同：常态 `text` 或 `text-dim`，悬停/开启 `accent`，按下 `accent-press`，禁用 `icon-disabled`；强调色底上的勾是白色。
 - **不用字体字符当图标**：✓ › ▲ ▼ ▾ × ▶ 都换成了图标（不同系统的字体画出来不一样）。
-- **清单**（名称：绘制框，用处）：`play`、`pause` 12×14，`stop` 12×12，`back`、`forward` 14×10，`open` 14×12（底栏按钮）；`volume`、`mute`、`playlist` 13×10（静音、播放列表开关）；`detach`、`attach` 14×12，`close` 14×13（列表页签条）；`move-top`、`move-up`、`move-down`、`move-bottom`、`search` 14×12，`add`、`remove`、`sort` 10×10（列表底栏）；`failed` 10×10（失败的列表项）；`chapter`、`bookmark` 12×12（章节/书签窗口）；`menu-check` 14×14，`submenu` 5×8，`scroll-up`、`scroll-down` 8×5（菜单）；`caret-down` 8×5（下拉框）；`check-box` 9×9，`check-task` 11×11（复选框、Markdown 任务列表）；`sort-asc`、`sort-desc` 7×4，`tag-remove` 7×7（快捷键页）；`preview-play` 8×9（外观页预览）。
+- **清单**：图标名与绘制框见 SDK 文档站 [Reference: Theme → Icons](https://vestrasys.github.io/vestra-player-sdk/documents/Theme.html#icons)。
 
 ## 3. 主窗口外壳（宿主）
 
@@ -339,13 +341,15 @@ label           { height: 14px; }                                    /* 表单�
 
 ### 7.3 共同要求（所有工具窗口）
 
+插件作者的规则见 SDK 文档站 [Interface guidelines → Tool windows](https://vestrasys.github.io/vestra-player-sdk/documents/Interface_guidelines.html#tool-windows)；本表是内置插件的验收项。
+
 | 编号 | 要求 | 负责方 |
 | --- | --- | --- |
 | UI-TOOL-01 | 窗口内部没有大号标题（窗口标题栏已有标题） | 所有工具窗口插件 |
 | UI-TOOL-02 | 主题样式（随配色）和 §2.3 控件尺寸：按钮 21px、输入框 21px、表单行距 24–26px、内边距 8–14px、正文 11px | 所有工具窗口插件（C2） |
 | UI-TOOL-03 | 滑块用控件库的面板样式：2px 线、`accent-fill` 填充、thumb 14×12 | 所有用滑块的插件 |
 | UI-TOOL-04 | 改动立即生效 + 每项「默认」按钮：不出现「应用」「确定」 | video、audio、subtitles |
-| UI-TOOL-05 | 状态与错误文字只用中文、一句话；不显示调试信息（任务 id、修订号、generation） | 所有插件 |
+| UI-TOOL-05 | 状态与错误文字一句话（原文英文，按界面语言显示）；不显示调试信息（任务 id、修订号、generation） | 所有插件 |
 
 ### 7.4 各窗口规格（D2：独立窗口，按 §7.1）
 
@@ -449,7 +453,7 @@ label           { height: 14px; }                                    /* 表单�
 
 ## 10. 核心能力（宿主 + SDK）
 
-本节是界面所依赖的核心能力清单。原则：核心只提供多个插件共用、或插件做不到的能力；每项只做最小接口；被新机制取代的旧接口删除，不保留兼容层。接口见[核心界面设计](../architecture/core-ui-design.md)与 [API 参考](../plugins/reference.md)。
+本节是界面所依赖的核心能力清单。原则：核心只提供多个插件共用、或插件做不到的能力；每项只做最小接口；被新机制取代的旧接口删除，不保留兼容层。接口见[核心界面设计](../architecture/core-ui-design.md)与 [API 参考](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html)。
 
 ### 10.1 能力清单
 

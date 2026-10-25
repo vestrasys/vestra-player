@@ -2,7 +2,7 @@
 
 日期：2026-10-22。作者：商城插件作者（生态计划 S5，[本轮](../process/rounds/2026-10-slint-store.md)步骤 2.1）。状态：**已采纳**（协调者决定见[本轮记录](../process/rounds/2026-10-slint-store.md)「协调者决定 → 2026-10-22，步骤 2.2」），**已实现**（步骤 2.4，`src/plugins/store/` 0.1.0）。与决定或实现不同于初稿的地方已改在正文里，并汇总在 §12。
 
-依据：[生态计划](../product/ecosystem-plan.md) 1.1–1.6（尤其 1.3 索引格式、1.5a id 与安装实例、1.6 的 12 条决定、S3 后半记录）；[S4 提案](../architecture/store-api-proposal.md)；[store-changes](store-changes.md)；[API 参考](reference.md)；SDK `@vestra-player/sdk` 1.1.2 的 `types.d.ts`；插件仓库 `scripts/lib/{signing,semver,publishing,revoked}.mjs`、`keys/index-signing.pub.pem`；线上 `https://vestrasys.github.io/vestra-player-plugins/index.json` 与 `.sig`（2026-10-22 取得，用内置公钥验签通过，篡改一个字节后失败）。
+依据：[生态计划](../product/ecosystem-plan.md) 1.1–1.6（尤其 1.3 索引格式、1.5a id 与安装实例、1.6 的 12 条决定、S3 后半记录）；[S4 提案](../architecture/store-api-proposal.md)；store-changes（S4 变更通知，已删除；仍有效的内容在 [SDK 文档站](https://vestrasys.github.io/vestra-player-sdk/)）；[API 参考](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html)；SDK `@vestra-player/sdk` 1.1.2 的 `types.d.ts`；插件仓库 `scripts/lib/{signing,semver,publishing,revoked}.mjs`、`keys/index-signing.pub.pem`；线上 `https://vestrasys.github.io/vestra-player-plugins/index.json` 与 `.sig`（2026-10-22 取得，用内置公钥验签通过，篡改一个字节后失败）。
 
 ## 0. 结论
 
@@ -144,32 +144,7 @@
 
 商城自带一张表（不能引用插件管理的 `labels.ts`）。未知的能力名（更新的播放器才有）显示「未知权限：<名字>」。
 
-| capability | 显示 | 风险标记 |
-| --- | --- | --- |
-| `commands` | 添加菜单命令和快捷键 | |
-| `ui.window` | 打开工具窗口 | |
-| `ui.mount` | 在底栏、侧栏或视频背景显示面板 | |
-| `ui.dialog` | 弹出文件选择和确认对话框 | |
-| `ui.osd` | 在视频上显示提示文字 | |
-| `ui.drop` | 接收拖到播放器上的文件 | |
-| `ui.theme` | 切换播放器配色 | |
-| `ui.settings` | 在「选项」窗口添加设置页 | |
-| `playback.read` | 读取正在播放的内容和进度 | |
-| `events` | 实时接收播放状态变化 | |
-| `playback.control` | 打开媒体、控制播放、阻止休眠 | |
-| `producer.av` | 向播放器提供自己生成的音视频 | |
-| `processing.video` | 处理画面（滤镜、着色器） | |
-| `processing.audio` | 处理声音 | |
-| `subtitles.read` | 读取字幕 | |
-| `subtitles.control` | 载入和修改字幕 | |
-| `media.read`、`media.control` | 截图与导出视频片段 | |
-| `source.resolve` | 解析网络视频地址 | |
-| `timeline.marks` | 在进度条上显示标记 | |
-| `window.control` | 调整主窗口（尺寸、置顶、画中画） | |
-| `clipboard` | 读写剪贴板 | ⚠ |
-| `bindings.manage` | 修改所有快捷键 | ⚠ |
-| `secrets` | 在系统钥匙串保存登录信息 | ⚠ |
-| `plugins.manage` | 安装、卸载、停用其它插件 | ⚠ |
+每个能力的英文措辞和是否醒目（⚠）以 SDK 的 `CAPABILITY_INFO`（`label`、`risky`）为准，表见 SDK 文档站 [Reference: Capabilities](https://vestrasys.github.io/vestra-player-sdk/documents/Capabilities.html) 的「Shown in the store as」「Highlighted」两列；商城的 `src/plugins/store/labels.ts` 与它逐条相同（`src/tests/sdk/host-agreement.test.ts` 检查），译文在商城的 `locales/`。
 
 ### 2.5 确认框（`dialogs.confirm`）
 

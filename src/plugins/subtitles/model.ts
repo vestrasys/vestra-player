@@ -8,7 +8,7 @@ import type { Status } from "./messages.ts";
 /** Sync step choices in ms (Subtitle Settings ▸ Sync step); 0.5 s is the default. */
 export const SYNC_STEPS = [50, 100, 250, 500, 1000, 5000] as const;
 export const DEFAULT_SYNC_STEP = 500;
-/** The host's accepted `offsetMs` range (reference §9). */
+/** The host's accepted `offsetMs` range (SubtitleStyle.offsetMs, ±10 min). */
 export const SYNC_LIMIT = 600000;
 
 /**

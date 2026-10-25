@@ -2,7 +2,14 @@ import type { Server } from "node:net";
 import { HostError } from "../wire.ts";
 import type { PackageManifest, PackageSource } from "./types.ts";
 import type { Json, LayoutSlot, LocalServices, PlaybackStats, Transport, WireSystemInfo } from "../wire.ts";
-import { COMMAND_LIMITS, MENU_IDS } from "../commands.ts";
+import { BUILTIN_COMMANDS, BUILTIN_SUBMENUS, COMMAND_LIMITS, MENU_IDS } from "../commands.ts";
+import type { BuiltinCommand, BuiltinSubmenu } from "../commands.ts";
+import { CAPABILITY_INFO, MESSAGE_LIMIT } from "../capabilities.ts";
+import type { CapabilityInfo } from "../capabilities.ts";
+import { OSD_LIMITS } from "./osd.ts";
+import { SECRET_LIMITS } from "./services.ts";
+import { BINDING_INPUTS } from "./bindings.ts";
+import { THEME_PALETTES } from "../palettes.ts";
 import { UI_VALUE_LIMITS } from "./values.ts";
 import type { CommandDeclaration } from "../commands.ts";
 import type { SourceState } from "../source.ts";
@@ -15,6 +22,22 @@ import { LOCALES, LIST_SEPARATORS, TEXT_LIMITS } from "../i18n.ts";
 export { HostError };
 /** The player's command caps, which the test host enforces as well. */
 export { COMMAND_LIMITS, MENU_IDS };
+/** The submenus of the player's built-in plugins, by key path. */
+export { BUILTIN_COMMANDS, BUILTIN_SUBMENUS };
+export type { BuiltinCommand, BuiltinSubmenu };
+/** The manifest capabilities: what each opens and how the store shows it. */
+export { CAPABILITY_INFO };
+export type { CapabilityInfo };
+/** The longest message a plugin may send the player. */
+export { MESSAGE_LIMIT };
+/** The player's limits on the on-screen display. */
+export { OSD_LIMITS };
+/** The player's limits on stored secrets. */
+export { SECRET_LIMITS };
+/** The names bindings are made of. */
+export { BINDING_INPUTS };
+/** The colours of the player's palettes, by `Theme` token. */
+export { THEME_PALETTES };
 /** The player's property value limits, which the test host enforces as well. */
 export { UI_VALUE_LIMITS };
 /**

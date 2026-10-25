@@ -1,6 +1,6 @@
 # SDK 设计说明
 
-插件 API（SDK v2）为什么这样设计：句柄、生命周期、更新轮、协议细节如何被 SDK 吸收、条件提交、错误模型。给 API 维护者和想深入理解的插件作者看；接口的精确定义见 [API 参考](../plugins/reference.md)，写法见 [插件示例](../plugins/examples.md)。
+插件 API（SDK v2）为什么这样设计：句柄、生命周期、更新轮、协议细节如何被 SDK 吸收、条件提交、错误模型。给 API 维护者和想深入理解的插件作者看；接口的精确定义见 [API 参考](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html)，写法见 [插件示例](https://vestrasys.github.io/vestra-player-sdk/documents/Examples.html)。
 
 代码：npm 包 `@vestra-player/sdk`，独立仓库 [vestra-player-sdk](https://github.com/vestrasys/vestra-player-sdk)。以下 SDK 路径相对于该仓库：公共类型在 `src/plugin/types.ts`，由包入口 `src/index.ts` 导出；测试宿主 `src/plugin/testing.ts`（`@vestra-player/sdk/testing`）；`createPlugin` 在 `@vestra-player/sdk/runtime`（仅供播放器）；单元测试 `test/`；构建工具 `bin/vestra-plugin.mjs`。播放器仓库里：运行器 `src/runtime/runner.ts`，最短的完整插件 `src/plugins/video/`。
 
@@ -38,7 +38,7 @@ export default async function activate(plugin: Plugin) {
 | `osd` | `show(text)`、`panel()` | `OsdPanel` | `set(text \| null)` | info |
 | 作用域 | `scope()`、`add`、`onDispose`、`onError`、`update`、`dispose` | `Scope` | | 全部（`onError`、`update` 按需） |
 
-模块需要的 manifest 能力（宿主按能力授权，SDK 不改变这一点）：`commands` → commands；`windows` → ui.window；`panels`（含位置状态）→ ui.mount；`osd` → ui.osd；`player.provideSequence/next/previous` → playback.control；`player.stats` → playback.read；`dialogs` → ui.dialog；`player.state` 初读与 `refresh` → playback.read，实时更新 → events；`player` 的控制与 `open` → playback.control；`openStream` → producer.av；`video`/`audio` 滤镜 → processing.video / processing.audio 加 playback.read（读处理状态）；`subtitles` → subtitles.read / subtitles.control；`media` → media.read、media.control（`processed` 截图另需 playback.read、subtitles.read）；`resolvers` → source.resolve；`packages` → plugins.manage。没有 events 能力时，`media.ready()` 自动轮询来源状态。
+模块需要的 manifest 能力（宿主按能力授权，SDK 不改变这一点）见 SDK 文档站 [Reference: Capabilities](https://vestrasys.github.io/vestra-player-sdk/documents/Capabilities.html)（由 SDK 的 `CAPABILITY_INFO` 生成，`src/tests/sdk/host-agreement.test.ts` 与宿主 `dispatch` 的按方法检查核对）。没有 events 能力时，`media.ready()` 自动轮询来源状态。
 
 字幕要点：比较字幕轨用 `track.id`（不透明字符串，不要解析其格式）；内嵌轨的轨道号用 `track.embeddedId`（外部轨没有该字段）。`load` 的 `signal` 在分块之间和提交前检查：已中止则 discard 上传并以 `AbortError` 拒绝；提交一旦发出就不再中止（已交给宿主的提交可能已生效）。上传 id 每个插件实例从 1 开始：宿主每次载入插件分配新的 owner 代次，并在 owner 释放时移除其上传 high-water。
 
@@ -109,7 +109,7 @@ SDK 仍然处理“答复丢失”（非宿主错误的拒绝，或客户端 `ti
 | 领域 | 查询 | 结论 |
 | --- | --- | --- |
 | 处理资源 | `processing.operation(stage, resourceId, revision)` | `completed` → 已应用；`failed` → 失败；`unknown` → 由 1 可知从未被接纳、肯定未执行，用新修订号重发（连续 3 次则失败 `unknown`）；`unknownExpired` → 读 `processing.state`，本资源当前修订号等于该修订则已应用，否则未生效并重发；`pending` → 100 ms 后再查 |
-| 来源 | `source.operation(id)` | `pending` 表示已接纳、仍在执行（例如 URL 解析中），按 40 ms 起、最长 500 ms 的间隔继续查直到 `completed`/`failed`；查询本身被宿主拒绝 → 失败 `unknown` |
+| 来源 | `source.operation(id)` | `pending` 表示已接纳、仍在执行（例如 URL 解析中），按 40 ms 起、最长 500 ms 的间隔继续查直到 `completed`/`failed`；查询本身被宿主拒绝 → 失败 `unknown`。每个插件只能查自己的操作，宿主接受 `playback.control` 或 `playback.read`（`main.rs` `required_capability`） |
 | 字幕 | `subtitles.operation(id)` | `completed` → 采用其状态；`failed` → 失败；`unknown` → 失败 `rejected`（未执行）；`unknownExpired` → 刷新状态并失败 `expired` |
 | 快照/任务 | `jobs.operation(id)` | `completed` → 采用结果（快照会再读 `snapshot.state`）；`failed`/`unknown`/`unknownExpired` → 失败；`pending` → 250 ms 后再查 |
 | 包安装/回退 | `packages.operation(requestId)` | 宿主保证 `operationId === requestId`，持续查询直到终态，从不重发 |
@@ -154,4 +154,4 @@ SDK 仍然处理“答复丢失”（非宿主错误的拒绝，或客户端 `ti
 - 运行器把超过 10 秒的请求写一条日志（不放弃等待），便于发现宿主卡住。
 - 窗口回调必须在首次 `show()` 前绑定（宿主打开窗口时登记回调白名单）；面板没有这个限制。
 
-测试工具与构建工具见 [API 参考 §14、§15](../plugins/reference.md#14-测试工具)。
+测试工具与构建工具见 [Test a plugin](https://vestrasys.github.io/vestra-player-sdk/documents/Test_a_plugin.html) 与 [Command line](https://vestrasys.github.io/vestra-player-sdk/documents/Command_line.html)。

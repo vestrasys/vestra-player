@@ -408,7 +408,7 @@ fn state_valid(state: &CommandState) -> Result<()> {
 }
 
 impl Registry {
-    /// Runaway guards, not product limits (reference.md §4). Sized from the
+    /// Runaway guards, not product limits (SDK site, Reference: Limits). Sized from the
     /// real menus: video registers 71 at idle and all plugins plus the host
     /// about 290, so one owner gets 160 and the registry 1024, enough for
     /// track lists and several plugins at once. Mirrored by

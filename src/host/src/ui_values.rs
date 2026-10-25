@@ -24,7 +24,7 @@ use slint_interpreter::{Struct, Value};
 // so a full value of 16384 is about 6 ms. The text total cannot
 // usefully grow past the 1 MiB protocol line (`plugins.rs`). The SDK repeats
 // them (`UI_VALUE_LIMITS`) and its TestHost enforces them; the player's
-// tests check that the two agree (doc/plugins/reference.md §6.1).
+// tests check that the two agree (src/tests/sdk/host-agreement.test.ts; SDK site, Reference: Limits).
 pub const MAX_DEPTH: usize = 8;
 pub const MAX_NODES: usize = 16384;
 pub const MAX_ARRAY: usize = 4096;

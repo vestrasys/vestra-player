@@ -8,7 +8,7 @@ Reading conventions:
 
 - **The four conditions of §4.3-4** are abbreviated below as: [host] needs host-internal state or a capability only the host has; [shared] the capability itself must be shared across plugins; [core duty] it already belongs to the core; [general] a basic capability that several plugins need, or that many plugins will use later. Items that meet none of the four are proposed for rejection.
 - **Core size impact** is estimated by order of magnitude: "tiny" = passing through one mpv property or one validation range (a few dozen lines at most); "small" = one new method plus a state field (about 100–300 lines, including SDK, TestHost, docs); "medium" = a new state machine, a new mount slot or new persistence (about 300–1000 lines); "large" = changes to the rendering or window architecture (over a thousand lines, with regression risk).
-- Code examples use only the existing API ([API reference](../../plugins/reference.md)), unless marked "rewritten form".
+- Code examples use only the existing API ([API reference](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html)), unless marked "rewritten form".
 - The current state of the host is taken from `src/host/src` (this branch); facts used are cited in the "Reason" of each item.
 
 ---

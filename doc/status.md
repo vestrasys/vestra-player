@@ -11,7 +11,7 @@ The [interface rework](product/ui-spec.md) has two steps:
 
 ## Plugins
 
-All 10 product plugins use the plugin API (SDK v2, see [doc/plugins/](plugins/README.md)). On 2026-10-20 all plugins were loaded in one player process and given a full GUI test with a real mouse and keyboard; all 12 items passed. This was tested by the developer; there is no conclusion from an independent acceptance tester yet.
+All 10 product plugins use the plugin API (SDK v2, see the [SDK documentation site](https://vestrasys.github.io/vestra-player-sdk/)). On 2026-10-20 all plugins were loaded in one player process and given a full GUI test with a real mouse and keyboard; all 12 items passed. This was tested by the developer; there is no conclusion from an independent acceptance tester yet.
 
 | Plugin | Directory | Tested | Not tested / known gaps |
 | --- | --- | --- | --- |
@@ -26,7 +26,7 @@ All 10 product plugins use the plugin API (SDK v2, see [doc/plugins/](plugins/RE
 | YouTube | plugin repository `plugins/youtube` | Public video playback | Download not retested in the GUI |
 | Bilibili | plugin repository `plugins/bilibili` | Public video playback | — |
 
-There is also the example plugin `src/examples/bookmark` (used by the [tutorial](plugins/tutorial.md)), tested in the player.
+There is also the example plugin `src/examples/bookmark` (the SDK site's [Bookmark example](https://vestrasys.github.io/vestra-player-sdk/documents/Example__Bookmark.html) walks through a plugin like it), tested in the player.
 
 ## Intermittent problems (not reliably reproduced)
 
