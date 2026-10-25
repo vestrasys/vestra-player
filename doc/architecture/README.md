@@ -1,6 +1,6 @@
 # 架构总览（维护者）
 
-给 API 维护者的地图：组件怎么分工、插件怎么被加载和停止、SDK 与宿主之间说什么协议、代码在哪。插件作者看 [doc/plugins/](../plugins/README.md)；SDK 的设计取舍见 [sdk-design.md](sdk-design.md)；项目原则见 [doc/product/](../product/direction.md)。
+给 API 维护者的地图：组件怎么分工、插件怎么被加载和停止、SDK 与宿主之间说什么协议、代码在哪。插件作者看 [SDK 文档站](https://vestrasys.github.io/vestra-player-sdk/)；SDK 的设计取舍见 [sdk-design.md](sdk-design.md)；项目原则见 [doc/product/](../product/direction.md)。
 
 ## 1. 组件
 
@@ -29,7 +29,7 @@
 - **激活**：宿主启动 `node runner.ts <包目录>` → 运行器读取 manifest、按能力读初始状态和订阅事件 → 调用默认导出的 `activate(plugin)` → 激活期间的注册全部成功后发送 `runtime.ready`，否则 `runtime.failed`。
 - **停用**：宿主按 owner 撤销该插件的全部资源（菜单与绑定、窗口、面板与浮动面板窗口、处理资源、字幕层、快照、任务、解析器、producer、播放序列提供者、屏幕信息块），发送 `runtime.stop`；运行器释放句柄，300 ms 内未退出则被结束。每次运行有新的 owner 代次，旧进程的迟到消息不会路由给重新加载的同名插件。
 
-manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力)。能力是契约声明，宿主据此拒绝未声明的调用（`code: "capability"`），不是安全沙箱。
+manifest 规则见 [Manifest](https://vestrasys.github.io/vestra-player-sdk/documents/Manifest.html)，能力见 [Capabilities](https://vestrasys.github.io/vestra-player-sdk/documents/Capabilities.html)。能力是契约声明，宿主据此拒绝未声明的调用（`code: "capability"`），不是安全沙箱。
 
 ## 3. wire 协议
 

@@ -449,7 +449,7 @@ label           { height: 14px; }                                    /* 表单�
 
 ## 10. 核心能力（宿主 + SDK）
 
-本节是界面所依赖的核心能力清单。原则：核心只提供多个插件共用、或插件做不到的能力；每项只做最小接口；被新机制取代的旧接口删除，不保留兼容层。接口见[核心界面设计](../architecture/core-ui-design.md)与 [API 参考](../plugins/reference.md)。
+本节是界面所依赖的核心能力清单。原则：核心只提供多个插件共用、或插件做不到的能力；每项只做最小接口；被新机制取代的旧接口删除，不保留兼容层。接口见[核心界面设计](../architecture/core-ui-design.md)与 [API 参考](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html)。
 
 ### 10.1 能力清单
 

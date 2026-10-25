@@ -17,6 +17,7 @@
     "test:sdk": "node --test tests/sdk/",
     "test:packaging": "node --test packaging/tests/",
     "portability": "node scripts/check-portability.mjs",
+    "docs:check": "node scripts/check-docs.mjs",
     "unsafe-policy": "node scripts/check-unsafe-policy.mjs",
     "ci:local": "node scripts/ci-local.mjs"
   },

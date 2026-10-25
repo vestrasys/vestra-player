@@ -1,4 +1,4 @@
-/** What the player accepts for a runtime image (reference §6.1). */
+/** What the player accepts for a runtime image (ImageRef). */
 export const MAX_IMAGE_BYTES = 16 * 1024 * 1024;
 export const MAX_IMAGE_SIDE = 4096;
 

@@ -1,6 +1,6 @@
 # 交互规格
 
-本文是 Vestra 的交互规格：各窗口状态下的鼠标、键盘、菜单、窗口与提示行为，写成要求。产品层面的约束（菜单按领域组织、界面归属、播放连续性）见[交互要求](interaction-requirements.md)；有哪些功能见[功能需求](feature-requirements.md)；界面尺寸与配色见[界面规格](ui-spec.md)；菜单树见[菜单](menus.md)；插件接口见[插件 API 参考](../plugins/reference.md)。
+本文是 Vestra 的交互规格：各窗口状态下的鼠标、键盘、菜单、窗口与提示行为，写成要求。产品层面的约束（菜单按领域组织、界面归属、播放连续性）见[交互要求](interaction-requirements.md)；有哪些功能见[功能需求](feature-requirements.md)；界面尺寸与配色见[界面规格](ui-spec.md)；菜单树见[菜单](menus.md)；插件接口见[插件 API 参考](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html)。
 
 体例沿用功能需求：先写核心（宿主），再按插件分章。每一条写明要求、必要的实现约束、是否需要核心新增 API、跨平台说明和验收条目。附录 A 按「状态 × 交互元素」逐格给出规格，附录 B 是播放列表「同类文件」判定的完整规则，附录 C 是各条目的实施轮次与状态。
 
@@ -53,7 +53,7 @@
 - **功能需求**（[feature-requirements.md](feature-requirements.md)）管「有什么功能」，本文管「交互细节」。两者冲突时以本文为准，并改正功能需求。
 - **界面规格**（[ui-spec.md](ui-spec.md)）管尺寸、配色与布局；与本文冲突时，交互部分以本文为准。
 - **菜单**（[menus.md](menus.md)）：本文新增或移动的菜单项实施后同步更新 menus.md 与冲突检查。
-- **插件 API 参考**（[reference.md](../plugins/reference.md)）：各章末的「本章核心 API 请求」是请求草案；维护者裁决后由维护者改参考文档。只改行为、不改签名的语义变化同样写进参考文档的变更说明。
+- **插件 API 参考**（[SDK 文档站](https://vestrasys.github.io/vestra-player-sdk/)）：各章末的「本章核心 API 请求」是请求草案；维护者裁决后由维护者改参考文档。只改行为、不改签名的语义变化同样写进参考文档的变更说明。
 
 ### 0.6 编号、优先级、状态与写法
 

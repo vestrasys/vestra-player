@@ -16,7 +16,7 @@ export struct PageSay {
 export global AiSettings {
     in property <[string]> providers;
     // in-out and two-way below: a one-way index stops following the model
-    // once the user picked an entry (reference §6.4), and the list would then
+    // once the user picked an entry (SDK: Concepts, UI, "Two-way controls"), and the list would then
     // show another model than the one used.
     in-out property <int> provider-index;
     // A custom endpoint (OpenAI or Anthropic format): Base URL, models listed

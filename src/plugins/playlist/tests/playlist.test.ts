@@ -499,7 +499,7 @@ test("the list menu, ADD and SORT popups list this plugin's commands; sorting re
   const app = await start();
   try {
     await app.emit("context-menu", 40, 60);
-    // 13 commands and 6 separators, single level (reference §6.3: at most 32).
+    // 13 commands and 6 separators, single level (Panel.showMenu: at most 32).
     assert.deepEqual(app.host.menus.at(-1), {
       items: [
         "playlist.play",

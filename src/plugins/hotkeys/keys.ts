@@ -3,7 +3,7 @@
  *
  * `fromSlintKey` turns a Slint `key-pressed` event of the capture box into a
  * canonical binding with the same rules as the player's `bindings.rs`
- * (API reference §4.1); the player's `bindings.set` stays the judge.
+ * (SDK: Reference, Commands, "Binding syntax"); the player's `bindings.set` stays the judge.
  */
 import type { BindingInfo, BindingRef } from "@vestra-player/sdk";
 

@@ -135,7 +135,7 @@ export component Slider {                // 2px 线滑块
 - `Theme` 是只读常量，同一文件被多个插件导入、在主窗口里共享不会互相影响（`composition.rs` 注释里禁止的是**有状态**的共享 global）。
 - **默认字体**：删除强制的 `Arial Unicode MS` 与按文件导入它的代码。P1b 查明 Slint 1.16 用 parley 排版、按字符经 fontique 回退（macOS 上走 CoreText 的系统回退链，`i-slint-core` `textlayout/sharedparley.rs`），所以默认**不指定字体**：系统 UI 字体 + 系统 CJK 回退。备用方案已实现但默认关闭：环境变量 `VESTRA_FONT_FALLBACK=hiragino` 时导入系统自带的 `/System/Library/Fonts/Hiragino Sans GB.ttc` 并设为主窗口、浮动窗口、工具窗口的默认字体（工具窗口沿用「插件没写 `default-font-family` 才注入」）。**P5 实测（2026-10-20）：不指定字体时插件窗口与面板的中文全部显示为空白，因此改为默认启用 Hiragino**（`VESTRA_FONT_FALLBACK=system` 可关闭）；信息层原用 `font-mono`（Menlo）同样缺中文，改为默认字体（§18 Q12）。**现状（2026-10-22，用户裁决）**：Slint 1.18.1 已按字符回退，强制 Hiragino 与 `VESTRA_FONT_FALLBACK` 已删除，各窗口不指定字体（系统默认 + 回退）；信息层不必改回 `font-mono`。某平台缺中文字体时的补法见[架构总览 §4](README.md)「字体」。
 - 宿主自己的界面（`host.slint`、`menu-view.slint`）也改用 `Theme` 令牌；菜单专用颜色（§6.3）留在 `menu-view.slint` 内，不进 `Theme`。
-- 编辑器支持：在 `doc/plugins/tutorial.md` 说明 Slint 语言服务的 `libraryPaths` 设置（`"vestra": "<仓库>/src/host/ui/vestra"`）。
+- 编辑器支持：在 SDK 文档站 [Concepts: UI](https://vestrasys.github.io/vestra-player-sdk/documents/Windows,_panels,_settings_pages,_dialogs_and_the_OSD.html#rules-for-plugin-slint-files) 说明 Slint 语言服务的 `libraryPaths` 设置（`"vestra": "<仓库>/src/host/ui/vestra"`）。
 
 ### 2.3 错误
 

@@ -4913,7 +4913,7 @@ fn main() -> Result<()> {
         }
         bail!("{text}");
     }
-    // GPU rendering (reference §5.4) needs Slint's OpenGL renderer (femtovg);
+    // GPU rendering (SDK site, Concepts: render options) needs Slint's OpenGL renderer (femtovg);
     // headless, `VESTRA_SOFTWARE_RENDER=1` and other systems render in software.
     let mut gpu = renderer::wanted(
         headless,

@@ -37,7 +37,7 @@ pub struct Backend {
     pub target: Arc<Shared>,
     #[cfg(feature = "producer-audio")]
     pub input: Arc<Mutex<Option<crate::producer_input::Routing>>>,
-    /// GPU or software rendering (reference §5.4).
+    /// GPU or software rendering (SDK site, Concepts: render options).
     pub render: Arc<crate::renderer::Render>,
     /// `{ mpv, ffmpeg }`: the linked libmpv's `mpv-version` / `ffmpeg-version`.
     pub versions: Value,

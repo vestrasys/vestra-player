@@ -9,7 +9,7 @@
 2026-10-21，基线 main fafa40d。由 `OUT=<file> node --test doc/process/rounds/menus-snapshot.test.ts` 导出的快照整理（[分配表](../process/rounds/2026-10-plugin-ui.md) §3；当时脚本默认列表覆盖 `src/plugins` 下全部 19 个插件；`youtube`、`bilibili` 迁出后默认列表为其余 17 个）；宿主的「全屏」「仅退出全屏」「退出」在 `src/host/src/main.rs`（`register_host_commands`），不在快照里。勾选、单选、初始禁用状态取自同一测试宿主里各命令的 `state`。
 
 - 顺序按声明的 `order` 升序；同一 `order` 再按插件 id、注册先后。子菜单取其中最小的 `order`，分组（`group`）取其中第一项的分组。
-- 例外：7 个内置顶层菜单（`@open` … `@settings`）的位置固定，不随里面的命令变：打开 110、播放 200、字幕 300、视频 400、声音 500、屏幕 710、设置 830（`src/host/src/commands.rs` 的 `MENU_ANCHORS`）。插件写 `["@video", …]`、英文 key `["Video", …]` 或旧中文标题 `["视频", …]` 都挪不动它。内置菜单的直接下一级里，`order` 为 0（插件省略 `order`）的项排在最后（[参考 §4](../plugins/reference.md)）；内置命令在这一级都用 100 以上的 `order`，不用 0。改内置菜单的顶层位置改这张表，不改命令的 `order`。
+- 例外：7 个内置顶层菜单（`@open` … `@settings`）的位置固定，不随里面的命令变：打开 110、播放 200、字幕 300、视频 400、声音 500、屏幕 710、设置 830（`src/host/src/commands.rs` 的 `MENU_ANCHORS`）。插件写 `["@video", …]`、英文 key `["Video", …]` 或旧中文标题 `["视频", …]` 都挪不动它。内置菜单的直接下一级里，`order` 为 0（插件省略 `order`）的项排在最后（[Order and separators](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_key_bindings.html#order-and-separators)）；内置命令在这一级都用 100 以上的 `order`，不用 0。改内置菜单的顶层位置改这张表，不改命令的 `order`。
 - 「插件」列：「核心」是宿主的核心动作（`host/<id>`），「宿主」是宿主自己的命令。
 - 顶层分隔线画成「——」行（相邻两项 `group` 不同）。子菜单内相邻两项的 `group` 不同时也画分隔线，表中不逐一画出。
 - 快捷键在全局作用域生效（视频画面、底栏、侧栏获得焦点时；工具窗口内不生效）。写 `Ctrl` 的在 macOS 上 ⌃ 和 ⌘ 都能触发。用户可在「设置 ▸ 快捷键…」改绑，或用「忽略默认快捷键」整体停用默认绑定。
@@ -256,7 +256,7 @@
 
 - **全局作用域：一处冲突。** `Alt+↑`、`Alt+↓` 同时是「视频 ▸ 帧位 ▸ 偏移 ↑/↓」（video，第 4a 轮的备用键）和「字幕 ▸ 字幕样式 ▸ 上移/下移」（subtitles）的默认绑定。宿主按插件加载先后（owner 代次小者）取胜，另一方被忽略并打印 `binding conflict`；Ctrl+Numpad8/2（帧位）不受影响。[功能需求](feature-requirements.md)「帧位」一节第 4a 轮的冲突检查只核对了 playback 的方向键，漏了 subtitles。需要改其中一方的默认键（待裁决）。
 - 宿主唯一的 ⌘ 绑定是 Cmd+Q（退出），没有命令声明 Ctrl+Q；其余 Ctrl 绑定与它不重复。
-- 窗口标准关闭键（macOS ⌘W；Windows Ctrl+W、Ctrl+F4；Linux Ctrl+W；只在工具窗口、浮动面板、选项窗口，不进绑定表，见 [参考 §4.1](../plugins/reference.md)）：2026-10-22 核对，没有默认绑定用 Ctrl+W、Cmd+W、Ctrl+F4（F4 是「停止」，不带修饰键，不冲突）。
+- 窗口标准关闭键（macOS ⌘W；Windows Ctrl+W、Ctrl+F4；Linux Ctrl+W；只在工具窗口、浮动面板、选项窗口，不进绑定表，见 [Keys the system takes first](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_bindings.html#keys-the-system-takes-first)）：2026-10-22 核对，没有默认绑定用 Ctrl+W、Cmd+W、Ctrl+F4（F4 是「停止」，不带修饰键，不冲突）。
 - 面板焦点作用域（播放列表）：无冲突。
 - 跨作用域遮蔽（按设计，不算冲突）：列表获得焦点时 Enter、P、Ctrl+I、Ctrl+O、Ctrl+U、Backspace、Ctrl+T、Ctrl+Home、F3、F2、F6 用列表自己的含义，见上节备注。
 - `>` `<` `?` 是按出的字符，与 `.` `,` `/` 是不同的键名（美式键盘上前者需要 Shift），互不冲突；`{` `}` 与 `[` `]` 同理。

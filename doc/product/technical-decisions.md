@@ -1,6 +1,6 @@
 # Vestra Player：技术选型
 
-本文记录技术选择、职责边界和选择理由。项目原则见[项目方向](direction.md)，宿主内部结构见[架构总览](../architecture/README.md)，插件 API 见 [doc/plugins/](../plugins/README.md)。
+本文记录技术选择、职责边界和选择理由。项目原则见[项目方向](direction.md)，宿主内部结构见[架构总览](../architecture/README.md)，插件 API 见 [SDK 文档站](https://vestrasys.github.io/vestra-player-sdk/)。
 
 ## 1. 目标与约束
 

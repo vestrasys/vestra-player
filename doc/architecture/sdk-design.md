@@ -1,6 +1,6 @@
 # SDK 设计说明
 
-插件 API（SDK v2）为什么这样设计：句柄、生命周期、更新轮、协议细节如何被 SDK 吸收、条件提交、错误模型。给 API 维护者和想深入理解的插件作者看；接口的精确定义见 [API 参考](../plugins/reference.md)，写法见 [插件示例](../plugins/examples.md)。
+插件 API（SDK v2）为什么这样设计：句柄、生命周期、更新轮、协议细节如何被 SDK 吸收、条件提交、错误模型。给 API 维护者和想深入理解的插件作者看；接口的精确定义见 [API 参考](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html)，写法见 [插件示例](https://vestrasys.github.io/vestra-player-sdk/documents/Examples.html)。
 
 代码：npm 包 `@vestra-player/sdk`，独立仓库 [vestra-player-sdk](https://github.com/vestrasys/vestra-player-sdk)。以下 SDK 路径相对于该仓库：公共类型在 `src/plugin/types.ts`，由包入口 `src/index.ts` 导出；测试宿主 `src/plugin/testing.ts`（`@vestra-player/sdk/testing`）；`createPlugin` 在 `@vestra-player/sdk/runtime`（仅供播放器）；单元测试 `test/`；构建工具 `bin/vestra-plugin.mjs`。播放器仓库里：运行器 `src/runtime/runner.ts`，最短的完整插件 `src/plugins/video/`。
 
@@ -154,4 +154,4 @@ SDK 仍然处理“答复丢失”（非宿主错误的拒绝，或客户端 `ti
 - 运行器把超过 10 秒的请求写一条日志（不放弃等待），便于发现宿主卡住。
 - 窗口回调必须在首次 `show()` 前绑定（宿主打开窗口时登记回调白名单）；面板没有这个限制。
 
-测试工具与构建工具见 [API 参考 §14、§15](../plugins/reference.md#14-测试工具)。
+测试工具与构建工具见 [Test a plugin](https://vestrasys.github.io/vestra-player-sdk/documents/Test_a_plugin.html) 与 [Command line](https://vestrasys.github.io/vestra-player-sdk/documents/Command_line.html)。

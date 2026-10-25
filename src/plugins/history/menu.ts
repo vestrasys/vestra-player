@@ -6,7 +6,7 @@ import type { Mode, Resume } from "./resume.ts";
 import { timing } from "./store.ts";
 
 const RECENT = ["@open", "Recently Played"] as const;
-/** All of Open ▸ Recently Played shares one order; declaration order arranges it (reference §4). */
+/** All of Open ▸ Recently Played shares one order; declaration order arranges it (SDK: Concepts, Commands, "Order and separators"). */
 const RECENT_ORDER = 114;
 /** Headless hosts refuse the display; that never fails the action itself. */
 export const quiet = (shown: Promise<void>) => void shown.catch(() => {});
