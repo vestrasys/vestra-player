@@ -24,7 +24,15 @@ export component AddLink inherits Window {
         ? (root.line > 0 ? @tr("Line {}: The list is full at {} items", root.line, root.limit) : @tr("The list is full at {} items", root.limit))
         : @tr("Enter HTTP(S) links; adding only selects, it does not play");
     title: @tr("Add Links to Playlist");
-    width: 464px;
+    // 464px, wider only when the heading or the usual hint needs it in this language (other
+    // messages elide).
+    width: max(464px, max(heading.preferred-width, hint-measure.preferred-width) + 2 * Theme.dialog-padding);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        hint-measure := Text { text: @tr("Enter HTTP(S) links; adding only selects, it does not play"); font-size: Theme.font-body; }
+    }
     background: Theme.bg-bar;
     // Esc also cancels while the focus is outside the input (after clicking a button).
     FocusScope {
@@ -38,7 +46,7 @@ export component AddLink inherits Window {
         VerticalLayout {
             padding: Theme.dialog-padding;
             spacing: 6px;
-            Text {
+            heading := Text {
                 text: @tr("Enter the web addresses to add to the playlist below, one per line.");
                 color: Theme.text;
                 font-size: Theme.font-body;

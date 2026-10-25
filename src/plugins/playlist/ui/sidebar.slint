@@ -227,7 +227,7 @@ export component PlaylistSidebar inherits Rectangle {
                 HorizontalLayout {
                     // The one tab: its label over a 28px gradient stroke.
                     Rectangle {
-                        width: 105px;
+                        width: max(105px, tab-label.preferred-width + 12px);
                         Rectangle {
                             x: (parent.width - 28px) / 2;
                             y: parent.height - 3px;
@@ -236,7 +236,7 @@ export component PlaylistSidebar inherits Rectangle {
                             border-radius: 1px;
                             background: Theme.accent-fill;
                         }
-                        Text {
+                        tab-label := Text {
                             width: 100%;
                             height: 100%;
                             text: @tr("Playlist");

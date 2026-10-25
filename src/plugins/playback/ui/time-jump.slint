@@ -11,10 +11,12 @@ component StepRow inherits HorizontalLayout {
     in-out property <string> value;
     callback reset();
     callback accepted();
+    // The label column (150px, wider for longer translations).
+    in property <length> column: 150px;
     spacing: 6px;
     alignment: start;
     Text {
-        width: 150px;
+        width: root.column;
         text: root.label;
         color: Theme.text;
         font-size: Theme.font-body;
@@ -63,8 +65,22 @@ export component TimeJumpWindow inherits Window {
     callback cancel();
     callback reset(int);
     title: @tr("Seek Steps");
-    preferred-width: 357px;
+    // 357px, wider only when a longer translated label needs it.
+    preferred-width: 357px + root.column - 150px;
     background: Theme.bg-bar;
+    // The label column: 150px, or the widest label.
+    private property <length> column: max(150px, label-measure.preferred-width);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        label-measure := VerticalLayout {
+            for text in [@tr("Left/Right arrow keys:"), @tr("Ctrl + Left/Right arrow keys:"), @tr("Shift + Left/Right arrow keys:"), @tr("Ctrl + Alt + Left/Right arrow keys:")]: Text {
+                text: text;
+                font-size: Theme.font-body;
+            }
+        }
+    }
     function submit() {
         root.confirm(root.value1, root.value2, root.value3, root.value4);
     }
@@ -86,6 +102,7 @@ export component TimeJumpWindow inherits Window {
                 height: Theme.label-height;
             }
             StepRow {
+                column: root.column;
                 label: @tr("Left/Right arrow keys:");
                 invalid: root.invalid1;
                 value <=> root.value1;
@@ -93,6 +110,7 @@ export component TimeJumpWindow inherits Window {
                 accepted => { root.submit(); }
             }
             StepRow {
+                column: root.column;
                 label: @tr("Ctrl + Left/Right arrow keys:");
                 invalid: root.invalid2;
                 value <=> root.value2;
@@ -100,6 +118,7 @@ export component TimeJumpWindow inherits Window {
                 accepted => { root.submit(); }
             }
             StepRow {
+                column: root.column;
                 label: @tr("Shift + Left/Right arrow keys:");
                 invalid: root.invalid3;
                 value <=> root.value3;
@@ -107,6 +126,7 @@ export component TimeJumpWindow inherits Window {
                 accepted => { root.submit(); }
             }
             StepRow {
+                column: root.column;
                 label: @tr("Ctrl + Alt + Left/Right arrow keys:");
                 invalid: root.invalid4;
                 value <=> root.value4;

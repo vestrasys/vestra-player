@@ -174,8 +174,14 @@ component Cell inherits Text {
     overflow: elide;
 }
 
+// Column widths: the header and every word the column can show, never under the original
+// widths (Version 50, Source 56, Status 56, Data 50); measured in the page (`Columns`).
 component Row inherits Rectangle {
     in property <PluginRow> item;
+    in property <length> version-width: 50px;
+    in property <length> source-width: 56px;
+    in property <length> state-width: 56px;
+    in property <length> size-width: 50px;
     callback select();
     private property <color> ink: root.item.dim ? Theme.text-dim : Theme.text-list;
     height: 18px;
@@ -186,10 +192,10 @@ component Row inherits Rectangle {
         spacing: 4px;
         Cell { horizontal-stretch: 1; text: root.item.id; color: root.item.dim ? Theme.text-dim : Theme.text; }
         // TRANSLATORS: the version column of a development-loaded plugin (50px wide).
-        Cell { width: 50px; text: root.item.version == "" ? @tr("Dev") : root.item.version; color: root.ink; }
-        Cell { width: 56px; text: Words.source(root.item.origin); color: root.ink; }
-        Cell { width: 56px; text: Words.state(root.item.state); color: root.item.failed ? Theme.accent : root.ink; }
-        Cell { width: 50px; text: root.item.size; color: root.ink; horizontal-alignment: right; }
+        Cell { width: root.version-width; text: root.item.version == "" ? @tr("Dev") : root.item.version; color: root.ink; }
+        Cell { width: root.source-width; text: Words.source(root.item.origin); color: root.ink; }
+        Cell { width: root.state-width; text: Words.state(root.item.state); color: root.item.failed ? Theme.accent : root.ink; }
+        Cell { width: root.size-width; text: root.item.size; color: root.ink; horizontal-alignment: right; }
     }
     TouchArea { clicked => { root.select(); } }
 }
@@ -221,6 +227,47 @@ export global Plugins {
 
 export component PluginsPage inherits Rectangle {
     height: 436px;
+    private property <length> version-width: max(50px, version-measure.preferred-width);
+    private property <length> source-width: max(56px, source-measure.preferred-width);
+    private property <length> state-width: max(56px, state-measure.preferred-width);
+    private property <length> size-width: max(50px, size-measure.preferred-width);
+    // Detail labels: 64px, or the widest label.
+    private property <length> label-width: max(64px, label-measure.preferred-width);
+    // Buttons that take a fixed width: at least that, or their label with the button padding.
+    private property <length> toggle-width: max(66px, toggle-measure.preferred-width + 2 * Theme.button-padding);
+    // The button row is wider than the page (6px padding each side): it takes two rows.
+    private property <bool> buttons-wrap: buttons-measure.preferred-width > root.width - 12px;
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        version-measure := VerticalLayout {
+            for text in [@tr("Version"), @tr("Dev")]: Cell { text: text; }
+        }
+        source-measure := VerticalLayout {
+            for code in ["repository", "link", "file", "workshop", "bundled", "installed", "development"]: Cell { text: Words.source(code); }
+            Cell { text: @tr("Source"); }
+        }
+        state-measure := VerticalLayout {
+            for code in ["running", "starting", "disabled", "failed", "stopped"]: Cell { text: Words.state(code); }
+            Cell { text: @tr("Status"); }
+        }
+        size-measure := Cell { text: @tr("Data"); }
+        label-measure := VerticalLayout {
+            for code in ["failure", "warning", "note", "source", "previous", "package", "data", "capabilities"]: Cell { text: Words.label(code); }
+        }
+        buttons-measure := HorizontalLayout {
+            spacing: 6px;
+            Rectangle { width: root.toggle-width; }
+            Button { text: @tr("Reload"); }
+            Button { width: max(94px, self.preferred-width); text: @tr("Roll Back"); }
+            Button { width: max(66px, self.preferred-width); text: @tr("Uninstall…"); }
+            Button { min-width: 82px; text: @tr("Open Data Folder"); }
+        }
+        toggle-measure := VerticalLayout {
+            for text in [@tr("Enable"), @tr("Disable")]: Cell { text: text; }
+        }
+    }
 
     VerticalLayout {
         padding: 6px;
@@ -239,17 +286,21 @@ export component PluginsPage inherits Rectangle {
                     padding-right: 6px;
                     spacing: 4px;
                     Head { horizontal-stretch: 1; text: @tr("Plugin"); }
-                    Head { width: 50px; text: @tr("Version"); }
-                    Head { width: 56px; text: @tr("Source"); }
-                    Head { width: 56px; text: @tr("Status"); }
+                    Head { width: root.version-width; text: @tr("Version"); }
+                    Head { width: root.source-width; text: @tr("Source"); }
+                    Head { width: root.state-width; text: @tr("Status"); }
                     // TRANSLATORS: column header: the size of the plugin's data folder.
-                    Head { width: 50px; text: @tr("Data"); horizontal-alignment: right; }
+                    Head { width: root.size-width; text: @tr("Data"); horizontal-alignment: right; }
                 }
                 Rectangle { height: 1px; background: Theme.line; }
                 ListView {
                     vertical-stretch: 1;
                     for row in Plugins.rows: Row {
                         item: row;
+                        version-width: root.version-width;
+                        source-width: root.source-width;
+                        state-width: root.state-width;
+                        size-width: root.size-width;
                         select => { Plugins.select(row.id); }
                     }
                 }
@@ -278,7 +329,7 @@ export component PluginsPage inherits Rectangle {
                     padding-left: 6px;
                     padding-right: 10px;
                     spacing: 6px;
-                    Cell { width: 64px; text: Words.label(line.label); color: Theme.text-dim; }
+                    Cell { width: root.label-width; text: Words.label(line.label); color: Theme.text-dim; }
                     // Long paths and failure reasons elide; hovering shows all of it.
                     ToolTipArea {
                         horizontal-stretch: 1;
@@ -298,11 +349,12 @@ export component PluginsPage inherits Rectangle {
             text: Words.message(Plugins.message);
             color: Plugins.message.warn ? Theme.accent : Theme.text-dim;
         }
+        // One row; Open Data Folder moves to a second row when the translated buttons do not fit.
         HorizontalLayout {
             height: Theme.button-height;
             spacing: 6px;
             ToolTipArea {
-                width: 66px;
+                width: root.toggle-width;
                 text: Words.tip(Plugins.toggle-tip);
                 Button {
                     width: 100%;
@@ -314,11 +366,11 @@ export component PluginsPage inherits Rectangle {
             }
             Button { horizontal-stretch: 0; text: @tr("Reload"); enabled: Plugins.can-reload; clicked => { Plugins.reload(); } }
             // TRANSLATORS: button: roll the plugin back to its previous version (94px wide).
-            Button { horizontal-stretch: 0; width: 94px; text: @tr("Roll Back"); enabled: Plugins.can-rollback; clicked => { Plugins.rollback(); } }
+            Button { horizontal-stretch: 0; width: max(94px, self.preferred-width); text: @tr("Roll Back"); enabled: Plugins.can-rollback; clicked => { Plugins.rollback(); } }
             ToolTipArea {
-                width: 66px;
+                width: max(66px, uninstall-button.preferred-width);
                 text: Words.tip(Plugins.uninstall-tip);
-                Button {
+                uninstall-button := Button {
                     width: 100%;
                     height: 100%;
                     text: @tr("Uninstall…");
@@ -326,6 +378,11 @@ export component PluginsPage inherits Rectangle {
                     clicked => { Plugins.uninstall(); }
                 }
             }
+            if !root.buttons-wrap: Button { horizontal-stretch: 0; min-width: 82px; text: @tr("Open Data Folder"); enabled: Plugins.can-open; clicked => { Plugins.open-data(); } }
+            Rectangle { horizontal-stretch: 1; }
+        }
+        if root.buttons-wrap: HorizontalLayout {
+            height: Theme.button-height;
             Button { horizontal-stretch: 0; min-width: 82px; text: @tr("Open Data Folder"); enabled: Plugins.can-open; clicked => { Plugins.open-data(); } }
             Rectangle { horizontal-stretch: 1; }
         }

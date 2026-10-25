@@ -1,7 +1,7 @@
 // Options ▸ Playback ▸ Playlist (IA-PL-02; Playlist Settings…): the open
 // and drop options and the same switches as the Playback ▸ Playlist menu items. 440 wide
 // (the options window's page area). Combo boxes hold indexes into the plugin's lists.
-import { CheckBox, ComboBox } from "std-widgets.slint";
+import { CheckBox, ComboBox, Palette } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 
 export global PlaylistSettings {
@@ -31,15 +31,62 @@ component Section inherits Text {
     color: Theme.text-dim;
 }
 
+// The row label; `column` is the page's label column (96px, wider for longer translations).
 component Label inherits Text {
-    width: 96px;
+    in property <length> column: 96px;
+    width: root.column;
     font-size: Theme.font-body;
     color: Theme.text;
     vertical-alignment: center;
 }
 
-component Check inherits CheckBox {
-    height: Theme.checkbox-row-height;
+// A check box row. The std CheckBox does not wrap its label: when the label is wider than
+// the page, the box is drawn without it and the label wraps beside it (same 18px box,
+// 12px gap and text as the CheckBox).
+component Check {
+    in property <string> text;
+    in-out property <bool> checked;
+    callback toggled();
+    private property <bool> fits: root.width >= measure.preferred-width;
+    preferred-width: measure.preferred-width;
+    min-width: 18px;
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        measure := CheckBox { text: root.text; }
+    }
+    VerticalLayout {
+        if root.fits: CheckBox {
+            height: Theme.checkbox-row-height;
+            text: root.text;
+            checked <=> root.checked;
+            toggled => { root.toggled(); }
+        }
+        if !root.fits: HorizontalLayout {
+            spacing: 12px;
+            VerticalLayout {
+                alignment: start;
+                CheckBox {
+                    width: 18px;
+                    height: Theme.checkbox-row-height;
+                    checked <=> root.checked;
+                    toggled => { root.toggled(); }
+                }
+            }
+            Text {
+                text: root.text;
+                color: Palette.foreground;
+                wrap: word-wrap;
+                TouchArea {
+                    clicked => {
+                        root.checked = !root.checked;
+                        root.toggled();
+                    }
+                }
+            }
+        }
+    }
 }
 
 export component PlaylistSettingsPage inherits Rectangle {
@@ -48,6 +95,16 @@ export component PlaylistSettingsPage inherits Rectangle {
     private property <int> repeat: PlaylistSettings.repeat;
     changed open-mode => { open-combo.current-index = self.open-mode; }
     changed repeat => { repeat-combo.current-index = self.repeat; }
+    // The label column: 96px, or the wider label.
+    private property <length> column: max(96px, label-measure.preferred-width);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        label-measure := VerticalLayout {
+            for text in [@tr("When opening a file:"), @tr("Repeat:")]: Text { text: text; font-size: Theme.font-body; }
+        }
+    }
     VerticalLayout {
         padding: Theme.dialog-padding;
         spacing: 6px;
@@ -64,7 +121,7 @@ export component PlaylistSettingsPage inherits Rectangle {
         HorizontalLayout {
             height: Theme.input-height;
             spacing: 4px;
-            Label { text: @tr("When opening a file:"); }
+            Label { column: root.column; text: @tr("When opening a file:"); }
             open-combo := ComboBox {
                 width: 200px;
                 model: [@tr("Open only that file"), @tr("Add similar files"), @tr("Add all files in the folder")];
@@ -87,7 +144,7 @@ export component PlaylistSettingsPage inherits Rectangle {
         HorizontalLayout {
             height: Theme.input-height;
             spacing: 4px;
-            Label { text: @tr("Repeat:"); }
+            Label { column: root.column; text: @tr("Repeat:"); }
             repeat-combo := ComboBox {
                 width: 200px;
                 model: [@tr("Off"), @tr("All"), @tr("One")];

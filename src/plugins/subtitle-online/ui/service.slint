@@ -5,8 +5,10 @@ import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
 import { Messages } from "messages.slint";
 
+// The row label; `column` is the window's label column (70px, wider for longer translations).
 component RowLabel inherits Text {
-    width: 70px;
+    in property <length> column: 70px;
+    width: root.column;
     color: Theme.text;
     font-size: Theme.font-body;
     horizontal-alignment: right;
@@ -30,23 +32,33 @@ export component ServiceSettings inherits Window {
     in property <bool> busy: false;
     callback save(string, string, string);
     callback test(string, string, string);
+    // The label column: 70px, or the widest label.
+    private property <length> column: max(70px, label-measure.preferred-width);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        label-measure := VerticalLayout {
+            for text in [@tr("API key"), @tr("Token"), @tr("User name"), @tr("Password")]: Text { text: text; font-size: Theme.font-body; }
+        }
+    }
 
     VerticalLayout {
         padding: Theme.dialog-padding;
         spacing: 5px;
         HorizontalLayout {
             spacing: 5px;
-            RowLabel { text: root.has-account ? @tr("API key") : @tr("Token"); }
+            RowLabel { column: root.column; text: root.has-account ? @tr("API key") : @tr("Token"); }
             LineEdit { height: Theme.input-height; font-size: Theme.font-body; input-type: password; text <=> root.key-text; }
         }
         if root.has-account: HorizontalLayout {
             spacing: 5px;
-            RowLabel { text: @tr("User name"); }
+            RowLabel { column: root.column; text: @tr("User name"); }
             LineEdit { height: Theme.input-height; font-size: Theme.font-body; placeholder-text: @tr("Optional"); text <=> root.user-text; }
         }
         if root.has-account: HorizontalLayout {
             spacing: 5px;
-            RowLabel { text: @tr("Password"); }
+            RowLabel { column: root.column; text: @tr("Password"); }
             LineEdit { height: Theme.input-height; font-size: Theme.font-body; input-type: password; placeholder-text: @tr("Optional"); text <=> root.password-text; }
         }
         Text {

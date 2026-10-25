@@ -265,7 +265,7 @@ component Message inherits VerticalLayout {
                 spacing: 6px;
                 height: Theme.button-small-height;
                 if root.last && root.can-retry: Button { small: true; text: @tr("Retry"); clicked => { root.retry(); } }
-                if item.settings: Button { small: true; width: 64px; text: @tr("Open Settings"); clicked => { root.open-settings(); } }
+                if item.settings: Button { small: true; width: max(64px, self.preferred-width); text: @tr("Open Settings"); clicked => { root.open-settings(); } }
             }
         }
     }
@@ -274,9 +274,24 @@ component Message inherits VerticalLayout {
 export component AiWindow inherits Window {
     // i18n-ignore: the product's name
     title: "Vestra Player AI";
-    preferred-width: 900px;
+    // 900px (at least 720), wider only when the result card's buttons need it in this language (sessions 220 +
+    // line 1 + card padding 2 × 12 + border 2 × 1 + padding 2 × 8).
+    preferred-width: max(900px, card-measure.preferred-width + 263px);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        card-measure := HorizontalLayout {
+            spacing: 6px;
+            Button { small: true; width: max(52px, self.preferred-width); text: @tr("Install"); }
+            Button { small: true; width: max(112px, self.preferred-width); text: @tr("Roll Back (Undo Install)"); }
+            Button { small: true; width: max(80px, self.preferred-width); text: @tr("Export .vxp"); }
+            Button { small: true; width: max(96px, self.preferred-width); text: @tr("Export Source .zip"); }
+            Button { small: true; width: max(72px, self.preferred-width); text: @tr("Open Folder"); }
+        }
+    }
     preferred-height: 620px;
-    min-width: 720px;
+    min-width: max(720px, card-measure.preferred-width + 263px);
     min-height: 480px;
     background: Theme.bg-panel;
 
@@ -471,7 +486,7 @@ export component AiWindow inherits Window {
                 if root.has-folder: VerticalLayout {
                     alignment: center;
                     horizontal-stretch: 0;
-                    Button { small: true; width: 72px; text: @tr("Open Folder"); clicked => { root.open-folder(); } }
+                    Button { small: true; width: max(72px, self.preferred-width); text: @tr("Open Folder"); clicked => { root.open-folder(); } }
                 }
             }
             if root.banner.code != "": Rectangle {
@@ -573,11 +588,11 @@ export component AiWindow inherits Window {
                         alignment: start;
                         spacing: 6px;
                         height: Theme.button-small-height;
-                        Button { small: true; width: 52px; text: @tr("Install"); enabled: !root.card-busy; clicked => { root.install(); } }
-                        if root.can-rollback: Button { small: true; width: 112px; text: @tr("Roll Back (Undo Install)"); enabled: !root.card-busy; clicked => { root.rollback(); } }
-                        Button { small: true; width: 80px; text: @tr("Export .vxp"); enabled: !root.card-busy; clicked => { root.export-vxp(); } }
-                        Button { small: true; width: 96px; text: @tr("Export Source .zip"); enabled: !root.card-busy; clicked => { root.export-source(); } }
-                        Button { small: true; width: 72px; text: @tr("Open Folder"); clicked => { root.open-project(); } }
+                        Button { small: true; width: max(52px, self.preferred-width); text: @tr("Install"); enabled: !root.card-busy; clicked => { root.install(); } }
+                        if root.can-rollback: Button { small: true; width: max(112px, self.preferred-width); text: @tr("Roll Back (Undo Install)"); enabled: !root.card-busy; clicked => { root.rollback(); } }
+                        Button { small: true; width: max(80px, self.preferred-width); text: @tr("Export .vxp"); enabled: !root.card-busy; clicked => { root.export-vxp(); } }
+                        Button { small: true; width: max(96px, self.preferred-width); text: @tr("Export Source .zip"); enabled: !root.card-busy; clicked => { root.export-source(); } }
+                        Button { small: true; width: max(72px, self.preferred-width); text: @tr("Open Folder"); clicked => { root.open-project(); } }
                     }
                     if root.card-status.code != "": Text {
                         text: root.card-text(root.card-status);

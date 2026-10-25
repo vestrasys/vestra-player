@@ -66,6 +66,27 @@ export component SubtitleDownload inherits Window {
         return row.release;
     }
 
+    // Column widths: the header (and the words a column shows), never under the original widths.
+    private property <length> language-width: max(60px, language-measure.preferred-width);
+    private property <length> format-width: max(40px, format-measure.preferred-width);
+    private property <length> fps-width: max(50px, fps-measure.preferred-width);
+    private property <length> downloads-width: max(60px, downloads-measure.preferred-width);
+    private property <length> match-width: max(40px, match-measure.preferred-width);
+    private property <length> source-width: max(80px, source-measure.preferred-width);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        language-measure := Cell { text: @tr("Language"); }
+        format-measure := Cell { text: @tr("Format"); }
+        fps-measure := Cell { text: @tr("FPS"); }
+        downloads-measure := Cell { text: @tr("Downloads"); }
+        match-measure := VerticalLayout {
+            for text in [@tr("Match"), @tr("Hash"), @tr("Title")]: Cell { text: text; }
+        }
+        source-measure := Cell { text: @tr("Source"); }
+    }
+
     VerticalLayout {
         padding: 8px;
         spacing: 6px;
@@ -113,13 +134,13 @@ export component SubtitleDownload inherits Window {
                     padding-right: 4px;
                     spacing: 4px;
                     Rectangle { width: 20px; }
-                    Cell { width: 60px; text: @tr("Language"); color: Theme.text-dim; }
+                    Cell { width: root.language-width; text: @tr("Language"); color: Theme.text-dim; }
                     Cell { horizontal-stretch: 1; text: @tr("Release"); color: Theme.text-dim; }
-                    Cell { width: 40px; text: @tr("Format"); color: Theme.text-dim; }
-                    Cell { width: 50px; text: @tr("FPS"); color: Theme.text-dim; }
-                    Cell { width: 60px; text: @tr("Downloads"); color: Theme.text-dim; }
-                    Cell { width: 40px; text: @tr("Match"); color: Theme.text-dim; }
-                    Cell { width: 80px; text: @tr("Source"); color: Theme.text-dim; }
+                    Cell { width: root.format-width; text: @tr("Format"); color: Theme.text-dim; }
+                    Cell { width: root.fps-width; text: @tr("FPS"); color: Theme.text-dim; }
+                    Cell { width: root.downloads-width; text: @tr("Downloads"); color: Theme.text-dim; }
+                    Cell { width: root.match-width; text: @tr("Match"); color: Theme.text-dim; }
+                    Cell { width: root.source-width; text: @tr("Source"); color: Theme.text-dim; }
                 }
                 ListView {
                     vertical-stretch: 1;
@@ -139,13 +160,13 @@ export component SubtitleDownload inherits Window {
                                 checked: row.checked;
                                 toggled => { root.toggle-row(index, self.checked); }
                             }
-                            Cell { width: 60px; text: row.language; color: index == root.selected-index ? Theme.text : Theme.text-list; }
+                            Cell { width: root.language-width; text: row.language; color: index == root.selected-index ? Theme.text : Theme.text-list; }
                             Cell { horizontal-stretch: 1; text: root.release-text(row); color: index == root.selected-index ? Theme.text : Theme.text-list; }
-                            Cell { width: 40px; text: row.format; }
-                            Cell { width: 50px; text: row.fps; }
-                            Cell { width: 60px; text: row.downloads; horizontal-alignment: right; }
-                            Cell { width: 40px; text: row.hash ? @tr("Hash") : @tr("Title"); color: row.hash ? Theme.accent : Theme.text-list; }
-                            Cell { width: 80px; text: Messages.service-name(row.service); }
+                            Cell { width: root.format-width; text: row.format; }
+                            Cell { width: root.fps-width; text: row.fps; }
+                            Cell { width: root.downloads-width; text: row.downloads; horizontal-alignment: right; }
+                            Cell { width: root.match-width; text: row.hash ? @tr("Hash") : @tr("Title"); color: row.hash ? Theme.accent : Theme.text-list; }
+                            Cell { width: root.source-width; text: Messages.service-name(row.service); }
                         }
                     }
                 }

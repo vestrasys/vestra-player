@@ -96,6 +96,20 @@ export component MousePage inherits Rectangle {
     changed picking => {
         if self.picking { filter-input.focus(); }
     }
+    // The input column: 110px, or the longest input name; the command picker gives up
+    // what the column and the Default button take beyond that (the rows are 428px wide).
+    private property <length> input-width: max(110px, input-measure.preferred-width);
+    private property <length> default-width: max(Theme.button-small-min-width, default-measure.preferred-width + 2 * Theme.button-padding);
+    private property <length> picker-width: min(250px, self.width - 12px - root.input-width - root.default-width - 12px);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        input-measure := VerticalLayout {
+            for index in 11: Label { text: Words.mouse(index); }
+        }
+        default-measure := Label { text: @tr("Default"); }
+    }
 
     VerticalLayout {
         padding: 6px;
@@ -103,7 +117,7 @@ export component MousePage inherits Rectangle {
         HorizontalLayout {
             height: Theme.button-height;
             spacing: 14px;
-            Label { width: 40px; text: @tr("Modifier"); color: Theme.text-list; }
+            Label { width: max(40px, self.preferred-width); text: @tr("Modifier"); color: Theme.text-list; }
             for name[index] in Mouse.modifiers: Radio {
                 horizontal-stretch: 0;
                 text: name == "" ? @tr("None") : name;
@@ -120,7 +134,7 @@ export component MousePage inherits Rectangle {
                     height: 26px;
                     spacing: 6px;
                     Label {
-                        width: 110px;
+                        width: root.input-width;
                         text: Words.mouse(row.input);
                         horizontal-alignment: right;
                         color: Theme.text-list;
@@ -128,7 +142,7 @@ export component MousePage inherits Rectangle {
                     VerticalLayout {
                         alignment: center;
                         Picker {
-                            width: 250px;
+                            width: root.picker-width;
                             text: row.bound ? row.command : @tr("(None)");
                             bound: row.bound;
                             clicked => { Mouse.pick(index); }

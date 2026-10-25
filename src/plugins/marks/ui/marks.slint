@@ -104,6 +104,16 @@ export component MarksWindow inherits Window {
     callback add();
     callback remove();
     callback clear();
+    // The edit labels' column: 28px, or the wider of Time and Title.
+    private property <length> edit-column: max(28px, edit-measure.preferred-width);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        edit-measure := VerticalLayout {
+            for text in [@tr("Time"), @tr("Title")]: Label { text: text; }
+        }
+    }
 
     VerticalLayout {
         padding: 10px;
@@ -148,7 +158,7 @@ export component MarksWindow inherits Window {
             spacing: Theme.form-row-gap - Theme.input-height;
             HorizontalLayout {
                 spacing: 6px;
-                Label { width: 28px; text: @tr("Time"); }
+                Label { width: root.edit-column; text: @tr("Time"); }
                 time-input := LineEdit {
                     width: 100px;
                     height: Theme.input-height;
@@ -164,7 +174,7 @@ export component MarksWindow inherits Window {
             }
             HorizontalLayout {
                 spacing: 6px;
-                Label { width: 28px; text: @tr("Title"); }
+                Label { width: root.edit-column; text: @tr("Title"); }
                 LineEdit {
                     horizontal-stretch: 1;
                     height: Theme.input-height;

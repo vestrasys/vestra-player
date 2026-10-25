@@ -218,7 +218,8 @@ export component Check {
     in property <bool> checked;
     in property <bool> enabled: true;
     callback clicked();
-    height: Theme.checkbox-row-height;
+    // One row; a label longer than the room wraps onto more lines.
+    min-height: Theme.checkbox-row-height;
     accessible-role: checkbox;
     accessible-label: root.text;
     accessible-checkable: true;
@@ -242,6 +243,7 @@ export component Check {
             color: root.enabled ? Theme.text-list : Theme.text-dim;
             font-size: Theme.font-body;
             vertical-alignment: center;
+            wrap: word-wrap;
         }
     }
     touch := TouchArea {

@@ -18,8 +18,10 @@ component Heading inherits Text {
     font-weight: 700;
 }
 
+// The row label; `column` is the window's label column (90px, wider for longer translations).
 component RowLabel inherits Text {
-    width: 90px;
+    in property <length> column: 90px;
+    width: root.column;
     color: Theme.text;
     font-size: Theme.font-body;
     horizontal-alignment: right;
@@ -28,7 +30,8 @@ component RowLabel inherits Text {
 
 export component OnlineSettings inherits Window {
     title: @tr("Online Subtitle Settings");
-    width: 420px;
+    // 420px, wider only when the indented check box needs it in this language.
+    width: max(420px, root.column + 5px + exact-check.preferred-width + 2 * Theme.dialog-padding);
     background: Theme.bg-panel;
     in property <[ServiceRow]> services: [];
     in-out property <int> selected-service: 0;
@@ -57,6 +60,20 @@ export component OnlineSettings inherits Window {
     callback change-exact(bool);
     callback change-exclude(string);
     callback change-save(int);
+    // The label column: 90px, or the widest label; the service name: 110px, or the longest name.
+    private property <length> column: max(90px, label-measure.preferred-width);
+    private property <length> name-width: max(110px, name-measure.preferred-width);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        label-measure := VerticalLayout {
+            for text in [@tr("Languages"), @tr("Auto search"), @tr("After search"), @tr("Exclude"), @tr("Save to")]: Text { text: text; font-size: Theme.font-body; }
+        }
+        name-measure := VerticalLayout {
+            for id in ["opensubtitles", "assrt"]: Text { text: Messages.service-name(id); font-size: Theme.font-body; }
+        }
+    }
 
     VerticalLayout {
         padding: Theme.dialog-padding;
@@ -83,7 +100,7 @@ export component OnlineSettings inherits Window {
                                 checked: service.enabled;
                                 toggled => { root.toggle-service(index, self.checked); }
                             }
-                            Text { text: Messages.service-name(service.service); color: Theme.text; font-size: Theme.font-body; vertical-alignment: center; width: 110px; }
+                            Text { text: Messages.service-name(service.service); color: Theme.text; font-size: Theme.font-body; vertical-alignment: center; width: root.name-width; }
                             Text { text: service.state; color: Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
                         }
                     }
@@ -106,7 +123,7 @@ export component OnlineSettings inherits Window {
         Heading { text: @tr("Search"); }
         HorizontalLayout {
             spacing: 5px;
-            RowLabel { text: @tr("Languages"); }
+            RowLabel { column: root.column; text: @tr("Languages"); }
             LineEdit {
                 height: Theme.input-height;
                 font-size: Theme.font-body;
@@ -118,7 +135,7 @@ export component OnlineSettings inherits Window {
         }
         HorizontalLayout {
             spacing: 5px;
-            RowLabel { text: @tr("Auto search"); }
+            RowLabel { column: root.column; text: @tr("Auto search"); }
             auto-combo := ComboBox {
                 height: 22px;
                 model: [@tr("Off"), @tr("When opening a video without subtitles")];
@@ -128,7 +145,7 @@ export component OnlineSettings inherits Window {
         }
         HorizontalLayout {
             spacing: 5px;
-            RowLabel { text: @tr("After search"); }
+            RowLabel { column: root.column; text: @tr("After search"); }
             after-combo := ComboBox {
                 height: 22px;
                 model: [@tr("Show the download window"), @tr("Load the best result automatically")];
@@ -137,8 +154,8 @@ export component OnlineSettings inherits Window {
             }
         }
         HorizontalLayout {
-            padding-left: 95px;
-            CheckBox {
+            padding-left: root.column + 5px;
+            exact-check := CheckBox {
                 height: Theme.checkbox-row-height;
                 text: @tr("Only subtitles that exactly match the file (hash)");
                 checked <=> root.exact-only;
@@ -147,7 +164,7 @@ export component OnlineSettings inherits Window {
         }
         HorizontalLayout {
             spacing: 5px;
-            RowLabel { text: @tr("Exclude"); }
+            RowLabel { column: root.column; text: @tr("Exclude"); }
             LineEdit {
                 height: Theme.input-height;
                 font-size: Theme.font-body;
@@ -159,7 +176,7 @@ export component OnlineSettings inherits Window {
         Heading { text: @tr("Saving"); }
         HorizontalLayout {
             spacing: 5px;
-            RowLabel { text: @tr("Save to"); }
+            RowLabel { column: root.column; text: @tr("Save to"); }
             save-combo := ComboBox {
                 height: 22px;
                 model: [@tr("Beside the video when possible"), @tr("Plugin data folder")];

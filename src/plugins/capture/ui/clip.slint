@@ -6,7 +6,8 @@ import { FormLabel, Group, Note, Status, Words } from "parts.slint";
 
 export component ClipDialog inherits Window {
     title: @tr("Export Clip");
-    width: 400px;
+    // 400px, wider only when the content needs it in this language.
+    width: max(400px, body.min-width);
     background: Theme.bg-panel;
     in property <bool> busy;
     in property <bool> can-export;
@@ -21,21 +22,31 @@ export component ClipDialog inherits Window {
     callback mark-end();
     callback open-tasks();
     callback export-clip(string, string, bool, bool, int);
+    // The label column: 100px, or the widest label.
+    private property <length> column: max(100px, label-measure.preferred-width);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        label-measure := VerticalLayout {
+            for text in [@tr("Start (s):"), @tr("End (s):"), @tr("Format:"), @tr("Audio:"), @tr("Status:")]: FormLabel { text: text; }
+        }
+    }
 
-    VerticalLayout {
+    body := VerticalLayout {
         padding: Theme.dialog-padding;
         spacing: 5px;
         Group {
             title: @tr("Range");
             HorizontalLayout {
                 spacing: 4px;
-                FormLabel { width: 100px; text: @tr("Start (s):"); }
+                FormLabel { width: root.column; text: @tr("Start (s):"); }
                 LineEdit { height: Theme.input-height; font-size: Theme.font-body; text <=> root.start-time; enabled: !root.busy; }
                 Button { small: true; height: Theme.input-height; text: @tr("Current"); enabled: !root.busy; clicked => { root.mark-start(); } }
             }
             HorizontalLayout {
                 spacing: 4px;
-                FormLabel { width: 100px; text: @tr("End (s):"); }
+                FormLabel { width: root.column; text: @tr("End (s):"); }
                 LineEdit { height: Theme.input-height; font-size: Theme.font-body; text <=> root.end-time; enabled: !root.busy; }
                 Button { small: true; height: Theme.input-height; text: @tr("Current"); enabled: !root.busy; clicked => { root.mark-end(); } }
             }
@@ -44,17 +55,17 @@ export component ClipDialog inherits Window {
             title: @tr("Output");
             HorizontalLayout {
                 spacing: 4px;
-                FormLabel { width: 100px; text: @tr("Format:"); }
+                FormLabel { width: root.column; text: @tr("Format:"); }
                 Note { text: @tr("MP4 (H.264 + AAC)"); }
             }
             HorizontalLayout {
                 spacing: 4px;
-                FormLabel { width: 100px; text: @tr("Audio:"); }
+                FormLabel { width: root.column; text: @tr("Audio:"); }
                 ComboBox { height: Theme.input-height; model: root.audio-labels; current-index <=> root.audio-index; enabled: !root.busy; }
             }
             HorizontalLayout {
                 spacing: 4px;
-                Rectangle { width: 100px; }
+                Rectangle { width: root.column; }
                 CheckBox { height: Theme.checkbox-row-height; text: @tr("Include video effects"); checked <=> root.processed; enabled: !root.busy; }
                 CheckBox { height: Theme.checkbox-row-height; text: @tr("Export subtitles too"); checked <=> root.subtitles; enabled: root.processed && !root.busy; }
             }
@@ -63,7 +74,7 @@ export component ClipDialog inherits Window {
             title: @tr("Information");
             HorizontalLayout {
                 spacing: 4px;
-                FormLabel { width: 100px; text: @tr("Status:"); }
+                FormLabel { width: root.column; text: @tr("Status:"); }
                 Note { text: Words.status(root.status); }
             }
         }

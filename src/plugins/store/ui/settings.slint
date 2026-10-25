@@ -32,6 +32,18 @@ export global StoreSettings {
 
 export component StorePage inherits Rectangle {
     height: 400px;
+    // Widths that follow the interface language, never under the original ones.
+    private property <length> remove-width: max(50px, remove-measure.preferred-width + 2 * Theme.button-padding);
+    private property <length> add-width: max(52px, add-measure.preferred-width + 2 * Theme.button-padding);
+    private property <length> cancel-width: max(52px, cancel-measure.preferred-width + 2 * Theme.button-padding);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        remove-measure := Cell { text: @tr("Remove"); }
+        add-measure := Cell { text: @tr("Add"); }
+        cancel-measure := Cell { text: @tr("Cancel"); }
+    }
     VerticalLayout {
         padding: 6px;
         spacing: 6px;
@@ -72,7 +84,7 @@ export component StorePage inherits Rectangle {
                         if repo.note != "": Cell { text: repo.note; color: Tone.color(repo.tone); }
                     }
                     VerticalLayout {
-                        width: 50px;
+                        width: root.remove-width;
                         alignment: center;
                         if repo.removable: Button {
                             small: true;
@@ -86,7 +98,7 @@ export component StorePage inherits Rectangle {
         if !StoreSettings.adding: HorizontalLayout {
             height: Theme.button-height;
             Button {
-                width: 84px;
+                width: max(84px, self.preferred-width);
                 text: @tr("Add Repository…");
                 enabled: StoreSettings.can-add;
                 clicked => { StoreSettings.start-add(); }
@@ -118,11 +130,11 @@ export component StorePage inherits Rectangle {
                 }
                 VerticalLayout {
                     alignment: center;
-                    Button { width: 52px; text: @tr("Add"); clicked => { StoreSettings.add(address.text); } }
+                    Button { width: root.add-width; text: @tr("Add"); clicked => { StoreSettings.add(address.text); } }
                 }
                 VerticalLayout {
                     alignment: center;
-                    Button { width: 52px; text: @tr("Cancel"); clicked => { StoreSettings.cancel-add(); } }
+                    Button { width: root.cancel-width; text: @tr("Cancel"); clicked => { StoreSettings.cancel-add(); } }
                 }
             }
         }

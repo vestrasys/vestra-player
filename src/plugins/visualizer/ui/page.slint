@@ -81,17 +81,18 @@ export component LogoCoverPage inherits Rectangle {
                 HorizontalLayout {
                     spacing: 6px;
                     alignment: start;
-                    Button { width: 96px; text: @tr("Choose Image…"); clicked => { LogoPage.choose-logo(); } }
-                    Button { width: 96px; text: @tr("Restore Default"); enabled: LogoPage.custom-logo; clicked => { LogoPage.reset-logo(); } }
+                    Button { width: max(96px, self.preferred-width); text: @tr("Choose Image…"); clicked => { LogoPage.choose-logo(); } }
+                    Button { width: max(96px, self.preferred-width); text: @tr("Restore Default"); enabled: LogoPage.custom-logo; clicked => { LogoPage.reset-logo(); } }
                 }
             }
         }
+        // One line; wraps when the text is longer than the page.
         Text {
-            height: Theme.label-height;
+            min-height: Theme.label-height;
             text: @tr("PNG or JPEG, up to 4096×4096 and 16 MB. The image is copied, so the original can be moved.");
             font-size: Theme.font-body;
             color: Theme.text-dim;
-            overflow: elide;
+            wrap: word-wrap;
         }
         Rectangle { height: 8px; }
         Section { text: @tr("Audio only"); }
@@ -122,7 +123,7 @@ export component LogoCoverPage inherits Rectangle {
                 vertical-alignment: center;
                 overflow: elide;
             }
-            Button { width: 96px; text: @tr("Clear Cover Cache"); enabled: LogoPage.can-clear; clicked => { LogoPage.clear-cache(); } }
+            Button { width: max(96px, self.preferred-width); text: @tr("Clear Cover Cache"); enabled: LogoPage.can-clear; clicked => { LogoPage.clear-cache(); } }
         }
     }
 }

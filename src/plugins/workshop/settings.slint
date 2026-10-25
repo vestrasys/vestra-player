@@ -50,11 +50,13 @@ export global AiSettings {
     callback choose-model(string);
 }
 
+// The row label; `column` is the page's label column (76px, wider for longer translations).
 component Label inherits Text {
+    in property <length> column: 76px;
     color: Theme.text;
     font-size: Theme.font-body;
     vertical-alignment: center;
-    width: 76px;
+    width: root.column;
 }
 
 export component AiSettingsPage inherits Rectangle {
@@ -100,6 +102,16 @@ export component AiSettingsPage inherits Rectangle {
             : ""
     }
     height: 380px;
+    // The label column: 76px, or the widest label.
+    private property <length> column: max(76px, label-measure.preferred-width);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        label-measure := VerticalLayout {
+            for text in [@tr("Provider"), @tr("Base URL"), @tr("API key"), @tr("Model"), @tr("Model ID"), @tr("Plugin author")]: Text { text: text; font-size: Theme.font-body; }
+        }
+    }
     VerticalLayout {
         padding: 6px;
         spacing: 10px;
@@ -117,12 +129,12 @@ export component AiSettingsPage inherits Rectangle {
             VerticalLayout {
                 alignment: center;
                 horizontal-stretch: 0;
-                Button { small: true; width: 72px; text: @tr("Delete Old Key"); clicked => { AiSettings.delete-old-key(); } }
+                Button { small: true; width: max(72px, self.preferred-width); text: @tr("Delete Old Key"); clicked => { AiSettings.delete-old-key(); } }
             }
         }
         HorizontalLayout {
             spacing: 8px;
-            Label { text: @tr("Provider"); }
+            Label { column: root.column; text: @tr("Provider"); }
             ComboBox {
                 height: Theme.input-height;
                 horizontal-stretch: 1;
@@ -133,7 +145,7 @@ export component AiSettingsPage inherits Rectangle {
         }
         if AiSettings.custom: HorizontalLayout {
             spacing: 8px;
-            Label { text: @tr("Base URL"); }
+            Label { column: root.column; text: @tr("Base URL"); }
             LineEdit {
                 height: Theme.input-height;
                 horizontal-stretch: 1;
@@ -147,7 +159,7 @@ export component AiSettingsPage inherits Rectangle {
         }
         HorizontalLayout {
             spacing: 8px;
-            Label { text: @tr("API key"); }
+            Label { column: root.column; text: @tr("API key"); }
             LineEdit {
                 height: Theme.input-height;
                 horizontal-stretch: 1;
@@ -160,12 +172,12 @@ export component AiSettingsPage inherits Rectangle {
             VerticalLayout {
                 alignment: center;
                 horizontal-stretch: 0;
-                Button { width: Theme.button-min-width; text: @tr("Save"); enabled: AiSettings.key-text != ""; clicked => { AiSettings.save-key(AiSettings.key-text); } }
+                Button { width: max(Theme.button-min-width, self.preferred-width); text: @tr("Save"); enabled: AiSettings.key-text != ""; clicked => { AiSettings.save-key(AiSettings.key-text); } }
             }
         }
         HorizontalLayout {
             spacing: 8px;
-            Label { text: ""; }
+            Label { column: root.column; text: ""; }
             Text {
                 text: root.key-text(AiSettings.key-state);
                 color: AiSettings.has-key ? Theme.text : Theme.text-dim;
@@ -176,12 +188,12 @@ export component AiSettingsPage inherits Rectangle {
             if AiSettings.has-key: VerticalLayout {
                 alignment: center;
                 horizontal-stretch: 0;
-                Button { small: true; width: Theme.button-min-width; text: @tr("Delete"); clicked => { AiSettings.delete-key(); } }
+                Button { small: true; width: max(Theme.button-min-width, self.preferred-width); text: @tr("Delete"); clicked => { AiSettings.delete-key(); } }
             }
         }
         if AiSettings.models.length > 0: HorizontalLayout {
             spacing: 8px;
-            Label { text: @tr("Model"); }
+            Label { column: root.column; text: @tr("Model"); }
             ComboBox {
                 height: Theme.input-height;
                 horizontal-stretch: 1;
@@ -194,7 +206,7 @@ export component AiSettingsPage inherits Rectangle {
                 alignment: center;
                 horizontal-stretch: 0;
                 Button {
-                    width: Theme.button-min-width;
+                    width: max(Theme.button-min-width, self.preferred-width);
                     text: AiSettings.listing ? @tr("Fetching…") : @tr("Fetch Models");
                     enabled: !AiSettings.listing;
                     clicked => { AiSettings.fetch-models(); }
@@ -204,7 +216,7 @@ export component AiSettingsPage inherits Rectangle {
         // Custom endpoints: the id can always be typed (when the endpoint lists none, or another one).
         if AiSettings.custom: HorizontalLayout {
             spacing: 8px;
-            Label { text: AiSettings.models.length > 0 ? @tr("Model ID") : @tr("Model"); }
+            Label { column: root.column; text: AiSettings.models.length > 0 ? @tr("Model ID") : @tr("Model"); }
             LineEdit {
                 height: Theme.input-height;
                 horizontal-stretch: 1;
@@ -217,7 +229,7 @@ export component AiSettingsPage inherits Rectangle {
                 alignment: center;
                 horizontal-stretch: 0;
                 Button {
-                    width: Theme.button-min-width;
+                    width: max(Theme.button-min-width, self.preferred-width);
                     text: AiSettings.listing ? @tr("Fetching…") : @tr("Fetch Models");
                     enabled: !AiSettings.listing && AiSettings.base-url != "";
                     clicked => { AiSettings.fetch-models(); }
@@ -226,7 +238,7 @@ export component AiSettingsPage inherits Rectangle {
         }
         HorizontalLayout {
             spacing: 8px;
-            Label { text: @tr("Plugin author"); }
+            Label { column: root.column; text: @tr("Plugin author"); }
             LineEdit {
                 height: Theme.input-height;
                 horizontal-stretch: 1;
@@ -239,7 +251,7 @@ export component AiSettingsPage inherits Rectangle {
         }
         HorizontalLayout {
             spacing: 8px;
-            Label { text: ""; }
+            Label { column: root.column; text: ""; }
             Text {
                 text: root.owner-text(AiSettings.owner-hint);
                 color: Theme.text-dim;

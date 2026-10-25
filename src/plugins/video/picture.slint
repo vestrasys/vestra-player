@@ -64,9 +64,10 @@ component Check {
     }
 }
 
-// Right-aligned 65px row label.
+// Right-aligned row label; `column` is the window's label column (65px, wider for longer translations).
 component Label inherits Text {
-    width: 65px;
+    in property <length> column: 65px;
+    width: root.column;
     color: Theme.text;
     font-size: Theme.font-body;
     horizontal-alignment: right;
@@ -79,7 +80,7 @@ component Toggle {
     in property <bool> checked;
     in property <bool> enabled: true;
     callback clicked();
-    width: 46px;
+    width: max(46px, toggle-label.preferred-width + 8px);
     height: 22px;
     accessible-role: button;
     accessible-label: root.text;
@@ -95,7 +96,7 @@ component Toggle {
             : touch.pressed ? Theme.button-press
             : touch.has-hover ? Theme.button-hover : Theme.button-bg;
     }
-    Text {
+    toggle-label := Text {
         text: root.text;
         color: !root.enabled ? Theme.text-dim : root.checked ? Theme.text : Theme.text-list;
         font-size: Theme.font-body;
@@ -214,10 +215,11 @@ component ColorRow {
     callback edited(float);
     callback committed(float);
     callback reset();
+    in property <length> column: 65px;
     height: 24px;
     HorizontalLayout {
         spacing: 6px;
-        Label { text: root.label; }
+        Label { text: root.label; column: root.column; }
         Slider {
             width: 154px;
             panel: true;
@@ -229,7 +231,7 @@ component ColorRow {
         }
         VerticalLayout {
             alignment: center;
-            Button { text: @tr("Default"); small: true; width: 41px; clicked => { root.reset(); } }
+            Button { text: @tr("Default"); small: true; width: max(41px, self.preferred-width); clicked => { root.reset(); } }
         }
     }
 }
@@ -245,6 +247,7 @@ component EffectRow {
     callback edited(float);
     callback committed(float);
     callback reset();
+    in property <length> column: 65px;
     height: 24px;
     ToolTipArea {
         width: 100%;
@@ -254,7 +257,7 @@ component EffectRow {
             spacing: 6px;
             alignment: start;
             Check {
-                width: 65px;
+                width: root.column;
                 text: root.label;
                 checked <=> root.checked;
                 toggled(on) => { root.toggled(on); }
@@ -271,7 +274,7 @@ component EffectRow {
             }
             VerticalLayout {
                 alignment: center;
-                Button { text: @tr("Default"); small: true; width: 41px; clicked => { root.reset(); } }
+                Button { text: @tr("Default"); small: true; width: max(41px, self.preferred-width); clicked => { root.reset(); } }
             }
         }
     }
@@ -282,7 +285,7 @@ component Tab {
     in property <string> text;
     in property <bool> selected;
     callback picked();
-    width: 74px;
+    width: max(74px, tab-label.preferred-width + 12px);
     height: 31px;
     accessible-role: tab;
     accessible-label: root.text;
@@ -303,7 +306,7 @@ component Tab {
         border-radius: 1px;
         background: Theme.accent-fill;
     }
-    Text {
+    tab-label := Text {
         text: root.text;
         color: root.selected ? Theme.text : Theme.text-dim;
         font-size: Theme.font-tab;
@@ -315,7 +318,8 @@ component Tab {
 
 export component PictureWindow inherits Window {
     title: @tr("Picture Adjustments");
-    width: 301px;
+    // 301px, wider only when a translation needs it.
+    width: max(301px, tab-strip.min-width, max(color-page.min-width, effect-page.min-width, view-page.min-width, advanced-page.min-width, status-row.min-width) + 16px);
     height: 245px;
     background: Theme.bg-panel;
     // 色彩
@@ -402,12 +406,33 @@ export component PictureWindow inherits Window {
     callback custom-aspect();
     callback shader-list();
     private property <[string]> tab-names: [@tr("Color"), @tr("Effects"), @tr("Picture"), @tr("Advanced")];
+    // The label column: 65px, or the widest label (a check adds its 12px box and 4px gap).
+    private property <length> column: max(65px, label-measure.preferred-width, check-measure.preferred-width + 16px);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        label-measure := VerticalLayout {
+            for text in [@tr("Brightness"), @tr("Contrast"), @tr("Saturation"), @tr("Hue"), @tr("Gamma"), @tr("Flip"), @tr("Rotate"),
+                @tr("Crop/stretch"), @tr("Aspect ratio"), @tr("Display"), @tr("Zoom"), @tr("Deinterlace"), @tr("HDR"), @tr("Shaders")]: Text {
+                text: text;
+                font-size: Theme.font-body;
+            }
+        }
+        effects-measure := Text { text: @tr("Enable picture effects"); font-size: Theme.font-body; }
+        check-measure := VerticalLayout {
+            for text in [@tr("Blur"), @tr("Sharpen"), @tr("Edges"), @tr("Denoise"), @tr("Deblock"), @tr("Deband"), @tr("Doubling")]: Text {
+                text: text;
+                font-size: Theme.font-body;
+            }
+        }
+    }
     VerticalLayout {
         // Page tabs, 31px; the last picked page is remembered by the plugin.
         Rectangle {
             height: 31px;
             background: Theme.bg-bar;
-            HorizontalLayout {
+            tab-strip := HorizontalLayout {
                 for name[index] in root.tab-names: Tab {
                     text: name;
                     selected: index == root.tab-index;
@@ -426,30 +451,31 @@ export component PictureWindow inherits Window {
             Rectangle {
                 height: 168px;
                 // 色彩
-                VerticalLayout {
+                color-page := VerticalLayout {
                     x: 0; y: 0; width: parent.width; height: parent.height;
                     visible: root.tab-index == 0;
-                    ColorRow { label: @tr("Brightness"); value <=> root.brightness; edited(v) => { root.adjust("brightness", v); } committed(v) => { root.commit("brightness", v); } reset => { root.reset-field("brightness"); } }
-                    ColorRow { label: @tr("Contrast"); value <=> root.contrast; edited(v) => { root.adjust("contrast", v); } committed(v) => { root.commit("contrast", v); } reset => { root.reset-field("contrast"); } }
-                    ColorRow { label: @tr("Saturation"); value <=> root.saturation; edited(v) => { root.adjust("saturation", v); } committed(v) => { root.commit("saturation", v); } reset => { root.reset-field("saturation"); } }
-                    ColorRow { label: @tr("Hue"); value <=> root.hue; edited(v) => { root.adjust("hue", v); } committed(v) => { root.commit("hue", v); } reset => { root.reset-field("hue"); } }
-                    ColorRow { label: @tr("Gamma"); value <=> root.gamma; edited(v) => { root.adjust("gamma", v); } committed(v) => { root.commit("gamma", v); } reset => { root.reset-field("gamma"); } }
+                    ColorRow { column: root.column; label: @tr("Brightness"); value <=> root.brightness; edited(v) => { root.adjust("brightness", v); } committed(v) => { root.commit("brightness", v); } reset => { root.reset-field("brightness"); } }
+                    ColorRow { column: root.column; label: @tr("Contrast"); value <=> root.contrast; edited(v) => { root.adjust("contrast", v); } committed(v) => { root.commit("contrast", v); } reset => { root.reset-field("contrast"); } }
+                    ColorRow { column: root.column; label: @tr("Saturation"); value <=> root.saturation; edited(v) => { root.adjust("saturation", v); } committed(v) => { root.commit("saturation", v); } reset => { root.reset-field("saturation"); } }
+                    ColorRow { column: root.column; label: @tr("Hue"); value <=> root.hue; edited(v) => { root.adjust("hue", v); } committed(v) => { root.commit("hue", v); } reset => { root.reset-field("hue"); } }
+                    ColorRow { column: root.column; label: @tr("Gamma"); value <=> root.gamma; edited(v) => { root.adjust("gamma", v); } committed(v) => { root.commit("gamma", v); } reset => { root.reset-field("gamma"); } }
                     Rectangle { height: 8px; }
                     HorizontalLayout {
                         spacing: 3px;
                         alignment: center;
-                        Button { text: @tr("Original"); width: 69px; clicked => { root.preset("original"); } }
-                        Button { text: @tr("Vivid"); width: 69px; clicked => { root.preset("vivid"); } }
-                        Button { text: @tr("Cinema"); width: 69px; clicked => { root.preset("cinema"); } }
-                        Button { text: @tr("Soft"); width: 69px; clicked => { root.preset("soft"); } }
+                        Button { text: @tr("Original"); width: max(69px, self.preferred-width); clicked => { root.preset("original"); } }
+                        Button { text: @tr("Vivid"); width: max(69px, self.preferred-width); clicked => { root.preset("vivid"); } }
+                        Button { text: @tr("Cinema"); width: max(69px, self.preferred-width); clicked => { root.preset("cinema"); } }
+                        Button { text: @tr("Soft"); width: max(69px, self.preferred-width); clicked => { root.preset("soft"); } }
                     }
                     Rectangle { }
                 }
                 // 效果
-                VerticalLayout {
+                effect-page := VerticalLayout {
                     x: 0; y: 0; width: parent.width; height: parent.height;
                     visible: root.tab-index == 1;
                     EffectRow {
+                        column: root.column;
                         label: @tr("Blur");
                         maximum: 10;
                         checked <=> root.blur-enabled;
@@ -460,6 +486,7 @@ export component PictureWindow inherits Window {
                         reset => { root.reset-field("blurStrength"); }
                     }
                     EffectRow {
+                        column: root.column;
                         label: @tr("Sharpen");
                         checked <=> root.sharpen-enabled;
                         value <=> root.sharpen-strength;
@@ -469,6 +496,7 @@ export component PictureWindow inherits Window {
                         reset => { root.reset-field("sharpen"); }
                     }
                     EffectRow {
+                        column: root.column;
                         label: @tr("Edges");
                         tip: @tr("Wide-radius sharpening that mainly strengthens outlines");
                         checked <=> root.edge-enabled;
@@ -483,7 +511,7 @@ export component PictureWindow inherits Window {
                         spacing: 6px;
                         alignment: start;
                         Check {
-                            width: 65px;
+                            width: root.column;
                             text: @tr("Denoise");
                             checked <=> root.denoise-enabled;
                             toggled(on) => { root.toggle("denoise", on); }
@@ -509,10 +537,11 @@ export component PictureWindow inherits Window {
                         }
                         VerticalLayout {
                             alignment: center;
-                            Button { text: @tr("Default"); small: true; width: 41px; clicked => { root.reset-field("denoise"); } }
+                            Button { text: @tr("Default"); small: true; width: max(41px, self.preferred-width); clicked => { root.reset-field("denoise"); } }
                         }
                     }
                     EffectRow {
+                        column: root.column;
                         label: @tr("Deblock");
                         tip: @tr("Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4");
                         checked <=> root.deblock-enabled;
@@ -523,6 +552,7 @@ export component PictureWindow inherits Window {
                         reset => { root.reset-field("deblock"); }
                     }
                     EffectRow {
+                        column: root.column;
                         label: @tr("Deband");
                         checked <=> root.deband-enabled;
                         value <=> root.deband-strength;
@@ -536,7 +566,7 @@ export component PictureWindow inherits Window {
                         spacing: 6px;
                         alignment: start;
                         ToolTipArea {
-                            width: 65px;
+                            width: root.column;
                             text: @tr("Doubles the frame rate (up to 60), blending each in-between frame from its neighbours");
                             Check {
                                 width: 100%;
@@ -555,9 +585,9 @@ export component PictureWindow inherits Window {
                             overflow: elide;
                         }
                         ToolTipArea {
-                            width: 100px;
+                            width: max(100px, interpolation-check.preferred-width);
                             text: root.render-ready ? @tr("GPU interpolation to the display refresh rate; excludes frame doubling") : root.render-reason;
-                            Check {
+                            interpolation-check := Check {
                                 width: 100%;
                                 height: 100%;
                                 text: @tr("Interpolation");
@@ -569,14 +599,14 @@ export component PictureWindow inherits Window {
                     }
                 }
                 // 画面
-                VerticalLayout {
+                view-page := VerticalLayout {
                     x: 0; y: 0; width: parent.width; height: parent.height;
                     visible: root.tab-index == 2;
                     HorizontalLayout {
                         height: 24px;
                         spacing: 6px;
                         alignment: start;
-                        Label { text: @tr("Flip"); }
+                        Label { column: root.column; text: @tr("Flip"); }
                         HorizontalLayout {
                             spacing: 3px;
                             padding-top: 1px;
@@ -603,7 +633,7 @@ export component PictureWindow inherits Window {
                         height: 24px;
                         spacing: 6px;
                         alignment: start;
-                        Label { text: @tr("Rotate"); }
+                        Label { column: root.column; text: @tr("Rotate"); }
                         HorizontalLayout {
                             spacing: 3px;
                             padding-top: 1px;
@@ -622,7 +652,7 @@ export component PictureWindow inherits Window {
                         height: 24px;
                         spacing: 6px;
                         alignment: start;
-                        Label { text: @tr("Crop/stretch"); }
+                        Label { column: root.column; text: @tr("Crop/stretch"); }
                         VerticalLayout {
                             alignment: center;
                             Choice {
@@ -646,7 +676,7 @@ export component PictureWindow inherits Window {
                         height: 24px;
                         spacing: 6px;
                         alignment: start;
-                        Label { text: @tr("Aspect ratio"); }
+                        Label { column: root.column; text: @tr("Aspect ratio"); }
                         VerticalLayout {
                             alignment: center;
                             Choice {
@@ -671,7 +701,7 @@ export component PictureWindow inherits Window {
                         height: 24px;
                         spacing: 6px;
                         alignment: start;
-                        Label { text: @tr("Display"); }
+                        Label { column: root.column; text: @tr("Display"); }
                         VerticalLayout {
                             alignment: center;
                             Choice {
@@ -689,7 +719,7 @@ export component PictureWindow inherits Window {
                         HorizontalLayout {
                             spacing: 6px;
                             alignment: start;
-                            Label { text: @tr("Zoom"); }
+                            Label { column: root.column; text: @tr("Zoom"); }
                             Slider {
                                 width: 154px;
                                 panel: true;
@@ -701,21 +731,21 @@ export component PictureWindow inherits Window {
                             }
                             VerticalLayout {
                                 alignment: center;
-                                Button { text: @tr("Default"); small: true; width: 41px; clicked => { root.reset-field("zoom"); } }
+                                Button { text: @tr("Default"); small: true; width: max(41px, self.preferred-width); clicked => { root.reset-field("zoom"); } }
                             }
                         }
                     }
                     Rectangle { }
                 }
                 // 高级
-                VerticalLayout {
+                advanced-page := VerticalLayout {
                     x: 0; y: 0; width: parent.width; height: parent.height;
                     visible: root.tab-index == 3;
                     HorizontalLayout {
                         height: 24px;
                         spacing: 6px;
                         alignment: start;
-                        Label { text: @tr("Deinterlace"); }
+                        Label { column: root.column; text: @tr("Deinterlace"); }
                         VerticalLayout {
                             alignment: center;
                             Choice {
@@ -742,7 +772,7 @@ export component PictureWindow inherits Window {
                         HorizontalLayout {
                             spacing: 6px;
                             alignment: start;
-                            Label { text: @tr("HDR"); color: root.render-ready ? Theme.text : Theme.text-dim; }
+                            Label { column: root.column; text: @tr("HDR"); color: root.render-ready ? Theme.text : Theme.text-dim; }
                             VerticalLayout {
                                 alignment: center;
                                 Choice {
@@ -770,7 +800,7 @@ export component PictureWindow inherits Window {
                         height: 24px;
                         spacing: 6px;
                         alignment: start;
-                        Label { text: ""; }
+                        Label { column: root.column; text: ""; }
                         Text {
                             width: 214px;
                             text: !root.render-ready ? root.render-reason : root.not-hdr ? @tr("Target {} nits · Not an HDR source", root.peak-nits) : @tr("Target {} nits", root.peak-nits);
@@ -787,35 +817,40 @@ export component PictureWindow inherits Window {
                         HorizontalLayout {
                             spacing: 6px;
                             alignment: start;
-                            Label { text: @tr("Shaders"); color: root.render-ready ? Theme.text : Theme.text-dim; }
+                            Label { column: root.column; text: @tr("Shaders"); color: root.render-ready ? Theme.text : Theme.text-dim; }
                             Check {
-                                width: 50px;
+                                width: max(50px, self.preferred-width);
                                 text: @tr("Enable");
                                 enabled: root.render-ready;
                                 checked <=> root.shaders-enabled;
                                 toggled(on) => { root.toggle("shaders", on); }
                             }
-                            Text { width: 70px; text: @tr("{n} shader" | "{n} shaders" % root.shader-count); color: Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; overflow: elide; }
+                            Text { width: max(70px, self.preferred-width); text: @tr("{n} shader" | "{n} shaders" % root.shader-count); color: Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; overflow: elide; }
                             VerticalLayout {
                                 alignment: center;
-                                Button { text: @tr("List…"); small: true; width: 50px; clicked => { root.shader-list(); } }
+                                Button { text: @tr("List…"); small: true; width: max(50px, self.preferred-width); clicked => { root.shader-list(); } }
                             }
                         }
                     }
                     Rectangle { }
                 }
             }
-            HorizontalLayout {
+            status-row := HorizontalLayout {
                 height: 22px;
                 spacing: 6px;
                 Check {
+                    // Never narrower than its box and label: the status text beside it elides instead.
+                    min-width: effects-measure.preferred-width + 16px;
                     text: @tr("Enable picture effects");
                     checked <=> root.effect-enabled;
                     toggled(on) => { root.toggle-effect(on); }
                 }
                 ToolTipArea {
                     text: root.detail-text;
+                    // As wide as the room left, so a long message elides instead of running under the check.
                     Text {
+                        width: 100%;
+                        height: 100%;
                         text: root.status-text;
                         color: Theme.accent;
                         font-size: Theme.font-body;
@@ -826,7 +861,7 @@ export component PictureWindow inherits Window {
                 }
                 if root.failed: VerticalLayout {
                     alignment: center;
-                    Button { text: @tr("Retry"); small: true; width: 41px; clicked => { root.retry(); } }
+                    Button { text: @tr("Retry"); small: true; width: max(41px, self.preferred-width); clicked => { root.retry(); } }
                 }
             }
         }

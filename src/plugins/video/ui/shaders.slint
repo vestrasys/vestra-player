@@ -61,7 +61,8 @@ component NameList {
 
 export component ShadersWindow inherits Window {
     title: @tr("Shader List");
-    width: 301px;
+    // 301px, wider only when a translation needs it.
+    width: Math.max(301px, body.min-width);
     height: 260px;
     background: Theme.bg-panel;
     in property <[string]> names;
@@ -80,7 +81,17 @@ export component ShadersWindow inherits Window {
     callback down();
     callback clear();
     callback open-folder();
-    VerticalLayout {
+    // The side buttons' column: 60px, or the widest label with the button padding.
+    private property <length> side-width: Math.max(60px, side-measure.preferred-width + 2 * Theme.button-padding);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        side-measure := VerticalLayout {
+            for text in [@tr("Add…"), @tr("Remove"), @tr("Move Up"), @tr("Move Down"), @tr("Clear")]: Text { text: text; font-size: Theme.font-body; }
+        }
+    }
+    body := VerticalLayout {
         padding: 8px;
         spacing: 4px;
         Text { height: 16px; text: @tr("Enabled {}/{} (run in order)", root.count, root.max); color: Theme.text; font-size: Theme.font-body; vertical-alignment: center; }
@@ -96,7 +107,7 @@ export component ShadersWindow inherits Window {
                 picked(i) => { root.select(i); }
             }
             VerticalLayout {
-                width: 60px;
+                width: root.side-width;
                 spacing: 2px;
                 Button { text: @tr("Add…"); height: 21px; clicked => { root.add(); } }
                 Button { text: @tr("Remove"); height: 21px; enabled: root.selected >= 0; clicked => { root.remove(); } }
@@ -123,7 +134,7 @@ export component ShadersWindow inherits Window {
                 vertical-alignment: center;
                 overflow: elide;
             }
-            Button { text: @tr("Open Folder"); width: 80px; clicked => { root.open-folder(); } }
+            Button { text: @tr("Open Folder"); width: Math.max(80px, self.preferred-width); clicked => { root.open-folder(); } }
         }
     }
 }

@@ -164,11 +164,12 @@ component EffectRow {
     in property <float> maximum;
     callback edited(float);
     callback reset();
+    in property <length> column: 56px;
     height: 24px;
     HorizontalLayout {
         spacing: 4px;
         alignment: start;
-        Text { width: 56px; text: root.label; color: root.available ? Theme.text : Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
+        Text { width: root.column; text: root.label; color: root.available ? Theme.text : Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
         Slider {
             width: 100px;
             panel: true;
@@ -181,7 +182,7 @@ component EffectRow {
         Text { width: 60px; text: root.shown; color: Theme.text-list; font-size: Theme.font-body; vertical-alignment: center; }
         VerticalLayout {
             alignment: center;
-            Button { width: 41px; text: @tr("Default"); small: true; enabled: root.available; clicked => { root.reset(); } }
+            Button { width: max(41px, self.preferred-width); text: @tr("Default"); small: true; enabled: root.available; clicked => { root.reset(); } }
         }
     }
 }
@@ -294,7 +295,7 @@ component Tab {
     in property <string> text;
     in property <bool> selected;
     callback picked();
-    width: 74px;
+    width: max(74px, tab-label.preferred-width + 12px);
     height: 31px;
     accessible-role: tab;
     accessible-label: root.text;
@@ -315,7 +316,7 @@ component Tab {
         border-radius: 1px;
         background: Theme.accent-fill;
     }
-    Text {
+    tab-label := Text {
         text: root.text;
         color: root.selected ? Theme.text : Theme.text-dim;
         font-size: Theme.font-tab;
@@ -356,7 +357,8 @@ component PresetItem {
 
 export component AudioWorkbench inherits Window {
     title: @tr("Audio Workbench");
-    width: 301px;
+    // 301px, wider only when the content needs it in this language.
+    width: max(301px, tab-strip.min-width, max(equalizer-page.min-width, effects-page.min-width, output-page.min-width) + 16px);
     height: 260px;
     background: Theme.bg-panel;
     // "loading", "no-track", "applying", "failed", "applied" or "ready" (Words.status).
@@ -407,6 +409,28 @@ export component AudioWorkbench inherits Window {
     // The presets of model.ts, in the same order.
     private property <[string]> preset-names: [@tr("Flat"), @tr("Voice"), @tr("Music"), @tr("Cinema")];
     private property <[string]> tab-names: [@tr("Equalizer"), @tr("Effects"), @tr("Output")];
+    // Label columns: Effects 56px, Output 65px, or the widest label there (a check adds its 12px box and 4px gap).
+    private property <length> effects-column: max(56px, effects-measure.preferred-width, effects-check-measure.preferred-width + 16px);
+    private property <length> output-column: max(65px, output-measure.preferred-width);
+    // The preset drop-down: 97px, or the widest preset with the button padding and the caret.
+    private property <length> preset-width: max(97px, preset-measure.preferred-width + 2 * Theme.button-padding + 12px);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        effects-measure := VerticalLayout {
+            Text { text: @tr("Audio sync"); font-size: Theme.font-body; }
+        }
+        effects-check-measure := VerticalLayout {
+            for text in [@tr("Normalize"), @tr("Crystalizer")]: Text { text: text; font-size: Theme.font-body; }
+        }
+        output-measure := VerticalLayout {
+            for text in [@tr("Track"), @tr("Channels"), @tr("Device"), @tr("Keep sync")]: Text { text: text; font-size: Theme.font-body; }
+        }
+        preset-measure := VerticalLayout {
+            for text in [@tr("Flat"), @tr("Voice"), @tr("Music"), @tr("Cinema"), @tr("Custom")]: Text { text: text; font-size: Theme.font-body; }
+        }
+    }
     changed delay-ms => { delay.value = root.delay-ms; }
     changed clarity-db => { clarity.value = root.clarity-db; }
     changed normalize-enabled => { norm.checked = root.normalize-enabled; }
@@ -423,7 +447,7 @@ export component AudioWorkbench inherits Window {
         Rectangle {
             height: 31px;
             background: Theme.bg-bar;
-            HorizontalLayout {
+            tab-strip := HorizontalLayout {
                 for name[index] in root.tab-names: Tab {
                     text: name;
                     selected: index == root.tab-index;
@@ -440,7 +464,7 @@ export component AudioWorkbench inherits Window {
             spacing: 6px;
             Rectangle {
                 vertical-stretch: 1;
-                VerticalLayout {
+                equalizer-page := VerticalLayout {
                     x: 0; y: 0; width: parent.width; height: parent.height;
                     visible: root.tab-index == 0;
                     spacing: 6px;
@@ -448,14 +472,14 @@ export component AudioWorkbench inherits Window {
                         height: 22px;
                         spacing: 6px;
                         eq := Check {
-                            width: 82px;
+                            width: max(82px, self.preferred-width);
                             text: @tr("Equalizer");
                             checked: root.equalizer-enabled;
                             enabled: root.source-ready;
                             toggled(on) => { root.equalizer-changed(on); }
                         }
                         Rectangle {
-                            width: 97px;
+                            width: root.preset-width;
                             preset-button := Button {
                                 width: 100%;
                                 height: 100%;
@@ -497,11 +521,12 @@ export component AudioWorkbench inherits Window {
                     }
                     Rectangle { }
                 }
-                VerticalLayout {
+                effects-page := VerticalLayout {
                     x: 0; y: 0; width: parent.width; height: parent.height;
                     visible: root.tab-index == 1;
                     spacing: 0px;
                     delay := EffectRow {
+                        column: root.effects-column;
                         label: @tr("Audio sync");
                         shown: @tr("{} ms", round(root.delay-ms));
                         minimum: -10000;
@@ -514,7 +539,7 @@ export component AudioWorkbench inherits Window {
                     HorizontalLayout {
                         height: 24px;
                         norm := Check {
-                            width: 56px;
+                            width: root.effects-column;
                             text: @tr("Normalize");
                             checked: root.normalize-enabled;
                             enabled: root.source-ready;
@@ -527,7 +552,7 @@ export component AudioWorkbench inherits Window {
                         spacing: 4px;
                         alignment: start;
                         clarity-check := Check {
-                            width: 56px;
+                            width: root.effects-column;
                             text: @tr("Crystalizer");
                             checked: root.clarity-enabled;
                             enabled: root.source-ready;
@@ -546,21 +571,21 @@ export component AudioWorkbench inherits Window {
                         Text { width: 60px; text: @tr("{} dB", round(root.clarity-db * 10) / 10); color: root.clarity-enabled ? Theme.text-list : Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; }
                         VerticalLayout {
                             alignment: center;
-                            Button { width: 41px; text: @tr("Default"); small: true; enabled: root.source-ready; clicked => { root.clarity-reset(); } }
+                            Button { width: max(41px, self.preferred-width); text: @tr("Default"); small: true; enabled: root.source-ready; clicked => { root.clarity-reset(); } }
                         }
                     }
                     Rectangle { }
                 }
-                VerticalLayout {
+                output-page := VerticalLayout {
                     x: 0; y: 0; width: parent.width; height: parent.height;
                     visible: root.tab-index == 2;
                     spacing: 4px;
                     // Track (G03) + Load… (A11): 65 + 6 + 140 + 6 + 50 = 267 of 285.
-                    HorizontalLayout {
+                    track-row := HorizontalLayout {
                         height: 24px;
                         spacing: 6px;
                         alignment: start;
-                        Text { width: 65px; text: @tr("Track"); color: Theme.text; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
+                        Text { width: root.output-column; text: @tr("Track"); color: Theme.text; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
                         VerticalLayout {
                             alignment: center;
                             track-combo := Choice {
@@ -573,17 +598,17 @@ export component AudioWorkbench inherits Window {
                         }
                         VerticalLayout {
                             alignment: center;
-                            Button { width: 50px; text: @tr("Load…"); small: true; enabled: root.can-load; clicked => { root.load-requested(); } }
+                            Button { width: max(50px, self.preferred-width); text: @tr("Load…"); small: true; enabled: root.can-load; clicked => { root.load-requested(); } }
                         }
                     }
                     // Channels (G05): 65 + 6 + 140 = 211.
                     ToolTipArea {
                         height: 24px;
                         text: root.mono-track ? @tr("The current track is mono") : "";
-                        HorizontalLayout {
+                        channel-row := HorizontalLayout {
                             spacing: 6px;
                             alignment: start;
-                            Text { width: 65px; text: @tr("Channels"); color: root.channels-available ? Theme.text : Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
+                            Text { width: root.output-column; text: @tr("Channels"); color: root.channels-available ? Theme.text : Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
                             VerticalLayout {
                                 alignment: center;
                                 channel-combo := Choice {
@@ -608,10 +633,10 @@ export component AudioWorkbench inherits Window {
                     ToolTipArea {
                         height: 24px;
                         text: Words.device-tip(root.device-tip);
-                        HorizontalLayout {
+                        device-row := HorizontalLayout {
                             spacing: 6px;
                             alignment: start;
-                            Text { width: 65px; text: @tr("Device"); color: root.devices-available ? Theme.text : Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
+                            Text { width: root.output-column; text: @tr("Device"); color: root.devices-available ? Theme.text : Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
                             VerticalLayout {
                                 alignment: center;
                                 device-combo := Choice {
@@ -628,17 +653,17 @@ export component AudioWorkbench inherits Window {
                     // Auto-load (A11): indented to the controls, 71 + check.
                     HorizontalLayout {
                         height: 24px;
-                        padding-left: 71px;
+                        padding-left: root.output-column + 6px;
                         auto-check := Check {
                             text: @tr("Auto-load audio files with the same name");
                             checked: root.auto-load;
                             toggled(on) => { root.auto-load-changed(on); }
                         }
                     }
-                    HorizontalLayout {
+                    keep-row := HorizontalLayout {
                         height: 24px;
                         spacing: 6px;
-                        Text { width: 65px; text: @tr("Keep sync"); color: Theme.text; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
+                        Text { width: root.output-column; text: @tr("Keep sync"); color: Theme.text; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
                         VerticalLayout {
                             alignment: center;
                             keep-combo := Choice {

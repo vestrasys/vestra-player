@@ -204,6 +204,30 @@ export component StoreWindow inherits Window {
 
     forward-focus: search-box;
 
+    // Widths that follow the interface language, never under the original ones.
+    // A drop-down: its widest label + 21px (6 + 5 padding, 2 gap, 8 caret).
+    private property <length> tag-width: max(110px, tag-measure.preferred-width + 21px);
+    private property <length> sort-width: max(110px, sort-measure.preferred-width + 21px);
+    private property <length> version-width: max(56px, version-measure.preferred-width);
+    private property <length> published-width: max(76px, published-measure.preferred-width);
+    private property <length> install-width: max(48px, install-measure.preferred-width + 2 * Theme.button-padding);
+    private property <length> fact-width: max(44px, fact-measure.preferred-width);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        tag-measure := Cell { text: @tr("Tags: All"); }
+        sort-measure := VerticalLayout {
+            for text in [@tr("Sort: Name"), @tr("Sort: Updated")]: Cell { text: text; }
+        }
+        version-measure := Cell { text: @tr("Version"); }
+        published-measure := Cell { text: @tr("Published"); }
+        install-measure := Cell { text: @tr("Install"); }
+        fact-measure := VerticalLayout {
+            for fact in root.facts: Cell { text: fact.label; }
+        }
+    }
+
     VerticalLayout {
         padding: 8px;
         spacing: 6px;
@@ -218,16 +242,16 @@ export component StoreWindow inherits Window {
                 text <=> root.search-text;
                 edited(text) => { root.search(text); }
             }
-            Chip { width: 48px; text: @tr("All"); checked: root.filter == 0; clicked => { root.set-filter(0); } }
-            Chip { width: 56px; text: @tr("Installed"); checked: root.filter == 1; clicked => { root.set-filter(1); } }
+            Chip { width: max(48px, self.preferred-width); text: @tr("All"); checked: root.filter == 0; clicked => { root.set-filter(0); } }
+            Chip { width: max(56px, self.preferred-width); text: @tr("Installed"); checked: root.filter == 1; clicked => { root.set-filter(1); } }
             Chip {
-                width: 76px;
+                width: max(76px, self.preferred-width);
                 text: root.updates > 0 ? @tr("Updates {}", root.updates) : @tr("Updates");
                 checked: root.filter == 2;
                 clicked => { root.set-filter(2); }
             }
             Choice {
-                width: 110px;
+                width: root.tag-width;
                 y: 1px;
                 model: root.tag-model;
                 first-label: @tr("Tags: All");
@@ -235,7 +259,7 @@ export component StoreWindow inherits Window {
                 selected(index) => { root.set-tag(index); }
             }
             Choice {
-                width: 110px;
+                width: root.sort-width;
                 y: 1px;
                 model: [@tr("Sort: Name"), @tr("Sort: Updated")];
                 current-index: root.sort-index;
@@ -246,10 +270,10 @@ export component StoreWindow inherits Window {
             spacing: 6px;
             height: Theme.button-height;
             Cell { horizontal-stretch: 1; text: @tr("You can also drop a .vxp plugin package on the player's video area to install it"); color: Theme.text-dim; }
-            Button { width: 84px; text: @tr("Install from File…"); clicked => { root.from-file(); } }
-            Button { width: 84px; text: @tr("Install from Link…"); clicked => { root.from-link(); } }
-            Button { width: 60px; text: @tr("Repositories…"); clicked => { root.repos(); } }
-            Button { width: 52px; text: @tr("Refresh"); clicked => { root.refresh(); } }
+            SizedButton { min: 84px; text: @tr("Install from File…"); clicked => { root.from-file(); } }
+            SizedButton { min: 84px; text: @tr("Install from Link…"); clicked => { root.from-link(); } }
+            SizedButton { min: 60px; text: @tr("Repositories…"); clicked => { root.repos(); } }
+            SizedButton { min: 52px; text: @tr("Refresh"); clicked => { root.refresh(); } }
         }
         if root.link-open: link-row := UrlInputRow {
             text <=> root.link-text;
@@ -404,10 +428,10 @@ export component StoreWindow inherits Window {
                                         padding-left: 6px;
                                         padding-right: 8px;
                                         spacing: 6px;
-                                        Cell { width: 56px; text: @tr("Version"); color: Theme.text-dim; }
-                                        Cell { width: 76px; text: @tr("Published"); color: Theme.text-dim; }
+                                        Cell { width: root.version-width; text: @tr("Version"); color: Theme.text-dim; }
+                                        Cell { width: root.published-width; text: @tr("Published"); color: Theme.text-dim; }
                                         Cell { horizontal-stretch: 1; text: @tr("Minimum player"); color: Theme.text-dim; }
-                                        Rectangle { width: 48px; }
+                                        Rectangle { width: root.install-width; }
                                     }
                                     Rectangle { height: 1px; background: Theme.line; }
                                     // Two lines per version: the facts, then the status in full (wrapped).
@@ -421,11 +445,11 @@ export component StoreWindow inherits Window {
                                             HorizontalLayout {
                                                 height: 20px;
                                                 spacing: 6px;
-                                                Cell { width: 56px; text: v.version; color: Theme.text; }
-                                                Cell { width: 76px; text: v.date; color: Theme.text-list; }
+                                                Cell { width: root.version-width; text: v.version; color: Theme.text; }
+                                                Cell { width: root.published-width; text: v.date; color: Theme.text-list; }
                                                 Cell { horizontal-stretch: 1; text: v.minimum; color: Theme.text-list; }
                                                 VerticalLayout {
-                                                    width: 48px;
+                                                    width: root.install-width;
                                                     alignment: center;
                                                     if v.canInstall: Button {
                                                         small: true;
@@ -453,7 +477,7 @@ export component StoreWindow inherits Window {
                             for fact[index] in root.facts: HorizontalLayout {
                                 height: 18px;
                                 spacing: 6px;
-                                Cell { width: 44px; text: fact.label; color: Theme.text-dim; }
+                                Cell { width: root.fact-width; text: fact.label; color: Theme.text-dim; }
                                 ToolTipArea {
                                     horizontal-stretch: 1;
                                     text: fact.text;

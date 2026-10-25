@@ -24,10 +24,11 @@ export struct PluginRow {
 component VersionLine {
     in property <string> label;
     in property <string> value;
+    in property <length> label-width: 100px;
     height: 18px;
     HorizontalLayout {
         spacing: 8px;
-        Text { width: 100px; text: root.label; color: Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
+        Text { width: root.label-width; text: root.label; color: Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
         Text { horizontal-stretch: 1; text: root.value; color: Theme.text; font-size: Theme.font-body; vertical-alignment: center; overflow: elide; }
     }
 }
@@ -39,15 +40,19 @@ component PluginLine {
     in property <string> origin;
     in property <string> state;
     in property <bool> heading;
+    // Column widths: the header and the words a column can show, never under 56 / 56 / 48.
+    in property <length> version-width: 56px;
+    in property <length> origin-width: 56px;
+    in property <length> state-width: 48px;
     height: 18px;
     HorizontalLayout {
         padding-left: 6px;
         padding-right: 6px;
         spacing: 6px;
         Text { horizontal-stretch: 1; min-width: 100px; text: root.id; color: root.heading ? Theme.text : Theme.text-list; font-size: Theme.font-body; font-weight: root.heading ? 700 : 400; vertical-alignment: center; overflow: elide; }
-        Text { width: 56px; text: root.version; color: root.heading ? Theme.text : Theme.text-list; font-size: Theme.font-body; font-weight: root.heading ? 700 : 400; vertical-alignment: center; overflow: elide; }
-        Text { width: 56px; text: root.origin; color: root.heading ? Theme.text : Theme.text-list; font-size: Theme.font-body; font-weight: root.heading ? 700 : 400; vertical-alignment: center; overflow: elide; }
-        Text { width: 48px; text: root.state; color: root.heading ? Theme.text : Theme.text-list; font-size: Theme.font-body; font-weight: root.heading ? 700 : 400; vertical-alignment: center; overflow: elide; }
+        Text { width: root.version-width; text: root.version; color: root.heading ? Theme.text : Theme.text-list; font-size: Theme.font-body; font-weight: root.heading ? 700 : 400; vertical-alignment: center; overflow: elide; }
+        Text { width: root.origin-width; text: root.origin; color: root.heading ? Theme.text : Theme.text-list; font-size: Theme.font-body; font-weight: root.heading ? 700 : 400; vertical-alignment: center; overflow: elide; }
+        Text { width: root.state-width; text: root.state; color: root.heading ? Theme.text : Theme.text-list; font-size: Theme.font-body; font-weight: root.heading ? 700 : 400; vertical-alignment: center; overflow: elide; }
     }
 }
 
@@ -100,6 +105,30 @@ export component AboutWindow inherits Window {
             : code;
     }
 
+    private property <length> label-width: max(100px, label-measure.preferred-width);
+    private property <length> version-width: max(56px, version-measure.preferred-width);
+    private property <length> origin-width: max(56px, origin-measure.preferred-width);
+    private property <length> state-width: max(48px, state-measure.preferred-width);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        label-measure := Text { text: @tr("Plugin API"); font-size: Theme.font-body; }
+        // Headings are bold.
+        version-measure := VerticalLayout {
+            Text { text: @tr("Version"); font-size: Theme.font-body; font-weight: 700; }
+            Text { text: @tr("Unknown"); font-size: Theme.font-body; }
+        }
+        origin-measure := VerticalLayout {
+            Text { text: @tr("Source"); font-size: Theme.font-body; font-weight: 700; }
+            for code in ["bundled", "repository", "link", "file", "workshop", "installed", "development"]: Text { text: root.origin-name(code); font-size: Theme.font-body; }
+        }
+        state-measure := VerticalLayout {
+            Text { text: @tr("State"); font-size: Theme.font-body; font-weight: 700; }
+            for code in ["starting", "running", "disabled", "failed", "stopped"]: Text { text: root.state-name(code); font-size: Theme.font-body; }
+        }
+    }
+
     body := VerticalLayout {
         padding-left: Theme.dialog-padding;
         padding-right: Theme.dialog-padding;
@@ -127,18 +156,18 @@ export component AboutWindow inherits Window {
             }
         }
         VerticalLayout {
-            VersionLine { label: @tr("Plugin API"); value: root.api; }
+            VersionLine { label-width: root.label-width; label: @tr("Plugin API"); value: root.api; }
             // i18n-ignore: component names
-            VersionLine { label: "mpv"; value: root.known(root.mpv); }
+            VersionLine { label-width: root.label-width; label: "mpv"; value: root.known(root.mpv); }
             // i18n-ignore
-            VersionLine { label: "FFmpeg"; value: root.known(root.ffmpeg); }
+            VersionLine { label-width: root.label-width; label: "FFmpeg"; value: root.known(root.ffmpeg); }
             // i18n-ignore
-            VersionLine { label: "Slint"; value: root.known(root.slint); }
+            VersionLine { label-width: root.label-width; label: "Slint"; value: root.known(root.slint); }
             // i18n-ignore
-            VersionLine { label: "Node"; value: root.known(root.node); }
+            VersionLine { label-width: root.label-width; label: "Node"; value: root.known(root.node); }
         }
         VerticalLayout {
-            PluginLine { id: @tr("Loaded plugins"); version: @tr("Version"); origin: @tr("Source"); state: @tr("State"); heading: true; }
+            PluginLine { version-width: root.version-width; origin-width: root.origin-width; state-width: root.state-width; id: @tr("Loaded plugins"); version: @tr("Version"); origin: @tr("Source"); state: @tr("State"); heading: true; }
             Rectangle {
                 height: 8 * 18px + 2px;
                 background: Theme.bg-list;
@@ -163,6 +192,9 @@ export component AboutWindow inherits Window {
                     VerticalLayout {
                         width: list.visible-width;
                         for plugin in root.plugins: PluginLine {
+                            version-width: root.version-width;
+                            origin-width: root.origin-width;
+                            state-width: root.state-width;
                             id: plugin.id;
                             version: root.known(plugin.version);
                             origin: root.origin-name(plugin.origin);
@@ -184,8 +216,8 @@ export component AboutWindow inherits Window {
                 vertical-alignment: center;
                 overflow: elide;
             }
-            Button { width: 66px; text: @tr("Copy Info"); clicked => { root.copy-info(); } }
-            Button { width: 66px; text: @tr("Close"); clicked => { root.close-window(); } }
+            Button { width: max(66px, self.preferred-width); text: @tr("Copy Info"); clicked => { root.copy-info(); } }
+            Button { width: max(66px, self.preferred-width); text: @tr("Close"); clicked => { root.close-window(); } }
         }
     }
 }

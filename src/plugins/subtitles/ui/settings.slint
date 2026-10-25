@@ -6,8 +6,10 @@ import { CheckBox, ComboBox } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button, Slider } from "@vestra/widgets.slint";
 
+// The row label; `column` is the window's label column (65px, wider for longer translations).
 component RowLabel inherits Text {
-    width: 65px;
+    in property <length> column: 65px;
+    width: root.column;
     color: Theme.text;
     font-size: Theme.font-body;
     horizontal-alignment: right;
@@ -17,7 +19,10 @@ component RowLabel inherits Text {
 
 export component SubtitleSettings inherits Window {
     title: @tr("Subtitle Settings");
-    width: 301px;
+    // 301px, wider by what a longer translated label or Default button needs, or for the
+    // longest check box (indented to the controls, 10px padding each side).
+    width: max(301px + (root.column - 65px) + (root.default-width - 41px),
+        root.column + 3px + max(box-check.preferred-width, reload-check.preferred-width) + 20px);
     background: Theme.bg-panel;
     in property <bool> can-style: false;
     // The selected track is ASS/SSA with its own styles kept: the note under the font.
@@ -61,13 +66,31 @@ export component SubtitleSettings inherits Window {
     callback change-box-opacity(float);
     callback change-ass-override(int);
     callback change-encoding(int);
+    // The label column: 65px, or the widest label.
+    private property <length> column: max(65px, label-measure.preferred-width);
+    // The Default buttons: 41px, or their label with the button padding.
+    private property <length> default-width: max(41px, default-measure.preferred-width + 2 * Theme.button-padding);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        label-measure := VerticalLayout {
+            for text in [@tr("Font"), @tr("Colour"), @tr("Outline {}", round(root.outline-size)), @tr("Shadow {}", round(root.shadow-size)),
+                @tr("Opacity {}%", round(root.box-opacity)), @tr("Margin {}%", round(root.margin-percent)), @tr("ASS style"), @tr("Sync step"),
+                @tr("Default encoding")]: Text {
+                text: text;
+                font-size: Theme.font-body;
+            }
+        }
+        default-measure := Text { text: @tr("Default"); font-size: Theme.font-body; }
+    }
 
     VerticalLayout {
         padding: 10px;
         spacing: 4px;
         HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: @tr("Font"); }
+            RowLabel { column: root.column; text: @tr("Font"); }
             font-combo := ComboBox {
                 height: 22px;
                 model: root.font-labels;
@@ -75,10 +98,10 @@ export component SubtitleSettings inherits Window {
                 enabled: root.can-style;
                 selected(value) => { root.change-font(self.current-index); }
             }
-            Button { width: 41px; height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("font"); } }
+            Button { width: root.default-width; height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("font"); } }
         }
         if root.ass-note: HorizontalLayout {
-            padding-left: 68px;
+            padding-left: root.column + 3px;
             Text {
                 text: @tr("With the original ASS styles on: fonts follow the subtitle file (missing fonts use the default font); colour, outline, bold, shadow, background box and position have no effect.");
                 color: Theme.text-dim;
@@ -88,7 +111,7 @@ export component SubtitleSettings inherits Window {
             }
         }
         HorizontalLayout {
-            padding-left: 68px;
+            padding-left: root.column + 3px;
             CheckBox {
                 height: Theme.checkbox-row-height;
                 text: @tr("Bold");
@@ -99,7 +122,7 @@ export component SubtitleSettings inherits Window {
         }
         HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: @tr("Colour"); }
+            RowLabel { column: root.column; text: @tr("Colour"); }
             // In the order of main.ts COLORS.
             color-combo := ComboBox {
                 height: 22px;
@@ -108,11 +131,11 @@ export component SubtitleSettings inherits Window {
                 enabled: root.can-style;
                 selected(value) => { root.change-color(self.current-index); }
             }
-            Button { width: 41px; height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("color"); } }
+            Button { width: root.default-width; height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("color"); } }
         }
         HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: @tr("Outline {}", round(root.outline-size)); }
+            RowLabel { column: root.column; text: @tr("Outline {}", round(root.outline-size)); }
             Slider {
                 panel: true; minimum: 0; maximum: 4;
                 value <=> root.outline-size;
@@ -120,11 +143,11 @@ export component SubtitleSettings inherits Window {
                 changed(value) => { root.change-outline(value); }
                 released => { root.slider-released(); }
             }
-            Button { width: 41px; height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("outline"); } }
+            Button { width: root.default-width; height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("outline"); } }
         }
         HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: @tr("Shadow {}", round(root.shadow-size)); }
+            RowLabel { column: root.column; text: @tr("Shadow {}", round(root.shadow-size)); }
             Slider {
                 panel: true; minimum: 0; maximum: 4;
                 value <=> root.shadow-size;
@@ -132,11 +155,11 @@ export component SubtitleSettings inherits Window {
                 changed(value) => { root.change-shadow(value); }
                 released => { root.slider-released(); }
             }
-            Button { width: 41px; height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("shadow"); } }
+            Button { width: root.default-width; height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("shadow"); } }
         }
         HorizontalLayout {
-            padding-left: 68px;
-            CheckBox {
+            padding-left: root.column + 3px;
+            box-check := CheckBox {
                 height: Theme.checkbox-row-height;
                 text: @tr("Background box (replaces outline and shadow)");
                 enabled: root.can-style;
@@ -146,7 +169,7 @@ export component SubtitleSettings inherits Window {
         }
         HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: @tr("Opacity {}%", round(root.box-opacity)); }
+            RowLabel { column: root.column; text: @tr("Opacity {}%", round(root.box-opacity)); }
             Slider {
                 panel: true; minimum: 0; maximum: 100;
                 value <=> root.box-opacity;
@@ -154,11 +177,11 @@ export component SubtitleSettings inherits Window {
                 changed(value) => { root.change-box-opacity(value); }
                 released => { root.slider-released(); }
             }
-            Button { width: 41px; height: 22px; text: @tr("Default"); enabled: root.can-style && root.box-on; clicked => { root.reset-field("boxOpacity"); } }
+            Button { width: root.default-width; height: 22px; text: @tr("Default"); enabled: root.can-style && root.box-on; clicked => { root.reset-field("boxOpacity"); } }
         }
         HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: @tr("Margin {}%", round(root.margin-percent)); }
+            RowLabel { column: root.column; text: @tr("Margin {}%", round(root.margin-percent)); }
             Slider {
                 panel: true; minimum: 2; maximum: 15;
                 value <=> root.margin-percent;
@@ -166,23 +189,23 @@ export component SubtitleSettings inherits Window {
                 changed(value) => { root.change-margin(value); }
                 released => { root.slider-released(); }
             }
-            Button { width: 41px; height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("margin"); } }
+            Button { width: root.default-width; height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("margin"); } }
         }
         HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: @tr("ASS style"); }
+            RowLabel { column: root.column; text: @tr("ASS style"); }
             ass-combo := ComboBox {
                 height: 22px;
                 model: [@tr("Keep original styles"), @tr("Use subtitle settings")];
                 current-index: root.ass-index;
                 selected(value) => { root.change-ass-override(self.current-index); }
             }
-            Button { width: 41px; height: 22px; text: @tr("Default"); clicked => { root.change-ass-override(0); } }
+            Button { width: root.default-width; height: 22px; text: @tr("Default"); clicked => { root.change-ass-override(0); } }
         }
         // Not style fields: they work without a selected track.
         HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: @tr("Sync step"); }
+            RowLabel { column: root.column; text: @tr("Sync step"); }
             // In the order of model.ts SYNC_STEPS.
             step-combo := ComboBox {
                 height: 22px;
@@ -190,11 +213,11 @@ export component SubtitleSettings inherits Window {
                 current-index: root.sync-step-index;
                 selected(value) => { root.change-sync-step(self.current-index); }
             }
-            Button { width: 41px; height: 22px; text: @tr("Default"); clicked => { root.change-sync-step(3); } }
+            Button { width: root.default-width; height: 22px; text: @tr("Default"); clicked => { root.change-sync-step(3); } }
         }
         HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: @tr("Default encoding"); }
+            RowLabel { column: root.column; text: @tr("Default encoding"); }
             // In the order of formats.ts ENCODINGS.
             encoding-combo := ComboBox {
                 height: 22px;
@@ -210,11 +233,11 @@ export component SubtitleSettings inherits Window {
                 current-index: root.encoding-index;
                 selected(value) => { root.change-encoding(self.current-index); }
             }
-            Button { width: 41px; height: 22px; text: @tr("Default"); clicked => { root.change-encoding(0); } }
+            Button { width: root.default-width; height: 22px; text: @tr("Default"); clicked => { root.change-encoding(0); } }
         }
         HorizontalLayout {
-            padding-left: 68px;
-            CheckBox {
+            padding-left: root.column + 3px;
+            reload-check := CheckBox {
                 height: Theme.checkbox-row-height;
                 text: @tr("Reload automatically when the subtitle file changes");
                 checked <=> root.auto-reload;

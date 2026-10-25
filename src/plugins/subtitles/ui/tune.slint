@@ -6,8 +6,10 @@ import { ComboBox } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button, ToolTipArea } from "@vestra/widgets.slint";
 
+// The row label; `column` is the window's label column (65px, wider for longer translations).
 component RowLabel inherits Text {
-    width: 65px;
+    in property <length> column: 65px;
+    width: root.column;
     color: Theme.text;
     font-size: Theme.font-body;
     horizontal-alignment: right;
@@ -17,7 +19,8 @@ component RowLabel inherits Text {
 
 export component SubtitleTune inherits Window {
     title: @tr("Subtitle Tuning");
-    width: 301px;
+    // 301px, wider only when a translated label or button needs it.
+    width: max(301px, max(size-row.min-width, position-row.min-width, sync-row.min-width) + 20px);
     background: Theme.bg-panel;
     // The first entry (off) comes from the plugin with the track names (text values, translated by the player).
     in property <[string]> track-labels: [];
@@ -51,6 +54,26 @@ export component SubtitleTune inherits Window {
     callback remove-selected();
     callback open-settings();
     callback open-sync();
+    // The label column: 65px, or the widest label.
+    private property <length> column: max(65px, label-measure.preferred-width);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        label-measure := VerticalLayout {
+            for text in [@tr("Size {}", root.subtitle-size), @tr("Position {}%", root.margin-percent), @tr("Sync {}", root.sync-seconds)]: Text {
+                text: text;
+                font-size: Theme.font-body;
+            }
+        }
+        // Button labels narrower than the 66px button minimum.
+        load-measure := VerticalLayout {
+            for text in [@tr("Cancel"), @tr("Load…")]: Text { text: text; font-size: Theme.font-body; }
+        }
+        up-measure := Text { text: @tr("Up"); font-size: Theme.font-body; }
+        down-measure := Text { text: @tr("Down"); font-size: Theme.font-body; }
+        default-measure := Text { text: @tr("Default"); font-size: Theme.font-body; }
+    }
 
     VerticalLayout {
         padding: 10px;
@@ -65,8 +88,8 @@ export component SubtitleTune inherits Window {
                 selected(value) => { root.select-track(self.current-index); }
             }
             // While an operation runs the same button cancels it.
-            Button {
-                width: 51px; height: 22px;
+            load-button := Button {
+                width: max(51px, load-measure.preferred-width + 2 * Theme.button-padding); height: 22px;
                 text: root.busy ? @tr("Cancel") : @tr("Load…");
                 clicked => { if root.busy { root.cancel(); } else { root.load-file(); } }
             }
@@ -85,31 +108,32 @@ export component SubtitleTune inherits Window {
                     self.current-index = root.selected-secondary;
                 }
             }
-            Rectangle { width: 51px; }
+            Rectangle { width: load-button.width; }
         }
-        HorizontalLayout {
+        size-row := HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: @tr("Size {}", root.subtitle-size); }
+            RowLabel { column: root.column; text: @tr("Size {}", root.subtitle-size); }
             Button { width: 51px; height: 22px; text: "−"; enabled: root.can-style; clicked => { root.size-step(-1); } }
             Button { width: 51px; height: 22px; text: "+"; enabled: root.can-style; clicked => { root.size-step(1); } }
             Rectangle { }
-            Button { width: 41px; height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("size"); } }
+            Button { width: max(41px, default-measure.preferred-width + 2 * Theme.button-padding); height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("size"); } }
         }
-        HorizontalLayout {
+        position-row := HorizontalLayout {
             spacing: 3px;
-            RowLabel { text: @tr("Position {}%", root.margin-percent); }
-            Button { width: 51px; height: 22px; text: @tr("Up"); enabled: root.can-style; clicked => { root.position-step(1); } }
-            Button { width: 51px; height: 22px; text: @tr("Down"); enabled: root.can-style; clicked => { root.position-step(-1); } }
+            RowLabel { column: root.column; text: @tr("Position {}%", root.margin-percent); }
+            Button { width: max(51px, up-measure.preferred-width + 2 * Theme.button-padding); height: 22px; text: @tr("Up"); enabled: root.can-style; clicked => { root.position-step(1); } }
+            Button { width: max(51px, down-measure.preferred-width + 2 * Theme.button-padding); height: 22px; text: @tr("Down"); enabled: root.can-style; clicked => { root.position-step(-1); } }
             Rectangle { }
-            Button { width: 41px; height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("position"); } }
+            Button { width: max(41px, default-measure.preferred-width + 2 * Theme.button-padding); height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("position"); } }
         }
-        HorizontalLayout {
+        sync-row := HorizontalLayout {
             spacing: 3px;
             // The value opens Adjust Sync (D05).
             ToolTipArea {
                 text: @tr("In seconds. Positive delays the subtitles, negative advances them. Click to enter a value.");
-                width: 65px;
+                width: root.column;
                 RowLabel {
+                    column: root.column;
                     text: @tr("Sync {}", root.sync-seconds);
                     color: sync-touch.has-hover ? Theme.accent : Theme.text;
                 }
@@ -118,9 +142,9 @@ export component SubtitleTune inherits Window {
                     clicked => { root.open-sync(); }
                 }
             }
-            Button { width: 69px; height: 22px; text: @tr("Later"); enabled: root.can-style; clicked => { root.sync-step(1); } }
-            Button { width: 69px; height: 22px; text: @tr("Earlier"); enabled: root.can-style; clicked => { root.sync-step(-1); } }
-            Button { width: 69px; height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("sync"); } }
+            Button { width: max(69px, self.preferred-width); height: 22px; text: @tr("Later"); enabled: root.can-style; clicked => { root.sync-step(1); } }
+            Button { width: max(69px, self.preferred-width); height: 22px; text: @tr("Earlier"); enabled: root.can-style; clicked => { root.sync-step(-1); } }
+            Button { width: max(69px, self.preferred-width); height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("sync"); } }
         }
         HorizontalLayout {
             spacing: 3px;
