@@ -74,7 +74,7 @@ std-widgets 控件（`LineEdit`、`ComboBox`、`CheckBox`、`ScrollView`、`List
 ### 2.3 控件尺寸
 
 ```css
-button          { height: 21px; min-width: 66px; padding: 0 8px; }   /* 对话框普通按钮 */
+button          { height: 21px; min-width: 66px; padding: 0 8px; }   /* 对话框普通按钮；首选宽度 = max(最小宽度, 文字宽 + 内边距) */
 button.primary  { height: 24px; }                                    /* 底部主操作按钮 */
 button.small    { height: 18px; min-width: 41px; }                   /* 面板内「默认」按钮 */
 input, select   { height: 21px; }
