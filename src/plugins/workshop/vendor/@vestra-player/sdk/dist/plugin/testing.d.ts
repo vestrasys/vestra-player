@@ -1242,11 +1242,20 @@ export declare class TestHost implements Transport {
     failStream(producerId: number, message: string): void;
     /**
      * Press a binding like the host's table would: panel-focus bindings first
-     * when `panel` is true, then global ones; the earliest registration wins a
-     * conflict. Resolves after the command ran; rejects when nothing is bound
-     * or the command is disabled or busy. Bindings use the reference syntax
-     * (`"Space"`, `"Ctrl+O"`, `"Mouse:WheelUp"`); the player's core actions
-     * match first, and user overrides in `bindings.overlay` apply.
+     * when `panel` is true, then global ones; within a scope the earliest
+     * registration first (the player's own commands before the plugin's), as
+     * the conflict rule orders them. A disabled command lets the key pass to
+     * the next command bound to it (SDK 1.5.12, as player 0.4.3): the one it
+     * shadowed, then the global scope. The first enabled one runs; `press`
+     * resolves after it ran (`"ran"`), or rejects when it is busy. When only
+     * disabled commands hold the key, the first one with a `reason` shows the
+     * reason on the OSD and eats the key (`"reason"`, see `host.osd`);
+     * without a reason the key goes on to the focused control (`"passed"`,
+     * nothing runs). Rejects when nothing is bound. Bindings use the
+     * reference syntax (`"Space"`, `"Ctrl+O"`, `"Mouse:WheelUp"`), and user
+     * overrides in `bindings.overlay` apply.
+     *
+     * @returns What the key did: `"ran"`, `"reason"` or `"passed"`.
      *
      * @example
      * ```ts
@@ -1256,7 +1265,7 @@ export declare class TestHost implements Transport {
      */
     press(binding: string, options?: {
         panel?: boolean;
-    }): Promise<void>;
+    }): Promise<"ran" | "reason" | "passed">;
     /**
      * Bindings declared by more than one command, each as
      * `[binding, winner, ...ignored]` (command ids; core actions as

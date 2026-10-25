@@ -303,7 +303,7 @@ interface Command extends Disposable {
         run: () => plugin.subtitles.select(track) }));
   });
   ```
-- 命令禁用或忙碌时，播放器不会调用 `run`（绑定的按键被接住但不执行）。`run` 抛出的错误交给 `onError`。
+- 命令禁用或忙碌时，播放器不会调用 `run`。忙碌时绑定的按键被接住但不执行；禁用时按键让出（§4.1）。`run` 抛出的错误交给 `onError`。
 - **数量上限**：每个插件实例同时最多 160 条命令，播放器全部（所有插件加上播放器自己的命令）最多 1024 条；超出时该命令的 `ready` 以 `limit` 失败（在激活期间注册的，激活随之失败），已注册的不受影响，`dispose` 后名额立即释放。上限只防失控（如按轨道数无限添加），不是产品限制：内置插件里最多的 video 在空闲时注册 71 条，全部插件约 290 条。按媒体内容动态添加的菜单项（轨道、章节、预设列表）请自行设一个合理的显示上限。常量 `COMMAND_LIMITS`（`{ perPlugin, total }`，从 `@vestra-player/sdk/testing` 导入）与播放器一致，`TestHost` 执行同样的上限。
 
 ### 4.1 绑定
@@ -1440,7 +1440,7 @@ const { stop } = await startPlugin(activate, { directory: new URL("..", import.m
 
 | 类别 | 成员 |
 | --- | --- |
-| 操作 | `host.command(id).run()`（禁用或忙碌时同样拒绝）；`host.press(binding, { panel? })`（按绑定表执行，`panel: true` 模拟面板有焦点）；`host.window(id).emit(callback, ...args)`；`host.mounted().emit(...)`；`host.dialogAnswers.push([path] \| null)`；`host.step("next" \| "previous")`（模拟别的插件调用 `player.next()`） |
+| 操作 | `host.command(id).run()`（禁用或忙碌时同样拒绝）；`host.press(binding, { panel? })`（按绑定表执行，`panel: true` 模拟面板有焦点；SDK 1.5.12 起与播放器一样让出禁用命令的按键（§4.1）：交给被它压下的命令、再到全局范围，执行第一个可用的命令，resolve 为 `"ran"`；只剩禁用的命令时，第一个带 `reason` 的把原因写进 `host.osd` 并吃掉按键，resolve 为 `"reason"`，都不带则 resolve 为 `"passed"`（交给焦点控件，什么都不执行）。没有绑定或要执行的命令忙碌时拒绝。1.5.11 及以前禁用命令的按键同样拒绝）；`host.window(id).emit(callback, ...args)`；`host.mounted().emit(...)`；`host.dialogAnswers.push([path] \| null)`；`host.step("next" \| "previous")`（模拟别的插件调用 `player.next()`） |
 | 模拟来源 | `host.openElsewhere(path, phase?)`（另一个插件打开了媒体）；`host.setSource({ phase, position, duration, … })` |
 | 界面语言 | `startPlugin(…, { locale })` / `host.locale`：加载插件该语言的词典；`host.command(id).display`、`host.translate(text, args)`、`host.confirmTexts`、`host.fileDialogs`、`host.loadCatalog(directory)`；文字值（§6.11）在 `props`、`osd`、时间轴、字幕标题里都按播放器的方式显示；`host.language`、`host.setLanguage(…)`（§6.10、§6.8）。核心命令的 `declaration.path` 是英文 key |
 | 断言 | `host.window(id).props`（kebab-case 名）、`.visible`；`host.command(id).state`、`.declaration`；`host.conflicts`（`[绑定, 赢家, ...被压下]`）；`host.layout.bottom` / `.sidebar`（可直接改后 `host.emit("window.state", {})` 模拟别处的变化；`.panels` 为页签、`.owner` 为当前页签，被测插件是 owner 1）；SDK 1.5.2 起 `host.mountOther(slot, plugin, { title })` / `host.unmountOther(plugin)` 模拟别的插件的面板（侧栏为另一个页签；底栏、背景层被占时被测插件的挂载以 `conflict` 失败，`startPlugin` 不因此失败），`host.selectTab(plugin)` 模拟点页签；`host.osd`（显示过的提示）、`host.osdPanel`；`host.sequence`（提供者的标志）；`host.menus`（`showMenu` 记录）；`host.sent(method)`；`host.source`；`host.processing`、`host.subtitles`、`host.snapshots`、`host.jobs`、`host.producers` |
@@ -1473,7 +1473,7 @@ vestra-plugin test  [插件目录…]                  # node --test tests/*.tes
 vestra-plugin build [插件目录…] [--version x.y.z]
 vestra-plugin pack  [插件目录…] [--version x.y.z] [--out 目录]   # build 后把 dist/ 打成 <id>-<version>.vxp（zip），输出大小和 sha256
 vestra-plugin i18n extract [插件目录…] [--locale <语言>]…       # 收集要翻译的文字 → locales/messages.pot，合并进每个 locales/<语言>.po（SDK 1.5.9）
-vestra-plugin i18n check   [插件目录…]                         # 覆盖率与问题，只警告
+vestra-plugin i18n check   [插件目录…]                         # 覆盖率与问题；词典过期时失败
 ```
 
 在本仓库的 `src/` 下有按插件名调用的快捷方式：
@@ -1493,7 +1493,7 @@ npm run plugins:build                   # 构建 src/plugins/ 下全部插件
 - 开发时不需要构建：`cargo run --bin vestra-host -- --plugin <插件目录>`（在 `src/host/` 下，可重复 `--plugin`）直接运行 `main.ts`。
 - 每个命令先按 §2 的规则检查 manifest（与宿主同一张表）；`check` 另外打印不算失败的提示（如 id 没有 `<所有者>.` 前缀）。
 - `pack` 的同样输入得到同样字节（条目排序、固定时间戳）。SDK 1.0 的扩展名是 `.zip`，内容相同。
-- 翻译（SDK 1.5.9）：`i18n extract` 找出 `.slint` 里的 `@tr`、交给 `commands.add`（`title`、`path`、`reason`）、`Command.set`、`settings.page`、`panels.mount`、`osd.show`、`OsdPanel.set`、`dialogs.*` 的文字（借 TS 类型检查器：字面量、条件的两支、`as const` 表的字面量联合类型）和 manifest 显示字段，写 `locales/messages.pot`，合并进已有的每个 `.po`（保留译文，新文字未翻译，消失的移到末尾作废，回来时恢复译文）；`--locale <语言>` 新建一种语言（`en` 与不支持的语言报错）。`i18n check` 报告每种语言的覆盖率、占位符不一致、缺复数形式、模板过期，以及无法翻译的文字：TS 里拼接的句子、不是字面量的值、非英文原文、Slint 里没包 `@tr` 的文字；只警告，`.po` 解析失败才失败。插件有 `locales/` 时 `check` 也打印这些警告。SDK 1.5.11 起还收集 `plugin.i18n.text`/`error`/`resolve` 的 `source` 与 `$vestraText` 字面量（只有占位符和标点的也收录），并按类型读取展开进调用选项的字段（`commands.add({ ...extra })`），读不出时报告（以前静默跳过）。`build` 把 `locales/<语言>.po` 编译成 `dist/locales/<语言>.json`，不复制 `.po`/`.pot`。
+- 翻译（SDK 1.5.9）：`i18n extract` 找出 `.slint` 里的 `@tr`、交给 `commands.add`（`title`、`path`、`reason`）、`Command.set`、`settings.page`、`panels.mount`、`osd.show`、`OsdPanel.set`、`dialogs.*` 的文字（借 TS 类型检查器：字面量、条件的两支、`as const` 表的字面量联合类型）和 manifest 显示字段，写 `locales/messages.pot`，合并进已有的每个 `.po`（保留译文，新文字未翻译，消失的移到末尾作废，回来时恢复译文）；`--locale <语言>` 新建一种语言（`en` 与不支持的语言报错）。`i18n check` 报告每种语言的覆盖率、占位符不一致、缺复数形式、模板过期，以及无法翻译的文字：TS 里拼接的句子、不是字面量的值、非英文原文、Slint 里没包 `@tr` 的文字；这些只警告。`.po` 解析失败时失败；SDK 1.5.12 起 `locales/messages.pot` 过期、有 `.po` 却没有模板、`.po` 缺模板里的文字时也失败（退出码 1，CI 能发现忘了 `extract`）。插件有 `locales/` 时 `check` 也打印这些问题，但只警告。SDK 1.5.12 起 `as const` 表（任意深度）里属性或元素前的 `TRANSLATORS:` 注释同样交给译者。SDK 1.5.11 起还收集 `plugin.i18n.text`/`error`/`resolve` 的 `source` 与 `$vestraText` 字面量（只有占位符和标点的也收录），并按类型读取展开进调用选项的字段（`commands.add({ ...extra })`），读不出时报告（以前静默跳过）。`build` 把 `locales/<语言>.po` 编译成 `dist/locales/<语言>.json`，不复制 `.po`/`.pot`。
 
 ## 16. 通用能力
 
@@ -1618,6 +1618,13 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 | `Theme.font-mono` §6.4 | Menlo | Consolas | DejaVu Sans Mono |
 
 ## 17. 变更说明
+
+### SDK 1.5.12：禁用命令让出按键（2026-10，播放器 0.4.3，SDK 1.5.12）
+
+- `TestHost.press` 与播放器（0.4.3，§4.1）一致：禁用的命令不再吞掉按键，按键交给被它压下的命令、再到全局范围；只剩禁用的命令时，第一个带 `reason` 的在 OSD 显示原因并吃掉按键，否则按键交给焦点控件。`press` 改为 resolve 出结果 `"ran"` / `"reason"` / `"passed"`（§14），不再因命令禁用而拒绝；没有绑定、要执行的命令忙碌时仍拒绝。断言「禁用命令的按键被拒绝」的测试改为断言 `"reason"`（及 `host.osd` 里的原因）或 `"passed"`（什么都没执行）。插件代码不用改。
+- `vestra-plugin i18n check` 在词典过期时以 1 退出（§15）；`as const` 表里的 `TRANSLATORS:` 注释交给译者。
+- SDK 带的控件库副本（`slint/vestra/widgets.slint`）与播放器一致：`Button` 的首选宽度跟随文字（最小宽度不变），译文较长时按钮变宽而不溢出。
+- `apiVersion` 仍为 `vestra/1`。
 
 ### 多语言第 2 轮：文字值（2026-10，播放器 0.4.3，SDK 1.5.11）
 
