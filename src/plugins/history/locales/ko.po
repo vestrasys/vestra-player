@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ko\n"
@@ -53,12 +54,12 @@ msgstr "(항목 없음)"
 #: menu.ts:114
 #, x-machine
 msgid "Remove Invalid Entries"
-msgstr "잘못된 항목 제거"
+msgstr "유효하지 않은 항목 제거"
 
 #: menu.ts:118
 #, x-machine
 msgid "Removed {} invalid entries"
-msgstr "잘못된 항목 {}개를 제거했습니다"
+msgstr "유효하지 않은 항목 {}개를 제거했습니다"
 
 #: menu.ts:122
 #, x-machine

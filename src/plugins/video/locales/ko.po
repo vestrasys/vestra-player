@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ko\n"
@@ -63,42 +64,42 @@ msgstr "창 채우기"
 #: main.ts:479
 #, x-machine
 msgid "Framing: larger ({}%)"
-msgstr "화면 위치: 크게 ({}%)"
+msgstr "화면 크기/위치: 크게 ({}%)"
 
 #: main.ts:479
 #, x-machine
 msgid "Framing: smaller ({}%)"
-msgstr "화면 위치: 작게 ({}%)"
+msgstr "화면 크기/위치: 작게 ({}%)"
 
 #: main.ts:486
 #, x-machine
 msgid "Framing: move right ({}%, {}%)"
-msgstr "화면 위치: 오른쪽으로 ({}%, {}%)"
+msgstr "화면 크기/위치: 오른쪽으로 ({}%, {}%)"
 
 #: main.ts:486
 #, x-machine
 msgid "Framing: move left ({}%, {}%)"
-msgstr "화면 위치: 왼쪽으로 ({}%, {}%)"
+msgstr "화면 크기/위치: 왼쪽으로 ({}%, {}%)"
 
 #: main.ts:486
 #, x-machine
 msgid "Framing: move up ({}%, {}%)"
-msgstr "화면 위치: 위로 ({}%, {}%)"
+msgstr "화면 크기/위치: 위로 ({}%, {}%)"
 
 #: main.ts:486
 #, x-machine
 msgid "Framing: move down ({}%, {}%)"
-msgstr "화면 위치: 아래로 ({}%, {}%)"
+msgstr "화면 크기/위치: 아래로 ({}%, {}%)"
 
 #: main.ts:491
 #, x-machine
 msgid "Framing: centered"
-msgstr "화면 위치: 가운데"
+msgstr "화면 크기/위치: 가운데"
 
 #: main.ts:491
 #, x-machine
 msgid "Framing: reset"
-msgstr "화면 위치: 재설정"
+msgstr "화면 크기/위치: 재설정"
 
 #: main.ts:534
 #, x-machine
@@ -308,7 +309,7 @@ msgstr "디인터레이스 출력: 프레임 단위"
 #: main.ts:566
 #, x-machine
 msgid "Deinterlace output: by field (double rate)"
-msgstr "디인터레이스 출력: 필드 단위 (2배 속도)"
+msgstr "디인터레이스 출력: 필드 단위 (2배 프레임 속도)"
 
 #: main.ts:573
 #, x-machine
@@ -318,12 +319,12 @@ msgstr "자르기/늘이기: 없음"
 #: main.ts:573
 #, x-machine
 msgid "Crop/stretch: stretch to {}"
-msgstr "자르기/늘이기: {}(으)로 늘이기"
+msgstr "자르기/늘이기: {} 비율로 늘이기"
 
 #: main.ts:573
 #, x-machine
 msgid "Crop/stretch: crop to {}"
-msgstr "자르기/늘이기: {}(으)로 자르기"
+msgstr "자르기/늘이기: {} 비율로 자르기"
 
 #: main.ts:580
 #, x-machine
@@ -625,7 +626,7 @@ msgstr "프레임 단위"
 #: main.ts:871 picture.slint:732
 #, x-machine
 msgid "By Field (Double Rate)"
-msgstr "필드 단위 (2배 속도)"
+msgstr "필드 단위 (2배 프레임 속도)"
 
 #: main.ts:882 main.ts:891 main.ts:899 main.ts:943 main.ts:945 main.ts:946
 #, x-machine
@@ -755,12 +756,12 @@ msgstr "아래로 이동"
 #: main.ts:999
 #, x-machine
 msgid "Framing"
-msgstr "화면 위치"
+msgstr "화면 크기/위치"
 
 #: main.ts:999
 #, x-machine
 msgid "Reset Framing"
-msgstr "화면 위치 재설정"
+msgstr "화면 크기/위치 재설정"
 
 #: main.ts:999
 #, x-machine
@@ -1089,7 +1090,7 @@ msgstr "영화"
 #: picture.slint:444
 #, x-machine
 msgid "Soft"
-msgstr "부드럽게"
+msgstr "부드러움"
 
 #: picture.slint:453
 #, x-machine
@@ -1306,7 +1307,7 @@ msgstr "셰이더 목록"
 #: ui/shaders.slint:86
 #, x-machine
 msgid "Enabled {}/{} (run in order)"
-msgstr "사용 {}/{} (순서대로 실행)"
+msgstr "사용 중 {}/{} (순서대로 실행)"
 
 #: ui/shaders.slint:95
 #, x-machine

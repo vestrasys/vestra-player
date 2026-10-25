@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ko\n"
@@ -118,7 +119,7 @@ msgstr "이 플러그인에는 더 새로운 Vestra Player가 필요합니다 (�
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "“{}” has the same id as a built-in plugin and cannot be installed"
-msgstr "“{}”은(는) 내장 플러그인과 ID가 같아 설치할 수 없습니다"
+msgstr "“{}”: 내장 플러그인과 ID가 같아 설치할 수 없습니다"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -168,32 +169,32 @@ msgstr "설치 안 됨"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Installed {} {}"
-msgstr "{} {} 설치함"
+msgstr "{} {} 설치 완료"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Updated {} to {}"
-msgstr "{}을(를) {}(으)로 업데이트했습니다"
+msgstr "{} 플러그인을 {} 버전으로 업데이트했습니다"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Rolled back {} to {}"
-msgstr "{}을(를) {}(으)로 롤백했습니다"
+msgstr "{} 플러그인을 {} 버전으로 롤백했습니다"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Restored {} to {}"
-msgstr "{}을(를) {}(으)로 복원했습니다"
+msgstr "{} 플러그인을 {} 버전으로 복원했습니다"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Uninstalled {} (data deleted)"
-msgstr "{}을(를) 제거했습니다 (데이터 삭제됨)"
+msgstr "{} 플러그인을 제거했습니다 (데이터 삭제됨)"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Uninstalled {} (data kept)"
-msgstr "{}을(를) 제거했습니다 (데이터 보관됨)"
+msgstr "{} 플러그인을 제거했습니다 (데이터 보관됨)"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -208,12 +209,12 @@ msgstr "내장 플러그인은 사용 중지만 할 수 있습니다"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Enabled “{}” again"
-msgstr "“{}”을(를) 다시 사용합니다"
+msgstr "“{}” 플러그인을 다시 사용합니다"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Couldn't enable “{}”: {}"
-msgstr "“{}”을(를) 사용할 수 없습니다: {}"
+msgstr "“{}” 플러그인을 사용할 수 없습니다: {}"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -423,7 +424,7 @@ msgstr "공식 저장소가 오래된 인덱스를 반환하여 이번 업데이
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "{} uses a newer format; please update Vestra Player"
-msgstr "{}은(는) 더 새로운 형식을 사용합니다. Vestra Player를 업데이트하세요"
+msgstr "{}: 더 새로운 형식을 사용합니다. Vestra Player를 업데이트하세요"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -438,12 +439,12 @@ msgstr "{0}의 인덱스 형식이 잘못되어 {1} 데이터를 표시합니다
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "{0} returned error {1}"
-msgstr "{0}에서 오류 {1}을(를) 반환했습니다"
+msgstr "{0}에서 오류를 반환했습니다 ({1})"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "{0} returned error {1}; showing the data from {2}"
-msgstr "{0}에서 오류 {1}을(를) 반환하여 {2} 데이터를 표시합니다"
+msgstr "{0}에서 오류를 반환했습니다 ({1}). {2} 데이터를 표시합니다"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -498,12 +499,12 @@ msgstr "이 저장소를 읽을 수 없습니다: {}. 주소(저장소의 루트
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Added {}"
-msgstr "{} 추가함"
+msgstr "추가했습니다: {}"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Removed {}"
-msgstr "{} 제거함"
+msgstr "제거했습니다: {}"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -578,7 +579,7 @@ msgstr "{} 설치"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Update to {}"
-msgstr "{}(으)로 업데이트"
+msgstr "{} 버전으로 업데이트"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -593,12 +594,12 @@ msgstr "바꾸기…"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Roll Back to {}"
-msgstr "{}(으)로 롤백"
+msgstr "{} 버전으로 롤백"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Restore to {}"
-msgstr "{}(으)로 복원"
+msgstr "{} 버전으로 복원"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -648,7 +649,7 @@ msgstr "이 컴퓨터에 있는 테스트 저장소이며 암호화되지 않습
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Installed {1} from {0}. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data; the current data is kept"
-msgstr "{0}에서 {1}을(를) 설치했습니다. 바꾸면 이 출처에서 예전에 설치한 적이 있을 경우 그때의 데이터를 이어서 사용하고, 없으면 비어 있는 새 데이터로 시작합니다. 현재 데이터는 보관됩니다"
+msgstr "{0}에서 {1} 버전을 설치했습니다. 바꾸면 이 출처에서 예전에 설치한 적이 있을 경우 그때의 데이터를 이어서 사용하고, 없으면 비어 있는 새 데이터로 시작합니다. 현재 데이터는 보관됩니다"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1023,12 +1024,12 @@ msgstr "플러그인 스토어: 플러그인 업데이트 있음 ({}개)"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Disabled the revoked plugin “{}”"
-msgstr "철회된 플러그인 “{}”을(를) 사용 중지했습니다"
+msgstr "철회된 “{}” 플러그인을 사용 중지했습니다"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Replace the installed “{}”?"
-msgstr "설치된 “{}”을(를) 바꿀까요?"
+msgstr "설치된 “{}” 플러그인을 바꿀까요?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1041,7 +1042,7 @@ msgid ""
 msgstr ""
 "{1}\n"
 "\n"
-"공식 저장소에서 {2}을(를) 설치합니다.\n"
+"공식 저장소에서 {2} 버전을 설치합니다.\n"
 "\n"
 "{3}"
 
@@ -1058,7 +1059,7 @@ msgid ""
 msgstr ""
 "{1}\n"
 "\n"
-"비공식 저장소에서 {2}을(를) 설치합니다.\n"
+"비공식 저장소에서 {2} 버전을 설치합니다.\n"
 "\n"
 "{4}\n"
 "\n"
@@ -1067,7 +1068,7 @@ msgstr ""
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Update “{}” to {}? The new version needs more permissions"
-msgstr "“{}”을(를) {}(으)로 업데이트할까요? 새 버전에는 더 많은 권한이 필요합니다"
+msgstr "“{}” 플러그인을 {} 버전으로 업데이트할까요? 새 버전에는 더 많은 권한이 필요합니다"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1082,39 +1083,39 @@ msgstr ""
 "추가된 권한:\n"
 "{2}\n"
 "\n"
-"현재: {3}. 업데이트한 뒤에도 스토어에서 {3}(으)로 롤백할 수 있습니다.\n"
+"현재: {3}. 업데이트한 뒤에도 스토어에서 {3} 버전으로 롤백할 수 있습니다.\n"
 "\n"
 "플러그인은 완전한 프로그램입니다. 위 권한은 플레이어에서 할 수 있는 일만 제한하며, 파일 읽기·쓰기나 네트워크 사용은 제한하지 않습니다."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Update “{}” to {}?"
-msgstr "“{}”을(를) {}(으)로 업데이트할까요?"
+msgstr "“{}” 플러그인을 {} 버전으로 업데이트할까요?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Current: {2}. After updating you can roll back to {2} in the store."
-msgstr "현재: {2}. 업데이트한 뒤에도 스토어에서 {2}(으)로 롤백할 수 있습니다."
+msgstr "현재: {2}. 업데이트한 뒤에도 스토어에서 {2} 버전으로 롤백할 수 있습니다."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Install “{}” {} (older version)?"
-msgstr "“{}” {}을(를) 설치할까요? (이전 버전)"
+msgstr "“{}” {} 버전을 설치할까요? (이전 버전)"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Install “{}” {} (reinstall)?"
-msgstr "“{}” {}을(를) 설치할까요? (다시 설치)"
+msgstr "“{}” {} 버전을 설치할까요? (다시 설치)"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Current: {2}. After installing you can restore {2} in the store."
-msgstr "현재: {2}. 설치한 뒤에도 스토어에서 {2}(으)로 복원할 수 있습니다."
+msgstr "현재: {2}. 설치한 뒤에도 스토어에서 {2} 버전으로 복원할 수 있습니다."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Current: {2}. After installing you can roll back to {2} in the store."
-msgstr "현재: {2}. 설치한 뒤에도 스토어에서 {2}(으)로 롤백할 수 있습니다."
+msgstr "현재: {2}. 설치한 뒤에도 스토어에서 {2} 버전으로 롤백할 수 있습니다."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1124,7 +1125,7 @@ msgid ""
 "This version needs more permissions:\n"
 "{3}"
 msgstr ""
-"현재: {2}. 설치한 뒤에도 스토어에서 {2}(으)로 복원할 수 있습니다.\n"
+"현재: {2}. 설치한 뒤에도 스토어에서 {2} 버전으로 복원할 수 있습니다.\n"
 "\n"
 "이 버전에는 더 많은 권한이 필요합니다:\n"
 "{3}"
@@ -1137,7 +1138,7 @@ msgid ""
 "This version needs more permissions:\n"
 "{3}"
 msgstr ""
-"현재: {2}. 설치한 뒤에도 스토어에서 {2}(으)로 롤백할 수 있습니다.\n"
+"현재: {2}. 설치한 뒤에도 스토어에서 {2} 버전으로 롤백할 수 있습니다.\n"
 "\n"
 "이 버전에는 더 많은 권한이 필요합니다:\n"
 "{3}"
@@ -1145,7 +1146,7 @@ msgstr ""
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Install “{}” {}?"
-msgstr "“{}” {}을(를) 설치할까요?"
+msgstr "“{}” {} 버전을 설치할까요?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1161,7 +1162,7 @@ msgstr ""
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Install “{}” {} from an unofficial repository?"
-msgstr "비공식 저장소에서 “{}” {}을(를) 설치할까요?"
+msgstr "비공식 저장소에서 “{}” {} 버전을 설치할까요?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1235,7 +1236,7 @@ msgstr "모두 {}개"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Replace the installed version with the plugin package “{}” {}?"
-msgstr "설치된 버전을 플러그인 패키지 “{}” {}(으)로 바꿀까요?"
+msgstr "설치된 버전을 플러그인 패키지 “{}” {} 버전으로 바꿀까요?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1255,7 +1256,7 @@ msgstr ""
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Install the plugin package “{}” {}?"
-msgstr "플러그인 패키지 “{}” {}을(를) 설치할까요?"
+msgstr "플러그인 패키지 “{}” {} 버전을 설치할까요?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1285,7 +1286,7 @@ msgstr "링크 {}에서 설치합니다. 어떤 저장소에서도 검토되지 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Uninstall “{}”?"
-msgstr "“{}”을(를) 제거할까요?"
+msgstr "“{}” 플러그인을 제거할까요?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1295,7 +1296,7 @@ msgstr "이 플러그인의 메뉴, 창, 처리 효과가 즉시 제거됩니다
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Add the unofficial repository “{}”?"
-msgstr "비공식 저장소 “{}”을(를) 추가할까요?"
+msgstr "“{}” 비공식 저장소를 추가할까요?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1331,7 +1332,7 @@ msgstr ""
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Remove the repository “{} ({})”?"
-msgstr "저장소 “{} ({})”을(를) 제거할까요?"
+msgstr "“{} ({})” 저장소를 제거할까요?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1346,7 +1347,7 @@ msgstr "스토어에서 이 저장소를 더 이상 읽지 않습니다. 이 저
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Disabled the revoked plugin “{}” {}"
-msgstr "철회된 플러그인 “{}” {}을(를) 사용 중지했습니다"
+msgstr "철회된 “{}” {} 버전을 사용 중지했습니다"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1380,7 +1381,7 @@ msgid ""
 "You can update to {} in the Plugin Store."
 msgstr ""
 "“{}” {}: {}\n"
-"플러그인 스토어에서 {}(으)로 업데이트할 수 있습니다."
+"플러그인 스토어에서 {} 버전으로 업데이트할 수 있습니다."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1396,7 +1397,7 @@ msgstr ""
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Enable the revoked “{}” {} anyway?"
-msgstr "철회된 “{}” {}을(를) 그래도 사용할까요?"
+msgstr "철회된 “{}” {} 버전을 그래도 사용할까요?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1422,12 +1423,12 @@ msgstr ""
 "\n"
 "사용하면 위험할 수 있습니다. 확인하면 스토어에서 다시 자동으로 사용 중지하지 않으며, 해당 페이지에 경고가 계속 표시됩니다.\n"
 "\n"
-"대신 {3}(으)로 업데이트하는 것을 권장합니다."
+"대신 {3} 버전으로 업데이트하는 것을 권장합니다."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "“{}” {} has been revoked. Keep using it?"
-msgstr "“{}” {}이(가) 철회되었습니다. 계속 사용할까요?"
+msgstr "“{}” {} 버전이 철회되었습니다. 계속 사용할까요?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1453,7 +1454,7 @@ msgstr ""
 "\n"
 "사용하면 위험할 수 있습니다. 확인하면 스토어에서 다시 자동으로 사용 중지하지 않으며, 해당 페이지에 경고가 계속 표시됩니다.\n"
 "\n"
-"대신 {3}(으)로 업데이트하는 것을 권장합니다."
+"대신 {3} 버전으로 업데이트하는 것을 권장합니다."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1548,7 +1549,7 @@ msgstr "온라인 비디오 주소 해석"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Show marks on the progress bar"
-msgstr "진행 막대에 표시 추가"
+msgstr "탐색 막대에 마커 표시"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1638,7 +1639,7 @@ msgstr "계속 사용"
 #: store.ts:368 store.ts:369 store.ts:371
 #, x-machine
 msgid "Disable"
-msgstr "사용 안 함"
+msgstr "사용 중지"
 
 #: store.ts:742
 #, x-machine
@@ -1708,12 +1709,12 @@ msgstr "태그: 전체"
 #: ui/store.slint:240
 #, x-machine
 msgid "Sort: Name"
-msgstr "정렬: 이름"
+msgstr "정렬: 이름순"
 
 #: ui/store.slint:240
 #, x-machine
 msgid "Sort: Updated"
-msgstr "정렬: 업데이트 날짜"
+msgstr "정렬: 업데이트순"
 
 #: ui/store.slint:248
 #, x-machine
@@ -1723,12 +1724,12 @@ msgstr ".vxp 플러그인 패키지를 플레이어의 비디오 영역에 끌�
 #: ui/store.slint:249
 #, x-machine
 msgid "Install from File…"
-msgstr "파일에서 설치…"
+msgstr "파일로 설치…"
 
 #: ui/store.slint:250
 #, x-machine
 msgid "Install from Link…"
-msgstr "링크에서 설치…"
+msgstr "링크로 설치…"
 
 #: ui/store.slint:251
 #, x-machine

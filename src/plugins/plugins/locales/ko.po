@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ko\n"
@@ -18,12 +19,12 @@ msgstr "플러그인 관리자"
 #: manager.ts:229 ui/plugins.slint:149
 #, x-machine
 msgid "Enabled {}"
-msgstr "{} 사용함"
+msgstr "{} 플러그인을 사용합니다"
 
 #: manager.ts:233
 #, x-machine
 msgid "Disable {}?"
-msgstr "{}을(를) 사용하지 않을까요?"
+msgstr "{} 플러그인을 사용 중지할까요?"
 
 #: manager.ts:236
 #, x-machine
@@ -38,27 +39,27 @@ msgstr "이 플러그인의 메뉴, 단축키, 창, 효과(이퀄라이저, 필�
 #: manager.ts:239 ui/plugins.slint:310
 #, x-machine
 msgid "Disable"
-msgstr "사용 안 함"
+msgstr "사용 중지"
 
 #: manager.ts:245 ui/plugins.slint:150
 #, x-machine
 msgid "Disabled {}"
-msgstr "{} 사용 안 함"
+msgstr "{} 플러그인을 사용 중지했습니다"
 
 #: manager.ts:257 ui/plugins.slint:151
 #, x-machine
 msgid "Reloaded {}"
-msgstr "{}을(를) 다시 로드했습니다"
+msgstr "{} 플러그인을 다시 로드했습니다"
 
 #: manager.ts:269 ui/plugins.slint:153
 #, x-machine
 msgid "Rolled back {} to {}"
-msgstr "{}을(를) {}(으)로 롤백했습니다"
+msgstr "{} 플러그인을 {} 버전으로 롤백했습니다"
 
 #: manager.ts:280
 #, x-machine
 msgid "Uninstall {}?"
-msgstr "{}을(를) 제거할까요?"
+msgstr "{} 플러그인을 제거할까요?"
 
 #: manager.ts:282
 #, x-machine
@@ -78,12 +79,12 @@ msgstr "설정과 데이터도 삭제"
 #: manager.ts:295 ui/plugins.slint:152
 #, x-machine
 msgid "Uninstalled {}"
-msgstr "{}을(를) 제거했습니다"
+msgstr "{} 플러그인을 제거했습니다"
 
 #: manifest.json
 #, x-machine
 msgid "See the installed plugins; disable, enable, roll back or uninstall them"
-msgstr "설치된 플러그인 보기, 사용/사용 안 함, 롤백, 제거"
+msgstr "설치된 플러그인 보기, 사용 중지·사용, 롤백, 제거"
 
 #: manifest.json
 #, x-machine

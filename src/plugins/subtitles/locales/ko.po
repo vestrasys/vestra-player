@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ko\n"
@@ -108,7 +109,7 @@ msgstr "위쪽"
 #: main.ts:733
 #, x-machine
 msgid "Above Main Subtitle"
-msgstr "기본 자막 위"
+msgstr "주 자막 위"
 
 #: main.ts:752
 #, x-machine
@@ -128,7 +129,7 @@ msgstr "텍스트 자막만 보조 자막으로 쓸 수 있습니다"
 #: main.ts:787
 #, x-machine
 msgid "Already the primary subtitle"
-msgstr "이미 기본 자막입니다"
+msgstr "이미 주 자막입니다"
 
 #: main.ts:803
 #, x-machine
@@ -228,17 +229,17 @@ msgstr "자막 그림자: 끔"
 #: main.ts:862
 #, x-machine
 msgid "Opaque Box"
-msgstr "불투명 상자"
+msgstr "불투명 배경"
 
 #: main.ts:866
 #, x-machine
 msgid "Opaque subtitle box: on"
-msgstr "자막 불투명 상자: 켬"
+msgstr "자막 불투명 배경: 켬"
 
 #: main.ts:866
 #, x-machine
 msgid "Opaque subtitle box: off"
-msgstr "자막 불투명 상자: 끔"
+msgstr "자막 불투명 배경: 끔"
 
 #: main.ts:876
 #, x-machine
@@ -263,7 +264,7 @@ msgstr "보조 자막 위치: 위쪽"
 #: main.ts:916
 #, x-machine
 msgid "Secondary subtitle position: above the main subtitle"
-msgstr "보조 자막 위치: 기본 자막 위"
+msgstr "보조 자막 위치: 주 자막 위"
 
 #: main.ts:952 main.ts:1017 main.ts:1021 main.ts:1025
 #, x-machine
@@ -537,17 +538,17 @@ msgstr "자막: {} (적용 여부를 확인하지 못함)"
 #: messages.ts:150
 #, x-machine
 msgid "Subtitles: {}. Secondary subtitle turned off (it is now the primary)"
-msgstr "자막: {}. 보조 자막을 껐습니다 (이제 기본 자막임)"
+msgstr "자막: {}. 보조 자막을 껐습니다 (이제 주 자막임)"
 
 #: messages.ts:150
 #, x-machine
 msgid "Subtitles: {} (waiting to take effect). Secondary subtitle turned off (it is now the primary)"
-msgstr "자막: {} (적용 대기 중). 보조 자막을 껐습니다 (이제 기본 자막임)"
+msgstr "자막: {} (적용 대기 중). 보조 자막을 껐습니다 (이제 주 자막임)"
 
 #: messages.ts:150
 #, x-machine
 msgid "Subtitles: {} (could not confirm it took effect). Secondary subtitle turned off (it is now the primary)"
-msgstr "자막: {} (적용 여부를 확인하지 못함). 보조 자막을 껐습니다 (이제 기본 자막임)"
+msgstr "자막: {} (적용 여부를 확인하지 못함). 보조 자막을 껐습니다 (이제 주 자막임)"
 
 #: messages.ts:150
 #, x-machine
@@ -567,7 +568,7 @@ msgstr "보조 자막으로 쓸 수 없습니다: 텍스트 자막만 보조 자
 #: messages.ts:150
 #, x-machine
 msgid "Cannot use it as the secondary subtitle: it is already the primary subtitle"
-msgstr "보조 자막으로 쓸 수 없습니다: 이미 기본 자막입니다"
+msgstr "보조 자막으로 쓸 수 없습니다: 이미 주 자막입니다"
 
 #: messages.ts:150
 #, x-machine
@@ -702,7 +703,7 @@ msgstr "이 자막은 자막 플러그인에서 불러온 것이 아니어서 �
 #: messages.ts:150
 #, x-machine
 msgid "Cannot reload: subtitle file {} not found"
-msgstr "다시 불러올 수 없습니다: 자막 파일 {}을(를) 찾을 수 없습니다"
+msgstr "다시 불러올 수 없습니다: 자막 파일을 찾을 수 없음 ({})"
 
 #: messages.ts:150
 #, x-machine
@@ -757,7 +758,7 @@ msgstr "자막이 바뀌지 않았습니다"
 #: messages.ts:150
 #, x-machine
 msgid "Reloaded subtitle {}"
-msgstr "자막 {}을(를) 다시 불러왔습니다"
+msgstr "자막을 다시 불러왔습니다: {}"
 
 #: messages.ts:150
 #, x-machine

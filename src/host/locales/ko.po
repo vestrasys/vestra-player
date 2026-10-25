@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 # Korean: machine translated (x-machine), awaiting human review.
 msgid ""
 msgstr ""
@@ -141,7 +142,7 @@ msgstr "볼륨 −"
 #: src/core_actions.rs:31
 #, x-machine
 msgid "Not supported by the current source"
-msgstr "현재 소스에서 지원하지 않습니다"
+msgstr "현재 소스에서는 지원되지 않습니다"
 
 #: src/core_actions.rs:310
 #, x-machine
@@ -162,7 +163,7 @@ msgstr "다음 항목이 없습니다"
 #: src/core_actions.rs:389 src/core_actions.rs:393
 #, x-machine
 msgid "Playing"
-msgstr "재생"
+msgstr "재생 중"
 
 #: src/core_actions.rs:395
 #, x-machine
@@ -277,12 +278,12 @@ msgstr "; "
 #: src/main.rs:3220 src/source_resolvers.rs:73
 #, x-machine
 msgid "{} is resolved by {}"
-msgstr "{}은(는) {}에서 처리합니다"
+msgstr "{}: {}에서 처리합니다"
 
 #: src/main.rs:3221
 #, x-machine
 msgid "{} not taken over: resolved by {}"
-msgstr "{}을(를) 넘겨받지 않음: {}에서 처리합니다"
+msgstr "{}: 넘겨받지 않음 ({}에서 처리)"
 
 #: src/main.rs:3656
 #, x-machine
@@ -383,7 +384,7 @@ msgstr "기타"
 #: src/slot_claims.rs:77
 #, x-machine
 msgid "The {} is used by {}"
-msgstr "{}을(를) {}에서 사용하고 있습니다"
+msgstr "{}: {}에서 사용 중입니다"
 
 #. A file extension, such as nes.
 #: src/source_resolvers.rs:156

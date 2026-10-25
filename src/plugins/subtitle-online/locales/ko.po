@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ko\n"
@@ -563,7 +564,7 @@ msgstr "{} [기계 번역]"
 #: ui/download.slint:63 ui/download.slint:64
 #, x-machine
 msgid "{} [HI]"
-msgstr "{} [청각 장애인용]"
+msgstr "{} [CC]"
 
 #: ui/download.slint:75
 #, x-machine
@@ -613,7 +614,7 @@ msgstr "FPS"
 #: ui/download.slint:120
 #, x-machine
 msgid "Downloads"
-msgstr "다운로드 수"
+msgstr "다운로드"
 
 #: ui/download.slint:121
 #, x-machine
@@ -753,7 +754,7 @@ msgstr "자동 검색"
 #: ui/settings.slint:124
 #, x-machine
 msgid "Off"
-msgstr "끔"
+msgstr "사용 안 함"
 
 #: ui/settings.slint:124
 #, x-machine

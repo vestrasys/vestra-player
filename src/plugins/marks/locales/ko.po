@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ko\n"
@@ -419,7 +420,7 @@ msgstr "A-B 구간 반복 실패: {}"
 #: seekbar.ts:147
 #, x-machine
 msgid "Show Marks on Seek Bar"
-msgstr "탐색 막대에 표시"
+msgstr "탐색 막대에 마커 표시"
 
 #: ui/marks.slint:114
 #, x-machine

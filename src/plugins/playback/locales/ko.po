@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ko\n"
@@ -118,12 +119,12 @@ msgstr "탐색 막대에 마우스를 올리면 시간 표시"
 #: commands.ts:229
 #, x-machine
 msgid "Show Thumbnail on Seek Bar Hover"
-msgstr "탐색 막대에 마우스를 올리면 미리보기 표시"
+msgstr "탐색 막대에 마우스를 올리면 썸네일 표시"
 
 #: commands.ts:238
 #, x-machine
 msgid "Not supported by the current source"
-msgstr "현재 소스에서 지원하지 않습니다"
+msgstr "현재 소스에서는 지원되지 않습니다"
 
 #: commands.ts:238
 #, x-machine
@@ -148,7 +149,7 @@ msgstr "비디오가 없습니다"
 #: commands.ts:238
 #, x-machine
 msgid "Needs ffmpeg"
-msgstr "ffmpeg가 필요합니다"
+msgstr "ffmpeg 필요"
 
 #: controller.ts:148
 #, x-machine
@@ -263,12 +264,12 @@ msgstr "탐색 막대 시간 표시: 끔"
 #: main.ts:29
 #, x-machine
 msgid "Show thumbnail on seek bar hover: On"
-msgstr "탐색 막대 미리보기 표시: 켬"
+msgstr "탐색 막대 썸네일 표시: 켬"
 
 #: main.ts:29
 #, x-machine
 msgid "Show thumbnail on seek bar hover: Off"
-msgstr "탐색 막대 미리보기 표시: 끔"
+msgstr "탐색 막대 썸네일 표시: 끔"
 
 #: main.ts:29 ui/prompt.slint:17
 #, x-machine
@@ -298,7 +299,7 @@ msgstr "하단 컨트롤 바, 파일 및 링크 열기, 탐색과 속도"
 #: manifest.json
 #, x-machine
 msgid "The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; time or thumbnail on seek bar hover; no screen saver while playing."
-msgstr "기본 창 아래쪽의 컨트롤 바(탐색 막대, 재생 버튼, 볼륨), 파일 열기, 링크 열기, 마지막 파일 다시 열기, 여러 단계의 탐색 간격, 키프레임 탐색, 지정한 시간으로 이동, 고정 및 사용자 지정 재생 속도, 탐색 막대에 마우스를 올리면 시간 또는 미리보기 표시, 재생 중 화면 보호기 끄기를 제공합니다."
+msgstr "기본 창 아래쪽의 컨트롤 바(탐색 막대, 재생 버튼, 볼륨), 파일 열기, 링크 열기, 마지막 파일 다시 열기, 여러 단계의 탐색 간격, 키프레임 탐색, 지정한 시간으로 이동, 고정 및 사용자 지정 재생 속도, 탐색 막대에 마우스를 올리면 시간 또는 썸네일 표시, 재생 중 화면 보호기 끄기를 제공합니다."
 
 #: manifest.json
 #, x-machine

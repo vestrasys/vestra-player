@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ko\n"
@@ -374,12 +375,12 @@ msgstr "모두 해제"
 #: ui/keys.slint:356
 #, x-machine
 msgid "⌘Q is the default shortcut to quit Vestra Player. Change it to “{}”?"
-msgstr "⌘Q는 Vestra Player를 종료하는 기본 단축키입니다. “{}”(으)로 변경할까요?"
+msgstr "⌘Q는 Vestra Player를 종료하는 기본 단축키입니다. “{}” 명령에 지정할까요?"
 
 #: ui/keys.slint:357
 #, x-machine
 msgid "{0} is already used by “{1}”"
-msgstr "{0}은(는) 이미 “{1}”에서 사용 중입니다"
+msgstr "{0}: 이미 “{1}”에서 사용 중입니다"
 
 #: ui/keys.slint:363
 #, x-machine
@@ -424,7 +425,7 @@ msgstr "없음"
 #: ui/mouse.slint:159
 #, x-machine
 msgid "Command run by “{}”:"
-msgstr "“{}”(으)로 실행할 명령:"
+msgstr "“{}”에 지정할 명령:"
 
 #: ui/mouse.slint:164
 #, x-machine
@@ -449,7 +450,7 @@ msgstr "로드되지 않은 플러그인"
 #: ui/parts.slint:64
 #, x-machine
 msgid "{0} is taken by “{1}” and has no effect"
-msgstr "{0}은(는) “{1}”에서 사용 중이어서 적용되지 않습니다"
+msgstr "{0}: “{1}”에서 사용 중이어서 적용되지 않습니다"
 
 #: ui/parts.slint:67
 #, x-machine
@@ -484,7 +485,7 @@ msgstr "Esc를 누르면 취소됩니다. Esc 자체를 지정하려면 상자 �
 #: ui/parts.slint:80
 #, x-machine
 msgid "{} is already a shortcut of this command"
-msgstr "{}은(는) 이미 이 명령의 단축키입니다"
+msgstr "{}: 이미 이 명령의 단축키입니다"
 
 #: ui/parts.slint:81
 #, x-machine

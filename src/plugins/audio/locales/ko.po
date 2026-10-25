@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ko\n"
@@ -158,7 +159,7 @@ msgstr "시스템 기본값으로 전환할 수 없습니다: {}"
 #: main.ts:349
 #, x-machine
 msgid "Cannot switch to {}: {}"
-msgstr "{}(으)로 전환할 수 없습니다: {}"
+msgstr "{} 장치로 전환할 수 없습니다: {}"
 
 #: main.ts:360
 #, x-machine

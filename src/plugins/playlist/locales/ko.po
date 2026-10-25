@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ko\n"
@@ -38,7 +39,7 @@ msgstr "기존 링크를 선택했습니다"
 #: main.ts:134
 #, x-machine
 msgid "Scanning folder…"
-msgstr "폴더 검색 중…"
+msgstr "폴더 스캔 중…"
 
 #: main.ts:134
 #, x-machine
@@ -58,12 +59,12 @@ msgstr "제거됨: {}"
 #: main.ts:134
 #, x-machine
 msgid "Invalid items removed: {}"
-msgstr "잘못된 항목 제거됨: {}"
+msgstr "유효하지 않은 항목 제거됨: {}"
 
 #: main.ts:134
 #, x-machine
 msgid "No invalid items"
-msgstr "잘못된 항목이 없습니다"
+msgstr "유효하지 않은 항목이 없습니다"
 
 #: main.ts:134
 #, x-machine
@@ -183,17 +184,17 @@ msgstr "다시 재생할 수 없습니다: {}"
 #: main.ts:134
 #, x-machine
 msgid "Cannot open {}: the file does not exist"
-msgstr "{}을(를) 열 수 없습니다: 파일이 없습니다"
+msgstr "{} 열기 실패: 파일이 없습니다"
 
 #: main.ts:134
 #, x-machine
 msgid "Cannot open {}: cannot open this media"
-msgstr "{}을(를) 열 수 없습니다: 이 미디어를 열 수 없습니다"
+msgstr "{} 열기 실패: 이 미디어를 열 수 없습니다"
 
 #: main.ts:134
 #, x-machine
 msgid "Cannot open {}: {}"
-msgstr "{}을(를) 열 수 없습니다: {}"
+msgstr "{} 열기 실패: {}"
 
 #: main.ts:134
 #, x-machine
@@ -218,7 +219,7 @@ msgstr "재생목록에서 항목 {}개를 모두 제거할까요?"
 #: main.ts:246
 #, x-machine
 msgid "Replace the current list with {}?"
-msgstr "현재 목록을 {}(으)로 바꿀까요?"
+msgstr "현재 목록을 {} 목록으로 바꿀까요?"
 
 #: main.ts:246
 #, x-machine
@@ -318,7 +319,7 @@ msgstr "선택하지 않은 항목 제거"
 #: main.ts:527
 #, x-machine
 msgid "Remove Invalid Items"
-msgstr "잘못된 항목 제거"
+msgstr "유효하지 않은 항목 제거"
 
 #: main.ts:527
 #, x-machine
@@ -448,7 +449,7 @@ msgstr "작업할 항목이 없습니다"
 #: main.ts:529 main.ts:532 main.ts:555 main.ts:564 main.ts:565
 #, x-machine
 msgid "Scanning folder"
-msgstr "폴더 검색 중"
+msgstr "폴더 스캔 중"
 
 #: main.ts:529 main.ts:532 main.ts:564 main.ts:565
 #, x-machine
@@ -607,7 +608,7 @@ msgstr "최대 {}개에 도달했습니다"
 #: queue.ts:98
 #, x-machine
 msgid "cannot read {}: {}"
-msgstr "{}을(를) 읽을 수 없습니다: {}"
+msgstr "{} 읽기 실패: {}"
 
 #: queue.ts:349
 #, x-machine
@@ -762,7 +763,7 @@ msgstr "모두 제거하기 전에 확인"
 #: ui/sidebar.slint:190
 #, x-machine
 msgid "Filtered {}"
-msgstr "필터링됨 {}"
+msgstr "검색 결과 {}"
 
 #: ui/sidebar.slint:251
 #, x-machine

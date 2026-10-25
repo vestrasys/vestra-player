@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: ko\n"
@@ -23,7 +24,7 @@ msgstr "ROM 파일이 불완전합니다: 헤더에 적힌 크기보다 짧습�
 #: core.ts:45
 #, x-machine
 msgid "JSNES does not support mapper {} of this ROM."
-msgstr "JSNES는 이 ROM의 매퍼 {}을(를) 지원하지 않습니다."
+msgstr "JSNES는 이 ROM의 매퍼를 지원하지 않습니다 (매퍼 {})."
 
 #: core.ts:45
 #, x-machine
