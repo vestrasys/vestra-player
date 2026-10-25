@@ -136,7 +136,7 @@ msgstr "ファイル情報を読み取れません：{}"
 msgid "ffprobe failed"
 msgstr "ffprobe が失敗しました"
 
-#: dialog.ts:62 main.ts:36 main.ts:123 properties.ts:126
+#: dialog.ts:62 main.ts:58 main.ts:149 properties.ts:126
 #, x-machine
 msgid "No media open"
 msgstr "メディアが開かれていません"
@@ -171,102 +171,142 @@ msgstr "名前を付けて保存"
 msgid "Saved to {}"
 msgstr "{} に保存しました"
 
-#: main.ts:36
+#. how the video is decoded, after "Decoder:": by the CPU.
+#: main.ts:33
+#, x-machine
+msgid "software"
+msgstr "ソフトウェア"
+
+#. how the video is decoded, after "Decoder:": by the GPU; {} is the method, e.g. d3d11va-copy.
+#: main.ts:37
+#, x-machine
+msgid "hardware ({})"
+msgstr "ハードウェア（{}）"
+
+#. how the video is decoded, after "Decoder:": by the GPU.
+#: main.ts:40
+#, x-machine
+msgid "hardware"
+msgstr "ハードウェア"
+
+#. frames per second the window showed; "source" is the video's own frame rate.
+#: main.ts:49
+#, x-machine
+msgid "{} fps"
+msgstr "{} fps"
+
+#. frames per second the window showed; "source" is the video's own frame rate.
+#: main.ts:49
+#, x-machine
+msgid "{} fps (source {})"
+msgstr "{} fps（ソース {}）"
+
+#: main.ts:58
 #, x-machine
 msgid "File: {}"
 msgstr "ファイル：{}"
 
-#: main.ts:37
+#: main.ts:59
 #, x-machine
 msgid "Time: {} / {}"
 msgstr "時間：{} / {}"
 
-#: main.ts:38
+#: main.ts:60
 #, x-machine
 msgid "Video: {} {}"
 msgstr "ビデオ：{} {}"
 
-#: main.ts:39
+#: main.ts:61 main.ts:167
+#, x-machine
+msgid "Decoder: {}"
+msgstr "デコード：{}"
+
+#: main.ts:62
 #, x-machine
 msgid "Frame rate: {}"
 msgstr "フレームレート：{}"
 
-#: main.ts:40
+#: main.ts:64 main.ts:168
+#, x-machine
+msgid "Displayed: {}"
+msgstr "実際の表示：{}"
+
+#: main.ts:65
 #, x-machine
 msgid "Audio: {} {} {}"
 msgstr "オーディオ：{} {} {}"
 
-#: main.ts:40 properties.ts:256
+#: main.ts:65 properties.ts:256
 #, x-machine
 msgid "{} channels"
 msgstr "{} チャンネル"
 
-#: main.ts:41
+#: main.ts:66
 #, x-machine
 msgid "Backend: {} (session {})"
 msgstr "バックエンド：{}（セッション {}）"
 
-#: main.ts:42
+#: main.ts:67
 #, x-machine
 msgid "Frames shown: {}"
 msgstr "表示したフレーム：{}"
 
-#: main.ts:43
+#: main.ts:68
 #, x-machine
 msgid "Dropped frames: {}"
 msgstr "ドロップしたフレーム：{}"
 
-#: main.ts:105
+#: main.ts:130
 #, x-machine
 msgid "Chapter {}"
 msgstr "チャプター {}"
 
-#: main.ts:111 properties.ts:196
+#: main.ts:136 properties.ts:196
 #, x-machine
 msgid "Subtitles"
 msgstr "字幕"
 
-#: main.ts:126
+#: main.ts:152
 #, x-machine
 msgid "{} ch"
 msgstr "{} ch"
 
-#: main.ts:130
+#: main.ts:156
 #, x-machine
 msgid "{} / {}"
 msgstr "{} / {}"
 
-#: main.ts:130 properties.ts:252
+#: main.ts:156 properties.ts:252
 #, x-machine
 msgid "Live"
 msgstr "ライブ"
 
-#: main.ts:134
+#: main.ts:160
 #, x-machine
 msgid "{} {}"
 msgstr "{} {}"
 
-#: main.ts:137 properties.ts:79
+#: main.ts:163 main.ts:169 properties.ts:79
 #, x-machine
 msgid "{} · {}"
 msgstr "{} · {}"
 
-#: main.ts:206 manifest.json
+#: main.ts:238 manifest.json
 #, x-machine
 msgid "Playback Info"
 msgstr "再生情報"
 
-#: main.ts:220
+#: main.ts:252
 #, x-machine
 msgid "Brief Info"
 msgstr "簡易情報"
 
-#: main.ts:239
+#: main.ts:271
 #, x-machine
 msgid "Playback Properties…"
 msgstr "再生のプロパティ…"
 
-#: main.ts:247
+#: main.ts:279
 #, x-machine
 msgid "About Vestra Player…"
 msgstr "Vestra Player について…"

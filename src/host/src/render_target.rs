@@ -320,32 +320,232 @@ impl FrameSlot {
     }
 }
 
-/// `VESTRA_FRAME_LOG=1`: one stderr line per second with produced and shown
-/// frame counts (GUI acceptance diagnostics, not public API).
-pub struct FrameLog {
-    last: Option<(Instant, u64, u64)>,
+/// Longest and mean of a set of durations (the frame log's timings).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Timing {
+    count: u64,
+    total: Duration,
+    max: Duration,
 }
-impl FrameLog {
-    pub fn from_env() -> Option<Self> {
-        (std::env::var("VESTRA_FRAME_LOG").as_deref() == Ok("1")).then_some(Self { last: None })
+impl Timing {
+    pub fn add(&mut self, duration: Duration) {
+        self.count += 1;
+        self.total += duration;
+        self.max = self.max.max(duration);
     }
-    pub fn tick(&mut self, counts: (u64, u64), size: Option<Size>, now: Instant) {
-        let (produced, shown) = counts;
-        match self.last {
-            None => self.last = Some((now, produced, shown)),
-            Some((at, p, s)) if now.duration_since(at) >= Duration::from_secs(1) => {
-                let seconds = now.duration_since(at).as_secs_f64();
-                let (dp, ds) = (produced - p, shown - s);
-                let size = size.map_or("-".into(), |(w, h)| format!("{w}x{h}"));
-                eprintln!(
-                    "vestra frames: produced {dp} shown {ds} ({:.1}/{:.1} fps) target {size}",
-                    dp as f64 / seconds,
-                    ds as f64 / seconds
-                );
-                self.last = Some((now, produced, shown));
+    pub fn count(&self) -> u64 {
+        self.count
+    }
+    /// `max M mean A ms`, or `-` with nothing measured.
+    fn text(&self) -> String {
+        if self.count == 0 {
+            return "-".into();
+        }
+        let ms = |d: Duration| d.as_secs_f64() * 1000.;
+        format!(
+            "max {:.1} mean {:.1} ms",
+            ms(self.max),
+            ms(self.total) / self.count as f64
+        )
+    }
+}
+
+/// What the window really draws (the presented counter): every draw of the
+/// main window, and the draws that put a *new* video picture on screen.
+/// mpv's counts stop at the renderer; frames lost after it (coalesced in the
+/// slot, a missed vsync, a draw that repeats the old picture) show only here.
+/// Counted on the UI thread; the control worker reads `presented_fps`.
+pub struct Presentation {
+    /// Bumped each time a new picture is set on the video area (pixels).
+    picture: AtomicU64,
+    /// Whether the main window's draws are counted (a hook is installed).
+    counting: AtomicBool,
+    /// Presented new-frame rate over the last second (f64 bits), `NONE`
+    /// before the first second is measured.
+    rate: AtomicU64,
+    state: Mutex<DrawState>,
+}
+const NONE: u64 = u64::MAX;
+#[derive(Default)]
+struct DrawState {
+    /// The picture number at the last draw.
+    drawn_picture: u64,
+    draws: u64,
+    presented: u64,
+    begun: Option<Instant>,
+    /// Draw times (BeforeRendering → AfterRendering) and picture hand-offs
+    /// (`show_frame`) since the frame log last read them.
+    render: Timing,
+    set: Timing,
+    /// The rate's window: its start and the presented count then.
+    window: Option<(Instant, u64)>,
+}
+impl Default for Presentation {
+    fn default() -> Self {
+        Self {
+            picture: AtomicU64::new(0),
+            counting: AtomicBool::new(false),
+            rate: AtomicU64::new(NONE),
+            state: Mutex::default(),
+        }
+    }
+}
+impl Presentation {
+    fn state(&self) -> std::sync::MutexGuard<'_, DrawState> {
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+    /// A hook counts the main window's draws from now on.
+    pub fn start_counting(&self) {
+        self.counting.store(true, Ordering::Release);
+    }
+    /// A new picture was set on the video area; `took` is how long setting it took.
+    pub fn picture_set(&self, took: Duration) {
+        self.picture.fetch_add(1, Ordering::AcqRel);
+        self.state().set.add(took);
+    }
+    /// The window starts drawing (rendering notifier: BeforeRendering).
+    pub fn draw_begin(&self, now: Instant) {
+        self.state().begun = Some(now);
+    }
+    /// The window drew (AfterRendering, or winit's RedrawRequested where no
+    /// notifier exists). `copied`: the GPU renderer copied a new frame into
+    /// the window for this draw. A draw presents a new frame when a picture
+    /// was set or copied since the last draw.
+    pub fn draw_end(&self, now: Instant, copied: bool) {
+        let picture = self.picture.load(Ordering::Acquire);
+        let mut state = self.state();
+        state.draws += 1;
+        if copied || picture != state.drawn_picture {
+            state.presented += 1;
+        }
+        state.drawn_picture = picture;
+        if let Some(begun) = state.begun.take() {
+            state.render.add(now.saturating_duration_since(begun));
+        }
+    }
+    /// (draws, presented new frames) since start.
+    pub fn counts(&self) -> (u64, u64) {
+        let state = self.state();
+        (state.draws, state.presented)
+    }
+    /// The draw and hand-off timings since the last call (the frame log).
+    pub fn take_timings(&self) -> (Timing, Timing) {
+        let mut state = self.state();
+        (
+            std::mem::take(&mut state.render),
+            std::mem::take(&mut state.set),
+        )
+    }
+    /// Called every host tick: closes the rate's one-second window.
+    pub fn sample(&self, now: Instant) {
+        if !self.counting.load(Ordering::Acquire) {
+            return;
+        }
+        let mut state = self.state();
+        let presented = state.presented;
+        match state.window {
+            None => state.window = Some((now, presented)),
+            Some((at, from)) if now.duration_since(at) >= Duration::from_secs(1) => {
+                let rate = (presented - from) as f64 / now.duration_since(at).as_secs_f64();
+                self.rate.store(rate.to_bits(), Ordering::Release);
+                state.window = Some((now, presented));
             }
             Some(_) => (),
         }
+    }
+    /// New video frames the window showed per second over the last second;
+    /// `None` while not measured (headless, the first second).
+    pub fn presented_fps(&self) -> Option<f64> {
+        let bits = self.rate.load(Ordering::Acquire);
+        (bits != NONE && self.counting.load(Ordering::Acquire)).then(|| f64::from_bits(bits))
+    }
+}
+
+/// One second of the window's numbers for the frame log.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct LogCounts {
+    /// Frames the renderer produced (software sequence + GPU publishes).
+    pub produced: u64,
+    /// Frames the UI took (software) or copied into a window (GPU).
+    pub shown: u64,
+    /// Draws of the main window.
+    pub draws: u64,
+    /// Draws that showed a new video frame.
+    pub presented: u64,
+}
+
+/// `VESTRA_FRAME_LOG=1`: one stderr line per second (GUI acceptance and
+/// field diagnostics, not public API):
+///
+/// `vestra frames: produced P shown S (p/s fps) presented N redraws R
+/// refresh 60.0 Hz ticks T tick max/mean render max/mean set max/mean target WxH`
+///
+/// - produced: frames the video renderer made; shown: frames the UI took
+///   from it (software) or copied into a window (GPU);
+/// - presented: draws of the main window that showed a new video frame;
+///   redraws: draws that repeated the old picture;
+/// - refresh: the window's display refresh rate; ticks: host ticks (16 ms
+///   timer) run; tick, render (one window draw, which includes uploading the
+///   new picture) and set (handing a picture to the video area): longest and
+///   mean milliseconds on the UI thread.
+pub struct FrameLog {
+    last: Option<(Instant, LogCounts)>,
+    ticks: Timing,
+}
+impl FrameLog {
+    pub fn from_env() -> Option<Self> {
+        (std::env::var("VESTRA_FRAME_LOG").as_deref() == Ok("1")).then(Self::new)
+    }
+    fn new() -> Self {
+        Self {
+            last: None,
+            ticks: Timing::default(),
+        }
+    }
+    /// One host tick's duration.
+    pub fn tick_took(&mut self, duration: Duration) {
+        self.ticks.add(duration);
+    }
+    /// The line for one interval, or `None` while the second is not over.
+    pub fn line(
+        &mut self,
+        counts: LogCounts,
+        presentation: &Presentation,
+        refresh: impl FnOnce() -> Option<f64>,
+        size: Option<Size>,
+        now: Instant,
+    ) -> Option<String> {
+        let Some((at, last)) = self.last else {
+            self.last = Some((now, counts));
+            let _ = presentation.take_timings();
+            self.ticks = Timing::default();
+            return None;
+        };
+        if now.duration_since(at) < Duration::from_secs(1) {
+            return None;
+        }
+        let seconds = now.duration_since(at).as_secs_f64();
+        let delta = |now: u64, then: u64| now.saturating_sub(then);
+        let (dp, ds) = (
+            delta(counts.produced, last.produced),
+            delta(counts.shown, last.shown),
+        );
+        let presented = delta(counts.presented, last.presented);
+        let redraws = delta(counts.draws, last.draws).saturating_sub(presented);
+        let size = size.map_or("-".into(), |(w, h)| format!("{w}x{h}"));
+        let refresh = refresh().map_or("-".into(), |hz| format!("{hz:.1} Hz"));
+        let (render, set) = presentation.take_timings();
+        let ticks = std::mem::take(&mut self.ticks);
+        self.last = Some((now, counts));
+        Some(format!(
+            "vestra frames: produced {dp} shown {ds} ({:.1}/{:.1} fps) presented {presented} redraws {redraws} refresh {refresh} ticks {} tick {} render {} set {} target {size}",
+            dp as f64 / seconds,
+            ds as f64 / seconds,
+            ticks.count(),
+            ticks.text(),
+            render.text(),
+            set.text(),
+        ))
     }
 }
 
@@ -538,5 +738,106 @@ mod tests {
         assert_eq!(slot.take().map(|f| f.sequence), Some(4));
         assert!(!slot.missed());
         assert_eq!(slot.counts(), (4, 2));
+    }
+
+    #[test]
+    fn draws_present_a_frame_only_when_the_picture_changed() {
+        let start = Instant::now();
+        let ms = |n| start + Duration::from_millis(n);
+        let presentation = Presentation::default();
+        assert_eq!(presentation.presented_fps(), None, "not counting");
+        presentation.start_counting();
+        presentation.sample(ms(0));
+        // 60 new pictures in a second, but only every other one is drawn
+        // (vsync halving): 30 presented; plus 10 draws of the old picture.
+        for n in 0..60u64 {
+            presentation.picture_set(Duration::from_micros(200));
+            if n % 2 == 1 {
+                presentation.draw_begin(ms(n * 16));
+                presentation.draw_end(ms(n * 16 + 8), false);
+            }
+        }
+        for n in 0..10u64 {
+            presentation.draw_begin(ms(970 + n));
+            presentation.draw_end(ms(970 + n), false);
+        }
+        assert_eq!(presentation.counts(), (40, 30));
+        presentation.sample(ms(500));
+        assert_eq!(presentation.presented_fps(), None, "first second not over");
+        presentation.sample(ms(1000));
+        assert_eq!(presentation.presented_fps(), Some(30.));
+        // The GPU renderer's copies present a frame without a set picture.
+        presentation.draw_end(ms(1010), true);
+        presentation.draw_end(ms(1020), false);
+        assert_eq!(presentation.counts(), (42, 31));
+        let (render, set) = presentation.take_timings();
+        assert_eq!((render.count(), set.count()), (40, 60));
+        assert_eq!(render.text(), "max 8.0 mean 6.0 ms");
+        assert_eq!(presentation.take_timings().0.count(), 0, "taken");
+        // Paused: nothing new is presented.
+        presentation.sample(ms(2000));
+        presentation.sample(ms(3000));
+        assert_eq!(presentation.presented_fps(), Some(0.));
+    }
+
+    #[test]
+    fn the_frame_log_line_has_every_column() {
+        let start = Instant::now();
+        let ms = |n| start + Duration::from_millis(n);
+        let presentation = Presentation::default();
+        let mut log = FrameLog::new();
+        let counts = |produced, shown, draws, presented| LogCounts {
+            produced,
+            shown,
+            draws,
+            presented,
+        };
+        assert_eq!(
+            log.line(counts(0, 0, 0, 0), &presentation, || Some(60.), None, ms(0)),
+            None
+        );
+        log.tick_took(Duration::from_millis(2));
+        log.tick_took(Duration::from_millis(4));
+        presentation.draw_begin(ms(10));
+        presentation.draw_end(ms(22), false);
+        presentation.picture_set(Duration::from_micros(500));
+        assert_eq!(
+            log.line(
+                counts(30, 15, 20, 15),
+                &presentation,
+                || Some(60.),
+                None,
+                ms(500)
+            ),
+            None
+        );
+        let line = log
+            .line(
+                counts(60, 30, 40, 28),
+                &presentation,
+                || Some(59.94),
+                Some((1920, 1080)),
+                ms(1000),
+            )
+            .expect("a line after a second");
+        assert_eq!(
+            line,
+            "vestra frames: produced 60 shown 30 (60.0/30.0 fps) presented 28 redraws 12 refresh 59.9 Hz ticks 2 tick max 4.0 mean 3.0 ms render max 12.0 mean 12.0 ms set max 0.5 mean 0.5 ms target 1920x1080"
+        );
+        let line = log
+            .line(
+                counts(60, 30, 40, 28),
+                &presentation,
+                || None,
+                None,
+                ms(2000),
+            )
+            .unwrap();
+        assert!(
+            line.ends_with(
+                "presented 0 redraws 0 refresh - ticks 0 tick - render - set - target -"
+            ),
+            "{line}"
+        );
     }
 }

@@ -34,6 +34,8 @@ pub struct Render {
     producer: AtomicBool,
     /// The display refresh rate interpolation paces to (UI thread sets it).
     refresh: Mutex<Option<f64>>,
+    /// What the main window really draws (`stats().presentedFps`).
+    pub presentation: crate::render_target::Presentation,
 }
 impl Render {
     pub fn new(wanted: bool) -> Arc<Self> {

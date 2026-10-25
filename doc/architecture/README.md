@@ -66,6 +66,29 @@ Manifest rules are in [Manifest](https://vestrasys.github.io/vestra-player-sdk/d
 - Do not change `hwdec-software-fallback` during playback: changing any vd-lavc option reopens the decoder (which is itself the same as a retry).
 - Real-machine tests (`cargo test --locked -- --ignored`, macOS, needs a GPU and ffmpeg): `gpu_decoding_runs_the_owned_chain` (filters take effect with a chain, back to zero-copy without one), `gpu_decoding_comes_back_after_a_fallback_caused_by_a_switch` (sets the threshold to 3 and keeps all cores busy to force a switch to fall back to software, then confirms the retry restores hardware decoding and retries only once), `the_next_file_starts_with_hardware_decoding_after_a_fallback`.
 
+## 4.2 Rendering diagnostics: what reaches the screen (0.5.1)
+
+mpv's counts stop at the renderer. `stats().framesShown` is the frames the video renderer produced and `framesDropped` is mpv's `frame-drop-count`. Neither sees frames lost after rendering: the UI took only the newest frame from `FrameSlot`, a vsync was missed, or a draw repeated the old picture.
+
+- **Presented counter** (`render_target::Presentation`, owned by `renderer::Render`). It counts every draw of the main window, and the draws that show a new video frame:
+  - GPU rendering: the `vestra-gpu-render` notifier reports `Draw::Begin` / `Draw::End { copied }`.
+  - Software rendering with femtovg: the window's rendering notifier, where a new picture was set by `show_frame` since the last draw.
+  - Slint's software renderer, which has no notifier: winit `RedrawRequested`, without draw times.
+- `stats().presentedFps` is the new frames over the last second (`null` without a window or in the first second). `stats().video.decoding` is `"hardware"` or `"software"`, from `hwdec-current`.
+- **`VESTRA_FRAME_LOG=1`** prints one stderr line per second, in GUI runs only (headless has no window):
+  `vestra frames: produced P shown S (p/s fps) presented N redraws R refresh 60.0 Hz ticks T tick max A mean B ms render max A mean B ms set max A mean B ms target WxH`
+  - `produced`: frames the renderer made (software sequence plus GPU publishes).
+  - `shown`: frames the UI took (software) or copied into a window (GPU).
+  - `presented`: main-window draws that showed a new frame. `redraws`: draws that repeated the old picture.
+  - `refresh`: the refresh rate of the window's display (`platform::window_refresh`, winit).
+  - `ticks`: host 16 ms ticks that ran.
+  - `tick` / `render` / `set`: the longest and mean milliseconds on the UI thread for the tick body, one window draw (including the new picture's texture upload; `-` under Slint's software renderer) and handing a picture to the video area.
+- **Reading a line:**
+  - `produced` below the source rate: the render thread is the bottleneck (decode, copy-back, mpv software render).
+  - `produced` at the source rate but `shown` low: the UI thread is busy (see `tick`, `render`, `set`).
+  - `shown` ≈ `presented` ≈ `refresh`, below the source: the display's refresh rate is the limit.
+  - Many `redraws` with `presented` about half the source: vsync halving.
+
 ## 5. Code map
 
 | Path | Contents |

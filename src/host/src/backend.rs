@@ -729,6 +729,17 @@ fn source_size(mpv: &Mpv) -> Option<(u32, u32)> {
     };
     Some((read("video-out-params/dw")?, read("video-out-params/dh")?))
 }
+/// `stats().video.decoding` from mpv `hwdec-current`: `"no"` is software
+/// decoding, any other method hardware; `None` before a decoder runs.
+fn decoding(hwdec: Option<&str>) -> Option<&'static str> {
+    hwdec.map(|method| {
+        if method == "no" {
+            "software"
+        } else {
+            "hardware"
+        }
+    })
+}
 /// `playback.stats` (C10): what the playback information overlay shows.
 fn stats(mpv: &Mpv, session: u64, frames: u64, render: &crate::renderer::Render) -> Value {
     let text = |name: &str| {
@@ -753,7 +764,8 @@ fn stats(mpv: &Mpv, session: u64, frames: u64, render: &crate::renderer::Render)
             "displayWidth":int("video-out-params/dw"),"displayHeight":int("video-out-params/dh"),
             "displayFps":float("estimated-display-fps"),
             "bitrate":float("video-bitrate"),
-            "hwdec":text("hwdec-current"),"transfer":text("video-params/gamma")})
+            "hwdec":text("hwdec-current"),"decoding":decoding(text("hwdec-current").as_deref()),
+            "transfer":text("video-params/gamma")})
     });
     let audio = text("audio-codec-name").map(|codec| {
         json!({"codec":codec,"sampleRate":int("audio-params/samplerate"),
@@ -764,6 +776,7 @@ fn stats(mpv: &Mpv, session: u64, frames: u64, render: &crate::renderer::Render)
             "bitrate":float("audio-bitrate")})
     });
     json!({"backend":render.backend_name(),"session":session,"framesShown":frames,
+        "presentedFps":render.presentation.presented_fps(),
         "framesDropped":int("frame-drop-count"),"video":video,"audio":audio,
         "avSyncMs":signed("avsync").map(|seconds| seconds * 1000.),
         "cacheSeconds":signed("demuxer-cache-duration")})
@@ -1152,6 +1165,13 @@ fn no_builtin_scripts(builder: &rsmpv::Builder) -> Result<()> {
 mod tests {
     use super::*;
     use crate::session::Phase;
+    #[test]
+    fn decoding_is_software_for_no_and_hardware_for_a_method() {
+        assert_eq!(decoding(Some("no")), Some("software"));
+        assert_eq!(decoding(Some("d3d11va-copy")), Some("hardware"));
+        assert_eq!(decoding(Some("videotoolbox")), Some("hardware"));
+        assert_eq!(decoding(None), None);
+    }
     #[test]
     fn mpv_starts_without_its_builtin_scripts() {
         let builder = Mpv::builder().unwrap();

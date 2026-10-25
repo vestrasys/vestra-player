@@ -579,7 +579,7 @@ pub use vestra_gpu_render::IOSurfaceRef as GpuFrame;
 /// libmpv draws with OpenGL in its own offscreen CGL context into IOSurfaces;
 /// each Slint (femtovg) window copies the newest one into its own texture.
 /// The raw GL and CGL calls are in the `vestra-gpu-render` crate.
-pub use vestra_gpu_render::{Handle as GpuHandle, Renderer as GpuRenderer};
+pub use vestra_gpu_render::{Draw as GpuDraw, Handle as GpuHandle, Renderer as GpuRenderer};
 pub const GPU_RENDER: bool = true;
 
 /// Start drawing `mpv` at `size` pixels; frames are shown while `publish`.

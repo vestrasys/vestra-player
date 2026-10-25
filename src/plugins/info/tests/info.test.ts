@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import type { PlaybackStats, PlayerState, TextArg } from "@vestra-player/sdk";
-import activate, { brief, briefColumns, currentChapter, fileName, shortCodec, subtitleName } from "../main.ts";
+import activate, { brief, briefColumns, currentChapter, decoding, displayed, fileName, shortCodec, subtitleName } from "../main.ts";
 
 const directory = new URL("..", import.meta.url);
 const zh = { locale: "zh-Hans" } as const;
@@ -49,7 +49,9 @@ test("top-level Playback Info entry in the windows group, Tab toggles the overla
       "File: movie.mp4",
       "Time: 00:05 / 01:40",
       "Video: h264 1920×1080",
+      "Decoder: -",
       "Frame rate: 24.00 fps",
+      "Displayed: -",
       "Audio: aac 48000 Hz 2 channels",
       "Backend: libmpv · 软件渲染 (session 3)",
       "Frames shown: 120",
@@ -77,7 +79,9 @@ test("the overlay in Simplified Chinese is word for word that of before", async 
       "文件：movie.mp4",
       "时间：00:05 / 01:40",
       "视频：h264 1920×1080",
+      "解码：-",
       "帧率：24.00 fps",
+      "实际显示：-",
       "音频：aac 48000 Hz 2 声道",
       "后端：libmpv · 软件渲染（会话 3）",
       "已显示帧：120",
@@ -137,7 +141,9 @@ test("without media every fact is a dash", async () => {
       "文件：未打开媒体",
       "时间：--:-- / --:--",
       "视频：- -",
+      "解码：-",
       "帧率：-",
+      "实际显示：-",
       "音频：- - -",
       "后端：libmpv · 软件渲染（会话 0）",
       "已显示帧：0",
@@ -221,7 +227,7 @@ test("I03: with the full overlay open both blocks show, short first; expiry leav
   await host.settle();
   const text = String(host.osdPanel);
   assert.ok(text.startsWith("movie.mp4\n01:23 / 45:00 · H.264 1920×1080 · AAC 2 声道\n\n文件：movie.mp4\n"), text);
-  assert.equal(text.split("\n").length, 11);
+  assert.equal(text.split("\n").length, 13);
   await host.settle(3100);
   assert.match(String(host.osdPanel), /^文件：movie\.mp4\n/);
   assert.equal(host.command("info.toggle").state.checked, true);
@@ -351,4 +357,73 @@ test("IA-INFO-01: chapter and subtitle names", async () => {
   const state = { source: "/a.mkv", position: 3, duration: 8 } as unknown as PlayerState;
   assert.equal(show(brief(i18n, state, null, { chapter: "Intro", subtitle: "English" })), "a.mkv\n00:03 / 00:08 · Intro\nEnglish");
   await stop();
+});
+
+/** A 4K60 source decoded with d3d11va-copy while the window shows 29.5 new frames a second. */
+const halved = {
+  ...stats,
+  presentedFps: 29.46,
+  video: { codec: "av1", width: 3840, height: 2160, fps: 60, hwdec: "d3d11va-copy", decoding: "hardware" as const },
+};
+
+test("the overlay shows the decoder and the frames that reached the screen", async () => {
+  const host = new TestHost();
+  host.stats = halved;
+  host.openElsewhere("/videos/movie.mkv");
+  host.setSource({ duration: 100, position: 5 });
+  const { stop } = await startPlugin(activate, { directory, host });
+  await host.press("Tab");
+  await host.settle();
+  const lines = String(host.osdPanel).split("\n");
+  assert.equal(lines[3], "Decoder: hardware (d3d11va-copy)");
+  assert.equal(lines[4], "Frame rate: 60.00 fps");
+  assert.equal(lines[5], "Displayed: 29.5 fps (source 60)");
+  host.stats = { ...halved, presentedFps: 60, video: { ...halved.video, hwdec: "no", decoding: "software" } };
+  await host.settle(1100);
+  const again = String(host.osdPanel).split("\n");
+  assert.deepEqual([again[3], again[5]], ["Decoder: software", "Displayed: 60 fps (source 60)"]);
+  await stop();
+});
+
+test("Shift+Tab adds a line with the decoder and the displayed frame rate", async () => {
+  const host = new TestHost();
+  host.stats = halved;
+  host.openElsewhere("/videos/movie.mkv");
+  host.setSource({ duration: 2700, position: 83 });
+  const { stop } = await startPlugin(activate, { directory, host, ...zh });
+  await host.press("Shift+Tab");
+  await host.settle();
+  assert.equal(host.osdPanel, "movie.mkv\n01:23 / 45:00 · AV1 3840×2160 · AAC 2 声道\n解码：硬件（d3d11va-copy） · 实际显示：29.5 fps（源 60）");
+  await stop();
+});
+
+test("decoder and displayed texts: unknown parts are left out", async () => {
+  const { i18n, show, stop } = await words("en");
+  const video = halved.video as PlaybackStats["video"];
+  assert.equal(show(decoding(i18n, video)), "hardware (d3d11va-copy)");
+  assert.equal(show(decoding(i18n, { ...video!, hwdec: null })), "hardware");
+  assert.equal(show(decoding(i18n, { ...video!, hwdec: "no", decoding: "software" })), "software");
+  assert.equal(decoding(i18n, { ...video!, decoding: null }), null);
+  assert.equal(decoding(i18n, null), null);
+  const full = halved as unknown as PlaybackStats;
+  assert.equal(show(displayed(i18n, full)), "29.5 fps (source 60)");
+  assert.equal(show(displayed(i18n, { ...full, video: { ...video!, fps: 23.976 } })), "29.5 fps (source 23.98)");
+  assert.equal(show(displayed(i18n, { ...full, video: { ...video!, fps: null } })), "29.5 fps");
+  assert.equal(displayed(i18n, { ...full, presentedFps: null }), null, "older players, the first second");
+  assert.equal(displayed(i18n, { ...full, video: null }), null, "no video");
+  const state = { source: "/a.mkv", position: 3, duration: 8 } as unknown as PlayerState;
+  assert.equal(show(brief(i18n, state, { ...full, presentedFps: null })), "a.mkv\n00:03 / 00:08 · AV1 3840×2160 · AAC 2 ch\nDecoder: hardware (d3d11va-copy)");
+  await stop();
+});
+
+test("the new texts are machine translated in every language and marked for review", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const ids = ["software", "hardware ({})", "hardware", "{} fps", "{} fps (source {})", "Decoder: {}", "Displayed: {}"];
+  for (const lang of ["zh-Hans", "ja", "ko", "de", "fr", "es"]) {
+    const po = await readFile(new URL(`../locales/${lang}.po`, import.meta.url), "utf8");
+    for (const id of ids) {
+      const escaped = id.replace(/[(){}]/g, "\\$&");
+      assert.match(po, new RegExp(`#, x-machine\nmsgid "${escaped}"\nmsgstr "[^"]+"`), `${lang}: ${id}`);
+    }
+  }
 });

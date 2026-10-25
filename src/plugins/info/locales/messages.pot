@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.info 0.1.5\n"
+"Project-Id-Version: vestra.info 0.1.6\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -108,7 +108,7 @@ msgstr ""
 msgid "ffprobe failed"
 msgstr ""
 
-#: dialog.ts:62 main.ts:36 main.ts:123 properties.ts:126
+#: dialog.ts:62 main.ts:58 main.ts:149 properties.ts:126
 msgid "No media open"
 msgstr ""
 
@@ -136,83 +136,116 @@ msgstr ""
 msgid "Saved to {}"
 msgstr ""
 
-#: main.ts:36
+#. how the video is decoded, after "Decoder:": by the CPU.
+#: main.ts:33
+msgid "software"
+msgstr ""
+
+#. how the video is decoded, after "Decoder:": by the GPU; {} is the method, e.g. d3d11va-copy.
+#: main.ts:37
+msgid "hardware ({})"
+msgstr ""
+
+#. how the video is decoded, after "Decoder:": by the GPU.
+#: main.ts:40
+msgid "hardware"
+msgstr ""
+
+#. frames per second the window showed; "source" is the video's own frame rate.
+#: main.ts:49
+msgid "{} fps"
+msgstr ""
+
+#. frames per second the window showed; "source" is the video's own frame rate.
+#: main.ts:49
+msgid "{} fps (source {})"
+msgstr ""
+
+#: main.ts:58
 msgid "File: {}"
 msgstr ""
 
-#: main.ts:37
+#: main.ts:59
 msgid "Time: {} / {}"
 msgstr ""
 
-#: main.ts:38
+#: main.ts:60
 msgid "Video: {} {}"
 msgstr ""
 
-#: main.ts:39
+#: main.ts:61 main.ts:167
+msgid "Decoder: {}"
+msgstr ""
+
+#: main.ts:62
 msgid "Frame rate: {}"
 msgstr ""
 
-#: main.ts:40
+#: main.ts:64 main.ts:168
+msgid "Displayed: {}"
+msgstr ""
+
+#: main.ts:65
 msgid "Audio: {} {} {}"
 msgstr ""
 
-#: main.ts:40 properties.ts:256
+#: main.ts:65 properties.ts:256
 msgid "{} channels"
 msgstr ""
 
-#: main.ts:41
+#: main.ts:66
 msgid "Backend: {} (session {})"
 msgstr ""
 
-#: main.ts:42
+#: main.ts:67
 msgid "Frames shown: {}"
 msgstr ""
 
-#: main.ts:43
+#: main.ts:68
 msgid "Dropped frames: {}"
 msgstr ""
 
-#: main.ts:105
+#: main.ts:130
 msgid "Chapter {}"
 msgstr ""
 
-#: main.ts:111 properties.ts:196
+#: main.ts:136 properties.ts:196
 msgid "Subtitles"
 msgstr ""
 
-#: main.ts:126
+#: main.ts:152
 msgid "{} ch"
 msgstr ""
 
-#: main.ts:130
+#: main.ts:156
 msgid "{} / {}"
 msgstr ""
 
-#: main.ts:130 properties.ts:252
+#: main.ts:156 properties.ts:252
 msgid "Live"
 msgstr ""
 
-#: main.ts:134
+#: main.ts:160
 msgid "{} {}"
 msgstr ""
 
-#: main.ts:137 properties.ts:79
+#: main.ts:163 main.ts:169 properties.ts:79
 msgid "{} · {}"
 msgstr ""
 
-#: main.ts:206 manifest.json
+#: main.ts:238 manifest.json
 msgid "Playback Info"
 msgstr ""
 
-#: main.ts:220
+#: main.ts:252
 msgid "Brief Info"
 msgstr ""
 
-#: main.ts:239
+#: main.ts:271
 msgid "Playback Properties…"
 msgstr ""
 
-#: main.ts:247
+#: main.ts:279
 msgid "About Vestra Player…"
 msgstr ""
 
