@@ -479,6 +479,7 @@ export class TestHost {
         session: 0,
         framesShown: 0,
         framesDropped: 0,
+        presentedFps: null,
         video: null,
         audio: null,
         avSyncMs: null,

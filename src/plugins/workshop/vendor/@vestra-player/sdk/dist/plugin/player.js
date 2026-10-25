@@ -81,6 +81,12 @@ function view(raw) {
     raws.set(state, raw);
     return state;
 }
+/** `stats().video.decoding` from `hwdec` for players that do not send it. */
+function decoding(hwdec) {
+    if (hwdec === null || hwdec === undefined || hwdec === "")
+        return null;
+    return hwdec === "no" ? "software" : "hardware";
+}
 export const rawOf = (state) => raws.get(state);
 export const sameStamp = (a, b) => a.generation === b.generation && a.intentVersion === b.intentVersion;
 function sourceFailure(error) {
@@ -474,6 +480,7 @@ export function player(scope) {
                 session: raw.session,
                 framesShown: raw.framesShown,
                 framesDropped: raw.framesDropped,
+                presentedFps: n(raw.presentedFps),
                 video: raw.video && {
                     codec: raw.video.codec,
                     width: raw.video.width,
@@ -487,6 +494,7 @@ export function player(scope) {
                     displayFps: n(raw.video.displayFps),
                     bitrate: n(raw.video.bitrate),
                     hwdec: n(raw.video.hwdec),
+                    decoding: raw.video.decoding ?? decoding(raw.video.hwdec),
                     transfer: n(raw.video.transfer),
                 },
                 audio: raw.audio && {
