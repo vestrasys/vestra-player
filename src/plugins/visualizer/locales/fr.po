@@ -1,0 +1,219 @@
+# French translation of the messages in messages.pot.
+# Machine translated (each entry flagged x-machine); awaiting human review.
+msgid ""
+msgstr ""
+"Language: fr\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: logo.ts:63
+#, x-machine
+msgid "Choose Logo Image"
+msgstr "Choisir l'image du logo"
+
+#: main.ts:66
+#, x-machine
+msgid "Image too large (max 4096×4096, 16 MB)"
+msgstr "Image trop grande (max. 4096×4096, 16 Mo)"
+
+#: main.ts:66
+#, x-machine
+msgid "Only PNG or JPEG images can be used"
+msgstr "Seules les images PNG ou JPEG peuvent être utilisées"
+
+#: main.ts:66
+#, x-machine
+msgid "The logo image cannot be read; using the default logo"
+msgstr "Impossible de lire l'image du logo ; utilisation du logo par défaut"
+
+#: main.ts:66
+#, x-machine
+msgid "Cannot read the selected image"
+msgstr "Impossible de lire l'image sélectionnée"
+
+#: main.ts:66
+#, x-machine
+msgid "Using the custom logo"
+msgstr "Utilisation du logo personnalisé"
+
+#: main.ts:66
+#, x-machine
+msgid "Default logo restored"
+msgstr "Logo par défaut rétabli"
+
+#: main.ts:66
+#, x-machine
+msgid "Album cover for audio only: On"
+msgstr "Pochette d'album pour l'audio seul : activée"
+
+#: main.ts:66
+#, x-machine
+msgid "Album cover for audio only: Off"
+msgstr "Pochette d'album pour l'audio seul : désactivée"
+
+#: main.ts:66
+#, x-machine
+msgid "Logo when idle: On"
+msgstr "Logo en attente : activé"
+
+#: main.ts:66
+#, x-machine
+msgid "Logo when idle: Off"
+msgstr "Logo en attente : désactivé"
+
+#: main.ts:66
+#, x-machine
+msgid "Cover cache cleared"
+msgstr "Cache des pochettes vidé"
+
+#: main.ts:227
+#, x-machine
+msgid "Show Album Cover for Audio Only"
+msgstr "Afficher la pochette d'album pour l'audio seul"
+
+#: main.ts:235 main.ts:243 main.ts:251
+#, x-machine
+msgid "Appearance"
+msgstr "Apparence"
+
+#: main.ts:235
+#, x-machine
+msgid "Show Logo When Idle"
+msgstr "Afficher le logo en attente"
+
+#: main.ts:243
+#, x-machine
+msgid "Choose Logo Image…"
+msgstr "Choisir l'image du logo…"
+
+#: main.ts:251
+#, x-machine
+msgid "Restore Default Logo"
+msgstr "Rétablir le logo par défaut"
+
+#: main.ts:255
+#, x-machine
+msgid "Using the default logo"
+msgstr "Utilisation du logo par défaut"
+
+#: main.ts:263 ui/page.slint:40
+#, x-machine
+msgid "Logo and Album Cover"
+msgstr "Logo et pochette d'album"
+
+#: manifest.json
+#, x-machine
+msgid "Album Cover and Idle Screen"
+msgstr "Pochette d'album et écran d'attente"
+
+#: manifest.json
+#, x-machine
+msgid "Shows the album cover for audio only and a logo when idle"
+msgstr "Affiche la pochette d'album pour l'audio seul et un logo en attente"
+
+#: manifest.json
+#, x-machine
+msgid ""
+"While audio without a picture plays, shows the album cover with title, artist and album; with no media open, shows a logo (which can be replaced with your own image); while media opens, shows a loading screen.\n"
+"Entries: Audio ▸ Show Album Cover for Audio Only, Settings ▸ Appearance."
+msgstr ""
+"Pendant la lecture d'un audio sans image, affiche la pochette d'album avec le titre, l'artiste et l'album ; sans média ouvert, affiche un logo (remplaçable par votre propre image) ; pendant l'ouverture d'un média, affiche un écran de chargement.\n"
+"Accès : Audio ▸ Afficher la pochette d'album pour l'audio seul, Paramètres ▸ Apparence."
+
+#: manifest.json
+#, x-machine
+msgid "audio"
+msgstr "audio"
+
+#: manifest.json
+#, x-machine
+msgid "appearance"
+msgstr "apparence"
+
+#: manifest.json
+#, x-machine
+msgid "cover"
+msgstr "pochette"
+
+#: ui/backdrop.slint:227
+#, x-machine
+msgid "Opening"
+msgstr "Ouverture"
+
+#: ui/backdrop.slint:245
+#, x-machine
+msgid "Opening: {}"
+msgstr "Ouverture : {}"
+
+#: ui/page.slint:46
+#, x-machine
+msgid "Idle screen"
+msgstr "Écran d'attente"
+
+#: ui/page.slint:49
+#, x-machine
+msgid "Show logo when idle"
+msgstr "Afficher le logo en attente"
+
+#: ui/page.slint:76
+#, x-machine
+msgid "Current: custom image"
+msgstr "Actuel : image personnalisée"
+
+#: ui/page.slint:76
+#, x-machine
+msgid "Current: Vestra Player logo"
+msgstr "Actuel : logo Vestra Player"
+
+#: ui/page.slint:84
+#, x-machine
+msgid "Choose Image…"
+msgstr "Choisir une image…"
+
+#: ui/page.slint:85
+#, x-machine
+msgid "Restore Default"
+msgstr "Rétablir par défaut"
+
+#: ui/page.slint:91
+#, x-machine
+msgid "PNG or JPEG, up to 4096×4096 and 16 MB. The image is copied, so the original can be moved."
+msgstr "PNG ou JPEG, jusqu'à 4096×4096 et 16 Mo. L'image est copiée, l'original peut donc être déplacé."
+
+#: ui/page.slint:97
+#, x-machine
+msgid "Audio only"
+msgstr "Audio seul"
+
+#: ui/page.slint:100
+#, x-machine
+msgid "Show album cover for audio only"
+msgstr "Afficher la pochette d'album pour l'audio seul"
+
+#: ui/page.slint:106
+#, x-machine
+msgid "The cover comes from the picture embedded in the file, or a cover, folder or front image in the same folder; without one the logo is shown as a placeholder."
+msgstr "La pochette provient de l'image intégrée au fichier, ou d'une image cover, folder ou front du même dossier ; à défaut, le logo est affiché à sa place."
+
+#: ui/page.slint:117
+#, x-machine
+msgid "Cover cache unavailable"
+msgstr "Cache des pochettes indisponible"
+
+#: ui/page.slint:118
+#, x-machine
+msgid "Cover cache: empty"
+msgstr "Cache des pochettes : vide"
+
+#: ui/page.slint:119
+#, x-machine
+msgid "Cover cache: {n} track, {0}"
+msgid_plural "Cover cache: {n} tracks, {0}"
+msgstr[0] "Cache des pochettes : {n} piste, {0}"
+msgstr[1] "Cache des pochettes : {n} pistes, {0}"
+
+#: ui/page.slint:125
+#, x-machine
+msgid "Clear Cover Cache"
+msgstr "Vider le cache des pochettes"

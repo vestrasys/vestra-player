@@ -1,0 +1,439 @@
+# French translation of the messages in messages.pot.
+# Machine translated (each entry flagged x-machine); awaiting human review.
+msgid ""
+msgstr ""
+"Language: fr\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. The top-level menu, and the link input's confirm button.
+#: src/commands.rs:327 ui/vestra/widgets.slint:192
+#, x-machine
+msgid "Open"
+msgstr "Ouvrir"
+
+#: src/commands.rs:328 src/settings_window.rs:27
+#, x-machine
+msgid "Playback"
+msgstr "Lecture"
+
+#: src/commands.rs:329 src/settings_window.rs:28
+#, x-machine
+msgid "Subtitles"
+msgstr "Sous-titres"
+
+#: src/commands.rs:330 src/settings_window.rs:29
+#, x-machine
+msgid "Video"
+msgstr "Vidéo"
+
+#: src/commands.rs:331 src/settings_window.rs:30
+#, x-machine
+msgid "Audio"
+msgstr "Audio"
+
+#: src/commands.rs:332
+#, x-machine
+msgid "Screen"
+msgstr "Écran"
+
+#: src/commands.rs:333
+#, x-machine
+msgid "Settings"
+msgstr "Paramètres"
+
+#: src/commands.rs:334
+#, x-machine
+msgid "Speed"
+msgstr "Vitesse"
+
+#: src/commands.rs:335
+#, x-machine
+msgid "Seek"
+msgstr "Navigation"
+
+#: src/composition.rs:39
+#, x-machine
+msgid "bottom bar"
+msgstr "barre inférieure"
+
+#: src/composition.rs:40
+#, x-machine
+msgid "sidebar"
+msgstr "barre latérale"
+
+#: src/composition.rs:41
+#, x-machine
+msgid "video backdrop"
+msgstr "arrière-plan vidéo"
+
+#: src/confirm.rs:47 ui/vestra/widgets.slint:193
+#, x-machine
+msgid "Cancel"
+msgstr "Annuler"
+
+#. A menu item; {} is a number of seconds.
+#: src/core_actions.rs:142
+#, x-machine
+msgid "Forward {} s"
+msgstr "Avancer de {} s"
+
+#. A menu item; {} is a number of seconds.
+#: src/core_actions.rs:147
+#, x-machine
+msgid "Back {} s"
+msgstr "Reculer de {} s"
+
+#: src/core_actions.rs:174
+#, x-machine
+msgid "Normal"
+msgstr "Normale"
+
+#: src/core_actions.rs:184 src/settings_window.rs:218 src/settings_window.rs:218
+#, x-machine
+msgid "Close"
+msgstr "Fermer"
+
+#: src/core_actions.rs:190
+#, x-machine
+msgid "Play/Pause"
+msgstr "Lecture/Pause"
+
+#: src/core_actions.rs:201
+#, x-machine
+msgid "Previous"
+msgstr "Précédent"
+
+#: src/core_actions.rs:212
+#, x-machine
+msgid "Next"
+msgstr "Suivant"
+
+#: src/core_actions.rs:223
+#, x-machine
+msgid "Previous Frame"
+msgstr "Image précédente"
+
+#: src/core_actions.rs:234
+#, x-machine
+msgid "Next Frame"
+msgstr "Image suivante"
+
+#: src/core_actions.rs:268
+#, x-machine
+msgid "Slower 0.1"
+msgstr "Ralentir de 0,1"
+
+#: src/core_actions.rs:279
+#, x-machine
+msgid "Faster 0.1"
+msgstr "Accélérer de 0,1"
+
+#: src/core_actions.rs:290
+#, x-machine
+msgid "Volume +"
+msgstr "Volume +"
+
+#: src/core_actions.rs:301
+#, x-machine
+msgid "Volume −"
+msgstr "Volume −"
+
+#: src/core_actions.rs:31
+#, x-machine
+msgid "Not supported by the current source"
+msgstr "Non pris en charge par la source actuelle"
+
+#: src/core_actions.rs:310
+#, x-machine
+msgid "Mute"
+msgstr "Muet"
+
+#: src/core_actions.rs:339
+#, x-machine
+msgid "No previous item"
+msgstr "Aucun élément précédent"
+
+#: src/core_actions.rs:340
+#, x-machine
+msgid "No next item"
+msgstr "Aucun élément suivant"
+
+#. On-screen message after Play/Pause resumes playback.
+#: src/core_actions.rs:389 src/core_actions.rs:393
+#, x-machine
+msgid "Playing"
+msgstr "Lecture"
+
+#: src/core_actions.rs:395
+#, x-machine
+msgid "Paused"
+msgstr "Pause"
+
+#. On-screen message: the step in seconds, then the new position and the duration.
+#: src/core_actions.rs:412
+#, x-machine
+msgid "Forward {} s: {} / {}"
+msgstr "Avance de {} s : {} / {}"
+
+#. On-screen message: the step in seconds, then the new position and the duration.
+#: src/core_actions.rs:414
+#, x-machine
+msgid "Back {} s: {} / {}"
+msgstr "Recul de {} s : {} / {}"
+
+#: src/core_actions.rs:428
+#, x-machine
+msgid "Speed: {}x"
+msgstr "Vitesse : {}x"
+
+#: src/core_actions.rs:445
+#, x-machine
+msgid "Volume: {}%"
+msgstr "Volume : {} %"
+
+#: src/core_actions.rs:454
+#, x-machine
+msgid "Mute: Off"
+msgstr "Muet : désactivé"
+
+#: src/core_actions.rs:456
+#, x-machine
+msgid "Mute: On"
+msgstr "Muet : activé"
+
+#: src/core_actions.rs:471 src/pip.rs:192 src/pip.rs:299
+#, x-machine
+msgid "No video"
+msgstr "Aucune vidéo"
+
+#: src/core_actions.rs:474
+#, x-machine
+msgid "The current source cannot step back a frame"
+msgstr "La source actuelle ne permet pas de reculer d'une image"
+
+#: src/core_actions.rs:477
+#, x-machine
+msgid "Already at the last frame"
+msgstr "Déjà à la dernière image"
+
+#: src/core_actions.rs:480
+#, x-machine
+msgid "Already at the first frame"
+msgstr "Déjà à la première image"
+
+#: src/core_actions.rs:585
+#, x-machine
+msgid "Next frame: {}"
+msgstr "Image suivante : {}"
+
+#: src/core_actions.rs:587
+#, x-machine
+msgid "Previous frame: {}"
+msgstr "Image précédente : {}"
+
+#: src/main.rs:140
+#, x-machine
+msgid "The sidebar holds at most {} tabs"
+msgstr "La barre latérale contient au plus {} onglets"
+
+#: src/main.rs:150
+#, x-machine
+msgid "Previous/Next is provided by {}"
+msgstr "Précédent/Suivant est fourni par {}"
+
+#: src/main.rs:2604
+#, x-machine
+msgid "Toggle Fullscreen"
+msgstr "Plein écran"
+
+#: src/main.rs:2607
+#, x-machine
+msgid "Leave Fullscreen"
+msgstr "Quitter le plein écran"
+
+#: src/main.rs:2609
+#, x-machine
+msgid "Quit"
+msgstr "Quitter"
+
+#: src/main.rs:3029
+#, x-machine
+msgid "Not available in fullscreen"
+msgstr "Indisponible en plein écran"
+
+#. A plugin's id, then what was refused (on the OSD).
+#: src/main.rs:3176
+#, x-machine
+msgid "{}: {}"
+msgstr "{} : {}"
+
+#. Between two warnings of one plugin.
+#: src/main.rs:3204
+#, x-machine
+msgid "; "
+msgstr " ; "
+
+#. {0}: “File type .nes” or a site such as https://example.com; {1}: a plugin id.
+#: src/main.rs:3220 src/source_resolvers.rs:73
+#, x-machine
+msgid "{} is resolved by {}"
+msgstr "{} est pris en charge par {}"
+
+#: src/main.rs:3221
+#, x-machine
+msgid "{} not taken over: resolved by {}"
+msgstr "{} non repris : pris en charge par {}"
+
+#: src/main.rs:3656
+#, x-machine
+msgid "Previous/Next not taken over: provided by {}"
+msgstr "Précédent/Suivant non repris : fourni par {}"
+
+#: src/main.rs:3776 src/main.rs:3783
+#, x-machine
+msgid "Panel not shown: {}"
+msgstr "Panneau non affiché : {}"
+
+#: src/main.rs:3880
+#, x-machine
+msgid "Select a path"
+msgstr "Choisir un chemin"
+
+#: src/package_manager.rs:1104
+#, x-machine
+msgid "“{}”: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed"
+msgstr "« {} » : les identifiants commençant par vestra. sont réservés aux plugins intégrés du lecteur et ne peuvent pas être installés"
+
+#: src/pip.rs:162
+#, x-machine
+msgid "Picture-in-picture is switching"
+msgstr "Changement du mode image dans l'image en cours"
+
+#: src/pip.rs:188
+#, x-machine
+msgid "Picture-in-picture is not supported on this system"
+msgstr "Le mode image dans l'image n'est pas pris en charge sur ce système"
+
+#: src/pip.rs:281
+#, x-machine
+msgid "The picture-in-picture window was closed"
+msgstr "La fenêtre image dans l'image a été fermée"
+
+#: src/pip.rs:289
+#, x-machine
+msgid "Cannot enter picture-in-picture: {}"
+msgstr "Impossible de passer en image dans l'image : {}"
+
+#: src/pip.rs:313
+#, x-machine
+msgid "Picture-in-picture did not start"
+msgstr "Le mode image dans l'image n'a pas démarré"
+
+#: src/platform/macos.rs:104
+#, x-machine
+msgid "Picture-in-picture needs macOS 14 or later"
+msgstr "Le mode image dans l'image nécessite macOS 14 ou ultérieur"
+
+#: src/renderer.rs:17
+#, x-machine
+msgid "libmpv · GPU rendering (OpenGL)"
+msgstr "libmpv · rendu GPU (OpenGL)"
+
+#: src/renderer.rs:20
+#, x-machine
+msgid "libmpv · software rendering"
+msgstr "libmpv · rendu logiciel"
+
+#: src/settings_window.rs:156 src/settings_window.rs:156
+#, x-machine
+msgid "Options"
+msgstr "Options"
+
+#: src/settings_window.rs:204 src/settings_window.rs:204
+#, x-machine
+msgid "Nothing to set here"
+msgstr "Rien à régler ici"
+
+#: src/settings_window.rs:26
+#, x-machine
+msgid "General"
+msgstr "Général"
+
+#: src/settings_window.rs:31
+#, x-machine
+msgid "Keys and Mouse"
+msgstr "Clavier et souris"
+
+#: src/settings_window.rs:32
+#, x-machine
+msgid "Appearance"
+msgstr "Apparence"
+
+#: src/settings_window.rs:33
+#, x-machine
+msgid "Plugins"
+msgstr "Plugins"
+
+#: src/settings_window.rs:34
+#, x-machine
+msgid "Other"
+msgstr "Autre"
+
+#. {0}: “bottom bar”, “sidebar” or “video backdrop”; {1}: a plugin id.
+#: src/slot_claims.rs:77
+#, x-machine
+msgid "The {} is used by {}"
+msgstr "L'emplacement « {} » est utilisé par {}"
+
+#. A file extension, such as nes.
+#: src/source_resolvers.rs:156
+#, x-machine
+msgid "File type .{}"
+msgstr "Type de fichier .{}"
+
+#: src/ui_markdown.rs:27
+#, x-machine
+msgid "… (too long, cut off)"
+msgstr "… (trop long, tronqué)"
+
+#: ui/host.slint:110
+#, x-machine
+msgid "Playing in picture-in-picture"
+msgstr "Lecture en image dans l'image"
+
+#: ui/menu-view.slint:329
+#, x-machine
+msgid "(No commands available)"
+msgstr "(Aucune commande disponible)"
+
+#: ui/sidebar-tabs.slint:104
+#, x-machine
+msgid "Attach to the main window"
+msgstr "Rattacher à la fenêtre principale"
+
+#: ui/sidebar-tabs.slint:104
+#, x-machine
+msgid "Detach as a floating window"
+msgstr "Détacher en fenêtre flottante"
+
+#: ui/sidebar-tabs.slint:113
+#, x-machine
+msgid "Close the sidebar"
+msgstr "Fermer la barre latérale"
+
+#: ui/vestra/markdown.slint:142
+#, x-machine
+msgid "Copy"
+msgstr "Copier"
+
+#: ui/vestra/markdown.slint:163
+#, x-machine
+msgid "[Image]"
+msgstr "[Image]"
+
+#: ui/vestra/markdown.slint:163
+#, x-machine
+msgid "[Image] {}"
+msgstr "[Image] {}"

@@ -1,0 +1,538 @@
+# French translation of the messages in messages.pot.
+# Machine translated (each entry flagged x-machine); awaiting human review.
+msgid ""
+msgstr ""
+"Language: fr\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: commands.ts:65
+#, x-machine
+msgid "Back {} s"
+msgstr "Reculer de {} s"
+
+#: commands.ts:65
+#, x-machine
+msgid "Forward {} s"
+msgstr "Avancer de {} s"
+
+#: commands.ts:229
+#, x-machine
+msgid "Seek"
+msgstr "Navigation"
+
+#: commands.ts:229
+#, x-machine
+msgid "Speed"
+msgstr "Vitesse"
+
+#: commands.ts:229
+#, x-machine
+msgid "Open File…"
+msgstr "Ouvrir un fichier…"
+
+#: commands.ts:229
+#, x-machine
+msgid "Open URL…"
+msgstr "Ouvrir une URL…"
+
+#: commands.ts:229
+#, x-machine
+msgid "Reopen Current/Last File"
+msgstr "Rouvrir le fichier actuel/dernier fichier"
+
+#: commands.ts:229
+#, x-machine
+msgid "Copy to Clipboard"
+msgstr "Copier dans le presse-papiers"
+
+#: commands.ts:229
+#, x-machine
+msgid "File Name"
+msgstr "Nom du fichier"
+
+#: commands.ts:229
+#, x-machine
+msgid "Folder Path"
+msgstr "Chemin du dossier"
+
+#: commands.ts:229
+#, x-machine
+msgid "Full Path"
+msgstr "Chemin complet"
+
+#: commands.ts:229
+#, x-machine
+msgid "Previous Keyframe"
+msgstr "Image clé précédente"
+
+#: commands.ts:229
+#, x-machine
+msgid "Next Keyframe"
+msgstr "Image clé suivante"
+
+#: commands.ts:229
+#, x-machine
+msgid "Jump to Time…"
+msgstr "Aller à l'instant…"
+
+#: commands.ts:229
+#, x-machine
+msgid "Jump to Start"
+msgstr "Aller au début"
+
+#: commands.ts:229
+#, x-machine
+msgid "Seek Steps…"
+msgstr "Pas de déplacement…"
+
+#: commands.ts:229
+#, x-machine
+msgid "0.5×"
+msgstr "0,5×"
+
+#: commands.ts:229
+#, x-machine
+msgid "1.5×"
+msgstr "1,5×"
+
+#: commands.ts:229
+#, x-machine
+msgid "2×"
+msgstr "2×"
+
+#: commands.ts:229
+#, x-machine
+msgid "Custom…"
+msgstr "Personnalisée…"
+
+#: commands.ts:229
+#, x-machine
+msgid "Disable Screen Saver While Playing"
+msgstr "Désactiver l'économiseur d'écran pendant la lecture"
+
+#: commands.ts:229
+#, x-machine
+msgid "Show Time on Seek Bar Hover"
+msgstr "Afficher le temps au survol de la barre de progression"
+
+#: commands.ts:229
+#, x-machine
+msgid "Show Thumbnail on Seek Bar Hover"
+msgstr "Afficher une miniature au survol de la barre de progression"
+
+#: commands.ts:238
+#, x-machine
+msgid "Not supported by the current source"
+msgstr "Non pris en charge par la source actuelle"
+
+#: commands.ts:238
+#, x-machine
+msgid "No file to reopen"
+msgstr "Aucun fichier à rouvrir"
+
+#: commands.ts:238
+#, x-machine
+msgid "No open file"
+msgstr "Aucun fichier ouvert"
+
+#: commands.ts:238
+#, x-machine
+msgid "A network source has no file name"
+msgstr "Une source réseau n'a pas de nom de fichier"
+
+#: commands.ts:238
+#, x-machine
+msgid "No video"
+msgstr "Aucune vidéo"
+
+#: commands.ts:238
+#, x-machine
+msgid "Needs ffmpeg"
+msgstr "Nécessite ffmpeg"
+
+#: controller.ts:148
+#, x-machine
+msgid "Open Media"
+msgstr "Ouvrir un média"
+
+#: controller.ts:148
+#, x-machine
+msgid "Open Media (replaces the current source)"
+msgstr "Ouvrir un média (remplace la source actuelle)"
+
+#: main.ts:29
+#, x-machine
+msgid "Seek: {} / {}"
+msgstr "Position : {} / {}"
+
+#: main.ts:29
+#, x-machine
+msgid "Back {} s: {} / {}"
+msgstr "Recul de {} s : {} / {}"
+
+#: main.ts:29
+#, x-machine
+msgid "Forward {} s: {} / {}"
+msgstr "Avance de {} s : {} / {}"
+
+#: main.ts:29
+#, x-machine
+msgid "Jumped to the start"
+msgstr "Retour au début"
+
+#: main.ts:29
+#, x-machine
+msgid "Previous keyframe: {} / {}"
+msgstr "Image clé précédente : {} / {}"
+
+#: main.ts:29
+#, x-machine
+msgid "Next keyframe: {} / {}"
+msgstr "Image clé suivante : {} / {}"
+
+#: main.ts:29
+#, x-machine
+msgid "Already at the last keyframe"
+msgstr "Déjà à la dernière image clé"
+
+#: main.ts:29
+#, x-machine
+msgid "Speed: {}x"
+msgstr "Vitesse : {}x"
+
+#: main.ts:29 ui/bar.slint:83
+#, x-machine
+msgid "Volume: {}%"
+msgstr "Volume : {} %"
+
+#: main.ts:29
+#, x-machine
+msgid "Open failed"
+msgstr "Échec de l'ouverture"
+
+#: main.ts:29 ui/open-url.slint:66
+#, x-machine
+msgid "Open failed: {}"
+msgstr "Échec de l'ouverture : {}"
+
+#: main.ts:29
+#, x-machine
+msgid "Reopened: {}"
+msgstr "Rouvert : {}"
+
+#: main.ts:29
+#, x-machine
+msgid "Reopened the last file: {}"
+msgstr "Dernier fichier rouvert : {}"
+
+#: main.ts:29
+#, x-machine
+msgid "Copied: {}"
+msgstr "Copié : {}"
+
+#: main.ts:29
+#, x-machine
+msgid "Copy failed: {}"
+msgstr "Échec de la copie : {}"
+
+#: main.ts:29 ui/open-url.slint:65
+#, x-machine
+msgid "Only the first line is opened; to open several links, add them to the playlist"
+msgstr "Seule la première ligne est ouverte ; pour ouvrir plusieurs liens, ajoutez-les à la liste de lecture"
+
+#: main.ts:29
+#, x-machine
+msgid "Disable screen saver while playing: On"
+msgstr "Désactiver l'économiseur d'écran pendant la lecture : activé"
+
+#: main.ts:29
+#, x-machine
+msgid "Disable screen saver while playing: Off"
+msgstr "Désactiver l'économiseur d'écran pendant la lecture : désactivé"
+
+#: main.ts:29
+#, x-machine
+msgid "Show time on seek bar hover: On"
+msgstr "Temps au survol de la barre de progression : activé"
+
+#: main.ts:29
+#, x-machine
+msgid "Show time on seek bar hover: Off"
+msgstr "Temps au survol de la barre de progression : désactivé"
+
+#: main.ts:29
+#, x-machine
+msgid "Show thumbnail on seek bar hover: On"
+msgstr "Miniature au survol de la barre de progression : activée"
+
+#: main.ts:29
+#, x-machine
+msgid "Show thumbnail on seek bar hover: Off"
+msgstr "Miniature au survol de la barre de progression : désactivée"
+
+#: main.ts:29 ui/prompt.slint:17
+#, x-machine
+msgid "Source operation failed: {}"
+msgstr "Échec de l'opération sur la source : {}"
+
+#: main.ts:29 ui/prompt.slint:18
+#, x-machine
+msgid "Enter a time within the source's duration as HH:MM:SS.mmm"
+msgstr "Saisissez un temps compris dans la durée de la source, au format HH:MM:SS.mmm"
+
+#: main.ts:29 ui/prompt.slint:19
+#, x-machine
+msgid "Speed must be between 0.25× and 4×"
+msgstr "La vitesse doit être comprise entre 0,25× et 4×"
+
+#: manifest.json
+#, x-machine
+msgid "Basic Playback"
+msgstr "Lecture de base"
+
+#: manifest.json
+#, x-machine
+msgid "Bottom control bar, open files and links, seek and speed"
+msgstr "Barre de commandes inférieure, ouverture de fichiers et de liens, navigation et vitesse"
+
+#: manifest.json
+#, x-machine
+msgid "The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; time or thumbnail on seek bar hover; no screen saver while playing."
+msgstr "La barre de commandes en bas de la fenêtre principale (barre de progression, boutons de lecture, volume) ; ouvrir un fichier, ouvrir un lien, rouvrir le dernier fichier ; plusieurs pas de déplacement, déplacement par image clé, accès à un instant précis, vitesses fixes et personnalisées ; temps ou miniature au survol de la barre de progression ; pas d'économiseur d'écran pendant la lecture."
+
+#: manifest.json
+#, x-machine
+msgid "playback"
+msgstr "lecture"
+
+#: manifest.json
+#, x-machine
+msgid "control bar"
+msgstr "barre de commandes"
+
+#: manifest.json
+#, x-machine
+msgid "seek"
+msgstr "navigation"
+
+#: manifest.json
+#, x-machine
+msgid "speed"
+msgstr "vitesse"
+
+#. a tooltip: a button's action and its key, e.g. "Pause (Space)".
+#: ui/bar.slint:73
+#, x-machine
+msgid "{} ({})"
+msgstr "{} ({})"
+
+#: ui/bar.slint:75
+#, x-machine
+msgid "Pause"
+msgstr "Pause"
+
+#: ui/bar.slint:75
+#, x-machine
+msgid "Play"
+msgstr "Lecture"
+
+#: ui/bar.slint:76
+#, x-machine
+msgid "Stop"
+msgstr "Arrêter"
+
+#. a tooltip of two lines: the click's action, then the right click's.
+#: ui/bar.slint:78 ui/bar.slint:79
+#, x-machine
+msgid ""
+"{}\n"
+"Right-click: {}"
+msgstr ""
+"{}\n"
+"Clic droit : {}"
+
+#. a tooltip of two lines: the click's action, then the right click's.
+#: ui/bar.slint:78
+#, x-machine
+msgid "Back {} seconds"
+msgstr "Reculer de {} secondes"
+
+#. a tooltip of two lines: the click's action, then the right click's.
+#: ui/bar.slint:78
+#, x-machine
+msgid "Play previous"
+msgstr "Lire le précédent"
+
+#: ui/bar.slint:79
+#, x-machine
+msgid "Forward {} seconds"
+msgstr "Avancer de {} secondes"
+
+#: ui/bar.slint:79
+#, x-machine
+msgid "Play next"
+msgstr "Lire le suivant"
+
+#: ui/bar.slint:80
+#, x-machine
+msgid "Open file"
+msgstr "Ouvrir un fichier"
+
+#: ui/bar.slint:81
+#, x-machine
+msgid "Click to show the elapsed time"
+msgstr "Cliquer pour afficher le temps écoulé"
+
+#: ui/bar.slint:81
+#, x-machine
+msgid "Click to show the remaining time"
+msgstr "Cliquer pour afficher le temps restant"
+
+#: ui/bar.slint:82
+#, x-machine
+msgid "Unmute"
+msgstr "Rétablir le son"
+
+#: ui/bar.slint:82 ui/bar.slint:329
+#, x-machine
+msgid "Mute"
+msgstr "Couper le son"
+
+#: ui/bar.slint:84
+#, x-machine
+msgid "{} (the window is too narrow for the playlist)"
+msgstr "{} (la fenêtre est trop étroite pour la liste de lecture)"
+
+#: ui/bar.slint:84 ui/bar.slint:353
+#, x-machine
+msgid "Playlist"
+msgstr "Liste de lecture"
+
+#: ui/bar.slint:329
+#, x-machine
+msgctxt "accessibility"
+msgid "Unmute"
+msgstr "Rétablir le son"
+
+#: ui/open-url.slint:21
+#, x-machine
+msgid "Open URL"
+msgstr "Ouvrir une URL"
+
+#: ui/open-url.slint:37
+#, x-machine
+msgid "Enter the address of the file to play below."
+msgstr "Saisissez ci-dessous l'adresse du fichier à lire."
+
+#: ui/open-url.slint:43
+#, x-machine
+msgid "Example: {}"
+msgstr "Exemple : {}"
+
+#: ui/open-url.slint:53
+#, x-machine
+msgid "Opening…"
+msgstr "Ouverture…"
+
+#: ui/open-url.slint:53
+#, x-machine
+msgid "Open"
+msgstr "Ouvrir"
+
+#: ui/open-url.slint:59
+#, x-machine
+msgid "Use an address from the clipboard by default"
+msgstr "Utiliser par défaut une adresse du presse-papiers"
+
+#: ui/open-url.slint:64
+#, x-machine
+msgid "Not a valid link"
+msgstr "Lien non valide"
+
+#: ui/prompt.slint:16
+#, x-machine
+msgid "The source changed; open this window again"
+msgstr "La source a changé ; rouvrez cette fenêtre"
+
+#: ui/prompt.slint:21
+#, x-machine
+msgid "Custom Speed"
+msgstr "Vitesse personnalisée"
+
+#: ui/prompt.slint:21
+#, x-machine
+msgid "Jump to Time"
+msgstr "Aller à l'instant"
+
+#: ui/prompt.slint:44
+#, x-machine
+msgid "Speed (0.25–4×)"
+msgstr "Vitesse (0,25–4×)"
+
+#: ui/prompt.slint:44
+#, x-machine
+msgid "Time (h:mm:ss.ms)"
+msgstr "Temps (h:mm:ss.ms)"
+
+#: ui/prompt.slint:60 ui/time-jump.slint:128
+#, x-machine
+msgid "OK"
+msgstr "OK"
+
+#: ui/prompt.slint:60
+#, x-machine
+msgid "Go"
+msgstr "Aller"
+
+#. the unit after a number of seconds.
+#: ui/time-jump.slint:32
+#, x-machine
+msgid "s"
+msgstr "s"
+
+#: ui/time-jump.slint:38
+#, x-machine
+msgid "Default"
+msgstr "Par défaut"
+
+#: ui/time-jump.slint:65
+#, x-machine
+msgid "Seek Steps"
+msgstr "Pas de déplacement"
+
+#: ui/time-jump.slint:83
+#, x-machine
+msgid "Set how far each seek key moves during playback."
+msgstr "Définissez la distance parcourue par chaque touche de déplacement pendant la lecture."
+
+#: ui/time-jump.slint:89
+#, x-machine
+msgid "Left/Right arrow keys:"
+msgstr "Flèches gauche/droite :"
+
+#: ui/time-jump.slint:96
+#, x-machine
+msgid "Ctrl + Left/Right arrow keys:"
+msgstr "Ctrl + flèches gauche/droite :"
+
+#: ui/time-jump.slint:103
+#, x-machine
+msgid "Shift + Left/Right arrow keys:"
+msgstr "Maj + flèches gauche/droite :"
+
+#: ui/time-jump.slint:110
+#, x-machine
+msgid "Ctrl + Alt + Left/Right arrow keys:"
+msgstr "Ctrl + Alt + flèches gauche/droite :"
+
+#: ui/time-jump.slint:117
+#, x-machine
+msgid "Range 0.1–3600 s, at most one decimal place"
+msgstr "Plage de 0,1 à 3600 s, au plus une décimale"
+
+#: ui/time-jump.slint:132
+#, x-machine
+msgid "Cancel"
+msgstr "Annuler"

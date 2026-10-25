@@ -1,0 +1,818 @@
+# French translation of the messages in messages.pot.
+# Machine translated (each entry flagged x-machine); awaiting human review.
+msgid ""
+msgstr ""
+"Language: fr\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Searching sends the file name keywords and the file hash to the chosen service."
+msgstr "La recherche envoie les mots-clés du nom de fichier et l'empreinte du fichier au service choisi."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "First enter an API key for OpenSubtitles under Services (free at opensubtitles.com), or turn on Assrt and enter its token."
+msgstr "Saisissez d'abord une clé API OpenSubtitles dans Services (gratuite sur opensubtitles.com), ou activez Assrt et saisissez son jeton."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No media to load subtitles into"
+msgstr "Aucun média dans lequel charger des sous-titres"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No media to load subtitles into; you can search by title."
+msgstr "Aucun média dans lequel charger des sous-titres ; vous pouvez rechercher par titre."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The media changed; no subtitle was loaded."
+msgstr "Le média a changé ; aucun sous-titre n'a été chargé."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Cancelled."
+msgstr "Annulé."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The player refused the subtitle (file too large or invalid)."
+msgstr "Le lecteur a refusé le sous-titre (fichier trop volumineux ou invalide)."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Subtitles cannot be loaded into the current media."
+msgstr "Impossible de charger des sous-titres dans le média actuel."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Loading the subtitle failed."
+msgstr "Échec du chargement du sous-titre."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Enter a title, then search."
+msgstr "Saisissez un titre, puis lancez la recherche."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Searching…"
+msgstr "Recherche…"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Subtitles found: {}"
+msgstr "Sous-titres trouvés : {}"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No subtitles found; change the title and search again"
+msgstr "Aucun sous-titre trouvé ; modifiez le titre et relancez la recherche"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Downloading subtitle…"
+msgstr "Téléchargement du sous-titre…"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Downloading subtitles ({}/{})…"
+msgstr "Téléchargement des sous-titres ({}/{})…"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Opened subtitle: {}"
+msgstr "Sous-titre ouvert : {}"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Subtitle loaded, but it could not be saved in the video's folder"
+msgstr "Sous-titre chargé, mais impossible de l'enregistrer dans le dossier de la vidéo"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Saved to {}"
+msgstr "Enregistré dans {}"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Subtitles added: {}"
+msgstr "Sous-titres ajoutés : {}"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Subtitles saved: {} (in {})"
+msgstr "Sous-titres enregistrés : {} (dans {})"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No place to save to."
+msgstr "Aucun emplacement d'enregistrement."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Not saved."
+msgstr "Non enregistré."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Resets at {}"
+msgstr "Réinitialisation à {}"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Online subtitle loaded automatically: {}"
+msgstr "Sous-titre en ligne chargé automatiquement : {}"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "This archive format (rar, 7z) is not supported yet; download a zip or a single subtitle file."
+msgstr "Ce format d'archive (rar, 7z) n'est pas encore pris en charge ; téléchargez un zip ou un fichier de sous-titres unique."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The archive has no subtitle files."
+msgstr "L'archive ne contient aucun fichier de sous-titres."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The archive is damaged"
+msgstr "L'archive est endommagée"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Write preferred languages like zh-CN, zh-TW, en (at most 5)"
+msgstr "Indiquez les langues préférées, par ex. zh-CN, zh-TW, en (5 au plus)"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Testing…"
+msgstr "Test en cours…"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Testing OpenSubtitles…"
+msgstr "Test d'OpenSubtitles…"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Testing Assrt…"
+msgstr "Test d'Assrt…"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Saved ({})"
+msgstr "Enregistré ({})"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Could not save: {}"
+msgstr "Impossible d'enregistrer : {}"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Key entered"
+msgstr "Clé saisie"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Token entered"
+msgstr "Jeton saisi"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No key"
+msgstr "Aucune clé"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No token"
+msgstr "Aucun jeton"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Enter the API key first"
+msgstr "Saisissez d'abord la clé API"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Key and account are valid"
+msgstr "La clé et le compte sont valides"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Key and account are valid; downloads left today: {}"
+msgstr "La clé et le compte sont valides ; téléchargements restants aujourd'hui : {}"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Key is valid (not logged in: fewer anonymous downloads)"
+msgstr "La clé est valide (non connecté : moins de téléchargements anonymes)"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Enter the token first"
+msgstr "Saisissez d'abord le jeton"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Token is valid"
+msgstr "Le jeton est valide"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Token is valid; calls left: {}"
+msgstr "Le jeton est valide ; appels restants : {}"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Cancelled"
+msgstr "Annulé"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Cannot connect to OpenSubtitles"
+msgstr "Impossible de se connecter à OpenSubtitles"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Cannot connect to Assrt"
+msgstr "Impossible de se connecter à Assrt"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "OpenSubtitles returned an unreadable response"
+msgstr "OpenSubtitles a renvoyé une réponse illisible"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Assrt returned an unreadable response"
+msgstr "Assrt a renvoyé une réponse illisible"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Invalid API key; check it in Online Subtitle Settings"
+msgstr "Clé API invalide ; vérifiez-la dans Paramètres des sous-titres en ligne"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "No downloads left today (OpenSubtitles). Log in for more downloads"
+msgstr "Plus aucun téléchargement disponible aujourd'hui (OpenSubtitles). Connectez-vous pour en obtenir davantage"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Too many requests to OpenSubtitles; try again later"
+msgstr "Trop de requêtes vers OpenSubtitles ; réessayez plus tard"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "OpenSubtitles error ({})"
+msgstr "Erreur OpenSubtitles ({})"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Wrong OpenSubtitles user name or password"
+msgstr "Nom d'utilisateur ou mot de passe OpenSubtitles incorrect"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "OpenSubtitles login failed"
+msgstr "Échec de la connexion à OpenSubtitles"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "OpenSubtitles gave no download link"
+msgstr "OpenSubtitles n'a fourni aucun lien de téléchargement"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Cannot download the subtitle ({})"
+msgstr "Impossible de télécharger le sous-titre ({})"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Invalid Assrt token; check it in Online Subtitle Settings"
+msgstr "Jeton Assrt invalide ; vérifiez-le dans Paramètres des sous-titres en ligne"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Assrt call limit reached; try again later"
+msgstr "Limite d'appels Assrt atteinte ; réessayez plus tard"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Assrt error ({})"
+msgstr "Erreur Assrt ({})"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Assrt gave no download link"
+msgstr "Assrt n'a fourni aucun lien de téléchargement"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Cannot read the subtitle file."
+msgstr "Impossible de lire le fichier de sous-titres."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The subtitle file must be a regular file of 1 byte to 8 MiB."
+msgstr "Le fichier de sous-titres doit être un fichier ordinaire de 1 octet à 8 Mio."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The subtitle file is empty or larger than 8 MiB."
+msgstr "Le fichier de sous-titres est vide ou dépasse 8 Mio."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Image subtitle files are not supported yet"
+msgstr "Les fichiers de sous-titres en image ne sont pas encore pris en charge"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Unknown subtitle format"
+msgstr "Format de sous-titres inconnu"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The subtitle file has no subtitles."
+msgstr "Le fichier de sous-titres ne contient aucun sous-titre."
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The subtitle file is larger than 2 MiB"
+msgstr "Le fichier de sous-titres dépasse 2 Mio"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "The subtitle encoding may be wrong; change the default encoding in Subtitle Settings"
+msgstr "L'encodage des sous-titres est peut-être incorrect ; modifiez l'encodage par défaut dans Paramètres des sous-titres"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Fonts embedded in the subtitle were ignored"
+msgstr "Les polices intégrées aux sous-titres ont été ignorées"
+
+#: main.ts:44 messages.ts:141
+#, x-machine
+msgid "Unknown video frame rate; the MicroDVD subtitle was converted at 23.976"
+msgstr "Fréquence d'images de la vidéo inconnue ; le sous-titre MicroDVD a été converti à 23,976"
+
+#: main.ts:333 model.ts:130
+#, x-machine
+msgid "{} · {}"
+msgstr "{} · {}"
+
+#: main.ts:392
+#, x-machine
+msgid "Save Subtitle As"
+msgstr "Enregistrer le sous-titre sous"
+
+#: main.ts:550 main.ts:554 manifest.json
+#, x-machine
+msgid "Online Subtitles"
+msgstr "Sous-titres en ligne"
+
+#: main.ts:550
+#, x-machine
+msgid "Search and Download Subtitles…"
+msgstr "Rechercher et télécharger des sous-titres…"
+
+#: main.ts:554
+#, x-machine
+msgid "Online Subtitle Settings…"
+msgstr "Paramètres des sous-titres en ligne…"
+
+#: manifest.json
+#, x-machine
+msgid "Search and download subtitles for the current video"
+msgstr "Rechercher et télécharger des sous-titres pour la vidéo actuelle"
+
+#: manifest.json
+#, x-machine
+msgid ""
+"Search OpenSubtitles.com or Assrt for subtitles by file hash and title, load them right away and keep a copy beside the video. Needs your own API key, kept in the system's secret store.\n"
+"Find it in the right-click menu under Subtitles ▸ Online Subtitles."
+msgstr ""
+"Recherche des sous-titres sur OpenSubtitles.com ou Assrt par empreinte de fichier et par titre, les charge immédiatement et en garde une copie à côté de la vidéo. Nécessite votre propre clé API, conservée dans le coffre de secrets du système.\n"
+"Accessible depuis le menu contextuel, sous Sous-titres ▸ Sous-titres en ligne."
+
+#: manifest.json
+#, x-machine
+msgid "subtitles"
+msgstr "sous-titres"
+
+#: manifest.json
+#, x-machine
+msgid "download"
+msgstr "téléchargement"
+
+#: messages.ts:132
+#, x-machine
+msgid "This run only"
+msgstr "Cette session uniquement"
+
+#: messages.ts:132
+#, x-machine
+msgid "macOS Keychain ({})"
+msgstr "Trousseau macOS ({})"
+
+#: messages.ts:132
+#, x-machine
+msgid "Windows Credential Manager ({})"
+msgstr "Gestionnaire d'identification Windows ({})"
+
+#: messages.ts:132
+#, x-machine
+msgid "System secret store ({})"
+msgstr "Coffre de secrets du système ({})"
+
+#: messages.ts:132
+#, x-machine
+msgid "{} (readable only by you)"
+msgstr "{} (lisible par vous seul)"
+
+#: messages.ts:135 ui/messages.slint:7
+#, x-machine
+msgid "Assrt"
+msgstr "Assrt"
+
+#. {0} is a service name, {1} the result of testing it
+#: messages.ts:147
+#, x-machine
+msgid "{0}: {1}"
+msgstr "{0} : {1}"
+
+#: model.ts:102
+#, x-machine
+msgid "Simplified Chinese"
+msgstr "Chinois simplifié"
+
+#: model.ts:102
+#, x-machine
+msgid "Traditional Chinese"
+msgstr "Chinois traditionnel"
+
+#: model.ts:102
+#, x-machine
+msgid "Chinese"
+msgstr "Chinois"
+
+#: model.ts:102
+#, x-machine
+msgid "English"
+msgstr "Anglais"
+
+#: model.ts:102
+#, x-machine
+msgid "Japanese"
+msgstr "Japonais"
+
+#: model.ts:102
+#, x-machine
+msgid "Korean"
+msgstr "Coréen"
+
+#: model.ts:102
+#, x-machine
+msgid "French"
+msgstr "Français"
+
+#: model.ts:102
+#, x-machine
+msgid "German"
+msgstr "Allemand"
+
+#: model.ts:102
+#, x-machine
+msgid "Spanish"
+msgstr "Espagnol"
+
+#: model.ts:102
+#, x-machine
+msgid "Italian"
+msgstr "Italien"
+
+#: model.ts:102
+#, x-machine
+msgid "Russian"
+msgstr "Russe"
+
+#: model.ts:102
+#, x-machine
+msgid "Portuguese"
+msgstr "Portugais"
+
+#: model.ts:102
+#, x-machine
+msgid "Brazilian Portuguese"
+msgstr "Portugais (Brésil)"
+
+#: model.ts:102
+#, x-machine
+msgid "Arabic"
+msgstr "Arabe"
+
+#: model.ts:102
+#, x-machine
+msgid "Thai"
+msgstr "Thaï"
+
+#: model.ts:102
+#, x-machine
+msgid "Vietnamese"
+msgstr "Vietnamien"
+
+#: model.ts:102
+#, x-machine
+msgid "Cantonese"
+msgstr "Cantonais"
+
+#: ui/choose.slint:7
+#, x-machine
+msgid "Choose Subtitle File"
+msgstr "Choisir le fichier de sous-titres"
+
+#: ui/choose.slint:20
+#, x-machine
+msgid "The archive has several subtitle files:"
+msgstr "L'archive contient plusieurs fichiers de sous-titres :"
+
+#: ui/choose.slint:52 ui/download.slint:162
+#, x-machine
+msgid "Cancel"
+msgstr "Annuler"
+
+#: ui/choose.slint:53
+#, x-machine
+msgid "OK"
+msgstr "OK"
+
+#: ui/download.slint:31
+#, x-machine
+msgid "Download Subtitles"
+msgstr "Télécharger des sous-titres"
+
+#: ui/download.slint:63 ui/download.slint:65
+#, x-machine
+msgid "{} [MT]"
+msgstr "{} [TA]"
+
+#: ui/download.slint:63 ui/download.slint:64
+#, x-machine
+msgid "{} [HI]"
+msgstr "{} [SME]"
+
+#: ui/download.slint:75
+#, x-machine
+msgid "Title:"
+msgstr "Titre :"
+
+#: ui/download.slint:87
+#, x-machine
+msgid "Search by Title"
+msgstr "Rechercher par titre"
+
+#: ui/download.slint:88
+#, x-machine
+msgid "Search Again"
+msgstr "Rechercher à nouveau"
+
+#: ui/download.slint:93
+#, x-machine
+msgid "Searching sends the file name keywords and the file hash to the chosen service. You will not be asked again once you agree."
+msgstr "La recherche envoie les mots-clés du nom de fichier et l'empreinte du fichier au service choisi. Une fois votre accord donné, la question ne sera plus posée."
+
+#: ui/download.slint:101
+#, x-machine
+msgid "Agree and Search"
+msgstr "Accepter et rechercher"
+
+#: ui/download.slint:116
+#, x-machine
+msgid "Language"
+msgstr "Langue"
+
+#: ui/download.slint:117
+#, x-machine
+msgid "Release"
+msgstr "Version"
+
+#: ui/download.slint:118
+#, x-machine
+msgid "Format"
+msgstr "Format"
+
+#: ui/download.slint:119
+#, x-machine
+msgid "FPS"
+msgstr "IPS"
+
+#: ui/download.slint:120
+#, x-machine
+msgid "Downloads"
+msgstr "Téléchargements"
+
+#: ui/download.slint:121
+#, x-machine
+msgid "Match"
+msgstr "Correspondance"
+
+#: ui/download.slint:122
+#, x-machine
+msgid "Source"
+msgstr "Source"
+
+#: ui/download.slint:147
+#, x-machine
+msgid "Hash"
+msgstr "Empreinte"
+
+#: ui/download.slint:147
+#, x-machine
+msgid "Title"
+msgstr "Titre"
+
+#: ui/download.slint:156
+#, x-machine
+msgid "Open"
+msgstr "Ouvrir"
+
+#: ui/download.slint:157
+#, x-machine
+msgid "Add"
+msgstr "Ajouter"
+
+#: ui/download.slint:158
+#, x-machine
+msgid "Save Only"
+msgstr "Enregistrer seulement"
+
+#: ui/download.slint:159
+#, x-machine
+msgid "Save As…"
+msgstr "Enregistrer sous…"
+
+#: ui/download.slint:160
+#, x-machine
+msgid "More"
+msgstr "Plus"
+
+#: ui/download.slint:163 ui/settings.slint:101
+#, x-machine
+msgid "Settings…"
+msgstr "Paramètres…"
+
+#: ui/service.slint:17
+#, x-machine
+msgid "{} Settings"
+msgstr "Paramètres {}"
+
+#: ui/service.slint:39
+#, x-machine
+msgid "API key"
+msgstr "Clé API"
+
+#: ui/service.slint:39
+#, x-machine
+msgid "Token"
+msgstr "Jeton"
+
+#: ui/service.slint:44
+#, x-machine
+msgid "User name"
+msgstr "Nom d'utilisateur"
+
+#: ui/service.slint:45 ui/service.slint:50
+#, x-machine
+msgid "Optional"
+msgstr "Facultatif"
+
+#: ui/service.slint:49
+#, x-machine
+msgid "Password"
+msgstr "Mot de passe"
+
+#: ui/service.slint:54
+#, x-machine
+msgid "Sign up at opensubtitles.com, then get a free API key on the “API consumers” page. User name and password are optional; logging in gives more downloads per day. Stored in: {}."
+msgstr "Inscrivez-vous sur opensubtitles.com, puis obtenez une clé API gratuite sur la page « API consumers ». Le nom d'utilisateur et le mot de passe sont facultatifs ; la connexion donne droit à plus de téléchargements par jour. Stockage : {}."
+
+#: ui/service.slint:55
+#, x-machine
+msgid "Sign up at assrt.net, then get the API token in the user center. The service limits how often it can be called. Stored in: {}."
+msgstr "Inscrivez-vous sur assrt.net, puis obtenez le jeton API dans l'espace utilisateur. Le service limite la fréquence des appels. Stockage : {}."
+
+#: ui/service.slint:71 ui/settings.slint:102
+#, x-machine
+msgid "Test"
+msgstr "Tester"
+
+#: ui/service.slint:72
+#, x-machine
+msgid "Save"
+msgstr "Enregistrer"
+
+#: ui/settings.slint:30
+#, x-machine
+msgid "Online Subtitle Settings"
+msgstr "Paramètres des sous-titres en ligne"
+
+#: ui/settings.slint:64
+#, x-machine
+msgid "Services"
+msgstr "Services"
+
+#: ui/settings.slint:96
+#, x-machine
+msgid "Move Up"
+msgstr "Monter"
+
+#: ui/settings.slint:97
+#, x-machine
+msgid "Move Down"
+msgstr "Descendre"
+
+#: ui/settings.slint:106
+#, x-machine
+msgid "Search"
+msgstr "Recherche"
+
+#: ui/settings.slint:109
+#, x-machine
+msgid "Languages"
+msgstr "Langues"
+
+#: ui/settings.slint:121
+#, x-machine
+msgid "Auto search"
+msgstr "Recherche automatique"
+
+#: ui/settings.slint:124
+#, x-machine
+msgid "Off"
+msgstr "Désactivée"
+
+#: ui/settings.slint:124
+#, x-machine
+msgid "When opening a video without subtitles"
+msgstr "À l'ouverture d'une vidéo sans sous-titres"
+
+#: ui/settings.slint:131
+#, x-machine
+msgid "After search"
+msgstr "Après la recherche"
+
+#: ui/settings.slint:134
+#, x-machine
+msgid "Show the download window"
+msgstr "Afficher la fenêtre de téléchargement"
+
+#: ui/settings.slint:134
+#, x-machine
+msgid "Load the best result automatically"
+msgstr "Charger automatiquement le meilleur résultat"
+
+#: ui/settings.slint:143
+#, x-machine
+msgid "Only subtitles that exactly match the file (hash)"
+msgstr "Uniquement les sous-titres correspondant exactement au fichier (empreinte)"
+
+#: ui/settings.slint:150
+#, x-machine
+msgid "Exclude"
+msgstr "Exclure"
+
+#: ui/settings.slint:154
+#, x-machine
+msgid "Separate with commas or spaces"
+msgstr "Séparer par des virgules ou des espaces"
+
+#: ui/settings.slint:159
+#, x-machine
+msgid "Saving"
+msgstr "Enregistrement"
+
+#: ui/settings.slint:162
+#, x-machine
+msgid "Save to"
+msgstr "Enregistrer dans"
+
+#: ui/settings.slint:165
+#, x-machine
+msgid "Beside the video when possible"
+msgstr "À côté de la vidéo si possible"
+
+#: ui/settings.slint:165
+#, x-machine
+msgid "Plugin data folder"
+msgstr "Dossier de données du plugin"
+
+#: ui/settings.slint:171
+#, x-machine
+msgid "Searching sends the file name keywords and the file hash to the chosen service. Keys and passwords are stored in: {}."
+msgstr "La recherche envoie les mots-clés du nom de fichier et l'empreinte du fichier au service choisi. Les clés et mots de passe sont stockés dans : {}."
