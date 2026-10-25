@@ -27,6 +27,28 @@ export function fileName(source: string) {
   return source.split(/[\\/]/).filter(Boolean).at(-1) ?? source;
 }
 
+/** `"hardware (d3d11va-copy)"` / `"software"` from `stats().video.decoding`; `null` while unknown. */
+export function decoding(i18n: I18n, video: PlaybackStats["video"]): TextArg | null {
+  // TRANSLATORS: how the video is decoded, after "Decoder:": by the CPU.
+  if (video?.decoding === "software") return i18n.text("software");
+  if (video?.decoding !== "hardware") return null;
+  if (video.hwdec && video.hwdec !== "no") {
+    // TRANSLATORS: how the video is decoded, after "Decoder:": by the GPU; {} is the method, e.g. d3d11va-copy.
+    return i18n.text("hardware ({})", [video.hwdec]);
+  }
+  // TRANSLATORS: how the video is decoded, after "Decoder:": by the GPU.
+  return i18n.text("hardware");
+}
+
+/** `30 fps (source 60)`: new frames the window showed per second, and the source's rate; `null` while not measured. */
+export function displayed(i18n: I18n, stats: PlaybackStats): TextArg | null {
+  if (stats.presentedFps === null || stats.presentedFps === undefined || !stats.video) return null;
+  const shown = Number(stats.presentedFps.toFixed(1));
+  const source = stats.video.fps ? Number(stats.video.fps.toFixed(2)) : null;
+  // TRANSLATORS: frames per second the window showed; "source" is the video's own frame rate.
+  return source === null ? i18n.text("{} fps", [shown]) : i18n.text("{} fps (source {})", [shown, source]);
+}
+
 /** The overlay text (ui-spec §9.2): one fact per line, as text values the player translates. */
 export function describe(i18n: I18n, state: PlayerState, stats: PlaybackStats): TextList {
   const { text, list } = i18n;
@@ -36,7 +58,10 @@ export function describe(i18n: I18n, state: PlayerState, stats: PlaybackStats): 
     text("File: {}", [state.source ? fileName(state.source) : text("No media open")]),
     text("Time: {} / {}", [clock(state.position), clock(state.duration)]),
     text("Video: {} {}", [or(video?.codec), size]),
+    text("Decoder: {}", [decoding(i18n, video) ?? "-"]),
     text("Frame rate: {}", [video?.fps ? `${video.fps.toFixed(2)} fps` : "-"]),
+    // TRANSLATORS: the frame rate that really reached the screen, e.g. "30 fps (source 60)".
+    text("Displayed: {}", [displayed(i18n, stats) ?? "-"]),
     text("Audio: {} {} {}", [or(audio?.codec), audio?.sampleRate ? `${audio.sampleRate} Hz` : "-", audio?.channels ? text("{} channels", [audio.channels]) : "-"]),
     text("Backend: {} (session {})", [or(stats.backend), stats.session]),
     text("Frames shown: {}", [stats.framesShown]),
@@ -112,10 +137,11 @@ export function subtitleName(i18n: I18n, track: { title: string; language: strin
 }
 
 /**
- * I03 / IA-INFO-01 short information, up to three lines: the file name, then
- * `01:23 / 45:00 · Part Two · H.264 1920×1080 · AAC 2 ch`, then the selected
- * subtitle track's name; unknown items (and the subtitle line without a
- * selected track) are left out, and codecs use short names. The player cuts
+ * I03 / IA-INFO-01 short information, up to four lines: the file name, then
+ * `01:23 / 45:00 · Part Two · H.264 1920×1080 · AAC 2 ch`, then
+ * `Decoder: hardware (videotoolbox) · Displayed: 30 fps (source 60)`, then the
+ * selected subtitle track's name; unknown items (and the subtitle line without
+ * a selected track) are left out, and codecs use short names. The player cuts
  * each line to the video area after translating it (`maxColumns`).
  */
 export function brief(i18n: I18n, state: PlayerState, stats: PlaybackStats | null, extras: BriefExtras = {}): TextValue {
@@ -135,6 +161,12 @@ export function brief(i18n: I18n, state: PlayerState, stats: PlaybackStats | nul
   ].filter((item): item is TextArg => !!item);
   const lines: TextArg[] = [fileName(state.source)];
   if (items.length) lines.push(items.reduce((line, item) => text("{} · {}", [line, item])));
+  const decoder = stats ? decoding(i18n, stats.video) : null;
+  const shown = stats ? displayed(i18n, stats) : null;
+  const frames: TextArg[] = [];
+  if (decoder !== null) frames.push(text("Decoder: {}", [decoder]));
+  if (shown !== null) frames.push(text("Displayed: {}", [shown]));
+  if (frames.length) lines.push(frames.reduce((line, item) => text("{} · {}", [line, item])));
   if (extras.subtitle) lines.push(extras.subtitle);
   return list(lines, "lines");
 }

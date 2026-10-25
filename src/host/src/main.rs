@@ -1109,11 +1109,21 @@ impl Host {
     }
     /// GPU rendering: show the renderer's texture in this window (before
     /// `show()`, so the rendering notifier sees the setup). A window that
-    /// cannot show it switches the player to software rendering.
+    /// cannot show it switches the player to software rendering. Either way
+    /// the window's draws are counted (`stats().presentedFps`).
     fn attach_gpu(&self, shell: &slint_interpreter::ComponentInstance) {
         let Some(gpu) = self.backend.render.gpu() else {
+            self.count_draws(shell);
             return;
         };
+        let render = self.backend.render.clone();
+        let drawn = move |draw: platform::GpuDraw| match draw {
+            platform::GpuDraw::Begin => render.presentation.draw_begin(Instant::now()),
+            platform::GpuDraw::End { copied } => {
+                render.presentation.draw_end(Instant::now(), copied);
+            }
+        };
+        self.backend.render.presentation.start_counting();
         let render = self.backend.render.clone();
         let show = move |shell: &slint_interpreter::ComponentInstance, image: slint::Image| {
             // A generated stream's picture stays (its frames come as pixels).
@@ -1123,11 +1133,37 @@ impl Host {
         };
         let render = self.backend.render.clone();
         let failed = move |reason: String| render.fall_back(&reason);
-        if let Err(error) = gpu.attach(shell, show, failed) {
+        if let Err(error) = gpu.attach(shell, show, failed, drawn) {
             self.backend
                 .render
                 .fall_back(&format!("the window cannot show GPU frames ({error})"));
         }
+    }
+    /// Software rendering: count the window's draws with its rendering
+    /// notifier (femtovg); Slint's software renderer has none, so there each
+    /// winit redraw counts (without draw times).
+    fn count_draws(&self, shell: &slint_interpreter::ComponentInstance) {
+        let render = self.backend.render.clone();
+        let notifier = move |state, _: &slint::GraphicsAPI| match state {
+            slint::RenderingState::BeforeRendering => {
+                render.presentation.draw_begin(Instant::now());
+            }
+            slint::RenderingState::AfterRendering => {
+                render.presentation.draw_end(Instant::now(), false);
+            }
+            _ => (),
+        };
+        if shell.window().set_rendering_notifier(notifier).is_err() {
+            use slint::winit_030::{EventResult, WinitWindowAccessor, winit::event::WindowEvent};
+            let render = self.backend.render.clone();
+            shell.window().on_winit_window_event(move |_, event| {
+                if matches!(event, WindowEvent::RedrawRequested) {
+                    render.presentation.draw_end(Instant::now(), false);
+                }
+                EventResult::Propagate
+            });
+        }
+        self.backend.render.presentation.start_counting();
     }
     /// Set the newest rendered frame on the video area (no copy: the renderer
     /// drew into this buffer).
@@ -1144,10 +1180,12 @@ impl Host {
             self.pip
                 .push(width as usize, height as usize, frame.buffer.as_bytes());
         }
+        let set = Instant::now();
         let image = slint::Image::from_rgb8(frame.buffer);
         self.last_image = Some(image.clone());
-        self.last_frame = Some(Instant::now());
+        self.last_frame = Some(set);
         let _ = window.set_property("video-frame", image.into());
+        self.backend.render.presentation.picture_set(set.elapsed());
         // With GPU rendering these are a generated stream's frames (or its
         // cleared canvas): the next GPU frame sets its texture again.
         if let Some(gpu) = self.backend.render.gpu() {
@@ -1476,13 +1514,26 @@ impl Host {
             self.render_area = Some(area);
         }
         self.apply_render_size();
+        let presentation = &self.backend.render.presentation;
+        presentation.sample(Instant::now());
         if let Some(log) = self.frame_log.as_mut() {
-            let (mut counts, mut size) = (self.backend.frame.counts(), self.shown_size);
+            let ((mut produced, mut shown), mut size) =
+                (self.backend.frame.counts(), self.shown_size);
             if let Some(gpu) = self.backend.render.gpu() {
-                counts = (counts.0 + gpu.frames(), counts.1 + gpu.shown());
+                (produced, shown) = (produced + gpu.frames(), shown + gpu.shown());
                 size = gpu.size().or(size);
             }
-            log.tick(counts, size, Instant::now());
+            let (draws, presented) = presentation.counts();
+            let counts = render_target::LogCounts {
+                produced,
+                shown,
+                draws,
+                presented,
+            };
+            let refresh = || platform::window_refresh(shell.window());
+            if let Some(line) = log.line(counts, presentation, refresh, size, Instant::now()) {
+                eprintln!("{line}");
+            }
         }
         self.apply_on_top();
         self.click_tick((number("pointer-x"), number("pointer-y")));
@@ -5133,6 +5184,7 @@ fn main() -> Result<()> {
             slint::TimerMode::Repeated,
             Duration::from_millis(16),
             move || {
+                let began = Instant::now();
                 let mut host = tick_host.borrow_mut();
                 for event in receiver.try_iter().take(128) {
                     host.handle(event);
@@ -5173,6 +5225,9 @@ fn main() -> Result<()> {
                 // one whose wake-up found the host busy.
                 if host.backend.frame.missed() {
                     host.show_frame();
+                }
+                if let Some(log) = host.frame_log.as_mut() {
+                    log.tick_took(began.elapsed());
                 }
                 if seconds.is_some_and(|seconds| start.elapsed().as_secs_f64() >= seconds) {
                     if let Some(path) = snapshot.as_ref()

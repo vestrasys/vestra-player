@@ -391,12 +391,14 @@ impl Handle {
     /// `show` gets each new texture image (first frame, resize, after
     /// [`reshow`](Self::reshow)) to set on the video area. Each new frame asks
     /// the last four attached windows to redraw. `failed` runs once if the
-    /// window cannot show textures (its renderer is not OpenGL).
+    /// window cannot show textures (its renderer is not OpenGL). `drawn` sees
+    /// each draw of the window (this notifier is the window's only one).
     pub fn attach<T>(
         &self,
         component: &T,
         show: impl Fn(&T, Image) + 'static,
         failed: impl FnOnce(String) + 'static,
+        mut drawn: impl FnMut(Draw) + 'static,
     ) -> Result<(), String>
     where
         T: ComponentHandle + 'static,
@@ -410,7 +412,7 @@ impl Handle {
         drop(redraw.drain(..stale));
         drop(redraw);
         let (shared, weak, mut view) = (self.0.clone(), component.as_weak(), None::<View>);
-        let mut failed = Some(failed);
+        let (mut failed, mut copied) = (Some(failed), false);
         let notifier = move |state, api: &GraphicsAPI| match state {
             RenderingState::RenderingSetup => {
                 view = matches!(api, GraphicsAPI::NativeOpenGL { .. }).then(View::new).flatten();
@@ -421,6 +423,8 @@ impl Handle {
                 }
             }
             RenderingState::BeforeRendering => {
+                drawn(Draw::Begin);
+                let copies = shared.shown.load(Ordering::Relaxed);
                 let frame = lock(&shared.latest).clone();
                 let reshow = *lock(&shared.reshow);
                 if let (Some(view), Some(frame), Some(component)) =
@@ -429,12 +433,24 @@ impl Handle {
                 {
                     show(&component, image);
                 }
+                copied = shared.shown.load(Ordering::Relaxed) != copies;
+            }
+            RenderingState::AfterRendering => {
+                drawn(Draw::End { copied: std::mem::take(&mut copied) })
             }
             RenderingState::RenderingTeardown => view = None,
             _ => (),
         };
         component.window().set_rendering_notifier(notifier).map_err(|e| e.to_string())
     }
+}
+
+/// A draw of an attached window, for the host's presentation counters.
+pub enum Draw {
+    /// The window starts drawing.
+    Begin,
+    /// The window drew; `copied`: a new frame was copied into it first.
+    End { copied: bool },
 }
 
 /// One window's side, in that window's GL context.

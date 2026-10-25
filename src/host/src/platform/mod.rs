@@ -26,7 +26,7 @@
 //! | storage | `sync_dir` (Unix: `fsync` below; Windows: `FlushFileBuffers` on a directory handle) |
 //! | generated streams | `av_listen` → `AvListener` / `AvStream` (Unix: `av_unix` below; Windows: `av_tcp`) |
 //! | offline media | `HELD_FILE_INPUT` (how FFmpeg names its stdin, the held source file) |
-//! | rendering | `GPU_RENDER`, `gpu_start` → `GpuRenderer` / `GpuHandle` / `GpuFrame` (macOS: `vestra-gpu-render`; elsewhere `no_gpu` below refuses, so the host renders in software) |
+//! | rendering | `window_refresh` (here, through winit on every system), `GPU_RENDER`, `gpu_start` → `GpuRenderer` / `GpuHandle` / `GpuFrame` / `GpuDraw` (macOS: `vestra-gpu-render`; elsewhere `no_gpu` below refuses, so the host renders in software) |
 //! | picture-in-picture | `pip_supported`, `PipWindow` (UI thread; macOS: AVKit through `vestra-pip`; elsewhere `pip_unsupported.rs`: `unsupported`) |
 //!
 //! Window rectangles are logical points. macOS uses the Cocoa lower-left
@@ -288,6 +288,17 @@ fn os_name() -> &'static str {
     }
 }
 
+/// The refresh rate of the display `window` is on (the frame log), from
+/// winit's monitor of the window: `None` without one or without a rate.
+pub fn window_refresh(window: &slint::Window) -> Option<f64> {
+    use slint::winit_030::WinitWindowAccessor;
+    window
+        .with_winit_window(|window| window.current_monitor()?.refresh_rate_millihertz())
+        .flatten()
+        .map(|mhz| f64::from(mhz) / 1000.)
+        .filter(|hz| *hz >= 1.)
+}
+
 /// The refusal for something this system's implementation does not do.
 #[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(dead_code))]
 fn unsupported(what: &str) -> crate::RpcError {
@@ -310,6 +321,12 @@ mod no_gpu {
     pub struct GpuHandle(());
     /// A published GPU frame; there are none here.
     pub enum GpuFrame {}
+    /// A draw of a window showing GPU frames (as on macOS); never sent here.
+    #[allow(dead_code)]
+    pub enum GpuDraw {
+        Begin,
+        End { copied: bool },
+    }
     pub fn gpu_start(
         _mpv: Arc<rsmpv::Mpv>,
         _size: (u32, u32),
@@ -347,6 +364,7 @@ mod no_gpu {
             _component: &T,
             _show: impl Fn(&T, slint::Image) + 'static,
             _failed: impl FnOnce(String) + 'static,
+            _drawn: impl FnMut(GpuDraw) + 'static,
         ) -> Result<(), String> {
             Err("GPU rendering is not available".into())
         }

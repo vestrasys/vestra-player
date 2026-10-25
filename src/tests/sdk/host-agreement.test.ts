@@ -880,23 +880,7 @@ test("HostAction ids are the player's core actions (core_actions.rs ACTIONS)", (
  * in the host, so the entry goes once the table lists the code or the host
  * stops returning it).
  */
-const KNOWN_UNDOCUMENTED_CODES = new Set([
-  "activation",
-  "command",
-  "input-overflow",
-  "internal",
-  "javascript",
-  "owner",
-  "pending",
-  "producer",
-  "resolution",
-  "revisionConflict",
-  "slint",
-  "source-geometry",
-  "source-geometry-unsupported",
-  "source-unavailable",
-  "unknown-expired",
-]);
+const KNOWN_UNDOCUMENTED_CODES = new Set<string>([]);
 
 test("the error codes the player returns are PluginError codes", () => {
   const types = sdkFile("plugin/types.d.ts");
