@@ -29,6 +29,13 @@ export function centered(index: number, height: number, count: number) {
   return limit(index * ROW_HEIGHT + ROW_HEIGHT / 2 - height / 2, height, count);
 }
 
+/**
+ * After the list appears (F6, its tab, detached or attached, the first layout after start-up),
+ * it is centred on the playing row, and kept so while its size settles this long; scrolls
+ * reported in this time are layout, not the user's (Vestra value).
+ */
+export const SHOW_SETTLE_MS = 1000;
+
 /** After the user scrolls, the playing row's changes leave the list alone this long (Vestra value). */
 export const USER_SCROLL_HOLD_MS = 2000;
 

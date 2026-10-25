@@ -192,3 +192,106 @@ test("3000 files: search numbers rows by their place in the list; select all and
     await app.close();
   }
 });
+
+test("3000 files: the list opens on the playing row, centred (F6, its tab, detached); a row playing out of view is shown", async () => {
+  const app = await start();
+  try {
+    app.host.dialogAnswers.push([app.root]);
+    await app.host.command("playlist.add-folder").run();
+    await app.until(() => app.count() === 3000, "the folder to be added");
+    await app.scroll(0); // the list reports its height: 40 rows of 20 px
+    const props = app.panel.props;
+    const request = () => props["scroll-request"] as number;
+    /** The scroll that puts row `index` (0-based) in the middle of the 800 px list, clamped. */
+    const middle = (index: number) => Math.max(0, Math.min(index * 20 + 10 - 400, 3000 * 20 - 800));
+    /** The row shown at `index`, from the rows sent (`null`: not in the 200-row window). */
+    const sent = (index: number) => app.rows()[index - app.first()] ?? null;
+    const play = async (index: number) => {
+      await app.scroll(middle(index));
+      app.panel.emit("play-row", sent(index)!.rowId);
+      await app.host.settle();
+      app.host.setSource({ phase: "ready" });
+      await app.host.settle();
+      assert.equal(sent(index)?.current, true, `row ${index + 1} plays`);
+    };
+    /** Close and reopen the list (F6 twice); the new panel reports where it starts (`show-y`). */
+    const reopen = async () => {
+      await app.host.command("playlist.visibility").run();
+      await app.host.settle();
+      assert.equal(app.host.layout.sidebar?.effective, false);
+      const start = props["show-y"] as number;
+      await app.host.command("playlist.visibility").run();
+      await app.host.settle();
+      await app.scroll(start);
+      return start;
+    };
+
+    // Item 2500 of 3000 plays; the user scrolls back to the top and closes the list.
+    await play(2499);
+    await app.scroll(0);
+    let asked = request();
+    const start = await reopen();
+    assert.equal(start, middle(2499), "the new panel starts with row 2500 in the middle");
+    assert.equal(props["scroll-to-y"], middle(2499));
+    assert.ok(request() > asked, "and is asked to scroll there once it shows");
+    assert.equal(sent(2499)?.current, true, "the playing row is among the rows sent");
+    assert.equal(2499 * 20 + 10 - start, 400, "its middle is the list's middle");
+    // The 40 rows on screen are in the window (no empty rows when the panel appears).
+    assert.ok(app.first() <= start / 20 && app.first() + WINDOW_ROWS >= start / 20 + 41);
+
+    // Clamped at the list's end and start.
+    await play(2998);
+    await app.scroll(0);
+    assert.equal(await reopen(), 3000 * 20 - 800, "the last row: the list ends at the bottom");
+    assert.equal(sent(2998)?.current, true);
+    await play(1);
+    await app.scroll(30_000);
+    assert.equal(await reopen(), 0, "the second row: the list starts at the top");
+
+    // Another plugin's tab, then the playlist's tab again.
+    await play(1800);
+    await app.scroll(0);
+    app.host.mountOther("sidebar", "example.other", { title: "Other" });
+    app.host.selectTab("example.other");
+    await app.host.settle();
+    assert.equal(props["show-y"], middle(1800), "hidden behind another tab: centred for the next panel");
+    asked = request();
+    app.host.selectTab("vestra.playlist");
+    await app.host.settle();
+    assert.ok(request() > asked);
+    assert.equal(props["scroll-to-y"], middle(1800));
+    await app.scroll(middle(1800));
+
+    // Detached into its own window: a new panel, centred again.
+    await app.scroll(0);
+    await pause(1100); // past the panel's settling time: the scroll above is the user's
+    asked = request();
+    await app.host.request("layout.set", { slot: "sidebar", detached: true });
+    app.host.emit("window.state", {});
+    await app.host.settle();
+    assert.ok(request() > asked, "detaching re-centres the playing row");
+    assert.equal(props["scroll-to-y"], middle(1800));
+    await app.scroll(middle(1800));
+    await pause(1100);
+
+    // While shown: the next row is in view, no scroll; a row playing off screen is centred.
+    asked = request();
+    const subs = () => app.host.sent("source.submit").length;
+    // `settle()` waits for host calls only: the next row's open follows the plugin's own file
+    // check (realpath), so wait for it before the source becomes ready.
+    await app.host.step("next");
+    await app.until(() => subs() === 5, "the next row's open");
+    app.host.setSource({ phase: "ready" });
+    await app.host.settle();
+    assert.equal(sent(1801)?.current, true);
+    assert.equal(request(), asked, "the next row is in view: the list stays");
+    const far = app.first(); // in the window, 60+ rows above the view
+    app.panel.emit("play-row", sent(far)!.rowId);
+    await app.host.settle();
+    app.host.setSource({ phase: "ready" });
+    await app.host.settle();
+    assert.equal(props["scroll-to-y"], middle(far), "a playing row out of view is centred");
+  } finally {
+    await app.close();
+  }
+});

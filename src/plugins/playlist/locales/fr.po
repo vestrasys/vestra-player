@@ -208,7 +208,7 @@ msgstr "Le chemin canonique du fichier correspond à un élément existant ; ce
 msgid "Close the other dialog first"
 msgstr "Fermez d'abord l'autre boîte de dialogue"
 
-#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:114 ui/sidebar.slint:242
+#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:114 ui/sidebar.slint:246
 #, x-machine
 msgid "Playlist"
 msgstr "Liste de lecture"
@@ -413,7 +413,7 @@ msgstr "Inverser l'ordre actuel"
 msgid "Select All"
 msgstr "Tout sélectionner"
 
-#: main.ts:527 ui/sidebar.slint:541
+#: main.ts:527 ui/sidebar.slint:548
 #, x-machine
 msgid "Search"
 msgstr "Rechercher"
@@ -533,7 +533,7 @@ msgstr "Mémoriser la liste"
 msgid "Confirm Before Removing All"
 msgstr "Confirmer avant de tout supprimer"
 
-#: main.ts:988
+#: main.ts:1035
 #, x-machine
 msgid "opening, added to the list"
 msgstr "en cours d'ouverture, ajouté à la liste"
@@ -692,7 +692,7 @@ msgstr "Saisissez ci-dessous les adresses web à ajouter à la liste de lecture,
 msgid "Example: {}"
 msgstr "Exemple : {}"
 
-#: ui/link.slint:63 ui/sidebar.slint:466
+#: ui/link.slint:63 ui/sidebar.slint:473
 #, x-machine
 msgid "Add"
 msgstr "Ajouter"
@@ -762,27 +762,27 @@ msgstr "Mémoriser la liste"
 msgid "Confirm before removing all"
 msgstr "Confirmer avant de tout supprimer"
 
-#: ui/sidebar.slint:190
+#: ui/sidebar.slint:194
 #, x-machine
 msgid "Filtered {}"
 msgstr "Filtré : {}"
 
-#: ui/sidebar.slint:251
+#: ui/sidebar.slint:255
 #, x-machine
 msgid "Attach to main window"
 msgstr "Rattacher à la fenêtre principale"
 
-#: ui/sidebar.slint:251
+#: ui/sidebar.slint:255
 #, x-machine
 msgid "Detach as floating window"
 msgstr "Détacher en fenêtre flottante"
 
-#: ui/sidebar.slint:257
+#: ui/sidebar.slint:261
 #, x-machine
 msgid "Close list"
 msgstr "Fermer la liste"
 
-#: ui/sidebar.slint:314
+#: ui/sidebar.slint:321
 #, x-machine
 msgid ""
 "{}\n"
@@ -791,7 +791,7 @@ msgstr ""
 "{}\n"
 "Le fichier n'existe pas"
 
-#: ui/sidebar.slint:315
+#: ui/sidebar.slint:322
 #, x-machine
 msgid ""
 "{}\n"
@@ -800,7 +800,7 @@ msgstr ""
 "{}\n"
 "Le fichier n'existe pas ou est illisible pour l'instant ; vous pouvez réessayer"
 
-#: ui/sidebar.slint:316
+#: ui/sidebar.slint:323
 #, x-machine
 msgid ""
 "{}\n"
@@ -809,42 +809,42 @@ msgstr ""
 "{}\n"
 "Impossible d'ouvrir ce média"
 
-#: ui/sidebar.slint:414
+#: ui/sidebar.slint:421
 #, x-machine
 msgid "No matches"
 msgstr "Aucun résultat"
 
-#: ui/sidebar.slint:441
+#: ui/sidebar.slint:448
 #, x-machine
 msgid "Move to top (Ctrl+Home)"
 msgstr "Placer en haut (Ctrl+Home)"
 
-#: ui/sidebar.slint:447
+#: ui/sidebar.slint:454
 #, x-machine
 msgid "Move up (Ctrl+↑)"
 msgstr "Monter (Ctrl+↑)"
 
-#: ui/sidebar.slint:453
+#: ui/sidebar.slint:460
 #, x-machine
 msgid "Move down (Ctrl+↓)"
 msgstr "Descendre (Ctrl+↓)"
 
-#: ui/sidebar.slint:459
+#: ui/sidebar.slint:466
 #, x-machine
 msgid "Move to bottom (Ctrl+End)"
 msgstr "Placer en bas (Ctrl+End)"
 
-#: ui/sidebar.slint:473
+#: ui/sidebar.slint:480
 #, x-machine
 msgid "Delete"
 msgstr "Supprimer"
 
-#: ui/sidebar.slint:480
+#: ui/sidebar.slint:487
 #, x-machine
 msgid "Sort"
 msgstr "Trier"
 
-#: ui/sidebar.slint:492
+#: ui/sidebar.slint:499
 #, x-machine
 msgid "Search (Ctrl+S)"
 msgstr "Rechercher (Ctrl+S)"

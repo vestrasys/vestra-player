@@ -19,7 +19,7 @@ import { failureText, fitName, type NoticeArgs, type NoticeText } from "./notice
 import { playback } from "./playback.ts";
 import { Prober, toolRunner } from "./probe.ts";
 import { clock, lengthOf, Queue, type Placement, type Repeat, type Row, type SortKey } from "./queue.ts";
-import { centered, ensureVisible, inView, USER_SCROLL_HOLD_MS, WINDOW_ROWS, windowStart } from "./scroll.ts";
+import { centered, ensureVisible, inView, SHOW_SETTLE_MS, USER_SCROLL_HOLD_MS, WINDOW_ROWS, windowStart } from "./scroll.ts";
 import { defaults, PERSIST_CHECK_MS, Store, type Saved } from "./store.ts";
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -743,8 +743,22 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   const listArea = { scroll: 0, height: Number.POSITIVE_INFINITY, top: LIST_TOP };
   const scroller = { request: 0, to: 0, sentAt: Number.NEGATIVE_INFINITY, userAt: Number.NEGATIVE_INFINITY };
   let lastPlaying: string | null = null;
-  /** The scroll this update asks for: the cursor after a key, else a newly playing row out of view. */
-  const scrollTarget = (shown: Row[]): number | null => {
+  // The panel is created anew each time it shows (the player builds it when it appears), so
+  // it opens on the playing row: centred while hidden (`show-y`, and the rows sent around it),
+  // then once more when it shows (`appeared.pending`), and again while its height settles.
+  const appeared = { at: Number.NEGATIVE_INFINITY, pending: false, reported: false };
+  const appear = () => {
+    Object.assign(appeared, { at: Date.now(), pending: true, reported: false });
+    plugin.update();
+  };
+  const settling = () => Date.now() - appeared.at < SHOW_SETTLE_MS;
+  const hidden = () => list.state?.effective === false;
+  /**
+   * The scroll this update asks for (`force`: ask even when the plugin believes the list is
+   * there, since a new panel may not have reported yet): the cursor after a key; the playing
+   * row centred while the list appears; else a newly playing row out of view.
+   */
+  const scrollTarget = (shown: Row[]): { to: number; force: boolean } | null => {
     const playing = queue.binding?.rowId ?? null;
     const playingChanged = playing !== lastPlaying;
     lastPlaying = playing;
@@ -754,14 +768,37 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     const at = (rowId: string | null) => shown.findIndex((row) => row.rowId === rowId);
     if (reveal) {
       const index = at(queue.selected);
-      if (index >= 0) return ensureVisible(index, listArea.scroll, listArea.height, shown.length);
+      if (index >= 0) return { to: ensureVisible(index, listArea.scroll, listArea.height, shown.length), force: false };
+    }
+    if (hidden() || appeared.pending) {
+      const index = playing ? at(playing) : -1;
+      const to = index < 0 ? null : centered(index, listArea.height, shown.length);
+      // Nothing is on screen while hidden: only the next panel's start moves (no request).
+      if (hidden()) {
+        if (to !== null) listArea.scroll = to;
+        return null;
+      }
+      appeared.pending = false;
+      return to === null ? null : { to, force: true };
     }
     // Not while the user browses (scrolled lately), nor for a row the search hides.
     if (!playingChanged || !playing || Date.now() - scroller.userAt < USER_SCROLL_HOLD_MS) return null;
     const index = at(playing);
     if (index < 0 || inView(index, listArea.scroll, listArea.height)) return null;
-    return centered(index, listArea.height, shown.length);
+    return { to: centered(index, listArea.height, shown.length), force: false };
   };
+  let wasShown = !hidden();
+  // Shown again (F6, its tab, the fullscreen pop-out), hidden (centre it for the next
+  // panel), or moved to or from its own window (a new panel too).
+  let detachedNow = list.state?.detached ?? false;
+  list.onChange((state) => {
+    const shownNow = !!state?.effective;
+    const moved = !!state && state.detached !== detachedNow;
+    if (shownNow && (!wasShown || moved)) appear();
+    else if (shownNow !== wasShown) plugin.update();
+    wasShown = shownNow;
+    if (state) detachedNow = state.detached;
+  });
 
   // The list shows `rows`: at most `WINDOW_ROWS` of the shown rows from `firstRow` on, placed
   // in a list `rowCount` rows tall (the player takes at most 1024 array rows and 4096 values
@@ -773,11 +810,11 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     player.prepare();
     const shown = queue.visible();
     const target = scrollTarget(shown);
-    if (target !== null && target !== listArea.scroll) {
+    if (target !== null && (target.force || target.to !== listArea.scroll)) {
       scroller.request++;
-      scroller.to = target;
+      scroller.to = target.to;
       scroller.sentAt = Date.now();
-      listArea.scroll = target;
+      listArea.scroll = target.to;
     }
     firstRow = windowStart(firstRow, listArea.scroll, listArea.height, shown.length);
     const page = shown.slice(firstRow, firstRow + WINDOW_ROWS);
@@ -831,6 +868,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       canBottom: queue.canPlace("bottom"),
       scrollToY: scroller.to,
       scrollRequest: scroller.request,
+      showY: listArea.scroll,
     };
   });
   list.on("selectRow", (rowId: string, toggle: boolean, extend: boolean) => {
@@ -927,10 +965,19 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   // player's); checked, since a stale build of the panel may report only two values.
   list.on("listArea", (scroll: number, height: number, top: number) => {
     const next = Number.isFinite(scroll) ? scroll : 0;
-    const ours = Math.abs(next - scroller.to) < 1 && Date.now() - scroller.sentAt < 500;
+    const area = Number.isFinite(height) && height > 0 ? height : Number.POSITIVE_INFINITY;
+    const resized = Math.abs(area - listArea.height) >= 1;
+    // A new panel's first report, and a resize while it settles, are layout, not the user.
+    const settled = settling() && (!appeared.reported || resized);
+    appeared.reported = true;
+    const ours = (Math.abs(next - scroller.to) < 1 && Date.now() - scroller.sentAt < 500) || settled;
     if (Math.abs(next - listArea.scroll) >= 1 && !ours) scroller.userAt = Date.now();
     listArea.scroll = next;
-    listArea.height = Number.isFinite(height) && height > 0 ? height : Number.POSITIVE_INFINITY;
+    const known = Number.isFinite(listArea.height);
+    listArea.height = area;
+    // The first height after start-up: the list has just appeared (a remembered list).
+    if (!known && Number.isFinite(area)) appear();
+    else if (settled && resized) appeared.pending = true;
     if (typeof top === "number" && Number.isFinite(top) && top >= 0) listArea.top = top;
   });
 

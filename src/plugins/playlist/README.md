@@ -8,6 +8,7 @@ The playlist in the right sidebar.
 - **When opening a file**: open only that file, add similar files from the same folder (the default), or add all files in the folder.
 - **Organize**: multiple selection, drag to reorder, move up and down, several ways to sort, search; remove the selected, the unselected, the invalid or all items.
 - **Play**: repeat (off, all, one), shuffle; plays the next item when one ends, and Fast Advance to Next can shorten the switch.
+- **Opens on the playing item**: each time the list is shown (F6, its tab, detached or attached, after a restart) it is scrolled so that the playing item is in the middle (at the top or bottom near the list's ends); while the list is shown, an item that starts playing out of view is scrolled to the middle, unless you scrolled in the last 2 seconds.
 - **List files**: open and save M3U, M3U8, PLS; open DPL.
 - Shows each item's duration and the total duration: items that have played use the duration from the player; for items not yet played, durations are read only for the rows on screen (needs ffprobe, at most 2 at a time), so adding many files does not read them one by one; the total has a "+" when some items are unknown. The list can be restored after a restart.
 
