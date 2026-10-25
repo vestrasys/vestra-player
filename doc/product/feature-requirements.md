@@ -484,7 +484,7 @@ type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
 type PropValue = Json | ImageRef;         // ImageRef is an opaque value that only plugin.ui.image can create
 ```
 
-Reason: the UI bridge only accepts JSON (ui_values.rs explicitly rejects image), so plugins cannot hand images to Slint. The plugin generates thumbnails itself with ffmpeg; the core only "loads an image by path". `media.capture` + `export` is not used: it is designed for screenshots and exports full-size PNGs through an offline job, which is too slow for hover previews.
+Reason: the UI bridge only accepts JSON (ui_values.rs explicitly rejects image), so plugins cannot hand images to Slint. The plugin generates thumbnails itself with ffmpeg; the core only "loads an image by path". `media.capture` + `export` is not used: it is designed for screenshots and exports full-size PNG files through an offline job, which is too slow for hover previews.
 
 **Acceptance**
 - With the toggle on, move over the seek bar of a 1080p local mkv: a thumbnail appears within 200 ms, matching the picture at that time.
