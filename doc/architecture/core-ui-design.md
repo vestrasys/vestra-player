@@ -48,7 +48,7 @@ HostWindow (默认 780×671，最小 320×182，背景 Theme.bg-video #101010，
   - 侧栏宽 = `min(用户宽度, 内容宽 − 3 − 318)`，且不小于 317；
   - 只有 `内容宽 < 318 + 3 + 317 = 638` 时才隐藏，`reason: "space"`，`preferred` 不变（菜单勾选仍是「显示」）；
   - 不再有高度条件（侧栏全高），删除 640×360、240、280 这组常量。
-- **全屏**（UI-SHELL-09）：底栏覆盖在视频底部，3000 ms 无操作后隐藏（沿用现有 `Policy` 的 idle 逻辑）；同时若正在播放（`!paused`），视频区 `mouse-cursor: none`。侧栏在全屏时收起为右边缘的覆盖层，指针移到右边缘时弹出（交互对齐 G-01，`reason: "fullscreen"` 表示收起）；指针停在底栏或弹出层上时不隐藏（G-04）。
+- **全屏**（UI-SHELL-09）：底栏覆盖在视频底部, shown only while the pointer is in its band (the bar's laid-out height `bottom-band-height` at the bottom edge, left of a popped-out sidebar) and hidden 500 ms after it leaves (FS-BAR-1, `Policy::bottom_band`); activity never reveals it. 若正在播放（`!paused`）且 `Policy::idle`（3 s without motion or keys, independent of the bar），视频区 `mouse-cursor: none`。侧栏在全屏时收起为右边缘的覆盖层，指针移到右边缘时弹出（交互对齐 G-01，`reason: "fullscreen"` 表示收起）；指针停在底栏或弹出层上时不隐藏（G-04）。
 - 显示侧栏时窗口太窄就自动放大窗口的逻辑（`sidebar_resize_requested`）删除，由上面的压缩规则代替（见 §18 Q7）。
 - 窗口初始尺寸与位置从持久化恢复（C8），没有记录时用 780×671、系统默认位置。
 

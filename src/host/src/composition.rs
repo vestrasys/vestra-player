@@ -214,7 +214,18 @@ pub fn shell_source(specs: &[CompileSpec]) -> Result<String> {
         import_spec(&mut source, spec, &path)?;
     }
     let mut shell = include_str!("../ui/host.slint").to_owned();
-    replace_marker(&mut shell, "// VESTRA-MOUNT-PROPERTIES", SHELL_PROPERTIES)?;
+    // FS-BAR-1: the bottom bar's laid-out height, also while it is hidden
+    // (the host's fullscreen band); 0 without a bottom bar.
+    let has_bottom = specs.iter().any(|spec| spec.slot == Slot::Bottom);
+    let properties = format!(
+        "{SHELL_PROPERTIES}\n    out property <float> bottom-band-height: {};",
+        if has_bottom {
+            "bottom-keys.height / 1px"
+        } else {
+            "0"
+        }
+    );
+    replace_marker(&mut shell, "// VESTRA-MOUNT-PROPERTIES", &properties)?;
     let tabs = specs
         .iter()
         .filter(|spec| spec.slot == Slot::Sidebar)
@@ -726,6 +737,10 @@ mod tests {
         // G-04: the bar reports hover; G-01: the fullscreen sidebar overlay is
         // a second instance above the video and the docked layout.
         assert!(source.contains("root.bottom-hover = self.has-hover"));
+        // FS-BAR-1: the bar's laid-out height is exported for the band.
+        assert!(
+            source.contains("out property <float> bottom-band-height: bottom-keys.height / 1px;")
+        );
         assert!(source.contains("root.sidebar-hover = self.has-hover"));
         let overlay = source.find("if root.sidebar-overlay:").unwrap();
         assert!(
