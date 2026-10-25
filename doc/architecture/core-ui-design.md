@@ -1,77 +1,77 @@
-# 核心界面与输入能力设计（C1–C11、C14）
+# Core UI and input capability design (C1–C11, C14)
 
-日期：2026-10-20。阶段：P1a 设计，P2 审查已通过（裁决见[本轮任务](../process/rounds/2026-10-core-ui.md) §8「P2 审查」，已并入本文），P1b 按本文实现。
-依据：[本轮任务](../process/rounds/2026-10-core-ui.md) §2、§5，[界面规格](../product/ui-spec.md) §2、§3、§6、§8、§9、§10。
-现状代码：`src/host/src/{main,commands,menu,composition,window_state,ui,plugins}.rs`、`src/host/ui/*.slint`、`src/sdk/plugin/*.ts`、`src/runtime/runner.ts`。
+Date: 2026-10-20. Stage: P1a design; the P2 review has passed (rulings in [this round's task](../process/rounds/2026-10-core-ui.md) §8 "P2 review", merged into this document); P1b implements this document.
+Basis: [this round's task](../process/rounds/2026-10-core-ui.md) §2, §5; [UI spec](../product/ui-spec.md) §2, §3, §6, §8, §9, §10.
+Current code: `src/host/src/{main,commands,menu,composition,window_state,ui,plugins}.rs`, `src/host/ui/*.slint`, `src/sdk/plugin/*.ts`, `src/runtime/runner.ts`.
 
-读法：每项先给公共接口，再给宿主怎么做、生命周期与错误、用法示例、取代并在 P4 删除的旧东西、现有插件的迁移写法。§14 说明迁移后菜单树为何不变，§15 是迁移者照抄的改写对照，§16 是删除总清单，§18 是需要协调者决定的问题。
+How to read: each item first gives the public interface, then how the host does it, lifecycle and errors, a usage example, the old things it replaces that are deleted in P4, and how existing plugins migrate. §14 explains why the menu tree does not change after migration, §15 is the rewrite reference for migrators to copy, §16 is the complete deletion list, and §18 holds the questions the coordinator has to decide.
 
-## 0. 总则
+## 0. General rules
 
-- **新增公共面一览**（只列插件能看到的）：
+- **New public surface at a glance** (only what plugins can see):
 
-| 位置 | 新增 / 改变 | 对应 |
+| Location | Added / changed | Item |
 | --- | --- | --- |
-| `CommandOptions` | 新增 `order`、`group`、`radio`、`bindings`、`focus`、`repeat`；删除 `shortcut`；`path` 改为 1–8 段任意内容，可省略（不进主菜单） | C3、C4 |
-| `plugin.panels` | 新增 `panels.bottom`、`panels.sidebar`（位置状态，任何插件可读可切换）；`mount` 选项加 `title`；`Panel` 删除 `visibility`/`onVisibility`/`setVisible`/`toggle`，新增 `showMenu` | C7、C11、C14 |
-| `plugin.player` | 新增 `provideSequence`、`next`、`previous`、`stats`；`PlayerState.can` 加 `next`、`previous` | C6、C10 |
-| `plugin.osd`（新模块） | `show(text)`、`panel()` | C5、C10 |
-| manifest 能力 | 新增 `ui.osd`（`plugin.osd.*`）。其它新接口沿用现有能力 | C5、C10 |
-| Slint | `import { Theme } from "@vestra/theme.slint"`、`import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint"`；所有插件 Slint 默认用 `fluent-dark` 风格编译 | C2 |
+| `CommandOptions` | Adds `order`, `group`, `radio`, `bindings`, `focus`, `repeat`; removes `shortcut`; `path` becomes 1–8 segments with any content, and can be omitted (not in the main menu) | C3, C4 |
+| `plugin.panels` | Adds `panels.bottom`, `panels.sidebar` (slot state, any plugin can read and toggle); the `mount` options gain `title`; `Panel` drops `visibility`/`onVisibility`/`setVisible`/`toggle` and gains `showMenu` | C7, C11, C14 |
+| `plugin.player` | Adds `provideSequence`, `next`, `previous`, `stats`; `PlayerState.can` gains `next`, `previous` | C6, C10 |
+| `plugin.osd` (new module) | `show(text)`, `panel()` | C5, C10 |
+| manifest capabilities | Adds `ui.osd` (`plugin.osd.*`). The other new interfaces use existing capabilities | C5, C10 |
+| Slint | `import { Theme } from "@vestra/theme.slint"`, `import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint"`; all plugin Slint is compiled with the `fluent-dark` style by default | C2 |
 
-- C1、C8、C9 没有插件接口，只是宿主行为。
-- wire 方法只服务于 SDK（[架构总览](README.md) §3）。新增：`layout.state`、`layout.set`、`ui.menu`、`osd.show`、`osd.panel`、`playback.stats`、`sequence.set`、`sequence.step`；宿主推给插件的新事件：`sequence.step`（只发给序列提供者，不需订阅）。删除：`ui.mountState`、`ui.showMount`。改变：`commands.register` 的 `declaration`、`ui.mount` 的参数、`source.state`（数据加 `sequence` 字段）。
-- 迁移期间（P1b–P3，已于 P4 结束，见 §19）旧字段与新字段**并存**：宿主同时接受 `declaration.shortcut` 和 `bindings`（`shortcut` 等于多一条绑定），SDK 同时保留 `Panel` 的旧可见性方法（`ui.showMount`/`ui.mountState` 仍可用）。SDK 对**没用任何新字段**的命令仍发旧形状 `{ title, path, shortcut }`，未迁移插件的测试不受影响；用了任一新字段（迁移后的插件都写 `order`）就发完整形状。P4 一次删除（§16），届时 SDK 总发完整形状。
+- C1, C8, C9 have no plugin interface; they are host behaviour only.
+- wire methods only serve the SDK ([architecture overview](README.md) §3). New: `layout.state`, `layout.set`, `ui.menu`, `osd.show`, `osd.panel`, `playback.stats`, `sequence.set`, `sequence.step`; new event pushed from the host to plugins: `sequence.step` (sent only to the sequence provider, no subscription needed). Removed: `ui.mountState`, `ui.showMount`. Changed: the `declaration` of `commands.register`, the parameters of `ui.mount`, `source.state` (the data gains a `sequence` field).
+- During migration (P1b–P3, ended in P4, see §19) old and new fields **coexist**: the host accepts both `declaration.shortcut` and `bindings` (`shortcut` counts as one more binding), and the SDK keeps the old visibility methods of `Panel` (`ui.showMount`/`ui.mountState` still work). For commands that use **none of the new fields** the SDK still sends the old shape `{ title, path, shortcut }`, so tests of unmigrated plugins are not affected; once any new field is used (migrated plugins all write `order`), it sends the full shape. P4 deletes all of this at once (§16); from then on the SDK always sends the full shape.
 
-## 1. C1 主窗口外壳
+## 1. C1 Main window shell
 
-### 1.1 宿主行为（无插件接口）
+### 1.1 Host behaviour (no plugin interface)
 
-`host.slint` 改成下面的结构（数值来自界面规格 §3）：
+`host.slint` changes to the structure below (values from UI spec §3):
 
 ```text
-HostWindow (默认 780×671，最小 320×182，背景 Theme.bg-video #101010，默认字体见 C2)
-└─ keys := FocusScope              // 全局绑定入口（C3），包住全部内容
+HostWindow (default 780×671, minimum 320×182, background Theme.bg-video #101010, default font see C2)
+└─ keys := FocusScope              // entry point for global bindings (C3), wraps all content
    └─ HorizontalLayout { spacing: 0 }
-      ├─ VerticalLayout（视频列，horizontal-stretch: 1）
-      │  ├─ canvas := FocusScope + 视频 Image + 鼠标 TouchArea（C3） + 屏幕提示层（C5、C10）
-      │  └─ 底栏槽（普通模式在视频下方；全屏时覆盖在视频底部）
-      ├─ 分隔条 3px #000（侧栏附着且显示时）
-      └─ 侧栏槽（全高，宽度 = sidebar-width）
-   └─ 菜单层（现有 MenuView，样式改为 C4）
+      ├─ VerticalLayout (video column, horizontal-stretch: 1)
+      │  ├─ canvas := FocusScope + video Image + mouse TouchArea (C3) + on-screen message layer (C5, C10)
+      │  └─ bottom bar slot (normal mode: below the video; fullscreen: overlaid on the bottom of the video)
+      ├─ divider 3px #000 (when the sidebar is attached and shown)
+      └─ sidebar slot (full height, width = sidebar-width)
+   └─ menu layer (the existing MenuView, styled per C4)
 ```
 
-- 去掉 Commands 按钮行、说明文字、诊断行、8px 外边距（UI-SHELL-01–03）。视频贴边。
-- 侧栏占视频右侧全高，底栏只在视频列下方（UI-SHELL-05）。
-- **分隔条**（UI-SHELL-06/07）：拖动时由 Slint 内部改 `sidebar-width`，范围 `[317, 可用宽 − 3 − 318]`；松开时调用 `sidebar-resized(width)`，宿主记下宽度并持久化（C8）。默认 317。
-- **空间不足**（UI-SHELL-08）：宿主 `window_state::Policy` 的规则改为：
-  - 侧栏宽 = `min(用户宽度, 内容宽 − 3 − 318)`，且不小于 317；
-  - 只有 `内容宽 < 318 + 3 + 317 = 638` 时才隐藏，`reason: "space"`，`preferred` 不变（菜单勾选仍是「显示」）；
-  - 不再有高度条件（侧栏全高），删除 640×360、240、280 这组常量。
-- **全屏**（UI-SHELL-09）：底栏覆盖在视频底部, shown only while the pointer is in its band (the bar's laid-out height `bottom-band-height` at the bottom edge, left of a popped-out sidebar) and hidden 500 ms after it leaves (FS-BAR-1, `Policy::bottom_band`); activity never reveals it. 若正在播放（`!paused`）且 `Policy::idle`（3 s without motion or keys, independent of the bar），视频区 `mouse-cursor: none`。侧栏在全屏时收起为右边缘的覆盖层，指针移到右边缘时弹出（交互对齐 G-01，`reason: "fullscreen"` 表示收起）；指针停在底栏或弹出层上时不隐藏（G-04）。
-- 显示侧栏时窗口太窄就自动放大窗口的逻辑（`sidebar_resize_requested`）删除，由上面的压缩规则代替（见 §18 Q7）。
-- 窗口初始尺寸与位置从持久化恢复（C8），没有记录时用 780×671、系统默认位置。
+- Remove the Commands button row, the explanatory text, the diagnostic line, and the 8px outer margin (UI-SHELL-01–03). The video goes edge to edge.
+- The sidebar takes the full height to the right of the video; the bottom bar is only below the video column (UI-SHELL-05).
+- **Divider** (UI-SHELL-06/07): while dragging, Slint changes `sidebar-width` internally, range `[317, available width − 3 − 318]`; on release it calls `sidebar-resized(width)`, and the host records the width and persists it (C8). Default 317.
+- **Not enough space** (UI-SHELL-08): the rules of the host's `window_state::Policy` become:
+  - sidebar width = `min(user width, content width − 3 − 318)`, and not less than 317;
+  - hidden only when `content width < 318 + 3 + 317 = 638`, with `reason: "space"`; `preferred` does not change (the menu check mark still says "shown");
+  - there is no height condition any more (the sidebar is full height); delete the 640×360, 240, 280 constants.
+- **Fullscreen** (UI-SHELL-09): the bottom bar is overlaid on the bottom of the video, shown only while the pointer is in its band (the bar's laid-out height `bottom-band-height` at the bottom edge, left of a popped-out sidebar) and hidden 500 ms after it leaves (FS-BAR-1, `Policy::bottom_band`); activity never reveals it. If playing (`!paused`) and `Policy::idle` (3 s without motion or keys, independent of the bar), the video area has `mouse-cursor: none`. In fullscreen the sidebar collapses into an overlay at the right edge and pops out when the pointer moves to the right edge (interaction alignment G-01; `reason: "fullscreen"` means collapsed); it does not hide while the pointer rests on the bottom bar or the popped-out layer (G-04).
+- The logic that automatically enlarges the window when it is too narrow to show the sidebar (`sidebar_resize_requested`) is deleted and replaced by the shrinking rule above (see §18 Q7).
+- The window's initial size and position are restored from persistence (C8); without a record, 780×671 and the system default position.
 
-### 1.2 取代与删除（P4）
+### 1.2 Replaced and deleted (P4)
 
-`host.slint` 的 Commands 按钮行、说明文字、`diagnostic` 属性与 `Text`、`padding: 8px`、1100×720 / 720×480 尺寸、窗口标题常量；`main.rs` 中写 `diagnostic` 的两处（帧刷新、「Preparing plugin UI…」）和 `sidebar_resize*`；`window_state.rs` 的 `CANVAS_MIN_*`、`SIDEBAR_MIN_WIDTH = 240`、`SIDEBAR_TARGET_WIDTH = 280` 和「空间不足直接隐藏」的判断。
+In `host.slint`: the Commands button row, the explanatory text, the `diagnostic` property and `Text`, `padding: 8px`, the 1100×720 / 720×480 sizes, the window title constant; in `main.rs`: the two places that write `diagnostic` (frame refresh, "Preparing plugin UI…") and `sidebar_resize*`; in `window_state.rs`: `CANVAS_MIN_*`, `SIDEBAR_MIN_WIDTH = 240`, `SIDEBAR_TARGET_WIDTH = 280` and the "hide directly when there is not enough space" check.
 
-迁移：插件无需改动。
+Migration: plugins need no changes.
 
-## 2. C2 主题
+## 2. C2 Theme
 
-### 2.1 Slint 接口
+### 2.1 Slint interface
 
 ```slint
-import { Theme } from "@vestra/theme.slint";      // 令牌，全部是常量 out 属性
-import { ToolTipArea } from "@vestra/widgets.slint"; // 悬停提示（std-widgets 没有）
+import { Theme } from "@vestra/theme.slint";      // tokens, all constant out properties
+import { ToolTipArea } from "@vestra/widgets.slint"; // hover tooltip (std-widgets has none)
 ```
 
-`@vestra/theme.slint`（宿主随附，路径 `src/host/ui/vestra/theme.slint`）：
+`@vestra/theme.slint` (shipped with the host, path `src/host/ui/vestra/theme.slint`):
 
 ```slint
 export global Theme {
-    // §2.1 颜色
+    // §2.1 colours
     out property <color> bg-bar: #1e1e1e;      out property <color> bg-video: #101010;
     out property <color> bg-list: #3b3b3b;     out property <color> bg-panel: #333333;
     out property <color> line: #000000;        out property <color> hover-bg: #272727;
@@ -82,11 +82,11 @@ export global Theme {
     out property <color> icon-disabled: #3b3b3b; out property <color> playing: #2282f2;
     out property <color> button-bg: #555555;   out property <color> button-hover: #5c5c5c;
     out property <color> button-press: #444444; out property <color> button-disabled: #2a2a2a;
-    // §2.2 字体与字号（只用这几档）
-    out property <string> font-mono: "Menlo";  // 默认字体不在这里：各窗口用系统默认字体（§2.2）
+    // §2.2 fonts and font sizes (only these steps)
+    out property <string> font-mono: "Menlo";  // the default font is not here: each window uses the system default font (§2.2)
     out property <length> font-xs: 9px;  out property <length> font-body: 11px;
     out property <length> font-tab: 12px; out property <length> font-title: 13px;
-    // §2.3 控件尺寸
+    // §2.3 control sizes
     out property <length> button-height: 21px;  out property <length> button-min-width: 66px;
     out property <length> button-padding: 8px;  out property <length> button-primary-height: 24px;
     out property <length> button-small-height: 18px; out property <length> button-small-min-width: 41px;
@@ -96,52 +96,52 @@ export global Theme {
 }
 ```
 
-`@vestra/widgets.slint` 本轮提供三个组件（P2 裁决 Q13：第二步所有工具窗口与底栏都要用；其它控件不做，用 `fluent-dark` 的 std-widgets）：
+`@vestra/widgets.slint` provides three components this round (P2 ruling Q13: all tool windows and the bottom bar in step two use them; no other controls are made, use the `fluent-dark` std-widgets):
 
 ```slint
-export component ToolTipArea {           // 包住任意内容；悬停 600 ms 后在指针旁显示 text
+export component ToolTipArea {           // wraps any content; after hovering 600 ms shows text next to the pointer
     in property <string> text;
     @children
 }
-export component Button {                // 对话框按钮（界面规格 §2.3）
+export component Button {                // dialog button (UI spec §2.3)
     in property <string> text;
-    in property <string> icon;           // Path 路径数据；text 为空、icon 非空 = 图标按钮（step 2 R2）
-    in property <length> icon-width: 14px;   // 同时是 viewbox 尺寸
+    in property <string> icon;           // Path data; empty text and non-empty icon = icon button (step 2 R2)
+    in property <length> icon-width: 14px;   // also the viewbox size
     in property <length> icon-height: 12px;
-    in property <bool> stroked;          // 画 1.5px 线而不填充
+    in property <bool> stroked;          // draw a 1.5px line instead of filling
     in property <bool> enabled: true;
-    in property <bool> small;            // false：21px 高、最小 66px 宽；true：18px 高、最小 41px 宽
-    in property <bool> checked;          // 图标按钮的开启态（图标变 Theme.accent）
+    in property <bool> small;            // false: 21px high, minimum 66px wide; true: 18px high, minimum 41px wide
+    in property <bool> checked;          // on state of an icon button (icon becomes Theme.accent)
     callback clicked();
 }
-export component Slider {                // 2px 线滑块
+export component Slider {                // 2px line slider
     in-out property <float> value;
     in property <float> minimum: 0;
     in property <float> maximum: 1;
     in property <bool> enabled: true;
-    in property <bool> panel;            // false：控制栏样式，8px 圆点 thumb，填充 Theme.accent；
-                                         // true：面板样式，14×12 thumb，填充 Theme.playing，轨道 Theme.bg-bar
-    callback changed(float);             // 拖动中连续回调
-    callback released(float);            // 松开
+    in property <bool> panel;            // false: control bar style, 8px dot thumb, fill Theme.accent;
+                                         // true: panel style, 14×12 thumb, fill Theme.playing, track Theme.bg-bar
+    callback changed(float);             // called continuously while dragging
+    callback released(float);            // on release
 }
 ```
 
-样式：ToolTipArea 底 `Theme.bg-panel`、1px `Theme.line` 边框、`Theme.font-body`、`Theme.text`，用 `PopupWindow` 显示，指针移出或按下即消失。Button 文字按钮底 `Theme.button-bg`（悬停 `button-hover`、按下 `button-press`、禁用 `button-disabled`），文字 `Theme.text-list` 11px；图标按钮无底色，Path 常态 `Theme.text-dim`、悬停与开启 `Theme.accent`、按下 `Theme.accent-press`、禁用 `Theme.icon-disabled`。Slider 的 thumb 常态 `Theme.text`，控制栏样式悬停 `Theme.accent`、按下 `Theme.accent-press`；未填充部分控制栏样式为 `Theme.line`。
+Styles: ToolTipArea has background `Theme.bg-panel`, a 1px `Theme.line` border, `Theme.font-body`, `Theme.text`, is shown with a `PopupWindow`, and disappears when the pointer leaves or a button is pressed. A Button text button has background `Theme.button-bg` (hover `button-hover`, pressed `button-press`, disabled `button-disabled`) and text `Theme.text-list` 11px; an icon button has no background, its Path is `Theme.text-dim` normally, `Theme.accent` on hover and when on, `Theme.accent-press` when pressed, `Theme.icon-disabled` when disabled. The Slider thumb is `Theme.text` normally; in control bar style it is `Theme.accent` on hover and `Theme.accent-press` when pressed; the unfilled part in control bar style is `Theme.line`.
 
-### 2.2 宿主怎么做
+### 2.2 How the host does it
 
-- **导入机制**：slint-interpreter 1.16 的 `Compiler::set_library_paths` 支持 `@库名/文件` 形式的导入（`i-slint-compiler` `typeloader.rs` 的 `find_file_in_library_path`）。宿主把库名 `vestra` 映射到随附目录（开发时 `src/host/ui/vestra/`，打包后 `Resources/ui/vestra/`，与现在找 `host.slint` 的方式相同）。不需要虚拟文件或改写插件源码。
-- 宿主现在有三处编译 Slint：`ui.rs`（工具窗口）、`composition.rs`（主窗口与面板）、`package_manager.rs`（包校验）。合并成一个 `slint_compiler()`：设库路径，`set_style("fluent-dark")`。因此**不改代码的插件，std-widgets 控件自动变成深色**（Button、Slider、LineEdit、CheckBox、ComboBox、ScrollView），这是预期变化。已核对：现有浅色工具窗口（video、subtitles、capture、nes、youtube、bilibili、workshop、playlist/link、bookmark）的 `.slint` 都没有写死文字颜色，深色下不会出现看不清的文字；audio、playback、playlist 侧栏本来就是自定深色。
-- `Theme` 是只读常量，同一文件被多个插件导入、在主窗口里共享不会互相影响（`composition.rs` 注释里禁止的是**有状态**的共享 global）。
-- **默认字体**：删除强制的 `Arial Unicode MS` 与按文件导入它的代码。P1b 查明 Slint 1.16 用 parley 排版、按字符经 fontique 回退（macOS 上走 CoreText 的系统回退链，`i-slint-core` `textlayout/sharedparley.rs`），所以默认**不指定字体**：系统 UI 字体 + 系统 CJK 回退。备用方案已实现但默认关闭：环境变量 `VESTRA_FONT_FALLBACK=hiragino` 时导入系统自带的 `/System/Library/Fonts/Hiragino Sans GB.ttc` 并设为主窗口、浮动窗口、工具窗口的默认字体（工具窗口沿用「插件没写 `default-font-family` 才注入」）。**P5 实测（2026-10-20）：不指定字体时插件窗口与面板的中文全部显示为空白，因此改为默认启用 Hiragino**（`VESTRA_FONT_FALLBACK=system` 可关闭）；信息层原用 `font-mono`（Menlo）同样缺中文，改为默认字体（§18 Q12）。**现状（2026-10-22，用户裁决）**：Slint 1.18.1 已按字符回退，强制 Hiragino 与 `VESTRA_FONT_FALLBACK` 已删除，各窗口不指定字体（系统默认 + 回退）；信息层不必改回 `font-mono`。某平台缺中文字体时的补法见[架构总览 §4](README.md)「字体」。
-- 宿主自己的界面（`host.slint`、`menu-view.slint`）也改用 `Theme` 令牌；菜单专用颜色（§6.3）留在 `menu-view.slint` 内，不进 `Theme`。
-- 编辑器支持：在 SDK 文档站 [Concepts: UI](https://vestrasys.github.io/vestra-player-sdk/documents/Windows,_panels,_settings_pages,_dialogs_and_the_OSD.html#rules-for-plugin-slint-files) 说明 Slint 语言服务的 `libraryPaths` 设置（`"vestra": "<仓库>/src/host/ui/vestra"`）。
+- **Import mechanism**: `Compiler::set_library_paths` in slint-interpreter 1.16 supports imports of the form `@library/file` (`find_file_in_library_path` in `i-slint-compiler` `typeloader.rs`). The host maps the library name `vestra` to the shipped directory (during development `src/host/ui/vestra/`, when packaged `Resources/ui/vestra/`, the same way `host.slint` is found today). No virtual files or rewriting of plugin sources is needed.
+- The host currently compiles Slint in three places: `ui.rs` (tool windows), `composition.rs` (main window and panels), `package_manager.rs` (package validation). They are merged into one `slint_compiler()`: set the library path, `set_style("fluent-dark")`. As a result, **std-widgets controls in plugins that do not change their code become dark automatically** (Button, Slider, LineEdit, CheckBox, ComboBox, ScrollView); this is an expected change. Checked: the `.slint` files of the existing light tool windows (video, subtitles, capture, nes, youtube, bilibili, workshop, playlist/link, bookmark) do not hard-code text colours, so no unreadable text appears in dark mode; the audio, playback, and playlist sidebars already use their own dark styling.
+- `Theme` is read-only constants; the same file imported by several plugins and shared in the main window does not cause interference (what the comment in `composition.rs` forbids is sharing **stateful** globals).
+- **Default font**: delete the forced `Arial Unicode MS` and the code that imports it by file. P1b found that Slint 1.16 lays out text with parley and falls back per character through fontique (on macOS via CoreText's system fallback chain, `i-slint-core` `textlayout/sharedparley.rs`), so by default **no font is specified**: system UI font + system CJK fallback. A fallback option is implemented but off by default: with the environment variable `VESTRA_FONT_FALLBACK=hiragino`, the system's `/System/Library/Fonts/Hiragino Sans GB.ttc` is imported and set as the default font of the main window, floating windows, and tool windows (tool windows keep "inject only if the plugin did not write `default-font-family`"). **P5 testing (2026-10-20): without a specified font, all Chinese text in plugin windows and panels showed as blank, so Hiragino was enabled by default instead** (`VESTRA_FONT_FALLBACK=system` turns it off); the info layer originally used `font-mono` (Menlo), which also lacks Chinese, and was changed to the default font (§18 Q12). **Current state (2026-10-22, user ruling)**: Slint 1.18.1 already falls back per character; the forced Hiragino and `VESTRA_FONT_FALLBACK` have been deleted, and windows do not specify a font (system default + fallback); the info layer does not need to go back to `font-mono`. For how to fill in a missing Chinese font on a platform, see [architecture overview §4](README.md) "Fonts".
+- The host's own UI (`host.slint`, `menu-view.slint`) also uses the `Theme` tokens; the menu-specific colours (§6.3) stay inside `menu-view.slint` and are not in `Theme`.
+- Editor support: the SDK documentation site [Concepts: UI](https://vestrasys.github.io/vestra-player-sdk/documents/Windows,_panels,_settings_pages,_dialogs_and_the_OSD.html#rules-for-plugin-slint-files) describes the `libraryPaths` setting of the Slint language server (`"vestra": "<repo>/src/host/ui/vestra"`).
 
-### 2.3 错误
+### 2.3 Errors
 
-导入不存在的令牌或组件是 Slint 编译错误，沿用现有报告：工具窗口 `show()` 失败、面板 `ready` 失败（`ui-prepare`）、包校验失败。
+Importing a token or component that does not exist is a Slint compile error, reported as today: tool window `show()` fails, panel `ready` fails (`ui-prepare`), package validation fails.
 
-### 2.4 示例
+### 2.4 Example
 
 ```slint
 import { Button } from "std-widgets.slint";
@@ -155,333 +155,333 @@ export component Picture inherits Window {
     VerticalLayout {
         padding: Theme.dialog-padding; spacing: 8px;
         ToolTipArea { text: root.path;
-            Text { text: "亮度"; color: Theme.text; font-size: Theme.font-body; } }
-        Button { text: "默认"; height: Theme.button-small-height; clicked => { root.reset(); } }
+            Text { text: "Brightness"; color: Theme.text; font-size: Theme.font-body; } }
+        Button { text: "Default"; height: Theme.button-small-height; clicked => { root.reset(); } }
     }
 }
 ```
 
-### 2.5 取代与删除、迁移
+### 2.5 Replaced and deleted, migration
 
-- 删除：`ui.rs` 与 `composition.rs` 中的 `Arial Unicode.ttf` 导入和 `"Arial Unicode MS"`；`host.slint` 的 `default-font-family: "Arial Unicode MS"`；架构总览 §4「插件界面默认使用宿主内置的 CJK 字体」一句改写。
-- 迁移：本轮插件**不需要**改 `.slint`（行为不变，深色是宿主的预期变化）。改用 `Theme` 令牌、删除硬编码颜色是第二步（UI-THEME-01 的验收在第二步）。
+- Delete: the `Arial Unicode.ttf` import and `"Arial Unicode MS"` in `ui.rs` and `composition.rs`; `default-font-family: "Arial Unicode MS"` in `host.slint`; rewrite the sentence "plugin UI uses the host's built-in CJK font by default" in architecture overview §4.
+- Migration: plugins do **not** need to change their `.slint` this round (behaviour is unchanged; dark is an expected change on the host side). Switching to `Theme` tokens and removing hard-coded colours is step two (UI-THEME-01 is accepted in step two).
 
-## 3. C3 输入绑定表
+## 3. C3 Input binding table
 
-### 3.1 SDK 接口
+### 3.1 SDK interface
 
 ```ts
 interface CommandOptions {
-  // …其余字段见 C4
-  /** 默认绑定，例如 ["Space"]、["Ctrl+O", "F3"]、["Mouse:WheelUp"]。 */
+  // …other fields see C4
+  /** Default bindings, e.g. ["Space"], ["Ctrl+O", "F3"], ["Mouse:WheelUp"]. */
   bindings?: string[];
-  /** "panel"：这些绑定只在本插件的面板（附着或浮动）获得焦点时生效。默认全局。 */
+  /** "panel": these bindings only apply while this plugin's panel (attached or floating) has focus. Global by default. */
   focus?: "panel";
-  /** true：按住不放时随系统自动重复触发（方向键跳转、音量）。默认 false。 */
+  /** true: when held down, fires repeatedly with the system auto-repeat (arrow-key seeking, volume). Default false. */
   repeat?: boolean;
 }
 ```
 
-`Command` 句柄不变。用户覆盖层没有 SDK 接口（改绑界面不做）。
+The `Command` handle is unchanged. The user overlay has no SDK interface (no rebinding UI is made).
 
-### 3.2 绑定语法
+### 3.2 Binding syntax
 
-一条绑定 = 若干修饰键 + 一个输入，用 `+` 连接，大小写敏感、写法固定：
+A binding = some modifiers + one input, joined with `+`, case-sensitive, fixed spelling:
 
 ```text
 binding   = { modifier "+" } input
-modifier  = "Ctrl" | "Alt" | "Shift" | "Cmd"          （书写顺序固定为 Ctrl、Alt、Shift、Cmd）
+modifier  = "Ctrl" | "Alt" | "Shift" | "Cmd"          (written in the fixed order Ctrl, Alt, Shift, Cmd)
 input     = key | "Mouse:" mouse
 key       = "A".."Z" | "0".."9" | "F1".."F24"
           | "Space" | "Enter" | "Tab" | "Escape" | "Backspace" | "Delete" | "Insert"
           | "Home" | "End" | "PageUp" | "PageDown"
           | "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown"
-          | "Plus" | 其它单个可打印符号（> < / , . ; ' [ ] \ - = ` 等）
+          | "Plus" | any other single printable symbol (> < / , . ; ' [ ] \ - = ` etc.)
 mouse     = "LeftDoubleClick" [ ":LeftHalf" | ":RightHalf" ]
           | "MiddleClick" | "X1" | "X2"
           | "WheelUp" | "WheelDown" | "WheelLeft" | "WheelRight"
 ```
 
-规则：
+Rules:
 
-- **字母**按键名匹配，与大小写锁无关：`E` = 按 E；`Shift+E` = Shift 加 E。
-- **符号键**按实际打出的字符匹配，不能再写 `Shift`：字幕同步的 `>` 写成 `">"`，不是 `"Shift+."`。`+` 写成 `Plus`。数字同理：`"Shift+1"` 非法，要写 `"!"`。
-- **macOS 的 Ctrl 与 Cmd**：`Ctrl+X` 在 macOS 上按 ⌃X 或 ⌘X 都触发（界面规格 §0）；`Cmd+X` 只认 ⌘X。同一事件先找完全匹配（⌘X 先找 `Cmd+X`），找不到再按 `Ctrl+X` 找。其它平台 `Cmd` 是 Win/Super 键。（Slint 在 macOS 上把 ⌘ 报成 `control`、⌃ 报成 `meta`，宿主在 Rust 里换回来。）
-- **鼠标**只在视频区生效，可带修饰键。`LeftDoubleClick:LeftHalf`/`:RightHalf` 按双击位置在视频左/右半边区分；同时有带区与不带区的绑定时，带区的优先，不算冲突。滚轮按累计位移计步（阈值在 P1b 按触控板和鼠标实测确定），每步触发一次。`X1`/`X2` 是鼠标侧键（Slint `back`/`forward`）。
-- 右键保留给菜单，不能绑定。左键单击、长按、右键双击本轮不做（§18 Q3）。宿主默认把 `Mouse:LeftDoubleClick` 绑到全屏。
-- 默认绑定**只在按下时触发，忽略按住不放的自动重复**（与现在 Space/←/→ 相同）；命令声明 `repeat: true` 时，按键的系统自动重复也触发（§18 Q6）。鼠标事件没有重复。
-- 菜单打开或系统对话框打开时，所有绑定暂停（与现在相同）。
-- 被绑定的 `Tab` 会被宿主接住，不再用于主窗口内的焦点切换。
+- **Letters** match by key name, regardless of Caps Lock: `E` = press E; `Shift+E` = Shift plus E.
+- **Symbol keys** match the character actually typed, and cannot also be written with `Shift`: subtitle sync's `>` is written `">"`, not `"Shift+."`. `+` is written `Plus`. The same for digits: `"Shift+1"` is invalid; write `"!"`.
+- **Ctrl and Cmd on macOS**: on macOS `Ctrl+X` fires on both ⌃X and ⌘X (UI spec §0); `Cmd+X` only accepts ⌘X. For one event, an exact match is looked up first (⌘X looks for `Cmd+X` first); if none is found, it is looked up as `Ctrl+X`. On other platforms `Cmd` is the Win/Super key. (On macOS Slint reports ⌘ as `control` and ⌃ as `meta`; the host swaps them back in Rust.)
+- **Mouse** bindings only apply in the video area and can have modifiers. `LeftDoubleClick:LeftHalf`/`:RightHalf` distinguish by whether the double-click is on the left or right half of the video; when bindings with and without a zone exist at the same time, the one with the zone wins, and this does not count as a conflict. The wheel counts steps by accumulated distance (the threshold is set in P1b by testing with trackpad and mouse), firing once per step. `X1`/`X2` are the mouse side buttons (Slint `back`/`forward`).
+- The right button is reserved for the menu and cannot be bound. Left single click, long press, and right double-click are not done this round (§18 Q3). By default the host binds `Mouse:LeftDoubleClick` to fullscreen.
+- Default bindings **fire only on press and ignore the auto-repeat of a held key** (same as Space/←/→ today); when a command declares `repeat: true`, the system auto-repeat of keys also fires (§18 Q6). Mouse events have no repeat.
+- While the menu is open or a system dialog is open, all bindings are paused (same as today).
+- A bound `Tab` is caught by the host and is no longer used for focus switching inside the main window.
 
-格式不合法（未知键名、修饰键顺序错、符号键带 Shift、重复）时，`commands.add` 立即抛出 `code: "invalid"` 的错误（SDK 先校验，宿主注册时再校验一次，以宿主为准）。
+When the format is invalid (unknown key name, wrong modifier order, symbol key with Shift, duplicates), `commands.add` throws immediately with an error of `code: "invalid"` (the SDK checks first, the host checks again on registration, and the host wins).
 
-### 3.3 作用范围与焦点
+### 3.3 Scope and focus
 
-| 范围 | 何时生效 | 实现 |
+| Scope | When it applies | Implementation |
 | --- | --- | --- |
-| 全局（默认） | 主窗口或浮动面板窗口获得焦点，且按键没被焦点控件吃掉（输入框打字、列表自己处理的方向键等） | `host.slint` 最外层 `keys := FocusScope` 收到冒泡上来的按键。Slint 1.16 的按键先给焦点控件，未接受的再逐级交给上层 FocusScope（`i-slint-core` `window.rs` `process_key_input`），所以输入框里的空格、方向键不会触发绑定 |
-| `focus: "panel"` | 焦点在该插件面板之内时，**先于**全局查找 | 宿主在面板外包一层 FocusScope（`focus-on-click` 默认为真，点面板空白处即获得焦点），未被面板内部接受的按键先在这里按「面板 P」范围查找，找不到再冒泡到全局 |
+| Global (default) | The main window or a floating panel window has focus, and the key was not consumed by the focused control (typing in an input box, arrow keys that a list handles itself, etc.) | The outermost `keys := FocusScope` in `host.slint` receives keys that bubble up. In Slint 1.16 keys go first to the focused control, and those not accepted are passed up level by level to the parent FocusScopes (`i-slint-core` `window.rs` `process_key_input`), so space and arrow keys in an input box do not fire bindings |
+| `focus: "panel"` | While focus is inside that plugin's panel, looked up **before** global | The host wraps a FocusScope around the panel (`focus-on-click` is true by default, so clicking empty space in the panel gives it focus); keys not accepted inside the panel are first looked up here in the "panel P" scope, and if none is found they bubble up to global |
 
-- 工具窗口（插件 `windows.create`）里不触发任何绑定，与现在相同；工具窗口范围的绑定本轮不做（§18 Q5）。
-- 与现在相比，全局绑定在焦点位于侧栏、底栏空白处时也生效（现在只在视频获得焦点时）。快捷键原有的生效场景全部保留。
+- Tool windows (plugin `windows.create`) do not fire any bindings, same as today; tool-window-scoped bindings are not done this round (§18 Q5).
+- Compared with today, global bindings also apply when focus is on empty space in the sidebar or bottom bar (today only when the video has focus). All places where shortcuts worked before still work.
 
-### 3.4 宿主数据结构
+### 3.4 Host data structures
 
-新文件 `src/host/src/bindings.rs`（纯数据，无 UI）：
+New file `src/host/src/bindings.rs` (pure data, no UI):
 
 ```rust
 pub struct Mods { ctrl: bool, alt: bool, shift: bool, cmd: bool }
 pub enum Input { Key { key: Key, mods: Mods }, Mouse { event: MouseEvent, zone: Option<Zone>, mods: Mods } }
 pub enum Scope { Global, Panel(OwnerGeneration) }
-pub struct Claim { owner: OwnerGeneration /* 0 = 宿主 */, command: String, user: bool }
+pub struct Claim { owner: OwnerGeneration /* 0 = host */, command: String, user: bool }
 pub struct Table {
-    defaults: BTreeMap<(OwnerGeneration, String), (Vec<Input>, Scope)>, // 来自命令声明
-    overlay: Overlay,               // 用户覆盖层："<manifest id>/<命令 id>" → 绑定列表（[] = 解绑）
-    active: BTreeMap<(Input, Scope), Claim>,   // 由上面两项重算
-    conflicts: Vec<Conflict>,                  // 被压下的声明
+    defaults: BTreeMap<(OwnerGeneration, String), (Vec<Input>, Scope)>, // from command declarations
+    overlay: Overlay,               // user overlay: "<manifest id>/<command id>" → binding list ([] = unbind)
+    active: BTreeMap<(Input, Scope), Claim>,   // recomputed from the two above
+    conflicts: Vec<Conflict>,                  // declarations that lost
 }
 impl Table {
     fn parse(text: &str) -> Result<Input, String>;
     fn resolve(&self, input: &Input, focused_panel: Option<OwnerGeneration>) -> Option<&Claim>;
-    fn label(&self, owner: OwnerGeneration, command: &str) -> Option<String>; // 菜单里显示的文字
+    fn label(&self, owner: OwnerGeneration, command: &str) -> Option<String>; // text shown in the menu
 }
 ```
 
-- 表是**派生数据**：命令注册、移除（插件停用）、覆盖层载入时整表重算，不保存中间状态。
-- 宿主自己的命令（owner 0）也在表里：
+- The table is **derived data**: the whole table is recomputed when a command is registered or removed (plugin deactivated) or when the overlay is loaded; no intermediate state is kept.
+- The host's own commands (owner 0) are also in the table:
 
-| 命令 | 默认绑定 | 菜单 | 状态 |
+| Command | Default bindings | Menu | State |
 | --- | --- | --- | --- |
-| `host/fullscreen` 全屏 | `Enter`、`Alt+Enter`（交互对齐 IA-CORE-04）、`F11`、`Mouse:LeftDoubleClick` | 顶层，`group: "screen"`，`order: 700`，勾选 = 是否全屏 | 总是可用 |
-| `host/exit-fullscreen` 退出全屏 | `Escape` | 不在菜单 | 仅全屏时可用 |
-| `host/quit` 退出 | `Cmd+Q` | 顶层，`group: "exit"`，`order: 990` | 总是可用 |
+| `host/fullscreen` Fullscreen | `Enter`, `Alt+Enter` (interaction alignment IA-CORE-04), `F11`, `Mouse:LeftDoubleClick` | top level, `group: "screen"`, `order: 700`, checked = whether fullscreen | always available |
+| `host/exit-fullscreen` Exit fullscreen | `Escape` | not in the menu | only available in fullscreen |
+| `host/quit` Quit | `Cmd+Q` | top level, `group: "exit"`, `order: 990` | always available |
 
-  菜单中是否本轮就出现「全屏」「退出」见 §18 Q2。
-- **主窗口事件流**：Slint 回调 `key-input(scope, text, ctrl, alt, shift, meta, repeat) -> bool` 和 `mouse-input(kind, zone, ctrl, alt, shift, meta) -> bool` 在 UI 线程上**同步**查询表的只读副本（`Rc<RefCell<Table>>`，重算时整体替换），绑定了就返回真（`accept`），并发 `Event::Binding(owner, id)`；主循环里再按现有 `resolve_execution` 检查启用/忙碌，再发 `commands.execute`。绑定了但命令禁用：按键被接住、不执行（与现在 Space 的行为相同）。
-- **模拟器输入捕获**（`producer.declareInput`，SDK 未公开）：winit 钩子里写死的 `F11 | Escape` 放行改为「绑定在宿主命令上的键放行」，其余被捕获的键仍优先给生成端。
+  Whether "Fullscreen" and "Quit" appear in the menu this round, see §18 Q2.
+- **Main window event flow**: the Slint callbacks `key-input(scope, text, ctrl, alt, shift, meta, repeat) -> bool` and `mouse-input(kind, zone, ctrl, alt, shift, meta) -> bool` query a read-only copy of the table **synchronously** on the UI thread (`Rc<RefCell<Table>>`, replaced as a whole on recompute); if bound, they return true (`accept`) and send `Event::Binding(owner, id)`; the main loop then checks enabled/busy with the existing `resolve_execution` and sends `commands.execute`. Bound but the command is disabled: the key is caught and not executed (same as Space today).
+- **Emulator input capture** (`producer.declareInput`, not public in the SDK): the hard-coded `F11 | Escape` pass-through in the winit hook becomes "pass through keys bound to host commands"; other captured keys still go to the producer first.
 
-### 3.5 冲突规则
+### 3.5 Conflict rules
 
-- 冲突 = 同一 `(输入, 范围)` 有两个以上命令声明。不让注册失败（一个插件选了某键不应让另一个插件激活失败），而是**确定性地只保留一个**，其余记入 `conflicts`：
-  1. 用户覆盖层的绑定优先于任何默认绑定（被覆盖的默认绑定不算冲突，只是被取代）；
-  2. 宿主自己的命令优先于插件；
-  3. 插件之间，先加载的（owner 代次小）优先。代次在 `--plugin` 顺序 / 包存储顺序下按序分配，同一组插件每次启动结果相同；新安装或试载的插件代次更大，不会抢走已有插件的键。
-- 报告：每次重算后，新出现的冲突写一行宿主日志（`binding conflict: Space → vestra.playback/toggle-pause; ignored: x.y/z`）；测试宿主提供 `host.conflicts` 供插件测试断言。没有给插件的冲突查询接口（无使用者）。备选规则见 §18 Q4。
-- 赢家停用后，表重算，原先被压下的绑定自动生效。
-- 不同范围不冲突：面板范围的 `Enter` 与宿主全局 `Enter` 共存，面板获得焦点时面板优先。
-- 试载中的插件：绑定一律忽略（与现在清空 `shortcut` 相同）。
+- Conflict = two or more commands declare the same `(input, scope)`. Registration is not made to fail (one plugin choosing a key should not make another plugin fail to activate); instead **exactly one is kept, deterministically**, and the rest are recorded in `conflicts`:
+  1. User overlay bindings win over any default binding (an overridden default binding is not a conflict, just replaced);
+  2. The host's own commands win over plugins;
+  3. Among plugins, the one loaded first (smaller owner generation) wins. Generations are assigned in `--plugin` order / package store order, so the same set of plugins gives the same result on every start; newly installed or trial-loaded plugins have larger generations and do not take keys from existing plugins.
+- Reporting: after each recompute, each new conflict writes one host log line (`binding conflict: Space → vestra.playback/toggle-pause; ignored: x.y/z`); the test host provides `host.conflicts` for plugin tests to assert on. There is no conflict query interface for plugins (no users). Alternative rules see §18 Q4.
+- When the winner is deactivated, the table is recomputed and the bindings that lost take effect automatically.
+- Different scopes do not conflict: a panel-scoped `Enter` and the host's global `Enter` coexist; while the panel has focus, the panel wins.
+- Plugins being trial-loaded: their bindings are always ignored (same as clearing `shortcut` today).
 
-### 3.6 持久化
+### 3.6 Persistence
 
-用户覆盖层存在 C8 的状态文件 `bindings` 字段，键是 `"<manifest id>/<命令 id>"`（宿主命令为 `"host/<id>"`），值是绑定字符串数组，`[]` 表示解绑。本轮只读不写（没有改绑界面）；保存其它状态时原样保留。非法条目忽略并写日志。
+The user overlay is stored in the `bindings` field of the C8 state file; keys are `"<manifest id>/<command id>"` (host commands are `"host/<id>"`), values are arrays of binding strings, `[]` means unbound. This round it is only read, not written (there is no rebinding UI); when other state is saved it is kept as is. Invalid entries are ignored and logged.
 
-### 3.7 示例
+### 3.7 Example
 
 ```ts
 export default async function activate(plugin: Plugin) {
   const { player } = plugin;
   plugin.commands.add({
-    id: "toggle", path: ["播放", "播放/暂停"], order: 263,
+    id: "toggle", path: ["Playback", "Play/Pause"], order: 263,
     bindings: ["Space"],
     run: () => player.setPaused(!player.state.paused),
   });
   plugin.commands.add({
-    id: "volume-up", path: ["声音", "音量 +"],
+    id: "volume-up", path: ["Audio", "Volume +"],
     bindings: ["ArrowUp", "Mouse:WheelUp"],
     run: () => player.setOutput({ volume: Math.min(200, player.state.volume + 5) }),
   });
   plugin.commands.add({
-    id: "remove", path: ["播放列表", "移除所选"], focus: "panel",
-    bindings: ["Delete"],     // 只在本插件面板获得焦点时
+    id: "remove", path: ["Playlist", "Remove Selected"], focus: "panel",
+    bindings: ["Delete"],     // only while this plugin's panel has focus
     run: () => removeSelected(),
   });
 }
 ```
 
-### 3.8 取代与删除、迁移
+### 3.8 Replaced and deleted, migration
 
-- 删除：`CommandOptions.shortcut`、`CommandDeclaration.shortcut`（SDK 两处）、`commands.rs` 的 `Declaration.shortcut`、`canvas_shortcut()`、`resolve_shortcut()`、「main-canvas shortcut already registered」冲突；`host.slint` canvas `key-pressed` 里写死的 F11、Escape、Space、←、→ 与 `window-input("shortcut:…")`；`main.rs` 的 `Host::canvas_shortcut`、`WindowInput` 中 `shortcut:` / `toggleFullscreen` / `escape` 分支；试载时清空 `shortcut` 的代码；producer 钩子里的 `"F11" | "Escape"`。
-- 迁移（行为不变）：`shortcut: "Space"` → `bindings: ["Space"]`；`"ArrowLeft"`、`"ArrowRight"` 同名。现有插件只有 playback 的这三处。
+- Delete: `CommandOptions.shortcut`, `CommandDeclaration.shortcut` (two places in the SDK), `Declaration.shortcut` in `commands.rs`, `canvas_shortcut()`, `resolve_shortcut()`, the "main-canvas shortcut already registered" conflict; the hard-coded F11, Escape, Space, ←, → and `window-input("shortcut:…")` in the canvas `key-pressed` of `host.slint`; `Host::canvas_shortcut` in `main.rs`, the `shortcut:` / `toggleFullscreen` / `escape` branches of `WindowInput`; the code that clears `shortcut` on trial load; `"F11" | "Escape"` in the producer hook.
+- Migration (behaviour unchanged): `shortcut: "Space"` → `bindings: ["Space"]`; `"ArrowLeft"`, `"ArrowRight"` keep the same names. Among existing plugins only playback has these three.
 
-## 4. C4 菜单结构
+## 4. C4 Menu structure
 
-### 4.1 SDK 接口
+### 4.1 SDK interface
 
 ```ts
 interface CommandOptions {
   id: string;
-  /** 菜单路径，1–8 段，最后一段是菜单项。1 段 = 顶层直接命令。省略 = 不进主菜单。 */
+  /** Menu path, 1–8 segments; the last segment is the menu item. 1 segment = top-level direct command. Omitted = not in the main menu. */
   path?: string[];
-  title?: string;               // 默认取 path 最后一段；省略 path 时必填
-  /** 同级排序，小的在前；默认 0。整数，范围 ±1 000 000。 */
+  title?: string;               // defaults to the last segment of path; required when path is omitted
+  /** Order among siblings, smaller first; default 0. Integer, range ±1 000 000. */
   order?: number;
-  /** 同级分组名；相邻两项分组不同时，中间画分隔线。默认 "domain"。 */
+  /** Sibling group name; when two adjacent items are in different groups, a separator is drawn between them. Default "domain". */
   group?: string;
-  /** checked 画成单选圆点而不是 ✓。互斥由插件自己维护 checked。 */
+  /** checked is drawn as a radio dot instead of ✓. The plugin maintains mutual exclusion of checked itself. */
   radio?: boolean;
   bindings?: string[]; focus?: "panel";   // C3
-  enabled?; checked?; busy?; reason?; run();  // 不变
+  enabled?; checked?; busy?; reason?; run();  // unchanged
 }
 ```
 
-### 4.2 排序与分组规则
+### 4.2 Ordering and grouping rules
 
-1. 每一级菜单里，每个节点有一个键 `(order, group)`：
-   - 菜单项：取自己的 `order`、`group`；
-   - 子菜单（某个路径段）：取它下面**排序最前的那个命令**的 `order` 和 `group`（递归）。子菜单不需要单独声明。
-2. 同级按 `order` 升序；`order` 相同时，先按插件 manifest id，再按同一插件内的注册先后。结果与注册到达的时间无关（现有承诺不变）。**不再按标题字母排序。**
-3. `group` 只决定分隔线：排好序后，相邻两项 `group` 不同就画一条线。`group` 不参与排序，所以一个分组要连在一起，它的 `order` 也要连续。
-4. 路径规则：1–8 段，每段 1–80 字节、无控制字符和首尾空白；同一路径不能被注册两次，也不能既是菜单项又是子菜单（`conflict`，与现在相同）。顶层不再限定领域名。省略 `path` 的命令（P2 裁决 Q9）不进主菜单，`title` 必填，照常参与绑定表并可放进面板右键菜单（C11）；第二步播放列表的列表菜单（全选、排序）与列表内 Del/Enter 用它。
-5. 推荐骨架（宿主文档约定，宿主不强制）：
+1. At each menu level, every node has a key `(order, group)`:
+   - menu item: its own `order`, `group`;
+   - submenu (a path segment): the `order` and `group` of the **first-ordered command** under it (recursively). Submenus need no separate declaration.
+2. Siblings are sorted by `order` ascending; with equal `order`, first by plugin manifest id, then by registration order within the same plugin. The result does not depend on when registrations arrive (the existing promise is unchanged). **No more sorting by title alphabetically.**
+3. `group` only decides separators: after sorting, a line is drawn between two adjacent items whose `group` differs. `group` does not take part in sorting, so for a group to stay together, its `order` values must also be contiguous.
+4. Path rules: 1–8 segments, each 1–80 bytes, no control characters and no leading or trailing whitespace; the same path cannot be registered twice, and cannot be both a menu item and a submenu (`conflict`, same as today). The top level is no longer restricted to domain names. Commands that omit `path` (P2 ruling Q9) are not in the main menu, `title` is required; they take part in the binding table as usual and can be put into a panel context menu (C11); in step two the playlist's list menu (select all, sort) and Del/Enter inside the list use this.
+5. Recommended skeleton (a host documentation convention, not enforced by the host):
 
-| 分组 `group` | 顶层 `order` 段 | 内容 |
+| Group `group` | Top-level `order` range | Content |
 | --- | --- | --- |
-| `open` | 100–199 | 打开文件、打开 ▸、关闭 |
-| `domain` | 200–699 | 播放、字幕、视频、声音、模拟器等领域子菜单 |
-| `screen` | 700–799 | 全屏（宿主 700） |
-| `windows` | 800–899 | 播放列表、播放信息、插件工坊等窗口入口 |
-| `exit` | 900–999 | 退出（宿主 990） |
+| `open` | 100–199 | Open File, Open ▸, Close |
+| `domain` | 200–699 | Domain submenus such as Playback, Subtitles, Video, Audio, Emulator |
+| `screen` | 700–799 | Fullscreen (host 700) |
+| `windows` | 800–899 | Window entries such as Playlist, Playback Info, Plugin Workshop |
+| `exit` | 900–999 | Quit (host 990) |
 
-   顶层编号表放在 [doc/product/menus.md](../product/menus.md)（交互负责人维护）；子菜单内部的编号由所在子菜单的插件自定。
-6. 试载插件：菜单项**最后一段**加前缀 `试载 <owner> · `（现在是第 2 段；现有命令都是 2 段时结果相同），绑定忽略。
+   The top-level numbering table is in [doc/product/menus.md](../product/menus.md) (maintained by the interaction owner); the numbering inside a submenu is decided by the plugin that owns that submenu.
+6. Trial-loaded plugins: the **last segment** of the menu item gets the prefix `Trial <owner> · ` (today it is the 2nd segment; the result is the same while all existing commands have 2 segments), and bindings are ignored.
 
-### 4.3 宿主数据结构
+### 4.3 Host data structures
 
-`commands.rs`：
+`commands.rs`:
 
 ```rust
 pub struct Declaration {
     pub title: String,
-    pub path: Vec<String>,          // 0..=8；空 = 不进主菜单
-    pub order: i32,                 // 默认 0
-    pub group: String,              // 默认 "domain"
+    pub path: Vec<String>,          // 0..=8; empty = not in the main menu
+    pub order: i32,                 // default 0
+    pub group: String,              // default "domain"
     pub radio: bool,
-    pub bindings: Vec<String>,      // 原文；解析与生效在 bindings.rs
+    pub bindings: Vec<String>,      // raw text; parsing and activation in bindings.rs
     pub focus: Option<Focus>,       // Some(Panel)
     pub repeat: bool,
 }
 pub struct Registry { commands: BTreeMap<CommandKey, CommandSnapshot>, sequence: BTreeMap<CommandKey, u64>, revision: u64 }
 ```
 
-- `Registry::new` 不再接收领域列表；`snapshot()` 按 §4.2 建树。`MenuNode::Group` 增加 `order`、`group`（取自最前子项），`MenuNode::Command` 不变；菜单投影（`menu.rs`）在分组变化处插入分隔行。
-- `snapshot()` 输出给菜单投影，`bindings::Table::label()` 提供每行右侧的快捷键文字。
+- `Registry::new` no longer takes a domain list; `snapshot()` builds the tree per §4.2. `MenuNode::Group` gains `order`, `group` (taken from the first child), `MenuNode::Command` is unchanged; the menu projection (`menu.rs`) inserts separator rows where the group changes.
+- The output of `snapshot()` goes to the menu projection; `bindings::Table::label()` provides the shortcut text on the right of each row.
 
-### 4.4 菜单样式（宿主，§6.3）
+### 4.4 Menu style (host, §6.3)
 
-`menu-view.slint`：底 `#444444`、1px `#000000` 边框、无圆角；文字 `#bbbbbb` 12px；悬停底 `#181818` 文字 `#fae100`；禁用 `#777777`；分隔线 1px `#27282f`（行高 7px，`menu.rs` 的几何计算同步）；勾选 14×14 圆角 3 底 `#34353f` 白勾；单选 12×12 外环 `#34353f` 中心点 `#2282f2`；快捷键文字右对齐 `#777777`。项高 24px。
+`menu-view.slint`: background `#444444`, 1px `#000000` border, no rounded corners; text `#bbbbbb` 12px; hover background `#181818`, text `#fae100`; disabled `#777777`; separator 1px `#27282f` (row height 7px, the geometry in `menu.rs` updated to match); check box 14×14, corner radius 3, background `#34353f`, white check; radio 12×12 outer ring `#34353f`, centre dot `#2282f2`; shortcut text right-aligned `#777777`. Item height 24px.
 
-快捷键文字取该命令第一个生效的**键盘**绑定（鼠标绑定不显示），显示形式：修饰键 `Ctrl+`、`Alt+`、`Shift+`、`Cmd+`；`ArrowLeft/Right/Up/Down` → `← → ↑ ↓`；`Escape` → `Esc`；`PageUp/PageDown` → `PgUp/PgDn`；`Delete` → `Del`；其余原样（§18 Q11）。
+The shortcut text is the command's first active **keyboard** binding (mouse bindings are not shown), displayed as: modifiers `Ctrl+`, `Alt+`, `Shift+`, `Cmd+`; `ArrowLeft/Right/Up/Down` → `← → ↑ ↓`; `Escape` → `Esc`; `PageUp/PageDown` → `PgUp/PgDn`; `Delete` → `Del`; everything else as is (§18 Q11).
 
-### 4.5 错误
+### 4.5 Errors
 
-| 情况 | 结果 |
+| Case | Result |
 | --- | --- |
-| 路径段数、文字、`order` 不合法，`group` 不合法（规则同路径段） | `commands.add` 的注册以 `invalid` 失败（激活期间 = 激活失败） |
-| 路径重复、叶子与子菜单冲突 | `conflict`（不变） |
-| 每插件超过 64 条、总数超过 512 条 | `limit`（不变） |
+| Invalid number of path segments, text, or `order`; invalid `group` (same rules as path segments) | Registration in `commands.add` fails with `invalid` (during activation = activation fails) |
+| Duplicate path, leaf conflicts with submenu | `conflict` (unchanged) |
+| More than 64 per plugin, more than 512 in total | `limit` (unchanged) |
 
-### 4.6 示例
+### 4.6 Example
 
 ```ts
-// 顶层直接命令、分组、单选组
-plugin.commands.add({ id: "open", path: ["打开文件…"], group: "open", order: 100,
+// top-level direct command, groups, radio group
+plugin.commands.add({ id: "open", path: ["Open File…"], group: "open", order: 100,
   bindings: ["Ctrl+O", "F3"], run: () => openFile() });
 for (const [i, rate] of [0.5, 1, 1.5, 2].entries())
   plugin.commands.add({
-    id: `rate-${rate}`, path: ["播放", "速度", `${rate}倍`], order: 230 + i, radio: true,
+    id: `rate-${rate}`, path: ["Playback", "Speed", `${rate}×`], order: 230 + i, radio: true,
     checked: () => player.state.rate === rate,
     run: () => player.setRate(rate),
   });
-plugin.commands.add({ id: "list", path: ["播放列表"], group: "windows", order: 800,
+plugin.commands.add({ id: "list", path: ["Playlist"], group: "windows", order: 800,
   checked: () => plugin.panels.sidebar.state?.preferred ?? false,
   bindings: ["F6"], run: () => plugin.panels.sidebar.toggle() });
 ```
 
-### 4.7 取代与删除、迁移
+### 4.7 Replaced and deleted, migration
 
-- 删除：`Registry::new(allowed_domains)` 与 `domains`/`domain_order`、`main.rs` 里的 8 个领域名、「2..=6 segments」与「domain is not allowed」检查、`snapshot()` 的领域排名 + `path[1..]` 字母排序、试载改写 `path[1]` 的代码、参考文档 §4「顶层分组惯例」一句。
-- 迁移：每条命令加 `order`，值见 §14 的表；`path`、`title` 不变；不写 `group`（全部为默认 `"domain"`，没有分隔线，与现在相同）。
+- Delete: `Registry::new(allowed_domains)` and `domains`/`domain_order`, the 8 domain names in `main.rs`, the "2..=6 segments" and "domain is not allowed" checks, the domain ranking + alphabetical `path[1..]` sort in `snapshot()`, the code that rewrites `path[1]` on trial load, and the sentence "top-level grouping convention" in reference doc §4.
+- Migration: add `order` to every command, with values from the table in §14; `path` and `title` are unchanged; do not write `group` (all default `"domain"`, no separators, same as today).
 
-## 5. C5 屏幕提示
+## 5. C5 On-screen messages
 
-### 5.1 接口
+### 5.1 Interface
 
 ```ts
 interface Osd {
-  /** 在视频左上角显示一行提示，2 秒后淡出；新提示立即替换旧提示。 */
+  /** Shows a one-line message at the top left of the video, fading out after 2 seconds; a new message replaces the old one immediately. */
   show(text: string): Promise<void>;
   panel(): OsdPanel;   // C10
 }
 interface Scope { readonly osd: Osd }
 ```
 
-需要新能力 `ui.osd`。
+Needs the new capability `ui.osd`.
 
-### 5.2 宿主行为
+### 5.2 Host behaviour
 
-- 视频区左上角，左/上边距 10px，粗体 16px，白字、1px 黑色描边（Slint `Text` 的 `stroke`/`stroke-width`；2026-10 视觉身份轮起改为半透明深色圆角底板，见界面规格 UI-OSD-01）；显示 2000 ms 后在 300 ms 内淡出；任何插件的新提示替换当前提示（只有一行）。全屏与普通模式都显示。
-- 文字 1–200 字符，换行替换为空格。
-- 提示不属于任何资源：插件停用时，已显示的提示照常到时消失。
-- wire：`osd.show { text }`，宿主显示后答复。
+- Top left of the video area, left/top margin 10px, bold 16px, white text with a 1px black outline (Slint `Text` `stroke`/`stroke-width`; from the 2026-10 visual identity round, a semi-transparent dark rounded backing plate instead, see UI spec UI-OSD-01); after 2000 ms it fades out over 300 ms; a new message from any plugin replaces the current one (only one line). Shown in both fullscreen and normal mode.
+- Text 1–200 characters; line breaks are replaced with spaces.
+- A message does not belong to any resource: when a plugin is deactivated, a message already shown disappears on time as usual.
+- wire: `osd.show { text }`; the host replies after showing it.
 
-### 5.3 错误
+### 5.3 Errors
 
-`invalid`（空或过长）、`unavailable`（无界面模式）、`capability`。
+`invalid` (empty or too long), `unavailable` (headless mode), `capability`.
 
-### 5.4 示例
+### 5.4 Example
 
 ```ts
 plugin.commands.add({
-  id: "volume-up", path: ["声音", "音量 +"], bindings: ["ArrowUp"],
+  id: "volume-up", path: ["Audio", "Volume +"], bindings: ["ArrowUp"],
   run: async () => {
     const volume = Math.min(200, plugin.player.state.volume + 5);
     await plugin.player.setOutput({ volume });
-    await plugin.osd.show(`音量: ${volume}%`);
+    await plugin.osd.show(`Volume: ${volume}%`);
   },
 });
 ```
 
-### 5.5 取代与删除、迁移
+### 5.5 Replaced and deleted, migration
 
-无旧接口。本轮插件不使用（屏幕提示文案是第二步 UI-OSD-02）。
+No old interface. Plugins do not use it this round (the on-screen message texts are step two, UI-OSD-02).
 
-## 6. C6 播放序列
+## 6. C6 Playback sequence
 
-### 6.1 接口
+### 6.1 Interface
 
 ```ts
 interface SequenceProvider {
-  next(): unknown;                 // 由 SDK 在提供者的作用域里调用
+  next(): unknown;                 // called by the SDK in the provider's scope
   previous(): unknown;
-  canNext: Bindable<boolean>;      // 每轮更新重新求值，变化才发送
+  canNext: Bindable<boolean>;      // re-evaluated on every update round, sent only on change
   canPrevious: Bindable<boolean>;
 }
 interface Player {
-  /** 登记为播放序列提供者；同时只能有一个。dispose 撤销。 */
+  /** Registers as the playback sequence provider; only one at a time. dispose revokes it. */
   provideSequence(provider: SequenceProvider): Disposable;
-  next(): Promise<void>;           // 交给提供者；不等提供者执行完
+  next(): Promise<void>;           // handed to the provider; does not wait for the provider to finish
   previous(): Promise<void>;
 }
-interface PlayerState { readonly can: { /* 现有字段 */ next: boolean; previous: boolean } }
+interface PlayerState { readonly can: { /* existing fields */ next: boolean; previous: boolean } }
 ```
 
-能力：`provideSequence`、`next`、`previous` 需要 `playback.control`；`can.next/previous` 随 `player.state` 读取（`playback.read`，实时更新需 `events`）。
+Capabilities: `provideSequence`, `next`, `previous` need `playback.control`; `can.next/previous` are read with `player.state` (`playback.read`; live updates need `events`).
 
-### 6.2 宿主行为
+### 6.2 Host behaviour
 
-- 宿主保存 `sequence: Option<(owner, can_next, can_previous)>`。wire：`sequence.set { canNext, canPrevious }`（首次即登记；已有别的提供者 → `conflict`），`sequence.set null` 撤销；`sequence.step { direction: "next" | "previous" }`。
-- `sequence.step`：没有提供者，或对应标志为假 → `unavailable`；否则向提供者推事件 `sequence.step { direction }` 后立即答复调用者。提供者的 SDK 在作用域里调用 `next()` / `previous()`，抛错交给提供者自己的 `onError`。
-- 标志并入来源状态：宿主在每个 `source.state` 事件和 `source.state` 答复的数据中加 `sequence: { next, previous }`；标志变化时，宿主用当前来源状态（`eventSequence` 不变）重发一次 `source.state`。SDK 已接受「序号相同、内容不同」的状态（`player.ts` `accept`），所以不需要新事件；来源戳不变，`ifCurrent` 条件不受影响。
-- 提供者停用、`dispose` 或插件退出时，宿主撤销提供者，标志变为假并重发状态。
+- The host keeps `sequence: Option<(owner, can_next, can_previous)>`. wire: `sequence.set { canNext, canPrevious }` (the first call registers; another provider already exists → `conflict`), `sequence.set null` revokes; `sequence.step { direction: "next" | "previous" }`.
+- `sequence.step`: no provider, or the matching flag is false → `unavailable`; otherwise it pushes the event `sequence.step { direction }` to the provider and replies to the caller immediately. The provider's SDK calls `next()` / `previous()` in the scope; errors go to the provider's own `onError`.
+- The flags are merged into the source state: the host adds `sequence: { next, previous }` to the data of every `source.state` event and `source.state` reply; when the flags change, the host resends `source.state` once with the current source state (`eventSequence` unchanged). The SDK already accepts states with "the same sequence number but different content" (`player.ts` `accept`), so no new event is needed; the source stamp is unchanged, and `ifCurrent` conditions are not affected.
+- When the provider is deactivated, calls `dispose`, or the plugin exits, the host revokes the provider; the flags become false and the state is resent.
 
-### 6.3 错误
+### 6.3 Errors
 
-`conflict`（已有其它提供者，激活期间 = 激活失败）、`unavailable`（无提供者或不能前进/后退）、`capability`。
+`conflict` (another provider already exists; during activation = activation fails), `unavailable` (no provider, or cannot go forward/back), `capability`.
 
-### 6.4 示例
+### 6.4 Example
 
 ```ts
-// 播放列表：登记提供者
+// playlist: register as provider
 plugin.player.provideSequence({
   canNext: () => !!queue.neighbor(1) && !busy(),
   canPrevious: () => !!queue.neighbor(-1) && !busy(),
@@ -489,68 +489,68 @@ plugin.player.provideSequence({
   previous: () => action("previous"),
 });
 
-// 任何插件：调用
+// any plugin: call
 plugin.commands.add({
-  id: "next", path: ["播放", "下一个"], bindings: ["PageDown", "Mouse:X2"],
+  id: "next", path: ["Playback", "Next"], bindings: ["PageDown", "Mouse:X2"],
   enabled: () => plugin.player.state.can.next,
   run: () => plugin.player.next(),
 });
 ```
 
-### 6.5 取代与删除、迁移
+### 6.5 Replaced and deleted, migration
 
-无旧接口（以前插件之间没有办法互相调用）。参考迁移中 playlist 登记为提供者（用户看不到变化；菜单「上一项/下一项」仍是它自己的命令）。其它插件本轮不使用。
+No old interface (previously plugins had no way to call each other). In the reference migration, playlist registers as the provider (no visible change to users; the menu items "Previous Item/Next Item" are still its own commands). Other plugins do not use it this round.
 
-## 7. C7 面板位置状态（侧栏与底栏）
+## 7. C7 Panel slot state (sidebar and bottom bar)
 
-### 7.1 接口
+### 7.1 Interface
 
 ```ts
 interface Panels {
   mount(slot: "bottom" | "sidebar", file: string,
         options?: { component?: string; global?: string; title?: string }): Panel;
-  /** 底栏位置的状态；任何插件可读可切换，不需要知道是谁挂的。 */
+  /** State of the bottom bar slot; any plugin can read and toggle it, without knowing who mounted it. */
   readonly bottom: PanelSlot;
   readonly sidebar: SidebarSlot;
 }
 interface PanelSlot {
-  readonly state: SlotState | null;          // null：该位置没有面板
+  readonly state: SlotState | null;          // null: no panel in this slot
   onChange(listener: (state: SlotState | null) => void): Disposable;
-  setVisible(visible: boolean): Promise<void>;  // 设置用户偏好
-  toggle(): Promise<void>;                      // 按宿主当前值翻转偏好
+  setVisible(visible: boolean): Promise<void>;  // sets the user preference
+  toggle(): Promise<void>;                      // flips the preference based on the host's current value
 }
 interface SidebarSlot extends PanelSlot {
   setDetached(detached: boolean): Promise<void>;  // C14
 }
 interface SlotState {
-  preferred: boolean;      // 用户的选择（菜单勾选）
-  effective: boolean;      // 现在是否显示（附着在主窗口或浮动窗口中）
+  preferred: boolean;      // the user's choice (menu check mark)
+  effective: boolean;      // whether it is shown now (attached in the main window or in a floating window)
   reason: "userHidden" | "space" | "fullscreen" | "idle" | null;
-  detached: boolean;       // 侧栏是否为浮动窗口；底栏总为 false
+  detached: boolean;       // whether the sidebar is a floating window; always false for the bottom bar
 }
 interface Panel extends View, Disposable {
   readonly ready: Promise<void>;
-  setInteraction(locks: Partial<{ focused; dragging; popupOpen: boolean }>): void; // 不变
+  setInteraction(locks: Partial<{ focused; dragging; popupOpen: boolean }>): void; // unchanged
   showMenu(items: (Command | null)[], at: { x: number; y: number }): Promise<void>; // C11
 }
 ```
 
-能力：`panels.bottom/sidebar` 需要 `ui.mount`；`state` 的实时更新需要 `events`（没有时只在自己的 `setVisible`/`toggle`/`setDetached` 之后刷新）。
+Capabilities: `panels.bottom/sidebar` need `ui.mount`; live updates of `state` need `events` (without it, it is only refreshed after your own `setVisible`/`toggle`/`setDetached`).
 
-### 7.2 宿主行为
+### 7.2 Host behaviour
 
-- wire：`layout.state` → `{ bottom: SlotState | null, sidebar: SlotState | null }`，在布局未确认时答复 `pending`（沿用现在 `ui.mountState` 的规则，SDK 保留上一次值）；`layout.set { slot, visible?, detached? }`。不再要求调用者就是挂载者。
-- SDK 在收到 `window.state` 事件后重新读 `layout.state`（现在 `PanelHandle.#read` 的逻辑移到模块级，每个插件一份），值变化才回调 `onChange` 并触发一轮更新。
-- 偏好由宿主持久化（C8，按挂载该位置的插件的 manifest id 记录侧栏；底栏不持久化，与现在相同）。
+- wire: `layout.state` → `{ bottom: SlotState | null, sidebar: SlotState | null }`, replying `pending` while the layout is not confirmed (same rule as `ui.mountState` today; the SDK keeps the last value); `layout.set { slot, visible?, detached? }`. The caller no longer has to be the one that mounted it.
+- After receiving a `window.state` event the SDK reads `layout.state` again (the logic of today's `PanelHandle.#read` moves to module level, one per plugin), and only calls `onChange` and triggers an update round when the value changes.
+- The preference is persisted by the host (C8; the sidebar is recorded by the manifest id of the plugin that mounted that slot; the bottom bar is not persisted, same as today).
 
-### 7.3 错误
+### 7.3 Errors
 
-`missing`（该位置没有面板）、`invalid`（对底栏设 `detached`）、`unavailable`（无界面模式）、`capability`。
+`missing` (no panel in this slot), `invalid` (setting `detached` on the bottom bar), `unavailable` (headless mode), `capability`.
 
-### 7.4 示例
+### 7.4 Example
 
 ```ts
-// playback 的底栏按钮切换播放列表侧栏（第二步 UI-BAR-09 的写法）
+// playback's bottom bar button toggles the playlist sidebar (how step two UI-BAR-09 writes it)
 const sidebar = plugin.panels.sidebar;
 bar.bind(() => ({
   listShown: sidebar.state?.preferred ?? false,
@@ -559,16 +559,16 @@ bar.bind(() => ({
 bar.on("toggleList", () => sidebar.toggle());
 ```
 
-### 7.5 取代与删除、迁移
+### 7.5 Replaced and deleted, migration
 
-- 删除：`Panel.visibility`、`onVisibility`、`setVisible`、`toggle`、类型 `PanelVisibility`（改名 `SlotState`，加 `detached`）；wire `ui.mountState`、`ui.showMount`（含 SDK 从不调用的 `scope: "presentation"` 分支与 `Policy::reveal_sidebar_in_fullscreen`、`sidebar_override`）；`MountVisibility` 类型；测试宿主中对应的假实现。
-- 迁移（§15）：`panel.toggle()` → `plugin.panels.<位置>.toggle()`；`panel.visibility?.x` → `plugin.panels.<位置>.state?.x`；`panel.setVisible(v)` → `plugin.panels.<位置>.setVisible(v)`；`onVisibility` → `onChange`。只有 playback（底栏）和 playlist（侧栏）用到。
+- Delete: `Panel.visibility`, `onVisibility`, `setVisible`, `toggle`, the type `PanelVisibility` (renamed `SlotState`, with `detached` added); wire `ui.mountState`, `ui.showMount` (including the `scope: "presentation"` branch the SDK never calls, and `Policy::reveal_sidebar_in_fullscreen`, `sidebar_override`); the `MountVisibility` type; the matching fake implementations in the test host.
+- Migration (§15): `panel.toggle()` → `plugin.panels.<slot>.toggle()`; `panel.visibility?.x` → `plugin.panels.<slot>.state?.x`; `panel.setVisible(v)` → `plugin.panels.<slot>.setVisible(v)`; `onVisibility` → `onChange`. Only playback (bottom bar) and playlist (sidebar) use them.
 
-## 8. C8 界面状态持久化
+## 8. C8 UI state persistence
 
-### 8.1 宿主行为（无插件接口）
+### 8.1 Host behaviour (no plugin interface)
 
-文件：`$VESTRA_UI_STATE`，未设置时 `~/Library/Application Support/Vestra/ui-state.json`（与包存储同一目录）。无界面模式（`--headless`）不读不写。
+File: `$VESTRA_UI_STATE`, when unset `~/Library/Application Support/Vestra/ui-state.json` (the same directory as the package store). Headless mode (`--headless`) neither reads nor writes it.
 
 ```json
 {
@@ -583,65 +583,65 @@ bar.on("toggleList", () => sidebar.toggle());
 }
 ```
 
-| 字段 | 何时读 | 何时写 |
+| Field | When read | When written |
 | --- | --- | --- |
-| `window` | 创建主窗口前（逻辑像素；恢复前检查是否在某个屏幕可见范围内，不在就用默认位置） | 普通模式下尺寸或位置变化（全屏不记录） |
-| `sidebar.width` | 建主窗口时 | 分隔条松开 |
-| `panels.<id>` | 该插件挂载侧栏时作为初始 `preferred`、`detached`、浮动窗口位置 | 偏好、分离状态、浮动窗口位置变化 |
-| `bindings` | 启动时载入覆盖层（C3） | 本轮不写，原样保留 |
+| `window` | Before the main window is created (logical pixels; before restoring, checks whether it is within the visible area of some screen, and if not uses the default position) | Size or position changes in normal mode (fullscreen is not recorded) |
+| `sidebar.width` | When the main window is built | Divider released |
+| `panels.<id>` | When that plugin mounts the sidebar, as the initial `preferred`, `detached`, floating window position | Preference, detached state, floating window position changes |
+| `bindings` | Overlay loaded at startup (C3) | Not written this round, kept as is |
 
-- 写入：变化后 1 秒合并写一次，退出前再写一次；先写临时文件再改名，避免写坏。
-- 读失败（不是 JSON、`version` 不认识）：写日志，把原文件改名为 `ui-state.json.bad`，用默认值启动。单个字段非法只忽略该字段。
-- 模块：新文件 `src/host/src/ui_state.rs`（`load() -> UiState`、`UiState::changed()`、`save_if_due(now)`），宿主主循环的 16 ms 定时器里调用 `save_if_due`。
+- Writing: changes are merged and written once 1 second after a change, and once more before exit; written to a temporary file first and then renamed, to avoid corrupting it.
+- Read failure (not JSON, unknown `version`): log it, rename the original file to `ui-state.json.bad`, start with defaults. An invalid single field only ignores that field.
+- Module: new file `src/host/src/ui_state.rs` (`load() -> UiState`, `UiState::changed()`, `save_if_due(now)`); `save_if_due` is called in the 16 ms timer of the host main loop.
 
-### 8.2 取代与删除、迁移
+### 8.2 Replaced and deleted, migration
 
-无旧接口。插件不需要改。注意：侧栏显示状态从「每次启动都显示」变为「恢复上次」，这是 C8 的预期变化（UI-PL-03）。
+No old interface. Plugins need no changes. Note: the sidebar's visibility changes from "shown on every start" to "restore the last state"; this is the expected change of C8 (UI-PL-03).
 
-## 9. C9 窗口标题
+## 9. C9 Window title
 
-宿主行为（无插件接口）：没有来源时标题为 `Vestra Player`；有来源时为 `<名称> - Vestra Player`。名称：本地文件取文件名；网络来源取解析器给的 `title`，没有就用 URL；生成流（模拟器）取 `Vestra Player`。在主循环收到 `source.state` 变化时更新 `shell.window()` 的标题（`HostWindow` 加 `in property <string> window-title`）。
+Host behaviour (no plugin interface): without a source the title is `Vestra Player`; with a source it is `<name> - Vestra Player`. Name: for a local file, the file name; for a network source, the `title` given by the resolver, or the URL if there is none; for a generated stream (emulator), `Vestra Player`. Updated in `shell.window()`'s title when the main loop receives a `source.state` change (`HostWindow` gains `in property <string> window-title`).
 
-删除：`host.slint` 原先的固定开发标题。迁移：无。
+Delete: the old fixed development title in `host.slint`. Migration: none.
 
-## 10. C10 视频信息层与播放统计
+## 10. C10 Video info layer and playback statistics
 
-### 10.1 接口
+### 10.1 Interface
 
 ```ts
 interface OsdPanel extends Disposable {
-  /** 在视频左上角显示一块只读多行文字；null 隐藏。最后写入生效。 */
+  /** Shows a block of read-only multi-line text at the top left of the video; null hides it. The last write wins. */
   set(text: string | null): void;
 }
-interface Osd { panel(): OsdPanel }        // 每个插件最多一个，第二次调用抛错
+interface Osd { panel(): OsdPanel }        // at most one per plugin; the second call throws
 
 interface Player { stats(): Promise<PlaybackStats> }
 interface PlaybackStats {
-  backend: string;                 // 例如 "libmpv · 软件渲染"
-  session: number;                 // 原诊断行的 session
-  framesShown: number;             // 宿主已显示的帧数（原诊断行的 embedded frame）
+  backend: string;                 // e.g. "libmpv · software rendering"
+  session: number;                 // the session from the old diagnostic line
+  framesShown: number;             // number of frames the host has shown (the embedded frame from the old diagnostic line)
   framesDropped: number | null;
   video: { codec: string | null; width: number | null; height: number | null; fps: number | null } | null;
   audio: { codec: string | null; sampleRate: number | null; channels: number | null } | null;
 }
 ```
 
-能力：`osd.panel` 需要 `ui.osd`；`stats` 需要 `playback.read`。
+Capabilities: `osd.panel` needs `ui.osd`; `stats` needs `playback.read`.
 
-### 10.2 宿主行为
+### 10.2 Host behaviour
 
-- 信息层：视频区左上角，位于屏幕提示一行之下（y = 36px，x = 10px），半透明黑底 `#000000b0`、内边距 6px、`Theme.font-mono` 11px、`Theme.text`（2026-10 视觉身份轮起为与 OSD 相同的圆角底板、固定浅色字，见界面规格 UI-INFO-02）；不接收输入（不放 TouchArea），跟随视频区，全屏时也显示。多个插件各有一块时按 owner 代次从上到下排列。
-- 文字最多 32 行、4096 字节；SDK 用「最后写入生效」泵发送（同一时间一个请求在途），每秒刷新一次只产生一个请求。wire：`osd.panel { text: string | null }`。
-- 插件停用或句柄 `dispose` 时宿主移除该块。
-- `playback.stats`：转给后端工作线程，从 libmpv 读 `video-codec`、`video-params/w,h`、`estimated-vf-fps`（无则 `container-fps`）、`audio-codec-name`、`audio-params/samplerate`、`audio-params/channel-count`、`frame-drop-count`，加上宿主自己的 session 与已显示帧序号。没有来源时 `video`、`audio` 为 `null`。
+- Info layer: top left of the video area, below the one-line on-screen message (y = 36px, x = 10px), semi-transparent black background `#000000b0`, padding 6px, `Theme.font-mono` 11px, `Theme.text` (from the 2026-10 visual identity round, the same rounded backing plate as the OSD with fixed light text, see UI spec UI-INFO-02); does not take input (no TouchArea), follows the video area, also shown in fullscreen. When several plugins each have a block, they are stacked top to bottom by owner generation.
+- Text at most 32 lines, 4096 bytes; the SDK sends with a "last write wins" pump (one request in flight at a time), so refreshing once per second produces only one request. wire: `osd.panel { text: string | null }`.
+- When the plugin is deactivated or the handle is `dispose`d, the host removes the block.
+- `playback.stats`: forwarded to the backend worker thread, which reads `video-codec`, `video-params/w,h`, `estimated-vf-fps` (or `container-fps` if missing), `audio-codec-name`, `audio-params/samplerate`, `audio-params/channel-count`, `frame-drop-count` from libmpv, plus the host's own session and shown frame number. Without a source, `video` and `audio` are `null`.
 
-### 10.3 错误
+### 10.3 Errors
 
-`osd.panel` 第二次调用：SDK 同步抛错（同「一个插件只能挂一个面板」）。`set` 失败（`invalid` 超长、`unavailable` 无界面）交给作用域 `onError`。`stats`：`capability`、`backend`（工作线程停止）。
+Second call of `osd.panel`: the SDK throws synchronously (like "a plugin can only mount one panel"). `set` failures (`invalid` too long, `unavailable` no UI) go to the scope's `onError`. `stats`: `capability`, `backend` (worker thread stopped).
 
-### 10.4 播放信息插件（新建 `src/plugins/info/`）
+### 10.4 Playback info plugin (new `src/plugins/info/`)
 
-manifest 能力：`commands`、`playback.read`、`events`、`ui.osd`。一条命令：
+manifest capabilities: `commands`, `playback.read`, `events`, `ui.osd`. One command:
 
 ```ts
 export default async function activate(plugin: Plugin) {
@@ -649,14 +649,14 @@ export default async function activate(plugin: Plugin) {
   let shown = false, timer: ReturnType<typeof setInterval> | undefined;
   const render = async () => {
     const s = await plugin.player.stats(), p = plugin.player.state;
-    if (!shown) return;               // 等待期间被关掉了
-    panel.set([p.source ?? "未打开媒体", `${clock(p.position)} / ${clock(p.duration)}`,
-      `视频 ${s.video?.codec ?? "-"} ${s.video?.width ?? "-"}×${s.video?.height ?? "-"} ${s.video?.fps ?? "-"} fps`,
-      `音频 ${s.audio?.codec ?? "-"} ${s.audio?.sampleRate ?? "-"} Hz ${s.audio?.channels ?? "-"} 声道`,
-      `${s.backend} · session ${s.session} · 帧 ${s.framesShown} · 丢帧 ${s.framesDropped ?? "-"}`].join("\n"));
+    if (!shown) return;               // turned off while waiting
+    panel.set([p.source ?? "No media open", `${clock(p.position)} / ${clock(p.duration)}`,
+      `Video ${s.video?.codec ?? "-"} ${s.video?.width ?? "-"}×${s.video?.height ?? "-"} ${s.video?.fps ?? "-"} fps`,
+      `Audio ${s.audio?.codec ?? "-"} ${s.audio?.sampleRate ?? "-"} Hz ${s.audio?.channels ?? "-"} channels`,
+      `${s.backend} · session ${s.session} · frames ${s.framesShown} · dropped ${s.framesDropped ?? "-"}`].join("\n"));
   };
   plugin.commands.add({
-    id: "info.toggle", path: ["视图", "播放信息"], order: 503, bindings: ["Tab"],
+    id: "info.toggle", path: ["View", "Playback Info"], order: 503, bindings: ["Tab"],
     checked: () => shown,
     run: () => {
       shown = !shown; clearInterval(timer);
@@ -667,322 +667,322 @@ export default async function activate(plugin: Plugin) {
 }
 ```
 
-（`clock` 是插件内的时间格式化函数。菜单位置见 §18 Q10。）
+(`clock` is a time formatting function inside the plugin. Menu position see §18 Q10.)
 
-### 10.5 取代与删除、迁移
+### 10.5 Replaced and deleted, migration
 
-删除宿主诊断文字（见 C1 删除项）。现有插件无需改动。
+Delete the host diagnostic text (see the C1 deletions). Existing plugins need no changes.
 
-## 11. C11 面板右键菜单
+## 11. C11 Panel context menu
 
-### 11.1 接口
+### 11.1 Interface
 
 ```ts
 interface Panel {
   /**
-   * 在本面板所在窗口弹出一组本插件的命令（null = 分隔线），样式与主菜单相同。
-   * at 是窗口坐标（逻辑像素），在 Slint 里取 self.absolute-position + 指针位置。
+   * Pops up a set of this plugin's commands (null = separator) in the window this panel is in, styled like the main menu.
+   * at is in window coordinates (logical pixels); in Slint use self.absolute-position + the pointer position.
    */
   showMenu(items: (Command | null)[], at: { x: number; y: number }): Promise<void>;
 }
 ```
 
-### 11.2 宿主行为
+### 11.2 Host behaviour
 
-- wire：`ui.menu { items: (string | null)[], x, y }`，`items` 是本插件命令 id。宿主用注册表里的标题、状态、勾选/单选和绑定表的快捷键文字生成**单层**菜单，复用 `MenuView`（菜单打开期间绑定暂停，Esc 关闭，点外面关闭）。选择一项 = 与主菜单相同的执行路径（`resolve_execution` → `commands.execute`）。
-- 弹在面板当前所在的窗口：附着时在主窗口的菜单层；分离时在浮动窗口自带的菜单层（C14 生成的窗口源码包含同一个 `MenuView`）。同一时刻只有一个菜单，新的替换旧的（包括主右键菜单）。
-- 子菜单、工具窗口里的右键菜单本轮不做（§18 Q8）。
+- wire: `ui.menu { items: (string | null)[], x, y }`, where `items` are this plugin's command ids. The host builds a **single-level** menu from the titles, states, check/radio marks in the registry and the shortcut text from the binding table, reusing `MenuView` (bindings paused while the menu is open, Esc closes, clicking outside closes). Choosing an item = the same execution path as the main menu (`resolve_execution` → `commands.execute`).
+- It pops up in the window the panel is currently in: when attached, in the main window's menu layer; when detached, in the floating window's own menu layer (the window source generated by C14 contains the same `MenuView`). Only one menu at a time; a new one replaces the old one (including the main context menu).
+- Submenus and context menus in tool windows are not done this round (§18 Q8).
 
-### 11.3 错误
+### 11.3 Errors
 
-`missing`（某个 id 不是本插件的命令或已释放）、`unavailable`（面板当前未显示）、`invalid`（空列表、超过 32 项、坐标非有限数）。
+`missing` (some id is not a command of this plugin, or has been released), `unavailable` (the panel is not currently shown), `invalid` (empty list, more than 32 items, non-finite coordinates).
 
-### 11.4 示例
+### 11.4 Example
 
 ```ts
-// sidebar.slint：TouchArea { pointer-event(e) => { if e.button == PointerEventButton.right && e.kind == PointerEventKind.down {
+// sidebar.slint: TouchArea { pointer-event(e) => { if e.button == PointerEventButton.right && e.kind == PointerEventKind.down {
 //   Bridge.context-menu(self.absolute-position.x / 1px + self.mouse-x / 1px, self.absolute-position.y / 1px + self.mouse-y / 1px); } } }
-const play = plugin.commands.add({ id: "play", path: ["播放列表", "播放"], run: playSelected });
-const remove = plugin.commands.add({ id: "remove", path: ["播放列表", "移除所选"], run: removeSelected });
-const list = plugin.panels.mount("sidebar", "ui/sidebar.slint", { title: "播放列表" });
+const play = plugin.commands.add({ id: "play", path: ["Playlist", "Play"], run: playSelected });
+const remove = plugin.commands.add({ id: "remove", path: ["Playlist", "Remove Selected"], run: removeSelected });
+const list = plugin.panels.mount("sidebar", "ui/sidebar.slint", { title: "Playlist" });
 list.on("contextMenu", (x: number, y: number) => list.showMenu([play, null, remove], { x, y }));
 ```
 
-### 11.5 取代与删除、迁移
+### 11.5 Replaced and deleted, migration
 
-无旧接口。本轮插件不使用（播放列表右键菜单是第二步 UI-PL-18）。
+No old interface. Plugins do not use it this round (the playlist context menu is step two, UI-PL-18).
 
-## 12. C14 面板分离
+## 12. C14 Panel detaching
 
-### 12.1 接口
+### 12.1 Interface
 
-`plugin.panels.sidebar.setDetached(detached)` 与 `SlotState.detached`（见 C7）；`panels.mount` 的 `title` 选项作为浮动窗口标题（默认空，宿主显示 `Vestra Player`）。插件的面板句柄、属性、回调**完全不变**。
+`plugin.panels.sidebar.setDetached(detached)` and `SlotState.detached` (see C7); the `title` option of `panels.mount` is used as the floating window title (empty by default, the host shows `Vestra Player`). The plugin's panel handle, properties, and callbacks are **completely unchanged**.
 
-### 12.2 宿主行为：同一份面板内容
+### 12.2 Host behaviour: the same panel content
 
-- 主窗口的源码不变（面板组件仍被导入主窗口，`global` 桥接对象在主窗口实例里）。分离时，宿主为该面板**另外编译一个浮动窗口**，源码由宿主生成：
+- The main window's source is unchanged (the panel component is still imported into the main window, and the `global` bridge object is in the main window instance). When detaching, the host **compiles a separate floating window** for the panel, with source generated by the host:
 
 ```slint
-import { <component> as Owner7View, <global> as Owner7Bridge } from "<面板文件>";
-import { MenuView, MenuLevel } from "<宿主 menu-view.slint>";
+import { <component> as Owner7View, <global> as Owner7Bridge } from "<panel file>";
+import { MenuView, MenuLevel } from "<host menu-view.slint>";
 import { Theme } from "@vestra/theme.slint";
 export { Owner7Bridge }
 export component FloatingPanel inherits Window {
     title: "<title>"; min-width: 300px; min-height: 250px;
-    background: Theme.bg-list;  // 不设 default-font-family（系统默认字体）
-    // key-input / mouse-input / 菜单层：与 HostWindow 相同的宿主属性和回调
-    keys := FocusScope { /* 全局 + 面板范围绑定 */  Owner7View { width: parent.width; height: parent.height; } }
+    background: Theme.bg-list;  // no default-font-family (system default font)
+    // key-input / mouse-input / menu layer: the same host properties and callbacks as HostWindow
+    keys := FocusScope { /* global + panel-scoped bindings */  Owner7View { width: parent.width; height: parent.height; } }
 }
 ```
 
-- Slint 的 global 是每个窗口实例各一份，所以宿主把同一份属性写入两边：浮动窗口创建时用 `Mount.properties`（宿主已为重建主窗口而保存的全部已设属性）初始化；之后每次 `ui.setMount` 同时写主窗口和浮动窗口。两边的回调都以 `$mount` 转发给同一插件，插件感觉不到窗口换了。附着时关闭浮动窗口，主窗口里的属性本来就是最新的，不需要重建主窗口。
-- 只有用户在 Slint 里改过、但插件没有回写的 in-out 属性（例如滚动位置、输入框里没提交的文字）在分离/附着时不保留——与现在其它插件挂载导致主窗口重建时的行为相同。插件状态（列表行、选中项）在插件里，不丢。
-- 浮动窗口：默认位置 (438, 100)、默认尺寸 300×408，最小 300×250；位置与尺寸变化时记入 C8。点窗口的关闭按钮 = `setVisible(false)`，仍保持分离；之后再显示时仍是浮动窗口。
-- 分离时 `effective` 只看 `preferred`（不受主窗口空间、全屏影响）；主窗口里的侧栏位置空出，视频占满。
-- 启动时若持久化记录为分离且显示，面板挂载完成后直接打开浮动窗口。
-- 插件停用：两个实例一起撤销。主窗口重建（别的插件挂载）时浮动窗口不受影响，宿主把它的回调重新指向新的主窗口代次。
+- A Slint global exists once per window instance, so the host writes the same properties to both: when the floating window is created it is initialised from `Mount.properties` (all set properties the host already keeps for rebuilding the main window); after that every `ui.setMount` writes both the main window and the floating window. Callbacks from both are forwarded as `$mount` to the same plugin, so the plugin does not notice the window changed. When attaching, the floating window is closed; the properties in the main window are already up to date, so the main window does not need to be rebuilt.
+- Only in-out properties that the user changed in Slint but the plugin did not write back (e.g. scroll position, uncommitted text in an input box) are not kept across detach/attach — the same as today when another plugin's mount causes the main window to be rebuilt. Plugin state (list rows, selection) lives in the plugin and is not lost.
+- Floating window: default position (438, 100), default size 300×408, minimum 300×250; position and size changes are recorded in C8. Clicking the window's close button = `setVisible(false)`, and it stays detached; when shown again it is still a floating window.
+- While detached, `effective` only follows `preferred` (not affected by main window space or fullscreen); the sidebar slot in the main window is left empty and the video fills it.
+- At startup, if persistence records it as detached and shown, the floating window is opened directly after the panel is mounted.
+- Plugin deactivated: both instances are revoked together. When the main window is rebuilt (another plugin mounts), the floating window is not affected; the host repoints its callbacks to the new main window generation.
 
-### 12.3 错误
+### 12.3 Errors
 
-`missing`（没有侧栏面板）、`unavailable`（无界面模式）、`ui-prepare`（浮动窗口编译失败；状态保持附着）。
+`missing` (no sidebar panel), `unavailable` (headless mode), `ui-prepare` (the floating window fails to compile; the state stays attached).
 
-### 12.4 示例
+### 12.4 Example
 
 ```ts
-// src/examples 中的演示：两条命令触发分离与附着（按钮由 playlist 在第二步加）
+// demo in src/examples: two commands trigger detach and attach (the button is added by playlist in step two)
 const sidebar = plugin.panels.sidebar;
-plugin.commands.add({ id: "detach", path: ["视图", "分离侧栏"], order: 510,
+plugin.commands.add({ id: "detach", path: ["View", "Detach Sidebar"], order: 510,
   enabled: () => sidebar.state !== null && !sidebar.state.detached,
   run: () => sidebar.setDetached(true) });
-plugin.commands.add({ id: "attach", path: ["视图", "附着侧栏"], order: 511,
+plugin.commands.add({ id: "attach", path: ["View", "Attach Sidebar"], order: 511,
   enabled: () => sidebar.state?.detached ?? false,
   run: () => sidebar.setDetached(false) });
 ```
 
-### 12.5 取代与删除、迁移
+### 12.5 Replaced and deleted, migration
 
-无旧接口。参考迁移中 playlist 的 `mount` 加 `title: "播放列表"`（附着时看不到变化）。
+No old interface. In the reference migration, playlist's `mount` adds `title: "Playlist"` (no visible change while attached).
 
-## 13. 生命周期汇总
+## 13. Lifecycle summary
 
-| 资源 | 归属 | 插件停用 / dispose 时 |
+| Resource | Owner | On plugin deactivation / dispose |
 | --- | --- | --- |
-| 命令的绑定 | 随命令 | 宿主 `remove_owner` 后整表重算；SDK 释放命令时命令变为禁用（绑定仍占着键但不执行，与现在相同） |
-| 侧栏偏好、分离状态 | 宿主（按 manifest id 持久化） | 面板卸载，状态留在文件里供下次挂载 |
-| 浮动窗口 | 宿主 | 关闭 |
-| 序列提供者 | 提供者插件 | 撤销，`can.next/previous` 变为假 |
-| 信息层 | 插件 | 移除 |
-| 屏幕提示 | 无 | 到时消失 |
-| 面板右键菜单 | 宿主 | 若属于该插件则关闭 |
+| Command bindings | With the command | Whole table recomputed after the host's `remove_owner`; when the SDK releases a command, the command becomes disabled (the binding still holds the key but does not execute, same as today) |
+| Sidebar preference, detached state | Host (persisted by manifest id) | Panel unmounted; the state stays in the file for the next mount |
+| Floating window | Host | Closed |
+| Sequence provider | Provider plugin | Revoked; `can.next/previous` become false |
+| Info layer | Plugin | Removed |
+| On-screen message | None | Disappears on time |
+| Panel context menu | Host | Closed if it belongs to that plugin |
 
-## 14. 迁移后菜单树为什么不变
+## 14. Why the menu tree does not change after migration
 
-现在的顺序（`commands.rs` `snapshot()`）：顶层按宿主领域表（文件、播放、视频、音频、字幕、视图、模拟器、插件），其下按 `path[1..]` 的 UTF-8 字节字典序，子菜单与菜单项交错排列，没有分隔线。新模型只看 `order`，子菜单取其最前子项的 `order`，所以只要给每条命令一个**等于它现在显示位置**的 `order` 就能逐项重现：
+The current order (`commands.rs` `snapshot()`): the top level follows the host domain table (File, Playback, Video, Audio, Subtitles, View, Emulator, Plugins); below that, the UTF-8 byte lexicographic order of `path[1..]`, with submenus and menu items interleaved and no separators. The new model only looks at `order`, and a submenu takes the `order` of its first child, so giving each command an `order` **equal to its current display position** reproduces the tree item by item:
 
-- 每个旧领域一段：文件 200、播放 260、视频 320、音频 380、字幕 440、视图 500、模拟器 560、插件 620（都在推荐骨架的 `domain` 段 200–699 内，第二步改版时不必挪段）；
-- 段内按现在的显示顺序（展开所有子菜单后的先序）从 +1 起编号；
-- 不写 `group`：全部是默认 `"domain"`，不出现分隔线；
-- 顶层：文件(201) < 播放(261) < 视频(321) < 音频(381) < 字幕(441) < 视图(501) < 模拟器(561) < 插件(621)，与领域表顺序相同；各子菜单内的相对顺序与现在相同，跨插件交错（音频下的 audio 与 playback）也由编号保证。
+- One range per old domain: File 200, Playback 260, Video 320, Audio 380, Subtitles 440, View 500, Emulator 560, Plugins 620 (all inside the recommended skeleton's `domain` range 200–699, so the redesign in step two does not need to move ranges);
+- Within a range, numbered from +1 in the current display order (pre-order with all submenus expanded);
+- No `group`: all default `"domain"`, so no separators appear;
+- Top level: File(201) < Playback(261) < Video(321) < Audio(381) < Subtitles(441) < View(501) < Emulator(561) < Plugins(621), the same as the domain table order; the relative order inside each submenu is the same as today, and cross-plugin interleaving (audio and playback under Audio) is also guaranteed by the numbers.
 
-| 插件 | 命令 id | 路径（不变） | `order` | `bindings` |
+| Plugin | Command id | Path (unchanged) | `order` | `bindings` |
 | --- | --- | --- | --- | --- |
-| playback | `close-source` | 文件 / 关闭当前来源 | 201 | |
-| playback | `open` | 文件 / 打开媒体… | 202 | |
-| playlist | `playlist.previous` | 文件 / 播放列表 / 上一项 | 203 | |
-| playlist | `playlist.move-up` | 文件 / 播放列表 / 上移 | 204 | |
-| playlist | `playlist.next` | 文件 / 播放列表 / 下一项 | 205 | |
-| playlist | `playlist.move-down` | 文件 / 播放列表 / 下移 | 206 | |
-| playlist | `playlist.play` | 文件 / 播放列表 / 播放选中项 | 207 | |
-| playlist | `playlist.add` | 文件 / 播放列表 / 添加文件… | 208 | |
-| playlist | `playlist.link` | 文件 / 播放列表 / 添加链接… | 209 | |
-| playlist | `playlist.clear` | 文件 / 播放列表 / 清空列表 | 210 | |
-| playlist | `playlist.remove` | 文件 / 播放列表 / 移除选中项 | 211 | |
-| bilibili | `bilibili.open` | 文件 / 网络媒体 / Bilibili 视频… | 212 | |
-| youtube | `youtube.open` | 文件 / 网络媒体 / YouTube 视频… | 213 | |
-| playback | `forward-5` | 播放 / 前进5秒 | 261 | `["ArrowRight"]` |
-| playback | `backward-5` | 播放 / 后退5秒 | 262 | `["ArrowLeft"]` |
-| playback | `toggle-pause` | 播放 / 播放/暂停 | 263 | `["Space"]` |
-| playback | `jump` | 播放 / 跳转到… | 264 | |
-| playback | `rate-05` | 播放 / 速度 / 0.5倍 | 265 | |
-| playback | `rate-15` | 播放 / 速度 / 1.5倍 | 266 | |
-| playback | `rate-20` | 播放 / 速度 / 2倍 | 267 | |
-| playback | `rate-10` | 播放 / 速度 / 正常速度 | 268 | |
-| playback | `rate-custom` | 播放 / 速度 / 自定义… | 269 | |
-| capture | `capture.still` | 视频 / 截图与导出 / 保存当前画面… | 321 | |
-| capture | `capture.clip` | 视频 / 截图与导出 / 导出片段… | 322 | |
-| capture | `capture.tasks` | 视频 / 截图与导出 / 查看导出任务… | 323 | |
-| capture | `capture.burst` | 视频 / 截图与导出 / 连拍… | 324 | |
-| video | `video.picture` | 视频 / 画面调节… | 325 | |
-| video | `video.gaussian` | 视频 / 高斯模糊… | 326 | |
-| audio | `audio.preset.1` | 音频 / 均衡器预设 / 人声 | 381 | |
-| audio | `audio.preset.0` | 音频 / 均衡器预设 / 平直 | 382 | |
-| audio | `audio.preset.3` | 音频 / 均衡器预设 / 影院 | 383 | |
-| audio | `audio.preset.2` | 音频 / 均衡器预设 / 音乐 | 384 | |
-| audio | `audio.reset` | 音频 / 复位音频处理 | 385 | |
-| playback | `mute` | 音频 / 静音 | 386 | |
-| playback | `volume` | 音频 / 音量… | 387 | |
-| audio | `audio.workbench` | 音频 / 音频工作台… | 388 | |
-| subtitles | `disable` | 字幕 / 关闭字幕 | 441 | |
-| subtitles | `refresh` | 字幕 / 刷新字幕轨 | 442 | |
-| subtitles | `load` | 字幕 / 加载外部 SRT… | 443 | |
-| subtitles | `workbench` | 字幕 / 字幕工作台… | 444 | |
-| playlist | `playlist.visibility` | 视图 / 显示播放列表 | 501 | |
-| playback | `bar-visible` | 视图 / 显示播放栏 | 502 | |
-| nes | `nes.window` | 模拟器 / NES 工具 | 561 | |
-| nes | `nes.stop` | 模拟器 / 停止 NES | 562 | |
-| nes | `nes.open` | 模拟器 / 打开 NES ROM… | 563 | |
-| workshop | `workshop.open` | 插件 / 插件工坊… | 621 | |
+| playback | `close-source` | File / Close Current Source | 201 | |
+| playback | `open` | File / Open Media… | 202 | |
+| playlist | `playlist.previous` | File / Playlist / Previous Item | 203 | |
+| playlist | `playlist.move-up` | File / Playlist / Move Up | 204 | |
+| playlist | `playlist.next` | File / Playlist / Next Item | 205 | |
+| playlist | `playlist.move-down` | File / Playlist / Move Down | 206 | |
+| playlist | `playlist.play` | File / Playlist / Play Selected Item | 207 | |
+| playlist | `playlist.add` | File / Playlist / Add Files… | 208 | |
+| playlist | `playlist.link` | File / Playlist / Add Link… | 209 | |
+| playlist | `playlist.clear` | File / Playlist / Clear List | 210 | |
+| playlist | `playlist.remove` | File / Playlist / Remove Selected Item | 211 | |
+| bilibili | `bilibili.open` | File / Network Media / Bilibili Video… | 212 | |
+| youtube | `youtube.open` | File / Network Media / YouTube Video… | 213 | |
+| playback | `forward-5` | Playback / Forward 5 s | 261 | `["ArrowRight"]` |
+| playback | `backward-5` | Playback / Back 5 s | 262 | `["ArrowLeft"]` |
+| playback | `toggle-pause` | Playback / Play/Pause | 263 | `["Space"]` |
+| playback | `jump` | Playback / Jump To… | 264 | |
+| playback | `rate-05` | Playback / Speed / 0.5× | 265 | |
+| playback | `rate-15` | Playback / Speed / 1.5× | 266 | |
+| playback | `rate-20` | Playback / Speed / 2× | 267 | |
+| playback | `rate-10` | Playback / Speed / Normal Speed | 268 | |
+| playback | `rate-custom` | Playback / Speed / Custom… | 269 | |
+| capture | `capture.still` | Video / Capture and Export / Save Current Frame… | 321 | |
+| capture | `capture.clip` | Video / Capture and Export / Export Clip… | 322 | |
+| capture | `capture.tasks` | Video / Capture and Export / View Export Tasks… | 323 | |
+| capture | `capture.burst` | Video / Capture and Export / Burst Capture… | 324 | |
+| video | `video.picture` | Video / Picture Adjustment… | 325 | |
+| video | `video.gaussian` | Video / Gaussian Blur… | 326 | |
+| audio | `audio.preset.1` | Audio / Equalizer Presets / Vocal | 381 | |
+| audio | `audio.preset.0` | Audio / Equalizer Presets / Flat | 382 | |
+| audio | `audio.preset.3` | Audio / Equalizer Presets / Cinema | 383 | |
+| audio | `audio.preset.2` | Audio / Equalizer Presets / Music | 384 | |
+| audio | `audio.reset` | Audio / Reset Audio Processing | 385 | |
+| playback | `mute` | Audio / Mute | 386 | |
+| playback | `volume` | Audio / Volume… | 387 | |
+| audio | `audio.workbench` | Audio / Audio Workbench… | 388 | |
+| subtitles | `disable` | Subtitles / Turn Off Subtitles | 441 | |
+| subtitles | `refresh` | Subtitles / Refresh Subtitle Tracks | 442 | |
+| subtitles | `load` | Subtitles / Load External SRT… | 443 | |
+| subtitles | `workbench` | Subtitles / Subtitle Workbench… | 444 | |
+| playlist | `playlist.visibility` | View / Show Playlist | 501 | |
+| playback | `bar-visible` | View / Show Playback Bar | 502 | |
+| nes | `nes.window` | Emulator / NES Tools | 561 | |
+| nes | `nes.stop` | Emulator / Stop NES | 562 | |
+| nes | `nes.open` | Emulator / Open NES ROM… | 563 | |
+| workshop | `workshop.open` | Plugins / Plugin Workshop… | 621 | |
 
-新增项（不属于迁移，是本轮预期的增加）：播放信息插件「视图 / 播放信息」503；宿主「全屏」700、「退出」990（§18 Q2）；主菜单每行右侧出现快捷键文字（C4）。
+New items (not part of the migration, expected additions this round): the playback info plugin's "View / Playback Info" 503; the host's "Fullscreen" 700 and "Quit" 990 (§18 Q2); shortcut text appears on the right of each main menu row (C4).
 
-**验证**（P1b 由维护者加，协调者复核）：
+**Verification** (added by the maintainer in P1b, reviewed by the coordinator):
 
-1. `commands.rs` 单元测试：按上表注册 46 条命令（打乱注册顺序），断言展开后的菜单树先序与现在 `snapshot()`（领域表 + 字节序）的结果完全相同。
-2. 快照脚本 `menus-snapshot.test.ts`：`shortcut` 改为读 `declaration.bindings`（对比时 `null` ↔ `[]`，`"Space"` ↔ `["Space"]`），并多输出 `order`；`menus-after.json` 与 `menus-before.json` 对比路径、标题、快捷键，再把 `order` 与上表对比。现有快照不含顺序，所以第 1 条测试是顺序不变的主要证据。
+1. `commands.rs` unit test: register the 46 commands from the table above (in shuffled registration order), and assert that the pre-order of the expanded menu tree is exactly the same as the result of today's `snapshot()` (domain table + byte order).
+2. Snapshot script `menus-snapshot.test.ts`: `shortcut` changes to reading `declaration.bindings` (compared with `null` ↔ `[]`, `"Space"` ↔ `["Space"]`), and also outputs `order`; `menus-after.json` is compared with `menus-before.json` on path, title, and shortcut, and `order` is then compared with the table above. The existing snapshot does not contain order, so test 1 is the main evidence that the order is unchanged.
 
-## 15. 迁移写法（迁移者照抄）
+## 15. Migration rewrites (for migrators to copy)
 
-### 15.1 命令：`shortcut` → `bindings`，加 `order`
+### 15.1 Commands: `shortcut` → `bindings`, add `order`
 
 ```ts
-// 旧
-plugin.commands.add({ id: "toggle-pause", path: ["播放", "播放/暂停"], shortcut: "Space", run });
-// 新
-plugin.commands.add({ id: "toggle-pause", path: ["播放", "播放/暂停"], order: 263, bindings: ["Space"], run });
+// old
+plugin.commands.add({ id: "toggle-pause", path: ["Playback", "Play/Pause"], shortcut: "Space", run });
+// new
+plugin.commands.add({ id: "toggle-pause", path: ["Playback", "Play/Pause"], order: 263, bindings: ["Space"], run });
 ```
 
-没有 `shortcut` 的命令只加 `order`（§14 表）。用表驱动注册的插件（playback `commands.ts`、playlist `main.ts`、audio 预设）在表里加一列 `order`。
+Commands without `shortcut` only add `order` (table in §14). Plugins that register from a table (playback `commands.ts`, playlist `main.ts`, audio presets) add an `order` column to the table.
 
-### 15.2 面板可见性 → 位置状态
+### 15.2 Panel visibility → slot state
 
 ```ts
-// 旧（playback）
-entry("bar-visible", ["视图", "显示播放栏"], () => bar.toggle(), () => ready(true, bar.visibility?.preferred ?? true))
-// 新
+// old (playback)
+entry("bar-visible", ["View", "Show Playback Bar"], () => bar.toggle(), () => ready(true, bar.visibility?.preferred ?? true))
+// new
 const bottom = plugin.panels.bottom;
-entry("bar-visible", ["视图", "显示播放栏"], () => bottom.toggle(), () => ready(true, bottom.state?.preferred ?? true))
+entry("bar-visible", ["View", "Show Playback Bar"], () => bottom.toggle(), () => ready(true, bottom.state?.preferred ?? true))
 
-// 旧（playlist）
+// old (playlist)
 checked: () => (name === "visibility" ? (list.visibility?.preferred ?? true) : null),
-reason: () => name === "visibility" && list.visibility?.reason === "space" ? "空间不足，放大窗口后可显示" : …,
+reason: () => name === "visibility" && list.visibility?.reason === "space" ? "Not enough space; enlarge the window to show it" : …,
 case "visibility": await list.toggle(); break;
 list.on("hide", () => list.setVisible(false));
-// 新
+// new
 const sidebar = plugin.panels.sidebar;
 checked: () => (name === "visibility" ? (sidebar.state?.preferred ?? true) : null),
-reason: () => name === "visibility" && sidebar.state?.reason === "space" ? "空间不足，放大窗口后可显示" : …,
+reason: () => name === "visibility" && sidebar.state?.reason === "space" ? "Not enough space; enlarge the window to show it" : …,
 case "visibility": await sidebar.toggle(); break;
 list.on("hide", () => sidebar.setVisible(false));
 ```
 
-`setInteraction` 不变。
+`setInteraction` is unchanged.
 
-### 15.3 测试
+### 15.3 Tests
 
 ```ts
-// 旧
-assert.deepEqual(host.command("workshop.open").declaration, { title: "插件工坊…", path: ["插件", "插件工坊…"], shortcut: null });
-// 新（写了 order，测试宿主收到完整形状，未写的字段是默认值）
+// old
+assert.deepEqual(host.command("workshop.open").declaration, { title: "Plugin Workshop…", path: ["Plugins", "Plugin Workshop…"], shortcut: null });
+// new (order is written, so the test host receives the full shape; unwritten fields have default values)
 assert.deepEqual(host.command("workshop.open").declaration, {
-  title: "插件工坊…", path: ["插件", "插件工坊…"], order: 621, group: "domain",
+  title: "Plugin Workshop…", path: ["Plugins", "Plugin Workshop…"], order: 621, group: "domain",
   radio: false, bindings: [], focus: null, repeat: false });
 ```
 
-测试宿主新增：`host.press("Space", { panel? })`（按绑定表执行命令，禁用时同样拒绝；`panel: true` 模拟面板有焦点）、`host.conflicts`、`host.layout`（两个位置的状态，可改后 `host.emit("window.state", {})` 模拟别处的变化）、`host.osd`（显示过的提示，最新在后）、`host.osdPanel`、`host.sequence`（当前提供者的标志）与 `host.step("next")`、`host.stats`（`player.stats()` 的返回值）、`host.menus`（`showMenu` 的记录）。`host.mounted().visibility` 在 P4 删除，迁移后改读 `host.layout`。
+New in the test host: `host.press("Space", { panel? })` (executes a command through the binding table, rejected in the same way when disabled; `panel: true` simulates the panel having focus), `host.conflicts`, `host.layout` (state of both slots; after changing it, `host.emit("window.state", {})` simulates a change from elsewhere), `host.osd` (messages shown, newest last), `host.osdPanel`, `host.sequence` (flags of the current provider) and `host.step("next")`, `host.stats` (the return value of `player.stats()`), `host.menus` (records of `showMenu`). `host.mounted().visibility` is deleted in P4; after migration read `host.layout` instead.
 
-### 15.4 逐插件清单（P3）
+### 15.4 Per-plugin list (P3)
 
-| 插件 | 要改的 |
+| Plugin | What to change |
 | --- | --- |
-| playback（维护者参考迁移） | 14 条命令加 `order`；3 处 `shortcut` → `bindings`；`bar.toggle()`/`bar.visibility` → `plugin.panels.bottom` |
-| playlist（维护者参考迁移） | 10 条命令加 `order`；侧栏可见性 → `plugin.panels.sidebar`；`mount` 加 `title: "播放列表"`；登记 `provideSequence`（复用现有 next/previous 逻辑） |
-| video、audio、subtitles、capture、nes、youtube、bilibili | 每条命令加 `order`；测试里 `declaration` 断言改新形状 |
-| workshop | `order: 621`；测试断言；`vendor/sdk` 用新 SDK 重新复制（`tests/vendor-sdk.test.mjs` 要求逐字节相同，命令写在该测试文件开头；P1b 起这条测试失败，直到复制） |
-| examples/bookmark（维护者） | 「播放 / 书签…」是示例，不在快照里；加 `order: 270` |
+| playback (maintainer reference migration) | Add `order` to 14 commands; 3 × `shortcut` → `bindings`; `bar.toggle()`/`bar.visibility` → `plugin.panels.bottom` |
+| playlist (maintainer reference migration) | Add `order` to 10 commands; sidebar visibility → `plugin.panels.sidebar`; `mount` adds `title: "Playlist"`; register `provideSequence` (reusing the existing next/previous logic) |
+| video, audio, subtitles, capture, nes, youtube, bilibili | Add `order` to every command; change the `declaration` assertions in tests to the new shape |
+| workshop | `order: 621`; test assertions; copy `vendor/sdk` again from the new SDK (`tests/vendor-sdk.test.mjs` requires byte-for-byte equality, the command is at the top of that test file; from P1b this test fails until the copy is made) |
+| examples/bookmark (maintainer) | "Playback / Bookmarks…" is an example, not in the snapshot; add `order: 270` |
 
-## 16. 删除清单（P4，全部完成后代码中不再出现）
+## 16. Deletion list (P4; after it is all done these no longer appear in the code)
 
-宿主（`src/host/`）：
+Host (`src/host/`):
 
-- `commands.rs`：`Declaration.shortcut`；`canvas_shortcut()`；`Registry::resolve_shortcut()`；`Registry::new` 的领域参数与 `domains`、`domain_order`；「2..=6 segments」「menu domain is not allowed」「main-canvas shortcut already registered」检查；`snapshot()` 中的领域排名和 `path[1..]` 字母排序；对应旧测试改写。
-- `main.rs`：Host 初始化里的 8 个领域名；`Host::canvas_shortcut`；`Event::WindowInput` 的 `shortcut:`、`toggleFullscreen`、`escape` 分支；`ui.mountState`、`ui.showMount` 的路由与能力表条目；`scope: "presentation"` 分支；试载改写 `path[1]` 和清空 `shortcut`；`diagnostic` 的两处写入；`sidebar_resize_requested`、`sidebar_resize` 及其计算（若 §18 Q7 通过）；producer 钩子中的 `"F11" | "Escape"`。
-- `window_state.rs`：`reveal_sidebar_in_fullscreen`、`sidebar_override`；`CANVAS_MIN_WIDTH = 640`、`CANVAS_MIN_HEIGHT = 360`、`SIDEBAR_MIN_WIDTH = 240`、`SIDEBAR_TARGET_WIDTH = 280` 与「空间不足直接隐藏」规则（换成 318/3/317）。
-- `ui.rs`、`composition.rs`：`Arial Unicode.ttf` 导入、`"Arial Unicode MS"`；三处各自的 `Compiler::default()`（合并为一个）。
-- `host.slint`：Commands 按钮行与说明文字；`diagnostic` 属性与文字行；`padding: 8px`；`default-font-family: "Arial Unicode MS"`；canvas `key-pressed` 中写死的 F11/Escape/Space/←/→；1100×720、720×480；固定标题；`#111318` 等写死颜色。
-- `menu-view.slint`：旧配色、圆角、文字 ✓。
+- `commands.rs`: `Declaration.shortcut`; `canvas_shortcut()`; `Registry::resolve_shortcut()`; the domain parameter of `Registry::new` and `domains`, `domain_order`; the "2..=6 segments", "menu domain is not allowed", "main-canvas shortcut already registered" checks; the domain ranking and alphabetical `path[1..]` sort in `snapshot()`; rewrite the matching old tests.
+- `main.rs`: the 8 domain names in Host initialisation; `Host::canvas_shortcut`; the `shortcut:`, `toggleFullscreen`, `escape` branches of `Event::WindowInput`; the routes and capability table entries of `ui.mountState`, `ui.showMount`; the `scope: "presentation"` branch; rewriting `path[1]` and clearing `shortcut` on trial load; the two writes of `diagnostic`; `sidebar_resize_requested`, `sidebar_resize` and their calculation (if §18 Q7 passes); `"F11" | "Escape"` in the producer hook.
+- `window_state.rs`: `reveal_sidebar_in_fullscreen`, `sidebar_override`; `CANVAS_MIN_WIDTH = 640`, `CANVAS_MIN_HEIGHT = 360`, `SIDEBAR_MIN_WIDTH = 240`, `SIDEBAR_TARGET_WIDTH = 280` and the "hide directly when there is not enough space" rule (replaced by 318/3/317).
+- `ui.rs`, `composition.rs`: the `Arial Unicode.ttf` import, `"Arial Unicode MS"`; the three separate `Compiler::default()` calls (merged into one).
+- `host.slint`: the Commands button row and explanatory text; the `diagnostic` property and text line; `padding: 8px`; `default-font-family: "Arial Unicode MS"`; the hard-coded F11/Escape/Space/←/→ in the canvas `key-pressed`; 1100×720, 720×480; the fixed title; hard-coded colours such as `#111318`.
+- `menu-view.slint`: the old colour scheme, rounded corners, text ✓.
 
-SDK 与运行器（`src/sdk/`）：
+SDK and runner (`src/sdk/`):
 
-- `plugin/types.ts`：`CommandOptions.shortcut`；`Panel.visibility`、`onVisibility`、`setVisible`、`toggle`；`PanelVisibility`。
-- `plugin/ui.ts`：`PanelHandle` 的可见性读取与切换代码（移到模块级的位置状态）。
-- `commands.ts`：`CommandDeclaration.shortcut`。
-- `wire.ts`：`ui.showMount`、`ui.mountState`、`MountVisibility`。
-- `plugin/testing.ts`：`ui.mountState` 假实现、`FakeCommand.declaration.shortcut`、面板可见性假实现。
+- `plugin/types.ts`: `CommandOptions.shortcut`; `Panel.visibility`, `onVisibility`, `setVisible`, `toggle`; `PanelVisibility`.
+- `plugin/ui.ts`: the visibility reading and toggling code of `PanelHandle` (moved to module-level slot state).
+- `commands.ts`: `CommandDeclaration.shortcut`.
+- `wire.ts`: `ui.showMount`, `ui.mountState`, `MountVisibility`.
+- `plugin/testing.ts`: the `ui.mountState` fake, `FakeCommand.declaration.shortcut`, the panel visibility fake.
 
-文档：`doc/plugins/reference.md` §4 `shortcut` 说明与「顶层分组惯例」、§6.3 面板可见性；`doc/architecture/sdk-design.md` §2 表中 `commands`、`panels` 两行；`doc/architecture/README.md` §4 字体一句。
+Docs: the `shortcut` description and "top-level grouping convention" in `doc/plugins/reference.md` §4, panel visibility in §6.3; the `commands` and `panels` rows of the table in `doc/architecture/sdk-design.md` §2; the font sentence in `doc/architecture/README.md` §4.
 
-插件：全部 `shortcut:`、`.visibility`、`.onVisibility`、`panel.setVisible`、`panel.toggle()`；workshop `vendor/sdk` 旧副本。
+Plugins: every `shortcut:`, `.visibility`, `.onVisibility`, `panel.setVisible`, `panel.toggle()`; the old copy of workshop's `vendor/sdk`.
 
-## 17. 错误码汇总（新增用法）
+## 17. Error code summary (new uses)
 
-| code | 出现在 |
+| code | Appears in |
 | --- | --- |
-| `invalid` | 绑定语法、路径/`order`/`group` 不合法（`commands.add`）；提示/信息层文字为空或过长；`showMenu` 参数；对底栏设 `detached` |
-| `conflict` | 已有别的序列提供者；路径重复（不变）。**绑定冲突不报错**，见 §3.5 |
-| `unavailable` | `next`/`previous` 没有提供者或不能前进后退；无界面模式下的提示、信息层、位置状态、分离；`showMenu` 时面板未显示 |
-| `missing` | 位置上没有面板；`showMenu` 的命令不属于本插件或已释放 |
-| `pending` | `layout.state` 在布局未确认时（SDK 内部处理，插件看不到） |
-| `ui-prepare` | 浮动窗口编译失败 |
-| `capability` | 未声明 `ui.osd` 却调用 `plugin.osd.*`，其余同现有规则 |
+| `invalid` | Binding syntax, invalid path/`order`/`group` (`commands.add`); message/info layer text empty or too long; `showMenu` parameters; setting `detached` on the bottom bar |
+| `conflict` | Another sequence provider already exists; duplicate path (unchanged). **Binding conflicts do not raise errors**, see §3.5 |
+| `unavailable` | `next`/`previous` without a provider or unable to go forward/back; messages, info layer, slot state, detaching in headless mode; `showMenu` while the panel is not shown |
+| `missing` | No panel in the slot; a `showMenu` command does not belong to this plugin or has been released |
+| `pending` | `layout.state` while the layout is not confirmed (handled inside the SDK, plugins do not see it) |
+| `ui-prepare` | Floating window fails to compile |
+| `capability` | Calling `plugin.osd.*` without declaring `ui.osd`; otherwise the existing rules |
 
-## 18. P2 裁决（2026-10-20）
+## 18. P2 rulings (2026-10-20)
 
-协调者审查通过。下表是最终决定（原问题与选项见 git 历史中的 P1a 版本）。
+The coordinator's review passed. The table below is the final decision (the original questions and options are in the P1a version in git history).
 
-| # | 问题 | 裁决 |
+| # | Question | Ruling |
 | --- | --- | --- |
-| Q1 | 浮动窗口默认尺寸 | 300×408（最小 300×250） |
-| Q2 | 宿主「全屏」「退出」进菜单顶层 | 进（`screen` 组 700、`exit` 组 990）；P1b 确认 ⌘Q 不与 macOS 默认应用菜单重复 |
-| Q3 | 鼠标事件范围 | 左键单击、长按、右键双击不做；`Mouse:LeftDoubleClick` 作为宿主全屏的默认绑定 |
-| Q4 | 插件间绑定冲突 | 先加载者胜（§3.5） |
-| Q5 | 焦点范围 | 只做 `panel` |
-| Q6 | 按住重复 | 命令可声明 `repeat: true`，默认 false（§3.1、§3.2） |
-| Q7 | 自动放大窗口 | 删除 |
-| Q8 | 面板右键菜单 | 单层、只在面板 |
-| Q9 | 省略 `path` | 允许；不进主菜单，`title` 必填（§4.1、§4.2） |
-| Q10 | 播放信息菜单位置 | 「视图 → 播放信息」 |
-| Q11 | 快捷键文字格式 | `Ctrl+O`、箭头 |
-| Q12 | 默认字体 | 按实测顺序；只能按文件导入时用系统自带 Hiragino Sans GB |
-| Q13 | 主题控件库 | `@vestra/widgets.slint` 提供 `Slider`、`Button`、`ToolTipArea`（§2.1）；其它控件不做 |
-| Q14 | 全屏时浮动面板 | 已知限制 |
+| Q1 | Floating window default size | 300×408 (minimum 300×250) |
+| Q2 | Host "Fullscreen" and "Quit" in the top-level menu | Yes (`screen` group 700, `exit` group 990); P1b confirms ⌘Q does not duplicate the macOS default app menu |
+| Q3 | Range of mouse events | No left single click, long press, or right double-click; `Mouse:LeftDoubleClick` is the default binding for host fullscreen |
+| Q4 | Binding conflicts between plugins | First loaded wins (§3.5) |
+| Q5 | Focus scopes | Only `panel` |
+| Q6 | Repeat when held | Commands can declare `repeat: true`, default false (§3.1, §3.2) |
+| Q7 | Automatic window enlargement | Deleted |
+| Q8 | Panel context menu | Single level, panels only |
+| Q9 | Omitting `path` | Allowed; not in the main menu, `title` required (§4.1, §4.2) |
+| Q10 | Menu position of playback info | "View → Playback Info" |
+| Q11 | Shortcut text format | `Ctrl+O`, arrows |
+| Q12 | Default font | In the tested order; when it can only be imported by file, use the system's Hiragino Sans GB |
+| Q13 | Theme widget library | `@vestra/widgets.slint` provides `Slider`, `Button`, `ToolTipArea` (§2.1); no other controls |
+| Q14 | Floating panel in fullscreen | Known limitation |
 
-## 19. P1b 实现记录（2026-10-20）
+## 19. P1b implementation record (2026-10-20)
 
-与上文的出入和实现时查明的事实，按需在 P5 验证。
+Differences from the text above and facts found during implementation, to be verified in P5 as needed.
 
-- **代码位置**：宿主新文件 `bindings.rs`（绑定表）、`ui_state.rs`（持久化）、`ui/vestra/theme.slint`、`ui/vestra/widgets.slint`；`commands.rs` 重写为新菜单模型（含 §14 的 46 条命令顺序测试）；`menu.rs` 增加分隔线、单选、快捷键列与单层面板菜单；`host.slint` 重写外壳；`composition.rs` 生成侧栏分隔条、按键转发层与浮动窗口源码。SDK 新文件 `sdk/plugin/bindings.ts`（与宿主同规则的语法检查）、`sdk/plugin/osd.ts`。新插件 `src/plugins/info/`；演示 `src/examples/core-ui/`（菜单分组与单选、`repeat` 绑定、不进菜单的命令、屏幕提示、`next/previous` 调用、侧栏开关与分离、主题控件窗口）与 `src/examples/panel-menu/`（面板右键菜单、面板焦点按键、序列提供者、浮动窗口标题）。
-- **⌘Q**：Slint 1.16 的 winit 后端在 macOS 默认建立应用菜单（muda，含系统「退出 ⌘Q」，`i-slint-backend-winit` `muda.rs` `create_default_app_menu`），⌘Q 由系统菜单先处理，不会到达窗口，所以不会和宿主的 `Cmd+Q` 绑定重复触发；宿主绑定在 macOS 上只提供菜单里的快捷键文字。经系统菜单退出时宿主不经过自己的退出路径，界面状态最多丢失最后 1 秒内未写入的变化（右键菜单「退出」会先写入）。需 P5 实测。
-- **主题令牌**：`Theme.font-family` 未提供（各窗口用系统默认字体，§2.2）；`font-mono` 由宿主按系统下发（macOS `Menlo`、Windows `Consolas`、Linux `DejaVu Sans Mono`，2026-10-22）。
-- **wire 方法**：`playback.stats` 由后端线程读 libmpv；`layout.set` 在答复前跑一次布局，紧接着的 `layout.state` 能看到结果。`ui.menu` 的宿主错误码按 §11.3。
-- **滚轮步长**：每 40 逻辑像素一步（`WHEEL_STEP`），需按触控板与鼠标实测调整。
-- **删除提前做了的部分**（因为外壳已换，旧代码不再有调用者）：`host.slint` 写死的 Space/←/→/F11/Esc 路由、`Host::canvas_shortcut`、`WindowInput` 的 `shortcut:`/`toggleFullscreen`/`escape` 分支、`Registry::resolve_shortcut`、领域列表、`diagnostic` 及后端为它维护的状态快照、`sidebar_resize*`（Q7）、Arial Unicode 字体。§16 其余项（`shortcut` 字段、旧面板可见性接口与 wire、`reveal_sidebar_in_fullscreen`、测试宿主旧字段）留到 P4。
-- **迁移期菜单顺序**：未迁移插件的命令 `order` 为 0，P3 完成前它们在 GUI 里排在已迁移命令之前；按插件比较的菜单快照不受影响。
+- **Code locations**: new host files `bindings.rs` (binding table), `ui_state.rs` (persistence), `ui/vestra/theme.slint`, `ui/vestra/widgets.slint`; `commands.rs` rewritten for the new menu model (including the order test for the 46 commands of §14); `menu.rs` gains separators, radio items, the shortcut column and single-level panel menus; `host.slint` rewritten as the shell; `composition.rs` generates the sidebar divider, the key forwarding layer and the floating window source. New SDK files `sdk/plugin/bindings.ts` (syntax check with the same rules as the host), `sdk/plugin/osd.ts`. New plugin `src/plugins/info/`; demos `src/examples/core-ui/` (menu groups and radio items, `repeat` bindings, commands not in the menu, on-screen messages, `next/previous` calls, sidebar toggle and detach, a theme widget window) and `src/examples/panel-menu/` (panel context menu, panel-focus keys, sequence provider, floating window title).
+- **⌘Q**: on macOS the winit backend of Slint 1.16 builds the app menu by default (muda, including the system "Quit ⌘Q", `i-slint-backend-winit` `muda.rs` `create_default_app_menu`); ⌘Q is handled first by the system menu and does not reach the window, so it does not fire twice together with the host's `Cmd+Q` binding; on macOS the host binding only provides the shortcut text in the menu. When quitting through the system menu the host does not go through its own quit path, so UI state can lose at most the changes from the last 1 second that were not yet written (the context menu's "Quit" writes first). Needs P5 testing.
+- **Theme tokens**: `Theme.font-family` is not provided (each window uses the system default font, §2.2); `font-mono` is supplied by the host per system (macOS `Menlo`, Windows `Consolas`, Linux `DejaVu Sans Mono`, 2026-10-22).
+- **wire methods**: `playback.stats` reads libmpv on the backend thread; `layout.set` runs one layout pass before replying, so an immediately following `layout.state` sees the result. Host error codes of `ui.menu` follow §11.3.
+- **Wheel step**: one step per 40 logical pixels (`WHEEL_STEP`); needs adjusting after testing with trackpad and mouse.
+- **Deletions done early** (because the shell was replaced, the old code had no callers): the hard-coded Space/←/→/F11/Esc routing in `host.slint`, `Host::canvas_shortcut`, the `shortcut:`/`toggleFullscreen`/`escape` branches of `WindowInput`, `Registry::resolve_shortcut`, the domain list, `diagnostic` and the state snapshot the backend kept for it, `sidebar_resize*` (Q7), the Arial Unicode font. The other items in §16 (the `shortcut` field, the old panel visibility interface and wire, `reveal_sidebar_in_fullscreen`, old test host fields) are left for P4.
+- **Menu order during migration**: commands of unmigrated plugins have `order` 0, so until P3 is done they appear before migrated commands in the GUI; the per-plugin menu snapshots are not affected.
 
-### P4 删除（2026-10-20）
+### P4 deletions (2026-10-20)
 
-§16 的清单已全部完成，迁移期的并存代码一并删除：
+The list in §16 is fully done, and the coexistence code of the migration period was deleted with it:
 
-- SDK：`CommandOptions.shortcut`；`sdk/commands.ts` 的 `LegacyCommandDeclaration` 与旧声明形状（SDK 现在总发完整声明，未写的字段为默认值）；`Panel.visibility`、`onVisibility`、`setVisible`、`toggle` 与类型 `PanelVisibility`，以及 `PanelHandle` 里读取 `ui.mountState`、订阅 `window.state` 的代码（面板挂载后改为刷新 `panels.<位置>` 的状态）；wire 的 `ui.showMount`、`ui.mountState`、`MountVisibility`。测试宿主：`ui.showMount`、`ui.mountState` 假实现、面板假对象的 `visibility`、按 `shortcut` 查绑定的兼容分支；`FakeCommand.declaration` 只有完整形状。
-- 宿主：`commands::Declaration.shortcut` 与 `all_bindings()`；`ui.mountState`、`ui.showMount` 的路由与能力表条目（含 `scope: "presentation"`）；试载时清空 `shortcut`；`window_state` 的 `reveal_sidebar_in_fullscreen`、`sidebar_override`（全屏时附着的侧栏总是隐藏，浮动窗口不受影响）。菜单行里的快捷键文字字段改名为 `keys`（与已删除的 `shortcut` 字段区分，含义不变）。
-- 测试：SDK 测试与 playback 测试改读完整声明和 `host.layout`；`window_state` 的全屏覆盖测试换成「全屏隐藏附着侧栏、保留偏好与浮动窗口」。
-- 文档：`doc/plugins/reference.md` 去掉两条迁移期说明；`doc/plugins/` 中不再出现已删除的接口。workshop 的 `vendor/sdk` 按其测试开头的命令重新同步（协调者授权）。
+- SDK: `CommandOptions.shortcut`; `LegacyCommandDeclaration` and the old declaration shape in `sdk/commands.ts` (the SDK now always sends the full declaration, unwritten fields have default values); `Panel.visibility`, `onVisibility`, `setVisible`, `toggle` and the type `PanelVisibility`, and the code in `PanelHandle` that read `ui.mountState` and subscribed to `window.state` (after a panel is mounted it now refreshes the state of `panels.<slot>`); wire `ui.showMount`, `ui.mountState`, `MountVisibility`. Test host: the `ui.showMount`, `ui.mountState` fakes, `visibility` of the fake panel object, the compatibility branch that looks up bindings by `shortcut`; `FakeCommand.declaration` only has the full shape.
+- Host: `commands::Declaration.shortcut` and `all_bindings()`; the routes and capability table entries of `ui.mountState`, `ui.showMount` (including `scope: "presentation"`); clearing `shortcut` on trial load; `reveal_sidebar_in_fullscreen`, `sidebar_override` in `window_state` (in fullscreen an attached sidebar is always hidden; floating windows are not affected). The shortcut text field in menu rows is renamed `keys` (to distinguish it from the deleted `shortcut` field; meaning unchanged).
+- Tests: SDK tests and playback tests read the full declaration and `host.layout`; the fullscreen override test of `window_state` is replaced by "fullscreen hides the attached sidebar, keeps the preference and the floating window".
+- Docs: `doc/plugins/reference.md` drops two migration-period notes; the deleted interfaces no longer appear in `doc/plugins/`. Workshop's `vendor/sdk` was resynced with the command at the top of its test (authorised by the coordinator).
 
 
-## 20. 第二步的接口变更（2026-10-20，按请求）
+## 20. Interface changes for step two (2026-10-20, on request)
 
-| 请求 | 决定 | 变更 |
+| Request | Decision | Change |
 | --- | --- | --- |
-| R1 播放列表：不打开文件读时长 | 拒绝 | 插件内调用 ffprobe（`VESTRA_FFPROBE` → `VESTRA_FFMPEG` 同目录 → PATH），限并发、超时、可中止，只探测本地文件，失败显示 `--:--` |
-| R2 控件：Path 图标、滑块回调 | Button 接受，Slider 拒绝 | `Button.icon` 由 `image` 改为 Path 路径数据，新增 `icon-width`、`icon-height`（默认 14×12，同时是 viewbox）、`stroked`；原 `image` 图标没有使用者。底栏专用按钮与进度条留在 playback 插件内 |
-| R3 菜单项改标题 / 隐藏 | 只做「释放即删除」 | wire `commands.unregister`；`Command.dispose()` 从菜单与绑定表删除，id 可再用（SDK 让同 id 的再次注册排在删除之后）。可变列表用子作用域释放后重建；不做可变 `title` |
-| R4 每插件数据目录 | 接受 | `plugin.dataDirectory`：`plugin-data/<manifest id>/`，宿主启动插件前创建并经 `VESTRA_PLUGIN_DATA_DIR` 交给运行器；试载用独立 id，停止时删除；无目录时读取抛 `unavailable`；测试宿主给临时目录，`startPlugin({ dataDirectory })` 可复用目录 |
+| R1 Playlist: read durations without opening files | Rejected | The plugin calls ffprobe itself (`VESTRA_FFPROBE` → same directory as `VESTRA_FFMPEG` → PATH), with limited concurrency, timeout, cancellable, local files only; on failure it shows `--:--` |
+| R2 Controls: Path icons, slider callbacks | Button accepted, Slider rejected | `Button.icon` changes from `image` to Path data, adding `icon-width`, `icon-height` (default 14×12, also the viewbox) and `stroked`; the original `image` icon had no users. The bottom-bar-specific buttons and the progress bar stay inside the playback plugin |
+| R3 Change title / hide menu items | Only "release means delete" | wire `commands.unregister`; `Command.dispose()` removes it from the menu and the binding table, and the id can be reused (the SDK orders a re-registration with the same id after the deletion). Variable lists are released with a child scope and rebuilt; no mutable `title` |
+| R4 Per-plugin data directory | Accepted | `plugin.dataDirectory`: `plugin-data/<manifest id>/`, created by the host before starting the plugin and passed to the runner through `VESTRA_PLUGIN_DATA_DIR`; trial loads use a separate id, deleted on stop; reading without a directory throws `unavailable`; the test host provides a temporary directory, and `startPlugin({ dataDirectory })` can reuse a directory |

@@ -1,311 +1,311 @@
-# 功能目录：已实现与未实现
+# Feature catalog: implemented and not implemented
 
-日期：2026-10-20。实现状态对照 Vestra 当前 `main`（1469a3c）。
+Date: 2026-10-20. Implementation status checked against the current Vestra `main` (1469a3c).
 
-**用法**：每项有编号（字母 = 分组），用于筛选，也供需求与规格文档引用。
+**Usage**: every item has an ID (letter = group). The IDs are for filtering and for references from requirement and specification documents.
 
-**后续**：未实现项经删减评审后的详细需求（按插件分章）见[功能需求](feature-requirements.md)。
+**Follow-up**: the detailed requirements for the unimplemented items that survived the cut review (one chapter per plugin) are in [Feature requirements](feature-requirements.md).
 
-**状态**：✅ 已实现　◐ 部分实现（说明里写差距）　✗ 未实现　⊘ 不做（Windows 专属、硬件设备、直播服务等与桌面播放器无关的，以及删减评审中去掉的）
+**Status**: ✅ implemented · ◐ partly implemented (the note states the gap) · ✗ not implemented · ⊘ won't do (Windows-only, hardware devices, live-streaming services and other things unrelated to a desktop player, plus the items removed in the cut review)
 
-**归属**：做这一项时由谁负责。`核心` = 需要宿主或 SDK 新增能力（按社区工作流自下而上提请求）；插件名 = 现有插件内即可完成；`新插件` = 建议另做一个插件。
-
----
-
-## A. 打开与来源
-
-| 编号 | 功能 | 状态 | 说明 / 归属 |
-| --- | --- | --- | --- |
-| A01 | 打开文件 | ✅ | playback |
-| A02 | 打开链接（通用 URL） | ◐ | 只有 YouTube / Bilibili 专用窗口和播放列表「添加链接」；没有通用的「打开链接」。playback |
-| A03 | 打开文件夹（整个目录加入并播放） | ✗ | playlist |
-| A04 | 打开远程 FTP / WebDAV / HTTP 服务器 | ⊘ | 新插件 删减评审（2026-10-20）不做。 |
-| A05 | 首选打开方式（打开按钮做什么） | ⊘ | playback 删减评审（2026-10-20）不做。 |
-| A06 | 文件简索（快速文件浏览器） | ⊘ | 新插件 删减评审（2026-10-20）不做。 |
-| A07 | 打开字幕 | ✅ | subtitles |
-| A08 | 添加次字幕（双字幕同时显示） | ✗ | 核心（双字幕轨）+ subtitles |
-| A09 | 重载字幕 | ◐ | 有「刷新字幕轨」，不是重新读取文件。subtitles |
-| A10 | 重开当前 / 最后一个文件 | ◐ | 有「重新打开」当前来源；无「最后一个」（需历史）。playback |
-| A11 | 载入外部音频轨 | ✗ | 核心 |
-| A12 | 最近播放历史（打开过的文件列表） | ✗ | 新插件（用插件数据目录） |
-| A13 | 打开文件时同时加入相似文件 / 同文件夹全部文件 | ✗ | playlist |
-| A14 | 收藏 / 专辑（收藏当前文件、文件夹） | ⊘ | 新插件 删减评审（2026-10-20）不做。 |
-| A15 | 拖放文件到窗口打开 | ✗ | 核心（窗口拖放事件） |
-| A16 | 网络视频：YouTube | ✅ | youtube |
-| A17 | 网络视频：Bilibili | ✅ | bilibili |
-| A18 | 屏幕采集 / 摄像头 / 模拟与数字电视 | ⊘ | 硬件与 Windows 设备 |
-| A19 | DVD / 蓝光设备与菜单 | ⊘ | 光驱 |
-
-## B. 播放控制
-
-| 编号 | 功能 | 状态 | 说明 / 归属 |
-| --- | --- | --- | --- |
-| B01 | 播放 / 暂停 | ✅ | playback |
-| B02 | 停止（关闭当前来源） | ✅ | playback |
-| B03 | 上一个 / 下一个 | ✅ | playback（经核心播放序列，由 playlist 提供） |
-| B04 | 后退 / 前进 5 秒 | ✅ | playback |
-| B05 | 后退 / 前进 30、60、300 秒 | ✅ | playback |
-| B06 | 跳转秒数可设置（时间跨度设置） | ✗ | playback（存插件数据目录） |
-| B07 | **上一帧 / 下一帧** | ✗ | **核心**（`player.frameStep`；mpv 有 frame-step）+ playback |
-| B08 | 上一关键帧 / 下一关键帧 | ✗ | 核心 + playback |
-| B09 | 跳到开头 | ✗ | playback（SDK 已有 `restart`） |
-| B10 | 跳到中点 / 结束前 30 秒 | ⊘ | playback 删减评审（2026-10-20）不做。 |
-| B11 | 上一句 / 下一句对白（按字幕跳转） | ✗ | 核心（读取字幕时间轴）+ subtitles |
-| B12 | 手动跳转到时间 | ✅ | playback |
-| B13 | 跳转到指定帧号 | ⊘ | 核心（按帧定位）+ playback 删减评审（2026-10-20）不做。 |
-| B14 | 以关键帧定位（快速但不精确） | ⊘ | 核心 删减评审（2026-10-20）不做。 |
-| B15 | 时间 / 章节 / 字幕场景浏览（缩略图网格） | ⊘ | 新插件 + 核心（缩略图生成） 删减评审（2026-10-20）不做。 |
-| B16 | 倍速：正常 / 减 0.1 / 加 0.1 | ✅ | playback |
-| B17 | 倍速：固定档位与自定义 | ✅ | playback（0.5/1.5/2 倍 + 自定义） |
-| B18 | 变速时音调处理方式（高品质 / 不校正音调） | ⊘ | 核心 删减评审（2026-10-20）不做。 |
-| B19 | 跳过片头 / 片尾 | ⊘ | 新插件或 playback（存设置） 删减评审（2026-10-20）不做。 |
-| B20 | 跳过章节 | ⊘ | 核心（章节信息） 删减评审（2026-10-20）不做。 |
-| B21 | 章节 / 书签菜单与跳转 | ✗ | 核心（章节读取）+ 新插件（书签） |
-| B22 | 在进度条上显示章节 / 书签标记 | ✗ | 核心 + playback |
-| B23 | **A-B 区段循环**（设起点 / 止点、微调、开关） | ✗ | 核心（循环区间）+ 新插件或 playback |
-| B24 | 循环当前字幕句 | ⊘ | 核心 + subtitles 删减评审（2026-10-20）不做。 |
-| B25 | 记忆播放位置（下次从上次位置继续） | ✗ | 新插件（插件数据目录）或 playback |
-| B26 | 无缝播放（预读下一个文件） | ✗ | 核心 |
-| B27 | 播放完后的动作（退出、关机、休眠） | ⊘ | 新插件；关机需系统权限，建议只做「退出」 删减评审（2026-10-20）不做。 |
-| B28 | 定时退出 / 无操作后退出 | ⊘ | 新插件 删减评审（2026-10-20）不做。 |
-| B29 | 播放时禁止屏保 / 休眠 | ✗ | 核心 |
-| B30 | 播放时隐藏鼠标指针 | ◐ | 只在全屏时隐藏。核心 |
-
-## C. 播放列表
-
-| 编号 | 功能 | 状态 | 说明 / 归属 |
-| --- | --- | --- | --- |
-| C01 | 显示 / 隐藏播放列表 | ✅ | playlist |
-| C02 | 附着 / 分离为浮动窗口 | ✅ | playlist + 核心 |
-| C03 | 添加文件 / 添加链接 | ✅ | playlist |
-| C04 | 添加文件夹 | ✗ | playlist |
-| C05 | 双击 / Enter / P 播放 | ✅ | playlist |
-| C06 | 移除所选 / 移除全部 | ✅ | playlist |
-| C07 | 移除未选 / 移除无效项 | ✗ | playlist |
-| C08 | 从磁盘删除文件 | ⊘ | playlist（需确认对话框） 删减评审（2026-10-20）不做。 |
-| C09 | 上移 / 下移 / 置顶 / 置底、拖动排序 | ✅ | playlist |
-| C10 | 排序：按名称 / 路径 / 倒序 | ✅ | playlist |
-| C11 | 排序：按扩展名 / 大小 / 时长 / 日期 / 随机 / 文件夹 | ✗ | playlist |
-| C12 | 全选 / 多选 | ✅ | playlist |
-| C13 | 反选 | ⊘ | playlist 删减评审（2026-10-20）不做。 |
-| C14 | 循环：不循环 / 全部 / 单个 | ✅ | playlist |
-| C15 | 随机播放 | ✅ | playlist |
-| C16 | 显示时长与总时长 | ✅ | playlist（ffprobe） |
-| C17 | 记住播放列表（重启后恢复） | ✗ | playlist（插件数据目录） |
-| C18 | 打开 / 保存播放列表文件（M3U 等） | ✗ | playlist |
-| C19 | 多个专辑（多列表页签） | ⊘ | playlist 删减评审（2026-10-20）不做。 |
-| C20 | 播放队列（插队播放） | ⊘ | playlist 删减评审（2026-10-20）不做。 |
-| C21 | 搜索列表 | ✗ | playlist |
-| C22 | 编辑标题 / 重命名文件 | ⊘ | playlist 删减评审（2026-10-20）不做。 |
-| C23 | 打开文件所在位置（Finder） | ✗ | playlist |
-| C24 | 复制 / 粘贴列表项 | ⊘ | playlist 删减评审（2026-10-20）不做。 |
-| C25 | 缩略图视图（每项带缩略图） | ⊘ | 核心（缩略图）+ playlist 删减评审（2026-10-20）不做。 |
-| C26 | 列表文件信息（编码、大小等） | ⊘ | playlist（ffprobe） 删减评审（2026-10-20）不做。 |
-| C27 | 不重复添加同一文件 | ✅ | playlist（已去重） |
-
-## D. 字幕
-
-| 编号 | 功能 | 状态 | 说明 / 归属 |
-| --- | --- | --- | --- |
-| D01 | 选择字幕轨 | ✅ | subtitles（菜单动态列出） |
-| D02 | 依次切换字幕轨 | ✗ | subtitles |
-| D03 | 显示 / 隐藏字幕 | ✅ | subtitles |
-| D04 | 字幕同步：超前 / 滞后 / 复位 | ✅ | subtitles |
-| D05 | 手动输入同步值 | ◐ | 字幕微调窗口有慢 / 快按钮，没有数值输入框。subtitles |
-| D06 | 字号 +/− | ◐ | 窗口里有，未绑定快捷键。subtitles |
-| D07 | 字幕位置上移 / 下移 | ◐ | 窗口里有，未绑定快捷键。subtitles |
-| D08 | 字幕位置左右移动、左右对齐 | ⊘ | 核心（样式字段） 删减评审（2026-10-20）不做。 |
-| D09 | 粗体 | ✗ | 核心（样式字段） |
-| D10 | 字体、颜色、描边、底边距 | ✅ | subtitles（字幕设置窗口） |
-| D11 | 阴影、背景框（不透明框） | ✗ | 核心（样式字段） |
-| D12 | 字幕浏览器（逐句列表、点击跳转、编辑） | ⊘ | 核心（读取字幕内容）+ subtitles 删减评审（2026-10-20）不做。 |
-| D13 | 复制当前字幕到剪贴板 | ⊘ | 核心 + subtitles 删减评审（2026-10-20）不做。 |
-| D14 | 保存字幕 / 应用同步后另存 | ⊘ | subtitles（插件自己读写 SRT） 删减评审（2026-10-20）不做。 |
-| D15 | 字幕帧率转换 | ⊘ | subtitles 删减评审（2026-10-20）不做。 |
-| D16 | 在线字幕搜索与下载 | ✗ | 新插件（网络服务，需选定服务商） |
-| D17 | ASS/SSA 特效字幕 | ◐ | 内嵌 ASS 由 mpv 渲染；外部只支持 SRT。核心 |
-| D18 | 外部字幕格式：ASS、VTT 等 | ✗ | 核心 |
-| D19 | 字幕显示在画面外（黑边上）/ 强制底部 | ⊘ | 核心 删减评审（2026-10-20）不做。 |
-| D20 | 3D 字幕 | ⊘ | 3D 输出相关 |
-| D21 | 字幕翻译 | ⊘ | 新插件（需选定翻译服务） 删减评审（2026-10-20）不做。 |
-
-## E. 视频画面
-
-| 编号 | 功能 | 状态 | 说明 / 归属 |
-| --- | --- | --- | --- |
-| E01 | 亮度、对比度、饱和度 ±1% 与复位 | ✅ | video |
-| E02 | 色调 ±1% | ✗ | 核心（eq 节点加 hue）+ video；Gamma 已有 |
-| E03 | 高斯模糊（柔化） | ✅ | video |
-| E04 | 锐化 | ✗ | 核心（处理节点）+ video |
-| E05 | 降噪（3D / 瞬态 / 渐进） | ✗ | 核心 + video |
-| E06 | 去块 / 消色带（deband）/ 边缘锐化 | ✗ | 核心 + video |
-| E07 | 色阶（电平）控制、自动色阶 | ⊘ | 核心 + video 删减评审（2026-10-20）不做。 |
-| E08 | 上下翻转 / 左右翻转 | ✗ | 核心 + video |
-| E09 | 旋转 90 / 180 / 270 | ✗ | 核心 + video |
-| E10 | 反交错（自动 / 开 / 关） | ✗ | 核心 |
-| E11 | 宽高比：原始 / 4:3 / 16:9 / 1.85 / 2.35 / 自定义 | ✗ | 核心 + 新插件或 video |
-| E12 | 拉伸 / 裁剪到指定比例 | ✗ | 核心 |
-| E13 | 画面缩放与平移（帧位 + / −、偏移） | ✗ | 核心 |
-| E14 | 下边距（给字幕留黑边） | ⊘ | 核心 删减评审（2026-10-20）不做。 |
-| E15 | 选择视频流 | ⊘ | 核心 删减评审（2026-10-20）不做。 |
-| E16 | HDR 自动校正 / 色域校正 | ✗ | 核心（mpv tone-mapping） |
-| E17 | 像素着色器（自定义 shader） | ✗ | 核心（mpv glsl-shaders） |
-| E18 | 倍帧 / 运动补偿 | ✗ | 核心（mpv interpolation） |
-| E19 | 3D 视频输出 | ⊘ | |
-| E20 | 视频渲染器选择 / AviSynth / VapourSynth | ⊘ | Windows 渲染器体系 |
-| E21 | 画面预设（原始 / 鲜艳 / 电影 / 柔和） | ✅ | video |
-
-## F. 截图与录制
-
-| 编号 | 功能 | 状态 | 说明 / 归属 |
-| --- | --- | --- | --- |
-| F01 | 截存当前画面（直接保存） | ✅ | capture |
-| F02 | 当前画面另存为 | ✅ | capture |
-| F03 | 复制当前画面到剪贴板 | ✗ | 核心（剪贴板图像）+ capture |
-| F04 | 截取实际显示画面（含效果、字幕） | ◐ | 连拍和导出可选含效果；单张只截源画面。capture |
-| F05 | 连续截图 | ✅ | capture |
-| F06 | 缩略图拼图（一张图含多帧） | ⊘ | capture + 核心 删减评审（2026-10-20）不做。 |
-| F07 | 截图格式 JPEG / BMP、质量 | ◐ | 只有 PNG。核心 + capture |
-| F08 | 文件名带系统时间 / 播放时间 | ⊘ | 固定为「片名_播放时间」。capture 删减评审（2026-10-20）不做。 |
-| F09 | 截图文件夹设置与打开 | ◐ | 能设置并记住；没有「打开文件夹」。capture |
-| F10 | 删除最近一次截图 | ⊘ | capture 删减评审（2026-10-20）不做。 |
-| F11 | 导出片段（起止时间） | ✅ | capture（离线导出，不是实时录制） |
-| F12 | 实时录制视频 / 声音 | ⊘ | 核心 删减评审（2026-10-20）不做。 |
-
-## G. 声音
-
-| 编号 | 功能 | 状态 | 说明 / 归属 |
-| --- | --- | --- | --- |
-| G01 | 音量 +/−、滚轮调音量 | ✅ | playback |
-| G02 | 静音 | ✅ | playback |
-| G03 | 选择音轨 | ✗ | 核心（选择音轨）+ playback 或 audio |
-| G04 | 依次切换音轨 | ✗ | 同上 |
-| G05 | 声道：立体声 / 左 / 右 | ✗ | 核心 + audio |
-| G06 | 左右声道互换 | ⊘ | 核心 + audio 删减评审（2026-10-20）不做。 |
-| G07 | 均衡器开关与调节 | ✅ | 6 段。扩到 10 段经删减评审（2026-10-20）不做。audio |
-| G08 | 均衡器预设 | ✅ | audio（4 个预设） |
-| G09 | 声音同步：超前 / 滞后 / 复位 | ◐ | 窗口里有延迟滑块，未绑定快捷键。audio |
-| G10 | 规格化（响度均衡） | ✅ | audio |
-| G11 | 晶化（清晰度） | ◐ | 有「清晰度增强」（高频提升），未绑定快捷键。audio |
-| G12 | 降噪 | ⊘ | 核心 + audio 删减评审（2026-10-20）不做。 |
-| G13 | 混响 | ⊘ | 核心 + audio 删减评审（2026-10-20）不做。 |
-| G14 | 人声消除 / 人声增强 | ⊘ | 核心 + audio 删减评审（2026-10-20）不做。 |
-| G15 | 音量放大（超过 100%） | ✅ | playback（最高 200%） |
-| G16 | 音频输出设备选择 | ✗ | 核心 |
-| G17 | 输出声道 / 采样率 / 直通（SPDIF） | ⊘ | 硬件相关，暂不需要 |
-| G18 | 系统主音量 / 波形音量 | ⊘ | Windows 系统音量 |
-
-## H. 窗口与界面
-
-| 编号 | 功能 | 状态 | 说明 / 归属 |
-| --- | --- | --- | --- |
-| H01 | 全屏 | ✅ | 核心 |
-| H02 | 全屏拉伸（不保持比例） | ⊘ | 核心 删减评审（2026-10-20）不做。 |
-| H03 | 窗口尺寸 0.5 / 1 / 1.5 / 2 倍视频尺寸 | ✗ | 核心 + 新插件 |
-| H04 | 适应视频比例（无黑边窗口） | ✗ | 核心 |
-| H05 | 置顶：总是 / 播放时 / 全屏时 | ✗ | 核心 |
-| H06 | 窗口移动到屏幕角落 / 居中 | ⊘ | 核心 删减评审（2026-10-20）不做。 |
-| H07 | 迷你尺寸 | ✗ | 核心 |
-| H08 | 底部控制栏 | ✅ | playback |
-| H09 | 控制栏与播放列表的显示 / 隐藏 | ✅ | playlist、核心 |
-| H10 | 皮肤 / 配色切换 | ✗ | 核心（主题可切换）；当前为品牌配色（logo 取色） |
-| H11 | 窗口不透明度 | ⊘ | 核心 删减评审（2026-10-20）不做。 |
-| H12 | 空闲时显示徽标 | ✗ | 核心 |
-| H13 | 控制面板（画面 / 声音 / 字幕 / 播放集中调节） | ⊘ | 已决定用独立工具窗口（整改文档 D2） |
-| H14 | 界面语言切换 | ✗ | 核心 + 全部插件（当前只有中文） |
-
-## I. 信息与提示
-
-| 编号 | 功能 | 状态 | 说明 / 归属 |
-| --- | --- | --- | --- |
-| I01 | 屏幕提示（操作反馈） | ✅ | 核心 + 各插件 |
-| I02 | 完整播放信息叠加层 | ✅ | info |
-| I03 | 简要信息（文件名、时间、编码） | ✗ | info |
-| I04 | 杂项信息（时间、百分比、序号） | ⊘ | info 删减评审（2026-10-20）不做。 |
-| I05 | 播放 / 系统信息对话框（编码、滤镜、文件信息） | ✗ | info + 核心（更多统计） |
-| I06 | 进度条悬停显示时间 | ✗ | playback |
-| I07 | 进度条悬停显示缩略图预览 | ✗ | 核心（缩略图）+ playback |
-| I08 | 复制文件名 / 路径到剪贴板 | ✗ | 核心（剪贴板文本）+ playback |
-| I09 | 关于 | ✗ | 核心 |
-
-## J. 设置与插件
-
-| 编号 | 功能 | 状态 | 说明 / 归属 |
-| --- | --- | --- | --- |
-| J01 | **快捷键设置**（给任意命令改绑键盘、鼠标） | ✗ | **新插件 + 核心**，见下节 |
-| J02 | 鼠标动作设置（单击、双击、滚轮、侧键分别绑定什么） | ✗ | 同上（绑定表已支持鼠标输入） |
-| J03 | 忽略默认快捷键 | ✗ | 同上 |
-| J04 | 首选项总窗口（集中设置） | ✗ | 新插件 + 核心（各插件设置页如何汇总，需设计） |
-| J05 | 配置导入 / 导出 | ⊘ | 核心 删减评审（2026-10-20）不做。 |
-| J06 | 解码器 / 滤镜管理 | ⊘ | DirectShow 体系 |
-| J07 | 插件管理（列表、停用、启用、卸载） | ✗ | 核心（停用接口已在上一轮删除，需要重新设计）+ 新插件 |
-| J08 | 插件工坊（AI 生成插件） | ✅ | workshop |
-| J09 | 模拟器（NES） | ✅ | nes |
-| J10 | 检查更新 | ⊘ | 暂不需要 删减评审（2026-10-20）不做。 |
-| J11 | 可视化（纯音频时显示动画、专辑封面） | ✗ | 新插件 + 核心（视频区绘制） |
-| J12 | 直播、聊天、广播工具 | ⊘ | 第三方直播服务 |
+**Owner**: who is responsible when this item is built. `core` = needs a new host or SDK capability (requested bottom-up under the community workflow); a plugin name = can be done inside that existing plugin; `new plugin` = suggest building a separate plugin.
 
 ---
 
-## 统计
+## A. Opening and sources
 
-| 状态 | 数量 |
+| ID | Feature | Status | Note / owner |
+| --- | --- | --- | --- |
+| A01 | Open file | ✅ | playback |
+| A02 | Open link (generic URL) | ◐ | Only the dedicated YouTube / Bilibili windows and the playlist's "Add Link…"; no generic "Open URL…". playback |
+| A03 | Open folder (add the whole directory and play) | ✗ | playlist |
+| A04 | Open remote FTP / WebDAV / HTTP server | ⊘ | new plugin. Dropped in the cut review (2026-10-20). |
+| A05 | Preferred open action (what the open button does) | ⊘ | playback. Dropped in the cut review (2026-10-20). |
+| A06 | Quick file browser | ⊘ | new plugin. Dropped in the cut review (2026-10-20). |
+| A07 | Open subtitles | ✅ | subtitles |
+| A08 | Add secondary subtitles (two subtitles shown at once) | ✗ | core (dual subtitle tracks) + subtitles |
+| A09 | Reload subtitles | ◐ | There is "Refresh Subtitle Tracks", which does not re-read the file. subtitles |
+| A10 | Reopen the current / last file | ◐ | "Reopen" for the current source exists; no "last file" (needs history). playback |
+| A11 | Load an external audio track | ✗ | core |
+| A12 | Recent history (list of opened files) | ✗ | new plugin (uses the plugin data directory) |
+| A13 | When opening a file, also add similar files / all files in the same folder | ✗ | playlist |
+| A14 | Favorites / albums (bookmark the current file or folder) | ⊘ | new plugin. Dropped in the cut review (2026-10-20). |
+| A15 | Drag and drop files onto the window to open | ✗ | core (window drag-and-drop events) |
+| A16 | Online video: YouTube | ✅ | youtube |
+| A17 | Online video: Bilibili | ✅ | bilibili |
+| A18 | Screen capture / camera / analog and digital TV | ⊘ | Hardware and Windows devices |
+| A19 | DVD / Blu-ray devices and menus | ⊘ | Optical drive |
+
+## B. Playback control
+
+| ID | Feature | Status | Note / owner |
+| --- | --- | --- | --- |
+| B01 | Play / pause | ✅ | playback |
+| B02 | Stop (close the current source) | ✅ | playback |
+| B03 | Previous / next | ✅ | playback (through the core play sequence, provided by playlist) |
+| B04 | Back / forward 5 seconds | ✅ | playback |
+| B05 | Back / forward 30, 60, 300 seconds | ✅ | playback |
+| B06 | Configurable seek steps (time span settings) | ✗ | playback (stored in the plugin data directory) |
+| B07 | **Previous frame / next frame** | ✗ | **core** (`player.frameStep`; mpv has frame-step) + playback |
+| B08 | Previous keyframe / next keyframe | ✗ | core + playback |
+| B09 | Jump to start | ✗ | playback (the SDK already has `restart`) |
+| B10 | Jump to the midpoint / 30 seconds before the end | ⊘ | playback. Dropped in the cut review (2026-10-20). |
+| B11 | Previous / next line of dialogue (seek by subtitles) | ✗ | core (read the subtitle timeline) + subtitles |
+| B12 | Jump to a time manually | ✅ | playback |
+| B13 | Jump to a given frame number | ⊘ | core (frame-accurate seek) + playback. Dropped in the cut review (2026-10-20). |
+| B14 | Seek by keyframe (fast but imprecise) | ⊘ | core. Dropped in the cut review (2026-10-20). |
+| B15 | Time / chapter / subtitle scene browser (thumbnail grid) | ⊘ | new plugin + core (thumbnail generation). Dropped in the cut review (2026-10-20). |
+| B16 | Speed: normal / −0.1 / +0.1 | ✅ | playback |
+| B17 | Speed: fixed steps and custom | ✅ | playback (0.5×/1.5×/2× + custom) |
+| B18 | Pitch handling when the speed changes (high quality / no pitch correction) | ⊘ | core. Dropped in the cut review (2026-10-20). |
+| B19 | Skip intro / outro | ⊘ | new plugin or playback (stores settings). Dropped in the cut review (2026-10-20). |
+| B20 | Skip chapters | ⊘ | core (chapter information). Dropped in the cut review (2026-10-20). |
+| B21 | Chapter / bookmark menu and jump | ✗ | core (read chapters) + new plugin (bookmarks) |
+| B22 | Show chapter / bookmark marks on the seek bar | ✗ | core + playback |
+| B23 | **A-B loop** (set start / end, fine-tune, toggle) | ✗ | core (loop range) + new plugin or playback |
+| B24 | Loop the current subtitle line | ⊘ | core + subtitles. Dropped in the cut review (2026-10-20). |
+| B25 | Remember playback position (resume where you left off) | ✗ | new plugin (plugin data directory) or playback |
+| B26 | Gapless playback (preload the next file) | ✗ | core |
+| B27 | Action after playback ends (quit, shut down, sleep) | ⊘ | new plugin; shutting down needs system permission, suggest doing only "quit". Dropped in the cut review (2026-10-20). |
+| B28 | Quit on a timer / after inactivity | ⊘ | new plugin. Dropped in the cut review (2026-10-20). |
+| B29 | Prevent the screen saver / sleep while playing | ✗ | core |
+| B30 | Hide the mouse pointer while playing | ◐ | Hidden only in fullscreen. core |
+
+## C. Playlist
+
+| ID | Feature | Status | Note / owner |
+| --- | --- | --- | --- |
+| C01 | Show / hide the playlist | ✅ | playlist |
+| C02 | Attach / detach as a floating window | ✅ | playlist + core |
+| C03 | Add file / add link | ✅ | playlist |
+| C04 | Add folder | ✗ | playlist |
+| C05 | Play with double-click / Enter / P | ✅ | playlist |
+| C06 | Remove selected / remove all | ✅ | playlist |
+| C07 | Remove unselected / remove invalid items | ✗ | playlist |
+| C08 | Delete the file from disk | ⊘ | playlist (needs a confirmation dialog). Dropped in the cut review (2026-10-20). |
+| C09 | Move up / down / to top / to bottom, drag to reorder | ✅ | playlist |
+| C10 | Sort: by name / path / reverse | ✅ | playlist |
+| C11 | Sort: by extension / size / duration / date / random / folder | ✗ | playlist |
+| C12 | Select all / multi-select | ✅ | playlist |
+| C13 | Invert selection | ⊘ | playlist. Dropped in the cut review (2026-10-20). |
+| C14 | Loop: off / all / single | ✅ | playlist |
+| C15 | Shuffle | ✅ | playlist |
+| C16 | Show item durations and the total duration | ✅ | playlist (ffprobe) |
+| C17 | Remember the playlist (restore after restart) | ✗ | playlist (plugin data directory) |
+| C18 | Open / save playlist files (M3U etc.) | ✗ | playlist |
+| C19 | Multiple albums (several list tabs) | ⊘ | playlist. Dropped in the cut review (2026-10-20). |
+| C20 | Play queue (play next) | ⊘ | playlist. Dropped in the cut review (2026-10-20). |
+| C21 | Search the list | ✗ | playlist |
+| C22 | Edit title / rename file | ⊘ | playlist. Dropped in the cut review (2026-10-20). |
+| C23 | Show the file's location (Finder) | ✗ | playlist |
+| C24 | Copy / paste list items | ⊘ | playlist. Dropped in the cut review (2026-10-20). |
+| C25 | Thumbnail view (a thumbnail per item) | ⊘ | core (thumbnails) + playlist. Dropped in the cut review (2026-10-20). |
+| C26 | File information in the list (codec, size, etc.) | ⊘ | playlist (ffprobe). Dropped in the cut review (2026-10-20). |
+| C27 | Do not add the same file twice | ✅ | playlist (already de-duplicated) |
+
+## D. Subtitles
+
+| ID | Feature | Status | Note / owner |
+| --- | --- | --- | --- |
+| D01 | Choose a subtitle track | ✅ | subtitles (listed dynamically in the menu) |
+| D02 | Cycle through subtitle tracks | ✗ | subtitles |
+| D03 | Show / hide subtitles | ✅ | subtitles |
+| D04 | Subtitle sync: earlier / later / reset | ✅ | subtitles |
+| D05 | Enter a sync value manually | ◐ | The subtitle tuning window has slower / faster buttons but no number field. subtitles |
+| D06 | Font size +/− | ◐ | In the window, not bound to a shortcut. subtitles |
+| D07 | Move the subtitle position up / down | ◐ | In the window, not bound to a shortcut. subtitles |
+| D08 | Move subtitles left / right, left / right alignment | ⊘ | core (style fields). Dropped in the cut review (2026-10-20). |
+| D09 | Bold | ✗ | core (style fields) |
+| D10 | Font, color, outline, bottom margin | ✅ | subtitles (subtitle settings window) |
+| D11 | Shadow, background box (opaque box) | ✗ | core (style fields) |
+| D12 | Subtitle browser (line-by-line list, click to jump, edit) | ⊘ | core (read subtitle content) + subtitles. Dropped in the cut review (2026-10-20). |
+| D13 | Copy the current subtitle to the clipboard | ⊘ | core + subtitles. Dropped in the cut review (2026-10-20). |
+| D14 | Save subtitles / save a copy with the sync applied | ⊘ | subtitles (the plugin reads and writes SRT itself). Dropped in the cut review (2026-10-20). |
+| D15 | Subtitle frame-rate conversion | ⊘ | subtitles. Dropped in the cut review (2026-10-20). |
+| D16 | Online subtitle search and download | ✗ | new plugin (network service; a provider must be chosen) |
+| D17 | ASS/SSA styled subtitles | ◐ | Embedded ASS is rendered by mpv; external files support only SRT. core |
+| D18 | External subtitle formats: ASS, VTT, etc. | ✗ | core |
+| D19 | Subtitles outside the picture (on the black bars) / forced to the bottom | ⊘ | core. Dropped in the cut review (2026-10-20). |
+| D20 | 3D subtitles | ⊘ | Related to 3D output |
+| D21 | Subtitle translation | ⊘ | new plugin (a translation service must be chosen). Dropped in the cut review (2026-10-20). |
+
+## E. Video picture
+
+| ID | Feature | Status | Note / owner |
+| --- | --- | --- | --- |
+| E01 | Brightness, contrast, saturation ±1% and reset | ✅ | video |
+| E02 | Hue ±1% | ✗ | core (add hue to the eq node) + video; Gamma already exists |
+| E03 | Gaussian blur (soften) | ✅ | video |
+| E04 | Sharpen | ✗ | core (processing node) + video |
+| E05 | Denoise (3D / temporal / progressive) | ✗ | core + video |
+| E06 | Deblock / deband / edge sharpening | ✗ | core + video |
+| E07 | Levels control, auto levels | ⊘ | core + video. Dropped in the cut review (2026-10-20). |
+| E08 | Flip vertical / flip horizontal | ✗ | core + video |
+| E09 | Rotate 90 / 180 / 270 | ✗ | core + video |
+| E10 | Deinterlace (auto / on / off) | ✗ | core |
+| E11 | Aspect ratio: original / 4:3 / 16:9 / 1.85 / 2.35 / custom | ✗ | core + new plugin or video |
+| E12 | Stretch / crop to a given ratio | ✗ | core |
+| E13 | Picture zoom and pan (frame position + / −, offset) | ✗ | core |
+| E14 | Bottom margin (black bar left for subtitles) | ⊘ | core. Dropped in the cut review (2026-10-20). |
+| E15 | Choose a video stream | ⊘ | core. Dropped in the cut review (2026-10-20). |
+| E16 | Automatic HDR correction / gamut correction | ✗ | core (mpv tone-mapping) |
+| E17 | Pixel shaders (custom shaders) | ✗ | core (mpv glsl-shaders) |
+| E18 | Frame doubling / motion compensation | ✗ | core (mpv interpolation) |
+| E19 | 3D video output | ⊘ | |
+| E20 | Video renderer choice / AviSynth / VapourSynth | ⊘ | Windows renderer stack |
+| E21 | Picture presets (original / vivid / cinema / soft) | ✅ | video |
+
+## F. Screenshots and recording
+
+| ID | Feature | Status | Note / owner |
+| --- | --- | --- | --- |
+| F01 | Save the current frame (save directly) | ✅ | capture |
+| F02 | Save the current frame as | ✅ | capture |
+| F03 | Copy the current frame to the clipboard | ✗ | core (clipboard image) + capture |
+| F04 | Capture the picture as displayed (with effects, subtitles) | ◐ | Burst capture and export can include effects; a single shot captures only the source frame. capture |
+| F05 | Burst screenshots | ✅ | capture |
+| F06 | Thumbnail sheet (several frames in one image) | ⊘ | capture + core. Dropped in the cut review (2026-10-20). |
+| F07 | Screenshot format JPEG / BMP, quality | ◐ | PNG only. core + capture |
+| F08 | File name with system time / playback time | ⊘ | Fixed as "title_playbacktime". capture. Dropped in the cut review (2026-10-20). |
+| F09 | Screenshot folder setting and open | ◐ | Can be set and is remembered; no "Open Folder". capture |
+| F10 | Delete the last screenshot | ⊘ | capture. Dropped in the cut review (2026-10-20). |
+| F11 | Export a clip (start and end time) | ✅ | capture (offline export, not live recording) |
+| F12 | Live video / audio recording | ⊘ | core. Dropped in the cut review (2026-10-20). |
+
+## G. Audio
+
+| ID | Feature | Status | Note / owner |
+| --- | --- | --- | --- |
+| G01 | Volume +/−, mouse wheel volume | ✅ | playback |
+| G02 | Mute | ✅ | playback |
+| G03 | Choose an audio track | ✗ | core (choose audio track) + playback or audio |
+| G04 | Cycle through audio tracks | ✗ | Same as above |
+| G05 | Channels: stereo / left / right | ✗ | core + audio |
+| G06 | Swap left and right channels | ⊘ | core + audio. Dropped in the cut review (2026-10-20). |
+| G07 | Equalizer toggle and adjustment | ✅ | 6 bands. Extending to 10 bands was dropped in the cut review (2026-10-20). audio |
+| G08 | Equalizer presets | ✅ | audio (4 presets) |
+| G09 | Audio sync: earlier / later / reset | ◐ | The window has a delay slider, not bound to a shortcut. audio |
+| G10 | Normalization (loudness leveling) | ✅ | audio |
+| G11 | Crystalizer (clarity) | ◐ | There is a "clarity enhancement" (high-frequency boost), not bound to a shortcut. audio |
+| G12 | Noise reduction | ⊘ | core + audio. Dropped in the cut review (2026-10-20). |
+| G13 | Reverb | ⊘ | core + audio. Dropped in the cut review (2026-10-20). |
+| G14 | Vocal removal / vocal boost | ⊘ | core + audio. Dropped in the cut review (2026-10-20). |
+| G15 | Volume boost (above 100%) | ✅ | playback (up to 200%) |
+| G16 | Audio output device choice | ✗ | core |
+| G17 | Output channels / sample rate / passthrough (SPDIF) | ⊘ | Hardware-related, not needed for now |
+| G18 | System master volume / wave volume | ⊘ | Windows system volume |
+
+## H. Window and interface
+
+| ID | Feature | Status | Note / owner |
+| --- | --- | --- | --- |
+| H01 | Fullscreen | ✅ | core |
+| H02 | Stretched fullscreen (aspect ratio not kept) | ⊘ | core. Dropped in the cut review (2026-10-20). |
+| H03 | Window size 0.5 / 1 / 1.5 / 2 × the video size | ✗ | core + new plugin |
+| H04 | Fit to the video's aspect ratio (window without black bars) | ✗ | core |
+| H05 | Stay on top: always / while playing / in fullscreen | ✗ | core |
+| H06 | Move the window to a screen corner / center | ⊘ | core. Dropped in the cut review (2026-10-20). |
+| H07 | Mini size | ✗ | core |
+| H08 | Bottom control bar | ✅ | playback |
+| H09 | Show / hide the control bar and the playlist | ✅ | playlist, core |
+| H10 | Skin / color scheme switching | ✗ | core (switchable themes); currently the brand colors (taken from the logo) |
+| H11 | Window opacity | ⊘ | core. Dropped in the cut review (2026-10-20). |
+| H12 | Show the logo when idle | ✗ | core |
+| H13 | Control panel (picture / audio / subtitles / playback adjusted in one place) | ⊘ | Decided to use separate tool windows (remediation document D2) |
+| H14 | Interface language switching | ✗ | core + all plugins (currently Chinese only) |
+
+## I. Information and feedback
+
+| ID | Feature | Status | Note / owner |
+| --- | --- | --- | --- |
+| I01 | On-screen messages (action feedback) | ✅ | core + each plugin |
+| I02 | Full playback information overlay | ✅ | info |
+| I03 | Brief information (file name, time, codec) | ✗ | info |
+| I04 | Miscellaneous information (time, percentage, index) | ⊘ | info. Dropped in the cut review (2026-10-20). |
+| I05 | Playback / system information dialog (codecs, filters, file information) | ✗ | info + core (more statistics) |
+| I06 | Show the time when hovering over the seek bar | ✗ | playback |
+| I07 | Show a thumbnail preview when hovering over the seek bar | ✗ | core (thumbnails) + playback |
+| I08 | Copy the file name / path to the clipboard | ✗ | core (clipboard text) + playback |
+| I09 | About | ✗ | core |
+
+## J. Settings and plugins
+
+| ID | Feature | Status | Note / owner |
+| --- | --- | --- | --- |
+| J01 | **Shortcut settings** (rebind any command to keyboard or mouse) | ✗ | **new plugin + core**, see the next section |
+| J02 | Mouse action settings (what click, double-click, wheel and side buttons are bound to) | ✗ | Same as above (the binding table already supports mouse input) |
+| J03 | Ignore default shortcuts | ✗ | Same as above |
+| J04 | Main preferences window (settings in one place) | ✗ | new plugin + core (how the plugins' settings pages are combined needs design) |
+| J05 | Settings import / export | ⊘ | core. Dropped in the cut review (2026-10-20). |
+| J06 | Decoder / filter management | ⊘ | DirectShow stack |
+| J07 | Plugin management (list, disable, enable, uninstall) | ✗ | core (the disable API was removed in the previous round and needs a redesign) + new plugin |
+| J08 | Plugin Workshop (AI-generated plugins) | ✅ | workshop |
+| J09 | Emulator (NES) | ✅ | nes |
+| J10 | Check for updates | ⊘ | Not needed for now. Dropped in the cut review (2026-10-20). |
+| J11 | Visualization (animation and album art for audio-only playback) | ✗ | new plugin + core (drawing in the video area) |
+| J12 | Live-streaming, chat and broadcast tools | ⊘ | Third-party live-streaming services |
+
+---
+
+## Statistics
+
+| Status | Count |
 | --- | --- |
-| ✅ 已实现 | 48 |
-| ◐ 部分实现 | 13 |
-| ✗ 未实现 | 66 |
-| ⊘ 不做 | 56 |
-| 合计 | 183 |
+| ✅ Implemented | 48 |
+| ◐ Partly implemented | 13 |
+| ✗ Not implemented | 66 |
+| ⊘ Won't do | 56 |
+| Total | 183 |
 
-未实现的项里，约 60% 要先由核心提供能力（多是 mpv 已有、只需开放的：帧步进、旋转翻转、锐化降噪、宽高比、选择音轨、A-B 循环、章节、置顶等），其余可以在现有插件或新插件里完成。
+Of the unimplemented items, about 60% first need a capability from the core (mostly things mpv already has and only need to be exposed: frame stepping, rotate and flip, sharpen and denoise, aspect ratio, audio track choice, A-B loop, chapters, stay on top, etc.). The rest can be done in existing plugins or new plugins.
 
 ---
 
-## 关于快捷键设置插件（J01–J03）
+## About the shortcut settings plugin (J01–J03)
 
-**能做，而且不需要插件之间通信。** 原因是所有快捷键都已经统一存在核心的绑定表里，不在各插件手里：
+**It can be done, and it needs no communication between plugins.** The reason is that all shortcuts are already kept in the core's binding table, not in the individual plugins:
 
-- 每个插件只是**声明**「我的命令默认绑定什么键」（`bindings`），真正的「哪个键触发哪个命令」由核心统一裁决。
-- 核心的绑定表本来就有一层**用户覆盖**（用户改过的绑定优先于插件默认值，可以解绑），并且已经跨启动保存在 `ui-state.json` 里。这一层上一轮就做好了，只是还没有对插件开放读写接口。
-- 所以快捷键设置插件只需要和核心说话：「列出所有命令及当前绑定」「把某命令改绑成某键」「恢复默认」。它不需要知道 playback、playlist 的存在，也不会调用它们。
+- Each plugin only **declares** "which keys my commands are bound to by default" (`bindings`); the actual decision "which key triggers which command" is made by the core.
+- The core's binding table already has a **user override** layer (bindings the user changed take precedence over plugin defaults, and can be unbound), and it is already saved across launches in `ui-state.json`. This layer was done in the previous round; only the read/write API for plugins is still missing.
+- So the shortcut settings plugin only needs to talk to the core: "list all commands and their current bindings", "rebind a command to a key", "restore defaults". It does not need to know that playback or playlist exist, and it never calls them.
 
-功能散落在多个插件里**不会**让它变难，反而正是这个设计的好处：任何插件注册的任何命令，都会自动出现在快捷键设置里，包括以后新装的插件和插件工坊生成的插件。
+Having the features spread over many plugins does **not** make this harder; it is exactly the benefit of this design: any command registered by any plugin shows up in the shortcut settings automatically, including plugins installed later and plugins generated by the Plugin Workshop.
 
-需要核心新增的接口（一条 API 请求，自下而上）：
+The API the core needs to add (one API request, bottom-up):
 
 ```ts
-plugin.bindings.list(): BindingInfo[]     // 每条命令：插件、命令 id、菜单路径或标题、默认绑定、当前绑定、冲突
-plugin.bindings.set(command, inputs[])    // 写入用户覆盖层；[] 表示解绑
-plugin.bindings.reset(command?)           // 恢复默认（单条或全部）
+plugin.bindings.list(): BindingInfo[]     // per command: plugin, command id, menu path or title, default binding, current binding, conflicts
+plugin.bindings.set(command, inputs[])    // writes the user override layer; [] means unbind
+plugin.bindings.reset(command?)           // restore defaults (one command or all)
 plugin.bindings.onChange(listener)
 ```
 
-这需要一个新能力（如 `bindings.manage`），因为它能改别人的快捷键。
+This needs a new capability (such as `bindings.manage`), because it can change other plugins' shortcuts.
 
-**基础操作要有核心「动作」，不依赖任何插件。** 上一帧 / 下一帧、播放 / 暂停、上一个 / 下一个这类操作，即使用户卸载了 playback 插件，快捷键插件也应该能绑定。现在的状态：
+**Basic operations need core "actions" that do not depend on any plugin.** Operations such as previous / next frame, play / pause and previous / next should still be bindable by the shortcut plugin even if the user uninstalls the playback plugin. Current state:
 
-| 操作 | 现在由谁提供命令 | 卸载 playback 后 |
+| Operation | Who provides the command now | After playback is uninstalled |
 | --- | --- | --- |
-| 全屏、仅退出全屏、退出 | 核心 | 仍可用 |
-| 播放 / 暂停、跳转、倍速、音量、静音、上一个 / 下一个 | playback | 没有命令可绑 |
-| 上一帧 / 下一帧 | 无（B07 未实现） | — |
+| Fullscreen, leave fullscreen only, quit | core | Still available |
+| Play / pause, seek, speed, volume, mute, previous / next | playback | No command to bind |
+| Previous / next frame | none (B07 not implemented) | — |
 
-建议做法：核心像现在的「全屏」「退出」一样，自己注册一组**基础播放动作**（播放 / 暂停、停止、上一帧 / 下一帧、±5 秒、上一个 / 下一个、音量 ±、静音、倍速 ±）。playback 插件只负责底栏界面和自己的扩展命令，不再重复注册这些基础动作。这样：
+Suggested approach: like "fullscreen" and "quit" today, the core registers a set of **basic playback actions** itself (play / pause, stop, previous / next frame, ±5 seconds, previous / next, volume ±, mute, speed ±). The playback plugin is then only responsible for the bottom bar UI and its own extra commands, and no longer registers these basic actions again. This way:
 
-- 基础动作永远存在，快捷键插件总能绑定它们；
-- playback 变成纯界面插件，可以被别的底栏插件替换；
-- 不涉及任何插件之间通信。
+- the basic actions always exist, and the shortcut plugin can always bind them;
+- playback becomes a pure UI plugin that another bottom-bar plugin can replace;
+- no communication between plugins is involved.
 
-这属于核心职责调整（把一部分命令从 playback 移到核心），如果要做，建议和快捷键接口一起作为一轮核心改动，按自上而下流程进行。
+This is a change of core responsibilities (moving some commands from playback into the core). If it is done, it should be one round of core changes together with the shortcut API, following the top-down process.
 
 ---
 
-## 插件实验选材原则
+## Principles for choosing plugin experiments
 
-挑选插件实验题目、划分插件与核心职责时遵循：
+When choosing plugin experiment topics and dividing responsibilities between plugins and the core:
 
-1. **功能分组不等于菜单结构。** 例如字幕的加载入口分布在「打开」和「字幕」两处，音频录制、视频录制与截图也可按任务能力重新组织；一个插件可以贡献多个菜单入口。
-2. **参数控制不等于算法在 TS 里执行。** 色彩、音频 DSP 和 GPU 增强等面板负责设置，计算由成熟播放后端或原生提供者执行；具体桥接以实验为准。
-3. **后端与平台设置不必全部做成插件。** 解码、设备、渲染器等底层资源的生命周期由宿主或后端承担，插件只提供策略与入口。
-4. **默认附带和可选扩展分开考虑。** NES 模拟器等属于可选扩展，不进默认功能集。
-5. **新增候选**（不在上表编号内）：白平衡 / 色温调节；GPU 超分辨率一类的画面增强，作为额外实验候选。
+1. **Feature groups are not the menu structure.** For example, the entry points for loading subtitles are split between "Open" and "Subtitles", and audio recording, video recording and screenshots can also be regrouped by task; one plugin can contribute several menu entries.
+2. **Controlling parameters does not mean running the algorithm in TS.** Panels for color, audio DSP, GPU enhancement and the like handle the settings; the computation is done by a mature playback backend or a native provider. The exact bridge is decided by experiment.
+3. **Backend and platform settings do not all have to be plugins.** The lifecycle of low-level resources such as decoding, devices and renderers belongs to the host or the backend; plugins only provide policy and entry points.
+4. **Consider the default bundle and optional extensions separately.** The NES emulator and the like are optional extensions and are not part of the default feature set.
+5. **New candidates** (not numbered in the tables above): white balance / color temperature adjustment; GPU picture enhancement such as super-resolution, as extra experiment candidates.

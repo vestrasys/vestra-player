@@ -1,84 +1,84 @@
-# 面板槽位共存（侧栏页签）
+# Panel slot sharing (sidebar tabs)
 
-2026-10-24。用户裁决：**方案 A，侧栏页签**。底栏和 backdrop 保持独占。
+2026-10-24. User ruling: **option A, sidebar tabs**. The bottom bar and the backdrop stay exclusive.
 
-## 问题
+## Problem
 
-槽位只有 3 个（`Slot::Bottom`、`Slot::Sidebar`、`Slot::Backdrop`，`composition.rs`），每个槽位只能放一个面板：
+There are only 3 slots (`Slot::Bottom`, `Slot::Sidebar`, `Slot::Backdrop`, in `composition.rs`), and each slot can hold only one panel:
 
-- `shell_source` 遇到两个面板同槽就 bail；
-- `window_state::Policy` 的 `bottom`/`sidebar` 是 `Option<Attachment>`；
-- `InputShared.sidebar` 只记一个 owner；
-- `layout.set`、`sync_floating`、`floating_source` 都按「一个槽位一个 owner」写。
+- `shell_source` bails when two panels are in the same slot;
+- `bottom`/`sidebar` in `window_state::Policy` are `Option<Attachment>`;
+- `InputShared.sidebar` records only one owner;
+- `layout.set`, `sync_floating` and `floating_source` are all written for "one owner per slot".
 
-侧栏和底栏的冲突要到编译阶段才发现，报的是 `ui-prepare`；而 `activate` 期间挂载失败会让整个激活失败。结果是后挂的插件（比如内置播放列表）整体失效，「播放列表 F6」消失，用户看不到任何提示。
+A sidebar or bottom-bar conflict is only discovered at compile time, reported as `ui-prepare`; and a mount failure during `activate` makes the whole activation fail. The result is that the plugin mounted later (for example the built-in playlist) fails entirely, "Playlist F6" disappears, and the user sees no message at all.
 
-## 第 0 步：失败必须看得见（分支 `fix/slot-conflict`）
+## Step 0: failures must be visible (branch `fix/slot-conflict`)
 
-- `ui.mount` 入口就检查侧栏和底栏是否已被占用（包括排队中、准备中的挂载），占用时返回 `conflict`，消息里写明占用方的插件 id。
-- 槽位冲突不再让激活失败：插件照常 ready，带上 `slot-occupied` 警告，插件管理里显示出来。
-- 内置插件先挂。
-- `ui-prepare` 只用于真正的编译错误和桥接错误。
+- `ui.mount` checks right at the entry whether the sidebar or bottom bar is already taken (including queued and preparing mounts); if taken, it returns `conflict`, with the occupying plugin's id in the message.
+- A slot conflict no longer fails activation: the plugin becomes ready as usual, with a `slot-occupied` warning that is shown in the plugin manager.
+- Built-in plugins mount first.
+- `ui-prepare` is used only for real compile errors and bridge errors.
 
-## 第 1 步：侧栏页签
+## Step 1: sidebar tabs
 
-状态（2026-10-24）：宿主与 SDK 1.5.2 已实现（分支 `feat/sidebar-tabs`、SDK `feat/panel-tabs`）；播放列表的适配另行进行。实现中的取舍：
+Status (2026-10-24): implemented in the host and SDK 1.5.2 (branches `feat/sidebar-tabs` and SDK `feat/panel-tabs`); adapting the playlist is done separately. Trade-offs made during implementation:
 
-- 页签列表放在 `PanelSlot.panels`（不放进 `SlotState`），这样插件测试里对 `state` 的 `deepEqual` 不会因新字段失败；线上仍是 `LayoutSlot.panels`。
-- `"otherTab"` 只出现在 `Panel.state.reason`；`SlotState.reason` 是整个侧栏的，不变。
-- 侧栏最多 8 个页签，第 9 个以 `conflict`（`slot-occupied`）拒绝，不算激活失败。
-- 页签条右端的关闭按钮提示「关闭侧栏」；非当前页签文字用 `text-dim`、悬停有 `hover-bg` 圆角底；页签放不下 105px 时等分变窄、文字省略。
-- 拖放坐标从页签条下方算起（面板组件自己的坐标系）。
-- Ctrl+Tab 切换页签未做。
+- The tab list is in `PanelSlot.panels` (not in `SlotState`), so `deepEqual` on `state` in plugin tests does not fail because of a new field; on the wire it is still `LayoutSlot.panels`.
+- `"otherTab"` only appears in `Panel.state.reason`; `SlotState.reason` is for the whole sidebar and is unchanged.
+- The sidebar holds at most 8 tabs; a 9th is refused with `conflict` (`slot-occupied`), which is not an activation failure.
+- The close button at the right end of the tab strip has the tooltip "Close Sidebar"; inactive tab text uses `text-dim`, and hovering shows a rounded `hover-bg` background; when tabs do not fit at 105px they narrow equally and the text is elided.
+- Drop coordinates are measured from below the tab strip (the panel component's own coordinate system).
+- Switching tabs with Ctrl+Tab is not done.
 
 ```
-┌──────────── video ────────────┬[播放列表][示例列表]   ⧉ ✕┐
-│                               │  1. a.mkv                 │
-└──────────── bottom bar ───────┴───────────────────────────┘
+┌──────────── video ────────────┬[Playlist][Example List]   ⧉ ✕┐
+│                               │  1. a.mkv                     │
+└──────────── bottom bar ───────┴───────────────────────────────┘
 ```
 
-- **页签条**：只有一个侧栏面板时不画，界面和现在完全一样；两个及以上时由宿主画 31px 页签条，样式沿用 ui-spec §5 的播放列表页签。分离和关闭按钮放在页签条右端，作用于整个槽位。
-- **宿主**
-  - composition：每个侧栏面板生成 `if root.sidebar-active == N: Owner{N}View`，切换页签只改属性，不重编 shell。
-  - `floating_source` 改为接收多个 spec，浮动窗口带同样的页签条。
-  - `Policy.sidebar` 改为 `{ panels, active, preferred, detached }`：可见和分离是槽位级的。
-  - `InputShared.sidebar` 取当前页签的 owner，只有当前页签收到 panel 键。
-  - `layout.set` 增加 `active`。
-  - `ui_state` 增加 `sidebarSlot { visible, detached, active, order }`；旧的 `panels[*]` 迁移过来。
-- **SDK**：只做增量（`vestra/1`，patch 版本）。
-  - `LayoutSlot.owner` 的含义改为当前页签的 owner。
-  - 新增 `LayoutSlot.panels?`，`reason` 增加 `"otherTab"`。
-  - `Panel` 新增 `state` / `onChange` / `show()` / `toggle()`；`PanelSlot` 新增 `activate(plugin)`。
-  - 第二个侧栏面板的 `ready` 照常 resolve；`showMenu` 在后台页签上调用时拒绝，返回 `unavailable`。
-  - 老插件不用改。
-- **播放列表**
-  - F6 改为 `list.toggle()`，勾选状态 = 侧栏可见且当前页签是播放列表。
-  - 有宿主页签条时，隐藏自己的页签条。
-  - 遇到旧宿主时回退到 `sidebar.toggle()`。
-- **快捷键**：插件可以给自己的 `toggle()` 绑键；可选 Ctrl+Tab（限定 `focus:"panel"`）切换页签，加之前先查 menus.md 有没有冲突。
-- **分离、全屏、拖放**：分离的是整个侧栏，浮动窗口里也有页签；全屏弹出层显示当前页签；拖放交给当前页签。
-- **首版不做**：关闭单个页签、拖动排序。页签按安装顺序排，播放列表固定在第一个。
+- **Tab strip**: not drawn when there is only one sidebar panel, so the UI is exactly as it is now; with two or more, the host draws a 31px tab strip in the style of the playlist tabs in ui-spec §5. The detach and close buttons sit at the right end of the tab strip and act on the whole slot.
+- **Host**
+  - composition: generates `if root.sidebar-active == N: Owner{N}View` for each sidebar panel; switching tabs only changes a property and does not recompile the shell.
+  - `floating_source` takes several specs, and the floating window has the same tab strip.
+  - `Policy.sidebar` becomes `{ panels, active, preferred, detached }`: visibility and detachment are per slot.
+  - `InputShared.sidebar` takes the owner of the active tab; only the active tab receives panel keys.
+  - `layout.set` gains `active`.
+  - `ui_state` gains `sidebarSlot { visible, detached, active, order }`; the old `panels[*]` are migrated into it.
+- **SDK**: additive only (`vestra/1`, patch version).
+  - `LayoutSlot.owner` now means the owner of the active tab.
+  - New `LayoutSlot.panels?`; `reason` gains `"otherTab"`.
+  - `Panel` gains `state` / `onChange` / `show()` / `toggle()`; `PanelSlot` gains `activate(plugin)`.
+  - `ready` of a second sidebar panel resolves as usual; `showMenu` called on a background tab is refused with `unavailable`.
+  - Old plugins need no changes.
+- **Playlist**
+  - F6 becomes `list.toggle()`; its checked state = sidebar visible and the active tab is the playlist.
+  - When the host has a tab strip, it hides its own tab strip.
+  - On an old host it falls back to `sidebar.toggle()`.
+- **Shortcuts**: plugins can bind keys to their own `toggle()`; optionally Ctrl+Tab (limited to `focus:"panel"`) switches tabs; check menus.md for conflicts before adding it.
+- **Detach, fullscreen, drag and drop**: the whole sidebar is detached, and the floating window has tabs too; the fullscreen pop-up shows the active tab; drops go to the active tab.
+- **Not in the first version**: closing a single tab, reordering by dragging. Tabs are ordered by installation order, with the playlist fixed first.
 
-## 抢不到槽位时插件拿到什么
+## What a plugin gets when it cannot get a slot
 
-不能静默失败：
+It must not fail silently:
 
-- 登记了但当前不显示：`ready` resolve，`panel.state.active === false`，`reason` 为 `"otherTab"`，状态变化通过 `onChange` 通知。
-- 独占槽位被占：`ready` reject，返回 `conflict`，消息里有占用方的插件 id。
-- 两种情况都不会让激活失败；插件管理里有提示。
+- Registered but not currently shown: `ready` resolves, `panel.state.active === false`, `reason` is `"otherTab"`, and state changes are reported through `onChange`.
+- Exclusive slot taken: `ready` rejects with `conflict`, and the message contains the occupying plugin's id.
+- Neither case fails activation; the plugin manager shows a notice.
 
-## 测试
+## Tests
 
-- 单测：composition 生成多个分支并能编译；window_state 中当前页签的回退；ui_state 迁移；`ui.mount` 返回 `conflict`、`layout.set` 的 `active`；SDK fake host；播放列表的 F6。
-- 真机：同时加载 panel-menu 示例和播放列表，检查以下操作：
-  - 页签切换；
-  - F6；
-  - 焦点在列表上时按 F6 关闭；
-  - 分离 / 附着；
-  - 全屏弹出层；
-  - 拖放；
-  - 重启后恢复当前页签；
-  - 窄窗口。
-- 完成后删掉 panel-menu README 里「不要和播放列表同时加载」那句。
+- Unit tests: composition generates several branches and compiles; falling back from the active tab in window_state; ui_state migration; `ui.mount` returning `conflict`, `active` in `layout.set`; the SDK fake host; the playlist's F6.
+- Real machine: load the panel-menu example and the playlist together, and check:
+  - switching tabs;
+  - F6;
+  - F6 closing the sidebar while focus is in the list;
+  - detach / attach;
+  - the fullscreen pop-up;
+  - drag and drop;
+  - restoring the active tab after a restart;
+  - a narrow window.
+- When done, remove the sentence "do not load together with the playlist" from the panel-menu README.
 
-不新增系统相关代码：浮动窗口沿用现有的 `platform::` 调用。
+No new system-specific code: the floating window keeps using the existing `platform::` calls.

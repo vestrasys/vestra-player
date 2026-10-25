@@ -1,127 +1,127 @@
-# 交互规格
+# Interaction specification
 
-本文是 Vestra 的交互规格：各窗口状态下的鼠标、键盘、菜单、窗口与提示行为，写成要求。产品层面的约束（菜单按领域组织、界面归属、播放连续性）见[交互要求](interaction-requirements.md)；有哪些功能见[功能需求](feature-requirements.md)；界面尺寸与配色见[界面规格](ui-spec.md)；菜单树见[菜单](menus.md)；插件接口见[插件 API 参考](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html)。
+This document is the Vestra interaction specification: mouse, keyboard, menu, window and notification behaviour in each window state, written as requirements. Product-level constraints (menus organised by domain, UI ownership, playback continuity) are in [Interaction requirements](interaction-requirements.md); which features exist is in [Feature requirements](feature-requirements.md); UI sizes and colours are in [UI specification](ui-spec.md); the menu tree is in [Menus](menus.md); the plugin interface is in the [Plugin API reference](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html).
 
-体例沿用功能需求：先写核心（宿主），再按插件分章。每一条写明要求、必要的实现约束、是否需要核心新增 API、跨平台说明和验收条目。附录 A 按「状态 × 交互元素」逐格给出规格，附录 B 是播放列表「同类文件」判定的完整规则，附录 C 是各条目的实施轮次与状态。
+The layout follows the feature requirements: the core (host) first, then one chapter per plugin. Each item states the requirement, any necessary implementation constraints, whether the core needs a new API, cross-platform notes and acceptance items. Appendix A gives the specification cell by cell as "state × interaction element", Appendix B is the complete rule for the playlist's "similar files" check, and Appendix C lists the implementation round and status of each item.
 
-## 0. 范围与写法
+## 0. Scope and conventions
 
-### 0.1 本文写什么
+### 0.1 What this document covers
 
-- 写**行为**：什么输入在什么状态下产生什么结果，含默认值、阈值、延时与持久化。尺寸、颜色、图标属于界面规格，本文只在影响交互时提到。
-- 规格以代码为准核对过。条目里的数值（阈值、延时、动画时长）就是 Vestra 的取值；以后要改，改本文并同步代码。
-- 标【核心新增】的接口是尚未接受的请求草案，按[社区工作流](../process/community-workflow.md) §4.1 单独提交、走 §4.3 的协商流程，维护者接受后写进参考文档。
+- It describes **behaviour**: which input in which state produces which result, including defaults, thresholds, delays and persistence. Sizes, colours and icons belong to the UI specification; this document mentions them only where they affect interaction.
+- The specification has been checked against the code. The values in the items (thresholds, delays, animation durations) are Vestra's values; to change one later, change this document and update the code to match.
+- Interfaces marked [New core API] are request drafts that have not been accepted yet. Following the [community workflow](../process/community-workflow.md) §4.1 they are submitted separately and go through the negotiation process of §4.3; once the maintainer accepts them they are written into the reference documentation.
 
-### 0.2 已定的交互决定
+### 0.2 Settled interaction decisions
 
-下面这些决定取代了功能需求、界面规格里早先的写法；对应原文已改写或加了「已被取代」的说明。
+The decisions below replace earlier wording in the feature requirements and the UI specification; the corresponding original text has been rewritten or given a "superseded" note.
 
-| 决定 | 条目 |
+| Decision | Item |
 | --- | --- |
-| 全屏时附着的播放列表不消失，指针移到屏幕右边缘时以覆盖层弹出；`SlotState.reason: "fullscreen"` 表示「全屏覆盖层当前收起」 | G-01 |
-| 打开本地文件时先清空列表，再按「打开文件时」模式加入（默认「加入相似文件」）；「打开或拖入时追加，不清空列表」为选项，默认关 | IA-PL-01 |
-| 拖到视频区：先清空列表再加入并播放；拖到列表：追加到末尾，「插入到拖放位置」为选项，默认关 | G-11、G-12 |
-| 开始播放时把窗口调整为 1 倍视频尺寸（默认） | G-02 |
-| 播放时隐藏鼠标指针默认开 | G-06 |
-| 置顶方式四种，默认「全屏播放时置顶」 | IA-WIN-03 |
-| `` ` `` 在所有系统上都是「迷你尺寸」，迷你尺寸不置顶；画中画是独立命令，没有默认按键 | IA-WIN-01、IA-WIN-02 |
-| 进度条悬停时间默认关 | IA-PB-01 |
-| 界面与按键的音量上限 100；`player.setOutput` 仍接受 0–200 | G-13a、G-13b |
-| 加载中背景层生效，显示加载界面 | G-16a、G-16b |
-| 屏幕提示字号随视频区高度 | G-10 |
-| 右键松开时弹出菜单；子菜单悬停 400 ms 后展开；Esc 逐级关闭 | G-15、IA-CORE-01 |
-| 视频区不设高度下限 | IA-CORE-13 |
-| 自绘标题栏，不加主菜单按钮，菜单入口仍是右键 | IA-CORE-07 |
-| 不做 F7 控制面板：画面、声音、字幕保持三个独立工具窗口 | IA-CORE-09（取消） |
+| In fullscreen an attached playlist does not disappear; when the pointer moves to the right edge of the screen it pops out as an overlay; `SlotState.reason: "fullscreen"` means "the fullscreen overlay is currently retracted" | G-01 |
+| Opening a local file first clears the list, then adds files according to the "When Opening a File" mode (default "Add Similar Files"); "Append when opening or dropping; don't clear the list" is an option, off by default | IA-PL-01 |
+| Dropping on the video area: clear the list first, then add and play; dropping on the list: append to the end, "insert at the drop position" is an option, off by default | G-11, G-12 |
+| When playback starts, resize the window to 1× the video size (default) | G-02 |
+| Hide the pointer while playing is on by default | G-06 |
+| Four always-on-top modes, default "While Playing in Fullscreen" | IA-WIN-03 |
+| `` ` `` is "Mini Size" on every system; mini size is not on top; picture-in-picture is a separate command with no default key | IA-WIN-01, IA-WIN-02 |
+| Seek bar hover time is off by default | IA-PB-01 |
+| The volume limit in the UI and for keys is 100; `player.setOutput` still accepts 0–200 | G-13a, G-13b |
+| The background layer takes effect while loading and shows the loading screen | G-16a, G-16b |
+| OSD font size follows the video area height | G-10 |
+| The menu pops up when the right button is released; a submenu opens after a 400 ms hover; Esc closes one level at a time | G-15, IA-CORE-01 |
+| The video area has no minimum height | IA-CORE-13 |
+| Custom-drawn title bar with no main menu button; the menu is still opened with the right button | IA-CORE-07 |
+| No F7 control panel: picture, audio and subtitles stay three separate tool windows | IA-CORE-09 (cancelled) |
 
-### 0.3 不做的项
+### 0.3 Not planned
 
-- **控制面板（F7）**：不做。画面调节、音频工作台、字幕工作台各自是独立工具窗口。依赖控制面板的条目（IA-CORE-09、IA-PB-08、IA-VID-01、IA-AUD-01、IA-SUB-01、IA-MK-01，以及 IA-PB-06 的控制面板开关）一并取消，编号保留不再使用。
-- **主菜单按钮**：标题栏上不放主菜单按钮，菜单只从右键打开。
-- **360°、3D、浏览器（聊天）按钮**：Vestra 没有这些功能，底栏不放对应按钮。以后要做这些功能属于功能需求。
-- **纯音频专用布局**：纯音频时沿用视频布局，背景层显示专辑封面（附录 A G-09）。
-- **拖动过程中的落点提示**：拖入文件时不显示「播放 / 加入列表」一类的落点区域（R-08）。
+- **Control panel (F7)**: not planned. Picture Adjustments, Audio Workbench and the subtitle workbench are each a separate tool window. The items that depend on the control panel (IA-CORE-09, IA-PB-08, IA-VID-01, IA-AUD-01, IA-SUB-01, IA-MK-01, and the control panel switch of IA-PB-06) are cancelled together; their numbers are kept and not reused.
+- **Main menu button**: no main menu button on the title bar; the menu opens only from the right button.
+- **360°, 3D, browser (chat) buttons**: Vestra has none of these features, so the bottom bar has no buttons for them. Building these features later belongs in the feature requirements.
+- **Audio-only layout**: audio-only playback keeps the video layout, and the background layer shows the album cover (Appendix A G-09).
+- **Drop target hints during a drag**: when dragging files in, no "play / add to list" style drop zones are shown (R-08).
 
-### 0.4 范围
+### 0.4 Scope
 
-**在范围内**：主窗口、浮动窗口、菜单、底栏、播放列表、屏幕提示与信息层在窗口模式、全屏、最大化、迷你尺寸、画中画、空闲、加载中、纯音频各状态下的交互。
+**In scope**: interaction of the main window, floating windows, menus, the bottom bar, the playlist, the OSD and the info layer in windowed mode, fullscreen, maximised, mini size, picture-in-picture, idle, loading and audio-only states.
 
-**不在范围内**：外观（配色、圆角、图标字形，见界面规格）；新功能（直播、聊天等）。
+**Out of scope**: appearance (colours, corner radii, icon glyphs; see the UI specification); new features (live streams, chat, etc.).
 
-### 0.5 与其它文档的关系
+### 0.5 Relation to other documents
 
-- **功能需求**（[feature-requirements.md](feature-requirements.md)）管「有什么功能」，本文管「交互细节」。两者冲突时以本文为准，并改正功能需求。
-- **界面规格**（[ui-spec.md](ui-spec.md)）管尺寸、配色与布局；与本文冲突时，交互部分以本文为准。
-- **菜单**（[menus.md](menus.md)）：本文新增或移动的菜单项实施后同步更新 menus.md 与冲突检查。
-- **插件 API 参考**（[SDK 文档站](https://vestrasys.github.io/vestra-player-sdk/)）：各章末的「本章核心 API 请求」是请求草案；维护者裁决后由维护者改参考文档。只改行为、不改签名的语义变化同样写进参考文档的变更说明。
+- **Feature requirements** ([feature-requirements.md](feature-requirements.md)) cover "which features exist"; this document covers "interaction details". If the two conflict, this document wins and the feature requirements are corrected.
+- **UI specification** ([ui-spec.md](ui-spec.md)) covers sizes, colours and layout; if it conflicts with this document, this document wins for interaction.
+- **Menus** ([menus.md](menus.md)): after menu items added or moved by this document are implemented, menus.md and the conflict check are updated to match.
+- **Plugin API reference** ([SDK documentation site](https://vestrasys.github.io/vestra-player-sdk/)): the "Core API requests in this chapter" at the end of each chapter are request drafts; after the maintainer decides, the maintainer updates the reference documentation. Semantic changes that alter only behaviour and not signatures are also written into the change notes of the reference documentation.
 
-### 0.6 编号、优先级、状态与写法
+### 0.6 Numbering, priority, status and conventions
 
-- **编号**：`G-xx` 是十八条高优先级条目；跨核心与插件的拆成 `G-xxa`（核心）、`G-xxb`（插件）。其余按章编 `IA-<章>-nn`：`CORE`（核心）、`PB`（playback）、`PL`（playlist）、`WIN`（window）、`INFO`、`VIS`（visualizer）、`HK`（hotkeys）、`VID`（video）、`AUD`（audio）、`SUB`（subtitles）、`MK`（marks）。附录 A 的逐格编号（`W-xx`、`F-xx`、`M-xx` 等）与正文条目互相引用。编号不重排、不复用，代码与其它文档按编号引用。
-- **优先级**：**P1** 影响日常使用；**P2** 状态不一致或常用选项；**P3** 补齐与低频项。
-- **状态**：每条标一项。**已实现**：代码与本文一致。**部分实现**：写明哪几条已实现。**未实现**：本文是目标，排在附录 C 的第 3、4 轮。**已取消**：保留编号，不再实施。
-- **跨平台**：按工作流 §1.5，系统相关代码只放在 `src/host/src/platform/` 的平台模块里，插件 API 不出现系统专有概念。每条写明 macOS 与 Windows 的做法；其它系统走 `platform/other.rs`，做不到的返回统一的 `unsupported`。
+- **Numbering**: `G-xx` are the eighteen high-priority items; those that span the core and a plugin are split into `G-xxa` (core) and `G-xxb` (plugin). The rest are numbered per chapter as `IA-<chapter>-nn`: `CORE` (core), `PB` (playback), `PL` (playlist), `WIN` (window), `INFO`, `VIS` (visualizer), `HK` (hotkeys), `VID` (video), `AUD` (audio), `SUB` (subtitles), `MK` (marks). The per-cell numbers of Appendix A (`W-xx`, `F-xx`, `M-xx`, etc.) and the items in the main text refer to each other. Numbers are not reordered or reused; code and other documents refer to items by number.
+- **Priority**: **P1** affects daily use; **P2** inconsistent state or commonly used options; **P3** completeness and rarely used items.
+- **Status**: each item has one. **Implemented**: the code matches this document. **Partially implemented**: states which parts are implemented. **Not implemented**: this document is the target, scheduled in rounds 3 and 4 of Appendix C. **Cancelled**: the number is kept and the item will not be implemented.
+- **Cross-platform**: per workflow §1.5, system-specific code lives only in the platform modules under `src/host/src/platform/`, and the plugin API exposes no system-specific concepts. Each item states the macOS and Windows approach; other systems go through `platform/other.rs`, and what cannot be done returns a uniform `unsupported`.
 
 ---
 
-## 核心（宿主）
+## Core (host)
 
-**位置**：`src/host/`（`src/host/src/*.rs`、`src/host/ui/host.slint`、`src/host/ui/menu-view.slint`、平台模块 `src/host/src/platform/`）
+**Location**: `src/host/` (`src/host/src/*.rs`, `src/host/ui/host.slint`, `src/host/ui/menu-view.slint`, platform modules `src/host/src/platform/`)
 
-### G-01 全屏时附着的播放列表从右边缘弹出（P1）
+### G-01 In fullscreen the attached playlist pops out from the right edge (P1)
 
-**状态**：已实现（窗口状态见 `window_state.rs`，覆盖层见 `composition.rs`）。「全屏时即使窗口模式下关着也弹出」的开关属于 IA-CORE-06，未实现，行为固定为默认（关）。
+**Status**: implemented (window state in `window_state.rs`, overlay in `composition.rs`). The switch "pop out in fullscreen even when closed in windowed mode" belongs to IA-CORE-06 and is not implemented; the behaviour is fixed at the default (off).
 
-**要求**：
+**Requirements**:
 
-1. 适用条件：全屏，侧栏已挂载、处于附着状态（`detached` 为假）。浮动侧栏保持独立窗口，不受影响。
-2. 两种状态：**收起**（不显示）和**弹出**（覆盖在视频右侧，不挤压视频）。进入全屏时为收起。
-3. 弹出条件：用户偏好为显示（`preferred`），且指针进入屏幕右边缘 **4 px** 以内。偏好为隐藏时右边缘不触发。
-4. 弹出层几何：从屏幕顶端到底端占满全高；宽度取用户在窗口模式下拖出的侧栏宽度，并且不超过「屏幕宽 − 318」。弹出期间底栏宽度立即收窄到「屏幕宽 − 弹出层宽」，底栏右端与弹出层左边缘对齐。
-5. 动画：弹出时向左滑出 150 ms，收起时向右滑回 150 ms。
-6. 收起条件（任一满足）：
-   - 指针离开弹出层（x 小于弹出层左边缘，含停在底栏上）500 ms 后；
-   - 弹出层没有锁（第 7 条）且 3000 ms 内没有活动（the host's activity idle timer, shared with the pointer auto-hide; the fullscreen bar no longer uses it, FS-BAR-1）；
-   - 用户按 F6 或点底栏的列表按钮把偏好改为隐藏；
-   - 退出全屏。
-7. 锁：面板通过 `Panel.setInteraction` 报告 `focused`（例如搜索框有焦点）、`dragging`（拖动排序）、`popupOpen`（列表右键菜单）为真时不收起，与底栏的锁规则相同。宿主自己的悬停锁（G-04）同样作用于弹出层。
-8. 全屏中按 F6：偏好从隐藏变为显示时立即弹出，保持到指针进入后再离开，或 3000 ms 无活动；从显示变为隐藏时立即收起。
-9. 焦点：弹出不抢键盘焦点；用户点击弹出层后焦点进入面板；收起时如果焦点在面板里，交回视频区。
-10. 指针：指针在弹出层上方时不隐藏。
-11. `SlotState` 语义：`effective` 表示「现在看得见」，弹出时为 `true`、收起时为 `false`；`reason: "fullscreen"` 表示「全屏覆盖层当前收起」。是否处于覆盖形态由插件按 `window.state.fullscreen && !state.detached` 判断。
-12. 弹出层是全屏时单独的一份面板组件实例，进入 / 退出全屏时重建；组件里的本地状态（如滚动位置）不跨全屏保留，插件写在 global 上的属性不受影响。全屏时拖放到弹出层上交给侧栏面板。
+1. Applies when: fullscreen, and the sidebar is mounted and attached (`detached` is false). A floating sidebar stays a separate window and is not affected.
+2. Two states: **retracted** (not shown) and **popped out** (overlaid on the right side of the video, without squeezing the video). Entering fullscreen starts retracted.
+3. Pop-out condition: the user preference is shown (`preferred`), and the pointer enters within **4 px** of the right edge of the screen. When the preference is hidden, the right edge does not trigger.
+4. Pop-out geometry: full height from the top of the screen to the bottom; the width is the sidebar width the user dragged in windowed mode, and at most "screen width − 318". While popped out, the bottom bar width immediately narrows to "screen width − pop-out width", with the right end of the bottom bar aligned to the left edge of the pop-out.
+5. Animation: slides out to the left in 150 ms when popping out, slides back to the right in 150 ms when retracting.
+6. Retract conditions (any one):
+   - 500 ms after the pointer leaves the pop-out (x less than the left edge of the pop-out, including resting on the bottom bar);
+   - the pop-out has no lock (item 7) and there is no activity for 3000 ms (the host's activity idle timer, shared with the pointer auto-hide; the fullscreen bar no longer uses it, FS-BAR-1);
+   - the user presses F6 or clicks the list button on the bottom bar, changing the preference to hidden;
+   - fullscreen is exited.
+7. Locks: while the panel reports `focused` (for example the search box has focus), `dragging` (drag reordering) or `popupOpen` (list context menu) as true through `Panel.setInteraction`, it does not retract; the same lock rules as the bottom bar. The host's own hover lock (G-04) also applies to the pop-out.
+8. Pressing F6 in fullscreen: when the preference changes from hidden to shown it pops out immediately and stays until the pointer enters and then leaves, or 3000 ms without activity; when it changes from shown to hidden it retracts immediately.
+9. Focus: popping out does not take keyboard focus; after the user clicks the pop-out, focus goes into the panel; when retracting, if focus is in the panel it returns to the video area.
+10. Pointer: the pointer is not hidden while it is over the pop-out.
+11. `SlotState` semantics: `effective` means "visible right now", `true` when popped out and `false` when retracted; `reason: "fullscreen"` means "the fullscreen overlay is currently retracted". Whether it is in overlay form is decided by the plugin with `window.state.fullscreen && !state.detached`.
+12. The pop-out is a separate instance of the panel component in fullscreen, rebuilt when entering / exiting fullscreen; local state in the component (such as the scroll position) is not kept across fullscreen, while properties the plugin writes on the global are not affected. In fullscreen, drops onto the pop-out go to the sidebar panel.
 
-**跨平台**：纯宿主逻辑。macOS 全屏是独立空间，指针移到屏幕顶端唤出系统菜单栏，与右边缘不冲突。Windows 多显示器时右边缘按主窗口所在屏幕计算（指针坐标本来就是窗口坐标）。
+**Cross-platform**: pure host logic. macOS fullscreen is a separate space, and moving the pointer to the top of the screen reveals the system menu bar, which does not conflict with the right edge. On Windows with multiple monitors, the right edge is computed for the screen the main window is on (pointer coordinates are window coordinates anyway).
 
-**验收**：
+**Acceptance**:
 
-1. 窗口模式开着列表，进入全屏：列表不显示，视频占满屏幕。
-2. 指针移到屏幕最右侧：列表从右边滑出，盖住视频右侧，视频不缩小；底栏右端与列表左边缘对齐。
-3. 指针移回视频中部：约半秒后列表滑回。
-4. 列表弹出时点搜索框输入文字，把指针移开：列表不收起；按 Esc 清空搜索、焦点交回列表后再移开：列表收起。
-5. 窗口模式关着列表（F6），进入全屏，指针移到右边缘：不弹出。全屏中按 F6：立即弹出；再按 F6：立即收起。
-6. 底栏的列表按钮在第 5 条各步中的亮 / 暗与偏好一致（G-18）。
-7. 列表处于浮动状态时进入全屏：浮动窗口保持原样，右边缘不触发。
+1. With the list open in windowed mode, enter fullscreen: the list is not shown, and the video fills the screen.
+2. Move the pointer to the far right of the screen: the list slides out from the right, covering the right side of the video, and the video does not shrink; the right end of the bottom bar aligns with the left edge of the list.
+3. Move the pointer back to the middle of the video: the list slides back after about half a second.
+4. With the list popped out, click the search box, type text and move the pointer away: the list does not retract; press Esc to clear the search, so focus returns to the list, then move away: the list retracts.
+5. With the list closed in windowed mode (F6), enter fullscreen and move the pointer to the right edge: it does not pop out. Press F6 in fullscreen: it pops out immediately; press F6 again: it retracts immediately.
+6. The lit / dim state of the list button on the bottom bar matches the preference in each step of item 5 (G-18).
+7. Enter fullscreen while the list is floating: the floating window stays as it is, and the right edge does not trigger.
 
-### G-04 全屏时指针停在底栏上，底栏不隐藏（P1）
+### G-04 In fullscreen, the bottom bar does not hide while the pointer rests on it (P1)
 
-**状态**：已实现。第 4 条的开关属于 IA-CORE-06，未实现，行为固定为默认（开）。
+**Status**: implemented. The switch in item 4 belongs to IA-CORE-06 and is not implemented; the behaviour is fixed at the default (on).
 
-**要求**：
+**Requirements**:
 
-1. 指针在底栏矩形范围内时，底栏视为被锁住，不隐藏。
+1. While the pointer is inside the bottom bar rectangle, the bottom bar counts as locked and does not hide.
 2. Since FS-BAR-1 the fullscreen bar shows only while the pointer is in its band and hides 500 ms after the pointer leaves it (see the FS-BAR-1 requirement below); moving over the bar still counts as activity for the pointer auto-hide.
-3. 指针在底栏上（or in its fullscreen band）时不隐藏指针（指针隐藏只作用于视频区）。
-4. 宿主设置页（IA-CORE-06）提供开关「指针在控制栏上时不自动隐藏」，默认开。
+3. While the pointer is on the bottom bar (or in its fullscreen band) the pointer is not hidden (pointer hiding applies only to the video area).
+4. The host settings page (IA-CORE-06) provides the switch "Don't auto-hide the pointer over the control bar", on by default.
 
-**实现约束**：底栏和全屏侧栏弹出层外包一层只做悬停检测的 `TouchArea`（作为内容的父元素，不吃子元素的事件），输出 `bottom-hover` / `sidebar-hover`；视频区输出 `video-hover`。悬停锁是宿主自己的锁，插件的 `setInteraction` 写不掉。
+**Implementation constraints**: the bottom bar and the fullscreen sidebar pop-out are wrapped in a `TouchArea` that only detects hover (as the parent of the content, not consuming the children's events), outputting `bottom-hover` / `sidebar-hover`; the video area outputs `video-hover`. The hover lock is the host's own lock, and a plugin's `setInteraction` cannot clear it.
 
-**跨平台**：纯宿主逻辑。
+**Cross-platform**: pure host logic.
 
-**验收**：
+**Acceptance**:
 
-1. 全屏播放，指针移到底栏上静止 10 秒：底栏不消失，指针不消失。
-2. 指针在底栏上左右移动 10 秒：底栏不消失。
+1. Play in fullscreen, move the pointer onto the bottom bar and keep it still for 10 seconds: the bottom bar does not disappear, and the pointer does not disappear.
+2. Move the pointer left and right on the bottom bar for 10 seconds: the bottom bar does not disappear.
 3. Move the pointer from the bar to the middle of the video and rest it there: the bar disappears after 500 ms, the pointer after 3 seconds (FS-BAR-1).
 4. With the host settings switch off (IA-CORE-06, not implemented): the bar still shows only while the pointer is in its band (FS-BAR-1); the switch affects only the pointer auto-hide over the bar.
 
@@ -133,1445 +133,1445 @@
 
 **Acceptance**: fullscreen on two monitor sizes, with the sidebar popped out and floating: the bar appears only with the pointer at the bottom band; Ctrl+→ shows "Forward 30 s: ..." on the OSD with no bar; a seek drag that leaves the band keeps the bar until release.
 
-### G-03 右键菜单在小窗口里完整可用；可以超出主窗口（P1）
+### G-03 The context menu is fully usable in a small window and can extend beyond the main window (P1)
 
-**状态**：部分实现。第一步（窗口内滚动）已实现；第二步（菜单覆盖层窗口，菜单可以超出主窗口）未实现。
+**Status**: partially implemented. Step one (scrolling inside the window) is implemented; step two (a menu overlay window, so the menu can extend beyond the main window) is not implemented.
 
-**要求**：
+**Requirements**:
 
-1. 菜单的每一级按**可用区域**定位：第一步为主窗口内部；第二步为主窗口所在显示器的工作区（macOS 不含菜单栏与 Dock，Windows 不含任务栏），不受主窗口大小限制。
-2. 顶层在指针处弹出；右侧放不下时向左展开，下方放不下时向上展开（贴住指针），仍放不下时贴住可用区域边缘。
-3. 子菜单在所属行右侧展开，与父级重叠 2 px；右侧放不下时翻到父级左侧；下方放不下时整体上移到贴住可用区域底边。子菜单按父行滚动后的位置定位。
-4. 某一级高于可用区域时，该级高度等于可用区域高度，上下两端各显示一条 12 px 的滚动箭头条（▲ / ▼）；指针停在箭头条上时每 50 ms 滚动一行，滚轮按像素位移滚动，键盘 ↑↓ 移出可见区时自动滚动。每一级的滚动位置由宿主保存，展开子菜单不丢失父级的滚动位置。
-5. 关闭：点击菜单以外的任何地方、切换到其它应用、按 Esc（IA-CORE-01）时关闭。点击菜单以外关闭菜单时，这次点击被菜单吃掉，不传给视频区。
-6. 浮动列表窗口与面板菜单（`Panel.showMenu`）用同一套规则。
+1. Each menu level is positioned within the **available area**: in step one, the inside of the main window; in step two, the work area of the display the main window is on (excluding the menu bar and Dock on macOS, and the taskbar on Windows), not limited by the size of the main window.
+2. The top level pops up at the pointer; if there is no room on the right it opens to the left, if there is no room below it opens upwards (against the pointer), and if it still does not fit it sticks to the edge of the available area.
+3. A submenu opens to the right of its row, overlapping the parent by 2 px; if there is no room on the right it flips to the left of the parent; if there is no room below it moves up as a whole until it touches the bottom edge of the available area. A submenu is positioned at its parent row's position after scrolling.
+4. When a level is taller than the available area, its height equals the height of the available area and a 12 px scroll arrow strip (▲ / ▼) is shown at each end; while the pointer rests on an arrow strip it scrolls one row every 50 ms, the wheel scrolls by pixel offset, and the keyboard ↑↓ scroll automatically when moving out of the visible area. The host keeps the scroll position of each level, so opening a submenu does not lose the parent's scroll position.
+5. Closing: the menu closes on a click anywhere outside it, on switching to another application, and on Esc (IA-CORE-01). When a click outside the menu closes it, that click is consumed by the menu and not passed to the video area.
+6. The floating list window and panel menus (`Panel.showMenu`) use the same rules.
 
-**实现约束（第二步）**：宿主打开菜单时创建一个无边框、透明、置顶、不在任务栏显示的顶层窗口，覆盖指针所在显示器的整个工作区，`MenuView` 画在这个窗口里；`menu.rs` 的定位改按工作区矩形计算；「主窗口失去焦点时关闭菜单」改为「应用失去激活（覆盖层与主窗口都不是活动窗口）时关闭」。第一步的窗口内滚动保留给无法建窗口的系统。
+**Implementation constraints (step two)**: when opening a menu, the host creates a borderless, transparent, always-on-top top-level window that does not show in the taskbar, covering the whole work area of the display the pointer is on, and draws `MenuView` in this window; positioning in `menu.rs` is computed from the work area rectangle; "close the menu when the main window loses focus" becomes "close when the application is deactivated (neither the overlay nor the main window is the active window)". Step one's in-window scrolling is kept for systems where a window cannot be created.
 
-**核心 API**：不新增。
+**Core API**: none new.
 
-**跨平台**（平台模块新增 `menu_overlay(attrs)` 一类函数）：
+**Cross-platform** (the platform module gets a function like `menu_overlay(attrs)`):
 
-- macOS：覆盖层窗口的层级设为弹出菜单层（`NSPopUpMenuWindowLevel`），集合行为加 `fullScreenAuxiliary` 与 `moveToActiveSpace`，在全屏空间里也能显示。
-- Windows：winit `with_decorations(false)`、`with_skip_taskbar(true)`、`with_window_level(AlwaysOnTop)`、`with_transparent(true)`；工作区用 `MonitorInfo.rcWork`。
-- 工作区查询放进 `platform::screen_for` 的返回值（`ScreenFacts` 增加工作区矩形）。
-- 其它系统：只做第一步。
+- macOS: the overlay window's level is set to the pop-up menu level (`NSPopUpMenuWindowLevel`), and its collection behaviour adds `fullScreenAuxiliary` and `moveToActiveSpace`, so it can show inside a fullscreen space as well.
+- Windows: winit `with_decorations(false)`, `with_skip_taskbar(true)`, `with_window_level(AlwaysOnTop)`, `with_transparent(true)`; the work area comes from `MonitorInfo.rcWork`.
+- The work area query goes into the return value of `platform::screen_for` (`ScreenFacts` gains a work area rectangle).
+- Other systems: step one only.
 
-**验收**：
+**Acceptance**:
 
-1. 主窗口拖到 320×182 右键：顶层菜单高度等于窗口高，上下有 ▲▼ 条，停在条上滚动、滚轮滚动、↓ 键到底自动滚动，每一项都能点到（第一步）。第二步：菜单完整显示在窗口外。
-2. 主窗口靠屏幕右边缘时右键：菜单向左展开；子菜单在屏幕右边缘翻到左侧（第二步）。
-3. 主窗口靠屏幕底边时右键：菜单向上展开，不被 Dock / 任务栏挡住（第二步）。
-4. 在 768 高的屏幕上打开项数超过屏幕高度的子菜单（测试插件注册 40 项）：出现上下箭头，可滚动（第二步）。
-5. 浮动列表窗口（300×250）里右键：列表菜单可滚动、每项可点。
-6. 全屏（macOS 全屏空间）里右键：菜单正常显示在全屏空间里。
-7. 菜单打开时点击菜单以外的视频：菜单关闭，视频不响应这次点击；用 ⌘Tab / Alt+Tab 切走：菜单关闭。
+1. Drag the main window to 320×182 and right-click: the top-level menu is as tall as the window with ▲▼ strips at top and bottom; resting on a strip scrolls, the wheel scrolls, and the ↓ key scrolls automatically at the bottom; every item can be clicked (step one). Step two: the menu shows completely outside the window.
+2. Right-click with the main window against the right edge of the screen: the menu opens to the left; a submenu flips to the left at the right edge of the screen (step two).
+3. Right-click with the main window against the bottom edge of the screen: the menu opens upwards and is not covered by the Dock / taskbar (step two).
+4. On a 768-high screen, open a submenu with more items than the screen height (a test plugin registers 40 items): up and down arrows appear and it can scroll (step two).
+5. Right-click in the floating list window (300×250): the list menu can scroll and every item can be clicked.
+6. Right-click in fullscreen (macOS fullscreen space): the menu shows normally inside the fullscreen space.
+7. With the menu open, click the video outside the menu: the menu closes and the video does not respond to this click; switch away with ⌘Tab / Alt+Tab: the menu closes.
 
-### G-15 子菜单展开延时；右键松开时弹出菜单（P1）
+### G-15 Submenu open delay; the menu pops up on right-button release (P1)
 
-**状态**：已实现（延时状态机 `menu::HoverDelay`，宿主每 16 ms 提交到期的路径）。
+**Status**: implemented (delay state machine `menu::HoverDelay`; the host commits due paths every 16 ms).
 
-**要求**：
+**Requirements**:
 
-1. **右键松开时弹出**：视频区右键按下只记录位置，松开时在**松开的位置**弹出主菜单。按下后移出视频区（拖到底栏或窗口外）再松开：不弹出。按住右键期间不弹出。
-2. **展开延时**：指针停在一个子菜单行上满「展开延时」后才展开；在此之前离开该行则取消。
-3. **切换延时**：某个子菜单已展开时，指针移到同级的其它行，等同样的延时后才关闭已展开的子菜单（并展开新行的子菜单，若有）；在此期间指针进入已展开的子菜单则取消切换。斜着移向子菜单时不会误切换，不需要另做方向判定。
-4. 点击子菜单行立即展开；键盘 → / Enter 立即展开；键盘 ↑↓ 移到命令行时立即关闭更深的级别。
-5. 展开延时：Windows 读系统设置 `SPI_GETMENUSHOWDELAY`（默认 400 ms）；macOS 与其它系统取 400 ms（平台函数 `platform::menu_show_delay_ms()`）。
-6. 面板菜单（`Panel.showMenu`）是单层菜单，不涉及延时。插件自己画的面板建议也在右键松开时调用 `showMenu`，与主菜单一致。
+1. **Pop up on right-button release**: pressing the right button on the video area only records the position; on release the main menu pops up at **the release position**. Pressing, moving out of the video area (dragging onto the bottom bar or outside the window) and then releasing: no menu. No menu while the right button is held down.
+2. **Open delay**: a submenu opens only after the pointer rests on its row for the "open delay"; leaving the row before that cancels it.
+3. **Switch delay**: while a submenu is open, when the pointer moves to another row at the same level, the open submenu closes only after the same delay (and the new row's submenu opens, if it has one); if the pointer enters the open submenu during that time, the switch is cancelled. Moving diagonally towards a submenu does not switch it by mistake, and no separate direction check is needed.
+4. Clicking a submenu row opens it immediately; keyboard → / Enter opens it immediately; when keyboard ↑↓ moves to a command row, deeper levels close immediately.
+5. Open delay: Windows reads the system setting `SPI_GETMENUSHOWDELAY` (default 400 ms); macOS and other systems use 400 ms (platform function `platform::menu_show_delay_ms()`).
+6. Panel menus (`Panel.showMenu`) are single-level and have no delay. Panels drawn by plugins are advised to call `showMenu` on right-button release as well, consistent with the main menu.
 
-**核心 API**：不新增。
+**Core API**: none new.
 
-**跨平台**：见第 5 条。macOS 系统菜单几乎立即展开，Vestra 的 400 ms 是有意的取舍（防误触），两个系统一致。
+**Cross-platform**: see item 5. macOS system menus open almost immediately; Vestra's 400 ms is a deliberate trade-off (to prevent accidental opening), the same on both systems.
 
-**验收**：
+**Acceptance**:
 
-1. 右键按下不松开：菜单不出现；松开：菜单在松开处出现。右键在视频上按下、拖到底栏松开：不弹出。
-2. 指针在「视频 ▸」上停 0.2 秒后移开：子菜单不展开；停 0.5 秒：展开。
-3. 「视频 ▸」展开后，指针从「视频」行斜着划过「声音」行进入视频子菜单：子菜单不被切换。
-4. 「视频 ▸」展开后，指针停在「声音」行上约 0.4 秒：视频子菜单关闭、声音子菜单展开。
-5. 点击「视频 ▸」行：立即展开。
-6. Windows 上把系统菜单延时改为 100 ms 后重启播放器：子菜单在约 0.1 秒后展开。
+1. Press the right button and hold: no menu appears; release: the menu appears at the release point. Press the right button on the video, drag to the bottom bar and release: no menu.
+2. Rest the pointer on "Video ▸" for 0.2 seconds and move away: the submenu does not open; rest for 0.5 seconds: it opens.
+3. With "Video ▸" open, move the pointer diagonally from the "Video" row across the "Audio" row into the Video submenu: the submenu is not switched.
+4. With "Video ▸" open, rest the pointer on the "Audio" row for about 0.4 seconds: the Video submenu closes and the Audio submenu opens.
+5. Click the "Video ▸" row: it opens immediately.
+6. On Windows, change the system menu delay to 100 ms and restart the player: submenus open after about 0.1 seconds.
 
-### IA-CORE-01 菜单里按 Esc 逐级关闭（P2）
+### IA-CORE-01 Esc in a menu closes one level at a time (P2)
 
-**状态**：已实现。
+**Status**: implemented.
 
-**要求**：子菜单展开时，Esc 等同 ←：关闭最深一级，键盘光标回到父级的展开行；只有顶层一级时 Esc 关闭整个菜单。用鼠标展开的子菜单（键盘光标仍在父级）按 Esc 时同样先关最深一级。
+**Requirements**: while a submenu is open, Esc is the same as ←: it closes the deepest level and the keyboard cursor returns to the parent's open row; when only the top level is open, Esc closes the whole menu. For a submenu opened with the mouse (the keyboard cursor is still on the parent), Esc also closes the deepest level first.
 
-**跨平台**：无差异。
+**Cross-platform**: no difference.
 
-**验收**：打开「视频 ▸ 比例 ▸」两级子菜单，按 Esc 三次：依次关闭「比例」、「视频」、整个菜单。
+**Acceptance**: open the two-level submenu "Video ▸ Aspect ▸" and press Esc three times: "Aspect", "Video" and the whole menu close in turn.
 
-### IA-CORE-02 菜单助记符（P3）
+### IA-CORE-02 Menu mnemonics (P3)
 
-**状态**：未实现。
+**Status**: not implemented.
 
-**要求**：菜单打开时按一个字母或数字键：跳到当前级里下一个助记符为该字符的项；该字符在当前级里只有一项时直接执行（命令）或展开（子菜单）。助记符显示在标题后的括号里并带下划线，例如「打开文件(O)」。
+**Requirements**: with a menu open, pressing a letter or digit key jumps to the next item in the current level whose mnemonic is that character; if only one item in the current level has that character, it is executed (command) or opened (submenu) directly. The mnemonic is shown underlined in parentheses after the title, for example "Open File(O)".
 
-**实现约束**：宿主在 `menu.rs` 的行数据里加 `mnemonic` 字段，`menu-view.slint` 的键盘处理匹配。
+**Implementation constraints**: the host adds a `mnemonic` field to the row data in `menu.rs`, and the keyboard handling in `menu-view.slint` matches on it.
 
-**核心 API**【核心新增】：
+**Core API** [New core API]:
 
 ```ts
 interface CommandOptions {
-  // …现有字段
-  mnemonic?: string;   // 单个 A–Z 或 0–9，不区分大小写；菜单里显示为标题后的「(X)」
+  // …existing fields
+  mnemonic?: string;   // a single A–Z or 0–9, case-insensitive; shown in the menu as "(X)" after the title
 }
 ```
 
-不改 API 的办法：宿主从标题自动取首个拉丁字母。代价：中文标题大多没有拉丁字母，得不到助记符。所以仍然提出请求，优先级最低，可以先只给宿主命令和顶层、二级菜单做。
+Without an API change: the host takes the first Latin letter of the title automatically. Cost: most Chinese titles have no Latin letter and get no mnemonic. So the request is still made, at the lowest priority, and can start with host commands and top-level and second-level menus only.
 
-**跨平台**：两个系统都做（macOS 系统菜单没有助记符，这是 Vestra 自己的菜单）。
+**Cross-platform**: done on both systems (macOS system menus have no mnemonics; this is Vestra's own menu).
 
-**验收**：给「打开文件…」声明 `mnemonic: "O"`，打开菜单按 O：执行打开文件。
+**Acceptance**: declare `mnemonic: "O"` for "Open File…", open the menu and press O: Open File is executed.
 
-### G-05 在画面上拖动移动窗口（P1）
+### G-05 Dragging on the picture moves the window (P1)
 
-**状态**：已实现。第 5 条的开关属于 IA-CORE-06，未实现，行为固定为默认（关）。
+**Status**: implemented. The switch in item 5 belongs to IA-CORE-06 and is not implemented; the behaviour is fixed at the default (off).
 
-**要求**：
+**Requirements**:
 
-1. 窗口模式下，在视频区按下左键并移动超过 4 px（与单击判定的容差相同）时开始拖动窗口，由系统接管移动。
-2. 开始拖动时取消待定的单击（`Mouse:LeftClick` 不触发），这次按下也不参与双击判定：拖动后紧接着的一次按下若与拖动的按下凑成双击，这次双击被忽略。
-3. 全屏、菜单打开、画中画期间不拖动；迷你尺寸照常可以拖动。
-4. 带修饰键（Alt / Ctrl / Shift / ⌘）的拖动不移动窗口，留给 IA-CORE-17。
-5. 宿主设置页（IA-CORE-06）提供「仅在标题栏上移动窗口」，默认关；打开后视频区拖动不移动窗口。
+1. In windowed mode, pressing the left button on the video area and moving more than 4 px (the same tolerance as the click check) starts a window drag, and the system takes over the move.
+2. Starting a drag cancels the pending click (`Mouse:LeftClick` does not fire), and this press does not take part in the double-click check either: if the press right after the drag would form a double-click with the drag's press, that double-click is ignored.
+3. No dragging in fullscreen, while a menu is open, or in picture-in-picture; mini size can be dragged as usual.
+4. A drag with a modifier (Alt / Ctrl / Shift / ⌘) does not move the window; it is left for IA-CORE-17.
+5. The host settings page (IA-CORE-06) provides "Move the window only by the title bar", off by default; when on, dragging on the video area does not move the window.
 
-**实现约束**：宿主调用 winit 的 `drag_window()`。
+**Implementation constraints**: the host calls winit's `drag_window()`.
 
-**跨平台**：`drag_window()` 在 macOS（`performWindowDragWithEvent`）与 Windows（`WM_NCLBUTTONDOWN` + `HTCAPTION`）都实现；Windows 上这样拖动会触发系统的窗口贴靠。其它系统 winit 不支持时宿主忽略错误。
+**Cross-platform**: `drag_window()` is implemented on both macOS (`performWindowDragWithEvent`) and Windows (`WM_NCLBUTTONDOWN` + `HTCAPTION`); on Windows such a drag triggers the system's window snapping. On other systems where winit does not support it, the host ignores the error.
 
-**验收**：
+**Acceptance**:
 
-1. 窗口模式，在视频上按住左键拖动：窗口跟随移动，松开后停在新位置。
-2. 给 `Mouse:LeftClick` 绑定「播放/暂停」后拖动窗口：松开后不暂停。
-3. 拖动 2 px 后松开：按单击处理（若有绑定）。
-4. 全屏中拖动：窗口不动；拖完马上单击一次：不进全屏。
-5. Windows 上把窗口拖到屏幕左边缘：系统贴靠为半屏。
-6. 打开「仅在标题栏上移动窗口」：视频区拖动不移动窗口（随 IA-CORE-06）。
+1. In windowed mode, hold the left button on the video and drag: the window follows, and stays at the new position after release.
+2. Bind `Mouse:LeftClick` to "Play/Pause", then drag the window: it does not pause after release.
+3. Drag 2 px and release: handled as a click (if bound).
+4. Drag in fullscreen: the window does not move; click once right after the drag: it does not enter fullscreen.
+5. On Windows, drag the window to the left edge of the screen: the system snaps it to half the screen.
+6. Turn on "Move the window only by the title bar": dragging on the video area does not move the window (with IA-CORE-06).
 
-### G-10 屏幕提示与信息块的字号随视频区缩放（P1）
+### G-10 OSD and info block font size scales with the video area (P1)
 
-**状态**：已实现。第 4 条的开关属于 IA-CORE-06，未实现，行为固定为自动。
+**Status**: implemented. The switch in item 4 belongs to IA-CORE-06 and is not implemented; the behaviour is fixed at automatic.
 
-**要求**：
+**Requirements**:
 
-1. OSD 字号 = `clamp(round(视频区高度 × 3%), 12px, 48px)`，粗体。示例：默认窗口（视频区约 609 高）18 px；1080 高的全屏 32 px；视频区很矮时 12 px。
-2. 白字（半粗）放在半透明深色圆角底板上，底板内边距和圆角随字号缩放（18 px 时左右 12、上下 5、圆角 8），底边一条 2 px 渐变线（界面规格 UI-OSD-01）；左边距 10 px。2026-10 视觉身份轮之前是黑色外描边，没有底板。
-3. 信息块字号 = `clamp(11px × 字号 / 16px, 9px, 28px)`，内边距同比例；信息块在 OSD 底板下方 4 px，随字号移动。
-4. 宿主设置页（IA-CORE-06）提供「自动字号」开关，默认开；关时使用固定字号（可调，默认 16）。
+1. OSD font size = `clamp(round(video area height × 3%), 12px, 48px)`, bold. Examples: default window (video area about 609 high) 18 px; fullscreen at 1080 high 32 px; 12 px when the video area is very short.
+2. White text (semi-bold) on a translucent dark rounded plate; the plate's padding and corner radius scale with the font size (at 18 px: 12 left and right, 5 top and bottom, radius 8), with a 2 px gradient line along the bottom edge (UI specification UI-OSD-01); left margin 10 px. Before the 2026-10 visual identity round it was a black outer outline with no plate.
+3. Info block font size = `clamp(11px × font size / 16px, 9px, 28px)`, padding in the same proportion; the info block is 4 px below the OSD plate and moves with the font size.
+4. The host settings page (IA-CORE-06) provides an "automatic font size" switch, on by default; when off, a fixed font size is used (adjustable, default 16).
 
-**跨平台**：按逻辑像素计算，Windows 高 DPI 与 macOS Retina 一致。
+**Cross-platform**: computed in logical pixels, consistent between Windows high DPI and macOS Retina.
 
-**验收**：默认窗口按 ↑：OSD 约 18 px；全屏（1080p 屏幕）按 ↑：约 32 px；拖到 320×182：约 12 px，且不超出视频区；按 Tab 时信息块在 OSD 底板下方，字号同比例变化。
+**Acceptance**: press ↑ in the default window: the OSD is about 18 px; press ↑ in fullscreen (1080p screen): about 32 px; drag to 320×182: about 12 px and not beyond the video area; press Tab: the info block is below the OSD plate and its font size changes in proportion.
 
-### G-13a 音量键的上限为 100（P1）
+### G-13a The volume keys stop at 100 (P1)
 
-**状态**：已实现。
+**Status**: implemented.
 
-**要求**：
+**Requirements**:
 
-1. `volume-up`（↑、滚轮上）：当前音量低于 100 时加 5，结果不超过 100；当前音量已经 ≥ 100（别的插件用 `setOutput` 设到了 100 以上）时不再增加，OSD 照常显示「音量: N%」。
-2. `volume-down`：减 5，不低于 0（150 → 145）。
-3. `player.setOutput` 的取值范围仍为 0–200，为以后的「音量放大」选项保留。
+1. `volume-up` (↑, wheel up): when the current volume is below 100, add 5, with the result at most 100; when the current volume is already ≥ 100 (another plugin set it above 100 with `setOutput`), it does not increase further, and the OSD shows "Volume: N%" as usual.
+2. `volume-down`: subtract 5, not below 0 (150 → 145).
+3. The range of `player.setOutput` is still 0–200, reserved for a later "volume boost" option.
 
-**跨平台**：无差异。
+**Cross-platform**: no difference.
 
-**验收**：音量 95% 时按 ↑ 两次：100%、100%；滚轮上推同样停在 100%。
+**Acceptance**: at 95% volume press ↑ twice: 100%, 100%; scrolling the wheel up also stops at 100%.
 
-### G-16a 加载中背景层生效（P1）
+### G-16a The background layer takes effect while loading (P1)
 
-**状态**：已实现。
+**Status**: implemented.
 
-**要求**：
+**Requirements**:
 
-1. 来源阶段为 `loading` 时，背景层 `effective` 为 `true`：视频区不再显示上一个来源的最后一帧。
-2. `error` 时沿用上一次的值。
-3. 背景层画什么由背景层插件决定（G-16b）；没有背景层插件时，加载中视频区为 `Theme.bg-video` 纯色。
-4. 立即生效，不加延时（本地文件打开很快时加载界面会短暂闪一下）。
-5. 画中画用另一套判断：加载中沿用上一值，换来源时小窗不因「没有视频」而关闭。
+1. When the source phase is `loading`, the background layer's `effective` is `true`: the video area no longer shows the last frame of the previous source.
+2. On `error`, the previous value is kept.
+3. What the background layer draws is decided by the background layer plugin (G-16b); without a background layer plugin, the video area is the solid colour `Theme.bg-video` while loading.
+4. It takes effect immediately, with no delay (when a local file opens quickly, the loading screen flashes briefly).
+5. Picture-in-picture uses a different rule: while loading it keeps the previous value, and when the source changes the small window does not close because of "no video".
 
-**跨平台**：无差异。
+**Cross-platform**: no difference.
 
-**验收**：播放视频 A 时打开网络链接 B：在 B 出画面之前，视频区不再停在 A 的最后一帧，显示加载界面（有 visualizer 时）或纯色（没有时）；画中画中换来源：小窗保持。
+**Acceptance**: while playing video A, open network link B: before B shows a picture, the video area no longer stays on A's last frame and shows the loading screen (with visualizer) or a solid colour (without); change the source in picture-in-picture: the small window stays.
 
-### IA-CORE-03 窗口尺寸记忆区分「普通尺寸」与「最大化」（P2）
+### IA-CORE-03 Window size memory distinguishes "normal size" from "maximised" (P2)
 
-**状态**：已实现。
+**Status**: implemented.
 
-**要求**：
+**Requirements**:
 
-1. 只在窗口既不是全屏也不是最大化时保存窗口位置与尺寸。
-2. 启动时总是以普通尺寸打开，不恢复最大化。
-3. 从最大化还原时回到最大化之前的普通尺寸（系统行为）。
-4. 关闭文件后窗口保持当前尺寸。
+1. The window position and size are saved only when the window is neither fullscreen nor maximised.
+2. On startup the window always opens at normal size; maximised is not restored.
+3. Restoring from maximised returns to the normal size from before maximising (system behaviour).
+4. After closing a file the window keeps its current size.
 
-**跨平台**：Slint 的 `is_maximized` 在 macOS 对应「缩放」、在 Windows 对应 `IsZoomed`，都由 winit 提供。
+**Cross-platform**: Slint's `is_maximized` corresponds to "zoom" on macOS and to `IsZoomed` on Windows, both provided by winit.
 
-**验收**：把窗口最大化（macOS 双击标题栏或按住 Option 点绿色按钮）后退出、重启：窗口为最大化之前的尺寸和位置。
+**Acceptance**: maximise the window (on macOS double-click the title bar or Option-click the green button), quit and restart: the window has the size and position from before maximising.
 
-### IA-CORE-04 全屏入口：Enter、Alt+Enter、全屏+、在其它显示器上全屏（P2 / P3）
+### IA-CORE-04 Fullscreen entries: Enter, Alt+Enter, fullscreen+, fullscreen on another display (P2 / P3)
 
-**状态**：部分实现。第 1 条已实现；第 2、3 条未实现。
+**Status**: partially implemented. Item 1 is implemented; items 2 and 3 are not implemented.
 
-**要求**：
+**Requirements**:
 
-1. （P2）宿主「全屏」的默认绑定为 `Enter`、`Alt+Enter`、`F11`、`Mouse:LeftDoubleClick`；Esc 退出全屏（窗口模式下 Esc 不起作用）。菜单「全屏」行的快捷键文字显示第一个键 `Enter`。
-2. （P3）宿主命令「全屏+」Ctrl+Enter：进入全屏，同时让画面拉伸铺满屏幕（不保持宽高比）；拉伸全屏中再按退出全屏。菜单位置在「全屏」之后，group `screen`，order 701。
-3. （P3）宿主命令「在其它显示器上全屏」Ctrl+Shift+Enter：把主窗口移到下一个显示器再进入全屏；只有一个显示器时禁用，原因「只有一个显示器」。
+1. (P2) The default bindings of the host's "Toggle Fullscreen" are `Enter`, `Alt+Enter`, `F11`, `Mouse:LeftDoubleClick`; Esc exits fullscreen (Esc does nothing in windowed mode). The shortcut text of the menu's "Toggle Fullscreen" row shows the first key, `Enter`.
+2. (P3) Host command "fullscreen+" Ctrl+Enter: enters fullscreen and at the same time stretches the picture to fill the screen (aspect ratio not kept); pressing it again during stretched fullscreen exits fullscreen. Menu position after "Toggle Fullscreen", group `screen`, order 701.
+3. (P3) Host command "fullscreen on another display" Ctrl+Shift+Enter: moves the main window to the next display and then enters fullscreen; disabled when there is only one display, with the reason "only one display".
 
-**实现约束**：拉伸用 mpv 的 `keepaspect=no`（全屏结束时恢复）；换显示器用 winit 的 `available_monitors()` 与 `set_outer_position`。
+**Implementation constraints**: stretching uses mpv's `keepaspect=no` (restored when fullscreen ends); changing displays uses winit's `available_monitors()` and `set_outer_position`.
 
-**跨平台**：macOS 上 ⌥↩、⌃↩ 不被系统占用；Ctrl 绑定在 macOS 上 ⌘ 也触发。macOS 全屏会新建空间，换显示器要先退出全屏、移动窗口、再进入。
+**Cross-platform**: on macOS ⌥↩ and ⌃↩ are not taken by the system; Ctrl bindings also fire with ⌘ on macOS. macOS fullscreen creates a new space, so changing displays must first exit fullscreen, move the window, then enter again.
 
-**验收**：Alt+Enter 进入全屏；Ctrl+Enter 画面铺满屏幕、无黑边；双显示器时 Ctrl+Shift+Enter 在另一块屏幕上全屏。
+**Acceptance**: Alt+Enter enters fullscreen; Ctrl+Enter makes the picture fill the screen with no black bars; with two displays, Ctrl+Shift+Enter goes fullscreen on the other screen.
 
-### IA-CORE-05 窗口模式「自动隐藏控制栏」开关（P3）
+### IA-CORE-05 Windowed-mode "auto-hide the control bar" switch (P3)
 
-**状态**：未实现。
+**Status**: not implemented.
 
-**要求**：宿主命令「屏幕 ▸ 窗口模式下自动隐藏控制栏」（勾选，默认关；order 720，group `screen-options`）。打开后窗口模式与全屏相同：底栏覆盖在视频底部，空闲 3000 ms 后隐藏，活动时出现，G-04 的悬停锁同样生效。只隐藏底栏，不隐藏标题栏。选择由宿主保存在界面状态文件。
+**Requirements**: host command "Screen ▸ Auto-hide the control bar in windowed mode" (checkable, off by default; order 720, group `screen-options`). When on, windowed mode behaves like fullscreen: the bottom bar overlays the bottom of the video, hides after 3000 ms idle, appears on activity, and the G-04 hover lock applies as well. Only the bottom bar is hidden, not the title bar. The host saves the choice in the UI state file.
 
-**实现约束**：`window_state::Policy` 增加 `auto_hide_windowed`，覆盖与空闲判断改为 `fullscreen || auto_hide_windowed`；composition 的底栏位置与高度条件同样替换。
+**Implementation constraints**: `window_state::Policy` gains `auto_hide_windowed`, and the overlay and idle checks become `fullscreen || auto_hide_windowed`; the bottom bar position and height conditions in composition are replaced the same way.
 
-**跨平台**：无差异。
+**Cross-platform**: no difference.
 
-**验收**：勾选后窗口模式播放，指针静止 3 秒：底栏消失、视频占满窗口；移动指针：底栏覆盖在视频底部出现。
+**Acceptance**: when checked, play in windowed mode and keep the pointer still for 3 seconds: the bottom bar disappears and the video fills the window; move the pointer: the bottom bar appears overlaid on the bottom of the video.
 
-### IA-CORE-06 宿主设置页（P2）
+### IA-CORE-06 Host settings page (P2)
 
-**状态**：未实现。
+**Status**: not implemented.
 
-**要求**：选项窗口的「常规」分类最前面加一页宿主自己的「界面」页（order 最小），包含：
+**Requirements**: at the very front of the "General" category of the Options window, add the host's own "Interface" page (lowest order), containing:
 
-| 选项 | 默认 | 条目 |
+| Option | Default | Item |
 | --- | --- | --- |
-| 仅在标题栏上移动窗口 | 关 | G-05 |
-| 全屏时即使窗口模式下关着也弹出附着面板 | 关 | G-01 |
-| 指针在控制栏上时不自动隐藏 | 开 | G-04 |
-| 显示屏幕提示 | 开 | O-07 |
-| 屏幕提示位置：水平（左 / 中 / 右）、垂直（上 / 中 / 下）、水平边距、垂直边距 | 左、上、10、10 | O-02 |
-| 屏幕提示自动字号 / 固定字号 | 自动；固定时 16 | G-10 |
+| Move the window only by the title bar | Off | G-05 |
+| In fullscreen, pop out the attached panel even when it is closed in windowed mode | Off | G-01 |
+| Don't auto-hide the pointer over the control bar | On | G-04 |
+| Show OSD | On | O-07 |
+| OSD position: horizontal (left / centre / right), vertical (top / centre / bottom), horizontal margin, vertical margin | Left, top, 10, 10 | O-02 |
+| OSD automatic font size / fixed font size | Automatic; 16 when fixed | G-10 |
 
-关闭「显示屏幕提示」时 `osd.show` 照常 resolve，只是不画。选择保存在界面状态文件。
+When "Show OSD" is off, `osd.show` resolves as usual but nothing is drawn. The choices are saved in the UI state file.
 
-**实现约束**：宿主页面用宿主自带的 Slint 组件实现，挂在选项窗口里与插件页面同样的位置，不经过插件 API；`settings_window.rs` 的页面集合加一类「宿主页面」。另一种做法是给 preferences 插件开放一组宿主选项接口，代价是新增只属于宿主的接口，不采用。
+**Implementation constraints**: the host page is implemented with the host's own Slint components and sits in the Options window in the same place as plugin pages, without going through the plugin API; the page set in `settings_window.rs` gains a "host page" kind. The alternative, opening a set of host option interfaces to the preferences plugin, would add interfaces that belong only to the host, and is not adopted.
 
-**核心 API**：不新增。**跨平台**：无差异。
+**Core API**: none new. **Cross-platform**: no difference.
 
-**验收**：选项窗口「常规」第一页是「界面」；逐项切换后对应行为改变，重启后保持。
+**Acceptance**: the first page of "General" in the Options window is "Interface"; toggling each option changes the corresponding behaviour, and the choices persist after a restart.
 
-### IA-CORE-07 自绘标题栏（P3）
+### IA-CORE-07 Custom-drawn title bar (P3)
 
-**状态**：未实现。
+**Status**: not implemented.
 
-**要求**：
+**Requirements**:
 
-1. 主窗口不用系统标题栏，宿主在内容顶部画 31 px 标题栏；标题栏按钮以外的部分可拖动移动窗口，双击按系统惯例最大化 / 还原（Windows）或缩放（macOS）。
-2. 不放主菜单按钮；菜单入口仍是视频区右键。标题栏上右键不弹菜单。
-3. 文件类型：当前来源的容器格式简称（如 `MKV`、`MP4`；网络链接显示 `URL`），窗口宽度小于 300 时隐藏；有文件类型时，它与标题之间有一条竖分隔。
-4. 标题：当前来源名；超长时以 1 px / 50 ms 向左滚动，到头后停 1 秒再从头开始。
-5. 右侧按钮：
-   - **Windows**：从右往左依次为关闭、全屏、最大化 / 还原（二选一）、最小化、置顶状态，按钮间距 10。
-   - **macOS**：左端保留系统的红黄绿按钮（系统控件，负责全屏、平铺菜单、缩放等系统行为），文件类型与标题在其后；右侧只画置顶状态与全屏两个按钮。
-6. 置顶状态按钮：图标按当前置顶方式显示 4 种之一；点击触发绑定输入 `Title:OnTop`（IA-WIN-07）。没有插件声明该绑定时按钮显示为禁用。
-7. 全屏时不显示标题栏：macOS 全屏空间里指针移到顶端时由系统显示菜单栏；Windows 全屏时隐藏。
-8. 窗口最小高度相应增加 31 px（IA-CORE-13）。
-9. 窗口失去焦点时标题栏颜色不变。
-10. 图标四态（常态、悬停、按下、禁用）的配色按界面规格的当前主题。
+1. The main window does not use the system title bar; the host draws a 31 px title bar at the top of the content. The parts of the title bar outside the buttons can be dragged to move the window, and a double-click maximises / restores (Windows) or zooms (macOS) following system convention.
+2. No main menu button; the menu entry is still the right button on the video area. Right-clicking the title bar does not pop up a menu.
+3. File type: the short name of the current source's container format (such as `MKV`, `MP4`; network links show `URL`), hidden when the window is narrower than 300; when there is a file type, a vertical separator sits between it and the title.
+4. Title: the current source name; when too long it scrolls left at 1 px / 50 ms, pauses for 1 second at the end and starts again from the beginning.
+5. Buttons on the right:
+   - **Windows**: from right to left, close, fullscreen, maximise / restore (one of the two), minimise, always-on-top state, with 10 between buttons.
+   - **macOS**: the system red, yellow and green buttons stay at the left end (system controls, responsible for fullscreen, the tiling menu, zoom and other system behaviour), followed by the file type and the title; on the right only the always-on-top state and fullscreen buttons are drawn.
+6. Always-on-top state button: the icon shows one of 4 kinds depending on the current always-on-top mode; a click fires the binding input `Title:OnTop` (IA-WIN-07). When no plugin declares that binding, the button shows as disabled.
+7. The title bar is not shown in fullscreen: in a macOS fullscreen space the system shows the menu bar when the pointer moves to the top; on Windows it is hidden in fullscreen.
+8. The minimum window height increases by 31 px accordingly (IA-CORE-13).
+9. The title bar colour does not change when the window loses focus.
+10. The colours of the four icon states (normal, hover, pressed, disabled) follow the current theme of the UI specification.
 
-**实现约束**：
+**Implementation constraints**:
 
-- `host.slint` 的根布局顶部插入宿主自带的 `TitleBar` 组件；标题、文件类型由宿主写属性。标题栏空白处的 `TouchArea` 按下后调用 `drag_window()`（同 G-05）。
-- Windows：`with_decorations(false)` 后宿主自己处理边框缩放（winit `drag_resize_window(direction)`，窗口四边各留 4 px 的缩放热区）、最小化 / 最大化（`set_minimized`、`set_maximized`），以及 Windows 11 悬停最大化按钮时的贴靠布局菜单（要在平台模块里让 `WM_NCHITTEST` 返回 `HTMAXBUTTON`；做不到时不提供贴靠布局菜单，其它照常）。
-- macOS：系统标题栏设为透明并让内容延伸到标题栏下（`titlebarAppearsTransparent`、`NSFullSizeContentViewWindowMask`、`titleVisibility = hidden`），系统按钮仍由系统画。只在 `platform/macos.rs` 里做。
-- 其它系统保留系统标题栏，不画自绘标题栏，`Title:OnTop` 永远不会触发。
+- A host-provided `TitleBar` component is inserted at the top of the root layout in `host.slint`; the host writes the title and file type properties. Pressing the `TouchArea` on the empty part of the title bar calls `drag_window()` (as in G-05).
+- Windows: after `with_decorations(false)` the host handles border resizing itself (winit `drag_resize_window(direction)`, with a 4 px resize hot zone on each of the four edges), minimise / maximise (`set_minimized`, `set_maximized`), and the Windows 11 snap layout menu when hovering the maximise button (the platform module must make `WM_NCHITTEST` return `HTMAXBUTTON`; if that cannot be done, no snap layout menu is offered and everything else works as usual).
+- macOS: the system title bar is made transparent and the content extends under the title bar (`titlebarAppearsTransparent`, `NSFullSizeContentViewWindowMask`, `titleVisibility = hidden`); the system buttons are still drawn by the system. Done only in `platform/macos.rs`.
+- Other systems keep the system title bar, no custom title bar is drawn, and `Title:OnTop` never fires.
 
-**核心 API**【核心新增】：
+**Core API** [New core API]:
 
 ```ts
-// 绑定输入（参考文档 §4.1 的「输入」语法增加一项）
-"Title:OnTop"          // 点击自绘标题栏上的置顶状态按钮；不能带修饰键
+// Binding input (one more item in the "input" syntax of reference §4.1)
+"Title:OnTop"          // click on the always-on-top state button of the custom title bar; cannot take modifiers
 
-// 主窗口（参考文档 §6.6）
+// Main window (reference §6.6)
 setAlwaysOnTop(onTop: boolean, options?: { mode?: "never" | "always" | "playing" | "fullscreen" }): Promise<void>;
-// mode 只用于标题栏图标；省略时按 onTop 显示「总是 / 不」两种图标
+// mode is used only for the title bar icon; when omitted, the icon shows the two kinds "always / never" according to onTop
 ```
 
-不改 API 的办法：置顶按钮只显示开 / 关两态，点击弹出「屏幕 ▸ 置顶」子菜单。代价：图标看不出四种方式，点击要多一步。另一种是宿主自己接管置顶方式，但「播放时 / 全屏播放时」是 window 插件的业务，搬进核心违反「核心不承担插件业务」。所以提出请求：`Title:OnTop` 只是绑定表里多一个输入名，沿用现有的冲突与改绑规则；`mode` 是可选参数，不影响现有调用。
+Without an API change: the always-on-top button shows only on / off, and a click pops up the "Screen ▸ Always on Top" submenu. Cost: the icon does not show the four modes, and a click takes one more step. Another option is for the host to take over the always-on-top modes itself, but "While Playing / While Playing in Fullscreen" is the window plugin's business, and moving it into the core violates "the core does not carry plugin business". So the request is made: `Title:OnTop` is only one more input name in the binding table, following the existing conflict and rebinding rules; `mode` is an optional parameter and does not affect existing calls.
 
-**验收**：
+**Acceptance**:
 
-1. Windows：标题栏 31 px，左起文件类型、标题；右起关闭、全屏、最大化、最小化、置顶状态，间距 10；四边可拖动缩放；拖标题栏到屏幕顶端最大化。
-2. macOS：红黄绿按钮在左端，其后是文件类型与标题；右侧是置顶状态、全屏；标题栏空白处可拖动；双击按系统设置缩放。
-3. 打开一个名字很长的文件：标题缓慢向左滚动。
-4. 窗口拖到 299 宽以下：文件类型隐藏。
-5. 点置顶状态按钮：置顶方式按 window 插件的顺序循环，图标随之变化（IA-WIN-07）。
+1. Windows: title bar 31 px; from the left, file type and title; from the right, close, fullscreen, maximise, minimise, always-on-top state, spacing 10; the four edges can be dragged to resize; dragging the title bar to the top of the screen maximises.
+2. macOS: the red, yellow and green buttons are at the left end, followed by the file type and title; on the right are the always-on-top state and fullscreen; the empty part of the title bar can be dragged; a double-click zooms according to the system setting.
+3. Open a file with a very long name: the title scrolls slowly to the left.
+4. Drag the window below 299 wide: the file type is hidden.
+5. Click the always-on-top state button: the always-on-top mode cycles in the window plugin's order, and the icon changes with it (IA-WIN-07).
 
-### IA-CORE-08 绑定输入补齐：鼠标双击、按住、侧键滚轮，以及 Scroll Lock（P3）
+### IA-CORE-08 Completing binding inputs: mouse double-click, push-and-hold, side-button wheel, and Scroll Lock (P3)
 
-**状态**：未实现。现有输入见参考文档 §4.1：`Mouse:LeftClick`、`Mouse:LeftDoubleClick[:LeftHalf|:RightHalf]`、`Mouse:MiddleClick`、`Mouse:X1`、`Mouse:X2`、四个滚轮方向；右键保留给菜单。
+**Status**: not implemented. Existing inputs are in reference §4.1: `Mouse:LeftClick`, `Mouse:LeftDoubleClick[:LeftHalf|:RightHalf]`, `Mouse:MiddleClick`, `Mouse:X1`, `Mouse:X2`, the four wheel directions; the right button is reserved for the menu.
 
-**要求**：
+**Requirements**:
 
-1. 新输入名：`Mouse:RightDoubleClick`、`Mouse:MiddleDoubleClick`、`Mouse:X1DoubleClick`、`Mouse:X2DoubleClick`、`Mouse:LeftPush`、`Mouse:RightPush`、`Mouse:MiddlePush`、`Mouse:X1Push`、`Mouse:X2Push`、`Mouse:X1+WheelUp` / `WheelDown`、`Mouse:X2+WheelUp` / `WheelDown`；键名 `ScrollLock`。都可以带修饰键。只补能力，不加默认绑定。
-2. 「按住」：按下后保持 500 ms 不松开、指针移动不超过 4 px。
-3. 双击判定沿用 `Mouse:LeftClick` 的规则：只有某个双击输入有生效的绑定时，对应按键的单击才延迟到双击间隔结束后判定；没有绑定时行为不变。
-4. 右键：`Mouse:RightDoubleClick` 有绑定时，右键松开后等双击间隔结束才弹出菜单；第二次按下算双击、不弹菜单。没有绑定时按 G-15 在松开时立即弹出。`Mouse:RightPush` 有绑定时，按住达到阈值即触发，这次松开不弹出菜单。
-5. `X1` / `X2` 有对应的「侧键 + 滚轮」绑定时，按住侧键期间的滚轮走这些绑定，侧键松开时不再触发 `X1` / `X2` 的单击。
+1. New input names: `Mouse:RightDoubleClick`, `Mouse:MiddleDoubleClick`, `Mouse:X1DoubleClick`, `Mouse:X2DoubleClick`, `Mouse:LeftPush`, `Mouse:RightPush`, `Mouse:MiddlePush`, `Mouse:X1Push`, `Mouse:X2Push`, `Mouse:X1+WheelUp` / `WheelDown`, `Mouse:X2+WheelUp` / `WheelDown`; key name `ScrollLock`. All can take modifiers. This only adds the capability, with no default bindings.
+2. "Push": held for 500 ms after pressing without release, with the pointer moving no more than 4 px.
+3. The double-click check follows the rules of `Mouse:LeftClick`: only when some double-click input has an active binding is the click of the corresponding button delayed until the double-click interval ends; without a binding the behaviour is unchanged.
+4. Right button: when `Mouse:RightDoubleClick` has a binding, the menu pops up only after the double-click interval ends following the right-button release; a second press counts as a double-click and does not pop up the menu. Without a binding it pops up immediately on release per G-15. When `Mouse:RightPush` has a binding, it fires as soon as the hold reaches the threshold, and that release does not pop up the menu.
+5. When `X1` / `X2` have corresponding "side button + wheel" bindings, the wheel while the side button is held goes to those bindings, and releasing the side button no longer fires the `X1` / `X2` click.
 
-**实现约束**：`bindings.rs` 的输入解析与匹配；`host.slint` 视频区分别处理各按键的按下 / 松开；宿主的待定单击推广为按按键区分的待定单击与按住计时。hotkeys 插件的鼠标页同步列出（IA-HK-01）。
+**Implementation constraints**: input parsing and matching in `bindings.rs`; the video area in `host.slint` handles press / release separately for each button; the host's pending click is generalised to per-button pending clicks and hold timers. The mouse page of the hotkeys plugin lists them too (IA-HK-01).
 
-**核心 API**【核心新增】：绑定语法新增上述输入名（参考文档 §4.1），不改任何方法签名。视频区的鼠标事件只有宿主收得到，插件没有替代办法。
+**Core API** [New core API]: the binding syntax gains the input names above (reference §4.1); no method signature changes. Only the host receives mouse events on the video area, so plugins have no alternative.
 
-**跨平台**：Scroll Lock：Windows 键盘有；Mac 键盘一般没有（Apple 扩展键盘的 F14 被 winit 报告为 `F14`），所以 macOS 上 `ScrollLock` 通常不会触发，相关命令从菜单执行（IA-INFO-02）。侧键在两个系统上都由 winit 报告为 `Back` / `Forward`。
+**Cross-platform**: Scroll Lock: Windows keyboards have it; Mac keyboards usually do not (F14 on the Apple extended keyboard is reported by winit as `F14`), so on macOS `ScrollLock` usually never fires, and the related commands are run from the menu (IA-INFO-02). Side buttons are reported by winit as `Back` / `Forward` on both systems.
 
-**验收**：在快捷键设置里把「中键双击」绑定到「全屏」：中键双击切换全屏，中键单击（如有绑定）在双击间隔后才触发；把「右键按住」绑定到「播放/暂停」：按住右键半秒暂停，松开不弹菜单；没有这些绑定时右键行为与 G-15 相同。
+**Acceptance**: in the shortcut settings bind "middle double-click" to "Toggle Fullscreen": a middle double-click toggles fullscreen, and a middle click (if bound) fires only after the double-click interval; bind "right push" to "Play/Pause": holding the right button for half a second pauses, and the release does not pop up the menu; without these bindings the right button behaves as in G-15.
 
-### IA-CORE-09 控制面板（已取消）
+### IA-CORE-09 Control panel (cancelled)
 
-**状态**：已取消（§0.3）。画面调节、音频工作台、字幕工作台保持三个独立工具窗口；不提供 F7 控制面板，也不新增 `plugin.controlPanel` 接口。
+**Status**: cancelled (§0.3). Picture Adjustments, Audio Workbench and the subtitle workbench stay three separate tool windows; no F7 control panel is provided, and no `plugin.controlPanel` interface is added.
 
-### IA-CORE-10 浮动窗口的标题行与吸附（P3）
+### IA-CORE-10 Title row and snapping for floating windows (P3)
 
-**状态**：未实现。现状：浮动列表窗口用系统标题栏，只有关闭；不吸附。
+**Status**: not implemented. Current state: the floating list window uses the system title bar with only a close button; it does not snap.
 
-**要求**：
+**Requirements**:
 
-1. 浮动窗口顶部是宿主画的 34 px 标题行，右侧依次为透明度滑块（20%–100%）、附着按钮（等于 `setDetached(false)`）、置顶钉（只让这个浮动窗口置顶）、关闭（等于 `setVisible(false)`）。面板自己页签条上的分离 / 附着按钮保留。
-2. 吸附：拖动浮动窗口或主窗口时，窗口边缘距屏幕工作区边缘或另一个播放器窗口的边缘在 10 px 以内时吸附对齐。
-3. 移动主窗口时浮动窗口不跟随。
+1. The top of a floating window is a 34 px title row drawn by the host; on the right, in order: an opacity slider (20%–100%), an attach button (same as `setDetached(false)`), a pin (keeps only this floating window on top), and close (same as `setVisible(false)`). The detach / attach button on the panel's own tab strip stays.
+2. Snapping: while dragging a floating window or the main window, when a window edge comes within 10 px of the edge of the screen work area or of another player window's edge, it snaps into alignment.
+3. Floating windows do not follow when the main window moves.
 
-**实现约束**：浮动窗口改为无系统标题栏（Windows）/ 透明标题栏（macOS），标题行由宿主生成。吸附在宿主处理窗口移动事件（winit `Moved`）时计算并 `set_outer_position`；macOS 上系统拖动过程中改位置可能被系统覆盖，做不到时退为「松手时吸附」。
+**Implementation constraints**: floating windows change to no system title bar (Windows) / a transparent title bar (macOS), and the title row is generated by the host. Snapping is computed when the host handles window move events (winit `Moved`) and applied with `set_outer_position`; on macOS changing the position during a system drag may be overridden by the system, and if that cannot be done it falls back to "snap on release".
 
-**核心 API**：不新增。置顶钉只作用于浮动窗口，不经过 `setAlwaysOnTop`。
+**Core API**: none new. The pin applies only to the floating window and does not go through `setAlwaysOnTop`.
 
-**跨平台**：Windows 系统自带贴靠只对屏幕边缘，窗口间吸附由宿主计算；macOS 系统不吸附，同样由宿主计算。窗口级别与透明度放平台模块。
+**Cross-platform**: the built-in snapping on Windows only covers screen edges, so snapping between windows is computed by the host; macOS does not snap, so it is also computed by the host. Window level and opacity go in the platform modules.
 
-**验收**：分离列表：浮动窗口顶部有透明度、附着、置顶钉、关闭；拖透明度滑块窗口变透明；点置顶钉后点别的应用，浮动窗口仍在最上而主窗口不置顶；把浮动窗口拖近主窗口右边缘：贴齐。
+**Acceptance**: detach the list: the top of the floating window has opacity, attach, pin and close; dragging the opacity slider makes the window transparent; click the pin, then click another application: the floating window stays on top while the main window is not on top; drag the floating window near the right edge of the main window: it snaps flush.
 
-### IA-CORE-11 最小化时所有窗口一起最小化（P3）
+### IA-CORE-11 Minimising minimises all windows together (P3)
 
-**状态**：未实现。
+**Status**: not implemented.
 
-**要求**：主窗口最小化时，浮动侧栏、工具窗口一起隐藏；主窗口还原时一起恢复（只恢复最小化前可见的那些）。
+**Requirements**: when the main window is minimised, the floating sidebar and tool windows are hidden with it; when the main window is restored they come back with it (only those visible before minimising).
 
-**跨平台**：Windows 用拥有者窗口关系（owned window），最小化主窗口时系统自动隐藏被拥有的窗口；macOS 的子窗口（`addChildWindow`）会让它们随主窗口移动，不合适，由宿主逐个最小化。都在平台模块。
+**Cross-platform**: Windows uses the owner window relationship (owned window), so minimising the main window automatically hides the owned windows; macOS child windows (`addChildWindow`) would make them move with the main window, which is not suitable, so the host minimises them one by one. Both in the platform modules.
 
-**验收**：分离列表、打开画面调节，最小化主窗口：三个窗口都消失；还原：三个都回来。
+**Acceptance**: detach the list, open Picture Adjustments, minimise the main window: all three windows disappear; restore: all three come back.
 
-### IA-CORE-12 画中画期间双击视频区（P2）
+### IA-CORE-12 Double-clicking the video area during picture-in-picture (P2)
 
-**状态**：已实现。
+**Status**: implemented.
 
-**要求**：画中画期间，主窗口视频区显示灰字「正在以画中画播放」；在视频区双击等于小窗的「返回」：关闭小窗，画面回到主窗口，不暂停、不切换全屏。
+**Requirements**: during picture-in-picture, the video area of the main window shows the grey text "Playing in picture-in-picture"; a double-click on the video area is the same as the small window's "return": it closes the small window and the picture returns to the main window, without pausing or switching to fullscreen.
 
-**跨平台**：画中画目前只有 macOS（参考文档 §6.6），其它系统不出现此状态。
+**Cross-platform**: picture-in-picture currently exists only on macOS (reference §6.6); other systems never enter this state.
 
-**验收**：macOS 上进入画中画，在主窗口视频区双击：小窗关闭，画面回到主窗口，不进入全屏，不暂停。
+**Acceptance**: on macOS enter picture-in-picture and double-click the video area of the main window: the small window closes, the picture returns to the main window, it does not enter fullscreen and does not pause.
 
-### IA-CORE-13 窗口最小高度（P3）
+### IA-CORE-13 Minimum window height (P3)
 
-**状态**：未实现。现状：主窗口最小 320×182（底栏 62 加视频区至少 120）。
+**Status**: not implemented. Current state: the main window minimum is 320×182 (bottom bar 62 plus a video area of at least 120).
 
-**要求**：主窗口最小宽度 320；视频区不设高度下限，窗口最小高度 = 标题栏（IA-CORE-07 落地后 31，之前为 0）+ 底栏 62。`setVideoArea` 的视频高度下限改为 1。视频区高度为 0 时暂停渲染输出（不建零尺寸纹理），播放不中断。
+**Requirements**: the main window minimum width is 320; the video area has no minimum height, and the minimum window height = title bar (31 once IA-CORE-07 lands, 0 before) + bottom bar 62. The video height lower bound of `setVideoArea` changes to 1. When the video area height is 0, render output pauses (no zero-size texture is created), and playback continues.
 
-**核心 API**：不新增（`setVideoArea` 的下限变化写进参考文档 §6.6）。
+**Core API**: none new (the lower bound change of `setVideoArea` is written into reference §6.6).
 
-**跨平台**：Windows 对无边框窗口没有额外的最小高度；macOS 在系统标题栏方案下另有系统最小高度，以系统为准。
+**Cross-platform**: Windows has no extra minimum height for borderless windows; macOS with the system title bar approach has its own system minimum height, and the system value wins.
 
-**验收**：窗口可以拖到只剩底栏（加标题栏）的高度；播放不中断，放大后画面恢复。
+**Acceptance**: the window can be dragged down to just the height of the bottom bar (plus the title bar); playback continues, and the picture returns after enlarging.
 
-### IA-CORE-14 嵌入式隐藏字幕轨（P3）
+### IA-CORE-14 Embedded closed caption tracks (P3)
 
-**状态**：未实现。
+**Status**: not implemented.
 
-**要求**：宿主为每个来源打开 mpv 的 `sub-create-cc-track=yes`，视频流里的 CEA-608/708 隐藏字幕作为一条普通的内嵌字幕轨出现在 `subtitles.state.tracks` 里（`codec` 为 `eia_608` 或 `eia_708`），不默认选中。
+**Requirements**: the host turns on mpv's `sub-create-cc-track=yes` for every source, so CEA-608/708 closed captions in the video stream appear as an ordinary embedded subtitle track in `subtitles.state.tracks` (`codec` is `eia_608` or `eia_708`), not selected by default.
 
-**核心 API**：不新增（`SubtitleTrack` 已有 `codec` 字段）。**跨平台**：mpv 选项，无差异。
+**Core API**: none new (`SubtitleTrack` already has a `codec` field). **Cross-platform**: an mpv option, no difference.
 
-**验收**：打开带 CEA-608 字幕的 TS 文件：字幕菜单多一条隐藏字幕轨，默认不显示。
+**Acceptance**: open a TS file with CEA-608 captions: the subtitle menu has one more closed caption track, not shown by default.
 
-### IA-CORE-15 主窗口接口扩展：最大化、位置、宽高比锁定、活动状态（P3）
+### IA-CORE-15 Main window interface extensions: maximise, position, aspect ratio lock, active state (P3)
 
-**状态**：未实现。插件侧见 IA-WIN-05、IA-WIN-06、IA-PB-07。
+**Status**: not implemented. Plugin side in IA-WIN-05, IA-WIN-06, IA-PB-07.
 
-**核心 API**【核心新增】：
+**Core API** [New core API]:
 
 ```ts
 interface WindowState {
-  // …现有字段
+  // …existing fields
   readonly maximized: boolean;
-  readonly active: boolean;      // 主窗口（或本应用的任一窗口）是活动窗口
+  readonly active: boolean;      // the main window (or any window of this application) is the active window
   readonly minimized: boolean;
-  readonly frame: { x: number; y: number; width: number; height: number }; // 屏幕坐标，逻辑点
+  readonly frame: { x: number; y: number; width: number; height: number }; // screen coordinates, logical points
 }
-setMaximized(mode: "off" | "maximized" | "cover"): Promise<void>;  // cover = 盖住任务栏 / Dock 的最大化
-moveBy(dx: number, dy: number): Promise<{ x: number; y: number }>; // 逻辑点；结果夹在屏幕可见区内
-setAspectLock(ratio: number | null): Promise<void>;                 // 用户拖动缩放时保持视频区宽高比；null 关闭
+setMaximized(mode: "off" | "maximized" | "cover"): Promise<void>;  // cover = maximise covering the taskbar / Dock
+moveBy(dx: number, dy: number): Promise<{ x: number; y: number }>; // logical points; the result is clamped to the visible screen area
+setAspectLock(ratio: number | null): Promise<void>;                 // keep the video area aspect ratio while the user drags to resize; null turns it off
 ```
 
-不改 API 的办法：「窗口 +/−」用现有 `setVideoArea` 按比例放大缩小即可（IA-WIN-05 就这样做）。「最大化」「窗口移动」「保持比例」「失去焦点 / 最小化时暂停」都需要宿主的窗口状态或窗口操作，插件没有替代办法。可以只接受其中一部分：建议维护者先接受只读的 `active`、`minimized`，其余按需排期。
+Without an API change: "window +/−" can simply scale with the existing `setVideoArea` (IA-WIN-05 does exactly that). "Maximise", "move window", "keep ratio" and "pause on focus loss / minimise" all need the host's window state or window operations, and plugins have no alternative. Only part of it can be accepted: the maintainer is advised to accept the read-only `active` and `minimized` first and schedule the rest as needed.
 
-**跨平台**：`cover` 在 Windows 为全屏尺寸的普通窗口（不切换全屏模式），在 macOS 为铺满整个屏幕（含菜单栏区域）的普通窗口；`maximized` 在 macOS 对应「缩放」。`frame` 在多显示器时为全局坐标。放平台模块。
+**Cross-platform**: `cover` on Windows is an ordinary window at fullscreen size (without switching to fullscreen mode), and on macOS an ordinary window filling the whole screen (including the menu bar area); `maximized` corresponds to "zoom" on macOS. `frame` uses global coordinates with multiple monitors. In the platform modules.
 
-**验收**：见各插件条目。
+**Acceptance**: see the plugin items.
 
-### IA-CORE-16 播放统计补充下载速率（P3）
+### IA-CORE-16 Download rate in playback statistics (P3)
 
-**状态**：未实现。
+**Status**: not implemented.
 
-**核心 API**【核心新增】：
+**Core API** [New core API]:
 
 ```ts
 interface PlaybackStats {
-  // …现有字段
-  cacheSpeed: number | null;   // 字节/秒，取自 mpv cache-speed；本地文件为 null
+  // …existing fields
+  cacheSpeed: number | null;   // bytes/second, from mpv cache-speed; null for local files
 }
 ```
 
-插件无法读 mpv 属性，没有替代办法；这是 `stats()` 现有的「原样取 mpv 属性」类别里多一个字段，属于兼容扩展。
+Plugins cannot read mpv properties, so there is no alternative; this is one more field in the existing "mpv property as is" category of `stats()`, a compatible extension.
 
-**跨平台**：mpv 属性，无差异。
+**Cross-platform**: an mpv property, no difference.
 
-**验收**：播放网络链接时 `stats().cacheSpeed` 为正数；本地文件为 `null`。
+**Acceptance**: while playing a network link, `stats().cacheSpeed` is a positive number; for a local file it is `null`.
 
-### IA-CORE-17 视频区修饰键拖动（P3）
+### IA-CORE-17 Modifier drags on the video area (P3)
 
-**状态**：未实现。插件侧见 IA-VID-02、IA-SUB-02。
+**Status**: not implemented. Plugin side in IA-VID-02, IA-SUB-02.
 
-**要求**：视频区带修饰键（Alt / Ctrl / Shift）的左键拖动交给登记了该修饰键的插件；没有插件登记时什么也不做（不移动窗口，G-05 第 4 条）。
+**Requirements**: a left-button drag with a modifier (Alt / Ctrl / Shift) on the video area goes to the plugin that registered that modifier; when no plugin has registered it, nothing happens (the window does not move, G-05 item 4).
 
-**核心 API**【核心新增】：
+**Core API** [New core API]:
 
 ```ts
-// 需要新能力 input.videoDrag
+// Needs the new capability input.videoDrag
 plugin.input.onVideoDrag(
   modifiers: "alt" | "ctrl" | "shift",
   listener: (e: { phase: "start" | "move" | "end"; dx: number; dy: number; videoArea: { width: number; height: number } }) => unknown,
-): Disposable;   // dx/dy 为自 start 以来的位移（逻辑点）；同一修饰键先登记的生效
+): Disposable;   // dx/dy is the offset since start (logical points); for the same modifier the first registration wins
 ```
 
-不改 API 的办法：把「Alt+拖动」做成离散的绑定输入（例如每移动 10 px 触发一次命令）。代价：命令不带参数，拖动只能按固定步长离散地走，手感和精度都差，且上下左右要四条命令。两个使用者默认都关，建议维护者把这条排在最后，必要时直接按离散绑定降级。
+Without an API change: make "Alt+drag" a discrete binding input (for example firing a command every 10 px of movement). Cost: commands take no parameters, so the drag can only move discretely in fixed steps, with poor feel and precision, and up, down, left and right need four commands. Both users are off by default; the maintainer is advised to schedule this last and, if necessary, downgrade directly to discrete bindings.
 
-**跨平台**：macOS 上 Ctrl+左键在系统里等于右键，所以 `ctrl` 在 macOS 上用 ⌘（与绑定表「Ctrl 也认 ⌘」一致）。
+**Cross-platform**: on macOS Ctrl+left button is the same as the right button in the system, so `ctrl` uses ⌘ on macOS (consistent with the binding table's "Ctrl also accepts ⌘").
 
-**验收**：见 IA-VID-02、IA-SUB-02。
+**Acceptance**: see IA-VID-02, IA-SUB-02.
 
-### 本章核心 API 请求
+### Core API requests in this chapter
 
-只改宿主行为或语义、不改 API 的：G-01（`SlotState.reason: "fullscreen"` 语义）、G-04、G-03、G-15、IA-CORE-01、G-05、G-10（参考文档 §6.5）、G-13a（§5.5）、G-16a（§6.3）、IA-CORE-03、IA-CORE-04、IA-CORE-05、IA-CORE-06、IA-CORE-10、IA-CORE-11、IA-CORE-12、IA-CORE-13（§6.6 下限）、IA-CORE-14。
+Changes only to host behaviour or semantics, with no API change: G-01 (`SlotState.reason: "fullscreen"` semantics), G-04, G-03, G-15, IA-CORE-01, G-05, G-10 (reference §6.5), G-13a (§5.5), G-16a (§6.3), IA-CORE-03, IA-CORE-04, IA-CORE-05, IA-CORE-06, IA-CORE-10, IA-CORE-11, IA-CORE-12, IA-CORE-13 (§6.6 lower bound), IA-CORE-14.
 
-【核心新增】请求草案（均未提交）：
+[New core API] request drafts (none submitted yet):
 
-| 签名 | 理由（工作流 §4.3 第 4 步） | 先考虑过的替代办法 | 来源 |
+| Signature | Reason (workflow §4.3 step 4) | Alternatives considered first | Source |
 | --- | --- | --- | --- |
-| `CommandOptions.mnemonic?: string` | 菜单由宿主绘制与处理按键 | 宿主从标题自动取字母（中文标题取不到） | IA-CORE-02 |
-| 绑定输入 `Title:OnTop` | 标题栏是宿主的界面 | 点击弹出「置顶」子菜单 | IA-CORE-07 |
-| `window.setAlwaysOnTop(onTop, options?: { mode? })` | 标题栏图标要显示 4 种置顶方式 | 只显示开 / 关两态 | IA-CORE-07 |
-| 绑定输入 `Mouse:RightDoubleClick`、`Mouse:MiddleDoubleClick`、`Mouse:X1DoubleClick`、`Mouse:X2DoubleClick`、`Mouse:LeftPush`、`Mouse:RightPush`、`Mouse:MiddlePush`、`Mouse:X1Push`、`Mouse:X2Push`、`Mouse:X1+WheelUp/Down`、`Mouse:X2+WheelUp/Down`、`ScrollLock` | 视频区鼠标事件只有宿主收得到 | 无 | IA-CORE-08 |
-| `WindowState.maximized`、`.active`、`.minimized`、`.frame` | 宿主窗口状态 | 无 | IA-CORE-15 |
-| `window.setMaximized(mode)` | 窗口操作只有宿主能做 | 无 | IA-CORE-15 |
-| `window.moveBy(dx, dy)` | 同上 | 无 | IA-CORE-15 |
-| `window.setAspectLock(ratio \| null)` | 用户拖动缩放由系统与宿主处理 | 无 | IA-CORE-15 |
-| `PlaybackStats.cacheSpeed` | mpv 属性 | 无 | IA-CORE-16 |
-| `plugin.input.onVideoDrag(modifiers, listener)`；能力 `input.videoDrag` | 视频区拖动只有宿主收得到 | 离散绑定（手感差），可降级 | IA-CORE-17 |
+| `CommandOptions.mnemonic?: string` | The host draws the menu and handles its keys | The host takes a letter from the title automatically (none for Chinese titles) | IA-CORE-02 |
+| Binding input `Title:OnTop` | The title bar is host UI | A click pops up the "Always on Top" submenu | IA-CORE-07 |
+| `window.setAlwaysOnTop(onTop, options?: { mode? })` | The title bar icon must show 4 always-on-top modes | Show only on / off | IA-CORE-07 |
+| Binding inputs `Mouse:RightDoubleClick`, `Mouse:MiddleDoubleClick`, `Mouse:X1DoubleClick`, `Mouse:X2DoubleClick`, `Mouse:LeftPush`, `Mouse:RightPush`, `Mouse:MiddlePush`, `Mouse:X1Push`, `Mouse:X2Push`, `Mouse:X1+WheelUp/Down`, `Mouse:X2+WheelUp/Down`, `ScrollLock` | Only the host receives mouse events on the video area | None | IA-CORE-08 |
+| `WindowState.maximized`, `.active`, `.minimized`, `.frame` | Host window state | None | IA-CORE-15 |
+| `window.setMaximized(mode)` | Only the host can perform window operations | None | IA-CORE-15 |
+| `window.moveBy(dx, dy)` | Same as above | None | IA-CORE-15 |
+| `window.setAspectLock(ratio \| null)` | Resizing by user drag is handled by the system and the host | None | IA-CORE-15 |
+| `PlaybackStats.cacheSpeed` | mpv property | None | IA-CORE-16 |
+| `plugin.input.onVideoDrag(modifiers, listener)`; capability `input.videoDrag` | Only the host receives drags on the video area | Discrete bindings (poor feel), possible downgrade | IA-CORE-17 |
 
 ---
 
-## 播放控制（`playback`）
+## Playback control (`playback`)
 
-**位置**：`src/plugins/playback/`（底栏 `ui/bar.slint`、`bar.ts`，设置 `settings.ts`）
+**Location**: `src/plugins/playback/` (bottom bar `ui/bar.slint`, `bar.ts`, settings `settings.ts`)
 
-### G-07 底栏按钮的悬停提示（P1）
+### G-07 Hover tooltips on the bottom bar buttons (P1)
 
-**状态**：已实现（`tips.ts`、`bar.ts`、`ui/bar.slint`）。
+**Status**: implemented (`tips.ts`, `bar.ts`, `ui/bar.slint`).
 
-**要求**：每个按钮与可点的标签都有悬停提示（`@vestra/widgets` 的 `ToolTipArea`，600 ms 后出现，每次悬停都会再次显示），文字带当前生效的快捷键：
+**Requirements**: every button and clickable label has a hover tooltip (`ToolTipArea` from `@vestra/widgets`, appearing after 600 ms and shown again on every hover), with the text including the currently active shortcut:
 
-| 元素 | 提示文字 |
+| Element | Tooltip text |
 | --- | --- |
-| 播放 / 暂停 | 「播放 (Space)」/「暂停 (Space)」 |
-| 停止 | 「停止 (F4)」 |
-| 后退 | 「后退 5 秒 (←)\n右键：播放上一个 (PgUp)」 |
-| 前进 | 「前进 5 秒 (→)\n右键：播放下一个 (PgDn)」 |
-| 打开 | 「打开文件 (Ctrl+O)」 |
-| 当前时间 | 「点击切换剩余时间」/「点击切换已播放时间」 |
-| 静音 | 「静音 (M)」/「取消静音 (M)」 |
-| 音量条 | 「音量: N%」（实际值，可以超过 100） |
-| 播放列表开关 | 「播放列表 (F6)」 |
+| Play / pause | "Play (Space)" / "Pause (Space)" |
+| Stop | "Stop (F4)" |
+| Back | "Back 5 seconds (←)\nRight-click: Play previous (PgUp)" |
+| Forward | "Forward 5 seconds (→)\nRight-click: Play next (PgDn)" |
+| Open | "Open file (Ctrl+O)" |
+| Current time | "Click to show the remaining time" / "Click to show the elapsed time" |
+| Mute | "Mute (M)" / "Unmute (M)" |
+| Volume bar | "Volume: N%" (the actual value, can exceed 100) |
+| Playlist toggle | "Playlist (F6)" |
 
-1. 后退 / 前进的秒数跟随 B06 的第一档设置。
-2. 键名取自 `plugin.bindings.list()` 的 `labels`（manifest 有 `bindings.manage`，只读）：命令第一个未被别的命令占用的键盘绑定；`bindings.onChange` 时重读；读不到时用默认键。用户改绑后提示随之变化。
-3. 播放列表开关没有自己的命令，取顶层菜单项「播放列表」的按键；没有插件注册它时提示只写「播放列表」。
-4. 快捷键文字在 macOS 上显示 ⌘ 还是 Ctrl 沿用菜单的规则（由宿主的标签生成），插件不自己拼。
+1. The number of seconds for back / forward follows the first tier setting of B06.
+2. Key names come from the `labels` of `plugin.bindings.list()` (the manifest has `bindings.manage`, read only): the command's first keyboard binding not taken by another command; reread on `bindings.onChange`; the default key is used when nothing can be read. After the user rebinds, the tooltip changes with it.
+3. The playlist toggle has no command of its own and takes the keys of the top-level menu item "Playlist"; when no plugin registers it, the tooltip shows only "Playlist".
+4. Whether the shortcut text shows ⌘ or Ctrl on macOS follows the menu's rules (labels generated by the host); the plugin does not assemble it itself.
 
-**验收**：指针停在每个按钮上 0.6 秒，出现上表的提示；移开再悬停同一按钮，提示再次出现；在快捷键设置里把播放 / 暂停改到 K 后，提示变为「播放 (K)」。
+**Acceptance**: rest the pointer on each button for 0.6 seconds: the tooltips in the table above appear; move away and hover the same button again: the tooltip appears again; after changing play / pause to K in the shortcut settings, the tooltip becomes "Play (K)".
 
-### G-13b 音量滑块按 0–100 映射（P1）
+### G-13b The volume slider maps to 0–100 (P1)
 
-**状态**：已实现。
+**Status**: implemented.
 
-**要求**：滑块范围 0–100，拖到最右为 100%；默认 100% 时滑块在最右端。当前音量 > 100（别的插件设的）时滑块停在最右，悬停提示写实际值（「音量: 150%」），拖动后按拖动值设置（≤ 100）。拖动时不提示，松开时 OSD 提示一次「音量: N%」。
+**Requirements**: the slider range is 0–100, and dragging to the far right is 100%; at the default 100% the slider is at the far right end. When the current volume is > 100 (set by another plugin), the slider stays at the far right, the hover tooltip shows the actual value ("Volume: 150%"), and after a drag the dragged value is set (≤ 100). No notification while dragging; on release the OSD shows "Volume: N%" once.
 
-**验收**：首次启动（音量 100%）时音量滑块在最右；拖到中间松开，OSD「音量: 50%」。
+**Acceptance**: on first launch (volume 100%) the volume slider is at the far right; drag it to the middle and release: OSD "Volume: 50%".
 
-### G-14 时间显示的切换要保存，点击区域只限当前时间（P1）
+### G-14 The time display toggle is saved, and the click area is only the current time (P1)
 
-**状态**：已实现（设置键 `remainingTime`）。
+**Status**: implemented (settings key `remainingTime`).
 
-**要求**：
+**Requirements**:
 
-1. 点击当前时间在「已播放 / 剩余」之间切换，结果保存在 playback 的 `settings.json` 的 `remainingTime: boolean`（默认 `false`），重启后保持。剩余时间显示为 `-MM:SS / 总长`。
-2. 只有当前时间那段文字可点，指针在它上方显示手形；斜杠与总时长不可点。
-3. 时间格式：不足 1 小时为 `MM:SS`，否则 `H:MM:SS`；空闲时为 `--:-- / --:--`。
+1. Clicking the current time toggles between "elapsed / remaining"; the result is saved as `remainingTime: boolean` (default `false`) in playback's `settings.json` and persists after a restart. Remaining time shows as `-MM:SS / total`.
+2. Only the current time text is clickable, and the pointer shows a hand over it; the slash and the total duration are not clickable.
+3. Time format: `MM:SS` under 1 hour, otherwise `H:MM:SS`; `--:-- / --:--` when idle.
 
-**验收**：点当前时间切到剩余时间，重启播放器：仍显示剩余时间；点总时长：没有反应；指针在当前时间上是手形。
+**Acceptance**: click the current time to switch to remaining time and restart the player: remaining time is still shown; click the total duration: nothing happens; the pointer is a hand over the current time.
 
-### G-18 侧栏看不见时底栏列表按钮的状态（P2）
+### G-18 State of the bottom bar list button when the sidebar cannot be seen (P2)
 
-**状态**：已实现（桥接属性 `sidebar-hidden`）。
+**Status**: implemented (bridge property `sidebar-hidden`).
 
-**要求**：按钮有三种外观：
+**Requirements**: the button has three appearances:
 
-| 状态 | 条件 | 外观 |
+| State | Condition | Appearance |
 | --- | --- | --- |
-| 关 | `preferred === false` | 常态色 |
-| 开 | `preferred && effective`，或 `reason === "fullscreen"` | 强调色（按下态） |
-| 开但看不见 | `preferred && !effective && reason === "space"` | 强调色 50% 不透明度；提示「播放列表 (F6)（窗口太窄，放不下播放列表）」 |
+| Off | `preferred === false` | Normal colour |
+| On | `preferred && effective`, or `reason === "fullscreen"` | Accent colour (pressed state) |
+| On but not visible | `preferred && !effective && reason === "space"` | Accent colour at 50% opacity; tooltip "Playlist (F6) (the window is too narrow for the playlist)" |
 
-全屏时 `reason === "fullscreen"` 表示覆盖层收起（G-01），指针移到右边缘就能看到，所以按「开」显示。窗口宽度不足 638（视频 318 + 分隔条 3 + 侧栏 317）时侧栏因空间不足隐藏，偏好不变。
+In fullscreen, `reason === "fullscreen"` means the overlay is retracted (G-01) and becomes visible when the pointer moves to the right edge, so it shows as "On". When the window is narrower than 638 (video 318 + divider 3 + sidebar 317), the sidebar is hidden for lack of space and the preference is unchanged.
 
-**验收**：开着列表把窗口拖窄到 600：列表消失，底栏按钮变为半亮，悬停提示说明原因；拖宽：列表回来、按钮全亮。
+**Acceptance**: with the list open, drag the window narrower to 600: the list disappears, the bottom bar button becomes half-lit, and the hover tooltip explains why; drag it wider: the list comes back and the button is fully lit.
 
-### IA-PB-01 进度条悬停时间默认关（P2）
+### IA-PB-01 Seek bar hover time is off by default (P2)
 
-**状态**：已实现。
+**Status**: implemented.
 
-**要求**：进度条悬停时间提示（`hoverTime`）默认 `false`，可在菜单「播放 ▸ 进度条悬停显示时间」打开。已经保存过设置的用户保持原值。悬停在书签 / 章节附近（3 px 以内）时的「标题  时间」提示不受此开关影响。
+**Requirements**: the seek bar hover time tooltip (`hoverTime`) defaults to `false` and can be turned on with the menu "Playback ▸ Show Time on Seek Bar Hover". Users who have already saved settings keep their value. The "title  time" tooltip when hovering near a bookmark / chapter (within 3 px) is not affected by this switch.
 
-**验收**：删除 playback 的 `settings.json` 后启动，指针停在进度条上：没有时间提示；菜单「播放 ▸ 进度条悬停显示时间」未勾选。
+**Acceptance**: delete playback's `settings.json`, start, and rest the pointer on the seek bar: no time tooltip; the menu "Playback ▸ Show Time on Seek Bar Hover" is unchecked.
 
-### IA-PB-02 窄窗口时右侧按钮的隐藏规则（P3）
+### IA-PB-02 Hiding rules for the right-hand buttons in a narrow window (P3)
 
-**状态**：未实现。现状：只有列表开关在底栏宽度小于 320 时隐藏。
+**Status**: not implemented. Current state: only the list toggle hides, when the bottom bar is narrower than 320.
 
-**要求**：右侧每个按钮有自己的最小左边缘位置（列表开关 320、附着面板开关 320、流选择 350、CC 410，见 IA-PB-06），按钮左边缘 x 小于该值时隐藏，窗口变窄时右侧按钮从左到右依次消失；另外，按钮左边缘与时间文字（含徽标，IA-PB-05）右边缘之间不足 8 px 时也隐藏，保证不重叠。
+**Requirements**: each right-hand button has its own minimum left edge position (list toggle 320, attached panel toggle 320, stream selection 350, CC 410, see IA-PB-06); a button is hidden when its left edge x is less than that value, so as the window narrows the right-hand buttons disappear from left to right; in addition, a button is also hidden when there is less than 8 px between its left edge and the right edge of the time text (including badges, IA-PB-05), so they never overlap.
 
-**验收**：播放超过 1 小时的视频，把窗口从 800 拖窄到 320：右侧按钮从左到右依次消失，任何宽度下都不与时间文字重叠。
+**Acceptance**: play a video longer than 1 hour and drag the window from 800 down to 320: the right-hand buttons disappear from left to right and never overlap the time text at any width.
 
-### IA-PB-03 不能跳转时显示禁用的滑块（P3）
+### IA-PB-03 A disabled slider is shown when seeking is not possible (P3)
 
-**状态**：未实现。现状：不能跳转时整个滑块隐藏。
+**Status**: not implemented. Current state: when seeking is not possible the whole slider is hidden.
 
-**要求**：不能跳转（空闲、直播）时滑块仍显示在当前位置（空闲时在最左），颜色为 `Theme.accent-disabled`，不响应指针；已播放部分用 `icon-disabled`。
+**Requirements**: when seeking is not possible (idle, live stream) the slider is still shown at the current position (at the far left when idle), coloured `Theme.accent-disabled`, and does not respond to the pointer; the played part uses `icon-disabled`.
 
-**验收**：空闲时底栏进度条最左端有一个暗色滑块，点击没有反应。
+**Acceptance**: when idle, the left end of the bottom bar seek bar has a dark slider, and clicking it does nothing.
 
-### IA-PB-04 进度条上 A-B 与书签标记的形状（P3）
+### IA-PB-04 Shapes of the A-B and bookmark marks on the seek bar (P3)
 
-**状态**：未实现。现状：标记画成 1×6 的竖线，A-B 区间用色带加两端 1×8 竖线。
+**Status**: not implemented. Current state: marks are drawn as 1×6 vertical lines, and the A-B range as a colour band with 1×8 vertical lines at both ends.
 
-**要求**：A 点、B 点画 6×10 三角（A 尖朝右、B 尖朝左），书签画 6×10 旗标，章节保持竖线；颜色用主题的文字色加黑描边。悬停判定范围不变（3 px）。
+**Requirements**: points A and B are drawn as 6×10 triangles (A pointing right, B pointing left), bookmarks as 6×10 flags, and chapters stay vertical lines; the colour is the theme's text colour with a black outline. The hover hit range is unchanged (3 px).
 
-**验收**：设置 A-B 循环并添加书签：进度条上出现两个三角与一个旗标。
+**Acceptance**: set an A-B loop and add a bookmark: two triangles and one flag appear on the seek bar.
 
-### IA-PB-05 信息徽标（P3）
+### IA-PB-05 Info badges (P3)
 
-**状态**：未实现。
+**Status**: not implemented.
 
-**要求**：
+**Requirements**:
 
-1. 时间文字之后依次显示徽标，主窗口宽度不小于阈值时才显示：
+1. After the time text, badges are shown in order, each only when the main window is at least the threshold width:
 
-   | 徽标 | 内容 | 主窗口宽度 ≥ |
+   | Badge | Content | Main window width ≥ |
    | --- | --- | --- |
-   | 解码 | `HW` / `SW`（`stats().video.hwdec` 不为 `"no"` 时为 HW） | 460 |
-   | HDR | `video.transfer` 为 `pq` 或 `hlg` 时显示 `HDR` | 700 |
-   | 视频编码 | `video.codec` 的大写短名（如 `H264`、`HEVC`） | 630 |
-   | 音频编码 | `audio.codec` 的大写短名 | 670 |
-   | 声道 | `audio.channels` 加「ch」（如 `2ch`、`6ch`） | 690 |
-   | 下载速率 | `stats().cacheSpeed`（IA-CORE-16），如 `1.2 MB/s`；本地文件不显示 | 740 |
+   | Decoding | `HW` / `SW` (HW when `stats().video.hwdec` is not `"no"`) | 460 |
+   | HDR | Shows `HDR` when `video.transfer` is `pq` or `hlg` | 700 |
+   | Video codec | Upper-case short name of `video.codec` (such as `H264`, `HEVC`) | 630 |
+   | Audio codec | Upper-case short name of `audio.codec` | 670 |
+   | Channels | `audio.channels` plus "ch" (such as `2ch`, `6ch`) | 690 |
+   | Download rate | `stats().cacheSpeed` (IA-CORE-16), such as `1.2 MB/s`; not shown for local files | 740 |
 
-2. 样式：高 14，左右内边距 5，彼此间距 5，11 px 字，次要文字色；悬停时底色变亮、文字为强调色。
-3. 没有对应数据时该徽标不显示。每秒刷新一次，只在有来源时轮询。
-4. 徽标不接点击动作（HW / SW 切换要改渲染选项，属于 video 插件；声道菜单属于 audio 插件），只显示悬停态。
+2. Style: height 14, left and right padding 5, spacing 5 between badges, 11 px text, secondary text colour; on hover the background brightens and the text is the accent colour.
+3. A badge is not shown when its data is missing. Refreshed once per second, polling only while there is a source.
+4. Badges have no click action (switching HW / SW changes rendering options and belongs to the video plugin; the channel menu belongs to the audio plugin); they only show a hover state.
 
-**实现约束**：`bar.ts` 定时调用 `player.stats()`；主窗口宽度由 `window.state.videoArea` 与侧栏宽度算出后传入 `bar.slint`。
+**Implementation constraints**: `bar.ts` calls `player.stats()` on a timer; the main window width is computed from `window.state.videoArea` and the sidebar width and passed into `bar.slint`.
 
-**核心 API**：下载速率徽标依赖 IA-CORE-16；其余不新增。
+**Core API**: the download rate badge depends on IA-CORE-16; nothing else new.
 
-**跨平台**：Windows 当前为软件渲染，`hwdec` 用回拷模式（`auto-copy-safe`，如 `d3d11va-copy`），徽标显示 `SW`，如实反映。
+**Cross-platform**: Windows currently uses software rendering, and `hwdec` uses copy-back mode (`auto-copy-safe`, such as `d3d11va-copy`), so the badge shows `SW`, reflecting the facts.
 
-**验收**：窗口 800 宽播放 HEVC 5.1 声道 HDR 片源：依次显示 `HW` `HDR` `HEVC` `EAC3` `6ch`；拖窄到 650：只剩 `HW` `HEVC`；拖到 450：全部消失。
+**Acceptance**: at a window width of 800, play an HEVC 5.1-channel HDR source: `HW` `HDR` `HEVC` `EAC3` `6ch` are shown in order; drag narrower to 650: only `HW` `HEVC` remain; drag to 450: all disappear.
 
-### IA-PB-06 底栏右侧按钮补齐：CC、流选择、附着面板（P3）
+### IA-PB-06 Completing the right-hand bottom bar buttons: CC, stream selection, attached panel (P3)
 
-**状态**：未实现。现状：右侧只有播放列表开关（23×22，距右 8 px）。控制面板开关随 IA-CORE-09 取消。
+**Status**: not implemented. Current state: on the right there is only the playlist toggle (23×22, 8 px from the right). The control panel toggle is cancelled together with IA-CORE-09.
 
-**要求**：右侧从左到右为 CC、流选择、播放列表开关、附着面板开 / 关；23×22 按钮之间间距 8。
+**Requirements**: from left to right on the right side: CC, stream selection, playlist toggle, attached panel on / off; 8 between the 23×22 buttons.
 
-1. **CC**：当前来源的字幕轨里有隐藏字幕轨（`codec === "eia_608"` 或 `"eia_708"`，IA-CORE-14）时显示；点击选中 / 取消该轨（`plugin.subtitles.select(track)` / `select(null)`）；该轨被选中时为按下态。subtitles 的「显示字幕」（Alt+H）记住的「上次显示的轨」可能与 CC 按钮的选择不同步，Alt+H 恢复的是它自己记住的轨。
-2. **流选择**：当前来源有 2 条以上音轨或有任何字幕轨时显示；点击在按钮上方弹出单层菜单：音轨列表（单选）、分隔线、字幕轨列表（单选，含「关闭字幕」）。用本插件注册的无 `path` 命令加 `Panel.showMenu` 实现：音轨用 `player.selectAudioTrack`，字幕用 `subtitles.select`；轨道变化时重建。
-3. **播放列表开关**：外观按 G-18。
-4. **附着面板开 / 关**（41×40，贴最右，左侧 1 px 分隔）：等同 `sidebar.toggle()`；侧栏附着且可见时显示「关闭」图标，否则「打开」图标。
-5. 各按钮的窄窗口隐藏按 IA-PB-02。
+1. **CC**: shown when the current source's subtitle tracks include a closed caption track (`codec === "eia_608"` or `"eia_708"`, IA-CORE-14); a click selects / deselects that track (`plugin.subtitles.select(track)` / `select(null)`); pressed state while that track is selected. The "last shown track" remembered by subtitles' "Show Subtitles" (Alt+H) may be out of sync with the CC button's choice; Alt+H restores the track it remembers itself.
+2. **Stream selection**: shown when the current source has 2 or more audio tracks or any subtitle track; a click pops up a single-level menu above the button: the audio track list (radio), a separator, and the subtitle track list (radio, including "subtitles off"). Implemented with commands without `path` registered by this plugin plus `Panel.showMenu`: audio tracks use `player.selectAudioTrack`, subtitles use `subtitles.select`; rebuilt when the tracks change.
+3. **Playlist toggle**: appearance per G-18.
+4. **Attached panel on / off** (41×40, flush right, with a 1 px separator on its left): same as `sidebar.toggle()`; shows the "close" icon when the sidebar is attached and visible, otherwise the "open" icon.
+5. Hiding of each button in a narrow window follows IA-PB-02.
 
-**实现约束**：manifest 增加 `subtitles.read`、`subtitles.control` 能力。
+**Implementation constraints**: the manifest adds the `subtitles.read` and `subtitles.control` capabilities.
 
-**核心 API**：依赖 IA-CORE-14（隐藏字幕轨）；其余用现有 API。
+**Core API**: depends on IA-CORE-14 (closed caption tracks); the rest uses the existing API.
 
-**验收**：播放双音轨带字幕的 MKV：出现流选择按钮，点击弹出音轨与字幕两组，选第二条音轨后声音切换；播放带 CEA-608 的 TS：出现 CC 按钮，点击显示隐藏字幕、按钮变为按下态；附着面板按钮与 F6 效果相同。
+**Acceptance**: play an MKV with two audio tracks and subtitles: the stream selection button appears, a click pops up the two groups of audio and subtitles, and choosing the second audio track switches the sound; play a TS with CEA-608: the CC button appears, a click shows the closed captions and the button turns pressed; the attached panel button has the same effect as F6.
 
-### IA-PB-07 失去焦点时暂停、最小化时暂停（P3）
+### IA-PB-07 Pause on focus loss, pause on minimise (P3)
 
-**状态**：未实现。
+**Status**: not implemented.
 
-**要求**：playback 的设置页（「播放」分类）加两个复选框，默认都关。打开后：本应用所有窗口都不是活动窗口时暂停；最小化时暂停。恢复焦点 / 还原时**不**自动继续。只在播放中且由本规则暂停时记录，避免误继续。
+**Requirements**: playback's settings page (the "Playback" category) gets two checkboxes, both off by default. When on: pause when none of this application's windows is the active window; pause when minimised. Regaining focus / restoring does **not** resume automatically. It is recorded only when playing and paused by this rule, to avoid resuming by mistake.
 
-**核心 API**：依赖 IA-CORE-15 的 `WindowState.active`、`minimized`。
+**Core API**: depends on `WindowState.active` and `minimized` from IA-CORE-15.
 
-**跨平台**：「活动」在两个系统上都是「本应用的任一窗口是前台窗口」。
+**Cross-platform**: "active" on both systems means "any window of this application is the foreground window".
 
-**验收**：打开「失去焦点时暂停」，播放中点击别的应用：暂停；切回来：保持暂停。
+**Acceptance**: turn on "pause on focus loss", and during playback click another application: it pauses; switch back: it stays paused.
 
-### IA-PB-08 控制面板「播放」页（已取消）
+### IA-PB-08 Control panel "Playback" page (cancelled)
 
-**状态**：已取消（随 IA-CORE-09）。
+**Status**: cancelled (together with IA-CORE-09).
 
-### 本章核心 API 请求
+### Core API requests in this chapter
 
-| 签名 | 来源 |
+| Signature | Source |
 | --- | --- |
-| `PlaybackStats.cacheSpeed`（IA-CORE-16） | IA-PB-05 |
-| `WindowState.active`、`WindowState.minimized`（IA-CORE-15） | IA-PB-07 |
+| `PlaybackStats.cacheSpeed` (IA-CORE-16) | IA-PB-05 |
+| `WindowState.active`, `WindowState.minimized` (IA-CORE-15) | IA-PB-07 |
 
-其余条目只用现有 API。
+The other items use only the existing API.
 
 ---
 
-## 播放列表（`playlist`）
+## Playlist (`playlist`)
 
-**位置**：`src/plugins/playlist/`
+**Location**: `src/plugins/playlist/`
 
-### G-08 选中项与正在播放项自动滚入视野；拖动时靠边自动滚动（P1）
+### G-08 The selected item and the playing item scroll into view automatically; edge auto-scroll while dragging (P1)
 
-**状态**：已实现（`scroll.ts`、`main.ts`、`ui/sidebar.slint`）。
+**Status**: implemented (`scroll.ts`, `main.ts`, `ui/sidebar.slint`).
 
-**要求**：
+**Requirements**:
 
-1. 键盘移动选中项（↑↓、Home / End、Shift 扩选、搜索框 ↓ 回到列表、Ctrl+↑ / ↓ / Home / End 移动）后，键盘光标所在行完全可见：在视野上方时滚到它成为第一行，在下方时滚到它成为最后一行（最小滚动）。
-2. 正在播放的项变化时（自动推进、下一个、双击播放），若它不在视野内，滚到它居中；在视野内则不动。列表有搜索筛选且该项被筛掉时不滚动。
-3. 拖动排序时指针进入列表区上 / 下边缘 20 px 内，以每 50 ms 一行的速度向该方向滚动，越靠近边缘越快（最多每 50 ms 三行）。拖动的行在拖动开始时记下（列表滚动时行元素可能被复用）。
-4. 用户自己滚动过（滚轮或拖滚动条）之后的 2 秒内，正在播放项的变化不触发滚动。
-5. PgUp / PgDn 在列表焦点下仍是全局的「上一个 / 下一个」，不作列表翻页。
+1. After the keyboard moves the selection (↑↓, Home / End, Shift extend, ↓ from the search box back to the list, Ctrl+↑ / ↓ / Home / End move), the row with the keyboard cursor is fully visible: if it is above the view, scroll until it is the first row; if below, until it is the last row (minimal scrolling).
+2. When the playing item changes (auto-advance, next, double-click to play), if it is not in view, scroll so it is centred; if it is in view, do not move. When the list has a search filter and that item is filtered out, do not scroll.
+3. During drag reordering, when the pointer enters within 20 px of the top / bottom edge of the list area, scroll in that direction at one row every 50 ms, faster the closer to the edge (at most three rows every 50 ms). The dragged row is recorded when the drag starts (row elements may be reused while the list scrolls).
+4. Within 2 seconds after the user scrolls by themselves (wheel or dragging the scroll bar), changes of the playing item do not trigger scrolling.
+5. PgUp / PgDn with focus in the list are still the global "previous / next", not list paging.
 
-**验收**：200 项的列表，选中第 1 项按 ↓ 直到第 40 项：视野始终跟随；按 End：滚到底；播放第 1 项后按 PgDn 若干次到第 60 项：第 60 项滚到中间；拖动第 5 项到列表底边并停住：列表向下滚动。
+**Acceptance**: with a 200-item list, select item 1 and press ↓ until item 40: the view keeps following; press End: it scrolls to the bottom; play item 1 and press PgDn several times up to item 60: item 60 scrolls to the middle; drag item 5 to the bottom edge of the list and hold: the list scrolls down.
 
-### G-11 拖放到画面：先清空列表再加入并播放（P1）
+### G-11 Dropping on the picture: clear the list first, then add and play (P1)
 
-**状态**：已实现。
+**Status**: implemented.
 
-**要求**：
+**Requirements**:
 
-1. 拖到视频区（没有修饰键）：展开拖入内容（文件夹、列表文件的规则见功能需求 A15）；有至少一项可加入时，先清空列表，再按拖入顺序加入，播放第一项。一项都不能加入时列表不变。
-2. 只拖入**一个**本地媒体文件时，按「打开文件时」的模式与同类文件规则（IA-PL-01）扩展，播放拖入的那个文件；多个文件、文件夹、列表文件不扩展。
-3. 清空前不确认（「移除全部前确认」只管「移除全部」命令）；清空时不显示「列表已清空」提示。
-4. 设置「打开或拖入时追加，不清空列表」（IA-PL-02，默认关）打开时：追加到末尾并播放第一个新项。
-5. 按住 Option（Windows 为 Alt）拖入：只追加、不清空、不播放、不扩展。
-6. 播放器正在打开另一个来源（`busy`）时：不清空，只追加，OSD「正在打开，已加入列表」。
-7. 拖入字幕等 playlist 不认领的文件：不经过 playlist，列表不变。
+1. Dropping on the video area (no modifier): expand the dropped content (rules for folders and list files in feature requirements A15); when at least one item can be added, clear the list first, then add in the dropped order and play the first item. When no item can be added, the list is unchanged.
+2. When only **one** local media file is dropped, it is expanded according to the "When Opening a File" mode and the similar files rule (IA-PL-01), and the dropped file is played; multiple files, folders and list files are not expanded.
+3. No confirmation before clearing ("Confirm Before Removing All" only applies to the "Remove All" command); no "list cleared" notification when clearing.
+4. When the setting "Append when opening or dropping; don't clear the list" (IA-PL-02, off by default) is on: append to the end and play the first new item.
+5. Dropping with Option held (Alt on Windows): append only; no clearing, no playing, no expanding.
+6. While the player is opening another source (`busy`): do not clear, only append, OSD "opening, added to the list".
+7. Dropping subtitles or other files that playlist does not claim: playlist is not involved and the list is unchanged.
 
-**跨平台**：Option / Alt 已由 `DropModifiers.alt` 统一。
+**Cross-platform**: Option / Alt is already unified by `DropModifiers.alt`.
 
-**验收**：列表有 5 项，拖 2 个 mkv 到视频区：列表只剩这 2 项，播放第一项；打开「追加」设置后再拖：列表变为 7 项；按住 Option / Alt 拖：追加且不播放。
+**Acceptance**: with 5 items in the list, drop 2 mkv files on the video area: only these 2 items remain in the list and the first plays; turn on the "append" setting and drop again: the list becomes 7 items; drop with Option / Alt held: appended and not played.
 
-### G-12 拖放到列表：默认追加到末尾（P1）
+### G-12 Dropping on the list: append to the end by default (P1)
 
-**状态**：已实现（设置键 `dropAtPointer`）。
+**Status**: implemented (settings key `dropAtPointer`).
 
-**要求**：
+**Requirements**:
 
-1. 拖到列表（附着或浮动）上：追加到末尾，不播放，不清空。
-2. 设置「拖到列表时插入到拖放位置」（IA-PL-02，默认关）打开时：插到落点所在行之前（2 px 插入线指示位置）。
-3. 列表内部的拖动排序不受影响。
+1. Dropping on the list (attached or floating): append to the end, no playing, no clearing.
+2. When the setting "Insert at the drop position when dropping on the list" (IA-PL-02, off by default) is on: insert before the row at the drop point (a 2 px insertion line shows the position).
+3. Drag reordering inside the list is not affected.
 
-**验收**：列表 5 项，拖 2 个文件到第 2 行上：追加为第 6、7 项；打开「插入到拖放位置」后再拖到第 2 行上：插在原第 2 行之前。
+**Acceptance**: with 5 items in the list, drop 2 files on row 2: they are appended as items 6 and 7; turn on "insert at the drop position" and drop on row 2 again: they are inserted before the original row 2.
 
-### IA-PL-01 打开本地文件时清空列表并加入同类文件（P1）
+### IA-PL-01 Opening a local file clears the list and adds similar files (P1)
 
-**状态**：已实现（`media.ts` 的 `siblings` / `similarStep` / `isSimilar`，`follow.ts`，`main.ts`，`store.ts`）。
+**Status**: implemented (`siblings` / `similarStep` / `isSimilar` in `media.ts`, `follow.ts`, `main.ts`, `store.ts`).
 
-**要求**：
+**Requirements**:
 
-1. 「播放 ▸ 播放列表 ▸ 打开文件时 ▸」三选一：仅打开该文件 / 加入相似文件（默认）/ 加入同文件夹全部文件。
-2. 别的插件打开一个**本地文件**（触发条件同功能需求 A13 第 1 条）时：先清空列表，再按模式加入，打开的文件成为当前行（接管）。「仅打开该文件」模式下列表清空后只有这一项并接管它。
-3. 设置「打开或拖入时追加，不清空列表」（IA-PL-02，默认关，与 G-11 共用）打开时：回到「追加去重」规则；「仅打开该文件」时不动列表。
-4. 「打开 ▸ 打开文件夹…」按同一设置：默认先清空再加入并播放第一项；正在打开别的来源时不清空。
-5. 网络链接、生成流打开时列表不变。
-6. 列表文件（`.m3u` 等）通过「打开列表文件…」打开时替换列表，不变。
-7. 清空前不确认。「记住列表」开着时，清空后的新列表照常保存。
-8. 插件启动（或重新启用）时正在播放的文件若已在恢复的列表里，只接管、不清空。
-9. 同类文件匹配超过 5000 个时，以打开的文件为中心截取 5000 个，OSD「已加入同文件夹 N 个文件，已达上限 5000」（N 不含打开的文件本身）。
-10. 设置文件带版本号 `settings.version = 2`；低于 2 的旧文件读入时 `openMode` 与 `appendOnOpen` 一次性迁移为当前默认（相似文件、不追加），其余设置保留。旧字段 `clearOnOpenFolder` 读入时忽略。
+1. "Playback ▸ Playlist ▸ When Opening a File ▸", one of three: Open Only That File / Add Similar Files (default) / Add All Files in the Folder.
+2. When another plugin opens a **local file** (trigger condition as in feature requirements A13 item 1): clear the list first, then add according to the mode, and the opened file becomes the current row (takeover). In "Open Only That File" mode the cleared list has only this item, which it takes over.
+3. When the setting "Append when opening or dropping; don't clear the list" (IA-PL-02, off by default, shared with G-11) is on: back to the "append without duplicates" rule; in "Open Only That File" the list is not touched.
+4. "Open ▸ Open Folder…" follows the same setting: by default clear first, then add and play the first item; do not clear while another source is opening.
+5. Opening network links or generated streams leaves the list unchanged.
+6. List files (`.m3u` etc.) opened with "Open List File…" replace the list, unchanged.
+7. No confirmation before clearing. When "Remember List" is on, the new list after clearing is saved as usual.
+8. When the plugin starts (or is re-enabled), if the file being played is already in the restored list, it is only taken over, not cleared.
+9. When more than 5000 similar files match, 5000 are taken centred on the opened file, OSD "Added N files from the same folder, limit of 5000 reached" (N does not include the opened file itself).
+10. The settings file carries the version number `settings.version = 2`; when an older file below 2 is read, `openMode` and `appendOnOpen` are migrated once to the current defaults (similar files, no append), and the other settings are kept. The old field `clearOnOpenFolder` is ignored when read.
 
-#### 同类文件规则
+#### Similar files rule
 
-只在打开**单个**本地文件时生效（多个文件同时打开时不扩展，拖放见 G-11 第 2 条）。完整算法与常量见附录 B；`media.ts` 按附录 B 实现，常量与整数除法不得改动。
+Applies only when opening a **single** local file (opening several files at once does not expand; for drops see G-11 item 2). The complete algorithm and constants are in Appendix B; `media.ts` implements Appendix B, and the constants and integer division must not be changed.
 
-1. 输入：打开的文件路径 P；模式 `similar | folder`（「仅打开该文件」不调用本规则）。
-2. 拆分：`ext` 取最后一个 `.` 之后的部分并转小写；`stem` 为去掉扩展名的文件名，保留原大小写。
-3. 分组：`ext` 属于音频扩展名集合时为音频组；否则属于视频扩展名集合时为视频组；两者都不是时只返回 `[P]`。集合沿用功能需求附录 B.5（`VIDEO`、`AUDIO`），按整个扩展名精确匹配。
-4. 相似模式的前置条件：`stem` 至少含一个空格、`-`、`_` 或 ASCII `0-9`，并且长度 ≥ 2；不满足时返回 `[P]`。全角数字、中文数字都不算数字。
-5. 枚举 P 所在文件夹，不递归，只看文件（指向文件的符号链接也算），不看目录。逐项判断：
-   - 名字以 `.` 开头的跳过（macOS 的 `._*` 元数据文件）；
-   - 跳过 P 本身；
-   - 候选与 P 必须同组：音频只配音频，视频只配视频；
-   - 「全部」模式：同组即收入。「相似」模式：`isSimilar(a, b, audio)` 为真才收入，其中 `a = asciiLower(stem) + ".tmp"`，`b = asciiLower(候选 stem) + ".tmp"`。`asciiLower` 只把 A–Z 转成小写；`.tmp` 必须拼上，所有长度阈值都把它算在内。
-6. 结果加上 P 本身，按 `Intl.Collator("zh", {numeric: true, sensitivity: "base"})` 比较文件名后排序（自然顺序、不区分大小写）。
-7. 没有数量上限，只在匹配超过 5000 个时截取（第 9 条）。
-8. 打开的文件成为当前行；排在它前面的文件也在列表里。
+1. Input: the opened file path P; mode `similar | folder` ("Open Only That File" does not call this rule).
+2. Split: `ext` is the part after the last `.`, converted to lower case; `stem` is the file name without the extension, keeping the original case.
+3. Grouping: if `ext` is in the audio extension set, the audio group; otherwise, if it is in the video extension set, the video group; if neither, return only `[P]`. The sets follow feature requirements Appendix B.5 (`VIDEO`, `AUDIO`), matched exactly on the whole extension.
+4. Precondition for similar mode: `stem` contains at least one space, `-`, `_` or ASCII `0-9`, and its length is ≥ 2; otherwise return `[P]`. Full-width digits and Chinese numerals do not count as digits.
+5. Enumerate the folder containing P, not recursively, files only (symbolic links to files count too), not directories. Check each entry:
+   - skip names starting with `.` (macOS `._*` metadata files);
+   - skip P itself;
+   - the candidate must be in the same group as P: audio only matches audio, video only matches video;
+   - "all" mode: same group means included. "similar" mode: included only when `isSimilar(a, b, audio)` is true, where `a = asciiLower(stem) + ".tmp"` and `b = asciiLower(candidate stem) + ".tmp"`. `asciiLower` only converts A–Z to lower case; `.tmp` must be appended, and all length thresholds count it.
+6. Add P itself to the result and sort by comparing file names with `Intl.Collator("zh", {numeric: true, sensitivity: "base"})` (natural order, case-insensitive).
+7. There is no count limit; truncation happens only when more than 5000 match (item 9).
+8. The opened file becomes the current row; files sorted before it are in the list too.
 
-**测试用例**（17 组，写在 `tests/similar.test.ts`；「打开」为当前行；列表按第 6 条排序；默认模式为相似）
+**Test cases** (17 groups, in `tests/similar.test.ts`; "Opened" is the current row; the list is sorted per item 6; the default mode is similar)
 
-| # | 打开 | 文件夹内容 | 期望列表（顺序） | 不应加入 | 通过的步骤 |
+| # | Opened | Folder contents | Expected list (in order) | Must not be added | Step passed |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `Show.S01E02.1080p.mkv` | `Show.S01E01.1080p.mkv` `Show.S01E02.1080p.mkv` `Show.S01E10.1080p.mkv` `Show.S02E01.1080p.mkv` `Show.S01E03.720p.mp4` `Show.S01E01.1080p.srt` `Other.Movie.2019.mkv` | `Show.S01E01.1080p.mkv` `Show.S01E02.1080p.mkv` `Show.S01E03.720p.mp4` `Show.S01E10.1080p.mkv` `Show.S02E01.1080p.mkv` | `.srt`（非媒体）、`Other.Movie.2019.mkv` | E01、E03：S1；E10、S02E01：S3 相等 |
-| 2 | `第02集.mp4` | `第01集.mp4` `第02集.mp4` `第10集.mp4` `第01集.mkv` `花絮.mp4` | `第01集.mkv` `第01集.mp4` `第02集.mp4` `第10集.mp4` | `花絮.mp4` | S3 相等；mkv 与 mp4 同为视频组 |
-| 3 | `[字幕组] 进击的巨人 - 02 [1080p].mkv` | `[字幕组] 进击的巨人 - 01 [1080p].mkv` `[字幕组] 进击的巨人 - 02 [1080p].mkv` `[字幕组] 进击的巨人 - 13 [1080p].mkv` `[字幕组] 鬼灭之刃 - 01 [1080p].mkv` `[其他组] 进击的巨人 - 03 [720p].mkv` | `[字幕组] 鬼灭之刃 - 01 [1080p].mkv` `[字幕组] 进击的巨人 - 01 [1080p].mkv` `[字幕组] 进击的巨人 - 02 [1080p].mkv` `[字幕组] 进击的巨人 - 13 [1080p].mkv` | `[其他组] 进击的巨人 - 03 [720p].mkv` | 01：S1；13：S3 相等；鬼灭之刃：S3 前缀 |
-| 4 | `A02.mkv` | `A01.mkv` `A02.mkv` `A03.mkv` `B.mkv` `song.mp3` | `A01.mkv` `A02.mkv` `A03.mkv` | `B.mkv`、`song.mp3` | S3 相等 |
-| 5 | `A02.mkv`（**全部**模式） | `A01.mkv` `A02.mkv` `A03.mkv` `B.mkv` `song.mp3` `notes.txt` | `A01.mkv` `A02.mkv` `A03.mkv` `B.mkv` | `song.mp3`（不同组）、`notes.txt` | 只看分组 |
-| 6 | `movie.mkv` | `movie.mkv` `movie2.mkv` `trailer.mkv` | `movie.mkv` | `movie2.mkv`、`trailer.mkv` | 不满足前置条件 |
-| 7 | `ep1.mp4` | `ep1.mp4` `ep2.mp4` `EP3.MP4` `ep4.avi` `ep10.mp4` `ep5.mp3` | `ep1.mp4` `ep2.mp4` `EP3.MP4` `ep4.avi` `ep10.mp4` | `ep5.mp3` | S3 相等（大小写无关） |
-| 8 | `Ep 001.mkv` | `Ep 001.mkv` `Ep 002.mkv` `Ep 010.mkv` `Ep 100.mkv` `Ep 1000.mkv` | 原顺序全部 | 无 | 002：S1；其余：S3 相等（数字位数不同） |
-| 9 | `01 - Intro.mp3` | `01 - Intro.mp3` `02 - Song Two.mp3` `03 - Another.flac` `10 - Outro.mp3` `Interview.mp3` `cover.jpg` | `01 - Intro.mp3` `02 - Song Two.mp3` `03 - Another.flac` `10 - Outro.mp3` | `Interview.mp3`、`cover.jpg` | S4 音频 |
+| 1 | `Show.S01E02.1080p.mkv` | `Show.S01E01.1080p.mkv` `Show.S01E02.1080p.mkv` `Show.S01E10.1080p.mkv` `Show.S02E01.1080p.mkv` `Show.S01E03.720p.mp4` `Show.S01E01.1080p.srt` `Other.Movie.2019.mkv` | `Show.S01E01.1080p.mkv` `Show.S01E02.1080p.mkv` `Show.S01E03.720p.mp4` `Show.S01E10.1080p.mkv` `Show.S02E01.1080p.mkv` | `.srt` (not media), `Other.Movie.2019.mkv` | E01, E03: S1; E10, S02E01: S3 equal |
+| 2 | `第02集.mp4` | `第01集.mp4` `第02集.mp4` `第10集.mp4` `第01集.mkv` `花絮.mp4` | `第01集.mkv` `第01集.mp4` `第02集.mp4` `第10集.mp4` | `花絮.mp4` | S3 equal; mkv and mp4 are both in the video group |
+| 3 | `[字幕组] 进击的巨人 - 02 [1080p].mkv` | `[字幕组] 进击的巨人 - 01 [1080p].mkv` `[字幕组] 进击的巨人 - 02 [1080p].mkv` `[字幕组] 进击的巨人 - 13 [1080p].mkv` `[字幕组] 鬼灭之刃 - 01 [1080p].mkv` `[其他组] 进击的巨人 - 03 [720p].mkv` | `[字幕组] 鬼灭之刃 - 01 [1080p].mkv` `[字幕组] 进击的巨人 - 01 [1080p].mkv` `[字幕组] 进击的巨人 - 02 [1080p].mkv` `[字幕组] 进击的巨人 - 13 [1080p].mkv` | `[其他组] 进击的巨人 - 03 [720p].mkv` | 01: S1; 13: S3 equal; 鬼灭之刃: S3 prefix |
+| 4 | `A02.mkv` | `A01.mkv` `A02.mkv` `A03.mkv` `B.mkv` `song.mp3` | `A01.mkv` `A02.mkv` `A03.mkv` | `B.mkv`, `song.mp3` | S3 equal |
+| 5 | `A02.mkv` (**All** mode) | `A01.mkv` `A02.mkv` `A03.mkv` `B.mkv` `song.mp3` `notes.txt` | `A01.mkv` `A02.mkv` `A03.mkv` `B.mkv` | `song.mp3` (different group), `notes.txt` | Group only |
+| 6 | `movie.mkv` | `movie.mkv` `movie2.mkv` `trailer.mkv` | `movie.mkv` | `movie2.mkv`, `trailer.mkv` | Precondition not met |
+| 7 | `ep1.mp4` | `ep1.mp4` `ep2.mp4` `EP3.MP4` `ep4.avi` `ep10.mp4` `ep5.mp3` | `ep1.mp4` `ep2.mp4` `EP3.MP4` `ep4.avi` `ep10.mp4` | `ep5.mp3` | S3 equal (case-insensitive) |
+| 8 | `Ep 001.mkv` | `Ep 001.mkv` `Ep 002.mkv` `Ep 010.mkv` `Ep 100.mkv` `Ep 1000.mkv` | All, in the original order | None | 002: S1; the rest: S3 equal (different digit counts) |
+| 9 | `01 - Intro.mp3` | `01 - Intro.mp3` `02 - Song Two.mp3` `03 - Another.flac` `10 - Outro.mp3` `Interview.mp3` `cover.jpg` | `01 - Intro.mp3` `02 - Song Two.mp3` `03 - Another.flac` `10 - Outro.mp3` | `Interview.mp3`, `cover.jpg` | S4 audio |
 | 10 | `Vlog_2023-05-01.mp4` | `Vlog_2023-05-01.mp4` `Vlog_2023-05-02.mp4` `Vlog_2024-12-31.mp4` `Holiday_2023-05-01.mp4` | `Vlog_2023-05-01.mp4` `Vlog_2023-05-02.mp4` `Vlog_2024-12-31.mp4` | `Holiday_2023-05-01.mp4` | S1 |
 | 11 | `Lecture 1.mp4` | `Lecture 1.mp4` `Lecture 2.mp4` `lecture 3.mp4` `Lecture 12.mp4` `Lab 1.mp4` | `Lecture 1.mp4` `Lecture 2.mp4` `lecture 3.mp4` `Lecture 12.mp4` | `Lab 1.mp4` | S1 |
-| 12 | `Friends.S01E01.mkv` | `Friends.S01E01.mkv` `Friends.S01E02.mkv` `Friends.Special.mkv` `Friends.S01E01.ass` `Friends.S01E03.zip` | `Friends.S01E01.mkv` `Friends.S01E02.mkv` `Friends.Special.mkv` | `.ass`、`.zip` | S1（`Special` 也算相似） |
-| 13 | `西游记01.rmvb` | `西游记01.rmvb` `西游记02.rmvb` `西游记25.rmvb` `红楼梦01.rmvb` | `西游记01.rmvb` `西游记02.rmvb` `西游记25.rmvb` | `红楼梦01.rmvb` | S3 相等 |
+| 12 | `Friends.S01E01.mkv` | `Friends.S01E01.mkv` `Friends.S01E02.mkv` `Friends.Special.mkv` `Friends.S01E01.ass` `Friends.S01E03.zip` | `Friends.S01E01.mkv` `Friends.S01E02.mkv` `Friends.Special.mkv` | `.ass`, `.zip` | S1 (`Special` also counts as similar) |
+| 13 | `西游记01.rmvb` | `西游记01.rmvb` `西游记02.rmvb` `西游记25.rmvb` `红楼梦01.rmvb` | `西游记01.rmvb` `西游记02.rmvb` `西游记25.rmvb` | `红楼梦01.rmvb` | S3 equal |
 | 14 | `abc-01.mkv` | `abc-01.mkv` `abc-02.mkv` `abd-01.mkv` `xyz-01.mkv` | `abc-01.mkv` `abc-02.mkv` `abd-01.mkv` | `xyz-01.mkv` | S1 |
-| 15 | `Show.S01E01.mkv` | `Show.S01E01.mkv` `Show.S01E02.mkv` `Shower.Cam.mkv` `Showtime.S01E01.mkv` | `Show.S01E01.mkv` `Show.S01E02.mkv` `Shower.Cam.mkv` | `Showtime.S01E01.mkv` | E02：S1；Shower.Cam：S4 掩码 |
-| 16 | `第０２集.mp4`（全角数字） | `第０１集.mp4` `第０２集.mp4` `第１０集.mp4` | `第０２集.mp4` | 其余两个 | 不满足前置条件 |
-| 17 | `ab1.mkv` | `ab1.mkv` `ab2.mkv` `ac1.mkv` `b1.mkv` | `ab1.mkv` `ab2.mkv` | `ac1.mkv`、`b1.mkv` | S3 相等（短名字只能完全相同） |
+| 15 | `Show.S01E01.mkv` | `Show.S01E01.mkv` `Show.S01E02.mkv` `Shower.Cam.mkv` `Showtime.S01E01.mkv` | `Show.S01E01.mkv` `Show.S01E02.mkv` `Shower.Cam.mkv` | `Showtime.S01E01.mkv` | E02: S1; Shower.Cam: S4 mask |
+| 16 | `第０２集.mp4` (full-width digits) | `第０１集.mp4` `第０２集.mp4` `第１０集.mp4` | `第０２集.mp4` | The other two | Precondition not met |
+| 17 | `ab1.mkv` | `ab1.mkv` `ab2.mkv` `ac1.mkv` `b1.mkv` | `ab1.mkv` `ab2.mkv` | `ac1.mkv`, `b1.mkv` | S3 equal (short names must be identical) |
 
-单元测试既比对 `siblings` 的结果，也逐个比对 `similarStep` 返回的步骤（`S1` / `S2` / `S3 equal` / `S3 prefix` / `S4 audio` / `S4 mask`）与上表「通过的步骤」一致；另测前置条件、`.tmp` 长度边界（第 17 组：`ab1.tmp` 共 7 个字符，7/2 = 3 < 5，不进入 S1；`ac1` 在 S3、S4 也因长度不足判为不相似）、掩码中「数字对非数字」在第 n 位上判为不相似、跳过 `.` 开头与文件夹、5000 截断。
+The unit tests compare both the result of `siblings` and, one by one, the step returned by `similarStep` (`S1` / `S2` / `S3 equal` / `S3 prefix` / `S4 audio` / `S4 mask`) against "Step passed" in the table above; they also test the precondition, the `.tmp` length boundary (group 17: `ab1.tmp` has 7 characters in total, 7/2 = 3 < 5, so it does not enter S1; `ac1` is also judged not similar in S3 and S4 for insufficient length), "digit against non-digit" at position n in the mask being judged not similar, skipping names starting with `.` and folders, and truncation at 5000.
 
-**验收**：
+**Acceptance**:
 
-1. 列表有 3 项，文件夹里有 `A01 A02 A03 B`：用底栏「打开文件」打开 `A02`：列表变为 `A01 A02 A03`，`A02` 为当前行，播完自动播放 `A03`。
-2. 模式改为「仅打开该文件」后用底栏打开 `B`：列表只剩 `B`，为当前行。
-3. 打开「追加」设置后再打开 `A01`：追加去重，原有行保留。
-4. 打开一个网络链接：列表不变。
-5. 「打开文件夹…」选一个文件夹：列表被替换为该文件夹的内容并播放第一项。
+1. The list has 3 items and the folder contains `A01 A02 A03 B`: open `A02` with the bottom bar "Open file": the list becomes `A01 A02 A03`, `A02` is the current row, and `A03` plays automatically when it ends.
+2. After changing the mode to "Open Only That File", open `B` with the bottom bar: only `B` remains in the list, as the current row.
+3. Turn on the "append" setting and open `A01` again: appended without duplicates, existing rows kept.
+4. Open a network link: the list is unchanged.
+5. "Open Folder…" and choose a folder: the list is replaced with the contents of that folder and the first item plays.
 
-### IA-PL-02 播放列表设置页与列表焦点下的 F5（P2）
+### IA-PL-02 Playlist settings page and F5 with focus in the list (P2)
 
-**状态**：已实现（`ui/settings.slint`，manifest 有 `ui.settings`，页面 id `playlist`，分类「播放」，order 30）。
+**Status**: implemented (`ui/settings.slint`; the manifest has `ui.settings`, page id `playlist`, category "Playback", order 30).
 
-**要求**：
+**Requirements**:
 
-1. 「选项 ▸ 播放 ▸ 播放列表」页：
-   - 打开文件时：仅打开该文件 / 加入相似文件（默认）/ 加入同文件夹全部文件（下拉框）；
-   - 打开或拖入时追加，不清空列表（默认关；同时管打开文件、打开文件夹与拖到画面）；
-   - 拖到列表时插入到拖放位置（默认关）；
-   - 循环（下拉框）、随机、快速推进到下一个、记住列表、移除全部前确认（复选框）。
-   页面与菜单里已有的勾选项双向同步。
-2. 列表获得焦点时 F5 打开该页（不进菜单的列表命令「播放列表设置…」，`focus: "panel"`）；列表没有焦点时 F5 仍是全局「选项…」。
-3. 手动播放（双击、Enter、P）后焦点留在列表。
+1. The "Options ▸ Playback ▸ Playlist" page:
+   - When Opening a File: Open Only That File / Add Similar Files (default) / Add All Files in the Folder (drop-down);
+   - Append when opening or dropping; don't clear the list (off by default; covers opening files, opening folders and dropping on the picture);
+   - Insert at the drop position when dropping on the list (off by default);
+   - Repeat (drop-down), Shuffle, Fast Advance to Next, Remember List, Confirm Before Removing All (checkboxes).
+   The page and the existing checkable items in the menu stay in sync both ways.
+2. With focus in the list, F5 opens this page (the list command "Playlist Settings…", not in the menu, `focus: "panel"`); without focus in the list, F5 is still the global "Options…".
+3. After manual play (double-click, Enter, P), focus stays in the list.
 
-**跨平台**：Apple 键盘上 F5 需要 fn。
+**Cross-platform**: on Apple keyboards F5 needs fn.
 
-**验收**：列表获得焦点按 F5：选项窗口打开在「播放列表」页；在页面上改「打开文件时」，菜单圆点同步。
+**Acceptance**: with focus in the list press F5: the Options window opens on the "Playlist" page; change "When Opening a File" on the page, and the menu radio dot follows.
 
-### IA-PL-03 键盘光标的焦点框（P3）
+### IA-PL-03 Focus frame for the keyboard cursor (P3)
 
-**状态**：未实现。现状：选中行有底色；键盘光标与选中合在一起。
+**Status**: not implemented. Current state: selected rows have a background colour; the keyboard cursor and the selection are combined.
 
-**要求**：列表获得焦点时，键盘光标所在行画 1 px 虚线框（主题的次要文字色），与是否选中无关；列表失去焦点时不画。
+**Requirements**: when the list has focus, the row with the keyboard cursor gets a 1 px dashed frame (the theme's secondary text colour), regardless of whether it is selected; when the list loses focus it is not drawn.
 
-**验收**：选中第 3 行后 Ctrl+点击取消选中：第 3 行仍有虚线框；按 ↓：框移到第 4 行。
+**Acceptance**: select row 3, then Ctrl+click to deselect it: row 3 still has the dashed frame; press ↓: the frame moves to row 4.
 
-### IA-PL-04 列表行的图标列（P3）
+### IA-PL-04 Icon column in list rows (P3)
 
-**状态**：未实现。现状：「序号. 标题」，时长右对齐。
+**Status**: not implemented. Current state: "number. title", with the duration right-aligned.
 
-**要求**：序号之后、标题之前画 12×12 的类型图标：视频、音频、网络链接三种（视频 / 音频按扩展名判断，链接按 `kind === "url"`）。标题来自文件名时保留扩展名。
+**Requirements**: after the number and before the title, draw a 12×12 type icon of three kinds: video, audio and network link (video / audio by extension, links by `kind === "url"`). When the title comes from the file name, the extension is kept.
 
-**验收**：列表里混放视频、音频、链接：三种图标不同。
+**Acceptance**: mix video, audio and links in the list: the three icons differ.
 
-### 本章核心 API 请求
+### Core API requests in this chapter
 
-无。本章全部用现有 API。
+None. This chapter uses only the existing API.
 
 ---
 
-## 窗口（`window`）
+## Window (`window`)
 
-**位置**：`src/plugins/window/`
+**Location**: `src/plugins/window/`
 
-### G-02 开始播放时把窗口调整为 1 倍视频尺寸（P1）
+### G-02 When playback starts, resize the window to 1× the video size (P1)
 
-**状态**：已实现（`window/settings.ts`、`main.ts`；设置键 `autoSize`、`autoSizeOnce`）。
+**Status**: implemented (`window/settings.ts`, `main.ts`; settings keys `autoSize`, `autoSizeOnce`).
 
-**要求**：
+**Requirements**:
 
-1. 设置「开始播放时的窗口尺寸」：不调整 / 0.5 倍 / 1 倍（默认）/ 1.5 倍 / 2 倍 / 适应视频比例。菜单「屏幕 ▸ 开始播放时 ▸」六个单选项（order 716–721，group `screen-auto`）；设置页「选项 ▸ 播放 ▸ 窗口」（order 30）同样提供。
-2. 设置「只调整一次」（默认关）：本次运行中第一个有视频的来源用掉这一次（即使它因为全屏等原因没有调整）。菜单「屏幕 ▸ 开始播放时 ▸ 只调整一次」（勾选，order 722，group `screen-auto-once`）。
-3. 触发：每次新来源（`sourceId` 变化）第一次拿到视频尺寸时调整一次（`ready` 后读 `stats()`，每 500 ms 重试至多 10 次）。同一来源重播、暂停、跳转不触发。插件激活时已在播放的来源也按新来源处理。
-4. 不调整的情况：全屏；迷你尺寸生效中；画中画中；纯音频或没有视频；插件生成的流没有尺寸。
-5. 尺寸规则与手动倍数（功能需求 H03）相同：目标是视频区，核心加上底栏与附着侧栏，保持左上角，放不下时按屏幕缩小、太小时按最小尺寸放大。
-6. 自动调整不显示 OSD；被屏幕缩小时同样不提示。从菜单改设置时提示「开始播放时: 1倍」「开始播放时: 不调整窗口」「开始播放时只调整一次: 开 / 关」，从设置页修改不提示；改设置不立即调整当前窗口，下一个来源生效。
-7. 来源已就绪、尺寸还没拿到时，用户手动改变了窗口（窗口模式下视频区变化超过 1 点；全屏切换、画中画不算），这一来源不再自动调整。
+1. Setting "Window size when playback starts": Don't Resize / 0.5× / 1× (default) / 1.5× / 2× / Fit to Video Aspect Ratio. The menu "Screen ▸ When Playback Starts ▸" has six radio items (order 716–721, group `screen-auto`); the settings page "Options ▸ Playback ▸ Window" (order 30) offers the same.
+2. Setting "Only Once" (off by default): the first source with video in this run uses up the one time (even if it was not resized because of fullscreen or similar). Menu "Screen ▸ When Playback Starts ▸ Only Once" (checkable, order 722, group `screen-auto-once`).
+3. Trigger: each new source (`sourceId` changes) is resized once, when it first gets a video size (read `stats()` after `ready`, retrying every 500 ms at most 10 times). Replaying, pausing or seeking within the same source does not trigger. A source already playing when the plugin activates is treated as a new source.
+4. No resizing when: fullscreen; mini size in effect; in picture-in-picture; audio only or no video; a plugin-generated stream with no size.
+5. The size rules are the same as for the manual multipliers (feature requirements H03): the target is the video area, the core adds the bottom bar and the attached sidebar, keeps the top-left corner, shrinks to the screen when it does not fit and enlarges to the minimum size when too small.
+6. Automatic resizing shows no OSD; nothing is shown when it is shrunk to the screen either. Changing the setting from the menu shows "When playback starts: 1×", "When playback starts: Don't resize the window", "Resize only once when playback starts: On / Off"; changing it on the settings page shows nothing; changing the setting does not resize the current window immediately, it takes effect with the next source.
+7. If, after the source is ready and before the size is known, the user changes the window manually (in windowed mode the video area changes by more than 1 point; fullscreen toggling and picture-in-picture do not count), this source is no longer resized automatically.
 
-**跨平台**：`setVideoArea` 在 Windows 上按整个显示器计算可见区（可能与任务栏重叠，参考文档 §6.6），这是核心的已知差异。
+**Cross-platform**: on Windows `setVideoArea` computes the visible area from the whole monitor (it may overlap the taskbar, reference §6.6); this is a known difference in the core.
 
-**验收**：
+**Acceptance**:
 
-1. 默认设置下打开 1280×720 片源（屏幕 2560×1440）：视频区变为 1280×720，窗口左上角不动。
-2. 接着打开 640×480 片源：视频区变为 640×480。
-3. 打开 3840×2160 片源：按屏幕缩小到能放下，无提示。
-4. 打开 mp3：窗口不变。
-5. 全屏中通过列表切到下一个视频：不调整；退出全屏后窗口为全屏前的尺寸。
-6. 设置为「不调整」：打开文件时窗口不变；设置为「只调整一次」：只有第一个视频调整。
+1. With default settings open a 1280×720 source (screen 2560×1440): the video area becomes 1280×720, and the top-left corner of the window does not move.
+2. Then open a 640×480 source: the video area becomes 640×480.
+3. Open a 3840×2160 source: it shrinks to fit the screen, with no notification.
+4. Open an mp3: the window is unchanged.
+5. In fullscreen, switch to the next video through the list: no resizing; after exiting fullscreen the window has its size from before fullscreen.
+6. Set "Don't Resize": the window is unchanged when opening files; set "Only Once": only the first video resizes it.
 
-### G-06 播放时隐藏鼠标指针默认开（P1）
+### G-06 Hiding the pointer while playing is on by default (P1)
 
-**状态**：已实现（设置键 `hideCursorWhilePlaying` 默认 `true`）。
+**Status**: implemented (settings key `hideCursorWhilePlaying` defaults to `true`).
 
-**要求**：默认开（菜单「播放 ▸ 播放时隐藏鼠标指针」，设置页「选项 ▸ 播放 ▸ 窗口」）。隐藏条件（参考文档 §6.6 `setCursorAutoHide("playing")`）：播放中、指针在视频区、3 秒无活动、没有菜单与对话框、主窗口是活动窗口。暂停时不隐藏；指针在底栏或弹出层上时不隐藏。已经保存过设置的用户保持原值。
+**Requirements**: on by default (menu "Playback ▸ Hide Pointer While Playing", settings page "Options ▸ Playback ▸ Window"). Hide conditions (reference §6.6 `setCursorAutoHide("playing")`): playing, the pointer is over the video area, 3 seconds without activity, no menu or dialog, and the main window is the active window. Not hidden while paused; not hidden while the pointer is over the bottom bar or the pop-out. Users who have already saved settings keep their value.
 
-**验收**：删除 window 的 `settings.json` 后启动，窗口模式播放，指针在视频上静止 3 秒：消失；菜单「播放 ▸ 播放时隐藏鼠标指针」已勾选。
+**Acceptance**: delete window's `settings.json`, start, play in windowed mode and keep the pointer still over the video for 3 seconds: it disappears; the menu "Playback ▸ Hide Pointer While Playing" is checked.
 
-### IA-WIN-01 `` ` `` 是「迷你尺寸」，画中画是独立命令（P2）
+### IA-WIN-01 `` ` `` is "Mini Size", picture-in-picture is a separate command (P2)
 
-**状态**：已实现。
+**Status**: implemented.
 
-**要求**：
+**Requirements**:
 
-1. 「屏幕 ▸ 迷你尺寸」（勾选，`` ` ``，id `mini`，order 710，group `screen`）在所有系统上都存在：视频区缩到能放进 400×300 的最大同比例尺寸、保持左上角，再按一次恢复。没有视频、全屏时禁用。置顶规则见 IA-WIN-02。
-2. 「屏幕 ▸ 画中画」（勾选，id `pip`，order 709，group `screen`，**无默认按键**）只在 `pictureInPicture.supported` 为真时注册，变为假时注销；没有视频时禁用（已在画中画中仍可退出）。
-3. 两项互斥：进入画中画时若迷你尺寸生效，先恢复原尺寸；画中画中执行迷你尺寸时先退出画中画，退出失败（提示「无法退出画中画：<原因>」）则不进入迷你尺寸。两项的切换进行中互相标为忙碌。
-4. 用户对 `` ` `` 的改绑作用于迷你尺寸。
+1. "Screen ▸ Mini Size" (checkable, `` ` ``, id `mini`, order 710, group `screen`) exists on every system: the video area shrinks to the largest same-ratio size that fits into 400×300, keeping the top-left corner, and pressing it again restores. Disabled without video and in fullscreen. Always-on-top rules in IA-WIN-02.
+2. "Screen ▸ Picture-in-Picture" (checkable, id `pip`, order 709, group `screen`, **no default key**) is registered only while `pictureInPicture.supported` is true and unregistered when it becomes false; disabled without video (it can still exit when already in picture-in-picture).
+3. The two are mutually exclusive: when entering picture-in-picture while mini size is in effect, the original size is restored first; running mini size during picture-in-picture first exits picture-in-picture, and if exiting fails (notification "Cannot exit picture-in-picture: <reason>"), mini size is not entered. While either switch is in progress, each marks the other as busy.
+4. The user's rebinding of `` ` `` applies to mini size.
 
-**跨平台**：迷你尺寸只用 `setVideoArea`，两个系统相同；画中画只有 macOS。
+**Cross-platform**: mini size uses only `setVideoArea`, the same on both systems; picture-in-picture exists only on macOS.
 
-**验收**：macOS 上按 `` ` ``：窗口缩为迷你尺寸（不进入画中画）；从「屏幕 ▸ 画中画」进入画中画；Windows 上菜单没有「画中画」，`` ` `` 行为与 macOS 相同。
+**Acceptance**: on macOS press `` ` ``: the window shrinks to mini size (without entering picture-in-picture); enter picture-in-picture from "Screen ▸ Picture-in-Picture"; on Windows the menu has no "Picture-in-Picture", and `` ` `` behaves the same as on macOS.
 
-### IA-WIN-02 迷你尺寸不置顶（P2）
+### IA-WIN-02 Mini size is not on top (P2)
 
-**状态**：已实现。
+**Status**: implemented.
 
-**要求**：迷你尺寸只改窗口尺寸；是否置顶完全由置顶方式（IA-WIN-03）决定。迷你尺寸的进入 / 退出不调用 `setAlwaysOnTop`。
+**Requirements**: mini size only changes the window size; whether it is on top is decided entirely by the always-on-top mode (IA-WIN-03). Entering / exiting mini size does not call `setAlwaysOnTop`.
 
-**验收**：置顶方式为「不置顶」时按 `` ` ``：窗口变小，点 Finder / 资源管理器后播放器被盖住。
+**Acceptance**: with the always-on-top mode "Never", press `` ` ``: the window becomes small, and after clicking Finder / File Explorer the player is covered.
 
-### IA-WIN-03 置顶方式四种，默认「全屏播放时」（P2）
+### IA-WIN-03 Four always-on-top modes, default "While Playing in Fullscreen" (P2)
 
-**状态**：已实现（只用现有 `setAlwaysOnTop(boolean)`）。
+**Status**: implemented (uses only the existing `setAlwaysOnTop(boolean)`).
 
-**要求**：
+**Requirements**:
 
-1. 「屏幕 ▸ 置顶 ▸」四种方式（单选）：不置顶、总是置顶、播放时置顶、全屏播放时置顶（order 729）。默认「全屏播放时置顶」。设置页「选项 ▸ 播放 ▸ 窗口」也有这四种单选。
-2. 「全屏播放时」：`window.state.fullscreen && phase === "ready" && !paused` 时置顶，否则不置顶；全屏切换时重新计算。只在值变化时调用 `setAlwaysOnTop`。
-3. Ctrl+T 循环：不 → 总是 → 播放时 → 全屏播放时 → 不。
-4. OSD：「置顶: 全屏播放时」。
-5. 已经保存过设置的用户保持原值。
-6. 非模态工具窗口不单独置顶；整体置顶时一起置顶。
+1. "Screen ▸ Always on Top ▸" has four modes (radio): Never, Always, While Playing, While Playing in Fullscreen (order 729). The default is "While Playing in Fullscreen". The settings page "Options ▸ Playback ▸ Window" also has these four radio options.
+2. "While Playing in Fullscreen": on top when `window.state.fullscreen && phase === "ready" && !paused`, otherwise not; recomputed when fullscreen toggles. `setAlwaysOnTop` is called only when the value changes.
+3. Ctrl+T cycles: Never → Always → While Playing → While Playing in Fullscreen → Never.
+4. OSD: "Always on top: While playing in fullscreen".
+5. Users who have already saved settings keep their value.
+6. Modeless tool windows are not put on top on their own; they go on top together when the whole is on top.
 
-**跨平台**：macOS 全屏是独立空间，主窗口在那里本来就在最前，「全屏播放时」在 macOS 上没有可见效果；仍然提供并作为默认值，保证两个系统的设置一致。Windows 上全屏为置顶的无边框窗口，其它窗口弹出时不会盖住播放器。
+**Cross-platform**: macOS fullscreen is a separate space where the main window is in front anyway, so "While Playing in Fullscreen" has no visible effect on macOS; it is still offered and is the default, to keep the settings consistent on both systems. On Windows, fullscreen is an always-on-top borderless window, so other windows that pop up do not cover the player.
 
-**验收**：首次启动菜单「屏幕 ▸ 置顶」圆点在「全屏播放时置顶」；Windows 上全屏播放时打开一个会自动弹到前台的程序：播放器仍在最上；窗口模式下不置顶。Ctrl+T 四次回到原方式。
+**Acceptance**: on first launch the radio dot of the menu "Screen ▸ Always on Top" is on "While Playing in Fullscreen"; on Windows, while playing in fullscreen, open a program that brings itself to the foreground: the player stays on top; not on top in windowed mode. Ctrl+T four times returns to the original mode.
 
-### IA-WIN-04 按视频尺寸调整时的上下限（P3）
+### IA-WIN-04 Lower and upper bounds when resizing to the video size (P3)
 
-**状态**：未实现。现状：只有按屏幕可用区缩小、按最小尺寸放大两条规则（参考文档 §6.6）。
+**Status**: not implemented. Current state: only two rules, shrinking to the available screen area and enlarging to the minimum size (reference §6.6).
 
-**要求**：设置页「窗口」加两组选项（默认都不启用）：「最小不小于桌面的 N%」「最大不超过桌面的 N%」（N 为 10–100）。启用时，G-02 的自动调整与手动倍数在调用 `setVideoArea` 之前先按这两个百分比夹住视频区尺寸（按屏幕可见区计算，保持宽高比）。桌面尺寸用 `plugin.app.system()` 的显示器信息。
+**Requirements**: the "Window" settings page gets two groups of options (both disabled by default): "at least N% of the desktop" and "at most N% of the desktop" (N from 10 to 100). When enabled, G-02's automatic resizing and the manual multipliers clamp the video area size by these two percentages before calling `setVideoArea` (computed from the visible screen area, keeping the aspect ratio). The desktop size comes from the display information of `plugin.app.system()`.
 
-**验收**：启用「最大不超过桌面的 50%」后在 2560×1440 屏幕按 4（2 倍）播放 1080p：视频区不超过 1280×720。
+**Acceptance**: enable "at most 50% of the desktop", then on a 2560×1440 screen press 4 (2×) while playing 1080p: the video area does not exceed 1280×720.
 
-### IA-WIN-05 更多窗口尺寸预设：最大化、窗口 +/−、窗口移动（P3）
+### IA-WIN-05 More window size presets: maximise, window +/−, window move (P3)
 
-**状态**：未实现。现状：0.5 / 1 / 1.5 / 2 倍与适应比例。
+**Status**: not implemented. Current state: 0.5 / 1 / 1.5 / 2× and fit to aspect ratio.
 
-**要求**：
+**Requirements**:
 
-1. 「屏幕 ▸ 窗口放大 / 窗口缩小」：视频区按 10% 放大 / 缩小，用现有 `setVideoArea`。
-2. 「屏幕 ▸ 最大化 / 最大化+」（单选，可取消）：最大化不盖住任务栏 / Dock，最大化+ 盖住；用 `setMaximized("maximized" | "cover")`。
-3. 「屏幕 ▸ 窗口移动 ▸ 上 / 下 / 左 / 右」：每次移动 10 点，Ctrl+Alt+小键盘 8 / 2 / 4 / 6；用 `moveBy`。
-4. 不提供「自定义尺寸」。
-5. 全屏中都禁用，原因「全屏时不可用」（与现有倍数命令相同）。
+1. "Screen ▸ Enlarge Window / Shrink Window": the video area grows / shrinks by 10%, using the existing `setVideoArea`.
+2. "Screen ▸ Maximise / Maximise+" (radio, can be deselected): Maximise does not cover the taskbar / Dock, Maximise+ covers it; uses `setMaximized("maximized" | "cover")`.
+3. "Screen ▸ Move Window ▸ Up / Down / Left / Right": moves 10 points each time, Ctrl+Alt+numpad 8 / 2 / 4 / 6; uses `moveBy`.
+4. No "custom size".
+5. All disabled in fullscreen, with the reason "Not available in fullscreen" (the same as the existing multiplier commands).
 
-**核心 API**：依赖 IA-CORE-15 的 `setMaximized`、`moveBy`、`WindowState.maximized`（第 1 条不依赖）。
+**Core API**: depends on `setMaximized`, `moveBy` and `WindowState.maximized` from IA-CORE-15 (item 1 does not).
 
-**跨平台**：「最大化+」在 macOS 上盖住菜单栏与 Dock 区域，在 Windows 上盖住任务栏。
+**Cross-platform**: "Maximise+" covers the menu bar and Dock area on macOS and the taskbar on Windows.
 
-**验收**：按「窗口放大」：视频区变大 10%；Ctrl+Alt+Num6：窗口右移；「最大化+」后窗口盖住任务栏 / Dock。
+**Acceptance**: press "Enlarge Window": the video area grows by 10%; Ctrl+Alt+Num6: the window moves right; after "Maximise+" the window covers the taskbar / Dock.
 
-### IA-WIN-06 调整窗口尺寸时保持比例（P3）
+### IA-WIN-06 Keep the ratio when resizing the window (P3)
 
-**状态**：未实现。
+**Status**: not implemented.
 
-**要求**：「屏幕 ▸ 调整窗口尺寸时保持比例」（勾选，默认关）；打开时用户拖动窗口边框，视频区保持当前视频的显示宽高比；没有视频时不锁定。换来源时按新视频重新锁定。
+**Requirements**: "Screen ▸ Keep Ratio When Resizing the Window" (checkable, off by default); when on and the user drags the window border, the video area keeps the display aspect ratio of the current video; no lock without video. When the source changes, the lock is reset to the new video.
 
-**核心 API**：依赖 IA-CORE-15 的 `setAspectLock`。
+**Core API**: depends on `setAspectLock` from IA-CORE-15.
 
-**跨平台**：macOS 用 `NSWindow.contentAspectRatio`（宿主扣掉底栏与侧栏的固定尺寸），Windows 在 `WM_SIZING` 中修正矩形；都在平台模块。
+**Cross-platform**: macOS uses `NSWindow.contentAspectRatio` (the host subtracts the fixed sizes of the bottom bar and sidebar), Windows corrects the rectangle in `WM_SIZING`; both in the platform modules.
 
-**验收**：勾选后播放 16:9 视频，拖窗口右下角：视频区始终没有黑边。
+**Acceptance**: when checked, play a 16:9 video and drag the bottom-right corner of the window: the video area never has black bars.
 
-### IA-WIN-07 标题栏置顶按钮（P3）
+### IA-WIN-07 Title bar always-on-top button (P3)
 
-**状态**：未实现（随 IA-CORE-07）。
+**Status**: not implemented (with IA-CORE-07).
 
-**要求**：「切换置顶方式」命令（Ctrl+T）的默认绑定加 `Title:OnTop`；每次置顶方式变化时调用 `setAlwaysOnTop(wanted, { mode })`，让标题栏显示 4 种图标之一（即使实际是否置顶没变，例如「播放时」在暂停中）。
+**Requirements**: the default bindings of the "cycle always-on-top mode" command (Ctrl+T) add `Title:OnTop`; every time the always-on-top mode changes, call `setAlwaysOnTop(wanted, { mode })` so the title bar shows one of the 4 icons (even when whether it is actually on top has not changed, for example "While Playing" during a pause).
 
-**核心 API**：依赖 IA-CORE-07 的 `Title:OnTop` 与 `setAlwaysOnTop` 的 `mode` 选项。
+**Core API**: depends on `Title:OnTop` and the `mode` option of `setAlwaysOnTop` from IA-CORE-07.
 
-**验收**：点标题栏置顶图标四次：OSD 依次显示四种方式，图标随之变化。
+**Acceptance**: click the title bar always-on-top icon four times: the OSD shows the four modes in turn, and the icon changes with them.
 
-### 本章核心 API 请求
+### Core API requests in this chapter
 
-| 签名 | 来源 |
+| Signature | Source |
 | --- | --- |
-| `window.setMaximized(mode)`、`window.moveBy(dx, dy)`、`WindowState.maximized`（IA-CORE-15） | IA-WIN-05 |
-| `window.setAspectLock(ratio \| null)`（IA-CORE-15） | IA-WIN-06 |
-| 绑定输入 `Title:OnTop`；`setAlwaysOnTop(onTop, { mode })`（IA-CORE-07） | IA-WIN-07 |
+| `window.setMaximized(mode)`, `window.moveBy(dx, dy)`, `WindowState.maximized` (IA-CORE-15) | IA-WIN-05 |
+| `window.setAspectLock(ratio \| null)` (IA-CORE-15) | IA-WIN-06 |
+| Binding input `Title:OnTop`; `setAlwaysOnTop(onTop, { mode })` (IA-CORE-07) | IA-WIN-07 |
 
-G-02、G-06、IA-WIN-01–04 只用现有 API。
+G-02, G-06 and IA-WIN-01–04 use only the existing API.
 
 ---
 
-## 播放信息（`info`）
+## Playback info (`info`)
 
-**位置**：`src/plugins/info/`
+**Location**: `src/plugins/info/`
 
-### IA-INFO-01 简要信息含字幕名与章节（P2）
+### IA-INFO-01 Brief info includes the subtitle name and chapter (P2)
 
-**状态**：已实现（`info/main.ts`；manifest 有 `subtitles.read`）。
+**Status**: implemented (`info/main.ts`; the manifest has `subtitles.read`).
 
-**要求**：Shift+Tab 显示简要信息 3 秒：
+**Requirements**: Shift+Tab shows the brief info for 3 seconds:
 
-1. 第一行：文件名。
-2. 第二行：`已播放 / 总长 · 当前章节 · 视频编码 尺寸 · 音频编码 声道`。章节取自 `player.chapters()`（核心的章节表，每个来源读一次）：开始时间不晚于当前位置的最后一章，没有标题时为「第 N 章」；没有章节时省略。
-3. 第三行：当前字幕轨名（标题，空则语言，再空则「字幕」）；没有选中字幕时不显示这一行。字幕选择没有推送事件，显示期间每秒随 `stats()` 一起 `subtitles.refresh()` 一次。
-4. 每行按视频区宽度截断：列数按 `(视频区宽 − 32) / 6.5` 估算，不少于 44 列。
+1. First line: the file name.
+2. Second line: `elapsed / total · current chapter · video codec size · audio codec channels`. The chapter comes from `player.chapters()` (the core's chapter table, read once per source): the last chapter whose start time is not later than the current position; "Chapter N" when it has no title; omitted when there are no chapters.
+3. Third line: the name of the current subtitle track (title; if empty, the language; if that is empty too, "Subtitles"); this line is not shown when no subtitle is selected. Subtitle selection has no push event, so while shown, `subtitles.refresh()` runs once per second together with `stats()`.
+4. Each line is truncated to the video area width: the number of columns is estimated as `(video area width − 32) / 6.5`, at least 44 columns.
 
-**验收**：播放带章节和字幕的 MKV，按 Shift+Tab：显示文件名；`12:34 / 45:00 · 第二章 标题 · H.264 1920×1080 · AAC 2 声道`；字幕名。
+**Acceptance**: play an MKV with chapters and subtitles and press Shift+Tab: the file name is shown; `12:34 / 45:00 · Chapter 2 title · H.264 1920×1080 · AAC 2 channels`; the subtitle name.
 
-### IA-INFO-02 杂项信息（Scroll Lock）与「仅全屏时显示」（P3）
+### IA-INFO-02 Misc info (Scroll Lock) and "show only in fullscreen" (P3)
 
-**状态**：未实现。
+**Status**: not implemented.
 
-**要求**：
+**Requirements**:
 
-1. 命令「杂项信息」（勾选，绑定 `ScrollLock`，菜单位置按 menus.md 的 info 分组）：开时在视频区持续显示一行：`12:34 / 45:00 (27%) · 文件名 · 章节标题`。
-2. 不显示播放序号（列表里的第几项）：播放序列由 playlist 提供，info 插件读不到。以后要做，需要核心在 `PlayerState` 里给出序列位置，届时单独提请求。
-3. 设置「仅全屏时显示」（默认关，info 的设置页）。
-4. 显示位置：用 info 插件已有的信息块（`osd.panel()`），与 Tab 的完整信息共用一块时排在最上。每秒刷新。
+1. Command "Misc Info" (checkable, bound to `ScrollLock`, menu position per the info group in menus.md): when on, one line is shown permanently in the video area: `12:34 / 45:00 (27%) · file name · chapter title`.
+2. The playback number (which item in the list) is not shown: the play sequence is provided by playlist, and the info plugin cannot read it. Doing it later needs the core to provide the sequence position in `PlayerState`, with a separate request at that time.
+3. Setting "show only in fullscreen" (off by default, on the info settings page).
+4. Display position: uses the info plugin's existing info block (`osd.panel()`); when it shares the block with the full Tab info, it goes at the top. Refreshed every second.
 
-**核心 API**：快捷键依赖 IA-CORE-08 的 `ScrollLock` 键名；菜单入口不依赖。
+**Core API**: the shortcut depends on the `ScrollLock` key name from IA-CORE-08; the menu entry does not.
 
-**跨平台**：Mac 键盘一般没有 Scroll Lock，macOS 上从菜单开关。
+**Cross-platform**: Mac keyboards usually have no Scroll Lock; on macOS it is toggled from the menu.
 
-**验收**：Windows 上按 Scroll Lock：视频区出现杂项信息行，再按消失；打开「仅全屏时显示」后窗口模式下不显示，全屏时显示。
+**Acceptance**: on Windows press Scroll Lock: the misc info line appears in the video area, press again and it disappears; with "show only in fullscreen" on it is not shown in windowed mode and is shown in fullscreen.
 
-### 本章核心 API 请求
+### Core API requests in this chapter
 
-| 签名 | 来源 |
+| Signature | Source |
 | --- | --- |
-| 绑定键名 `ScrollLock`（IA-CORE-08） | IA-INFO-02 |
+| Binding key name `ScrollLock` (IA-CORE-08) | IA-INFO-02 |
 
 ---
 
-## 专辑封面与空闲画面（`visualizer`）
+## Album cover and idle screen (`visualizer`)
 
-**位置**：`src/plugins/visualizer/`
+**Location**: `src/plugins/visualizer/`
 
-### G-16b 加载中显示加载界面（P1）
+### G-16b Show the loading screen while loading (P1)
 
-**状态**：已实现（`visualizer/main.ts` 的 `mode: "loading"`，`ui/backdrop.slint` 的 `LoadingScene`）。
+**Status**: implemented (`mode: "loading"` in `visualizer/main.ts`, `LoadingScene` in `ui/backdrop.slint`).
 
-**要求**：
+**Requirements**:
 
-1. `player.state.phase === "loading"` 且背景层生效时画加载界面：视频区中央（中心上移 30 px）74×74 的转圈，12 个圆点，每 50 ms 转一格，当前格最亮、其后依次变暗；下方（下移 30 px）一行粗体 15 px 文字「正在打开：<来源名>」。圆点与文字都用 `Theme.text-dim`。
-2. 来源名：本地文件为文件名；链接为「主机/路径末段」，没有路径时只写主机；超过 60 字用「…」截断，Slint 里按宽度再省略。
-3. 加载界面立即显示、不淡入；徽标与封面照旧 200 ms 淡出。同一来源重新加载（`sourceId` 不变）时同样显示加载界面。
-4. 进入 `ready` 后按现有规则判断（有画面 → 背景层不生效；纯音频 → 封面）。进入 `error` 时回到进入加载前插件显示的画面（徽标、封面或纯色），由出错提示（OSD）说明。
-5. 加载界面与空闲徽标、封面互斥，不受「空闲时显示徽标」「纯音频时显示专辑封面」两个开关影响。
+1. When `player.state.phase === "loading"` and the background layer is in effect, draw the loading screen: a 74×74 spinner in the centre of the video area (centre moved up 30 px), 12 dots, advancing one step every 50 ms, the current step brightest and the following ones progressively dimmer; below it (moved down 30 px) one line of bold 15 px text "Opening: <source name>". Both dots and text use `Theme.text-dim`.
+2. Source name: the file name for local files; "host/last path segment" for links, only the host when there is no path; truncated with "…" beyond 60 characters, and elided further by width in Slint.
+3. The loading screen shows immediately, without fading in; the logo and cover still fade out in 200 ms. Reloading the same source (`sourceId` unchanged) also shows the loading screen.
+4. After entering `ready`, the existing rules apply (picture → background layer not in effect; audio only → cover). On entering `error`, it returns to what the plugin showed before loading started (logo, cover or solid colour), and the error notification (OSD) explains.
+5. The loading screen is mutually exclusive with the idle logo and the cover, and is not affected by the two switches "Show Logo When Idle" and "Show Album Cover for Audio Only".
 
-**核心 API**：不新增；依赖 G-16a（`loading` 时 `effective` 为 `true`）。
+**Core API**: none new; depends on G-16a (`effective` is `true` during `loading`).
 
-**验收**：打开一个网络链接：在出画面之前，视频区中央有转圈和「正在打开：…」；出画面后消失。
+**Acceptance**: open a network link: before the picture appears, the centre of the video area has a spinner and "Opening: …"; it disappears once the picture appears.
 
-### 本章核心 API 请求
+### Core API requests in this chapter
 
-无（依赖 G-16a 的行为）。
+None (depends on the behaviour of G-16a).
 
 ---
 
-## 快捷键设置（`hotkeys`）
+## Shortcut settings (`hotkeys`)
 
-**位置**：`src/plugins/hotkeys/`
+**Location**: `src/plugins/hotkeys/`
 
-### IA-HK-01 鼠标页列出新增的鼠标输入（P3）
+### IA-HK-01 The mouse page lists the new mouse inputs (P3)
 
-**状态**：未实现（随 IA-CORE-08）。现状：`keys.ts` 列出 11 种鼠标输入。
+**Status**: not implemented (with IA-CORE-08). Current state: `keys.ts` lists 11 kinds of mouse input.
 
-**要求**：鼠标页增加：右键双击、中键双击、侧键后退双击、侧键前进双击、左键按住、右键按住、中键按住、侧键后退按住、侧键前进按住、按住侧键后退时滚轮上 / 下、按住侧键前进时滚轮上 / 下。右键双击、右键按住的说明里注明「绑定后右键菜单在松开并等待双击间隔后弹出」（IA-CORE-08 第 4 条）。
+**Requirements**: the mouse page adds: right double-click, middle double-click, back button double-click, forward button double-click, left push, right push, middle push, back button push, forward button push, wheel up / down while holding the back button, wheel up / down while holding the forward button. The descriptions of right double-click and right push note "when bound, the context menu pops up after release and waiting for the double-click interval" (IA-CORE-08 item 4).
 
-**核心 API**：依赖 IA-CORE-08。
+**Core API**: depends on IA-CORE-08.
 
-**验收**：鼠标页能选到「中键双击」并绑定到「全屏」，绑定生效。
+**Acceptance**: on the mouse page "middle double-click" can be selected and bound to "Toggle Fullscreen", and the binding takes effect.
 
-### 本章核心 API 请求
+### Core API requests in this chapter
 
-| 签名 | 来源 |
+| Signature | Source |
 | --- | --- |
-| 新的鼠标绑定输入（IA-CORE-08） | IA-HK-01 |
+| New mouse binding inputs (IA-CORE-08) | IA-HK-01 |
 
 ---
 
-## 画面调节（`video`）
+## Picture adjustments (`video`)
 
-**位置**：`src/plugins/video/`
+**Location**: `src/plugins/video/`
 
-### IA-VID-01 控制面板「视频」页（已取消）
+### IA-VID-01 Control panel "Video" page (cancelled)
 
-**状态**：已取消（随 IA-CORE-09）。画面调节保持独立工具窗口。
+**Status**: cancelled (together with IA-CORE-09). Picture Adjustments stays a separate tool window.
 
-### IA-VID-02 Alt / Ctrl + 拖动调整画面（P3，默认关）
+### IA-VID-02 Alt / Ctrl + drag adjusts the picture (P3, off by default)
 
-**状态**：未实现。
+**Status**: not implemented.
 
-**要求**：设置「用 Alt / Ctrl + 拖动调整画面」（默认关）。打开后：Alt + 拖动平移画面（功能需求 E13 的平移），Ctrl（macOS ⌘）+ 拖动缩放画面（上拖放大）。Shift + 拖动不绑定。
+**Requirements**: setting "Adjust the picture with Alt / Ctrl + drag" (off by default). When on: Alt + drag pans the picture (the panning of feature requirements E13), Ctrl (⌘ on macOS) + drag zooms the picture (drag up to zoom in). Shift + drag is not bound.
 
-**核心 API**：依赖 IA-CORE-17（`plugin.input.onVideoDrag`）；维护者拒绝时降级为离散的绑定命令（每 10 px 一步）。
+**Core API**: depends on IA-CORE-17 (`plugin.input.onVideoDrag`); if the maintainer rejects it, downgrade to discrete binding commands (one step every 10 px).
 
-**验收**：打开设置后按住 Alt 在视频上拖动：画面跟随平移；关闭设置后同样操作：不平移（无修饰键拖动移动窗口不受影响）。
+**Acceptance**: with the setting on, hold Alt and drag on the video: the picture pans along; with the setting off, the same operation: no panning (moving the window by dragging without a modifier is not affected).
 
-### 本章核心 API 请求
+### Core API requests in this chapter
 
-| 签名 | 来源 |
+| Signature | Source |
 | --- | --- |
-| `plugin.input.onVideoDrag`（IA-CORE-17） | IA-VID-02 |
+| `plugin.input.onVideoDrag` (IA-CORE-17) | IA-VID-02 |
 
 ---
 
-## 音频工作台（`audio`）
+## Audio workbench (`audio`)
 
-**位置**：`src/plugins/audio/`
+**Location**: `src/plugins/audio/`
 
-### IA-AUD-01 控制面板「音频」页（已取消）
+### IA-AUD-01 Control panel "Audio" page (cancelled)
 
-**状态**：已取消（随 IA-CORE-09）。音频工作台保持独立工具窗口。
+**Status**: cancelled (together with IA-CORE-09). Audio Workbench stays a separate tool window.
 
 ---
 
-## 字幕（`subtitles`）
+## Subtitles (`subtitles`)
 
-**位置**：`src/plugins/subtitles/`
+**Location**: `src/plugins/subtitles/`
 
-### IA-SUB-01 控制面板「字幕」页（已取消）
+### IA-SUB-01 Control panel "Subtitles" page (cancelled)
 
-**状态**：已取消（随 IA-CORE-09）。字幕工作台保持独立工具窗口。
+**Status**: cancelled (together with IA-CORE-09). The subtitle workbench stays a separate tool window.
 
-### IA-SUB-02 Ctrl + 拖动移动字幕（P3，默认关）
+### IA-SUB-02 Ctrl + drag moves the subtitles (P3, off by default)
 
-**状态**：未实现。
+**Status**: not implemented.
 
-**要求**：设置「用 Ctrl + 拖动移动字幕」（默认关）。打开后 Ctrl（macOS ⌘）+ 竖向拖动改变字幕的垂直位置（`marginPercent`），松开时 OSD「字幕位置: N%」。字幕只用 Ctrl、画面平移只用 Alt，两者都打开时不冲突（同一修饰键以先登记的为准，IA-CORE-17）。
+**Requirements**: setting "Move the subtitles with Ctrl + drag" (off by default). When on, Ctrl (⌘ on macOS) + vertical drag changes the vertical position of the subtitles (`marginPercent`), and on release the OSD shows "Subtitle position: N%". Subtitles use only Ctrl and picture panning uses only Alt, so they do not conflict when both are on (for the same modifier the first registration wins, IA-CORE-17).
 
-**核心 API**：依赖 IA-CORE-17；降级办法同 IA-VID-02。
+**Core API**: depends on IA-CORE-17; the downgrade is the same as IA-VID-02.
 
-**验收**：打开设置后 Ctrl / ⌘ + 向上拖动：字幕上移。
+**Acceptance**: with the setting on, Ctrl / ⌘ + drag up: the subtitles move up.
 
-### 本章核心 API 请求
+### Core API requests in this chapter
 
-| 签名 | 来源 |
+| Signature | Source |
 | --- | --- |
-| `plugin.input.onVideoDrag`（IA-CORE-17） | IA-SUB-02 |
+| `plugin.input.onVideoDrag` (IA-CORE-17) | IA-SUB-02 |
 
 ---
 
-## 章节、书签与区段（`marks`）
+## Chapters, bookmarks and ranges (`marks`)
 
-**位置**：`src/plugins/marks/`
+**Location**: `src/plugins/marks/`
 
-### IA-MK-01 控制面板「播放」页的 A-B 循环区块（已取消）
+### IA-MK-01 A-B loop block on the control panel "Playback" page (cancelled)
 
-**状态**：已取消（随 IA-CORE-09）。A-B 循环用功能需求 B23 的命令与菜单。
+**Status**: cancelled (together with IA-CORE-09). A-B loops use the commands and menus of feature requirements B23.
 
 ---
 
-## 附录 A：状态 × 交互元素 逐格规格
+## Appendix A: state × interaction element, cell by cell
 
-按「状态 × 交互元素」逐格写出 Vestra 的规格。每格一个值；正文有条目的，「条目」列给出编号，以正文为准。标「未实现」的格子写的是目标，现状写在对应正文条目的「状态」里。
+Vestra's specification written cell by cell as "state × interaction element". One value per cell; where the main text has an item, the "Item" column gives its number, and the main text wins. Cells marked "not implemented" describe the target; the current state is in the "Status" of the corresponding item in the main text.
 
-### A.1 高优先级条目（G-01–G-18）
+### A.1 High-priority items (G-01–G-18)
 
-| 编号 | 状态 | 元素 | 规格 | 条目 |
+| No. | State | Element | Specification | Item |
 | --- | --- | --- | --- | --- |
-| G-01 | 全屏 | 附着的播放列表 | 指针移到屏幕右边缘 4 px 内时以覆盖层弹出，离开 500 ms 或空闲 3 秒后收起；F6 立即弹出 / 收起 | G-01 |
-| G-02 | 窗口模式 × 打开文件 | 窗口尺寸 | 每个新来源按 1 倍视频尺寸调整窗口；可选不调整 / 0.5 / 1.5 / 2 倍 / 适应比例、只调整一次 | G-02 |
-| G-03 | 全部，小窗口时尤其 | 右键菜单 | 放不下时可滚动，每一项都能点到；目标：菜单可超出主窗口，按屏幕工作区定位（未实现） | G-03 |
-| G-04 | 全屏 | 底栏自动隐藏 | 指针在底栏上时不隐藏 | G-04 |
-| G-05 | 窗口模式 | 在画面上拖动 | 移动窗口 | G-05 |
-| G-06 | 窗口模式 × 播放中 | 鼠标指针 | 播放时隐藏，默认开 | G-06 |
-| G-07 | 全部 | 底栏按钮 | 都有悬停提示，带当前快捷键；后退 / 前进写明右键功能 | G-07 |
-| G-08 | 列表 | 滚动 | 键盘移动与正在播放项变化时自动滚入视野；拖动时靠边自动滚动 | G-08 |
-| G-09 | 纯音频 | 主窗口布局 | 沿用视频布局，背景层显示专辑封面；窗口尺寸与底栏不变；不做音频专用布局，不分别保存音频 / 视频窗口尺寸 | §0.3 |
-| G-10 | 全部 | 屏幕提示字号 | 随视频区高度：`clamp(round(高 × 3%), 12px, 48px)` | G-10 |
-| G-11 | 窗口模式 | 拖放到画面 | 先清空列表再加入并播放 | G-11 |
-| G-12 | 窗口模式 | 拖放到列表 | 追加到末尾 | G-12 |
-| G-13 | 全部 | 音量量程 | 界面与按键 0–100；`setOutput` 0–200 | G-13a、G-13b |
-| G-14 | 窗口模式 | 时间显示的切换 | 只有当前时间可点；选择保存 | G-14 |
-| G-15 | 全部 | 右键菜单 | 右键松开时弹出；子菜单悬停 400 ms 后展开 | G-15 |
-| G-16 | 加载中 | 视频区 | 显示加载界面（转圈与「正在打开：…」） | G-16a、G-16b |
-| G-17 | 窗口模式 | 浮动播放列表 | 宿主标题行（透明度、附着、置顶钉、关闭），10 px 吸附（未实现） | IA-CORE-10 |
-| G-18 | 窗口模式 | 窄窗口与侧栏 | 宽度不足 638 时侧栏隐藏、偏好不变，底栏列表按钮半亮 | G-18 |
+| G-01 | Fullscreen | Attached playlist | Pops out as an overlay when the pointer moves within 4 px of the right edge of the screen, retracts 500 ms after leaving or after 3 seconds idle; F6 pops out / retracts immediately | G-01 |
+| G-02 | Windowed × opening a file | Window size | Each new source resizes the window to 1× the video size; options Don't Resize / 0.5 / 1.5 / 2× / fit to aspect ratio, Only Once | G-02 |
+| G-03 | All, especially small windows | Context menu | Scrolls when it does not fit, and every item can be clicked; target: the menu can extend beyond the main window and is positioned by the screen work area (not implemented) | G-03 |
+| G-04 | Fullscreen | Bottom bar auto-hide | Does not hide while the pointer is on the bottom bar | G-04 |
+| G-05 | Windowed | Dragging on the picture | Moves the window | G-05 |
+| G-06 | Windowed × playing | Mouse pointer | Hidden while playing, on by default | G-06 |
+| G-07 | All | Bottom bar buttons | All have hover tooltips with the current shortcut; back / forward state the right-click function | G-07 |
+| G-08 | List | Scrolling | Scrolls into view automatically on keyboard moves and when the playing item changes; edge auto-scroll while dragging | G-08 |
+| G-09 | Audio only | Main window layout | Keeps the video layout, the background layer shows the album cover; window size and bottom bar unchanged; no audio-specific layout, no separate audio / video window sizes | §0.3 |
+| G-10 | All | OSD font size | Follows the video area height: `clamp(round(height × 3%), 12px, 48px)` | G-10 |
+| G-11 | Windowed | Dropping on the picture | Clear the list first, then add and play | G-11 |
+| G-12 | Windowed | Dropping on the list | Append to the end | G-12 |
+| G-13 | All | Volume range | UI and keys 0–100; `setOutput` 0–200 | G-13a, G-13b |
+| G-14 | Windowed | Time display toggle | Only the current time is clickable; the choice is saved | G-14 |
+| G-15 | All | Context menu | Pops up on right-button release; submenus open after a 400 ms hover | G-15 |
+| G-16 | Loading | Video area | Shows the loading screen (spinner and "Opening: …") | G-16a, G-16b |
+| G-17 | Windowed | Floating playlist | Host title row (opacity, attach, pin, close), 10 px snapping (not implemented) | IA-CORE-10 |
+| G-18 | Windowed | Narrow window and sidebar | Below a width of 638 the sidebar is hidden, the preference is unchanged, and the bottom bar list button is half-lit | G-18 |
 
-### A.2 窗口状态 × 界面元素
+### A.2 Window state × UI element
 
-「布局」指占据窗口空间（挤压视频）还是覆盖在视频上。
+"Layout" means whether it takes window space (squeezing the video) or overlays the video.
 
-**窗口模式**
+**Windowed mode**
 
-| # | 元素 | 规格 | 条目 |
+| # | Element | Specification | Item |
 | --- | --- | --- | --- |
-| W-01 | 底栏的布局 | 位于视频下方，挤占高度，不覆盖画面 | |
-| W-02 | 底栏的宽度 | 只在视频下方，不延伸到播放列表下面 | |
-| W-03 | 底栏自动隐藏 | 默认不隐藏；可选「窗口模式下自动隐藏控制栏」（未实现） | IA-CORE-05 |
-| W-04 | 播放列表的显示 | 默认显示并附着在右侧，占满全高，与视频之间 3 px 分隔条 | |
-| W-05 | 打开播放列表时窗口的变化 | 窗口宽度不变，挤压视频 | |
-| W-06 | 标题栏 | 现为系统标题栏，显示来源名；目标为 31 px 自绘标题栏（未实现） | IA-CORE-07 |
-| W-07 | 窗口失去焦点时的外观 | 标题栏与底栏颜色不变 | IA-CORE-07 |
-| W-08 | 屏幕提示（OSD） | 视频区左上角，边距 10，白字在半透明深色圆角底板上，底边渐变线；字号随视频区 | G-10 |
-| W-09 | 指针 | 播放中、指针在视频区静止 3 秒后隐藏（默认开） | G-06 |
-| W-10 | 最小尺寸 | 现为 320×182；目标宽 320，高度只由标题栏与底栏决定（未实现） | IA-CORE-13 |
-| W-11 | 首次启动的尺寸与位置 | 780×671，位置由系统决定 | |
-| W-12 | 启动时恢复上次的窗口 | 恢复普通尺寸与位置；不恢复最大化 | IA-CORE-03 |
-| W-13 | 吸附屏幕边缘 | 拖动窗口时 10 px 内吸附（未实现）；Windows 系统贴靠照常 | IA-CORE-10 |
-| W-14 | 关闭文件后的窗口尺寸 | 保持当前尺寸 | |
+| W-01 | Bottom bar layout | Below the video, taking height, not covering the picture | |
+| W-02 | Bottom bar width | Only below the video, not extending under the playlist | |
+| W-03 | Bottom bar auto-hide | Not hidden by default; optional "auto-hide the control bar in windowed mode" (not implemented) | IA-CORE-05 |
+| W-04 | Playlist display | Shown and attached on the right by default, full height, with a 3 px divider from the video | |
+| W-05 | Window change when opening the playlist | The window width is unchanged and the video is squeezed | |
+| W-06 | Title bar | Currently the system title bar showing the source name; target: a 31 px custom title bar (not implemented) | IA-CORE-07 |
+| W-07 | Appearance when the window loses focus | Title bar and bottom bar colours unchanged | IA-CORE-07 |
+| W-08 | OSD | Top-left of the video area, margin 10, white text on a translucent dark rounded plate with a gradient line along the bottom; font size follows the video area | G-10 |
+| W-09 | Pointer | Hidden while playing after the pointer rests 3 seconds over the video area (on by default) | G-06 |
+| W-10 | Minimum size | Currently 320×182; target width 320, with the height determined only by the title bar and bottom bar (not implemented) | IA-CORE-13 |
+| W-11 | Size and position on first launch | 780×671, position decided by the system | |
+| W-12 | Restoring the last window on startup | Restores the normal size and position; maximised is not restored | IA-CORE-03 |
+| W-13 | Snapping to screen edges | Snaps within 10 px while dragging the window (not implemented); Windows system snapping works as usual | IA-CORE-10 |
+| W-14 | Window size after closing a file | Keeps the current size | |
 
-**全屏**
+**Fullscreen**
 
-| # | 元素 | 规格 | 条目 |
+| # | Element | Specification | Item |
 | --- | --- | --- | --- |
-| F-01 | 底栏的布局 | 覆盖在视频底部，视频不缩放 | |
-| F-02 | 底栏的唤出 | Only the pointer in the bar's band (its laid-out height at the bottom edge, left of a popped-out sidebar); keys, motion elsewhere, wheel, clicks, menus, dialogs and entering fullscreen do not reveal it | FS-BAR-1 |
-| F-03 | 底栏的隐藏延时 | 500 ms after the pointer leaves the band (a bar lock or a menu or dialog opened while shown holds it) | FS-BAR-1 |
-| F-04 | 显示与隐藏的动画 | 立即出现、立即消失 | |
-| F-05 | 指针停在底栏上 | 底栏不隐藏 | G-04 |
-| F-06 | 暂停时底栏 | The same: shows only while the pointer is in the band | FS-BAR-1 |
-| F-07 | 附着的播放列表 | 右边缘弹出 | G-01 |
-| F-08 | 浮动的播放列表 | 保持为独立窗口，右边缘不触发 | G-01 |
-| F-09 | 指针 | 播放中空闲 3 秒后隐藏；暂停时不隐藏；在底栏、弹出层上不隐藏 (nor in the bar's band); independent of the bar | G-06, FS-BAR-1 |
-| F-10 | 标题栏 | 不显示（macOS 指针移到顶端时由系统显示菜单栏） | IA-CORE-07 |
-| F-11 | 屏幕提示与信息层 | 与窗口模式相同；杂项信息可设「仅全屏时显示」（未实现） | IA-INFO-02 |
-| F-12 | 进入全屏 | Enter、Alt+Enter、F11、双击；Esc 退出；Ctrl+Enter 拉伸全屏、Ctrl+Shift+Enter 在其它显示器上全屏（未实现） | IA-CORE-04 |
-| F-13 | 置顶 | 默认「全屏播放时置顶」 | IA-WIN-03 |
-| F-14 | 窗口尺寸命令 | 禁用，原因「全屏时不可用」 | |
-| F-15 | 其它显示器 | 系统行为，不填黑 | |
+| F-01 | Bottom bar layout | Overlays the bottom of the video; the video is not scaled | |
+| F-02 | Revealing the bottom bar | Only the pointer in the bar's band (its laid-out height at the bottom edge, left of a popped-out sidebar); keys, motion elsewhere, wheel, clicks, menus, dialogs and entering fullscreen do not reveal it | FS-BAR-1 |
+| F-03 | Bottom bar hide delay | 500 ms after the pointer leaves the band (a bar lock or a menu or dialog opened while shown holds it) | FS-BAR-1 |
+| F-04 | Show and hide animation | Appears immediately, disappears immediately | |
+| F-05 | Pointer resting on the bottom bar | The bottom bar does not hide | G-04 |
+| F-06 | Bottom bar while paused | The same: shows only while the pointer is in the band | FS-BAR-1 |
+| F-07 | Attached playlist | Pops out from the right edge | G-01 |
+| F-08 | Floating playlist | Stays a separate window; the right edge does not trigger | G-01 |
+| F-09 | Pointer | Hidden after 3 seconds idle while playing; not hidden while paused; not hidden over the bottom bar or the pop-out (nor in the bar's band); independent of the bar | G-06, FS-BAR-1 |
+| F-10 | Title bar | Not shown (on macOS the system shows the menu bar when the pointer moves to the top) | IA-CORE-07 |
+| F-11 | OSD and info layer | Same as windowed mode; misc info can be set to "show only in fullscreen" (not implemented) | IA-INFO-02 |
+| F-12 | Entering fullscreen | Enter, Alt+Enter, F11, double-click; Esc exits; Ctrl+Enter stretched fullscreen, Ctrl+Shift+Enter fullscreen on another display (not implemented) | IA-CORE-04 |
+| F-13 | Always on top | Default "While Playing in Fullscreen" | IA-WIN-03 |
+| F-14 | Window size commands | Disabled, with the reason "Not available in fullscreen" | |
+| F-15 | Other displays | System behaviour, not filled with black | |
 
-**最大化**
+**Maximised**
 
-| # | 元素 | 规格 | 条目 |
+| # | Element | Specification | Item |
 | --- | --- | --- | --- |
-| X-01 | 布局 | 与普通窗口相同 | |
-| X-02 | 最大化的种类 | 系统的最大化 / 缩放；另有「最大化」「最大化+」命令（未实现） | IA-WIN-05 |
-| X-03 | 记忆 | 最大化时不记录窗口尺寸 | IA-CORE-03 |
+| X-01 | Layout | Same as a normal window | |
+| X-02 | Kinds of maximise | The system's maximise / zoom; additional "Maximise" and "Maximise+" commands (not implemented) | IA-WIN-05 |
+| X-03 | Memory | The window size is not recorded while maximised | IA-CORE-03 |
 
-**迷你尺寸、置顶、画中画**
+**Mini size, always on top, picture-in-picture**
 
-| # | 元素 | 规格 | 条目 |
+| # | Element | Specification | Item |
 | --- | --- | --- | --- |
-| P-01 | `` ` `` 键 | 迷你尺寸（所有系统） | IA-WIN-01 |
-| P-02 | 迷你尺寸时置顶 | 不置顶，只看置顶方式 | IA-WIN-02 |
-| P-03 | 迷你尺寸时的界面 | 底栏、侧栏照常；窄于 638 时侧栏因空间不足隐藏 | G-18 |
-| P-04 | 画中画时主窗口 | 视频区显示「正在以画中画播放」，底栏可用 | |
-| P-05 | 画中画时在视频区双击 | 放回主窗口，不暂停、不切换全屏 | IA-CORE-12 |
-| P-06 | 画中画时的 OSD 与信息层 | 只画在主窗口，小窗里看不到 | |
-| P-07 | 置顶方式 | 四种：不、总是、播放时、全屏播放时；Ctrl+T 循环；默认全屏播放时 | IA-WIN-03 |
-| P-08 | 窗口尺寸预设 | 0.5 / 1 / 1.5 / 2 倍、适应比例、迷你尺寸；窗口 +/−、窗口移动、最大化（未实现） | IA-WIN-05 |
+| P-01 | `` ` `` key | Mini size (all systems) | IA-WIN-01 |
+| P-02 | Always on top in mini size | Not on top; depends only on the always-on-top mode | IA-WIN-02 |
+| P-03 | UI in mini size | Bottom bar and sidebar as usual; below 638 wide the sidebar is hidden for lack of space | G-18 |
+| P-04 | Main window during picture-in-picture | The video area shows "Playing in picture-in-picture"; the bottom bar is usable | |
+| P-05 | Double-click on the video area during picture-in-picture | Returns it to the main window, without pausing or switching to fullscreen | IA-CORE-12 |
+| P-06 | OSD and info layer during picture-in-picture | Drawn only in the main window, not visible in the small window | |
+| P-07 | Always-on-top modes | Four: Never, Always, While Playing, While Playing in Fullscreen; Ctrl+T cycles; default While Playing in Fullscreen | IA-WIN-03 |
+| P-08 | Window size presets | 0.5 / 1 / 1.5 / 2×, fit to aspect ratio, mini size; window +/−, window move, maximise (not implemented) | IA-WIN-05 |
 
-**空闲（没有打开媒体）**
+**Idle (no media open)**
 
-| # | 元素 | 规格 | 条目 |
+| # | Element | Specification | Item |
 | --- | --- | --- | --- |
-| I-01 | 视频区 | 背景层显示徽标（visualizer），底色 `Theme.bg-video` | |
-| I-02 | 底栏 | 显示；播放、停止、后退、前进禁用，打开可用 | |
-| I-03 | 进度条滑块 | 现为隐藏；目标为最左端的禁用色滑块（未实现） | IA-PB-03 |
-| I-04 | 时间文字 | `--:-- / --:--` | G-14 |
-| I-05 | 双击视频区 | 切换全屏 | |
-| I-06 | 右键菜单 | 完整菜单，不可用的项变灰，悬停显示原因 | |
-| I-07 | 加载中 | 加载界面 | G-16a、G-16b |
+| I-01 | Video area | The background layer shows the logo (visualizer), background colour `Theme.bg-video` | |
+| I-02 | Bottom bar | Shown; play, stop, back and forward disabled, open available | |
+| I-03 | Seek bar slider | Currently hidden; target: a disabled-colour slider at the far left (not implemented) | IA-PB-03 |
+| I-04 | Time text | `--:-- / --:--` | G-14 |
+| I-05 | Double-click on the video area | Toggles fullscreen | |
+| I-06 | Context menu | The full menu; unavailable items are greyed out and show the reason on hover | |
+| I-07 | Loading | Loading screen | G-16a, G-16b |
 
-**纯音频**
+**Audio only**
 
-| # | 元素 | 规格 | 条目 |
+| # | Element | Specification | Item |
 | --- | --- | --- | --- |
-| A-01 | 布局 | 沿用视频布局，背景层显示封面 | G-09 |
-| A-02 | 窗口尺寸 | 与视频共用一套 | G-09 |
-| A-03 | 指针、底栏 | 与有视频时相同（指针隐藏只看是否播放中） | |
-| A-04 | 窗口尺寸命令 | 禁用，原因「没有视频」 | |
+| A-01 | Layout | Keeps the video layout; the background layer shows the cover | G-09 |
+| A-02 | Window size | Shares one set with video | G-09 |
+| A-03 | Pointer, bottom bar | Same as with video (pointer hiding depends only on whether it is playing) | |
+| A-04 | Window size commands | Disabled, with the reason "No video" | |
 
-### A.3 鼠标
+### A.3 Mouse
 
-| # | 位置 | 操作 | 规格 | 条目 |
+| # | Location | Action | Specification | Item |
 | --- | --- | --- | --- | --- |
-| M-01 | 画面 | 左键单击 | 默认不绑定；绑定后推迟到双击间隔结束才判定单击；只在视频区内生效 | |
-| M-02 | 画面 | 左键双击 | 切换全屏；可以按左半区、右半区分别绑定 | |
-| M-03 | 画面 | 右键单击 | 松开时弹出主菜单 | G-15 |
-| M-04 | 画面 | 右键双击 | 可绑定（未实现） | IA-CORE-08 |
-| M-05 | 画面 | 中键单击、双击 | 单击可绑定，默认不绑定；双击可绑定（未实现） | IA-CORE-08 |
-| M-06 | 画面 | 侧键 X1、X2 | 单击默认为上一个 / 下一个；双击可绑定（未实现） | IA-CORE-08 |
-| M-07 | 画面 | 按住（左 / 右 / 中 / X1 / X2） | 可绑定，500 ms（未实现） | IA-CORE-08 |
-| M-08 | 画面 | 滚轮上、下 | 音量 ±5，上限 100 | G-13a |
-| M-09 | 画面 | 滚轮左、右 | 可以绑定，默认不绑定 | |
-| M-10 | 画面 | 按住侧键时滚轮 | 可绑定（未实现） | IA-CORE-08 |
-| M-11 | 画面 | 拖动 | 无修饰键：移动窗口；带修饰键：交给登记的插件（未实现） | G-05、IA-CORE-17 |
-| M-12 | 底栏 | 滚轮 | 没有反应 | |
-| M-13 | 进度条 | 单击 | 按下即跳到点击处 | |
-| M-14 | 进度条 | 拖动 | 实时跳转、不暂停；松开时 OSD「跳转: …」 | |
-| M-15 | 进度条 | 悬停 | 时间提示默认关，可在菜单打开；缩略图默认关 | IA-PB-01 |
-| M-16 | 进度条 | 悬停在书签或章节附近 | 3 px 以内显示「标题  时间」 | |
-| M-17 | 进度条 | 滚轮 | 没有反应 | |
-| M-18 | 音量条 | 单击、拖动 | 70×10，0–100 | G-13b |
-| M-19 | 音量条 | 滚轮 | 没有反应 | |
-| M-20 | 静音按钮 | 单击 | 切换静音 | |
-| M-21 | 后退、前进按钮 | 左键、右键 | 左键 ±5 秒；右键松开时上一个 / 下一个 | G-07 |
-| M-22 | 时间标签 | 单击 | 只有当前时间可点，切换已播放 / 剩余并保存 | G-14 |
-| M-23 | 播放列表 | 单击、Ctrl / Shift+单击 | 单选；Ctrl 切换选中，Shift 选中区间；按住已选中的项可拖动多项 | |
-| M-24 | 播放列表 | 双击 | 播放 | |
-| M-25 | 播放列表 | 右键 | 松开时弹出列表菜单；右键未选中的项时先选中它 | |
-| M-26 | 播放列表 | 滚轮 | 滚动列表 | |
-| M-27 | 播放列表 | 拖动排序 | 支持；搜索过滤时不可用；靠边自动滚动 | G-08 |
-| M-28 | 底栏、侧栏 | 右键空白处 | 底栏：没有反应；侧栏：列表菜单 | |
-| M-29 | 所有按钮 | 悬停提示 | 底栏与列表底栏的按钮都有 | G-07 |
-| M-30 | 悬停提示 | 延时 | 600 ms | |
-| M-31 | 窗口边缘 | 悬停 | 全屏时右边缘弹出附着面板；窗口模式没有边缘行为 | G-01 |
+| M-01 | Picture | Left click | Not bound by default; when bound, the click is decided only after the double-click interval ends; works only inside the video area | |
+| M-02 | Picture | Left double-click | Toggles fullscreen; the left half and right half can be bound separately | |
+| M-03 | Picture | Right click | Pops up the main menu on release | G-15 |
+| M-04 | Picture | Right double-click | Bindable (not implemented) | IA-CORE-08 |
+| M-05 | Picture | Middle click, double-click | Click bindable, not bound by default; double-click bindable (not implemented) | IA-CORE-08 |
+| M-06 | Picture | Side buttons X1, X2 | Click defaults to previous / next; double-click bindable (not implemented) | IA-CORE-08 |
+| M-07 | Picture | Push (left / right / middle / X1 / X2) | Bindable, 500 ms (not implemented) | IA-CORE-08 |
+| M-08 | Picture | Wheel up, down | Volume ±5, limit 100 | G-13a |
+| M-09 | Picture | Wheel left, right | Bindable, not bound by default | |
+| M-10 | Picture | Wheel while holding a side button | Bindable (not implemented) | IA-CORE-08 |
+| M-11 | Picture | Drag | No modifier: moves the window; with a modifier: goes to the registered plugin (not implemented) | G-05, IA-CORE-17 |
+| M-12 | Bottom bar | Wheel | No effect | |
+| M-13 | Seek bar | Click | Jumps to the click position on press | |
+| M-14 | Seek bar | Drag | Seeks in real time without pausing; on release OSD "Seek: …" | |
+| M-15 | Seek bar | Hover | Time tooltip off by default, can be turned on in the menu; thumbnail off by default | IA-PB-01 |
+| M-16 | Seek bar | Hover near a bookmark or chapter | Within 3 px shows "title  time" | |
+| M-17 | Seek bar | Wheel | No effect | |
+| M-18 | Volume bar | Click, drag | 70×10, 0–100 | G-13b |
+| M-19 | Volume bar | Wheel | No effect | |
+| M-20 | Mute button | Click | Toggles mute | |
+| M-21 | Back, forward buttons | Left button, right button | Left button ±5 seconds; right button on release previous / next | G-07 |
+| M-22 | Time label | Click | Only the current time is clickable; toggles elapsed / remaining and saves | G-14 |
+| M-23 | Playlist | Click, Ctrl / Shift+click | Single selection; Ctrl toggles selection, Shift selects a range; pressing on an already selected item can drag several items | |
+| M-24 | Playlist | Double-click | Play | |
+| M-25 | Playlist | Right button | Pops up the list menu on release; right-clicking an unselected item selects it first | |
+| M-26 | Playlist | Wheel | Scrolls the list | |
+| M-27 | Playlist | Drag reordering | Supported; unavailable while a search filter is active; edge auto-scroll | G-08 |
+| M-28 | Bottom bar, sidebar | Right-click on empty space | Bottom bar: no effect; sidebar: the list menu | |
+| M-29 | All buttons | Hover tooltip | The buttons of the bottom bar and of the list bottom bar all have one | G-07 |
+| M-30 | Hover tooltip | Delay | 600 ms | |
+| M-31 | Window edge | Hover | In fullscreen the right edge pops out the attached panel; no edge behaviour in windowed mode | G-01 |
 
-### A.4 键盘焦点
+### A.4 Keyboard focus
 
-| # | 场景 | 规格 | 条目 |
+| # | Scenario | Specification | Item |
 | --- | --- | --- | --- |
-| K-01 | 视频区获得焦点 | 全局绑定表生效；启动时视频区获得焦点 | |
-| K-02 | 播放列表获得焦点 | `focus: "panel"` 的绑定优先（Enter / P 播放、Del、Ctrl+↑↓ / Home / End、F6 关闭、F5 列表设置等，见 menus.md「播放列表获得焦点时」），没有命中的按键交给全局 | |
-| K-03 | 列表焦点下 ↑↓ / Home / End | 移动选中项，Shift 扩展选区；视图跟随 | G-08 |
-| K-04 | 列表焦点下 ←→ | 交给全局，±5 秒跳转 | |
-| K-05 | 列表焦点下 F5 | 打开「播放列表设置」 | IA-PL-02 |
-| K-06 | 手动播放后焦点 | 留在列表 | IA-PL-02 |
-| K-07 | 底栏获得焦点 | 底栏有 `FocusScope`，按钮本身不抢焦点 | |
-| K-08 | 工具窗口（画面调节、音频工作台等） | 不触发任何绑定 | |
-| K-09 | 浮动的播放列表窗口 | 全局和列表绑定都生效 | |
-| K-10 | 菜单打开时 | 按键全部留在菜单里，绑定暂停 | |
-| K-11 | 菜单的键盘操作 | ↑↓←→、Enter、Space、Esc；助记符（未实现） | IA-CORE-02 |
-| K-12 | Esc：全屏 | 退出全屏 | IA-CORE-04 |
-| K-13 | Esc：窗口模式 | 没有作用 | |
-| K-14 | Esc：菜单 | 逐级关闭 | IA-CORE-01 |
-| K-15 | Esc：工具窗口和对话框 | 小对话框（跳转、打开链接、比例、确认）里关闭窗口；大的工具窗口（画面调节、音频、字幕、截图）里不处理 | |
-| K-16 | Esc：列表搜索框 | 清空搜索并把焦点交回列表 | |
-| K-17 | 禁用默认快捷键 | 「忽略默认快捷键」（hotkeys） | |
+| K-01 | Video area has focus | The global binding table is in effect; the video area gets focus on startup | |
+| K-02 | Playlist has focus | Bindings with `focus: "panel"` take precedence (Enter / P play, Del, Ctrl+↑↓ / Home / End, F6 close, F5 list settings, etc., see "when the playlist has focus" in menus.md); keys that match nothing go to the global table | |
+| K-03 | ↑↓ / Home / End with focus in the list | Move the selection, Shift extends the selection; the view follows | G-08 |
+| K-04 | ←→ with focus in the list | Go to the global table, ±5 second seek | |
+| K-05 | F5 with focus in the list | Opens "Playlist Settings" | IA-PL-02 |
+| K-06 | Focus after manual play | Stays in the list | IA-PL-02 |
+| K-07 | Bottom bar has focus | The bottom bar has a `FocusScope`; the buttons themselves do not take focus | |
+| K-08 | Tool windows (Picture Adjustments, Audio Workbench, etc.) | Do not fire any binding | |
+| K-09 | Floating playlist window | Both global and list bindings are in effect | |
+| K-10 | While a menu is open | All keys stay in the menu; bindings are paused | |
+| K-11 | Menu keyboard operation | ↑↓←→, Enter, Space, Esc; mnemonics (not implemented) | IA-CORE-02 |
+| K-12 | Esc: fullscreen | Exits fullscreen | IA-CORE-04 |
+| K-13 | Esc: windowed mode | No effect | |
+| K-14 | Esc: menu | Closes one level at a time | IA-CORE-01 |
+| K-15 | Esc: tool windows and dialogs | Closes the window in small dialogs (seek, open URL, aspect ratio, confirmation); not handled in large tool windows (Picture Adjustments, audio, subtitles, snapshot) | |
+| K-16 | Esc: list search box | Clears the search and returns focus to the list | |
+| K-17 | Disabling the default shortcuts | "Ignore Default Shortcuts" (hotkeys) | |
 
-### A.5 底栏与进度条
+### A.5 Bottom bar and seek bar
 
-| # | 状态 | 元素 | 规格 | 条目 |
+| # | State | Element | Specification | Item |
 | --- | --- | --- | --- | --- |
-| B-01 | 全部 | 总高度 | 62 px（进度条行 22 + 按钮行 40） | |
-| B-02 | 全部 | 左侧按钮 | 41×40：播放 / 暂停、停止、后退、前进、打开 | |
-| B-03 | 全部 | 播放 / 暂停 | 一个按钮，按状态换图标 | |
-| B-04 | 全部 | 停止 | 关闭播放 | |
-| B-05 | 全部 | 右侧按钮 | 现为播放列表开关；目标为 CC、流选择、播放列表开关、附着面板开关（未实现） | IA-PB-06 |
-| B-06 | 全部 | 信息徽标 | HW/SW、HDR、视频编码、音频编码、声道、下载速率，按窗口宽度显示（未实现） | IA-PB-05 |
-| B-07 | 窄窗口 | 右侧按钮依次隐藏 | 现为列表开关在底栏宽度小于 320 时隐藏；目标为按各自阈值与时间文字右边缘隐藏（未实现） | IA-PB-02 |
-| B-08 | 全部 | 时间文字 | 当前时间为主文字色，「/ 总长」为次要文字色 | |
-| B-09 | 全部 | 时间格式 | 不足 1 小时 `MM:SS`，否则 `H:MM:SS` | G-14 |
-| B-10 | 全部 | 剩余时间 | `-MM:SS / 总长` | G-14 |
-| B-11 | 全部 | 按播放速度修正时间 | 不提供 | |
-| B-12 | 全部 | 进度条 | 10 px 点击区，2 px 线，8 px 圆形滑块；悬停与按下变色 | |
-| B-13 | 全部 | 进度条的位置 | `x: 15px`，宽度为底栏宽 − 132 | |
-| B-14 | 不能跳转时 | 进度条 | 已播放部分用禁用色；滑块见 I-03 | IA-PB-03 |
-| B-15 | 全部 | A-B 循环、书签、章节标记 | 现为竖线与色带；目标为 A / B 三角、书签旗标、章节竖线（未实现） | IA-PB-04 |
-| B-16 | 全部 | 进度条悬停提示 | 跟随指针，位于进度条上方 4 px，在底栏内左右各留 2 px | IA-PB-01 |
-| B-17 | 全部 | 静音与音量 | 13×10 + 70×10，位于进度条行最右端；0–100 | G-13b |
-| B-18 | 全部 | 音量调节时的 OSD | 拖动时不提示，松开时提示一次「音量: N%」 | G-13b |
-| B-19 | 全屏 | 底栏的布局 | 与窗口模式相同的两行，覆盖在画面上，横跨屏幕宽度（侧栏弹出时收窄） | G-01 |
-| B-20 | 全屏 | 底栏的背景 | 不透明，`Theme.bg-bar` | |
-| B-21 | 全部 | 隐藏底栏的命令 | 没有 | |
-| B-22 | 全部 | 播放列表开关的状态 | 关 / 开 / 开但看不见（半亮） | G-18 |
+| B-01 | All | Total height | 62 px (seek bar row 22 + button row 40) | |
+| B-02 | All | Left-hand buttons | 41×40: play / pause, stop, back, forward, open | |
+| B-03 | All | Play / pause | One button that changes its icon with the state | |
+| B-04 | All | Stop | Closes playback | |
+| B-05 | All | Right-hand buttons | Currently the playlist toggle; target: CC, stream selection, playlist toggle, attached panel toggle (not implemented) | IA-PB-06 |
+| B-06 | All | Info badges | HW/SW, HDR, video codec, audio codec, channels, download rate, shown by window width (not implemented) | IA-PB-05 |
+| B-07 | Narrow window | Right-hand buttons hide in turn | Currently the list toggle hides when the bottom bar is narrower than 320; target: hide by each button's threshold and the right edge of the time text (not implemented) | IA-PB-02 |
+| B-08 | All | Time text | The current time in the primary text colour, "/ total" in the secondary text colour | |
+| B-09 | All | Time format | `MM:SS` under 1 hour, otherwise `H:MM:SS` | G-14 |
+| B-10 | All | Remaining time | `-MM:SS / total` | G-14 |
+| B-11 | All | Time corrected for playback speed | Not offered | |
+| B-12 | All | Seek bar | 10 px click area, 2 px line, 8 px round slider; colour changes on hover and press | |
+| B-13 | All | Seek bar position | `x: 15px`, width = bottom bar width − 132 | |
+| B-14 | When seeking is not possible | Seek bar | The played part uses the disabled colour; slider see I-03 | IA-PB-03 |
+| B-15 | All | A-B loop, bookmark, chapter marks | Currently vertical lines and a colour band; target: A / B triangles, bookmark flags, chapter vertical lines (not implemented) | IA-PB-04 |
+| B-16 | All | Seek bar hover tooltip | Follows the pointer, 4 px above the seek bar, keeping 2 px on each side inside the bottom bar | IA-PB-01 |
+| B-17 | All | Mute and volume | 13×10 + 70×10, at the far right of the seek bar row; 0–100 | G-13b |
+| B-18 | All | OSD while adjusting volume | No notification while dragging; "Volume: N%" once on release | G-13b |
+| B-19 | Fullscreen | Bottom bar layout | The same two rows as windowed mode, overlaid on the picture, across the screen width (narrower when the sidebar pops out) | G-01 |
+| B-20 | Fullscreen | Bottom bar background | Opaque, `Theme.bg-bar` | |
+| B-21 | All | Command to hide the bottom bar | None | |
+| B-22 | All | Playlist toggle state | Off / on / on but not visible (half-lit) | G-18 |
 
-### A.6 播放列表
+### A.6 Playlist
 
-| # | 状态 | 元素 | 规格 | 条目 |
+| # | State | Element | Specification | Item |
 | --- | --- | --- | --- | --- |
-| L-01 | 窗口模式 | 附着 / 分离 | 页签条右端一个按钮切换附着与分离 | |
-| L-02 | 浮动 | 默认矩形与最小尺寸 | (438,100) 300×408，最小 300×250 | |
-| L-03 | 浮动 | 标题栏 | 现为系统标题栏，只有关闭；目标为宿主标题行（未实现） | IA-CORE-10 |
-| L-04 | 浮动 | 吸附与跟随主窗口 | 10 px 吸附（未实现）；不跟随主窗口移动 | IA-CORE-10 |
-| L-05 | 全屏 | 附着的列表 | 右边缘弹出 | G-01 |
-| L-06 | 窗口模式 | 宽度记忆 | 记住拖动后的宽度，默认 317 | |
-| L-07 | 窗口模式 | 分隔条 | 3 px；视频至少 318，面板至少 317 | |
-| L-08 | 窗口模式 | 自动隐藏 | 只在窗口宽度小于 638 时因空间不足隐藏 | G-18 |
-| L-09 | 窗口模式 | 与窗口尺寸的关系 | 挤压视频，窗口宽度不变 | |
-| L-10 | 全部 | 双击、Enter、P | 播放 | |
-| L-11 | 全部 | 选中与键盘光标 | 选中行有底色；键盘光标虚线框（未实现） | IA-PL-03 |
-| L-12 | 全部 | 正在播放 / 已播放 | 正在播放用 `Theme.playing`，已播放用 `text-played` | |
-| L-13 | 全部 | 列 | 「序号. 标题」，时长右对齐；类型图标（未实现） | IA-PL-04 |
-| L-14 | 全部 | 行高与字体 | 20 px，12 px 字 | |
-| L-15 | 全部 | 悬停提示 | 完整路径，600 ms 后显示 | |
-| L-16 | 全部 | 列表内拖动排序 | 支持，2 px 插入线 | |
-| L-17 | 全部 | 从外部拖入列表 | 追加到末尾 | G-12 |
-| L-18 | 全部 | 从外部拖到画面 | 清空列表后加入并播放 | G-11 |
-| L-19 | 全部 | 键盘移动后的滚动 | 保持可见 | G-08 |
-| L-20 | 切换文件时 | 正在播放项 | 不在视野内时滚到居中 | G-08 |
-| L-21 | 全部 | 列表底栏 | 35 px：四个移动按钮、添加 / 删除 / 排序、搜索框、总时长；窄时搜索框折叠为放大镜 | |
-| L-22 | 全部 | 关闭方式 | F6、底栏按钮、浮动窗口的关闭按钮、列表菜单里的「关闭」、附着时页签条上的 × | |
-| L-23 | 全部 | 面板的锁 | 搜索框有焦点、拖动排序时锁住面板（全屏时弹出层不收起）；列表本身有焦点不锁 | G-01 |
+| L-01 | Windowed | Attached / detached | One button at the right end of the tab strip toggles attached and detached | |
+| L-02 | Floating | Default rectangle and minimum size | (438,100) 300×408, minimum 300×250 | |
+| L-03 | Floating | Title bar | Currently the system title bar with only close; target: a host title row (not implemented) | IA-CORE-10 |
+| L-04 | Floating | Snapping and following the main window | 10 px snapping (not implemented); does not follow when the main window moves | IA-CORE-10 |
+| L-05 | Fullscreen | Attached list | Pops out from the right edge | G-01 |
+| L-06 | Windowed | Width memory | Remembers the dragged width, default 317 | |
+| L-07 | Windowed | Divider | 3 px; video at least 318, panel at least 317 | |
+| L-08 | Windowed | Auto-hide | Hidden for lack of space only when the window is narrower than 638 | G-18 |
+| L-09 | Windowed | Relation to the window size | Squeezes the video; the window width is unchanged | |
+| L-10 | All | Double-click, Enter, P | Play | |
+| L-11 | All | Selection and keyboard cursor | Selected rows have a background colour; keyboard cursor dashed frame (not implemented) | IA-PL-03 |
+| L-12 | All | Playing / played | Playing uses `Theme.playing`, played uses `text-played` | |
+| L-13 | All | Columns | "number. title", duration right-aligned; type icon (not implemented) | IA-PL-04 |
+| L-14 | All | Row height and font | 20 px, 12 px text | |
+| L-15 | All | Hover tooltip | Full path, shown after 600 ms | |
+| L-16 | All | Drag reordering within the list | Supported, 2 px insertion line | |
+| L-17 | All | Dragging into the list from outside | Appends to the end | G-12 |
+| L-18 | All | Dragging onto the picture from outside | Clears the list, then adds and plays | G-11 |
+| L-19 | All | Scrolling after keyboard moves | Kept visible | G-08 |
+| L-20 | When switching files | Playing item | Scrolled to the centre when not in view | G-08 |
+| L-21 | All | List bottom bar | 35 px: four move buttons, add / remove / sort, search box, total duration; when narrow the search box collapses to a magnifier | |
+| L-22 | All | Ways to close | F6, the bottom bar button, the close button of the floating window, "Close" in the list menu, the × on the tab strip when attached | |
+| L-23 | All | Panel locks | The panel is locked while the search box has focus and during drag reordering (in fullscreen the pop-out does not retract); focus on the list itself does not lock | G-01 |
 
-### A.7 屏幕提示（OSD）与信息层
+### A.7 OSD and info layer
 
-| # | 元素 | 规格 | 条目 |
+| # | Element | Specification | Item |
 | --- | --- | --- | --- |
-| O-01 | 位置 | 视频区左上角，边距 10 | |
-| O-02 | 位置可调 | 水平 / 垂直对齐与边距可设（未实现） | IA-CORE-06 |
-| O-03 | 字号 | 随视频区高度 | G-10 |
-| O-04 | 颜色与底板 | 白字，半透明深色圆角底板 `#0b0a10c4`，底边 2 px `accent-fill`；两套配色相同 | G-10、UI-OSD-01 |
-| O-05 | 显示时长、淡出 | 显示 2000 ms，然后 300 ms 淡出 | |
-| O-06 | 叠放 | 新提示替换旧提示 | |
-| O-07 | 总开关 | 「显示屏幕提示」，默认开（未实现） | IA-CORE-06 |
-| O-08 | 杂项信息 | Scroll Lock 开关的一行信息（未实现） | IA-INFO-02 |
-| O-09 | 简要信息（Shift+Tab） | 文件名；时间、章节、编码；字幕名；3 秒 | IA-INFO-01 |
-| O-10 | 完整信息（Tab） | 信息块，半透明黑底，每秒刷新 | |
-| O-11 | OSD 与信息块的叠放 | 信息块紧贴 OSD 行下方 | G-10 |
-| O-12 | 全屏与窗口 | 相同；杂项信息可设仅全屏（未实现） | IA-INFO-02 |
-| O-13 | 截图是否包含 OSD | 不包含；截图插件可选「实际画面包含字幕」 | |
-| O-14 | 菜单打开时的 OSD | 照常显示、照常淡出 | |
+| O-01 | Position | Top-left of the video area, margin 10 | |
+| O-02 | Adjustable position | Horizontal / vertical alignment and margins can be set (not implemented) | IA-CORE-06 |
+| O-03 | Font size | Follows the video area height | G-10 |
+| O-04 | Colour and plate | White text, translucent dark rounded plate `#0b0a10c4`, 2 px `accent-fill` along the bottom; the same in both colour schemes | G-10, UI-OSD-01 |
+| O-05 | Display duration, fade-out | Shown for 2000 ms, then fades out in 300 ms | |
+| O-06 | Stacking | A new notification replaces the old one | |
+| O-07 | Master switch | "Show OSD", on by default (not implemented) | IA-CORE-06 |
+| O-08 | Misc info | One line of info toggled by Scroll Lock (not implemented) | IA-INFO-02 |
+| O-09 | Brief info (Shift+Tab) | File name; time, chapter, codecs; subtitle name; 3 seconds | IA-INFO-01 |
+| O-10 | Full info (Tab) | Info block, translucent black background, refreshed every second | |
+| O-11 | Stacking of OSD and info block | The info block sits right below the OSD line | G-10 |
+| O-12 | Fullscreen and window | The same; misc info can be set to fullscreen only (not implemented) | IA-INFO-02 |
+| O-13 | Whether snapshots include the OSD | Not included; the capture plugin has the option "Include Subtitles in Rendered Frame" | |
+| O-14 | OSD while a menu is open | Shown and faded out as usual | |
 
-### A.8 菜单
+### A.8 Menus
 
-| # | 状态 | 元素 | 规格 | 条目 |
+| # | State | Element | Specification | Item |
 | --- | --- | --- | --- | --- |
-| MN-01 | 全部 | 弹出位置 | 指针处（松开的位置） | G-15 |
-| MN-02 | 全部 | 弹出时机 | 右键松开 | G-15 |
-| MN-03 | 全部 | 能否超出窗口 | 现为限制在窗口内、可滚动；目标为可超出窗口（未实现） | G-03 |
-| MN-04 | 全部 | 子菜单的展开方向 | 向右；到可用区域边缘时翻到左侧 | G-03 |
-| MN-05 | 全部 | 子菜单的展开延时 | 400 ms（Windows 读系统设置） | G-15 |
-| MN-06 | 全部 | 禁用项 | 文字暗色，悬停时在旁边显示原因 | |
-| MN-07 | 全部 | 勾选与单选 | 14×14 勾选框，12×12 单选圆点 | |
-| MN-08 | 全部 | 行高 | 24 px | |
-| MN-09 | 全部 | 分隔线 | 1 px，占 7 px 高度 | |
-| MN-10 | 全部 | 快捷键文字 | 由绑定表生成，右对齐 | |
-| MN-11 | 全屏 | 可用性 | 完整菜单 | |
-| MN-12 | 画中画 | 可用性 | 只在主窗口里弹出；画中画小窗没有菜单 | |
-| MN-13 | 空闲 | 可用性 | 依赖媒体的项变灰并说明原因 | |
-| MN-14 | 迷你尺寸、小窗口 | 可用性 | 每一项都能到达（滚动） | G-03 |
-| MN-15 | 全部 | 精简菜单 | 只有一套菜单 | |
-| MN-16 | 全部 | 菜单打开时的播放 | 不暂停（[交互要求](interaction-requirements.md) §3） | |
-| MN-17 | 全部 | 菜单打开时底栏 | 不隐藏 | |
-| MN-18 | 失去焦点 | 菜单 | 主窗口失去焦点时关闭；覆盖层窗口落地后改为应用失去激活时关闭 | G-03 |
-| MN-19 | 底栏、列表 | 右键 | 底栏上没有菜单；列表上是列表菜单 | |
+| MN-01 | All | Pop-up position | At the pointer (the release position) | G-15 |
+| MN-02 | All | Pop-up timing | Right-button release | G-15 |
+| MN-03 | All | Can it extend beyond the window | Currently confined to the window and scrollable; target: can extend beyond the window (not implemented) | G-03 |
+| MN-04 | All | Submenu opening direction | To the right; flips to the left at the edge of the available area | G-03 |
+| MN-05 | All | Submenu open delay | 400 ms (Windows reads the system setting) | G-15 |
+| MN-06 | All | Disabled items | Dim text; the reason is shown beside it on hover | |
+| MN-07 | All | Check and radio | 14×14 checkbox, 12×12 radio dot | |
+| MN-08 | All | Row height | 24 px | |
+| MN-09 | All | Separator | 1 px, taking 7 px of height | |
+| MN-10 | All | Shortcut text | Generated from the binding table, right-aligned | |
+| MN-11 | Fullscreen | Availability | The full menu | |
+| MN-12 | Picture-in-picture | Availability | Pops up only in the main window; the picture-in-picture small window has no menu | |
+| MN-13 | Idle | Availability | Items that depend on media are greyed out and explain why | |
+| MN-14 | Mini size, small window | Availability | Every item can be reached (scrolling) | G-03 |
+| MN-15 | All | Simplified menu | There is only one menu | |
+| MN-16 | All | Playback while a menu is open | Not paused ([Interaction requirements](interaction-requirements.md) §3) | |
+| MN-17 | All | Bottom bar while a menu is open | Not hidden | |
+| MN-18 | Focus lost | Menu | Closes when the main window loses focus; once the overlay window lands, closes when the application is deactivated | G-03 |
+| MN-19 | Bottom bar, list | Right button | No menu on the bottom bar; the list menu on the list | |
 
-### A.9 窗口尺寸与布局
+### A.9 Window size and layout
 
-| # | 元素 | 规格 | 条目 |
+| # | Element | Specification | Item |
 | --- | --- | --- | --- |
-| S-01 | 主窗口最小尺寸 | 见 W-10 | IA-CORE-13 |
-| S-02 | 视频区最小尺寸 | 侧栏打开时至少 318 宽；高度下限现为 120，目标取消（未实现） | IA-CORE-13 |
-| S-03 | 开始播放时的窗口尺寸 | 1 倍 | G-02 |
-| S-04 | 按视频尺寸调整的上下限 | 按屏幕可用区缩小、按最小尺寸放大；用户可设的桌面百分比上下限（未实现） | IA-WIN-04 |
-| S-05 | 调整尺寸时的基准点 | 保持左上角 | |
-| S-06 | 开始播放时居中 | 不居中 | |
-| S-07 | 侧栏打开时 | 挤压视频，窗口宽度不变 | |
-| S-08 | 按倍数调整时 | 视频区按倍数计算，再加上侧栏和分隔条的宽度 | |
-| S-09 | 全屏切换时的侧栏和底栏 | 底栏改为覆盖；附着侧栏改为右边缘弹出 | G-01 |
-| S-10 | 退出全屏后 | 回到原来的窗口；侧栏恢复显示 | |
-| S-11 | 缩放窗口时保持宽高比 | 可选，默认关（未实现） | IA-WIN-06 |
-| S-12 | 窗口窄到放不下侧栏 | 宽度小于 638 时隐藏侧栏，偏好不变 | G-18 |
+| S-01 | Main window minimum size | See W-10 | IA-CORE-13 |
+| S-02 | Video area minimum size | At least 318 wide when the sidebar is open; the height lower bound is currently 120, target: removed (not implemented) | IA-CORE-13 |
+| S-03 | Window size when playback starts | 1× | G-02 |
+| S-04 | Bounds when resizing to the video size | Shrink to the available screen area, enlarge to the minimum size; user-settable desktop percentage bounds (not implemented) | IA-WIN-04 |
+| S-05 | Reference point when resizing | Keeps the top-left corner | |
+| S-06 | Centring when playback starts | Not centred | |
+| S-07 | When the sidebar opens | Squeezes the video; the window width is unchanged | |
+| S-08 | When resizing by a multiplier | The video area is computed by the multiplier, then the width of the sidebar and divider is added | |
+| S-09 | Sidebar and bottom bar when toggling fullscreen | The bottom bar becomes an overlay; the attached sidebar becomes a right-edge pop-out | G-01 |
+| S-10 | After exiting fullscreen | Back to the original window; the sidebar is shown again | |
+| S-11 | Keeping the aspect ratio when resizing the window | Optional, off by default (not implemented) | IA-WIN-06 |
+| S-12 | Window too narrow for the sidebar | Below a width of 638 the sidebar is hidden, the preference is unchanged | G-18 |
 
-### A.10 其它与状态有关的规则
+### A.10 Other state-related rules
 
-| # | 规则 | 规格 | 条目 |
+| # | Rule | Specification | Item |
 | --- | --- | --- | --- |
-| R-01 | 失去焦点时暂停 | 可选，默认关（未实现） | IA-PB-07 |
-| R-02 | 最小化时暂停 | 可选，默认关（未实现） | IA-PB-07 |
-| R-03 | 锁屏时暂停 | 不暂停 | |
-| R-04 | 播放时防止屏保 | 开（playback 的 `preventSleep: true`） | |
-| R-05 | 非模态工具窗口置顶 | 不单独置顶；整体置顶时一起置顶 | IA-WIN-03 |
-| R-06 | 最小化时所有窗口一起最小化 | 开（未实现） | IA-CORE-11 |
-| R-07 | 用文件启动时不抢焦点 | 不提供 | |
-| R-08 | 拖入文件时的落点提示 | 不显示 | §0.3 |
-| R-09 | 播放失败时 | 播放列表插件给出提示 | |
-| R-10 | 列表播放结束 | 默认不循环、不随机，播完停止 | |
+| R-01 | Pause on focus loss | Optional, off by default (not implemented) | IA-PB-07 |
+| R-02 | Pause on minimise | Optional, off by default (not implemented) | IA-PB-07 |
+| R-03 | Pause on screen lock | Does not pause | |
+| R-04 | Prevent the screen saver while playing | On (playback's `preventSleep: true`) | |
+| R-05 | Modeless tool windows on top | Not on top on their own; on top together when the whole is on top | IA-WIN-03 |
+| R-06 | Minimise all windows together | On (not implemented) | IA-CORE-11 |
+| R-07 | Not taking focus when launched with a file | Not offered | |
+| R-08 | Drop target hints when dragging files in | Not shown | §0.3 |
+| R-09 | When playback fails | The playlist plugin shows a notification | |
+| R-10 | End of list playback | No repeat and no shuffle by default; stops when finished | |
 
-## 附录 B：同类文件判定（S1–S4）
+## Appendix B: Similar files check (S1–S4)
 
-IA-PL-01「同类文件规则」第 5 条的 `isSimilar(a, b, audio)`。`a`、`b` 是两个文件的比较键：`asciiLower(stem) + ".tmp"`。实现在 `src/plugins/playlist/media.ts`（`similarStep` 返回通过的步骤，`isSimilar` 为其是否非空）；常量与整数除法是规格的一部分，不得调整。
+The `isSimilar(a, b, audio)` of item 5 of the IA-PL-01 "Similar files rule". `a` and `b` are the comparison keys of the two files: `asciiLower(stem) + ".tmp"`. Implemented in `src/plugins/playlist/media.ts` (`similarStep` returns the step passed, `isSimilar` is whether it is non-empty); the constants and integer division are part of the specification and must not be adjusted.
 
-**记号**
+**Notation**
 
-- `T1`：12 个分隔字符：空格 `_` `-` `.` `(` `)` `{` `}` `[` `]` `'` `"`。
-- 数字：只认 ASCII `0-9`；全角数字、中文数字以及码位 ≥ 0x80 的字符都不是数字。
-- `half(s) = ⌊len(s) / 2⌋`，`third(s) = ⌊len(s) / 3⌋`。
-- `stripT1(s)`：删去 `T1` 字符（括号内的内容保留，只删括号字符本身）。
-- `mask(s)`：`T1` 字符换成 `?`，数字换成 `*`，其它字符不变，长度不变。
-- `digitDiff(x, y, n)`：看前 `n` 个字符；只要有一个位置任一方不是数字（或已越界），结果为 100；否则为两边不同的位置数。
-- `loosePrefix(x, y)`：对 `a = stripT1(x)`、`b = stripT1(y)`，在前 `⌊min(len) × 2 / 3⌋` 个位置逐个比较：相同则计数；不同时，若两个字符都 < 0x80 且至少一个是数字，停止比较，否则跳过。计数 ≥ `⌊max(len) / 2⌋` 时为真。
-- `maskEq(x, y, n, prefix)`：`prefix` 为假时两者长度不同即为假。在较短长度内逐位比较：相同时，若 `prefix` 为真且位置 ≥ `n`，立即为真；不同时，若任一方该位是 `*`，为假，否则「位置 ≥ `n`」即为结果。比完都相同时为真。
+- `T1`: 12 separator characters: space `_` `-` `.` `(` `)` `{` `}` `[` `]` `'` `"`.
+- Digits: only ASCII `0-9`; full-width digits, Chinese numerals and characters with code points ≥ 0x80 are not digits.
+- `half(s) = ⌊len(s) / 2⌋`, `third(s) = ⌊len(s) / 3⌋`.
+- `stripT1(s)`: removes `T1` characters (the content inside brackets is kept; only the bracket characters themselves are removed).
+- `mask(s)`: `T1` characters become `?`, digits become `*`, other characters are unchanged, and the length is unchanged.
+- `digitDiff(x, y, n)`: looks at the first `n` characters; if at any position either side is not a digit (or is out of range), the result is 100; otherwise it is the number of positions where the two differ.
+- `loosePrefix(x, y)`: for `a = stripT1(x)`, `b = stripT1(y)`, compare position by position over the first `⌊min(len) × 2 / 3⌋` positions: when equal, count it; when different, if both characters are < 0x80 and at least one is a digit, stop comparing, otherwise skip. True when the count is ≥ `⌊max(len) / 2⌋`.
+- `maskEq(x, y, n, prefix)`: when `prefix` is false, different lengths mean false. Compare position by position within the shorter length: when equal, if `prefix` is true and the position is ≥ `n`, true immediately; when different, if either side has `*` at that position, false, otherwise the result is "position ≥ `n`". True when all compared positions are equal.
 
-**步骤**（依次判断，第一条通过即为相似）
+**Steps** (checked in order; the first that passes means similar)
 
-1. **S1**：若 `min(half(a), half(b)) ≥ 5`：`loosePrefix(a, b)` 为真，或 `digitDiff(a, b, min(third(a), third(b))) ≤ 2`。
-2. **S2**：`a2 = stripT1(a)`、`b2 = stripT1(b)`；若 `min(half(a2), half(b2)) ≥ 5` 且 `digitDiff(a2, b2, min(third(a2), third(b2))) ≤ 2`。
-3. **S3**：`a3`、`b3` 为 `a2`、`b2` 再删去数字。`a3 == b3` 为「S3 相等」；否则若 `min(half(a3), half(b3)) ≥ 5` 且 `maskEq(a3, b3, min(third(a3), third(b3), 5), true)` 为「S3 前缀」。
-4. **S4**：`am = mask(a)`、`bm = mask(b)`。音频组：`maskEq(am, bm, 2, false)` 或 `maskEq(am, bm, 3, true)` 为真即「S4 音频」。否则若 `min(half(am), half(bm)) < 5` 为不相似；`maskEq(am, bm, min(third(am), third(bm), 5), true)` 为真即「S4 掩码」。
-5. 都不通过：不相似。
+1. **S1**: if `min(half(a), half(b)) ≥ 5`: `loosePrefix(a, b)` is true, or `digitDiff(a, b, min(third(a), third(b))) ≤ 2`.
+2. **S2**: `a2 = stripT1(a)`, `b2 = stripT1(b)`; if `min(half(a2), half(b2)) ≥ 5` and `digitDiff(a2, b2, min(third(a2), third(b2))) ≤ 2`.
+3. **S3**: `a3`, `b3` are `a2`, `b2` with digits also removed. `a3 == b3` is "S3 equal"; otherwise, if `min(half(a3), half(b3)) ≥ 5` and `maskEq(a3, b3, min(third(a3), third(b3), 5), true)`, it is "S3 prefix".
+4. **S4**: `am = mask(a)`, `bm = mask(b)`. Audio group: if `maskEq(am, bm, 2, false)` or `maskEq(am, bm, 3, true)` is true, it is "S4 audio". Otherwise, if `min(half(am), half(bm)) < 5`, not similar; if `maskEq(am, bm, min(third(am), third(bm), 5), true)` is true, it is "S4 mask".
+5. None passes: not similar.
 
-IA-PL-01 的 17 组用例的「通过的步骤」一列即按上面的步骤名标注。
+The "Step passed" column of the 17 IA-PL-01 cases is labelled with the step names above.
 
-## 附录 C：实施轮次与状态
+## Appendix C: Implementation rounds and status
 
-原则：先核心后插件；同一轮内，核心的行为改动（不改 API）先于需要 API 协商的改动；插件条目在它依赖的核心条目验收后开工，不依赖核心的插件条目可以与核心轮并行（工作流 §3）。
+Principle: the core before plugins; within one round, core behaviour changes (no API change) come before changes that need API negotiation; a plugin item starts after the core items it depends on pass acceptance, and plugin items that do not depend on the core can run in parallel with the core rounds (workflow §3).
 
-### 第 1 轮：核心行为（已完成，2026-10-21）
+### Round 1: core behaviour (done, 2026-10-21)
 
-G-04、G-01、G-03 第一步（菜单窗口内滚动）、G-15、IA-CORE-01、G-05、G-10、G-13a、G-16a、IA-CORE-03、IA-CORE-12、IA-CORE-04 第 1 条。参考文档 §5.5、§6.3、§6.5 的语义说明已同步更新。
+G-04, G-01, G-03 step one (scrolling the menu inside the window), G-15, IA-CORE-01, G-05, G-10, G-13a, G-16a, IA-CORE-03, IA-CORE-12, IA-CORE-04 item 1. The semantic notes in reference §5.5, §6.3 and §6.5 have been updated to match.
 
-### 第 2 轮：插件（已完成，2026-10-21）
+### Round 2: plugins (done, 2026-10-21)
 
-G-07、G-13b、G-14、G-18、IA-PB-01；G-08、G-11、G-12、IA-PL-01、IA-PL-02；G-02、G-06、IA-WIN-01、IA-WIN-02、IA-WIN-03；IA-INFO-01；G-16b。
+G-07, G-13b, G-14, G-18, IA-PB-01; G-08, G-11, G-12, IA-PL-01, IA-PL-02; G-02, G-06, IA-WIN-01, IA-WIN-02, IA-WIN-03; IA-INFO-01; G-16b.
 
-### 第 3 轮：核心第二批（未实施）
+### Round 3: core, second batch (not started)
 
-| 条目 | 是否需要 API 协商 |
+| Item | Needs API negotiation |
 | --- | --- |
-| G-03 第二步（菜单覆盖层窗口） | 否 |
-| IA-CORE-06 宿主设置页（含 G-01、G-04、G-05、G-10 的开关） | 否 |
-| IA-CORE-05 自动隐藏控制栏 | 否 |
-| IA-CORE-13 最小高度 | 否 |
-| IA-CORE-14 隐藏字幕轨 | 否 |
-| IA-CORE-10 浮动窗口标题行与吸附 | 否 |
-| IA-CORE-11 一起最小化 | 否 |
-| IA-CORE-04 第 2、3 条 | 否 |
-| IA-CORE-07 自绘标题栏 | 是（`Title:OnTop`、`setAlwaysOnTop` 的 `mode`） |
-| IA-CORE-08 绑定输入补齐 | 是 |
-| IA-CORE-15 主窗口接口扩展 | 是（建议先接受 `active`、`minimized`） |
-| IA-CORE-16 `cacheSpeed` | 是（兼容扩展） |
-| IA-CORE-02 助记符 | 是（最低） |
-| IA-CORE-17 视频区拖动 | 是（最低，可降级） |
+| G-03 step two (menu overlay window) | No |
+| IA-CORE-06 host settings page (including the switches of G-01, G-04, G-05, G-10) | No |
+| IA-CORE-05 auto-hide the control bar | No |
+| IA-CORE-13 minimum height | No |
+| IA-CORE-14 closed caption tracks | No |
+| IA-CORE-10 floating window title row and snapping | No |
+| IA-CORE-11 minimise together | No |
+| IA-CORE-04 items 2 and 3 | No |
+| IA-CORE-07 custom-drawn title bar | Yes (`Title:OnTop`, the `mode` of `setAlwaysOnTop`) |
+| IA-CORE-08 completing binding inputs | Yes |
+| IA-CORE-15 main window interface extensions | Yes (accepting `active` and `minimized` first is advised) |
+| IA-CORE-16 `cacheSpeed` | Yes (compatible extension) |
+| IA-CORE-02 mnemonics | Yes (lowest) |
+| IA-CORE-17 drags on the video area | Yes (lowest, can be downgraded) |
 
-需要协商的条目按工作流 §4.3 逐条提交；协商期间先做不需要协商的条目。
+Items that need negotiation are submitted one by one per workflow §4.3; during negotiation, the items that need none are done first.
 
-### 第 4 轮：插件第二批（未实施）
+### Round 4: plugins, second batch (not started)
 
-IA-PB-02、IA-PB-03、IA-PB-04、IA-PB-05、IA-PB-06、IA-PB-07、IA-PL-03、IA-PL-04、IA-WIN-04、IA-WIN-05、IA-WIN-06、IA-WIN-07、IA-INFO-02、IA-HK-01、IA-VID-02、IA-SUB-02。其中 IA-PB-02、IA-PB-03、IA-PB-04、IA-PL-03、IA-PL-04、IA-WIN-04 不依赖核心，可以提前。
+IA-PB-02, IA-PB-03, IA-PB-04, IA-PB-05, IA-PB-06, IA-PB-07, IA-PL-03, IA-PL-04, IA-WIN-04, IA-WIN-05, IA-WIN-06, IA-WIN-07, IA-INFO-02, IA-HK-01, IA-VID-02, IA-SUB-02. Of these, IA-PB-02, IA-PB-03, IA-PB-04, IA-PL-03, IA-PL-04 and IA-WIN-04 do not depend on the core and can be done earlier.
 
-### 已取消
+### Cancelled
 
-IA-CORE-09、IA-PB-08、IA-VID-01、IA-AUD-01、IA-SUB-01、IA-MK-01（控制面板，§0.3）。
+IA-CORE-09, IA-PB-08, IA-VID-01, IA-AUD-01, IA-SUB-01, IA-MK-01 (control panel, §0.3).
 
-### 每轮结束时
+### At the end of each round
 
-- 协调者按各条「验收」做真实 GUI 测试（工作流 §6.2），macOS 实测；Windows 只做编译与可移植性检查（工作流 §6.1），有 Windows 机器时补测各条「跨平台」里的 Windows 行为。
-- 交互设计负责人同步改写功能需求、界面规格中被取代的条目，更新 menus.md。
+- The coordinator runs real GUI tests per the "Acceptance" of each item (workflow §6.2), tested on macOS; Windows gets only build and portability checks (workflow §6.1), and when a Windows machine is available the Windows behaviour in each item's "Cross-platform" is tested as well.
+- The interaction design owner rewrites the superseded items in the feature requirements and the UI specification to match, and updates menus.md.

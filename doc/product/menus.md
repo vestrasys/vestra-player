@@ -1,254 +1,256 @@
-# 菜单与界面归属
+# Menus and UI ownership
 
-> 本表记录当前实现，对应[界面规格](ui-spec.md) §6.2 的顶层结构。
+> This table records the current implementation and corresponds to the top-level structure in [UI spec](ui-spec.md) §6.2.
 
-当前产品的右键菜单树，由 19 个插件各自注册的命令（2026-10-22 起另有内置的插件商城 `store` 的一项，见下表）（其中 `youtube`、`bilibili` 已迁到插件仓库、经商城安装，装上后才有它们的两项）、宿主的 14 条核心动作和宿主自己的「全屏」「退出」合并而成（2026-10-21 从 main fafa40d 的插件代码实际注册结果整理）。菜单按用户领域组织，不按插件组织。新增或移动入口前对照本表，确认没有重复入口、没有散放到错误领域（[交互要求 §1](interaction-requirements.md#1-菜单按用户领域组织)）。
+The product's context menu tree is merged from the commands registered by each of the 19 plugins (since 2026-10-22 there is also one item from the built-in plugin store `store`, see the table below) (`youtube` and `bilibili` have moved to the plugin repository and are installed through the store; their two items only exist once they are installed), the host's 14 core actions, and the host's own "Fullscreen" and "Quit" (compiled on 2026-10-21 from what the plugin code on main fafa40d actually registers). Menus are organised by user domain, not by plugin. Before adding or moving an entry, check it against this table to make sure there is no duplicate entry and nothing is scattered into the wrong domain ([interaction requirements §1](interaction-requirements.md#1-menus-are-organised-by-user-domain)).
 
-## 菜单树
+## Menu tree
 
-2026-10-21，基线 main fafa40d。由 `OUT=<file> node --test doc/process/rounds/menus-snapshot.test.ts` 导出的快照整理（[分配表](../process/rounds/2026-10-plugin-ui.md) §3；当时脚本默认列表覆盖 `src/plugins` 下全部 19 个插件；`youtube`、`bilibili` 迁出后默认列表为其余 17 个）；宿主的「全屏」「仅退出全屏」「退出」在 `src/host/src/main.rs`（`register_host_commands`），不在快照里。勾选、单选、初始禁用状态取自同一测试宿主里各命令的 `state`。
+2026-10-21, baseline main fafa40d. Compiled from the snapshot exported by `OUT=<file> node --test doc/process/rounds/menus-snapshot.test.ts` ([assignment table](../process/rounds/2026-10-plugin-ui.md) §3; at the time the script's default list covered all 19 plugins under `src/plugins`; after `youtube` and `bilibili` moved out, the default list is the other 17); the host's "Fullscreen", "Leave Fullscreen" and "Quit" are in `src/host/src/main.rs` (`register_host_commands`) and are not in the snapshot. Checked, radio and initially disabled states come from each command's `state` in the same test host.
 
-- 顺序按声明的 `order` 升序；同一 `order` 再按插件 id、注册先后。子菜单取其中最小的 `order`，分组（`group`）取其中第一项的分组。
-- 例外：7 个内置顶层菜单（`@open` … `@settings`）的位置固定，不随里面的命令变：打开 110、播放 200、字幕 300、视频 400、声音 500、屏幕 710、设置 830（`src/host/src/commands.rs` 的 `MENU_ANCHORS`）。插件写 `["@video", …]`、英文 key `["Video", …]` 或旧中文标题 `["视频", …]` 都挪不动它。内置菜单的直接下一级里，`order` 为 0（插件省略 `order`）的项排在最后（[Order and separators](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_key_bindings.html#order-and-separators)）；内置命令在这一级都用 100 以上的 `order`，不用 0。改内置菜单的顶层位置改这张表，不改命令的 `order`。
-- 「插件」列：「核心」是宿主的核心动作（`host/<id>`），「宿主」是宿主自己的命令。
-- 顶层分隔线画成「——」行（相邻两项 `group` 不同）。子菜单内相邻两项的 `group` 不同时也画分隔线，表中不逐一画出。
-- 快捷键在全局作用域生效（视频画面、底栏、侧栏获得焦点时；工具窗口内不生效）。写 `Ctrl` 的在 macOS 上 ⌃ 和 ⌘ 都能触发。用户可在「设置 ▸ 快捷键…」改绑，或用「忽略默认快捷键」整体停用默认绑定。
-- 「动态」项按当前媒体、记录或设备在运行时生成；「禁用」项常驻但在条件不满足时置灰并给出原因。
+The labels below are the English interface text (the English source text of each string); the Simplified Chinese interface shows the translations from the `zh-Hans.po` catalogs.
 
-| 菜单路径 | 插件 | 快捷键 | 备注 |
+- Order is ascending by declared `order`; for equal `order`, by plugin id, then registration order. A submenu takes the smallest `order` among its items, and a group (`group`) takes the group of its first item.
+- Exception: the positions of the 7 built-in top-level menus (`@open` … `@settings`) are fixed and do not follow the commands inside them: Open 110, Playback 200, Subtitles 300, Video 400, Audio 500, Screen 710, Settings 830 (`MENU_ANCHORS` in `src/host/src/commands.rs`). A plugin writing `["@video", …]`, the English key `["Video", …]` or the old Chinese title `["视频", …]` (Video) cannot move it. In the level directly below a built-in menu, items with `order` 0 (the plugin omitted `order`) come last ([Order and separators](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_key_bindings.html#order-and-separators)); built-in commands at that level all use an `order` of 100 or more, never 0. To change the top-level position of a built-in menu, change this table, not the commands' `order`.
+- "Plugin" column: "core" is a host core action (`host/<id>`), "host" is the host's own command.
+- Top-level separators are drawn as "——" rows (two adjacent items with different `group`). Inside a submenu a separator is also drawn between adjacent items with different `group`; the table does not draw each one.
+- Shortcuts work in the global scope (when the video area, bottom bar or sidebar has focus; not inside tool windows). Shortcuts written with `Ctrl` can be triggered on macOS by both ⌃ and ⌘. Users can rebind them in "Settings ▸ Keyboard Shortcuts…", or turn off all default bindings with "Ignore Default Shortcuts".
+- "Dynamic" items are generated at run time from the current media, records or devices; "disabled" items are always present but greyed out with a reason when their condition is not met.
+
+| Menu path | Plugin | Shortcut | Notes |
 | --- | --- | --- | --- |
-| 打开文件… | playback | Ctrl+O、F3 | |
-| 打开 ▸ 打开链接… | playback | Ctrl+U | |
-| 打开 ▸ 打开文件夹… | playlist | F2 | |
-| 打开 ▸ YouTube 视频… | youtube | | 插件仓库的官方插件，安装后出现 |
-| 打开 ▸ Bilibili 视频… | bilibili | | 插件仓库的官方插件，安装后出现 |
-| 打开 ▸ 打开字幕… | subtitles | Alt+O | |
-| 打开 ▸ 载入外部音频… | audio | | 没有正在播放的文件时禁用 |
-| 打开 ▸ 添加次字幕… | subtitles | | 没有可播放的媒体时禁用 |
-| 打开 ▸ 最近播放 ▸ （最近记录各一项） | history | | 动态；无记录时显示置灰的「（无记录）」 |
-| 打开 ▸ 最近播放 ▸ 移除无效记录 · 清除记录 | history | | |
-| 打开 ▸ 最近播放 ▸ 记录播放历史 | history | | 勾选 |
-| 关闭 | 核心 | F4 | |
-| 重开当前/最后文件 | playback | Ctrl+Y | |
-| 复制到剪贴板 ▸ 文件名 · 文件夹路径 · 完整路径 | playback | | |
+| Open File… | playback | Ctrl+O, F3 | |
+| Open ▸ Open URL… | playback | Ctrl+U | |
+| Open ▸ Open Folder… | playlist | F2 | |
+| Open ▸ YouTube Video… | youtube | | Official plugin from the plugin repository; appears after installation |
+| Open ▸ Bilibili Video… | bilibili | | Official plugin from the plugin repository; appears after installation |
+| Open ▸ Open Subtitle… | subtitles | Alt+O | |
+| Open ▸ Load External Audio… | audio | | Disabled when no file is playing |
+| Open ▸ Add Secondary Subtitle… | subtitles | | Disabled when there is no playable media |
+| Open ▸ Recently Played ▸ (one item per recent entry) | history | | Dynamic; with no entries shows a greyed-out "(No Entries)" |
+| Open ▸ Recently Played ▸ Remove Invalid Entries · Clear Entries | history | | |
+| Open ▸ Recently Played ▸ Record Playback History | history | | Checked |
+| Close | core | F4 | |
+| Reopen Current/Last File | playback | Ctrl+Y | |
+| Copy to Clipboard ▸ File Name · Folder Path · Full Path | playback | | |
 | —— | | | |
-| 播放 ▸ 播放/暂停 | 核心 | Space | |
-| 播放 ▸ 上一个 | 核心 | PgUp、鼠标侧键 X1 | |
-| 播放 ▸ 下一个 | 核心 | PgDn、鼠标侧键 X2 | |
-| 播放 ▸ 跳转 ▸ 上一帧 · 下一帧 | 核心 | D · F | |
-| 播放 ▸ 跳转 ▸ 上一关键帧 · 下一关键帧 | playback | Ctrl+Shift+← · Ctrl+Shift+→ | |
-| 播放 ▸ 跳转 ▸ 后退 5 秒 · 前进 5 秒 | 核心 | ← · → | |
-| 播放 ▸ 跳转 ▸ 后退/前进 30 秒 | playback | Ctrl+← · Ctrl+→ | macOS 上 ⌃←/⌃→ 默认被系统占用，用 ⌘←/⌘→（见冲突检查） |
-| 播放 ▸ 跳转 ▸ 后退/前进 60 秒 | playback | Shift+← · Shift+→ | |
-| 播放 ▸ 跳转 ▸ 后退/前进 300 秒 | playback | Ctrl+Alt+← · Ctrl+Alt+→ | |
-| 播放 ▸ 跳转 ▸ 上一句对白 · 下一句对白 · 当前字幕起点 | subtitles | Home · End · Ctrl+Home | |
-| 播放 ▸ 跳转 ▸ 跳到开头 | playback | Backspace | |
-| 播放 ▸ 跳转 ▸ 时间跨度设置… | playback | | |
-| 播放 ▸ 跳转到… | playback | G | |
-| 播放 ▸ 速度 ▸ 正常 | 核心 | Z | 单选 |
-| 播放 ▸ 速度 ▸ 减速 0.1 · 加速 0.1 | 核心 | X · C | |
-| 播放 ▸ 速度 ▸ 0.5 倍 · 1.5 倍 · 2 倍 | playback | | 单选（与「正常」同组） |
-| 播放 ▸ 速度 ▸ 自定义… | playback | | |
-| 播放 ▸ 播放列表 ▸ 添加文件… · 添加链接… · 添加文件夹… | playlist | | |
-| 播放 ▸ 播放列表 ▸ 循环 ▸ 不循环 · 全部 · 单个 | playlist | | 单选 |
-| 播放 ▸ 播放列表 ▸ 随机 | playlist | | 勾选 |
-| 播放 ▸ 播放列表 ▸ 打开列表文件… · 保存列表… | playlist | | |
-| 播放 ▸ 播放列表 ▸ 打开文件时 ▸ 仅打开该文件 · 加入相似文件 · 加入同文件夹全部文件 | playlist | | 单选 |
-| 播放 ▸ 播放列表 ▸ 快速推进到下一个 · 记住列表 · 移除全部前确认 | playlist | | 勾选 |
-| 播放 ▸ 播放时禁止屏保 | playback | | 勾选 |
-| 播放 ▸ 播放时隐藏鼠标指针 | window | | 勾选，默认开（G-06） |
-| 播放 ▸ 进度条悬停显示时间 | playback | | 勾选 |
-| 播放 ▸ 进度条悬停显示缩略图 | playback | | 勾选；没有 ffmpeg 时禁用 |
-| 播放 ▸ 记忆播放位置 ▸ 不记忆 · 自动继续 · 每次询问 | history | | 单选 |
-| 播放 ▸ 记忆播放位置 ▸ 同时记忆音频文件 | history | | 勾选 |
-| 播放 ▸ 记忆播放位置 ▸ 清除所有记忆点 | history | | |
-| 播放 ▸ 章节/书签 ▸ 章节/书签列表… | marks | H | |
-| 播放 ▸ 章节/书签 ▸ 添加书签 | marks | P | 未打开媒体时禁用 |
-| 播放 ▸ 章节/书签 ▸ 上一书签/章节 · 下一书签/章节 | marks | Shift+PgUp · Shift+PgDn | |
-| 播放 ▸ 章节/书签 ▸ 上一章节 · 下一章节 | marks | Ctrl+PgUp · Ctrl+PgDn | |
-| 播放 ▸ 章节/书签 ▸ （章节各一项） | marks | | 动态，单选（当前章节）；最多 50 项，超出时末尾「更多章节…（共 N 项）」 |
-| 播放 ▸ 章节/书签 ▸ （书签各一项） | marks | | 动态；最多 50 项，超出时末尾「更多书签…（共 N 项）」 |
-| 播放 ▸ 章节/书签 ▸ 在进度条上显示标记 | marks | | 勾选；排在子菜单最后 |
-| 播放 ▸ A-B 区段循环 ▸ 设定起点 · 解除起点 | marks | `[` · `{` | |
-| 播放 ▸ A-B 区段循环 ▸ 起点后退 · 前进 0.1 秒 | marks | Ctrl+[ · Alt+[ | |
-| 播放 ▸ A-B 区段循环 ▸ 设定止点 · 解除止点 | marks | `]` · `}` | |
-| 播放 ▸ A-B 区段循环 ▸ 止点后退 · 前进 0.1 秒 | marks | Ctrl+] · Alt+] | |
-| 播放 ▸ A-B 区段循环 ▸ 区段整体后退 · 前进 0.1 秒 | marks | Ctrl+Alt+[ · Ctrl+Alt+] | |
-| 播放 ▸ A-B 区段循环 ▸ 循环当前章节/书签区段 | marks | Alt+\ | |
-| 播放 ▸ A-B 区段循环 ▸ 区段循环 开/关 | marks | `\` | 勾选 |
-| 播放 ▸ A-B 区段循环 ▸ 循环次数 ▸ 无限 · 1 次 · 2 次 · 3 次 · 5 次 · 10 次 | marks | | 单选 |
-| 字幕 ▸ 显示字幕 | subtitles | Alt+H | 勾选 |
-| 字幕 ▸ 选择字幕轨 ▸ 不显示 · （真实轨名） | subtitles | | 单选；轨名动态 |
-| 字幕 ▸ 选择字幕轨 ▸ 依次切换 | subtitles | Alt+L | |
-| 字幕 ▸ 次字幕 ▸ 不显示 · （真实轨名） | subtitles | | 单选；轨名动态 |
-| 字幕 ▸ 次字幕 ▸ 位置 ▸ 顶部 · 主字幕上方 | subtitles | | 单选 |
-| 字幕 ▸ 字幕样式 ▸ 粗体 | subtitles | Alt+B | 勾选 |
-| 字幕 ▸ 字幕样式 ▸ 字号 + · 字号 − | subtitles | Alt+PgUp · Alt+PgDn | |
-| 字幕 ▸ 字幕样式 ▸ 上移 · 下移 · 复位位置 | subtitles | Alt+↑ · Alt+↓ · Alt+Home | Alt+↑/↓ 与「视频 ▸ 帧位 ▸ 偏移 ↑/↓」重复（见冲突检查） |
-| 字幕 ▸ 字幕样式 ▸ 阴影 · 字幕边框不透明 | subtitles | | 勾选 |
-| 字幕 ▸ 开启 ASS/SSA 原样式 | subtitles | | 勾选 |
-| 字幕 ▸ 同步 ▸ 超前 0.5 秒 · 滞后 0.5 秒 · 复位 | subtitles | `.` · `,` · `/` | |
-| 字幕 ▸ 同步 ▸ 手动调整同步… | subtitles | | |
-| 字幕 ▸ 在线字幕 ▸ 搜索与下载字幕… · 在线字幕设置… | subtitle-online | | |
-| 字幕 ▸ 重载字幕 | subtitles | Ctrl+Alt+Y | |
-| 字幕 ▸ 刷新字幕轨 · 字幕微调… · 字幕设置… | subtitles | | |
+| Playback ▸ Play/Pause | core | Space | |
+| Playback ▸ Previous | core | PgUp, mouse side button X1 | |
+| Playback ▸ Next | core | PgDn, mouse side button X2 | |
+| Playback ▸ Seek ▸ Previous Frame · Next Frame | core | D · F | |
+| Playback ▸ Seek ▸ Previous Keyframe · Next Keyframe | playback | Ctrl+Shift+← · Ctrl+Shift+→ | |
+| Playback ▸ Seek ▸ Back 5 s · Forward 5 s | core | ← · → | |
+| Playback ▸ Seek ▸ Back/Forward 30 s | playback | Ctrl+← · Ctrl+→ | On macOS ⌃←/⌃→ are taken by the system by default; use ⌘←/⌘→ (see Conflict check) |
+| Playback ▸ Seek ▸ Back/Forward 60 s | playback | Shift+← · Shift+→ | |
+| Playback ▸ Seek ▸ Back/Forward 300 s | playback | Ctrl+Alt+← · Ctrl+Alt+→ | |
+| Playback ▸ Seek ▸ Previous Dialogue · Next Dialogue · Current Subtitle Start | subtitles | Home · End · Ctrl+Home | |
+| Playback ▸ Seek ▸ Jump to Start | playback | Backspace | |
+| Playback ▸ Seek ▸ Seek Steps… | playback | | |
+| Playback ▸ Jump to Time… | playback | G | |
+| Playback ▸ Speed ▸ Normal | core | Z | Radio |
+| Playback ▸ Speed ▸ Slower 0.1 · Faster 0.1 | core | X · C | |
+| Playback ▸ Speed ▸ 0.5× · 1.5× · 2× | playback | | Radio (same group as "Normal") |
+| Playback ▸ Speed ▸ Custom… | playback | | |
+| Playback ▸ Playlist ▸ Add Files… · Add Link… · Add Folder… | playlist | | |
+| Playback ▸ Playlist ▸ Repeat ▸ Off · All · One | playlist | | Radio |
+| Playback ▸ Playlist ▸ Shuffle | playlist | | Checked |
+| Playback ▸ Playlist ▸ Open List File… · Save List… | playlist | | |
+| Playback ▸ Playlist ▸ When Opening a File ▸ Open Only That File · Add Similar Files · Add All Files in the Folder | playlist | | Radio |
+| Playback ▸ Playlist ▸ Fast Advance to Next · Remember List · Confirm Before Removing All | playlist | | Checked |
+| Playback ▸ Disable Screen Saver While Playing | playback | | Checked |
+| Playback ▸ Hide Pointer While Playing | window | | Checked, on by default (G-06) |
+| Playback ▸ Show Time on Seek Bar Hover | playback | | Checked |
+| Playback ▸ Show Thumbnail on Seek Bar Hover | playback | | Checked; disabled without ffmpeg |
+| Playback ▸ Resume Playback ▸ Don't Resume · Resume Automatically · Ask Every Time | history | | Radio |
+| Playback ▸ Resume Playback ▸ Also Remember Audio Files | history | | Checked |
+| Playback ▸ Resume Playback ▸ Clear All Saved Positions | history | | |
+| Playback ▸ Chapters and Bookmarks ▸ Chapter and Bookmark List… | marks | H | |
+| Playback ▸ Chapters and Bookmarks ▸ Add Bookmark | marks | P | Disabled when no media is open |
+| Playback ▸ Chapters and Bookmarks ▸ Previous Bookmark or Chapter · Next Bookmark or Chapter | marks | Shift+PgUp · Shift+PgDn | |
+| Playback ▸ Chapters and Bookmarks ▸ Previous Chapter · Next Chapter | marks | Ctrl+PgUp · Ctrl+PgDn | |
+| Playback ▸ Chapters and Bookmarks ▸ (one item per chapter) | marks | | Dynamic, radio (current chapter); at most 50 items, beyond that a final "More Chapters… (N in all)" |
+| Playback ▸ Chapters and Bookmarks ▸ (one item per bookmark) | marks | | Dynamic; at most 50 items, beyond that a final "More Bookmarks… (N in all)" |
+| Playback ▸ Chapters and Bookmarks ▸ Show Marks on Seek Bar | marks | | Checked; last in the submenu |
+| Playback ▸ A-B Loop ▸ Set Start Point · Clear Start Point | marks | `[` · `{` | |
+| Playback ▸ A-B Loop ▸ Start Point Back · Forward 0.1 s | marks | Ctrl+[ · Alt+[ | |
+| Playback ▸ A-B Loop ▸ Set End Point · Clear End Point | marks | `]` · `}` | |
+| Playback ▸ A-B Loop ▸ End Point Back · Forward 0.1 s | marks | Ctrl+] · Alt+] | |
+| Playback ▸ A-B Loop ▸ Move Range Back · Forward 0.1 s | marks | Ctrl+Alt+[ · Ctrl+Alt+] | |
+| Playback ▸ A-B Loop ▸ Loop Current Chapter or Bookmark Range | marks | Alt+\ | |
+| Playback ▸ A-B Loop ▸ A-B Loop On/Off | marks | `\` | Checked |
+| Playback ▸ A-B Loop ▸ Loop Count ▸ Endless · Once · 2 Times · 3 Times · 5 Times · 10 Times | marks | | Radio |
+| Subtitles ▸ Show Subtitles | subtitles | Alt+H | Checked |
+| Subtitles ▸ Subtitle Track ▸ Off · (actual track names) | subtitles | | Radio; track names are dynamic |
+| Subtitles ▸ Subtitle Track ▸ Cycle | subtitles | Alt+L | |
+| Subtitles ▸ Secondary Subtitle ▸ Off · (actual track names) | subtitles | | Radio; track names are dynamic |
+| Subtitles ▸ Secondary Subtitle ▸ Position ▸ Top · Above Main Subtitle | subtitles | | Radio |
+| Subtitles ▸ Subtitle Style ▸ Bold | subtitles | Alt+B | Checked |
+| Subtitles ▸ Subtitle Style ▸ Size + · Size − | subtitles | Alt+PgUp · Alt+PgDn | |
+| Subtitles ▸ Subtitle Style ▸ Move Up · Move Down · Reset Position | subtitles | Alt+↑ · Alt+↓ · Alt+Home | Alt+↑/↓ duplicate "Video ▸ Framing ▸ Pan ↑/↓" (see Conflict check) |
+| Subtitles ▸ Subtitle Style ▸ Shadow · Opaque Box | subtitles | | Checked |
+| Subtitles ▸ Original ASS/SSA Styles | subtitles | | Checked |
+| Subtitles ▸ Sync ▸ Earlier 0.5 s · Later 0.5 s · Reset | subtitles | `.` · `,` · `/` | |
+| Subtitles ▸ Sync ▸ Adjust Sync… | subtitles | | |
+| Subtitles ▸ Online Subtitles ▸ Search and Download Subtitles… · Online Subtitle Settings… | subtitle-online | | |
+| Subtitles ▸ Reload Subtitles | subtitles | Ctrl+Alt+Y | |
+| Subtitles ▸ Refresh Subtitle Tracks · Subtitle Tuning… · Subtitle Settings… | subtitles | | |
 | —— | | | |
-| 视频 ▸ 像素着色 ▸ 使用着色器 | video | Shift+P | 勾选；软件渲染时禁用（「需要 GPU 渲染（当前为软件渲染）」） |
-| 视频 ▸ 像素着色 ▸ 着色器列表… · 打开着色器文件夹 | video | | 软件渲染时也可用 |
-| 视频 ▸ 像素着色 ▸ 重新载入着色器 | video | | 软件渲染时禁用 |
-| 视频 ▸ 像素着色 ▸ HDR 色调映射 ▸ 自动 · 关 · BT.2390 · Hable · Mobius · Reinhard · 裁剪 | video | | 单选；软件渲染时禁用 |
-| 视频 ▸ 像素着色 ▸ HDR 色调映射 ▸ 动态峰值检测 | video | | 勾选；软件渲染时禁用 |
-| 视频 ▸ 像素着色 ▸ HDR 设置… | video | | 软件渲染时禁用 |
-| 视频 ▸ 反交错 ▸ 按序切换 | video | Ctrl+I | |
-| 视频 ▸ 反交错 ▸ 自动 · 总是使用 · 不使用 | video | | 单选 |
-| 视频 ▸ 反交错 ▸ 输出 ▸ 按帧 · 按场（倍帧率） | video | | 单选 |
-| 视频 ▸ 比例 ▸ 保持宽高比 · 不保持宽高比 · 填满窗口（裁去多余） | video | | 单选 |
-| 视频 ▸ 比例 ▸ 依次切换比例 | video | Shift+F6 | |
-| 视频 ▸ 比例 ▸ 默认（按来源） · 4:3 · 16:9 · 16:10 · 1.85:1 · 2.35:1 · 自定义（x:y） | video | | 单选；「自定义」在输入过比例前禁用，输入后标题变为如「自定义（21:9）」 |
-| 视频 ▸ 比例 ▸ 自定义比例… | video | | |
-| 视频 ▸ 裁剪/拉伸 ▸ 不使用 · 按 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1 拉伸 · 按同样 5 种比例裁剪 | video | | 单选 |
-| 视频 ▸ 裁剪/拉伸 ▸ 位置复位 · 左移 · 右移 · 上移 · 下移 | video | | |
-| 视频 ▸ 帧位 ▸ 帧位复位 | video | Numpad5、Alt+Backspace | |
-| 视频 ▸ 帧位 ▸ 全帧 + · 全帧 − | video | Numpad9、Alt+Plus · Numpad1、Alt+- | |
-| 视频 ▸ 帧位 ▸ 偏移 → · ← · ↑ · ↓ | video | Ctrl+Numpad6、Alt+→ · Ctrl+Numpad4、Alt+← · Ctrl+Numpad8、Alt+↑ · Ctrl+Numpad2、Alt+↓ | Alt+↑/↓ 与字幕上移/下移重复（见冲突检查） |
-| 视频 ▸ 帧位 ▸ 帧位居中 | video | Ctrl+Numpad5 | |
-| 视频 ▸ 图像处理 ▸ 上下翻转 · 左右翻转 | video | Ctrl+P · Ctrl+Z | 勾选 |
-| 视频 ▸ 图像处理 ▸ 高斯模糊 · 锐化 · 边缘锐化 | video | Ctrl+B · Ctrl+R · 无 | 勾选 |
-| 视频 ▸ 图像处理 ▸ 去块 · 消色带 · 3D 降噪 · 渐进降噪 · 瞬态降噪 | video | Ctrl+H · 无 · Ctrl+N · 无 · Ctrl+M | 勾选 |
-| 视频 ▸ 图像处理 ▸ 倍帧 | video | | 勾选 |
-| 视频 ▸ 图像处理 ▸ 运动补偿 | video | | 勾选；软件渲染时禁用 |
-| 视频 ▸ 图像旋转 ▸ 按序切换 | video | Alt+K | |
-| 视频 ▸ 图像旋转 ▸ 不旋转 · 90° · 180° · 270° | video | | 单选 |
-| 视频 ▸ 截图 ▸ 保存当前画面 · 当前画面另存为… · 复制当前画面 | capture | Ctrl+E · 无 · Ctrl+C | 没有可截取的画面时禁用 |
-| 视频 ▸ 截图 ▸ 保存实际画面 · 实际画面另存为… · 复制实际画面 | capture | Ctrl+Alt+E · 无 · Ctrl+Alt+C | 同上 |
-| 视频 ▸ 截图 ▸ 连拍… | capture | Ctrl+G | 勾选（连拍窗口打开时） |
-| 视频 ▸ 截图 ▸ 导出片段… · 导出任务… | capture | | |
-| 视频 ▸ 截图 ▸ 截取为 PNG · JPEG · BMP | capture | | 单选 |
-| 视频 ▸ 截图 ▸ 实际画面包含字幕 | capture | | 勾选 |
-| 视频 ▸ 截图 ▸ 截图设置… | capture | | |
-| 视频 ▸ 截图 ▸ 截图文件夹… · 打开截图文件夹 | capture | | |
-| 视频 ▸ 画面调节… | video | | |
-| 视频 ▸ 复位 | video | Q | |
-| 视频 ▸ 亮度 −1% · +1% | video | W · E | |
-| 视频 ▸ 对比度 −1% · +1% | video | R · T | |
-| 视频 ▸ 饱和度 −1% · +1% | video | Y · U | |
-| 视频 ▸ 色调 −1% · +1% | video | I · O | |
+| Video ▸ Pixel Shaders ▸ Use Shaders | video | Shift+P | Checked; disabled with software rendering ("Needs GPU rendering (currently software rendering)") |
+| Video ▸ Pixel Shaders ▸ Shader List… · Open Shader Folder | video | | Also available with software rendering |
+| Video ▸ Pixel Shaders ▸ Reload Shaders | video | | Disabled with software rendering |
+| Video ▸ Pixel Shaders ▸ HDR Tone Mapping ▸ Auto · Off · BT.2390 · Hable · Mobius · Reinhard · Clip | video | | Radio; disabled with software rendering |
+| Video ▸ Pixel Shaders ▸ HDR Tone Mapping ▸ Dynamic Peak Detection | video | | Checked; disabled with software rendering |
+| Video ▸ Pixel Shaders ▸ HDR Settings… | video | | Disabled with software rendering |
+| Video ▸ Deinterlace ▸ Cycle | video | Ctrl+I | |
+| Video ▸ Deinterlace ▸ Auto · Always · Never | video | | Radio |
+| Video ▸ Deinterlace ▸ Output ▸ By Frame · By Field (Double Rate) | video | | Radio |
+| Video ▸ Aspect ▸ Keep Aspect Ratio · Ignore Aspect Ratio · Fill Window (Crop Excess) | video | | Radio |
+| Video ▸ Aspect ▸ Cycle Aspect Ratio | video | Shift+F6 | |
+| Video ▸ Aspect ▸ Default (Source) · 4:3 · 16:9 · 16:10 · 1.85:1 · 2.35:1 · Custom (x:y) | video | | Radio; "Custom" is disabled until a ratio has been entered, after which its title becomes e.g. "Custom (21:9)" |
+| Video ▸ Aspect ▸ Custom Aspect Ratio… | video | | |
+| Video ▸ Crop/Stretch ▸ None · Stretch to 4:3 / 16:9 / 16:10 / 1.85:1 / 2.35:1 · Crop to the same 5 ratios | video | | Radio |
+| Video ▸ Crop/Stretch ▸ Reset Position · Move Left · Move Right · Move Up · Move Down | video | | |
+| Video ▸ Framing ▸ Reset Framing | video | Numpad5, Alt+Backspace | |
+| Video ▸ Framing ▸ Zoom In · Zoom Out | video | Numpad9, Alt+Plus · Numpad1, Alt+- | |
+| Video ▸ Framing ▸ Pan → · ← · ↑ · ↓ | video | Ctrl+Numpad6, Alt+→ · Ctrl+Numpad4, Alt+← · Ctrl+Numpad8, Alt+↑ · Ctrl+Numpad2, Alt+↓ | Alt+↑/↓ duplicate subtitle Move Up/Move Down (see Conflict check) |
+| Video ▸ Framing ▸ Center Frame | video | Ctrl+Numpad5 | |
+| Video ▸ Image Processing ▸ Flip Vertically · Flip Horizontally | video | Ctrl+P · Ctrl+Z | Checked |
+| Video ▸ Image Processing ▸ Gaussian Blur · Sharpen · Edge Sharpen | video | Ctrl+B · Ctrl+R · none | Checked |
+| Video ▸ Image Processing ▸ Deblock · Deband · 3D Denoise · Gradual Denoise · Temporal Denoise | video | Ctrl+H · none · Ctrl+N · none · Ctrl+M | Checked |
+| Video ▸ Image Processing ▸ Frame Doubling | video | | Checked |
+| Video ▸ Image Processing ▸ Motion Interpolation | video | | Checked; disabled with software rendering |
+| Video ▸ Rotation ▸ Cycle | video | Alt+K | |
+| Video ▸ Rotation ▸ No Rotation · 90° · 180° · 270° | video | | Radio |
+| Video ▸ Snapshot ▸ Save Current Frame · Save Current Frame As… · Copy Current Frame | capture | Ctrl+E · none · Ctrl+C | Disabled when there is no frame to capture |
+| Video ▸ Snapshot ▸ Save Rendered Frame · Save Rendered Frame As… · Copy Rendered Frame | capture | Ctrl+Alt+E · none · Ctrl+Alt+C | Same as above |
+| Video ▸ Snapshot ▸ Burst… | capture | Ctrl+G | Checked (while the burst window is open) |
+| Video ▸ Snapshot ▸ Export Clip… · Export Tasks… | capture | | |
+| Video ▸ Snapshot ▸ Capture as PNG · JPEG · BMP | capture | | Radio |
+| Video ▸ Snapshot ▸ Include Subtitles in Rendered Frame | capture | | Checked |
+| Video ▸ Snapshot ▸ Snapshot Settings… | capture | | |
+| Video ▸ Snapshot ▸ Snapshot Folder… · Open Snapshot Folder | capture | | |
+| Video ▸ Picture Adjustments… | video | | |
+| Video ▸ Reset | video | Q | |
+| Video ▸ Brightness −1% · +1% | video | W · E | |
+| Video ▸ Contrast −1% · +1% | video | R · T | |
+| Video ▸ Saturation −1% · +1% | video | Y · U | |
+| Video ▸ Hue −1% · +1% | video | I · O | |
 | —— | | | |
-| 声音 ▸ 音量 + · 音量 − | 核心 | ↑、滚轮上 · ↓、滚轮下 | |
-| 声音 ▸ 静音 | 核心 | M | 勾选 |
-| 声音 ▸ 音频工作台… | audio | | |
-| 声音 ▸ 音轨 ▸ （真实音轨名） | audio | | 单选；动态，无音轨时显示置灰的「没有音轨」（载入中为「正在载入…」） |
-| 声音 ▸ 音轨 ▸ 按序切换 | audio | Alt+A | |
-| 声音 ▸ 音轨 ▸ 立体声 · 左声道 · 右声道 · 单声道混合 · 左右互换 | audio | | 单选 |
-| 声音 ▸ 输出设备 ▸ （输出设备各一项） | audio | | 单选；动态，未连接的设备置灰（「设备未连接」）；没有设备时显示置灰的「没有可用的输出设备」 |
-| 声音 ▸ 均衡器 | audio | Shift+E | 勾选 |
-| 声音 ▸ 预设 ▸ 平直 · 人声 · 音乐 · 影院 | audio | | 单选 |
-| 声音 ▸ 声音同步 ▸ 超前 50 毫秒 · 滞后 50 毫秒 · 复位 | audio | `>` · `<` · `?` | |
-| 声音 ▸ 声音同步 ▸ 不保持 · 本次运行内保持 · 始终保持 | audio | | 单选 |
-| 声音 ▸ 声音处理 ▸ 规格化 · 晶化 | audio | Shift+N · Shift+C | 勾选 |
-| 声音 ▸ 复位 | audio | | |
-| 声音 ▸ 纯音频时显示专辑封面 | visualizer | | 勾选 |
-| 模拟器 ▸ 打开 NES ROM… · 停止 NES · NES 工具… | nes | | |
+| Audio ▸ Volume + · Volume − | core | ↑, wheel up · ↓, wheel down | |
+| Audio ▸ Mute | core | M | Checked |
+| Audio ▸ Audio Workbench… | audio | | |
+| Audio ▸ Audio Track ▸ (actual audio track names) | audio | | Radio; dynamic; with no audio tracks shows a greyed-out "No Audio Tracks" ("Loading…" while loading) |
+| Audio ▸ Audio Track ▸ Cycle | audio | Alt+A | |
+| Audio ▸ Audio Track ▸ Stereo · Left Channel · Right Channel · Mono Mix · Swap Left and Right | audio | | Radio |
+| Audio ▸ Output Device ▸ (one item per output device) | audio | | Radio; dynamic; disconnected devices are greyed out ("Device not connected"); with no devices shows a greyed-out "No Output Devices" |
+| Audio ▸ Equalizer | audio | Shift+E | Checked |
+| Audio ▸ Preset ▸ Flat · Voice · Music · Cinema | audio | | Radio |
+| Audio ▸ Audio Sync ▸ 50 ms Earlier · 50 ms Later · Reset | audio | `>` · `<` · `?` | |
+| Audio ▸ Audio Sync ▸ Don't Keep · Keep for This Run · Always Keep | audio | | Radio |
+| Audio ▸ Processing ▸ Normalize · Crystalizer | audio | Shift+N · Shift+C | Checked |
+| Audio ▸ Reset | audio | | |
+| Audio ▸ Show Album Cover for Audio Only | visualizer | | Checked |
+| Emulator ▸ Open NES ROM… · Stop NES · NES Tools… | nes | | |
 | —— | | | |
-| 全屏 | 宿主 | Enter、F11、双击视频 | 勾选；key `Toggle Fullscreen`（id `fullscreen`）；全屏时 Esc 退出全屏（命令「仅退出全屏」，key `Leave Fullscreen`，不在菜单） |
-| 屏幕 ▸ 画中画 | window | | 勾选；只在主窗口报告支持系统画中画（macOS 14+）时出现（id `pip`，IA-WIN-01）；没有视频时禁用（已在画中画中仍可退出）；迷你尺寸生效时先恢复原尺寸 |
-| 屏幕 ▸ 迷你尺寸 | window | `` ` `` | 勾选；所有系统（id `mini`，IA-WIN-01）；不置顶（IA-WIN-02）；没有视频、全屏时禁用；画中画中执行时先退出画中画 |
-| 屏幕 ▸ 0.5倍 · 1倍 · 1.5倍 · 2倍 | window | 1 · 2 · 3 · 4 | 单选；没有视频时禁用 |
-| 屏幕 ▸ 适应视频比例 | window | 8 | 没有视频时禁用 |
-| 屏幕 ▸ 开始播放时 ▸ 不调整 · 0.5倍 · 1倍 · 1.5倍 · 2倍 · 适应视频比例 | window | | 单选，默认 1倍（G-02） |
-| 屏幕 ▸ 开始播放时 ▸ 只调整一次 | window | | 勾选，默认关（G-02） |
-| 屏幕 ▸ 置顶 ▸ 切换置顶方式 | window | Ctrl+T | 不 → 总是 → 播放时 → 全屏播放时 循环 |
-| 屏幕 ▸ 置顶 ▸ 不置顶 · 总是置顶 · 播放时置顶 · 全屏播放时置顶 | window | | 单选，默认「全屏播放时置顶」（IA-WIN-03） |
+| Fullscreen | host | Enter, F11, double-click video | Checked; key `Toggle Fullscreen` (id `fullscreen`); in fullscreen Esc leaves fullscreen (command "Leave Fullscreen", key `Leave Fullscreen`, not in the menu) |
+| Screen ▸ Picture-in-Picture | window | | Checked; appears only when the main window reports support for the system's picture-in-picture (macOS 14+) (id `pip`, IA-WIN-01); disabled without video (can still be left while in picture-in-picture); if mini size is active, the original size is restored first |
+| Screen ▸ Mini Size | window | `` ` `` | Checked; all systems (id `mini`, IA-WIN-01); not on top (IA-WIN-02); disabled without video and in fullscreen; run in picture-in-picture, it leaves picture-in-picture first |
+| Screen ▸ 0.5× · 1× · 1.5× · 2× | window | 1 · 2 · 3 · 4 | Radio; disabled without video |
+| Screen ▸ Fit to Video Aspect Ratio | window | 8 | Disabled without video |
+| Screen ▸ When Playback Starts ▸ Don't Resize · 0.5× · 1× · 1.5× · 2× · Fit to Video Aspect Ratio | window | | Radio, default 1× (G-02) |
+| Screen ▸ When Playback Starts ▸ Only Once | window | | Checked, off by default (G-02) |
+| Screen ▸ Always on Top ▸ Cycle Mode | window | Ctrl+T | Cycles Never → Always → While Playing → While Playing in Fullscreen |
+| Screen ▸ Always on Top ▸ Never · Always · While Playing · While Playing in Fullscreen | window | | Radio, default "While Playing in Fullscreen" (IA-WIN-03) |
 | —— | | | |
-| 播放列表 | playlist | F6 | 勾选 |
-| 播放信息 | info | Tab | 勾选 |
-| 播放属性… | info | Ctrl+F1 | macOS 上 ⌃F1 是系统保留键，用 ⌘F1（见冲突检查） |
-| 插件工坊… | workshop | | |
-| 插件商城… | store | | `order` 822、`group: "windows"`（2026-10-22 步骤 2.2 决定）；有可更新的插件时标题为「插件商城（N 个可更新）…」。商城不在主菜单的其它入口：把 `.vxp` 拖到视频区安装；「选项 ▸ 插件 ▸ 插件商城」设置页（第三方仓库、自动检查） |
+| Playlist | playlist | F6 | Checked |
+| Playback Info | info | Tab | Checked |
+| Playback Properties… | info | Ctrl+F1 | On macOS ⌃F1 is reserved by the system; use ⌘F1 (see Conflict check) |
+| Vestra Player AI… | workshop | | |
+| Plugin Store… | store | | `order` 822, `group: "windows"` (decided in step 2.2 on 2026-10-22); when plugins have updates, the title is "Plugin Store (N updates)…". The store's other entry points are not in the main menu: drag a `.vxp` onto the video area to install it; the "Options ▸ Plugins ▸ Plugin Store" settings page (third-party repositories, automatic checks) |
 | —— | | | |
-| 设置 ▸ 选项… | preferences | F5 | |
-| 设置 ▸ 快捷键… · 鼠标… | hotkeys | | |
-| 设置 ▸ 忽略默认快捷键 | hotkeys | | 勾选 |
-| 设置 ▸ 插件管理… | plugins | | |
-| 设置 ▸ 外观 ▸ Vestra 深色 · Vestra 浅色 | preferences | | 单选（配色）；`order` 840、841。深色是默认；浅色的视频区仍是深色 |
-| 设置 ▸ 外观 ▸ 空闲时显示徽标 | visualizer | | 勾选 |
-| 设置 ▸ 外观 ▸ 选择徽标图片… · 恢复默认徽标 | visualizer | | 「恢复默认徽标」在使用默认徽标时禁用 |
+| Settings ▸ Options… | preferences | F5 | |
+| Settings ▸ Keyboard Shortcuts… · Mouse… | hotkeys | | |
+| Settings ▸ Ignore Default Shortcuts | hotkeys | | Checked |
+| Settings ▸ Plugin Manager… | plugins | | |
+| Settings ▸ Appearance ▸ Vestra Dark · Vestra Light | preferences | | Radio (palette); `order` 840, 841. Dark is the default; with Light the video area stays dark |
+| Settings ▸ Appearance ▸ Show Logo When Idle | visualizer | | Checked |
+| Settings ▸ Appearance ▸ Choose Logo Image… · Restore Default Logo | visualizer | | "Restore Default Logo" is disabled while the default logo is in use |
 | —— | | | |
-| 关于 Vestra Player… | info | F1 | |
+| About Vestra Player… | info | F1 | |
 | —— | | | |
-| 退出 | 宿主 | Cmd+Q | key `Quit` |
+| Quit | host | Cmd+Q | key `Quit` |
 
-不在菜单里的全局按键：Shift+Tab 简要信息（info）、Esc「仅退出全屏」（宿主，只在全屏时生效，窗口模式下按键照常交给焦点控件）。
+Global keys not in the menu: Shift+Tab brief info (info), Esc "Leave Fullscreen" (host; only in fullscreen; in windowed mode the key goes to the focused control as usual).
 
-### 播放列表获得焦点时
+### When the playlist has focus
 
-以下按键只在播放列表（列表或搜索框）获得焦点时生效（`focus: "panel"`），优先于同键的全局命令；失去焦点后恢复全局含义。它们不进右键主菜单，出现在列表右键菜单、列表底栏按钮与「添加」「排序」按钮的弹出菜单里（面板右键菜单；这两个按钮在 2026-10 视觉身份轮之前是文字按钮 ADD、SORT，现在是图标 ＋、⇅，位置和大小不变）。
+The following keys only work while the playlist (the list or its search box) has focus (`focus: "panel"`), and take precedence over global commands on the same key; once focus leaves, the global meaning returns. They are not in the main context menu; they appear in the list's context menu, in the list's bottom-bar buttons, and in the pop-up menus of the "Add" and "Sort" buttons (panel context menus; before the 2026-10 visual identity round these two buttons were the text buttons ADD and SORT, now they are the icons ＋ and ⇅, with the same position and size).
 
-| 命令 | 快捷键 | 出现在 | 备注 |
+| Command | Shortcut | Appears in | Notes |
 | --- | --- | --- | --- |
-| 播放 | Enter、P | 列表右键菜单 | 遮蔽全局 Enter（全屏）、P（添加书签） |
-| 添加文件… | Ctrl+I | 列表右键菜单、添加 | 遮蔽全局 Ctrl+I（反交错按序切换） |
-| 添加文件夹… | Ctrl+O | 列表右键菜单、添加 | 遮蔽全局 Ctrl+O（打开文件） |
-| 添加链接… | Ctrl+U | 列表右键菜单、添加 | 遮蔽全局 Ctrl+U（打开链接） |
-| 移除所选 | Delete、Backspace | 列表右键菜单 | 遮蔽全局 Backspace（跳到开头） |
-| 移除未选 | Ctrl+Delete | 列表右键菜单 | |
-| 移除无效项 | Ctrl+T | 列表右键菜单 | 遮蔽全局 Ctrl+T（切换置顶方式） |
-| 移除全部 | Alt+Delete | 列表右键菜单 | |
-| 在 Finder 中显示 | Ctrl+F | 列表右键菜单 | 标题在各系统上相同（Windows 上也写「Finder」） |
-| 全选 | Ctrl+A | 列表右键菜单 | |
-| 搜索 | Ctrl+S | 列表右键菜单 | |
-| 打开列表文件… | F3 | 列表右键菜单 | 遮蔽全局 F3（打开文件） |
-| 保存列表… | F2 | 列表右键菜单 | 遮蔽全局 F2（打开文件夹） |
-| 关闭列表 | F6 | 列表右键菜单 | 与全局 F6 同效（隐藏列表） |
-| 置顶 · 上移 · 下移 · 置底 | Ctrl+Home · Ctrl+↑ · Ctrl+↓ · Ctrl+End | 列表底栏按钮 | Ctrl+Home 遮蔽全局（当前字幕起点）；macOS 上 ⌃↑/⌃↓ 默认被系统占用，用 ⌘↑/⌘↓ |
-| 正序 · 反序 | Ctrl+1 · Ctrl+2 | 排序 | 单选 |
-| 按标题 · 文件名 · 扩展名 · 大小 · 时长 · 日期 · 乱序 · 文件夹 | Ctrl+3 … Ctrl+9、Ctrl+0 | 排序 | |
-| 按路径排序 · 倒置当前顺序 | | 排序 | 无快捷键 |
+| Play | Enter, P | List context menu | Shadows global Enter (fullscreen), P (add bookmark) |
+| Add Files… | Ctrl+I | List context menu, Add | Shadows global Ctrl+I (cycle deinterlace) |
+| Add Folder… | Ctrl+O | List context menu, Add | Shadows global Ctrl+O (open file) |
+| Add Link… | Ctrl+U | List context menu, Add | Shadows global Ctrl+U (open URL) |
+| Remove Selected | Delete, Backspace | List context menu | Shadows global Backspace (jump to start) |
+| Remove Unselected | Ctrl+Delete | List context menu | |
+| Remove Invalid Items | Ctrl+T | List context menu | Shadows global Ctrl+T (cycle always-on-top mode) |
+| Remove All | Alt+Delete | List context menu | |
+| Show in Finder | Ctrl+F | List context menu | The title is the same on every system (it also says "Finder" on Windows) |
+| Select All | Ctrl+A | List context menu | |
+| Search | Ctrl+S | List context menu | |
+| Open List File… | F3 | List context menu | Shadows global F3 (open file) |
+| Save List… | F2 | List context menu | Shadows global F2 (open folder) |
+| Close List | F6 | List context menu | Same effect as global F6 (hide the list) |
+| Move to Top · Move Up · Move Down · Move to Bottom | Ctrl+Home · Ctrl+↑ · Ctrl+↓ · Ctrl+End | List bottom-bar buttons | Ctrl+Home shadows the global binding (current subtitle start); on macOS ⌃↑/⌃↓ are taken by the system by default; use ⌘↑/⌘↓ |
+| Ascending · Descending | Ctrl+1 · Ctrl+2 | Sort | Radio |
+| By Title · File Name · Extension · Size · Duration · Date · Random Order · Folder | Ctrl+3 … Ctrl+9, Ctrl+0 | Sort | |
+| Sort by Path · Reverse Current Order | | Sort | No shortcut |
 
-## 英文菜单 key
+## English menu keys
 
-菜单按英文 key 合并（[i18n §5](../architecture/i18n.md#5-声明与菜单)），上表写的是简体中文界面的显示文字。key 的写法（`▸` 分隔、子菜单合并、叶子不登记）和内置插件声明的子菜单 key 清单见 SDK 文档站 [Reference: Commands](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_bindings.html#menu-paths)（[Submenu keys in use](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_bindings.html#submenu-keys-in-use)，由 SDK `BUILTIN_SUBMENUS` 生成）。内置插件新增或改动子菜单 key 时，SDK 的 `BUILTIN_SUBMENUS` 跟着改（`src/tests/sdk/host-agreement.test.ts` 启动全部内置插件核对，不一致即失败）。
+Menus merge by English key ([i18n §5](../architecture/i18n.md#5-declarations-and-menus)); the tables above show the English display text, and the Simplified Chinese interface shows its translations. How keys are written (`▸` separators, submenu merging, leaves not registered) and the list of submenu keys declared by the built-in plugins are on the SDK documentation site, [Reference: Commands](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_bindings.html#menu-paths) ([Submenu keys in use](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_bindings.html#submenu-keys-in-use), generated from the SDK's `BUILTIN_SUBMENUS`). When a built-in plugin adds or changes a submenu key, the SDK's `BUILTIN_SUBMENUS` changes with it (`src/tests/sdk/host-agreement.test.ts` starts all built-in plugins and compares; any mismatch fails).
 
-## 界面形式
+## UI forms
 
-| 插件 | 界面 |
+| Plugin | UI |
 | --- | --- |
-| playback | 底栏（常驻）：来源、进度条（含 marks 的章节/书签标记）、时间、打开/暂停/倍速/静音、音量；内嵌编辑框（跳转、倍速、音量） |
-| playlist | 侧栏（可隐藏）：列表与操作按钮；「添加链接」工具窗口 |
-| video | 工具窗口：画面调节（分页，含 HDR 设置页）、自定义比例、着色器列表 |
-| audio | 工具窗口：音频工作台 |
-| subtitles | 工具窗口：字幕工作台 |
-| capture | 工具窗口：截图与导出 |
-| marks | 工具窗口：章节/书签列表 |
-| info | 视频左上角的只读信息层（Tab、Shift+Tab）；工具窗口：播放属性、关于 Vestra Player |
-| window | 不开窗口，只调整主窗口（尺寸、置顶、指针、画中画）；「选项 ▸ 播放 ▸ 窗口」设置页 |
-| visualizer | 视频区背景层（空闲徽标、纯音频时的专辑封面）；「选项」里的设置页 |
-| preferences | 工具窗口：选项（播放器的设置窗口，本插件提供入口和「外观」页） |
-| hotkeys | 工具窗口：快捷键、鼠标 |
-| plugins | 工具窗口：插件管理 |
-| nes | 工具窗口：NES |
-| youtube、bilibili | 工具窗口：输入链接、播放（YouTube 另有下载） |
-| workshop | 工具窗口：插件工坊；它生成并安装的插件各有自己的窗口 |
-| store | 工具窗口：插件商城（列表 + 详情）；「选项 ▸ 插件 ▸ 插件商城」设置页；视频区接收拖入的 `.vxp`（扩展名 `vxp` 的拖放提供者） |
+| playback | Bottom bar (always present): source, seek bar (including the chapter/bookmark marks from marks), time, open/pause/speed/mute, volume; inline edit boxes (seek, speed, volume) |
+| playlist | Sidebar (can be hidden): list and action buttons; "Add Link" tool window |
+| video | Tool windows: picture adjustments (tabbed, including the HDR settings page), custom aspect ratio, shader list |
+| audio | Tool window: audio workbench |
+| subtitles | Tool window: subtitle workbench |
+| capture | Tool window: snapshots and export |
+| marks | Tool window: chapter/bookmark list |
+| info | Read-only info overlay at the top left of the video (Tab, Shift+Tab); tool windows: playback properties, About Vestra Player |
+| window | No windows of its own, only adjusts the main window (size, always on top, pointer, picture-in-picture); "Options ▸ Playback ▸ Window" settings page |
+| visualizer | Video-area background layer (idle logo, album cover for audio only); settings page in "Options" |
+| preferences | Tool window: Options (the player's settings window; this plugin provides the entry and the "Appearance" page) |
+| hotkeys | Tool windows: keyboard shortcuts, mouse |
+| plugins | Tool window: plugin manager |
+| nes | Tool window: NES |
+| youtube, bilibili | Tool windows: enter a link, play (YouTube also has download) |
+| workshop | Tool window: Plugin Workshop; each plugin it generates and installs has its own window |
+| store | Tool window: Plugin Store (list + details); "Options ▸ Plugins ▸ Plugin Store" settings page; the video area accepts dropped `.vxp` files (a drop provider for the `vxp` extension) |
 
-工具窗口的显示、隐藏、关闭不影响该插件已经生效的效果；关闭工具不等于撤销处理，也不替换底栏。
+Showing, hiding or closing a tool window does not affect effects the plugin has already applied; closing a tool does not undo processing and does not replace the bottom bar.
 
-## 冲突检查
+## Conflict check
 
-2026-10-21 对上表全部默认绑定（19 个插件、14 条核心动作、宿主的全屏/仅退出全屏/退出）按作用域逐键检查，macOS 上把 `Cmd+X` 与 `Ctrl+X` 视为同一键（`CTRL_ACCEPTS_CMD`）。
+On 2026-10-21 every default binding in the tables above (19 plugins, 14 core actions, the host's Fullscreen/Leave Fullscreen/Quit) was checked key by key per scope, treating `Cmd+X` and `Ctrl+X` as the same key on macOS (`CTRL_ACCEPTS_CMD`).
 
-- **全局作用域：一处冲突。** `Alt+↑`、`Alt+↓` 同时是「视频 ▸ 帧位 ▸ 偏移 ↑/↓」（video，第 4a 轮的备用键）和「字幕 ▸ 字幕样式 ▸ 上移/下移」（subtitles）的默认绑定。宿主按插件加载先后（owner 代次小者）取胜，另一方被忽略并打印 `binding conflict`；Ctrl+Numpad8/2（帧位）不受影响。[功能需求](feature-requirements.md)「帧位」一节第 4a 轮的冲突检查只核对了 playback 的方向键，漏了 subtitles。需要改其中一方的默认键（待裁决）。
-- 宿主唯一的 ⌘ 绑定是 Cmd+Q（退出），没有命令声明 Ctrl+Q；其余 Ctrl 绑定与它不重复。
-- 窗口标准关闭键（macOS ⌘W；Windows Ctrl+W、Ctrl+F4；Linux Ctrl+W；只在工具窗口、浮动面板、选项窗口，不进绑定表，见 [Keys the system takes first](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_bindings.html#keys-the-system-takes-first)）：2026-10-22 核对，没有默认绑定用 Ctrl+W、Cmd+W、Ctrl+F4（F4 是「停止」，不带修饰键，不冲突）。
-- 面板焦点作用域（播放列表）：无冲突。
-- 跨作用域遮蔽（按设计，不算冲突）：列表获得焦点时 Enter、P、Ctrl+I、Ctrl+O、Ctrl+U、Backspace、Ctrl+T、Ctrl+Home、F3、F2、F6 用列表自己的含义，见上节备注。
-- `>` `<` `?` 是按出的字符，与 `.` `,` `/` 是不同的键名（美式键盘上前者需要 Shift），互不冲突；`{` `}` 与 `[` `]` 同理。
-- Ctrl+I / Tab、Ctrl+H / Backspace、Ctrl+M / Enter、Ctrl+[ / Esc 在终端意义上是同一控制字符，宿主按物理键区分（`bindings.rs`），互不冲突。
+- **Global scope: one conflict.** `Alt+↑` and `Alt+↓` are default bindings of both "Video ▸ Framing ▸ Pan ↑/↓" (video, the alternate keys from round 4a) and "Subtitles ▸ Subtitle Style ▸ Move Up/Move Down" (subtitles). The host lets the plugin loaded first (the owner with the smaller generation) win; the other is ignored and `binding conflict` is printed; Ctrl+Numpad8/2 (framing) are not affected. The round 4a conflict check in the "Framing" section of [feature requirements](feature-requirements.md) only checked playback's arrow keys and missed subtitles. One side's default keys need to change (awaiting a ruling).
+- The host's only ⌘ binding is Cmd+Q (quit); no command declares Ctrl+Q; no other Ctrl binding duplicates it.
+- Standard window close keys (macOS ⌘W; Windows Ctrl+W, Ctrl+F4; Linux Ctrl+W; only in tool windows, floating panels and the options window, not in the binding table, see [Keys the system takes first](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_bindings.html#keys-the-system-takes-first)): checked on 2026-10-22, no default binding uses Ctrl+W, Cmd+W or Ctrl+F4 (F4 is "Stop", without a modifier, so no conflict).
+- Panel focus scope (playlist): no conflicts.
+- Cross-scope shadowing (by design, not a conflict): while the list has focus, Enter, P, Ctrl+I, Ctrl+O, Ctrl+U, Backspace, Ctrl+T, Ctrl+Home, F3, F2 and F6 have the list's own meaning; see the notes in the previous section.
+- `>` `<` `?` are typed characters and are different key names from `.` `,` `/` (on a US keyboard the former need Shift), so they do not conflict; the same goes for `{` `}` and `[` `]`.
+- Ctrl+I / Tab, Ctrl+H / Backspace, Ctrl+M / Enter and Ctrl+[ / Esc are the same control character in terminal terms; the host tells them apart by physical key (`bindings.rs`), so they do not conflict.
 
-系统保留键（不是本表内的重复，但按下时可能先被系统接走；各系统的完整清单见 SDK 文档站 [Keys the system takes first](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_bindings.html#keys-the-system-takes-first)，下面只记本表受影响的绑定）：
+System-reserved keys (not duplicates within this table, but the system may take them first when pressed; the full list per system is on the SDK documentation site, [Keys the system takes first](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_bindings.html#keys-the-system-takes-first); only the bindings in this table that are affected are listed below):
 
-- macOS ⌃F1–⌃F8 是系统键盘导航键。本表只用到 **Ctrl+F1（播放属性…）**：⌃F1 默认是「打开/关闭键盘访问」，按 ⌘F1 才能可靠触发。⌃F2–⌃F8 未使用。
-- macOS ⌃← / ⌃→（切换桌面空间）、⌃↑ / ⌃↓（调度中心、应用程序窗口）默认被系统占用：影响「后退/前进 30 秒」（Ctrl+←/→，全局）与列表的「上移/下移」（Ctrl+↑/↓，面板）。⌘ 版本可用。
-- macOS ⌘H（隐藏）、⌘M（最小化）：去块（Ctrl+H）、瞬态降噪（Ctrl+M）的 ⌘ 版本若被系统先接走，只有 ⌃H、⌃M 生效（第 4a 轮已接受的取舍）。
-- macOS F11 默认是「显示桌面」，Apple 键盘上 F1–F12 默认是媒体键（需 fn）：全屏另有 Enter、双击；F1–F6 的命令在这类键盘上需要按 fn。
-- Windows：部分显卡驱动把 Ctrl+Alt+方向键用作屏幕旋转，可能拦截「后退/前进 300 秒」（Ctrl+Alt+←/→）。其它绑定没有用到 Windows 保留组合（Alt+Tab、Alt+F4、Alt+Space、Ctrl+Esc、Win 键组合）。
+- macOS ⌃F1–⌃F8 are system keyboard-navigation keys. This table only uses **Ctrl+F1 (Playback Properties…)**: ⌃F1 is "Turn keyboard access on or off" by default, so only ⌘F1 triggers it reliably. ⌃F2–⌃F8 are unused.
+- macOS ⌃← / ⌃→ (switch Spaces) and ⌃↑ / ⌃↓ (Mission Control, application windows) are taken by the system by default: this affects "Back/Forward 30 s" (Ctrl+←/→, global) and the list's "Move Up/Move Down" (Ctrl+↑/↓, panel). The ⌘ versions work.
+- macOS ⌘H (hide) and ⌘M (minimise): if the system takes the ⌘ versions of Deblock (Ctrl+H) and Temporal Denoise (Ctrl+M) first, only ⌃H and ⌃M work (a trade-off accepted in round 4a).
+- On macOS F11 is "Show Desktop" by default, and on Apple keyboards F1–F12 are media keys by default (fn needed): fullscreen also has Enter and double-click; the commands on F1–F6 need fn on such keyboards.
+- Windows: some graphics drivers use Ctrl+Alt+arrow keys for screen rotation and may intercept "Back/Forward 300 s" (Ctrl+Alt+←/→). No other binding uses a Windows reserved combination (Alt+Tab, Alt+F4, Alt+Space, Ctrl+Esc, Win key combinations).

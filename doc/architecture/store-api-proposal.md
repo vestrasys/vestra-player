@@ -1,59 +1,59 @@
-# S4 核心 API 变更提案：安装实例、来源、内置保护、manifest 字段、Markdown 组件
+# S4 core API change proposal: install instances, sources, built-in protection, manifest fields, Markdown component
 
-日期：2026-10-21。作者：API 维护者。状态：**已确认（2026-10-21）**，见文末「协调者确认」。
-依据：[生态计划](../product/ecosystem-plan.md) 第 1 章（1.2、1.3、1.4、1.5a、1.6）与第 4 章 S4；[工作流](../process/community-workflow.md) §1、§1.5、§1.6、§4.3。
+Date: 2026-10-21. Author: API maintainer. Status: **confirmed (2026-10-21)**, see "Coordinator confirmation" at the end.
+Based on: [Ecosystem plan](../product/ecosystem-plan.md) chapter 1 (1.2, 1.3, 1.4, 1.5a, 1.6) and chapter 4 S4; [Workflow](../process/community-workflow.md) §1, §1.5, §1.6, §4.3.
 
-## 0. 结论
+## 0. Conclusion
 
-| # | 改动 | 位置 | 对插件 API |
+| # | Change | Location | Effect on the plugin API |
 | --- | --- | --- | --- |
-| 1 | 安装登记并入现有 `packages/catalog.json`：每个 id 的当前安装带一个**安装实例**（GUID、来源、内置标记、启用、安装时间）；被替换或卸载（保留数据）的实例转为「休眠」，换回同一来源时接上 | 宿主 | 无变化（插件仍从 `VESTRA_PLUGIN_DATA_DIR` 取目录） |
-| 2 | 数据目录 `plugin-data/<id>/` → `plugin-data/<GUID>/`；开发加载 `plugin-data/development/<id>/`；`secrets` 也按 GUID 隔离 | 宿主 | **文档契约变化一处**：§3.4「`<数据根>/<id>` 推出别的插件的数据目录」作废，改用新字段 `PluginInfo.dataDirectory`（§7.3） |
-| 3 | `packages` 新增：`validateArchive(file)`（`.vxp`）、`install({ source, replace })`、`PluginInfo` 加 `builtin`、`source`、`dataDirectory` | 宿主 + SDK | 只新增 |
-| 4 | 内置插件按**来源**识别（随安装包播种），`uninstall` → `unsupported`，跨来源替换 → `unsupported`；停用、回退照常 | 宿主 | 只新增错误情形 |
-| 5 | manifest 新增可选显示字段与 `minPlayerVersion`，宿主与 CLI 用同一张规则表校验；未知字段**继续拒绝** | 宿主 + SDK CLI | 只新增 |
-| 6 | 核心 Markdown 组件：`@vestra/markdown.slint` 的 `MarkdownView` + `plugin.ui.markdown()` 生成的属性值；宿主用 pulldown-cmark 解析，远程图片由 SDK 在插件进程里下载缓存 | 宿主 + SDK + 控件库 | 只新增，无新能力 |
-| 7 | SDK 1.1.0：类型、TestHost、CLI（新字段校验、无前缀 id 提示、build 带上 icon/README、`pack` 产出 `.vxp`） | SDK 仓库 | 只新增；`pack` 文件扩展名变化（非插件 API） |
-| 8 | 打包：`Resources/plugins/` 放内置 `.vxp` 与 `builtin.json`，宿主启动时播种 | 宿主 + `src/scripts/` | 无 |
+| 1 | The install registry is merged into the existing `packages/catalog.json`: the current install of each id carries an **install instance** (GUID, source, built-in flag, enabled, install time); an instance that is replaced or uninstalled (keeping data) becomes "dormant" and is reattached when the same source is installed again | Host | No change (plugins still get their directory from `VESTRA_PLUGIN_DATA_DIR`) |
+| 2 | Data directory `plugin-data/<id>/` → `plugin-data/<GUID>/`; development loading uses `plugin-data/development/<id>/`; `secrets` is also isolated per GUID | Host | **One documented contract changes**: §3.4 "derive another plugin's data directory from `<data root>/<id>`" is withdrawn and replaced by the new field `PluginInfo.dataDirectory` (§7.3) |
+| 3 | New in `packages`: `validateArchive(file)` (`.vxp`), `install({ source, replace })`, `PluginInfo` gains `builtin`, `source`, `dataDirectory` | Host + SDK | Additions only |
+| 4 | Built-in plugins are identified by **source** (seeded from the installer); `uninstall` → `unsupported`, replacement from another source → `unsupported`; disable and rollback work as usual | Host | Only new error cases |
+| 5 | Manifest gains optional display fields and `minPlayerVersion`; host and CLI validate with the same rule table; unknown fields are **still rejected** | Host + SDK CLI | Additions only |
+| 6 | Core Markdown component: `MarkdownView` in `@vestra/markdown.slint` + the property value produced by `plugin.ui.markdown()`; the host parses with pulldown-cmark, remote images are downloaded and cached by the SDK in the plugin process | Host + SDK + widget library | Additions only, no new capability |
+| 7 | SDK 1.1.0: types, TestHost, CLI (validation of new fields, hint for ids without a prefix, build includes icon/README, `pack` produces `.vxp`) | SDK repository | Additions only; the `pack` file extension changes (not plugin API) |
+| 8 | Packaging: `Resources/plugins/` holds the built-in `.vxp` files and `builtin.json`; the host seeds them at startup | Host + `src/scripts/` | None |
 
-不进核心：下载 `index.json`、签名校验、更新检查、撤回处理、仓库管理、权限展示——都在商城插件（S5）。
+Not in core: downloading `index.json`, signature verification, update checks, withdrawal handling, repository management, permission display. All of these live in the store plugin (S5).
 
 ---
 
-## 1. 安装实例 GUID 与安装登记（1.5a）
+## 1. Install instance GUID and install registry (1.5a)
 
-### 1.1 现状
+### 1.1 Current state
 
-| 代码 | 现在按什么 | 问题 |
+| Code | Keyed by | Problem |
 | --- | --- | --- |
-| `package_store.rs` `Catalog.installed: BTreeMap<id, Installed>`、`disabled: BTreeSet<id>` | id | 没有来源、没有实例；停用集合单独存 |
-| `plugins.rs` `load_manifest`：`data_root().join(&manifest.id)` | id | 同 id 的两个插件共用数据目录 |
-| `package_manager.rs` `uninstall`：`plugins::data_root().join(&id)` | id | 同上 |
-| `system.rs` `secrets.*`：keychain service = manifest id | id | 替换后的同 id 插件能读到前一个插件的密钥 |
-| `main.rs` `load`（`--plugin`）：数据目录同样是 `<id>` | id | 开发加载与已安装的同 id 插件共用数据 |
+| `package_store.rs` `Catalog.installed: BTreeMap<id, Installed>`, `disabled: BTreeSet<id>` | id | No source, no instance; the disabled set is stored separately |
+| `plugins.rs` `load_manifest`: `data_root().join(&manifest.id)` | id | Two plugins with the same id share a data directory |
+| `package_manager.rs` `uninstall`: `plugins::data_root().join(&id)` | id | Same as above |
+| `system.rs` `secrets.*`: keychain service = manifest id | id | A replacement plugin with the same id can read the previous plugin's secrets |
+| `main.rs` `load` (`--plugin`): data directory is also `<id>` | id | A development load shares data with the installed plugin of the same id |
 
-### 1.2 登记的位置与格式
+### 1.2 Registry location and format
 
-**不另建文件**，扩展现有的 `<app_data_dir>/packages/catalog.json`（`VESTRA_PACKAGE_STORE` 可改根目录）。理由：实例必须和安装、回退、恢复在**同一次原子替换**里变化（`Store::publish` 已是单写者 + 临时文件改名）；另开一个文件就要处理两份文件不一致。
+**No new file**; extend the existing `<app_data_dir>/packages/catalog.json` (`VESTRA_PACKAGE_STORE` can change the root). Reason: the instance must change in the **same atomic replacement** as install, rollback and recovery (`Store::publish` is already single-writer + temp-file rename); a separate file would mean handling two files that disagree.
 
 ```jsonc
 {
   "installed": {
     "vestra.subtitles": {
       "revision": 3,
-      "instance": {                          // 新增：当前安装实例
+      "instance": {                          // new: the current install instance
         "guid": "3f0c8a8e-5b7e-4c1f-9d0a-2b6f1c7e9a41",
-        "source": { "kind": "bundled" },     // 修订后内置插件的来源（文末）
+        "source": { "kind": "bundled" },     // source of built-in plugins after the revision (end of document)
         "builtin": true,
-        "enabled": true,                     // 取代原 disabled 集合
-        "installedAt": 1792540800000,        // 该实例首次安装，Unix 毫秒
-        "seededVersion": "1.2.0"             // 仅内置：上次随安装包播种的版本（§3.3）
+        "enabled": true,                     // replaces the old disabled set
+        "installedAt": 1792540800000,        // first install of this instance, Unix milliseconds
+        "seededVersion": "1.2.0"             // built-in only: version last seeded from the installer (§3.3)
       },
       "current": { "digest": "…", "manifest": { … }, "directory": "…/packages/<digest>" },
-      "previous": { … }                      // 同一实例内的上一版本，回退用
+      "previous": { … }                      // previous version within the same instance, for rollback
     }
   },
-  "dormant": {                               // 新增：休眠实例（只剩数据）
+  "dormant": {                               // new: dormant instances (only data remains)
     "9b1d…": { "id": "someone.viz", "source": { "kind": "link", "url": "…" },
                "version": "0.3.0", "installedAt": …, "retiredAt": … }
   },
@@ -61,509 +61,509 @@
 }
 ```
 
-| 字段 | 说明 |
+| Field | Description |
 | --- | --- |
-| `guid` | 宿主生成的 UUID v4，小写带连字符。全新安装时生成；升级、回退沿用 |
-| `id`、版本 | 分别是 `installed` 的键与 `current.manifest.version`，不重复存 |
-| `source` | §2.3 的 `PackageSource`；内置插件的来源是 `bundled`（初稿为官方仓库地址，已按文末「协调者修订」改） |
-| `builtin` | 由宿主播种时写入，插件无法设置 |
-| `enabled` | `setEnabled` 写这里；原 `disabled` 集合删除（读到旧 catalog 时按集合换算一次） |
-| `installedAt` | 实例首次安装时间 |
+| `guid` | UUID v4 generated by the host, lowercase with hyphens. Generated on a fresh install; kept on upgrade and rollback |
+| `id`, version | These are the key of `installed` and `current.manifest.version`; not stored twice |
+| `source` | The `PackageSource` of §2.3; the source of built-in plugins is `bundled` (the first draft used the official repository address; changed per "Coordinator revision" at the end) |
+| `builtin` | Written by the host when seeding; plugins cannot set it |
+| `enabled` | Written by `setEnabled`; the old `disabled` set is removed (an old catalog is converted from the set once on read) |
+| `installedAt` | Time of the instance's first install |
 
-上限：`dormant` 至多 256 条；满了以后新的替换/卸载照常进行，只是**不再保留可接上的登记**（数据目录仍留在磁盘，不自动删除用户数据），并在宿主日志里记一行。
+Limit: `dormant` holds at most 256 entries; once full, new replacements/uninstalls still proceed, but **no reattachable registry entry is kept** (the data directory stays on disk; user data is not deleted automatically), and one line is written to the host log.
 
-未发版，不迁移：旧 catalog 里没有 `instance` 的条目，打开时补一个新 GUID（数据目录为空），旧的 `plugin-data/<id>/` 不动也不读。
+Not released, no migration: entries in an old catalog without `instance` get a new GUID when opened (empty data directory); the old `plugin-data/<id>/` is neither touched nor read.
 
-### 1.3 规则
+### 1.3 Rules
 
-| 情形 | 行为 |
+| Case | Behavior |
 | --- | --- |
-| 全新安装 id | 新 GUID，空数据目录 |
-| 同 id、**同来源**（§2.3 的来源标识相同） | 升级：沿用 GUID、数据、`enabled`、`builtin` |
-| 同 id、**不同来源** | 未带 `replace: true` → `conflict`；带了 → 替换：当前实例转休眠（包文件回收，数据保留），新实例拿新 GUID 与空目录 |
-| 替换时，新来源恰好对应同 id 的一个休眠实例 | 「换回」：复用那个 GUID 与数据，休眠记录删除 |
-| 替换的目标是内置插件 | `unsupported`（内置不可替换），`replace` 也不行 |
-| 替换激活失败、取消、播放器中途退出 | 现有恢复流程把 `Installed`（含 `instance`）整体还原；新实例这次创建的数据目录删除 |
-| `rollback` | 只在同一实例内（`previous`），GUID 不变。替换后的新实例没有 `previous` |
-| `uninstall`，不带 `removeData` | 当前实例转休眠，同来源重新安装时接上数据（等于今天「卸载保留数据、重装恢复」的行为） |
-| `uninstall({ removeData: true })` | 删除该实例的登记与数据目录（进程退出后），休眠记录也不留 |
-| 同时运行 | 同一 id 只运行一个：`load_package` 现有的 `plugin already running` 检查不变 |
+| Fresh install of an id | New GUID, empty data directory |
+| Same id, **same source** (same source identity per §2.3) | Upgrade: keeps GUID, data, `enabled`, `builtin` |
+| Same id, **different source** | Without `replace: true` → `conflict`; with it → replace: the current instance becomes dormant (package files reclaimed, data kept), the new instance gets a new GUID and an empty directory |
+| On replacement, the new source matches a dormant instance of the same id | "Switch back": reuse that GUID and data, delete the dormant record |
+| The replacement target is a built-in plugin | `unsupported` (built-ins cannot be replaced), not even with `replace` |
+| Replacement activation fails, is cancelled, or the player exits midway | The existing recovery flow restores `Installed` (including `instance`) as a whole; the data directory created for the new instance this time is deleted |
+| `rollback` | Only within the same instance (`previous`); the GUID does not change. A new instance after replacement has no `previous` |
+| `uninstall` without `removeData` | The current instance becomes dormant; reinstalling from the same source reattaches the data (equal to today's "uninstall keeps data, reinstall restores it" behavior) |
+| `uninstall({ removeData: true })` | Deletes the instance's registry entry and data directory (after the process exits); no dormant record is kept |
+| Running at the same time | Only one plugin per id runs: the existing `plugin already running` check in `load_package` is unchanged |
 
-### 1.4 目录与密钥
+### 1.4 Directories and secrets
 
-| 对象 | 现在 | 改为 |
+| Object | Now | Changed to |
 | --- | --- | --- |
-| 已安装插件数据目录 | `plugin-data/<id>/` | `plugin-data/<GUID>/` |
-| 开发加载（`--plugin`） | `plugin-data/<id>/` | `plugin-data/development/<id>/`（与已安装的同 id 插件互不影响） |
-| 试载 | `plugin-data/<id>.trial.<owner>/`，停止时删除 | 不变 |
-| `secrets` 的 keychain service | `<id>` | 已安装：`vestra.plugin.<GUID>`；开发加载：`vestra.dev.<id>`；试载：不变（service 是试载自己的 id `<id>.trial.<owner>`，本来就与正式安装分开）。`removeData: true` 卸载时一并删除该 service 下的条目（做不到的平台返回 `unsupported` 不阻塞卸载，见 §9.3 待验） |
-| 界面偏好（侧栏、浮动窗口位置、绑定覆盖层、选项窗口页） | `<id>` | **不变**：它们是用户对该 id 界面的偏好，不是插件私有数据，换实例后沿用合理 |
+| Installed plugin data directory | `plugin-data/<id>/` | `plugin-data/<GUID>/` |
+| Development load (`--plugin`) | `plugin-data/<id>/` | `plugin-data/development/<id>/` (independent of the installed plugin of the same id) |
+| Trial | `plugin-data/<id>.trial.<owner>/`, deleted on stop | Unchanged |
+| `secrets` keychain service | `<id>` | Installed: `vestra.plugin.<GUID>`; development load: `vestra.dev.<id>`; trial: unchanged (the service is the trial's own id `<id>.trial.<owner>`, already separate from the real install). Uninstalling with `removeData: true` also deletes the entries under that service (platforms that cannot do this return `unsupported` without blocking the uninstall; see §9.3, to be verified) |
+| UI preferences (sidebar, floating window positions, binding overlay, options window page) | `<id>` | **Unchanged**: these are the user's preferences for that id's UI, not plugin private data; keeping them across instances is reasonable |
 
-`VESTRA_PLUGIN_DATA_DIR` 仍是插件拿目录的唯一途径，插件代码不变。
+`VESTRA_PLUGIN_DATA_DIR` remains the only way a plugin gets its directory; plugin code does not change.
 
-### 1.5 代码改动
+### 1.5 Code changes
 
-| 文件 | 改动 |
+| File | Change |
 | --- | --- |
-| `package_store.rs` | `Installed` 加 `instance: Instance`；`Catalog` 加 `dormant`，删 `disabled`（旧字段读入时换算）；`prepare_with_receipt` 接收目标实例（升级沿用 / 新建 / 换回）；`commit` 时写入；`uninstall(id, keep_data)` 转休眠或删除；`set_enabled` 改写 `instance.enabled`；`validate_catalog` 校验 GUID 格式、`dormant` 上限、同一 GUID 不同时出现在 `installed` 与 `dormant` |
-| `package_manager.rs` | `packages.install` 读 `source`、`replace`，按 §1.3 决定实例并在冲突时返回 `conflict`；`uninstall` 拒绝内置；`load_package` 把实例传给 `Plugin::load_manifest`；`package_list` 输出 `builtin`、`source`、`dataDirectory`；数据删除路径改为 GUID 目录 |
-| `plugins.rs` | `load_manifest` 新参数 `data_key: DataKey`（`Instance(guid)` / `Development(id)` / `Trial(owner)`），据此建目录；`Plugin` 记住 `data_key` 供 `secrets` 用 |
-| `main.rs` `load` | 开发加载用 `DataKey::Development` |
-| `system.rs` | `secrets.*` 的 service 取自 `data_key` |
-| `Cargo.toml` | `uuid = { version = "=1.x", default-features = false, features = ["v4"] }`（已在依赖树里，MIT/Apache-2.0） |
+| `package_store.rs` | `Installed` gains `instance: Instance`; `Catalog` gains `dormant` and drops `disabled` (the old field is converted on read); `prepare_with_receipt` takes the target instance (keep on upgrade / new / switch back); written at `commit`; `uninstall(id, keep_data)` makes it dormant or deletes it; `set_enabled` writes `instance.enabled`; `validate_catalog` checks GUID format, the `dormant` limit, and that the same GUID does not appear in both `installed` and `dormant` |
+| `package_manager.rs` | `packages.install` reads `source`, `replace`, decides the instance per §1.3 and returns `conflict` on conflict; `uninstall` rejects built-ins; `load_package` passes the instance to `Plugin::load_manifest`; `package_list` outputs `builtin`, `source`, `dataDirectory`; the data deletion path becomes the GUID directory |
+| `plugins.rs` | `load_manifest` gets a new parameter `data_key: DataKey` (`Instance(guid)` / `Development(id)` / `Trial(owner)`) and builds the directory from it; `Plugin` remembers `data_key` for `secrets` |
+| `main.rs` `load` | Development loading uses `DataKey::Development` |
+| `system.rs` | The `secrets.*` service is taken from `data_key` |
+| `Cargo.toml` | `uuid = { version = "=1.x", default-features = false, features = ["v4"] }` (already in the dependency tree, MIT/Apache-2.0) |
 
 ---
 
-## 2. `packages` 接口新增（`plugins.manage`）
+## 2. Additions to the `packages` interface (`plugins.manage`)
 
-### 2.1 现有接口（不变）
+### 2.1 Existing interface (unchanged)
 
-`validate(directory)`、`rollback(id)`、`list()`、`onChange()`、`setEnabled(id, enabled)`、`uninstall(id, { removeData })`；`PackageCandidate.trial()`、`install()`。调用方：插件仓库中的 `plugins/plugins/`（`list`、`onChange`、`setEnabled`、`rollback`、`uninstall`）、`plugins/workshop/`（`validate`、`trial`、`install`、`rollback`）。
+`validate(directory)`, `rollback(id)`, `list()`, `onChange()`, `setEnabled(id, enabled)`, `uninstall(id, { removeData })`; `PackageCandidate.trial()`, `install()`. Callers: `plugins/plugins/` in the plugin repository (`list`, `onChange`, `setEnabled`, `rollback`, `uninstall`), `plugins/workshop/` (`validate`, `trial`, `install`, `rollback`).
 
-### 2.2 新增签名
+### 2.2 New signatures
 
 ```ts
 interface Packages {
-  // 新增：从 .vxp 文件（zip）校验。返回与 validate 相同的 PackageCandidate
+  // New: validate from a .vxp file (zip). Returns the same PackageCandidate as validate
   validateArchive(file: string): Promise<PackageCandidate>;
 }
 interface PackageCandidate {
-  // 原 install() 增加可选参数；不带参数时与现在相同（来源为 { kind: "file" }）
+  // The existing install() gains an optional parameter; without it, same as today (source is { kind: "file" })
   install(options?: { source?: PackageSource; replace?: boolean }): Promise<PackageChange>;
 }
 type PackageSource =
-  | { kind: "repository"; url: string }   // index.json 的完整地址（商城规范化后传入）
-  | { kind: "link"; url: string }         // 插件包链接
-  | { kind: "file" }                      // 拖入或选择的本地包、目录
-  | { kind: "workshop" };                 // 插件工坊生成
+  | { kind: "repository"; url: string }   // full address of index.json (normalized by the store before passing)
+  | { kind: "link"; url: string }         // plugin package link
+  | { kind: "file" }                      // local package or directory dropped in or chosen
+  | { kind: "workshop" };                 // generated by the plugin workshop
 interface PluginInfo {
-  // 现有字段不变，新增：
-  builtin: boolean;                  // 随播放器安装：可停用，不可卸载、不可被其它来源替换
-  source: PackageSource | null;      // origin 为 "installed" 时有；开发加载、试载为 null
-  dataDirectory: string | null;      // 它的数据目录；播放器没能提供时 null
+  // existing fields unchanged; new:
+  builtin: boolean;                  // installed with the player: can be disabled, cannot be uninstalled or replaced from another source
+  source: PackageSource | null;      // present when origin is "installed"; null for development loads and trials
+  dataDirectory: string | null;      // its data directory; null when the player could not provide one
 }
 interface PackageManifest {
-  // 现有字段不变，新增可选：name、author、punchline、description、tags、icon、
-  // readme、changelog、sourceUrl、license、minPlayerVersion（§4）
+  // existing fields unchanged; new optional: name, author, punchline, description, tags, icon,
+  // readme, changelog, sourceUrl, license, minPlayerVersion (§4)
 }
 ```
 
-- `validateArchive`：宿主解压到临时目录后走 `Candidate::capture`，检查与 `validate` 完全相同（manifest、digest、`node --check`、Slint 编译）。`.vxp` 的 sha256 由调用方（商城）在调用前自己核对，宿主不知道期望值。
-- `install` 的 `source` 进 wire 的 `packages.install` 参数，所以也进入请求指纹：同一 `requestId` 换了来源会以 `conflict` 拒绝（现有去重规则）。
-- `PluginInfo.origin` **不加新值**（内置仍是 `"installed"`，用 `builtin` 区分）：给输出类型的联合加成员，会让作者写的穷举 `switch` 编译失败，属于隐性破坏。
+- `validateArchive`: the host extracts to a temporary directory and goes through `Candidate::capture`; the checks are exactly the same as `validate` (manifest, digest, `node --check`, Slint compilation). The caller (the store) checks the `.vxp` sha256 itself before calling; the host does not know the expected value.
+- The `source` of `install` goes into the wire `packages.install` parameters, so it is also part of the request fingerprint: the same `requestId` with a different source is rejected with `conflict` (existing deduplication rule).
+- `PluginInfo.origin` gets **no new value** (built-ins are still `"installed"`, distinguished by `builtin`): adding a member to the union of an output type would break exhaustive `switch` statements written by authors at compile time, which is a hidden break.
 
-### 2.3 来源标识（决定「升级」还是「替换」）
+### 2.3 Source identity (decides "upgrade" vs "replace")
 
-| `kind` | 来源标识 | 理由 |
+| `kind` | Source identity | Reason |
 | --- | --- | --- |
-| `repository` | `url`（WHATWG 规范化后逐字比较） | 商城「只从原来源接收更新」（1.5a） |
-| `link`、`file` | 同为 `manual` | 用户手动装同 id 的包就是有意更新；按链接区分会让「换一个版本链接」变成替换并丢数据 |
-| `workshop` | `workshop` | 工坊生成的 id 与手动安装的插件撞名时应提示 |
+| `repository` | `url` (compared verbatim after WHATWG normalization) | The store "accepts updates only from the original source" (1.5a) |
+| `link`, `file` | Both `manual` | A user manually installing a package with the same id intends to update; distinguishing by link would turn "use another version link" into a replacement and lose data |
+| `workshop` | `workshop` | A user should be warned when a workshop-generated id collides with a manually installed plugin |
 
-`url` 只记录、只比较，宿主不访问它。`url` 须为 `http(s)`、≤ 2048 字节，否则 `invalid`。**这一条需要拍板**（见报告）：若希望链接安装也按 URL 区分，改表即可，接口不变。
+`url` is only recorded and compared; the host never accesses it. `url` must be `http(s)` and ≤ 2048 bytes, otherwise `invalid`. **This one needs a decision** (see the report): if link installs should also be distinguished by URL, change the table; the interface stays the same.
 
-### 2.4 替换确认：宿主拒绝，插件确认后带标志重试
+### 2.4 Replacement confirmation: the host rejects, the plugin confirms and retries with a flag
 
-选择：同 id 已从**另一来源**安装时，`install()` 以 `code: "conflict"` 失败、什么都不做；插件用 `dialogs.confirm` 问用户，同意后 `install({ source, replace: true })`。
+Choice: when the same id is already installed from **another source**, `install()` fails with `code: "conflict"` and does nothing; the plugin asks the user with `dialogs.confirm` and, on consent, calls `install({ source, replace: true })`.
 
-| 方案 | 结论 |
+| Option | Conclusion |
 | --- | --- |
-| **宿主拒绝 + `replace` 标志**（采用） | 判断在宿主里与提交原子进行（插件先 `list()` 再装，中间状态可能变）；确认界面留在插件（文案、复选框由商城/工坊决定，宿主不替插件弹框，符合「核心不含插件业务」）；不带标志的旧调用不会静默替换 |
-| 宿主自己弹确认框 | 宿主要知道「商城」「工坊」的文案和场景；无界面模式无法工作 |
-| 只靠插件先 `list()` 自查 | 有竞态；漏查的插件会静默覆盖别人的插件 |
+| **Host rejects + `replace` flag** (adopted) | The decision happens in the host, atomically with the commit (a plugin that calls `list()` first and then installs may see the state change in between); the confirmation UI stays in the plugin (wording and checkboxes are decided by the store/workshop; the host does not show dialogs on behalf of plugins, in line with "core contains no plugin business logic"); old calls without the flag never replace silently |
+| Host shows its own confirmation dialog | The host would need to know the "store" and "workshop" wording and scenarios; does not work in headless mode |
+| Rely only on the plugin checking `list()` first | Race condition; a plugin that forgets the check silently overwrites someone else's plugin |
 
-插件在弹框前想显示「已安装的来自哪里」，用 `list()` 里该 id 的 `source`、`version`；错误对象不额外携带数据（保持 `PluginError = Error & { code }` 不变）。
+If the plugin wants to show "where the installed one came from" before the dialog, it uses the `source` and `version` of that id in `list()`; the error object carries no extra data (`PluginError = Error & { code }` stays unchanged).
 
-### 2.5 GUID 不暴露
+### 2.5 The GUID is not exposed
 
-- 插件按 id 寻址，同一时间每个 id 只有一个实例，GUID 没有可调用的接口。
-- 插件管理真正需要的只是数据目录，已由 `dataDirectory` 给出。
-- 不承诺 GUID，宿主以后可以改存储布局；插件也无法持久化、比对实例（例如据此追踪用户换过哪些来源）。
-- `dataDirectory` 的路径里看得到 GUID，但文档写明「路径格式不属于契约」。
+- Plugins address by id; there is only one instance per id at a time, so the GUID has no callable interface.
+- What plugin management actually needs is only the data directory, already given by `dataDirectory`.
+- No promise about the GUID, so the host can change the storage layout later; plugins also cannot persist or compare instances (for example, to track which sources a user has switched between).
+- The GUID is visible in the `dataDirectory` path, but the documentation states that "the path format is not part of the contract".
 
-### 2.6 回退
+### 2.6 Rollback
 
-不改。`rollback(id)` 回到同一实例的 `previous`；内置插件可以回退（§3.3 保证播种不会把用户的回退立刻覆盖掉）。跨来源「回到旧插件」= 用旧来源重新安装（会接上休眠实例的数据）。
+Unchanged. `rollback(id)` returns to the `previous` of the same instance; built-in plugins can be rolled back (§3.3 ensures seeding does not immediately overwrite a user's rollback). Going "back to the old plugin" across sources = reinstall from the old source (which reattaches the dormant instance's data).
 
 ---
 
-## 3. 内置插件：只能停用，不能卸载
+## 3. Built-in plugins: can be disabled, not uninstalled
 
-### 3.1 识别
+### 3.1 Identification
 
-按**来源**：只有宿主启动时从安装包的 `Resources/plugins/builtin.json` 播种的实例带 `builtin: true`。插件不能通过 `install()` 声明内置；`builtin` 标记仍只看来源。2026-10-24 起 `vestra.` 前缀只留给内置插件，宿主拒绝安装、试载其它 `vestra.` 开头的包（文末「协调者修订（2026-10-24）」）。
+By **source**: only instances seeded by the host at startup from the installer's `Resources/plugins/builtin.json` carry `builtin: true`. A plugin cannot declare itself built-in through `install()`; the `builtin` flag still depends only on the source. Since 2026-10-24 the `vestra.` prefix is reserved for built-in plugins, and the host refuses to install or trial any other package whose id starts with `vestra.` ("Coordinator revision (2026-10-24)" at the end).
 
-### 3.2 行为
+### 3.2 Behavior
 
-| 操作 | 内置插件 |
+| Operation | Built-in plugin |
 | --- | --- |
-| `setEnabled(id, false/true)` | 照常，跨启动保持 |
-| `uninstall` | `code: "unsupported"`，message `built-in plugins can be disabled but not uninstalled` |
-| `install` 同来源（官方仓库）的新版本 | 升级，保持 `builtin` |
-| `install` 其它来源，带不带 `replace` | `unsupported`（内置不可替换） |
-| `rollback` | 照常 |
+| `setEnabled(id, false/true)` | As usual, persists across launches |
+| `uninstall` | `code: "unsupported"`, message `built-in plugins can be disabled but not uninstalled` |
+| `install` a new version from the same source (official repository) | Upgrade, keeps `builtin` |
+| `install` from another source, with or without `replace` | `unsupported` (built-ins cannot be replaced) |
+| `rollback` | As usual |
 
-### 3.3 播种（宿主启动时）
+### 3.3 Seeding (at host startup)
 
-`builtin.json`（打包脚本生成）：
+`builtin.json` (generated by the packaging script):
 
 ```json
 { "schema": 1, "source": { "kind": "repository", "url": "https://…/index.json" },
   "plugins": [ { "file": "vestra.subtitles-1.2.0.vxp", "sha256": "…" } ] }
 ```
 
-| 已安装状态 | 动作 |
+| Installed state | Action |
 | --- | --- |
-| 没有这个 id | 按 `.vxp` 安装（新 GUID，`builtin: true`，`seededVersion` = 包版本） |
-| 已安装且是内置 | 包版本 > `seededVersion` 才升级到包里的版本（用户经商城装了更高版本则不动）；用户回退过也不会被同一安装包再次覆盖 |
-| 已安装但来自其它来源（发版前用户侧载了同 id） | 不动，日志一行；内置标记不强加 |
+| This id is not installed | Install from the `.vxp` (new GUID, `builtin: true`, `seededVersion` = package version) |
+| Installed and built-in | Upgrade to the packaged version only if the package version > `seededVersion` (if the user installed a higher version through the store, leave it); if the user rolled back, the same installer does not overwrite it again |
+| Installed but from another source (the user sideloaded the same id before release) | Leave it, one log line; the built-in flag is not forced |
 
-播种走现有的 stage → prepare → 激活 → commit 流程（失败按现有规则恢复并记入 `failures`），不另写安装路径。`VESTRA_BUILTIN_PLUGINS=<目录>` 可在开发时指定别的播种目录；直接 `cargo run` 没有该目录时不播种。
+Seeding goes through the existing stage → prepare → activate → commit flow (failures are recovered per the existing rules and recorded in `failures`); no separate install path is written. `VESTRA_BUILTIN_PLUGINS=<directory>` can point to another seeding directory during development; a plain `cargo run` without that directory does not seed.
 
-`--plugin` 开发加载与已安装插件同 id 时：开发加载优先，已安装的这次运行不启动（`state: "stopped"`）。实现时先核对 `package_tick` 与 `load` 的现有顺序。
+When a `--plugin` development load has the same id as an installed plugin: the development load wins, and the installed one does not start in this run (`state: "stopped"`). Check the existing order of `package_tick` and `load` first when implementing.
 
-### 3.4 `plugins` 插件与工坊需要知道的
+### 3.4 What the `plugins` plugin and the workshop need to know
 
-- 插件管理：`builtin` 为真时禁用「卸载…」，悬停说明「内置插件只能停用」；详情显示来源（官方仓库 / 第三方仓库地址 / 链接 / 本地文件 / 插件工坊）。`uninstall` 仍要处理 `unsupported`（列表可能过时）。
-- 工坊：生成的 id 与内置插件撞名时 `install` 得到 `unsupported`，提示用户改 id。2026-10-24 起生成 `vestra.` 开头的 id 时，`validate`、`trial`、`install` 得到 `reserved`（文末修订）。
+- Plugin management: when `builtin` is true, disable "Uninstall…" with the hover text "Built-in plugins can only be disabled"; details show the source (official repository / third-party repository address / link / local file / plugin workshop). `uninstall` must still handle `unsupported` (the list may be out of date).
+- Workshop: when a generated id collides with a built-in plugin, `install` gets `unsupported`; prompt the user to change the id. Since 2026-10-24, when the generated id starts with `vestra.`, `validate`, `trial` and `install` get `reserved` (revision at the end).
 
 ---
 
-## 4. manifest 新字段
+## 4. New manifest fields
 
-### 4.1 字段与校验（宿主与 CLI 同一张表）
+### 4.1 Fields and validation (one table for host and CLI)
 
-| 字段 | 类型 | 规则 |
+| Field | Type | Rule |
 | --- | --- | --- |
-| `name` | string | 1–64 个字符（Unicode 标量），无控制字符，首尾无空白 |
-| `author` | string | 1–64 个字符，同上 |
-| `punchline` | string | 1–120 个字符，单行 |
-| `description` | string | 1–2000 个字符，允许换行，纯文本 |
-| `tags` | string[] | 至多 8 个，每个 1–24 个字符、单行，不区分大小写去重 |
-| `icon` | string | 包内相对路径（与 `entry` 相同的路径规则：不含 `..`、`\`、绝对路径、符号链接）；扩展名 `.png`/`.jpg`/`.jpeg`；文件必须在包内；≤ 512 KB；按内容判断为 PNG/JPEG，边长 ≤ 1024（建议 256×256 正方形） |
-| `readme` | string | 包内相对路径，`.md`，UTF-8，≤ 256 KB。省略时若包里有 `README.md` 则视为它 |
-| `changelog` | string | 同 `readme`；省略时若有 `CHANGELOG.md` 则视为它 |
-| `sourceUrl` | string | `https:` 地址，WHATWG 解析成功，≤ 2048 字节 |
-| `license` | string | 1–64 个字符（建议 SPDX 表达式，不对照 SPDX 列表） |
-| `minPlayerVersion` | string | 与 `version` 相同的严格 `x.y.z`（§6） |
+| `name` | string | 1–64 characters (Unicode scalars), no control characters, no leading/trailing whitespace |
+| `author` | string | 1–64 characters, same as above |
+| `punchline` | string | 1–120 characters, single line |
+| `description` | string | 1–2000 characters, line breaks allowed, plain text |
+| `tags` | string[] | At most 8, each 1–24 characters, single line, deduplicated case-insensitively |
+| `icon` | string | Relative path inside the package (same path rules as `entry`: no `..`, `\`, absolute paths, symbolic links); extension `.png`/`.jpg`/`.jpeg`; the file must be in the package; ≤ 512 KB; PNG/JPEG by content, side length ≤ 1024 (256×256 square recommended) |
+| `readme` | string | Relative path inside the package, `.md`, UTF-8, ≤ 256 KB. If omitted and the package has `README.md`, that file is used |
+| `changelog` | string | Same as `readme`; if omitted and there is `CHANGELOG.md`, that file is used |
+| `sourceUrl` | string | `https:` address, parses successfully per WHATWG, ≤ 2048 bytes |
+| `license` | string | 1–64 characters (an SPDX expression is recommended; not checked against the SPDX list) |
+| `minPlayerVersion` | string | Strict `x.y.z`, same as `version` (§6) |
 
-- 显式写出的 `icon` / `readme` / `changelog` 找不到文件 → 拒绝；默认的 `README.md` / `CHANGELOG.md` 不存在 → 不报错。
-- 字段只用于显示，宿主除了校验不使用它们（`minPlayerVersion` 除外）。宿主不渲染 README，也不显示 icon。
-- 开发加载（`--plugin`）同样校验；路径相对源码目录。
+- An explicitly given `icon` / `readme` / `changelog` whose file is missing → rejected; a missing default `README.md` / `CHANGELOG.md` → no error.
+- The fields are for display only; apart from validation the host does not use them (except `minPlayerVersion`). The host does not render the README or show the icon.
+- Development loads (`--plugin`) are validated the same way; paths are relative to the source directory.
 
-### 4.2 未知字段：继续拒绝
+### 4.2 Unknown fields: still rejected
 
-现在 `plugins::Manifest` 与 `package_stage::PackageManifest` 都是 `deny_unknown_fields`，参考文档也写明拒绝。保持：
+Today both `plugins::Manifest` and `package_stage::PackageManifest` are `deny_unknown_fields`, and the reference documentation also states they are rejected. Keep it:
 
-- 拼错的字段（`capabilties`）立刻暴露，不会悄悄失效；
-- 以后新增字段时作者同时写 `minPlayerVersion`，商城不会把它推给旧播放器；
-- 侧载到旧播放器时，宿主**先读 `minPlayerVersion`** 再做严格解析，所以报的是「需要 Vestra Player ≥ x.y.z」而不是「未知字段」。
+- A misspelled field (`capabilties`) shows up immediately instead of silently doing nothing;
+- When fields are added later, authors also write `minPlayerVersion`, so the store will not push the plugin to old players;
+- When sideloaded into an old player, the host **reads `minPlayerVersion` first** and then parses strictly, so the error is "requires Vestra Player ≥ x.y.z" rather than "unknown field".
 
-实现提示：两个 manifest 结构并成一个模块（建议 `src/host/src/manifest.rs`），一套字段、两种校验模式（开发/包）。serde 的 `flatten` 不能与 `deny_unknown_fields` 同用，所以不要用 `flatten` 复用字段。
+Implementation hint: merge the two manifest structs into one module (suggested `src/host/src/manifest.rs`), with one set of fields and two validation modes (development/package). serde's `flatten` cannot be combined with `deny_unknown_fields`, so do not reuse fields through `flatten`.
 
-### 4.3 id 规则
+### 4.3 id rules
 
-不变（1.5a 已定）：非空、≤ 128 字节、ASCII 字母数字与 `.-_`。宿主不强制前缀。（2026-10-24 修订：`vestra` 与 `vestra.` 开头的 id 只留给内置插件，见文末。）
+Unchanged (decided in 1.5a): non-empty, ≤ 128 bytes, ASCII letters and digits plus `.-_`. The host does not enforce a prefix. (Revision 2026-10-24: `vestra` and ids starting with `vestra.` are reserved for built-in plugins; see the end.)
 
 ---
 
-## 5. 核心 Markdown 显示组件（1.6 第 10 条）
+## 5. Core Markdown display component (1.6 item 10)
 
-### 5.1 形态：控件库新控件 + 宿主解析成模型
+### 5.1 Shape: a new widget-library control + the host parses into a model
 
 ```slint
 import { MarkdownView } from "@vestra/markdown.slint";
 export component Readme inherits Window {
-  in property <[MarkdownBlock]> readme;      // 插件写入 plugin.ui.markdown() 的结果
+  in property <[MarkdownBlock]> readme;      // the plugin writes the result of plugin.ui.markdown()
   callback open-link(string);
   MarkdownView { blocks: root.readme; link-clicked(url) => { root.open-link(url); } }
 }
 ```
 
 ```ts
-const doc = await plugin.ui.markdown(text, { base: readmeUrl });   // 不需要能力
+const doc = await plugin.ui.markdown(text, { base: readmeUrl });   // no capability needed
 window.set({ readme: doc });
 window.on("openLink", (url: string) => plugin.system.openUrl(url));
 ```
 
-与现有架构的对应：
+Mapping to the existing architecture:
 
-| 环节 | 做法 | 依据 |
+| Step | Approach | Basis |
 | --- | --- | --- |
-| 线上传值 | `MarkdownRef` 与 `ImageRef` 同类：只能作为属性的整个值，线上形式 `{ "$vestraMarkdown": { text, base, images }, "ref": n }` 是内部细节 | `ui_image.rs` 的 `$vestraImage`；`Host::prop_value` 加一个分支 |
-| 解析 | 宿主在 `prop_value` 里解析成 `[MarkdownBlock]` 的 Slint 模型（`slint_interpreter::Value::Model` of Struct），图片直接构造成 `Value::Image` | 图片不能经 JSON 进结构体（参考 §6.1 的限制），宿主侧构造模型绕开这一点 |
-| 图片加载 | 复用 `ui_image::Images`：同样的路径根（插件包与数据目录）、格式、16 MB / 4096² 上限、每插件 64 MB 缓存 | `ui_image.rs` |
-| 渲染 | `src/host/ui/vestra/markdown.slint`（新库文件）导出 `MarkdownView` 与 `struct MarkdownBlock`；`ScrollView` + `for block in blocks` 按 `kind` 画标题、段落、列表项、代码块、引用、图片、表格、分隔线 | 控件库机制不变；`sync-sdk-slint.mjs` 的 `SLINT_FILES` 加入新文件 |
-| 链接 | `MarkdownView` 的 `callback link-clicked(string)` 给出绝对地址（相对链接按 `base` 解析；`#锚点` 原样给出），打开与否由插件决定（通常 `system.openUrl`） | 已有 `system.openUrl` |
+| Passing the value over the wire | `MarkdownRef` is the same kind of thing as `ImageRef`: it can only be the whole value of a property; the wire form `{ "$vestraMarkdown": { text, base, images }, "ref": n }` is an internal detail | `$vestraImage` in `ui_image.rs`; add one branch to `Host::prop_value` |
+| Parsing | The host parses in `prop_value` into a Slint model of `[MarkdownBlock]` (`slint_interpreter::Value::Model` of Struct), building images directly as `Value::Image` | Images cannot enter a struct through JSON (limitation in reference §6.1); building the model on the host side avoids this |
+| Image loading | Reuse `ui_image::Images`: the same path roots (plugin package and data directory), formats, 16 MB / 4096² limit, 64 MB cache per plugin | `ui_image.rs` |
+| Rendering | `src/host/ui/vestra/markdown.slint` (new library file) exports `MarkdownView` and `struct MarkdownBlock`; `ScrollView` + `for block in blocks` draws headings, paragraphs, list items, code blocks, quotes, images, tables and rules by `kind` | Widget library mechanism unchanged; add the new file to `SLINT_FILES` in `sync-sdk-slint.mjs` |
+| Links | `callback link-clicked(string)` of `MarkdownView` gives an absolute address (relative links are resolved against `base`; `#anchor` is passed as-is); whether to open it is up to the plugin (usually `system.openUrl`) | Existing `system.openUrl` |
 
-放在单独的库文件而不是 `widgets.slint`：控件较大，不用它的插件编译时不加载。
+It goes in a separate library file rather than `widgets.slint`: the control is large, and plugins that do not use it do not load it at compile time.
 
-### 5.2 支持的子集
+### 5.2 Supported subset
 
-| 元素 | 渲染 |
+| Element | Rendering |
 | --- | --- |
-| 标题 1–6 | 字号按 `Theme` 分级 |
-| 段落、强调、加粗、删除线、行内代码、链接 | 见 §5.4 |
-| 无序 / 有序列表、任务列表 | 嵌套深度 ≤ 4（更深的压平到第 4 层），任务项显示 ☐ / ☑ |
-| 代码块 | `Theme.font-mono`，自动换行，不做语法高亮 |
-| 引用 | 左侧竖线，嵌套 ≤ 4 |
-| 图片 | 本地或已下载的 PNG/JPEG；按宽度缩放不放大；失败、不支持的格式（SVG、GIF、WebP）显示 alt 文字 |
-| 表格（GFM） | 单元格为纯文本（去掉行内样式），列宽均分，≤ 16 列 × 500 行 |
-| 分隔线 | 有 |
-| 内嵌 HTML（块与行内） | **丢弃**，不显示原文 |
-| 脚注、数学、定义列表、front matter | 不启用，按普通文本 |
+| Headings 1–6 | Font size graded by `Theme` |
+| Paragraphs, emphasis, bold, strikethrough, inline code, links | See §5.4 |
+| Unordered / ordered lists, task lists | Nesting depth ≤ 4 (deeper levels flattened to level 4); task items show ☐ / ☑ |
+| Code blocks | `Theme.font-mono`, wrapped, no syntax highlighting |
+| Quotes | Vertical bar on the left, nesting ≤ 4 |
+| Images | Local or downloaded PNG/JPEG; scaled down to the width, never up; failures and unsupported formats (SVG, GIF, WebP) show the alt text |
+| Tables (GFM) | Cells are plain text (inline styles removed), equal column widths, ≤ 16 columns × 500 rows |
+| Horizontal rules | Yes |
+| Embedded HTML (block and inline) | **Dropped**; the source is not shown |
+| Footnotes, math, definition lists, front matter | Not enabled; treated as normal text |
 
-上限：`text` ≤ 256 KB（线上消息 1 MiB），块 ≤ 4000，图片 ≤ 64；超出部分截断并在末尾加一块「内容过长，已截断」。
+Limits: `text` ≤ 256 KB (wire messages 1 MiB), blocks ≤ 4000, images ≤ 64; the excess is truncated and a final block "Content too long, truncated" is added.
 
-### 5.3 远程图片：SDK 在插件进程下载，缓存在插件数据目录
+### 5.3 Remote images: downloaded by the SDK in the plugin process, cached in the plugin data directory
 
-| 方案 | 结论 |
+| Option | Conclusion |
 | --- | --- |
-| **SDK 下载**（采用） | Node 自带 `fetch`，跨平台、无新依赖；下载属于调用插件，资源与停用一起回收；缓存在该插件自己的数据目录，`ui_image` 的路径根不用放宽 |
-| 宿主下载 | Rust 侧要新增 HTTP + TLS 栈（ureq/rustls 与各平台证书），扩大核心与跨平台面，只为一个显示功能 |
+| **SDK downloads** (adopted) | Node has built-in `fetch`, cross-platform, no new dependency; the download belongs to the calling plugin, and its resources are reclaimed together with disabling; the cache lives in that plugin's own data directory, so the `ui_image` path roots need not be widened |
+| Host downloads | The Rust side would need a new HTTP + TLS stack (ureq/rustls and per-platform certificates), widening the core and the cross-platform surface for a single display feature |
 
-流程：`ui.markdown(text, { base })` → SDK 发 `ui.markdownScan`（宿主解析，返回需要的远程图片绝对地址，至多 64 个）→ SDK 下载到 `<dataDirectory>/.vestra-cache/markdown/<sha256(url)>` → 构造线上值，`images` 为「地址 → 本地路径」。
+Flow: `ui.markdown(text, { base })` → the SDK sends `ui.markdownScan` (the host parses and returns the absolute addresses of the remote images needed, at most 64) → the SDK downloads to `<dataDirectory>/.vestra-cache/markdown/<sha256(url)>` → builds the wire value, with `images` as "address → local path".
 
-| 规则 | 值 |
+| Rule | Value |
 | --- | --- |
-| 协议 | 只 `https:`；`http:` 与其它显示 alt |
-| 单张 | ≤ 4 MB，按内容只收 PNG/JPEG，10 秒超时，重定向 ≤ 5 次，不带 cookie |
-| 并发 | 每插件 4 |
-| 缓存 | 每插件 32 MB，按最近使用淘汰；同一地址 24 小时内不重新下载 |
-| 失败 | 不让 `markdown()` 失败，对应图片显示 alt |
-| `options.remoteImages: false` | 不下载 |
+| Protocol | `https:` only; `http:` and others show the alt text |
+| Per image | ≤ 4 MB, only PNG/JPEG by content, 10-second timeout, ≤ 5 redirects, no cookies |
+| Concurrency | 4 per plugin |
+| Cache | 32 MB per plugin, least-recently-used eviction; the same address is not downloaded again within 24 hours |
+| Failure | Does not make `markdown()` fail; the image shows its alt text |
+| `options.remoteImages: false` | No downloads |
 
-### 5.4 行内样式：用 Slint 的 `StyledText`，需要先验证（待拍板）
+### 5.4 Inline styles: use Slint's `StyledText`, needs verification first (pending decision)
 
-Slint 1.16.1 已有 `StyledText` 元素（加粗、斜体、删除线、行内代码、链接与 `link-clicked`），但 `slint-interpreter` 里对应的 `Value::StyledText` 标着 `#[doc(hidden)]`（「StyledText 公开后再显示」），宿主要构造它得用未公开的接口。
+Slint 1.16.1 already has a `StyledText` element (bold, italic, strikethrough, inline code, links and `link-clicked`), but the corresponding `Value::StyledText` in `slint-interpreter` is marked `#[doc(hidden)]` ("shown once StyledText is public"), so the host would have to use an unpublished interface to construct it.
 
-- 实现第一步做探针 M0：在插件窗口里用解释器显示宿主构造的 `StyledText`，含中文、链接点击。
-- 通过：段落、列表项、引用、标题用 `StyledText`；构造代码集中在一个函数里，Slint 锁定 `=1.16.1`，升级 Slint 时必须复测。
-- 不通过：降级为纯文本（去掉行内标记，行内代码保留文字），段落里的链接列在该段下方作为可点击行。接口不变，以后再升级渲染。
+- First implementation step is probe M0: in a plugin window, use the interpreter to show a `StyledText` built by the host, including Chinese text and link clicks.
+- Pass: paragraphs, list items, quotes and headings use `StyledText`; the construction code is kept in one function, Slint is pinned to `=1.16.1`, and it must be retested on every Slint upgrade.
+- Fail: fall back to plain text (inline markup removed, inline code keeps its text); links in a paragraph are listed below that paragraph as clickable lines. The interface stays the same; rendering can be upgraded later.
 
-### 5.5 Rust 解析库
+### 5.5 Rust parsing library
 
-`pulldown-cmark`：MIT 许可，CommonMark + GFM 表格/删除线/任务列表；**已在依赖树里**（Slint 1.16.1 依赖 0.13.4），直接依赖锁同一版本 `=0.13.4`、`default-features = false`，不引入新代码。第一方代码仍 `forbid(unsafe_code)`。解析是纯计算，与系统无关，满足 §1.5 跨平台规则。
+`pulldown-cmark`: MIT license, CommonMark + GFM tables/strikethrough/task lists; **already in the dependency tree** (Slint 1.16.1 depends on 0.13.4); the direct dependency is pinned to the same version `=0.13.4` with `default-features = false`, bringing in no new code. First-party code stays `forbid(unsafe_code)`. Parsing is pure computation and system-independent, which satisfies the §1.5 cross-platform rule.
 
-### 5.6 能力
+### 5.6 Capabilities
 
-不新增能力。与 `ui.image` 相同：只是一种属性值，显示它要的 `ui.window` / `ui.mount` / `ui.settings` 已经限制了能显示的地方；下载走插件自己的进程，能力本来也不限制联网。
+No new capability. Same as `ui.image`: it is only a kind of property value; the `ui.window` / `ui.mount` / `ui.settings` needed to show it already limit where it can appear; downloads run in the plugin's own process, and capabilities never restricted network access anyway.
 
 ---
 
 ## 6. `minPlayerVersion`
 
-- **播放器版本号来源**：宿主 `Cargo.toml` 的 `version`（`env!("CARGO_PKG_VERSION")`），即插件看到的 `plugin.app.version`。打包时 `Info.plist` / Windows 版本资源从它生成，不另维护一份。建议 S4 发布时把宿主从 `0.1.0` 升到 `0.2.0`，作为第一个支持新 API 的版本。
-- **语义**：播放器版本（只比较 `MAJOR.MINOR.PATCH` 三段数字，忽略预发布后缀）≥ `minPlayerVersion` 才能加载。它表达「用到了某版播放器才有的**新增** API」；`apiVersion` 仍表达破坏性的大版本。没有 `maxPlayerVersion`。
-- **检查点**：`validate` / `validateArchive` → `code: "versionMismatch"`（宿主已有此码，补进参考 §13），message `requires Vestra Player ≥ x.y.z`；开发加载 → 加载失败同样的消息；已安装的插件在降级后的播放器上 → 不启动，`state: "failed"`、`error` 同上；内置播种跳过并记日志。
-- **SDK 版本对照**：SDK README 加一张表「SDK 1.1 新增的 API 需要播放器 ≥ 0.2.0」。CLI 不自动推断（要分析用到了哪些 API，不值得）。
-- `index.json` 的每个版本条目建议加 `minPlayerVersion`，商城据此过滤；这属于 S3/S5，见 §8。
+- **Source of the player version number**: the `version` in the host `Cargo.toml` (`env!("CARGO_PKG_VERSION")`), i.e. the `plugin.app.version` that plugins see. At packaging time `Info.plist` / the Windows version resource are generated from it; no second copy is maintained. Suggestion: when S4 ships, bump the host from `0.1.0` to `0.2.0` as the first version supporting the new API.
+- **Semantics**: a plugin can load only if the player version (only the three numeric parts `MAJOR.MINOR.PATCH` are compared; pre-release suffixes are ignored) ≥ `minPlayerVersion`. It expresses "uses an API **added** in a certain player version"; `apiVersion` still expresses breaking major versions. There is no `maxPlayerVersion`.
+- **Check points**: `validate` / `validateArchive` → `code: "versionMismatch"` (the host already has this code; add it to reference §13), message `requires Vestra Player ≥ x.y.z`; development load → load fails with the same message; an installed plugin on a downgraded player → does not start, `state: "failed"`, `error` as above; built-in seeding skips it and logs.
+- **SDK version table**: the SDK README gets a table "APIs added in SDK 1.1 require player ≥ 0.2.0". The CLI does not infer it automatically (that would require analyzing which APIs are used; not worth it).
+- Each version entry in `index.json` should get `minPlayerVersion` so the store can filter on it; this belongs to S3/S5, see §8.
 
 ---
 
-## 7. SDK 1.1.0 范围
+## 7. SDK 1.1.0 scope
 
-### 7.1 内容
+### 7.1 Contents
 
-| 部分 | 内容 |
+| Part | Contents |
 | --- | --- |
-| 类型（`types.ts`） | §2.2 全部；`PackageManifest` 新增可选字段；`plugin.ui.markdown(text, { base?, remoteImages? }): Promise<MarkdownRef>`、`MarkdownRef` 类型；`PackageSource` |
-| 实现 | `packages.ts`：`validateArchive`、`install(options)`、`info()` 带出新字段；`ui.ts`：`markdown()` 与下载缓存（只用 Node 内置模块，保持零运行时依赖） |
-| wire（内部） | `packages.validateArchive`；`packages.install` 参数加 `source`、`replace`；`packages.list` / `packages.changed` 条目加字段；`ui.markdownScan` |
-| TestHost | `host.packages` 条目的新字段**全部可选**（默认 `builtin: false`、`source: null`、`dataDirectory: null`），已有测试不用改；`uninstall` 内置条目 → `unsupported`；新增 `host.candidates`（路径 → manifest）支持 `validate` / `validateArchive` / `install`，按 §1.3 模拟 `conflict` 与 `replace`，`packageCalls` 记录 `install`；`ui.markdown` 的线上值可用 `host.markdown(value)` 读回 `{ text, base, images }`；远程图片不联网，由 `host.remoteImages`（地址 → 本地路径或 `null`）提供 |
-| CLI `check` | 按 §4.1 校验全部新字段（规则表从 `./runtime` 导出常量，宿主一致性测试比对）；id 不含 `.` 前缀时打印**提示**（如「发布到官方仓库需要 `<GitHub 用户名>.<插件名>`」），退出码 0；manifest 未知字段报错（与宿主一致） |
-| CLI `build` | 把 manifest 引用的 `icon`、`readme`、`changelog`（及默认的 `README.md`、`CHANGELOG.md`）复制进 `dist/`——现在 `.md` 一律跳过，不改的话 README 进不了包 |
-| CLI `pack` | 产出 `<id>-<version>.vxp`（内容与现在的确定性 zip 相同，只改扩展名） |
-| 文档 | README、CHANGELOG、TypeDoc；版本对照表加 `1.1 ↔ 播放器 ≥ 0.2.0` |
+| Types (`types.ts`) | All of §2.2; new optional fields on `PackageManifest`; `plugin.ui.markdown(text, { base?, remoteImages? }): Promise<MarkdownRef>`, the `MarkdownRef` type; `PackageSource` |
+| Implementation | `packages.ts`: `validateArchive`, `install(options)`, `info()` carries the new fields; `ui.ts`: `markdown()` and the download cache (Node built-in modules only, keeping zero runtime dependencies) |
+| wire (internal) | `packages.validateArchive`; `packages.install` parameters gain `source`, `replace`; `packages.list` / `packages.changed` entries gain fields; `ui.markdownScan` |
+| TestHost | New fields on `host.packages` entries are **all optional** (defaults `builtin: false`, `source: null`, `dataDirectory: null`), so existing tests need no change; `uninstall` of a built-in entry → `unsupported`; new `host.candidates` (path → manifest) supports `validate` / `validateArchive` / `install`, simulating `conflict` and `replace` per §1.3, and `packageCalls` records `install`; the wire value of `ui.markdown` can be read back as `{ text, base, images }` with `host.markdown(value)`; remote images do not go to the network and are provided by `host.remoteImages` (address → local path or `null`) |
+| CLI `check` | Validates all new fields per §4.1 (the rule table is exported as constants from `./runtime` and compared by a host agreement test); prints a **hint** when the id has no `.` prefix (such as "publishing to the official repository requires `<GitHub username>.<plugin name>`"), exit code 0; unknown manifest fields are errors (consistent with the host) |
+| CLI `build` | Copies the `icon`, `readme`, `changelog` referenced by the manifest (and the default `README.md`, `CHANGELOG.md`) into `dist/`. Today `.md` files are always skipped; without this change the README does not get into the package |
+| CLI `pack` | Produces `<id>-<version>.vxp` (same content as today's deterministic zip, only the extension changes) |
+| Documentation | README, CHANGELOG, TypeDoc; the version table gets `1.1 ↔ player ≥ 0.2.0` |
 
-### 7.2 推迟：`npm create vestra-plugin`
+### 7.2 Deferred: `npm create vestra-plugin`
 
-本轮不做。理由：它是另一个 npm 包（`create-vestra-plugin`），要单独的发布流程；模板内容（`name`、`author`、`icon`、README 骨架、id 前缀）等本提案定稿后才稳定；S4/S5 不依赖它。建议 S5 之后与插件仓库的贡献说明一起做。
+Not in this round. Reasons: it is a separate npm package (`create-vestra-plugin`) that needs its own release process; the template contents (`name`, `author`, `icon`, README skeleton, id prefix) only become stable once this proposal is final; S4/S5 do not depend on it. Suggested to do it after S5, together with the plugin repository's contribution guide.
 
-### 7.3 兼容性审查
+### 7.3 Compatibility review
 
-全部是新增：新方法、可选参数、输出接口的新属性、新库文件、新 wire 方法。逐项检查过的隐性破坏：
+Everything is additive: new methods, optional parameters, new properties on output interfaces, a new library file, new wire methods. Hidden breaks checked item by item:
 
-| 点 | 是否破坏 | 处理 |
+| Point | Breaking? | Handling |
 | --- | --- | --- |
-| **参考 §3.4「`<数据根>/<id>` 推出别的插件的数据目录」** | **是**（文档承诺的规则失效） | 不得不：GUID 目录的目的就是不再按 id 定位。替代：同一版本新增 `PluginInfo.dataDirectory`。唯一使用者是插件管理（`manager.ts` 的 `dataDirectory(id)`），随本轮迁移；参考与 SDK 注释（`PluginInfo.directory` 上的「`<data root>/<id>`」）同步改。未发版 |
-| 数据与密钥位置变化 | 对插件代码否；对用户数据是（一次性丢失开发期数据与登录） | 1.5a 已定不迁移；通知 youtube、bilibili（登录密钥） |
-| `install()` 不带参数遇到其它来源的同 id → `conflict` | 错误语义新增 | 今天不存在「其它来源」（没有商城、没有链接安装），所以对现有调用方没有行为变化；工坊本轮改为传 `source: workshop` 并处理 `conflict` |
-| `uninstall` 新增 `unsupported` 情形、`install` 新增 `unsupported`（内置） | 否 | 两个方法已有 `unsupported`，调用方本来就要处理 |
-| `PluginInfo.origin` 不加 `"builtin"` | — | 刻意避免（§2.2） |
-| TestHost 条目类型加字段 | 否 | 新字段可选 |
-| `pack` 输出 `.zip` → `.vxp` | CLI 行为变化，非插件 API | S0 已注明暂定格式；SDK CHANGELOG 写明；通知 S3 |
-| `apiVersion` | 不变 `vestra/1` | |
+| **Reference §3.4 "derive another plugin's data directory from `<data root>/<id>`"** | **Yes** (a rule promised by the documentation stops holding) | Unavoidable: the purpose of GUID directories is to stop locating by id. Replacement: the same version adds `PluginInfo.dataDirectory`. The only user is plugin management (`dataDirectory(id)` in `manager.ts`), migrated in this round; the reference and the SDK comment (the "`<data root>/<id>`" on `PluginInfo.directory`) are updated together. Not released |
+| Data and secret locations change | Not for plugin code; yes for user data (development-time data and logins are lost once) | 1.5a decided no migration; notify youtube, bilibili (login secrets) |
+| `install()` without parameters meets the same id from another source → `conflict` | New error semantics | "Another source" does not exist today (no store, no link install), so existing callers see no behavior change; the workshop changes this round to pass `source: workshop` and handle `conflict` |
+| `uninstall` gains an `unsupported` case, `install` gains `unsupported` (built-in) | No | Both methods already have `unsupported`; callers must already handle it |
+| `PluginInfo.origin` does not get `"builtin"` | — | Deliberately avoided (§2.2) |
+| TestHost entry type gains fields | No | New fields are optional |
+| `pack` output `.zip` → `.vxp` | CLI behavior change, not plugin API | S0 already noted the format was provisional; stated in the SDK CHANGELOG; notify S3 |
+| `apiVersion` | Unchanged `vestra/1` | |
 
 ---
 
-## 8. 影响与通知清单
+## 8. Impact and notification list
 
-| 对象 | 需要知道 | 需要做 |
+| Party | Needs to know | Needs to do |
 | --- | --- | --- |
-| 插件管理 / 商城（插件仓库中的 `plugins/plugins/`） | `dataDirectory`、`builtin`、`source`；`validateArchive`；`install({ source, replace })` 与 `conflict`；Markdown 组件 | 数据目录改读 `info.dataDirectory`；内置禁用卸载；显示来源；S5 起用新接口 |
-| 插件工坊（`plugins/workshop/`） | `install` 可能 `conflict`（与手动安装或仓库安装撞 id）、`unsupported`（与内置撞 id） | 传 `source: { kind: "workshop" }`；`conflict` 时确认后 `replace: true`；`unsupported` 提示改 id |
-| youtube、bilibili | `secrets` 改按实例存，现有登录要重新登录一次 | 无代码改动 |
-| 全部插件作者 | 数据目录位置变（开发加载在 `plugin-data/development/<id>/`）；`build` 会把 `README.md` 打进包，README 将显示在商城详情页；新的可选显示字段；用到 1.1 新 API 时写 `minPlayerVersion` | 进官方仓库前补 `name`、`author`、`punchline`、`icon`，把 README 改成面向用户 |
-| S3（插件仓库 CI） | `pack` 产出 `.vxp`；`index.json` 版本条目建议加 `minPlayerVersion`；播放器侧维护内置插件清单 | 按 `.vxp` 上传 Releases |
-| 协调者 | §9.3 真机验证点；需要拍板的问题（报告） | |
-| 文档（维护者自己） | 参考 §2、§3.4、§6.1（新增 Markdown 小节）、§12、§13（`versionMismatch`）、§17 变更说明；架构总览代码地图 | 随实现更新 |
+| Plugin management / store (`plugins/plugins/` in the plugin repository) | `dataDirectory`, `builtin`, `source`; `validateArchive`; `install({ source, replace })` and `conflict`; the Markdown component | Read the data directory from `info.dataDirectory`; disable uninstall for built-ins; show the source; use the new interfaces from S5 on |
+| Plugin workshop (`plugins/workshop/`) | `install` may return `conflict` (id collides with a manual or repository install) or `unsupported` (id collides with a built-in) | Pass `source: { kind: "workshop" }`; on `conflict`, confirm and then `replace: true`; on `unsupported`, prompt to change the id |
+| youtube, bilibili | `secrets` are now stored per instance; existing logins must sign in again once | No code change |
+| All plugin authors | The data directory location changes (development load in `plugin-data/development/<id>/`); `build` packs `README.md`, and the README will be shown on the store detail page; new optional display fields; write `minPlayerVersion` when using new 1.1 APIs | Before entering the official repository, add `name`, `author`, `punchline`, `icon`, and rewrite the README for users |
+| S3 (plugin repository CI) | `pack` produces `.vxp`; `index.json` version entries should get `minPlayerVersion`; the player side maintains the built-in plugin list | Upload `.vxp` files to Releases |
+| Coordinator | §9.3 real-device verification points; questions needing a decision (report) | |
+| Documentation (maintainer) | Reference §2, §3.4, §6.1 (new Markdown subsection), §12, §13 (`versionMismatch`), §17 change notes; the architecture overview code map | Update along with the implementation |
 
 ---
 
-## 9. 实现分工、顺序与测试
+## 9. Implementation split, order and tests
 
-### 9.1 顺序（维护者一人；括号内为可并行处）
+### 9.1 Order (maintainer alone; parallelizable items in parentheses)
 
-| 步 | 内容 | 依赖 |
+| Step | Contents | Depends on |
 | --- | --- | --- |
-| A | 宿主：`manifest.rs` 合并两个 manifest 结构，新字段校验与 `minPlayerVersion` | 无 |
-| B | 宿主：catalog `instance` / `dormant`、GUID 数据目录、开发加载目录、`secrets` 按实例、内置保护、`source`/`replace`、`packages.list` 新字段 | A |
-| C | 宿主：`validateArchive`（解压，见下） | A（与 B 并行） |
-| D | 宿主：`builtin.json` 播种 + `src/scripts/stage-plugins.mjs`（从插件仓库 Releases 或本地目录取 `.vxp`，按清单校验 sha256） | B、C；S3 有 Releases 前用本地 `.vxp` |
-| M0→M | Markdown：探针 M0（§5.4）→ 解析与模型 → `markdown.slint` → `prop_value` 分支 → `ui.markdownScan` | 与 A–D 并行 |
-| S | SDK 1.1.0：先发类型与 TestHost（可用 `1.1.0-rc.1` 给 S5 作者提前写代码），再补实现与 CLI | 线上协议随 B、C、M 定 |
-| P | 播放器升级 SDK 依赖、host-agreement 测试加规则表比对、文档；通知插件管理与工坊作者迁移 | S |
+| A | Host: `manifest.rs` merges the two manifest structs, validation of new fields and `minPlayerVersion` | None |
+| B | Host: catalog `instance` / `dormant`, GUID data directories, development load directory, per-instance `secrets`, built-in protection, `source`/`replace`, new `packages.list` fields | A |
+| C | Host: `validateArchive` (extraction, see below) | A (parallel with B) |
+| D | Host: `builtin.json` seeding + `src/scripts/stage-plugins.mjs` (takes `.vxp` files from the plugin repository Releases or a local directory, checks sha256 against the list) | B, C; use local `.vxp` files until S3 has Releases |
+| M0→M | Markdown: probe M0 (§5.4) → parsing and model → `markdown.slint` → `prop_value` branch → `ui.markdownScan` | Parallel with A–D |
+| S | SDK 1.1.0: ship types and TestHost first (`1.1.0-rc.1` can let S5 authors start writing code early), then the implementation and CLI | The wire protocol is fixed along with B, C, M |
+| P | Player upgrades the SDK dependency, host-agreement tests add the rule-table comparison, documentation; notify plugin management and workshop authors to migrate | S |
 
-`.vxp` 解压：建议用 `zip` crate（MIT，`default-features = false`，只开 deflate，锁精确版本），不手写 zip 解析——这是处理外来输入的安全敏感代码，用成熟库更稳。限制与 `package_stage` 一致并在**解压过程中**强制：归档 ≤ 64 MB；条目 ≤ 1024；单文件解压后 ≤ 32 MB、总计 ≤ 64 MB（防 zip 炸弹）；只接受 stored/deflate、不接受加密；拒绝绝对路径、`..`、`\`、符号链接（外部属性）、大小写不敏感重名；`manifest.json` 必须在根。新依赖属于「引入许可证义务」，见报告。
+`.vxp` extraction: suggested to use the `zip` crate (MIT, `default-features = false`, deflate only, exact version pinned) rather than hand-written zip parsing. This is security-sensitive code that handles external input; a mature library is safer. Limits match `package_stage` and are enforced **during extraction**: archive ≤ 64 MB; entries ≤ 1024; each file ≤ 32 MB after extraction, total ≤ 64 MB (against zip bombs); only stored/deflate, no encryption; reject absolute paths, `..`, `\`, symbolic links (external attributes), case-insensitive duplicate names; `manifest.json` must be at the root. The new dependency counts as "introduces license obligations", see the report.
 
-### 9.2 测试
+### 9.2 Tests
 
-| 层 | 内容 |
+| Layer | Contents |
 | --- | --- |
-| 宿主单测 `package_store` | 新装生成 GUID；同来源升级沿用；异来源无 `replace` 拒绝、有则替换并转休眠；换回复用 GUID；内置不可卸载、不可替换；替换失败恢复 `instance`；`dormant` 上限；`enabled` 跨重开；旧 catalog（有 `disabled`、无 `instance`）读入 |
-| 宿主单测 `plugins` / `system` | 数据目录按 `DataKey` 落在 GUID / `development/<id>` / 试载临时目录；`removeData` 删 GUID 目录；`secrets` service 随实例 |
-| 宿主单测 manifest | 每个字段的边界（长度、控制字符、路径越界、icon 格式与尺寸、默认 README 不存在不报错、显式不存在报错、URL 协议）；未知字段拒绝；`minPlayerVersion` 先于严格解析报错 |
-| 宿主单测 `.vxp` | 正常包与 `pack` 产物同 digest；`..`、绝对路径、符号链接、重名（大小写）、加密、超限、炸弹（高压缩比）全部拒绝 |
-| 宿主单测 Markdown | 每种块的模型输出；HTML 丢弃；相对链接按 `base` 解析；超限截断；图片路径越界走 `ui_image` 的拒绝 |
-| 宿主单测播种 | 首次播种；版本更高才升级；回退后不被同版本覆盖；其它来源已占 id 时跳过；sha256 不符跳过 |
-| SDK 单测 | `validateArchive`、`install(options)` 的 wire 参数；`info()` 新字段；markdown 下载：协议、大小、类型、缓存淘汰、失败不抛（用本地 HTTP 服务器，不访问外网） |
-| TestHost | 冲突与替换模拟；旧形态的 `host.packages` 条目仍可用；`host.markdown()` |
-| CLI | `check` 新字段报错与无前缀提示；`build` 带上 README/icon；`pack` 产出 `.vxp` 且确定性 |
-| 一致性 | `host-agreement.test.ts` 比对 manifest 规则常量；`sync-sdk-slint` 覆盖 `markdown.slint` |
-| §6.1 全套 | 宿主 fmt/clippy/test；`src/` check、boundaries、test:sdk、plugins:build、各插件测试；SDK 仓库 CI；portability（Windows 目标编译） |
+| Host unit tests `package_store` | Fresh install generates a GUID; same-source upgrade keeps it; different source without `replace` is rejected, with it replaced and made dormant; switch back reuses the GUID; built-ins cannot be uninstalled or replaced; failed replacement restores `instance`; `dormant` limit; `enabled` across reopen; reading an old catalog (with `disabled`, without `instance`) |
+| Host unit tests `plugins` / `system` | Data directory per `DataKey` lands in GUID / `development/<id>` / the trial temp directory; `removeData` deletes the GUID directory; the `secrets` service follows the instance |
+| Host unit tests manifest | Boundaries of each field (length, control characters, path escapes, icon format and size, missing default README is no error, missing explicit one is an error, URL protocol); unknown fields rejected; `minPlayerVersion` errors before strict parsing |
+| Host unit tests `.vxp` | A normal package has the same digest as the `pack` output; `..`, absolute paths, symbolic links, duplicate names (case), encryption, over-limit, bombs (high compression ratio) are all rejected |
+| Host unit tests Markdown | Model output for each block type; HTML dropped; relative links resolved against `base`; truncation over limits; image paths out of bounds go through the `ui_image` rejection |
+| Host unit tests seeding | First seeding; upgrade only for a higher version; after a rollback, not overwritten by the same version; skip when another source already holds the id; skip on sha256 mismatch |
+| SDK unit tests | Wire parameters of `validateArchive` and `install(options)`; new `info()` fields; markdown download: protocol, size, type, cache eviction, failures do not throw (with a local HTTP server, no external network) |
+| TestHost | Conflict and replacement simulation; old-shape `host.packages` entries still work; `host.markdown()` |
+| CLI | `check` errors for new fields and the no-prefix hint; `build` includes README/icon; `pack` produces `.vxp` deterministically |
+| Agreement | `host-agreement.test.ts` compares the manifest rule constants; `sync-sdk-slint` covers `markdown.slint` |
+| Full §6.1 suite | Host fmt/clippy/test; `src/` check, boundaries, test:sdk, plugins:build, each plugin's tests; SDK repository CI; portability (Windows target compile) |
 
-### 9.3 需要协调者真机验证
+### 9.3 Real-device verification by the coordinator
 
-1. Markdown：在一个窗口里显示含中文、标题、列表、代码块、引用、表格、本地与远程图片、链接的文档；点击链接打开浏览器；滚动流畅；窗口缩放时重新换行。StyledText 路线（或降级）在 GUI 上的实际效果。
-2. 拖入 / 选择 `.vxp` 安装（经插件管理或临时测试插件），安装后热启用。
-3. 替换流程：同 id 从两个来源安装，确认框、替换、换回后数据还在。
-4. 内置保护：打包布局下（`Resources/plugins`）首次启动播种全部内置插件；插件管理里内置插件「卸载」不可用、可停用、重启后保持停用。
-5. 数据隔离：替换后新插件看不到旧插件的数据目录内容与密钥（macOS keychain、Windows 凭据管理器各一次）。
-6. Windows：`.vxp` 路径与大小写、GUID 目录、密钥 service 名。
+1. Markdown: show in one window a document with Chinese text, headings, lists, code blocks, quotes, tables, local and remote images, and links; clicking a link opens the browser; scrolling is smooth; resizing the window rewraps the text. The actual result of the StyledText route (or the fallback) in the GUI.
+2. Install by dragging in / choosing a `.vxp` (through plugin management or a temporary test plugin), hot-enabled after install.
+3. Replacement flow: install the same id from two sources; confirmation dialog, replacement, and data still present after switching back.
+4. Built-in protection: in the packaged layout (`Resources/plugins`), the first launch seeds all built-in plugins; in plugin management, "Uninstall" is unavailable for built-ins, they can be disabled, and stay disabled after restart.
+5. Data isolation: after replacement, the new plugin cannot see the old plugin's data directory contents or secrets (once each for macOS keychain and Windows Credential Manager).
+6. Windows: `.vxp` paths and case, GUID directories, secret service names.
 
 ---
 
-## 10. 刻意不做的
+## 10. Deliberately not done
 
-| 诱惑项 | 不做的理由 |
+| Temptation | Reason for not doing it |
 | --- | --- |
-| 宿主下载 `index.json`、校验签名、检查更新、处理撤回 | 1.4 已定在商城插件；签名「以后再考虑移进核心」 |
-| 宿主内置 HTTP 客户端（为远程图片） | 引入 TLS 栈与平台证书差异，只为一个显示功能；Node `fetch` 已足够（§5.3） |
-| `PluginInfo` 带显示字段（name、icon…） | 插件可以直接读 `info.directory/manifest.json`（宿主已校验）；少一份要维护的投影 |
-| 暴露 GUID、`installedAt` | 没有调用方需要（§2.5）；需要时再按 §4 请求加 |
-| 休眠实例的列表与清理接口 | 先观察是否真有大量残留；需要时作为插件管理的请求单独设计。现在不自动删除用户数据 |
-| 放宽 `ui.image` 让商城显示别的插件包里的图标 | 商城可把文件复制进自己的数据目录再显示；不为一个插件开放跨插件读路径 |
-| `PluginInfo.origin` 增加 `"builtin"` | 输出联合加成员是隐性破坏（§2.2） |
-| 宿主强制 id 前缀 | 1.5a 已放弃（保留 `vestra.` 已在 2026-10-24 改为要做，见文末） |
-| 未知 manifest 字段改为忽略 | 失去拼写错误检查；`minPlayerVersion` 已解决向前兼容（§4.2） |
-| `maxPlayerVersion`、版本范围 | 没有需求；`apiVersion` 管破坏性变更 |
-| Markdown：内嵌 HTML、语法高亮、SVG/GIF/WebP、脚注、数学、编辑、目录跳转 | 1.6 第 10 条只要常见子集；每项都要额外解析或解码代码 |
-| Markdown 专用能力名 | 只是属性值，显示位置已受能力约束（§5.6） |
-| `.vxp` 文件关联（双击打开）、拖到主窗口直接安装 | 需要平台注册与安装确认界面；拖入安装由商城用现有 `ui.drop` 做 |
-| `npm create vestra-plugin`、`vestra-repo build` | 前者推迟到 S5 后（§7.2）；后者属于 S3 |
-| 插件沙箱、按能力限制联网与文件 | 1.6 第 4 条：以后再说 |
-| 自动更新（不经用户确认） | 1.6 第 5 条：手动确认 |
+| Host downloads `index.json`, verifies signatures, checks for updates, handles withdrawals | 1.4 placed these in the store plugin; signatures "may move into core later" |
+| Built-in HTTP client in the host (for remote images) | Brings in a TLS stack and platform certificate differences for a single display feature; Node `fetch` is enough (§5.3) |
+| `PluginInfo` carrying display fields (name, icon…) | Plugins can read `info.directory/manifest.json` directly (already validated by the host); one less projection to maintain |
+| Exposing the GUID, `installedAt` | No caller needs them (§2.5); add them via a §4 request when needed |
+| Listing and cleanup interface for dormant instances | First observe whether many leftovers really occur; when needed, design it separately as a plugin management request. User data is not deleted automatically for now |
+| Widening `ui.image` so the store can show icons inside other plugin packages | The store can copy the file into its own data directory and show it there; no cross-plugin read path opened for a single plugin |
+| `PluginInfo.origin` gaining `"builtin"` | Adding a member to an output union is a hidden break (§2.2) |
+| Host enforcing an id prefix | Dropped in 1.5a (reserving `vestra.` was changed to "do it" on 2026-10-24, see the end) |
+| Ignoring unknown manifest fields instead | Loses misspelling detection; `minPlayerVersion` already solves forward compatibility (§4.2) |
+| `maxPlayerVersion`, version ranges | No need; `apiVersion` handles breaking changes |
+| Markdown: embedded HTML, syntax highlighting, SVG/GIF/WebP, footnotes, math, editing, table-of-contents navigation | 1.6 item 10 asks only for the common subset; each item needs extra parsing or decoding code |
+| A Markdown-specific capability name | It is only a property value; where it can be shown is already constrained by capabilities (§5.6) |
+| `.vxp` file association (double-click to open), dropping onto the main window to install directly | Needs platform registration and an install confirmation UI; drop-to-install is done by the store with the existing `ui.drop` |
+| `npm create vestra-plugin`, `vestra-repo build` | The former is deferred until after S5 (§7.2); the latter belongs to S3 |
+| Plugin sandbox, restricting network and files by capability | 1.6 item 4: later |
+| Automatic updates (without user confirmation) | 1.6 item 5: manual confirmation |
 
-## 协调者确认（2026-10-21）
+## Coordinator confirmation (2026-10-21)
 
-- 提案整体通过，按 §9 的顺序在阶段 3 实现。
-- 链接安装与本地文件安装算同一来源（侧载），按提案。
-- Markdown 行内样式先做探针 M0；`StyledText` 在解释器里不可用时降级为纯文本，由维护者决定，不再请示。
-- 密钥按实例隔离，YouTube、Bilibili 已有登录失效一次：接受（未发版）。
-- 新增 `zip` crate（MIT）：用户已同意。发行包需附带其许可证文本，与其它第三方许可证一起整理。
+- The proposal is approved as a whole and is implemented in stage 3 in the order of §9.
+- Link installs and local file installs count as the same source (sideloading), as proposed.
+- Markdown inline styles start with probe M0; if `StyledText` is not usable in the interpreter, falling back to plain text is the maintainer's decision, without asking again.
+- Secrets are isolated per instance, and existing YouTube and Bilibili logins become invalid once: accepted (not released).
+- Adding the `zip` crate (MIT): the user has agreed. The release package must include its license text, collected together with the other third-party licenses.
 
-## 协调者修订（2026-10-21，内置插件留在主仓库）
+## Coordinator revision (2026-10-21, built-in plugins stay in the main repository)
 
-用户决定内置插件留在播放器仓库（生态计划 1.6 第 6 条修订），只有 `youtube`、`bilibili` 迁到插件仓库、经商城安装。对本提案的影响：
+The user decided that built-in plugins stay in the player repository (revision of ecosystem plan 1.6 item 6); only `youtube` and `bilibili` move to the plugin repository and are installed through the store. Effect on this proposal:
 
-- 内置插件的来源是**安装包**（`source.kind = "bundled"`），不是官方仓库地址；`builtin.json` 与 `.vxp` 由打包脚本从 `src/plugins/` 构建。
-- 第一版商城**不更新、不替换**内置插件：对内置 id 的任何 `install`（无论来源、带不带 `replace`）都返回 `unsupported`；只有播种（新安装包里版本更高）会升级内置插件。§3 表中「`install` 同来源（官方仓库）的新版本 → 升级」一行作废；§3.3 中「用户经商城装了更高版本则不动」一种情形不再出现。
-- 回退、停用照常。
+- The source of built-in plugins is the **installer** (`source.kind = "bundled"`), not the official repository address; `builtin.json` and the `.vxp` files are built by the packaging script from `src/plugins/`.
+- The first store version **neither updates nor replaces** built-in plugins: any `install` for a built-in id (whatever the source, with or without `replace`) returns `unsupported`; only seeding (a higher version in a new installer) upgrades built-in plugins. The row "`install` a new version from the same source (official repository) → upgrade" in the §3 table is withdrawn; the case "if the user installed a higher version through the store, leave it" in §3.3 no longer occurs.
+- Rollback and disabling work as usual.
 
-## 协调者修订（2026-10-24，`vestra.` 前缀只留给内置插件）
+## Coordinator revision (2026-10-24, the `vestra.` prefix is reserved for built-in plugins)
 
-用户裁决（生态计划开头「插件分类」）：官方插件只有播放器主仓库自带的内置插件，id 用 `vestra.<名字>`，这个前缀只留给它们。其余插件都是第三方插件，包括官方插件仓库 `plugins/` 里的；它们只是托管在官方仓库、审核更严格，id 按 `<GitHub 用户或组织>.<名字>`。youtube、bilibili 改为 `zysilm.youtube`、`zysilm.bilibili`（作者 zysilm）。播放器未发布，不做迁移。这推翻了 §4.3 与 §10 中「不给任何 id 特殊待遇」「不保留 `vestra.`」。宿主的做法：
+User ruling ("Plugin categories" at the start of the ecosystem plan): the only official plugins are the built-in plugins shipped with the player's main repository; their ids use `vestra.<name>`, and this prefix is reserved for them. All other plugins are third-party plugins, including those in the official plugin repository `plugins/`; they are only hosted in the official repository with stricter review, and their ids follow `<GitHub user or organization>.<name>`. youtube and bilibili become `zysilm.youtube` and `zysilm.bilibili` (author zysilm). The player has not been released, so there is no migration. This overturns "no id gets special treatment" and "`vestra.` is not reserved" in §4.3 and §10. What the host does:
 
-- `packages.validate`、`validateArchive`、`trial`、`install` 拒绝 id 为保留 id（不分大小写，等于 `vestra` 或以 `vestra.` 开头）的包，错误码 `reserved`，message「「<id>」：vestra. 开头的 id 只留给播放器内置插件，不能安装或试载」。商城安装、侧载（拖入 `.vxp`、从文件安装、从链接安装）、插件工坊与 AI 的安装和试载都经过这几个方法。
-- 对保留 id 的 `packages.rollback` 只在内置实例上有效（即回退内置插件，与以前相同）。
-- 内置插件只来自安装包的内置插件集合（`builtin.json`，播种时来源 `bundled`），这是保留 id 装进安装库的唯一途径。
-- 启动时，安装库里遗留的非内置保留 id 插件（这条规则之前装的）不启动；`packages.list` 里显示为 `failed`，`error` 是上面那句话；用户可以卸载它。
-- `--plugin DIR` 开发加载保留 id 仍然可以（内置插件的作者用 `--plugin` 开发），宿主在 stderr 打印警告。开发加载从不写进安装库，数据在 `plugin-data/development/<id>/`。
+- `packages.validate`, `validateArchive`, `trial` and `install` reject packages whose id is a reserved id (case-insensitive, equal to `vestra` or starting with `vestra.`), with error code `reserved` and the message "“<id>”: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed". Store installs, sideloading (dropping a `.vxp`, installing from a file, installing from a link), and installs and trials by the plugin workshop and AI all go through these methods.
+- `packages.rollback` for a reserved id works only on a built-in instance (that is, rolling back a built-in plugin, as before).
+- Built-in plugins come only from the installer's built-in plugin set (`builtin.json`, source `bundled` when seeded); this is the only way a reserved id gets into the install store.
+- At startup, leftover non-built-in plugins with reserved ids in the install store (installed before this rule) do not start; `packages.list` shows them as `failed` with the sentence above as `error`; the user can uninstall them.
+- `--plugin DIR` development loads with a reserved id are still allowed (built-in plugin authors develop with `--plugin`); the host prints a warning on stderr. Development loads are never written to the install store; their data is in `plugin-data/development/<id>/`.
 
-## 实现记录（2026-10-21，阶段 3，API 维护者）
+## Implementation record (2026-10-21, stage 3, API maintainer)
 
-按 §9 的顺序实现了 §0 的 1–8 项及协调者修订（内置插件来源 `bundled`、对内置 id 的任何 `install` 都是 `unsupported`）。播放器在 `rebuild/store-core` 工作树，SDK 在 `vestra-player-sdk` 的 `store-1.1` 分支（提交 `453088e`，版本 1.1.0，未打标签、未推送）。宿主版本升为 **0.2.0**（`Cargo.toml`），即 SDK 1.1 新增接口要求的 `minPlayerVersion`。
+Implemented items 1–8 of §0 in the order of §9, plus the coordinator revision (built-in plugin source `bundled`, any `install` for a built-in id is `unsupported`). The player is in the `rebuild/store-core` worktree, the SDK on the `store-1.1` branch of `vestra-player-sdk` (commit `453088e`, version 1.1.0, not tagged, not pushed). The host version is bumped to **0.2.0** (`Cargo.toml`), which is the `minPlayerVersion` required by the interfaces added in SDK 1.1.
 
-### 宿主
+### Host
 
-| 文件 | 内容 |
+| File | Contents |
 | --- | --- |
-| `manifest.rs`（新） | 开发加载与托管包共用的 `Manifest`（`plugins::Manifest`、`package_stage::PackageManifest` 都是它的别名）与规则表（§4.1）；`parse` 先读 `minPlayerVersion` 再严格解析；`NeedsPlayer` 错误在 RPC 里映射为 `versionMismatch` |
-| `package_store.rs` | `Installed.instance`（GUID、`source`、`builtin`、`installedAt`、`seededVersion`）、`Catalog.dormant`（≤ 256）、`Recovery.instance`；提交时按 GUID 判断升级/替换（替换：旧实例转休眠、`previous` 清空；换回：从休眠取回）；`uninstall(keep_data)`；旧 catalog 打开时补实例 |
-| `package_manager.rs` | `install` 读 `source`/`replace` 决定实例（`install_instance`，§1.3/§2.3）；`packages.validateArchive`；`uninstall` 拒绝内置；`packages.list` 新字段；开发加载同 id 时优先；`seed_builtins` 播种 |
-| `package_archive.rs`（新） | `.vxp` 解压（`zip` 9.0.5，只开 deflate），上限在解压过程中强制 |
-| `plugins.rs` | `DataKey`（`Instance(guid)` / `Development(id)` / `Trial`）决定数据目录与密钥服务名 |
-| `system.rs` | `secrets.*` 的服务名取自 `DataKey` |
-| `ui_markdown.rs`（新）、`ui/vestra/markdown.slint`（新） | pulldown-cmark 0.13.4 解析成 `[MarkdownBlock]` 模型；`ui_image.rs` 的 `prop_value` 识别 `$vestraMarkdown`；`ui.markdownScan`（无能力）返回需要下载的远程图片 |
-| `ui_values.rs` | `reconcile` 遇到非 JSON 值（Markdown 行里的图片与样式文字）时整体替换，不再报错 |
+| `manifest.rs` (new) | The `Manifest` shared by development loads and managed packages (`plugins::Manifest` and `package_stage::PackageManifest` are both aliases of it) and the rule table (§4.1); `parse` reads `minPlayerVersion` first and then parses strictly; the `NeedsPlayer` error is mapped to `versionMismatch` in RPC |
+| `package_store.rs` | `Installed.instance` (GUID, `source`, `builtin`, `installedAt`, `seededVersion`), `Catalog.dormant` (≤ 256), `Recovery.instance`; at commit, upgrade/replace is decided by GUID (replace: the old instance becomes dormant, `previous` is cleared; switch back: taken back from dormant); `uninstall(keep_data)`; an old catalog gets instances when opened |
+| `package_manager.rs` | `install` reads `source`/`replace` to decide the instance (`install_instance`, §1.3/§2.3); `packages.validateArchive`; `uninstall` rejects built-ins; new `packages.list` fields; a development load with the same id takes priority; `seed_builtins` seeding |
+| `package_archive.rs` (new) | `.vxp` extraction (`zip` 9.0.5, deflate only); limits enforced during extraction |
+| `plugins.rs` | `DataKey` (`Instance(guid)` / `Development(id)` / `Trial`) decides the data directory and the secret service name |
+| `system.rs` | The service name of `secrets.*` is taken from `DataKey` |
+| `ui_markdown.rs` (new), `ui/vestra/markdown.slint` (new) | pulldown-cmark 0.13.4 parses into the `[MarkdownBlock]` model; `prop_value` in `ui_image.rs` recognizes `$vestraMarkdown`; `ui.markdownScan` (no capability) returns the remote images to download |
+| `ui_values.rs` | `reconcile` replaces the whole value when it meets non-JSON values (images and styled text in Markdown rows) instead of reporting an error |
 
-**M0 探针结论：采用 `StyledText`**。`slint::private_unstable_api::re_exports::{parse_markdown, string_to_styled_text}` 构造 `Value::StyledText`（解释器里该变体 `doc(hidden)`），插件 `.slint` 里的 `StyledText` 元素与结构体字段 `styled-text` 都能编译、渲染、`link-clicked` 可用（`ui_markdown` 的无界面渲染测试：文字、图片像素、点击链接回调）。为了不让用户文本进入 Slint 的 Markdown 解析，格式串里只有我们生成的标记与占位符 U+E541，文字全部作为占位参数传入；`parse_markdown` 包在 `catch_unwind` 里，失败时退回纯文本。Slint 锁定 `=1.16.1`，升级 Slint 时须复测这一处（`ui_markdown.rs` 的 `Inline::styled` 与渲染测试）。
+**M0 probe conclusion: use `StyledText`**. `slint::private_unstable_api::re_exports::{parse_markdown, string_to_styled_text}` constructs `Value::StyledText` (that variant is `doc(hidden)` in the interpreter); the `StyledText` element in plugin `.slint` files and the struct field `styled-text` both compile and render, and `link-clicked` works (headless rendering test in `ui_markdown`: text, image pixels, link click callback). To keep user text out of Slint's Markdown parsing, the format string contains only markup we generate and the placeholder U+E541, and all text is passed as placeholder arguments; `parse_markdown` is wrapped in `catch_unwind` and falls back to plain text on failure. Slint is pinned to `=1.16.1`; this spot must be retested on every Slint upgrade (`Inline::styled` in `ui_markdown.rs` and the rendering test).
 
-**与提案不同的实现选择**
+**Implementation choices that differ from the proposal**
 
-- 启用状态仍存在原 `disabled` 集合（按 id，只作用于当前实例），没有搬进 `instance.enabled`：语义相同、改动更小。
-- 内置插件播种在启动时**直接提交**，不等激活成功；随后由启动流程像其它已安装插件一样启动，启动失败显示为 `failed`。若等激活，无界面或某次启动失败时内置插件会从列表里消失。
-- 试载的数据目录与密钥服务名不变（本来就按 `<id>.trial.<owner>` 隔离）。
-- `validateArchive` 的解压错误为 `invalid`（目录的 `validate` 出错仍是原来的 `host`）。
-- 卸载时删除数据，但系统密钥库里该实例的条目不删（无法枚举服务下的条目）；新实例的服务名不同，读不到它们。
+- The enabled state is still stored in the original `disabled` set (by id, applying only to the current instance) and was not moved into `instance.enabled`: same semantics, smaller change.
+- Built-in plugin seeding **commits directly** at startup without waiting for activation to succeed; the startup flow then starts them like any other installed plugin, and a failed start shows as `failed`. If seeding waited for activation, built-in plugins would disappear from the list in headless mode or after a failed start.
+- The trial data directory and secret service name are unchanged (already isolated by `<id>.trial.<owner>`).
+- Extraction errors in `validateArchive` are `invalid` (errors from directory `validate` are still the original `host`).
+- Uninstalling deletes the data, but the instance's entries in the system keychain are not deleted (the entries under a service cannot be enumerated); the new instance has a different service name and cannot read them.
 
-### 打包
+### Packaging
 
-`src/scripts/stage-plugins.mjs <目标>/plugins`：对 `src/plugins/` 下每个有 `manifest.json` 的目录运行 `vestra-plugin pack`，生成 `<id>-<version>.vxp` 与 `builtin.json`（`{ schema: 1, plugins: [{ id, version, file, sha256 }] }`；SDK 1.0 产出的 `.zip` 自动改名）。宿主从 `$VESTRA_BUILTIN_PLUGINS`，否则 `<exe>/../../Resources/plugins` 读取；没有 `builtin.json` 时不播种（开发运行）。youtube、bilibili 由另一个工作树删除后自然不再打包。
+`src/scripts/stage-plugins.mjs <target>/plugins`: runs `vestra-plugin pack` for each directory with a `manifest.json` under `src/plugins/`, producing `<id>-<version>.vxp` and `builtin.json` (`{ schema: 1, plugins: [{ id, version, file, sha256 }] }`; `.zip` files produced by SDK 1.0 are renamed automatically). The host reads from `$VESTRA_BUILTIN_PLUGINS`, otherwise `<exe>/../../Resources/plugins`; without `builtin.json` there is no seeding (development runs). youtube and bilibili are deleted by another worktree and so are naturally no longer packaged.
 
-**新增依赖与许可证**：`zip` 9.0.5（MIT；新带进依赖树的只有 `typed-path` 与 Unix 上的 `nix` 0.31，均为 MIT 或 MIT/Apache-2.0，其余 `flate2`、`crc32fast`、`indexmap`、`memchr` 原已在树里）、`uuid` 1.28.0 与 `pulldown-cmark` 0.13.4（均已在依赖树里）。仓库目前没有汇总第三方许可证文本的位置，发行包附带许可证需在打包任务里统一处理。
+**New dependencies and licenses**: `zip` 9.0.5 (MIT; the only crates newly brought into the dependency tree are `typed-path` and, on Unix, `nix` 0.31, all MIT or MIT/Apache-2.0; the others, `flate2`, `crc32fast`, `indexmap`, `memchr`, were already in the tree), `uuid` 1.28.0 and `pulldown-cmark` 0.13.4 (both already in the dependency tree). The repository currently has no place that collects third-party license texts; including licenses in the release package needs to be handled in the packaging task.
 
 ### SDK 1.1.0
 
-类型、`packages.validateArchive`、`install(options)`、`PluginInfo` 新字段、`ui.markdown`（`src/plugin/markdown.ts`：Node `fetch` 只下 `https:`、手动跟随 ≤ 5 次重定向、单张 4 MB、10 秒、并发 4、缓存 32 MB/24 小时）、`src/manifest.ts`（CLI 的规则表；`MANIFEST_LIMITS`、`MANIFEST_FIELDS`、`MARKDOWN_LIMITS` 经 `./runtime` 给播放器一致性测试）、TestHost、CLI、`slint/vestra/markdown.slint`、README / Getting started / `CHANGELOG.md`。全部是新增；兼容性审查同 §7.3。`npm create vestra-plugin` 按 §7.2 推迟。
+Types, `packages.validateArchive`, `install(options)`, new `PluginInfo` fields, `ui.markdown` (`src/plugin/markdown.ts`: Node `fetch` downloads only `https:`, follows ≤ 5 redirects manually, 4 MB per image, 10 seconds, concurrency 4, cache 32 MB/24 hours), `src/manifest.ts` (the CLI's rule table; `MANIFEST_LIMITS`, `MANIFEST_FIELDS`, `MARKDOWN_LIMITS` are given to the player's agreement tests through `./runtime`), TestHost, CLI, `slint/vestra/markdown.slint`, README / Getting started / `CHANGELOG.md`. All additive; compatibility review as in §7.3. `npm create vestra-plugin` is deferred per §7.2.
 
-### 文档与示例
+### Documentation and examples
 
-`doc/plugins/reference.md`（§2、§3.4、§6.1、§12、§13、§15、§17）、`doc/plugins/store-changes.md`（给插件维护者的通知与例子）、`doc/plugins/README.md`、`doc/architecture/README.md`；示例插件 `src/examples/markdown/`（Markdown 窗口、显示字段、`minPlayerVersion`）。
+`doc/plugins/reference.md` (§2, §3.4, §6.1, §12, §13, §15, §17), `doc/plugins/store-changes.md` (notice and examples for plugin maintainers), `doc/plugins/README.md`, `doc/architecture/README.md`; example plugin `src/examples/markdown/` (Markdown window, display fields, `minPlayerVersion`).
 
-### 检查（本次实际执行）
+### Checks (actually run this time)
 
-- 宿主（`CARGO_TARGET_DIR=~/.cache/vestra-target/core`）：`cargo fmt --check`、`cargo clippy --locked --all-targets -- -D warnings` 通过；`cargo test --locked` 287/287（基线 263，新增 24）。`npm run portability`：clean，宿主可编译到 Windows 目标。
-- SDK 仓库：`npm ci`、`check`、`format:check`、`build`、`npm test` 111/111（基线 105）、`npm pack --dry-run`（83 个文件）、`npm run docs`（警告即错误）通过。
-- 播放器（临时 `npm install <SDK 仓库>`）：`check`、`format:check`、`boundaries` 通过；`test:sdk` 11/11；`plugins:build` 通过；19 个插件测试 552/552，与基线逐个相同；示例 bookmark 1、core-ui 2、panel-menu 1、markdown 1。交付前 `src/package.json`、`package-lock.json` 已恢复为 `^1.0.0`（与提交前逐字节相同）。
-- 无界面端到端（`vestra-host --headless`，临时的安装库与数据根）：首次播种 19 个内置插件（来源 `bundled`、各自 GUID 目录）；再次启动不重复播种；新安装包里 2 个插件升版本后升级、GUID 不变、`previousVersion` 为旧版本、用户停用状态保留；一个 `plugins.manage` 驱动插件依次验证了 `validateArchive`、仓库来源安装、异来源 `conflict`、`replace` 替换（新 GUID）、换回原来源（复用原 GUID 与数据）、内置插件 `uninstall`/`install` 均为 `unsupported`、可停用、含 `../` 条目的包被拒、`minPlayerVersion: 9.0.0` 的包为 `versionMismatch`、保留数据卸载后转休眠；开发加载与已安装插件同 id 时只运行开发加载的。
+- Host (`CARGO_TARGET_DIR=~/.cache/vestra-target/core`): `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings` pass; `cargo test --locked` 287/287 (baseline 263, 24 new). `npm run portability`: clean, the host compiles for the Windows target.
+- SDK repository: `npm ci`, `check`, `format:check`, `build`, `npm test` 111/111 (baseline 105), `npm pack --dry-run` (83 files), `npm run docs` (warnings as errors) pass.
+- Player (temporary `npm install <SDK repository>`): `check`, `format:check`, `boundaries` pass; `test:sdk` 11/11; `plugins:build` passes; 19 plugin test suites 552/552, identical to the baseline one by one; examples bookmark 1, core-ui 2, panel-menu 1, markdown 1. Before delivery, `src/package.json` and `package-lock.json` were restored to `^1.0.0` (byte-identical to before the commit).
+- Headless end-to-end (`vestra-host --headless`, temporary install store and data root): first seeding of 19 built-in plugins (source `bundled`, each with its own GUID directory); a second launch does not seed again; with 2 plugins at higher versions in a new installer, they upgrade, the GUID does not change, `previousVersion` is the old version, and the user's disabled state is kept; a `plugins.manage`-driven plugin verified in turn `validateArchive`, install from a repository source, `conflict` from another source, `replace` replacement (new GUID), switching back to the original source (reusing the original GUID and data), `uninstall`/`install` of a built-in plugin both `unsupported`, it can be disabled, a package with a `../` entry is rejected, a package with `minPlayerVersion: 9.0.0` gets `versionMismatch`, and uninstalling with data kept makes it dormant; when a development load and an installed plugin share an id, only the development load runs.
 
-### 发现但未修
+### Found but not fixed
 
-- 安装库的操作回执上限 512 条（`MAX_OPERATIONS`）从不清理；每次播种升级也会写回执（同一包复用同一回执 id）。长期使用后安装会以「operation history full」失败，需要单独设计回执的淘汰。
-- `npm run portability` 把 Windows 检查的产物写在仓库内 `src/host/target/portability`（已被 `.gitignore` 忽略），与「不在仓库里产生 `target/`」的约定不一致。
+- The install store's operation receipt limit of 512 (`MAX_OPERATIONS`) is never cleaned up; every seeding upgrade also writes a receipt (the same package reuses the same receipt id). After long use, installs will fail with "operation history full"; receipt eviction needs a separate design.
+- `npm run portability` writes the Windows check output inside the repository at `src/host/target/portability` (ignored by `.gitignore`), which is inconsistent with the convention "do not create `target/` in the repository".
 
-### GUI 复测修正（2026-10-21）
+### GUI retest fixes (2026-10-21)
 
-协调者真机测试 Markdown 示例发现 5 处问题，已修（宿主 `ui_markdown.rs`、`ui/vestra/markdown.slint`，示例 `sample.md`；SDK `store-1.1.1` 分支提交 `e42a866`，版本 1.1.1，未打标签）：
+The coordinator's real-device test of the Markdown example found 5 problems, now fixed (host `ui_markdown.rs`, `ui/vestra/markdown.slint`, example `sample.md`; SDK branch `store-1.1.1` commit `e42a866`, version 1.1.1, not tagged):
 
-| 问题 | 原因 | 修正 |
+| Problem | Cause | Fix |
 | --- | --- | --- |
-| 斜体、删除线看不出 | 强制的中文字体（Hiragino Sans GB / Microsoft YaHei）没有斜体，Slint 1.16 的渲染器忽略斜体合成；删除线粗细取自字体，正文字号下不足 1 像素。拉丁文同样受影响（拉丁文也用这个字体） | 保留 `Emphasis`/`Strikethrough` 样式，另用 `<font color>` 着色：斜体琥珀色 `#e8a33d`、删除线灰色 `#8a8496`（格式串里只能写字面颜色，两套配色下都可读） |
-| 含中文的行内代码不显示 | Slint 的 `Code` 样式把字体族换成单一的等宽字体，没有回退 | 代码文字按字符分段：ASCII 段用 `Code`，其它段用正文字体；代码块改为同样分段的 `styled-text`（逐行硬换行，空行与缩进保留），等宽显示 ASCII |
-| 未完成任务显示为缺字方框 | ☐ 不在字体里 | `MarkdownBlock.task`（0/1/2），方框与勾用 Slint 图形绘制；`marker` 对任务项为空 |
-| 表头与正文对齐不一致 | 每行各自按内容分配列宽 | `MarkdownBlock.aligns` 取自 GFM 分隔行；每行列宽相等，表头与正文都按列对齐；短行补空单元格 |
-| 示例的远程图片 400 | Wikimedia 不再接受非标准缩略图尺寸 | 改用 `https://github.com/vestrasys.png?size=128`（本组织头像，302 到 avatars.githubusercontent.com，顺带覆盖重定向路径；已用 SDK 下载器实测取回 PNG）。播放器与插件仓库是私有的，raw.githubusercontent.com 取不到；公开的 SDK 仓库里没有 PNG。SDK 的下载器改为可注入 `fetch`，新增 HTTP 错误、跳到 `http:`、重定向上限、大小上限与 `User-Agent` 的测试 |
+| Italic and strikethrough not visible | The forced Chinese font (Hiragino Sans GB / Microsoft YaHei) has no italic, and the Slint 1.16 renderer ignores synthesized italics; the strikethrough thickness comes from the font and is under 1 pixel at body size. Latin text is affected too (Latin text also uses this font) | Keep the `Emphasis`/`Strikethrough` styles and additionally color them with `<font color>`: italic amber `#e8a33d`, strikethrough gray `#8a8496` (the format string can only contain literal colors; both are readable in both color schemes) |
+| Inline code containing Chinese is not shown | Slint's `Code` style switches the font family to a single monospace font with no fallback | Code text is split by character: ASCII runs use `Code`, other runs use the body font; code blocks become `styled-text` split the same way (hard line breaks per line, empty lines and indentation kept), with ASCII shown in monospace |
+| Unfinished tasks show as a missing-glyph box | ☐ is not in the font | `MarkdownBlock.task` (0/1/2); the box and check mark are drawn with Slint shapes; `marker` is empty for task items |
+| Header and body alignment differ | Each row allocated column widths from its own content | `MarkdownBlock.aligns` is taken from the GFM delimiter row; every row has equal column widths, header and body are aligned by column; short rows are padded with empty cells |
+| The example's remote image returns 400 | Wikimedia no longer accepts non-standard thumbnail sizes | Use `https://github.com/vestrasys.png?size=128` instead (this organization's avatar, 302 to avatars.githubusercontent.com, which also covers the redirect path; verified that the SDK downloader fetches a PNG). The player and plugin repositories are private, so raw.githubusercontent.com cannot serve them; the public SDK repository has no PNG. The SDK downloader now accepts an injected `fetch`, with new tests for HTTP errors, redirects to `http:`, the redirect limit, the size limit and `User-Agent` |
 
-结构体 `MarkdownBlock` 新增字段属于控件库内部数据（插件只传递 `plugin.ui.markdown()` 的值），不影响插件。宿主测试 288/288（新增 1 项回归测试；渲染测试增加任务方框的像素检查）；SDK 112/112。
+The new fields of the `MarkdownBlock` struct are internal widget-library data (plugins only pass along the value of `plugin.ui.markdown()`) and do not affect plugins. Host tests 288/288 (1 new regression test; the rendering test adds a pixel check for task boxes); SDK 112/112.
