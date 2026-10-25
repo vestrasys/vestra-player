@@ -1,230 +1,230 @@
-# 任务 1 步骤 1.1：Slint 1.16.1 → 1.18.1 调研（维护者）
+# Task 1 step 1.1: Slint 1.16.1 → 1.18.1 research (maintainer)
 
-日期 2026-10-22。基线 `rebuild/slint-118` = main `0349e36`。本文只做调研，没有改任何仓库文件。
+Date 2026-10-22. Baseline `rebuild/slint-118` = main `0349e36`. This document is research only; no repository file was changed.
 
-**试验环境**（一次性，可删）：
-- 试验 worktree `scratchpad/wt-slint-trial`（分支 `trial/slint-118-research`）：两处版本钉改成 `=1.18.1`、`cargo update -p slint -p slint-interpreter --precise 1.18.1`，`ui_markdown.rs` 的两个用 `as_ref()` 的测试用 `#[cfg(any())]` 临时关掉；`src/node_modules` 是指向 wt-core 的软链接。清理：`git worktree remove --force …/wt-slint-trial && git branch -D trial/slint-118-research`。
-- 对照探针 `scratchpad/slint118/probe-{116,118}`（同一份 `probe-common/main.rs`，分别链接 1.16.1、1.18.1，软件渲染器无窗口）：渲染对比、ComboBox 复现、条件元素布局复现、逐文件编译诊断。原始输出：`slint118/diag-116.txt`、`diag-118.txt`、`test-118.log`、`subp-*.log`。
-- `CARGO_TARGET_DIR=~/.cache/vestra-target/slint118`。上游变更日志取自 `https://raw.githubusercontent.com/slint-ui/slint/v1.18.1/CHANGELOG.md`（crate 包里没有 CHANGELOG），存于 `slint118/CHANGELOG.md`。
+**Trial environment** (one-off, can be deleted):
+- Trial worktree `scratchpad/wt-slint-trial` (branch `trial/slint-118-research`): both version pins changed to `=1.18.1`, `cargo update -p slint -p slint-interpreter --precise 1.18.1`, the two tests in `ui_markdown.rs` that use `as_ref()` temporarily disabled with `#[cfg(any())]`; `src/node_modules` is a symlink to wt-core. Cleanup: `git worktree remove --force …/wt-slint-trial && git branch -D trial/slint-118-research`.
+- Comparison probes `scratchpad/slint118/probe-{116,118}` (the same `probe-common/main.rs`, linked against 1.16.1 and 1.18.1 respectively, software renderer, no window): rendering comparison, ComboBox reproduction, conditional-element layout reproduction, per-file compile diagnostics. Raw output: `slint118/diag-116.txt`, `diag-118.txt`, `test-118.log`, `subp-*.log`.
+- `CARGO_TARGET_DIR=~/.cache/vestra-target/slint118`. The upstream changelog was taken from `https://raw.githubusercontent.com/slint-ui/slint/v1.18.1/CHANGELOG.md` (the crate package has no CHANGELOG) and stored at `slint118/CHANGELOG.md`.
 
-**1.18 下的实测结果一览**
+**Measured results under 1.18 at a glance**
 
-| 检查 | 结果 |
+| Check | Result |
 | --- | --- |
-| `cargo build`（正式代码） | 无错误无警告 |
-| `cargo clippy --locked --all-targets -D warnings`（关掉两个 as_ref 测试后） | 通过，无弃用警告 |
-| `cargo fmt --check` | 通过 |
-| `cargo test --locked` | 289 通过、2 失败（见下）、2 个测试临时编译掉 |
-| 失败 1 `ui_probe::a_combo_box_two_way_bound_to_a_global_is_refused` | 预期内：上游已修，探针不再拒绝 |
-| 失败 2 `ui::popped_sidebar_narrows_the_fullscreen_bar_from_the_left_edge` | **1.18 行为变化**：`if` 条件变化后，在下一次渲染前读到的布局几何是旧的（§1.3） |
-| 54 个 .slint 逐个编译 | 0 个新错误；新增 15 条警告（14 条 `viewport-*` 弃用、1 条 `hide` 遮蔽内置函数），§3 |
-| subtitles 插件测试 | 单独跑 3/3 通过；4 路并发跑 12 次失败 3 次，已定位（§5.4），与 Slint 无关 |
+| `cargo build` (production code) | No errors, no warnings |
+| `cargo clippy --locked --all-targets -D warnings` (after disabling the two as_ref tests) | Passes, no deprecation warnings |
+| `cargo fmt --check` | Passes |
+| `cargo test --locked` | 289 passed, 2 failed (see below), 2 tests temporarily compiled out |
+| Failure 1 `ui_probe::a_combo_box_two_way_bound_to_a_global_is_refused` | Expected: fixed upstream, the probe no longer refuses |
+| Failure 2 `ui::popped_sidebar_narrows_the_fullscreen_bar_from_the_left_edge` | **1.18 behavior change**: after an `if` condition changes, layout geometry read before the next render is stale (§1.3) |
+| Compiling each of the 54 .slint files | 0 new errors; 15 new warnings (14 `viewport-*` deprecations, 1 `hide` shadowing a builtin function), §3 |
+| subtitles plugin tests | 3/3 pass when run alone; 3 failures out of 12 runs with 4 in parallel, located (§5.4), unrelated to Slint |
 
 ---
 
-## 1. 1.16.1 → 1.18.x 与我们相关的变化
+## 1. Changes from 1.16.1 → 1.18.x that affect us
 
-### 1.1 破坏性 / 编译层面
+### 1.1 Breaking / compile level
 
-| 变化 | 出处 | 对我们 |
+| Change | Source | Effect on us |
 | --- | --- | --- |
-| `StyledText` 改为公开类型 `slint::StyledText`（`from_plain_text`、`from_markdown`），去掉了 `AsRef<[StyledTextParagraph]>`，段落字段变成 `pub(crate)` | 1.17.0 Rust「Added `StyledText` struct …」；源码 `i-slint-core-1.18.1/styled_text.rs` | `ui_markdown.rs:760,803` 的测试编译失败。正式代码仍可用 `private_unstable_api::re_exports::{parse_markdown, string_to_styled_text}`（1.18.1 仍在，`private_unstable_api.rs:159`）；带占位参数的插值只有这个私有函数能做，公开的 `from_markdown` 不接受参数。解释器的 `Value::StyledText` 仍是 `#[doc(hidden)]`（`slint-interpreter-1.18.1/api.rs:133`）。**结论：私有接口依赖仍在，升级 Slint 时须复测这一处的规则不变** |
-| `parse_markdown` 不再 `unwrap()` 解析错误，改为 `debug_log` 后返回部分结果 | 对比 1.16.1 `styled_text.rs:90` 与 1.18.1 `styled_text.rs:148` | `Inline::styled` 的 `catch_unwind` 退回纯文本的分支在 1.18 下不会再触发（无害，可删） |
-| `Flickable`/`ScrollView` 的 `viewport-x/y/width/height` 改名 `content-*`，旧名弃用（仍可用） | 1.18.0 Slint language「Renamed the `viewport-x`…」(#1443) | 14 条弃用警告：`@vestra/markdown.slint`（宿主 + SDK 副本）、playlist、audio、video 插件 |
-| Window 新增内置函数 `close()`、`hide()`（1.17），组件自己声明同名回调时出警告「shadows the builtin function」 | 1.17.0「`Window`: Added … `close()`, and `hide()` functions」；1.18.0「A component can now declare … shadows a private member」 | `playlist/ui/link.slint:11 callback hide()` 警告；宿主生成的选项窗口源码 `settings_window.rs:144 callback close()` 同样（生成源码，不在扫描里）。行为不变：调用仍落到自己声明的回调 |
-| `unstable-wgpu-*`、`unstable-fontique-*` 特性改名 | 1.17/1.18 Rust | 我们不用，无影响。`unstable-winit-030` 仍在（`slint-1.18.1/Cargo.toml:53`、`lib.rs:664`），宿主用法编译通过 |
-| `Window::try_dispatch_event` 弃用 | 1.18.0 Rust | 我们只用 `dispatch_event`，无影响 |
-| 依赖树：femtovg 0.23.2 → 0.27.0、parley/fontique 0.8 → 0.11.1；femtovg 改用 glow 0.18.0 | `Cargo.lock` 差异（+56/−44 个包） | `unsafe/render` 自己钉 `glow =0.17.0`，与 femtovg 的 0.18.0 并存。两者不共享类型（render 用自己的 `glow::Context::from_loader_function_cstr`），可编译；建议顺手升到 `=0.18.0` 去重（需编译验证）。**femtovg 大版本跨度是 GPU 渲染的主要风险**，只能真机验证 |
+| `StyledText` became the public type `slint::StyledText` (`from_plain_text`, `from_markdown`), `AsRef<[StyledTextParagraph]>` was removed, paragraph fields became `pub(crate)` | 1.17.0 Rust "Added `StyledText` struct …"; source `i-slint-core-1.18.1/styled_text.rs` | Tests at `ui_markdown.rs:760,803` fail to compile. Production code can still use `private_unstable_api::re_exports::{parse_markdown, string_to_styled_text}` (still present in 1.18.1, `private_unstable_api.rs:159`); only this private function can interpolate placeholder arguments, the public `from_markdown` takes no arguments. The interpreter's `Value::StyledText` is still `#[doc(hidden)]` (`slint-interpreter-1.18.1/api.rs:133`). **Conclusion: the private-API dependency remains; every Slint upgrade must re-test that this rule still holds here** |
+| `parse_markdown` no longer `unwrap()`s parse errors; it calls `debug_log` and returns a partial result | Compare 1.16.1 `styled_text.rs:90` with 1.18.1 `styled_text.rs:148` | The `catch_unwind` fallback to plain text in `Inline::styled` will no longer trigger under 1.18 (harmless, can be removed) |
+| `viewport-x/y/width/height` of `Flickable`/`ScrollView` renamed to `content-*`, old names deprecated (still work) | 1.18.0 Slint language "Renamed the `viewport-x`…" (#1443) | 14 deprecation warnings: `@vestra/markdown.slint` (host + SDK copy), playlist, audio, video plugins |
+| Window gained the builtin functions `close()` and `hide()` (1.17); a component that declares a callback with the same name gets the warning "shadows the builtin function" | 1.17.0 "`Window`: Added … `close()`, and `hide()` functions"; 1.18.0 "A component can now declare … shadows a private member" | Warning at `playlist/ui/link.slint:11 callback hide()`; the same for the options window source generated by the host, `settings_window.rs:144 callback close()` (generated source, not in the scan). Behavior unchanged: calls still go to the declared callback |
+| `unstable-wgpu-*` and `unstable-fontique-*` features renamed | 1.17/1.18 Rust | We don't use them, no effect. `unstable-winit-030` is still there (`slint-1.18.1/Cargo.toml:53`, `lib.rs:664`); the host's usage compiles |
+| `Window::try_dispatch_event` deprecated | 1.18.0 Rust | We only use `dispatch_event`, no effect |
+| Dependency tree: femtovg 0.23.2 → 0.27.0, parley/fontique 0.8 → 0.11.1; femtovg now uses glow 0.18.0 | `Cargo.lock` diff (+56/−44 packages) | `unsafe/render` pins `glow =0.17.0` itself, which coexists with femtovg's 0.18.0. The two share no types (render uses its own `glow::Context::from_loader_function_cstr`), so it compiles; suggest bumping to `=0.18.0` along the way to deduplicate (needs a compile check). **The major-version jump in femtovg is the main risk for GPU rendering**, and can only be verified on a real machine |
 
-### 1.2 修掉了我们绕开的问题（上游证据 + 实测）
+### 1.2 Fixed problems we worked around (upstream evidence + measurements)
 
-| 上游条目 | 我们的绕路 | 实测 |
+| Upstream entry | Our workaround | Measurement |
 | --- | --- | --- |
-| 1.18.0「Fixed `changed` handlers and animations on properties that are two-way bound to a global property. (#12155, #4529)」；1.18.1「Interpreter: Fixed two-way bindings when several properties link to the same one. (#13446)」 | `ui_probe.rs` 预检、reference.md §736 规则 | 探针：`ComboBox { current-index <=> Bridge.index }` 改 global 后，1.16.1 panic「accessing deleted parent (issue #6426)」，1.18.1 正常返回 `current-index = 2` |
-| 字体回退（parley/fontique 0.11；`shaping.rs:71` 按请求字体的行高比统一行高） | 强制 Hiragino Sans GB（`ui.rs:33`）；`font-mono` 不能显示中文（reference §737）；Markdown 代码按 ASCII/非 ASCII 分字体 | 不指定字体时 `Text "中文…"`：1.16.1 墨迹 0 像素（空白，与 2026-10-20 真机现象一致），1.18.1 948 像素；`font-family: "Menlo"` 写中文：1.16.1 为 0，1.18.1 为 948；Markdown `` `中文` ``：1.16.1 为 0，1.18.1 正常 |
-| 1.18.0「`StyledText`: Inline code from `@markdown` now renders in a monospace font with a capsule background」（字号 ×0.85，`shaping.rs:18 INLINE_CODE_FONT_SCALE`） | — | **外观变化**：每个 Code 段都有半透明胶囊底。我们现在把代码块逐行、按 ASCII 段套 Code，1.18 下代码块会变成一段段胶囊、字号变小、中文段没有胶囊，需改写（§2） |
+| 1.18.0 "Fixed `changed` handlers and animations on properties that are two-way bound to a global property. (#12155, #4529)"; 1.18.1 "Interpreter: Fixed two-way bindings when several properties link to the same one. (#13446)" | `ui_probe.rs` pre-check, rule at reference.md §736 | Probe: after changing the global for `ComboBox { current-index <=> Bridge.index }`, 1.16.1 panics "accessing deleted parent (issue #6426)", 1.18.1 returns `current-index = 2` normally |
+| Font fallback (parley/fontique 0.11; `shaping.rs:71` unifies line height using the line-height ratio of the requested font) | Force Hiragino Sans GB (`ui.rs:33`); `font-mono` cannot show Chinese (reference §737); Markdown code uses separate fonts for ASCII/non-ASCII | `Text "中文…"` without a font: 1.16.1 0 ink pixels (blank, matching the real-machine observation of 2026-10-20), 1.18.1 948 pixels; Chinese with `font-family: "Menlo"`: 1.16.1 0, 1.18.1 948; Markdown `` `中文` ``: 1.16.1 0, 1.18.1 normal |
+| 1.18.0 "`StyledText`: Inline code from `@markdown` now renders in a monospace font with a capsule background" (font size ×0.85, `shaping.rs:18 INLINE_CODE_FONT_SCALE`) | — | **Appearance change**: every Code run gets a translucent capsule background. We currently apply Code line by line and per ASCII run in code blocks; under 1.18 code blocks would turn into a series of capsules, with a smaller font size and no capsule on Chinese runs. Needs a rewrite (§2) |
 
-### 1.3 行为变化（需要真机关注）
+### 1.3 Behavior changes (need attention on a real machine)
 
-| 变化 | 出处 | 对我们的影响 |
+| Change | Source | Effect on us |
 | --- | --- | --- |
-| **`if` 条件变化后，布局在下一次遍历/渲染前不更新**。读到的 `width`/`absolute-position` 等是旧值 | 未在变更日志里单独写出；可能与 1.17.0「`for` and `if` elements are now instantiated eagerly」有关。探针 `layout` 复现：已显示的窗口里 `HorizontalLayout { a, if side: Rectangle{317px} }`，把 `side` 设为 false，1.16.1 立即读到 a=1470，1.18.1 仍为 1150，`update_timers_and_animations()` 也不更新，渲染一帧后才变 1470；未显示的窗口在 `show()` 后更新 | 宿主测试 `ui.rs:395` 因此失败。正式代码里宿主在同一轮里先设 `sidebar-visible`/`bottom-visible`（`main.rs:1300-1314`），再读 `video-x/y/width/height`、`logical-*`（`main.rs:1017`、`1216`、`2687`，用于画中画位置、窗口按视频尺寸调整、`sizing.observe`），1.18 下可能读到上一帧的值，下一轮才对。需真机看「显示/隐藏播放列表后立即按视频尺寸调整窗口」「切全屏」等。可考虑向上游报告 |
-| 焦点元素变为不可见时清除焦点 | 1.18.0「Fixed the focus not being cleared when the focused item becomes invisible. (#11079)」 | 宿主快捷键靠 `keys := FocusScope` 收冒泡（`host.slint:82-92`）。全屏时底栏 `visible: root.bottom-visible`：若焦点在底栏控件上、底栏隐藏，1.18 会清焦点，之后按键可能到不了绑定表，直到点击画面。侧栏收起时宿主已调用 `focus-video`（`main.rs:1315`），底栏没有 |
-| std-widgets 默认字号与 `Text` 一致：fluent 的 `body` 从 `14 * 0.0769rem`（≈1.077rem）变为 1rem | 1.17.1「Widgets: Made the default font size consistent with plain `Text`. (#12237)」；对比 `widgets/fluent/styling.slint` | 插件里 std 的 `LineEdit`、`CheckBox`、`ComboBox`、`Button` 文字约小 7%。Windows/Linux 上默认字号还会读系统设置（1.17.0），Windows 留到 S6 |
-| fluent `ComboBox` 最小宽度改为 `max(160px, layout.min-width)`（原来误用 `min-height`） | 1.18.1「Widgets: Fixed the minimum width of `ComboBox`…(#13447)」 | 选项较长时 ComboBox 会更宽，可能撑宽 capture/subtitles/playlist 设置页。160px 下限仍在，hotkeys 自制下拉框（`hotkeys/ui/parts.slint:2`）仍需要 |
-| 换行文本的最小宽度 = 最长单词宽度；带 padding 的布局里换行文本按正确宽度测量；Vertical/GridLayout 里换行文本单元格按分到的宽度测高 | 1.18.0 `Text` 条目、(#12776) | 含长 URL/路径的换行文字会抬高窗口最小宽度；对话框高度可能变化 |
-| 滚轮滚动有动画；无可平移内容时按下立即转发 | 1.17.0「`Flickable`: Animate wheel scrolling. (#11312)」、1.18.0 (#13117) | 播放列表（`ListView`）的滚轮滚动与 `viewport-y` 回报（拖放落点计算）；动画期间会多次回报。右键菜单的滚动是自己实现的，不受影响 |
-| `PopupWindow` 显示后响应几何变化；尺寸变化时偏移修正 | 1.17.0 (#6000)、1.18.0 | ToolTipArea、audio/hotkeys/video 的自制下拉框位置 |
-| `float` ↔ `string` 转换按区域小数点 | 1.17.0 (#10857) | 扫描所有 .slint：拼接到字符串的数值都经过 `round()` 或是整数，无影响 |
-| `@markdown`/Code 胶囊、`max-lines`、`line-height-factor` | 1.18.0 | 见 §2 Markdown |
-| FemtoVG：`take_snapshot()` 返回当前状态而不是上次呈现的帧；分数像素位置图片不再模糊；阴影不再每帧重绘；`Path` 在非 1 缩放下位置修正 | 1.18.0 General | `--snapshot`（`main.rs:4260`）在 GPU 模式下可能多渲染一帧；Path 图标位置可能挪动（播放栏图标、`@vestra/widgets` 图标按钮） |
-| macOS：只有背景半透明或无边框的窗口才透明 | 1.18.0 | 宿主没有无边框/透明窗口（已 grep），无影响 |
-| 未设 `title` 的窗口以应用名命名 | 1.18.0 | 外观细节 |
-| winit：显示前设的窗口宽度不再被首选宽度覆盖 (#13245)；稍后显示的窗口也先渲染一帧 | 1.18.0 | 宿主 `set_size`/`set_position` 后再 `show` 的路径（浮动侧栏、选项窗口、工具窗口），尺寸可能与以前不同（应更符合预期） |
-| `KeyEvent.repeat` 对按住的键置位 | 1.18.0「winit: The `repeat` flag…(#12719)」 | 宿主自己从 winit 事件算 repeat，可不改 |
-| 修饰键仍只跟随修饰键自身的事件；死键（无文本）仍被丢弃 | 对比 `i-slint-core window.rs`、`i-slint-backend-winit-1.18.1/winitwindowadapter.rs:1385-1395` | 宿主的修饰键补发、死键、⌥+命名键注入仍需要（§2） |
+| **After an `if` condition changes, layout is not updated until the next traversal/render.** `width`/`absolute-position` etc. read stale values | Not listed separately in the changelog; possibly related to 1.17.0 "`for` and `if` elements are now instantiated eagerly". Reproduced by the probe `layout`: in a shown window with `HorizontalLayout { a, if side: Rectangle{317px} }`, setting `side` to false, 1.16.1 immediately reads a=1470, 1.18.1 still reads 1150, `update_timers_and_animations()` does not update it either, it becomes 1470 only after one frame is rendered; a window that is not shown updates after `show()` | Host test `ui.rs:395` fails because of this. In production code the host first sets `sidebar-visible`/`bottom-visible` (`main.rs:1300-1314`) and then, in the same pass, reads `video-x/y/width/height` and `logical-*` (`main.rs:1017`, `1216`, `2687`, used for picture-in-picture position, sizing the window to the video, `sizing.observe`). Under 1.18 these may read the previous frame's values and only be correct on the next pass. Check on a real machine "resize the window to the video right after showing/hiding the playlist", "toggle fullscreen", etc. Consider reporting upstream |
+| Focus is cleared when the focused element becomes invisible | 1.18.0 "Fixed the focus not being cleared when the focused item becomes invisible. (#11079)" | Host shortcuts rely on `keys := FocusScope` receiving bubbled events (`host.slint:82-92`). In fullscreen the bottom bar has `visible: root.bottom-visible`: if focus is on a bottom-bar control and the bar hides, 1.18 clears focus, and key presses may then not reach the binding table until the video is clicked. When the sidebar collapses the host already calls `focus-video` (`main.rs:1315`); the bottom bar does not |
+| std-widgets default font size now matches `Text`: fluent's `body` changes from `14 * 0.0769rem` (≈1.077rem) to 1rem | 1.17.1 "Widgets: Made the default font size consistent with plain `Text`. (#12237)"; compare `widgets/fluent/styling.slint` | Text in std `LineEdit`, `CheckBox`, `ComboBox`, `Button` in plugins becomes about 7% smaller. On Windows/Linux the default font size also reads the system setting (1.17.0); Windows is left to S6 |
+| fluent `ComboBox` minimum width changed to `max(160px, layout.min-width)` (previously used `min-height` by mistake) | 1.18.1 "Widgets: Fixed the minimum width of `ComboBox`…(#13447)" | With long options the ComboBox gets wider and may widen the capture/subtitles/playlist settings pages. The 160px floor is still there, so the custom dropdown in hotkeys (`hotkeys/ui/parts.slint:2`) is still needed |
+| Minimum width of wrapped text = width of the longest word; wrapped text in padded layouts is measured with the correct width; wrapped-text cells in Vertical/GridLayout are measured for height using the width they are given | 1.18.0 `Text` entries, (#12776) | Wrapped text containing long URLs/paths raises the window's minimum width; dialog heights may change |
+| Wheel scrolling is animated; when there is no pannable content, presses are forwarded immediately | 1.17.0 "`Flickable`: Animate wheel scrolling. (#11312)", 1.18.0 (#13117) | Wheel scrolling in the playlist (`ListView`) and its `viewport-y` reports (used to compute drop positions); there are several reports during the animation. Context-menu scrolling is our own implementation and is not affected |
+| `PopupWindow` reacts to geometry changes after it is shown; offset is corrected when size changes | 1.17.0 (#6000), 1.18.0 | Positions of ToolTipArea and the custom dropdowns in audio/hotkeys/video |
+| `float` ↔ `string` conversion uses the locale's decimal separator | 1.17.0 (#10857) | Scanned all .slint files: every number concatenated into a string goes through `round()` or is an integer; no effect |
+| `@markdown`/Code capsule, `max-lines`, `line-height-factor` | 1.18.0 | See §2 Markdown |
+| FemtoVG: `take_snapshot()` returns the current state instead of the last presented frame; images at fractional pixel positions are no longer blurry; shadows are no longer redrawn every frame; `Path` position corrected at non-1 scale | 1.18.0 General | `--snapshot` (`main.rs:4260`) may render one extra frame in GPU mode; Path icons may shift (playback bar icons, `@vestra/widgets` icon buttons) |
+| macOS: only windows with a translucent background or no frame are transparent | 1.18.0 | The host has no frameless/transparent windows (grepped); no effect |
+| Windows without a `title` are named after the application | 1.18.0 | Cosmetic detail |
+| winit: a window width set before showing is no longer overridden by the preferred width (#13245); windows shown later also render one frame first | 1.18.0 | Host paths that call `set_size`/`set_position` and then `show` (floating sidebar, options window, tool windows) may get a different size than before (should match expectations better) |
+| `KeyEvent.repeat` is set for held keys | 1.18.0 "winit: The `repeat` flag…(#12719)" | The host computes repeat from winit events itself; no change needed |
+| Modifiers still only follow the modifier keys' own events; dead keys (no text) are still dropped | Compare `i-slint-core window.rs`, `i-slint-backend-winit-1.18.1/winitwindowadapter.rs:1385-1395` | The host's modifier re-sending, dead-key handling and ⌥+named-key injection are still needed (§2) |
 
-### 1.4 可以替代自有代码的新功能（本轮不必做，供参考）
+### 1.4 New features that could replace our own code (not needed this round, for reference)
 
-- 公开 `slint::StyledText`：`ui_markdown` 的类型导入可改用公开类型（构造仍需私有 `parse_markdown`）。
-- `Tooltip` 元素（1.17）：可替代 `@vestra/widgets` 的 `ToolTipArea`，但会改变 600ms 延迟等既定行为，不建议本轮动。
-- `DragArea`/`DropArea`（1.17）：窗口内拖放（播放列表重排）有了原生插入位置；与 R-U2（宿主无 `onDragOver`）有关，属于以后的插件改进。
-- `FlexboxLayout`、`max-lines`、`line-height-factor`、`string.starts-with/ends-with/replace-all`、数组 `push/remove/insert`、结构体字段默认值、`Keys::to_parts()`、`Image::load_from_data()`、`Window` 的 `minimized/maximized`、`WindowMoveArea`。都是新增，不影响现有代码。
+- Public `slint::StyledText`: the type imports in `ui_markdown` can switch to the public type (construction still needs the private `parse_markdown`).
+- `Tooltip` element (1.17): could replace `ToolTipArea` in `@vestra/widgets`, but would change established behavior such as the 600ms delay; not recommended this round.
+- `DragArea`/`DropArea` (1.17): drag and drop inside a window (playlist reordering) gets a native insertion position; related to R-U2 (host has no `onDragOver`), a future plugin improvement.
+- `FlexboxLayout`, `max-lines`, `line-height-factor`, `string.starts-with/ends-with/replace-all`, array `push/remove/insert`, default values for struct fields, `Keys::to_parts()`, `Image::load_from_data()`, `Window`'s `minimized/maximized`, `WindowMoveArea`. All additions; no effect on existing code.
 
 ---
 
-## 2. 1.16 绕路方案清单与结论
+## 2. List of 1.16 workarounds and conclusions
 
-| # | 位置 | 绕开的问题 | 结论 | 依据 |
+| # | Location | Problem worked around | Conclusion | Basis |
 | --- | --- | --- | --- | --- |
-| W1 | `src/host/src/ui_probe.rs`（整个模块、`HAZARD`）；调用点 `ui.rs:67-68`、`settings_window.rs:314-323`、`main.rs:2093-2100`；测试 `ui_probe.rs:139-172`、`settings_window.rs:731-800` | ComboBox `<=>` global 的编译器 bug 导致事件循环 panic | **需要改写**：删掉「独立线程 + 逐个改 global」的预检，但保留注册时单独编译一次（编译失败仍以 `ui-prepare` 拒绝，见 reference §833、core-ui-design §142）。现在探针是选项页注册时唯一的单页编译，直接删会丢掉「坏页面只让自己失败」。测试：把 `a_combo_box_two_way_bound_to_a_global_is_refused` 反过来改成「双向绑定到 global 的 ComboBox 改 global 不崩」（防止退回旧版 Slint）；`options_window_…survives_global_changes` 去掉探针，直接在组合窗口里改 global | §1.2 探针实测；1.18.0 #12155/#4529 |
-| W2 | `doc/plugins/reference.md:736`（ComboBox 例外规则） | 同 W1 | **可以拆**：删除该条；`ui-prepare` 只保留「编译失败」的含义 | 同上 |
-| W3 | 插件里的单向写法：`playlist/ui/settings.slint:49-50,71-72`（8bc172b）、`audio/ui/workbench.slint:352-357`、`subtitles/ui/tune.slint:32-36` | 同 W1 | **保留**（两版都正确，改回 `<=>` 无收益，属各插件作者，不要求改） | — |
-| W4 | `src/host/src/ui.rs:33-44`、`platform::ui_font`（强制 Hiragino Sans GB / Microsoft YaHei 并注入 `default-font-family`，`VESTRA_FONT_FALLBACK`） | 1.16 插件窗口中文空白（不按文字回退） | **可以拆，但要真机 A/B 后由协调者决定**：探针显示 1.18 不指定字体也能回退显示中文。拆掉会改变全部界面的西文字形、行高与宽度（系统 UI 字体 vs Hiragino 的西文），属外观变化；Windows 的 YaHei 回退要到 S6 才能验。建议 1.3 先不改默认，真机用 `VESTRA_FONT_FALLBACK=system` 逐窗口对比；若决定拆，`ui.rs`、`platform/{macos,windows}.rs ui_font`、`theme.slint:40` 注释、architecture README:46、core-ui-design:136 一起改 | 探针 E3（§1.2） |
-| W5 | `ui_markdown.rs:26-32` 斜体琥珀色 `EMPHASIS_COLOR` | 强制字体没有斜体，渲染器不合成斜体 | **必须保留** | 1.18.1 的 femtovg（`itemrenderer.rs:874 _synthesis` 未使用）与软件渲染器（`lib.rs:3327 _synthesis`）仍忽略合成；只有 Skia 用。探针：Hiragino 下 `*abc 斜体*` 与正文逐像素相同（1.16/1.18 都是 0 像素差异）。即使拆了 W4，中文也没有斜体字形 |
-| W6 | `ui_markdown.rs` 删除线灰色 `STRIKE_COLOR` | 删除线细于 1 像素看不见 | **必须保留** | 探针：1.18 在 11px、12px（`Theme.font-body`/`font-tab`，Markdown 正文字号）删除线 0 像素，14px 才有 1 行；1.16 各字号都是 0 |
-| W7 | `ui_markdown.rs:113-152 Inline::code / code_block`、`markdown.slint:120` 注释（代码按 ASCII/非 ASCII 分字体） | 等宽字体在 1.16 不回退，代码里的中文不显示 | **需要改写**：回退已修（W4 的探针 E2/E3b），而且 1.18 的 Code 样式加了胶囊底和 0.85 字号，现在的分段会画成断开的胶囊。建议：行内代码整段用一个 `` `…` ``（中文也在里面，靠回退显示）；代码块不再用 Code 样式，`markdown.slint` 代码块的 `StyledText` 设 `default-font-family: Theme.font-mono`，文字作为纯占位参数（仍逐行硬换行、保留空行与缩进）。改 `markdown.slint` 要走 SDK 同步发版 | 1.18.0 StyledText 条目；`shaping.rs:192-210` |
-| W8 | `ui_markdown.rs:169-172` `catch_unwind` 包 `parse_markdown` | 1.16 解析失败 panic | **可以拆**（可选）：1.18 不再 panic；格式串由我们生成且有测试覆盖 | §1.1 |
-| W9 | `ui_markdown.rs:757-829` 测试里的 `styled.as_ref()` | — | **需要改写**：段落不再可读。改为断言我们自己的 `Inline.format`/`args`（这才是我们控制的部分，例如格式串里有 `<font color="#e8a33d">*\u{e541}*</font>`），再加 `styled() != StyledText::from_plain_text(plain)` 证明 Slint 接受了格式；像素级验证留给 `markdown_view_renders_the_model` | 编译错误 E0599 |
-| W10 | 任务方框图形绘制（`MarkdownBlock.task`，`markdown.slint:92`） | ☐ 不在强制字体里 | **保留**（图形方框在任何字体下一致，属于外观选择；若拆 W4 也不需要改） | — |
-| W11 | reference.md:636 Markdown「显示细节」段 | 描述 W5/W6/W7 | **需要改写**：保留斜体/删除线着色说明；代码段落改为新行为 | — |
-| W12 | reference.md:737 与 theme.slint 注释「`font-mono`（Menlo）只含西文，中文不要用它」；architecture README:46「信息层改为默认字体」 | Menlo 无回退 | **可以拆**（文档）：1.18 Menlo 写中文可回退显示（探针 E3b）。信息层不必改回 | 探针 |
-| W13 | `visualizer/ui/backdrop.slint:56-58,98-103`（文字框高于一行，否则省略的 Text 不绘制；「CJK 回退字体很高」） | 回退字体抬高行盒 | **保留**（无害；1.18 已按请求字体行高统一行盒，`shaping.rs:71`，原因不再成立，但高度富余不影响外观。属 visualizer 作者，可在注释里更新原因） | 源码 |
-| W14 | `hotkeys/ui/parts.slint:2-3` 自制下拉框 | fluent ComboBox 最小宽 160px | **必须保留** | 1.18.1 `fluent/combobox.slint:22 min-width: max(160px, layout.min-width)` |
-| W15 | `main.rs:3678-3720 observe_key`、`bindings.rs:155-160 Physical.mods`、`main.rs:3818 release_modifiers` | Slint 修饰键只跟随修饰键事件，合成输入时漏按下/释放 | **必须保留** | `i-slint-core window.rs` 修饰键逻辑未变 |
-| W16 | `main.rs:1576-1588` 死键 + Option | Slint 丢弃无文本的死键 | **必须保留** | 1.18.1 `winitwindowadapter.rs` 仍 `if text.is_empty() return` |
-| W17 | `main.rs:3768-3816 inject_option_key`（⌥⌦、⌥←） | macOS 下 Slint 不把它交给焦点元素，输入卡住 | **保留**；真机可顺带复核（MEMORY 里「⌥⌦ check」待办）。1.18 没有相关条目 | — |
-| W18 | `playback/ui/bar.slint:177`「Slint has no loops」（13 步展开） | 语言没有循环 | **保留**（1.18 仍无循环语句） | — |
-| W19 | `composition.rs:1`、`ui_values.rs:1` 注释写「1.16.1」；`reference.md:213` 示例 `"1.16.1"`；SDK `src/plugin/testing.ts:1075`、`types.ts:1180`、`test/round3a.test.ts:84,91` | 版本号文字 | **需要改写**（纯文字，改成 1.18.1 或去掉具体版本）。`info` 插件测试里的 `"1.16.1"` 是假数据，不必改 | — |
-| W20 | store-api-proposal.md:338-346、511、553，core-ui-design.md:133、136、222、964 | 历史设计记录里写的 1.16 | **保留原文**（是当时的记录），只在 architecture README 与 reference 里更新现状 | — |
-| W21 | `settings_window.rs:144` 生成源码 `callback close()`；`playlist/ui/link.slint:11 callback hide()` | （不是绕路）1.17 起与 Window 内置函数同名 | **建议改名**（宿主：`close-window` 一类；playlist：例如 `cancel` 并同步 `link.ts:16`）。不改只是警告，行为不变 | §3 |
+| W1 | `src/host/src/ui_probe.rs` (whole module, `HAZARD`); call sites `ui.rs:67-68`, `settings_window.rs:314-323`, `main.rs:2093-2100`; tests `ui_probe.rs:139-172`, `settings_window.rs:731-800` | Compiler bug with ComboBox `<=>` global makes the event loop panic | **Needs a rewrite**: remove the "separate thread + change each global" pre-check, but keep compiling once separately at registration (a compile failure is still refused with `ui-prepare`, see reference §833, core-ui-design §142). The probe is currently the only single-page compile when an options page is registered; deleting it outright would lose "a bad page only fails itself". Tests: invert `a_combo_box_two_way_bound_to_a_global_is_refused` into "a ComboBox two-way bound to a global does not crash when the global changes" (guards against going back to an old Slint); `options_window_…survives_global_changes` drops the probe and changes the global directly in the composed window | §1.2 probe measurement; 1.18.0 #12155/#4529 |
+| W2 | `doc/plugins/reference.md:736` (ComboBox exception rule) | Same as W1 | **Can be removed**: delete the rule; `ui-prepare` keeps only the meaning "compile failed" | Same as above |
+| W3 | One-way bindings in plugins: `playlist/ui/settings.slint:49-50,71-72` (8bc172b), `audio/ui/workbench.slint:352-357`, `subtitles/ui/tune.slint:32-36` | Same as W1 | **Keep** (correct in both versions, no gain from changing back to `<=>`, they belong to the plugin authors, no change required) | — |
+| W4 | `src/host/src/ui.rs:33-44`, `platform::ui_font` (force Hiragino Sans GB / Microsoft YaHei and inject `default-font-family`, `VESTRA_FONT_FALLBACK`) | Chinese blank in plugin windows under 1.16 (no per-character fallback) | **Can be removed, but the coordinator decides after a real-machine A/B**: the probe shows that 1.18 falls back and displays Chinese without a specified font. Removing it changes Latin glyph shapes, line height and width across the whole UI (system UI font vs Hiragino's Latin), an appearance change; the YaHei fallback on Windows can only be verified in S6. Suggest not changing the default in 1.3, compare window by window on a real machine with `VESTRA_FONT_FALLBACK=system`; if it is removed, change `ui.rs`, `platform/{macos,windows}.rs ui_font`, the comment at `theme.slint:40`, architecture README:46 and core-ui-design:136 together | Probe E3 (§1.2) |
+| W5 | `ui_markdown.rs:26-32` amber italics `EMPHASIS_COLOR` | The forced font has no italics, and the renderer does not synthesize italics | **Must keep** | In 1.18.1 both femtovg (`itemrenderer.rs:874 _synthesis` unused) and the software renderer (`lib.rs:3327 _synthesis`) still ignore synthesis; only Skia uses it. Probe: with Hiragino, `*abc 斜体*` is pixel-identical to body text (0 pixel difference in both 1.16 and 1.18). Even if W4 is removed, Chinese has no italic glyphs |
+| W6 | `ui_markdown.rs` grey strikethrough `STRIKE_COLOR` | Strikethrough thinner than 1 pixel is invisible | **Must keep** | Probe: in 1.18 strikethrough at 11px and 12px (`Theme.font-body`/`font-tab`, the Markdown body sizes) is 0 pixels, only at 14px is there 1 row; in 1.16 it is 0 at all sizes |
+| W7 | `ui_markdown.rs:113-152 Inline::code / code_block`, comment at `markdown.slint:120` (code uses separate fonts for ASCII/non-ASCII) | The monospace font does not fall back in 1.16, Chinese in code is not shown | **Needs a rewrite**: fallback is fixed (W4 probes E2/E3b), and 1.18's Code style adds a capsule background and 0.85 size, so the current splitting draws broken capsules. Suggestion: inline code as one whole `` `…` `` (Chinese inside too, shown via fallback); code blocks no longer use the Code style; the code block `StyledText` in `markdown.slint` sets `default-font-family: Theme.font-mono` and the text is passed as a plain placeholder argument (still hard-wrapped line by line, keeping blank lines and indentation). Changing `markdown.slint` requires a synchronized SDK release | 1.18.0 StyledText entry; `shaping.rs:192-210` |
+| W8 | `ui_markdown.rs:169-172` `catch_unwind` around `parse_markdown` | Parse failure panics in 1.16 | **Can be removed** (optional): 1.18 no longer panics; the format strings are generated by us and covered by tests | §1.1 |
+| W9 | `styled.as_ref()` in tests at `ui_markdown.rs:757-829` | — | **Needs a rewrite**: paragraphs are no longer readable. Assert on our own `Inline.format`/`args` instead (that is the part we control, e.g. the format string contains `<font color="#e8a33d">*\u{e541}*</font>`), and add `styled() != StyledText::from_plain_text(plain)` to prove Slint accepted the formatting; leave pixel-level verification to `markdown_view_renders_the_model` | Compile error E0599 |
+| W10 | Task checkbox drawn as graphics (`MarkdownBlock.task`, `markdown.slint:92`) | ☐ is not in the forced font | **Keep** (a drawn box looks the same in any font; an appearance choice; no change needed even if W4 is removed) | — |
+| W11 | reference.md:636 Markdown "display details" paragraph | Describes W5/W6/W7 | **Needs a rewrite**: keep the italic/strikethrough coloring notes; change the code paragraph to the new behavior | — |
+| W12 | reference.md:737 and the theme.slint comment "`font-mono` (Menlo) only contains Latin, don't use it for Chinese"; architecture README:46 "info layer changed to the default font" | Menlo has no fallback | **Can be removed** (docs): under 1.18 Chinese in Menlo falls back and is displayed (probe E3b). The info layer does not need to be changed back | Probe |
+| W13 | `visualizer/ui/backdrop.slint:56-58,98-103` (text box taller than one line, otherwise the elided Text is not drawn; "CJK fallback fonts are tall") | Fallback font raises the line box | **Keep** (harmless; 1.18 already unifies the line box using the requested font's line height, `shaping.rs:71`, so the reason no longer holds, but the extra height does not affect appearance. Belongs to the visualizer author, who can update the reason in the comment) | Source |
+| W14 | Custom dropdown at `hotkeys/ui/parts.slint:2-3` | fluent ComboBox minimum width 160px | **Must keep** | 1.18.1 `fluent/combobox.slint:22 min-width: max(160px, layout.min-width)` |
+| W15 | `main.rs:3678-3720 observe_key`, `bindings.rs:155-160 Physical.mods`, `main.rs:3818 release_modifiers` | Slint modifiers only follow modifier-key events, so synthesized input misses presses/releases | **Must keep** | Modifier logic in `i-slint-core window.rs` unchanged |
+| W16 | `main.rs:1576-1588` dead keys + Option | Slint drops dead keys without text | **Must keep** | 1.18.1 `winitwindowadapter.rs` still has `if text.is_empty() return` |
+| W17 | `main.rs:3768-3816 inject_option_key` (⌥⌦, ⌥←) | On macOS Slint does not pass these to the focused element, input gets stuck | **Keep**; can be re-checked on a real machine along the way (the "⌥⌦ check" item in MEMORY). No related entry in 1.18 | — |
+| W18 | `playback/ui/bar.slint:177` "Slint has no loops" (13 steps unrolled) | The language has no loops | **Keep** (1.18 still has no loop statement) | — |
+| W19 | Comments in `composition.rs:1`, `ui_values.rs:1` saying "1.16.1"; example `"1.16.1"` at `reference.md:213`; SDK `src/plugin/testing.ts:1075`, `types.ts:1180`, `test/round3a.test.ts:84,91` | Version number text | **Needs a rewrite** (text only, change to 1.18.1 or drop the specific version). `"1.16.1"` in the `info` plugin tests is fake data and need not change | — |
+| W20 | store-api-proposal.md:338-346, 511, 553, core-ui-design.md:133, 136, 222, 964 | Historical design records mentioning 1.16 | **Keep as written** (records of the time); only update the current state in the architecture README and reference | — |
+| W21 | Generated source `callback close()` at `settings_window.rs:144`; `playlist/ui/link.slint:11 callback hide()` | (Not a workaround) same name as the Window builtin functions since 1.17 | **Rename suggested** (host: something like `close-window`; playlist: e.g. `cancel`, and update `link.ts:16` to match). If not renamed it is only a warning, behavior unchanged | §3 |
 
 ---
 
-## 3. 所有 .slint 在 1.18 下的诊断
+## 3. Diagnostics for all .slint files under 1.18
 
-方法：用宿主同样的编译配置（库路径 `vestra` → `host/ui/vestra`，风格 `fluent-dark`）逐个 `build_from_path`，1.16.1 与 1.18.1 各跑一遍对比。共 54 个文件：宿主 `host/ui` 6、SDK `slint/` 4、`src/plugins/*` 39、`src/examples/*` 4（含 `core-ui/theme.slint`）、插件仓库 2（不含 `dist/`、`node_modules/`）。
+Method: with the same compiler configuration as the host (library path `vestra` → `host/ui/vestra`, style `fluent-dark`), `build_from_path` each file, once with 1.16.1 and once with 1.18.1, and compare. 54 files in total: host `host/ui` 6, SDK `slint/` 4, `src/plugins/*` 39, `src/examples/*` 4 (including `core-ui/theme.slint`), plugin repository 2 (excluding `dist/`, `node_modules/`).
 
-**错误**：两版相同，都是单独编译库文件造成的假阳性：`palette.slint`（宿主与 SDK 副本）只导出 global，报「No component found」。实际使用时它被别的文件导入，不是错误。没有任何文件在 1.18 下新出错。
+**Errors**: identical in both versions, all false positives from compiling library files alone: `palette.slint` (host and SDK copy) only exports a global and reports "No component found". In real use it is imported by other files, so it is not an error. No file has a new error under 1.18.
 
-**两版共有的警告**（31 条，都是单独编译非窗口组件/库文件的假阳性：「Exported component 'X' doesn't inherit Window」「No component is exported…」）：与 1.16 完全相同，不处理。
+**Warnings common to both versions** (31, all false positives from compiling non-window components/library files alone: "Exported component 'X' doesn't inherit Window", "No component is exported…"): exactly the same as in 1.16, no action.
 
-**1.18 新增的警告（15 条，全部需要处理）**：
+**Warnings new in 1.18 (15, all need action)**:
 
-| 文件 | 行 | 警告 | 归属 |
+| File | Line | Warning | Owner |
 | --- | --- | --- | --- |
-| `src/host/ui/vestra/markdown.slint`（及 SDK `slint/vestra/markdown.slint`，示例 `examples/markdown/ui/document.slint` 经导入也报） | 199、200 | `viewport-width`/`viewport-height` 弃用 → `content-width`/`content-height` | 宿主 + SDK 发版 |
-| `src/plugins/playlist/ui/sidebar.slint` | 135、138、145×2、233、234、248、339 | `viewport-y` 弃用 → `content-y` | playlist 作者 |
-| `src/plugins/playlist/ui/link.slint` | 11 | `'hide' shadows the builtin function of the same name` | playlist 作者 |
-| `src/plugins/audio/ui/workbench.slint` | 230 | `viewport-height` 弃用 | audio 作者 |
-| `src/plugins/video/ui/shaders.slint` | 28 | `viewport-height` 弃用 | video 作者 |
+| `src/host/ui/vestra/markdown.slint` (and SDK `slint/vestra/markdown.slint`; the example `examples/markdown/ui/document.slint` also reports it via import) | 199, 200 | `viewport-width`/`viewport-height` deprecated → `content-width`/`content-height` | Host + SDK release |
+| `src/plugins/playlist/ui/sidebar.slint` | 135, 138, 145×2, 233, 234, 248, 339 | `viewport-y` deprecated → `content-y` | playlist author |
+| `src/plugins/playlist/ui/link.slint` | 11 | `'hide' shadows the builtin function of the same name` | playlist author |
+| `src/plugins/audio/ui/workbench.slint` | 230 | `viewport-height` deprecated | audio author |
+| `src/plugins/video/ui/shaders.slint` | 28 | `viewport-height` deprecated | video author |
 
-插件仓库 `youtube/youtube.slint`、`bilibili/dialog.slint`：1.18 下无错误无警告，不需要改。
+Plugin repository `youtube/youtube.slint`, `bilibili/dialog.slint`: no errors or warnings under 1.18, no change needed.
 
-宿主内部生成的源码（`composition.rs` 组合窗口、`settings_window.rs` 选项窗口）不在逐文件扫描里，但都被 `cargo test` 编译过；已知会有 `callback close()` 的遮蔽警告（W21）。另外改名 `viewport-*` 时注意：`menu-view.slint` 的 `MenuLevel.viewport-y` 是我们自己的结构体字段，不是 Flickable 属性，没有警告，不用改。
+Source generated inside the host (`composition.rs` composed windows, `settings_window.rs` options window) is not in the per-file scan, but all of it is compiled by `cargo test`; the `callback close()` shadowing warning is known (W21). Also, when renaming `viewport-*`, note that `MenuLevel.viewport-y` in `menu-view.slint` is a field of our own struct, not a Flickable property; it has no warning and must not be changed.
 
 ---
 
-## 4. 步骤 1.3 实施计划
+## 4. Step 1.3 implementation plan
 
-### 4.1 顺序与归属
+### 4.1 Order and ownership
 
-| 步骤 | 内容 | 文件 | 归属 |
+| Step | Content | Files | Owner |
 | --- | --- | --- | --- |
-| 1 | 版本钉 `=1.18.1`（两处）+ `cargo update -p slint -p slint-interpreter --precise 1.18.1`；可选：`unsafe/render` 的 `glow` 升 `=0.18.0` 去重 | `src/host/Cargo.toml`、`src/host/unsafe/render/Cargo.toml`、`src/host/Cargo.lock` | 维护者 |
-| 2 | W9 测试改写；W7 代码段改写；W8 去 `catch_unwind`（可选）；类型改用公开 `slint::StyledText`；W5/W6 注释更新原因（1.18 实测） | `src/host/src/ui_markdown.rs` | 维护者 |
-| 3 | `markdown.slint`：`viewport-*` → `content-*`；代码块 `default-font-family: Theme.font-mono`、更新注释 | `src/host/ui/vestra/markdown.slint` | 维护者（随后 SDK 同步） |
-| 4 | W1：删 `ui_probe.rs`，三处调用改为只编译（选项页注册仍单页编译、失败 `ui-prepare`；面板挂载与工具窗口本来就会编译，可直接删预检）；测试改写 | `ui_probe.rs`（删）、`ui.rs`、`settings_window.rs`、`main.rs` | 维护者 |
-| 5 | `ui.rs:395` 测试：断言前 `show()` 并渲染一帧（或改用已显示窗口）；评估正式代码读 `video-*` 的时机（§1.3），至少在注释里写明 1.18 的「下一帧才更新」并在真机确认；可向上游报 issue | `ui.rs`，可能 `main.rs` | 维护者 |
-| 6 | W21 宿主侧：生成源码的 `callback close()` 改名 | `settings_window.rs` | 维护者 |
-| 7 | W19 注释与文档；W2、W11、W12 文档；reference §213 示例版本；W4 若协调者决定拆则一并改 | `composition.rs`、`ui_values.rs`、`doc/plugins/reference.md`、`doc/architecture/README.md` | 维护者 |
-| 8 | 小问题（§5）：操作回执淘汰、portability 目录、钥匙串清理 | `package_store.rs`、`package_manager.rs`、`src/scripts/check-portability.mjs`、`system.rs`/`plugins.rs` 等 | 维护者 |
-| 9 | `node scripts/sync-sdk-slint.mjs --write <SDK 仓库>` | — | 维护者 |
-| 10 | SDK 1.1.2（§1.6）：同步 `slint/vestra/markdown.slint`；`testing.ts` 默认 `slint: "1.18.1"`、`types.ts` 注释、`test/round3a.test.ts`；`TestHost.settle()` 文档写明「只等宿主调用，插件自己的文件读写要轮询可观察结果」；CHANGELOG；打标签；播放器 `npm install @vestra-player/sdk@1.1.2` | SDK 仓库、`src/package.json`、`package-lock.json` | 维护者写，协调者提交/打标签 |
-| 11 | 插件 .slint 适配（步骤 1.4）：playlist（`sidebar.slint` 8 处 `viewport-y`、`link.slint` 的 `hide` 改名 + `link.ts:16`）；audio（`workbench.slint:230`）；video（`ui/shaders.slint:28`）；visualizer（W13 注释，可选） | `src/plugins/<名字>/` | 各插件作者 |
-| 12 | subtitles 测试去抖动（§5.4） | `src/plugins/subtitles/tests/` | subtitles 作者 |
-| 13 | nes 版本对齐：`package.json`、`package-lock.json`（第 3、9 行）`0.1.0` → `0.2.0` | `src/plugins/nes/` | nes 作者（本轮「顺手」，可由协调者直接改） |
-| 14 | 插件仓库 | 不需要改（无诊断；不依赖宿主 Slint 版本）。可选：用新播放器跑一次 youtube/bilibili 真机 | — |
-| 15 | §6.1 全部检查 + 真机回归（下节） | — | 协调者 |
+| 1 | Version pin `=1.18.1` (two places) + `cargo update -p slint -p slint-interpreter --precise 1.18.1`; optional: bump `glow` in `unsafe/render` to `=0.18.0` to deduplicate | `src/host/Cargo.toml`, `src/host/unsafe/render/Cargo.toml`, `src/host/Cargo.lock` | Maintainer |
+| 2 | Rewrite W9 tests; rewrite W7 code runs; remove W8 `catch_unwind` (optional); switch the type to public `slint::StyledText`; update the reason in the W5/W6 comments (measured under 1.18) | `src/host/src/ui_markdown.rs` | Maintainer |
+| 3 | `markdown.slint`: `viewport-*` → `content-*`; code block `default-font-family: Theme.font-mono`, update comments | `src/host/ui/vestra/markdown.slint` | Maintainer (SDK synced afterwards) |
+| 4 | W1: delete `ui_probe.rs`, change the three call sites to compile only (options page registration still compiles the single page and fails with `ui-prepare`; panel mounting and tool windows compile anyway, so the pre-check can simply be deleted); rewrite tests | `ui_probe.rs` (deleted), `ui.rs`, `settings_window.rs`, `main.rs` | Maintainer |
+| 5 | Test at `ui.rs:395`: `show()` and render one frame before asserting (or use a shown window); evaluate when production code reads `video-*` (§1.3), at least document 1.18's "updated on the next frame" in a comment and confirm on a real machine; can report an issue upstream | `ui.rs`, possibly `main.rs` | Maintainer |
+| 6 | W21 host side: rename `callback close()` in the generated source | `settings_window.rs` | Maintainer |
+| 7 | W19 comments and docs; W2, W11, W12 docs; reference §213 example version; also W4 if the coordinator decides to remove it | `composition.rs`, `ui_values.rs`, `doc/plugins/reference.md`, `doc/architecture/README.md` | Maintainer |
+| 8 | Small issues (§5): operation receipt eviction, portability directory, keychain cleanup | `package_store.rs`, `package_manager.rs`, `src/scripts/check-portability.mjs`, `system.rs`/`plugins.rs`, etc. | Maintainer |
+| 9 | `node scripts/sync-sdk-slint.mjs --write <SDK repository>` | — | Maintainer |
+| 10 | SDK 1.1.2 (§1.6): sync `slint/vestra/markdown.slint`; `testing.ts` default `slint: "1.18.1"`, `types.ts` comment, `test/round3a.test.ts`; document in `TestHost.settle()` that it "only waits for host calls; the plugin's own file reads/writes must be polled through an observable result"; CHANGELOG; tag; in the player `npm install @vestra-player/sdk@1.1.2` | SDK repository, `src/package.json`, `package-lock.json` | Maintainer writes, coordinator commits/tags |
+| 11 | Plugin .slint adaptation (step 1.4): playlist (8 `viewport-y` in `sidebar.slint`, rename `hide` in `link.slint` + `link.ts:16`); audio (`workbench.slint:230`); video (`ui/shaders.slint:28`); visualizer (W13 comment, optional) | `src/plugins/<name>/` | Each plugin author |
+| 12 | De-flake subtitles tests (§5.4) | `src/plugins/subtitles/tests/` | subtitles author |
+| 13 | nes version alignment: `package.json`, `package-lock.json` (lines 3, 9) `0.1.0` → `0.2.0` | `src/plugins/nes/` | nes author ("along the way" this round; the coordinator can change it directly) |
+| 14 | Plugin repository | No change needed (no diagnostics; does not depend on the host's Slint version). Optional: run youtube/bilibili once on a real machine with the new player | — |
+| 15 | All §6.1 checks + real-machine regression (next section) | — | Coordinator |
 
-步骤 2–8 互不依赖，可一个 agent 顺序做；10 依赖 3；11、12、13 可与 2–8 并行。
+Steps 2–8 are independent and can be done in order by one agent; 10 depends on 3; 11, 12, 13 can run in parallel with 2–8.
 
-### 4.2 风险
+### 4.2 Risks
 
-1. **GPU 渲染**（femtovg 0.23 → 0.27，glow 双版本）：画面黑屏/错位/闪烁只能真机发现；软件渲染回退路径（`VESTRA_SOFTWARE_RENDER=1`）也要过一遍。
-2. **条件元素布局延后一帧**（§1.3）：窗口按视频尺寸调整、画中画定位、全屏侧栏弹出时读到旧几何。测试只改了一处，正式代码要真机看。
-3. **焦点清除**（#11079）：全屏底栏自动隐藏后快捷键失效的可能。
-4. **外观整体微变**：std-widgets 字号 −7%、ComboBox 变宽、换行文本最小宽度、Path 图标位置、Code 胶囊。
-5. **私有接口**：Markdown 仍依赖 `private_unstable_api::parse_markdown` 与隐藏的 `Value::StyledText`，下次升级还要复测。
-6. **SDK 发版耦合**：改 `markdown.slint` 就必须发 SDK 1.1.2，否则 `test:sdk` 的逐字节一致检查失败。
-7. W4（去掉强制字体）若决定做，是全局外观变化，建议与本次升级分开提交，方便回退。
+1. **GPU rendering** (femtovg 0.23 → 0.27, two glow versions): black screen/misplacement/flicker can only be found on a real machine; the software rendering fallback path (`VESTRA_SOFTWARE_RENDER=1`) must be checked too.
+2. **Conditional-element layout one frame late** (§1.3): sizing the window to the video, picture-in-picture positioning and the fullscreen sidebar pop-out read stale geometry. Only one test was changed; production code must be checked on a real machine.
+3. **Focus clearing** (#11079): possibility that shortcuts stop working after the fullscreen bottom bar auto-hides.
+4. **Small overall appearance changes**: std-widgets font size −7%, wider ComboBox, minimum width of wrapped text, Path icon positions, Code capsules.
+5. **Private API**: Markdown still depends on `private_unstable_api::parse_markdown` and the hidden `Value::StyledText`; the next upgrade must re-test it.
+6. **SDK release coupling**: changing `markdown.slint` requires releasing SDK 1.1.2, otherwise the byte-for-byte identity check in `test:sdk` fails.
+7. W4 (removing the forced font), if decided, is a global appearance change; suggest committing it separately from this upgrade so it is easy to revert.
 
-### 4.3 协调者真机回归清单（侧重 1.18 可能改变的地方）
+### 4.3 Coordinator real-machine regression list (focused on what 1.18 may change)
 
-在 §6.2 全量场景之外，特别看：
+In addition to the full scenarios in §6.2, look especially at:
 
-| # | 场景 | 看什么 |
+| # | Scenario | What to check |
 | --- | --- | --- |
-| 1 | 默认 GPU 渲染播放视频；拖动窗口大小、全屏/退出、画中画开关；再用 `VESTRA_SOFTWARE_RENDER=1` 重复 | 画面正常、无黑帧/撕裂/错位；画中画位置正确 |
-| 2 | 窗口模式下显示/隐藏播放列表、拖动分隔条；随后立即执行「窗口按视频尺寸」类命令 | 视频区域和窗口尺寸一次就对（§1.3） |
-| 3 | 全屏：鼠标移到右侧弹出侧栏、移开收回；底栏出现/隐藏 | 底栏宽度跟侧栏同步（G-01），动画正常 |
-| 4 | 全屏：点底栏上的按钮（焦点进底栏）→ 等底栏自动隐藏 → 按空格/方向键/其它快捷键 | 快捷键仍生效（#11079） |
-| 5 | 播放列表搜索框有焦点时收起播放列表 → 按快捷键 | 快捷键生效 |
-| 6 | 右键菜单：多级、长菜单滚动（滚轮）、子菜单位置 | 每项可达、位置正确（菜单滚动是自己实现的 `viewport-y` 字段，不受 Flickable 动画影响，属快速复核） |
-| 7 | 选项窗口逐页打开：外观、窗口、播放列表、字幕、截图、快捷键、插件管理、标志页；改 ComboBox，插件侧回推值 | 不崩溃；ComboBox 宽度、std 控件字号可接受，布局不溢出 |
-| 8 | 悬停提示（播放栏图标按钮）、音频工作台的下拉与预设弹窗、快捷键窗口自制下拉、视频画面的列表弹窗 | 弹出位置与关闭正常 |
-| 9 | 播放列表：滚轮滚动、拖动重排（插入位置）、拖到边缘自动滚动、「添加链接…」窗口按 Esc/取消 | 落点正确；窗口能关闭（`hide` 遮蔽） |
-| 10 | Markdown 示例窗口 | 斜体琥珀色、删除线灰色可见；行内代码胶囊（含中文的代码整段显示）；代码块等宽、中文可见、缩进与空行保留；任务方框、表格对齐、链接点击、图片 |
-| 11 | 所有插件窗口与面板中的中文（默认强制字体）；再用 `VESTRA_FONT_FALLBACK=system` 启动对比几个窗口 | 默认无空白；A/B 结果供 W4 决定 |
-| 12 | 键盘：按住方向键连发；死键（⌥E 等）在画面焦点与输入框中；⌥⌦ 在播放列表；系统事件合成的修饰键组合 | 与 1.16 一致 |
-| 13 | 含长路径/长 URL 的对话框（打开链接、属性、关于、错误提示） | 窗口最小宽度没有被撑大 |
-| 14 | 关于/系统信息页 | 显示「Slint：1.18.1」 |
-| 15 | NES 画面、无视频时的标志背景层与封面文字、播放栏图标（Path 位置修正） | 位置与清晰度正常 |
+| 1 | Play video with the default GPU rendering; resize the window, enter/leave fullscreen, toggle picture-in-picture; repeat with `VESTRA_SOFTWARE_RENDER=1` | Picture correct, no black frames/tearing/misplacement; picture-in-picture position correct |
+| 2 | In windowed mode show/hide the playlist, drag the divider; then immediately run a "size window to video" command | Video area and window size correct on the first try (§1.3) |
+| 3 | Fullscreen: move the pointer to the right edge to pop out the sidebar, move away to retract it; bottom bar shows/hides | Bottom bar width follows the sidebar (G-01), animation normal |
+| 4 | Fullscreen: click a button on the bottom bar (focus moves into the bar) → wait for the bar to auto-hide → press Space/arrow keys/other shortcuts | Shortcuts still work (#11079) |
+| 5 | Collapse the playlist while its search field has focus → press a shortcut | Shortcut works |
+| 6 | Context menu: multiple levels, scrolling a long menu (wheel), submenu positions | Every item reachable, positions correct (menu scrolling is our own `viewport-y` field and not affected by the Flickable animation; a quick re-check) |
+| 7 | Open each page of the options window: appearance, window, playlist, subtitles, capture, hotkeys, plugin management, logo page; change a ComboBox, and have the plugin push a value back | No crash; ComboBox width and std widget font size acceptable, layout does not overflow |
+| 8 | Hover tooltips (playback bar icon buttons), the audio workbench dropdowns and preset popup, the hotkeys window custom dropdown, the list popup on the video | Popup positions and closing correct |
+| 9 | Playlist: wheel scrolling, drag reordering (insertion position), auto-scroll when dragging to the edge, Esc/Cancel in the "Add link…" window | Drop position correct; the window can be closed (`hide` shadowing) |
+| 10 | Markdown example window | Amber italics and grey strikethrough visible; inline code capsule (code containing Chinese shown as a whole); code blocks monospace, Chinese visible, indentation and blank lines kept; task boxes, table alignment, link clicks, images |
+| 11 | Chinese in all plugin windows and panels (default forced font); then start with `VESTRA_FONT_FALLBACK=system` and compare a few windows | No blanks by default; A/B results inform the W4 decision |
+| 12 | Keyboard: hold an arrow key for repeat; dead keys (⌥E, etc.) with focus on the video and in input fields; ⌥⌦ in the playlist; modifier combinations synthesized from system events | Same as in 1.16 |
+| 13 | Dialogs with long paths/URLs (open link, properties, about, error messages) | Window minimum width not enlarged |
+| 14 | About/system information page | Shows "Slint：1.18.1" (Slint: 1.18.1) |
+| 15 | NES picture, the logo backdrop layer and cover text when there is no video, playback bar icons (Path position correction) | Position and sharpness normal |
 
 ---
 
-## 5. 分到本轮的小问题
+## 5. Small issues assigned to this round
 
-### 5.1 操作回执 512 条上限从不清理
+### 5.1 The 512-entry operation receipt limit is never cleaned up
 
-**现状**：`package_store.rs:21 MAX_OPERATIONS = 512`；`insert_receipt`（:766-774）满了就拒绝新 id，`validate_catalog`（:256-263）也按 512 校验。内存中的进行中操作（`package_manager.rs:330`，64 个）在终态时会移除，没问题；落盘的回执只增不减。每次内置插件升级播种也写一条（`seed-<sha 前 32 位>`，`package_manager.rs:585`），所以长期使用、多次更新后安装会失败。
+**Current state**: `package_store.rs:21 MAX_OPERATIONS = 512`; `insert_receipt` (:766-774) refuses new ids when full, and `validate_catalog` (:256-263) also validates against 512. In-progress operations in memory (`package_manager.rs:330`, 64 of them) are removed when they reach a final state, which is fine; receipts on disk only grow. Every seeding for a built-in plugin upgrade also writes one (`seed-<first 32 chars of sha>`, `package_manager.rs:585`), so after long use and many updates, installs will fail.
 
-**建议**：插入前淘汰最旧的**终态**回执。
-- 回执写入时加 `at`（unix 毫秒，可复用 `unix_ms()`）；旧回执没有 `at` 的视为最旧。
-- 满 512 时按 `at` 从旧到新删除状态为 `committed`/`failed`/`aborted`/`cancelled`/`failedDegraded`/`completed` 的回执，直到有空位；**不删** `preparing` 以及 `catalog.pending` 里 `recovery.operation_id` 引用的回执。若全是非终态（理论上不可能，pending ≤ 64），仍按现在的错误拒绝。
-- 可选再加保留期（例如 30 天）在打开目录时顺带清理。
-- 语义影响：被淘汰的 `requestId` 再提交时按新请求处理，`packages.operation` 查询返回 `missing`。在 reference 的 `packages.*` 幂等说明里写明「回执至少保留最近 N 条」。
-- 测试：把 `full_receipt_history_rejects_new_requests_and_preserves_existing` 改为「满了淘汰最旧终态、保留 pending」。
+**Suggestion**: evict the oldest **final-state** receipts before inserting.
+- Add `at` (unix milliseconds, can reuse `unix_ms()`) when writing a receipt; old receipts without `at` count as oldest.
+- At 512, delete receipts with status `committed`/`failed`/`aborted`/`cancelled`/`failedDegraded`/`completed` from oldest to newest by `at` until there is room; **do not delete** `preparing` receipts or receipts referenced by `recovery.operation_id` in `catalog.pending`. If all are non-final (theoretically impossible, pending ≤ 64), still refuse with the current error.
+- Optionally add a retention period (e.g. 30 days) and clean up when the catalog is opened.
+- Semantic impact: an evicted `requestId` submitted again is treated as a new request, and a `packages.operation` query returns `missing`. State "receipts are kept for at least the most recent N" in the `packages.*` idempotency notes in the reference.
+- Test: change `full_receipt_history_rejects_new_requests_and_preserves_existing` to "when full, evict the oldest final-state receipt and keep pending ones".
 
-### 5.2 `npm run portability` 写进 `src/host/target/portability`
+### 5.2 `npm run portability` writes into `src/host/target/portability`
 
-**现状**：`src/scripts/check-portability.mjs:90-91` 固定 `--target-dir join(host, "target", "portability")`，违反 §1「不在仓库里产生 `target/`」。
+**Current state**: `src/scripts/check-portability.mjs:90-91` hard-codes `--target-dir join(host, "target", "portability")`, violating the §1 rule "do not produce `target/` inside the repository".
 
-**建议**：`const targetDir = process.env.CARGO_TARGET_DIR ? join(process.env.CARGO_TARGET_DIR, "portability") : join(tmpdir(), "vestra-target", "portability");`（`node:os` 的 `tmpdir()`，跨平台）。在脚本头注释和 §6.1 写明。`.gitignore` 的 `host/target/` 可以保留防误提交。
+**Suggestion**: `const targetDir = process.env.CARGO_TARGET_DIR ? join(process.env.CARGO_TARGET_DIR, "portability") : join(tmpdir(), "vestra-target", "portability");` (`tmpdir()` from `node:os`, cross-platform). Document it in the script header comment and §6.1. The `host/target/` entry in `.gitignore` can stay to prevent accidental commits.
 
-### 5.3 带数据卸载后钥匙串条目残留
+### 5.3 Keychain entries left behind after uninstalling with data
 
-**现状**：`secrets.*` 的服务名按实例 `vestra.plugin.<guid>`（`plugins.rs:38-44`），`system.rs:135-157` 只按名字读写删；`keyring` 不能按服务枚举，所以 `uninstall(removeData)`（`package_manager.rs:778` 起）只删数据目录，钥匙串留着（store-api-proposal「卸载时…密钥库条目不删」）。
+**Current state**: the service name for `secrets.*` is per instance, `vestra.plugin.<guid>` (`plugins.rs:38-44`), and `system.rs:135-157` only reads/writes/deletes by name; `keyring` cannot enumerate by service, so `uninstall(removeData)` (from `package_manager.rs:778`) only deletes the data directory and the keychain entries remain (store-api-proposal "on uninstall… key store entries are not deleted").
 
-**建议**（跨平台、无需新系统调用）：宿主记录每个实例用过的密钥名。
-- 位置：宿主自己的安装库目录（插件不可写），例如 `<安装库>/secrets/<guid>.json`（只存名字，不存值）；或放进 catalog 的实例记录。
-- `secrets.set` 成功后加入名字，`secrets.delete` 成功后移除；文件写失败不影响 `set` 的结果但要记日志。
-- `uninstall(removeData: true)`、以及休眠实例因 `MAX_DORMANT` 被丢弃时：逐个 `platform::secret_delete(service, name)`（不存在忽略），再删索引。
-- 开发加载（`vestra.dev.<id>`）与试载（`<id>.trial.<owner>`）不在卸载范围，不处理。
-- 名字索引需要上限，否则插件可以让索引无限增长：建议每实例 256 个名字，超出时 `set` 返回 `limit`。**这是新增的可见限制，需协调者决定**（替代：不设上限，只限制文件大小）。
-- 已经残留的旧条目无法枚举清理，在 CHANGELOG 里说明。
-- 备选：macOS 用 `security-framework` 按服务枚举（安全 Rust），Windows 需要 `CredEnumerateW`（要进 `unsafe/win32`），两套平台代码，不推荐。
+**Suggestion** (cross-platform, no new system calls): the host records the secret names each instance has used.
+- Location: the host's own install library directory (not writable by plugins), e.g. `<install library>/secrets/<guid>.json` (names only, no values); or in the instance record in the catalog.
+- Add the name after a successful `secrets.set`, remove it after a successful `secrets.delete`; a failed file write does not affect the result of `set` but is logged.
+- On `uninstall(removeData: true)`, and when a dormant instance is dropped because of `MAX_DORMANT`: call `platform::secret_delete(service, name)` for each (ignore missing ones), then delete the index.
+- Development loads (`vestra.dev.<id>`) and trial loads (`<id>.trial.<owner>`) are not in scope for uninstall; not handled.
+- The name index needs a limit, otherwise a plugin can grow it without bound: suggest 256 names per instance, beyond which `set` returns `limit`. **This is a new visible limit; the coordinator decides** (alternative: no name limit, only a file size limit).
+- Existing leftover entries cannot be enumerated and cleaned; note this in the CHANGELOG.
+- Alternative: enumerate by service on macOS with `security-framework` (safe Rust); Windows needs `CredEnumerateW` (would go into `unsafe/win32`); two sets of platform code, not recommended.
 
-### 5.4 subtitles 插件测试偶发失败
+### 5.4 Intermittent subtitles plugin test failures
 
-**复现**：`npm run plugin -- test subtitles` 单独跑 3 次全过；4 路并发、共 12 次，失败 3 次（`slint118/subp-1-3.log`、`subp-2-4.log`、`subp-3-1.log`）。两个失败点：
-1. `behavior.test.ts:276-291`「a host refusal of the upload is shown as one Chinese sentence」：`window.emit("load-file")` 后只 `await host.settle()` 一次就断言，实际 `status-text` 还是「请选择字幕文件…」（3/3 次失败都有它）。
-2. `round2.test.ts:48`「D18: VTT, ASS and two-language SAMI…」：辅助函数 `loadFile`（:26-31）的循环条件 `!host.osd.at(-1)?.startsWith("打开字幕")` 在第二次载入时被上一个文件的「打开字幕：a.vtt」直接满足，于是只 settle 一次就断言（1 次）。
+**Reproduction**: `npm run plugin -- test subtitles` passes 3 times out of 3 when run alone; with 4 in parallel, 12 runs in total, 3 failures (`slint118/subp-1-3.log`, `subp-2-4.log`, `subp-3-1.log`). Two failure points:
+1. `behavior.test.ts:276-291` "a host refusal of the upload is shown as one Chinese sentence": after `window.emit("load-file")` it only does `await host.settle()` once before asserting, and `status-text` is actually still "请选择字幕文件…" ("Choose a subtitle file…") (present in all 3 failures).
+2. `round2.test.ts:48` "D18: VTT, ASS and two-language SAMI…": the loop condition `!host.osd.at(-1)?.startsWith("打开字幕")` ("Opened subtitles") in the helper `loadFile` (:26-31) is already satisfied on the second load by the previous file's "打开字幕：a.vtt" ("Opened subtitles: a.vtt"), so it settles only once before asserting (1 time).
 
-**根因**：SDK 的 `TestHost.settle()`（SDK `src/plugin/testing.ts:1908-1915`）只等宿主调用清空、连续 3 个 1ms 空闲轮；插件自己的文件读取（选字幕后 `readFile`/`stat`/解析）不是宿主调用，负载高时 3ms 内没完成，settle 就提前返回。不是插件逻辑错误。
+**Root cause**: the SDK's `TestHost.settle()` (SDK `src/plugin/testing.ts:1908-1915`) only waits until host calls are drained and 3 consecutive 1ms idle turns pass; the plugin's own file reads (`readFile`/`stat`/parsing after choosing subtitles) are not host calls, and under high load they do not finish within 3ms, so settle returns early. Not a plugin logic error.
 
-**修法**（subtitles 作者，只改测试）：
-- 用例 1：照搬它上一个用例（:265-267）的轮询：`for (let i = 0; i < 100 && window.props["status-text"] !== text; i++) await host.settle(20);`。
-- `loadFile`：先记下 `const before = host.osd.length` 和 `host.sent("subtitles.commit").length`，循环到 OSD 条数增加且最后一条以「打开字幕」开头，或 commit 数增加，再 settle。
-- SDK 侧（维护者，随 1.1.2）：`settle()` 的文档写明只等待宿主调用；可选提供 `host.until(predicate, timeoutMs)` 辅助——这是新增 API，按 §4.3 默认不做，文档说明即可。
-- 其它 `settle(170)` 等待 100ms 样式计时器的用例在并发下没失败，暂不动。
+**Fix** (subtitles author, tests only):
+- Case 1: copy the polling from the previous case (:265-267): `for (let i = 0; i < 100 && window.props["status-text"] !== text; i++) await host.settle(20);`.
+- `loadFile`: first record `const before = host.osd.length` and `host.sent("subtitles.commit").length`, loop until the OSD count increases and the last entry starts with "打开字幕" ("Opened subtitles"), or the commit count increases, then settle.
+- SDK side (maintainer, with 1.1.2): document that `settle()` only waits for host calls; optionally provide a `host.until(predicate, timeoutMs)` helper — this is a new API, not done by default under §4.3; documenting it is enough.
+- Other cases that wait `settle(170)` for the 100ms style timer did not fail in parallel; leave them for now.

@@ -1,71 +1,71 @@
-# 2026-10 轮：插件中心与界面打磨
+# 2026-10 round: plugin center and UI polish
 
-登记于 2026-10-25。**本文是这一轮的唯一进度来源。**
+Registered 2026-10-25. **This document is the only progress source for this round.**
 
-**开工条件**：0.5.0 的其它工作全部完成，包括多语言第 2 轮、五种语言的翻译和验证、宿主修复。在那之前本轮只做登记，不派活。
+**Start condition**: all other 0.5.0 work is done, including i18n round 2, translation and verification of the five languages, and the host fixes. Until then this round is only registered and no work is assigned.
 
-## 用户的要求（原话要点）
+## The user's requirements (key points of what the user said)
 
-- 插件商城（能显示 Markdown 的那个界面）要接管插件管理的全部功能，停用、卸载等操作都统一在那里做。
-- 「已安装 / 未安装」这类分类应该放在一个页签栏里。
-- 仓库管理、手动安装这类入口，做成一个图标，点开是菜单，或者每项直接是一个图标。
-- 插件列表的每一行像 VS Code 那样带安装、卸载按钮，并显示插件的 logo。
-- 以上做完后，把所有界面不合理的地方都找出来改掉。已知的例子：
-  - AI 工坊按钮过大、排版不合理；
-  - Vestra Player AI 设置页里 API 设置的下拉菜单风格不对。
-- 用户的批评：这些问题本该在写的时候就注意到，或者自己看出来，不应该等用户提醒。
+- The plugin store (the interface that can show Markdown) takes over all plugin management functions; disabling, uninstalling and other actions are all done there.
+- Categories such as "Installed / Not installed" belong in a tab bar.
+- Entries such as repository management and manual install become one icon that opens a menu, or each item is an icon of its own.
+- Each row of the plugin list has install and uninstall buttons, like VS Code, and shows the plugin's logo.
+- After that, find every unreasonable part of the interface and fix it. Known examples:
+  - the AI workshop buttons are too large and the layout is unreasonable;
+  - the drop-down menus for the API settings on the Vestra Player AI settings page have the wrong style.
+- The user's criticism: these problems should have been noticed while writing, or spotted by ourselves, instead of waiting for the user to point them out.
 
-## 为什么会漏掉（复盘）
+## Why they were missed (retrospective)
 
-- 作者 agent 写 Slint 时看不到渲染结果，只能确认代码能编译、测试能通过。
-- 协调者的真机截图只覆盖了被改动的功能，没有逐个界面做视觉审查。
-- 作者没有对照 ui-spec 和现有界面自查，所以出现了过大的按钮、自己画的下拉框。
+- Author agents cannot see the rendered result when writing Slint; they can only confirm that the code compiles and the tests pass.
+- The coordinator's real-machine screenshots covered only the changed features, without a visual review of each interface.
+- Authors did not check their work against ui-spec and the existing interfaces, which led to oversized buttons and self-drawn drop-down boxes.
 
-对策都写进下面的流程，重点是让写界面的人在交付前**自己看过**渲染结果。
+The countermeasures are all in the process below; the key point is that whoever writes an interface has **looked at** the rendered result themselves before delivering.
 
-## 流程
+## Process
 
-### 范围（用户裁决，2026-10-25）
+### Scope (user ruling, 2026-10-25)
 
-**不重新设计界面。** 现有界面是研究过、定下来的，标准就是现有的 [ui-spec.md](../../product/ui-spec.md)。本轮只做两件事：
+**Do not redesign the interface** (不重新设计界面). The existing interface was researched and settled; the standard is the existing [ui-spec.md](../../product/ui-spec.md). This round does only two things:
 
-- 用户点名的插件中心改动（第 1 步），范围仅限用户列出的几点；
-- 找出并修掉雷人的部分（第 2 步）：违反 ui-spec 的写法、明显不协调的尺寸和排版（例如过大的按钮）、和其它界面风格不一致的控件（例如自己画的下拉框）。修法是向 ui-spec 和现有界面靠齐，不另立新规范，不改主题、配色和布局结构。
+- the plugin center changes the user named (step 1), limited to the points the user listed;
+- find and fix the ugly parts (step 2): code that violates ui-spec, clearly mismatched sizes and layout (for example oversized buttons), and controls whose style differs from the other interfaces (for example self-drawn drop-down boxes). The fix is to align with ui-spec and the existing interfaces; no new specification, no changes to the theme, colours or layout structure.
 
-### 第 0 步：准备（维护者）
+### Step 0: preparation (maintainer)
 
-- **离屏截图工具**：一条命令把指定插件的每个窗口、设置页渲染成 PNG，可以指定语言（en、zh-Hans、de）和示例数据。在已有的 slint-check 原型上扩展。作者 agent 用 Read 工具看图。
-- 以后派活的说明附一条：交付前用截图工具看过 en 和 de，并对照 ui-spec 自查。
+- **Offscreen screenshot tool**: one command renders every window and settings page of a given plugin to PNG, with a chosen language (en, zh-Hans, de) and sample data. Built by extending the existing slint-check prototype. Author agents look at the images with the Read tool.
+- From now on, task instructions include one line: before delivering, look at en and de with the screenshot tool and check against ui-spec.
 
-### 第 1 步：插件中心（store 与 plugins 两个插件合并）
+### Step 1: plugin center (merging the store and plugins plugins)
 
-1. **协调者写产品规格**，写在本文下方，放线框图；沿用 store 现有的窗口、配色和控件，只改用户点名的地方：
-   - 一个窗口，顶部页签：已安装、可安装、可更新；
-   - 列表每行：logo、名称、作者、版本、VS Code 扩展列表式的行内主按钮（安装 / 卸载 / 更新），用现有的 Button 组件，停用放在行内的次级操作里；
-   - 右侧是详情（Markdown）；
-   - 右上角一个齿轮或「…」图标，菜单里放仓库管理、手动安装（侧载）、打开数据文件夹。
-2. **store 作者和 plugins 作者**按 §4 协商：哪些功能并入 store，plugins 插件是退役还是只留入口，菜单路径（「设置 ▸ 插件管理…」要不要保留）。需要的宿主或 SDK 能力，比如图标按钮、页签栏组件、插件 logo 的读取接口，按 §4.1 向维护者提请求。
-3. 实现 → 作者自己截图自查 → 协调者截图验收（mac 实机）→ 用户在 Windows 上看。
+1. **The coordinator writes the product specification**, below in this document, with wireframes; it keeps the store's existing window, colours and controls and changes only what the user named:
+   - one window, with tabs at the top: Installed, Available, Updates;
+   - each list row: logo, name, author, version, an inline primary button in the style of the VS Code extension list (Install / Uninstall / Update) using the existing Button component; Disable goes in the row's secondary actions;
+   - details (Markdown) on the right;
+   - a gear or "…" icon at the top right, whose menu has repository management, manual install (sideloading) and open data folder.
+2. **The store author and the plugins author** negotiate according to §4: which functions move into store, whether the plugins plugin is retired or keeps only an entry, and the menu path (whether to keep "Settings ▸ Plugin Manager…"). Host or SDK capabilities they need, such as icon buttons, a tab bar component or an API to read plugin logos, are requested from the maintainer according to §4.1.
+3. Implementation → the author checks with their own screenshots → the coordinator accepts with screenshots (real Mac) → the user looks on Windows.
 
-### 第 2 步：全量界面审查
+### Step 2: full interface review
 
-1. **协调者截全部界面**：主窗口、各菜单、选项窗口的每一页、每个插件窗口和侧栏面板，语言用 en、zh-Hans、de（最长）。macOS 实机；Windows 截图请用户补几张关键的。
-2. **界面审查员**（临时角色，一个独立 agent，不写代码）：
-   - 对照 ui-spec 和其它界面逐张审查，只记雷人的问题，不提「可以设计得更好」一类的建议；
-   - 每条问题写清楚截图、位置、违反 ui-spec 的哪条（或与哪个界面不一致）、严重程度（明显错误 / 不协调 / 小瑕疵）；
-   - 问题清单写在本文下方。
-3. 协调者裁决：确认、驳回、合并重复项，然后把确认的问题按插件分给作者，宿主组件的问题分给维护者。
-4. 作者修改并附上修改前后的截图 → 审查员复审 → 协调者实机验收。
-5. 两轮之内还没解决的问题，列给用户决定。
+1. **The coordinator takes screenshots of every interface**: the main window, each menu, every page of the Options window, every plugin window and sidebar panel, in en, zh-Hans and de (the longest). On a real Mac; for Windows, ask the user for a few key screenshots.
+2. **Interface reviewer** (a temporary role, an independent agent that writes no code):
+   - reviews each screenshot against ui-spec and the other interfaces, records only ugly problems, and makes no "could be designed better" suggestions;
+   - each problem states the screenshot, the location, which ui-spec rule it violates (or which interface it is inconsistent with), and the severity (clear error / mismatched / minor flaw);
+   - the problem list goes below in this document.
+3. The coordinator rules: confirm, reject, merge duplicates, then assign the confirmed problems to authors by plugin, and host component problems to the maintainer.
+4. The author fixes them and attaches before and after screenshots → the reviewer reviews again → the coordinator accepts on the real machine.
+5. Problems not solved within two rounds are listed for the user to decide.
 
-### 不做的事
+### Out of scope
 
-- 不重新设计界面，不新写界面规范。参考对象只有一个：插件中心的列表行可以参考 VS Code 扩展视图（用户指定）。其它界面不拿任何软件当参考（参考研究已经做过，结论就是现在的 ui-spec 和界面），派活说明里也不写。
-- 不改交互逻辑和功能范围，第 1 步插件中心中用户点名的部分除外。
-- 不动主题和配色。如果审查认为 ui-spec 本身有问题，只登记，再问用户。
+- No interface redesign and no new interface specification. There is only one reference: the plugin center's list rows may follow the VS Code extensions view (named by the user). No other interface uses any software as a reference (the reference research has been done; its conclusions are the current ui-spec and interface), and task instructions do not mention any.
+- No changes to interaction logic or feature scope, except the parts of the step 1 plugin center the user named.
+- No changes to the theme and colours. If the review finds a problem in ui-spec itself, only register it and ask the user.
 
-## 进度
+## Progress
 
-- [ ] 第 0 步：截图工具
-- [ ] 第 1 步：插件中心规格 → 协商 → 实现 → 验收
-- [ ] 第 2 步：全量截图 → 审查 → 修改 → 复审 → 验收
+- [ ] Step 0: screenshot tool
+- [ ] Step 1: plugin center specification → negotiation → implementation → acceptance
+- [ ] Step 2: full screenshots → review → fixes → second review → acceptance

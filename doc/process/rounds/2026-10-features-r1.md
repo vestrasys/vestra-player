@@ -1,98 +1,98 @@
-# 第 1 轮：无核心依赖的功能 + 核心请求协商
+# Round 1: features without core dependencies + negotiation of core requests
 
-分支：`rebuild/features-r1`（自 `main` 6ef174f）。依据：[功能需求](../../product/feature-requirements.md)（下称「需求文档」）、[社区工作流](../community-workflow.md) §3、§4（尤其 §4.3 协商）。共 4 轮，计划见 §5。
+Branch: `rebuild/features-r1` (from `main` 6ef174f). Basis: [feature requirements](../../product/feature-requirements.md) (below: "the requirements document"), [community workflow](../community-workflow.md) §3, §4 (especially §4.3 negotiation). 4 rounds in all; the plan is in §5.
 
-## 1. 两条线
+## 1. Two tracks
 
-- **A 线：插件作者**。实现需求文档中「依赖核心新增：否」的 29 项。
-- **B 线：协商**。需求文档附录 A 的全部核心请求按 §4.3 走一遍，结论决定第 2–4 轮的范围。
+- **Track A: plugin authors**. Implement the 29 items in the requirements document marked "depends on new core: no".
+- **Track B: negotiation**. Take all core requests in Appendix A of the requirements document through §4.3; the conclusions decide the scope of rounds 2–4.
 
-两条线互不等待。
+The two tracks do not wait for each other.
 
-## 2. 作者规则
+## 2. Author rules
 
-- 只写自己的插件目录（新插件就新建目录）；不改核心、SDK、兄弟插件和 `doc/`（需求文档与菜单表由协调者更新）。
-- 按需求文档对应小节实现，菜单 order 与快捷键按需求文档各章「菜单与快捷键」。表外的需要在报告中说明。
-- 某一项发现其实需要核心改动，就跳过这一项，在报告的「API 请求」节按工作流 §4.1 写请求，其余照做。
-- 颜色与尺寸用 `Theme`；控件用 `@vestra/widgets.slint`。
-- 测试：新行为补测试，被改变的旧行为同步更新测试。
-- 完成条件：`npm run plugin -- check|build|test <插件目录>` 全部通过。报告列出完成项、未完成项与原因、API 请求、需要协调者更新的文档（菜单、快捷键）。
-- 不 commit、不 push、不 reset，不操作 GUI。
+- Write only in your own plugin directory (create a new directory for a new plugin); do not change the core, the SDK, sibling plugins or `doc/` (the coordinator updates the requirements document and the menu table).
+- Implement according to the matching section of the requirements document; menu order and shortcuts follow the "Menus and shortcuts" part of each chapter in the requirements document. Anything outside the table must be explained in the report.
+- If an item turns out to need a core change, skip that item, write a request in the report's "API requests" section according to workflow §4.1, and do the rest.
+- Use `Theme` for colours and sizes; use `@vestra/widgets.slint` for controls.
+- Tests: add tests for new behaviour, and update tests for old behaviour that changed.
+- Done when: `npm run plugin -- check|build|test <plugin directory>` all pass. The report lists finished items, unfinished items with reasons, API requests, and documents the coordinator needs to update (menus, shortcuts).
+- No commit, no push, no reset, no GUI operation.
 
-## 3. 分派（A 线）
+## 3. Assignments (track A)
 
-| 作者 | 插件 | 编号 |
+| Author | Plugin | Items |
 | --- | --- | --- |
-| A | playback | A02、A10、B09、B29、I06、I08 |
-| B | playlist | A03、A13、C04、C07、C11、C17、C18、C21、C23 |
-| C | subtitles、audio | A09、D02、D05、D06、D07；G09、G11（字幕同步改 `.` `,` `/`，音频同步用 `>` `<` `?`，两边同时改） |
-| D | capture、info | F03、F04、F07、F09；I03 |
-| E | history（新插件） | A12、B25 |
+| A | playback | A02, A10, B09, B29, I06, I08 |
+| B | playlist | A03, A13, C04, C07, C11, C17, C18, C21, C23 |
+| C | subtitles, audio | A09, D02, D05, D06, D07; G09, G11 (subtitle sync changes to `.` `,` `/`, audio sync uses `>` `<` `?`; change both sides together) |
+| D | capture, info | F03, F04, F07, F09; I03 |
+| E | history (new plugin) | A12, B25 |
 
-## 4. 协商（B 线）
+## 4. Negotiation (track B)
 
-| 步骤 | 执行 | 产出 |
+| Step | By | Output |
 | --- | --- | --- |
-| 1 | API 维护者 | 逐条回复附录 A 的请求：不改 API 的替代方案和代价，或初步认可的理由 |
-| 2 | 作者代表（代各请求插件） | 对维护者不认可的条目，最多反驳一次，必须附证据 |
-| 3 | API 维护者 | 裁决：拒绝并给替代 / 改写后接受 / 接受；合并同一能力的请求；排进第 2–4 轮 |
+| 1 | API maintainer | Reply to each request in Appendix A: an alternative without API changes and its cost, or the reasons for preliminary approval |
+| 2 | Author representative (on behalf of each requesting plugin) | For items the maintainer did not approve, at most one rebuttal, with evidence |
+| 3 | API maintainer | Ruling: reject with an alternative / accept after rewriting / accept; merge requests for the same capability; schedule into rounds 2–4 |
 
-记录在 [2026-10-features-negotiation.md](2026-10-features-negotiation.md)。
+Recorded in [2026-10-features-negotiation.md](2026-10-features-negotiation.md).
 
-## 5. 轮次计划
+## 5. Round plan
 
-| 轮 | 内容 |
+| Round | Contents |
 | --- | --- |
-| 1 | 本文 |
-| 2 | 核心第一批（播放、轨道、处理节点，含基础播放动作移交核心），然后插件接入 |
-| 3 | 核心第二批（界面、窗口、设置、绑定），新插件为主 |
-| 4 | 渲染改造（C-SIZE、C-GPU、画中画） |
+| 1 | This document |
+| 2 | Core batch one (playback, tracks, processing nodes, including moving basic playback actions to the core), then plugin integration |
+| 3 | Core batch two (interface, windows, settings, bindings), mainly new plugins |
+| 4 | Rendering rework (C-SIZE, C-GPU, picture-in-picture) |
 
-第 2–4 轮的具体条目以协商结论为准。每轮结束：静态检查、全部插件测试、GUI 实测，合并到 `main` 并推送。
+The exact items of rounds 2–4 follow the negotiation conclusions. At the end of each round: static checks, all plugin tests, GUI testing, merge into `main` and push.
 
-## 6. 记录
+## 6. Record
 
-### 作者交付（2026-10-20）
+### Author deliveries (2026-10-20)
 
-| 作者 | 插件 | 完成 | 测试 | API 请求 |
+| Author | Plugin | Done | Tests | API requests |
 | --- | --- | --- | --- | --- |
-| A | playback | A02、A10、B09、B29、I06、I08（系统命令集中在 `system.ts`） | 37 | 无 |
-| B | playlist | A03、A13、C04、C07、C11、C17、C18、C21、C23 | 56 | 无 |
-| C | subtitles、audio | A09、D02、D05、D06、D07；G09、G11（另补 G10 规格化入口）；同步键对调 | 30、22 | 无 |
-| D | capture、info | F03、F04、F07、F09；I03 | 22、9 | 无 |
-| E | history（新） | A12、B25 | 21 | 无 |
+| A | playback | A02, A10, B09, B29, I06, I08 (system commands gathered in `system.ts`) | 37 | None |
+| B | playlist | A03, A13, C04, C07, C11, C17, C18, C21, C23 | 56 | None |
+| C | subtitles, audio | A09, D02, D05, D06, D07; G09, G11 (plus a normalized entry for G10); sync keys swapped | 30, 22 | None |
+| D | capture, info | F03, F04, F07, F09; I03 | 22, 9 | None |
+| E | history (new) | A12, B25 | 21 | None |
 
-29 项全部完成，没有 API 请求。全部 12 个插件测试通过（共 264 个）；`check`、`format:check`、`boundaries` 通过。
+All 29 items done, no API requests. All 12 plugins' tests pass (264 in total); `check`, `format:check`, `boundaries` pass.
 
-### 协商（B 线）
+### Negotiation (track B)
 
-67 条请求的裁决：拒绝并给替代 6 条、改写后接受 30 条、接受 31 条，作者反驳 0 条（附实测数据）。另外采纳了几项通用核心能力：剪贴板、阻止休眠、确认对话框，以及 runtime 层的 `tools`、`storage`、`system`。轮次因体积预算拆分为 2、3a、3b、4a、4b。详见 [协商记录](2026-10-features-negotiation.md) 与 [第 2 轮任务单](2026-10-features-r2.md)。
+Rulings on 67 requests: 6 rejected with an alternative, 30 accepted after rewriting, 31 accepted; 0 author rebuttals (with measured data). Several general core capabilities were also adopted: clipboard, sleep prevention, confirmation dialogs, and `tools`, `storage`, `system` in the runtime layer. Because of the size budget the rounds were split into 2, 3a, 3b, 4a, 4b. Details in the [negotiation record](2026-10-features-negotiation.md) and the [round 2 task sheet](2026-10-features-r2.md).
 
-### GUI 实测（协调者）
+### GUI testing (coordinator)
 
-**通过**：
-- 打开文件夹：自然排序；跳过隐藏文件、.app 和 txt。
-- 列表跨重启恢复。
-- 搜索：过滤后保留原序号；无匹配时有提示。
-- 进度条悬停时间。
-- 简要信息。
-- Backspace 跳到开头。
-- 重开最后文件：菜单可用。
-- ⌘C 复制画面：剪贴板里是 PNG，没有残留文件。
-- 截图存为 JPEG。
-- 禁止休眠：`pmset` 断言随播放和暂停正确出现、消失。
-- 最近播放菜单。
-- 字幕同步 `.` `,`、音频同步 `>`、手动调整同步窗口。
+**Passed**:
+- Open folder: natural sort order; hidden files, .app and txt are skipped.
+- The list is restored across restarts.
+- Search: filtered results keep their original numbers; a message when nothing matches.
+- Time on seek bar hover.
+- Brief info.
+- Backspace jumps to the start.
+- Reopen last file: the menu works.
+- ⌘C copies the frame: the clipboard holds a PNG, no leftover file.
+- Snapshot saved as JPEG.
+- Sleep prevention: the `pmset` assertion appears and disappears correctly with play and pause.
+- Recently played menu.
+- Subtitle sync `.` `,`, audio sync `>`, the manual sync adjustment window.
 
-**当场修复**：
-- 音频工作台「效果」页溢出（作者 C）。
-- 默认宽度下总时长被搜索框挤掉：裁决为窄时把搜索框收成放大镜图标（作者 B）。
-- 简要信息行过长：改用编码简称，并限制宽度（作者 D）。
+**Fixed on the spot**:
+- Overflow on the "Effects" page of the audio workbench (author C).
+- At the default width the total duration was pushed out by the search box: ruled that when narrow the search box collapses into a magnifier icon (author B).
+- Brief info line too long: use short codec names and limit the width (author D).
 
-**宿主缺陷，转第 2 轮批次 A**：
-- Option 组合键不触发（Alt+L、Alt+O）。
-- Ctrl+字母以控制码到达时被误认：Ctrl+Y 被认成 Shift+Tab，所以「重开」快捷键无效；Ctrl+I、Ctrl+H、Ctrl+M、Ctrl+[ 也会错。
+**Host defects, moved to round 2 batch A**:
+- Option key combinations do not trigger (Alt+L, Alt+O).
+- Ctrl+letter arriving as a control code is misread: Ctrl+Y is read as Shift+Tab, so the "Reopen" shortcut does not work; Ctrl+I, Ctrl+H, Ctrl+M, Ctrl+[ are also wrong.
 
-**遗留观察**：关闭媒体后视频区仍显示最后一帧，留待第 3 轮的空闲画面（H12）。
+**Remaining observation**: after closing the media, the video area still shows the last frame; left for the idle screen of round 3 (H12).
 
-菜单表（menus.md）在第 2 轮基础动作移交后统一更新。
+The menu table (menus.md) is updated in one go after the basic actions are handed over in round 2.

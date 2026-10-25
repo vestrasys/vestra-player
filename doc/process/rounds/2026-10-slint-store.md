@@ -1,141 +1,141 @@
-# 2026-10 轮：Slint 升级与插件商城
+# 2026-10 round: Slint upgrade and plugin store
 
-开始于 2026-10-22，基线 main 8bc172b。用户授权协调者自主推进（用户不在时）：原定需用户审阅的节点由协调者按既定原则决定，记在「协调者决定」里，供用户事后复核。
+Started 2026-10-22, baseline main 8bc172b. The user authorized the coordinator to proceed autonomously (while the user is away): checkpoints that were meant for user review are decided by the coordinator on the established principles, recorded under "Coordinator decisions" for the user to review afterwards.
 
-**本文是这一轮的唯一进度来源。** 协调者上下文压缩后先读本文再继续；每完成一步更新本文并提交。
+**This document is the only progress record for this round.** After a context compaction the coordinator reads this document first, then continues; after each completed step this document is updated and committed.
 
-## 目标
+## Goals
 
-1. **任务 1：Slint 1.16.1 → 1.18.x**。适配新版，拆掉因 1.16 而存在的绕路方案，跑完整检查和真机全量回归。
-2. **任务 2：插件商城（生态计划 S5）**。商城插件：列表、带 README 的详情、权限、签名验证、第三方提示、撤回、更新与回退。验收时补测阶段 4 无法测的三项：安装 `.vxp`、跨来源替换同 id、插件工坊安装。
+1. **Task 1: Slint 1.16.1 → 1.18.x**. Adapt to the new version, remove the workarounds that exist because of 1.16, and run the full checks and a full real-device regression.
+2. **Task 2: plugin store (ecosystem plan S5)**. Store plugin: list, details with README, permissions, signature verification, third-party notice, revocation, update and rollback. During acceptance, also test the three items stage 4 could not test: installing a `.vxp`, replacing the same id across sources, installing from the Plugin Workshop.
 
-顺序执行：先任务 1，再任务 2（商城界面建在新 Slint 上）。之后才是 S6 整体验收（含 Windows 真机）、S7 打包（自带 Node 24、.app、签名、Windows 安装包）和第三方许可证收集，不在本轮。
+Run in order: task 1 first, then task 2 (the store UI is built on the new Slint). After that come S6 overall acceptance (including a real Windows machine), S7 packaging (bundled Node 24, .app, signing, Windows installer) and third-party license collection, which are not in this round.
 
-## 分工与流程
+## Roles and process
 
-- 写代码的都是子 agent，每阶段一个新 agent，在独立 worktree 干活，交固定格式报告。协调者负责审查、合并、完整检查（community-workflow §6.1）、真机测试、GitHub 操作和小的文档改动。
-- 任务 1 自上而下（§5）：维护者调研 → 清单（协调者决定）→ 维护者实施 → 必要时插件作者改各自 .slint → 必要时 SDK 发版（§1.6）→ 真机全量回归 → 合并。
-- 任务 2 自下而上（§4）：商城插件作者写设计并列 API 缺口（协调者决定）→ 有缺口则维护者走 API 提案 → 作者实施 → 真机验收 → 合并。
+- All code is written by sub-agents, one new agent per stage, each working in its own worktree and delivering a report in the fixed format. The coordinator does review, merging, the full checks (community-workflow §6.1), real-device testing, GitHub operations and small doc changes.
+- Task 1 is top-down (§5): maintainer research → list (coordinator decides) → maintainer implements → plugin authors change their own .slint where needed → SDK release where needed (§1.6) → full real-device regression → merge.
+- Task 2 is bottom-up (§4): the store plugin author writes a design and lists API gaps (coordinator decides) → if there are gaps, the maintainer goes through an API proposal → author implements → real-device acceptance → merge.
 
-## 分配到本轮的小问题
+## Small issues assigned to this round
 
-| 问题 | 分给 |
+| Issue | Assigned to |
 | --- | --- |
-| 操作历史 512 条上限从不清理 | 任务 1 维护者 |
-| `portability` 检查把文件写进 `src/host/target/portability` | 任务 1 维护者 |
-| 带数据卸载后钥匙串条目残留 | 任务 1 维护者 |
-| 字幕插件测试偶发失败 | 任务 1 维护者（定位；插件侧改动交字幕作者） |
-| 插件仓库 youtube/bilibili README 里的旧 `src/` 命令 | 任务 2（插件仓库） |
-| `nes/package.json` 版本 0.1.0 与 manifest 0.2.0 不一致 | 任务 1 顺手 |
+| The 512-entry action history cap is never cleaned up | Task 1 maintainer |
+| The `portability` check writes files into `src/host/target/portability` | Task 1 maintainer |
+| Keychain entries remain after uninstalling with data | Task 1 maintainer |
+| Subtitle plugin test fails intermittently | Task 1 maintainer (locate; plugin-side changes go to the subtitle author) |
+| Old `src/` commands in the plugin repository's youtube/bilibili READMEs | Task 2 (plugin repository) |
+| `nes/package.json` version 0.1.0 does not match manifest 0.2.0 | Task 1, in passing |
 
-## 已知事实
+## Known facts
 
-- Slint 1.18.1 试编译（2026-10-22）：两处版本钉（`src/host/Cargo.toml`、`src/host/unsafe/render/Cargo.toml`）改成 `=1.18.1` 后正式代码无错误无警告；测试代码 `ui_markdown.rs:760,803` 用了 `StyledText::as_ref()`，1.18 已没有，需改。插件 .slint 未在新版下检查。
-- 1.16 绕路方案（不完整，调研要补全）：ComboBox `<=>` global 的预检 `ui_probe.rs`（上游 1.18 已修）；Markdown 斜体改琥珀色、删除线改灰色、代码按 ASCII/非 ASCII 分字体、任务方框手画（`ui_markdown.rs`、`host/ui/vestra/markdown.slint`）。
-- 插件仓库已公开，发布流程跑通：Releases `vestra.youtube-v0.2.0`、`vestra.bilibili-v0.2.0`；`https://vestrasys.github.io/vestra-player-plugins/index.json` 签名验证通过。公钥 `keys/index-signing.pub.pem`（插件仓库）；签名为 base64，验证前去掉首尾空白。`revoked.json` 版本范围语法见插件仓库 `scripts/lib/semver.mjs`。
+- Slint 1.18.1 trial build (2026-10-22): after changing the two version pins (`src/host/Cargo.toml`, `src/host/unsafe/render/Cargo.toml`) to `=1.18.1`, production code builds with no errors and no warnings; test code `ui_markdown.rs:760,803` uses `StyledText::as_ref()`, which 1.18 no longer has, and needs changing. Plugin .slint files have not been checked under the new version.
+- 1.16 workarounds (incomplete; the research must complete the list): the ComboBox `<=>` global pre-check `ui_probe.rs` (fixed upstream in 1.18); Markdown italics turned amber, strikethrough turned grey, code split into ASCII/non-ASCII fonts, hand-drawn task boxes (`ui_markdown.rs`, `host/ui/vestra/markdown.slint`).
+- The plugin repository is public and the release flow works: Releases `vestra.youtube-v0.2.0`, `vestra.bilibili-v0.2.0`; `https://vestrasys.github.io/vestra-player-plugins/index.json` passes signature verification. Public key `keys/index-signing.pub.pem` (plugin repository); the signature is base64, strip leading and trailing whitespace before verifying. The version range syntax of `revoked.json` is in the plugin repository's `scripts/lib/semver.mjs`.
 
-## 进度
+## Progress
 
-- [x] 1.1 维护者调研：变更日志、绕路方案清单、所有 .slint 扫描（报告：[2026-10-slint-store-research.md](2026-10-slint-store-research.md)，W1–W21 编号以它为准）
-- [x] 1.2 协调者决定清单
-- [x] 1.3 维护者实施（含小问题）：`rebuild/slint-118` d2ae8dd
-- [x] 1.4 插件 .slint 适配：`rebuild/slint-118-plugins` 021a967（playlist、audio、video、visualizer 升版本；subtitles 测试去抖，并发 52 次 0 失败；nes 版本对齐）
-- [x] 1.5 SDK 1.1.2 已发布，播放器依赖 ^1.1.2（13a8d69）
-- [x] 1.6 完整检查 + 真机全量回归。合并分支 `rebuild/slint-118`（scratchpad/wt-core，4f19401）：§6.1 全部通过（cargo test 294、17 个插件测试、test:sdk 11/11、portability clean）。**2026-10-22 07:50 起真机回归已做，无升级回归，见「真机测试记录」。** 启动脚本 `scratchpad/run18.sh <后缀> [--plugin …]`；回归清单见调研报告 §4.3 加 workflow §6.2；素材在 `scratchpad/media`（hd.mp4、hd.srt、tone.mp3、test.nes 等）
-- [x] 1.7 合并（随商城一起，main 615bd07）
-- [x] 2.1 商城插件作者设计 + API 缺口：`doc/plugins/store-design.md`（分支 `rebuild/store-ui` c504731）。v1 无阻塞缺口（G1 列表图标、G2 窗口拖放为可选；G3 契约澄清）
-- [x] 2.2 协调者决定设计
-- [x] 2.3 API 提案与实现：不需要（G3 只是文档澄清，见决定）
-- [x] 2.4 商城插件实施：`rebuild/store-ui` 6481427（scratchpad/wt-plugins2），47 个测试通过，线上索引冒烟通过。真机驱动说明和验收清单见设计稿 §8.2。安全审查（独立 agent，对抗式）完成：签名、下载、包核对无可利用缺陷；发现 1 高（下架后撤回不生效）、1 中（重放旧索引隐藏撤回）、4 低，已全部修复（34c1822），README/图标哈希随插件仓库加固一起完成（dc58f40）
-- [x] 2.5 真机验收（含阶段 4 遗留三项）：2026-10-22 已做并复测，见「真机测试记录」
-- [x] 2.6 合并：main 615bd07（Slint 1.18、商城、系统字体、关闭快捷键、SDK 1.1.3、真机缺陷修复）
+- [x] 1.1 Maintainer research: changelog, workaround list, scan of all .slint files (report: [2026-10-slint-store-research.md](2026-10-slint-store-research.md); the W1–W21 numbering follows it)
+- [x] 1.2 Coordinator decides the list
+- [x] 1.3 Maintainer implements (including the small issues): `rebuild/slint-118` d2ae8dd
+- [x] 1.4 Plugin .slint adaptation: `rebuild/slint-118-plugins` 021a967 (playlist, audio, video, visualizer version bumps; subtitles test de-flaked, 52 concurrent runs with 0 failures; nes version aligned)
+- [x] 1.5 SDK 1.1.2 released; the player depends on ^1.1.2 (13a8d69)
+- [x] 1.6 Full checks + full real-device regression. Merge branch `rebuild/slint-118` (scratchpad/wt-core, 4f19401): all of §6.1 passed (cargo test 294, 17 plugin tests, test:sdk 11/11, portability clean). **Real-device regression done from 2026-10-22 07:50, no upgrade regressions, see "Real-device test record".** Launch script `scratchpad/run18.sh <suffix> [--plugin …]`; regression list in research report §4.3 plus workflow §6.2; media in `scratchpad/media` (hd.mp4, hd.srt, tone.mp3, test.nes, etc.)
+- [x] 1.7 Merge (together with the store, main 615bd07)
+- [x] 2.1 Store plugin author design + API gaps: `doc/plugins/store-design.md` (branch `rebuild/store-ui` c504731). No blocking gaps for v1 (G1 list icons and G2 window drag-and-drop are optional; G3 is a contract clarification)
+- [x] 2.2 Coordinator decides the design
+- [x] 2.3 API proposal and implementation: not needed (G3 is only a doc clarification, see decisions)
+- [x] 2.4 Store plugin implementation: `rebuild/store-ui` 6481427 (scratchpad/wt-plugins2), 47 tests pass, smoke test against the live index passes. Real-device driving notes and acceptance list in design §8.2. Security review (independent agent, adversarial) done: no exploitable flaws in signatures, downloads or package verification; found 1 high (revocation has no effect after delisting), 1 medium (replaying an old index hides revocations), 4 low, all fixed (34c1822); README/icon hashes done together with the plugin repository hardening (dc58f40)
+- [x] 2.5 Real-device acceptance (including the three items left from stage 4): done and retested 2026-10-22, see "Real-device test record"
+- [x] 2.6 Merge: main 615bd07 (Slint 1.18, store, system fonts, close shortcut, SDK 1.1.3, real-device bug fixes)
 
-## 协调者决定
+## Coordinator decisions
 
-（每条写明：日期、决定、理由、用户复核时可推翻的影响面。）
+(Each entry states: date, decision, reason, and what is affected if the user overturns it on review.)
 
-**2026-10-22，步骤 1.2（绕路方案清单）**
-1. 按调研报告 §4.1 执行，采纳其中「可以拆 / 需要改写 / 必须保留」的结论。
-2. W1：删掉独立线程改 global 的预检，选项页注册时的单页编译保留（失败仍为 `ui-prepare`）。测试反过来证明 ComboBox 双向绑定到 global 不再崩。
-3. **W4 强制中文字体本轮不拆。** 理由：会改变所有界面的西文字形和尺寸，是外观决定，应由用户看过对比再定。回归时协调者截 `VESTRA_FONT_FALLBACK=system` 的对比图放进本文，留给用户。
-4. W7 按报告改写（行内代码整段、代码块用等宽字体）；W8 的 `catch_unwind` 保留（仍依赖私有接口，留着防护成本很低）。
-5. W21 两处 `close`/`hide` 改名都做。glow 能无痛去重就去重，不行就留双版本并在报告里说明。
-6. 布局延后一帧（报告 §1.3 风险 2）：维护者必须排查宿主正式代码里切换 `if` 后立刻读几何的地方并修好，不能只改测试。
-7. 操作回执：按报告 §5.1 淘汰最旧的终态回执。
-8. 钥匙串：按报告 §5.3 宿主记录密钥名、卸载时删除；每实例上限 256 个名字，超出时 `secrets.set` 失败。理由：没有上限的话插件可以让宿主的索引无限增长；256 远超正常插件用量。错误码优先复用已有的，不新增。用户可推翻（影响：一条 reference 规则和一个测试）。
-9. SDK 发 1.1.2（markdown.slint 同步、`testing.ts` 默认版本、`settle()` 文档）。不新增 `host.until`。
-10. 顺序：维护者先做宿主 + SDK（1.3/1.5），合入后插件作者再在 1.18 上改各自 .slint（1.4，含 playlist、audio、video、subtitles 测试去抖、nes 版本对齐），避免插件在 1.16 宿主上用新属性名。
+**2026-10-22, step 1.2 (workaround list)**
+1. Follow research report §4.1, adopting its "can remove / needs rewriting / must keep" conclusions.
+2. W1: remove the pre-check that changes the global on a separate thread; keep the single-page compile when an options page is registered (failure is still `ui-prepare`). A test proves the reverse: ComboBox two-way binding to a global no longer crashes.
+3. **W4, the forced Chinese font, is not removed this round.** Reason: it would change Latin glyphs and sizes across the whole UI; it is a look-and-feel decision that the user should make after seeing a comparison. During regression the coordinator puts a comparison screenshot with `VESTRA_FONT_FALLBACK=system` in this document for the user.
+4. W7 is rewritten as the report says (inline code as one run, code blocks in a monospace font); W8's `catch_unwind` stays (it still relies on a private interface, and keeping the guard costs very little).
+5. W21: do both `close`/`hide` renames. Deduplicate glow if it can be done painlessly; otherwise keep both versions and explain in the report.
+6. Layout deferred by one frame (report §1.3 risk 2): the maintainer must find and fix the places in host production code that read geometry right after switching an `if`, not just change the tests.
+7. Operation receipts: evict the oldest terminal receipts as in report §5.1.
+8. Keychain: as in report §5.3, the host records key names and deletes them on uninstall; cap of 256 names per instance, beyond which `secrets.set` fails. Reason: without a cap a plugin could make the host's index grow without bound; 256 is far above normal plugin usage. Reuse existing error codes where possible, add none. The user can overturn this (impact: one reference rule and one test).
+9. Release SDK 1.1.2 (markdown.slint sync, `testing.ts` default version, `settle()` docs). Do not add `host.until`.
+10. Order: the maintainer does host + SDK first (1.3/1.5); after that is merged, plugin authors change their own .slint on 1.18 (1.4, including playlist, audio, video, subtitles test de-flaking, nes version alignment), so plugins do not use new property names on a 1.16 host.
 
-**2026-10-22，步骤 1.3 审查**
-1. 接受 `ui::settle_layout` 调用私有接口 `WindowInner::ensure_tree_instantiated`（读几何前先实例化 `if`/`for`）。理由：没有公开替代，`show()` 和派发事件都有副作用；Slint 版本是精确钉住的，升级时会被测试 `geometry_is_current_after_a_condition_changes` 拦住。已记在 architecture README。
-2. 主窗口生成源码里 `sidebar-actual` 的绑定环警告（1.16 就有）本轮不修，放进待办：修它会改侧栏布局语义，需单独一轮并真机验证。
-3. 删掉挂载预检后，「主窗口里能编译、单独成浮动窗口却编译失败」的面板要到分离时才失败。接受：失败只影响那个浮动窗口，而且所有面板在主窗口里都已编译过。
-4. SDK 1.1.2 由协调者合并、打标签、推送，CI 发布。
+**2026-10-22, step 1.3 review**
+1. Accept `ui::settle_layout` calling the private interface `WindowInner::ensure_tree_instantiated` (instantiate `if`/`for` before reading geometry). Reason: there is no public alternative, and both `show()` and dispatching events have side effects; the Slint version is pinned exactly, and an upgrade would be caught by the test `geometry_is_current_after_a_condition_changes`. Recorded in the architecture README.
+2. The binding loop warning on `sidebar-actual` in the main window's generated source (present since 1.16) is not fixed this round and goes to the to-do list: fixing it changes the sidebar layout semantics and needs its own round with real-device verification.
+3. With the mount pre-check removed, a panel that "compiles in the main window but fails to compile as a separate floating window" only fails when detached. Accepted: the failure only affects that floating window, and every panel has already compiled in the main window.
+4. SDK 1.1.2 is merged, tagged and pushed by the coordinator; CI publishes it.
 
-**2026-10-22，步骤 2.2（商城设计）**
-1. 采纳设计稿。商城是独立内置插件 `vestra.store`，和插件管理分开（理由见设计稿：联网部分可单独停用、出错互不拖累、布局不同）。
-2. 入口放顶层「插件商城…」，紧挨「插件工坊…」（工坊已在顶层，同类入口放一起）。有更新时标题带数量。用户可推翻改到「设置 ▶」下，影响只是一个菜单 order。
-3. 商城提供卸载和回退（同 VS Code）；插件管理保留它现有的按钮，两处调用同一 API，不冲突。
-4. 被撤回的插件：自动停用一次并持续显示警告；用户手动重新启用要先确认风险，之后不再强制停用。
-5. 第三方仓库 v1 只标「非官方」并警告，不配公钥、不做 TOFU，README 默认不加载远程图片。
-6. 自动检查：激活后 30 秒一次，之后每 24 小时，默认开，设置页可关。
-7. G1、G2 本轮不做（列表不显示图标；拖到视频区安装 + 「从文件安装…」按钮）。G3：同来源装更低版本，按宿主现状允许，由维护者在 reference §12 补一句（随 2.4 一起做）。
-8. 插件仓库索引加单调 `generated` 字段、签名支持多签名：放进待办，不阻塞 S5。
+**2026-10-22, step 2.2 (store design)**
+1. Adopt the design. The store is a separate built-in plugin `vestra.store`, apart from plugin management (reasons in the design: the networked part can be disabled on its own, failures do not drag each other down, the layouts differ).
+2. The entry goes at the top level as "Plugin Store…", right next to "Plugin Workshop…" (the workshop is already top level; similar entries sit together). The title shows a count when there are updates. The user can overturn this and move it under "Settings ▶"; the impact is just one menu order.
+3. The store offers uninstall and rollback (like VS Code); plugin management keeps its existing buttons; both call the same API, so there is no conflict.
+4. Revoked plugins: disabled automatically once, with a persistent warning; if the user re-enables manually they must first confirm the risk, and after that it is not force-disabled again.
+5. Third-party repositories in v1 are only marked "unofficial" with a warning: no public key configuration, no TOFU, and README does not load remote images by default.
+6. Automatic check: once 30 seconds after activation, then every 24 hours; on by default, can be turned off on the settings page.
+7. G1 and G2 are not done this round (no icons in the list; drag onto the video area to install + an "Install from File…" button). G3: installing a lower version from the same source is allowed, as the host does today; the maintainer adds a sentence to reference §12 (done together with 2.4).
+8. Plugin repository index adds a monotonic `generated` field and signatures support multiple signatures: goes to the to-do list, does not block S5.
 
-**2026-10-22，用户裁决（真机测试后）**
-1. 字体（W4）：要支持多平台。原则：额外安装的字体更好就用，否则用系统默认。协调者判断用系统默认：1.18 已能按文字回退显示中文，系统字体（macOS 苹方、Windows 雅黑、Linux 发行版自带 Noto CJK、Android/iOS 系统字体）在各平台都最贴近原生，不增加十几 MB 安装包，也不多一份字体许可证；自带字体也解决不了斜体问题。所以拆掉强制字体，改用系统默认 + Slint 回退。S6 在 Windows 真机上验证；若某个平台回退失败（例如缺中文字体的精简 Linux），再只为该平台补一份回退字体（Noto Sans SC，OFL），不改其它平台。
-2. 关闭工具窗口的快捷键：要支持，并注意多平台。做法：宿主在平台层提供「标准窗口快捷键」表，工具窗口和浮动面板按平台约定关闭：macOS ⌘W；Windows Ctrl+W 和 Ctrl+F4；Linux Ctrl+W。主窗口不响应（单窗口播放器，关主窗口等于退出，已有 ⌘Q / Alt+F4）。表按平台分开写，以后加 Linux、Android、iOS 只加条目（移动端没有键盘快捷键，返回手势由平台层另行映射）。这些键不进全局快捷键表，不和插件绑定冲突（Ctrl+W 目前没人用）。
-3. 播放列表合成双击卡在拖动状态（已存在缺陷第 5 条）：记下来，用户以后用真鼠标测。
-（2026-10-22 07:50–08:18，macOS，分支 `rebuild/store-ui` dc58f40 的 release 构建）
+**2026-10-22, user rulings (after real-device testing)**
+1. Fonts (W4): must support multiple platforms. Principle: use an additionally installed font if it is better, otherwise the system default. The coordinator judged the system default: 1.18 can already fall back per character to show Chinese, and system fonts (PingFang on macOS, YaHei on Windows, the Noto CJK that Linux distributions ship, the system fonts on Android/iOS) are closest to native on each platform, add no dozen-plus MB to the installer, and add no extra font license; a bundled font would not solve the italics problem either. So the forced font is removed in favour of the system default + Slint fallback. S6 verifies this on a real Windows machine; if fallback fails on some platform (for example a minimal Linux without a Chinese font), add a fallback font (Noto Sans SC, OFL) only for that platform and leave the others unchanged.
+2. Shortcut to close tool windows: support it, with attention to multiple platforms. Approach: the host provides a "standard window shortcuts" table in the platform layer, and tool windows and floating panels close by platform convention: macOS ⌘W; Windows Ctrl+W and Ctrl+F4; Linux Ctrl+W. The main window does not respond (single-window player; closing the main window equals quitting, and ⌘Q / Alt+F4 already exist). The table is written per platform; adding Linux, Android or iOS later only adds entries (mobile has no keyboard shortcuts; the back gesture is mapped separately by the platform layer). These keys do not go into the global shortcut table and do not conflict with plugin bindings (nobody uses Ctrl+W yet).
+3. Synthetic double-click in the playlist gets stuck in the drag state (existing bug no. 5): noted; the user will test with a real mouse later.
+(2026-10-22 07:50–08:18, macOS, release build of branch `rebuild/store-ui` dc58f40)
 
-用户授权直接开始。对照组是 main 8bc172b 的构建（Slint 1.16）。
+The user authorized starting directly. The control group is a build of main 8bc172b (Slint 1.16).
 
-**Slint 1.18 回归（调研报告 §4.3）**：没有发现由升级引起的回归。
-- 通过：GPU 播放；软件渲染（含全屏 4:3）；显示/隐藏播放列表后立即读视频区（0.5 倍时窗口 960/1280 宽，一次就对）；全屏侧栏弹出与底栏同步；底栏自动隐藏后空格仍有效（#11079 修复生效）；画中画进出；选项窗口 8 页全部打开；播放列表 ComboBox 改值后关闭重开不崩、值保留；「关闭」按钮（`close-window` 改名）；「添加链接」窗口 Esc 与「取消」（`cancel` 改名）；拖动排序；Markdown 示例（斜体琥珀、删除线灰、行内代码整段胶囊含中文、代码块、表格、本地与远程图片、滚动）；中英字幕；NES 运行与停止；关于窗口显示 Slint 1.18.1。
-- 1.18 顺带修好：旧版 NES 工具窗口只有标题栏、没有内容，新版正常。
-- 字体对比（W4，留给用户决定）：`assets/2026-10-font-ab.png`，左为现在的强制 Hiragino，右为 `VESTRA_FONT_FALLBACK=system`（苹方）。两者中文都正常。
-- 未测：⌥⌦ 与死键（需真键盘）、长列表滚轮、Windows。
+**Slint 1.18 regression (research report §4.3)**: no regressions caused by the upgrade found.
+- Passed: GPU playback; software rendering (including fullscreen 4:3); reading the video area right after showing/hiding the playlist (at 0.5× the window is 960/1280 wide, right the first time); fullscreen sidebar pop-out in sync with the bottom bar; Space still works after the bottom bar auto-hides (#11079 fix in effect); entering and leaving picture-in-picture; all 8 pages of the options window open; playlist ComboBox does not crash after changing a value and closing/reopening, and the value is kept; the "Close" button (`close-window` rename); Esc and "Cancel" in the "Add Link" window (`cancel` rename); drag reordering; the Markdown example (amber italics, grey strikethrough, inline code as one capsule including Chinese, code blocks, tables, local and remote images, scrolling); Chinese and English subtitles; NES run and stop; the About window shows Slint 1.18.1.
+- Fixed by 1.18 in passing: the old NES tool window had only a title bar and no content; the new one is fine.
+- Font comparison (W4, for the user to decide): `assets/2026-10-font-ab.png`, left is the current forced Hiragino, right is `VESTRA_FONT_FALLBACK=system` (PingFang). Chinese is fine in both.
+- Not tested: ⌥⌦ and dead keys (need a real keyboard), mouse wheel on long lists, Windows.
 
-**新旧版本都有的已存在缺陷**（不是升级引起）：
-1. window：视频播完后再播放，「屏幕」下的尺寸、迷你、画中画一直灰（「没有视频」）。原因：`video-size.ts` 播完时清空尺寸，重新播放不再探测。
-2. window：「窗口」设置页说明文字折成两行，第二行被裁掉。
-3. nes：在 NES 窗口点「停止」后 OSD 显示「打开失败：producer transport closed」（底栏停止不会）。
-4. plugins / info：插件管理列表与关于窗口的「来源」列对仓库、本地文件安装的插件都只写「已安装」，没区分；关于窗口对内置插件也写「已安装」。
-5. playlist：合成双击列表项会进入拖动状态且不播放，直到下一次点击（旧版同样）。可能是合成事件的问题，需用户用真鼠标确认。
-6. ⌘W 关不掉工具窗口（产品问题，留给用户）。
+**Existing bugs present in both old and new versions** (not caused by the upgrade):
+1. window: after a video finishes and plays again, size, mini and picture-in-picture under "Screen" stay greyed out ("no video"). Cause: `video-size.ts` clears the size when playback finishes and does not probe again on replay.
+2. window: the description text on the "Window" settings page wraps to two lines and the second line is clipped.
+3. nes: after clicking "Stop" in the NES window, the OSD shows "Open failed: producer transport closed" (stop in the bottom bar does not).
+4. plugins / info: the "Source" column in the plugin management list and the About window says only "Installed" for both repository and local-file plugins, without distinguishing them; the About window also says "Installed" for built-in plugins.
+5. playlist: a synthetic double-click on a list item enters the drag state and does not play, until the next click (same in the old version). Possibly a synthetic-event problem; the user needs to confirm with a real mouse.
+6. ⌘W does not close tool windows (product question, left to the user).
 
-**商城验收（设计稿 §8.2）**：
-- 通过：1 打开商城、官方仓库验签与列表；2 详情、权限、许可证；4 从官方仓库安装 YouTube；6 从文件安装（侧载警告、来源「本地文件」）；7 跨来源替换（新实例、旧数据保留）；7b 换回本地文件接回原实例 c053abec 与数据；9 内置插件只能停用；10 添加第三方本机测试仓库（警告与「非官方」标记）；11 更新检测与更新、回退；12 撤回自动停用 + 通知 + 「仍然启用」风险确认 + 之后不再停用；13 不兼容版本不可装；14 停用商城后设置页消失，重新启用恢复。
-- 缺陷（交商城作者）：
-  - S1（高）官方插件的 README、更新日志一律「无法加载说明：大小与描述不符」。原因：Pages 以 gzip 返回，`net.ts:133-136` 拿压缩后的 Content-Length（647）和解压后的大小（892）比较。测试的假网络不压缩，没覆盖到。
-  - S2 列表每行第三行（一句话简介）被下一行盖住一半。
-  - S3 回退后按钮写「回退到 0.2.0」（较新版本），应为「恢复到」之类。
-  - S4 「版本」页状态列太窄，「不兼容：需要 …」「当前，已撤…」被截断。
-  - S5 从原来源重装时确认框仍写「替换后新插件使用新的空数据」，实际会接回原数据。
-  - S6 设置页「添加仓库」输入框和按钮过高。
-- 未测：3 链接打开、5 断网缓存、8 插件工坊安装（要付费模型）、拖 `.vxp` 到视频区、从链接安装、15 Windows。
+**Store acceptance (design §8.2)**:
+- Passed: 1 open the store, official repository signature check and list; 2 details, permissions, license; 4 install YouTube from the official repository; 6 install from file (sideload warning, source "Local file"); 7 cross-source replacement (new instance, old data kept); 7b switching back to the local file reconnects the original instance c053abec and its data; 9 built-in plugins can only be disabled; 10 add a local third-party test repository (warning and "unofficial" mark); 11 update detection, update, rollback; 12 revocation auto-disables + notice + "Enable Anyway" risk confirmation + not disabled again afterwards; 13 incompatible versions cannot be installed; 14 disabling the store removes its settings page, re-enabling restores it.
+- Bugs (for the store author):
+  - S1 (high) README and changelog of official plugins always show "Could not load description: size does not match". Cause: Pages returns gzip, and `net.ts:133-136` compares the compressed Content-Length (647) with the decompressed size (892). The test's fake network does not compress, so it was not covered.
+  - S2 the third line of each list row (the one-sentence summary) is half covered by the next row.
+  - S3 after rollback the button says "Roll back to 0.2.0" (the newer version); it should be something like "Restore to".
+  - S4 the status column of the "Versions" page is too narrow; "Incompatible: requires …" and "Current, revok…" are truncated.
+  - S5 when reinstalling from the original source the confirmation still says "after replacing, the new plugin uses new empty data", while it actually reconnects the original data.
+  - S6 the "Add repository" input and button on the settings page are too tall.
+- Not tested: 3 opening links, 5 offline cache, 8 Plugin Workshop install (needs a paid model), dragging a `.vxp` onto the video area, install from link, 15 Windows.
 
-**复测（2026-10-22 08:56–09:03，合并后构建，SDK 1.1.3）**：商城 S1（官方 README 正常加载）、S2（列表三行完整）通过；⌘W 关闭选项窗口、商城、焦点在输入框的「添加链接」，主窗口不响应；系统字体生效；重播后 0.5 倍可用；NES 停止不再报错；「窗口」页说明两行完整；来源列显示「内置」「仓库」。capture 测试抖动已修（`rebuild/capture-flaky`，并发 80 次 0 失败）。全部检查通过（cargo test 302、17 个插件、test:sdk 11/11、portability）。
-剩下的小问题（不影响功能，合并后另修）：S6「添加仓库」输入框底边压住下面的警告文字；换系统字体后，折行的灰色说明文字行距偏紧（「窗口」页、商城设置页、商城 README）。
+**Retest (2026-10-22 08:56–09:03, post-merge build, SDK 1.1.3)**: store S1 (official README loads) and S2 (all three list lines visible) pass; ⌘W closes the options window, the store, and "Add Link" with focus in the input, and the main window does not respond; system fonts in effect; 0.5× available after replay; NES stop no longer reports an error; both description lines on the "Window" page visible; the source column shows "Built-in" and "Repository". The capture test flakiness is fixed (`rebuild/capture-flaky`, 80 concurrent runs with 0 failures). All checks pass (cargo test 302, 17 plugins, test:sdk 11/11, portability).
+Remaining small issues (no functional impact, fixed separately after merge): S6 the bottom edge of the "Add repository" input overlaps the warning text below it; after switching to system fonts, wrapped grey description text has tight line spacing (the "Window" page, the store settings page, the store README).
 
-## 待办（本轮之后）
-- **Windows 真机验收（S6，等用户有机器）**：中文回退字体、Consolas 等宽、Ctrl+W / Ctrl+F4 关闭工具窗口（单按 F4 仍是停止）、商城清单第 15 项（安装、侧载、跨来源替换，卸载时「同时删除数据」的是/否框）、GPU 渲染与画中画回退、全量菜单与插件功能（workflow §6.2）。
-- ~~界面：S6 输入框与警告文字重叠；折行说明文字行距偏紧~~：已修（cc71fec，`line-height-factor: 1.25`），真机确认。Markdown 正文（StyledText）在 1.18 没有行高属性，商城 README 行距暂不改；以后可在 Theme 加行高变量随 SDK 发布。
-- ~~插件仓库：资源哈希、单调 `generated`、多签名、`revoked.json` 只追加~~：2026-10-22 已完成并发布（插件仓库 68ff01b，线上 `generated` = 1，签名通过）。商城端配套改动已完成（`rebuild/store-ui` dc58f40，测试 58/58；协调者对线上索引冒烟：验签通过、记下 generated=1、YouTube 包 sha256 一致、二次刷新 304）。
-- ~~插件仓库 youtube 测试~~：已修（29ef948）。原文：「download shows progress while running and the saved file when done」在 Windows + Node 22.18 偶发失败一次（CI run 39678880495，dbd7e7d），前后同一测试都通过。交 youtube 作者查。
-- 主窗口 `sidebar-actual` 绑定环警告（见上）。
-- ~~SDK：`StreamHandle.stop()` 顺序~~：SDK 1.1.3 已改为先关来源，宿主断开给 0.5 秒宽限（ee42ec1）。原文：`StreamHandle.stop()` 先关数据连接再关来源，宿主把断开当成加载失败，生成流的插件停止时会弹「打开失败：producer transport closed」。nes 已规避（`rebuild/plugin-fixes` bdb1dd3）；SDK 应改为先关来源，宿主也可考虑播放中断开不算加载失败。交维护者（字体/快捷键任务之后），随 SDK 1.1.3。
-- 用户待测：播放列表用真鼠标双击列表项能否播放（合成双击会卡在拖动状态）。
-- ~~SDK 仓库的 Docs 工作流在推标签时失败~~：CI 改造后文档只在 main 部署（SDK 8384e03）。原文：Docs 工作流在推标签时失败（Pages 环境只允许 main；v1.1.1 起就这样，main 上的那次会正常部署）。应让 Docs 只在 main 上运行。
-- ~~reference §6.4 字体说明~~：W4 拆掉强制字体后已一致（854d60d）。
+## To do (after this round)
+- **Real-device Windows acceptance (S6, when the user has a machine)**: Chinese fallback font, Consolas monospace, Ctrl+W / Ctrl+F4 closing tool windows (F4 alone is still stop), store checklist item 15 (install, sideload, cross-source replacement, the yes/no box for "Also delete data" on uninstall), GPU rendering and picture-in-picture fallback, all menus and plugin features (workflow §6.2).
+- ~~UI: S6 input overlapping warning text; tight line spacing in wrapped descriptions~~: fixed (cc71fec, `line-height-factor: 1.25`), confirmed on a real device. Markdown body text (StyledText) has no line-height property in 1.18, so the store README line spacing is left as is for now; later a line-height variable can be added to Theme and shipped with the SDK.
+- ~~Plugin repository: resource hashes, monotonic `generated`, multiple signatures, append-only `revoked.json`~~: done and released 2026-10-22 (plugin repository 68ff01b, live `generated` = 1, signature passes). The matching store changes are done (`rebuild/store-ui` dc58f40, tests 58/58; coordinator smoke test against the live index: signature passes, generated=1 recorded, YouTube package sha256 matches, second refresh 304).
+- ~~Plugin repository youtube test~~: fixed (29ef948). Original: "download shows progress while running and the saved file when done" failed once intermittently on Windows + Node 22.18 (CI run 39678880495, dbd7e7d); the same test passed before and after. Handed to the youtube author.
+- Binding loop warning on `sidebar-actual` in the main window (see above).
+- ~~SDK: `StreamHandle.stop()` order~~: SDK 1.1.3 now closes the source first, and the host gives a 0.5 second grace period on disconnect (ee42ec1). Original: `StreamHandle.stop()` closed the data connection before the source, the host treated the disconnect as a load failure, and plugins that generate streams showed "Open failed: producer transport closed" when stopped. nes worked around it (`rebuild/plugin-fixes` bdb1dd3); the SDK should close the source first, and the host could also consider not treating a disconnect during playback as a load failure. Handed to the maintainer (after the font/shortcut task), with SDK 1.1.3.
+- For the user to test: whether a real-mouse double-click on a playlist item plays it (a synthetic double-click gets stuck in the drag state).
+- ~~The Docs workflow in the SDK repository fails when a tag is pushed~~: after the CI rework docs are only deployed from main (SDK 8384e03). Original: the Docs workflow failed when a tag was pushed (the Pages environment only allows main; this has been the case since v1.1.1, and the run on main deploys normally). Docs should only run on main.
+- ~~reference §6.4 font notes~~: consistent after W4 removed the forced font (854d60d).
 
-## CI 改造（2026-10-22，为 S7 发布做准备）
+## CI rework (2026-10-22, preparing for the S7 release)
 
-三个仓库按 `doc/process/ci-research.md` §10 改成「可复用检查 + 推任意分支 / main / 发版三个入口」，`ci-ok` 为唯一必过检查；说明见 `doc/process/ci.md`。合并：播放器 13e2cb5、SDK 8384e03、插件仓库 414e8be，main 首次运行全绿。
-- 实测（播放器，冷缓存）：只改 TS 约 7 计费分钟；改 Rust（加 Windows）约 25；完整（加 macOS）约 46。
-- CI 首次在真 Windows 上跑宿主测试，修了 24 个失败（目录刷盘、`\\?\` 路径、包内 `/`）；ttf-parser 换成 skrifa；SDK 的 Windows 测试以前一直挂到超时，已修。
-- 用户已设：两个公开仓库 main 规则集（`ci-ok` 必过、禁强推和删除）；SDK `vestra` 环境审批人（协调者把 `v*` 规则从分支改成了标签）。播放器私有，免费方案不能设分支保护和环境审批。
-- **用户待办**：`npm login` 后 `npm trust github @vestra-player/sdk --file release.yml --repo vestrasys/vestra-player-sdk --env vestra`。下次 SDK 发版确认 provenance 后，再禁用 token 发布并删除 `NPM_TOKEN`。
-- 待定：Windows 包路径规则是否拒绝 `:*?"<>|`、保留名（改包格式，随 S6 定）；mpv-dev 下载源镜像到 vestrasys；CODEOWNERS。
+All three repositories were changed per `doc/process/ci-research.md` §10 to "reusable checks + three entry points: push to any branch / main / release", with `ci-ok` as the only required check; see `doc/process/ci.md`. Merged: player 13e2cb5, SDK 8384e03, plugin repository 414e8be; the first runs on main were all green.
+- Measured (player, cold cache): TS-only change about 7 billable minutes; Rust change (adds Windows) about 25; full (adds macOS) about 46.
+- CI ran the host tests on real Windows for the first time and 24 failures were fixed (directory flushing, `\\?\` paths, `/` inside packages); ttf-parser replaced by skrifa; the SDK's Windows tests used to always hang until timeout, now fixed.
+- Set by the user: main rulesets on both public repositories (`ci-ok` required, no force-push or deletion); approvers for the SDK `vestra` environment (the coordinator changed the `v*` rule from branches to tags). The player is private, and the free plan cannot set branch protection or environment approval.
+- **User to do**: after `npm login`, run `npm trust github @vestra-player/sdk --file release.yml --repo vestrasys/vestra-player-sdk --env vestra`. After the next SDK release confirms provenance, disable token publishing and delete `NPM_TOKEN`.
+- Undecided: whether Windows package path rules reject `:*?"<>|` and reserved names (changes the package format, decided with S6); mirroring the mpv-dev download source to vestrasys; CODEOWNERS.
 
-## 记录
+## Record

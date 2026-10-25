@@ -1,6 +1,6 @@
-# 书签示例插件
+# Bookmark example plugin
 
-[入门教程](../../../doc/plugins/tutorial.md)中逐行讲解的插件：记录当前播放位置，一键跳回。
+The plugin explained line by line in the [tutorial](../../../doc/plugins/tutorial.md): it records the current playback position and jumps back to it with one click.
 
-在 `src/` 下：`npm run plugin -- check|test|build examples/bookmark`。
-在 `src/host/` 下试用：`cargo run --bin vestra-host -- --plugin ../plugins/playback --plugin ../examples/bookmark`。
+In `src/`: `npm run plugin -- check|test|build examples/bookmark`.
+To try it, in `src/host/`: `cargo run --bin vestra-host -- --plugin ../plugins/playback --plugin ../examples/bookmark`.

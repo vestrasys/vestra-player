@@ -1,53 +1,53 @@
-# Vestra Player AI（实验性）
+# Vestra Player AI (experimental)
 
-播放器里的 AI 助手，基于 [pi](https://github.com/earendil-works/pi)。用你自己的 API key，和你选的模型对话；AI 可以在当前对话的文件夹里写 Vestra 插件，自己做类型检查、跑测试、打包，写好的插件可以安装（能回退）或导出。
+An AI assistant inside the player, based on [pi](https://github.com/earendil-works/pi). Use your own API key and chat with the model you choose; the AI can write Vestra plugins in the current chat's folder, type-check, test and pack them itself, and you can install the finished plugin (reversibly) or export it.
 
-## 怎么用
+## How to use it
 
-1. 右键菜单选「Vestra Player AI…」。
-2. 第一次使用时点「去设置」（或侧栏的「⚙ 设置」），在「选项 ▸ 插件 ▸ Vestra Player AI」里：
-   - 选服务商：pi 支持、用 API key 的全部服务商（Anthropic、OpenAI、Google、OpenRouter、DeepSeek、Mistral、Groq、xAI、MiniMax、Moonshot 等，按量付费），或者「自定义 · OpenAI 格式」/「自定义 · Anthropic 格式」（填 Base URL，可接 Ollama、LM Studio 或其它兼容服务）；
-   - 粘贴 API key，点「保存」；每个服务商的 key 分开保存；
-   - 选模型。自定义服务在填好 Base URL 后按 Enter 或点「获取模型」，会向服务列出模型；列不出来时直接填写模型 ID。
-3. 回到 AI 窗口输入消息，Enter 发送，Shift+Enter 换行。生成过程中可以点「■ 停止」。
-4. AI 工作时有一行状态：先显示「思考中…」，调用工具时显示当前的工具（最新的一次替换上一次）；这一轮结束后点这一行可以展开所有工具调用。
-5. 左侧是对话列表：「+ 新对话」开始新对话，点一项切换。关闭后再打开，回到上次的对话。
-6. 「打开文件夹」打开当前对话的工作文件夹。
-7. 在设置页的「插件作者」里填你的 GitHub 用户名：AI 新建的插件 id 是 `<用户名>.<名字>`（官方插件仓库要求 id 前缀就是源码仓库所属的 GitHub 用户或组织）。不填时用 `local.<名字>`，只适合在本机使用，发布前要改 id。`vestra.` 留给官方插件，不能用。
+1. Choose "Vestra Player AI…" in the right-click menu.
+2. The first time, click "Go to Settings" (or "⚙ Settings" in the sidebar), and in "Options ▸ Plugins ▸ Vestra Player AI":
+   - choose a provider: all the providers pi supports that use an API key (Anthropic, OpenAI, Google, OpenRouter, DeepSeek, Mistral, Groq, xAI, MiniMax, Moonshot and others, pay-as-you-go), or "Custom · OpenAI format" / "Custom · Anthropic format" (enter a Base URL; works with Ollama, LM Studio or other compatible services);
+   - paste the API key and click "Save"; each provider's key is saved separately;
+   - choose a model. For a custom service, press Enter or click "Fetch Models" after entering the Base URL to ask the service for its models; if it cannot list them, enter the model ID directly.
+3. Back in the AI window, type a message; Enter sends, Shift+Enter starts a new line. While a reply is being generated you can click "■ Stop".
+4. While the AI works there is one status line: it first shows "Thinking…", and while a tool runs it shows the current tool (each new one replaces the last); when the turn is over, click the line to expand all tool calls.
+5. On the left is the chat list: "+ New Chat" starts a new chat; click an item to switch to it. When you close the window and open it again, you return to the last chat.
+6. "Open Folder" opens the current chat's working folder.
+7. Enter your GitHub user name under "Plugin author" on the settings page: plugins the AI creates get the id `<user name>.<name>` (the official plugin repository requires the id prefix to be the GitHub user or organization that owns the source repository). Without it the id is `local.<name>`, which is only for use on your own machine; change the id before publishing. `vestra.` is reserved for official plugins and cannot be used.
 
-## 写插件
+## Writing plugins
 
-让 AI 写插件时，它先读插件 SDK 的参考资料（只读，在插件包里），然后用这些工具，状态行里显示中文名称：
+When you ask the AI to write a plugin, it first reads the plugin SDK reference (read-only, inside the plugin package) and then uses these tools; the status line shows their display names:
 
-| 工具 | 状态行 | 做什么 |
+| Tool | Status line | What it does |
 | --- | --- | --- |
-| `scaffold_plugin` | 创建插件 | 按官方插件仓库的布局新建项目：manifest.json、main.ts、ui/、tests/、README、CHANGELOG |
-| `typecheck` | 类型检查 | 严格类型检查（播放器自带的 SDK 类型），错误带文件、行、错误码 |
-| `test` | 运行测试 | 在单独的受限 Node 进程里跑 `tests/*.test.ts`：只能读插件文件夹、只能写临时文件夹，不能联网、不能开子进程；失败时返回断言信息和测试打印的内容 |
-| `check` | 检查 | id、依赖、manifest、类型、构建（Slint 由播放器在安装时编译） |
-| `pack` | 打包 | 生成 `dist/<id>-<版本>.vxp` |
-| `install_plugin` | 安装 | 播放器校验（含 Slint）后先弹对话框确认，再安装（只在你要求时）；之后可以「回退（撤销安装）」 |
+| `scaffold_plugin` | Create plugin | Creates a project in the layout of the official plugin repository: manifest.json, main.ts, ui/, tests/, README, CHANGELOG |
+| `typecheck` | Type check | Strict type check (with the SDK types that come with the player); errors include file, line and error code |
+| `test` | Run tests | Runs `tests/*.test.ts` in a separate restricted Node process: it can only read the plugin folder and only write a temporary folder, with no network and no child processes; on failure it returns the assertion messages and what the tests printed |
+| `check` | Check | id, dependencies, manifest, types, build (Slint is compiled by the player at install time) |
+| `pack` | Pack | Creates `dist/<id>-<version>.vxp` |
+| `install_plugin` | Install | The player validates it (including Slint), asks for confirmation in a dialog, then installs it (only when you ask); afterwards you can use "Roll Back (Undo Install)" |
 
-类型检查、测试、检查都通过，AI 才算写完。每个工具都有时间上限、输出上限，点「■ 停止」会取消正在运行的工具。
+The AI is done only when type check, tests and check all pass. Every tool has a time limit and an output limit; clicking "■ Stop" cancels the running tool.
 
-对话里有插件项目时，输入框上方出现插件卡片：
+When the chat has a plugin project, a plugin card appears above the input box:
 
-- 「安装」：安装进播放器（来源记为 AI 工坊）；同 id 的插件来自别处时先问是否替换。之后可以点「回退（撤销安装）」（有旧版本时回到旧版本，第一次安装则卸载）。装好后如果插件的快捷键被播放器或其它插件占用（播放器会忽略这些按键），卡片和 AI 都会得到提示；为此插件读取快捷键表（`bindings.manage`，只读取，不改任何按键）。
-- 「导出 .vxp」：打包后另存，可以分享。
-- 「导出源码 zip」：完整的插件项目，可以直接建成你自己的 GitHub 仓库：README、CHANGELOG、测试、tsconfig、带 SDK 依赖的 package.json、GitHub Actions 工作流（check、test、pack），以及待替换的 LICENSE 占位文件；不含 node_modules 和 dist。
-- 「打开文件夹」：插件项目的文件夹。
+- "Install": installs it into the player (the source is recorded as the AI workshop); if a plugin with the same id came from elsewhere, you are asked first whether to replace it. Afterwards you can click "Roll Back (Undo Install)" (it returns to the old version if there was one, and uninstalls a first install). If, after installing, the plugin's shortcuts are taken by the player or another plugin (the player ignores those keys), both the card and the AI are told; for this the plugin reads the shortcut table (`bindings.manage`, read only; it changes no keys).
+- "Export .vxp": packs the plugin and saves a copy you can share.
+- "Export Source .zip": the complete plugin project, ready to become your own GitHub repository: README, CHANGELOG, tests, tsconfig, a package.json with the SDK dependency, a GitHub Actions workflow (check, test, pack), and a LICENSE placeholder to replace; without node_modules and dist.
+- "Open Folder": the plugin project's folder.
 
-## 说明
+## Notes
 
-- **key 的保存**：只保存在系统钥匙串（macOS）或凭据管理器（Windows）里，不写入任何文件、日志或对话记录。调用模型的费用由你的服务商账户承担。
-- **读取 key**：打开 AI 窗口时才读取，读过一次就记在内存里。系统可能会弹出授权对话框（播放器更新后常见）；拒绝或读取失败时，窗口顶部会提示「无法读取钥匙串中的 key，请在设置中重新保存」，其它功能不受影响。
-- **AI 能做什么**：只能读写当前对话的工作文件夹（`read`、`write`、`edit`、`ls`、`find`、`grep`、`delete`；`delete` 只删文件或空文件夹，用来清掉调试文件），另外可以读插件 SDK 的参考资料（只读，短路径 `sdk/…`，例如 `sdk/llms.txt`；模型抄长绝对路径容易抄错）；不能运行命令，不能访问其它文件，也不能使用符号链接或以「.」开头的文件名。AI 在一个单独的受限进程里运行。插件工具由插件进程按固定参数执行。测试和类型检查（typecheck）在 Node 的权限模式（`--permission`）下运行：只能读插件项目、SDK 和数据目录里的 SDK 副本，只能写临时文件夹，不能联网；测试不能启动子进程，类型检查可以，但只用来启动 `tsc`，`tsc` 继承同样的限制。check 和打包暂时不在权限模式下（SDK 命令行复制文件用的 `fs.cp` 在权限模式下会读目标的所有上级目录）。
-- **对话保存在哪里**：插件数据目录下的 `sessions/<对话>/`：`meta.json`、pi 的对话记录（`.jsonl`）、工作文件夹 `work/`（每个插件一个 `work/<id>/`）和打包结果 `dist/`。数据目录的 `node_modules/` 是插件 SDK 的一份副本，供类型检查和测试使用。
-- 同一时间只有一个对话在生成。
-- 一轮回复里第一次工具调用之前的那一行开场白（「I'll start by reading…」）不显示：模型常用英文写它，工具状态行已经说明在做什么。对话记录里仍保留原文。
-- AI 的回复按 Markdown 显示（标题、列表、表格、代码块等），代码块右上角可以「复制」，链接用浏览器打开。回复里的网络图片不会下载，只显示替代文字。很长的对话只显示最近的消息，完整记录在会话文件夹里。
-- 服务商列表只有按量付费的 API；编程套餐、Token Plan 等订阅套餐不在列表里，需要时用「自定义 · OpenAI 格式」或「自定义 · Anthropic 格式」接入。
-- 需要 Vestra Player 0.4.3 或更新版本。界面文字的原文是英文，简体中文译文在 `locales/zh-Hans.po`（`vestra-plugin i18n extract` 更新 `locales/messages.pot`）。
-- 插件 SDK（`vendor/@vestra-player/sdk`，含 `vestra-plugin` 命令行）、TypeScript 和 `@types/node` 随插件一起提供，与播放器使用的 SDK 版本相同（`npm run vendor:sdk` 更新，`tests/vendor-sdk.mjs`）。AI 读的参考资料是 SDK 包自带的 `llms.txt` 和 `llms-full.txt`。
-- 评估：`tests/eval/` 有 6 道固定题目，`npm run eval` 用真实模型跑（会花你服务商账户的钱，只在改提示词或工具后手动跑），见 `tests/eval/run.mjs` 开头的说明。
-- 第三方组件的许可证见 `licenses/`（随插件包一起发布），pi 的 logo 出处见 `licenses/pi-logo/NOTICE.md`；随插件提供的 SDK、TypeScript、`@types/node`、`undici-types` 的许可证在 `vendor/` 下各自的文件夹里（`LICENSE`、`LICENSE.txt`、`ThirdPartyNoticeText.txt`）。
+- **How keys are stored**: only in the system keychain (macOS) or Credential Manager (Windows), never in any file, log or chat history. The cost of calling the model is charged to your provider account.
+- **Reading the key**: it is read only when the AI window opens, and kept in memory after the first read. The system may show a permission dialog (common after a player update); if you deny it or reading fails, the top of the window says "Cannot read the key from the keychain; save it again in the settings", and everything else keeps working.
+- **What the AI can do**: it can only read and write the current chat's working folder (`read`, `write`, `edit`, `ls`, `find`, `grep`, `delete`; `delete` only removes files or empty folders, for cleaning up debug files), and it can also read the plugin SDK reference (read-only, short paths `sdk/…`, for example `sdk/llms.txt`; models often copy long absolute paths wrongly). It cannot run commands, cannot access other files, and cannot use symbolic links or file names starting with ".". The AI runs in a separate restricted process. The plugin tools are run by the plugin process with fixed arguments. Tests and type checks (typecheck) run in Node's permission mode (`--permission`): they can only read the plugin project, the SDK and the SDK copy in the data directory, only write a temporary folder, and have no network; tests cannot start child processes; type checks can, but only to start `tsc`, which inherits the same limits. check and pack do not run in permission mode yet (the `fs.cp` the SDK command line uses to copy files reads every parent directory of the target in permission mode).
+- **Where chats are stored**: in `sessions/<chat>/` in the plugin data directory: `meta.json`, pi's chat history (`.jsonl`), the working folder `work/` (one `work/<id>/` per plugin) and the pack results `dist/`. `node_modules/` in the data directory is a copy of the plugin SDK, used for type checks and tests.
+- Only one chat generates at a time.
+- The opening line before the first tool call of a reply ("I'll start by reading…") is not shown: models usually write it in English, and the tool status line already says what is happening. The chat history keeps the original text.
+- AI replies are shown as Markdown (headings, lists, tables, code blocks and so on); code blocks have "Copy" in the top right corner, and links open in the browser. Web images in replies are not downloaded; only their alt text is shown. Very long chats show only the most recent messages; the full history is in the session folder.
+- The provider list has only pay-as-you-go APIs; subscription plans such as coding plans or Token Plans are not in the list; to use one, connect it with "Custom · OpenAI format" or "Custom · Anthropic format".
+- Needs Vestra Player 0.4.3 or later. The interface texts are written in English; the Simplified Chinese translation is in `locales/zh-Hans.po` (`vestra-plugin i18n extract` updates `locales/messages.pot`).
+- The plugin SDK (`vendor/@vestra-player/sdk`, including the `vestra-plugin` command line), TypeScript and `@types/node` come with the plugin, at the same SDK version the player uses (`npm run vendor:sdk` updates them, `tests/vendor-sdk.mjs`). The reference the AI reads is the `llms.txt` and `llms-full.txt` shipped in the SDK package.
+- Evaluation: `tests/eval/` has 6 fixed tasks; `npm run eval` runs them with a real model (this costs money on your provider account; run it by hand only after changing the prompt or the tools), see the notes at the top of `tests/eval/run.mjs`.
+- Licenses of third-party components are in `licenses/` (shipped with the plugin package); the source of the pi logo is in `licenses/pi-logo/NOTICE.md`; the licenses of the SDK, TypeScript, `@types/node` and `undici-types` shipped with the plugin are in their own folders under `vendor/` (`LICENSE`, `LICENSE.txt`, `ThirdPartyNoticeText.txt`).

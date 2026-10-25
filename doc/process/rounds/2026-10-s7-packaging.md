@@ -1,64 +1,64 @@
-# 2026-10 轮：S7 打包与发布
+# 2026-10 round: S7 packaging and release
 
-开始于 2026-10-22，基线 main 13e2cb5 之后。用户指示「处理完 Dependabot 直接做 S7」。上一轮见 [2026-10-slint-store.md](2026-10-slint-store.md)。
+Started 2026-10-22, after the baseline main 13e2cb5. User instruction: "after Dependabot is handled, go straight to S7" (处理完 Dependabot 直接做 S7). The previous round: [2026-10-slint-store.md](2026-10-slint-store.md).
 
-**本文是这一轮的唯一进度来源。** 协调者上下文压缩后先读本文再继续。
+**This document is the only progress source for this round.** After a context compaction, the coordinator reads this document first and then continues.
 
-## 目标（生态计划 S7、1.6 第 12 条）
+## Goals (ecosystem plan S7, item 12 of 1.6)
 
-1. 播放器自带 Node 24 LTS，不要求用户安装；SDK `engines` 与类型检查按这个版本调整。
-2. macOS：`.app`（显示名 Vestra Player、新 logo 图标、内含 libmpv 及其依赖、内置插件、Node、第三方许可证），再做 `.dmg`。
-3. Windows：安装包（含同样的内容）。
-4. 第三方许可证：Rust 依赖用 cargo-about；libmpv/ffmpeg、Node、字体等非 Cargo 依赖用清单，CI 检查清单和包里实际文件一致。
-5. 接进 `release.yml`：推 `v*` 标签 → 全套检查 → 各平台打包 → 公开发布地址上的 draft release。
-6. 签名（Apple Developer ID、Windows 代码签名）这一轮只留接口，不接证书；先出不签名的测试版。
+1. The player bundles Node 24 LTS and does not require users to install it; the SDK `engines` and type checks are adjusted to this version.
+2. macOS: an `.app` (display name Vestra Player, the new logo icon, containing libmpv and its dependencies, the built-in plugins, Node and third-party licenses), then a `.dmg`.
+3. Windows: an installer (with the same contents).
+4. Third-party licenses: cargo-about for Rust dependencies; a manifest for non-Cargo dependencies such as libmpv/ffmpeg, Node and fonts, and CI checks that the manifest matches the actual files in the package.
+5. Wired into `release.yml`: push a `v*` tag → full checks → packaging for each platform → a draft release at the public release location.
+6. Signing (Apple Developer ID, Windows code signing): this round only leaves the hooks and adds no certificates; unsigned test builds come first.
 
-## 协调者决定
+## Coordinator decisions
 
-**2026-10-22（用户说「直接做 S7」，对上一条消息里的两项提议没有反对）**
-1. 发布地址：新建公开仓库 `vestrasys/vestra-player-releases`，只放安装包与发布说明（播放器源码仓库保持私有）。到 release 步骤需要时再建。
-2. 签名先不接，先出不签名的 draft release；签名步骤留成 `environment: release` 下的 TODO job。
+**2026-10-22 (the user said "go straight to S7" (直接做 S7) and did not object to the two proposals in the previous message)**
+1. Release location: create a new public repository `vestrasys/vestra-player-releases` that holds only installers and release notes (the player source repository stays private). Created when the release step needs it.
+2. No signing yet; draft releases are unsigned first; the signing steps are TODO jobs under `environment: release`.
 
-**2026-10-22，步骤 7.2（方案中协调者能定的部分）**
-3. macOS 第一版只出 arm64，最低 macOS 14.0（画中画要求 14）；依赖在 `macos-14` runner 上生成。Intel 版以后按需求再加。
-4. 依赖来源：新增 `deps.yml`，一次生成 libmpv 等依赖，固定哈希，镜像到发布仓库；不在每次 release 时现装 Homebrew，Windows 也不依赖 shinchiro 会被删除的旧构建。
-5. ffmpeg/ffprobe 两个平台都随包（导出、内嵌字幕、时长、缩略图都依赖它们）；宿主设置 `VESTRA_FFMPEG`/`VESTRA_FFPROBE`，SDK 不变。
-6. Windows：Inno Setup 按用户安装（不要管理员）+ 便携 zip；卸载默认保留用户数据；exe 设为 GUI 子系统，Node 子进程不弹控制台；VC 运行库静态链接。
-7. 关掉 mpv 内置的 Lua 脚本和 ytdl hook（网络视频由插件经 yt-dlp 解析，不需要 mpv 自己调用）。
-8. 图标：先由 logo 自动合成圆角底板，以后有设计稿再替换。
-9. 发布说明：`doc/releases/v<版本>.md`，缺文件则 release 失败。
-10. 文件关联第一版不做（宿主还接不住系统传来的文件路径），单独排期。
-11. 打包用自写脚本（不用 cargo-bundle/cargo-packager），DMG 用系统 `hdiutil`。
-12. 补仓库根 LICENSE（GPL-3.0 全文）；运行时暂存时带上 SDK 的 LICENSE；nes 插件补 jsnes（Apache-2.0）许可证（交 nes 作者）。
+**2026-10-22, step 7.2 (the parts of the proposal the coordinator can decide)**
+3. The first macOS version is arm64 only, minimum macOS 14.0 (picture-in-picture requires 14); dependencies are built on the `macos-14` runner. An Intel version is added later on demand.
+4. Dependency source: a new `deps.yml` builds libmpv and other dependencies once, pins their hashes and mirrors them to the release repository; no fresh Homebrew install on every release, and Windows does not rely on old shinchiro builds that get deleted.
+5. ffmpeg/ffprobe ship with the package on both platforms (export, embedded subtitles, durations and thumbnails all depend on them); the host sets `VESTRA_FFMPEG`/`VESTRA_FFPROBE`, the SDK does not change.
+6. Windows: Inno Setup per-user install (no administrator) + a portable zip; uninstalling keeps user data by default; the exe uses the GUI subsystem, Node child processes open no console; the VC runtime is linked statically.
+7. Turn off mpv's built-in Lua scripts and ytdl hook (network videos are resolved by plugins through yt-dlp; mpv does not need to call it itself).
+8. Icon: first generated automatically from the logo on a rounded plate; replaced later when there is a design.
+9. Release notes: `doc/releases/v<version>.md`; the release fails if the file is missing.
+10. No file associations in the first version (the host cannot yet receive file paths from the system); scheduled separately.
+11. Packaging uses our own scripts (not cargo-bundle/cargo-packager); the DMG uses the system `hdiutil`.
+12. Add a LICENSE at the repository root (the full GPL-3.0 text); include the SDK's LICENSE when staging the runtime; add the jsnes (Apache-2.0) license to the nes plugin (handed to the nes author).
 
-**2026-10-22，用户裁决**
-13. Node 主版本用 **26**（26 LTS 起，`vestra/1` 期间只升不降）。SDK `engines` 随之调整（SDK 1.2.0）。
-14. GPL：源码仓库日后开源；在那之前安装包不对外发布，只做内部测试版。安装包发在 **`vestra-player` 仓库自己的 GitHub Release**，官网也引导到这里。**推翻决定 1**：不再新建 `vestra-player-releases`，release 用本仓库的 `GITHUB_TOKEN`，不需要额外凭据。仓库公开时 Release 和源码同时公开，满足 GPL。依赖镜像（决定 4）也放本仓库 Release（固定标签如 `deps-<日期>`）。
-15. bundle id：`com.vestraplayer.player`（用户裁决）。bundle id 只是命名惯例，不需要拥有域名，也不在苹果登记（不上 App Store）；只有同一台 Mac 上两个应用的完整 ID 相同才会冲突。vestrasys.com、vestra.com 已被他人注册，vestraplayer.com 当时（2026-10-22）未注册，以后做官网可注册它。
+**2026-10-22, user rulings**
+13. Node major version **26** (from 26 LTS; during `vestra/1` it only goes up, never down). The SDK `engines` follows (SDK 1.2.0).
+14. GPL: the source repository will be open-sourced later; until then installers are not published externally, only internal test builds. Installers are published on **the `vestra-player` repository's own GitHub Releases**, and the website will point there too. **Overrides decision 1**: no new `vestra-player-releases`; the release uses this repository's `GITHUB_TOKEN` and needs no extra credentials. When the repository becomes public, the releases and the source become public at the same time, which satisfies the GPL. The dependency mirror (decision 4) also goes to this repository's Releases (fixed tags such as `deps-<date>`).
+15. bundle id: `com.vestraplayer.player` (user ruling). A bundle id is only a naming convention: it does not require owning the domain and is not registered with Apple (no App Store); it conflicts only when two apps on the same Mac have the same full ID. vestrasys.com and vestra.com are registered by others; vestraplayer.com was not registered at the time (2026-10-22) and can be registered later for a website.
 
-**2026-10-22，步骤 7.3 中的偏差**
-16. macOS 最低版本改为 **15.0**（推翻决定 3 的 14.0）：Homebrew 已不再为 macOS 14 出预编译包，要做到 14 得自己编译 mpv/FFmpeg。15.0（2024 年发布）可以接受；自编译 mpv 以后单独排期。依赖在 `macos-15` 上生成。
-17. 打包脚本放在 `src/packaging/`（方案写的是 `src/scripts/package/`）。
+**2026-10-22, deviations in step 7.3**
+16. Minimum macOS version changed to **15.0** (overrides 14.0 in decision 3): Homebrew no longer ships prebuilt packages for macOS 14, and supporting 14 would mean building mpv/FFmpeg ourselves. 15.0 (released 2024) is acceptable; building mpv ourselves is scheduled separately later. Dependencies are built on `macos-15`.
+17. The packaging scripts are in `src/packaging/` (the proposal said `src/scripts/package/`).
 
-**GitHub Actions 额度（2026-10-22）**：本月 2000 分钟已用完，主要是旧 SDK CI 的 Windows 测试每次挂满 6 小时（公开仓库，金额被抵扣，但吃掉了额度）；播放器自己约 3 美元。私有仓库的 CI 在用户设预算或 11 月 1 日重置前被拦。已建议用户设 Actions 预算 20 美元并勾选达到上限即停。agent 改为本机先验证、只在必要时上 CI。
+**GitHub Actions quota (2026-10-22)**: this month's 2000 minutes are used up, mainly because the Windows tests of the old SDK CI ran for the full 6 hours each time (a public repository, so the cost was waived, but it used up the quota); the player itself cost about 3 USD. CI on private repositories is blocked until the user sets a budget or the quota resets on November 1. Suggested to the user: set an Actions budget of 20 USD and tick "stop usage when the limit is reached". Agents now verify locally first and use CI only when necessary.
 
-**2026-10-24 Windows 进展**：Windows 编译和测试通过（补了 `vulkan-1.dll`、Git Bash 路径转义、gpg 路径）；安装包生成并静默安装成功，但安装后冒烟测试 0/18 插件就绪，排查中。
+**2026-10-24 Windows progress**: Windows build and tests pass (added `vulkan-1.dll`, Git Bash path escaping, the gpg path); the installer is built and installs silently, but the post-install smoke test has 0/18 plugins ready; under investigation.
 
-## 流程
+## Process
 
-自上而下（community-workflow §5）：维护者调研并写方案 → 协调者决定 → 维护者实现（宿主找内置 Node、资源路径、打包脚本、许可证）→ CI release 演练（dispatch dry_run）→ 协调者真机测试打包后的 `.app`（双击启动、插件全部激活、播放、商城安装）→ 合并。Windows 安装包在 CI 上构建并做冒烟测试，真机验收随 S6。
+Top-down (community-workflow §5): the maintainer researches and writes a proposal → the coordinator decides → the maintainer implements (host finds the bundled Node, resource paths, packaging scripts, licenses) → CI release rehearsal (dispatch dry_run) → the coordinator tests the packaged `.app` on a real machine (double-click to start, all plugins active, playback, store install) → merge. The Windows installer is built and smoke-tested on CI; real-machine acceptance comes with S6.
 
-## 进度
+## Progress
 
-- [x] 7.1 维护者调研与方案：[packaging-proposal.md](../../architecture/packaging-proposal.md)（试拼 .app 231 MB、DMG 76 MB；去掉 PATH 里的 node 后 18 个插件全部启动失败，证实必须内置 Node）
-- [x] 7.2 协调者决定（含用户裁决 13–15）
-- 7.3 进行中：宿主 `s7/host`（0872b84、db6983d，本机全过，Windows CI 因额度未跑）；打包 `s7/packaging`（d3b9c73；deps.yml 39788694017 成功，release `deps-20261022`；本机打出 .app 268 MB / DMG 78 MB，依赖全部从包内加载）
-- [ ] 7.3 实现
-- [ ] 7.4 release 演练（不签名）
-- [ ] 7.5 真机测试 macOS 包
-- [ ] 7.6 合并
+- [x] 7.1 Maintainer research and proposal: [packaging-proposal.md](../../architecture/packaging-proposal.md) (trial .app 231 MB, DMG 76 MB; with node removed from PATH, all 18 plugins failed to start, confirming that Node must be bundled)
+- [x] 7.2 Coordinator decisions (including user rulings 13–15)
+- 7.3 in progress: host `s7/host` (0872b84, db6983d, all pass locally, Windows CI not run because of the quota); packaging `s7/packaging` (d3b9c73; deps.yml 39788694017 succeeded, release `deps-20261022`; built locally: .app 268 MB / DMG 78 MB, all dependencies loaded from inside the package)
+- [ ] 7.3 Implementation
+- [ ] 7.4 Release rehearsal (unsigned)
+- [ ] 7.5 Real-machine test of the macOS package
+- [ ] 7.6 Merge
 
-## 记录
+## Record
 
-- 2026-10-22：SDK 的 Dependabot PR #1（TypeScript 5.9 → 7.0）关闭。理由：TypeScript 是 SDK 的运行时依赖，插件作者用它做类型检查；typedoc 0.28 只支持到 6.0。PR #2 让 Dependabot 不再提 TypeScript 大版本。升 7 以后作为单独的 SDK 版本评估。
-- 2026-10-22：清理磁盘：删除 `src/host/target`（7.7 GB，旧的 portability 输出）和 `~/.cache/vestra-target` 下 Slint 1.16 时期的旧构建目录，空闲从 11 GB 到 50 GB。
+- 2026-10-22: SDK Dependabot PR #1 (TypeScript 5.9 → 7.0) closed. Reason: TypeScript is a runtime dependency of the SDK, used by plugin authors for type checks; typedoc 0.28 supports only up to 6.0. PR #2 stops Dependabot from proposing TypeScript major versions. Upgrading to 7 is assessed later as a separate SDK version.
+- 2026-10-22: disk cleanup: deleted `src/host/target` (7.7 GB, old portability output) and the old build directories from the Slint 1.16 era under `~/.cache/vestra-target`; free space went from 11 GB to 50 GB.

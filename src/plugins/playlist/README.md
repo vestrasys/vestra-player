@@ -1,27 +1,27 @@
-# 播放列表
+# Playlist
 
-右侧栏的播放列表。
+The playlist in the right sidebar.
 
-## 功能
+## Features
 
-- **添加**：添加文件、文件夹（含子文件夹）和链接；拖放文件、文件夹或列表文件到视频区或列表。
-- **打开文件时**：仅打开该文件、加入同文件夹的相似文件（默认），或加入同文件夹全部文件。
-- **整理**：多选、拖动排序、上移下移、多种排序方式、搜索；移除所选、未选、无效项或全部。
-- **播放**：循环（不循环、全部、单个）、随机；播完自动播放下一项，可开启「快速推进到下一个」缩短切换时间。
-- **列表文件**：打开和保存 M3U、M3U8、PLS，打开 DPL。
-- 显示每项时长与总时长：播放过的项用播放器给出的时长；未播放的项只为屏幕上的行读取（需要 ffprobe，同时最多 2 个），加入大量文件时不逐个读取；总时长有未知项时带「+」。可在重启后恢复列表。
+- **Add**: add files, folders (including subfolders) and links; drag and drop files, folders or list files onto the video area or the list.
+- **When opening a file**: open only that file, add similar files from the same folder (the default), or add all files in the folder.
+- **Organize**: multiple selection, drag to reorder, move up and down, several ways to sort, search; remove the selected, the unselected, the invalid or all items.
+- **Play**: repeat (off, all, one), shuffle; plays the next item when one ends, and Fast Advance to Next can shorten the switch.
+- **List files**: open and save M3U, M3U8, PLS; open DPL.
+- Shows each item's duration and the total duration: items that have played use the duration from the player; for items not yet played, durations are read only for the rows on screen (needs ffprobe, at most 2 at a time), so adding many files does not read them one by one; the total has a "+" when some items are unknown. The list can be restored after a restart.
 
-## 入口
+## Where to find it
 
-- 右键菜单「播放列表」（F6）显示或隐藏列表；侧栏有其它插件的页签时，F6 先切到播放列表页签，已在播放列表页签上再按才隐藏侧栏。控制栏右侧也有开关。
-- 右键菜单「打开 ▸ 打开文件夹…」（F2）。
-- 右键菜单「播放 ▸ 播放列表」：添加、循环、随机、列表文件和各项设置。
-- 列表里的右键菜单与 ADD、DEL、SORT 按钮；列表获得焦点时可用 Enter 播放、Delete 移除、Ctrl+A 全选、Ctrl+S 搜索等。
-- 选项窗口「播放 ▸ 播放列表」。
+- Right-click menu Playlist (F6) shows or hides the list; when the sidebar has tabs from other plugins, F6 first switches to the playlist tab, and pressing it again on the playlist tab hides the sidebar. The control bar also has a toggle on the right.
+- Right-click menu Open ▸ Open Folder… (F2).
+- Right-click menu Playback ▸ Playlist: add, repeat, shuffle, list files and the settings.
+- The right-click menu inside the list and the ADD, DEL and SORT buttons; when the list has focus, Enter plays, Delete removes, Ctrl+A selects all, Ctrl+S searches, and so on.
+- Options window Playback ▸ Playlist.
 
-## 限制
+## Limits
 
-- 「快速推进到下一个」不是无缝播放，切换时仍有短暂停顿。
-- 列表每次只把视图附近的 200 行交给界面，滚动时随之更新；一下拖动滚动条到很远的位置时，新位置的行会晚一瞬间出现。
-- 链接由已安装的站点插件解析，本插件不解析链接。
-- 其它插件按扩展名接管的文件（如模拟器的 ROM）可以用「添加文件…」加入并正常播放、上一个/下一个；拖放到列表、扫描文件夹和「相似文件」只认音视频扩展名，暂不包括这些文件。
+- Fast Advance to Next is not gapless playback; there is still a short pause at the switch.
+- The list gives the interface only the 200 rows around the view at a time and updates them as you scroll; when you drag the scroll bar far in one go, the rows at the new position appear a moment later.
+- Links are resolved by the installed site plugins; this plugin does not resolve links.
+- Files that other plugins take over by extension (such as emulator ROMs) can be added with Add Files… and play normally, including previous/next; dropping onto the list, scanning folders and "similar files" only recognize audio and video extensions and do not include these files yet.
