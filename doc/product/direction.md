@@ -1,154 +1,154 @@
-# Vestra Player：项目目的、产品方向与架构原则
+# Vestra Player: project purpose, product direction and architecture principles
 
-本文记录项目已经确定的原则与大方向架构，作为后续讨论、设计和实现的共同依据。它不是详细设计，也不是首版功能承诺。
+This document records the principles and high-level architecture the project has settled on, as a shared basis for later discussion, design and implementation. It is not a detailed design and not a first-release feature commitment.
 
-技术组合（Rust 宿主 + Slint 原生界面 + TypeScript 插件）见[技术选型](technical-decisions.md)；插件 API 见 [SDK 文档站](https://vestrasys.github.io/vestra-player-sdk/)；当前进度见[状态](../status.md)。
+The technology stack (Rust host + Slint native UI + TypeScript plugins) is in [Technical decisions](technical-decisions.md); the plugin API is on the [SDK documentation site](https://vestrasys.github.io/vestra-player-sdk/); current progress is in [Status](../status.md).
 
-文中的代码均为 **usage examples（使用方式示例）**，用于说明未来开发者如何使用平台，不是现有实现或已经冻结的 API。命名、参数、包格式和通信细节仍可在设计阶段调整。
+The code in this document consists of **usage examples** that show how future developers will use the platform. It is not an existing implementation or a frozen API. Names, parameters, package format and communication details can still change during design.
 
-## 1. 为什么做这个项目
+## 1. Why this project exists
 
-项目源于一个真实的日常需求：希望有一个开源播放器，具备丰富而顺手的控制体验，同时拥有现代交互和可扩展的架构。
+The project comes from a real everyday need: an open-source player with a rich, comfortable control experience, a modern interaction model and an extensible architecture.
 
-我们看重的不只是“视频能播放”，还包括：
+What matters to us is not only "the video plays", but also:
 
-- 播放列表可以方便地常驻侧栏，支持清晰的浏览和操作。
-- 播放、视频、音频、字幕等功能能从菜单中发现，不要求用户先学配置文件和命令。
-- 快捷键丰富、可搜索、可配置，常用操作路径短。
-- 高级用户能够控制滤镜、shader、硬件解码、渲染和音视频输出等能力。
+- The playlist can stay docked in the sidebar, with clear browsing and actions.
+- Playback, video, audio, subtitle and other features can be discovered from menus, without first learning configuration files and commands.
+- Keyboard shortcuts are plentiful, searchable and configurable, and common actions take few steps.
+- Advanced users can control filters, shaders, hardware decoding, rendering, and audio/video output.
 
-项目的价值集中在交互、功能组织和扩展能力。播放技术优先复用成熟基础设施，把开发精力投入用户实际感受到的体验。
+The project's value lies in interaction, feature organisation and extensibility. For playback technology we reuse mature infrastructure first, and spend development effort on the experience users actually feel.
 
-前期讨论比较过多个现有播放器。这些比较是选题背景，不应理解为“没有任何开源竞品”，也不应把记录中的项目热度、版本和功能描述当作持续有效的市场结论。
+Early discussion compared several existing players. Those comparisons are background for the choice of topic. They should not be read as "there is no open-source competitor", and the popularity, versions and feature descriptions recorded there should not be taken as lasting market conclusions.
 
-## 2. 产品方向
+## 2. Product direction
 
-**一个以 mpv 为默认播放引擎，具备现代交互、深度控制和插件生态的开源桌面播放器。**
+**An open-source desktop player that uses mpv as its default playback engine, with modern interaction, deep control and a plugin ecosystem.**
 
-mpv 提供播放能力；VS Code 是插件架构的主要参考。Obsidian、foobar2000 等则提供可扩展产品形态的启发。
+mpv provides playback; VS Code is the main reference for the plugin architecture. Obsidian, foobar2000 and others inspire the shape of an extensible product.
 
-### 现代界面与高级能力并存
+### Modern interface alongside advanced capabilities
 
-现代化不仅指视觉样式，也包括可搜索命令、清晰的侧栏、统一的设置入口，以及按需展开的高级控制。
+Modern does not only mean visual style. It also means searchable commands, a clear sidebar, a single place for settings, and advanced controls that expand on demand.
 
-界面可以采用渐进展开的方式：
+The interface can use progressive disclosure:
 
 ```text
-基础播放界面
-    ├── 按需打开播放列表、字幕等面板
-    └── 按需打开高级视频与音频控制
+Basic playback interface
+    ├── Open playlist, subtitle and other panels on demand
+    └── Open advanced video and audio controls on demand
 ```
 
-默认体验应当容易上手，高级能力也应有可发现的 GUI 入口。用户不需要知道 mpv 的命令名称，才能调整字幕延迟或配置视频处理。
+The default experience should be easy to pick up, and advanced capabilities should also have a discoverable GUI entry. Users should not need to know mpv command names to adjust subtitle delay or configure video processing.
 
 ### mpv-first
 
-默认使用 mpv/libmpv 承担解封装、解码、音视频同步、字幕、滤镜和输出等播放工作。我们建立自己的播放后端接口，避免 UI 和普通插件到处直接调用 mpv。
+By default mpv/libmpv does the playback work: demuxing, decoding, A/V sync, subtitles, filters and output. We build our own playback backend interface so that the UI and ordinary plugins do not call mpv directly all over the place.
 
-滤镜、shader、渲染、硬件解码等属于产品方向；具体支持程度取决于后端、平台和设备能力。缺失能力可以通过扩展或向 mpv 上游贡献解决。
+Filters, shaders, rendering, hardware decoding and similar features are part of the product direction; the actual level of support depends on the backend, platform and device capabilities. Missing capabilities can be addressed through extensions or upstream contributions to mpv.
 
-mpv 的处理管线与 DirectShow 组件生态并不等价。采用 mpv 不代表能够直接加载任意 LAV、madVR 等组件，也不构成兼容任意第三方播放器内部组件的承诺。特殊原生集成需要单独验证。
+mpv's processing pipeline is not equivalent to the DirectShow component ecosystem. Using mpv does not mean LAV, madVR or similar components can be loaded directly, and it is not a promise of compatibility with arbitrary internal components of other players. Special native integrations need separate validation.
 
-第一阶段专注 mpv。后端接口保留边界，不因此提前实现多个播放引擎。
+The first phase focuses on mpv. The backend interface keeps its boundary, but we do not implement several playback engines ahead of time because of it.
 
-## 3. 最重要的思想：Everything is a plugin
+## 3. The most important idea: Everything is a plugin
 
-**产品本身由插件组成。**
+**The product itself is made of plugins.**
 
-核心只保留让播放器运行、让插件协作所必需的基础设施。播放列表、字幕控制、音视频控制、历史记录、书签，以及复杂设置等用户功能，尽量由插件提供。
+The core keeps only the infrastructure needed for the player to run and for plugins to cooperate. User features such as the playlist, subtitle controls, audio/video controls, history, bookmarks and complex settings are provided by plugins wherever possible.
 
 ```text
-小核心
-    ├── 基础播放能力与后端接口
-    ├── 状态、命令和事件
-    ├── 配置与持久化基础设施
-    ├── 插件生命周期与通信
-    └── UI 外壳与扩展点
+Small core
+    ├── Basic playback capability and backend interface
+    ├── State, commands and events
+    ├── Configuration and persistence infrastructure
+    ├── Plugin lifecycle and communication
+    └── UI shell and extension points
           ↑
-          │ 通过公开 API 贡献功能
+          │ Contribute features through the public API
           │
-    播放列表 / 字幕 / 高级视频 / 历史 / 第三方扩展
+    Playlist / Subtitles / Advanced video / History / Third-party extensions
 ```
 
-“Everything”表达的是功能组织原则，不要求把每一个基础设施模块都做成可动态卸载的插件。核心与插件的精确边界将在详细设计中确定。
+"Everything" expresses a principle of feature organisation. It does not require every infrastructure module to be a dynamically unloadable plugin. The exact boundary between core and plugins will be settled in the detailed design.
 
-### 官方插件与第三方插件使用同一套公开 API
+### Official and third-party plugins use the same public API
 
-官方播放列表插件与第三方扩展在功能 API 上遵守相同边界。默认附带、官方维护，不应成为绕过公开 API 的理由。
+The official playlist plugin and third-party extensions follow the same boundary in the feature API. Being bundled by default and maintained officially is no reason to bypass the public API.
 
-如果官方插件需要某项能力，而公开 API 无法表达，应完善公开 API，而不是访问内部对象、原始指针或隐藏接口。
+If an official plugin needs a capability that the public API cannot express, the public API should be improved, instead of reaching into internal objects, raw pointers or hidden interfaces.
 
-这是验证插件 API 是否真正可用的标准：我们自己的功能也必须能够通过它完成。
+This is the test of whether the plugin API is really usable: our own features must also be buildable with it.
 
-### 用户选择功能组合
+### Users choose their feature set
 
-产品可以默认附带一组官方插件，形成开箱即用的体验。用户可以按需要启用、停用或安装功能插件；具体依赖约束由后续设计明确。
+The product can bundle a set of official plugins by default for an out-of-the-box experience. Users can enable, disable or install feature plugins as needed; the exact dependency constraints will be specified in later design.
 
-第三方插件的质量由其作者负责，用户自行选择安装。项目负责提供清晰、稳定的 API、生命周期和故障边界。插件商店不是架构成立的前提，可在生态产生实际需求后再考虑。
+The quality of a third-party plugin is its author's responsibility, and users choose what to install. The project is responsible for a clear, stable API, lifecycle and failure boundaries. A plugin store is not a precondition for the architecture; it can be considered once the ecosystem creates a real need.
 
-## 4. 与 Cameo 的关键区别
+## 4. Key difference from Cameo
 
-讨论中的 Cameo 指 Cameo Systems Modeler / MagicDraw 这一类 MBSE 软件。这里用它帮助理解插件与宿主的关系，不对它的全部内部实现作概括。
+In the discussion, Cameo refers to MBSE software of the Cameo Systems Modeler / MagicDraw kind. It is used here to help explain the relationship between plugins and the host; this is not a summary of all its internals.
 
-Cameo 的插件开发体验更接近：引入 SDK，使用公开应用对象、Action 和 Configurator 等机制，在应用中增加功能。它也有公开 API 和扩展机制。
+Plugin development in Cameo is closer to this: import the SDK, use the public application objects and mechanisms such as Action and Configurator, and add features to the application. It also has a public API and extension mechanisms.
 
-我们借鉴 **VS Code 的能力 API 与 Extension Host 思路**：插件通过公开能力工作，运行在独立进程，不依赖宿主的内部对象结构。
+We borrow **VS Code's capability API and Extension Host approach**: plugins work through public capabilities, run in a separate process, and do not depend on the host's internal object structure.
 
-| 对比维度 | Cameo 式 SDK 插件的理解方式 | 我们的方向 |
+| Dimension | How a Cameo-style SDK plugin is understood | Our direction |
 |---|---|---|
-| 开发者面对什么 | 应用的公开对象模型与 SDK | 能力 API 与扩展点 |
-| 怎样接入功能 | 实现 Action、Configurator 等接口 | 声明贡献内容，注册行为 |
-| 怎样增加 UI | 通过 SDK 操作界面相关对象 | 向指定菜单、侧栏、设置等位置贡献内容 |
-| 对宿主实现的依赖 | 需要理解相关对象与接口体系 | 无需知道内部窗口或后端控制器结构 |
-| 产品怎样扩展 | 为应用增加功能 | 官方与第三方插件共同组成产品 |
+| What the developer faces | The application's public object model and SDK | Capability API and extension points |
+| How features are wired in | Implement interfaces such as Action and Configurator | Declare contributions, register behaviour |
+| How UI is added | Manipulate UI-related objects through the SDK | Contribute content to specified menus, sidebar, settings and other places |
+| Dependency on the host implementation | Must understand the relevant object and interface system | No need to know the internal window or backend controller structure |
+| How the product grows | Add features to the application | Official and third-party plugins together make up the product |
 
-差异不由 Java 或 TypeScript 决定，也不单由是否跨进程决定。核心是公开契约、扩展点和依赖边界。
+The difference is not decided by Java versus TypeScript, nor only by whether things cross a process boundary. The core of it is the public contract, extension points and dependency boundaries.
 
-### 同一个功能：在右键菜单里加「暂停」
+### The same feature: add "Pause" to the context menu
 
-下面是「直接沿宿主对象查找控制器」的假想写法，**不是 Cameo 的真实 API，也不是我们的 API**：
+Below is a hypothetical style that "walks host objects directly to find the controller". It is **neither Cameo's real API nor ours**:
 
 ```ts
 const window = app.getMainWindow();
 const controller = window.getCurrentPlayer().getMpvController();
 
-window.getContextMenu().addAction("暂停", () => {
+window.getContextMenu().addAction("Pause", () => {
   controller.setProperty("pause", true);
 });
 ```
 
-这种写法让插件知道窗口、播放器、mpv 控制器和菜单对象如何组织。
+This style makes the plugin know how the window, player, mpv controller and menu objects are organised.
 
-我们的写法（[插件 API](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html)）：
+Our style ([plugin API](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html)):
 
 ```ts
 export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "example.pause",
-    path: ["播放", "暂停"],
+    path: ["Playback", "Pause"],
     enabled: () => plugin.player.state.can.pause,
     run: () => plugin.player.setPaused(true),
   });
 }
 ```
 
-插件只知道播放器能力和菜单的领域路径。菜单怎么绘制、播放后端怎么执行，由宿主负责。回调留在插件进程里执行，不会把函数对象传给 Rust。
+The plugin only knows player capabilities and the domain path of the menu. How the menu is drawn and how the playback backend executes are the host's job. Callbacks run inside the plugin process; function objects are never passed to Rust.
 
-## 5. 命令与入口
+## 5. Commands and entry points
 
-### 同一个功能，共用一个命令
+### One feature, one command
 
-命令连接功能与操作入口。同一个命令可以出现在右键菜单、带快捷键，界面按钮也调用同一段逻辑，不需要在每个入口重新实现。
+Commands connect features to the places they are triggered from. The same command can appear in the context menu and carry a shortcut, and UI buttons call the same logic, so it does not have to be reimplemented for each entry point.
 
 ```text
-右键菜单 ────┐
-快捷键 ──────┼──→ 命令 ──→ 插件逻辑 ──→ 播放器能力
-界面按钮 ────┘
+Context menu ──┐
+Shortcut ──────┼──→ Command ──→ Plugin logic ──→ Player capability
+UI button ─────┘
 ```
 
-菜单按用户领域组织（文件、播放、视频、音频、字幕……），不按插件组织。多个插件的命令合并到同一棵菜单树里。
+Menus are organised by user domain (File, Playback, Video, Audio, Subtitles…), not by plugin. Commands from several plugins merge into one menu tree.
 
-### manifest 只描述身份和能力
+### The manifest only describes identity and capabilities
 
 ```json
 {
@@ -160,115 +160,115 @@ export default async function activate(plugin: Plugin) {
 }
 ```
 
-命令、窗口、面板都在代码里声明（`commands.add`、`windows.create`、`panels.mount`），声明和处理写在一起。manifest 不重复声明这些贡献，只说明插件是谁、需要哪些播放器能力。宿主据此拒绝未声明的调用；这是契约，不是安全沙箱。
+Commands, windows and panels are declared in code (`commands.add`, `windows.create`, `panels.mount`), so declaration and handling live together. The manifest does not repeat these contributions; it only says who the plugin is and which player capabilities it needs. The host uses it to reject undeclared calls; this is a contract, not a security sandbox.
 
-### 先看能力再提供功能
+### Check capabilities before offering features
 
-后端能力通过状态告诉插件。例如 `player.state.can.seek` 为 `false`（直播流、模拟器）时，跳转命令应禁用，而不是调用后失败。滤镜等处理有明确的取值范围和失败状态，插件据此反馈用户，不假设某个滤镜一定可用。
+The backend tells plugins its capabilities through state. For example, when `player.state.can.seek` is `false` (live streams, emulators), the seek command should be disabled rather than fail when called. Filters and other processing have clear value ranges and failure states; plugins use them to give feedback to the user and do not assume a given filter is always available.
 
-## 6. TypeScript、Rust 与 Slint 的关系
+## 6. How TypeScript, Rust and Slint relate
 
-**Rust 实现宿主，TypeScript 实现插件逻辑，Slint 描述界面，三者通过明确的协议协作。**
+**Rust implements the host, TypeScript implements plugin logic, Slint describes the UI, and the three cooperate through explicit protocols.**
 
-| 层 | 主要职责 |
+| Layer | Main responsibility |
 |---|---|
-| 插件（TypeScript，每个插件一个 Node 进程） | 功能行为：命令、状态、对用户操作的响应 |
-| 插件界面（Slint） | 工具窗口、底栏/侧栏面板的布局与控件 |
-| SDK | 插件看到的 API；把协议细节（修订号、来源代次、结果查询）收在内部 |
-| Rust 宿主 | 权威播放状态、命令与菜单、界面组合、处理链、插件生命周期 |
-| libmpv（经安全封装） | 实际媒体播放与处理 |
+| Plugin (TypeScript, one Node process per plugin) | Feature behaviour: commands, state, responses to user actions |
+| Plugin UI (Slint) | Layout and controls of tool windows and bottom-bar/sidebar panels |
+| SDK | The API plugins see; keeps protocol details (revision numbers, source generations, result queries) internal |
+| Rust host | Authoritative playback state, commands and menus, UI composition, processing chain, plugin lifecycle |
+| libmpv (behind a safe wrapper) | Actual media playback and processing |
 
 ```text
-插件逻辑（TS） ── SDK ── JSONL 管道 ──┐
-插件界面（.slint，由宿主编译组合）    │
-                                     Rust 宿主
-                         状态、命令、界面组合、插件管理
+Plugin logic (TS) ── SDK ── JSONL pipe ──┐
+Plugin UI (.slint, composed by host)     │
+                                     Rust host
+                         State, commands, UI composition, plugin management
                                        │
-                                 libmpv（safe 封装）
+                                 libmpv (safe wrapper)
 ```
 
-跨语言协议的数据、错误和事件都要明确；TypeScript 类型不能替代 Rust 端的输入校验。
+Data, errors and events in the cross-language protocol must all be explicit; TypeScript types are no substitute for input validation on the Rust side.
 
-### 一次暂停如何发生
+### How one pause happens
 
-插件写：
+The plugin writes:
 
 ```ts
 await plugin.player.setPaused(true);
 ```
 
-调用路径：
+Call path:
 
 ```text
-SDK 发出请求（以插件看到的播放状态为条件）
+SDK sends a request (conditioned on the playback state the plugin sees)
     ↓
-宿主校验条件与能力，交给播放后端
+Host checks the condition and capability, passes it to the playback backend
     ↓
-libmpv 执行暂停，后端报告实际状态
+libmpv pauses, the backend reports the actual state
     ↓
-宿主更新权威状态并发布事件
+Host updates the authoritative state and publishes an event
     ↓
-SDK 更新 player.state，界面与插件获知已暂停
+SDK updates player.state; UI and plugins learn that playback is paused
 ```
 
-界面不能只因按钮被点击就认定底层已经完成操作。
+The UI must not assume the underlying operation is done just because a button was clicked.
 
-### 插件逻辑与插件界面分开
+### Plugin logic and plugin UI are separate
 
-插件逻辑在 Node 进程里，界面由宿主用 Slint 编译。两者之间只交换数据：插件把属性值发给界面，界面把用户操作作为回调发给插件，不传递函数或组件对象。
+Plugin logic runs in a Node process; the UI is compiled by the host with Slint. Only data passes between them: the plugin sends property values to the UI, and the UI sends user actions to the plugin as callbacks. Functions and component objects are not passed.
 
-## 7. Rust 与原生扩展的安全原则
+## 7. Safety principles for Rust and native extensions
 
-### 自身 Rust 代码只使用 Safe Rust
+### Our own Rust code uses only Safe Rust
 
-所有第一方 Rust crate 应禁止 `unsafe`：
+All first-party Rust crates should forbid `unsafe`:
 
 ```rust
 #![forbid(unsafe_code)]
 ```
 
-这是最终原则，取代早期讨论中“在自身 mpv-backend 或平台模块里允许少量 unsafe”的建议。
+This is the final principle. It replaces the earlier suggestion of "allowing a little unsafe in our own mpv-backend or platform modules".
 
-我们通过依赖库提供的安全封装调用 libmpv、窗口系统等原生能力。依赖内部仍可能使用 `unsafe` 或 C/C++；原则约束的是本项目自身代码，不是宣称整个最终程序不存在原生不安全代码。
+We call libmpv, the windowing system and other native capabilities through safe wrappers provided by dependencies. Those dependencies may still use `unsafe` or C/C++ internally; the principle constrains this project's own code and does not claim the final program contains no unsafe native code.
 
-具体封装库尚需验证，尤其是嵌入渲染、窗口句柄、线程与生命周期接口。如果某条实现路线要求自身编写 `unsafe`，应先寻找符合原则的依赖或进程边界方案，不静默放宽原则。
+The specific wrapper libraries still need validation, especially for embedded rendering, window handles, threading and lifecycle interfaces. If an implementation route requires writing `unsafe` ourselves, we first look for a dependency or a process-boundary approach that fits the principle, and do not relax the principle silently.
 
-Safe Rust 也不替代逻辑、并发和资源管理方面的验证。AI 负责主要编码、维护者审阅代码的开发方式，仍需配合编译检查和适当测试。
+Safe Rust does not replace verification of logic, concurrency and resource management. A workflow where AI does most of the coding and the maintainer reviews the code still needs compiler checks and appropriate tests.
 
-### 原生扩展走独立进程与 IPC
+### Native extensions use a separate process and IPC
 
-早期示例曾提出动态加载 native plugin，并直接调用 ABI。这不再是当前采用的方向。
+An early example proposed dynamically loading native plugins and calling their ABI directly. That is no longer the chosen direction.
 
-特殊原生集成采用独立扩展进程，通过 IPC 与核心交互：
+Special native integrations use a separate extension process that talks to the core over IPC:
 
 ```text
 Rust Core
-    ├── IPC ── Extension Host ── JS 插件
+    ├── IPC ── Extension Host ── JS plugins
     └── IPC ── Native Extension Process
-                    └── 特殊原生能力
+                    └── Special native capability
 ```
 
-这样避免在自身代码中直接加载任意 DLL 并调用原始 ABI。独立进程还提供故障隔离边界，但不自动构成完整权限沙箱。
+This avoids loading arbitrary DLLs and calling raw ABIs from our own code. A separate process also provides a failure-isolation boundary, but it is not automatically a full permission sandbox.
 
-默认 libmpv 后端经由依赖库的安全封装接入，不代表所有播放代码都必须移到进程外。第三方原生扩展的 IPC 也不自动解决视频帧传输、GPU 资源共享或渲染器替换；这些集成需专门设计和验证。
+Connecting the default libmpv backend through a dependency's safe wrapper does not mean all playback code has to move out of process. IPC for third-party native extensions also does not automatically solve video frame transfer, GPU resource sharing or renderer replacement; those integrations need dedicated design and validation.
 
-第三方 JS 插件逻辑也应与核心分离。Extension Host 故障不应直接拖垮核心；基础播放在插件故障下如何继续、哪些界面功能会暂时失效，需要通过故障恢复设计落实。
+Third-party JS plugin logic should also be separated from the core. A failure of the Extension Host should not bring the core down directly; how basic playback continues when a plugin fails, and which UI features become temporarily unavailable, must be worked out in the failure-recovery design.
 
-## 8. 已确定的原则与后续设计空间
+## 8. Settled principles and open design space
 
-已经确定并实现：
+Settled and implemented:
 
-- 产品面向真实播放工作流，现代交互与深度控制并存。
-- mpv-first，复用成熟播放技术，建立自己的播放器能力 API。
-- Everything is a plugin：小宿主加 10 个产品插件组成产品。
-- 官方与第三方功能使用同一套公开插件 API，不依赖内部对象开后门。
-- Rust 宿主、Slint 原生界面、TypeScript 插件，通过明确协议协作。
-- 第一方 Rust 禁止 `unsafe`；原生边界依赖安全封装或隔离进程。
-- 插件 API 由真实插件的需求驱动演进（[社区工作流](../process/community-workflow.md)）。
+- The product targets real playback workflows, with modern interaction and deep control side by side.
+- mpv-first: reuse mature playback technology and build our own player capability API.
+- Everything is a plugin: a small host plus 10 product plugins make up the product.
+- Official and third-party features use the same public plugin API, with no backdoors into internal objects.
+- Rust host, Slint native UI, TypeScript plugins, cooperating through explicit protocols.
+- First-party Rust forbids `unsafe`; native boundaries rely on safe wrappers or isolated processes.
+- The plugin API evolves driven by the needs of real plugins ([community workflow](../process/community-workflow.md)).
 
-后续需要设计与验证：
+Still to design and validate:
 
-- 首发平台与发布形态。
-- 插件故障恢复、状态持久化、插件管理界面。
-- API 版本策略与多版本兼容。
-- 第三方原生扩展的进程与数据通道。
+- Launch platforms and release format.
+- Plugin failure recovery, state persistence, plugin management UI.
+- API versioning policy and multi-version compatibility.
+- Process and data channels for third-party native extensions.
