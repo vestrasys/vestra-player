@@ -1,4 +1,5 @@
-# clippy + tests (+ rustdoc) for the whole src/host workspace on a target OS.
+# clippy + tests (+ rustdoc) for the whole src/host workspace on a target OS,
+# and the recorded plugin props check (`ui-record`; `ui-only` runs just that).
 name: build-test
 
 on:
@@ -16,6 +17,16 @@ on:
         description: Use the cargo cache (release runs without).
         type: boolean
         default: true
+      ui-record:
+        description: >
+          Check the property values the plugin tests recorded (artifact
+          `ui-record` of _static) against the compiled Slint.
+        type: boolean
+        default: false
+      ui-only:
+        description: Only that check (no clippy, workspace tests or rustdoc).
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -43,17 +54,37 @@ jobs:
         with:
           cache: ${{ inputs.cache }}
           cache-key: build-test
+          save: ${{ !inputs.ui-only }}
       - uses: ./.github/actions/setup-libmpv
       # The host's tests start the Node plugin runner.
       - uses: ./.github/actions/setup-node
+        if: ${{ !inputs.ui-only }}
       - name: cargo clippy
+        if: ${{ !inputs.ui-only }}
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
       # Tests that need a GPU are #[ignore]d (CI VMs have none); ci:local runs them.
       - name: cargo test
+        if: ${{ !inputs.ui-only }}
         run: cargo test --locked --workspace --no-fail-fast
+      # The values the plugin tests sent to their windows, panels and settings
+      # pages (recorded on Linux by _static), each set on the compiled Slint
+      # component. After cargo test the test program is already built.
+      # Runs even when the tests failed, for one more signal per run.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: ${{ !cancelled() && inputs.ui-record }}
+        with:
+          name: ui-record
+          path: ${{ runner.temp }}/ui-record
+      - name: recorded plugin props match their Slint
+        if: ${{ !cancelled() && inputs.ui-record }}
+        env:
+          VESTRA_UI_RECORD: ${{ runner.temp }}/ui-record
+        run: |
+          node ../../.github/scripts/ui-record-paths.mjs absolute "$VESTRA_UI_RECORD" "$GITHUB_WORKSPACE"
+          cargo test --locked --bin vestra-host -- --ignored --exact ui_types::tests::recorded_plugin_props_match_their_slint
       # Runs even when the tests failed, for one more signal per run.
       - name: cargo doc
-        if: ${{ !cancelled() && inputs.doc }}
+        if: ${{ !cancelled() && inputs.doc && !inputs.ui-only }}
         env:
           RUSTDOCFLAGS: -D warnings
         run: cargo doc --locked --no-deps --workspace --document-private-items

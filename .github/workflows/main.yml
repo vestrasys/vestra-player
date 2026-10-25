@@ -30,6 +30,7 @@ jobs:
       run_windows: ${{ steps.plan.outputs.run_windows }}
       run_macos: ${{ steps.plan.outputs.run_macos }}
       plugins: ${{ steps.plan.outputs.plugins }}
+      ui_props: ${{ steps.plan.outputs.ui_props }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -63,6 +64,23 @@ jobs:
     with:
       os: windows
       doc: true
+      ui-record: ${{ needs.static.outputs.ui_record == 'true' }}
+
+  # The recorded plugin props check when the Windows build-test does not run
+  # (only plugins changed): the host's test program alone, on Windows (2x)
+  # rather than macOS (10x). Linux cannot build the host.
+  ui-props:
+    needs: [plan, static]
+    if: >-
+      needs.static.outputs.ui_record == 'true' && needs.plan.outputs.ui_props == 'true'
+      && needs.plan.outputs.run_windows != 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_build-test.yml
+    with:
+      os: windows
+      ui-record: true
+      ui-only: true
 
   macos:
     needs: [plan, static]
@@ -76,7 +94,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [plan, static, windows, macos]
+    needs: [plan, static, windows, ui-props, macos]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}

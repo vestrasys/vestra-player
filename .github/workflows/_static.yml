@@ -11,6 +11,12 @@ on:
           names under src/plugins (plan.sh picks them from the changed paths).
         type: string
         default: all
+    outputs:
+      ui_record:
+        description: >
+          true when the plugin tests recorded property values for their Slint
+          views (artifact `ui-record`, checked by _build-test's `ui-record`).
+        value: ${{ jobs.ts.outputs.ui_record }}
 
 permissions: {}
 
@@ -70,6 +76,8 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+    outputs:
+      ui_record: ${{ steps.ui-record.outputs.recorded }}
     defaults:
       run:
         working-directory: src
@@ -91,9 +99,13 @@ jobs:
       - run: npm run portability -- --skip-host
       - run: npm run test:sdk
       - run: npm run plugins:build
+      # VESTRA_UI_RECORD: the tests also record every property value sent to
+      # a window, panel or settings page (scripts/ui-record.mjs); the Windows
+      # build-test sets each on the compiled Slint (ui-record below).
       - name: plugin tests (${{ inputs.plugins }})
         env:
           PLUGINS: ${{ inputs.plugins }}
+          VESTRA_UI_RECORD: ${{ runner.temp }}/ui-record
         run: |
           case "$PLUGINS" in
             all) npm run plugin -- test --all ;;
@@ -104,6 +116,25 @@ jobs:
               npm run plugin -- test "${names[@]}"
               ;;
           esac
+      - name: recorded plugin props
+        id: ui-record
+        env:
+          RECORD: ${{ runner.temp }}/ui-record
+        run: |
+          if compgen -G "$RECORD/*.jsonl" > /dev/null; then
+            node ../.github/scripts/ui-record-paths.mjs relative "$RECORD" "$GITHUB_WORKSPACE"
+            echo "recorded=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "nothing recorded (no plugin tests ran, or none opened a view)"
+            echo "recorded=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.ui-record.outputs.recorded == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ui-record
+          path: ${{ runner.temp }}/ui-record
+          retention-days: 1
+          if-no-files-found: error
       - name: SDK Slint copy matches host/ui
         run: npm run sdk:sync-slint
       - name: nothing generated differs from git

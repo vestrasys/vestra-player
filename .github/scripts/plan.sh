@@ -77,8 +77,16 @@ if [ "$docs_only" = true ]; then run_windows=false; run_macos=false; lock=false;
 # files and the SDK (npm run boundaries), so a change inside one plugin's
 # directory tests that plugin; a change anywhere else except src/host/ (the
 # SDK version, scripts, CI, ...) tests every plugin.
+#
+# The plugin tests also record the values the plugins send to their Slint
+# views, which the Windows build-test checks against the compiled Slint
+# (_build-test.yml `ui-record`). The host's Slint library (`@vestra/*`), its
+# value conversion and the Slint version (Cargo.lock) are part of that check,
+# so a change to them tests (and records) every plugin.
+host_ui='^src/host/(ui/|src/(ui|ui_values|ui_types|ui_image|ui_markdown[a-z_]*|composition)\.rs$|src/i18n/|Cargo\.lock$)'
 plugins=none
-if [ "$all" = true ] || printf '%s\n' "$files" | grep -Ev '^$|^doc/|\.md$|^src/host/|^src/plugins/[^/]+/' | grep -q .; then
+if [ "$all" = true ] || has "$host_ui" \
+  || printf '%s\n' "$files" | grep -Ev '^$|^doc/|\.md$|^src/host/|^src/plugins/[^/]+/' | grep -q .; then
   plugins=all
 else
   names=""
@@ -88,6 +96,11 @@ else
   [ -n "$names" ] && plugins="${names# }"
 fi
 
+# The recorded props check runs in the Windows build-test, or on its own
+# (ci.yml/main.yml `ui-props`) when Windows does not run; see below for main.
+ui_props=true
+[ "$plugins" = none ] && ui_props=false
+
 # main only: a squash merge of an up-to-date pull request has the same tree as
 # its head. When a branch run already passed the Windows or macOS build-test
 # on exactly this tree (ci.yml windows, ci.yml full or ci-macos.yml macos),
@@ -95,7 +108,7 @@ fi
 # whose tree is the head's when the head contains the base, which is the only
 # way main can end up with the head's tree.
 if [ "$REF" = refs/heads/main ] && [ "$EVENT" = push ] && [ -n "${GH_TOKEN:-}" ] \
-  && { [ "$run_windows" = true ] || [ "$run_macos" = true ]; }; then
+  && { [ "$run_windows" = true ] || [ "$run_macos" = true ] || [ "$plugins" != none ]; }; then
   tree="$(git rev-parse 'HEAD^{tree}')"
   passed="$(
     for wf in ci.yml ci-macos.yml; do
@@ -106,6 +119,12 @@ if [ "$REF" = refs/heads/main ] && [ "$EVENT" = push ] && [ -n "${GH_TOKEN:-}" ]
         --jq ".jobs[] | select(.conclusion == \"success\") | \"\\(.name)\t$id\"" 2>/dev/null || true
     done
   )"
+  # The branch run that passed on this tree also checked the recorded props
+  # (in its Windows build-test, or its own ui-props job).
+  if [ "$ui_props" = true ] && printf '%s\n' "$passed" | awk -F'\t' '$1 == "windows / windows" || $1 == "ui-props / windows" { f = 1 } END { exit !f }'; then
+    echo "ui-props: tree $tree already checked on a branch; skipped"
+    ui_props=false
+  fi
   for os in windows macos; do
     run_var="run_$os"
     [ "${!run_var}" = true ] || continue
@@ -124,4 +143,5 @@ fi
   echo "run_windows=$run_windows"
   echo "run_macos=$run_macos"
   echo "plugins=$plugins"
+  echo "ui_props=$ui_props"
 } | tee -a "${GITHUB_OUTPUT:-/dev/null}"
