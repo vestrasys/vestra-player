@@ -386,12 +386,14 @@ function matchArms(body: string): { pattern: string; value: string }[] {
 const DISPATCH = "let capability = match method {";
 
 /**
- * The capability host/src/main.rs `dispatch` checks for a request
- * (`null`: none; `undefined`: the player does not know the method), read
- * from its `let capability = match method { ... }`. An arm matches method
- * names or `method if method.starts_with(..)`; its value is `None`,
- * `Some("x")`, `Some(if params["k"] == "v" { "a" } else { "b" })` or a
- * nested `match params["k"].as_str() { Some("v") => .., _ => .. }`.
+ * The capability host/src/main.rs `required_capability` asks for a request
+ * from a plugin that declared `declared` (`null`: none; `undefined`: the
+ * player does not know the method), read from its
+ * `let capability = match method { ... }`. An arm matches method names or
+ * `method if method.starts_with(..)`; its value is `None`, `Some("x")`,
+ * `Some(if params["k"] == "v" { "a" } else { "b" })`,
+ * `Some(if allows("x") { "a" } else { "b" })` or a nested
+ * `match params["k"].as_str() { Some("v") => .., _ => .. }`.
  */
 function dispatchCapabilities() {
   const unquote = (text: string) =>
@@ -399,6 +401,7 @@ function dispatchCapabilities() {
   const evaluate = (
     value: string,
     params: Record<string, string>,
+    declared: ReadonlySet<string>,
   ): string | null | undefined => {
     value = value.replace(/^\{([\s\S]*)\}$/, "$1").trim();
     if (value === "None") return null;
@@ -411,12 +414,17 @@ function dispatchCapabilities() {
       );
     if (choice)
       return params[choice[1]!] === choice[2] ? choice[3]! : choice[4]!;
+    const allowed =
+      /^Some\(if allows\("([^"]+)"\) \{\s*"([^"]+)"\s*\} else \{\s*"([^"]+)"\s*\}\)$/.exec(
+        value,
+      );
+    if (allowed) return declared.has(allowed[1]!) ? allowed[2]! : allowed[3]!;
     const nested = /^match params\["(\w+)"\]\.as_str\(\) \{/.exec(value);
     if (nested)
       for (const arm of matchArms(braces(value, "match"))) {
         const wanted = /^Some\("([^"]+)"\)$/.exec(arm.pattern)?.[1];
         if (arm.pattern === "_" || params[nested[1]!] === wanted)
-          return evaluate(arm.value, params);
+          return evaluate(arm.value, params, declared);
       }
     throw new Error(`main.rs dispatch: cannot read the capability ${value}`);
   };
@@ -440,13 +448,17 @@ function dispatchCapabilities() {
       return { names: unquote(pattern), prefixes: [], value };
     },
   );
-  const capability = (method: string, params: Record<string, string> = {}) => {
+  const capability = (
+    method: string,
+    params: Record<string, string> = {},
+    declared: ReadonlySet<string> = new Set(),
+  ) => {
     const arm = arms.find(
       (arm) =>
         arm.names.includes(method) ||
         arm.prefixes.some((p) => method.startsWith(p)),
     )!;
-    return evaluate(arm.value, params);
+    return evaluate(arm.value, params, declared);
   };
   return { capability, methods: arms.flatMap((arm) => arm.names) };
 }
@@ -631,24 +643,10 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
 };
 
 /**
- * Drift already reported and not fixed yet. Each entry must still be drift,
- * so the test fails once it is fixed and the entry is removed then.
- *
- * - The player checks `playback.read` for `source.operation`, the query a
- *   Player control makes while its request is `pending` (an `open` that a
- *   resolver handles); CAPABILITY_INFO lists the controls under
- *   `playback.control` only, so a plugin with just `playback.control` cannot
- *   learn the outcome (it gets `unknown`).
- *
  * KNOWN_UNREACHED: requests the player guards that no SDK member sends on
  * purpose (`producer.declareInput`: kept for a future keyboard input of
  * generated streams, doc/architecture/README.md §3).
  */
-const KNOWN_CAPABILITY_GAPS = new Set([
-  ...["open", "setPaused", "seek", "setRate", "restart", "close", "scrub"].map(
-    (m) => `Player.${m} source.operation playback.read`,
-  ),
-]);
 const KNOWN_UNREACHED = new Set(["producer.declareInput"]);
 
 test("CAPABILITY_INFO.apis need the capabilities the player checks per request (main.rs dispatch)", () => {
@@ -686,7 +684,6 @@ test("CAPABILITY_INFO.apis need the capabilities the player checks per request (
       listed.has(member),
       `MEMBER_REQUESTS has ${member}, which CAPABILITY_INFO no longer lists`,
     );
-  const gaps = new Set<string>();
   for (const [member, names] of listed) {
     const declared = new Set(
       names.flatMap((name) => [name, ...CAPABILITY_INFO[name]!.requires]),
@@ -698,7 +695,7 @@ test("CAPABILITY_INFO.apis need the capabilities the player checks per request (
         sdk.includes(`"${method}"`),
         `${member}: the installed SDK never sends ${method}; correct MEMBER_REQUESTS`,
       );
-      const capability = capabilityOf(method, params);
+      const capability = capabilityOf(method, params, declared);
       assert.notEqual(
         capability,
         undefined,
@@ -707,12 +704,9 @@ test("CAPABILITY_INFO.apis need the capabilities the player checks per request (
       if (!capability) continue;
       needed.add(capability);
       if (call.endsWith("?") || declared.has(capability)) continue;
-      const gap = `${member} ${method} ${capability}`;
-      assert.ok(
-        KNOWN_CAPABILITY_GAPS.has(gap),
+      assert.fail(
         `${member} sends ${call}, for which the player checks ${capability}, but CAPABILITY_INFO lists ${member} under ${names.join(", ")} (with requires: ${[...declared].join(", ")})`,
       );
-      gaps.add(gap);
     }
     for (const name of names)
       assert.ok(
@@ -720,11 +714,6 @@ test("CAPABILITY_INFO.apis need the capabilities the player checks per request (
         `CAPABILITY_INFO lists ${member} under ${name}, but the player checks ${name} for none of its requests (${MEMBER_REQUESTS[member]!.join(", ")})`,
       );
   }
-  for (const gap of KNOWN_CAPABILITY_GAPS)
-    assert.ok(
-      gaps.has(gap),
-      `KNOWN_CAPABILITY_GAPS: "${gap}" is fixed; remove the entry`,
-    );
   // Every request the player names in the dispatch, if it needs a capability,
   // is sent by some listed member.
   const reached = new Set(

@@ -3360,69 +3360,7 @@ impl Host {
             .plugins
             .get(&reply.owner)
             .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
-        let capability = match method {
-            "packages.list" => None,
-            "bindings.list" | "bindings.set" | "bindings.reset" => Some("bindings.manage"),
-            // Plugin and binding changes have their own (or no) capability.
-            "events.subscribe" | "events.unsubscribe" => match params["event"].as_str() {
-                Some("packages.changed") => None,
-                Some("bindings.changed") => Some("bindings.manage"),
-                _ => Some("events"),
-            },
-            method if method.starts_with("packages.") => Some("plugins.manage"),
-            method if method.starts_with("sourceResolvers.") => Some("source.resolve"),
-            "dialogs.open" | "dialogs.confirm" => Some("ui.dialog"),
-            "window.state" => None,
-            "window.setVideoArea"
-            | "window.setAlwaysOnTop"
-            | "window.setCursorAutoHide"
-            | "window.setPictureInPicture" => Some("window.control"),
-            "player.chapters" | "player.audioDevices" | "timeline.marks" => Some("playback.read"),
-            "timeline.set" => Some("timeline.marks"),
-            "drops.provide" | "drops.withdraw" | "drops.listen" => Some("ui.drop"),
-            method if method.starts_with("settings.") => Some("ui.settings"),
-            "appearance.set" | "appearance.setLanguage" => Some("ui.theme"),
-            "player.setLoop" | "player.setAudioDevice" => Some("playback.control"),
-            "ui.mount" | "ui.setMount" | "ui.unmount" | "ui.interaction" | "ui.menu"
-            | "layout.state" | "layout.set" => Some("ui.mount"),
-            "osd.show" | "osd.panel" => Some("ui.osd"),
-            "clipboard.readText" | "clipboard.writeText" | "clipboard.writeImage" => {
-                Some("clipboard")
-            }
-            "power.preventSleep" | "player.setStepSeek" | "player.step" => Some("playback.control"),
-            "system.reveal" | "system.openPath" | "system.openUrl" | "app.system" => None,
-            "ui.markdownScan" => None,
-            "secrets.get" | "secrets.set" | "secrets.delete" => Some("secrets"),
-            "host.run" => Some("commands"),
-            "playback.stats" => Some("playback.read"),
-            "sequence.set" | "sequence.step" => Some("playback.control"),
-            "commands.register" | "commands.update" | "commands.unregister" => Some("commands"),
-            "source.state" | "source.operation" | "processing.state" => Some("playback.read"),
-            "playback.set" | "source.submit" | "audio.addTrack" | "audio.selectTrack" => {
-                Some("playback.control")
-            }
-            "producer.prepare"
-            | "producer.state"
-            | "producer.release"
-            | "producer.ack"
-            | "producer.declareInput"
-            | "producer.ackInput" => Some("producer.av"),
-            "snapshot.state" | "jobs.state" | "jobs.operation" => Some("media.read"),
-            method if method.starts_with("snapshot.") || method.starts_with("jobs.") => {
-                Some("media.control")
-            }
-            "subtitles.state" => Some("subtitles.read"),
-            method if method.starts_with("subtitles.") => Some("subtitles.control"),
-            "processing.replace" | "processing.operation" => Some(if params["stage"] == "video" {
-                "processing.video"
-            } else {
-                "processing.audio"
-            }),
-            "ui.open" | "ui.set" | "ui.show" | "ui.close" => Some("ui.window"),
-            "video.view.set" | "video.view.release" => Some("processing.video"),
-            "video.render.set" | "video.render.release" => Some("processing.video"),
-            _ => return Err(RpcError::new("unsupported", "unknown method")),
-        };
+        let capability = required_capability(method, params, |name| plugin.allows(name))?;
         if capability.is_some_and(|capability| !plugin.allows(capability)) {
             return Err(RpcError::new(
                 "capability",
@@ -5264,9 +5202,112 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+/// The manifest capability a request needs (`None`: none); `allows` tells
+/// which capabilities the plugin declared. Unknown methods fail
+/// `unsupported`. src/tests/sdk/host-agreement.test.ts reads this `match`
+/// to check the SDK's `CAPABILITY_INFO` against it.
+fn required_capability(
+    method: &str,
+    params: &Value,
+    allows: impl Fn(&str) -> bool,
+) -> std::result::Result<Option<&'static str>, RpcError> {
+    let capability = match method {
+        "packages.list" => None,
+        "bindings.list" | "bindings.set" | "bindings.reset" => Some("bindings.manage"),
+        // Plugin and binding changes have their own (or no) capability.
+        "events.subscribe" | "events.unsubscribe" => match params["event"].as_str() {
+            Some("packages.changed") => None,
+            Some("bindings.changed") => Some("bindings.manage"),
+            _ => Some("events"),
+        },
+        method if method.starts_with("packages.") => Some("plugins.manage"),
+        method if method.starts_with("sourceResolvers.") => Some("source.resolve"),
+        "dialogs.open" | "dialogs.confirm" => Some("ui.dialog"),
+        "window.state" => None,
+        "window.setVideoArea"
+        | "window.setAlwaysOnTop"
+        | "window.setCursorAutoHide"
+        | "window.setPictureInPicture" => Some("window.control"),
+        "player.chapters" | "player.audioDevices" | "timeline.marks" => Some("playback.read"),
+        "timeline.set" => Some("timeline.marks"),
+        "drops.provide" | "drops.withdraw" | "drops.listen" => Some("ui.drop"),
+        method if method.starts_with("settings.") => Some("ui.settings"),
+        "appearance.set" | "appearance.setLanguage" => Some("ui.theme"),
+        "player.setLoop" | "player.setAudioDevice" => Some("playback.control"),
+        "ui.mount" | "ui.setMount" | "ui.unmount" | "ui.interaction" | "ui.menu"
+        | "layout.state" | "layout.set" => Some("ui.mount"),
+        "osd.show" | "osd.panel" => Some("ui.osd"),
+        "clipboard.readText" | "clipboard.writeText" | "clipboard.writeImage" => Some("clipboard"),
+        "power.preventSleep" | "player.setStepSeek" | "player.step" => Some("playback.control"),
+        "system.reveal" | "system.openPath" | "system.openUrl" | "app.system" => None,
+        "ui.markdownScan" => None,
+        "secrets.get" | "secrets.set" | "secrets.delete" => Some("secrets"),
+        "host.run" => Some("commands"),
+        "playback.stats" => Some("playback.read"),
+        "sequence.set" | "sequence.step" => Some("playback.control"),
+        "commands.register" | "commands.update" | "commands.unregister" => Some("commands"),
+        "source.state" | "processing.state" => Some("playback.read"),
+        // The outcome of this plugin's own source operation (operation
+        // books are per plugin): a control that went `pending` (an open
+        // a resolver handles) is followed up with `playback.control`.
+        "source.operation" => Some(if allows("playback.control") {
+            "playback.control"
+        } else {
+            "playback.read"
+        }),
+        "playback.set" | "source.submit" | "audio.addTrack" | "audio.selectTrack" => {
+            Some("playback.control")
+        }
+        "producer.prepare"
+        | "producer.state"
+        | "producer.release"
+        | "producer.ack"
+        | "producer.declareInput"
+        | "producer.ackInput" => Some("producer.av"),
+        "snapshot.state" | "jobs.state" | "jobs.operation" => Some("media.read"),
+        method if method.starts_with("snapshot.") || method.starts_with("jobs.") => {
+            Some("media.control")
+        }
+        "subtitles.state" => Some("subtitles.read"),
+        method if method.starts_with("subtitles.") => Some("subtitles.control"),
+        "processing.replace" | "processing.operation" => Some(if params["stage"] == "video" {
+            "processing.video"
+        } else {
+            "processing.audio"
+        }),
+        "ui.open" | "ui.set" | "ui.show" | "ui.close" => Some("ui.window"),
+        "video.view.set" | "video.view.release" => Some("processing.video"),
+        "video.render.set" | "video.render.release" => Some("processing.video"),
+        _ => return Err(RpcError::new("unsupported", "unknown method")),
+    };
+    Ok(capability)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_plugin_follows_up_its_own_source_operation_with_playback_control() {
+        let query = |declared: &[&str]| {
+            required_capability("source.operation", &json!({"operationId": 1}), |name| {
+                declared.contains(&name)
+            })
+            .unwrap()
+        };
+        assert_eq!(query(&["playback.control"]), Some("playback.control"));
+        assert_eq!(query(&["playback.read"]), Some("playback.read"));
+        assert_eq!(
+            query(&["playback.read", "playback.control"]),
+            Some("playback.control")
+        );
+        // Neither declared: the check asks for playback.read, which fails.
+        assert_eq!(query(&[]), Some("playback.read"));
+        let state = required_capability("source.state", &json!({}), |_| true).unwrap();
+        assert_eq!(state, Some("playback.read"));
+        let unknown = required_capability("source.nothing", &json!({}), |_| true).unwrap_err();
+        assert_eq!(unknown.code, "unsupported");
+    }
 
     #[test]
     fn a_value_over_the_limits_is_limit_naming_the_property() {

@@ -109,7 +109,7 @@ SDK 仍然处理“答复丢失”（非宿主错误的拒绝，或客户端 `ti
 | 领域 | 查询 | 结论 |
 | --- | --- | --- |
 | 处理资源 | `processing.operation(stage, resourceId, revision)` | `completed` → 已应用；`failed` → 失败；`unknown` → 由 1 可知从未被接纳、肯定未执行，用新修订号重发（连续 3 次则失败 `unknown`）；`unknownExpired` → 读 `processing.state`，本资源当前修订号等于该修订则已应用，否则未生效并重发；`pending` → 100 ms 后再查 |
-| 来源 | `source.operation(id)` | `pending` 表示已接纳、仍在执行（例如 URL 解析中），按 40 ms 起、最长 500 ms 的间隔继续查直到 `completed`/`failed`；查询本身被宿主拒绝 → 失败 `unknown` |
+| 来源 | `source.operation(id)` | `pending` 表示已接纳、仍在执行（例如 URL 解析中），按 40 ms 起、最长 500 ms 的间隔继续查直到 `completed`/`failed`；查询本身被宿主拒绝 → 失败 `unknown`。每个插件只能查自己的操作，宿主接受 `playback.control` 或 `playback.read`（`main.rs` `required_capability`） |
 | 字幕 | `subtitles.operation(id)` | `completed` → 采用其状态；`failed` → 失败；`unknown` → 失败 `rejected`（未执行）；`unknownExpired` → 刷新状态并失败 `expired` |
 | 快照/任务 | `jobs.operation(id)` | `completed` → 采用结果（快照会再读 `snapshot.state`）；`failed`/`unknown`/`unknownExpired` → 失败；`pending` → 250 ms 后再查 |
 | 包安装/回退 | `packages.operation(requestId)` | 宿主保证 `operationId === requestId`，持续查询直到终态，从不重发 |
