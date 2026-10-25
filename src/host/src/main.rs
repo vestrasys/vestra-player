@@ -2671,7 +2671,8 @@ impl Host {
             busy: false,
             reason: None,
         };
-        let mut fullscreen = commands::Declaration::new("Fullscreen", &["Fullscreen"]);
+        let mut fullscreen =
+            commands::Declaration::new("Toggle Fullscreen", &["Toggle Fullscreen"]);
         fullscreen.group = "screen".into();
         fullscreen.order = 700;
         // IA-CORE-04: Enter and Alt+Enter toggle full screen; F11 too.
@@ -2681,10 +2682,10 @@ impl Host {
             "F11".into(),
             "Mouse:LeftDoubleClick".into(),
         ];
-        fullscreen.localize(|_| i18n::tr("Fullscreen"));
-        let mut exit = commands::Declaration::new("Exit Fullscreen", &[]);
+        fullscreen.localize(|_| i18n::tr("Toggle Fullscreen"));
+        let mut exit = commands::Declaration::new("Leave Fullscreen", &[]);
         exit.bindings = vec!["Escape".into()];
-        exit.localize(|_| i18n::tr("Exit Fullscreen"));
+        exit.localize(|_| i18n::tr("Leave Fullscreen"));
         let mut quit = commands::Declaration::new("Quit", &["Quit"]);
         quit.localize(|_| i18n::tr("Quit"));
         quit.group = "exit".into();

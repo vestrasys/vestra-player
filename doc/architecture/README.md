@@ -51,7 +51,7 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 - 工具窗口：插件 `.slint` 文件恰好导出一个组件；宿主用 slint-interpreter 编译，按 SDK 登记的回调白名单转发回调。
 - 面板：文件导出一个 component 和一个 global（属性与回调的桥接对象）；宿主按 owner 别名把它导入主界面（`host.slint` 的插入标记），转发 global 上的全部回调。主窗口外壳：视频列（视频 + 底栏）在左，3px 分隔条与全高侧栏在右；全屏时底栏覆盖在视频底部并按 `window_state::Policy` 的空闲规则隐藏（指针停在底栏上时不隐藏），附着的侧栏变成右边缘的弹出层。
 - 浮动面板（C14）：分离时宿主另外编译一个窗口，导入同一个组件与桥接 global；global 每个窗口实例一份，所以宿主用保存的 `Mount.properties` 初始化浮动窗口，之后每次 `ui.setMount` 同时写主窗口与浮动窗口，两边回调都以 `$mount` 转发。附着时只关闭浮动窗口，主窗口不重建。
-- 输入：主窗口最外层、两个面板各包一层 FocusScope。Slint 的按键先给焦点控件，未接受的逐级冒泡；面板那一层以「面板 + 全局」查表，最外层以全局查表（`bindings.rs`）。查表在 UI 线程上同步进行（`Rc<RefCell<InputShared>>`，不借用 Host），绑定了就返回 accept 并发 `Event::Binding`，主循环再按注册表检查启用状态后执行。视频区鼠标（双击、中键、侧键、滚轮）同理。全屏、退出全屏、退出是宿主自己的命令（owner 0），和插件命令在同一张表与同一棵菜单树里。
+- 输入：主窗口最外层、两个面板各包一层 FocusScope。Slint 的按键先给焦点控件，未接受的逐级冒泡；面板那一层以「面板 + 全局」查表，最外层以全局查表（`bindings.rs`）。查表在 UI 线程上同步进行（`Rc<RefCell<InputShared>>`，不借用 Host），绑定了就返回 accept 并发 `Event::Binding`，主循环再按注册表检查启用状态后执行。表里有注册表停用命令的镜像（每轮按注册表修订号同步）：停用的命令让出按键给同一输入的下一个命令；只剩停用的命令时，带 `reason` 的把原因显示在 OSD 上，不带的不接受按键。视频区鼠标（双击、中键、侧键、滚轮）同理。全屏、仅退出全屏、退出是宿主自己的命令（owner 0），和插件命令在同一张表与同一棵菜单树里。
 - 菜单：`commands.rs` 按 `order`（子菜单取其最前的命令）建树，`menu.rs` 投影为面板列表（分隔线、单选、快捷键文字、行位置），`menu-view.slint` 只负责绘制。面板右键菜单（C11）复用同一投影的单层形式，弹在面板当前所在的窗口。
 - 模拟器输入捕获（`producer.declareInput`）在 winit 层先拦截按键；绑定在宿主命令上的键（全屏等）放行。
 - 等宽字体：`Theme.font-mono` 读 `VestraPalette.font-mono`（`ui/palette.slint`，默认 Menlo），宿主在每个视图（主窗口、浮动面板、工具窗口、选项窗口）下发配色时一并设置为 `platform::monospace_font(SYSTEM)`（macOS Menlo、Windows Consolas、Linux DejaVu Sans Mono；纯函数，各系统在任何机器上都有测试），`theme::apply_fonts`；与配色无关，Vestra 配色下也设置。

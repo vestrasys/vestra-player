@@ -422,7 +422,7 @@ fn the_simplified_chinese_catalog_keeps_the_old_texts() {
         ("Speed", "速度"),
         ("Seek", "跳转"),
         ("Settings", "设置"),
-        ("Fullscreen", "全屏"),
+        ("Toggle Fullscreen", "全屏"),
         ("Quit", "退出"),
         ("Keys and Mouse", "快捷键与鼠标"),
         ("Options", "选项"),
