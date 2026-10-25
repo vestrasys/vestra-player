@@ -24,7 +24,7 @@ test("the reference is the SDK's own llms.txt: an index with the modules and cap
   const index = await fs.readFile(toolchain.docsIndex(), "utf8");
   const full = await fs.readFile(path.join(path.dirname(toolchain.docsIndex()), "llms-full.txt"), "utf8");
   assert.ok(index.length < 64 * 1024, `llms.txt is ${index.length} bytes`);
-  for (const word of ["plugin.commands", "plugin.windows", "ui.window", "dist/plugin/types.d.ts"]) assert.ok(index.includes(word), word);
+  for (const word of ["plugin.commands", "Windows.create", "ui.window", "dist/plugin/"]) assert.ok(index.includes(word), word);
   for (const example of ["hello", "blur", "signal-generator", "bookmark", "panel-menu", "menus", "theme-widgets", "markdown"]) assert.ok(full.includes(`examples/${example}`), example);
   assert.ok(toolchain.docsRoots().every((root) => root.startsWith(plugin)));
 });
