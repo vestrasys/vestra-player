@@ -1,0 +1,526 @@
+msgid ""
+msgstr ""
+"Language: de\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: main.ts:21
+#, x-machine
+msgid "Plugin Manager…"
+msgstr "Plugin-Verwaltung…"
+
+#: manager.ts:55 manifest.json
+#, x-machine
+msgid "Plugin Manager"
+msgstr "Plugin-Verwaltung"
+
+#: manager.ts:229 ui/plugins.slint:149
+#, x-machine
+msgid "Enabled {}"
+msgstr "{} aktiviert"
+
+#: manager.ts:233
+#, x-machine
+msgid "Disable {}?"
+msgstr "{} deaktivieren?"
+
+#: manager.ts:236
+#, x-machine
+msgid "Its menus, shortcuts, windows and effects are removed at once; open media keeps playing. A development-loaded plugin stays disabled only for this run."
+msgstr "Menüs, Tastenkürzel, Fenster und Effekte des Plugins werden sofort entfernt; geöffnete Medien werden weiter abgespielt. Ein im Entwicklungsmodus geladenes Plugin bleibt nur für diese Sitzung deaktiviert."
+
+#: manager.ts:236
+#, x-machine
+msgid "Its menus, shortcuts, windows and effects (such as the equalizer, filters, subtitle style) are removed at once; open media keeps playing. It stays disabled after Vestra Player restarts; you can enable it here at any time."
+msgstr "Menüs, Tastenkürzel, Fenster und Effekte des Plugins (etwa Equalizer, Filter, Untertitelstil) werden sofort entfernt; geöffnete Medien werden weiter abgespielt. Es bleibt auch nach einem Neustart von Vestra Player deaktiviert; Sie können es hier jederzeit wieder aktivieren."
+
+#: manager.ts:239 ui/plugins.slint:310
+#, x-machine
+msgid "Disable"
+msgstr "Deaktivieren"
+
+#: manager.ts:245 ui/plugins.slint:150
+#, x-machine
+msgid "Disabled {}"
+msgstr "{} deaktiviert"
+
+#: manager.ts:257 ui/plugins.slint:151
+#, x-machine
+msgid "Reloaded {}"
+msgstr "{} neu geladen"
+
+#: manager.ts:269 ui/plugins.slint:153
+#, x-machine
+msgid "Rolled back {} to {}"
+msgstr "{} auf {} zurückgesetzt"
+
+#: manager.ts:280
+#, x-machine
+msgid "Uninstall {}?"
+msgstr "{} deinstallieren?"
+
+#: manager.ts:282
+#, x-machine
+msgid "Its current and previous versions are removed from the installed plugins. Its shortcut changes are kept and come back if you install it again."
+msgstr "Die aktuelle und die vorherige Version werden aus den installierten Plugins entfernt. Geänderte Tastenkürzel bleiben erhalten und gelten wieder, wenn Sie das Plugin erneut installieren."
+
+#: manager.ts:283
+#, x-machine
+msgid "Uninstall"
+msgstr "Deinstallieren"
+
+#: manager.ts:285
+#, x-machine
+msgid "Also delete its settings and data"
+msgstr "Auch Einstellungen und Daten löschen"
+
+#: manager.ts:295 ui/plugins.slint:152
+#, x-machine
+msgid "Uninstalled {}"
+msgstr "{} deinstalliert"
+
+#: manifest.json
+#, x-machine
+msgid "See the installed plugins; disable, enable, roll back or uninstall them"
+msgstr "Installierte Plugins anzeigen, deaktivieren, aktivieren, zurücksetzen oder deinstallieren"
+
+#: manifest.json
+#, x-machine
+msgid "Lists every plugin of the player on the Plugins page of the options window: version, source, state and data size. Select a plugin to see its details (failure reason, source, package folder, data folder, capabilities), disable or enable it, reload it, roll it back to its previous version, uninstall it (optionally with its settings and data), or open its data folder. Built-in plugins, installed with the player, cannot be uninstalled."
+msgstr "Listet auf der Seite „Plugins“ des Optionsfensters alle Plugins des Players auf: Version, Quelle, Status und Datengröße. Wählen Sie ein Plugin, um Details zu sehen (Fehlerursache, Quelle, Paketordner, Datenordner, Fähigkeiten), es zu deaktivieren oder zu aktivieren, neu zu laden, auf die vorherige Version zurückzusetzen, zu deinstallieren (auf Wunsch mit Einstellungen und Daten) oder seinen Datenordner zu öffnen. Integrierte Plugins, die mit dem Player installiert werden, lassen sich nicht deinstallieren."
+
+#: manifest.json
+#, x-machine
+msgid "plugins"
+msgstr "Plugins"
+
+#: manifest.json
+#, x-machine
+msgid "settings"
+msgstr "Einstellungen"
+
+#: ui/plugins.slint:46
+#, x-machine
+msgid "Running"
+msgstr "Läuft"
+
+#: ui/plugins.slint:47
+#, x-machine
+msgid "Starting"
+msgstr "Wird gestartet"
+
+#: ui/plugins.slint:48
+#, x-machine
+msgid "Disabled"
+msgstr "Deaktiviert"
+
+#. a plugin's state in the list: it failed to start.
+#: ui/plugins.slint:50
+#, x-machine
+msgctxt "plugin state"
+msgid "Failed"
+msgstr "Startfehler"
+
+#: ui/plugins.slint:51
+#, x-machine
+msgid "Stopped"
+msgstr "Gestoppt"
+
+#: ui/plugins.slint:56
+#, x-machine
+msgid "Repository"
+msgstr "Repository"
+
+#: ui/plugins.slint:57
+#, x-machine
+msgid "Link"
+msgstr "Link"
+
+#: ui/plugins.slint:58
+#, x-machine
+msgid "Local file"
+msgstr "Lokale Datei"
+
+#: ui/plugins.slint:59
+#, x-machine
+msgid "Plugin Workshop"
+msgstr "Plugin-Werkstatt"
+
+#: ui/plugins.slint:60
+#, x-machine
+msgid "Built-in"
+msgstr "Integriert"
+
+#: ui/plugins.slint:61
+#, x-machine
+msgid "Installed"
+msgstr "Installiert"
+
+#: ui/plugins.slint:62
+#, x-machine
+msgid "Development"
+msgstr "Entwicklung"
+
+#: ui/plugins.slint:66
+#, x-machine
+msgid "Menu commands and shortcuts"
+msgstr "Menübefehle und Tastenkürzel"
+
+#: ui/plugins.slint:67
+#, x-machine
+msgid "Open tool windows"
+msgstr "Werkzeugfenster öffnen"
+
+#: ui/plugins.slint:68
+#, x-machine
+msgid "Bottom bar and sidebar panels"
+msgstr "Bereiche in unterer Leiste und Seitenleiste"
+
+#: ui/plugins.slint:69
+#, x-machine
+msgid "System dialogs"
+msgstr "Systemdialoge"
+
+#: ui/plugins.slint:70
+#, x-machine
+msgid "On-screen messages"
+msgstr "Bildschirmmeldungen"
+
+#: ui/plugins.slint:71
+#, x-machine
+msgid "Read the playback state"
+msgstr "Wiedergabestatus lesen"
+
+#: ui/plugins.slint:72
+#, x-machine
+msgid "Receive live state"
+msgstr "Live-Status empfangen"
+
+#: ui/plugins.slint:73
+#, x-machine
+msgid "Control playback"
+msgstr "Wiedergabe steuern"
+
+#: ui/plugins.slint:74
+#, x-machine
+msgid "Generate audio and video streams"
+msgstr "Audio- und Videostreams erzeugen"
+
+#: ui/plugins.slint:75
+#, x-machine
+msgid "Process the picture"
+msgstr "Bild bearbeiten"
+
+#: ui/plugins.slint:76
+#, x-machine
+msgid "Process the sound"
+msgstr "Ton bearbeiten"
+
+#: ui/plugins.slint:77
+#, x-machine
+msgid "Read subtitles"
+msgstr "Untertitel lesen"
+
+#: ui/plugins.slint:78
+#, x-machine
+msgid "Control subtitles"
+msgstr "Untertitel steuern"
+
+#: ui/plugins.slint:79
+#, x-machine
+msgid "Read the picture (snapshots)"
+msgstr "Bild lesen (Schnappschüsse)"
+
+#: ui/plugins.slint:80
+#, x-machine
+msgid "Snapshots and export"
+msgstr "Schnappschüsse und Export"
+
+#: ui/plugins.slint:81
+#, x-machine
+msgid "Resolve web addresses"
+msgstr "Webadressen auflösen"
+
+#: ui/plugins.slint:82
+#, x-machine
+msgid "Manage plugins"
+msgstr "Plugins verwalten"
+
+#: ui/plugins.slint:83
+#, x-machine
+msgid "Clipboard"
+msgstr "Zwischenablage"
+
+#: ui/plugins.slint:84
+#, x-machine
+msgid "Control the main window"
+msgstr "Hauptfenster steuern"
+
+#: ui/plugins.slint:85
+#, x-machine
+msgid "Change shortcuts"
+msgstr "Tastenkürzel ändern"
+
+#: ui/plugins.slint:90
+#, x-machine
+msgid "Preparing"
+msgstr "Wird vorbereitet"
+
+#: ui/plugins.slint:91
+#, x-machine
+msgid "Activating"
+msgstr "Wird aktiviert"
+
+#: ui/plugins.slint:92
+#, x-machine
+msgid "Restoring"
+msgstr "Wird wiederhergestellt"
+
+#: ui/plugins.slint:93
+#, x-machine
+msgid "Done"
+msgstr "Fertig"
+
+#: ui/plugins.slint:94
+#, x-machine
+msgid "Cancelled"
+msgstr "Abgebrochen"
+
+#. a rollback or uninstall did not complete.
+#: ui/plugins.slint:96
+#, x-machine
+msgctxt "change status"
+msgid "Failed"
+msgstr "Fehlgeschlagen"
+
+#: ui/plugins.slint:97
+#, x-machine
+msgid "Failed (previous version restored)"
+msgstr "Fehlgeschlagen (vorherige Version wiederhergestellt)"
+
+#: ui/plugins.slint:98
+#, x-machine
+msgid "Too late to cancel"
+msgstr "Abbrechen nicht mehr möglich"
+
+#: ui/plugins.slint:103
+#, x-machine
+msgid "Plugin Manager cannot disable or uninstall itself"
+msgstr "Die Plugin-Verwaltung kann sich nicht selbst deaktivieren oder deinstallieren"
+
+#: ui/plugins.slint:104
+#, x-machine
+msgid "Development-loaded plugins cannot be uninstalled or rolled back"
+msgstr "Im Entwicklungsmodus geladene Plugins können nicht deinstalliert oder zurückgesetzt werden"
+
+#: ui/plugins.slint:105 ui/plugins.slint:114
+#, x-machine
+msgid "Built-in plugins can only be disabled"
+msgstr "Integrierte Plugins können nur deaktiviert werden"
+
+#: ui/plugins.slint:106
+#, x-machine
+msgid "This plugin no longer exists"
+msgstr "Dieses Plugin existiert nicht mehr"
+
+#: ui/plugins.slint:107
+#, x-machine
+msgid "Installing or rolling back, please try again later"
+msgstr "Installation oder Zurücksetzen läuft, bitte versuchen Sie es später erneut"
+
+#: ui/plugins.slint:112 ui/plugins.slint:135
+#, x-machine
+msgid "Plugin Manager cannot disable itself"
+msgstr "Die Plugin-Verwaltung kann sich nicht selbst deaktivieren"
+
+#: ui/plugins.slint:113
+#, x-machine
+msgid "Updating"
+msgstr "Wird aktualisiert"
+
+#: ui/plugins.slint:115
+#, x-machine
+msgid "Only installed plugins can be uninstalled"
+msgstr "Nur installierte Plugins können deinstalliert werden"
+
+#: ui/plugins.slint:120
+#, x-machine
+msgid "Error"
+msgstr "Fehler"
+
+#: ui/plugins.slint:121
+#, x-machine
+msgid "Warning"
+msgstr "Warnung"
+
+#: ui/plugins.slint:122
+#, x-machine
+msgid "Note"
+msgstr "Hinweis"
+
+#: ui/plugins.slint:123 ui/plugins.slint:243
+#, x-machine
+msgid "Source"
+msgstr "Quelle"
+
+#. detail label: the version a rollback returns to.
+#: ui/plugins.slint:125
+#, x-machine
+msgid "Previous"
+msgstr "Vorherige"
+
+#. detail label: the folder the plugin's package is in.
+#: ui/plugins.slint:127
+#, x-machine
+msgid "Package"
+msgstr "Paket"
+
+#. detail label: the folder with the plugin's settings and data.
+#: ui/plugins.slint:129
+#, x-machine
+msgid "Data folder"
+msgstr "Datenordner"
+
+#: ui/plugins.slint:130
+#, x-machine
+msgid "Capabilities"
+msgstr "Fähigkeiten"
+
+#: ui/plugins.slint:134
+#, x-machine
+msgid "Development load: disabling lasts only for this run; cannot be uninstalled or rolled back"
+msgstr "Entwicklungsmodus: Deaktivieren gilt nur für diese Sitzung; Deinstallieren oder Zurücksetzen nicht möglich"
+
+#: ui/plugins.slint:136
+#, x-machine
+msgid "Built-in plugin: installed and updated with the player; can be disabled but not uninstalled"
+msgstr "Integriertes Plugin: wird mit dem Player installiert und aktualisiert; kann deaktiviert, aber nicht deinstalliert werden"
+
+#: ui/plugins.slint:137
+#, x-machine
+msgid "Unavailable"
+msgstr "Nicht verfügbar"
+
+#: ui/plugins.slint:138
+#, x-machine
+msgid "(none)"
+msgstr "(keine)"
+
+#: ui/plugins.slint:139
+#, x-machine
+msgid "Repository ({})"
+msgstr "Repository ({})"
+
+#: ui/plugins.slint:140
+#, x-machine
+msgid "Link ({})"
+msgstr "Link ({})"
+
+#. a capability id, two spaces, what it lets a plugin do.
+#: ui/plugins.slint:144
+#, x-machine
+msgid "{0}  {1}"
+msgstr "{0}  {1}"
+
+#. progress or result of a rollback: plugin id, status.
+#: ui/plugins.slint:155
+#, x-machine
+msgid "Roll back {0}: {1}"
+msgstr "{0} zurücksetzen: {1}"
+
+#. plugin id, status, the player's message.
+#: ui/plugins.slint:157
+#, x-machine
+msgid "Roll back {0}: {1} ({2})"
+msgstr "{0} zurücksetzen: {1} ({2})"
+
+#. progress or result of an uninstall: plugin id, status.
+#: ui/plugins.slint:159
+#, x-machine
+msgid "Uninstall {0}: {1}"
+msgstr "{0} deinstallieren: {1}"
+
+#. plugin id, status, the player's message.
+#: ui/plugins.slint:161
+#, x-machine
+msgid "Uninstall {0}: {1} ({2})"
+msgstr "{0} deinstallieren: {1} ({2})"
+
+#: ui/plugins.slint:163
+#, x-machine
+msgid "Cannot read the plugin list: {}"
+msgstr "Die Plugin-Liste kann nicht gelesen werden: {}"
+
+#: ui/plugins.slint:164
+#, x-machine
+msgid "Cannot ask for confirmation: {}"
+msgstr "Bestätigung kann nicht angefordert werden: {}"
+
+#: ui/plugins.slint:165
+#, x-machine
+msgid "The data folder does not exist (the plugin has not saved any settings or data yet)"
+msgstr "Der Datenordner existiert nicht (das Plugin hat noch keine Einstellungen oder Daten gespeichert)"
+
+#: ui/plugins.slint:166
+#, x-machine
+msgid "Data folder unavailable: {}"
+msgstr "Datenordner nicht verfügbar: {}"
+
+#. the version column of a development-loaded plugin (50px wide).
+#: ui/plugins.slint:189
+#, x-machine
+msgid "Dev"
+msgstr "Dev"
+
+#: ui/plugins.slint:241
+#, x-machine
+msgid "Plugin"
+msgstr "Plugin"
+
+#: ui/plugins.slint:242
+#, x-machine
+msgid "Version"
+msgstr "Version"
+
+#: ui/plugins.slint:244
+#, x-machine
+msgid "Status"
+msgstr "Status"
+
+#. column header: the size of the plugin's data folder.
+#: ui/plugins.slint:246
+#, x-machine
+msgid "Data"
+msgstr "Daten"
+
+#: ui/plugins.slint:269
+#, x-machine
+msgid "Select a plugin to see its details"
+msgstr "Wählen Sie ein Plugin, um Details anzuzeigen"
+
+#: ui/plugins.slint:310
+#, x-machine
+msgid "Enable"
+msgstr "Aktivieren"
+
+#: ui/plugins.slint:315
+#, x-machine
+msgid "Reload"
+msgstr "Neu laden"
+
+#. button: roll the plugin back to its previous version (94px wide).
+#: ui/plugins.slint:317
+#, x-machine
+msgid "Roll Back"
+msgstr "Zurücksetzen"
+
+#: ui/plugins.slint:324
+#, x-machine
+msgid "Uninstall…"
+msgstr "Deinstallieren…"
+
+#: ui/plugins.slint:329
+#, x-machine
+msgid "Open Data Folder"
+msgstr "Datenordner öffnen"
