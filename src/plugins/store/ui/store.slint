@@ -2,7 +2,7 @@
 // plugin list on the left (300 wide, 52px rows), the selected plugin on the
 // right (header, actions, notices, tabs Description / Changelog / Versions
 // and a 200px column with facts and permissions), a status line at the bottom.
-// Texts built at run time come as `Msg` data and become words in words.slint.
+// Texts built at run time come translated from TypeScript (text values).
 // Minimum 760×480: top row search ≥ 180 + 3 filter buttons + two 110px
 // drop-downs + gaps ≈ 600; the detail keeps ≥ 440 next to the list.
 import { LineEdit, ListView } from "std-widgets.slint";
@@ -10,15 +10,14 @@ import { MarkdownView, MarkdownBlock } from "@vestra/markdown.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button, ToolTipArea, UrlInputRow } from "@vestra/widgets.slint";
 import { Cell, Chip, Choice, Tone } from "parts.slint";
-import { Msg, Words } from "words.slint";
 
 export struct StoreRow {
     key: string,
     name: string,
     version: string,
-    meta: Msg,
+    meta: string,
     punchline: string,
-    badge: Msg,
+    badge: string,
     // 0 plain, 1 accent, 2 warn, 3 danger, 4 dim (see Tone)
     tone: int,
     selected: bool,
@@ -26,37 +25,35 @@ export struct StoreRow {
 
 export struct StoreAction {
     id: string,
-    text: Msg,
+    text: string,
     enabled: bool,
 }
 
 export struct StoreBanner {
-    text: Msg,
-    // Not empty: "The new version needs new permissions: …" with these capabilities.
-    caps: [string],
+    text: string,
     tone: int,
     action: string,
-    actionText: Msg,
+    actionText: string,
 }
 
 export struct StoreVersion {
     version: string,
     date: string,
     minimum: string,
-    status: Msg,
+    status: string,
     tone: int,
     canInstall: bool,
 }
 
 export struct StoreFact {
-    label: Msg,
-    text: Msg,
+    label: string,
+    text: string,
     link: bool,
 }
 
 export struct StorePermission {
-    // The capability (Words.cap() says it in words).
-    id: string,
+    // The capability in words.
+    text: string,
     risky: bool,
 }
 
@@ -105,8 +102,8 @@ component ListRow inherits Rectangle {
         HorizontalLayout {
             height: 16px;
             spacing: 6px;
-            Cell { horizontal-stretch: 1; text: Words.msg(root.item.meta); color: Theme.text-dim; }
-            Cell { text: Words.msg(root.item.badge); color: Tone.color(root.item.tone); }
+            Cell { horizontal-stretch: 1; text: root.item.meta; color: Theme.text-dim; }
+            Cell { text: root.item.badge; color: Tone.color(root.item.tone); }
         }
         Cell { height: 16px; text: root.item.punchline; color: Theme.text-list; }
     }
@@ -161,33 +158,30 @@ export component StoreWindow inherits Window {
     in property <int> tag-index;
     in property <int> sort-index;
     in property <[StoreRow]> rows;
-    in property <Msg> empty-text;
+    in property <string> empty-text;
     in property <bool> link-open;
     in-out property <string> link-text;
     // Detail
     in property <bool> has-selection;
     in property <string> d-name;
-    in property <Msg> d-meta;
+    in property <string> d-meta;
     in property <string> d-punchline;
     in property <image> d-icon;
     in property <[StoreAction]> actions;
     in property <[StoreBanner]> banners;
     in property <int> tab;
     in property <[MarkdownBlock]> doc;
-    in property <Msg> doc-note;
+    in property <string> doc-note;
     in property <[StoreVersion]> versions;
     in property <[StoreFact]> facts;
     in property <[StorePermission]> permissions;
     // Installed and not built in: where to disable it.
     in property <bool> manage;
     // Status line: one message, or a text per repository.
-    in property <[Msg]> status;
+    in property <string> status;
     in property <bool> status-warn;
-    in property <Msg> busy-text;
+    in property <string> busy-text;
     in property <bool> can-cancel;
-    private property <string> status-text: Words.line(root.status);
-    private property <string> busy: Words.msg(root.busy-text);
-    private property <string> note: Words.msg(root.doc-note);
 
     callback search(string);
     callback set-filter(int);
@@ -288,7 +282,7 @@ export component StoreWindow inherits Window {
                     x: 12px;
                     width: parent.width - 24px;
                     height: parent.height;
-                    text: Words.msg(root.empty-text);
+                    text: root.empty-text;
                     color: Theme.text-dim;
                     font-size: Theme.font-body;
                     wrap: word-wrap;
@@ -324,7 +318,7 @@ export component StoreWindow inherits Window {
                             alignment: center;
                             spacing: 2px;
                             Cell { text: root.d-name; color: Theme.text; font-size: Theme.font-title; font-weight: 700; }
-                            Cell { text: Words.msg(root.d-meta); color: Theme.text-dim; }
+                            Cell { text: root.d-meta; color: Theme.text-dim; }
                             Cell { text: root.d-punchline; color: Theme.text-list; }
                         }
                     }
@@ -333,7 +327,7 @@ export component StoreWindow inherits Window {
                         spacing: 6px;
                         alignment: start;
                         for action in root.actions: SizedButton {
-                            text: Words.msg(action.text);
+                            text: action.text;
                             enabled: action.enabled;
                             clicked => { root.act(action.id); }
                         }
@@ -348,9 +342,7 @@ export component StoreWindow inherits Window {
                             Rectangle { width: 3px; background: Tone.color(banner.tone); }
                             Text {
                                 horizontal-stretch: 1;
-                                text: banner.caps.length > 0
-                                    ? @tr("The new version needs new permissions: {}", Words.caps(banner.caps))
-                                    : Words.msg(banner.text);
+                                text: banner.text;
                                 color: Tone.color(banner.tone);
                                 font-size: Theme.font-body;
                                 wrap: word-wrap;
@@ -360,7 +352,7 @@ export component StoreWindow inherits Window {
                             if banner.action != "": SizedButton {
                                 min: 41px;
                                 small: true;
-                                text: Words.msg(banner.actionText);
+                                text: banner.actionText;
                                 clicked => { root.banner-act(banner.action); }
                             }
                         }
@@ -390,11 +382,11 @@ export component StoreWindow inherits Window {
                                     blocks: root.doc;
                                     link-clicked(url) => { root.open-link(url); }
                                 }
-                                if root.tab != 2 && root.note != "": Text {
+                                if root.tab != 2 && root.doc-note != "": Text {
                                     x: 12px;
                                     width: parent.width - 24px;
                                     height: parent.height;
-                                    text: root.note;
+                                    text: root.doc-note;
                                     color: Theme.text-dim;
                                     font-size: Theme.font-body;
                                     wrap: word-wrap;
@@ -442,8 +434,8 @@ export component StoreWindow inherits Window {
                                                     }
                                                 }
                                             }
-                                            if Words.msg(v.status) != "": Text {
-                                                text: Words.msg(v.status);
+                                            if v.status != "": Text {
+                                                text: v.status;
                                                 color: Tone.color(v.tone);
                                                 font-size: Theme.font-body;
                                                 wrap: word-wrap;
@@ -461,14 +453,14 @@ export component StoreWindow inherits Window {
                             for fact[index] in root.facts: HorizontalLayout {
                                 height: 18px;
                                 spacing: 6px;
-                                Cell { width: 44px; text: Words.msg(fact.label); color: Theme.text-dim; }
+                                Cell { width: 44px; text: fact.label; color: Theme.text-dim; }
                                 ToolTipArea {
                                     horizontal-stretch: 1;
-                                    text: Words.msg(fact.text);
+                                    text: fact.text;
                                     Cell {
                                         width: 100%;
                                         height: 100%;
-                                        text: Words.msg(fact.text);
+                                        text: fact.text;
                                         color: fact.link ? Theme.accent : Theme.text-list;
                                     }
                                     if fact.link: TouchArea {
@@ -486,7 +478,7 @@ export component StoreWindow inherits Window {
                                 vertical-stretch: 1;
                                 for p in root.permissions: Text {
                                     height: self.preferred-height + 3px;
-                                    text: "· " + Words.cap(p.id);
+                                    text: "· " + p.text;
                                     color: p.risky ? Tone.warn : Theme.text-list;
                                     font-size: Theme.font-body;
                                     wrap: word-wrap;
@@ -512,15 +504,15 @@ export component StoreWindow inherits Window {
             spacing: 8px;
             ToolTipArea {
                 horizontal-stretch: 1;
-                text: root.status-text;
+                text: root.status;
                 Cell {
                     width: 100%;
                     height: 100%;
-                    text: root.status-text;
+                    text: root.status;
                     color: root.status-warn ? Tone.warn : Theme.text-dim;
                 }
             }
-            if root.busy != "": Cell { text: root.busy; color: Theme.text; }
+            if root.busy-text != "": Cell { text: root.busy-text; color: Theme.text; }
             if root.can-cancel: Button { small: true; text: @tr("Cancel"); clicked => { root.cancel(); } }
         }
     }

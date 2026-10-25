@@ -44,8 +44,9 @@ test("a revoked version installed from the repository is disabled once, with one
     const notice = host.confirmTexts[0]!;
     assert.equal(notice.message, "已停用 2 个被撤回的插件");
     assert.match(String(notice.detail), /^仓库撤回了这些版本，原因：/);
-    // The reasons are nested templates: English until the player translates nested arguments.
-    assert.match(String(notice.detail), /“YouTube” 0\.2\.0: 会删除下载目录\nYou can update to 0\.2\.1 in the Plugin Store\./);
+    assert.match(String(notice.detail), /「YouTube」0\.2\.0：会删除下载目录\n可以在插件商城更新到 0\.2\.1。/);
+    // "“{}” {}: {}" has no words, so extract (SDK 1.5.11) leaves it out of the catalog and the
+    // player formats the English punctuation (was 「Bilibili」0.2.0：接口失效).
     assert.match(String(notice.detail), /“Bilibili” 0\.2\.0: 接口失效/);
     assert.equal(notice.confirm, "打开插件商城");
     assert.equal(notice.cancel, "知道了");

@@ -1,7 +1,7 @@
 import { hostOf, reasonOf } from "./labels.ts";
 import { MAX_REPOS, normalizeRepoUrl } from "./repos.ts";
 import type { Store } from "./store.ts";
-import { msg, slint, type Msg } from "./text.ts";
+import { msg, type Msg } from "./text.ts";
 
 /**
  * Options ▸ Plugins ▸ Plugin Store (design §4): automatic checks on or off,
@@ -51,15 +51,15 @@ export class SettingsPage {
     return {
       autoCheck: store.settings.value.autoCheck,
       repos: store.repos.list.map((repo) => ({
-        name: slint(repo.official ? msg("Vestra Player official repository") : repo.origin),
+        name: store.shown(repo.official ? msg("Vestra Player official repository") : repo.origin),
         url: repo.url,
-        note: slint(repo.status.text),
+        note: store.shown(repo.status.text),
         tone: repo.status.warn ? 2 : 0,
         removable: !repo.official,
       })),
       adding: this.#adding,
       canAdd: store.settings.value.repos.length < MAX_REPOS && !this.#working,
-      message: slint(this.#message.text),
+      message: store.shown(this.#message.text),
       messageWarn: this.#message.warn,
     };
   }

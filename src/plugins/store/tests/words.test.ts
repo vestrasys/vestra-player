@@ -2,43 +2,24 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { CAPABILITIES } from "../labels.ts";
-import { HOST, PART, WINDOW } from "../text.ts";
+import { HOST, LABELS, PART, WINDOW } from "../text.ts";
 import { BUILTIN, FakeNet, OFFICIAL, openStore, props, publish, rows, start, until } from "./helpers.ts";
 
-const words = readFileSync(new URL("../ui/words.slint", import.meta.url), "utf8");
+const pot = readFileSync(new URL("../locales/messages.pot", import.meta.url), "utf8");
+const po = readFileSync(new URL("../locales/zh-Hans.po", import.meta.url), "utf8");
 
-/** `if <var>.id == "…" { return @tr("…", args…); }` lines of one function. */
-function entries(name: string, variable: string): Map<string, number> {
-  const from = words.indexOf(`function ${name}(`);
-  const body = words.slice(from, words.indexOf(`return ${variable}.id;`, from));
-  const found = new Map<string, number>();
-  const line = new RegExp(`if ${variable}\\.id == ("(?:[^"\\\\]|\\\\.)*") \\{ return @tr\\(("(?:[^"\\\\]|\\\\.)*")(.*)\\); \\}`, "g");
-  for (const match of body.matchAll(line)) {
-    assert.equal(match[1], match[2], "the id is the @tr text");
-    found.set(JSON.parse(match[1]!) as string, match[3]!.split(",").length - 1);
-  }
-  return found;
-}
+/** Only placeholders and punctuation: the player formats it as it is (not in the catalog). */
+const formatOnly = (template: string) => !/\p{L}/u.test(template.replace(/\{[^{}]*\}/g, ""));
+const quoted = (text: string) => `msgid ${JSON.stringify(text)}`;
 
-/** How many arguments a template takes. */
-function count(template: string): number {
-  const numbered = [...template.matchAll(/\{(\d+)\}/g)].map((m) => Number(m[1]));
-  return numbered.length ? Math.max(...numbered) + 1 : [...template.matchAll(/\{\}/g)].length;
-}
-
-test("words.slint knows every window template of text.ts, with the right number of arguments", () => {
-  const windows = entries("msg", "m");
-  const parts = entries("arg", "x");
-  assert.deepEqual([...windows.keys()].sort(), [...WINDOW].sort());
-  assert.deepEqual([...parts.keys()].sort(), [...PART].sort());
-  for (const [template, args] of [...windows, ...parts]) assert.equal(args, count(template), template);
+test("every template and capability is in messages.pot and translated in zh-Hans.po", () => {
   // The templates of the three tables are distinct.
   assert.equal(new Set([...WINDOW, ...PART, ...HOST]).size, WINDOW.length + PART.length + HOST.length);
-});
-
-test("words.slint says every capability in the same words as labels.ts", () => {
-  for (const [id, { text }] of Object.entries(CAPABILITIES))
-    assert.ok(words.includes(`if id == "${id}" { return @tr(${JSON.stringify(text)}); }`), id);
+  const all = [...WINDOW, ...PART, ...HOST, ...LABELS, ...Object.values(CAPABILITIES).map((c) => c.text)];
+  for (const text of all.filter((each) => !formatOnly(each) && !each.includes("\n"))) {
+    assert.ok(pot.includes(quoted(text)), `messages.pot: ${text}`);
+    assert.ok(po.includes(quoted(text)), `zh-Hans.po: ${text}`);
+  }
 });
 
 test("English by default: the menu, the list and the OSD", async () => {

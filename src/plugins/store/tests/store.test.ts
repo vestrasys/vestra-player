@@ -34,8 +34,7 @@ test("menu Plugin Store… counts updates from the same source only, announces t
     store.repos.sync([THIRD]);
     await store.refreshAll(true);
     await until(host, () => path(host)?.[0] !== "Plugin Store…", "menu title");
-    // A menu title takes no arguments yet (request R2-audio-1): English with the count.
-    assert.deepEqual(path(host), ["Plugin Store (1 updates)…"]);
+    assert.deepEqual(host.command("open").display.path, ["插件商城（1 个可更新）…"]);
     assert.deepEqual(host.osd, ["插件商城：1 个插件可以更新"]);
     await store.refreshAll(true);
     await host.settle(20);

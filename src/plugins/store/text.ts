@@ -1,18 +1,15 @@
+import type { I18n, ListStyle, TextArg, TextValue } from "@vestra-player/sdk";
+import type { CapabilityText } from "./labels.ts";
+
 /**
  * Every sentence the store builds at run time is a `Msg`: an English
  * template from the tables below and its arguments. Arguments are data
- * (names, versions, addresses, error messages from the player) or another
- * `Msg`. Nothing is translated here: the player translates.
- *
- * - The windows (store.slint, settings.slint) get `Msg`s as data (`slint()`),
- *   and ui/words.slint turns them into text with `@tr`: `Words.arg()` knows the
- *   `PART` templates (which take plain arguments only), `Words.msg()` the
- *   `WINDOW` ones (whose arguments may be `PART`s). tests/words.test.ts keeps
- *   the two files in step.
- * - The OSD and confirmations get the template and its arguments (`host()`).
- *   The player does not translate a `Msg` given as an argument yet: until it
- *   does (request in doc/process/rounds/2026-10-i18n.md, 第 2 轮请求), such an
- *   argument shows in English (`english()`).
+ * (names, versions, addresses, error messages from the player), another
+ * `Msg`, or a list of them. Nothing is translated here: the player
+ * translates. `argOf()` / `textOf()` turn a `Msg` into a text value
+ * (`plugin.i18n.text`) for the windows, the OSD and the confirmations;
+ * `vestra-plugin i18n extract` reads the templates from these `as const`
+ * tables through the type of `Msg.text`.
  */
 
 /** Templates of the windows' status line, notices and labels (also shown on the OSD). */
@@ -178,6 +175,8 @@ export const WINDOW = [
   "License",
   "Code",
   "Open ↗",
+  // A banner (the permissions are a list).
+  "The new version needs new permissions: {}",
 ] as const;
 
 /** Parts of other sentences (labels, reasons); their arguments are plain. */
@@ -226,6 +225,8 @@ export const PART = [
   "Enter a repository address starting with https://",
   "The address cannot contain a user name or password",
   "The repository address is too long",
+  // A capability the store does not know.
+  "Unknown permission: {}",
 ] as const;
 
 /** Only on the OSD or in confirmations, never in a window. */
@@ -258,6 +259,10 @@ export const HOST = [
   "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust. This is a test repository on this machine, without encryption.",
   "It will be able to:\n{}\n\nA plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network.",
   "Unknown",
+  // The permission list: one line each, at most 20.
+  "· {}",
+  "· Uses none of the player's features",
+  "{} in total",
   // Confirmation: a package from a file or a link.
   "Replace the installed version with the plugin package “{}” {}?",
   "{2}\n\n{3}\n\n{4}",
@@ -282,6 +287,7 @@ export const HOST = [
   "The repository revoked these versions. Reasons:\n\n{2}\n\nTo keep using one anyway, choose “Enable Anyway…” on its page in the Plugin Store.",
   "“{}” {}: {}",
   "“{}” {}: {}\nYou can update to {} in the Plugin Store.",
+  "{}\n\n{}",
   "Enable the revoked “{}” {} anyway?",
   "The repository's reason for revoking this version: {2}\n\nUsing it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning.",
   "The repository's reason for revoking this version: {2}\n\nUsing it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning.\n\nUpdating to {3} instead is recommended.",
@@ -309,13 +315,18 @@ export const LABELS = [
 
 export type WindowTemplate = (typeof WINDOW)[number];
 export type PartTemplate = (typeof PART)[number];
-export type Template = WindowTemplate | PartTemplate | (typeof HOST)[number];
+export type Template = WindowTemplate | PartTemplate | (typeof HOST)[number] | CapabilityText;
 export type Label = (typeof LABELS)[number];
 
-export type Arg = string | number | Msg;
+export type Arg = string | number | Msg | Many;
 export interface Msg {
   readonly text: Template;
   readonly args: readonly Arg[];
+}
+/** Items joined the interface language's way (`plugin.i18n.list`). */
+export interface Many {
+  readonly items: readonly Arg[];
+  readonly style: ListStyle;
 }
 
 export const msg = (text: Template, ...args: Arg[]): Msg => ({ text, args });
@@ -323,7 +334,19 @@ export const msg = (text: Template, ...args: Arg[]): Msg => ({ text, args });
 /** A plain value shown as it is (an error message from the player). */
 export const raw = (value: string): Msg => ({ text: "{}" as Template, args: [value] });
 
-const isMsg = (value: Arg): value is Msg => typeof value === "object";
+export const list = (items: readonly Arg[], style: ListStyle = "list"): Many => ({ items, style });
+
+/**
+ * Items one after another with `between` (`"{} · {}"`, `"{}\n\n{}"`), as a
+ * balanced tree so that it nests only log₂(n) deep (texts nest at most 8).
+ */
+export function joined(items: readonly Arg[], between: "{} · {}" | "{}\n\n{}"): Arg {
+  if (items.length <= 1) return items[0] ?? "";
+  const half = Math.ceil(items.length / 2);
+  return msg(between, joined(items.slice(0, half), between), joined(items.slice(half), between));
+}
+
+const isMsg = (value: Msg | Many): value is Msg => "text" in value;
 const isRaw = (value: Msg) => (value.text as string) === "{}";
 
 /** Cut to `max` characters (the player's limits count characters). */
@@ -332,57 +355,26 @@ export function cut(text: string, max: number): string {
   return chars.length > max ? `${chars.slice(0, max - 1).join("")}…` : text;
 }
 
-/** `{}` takes the next argument, `{0}` a numbered one (as the player and Slint do). */
-function format(template: string, args: readonly (string | number)[]): string {
-  let next = 0;
-  return template.replace(/\{\{|\}\}|\{(\d*)\}/g, (match, index: string | undefined) => {
-    if (match === "{{") return "{";
-    if (match === "}}") return "}";
-    const value = args[index ? Number(index) : next++];
-    return value === undefined ? match : String(value);
-  });
-}
+type Words = Pick<I18n, "text" | "list">;
 
 /**
- * A nested `Msg` in English, until the player translates arguments that are
- * templates themselves (see the header). Only for `host()`.
+ * An argument as the player takes it: data as it is (strings cut to `max`
+ * characters), a `Msg` as a text value, a `Many` as a list value.
  */
-function english(value: Msg): string {
-  return format(
+export function argOf(words: Words, value: Arg, max: number): TextArg {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") return cut(value, max);
+  if (!isMsg(value)) return words.list(value.items.map((each) => argOf(words, each, max)), value.style);
+  if (isRaw(value)) return argOf(words, value.args[0] ?? "", max);
+  return words.text(
     value.text,
-    value.args.map((arg) => (isMsg(arg) ? english(arg) : arg)),
+    value.args.map((each) => argOf(words, each, max)),
   );
 }
 
-/**
- * Several `Msg`s as one argument, one after another (English until the
- * player translates nested arguments; see the header).
- */
-export const list = (items: readonly Msg[], separator: string): string => items.map(english).join(separator);
-
-/** Arguments for `osd.show` and `dialogs.confirm`: plain, each at most `max` characters. */
-export function host(args: readonly Arg[], max = 300): (string | number)[] {
-  return args.map((arg) => (isMsg(arg) ? cut(english(arg), max) : typeof arg === "string" ? cut(arg, max) : arg));
-}
-
-/** One argument of a window text: plain (`id` empty, the value in `a`), or a `PART` with plain arguments. */
-export type SlintArg = { id: string; a: string; b: string; c: string; d: string };
-export type SlintMsg = { id: string; args: SlintArg[] };
-
-const plain = (value: string | number): SlintArg => ({ id: "", a: String(value), b: "", c: "", d: "" });
-
-function slintArg(value: Arg): SlintArg {
-  if (!isMsg(value)) return plain(value);
-  if (isRaw(value)) return plain(String(value.args[0] ?? ""));
-  const [a = "", b = "", c = "", d = ""] = value.args.map((each) => (isMsg(each) ? english(each) : String(each)));
-  return { id: value.text, a, b, c, d };
-}
-
-/** A `Msg` as window data for `Words.msg()` (ui/words.slint); `null` is no text. */
-export function slint(value: Msg | null): SlintMsg {
-  if (!value) return { id: "", args: [] };
-  // A plain value or a PART on its own: `Words.msg()` hands the first argument to `Words.arg()`.
-  if (isRaw(value) || (PART as readonly string[]).includes(value.text))
-    return { id: "", args: [slintArg(value)] };
-  return { id: value.text, args: value.args.map(slintArg) };
+/** A `Msg` (or other argument) as window text (a text value, or data for a plain value); `null` is no text. */
+export function textOf(words: Words, value: Arg | null, max = 1000): TextValue {
+  if (value === null || value === "") return "";
+  const shown = argOf(words, value, max);
+  return typeof shown === "number" ? String(shown) : shown;
 }

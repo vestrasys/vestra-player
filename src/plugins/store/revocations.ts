@@ -1,7 +1,7 @@
 import type { Item } from "./catalog.ts";
 import { compareVersions, isVersion } from "./semver.ts";
 import type { Store } from "./store.ts";
-import { list, msg, raw, type Msg } from "./text.ts";
+import { joined, msg, raw, type Msg } from "./text.ts";
 
 /** Identifies one revocation hit: repository, plugin, installed version, range. */
 export const revocationKey = (repo: string, id: string, version: string, range: string) =>
@@ -108,8 +108,8 @@ export class Revocations {
           : msg("Disabled {} revoked plugins", items.length, ""),
       detail: msg(
         "The repository revoked these versions. Reasons:\n\n{2}\n\nTo keep using one anyway, choose “Enable Anyway…” on its page in the Plugin Store.",
-        // One reason after another.
-        list(lines, "\n\n"),
+        // One reason after another (at most 20, then the count).
+        joined(lines.length > 20 ? [...lines.slice(0, 20), msg("{} in total", lines.length)] : lines, "{}\n\n{}"),
       ),
       confirm: "Open Plugin Store",
       cancel: "OK",

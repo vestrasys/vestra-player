@@ -5,12 +5,11 @@ import { LineEdit, ListView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button } from "@vestra/widgets.slint";
 import { Cell, Check, Tone } from "parts.slint";
-import { Msg, Words } from "words.slint";
 
 export struct RepoRow {
-    name: Msg,
+    name: string,
     url: string,
-    note: Msg,
+    note: string,
     // 0 plain, 2 warn (see Tone)
     tone: int,
     removable: bool,
@@ -22,7 +21,7 @@ export global StoreSettings {
     in property <bool> adding;
     in-out property <string> add-text;
     in property <bool> can-add: true;
-    in property <Msg> message;
+    in property <string> message;
     in property <bool> message-warn;
     callback toggle-auto();
     callback start-add();
@@ -68,9 +67,9 @@ export component StorePage inherits Rectangle {
                     VerticalLayout {
                         horizontal-stretch: 1;
                         alignment: center;
-                        Cell { text: Words.msg(repo.name); color: Theme.text; }
+                        Cell { text: repo.name; color: Theme.text; }
                         Cell { text: repo.url; color: Theme.text-dim; }
-                        if Words.msg(repo.note) != "": Cell { text: Words.msg(repo.note); color: Tone.color(repo.tone); }
+                        if repo.note != "": Cell { text: repo.note; color: Tone.color(repo.tone); }
                     }
                     VerticalLayout {
                         width: 50px;
@@ -134,8 +133,8 @@ export component StorePage inherits Rectangle {
             wrap: word-wrap;
             line-height-factor: 1.25;
         }
-        if Words.msg(StoreSettings.message) != "": Text {
-            text: Words.msg(StoreSettings.message);
+        if StoreSettings.message != "": Text {
+            text: StoreSettings.message;
             color: StoreSettings.message-warn ? Tone.warn : Theme.text-dim;
             font-size: Theme.font-body;
             wrap: word-wrap;

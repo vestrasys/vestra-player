@@ -5,7 +5,7 @@ import test from "node:test";
 import { bestVersion, checkVersion, revocationOf } from "../catalog.ts";
 import { clean, parseIndex, remember, replayed, IndexError } from "../index-format.ts";
 import { permissionList, permissions } from "../labels.ts";
-import { msg } from "../text.ts";
+import { msg, type Many } from "../text.ts";
 import { normalizeRepoUrl } from "../repos.ts";
 import { compareVersions, parseRange, playerAtLeast, satisfies } from "../semver.ts";
 import { OFFICIAL_KEY_FILE, officialKeys, verifyIndex } from "../signing.ts";
@@ -189,12 +189,15 @@ test("repository addresses are normalized; only https (and this machine's http)"
 
 test("permissions in plain words; unknown ones are named; long lists are cut", () => {
   assert.deepEqual(permissions(["clipboard", "media.read", "media.control", "future.thing"]), [
-    { id: "clipboard", text: "Read and write the clipboard", risky: true },
-    { id: "media.read", text: "Take snapshots and export clips", risky: false },
-    { id: "future.thing", text: "Unknown permission: future.thing", risky: false },
+    { id: "clipboard", text: msg("Read and write the clipboard"), risky: true },
+    { id: "media.read", text: msg("Take snapshots and export clips"), risky: false },
+    { id: "future.thing", text: msg("Unknown permission: {}", "future.thing"), risky: false },
   ]);
   const many = Array.from({ length: 25 }, (_, i) => `x.${i}`);
-  const list = permissionList(many).split("\n");
-  assert.equal(list.length, 21);
-  assert.equal(list.at(-1), "25 in total");
+  const lines = permissionList(many) as Many;
+  assert.equal(lines.style, "lines");
+  assert.equal(lines.items.length, 21);
+  assert.deepEqual(lines.items[0], msg("· {}", msg("Unknown permission: {}", "x.0")));
+  assert.deepEqual(lines.items.at(-1), msg("{} in total", 25));
+  assert.deepEqual(permissionList([]), msg("· Uses none of the player's features"));
 });

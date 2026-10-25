@@ -4,7 +4,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: manifest.json settings-page.ts:24 ui/store.slint:147
+#: manifest.json settings-page.ts:24 ui/store.slint:144
 msgid "Plugin Store"
 msgstr ""
 
@@ -28,802 +28,791 @@ msgstr ""
 msgid "Plugin Store…"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:66
+#: store.ts:297
+msgid "Plugin Store ({} updates)…"
+msgstr ""
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Another install is in progress; wait for it to finish"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:67
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "This system does not support confirmation dialogs; cannot continue"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:68
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Another dialog is open; close it first"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:69
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Couldn't open the link: {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:70
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "This kind of link cannot be opened"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:71
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The downloaded file does not match the repository's description (size); deleted"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:72
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The downloaded file does not match the repository's description (checksum); deleted"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:73
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The plugin package exceeds 64 MB; download stopped"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:74
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The download address is insecure or redirects too often; stopped"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:75
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Download cancelled"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:76
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Couldn't write the download file: {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:77
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Download failed: {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:78
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "This is not a valid plugin package: {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:79
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "This plugin needs Vestra Player ≥ {} (current {})"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:80
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "This plugin needs a newer Vestra Player (current {})"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:81
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "“{}” has the same id as a built-in plugin and cannot be installed"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:82
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "This plugin has the same id as a built-in plugin and cannot be installed"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:83
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "This plugin is being installed or rolled back; try again later"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:84
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The Plugin Store lacks the “Manage plugins” permission"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:85
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "This plugin no longer exists"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:86
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The plugin package does not match the repository's description (id); not installed"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:87
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The plugin package does not match the repository's description (version); not installed"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:88
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The plugin package does not match the repository's description (permissions); not installed"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:89
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "You can only install from https:// links"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:90
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Not installed"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:91
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Installed {} {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:92
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Updated {} to {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:93
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Rolled back {} to {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:94
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Restored {} to {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:95
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Uninstalled {} (data deleted)"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:96
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Uninstalled {} (data kept)"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:97
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "This plugin cannot be rolled back"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:98
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Built-in plugins can only be disabled"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:99
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Enabled “{}” again"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:100
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Couldn't enable “{}”: {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:101
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Can no longer cancel; the installation continues"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:102
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Can no longer cancel; the uninstallation continues"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:103
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Can no longer cancel; the rollback continues"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:104
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Can no longer cancel; the restore continues"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:105
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Installation failed; the previous version was restored"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:106
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Uninstallation failed; the previous version was restored"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:107
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Rollback failed; the previous version was restored"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:108
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Restore failed; the previous version was restored"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:109
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Installation cancelled"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:110
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Uninstallation cancelled"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:111
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Rollback cancelled"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:112
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Restore cancelled"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:113
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Installation failed: {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:114
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Uninstallation failed: {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:115
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Rollback failed: {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:116
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Restore failed: {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:117
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Downloading {} {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:118
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Downloading {} {} ({}%)"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:119
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Downloading the plugin package"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:120
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Downloading the plugin package ({}%)"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:121
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Checking {}…"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:122
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Checking the plugin package…"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:123
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Installing {}…"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:124
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Rolling back {}…"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:125
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Restoring {}…"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:126
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Uninstalling {}…"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:127
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Installing… (preparing)"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:128
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Installing… (activating)"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:129
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Uninstalling… (preparing)"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:130
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Uninstalling… (activating)"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:131
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Rolling back… (preparing)"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:132
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Rolling back… (activating)"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:133
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Restoring… (preparing)"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:134
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Restoring… (activating)"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:135
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Updating {}…"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:136
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "{0}: up to date at {1}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:137
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "{0}: updated at {1}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:138
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "{0}: data from {1}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:139
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The official repository has no signature file; this update was ignored"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:140
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The official repository's signature check failed (it may have been tampered with); this update was ignored"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:141
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The official repository returned an old index; this update was ignored"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:142
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "{} uses a newer format; please update Vestra Player"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:143
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "{}'s index is malformed"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:144
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "{0}'s index is malformed; showing the data from {1}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:145
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "{0} returned error {1}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:146
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "{0} returned error {1}; showing the data from {2}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:147
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "{}'s index exceeds 4 MB; refused"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:148
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "{0}'s index exceeds 4 MB; refused; showing the data from {1}"
 msgstr ""
 
-#. a repository and what went wrong with it
-#: store.ts:351 store.ts:361 ui/words.slint:150
-msgid "{0}: {1}"
-msgstr ""
-
-#: store.ts:351 store.ts:361 ui/words.slint:151
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "{0}: {1}; showing the data from {2}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:152
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Can't connect to {0} ({1}); its plugins are not available for now"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:153
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Can't connect to {0} ({1}); showing the cache from {2}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:154
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "This repository has already been added"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:155
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "At most {} repositories can be added"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:156
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Reading {}…"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:157
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Couldn't read this repository: {}. Check the address (the repository's root address or the full address of index.json)"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:158
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Added {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:159
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Removed {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:160
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "No plugins match"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:161
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "All plugins are up to date"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:162
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "No plugins installed yet"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:163
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Reading repositories…"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:164
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Can't connect to the repositories and there is no cached copy. Click “Refresh” once you are online."
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:165
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The repositories have no plugins yet"
 msgstr ""
 
-#. author · where the plugin comes from
-#: store.ts:351 store.ts:361 ui/words.slint:167
-msgid "{} · {}"
-msgstr ""
-
-#. a list badge, and a fact label (44 px wide): the installed version
-#: store.ts:351 store.ts:361 ui/store.slint:228 ui/words.slint:169
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:222
 msgid "Installed"
 msgstr ""
 
-#. a list badge: a newer version is available
-#: store.ts:351 store.ts:361 ui/words.slint:171
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Update → {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:172
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Revoked"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:173
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Installed from {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:174
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Incompatible"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:175
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Cannot be installed"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:176
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Install {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:177
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Update to {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:178
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Enable Anyway…"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:179
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Replace…"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:180
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Roll Back to {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:181
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Restore to {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:182
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Uninstall…"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:183
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Load"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:184
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Show Images"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:185
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Retry"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:186
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "This version has been revoked: {}."
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:187
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "This version has been revoked: {}. You confirmed the risk and enabled it again; the store will not disable it again."
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:188
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "This version has been revoked: {}. The store has disabled it."
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:189
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Unofficial repository: not reviewed by Vestra Player; plugins may read your files or use the network"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:190
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "This is a test repository on this machine, without encryption"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:191
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Installed {1} from {0}. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data; the current data is kept"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:192
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Same id as a built-in plugin of the player; cannot be installed from here"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:193
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Built-in plugins are updated with the player and cannot be uninstalled; to disable one, use “Settings ▸ Plugin Manager…”"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:194
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The repository no longer offers this plugin; the store no longer checks it for updates (it still checks for revocations)"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:195
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Its repository was removed from the store; the store no longer checks it for updates or revocations"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:196
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Sideloaded plugin: not reviewed; the store does not check it for updates"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:197
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "This run uses the development-loaded version"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:198
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The description is on another website ({}); not loaded automatically"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:199
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Remote images blocked (unofficial source): {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:200
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Loading…"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:201
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Loading the description…"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:202
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Loading the changelog…"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:203
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The author provided no description"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:204
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The author provided no changelog"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:205
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The description is on another website; not loaded automatically"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:206
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The changelog is on another website; not loaded automatically"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:207
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Couldn't load the description: {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:208
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Couldn't load the changelog: {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:209
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Couldn't show the description: {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:210
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Couldn't show the changelog: {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:211
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Current"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:212
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Current, {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:213
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Incompatible: {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:214
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Latest"
 msgstr ""
 
-#. a fact label (44 px wide)
-#: store.ts:351 store.ts:361 ui/store.slint:415 ui/words.slint:216
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:407
 msgid "Version"
 msgstr ""
 
-#. a fact label (44 px wide): when the latest version was published
-#: store.ts:351 store.ts:361 ui/words.slint:218
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Updated"
 msgstr ""
 
-#. a fact label (44 px wide): where the plugin comes from
-#: store.ts:351 store.ts:361 ui/words.slint:220
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Source"
 msgstr ""
 
-#. a fact label (44 px wide)
-#: store.ts:351 store.ts:361 ui/words.slint:222
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "License"
 msgstr ""
 
-#. a fact label (44 px wide): the plugin's source code; the link says Open ↗
-#: store.ts:351 store.ts:361 ui/words.slint:224
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Code"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:225
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Open ↗"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:16
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid "The new version needs new permissions: {}"
+msgstr ""
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Official repository"
 msgstr ""
 
-#. a third-party repository: its own name (host)
-#: store.ts:351 store.ts:361 ui/words.slint:18
-msgid "{} ({})"
-msgstr ""
-
-#: store.ts:351 store.ts:361 ui/words.slint:19
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Unnamed repository ({})"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:20
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Unofficial: {} ({})"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:21
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Unofficial: Unnamed repository ({})"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:22
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Vestra Player official repository"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:23
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Built-in"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:24
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Local file"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:25
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Link"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:26
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Plugin Workshop"
 msgstr ""
 
-#. where a plugin was installed from: a repository at this host
-#: store.ts:351 store.ts:361 ui/words.slint:28
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Repository {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:29
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Unknown source"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:30
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Unknown author"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:31
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Cancelled"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:32
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Only https:// addresses are supported"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:33
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Redirected to an insecure address"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:34
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Redirect without a target address ({})"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:35
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Too many redirects"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:36
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Size does not match the description"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:37
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "File exceeds the size limit"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:38
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Checksum does not match the description"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:39
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Connection timed out"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:40
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Server not found"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:41
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Connection refused"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:42
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Connection reset"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:43
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Secure connection failed"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:44
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "File exceeds 256 KB"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:45
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Not JSON"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:46
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The top level is not an object"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:47
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Wrong schema"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:48
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "plugins is not an array"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:49
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "revoked is not an array"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:50
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "revoked has more than {} entries"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:51
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Needs a newer plugin API ({})"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:52
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Needs Vestra Player ≥ {} (current {})"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:53
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Revoked: {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:54
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "This plugin has been revoked: {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:55
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "“{}”: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed or loaded for testing"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:56
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "This plugin: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed or loaded for testing"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:57
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Enter a repository address starting with https://"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:58
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The address cannot contain a user name or password"
 msgstr ""
 
-#: store.ts:351 store.ts:361 ui/words.slint:59
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The repository address is too long"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid "Unknown permission: {}"
+msgstr ""
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Plugin Store: plugin updates available ({})"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Disabled the revoked plugin “{}”"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Replace the installed “{}”?"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid ""
 "{1}\n"
 "\n"
@@ -832,7 +821,7 @@ msgid ""
 "{3}"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid ""
 "{1}\n"
 "\n"
@@ -843,11 +832,11 @@ msgid ""
 "{3}"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Update “{}” to {}? The new version needs more permissions"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid ""
 "Added:\n"
 "{2}\n"
@@ -857,31 +846,31 @@ msgid ""
 "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Update “{}” to {}?"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Current: {2}. After updating you can roll back to {2} in the store."
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Install “{}” {} (older version)?"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Install “{}” {} (reinstall)?"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Current: {2}. After installing you can restore {2} in the store."
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Current: {2}. After installing you can roll back to {2} in the store."
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid ""
 "Current: {2}. After installing you can restore {2} in the store.\n"
 "\n"
@@ -889,7 +878,7 @@ msgid ""
 "{3}"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid ""
 "Current: {2}. After installing you can roll back to {2} in the store.\n"
 "\n"
@@ -897,49 +886,38 @@ msgid ""
 "{3}"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Install “{}” {}?"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid ""
 "From the Vestra Player official repository, author {2}.\n"
 "\n"
 "{3}"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Install “{}” {} from an unofficial repository?"
 msgstr ""
 
-#: store.ts:351 store.ts:361
-msgid ""
-"{2}\n"
-"\n"
-"{3}"
-msgstr ""
-
-#: store.ts:351 store.ts:361
-msgid "{1}"
-msgstr ""
-
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "This plugin has already been installed from another source. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source."
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The current “{}” {} comes from {}. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source."
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust."
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust. This is a test repository on this machine, without encryption."
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid ""
 "It will be able to:\n"
 "{}\n"
@@ -947,28 +925,27 @@ msgid ""
 "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Unknown"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid "· Uses none of the player's features"
+msgstr ""
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+msgid "{} in total"
+msgstr ""
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Replace the installed version with the plugin package “{}” {}?"
 msgstr ""
 
-#: store.ts:351 store.ts:361
-msgid ""
-"{2}\n"
-"\n"
-"{3}\n"
-"\n"
-"{4}"
-msgstr ""
-
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Install the plugin package “{}” {}?"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid ""
 "{2}\n"
 "\n"
@@ -977,38 +954,38 @@ msgid ""
 "{4}"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "From the file {}; not reviewed by any repository and not updated automatically. Only install plugins from authors you trust."
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "From the link {}; not reviewed by any repository and not updated automatically. Only install plugins from authors you trust."
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Uninstall “{}”?"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Its menus, windows and processing effects are removed immediately."
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Add the unofficial repository “{}”?"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Add the unofficial repository “Unnamed repository”?"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid ""
 "Address: {1}\n"
 "\n"
 "Its plugins are not reviewed by Vestra Player and may read your files or use the network. The store shows this repository's plugins but does not judge for you whether they can be trusted."
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid ""
 "Address: {1}\n"
 "\n"
@@ -1017,27 +994,27 @@ msgid ""
 "This is a test repository on this machine, without encryption."
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Remove the repository “{} ({})”?"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Remove the repository “Unnamed repository ({1})”?"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "The store will stop reading this repository. Plugins installed from it stay, but the store no longer checks them for updates and revocations."
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Disabled the revoked plugin “{}” {}"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Disabled {} revoked plugins"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid ""
 "The repository revoked these versions. Reasons:\n"
 "\n"
@@ -1046,28 +1023,24 @@ msgid ""
 "To keep using one anyway, choose “Enable Anyway…” on its page in the Plugin Store."
 msgstr ""
 
-#: store.ts:351 store.ts:361
-msgid "“{}” {}: {}"
-msgstr ""
-
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid ""
 "“{}” {}: {}\n"
 "You can update to {} in the Plugin Store."
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Enable the revoked “{}” {} anyway?"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid ""
 "The repository's reason for revoking this version: {2}\n"
 "\n"
 "Using it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning."
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid ""
 "The repository's reason for revoking this version: {2}\n"
 "\n"
@@ -1076,18 +1049,18 @@ msgid ""
 "Updating to {3} instead is recommended."
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "“{}” {} has been revoked. Keep using it?"
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid ""
 "It was just enabled again. The repository's reason for revoking this version: {2}\n"
 "\n"
 "Using it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning."
 msgstr ""
 
-#: store.ts:351 store.ts:361
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid ""
 "It was just enabled again. The repository's reason for revoking this version: {2}\n"
 "\n"
@@ -1096,283 +1069,270 @@ msgid ""
 "Updating to {3} instead is recommended."
 msgstr ""
 
-#: store.ts:363
-msgid "Replace"
-msgstr ""
-
-#: store.ts:363 ui/settings.slint:122
-msgid "Add"
-msgstr ""
-
-#: store.ts:363 ui/settings.slint:80
-msgid "Remove"
-msgstr ""
-
-#: store.ts:363
-msgid "Update"
-msgstr ""
-
-#: store.ts:363 ui/store.slint:263 ui/store.slint:440
-msgid "Install"
-msgstr ""
-
-#: store.ts:363
-msgid "Install Anyway"
-msgstr ""
-
-#: store.ts:363
-msgid "Uninstall"
-msgstr ""
-
-#: store.ts:363
-msgid "Also delete its settings and data"
-msgstr ""
-
-#: store.ts:363
-msgid "Open Plugin Store"
-msgstr ""
-
-#: store.ts:363
-msgid "OK"
-msgstr ""
-
-#: store.ts:363
-msgid "Enable Anyway"
-msgstr ""
-
-#: store.ts:363
-msgid "Keep Using"
-msgstr ""
-
-#: store.ts:363
-msgid "Disable"
-msgstr ""
-
-#: store.ts:736
-msgid "Choose a plugin package (.vxp)"
-msgstr ""
-
-#: ui/settings.slint:40
-msgid "Check for updates automatically (30 seconds after the player starts, then every 24 hours)"
-msgstr ""
-
-#: ui/settings.slint:45
-msgid "When off, the store goes online only when you open it or click “Refresh”; plugins revoked by a repository are disabled only then too. When updates are available, the “Plugin Store…” menu item shows how many."
-msgstr ""
-
-#: ui/settings.slint:52
-msgid "Repositories"
-msgstr ""
-
-#: ui/settings.slint:91
-msgid "Add Repository…"
-msgstr ""
-
-#: ui/settings.slint:115
-msgid "The repository's root address or the full address of index.json (https://…)"
-msgstr ""
-
-#: ui/settings.slint:126 ui/store.slint:524
-msgid "Cancel"
-msgstr ""
-
-#: ui/settings.slint:131
-msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline, disable the Plugin Store in “Plugin Manager”."
-msgstr ""
-
-#: ui/store.slint:222
-msgid "Search names, authors, tags…"
-msgstr ""
-
-#: ui/store.slint:227
-msgid "All"
-msgstr ""
-
-#: ui/store.slint:231
-msgid "Updates {}"
-msgstr ""
-
-#: ui/store.slint:231
-msgid "Updates"
-msgstr ""
-
-#: ui/store.slint:239
-msgid "Tags: All"
-msgstr ""
-
-#: ui/store.slint:246
-msgid "Sort: Name"
-msgstr ""
-
-#: ui/store.slint:246
-msgid "Sort: Updated"
-msgstr ""
-
-#: ui/store.slint:254
-msgid "You can also drop a .vxp plugin package on the player's video area to install it"
-msgstr ""
-
-#: ui/store.slint:255
-msgid "Install from File…"
-msgstr ""
-
-#: ui/store.slint:256
-msgid "Install from Link…"
-msgstr ""
-
-#: ui/store.slint:257
-msgid "Repositories…"
-msgstr ""
-
-#: ui/store.slint:258
-msgid "Refresh"
-msgstr ""
-
-#: ui/store.slint:262
-msgid "Plugin package link (https://…/name-version.vxp)"
-msgstr ""
-
-#: ui/store.slint:306
-msgid "Select a plugin on the left to see its details"
-msgstr ""
-
-#: ui/store.slint:352
-msgid "The new version needs new permissions: {}"
-msgstr ""
-
-#: ui/store.slint:376
-msgid "Description"
-msgstr ""
-
-#: ui/store.slint:377
-msgid "Changelog"
-msgstr ""
-
-#: ui/store.slint:378
-msgid "Versions"
-msgstr ""
-
-#: ui/store.slint:416
-msgid "Published"
-msgstr ""
-
-#: ui/store.slint:417
-msgid "Minimum player"
-msgstr ""
-
-#: ui/store.slint:483
-msgid "Permissions ({})"
-msgstr ""
-
-#: ui/store.slint:497
-msgid "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
-msgstr ""
-
-#: ui/store.slint:505
-msgid "Disable, reload, open the data folder: Settings ▸ Plugin Manager…"
-msgstr ""
-
-#: ui/words.slint:252
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Add menu commands and shortcuts"
 msgstr ""
 
-#: ui/words.slint:253
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Open tool windows"
 msgstr ""
 
-#: ui/words.slint:254
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Show panels in the bottom bar, the sidebar or behind the video"
 msgstr ""
 
-#: ui/words.slint:255
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Show file pickers and confirmations"
 msgstr ""
 
-#: ui/words.slint:256
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Show messages on the video"
 msgstr ""
 
-#: ui/words.slint:257
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Receive files dropped on the player"
 msgstr ""
 
-#: ui/words.slint:258
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Change the player's palette"
 msgstr ""
 
-#: ui/words.slint:259
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Add pages to the Options window"
 msgstr ""
 
-#: ui/words.slint:260
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Read what is playing and the position"
 msgstr ""
 
-#: ui/words.slint:261
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Receive playback changes as they happen"
 msgstr ""
 
-#: ui/words.slint:262
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Open media, control playback, keep the computer awake"
 msgstr ""
 
-#: ui/words.slint:263
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Provide audio and video it generates itself"
 msgstr ""
 
-#: ui/words.slint:264
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Process the picture (filters, shaders)"
 msgstr ""
 
-#: ui/words.slint:265
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Process the sound"
 msgstr ""
 
-#: ui/words.slint:266
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Read subtitles"
 msgstr ""
 
-#: ui/words.slint:267
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Load and change subtitles"
 msgstr ""
 
-#: ui/words.slint:268 ui/words.slint:269
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Take snapshots and export clips"
 msgstr ""
 
-#: ui/words.slint:270
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Resolve online video addresses"
 msgstr ""
 
-#: ui/words.slint:271
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Show marks on the progress bar"
 msgstr ""
 
-#: ui/words.slint:272
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Adjust the main window (size, on top, picture-in-picture)"
 msgstr ""
 
-#: ui/words.slint:273
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Read and write the clipboard"
 msgstr ""
 
-#: ui/words.slint:274
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Change all shortcuts"
 msgstr ""
 
-#: ui/words.slint:275
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Store sign-in details in the system keychain"
 msgstr ""
 
-#: ui/words.slint:276
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 msgid "Install, uninstall and disable other plugins"
 msgstr ""
 
-#: ui/words.slint:277
-msgid "Unknown permission: {}"
+#: store.ts:368 store.ts:369 store.ts:371
+msgid "Replace"
 msgstr ""
 
-#. between two permissions in a list
-#: ui/words.slint:283
-msgid ", "
+#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:121
+msgid "Add"
+msgstr ""
+
+#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:79
+msgid "Remove"
+msgstr ""
+
+#: store.ts:368 store.ts:369 store.ts:371
+msgid "Update"
+msgstr ""
+
+#: store.ts:368 store.ts:369 store.ts:371 ui/store.slint:257 ui/store.slint:432
+msgid "Install"
+msgstr ""
+
+#: store.ts:368 store.ts:369 store.ts:371
+msgid "Install Anyway"
+msgstr ""
+
+#: store.ts:368 store.ts:369 store.ts:371
+msgid "Uninstall"
+msgstr ""
+
+#: store.ts:368 store.ts:369 store.ts:371
+msgid "Also delete its settings and data"
+msgstr ""
+
+#: store.ts:368 store.ts:369 store.ts:371
+msgid "Open Plugin Store"
+msgstr ""
+
+#: store.ts:368 store.ts:369 store.ts:371
+msgid "OK"
+msgstr ""
+
+#: store.ts:368 store.ts:369 store.ts:371
+msgid "Enable Anyway"
+msgstr ""
+
+#: store.ts:368 store.ts:369 store.ts:371
+msgid "Keep Using"
+msgstr ""
+
+#: store.ts:368 store.ts:369 store.ts:371
+msgid "Disable"
+msgstr ""
+
+#: store.ts:742
+msgid "Choose a plugin package (.vxp)"
+msgstr ""
+
+#: ui/settings.slint:39
+msgid "Check for updates automatically (30 seconds after the player starts, then every 24 hours)"
+msgstr ""
+
+#: ui/settings.slint:44
+msgid "When off, the store goes online only when you open it or click “Refresh”; plugins revoked by a repository are disabled only then too. When updates are available, the “Plugin Store…” menu item shows how many."
+msgstr ""
+
+#: ui/settings.slint:51
+msgid "Repositories"
+msgstr ""
+
+#: ui/settings.slint:90
+msgid "Add Repository…"
+msgstr ""
+
+#: ui/settings.slint:114
+msgid "The repository's root address or the full address of index.json (https://…)"
+msgstr ""
+
+#: ui/settings.slint:125 ui/store.slint:516
+msgid "Cancel"
+msgstr ""
+
+#: ui/settings.slint:130
+msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline, disable the Plugin Store in “Plugin Manager”."
+msgstr ""
+
+#: ui/store.slint:216
+msgid "Search names, authors, tags…"
+msgstr ""
+
+#: ui/store.slint:221
+msgid "All"
+msgstr ""
+
+#: ui/store.slint:225
+msgid "Updates {}"
+msgstr ""
+
+#: ui/store.slint:225
+msgid "Updates"
+msgstr ""
+
+#: ui/store.slint:233
+msgid "Tags: All"
+msgstr ""
+
+#: ui/store.slint:240
+msgid "Sort: Name"
+msgstr ""
+
+#: ui/store.slint:240
+msgid "Sort: Updated"
+msgstr ""
+
+#: ui/store.slint:248
+msgid "You can also drop a .vxp plugin package on the player's video area to install it"
+msgstr ""
+
+#: ui/store.slint:249
+msgid "Install from File…"
+msgstr ""
+
+#: ui/store.slint:250
+msgid "Install from Link…"
+msgstr ""
+
+#: ui/store.slint:251
+msgid "Repositories…"
+msgstr ""
+
+#: ui/store.slint:252
+msgid "Refresh"
+msgstr ""
+
+#: ui/store.slint:256
+msgid "Plugin package link (https://…/name-version.vxp)"
+msgstr ""
+
+#: ui/store.slint:300
+msgid "Select a plugin on the left to see its details"
+msgstr ""
+
+#: ui/store.slint:368
+msgid "Description"
+msgstr ""
+
+#: ui/store.slint:369
+msgid "Changelog"
+msgstr ""
+
+#: ui/store.slint:370
+msgid "Versions"
+msgstr ""
+
+#: ui/store.slint:408
+msgid "Published"
+msgstr ""
+
+#: ui/store.slint:409
+msgid "Minimum player"
+msgstr ""
+
+#: ui/store.slint:475
+msgid "Permissions ({})"
+msgstr ""
+
+#: ui/store.slint:489
+msgid "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
+msgstr ""
+
+#: ui/store.slint:497
+msgid "Disable, reload, open the data folder: Settings ▸ Plugin Manager…"
 msgstr ""

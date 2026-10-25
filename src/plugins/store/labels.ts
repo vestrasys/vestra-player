@@ -1,15 +1,10 @@
 import type { PackageSource } from "@vestra-player/sdk";
 import { IndexError } from "./index-format.ts";
 import { NetError } from "./net.ts";
-import { msg, raw, type Msg } from "./text.ts";
+import { list, msg, raw, type Arg, type Msg } from "./text.ts";
 
-/**
- * Capabilities in plain words (design §2.4); `risky` ones are drawn amber.
- * The windows show them through `Words.cap()` (ui/words.slint, same texts);
- * the English here is for the confirmations until the player translates
- * nested arguments (text.ts).
- */
-export const CAPABILITIES: Record<string, { text: string; risky?: boolean }> = {
+/** Capabilities in plain words (design §2.4); `risky` ones are drawn amber. */
+export const CAPABILITIES = {
   commands: { text: "Add menu commands and shortcuts" },
   "ui.window": { text: "Open tool windows" },
   "ui.mount": { text: "Show panels in the bottom bar, the sidebar or behind the video" },
@@ -35,7 +30,12 @@ export const CAPABILITIES: Record<string, { text: string; risky?: boolean }> = {
   "bindings.manage": { text: "Change all shortcuts", risky: true },
   secrets: { text: "Store sign-in details in the system keychain", risky: true },
   "plugins.manage": { text: "Install, uninstall and disable other plugins", risky: true },
-};
+} as const satisfies Record<string, { text: string; risky?: true }>;
+
+/** The words of a capability (a template of text.ts). */
+export type CapabilityText = (typeof CAPABILITIES)[keyof typeof CAPABILITIES]["text"];
+
+const KNOWN: Partial<Record<string, { text: CapabilityText; risky?: true }>> = CAPABILITIES;
 
 /**
  * `vestra` and `vestra.<name>` (any case) belong to the player's built-in
@@ -60,29 +60,33 @@ export const reservedText = (id: string | undefined): Msg =>
 
 /**
  * One line per distinct description (media.read and media.control share
- * one): the capability shown (`id`, the first of those sharing a text) and
- * whether it is risky.
+ * one): the capability shown (`id`, the first of those sharing a text), its
+ * words and whether it is risky.
  */
-export function permissions(capabilities: readonly string[]): { id: string; text: string; risky: boolean }[] {
+export function permissions(capabilities: readonly string[]): { id: string; text: Msg; risky: boolean }[] {
   const seen = new Set<string>();
-  const lines: { id: string; text: string; risky: boolean }[] = [];
+  const lines: { id: string; text: Msg; risky: boolean }[] = [];
   for (const name of capabilities) {
-    const known = CAPABILITIES[name];
-    const text = known?.text ?? `Unknown permission: ${name}`;
-    if (seen.has(text)) continue;
-    seen.add(text);
-    lines.push({ id: name, text, risky: known?.risky === true });
+    const known = KNOWN[name];
+    const key = known?.text ?? `?${name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push({
+      id: name,
+      text: known ? msg(known.text) : msg("Unknown permission: {}", name),
+      risky: known?.risky === true,
+    });
   }
   return lines;
 }
 
-/** Bullet list for a confirmation, at most 20 lines (English until nested arguments are translated). */
-export function permissionList(capabilities: readonly string[]): string {
+/** Bullet list for a confirmation, at most 20 lines. */
+export function permissionList(capabilities: readonly string[]): Arg {
   const lines = permissions(capabilities);
-  if (!lines.length) return "· Uses none of the player's features";
-  const shown = lines.slice(0, 20).map((line) => `· ${line.text}`);
-  if (lines.length > 20) shown.push(`${lines.length} in total`);
-  return shown.join("\n");
+  if (!lines.length) return msg("· Uses none of the player's features");
+  const shown: Arg[] = lines.slice(0, 20).map((line) => msg("· {}", line.text));
+  if (lines.length > 20) shown.push(msg("{} in total", lines.length));
+  return list(shown, "lines");
 }
 
 /** Where a sideloaded or other-source plugin came from. */

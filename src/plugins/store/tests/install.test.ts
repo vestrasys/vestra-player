@@ -45,9 +45,8 @@ test("official install: confirm with permissions, download through a redirect, c
     const confirm = host.confirmTexts.at(-1)!;
     assert.equal(confirm.message, "安装「YouTube」0.2.0？");
     assert.match(String(confirm.detail), /来自 Vestra Player 官方仓库，作者 zysilm。/);
-    // The permission list is a nested template: English until the player translates nested arguments.
-    assert.match(String(confirm.detail), /· Read and write the clipboard/);
-    assert.match(String(confirm.detail), /not reading and writing files or using the network/);
+    assert.match(String(confirm.detail), /· 读写剪贴板/);
+    assert.match(String(confirm.detail), /不限制它读写文件和联网/);
     assert.deepEqual(installs(host)[0], {
       method: "install",
       id: "zysilm.youtube",
@@ -143,10 +142,8 @@ test("installed from another source: 替换… asks once and installs with repla
     assert.equal(host.confirmTexts.at(-1)!.message, "替换已安装的「YouTube」？");
     assert.equal(host.confirms.at(-1)!["destructive"], true);
     assert.match(String(host.confirmTexts.at(-1)!.detail), /将安装官方仓库的 0\.2\.0。/);
-    // Acceptance S5: the store cannot see dormant instances, so it says both cases (a nested
-    // template: English until the player translates nested arguments).
-    assert.match(String(host.confirmTexts.at(-1)!.detail), /The original plugin's data is kept and is used again when you reinstall it/);
-    assert.match(String(host.confirmTexts.at(-1)!.detail), /from this source, if there was one, otherwise with new, empty data/);
+    // Acceptance S5: the store cannot see dormant instances, so it says both cases.
+    assert.match(String(host.confirmTexts.at(-1)!.detail), /若之前从这个来源安装过，会接上当时的数据；否则使用新的空数据/);
     assert.equal(installs(host).length, 0);
 
     host.dialogAnswers.push(yes);
@@ -272,8 +269,7 @@ test("update, rollback, older version and uninstall from the same repository", a
     host.window("store").emit("act", "update");
     await until(host, () => host.osd.includes("已更新 YouTube 到 0.3.0"));
     assert.equal(host.confirmTexts.at(-1)!.message, "更新「YouTube」到 0.3.0？新版本需要更多权限");
-    // The permission list: English until the player translates nested arguments.
-    assert.match(String(host.confirmTexts.at(-1)!.detail), /新增：\n· Read and write the clipboard/);
+    assert.match(String(host.confirmTexts.at(-1)!.detail), /新增：\n· 读写剪贴板/);
     await until(host, () => !store.busy);
     assert.deepEqual(actions(host).map((a) => a.text), ["回退到 0.2.0", "卸载…"]);
 
@@ -348,8 +344,7 @@ test("third-party repository: warning banner, unofficial confirmation, remote RE
     assert.equal(confirm.message, "安装来自非官方仓库的「Viz」1.0.0？");
     assert.equal(confirm.confirm, "仍然安装");
     assert.equal(host.confirms.at(-1)!["destructive"], true);
-    // A nested template: English until the player translates nested arguments.
-    assert.match(String(confirm.detail), /This repository is not reviewed by Vestra Player/);
+    assert.match(String(confirm.detail), /这个仓库未经 Vestra Player 审核/);
     assert.deepEqual(installs(host)[0]!.source, { kind: "repository", url: THIRD });
   } finally {
     await stop();

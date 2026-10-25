@@ -3,7 +3,7 @@
 ## 0.1.4
 
 - English source text with a Simplified Chinese translation (`locales/zh-Hans.po`); the Chinese interface reads as before. Needs Vestra Player 0.4.3.
-- Until the player translates nested template arguments and menu titles with arguments, a few parts show in English in other languages: the permission lists and some paragraphs of the install confirmations, and the update count in the menu title.
+- Sentences built at run time go to the player as text values (SDK 1.5.11), so the permission lists, the paragraphs of the install confirmations, the revocation reasons, the download failure reasons and the update count in the menu title are translated too; the windows no longer need a Slint word table.
 
 ## 0.1.3
 

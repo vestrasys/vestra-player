@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
   ImageRef,
+  TextValue,
   JsonStore,
   MarkdownRef,
   Plugin,
@@ -20,7 +21,7 @@ import { Revocations, revocationKey } from "./revocations.ts";
 import { Repos, type Deps } from "./repos.ts";
 import { compareVersions, isVersion } from "./semver.ts";
 import { SettingsPage } from "./settings-page.ts";
-import { host, msg, raw, slint, type Label, type Msg } from "./text.ts";
+import { argOf, joined, list, msg, raw, textOf, type Arg, type Label, type Msg } from "./text.ts";
 
 /** Persisted in `<data>/settings.json`. */
 export type Settings = {
@@ -74,7 +75,7 @@ export interface Question {
   checkbox?: Label;
 }
 
-type Banner = { text: Msg | null; caps: string[]; tone: number; action: string; actionText: Msg | null };
+type Banner = { text: Msg | null; tone: number; action: string; actionText: Msg | null };
 
 type Doc = {
   key: string;
@@ -293,8 +294,7 @@ export class Store {
       const scope = (this.#menuScope = this.plugin.scope());
       scope.commands.add({
         id: "open",
-        // The count cannot be translated yet: a menu title takes no arguments (第 2 轮请求 in the i18n round).
-        path: [count > 0 ? `Plugin Store (${count} updates)…` : "Plugin Store…"],
+        path: [count > 0 ? this.plugin.i18n.text("Plugin Store ({} updates)…", [count]) : "Plugin Store…"],
         order: MENU_ORDER,
         group: "windows",
         run: () => this.open(),
@@ -348,14 +348,19 @@ export class Store {
 
   osd(text: Msg) {
     // Arguments cut so the shown text stays within the OSD's 200 characters.
-    void this.plugin.osd.show(text.text, host(text.args, 80)).catch(() => {});
+    void this.plugin.osd.show(text.text, text.args.map((arg) => argOf(this.plugin.i18n, arg, 80))).catch(() => {});
+  }
+
+  /** A `Msg` as window text. */
+  shown(text: Arg | null): TextValue {
+    return textOf(this.plugin.i18n, text);
   }
 
   /** `dialogs.confirm` with the limits applied; `null` when no dialog could be shown. */
   async ask(question: Question): Promise<{ confirmed: boolean; checked: boolean } | null> {
     this.lastDialogError = null;
     const { message, detail, confirm, cancel, destructive, checkbox } = question;
-    const args = host([...message.args, ...(detail?.args ?? [])], 1200);
+    const args = [...message.args, ...(detail?.args ?? [])].map((arg) => argOf(this.plugin.i18n, arg, 1200));
     try {
       return await this.plugin.dialogs.confirm({
         message: message.text,
@@ -416,9 +421,11 @@ export class Store {
     const tags = this.#tags();
     const item = this.selectedItem();
     const op = this.#operation;
+    // One message, or a text per repository.
     const status = this.#message
       ? [this.#message.text]
       : this.repos.list.flatMap((repo) => (repo.status.text ? [repo.status.text] : []));
+    const shown = (text: Msg | null) => this.shown(text);
     const base = {
       filter: this.filter,
       updates: updateCount(this.items),
@@ -427,11 +434,11 @@ export class Store {
       tagIndex: this.tag ? Math.max(0, tags.findIndex((t) => t.toLowerCase() === this.tag!.toLowerCase()) + 1) : 0,
       sortIndex: this.sort,
       rows: visible.map((each) => this.#row(each)),
-      emptyText: slint(this.#emptyText(visible)),
+      emptyText: shown(this.#emptyText(visible)),
       linkOpen: this.linkOpen,
-      status: status.map(slint),
+      status: this.shown(joined(status, "{} · {}")),
       statusWarn: this.#message?.warn ?? this.repos.list.some((repo) => repo.status.warn),
-      busyText: slint(op?.text ?? null),
+      busyText: shown(op?.text ?? null),
       canCancel: op?.cancel != null,
       hasSelection: item !== null,
     };
@@ -440,17 +447,17 @@ export class Store {
     return {
       ...base,
       dName: item.name,
-      dMeta: slint(msg("{} · {}", item.author ?? msg("Unknown author"), this.#origin(item))),
+      dMeta: shown(msg("{} · {}", item.author ?? msg("Unknown author"), this.#origin(item))),
       dPunchline: item.punchline ?? item.local?.description ?? "",
       dIcon: this.#icon(item),
-      actions: this.#actions(item).map((a) => ({ ...a, text: slint(a.text) })),
-      banners: this.#banners(item).map((b) => ({ ...b, text: slint(b.text), actionText: slint(b.actionText) })),
+      actions: this.#actions(item).map((a) => ({ ...a, text: shown(a.text) })),
+      banners: this.#banners(item).map((b) => ({ ...b, text: shown(b.text), actionText: shown(b.actionText) })),
       tab: this.tab,
       doc: this.#doc.key === this.#docKey(item) && this.#doc.ref ? this.#doc.ref : [],
-      docNote: slint(this.#doc.key === this.#docKey(item) ? this.#doc.note : msg("Loading…")),
+      docNote: shown(this.#doc.key === this.#docKey(item) ? this.#doc.note : msg("Loading…")),
       versions: this.#versions(item),
-      facts: this.#facts(item).map(({ label, text, url }) => ({ label: slint(label), text: slint(text), link: url !== null })),
-      permissions: permissions(caps).map(({ id, risky }) => ({ id, risky })),
+      facts: this.#facts(item).map(({ label, text, url }) => ({ label: shown(label), text: shown(text), link: url !== null })),
+      permissions: permissions(caps).map(({ text, risky }) => ({ text: shown(text), risky })),
       manage: item.installed !== null && !item.installed.builtin,
     };
   }
@@ -504,9 +511,9 @@ export class Store {
       key: item.key,
       name: item.name,
       version: shown,
-      meta: slint(msg("{} · {}", item.author ?? msg("Unknown author"), this.#origin(item))),
+      meta: this.shown(msg("{} · {}", item.author ?? msg("Unknown author"), this.#origin(item))),
       punchline: item.punchline ?? "",
-      badge: slint(badge),
+      badge: this.shown(badge),
       tone,
       selected: item.key === this.selected,
     };
@@ -569,7 +576,7 @@ export class Store {
   #banners(item: Item): Banner[] {
     const banners: Banner[] = [];
     const add = (text: Msg | null, tone: number, action = "", actionText: Msg | null = null) =>
-      banners.push({ text, caps: [], tone, action, actionText });
+      banners.push({ text, tone, action, actionText });
     const info = item.installed;
     if (item.state === "revoked" && item.revocation && info) {
       const key = revocationKey(item.repo!.url, item.id, info.version ?? "", item.revocation.versions);
@@ -594,9 +601,8 @@ export class Store {
       if (item.repo.local) add(msg("This is a test repository on this machine, without encryption"), 2);
     }
     if (item.state === "update" && item.best && info) {
-      // "The new version needs new permissions: …" (the window lists them).
       const added = permissions(item.best.capabilities.filter((c) => !info.capabilities.includes(c)));
-      if (added.length) banners.push({ text: null, caps: added.map((p) => p.id), tone: 2, action: "", actionText: null });
+      if (added.length) add(msg("The new version needs new permissions: {}", list(added.map((p) => p.text))), 2);
     }
     if (item.state === "otherSource" && info)
       add(
@@ -644,7 +650,7 @@ export class Store {
     if (!item.entry) {
       const info = item.installed;
       return info?.version
-        ? [{ version: info.version, date: "", minimum: "", status: slint(msg("Current")), tone: 0, canInstall: false }]
+        ? [{ version: info.version, date: "", minimum: "", status: this.shown(msg("Current")), tone: 0, canInstall: false }]
         : [];
     }
     const revoked = item.repo?.index?.revoked ?? [];
@@ -667,7 +673,7 @@ export class Store {
         version: v.version,
         date: day(v.published),
         minimum: v.minPlayerVersion ?? "—",
-        status: slint(status),
+        status: this.shown(status),
         tone: check.ok ? 0 : check.why === "revoked" ? 3 : 4,
         canInstall: check.ok && !current && item.state !== "builtin" && item.state !== "reserved" && !this.busy,
       };

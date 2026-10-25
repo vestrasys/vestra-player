@@ -33,4 +33,4 @@ Browse the plugins in the official Vestra Player repository and install, update,
 
 ## Translations
 
-Texts are English in the source; `locales/zh-Hans.po` has the Simplified Chinese (`vestra-plugin i18n extract`, `i18n check`). Sentences built at run time are templates in `text.ts`; the windows turn them into words in `ui/words.slint`.
+Texts are English in the source; `locales/zh-Hans.po` has the Simplified Chinese (`vestra-plugin i18n extract`, `i18n check`). Sentences built at run time are templates in `text.ts`, handed to the player as text values (`plugin.i18n.text`), which it translates in the windows, the OSD and the confirmations alike.
