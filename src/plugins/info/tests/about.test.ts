@@ -27,7 +27,7 @@ async function start(locale?: "zh-Hans") {
   host.app = app;
   host.packages = [entry("vestra.video"), entry("vestra.audio"), entry("vestra.info")];
   const plugin = await startPlugin(activate, { directory, host, ...(locale ? { locale } : {}) });
-  return { host, stop: () => plugin.stop() };
+  return { host, i18n: plugin.plugin.i18n, stop: () => plugin.stop() };
 }
 
 test("I09: top-level About Vestra Player… (880, windows, F1) opens the about window with plugin.app versions", async () => {
@@ -139,15 +139,13 @@ test("I09: a failed packages.list shows Unknown in the list; the next opening re
   }
 });
 
-test("I09 pure rules: unknown versions show Unknown; plugin rows sorted by id with origin and state codes", () => {
+test("I09 pure rules: unknown versions show Unknown; plugin rows sorted by id with origin and state codes", async () => {
+  const { i18n, stop } = await start("zh-Hans");
+  const en = await start();
   const bare = { version: "0.2.0", build: null, components: { mpv: null, libav: {}, slint: "" } };
-  assert.deepEqual(components(bare, null), [
-    ["Plugin API", "vestra/1"],
-    ["mpv", "Unknown"],
-    ["FFmpeg", "Unknown"],
-    ["Slint", "Unknown"],
-    ["Node", "Unknown"],
-  ]);
+  const line = (words: typeof i18n) => ([label, value]: [unknown, unknown]) => words.resolve(words.text("{}: {}", [label, value] as never));
+  assert.deepEqual(components(i18n, bare, null).map(line(i18n)), ["插件 API：vestra/1", "mpv：未知", "FFmpeg：未知", "Slint：未知", "Node：未知"]);
+  assert.deepEqual(components(en.i18n, bare, null).map(line(en.i18n)), ["Plugin API: vestra/1", "mpv: Unknown", "FFmpeg: Unknown", "Slint: Unknown", "Node: Unknown"]);
   const rows = pluginRows([
     { id: "vestra.video", version: "0.1.0", origin: "installed", state: "running" },
     { id: "vestra.audio", version: null, origin: "development", state: "disabled" },
@@ -168,8 +166,13 @@ test("I09 pure rules: unknown versions show Unknown; plugin rows sorted by id wi
     { id: "x.repo", version: "1.0.0", origin: "repository", state: "running" },
     { id: "x.workshop", version: "1.0.0", origin: "workshop", state: "running" },
   ]);
-  assert.match(aboutText(bare, null, rows), /^Vestra Player\nVersion 0\.2\.0\n\n[\s\S]*\nLoaded plugins\ntest\.failed {2}1\.0\.0 {2}Installed {2}Failed\nvestra\.audio {2}Unknown {2}/);
-  assert.match(aboutText(bare, null, null), /\nLoaded plugins\nUnknown \(cannot read the plugin list\)\n$/);
+  assert.match(aboutText(i18n, bare, null, rows), /^Vestra Player\n版本 0\.2\.0\n\n[\s\S]*\n已加载插件\ntest\.failed {2}1\.0\.0 {2}已安装 {2}失败\nvestra\.audio {2}未知 {2}开发加载 {2}已停用\nvestra\.info {2}0\.1\.0 {2}内置 {2}运行中\n/);
+  assert.match(aboutText(i18n, bare, null, rows), /\nx\.file {2}1\.0\.0 {2}本地文件 {2}运行中\nx\.link {2}1\.0\.0 {2}链接 {2}运行中\nx\.repo {2}1\.0\.0 {2}仓库 {2}运行中\nx\.workshop {2}1\.0\.0 {2}插件工坊 {2}运行中\n$/);
+  assert.match(aboutText(i18n, bare, null, null), /\n已加载插件\n未知（无法读取插件列表）\n$/);
+  assert.match(aboutText(en.i18n, bare, null, rows), /^Vestra Player\nVersion 0\.2\.0\n\n[\s\S]*\nLoaded plugins\ntest\.failed {2}1\.0\.0 {2}Installed {2}Failed\nvestra\.audio {2}Unknown {2}/);
+  assert.match(aboutText(en.i18n, bare, null, null), /\nLoaded plugins\nUnknown \(cannot read the plugin list\)\n$/);
+  await stop();
+  await en.stop();
 });
 
 test("I09 in Simplified Chinese: the window's words and the message of before", async () => {
@@ -195,6 +198,25 @@ test("I09 in Simplified Chinese: the window's words and the message of before", 
     await host.settle();
     host.window("about").emit("copy-info");
     await until(() => host.osd.at(-1) === "已复制版本信息");
+    assert.equal(
+      host.clipboard.text,
+      [
+        "Vestra Player",
+        "版本 0.1.0（构建 289b26b）",
+        "",
+        "插件 API：vestra/1",
+        "mpv：mpv v0.41.0",
+        "FFmpeg：9.0.2",
+        "Slint：1.16.1",
+        `Node：v${process.versions.node}`,
+        "",
+        "已加载插件",
+        "vestra.audio  0.1.0  开发加载  运行中",
+        "vestra.info  0.1.0  开发加载  运行中",
+        "vestra.video  0.1.0  开发加载  运行中",
+        "",
+      ].join("\n"),
+    );
   } finally {
     await stop();
   }

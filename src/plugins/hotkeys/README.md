@@ -16,7 +16,7 @@ View and change the keyboard shortcuts and mouse actions of the player and of ev
 
 ## Languages
 
-English source texts; Simplified Chinese in `locales/zh-Hans.po`. The exported list and the input name in the mouse page's OSD message are English for now.
+English source texts; Simplified Chinese in `locales/zh-Hans.po`. The exported list is in the interface language too.
 
 ## Limitations
 

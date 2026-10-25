@@ -131,10 +131,9 @@ export function fromSlintKey(event: KeyEvent): Capture {
 /**
  * Mouse inputs J02 lists, in J02's order (the right button is the menu's).
  * The pages show them by index (ui/parts.slint Words.mouse, translated);
- * `label` is the English name for the mouse OSD message only.
+ * `label` is the English source of the name in the mouse OSD message.
  */
-export const MOUSE: { input: string; label: string }[] = [
-  // i18n: needs r2-api (the labels are nested in the OSD message of the mouse page)
+export const MOUSE = [
   { input: "Mouse:LeftClick", label: "Left click" },
   { input: "Mouse:LeftDoubleClick", label: "Left double-click" },
   { input: "Mouse:LeftDoubleClick:LeftHalf", label: "Left double-click (left half)" },
@@ -146,7 +145,7 @@ export const MOUSE: { input: string; label: string }[] = [
   { input: "Mouse:WheelDown", label: "Wheel down" },
   { input: "Mouse:WheelLeft", label: "Wheel left" },
   { input: "Mouse:WheelRight", label: "Wheel right" },
-];
+] as const;
 /** J02 modifier choices; `""` is none. */
 export const MODIFIERS = ["", "Ctrl", "Alt", "Shift", "Cmd"] as const;
 

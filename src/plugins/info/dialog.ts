@@ -1,6 +1,6 @@
 import { rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
-import type { PlaybackStats, PlayerState, Plugin } from "@vestra-player/sdk";
+import type { I18n, PlaybackStats, PlayerState, Plugin, TextArg } from "@vestra-player/sdk";
 import { filePage, isUrl, message, pageText, playbackPage, remotePage, saveName, systemPage } from "./properties.ts";
 import type { Row, SystemFacts } from "./properties.ts";
 import { readFacts } from "./sysinfo.ts";
@@ -12,17 +12,18 @@ type Prefs = { propertiesTab: number };
 const isPrefs = (value: unknown): value is Prefs => typeof value === "object" && value !== null && !Array.isArray(value);
 const reason = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-/** The File page failure in one line: a missing ffprobe, a timeout, or ffprobe's own last line. */
-// i18n: needs r2-api (a properties row, see properties.ts)
-function probeError(error: unknown) {
+/** The File page failure in one line: a missing ffprobe, a timeout, our own reason, or ffprobe's own last line. */
+function probeError(i18n: I18n, error: unknown) {
+  const { text } = i18n;
   switch ((error as { code?: string }).code) {
     case "unavailable":
-      return "Cannot read file information (ffprobe not found)";
+      return text("Cannot read file information (ffprobe not found)");
     case "timeout":
-      return "Cannot read file information: timed out";
-    default:
-      return `Cannot read file information: ${reason(error).split("\n").at(-1)!.slice(0, 120) || "ffprobe failed"}`;
+      return text("Cannot read file information: timed out");
   }
+  const own = (error as { text?: TextArg }).text;
+  const last = reason(error).split("\n").at(-1)!.slice(0, 120);
+  return text("Cannot read file information: {}", [own ?? (last || text("ffprobe failed"))]);
 }
 
 /**
@@ -56,11 +57,11 @@ export function propertiesWindow(plugin: Plugin) {
 
   const page = (): Row[] => {
     const state = player.state;
-    if (tab === 0) return playbackPage(state, stats);
-    if (tab === 2) return systemPage(plugin.app, facts);
-    if (!state.source) return message("No media open");
-    if (isUrl(state.source)) return remotePage(state, stats);
-    return file?.sourceId === state.sourceId ? file.rows : message("Reading…");
+    if (tab === 0) return playbackPage(plugin.i18n, state, stats);
+    if (tab === 2) return systemPage(plugin.i18n, plugin.app, facts);
+    if (!state.source) return message(plugin.i18n.text("No media open"));
+    if (isUrl(state.source)) return remotePage(plugin.i18n, state, stats);
+    return file?.sourceId === state.sourceId ? file.rows : message(plugin.i18n.text("Reading…"));
   };
 
   const window = plugin.windows.create("ui/properties.slint");
@@ -85,19 +86,19 @@ export function propertiesWindow(plugin: Plugin) {
     let rows: Row[];
     try {
       const info = await stat(state.source).catch(() => {
-        throw new Error("File not found");
+        throw plugin.i18n.error("File not found");
       });
       const { stdout } = await plugin.tools.run("ffprobe", [...PROBE_ARGS, state.source], { timeoutMs: 10_000, signal: controller.signal });
       let parsed;
       try {
         parsed = JSON.parse(new TextDecoder().decode(stdout));
       } catch {
-        throw new Error("Cannot parse the ffprobe output");
+        throw plugin.i18n.error("Cannot parse the ffprobe output");
       }
-      rows = filePage(state.source, info, parsed, plugin.i18n.locale);
+      rows = filePage(plugin.i18n, state.source, info, parsed, plugin.i18n.locale);
     } catch (error) {
       if (controller.signal.aborted) return; // a newer read (or closing) took over
-      rows = message(probeError(error));
+      rows = message(probeError(plugin.i18n, error));
     }
     if (probe !== controller) return;
     probe = null;
@@ -112,7 +113,7 @@ export function propertiesWindow(plugin: Plugin) {
     if (again) facts = null;
     plugin.update();
     try {
-      const read = await readFacts(plugin.app);
+      const read = await readFacts(plugin.i18n, plugin.app);
       if (!controller.signal.aborted) facts = read; // closed meanwhile: read again next time
     } finally {
       if (reading === controller) reading = null;
@@ -148,7 +149,7 @@ export function propertiesWindow(plugin: Plugin) {
   });
   window.on("copyPage", async () => {
     try {
-      await plugin.clipboard.writeText(pageText(page()));
+      await plugin.clipboard.writeText(pageText(plugin.i18n, page()));
       status = "";
       void plugin.osd.show("Playback info copied").catch(() => {});
     } catch (error) {
@@ -157,8 +158,8 @@ export function propertiesWindow(plugin: Plugin) {
     }
   });
   window.on("savePage", async () => {
-    const text = pageText(page()); // what the user saw when asking
-    const chosen = await plugin.dialogs.saveFile({ title: "Save As", fileName: saveName(player.state.source) });
+    const text = pageText(plugin.i18n, page()); // what the user saw when asking
+    const chosen = await plugin.dialogs.saveFile({ title: "Save As", fileName: saveName(plugin.i18n, player.state.source) });
     if (!chosen) return;
     const temporary = `${chosen}.vestra-${process.pid}.tmp`;
     try {

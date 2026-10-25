@@ -415,6 +415,27 @@ test("J01: export the list as CSV or text", async () => {
   await emit(host, "keys", "export");
 });
 
+test("J01: the exported list in Simplified Chinese has the words of before", async () => {
+  const host = new TestHost();
+  host.bindings.overlay.set("host/mute", ["N"]);
+  await start(host, undefined, "zh-Hans");
+  await openKeys(host);
+  const csv = join(scratch, "keys-zh.csv");
+  host.dialogAnswers.push([csv]);
+  await emit(host, "keys", "export");
+  assert.deepEqual(host.fileDialogs.at(-1), { kind: "saveFile", title: "导出快捷键列表", fileName: "Vestra Player 快捷键.csv" });
+  const text = readFileSync(csv, "utf8");
+  assert.ok(text.startsWith("\u{feff}命令,快捷键,范围,来源,状态\n"));
+  assert.match(text, /\n播放 ▸ 播放\/暂停,Space,全局,宿主,默认\n/);
+  assert.match(text, /,N,全局,宿主,已修改\n/);
+  const txt = join(scratch, "keys-zh.txt");
+  host.dialogAnswers.push([txt]);
+  await emit(host, "keys", "export");
+  const plain = readFileSync(txt, "utf8");
+  assert.ok(plain.startsWith("Vestra Player 快捷键列表\n\n命令\t快捷键\t范围\t来源\t状态\n"));
+  assert.match(plain, /播放 ▸ 播放\/暂停\tSpace\t全局\t宿主\t默认/);
+});
+
 test("J01: the list follows changes made elsewhere; the selection stays", async () => {
   const host = new TestHost();
   await start(host);
@@ -500,6 +521,21 @@ test("J02: left click and a modifier; (None) only takes the input", async () => 
   assert.equal((page(host, "mouse").props.message as { kind: string }).kind, "mouse-updated-none");
   assert.deepEqual(overlay(host)["host/volume-down"], ["ArrowDown"]);
   await assert.rejects(host.press("Mouse:WheelDown"));
+});
+
+test("J02: the mouse OSD message in Simplified Chinese names the input in Chinese", async () => {
+  const host = new TestHost();
+  await start(host, undefined, "zh-Hans");
+  await host.command("mouse").run();
+  await host.settle(WAIT);
+  await emit(host, "mouse", "setModifier", 1); // Ctrl
+  await emit(host, "mouse", "pick", 7);
+  await emit(host, "mouse", "choose", "host/mute");
+  assert.match(host.osd.at(-1)!, /^鼠标动作已更新：Ctrl\+滚轮上推 = .+静音/);
+  await emit(host, "mouse", "setModifier", 0);
+  await emit(host, "mouse", "pick", 8);
+  await emit(host, "mouse", "choose", "");
+  assert.equal(host.osd.at(-1), "鼠标动作已更新：滚轮下推 = （无）");
 });
 
 // ------------------------------------------------------------------ J03

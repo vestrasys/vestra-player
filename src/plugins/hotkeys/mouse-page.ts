@@ -173,8 +173,10 @@ export class MousePage {
     const owner = winner(this.#model.commands, input, "global");
     const command = owner ? commandText(owner) : "";
     this.#say(message(owner ? "mouse-updated" : "mouse-updated-none", { input: inputOf(input), text: command }));
-    // i18n: needs r2-api (the mouse input's name is a translatable arg; English until then)
-    const name = `${MODIFIERS[this.#modifier] ? `${MODIFIERS[this.#modifier]}+` : ""}${MOUSE[row]!.label}`;
+    const { text } = this.#plugin.i18n;
+    const modifier = MODIFIERS[this.#modifier];
+    const mouse = text(MOUSE[row]!.label);
+    const name = modifier ? text("{}+{}", [modifier, mouse]) : mouse;
     this.#osd(
       owner
         ? this.#plugin.osd.show("Mouse action updated: {0} = {1}", [name, command])

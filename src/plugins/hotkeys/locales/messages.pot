@@ -4,6 +4,66 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+#: export.ts:16 ui/keys.slint:95
+msgid "({})"
+msgstr ""
+
+#: export.ts:17 ui/keys.slint:101 ui/mouse.slint:143
+msgid "Default"
+msgstr ""
+
+#: export.ts:17 ui/keys.slint:98 ui/keys.slint:197
+msgid "Changed"
+msgstr ""
+
+#: export.ts:17 ui/keys.slint:99
+msgid "Conflict"
+msgstr ""
+
+#: export.ts:17 ui/keys.slint:100
+msgid "Ignored"
+msgstr ""
+
+#: export.ts:17 ui/keys.slint:101
+msgid "Not loaded"
+msgstr ""
+
+#: export.ts:21
+msgid "In panel"
+msgstr ""
+
+#: export.ts:21
+msgid "Global"
+msgstr ""
+
+#: export.ts:22 ui/parts.slint:60
+msgid "Player"
+msgstr ""
+
+#: export.ts:30 export.ts:40 ui/keys.slint:225
+msgid "Command"
+msgstr ""
+
+#: export.ts:30 export.ts:40 ui/keys.slint:233
+msgid "Shortcut"
+msgstr ""
+
+#: export.ts:30 export.ts:40
+msgid "Scope"
+msgstr ""
+
+#: export.ts:30 export.ts:40
+msgid "Source"
+msgstr ""
+
+#: export.ts:30 export.ts:40 ui/keys.slint:239
+msgid "Status"
+msgstr ""
+
+#: export.ts:41
+msgid "Vestra Player shortcuts"
+msgstr ""
+
 #: ignore.ts:47
 msgid "Ignore default shortcuts?"
 msgstr ""
@@ -24,36 +84,42 @@ msgstr ""
 msgid "Ignore default shortcuts: Off"
 msgstr ""
 
-#: keys-page.ts:117
+#: keys-page.ts:116
 msgid "Keyboard Shortcuts"
 msgstr ""
 
-#: keys-page.ts:406
+#: keys-page.ts:405
 msgid "Shortcut updated: {0} = {1}"
 msgstr ""
 
-#: keys-page.ts:409
+#: keys-page.ts:408
 msgid "Shortcut updated: {} = (none)"
 msgstr ""
 
-#: keys-page.ts:461
+#: keys-page.ts:460
 msgid "Restore all default shortcuts?"
 msgstr ""
 
-#: keys-page.ts:462
+#: keys-page.ts:461
 msgid "This clears your changes to the shortcuts and mouse actions of every command, including those of plugins that are not loaded."
 msgstr ""
 
-#: keys-page.ts:463
+#: keys-page.ts:462
 msgid "Restore All Defaults"
 msgstr ""
 
-#: keys-page.ts:475
+#: keys-page.ts:474
 msgid "Shortcuts restored to defaults"
 msgstr ""
 
-#: keys-page.ts:486
+#. only the part before the extension.
+#: keys-page.ts:485
 msgid "Export Shortcut List"
+msgstr ""
+
+#. only the part before the extension.
+#: keys-page.ts:485
+msgid "Vestra Player Shortcuts.csv"
 msgstr ""
 
 #: main.ts:32
@@ -98,36 +164,60 @@ msgstr ""
 msgid "Mouse"
 msgstr ""
 
-#: mouse-page.ts:180
+#: mouse-page.ts:178 ui/parts.slint:41
+msgid "Left click"
+msgstr ""
+
+#: mouse-page.ts:178 ui/parts.slint:42
+msgid "Left double-click"
+msgstr ""
+
+#: mouse-page.ts:178 ui/parts.slint:43
+msgid "Left double-click (left half)"
+msgstr ""
+
+#: mouse-page.ts:178 ui/parts.slint:44
+msgid "Left double-click (right half)"
+msgstr ""
+
+#: mouse-page.ts:178 ui/parts.slint:45
+msgid "Middle click"
+msgstr ""
+
+#: mouse-page.ts:178 ui/parts.slint:46
+msgid "Back button"
+msgstr ""
+
+#: mouse-page.ts:178 ui/parts.slint:47
+msgid "Forward button"
+msgstr ""
+
+#: mouse-page.ts:178 ui/parts.slint:48
+msgid "Wheel up"
+msgstr ""
+
+#: mouse-page.ts:178 ui/parts.slint:49
+msgid "Wheel down"
+msgstr ""
+
+#: mouse-page.ts:178 ui/parts.slint:50
+msgid "Wheel left"
+msgstr ""
+
+#: mouse-page.ts:178 ui/parts.slint:51
+msgid "Wheel right"
+msgstr ""
+
+#: mouse-page.ts:179
+msgid "{}+{}"
+msgstr ""
+
+#: mouse-page.ts:182
 msgid "Mouse action updated: {0} = {1}"
 msgstr ""
 
-#: mouse-page.ts:181
+#: mouse-page.ts:183
 msgid "Mouse action updated: {} = (none)"
-msgstr ""
-
-#: ui/keys.slint:95
-msgid "({})"
-msgstr ""
-
-#: ui/keys.slint:98 ui/keys.slint:197
-msgid "Changed"
-msgstr ""
-
-#: ui/keys.slint:99
-msgid "Conflict"
-msgstr ""
-
-#: ui/keys.slint:100
-msgid "Ignored"
-msgstr ""
-
-#: ui/keys.slint:101
-msgid "Not loaded"
-msgstr ""
-
-#: ui/keys.slint:101 ui/mouse.slint:143
-msgid "Default"
 msgstr ""
 
 #: ui/keys.slint:111
@@ -152,18 +242,6 @@ msgstr ""
 
 #: ui/keys.slint:197 ui/keys.slint:284
 msgid "Unbound"
-msgstr ""
-
-#: ui/keys.slint:225
-msgid "Command"
-msgstr ""
-
-#: ui/keys.slint:233
-msgid "Shortcut"
-msgstr ""
-
-#: ui/keys.slint:239
-msgid "Status"
 msgstr ""
 
 #: ui/keys.slint:256
@@ -270,56 +348,8 @@ msgstr ""
 msgid "A bound left click responds only after the system's double-click interval; the right button always opens the menu."
 msgstr ""
 
-#: ui/parts.slint:41
-msgid "Left click"
-msgstr ""
-
-#: ui/parts.slint:42
-msgid "Left double-click"
-msgstr ""
-
-#: ui/parts.slint:43
-msgid "Left double-click (left half)"
-msgstr ""
-
-#: ui/parts.slint:44
-msgid "Left double-click (right half)"
-msgstr ""
-
-#: ui/parts.slint:45
-msgid "Middle click"
-msgstr ""
-
-#: ui/parts.slint:46
-msgid "Back button"
-msgstr ""
-
-#: ui/parts.slint:47
-msgid "Forward button"
-msgstr ""
-
-#: ui/parts.slint:48
-msgid "Wheel up"
-msgstr ""
-
-#: ui/parts.slint:49
-msgid "Wheel down"
-msgstr ""
-
-#: ui/parts.slint:50
-msgid "Wheel left"
-msgstr ""
-
-#: ui/parts.slint:51
-msgid "Wheel right"
-msgstr ""
-
 #: ui/parts.slint:59
 msgid "All sources"
-msgstr ""
-
-#: ui/parts.slint:60
-msgid "Player"
 msgstr ""
 
 #: ui/parts.slint:61

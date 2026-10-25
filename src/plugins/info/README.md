@@ -17,7 +17,7 @@ Information about the media playing, the player and the system.
 
 ## Languages
 
-English, Simplified Chinese (`locales/zh-Hans.po`). The overlay, the property rows and the copied or saved text are English for now.
+English, Simplified Chinese (`locales/zh-Hans.po`). The copied or saved text is in the interface language too.
 
 ## Limits
 

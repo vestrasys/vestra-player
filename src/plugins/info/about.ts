@@ -1,13 +1,9 @@
-import type { AppInfo, PackageSource, Plugin } from "@vestra-player/sdk";
+import type { AppInfo, I18n, PackageSource, Plugin, TextArg } from "@vestra-player/sdk";
 
 /** The protocol version in manifest.json (the Plugin API rows of I05 and I09). */
 export const API_VERSION = "vestra/1";
-// i18n: needs r2-api (UNKNOWN is a word inside plain text: properties rows, the clipboard)
-const UNKNOWN = "Unknown";
-
 /** `0.1.0 (build 289b26b)`, or the bare version without a build hash. */
-// i18n: needs r2-api (a word inside a properties-row value and the clipboard text)
-export const vestraVersion = (app: AppInfo) => (app.build ? `${app.version} (build ${app.build})` : app.version);
+export const vestraVersion = (i18n: I18n, app: AppInfo): TextArg => (app.build ? i18n.text("{} (build {})", [app.version, app.build]) : app.version);
 
 /**
  * The FFmpeg version from what libmpv reports: `ffmpeg-version` first, then
@@ -29,16 +25,17 @@ export function versions(app: AppInfo, node: string | null) {
   };
 }
 
-/** I09 component rows as plain text, `[label, value]`; a version that is not known shows Unknown. */
-// i18n: needs r2-api (the copied text)
-export function components(app: AppInfo, node: string | null): [string, string][] {
+/** I09 component rows of the copied text, `[label, value]`; a version that is not known shows Unknown. */
+export function components(i18n: I18n, app: AppInfo, node: string | null): [TextArg, TextArg][] {
+  const { text } = i18n;
   const v = versions(app, node);
+  const unknown = text("Unknown");
   return [
-    ["Plugin API", v.api],
-    ["mpv", v.mpv || UNKNOWN],
-    ["FFmpeg", v.ffmpeg || UNKNOWN],
-    ["Slint", v.slint || UNKNOWN],
-    ["Node", v.node || UNKNOWN],
+    [text("Plugin API"), v.api],
+    ["mpv", v.mpv || unknown],
+    ["FFmpeg", v.ffmpeg || unknown],
+    ["Slint", v.slint || unknown],
+    ["Node", v.node || unknown],
   ];
 }
 
@@ -61,24 +58,26 @@ export function pluginRows(plugins: Listed[]): PluginRow[] {
     .map((p) => ({ id: p.id, version: p.version ?? "", origin: origin(p), state: p.state }));
 }
 
-// i18n: needs r2-api (the copied text names origins and states in words; the window translates them in about.slint)
-const ORIGIN_WORDS: Record<string, string> = {
+/** The origin and state words of the copied text, as about.slint words the codes. */
+const ORIGIN_WORDS = {
   bundled: "Built-in", repository: "Repository", link: "Link", file: "Local file", workshop: "Workshop", installed: "Installed", development: "Development",
-};
-const STATE_WORDS: Record<string, string> = { starting: "Starting", running: "Running", disabled: "Disabled", failed: "Failed", stopped: "Stopped" };
+} as const;
+const STATE_WORDS = { starting: "Starting", running: "Running", disabled: "Disabled", failed: "Failed", stopped: "Stopped" } as const;
 
-/** What the copied text says when `packages.list` failed (it is read again on the next opening). */
-export const PLUGINS_UNKNOWN = "Unknown (cannot read the plugin list)";
-
-/** The whole window as plain text, for Copy Info. */
-// i18n: needs r2-api (the copied text: fixed words and data composed in TypeScript)
-export function aboutText(app: AppInfo, node: string | null, plugins: PluginRow[] | null) {
-  const lines = ["Vestra Player", `Version ${vestraVersion(app)}`, ""];
-  for (const [label, value] of components(app, node)) lines.push(`${label}: ${value}`);
-  lines.push("", "Loaded plugins");
-  if (!plugins) lines.push(PLUGINS_UNKNOWN);
-  else for (const p of plugins) lines.push(`${p.id}  ${p.version || UNKNOWN}  ${ORIGIN_WORDS[p.origin] ?? p.origin}  ${STATE_WORDS[p.state] ?? p.state}`);
-  return `${lines.join("\n")}\n`;
+/** The whole window as plain text in the interface language, for Copy Info (it leaves the player: resolved here). */
+export function aboutText(i18n: I18n, app: AppInfo, node: string | null, plugins: PluginRow[] | null) {
+  const { text, list, resolve } = i18n;
+  const lines: TextArg[] = ["Vestra Player", app.build ? text("Version {} (build {})", [app.version, app.build]) : text("Version {}", [app.version]), ""];
+  for (const [label, value] of components(i18n, app, node)) lines.push(text("{}: {}", [label, value]));
+  lines.push("", text("Loaded plugins"));
+  if (!plugins) lines.push(text("Unknown (cannot read the plugin list)"));
+  else
+    for (const p of plugins) {
+      const origin = Object.hasOwn(ORIGIN_WORDS, p.origin) ? text(ORIGIN_WORDS[p.origin as keyof typeof ORIGIN_WORDS]) : p.origin;
+      const state = Object.hasOwn(STATE_WORDS, p.state) ? text(STATE_WORDS[p.state as keyof typeof STATE_WORDS]) : p.state;
+      lines.push(text("{}  {}  {}  {}", [p.id, p.version || text("Unknown"), origin, state]));
+    }
+  return `${resolve(list(lines, "lines"))}\n`;
 }
 
 /**
@@ -115,7 +114,7 @@ export function aboutWindow(plugin: Plugin) {
   }));
   window.on("copyInfo", async () => {
     try {
-      await plugin.clipboard.writeText(aboutText(plugin.app, node, plugins));
+      await plugin.clipboard.writeText(aboutText(plugin.i18n, plugin.app, node, plugins));
       status = "";
       void plugin.osd.show("Version info copied").catch(() => {});
     } catch (error) {

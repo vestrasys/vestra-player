@@ -69,7 +69,7 @@ export component PropertiesWindow inherits Window {
     callback copy-page();
     callback save-page();
     callback close-window();
-    private property <[string]> tab-names: [@tr("Playback"), @tr("File"), @tr("System")];
+    private property <[string]> tab-names: [@tr("tab" => "Playback"), @tr("tab" => "File"), @tr("tab" => "System")];
 
     VerticalLayout {
         Rectangle {

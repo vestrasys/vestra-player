@@ -1,4 +1,4 @@
-import type { PlaybackStats, PlayerState, Plugin } from "@vestra-player/sdk";
+import type { I18n, PlaybackStats, PlayerState, Plugin, TextArg, TextList, TextValue } from "@vestra-player/sdk";
 import { aboutWindow } from "./about.ts";
 import { propertiesWindow } from "./dialog.ts";
 
@@ -14,8 +14,7 @@ function clock(seconds: number | null) {
 const or = (value: unknown) => (value === null || value === undefined || value === "" ? "-" : String(value));
 
 /** The file name of a path, or the last path segment of a URL (its host when it has none). */
-export function fileName(source: string | null) {
-  if (!source) return "No media open";
+export function fileName(source: string) {
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(source)) {
     try {
       const url = new URL(source);
@@ -28,26 +27,21 @@ export function fileName(source: string | null) {
   return source.split(/[\\/]/).filter(Boolean).at(-1) ?? source;
 }
 
-/**
- * The overlay text (ui-spec §9.2): one fact per line.
- *
- * i18n: needs r2-api. The lines put words ("channels", "No media open") inside
- * the panel's arguments, so the overlay stays English until the player can
- * translate nested arguments.
- */
-export function describe(state: PlayerState, stats: PlaybackStats) {
+/** The overlay text (ui-spec §9.2): one fact per line, as text values the player translates. */
+export function describe(i18n: I18n, state: PlayerState, stats: PlaybackStats): TextList {
+  const { text, list } = i18n;
   const { video, audio } = stats;
   const size = video?.width && video?.height ? `${video.width}×${video.height}` : "-";
-  return [
-    `File: ${fileName(state.source)}`,
-    `Time: ${clock(state.position)} / ${clock(state.duration)}`,
-    `Video: ${or(video?.codec)} ${size}`,
-    `Frame rate: ${video?.fps ? `${video.fps.toFixed(2)} fps` : "-"}`,
-    `Audio: ${or(audio?.codec)} ${audio?.sampleRate ? `${audio.sampleRate} Hz` : "-"} ${audio?.channels ? `${audio.channels} channels` : "-"}`,
-    `Backend: ${or(stats.backend)} (session ${stats.session})`,
-    `Frames shown: ${stats.framesShown}`,
-    `Dropped frames: ${or(stats.framesDropped)}`,
-  ].join("\n");
+  return list([
+    text("File: {}", [state.source ? fileName(state.source) : text("No media open")]),
+    text("Time: {} / {}", [clock(state.position), clock(state.duration)]),
+    text("Video: {} {}", [or(video?.codec), size]),
+    text("Frame rate: {}", [video?.fps ? `${video.fps.toFixed(2)} fps` : "-"]),
+    text("Audio: {} {} {}", [or(audio?.codec), audio?.sampleRate ? `${audio.sampleRate} Hz` : "-", audio?.channels ? text("{} channels", [audio.channels]) : "-"]),
+    text("Backend: {} (session {})", [or(stats.backend), stats.session]),
+    text("Frames shown: {}", [stats.framesShown]),
+    text("Dropped frames: {}", [or(stats.framesDropped)]),
+  ], "lines");
 }
 
 /** Short codec names: mpv reports long descriptions such as "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10". */
@@ -88,78 +82,61 @@ export const BRIEF_COLUMNS = 44;
 /**
  * IA-INFO-01: the columns the info block has in a video area `width` points
  * wide (10 px margins, 6 px padding, about 6.5 px a column); never fewer than
- * `BRIEF_COLUMNS` (headless players report 0).
+ * `BRIEF_COLUMNS` (headless players report 0), at most the 1000 `maxColumns` takes.
  */
-export const briefColumns = (width: number) => Math.max(BRIEF_COLUMNS, Math.floor((width - 32) / 6.5));
-const wide = (char: string) => /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]|[\u{20000}-\u{3fffd}]/u.test(char);
-/** Cut a line to `columns` display columns, ending in "…" when cut. */
-export function fit(line: string, columns = BRIEF_COLUMNS) {
-  const chars = [...line];
-  let width = 0;
-  for (let i = 0; i < chars.length; i++) {
-    width += wide(chars[i]!) ? 2 : 1;
-    if (width > columns) {
-      let kept = chars.slice(0, i);
-      while (kept.length && kept.reduce((sum, c) => sum + (wide(c) ? 2 : 1), 0) > columns - 1) kept = kept.slice(0, -1);
-      return `${kept.join("")}…`;
-    }
-  }
-  return line;
-}
+export const briefColumns = (width: number) => Math.min(1000, Math.max(BRIEF_COLUMNS, Math.floor((width - 32) / 6.5)));
 
 /** What the short information adds from other public state (IA-INFO-01); `null` / absent = left out. */
 export interface BriefExtras {
   /** The current chapter's title (`Chapter N` when it has none). */
-  chapter?: string | null;
+  chapter?: TextArg | null;
   /** The selected subtitle track's name. */
-  subtitle?: string | null;
+  subtitle?: TextArg | null;
 }
 
 /** IA-INFO-01: the chapter playing at `position`: the last one starting at or before it. */
-export function currentChapter(chapters: readonly { title: string | null; start: number }[], position: number | null) {
+export function currentChapter(i18n: I18n, chapters: readonly { title: string | null; start: number }[], position: number | null): TextArg | null {
   if (position === null || !Number.isFinite(position)) return null;
   let found = -1;
   chapters.forEach((chapter, index) => {
     if (chapter.start <= position + 1e-3) found = index;
   });
   if (found < 0) return null;
-  // i18n: needs r2-api (a word inside the overlay's text)
-  return chapters[found]!.title?.trim() || `Chapter ${found + 1}`;
+  return chapters[found]!.title?.trim() || i18n.text("Chapter {}", [found + 1]);
 }
 
 /** IA-INFO-01: the selected subtitle track's title, else its language, else "Subtitles"; `null` when none is selected. */
-export function subtitleName(track: { title: string; language: string | null } | null | undefined) {
+export function subtitleName(i18n: I18n, track: { title: string; language: string | null } | null | undefined): TextArg | null {
   if (!track) return null;
-  // i18n: needs r2-api (a word inside the overlay's text)
-  return track.title.trim() || track.language?.trim() || "Subtitles";
+  return track.title.trim() || track.language?.trim() || i18n.text("Subtitles");
 }
 
 /**
  * I03 / IA-INFO-01 short information, up to three lines: the file name, then
  * `01:23 / 45:00 · Part Two · H.264 1920×1080 · AAC 2 ch`, then the selected
  * subtitle track's name; unknown items (and the subtitle line without a
- * selected track) are left out, codecs use short names, and each line fits
- * the video area (cut with "…").
- *
- * i18n: needs r2-api ("Live", "ch", "No media open" are words inside the
- * overlay's text, and a line is cut to the video width after it is worded).
+ * selected track) are left out, and codecs use short names. The player cuts
+ * each line to the video area after translating it (`maxColumns`).
  */
-export function brief(state: PlayerState, stats: PlaybackStats | null, extras: BriefExtras = {}, columns = BRIEF_COLUMNS) {
-  if (!state.source) return "No media open";
+export function brief(i18n: I18n, state: PlayerState, stats: PlaybackStats | null, extras: BriefExtras = {}): TextValue {
+  const { text, list } = i18n;
+  if (!state.source) return text("No media open");
   const { video, audio } = stats ?? { video: null, audio: null };
   const join = (...parts: (string | null | undefined | false)[]) => parts.filter(Boolean).join(" ");
+  const channels = audio?.channels ? text("{} ch", [audio.channels]) : null;
+  const codec = shortCodec(audio?.codec);
   const items = [
     state.position !== null && Number.isFinite(state.position)
-      ? `${clock(state.position)} / ${state.duration === null ? "Live" : clock(state.duration)}`
+      ? text("{} / {}", [clock(state.position), state.duration === null ? text("Live") : clock(state.duration)])
       : null,
     extras.chapter,
     join(shortCodec(video?.codec), !!video?.width && !!video?.height && `${video.width}×${video.height}`),
-    join(shortCodec(audio?.codec), !!audio?.channels && `${audio.channels} ch`),
-  ].filter(Boolean);
-  const lines = [fit(fileName(state.source), columns)];
-  if (items.length) lines.push(fit(items.join(" · "), columns));
-  if (extras.subtitle) lines.push(fit(extras.subtitle, columns));
-  return lines.join("\n");
+    codec && channels ? text("{} {}", [codec, channels]) : (codec ?? channels),
+  ].filter((item): item is TextArg => !!item);
+  const lines: TextArg[] = [fileName(state.source)];
+  if (items.length) lines.push(items.reduce((line, item) => text("{} · {}", [line, item])));
+  if (extras.subtitle) lines.push(extras.subtitle);
+  return list(lines, "lines");
 }
 
 const BRIEF_MS = 3000;
@@ -183,19 +160,19 @@ export default async function activate(plugin: Plugin) {
   const extras = (): BriefExtras => {
     const state = plugin.player.state;
     return {
-      chapter: chapters?.sourceId === state.sourceId ? currentChapter(chapters.list, state.position) : null,
-      subtitle: state.source ? subtitleName(plugin.subtitles.state?.selected) : null,
+      chapter: chapters?.sourceId === state.sourceId ? currentChapter(plugin.i18n, chapters.list, state.position) : null,
+      subtitle: state.source ? subtitleName(plugin.i18n, plugin.subtitles.state?.selected) : null,
     };
   };
   /** Write the panel from the last stats; nothing shown hides it. */
   const draw = () => {
     const blocks = [
-      briefShown() ? brief(plugin.player.state, stats, extras(), briefColumns(plugin.window.state.videoArea.width)) : null,
-      shown && stats ? describe(plugin.player.state, stats) : null,
-    ].filter((block): block is string => block !== null);
-    // i18n: needs r2-api (the overlay is composed here; see describe and brief)
-    // i18n-ignore
-    panel.set(blocks.length ? blocks.join("\n\n") : null);
+      briefShown() ? brief(plugin.i18n, plugin.player.state, stats, extras()) : null,
+      shown && stats ? describe(plugin.i18n, plugin.player.state, stats) : null,
+    ].filter((block) => block !== null);
+    // A blank line between the blocks; the short information's lines fit the video area.
+    const columns = briefShown() ? { maxColumns: briefColumns(plugin.window.state.videoArea.width) } : {};
+    panel.set(blocks.length ? plugin.i18n.list(blocks.length > 1 ? [blocks[0]!, "", blocks[1]!] : blocks, "lines") : null, null, columns);
   };
   /** The chapter list (once per source) and the subtitle selection (no event exists: read each time). */
   const readExtras = async () => {

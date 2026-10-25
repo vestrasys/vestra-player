@@ -481,8 +481,8 @@ export class KeysPage {
   async #export() {
     let path: string | null;
     try {
-      // i18n: needs r2-api (a translatable fileName)
-      path = await this.#plugin.dialogs.saveFile({ title: "Export Shortcut List", fileName: "Vestra Player Shortcuts.csv" });
+      // TRANSLATORS: only the part before the extension.
+      path = await this.#plugin.dialogs.saveFile({ title: "Export Shortcut List", fileName: this.#plugin.i18n.text("Vestra Player Shortcuts.csv") });
     } catch (error) {
       return this.#say(message("export-failed", { text: (error as Error).message, warn: true }));
     }
@@ -490,7 +490,7 @@ export class KeysPage {
     const lines = this.lines()
       .filter((line) => !!line.info)
       .sort((a, b) => a.command.localeCompare(b.command, "zh-Hans-CN"));
-    const text = path.toLowerCase().endsWith(".csv") ? exportCsv(lines) : exportText(lines);
+    const text = path.toLowerCase().endsWith(".csv") ? exportCsv(this.#plugin.i18n, lines) : exportText(this.#plugin.i18n, lines);
     try {
       const temp = `${path}.tmp-${process.pid}`;
       writeFileSync(temp, text);
