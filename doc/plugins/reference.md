@@ -585,14 +585,14 @@ plugin.host.run(action: HostAction): Promise<void>;
 | 动作 | 菜单路径 | order / group | 默认绑定 | 行为与提示 |
 | --- | --- | --- | --- | --- |
 | `stop` | 关闭 | 120 / open | F4 | 关闭来源；没有来源时禁用 |
-| `play-pause` | 播放 ▶ 播放/暂停 | 201 | Space | 暂停/继续，播完后重播；「已暂停」/「播放」；勾选 = 已暂停 |
-| `previous` / `next` | 播放 ▶ 上一个 / 下一个 | 202 / 203 | PageUp、Mouse:X1 / PageDown、Mouse:X2 | 交给播放序列提供者（§5.4）；不可用时原因「没有上一个」/「没有下一个」 |
-| `frame-back` / `frame-forward` | 播放 ▶ 跳转 ▶ 上一帧 / 下一帧 | 204 / 205，frame | D / F（按住重复） | `player.step("frame", …)`；在途时丢弃重复触发；完成后提示「定位: 下一帧 00:01:23.456」/「定位: 上一帧 …」（完成后的位置，精确到毫秒），没动时「已是最后一帧」/「已是第一帧」。两个方向分别判断：没有视频轨（纯音频、只有封面）禁用，原因「没有视频」；下一帧需要就绪（直播也可以，播完后不可）；上一帧播完后也可用，需要可跳转（生成流、不可跳转的直播原因「当前来源不支持逐帧后退」） |
-| `seek-backward` / `seek-forward` | 播放 ▶ 跳转 ▶ 后退/前进 N秒 | 210 / 211，step | ← / →（按住重复） | 从最新未完成的目标累加，夹在 0 与时长之间；「前进 5秒: 00:37 / 01:40」；N 见 `setStepSeek` |
-| `rate-normal` | 播放 ▶ 速度 ▶ 正常（单选） | 220 | Z | 1 倍；「播放速度: 1x」 |
-| `rate-down` / `rate-up` | 播放 ▶ 速度 ▶ 减速 0.1 / 加速 0.1 | 221 / 222 | X / C | ±0.1，取两位小数，夹在 0.25–4；「播放速度: 1.1x」 |
-| `volume-up` / `volume-down` | 声音 ▶ 音量 + / 音量 − | 501 / 502 | ↑、滚轮上 / ↓、滚轮下（按住重复） | ±5，先设音量再取消静音；「音量: 85%」。`volume-up` 上限 100（交互对齐 G-13a）：已经 ≥ 100（别的插件用 `setOutput` 设到 100 以上）时不再增加、照常提示；`volume-down` 不低于 0。`setOutput` 的范围仍是 0–200 |
-| `mute` | 声音 ▶ 静音（勾选） | 503 | M | 「静音: 开」/「静音: 关」 |
+| `play-pause` | 播放 ▸ 播放/暂停 | 201 | Space | 暂停/继续，播完后重播；「已暂停」/「播放」；勾选 = 已暂停 |
+| `previous` / `next` | 播放 ▸ 上一个 / 下一个 | 202 / 203 | PageUp、Mouse:X1 / PageDown、Mouse:X2 | 交给播放序列提供者（§5.4）；不可用时原因「没有上一个」/「没有下一个」 |
+| `frame-back` / `frame-forward` | 播放 ▸ 跳转 ▸ 上一帧 / 下一帧 | 204 / 205，frame | D / F（按住重复） | `player.step("frame", …)`；在途时丢弃重复触发；完成后提示「定位: 下一帧 00:01:23.456」/「定位: 上一帧 …」（完成后的位置，精确到毫秒），没动时「已是最后一帧」/「已是第一帧」。两个方向分别判断：没有视频轨（纯音频、只有封面）禁用，原因「没有视频」；下一帧需要就绪（直播也可以，播完后不可）；上一帧播完后也可用，需要可跳转（生成流、不可跳转的直播原因「当前来源不支持逐帧后退」） |
+| `seek-backward` / `seek-forward` | 播放 ▸ 跳转 ▸ 后退/前进 N秒 | 210 / 211，step | ← / →（按住重复） | 从最新未完成的目标累加，夹在 0 与时长之间；「前进 5秒: 00:37 / 01:40」；N 见 `setStepSeek` |
+| `rate-normal` | 播放 ▸ 速度 ▸ 正常（单选） | 220 | Z | 1 倍；「播放速度: 1x」 |
+| `rate-down` / `rate-up` | 播放 ▸ 速度 ▸ 减速 0.1 / 加速 0.1 | 221 / 222 | X / C | ±0.1，取两位小数，夹在 0.25–4；「播放速度: 1.1x」 |
+| `volume-up` / `volume-down` | 声音 ▸ 音量 + / 音量 − | 501 / 502 | ↑、滚轮上 / ↓、滚轮下（按住重复） | ±5，先设音量再取消静音；「音量: 85%」。`volume-up` 上限 100（交互对齐 G-13a）：已经 ≥ 100（别的插件用 `setOutput` 设到 100 以上）时不再增加、照常提示；`volume-down` 不低于 0。`setOutput` 的范围仍是 0–200 |
+| `mute` | 声音 ▸ 静音（勾选） | 503 | M | 「静音: 开」/「静音: 关」 |
 
 - 禁用时 `run` 以 `unavailable` 失败（`message` 为原因），未知 id 为 `invalid`。动作执行完才 resolve（之后 `player.state` 已刷新）；同一动作在途时的重复调用被丢弃并直接 resolve（相对跳转与音量除外，它们排队累加）。
 - 执行失败（如来源拒绝）显示在视频上。
@@ -1705,7 +1705,7 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 
 只增不改，原有写法照常可用。用到新增项的插件设 `"minPlayerVersion": "0.4.0"`。
 
-- 新配色 `vestra-light`（浅色，视频区仍是深色），`ThemeId` 变为 `"vestra" | "vestra-light"`（§6.8）；「设置 ▶ 外观」有「Vestra 深色」「Vestra 浅色」两项。浅色时 std-widgets 控件由播放器切到浅色。
+- 新配色 `vestra-light`（浅色，视频区仍是深色），`ThemeId` 变为 `"vestra" | "vestra-light"`（§6.8）；「设置 ▸ 外观」有「Vestra 深色」「Vestra 浅色」两项。浅色时 std-widgets 控件由播放器切到浅色。
 - `vestra` 的颜色值换成 Aurora（取标志的完整色谱）：强调色 `#f72aa6`，`playing` 由紫色改为青色 `#2bb6ff`，`accent-fill` 为琥珀→洋红→紫→青，`line` 由近黑改为可见的细线色 `#2b2734`。token 名不变，读 `Theme` 的插件不用改。
 - 圆角：`radius-control` 4px（原 3px），`radius-panel` 8px（原 6px）。尺寸 token 不变。
 - 新库文件 `@vestra/icons.slint`：`Icon` 组件与 `Icons` 全局（§6.4 主题与控件）。
@@ -1715,7 +1715,7 @@ secrets.delete(name: string): Promise<void>;             // 不存在也算成�
 
 ### 只保留 Vestra 配色（2026-10，SDK 1.4.0）
 
-- 去掉第二套配色：`ThemeId` 只剩 `"vestra"`（§6.8），「设置 ▶ 外观」只有 Vestra 一项。拿 `appearance.theme` 与已去掉的 id 比较的插件在类型检查时报错（TypeScript 认为两者没有交集），运行时这个比较永远为假；删掉该分支即可。SDK 1.4.0 的 `appearance.set` 对 `"vestra"` 以外的值抛 `invalid`。
+- 去掉第二套配色：`ThemeId` 只剩 `"vestra"`（§6.8），「设置 ▸ 外观」只有 Vestra 一项。拿 `appearance.theme` 与已去掉的 id 比较的插件在类型检查时报错（TypeScript 认为两者没有交集），运行时这个比较永远为假；删掉该分支即可。SDK 1.4.0 的 `appearance.set` 对 `"vestra"` 以外的值抛 `invalid`。
 - 兼容：播放器把不认识的配色 id 当作 `vestra`，用旧 SDK 构建、仍会请求旧配色的插件不会失败；保存过旧配色的用户启动后是 Vestra。
 
 ### 滤镜与示例作者发现的缺口（2026-10，播放器 0.3.0，SDK 1.3.0）
