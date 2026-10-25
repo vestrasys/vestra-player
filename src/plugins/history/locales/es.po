@@ -1,0 +1,146 @@
+msgid ""
+msgstr ""
+"Language: es\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: manifest.json
+#, x-machine
+msgid "Playback History"
+msgstr "Historial de reproducción"
+
+#: manifest.json
+#, x-machine
+msgid "Recently played items, and resuming where you left off"
+msgstr "Elementos reproducidos recientemente y reanudación donde lo dejaste"
+
+#: manifest.json
+#, x-machine
+msgid "Open ▸ Recently Played lists the files and links opened recently. Playback ▸ Resume Playback offers Don't Resume, Resume Automatically or Ask Every Time: the next time the same file is opened, it continues where it stopped."
+msgstr "Abrir ▸ Reproducido recientemente muestra los archivos y enlaces abiertos recientemente. Reproducción ▸ Reanudar reproducción ofrece No reanudar, Reanudar automáticamente o Preguntar siempre: la próxima vez que se abra el mismo archivo, continúa donde se detuvo."
+
+#: manifest.json
+#, x-machine
+msgid "playback"
+msgstr "reproducción"
+
+#: manifest.json
+#, x-machine
+msgid "history"
+msgstr "historial"
+
+#: manifest.json
+#, x-machine
+msgid "resume"
+msgstr "reanudar"
+
+#: menu.ts:36
+#, x-machine
+msgid "{} ({})"
+msgstr "{} ({})"
+
+#: menu.ts:94 menu.ts:114 menu.ts:122 menu.ts:133
+#, x-machine
+msgid "Recently Played"
+msgstr "Reproducido recientemente"
+
+#: menu.ts:94
+#, x-machine
+msgid "(No Entries)"
+msgstr "(Sin entradas)"
+
+#: menu.ts:114
+#, x-machine
+msgid "Remove Invalid Entries"
+msgstr "Quitar entradas no válidas"
+
+#: menu.ts:118
+#, x-machine
+msgid "Removed {} invalid entries"
+msgstr "Se quitaron {} entradas no válidas"
+
+#: menu.ts:122
+#, x-machine
+msgid "Clear Entries"
+msgstr "Borrar entradas"
+
+#: menu.ts:128
+#, x-machine
+msgid "Playback history cleared"
+msgstr "Historial de reproducción borrado"
+
+#: menu.ts:133
+#, x-machine
+msgid "Record Playback History"
+msgstr "Registrar historial de reproducción"
+
+#: menu.ts:144
+#, x-machine
+msgid "File not found: {}"
+msgstr "Archivo no encontrado: {}"
+
+#: menu.ts:153 menu.ts:156
+#, x-machine
+msgid "Cannot open: {}"
+msgstr "No se puede abrir: {}"
+
+#: menu.ts:172 menu.ts:182 menu.ts:190 ui/resume.slint:6
+#, x-machine
+msgid "Resume Playback"
+msgstr "Reanudar reproducción"
+
+#: menu.ts:172
+#, x-machine
+msgid "Don't Resume"
+msgstr "No reanudar"
+
+#: menu.ts:172
+#, x-machine
+msgid "Resume Automatically"
+msgstr "Reanudar automáticamente"
+
+#: menu.ts:172
+#, x-machine
+msgid "Ask Every Time"
+msgstr "Preguntar siempre"
+
+#: menu.ts:182
+#, x-machine
+msgid "Also Remember Audio Files"
+msgstr "Recordar también archivos de audio"
+
+#: menu.ts:190
+#, x-machine
+msgid "Clear All Saved Positions"
+msgstr "Borrar todas las posiciones guardadas"
+
+#: menu.ts:195
+#, x-machine
+msgid "All saved positions cleared"
+msgstr "Todas las posiciones guardadas borradas"
+
+#: resume.ts:226
+#, x-machine
+msgid "Resuming from {}"
+msgstr "Reanudando desde {}"
+
+#: resume.ts:229
+#, x-machine
+msgid "Cannot resume: {}"
+msgstr "No se puede reanudar: {}"
+
+#: ui/resume.slint:31
+#, x-machine
+msgid "You didn't finish this last time. Continue? ({})"
+msgstr "No lo terminaste la última vez. ¿Continuar? ({})"
+
+#: ui/resume.slint:48
+#, x-machine
+msgid "Continue"
+msgstr "Continuar"
+
+#: ui/resume.slint:51
+#, x-machine
+msgid "Start Over"
+msgstr "Empezar de nuevo"

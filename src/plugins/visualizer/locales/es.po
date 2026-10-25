@@ -1,0 +1,217 @@
+msgid ""
+msgstr ""
+"Language: es\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: logo.ts:63
+#, x-machine
+msgid "Choose Logo Image"
+msgstr "Elegir imagen del logotipo"
+
+#: main.ts:66
+#, x-machine
+msgid "Image too large (max 4096×4096, 16 MB)"
+msgstr "Imagen demasiado grande (máx. 4096×4096, 16 MB)"
+
+#: main.ts:66
+#, x-machine
+msgid "Only PNG or JPEG images can be used"
+msgstr "Solo se pueden usar imágenes PNG o JPEG"
+
+#: main.ts:66
+#, x-machine
+msgid "The logo image cannot be read; using the default logo"
+msgstr "No se puede leer la imagen del logotipo; se usa el logotipo predeterminado"
+
+#: main.ts:66
+#, x-machine
+msgid "Cannot read the selected image"
+msgstr "No se puede leer la imagen seleccionada"
+
+#: main.ts:66
+#, x-machine
+msgid "Using the custom logo"
+msgstr "Se usa el logotipo personalizado"
+
+#: main.ts:66
+#, x-machine
+msgid "Default logo restored"
+msgstr "Logotipo predeterminado restaurado"
+
+#: main.ts:66
+#, x-machine
+msgid "Album cover for audio only: On"
+msgstr "Portada del álbum para solo audio: activada"
+
+#: main.ts:66
+#, x-machine
+msgid "Album cover for audio only: Off"
+msgstr "Portada del álbum para solo audio: desactivada"
+
+#: main.ts:66
+#, x-machine
+msgid "Logo when idle: On"
+msgstr "Logotipo en reposo: activado"
+
+#: main.ts:66
+#, x-machine
+msgid "Logo when idle: Off"
+msgstr "Logotipo en reposo: desactivado"
+
+#: main.ts:66
+#, x-machine
+msgid "Cover cache cleared"
+msgstr "Caché de portadas vaciada"
+
+#: main.ts:227
+#, x-machine
+msgid "Show Album Cover for Audio Only"
+msgstr "Mostrar portada del álbum para solo audio"
+
+#: main.ts:235 main.ts:243 main.ts:251
+#, x-machine
+msgid "Appearance"
+msgstr "Apariencia"
+
+#: main.ts:235
+#, x-machine
+msgid "Show Logo When Idle"
+msgstr "Mostrar logotipo en reposo"
+
+#: main.ts:243
+#, x-machine
+msgid "Choose Logo Image…"
+msgstr "Elegir imagen del logotipo…"
+
+#: main.ts:251
+#, x-machine
+msgid "Restore Default Logo"
+msgstr "Restaurar logotipo predeterminado"
+
+#: main.ts:255
+#, x-machine
+msgid "Using the default logo"
+msgstr "Se usa el logotipo predeterminado"
+
+#: main.ts:263 ui/page.slint:40
+#, x-machine
+msgid "Logo and Album Cover"
+msgstr "Logotipo y portada del álbum"
+
+#: manifest.json
+#, x-machine
+msgid "Album Cover and Idle Screen"
+msgstr "Portada del álbum y pantalla en reposo"
+
+#: manifest.json
+#, x-machine
+msgid "Shows the album cover for audio only and a logo when idle"
+msgstr "Muestra la portada del álbum para solo audio y un logotipo en reposo"
+
+#: manifest.json
+#, x-machine
+msgid ""
+"While audio without a picture plays, shows the album cover with title, artist and album; with no media open, shows a logo (which can be replaced with your own image); while media opens, shows a loading screen.\n"
+"Entries: Audio ▸ Show Album Cover for Audio Only, Settings ▸ Appearance."
+msgstr ""
+"Mientras se reproduce audio sin imagen, muestra la portada del álbum con el título, el artista y el álbum; sin ningún medio abierto, muestra un logotipo (que puedes sustituir por tu propia imagen); mientras se abre un medio, muestra una pantalla de carga.\n"
+"Accesos: Audio ▸ Mostrar portada del álbum para solo audio, Ajustes ▸ Apariencia."
+
+#: manifest.json
+#, x-machine
+msgid "audio"
+msgstr "audio"
+
+#: manifest.json
+#, x-machine
+msgid "appearance"
+msgstr "apariencia"
+
+#: manifest.json
+#, x-machine
+msgid "cover"
+msgstr "portada"
+
+#: ui/backdrop.slint:227
+#, x-machine
+msgid "Opening"
+msgstr "Abriendo"
+
+#: ui/backdrop.slint:245
+#, x-machine
+msgid "Opening: {}"
+msgstr "Abriendo: {}"
+
+#: ui/page.slint:46
+#, x-machine
+msgid "Idle screen"
+msgstr "Pantalla en reposo"
+
+#: ui/page.slint:49
+#, x-machine
+msgid "Show logo when idle"
+msgstr "Mostrar logotipo en reposo"
+
+#: ui/page.slint:76
+#, x-machine
+msgid "Current: custom image"
+msgstr "Actual: imagen personalizada"
+
+#: ui/page.slint:76
+#, x-machine
+msgid "Current: Vestra Player logo"
+msgstr "Actual: logotipo de Vestra Player"
+
+#: ui/page.slint:84
+#, x-machine
+msgid "Choose Image…"
+msgstr "Elegir imagen…"
+
+#: ui/page.slint:85
+#, x-machine
+msgid "Restore Default"
+msgstr "Restaurar predeterminado"
+
+#: ui/page.slint:91
+#, x-machine
+msgid "PNG or JPEG, up to 4096×4096 and 16 MB. The image is copied, so the original can be moved."
+msgstr "PNG o JPEG, hasta 4096×4096 y 16 MB. La imagen se copia, así que puedes mover el original."
+
+#: ui/page.slint:97
+#, x-machine
+msgid "Audio only"
+msgstr "Solo audio"
+
+#: ui/page.slint:100
+#, x-machine
+msgid "Show album cover for audio only"
+msgstr "Mostrar portada del álbum para solo audio"
+
+#: ui/page.slint:106
+#, x-machine
+msgid "The cover comes from the picture embedded in the file, or a cover, folder or front image in the same folder; without one the logo is shown as a placeholder."
+msgstr "La portada procede de la imagen incrustada en el archivo, o de una imagen cover, folder o front de la misma carpeta; si no hay ninguna, se muestra el logotipo en su lugar."
+
+#: ui/page.slint:117
+#, x-machine
+msgid "Cover cache unavailable"
+msgstr "Caché de portadas no disponible"
+
+#: ui/page.slint:118
+#, x-machine
+msgid "Cover cache: empty"
+msgstr "Caché de portadas: vacía"
+
+#: ui/page.slint:119
+#, x-machine
+msgid "Cover cache: {n} track, {0}"
+msgid_plural "Cover cache: {n} tracks, {0}"
+msgstr[0] "Caché de portadas: {n} pista, {0}"
+msgstr[1] "Caché de portadas: {n} pistas, {0}"
+
+#: ui/page.slint:125
+#, x-machine
+msgid "Clear Cover Cache"
+msgstr "Vaciar caché de portadas"

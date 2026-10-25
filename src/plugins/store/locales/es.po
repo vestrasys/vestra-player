@@ -1,0 +1,1791 @@
+msgid ""
+msgstr ""
+"Language: es\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: manifest.json settings-page.ts:24 ui/store.slint:144
+#, x-machine
+msgid "Plugin Store"
+msgstr "Tienda de complementos"
+
+#: manifest.json
+#, x-machine
+msgid "Browse, install and update plugins"
+msgstr "Explora, instala y actualiza complementos"
+
+#: manifest.json
+#, x-machine
+msgid "Browse plugins from the official Vestra Player plugin repository: descriptions, changelogs, version history and the permissions they need. Install, update, roll back to the previous version or uninstall in one click; add third-party repositories (clearly marked as unofficial), install from a link or a local .vxp file, or drop a .vxp file on the video area. The official repository's index is digitally signed, and the store checks the signature and every package's checksum; versions revoked by a repository are disabled, with the reason."
+msgstr "Explora los complementos del repositorio oficial de Vestra Player: descripciones, registros de cambios, historial de versiones y los permisos que necesitan. Instala, actualiza, revierte a la versión anterior o desinstala con un clic; añade repositorios de terceros (marcados claramente como no oficiales), instala desde un enlace o un archivo .vxp local, o suelta un archivo .vxp sobre la zona del vídeo. El índice del repositorio oficial está firmado digitalmente, y la tienda comprueba la firma y la suma de comprobación de cada paquete; las versiones retiradas por un repositorio se desactivan, indicando el motivo."
+
+#: manifest.json
+#, x-machine
+msgid "plugins"
+msgstr "complementos"
+
+#: manifest.json
+#, x-machine
+msgid "store"
+msgstr "tienda"
+
+#: store.ts:297
+#, x-machine
+msgid "Plugin Store…"
+msgstr "Tienda de complementos…"
+
+#: store.ts:297
+#, x-machine
+msgid "Plugin Store ({} updates)…"
+msgstr "Tienda de complementos ({} actualizaciones)…"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Another install is in progress; wait for it to finish"
+msgstr "Hay otra instalación en curso; espera a que termine"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "This system does not support confirmation dialogs; cannot continue"
+msgstr "Este sistema no admite cuadros de confirmación; no se puede continuar"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Another dialog is open; close it first"
+msgstr "Hay otro cuadro de diálogo abierto; ciérralo primero"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Couldn't open the link: {}"
+msgstr "No se pudo abrir el enlace: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "This kind of link cannot be opened"
+msgstr "Este tipo de enlace no se puede abrir"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The downloaded file does not match the repository's description (size); deleted"
+msgstr "El archivo descargado no coincide con la descripción del repositorio (tamaño); se eliminó"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The downloaded file does not match the repository's description (checksum); deleted"
+msgstr "El archivo descargado no coincide con la descripción del repositorio (suma de comprobación); se eliminó"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The plugin package exceeds 64 MB; download stopped"
+msgstr "El paquete del complemento supera los 64 MB; se detuvo la descarga"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The download address is insecure or redirects too often; stopped"
+msgstr "La dirección de descarga no es segura o redirige demasiadas veces; se detuvo"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Download cancelled"
+msgstr "Descarga cancelada"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Couldn't write the download file: {}"
+msgstr "No se pudo escribir el archivo descargado: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Download failed: {}"
+msgstr "Error en la descarga: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "This is not a valid plugin package: {}"
+msgstr "No es un paquete de complemento válido: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "This plugin needs Vestra Player ≥ {} (current {})"
+msgstr "Este complemento requiere Vestra Player ≥ {} (actual: {})"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "This plugin needs a newer Vestra Player (current {})"
+msgstr "Este complemento requiere una versión más reciente de Vestra Player (actual: {})"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "“{}” has the same id as a built-in plugin and cannot be installed"
+msgstr "«{}» tiene el mismo id que un complemento integrado y no se puede instalar"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "This plugin has the same id as a built-in plugin and cannot be installed"
+msgstr "Este complemento tiene el mismo id que un complemento integrado y no se puede instalar"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "This plugin is being installed or rolled back; try again later"
+msgstr "Este complemento se está instalando o revirtiendo; inténtalo más tarde"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The Plugin Store lacks the “Manage plugins” permission"
+msgstr "La Tienda de complementos no tiene el permiso «Gestionar complementos»"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "This plugin no longer exists"
+msgstr "Este complemento ya no existe"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The plugin package does not match the repository's description (id); not installed"
+msgstr "El paquete del complemento no coincide con la descripción del repositorio (id); no se instaló"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The plugin package does not match the repository's description (version); not installed"
+msgstr "El paquete del complemento no coincide con la descripción del repositorio (versión); no se instaló"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The plugin package does not match the repository's description (permissions); not installed"
+msgstr "El paquete del complemento no coincide con la descripción del repositorio (permisos); no se instaló"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "You can only install from https:// links"
+msgstr "Solo se puede instalar desde enlaces https://"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Not installed"
+msgstr "No instalado"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Installed {} {}"
+msgstr "Instalado: {} {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Updated {} to {}"
+msgstr "{} actualizado a {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Rolled back {} to {}"
+msgstr "{} revertido a {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Restored {} to {}"
+msgstr "{} restaurado a {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Uninstalled {} (data deleted)"
+msgstr "Desinstalado: {} (datos eliminados)"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Uninstalled {} (data kept)"
+msgstr "Desinstalado: {} (datos conservados)"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "This plugin cannot be rolled back"
+msgstr "Este complemento no se puede revertir"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Built-in plugins can only be disabled"
+msgstr "Los complementos integrados solo se pueden desactivar"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Enabled “{}” again"
+msgstr "Se volvió a activar «{}»"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Couldn't enable “{}”: {}"
+msgstr "No se pudo activar «{}»: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Can no longer cancel; the installation continues"
+msgstr "Ya no se puede cancelar; la instalación continúa"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Can no longer cancel; the uninstallation continues"
+msgstr "Ya no se puede cancelar; la desinstalación continúa"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Can no longer cancel; the rollback continues"
+msgstr "Ya no se puede cancelar; la reversión continúa"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Can no longer cancel; the restore continues"
+msgstr "Ya no se puede cancelar; la restauración continúa"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Installation failed; the previous version was restored"
+msgstr "Error en la instalación; se restauró la versión anterior"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Uninstallation failed; the previous version was restored"
+msgstr "Error en la desinstalación; se restauró la versión anterior"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Rollback failed; the previous version was restored"
+msgstr "Error en la reversión; se restauró la versión anterior"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Restore failed; the previous version was restored"
+msgstr "Error en la restauración; se restauró la versión anterior"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Installation cancelled"
+msgstr "Instalación cancelada"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Uninstallation cancelled"
+msgstr "Desinstalación cancelada"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Rollback cancelled"
+msgstr "Reversión cancelada"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Restore cancelled"
+msgstr "Restauración cancelada"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Installation failed: {}"
+msgstr "Error en la instalación: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Uninstallation failed: {}"
+msgstr "Error en la desinstalación: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Rollback failed: {}"
+msgstr "Error en la reversión: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Restore failed: {}"
+msgstr "Error en la restauración: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Downloading {} {}"
+msgstr "Descargando {} {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Downloading {} {} ({}%)"
+msgstr "Descargando {} {} ({} %)"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Downloading the plugin package"
+msgstr "Descargando el paquete del complemento"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Downloading the plugin package ({}%)"
+msgstr "Descargando el paquete del complemento ({} %)"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Checking {}…"
+msgstr "Comprobando {}…"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Checking the plugin package…"
+msgstr "Comprobando el paquete del complemento…"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Installing {}…"
+msgstr "Instalando {}…"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Rolling back {}…"
+msgstr "Revirtiendo {}…"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Restoring {}…"
+msgstr "Restaurando {}…"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Uninstalling {}…"
+msgstr "Desinstalando {}…"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Installing… (preparing)"
+msgstr "Instalando… (preparando)"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Installing… (activating)"
+msgstr "Instalando… (activando)"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Uninstalling… (preparing)"
+msgstr "Desinstalando… (preparando)"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Uninstalling… (activating)"
+msgstr "Desinstalando… (activando)"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Rolling back… (preparing)"
+msgstr "Revirtiendo… (preparando)"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Rolling back… (activating)"
+msgstr "Revirtiendo… (activando)"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Restoring… (preparing)"
+msgstr "Restaurando… (preparando)"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Restoring… (activating)"
+msgstr "Restaurando… (activando)"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Updating {}…"
+msgstr "Actualizando {}…"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "{0}: up to date at {1}"
+msgstr "{0}: al día a las {1}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "{0}: updated at {1}"
+msgstr "{0}: actualizado a las {1}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "{0}: data from {1}"
+msgstr "{0}: datos de {1}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The official repository has no signature file; this update was ignored"
+msgstr "El repositorio oficial no tiene archivo de firma; se ignoró esta actualización"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The official repository's signature check failed (it may have been tampered with); this update was ignored"
+msgstr "Falló la comprobación de la firma del repositorio oficial (puede haber sido manipulado); se ignoró esta actualización"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The official repository returned an old index; this update was ignored"
+msgstr "El repositorio oficial devolvió un índice antiguo; se ignoró esta actualización"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "{} uses a newer format; please update Vestra Player"
+msgstr "{} usa un formato más reciente; actualiza Vestra Player"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "{}'s index is malformed"
+msgstr "El índice de {} está mal formado"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "{0}'s index is malformed; showing the data from {1}"
+msgstr "El índice de {0} está mal formado; se muestran los datos de {1}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "{0} returned error {1}"
+msgstr "{0} devolvió el error {1}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "{0} returned error {1}; showing the data from {2}"
+msgstr "{0} devolvió el error {1}; se muestran los datos de {2}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "{}'s index exceeds 4 MB; refused"
+msgstr "El índice de {} supera los 4 MB; rechazado"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "{0}'s index exceeds 4 MB; refused; showing the data from {1}"
+msgstr "El índice de {0} supera los 4 MB; rechazado; se muestran los datos de {1}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "{0}: {1}"
+msgstr "{0}: {1}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "{0}: {1}; showing the data from {2}"
+msgstr "{0}: {1}; se muestran los datos de {2}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Can't connect to {0} ({1}); its plugins are not available for now"
+msgstr "No se puede conectar con {0} ({1}); sus complementos no están disponibles por ahora"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Can't connect to {0} ({1}); showing the cache from {2}"
+msgstr "No se puede conectar con {0} ({1}); se muestra la caché de {2}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "This repository has already been added"
+msgstr "Este repositorio ya se ha añadido"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "At most {} repositories can be added"
+msgstr "Se pueden añadir como máximo {} repositorios"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Reading {}…"
+msgstr "Leyendo {}…"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Couldn't read this repository: {}. Check the address (the repository's root address or the full address of index.json)"
+msgstr "No se pudo leer este repositorio: {}. Comprueba la dirección (la dirección raíz del repositorio o la dirección completa de index.json)"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Added {}"
+msgstr "Añadido: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Removed {}"
+msgstr "Eliminado: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "No plugins match"
+msgstr "Ningún complemento coincide"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "All plugins are up to date"
+msgstr "Todos los complementos están actualizados"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "No plugins installed yet"
+msgstr "Aún no hay complementos instalados"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Reading repositories…"
+msgstr "Leyendo repositorios…"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Can't connect to the repositories and there is no cached copy. Click “Refresh” once you are online."
+msgstr "No se puede conectar con los repositorios y no hay copia en caché. Haz clic en «Actualizar» cuando tengas conexión."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The repositories have no plugins yet"
+msgstr "Los repositorios aún no tienen complementos"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "{} · {}"
+msgstr "{} · {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:222
+#, x-machine
+msgid "Installed"
+msgstr "Instalado"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Update → {}"
+msgstr "Actualizar → {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Revoked"
+msgstr "Retirada"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Installed from {}"
+msgstr "Instalado desde {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Incompatible"
+msgstr "Incompatible"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Cannot be installed"
+msgstr "No se puede instalar"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Install {}"
+msgstr "Instalar {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Update to {}"
+msgstr "Actualizar a {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Enable Anyway…"
+msgstr "Activar de todos modos…"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Replace…"
+msgstr "Reemplazar…"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Roll Back to {}"
+msgstr "Revertir a {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Restore to {}"
+msgstr "Restaurar a {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Uninstall…"
+msgstr "Desinstalar…"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Load"
+msgstr "Cargar"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Show Images"
+msgstr "Mostrar imágenes"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Retry"
+msgstr "Reintentar"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "This version has been revoked: {}."
+msgstr "Esta versión se ha retirado: {}."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "This version has been revoked: {}. You confirmed the risk and enabled it again; the store will not disable it again."
+msgstr "Esta versión se ha retirado: {}. Confirmaste el riesgo y la volviste a activar; la tienda no la volverá a desactivar."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "This version has been revoked: {}. The store has disabled it."
+msgstr "Esta versión se ha retirado: {}. La tienda la ha desactivado."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Unofficial repository: not reviewed by Vestra Player; plugins may read your files or use the network"
+msgstr "Repositorio no oficial: no revisado por Vestra Player; los complementos pueden leer tus archivos o usar la red"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "This is a test repository on this machine, without encryption"
+msgstr "Es un repositorio de prueba en este equipo, sin cifrado"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Installed {1} from {0}. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data; the current data is kept"
+msgstr "Se instaló {1} desde {0}. Al reemplazarlo, se continúa con los datos de una instalación anterior desde este origen, si la hubo; si no, con datos nuevos y vacíos; los datos actuales se conservan"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Same id as a built-in plugin of the player; cannot be installed from here"
+msgstr "Mismo id que un complemento integrado del reproductor; no se puede instalar desde aquí"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Built-in plugins are updated with the player and cannot be uninstalled; to disable one, use “Settings ▸ Plugin Manager…”"
+msgstr "Los complementos integrados se actualizan con el reproductor y no se pueden desinstalar; para desactivar uno, usa «Ajustes ▸ Gestor de complementos…»"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The repository no longer offers this plugin; the store no longer checks it for updates (it still checks for revocations)"
+msgstr "El repositorio ya no ofrece este complemento; la tienda ya no busca actualizaciones para él (sí sigue comprobando si se retira)"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Its repository was removed from the store; the store no longer checks it for updates or revocations"
+msgstr "Su repositorio se quitó de la tienda; la tienda ya no busca actualizaciones ni retiradas para él"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Sideloaded plugin: not reviewed; the store does not check it for updates"
+msgstr "Complemento instalado manualmente: no revisado; la tienda no busca actualizaciones para él"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "This run uses the development-loaded version"
+msgstr "Esta sesión usa la versión cargada en desarrollo"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The description is on another website ({}); not loaded automatically"
+msgstr "La descripción está en otro sitio web ({}); no se carga automáticamente"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Remote images blocked (unofficial source): {}"
+msgstr "Imágenes remotas bloqueadas (origen no oficial): {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Loading…"
+msgstr "Cargando…"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Loading the description…"
+msgstr "Cargando la descripción…"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Loading the changelog…"
+msgstr "Cargando el registro de cambios…"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The author provided no description"
+msgstr "El autor no proporcionó ninguna descripción"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The author provided no changelog"
+msgstr "El autor no proporcionó ningún registro de cambios"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The description is on another website; not loaded automatically"
+msgstr "La descripción está en otro sitio web; no se carga automáticamente"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The changelog is on another website; not loaded automatically"
+msgstr "El registro de cambios está en otro sitio web; no se carga automáticamente"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Couldn't load the description: {}"
+msgstr "No se pudo cargar la descripción: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Couldn't load the changelog: {}"
+msgstr "No se pudo cargar el registro de cambios: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Couldn't show the description: {}"
+msgstr "No se pudo mostrar la descripción: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Couldn't show the changelog: {}"
+msgstr "No se pudo mostrar el registro de cambios: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Current"
+msgstr "Actual"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Current, {}"
+msgstr "Actual, {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Incompatible: {}"
+msgstr "Incompatible: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Latest"
+msgstr "Más reciente"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:407
+#, x-machine
+msgid "Version"
+msgstr "Versión"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Updated"
+msgstr "Actualizado"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Source"
+msgstr "Origen"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "License"
+msgstr "Licencia"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Code"
+msgstr "Código"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Open ↗"
+msgstr "Abrir ↗"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The new version needs new permissions: {}"
+msgstr "La nueva versión necesita permisos nuevos: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Official repository"
+msgstr "Repositorio oficial"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "{} ({})"
+msgstr "{} ({})"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Unnamed repository ({})"
+msgstr "Repositorio sin nombre ({})"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Unofficial: {} ({})"
+msgstr "No oficial: {} ({})"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Unofficial: Unnamed repository ({})"
+msgstr "No oficial: repositorio sin nombre ({})"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Vestra Player official repository"
+msgstr "Repositorio oficial de Vestra Player"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Built-in"
+msgstr "Integrado"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Local file"
+msgstr "Archivo local"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Link"
+msgstr "Enlace"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Plugin Workshop"
+msgstr "Taller de complementos"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Repository {}"
+msgstr "Repositorio {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Unknown source"
+msgstr "Origen desconocido"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Unknown author"
+msgstr "Autor desconocido"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Cancelled"
+msgstr "Cancelado"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Only https:// addresses are supported"
+msgstr "Solo se admiten direcciones https://"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Redirected to an insecure address"
+msgstr "Redirigido a una dirección no segura"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Redirect without a target address ({})"
+msgstr "Redirección sin dirección de destino ({})"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Too many redirects"
+msgstr "Demasiadas redirecciones"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Size does not match the description"
+msgstr "El tamaño no coincide con la descripción"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "File exceeds the size limit"
+msgstr "El archivo supera el límite de tamaño"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Checksum does not match the description"
+msgstr "La suma de comprobación no coincide con la descripción"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Connection timed out"
+msgstr "Se agotó el tiempo de conexión"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Server not found"
+msgstr "Servidor no encontrado"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Connection refused"
+msgstr "Conexión rechazada"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Connection reset"
+msgstr "Conexión restablecida"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Secure connection failed"
+msgstr "Error en la conexión segura"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "File exceeds 256 KB"
+msgstr "El archivo supera los 256 KB"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Not JSON"
+msgstr "No es JSON"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The top level is not an object"
+msgstr "El nivel superior no es un objeto"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Wrong schema"
+msgstr "Esquema incorrecto"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "plugins is not an array"
+msgstr "plugins no es una matriz"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "revoked is not an array"
+msgstr "revoked no es una matriz"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "revoked has more than {} entries"
+msgstr "revoked tiene más de {} entradas"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Needs a newer plugin API ({})"
+msgstr "Requiere una API de complementos más reciente ({})"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Needs Vestra Player ≥ {} (current {})"
+msgstr "Requiere Vestra Player ≥ {} (actual: {})"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Revoked: {}"
+msgstr "Retirada: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "This plugin has been revoked: {}"
+msgstr "Este complemento se ha retirado: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "“{}”: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed or loaded for testing"
+msgstr "«{}»: los id que empiezan por vestra. están reservados para los complementos integrados del reproductor y no se pueden instalar ni cargar para pruebas"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "This plugin: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed or loaded for testing"
+msgstr "Este complemento: los id que empiezan por vestra. están reservados para los complementos integrados del reproductor y no se pueden instalar ni cargar para pruebas"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Enter a repository address starting with https://"
+msgstr "Introduce una dirección de repositorio que empiece por https://"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The address cannot contain a user name or password"
+msgstr "La dirección no puede contener nombre de usuario ni contraseña"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The repository address is too long"
+msgstr "La dirección del repositorio es demasiado larga"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Unknown permission: {}"
+msgstr "Permiso desconocido: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Plugin Store: plugin updates available ({})"
+msgstr "Tienda de complementos: hay actualizaciones de complementos ({})"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Disabled the revoked plugin “{}”"
+msgstr "Se desactivó el complemento retirado «{}»"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Replace the installed “{}”?"
+msgstr "¿Reemplazar «{}» instalado?"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid ""
+"{1}\n"
+"\n"
+"Will install {2} from the official repository.\n"
+"\n"
+"{3}"
+msgstr ""
+"{1}\n"
+"\n"
+"Se instalará {2} desde el repositorio oficial.\n"
+"\n"
+"{3}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid ""
+"{1}\n"
+"\n"
+"Will install {2} from the unofficial repository.\n"
+"\n"
+"{4}\n"
+"\n"
+"{3}"
+msgstr ""
+"{1}\n"
+"\n"
+"Se instalará {2} desde el repositorio no oficial.\n"
+"\n"
+"{4}\n"
+"\n"
+"{3}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Update “{}” to {}? The new version needs more permissions"
+msgstr "¿Actualizar «{}» a {}? La nueva versión necesita más permisos"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid ""
+"Added:\n"
+"{2}\n"
+"\n"
+"Current: {3}. After updating you can roll back to {3} in the store.\n"
+"\n"
+"A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
+msgstr ""
+"Añadidos:\n"
+"{2}\n"
+"\n"
+"Actual: {3}. Tras actualizar, puedes revertir a {3} en la tienda.\n"
+"\n"
+"Un complemento es un programa completo: los permisos anteriores solo limitan lo que puede hacer con el reproductor, no la lectura y escritura de archivos ni el uso de la red."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Update “{}” to {}?"
+msgstr "¿Actualizar «{}» a {}?"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Current: {2}. After updating you can roll back to {2} in the store."
+msgstr "Actual: {2}. Tras actualizar, puedes revertir a {2} en la tienda."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Install “{}” {} (older version)?"
+msgstr "¿Instalar «{}» {} (versión anterior)?"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Install “{}” {} (reinstall)?"
+msgstr "¿Instalar «{}» {} (reinstalar)?"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Current: {2}. After installing you can restore {2} in the store."
+msgstr "Actual: {2}. Tras instalar, puedes restaurar {2} en la tienda."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Current: {2}. After installing you can roll back to {2} in the store."
+msgstr "Actual: {2}. Tras instalar, puedes revertir a {2} en la tienda."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid ""
+"Current: {2}. After installing you can restore {2} in the store.\n"
+"\n"
+"This version needs more permissions:\n"
+"{3}"
+msgstr ""
+"Actual: {2}. Tras instalar, puedes restaurar {2} en la tienda.\n"
+"\n"
+"Esta versión necesita más permisos:\n"
+"{3}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid ""
+"Current: {2}. After installing you can roll back to {2} in the store.\n"
+"\n"
+"This version needs more permissions:\n"
+"{3}"
+msgstr ""
+"Actual: {2}. Tras instalar, puedes revertir a {2} en la tienda.\n"
+"\n"
+"Esta versión necesita más permisos:\n"
+"{3}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Install “{}” {}?"
+msgstr "¿Instalar «{}» {}?"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid ""
+"From the Vestra Player official repository, author {2}.\n"
+"\n"
+"{3}"
+msgstr ""
+"Del repositorio oficial de Vestra Player, autor: {2}.\n"
+"\n"
+"{3}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Install “{}” {} from an unofficial repository?"
+msgstr "¿Instalar «{}» {} desde un repositorio no oficial?"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid ""
+"{2}\n"
+"\n"
+"{3}"
+msgstr ""
+"{2}\n"
+"\n"
+"{3}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "{1}"
+msgstr "{1}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "This plugin has already been installed from another source. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source."
+msgstr "Este complemento ya se instaló desde otro origen. Al reemplazarlo, se continúa con los datos de una instalación anterior desde este origen, si la hubo; si no, con datos nuevos y vacíos. Los datos del complemento original se conservan y se vuelven a usar si lo reinstalas desde el origen original."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The current “{}” {} comes from {}. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source."
+msgstr "El «{}» {} actual procede de {}. Al reemplazarlo, se continúa con los datos de una instalación anterior desde este origen, si la hubo; si no, con datos nuevos y vacíos. Los datos del complemento original se conservan y se vuelven a usar si lo reinstalas desde el origen original."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust."
+msgstr "Repositorio: {} ({}). Vestra Player no revisa este repositorio; sus complementos pueden leer tus archivos o usar la red. Instala solo complementos de autores en los que confíes."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust. This is a test repository on this machine, without encryption."
+msgstr "Repositorio: {} ({}). Vestra Player no revisa este repositorio; sus complementos pueden leer tus archivos o usar la red. Instala solo complementos de autores en los que confíes. Es un repositorio de prueba en este equipo, sin cifrado."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid ""
+"It will be able to:\n"
+"{}\n"
+"\n"
+"A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
+msgstr ""
+"Podrá:\n"
+"{}\n"
+"\n"
+"Un complemento es un programa completo: los permisos anteriores solo limitan lo que puede hacer con el reproductor, no la lectura y escritura de archivos ni el uso de la red."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Unknown"
+msgstr "Desconocido"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "· {}"
+msgstr "· {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "· Uses none of the player's features"
+msgstr "· No usa ninguna función del reproductor"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "{} in total"
+msgstr "{} en total"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Replace the installed version with the plugin package “{}” {}?"
+msgstr "¿Reemplazar la versión instalada por el paquete de complemento «{}» {}?"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid ""
+"{2}\n"
+"\n"
+"{3}\n"
+"\n"
+"{4}"
+msgstr ""
+"{2}\n"
+"\n"
+"{3}\n"
+"\n"
+"{4}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Install the plugin package “{}” {}?"
+msgstr "¿Instalar el paquete de complemento «{}» {}?"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid ""
+"{2}\n"
+"\n"
+"Currently installed: {3} (same source; you can roll back after installing).\n"
+"\n"
+"{4}"
+msgstr ""
+"{2}\n"
+"\n"
+"Instalado actualmente: {3} (mismo origen; puedes revertir tras instalar).\n"
+"\n"
+"{4}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "From the file {}; not reviewed by any repository and not updated automatically. Only install plugins from authors you trust."
+msgstr "Del archivo {}; no lo ha revisado ningún repositorio y no se actualiza automáticamente. Instala solo complementos de autores en los que confíes."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "From the link {}; not reviewed by any repository and not updated automatically. Only install plugins from authors you trust."
+msgstr "Del enlace {}; no lo ha revisado ningún repositorio y no se actualiza automáticamente. Instala solo complementos de autores en los que confíes."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Uninstall “{}”?"
+msgstr "¿Desinstalar «{}»?"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Its menus, windows and processing effects are removed immediately."
+msgstr "Sus menús, ventanas y efectos de procesamiento se quitan de inmediato."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Add the unofficial repository “{}”?"
+msgstr "¿Añadir el repositorio no oficial «{}»?"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Add the unofficial repository “Unnamed repository”?"
+msgstr "¿Añadir el repositorio no oficial «Repositorio sin nombre»?"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid ""
+"Address: {1}\n"
+"\n"
+"Its plugins are not reviewed by Vestra Player and may read your files or use the network. The store shows this repository's plugins but does not judge for you whether they can be trusted."
+msgstr ""
+"Dirección: {1}\n"
+"\n"
+"Vestra Player no revisa sus complementos, que pueden leer tus archivos o usar la red. La tienda muestra los complementos de este repositorio, pero no decide por ti si son de confianza."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid ""
+"Address: {1}\n"
+"\n"
+"Its plugins are not reviewed by Vestra Player and may read your files or use the network. The store shows this repository's plugins but does not judge for you whether they can be trusted.\n"
+"\n"
+"This is a test repository on this machine, without encryption."
+msgstr ""
+"Dirección: {1}\n"
+"\n"
+"Vestra Player no revisa sus complementos, que pueden leer tus archivos o usar la red. La tienda muestra los complementos de este repositorio, pero no decide por ti si son de confianza.\n"
+"\n"
+"Es un repositorio de prueba en este equipo, sin cifrado."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Remove the repository “{} ({})”?"
+msgstr "¿Quitar el repositorio «{} ({})»?"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Remove the repository “Unnamed repository ({1})”?"
+msgstr "¿Quitar el repositorio «Repositorio sin nombre ({1})»?"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "The store will stop reading this repository. Plugins installed from it stay, but the store no longer checks them for updates and revocations."
+msgstr "La tienda dejará de leer este repositorio. Los complementos instalados desde él se mantienen, pero la tienda ya no busca actualizaciones ni retiradas para ellos."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Disabled the revoked plugin “{}” {}"
+msgstr "Se desactivó el complemento retirado «{}» {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Disabled {} revoked plugins"
+msgstr "Se desactivaron {} complementos retirados"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid ""
+"The repository revoked these versions. Reasons:\n"
+"\n"
+"{2}\n"
+"\n"
+"To keep using one anyway, choose “Enable Anyway…” on its page in the Plugin Store."
+msgstr ""
+"El repositorio retiró estas versiones. Motivos:\n"
+"\n"
+"{2}\n"
+"\n"
+"Para seguir usando alguna de todos modos, elige «Activar de todos modos…» en su página de la Tienda de complementos."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "“{}” {}: {}"
+msgstr "«{}» {}: {}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid ""
+"“{}” {}: {}\n"
+"You can update to {} in the Plugin Store."
+msgstr ""
+"«{}» {}: {}\n"
+"Puedes actualizar a {} en la Tienda de complementos."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid ""
+"{}\n"
+"\n"
+"{}"
+msgstr ""
+"{}\n"
+"\n"
+"{}"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Enable the revoked “{}” {} anyway?"
+msgstr "¿Activar de todos modos «{}» {}, que está retirada?"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid ""
+"The repository's reason for revoking this version: {2}\n"
+"\n"
+"Using it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning."
+msgstr ""
+"Motivo del repositorio para retirar esta versión: {2}\n"
+"\n"
+"Usarla puede ser arriesgado. Una vez que confirmes, la tienda no la volverá a desactivar automáticamente y su página seguirá mostrando una advertencia."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid ""
+"The repository's reason for revoking this version: {2}\n"
+"\n"
+"Using it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning.\n"
+"\n"
+"Updating to {3} instead is recommended."
+msgstr ""
+"Motivo del repositorio para retirar esta versión: {2}\n"
+"\n"
+"Usarla puede ser arriesgado. Una vez que confirmes, la tienda no la volverá a desactivar automáticamente y su página seguirá mostrando una advertencia.\n"
+"\n"
+"Se recomienda actualizar a {3} en su lugar."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "“{}” {} has been revoked. Keep using it?"
+msgstr "«{}» {} se ha retirado. ¿Seguir usándola?"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid ""
+"It was just enabled again. The repository's reason for revoking this version: {2}\n"
+"\n"
+"Using it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning."
+msgstr ""
+"Se acaba de volver a activar. Motivo del repositorio para retirar esta versión: {2}\n"
+"\n"
+"Usarla puede ser arriesgado. Una vez que confirmes, la tienda no la volverá a desactivar automáticamente y su página seguirá mostrando una advertencia."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid ""
+"It was just enabled again. The repository's reason for revoking this version: {2}\n"
+"\n"
+"Using it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning.\n"
+"\n"
+"Updating to {3} instead is recommended."
+msgstr ""
+"Se acaba de volver a activar. Motivo del repositorio para retirar esta versión: {2}\n"
+"\n"
+"Usarla puede ser arriesgado. Una vez que confirmes, la tienda no la volverá a desactivar automáticamente y su página seguirá mostrando una advertencia.\n"
+"\n"
+"Se recomienda actualizar a {3} en su lugar."
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Add menu commands and shortcuts"
+msgstr "Añadir comandos de menú y atajos"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Open tool windows"
+msgstr "Abrir ventanas de herramientas"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Show panels in the bottom bar, the sidebar or behind the video"
+msgstr "Mostrar paneles en la barra inferior, la barra lateral o detrás del vídeo"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Show file pickers and confirmations"
+msgstr "Mostrar selectores de archivos y confirmaciones"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Show messages on the video"
+msgstr "Mostrar mensajes sobre el vídeo"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Receive files dropped on the player"
+msgstr "Recibir archivos soltados sobre el reproductor"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Change the player's palette"
+msgstr "Cambiar la paleta del reproductor"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Add pages to the Options window"
+msgstr "Añadir páginas a la ventana Opciones"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Read what is playing and the position"
+msgstr "Leer lo que se reproduce y la posición"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Receive playback changes as they happen"
+msgstr "Recibir los cambios de reproducción en el momento"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Open media, control playback, keep the computer awake"
+msgstr "Abrir medios, controlar la reproducción, mantener el equipo activo"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Provide audio and video it generates itself"
+msgstr "Proporcionar audio y vídeo generados por él mismo"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Process the picture (filters, shaders)"
+msgstr "Procesar la imagen (filtros, shaders)"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Process the sound"
+msgstr "Procesar el sonido"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Read subtitles"
+msgstr "Leer subtítulos"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Load and change subtitles"
+msgstr "Cargar y cambiar subtítulos"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Take snapshots and export clips"
+msgstr "Hacer capturas y exportar clips"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Resolve online video addresses"
+msgstr "Resolver direcciones de vídeo en línea"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Show marks on the progress bar"
+msgstr "Mostrar marcas en la barra de progreso"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Adjust the main window (size, on top, picture-in-picture)"
+msgstr "Ajustar la ventana principal (tamaño, siempre visible, imagen en imagen)"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Read and write the clipboard"
+msgstr "Leer y escribir en el portapapeles"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Change all shortcuts"
+msgstr "Cambiar todos los atajos"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Store sign-in details in the system keychain"
+msgstr "Guardar datos de inicio de sesión en el llavero del sistema"
+
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370
+#, x-machine
+msgid "Install, uninstall and disable other plugins"
+msgstr "Instalar, desinstalar y desactivar otros complementos"
+
+#: store.ts:368 store.ts:369 store.ts:371
+#, x-machine
+msgid "Replace"
+msgstr "Reemplazar"
+
+#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:121
+#, x-machine
+msgid "Add"
+msgstr "Añadir"
+
+#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:79
+#, x-machine
+msgid "Remove"
+msgstr "Quitar"
+
+#: store.ts:368 store.ts:369 store.ts:371
+#, x-machine
+msgid "Update"
+msgstr "Actualizar"
+
+#: store.ts:368 store.ts:369 store.ts:371 ui/store.slint:257 ui/store.slint:432
+#, x-machine
+msgid "Install"
+msgstr "Instalar"
+
+#: store.ts:368 store.ts:369 store.ts:371
+#, x-machine
+msgid "Install Anyway"
+msgstr "Instalar de todos modos"
+
+#: store.ts:368 store.ts:369 store.ts:371
+#, x-machine
+msgid "Uninstall"
+msgstr "Desinstalar"
+
+#: store.ts:368 store.ts:369 store.ts:371
+#, x-machine
+msgid "Also delete its settings and data"
+msgstr "Eliminar también sus ajustes y datos"
+
+#: store.ts:368 store.ts:369 store.ts:371
+#, x-machine
+msgid "Open Plugin Store"
+msgstr "Abrir Tienda de complementos"
+
+#: store.ts:368 store.ts:369 store.ts:371
+#, x-machine
+msgid "OK"
+msgstr "Aceptar"
+
+#: store.ts:368 store.ts:369 store.ts:371
+#, x-machine
+msgid "Enable Anyway"
+msgstr "Activar de todos modos"
+
+#: store.ts:368 store.ts:369 store.ts:371
+#, x-machine
+msgid "Keep Using"
+msgstr "Seguir usando"
+
+#: store.ts:368 store.ts:369 store.ts:371
+#, x-machine
+msgid "Disable"
+msgstr "Desactivar"
+
+#: store.ts:742
+#, x-machine
+msgid "Choose a plugin package (.vxp)"
+msgstr "Elige un paquete de complemento (.vxp)"
+
+#: ui/settings.slint:39
+#, x-machine
+msgid "Check for updates automatically (30 seconds after the player starts, then every 24 hours)"
+msgstr "Buscar actualizaciones automáticamente (30 segundos después de iniciar el reproductor y luego cada 24 horas)"
+
+#: ui/settings.slint:44
+#, x-machine
+msgid "When off, the store goes online only when you open it or click “Refresh”; plugins revoked by a repository are disabled only then too. When updates are available, the “Plugin Store…” menu item shows how many."
+msgstr "Si está desactivado, la tienda solo se conecta cuando la abres o haces clic en «Actualizar»; los complementos retirados por un repositorio también se desactivan solo entonces. Cuando hay actualizaciones, el elemento de menú «Tienda de complementos…» indica cuántas."
+
+#: ui/settings.slint:51
+#, x-machine
+msgid "Repositories"
+msgstr "Repositorios"
+
+#: ui/settings.slint:90
+#, x-machine
+msgid "Add Repository…"
+msgstr "Añadir repositorio…"
+
+#: ui/settings.slint:114
+#, x-machine
+msgid "The repository's root address or the full address of index.json (https://…)"
+msgstr "La dirección raíz del repositorio o la dirección completa de index.json (https://…)"
+
+#: ui/settings.slint:125 ui/store.slint:516
+#, x-machine
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: ui/settings.slint:130
+#, x-machine
+msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline, disable the Plugin Store in “Plugin Manager”."
+msgstr "Vestra Player no revisa los repositorios de terceros; sus complementos pueden leer tus archivos o usar la red. Añade solo repositorios de confianza. El repositorio oficial no se puede quitar; para que la tienda no se conecte, desactiva la Tienda de complementos en «Gestor de complementos»."
+
+#: ui/store.slint:216
+#, x-machine
+msgid "Search names, authors, tags…"
+msgstr "Buscar nombres, autores, etiquetas…"
+
+#: ui/store.slint:221
+#, x-machine
+msgid "All"
+msgstr "Todos"
+
+#: ui/store.slint:225
+#, x-machine
+msgid "Updates {}"
+msgstr "Actualizaciones {}"
+
+#: ui/store.slint:225
+#, x-machine
+msgid "Updates"
+msgstr "Actualizaciones"
+
+#: ui/store.slint:233
+#, x-machine
+msgid "Tags: All"
+msgstr "Etiquetas: todas"
+
+#: ui/store.slint:240
+#, x-machine
+msgid "Sort: Name"
+msgstr "Ordenar: nombre"
+
+#: ui/store.slint:240
+#, x-machine
+msgid "Sort: Updated"
+msgstr "Ordenar: actualización"
+
+#: ui/store.slint:248
+#, x-machine
+msgid "You can also drop a .vxp plugin package on the player's video area to install it"
+msgstr "También puedes soltar un paquete de complemento .vxp sobre la zona del vídeo del reproductor para instalarlo"
+
+#: ui/store.slint:249
+#, x-machine
+msgid "Install from File…"
+msgstr "Instalar desde archivo…"
+
+#: ui/store.slint:250
+#, x-machine
+msgid "Install from Link…"
+msgstr "Instalar desde enlace…"
+
+#: ui/store.slint:251
+#, x-machine
+msgid "Repositories…"
+msgstr "Repositorios…"
+
+#: ui/store.slint:252
+#, x-machine
+msgid "Refresh"
+msgstr "Actualizar"
+
+#: ui/store.slint:256
+#, x-machine
+msgid "Plugin package link (https://…/name-version.vxp)"
+msgstr "Enlace del paquete de complemento (https://…/nombre-versión.vxp)"
+
+#: ui/store.slint:300
+#, x-machine
+msgid "Select a plugin on the left to see its details"
+msgstr "Selecciona un complemento a la izquierda para ver sus detalles"
+
+#: ui/store.slint:368
+#, x-machine
+msgid "Description"
+msgstr "Descripción"
+
+#: ui/store.slint:369
+#, x-machine
+msgid "Changelog"
+msgstr "Registro de cambios"
+
+#: ui/store.slint:370
+#, x-machine
+msgid "Versions"
+msgstr "Versiones"
+
+#: ui/store.slint:408
+#, x-machine
+msgid "Published"
+msgstr "Publicado"
+
+#: ui/store.slint:409
+#, x-machine
+msgid "Minimum player"
+msgstr "Reproductor mínimo"
+
+#: ui/store.slint:475
+#, x-machine
+msgid "Permissions ({})"
+msgstr "Permisos ({})"
+
+#: ui/store.slint:489
+#, x-machine
+msgid "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
+msgstr "Un complemento es un programa completo: los permisos anteriores solo limitan lo que puede hacer con el reproductor, no la lectura y escritura de archivos ni el uso de la red."
+
+#: ui/store.slint:497
+#, x-machine
+msgid "Disable, reload, open the data folder: Settings ▸ Plugin Manager…"
+msgstr "Desactivar, recargar, abrir la carpeta de datos: Ajustes ▸ Gestor de complementos…"

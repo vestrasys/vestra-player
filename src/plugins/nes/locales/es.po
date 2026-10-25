@@ -1,0 +1,180 @@
+msgid ""
+msgstr ""
+"Language: es\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: core.ts:9
+#, x-machine
+msgid "The emulator frame has an invalid size."
+msgstr "El fotograma del emulador tiene un tamaño no válido."
+
+#: core.ts:29
+#, x-machine
+msgid "This is not an NES ROM in iNES format."
+msgstr "No es una ROM de NES en formato iNES."
+
+#: core.ts:32
+#, x-machine
+msgid "The ROM file is incomplete: shorter than its header says."
+msgstr "El archivo ROM está incompleto: es más corto de lo que indica su cabecera."
+
+#: core.ts:45
+#, x-machine
+msgid "JSNES does not support mapper {} of this ROM."
+msgstr "JSNES no admite el mapper {} de esta ROM."
+
+#: core.ts:45
+#, x-machine
+msgid "JSNES could not load this ROM: {}"
+msgstr "JSNES no pudo cargar esta ROM: {}"
+
+#: core.ts:53
+#, x-machine
+msgid "The emulator produced invalid audio data."
+msgstr "El emulador produjo datos de audio no válidos."
+
+#: main.ts:83
+#, x-machine
+msgid "Open NES ROM"
+msgstr "Abrir ROM de NES"
+
+#: main.ts:116 main.ts:117 main.ts:118 manifest.json
+#, x-machine
+msgid "Emulator"
+msgstr "Emulador"
+
+#: main.ts:116
+#, x-machine
+msgid "Open NES ROM…"
+msgstr "Abrir ROM de NES…"
+
+#: main.ts:117
+#, x-machine
+msgid "Stop NES"
+msgstr "Detener NES"
+
+#: main.ts:118
+#, x-machine
+msgid "NES Tools…"
+msgstr "Herramientas de NES…"
+
+#: main.ts:123
+#, x-machine
+msgid "The ROM file is larger than the 16 MiB limit."
+msgstr "El archivo ROM supera el límite de 16 MiB."
+
+#: main.ts:131
+#, x-machine
+msgid "The ROM file was not found."
+msgstr "No se encontró el archivo ROM."
+
+#: main.ts:132
+#, x-machine
+msgid "No permission to read the ROM file."
+msgstr "Sin permiso para leer el archivo ROM."
+
+#: main.ts:133
+#, x-machine
+msgid "This is a folder, not a ROM file."
+msgstr "Es una carpeta, no un archivo ROM."
+
+#: manifest.json
+#, x-machine
+msgid "NES Emulator"
+msgstr "Emulador de NES"
+
+#: manifest.json
+#, x-machine
+msgid "Play NES game ROMs in the player"
+msgstr "Juega ROM de NES en el reproductor"
+
+#: manifest.json
+#, x-machine
+msgid ""
+"Runs iNES ROMs with JSNES; picture and sound play in the player like any other media.\n"
+".nes files open like media: Open File, a drop on the video, the playlist; the Emulator context menu opens and stops them too. No keyboard controls or save states yet; no games included."
+msgstr ""
+"Ejecuta ROM iNES con JSNES; la imagen y el sonido se reproducen en el reproductor como cualquier otro medio.\n"
+"Los archivos .nes se abren como medios: Abrir archivo, arrastrándolos al vídeo o desde la lista de reproducción; el menú contextual Emulador también los abre y detiene. Aún sin controles de teclado ni partidas guardadas; no incluye juegos."
+
+#: manifest.json
+#, x-machine
+msgid "Games"
+msgstr "Juegos"
+
+#: nes.slint:5
+#, x-machine
+msgid "NES"
+msgstr "NES"
+
+#: nes.slint:15
+#, x-machine
+msgid "Running {} · 256×240 · 48 kHz stereo"
+msgstr "Ejecutando {} · 256×240 · 48 kHz estéreo"
+
+#: nes.slint:16
+#, x-machine
+msgid "Stopped."
+msgstr "Detenido."
+
+#: nes.slint:17
+#, x-machine
+msgid "Replaced by another source."
+msgstr "Sustituido por otra fuente."
+
+#: nes.slint:18
+#, x-machine
+msgid "Emulator stopped: {}"
+msgstr "Emulador detenido: {}"
+
+#: nes.slint:19
+#, x-machine
+msgid "Emulator stopped: the source ended."
+msgstr "Emulador detenido: la fuente terminó."
+
+#: nes.slint:20
+#, x-machine
+msgid "Error: {}"
+msgstr "Error: {}"
+
+#: nes.slint:21
+#, x-machine
+msgid "Error: could not open the ROM."
+msgstr "Error: no se pudo abrir la ROM."
+
+#: nes.slint:22
+#, x-machine
+msgid "Error: timed out preparing the first audio and video buffers."
+msgstr "Error: se agotó el tiempo al preparar los primeros búferes de audio y vídeo."
+
+#: nes.slint:23
+#, x-machine
+msgid "Error: timed out waiting for the emulator source to start."
+msgstr "Error: se agotó el tiempo esperando a que se iniciara la fuente del emulador."
+
+#: nes.slint:24
+#, x-machine
+msgid "Error: start-up timed out."
+msgstr "Error: se agotó el tiempo de inicio."
+
+#: nes.slint:25
+#, x-machine
+msgid "Error: the audio device is not ready."
+msgstr "Error: el dispositivo de audio no está listo."
+
+#: nes.slint:26
+#, x-machine
+msgid "Choose an iNES ROM file."
+msgstr "Elige un archivo ROM iNES."
+
+#: nes.slint:47
+#, x-machine
+msgid "Open ROM…"
+msgstr "Abrir ROM…"
+
+#: nes.slint:48
+#, x-machine
+msgid "Stop"
+msgstr "Detener"

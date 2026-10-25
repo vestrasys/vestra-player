@@ -1,0 +1,680 @@
+msgid ""
+msgstr ""
+"Language: es\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:57
+#, x-machine
+msgid "Enter valid seconds; the end must be after the start."
+msgstr "Introduce segundos válidos; el final debe ser posterior al inicio."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:58
+#, x-machine
+msgid "A burst needs 2–20 frames, an interval of 0.1–10 s and a known media duration."
+msgstr "Una ráfaga necesita 2–20 fotogramas, un intervalo de 0,1–10 s y una duración del medio conocida."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:59
+#, x-machine
+msgid "The burst runs past the end of the media. Use fewer frames or a shorter interval."
+msgstr "La ráfaga sobrepasa el final del medio. Usa menos fotogramas o un intervalo más corto."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:60
+#, x-machine
+msgid "No free file name found."
+msgstr "No se encontró ningún nombre de archivo libre."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:61
+#, x-machine
+msgid "The current frame cannot be captured. Open a local video file first."
+msgstr "No se puede capturar el fotograma actual. Abre primero un archivo de vídeo local."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:62
+#, x-machine
+msgid "The current frame cannot be exported. Open a local video file first."
+msgstr "No se puede exportar el fotograma actual. Abre primero un archivo de vídeo local."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:63
+#, x-machine
+msgid "Bursts and clips need a known media duration."
+msgstr "Las ráfagas y los clips necesitan una duración del medio conocida."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:64
+#, x-machine
+msgid "The selected range is past the end of the media."
+msgstr "El intervalo seleccionado sobrepasa el final del medio."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:65
+#, x-machine
+msgid "The selected audio track cannot be exported. Choose another track or No Audio."
+msgstr "No se puede exportar la pista de audio seleccionada. Elige otra pista o Sin audio."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:66
+#, x-machine
+msgid "The media changed; nothing was started."
+msgstr "El medio cambió; no se inició nada."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:67
+#, x-machine
+msgid "The player is busy. Try again later."
+msgstr "El reproductor está ocupado. Inténtalo más tarde."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:68
+#, x-machine
+msgid "The current frame cannot be captured."
+msgstr "No se puede capturar el fotograma actual."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:69
+#, x-machine
+msgid "Could not capture the frame."
+msgstr "No se pudo capturar el fotograma."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:70
+#, x-machine
+msgid "One export is running and four are queued. Please wait."
+msgstr "Hay una exportación en curso y cuatro en cola. Espera, por favor."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:71
+#, x-machine
+msgid "The kept frame has expired. Retry with the current frame."
+msgstr "El fotograma retenido ha caducado. Vuelve a intentarlo con el fotograma actual."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:72
+#, x-machine
+msgid "The kept frame was released."
+msgstr "Se liberó el fotograma retenido."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:73
+#, x-machine
+msgid "Cancelled."
+msgstr "Cancelado."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:74
+#, x-machine
+msgid "Could not write to the clipboard"
+msgstr "No se pudo escribir en el portapapeles"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:75
+#, x-machine
+msgid "Not enough disk space"
+msgstr "No hay suficiente espacio en disco"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:76
+#, x-machine
+msgid "The target file already exists"
+msgstr "El archivo de destino ya existe"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:77
+#, x-machine
+msgid "No write permission"
+msgstr "Sin permiso de escritura"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:78
+#, x-machine
+msgid "This media cannot be encoded"
+msgstr "Este medio no se puede codificar"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:79
+#, x-machine
+msgid "Export failed"
+msgstr "Error al exportar"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:80
+#, x-machine
+msgid "This task has no output file yet."
+msgstr "Esta tarea aún no tiene archivo de salida."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:81
+#, x-machine
+msgid "The output file no longer exists."
+msgstr "El archivo de salida ya no existe."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:82
+#, x-machine
+msgid "Could not open the folder."
+msgstr "No se pudo abrir la carpeta."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:83
+#, x-machine
+msgid "The snapshot folder is unavailable. Please choose it again."
+msgstr "La carpeta de capturas no está disponible. Vuelve a elegirla."
+
+#: main.ts:73
+#, x-machine
+msgid "Snapshot failed: {}"
+msgstr "Error en la captura: {}"
+
+#: main.ts:73 ui/parts.slint:115
+#, x-machine
+msgid "Burst failed: {}"
+msgstr "Error en la ráfaga: {}"
+
+#: main.ts:73 ui/parts.slint:117
+#, x-machine
+msgid "Export failed: {}"
+msgstr "Error al exportar: {}"
+
+#: main.ts:88
+#, x-machine
+msgid "Frame saved as {}"
+msgstr "Fotograma guardado como {}"
+
+#. {0} is the number of frames (2–20), {1} the folder.
+#: main.ts:93
+#, x-machine
+msgid "Burst of {0} frames saved to {1}"
+msgstr "Ráfaga de {0} fotogramas guardada en {1}"
+
+#: main.ts:97
+#, x-machine
+msgid "Clip exported as {}"
+msgstr "Clip exportado como {}"
+
+#: main.ts:127
+#, x-machine
+msgid "Snapshot format: {}"
+msgstr "Formato de captura: {}"
+
+#: main.ts:149
+#, x-machine
+msgid "The previous snapshot is still being processed"
+msgstr "La captura anterior aún se está procesando"
+
+#: main.ts:168
+#, x-machine
+msgid "Snapshot queued"
+msgstr "Captura en cola"
+
+#: main.ts:176
+#, x-machine
+msgid "Save Rendered Frame As"
+msgstr "Guardar fotograma renderizado como"
+
+#: main.ts:176
+#, x-machine
+msgid "Save Current Frame As"
+msgstr "Guardar fotograma actual como"
+
+#: main.ts:187
+#, x-machine
+msgid "Frame copied to the clipboard"
+msgstr "Fotograma copiado al portapapeles"
+
+#: main.ts:190
+#, x-machine
+msgid "Choose Snapshot Folder"
+msgstr "Elegir carpeta de capturas"
+
+#: main.ts:192
+#, x-machine
+msgid "Please choose an existing folder."
+msgstr "Elige una carpeta existente."
+
+#: main.ts:195
+#, x-machine
+msgid "Snapshot folder: {}"
+msgstr "Carpeta de capturas: {}"
+
+#: main.ts:280 ui/clip.slint:8
+#, x-machine
+msgid "Export Clip"
+msgstr "Exportar clip"
+
+#: main.ts:329
+#, x-machine
+msgid "The snapshot window could not open."
+msgstr "No se pudo abrir la ventana de captura."
+
+#: main.ts:346 manifest.json ui/error.slint:5
+#, x-machine
+msgid "Snapshot"
+msgstr "Captura"
+
+#: main.ts:346
+#, x-machine
+msgid "Save Current Frame"
+msgstr "Guardar fotograma actual"
+
+#: main.ts:346
+#, x-machine
+msgid "Save Current Frame As…"
+msgstr "Guardar fotograma actual como…"
+
+#: main.ts:346
+#, x-machine
+msgid "Copy Current Frame"
+msgstr "Copiar fotograma actual"
+
+#: main.ts:346
+#, x-machine
+msgid "Save Rendered Frame"
+msgstr "Guardar fotograma renderizado"
+
+#: main.ts:346
+#, x-machine
+msgid "Save Rendered Frame As…"
+msgstr "Guardar fotograma renderizado como…"
+
+#: main.ts:346
+#, x-machine
+msgid "Copy Rendered Frame"
+msgstr "Copiar fotograma renderizado"
+
+#: main.ts:346
+#, x-machine
+msgid "Burst…"
+msgstr "Ráfaga…"
+
+#: main.ts:346
+#, x-machine
+msgid "Export Clip…"
+msgstr "Exportar clip…"
+
+#: main.ts:346 ui/clip.slint:74
+#, x-machine
+msgid "Export Tasks…"
+msgstr "Tareas de exportación…"
+
+#: main.ts:346
+#, x-machine
+msgid "Capture as PNG"
+msgstr "Capturar como PNG"
+
+#: main.ts:346
+#, x-machine
+msgid "Capture as JPEG"
+msgstr "Capturar como JPEG"
+
+#: main.ts:346
+#, x-machine
+msgid "Capture as BMP"
+msgstr "Capturar como BMP"
+
+#: main.ts:346
+#, x-machine
+msgid "Include Subtitles in Rendered Frame"
+msgstr "Incluir subtítulos en el fotograma renderizado"
+
+#: main.ts:346
+#, x-machine
+msgid "Snapshot Settings…"
+msgstr "Ajustes de captura…"
+
+#: main.ts:346
+#, x-machine
+msgid "Snapshot Folder…"
+msgstr "Carpeta de capturas…"
+
+#: main.ts:346
+#, x-machine
+msgid "Open Snapshot Folder"
+msgstr "Abrir carpeta de capturas"
+
+#: main.ts:346
+#, x-machine
+msgid "No frame to capture"
+msgstr "No hay fotograma que capturar"
+
+#: manifest.json
+#, x-machine
+msgid "Save or copy the current frame, capture bursts, export clips"
+msgstr "Guarda o copia el fotograma actual, captura ráfagas y exporta clips"
+
+#: manifest.json
+#, x-machine
+msgid ""
+"Saves, saves as or copies the current frame (the source frame, or the rendered frame with video effects and subtitles) as PNG, JPEG or BMP; captures a burst of frames; exports part of a video as MP4 and shows its progress in a task list.\n"
+"Right-click menu: Video ▸ Snapshot."
+msgstr ""
+"Guarda, guarda como o copia el fotograma actual (el fotograma original, o el fotograma renderizado con efectos de vídeo y subtítulos) en PNG, JPEG o BMP; captura una ráfaga de fotogramas; exporta parte de un vídeo como MP4 y muestra su progreso en una lista de tareas.\n"
+"Menú contextual: Vídeo ▸ Captura."
+
+#: manifest.json
+#, x-machine
+msgid "video"
+msgstr "vídeo"
+
+#: manifest.json
+#, x-machine
+msgid "snapshot"
+msgstr "captura"
+
+#: manifest.json
+#, x-machine
+msgid "export"
+msgstr "exportar"
+
+#: model.ts:178 ui/clip.slint:13
+#, x-machine
+msgid "No Audio"
+msgstr "Sin audio"
+
+#: model.ts:179 ui/clip.slint:13
+#, x-machine
+msgid "Current Track"
+msgstr "Pista actual"
+
+#: model.ts:180
+#, x-machine
+msgid "Track {} · {}"
+msgstr "Pista {} · {}"
+
+#: model.ts:180
+#, x-machine
+msgid "Track {}"
+msgstr "Pista {}"
+
+#: ui/burst.slint:8
+#, x-machine
+msgid "Burst"
+msgstr "Ráfaga"
+
+#: ui/burst.slint:35
+#, x-machine
+msgid "Save to"
+msgstr "Guardar en"
+
+#: ui/burst.slint:45
+#, x-machine
+msgid "Snapshot settings"
+msgstr "Ajustes de captura"
+
+#: ui/burst.slint:48
+#, x-machine
+msgid "Count:"
+msgstr "Cantidad:"
+
+#: ui/burst.slint:50
+#, x-machine
+msgid "frames (2–20)"
+msgstr "fotogramas (2–20)"
+
+#: ui/burst.slint:54
+#, x-machine
+msgid "Interval:"
+msgstr "Intervalo:"
+
+#: ui/burst.slint:56
+#, x-machine
+msgid "s (0.1–10)"
+msgstr "s (0,1–10)"
+
+#: ui/burst.slint:58
+#, x-machine
+msgid "Start at the current position"
+msgstr "Empezar en la posición actual"
+
+#: ui/burst.slint:61
+#, x-machine
+msgid "Start:"
+msgstr "Inicio:"
+
+#: ui/burst.slint:63 ui/clip.slint:34 ui/clip.slint:40
+#, x-machine
+msgid "Current"
+msgstr "Actual"
+
+#: ui/burst.slint:67
+#, x-machine
+msgid "Other settings"
+msgstr "Otros ajustes"
+
+#: ui/burst.slint:70 ui/clip.slint:47 ui/settings.slint:29
+#, x-machine
+msgid "Format:"
+msgstr "Formato:"
+
+#: ui/burst.slint:79 ui/clip.slint:58
+#, x-machine
+msgid "Include video effects"
+msgstr "Incluir efectos de vídeo"
+
+#: ui/burst.slint:80
+#, x-machine
+msgid "Capture subtitles too"
+msgstr "Capturar también los subtítulos"
+
+#: ui/burst.slint:85 ui/clip.slint:63
+#, x-machine
+msgid "Information"
+msgstr "Información"
+
+#: ui/burst.slint:88
+#, x-machine
+msgid "Progress:"
+msgstr "Progreso:"
+
+#: ui/burst.slint:93 ui/clip.slint:66
+#, x-machine
+msgid "Status:"
+msgstr "Estado:"
+
+#: ui/burst.slint:100 ui/tasks.slint:80
+#, x-machine
+msgid "Open Save Folder"
+msgstr "Abrir carpeta de destino"
+
+#: ui/burst.slint:101
+#, x-machine
+msgid "Capture Current Frame"
+msgstr "Capturar fotograma actual"
+
+#: ui/burst.slint:104
+#, x-machine
+msgid "Start"
+msgstr "Iniciar"
+
+#: ui/clip.slint:29
+#, x-machine
+msgid "Range"
+msgstr "Intervalo"
+
+#: ui/clip.slint:32
+#, x-machine
+msgid "Start (s):"
+msgstr "Inicio (s):"
+
+#: ui/clip.slint:38
+#, x-machine
+msgid "End (s):"
+msgstr "Final (s):"
+
+#: ui/clip.slint:44
+#, x-machine
+msgid "Output"
+msgstr "Salida"
+
+#: ui/clip.slint:48
+#, x-machine
+msgid "MP4 (H.264 + AAC)"
+msgstr "MP4 (H.264 + AAC)"
+
+#: ui/clip.slint:52
+#, x-machine
+msgid "Audio:"
+msgstr "Audio:"
+
+#: ui/clip.slint:59
+#, x-machine
+msgid "Export subtitles too"
+msgstr "Exportar también los subtítulos"
+
+#: ui/clip.slint:77
+#, x-machine
+msgid "Export…"
+msgstr "Exportar…"
+
+#: ui/error.slint:12
+#, x-machine
+msgid "The snapshot window could not open. Close this notice and try again."
+msgstr "No se pudo abrir la ventana de captura. Cierra este aviso y vuelve a intentarlo."
+
+#: ui/parts.slint:89
+#, x-machine
+msgid "Queued"
+msgstr "En cola"
+
+#: ui/parts.slint:90
+#, x-machine
+msgid "Preparing"
+msgstr "Preparando"
+
+#: ui/parts.slint:91
+#, x-machine
+msgid "Exporting"
+msgstr "Exportando"
+
+#: ui/parts.slint:92
+#, x-machine
+msgid "Cancelling"
+msgstr "Cancelando"
+
+#: ui/parts.slint:93
+#, x-machine
+msgid "Completed"
+msgstr "Completado"
+
+#: ui/parts.slint:94
+#, x-machine
+msgid "Failed"
+msgstr "Error"
+
+#: ui/parts.slint:95
+#, x-machine
+msgid "Cancelled"
+msgstr "Cancelado"
+
+#: ui/parts.slint:103
+#, x-machine
+msgid "Failed: {}"
+msgstr "Error: {}"
+
+#. {0} is a task state (Exporting), {1} the frames done, {2} the frames in all.
+#: ui/parts.slint:105
+#, x-machine
+msgid "{0} · {1}/{2}"
+msgstr "{0} · {1}/{2}"
+
+#. {} is the number of frames (2–20).
+#: ui/parts.slint:112
+#, x-machine
+msgid "{} frames saved"
+msgstr "{} fotogramas guardados"
+
+#. {} is the number of frames (2–20).
+#: ui/parts.slint:114
+#, x-machine
+msgid "Burst of {} frames started"
+msgstr "Ráfaga de {} fotogramas iniciada"
+
+#: ui/parts.slint:116
+#, x-machine
+msgid "Exported {}"
+msgstr "Exportado: {}"
+
+#: ui/parts.slint:118
+#, x-machine
+msgid "No save location chosen."
+msgstr "No se eligió ninguna ubicación de guardado."
+
+#: ui/parts.slint:119
+#, x-machine
+msgid "Export started. Follow it in Export Tasks."
+msgstr "Exportación iniciada. Puedes seguirla en Tareas de exportación."
+
+#: ui/parts.slint:120
+#, x-machine
+msgid "Restarted."
+msgstr "Reiniciado."
+
+#: ui/settings.slint:8
+#, x-machine
+msgid "Snapshot Settings"
+msgstr "Ajustes de captura"
+
+#: ui/settings.slint:26
+#, x-machine
+msgid "Format"
+msgstr "Formato"
+
+#: ui/settings.slint:39
+#, x-machine
+msgid "Quality:"
+msgstr "Calidad:"
+
+#: ui/settings.slint:49
+#, x-machine
+msgid "Quality applies to JPEG only; copies to the clipboard are always PNG."
+msgstr "La calidad solo se aplica a JPEG; las copias al portapapeles son siempre PNG."
+
+#: ui/settings.slint:52
+#, x-machine
+msgid "Save location"
+msgstr "Ubicación de guardado"
+
+#: ui/settings.slint:60
+#, x-machine
+msgid "Save to the media folder when possible"
+msgstr "Guardar en la carpeta del medio cuando sea posible"
+
+#: ui/settings.slint:66
+#, x-machine
+msgid "Rendered frame"
+msgstr "Fotograma renderizado"
+
+#: ui/settings.slint:69
+#, x-machine
+msgid "Include subtitles"
+msgstr "Incluir subtítulos"
+
+#: ui/settings.slint:74
+#, x-machine
+msgid "The rendered frame is made offline: it includes the plugins' video effects, and subtitles are drawn again in the plugins' style, always inside the picture, so it is not pixel for pixel what the screen shows. On-screen messages are not included."
+msgstr "El fotograma renderizado se genera aparte: incluye los efectos de vídeo de los complementos, y los subtítulos se vuelven a dibujar con el estilo de los complementos, siempre dentro de la imagen, así que no es píxel a píxel lo que muestra la pantalla. No incluye los mensajes en pantalla."
+
+#: ui/tasks.slint:20
+#, x-machine
+msgid "Export Tasks"
+msgstr "Tareas de exportación"
+
+#: ui/tasks.slint:41
+#, x-machine
+msgid "No export tasks yet."
+msgstr "Aún no hay tareas de exportación."
+
+#: ui/tasks.slint:56
+#, x-machine
+msgid "Burst · {}"
+msgstr "Ráfaga · {}"
+
+#: ui/tasks.slint:56
+#, x-machine
+msgid "Clip · {}"
+msgstr "Clip · {}"
+
+#: ui/tasks.slint:56
+#, x-machine
+msgid "Snapshot · {}"
+msgstr "Captura · {}"
+
+#. {0} is the time or time range, {1} the progress (Completed).
+#: ui/tasks.slint:60
+#, x-machine
+msgid "{0} · {1}"
+msgstr "{0} · {1}"
+
+#: ui/tasks.slint:66
+#, x-machine
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: ui/tasks.slint:67
+#, x-machine
+msgid "Open"
+msgstr "Abrir"
+
+#: ui/tasks.slint:68
+#, x-machine
+msgid "Retry"
+msgstr "Reintentar"
