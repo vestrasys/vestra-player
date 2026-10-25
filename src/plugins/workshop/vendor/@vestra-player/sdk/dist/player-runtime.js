@@ -9,8 +9,12 @@
  */
 export { createPlugin } from "./plugin/index.js";
 export { HostError } from "./wire.js";
-export { API_VERSION, CAPABILITIES } from "./capabilities.js";
-export { COMMAND_LIMITS, MENU_IDS } from "./commands.js";
+export { API_VERSION, CAPABILITIES, CAPABILITY_INFO, MESSAGE_LIMIT, } from "./capabilities.js";
+export { BUILTIN_COMMANDS, BUILTIN_SUBMENUS, COMMAND_LIMITS, MENU_IDS, } from "./commands.js";
+export { BINDING_INPUTS } from "./plugin/bindings.js";
+export { OSD_LIMITS } from "./plugin/osd.js";
+export { SECRET_LIMITS } from "./plugin/services.js";
+export { THEME_PALETTES } from "./palettes.js";
 export { Catalog, HOST_ZH_HANS, LIST_SEPARATORS, LOCALES, MENU_KEYS, matchLocale, parsePo, rewriteSlint, renderText, scanSlint, TEXT_LIMITS, textKey, textProblem, } from "./i18n.js";
 export { MANIFEST_FIELDS, MANIFEST_LIMITS } from "./manifest.js";
 export { MARKDOWN_LIMITS } from "./plugin/markdown.js";
