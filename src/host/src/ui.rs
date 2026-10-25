@@ -144,9 +144,9 @@ pub fn translate(source: String, path: &Path) -> String {
 }
 
 /// Fonts: no window sets `default-font-family`, so every window uses the
-/// system UI font and Slint's per-character fallback for scripts it lacks
-/// (CJK included since Slint 1.18; architecture README "fonts" has how to
-/// add a fallback font for one platform only).
+/// system UI font and Slint's per-character fallback for scripts it lacks;
+/// the CJK fallback chains are the host's (`ui_fonts`, architecture README
+/// "fonts").
 pub fn compile(path: &Path) -> Result<ComponentInstance> {
     compile_source(std::fs::read_to_string(path)?, path)
 }

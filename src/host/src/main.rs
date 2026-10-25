@@ -69,6 +69,7 @@ mod system;
 mod theme;
 mod timeline;
 mod ui;
+mod ui_fonts;
 mod ui_image;
 mod ui_markdown;
 mod ui_state;
@@ -5036,6 +5037,12 @@ fn main() -> Result<()> {
         platform::preferred_languages()
     };
     i18n::init(i18n::resolve(preference.as_deref(), &system));
+    if !headless {
+        // CJK fallback fonts for every window, before the first one exists
+        // (`ui_fonts`), ordered for the interface language (Japanese fonts
+        // first in `ja`, Korean in `ko`, Simplified Chinese otherwise).
+        ui_fonts::install(i18n::locale());
+    }
     host.register_host_commands()?;
     {
         if core_actions::migrate_overlay(&mut host.ui_state.state.bindings) {

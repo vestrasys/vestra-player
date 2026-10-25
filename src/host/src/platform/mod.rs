@@ -12,7 +12,7 @@
 //!
 //! | area | functions |
 //! | --- | --- |
-//! | per-system tables | `SYSTEM` → `standard_window_shortcut` (table in `shortcuts.rs`), `ui_monospace_font` (`monospace_font`); the tables are the same code on every system; `KEY_LABELS` (how menus write shortcuts) |
+//! | per-system tables | `SYSTEM` → `standard_window_shortcut` (table in `shortcuts.rs`), `ui_monospace_font` (`monospace_font`), `ui_cjk_fallback_families` / `ui_bundled_cjk_fallback` (table in `fonts.rs`); the tables are the same code on every system; `KEY_LABELS` (how menus write shortcuts) |
 //! | windows | `shown`, `capture_windows`, `associate_new`, `set_floating`, `set_dark_title_bars`, `window_count`, `resize_content`, `screen_for`, `pointer_in`, `modifier_keys`, `double_click_seconds`, `menu_show_delay_ms` |
 //! | clipboard | `clipboard_read_text`, `clipboard_write_text`, `clipboard_write_image` |
 //! | dialogs | `confirm` |
@@ -88,6 +88,9 @@ pub fn preferred_languages() -> Vec<String> {
 mod layout;
 pub use layout::*;
 
+mod fonts;
+pub use fonts::*;
+
 /// The installation this executable runs from (`layout.rs`); `None` for a
 /// development build.
 pub fn current_install_layout() -> Option<InstallLayout> {
@@ -117,6 +120,17 @@ pub fn monospace_font(system: System) -> &'static str {
 /// The running system's monospace family (`theme::apply_fonts`).
 pub fn ui_monospace_font() -> &'static str {
     monospace_font(imp::SYSTEM)
+}
+
+/// The running system's CJK fallback families for `script` in an interface
+/// in `locale` (`ui_fonts::install`; table in `fonts.rs`).
+pub fn ui_cjk_fallback_families(script: CjkScript, locale: &str) -> Vec<&'static str> {
+    cjk_fallback_families(imp::SYSTEM, script, locale)
+}
+
+/// Whether the bundled CJK font ends the running system's fallback chains.
+pub fn ui_bundled_cjk_fallback() -> bool {
+    bundled_cjk_fallback(imp::SYSTEM)
 }
 
 /// The running system's standard window shortcut for `press`, if any.
