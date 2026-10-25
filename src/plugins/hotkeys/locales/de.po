@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: de\n"
@@ -133,7 +134,7 @@ msgstr "Damit werden Ihre Änderungen an Tastenkürzeln und Mausaktionen aller B
 #: keys-page.ts:462
 #, x-machine
 msgid "Restore All Defaults"
-msgstr "Alle Standards wiederherstellen"
+msgstr "Alle Standardwerte wiederherstellen"
 
 #: keys-page.ts:474
 #, x-machine
@@ -180,7 +181,7 @@ msgstr "Tastenkürzel und Mausaktionen anzeigen und neu belegen"
 #: manifest.json
 #, x-machine
 msgid "Lists the commands of the player and of every plugin in the Keys and Mouse category of the options window: search by command or key, rebind, unbind, restore defaults, check conflicts and export the list. Assigns commands to mouse clicks and the wheel on the video, and can ignore every default shortcut at once.\nOpen it from the context menu: Settings ▸ Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts."
-msgstr "Listet die Befehle des Players und aller Plugins in der Kategorie „Tastatur und Maus“ des Optionsfensters auf: Suche nach Befehl oder Taste, neu belegen, Belegung entfernen, Standards wiederherstellen, Konflikte prüfen und die Liste exportieren. Weist Mausklicks und dem Mausrad auf dem Video Befehle zu und kann alle Standard-Tastenkürzel auf einmal ignorieren.\nAufruf über das Kontextmenü: Einstellungen ▸ Tastenkürzel… / Maus… / Standard-Tastenkürzel ignorieren."
+msgstr "Listet die Befehle des Players und aller Plugins in der Kategorie „Tastatur und Maus“ des Optionsfensters auf: Suche nach Befehl oder Taste, neu belegen, Belegung entfernen, Standardwerte wiederherstellen, Konflikte prüfen und die Liste exportieren. Weist Mausklicks und dem Mausrad auf dem Video Befehle zu und kann alle Standard-Tastenkürzel auf einmal ignorieren.\nAufruf über das Kontextmenü: Einstellungen ▸ Tastenkürzel… / Maus… / Standard-Tastenkürzel ignorieren."
 
 #: manifest.json
 #, x-machine
@@ -240,12 +241,12 @@ msgstr "Vorwärts-Taste"
 #: mouse-page.ts:178 ui/parts.slint:48
 #, x-machine
 msgid "Wheel up"
-msgstr "Mausrad hoch"
+msgstr "Mausrad nach oben"
 
 #: mouse-page.ts:178 ui/parts.slint:49
 #, x-machine
 msgid "Wheel down"
-msgstr "Mausrad runter"
+msgstr "Mausrad nach unten"
 
 #: mouse-page.ts:178 ui/parts.slint:50
 #, x-machine
@@ -345,12 +346,12 @@ msgstr "{0} ({1})"
 #: ui/keys.slint:296
 #, x-machine
 msgid "Add Key…"
-msgstr "Taste hinzufügen…"
+msgstr "Hinzufügen…"
 
 #: ui/keys.slint:309
 #, x-machine
 msgid "Press a shortcut (Esc cancels)"
-msgstr "Drücken Sie ein Tastenkürzel (Esc bricht ab)"
+msgstr "Tasten drücken (Esc: Abbruch)"
 
 #: ui/keys.slint:339
 #, x-machine
@@ -390,12 +391,12 @@ msgstr "Abbrechen"
 #: ui/keys.slint:379
 #, x-machine
 msgid "Restore All Defaults…"
-msgstr "Alle Standards wiederherstellen…"
+msgstr "Alle Standardwerte wiederherstellen…"
 
 #: ui/keys.slint:380
 #, x-machine
 msgid "Export List…"
-msgstr "Liste exportieren…"
+msgstr "Exportieren…"
 
 #: ui/keys.slint:383
 #, x-machine
@@ -410,7 +411,7 @@ msgstr "(Keine)"
 #: ui/mouse.slint:106
 #, x-machine
 msgid "Modifier"
-msgstr "Zusatztaste"
+msgstr "Taste"
 
 #: ui/mouse.slint:109
 #, x-machine
@@ -535,7 +536,7 @@ msgstr "Bestätigen nicht möglich: {}"
 #: ui/parts.slint:91
 #, x-machine
 msgid "All defaults restored"
-msgstr "Alle Standards wiederhergestellt"
+msgstr "Alle Standardwerte wiederhergestellt"
 
 #: ui/parts.slint:92
 #, x-machine

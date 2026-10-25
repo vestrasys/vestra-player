@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: de\n"
@@ -83,7 +84,7 @@ msgstr "Datei nicht gefunden: {}"
 #: menu.ts:153 menu.ts:156
 #, x-machine
 msgid "Cannot open: {}"
-msgstr "Kann nicht geöffnet werden: {}"
+msgstr "Öffnen nicht möglich: {}"
 
 #: menu.ts:172 menu.ts:182 menu.ts:190 ui/resume.slint:6
 #, x-machine
@@ -133,7 +134,7 @@ msgstr "Fortsetzen nicht möglich: {}"
 #: ui/resume.slint:31
 #, x-machine
 msgid "You didn't finish this last time. Continue? ({})"
-msgstr "Diese Wiedergabe wurde zuletzt nicht beendet. Fortsetzen? ({})"
+msgstr "Beim letzten Mal wurde die Wiedergabe nicht beendet. Fortsetzen? ({})"
 
 #: ui/resume.slint:48
 #, x-machine

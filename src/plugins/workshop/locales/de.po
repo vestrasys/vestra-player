@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: de\n"
@@ -289,7 +290,7 @@ msgstr "Die Prüfung durch den Player ist fehlgeschlagen ({0}): {1}"
 #: ai.slint:365
 #, x-machine
 msgid "Checks before packing failed: {} problem(s)"
-msgstr "Prüfungen vor dem Packen fehlgeschlagen: {} Problem(e)"
+msgstr "Prüfungen vor dem Packen fehlgeschlagen; Probleme: {}"
 
 #: ai.slint:366
 #, x-machine
@@ -354,12 +355,12 @@ msgstr "{0}: {1}"
 #: ai.slint:378
 #, x-machine
 msgid "Installed {0} {1}; you can click Roll Back (Undo Install). Shortcuts not in effect:"
-msgstr "{0} {1} installiert; Sie können auf „Zurücksetzen (Installation rückgängig)“ klicken. Nicht wirksame Tastenkürzel:"
+msgstr "{0} {1} installiert; Sie können auf „Installation rückgängig“ klicken. Nicht wirksame Tastenkürzel:"
 
 #: ai.slint:379
 #, x-machine
 msgid "Installed {0} {1}; you can click Roll Back (Undo Install)."
-msgstr "{0} {1} installiert; Sie können auf „Zurücksetzen (Installation rückgängig)“ klicken."
+msgstr "{0} {1} installiert; Sie können auf „Installation rückgängig“ klicken."
 
 #: ai.slint:380
 #, x-machine
@@ -454,17 +455,17 @@ msgstr "Plugin: {}"
 #: ai.slint:577
 #, x-machine
 msgid "Roll Back (Undo Install)"
-msgstr "Zurücksetzen (Installation rückgängig)"
+msgstr "Installation rückgängig"
 
 #: ai.slint:578
 #, x-machine
 msgid "Export .vxp"
-msgstr ".vxp exportieren"
+msgstr ".vxp-Export"
 
 #: ai.slint:579
 #, x-machine
 msgid "Export Source .zip"
-msgstr "Quellcode als .zip exportieren"
+msgstr "Quellcode (.zip)"
 
 #: ai.slint:611
 #, x-machine
@@ -494,12 +495,12 @@ msgstr "KI-generiertes Plugin „{}“ installieren?"
 #: delivery.ts:159
 #, x-machine
 msgid "{1} {2}\nCapabilities: {3}\nTo undo the install, click Roll Back (Undo Install) in the AI window."
-msgstr "{1} {2}\nFähigkeiten: {3}\nUm die Installation rückgängig zu machen, klicken Sie im KI-Fenster auf „Zurücksetzen (Installation rückgängig)“."
+msgstr "{1} {2}\nFähigkeiten: {3}\nUm die Installation rückgängig zu machen, klicken Sie im KI-Fenster auf „Installation rückgängig“."
 
 #: delivery.ts:159
 #, x-machine
 msgid "{1} {2}\nCapabilities: none\nTo undo the install, click Roll Back (Undo Install) in the AI window."
-msgstr "{1} {2}\nFähigkeiten: keine\nUm die Installation rückgängig zu machen, klicken Sie im KI-Fenster auf „Zurücksetzen (Installation rückgängig)“."
+msgstr "{1} {2}\nFähigkeiten: keine\nUm die Installation rückgängig zu machen, klicken Sie im KI-Fenster auf „Installation rückgängig“."
 
 #: delivery.ts:188
 #, x-machine
@@ -731,7 +732,7 @@ msgstr "Ein GitHub-Name besteht nur aus Buchstaben, Ziffern und „-“, höchst
 #: settings.slint:120
 #, x-machine
 msgid "Delete Old Key"
-msgstr "Alten Schlüssel löschen"
+msgstr "Alten löschen"
 
 #: settings.slint:125
 #, x-machine

@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: de\n"
@@ -528,7 +529,7 @@ msgstr "Repositorys werden gelesen…"
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
 msgid "Can't connect to the repositories and there is no cached copy. Click “Refresh” once you are online."
-msgstr "Keine Verbindung zu den Repositorys und keine zwischengespeicherte Kopie. Klicken Sie auf „Aktualisieren“, sobald Sie online sind."
+msgstr "Keine Verbindung zu den Repositorys und keine zwischengespeicherte Kopie. Klicken Sie auf „Neu laden“, sobald Sie online sind."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1493,7 +1494,7 @@ msgstr "Automatisch nach Updates suchen (30 Sekunden nach dem Start des Players,
 #: ui/settings.slint:44
 #, x-machine
 msgid "When off, the store goes online only when you open it or click “Refresh”; plugins revoked by a repository are disabled only then too. When updates are available, the “Plugin Store…” menu item shows how many."
-msgstr "Wenn ausgeschaltet, geht der Store nur online, wenn Sie ihn öffnen oder auf „Aktualisieren“ klicken; von einem Repository zurückgezogene Plugins werden ebenfalls nur dann deaktiviert. Sind Updates verfügbar, zeigt der Menüeintrag „Plugin-Store…“ deren Anzahl."
+msgstr "Wenn ausgeschaltet, geht der Store nur online, wenn Sie ihn öffnen oder auf „Neu laden“ klicken; von einem Repository zurückgezogene Plugins werden ebenfalls nur dann deaktiviert. Sind Updates verfügbar, zeigt der Menüeintrag „Plugin-Store…“ deren Anzahl."
 
 #: ui/settings.slint:51
 #, x-machine
@@ -1548,12 +1549,12 @@ msgstr "Tags: Alle"
 #: ui/store.slint:240
 #, x-machine
 msgid "Sort: Name"
-msgstr "Sortierung: Name"
+msgstr "Nach Name"
 
 #: ui/store.slint:240
 #, x-machine
 msgid "Sort: Updated"
-msgstr "Sortierung: Aktualisiert"
+msgstr "Nach Datum"
 
 #: ui/store.slint:248
 #, x-machine
@@ -1563,12 +1564,12 @@ msgstr "Sie können ein .vxp-Plugin-Paket auch zum Installieren auf den Videober
 #: ui/store.slint:249
 #, x-machine
 msgid "Install from File…"
-msgstr "Aus Datei installieren…"
+msgstr "Aus Datei…"
 
 #: ui/store.slint:250
 #, x-machine
 msgid "Install from Link…"
-msgstr "Über Link installieren…"
+msgstr "Über Link…"
 
 #: ui/store.slint:251
 #, x-machine
@@ -1578,7 +1579,7 @@ msgstr "Repositorys…"
 #: ui/store.slint:252
 #, x-machine
 msgid "Refresh"
-msgstr "Aktualisieren"
+msgstr "Neu laden"
 
 #: ui/store.slint:256
 #, x-machine

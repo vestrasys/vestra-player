@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 # The player's own interface strings (doc/architecture/i18n.md §6).
 # English is the source; src/i18n/tests.rs checks this file lists exactly
 # the strings the code asks for, and that each <lang>.po has the same entries.
@@ -78,7 +79,7 @@ msgstr "Abbrechen"
 #: src/core_actions.rs:142
 #, x-machine
 msgid "Forward {} s"
-msgstr "{} s vor"
+msgstr "{} s vorwärts"
 
 #. A menu item; {} is a number of seconds.
 #: src/core_actions.rs:147
@@ -176,7 +177,7 @@ msgstr "Pausiert"
 #: src/core_actions.rs:412
 #, x-machine
 msgid "Forward {} s: {} / {}"
-msgstr "{} s vor: {} / {}"
+msgstr "{} s vorwärts: {} / {}"
 
 #. On-screen message: the step in seconds, then the new position and the duration.
 #: src/core_actions.rs:414
@@ -212,17 +213,17 @@ msgstr "Kein Video"
 #: src/core_actions.rs:474
 #, x-machine
 msgid "The current source cannot step back a frame"
-msgstr "Die aktuelle Quelle kann nicht ein Einzelbild zurückgehen"
+msgstr "Die aktuelle Quelle unterstützt keinen Einzelbildschritt zurück"
 
 #: src/core_actions.rs:477
 #, x-machine
 msgid "Already at the last frame"
-msgstr "Bereits beim letzten Einzelbild"
+msgstr "Bereits am letzten Einzelbild"
 
 #: src/core_actions.rs:480
 #, x-machine
 msgid "Already at the first frame"
-msgstr "Bereits beim ersten Einzelbild"
+msgstr "Bereits am ersten Einzelbild"
 
 #: src/core_actions.rs:585
 #, x-machine
@@ -280,12 +281,12 @@ msgstr "; "
 #: src/main.rs:3220 src/source_resolvers.rs:73
 #, x-machine
 msgid "{} is resolved by {}"
-msgstr "{} wird von {} aufgelöst"
+msgstr "{} wird von {} verarbeitet"
 
 #: src/main.rs:3221
 #, x-machine
 msgid "{} not taken over: resolved by {}"
-msgstr "{} nicht übernommen: wird von {} aufgelöst"
+msgstr "{} nicht übernommen: wird von {} verarbeitet"
 
 #: src/main.rs:3656
 #, x-machine
@@ -417,7 +418,7 @@ msgstr "An das Hauptfenster andocken"
 #: ui/sidebar-tabs.slint:104
 #, x-machine
 msgid "Detach as a floating window"
-msgstr "Als schwebendes Fenster lösen"
+msgstr "Als schwebendes Fenster abdocken"
 
 #: ui/sidebar-tabs.slint:113
 #, x-machine

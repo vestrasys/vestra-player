@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: de\n"
@@ -273,7 +274,7 @@ msgstr "Untertitel werden gelesen…"
 #: main.ts:990 main.ts:1017 main.ts:1021 main.ts:1025
 #, x-machine
 msgid "The current media cannot seek"
-msgstr "Im aktuellen Medium kann nicht gesprungen werden"
+msgstr "Das aktuelle Medium unterstützt keine Sprünge"
 
 #: main.ts:990 main.ts:1001 main.ts:1017 main.ts:1021 main.ts:1025
 #, x-machine
@@ -1013,7 +1014,7 @@ msgstr "Untertiteleinstellungen verwenden"
 #: ui/settings.slint:185
 #, x-machine
 msgid "Sync step"
-msgstr "Versatzschritt"
+msgstr "Schrittweite"
 
 #: ui/settings.slint:189
 #, x-machine
@@ -1118,12 +1119,12 @@ msgstr "Position {} %"
 #: ui/tune.slint:101
 #, x-machine
 msgid "Up"
-msgstr "Hoch"
+msgstr "Höher"
 
 #: ui/tune.slint:102
 #, x-machine
 msgid "Down"
-msgstr "Runter"
+msgstr "Tiefer"
 
 #: ui/tune.slint:110
 #, x-machine

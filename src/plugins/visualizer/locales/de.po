@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: de\n"
@@ -18,7 +19,7 @@ msgstr "Bild zu groß (max. 4096×4096, 16 MB)"
 #: main.ts:66
 #, x-machine
 msgid "Only PNG or JPEG images can be used"
-msgstr "Nur PNG- oder JPEG-Bilder sind möglich"
+msgstr "Nur PNG- oder JPEG-Bilder können verwendet werden"
 
 #: main.ts:66
 #, x-machine

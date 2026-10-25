@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: de\n"
@@ -128,7 +129,7 @@ msgstr "Wiederholen: Alle"
 #: main.ts:134
 #, x-machine
 msgid "Repeat: One"
-msgstr "Wiederholen: Einen"
+msgstr "Wiederholen: Einzeln"
 
 #: main.ts:134
 #, x-machine
@@ -143,12 +144,12 @@ msgstr "Zufallswiedergabe: Aus"
 #: main.ts:134
 #, x-machine
 msgid "Fast advance to next: On"
-msgstr "Schnell zum Nächsten: Ein"
+msgstr "Nahtloser Übergang: Ein"
 
 #: main.ts:134
 #, x-machine
 msgid "Fast advance to next: Off"
-msgstr "Schnell zum Nächsten: Aus"
+msgstr "Nahtloser Übergang: Aus"
 
 #: main.ts:134
 #, x-machine
@@ -443,7 +444,7 @@ msgstr "Wird geöffnet oder Ergebnis noch unbekannt"
 #: main.ts:529 main.ts:532 main.ts:564 main.ts:565
 #, x-machine
 msgid "Nothing to act on"
-msgstr "Nichts auszuführen"
+msgstr "Kein Eintrag für diese Aktion"
 
 #: main.ts:529 main.ts:532 main.ts:555 main.ts:564 main.ts:565
 #, x-machine
@@ -488,7 +489,7 @@ msgstr "Alle"
 #: main.ts:561 ui/settings.slint:93
 #, x-machine
 msgid "One"
-msgstr "Einen"
+msgstr "Einzeln"
 
 #: main.ts:561 ui/settings.slint:99
 #, x-machine
@@ -518,7 +519,7 @@ msgstr "Alle Dateien im Ordner hinzufügen"
 #: main.ts:561
 #, x-machine
 msgid "Fast Advance to Next"
-msgstr "Schnell zum Nächsten"
+msgstr "Nahtloser Übergang"
 
 #: main.ts:561
 #, x-machine
@@ -738,7 +739,7 @@ msgstr "Wiederholen:"
 #: ui/settings.slint:104
 #, x-machine
 msgid "Fast advance to next"
-msgstr "Schnell zum Nächsten"
+msgstr "Nahtloser Übergang"
 
 #: ui/settings.slint:109
 #, x-machine
@@ -768,7 +769,7 @@ msgstr "An das Hauptfenster andocken"
 #: ui/sidebar.slint:251
 #, x-machine
 msgid "Detach as floating window"
-msgstr "Als schwebendes Fenster lösen"
+msgstr "Als schwebendes Fenster abdocken"
 
 #: ui/sidebar.slint:257
 #, x-machine

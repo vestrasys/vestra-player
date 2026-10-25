@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: de\n"
@@ -18,7 +19,7 @@ msgstr "Farbschema: Vestra Dunkel"
 #: main.ts:51
 #, x-machine
 msgid "Language: Follow System. Takes effect after restart"
-msgstr "Sprache: Wie System. Wird nach einem Neustart wirksam"
+msgstr "Sprache: Systemsprache. Wird nach einem Neustart wirksam"
 
 #: main.ts:52
 #, x-machine
@@ -53,7 +54,7 @@ msgstr "Vestra Hell"
 #: main.ts:103 ui/language.slint:66
 #, x-machine
 msgid "Follow System"
-msgstr "Wie System"
+msgstr "Systemsprache"
 
 #: manifest.json
 #, x-machine
@@ -113,7 +114,7 @@ msgstr "Änderungen gelten sofort für alle Fenster. Eckenradien, Schrift- und S
 #: ui/appearance.slint:162
 #, x-machine
 msgid "Restore Defaults"
-msgstr "Standards wiederherstellen"
+msgstr "Standardwerte wiederherstellen"
 
 #: ui/language.slint:77
 #, x-machine

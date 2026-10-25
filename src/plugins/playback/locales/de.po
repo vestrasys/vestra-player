@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: de\n"
@@ -13,7 +14,7 @@ msgstr "{} s zurück"
 #: commands.ts:65
 #, x-machine
 msgid "Forward {} s"
-msgstr "{} s vor"
+msgstr "{} s vorwärts"
 
 #: commands.ts:229
 #, x-machine
@@ -173,7 +174,7 @@ msgstr "{} s zurück: {} / {}"
 #: main.ts:29
 #, x-machine
 msgid "Forward {} s: {} / {}"
-msgstr "{} s vor: {} / {}"
+msgstr "{} s vorwärts: {} / {}"
 
 #: main.ts:29
 #, x-machine
@@ -193,7 +194,7 @@ msgstr "Nächstes Schlüsselbild: {} / {}"
 #: main.ts:29
 #, x-machine
 msgid "Already at the last keyframe"
-msgstr "Bereits beim letzten Schlüsselbild"
+msgstr "Bereits am letzten Schlüsselbild"
 
 #: main.ts:29
 #, x-machine
@@ -273,7 +274,7 @@ msgstr "Vorschaubild beim Überfahren der Zeitleiste: Aus"
 #: main.ts:29 ui/prompt.slint:17
 #, x-machine
 msgid "Source operation failed: {}"
-msgstr "Quellenvorgang fehlgeschlagen: {}"
+msgstr "Vorgang der Quelle fehlgeschlagen: {}"
 
 #: main.ts:29 ui/prompt.slint:18
 #, x-machine
@@ -283,7 +284,7 @@ msgstr "Geben Sie eine Zeit innerhalb der Dauer der Quelle im Format HH:MM:SS.mm
 #: main.ts:29 ui/prompt.slint:19
 #, x-machine
 msgid "Speed must be between 0.25× and 4×"
-msgstr "Die Geschwindigkeit muss zwischen 0,25× und 4× liegen"
+msgstr "Die Geschwindigkeit muss zwischen 0.25× und 4× liegen"
 
 #: manifest.json
 #, x-machine
@@ -362,7 +363,7 @@ msgstr "Vorheriges abspielen"
 #: ui/bar.slint:79
 #, x-machine
 msgid "Forward {} seconds"
-msgstr "{} Sekunden vor"
+msgstr "{} Sekunden vorwärts"
 
 #: ui/bar.slint:79
 #, x-machine
@@ -392,7 +393,7 @@ msgstr "Ton ein"
 #: ui/bar.slint:82 ui/bar.slint:329
 #, x-machine
 msgid "Mute"
-msgstr "Stumm"
+msgstr "Stummschalten"
 
 #: ui/bar.slint:84
 #, x-machine
@@ -463,7 +464,7 @@ msgstr "Zu Zeitpunkt springen"
 #: ui/prompt.slint:44
 #, x-machine
 msgid "Speed (0.25–4×)"
-msgstr "Geschwindigkeit (0,25–4×)"
+msgstr "Geschwindigkeit (0.25–4×)"
 
 #: ui/prompt.slint:44
 #, x-machine
@@ -478,7 +479,7 @@ msgstr "OK"
 #: ui/prompt.slint:60
 #, x-machine
 msgid "Go"
-msgstr "Los"
+msgstr "Springen"
 
 #. the unit after a number of seconds.
 #: ui/time-jump.slint:32
@@ -504,27 +505,27 @@ msgstr "Legen Sie fest, wie weit jede Sprungtaste während der Wiedergabe spring
 #: ui/time-jump.slint:89
 #, x-machine
 msgid "Left/Right arrow keys:"
-msgstr "Pfeiltasten links/rechts:"
+msgstr "Pfeil links/rechts:"
 
 #: ui/time-jump.slint:96
 #, x-machine
 msgid "Ctrl + Left/Right arrow keys:"
-msgstr "Ctrl + Pfeiltasten links/rechts:"
+msgstr "Ctrl + Pfeil links/rechts:"
 
 #: ui/time-jump.slint:103
 #, x-machine
 msgid "Shift + Left/Right arrow keys:"
-msgstr "Shift + Pfeiltasten links/rechts:"
+msgstr "Shift + Pfeil links/rechts:"
 
 #: ui/time-jump.slint:110
 #, x-machine
 msgid "Ctrl + Alt + Left/Right arrow keys:"
-msgstr "Ctrl + Alt + Pfeiltasten links/rechts:"
+msgstr "Ctrl + Alt + Pfeil links/rechts:"
 
 #: ui/time-jump.slint:117
 #, x-machine
 msgid "Range 0.1–3600 s, at most one decimal place"
-msgstr "Bereich 0,1–3600 s, höchstens eine Nachkommastelle"
+msgstr "Bereich 0.1–3600 s, höchstens eine Nachkommastelle"
 
 #: ui/time-jump.slint:132
 #, x-machine

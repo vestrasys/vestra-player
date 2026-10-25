@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: de\n"
@@ -62,7 +63,7 @@ msgstr "2×"
 #: main.ts:134 main.ts:159
 #, x-machine
 msgid "Fit to Video Aspect Ratio"
-msgstr "An Seitenverhältnis anpassen"
+msgstr "An Seitenverhältnis des Videos anpassen"
 
 #: main.ts:148
 #, x-machine
@@ -82,12 +83,12 @@ msgstr "Bei Wiedergabestart: {}×"
 #: main.ts:154
 #, x-machine
 msgid "Resize only once when playback starts: On"
-msgstr "Nur einmal anpassen bei Wiedergabestart: Ein"
+msgstr "Nur einmal bei Wiedergabestart anpassen: Ein"
 
 #: main.ts:154
 #, x-machine
 msgid "Resize only once when playback starts: Off"
-msgstr "Nur einmal anpassen bei Wiedergabestart: Aus"
+msgstr "Nur einmal bei Wiedergabestart anpassen: Aus"
 
 #: main.ts:159 main.ts:169
 #, x-machine
@@ -132,7 +133,7 @@ msgstr "Immer im Vordergrund"
 #: main.ts:184
 #, x-machine
 msgid "Cycle Mode"
-msgstr "Modus wechseln"
+msgstr "Modus durchschalten"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
 #: main.ts:193 ui/page.slint:121
@@ -234,7 +235,7 @@ msgstr "Bild-in-Bild: Aus (kein Video)"
 #: size.ts:47
 #, x-machine
 msgid "Window: {}× (shrunk to fit the screen)"
-msgstr "Fenster: {}× (an den Bildschirm angepasst verkleinert)"
+msgstr "Fenster: {}× (auf Bildschirmgröße verkleinert)"
 
 #: size.ts:47
 #, x-machine
@@ -254,7 +255,7 @@ msgstr "Das Fenster hat bereits das Seitenverhältnis des Videos"
 #: size.ts:72
 #, x-machine
 msgid "Window: Fit to video aspect ratio (shrunk to fit the screen)"
-msgstr "Fenster: An Seitenverhältnis angepasst (an den Bildschirm angepasst verkleinert)"
+msgstr "Fenster: An Seitenverhältnis angepasst (auf Bildschirmgröße verkleinert)"
 
 #: size.ts:72
 #, x-machine

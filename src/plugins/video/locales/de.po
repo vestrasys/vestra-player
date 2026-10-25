@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: de\n"
@@ -625,7 +626,7 @@ msgstr "Pro Vollbild"
 #: main.ts:871 picture.slint:732
 #, x-machine
 msgid "By Field (Double Rate)"
-msgstr "Pro Halbbild (doppelte Rate)"
+msgstr "Pro Halbbild (2× Rate)"
 
 #: main.ts:882 main.ts:891 main.ts:899 main.ts:943 main.ts:945 main.ts:946
 #, x-machine
@@ -1105,7 +1106,7 @@ msgstr "Schärfung mit großem Radius, die vor allem Konturen verstärkt"
 #: picture.slint:487
 #, x-machine
 msgid "Denoise"
-msgstr "Rauschunterdrückung"
+msgstr "Entrauschen"
 
 #: picture.slint:495
 #, x-machine
@@ -1135,12 +1136,12 @@ msgstr "Verdoppelt die Bildrate (bis 60); jedes Zwischenbild wird aus seinen Nac
 #: picture.slint:544
 #, x-machine
 msgid "Doubling"
-msgstr "Verdopplung"
+msgstr "Verdoppeln"
 
 #: picture.slint:551
 #, x-machine
 msgid "Rate already high enough"
-msgstr "Bildrate bereits hoch genug"
+msgstr "Rate schon hoch genug"
 
 #: picture.slint:559
 #, x-machine
@@ -1175,7 +1176,7 @@ msgstr "Drehen"
 #: picture.slint:625
 #, x-machine
 msgid "Crop/stretch"
-msgstr "Zuschneiden/Strecken"
+msgstr "Zuschnitt"
 
 #: picture.slint:630
 #, x-machine
@@ -1185,12 +1186,12 @@ msgstr "Strecken"
 #: picture.slint:630
 #, x-machine
 msgid "Crop"
-msgstr "Zuschneiden"
+msgstr "Schneiden"
 
 #: picture.slint:649
 #, x-machine
 msgid "Aspect ratio"
-msgstr "Seitenverhältnis"
+msgstr "Bildformat"
 
 #: picture.slint:674
 #, x-machine
@@ -1240,7 +1241,7 @@ msgstr "Shader"
 #: picture.slint:793
 #, x-machine
 msgid "Enable"
-msgstr "Aktivieren"
+msgstr "Aktiv"
 
 #: picture.slint:798
 #, x-machine

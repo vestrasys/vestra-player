@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: de\n"
@@ -13,7 +14,7 @@ msgstr "Geben Sie gültige Sekunden ein; das Ende muss nach dem Anfang liegen."
 #: main.ts:68 main.ts:73 ui/parts.slint:58
 #, x-machine
 msgid "A burst needs 2–20 frames, an interval of 0.1–10 s and a known media duration."
-msgstr "Eine Serienaufnahme braucht 2–20 Bilder, ein Intervall von 0,1–10 s und eine bekannte Mediendauer."
+msgstr "Eine Serienaufnahme braucht 2–20 Bilder, ein Intervall von 0.1–10 s und eine bekannte Mediendauer."
 
 #: main.ts:68 main.ts:73 ui/parts.slint:59
 #, x-machine
@@ -73,17 +74,17 @@ msgstr "Das Bild konnte nicht aufgenommen werden."
 #: main.ts:68 main.ts:73 ui/parts.slint:70
 #, x-machine
 msgid "One export is running and four are queued. Please wait."
-msgstr "Ein Export läuft und vier warten. Bitte warten Sie."
+msgstr "Ein Export läuft, vier sind in der Warteschlange. Bitte warten Sie."
 
 #: main.ts:68 main.ts:73 ui/parts.slint:71
 #, x-machine
 msgid "The kept frame has expired. Retry with the current frame."
-msgstr "Das gehaltene Bild ist abgelaufen. Versuchen Sie es mit dem aktuellen Bild erneut."
+msgstr "Das festgehaltene Bild ist abgelaufen. Versuchen Sie es mit dem aktuellen Bild erneut."
 
 #: main.ts:68 main.ts:73 ui/parts.slint:72
 #, x-machine
 msgid "The kept frame was released."
-msgstr "Das gehaltene Bild wurde freigegeben."
+msgstr "Das festgehaltene Bild wurde freigegeben."
 
 #: main.ts:68 main.ts:73 ui/parts.slint:73
 #, x-machine
@@ -294,7 +295,7 @@ msgstr "Als BMP aufnehmen"
 #: main.ts:346
 #, x-machine
 msgid "Include Subtitles in Rendered Frame"
-msgstr "Untertitel im gerenderten Bild"
+msgstr "Untertitel im gerenderten Bild einbeziehen"
 
 #: main.ts:346
 #, x-machine
@@ -394,7 +395,7 @@ msgstr "Intervall:"
 #: ui/burst.slint:56
 #, x-machine
 msgid "s (0.1–10)"
-msgstr "s (0,1–10)"
+msgstr "s (0.1–10)"
 
 #: ui/burst.slint:58
 #, x-machine

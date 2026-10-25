@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: de\n"
@@ -108,19 +109,19 @@ msgstr "Läuft"
 #: ui/plugins.slint:47
 #, x-machine
 msgid "Starting"
-msgstr "Wird gestartet"
+msgstr "Startet"
 
 #: ui/plugins.slint:48
 #, x-machine
 msgid "Disabled"
-msgstr "Deaktiviert"
+msgstr "Inaktiv"
 
 #. a plugin's state in the list: it failed to start.
 #: ui/plugins.slint:50
 #, x-machine
 msgctxt "plugin state"
 msgid "Failed"
-msgstr "Startfehler"
+msgstr "Fehler"
 
 #: ui/plugins.slint:51
 #, x-machine
@@ -140,12 +141,12 @@ msgstr "Link"
 #: ui/plugins.slint:58
 #, x-machine
 msgid "Local file"
-msgstr "Lokale Datei"
+msgstr "Datei"
 
 #: ui/plugins.slint:59
 #, x-machine
 msgid "Plugin Workshop"
-msgstr "Plugin-Werkstatt"
+msgstr "Werkstatt"
 
 #: ui/plugins.slint:60
 #, x-machine
@@ -368,7 +369,7 @@ msgstr "Quelle"
 #: ui/plugins.slint:125
 #, x-machine
 msgid "Previous"
-msgstr "Vorherige"
+msgstr "Vorversion"
 
 #. detail label: the folder the plugin's package is in.
 #: ui/plugins.slint:127
@@ -518,7 +519,7 @@ msgstr "Zurücksetzen"
 #: ui/plugins.slint:324
 #, x-machine
 msgid "Uninstall…"
-msgstr "Deinstallieren…"
+msgstr "Entfernen…"
 
 #: ui/plugins.slint:329
 #, x-machine

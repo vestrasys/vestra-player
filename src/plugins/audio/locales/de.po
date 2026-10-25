@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: de\n"
@@ -53,7 +54,7 @@ msgstr "Kanäle: Mono-Mix (zu Stereo gemischt)"
 #: main.ts:110
 #, x-machine
 msgid "Channels: Swap Left and Right (mixed to stereo)"
-msgstr "Kanäle: Links und rechts tauschen (zu Stereo gemischt)"
+msgstr "Kanäle: Links/rechts tauschen (zu Stereo gemischt)"
 
 #: main.ts:110
 #, x-machine
@@ -73,7 +74,7 @@ msgstr "Kanäle: Mono-Mix"
 #: main.ts:110
 #, x-machine
 msgid "Channels: Swap Left and Right"
-msgstr "Kanäle: Links und rechts tauschen"
+msgstr "Kanäle: Links/rechts tauschen"
 
 #: main.ts:173
 #, x-machine
@@ -213,7 +214,7 @@ msgstr "Es wird keine Datei abgespielt"
 #: main.ts:530
 #, x-machine
 msgid "Generated video cannot take external audio"
-msgstr "Generiertes Video kann keine externe Audiodatei aufnehmen"
+msgstr "Zu generiertem Video kann keine externe Audiodatei geladen werden"
 
 #: main.ts:539
 #, x-machine
@@ -253,7 +254,7 @@ msgstr "Mono-Mix"
 #: main.ts:557 ui/workbench.slint:598
 #, x-machine
 msgid "Swap Left and Right"
-msgstr "Links und rechts tauschen"
+msgstr "Links/rechts tauschen"
 
 #: main.ts:563 main.ts:573 main.ts:586 main.ts:607 main.ts:625 main.ts:637 main.ts:649 ui/workbench.slint:36
 #, x-machine
@@ -293,7 +294,7 @@ msgstr "Neutral"
 #: main.ts:582 ui/workbench.slint:408
 #, x-machine
 msgid "Voice"
-msgstr "Sprache"
+msgstr "Stimme"
 
 #: main.ts:582 ui/workbench.slint:408
 #, x-machine
@@ -313,7 +314,7 @@ msgstr "Equalizer-Voreinstellung: Neutral"
 #: main.ts:589
 #, x-machine
 msgid "Equalizer preset: Voice"
-msgstr "Equalizer-Voreinstellung: Sprache"
+msgstr "Equalizer-Voreinstellung: Stimme"
 
 #: main.ts:589
 #, x-machine
@@ -353,7 +354,7 @@ msgstr "Nicht beibehalten"
 #: main.ts:611 ui/workbench.slint:649
 #, x-machine
 msgid "Keep for This Run"
-msgstr "Bis zum Beenden beibehalten"
+msgstr "Nur diese Sitzung"
 
 #: main.ts:611 ui/workbench.slint:650
 #, x-machine
@@ -498,17 +499,17 @@ msgstr "Effekte"
 #: ui/workbench.slint:409
 #, x-machine
 msgid "Output"
-msgstr "Kanäle und Ausgabe"
+msgstr "Ausgabe"
 
 #: ui/workbench.slint:463
 #, x-machine
 msgid "Custom"
-msgstr "Benutzerdefiniert"
+msgstr "Angepasst"
 
 #: ui/workbench.slint:505
 #, x-machine
 msgid "Audio sync"
-msgstr "Audioversatz"
+msgstr "Versatz"
 
 #: ui/workbench.slint:506
 #, x-machine
@@ -548,7 +549,7 @@ msgstr "Gleichnamige Audiodateien automatisch laden"
 #: ui/workbench.slint:641
 #, x-machine
 msgid "Keep sync"
-msgstr "Versatz beibehalten"
+msgstr "Behalten"
 
 #: ui/workbench.slint:676
 #, x-machine

@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: de\n"
@@ -63,7 +64,7 @@ msgstr "Link"
 #: about.ts:76 ui/about.slint:88
 #, x-machine
 msgid "Local file"
-msgstr "Lokale Datei"
+msgstr "Datei"
 
 #: about.ts:76 ui/about.slint:89
 #, x-machine
@@ -83,7 +84,7 @@ msgstr "Entwicklung"
 #: about.ts:77 ui/about.slint:95
 #, x-machine
 msgid "Starting"
-msgstr "Wird gestartet"
+msgstr "Startet"
 
 #: about.ts:77 ui/about.slint:96
 #, x-machine
@@ -93,12 +94,12 @@ msgstr "Läuft"
 #: about.ts:77 ui/about.slint:97
 #, x-machine
 msgid "Disabled"
-msgstr "Deaktiviert"
+msgstr "Inaktiv"
 
 #: about.ts:77 ui/about.slint:98
 #, x-machine
 msgid "Failed"
-msgstr "Fehlgeschlagen"
+msgstr "Fehler"
 
 #: about.ts:77 ui/about.slint:99
 #, x-machine
@@ -713,12 +714,12 @@ msgstr "Player"
 #: properties.ts:283
 #, x-machine
 msgid "Vestra Player version"
-msgstr "Version von Vestra Player"
+msgstr "Vestra-Player-Version"
 
 #: properties.ts:284
 #, x-machine
 msgid "Plugin API version"
-msgstr "Version der Plugin-API"
+msgstr "Plugin-API-Version"
 
 #: properties.ts:285
 #, x-machine
@@ -799,7 +800,7 @@ msgstr "Version"
 #: ui/about.slint:141
 #, x-machine
 msgid "State"
-msgstr "Zustand"
+msgstr "Status"
 
 #: ui/about.slint:181 ui/properties.slint:147
 #, x-machine
@@ -809,7 +810,7 @@ msgstr "Kopieren fehlgeschlagen"
 #: ui/about.slint:187
 #, x-machine
 msgid "Copy Info"
-msgstr "Info kopieren"
+msgstr "Kopieren"
 
 #: ui/about.slint:188 ui/properties.slint:158
 #, x-machine
@@ -847,14 +848,14 @@ msgstr "Speichern fehlgeschlagen: {}"
 #: ui/properties.slint:155
 #, x-machine
 msgid "Refresh"
-msgstr "Aktualisieren"
+msgstr "Neu laden"
 
 #: ui/properties.slint:156
 #, x-machine
 msgid "Copy"
-msgstr "In die Zwischenablage kopieren"
+msgstr "Kopieren"
 
 #: ui/properties.slint:157
 #, x-machine
 msgid "Save As…"
-msgstr "Speichern unter…"
+msgstr "Speichern…"

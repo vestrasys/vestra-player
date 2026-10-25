@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: de\n"
@@ -130,7 +131,7 @@ msgstr "Nächstes Kapitel"
 #: menu.ts:125 menu.ts:164 menu.ts:183
 #, x-machine
 msgid "This source can't seek"
-msgstr "In dieser Quelle kann nicht gesprungen werden"
+msgstr "Diese Quelle unterstützt keine Sprünge"
 
 #: menu.ts:171
 #, x-machine
@@ -160,12 +161,12 @@ msgstr "Startpunkt entfernen"
 #: menu.ts:231
 #, x-machine
 msgid "Start Point Back 0.1 s"
-msgstr "Startpunkt 0,1 s zurück"
+msgstr "Startpunkt 0,1 s früher"
 
 #: menu.ts:231
 #, x-machine
 msgid "Start Point Forward 0.1 s"
-msgstr "Startpunkt 0,1 s vor"
+msgstr "Startpunkt 0,1 s später"
 
 #: menu.ts:231
 #, x-machine
@@ -180,22 +181,22 @@ msgstr "Endpunkt entfernen"
 #: menu.ts:231
 #, x-machine
 msgid "End Point Back 0.1 s"
-msgstr "Endpunkt 0,1 s zurück"
+msgstr "Endpunkt 0,1 s früher"
 
 #: menu.ts:231
 #, x-machine
 msgid "End Point Forward 0.1 s"
-msgstr "Endpunkt 0,1 s vor"
+msgstr "Endpunkt 0,1 s später"
 
 #: menu.ts:231
 #, x-machine
 msgid "Move Range Back 0.1 s"
-msgstr "Bereich 0,1 s zurück"
+msgstr "Bereich 0,1 s früher"
 
 #: menu.ts:231
 #, x-machine
 msgid "Move Range Forward 0.1 s"
-msgstr "Bereich 0,1 s vor"
+msgstr "Bereich 0,1 s später"
 
 #: menu.ts:231
 #, x-machine

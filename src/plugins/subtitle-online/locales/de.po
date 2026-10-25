@@ -1,3 +1,4 @@
+# Reviewed by an AI reviewer on 2026-10-25
 msgid ""
 msgstr ""
 "Language: de\n"
@@ -554,12 +555,12 @@ msgstr "Untertitel herunterladen"
 #: ui/download.slint:63 ui/download.slint:65
 #, x-machine
 msgid "{} [MT]"
-msgstr "{} [MÜ]"
+msgstr "{} [MT]"
 
 #: ui/download.slint:63 ui/download.slint:64
 #, x-machine
 msgid "{} [HI]"
-msgstr "{} [HG]"
+msgstr "{} [HI]"
 
 #: ui/download.slint:75
 #, x-machine
@@ -744,7 +745,7 @@ msgstr "Sprachen"
 #: ui/settings.slint:121
 #, x-machine
 msgid "Auto search"
-msgstr "Automatische Suche"
+msgstr "Auto-Suche"
 
 #: ui/settings.slint:124
 #, x-machine
