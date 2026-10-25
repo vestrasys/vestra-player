@@ -1,41 +1,41 @@
-# 产品交互要求
+# Product interaction requirements
 
-用户确定的产品交互约束，所有插件的设计与实现都要满足。插件开发流程见[社区工作流](../process/community-workflow.md)；各状态下的具体交互（按键、鼠标、菜单、窗口行为）见[交互规格](interaction-spec.md)。
+Product interaction constraints set by the user; the design and implementation of every plugin must meet them. The plugin development process is in the [community workflow](../process/community-workflow.md); the concrete interaction in each state (keys, mouse, menus, window behaviour) is in the [interaction specification](interaction-spec.md).
 
-## 范围决定（2026-10-18）
+## Scope decisions (2026-10-18)
 
-- NES 只要求真实模拟器运行并向播放器输出游戏画面和声音；键盘输入、存读档暂缓。存档格式、ROM 校验、复位等策略属于 NES 插件，公共 API 不含 NES 特化概念。
-- YouTube（播放与下载）和 Bilibili（播放）是独立插件。播放列表可以加入它们的链接并播放；站点解析、网络请求、下载策略留在站点插件，通过公共来源解析能力协作，插件之间不互相引用。
+- NES only requires a real emulator to run and output the game picture and sound to the player; keyboard input and save / load states are deferred. Policies such as the save format, ROM verification and reset belong to the NES plugin, and the public API contains no NES-specific concepts.
+- YouTube (playback and download) and Bilibili (playback) are separate plugins. The playlist can add their links and play them; site parsing, network requests and download policy stay in the site plugins, which cooperate through the public source resolution capability, and plugins do not reference each other.
 
-## 1. 菜单按用户领域组织
+## 1. Menus are organised by user domain
 
-先按功能领域建立整个播放器的菜单结构，再分配插件入口。插件划分不等于菜单划分；不能因为不同 agent 实现了不同模块，就让入口各自生长。
+First build the menu structure of the whole player by functional domain, then assign plugin entries. The plugin split is not the menu split; entries must not grow separately just because different agents implemented different modules.
 
-- 视频参数、视频预设及相应复位统一归入视频领域。
-- 音频参数、均衡器、延迟、音频预设及相应复位统一归入音频领域。
-- 字幕来源、轨道、样式、同步与翻译统一归入字幕领域。
-- 截图、片段导出等入口必须在设计中明确归属；不得把同一个功能重复分散到多个顶级菜单。
-- 播放、文件、播放列表、模拟器、插件管理与工坊等功能同样先明确归属，再交插件实现；不预先为尚无需求的分类建立空菜单。
+- Video parameters, video presets and the corresponding resets all go in the video domain.
+- Audio parameters, the equaliser, delay, audio presets and the corresponding resets all go in the audio domain.
+- Subtitle sources, tracks, style, sync and translation all go in the subtitle domain.
+- Entries such as snapshots and clip export must have their place stated explicitly in the design; the same feature must not be spread over several top-level menus.
+- Playback, files, the playlist, emulators, plugin management and the workshop likewise get their place decided first and are then implemented by plugins; no empty menus are created in advance for categories that have no need yet.
 
-上述领域可以有子菜单和多个命令，不要求一个插件只有一个入口。不要将“同一插件可注册多个命令”解释成可以随意跨领域散放命令。例如“复位音频”应留在音频领域，不能另挂在通用工具菜单。
+These domains can have submenus and several commands; a plugin is not required to have only one entry. "The same plugin can register several commands" must not be read as permission to scatter commands across domains at will. For example, "reset audio" stays in the audio domain and must not also hang in a general tools menu.
 
-同一命令可以同时有合适的按钮或快捷键，但必须共享状态与行为，不能形成两套互相矛盾的设置。全局菜单表记录唯一主菜单路径和其他必要入口；确有重复菜单需求时须说明用户场景，经统一审查后才能加入。
+The same command can also have a suitable button or shortcut, but they must share state and behaviour and must not form two contradictory sets of settings. The global menu table records the single main menu path and any other necessary entries; where a duplicate menu entry is really needed, the user scenario must be stated, and it is added only after a unified review.
 
-## 2. 界面与功能归属
+## 2. UI and feature ownership
 
-播放行为及播放操作栏由默认插件提供；Rust 核心管理窗口、公共播放设施、组件挂载和生命周期。常驻不意味着必须把功能实现放进核心。
+Playback behaviour and the playback control bar are provided by default plugins; the Rust core manages windows, shared playback facilities, component mounting and lifecycle. Always present does not mean the feature implementation must go into the core.
 
-打开音频等工具界面不能替换播放操作栏；用户在工具显示时仍能执行设计承诺的播放、暂停和进度操作。工具的显示、隐藏、关闭与插件安装、运行、停用是不同事件，不能将关闭工具界面等同于撤销处理效果。
+Opening a tool UI such as audio must not replace the playback control bar; while a tool is shown, the user can still perform the play, pause and seek operations the design promises. Showing, hiding and closing a tool are different events from installing, running and disabling a plugin; closing a tool UI must not be treated as undoing its processing effect.
 
-界面形式有三种：独立工具窗口、挂载到底栏的常驻控件、挂载到侧栏的面板。各插件按用途选择，新增界面前要确认它和主画面、常驻控件、其它工具能合理共存。
+There are three forms of UI: a separate tool window, a resident control mounted in the bottom bar, and a panel mounted in the sidebar. Each plugin chooses by purpose; before adding a UI, confirm that it can reasonably coexist with the main picture, the resident controls and other tools.
 
-统一交互规则由产品设计表达，核心不能通过识别某个插件的名字提供专属布局或业务后门。复用 Slint 的布局、控件和样式能力，不自建另一套通用 UI 框架。
+Unified interaction rules are expressed by the product design; the core must not offer a dedicated layout or business backdoor by recognising a particular plugin's name. Reuse Slint's layout, widget and style capabilities instead of building another general UI framework.
 
-## 3. 播放连续性是实际需求
+## 3. Playback continuity is a real requirement
 
-- 连续拖动画面或音频参数时，不能把每次参数事件都实现为重启整个播放会话；参数的提交、等待和失败行为要明确。
-- 展开或停留右键菜单不能导致声音继续而画面冻结。
-- 显示/关闭工具界面不应擅自暂停、跳转或清空播放状态。
-- 文件选择、安装首次界面等可能影响事件循环的操作，必须在设计中说明播放和状态保存行为，并在后续实现中据实验证。
+- When dragging picture or audio parameters continuously, each parameter event must not be implemented as restarting the whole playback session; the commit, waiting and failure behaviour of parameters must be explicit.
+- Opening or keeping a context menu open must not lead to sound continuing while the picture freezes.
+- Showing / closing a tool UI should not pause, seek or clear the playback state on its own.
+- Operations that may affect the event loop, such as file selection and first-run install screens, must have their playback and state saving behaviour stated in the design and verified against reality in the later implementation.
 
-这些是共享播放设施和每个插件都必须满足的约束。离线滤镜输出正确、单次请求成功或界面能编译，不足以证明这些要求成立，必须在真实界面里操作验证。
+These are constraints that the shared playback facilities and every plugin must meet. Correct output from an offline filter, a single successful request or a UI that compiles is not enough to prove these requirements hold; they must be verified by operating the real UI.
