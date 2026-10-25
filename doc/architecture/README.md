@@ -57,6 +57,15 @@ manifest 规则见 [API 参考 §2](../plugins/reference.md#2-manifest-与能力
 - 等宽字体：`Theme.font-mono` 读 `VestraPalette.font-mono`（`ui/palette.slint`，默认 Menlo），宿主在每个视图（主窗口、浮动面板、工具窗口、选项窗口）下发配色时一并设置为 `platform::monospace_font(SYSTEM)`（macOS Menlo、Windows Consolas、Linux DejaVu Sans Mono；纯函数，各系统在任何机器上都有测试），`theme::apply_fonts`；与配色无关，Vestra 配色下也设置。
 - 窗口标准快捷键（用户裁决 2026-10-22）：工具窗口、浮动面板、选项窗口按系统约定关闭（macOS ⌘W；Windows Ctrl+W、Ctrl+F4；Linux Ctrl+W），主窗口不响应。表在平台层 `platform/shortcuts.rs`：按系统分开的纯函数 `window_shortcuts(System)`，每个平台模块只声明自己的 `SYSTEM`，所以每个系统的条目在任何机器上都有测试；以后加 Linux 桌面变体、Android、iOS 只加条目（移动端表为空，返回手势由那个平台模块映射到 `WindowAction::Close`）。`ui::WindowShortcuts` 在这些窗口的 winit 钩子里最先检查按键（字母按当前布局不带修饰键的字符，非拉丁布局按美式键位；修饰键必须完全一致），命中时调用 `slint::Window::dispatch_event(CloseRequested)`，即标题栏关闭按钮的同一路径（工具窗口 `ViewClosed` → 插件 `ui.closed`，浮动面板 `FloatingClosed`，选项窗口 `Event::Settings(_, None)`，与「关闭」按钮的 `close-window` 相同），并返回 `PreventDefault`：Slint 收不到这次按键，所以输入框获得焦点时也有效，也不会进绑定表或插件的 Slint 处理器。之前选项窗口的 ⌘W 写在 Slint 里，看的是 `modifiers.meta`，而 Slint 在 macOS 上把 ⌘ 报告为 `control`（⌃ 才是 `meta`，见 `SLINT_CONTROL_IS_COMMAND`），所以从来没生效；该处理器已删除。
 
+## 4.1 硬件解码与处理链（`processing.rs`）
+
+- 默认模式：GPU 渲染用零拷贝 `hwdec=auto-safe`（macOS 上是 VideoToolbox），软件渲染用回拷模式（`renderer::hwdec`）。处理链的视频节点是 FFmpeg 软件滤镜，需要内存里的帧，所以只要有任何插件的视频链，就切到同一模式的回拷版本（`copy_back`：`auto-safe` → `auto-copy-safe`），链全部删除后切回原来的模式（`frames_in_memory`）。别人中途改了 `hwdec`、或者渲染方式切换了（`renderer_changed`），就不再切回。
+- 运行时切换会让 mpv 重新打开解码器，并从上一个关键帧 seek 回原位置（mpv 的 `Seek`、`PlaybackRestart` 事件）。期间 VideoToolbox 会有一批帧失败（`vt decoder cb: … -12909`；实测在回拷与零拷贝之间切换时 11-15 帧，50-60 fps 的片源每次都失败，机器越忙越多）。mpv 连续失败 `hwdec-software-fallback` 次就改用软件解码，而且整个文件都不再回到硬件。宿主启动时把它设为 32（`HWDEC_SOFTWARE_FALLBACK`，mpv 默认 3，32 是还保留 mpv 探测期间重放数据包的上限）。
+- 仍然退回软件时重试一次（2026-10-25）：宿主自己做了切换后，观察 `hwdec-current`（`observe_hwdec`，后端事件循环里的 `Event::PropertyChange`；状态推送每 100 ms 也检查一次，让窗口在没有事件时也能结束）。条件：切换前正在硬件解码；mpv 已经完成这次切换的 seek（收到 `PlaybackRestart`）；切换后播放不超过 3 秒（`HWDEC_WATCH_SECONDS`，按 `time-pos` 计，暂停不消耗，往回 seek 或换文件就结束）；此时 `hwdec-current` 是 `no`。满足就重新应用预期模式：还有链时是回拷模式，否则是配置的模式。mpv 把「设成当前值」当作没有变化，所以先设 `no` 再设预期模式，解码器才会重新打开。不能在 `PlaybackRestart` 之前重试：mpv 还在为切换重放数据包时再次打开解码器，视频会直接结束（`video EOF reached`）。每次切换只重试一次，再退回就让这个文件用软件解码；窗口以外的退回（文件本身解不了）不重试，由 mpv 决定。重试时和结果在 stderr 各写一行 `processing: hwdec …`。判断是纯函数 `HwdecWatch::step`，有单元测试。
+- 一个文件退回软件后，下一个文件重新尝试硬件解码：mpv 每次初始化解码器都按 `hwdec` 重新选择。
+- 不要在播放中改 `hwdec-software-fallback`：改任何 vd-lavc 选项都会重新打开解码器（本身就相当于一次重试）。
+- 真机测试（`cargo test --locked -- --ignored`，macOS，需要 GPU 和 ffmpeg）：`gpu_decoding_runs_the_owned_chain`（有链时滤镜生效、无链时回到零拷贝），`gpu_decoding_comes_back_after_a_fallback_caused_by_a_switch`（阈值设为 3 并让所有核心忙碌，强制切换退回软件，然后确认重试恢复硬件解码、只重试一次），`the_next_file_starts_with_hardware_decoding_after_a_fallback`。
+
 ## 5. 代码地图
 
 | 路径 | 内容 |

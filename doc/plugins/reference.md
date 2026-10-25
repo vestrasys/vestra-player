@@ -1053,7 +1053,7 @@ type FilterStatus =
 - `failed` 之后不会自动重试，直到下一次 `set()`、`retry()` 或来源变化。`error.code === "backend-uncertain"` 表示播放器后端暂时阻塞了该阶段。
 - **空链**（视频 `set([])`，音频 `nodes: []` 且 `delayMs` 为 0）删除本插件的这条链，其它插件不受影响；从未应用过时什么都不发送。播放器 0.3.0 之前视频空链以 `invalid`（「resource must contain a node」）失败，效果留在画面上；音频一直可以。
 - **生成流**（`openStream`，§5.2）的画面和声音不经过播放器的解码管线，处理链对它不起作用：生成流播放期间 `set` 非空链以 `{ state: "failed", error.code: "unsupported" }` 结束（不轮询；播放器 0.3.0 之前一直停在 `waiting` 并每 250 毫秒重试），空链照常删除。值保留，来源换成文件后 SDK 自动重新应用。
-- **硬件解码**：滤镜是 FFmpeg 的软件滤镜，需要内存里的帧。GPU 渲染默认的零拷贝硬件解码（`hwdec=auto-safe`，macOS 上是 VideoToolbox）把帧留在显存里，mpv 配置不了滤镜图，只写一行日志就把它丢掉（播放器 0.3.0 之前的缺陷：状态是 `applied`，画面却没变）。播放器 0.3.0 起，只要有任何插件的视频链，就改用同一解码器的回拷模式（`auto-copy-safe`，仍是硬件解码，`stats().video.hwdec` 报 `videotoolbox-copy`），链全部删除后恢复；切换时解码器重新初始化，画面可能停顿一下。软件渲染本来就用回拷模式，有没有链都不切换。
+- **硬件解码**：滤镜是 FFmpeg 的软件滤镜，需要内存里的帧。GPU 渲染默认的零拷贝硬件解码（`hwdec=auto-safe`，macOS 上是 VideoToolbox）把帧留在显存里，mpv 配置不了滤镜图，只写一行日志就把它丢掉（播放器 0.3.0 之前的缺陷：状态是 `applied`，画面却没变）。播放器 0.3.0 起，只要有任何插件的视频链，就改用同一解码器的回拷模式（`auto-copy-safe`，仍是硬件解码，`stats().video.hwdec` 报 `videotoolbox-copy`），链全部删除后恢复；切换时解码器重新初始化，画面可能停顿一下。万一这次切换让 mpv 改用了软件解码（`stats().video.hwdec` 变成 `"no"`），播放器会再请求一次硬件解码；再失败，这个文件就用软件解码播完，下一个文件照常先试硬件解码。软件渲染本来就用回拷模式，有没有链都不切换。
 
 节点类型与取值范围（超出范围以 `invalid` 失败）：
 

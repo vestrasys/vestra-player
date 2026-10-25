@@ -92,6 +92,7 @@ impl Backend {
                 no_builtin_scripts(&builder)?;
                 let mpv = Arc::new(builder.build()?);
                 mpv.request_log_messages("v")?;
+                crate::processing::observe_hwdec(&mpv)?;
                 let version = |name: &str| mpv.get_property::<String>(name).ok();
                 let versions =
                     json!({"mpv":version("mpv-version"),"ffmpeg":version("ffmpeg-version")});
@@ -452,6 +453,12 @@ impl Backend {
                             }
                             continue;
                         }
+                        processing.hwdec_event(&mpv, &event);
+                        if let rsmpv::Event::PropertyChange { userdata, .. } = &event
+                            && *userdata == crate::processing::HWDEC_OBSERVATION
+                        {
+                            continue;
+                        }
                         let accepted = sources.event(&event);
                         processing.note_source(sources.generation(), sources.phase());
                         subtitles.note_source(sources.generation(), sources.phase());
@@ -561,6 +568,10 @@ impl Backend {
                     if push.due(sources.generation(), sources.phase(), Instant::now()) {
                         view_target.set_picture(picture_size(&mpv));
                         let source_snapshot = sources.snapshot(&mpv);
+                        // A watched hwdec switch's window also ends without an event.
+                        if processing.hwdec_watching() {
+                            processing.hwdec_check(&mpv);
+                        }
                         processing.note_source(sources.generation(), sources.phase());
                         subtitles.note_source(sources.generation(), sources.phase());
                         // Natural EOF is found by the snapshot itself and is in it.

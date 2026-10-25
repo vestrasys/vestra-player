@@ -55,6 +55,12 @@ pub struct Processing {
     /// `(original, copy)`: the `hwdec` mode before the owned video chain
     /// needed frames in memory, and the copy-back mode set for it.
     hwdec: Option<(String, String)>,
+    /// The last `hwdec` switch `frames_in_memory` made, watched for mpv's
+    /// software fallback (`hwdec_check`).
+    hwdec_watch: Option<HwdecWatch>,
+    /// Retries made, for the hardware tests.
+    #[cfg(test)]
+    hwdec_retries: u32,
 }
 impl Processing {
     pub fn register(&mut self, owner: u64, id: String) {
@@ -618,6 +624,7 @@ impl Processing {
     /// back to, so it is forgotten.
     pub fn renderer_changed(&mut self) {
         self.hwdec = None;
+        self.hwdec_watch = None;
     }
     /// The owned video nodes are FFmpeg software filters: they need decoded
     /// frames in memory. With zero-copy hardware decoding (GPU rendering's
@@ -631,6 +638,10 @@ impl Processing {
     /// unless someone else changed `hwdec` in between or the renderer
     /// switched (`renderer_changed`). Software rendering already uses a
     /// copy-back mode (`renderer::hwdec`), so there nothing switches.
+    ///
+    /// Each switch reopens the decoder mid-stream; if that makes mpv give up
+    /// on hardware decoding for the rest of the file, `hwdec_check` asks
+    /// for it once more (`HwdecWatch`).
     fn frames_in_memory(&mut self, mpv: &Mpv, needed: bool) {
         let current = mpv.get_property::<String>("hwdec").unwrap_or_default();
         if needed {
@@ -640,17 +651,225 @@ impl Processing {
             let Some(copy) = copy_back(&current) else {
                 return;
             };
+            let watch = HwdecWatch::before_switch(mpv, &copy);
             match mpv.set_property("hwdec", copy.as_str()) {
-                Ok(()) => self.hwdec = Some((current, copy)),
+                Ok(()) => {
+                    self.hwdec = Some((current, copy));
+                    self.hwdec_watch = watch;
+                }
                 Err(error) => eprintln!("processing: hwdec={copy} refused: {error}"),
             }
         } else if let Some((original, copy)) = self.hwdec.take()
             && current == copy
-            && let Err(error) = mpv.set_property("hwdec", original.as_str())
         {
-            eprintln!("processing: restoring hwdec={original} failed: {error}");
+            let watch = HwdecWatch::before_switch(mpv, &original);
+            match mpv.set_property("hwdec", original.as_str()) {
+                Ok(()) => self.hwdec_watch = watch,
+                Err(error) => {
+                    eprintln!("processing: restoring hwdec={original} failed: {error}");
+                }
+            }
         }
     }
+    /// Follows mpv after a switch `frames_in_memory` made, with every mpv
+    /// event (the backend observes `hwdec-current`, `observe_hwdec`) and
+    /// with the backend's periodic state push while a watch is open, so the
+    /// window also closes without an event. Reads `hwdec-current` itself:
+    /// an observed value can be one from the middle of the decoder's
+    /// reinitialization.
+    ///
+    /// A runtime switch reopens the decoder and seeks back to where it was
+    /// from the last keyframe (`Seek`, then `PlaybackRestart`). When
+    /// hardware decoding was active before the switch and mpv has fallen
+    /// back to software by the time that restart is done, or within
+    /// `HWDEC_WATCH_SECONDS` of playback after the switch, the switch broke
+    /// it (`HWDEC_SOFTWARE_FALLBACK`), not the file: the intended mode is
+    /// applied once more (copy-back while a chain exists, otherwise the
+    /// configured mode: the mode the switch set), by way of `no` because
+    /// mpv ignores setting an option to the value it has; that reopens the
+    /// decoder with hardware decoding. Not before the restart: reopening the
+    /// decoder again while mpv is still replaying packets for the switch
+    /// ends the video ("video EOF reached"). One retry per switch: falling
+    /// back again leaves this file on software decoding. Outside the window
+    /// nothing is retried; mpv's own fallback stands. mpv tries hardware
+    /// decoding again at the next file's decoder initialization anyway.
+    pub fn hwdec_event(&mut self, mpv: &Mpv, event: &rsmpv::Event) {
+        let Some(watch) = self.hwdec_watch.as_mut() else {
+            return;
+        };
+        match event {
+            // Another file is another decoder. (Not `Seek`: the switch
+            // itself seeks; a user's seek away moves `time-pos` out of the
+            // window.)
+            rsmpv::Event::StartFile { .. } | rsmpv::Event::EndFile { .. } => {
+                if watch.retried {
+                    eprintln!(
+                        "processing: hwdec retry outcome unknown (another file first; hwdec-current={})",
+                        hwdec_current(mpv).as_deref().unwrap_or("unavailable"),
+                    );
+                }
+                self.hwdec_watch = None;
+            }
+            rsmpv::Event::PlaybackRestart => {
+                watch.restarted = true;
+                self.hwdec_check(mpv);
+            }
+            _ => self.hwdec_check(mpv),
+        }
+    }
+    /// See `hwdec_event`.
+    pub fn hwdec_check(&mut self, mpv: &Mpv) {
+        let Some(watch) = self.hwdec_watch.as_mut() else {
+            return;
+        };
+        let position = mpv.get_property::<f64>("time-pos").ok();
+        let current = hwdec_current(mpv);
+        let current = current.as_deref();
+        match watch.step(position, current) {
+            HwdecCheck::Watch => {}
+            HwdecCheck::Done => self.hwdec_watch = None,
+            HwdecCheck::Retry => {
+                let mode = watch.mode.clone();
+                // Someone else changed `hwdec` meanwhile: theirs stands.
+                if mpv.get_property::<String>("hwdec").ok().as_deref() != Some(mode.as_str()) {
+                    self.hwdec_watch = None;
+                    return;
+                }
+                eprintln!(
+                    "processing: hwdec fell back to software after switching to {mode}; requesting hardware decoding once more"
+                );
+                // mpv ignores setting an option to the value it has: going
+                // through `no` (the decoder already decodes in software)
+                // makes the intended mode reopen the decoder.
+                let applied = mpv
+                    .set_property("hwdec", "no")
+                    .and_then(|()| mpv.set_property("hwdec", mode.as_str()));
+                match applied {
+                    Ok(()) => {
+                        #[cfg(test)]
+                        {
+                            self.hwdec_retries += 1;
+                        }
+                        watch.from = position.unwrap_or(watch.from);
+                        watch.retried = true;
+                        watch.restarted = false;
+                    }
+                    Err(error) => {
+                        eprintln!("processing: hwdec retry ({mode}) refused: {error}");
+                        self.hwdec_watch = None;
+                    }
+                }
+            }
+            HwdecCheck::Restored => {
+                eprintln!(
+                    "processing: hwdec retry restored hardware decoding ({})",
+                    current.unwrap_or_default()
+                );
+                self.hwdec_watch = None;
+            }
+            HwdecCheck::StaysSoftware => {
+                eprintln!(
+                    "processing: hwdec retry did not restore hardware decoding (hwdec-current={}); this file stays on software decoding",
+                    current.unwrap_or("unavailable")
+                );
+                self.hwdec_watch = None;
+            }
+        }
+    }
+    /// Whether a switch is being watched (the backend then checks with
+    /// every state push).
+    pub fn hwdec_watching(&self) -> bool {
+        self.hwdec_watch.is_some()
+    }
+}
+/// Notifies `hwdec-current` changes as `Event::PropertyChange` with this
+/// userdata (`Processing::hwdec_event`).
+pub const HWDEC_OBSERVATION: u64 = 1;
+pub fn observe_hwdec(mpv: &Mpv) -> rsmpv::Result<()> {
+    mpv.observe_property(HWDEC_OBSERVATION, "hwdec-current", rsmpv::Format::None)
+}
+fn hwdec_current(mpv: &Mpv) -> Option<String> {
+    mpv.get_property::<String>("hwdec-current").ok()
+}
+/// How much playback (`time-pos`, seconds) after a switch still counts as
+/// the switch's: mpv falls back once `HWDEC_SOFTWARE_FALLBACK` frames in a
+/// row failed, usually while it seeks back for the switch (frames do not
+/// advance meanwhile), at the latest a second or two later at common frame
+/// rates. Pausing does not use up the window (no frames are decoded);
+/// seeking away or another file ends it.
+pub(crate) const HWDEC_WATCH_SECONDS: f64 = 3.;
+/// A `hwdec` switch `frames_in_memory` made, watched for mpv's software
+/// fallback (`Processing::hwdec_event`).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct HwdecWatch {
+    /// The intended mode: the one the switch set, applied again to retry.
+    pub mode: String,
+    /// `time-pos` at the switch (at the retry, once retried).
+    pub from: f64,
+    /// `hwdec-current` was a hardware decoder right before the switch.
+    pub hardware_before: bool,
+    /// The one retry was made.
+    pub retried: bool,
+    /// mpv's `PlaybackRestart` since the switch (or the retry): the
+    /// decoder is reopened and the seek back is done.
+    pub restarted: bool,
+}
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum HwdecCheck {
+    /// Keep watching.
+    Watch,
+    /// Stop watching, nothing to do or report.
+    Done,
+    /// Fell back to software: apply the intended mode again (once).
+    Retry,
+    /// After the retry: hardware decoding again.
+    Restored,
+    /// After the retry: software decoding again (or still); stop.
+    StaysSoftware,
+}
+impl HwdecWatch {
+    /// Read right before a switch; `None` without a position (nothing is
+    /// playing, so no frames can fail).
+    fn before_switch(mpv: &Mpv, mode: &str) -> Option<Self> {
+        let from = mpv.get_property::<f64>("time-pos").ok()?;
+        Some(Self {
+            mode: mode.into(),
+            from,
+            hardware_before: hwdec_current(mpv).is_some_and(|current| is_hardware(&current)),
+            retried: false,
+            restarted: false,
+        })
+    }
+    /// The decision, from `time-pos` and `hwdec-current` now (`None`:
+    /// unavailable, as while the decoder reopens).
+    pub(crate) fn step(&self, position: Option<f64>, current: Option<&str>) -> HwdecCheck {
+        let within = position
+            .is_some_and(|position| (0. ..=HWDEC_WATCH_SECONDS).contains(&(position - self.from)));
+        let hardware = current.is_some_and(is_hardware);
+        let software = current == Some("no");
+        if !self.hardware_before {
+            HwdecCheck::Done
+        } else if !self.retried {
+            match () {
+                _ if !within => HwdecCheck::Done,
+                _ if software && self.restarted => HwdecCheck::Retry,
+                _ => HwdecCheck::Watch,
+            }
+        } else {
+            match () {
+                _ if !within && hardware => HwdecCheck::Restored,
+                _ if !within => HwdecCheck::StaysSoftware,
+                // Before the restart the value can still be the old one.
+                _ if !self.restarted => HwdecCheck::Watch,
+                _ if hardware => HwdecCheck::Restored,
+                _ if software => HwdecCheck::StaysSoftware,
+                _ => HwdecCheck::Watch,
+            }
+        }
+    }
+}
+fn is_hardware(current: &str) -> bool {
+    !current.is_empty() && current != "no"
 }
 /// How many hardware decoding failures in a row mpv tolerates before it
 /// falls back to the next method and finally to software
@@ -663,7 +882,9 @@ impl Processing {
 /// the busier the machine. 32 is the most that keeps mpv's packet replay
 /// for a decoder that fails while probing (`software_fallback <= 32` in
 /// vd_lavc.c), so a decoder that really cannot decode still loses no frames
-/// at file start.
+/// at file start. More frames than that, or a switch under heavy load, can
+/// still fall back; `Processing::hwdec_event` then asks for hardware
+/// decoding once more.
 pub(crate) const HWDEC_SOFTWARE_FALLBACK: &str = "32";
 /// What the current source is, for `processing.replace`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -924,6 +1145,99 @@ mod tests {
         }
     }
 
+    fn watch(hardware_before: bool, restarted: bool) -> HwdecWatch {
+        HwdecWatch {
+            mode: "auto-safe".into(),
+            from: 10.,
+            hardware_before,
+            retried: false,
+            restarted,
+        }
+    }
+    /// `HwdecWatch::step`: a fallback right after the player's own switch
+    /// is retried once mpv is done seeking back for it; anything else is
+    /// mpv's to decide.
+    #[test]
+    fn a_software_fallback_is_retried_only_right_after_the_switch() {
+        // Software decoding before the switch: nothing to restore.
+        assert_eq!(
+            watch(false, true).step(Some(10.), Some("no")),
+            HwdecCheck::Done
+        );
+        // Within the window, once restarted (also with no frame shown
+        // since the switch).
+        assert_eq!(
+            watch(true, true).step(Some(10.), Some("no")),
+            HwdecCheck::Retry
+        );
+        assert_eq!(
+            watch(true, true).step(Some(12.9), Some("no")),
+            HwdecCheck::Retry
+        );
+        // Not while mpv is still reopening the decoder for the switch.
+        assert_eq!(
+            watch(true, false).step(Some(10.), Some("no")),
+            HwdecCheck::Watch
+        );
+        assert_eq!(watch(true, true).step(Some(10.4), None), HwdecCheck::Watch);
+        assert_eq!(
+            watch(true, true).step(Some(10.4), Some("videotoolbox")),
+            HwdecCheck::Watch
+        );
+        // After the window, before the switch (seeked back), or no position:
+        // a genuine failure, mpv's fallback stands.
+        for position in [Some(13.5), Some(9.), None] {
+            for current in ["no", "videotoolbox"] {
+                assert_eq!(
+                    watch(true, true).step(position, Some(current)),
+                    HwdecCheck::Done,
+                    "{position:?} {current}"
+                );
+            }
+        }
+    }
+    #[test]
+    fn the_retry_is_used_once_and_reports_its_outcome() {
+        let retried = |restarted| HwdecWatch {
+            retried: true,
+            ..watch(true, restarted)
+        };
+        // Until the retry's restart the old value may still be read.
+        assert_eq!(
+            retried(false).step(Some(10.), Some("no")),
+            HwdecCheck::Watch
+        );
+        assert_eq!(
+            retried(true).step(Some(10.), Some("videotoolbox-copy")),
+            HwdecCheck::Restored
+        );
+        assert_eq!(retried(true).step(Some(10.), None), HwdecCheck::Watch);
+        // Fell back again: no second retry.
+        assert_eq!(
+            retried(true).step(Some(10.5), Some("no")),
+            HwdecCheck::StaysSoftware
+        );
+        // The window ends: whatever it is now is the outcome.
+        assert_eq!(
+            retried(false).step(Some(14.), Some("no")),
+            HwdecCheck::StaysSoftware
+        );
+        assert_eq!(retried(false).step(None, None), HwdecCheck::StaysSoftware);
+        assert_eq!(
+            retried(false).step(Some(14.), Some("videotoolbox")),
+            HwdecCheck::Restored
+        );
+    }
+    #[test]
+    fn a_switch_without_playback_is_not_watched() {
+        let _one = one_mpv_at_a_time();
+        let mpv = mpv("auto-safe");
+        let mut processing = ready();
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(1, gblur(4.0)))
+            .unwrap();
+        assert!(!processing.hwdec_watching());
+    }
     /// The blur example's sequence: on, off (`[]`), on again. An empty chain
     /// removes the resource (it used to fail `invalid` for video, so "off"
     /// left the blur in place), and while a chain exists decoding copies
@@ -1270,5 +1584,258 @@ mod tests {
         assert_eq!(current(), "videotoolbox");
         drop(renderer);
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A single-GOP 1440x1080 25 fps H.264 clip (libx264's keyint 250)
+    /// in its own temporary directory. Measured on an M-series Mac, a
+    /// runtime switch between copy-back and zero-copy decoding here fails
+    /// 11-15 frames on some switches, more often the busier the machine,
+    /// and reopening the decoder from software decoding fails none.
+    /// (50-60 fps clips fail 9-17 frames on every reopen, from software
+    /// too, so a retry could not be told from the switch.)
+    #[cfg(target_os = "macos")]
+    struct Clip(std::path::PathBuf);
+    #[cfg(target_os = "macos")]
+    impl Clip {
+        fn new(name: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!("vestra-{name}-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).unwrap();
+            let made = std::process::Command::new("ffmpeg")
+                .args(["-loglevel", "error", "-y", "-f", "lavfi", "-i"])
+                .arg("testsrc2=size=1440x1080:rate=25")
+                .args(["-t", "10", "-c:v", "libx264", "-pix_fmt", "yuv420p"])
+                .arg(dir.join("clip.mp4"))
+                .status()
+                .unwrap();
+            assert!(made.success());
+            Self(dir)
+        }
+        fn file(&self) -> String {
+            self.0.join("clip.mp4").to_string_lossy().into_owned()
+        }
+    }
+    #[cfg(target_os = "macos")]
+    impl Drop for Clip {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    /// GPU rendering (VideoToolbox, `hwdec=auto-safe`) with `hwdec-current`
+    /// observed, as in the backend.
+    #[cfg(target_os = "macos")]
+    struct GpuPlayback {
+        renderer: Option<crate::platform::GpuRenderer>,
+        mpv: std::sync::Arc<Mpv>,
+    }
+    #[cfg(target_os = "macos")]
+    impl GpuPlayback {
+        fn start(fallback: &str) -> Self {
+            let mpv = std::sync::Arc::new(mpv("no"));
+            mpv.set_property("keep-open", true).unwrap();
+            mpv.set_property("vo", "libmpv").unwrap();
+            mpv.set_property("hwdec-software-fallback", fallback)
+                .unwrap();
+            observe_hwdec(&mpv).unwrap();
+            let publish = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+            let renderer = crate::platform::gpu_start(mpv.clone(), (720, 540), publish).unwrap();
+            mpv.set_property("hwdec", crate::renderer::hwdec(None, false).as_str())
+                .unwrap();
+            Self {
+                renderer: Some(renderer),
+                mpv,
+            }
+        }
+        /// Plays `clip` from the start; `options` are mpv's per-file
+        /// options (`loadfile`'s fourth argument).
+        fn load(&self, clip: &Clip, options: &str) {
+            self.mpv
+                .command(&["loadfile", &clip.file(), "replace", "-1", options])
+                .unwrap();
+            let loaded = std::cell::Cell::new(false);
+            self.pump(
+                &mut |event| {
+                    if matches!(event, rsmpv::Event::FileLoaded) {
+                        loaded.set(true);
+                    }
+                },
+                &|| loaded.get() && self.position() >= 0.5,
+            );
+            assert!(loaded.get(), "{} did not load", clip.file());
+        }
+        fn position(&self) -> f64 {
+            self.mpv.get_property::<f64>("time-pos").unwrap_or(0.)
+        }
+        fn current(&self) -> String {
+            hwdec_current(&self.mpv).unwrap_or_default()
+        }
+        /// Hands every event to `each` until `done` holds or 5 s pass.
+        fn pump(&self, each: &mut dyn FnMut(&rsmpv::Event), done: &dyn Fn() -> bool) {
+            let end = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            while std::time::Instant::now() < end && !done() {
+                while let Some(event) = self.mpv.poll_event() {
+                    each(&event);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        }
+        /// Plays `clip` with `hwdec-software-fallback=3` while every core is
+        /// kept busy, and adds and removes a gblur chain until a switch
+        /// makes mpv give up on hardware decoding for the file (usually
+        /// within a few switches), with a new player after eight. Each
+        /// event goes to `each`. The threshold stays: changing it while
+        /// playing reopens the decoder itself (and so would restore
+        /// hardware decoding on its own). Returns the player, its
+        /// processing book and whether the chain is there.
+        fn fallen_back(
+            clip: &Clip,
+            each: &mut dyn FnMut(&Self, &mut Processing, &rsmpv::Event),
+        ) -> (Self, Processing, bool) {
+            // A busy machine fails more frames (`HWDEC_SOFTWARE_FALLBACK`).
+            let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let hogs: Vec<_> = (0..std::thread::available_parallelism().map_or(4, |n| n.get()))
+                .map(|_| {
+                    let stop = stop.clone();
+                    std::thread::spawn(move || {
+                        let mut x = 0u64;
+                        while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                            x = std::hint::black_box(
+                                x.wrapping_mul(6364136223846793005).wrapping_add(1),
+                            );
+                        }
+                    })
+                })
+                .collect();
+            let _hogs = Hogs(stop, hogs);
+            for attempt in 1..=6 {
+                let playback = Self::start("3");
+                playback.load(clip, "");
+                let mut processing = ready();
+                let fell_back = std::cell::Cell::new(false);
+                for revision in 1..=8 {
+                    let chain = revision % 2 == 1;
+                    let nodes = if chain { gblur(4.0) } else { json!([]) };
+                    processing
+                        .replace(
+                            &playback.mpv,
+                            OWNER,
+                            1,
+                            Source::Decoded,
+                            &video(revision, nodes),
+                        )
+                        .unwrap();
+                    let end = playback.position() + 0.6;
+                    playback.pump(
+                        &mut |event| {
+                            if playback.current() == "no" {
+                                fell_back.set(true);
+                            }
+                            each(&playback, &mut processing, event);
+                        },
+                        &|| fell_back.get() || playback.position() >= end,
+                    );
+                    if fell_back.get() {
+                        eprintln!("fallback forced: player {attempt}, switch {revision}");
+                        return (playback, processing, chain);
+                    }
+                }
+            }
+            panic!("no switch made mpv fall back to software");
+        }
+    }
+    /// Busy threads, stopped on drop.
+    #[cfg(target_os = "macos")]
+    struct Hogs(
+        std::sync::Arc<std::sync::atomic::AtomicBool>,
+        Vec<std::thread::JoinHandle<()>>,
+    );
+    #[cfg(target_os = "macos")]
+    impl Drop for Hogs {
+        fn drop(&mut self) {
+            self.0.store(true, std::sync::atomic::Ordering::Relaxed);
+            for hog in self.1.drain(..) {
+                let _ = hog.join();
+            }
+        }
+    }
+    #[cfg(target_os = "macos")]
+    impl Drop for GpuPlayback {
+        fn drop(&mut self) {
+            drop(self.renderer.take());
+        }
+    }
+    /// A runtime switch that makes mpv fall back to software is followed by
+    /// one retry with the intended mode, and hardware decoding is back for
+    /// the rest of the file (`Processing::hwdec_event`). Under the test's
+    /// threshold the retry's own reopening can fail too now and then; then
+    /// there is no second retry and the file stays on software, and the
+    /// test tries again with a new player.
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "needs a GPU, VideoToolbox and ffmpeg"]
+    fn gpu_decoding_comes_back_after_a_fallback_caused_by_a_switch() {
+        let _one = one_mpv_at_a_time();
+        let clip = Clip::new("hwdec-retry");
+        for _ in 0..4 {
+            let (playback, mut processing, chain) =
+                GpuPlayback::fallen_back(&clip, &mut |playback, processing, event| {
+                    processing.hwdec_event(&playback.mpv, event);
+                });
+            let watching = std::cell::Cell::new(processing.hwdec_watching());
+            playback.pump(
+                &mut |event| {
+                    processing.hwdec_event(&playback.mpv, event);
+                    watching.set(processing.hwdec_watching());
+                },
+                &|| !watching.get(),
+            );
+            assert!(!processing.hwdec_watching(), "the retry has an outcome");
+            assert_eq!(processing.hwdec_retries, 1);
+            let outcome = playback.current();
+            let end = playback.position() + 1.;
+            playback.pump(
+                &mut |event| processing.hwdec_event(&playback.mpv, event),
+                &|| playback.position() >= end,
+            );
+            assert_eq!(playback.current(), outcome, "and it stays");
+            assert_eq!(processing.hwdec_retries, 1, "one retry per switch");
+            let expected = if chain {
+                "videotoolbox-copy"
+            } else {
+                "videotoolbox"
+            };
+            if outcome == expected {
+                return;
+            }
+            assert_eq!(outcome, "no");
+        }
+        panic!("the retry never restored hardware decoding");
+    }
+    /// After a software fallback the next file starts with hardware
+    /// decoding again: mpv tries the configured mode at each decoder
+    /// initialization. No retry here (events are not handed to
+    /// `Processing`), so the fallback holds until the next file.
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "needs a GPU, VideoToolbox and ffmpeg"]
+    fn the_next_file_starts_with_hardware_decoding_after_a_fallback() {
+        let _one = one_mpv_at_a_time();
+        let clip = Clip::new("hwdec-next");
+        let (playback, _processing, chain) = GpuPlayback::fallen_back(&clip, &mut |_, _, _| {});
+        let end = playback.position() + 0.5;
+        playback.pump(&mut |_| {}, &|| playback.position() >= end);
+        assert_eq!(playback.current(), "no", "mpv keeps software for this file");
+        // With the player's threshold: a fresh VideoToolbox session
+        // right after failures can fail a few frames at the start too. Per
+        // file, so the old file's decoder is not reopened by the change.
+        playback.load(
+            &clip,
+            &format!("hwdec-software-fallback={HWDEC_SOFTWARE_FALLBACK}"),
+        );
+        let expected = if chain {
+            "videotoolbox-copy"
+        } else {
+            "videotoolbox"
+        };
+        assert_eq!(playback.current(), expected, "next file");
     }
 }
