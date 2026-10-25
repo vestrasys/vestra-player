@@ -4,691 +4,711 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: main.ts:154 ui/messages.slint:15
+#: main.ts:110
+msgid "Embedded {}"
+msgstr ""
+
+#: main.ts:110
+msgid "External subtitle"
+msgstr ""
+
+#: main.ts:155 ui/messages.slint:15
 msgid "The operation was cancelled or the media changed."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:16
+#: main.ts:155 ui/messages.slint:16
 msgid "The subtitle tracks changed. Adjust again."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:17
+#: main.ts:155 ui/messages.slint:17
 msgid "The player refused the subtitle (file too large or invalid)."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:18
+#: main.ts:155 ui/messages.slint:18
 msgid "The player is busy. Try again later."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:19
+#: main.ts:155 ui/messages.slint:19
 msgid "The current media does not support this."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:20
+#: main.ts:155 ui/messages.slint:20
 msgid "The player cannot load this subtitle."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:21
+#: main.ts:155 ui/messages.slint:21
 msgid "The subtitle operation failed."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:22
+#: main.ts:155 ui/messages.slint:22
 msgid "Cancelled."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:23
+#: main.ts:155 ui/messages.slint:23
 msgid "Subtitle tracks refreshed."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:24
+#: main.ts:155 ui/messages.slint:24
 msgid "Subtitles: {}"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:25
+#: main.ts:155 ui/messages.slint:25
 msgid "Subtitles: {} (waiting to take effect)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:26
+#: main.ts:155 ui/messages.slint:26
 msgid "Subtitles: {} (could not confirm it took effect)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:27
+#: main.ts:155 ui/messages.slint:27
 msgid "Subtitles: {}. Secondary subtitle turned off (it is now the primary)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:28
+#: main.ts:155 ui/messages.slint:28
 msgid "Subtitles: {} (waiting to take effect). Secondary subtitle turned off (it is now the primary)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:29
+#: main.ts:155 ui/messages.slint:29
 msgid "Subtitles: {} (could not confirm it took effect). Secondary subtitle turned off (it is now the primary)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:30
+#: main.ts:155 ui/messages.slint:30
 msgid "Subtitles hidden"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:31
+#: main.ts:155 ui/messages.slint:31
 msgid "The subtitle tracks changed. Choose again."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:32
+#: main.ts:155 ui/messages.slint:32
 msgid "Cannot use it as the secondary subtitle: only text subtitles can be secondary"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:33
+#: main.ts:155 ui/messages.slint:33
 msgid "Cannot use it as the secondary subtitle: it is already the primary subtitle"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:34
+#: main.ts:155 ui/messages.slint:34
 msgid "Secondary subtitle: {}"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:35
+#: main.ts:155 ui/messages.slint:35
 msgid "Secondary subtitle: {} (waiting to take effect)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:36
+#: main.ts:155 ui/messages.slint:36
 msgid "Secondary subtitle: {} (could not confirm it took effect)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:37
+#: main.ts:155 ui/messages.slint:37
 msgid "Secondary subtitle: off"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:38
+#: main.ts:155 ui/messages.slint:38
 msgid "No subtitle file chosen."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:39
+#: main.ts:155 ui/messages.slint:39
 msgid "Opened subtitle: {}"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:40
+#: main.ts:155 ui/messages.slint:40
 msgid "Opened subtitle: {} (waiting to take effect)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:41
+#: main.ts:155 ui/messages.slint:41
 msgid "Opened subtitle: {} (could not confirm it took effect)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:42
+#: main.ts:155 ui/messages.slint:42
 msgid "Opened subtitle: {} ({} tracks)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:43
+#: main.ts:155 ui/messages.slint:43
 msgid "Opened subtitle: {} ({} tracks) (waiting to take effect)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:44
+#: main.ts:155 ui/messages.slint:44
 msgid "Opened subtitle: {} ({} tracks) (could not confirm it took effect)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:45
+#: main.ts:155 ui/messages.slint:45
 msgid "Secondary subtitle: {} ({} tracks)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:46
+#: main.ts:155 ui/messages.slint:46
 msgid "Secondary subtitle: {} ({} tracks) (waiting to take effect)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:47
+#: main.ts:155 ui/messages.slint:47
 msgid "Secondary subtitle: {} ({} tracks) (could not confirm it took effect)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:48
+#: main.ts:155 ui/messages.slint:48
 msgid "Subtitle loaded, but it cannot be the secondary subtitle"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:49
+#: main.ts:155 ui/messages.slint:49
 msgid "Subtitle loaded, but it cannot be the secondary subtitle (waiting to take effect)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:50
+#: main.ts:155 ui/messages.slint:50
 msgid "Subtitle loaded, but it cannot be the secondary subtitle (could not confirm it took effect)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:51
+#: main.ts:155 ui/messages.slint:51
 msgid "No subtitles to show."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:52
+#: main.ts:155 ui/messages.slint:52
 msgid "Subtitles shown"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:53
+#: main.ts:155 ui/messages.slint:53
 msgid "Subtitles: {} ({}/{})"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:54
+#: main.ts:155 ui/messages.slint:54
 msgid "Subtitles: {} ({}/{}) (waiting to take effect)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:55
+#: main.ts:155 ui/messages.slint:55
 msgid "Subtitles: {} ({}/{}) (could not confirm it took effect)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:56
+#: main.ts:155 ui/messages.slint:56
 msgid "Subtitles: off"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:57
+#: main.ts:155 ui/messages.slint:57
 msgid "No subtitle selected."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:58
+#: main.ts:155 ui/messages.slint:58
 msgid "Embedded subtitles need no reload"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:59
+#: main.ts:155 ui/messages.slint:59
 msgid "This subtitle was not loaded by the Subtitles plugin and cannot be reloaded"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:60
+#: main.ts:155 ui/messages.slint:60
 msgid "Cannot reload: subtitle file {} not found"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:61
+#: main.ts:155 ui/messages.slint:61
 msgid "Cannot reload: the content of subtitle file {} changed"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:62
+#: main.ts:155 ui/messages.slint:62
 msgid "Cannot reload: {}"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:63
+#: main.ts:155 ui/messages.slint:63
 msgid "Cannot reload: cannot read the subtitle file."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:64
+#: main.ts:155 ui/messages.slint:64
 msgid "Cannot reload: the subtitle file must be a regular file of 1 byte to 8 MiB."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:65
+#: main.ts:155 ui/messages.slint:65
 msgid "Cannot reload: the subtitle file is empty or larger than 8 MiB."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:66
+#: main.ts:155 ui/messages.slint:66
 msgid "Cannot reload: image subtitle files are not supported yet"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:67
+#: main.ts:155 ui/messages.slint:67
 msgid "Cannot reload: unknown subtitle format"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:68
+#: main.ts:155 ui/messages.slint:68
 msgid "Cannot reload: the subtitle file has no subtitles."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:69
+#: main.ts:155 ui/messages.slint:69
 msgid "Cannot reload: the subtitle file is larger than 2 MiB"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:70
+#: main.ts:155 ui/messages.slint:70
 msgid "Subtitle unchanged"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:71
+#: main.ts:155 ui/messages.slint:71
 msgid "Reloaded subtitle {}"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:72
+#: main.ts:155 ui/messages.slint:72
 msgid "Subtitle reloaded automatically"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:73
+#: main.ts:155 ui/messages.slint:73
 msgid "Select a subtitle track first."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:74
+#: main.ts:155 ui/messages.slint:74
 msgid "The current subtitle track cannot be adjusted."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:75
+#: main.ts:155 ui/messages.slint:75
 msgid "No subtitle font available."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:76
+#: main.ts:155 ui/messages.slint:76
 msgid "Subtitle style updated"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:77
+#: main.ts:155 ui/messages.slint:77
 msgid "Subtitle style updated (waiting to take effect)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:78
+#: main.ts:155 ui/messages.slint:78
 msgid "Subtitle style updated (could not confirm it took effect)"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:79
+#: main.ts:155 ui/messages.slint:79
 msgid "Default style restored."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:80
+#: main.ts:155 ui/messages.slint:80
 msgid "The selected subtitle changed. Choose again."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:81
+#: main.ts:155 ui/messages.slint:81
 msgid "External subtitle removed."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:82
+#: main.ts:155 ui/messages.slint:82
 msgid "The media changed; the running operation was cancelled."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:83
+#: main.ts:155 ui/messages.slint:83
 msgid "Enter whole milliseconds, for example 1250 or -500."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:84
+#: main.ts:155 ui/messages.slint:84
 msgid "The sync value must be between −{} and {} ms"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:85
+#: main.ts:155 ui/messages.slint:85
 msgid "Switching subtitle track…"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:86
+#: main.ts:155 ui/messages.slint:86
 msgid "Removing subtitle…"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:87
+#: main.ts:155 ui/messages.slint:87
 msgid "Switching secondary subtitle…"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:88
+#: main.ts:155 ui/messages.slint:88
 msgid "Choose a subtitle file…"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:89
+#: main.ts:155 ui/messages.slint:89
 msgid "Choose a secondary subtitle file…"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:90
+#: main.ts:155 ui/messages.slint:90
 msgid "Switching subtitle display…"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:91
+#: main.ts:155 ui/messages.slint:91
 msgid "Hiding subtitles…"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:92
+#: main.ts:155 ui/messages.slint:92
 msgid "Turning off the secondary subtitle…"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:93
+#: main.ts:155 ui/messages.slint:93
 msgid "Reloading subtitle…"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:94
+#: main.ts:155 ui/messages.slint:94
 msgid "Refreshing…"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:95
+#: main.ts:155 ui/messages.slint:95
 msgid "Applying subtitle style…"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:96
+#: main.ts:155 ui/messages.slint:96
 msgid "Restoring the default style…"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:97
+#: main.ts:155 ui/messages.slint:97
 msgid "Cannot read the subtitle file."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:98
+#: main.ts:155 ui/messages.slint:98
 msgid "The subtitle file must be a regular file of 1 byte to 8 MiB."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:99
+#: main.ts:155 ui/messages.slint:99
 msgid "The subtitle file is empty or larger than 8 MiB."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:100
+#: main.ts:155 ui/messages.slint:100
 msgid "Image subtitle files are not supported yet"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:101
+#: main.ts:155 ui/messages.slint:101
 msgid "Unknown subtitle format"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:102
+#: main.ts:155 ui/messages.slint:102
 msgid "The subtitle file has no subtitles."
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:103
+#: main.ts:155 ui/messages.slint:103
 msgid "The subtitle file is larger than 2 MiB"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:9
+#: main.ts:155 ui/messages.slint:9
 msgid "The subtitle encoding may be wrong; change the default encoding in Subtitle Settings"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:10
+#: main.ts:155 ui/messages.slint:10
 msgid "Fonts embedded in the subtitle were ignored"
 msgstr ""
 
-#: main.ts:154 ui/messages.slint:11
+#: main.ts:155 ui/messages.slint:11
 msgid "Unknown video frame rate; the MicroDVD subtitle was converted at 23.976"
 msgstr ""
 
-#: main.ts:160
+#: main.ts:161
 msgid "Subtitle sync: 0 s"
 msgstr ""
 
-#: main.ts:161
+#: main.ts:162
 msgid "Subtitle sync: {} s earlier"
 msgstr ""
 
-#: main.ts:161
+#: main.ts:162
 msgid "Subtitle sync: {} s later"
 msgstr ""
 
-#: main.ts:268
+#: main.ts:269
 msgid "Add Secondary Subtitle"
 msgstr ""
 
-#: main.ts:268
+#: main.ts:269
 msgid "Open Subtitle"
 msgstr ""
 
-#: main.ts:711
+#: main.ts:535
+msgid "Subtitles Off"
+msgstr ""
+
+#: main.ts:538
+msgid "Secondary Off"
+msgstr ""
+
+#: main.ts:710
 msgid "Open Subtitle…"
 msgstr ""
 
-#: main.ts:716
-msgid "Add Secondary Subtitle…"
-msgstr ""
-
-#: main.ts:718 main.ts:778
+#: main.ts:710 main.ts:717 main.ts:721 main.ts:726 main.ts:732 main.ts:792 main.ts:800 main.ts:1074
 msgid "Subtitle operation in progress"
 msgstr ""
 
-#: main.ts:718
+#: main.ts:715
+msgid "Add Secondary Subtitle…"
+msgstr ""
+
+#: main.ts:717
 msgid "No media to play"
 msgstr ""
 
-#: main.ts:722
+#: main.ts:721
 msgid "Show Subtitles"
 msgstr ""
 
-#: main.ts:727 main.ts:785 main.ts:794
+#: main.ts:726 main.ts:799 main.ts:808
 msgid "Subtitle Track"
 msgstr ""
 
-#: main.ts:727 main.ts:733
+#: main.ts:726 main.ts:732
 msgid "Off"
 msgstr ""
 
-#: main.ts:733 main.ts:739 main.ts:775
+#: main.ts:732 main.ts:738 main.ts:789
 msgid "Secondary Subtitle"
 msgstr ""
 
-#: main.ts:739
+#: main.ts:738
 msgid "Position"
 msgstr ""
 
-#: main.ts:739
+#: main.ts:738
 msgid "Top"
 msgstr ""
 
-#: main.ts:739
+#: main.ts:738
 msgid "Above Main Subtitle"
 msgstr ""
 
-#: main.ts:778
+#: main.ts:757
+msgid "Track {}"
+msgstr ""
+
+#: main.ts:792
 msgid "Only text subtitles can be secondary"
 msgstr ""
 
-#: main.ts:778
+#: main.ts:792
 msgid "Already the primary subtitle"
 msgstr ""
 
-#: main.ts:794
+#: main.ts:808
 msgid "Cycle"
 msgstr ""
 
-#: main.ts:796
+#: main.ts:810
 msgid "No subtitle tracks"
 msgstr ""
 
-#: main.ts:813 main.ts:817 main.ts:821 main.ts:825 main.ts:829 main.ts:837 main.ts:845 main.ts:853
+#: main.ts:827 main.ts:831 main.ts:835 main.ts:839 main.ts:843 main.ts:851 main.ts:859 main.ts:867
 msgid "Subtitle Style"
 msgstr ""
 
-#: main.ts:813
+#: main.ts:827
 msgid "Size +"
 msgstr ""
 
-#: main.ts:814
+#: main.ts:828
 msgid "Subtitle size: larger ({})"
 msgstr ""
 
-#: main.ts:817
+#: main.ts:831
 msgid "Size −"
 msgstr ""
 
-#: main.ts:818
+#: main.ts:832
 msgid "Subtitle size: smaller ({})"
 msgstr ""
 
-#: main.ts:821
+#: main.ts:835
 msgid "Move Up"
 msgstr ""
 
-#: main.ts:822
+#: main.ts:836
 msgid "Subtitle position: up ({}%)"
 msgstr ""
 
-#: main.ts:825
+#: main.ts:839
 msgid "Move Down"
 msgstr ""
 
-#: main.ts:826
+#: main.ts:840
 msgid "Subtitle position: down ({}%)"
 msgstr ""
 
-#: main.ts:829
+#: main.ts:843
 msgid "Reset Position"
 msgstr ""
 
-#: main.ts:832
+#: main.ts:846
 msgid "Subtitle position: default ({}%)"
 msgstr ""
 
-#: main.ts:837 ui/settings.slint:93
+#: main.ts:851 ui/settings.slint:93
 msgid "Bold"
 msgstr ""
 
-#: main.ts:841
+#: main.ts:855
 msgid "Bold subtitles"
 msgstr ""
 
-#: main.ts:841
+#: main.ts:855
 msgid "Bold subtitles off"
 msgstr ""
 
-#: main.ts:845
+#: main.ts:859
 msgid "Shadow"
 msgstr ""
 
-#: main.ts:849
+#: main.ts:863
 msgid "Subtitle shadow: on ({})"
 msgstr ""
 
-#: main.ts:849
+#: main.ts:863
 msgid "Subtitle shadow: off"
 msgstr ""
 
-#: main.ts:853
+#: main.ts:867
 msgid "Opaque Box"
 msgstr ""
 
-#: main.ts:857
+#: main.ts:871
 msgid "Opaque subtitle box: on"
 msgstr ""
 
-#: main.ts:857
+#: main.ts:871
 msgid "Opaque subtitle box: off"
 msgstr ""
 
-#: main.ts:867
+#: main.ts:881
 msgid "ASS/SSA animated subtitles: on"
 msgstr ""
 
-#: main.ts:867
+#: main.ts:881
 msgid "ASS/SSA animated subtitles: off"
 msgstr ""
 
-#: main.ts:873
+#: main.ts:887
 msgid "Original ASS/SSA Styles"
 msgstr ""
 
-#: main.ts:907
+#: main.ts:921
 msgid "Secondary subtitle position: top"
 msgstr ""
 
-#: main.ts:907
+#: main.ts:921
 msgid "Secondary subtitle position: above the main subtitle"
 msgstr ""
 
-#: main.ts:943
+#: main.ts:957 main.ts:1022 main.ts:1026 main.ts:1030
 msgid "Reading subtitles…"
 msgstr ""
 
-#: main.ts:981
+#: main.ts:995 main.ts:1022 main.ts:1026 main.ts:1030
 msgid "The current media cannot seek"
 msgstr ""
 
-#: main.ts:981 main.ts:992
+#: main.ts:995 main.ts:1006 main.ts:1022 main.ts:1026 main.ts:1030
 msgid "No text subtitles available"
 msgstr ""
 
-#: main.ts:988
+#: main.ts:1002
 msgid "ffmpeg is needed to read embedded subtitles"
 msgstr ""
 
-#: main.ts:988
+#: main.ts:1002
 msgid "Reading embedded subtitles timed out"
 msgstr ""
 
-#: main.ts:988
+#: main.ts:1002
 msgid "Cannot read embedded subtitles"
 msgstr ""
 
-#: main.ts:998
+#: main.ts:1012
 msgid "No previous dialogue"
 msgstr ""
 
-#: main.ts:998
+#: main.ts:1012
 msgid "No next dialogue"
 msgstr ""
 
-#: main.ts:998
+#: main.ts:1012
 msgid "No dialogue to jump to"
 msgstr ""
 
-#: main.ts:999
+#: main.ts:1013
 msgid "Seek: previous dialogue {}"
 msgstr ""
 
-#: main.ts:999
+#: main.ts:1013
 msgid "Seek: next dialogue {}"
 msgstr ""
 
-#: main.ts:999
+#: main.ts:1013
 msgid "Seek: start of current dialogue {}"
 msgstr ""
 
-#: main.ts:1007 main.ts:1011 main.ts:1015
+#: main.ts:1021 main.ts:1025 main.ts:1029
 msgid "Seek"
 msgstr ""
 
-#: main.ts:1007
+#: main.ts:1021
 msgid "Previous Dialogue"
 msgstr ""
 
-#: main.ts:1011
+#: main.ts:1025
 msgid "Next Dialogue"
 msgstr ""
 
-#: main.ts:1015
+#: main.ts:1029
 msgid "Current Subtitle Start"
 msgstr ""
 
-#: main.ts:1035 main.ts:1039 main.ts:1046 main.ts:1050
+#: main.ts:1049 main.ts:1053 main.ts:1060 main.ts:1064
 msgid "Sync"
 msgstr ""
 
-#: main.ts:1035
+#: main.ts:1049
 msgid "Earlier 0.05 s"
 msgstr ""
 
-#: main.ts:1035
+#: main.ts:1049
 msgid "Earlier 0.1 s"
 msgstr ""
 
-#: main.ts:1035
+#: main.ts:1049
 msgid "Earlier 0.25 s"
 msgstr ""
 
-#: main.ts:1035
+#: main.ts:1049
 msgid "Earlier 0.5 s"
 msgstr ""
 
-#: main.ts:1035
+#: main.ts:1049
 msgid "Earlier 1 s"
 msgstr ""
 
-#: main.ts:1035
+#: main.ts:1049
 msgid "Earlier 5 s"
 msgstr ""
 
-#: main.ts:1039
+#: main.ts:1053
 msgid "Later 0.05 s"
 msgstr ""
 
-#: main.ts:1039
+#: main.ts:1053
 msgid "Later 0.1 s"
 msgstr ""
 
-#: main.ts:1039
+#: main.ts:1053
 msgid "Later 0.25 s"
 msgstr ""
 
-#: main.ts:1039
+#: main.ts:1053
 msgid "Later 0.5 s"
 msgstr ""
 
-#: main.ts:1039
+#: main.ts:1053
 msgid "Later 1 s"
 msgstr ""
 
-#: main.ts:1039
+#: main.ts:1053
 msgid "Later 5 s"
 msgstr ""
 
-#: main.ts:1046
+#: main.ts:1060
 msgid "Reset"
 msgstr ""
 
-#: main.ts:1050
+#: main.ts:1064
 msgid "Adjust Sync…"
 msgstr ""
 
-#: main.ts:1059
+#: main.ts:1074
 msgid "Reload Subtitles"
 msgstr ""
 
-#: main.ts:1059
+#: main.ts:1074
 msgid "Refresh Subtitle Tracks"
 msgstr ""
 
-#: main.ts:1059
+#: main.ts:1074
 msgid "Subtitle Tuning…"
 msgstr ""
 
-#: main.ts:1059
+#: main.ts:1074
 msgid "Subtitle Settings…"
 msgstr ""
 
@@ -716,11 +736,6 @@ msgstr ""
 
 #: manifest.json
 msgid "sync"
-msgstr ""
-
-#. a status, then a note about it ({1}); in Chinese joined with 。
-#: ui/messages.slint:110 ui/messages.slint:112
-msgid "{0}. {1}"
 msgstr ""
 
 #: ui/settings.slint:20

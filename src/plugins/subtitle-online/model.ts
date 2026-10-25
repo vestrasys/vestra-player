@@ -1,4 +1,5 @@
 // settings.json and result ordering. Secrets are not here (see secrets.ts).
+import type { I18n, Text } from "@vestra-player/sdk";
 import type { Result, ServiceId } from "./services.ts";
 import { SERVICE_IDS, languageLabel } from "./services.ts";
 
@@ -114,10 +115,15 @@ export const row = (r: Result, checked: boolean) => ({
   service: r.service,
 });
 
-/** Track title: "<language> · <release>", 1–200 characters. */
-// i18n: needs r2-api (the language name stays English in the track title)
-export const trackTitle = (r: Result) =>
-  `${languageLabel(r.language)} · ${r.release}`.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 200);
+/**
+ * Track title: "<language> · <release>" (the language name translated, the
+ * release data), at most 200 characters with a SAMI language after it.
+ */
+export function trackTitle(text: I18n["text"], r: Result): Text {
+  const name = languageLabel(r.language);
+  const release = r.release.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 150);
+  return text("{} · {}", [name ? text(name) : r.language.slice(0, 20), release]);
+}
 
 /** The language part of a saved file name: "zh-CN" → "zh". */
 export const fileLanguage = (code: string) => code.split("-")[0]!.toLowerCase() || "und";

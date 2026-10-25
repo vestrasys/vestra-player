@@ -1,8 +1,10 @@
 // The status lines of the windows and the on-screen messages: an id and its
-// arguments (data). The English templates are the source text; the windows
+// arguments (data, or a text value such as a track title). The English templates are the source text; the windows
 // show them through ui/messages.slint (the same texts, @tr), the OSD through
 // `osd.show(STATUS[id], args)`. tests/i18n.test.ts checks that both agree.
 // formats.ts (shared with the Subtitles plugin) throws `Failure`s with its ids.
+
+import type { TextArg } from "@vestra-player/sdk";
 
 /** Every status sentence, by id. */
 export const STATUS = {
@@ -93,8 +95,8 @@ export type NoteId = "noteEncoding" | "noteFonts" | "noteFps";
  * One sentence: an id and its arguments (data, never translated). `raw` shows
  * a message of the player, the system or a service as it is (args[0]); `""` is none.
  */
-export type Line = { id: StatusId | "raw" | ""; args: (string | number)[] };
-export const line = (id: StatusId | "", args: (string | number)[] = []): Line => ({ id, args });
+export type Line = { id: StatusId | "raw" | ""; args: TextArg[] };
+export const line = (id: StatusId | "", args: TextArg[] = []): Line => ({ id, args });
 export const raw = (text: string): Line => ({ id: "raw", args: [text] });
 
 /**
@@ -110,14 +112,16 @@ export const serviceResult = (service: string, result: Line): Status => ({ kind:
 /** A failure the plugin itself reports: its line. */
 export class Failure extends Error {
   readonly status: Line;
-  constructor(id: StatusId, args: (string | number)[] = []) {
+  constructor(id: StatusId, args: TextArg[] = []) {
     super(STATUS[id]);
     this.status = line(id, args);
   }
 }
 
+/** A `string` field of Slint: data as text; a text value as it is (the player shows it translated). */
+const field = (arg: TextArg | undefined) => (typeof arg === "number" ? String(arg) : (arg ?? ""));
 /** What Slint gets (ui/messages.slint `Line` and `Status`). */
-export const lineForSlint = (l: Line | undefined) => ({ id: l?.id ?? "", a: String(l?.args[0] ?? ""), b: String(l?.args[1] ?? "") });
+export const lineForSlint = (l: Line | undefined) => ({ id: l?.id ?? "", a: field(l?.args[0]), b: field(l?.args[1]) });
 export const forSlint = (s: Status) => ({
   kind: s.kind,
   service: s.service ?? "",

@@ -46,18 +46,20 @@ export class ServiceError extends Error {
 }
 
 /**
- * Language names for track titles. The download window has the same names in
- * ui/messages.slint (`Messages.language`), translated; a track title is data
- * sent to the player, so it keeps the English name for now.
+ * Language names for track titles (translated by the player, model.ts
+ * `trackTitle`). The download window has the same names in ui/messages.slint
+ * (`Messages.language`).
  */
-// i18n: needs r2-api (a translatable track title)
-const LANGUAGE_LABELS: Record<string, string> = {
+const LANGUAGE_LABELS = {
   "zh-cn": "Simplified Chinese", "zh-tw": "Traditional Chinese", zh: "Chinese", en: "English", ja: "Japanese",
   ko: "Korean", fr: "French", de: "German", es: "Spanish", it: "Italian", ru: "Russian", pt: "Portuguese",
   "pt-br": "Brazilian Portuguese", ar: "Arabic", th: "Thai", vi: "Vietnamese", "zh-ca": "Cantonese",
-};
+} as const;
+type LanguageCode = keyof typeof LANGUAGE_LABELS;
 export const LANGUAGE_CODES = Object.keys(LANGUAGE_LABELS);
-export const languageLabel = (code: string) => LANGUAGE_LABELS[code.toLowerCase()] ?? code;
+/** The English name of a known language code (the source text), else undefined. */
+export const languageLabel = (code: string): (typeof LANGUAGE_LABELS)[LanguageCode] | undefined =>
+  LANGUAGE_LABELS[code.toLowerCase() as LanguageCode];
 
 async function request(url: string, init: RequestInit, signal: AbortSignal, service: ServiceId) {
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT);

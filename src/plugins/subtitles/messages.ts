@@ -1,7 +1,9 @@
 // The status line of the windows and its on-screen message: one id and its
-// arguments (data). The English templates are the source text; the windows
-// show them through ui/messages.slint (the same texts, @tr), the OSD through
-// `osd.show(STATUS[id], args)`. tests/i18n.test.ts checks that both agree.
+// arguments. The English templates are the source text; the windows show them
+// through ui/messages.slint (the same texts, @tr), the OSD through
+// `text(STATUS[id], args)` joined with its notes. tests/i18n.test.ts checks that both agree.
+
+import type { TextArg } from "@vestra-player/sdk";
 
 /** Every status sentence, by id. `.waiting` / `.uncertain`: the player has not confirmed it yet. */
 export const STATUS = {
@@ -110,11 +112,12 @@ export type Confirmable =
   | "select" | "moved" | "secondary" | "opened" | "openedTracks" | "secondaryTracks" | "notSecondary" | "cycle" | "styleUpdated";
 
 /**
- * A status: an id and its arguments (data, never translated). `raw` shows a
- * message of the player or the system as it is (args[0]); `""` is none.
+ * A status: an id and its arguments (data, or a text value such as a track's
+ * fallback name). `raw` shows a message of the player or the system as it is
+ * (args[0]); `""` is none.
  */
-export type Status = { id: StatusId | "raw" | ""; args: (string | number)[]; notes: NoteId[] };
-export const status = (id: StatusId | "", args: (string | number)[] = [], notes: NoteId[] = []): Status => ({ id, args, notes });
+export type Status = { id: StatusId | "raw" | ""; args: TextArg[]; notes: NoteId[] };
+export const status = (id: StatusId | "", args: TextArg[] = [], notes: NoteId[] = []): Status => ({ id, args, notes });
 export const raw = (text: string): Status => ({ id: "raw", args: [text], notes: [] });
 export const NONE = status("");
 
@@ -131,18 +134,20 @@ export function confirmed(
 /** A failure the plugin itself reports: its status. */
 export class Failure extends Error {
   readonly status: Status;
-  constructor(id: StatusId, args: (string | number)[] = []) {
+  constructor(id: StatusId, args: TextArg[] = []) {
     super(STATUS[id]);
     this.status = status(id, args);
   }
 }
 
+/** A `string` field of Slint: data as text; a text value as it is (the player shows it translated). */
+const field = (arg: TextArg | undefined) => (typeof arg === "number" ? String(arg) : (arg ?? ""));
 /** What a window's Slint gets (ui/messages.slint `Status`). */
 export const forSlint = (s: Status) => ({
   id: s.id,
-  a: String(s.args[0] ?? ""),
-  b: String(s.args[1] ?? ""),
-  c: String(s.args[2] ?? ""),
+  a: field(s.args[0]),
+  b: field(s.args[1]),
+  c: field(s.args[2]),
   n1: s.notes[0] ?? "",
   n2: s.notes[1] ?? "",
 });

@@ -20,7 +20,7 @@ export component SubtitleTune inherits Window {
     title: @tr("Subtitle Tuning");
     width: 301px;
     background: Theme.bg-panel;
-    // The first entry (off) comes from the plugin with the track names (第 2 轮请求 R2-subtitles-1).
+    // The first entry (off) comes from the plugin with the track names (text values, translated by the player).
     in property <[string]> track-labels: [];
     in property <int> selected-track: 0;
     in property <[string]> secondary-labels: [];

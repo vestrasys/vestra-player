@@ -54,8 +54,7 @@ test("D18: VTT, ASS and two-language SAMI files load with titles, formats and no
     await loadFile(host, files.path("a.vtt"));
     assert.equal(host.osd.at(-1), "打开字幕：a.vtt");
     await loadFile(host, files.path("b.ass"));
-    // The OSD leaves the note out until it can join translated sentences (R2-subtitles-2).
-    assert.equal(host.osd.at(-1), "打开字幕：b.ass");
+    assert.equal(host.osd.at(-1), "打开字幕：b.ass。已忽略字幕内嵌字体");
     await loadFile(host, files.path("c.smi"));
     assert.equal(host.osd.at(-1), "打开字幕：c.smi（2 条轨）");
     assert.deepEqual(host.subtitleLoads.map((l) => [l.format, l.title, l.select]), [

@@ -9,6 +9,8 @@ import type {
   SubtitleStyle,
   SubtitleTrack,
   SubtitlesState,
+  Text,
+  TextArg,
 } from "@vestra-player/sdk";
 import { ENCODINGS, convert, cuesOf, parseSrt, readFileBytes } from "./formats.ts";
 import type { Cue, Converted, Encoding } from "./formats.ts";
@@ -37,7 +39,7 @@ const COLORS = ["white", "yellow", "cyan"] as const;
 /** Subtitles ▸ Subtitle Track lists at most this many tracks (orders 303–310); the rest are in Subtitle Tuning. */
 const MENU_TRACKS = 8;
 const SIZE_STEP = 2;
-/** Titles the track items must not take: the fixed items of Subtitle Track ▸ (menus merge by these words). */
+/** Menu keys the track items must not take: the fixed items of Subtitle Track ▸ (menus merge by these words). */
 const RESERVED = new Set(["Off", "Cycle"]);
 /** A style with every optional field filled in. */
 type FullStyle = Required<SubtitleStyle>;
@@ -76,15 +78,8 @@ function errorText(e: unknown): Status {
       return message("failed");
   }
 }
-/**
- * A track's name: data (its title and language). Without a title the fallback
- * is English for now: a menu title cannot take template arguments yet
- * (第 2 轮请求 R2-audio-1) and a [string] list cannot hold a translated text
- * (第 2 轮请求 R2-subtitles-1, doc/process/rounds/2026-10-i18n.md).
- */
-// i18n-ignore: track names are data; the fallback waits for R2-audio-1
-const label = (t: SubtitleTrack) =>
-  `${t.title || (t.kind === "embedded" ? `Embedded ${t.embeddedId}` : "External subtitle")}${t.language ? ` · ${t.language}` : ""}`;
+/** Path segments: no control characters or edge spaces. */
+const clean = (s: string) => s.replace(/[\u0000-\u001f\u007f]/g, " ").trim();
 const seconds = (ms: number) => `${ms > 0 ? "+" : ms < 0 ? "−" : ""}${Math.abs(ms) / 1000}`;
 /** "Cannot reload: …" for each error of reading a subtitle file. */
 const RELOAD: Record<FileError, StatusId> = {
@@ -109,6 +104,14 @@ const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest(
 /** Subtitles: Subtitle Tuning and Subtitle Settings windows, Subtitles ▸ menu, serialized subtitle operations. */
 export default async function activate(plugin: Plugin) {
   const { subtitles, osd } = plugin;
+  const { text, list } = plugin.i18n;
+  /** A track without a title: "Embedded 3" / "External subtitle", translated. */
+  const fallbackName = (t: SubtitleTrack): Text =>
+    t.kind === "embedded" ? text("Embedded {}", [t.embeddedId ?? ""]) : text("External subtitle");
+  /** A track's name: its title and language (data), or the translated fallback name and the language. */
+  const titled = (t: SubtitleTrack) => `${t.title}${t.language ? ` · ${t.language}` : ""}`;
+  const label = (t: SubtitleTrack): TextArg =>
+    t.title ? titled(t) : t.language ? text("{} · {}", [fallbackName(t), t.language]) : fallbackName(t);
   const tune = plugin.windows.create("ui/tune.slint", { id: "subtitle-tune" });
   const settings = plugin.windows.create("ui/settings.slint", { id: "subtitle-settings" });
   const syncWindow = plugin.windows.create("ui/sync.slint", { id: "subtitle-sync" });
@@ -143,15 +146,13 @@ export default async function activate(plugin: Plugin) {
   let lastShown: string | null = null; // track id that Show Subtitles brings back
   // Headless hosts refuse the display; that never fails the action itself.
   const shown = (p: Promise<void>) => void p.catch(() => {});
-  /**
-   * A status on screen. Its notes are left out: the OSD cannot join translated
-   * sentences yet (第 2 轮请求 R2-subtitles-2); the windows show them.
-   */
+  /** A status on screen, with its notes as further sentences ("A. B" / "A。B"). */
   const say = (s: Status) => {
     if (s.id === "raw") {
       // i18n-ignore: the player's or the system's own message
       shown(osd.show(String(s.args[0])));
-    } else shown(osd.show(s.id === "" ? "" : STATUS[s.id], s.args));
+    } else if (s.id === "") shown(osd.show(""));
+    else shown(osd.show(list([text(STATUS[s.id], s.args), ...s.notes.map((note) => text(STATUS[note]))], "sentences")));
   };
   /** The OSD wording for a subtitle offset (positive = later). */
   const sayOffset = (ms: number) =>
@@ -531,12 +532,10 @@ export default async function activate(plugin: Plugin) {
     const s = subtitles.state, selected = s?.selected ?? null, style = current();
     return {
       ...common(),
-      // Blocked (R2-subtitles-1): a [string] list cannot hold a translated text yet; the old text stays.
-      trackLabels: /* i18n-ignore */ ["关闭字幕", ...(s?.tracks.map(label) ?? [])],
+      trackLabels: [text("Subtitles Off"), ...(s?.tracks.map(label) ?? [])],
       selectedTrack: selected && s ? s.tracks.findIndex((t) => t.id === selected.id) + 1 : 0,
       canRemove: !!selected?.owned,
-      // Blocked (R2-subtitles-1), as trackLabels.
-      secondaryLabels: /* i18n-ignore */ ["关闭次字幕", ...(s?.tracks.map(label) ?? [])],
+      secondaryLabels: [text("Secondary Off"), ...(s?.tracks.map(label) ?? [])],
       selectedSecondary: s?.secondary ? s.tracks.findIndex((t) => t.id === s.secondary!.id) + 1 : 0,
       subtitleSize: style.fontSize,
       marginPercent: style.marginPercent,
@@ -745,20 +744,35 @@ export default async function activate(plugin: Plugin) {
   let secondMenu = plugin.scope();
   let trackKey = "";
   let rebuilding = Promise.resolve();
+  /**
+   * The track items' titles and menu keys (the English rendering; menus merge by it).
+   * A path segment is 1–80 bytes without control characters or edge spaces; keys must differ.
+   */
   function menuTitles(tracks: SubtitleTrack[]) {
     const used = new Set<string>();
     return tracks.slice(0, MENU_TRACKS).map((t, i) => {
-      // A path segment is 1–80 bytes without control characters or edge spaces; titles must differ.
-      // English for now: a menu title cannot take arguments yet (R2-audio-1).
-      let title = label(t).replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, 24) || `Track ${i + 1}`;
-      if (used.has(title) || RESERVED.has(title)) title = `${title} (${i + 1})`;
-      used.add(title);
-      return title;
+      let title: string | Text, key: string;
+      if (t.title) {
+        key = clean(titled(t)).slice(0, 24);
+        title = key || text("Track {}", [i + 1]);
+        key ||= `Track ${i + 1}`;
+      } else {
+        const language = clean(t.language ?? "").slice(0, 16);
+        const english = t.kind === "embedded" ? `Embedded ${t.embeddedId ?? ""}` : "External subtitle";
+        title = language ? text("{} · {}", [fallbackName(t), language]) : fallbackName(t);
+        key = language ? `${english} · ${language}` : english;
+      }
+      if (used.has(key) || RESERVED.has(key)) {
+        title = typeof title === "string" ? `${title} (${i + 1})` : text("{} ({})", [title, i + 1]);
+        key = `${key} (${i + 1})`;
+      }
+      used.add(key);
+      return { title, key };
     });
   }
   function syncTrackMenu(s: SubtitlesState) {
     const titles = menuTitles(s.tracks);
-    const key = JSON.stringify(s.tracks.slice(0, MENU_TRACKS).map((t, i) => [t.id, titles[i], t.text]));
+    const key = JSON.stringify(s.tracks.slice(0, MENU_TRACKS).map((t, i) => [t.id, titles[i]!.key, t.text]));
     if (key === trackKey) return;
     trackKey = key;
     const tracks = s.tracks.slice(0, MENU_TRACKS);
@@ -771,8 +785,8 @@ export default async function activate(plugin: Plugin) {
       secondMenu = plugin.scope();
       seconds.forEach((track, i) =>
         secondMenu.commands.add({
-          // Track names are data (not translated).
-          id: `second-${i + 1}`, path: ["@subtitles", "Secondary Subtitle", /* i18n-ignore */ titles[i]!], order: 313 + i,
+          // Track names are data; a fallback name is a text value (menuTitles).
+          id: `second-${i + 1}`, path: ["@subtitles", "Secondary Subtitle", /* i18n-ignore */ titles[i]!.title], order: 313 + i,
           group: "subtitle-second", radio: true, busy: () => busy,
           enabled: () => !busy && !secondBlocked(track),
           reason: () => (busy ? BUSY : secondBlocked(track)),
@@ -782,7 +796,7 @@ export default async function activate(plugin: Plugin) {
       );
       tracks.forEach((track, i) =>
         trackMenu.commands.add({
-          id: `track-${i + 1}`, path: ["@subtitles", "Subtitle Track", /* i18n-ignore */ titles[i]!], order: 303 + i,
+          id: `track-${i + 1}`, path: ["@subtitles", "Subtitle Track", /* i18n-ignore */ titles[i]!.title], order: 303 + i,
           group: "subtitle-track", radio: true, ...idle,
           checked: () => track.id === subtitles.state?.selected?.id,
           run: () => busy || announce(message("switching"), select(track, s.sourceId)),
@@ -1055,7 +1069,8 @@ export default async function activate(plugin: Plugin) {
     tune: "Subtitle Tuning…",
     settings: "Subtitle Settings…",
   } as const;
-  const tool = (id: keyof typeof TOOLS, order: number, run: () => unknown, extra: Partial<CommandOptions> = {}) =>
+  type Extra = Partial<Pick<CommandOptions, "bindings"> & typeof idle>;
+  const tool = (id: keyof typeof TOOLS, order: number, run: () => unknown, extra: Extra = {}) =>
     plugin.commands.add({ id, path: ["@subtitles", TOOLS[id]], order, group: "subtitle-tools", run, ...extra });
   tool("reload", 370, () => busy || announce(message("reloading"), reload()), { bindings: ["Ctrl+Alt+Y"], ...idle });
   tool("refresh", 371, () => busy || announce(message("refreshing"), refresh));

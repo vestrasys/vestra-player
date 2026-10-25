@@ -52,7 +52,7 @@ async function srt(name: string, body: string) {
   return { path, cleanup: () => rm(folder, { recursive: true, force: true }) };
 }
 
-test("A08: 次字幕 ▶ lists the tracks; the primary and bitmap tracks are disabled with the reason", async () => {
+test("A08: 次字幕 ▸ lists the tracks; the primary and bitmap tracks are disabled with the reason", async () => {
   const host = dualHost();
   const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
   await host.settle();
@@ -103,7 +103,7 @@ test("A08: choosing the secondary as the primary turns the secondary off; 依次
   await host.settle();
   await host.command("second-2").run();
   await host.settle();
-  await host.command("track-2").run(); // 选择字幕轨 ▶ English
+  await host.command("track-2").run(); // 选择字幕轨 ▸ English
   await host.settle();
   assert.deepEqual(host.subtitles.selection.target, EN);
   assert.equal(secondary(host), null);
@@ -156,7 +156,7 @@ test("A08: 添加次字幕… loads a file as the secondary and leaves the prima
   }
 });
 
-test("A08: 位置 ▶ 主字幕上方 is applied as a style field, saved, and re-applied for a later secondary", async () => {
+test("A08: 位置 ▸ 主字幕上方 is applied as a style field, saved, and re-applied for a later secondary", async () => {
   const data = await mkdtemp(join(tmpdir(), "vestra-subtitles-data-"));
   try {
     let host = dualHost();

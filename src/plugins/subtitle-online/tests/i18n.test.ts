@@ -6,7 +6,10 @@ import test from "node:test";
 import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 import { STATUS, forSlint, line, list, raw, sentences, serviceResult } from "../messages.ts";
+import { trackTitle } from "../model.ts";
 import { LANGUAGE_CODES } from "../services.ts";
+import type { Result } from "../services.ts";
+import type { TemplateArgs, Text } from "@vestra-player/sdk";
 import { LOCATIONS, statusText } from "./status.ts";
 
 const directory = new URL("..", import.meta.url);
@@ -23,6 +26,15 @@ test("Simplified Chinese: the menus show the old words", async () => {
   assert.deepEqual(host.command("search").display.path, ["字幕", "在线字幕", "搜索与下载字幕…"]);
   assert.deepEqual(host.command("settings").display.path, ["字幕", "在线字幕", "在线字幕设置…"]);
   await stop();
+});
+
+test("a track title: the language name translated, the release as it is", () => {
+  const text = (source: string, args?: TemplateArgs): Text => ({ $vestraText: source, args });
+  const result = (language: string) => ({ language, release: "Movie.CN\u0001x" }) as Result;
+  const zh = zhHost(), en = new TestHost();
+  assert.equal(zh.translate(trackTitle(text, result("zh-CN"))), "简体中文 · Movie.CN x");
+  assert.equal(en.translate(trackTitle(text, result("zh-CN"))), "Simplified Chinese · Movie.CN x");
+  assert.equal(zh.translate(trackTitle(text, result("xx"))), "xx · Movie.CN x", "an unknown code stays as given");
 });
 
 test("a window joins lines with 。 or ；, as before; the player's own words stay", () => {
@@ -54,7 +66,10 @@ test("every text is translated; no Chinese left in the sources", async () => {
   const pot = await read("locales/messages.pot");
   const po = await read("locales/zh-Hans.po");
   assert.doesNotMatch(po, /msgstr ""\n\n/);
-  assert.equal([...pot.matchAll(/^msgid /gm)].length, [...po.matchAll(/^msgid /gm)].length);
+  // The catalog also keeps the joins of ui/messages.slint ("{0}. {1}", "{0}; {1}", "{0}: {1}"), which extract leaves out of the .pot.
+  assert.equal([...pot.matchAll(/^msgid /gm)].length + 3, [...po.matchAll(/^msgid /gm)].length);
+  for (const [join, zh] of [["{0}. {1}", "{0}。{1}"], ["{0}; {1}", "{0}；{1}"], ["{0}: {1}", "{0}：{1}"]])
+    assert.ok(po.includes(`msgid "${join}"\nmsgstr "${zh}"`), join);
   for (const source of ["main.ts", "model.ts", "media.ts", "services.ts", "secrets.ts", "formats.ts", "messages.ts", "ui/download.slint", "ui/settings.slint", "ui/service.slint", "ui/choose.slint", "ui/messages.slint"]) {
     const code = (await read(source)).split("\n").filter((text) => !/^\s*(\/\/|\*|\/\*\*)/.test(text));
     assert.deepEqual(code.filter((text) => /\p{Script=Han}/u.test(text)), [], source);

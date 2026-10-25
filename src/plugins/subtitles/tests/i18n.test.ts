@@ -37,8 +37,23 @@ test("English by default: menus, on-screen messages and window status", async ()
   const window = host.window("subtitle-tune");
   assert.equal(shownStatus(host, window.props), "Subtitle style updated");
   assert.deepEqual(window.props.status, { id: "styleUpdated", a: "", b: "", c: "", n1: "", n2: "" });
+  assert.deepEqual(window.props["track-labels"], ["Subtitles Off", "English · en"]);
+  assert.deepEqual(window.props["secondary-labels"], ["Secondary Off", "English · en"]);
   assert.equal(host.command("dialogue-next").state.reason, "No text subtitles available");
   await stop();
+});
+
+test("fallback track names are translated in the menu, the tune lists and the OSD; the menu keys stay English", async () => {
+  for (const [locale, names] of [["en", ["Embedded 3 · ja", "Embedded 4", "Embedded 4 (4)", "Off (5)"]], ["zh-Hans", ["内嵌 3 · ja", "内嵌 4", "内嵌 4 (4)", "Off (5)"]]] as const) {
+    const host = sourceHost();
+    for (const [id, title, language] of [[3, "", "ja"], [4, "", null], [4, "", null], [5, "Off", null]] as const)
+      host.subtitles.tracks.push({ target: { kind: "embedded", id }, title, language, styleSupported: true, styleReason: null });
+    const { stop } = await startPlugin(activate, { directory, host, locale });
+    assert.deepEqual([2, 3, 4, 5].map((n) => host.command(`track-${n}`).display.path.at(-1)), names, locale);
+    await host.command("track-2").run();
+    assert.equal(host.osd.at(-1), locale === "en" ? "Subtitles: Embedded 3 · ja" : "字幕：内嵌 3 · ja");
+    await stop();
+  }
 });
 
 test("Simplified Chinese: a window joins a status and its notes with 。", () => {
@@ -70,11 +85,11 @@ test("fixed lists stay in step with their Slint names; every text is translated"
   const po = await read("locales/zh-Hans.po");
   assert.doesNotMatch(po, /msgstr ""\n\n/);
   assert.match(po, /msgid "Subtitle Tuning…"\nmsgstr "字幕微调…"/);
-  assert.equal([...pot.matchAll(/^msgid /gm)].length, [...po.matchAll(/^msgid /gm)].length);
+  // The catalog also keeps "{0}. {1}" (ui/messages.slint), which extract leaves out of the .pot.
+  assert.equal([...pot.matchAll(/^msgid /gm)].length + 1, [...po.matchAll(/^msgid /gm)].length);
+  assert.match(po, /msgid "\{0\}\. \{1\}"\nmsgstr "\{0\}。\{1\}"/);
   for (const source of ["main.ts", "model.ts", "formats.ts", "messages.ts", "ui/tune.slint", "ui/settings.slint", "ui/sync.slint"]) {
-    const code = (await read(source)).split("\n").filter((line) => !/^\s*(\/\/|\*|\/\*\*)/.test(line) && !line.includes("i18n-ignore"));
-    const chinese = code.filter((line) => /\p{Script=Han}/u.test(line) && !/i18n-ignore|R2-subtitles-1/.test(line));
-    // The two [string] off-entries wait for R2-subtitles-1 (marked i18n-ignore inline).
-    assert.deepEqual(chinese.filter((line) => !/关闭(次)?字幕/.test(line)), [], source);
+    const code = (await read(source)).split("\n").filter((line) => !/^\s*(\/\/|\*|\/\*\*)/.test(line));
+    assert.deepEqual(code.filter((line) => /\p{Script=Han}/u.test(line)), [], source);
   }
 });

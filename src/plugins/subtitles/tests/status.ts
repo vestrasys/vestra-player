@@ -1,5 +1,6 @@
 // What a window's status line shows (ui/messages.slint), as the test host translates it.
 import { fileURLToPath } from "node:url";
+import type { TextArg } from "@vestra-player/sdk";
 import { TestHost } from "@vestra-player/sdk/testing";
 import { STATUS } from "../messages.ts";
 import type { StatusId } from "../messages.ts";
@@ -25,8 +26,9 @@ export function zhHost() {
   return host;
 }
 /** A status (or a `Failure`'s) in Simplified Chinese, as a window shows it. */
-export const zh = (status: { id: string; args: (string | number)[]; notes?: string[] }) => {
-  const [a = "", b = "", c = ""] = status.args.map(String);
+export const zh = (status: { id: string; args: TextArg[]; notes?: string[] }) => {
+  const host = zhHost();
+  const [a = "", b = "", c = ""] = status.args.map((arg) => (typeof arg === "object" ? host.translate(arg) : String(arg)));
   const [n1 = "", n2 = ""] = status.notes ?? [];
-  return statusText(zhHost(), { id: status.id, a, b, c, n1, n2 });
+  return statusText(host, { id: status.id, a, b, c, n1, n2 });
 };

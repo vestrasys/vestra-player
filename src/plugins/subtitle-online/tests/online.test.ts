@@ -307,12 +307,11 @@ test("double-click downloads, loads and selects the subtitle, and saves <video n
     window.emit("open-row", 0);
     // The copy beside the video is written after the load, by the plugin itself: wait for the operation to end.
     await waitFor(() => t.host.subtitleLoads.length === 1 && window.props["busy"] === false, "loaded");
-    // i18n: needs r2-api — the track title keeps the English language name until titles can be translated.
-    assert.deepEqual(t.host.subtitleLoads.map((l) => [l.format, l.title, l.select, l.bytes.toString()]), [["srt", "Simplified Chinese · Movie.CN", "primary", SRT]]);
+    assert.deepEqual(t.host.subtitleLoads.map((l) => [l.format, l.title, l.select, l.bytes.toString()]), [["srt", "简体中文 · Movie.CN", "primary", SRT]]);
     assert.equal(JSON.parse(fetch.calls.find((c) => c.url.endsWith("/download"))!.body!).file_id, 7);
-    assert.equal(t.host.osd.at(-1), "打开字幕：Simplified Chinese · Movie.CN");
+    assert.equal(t.host.osd.at(-1), "打开字幕：简体中文 · Movie.CN");
     const video = join(t.folder, "The.Movie.2019.1080p.BluRay.x264-GRP.zh.srt");
-    assert.equal(shown(t.host, "subtitle-download"), `打开字幕：Simplified Chinese · Movie.CN。已保存到 ${video}`);
+    assert.equal(shown(t.host, "subtitle-download"), `打开字幕：简体中文 · Movie.CN。已保存到 ${video}`);
     const files = await readdir(t.folder);
     assert.ok(files.includes("The.Movie.2019.1080p.BluRay.x264-GRP.zh.srt"), files.join());
     window.emit("open-row", 0);
@@ -498,7 +497,7 @@ test("automatic search: a hash match in the first language is loaded when a vide
     t.host.openElsewhere(t.video);
     t.host.subtitles.selection.stamp = { generation: 2, revision: 1 };
     await waitFor(() => t.host.osd.at(-1)?.startsWith("已自动载入在线字幕") === true, "auto loaded");
-    assert.equal(t.host.osd.at(-1), "已自动载入在线字幕：Simplified Chinese · Movie.CN"); // i18n: needs r2-api
+    assert.equal(t.host.osd.at(-1), "已自动载入在线字幕：简体中文 · Movie.CN");
     assert.equal(t.host.subtitleLoads[0]!.select, "primary");
     // A video that already has a text track is not searched.
     const before = fetch.calls.length;

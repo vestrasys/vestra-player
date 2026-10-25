@@ -1,6 +1,6 @@
 import { access, mkdir, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
-import type { Plugin, PlayerState } from "@vestra-player/sdk";
+import type { Plugin, PlayerState, TextArg } from "@vestra-player/sdk";
 import { convert } from "./formats.ts";
 import { archiveKind, keywords, movieHash, unzipSubtitles, urlTitle } from "./media.ts";
 import { DEFAULTS, fileLanguage, isSettingsFile, parseLanguages, parseSettings, rank, row, trackTitle } from "./model.ts";
@@ -40,7 +40,8 @@ const aborted = (e: unknown) =>
 /** Online Subtitles (D16): search OpenSubtitles / assrt, download, load as this plugin's tracks. */
 export default async function activate(plugin: Plugin) {
   const { player, subtitles } = plugin;
-  const say = (id: StatusId, args: (string | number)[] = []) => void plugin.osd.show(STATUS[id], args).catch(() => {});
+  const { text } = plugin.i18n;
+  const say = (id: StatusId, args: TextArg[] = []) => void plugin.osd.show(STATUS[id], args).catch(() => {});
   let directory: string | null = null;
   try {
     directory = plugin.dataDirectory;
@@ -327,7 +328,8 @@ export default async function activate(plugin: Plugin) {
     for (const [i, part] of converted.tracks.entries()) {
       const s = await subtitles.refresh();
       if (s.sourceId !== source || player.state.sourceId !== source) throw new Failure("sourceChanged");
-      const name = part.language ? `${trackTitle(result)} · ${part.language}`.slice(0, 200) : trackTitle(result);
+      const title = trackTitle(text, result);
+      const name = part.language ? text("{} · {}", [title, part.language.slice(0, 20)]) : title;
       await subtitles.load(part.bytes, { format: part.format, title: name, select: i === 0 ? select : "none", ifCurrent: s, signal });
     }
     // The track uses the downloaded bytes; saving a copy is a convenience.
@@ -344,9 +346,10 @@ export default async function activate(plugin: Plugin) {
       plugin.update();
       const { saved, notes } = await loadResult(result, "primary", signal, source);
       const where = saved.fallback ? [line("notSavedBeside")] : saved.path ? [line("savedTo", [saved.path])] : [];
-      status = sentences(line("opened", [trackTitle(result)]), ...notes.map((note) => line(note)), ...where);
+      const title = trackTitle(text, result);
+      status = sentences(line("opened", [title]), ...notes.map((note) => line(note)), ...where);
       if (saved.fallback) say("notSavedBeside");
-      else say("opened", [trackTitle(result)]); // i18n: needs r2-api (the track title's language name stays English)
+      else say("opened", [title]);
     });
   }
   async function addChecked() {
@@ -583,7 +586,7 @@ export default async function activate(plugin: Plugin) {
     if (settings.afterSearch === "show") return void download.show();
     await begin(false, async (signal) => {
       await loadResult(best, "primary", signal, p.sourceId);
-      say("autoLoaded", [trackTitle(best)]); // i18n: needs r2-api (the track title's language name stays English)
+      say("autoLoaded", [trackTitle(text, best)]);
     });
   }
 

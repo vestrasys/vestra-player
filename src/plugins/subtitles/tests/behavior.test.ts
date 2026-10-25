@@ -457,8 +457,8 @@ test("an untitled embedded track is labelled by its track number", async () => {
   const host = sourceHost();
   host.subtitles.tracks.push({ target: { kind: "embedded", id: 3 }, title: "", language: null, styleSupported: false, styleReason: null });
   const { window, stop } = await open(host);
-  // English until a menu title can take arguments (R2-audio-1).
-  assert.deepEqual(window.props["track-labels"], ["关闭字幕", "English · en", "Embedded 3"]);
+  assert.deepEqual(window.props["track-labels"], ["关闭字幕", "English · en", "内嵌 3"]);
+  assert.equal(host.command("track-2").display.path.at(-1), "内嵌 3");
   await stop();
 });
 
