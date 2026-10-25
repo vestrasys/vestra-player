@@ -639,8 +639,10 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
  *   resolver handles); CAPABILITY_INFO lists the controls under
  *   `playback.control` only, so a plugin with just `playback.control` cannot
  *   learn the outcome (it gets `unknown`).
- * - No SDK member sends `producer.declareInput`, which the player accepts
- *   (`producer.av`).
+ *
+ * KNOWN_UNREACHED: requests the player guards that no SDK member sends on
+ * purpose (`producer.declareInput`: kept for a future keyboard input of
+ * generated streams, doc/architecture/README.md §3).
  */
 const KNOWN_CAPABILITY_GAPS = new Set([
   ...["open", "setPaused", "seek", "setRate", "restart", "close", "scrub"].map(

@@ -38,7 +38,7 @@ export default async function activate(plugin: Plugin) {
 | `osd` | `show(text)`、`panel()` | `OsdPanel` | `set(text \| null)` | info |
 | 作用域 | `scope()`、`add`、`onDispose`、`onError`、`update`、`dispose` | `Scope` | | 全部（`onError`、`update` 按需） |
 
-模块需要的 manifest 能力（宿主按能力授权，SDK 不改变这一点）：`commands` → commands；`windows` → ui.window；`panels`（含位置状态）→ ui.mount；`osd` → ui.osd；`player.provideSequence/next/previous` → playback.control；`player.stats` → playback.read；`dialogs` → ui.dialog；`player.state` 初读与 `refresh` → playback.read，实时更新 → events；`player` 的控制与 `open` → playback.control；`openStream` → producer.av；`video`/`audio` 滤镜 → processing.video / processing.audio 加 playback.read（读处理状态）；`subtitles` → subtitles.read / subtitles.control；`media` → media.read、media.control（`processed` 截图另需 playback.read、subtitles.read）；`resolvers` → source.resolve；`packages` → plugins.manage。没有 events 能力时，`media.ready()` 自动轮询来源状态。
+模块需要的 manifest 能力（宿主按能力授权，SDK 不改变这一点）见 SDK 文档站 [Reference: Capabilities](https://vestrasys.github.io/vestra-player-sdk/documents/Capabilities.html)（由 SDK 的 `CAPABILITY_INFO` 生成，`src/tests/sdk/host-agreement.test.ts` 与宿主 `dispatch` 的按方法检查核对）。没有 events 能力时，`media.ready()` 自动轮询来源状态。
 
 字幕要点：比较字幕轨用 `track.id`（不透明字符串，不要解析其格式）；内嵌轨的轨道号用 `track.embeddedId`（外部轨没有该字段）。`load` 的 `signal` 在分块之间和提交前检查：已中止则 discard 上传并以 `AbortError` 拒绝；提交一旦发出就不再中止（已交给宿主的提交可能已生效）。上传 id 每个插件实例从 1 开始：宿主每次载入插件分配新的 owner 代次，并在 owner 释放时移除其上传 high-water。
 

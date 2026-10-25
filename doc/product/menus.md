@@ -207,24 +207,7 @@
 
 ## 英文菜单 key
 
-菜单按英文 key 合并（[i18n §5](../architecture/i18n.md#5-声明与菜单)），上表写的是简体中文界面的显示文字。播放器自己的菜单（`@open` … `@settings`、`Playback ▸ Speed`、`Playback ▸ Seek`）的 key 见 i18n §5 的表。下面是插件声明的子菜单 key：别的插件要把命令放进同一个子菜单，写同一个 key（路径用 `▸` 分隔，与菜单表相同）。新增 key 由交互负责人登记在这里。
-
-| key | 中文显示 | 声明的插件 |
-| --- | --- | --- |
-| Open ▸ Recently Played | 打开 ▸ 最近播放 | history |
-| Playback ▸ Playlist | 播放 ▸ 播放列表 | playlist |
-| Playback ▸ Chapters and Bookmarks | 播放 ▸ 章节/书签 | marks |
-| Playback ▸ A-B Loop | 播放 ▸ A-B 区段循环 | marks |
-| Playback ▸ Resume Playback | 播放 ▸ 记忆播放位置 | history |
-| Subtitles ▸ Online Subtitles | 字幕 ▸ 在线字幕 | subtitle-online |
-| Video ▸ Snapshot | 视频 ▸ 截图 | capture |
-| Emulator | 模拟器（顶层） | nes |
-| Screen ▸ When Playback Starts | 屏幕 ▸ 开始播放时 | window |
-| Screen ▸ Always on Top | 屏幕 ▸ 置顶 | window |
-
-- key 是英文原文，显示文字由声明它的插件的词典给出（第一个命令所在插件的译文作为子菜单标题）；两个插件写同一个 key 时，菜单里只有一个子菜单。
-- 叶子（命令标题）不需要登记；宿主命令的 key 见上表「全屏」「退出」行。
-- 菜单路径的分隔符一律写 `▸`（U+25B8）；`▶`（U+25B6）在多数系统上按 emoji 显示，不用。
+菜单按英文 key 合并（[i18n §5](../architecture/i18n.md#5-声明与菜单)），上表写的是简体中文界面的显示文字。key 的写法（`▸` 分隔、子菜单合并、叶子不登记）和内置插件声明的子菜单 key 清单见 SDK 文档站 [Reference: Commands](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_bindings.html#menu-paths)（[Submenu keys in use](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_bindings.html#submenu-keys-in-use)，由 SDK `BUILTIN_SUBMENUS` 生成）。内置插件新增或改动子菜单 key 时，SDK 的 `BUILTIN_SUBMENUS` 跟着改（`src/tests/sdk/host-agreement.test.ts` 启动全部内置插件核对，不一致即失败）。
 
 ## 界面形式
 
@@ -262,7 +245,7 @@
 - `>` `<` `?` 是按出的字符，与 `.` `,` `/` 是不同的键名（美式键盘上前者需要 Shift），互不冲突；`{` `}` 与 `[` `]` 同理。
 - Ctrl+I / Tab、Ctrl+H / Backspace、Ctrl+M / Enter、Ctrl+[ / Esc 在终端意义上是同一控制字符，宿主按物理键区分（`bindings.rs`），互不冲突。
 
-系统保留键（不是本表内的重复，但按下时可能先被系统接走）：
+系统保留键（不是本表内的重复，但按下时可能先被系统接走；各系统的完整清单见 SDK 文档站 [Keys the system takes first](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_bindings.html#keys-the-system-takes-first)，下面只记本表受影响的绑定）：
 
 - macOS ⌃F1–⌃F8 是系统键盘导航键。本表只用到 **Ctrl+F1（播放属性…）**：⌃F1 默认是「打开/关闭键盘访问」，按 ⌘F1 才能可靠触发。⌃F2–⌃F8 未使用。
 - macOS ⌃← / ⌃→（切换桌面空间）、⌃↑ / ⌃↓（调度中心、应用程序窗口）默认被系统占用：影响「后退/前进 30 秒」（Ctrl+←/→，全局）与列表的「上移/下移」（Ctrl+↑/↓，面板）。⌘ 版本可用。
