@@ -1,0 +1,232 @@
+#!/usr/bin/env node
+/**
+ * The media files the system may open with Vestra Player: Finder's and
+ * Explorer's "Open With", and (where the user picks it) the default app.
+ * The kinds are those the built-in playlist plays (plugins/playlist/media.ts;
+ * packaging/tests/file-types.test.mjs keeps this a subset of them), since an
+ * opened file goes to the plugin that provides its kind (host
+ * `open_files.rs`).
+ *
+ * macOS (bundle-macos.mjs): CFBundleDocumentTypes with the role Viewer and
+ * LSHandlerRank Alternate (listed, never preferred over the user's default).
+ * They name public.movie and public.audio, which every system-declared kind
+ * conforms to, and import a declaration for the kinds macOS 14 declares none
+ * for (CoreTypes.bundle, checked on macOS 26.2), so those files are movies or
+ * audio too. An import yields to any app that exports the same type.
+ *
+ * Windows (windows/vestra.iss includes windows/file-types.iss, generated
+ * from here and committed; `--check` compares, `--write` rewrites):
+ *   always       ProgIDs VestraPlayer.Video / VestraPlayer.Audio, each
+ *                kind's OpenWithProgids, Applications\vestra-host.exe with
+ *                SupportedTypes: Vestra Player is in "Open with" for them;
+ *   task         "associate" (unchecked by default): Capabilities and
+ *                RegisteredApplications, so Settings › Default apps offers
+ *                Vestra Player for them. Windows 10/11 lets only the user
+ *                choose the default; nothing here takes it.
+ * The uninstaller removes every key and value (uninsdelete* flags).
+ *
+ *   node packaging/file-types.mjs --check | --write
+ */
+import { readFile, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { fail, packaging, parseArgs } from "./lib.mjs";
+
+export const VIDEO = [
+  ..."mp4 m4v mkv webm mov avi wmv asf flv f4v ts m2ts mts mpg mpeg vob ogv 3gp rm rmvb".split(
+    " ",
+  ),
+];
+export const AUDIO = [
+  ..."mp3 m4a aac flac wav ogg oga opus wma ape aif aiff dsf dff mka wv tta ac3 dts".split(
+    " ",
+  ),
+];
+
+/**
+ * Kinds without a system declaration on macOS: identifier, description,
+ * the type it conforms to, extensions. The Matroska and Ogg ones use the
+ * identifiers other players use; the rest are ours.
+ */
+export const MACOS_IMPORTED = [
+  ["org.matroska.mkv", "Matroska video", "public.movie", ["mkv"]],
+  ["org.matroska.mka", "Matroska audio", "public.audio", ["mka"]],
+  ["org.xiph.ogv", "Ogg video", "public.movie", ["ogv"]],
+  [
+    "com.vestraplayer.m2ts",
+    "MPEG-2 transport stream (AVCHD)",
+    "public.movie",
+    ["m2ts", "mts"],
+  ],
+  ["com.vestraplayer.vob", "DVD video object", "public.movie", ["vob"]],
+  ["com.vestraplayer.ape", "Monkey's Audio", "public.audio", ["ape"]],
+  ["com.vestraplayer.dsd", "DSD audio", "public.audio", ["dsf", "dff"]],
+  ["com.vestraplayer.wv", "WavPack audio", "public.audio", ["wv"]],
+  ["com.vestraplayer.tta", "True Audio", "public.audio", ["tta"]],
+  ["com.vestraplayer.dts", "DTS audio", "public.audio", ["dts"]],
+].map(([identifier, description, conformsTo, extensions]) => ({
+  identifier,
+  description,
+  conformsTo,
+  extensions,
+}));
+
+/** The Info.plist entries for document types (merged into the app's). */
+export function macosDocumentTypes() {
+  const imported = (kind) =>
+    MACOS_IMPORTED.filter((type) => type.conformsTo === kind).map(
+      (type) => type.identifier,
+    );
+  const documentType = (name, contentTypes) => ({
+    CFBundleTypeName: name,
+    CFBundleTypeRole: "Viewer",
+    LSHandlerRank: "Alternate",
+    LSItemContentTypes: contentTypes,
+  });
+  return {
+    CFBundleDocumentTypes: [
+      documentType("Video", [
+        "public.movie",
+        // Windows Media containers conform only to audiovisual content.
+        "com.microsoft.advanced-systems-format",
+        ...imported("public.movie"),
+      ]),
+      documentType("Audio", ["public.audio", ...imported("public.audio")]),
+    ],
+    UTImportedTypeDeclarations: MACOS_IMPORTED.map((type) => ({
+      UTTypeIdentifier: type.identifier,
+      UTTypeDescription: type.description,
+      UTTypeConformsTo: [type.conformsTo],
+      UTTypeTagSpecification: { "public.filename-extension": type.extensions },
+    })),
+  };
+}
+
+export const WINDOWS_INCLUDE = join(packaging, "windows/file-types.iss");
+const EXE = "vestra-host.exe";
+const PROGIDS = { video: "VestraPlayer.Video", audio: "VestraPlayer.Audio" };
+
+/** windows/file-types.iss: the [Registry] section vestra.iss includes. */
+export function windowsRegistry() {
+  const kinds = [
+    ...VIDEO.map((extension) => [extension, "video"]),
+    ...AUDIO.map((extension) => [extension, "audio"]),
+  ];
+  const command = `"""{app}\\${EXE}"" ""%1"""`;
+  const line = (fields) =>
+    Object.entries(fields)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join("; ");
+  const key = (subkey, fields = {}) =>
+    line({ Root: "HKA", Subkey: `"${subkey}"`, ...fields });
+  const lines = [
+    "; Generated by packaging/file-types.mjs --write; do not edit.",
+    "; Included by vestra.iss. HKA: HKCU for a per-user install, HKLM for all users.",
+    "",
+    "[Registry]",
+    "; ProgIDs, the targets of Open with.",
+  ];
+  for (const [kind, progid] of Object.entries(PROGIDS)) {
+    const classes = `Software\\Classes\\${progid}`;
+    const name = kind === "video" ? "Video" : "Audio";
+    lines.push(
+      key(classes, {
+        ValueType: "string",
+        ValueName: '""',
+        ValueData: `"${name} (Vestra Player)"`,
+        Flags: "uninsdeletekey",
+      }),
+      key(`${classes}\\DefaultIcon`, {
+        ValueType: "string",
+        ValueName: '""',
+        ValueData: `"{app}\\${EXE},0"`,
+      }),
+      key(`${classes}\\shell\\open\\command`, {
+        ValueType: "string",
+        ValueName: '""',
+        ValueData: command,
+      }),
+    );
+  }
+  lines.push(
+    "; The application itself, offered for its supported kinds.",
+    key(`Software\\Classes\\Applications\\${EXE}`, {
+      ValueType: "string",
+      ValueName: '"FriendlyAppName"',
+      ValueData: '"Vestra Player"',
+      Flags: "uninsdeletekey",
+    }),
+    key(`Software\\Classes\\Applications\\${EXE}\\shell\\open\\command`, {
+      ValueType: "string",
+      ValueName: '""',
+      ValueData: command,
+    }),
+  );
+  for (const [extension] of kinds)
+    lines.push(
+      key(`Software\\Classes\\Applications\\${EXE}\\SupportedTypes`, {
+        ValueType: "string",
+        ValueName: `".${extension}"`,
+        ValueData: '""',
+      }),
+    );
+  lines.push("; Each kind lists the ProgID in its Open with menu.");
+  for (const [extension, kind] of kinds)
+    lines.push(
+      key(`Software\\Classes\\.${extension}\\OpenWithProgids`, {
+        ValueType: "none",
+        ValueName: `"${PROGIDS[kind]}"`,
+        Flags: "uninsdeletevalue",
+      }),
+    );
+  lines.push(
+    "; Task associate: a candidate for the default app (Settings, Default apps).",
+    key("Software\\VestraPlayer", {
+      Flags: "uninsdeletekeyifempty",
+      Tasks: "associate",
+    }),
+    key("Software\\VestraPlayer\\Capabilities", {
+      ValueType: "string",
+      ValueName: '"ApplicationName"',
+      ValueData: '"Vestra Player"',
+      Flags: "uninsdeletekey",
+      Tasks: "associate",
+    }),
+    key("Software\\VestraPlayer\\Capabilities", {
+      ValueType: "string",
+      ValueName: '"ApplicationDescription"',
+      ValueData: '"Plays video and audio files."',
+      Tasks: "associate",
+    }),
+  );
+  for (const [extension, kind] of kinds)
+    lines.push(
+      key("Software\\VestraPlayer\\Capabilities\\FileAssociations", {
+        ValueType: "string",
+        ValueName: `".${extension}"`,
+        ValueData: `"${PROGIDS[kind]}"`,
+        Tasks: "associate",
+      }),
+    );
+  lines.push(
+    key("Software\\RegisteredApplications", {
+      ValueType: "string",
+      ValueName: '"Vestra Player"',
+      ValueData: '"Software\\VestraPlayer\\Capabilities"',
+      Flags: "uninsdeletevalue",
+      Tasks: "associate",
+    }),
+  );
+  return `${lines.join("\n")}\n`;
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === import.meta.filename) {
+  const options = parseArgs(process.argv.slice(2), ["check", "write"]);
+  const fresh = windowsRegistry();
+  if (options.write) await writeFile(WINDOWS_INCLUDE, fresh);
+  else if (options.check) {
+    if ((await readFile(WINDOWS_INCLUDE, "utf8")) !== fresh)
+      fail(
+        `${WINDOWS_INCLUDE} is out of date: node packaging/file-types.mjs --write`,
+      );
+  } else fail("usage: file-types.mjs --check | --write");
+}

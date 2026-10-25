@@ -17,6 +17,7 @@ pub mod font_asset;
 pub mod font_carrier;
 mod i18n;
 mod input_trace;
+mod launch;
 mod manifest;
 mod media_jobs;
 mod media_tracks;
@@ -25,6 +26,7 @@ mod menu;
 mod native_subtitle;
 mod offline_audio;
 mod offline_descriptor;
+mod open_files;
 pub mod package_activation;
 mod package_archive;
 mod package_manager;
@@ -247,6 +249,9 @@ enum Event {
     ConfirmDone(Reply, bool, bool),
     /// A file dropped on a window: (window generation, path).
     Dropped(u64, PathBuf),
+    /// Files to open (`open_files.rs`); `true`: from another launch, which
+    /// also wants the window in front.
+    OpenFiles(Vec<PathBuf>, bool),
     /// The options window: (generation, tree index to show, or `None` = close).
     Settings(u64, Option<usize>),
     RuntimeFault(u64, String),
@@ -438,6 +443,8 @@ struct Host {
     pip_gpu: (Arc<AtomicBool>, bool),
     /// File drops (R-U2).
     drops: drops::Drops,
+    /// Files the system or another launch asked to open.
+    opens: open_files::OpenFiles,
     /// Settings pages and the options window (R-S1, R-H7).
     settings: settings_window::Settings,
     /// The category of the page the options window last showed.
@@ -1032,6 +1039,7 @@ impl Host {
                 }
             }
             Event::Dropped(generation, path) => self.drops.arrived(generation, path),
+            Event::OpenFiles(files, front) => self.open_files(files, front),
             Event::Settings(generation, index) => self.settings_event(generation, index),
             Event::ConfirmDone(reply, confirmed, checked) => {
                 self.policy.activity(self.now_ms());
@@ -4839,47 +4847,37 @@ impl FrameEvidence {
 }
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let mut directories = Vec::<PathBuf>::new();
-    let mut headless = false;
-    let mut silent = false;
-    let mut seconds = None;
-    let mut snapshot = None;
-    let mut frame_evidence = None;
-    let mut args = args.iter();
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--frame-evidence-dir" => {
-                frame_evidence =
-                    Some(PathBuf::from(args.next().ok_or_else(|| {
-                        anyhow::anyhow!("--frame-evidence-dir requires path")
-                    })?));
-            }
-            "--snapshot" => {
-                snapshot =
-                    Some(PathBuf::from(args.next().ok_or_else(|| {
-                        anyhow::anyhow!("--snapshot requires PNG path")
-                    })?))
-            }
-            "--headless" => headless = true,
-            "--silent" => silent = true,
-            "--plugin" => directories
-                .push(PathBuf::from(args.next().ok_or_else(|| {
-                    anyhow::anyhow!("--plugin requires directory")
-                })?)),
-            "--seconds" => {
-                seconds = Some(
-                    args.next()
-                        .ok_or_else(|| anyhow::anyhow!("--seconds requires number"))?
-                        .parse::<f64>()?,
-                )
-            }
-            _ => bail!(
-                "unknown argument {arg}; use --plugin DIR [--headless] [--silent] [--seconds N]"
-            ),
-        }
+    let launch::Launch {
+        directories,
+        headless,
+        silent,
+        seconds,
+        snapshot,
+        frame_evidence,
+        files,
+        urls,
+    } = launch::parse(&args, &std::env::current_dir()?)?;
+    for url in &urls {
+        eprintln!("host.warning open: {url} is not a file; open links from a plugin's command");
     }
-    if frame_evidence.is_some() && !headless {
-        bail!("--frame-evidence-dir is headless diagnostic only");
+    // One player per user (`platform::single_instance`): a later launch
+    // hands its files to the running one and exits. Development runs
+    // (`--plugin`) and headless ones stay on their own unless
+    // `VESTRA_INSTANCE_DIR` names the directory to coordinate in (tests).
+    let instance_dir = std::env::var_os("VESTRA_INSTANCE_DIR")
+        .map(PathBuf::from)
+        .or_else(|| {
+            (!headless && directories.is_empty())
+                .then(platform::app_data_dir)
+                .flatten()
+        });
+    let mut primary = None;
+    if let Some(directory) = instance_dir {
+        match platform::single_instance(&directory, &files, Duration::from_secs(5)) {
+            Ok(platform::Launch::HandedOff) => return Ok(()),
+            Ok(platform::Launch::Primary(claimed)) => primary = Some(claimed),
+            Err(error) => eprintln!("single instance: {error}; running on its own"),
+        }
     }
     let mut evidence = frame_evidence.map(FrameEvidence::new).transpose()?;
     // A packaged player missing its own files (the bundled Node above all)
@@ -4920,6 +4918,19 @@ fn main() -> Result<()> {
     }
     let mut observed_source = Value::Null;
     let (events, receiver) = mpsc::channel();
+    if !headless {
+        // Before the event loop: the launch's own open-documents event (macOS).
+        let events = events.clone();
+        platform::on_open_files(move |files| {
+            let _ = events.send(Event::OpenFiles(files, false));
+        });
+    }
+    if let Some(primary) = primary {
+        let events = events.clone();
+        primary.serve(move |files| {
+            let _ = events.send(Event::OpenFiles(files, true));
+        });
+    }
     let backend = Backend::start(events.clone(), silent, gpu)?;
     // `plugin.app`, handed to every plugin process when it starts.
     let ffmpeg = &backend.versions["ffmpeg"];
@@ -5018,6 +5029,7 @@ fn main() -> Result<()> {
         render_sent: None,
         pip_gpu: Default::default(),
         drops: Default::default(),
+        opens: Default::default(),
         settings: Default::default(),
         settings_category: None,
         theme_pending: false,
@@ -5060,6 +5072,7 @@ fn main() -> Result<()> {
     for directory in directories {
         host.load(&directory, 120_000)?;
     }
+    host.open_files(files, false);
     let start = Instant::now();
     if headless {
         loop {
@@ -5083,6 +5096,7 @@ fn main() -> Result<()> {
             host.package_tick();
             host.notify_tick();
             host.timeline_tick();
+            host.open_files_tick();
             if let Some(evidence) = evidence.as_mut() {
                 evidence.sample(&host.backend, &observed_source, start)?;
             }
@@ -5169,6 +5183,7 @@ fn main() -> Result<()> {
                 host.notify_tick();
                 host.timeline_tick();
                 host.drops_tick();
+                host.open_files_tick();
                 host.settings_tick();
                 if host.theme_pending {
                     host.theme_all();

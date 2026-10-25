@@ -29,7 +29,7 @@
 | workshop 插件启动子进程 | `engine.mjs:84` 用 `spawn(process.execPath, …)` | 不用改，自动用到自带的 Node |
 | 数据目录 | `platform::app_data_dir()`：macOS 是 `~/Library/Application Support/Vestra`，Windows 是 `%APPDATA%\Vestra`。下面有 `packages/`、`plugin-data/`、`ui-state.json` | 不受影响。实测安装库和插件数据都写到了这里 |
 | 日志 | 插件的 stderr 直接继承宿主的 stderr | 从 Finder 双击启动时 stderr 被丢掉。Windows 改成 GUI 子系统以后也没有 stderr |
-| 命令行参数 | `main.rs:3998`：不认识的参数直接 `bail!` | 现在没问题。但以后做文件关联时，系统传进来的文件路径会被这里拒绝（见 §3.2） |
+| 命令行参数 | `main.rs:3998`：不认识的参数直接 `bail!` | 现在没问题。但以后做文件关联时，系统传进来的文件路径会被这里拒绝（见 §3.2）。2026-10-25：位置参数改为要打开的文件（`launch.rs`） |
 | Windows 控制台 | 没有 `#![windows_subsystem = "windows"]`，启动子进程也没加 `CREATE_NO_WINDOW` | 双击 exe 会多出一个控制台窗口，每个 Node 和 ffmpeg 子进程还会再各开一个 |
 
 只在开发时有意义的东西：`CARGO_MANIFEST_DIR` 的三个回退；`default_ffmpeg` 写死的 Homebrew 路径；测试里直接 `Command::new("node")`；`VESTRA_*` 环境变量（这些继续保留，用来调试）。
@@ -180,6 +180,11 @@ Vestra Player.app/Contents/
   - macOS 打开文件走 Apple Event（`application:openURLs:`），winit/Slint 没有转发，要在平台层接；
   - 命令行遇到不认识的参数会 `bail!`。
   - 拖放已经能用。接好以后再加 `CFBundleDocumentTypes`（`LSHandlerRank = Alternate`，常见视频和音频的 UTI），作为单独一项。
+  - **2026-10-25 已接上**：
+    - 命令行的位置参数是要打开的文件（`launch.rs`，`file://` 转成路径，`--` 之后全当文件），打开方式和把同样的文件拖到视频区一样（`open_files.rs` → `drops.drop`）；启动时等已安装插件激活完再送；
+    - macOS 在平台层接 open-documents Apple Event（`unsafe/open`，用 `NSAppleEventManager`，winit 的 delegate 不动）；`Info.plist` 声明 `public.movie`、`public.audio`，系统没声明的类型（mkv、mka、ogv 等）用 `UTImportedTypeDeclarations` 补，角色 Viewer、`LSHandlerRank = Alternate`，不抢默认；
+    - 单实例（`platform/instance.rs`，各系统同一份代码）：第一个进程锁住数据目录里的 `instance.lock`，在回环端口上监听；后来的进程把文件交过去后退出，正在运行的窗口回到前台（Windows 先 `AllowSetForegroundWindow`）。`--plugin`、`--headless` 的运行不参与，除非设了 `VESTRA_INSTANCE_DIR`；
+    - Windows 安装包始终注册 ProgID、`OpenWithProgids`、`Applications\vestra-host.exe\SupportedTypes`（「打开方式」里有 Vestra Player）；可选任务「associate」（默认不勾）再写 `Capabilities` 和 `RegisteredApplications`，用户在「设置 › 默认应用」里自己选。清单在 `packaging/file-types.mjs`，生成 `windows/file-types.iss`。
 - **图标**：来源是 `src/assets/brand/logo.png`（1024×1024，带透明），是一个满幅的 V 字，没有底板。
   - 用 `sips` 和 `iconutil` 生成 `.icns` 已经实测可行（806 KB）。
   - 但 macOS 11 以后的图标规范是 824 px 的圆角方形底板加内容；macOS 26 会把不合规范的图标塞进一个灰色底板里。
@@ -489,7 +494,7 @@ SHA256SUMS
 9. **mpv 内置 Lua 脚本和 ytdl 关掉**（§3.4）：会改变行为，但能避免 Hardened Runtime 的问题和意外调用 yt-dlp。
 10. **图标**：自动合成圆角底板（推荐），还是等设计稿。
 11. **发布说明的来源**：`doc/releases/v<版本>.md`（推荐），缺了这个文件 release 就失败。
-12. **文档类型和文件关联**：第一版不做（推荐），之后作为宿主功能单独排期。
+12. **文档类型和文件关联**：第一版不做（推荐），之后作为宿主功能单独排期。2026-10-25 已做，见 §3.2「文档类型」。
 13. **SDK 1.2.0**（`engines`、`@types/node`）：和 S7 一起发。
 
 ---

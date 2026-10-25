@@ -483,6 +483,20 @@ pub fn open_url(url: &str) -> std::result::Result<(), RpcError> {
     open(&[std::ffi::OsStr::new(url)])
 }
 
+// ------------------------------------------------------- opening the player
+
+/// Files LaunchServices asks the running player to open (Finder "Open With",
+/// double-click, the Dock icon): open-documents Apple events, at launch too
+/// (`vestra-open-files`). Call once on the main thread before the event loop.
+pub fn on_open_files(deliver: impl Fn(Vec<PathBuf>) + 'static) {
+    if !vestra_open_files::on_open_files(deliver) {
+        eprintln!("open files: the open-documents handler is not installed");
+    }
+}
+
+/// LaunchServices activates the app it sends documents to; nothing to pass on.
+pub fn allow_handoff_foreground() {}
+
 // -------------------------------------------------------------------- facts
 
 /// The product version as `sw_vers -productVersion` prints it (`26.2`,

@@ -1,0 +1,25 @@
+[package]
+name = "vestra-open-files"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+description = "macOS open-documents Apple events (Finder Open With, double-click, drops on the Dock icon) for vestra-host"
+
+# One of the crates under src/host/unsafe/: the only place first-party Rust may
+# use `unsafe`. Every block carries a SAFETY comment; the public API is safe.
+# Empty on other systems.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "=0.6.5"
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSAppleEventDescriptor", "NSAppleEventManager", "NSNotification", "NSString", "NSURL"] }
+
+# Not `workspace = true` (that would forbid unsafe); src/scripts/check-unsafe-policy.mjs
+# requires these entries.
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"
+missing_safety_doc = "deny"
+dbg_macro = "warn"
+todo = "warn"
