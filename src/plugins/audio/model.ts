@@ -202,15 +202,19 @@ export const deviceLabel = (name: string) => cleanName(name) || UNNAMED_DEVICE;
 /**
  * Menu titles for `[System Default, ...devices, missing?]`: distinct (a repeated name gets " (2)"),
  * never one of the fixed titles. `missing` is the chosen device while it is not connected.
+ * `name` is the `cleanName`, empty for an unnamed device; `n` is the number after it, or `null`.
+ * `key` is the English title, which keeps them distinct.
  */
 export function deviceTitles(devices: readonly { id: string; name: string }[], missing: string | null = null) {
-  const used = new Set([SYSTEM_DEFAULT, NO_DEVICES]);
-  return [...devices.map((d) => d.name), ...(missing === null ? [] : [missing])].map((name) => {
-    const base = deviceLabel(name);
-    let title = base;
-    for (let n = 2; used.has(title); n++) title = `${base} (${n})`;
-    used.add(title);
-    return title;
+  const used = new Set<string>([SYSTEM_DEFAULT, NO_DEVICES]);
+  return [...devices.map((d) => d.name), ...(missing === null ? [] : [missing])].map((raw) => {
+    const name = cleanName(raw);
+    const base = deviceLabel(raw);
+    let n: number | null = null;
+    let key = base;
+    for (let next = 2; used.has(key); next++) [n, key] = [next, `${base} (${next})`];
+    used.add(key);
+    return { name, n, key };
   });
 }
 
@@ -221,6 +225,7 @@ export function deviceTitles(devices: readonly { id: string; name: string }[], m
  * "track"). `text` is data, "1. 日语 [jpn] (aac)" (at most 60 characters), or
  * empty for a track without title and language: the window then shows the
  * words "Track {n}" ("Track 2 (opus)"). An external track gets " (external)".
+ * The menu and the OSD put the same words into a text value (main.ts `trackLabel`).
  */
 export type TrackRow = { kind: "track"; text: string; n: number; codec: string; external: boolean; disconnected: false };
 export function trackRow(track: AudioTrack, index: number): TrackRow {
@@ -233,27 +238,6 @@ export function trackRow(track: AudioTrack, index: number): TrackRow {
 }
 /** At most `length` characters, cut with "…". */
 export const clip = (text: string, length: number) => ([...text].length > length ? `${[...text].slice(0, length - 1).join("")}…` : text);
-
-/**
- * The OSD after switching to a track: one whole template per shape of the
- * label, so each is translated as a sentence.
- */
-export function trackOsd(row: TrackRow) {
-  if (row.text) return row.external ? (["Audio track: {} (external)", [row.text]] as const) : (["Audio track: {}", [row.text]] as const);
-  if (row.codec)
-    return row.external ? (["Audio track: Track {} ({}) (external)", [row.n, row.codec]] as const) : (["Audio track: Track {} ({})", [row.n, row.codec]] as const);
-  return row.external ? (["Audio track: Track {} (external)", [row.n]] as const) : (["Audio track: Track {}", [row.n]] as const);
-}
-
-/**
- * The track as a menu item title, in English: a command title cannot take
- * arguments (doc/process/rounds/2026-10-i18n.md, 第 2 轮请求 R2-audio-1), so
- * "Track {}" and " (external)" stay untranslated in the menu meanwhile.
- */
-export function trackTitle(row: TrackRow) {
-  const text = row.text || (row.codec ? `Track ${row.n} (${row.codec})` : `Track ${row.n}`);
-  return row.external ? `${text} (external)` : text;
-}
 
 /** Audio file extensions A11 offers and the same-name scan picks up. */
 export const AUDIO_EXTENSIONS = ["mka", "m4a", "aac", "ac3", "eac3", "dts", "flac", "mp3", "ogg", "opus", "wav", "mp2", "wma", "aiff", "aif", "thd", "mlp"];

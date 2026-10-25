@@ -5,7 +5,6 @@ import {
   DEVICE_POLL_MS,
   SELECTED_DEVICE,
   SYNC_STEP_MS,
-  SYSTEM_DEFAULT,
   TABS,
   channelModes,
   cleanName,
@@ -24,11 +23,9 @@ import {
   syncKeeps,
   syncSeconds,
   tenth,
-  trackOsd,
   trackRow,
-  trackTitle,
 } from "./model.ts";
-import type { ChannelMode, Settings, SyncKeep } from "./model.ts";
+import type { ChannelMode, Settings, SyncKeep, TrackRow } from "./model.ts";
 
 /** The player's Audio menu. */
 const AUDIO = "@audio";
@@ -48,6 +45,15 @@ const quiet = (shown: Promise<void>) => void shown.catch(() => undefined);
  */
 export default async function activate(plugin: Plugin) {
   const { player } = plugin;
+  const { text } = plugin.i18n;
+  /**
+   * A track in the menu and the OSD: its data ("1. 日语 [jpn] (aac)"; `{}` keeps it untranslated),
+   * or "Track 2 (opus)" without title and language; an external one gets "(external)".
+   */
+  const trackLabel = (row: TrackRow) => {
+    const label = row.text ? text("{}", [row.text]) : row.codec ? text("Track {} ({})", [row.n, row.codec]) : text("Track {}", [row.n]);
+    return row.external ? text("{} (external)", [label]) : label;
+  };
   const filter = plugin.audio.filter("workbench");
   const window = plugin.windows.create("ui/workbench.slint", { id: "audio-workbench" });
   const store = settingsStore(plugin);
@@ -225,8 +231,7 @@ export default async function activate(plugin: Plugin) {
     if (!chosen || chosen.selected) return;
     try {
       await player.selectAudioTrack(id);
-      const [text, args] = trackOsd(trackRow(chosen, index));
-      quiet(plugin.osd.show(text, args));
+      quiet(plugin.osd.show("Audio track: {}", [trackLabel(trackRow(chosen, index))]));
     } catch (error) {
       // The source changed meanwhile: the menu follows it, nothing to say.
       if ((error as PluginError).code !== "stale") quiet(plugin.osd.show("Cannot switch the audio track: {}", [arg((error as Error).message)]));
@@ -247,7 +252,7 @@ export default async function activate(plugin: Plugin) {
   const rebuildTracks = () =>
     (rebuilding = rebuilding.then(async () => {
       const list = player.state.audioTracks;
-      const labels = list?.map((t, index) => trackTitle(trackRow(t, index))) ?? null;
+      const labels = list?.map((t, index) => trackLabel(trackRow(t, index))) ?? null;
       const key = JSON.stringify([labels, list?.map((t) => t.id), list === null ? noTracks() : null]);
       if (key === trackKey) return;
       trackKey = key;
@@ -267,7 +272,7 @@ export default async function activate(plugin: Plugin) {
       list.forEach((t: AudioTrack, index) =>
         trackScope.commands.add({
           id: `audio.track.${t.id}`,
-          path: [AUDIO, "Audio Track", /* i18n-ignore: data, see trackTitle */ labels![index]!],
+          path: [AUDIO, "Audio Track", labels![index]!],
           order: 511,
           group: "audio-tools",
           radio: true,
@@ -297,9 +302,13 @@ export default async function activate(plugin: Plugin) {
   const deviceEntries = () => {
     if (!devices?.length) return null;
     const missing = device !== null && !present(device) ? nameOf(device) ?? SELECTED_DEVICE : null;
-    const titles = deviceTitles(devices, missing);
+    // A device name is data (`{}` keeps it untranslated); "Unnamed device" and "Selected device" are words, also with " (2)".
+    const titles = deviceTitles(devices, missing).map(({ name, n }) => {
+      const base = !name ? text("Unnamed device") : name === SELECTED_DEVICE ? text("Selected device") : name;
+      return n === null ? (typeof base === "string" ? text("{}", [base]) : base) : text("{} ({})", [base, n]);
+    });
     return [
-      { id: null, title: SYSTEM_DEFAULT, name: null, connected: true },
+      { id: null, title: text("System Default"), name: null, connected: true },
       ...devices.map((d, i) => ({ id: d.id as string | null, title: titles[i]!, name: d.name as string | null, connected: true })),
       ...(missing === null ? [] : [{ id: device, title: titles.at(-1)!, name: device === null ? null : nameOf(device), connected: false }]),
     ];
@@ -389,8 +398,7 @@ export default async function activate(plugin: Plugin) {
       entries.forEach((entry, index) =>
         deviceScope.commands.add({
           id: `audio.device.${index}`,
-          // System Default, a device name (data), or "Unnamed device" / "Selected device" (in the catalog through the window)
-          path: [AUDIO, "Output Device", /* i18n-ignore */ entry.title],
+          path: [AUDIO, "Output Device", entry.title],
           ...at,
           radio: true,
           enabled: entry.connected,

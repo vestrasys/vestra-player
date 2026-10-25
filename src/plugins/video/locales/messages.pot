@@ -400,12 +400,12 @@ msgstr ""
 msgid "Could not open the shader folder: {}"
 msgstr ""
 
-#. {} is a list of file names, separated by "、" for now (R2-video-1: list format by language).
+#. {} is a list of file names.
 #: main.ts:760
 msgid "Removed missing shaders: {}"
 msgstr ""
 
-#. {} is a list of file names, separated by "、" for now (R2-video-1: list format by language).
+#. {} is a list of file names.
 #: main.ts:761
 msgid "Shaders reloaded ({})"
 msgstr ""
@@ -416,6 +416,10 @@ msgstr ""
 
 #: main.ts:814
 msgid "Use Shaders"
+msgstr ""
+
+#: main.ts:819 main.ts:824 main.ts:833 main.ts:842 main.ts:845 main.ts:1068 picture.slint:365 ui/shaders.slint:120
+msgid "Needs GPU rendering (currently software rendering)"
 msgstr ""
 
 #: main.ts:822
@@ -474,7 +478,7 @@ msgstr ""
 msgid "Deinterlace"
 msgstr ""
 
-#: main.ts:849 main.ts:1077
+#: main.ts:849 main.ts:1074
 msgid "Cycle"
 msgstr ""
 
@@ -498,7 +502,7 @@ msgstr ""
 msgid "By Field (Double Rate)"
 msgstr ""
 
-#: main.ts:882 main.ts:891 main.ts:899 main.ts:948 main.ts:949
+#: main.ts:882 main.ts:891 main.ts:899 main.ts:943 main.ts:945 main.ts:946
 msgid "Aspect"
 msgstr ""
 
@@ -514,239 +518,231 @@ msgstr ""
 msgid "Default (Source)"
 msgstr ""
 
-#: main.ts:948
+#: main.ts:943 picture.slint:354
+msgid "Custom ({})"
+msgstr ""
+
+#: main.ts:945
 msgid "Custom (x:y)"
 msgstr ""
 
-#: main.ts:948
+#: main.ts:945
 msgid "Enter one with Custom Aspect Ratio… first"
 msgstr ""
 
-#: main.ts:949 picture.slint:665
+#: main.ts:946 picture.slint:665
 msgid "Custom Aspect Ratio…"
 msgstr ""
 
-#: main.ts:955 main.ts:966 main.ts:984
+#: main.ts:952 main.ts:963 main.ts:981
 msgid "Crop/Stretch"
 msgstr ""
 
-#: main.ts:955 picture.slint:630
+#: main.ts:952 picture.slint:630
 msgid "None"
 msgstr ""
 
-#: main.ts:966
+#: main.ts:963
 msgid "Stretch to 4:3"
 msgstr ""
 
-#: main.ts:966
+#: main.ts:963
 msgid "Stretch to 16:9"
 msgstr ""
 
-#: main.ts:966
+#: main.ts:963
 msgid "Stretch to 16:10"
 msgstr ""
 
-#: main.ts:966
+#: main.ts:963
 msgid "Stretch to 1.85:1"
 msgstr ""
 
-#: main.ts:966
+#: main.ts:963
 msgid "Stretch to 2.35:1"
 msgstr ""
 
-#: main.ts:966
+#: main.ts:963
 msgid "Crop to 4:3"
 msgstr ""
 
-#: main.ts:966
+#: main.ts:963
 msgid "Crop to 16:9"
 msgstr ""
 
-#: main.ts:966
+#: main.ts:963
 msgid "Crop to 16:10"
 msgstr ""
 
-#: main.ts:966
+#: main.ts:963
 msgid "Crop to 1.85:1"
 msgstr ""
 
-#: main.ts:966
+#: main.ts:963
 msgid "Crop to 2.35:1"
 msgstr ""
 
-#: main.ts:984
+#: main.ts:981
 msgid "Reset Position"
 msgstr ""
 
-#: main.ts:984
+#: main.ts:981
 msgid "Move Left"
 msgstr ""
 
-#: main.ts:984
+#: main.ts:981
 msgid "Move Right"
 msgstr ""
 
-#: main.ts:984 ui/shaders.slint:103
+#: main.ts:981 ui/shaders.slint:103
 msgid "Move Up"
 msgstr ""
 
-#: main.ts:984 ui/shaders.slint:104
+#: main.ts:981 ui/shaders.slint:104
 msgid "Move Down"
 msgstr ""
 
-#: main.ts:1002
+#: main.ts:999
 msgid "Framing"
 msgstr ""
 
-#: main.ts:1002
+#: main.ts:999
 msgid "Reset Framing"
 msgstr ""
 
-#: main.ts:1002
+#: main.ts:999
 msgid "Zoom In"
 msgstr ""
 
-#: main.ts:1002
+#: main.ts:999
 msgid "Zoom Out"
 msgstr ""
 
-#: main.ts:1002
+#: main.ts:999
 msgid "Pan →"
 msgstr ""
 
-#: main.ts:1002
+#: main.ts:999
 msgid "Pan ←"
 msgstr ""
 
-#: main.ts:1002
+#: main.ts:999
 msgid "Pan ↑"
 msgstr ""
 
-#: main.ts:1002
+#: main.ts:999
 msgid "Pan ↓"
 msgstr ""
 
-#: main.ts:1002
+#: main.ts:999
 msgid "Center Frame"
 msgstr ""
 
-#: main.ts:1006 main.ts:1015 main.ts:1024 main.ts:1048 main.ts:1059 main.ts:1067
+#: main.ts:1003 main.ts:1012 main.ts:1021 main.ts:1045 main.ts:1056 main.ts:1064
 msgid "Image Processing"
 msgstr ""
 
-#: main.ts:1006
+#: main.ts:1003
 msgid "Flip Vertically"
 msgstr ""
 
-#: main.ts:1015
+#: main.ts:1012
 msgid "Flip Horizontally"
 msgstr ""
 
-#: main.ts:1024
+#: main.ts:1021
 msgid "Gaussian Blur"
 msgstr ""
 
-#: main.ts:1032
+#: main.ts:1029
 msgid "Gaussian blur: on"
 msgstr ""
 
-#: main.ts:1032
+#: main.ts:1029
 msgid "Gaussian blur: off"
 msgstr ""
 
-#: main.ts:1048 picture.slint:463
+#: main.ts:1045 picture.slint:463
 msgid "Sharpen"
 msgstr ""
 
-#: main.ts:1048
+#: main.ts:1045
 msgid "Edge Sharpen"
 msgstr ""
 
-#: main.ts:1048 picture.slint:516
+#: main.ts:1045 picture.slint:516
 msgid "Deblock"
 msgstr ""
 
-#: main.ts:1048 picture.slint:526
+#: main.ts:1045 picture.slint:526
 msgid "Deband"
 msgstr ""
 
-#: main.ts:1048
+#: main.ts:1045
 msgid "3D Denoise"
 msgstr ""
 
-#: main.ts:1048
+#: main.ts:1045
 msgid "Gradual Denoise"
 msgstr ""
 
-#: main.ts:1048
+#: main.ts:1045
 msgid "Temporal Denoise"
 msgstr ""
 
-#: main.ts:1059
+#: main.ts:1056
 msgid "Frame Doubling"
 msgstr ""
 
-#: main.ts:1067
+#: main.ts:1064
 msgid "Motion Interpolation"
 msgstr ""
 
-#: main.ts:1077 main.ts:1086
+#: main.ts:1074 main.ts:1083
 msgid "Rotation"
 msgstr ""
 
-#: main.ts:1086
+#: main.ts:1083
 msgid "No Rotation"
 msgstr ""
 
-#: main.ts:1086
-msgid "90°"
-msgstr ""
-
-#: main.ts:1086
-msgid "180°"
-msgstr ""
-
-#: main.ts:1086
-msgid "270°"
-msgstr ""
-
-#: main.ts:1094
+#: main.ts:1091
 msgid "Picture Adjustments…"
 msgstr ""
 
-#: main.ts:1095
+#: main.ts:1092
 msgid "Reset"
 msgstr ""
 
-#: main.ts:1100
+#: main.ts:1097
 msgid "Brightness -1%"
 msgstr ""
 
-#: main.ts:1100
+#: main.ts:1097
 msgid "Contrast -1%"
 msgstr ""
 
-#: main.ts:1100
+#: main.ts:1097
 msgid "Saturation -1%"
 msgstr ""
 
-#: main.ts:1100
+#: main.ts:1097
 msgid "Hue -1%"
 msgstr ""
 
-#: main.ts:1109
+#: main.ts:1106
 msgid "Brightness +1%"
 msgstr ""
 
-#: main.ts:1109
+#: main.ts:1106
 msgid "Contrast +1%"
 msgstr ""
 
-#: main.ts:1109
+#: main.ts:1106
 msgid "Saturation +1%"
 msgstr ""
 
-#: main.ts:1109
+#: main.ts:1106
 msgid "Hue +1%"
 msgstr ""
 
@@ -782,14 +778,6 @@ msgstr ""
 
 #: picture.slint:232 picture.slint:274 picture.slint:512 picture.slint:704
 msgid "Default"
-msgstr ""
-
-#: picture.slint:354
-msgid "Custom ({})"
-msgstr ""
-
-#: picture.slint:365 ui/shaders.slint:120
-msgid "Needs GPU rendering (currently software rendering)"
 msgstr ""
 
 #: picture.slint:383

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bands, clamp, companions, deviceId, deviceLabel, deviceTitles, matches, neutral, nodes, parse, presetOf, presets, serialize, syncSeconds, trackOsd, trackRow, trackTitle } from "../model.ts";
+import { bands, clamp, companions, deviceId, deviceLabel, deviceTitles, matches, neutral, nodes, parse, presetOf, presets, serialize, syncSeconds, trackRow } from "../model.ts";
 
 test("reset clears the owned chain and preset gains stay inside the ±6 dB EQ range", () => {
   assert.deepEqual(nodes(neutral()), []);
@@ -84,22 +84,16 @@ test("G03 track labels: number, title, language, codec, external", () => {
   const t = (fields: Partial<Parameters<typeof trackRow>[0]>) => ({
     id: 1, selected: false, external: false, exportable: true, codec: null, title: null, language: null, ...fields,
   });
-  const label = (fields: Partial<Parameters<typeof trackRow>[0]>, index: number) => trackTitle(trackRow(t(fields), index));
+  const label = (fields: Partial<Parameters<typeof trackRow>[0]>, index: number) => trackRow(t(fields), index).text;
   assert.equal(label({ title: "日语", language: "jpn", codec: "aac" }, 0), "1. 日语 [jpn] (aac)");
-  assert.equal(label({ title: "movie.ac3", codec: "ac3", external: true }, 2), "3. movie.ac3 (ac3) (external)");
-  assert.equal(label({ codec: "opus" }, 1), "Track 2 (opus)");
+  assert.equal(label({ title: "movie.ac3", codec: "ac3", external: true }, 2), "3. movie.ac3 (ac3)");
   assert.equal(label({ language: "eng" }, 0), "1. [eng]");
-  assert.equal(label({}, 3), "Track 4");
   assert.equal([...label({ title: "长".repeat(80) }, 0)].length, 60);
-  // The window and the OSD get the data and put the words around it.
+  // Without title and language the window, the menu and the OSD put the words around the data.
   assert.deepEqual(trackRow(t({ codec: "opus", external: true }), 1), {
     kind: "track", text: "", n: 2, codec: "opus", external: true, disconnected: false,
   });
-  assert.deepEqual(trackOsd(trackRow(t({ title: "日语", codec: "aac" }), 0)), ["Audio track: {}", ["1. 日语 (aac)"]]);
-  assert.deepEqual(trackOsd(trackRow(t({ title: "movie.ac3", external: true }), 2)), ["Audio track: {} (external)", ["3. movie.ac3"]]);
-  assert.deepEqual(trackOsd(trackRow(t({ codec: "opus" }), 1)), ["Audio track: Track {} ({})", [2, "opus"]]);
-  assert.deepEqual(trackOsd(trackRow(t({ external: true }), 1)), ["Audio track: Track {} (external)", [2]]);
-  assert.deepEqual(trackOsd(trackRow(t({}), 0)), ["Audio track: Track {}", [1]]);
+  assert.deepEqual(trackRow(t({}), 3), { kind: "track", text: "", n: 4, codec: "", external: false, disconnected: false });
 });
 
 test("A11 same-name scan: audio files that start with the video's name, at most 8", () => {
@@ -121,8 +115,15 @@ test("G16: the saved device is an id the player accepts, kept with its name; tit
   for (const bad of ["", 7, "a\nb", "x".repeat(513)]) assert.equal(parse({ device: bad, deviceName: "n" }).device, null);
   assert.equal(deviceId("coreaudio/X"), "coreaudio/X");
   assert.deepEqual(
-    deviceTitles([{ id: "a", name: "USB Audio" }, { id: "b", name: "USB Audio" }, { id: "c", name: "System Default" }, { id: "d", name: " \t " }], "USB Audio"),
-    ["USB Audio", "USB Audio (2)", "System Default (2)", "Unnamed device", "USB Audio (3)"],
+    deviceTitles([{ id: "a", name: "USB Audio" }, { id: "b", name: "USB Audio" }, { id: "c", name: "System Default" }, { id: "d", name: " \t " }, { id: "e", name: "" }], "USB Audio"),
+    [
+      { name: "USB Audio", n: null, key: "USB Audio" },
+      { name: "USB Audio", n: 2, key: "USB Audio (2)" },
+      { name: "System Default", n: 2, key: "System Default (2)" },
+      { name: "", n: null, key: "Unnamed device" },
+      { name: "", n: 2, key: "Unnamed device (2)" },
+      { name: "USB Audio", n: 3, key: "USB Audio (3)" },
+    ],
   );
   const long = deviceLabel("扬声器".repeat(40));
   assert.ok(new TextEncoder().encode(long).length <= 72 && long.endsWith("…"));

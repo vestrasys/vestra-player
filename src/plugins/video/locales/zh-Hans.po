@@ -401,12 +401,12 @@ msgstr "着色器复制失败：{}"
 msgid "Could not open the shader folder: {}"
 msgstr "无法打开着色器文件夹：{}"
 
-#. {} is a list of file names, separated by "、" for now (R2-video-1: list format by language).
+#. {} is a list of file names.
 #: main.ts:760
 msgid "Removed missing shaders: {}"
 msgstr "已移除不存在的着色器：{}"
 
-#. {} is a list of file names, separated by "、" for now (R2-video-1: list format by language).
+#. {} is a list of file names.
 #: main.ts:761
 msgid "Shaders reloaded ({})"
 msgstr "已重新载入着色器 ({})"
@@ -418,6 +418,10 @@ msgstr "像素着色"
 #: main.ts:814
 msgid "Use Shaders"
 msgstr "使用着色器"
+
+#: main.ts:819 main.ts:824 main.ts:833 main.ts:842 main.ts:845 main.ts:1068 picture.slint:365 ui/shaders.slint:120
+msgid "Needs GPU rendering (currently software rendering)"
+msgstr "需要 GPU 渲染（当前为软件渲染）"
 
 #: main.ts:822
 msgid "Shader List…"
@@ -475,7 +479,7 @@ msgstr "HDR 设置…"
 msgid "Deinterlace"
 msgstr "反交错"
 
-#: main.ts:849 main.ts:1077
+#: main.ts:849 main.ts:1074
 msgid "Cycle"
 msgstr "按序切换"
 
@@ -499,7 +503,7 @@ msgstr "按帧"
 msgid "By Field (Double Rate)"
 msgstr "按场（倍帧率）"
 
-#: main.ts:882 main.ts:891 main.ts:899 main.ts:948 main.ts:949
+#: main.ts:882 main.ts:891 main.ts:899 main.ts:943 main.ts:945 main.ts:946
 msgid "Aspect"
 msgstr "比例"
 
@@ -515,239 +519,231 @@ msgstr "依次切换比例"
 msgid "Default (Source)"
 msgstr "默认（按来源）"
 
-#: main.ts:948
+#: main.ts:943 picture.slint:354
+msgid "Custom ({})"
+msgstr "自定义（{}）"
+
+#: main.ts:945
 msgid "Custom (x:y)"
 msgstr "自定义（x:y）"
 
-#: main.ts:948
+#: main.ts:945
 msgid "Enter one with Custom Aspect Ratio… first"
 msgstr "先用「自定义比例…」输入"
 
-#: main.ts:949 picture.slint:665
+#: main.ts:946 picture.slint:665
 msgid "Custom Aspect Ratio…"
 msgstr "自定义比例…"
 
-#: main.ts:955 main.ts:966 main.ts:984
+#: main.ts:952 main.ts:963 main.ts:981
 msgid "Crop/Stretch"
 msgstr "裁剪/拉伸"
 
-#: main.ts:955 picture.slint:630
+#: main.ts:952 picture.slint:630
 msgid "None"
 msgstr "不使用"
 
-#: main.ts:966
+#: main.ts:963
 msgid "Stretch to 4:3"
 msgstr "按 4:3 拉伸"
 
-#: main.ts:966
+#: main.ts:963
 msgid "Stretch to 16:9"
 msgstr "按 16:9 拉伸"
 
-#: main.ts:966
+#: main.ts:963
 msgid "Stretch to 16:10"
 msgstr "按 16:10 拉伸"
 
-#: main.ts:966
+#: main.ts:963
 msgid "Stretch to 1.85:1"
 msgstr "按 1.85:1 拉伸"
 
-#: main.ts:966
+#: main.ts:963
 msgid "Stretch to 2.35:1"
 msgstr "按 2.35:1 拉伸"
 
-#: main.ts:966
+#: main.ts:963
 msgid "Crop to 4:3"
 msgstr "按 4:3 裁剪"
 
-#: main.ts:966
+#: main.ts:963
 msgid "Crop to 16:9"
 msgstr "按 16:9 裁剪"
 
-#: main.ts:966
+#: main.ts:963
 msgid "Crop to 16:10"
 msgstr "按 16:10 裁剪"
 
-#: main.ts:966
+#: main.ts:963
 msgid "Crop to 1.85:1"
 msgstr "按 1.85:1 裁剪"
 
-#: main.ts:966
+#: main.ts:963
 msgid "Crop to 2.35:1"
 msgstr "按 2.35:1 裁剪"
 
-#: main.ts:984
+#: main.ts:981
 msgid "Reset Position"
 msgstr "位置复位"
 
-#: main.ts:984
+#: main.ts:981
 msgid "Move Left"
 msgstr "左移"
 
-#: main.ts:984
+#: main.ts:981
 msgid "Move Right"
 msgstr "右移"
 
-#: main.ts:984 ui/shaders.slint:103
+#: main.ts:981 ui/shaders.slint:103
 msgid "Move Up"
 msgstr "上移"
 
-#: main.ts:984 ui/shaders.slint:104
+#: main.ts:981 ui/shaders.slint:104
 msgid "Move Down"
 msgstr "下移"
 
-#: main.ts:1002
+#: main.ts:999
 msgid "Framing"
 msgstr "帧位"
 
-#: main.ts:1002
+#: main.ts:999
 msgid "Reset Framing"
 msgstr "帧位复位"
 
-#: main.ts:1002
+#: main.ts:999
 msgid "Zoom In"
 msgstr "全帧 +"
 
-#: main.ts:1002
+#: main.ts:999
 msgid "Zoom Out"
 msgstr "全帧 -"
 
-#: main.ts:1002
+#: main.ts:999
 msgid "Pan →"
 msgstr "偏移 →"
 
-#: main.ts:1002
+#: main.ts:999
 msgid "Pan ←"
 msgstr "偏移 ←"
 
-#: main.ts:1002
+#: main.ts:999
 msgid "Pan ↑"
 msgstr "偏移 ↑"
 
-#: main.ts:1002
+#: main.ts:999
 msgid "Pan ↓"
 msgstr "偏移 ↓"
 
-#: main.ts:1002
+#: main.ts:999
 msgid "Center Frame"
 msgstr "帧位居中"
 
-#: main.ts:1006 main.ts:1015 main.ts:1024 main.ts:1048 main.ts:1059 main.ts:1067
+#: main.ts:1003 main.ts:1012 main.ts:1021 main.ts:1045 main.ts:1056 main.ts:1064
 msgid "Image Processing"
 msgstr "图像处理"
 
-#: main.ts:1006
+#: main.ts:1003
 msgid "Flip Vertically"
 msgstr "上下翻转"
 
-#: main.ts:1015
+#: main.ts:1012
 msgid "Flip Horizontally"
 msgstr "左右翻转"
 
-#: main.ts:1024
+#: main.ts:1021
 msgid "Gaussian Blur"
 msgstr "高斯模糊"
 
-#: main.ts:1032
+#: main.ts:1029
 msgid "Gaussian blur: on"
 msgstr "高斯模糊: 开"
 
-#: main.ts:1032
+#: main.ts:1029
 msgid "Gaussian blur: off"
 msgstr "高斯模糊: 关"
 
-#: main.ts:1048 picture.slint:463
+#: main.ts:1045 picture.slint:463
 msgid "Sharpen"
 msgstr "锐化"
 
-#: main.ts:1048
+#: main.ts:1045
 msgid "Edge Sharpen"
 msgstr "边缘锐化"
 
-#: main.ts:1048 picture.slint:516
+#: main.ts:1045 picture.slint:516
 msgid "Deblock"
 msgstr "去块"
 
-#: main.ts:1048 picture.slint:526
+#: main.ts:1045 picture.slint:526
 msgid "Deband"
 msgstr "消色带"
 
-#: main.ts:1048
+#: main.ts:1045
 msgid "3D Denoise"
 msgstr "3D 降噪"
 
-#: main.ts:1048
+#: main.ts:1045
 msgid "Gradual Denoise"
 msgstr "渐进降噪"
 
-#: main.ts:1048
+#: main.ts:1045
 msgid "Temporal Denoise"
 msgstr "瞬态降噪"
 
-#: main.ts:1059
+#: main.ts:1056
 msgid "Frame Doubling"
 msgstr "倍帧"
 
-#: main.ts:1067
+#: main.ts:1064
 msgid "Motion Interpolation"
 msgstr "运动补偿"
 
-#: main.ts:1077 main.ts:1086
+#: main.ts:1074 main.ts:1083
 msgid "Rotation"
 msgstr "图像旋转"
 
-#: main.ts:1086
+#: main.ts:1083
 msgid "No Rotation"
 msgstr "不旋转"
 
-#: main.ts:1086
-msgid "90°"
-msgstr "90°"
-
-#: main.ts:1086
-msgid "180°"
-msgstr "180°"
-
-#: main.ts:1086
-msgid "270°"
-msgstr "270°"
-
-#: main.ts:1094
+#: main.ts:1091
 msgid "Picture Adjustments…"
 msgstr "画面调节…"
 
-#: main.ts:1095
+#: main.ts:1092
 msgid "Reset"
 msgstr "复位"
 
-#: main.ts:1100
+#: main.ts:1097
 msgid "Brightness -1%"
 msgstr "亮度 -1%"
 
-#: main.ts:1100
+#: main.ts:1097
 msgid "Contrast -1%"
 msgstr "对比度 -1%"
 
-#: main.ts:1100
+#: main.ts:1097
 msgid "Saturation -1%"
 msgstr "饱和度 -1%"
 
-#: main.ts:1100
+#: main.ts:1097
 msgid "Hue -1%"
 msgstr "色调 -1%"
 
-#: main.ts:1109
+#: main.ts:1106
 msgid "Brightness +1%"
 msgstr "亮度 +1%"
 
-#: main.ts:1109
+#: main.ts:1106
 msgid "Contrast +1%"
 msgstr "对比度 +1%"
 
-#: main.ts:1109
+#: main.ts:1106
 msgid "Saturation +1%"
 msgstr "饱和度 +1%"
 
-#: main.ts:1109
+#: main.ts:1106
 msgid "Hue +1%"
 msgstr "色调 +1%"
 
@@ -786,14 +782,6 @@ msgstr "滤镜"
 #: picture.slint:232 picture.slint:274 picture.slint:512 picture.slint:704
 msgid "Default"
 msgstr "默认"
-
-#: picture.slint:354
-msgid "Custom ({})"
-msgstr "自定义（{}）"
-
-#: picture.slint:365 ui/shaders.slint:120
-msgid "Needs GPU rendering (currently software rendering)"
-msgstr "需要 GPU 渲染（当前为软件渲染）"
 
 #: picture.slint:383
 msgid "No picture in the current source"

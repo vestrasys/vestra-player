@@ -62,25 +62,25 @@ test("menu under Audio follows the allocation, and editing commands wait for a s
   const { host, stop } = await startPlugin(activate, { directory });
   await host.settle();
   assert.deepEqual(
-    [...host.commands.values()].map(({ declaration: d }) => [d.path.join(" ▶ "), d.order, d.group, d.bindings.join(","), d.radio, d.repeat]),
+    [...host.commands.values()].map(({ declaration: d }) => [d.path.join(" ▸ "), d.order, d.group, d.bindings.join(","), d.radio, d.repeat]),
     [
-      ["@open ▶ Load External Audio…", 114, "open", "", false, false],
-      ["@audio ▶ Audio Workbench…", 510, "audio-tools", "", false, false],
-      ["@audio ▶ Audio Track ▶ Cycle Tracks", 512, "audio-track-cycle", "Alt+A", false, false],
-      ...["Stereo", "Left Channel", "Right Channel", "Mono Mix", "Swap Left and Right"].map((label) => [`@audio ▶ Audio Track ▶ ${label}`, 512, "audio-channels", "", true, false]),
-      ["@audio ▶ Equalizer", 513, "audio-eq", "Shift+E", false, false],
-      ...presets.map((p) => [`@audio ▶ Preset ▶ ${p.label}`, 514, "audio-eq", "", true, false]),
-      ["@audio ▶ Audio Sync ▶ 50 ms Earlier", 515, "audio-eq", ">", false, true],
-      ["@audio ▶ Audio Sync ▶ 50 ms Later", 515, "audio-eq", "<", false, true],
-      ["@audio ▶ Audio Sync ▶ Reset", 515, "audio-eq", "?", false, true],
-      ["@audio ▶ Audio Sync ▶ Don't Keep", 515, "audio-sync-keep", "", true, false],
-      ["@audio ▶ Audio Sync ▶ Keep for This Run", 515, "audio-sync-keep", "", true, false],
-      ["@audio ▶ Audio Sync ▶ Always Keep", 515, "audio-sync-keep", "", true, false],
-      ["@audio ▶ Processing ▶ Normalize", 516, "audio-eq", "Shift+N", false, false],
-      ["@audio ▶ Processing ▶ Crystalizer", 516, "audio-eq", "Shift+C", false, false],
-      ["@audio ▶ Reset", 517, "audio-eq", "", false, false],
-      ["@audio ▶ Audio Track ▶ No Audio Tracks", 511, "audio-tools", "", false, false],
-      ["@audio ▶ Output Device ▶ No Output Devices", 512, "audio-tools", "", false, false],
+      ["@open ▸ Load External Audio…", 114, "open", "", false, false],
+      ["@audio ▸ Audio Workbench…", 510, "audio-tools", "", false, false],
+      ["@audio ▸ Audio Track ▸ Cycle Tracks", 512, "audio-track-cycle", "Alt+A", false, false],
+      ...["Stereo", "Left Channel", "Right Channel", "Mono Mix", "Swap Left and Right"].map((label) => [`@audio ▸ Audio Track ▸ ${label}`, 512, "audio-channels", "", true, false]),
+      ["@audio ▸ Equalizer", 513, "audio-eq", "Shift+E", false, false],
+      ...presets.map((p) => [`@audio ▸ Preset ▸ ${p.label}`, 514, "audio-eq", "", true, false]),
+      ["@audio ▸ Audio Sync ▸ 50 ms Earlier", 515, "audio-eq", ">", false, true],
+      ["@audio ▸ Audio Sync ▸ 50 ms Later", 515, "audio-eq", "<", false, true],
+      ["@audio ▸ Audio Sync ▸ Reset", 515, "audio-eq", "?", false, true],
+      ["@audio ▸ Audio Sync ▸ Don't Keep", 515, "audio-sync-keep", "", true, false],
+      ["@audio ▸ Audio Sync ▸ Keep for This Run", 515, "audio-sync-keep", "", true, false],
+      ["@audio ▸ Audio Sync ▸ Always Keep", 515, "audio-sync-keep", "", true, false],
+      ["@audio ▸ Processing ▸ Normalize", 516, "audio-eq", "Shift+N", false, false],
+      ["@audio ▸ Processing ▸ Crystalizer", 516, "audio-eq", "Shift+C", false, false],
+      ["@audio ▸ Reset", 517, "audio-eq", "", false, false],
+      ["@audio ▸ Audio Track ▸ No Audio Tracks", 511, "audio-tools", "", false, false],
+      ["@audio ▸ Output Device ▸ No Output Devices", 512, "audio-tools", "", false, false],
     ],
   );
   assert.equal(host.command("audio.device.none").state.enabled, false);
@@ -590,7 +590,7 @@ test("G03: the Audio Track menu lists the tracks, follows the list and switches 
   const items = () =>
     [...host.commands.values()]
       .filter(({ declaration: d }) => d.path[1] === "Audio Track" && d.order === 511)
-      .map(({ declaration: d }) => d.path[2]);
+      .map(({ display }) => display.path[2]);
   assert.deepEqual(items(), ["1. 日语 [jpn] (aac)", "2. English [eng] (aac)"]);
   assert.equal(host.command("audio.track.1").state.checked, true);
   assert.equal(host.command("audio.track.1").declaration.radio, true);
@@ -785,7 +785,7 @@ const device = (name: string, disconnected = false) => row("device", name, disco
 const deviceItems = (host: TestHost) =>
   [...host.commands.entries()]
     .filter(([, { declaration: d }]) => d.path[1] === "Output Device")
-    .map(([id, { declaration: d, state }]) => [d.path[2], d.order, d.group, d.radio, state.enabled, state.checked, state.reason, id] as const);
+    .map(([id, { declaration: d, display, state }]) => [display.path[2], d.order, d.group, d.radio, state.enabled, state.checked, state.reason, id] as const);
 const deviceCommand = (host: TestHost, title: string) => host.command(deviceItems(host).find((item) => item[0] === title)![7]);
 const savedJson = async (path: string) => JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
 /** The player noticed a plug or unplug (it checks every second): what `audioOutput` becomes. */
@@ -941,27 +941,27 @@ test("zh-Hans: the menu, its reasons and the on-screen messages read as before t
   const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
   await host.settle();
   assert.deepEqual(
-    [...host.commands.values()].map((command) => command.display.path.join(" ▶ ")),
+    [...host.commands.values()].map((command) => command.display.path.join(" ▸ ")),
     [
-      "打开 ▶ 载入外部音频…",
-      "声音 ▶ 音频工作台…",
-      "声音 ▶ 音轨 ▶ 按序切换",
-      ...["立体声", "左声道", "右声道", "单声道混合", "左右互换"].map((label) => `声音 ▶ 音轨 ▶ ${label}`),
-      "声音 ▶ 均衡器",
-      ...["平直", "人声", "音乐", "影院"].map((label) => `声音 ▶ 预设 ▶ ${label}`),
-      "声音 ▶ 声音同步 ▶ 超前 50 毫秒",
-      "声音 ▶ 声音同步 ▶ 滞后 50 毫秒",
-      "声音 ▶ 声音同步 ▶ 复位",
-      "声音 ▶ 声音同步 ▶ 不保持",
-      "声音 ▶ 声音同步 ▶ 本次运行内保持",
-      "声音 ▶ 声音同步 ▶ 始终保持",
-      "声音 ▶ 声音处理 ▶ 规格化",
-      "声音 ▶ 声音处理 ▶ 晶化",
-      "声音 ▶ 复位",
-      "声音 ▶ 音轨 ▶ 没有音轨",
-      "声音 ▶ 输出设备 ▶ 系统默认",
-      "声音 ▶ 输出设备 ▶ MacBook Air 扬声器",
-      "声音 ▶ 输出设备 ▶ USB 耳机",
+      "打开 ▸ 载入外部音频…",
+      "声音 ▸ 音频工作台…",
+      "声音 ▸ 音轨 ▸ 按序切换",
+      ...["立体声", "左声道", "右声道", "单声道混合", "左右互换"].map((label) => `声音 ▸ 音轨 ▸ ${label}`),
+      "声音 ▸ 均衡器",
+      ...["平直", "人声", "音乐", "影院"].map((label) => `声音 ▸ 预设 ▸ ${label}`),
+      "声音 ▸ 声音同步 ▸ 超前 50 毫秒",
+      "声音 ▸ 声音同步 ▸ 滞后 50 毫秒",
+      "声音 ▸ 声音同步 ▸ 复位",
+      "声音 ▸ 声音同步 ▸ 不保持",
+      "声音 ▸ 声音同步 ▸ 本次运行内保持",
+      "声音 ▸ 声音同步 ▸ 始终保持",
+      "声音 ▸ 声音处理 ▸ 规格化",
+      "声音 ▸ 声音处理 ▸ 晶化",
+      "声音 ▸ 复位",
+      "声音 ▸ 音轨 ▸ 没有音轨",
+      "声音 ▸ 输出设备 ▸ 系统默认",
+      "声音 ▸ 输出设备 ▸ MacBook Air 扬声器",
+      "声音 ▸ 输出设备 ▸ USB 耳机",
     ],
   );
   const reason = (id: string) => host.translate(host.command(id).state.reason!);
@@ -976,7 +976,7 @@ test("zh-Hans: the menu, its reasons and the on-screen messages read as before t
   host.handle("player.setAudioDevice", () => {
     throw new HostError("busy", "设备被占用");
   });
-  await deviceCommand(host, "System Default").run();
+  await deviceCommand(host, "系统默认").run();
   await host.settle();
   assert.equal(host.osd.at(-1), "无法切换到 系统默认: 设备被占用");
   host.reset("player.setAudioDevice");
@@ -987,7 +987,7 @@ test("zh-Hans: the menu, its reasons and the on-screen messages read as before t
   plug(host, [SPEAKERS, PHONES]);
   await host.settle();
   assert.equal(host.osd.at(-1), "音频输出: USB 耳机");
-  await deviceCommand(host, "System Default").run();
+  await deviceCommand(host, "系统默认").run();
   await host.settle();
   assert.equal(host.osd.at(-1), "音频输出: 系统默认");
   // A source with three tracks: the processing, sync and track messages.
@@ -1037,9 +1037,34 @@ test("zh-Hans: the menu, its reasons and the on-screen messages read as before t
     "音轨: 3. movie.jpn.mka（外部）",
     "该音频已载入",
   ]);
+  assert.deepEqual(
+    ["audio.track.1", "audio.track.2", "audio.track.3"].map((id) => host.command(id).display.path.join(" ▸ ")),
+    ["声音 ▸ 音轨 ▸ 1. 日语 [jpn] (aac)", "声音 ▸ 音轨 ▸ 音轨 2 (aac)", "声音 ▸ 音轨 ▸ 3. movie.jpn.mka（外部）"],
+  );
   host.setSource({ audioTracks: [track(1)] });
   await host.settle();
   await host.press("Alt+A");
   assert.equal(host.osd.at(-1), "只有一条音轨");
+  await stop();
+});
+
+test("zh-Hans: a track without title or codec, an external one, and unnamed devices read as before", async () => {
+  const host = new TestHost();
+  host.audioDevices = [{ id: "a", name: "" }, { id: "b", name: " " }, { id: "c", name: "USB 耳机" }, { id: "d", name: "USB 耳机" }];
+  host.openElsewhere("/movie.mkv");
+  host.setSource({ audioTracks: [{ ...track(1, true), codec: null }, { ...track(2, false), codec: "opus", external: true }] });
+  const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
+  await host.settle();
+  assert.deepEqual(
+    ["audio.track.1", "audio.track.2"].map((id) => host.command(id).display.path.at(-1)),
+    ["音轨 1", "音轨 2 (opus)（外部）"],
+  );
+  await host.command("audio.track.2").run();
+  await host.settle();
+  assert.equal(host.osd.at(-1), "音轨: 音轨 2 (opus)（外部）");
+  assert.deepEqual(
+    deviceItems(host).map((item) => item[0]),
+    ["系统默认", "未命名设备", "未命名设备 (2)", "USB 耳机", "USB 耳机 (2)"],
+  );
   await stop();
 });

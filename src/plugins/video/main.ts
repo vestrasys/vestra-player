@@ -134,7 +134,7 @@ const pause = (ms: number) => new Promise<void>((done) => void setTimeout(done, 
 
 /**
  * Picture tool: one four-page window, one owned video filter, the display layer
- * (aspect, fit, zoom, pan) and the 视频 ▶ menu. Colour, effects, deinterlace, crop/pad,
+ * (aspect, fit, zoom, pan) and the 视频 ▸ menu. Colour, effects, deinterlace, crop/pad,
  * aspect and fit are global (`settings.json`); flip, rotation, zoom and pan belong to
  * the current source and reset when it changes.
  */
@@ -756,8 +756,8 @@ export default async function activate(plugin: Plugin) {
     const files = await refreshShaders();
     const missing = look.render.shaders.filter((name) => !files.includes(name));
     editShaders((list) => list.splice(0, list.length, ...list.filter((name) => files.includes(name))), true);
-    // TRANSLATORS: {} is a list of file names, separated by "、" for now (R2-video-1: list format by language).
-    if (missing.length > 0) shown(plugin.osd.show("Removed missing shaders: {}", [missing.join("、")]));
+    // TRANSLATORS: {} is a list of file names.
+    if (missing.length > 0) shown(plugin.osd.show("Removed missing shaders: {}", [plugin.i18n.list(missing)]));
     else shown(plugin.osd.show("Shaders reloaded ({})", [look.render.shaders.length]));
   };
   const openShaders = () => {
@@ -803,7 +803,7 @@ export default async function activate(plugin: Plugin) {
   });
   shadersWindow.on("openFolder", () => void openShaderFolder());
 
-  // ---------------------------------------------------------------- menu 视频 ▶ (@video)
+  // ---------------------------------------------------------------- menu 视频 ▸ (@video)
   const { commands } = plugin;
   // 402 像素着色 (E17, E16): GPU render options, disabled with the reason under software rendering.
   // The list and the folder stay usable, so shaders can be arranged beforehand.
@@ -940,10 +940,7 @@ export default async function activate(plugin: Plugin) {
     if (text)
       custom.commands.add({
         ...item,
-        // A menu title cannot take arguments, so "Custom (21:9)" is not translated
-        // (R2-audio-1 in doc/process/rounds/2026-10-i18n.md).
-        // i18n-ignore
-        path: ["@video", "Aspect", `Custom (${text})`],
+        path: ["@video", "Aspect", plugin.i18n.text("Custom ({})", [text])],
       });
     else custom.commands.add({ ...item, path: ["@video", "Aspect", "Custom (x:y)"], enabled: false, reason: "Enter one with Custom Aspect Ratio… first" });
     custom.commands.add({ id: "video.aspect.edit", path: ["@video", "Aspect", "Custom Aspect Ratio…"], order: 404, group: "video-aspect", run: openCustom });

@@ -24,7 +24,6 @@ These settings are kept across files and restarts (the audio sync as its keep mo
 
 - Volume and mute are the player's, not this plugin's.
 - A loaded external track stays until the source changes.
-- In the menu, a track without title and language reads "Track 2 (opus)", and an external track gets "(external)", in English in every language: a command title cannot take template arguments yet (round doc 2026-10-i18n, request R2-audio-1).
 
 ## Translations
 
