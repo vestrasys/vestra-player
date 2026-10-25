@@ -1,0 +1,680 @@
+msgid ""
+msgstr ""
+"Language: ko\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:57
+#, x-machine
+msgid "Enter valid seconds; the end must be after the start."
+msgstr "올바른 초를 입력하세요. 끝은 시작보다 뒤여야 합니다."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:58
+#, x-machine
+msgid "A burst needs 2–20 frames, an interval of 0.1–10 s and a known media duration."
+msgstr "연속 캡처에는 2–20프레임, 0.1–10초 간격, 그리고 알려진 미디어 길이가 필요합니다."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:59
+#, x-machine
+msgid "The burst runs past the end of the media. Use fewer frames or a shorter interval."
+msgstr "연속 캡처가 미디어 끝을 넘어갑니다. 프레임 수를 줄이거나 간격을 줄이세요."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:60
+#, x-machine
+msgid "No free file name found."
+msgstr "사용할 수 있는 파일 이름을 찾지 못했습니다."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:61
+#, x-machine
+msgid "The current frame cannot be captured. Open a local video file first."
+msgstr "현재 프레임을 캡처할 수 없습니다. 먼저 로컬 비디오 파일을 여세요."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:62
+#, x-machine
+msgid "The current frame cannot be exported. Open a local video file first."
+msgstr "현재 프레임을 내보낼 수 없습니다. 먼저 로컬 비디오 파일을 여세요."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:63
+#, x-machine
+msgid "Bursts and clips need a known media duration."
+msgstr "연속 캡처와 클립에는 알려진 미디어 길이가 필요합니다."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:64
+#, x-machine
+msgid "The selected range is past the end of the media."
+msgstr "선택한 구간이 미디어 끝을 넘어갑니다."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:65
+#, x-machine
+msgid "The selected audio track cannot be exported. Choose another track or No Audio."
+msgstr "선택한 오디오 트랙을 내보낼 수 없습니다. 다른 트랙이나 ‘오디오 없음’을 선택하세요."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:66
+#, x-machine
+msgid "The media changed; nothing was started."
+msgstr "미디어가 바뀌어 시작하지 않았습니다."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:67
+#, x-machine
+msgid "The player is busy. Try again later."
+msgstr "플레이어가 사용 중입니다. 나중에 다시 시도하세요."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:68
+#, x-machine
+msgid "The current frame cannot be captured."
+msgstr "현재 프레임을 캡처할 수 없습니다."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:69
+#, x-machine
+msgid "Could not capture the frame."
+msgstr "프레임을 캡처하지 못했습니다."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:70
+#, x-machine
+msgid "One export is running and four are queued. Please wait."
+msgstr "내보내기 하나가 진행 중이고 네 개가 대기 중입니다. 잠시 기다리세요."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:71
+#, x-machine
+msgid "The kept frame has expired. Retry with the current frame."
+msgstr "보관한 프레임이 만료되었습니다. 현재 프레임으로 다시 시도하세요."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:72
+#, x-machine
+msgid "The kept frame was released."
+msgstr "보관한 프레임을 해제했습니다."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:73
+#, x-machine
+msgid "Cancelled."
+msgstr "취소했습니다."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:74
+#, x-machine
+msgid "Could not write to the clipboard"
+msgstr "클립보드에 쓸 수 없습니다"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:75
+#, x-machine
+msgid "Not enough disk space"
+msgstr "디스크 공간이 부족합니다"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:76
+#, x-machine
+msgid "The target file already exists"
+msgstr "대상 파일이 이미 있습니다"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:77
+#, x-machine
+msgid "No write permission"
+msgstr "쓰기 권한이 없습니다"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:78
+#, x-machine
+msgid "This media cannot be encoded"
+msgstr "이 미디어는 인코딩할 수 없습니다"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:79
+#, x-machine
+msgid "Export failed"
+msgstr "내보내기 실패"
+
+#: main.ts:68 main.ts:73 ui/parts.slint:80
+#, x-machine
+msgid "This task has no output file yet."
+msgstr "이 작업에는 아직 출력 파일이 없습니다."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:81
+#, x-machine
+msgid "The output file no longer exists."
+msgstr "출력 파일이 더 이상 없습니다."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:82
+#, x-machine
+msgid "Could not open the folder."
+msgstr "폴더를 열 수 없습니다."
+
+#: main.ts:68 main.ts:73 ui/parts.slint:83
+#, x-machine
+msgid "The snapshot folder is unavailable. Please choose it again."
+msgstr "스냅샷 폴더를 사용할 수 없습니다. 다시 선택하세요."
+
+#: main.ts:73
+#, x-machine
+msgid "Snapshot failed: {}"
+msgstr "스냅샷 실패: {}"
+
+#: main.ts:73 ui/parts.slint:115
+#, x-machine
+msgid "Burst failed: {}"
+msgstr "연속 캡처 실패: {}"
+
+#: main.ts:73 ui/parts.slint:117
+#, x-machine
+msgid "Export failed: {}"
+msgstr "내보내기 실패: {}"
+
+#: main.ts:88
+#, x-machine
+msgid "Frame saved as {}"
+msgstr "프레임을 {}(으)로 저장했습니다"
+
+#. {0} is the number of frames (2–20), {1} the folder.
+#: main.ts:93
+#, x-machine
+msgid "Burst of {0} frames saved to {1}"
+msgstr "연속 캡처 {0}프레임을 {1}에 저장했습니다"
+
+#: main.ts:97
+#, x-machine
+msgid "Clip exported as {}"
+msgstr "클립을 {}(으)로 내보냈습니다"
+
+#: main.ts:127
+#, x-machine
+msgid "Snapshot format: {}"
+msgstr "스냅샷 형식: {}"
+
+#: main.ts:149
+#, x-machine
+msgid "The previous snapshot is still being processed"
+msgstr "이전 스냅샷을 아직 처리하고 있습니다"
+
+#: main.ts:168
+#, x-machine
+msgid "Snapshot queued"
+msgstr "스냅샷 대기 중"
+
+#: main.ts:176
+#, x-machine
+msgid "Save Rendered Frame As"
+msgstr "렌더링된 프레임을 다른 이름으로 저장"
+
+#: main.ts:176
+#, x-machine
+msgid "Save Current Frame As"
+msgstr "현재 프레임을 다른 이름으로 저장"
+
+#: main.ts:187
+#, x-machine
+msgid "Frame copied to the clipboard"
+msgstr "프레임을 클립보드에 복사했습니다"
+
+#: main.ts:190
+#, x-machine
+msgid "Choose Snapshot Folder"
+msgstr "스냅샷 폴더 선택"
+
+#: main.ts:192
+#, x-machine
+msgid "Please choose an existing folder."
+msgstr "있는 폴더를 선택하세요."
+
+#: main.ts:195
+#, x-machine
+msgid "Snapshot folder: {}"
+msgstr "스냅샷 폴더: {}"
+
+#: main.ts:280 ui/clip.slint:8
+#, x-machine
+msgid "Export Clip"
+msgstr "클립 내보내기"
+
+#: main.ts:329
+#, x-machine
+msgid "The snapshot window could not open."
+msgstr "스냅샷 창을 열 수 없습니다."
+
+#: main.ts:346 manifest.json ui/error.slint:5
+#, x-machine
+msgid "Snapshot"
+msgstr "스냅샷"
+
+#: main.ts:346
+#, x-machine
+msgid "Save Current Frame"
+msgstr "현재 프레임 저장"
+
+#: main.ts:346
+#, x-machine
+msgid "Save Current Frame As…"
+msgstr "현재 프레임을 다른 이름으로 저장…"
+
+#: main.ts:346
+#, x-machine
+msgid "Copy Current Frame"
+msgstr "현재 프레임 복사"
+
+#: main.ts:346
+#, x-machine
+msgid "Save Rendered Frame"
+msgstr "렌더링된 프레임 저장"
+
+#: main.ts:346
+#, x-machine
+msgid "Save Rendered Frame As…"
+msgstr "렌더링된 프레임을 다른 이름으로 저장…"
+
+#: main.ts:346
+#, x-machine
+msgid "Copy Rendered Frame"
+msgstr "렌더링된 프레임 복사"
+
+#: main.ts:346
+#, x-machine
+msgid "Burst…"
+msgstr "연속 캡처…"
+
+#: main.ts:346
+#, x-machine
+msgid "Export Clip…"
+msgstr "클립 내보내기…"
+
+#: main.ts:346 ui/clip.slint:74
+#, x-machine
+msgid "Export Tasks…"
+msgstr "내보내기 작업…"
+
+#: main.ts:346
+#, x-machine
+msgid "Capture as PNG"
+msgstr "PNG로 캡처"
+
+#: main.ts:346
+#, x-machine
+msgid "Capture as JPEG"
+msgstr "JPEG로 캡처"
+
+#: main.ts:346
+#, x-machine
+msgid "Capture as BMP"
+msgstr "BMP로 캡처"
+
+#: main.ts:346
+#, x-machine
+msgid "Include Subtitles in Rendered Frame"
+msgstr "렌더링된 프레임에 자막 포함"
+
+#: main.ts:346
+#, x-machine
+msgid "Snapshot Settings…"
+msgstr "스냅샷 설정…"
+
+#: main.ts:346
+#, x-machine
+msgid "Snapshot Folder…"
+msgstr "스냅샷 폴더…"
+
+#: main.ts:346
+#, x-machine
+msgid "Open Snapshot Folder"
+msgstr "스냅샷 폴더 열기"
+
+#: main.ts:346
+#, x-machine
+msgid "No frame to capture"
+msgstr "캡처할 프레임이 없습니다"
+
+#: manifest.json
+#, x-machine
+msgid "Save or copy the current frame, capture bursts, export clips"
+msgstr "현재 프레임 저장·복사, 연속 캡처, 클립 내보내기"
+
+#: manifest.json
+#, x-machine
+msgid ""
+"Saves, saves as or copies the current frame (the source frame, or the rendered frame with video effects and subtitles) as PNG, JPEG or BMP; captures a burst of frames; exports part of a video as MP4 and shows its progress in a task list.\n"
+"Right-click menu: Video ▸ Snapshot."
+msgstr ""
+"현재 프레임(원본 프레임, 또는 비디오 효과와 자막이 들어간 렌더링된 프레임)을 PNG, JPEG, BMP로 저장하거나 다른 이름으로 저장하거나 복사합니다. 여러 프레임을 연속 캡처하고, 비디오 일부를 MP4로 내보내며 진행 상황을 작업 목록에 표시합니다.\n"
+"오른쪽 클릭 메뉴: 비디오 ▸ 스냅샷."
+
+#: manifest.json
+#, x-machine
+msgid "video"
+msgstr "비디오"
+
+#: manifest.json
+#, x-machine
+msgid "snapshot"
+msgstr "스냅샷"
+
+#: manifest.json
+#, x-machine
+msgid "export"
+msgstr "내보내기"
+
+#: model.ts:178 ui/clip.slint:13
+#, x-machine
+msgid "No Audio"
+msgstr "오디오 없음"
+
+#: model.ts:179 ui/clip.slint:13
+#, x-machine
+msgid "Current Track"
+msgstr "현재 트랙"
+
+#: model.ts:180
+#, x-machine
+msgid "Track {} · {}"
+msgstr "트랙 {} · {}"
+
+#: model.ts:180
+#, x-machine
+msgid "Track {}"
+msgstr "트랙 {}"
+
+#: ui/burst.slint:8
+#, x-machine
+msgid "Burst"
+msgstr "연속 캡처"
+
+#: ui/burst.slint:35
+#, x-machine
+msgid "Save to"
+msgstr "저장 위치"
+
+#: ui/burst.slint:45
+#, x-machine
+msgid "Snapshot settings"
+msgstr "스냅샷 설정"
+
+#: ui/burst.slint:48
+#, x-machine
+msgid "Count:"
+msgstr "개수:"
+
+#: ui/burst.slint:50
+#, x-machine
+msgid "frames (2–20)"
+msgstr "프레임 (2–20)"
+
+#: ui/burst.slint:54
+#, x-machine
+msgid "Interval:"
+msgstr "간격:"
+
+#: ui/burst.slint:56
+#, x-machine
+msgid "s (0.1–10)"
+msgstr "초 (0.1–10)"
+
+#: ui/burst.slint:58
+#, x-machine
+msgid "Start at the current position"
+msgstr "현재 위치에서 시작"
+
+#: ui/burst.slint:61
+#, x-machine
+msgid "Start:"
+msgstr "시작:"
+
+#: ui/burst.slint:63 ui/clip.slint:34 ui/clip.slint:40
+#, x-machine
+msgid "Current"
+msgstr "현재"
+
+#: ui/burst.slint:67
+#, x-machine
+msgid "Other settings"
+msgstr "기타 설정"
+
+#: ui/burst.slint:70 ui/clip.slint:47 ui/settings.slint:29
+#, x-machine
+msgid "Format:"
+msgstr "형식:"
+
+#: ui/burst.slint:79 ui/clip.slint:58
+#, x-machine
+msgid "Include video effects"
+msgstr "비디오 효과 포함"
+
+#: ui/burst.slint:80
+#, x-machine
+msgid "Capture subtitles too"
+msgstr "자막도 캡처"
+
+#: ui/burst.slint:85 ui/clip.slint:63
+#, x-machine
+msgid "Information"
+msgstr "정보"
+
+#: ui/burst.slint:88
+#, x-machine
+msgid "Progress:"
+msgstr "진행률:"
+
+#: ui/burst.slint:93 ui/clip.slint:66
+#, x-machine
+msgid "Status:"
+msgstr "상태:"
+
+#: ui/burst.slint:100 ui/tasks.slint:80
+#, x-machine
+msgid "Open Save Folder"
+msgstr "저장 폴더 열기"
+
+#: ui/burst.slint:101
+#, x-machine
+msgid "Capture Current Frame"
+msgstr "현재 프레임 캡처"
+
+#: ui/burst.slint:104
+#, x-machine
+msgid "Start"
+msgstr "시작"
+
+#: ui/clip.slint:29
+#, x-machine
+msgid "Range"
+msgstr "구간"
+
+#: ui/clip.slint:32
+#, x-machine
+msgid "Start (s):"
+msgstr "시작(초):"
+
+#: ui/clip.slint:38
+#, x-machine
+msgid "End (s):"
+msgstr "끝(초):"
+
+#: ui/clip.slint:44
+#, x-machine
+msgid "Output"
+msgstr "출력"
+
+#: ui/clip.slint:48
+#, x-machine
+msgid "MP4 (H.264 + AAC)"
+msgstr "MP4 (H.264 + AAC)"
+
+#: ui/clip.slint:52
+#, x-machine
+msgid "Audio:"
+msgstr "오디오:"
+
+#: ui/clip.slint:59
+#, x-machine
+msgid "Export subtitles too"
+msgstr "자막도 내보내기"
+
+#: ui/clip.slint:77
+#, x-machine
+msgid "Export…"
+msgstr "내보내기…"
+
+#: ui/error.slint:12
+#, x-machine
+msgid "The snapshot window could not open. Close this notice and try again."
+msgstr "스냅샷 창을 열 수 없습니다. 이 알림을 닫고 다시 시도하세요."
+
+#: ui/parts.slint:89
+#, x-machine
+msgid "Queued"
+msgstr "대기 중"
+
+#: ui/parts.slint:90
+#, x-machine
+msgid "Preparing"
+msgstr "준비 중"
+
+#: ui/parts.slint:91
+#, x-machine
+msgid "Exporting"
+msgstr "내보내는 중"
+
+#: ui/parts.slint:92
+#, x-machine
+msgid "Cancelling"
+msgstr "취소하는 중"
+
+#: ui/parts.slint:93
+#, x-machine
+msgid "Completed"
+msgstr "완료"
+
+#: ui/parts.slint:94
+#, x-machine
+msgid "Failed"
+msgstr "실패"
+
+#: ui/parts.slint:95
+#, x-machine
+msgid "Cancelled"
+msgstr "취소됨"
+
+#: ui/parts.slint:103
+#, x-machine
+msgid "Failed: {}"
+msgstr "실패: {}"
+
+#. {0} is a task state (Exporting), {1} the frames done, {2} the frames in all.
+#: ui/parts.slint:105
+#, x-machine
+msgid "{0} · {1}/{2}"
+msgstr "{0} · {1}/{2}"
+
+#. {} is the number of frames (2–20).
+#: ui/parts.slint:112
+#, x-machine
+msgid "{} frames saved"
+msgstr "{}프레임 저장됨"
+
+#. {} is the number of frames (2–20).
+#: ui/parts.slint:114
+#, x-machine
+msgid "Burst of {} frames started"
+msgstr "{}프레임 연속 캡처를 시작했습니다"
+
+#: ui/parts.slint:116
+#, x-machine
+msgid "Exported {}"
+msgstr "{} 내보냄"
+
+#: ui/parts.slint:118
+#, x-machine
+msgid "No save location chosen."
+msgstr "저장 위치를 선택하지 않았습니다."
+
+#: ui/parts.slint:119
+#, x-machine
+msgid "Export started. Follow it in Export Tasks."
+msgstr "내보내기를 시작했습니다. 내보내기 작업에서 확인하세요."
+
+#: ui/parts.slint:120
+#, x-machine
+msgid "Restarted."
+msgstr "다시 시작했습니다."
+
+#: ui/settings.slint:8
+#, x-machine
+msgid "Snapshot Settings"
+msgstr "스냅샷 설정"
+
+#: ui/settings.slint:26
+#, x-machine
+msgid "Format"
+msgstr "형식"
+
+#: ui/settings.slint:39
+#, x-machine
+msgid "Quality:"
+msgstr "품질:"
+
+#: ui/settings.slint:49
+#, x-machine
+msgid "Quality applies to JPEG only; copies to the clipboard are always PNG."
+msgstr "품질은 JPEG에만 적용됩니다. 클립보드에는 항상 PNG로 복사됩니다."
+
+#: ui/settings.slint:52
+#, x-machine
+msgid "Save location"
+msgstr "저장 위치"
+
+#: ui/settings.slint:60
+#, x-machine
+msgid "Save to the media folder when possible"
+msgstr "가능하면 미디어 폴더에 저장"
+
+#: ui/settings.slint:66
+#, x-machine
+msgid "Rendered frame"
+msgstr "렌더링된 프레임"
+
+#: ui/settings.slint:69
+#, x-machine
+msgid "Include subtitles"
+msgstr "자막 포함"
+
+#: ui/settings.slint:74
+#, x-machine
+msgid "The rendered frame is made offline: it includes the plugins' video effects, and subtitles are drawn again in the plugins' style, always inside the picture, so it is not pixel for pixel what the screen shows. On-screen messages are not included."
+msgstr "렌더링된 프레임은 오프라인으로 만들어집니다. 플러그인의 비디오 효과가 포함되고 자막은 플러그인 스타일로 다시 그려져 항상 화면 안쪽에 놓이므로, 화면에 보이는 것과 픽셀 단위로 같지는 않습니다. 화면 메시지는 포함되지 않습니다."
+
+#: ui/tasks.slint:20
+#, x-machine
+msgid "Export Tasks"
+msgstr "내보내기 작업"
+
+#: ui/tasks.slint:41
+#, x-machine
+msgid "No export tasks yet."
+msgstr "아직 내보내기 작업이 없습니다."
+
+#: ui/tasks.slint:56
+#, x-machine
+msgid "Burst · {}"
+msgstr "연속 캡처 · {}"
+
+#: ui/tasks.slint:56
+#, x-machine
+msgid "Clip · {}"
+msgstr "클립 · {}"
+
+#: ui/tasks.slint:56
+#, x-machine
+msgid "Snapshot · {}"
+msgstr "스냅샷 · {}"
+
+#. {0} is the time or time range, {1} the progress (Completed).
+#: ui/tasks.slint:60
+#, x-machine
+msgid "{0} · {1}"
+msgstr "{0} · {1}"
+
+#: ui/tasks.slint:66
+#, x-machine
+msgid "Cancel"
+msgstr "취소"
+
+#: ui/tasks.slint:67
+#, x-machine
+msgid "Open"
+msgstr "열기"
+
+#: ui/tasks.slint:68
+#, x-machine
+msgid "Retry"
+msgstr "다시 시도"

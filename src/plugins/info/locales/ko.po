@@ -1,0 +1,860 @@
+msgid ""
+msgstr ""
+"Language: ko\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: about.ts:6
+#, x-machine
+msgid "{} (build {})"
+msgstr "{} (빌드 {})"
+
+#: about.ts:32 about.ts:78 properties.ts:196 properties.ts:285 properties.ts:286 ui/about.slint:81
+#, x-machine
+msgid "Unknown"
+msgstr "알 수 없음"
+
+#: about.ts:34 ui/about.slint:130
+#, x-machine
+msgid "Plugin API"
+msgstr "플러그인 API"
+
+#: about.ts:70 ui/about.slint:126
+#, x-machine
+msgid "Version {} (build {})"
+msgstr "버전 {} (빌드 {})"
+
+#: about.ts:70 ui/about.slint:126
+#, x-machine
+msgid "Version {}"
+msgstr "버전 {}"
+
+#: about.ts:71 properties.ts:61
+#, x-machine
+msgid "{}: {}"
+msgstr "{}: {}"
+
+#: about.ts:72 ui/about.slint:141
+#, x-machine
+msgid "Loaded plugins"
+msgstr "로드된 플러그인"
+
+#: about.ts:73 ui/about.slint:152
+#, x-machine
+msgid "Unknown (cannot read the plugin list)"
+msgstr "알 수 없음 (플러그인 목록을 읽을 수 없음)"
+
+#: about.ts:76 ui/about.slint:85
+#, x-machine
+msgid "Built-in"
+msgstr "내장"
+
+#: about.ts:76 ui/about.slint:86
+#, x-machine
+msgid "Repository"
+msgstr "저장소"
+
+#: about.ts:76 ui/about.slint:87
+#, x-machine
+msgid "Link"
+msgstr "링크"
+
+#: about.ts:76 ui/about.slint:88
+#, x-machine
+msgid "Local file"
+msgstr "로컬 파일"
+
+#: about.ts:76 ui/about.slint:89
+#, x-machine
+msgid "Workshop"
+msgstr "워크숍"
+
+#: about.ts:76 ui/about.slint:90
+#, x-machine
+msgid "Installed"
+msgstr "설치됨"
+
+#: about.ts:76 ui/about.slint:91
+#, x-machine
+msgid "Development"
+msgstr "개발"
+
+#: about.ts:77 ui/about.slint:95
+#, x-machine
+msgid "Starting"
+msgstr "시작 중"
+
+#: about.ts:77 ui/about.slint:96
+#, x-machine
+msgid "Running"
+msgstr "실행 중"
+
+#: about.ts:77 ui/about.slint:97
+#, x-machine
+msgid "Disabled"
+msgstr "사용 안 함"
+
+#: about.ts:77 ui/about.slint:98
+#, x-machine
+msgid "Failed"
+msgstr "실패"
+
+#: about.ts:77 ui/about.slint:99
+#, x-machine
+msgid "Stopped"
+msgstr "중지됨"
+
+#: about.ts:78
+#, x-machine
+msgid "{}  {}  {}  {}"
+msgstr "{}  {}  {}  {}"
+
+#: about.ts:119
+#, x-machine
+msgid "Version info copied"
+msgstr "버전 정보를 복사했습니다"
+
+#: dialog.ts:20
+#, x-machine
+msgid "Cannot read file information (ffprobe not found)"
+msgstr "파일 정보를 읽을 수 없습니다 (ffprobe를 찾을 수 없음)"
+
+#: dialog.ts:22
+#, x-machine
+msgid "Cannot read file information: timed out"
+msgstr "파일 정보를 읽을 수 없습니다: 시간 초과"
+
+#: dialog.ts:26
+#, x-machine
+msgid "Cannot read file information: {}"
+msgstr "파일 정보를 읽을 수 없습니다: {}"
+
+#: dialog.ts:26
+#, x-machine
+msgid "ffprobe failed"
+msgstr "ffprobe 실패"
+
+#: dialog.ts:62 main.ts:36 main.ts:123 properties.ts:126
+#, x-machine
+msgid "No media open"
+msgstr "열린 미디어가 없습니다"
+
+#: dialog.ts:64 properties.ts:127 properties.ts:297
+#, x-machine
+msgid "Reading…"
+msgstr "읽는 중…"
+
+#: dialog.ts:89
+#, x-machine
+msgid "File not found"
+msgstr "파일을 찾을 수 없습니다"
+
+#: dialog.ts:96
+#, x-machine
+msgid "Cannot parse the ffprobe output"
+msgstr "ffprobe 출력을 해석할 수 없습니다"
+
+#: dialog.ts:154
+#, x-machine
+msgid "Playback info copied"
+msgstr "재생 정보를 복사했습니다"
+
+#: dialog.ts:162
+#, x-machine
+msgid "Save As"
+msgstr "다른 이름으로 저장"
+
+#: dialog.ts:169
+#, x-machine
+msgid "Saved to {}"
+msgstr "{}에 저장했습니다"
+
+#: main.ts:36
+#, x-machine
+msgid "File: {}"
+msgstr "파일: {}"
+
+#: main.ts:37
+#, x-machine
+msgid "Time: {} / {}"
+msgstr "시간: {} / {}"
+
+#: main.ts:38
+#, x-machine
+msgid "Video: {} {}"
+msgstr "비디오: {} {}"
+
+#: main.ts:39
+#, x-machine
+msgid "Frame rate: {}"
+msgstr "프레임 속도: {}"
+
+#: main.ts:40
+#, x-machine
+msgid "Audio: {} {} {}"
+msgstr "오디오: {} {} {}"
+
+#: main.ts:40 properties.ts:256
+#, x-machine
+msgid "{} channels"
+msgstr "{}채널"
+
+#: main.ts:41
+#, x-machine
+msgid "Backend: {} (session {})"
+msgstr "백엔드: {} (세션 {})"
+
+#: main.ts:42
+#, x-machine
+msgid "Frames shown: {}"
+msgstr "표시된 프레임: {}"
+
+#: main.ts:43
+#, x-machine
+msgid "Dropped frames: {}"
+msgstr "드롭된 프레임: {}"
+
+#: main.ts:105
+#, x-machine
+msgid "Chapter {}"
+msgstr "챕터 {}"
+
+#: main.ts:111 properties.ts:196
+#, x-machine
+msgid "Subtitles"
+msgstr "자막"
+
+#: main.ts:126
+#, x-machine
+msgid "{} ch"
+msgstr "{}채널"
+
+#: main.ts:130
+#, x-machine
+msgid "{} / {}"
+msgstr "{} / {}"
+
+#: main.ts:130 properties.ts:252
+#, x-machine
+msgid "Live"
+msgstr "라이브"
+
+#: main.ts:134
+#, x-machine
+msgid "{} {}"
+msgstr "{} {}"
+
+#: main.ts:137 properties.ts:79
+#, x-machine
+msgid "{} · {}"
+msgstr "{} · {}"
+
+#: main.ts:206 manifest.json
+#, x-machine
+msgid "Playback Info"
+msgstr "재생 정보"
+
+#: main.ts:220
+#, x-machine
+msgid "Brief Info"
+msgstr "간단한 정보"
+
+#: main.ts:239
+#, x-machine
+msgid "Playback Properties…"
+msgstr "재생 속성…"
+
+#: main.ts:247
+#, x-machine
+msgid "About Vestra Player…"
+msgstr "Vestra Player 정보…"
+
+#: manifest.json
+#, x-machine
+msgid "Playback info overlay, playback properties and the About window"
+msgstr "재생 정보 오버레이, 재생 속성, 정보 창"
+
+#: manifest.json
+#, x-machine
+msgid "Shows live facts at the top left of the video (Tab): file, time, codecs, frame rate and more, or a short summary with Shift+Tab. Playback Properties… lists the decoding state, the file's streams and metadata, and system information, to copy or save as text. About Vestra Player… shows the version, components and loaded plugins."
+msgstr "비디오 왼쪽 위에 파일, 시간, 코덱, 프레임 속도 등의 실시간 정보를 표시하거나(Tab), Shift+Tab으로 간단한 요약을 표시합니다. 재생 속성…에서는 디코딩 상태, 파일의 스트림과 메타데이터, 시스템 정보를 보고 텍스트로 복사하거나 저장할 수 있습니다. Vestra Player 정보…에서는 버전, 구성 요소, 로드된 플러그인을 보여 줍니다."
+
+#: manifest.json
+#, x-machine
+msgid "Info"
+msgstr "정보"
+
+#: manifest.json
+#, x-machine
+msgid "Media info"
+msgstr "미디어 정보"
+
+#: manifest.json
+#, x-machine
+msgid "About"
+msgstr "정보"
+
+#: properties.ts:42
+#, x-machine
+msgid "(The rest is too long and was left out)"
+msgstr "(나머지는 너무 길어서 생략했습니다)"
+
+#: properties.ts:91
+#, x-machine
+msgid "8-bit ({})"
+msgstr "8비트 ({})"
+
+#: properties.ts:91
+#, x-machine
+msgid "16-bit ({})"
+msgstr "16비트 ({})"
+
+#: properties.ts:91
+#, x-machine
+msgid "32-bit ({})"
+msgstr "32비트 ({})"
+
+#: properties.ts:91
+#, x-machine
+msgid "64-bit ({})"
+msgstr "64비트 ({})"
+
+#: properties.ts:91
+#, x-machine
+msgid "32-bit float ({})"
+msgstr "32비트 부동소수점 ({})"
+
+#: properties.ts:91
+#, x-machine
+msgid "64-bit float ({})"
+msgstr "64비트 부동소수점 ({})"
+
+#: properties.ts:113
+#, x-machine
+msgid "{} bytes"
+msgstr "{}바이트"
+
+#: properties.ts:114
+#, x-machine
+msgid "{} KB ({})"
+msgstr "{} KB ({})"
+
+#: properties.ts:114
+#, x-machine
+msgid "{} MB ({})"
+msgstr "{} MB ({})"
+
+#: properties.ts:114
+#, x-machine
+msgid "{} GB ({})"
+msgstr "{} GB ({})"
+
+#: properties.ts:114
+#, x-machine
+msgid "{} TB ({})"
+msgstr "{} TB ({})"
+
+#: properties.ts:120
+#, x-machine
+msgid "Not used"
+msgstr "사용 안 함"
+
+#: properties.ts:130 properties.ts:196 properties.ts:255
+#, x-machine
+msgid "Video"
+msgstr "비디오"
+
+#: properties.ts:131 properties.ts:140
+#, x-machine
+msgid "Decoder"
+msgstr "디코더"
+
+#: properties.ts:132
+#, x-machine
+msgid "Hardware decoding"
+msgstr "하드웨어 디코딩"
+
+#: properties.ts:133
+#, x-machine
+msgid "Input format"
+msgstr "입력 형식"
+
+#: properties.ts:134 properties.ts:205
+#, x-machine
+msgid "Size"
+msgstr "크기"
+
+#: properties.ts:135
+#, x-machine
+msgid "Source frame rate"
+msgstr "원본 프레임 속도"
+
+#: properties.ts:136
+#, x-machine
+msgid "Display frame rate"
+msgstr "표시 프레임 속도"
+
+#: properties.ts:137
+#, x-machine
+msgid "Video bitrate"
+msgstr "비디오 비트레이트"
+
+#: properties.ts:139 properties.ts:196 properties.ts:256
+#, x-machine
+msgid "Audio"
+msgstr "오디오"
+
+#: properties.ts:141 properties.ts:200
+#, x-machine
+msgid "Codec"
+msgstr "코덱"
+
+#: properties.ts:142 properties.ts:212
+#, x-machine
+msgid "Sample rate"
+msgstr "샘플 레이트"
+
+#: properties.ts:143
+#, x-machine
+msgid "Bit depth"
+msgstr "비트 심도"
+
+#: properties.ts:144
+#, x-machine
+msgid "Channel count"
+msgstr "채널 수"
+
+#: properties.ts:144 properties.ts:184 sysinfo.ts:31
+#, x-machine
+msgid "{} ({})"
+msgstr "{} ({})"
+
+#: properties.ts:145
+#, x-machine
+msgid "Audio bitrate"
+msgstr "오디오 비트레이트"
+
+#: properties.ts:147
+#, x-machine
+msgid "Other"
+msgstr "기타"
+
+#: properties.ts:148
+#, x-machine
+msgid "Backend"
+msgstr "백엔드"
+
+#: properties.ts:149
+#, x-machine
+msgid "Session"
+msgstr "세션"
+
+#: properties.ts:150
+#, x-machine
+msgid "Frames shown"
+msgstr "표시된 프레임"
+
+#: properties.ts:151
+#, x-machine
+msgid "Dropped frames"
+msgstr "드롭된 프레임"
+
+#: properties.ts:152
+#, x-machine
+msgid "A/V sync offset"
+msgstr "A/V 싱크 차이"
+
+#: properties.ts:153
+#, x-machine
+msgid "Cache"
+msgstr "캐시"
+
+#: properties.ts:153
+#, x-machine
+msgid "{} s"
+msgstr "{}초"
+
+#: properties.ts:193
+#, x-machine
+msgid "Default"
+msgstr "기본"
+
+#: properties.ts:193
+#, x-machine
+msgid "Forced"
+msgstr "강제"
+
+#: properties.ts:194
+#, x-machine
+msgid "None"
+msgstr "없음"
+
+#: properties.ts:196
+#, x-machine
+msgid "Data"
+msgstr "데이터"
+
+#: properties.ts:196
+#, x-machine
+msgid "Attachment"
+msgstr "첨부 파일"
+
+#: properties.ts:198
+#, x-machine
+msgid "Stream #{}: {}"
+msgstr "스트림 #{}: {}"
+
+#: properties.ts:201
+#, x-machine
+msgid "Language"
+msgstr "언어"
+
+#: properties.ts:202 properties.ts:220
+#, x-machine
+msgid "Title"
+msgstr "제목"
+
+#: properties.ts:203
+#, x-machine
+msgid "Flags"
+msgstr "플래그"
+
+#: properties.ts:206
+#, x-machine
+msgid "Frame rate"
+msgstr "프레임 속도"
+
+#: properties.ts:207
+#, x-machine
+msgid "Pixel format"
+msgstr "픽셀 형식"
+
+#: properties.ts:208
+#, x-machine
+msgid "Color space"
+msgstr "색 공간"
+
+#: properties.ts:209 properties.ts:215
+#, x-machine
+msgid "Bitrate"
+msgstr "비트레이트"
+
+#: properties.ts:213
+#, x-machine
+msgid "Channels"
+msgstr "채널"
+
+#: properties.ts:214
+#, x-machine
+msgid "Sample format"
+msgstr "샘플 형식"
+
+#: properties.ts:220
+#, x-machine
+msgid "Artist"
+msgstr "아티스트"
+
+#: properties.ts:220
+#, x-machine
+msgid "Album artist"
+msgstr "앨범 아티스트"
+
+#: properties.ts:220
+#, x-machine
+msgid "Album"
+msgstr "앨범"
+
+#: properties.ts:220
+#, x-machine
+msgid "Date"
+msgstr "날짜"
+
+#: properties.ts:220
+#, x-machine
+msgid "Genre"
+msgstr "장르"
+
+#: properties.ts:220
+#, x-machine
+msgid "Track"
+msgstr "트랙 번호"
+
+#: properties.ts:220
+#, x-machine
+msgid "Comment"
+msgstr "설명"
+
+#: properties.ts:220
+#, x-machine
+msgid "Composer"
+msgstr "작곡가"
+
+#: properties.ts:220
+#, x-machine
+msgid "Copyright"
+msgstr "저작권"
+
+#: properties.ts:220
+#, x-machine
+msgid "Encoder"
+msgstr "인코더"
+
+#: properties.ts:220
+#, x-machine
+msgid "Creation time"
+msgstr "생성 시간"
+
+#: properties.ts:222 properties.ts:250 ui/about.slint:141
+#, x-machine
+msgid "Source"
+msgstr "소스"
+
+#: properties.ts:223
+#, x-machine
+msgid "Path"
+msgstr "경로"
+
+#: properties.ts:224
+#, x-machine
+msgid "File size"
+msgstr "파일 크기"
+
+#: properties.ts:225
+#, x-machine
+msgid "Modified"
+msgstr "수정한 날짜"
+
+#: properties.ts:227
+#, x-machine
+msgid "Container"
+msgstr "컨테이너"
+
+#: properties.ts:228
+#, x-machine
+msgid "Format"
+msgstr "형식"
+
+#: properties.ts:229 properties.ts:252
+#, x-machine
+msgid "Duration"
+msgstr "길이"
+
+#: properties.ts:230
+#, x-machine
+msgid "Overall bitrate"
+msgstr "전체 비트레이트"
+
+#: properties.ts:231
+#, x-machine
+msgid "Stream count"
+msgstr "스트림 수"
+
+#: properties.ts:232
+#, x-machine
+msgid "Chapters"
+msgstr "챕터 수"
+
+#: properties.ts:235
+#, x-machine
+msgid "Metadata"
+msgstr "메타데이터"
+
+#: properties.ts:236
+#, x-machine
+msgid "Embedded resources"
+msgstr "내장 리소스"
+
+#: properties.ts:238
+#, x-machine
+msgid "Attachment #{}"
+msgstr "첨부 파일 #{}"
+
+#: properties.ts:238
+#, x-machine
+msgid "(no file name)"
+msgstr "(파일 이름 없음)"
+
+#: properties.ts:239
+#, x-machine
+msgid "Cover #{}"
+msgstr "커버 #{}"
+
+#: properties.ts:248
+#, x-machine
+msgid "Network source: only what the player reports"
+msgstr "네트워크 소스: 플레이어가 보고하는 정보만 표시"
+
+#: properties.ts:251
+#, x-machine
+msgid "Address"
+msgstr "주소"
+
+#: properties.ts:254
+#, x-machine
+msgid "Streams"
+msgstr "스트림"
+
+#: properties.ts:257
+#, x-machine
+msgid "Audio tracks"
+msgstr "오디오 트랙 수"
+
+#: properties.ts:280
+#, x-machine
+msgid "{} ({} cores)"
+msgstr "{} ({}코어)"
+
+#: properties.ts:282
+#, x-machine
+msgid "Player"
+msgstr "플레이어"
+
+#: properties.ts:283
+#, x-machine
+msgid "Vestra Player version"
+msgstr "Vestra Player 버전"
+
+#: properties.ts:284
+#, x-machine
+msgid "Plugin API version"
+msgstr "플러그인 API 버전"
+
+#: properties.ts:285
+#, x-machine
+msgid "mpv version"
+msgstr "mpv 버전"
+
+#: properties.ts:286
+#, x-machine
+msgid "FFmpeg version"
+msgstr "FFmpeg 버전"
+
+#: properties.ts:288
+#, x-machine
+msgid "System"
+msgstr "시스템"
+
+#: properties.ts:289
+#, x-machine
+msgid "System version"
+msgstr "시스템 버전"
+
+#: properties.ts:290
+#, x-machine
+msgid "Model"
+msgstr "모델"
+
+#: properties.ts:291
+#, x-machine
+msgid "CPU"
+msgstr "CPU"
+
+#: properties.ts:292
+#, x-machine
+msgid "Total memory"
+msgstr "전체 메모리"
+
+#: properties.ts:293
+#, x-machine
+msgid "Free memory"
+msgstr "사용 가능한 메모리"
+
+#: properties.ts:295
+#, x-machine
+msgid "Display {}"
+msgstr "디스플레이 {}"
+
+#: properties.ts:295 properties.ts:296
+#, x-machine
+msgid "Display"
+msgstr "디스플레이"
+
+#: properties.ts:297
+#, x-machine
+msgid "Status"
+msgstr "상태"
+
+#: properties.ts:303
+#, x-machine
+msgid "Vestra Player info.txt"
+msgstr "Vestra Player 정보.txt"
+
+#. only the part before the extension; {} is the media's file name.
+#: properties.ts:315
+#, x-machine
+msgid "{} info.txt"
+msgstr "{} 정보.txt"
+
+#: ui/about.slint:55
+#, x-machine
+msgid "About Vestra Player"
+msgstr "Vestra Player 정보"
+
+#: ui/about.slint:141
+#, x-machine
+msgid "Version"
+msgstr "버전"
+
+#: ui/about.slint:141
+#, x-machine
+msgid "State"
+msgstr "상태"
+
+#: ui/about.slint:181 ui/properties.slint:147
+#, x-machine
+msgid "Copy failed"
+msgstr "복사 실패"
+
+#: ui/about.slint:187
+#, x-machine
+msgid "Copy Info"
+msgstr "정보 복사"
+
+#: ui/about.slint:188 ui/properties.slint:158
+#, x-machine
+msgid "Close"
+msgstr "닫기"
+
+#: ui/properties.slint:55
+#, x-machine
+msgid "Playback Properties"
+msgstr "재생 속성"
+
+#: ui/properties.slint:72
+#, x-machine
+msgctxt "tab"
+msgid "Playback"
+msgstr "재생"
+
+#: ui/properties.slint:72
+#, x-machine
+msgctxt "tab"
+msgid "File"
+msgstr "파일"
+
+#: ui/properties.slint:72
+#, x-machine
+msgctxt "tab"
+msgid "System"
+msgstr "시스템"
+
+#: ui/properties.slint:148
+#, x-machine
+msgid "Save failed: {}"
+msgstr "저장 실패: {}"
+
+#: ui/properties.slint:155
+#, x-machine
+msgid "Refresh"
+msgstr "새로 고침"
+
+#: ui/properties.slint:156
+#, x-machine
+msgid "Copy"
+msgstr "클립보드에 복사"
+
+#: ui/properties.slint:157
+#, x-machine
+msgid "Save As…"
+msgstr "다른 이름으로 저장…"
