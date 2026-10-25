@@ -473,19 +473,22 @@ fn every_interface_language_has_an_embedded_host_catalog() {
     assert_eq!(embedded, translated);
 }
 
-/// The player's strings show in each language (one msgid each).
+/// The player's strings show in each language (one msgid each). The
+/// expectation comes from the compiled catalog itself, so a reviewed
+/// translation can change without touching this test.
 #[test]
 fn host_strings_show_in_every_language() {
-    for (locale, paused) in [
-        ("zh-Hans", "已暂停"),
-        ("ja", "一時停止"),
-        ("ko", "일시 정지됨"),
-        ("de", "Pausiert"),
-        ("fr", "Pause"),
-        ("es", "En pausa"),
-    ] {
-        let catalog = host_catalog(locale).unwrap_or_else(|| panic!("{locale}: no catalog"));
-        assert_eq!(catalog.text("Paused"), paused, "{locale}");
+    let id = "Paused";
+    for locale in LOCALES.iter().copied().filter(|l| *l != "en") {
+        let json = host_json(locale).unwrap_or_else(|| panic!("{locale}: no catalog"));
+        let compiled: Value = serde_json::from_str(json).unwrap();
+        let expected = compiled["messages"][id]
+            .as_str()
+            .unwrap_or_else(|| panic!("{locale}: {id:?} is not translated"));
+        assert!(!expected.trim().is_empty(), "{locale}: empty translation");
+        assert_ne!(expected, id, "{locale}: translation is the English text");
+        let catalog = host_catalog(locale).unwrap();
+        assert_eq!(catalog.text(id), expected, "{locale}");
     }
 }
 
