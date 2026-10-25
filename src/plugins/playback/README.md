@@ -5,6 +5,7 @@ The main window's control bar, and playback commands such as open, seek and spee
 ## Features
 
 - **Control bar**: seek bar, play/pause, stop, back, forward, open, mute and volume, playlist toggle; click the current time to switch between elapsed and remaining time. Button tooltips show the current shortcut.
+- **Volume and mute are remembered**: the last volume and mute (set with the bar, the keys or anything else) come back when the player starts again.
 - **Open**: open a file, open a link (can fill in a link from the clipboard automatically), reopen the current or last played file; copy the file name or path.
 - **Seek**: four seek steps (change them in Seek Steps…), previous/next keyframe, jump to the start, jump to a given time.
 - **Speed**: 0.5×, 1.5×, 2× and a custom speed.
@@ -17,4 +18,4 @@ The main window's control bar, and playback commands such as open, seek and spee
 - Right-click menu Playback ▸ Seek: Previous/Next Keyframe (Ctrl+Shift+←/→), Back/Forward 30 s (Ctrl+←/→), 60 s (Shift+←/→), 300 s (Ctrl+Alt+←/→), Jump to Start (Backspace), Seek Steps…
 - Right-click menu Playback: Jump to Time… (G), Speed, Disable Screen Saver While Playing, Show Time / Thumbnail on Seek Bar Hover.
 
-Basic actions such as play/pause, back/forward 5 seconds, volume and mute are provided by the player and keep working when this plugin is turned off.
+Basic actions such as play/pause, back/forward 5 seconds, volume and mute are provided by the player and keep working when this plugin is turned off (without it, the volume is not remembered).

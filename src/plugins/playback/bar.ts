@@ -1,6 +1,7 @@
 import type { HostAction, Json, Panel, Plugin, TimelineMark } from "@vestra-player/sdk";
 import type { Playback } from "./controller.ts";
 import { time } from "./format.ts";
+import type { OutputMemory } from "./output-memory.ts";
 import type { SettingsStore } from "./settings.ts";
 import { sourceFailure } from "./texts.ts";
 import type { Thumbnails } from "./thumbs.ts";
@@ -43,7 +44,14 @@ const CORE: ReadonlySet<string> = new Set<HostAction>([
  * core's (`host.run`), except Open (this plugin's) and the volume slider, which
  * needs continuous values (`player.setOutput`, the same rules as volume ±).
  */
-export function wireBar(bar: Panel, scope: Plugin, playback: Playback, settings: SettingsStore, thumbnails: Thumbnails) {
+export function wireBar(
+  bar: Panel,
+  scope: Plugin,
+  playback: Playback,
+  settings: SettingsStore,
+  thumbnails: Thumbnails,
+  output: OutputMemory,
+) {
   const { player } = scope;
   // G-07: tooltips name the keys the user has bound (read again when bindings change).
   const keys = new Keys(scope, () => scope.update());
@@ -133,6 +141,7 @@ export function wireBar(bar: Panel, scope: Plugin, playback: Playback, settings:
   bar.on("volumeChanged", (value: number) => {
     if (!volumeDragging) {
       volumeDragging = true;
+      output.hold(true);
       locks();
     }
     p.setVolume(value);
@@ -141,6 +150,7 @@ export function wireBar(bar: Panel, scope: Plugin, playback: Playback, settings:
     volumeDragging = false;
     locks();
     p.setVolume(value, true);
+    output.hold(false);
   });
   // Pointer down → dragging(true) + seekChanged…; up → seekChanged + dragging(false).
   bar.on("dragging", (dragging: boolean) => {

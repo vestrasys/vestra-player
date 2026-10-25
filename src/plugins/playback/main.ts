@@ -5,6 +5,7 @@ import { Playback } from "./controller.ts";
 import { copyToClipboard } from "./copy.ts";
 import { parseTime, rateText, time } from "./format.ts";
 import { OpenUrl } from "./open-url.ts";
+import { OutputMemory } from "./output-memory.ts";
 import { Keyframes } from "./keyframes.ts";
 import { Prompt } from "./prompt.ts";
 import { Reopener } from "./reopen.ts";
@@ -53,6 +54,9 @@ export default async function activate(plugin: Plugin) {
   );
 
   const settings = new SettingsStore(plugin);
+  // The last volume and mute come back once at start; later changes by anyone are saved.
+  const output = new OutputMemory(plugin, player);
+  void output.restore();
   const reopener = new Reopener(plugin, osd);
   const openUrl = new OpenUrl(plugin, settings, osd);
   const keyframes = new Keyframes(plugin, playback, () => plugin.update());
@@ -78,7 +82,7 @@ export default async function activate(plugin: Plugin) {
     jumpToStart: () => playback.jumpToStart(),
     thumbnails,
   });
-  wireBar(bar, plugin, playback, settings, thumbnails);
+  wireBar(bar, plugin, playback, settings, thumbnails, output);
   plugin.onError((error) => playback.report(error));
 
   reopener.observe(player.state);
@@ -102,6 +106,7 @@ export default async function activate(plugin: Plugin) {
     reopener.observe(state);
     keyframes.observe(state);
     thumbnails.observe(state);
+    output.observe(state);
     await Promise.resolve(); // the drag gesture observes the same change first
     if (replaced || playback.gestureLost) {
       playback.clearSeek();
