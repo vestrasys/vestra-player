@@ -315,6 +315,14 @@ enum MenuMode {
 /// One wheel step per this many logical pixels of accumulated scroll.
 const WHEEL_STEP: f64 = 40.;
 const OSD_MS: u64 = 2000;
+/// On-screen display limits: a message's characters, the information
+/// block's lines and bytes, and its `maxColumns` range. The SDK repeats them
+/// (`OSD_LIMITS`); src/tests/sdk/host-agreement.test.ts checks they agree.
+const OSD_MESSAGE_CHARS: usize = 200;
+const OSD_PANEL_LINES: usize = 32;
+const OSD_PANEL_BYTES: usize = 4096;
+const OSD_MIN_COLUMNS: u64 = 8;
+const OSD_MAX_COLUMNS: u64 = 1000;
 struct MountChange {
     reply: Reply,
     contribution: Option<Mount>,
@@ -3748,8 +3756,10 @@ impl Host {
                 let text = self
                     .plugin_sentence(reply.owner, &params["text"], &params["args"])?
                     .replace(['\n', '\r'], " ");
-                if text.trim().is_empty() || text.chars().count() > 200 {
-                    return Err(RpcError::invalid("osd text needs 1..=200 characters"));
+                if text.trim().is_empty() || text.chars().count() > OSD_MESSAGE_CHARS {
+                    return Err(RpcError::invalid(format!(
+                        "osd text needs 1..={OSD_MESSAGE_CHARS} characters"
+                    )));
                 }
                 let shell = self
                     .shell
@@ -3781,15 +3791,19 @@ impl Host {
                             max => {
                                 let max = max
                                     .as_u64()
-                                    .filter(|m| (8..=1000).contains(m))
+                                    .filter(|m| (OSD_MIN_COLUMNS..=OSD_MAX_COLUMNS).contains(m))
                                     .ok_or_else(|| {
-                                        RpcError::invalid("maxColumns is an integer from 8 to 1000")
+                                        RpcError::invalid(format!(
+                                            "maxColumns is an integer from {OSD_MIN_COLUMNS} to {OSD_MAX_COLUMNS}"
+                                        ))
                                     })?;
                                 text = i18n::text::fit_columns(&text, max as usize);
                             }
                         }
-                        if text.len() > 4096 || text.lines().count() > 32 {
-                            return Err(RpcError::invalid("osd panel allows 32 lines, 4096 bytes"));
+                        if text.len() > OSD_PANEL_BYTES || text.lines().count() > OSD_PANEL_LINES {
+                            return Err(RpcError::invalid(format!(
+                                "osd panel allows {OSD_PANEL_LINES} lines, {OSD_PANEL_BYTES} bytes"
+                            )));
                         }
                         self.info_panels.insert(reply.owner, text);
                     }

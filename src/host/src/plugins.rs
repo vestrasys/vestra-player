@@ -13,6 +13,10 @@ use std::{
 };
 
 pub const API: &str = "vestra/1";
+/// The longest protocol line a plugin may write, newline included (1 MiB);
+/// a longer one stops the plugin. The SDK repeats it (`MESSAGE_LIMIT`);
+/// src/tests/sdk/host-agreement.test.ts checks they agree.
+pub const MAX_MESSAGE_BYTES: usize = 1024 * 1024;
 pub use crate::manifest::Manifest;
 
 /// Whose data directory and secrets a plugin process gets.
@@ -174,11 +178,11 @@ impl Plugin {
                 // Protocol lines are capped at 1 MiB. Oversize/malformed output terminates the instance.
                 let mut bytes = Vec::new();
                 let read = std::io::Read::by_ref(&mut reader)
-                    .take(1_048_577)
+                    .take(MAX_MESSAGE_BYTES as u64 + 1)
                     .read_until(b'\n', &mut bytes);
                 match read {
                     Ok(0) | Err(_) => break,
-                    Ok(_) if bytes.len() > 1_048_576 => {
+                    Ok(_) if bytes.len() > MAX_MESSAGE_BYTES => {
                         let _ = events.send(Event::RuntimeFault(
                             generation,
                             "protocol message exceeds 1 MiB".into(),
