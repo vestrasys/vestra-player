@@ -1,8 +1,8 @@
 import { realpath } from "node:fs/promises";
 import { basename, dirname, extname, resolve } from "node:path";
-import type { Disposable, Media, PlayerState } from "@vestra-player/sdk";
+import type { Disposable, Media, PlayerState, Text, TextList } from "@vestra-player/sdk";
 import { collator, compareByFolder, SCAN_LIMIT } from "./media.ts";
-import { fitName, type Notice, type NoticeArgs, type ReadFailure } from "./notices.ts";
+import { failureText, fitName, type Notice, type NoticeArgs, type NoticeText, type ReadFailure, type Texts } from "./notices.ts";
 
 export type Row = {
   rowId: string;
@@ -59,7 +59,7 @@ export type Entry = {
   /** A file that cannot be read is "missing" (list files), not "unreadable, can retry". */
   missing?: boolean;
 };
-/** What a drop or a folder scan could not take (the notice after adding names the first). */
+/** What a drop or a folder scan could not take (the notice after adding names each problem). */
 export type Problems = {
   skipped?: number;
   unreadable?: number;
@@ -80,6 +80,24 @@ export type Added = {
 
 /** C17: the list holds at most this many rows. */
 export const ROW_LIMIT = 20_000;
+/** Unreadable folders and list files named in one notice (more could not fit on screen anyway). */
+const FAILED_SHOWN = 20;
+
+/**
+ * The clauses for what a drop or a folder scan could not take, in the order
+ * the notice gives them: unsupported items, unreadable subfolders, the scan
+ * limit, then each folder or list file that could not be read (with why).
+ */
+export function problemClauses(texts: Texts, problems: Problems): Text[] {
+  const { text } = texts;
+  const clauses: Text[] = [];
+  if (problems.skipped) clauses.push(text("unsupported items skipped: {}", [problems.skipped]));
+  if (problems.unreadable) clauses.push(text("subfolders that could not be read: {}", [problems.unreadable]));
+  if (problems.truncated) clauses.push(text("limit of {} reached", [SCAN_LIMIT]));
+  for (const { name, failure } of problems.failed?.slice(0, FAILED_SHOWN) ?? [])
+    clauses.push(text("cannot read {}: {}", [fitName(name, 60), failureText(texts, failure, 60)]));
+  return clauses;
+}
 /** Paths resolved at once while adding. */
 const RESOLVE_LIMIT = 16;
 
@@ -104,10 +122,10 @@ export class Queue {
   binding: Binding | null = null;
   failed: string | null = null;
   epoch = 0;
-  /** Last status (an English template); only notices (see `notice`) reach the user, as on-screen text. */
-  message: string = "";
+  /** Last status (an English template or a text value); only notices (see `notice`) reach the user, as on-screen text. */
+  message: string | NoticeText = "";
   /** Shows a notice to the user; the plugin wires this to `osd.show`. */
-  say: (text: Notice, args?: NoticeArgs) => void = () => {};
+  say: (text: NoticeText, args?: NoticeArgs) => void = () => {};
   /** Shows a row's title (data, not translated) on screen. */
   sayTitle: (title: string) => void = () => {};
   /** Called with each row that leaves the list (removal, dedup or clear). */
@@ -164,7 +182,13 @@ export class Queue {
     this.anchor = id;
     this.selection = new Set(id ? [id] : []);
   }
-  notice(text: Notice, args?: NoticeArgs) {
+  /** `plugin.i18n`, for the notices made of parts. */
+  readonly texts: Texts;
+  constructor(texts: Texts) {
+    this.texts = texts;
+  }
+
+  notice(text: NoticeText, args?: NoticeArgs) {
     this.message = text;
     this.say(text, args);
   }
@@ -316,51 +340,18 @@ export class Queue {
     return result;
   }
   /**
-   * The notice after adding: how many were added and skipped as duplicates, then the
-   * first problem (unreadable rows, `problems` of a drop or scan, the list limit).
+   * The notice after adding: how many were added, skipped as duplicates and
+   * not readable for now, every problem of a drop or scan, then the list
+   * limit when reached (one clause each, joined the interface language's way).
    */
-  summary(result: Added, problems: Problems = {}): [Notice, NoticeArgs] {
-    const added = result.added,
-      duplicates = result.duplicate;
-    const dup = duplicates > 0;
-    const failed = problems.failed?.[0];
-    if (result.invalid) {
-      const count = result.invalid;
-      return dup
-        ? ["Added: {added}, duplicates skipped: {duplicates}, not readable for now: {count}", { added, duplicates, count }]
-        : ["Added: {added}, not readable for now: {count}", { added, count }];
-    }
-    if (problems.skipped) {
-      const count = problems.skipped;
-      return dup
-        ? ["Added: {added}, duplicates skipped: {duplicates}, unsupported items skipped: {count}", { added, duplicates, count }]
-        : ["Added: {added}, unsupported items skipped: {count}", { added, count }];
-    }
-    if (problems.unreadable) {
-      const count = problems.unreadable;
-      return dup
-        ? ["Added: {added}, duplicates skipped: {duplicates}, subfolders that could not be read: {count}", { added, duplicates, count }]
-        : ["Added: {added}, subfolders that could not be read: {count}", { added, count }];
-    }
-    if (problems.truncated) {
-      const limit = SCAN_LIMIT;
-      return dup
-        ? ["Added: {added}, duplicates skipped: {duplicates}, limit of {limit} reached", { added, duplicates, limit }]
-        : ["Added: {added}, limit of {limit} reached", { added, limit }];
-    }
-    if (failed) {
-      const name = fitName(failed.name, 80);
-      return dup
-        ? ["Added: {added}, duplicates skipped: {duplicates}, could not read {name}", { added, duplicates, name }]
-        : ["Added: {added}, could not read {name}", { added, name }];
-    }
-    if (result.refused) {
-      const limit = ROW_LIMIT;
-      return dup
-        ? ["Added: {added}, duplicates skipped: {duplicates}, the list is full at {limit} items", { added, duplicates, limit }]
-        : ["Added: {added}, the list is full at {limit} items", { added, limit }];
-    }
-    return dup ? ["Added: {added}, duplicates skipped: {duplicates}", { added, duplicates }] : ["Added: {added}", { added }];
+  summary(result: Added, problems: Problems = {}): TextList {
+    const { text, list } = this.texts;
+    const clauses = [text("Added: {}", [result.added])];
+    if (result.duplicate) clauses.push(text("duplicates skipped: {}", [result.duplicate]));
+    if (result.invalid) clauses.push(text("not readable for now: {}", [result.invalid]));
+    clauses.push(...problemClauses(this.texts, problems));
+    if (result.refused) clauses.push(text("the list is full at {} items", [ROW_LIMIT]));
+    return list(clauses, "clauses");
   }
   /** The first row a batch created is selected when the list was empty (as "Add Files…"). */
   selectFirstAdded(result: Added, wasEmpty: boolean) {
@@ -371,7 +362,7 @@ export class Queue {
     const wasEmpty = this.rows.length === 0;
     const result = await this.addEntries(paths.map((source) => ({ kind: "file" as const, source })));
     this.selectFirstAdded(result, wasEmpty);
-    this.notice(...this.summary(result));
+    this.notice(this.summary(result));
     return result;
   }
   addUrl(input: string) {

@@ -5,529 +5,429 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: main.ts:133
-msgid "Added: {added}"
-msgstr "已添加 {added} 项"
+#: drop.ts:197
+msgid "Nothing to add: {}"
+msgstr "没有可加入的项目：{}"
 
-#: main.ts:133
-msgid "Added: {added}, duplicates skipped: {duplicates}"
-msgstr "已添加 {added} 项，跳过 {duplicates} 个重复"
-
-#: main.ts:133
-msgid "Added: {added}, not readable for now: {count}"
-msgstr "已添加 {added} 项，{count} 项暂不可读"
-
-#: main.ts:133
-msgid "Added: {added}, duplicates skipped: {duplicates}, not readable for now: {count}"
-msgstr "已添加 {added} 项，跳过 {duplicates} 个重复，{count} 项暂不可读"
-
-#: main.ts:133
-msgid "Added: {added}, unsupported items skipped: {count}"
-msgstr "已添加 {added} 项，跳过 {count} 个不支持的项目"
-
-#: main.ts:133
-msgid "Added: {added}, duplicates skipped: {duplicates}, unsupported items skipped: {count}"
-msgstr "已添加 {added} 项，跳过 {duplicates} 个重复，跳过 {count} 个不支持的项目"
-
-#: main.ts:133
-msgid "Added: {added}, subfolders that could not be read: {count}"
-msgstr "已添加 {added} 项，{count} 个子文件夹无法读取"
-
-#: main.ts:133
-msgid "Added: {added}, duplicates skipped: {duplicates}, subfolders that could not be read: {count}"
-msgstr "已添加 {added} 项，跳过 {duplicates} 个重复，{count} 个子文件夹无法读取"
-
-#: main.ts:133
-msgid "Added: {added}, limit of {limit} reached"
-msgstr "已添加 {added} 项，已达上限 {limit}"
-
-#: main.ts:133
-msgid "Added: {added}, duplicates skipped: {duplicates}, limit of {limit} reached"
-msgstr "已添加 {added} 项，跳过 {duplicates} 个重复，已达上限 {limit}"
-
-#: main.ts:133
-msgid "Added: {added}, could not read {name}"
-msgstr "已添加 {added} 项，无法读取 {name}"
-
-#: main.ts:133
-msgid "Added: {added}, duplicates skipped: {duplicates}, could not read {name}"
-msgstr "已添加 {added} 项，跳过 {duplicates} 个重复，无法读取 {name}"
-
-#: main.ts:133
-msgid "Added: {added}, the list is full at {limit} items"
-msgstr "已添加 {added} 项，列表已达上限 {limit} 项"
-
-#: main.ts:133
-msgid "Added: {added}, duplicates skipped: {duplicates}, the list is full at {limit} items"
-msgstr "已添加 {added} 项，跳过 {duplicates} 个重复，列表已达上限 {limit} 项"
-
-#: main.ts:133
-msgid "Added: {added}; another source is opening, only added to the list"
-msgstr "已添加 {added} 项；正在打开另一个来源，只加入列表"
-
-#: main.ts:133
-msgid "Added: {added}; opening, added to the list"
-msgstr "已添加 {added} 项；正在打开，已加入列表"
-
-#: main.ts:133
+#: main.ts:134
 msgid "Added {count} files from the same folder"
 msgstr "已加入同文件夹 {count} 个文件"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Added {count} files from the same folder, limit of {limit} reached"
 msgstr "已加入同文件夹 {count} 个文件，已达上限 {limit}"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Nothing to add"
 msgstr "没有可加入的项目"
 
-#: main.ts:133
-msgid "Nothing to add: unsupported items skipped: {count}"
-msgstr "没有可加入的项目：跳过 {count} 个不支持的项目"
-
-#: main.ts:133
-msgid "Nothing to add: subfolders that could not be read: {count}"
-msgstr "没有可加入的项目：{count} 个子文件夹无法读取"
-
-#: main.ts:133
-msgid "Nothing to add: cannot read {name}: access to this location is not allowed (System Settings ▸ Privacy & Security ▸ Files & Folders)"
-msgstr "没有可加入的项目：无法读取 {name}：未获准访问此位置（系统设置 ▶ 隐私与安全性 ▶ 文件与文件夹）"
-
-#: main.ts:133
-msgid "Nothing to add: cannot read {name}: no permission to read"
-msgstr "没有可加入的项目：无法读取 {name}：没有读取权限"
-
-#: main.ts:133
-msgid "Nothing to add: cannot read {name}: the folder does not exist"
-msgstr "没有可加入的项目：无法读取 {name}：文件夹不存在"
-
-#: main.ts:133
-msgid "Nothing to add: cannot read {name}: not a folder"
-msgstr "没有可加入的项目：无法读取 {name}：不是文件夹"
-
-#: main.ts:133
-msgid "Nothing to add: cannot read {name}: the file is larger than 16 MB"
-msgstr "没有可加入的项目：无法读取 {name}：文件超过 16 MB"
-
-#: main.ts:133
-msgid "Nothing to add: cannot read {name}: {message}"
-msgstr "没有可加入的项目：无法读取 {name}：{message}"
-
-#: main.ts:133
+#: main.ts:134
 msgid "Link added"
 msgstr "已添加链接"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Existing link selected"
 msgstr "已选择已有链接"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Scanning folder…"
 msgstr "正在扫描文件夹…"
 
-#: main.ts:133
+#: main.ts:134
 msgid "No playable files in the folder"
 msgstr "文件夹中没有可播放的文件"
 
-#: main.ts:133
-msgid "Cannot read the folder: access to this location is not allowed (System Settings ▸ Privacy & Security ▸ Files & Folders)"
-msgstr "无法读取文件夹：未获准访问此位置（系统设置 ▶ 隐私与安全性 ▶ 文件与文件夹）"
-
-#: main.ts:133
-msgid "Cannot read the folder: no permission to read"
-msgstr "无法读取文件夹：没有读取权限"
-
-#: main.ts:133
-msgid "Cannot read the folder: the folder does not exist"
-msgstr "无法读取文件夹：文件夹不存在"
-
-#: main.ts:133
-msgid "Cannot read the folder: not a folder"
-msgstr "无法读取文件夹：不是文件夹"
-
-#: main.ts:133
+#: main.ts:134
 msgid "Cannot read the folder: {}"
 msgstr "无法读取文件夹：{}"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Removed: {}"
 msgstr "已移除 {} 项"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Invalid items removed: {}"
 msgstr "已移除 {} 个无效项"
 
-#: main.ts:133
+#: main.ts:134
 msgid "No invalid items"
 msgstr "没有无效项"
 
-#: main.ts:133
+#: main.ts:134
 msgid "The media being opened was removed from the list"
 msgstr "正在打开的媒体已移出列表"
 
-#: main.ts:133
+#: main.ts:134
 msgid "The current media was removed from the list"
 msgstr "当前媒体已移出列表"
 
-#: main.ts:133
+#: main.ts:134
 msgid "List cleared; the current media continues"
 msgstr "列表已清空，当前媒体继续"
 
-#: main.ts:133
-msgid "Only the first {} files are shown"
-msgstr "只显示前 {} 个文件"
-
-#: main.ts:133
-msgid "File not found: {}"
-msgstr "找不到文件：{}"
-
-#: main.ts:133
-msgid "Only the first {limit} files are shown; file not found: {name}"
-msgstr "只显示前 {limit} 个文件；找不到文件：{name}"
-
-#: main.ts:133
+#: main.ts:134
 msgid "Unsupported list format"
 msgstr "不支持的列表格式"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Cannot open the list: the file is larger than 16 MB"
 msgstr "无法打开列表：文件超过 16 MB"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Cannot open the list: {}"
 msgstr "无法打开列表：{}"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Opened list: {name} ({count} items)"
 msgstr "已打开列表：{name}（{count} 项）"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Opened list: {name} ({count} items), skipped: {skipped}"
 msgstr "已打开列表：{name}（{count} 项），跳过 {skipped} 项"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Cannot save the list: {}"
 msgstr "无法保存列表：{}"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Saved list: {}"
 msgstr "已保存列表：{}"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Repeat: Off"
 msgstr "循环：不循环"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Repeat: All"
 msgstr "循环：全部"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Repeat: One"
 msgstr "循环：单个"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Shuffle: On"
 msgstr "随机播放：开"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Shuffle: Off"
 msgstr "随机播放：关"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Fast advance to next: On"
 msgstr "快速推进到下一个：开"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Fast advance to next: Off"
 msgstr "快速推进到下一个：关"
 
-#: main.ts:133
+#: main.ts:134
 msgid "The list will be remembered"
 msgstr "将记住列表"
 
-#: main.ts:133
+#: main.ts:134
 msgid "The list will no longer be remembered"
 msgstr "不再记住列表"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Confirm before removing all: On"
 msgstr "移除全部前确认：开"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Confirm before removing all: Off"
 msgstr "移除全部前确认：关"
 
-#: main.ts:133
+#: main.ts:134
 msgid "End of the list"
 msgstr "列表已播完"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Cannot replay: {}"
 msgstr "无法重播：{}"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Cannot open {}: the file does not exist"
 msgstr "无法打开 {}：文件不存在"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Cannot open {}: cannot open this media"
 msgstr "无法打开 {}：无法打开此媒体"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Cannot open {}: {}"
 msgstr "无法打开 {}：{}"
 
-#: main.ts:133
+#: main.ts:134
 msgid "The file's canonical path matches an existing item; that item is selected"
 msgstr "文件规范路径与已有项重复，已选择已有项"
 
-#: main.ts:133
+#: main.ts:134
 msgid "Close the other dialog first"
 msgstr "请先关闭另一个对话框"
 
-#: main.ts:146 main.ts:548 main.ts:571 main.ts:724 manifest.json ui/settings.slint:57 ui/sidebar.slint:242
+#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:57 ui/sidebar.slint:242
 msgid "Playlist"
 msgstr "播放列表"
 
-#: main.ts:245
+#: main.ts:246
 msgid "Remove all {} items from the playlist?"
 msgstr "移除播放列表中的全部 {} 项？"
 
-#: main.ts:245
+#: main.ts:246
 msgid "Replace the current list with {}?"
 msgstr "用 {} 替换当前列表？"
 
-#: main.ts:245
+#: main.ts:246
 msgid "The media that is playing continues to play."
 msgstr "正在播放的媒体继续播放。"
 
-#: main.ts:245 main.ts:537
+#: main.ts:246 main.ts:527
 msgid "Remove All"
 msgstr "移除全部"
 
-#: main.ts:245
+#: main.ts:246
 msgid "Replace"
 msgstr "替换"
 
-#: main.ts:245
+#: main.ts:246
 msgid "Don't ask again"
 msgstr "不再询问"
 
-#: main.ts:274
+#: main.ts:275
 msgid "Add to Playlist"
 msgstr "添加到播放列表"
 
-#: main.ts:288
+#: main.ts:289
 msgid "Open Folder"
 msgstr "打开文件夹"
 
-#: main.ts:288
+#: main.ts:289
 msgid "Add Folder to Playlist"
 msgstr "添加文件夹到播放列表"
 
-#: main.ts:460
+#: main.ts:318
+msgid "another source is opening, only added to the list"
+msgstr "正在打开另一个来源，只加入列表"
+
+#: main.ts:416
+msgid "Only the first {} files are shown"
+msgstr "只显示前 {} 个文件"
+
+#: main.ts:438
+msgid "File not found: {}"
+msgstr "找不到文件：{}"
+
+#: main.ts:449
 msgid "Open Playlist File"
 msgstr "打开播放列表文件"
 
-#: main.ts:506
+#: main.ts:495
 msgid "Save Playlist"
 msgstr "保存播放列表"
 
-#: main.ts:537
+#: main.ts:497
+msgid "Playlist.m3u8"
+msgstr "播放列表.m3u8"
+
+#: main.ts:527
 msgid "Play"
 msgstr "播放"
 
-#: main.ts:537 main.ts:571
+#: main.ts:527 main.ts:561
 msgid "Add Files…"
 msgstr "添加文件…"
 
-#: main.ts:537 main.ts:571
+#: main.ts:527 main.ts:561
 msgid "Add Folder…"
 msgstr "添加文件夹…"
 
-#: main.ts:537 main.ts:571
+#: main.ts:527 main.ts:561
 msgid "Add Link…"
 msgstr "添加链接…"
 
-#: main.ts:537
+#: main.ts:527
 msgid "Remove Selected"
 msgstr "移除所选"
 
-#: main.ts:537
+#: main.ts:527
 msgid "Remove Unselected"
 msgstr "移除未选"
 
-#: main.ts:537
+#: main.ts:527
 msgid "Remove Invalid Items"
 msgstr "移除无效项"
 
-#: main.ts:537
+#: main.ts:527
 msgid "Show in Finder"
 msgstr "在 Finder 中显示"
 
-#: main.ts:537
+#: main.ts:527
 msgid "Move to Top"
 msgstr "置顶"
 
-#: main.ts:537
+#: main.ts:527
 msgid "Move Up"
 msgstr "上移"
 
-#: main.ts:537
+#: main.ts:527
 msgid "Move Down"
 msgstr "下移"
 
-#: main.ts:537
+#: main.ts:527
 msgid "Move to Bottom"
 msgstr "置底"
 
-#: main.ts:537
+#: main.ts:527
 msgid "Ascending"
 msgstr "正序"
 
-#: main.ts:537
+#: main.ts:527
 msgid "Descending"
 msgstr "反序"
 
-#: main.ts:537
+#: main.ts:527
 msgid "By Title"
 msgstr "按标题"
 
-#: main.ts:537
+#: main.ts:527
 msgid "By File Name"
 msgstr "按文件名"
 
-#: main.ts:537
+#: main.ts:527
 msgid "By Extension"
 msgstr "按扩展名"
 
-#: main.ts:537
+#: main.ts:527
 msgid "By Size"
 msgstr "按大小"
 
-#: main.ts:537
+#: main.ts:527
 msgid "By Duration"
 msgstr "按时长"
 
-#: main.ts:537
+#: main.ts:527
 msgid "By Date"
 msgstr "按日期"
 
-#: main.ts:537
+#: main.ts:527
 msgid "Random Order"
 msgstr "乱序"
 
-#: main.ts:537
+#: main.ts:527
 msgid "By Folder"
 msgstr "按文件夹"
 
-#: main.ts:537
+#: main.ts:527
 msgid "Sort by Path"
 msgstr "按路径排序"
 
-#: main.ts:537
+#: main.ts:527
 msgid "Reverse Current Order"
 msgstr "倒置当前顺序"
 
-#: main.ts:537
+#: main.ts:527
 msgid "Select All"
 msgstr "全选"
 
-#: main.ts:537 ui/sidebar.slint:541
+#: main.ts:527 ui/sidebar.slint:541
 msgid "Search"
 msgstr "搜索"
 
-#: main.ts:537 main.ts:571
+#: main.ts:527 main.ts:561
 msgid "Open List File…"
 msgstr "打开列表文件…"
 
-#: main.ts:537 main.ts:571
+#: main.ts:527 main.ts:561
 msgid "Save List…"
 msgstr "保存列表…"
 
-#: main.ts:537
+#: main.ts:527
 msgid "Close List"
 msgstr "关闭列表"
 
-#: main.ts:537
+#: main.ts:527
 msgid "Playlist Settings…"
 msgstr "播放列表设置…"
 
-#: main.ts:539 main.ts:575
+#: main.ts:529 main.ts:532 main.ts:564 main.ts:565
 msgid "Opening, or the result is not known yet"
 msgstr "正在打开或结果未知"
 
-#: main.ts:539 main.ts:575
+#: main.ts:529 main.ts:532 main.ts:564 main.ts:565
 msgid "Nothing to act on"
 msgstr "当前没有可操作项"
 
-#: main.ts:539 main.ts:565 main.ts:575
+#: main.ts:529 main.ts:532 main.ts:555 main.ts:564 main.ts:565
 msgid "Scanning folder"
 msgstr "正在扫描文件夹"
 
-#: main.ts:539 main.ts:575
+#: main.ts:529 main.ts:532 main.ts:564 main.ts:565
 msgid "Links have no local location"
 msgstr "链接没有本地位置"
 
-#: main.ts:539 main.ts:575
+#: main.ts:529 main.ts:532 main.ts:564 main.ts:565
 msgid "The order cannot change while searching"
 msgstr "搜索时不能调整顺序"
 
-#: main.ts:555
+#: main.ts:545
 msgid "Not enough room; enlarge the window to show it"
 msgstr "空间不足，放大窗口后可显示"
 
-#: main.ts:560
+#: main.ts:550
 msgid "Open Folder…"
 msgstr "打开文件夹…"
 
-#: main.ts:571
+#: main.ts:561
 msgid "Repeat"
 msgstr "循环"
 
-#: main.ts:571 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:93
 msgid "Off"
 msgstr "不循环"
 
-#: main.ts:571 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:93
 msgid "All"
 msgstr "全部"
 
-#: main.ts:571 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:93
 msgid "One"
 msgstr "单个"
 
-#: main.ts:571 ui/settings.slint:99
+#: main.ts:561 ui/settings.slint:99
 msgid "Shuffle"
 msgstr "随机"
 
-#: main.ts:571
+#: main.ts:561
 msgid "When Opening a File"
 msgstr "打开文件时"
 
-#: main.ts:571
+#: main.ts:561
 msgid "Open Only That File"
 msgstr "仅打开该文件"
 
-#: main.ts:571
+#: main.ts:561
 msgid "Add Similar Files"
 msgstr "加入相似文件"
 
-#: main.ts:571
+#: main.ts:561
 msgid "Add All Files in the Folder"
 msgstr "加入同文件夹全部文件"
 
-#: main.ts:571
+#: main.ts:561
 msgid "Fast Advance to Next"
 msgstr "快速推进到下一个"
 
-#: main.ts:571
+#: main.ts:561
 msgid "Remember List"
 msgstr "记住列表"
 
-#: main.ts:571
+#: main.ts:561
 msgid "Confirm Before Removing All"
 msgstr "移除全部前确认"
+
+#: main.ts:988
+msgid "opening, added to the list"
+msgstr "正在打开，已加入列表"
 
 #: manifest.json
 msgid "Sidebar playlist: add, sort, repeat and shuffle"
@@ -539,7 +439,7 @@ msgid ""
 "Entry points: \"Playlist\" (F6) in the context menu and Playback ▸ Playlist."
 msgstr ""
 "右侧栏播放列表：添加文件、文件夹和链接，拖放加入，排序与搜索，循环与随机播放，打开文件时自动加入同文件夹的相似文件；读写 M3U、M3U8、PLS 列表文件，重启后恢复列表。\n"
-"入口：右键菜单「播放列表」（F6）与「播放 ▶ 播放列表」。"
+"入口：右键菜单「播放列表」（F6）与「播放 ▸ 播放列表」。"
 
 #: manifest.json
 msgid "playlist"
@@ -552,6 +452,58 @@ msgstr "打开"
 #: manifest.json
 msgid "drag and drop"
 msgstr "拖放"
+
+#: notices.ts:82
+msgid "access to this location is not allowed (System Settings ▸ Privacy & Security ▸ Files & Folders)"
+msgstr "未获准访问此位置（系统设置 ▸ 隐私与安全性 ▸ 文件与文件夹）"
+
+#: notices.ts:84
+msgid "no permission to read"
+msgstr "没有读取权限"
+
+#: notices.ts:86
+msgid "the folder does not exist"
+msgstr "文件夹不存在"
+
+#: notices.ts:88
+msgid "not a folder"
+msgstr "不是文件夹"
+
+#: notices.ts:90
+msgid "the file is larger than 16 MB"
+msgstr "文件超过 16 MB"
+
+#: queue.ts:94
+msgid "unsupported items skipped: {}"
+msgstr "跳过 {} 个不支持的项目"
+
+#: queue.ts:95
+msgid "subfolders that could not be read: {}"
+msgstr "{} 个子文件夹无法读取"
+
+#: queue.ts:96
+msgid "limit of {} reached"
+msgstr "已达上限 {}"
+
+#: queue.ts:98
+msgid "cannot read {}: {}"
+msgstr "无法读取 {}：{}"
+
+#: queue.ts:349
+msgid "Added: {}"
+msgstr "已添加 {} 项"
+
+#: queue.ts:350
+msgid "duplicates skipped: {}"
+msgstr "跳过 {} 个重复"
+
+#: queue.ts:351
+msgid "not readable for now: {}"
+msgstr "{} 项暂不可读"
+
+#: queue.ts:353
+msgid "the list is full at {} items"
+msgstr "列表已达上限 {} 项"
 
 #: ui/link.slint:18
 msgid "{} links added, only selected; playing them needs an available source provider"

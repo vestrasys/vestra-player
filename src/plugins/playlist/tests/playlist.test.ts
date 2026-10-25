@@ -9,6 +9,7 @@ import { filesPending, settleFiles } from "./settle.ts";
 import activate from "../main.ts";
 import { Prober, type ProbeRunner } from "../probe.ts";
 import { Queue } from "../queue.ts";
+import { chineseTexts } from "./texts.ts";
 
 type ViewRow = {
   rowId: string;
@@ -1110,8 +1111,10 @@ test("at most two ffprobe processes run at once", async () => {
   }
 });
 
-test("Prober: ffprobe runs with a 10 s timeout and removal aborts the run", async () => {
-  const queue = new Queue();
+test("Prober: ffprobe runs with a 10 s timeout and removal aborts the run", async (t) => {
+  const zh = await chineseTexts();
+  t.after(() => zh.stop());
+  const queue = new Queue(zh.texts);
   const runs: { args: string[]; signal: AbortSignal; timeoutMs: number }[] = [];
   const runner: ProbeRunner = (args, { signal, timeoutMs }) =>
     new Promise((_, reject) => {

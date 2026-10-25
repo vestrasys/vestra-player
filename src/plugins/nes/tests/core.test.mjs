@@ -1,9 +1,16 @@
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { NesCore, rgbaFrame } from '../core.ts';
+import { startPlugin } from '@vestra-player/sdk/testing';
+import { NesCore as Core, rgbaFrame as rgba } from '../core.ts';
 
 import { homebrew } from './homebrew.mjs';
+
+// The failures are `plugin.i18n.error`s: English messages, shown translated by the player.
+const { host, plugin, stop } = await startPlugin(() => {}, { directory: new URL('..', import.meta.url), capabilities: [], locale: 'zh-Hans' });
+after(stop);
+const NesCore = class extends Core { constructor(rom) { super(rom, plugin.i18n.error); } };
+const rgbaFrame = pixels => rgba(pixels, plugin.i18n.error);
 
 test('JSNES runs original 6502 ROM and yields distinct PPU frames plus audible PCM', () => {
   const hashes = [];
@@ -39,6 +46,8 @@ test('pixel channel conversion and malformed ROM errors', () => {
   unsupported[6] = 0xf0;
   unsupported[7] = 0xf0;
   assert.throws(() => new NesCore(unsupported), { message: 'JSNES does not support mapper 255 of this ROM.' });
+  assert.throws(() => new NesCore(unsupported), error => host.translate(error.text) === 'JSNES 不支持这个 ROM 的 mapper 255。');
+  assert.throws(() => new NesCore(new Uint8Array(100)), error => host.translate(error.text) === '这不是 iNES 格式的 NES ROM 文件。');
   assert.throws(() => new NesCore(homebrew().subarray(0, 16 + 16384)), /incomplete/); // CHR bank missing
   const trainer = new Uint8Array(512 + homebrew().length);
   trainer.set(homebrew().subarray(0, 16));

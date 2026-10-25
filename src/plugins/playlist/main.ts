@@ -15,7 +15,7 @@ import {
   writeAtomic,
 } from "./listfile.ts";
 import { extensionOf, folderError, isMedia, LIST_FILES, scanFolder, siblings } from "./media.ts";
-import { fitName, type Notice, type NoticeArgs } from "./notices.ts";
+import { failureText, fitName, type NoticeArgs, type NoticeText } from "./notices.ts";
 import { playback } from "./playback.ts";
 import { Prober, toolRunner } from "./probe.ts";
 import { clock, lengthOf, Queue, type Placement, type Repeat, type Row, type SortKey } from "./queue.ts";
@@ -77,8 +77,8 @@ type Reason =
   | "Scanning folder"
   | "Links have no local location"
   | "The order cannot change while searching";
-/** Command options whose `reason` is one of `Reason` (so the texts are found for translation). */
-type CommandSetup = Partial<Omit<CommandOptions, "reason">> & { reason?: () => Reason | null };
+/** Command options whose `reason` is one of `Reason`, without the title and path (so the texts are found for translation). */
+type CommandSetup = Partial<Omit<CommandOptions, "reason" | "title" | "path">> & { reason?: () => Reason | null };
 /** Playback ▸ Playlist ▸ … (after the shared "Playlist" submenu). */
 type PlaylistItem =
   | "Add Files…"
@@ -129,8 +129,9 @@ async function pool<T>(items: T[], limit: number, work: (item: T) => Promise<voi
 
 export default async function activate(plugin: Plugin, options: Partial<Options> = {}) {
   const random = options.random ?? Math.random;
-  const queue = new Queue();
-  queue.say = (text: Notice, args?: NoticeArgs) => void plugin.osd.show(text, args).catch(() => {});
+  const { text } = plugin.i18n;
+  const queue = new Queue(plugin.i18n);
+  queue.say = (notice: NoticeText, args?: NoticeArgs) => void plugin.osd.show(notice, args).catch(() => {});
   // i18n-ignore: a row's title is data
   queue.sayTitle = (title) => void plugin.osd.show(title.slice(0, 200)).catch(() => {});
   const prober = new Prober(queue, toolRunner(plugin.tools), () => plugin.update());
@@ -293,15 +294,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
           scan = await scanFolder(folder, { signal: stop.signal });
         } catch (error) {
           if (stop.signal.aborted) return;
-          const failure = folderError(error);
-          if (failure.reason === "permission")
-            return queue.notice(
-              "Cannot read the folder: access to this location is not allowed (System Settings ▸ Privacy & Security ▸ Files & Folders)",
-            );
-          if (failure.reason === "access") return queue.notice("Cannot read the folder: no permission to read");
-          if (failure.reason === "missing") return queue.notice("Cannot read the folder: the folder does not exist");
-          if (failure.reason === "not-folder") return queue.notice("Cannot read the folder: not a folder");
-          return queue.notice("Cannot read the folder: {}", [failure.reason === "message" ? fitName(failure.message) : failure.reason]);
+          return queue.notice("Cannot read the folder: {}", [failureText(plugin.i18n, folderError(error))]);
         } finally {
           clearTimeout(slow);
         }
@@ -316,15 +309,15 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
         const summary = queue.summary(result, { unreadable: scan.unreadable, truncated: scan.truncated });
         if (!play) {
           queue.selectFirstAdded(result, wasEmpty);
-          return queue.notice(...summary);
+          return queue.notice(summary);
         }
         // The first new row, or (all duplicates) the row of the folder's first file.
         const target = result.fresh[0] ?? result.rows.find((row) => !!row);
-        if (!target) return queue.notice(...summary);
+        if (!target) return queue.notice(summary);
         if (player.busy())
-          return queue.notice("Added: {added}; another source is opening, only added to the list", { added: result.added });
+          return queue.notice(plugin.i18n.list([summary, text("another source is opening, only added to the list")], "semicolons"));
         queue.select(target.rowId);
-        queue.notice(...summary);
+        queue.notice(summary);
         await player.play(target.rowId, undefined, { quiet: true });
       } finally {
         scanning = false;
@@ -419,8 +412,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
    */
   const revealSelected = guard(async () => {
     const paths = queue.marked().filter((row) => row.kind === "file").map((row) => row.source);
-    const limited = paths.length > REVEAL_LIMIT;
-    const notFound: string[] = [];
+    // One clause each: the limit, then every file not found.
+    const notices = paths.length > REVEAL_LIMIT ? [text("Only the first {} files are shown", [REVEAL_LIMIT])] : [];
     const folders = new Map<string, string[]>();
     for (const path of paths.slice(0, REVEAL_LIMIT)) folders.set(dirname(path), [...(folders.get(dirname(path)) ?? []), path]);
     const missing = (error: unknown) => {
@@ -442,14 +435,10 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
         await plugin.system.openPath(dir);
       } catch (error) {
         missing(error);
-        notFound.push(basename(files[0]!));
+        notices.push(text("File not found: {}", [fitName(basename(files[0]!), 100)]));
       }
     }
-    const name = fitName(notFound.join(", "), 100);
-    if (limited && notFound.length)
-      queue.notice("Only the first {limit} files are shown; file not found: {name}", { limit: REVEAL_LIMIT, name });
-    else if (limited) queue.notice("Only the first {} files are shown", [REVEAL_LIMIT]);
-    else if (notFound.length) queue.notice("File not found: {}", [name]);
+    if (notices.length) queue.notice(plugin.i18n.list(notices, "semicolons"));
   });
 
   /** C18: replace the list with a list file's entries (after confirmation when not empty). */
@@ -504,7 +493,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     try {
       const chosen = await plugin.dialogs.saveFile({
         title: "Save Playlist",
-        fileName: `${lastList ?? "Playlist"}.m3u8`,
+        // TRANSLATORS: the default file name; translate only the part before ".m3u8".
+        fileName: lastList === null ? text("Playlist.m3u8") : `${lastList}.m3u8`,
       });
       if (!chosen) return;
       const { path, ext } = savePath(chosen);
@@ -973,7 +963,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
             }
           }
         }
-        if (!expanded.entries.length) return queue.notice(...nothingToAdd(expanded));
+        if (!expanded.entries.length) return queue.notice(nothingToAdd(plugin.i18n, expanded));
         let before: number | undefined;
         if (how.at) {
           const shown = queue.visible();
@@ -988,16 +978,16 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
         const summary = queue.summary(result, dropProblems(expanded));
         if (!how.play) {
           queue.selectFirstAdded(result, wasEmpty);
-          return queue.notice(...summary);
+          return queue.notice(summary);
         }
         // The dropped file when it brought its siblings; else the first new row, or (all
         // duplicates) the existing row of the first item.
         const at = start === null ? -1 : expanded.entries.findIndex((entry) => entry.source === start);
         const target = (at >= 0 ? result.rows[at] : undefined) ?? result.fresh[0] ?? result.rows.find((row) => !!row);
-        if (!target) return queue.notice(...summary);
-        if (player.busy()) return queue.notice("Added: {added}; opening, added to the list", { added: result.added });
+        if (!target) return queue.notice(summary);
+        if (player.busy()) return queue.notice(plugin.i18n.list([summary, text("opening, added to the list")], "semicolons"));
         queue.select(target.rowId);
-        queue.notice(...summary);
+        queue.notice(summary);
         await player.play(target.rowId, undefined, { quiet: true });
       }),
     ));

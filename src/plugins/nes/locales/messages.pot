@@ -4,6 +4,30 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+#: core.ts:9
+msgid "The emulator frame has an invalid size."
+msgstr ""
+
+#: core.ts:29
+msgid "This is not an NES ROM in iNES format."
+msgstr ""
+
+#: core.ts:32
+msgid "The ROM file is incomplete: shorter than its header says."
+msgstr ""
+
+#: core.ts:45
+msgid "JSNES does not support mapper {} of this ROM."
+msgstr ""
+
+#: core.ts:45
+msgid "JSNES could not load this ROM: {}"
+msgstr ""
+
+#: core.ts:53
+msgid "The emulator produced invalid audio data."
+msgstr ""
+
 #: main.ts:83
 msgid "Open NES ROM"
 msgstr ""
@@ -22,6 +46,22 @@ msgstr ""
 
 #: main.ts:118
 msgid "NES Tools…"
+msgstr ""
+
+#: main.ts:123
+msgid "The ROM file is larger than the 16 MiB limit."
+msgstr ""
+
+#: main.ts:131
+msgid "The ROM file was not found."
+msgstr ""
+
+#: main.ts:132
+msgid "No permission to read the ROM file."
+msgstr ""
+
+#: main.ts:133
+msgid "This is a folder, not a ROM file."
 msgstr ""
 
 #: manifest.json

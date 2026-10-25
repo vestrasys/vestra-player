@@ -5,6 +5,30 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
+#: core.ts:9
+msgid "The emulator frame has an invalid size."
+msgstr "模拟器画面尺寸无效。"
+
+#: core.ts:29
+msgid "This is not an NES ROM in iNES format."
+msgstr "这不是 iNES 格式的 NES ROM 文件。"
+
+#: core.ts:32
+msgid "The ROM file is incomplete: shorter than its header says."
+msgstr "ROM 文件不完整：比文件头声明的短。"
+
+#: core.ts:45
+msgid "JSNES does not support mapper {} of this ROM."
+msgstr "JSNES 不支持这个 ROM 的 mapper {}。"
+
+#: core.ts:45
+msgid "JSNES could not load this ROM: {}"
+msgstr "JSNES 无法载入这个 ROM：{}"
+
+#: core.ts:53
+msgid "The emulator produced invalid audio data."
+msgstr "模拟器音频数据无效。"
+
 #: main.ts:83
 msgid "Open NES ROM"
 msgstr "打开 NES ROM"
@@ -24,6 +48,22 @@ msgstr "停止 NES"
 #: main.ts:118
 msgid "NES Tools…"
 msgstr "NES 工具…"
+
+#: main.ts:123
+msgid "The ROM file is larger than the 16 MiB limit."
+msgstr "ROM 文件超过 16 MiB 上限。"
+
+#: main.ts:131
+msgid "The ROM file was not found."
+msgstr "找不到 ROM 文件。"
+
+#: main.ts:132
+msgid "No permission to read the ROM file."
+msgstr "没有权限读取 ROM 文件。"
+
+#: main.ts:133
+msgid "This is a folder, not a ROM file."
+msgstr "这是一个文件夹，不是 ROM 文件。"
 
 #: manifest.json
 msgid "NES Emulator"

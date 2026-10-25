@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readdir, readFile, realpath, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, realpath, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Json } from "@vestra-player/sdk";
@@ -537,7 +537,7 @@ test("移除全部 asks with the system confirmation; 「不再询问」 on a co
     assert.equal(app.rows().length, 0);
     assert.equal(app.host.confirms.length, 0, "remembered across a restart");
     assert.equal(JSON.parse(await readFile(join(data, "playlists.json"), "utf8")).settings.confirmClear, false);
-    // 播放 ▶ 播放列表 ▶ 移除全部前确认 turns the question back on.
+    // 播放 ▸ 播放列表 ▸ 移除全部前确认 turns the question back on.
     assert.equal(app.command("confirm-clear").state.checked, false);
     await app.run("confirm-clear");
     assert.equal(app.command("confirm-clear").state.checked, true);
@@ -550,6 +550,24 @@ test("移除全部 asks with the system confirmation; 「不再询问」 on a co
   } finally {
     await app.close();
     await rm(data, { recursive: true, force: true });
+  }
+});
+
+test("C18: saving before any list file proposes 播放列表.m3u8 (translated; English: Playlist.m3u8)", async () => {
+  for (const [locale, shown] of [
+    ["zh-Hans", "播放列表.m3u8"],
+    ["en", "Playlist.m3u8"],
+  ] as const) {
+    const app = await start({ locale });
+    try {
+      await app.addFiles(await app.files(["a.mp4"]));
+      app.host.dialogAnswers.push([join(app.root, "saved")]);
+      await app.run("save-list");
+      assert.deepEqual(app.host.fileDialogs.at(-1), { kind: "saveFile", title: locale === "en" ? "Save Playlist" : "保存播放列表", fileName: shown });
+      assert.equal(existsSync(join(app.root, "saved.m3u8")), true);
+    } finally {
+      await app.close();
+    }
   }
 });
 
@@ -571,7 +589,8 @@ test("C18: GBK .m3u, PLS round trip, DPL; saving adds .m3u8 and writes relative 
     app.host.window("playlist-link").emit("add-link", "https://example.org/v");
     await app.host.settle(30);
 
-    // No extension: .m3u8 is appended; the default name follows the last opened list.
+    // No extension: .m3u8 is appended; the default name follows the last opened list
+    // (before any, it is the translated "Playlist.m3u8", see "saving before any list file").
     app.host.dialogAnswers.push([join(app.root, "list")]);
     await app.press("F2");
     assert.deepEqual(app.host.sent("dialogs.open").at(-1), {
@@ -747,6 +766,19 @@ test("C23: only the first 20 selected files are shown", async () => {
     await app.press("Ctrl+F");
     assert.deepEqual(app.host.system.revealed, [paths[0]]);
     assert.equal(app.osd(), "只显示前 20 个文件");
+
+    // The limit, then one sentence per file not found (each folder is gone).
+    const [x] = await app.files(["other/x.mp4"]);
+    await app.addFiles([x!]);
+    await rm(join(app.root, "many"), { recursive: true });
+    await rm(join(app.root, "other"), { recursive: true });
+    await app.press("Ctrl+A");
+    await app.press("Ctrl+F");
+    assert.equal(app.osd(), "只显示前 20 个文件；找不到文件：0.mp4");
+    await app.click(0);
+    await app.click(22, { ctrl: true });
+    await app.press("Ctrl+F");
+    assert.equal(app.osd(), "找不到文件：0.mp4；找不到文件：x.mp4");
   } finally {
     await app.close();
   }
@@ -1065,6 +1097,38 @@ test("A15: a dropped folder is scanned as A03, a list file parsed as C18, a .web
     assert.equal(app.rows().length, 5);
     assert.equal(app.osd(), "没有可加入的项目：跳过 1 个不支持的项目");
   } finally {
+    await app.close();
+  }
+});
+
+// Folders made unreadable with chmod: not on Windows (no POSIX modes) or as root (reads anyway).
+const noChmod = process.platform === "win32" || process.getuid?.() === 0;
+
+test("A15: the notice after a drop names every problem, as before; nothing to add names them all too", { skip: noChmod }, async () => {
+  const app = await start();
+  const locked = [join(app.root, "locked"), join(app.root, "album", "sub")];
+  try {
+    const [a, b] = await app.files(["a.mp4", "b.mp4", "notes.txt", "album/c.mp4", "album/sub/d.mp4", "locked/e.mp4"]);
+    await app.addFiles([a!]);
+    for (const dir of locked) await chmod(dir, 0);
+    await app.emit("list-area", 0, 200);
+    await app.host.drop([a!, b!, join(app.root, "notes.txt"), join(app.root, "locked"), join(app.root, "album")], {
+      target: "panel",
+    });
+    await app.host.settle(30);
+    assert.deepEqual(app.names(), ["a.mp4", "b.mp4", "c.mp4"]);
+    assert.equal(
+      app.osd(),
+      "已添加 2 项，跳过 1 个重复，跳过 1 个不支持的项目，1 个子文件夹无法读取，无法读取 locked：没有读取权限",
+    );
+
+    await app.host.drop([join(app.root, "notes.txt"), join(app.root, "locked"), join(app.root, "album", "sub")], {
+      target: "panel",
+    });
+    await app.host.settle(30);
+    assert.equal(app.osd(), "没有可加入的项目：跳过 1 个不支持的项目，无法读取 locked：没有读取权限，无法读取 sub：没有读取权限");
+  } finally {
+    for (const dir of locked) await chmod(dir, 0o755);
     await app.close();
   }
 });

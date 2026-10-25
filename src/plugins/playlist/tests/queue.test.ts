@@ -1,10 +1,14 @@
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Media, PlayerState } from "@vestra-player/sdk";
-import { type LinkError, Queue } from "../queue.ts";
+import { type LinkError, Queue, ROW_LIMIT } from "../queue.ts";
+import { chineseTexts } from "./texts.ts";
+
+const zh = await chineseTexts();
+after(() => zh.stop());
 
 function state(overrides: Partial<PlayerState> = {}): PlayerState {
   return {
@@ -29,7 +33,7 @@ function media(current = true): Media & { current: boolean } {
   return { current, ready: async () => {}, onEnd: () => ({ dispose: async () => {} }), close: async () => {} };
 }
 function fixture() {
-  const queue = new Queue();
+  const queue = new Queue(zh.texts);
   for (const name of ["a", "b", "c", "d"]) queue.addUrl(`https://example.org/${name}`);
   return queue;
 }
@@ -41,8 +45,8 @@ test("realpath deduplicates same batch and symlink while inaccessible rows remai
       alias = join(directory, "alias.mp4");
     await writeFile(path, "not decoded by plugin");
     await symlink(path, alias);
-    const queue = new Queue();
-    const said: unknown[] = [];
+    const queue = new Queue(zh.texts);
+    const said: Parameters<Queue["say"]>[] = [];
     queue.say = (text, args) => void said.push([text, args]);
     await queue.addFiles([path, path, alias, join(directory, "missing.mp4")]);
     assert.equal(queue.rows.length, 2);
@@ -50,20 +54,53 @@ test("realpath deduplicates same batch and symlink while inaccessible rows remai
     assert.equal(queue.binding, null);
     assert.deepEqual(queue.rows[1].error, { kind: "unreadable" });
     assert.equal(queue.rows[1].status, "retry");
-    // 已添加 2 项，跳过 2 个重复，1 项暂不可读 in Simplified Chinese.
-    assert.deepEqual(said, [
-      [
-        "Added: {added}, duplicates skipped: {duplicates}, not readable for now: {count}",
-        { added: 2, duplicates: 2, count: 1 },
-      ],
-    ]);
+    assert.equal(said.length, 1);
+    assert.equal(zh.host.translate(said[0]![0]), "已添加 2 项，跳过 2 个重复，1 项暂不可读");
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
 });
 
+test("the summary after adding names every clause, in the old order; English is the source", () => {
+  const queue = new Queue(zh.texts);
+  const all = queue.summary(
+    { rows: [], fresh: [], added: 3, duplicate: 2, invalid: 1, refused: 4 },
+    {
+      skipped: 1,
+      unreadable: 2,
+      truncated: true,
+      failed: [
+        { name: "a", failure: { reason: "access" } },
+        { name: "b.m3u", failure: { reason: "message", message: "bad line" } },
+        { name: "c", failure: { reason: "permission" } },
+      ],
+    },
+  );
+  assert.equal(
+    zh.host.translate(all),
+    "已添加 3 项，跳过 2 个重复，1 项暂不可读，跳过 1 个不支持的项目，2 个子文件夹无法读取，已达上限 5000，" +
+      "无法读取 a：没有读取权限，无法读取 b.m3u：bad line，" +
+      "无法读取 c：未获准访问此位置（系统设置 ▸ 隐私与安全性 ▸ 文件与文件夹），" +
+      `列表已达上限 ${ROW_LIMIT} 项`,
+  );
+  const english = new Queue(zh.texts).summary(
+    { rows: [], fresh: [], added: 1, duplicate: 1, invalid: 0, refused: 0 },
+    { unreadable: 1, truncated: true },
+  );
+  assert.deepEqual(english, {
+    $vestraList: [
+      { $vestraText: "Added: {}", args: [1] },
+      { $vestraText: "duplicates skipped: {}", args: [1] },
+      { $vestraText: "subfolders that could not be read: {}", args: [1] },
+      { $vestraText: "limit of {} reached", args: [5000] },
+    ],
+    style: "clauses",
+  });
+  assert.equal(zh.host.translate(english), "已添加 1 项，跳过 1 个重复，1 个子文件夹无法读取，已达上限 5000");
+});
+
 test("link addition preserves original URL, selects without binding, and rejects credentials/non-http", () => {
-  const queue = new Queue();
+  const queue = new Queue(zh.texts);
   queue.addUrl("https://example.org/a?x=1");
   assert.equal(queue.rows[0].source, "https://example.org/a?x=1");
   assert.equal(queue.selected, queue.rows[0].rowId);

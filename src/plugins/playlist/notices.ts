@@ -1,46 +1,22 @@
+import type { I18n, TemplateArgs, Text, TextList } from "@vestra-player/sdk";
+
 /**
  * Every notice the playlist shows on screen (`osd.show`): English templates
  * the player translates with `locales/<lang>.po`; `{}` and `{name}` take the
- * arguments (data: counts, file names, messages of the system).
+ * arguments (data: counts, file names, messages of the system, or texts).
+ * Notices made of a varying number of parts are text values instead
+ * (`Queue.summary`, `problemClauses`, Show in Finder).
  */
 export const NOTICES = [
-  // Adding (the summary: what was added, then the first problem).
-  "Added: {added}",
-  "Added: {added}, duplicates skipped: {duplicates}",
-  "Added: {added}, not readable for now: {count}",
-  "Added: {added}, duplicates skipped: {duplicates}, not readable for now: {count}",
-  "Added: {added}, unsupported items skipped: {count}",
-  "Added: {added}, duplicates skipped: {duplicates}, unsupported items skipped: {count}",
-  "Added: {added}, subfolders that could not be read: {count}",
-  "Added: {added}, duplicates skipped: {duplicates}, subfolders that could not be read: {count}",
-  "Added: {added}, limit of {limit} reached",
-  "Added: {added}, duplicates skipped: {duplicates}, limit of {limit} reached",
-  "Added: {added}, could not read {name}",
-  "Added: {added}, duplicates skipped: {duplicates}, could not read {name}",
-  "Added: {added}, the list is full at {limit} items",
-  "Added: {added}, duplicates skipped: {duplicates}, the list is full at {limit} items",
-  "Added: {added}; another source is opening, only added to the list",
-  "Added: {added}; opening, added to the list",
+  // Adding (the summary is a list of clauses, see `Queue.summary`).
   "Added {count} files from the same folder",
   "Added {count} files from the same folder, limit of {limit} reached",
   "Nothing to add",
-  "Nothing to add: unsupported items skipped: {count}",
-  "Nothing to add: subfolders that could not be read: {count}",
-  "Nothing to add: cannot read {name}: access to this location is not allowed (System Settings ▸ Privacy & Security ▸ Files & Folders)",
-  "Nothing to add: cannot read {name}: no permission to read",
-  "Nothing to add: cannot read {name}: the folder does not exist",
-  "Nothing to add: cannot read {name}: not a folder",
-  "Nothing to add: cannot read {name}: the file is larger than 16 MB",
-  "Nothing to add: cannot read {name}: {message}",
   "Link added",
   "Existing link selected",
   // Folders.
   "Scanning folder…",
   "No playable files in the folder",
-  "Cannot read the folder: access to this location is not allowed (System Settings ▸ Privacy & Security ▸ Files & Folders)",
-  "Cannot read the folder: no permission to read",
-  "Cannot read the folder: the folder does not exist",
-  "Cannot read the folder: not a folder",
   "Cannot read the folder: {}",
   // Removing.
   "Removed: {}",
@@ -49,10 +25,6 @@ export const NOTICES = [
   "The media being opened was removed from the list",
   "The current media was removed from the list",
   "List cleared; the current media continues",
-  // Show in Finder.
-  "Only the first {} files are shown",
-  "File not found: {}",
-  "Only the first {limit} files are shown; file not found: {name}",
   // List files.
   "Unsupported list format",
   "Cannot open the list: the file is larger than 16 MB",
@@ -85,7 +57,11 @@ export const NOTICES = [
 
 export type Notice = (typeof NOTICES)[number];
 /** Positional (`{}`) or named (`{name}`) arguments of a notice. */
-export type NoticeArgs = (string | number)[] | Record<string, string | number>;
+export type NoticeArgs = TemplateArgs;
+/** What `Queue.notice` shows: a template of `NOTICES` (with `NoticeArgs`), or a text value. */
+export type NoticeText = Notice | Text | TextList;
+/** The text values of `plugin.i18n` (passed in, so the list logic stays testable). */
+export type Texts = Pick<I18n, "text" | "list">;
 
 /**
  * Why a folder or list file could not be read: one of the fixed reasons
@@ -98,3 +74,21 @@ export type ReadFailure =
 /** At most `max` characters of a name shown in a notice or confirmation (both are 1–200 characters). */
 export const fitName = (name: string, max = 120) =>
   [...name].length > max ? `${[...name].slice(0, max - 1).join("")}…` : name;
+
+/** Why a folder or list file could not be read, as words (a fixed reason), else the system's message. */
+export function failureText({ text }: Texts, failure: ReadFailure, max = 120): Text | string {
+  switch (failure.reason) {
+    case "permission":
+      return text("access to this location is not allowed (System Settings ▸ Privacy & Security ▸ Files & Folders)");
+    case "access":
+      return text("no permission to read");
+    case "missing":
+      return text("the folder does not exist");
+    case "not-folder":
+      return text("not a folder");
+    case "large":
+      return text("the file is larger than 16 MB");
+    case "message":
+      return fitName(failure.message, max);
+  }
+}

@@ -1,7 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename } from "node:path";
-import type { Plugin, PluginError, Stream, StreamStartError } from "@vestra-player/sdk";
-import { NesCore } from "./core.ts";
+import type { Plugin, PluginError, Stream, StreamStartError, Text, TextError } from "@vestra-player/sdk";
+import { type Fail, NesCore } from "./core.ts";
 
 const MAX_ROM = 16 * 1024 * 1024;
 
@@ -29,7 +29,7 @@ export default async function activate(plugin: Plugin) {
     extensions: ["nes"],
     async resolve(path, signal) {
       pending = latest = path;
-      const core = new NesCore(await readRom(path, signal));
+      const core = new NesCore(await readRom(path, signal, plugin.i18n.error), plugin.i18n.error);
       return {
         kind: "stream",
         width: 256,
@@ -42,8 +42,8 @@ export default async function activate(plugin: Plugin) {
           next.onStop((error) => {
             if (stream !== next) return; // not when this plugin stops it, nor after a newer ROM started
             stream = undefined;
-            // The stream failed: the player's reason.
-            if (error) return void (status = stopText(error.message));
+            // The stream failed: the player's reason (or this plugin's, for a frame failure).
+            if (error) return void (status = stopText(error));
             // Replaced or closed: the player's state (read by the SDK) says which.
             const state = plugin.player.state;
             if (state.phase === "empty") status = { state: "stopped" };
@@ -112,34 +112,33 @@ export default async function activate(plugin: Plugin) {
   window.on("stop", stop);
   plugin.onError((error) => (status = failureText(error)));
   plugin.onDispose(() => opening?.abort());
-  // Emulator ▶ (domain 601–619, round allocation table): open, stop, then the window.
+  // Emulator ▸ (domain 601–619, round allocation table): open, stop, then the window.
   plugin.commands.add({ id: "nes.open", path: ["Emulator", "Open NES ROM…"], order: 601, run: openRom });
   plugin.commands.add({ id: "nes.stop", path: ["Emulator", "Stop NES"], order: 602, run: stop });
   plugin.commands.add({ id: "nes.window", path: ["Emulator", "NES Tools…"], order: 603, run: () => window.show() });
 }
 
 /** The ROM's bytes; file system failures in the plugin's words. */
-async function readRom(path: string, signal: AbortSignal) {
-  // i18n: needs R2-nes-1 (a resolver's error is shown by the player as it is, untranslated)
-  const tooLarge = () => new Error("The ROM file is larger than the 16 MiB limit.");
+async function readRom(path: string, signal: AbortSignal, error: Fail) {
+  const tooLarge = () => error("The ROM file is larger than the 16 MiB limit.");
   try {
     if ((await stat(path)).size > MAX_ROM) throw tooLarge();
     const bytes = await readFile(path, { signal });
     if (bytes.byteLength > MAX_ROM) throw tooLarge();
     return bytes;
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    // i18n: needs R2-nes-1
-    if (code === "ENOENT") throw new Error("The ROM file was not found.");
-    if (code === "EACCES" || code === "EPERM") throw new Error("No permission to read the ROM file.");
-    if (code === "EISDIR") throw new Error("This is a folder, not a ROM file.");
-    throw error; // the size limit, or the open was cancelled (AbortError)
+  } catch (failure) {
+    const code = (failure as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") throw error("The ROM file was not found.");
+    if (code === "EACCES" || code === "EPERM") throw error("No permission to read the ROM file.");
+    if (code === "EISDIR") throw error("This is a folder, not a ROM file.");
+    throw failure; // the size limit, or the open was cancelled (AbortError)
   }
 }
 
 /**
  * The window's status line, worded in nes.slint. `detail` is a reason in the
- * player's (or the SDK's) words, shown in one line.
+ * player's (or the SDK's) words, shown in one line, or this plugin's own
+ * (a text the player translates).
  */
 type Status = {
   state:
@@ -156,7 +155,7 @@ type Status = {
     | "activationTimeout"
     | "device";
   rom?: string;
-  detail?: string;
+  detail?: string | Text;
 };
 
 /** Status text is one line (UI-TOOL-05). */
@@ -165,9 +164,13 @@ const oneLine = (text: string) => {
   return flat.length > 160 ? `${flat.slice(0, 159)}…` : flat;
 };
 
-/** The running game failed: the player's (or SDK's) own reason. */
-function stopText(reason: string | null | undefined): Status {
-  return reason == null ? { state: "ended" } : { state: "halted", detail: oneLine(reason) };
+/** Why something failed: this plugin's own words (`plugin.i18n.error`), else the error's message in one line. */
+const reasonOf = (error: unknown): string | Text =>
+  (error as Partial<TextError>)?.text ?? oneLine(error instanceof Error ? error.message : String(error));
+
+/** The running game failed: the player's (or SDK's, or this plugin's) own reason. */
+function stopText(error: PluginError | null): Status {
+  return error == null ? { state: "ended" } : { state: "halted", detail: reasonOf(error) };
 }
 
 /** Start-up failures the SDK words generically get the plugin's own words. */
@@ -180,5 +183,5 @@ function failureText(error: unknown): Status {
   const { code } = error as PluginError;
   if (code === "timeout") return { state: timeouts[(error as StreamStartError).stage] ?? "timeout" };
   if (code === "device") return { state: "device" };
-  return { state: "error", detail: oneLine(error instanceof Error ? error.message : String(error)) };
+  return { state: "error", detail: reasonOf(error) };
 }

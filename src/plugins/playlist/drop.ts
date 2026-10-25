@@ -2,9 +2,8 @@ import { readFile, stat } from "node:fs/promises";
 import { basename, dirname } from "node:path";
 import { decodeList, LIST_ENTRY_LIMIT, LIST_SIZE_LIMIT, parseList } from "./listfile.ts";
 import { AUDIO, extensionOf, folderError, isMedia, isPackage, LIST_FILES, scanFolder, VIDEO } from "./media.ts";
-import type { Notice, NoticeArgs, ReadFailure } from "./notices.ts";
-import { fitName } from "./notices.ts";
-import type { Entry, Problems } from "./queue.ts";
+import type { NoticeText, ReadFailure, Texts } from "./notices.ts";
+import { type Entry, type Problems, problemClauses } from "./queue.ts";
 
 /**
  * A15: what playlist takes from a drop on the video area (`drops.provide`):
@@ -192,30 +191,8 @@ export const dropProblems = (expanded: Expanded): Problems => ({
   failed: expanded.failed,
 });
 
-/** The notice when a drop brought nothing to add: its first problem. */
-export function nothingToAdd(expanded: Expanded): [Notice, NoticeArgs?] {
-  if (expanded.skipped) return ["Nothing to add: unsupported items skipped: {count}", { count: expanded.skipped }];
-  if (expanded.unreadable)
-    return ["Nothing to add: subfolders that could not be read: {count}", { count: expanded.unreadable }];
-  const failed = expanded.failed[0];
-  if (!failed) return ["Nothing to add"];
-  const name = fitName(failed.name, 60);
-  const { failure } = failed;
-  switch (failure.reason) {
-    case "permission":
-      return [
-        "Nothing to add: cannot read {name}: access to this location is not allowed (System Settings ▸ Privacy & Security ▸ Files & Folders)",
-        { name },
-      ];
-    case "access":
-      return ["Nothing to add: cannot read {name}: no permission to read", { name }];
-    case "missing":
-      return ["Nothing to add: cannot read {name}: the folder does not exist", { name }];
-    case "not-folder":
-      return ["Nothing to add: cannot read {name}: not a folder", { name }];
-    case "large":
-      return ["Nothing to add: cannot read {name}: the file is larger than 16 MB", { name }];
-    case "message":
-      return ["Nothing to add: cannot read {name}: {message}", { name, message: fitName(failure.message, 60) }];
-  }
+/** The notice when a drop brought nothing to add: every problem, as after adding. */
+export function nothingToAdd(texts: Texts, expanded: Expanded): NoticeText {
+  const clauses = problemClauses(texts, dropProblems(expanded));
+  return clauses.length ? texts.text("Nothing to add: {}", [texts.list(clauses, "clauses")]) : "Nothing to add";
 }

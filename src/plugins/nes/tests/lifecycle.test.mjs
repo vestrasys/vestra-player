@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { TestHost } from '@vestra-player/sdk/testing';
+import { NesCore } from '../core.ts';
 import { roms, running, start, statusText, until } from './harness.mjs';
 
 /** The plugin's stream is the player's source, under the path that was opened. */
@@ -82,9 +83,10 @@ test('in Simplified Chinese the menus, the picker and the window read as before 
     assert.equal(host.translate(title), '打开 NES ROM');
     await host.press('F4');
     await until(() => status() === '已停止。', 'stopped by F4');
-    // The resolver's own reasons are English until the player translates them (R2-nes-1).
+    // The resolver's own reasons are translated by the player: the failure and the window.
     host.openElsewhere(files.missing);
-    await until(() => status() === '错误：The ROM file was not found.', 'missing ROM');
+    await until(() => status() === '错误：找不到 ROM 文件。', 'missing ROM');
+    assert.deepEqual(host.source.terminalReason, { failed: '找不到 ROM 文件。' });
     assert.equal(window().props.running, false);
   } finally {
     await stop();
@@ -244,14 +246,18 @@ for (const retire of [true, false]) {
 }
 
 for (const retire of [true, false]) {
-  test(`a bad ROM fails the open with the plugin wording, in the player and the window (${mode(retire)})`, async () => {
+  // Simplified Chinese reads as before the migration; English is the source.
+  const zh = retire;
+  test(`a bad ROM fails the open with the plugin wording, in the player and the window (${mode(retire)}, ${zh ? 'zh-Hans' : 'en'})`, async () => {
     const files = await roms();
-    const { host, stop, window, status } = await start(undefined, undefined, { retire });
+    const { host, stop, window, status } = await start(undefined, undefined, { retire, ...(zh ? { locale: 'zh-Hans' } : {}) });
+    const words = (en, cn) => (zh ? cn : en);
+    const error = message => (zh ? `错误：${message}` : `Error: ${message}`);
     const cases = [
-      [files.bad, 'This is not an NES ROM in iNES format.'],
-      [files.truncated, 'The ROM file is incomplete: shorter than its header says.'],
-      [files.large, 'The ROM file is larger than the 16 MiB limit.'],
-      [files.missing, 'The ROM file was not found.'],
+      [files.bad, words('This is not an NES ROM in iNES format.', '这不是 iNES 格式的 NES ROM 文件。')],
+      [files.truncated, words('The ROM file is incomplete: shorter than its header says.', 'ROM 文件不完整：比文件头声明的短。')],
+      [files.large, words('The ROM file is larger than the 16 MiB limit.', 'ROM 文件超过 16 MiB 上限。')],
+      [files.missing, words('The ROM file was not found.', '找不到 ROM 文件。')],
     ];
     try {
       host.openElsewhere(files.blue);
@@ -261,7 +267,7 @@ for (const retire of [true, false]) {
         await until(() => host.source.phase === 'error', `error for ${path}`);
         assert.equal(host.source.source, path);
         assert.deepEqual(host.source.terminalReason, { failed: message }, 'the player shows the plugin text, unprefixed');
-        await until(() => status() === `Error: ${message}`, `status for ${path}`);
+        await until(() => status() === error(message), `status for ${path}`);
         await until(() => window().props.running === false, 'running false'); // props are written one by one
       }
       assert.equal(host.producers.size, 1, 'a bad ROM never prepares a stream');
@@ -269,7 +275,7 @@ for (const retire of [true, false]) {
 
       host.dialogAnswers.push([files.bad]); // the menu entry: the same failure
       await host.command('nes.open').run();
-      await until(() => host.source.phase === 'error' && status() === 'Error: This is not an NES ROM in iNES format.', 'menu');
+      await until(() => host.source.phase === 'error' && status() === error(cases[0][1]), 'menu');
     } finally {
       await stop();
       await files.remove();
@@ -391,6 +397,25 @@ test('another plugin holding .nes: activation goes on, the menu still opens file
     assert.equal(host.producers.size, 0);
     await until(() => window().props.running === false, 'running false'); // props are written one by one
   } finally {
+    await stop();
+    await files.remove();
+  }
+});
+
+test('a running game whose frame fails shows the plugin reason in the window, translated', async () => {
+  const files = await roms();
+  const { host, stop, window, status } = await start(undefined, undefined, { locale: 'zh-Hans' });
+  const frame = NesCore.prototype.frame;
+  try {
+    host.openElsewhere(files.blue);
+    await until(() => window().props.running === true, 'ROM');
+    NesCore.prototype.frame = function () {
+      throw this.error('The emulator produced invalid audio data.');
+    };
+    await until(() => status() === '模拟器已停止：模拟器音频数据无效。', 'halted');
+    assert.equal(window().props.running, false);
+  } finally {
+    NesCore.prototype.frame = frame;
     await stop();
     await files.remove();
   }
