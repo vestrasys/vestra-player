@@ -156,6 +156,114 @@ pub fn own_default_models(
     Ok(())
 }
 
+/// Write `value` to a property of the instance (or of one of its globals). A
+/// refusal names the property and, as far as the current value shows the
+/// declared type, what does not match (`banner: banner.n is not a field of
+/// the declared struct (args, code)`) instead of Slint's bare "wrong type".
+pub fn set(
+    instance: &slint_interpreter::ComponentInstance,
+    global: Option<&str>,
+    name: &str,
+    value: Value,
+) -> Result<()> {
+    let shown = value.clone();
+    let result = match global {
+        Some(global) => instance.set_global_property(global, name, value),
+        None => instance.set_property(name, value),
+    };
+    result.map_err(|error| {
+        let current = match global {
+            Some(global) => instance.get_global_property(global, name).ok(),
+            None => instance.get_property(name).ok(),
+        };
+        anyhow::anyhow!(refusal(&error, name, current.as_ref(), &shown))
+    })
+}
+
+/// Slint's refusal of `next` for property `name` (now `current`), in words.
+pub fn refusal(
+    error: &slint_interpreter::SetPropertyError,
+    name: &str,
+    current: Option<&Value>,
+    next: &Value,
+) -> String {
+    use slint_interpreter::SetPropertyError as E;
+    match error {
+        E::NoSuchProperty => format!("{name}: no such property"),
+        E::AccessDenied => format!("{name}: not writable (an out property)"),
+        _ => {
+            let detail = current
+                .and_then(|current| mismatch(name, current, next))
+                .unwrap_or_else(|| match current {
+                    Some(current) => format!(
+                        "{name} is {} that does not match the declared {} type",
+                        kind(next),
+                        kind(current)
+                    ),
+                    None => format!("{name} is {}", kind(next)),
+                });
+            format!("{name}: wrong type: {detail}")
+        }
+    }
+}
+
+fn kind(value: &Value) -> &'static str {
+    match value {
+        Value::Void => "null",
+        Value::Number(_) => "a number",
+        Value::String(_) => "a string",
+        Value::Bool(_) => "a bool",
+        Value::Image(_) => "an image",
+        Value::Model(_) => "an array",
+        Value::Struct(_) => "a struct",
+        Value::Brush(_) => "a brush",
+        Value::EnumerationValue(..) => "an enum value",
+        _ => "a value",
+    }
+}
+
+/// The first place where `next` differs in shape from `current` (a value of
+/// the declared type: its default or last value). An array whose current
+/// value has no rows does not show its element type, so its rows are not
+/// compared.
+fn mismatch(path: &str, current: &Value, next: &Value) -> Option<String> {
+    match (current, next) {
+        (Value::Struct(declared), Value::Struct(given)) => {
+            let mut fields: Vec<_> = given.iter().collect();
+            fields.sort_by_key(|(name, _)| *name);
+            fields.into_iter().find_map(|(field, value)| {
+                let path = format!("{path}.{field}");
+                match declared.get_field(field) {
+                    Some(declared) => mismatch(&path, declared, value),
+                    None => {
+                        let mut names: Vec<_> = declared.iter().map(|(name, _)| name).collect();
+                        names.sort_unstable();
+                        Some(format!(
+                            "{path} is not a field of the declared struct ({})",
+                            names.join(", ")
+                        ))
+                    }
+                }
+            })
+        }
+        (Value::Model(declared), Value::Model(given)) => {
+            let sample = declared.row_data(0)?;
+            given
+                .iter()
+                .enumerate()
+                .find_map(|(index, row)| mismatch(&format!("{path}[{index}]"), &sample, &row))
+        }
+        (declared, given) if std::mem::discriminant(declared) == std::mem::discriminant(given) => {
+            None
+        }
+        (declared, given) => Some(format!(
+            "{path} is {} where the declaration has {}",
+            kind(given),
+            kind(declared)
+        )),
+    }
+}
+
 /// Reconcile an actual live property before replacing it. Bridge-created models
 /// with stable length update only changed rows, preserving focused repeater items.
 /// False means the caller must install the new value (including structural change).

@@ -12,14 +12,15 @@ For the design and trade-offs see [ci-research.md](ci-research.md) §10.1–10.5
 | `.github/workflows/nightly.yml` | Daily at 01:17 UTC and manual: checks RustSec advisories every day; builds unsigned packages for both systems only if main had non-docs changes in the last 24 hours (using the cargo cache; packages are not published). Does not run build-test again when main.yml already passed on the tip (`main-green.sh`); otherwise runs it first |
 | `.github/workflows/release.yml` | Tag `v*` and manual (`dry_run`, on by default): checks the tag against the version in `src/host/Cargo.toml`, the release notes and the dependency pins; skips static and build-test when main.yml already passed on this commit (or on an ancestor that differs from it only in docs), otherwise runs the same checks (without cache; `checks` forces them on a manual run); packaging never uses the cache and always builds from scratch; unsigned installers for both systems, `SHA256SUMS`; on a tag, creates a draft release in this repository. Signing is a TODO job (`environment: release`). See "Packaging" below and [doc/releases/README.md](../releases/README.md) |
 | `.github/workflows/deps.yml` | Manual only: builds and pins the native dependencies (libmpv, FFmpeg) and publishes them to the pre-release `deps-<date>` in this repository. See "Packaging" below |
-| `_static.yml` | Reusable: all static checks on ubuntu; the gate for Windows/macOS |
-| `_build-test.yml` | Reusable (`os`): clippy and test for the whole `src/host` workspace; Windows also runs rustdoc |
+| `_static.yml` | Reusable: all static checks on ubuntu; the gate for Windows/macOS. The plugin tests also record the property values the plugins send to their Slint views (artifact `ui-record`, output `ui_record`; see "Recorded plugin props" below) |
+| `_build-test.yml` | Reusable (`os`): clippy and test for the whole `src/host` workspace; Windows also runs rustdoc. `ui-record` also checks the recorded plugin props; `ui-only` runs only that check |
 | `_package.yml` | Reusable (`os`, `artifact`): release build → `src/packaging/bundle-*.mjs` (including the license check) → upload installers → headless smoke test |
 | `_audit.yml` | Reusable: `cargo deny check advisories` |
-| `.github/actions/setup-rust` | Installs the toolchain from `rust-toolchain.toml`; `Swatinem/rust-cache`, saved only on main |
+| `.github/actions/setup-rust` | Installs the toolchain from `rust-toolchain.toml`; `Swatinem/rust-cache`, saved only on main (and not by the `ui-only` job, which builds only part of the workspace) |
 | `.github/actions/setup-node` | Node 26 + npm cache; `npm ci` in `src/` and in each plugin with a lockfile (nes, workshop) |
 | `.github/actions/setup-libmpv` | Uses the job token to download the dependency packages from this repository's `deps-*` release as listed in `src/packaging/deps.json`, verifies SHA-256, caches, extracts. Sets `MPV_LIBRARY_DIR` (read by rsmpv-sys's build.rs) and `VESTRA_DEPS_DIR` (read by the packaging scripts). On macOS also sets the rpath (test programs use it to find `@rpath/libmpv.2.dylib`); on Windows adds the DLL directory to PATH |
 | `.github/scripts/plan.sh` | The plan of ci.yml and main.yml: decides what to run from the changed paths (see below) |
+| `.github/scripts/ui-record-paths.mjs` | Makes the plugin paths in the recorded props relative to the checkout (ts job, before the upload) and absolute again in the checking job's checkout |
 | `.github/scripts/main-green.sh` | release.yml, nightly.yml: whether main.yml has already passed on this commit. First waits for any unfinished main.yml run on this commit (release up to 30 minutes, nightly 20 minutes, both waiting on Linux), then looks at the most recent green main.yml: if it is this commit, or an ancestor with only `doc/` and `*.md` changes in between, the commit counts as checked |
 | `rust-toolchain.toml`, `src/host/deny.toml`, `_typos.toml`, `.github/zizmor.yml` | Tool configuration |
 | `.gitattributes` | LF for all checkouts (Windows converts to CRLF by default, which makes tests that compare source text fail) |
@@ -37,11 +38,14 @@ plan [ubuntu]  changed paths → docs_only, host, lock, run_windows, run_macos
 │    │        cargo deny (licenses bans sources) · cargo shear · unsafe-policy
 │    └─ ts:   npm run check · format:check · boundaries · portability --skip-host
 │             licenses · test:sdk · plugins:build · plugin -- test <plugins> · sdk:sync-slint
+│             (plugin tests with VESTRA_UI_RECORD → artifact ui-record)
 │             git working tree unchanged
 ├─ audit [ubuntu]  (ci.yml only; lock: Cargo.lock / deny.toml changed)  non-blocking, failure only gives a warning
 │
 ├─ windows [windows-2022, 2x]  needs static, if run_windows
-│    clippy -D warnings · cargo test --workspace · cargo doc -D warnings
+│    clippy -D warnings · cargo test --workspace · recorded plugin props (if ui_record) · cargo doc -D warnings
+├─ ui-props [windows-2022, 2x]  needs static, if ui_record and ui_props and not run_windows (only plugins changed)
+│    recorded plugin props only (the host test program; no clippy, workspace tests, rustdoc or npm)
 ├─ macos   [macos-15, 10x]     needs static, if run_macos
 │    clippy -D warnings · cargo test --workspace
 │
@@ -56,7 +60,8 @@ pull_request{opened, reopened, ready_for_review, labeled ci:macos}, non-draft, h
 - `host` = changes to `src/host/`, `src/runtime/`, `src/package*.json`, `rust-toolchain.toml`, `.gitattributes` or `.github/` (host tests start the Node plugin runner). The `paths` of ci-macos.yml match this. Changes only to `src/plugins/` do not count as host: plugin tests are in the static ts job.
 - `run_windows` = `host` or `full`. `run_macos` = `full`, or `host` on main. Branch pushes do not run macOS: all branches are developed on a Mac, and `npm run ci:local` already runs macOS locally (including the GPU tests); Windows cannot run locally, so every host change on a branch runs it.
 - Changes only to `doc/` or `*.md`: only plan and ci-ok run (main too).
-- `plugins` (which plugins' tests the ts job runs): `all` on a full run, or when any path outside `doc/`, `*.md`, `src/host/` and `src/plugins/<name>/` changed (the SDK version, `src/scripts/`, `.github/`, ...); otherwise the changed plugin directories (those with a `manifest.json`), and `none` when there are none. A plugin can only import its own files and the SDK (`npm run boundaries`), so changes to other plugins cannot affect it. When release calls `_static` it does not pass this, and the default is `all`. The tests of the 18 plugins take about 220 seconds in total; workshop alone takes 78 seconds.
+- `plugins` (which plugins' tests the ts job runs): `all` on a full run, or when any path outside `doc/`, `*.md`, `src/host/` and `src/plugins/<name>/` changed (the SDK version, `src/scripts/`, `.github/`, ...); otherwise the changed plugin directories (those with a `manifest.json`), and `none` when there are none; a change to the host's Slint or value conversion also gives `all` (see "Recorded plugin props"). A plugin can only import its own files and the SDK (`npm run boundaries`), so changes to other plugins cannot affect it. When release calls `_static` it does not pass this, and the default is `all`. The tests of the 18 plugins take about 220 seconds in total; workshop alone takes 78 seconds.
+- `ui_props` = some plugin's tests run (`plugins` is not `none`); on main it becomes false when a branch run on the same tree passed `windows / windows` or `ui-props / windows` (see below).
 - **main reuses branch results**: when Windows / macOS needs to run on main, plan.sh first looks in the last 50 runs of ci.yml and ci-macos.yml for one whose `head_commit.tree_id` equals HEAD's tree and whose `windows / windows` (or `macos / macos`) job succeeded; if one exists, that system does not run again on main, and the log links to that run. When a PR that already contains the latest main is squash-merged, the main commit and the PR head have the same tree, so the inputs are identical. ci-macos.yml tests the PR's merge commit: when the head contains the base, its tree is the head's tree, and only in that case does main get the same tree as the head. **Rebase the PR onto the latest main before merging**, and main will mostly not compile again. static is not reused (Linux, cheap; the plugin test scope is computed from main's own previous green run).
 - Each push has only one run (previously a branch with a PR ran once for the push and once for pull_request, and the PR run also ran macOS). The concurrency group of ci.yml is `ci-<ref>`; a new push cancels the old run.
 - main.yml does not cancel a running main run (it has to write the cache).
@@ -72,6 +77,17 @@ Every item of §6.1 is in CI, plus typos, cargo-deny, cargo-shear, unsafe-policy
 - `cargo test` adds `--no-fail-fast`, so the remaining test programs still run after one fails.
 - Tests that need a GPU (the two OpenGL tests in `unsafe/render`) are marked `#[ignore]`: the macOS VMs in CI cannot create an OpenGL 4.1 context. `ci:local` runs them on the local machine with `--include-ignored`.
 - `cargo doc` runs only on Windows.
+- `ci:local` runs the plugin tests with `VESTRA_UI_RECORD` and the host's ignored test `recorded_plugin_props_match_their_slint` with `--include-ignored`; CI does the same across two runners (see the next section).
+
+## Recorded plugin props
+
+The SDK's test host does not know the Slint declarations, so a value Slint refuses (a struct field the struct does not declare, a number where a string is declared) passes every plugin test and fails only in the player ("wrong type"; 0.5.0: the AI window did not open). The check needs the host (the Slint interpreter and the player's own value conversion), which builds only on Windows and macOS, while the plugin tests run on Linux:
+
+1. ts job (`_static.yml`, Linux): `plugin -- test <plugins>` runs with `VESTRA_UI_RECORD`, so `src/scripts/ui-record.mjs` writes every property value sent to a window, panel or settings page as JSON lines. `ui-record-paths.mjs relative` makes the plugin paths relative to the checkout, and the directory is uploaded as the artifact `ui-record` (1 day; about 6 MB uncompressed for all 18 plugins, 3,900 values). Output `ui_record` is true when anything was recorded.
+2. Windows (`_build-test.yml` with `ui-record`): after `cargo test --workspace` (the test program is already built), downloads the artifact, `ui-record-paths.mjs absolute`, then `cargo test --bin vestra-host -- --ignored --exact ui_types::tests::recorded_plugin_props_match_their_slint`. It runs even when the tests failed.
+3. When Windows does not run (only plugins changed), the separate `ui-props` job (`_build-test.yml` with `ui-only`) builds only the host's test program and runs that test. macOS is not used for this (10x, and it does not run on branch pushes).
+
+**Scope**: the recording covers the plugins whose tests ran (`plugins`). A change to the host's Slint library (`src/host/ui/`, the `@vestra/*` imports), its value conversion (`src/host/src/{ui,ui_values,ui_types,ui_image,ui_markdown*,composition}.rs`, `src/host/src/i18n/`) or `src/host/Cargo.lock` (the Slint version) sets `plugins` to `all`, so every plugin is tested and recorded. Release passes `ui-record` to its Windows build-test (to macOS when only macOS runs); ci-macos.yml and nightly do not run the plugin tests and do not check.
 
 ## Unsafe rule
 
@@ -159,7 +175,8 @@ Billing multipliers: Linux 1, Windows 2, macOS 10; each job is rounded up to who
 | --- | --- | --- | --- |
 | windows build-test | 3.8–4.8 (restore 45 s, npm 25 s, clippy 30–45 s, test 40–85 s) | 8.7 (clippy 3.8, test 3.8) | 8–10 / 18 |
 | macos build-test | 1.1–1.2 (restore 19 s, clippy 10 s, test 23 s) | 1.7 (clippy 35 s, test 41 s) | 20 / 20 (occasionally 2.2 → 30) |
-| ts (static) | 4.5–5.5, of which plugin tests 215–220 s | — | 5–6 |
+| ts (static) | 4.5–5.5, of which plugin tests 215–220 s; recording and upload add a few seconds | — | 5–6 |
+| ui-props (Windows, only plugins changed) | not measured yet; estimated 3: restore 45 s, libmpv, compile `vestra-host` tests (locally 46 s on arm64), the check (locally 13 s) | — | about 6 |
 | package windows | — | 21.0: `cargo build --release` 11.0, `cargo about` 1.3, 7z `-mx=9` 3.6, Inno Setup 1.9, smoke 1.1 | 42 |
 | package macos | — | 4.4: release build 1.8, packaging 1.7, smoke 0.4 | 50 |
 
@@ -192,11 +209,11 @@ Before that (2026-10-22 08:40 to 10-24 12:50, 136 runs) it was about 2470, of wh
 | Scenario | Billed minutes |
 | --- | --- |
 | Branch push, docs only | 2 |
-| Branch push, one plugin only | 4–6 (workshop 6) |
-| Branch push, host changed (no plugin changes) | 13–15 (plan 1, lint 1, ts 2, Windows 8–10, ci-ok 1) |
-| Branch push, SDK version or `.github/` changed (all plugins + Windows) | 19 |
+| Branch push, one plugin only | 10–12 (workshop 12): 4–6 plus `ui-props` about 6 (none when the plugin's tests record nothing) |
+| Branch push, host changed (no plugin changes) | 13–15 (plan 1, lint 1, ts 2, Windows 8–10, ci-ok 1); a change to the host's Slint or value conversion tests all plugins: ts 5–6, Windows +about 1 for the check, 17–20 |
+| Branch push, SDK version or `.github/` changed (all plugins + Windows, with the recorded props check) | 19–20 |
 | PR opened (host changed) | + macOS 20 |
-| main push, docs only / plugins only | 2 / 4–6 |
+| main push, docs only / plugins only | 2 / 4–6 when the branch already checked the same tree, otherwise 10–12 |
 | main push, host changed, PR rebased before merging, Windows and macOS both passed on the branch | 5 |
 | main push, host changed, no reusable results | 33–35 |
 | tag release (main already passed) | about 98 |

@@ -75,6 +75,8 @@ mod ui_fonts;
 mod ui_image;
 mod ui_markdown;
 mod ui_state;
+#[cfg(test)]
+mod ui_types;
 mod ui_values;
 mod video_click;
 mod video_render;
@@ -4318,8 +4320,7 @@ impl Host {
                             .get_property(name)
                             .map_err(|e| RpcError::new("ui", e.to_string()))?;
                         if !ui_values::reconcile(&current, &next)? {
-                            view.instance
-                                .set_property(name, next)
+                            ui_values::set(&view.instance, None, name, next)
                                 .map_err(|e| RpcError::new("ui", e.to_string()))?;
                         }
                     }

@@ -103,6 +103,7 @@ jobs:
       os: windows
       doc: true
       cache: false
+      ui-record: ${{ needs.static.outputs.ui_record == 'true' }}
 
   macos:
     needs: static
@@ -113,6 +114,8 @@ jobs:
     with:
       os: macos
       cache: false
+      # Windows checks the recorded plugin props, unless only macOS runs.
+      ui-record: ${{ needs.static.outputs.ui_record == 'true' && inputs.platforms == 'macos' }}
 
   # After build-test, or straight away when main.yml already passed it.
   package-windows:

@@ -518,11 +518,13 @@ export default async function activate(plugin: Plugin) {
     });
   };
 
-  const common = () => {
+  /** What every window shows; ui/settings.slint has no busy state (it declares no `busy`). */
+  const shared = () => {
     const s = subtitles.state;
     const blocked = styleBlocked(s);
-    return { busy, canStyle: !blocked, styleReason: statusText(plugin.i18n, blocked ?? NONE), status: statusText(plugin.i18n, status) };
+    return { canStyle: !blocked, styleReason: statusText(plugin.i18n, blocked ?? NONE), status: statusText(plugin.i18n, status) };
   };
+  const common = () => ({ busy, ...shared() });
   tune.bind(() => {
     const s = subtitles.state, selected = s?.selected ?? null, style = current();
     return {
@@ -545,7 +547,7 @@ export default async function activate(plugin: Plugin) {
     const s = subtitles.state, style = current();
     const ass = /^(ass|ssa)$/.test(s?.selected?.codec ?? "") && style.assOverride !== "force";
     return {
-      ...common(),
+      ...shared(),
       assNote: ass,
       bold: style.bold === true,
       shadowSize: style.shadow ?? 0,

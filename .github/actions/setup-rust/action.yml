@@ -9,6 +9,11 @@ inputs:
   cache-key:
     description: Extra cache key, e.g. the job kind (build-test, package).
     default: ""
+  save:
+    description: >
+      On main, save the cache. A job that builds only part of the workspace
+      (build-test `ui-only`) restores the full one and must not replace it.
+    default: "true"
 runs:
   using: composite
   steps:
@@ -26,4 +31,4 @@ runs:
       with:
         workspaces: src/host -> target
         key: ${{ inputs.cache-key }}
-        save-if: ${{ github.ref == 'refs/heads/main' }}
+        save-if: ${{ github.ref == 'refs/heads/main' && inputs.save == 'true' }}
