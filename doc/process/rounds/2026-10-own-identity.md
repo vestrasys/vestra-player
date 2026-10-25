@@ -1,50 +1,50 @@
-# 2026-10 轮：自己的视觉身份
+# 2026-10 round: our own visual identity
 
-开始于 2026-10-22。**本文是这一轮的唯一进度来源。**
+Started 2026-10-22. **This document is the only progress source for this round.**
 
-## 目标
+## Goal
 
-保持现在的交互手感——按钮和菜单的尺寸、位置、菜单排布全部不变——去掉对参考播放器的模仿痕迹，做出自己的特色；开源前把仓库里的参考痕迹清干净，包括 git 历史。
+Keep the current interaction feel (button and menu sizes, positions and the menu layout all stay the same), remove the traces of imitating the reference player, and create our own character; before open-sourcing, clean every reference trace out of the repository, including the git history.
 
-## 用户裁决（2026-10-22）
+## User rulings (2026-10-22)
 
-1. 删除第二套「经典」主题（模仿痕迹明显）。
-2. 开源前彻底清理，包括改写 git 历史。
-3. 菜单排布不变；交互尺寸不变。
+1. Delete the second "classic" theme (an obvious imitation).
+2. Clean up thoroughly before open-sourcing, including rewriting the git history.
+3. The menu layout stays the same; interaction sizes stay the same.
 
-## 现状（2026-10-22 盘点）
+## Current state (inventory 2026-10-22)
 
-- 图标不是拷贝的 SVG：播放栏等图标是 Slint 里手写的 Path，但造型照着参考播放器画。
-- 主题：`src/host/src/theme.rs` 的 `THEMES` 含第二套主题 id 与 22 个参考配色；preferences 插件的「设置 ▶ 外观 ▶ Vestra / 经典」；SDK 公开类型 `ThemeId` 含第二套主题 id（SDK 的 `types.ts`、`appearance.ts`、`testing.ts`、`wire.ts`、`slint/vestra/*`、`docs/concepts/ui.md`）。
-- 播放器仓库：85 个文件提到参考对象（`src/` 下 51 个，其余在 `doc/`）；`doc/product/research/` 下有从参考播放器安装包提取的字符串、菜单树、资源表（1.6 MB）；9 个提交说明提到参考对象。
-- SDK 仓库（已公开）：9 个文件、1 个提交说明提到参考对象；已发布的 npm 包（1.0.0–1.3.0）里也有，npm 不能撤回内容，只能以后的版本里去掉。
-- 插件仓库：干净。
+- The icons are not copied SVGs: the play bar icons and others are Paths hand-written in Slint, but their shapes were drawn after the reference player.
+- Themes: `THEMES` in `src/host/src/theme.rs` contains the second theme id and 22 reference colours; the preferences plugin's "Settings ▶ Appearance ▶ Vestra / Classic"; the public SDK type `ThemeId` contains the second theme id (the SDK's `types.ts`, `appearance.ts`, `testing.ts`, `wire.ts`, `slint/vestra/*`, `docs/concepts/ui.md`).
+- Player repository: 85 files mention the reference (51 under `src/`, the rest in `doc/`); `doc/product/research/` has strings, menu trees and resource tables extracted from the reference player's installer (1.6 MB); 9 commit messages mention the reference.
+- SDK repository (already public): 9 files and 1 commit message mention the reference; the published npm packages (1.0.0–1.3.0) have it too; npm cannot withdraw content, it can only be removed in later versions.
+- Plugin repository: clean.
 
-## 分工
+## Division of work
 
-- **A 视觉设计**（只出方案，不改产品代码）：2–3 套图标风格 + 配色方案，几何尺寸与现在完全一致，出对比图交用户选。
-- **B 清理**（与 A 并行，不依赖设计决定）：删除第二套主题（宿主、preferences 插件、SDK `ThemeId`，旧设置自动迁到 vestra）；代码和注释去掉参考对象的字样；删除 `doc/product/research/` 下的提取资料；把对标文档改写成我们自己的交互规格；SDK 同步清理并发版。
-- **C 改写 git 历史**（最后做）：A、B 合并之后，用 `git filter-repo` 从历史中删掉提取资料、改写提交说明里的参考对象字样；先做完整镜像备份；强推所有分支和标签；本机各 worktree 重建。SDK 仓库同样处理（公开仓库，已有的 fork/克隆无法收回，npm 旧版本内容无法改）。
+- **A visual design** (proposals only, no product code changes): 2–3 icon styles + colour schemes, geometry exactly the same as now, comparison images for the user to choose from.
+- **B cleanup** (in parallel with A, does not depend on the design decision): delete the second theme (host, preferences plugin, SDK `ThemeId`; old settings migrate to vestra automatically); remove the reference's name from code and comments; delete the extracted material under `doc/product/research/`; rewrite the benchmarking documents as our own interaction specification; clean up the SDK the same way and release it.
+- **C rewrite git history** (last): after A and B are merged, use `git filter-repo` to remove the extracted material from history and rewrite the reference's name in commit messages; make a full mirror backup first; force-push all branches and tags; rebuild every local worktree. Same for the SDK repository (a public repository: existing forks/clones cannot be recalled, and the content of old npm versions cannot be changed).
 
-## 进度
+## Progress
 
-- [x] A 设计方案 → 用户选定（2026-10-24）：**默认 A「V-Line 圆角线 × Aurora 极光」，主题可选 A′「Aurora Light 浅色」**；完全替换旧造型。方案与对比图：`scratchpad/identity/`（proposal.md、compare*.png、icons-v-line.json、palette-aurora*.json）
-- [ ] A 实施（图标、主题配色）+ 真机像素对比验收
-  - [x] 实施：分支 `identity/look`（播放器 0.4.0）；SDK 1.5.0 分支 `identity/look`（`ThemeId` 加 `"vestra-light"`、`@vestra/icons.slint`），PR 待合并发版。说明与最终效果图见 [proposal.md 的「实施」](../../product/identity/proposal.md)
-  - [x] 交互几何核对（解释器读元素位置，改动前后对比）：一致；顺带修好播放列表六个图标按钮点击区为 0×0 的缺陷
-  - [x] SDK 1.5.0 发版后播放器升级依赖（main 2848111）
-  - [x] 协调者真机验收（两套配色）
-- [x] B 清理（播放器、SDK）+ SDK 发版：SDK 1.4.0 已发布；播放器 main e17ec0e，全树 0 处提及
-  - [x] 播放器：分支 `identity/cleanup`（第二套主题删除，旧设置迁到 vestra；代码、注释、文档清理；新文档 `ui-spec.md`、`interaction-spec.md`、`feature-catalog.md`）
-  - [x] SDK：1.4.0（`ThemeId` 只剩 `"vestra"`），PR vestrasys/vestra-player-sdk#10，待合并、打 tag 发版
-  - [x] 发版后播放器升级依赖
-- [x] C 历史改写（播放器、SDK）：2026-10-24 强推完成
-  - [x] 演练（2026-10-24）：镜像备份与 bundle、`git filter-repo` 改写、核对（所有 ref 的全部对象 0 处提及，提交数不变）。脚本在 scratchpad `history/`（`prepare.sh`、`push.sh`、`replacements.txt`）；推送前重跑 `prepare.sh`
-  - [x] 用户确认后强推（2026-10-24）：暂停 Actions 和 SDK 规则集 → 推送 → 恢复 → 重新部署文档站；本机仓库原地切到新历史，旧 worktree、旧分支、旧 SDK 克隆已删，全部对象 0 处提及。改写前的完整备份：`~/vestra-history-backup-20261024/`（bundle + SHA256SUMS）
-  - [x] npm：1.0.0–1.3.0 已撤回（用户操作，2026-10-24），现存 0.0.0-stage、1.4.0、1.5.0、1.5.1
-  - [ ] 文档里引用的旧提交 SHA 未改写（可从备份重跑 filter-repo 得到对照表）；SDK 已合并 PR 的 refs/pull 仍指向旧提交，需要时联系 GitHub Support
-  - 留在 GitHub 上的：SDK 已合并 PR 的 refs/pull 仍指向旧提交，只有 GitHub Support 能清；npm 1.0.0–1.3.0 含提及，72 小时内可 unpublish（窗口 10-24 16:25Z 起陆续关闭），之后只能 deprecate
+- [x] A design proposals → user chose (2026-10-24): **default A "V-Line rounded line × Aurora", optional theme A′ "Aurora Light"**; fully replaces the old shapes. Proposals and comparison images: `scratchpad/identity/` (proposal.md, compare*.png, icons-v-line.json, palette-aurora*.json)
+- [ ] A implementation (icons, theme colours) + pixel comparison acceptance on a real machine
+  - [x] Implementation: branch `identity/look` (player 0.4.0); SDK 1.5.0 branch `identity/look` (`ThemeId` adds `"vestra-light"`, `@vestra/icons.slint`), PR waiting to be merged and released. Notes and final screenshots in ["Implementation" in proposal.md](../../product/identity/proposal.md)
+  - [x] Interaction geometry check (the interpreter reads element positions, compared before and after the change): identical; also fixed the defect where the playlist's six icon buttons had a 0×0 click area
+  - [x] Player dependency upgraded after the SDK 1.5.0 release (main 2848111)
+  - [x] Coordinator acceptance on a real machine (both palettes)
+- [x] B cleanup (player, SDK) + SDK release: SDK 1.4.0 published; player main e17ec0e, 0 mentions in the whole tree
+  - [x] Player: branch `identity/cleanup` (second theme deleted, old settings migrate to vestra; code, comments and documents cleaned up; new documents `ui-spec.md`, `interaction-spec.md`, `feature-catalog.md`)
+  - [x] SDK: 1.4.0 (`ThemeId` has only `"vestra"`), PR vestrasys/vestra-player-sdk#10, waiting to be merged, tagged and released
+  - [x] Player dependency upgraded after the release
+- [x] C history rewrite (player, SDK): force-pushed 2026-10-24
+  - [x] Dry run (2026-10-24): mirror backup and bundle, `git filter-repo` rewrite, verification (0 mentions in all objects of all refs, same number of commits). Scripts in scratchpad `history/` (`prepare.sh`, `push.sh`, `replacements.txt`); rerun `prepare.sh` before pushing
+  - [x] Force-pushed after user confirmation (2026-10-24): pause Actions and the SDK ruleset → push → restore → redeploy the documentation site; local repositories switched to the new history in place; old worktrees, old branches and the old SDK clone deleted; 0 mentions in all objects. Full backup before the rewrite: `~/vestra-history-backup-20261024/` (bundle + SHA256SUMS)
+  - [x] npm: 1.0.0–1.3.0 unpublished (done by the user, 2026-10-24); 0.0.0-stage, 1.4.0, 1.5.0, 1.5.1 remain
+  - [ ] Old commit SHAs cited in documents are not rewritten (a mapping table can be obtained by rerunning filter-repo from the backup); refs/pull of the SDK's merged PRs still point to old commits; contact GitHub Support if needed
+  - What remains on GitHub: refs/pull of the SDK's merged PRs still point to old commits, and only GitHub Support can clear them; npm 1.0.0–1.3.0 contain mentions and can be unpublished within 72 hours (the windows close one by one from 10-24 16:25Z), after that they can only be deprecated
 
-## 记录
+## Record
 
-- 2026-10-22：用户考虑过把 SDK 和插件仓库设为私有（担心公开的 API 暴露架构、被人抢先发布）。评估：要订 Team，还要把插件包改放 Pages、去掉 npm 来源证明和插件包证明、收紧 CI 矩阵；npm 上 1.0.0–1.3.0 已公开，收不回。**用户决定暂不处理私有化**，两个仓库保持公开。
+- 2026-10-22: the user considered making the SDK and plugin repositories private (worried that the public API exposes the architecture and that someone publishes first). Assessment: it would need a Team plan, moving plugin packages to Pages, dropping npm provenance and plugin package attestations, and narrowing the CI matrix; 1.0.0–1.3.0 on npm are already public and cannot be recalled. **The user decided not to make them private for now**; both repositories stay public.

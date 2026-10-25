@@ -1,33 +1,33 @@
-# 发布说明与发版步骤
+# Release notes and release steps
 
-本目录放每个版本的发布说明：`v<版本>.md`，例如 `v0.3.0.md`。`release.yml` 把它原样作为 GitHub release 的正文；**推 tag 时这个文件不存在，release 就失败**（dry run 只给 warning）。
+This directory holds the release notes for each version: `v<version>.md`, for example `v0.3.0.md`. `release.yml` uses the file as-is as the body of the GitHub release; **if the file does not exist when the tag is pushed, the release fails** (a dry run only gives a warning).
 
-安装包发在本仓库自己的 GitHub Release（协调者决定 14）。仓库公开之前只做内部测试版，release 都是草稿，标题注明「unsigned test build」。
+Installers are published on this repository's own GitHub Releases (coordinator decision 14). Until the repository is public there are only internal test builds; every release is a draft and its title says "unsigned test build".
 
-## 发版步骤
+## Release steps
 
-1. **确认依赖固定**：`src/packaging/deps.json` 的 `release` 指向一个存在的 `deps-*` release；要升级 libmpv/FFmpeg 就先跑 `deps.yml` 并提交新的 `deps.json`（[ci.md「打包」](../process/ci.md#打包)）。Node 补丁版本用 `node src/packaging/fetch-node.mjs --pin <版本>` 升级（主版本不变）。
-2. **升版本号**：`src/host/Cargo.toml` 的 `version`（`cargo build` 会同步 `Cargo.lock`）。改过的内置插件也要升各自的版本，否则用户机器上不会更新（`src/scripts/stage-plugins.mjs` 的说明）。
-3. **写发布说明** `doc/releases/v<版本>.md`：面向用户，英文（release 页面面向所有用户）；新功能、修复、已知问题；未签名测试版写上安装方法（见下）。
-4. **dry run**：合并到 main 以后，
+1. **Check that dependencies are pinned**: `release` in `src/packaging/deps.json` points to an existing `deps-*` release; to upgrade libmpv/FFmpeg, run `deps.yml` first and commit the new `deps.json` ([ci.md "Packaging"](../process/ci.md#packaging)). Upgrade the Node patch version with `node src/packaging/fetch-node.mjs --pin <version>` (the major version stays the same).
+2. **Bump the version**: `version` in `src/host/Cargo.toml` (`cargo build` updates `Cargo.lock`). Built-in plugins that changed must bump their own versions too, otherwise they are not updated on users' machines (see the notes in `src/scripts/stage-plugins.mjs`).
+3. **Write the release notes** `doc/releases/v<version>.md`: user-facing, in English (the release page is for all users); new features, fixes, known issues; for unsigned test builds include the installation steps (see below).
+4. **Dry run**: after merging to main,
    ```
    gh workflow run release.yml --repo vestrasys/vestra-player --ref main -f dry_run=true
    ```
-   全套检查、两个系统的安装包、`SHA256SUMS`，不签名、不建 release。只想验证一个系统时加 `-f platforms=windows`（或 `macos`），省掉另一个系统的 build-test 和打包（macOS runner 按 10 倍计费）；打 tag 时总是两个都做。产物在这次运行的 artifacts 里（`vestra-unsigned-macos`、`vestra-unsigned-windows`、`vestra-unsigned-SHA256SUMS`），用 `gh run download <run id>` 下载（只保留 1 天）。按 [packaging-proposal.md](../architecture/packaging-proposal.md) 末尾的清单在真机上试。
-5. **打 tag**：
+   Runs the full checks and builds the installers for both systems and `SHA256SUMS`, without signing and without creating a release. To check only one system, add `-f platforms=windows` (or `macos`); this skips build-test and packaging for the other system (macOS runners are billed at 10x). Tag builds always do both. The outputs are in the run's artifacts (`vestra-unsigned-macos`, `vestra-unsigned-windows`, `vestra-unsigned-SHA256SUMS`); download them with `gh run download <run id>` (kept for 1 day only). Try them on real machines using the checklist at the end of [packaging-proposal.md](../architecture/packaging-proposal.md).
+5. **Tag**:
    ```
-   git tag -a v<版本> -m "Vestra Player <版本>" && git push origin v<版本>
+   git tag -a v<version> -m "Vestra Player <version>" && git push origin v<version>
    ```
-   `release.yml` 核对 tag 与版本、发布说明存在，跑全套检查、打包，`sign-*` 两个 TODO job 要在 `release` environment 里批准，最后建**草稿** release：资产是 `VestraPlayer-<版本>-macos-arm64.dmg`、`…-macos-arm64.app.zip`、`…-windows-x64-setup.exe`、`…-windows-x64-portable.zip` 和 `SHA256SUMS`。
-6. **检查草稿**，确认无误后在 GitHub 上发布（或 `gh release edit v<版本> --draft=false`）。
+   `release.yml` checks that the tag matches the version and that the release notes exist, runs the full checks and packaging; the two TODO jobs `sign-*` must be approved in the `release` environment; finally it creates a **draft** release. The assets are `VestraPlayer-<version>-macos-arm64.dmg`, `…-macos-arm64.app.zip`, `…-windows-x64-setup.exe`, `…-windows-x64-portable.zip` and `SHA256SUMS`.
+6. **Check the draft**, and when it is correct publish it on GitHub (or `gh release edit v<version> --draft=false`).
 
-失败时修好再推一个新的补丁版本 tag；不要移动已经推过的 tag。
+If something fails, fix it and push a tag for a new patch version; do not move a tag that has already been pushed.
 
-## 未签名测试版怎么装
+## Installing an unsigned test build
 
-- macOS（14 以上，arm64；当前依赖包要求 15 以上，见 ci.md）：打开 DMG，把 Vestra Player 拖进「应用程序」。第一次打开会被 Gatekeeper 拦下：到「系统设置 → 隐私与安全性」点「仍要打开」，或者执行 `xattr -dr com.apple.quarantine "/Applications/Vestra Player.app"`。用 `gh run download` / `gh release download` 下载的文件没有隔离属性，不会被拦。
-- Windows 10/11 x64：运行 `…-setup.exe`，SmartScreen 提示时点「更多信息 → 仍要运行」。安装在 `%LOCALAPPDATA%\Programs\Vestra Player`，不需要管理员；卸载时默认保留 `%APPDATA%\Vestra` 里的插件和设置。也可以解压便携 zip 直接运行 `vestra-host.exe`。
+- macOS (14 or later, arm64; the current dependency bundle requires 15 or later, see ci.md): open the DMG and drag Vestra Player into Applications. Gatekeeper blocks the first launch: go to System Settings → Privacy & Security and click "Open Anyway", or run `xattr -dr com.apple.quarantine "/Applications/Vestra Player.app"`. Files downloaded with `gh run download` / `gh release download` have no quarantine attribute and are not blocked.
+- Windows 10/11 x64: run `…-setup.exe`; when SmartScreen warns, click "More info → Run anyway". It installs to `%LOCALAPPDATA%\Programs\Vestra Player` and needs no administrator rights; uninstalling keeps the plugins and settings in `%APPDATA%\Vestra` by default. You can also unzip the portable zip and run `vestra-host.exe` directly.
 
-## 签名（以后）
+## Signing (later)
 
-`release.yml` 的 `sign-macos`、`sign-windows` 现在只是占位。接证书时需要的东西见方案 §8；bundle id 是 `com.vestraplayer.player`，正式签名发布以后不能再改。
+`sign-macos` and `sign-windows` in `release.yml` are placeholders for now. What is needed to add certificates is in §8 of the proposal; the bundle id is `com.vestraplayer.player` and cannot change after the first signed release.

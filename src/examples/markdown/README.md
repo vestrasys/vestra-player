@@ -1,11 +1,11 @@
-# Markdown 示例（examples.markdown）
+# Markdown example (examples.markdown)
 
-核心 Markdown 显示组件的演示（[S4 提案 §5](../../../doc/architecture/store-api-proposal.md)）。
+A demonstration of the core Markdown display component ([S4 proposal §5](../../../doc/architecture/store-api-proposal.md)).
 
-- 菜单：示例 ▶ Markdown 示例…，打开一个窗口显示 `sample.md`。
-- 窗口 `ui/document.slint` 只有一个 `MarkdownView`；`main.ts` 用 `plugin.ui.markdown(text, { base: 包目录 })` 生成属性值。
-- 相对图片按包目录解析（`assets/icon.png`）；`https:` 图片由 SDK 下载到数据目录 `.vestra-cache/markdown/` 后显示；SVG 等不支持的格式显示替代文字；内嵌 HTML 不显示。
-- 链接：`http(s)` 地址用浏览器打开（`system.openUrl`），`#锚点` 只显示屏幕提示。
-- manifest 同时演示显示字段（`name`、`author`、`punchline`、`description`、`tags`、`icon`、`license`）与 `minPlayerVersion`。
+- Menu: 示例 ▶ Markdown 示例… (Examples ▶ Markdown Example…) opens a window that shows `sample.md`.
+- The window `ui/document.slint` has only one `MarkdownView`; `main.ts` builds the property value with `plugin.ui.markdown(text, { base: <package directory> })`.
+- Relative images resolve against the package directory (`assets/icon.png`); `https:` images are downloaded by the SDK to `.vestra-cache/markdown/` in the data directory and then shown; unsupported formats such as SVG show their alt text; inline HTML is not shown.
+- Links: `http(s)` addresses open in the browser (`system.openUrl`); `#anchor` links only show an on-screen message.
+- The manifest also demonstrates the display fields (`name`, `author`, `punchline`, `description`, `tags`, `icon`, `license`) and `minPlayerVersion`.
 
-开发：在 `src/` 下 `npm run plugin -- check|test|build examples/markdown`；运行 `cd host && cargo run --bin vestra-host -- --plugin ../examples/markdown`。
+Development: in `src/`, `npm run plugin -- check|test|build examples/markdown`; run with `cd host && cargo run --bin vestra-host -- --plugin ../examples/markdown`.

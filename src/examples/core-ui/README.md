@@ -1,15 +1,15 @@
-# 示例：核心界面接口（examples.core-ui）
+# Example: core UI APIs (examples.core-ui)
 
-演示 [core-ui-design.md](../../../doc/architecture/core-ui-design.md) 的新接口，不属于产品。右键菜单「示例」子菜单（自成一组，有分隔线）：
+Demonstrates the new APIs from [core-ui-design.md](../../../doc/architecture/core-ui-design.md); not part of the product. The 示例 (Examples) submenu in the right-click menu (a group of its own, with a separator). The menu titles below are the example's actual (Chinese) strings:
 
-| 入口                                     | 演示                                                                                                                                         |
+| Entry                                     | Demonstrates                                                                                                                                         |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| 示例 → 速度 → 0.5/1/2倍                  | `radio` 单选圆点、`order`、`group`；屏幕提示 `osd.show`                                                                                      |
-| 示例 → 音量 +5（Ctrl+Alt+↑，按住重复）   | `bindings`、`repeat: true`                                                                                                                   |
-| Ctrl+Alt+W                               | 不进主菜单的命令（省略 `path`）                                                                                                              |
-| 示例 → 上次速度：N倍                     | 标题会变的菜单项：在子作用域里 `dispose()` 后重新添加（释放即从菜单删除）；速度存进 `plugin.dataDirectory`（先写临时文件再改名），重启后恢复 |
-| 示例 → 下一个 / 上一个（Ctrl+Alt+N / P） | `player.next()`、`can.next`；需要播放列表等提供者                                                                                            |
-| 示例 → 显示侧栏 / 分离侧栏（Ctrl+Alt+D） | `plugin.panels.sidebar`：任何插件读写侧栏、分离为浮动窗口与附着                                                                              |
-| 示例 → 主题控件…                         | `@vestra/theme.slint` 令牌与 `@vestra/widgets.slint` 的 Button、Slider、ToolTipArea                                                          |
+| 示例 → 速度 → 0.5/1/2倍 (Examples → Speed → 0.5/1/2×)                  | `radio` radio dots, `order`, `group`; on-screen message `osd.show`                                                                                      |
+| 示例 → 音量 +5 (Examples → Volume +5) (Ctrl+Alt+↑, repeats while held)   | `bindings`, `repeat: true`                                                                                                                   |
+| Ctrl+Alt+W                               | A command that is not in the main menu (`path` omitted)                                                                                                              |
+| 示例 → 上次速度：N倍 (Examples → Last speed: N×)                     | A menu item whose title changes: `dispose()` it in a child scope and add it again (disposing removes it from the menu); the speed is stored in `plugin.dataDirectory` (written to a temporary file first, then renamed) and restored after a restart |
+| 示例 → 下一个 / 上一个 (Examples → Next / Previous) (Ctrl+Alt+N / P) | `player.next()`, `can.next`; needs a provider such as the playlist                                                                                            |
+| 示例 → 显示侧栏 / 分离侧栏 (Examples → Show Sidebar / Detach Sidebar) (Ctrl+Alt+D) | `plugin.panels.sidebar`: any plugin reads and writes the sidebar, detaches it into a floating window and attaches it again                                                                              |
+| 示例 → 主题控件… (Examples → Theme Widgets…)                         | `@vestra/theme.slint` tokens and Button, Slider, ToolTipArea from `@vestra/widgets.slint`                                                          |
 
-运行：`cargo run --bin vestra-host -- --plugin ../plugins/playlist --plugin ../examples/core-ui`（在 `src/host/` 下）。
+Run: `cargo run --bin vestra-host -- --plugin ../plugins/playlist --plugin ../examples/core-ui` (in `src/host/`).

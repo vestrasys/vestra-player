@@ -1,20 +1,20 @@
-# 基础播放
+# Basic Playback
 
-主窗口的控制栏，以及打开、跳转、速度等播放命令。
+The main window's control bar, and playback commands such as open, seek and speed.
 
-## 功能
+## Features
 
-- **控制栏**：进度条、播放/暂停、停止、后退、前进、打开、静音与音量、播放列表开关；点击当前时间切换已播放/剩余时间。按钮的提示里显示当前的快捷键。
-- **打开**：打开文件、打开链接（可自动填入剪贴板里的链接）、重开当前或最后播放的文件；复制文件名或路径。
-- **跳转**：四档跳转秒数（可在「时间跨度设置…」修改）、上一/下一关键帧、跳到开头、跳转到指定时间。
-- **速度**：0.5、1.5、2 倍和自定义速度。
-- **进度条悬停**：显示指针处的时间或缩略图（缩略图需要 ffmpeg）。
-- **播放时禁止屏保**。
+- **Control bar**: seek bar, play/pause, stop, back, forward, open, mute and volume, playlist toggle; click the current time to switch between elapsed and remaining time. Button tooltips show the current shortcut.
+- **Open**: open a file, open a link (can fill in a link from the clipboard automatically), reopen the current or last played file; copy the file name or path.
+- **Seek**: four seek steps (change them in Seek Steps…), previous/next keyframe, jump to the start, jump to a given time.
+- **Speed**: 0.5×, 1.5×, 2× and a custom speed.
+- **Seek bar hover**: shows the time or a thumbnail at the pointer (thumbnails need ffmpeg).
+- **No screen saver while playing**.
 
-## 入口
+## Where to find it
 
-- 右键菜单：打开文件…（Ctrl+O、F3）、打开 ▸ 打开链接…（Ctrl+U）、重开当前/最后文件（Ctrl+Y）、复制到剪贴板。
-- 右键菜单「播放 ▸ 跳转」：上一/下一关键帧（Ctrl+Shift+←/→）、后退/前进 30 秒（Ctrl+←/→）、60 秒（Shift+←/→）、300 秒（Ctrl+Alt+←/→）、跳到开头（Backspace）、时间跨度设置…
-- 右键菜单「播放」：跳转到…（G）、速度、播放时禁止屏保、进度条悬停显示时间/缩略图。
+- Right-click menu: Open File… (Ctrl+O, F3), Open ▸ Open URL… (Ctrl+U), Reopen Current/Last File (Ctrl+Y), Copy to Clipboard.
+- Right-click menu Playback ▸ Seek: Previous/Next Keyframe (Ctrl+Shift+←/→), Back/Forward 30 s (Ctrl+←/→), 60 s (Shift+←/→), 300 s (Ctrl+Alt+←/→), Jump to Start (Backspace), Seek Steps…
+- Right-click menu Playback: Jump to Time… (G), Speed, Disable Screen Saver While Playing, Show Time / Thumbnail on Seek Bar Hover.
 
-播放/暂停、后退/前进 5 秒、音量、静音等基础动作由播放器提供，停用本插件后仍可用。
+Basic actions such as play/pause, back/forward 5 seconds, volume and mute are provided by the player and keep working when this plugin is turned off.

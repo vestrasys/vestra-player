@@ -1,11 +1,11 @@
-# 示例：面板右键菜单（examples.panel-menu）
+# Example: panel context menu (examples.panel-menu)
 
-侧栏面板「示例列表」，演示：
+A sidebar panel 示例列表 (Example List) that demonstrates:
 
-- 右键条目弹出本插件命令（`panel.showMenu`，单层，`null` 为分隔线），样式同主菜单；
-- 面板获得焦点时 Home / Delete 生效（`focus: "panel"`），焦点在别处时不生效；
-- 两条命令不进主菜单（省略 `path`，`title` 必填），只出现在面板菜单里；
-- 登记为播放序列提供者（`player.provideSequence`）：其它插件的 `player.next()` 在列表里移动选中项；
-- `mount` 的 `title` 是分离后浮动窗口的标题（分离用 core-ui 示例的「分离侧栏」）。
+- right-clicking an entry pops up this plugin's commands (`panel.showMenu`, one level, `null` is a separator), styled like the main menu;
+- Home / Delete work while the panel has focus (`focus: "panel"`), and not when the focus is elsewhere;
+- the two commands are not in the main menu (`path` omitted, `title` required) and appear only in the panel menu;
+- it registers as a play sequence provider (`player.provideSequence`): another plugin's `player.next()` moves the selection in the list;
+- the `title` of `mount` is the title of the floating window after detaching (detach with 分离侧栏 (Detach Sidebar) from the core-ui example).
 
-只占一个侧栏位置，不要与播放列表同时加载。
+It takes the only sidebar slot; do not load it together with the playlist.
