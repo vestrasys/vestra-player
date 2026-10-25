@@ -175,43 +175,43 @@ msgstr "画像を選択…"
 msgid "Restore Default"
 msgstr "デフォルトに戻す"
 
-#: ui/page.slint:91
+#: ui/page.slint:92
 #, x-machine
 msgid "PNG or JPEG, up to 4096×4096 and 16 MB. The image is copied, so the original can be moved."
 msgstr "PNG または JPEG、最大 4096×4096、16 MB。画像はコピーされるため、元のファイルは移動してもかまいません。"
 
-#: ui/page.slint:97
+#: ui/page.slint:98
 #, x-machine
 msgid "Audio only"
 msgstr "オーディオのみ"
 
-#: ui/page.slint:100
+#: ui/page.slint:101
 #, x-machine
 msgid "Show album cover for audio only"
 msgstr "オーディオのみのときアルバムカバーを表示"
 
-#: ui/page.slint:106
+#: ui/page.slint:107
 #, x-machine
 msgid "The cover comes from the picture embedded in the file, or a cover, folder or front image in the same folder; without one the logo is shown as a placeholder."
 msgstr "カバーには、ファイルに埋め込まれた画像、または同じフォルダにある cover、folder、front の画像を使用します。ない場合はロゴを代わりに表示します。"
 
-#: ui/page.slint:117
+#: ui/page.slint:118
 #, x-machine
 msgid "Cover cache unavailable"
 msgstr "カバーのキャッシュを使用できません"
 
-#: ui/page.slint:118
+#: ui/page.slint:119
 #, x-machine
 msgid "Cover cache: empty"
 msgstr "カバーのキャッシュ：空"
 
-#: ui/page.slint:119
+#: ui/page.slint:120
 #, x-machine
 msgid "Cover cache: {n} track, {0}"
 msgid_plural "Cover cache: {n} tracks, {0}"
 msgstr[0] "カバーのキャッシュ：{n} 曲、{0}"
 
-#: ui/page.slint:125
+#: ui/page.slint:126
 #, x-machine
 msgid "Clear Cover Cache"
 msgstr "カバーのキャッシュを消去"

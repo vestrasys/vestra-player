@@ -8,7 +8,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: bookmarks.ts:46 menu.ts:51 ui/marks.slint:56 ui/marks.slint:173
+#: bookmarks.ts:46 menu.ts:51 ui/marks.slint:56 ui/marks.slint:183
 #, x-machine
 msgid "Bookmark {}"
 msgstr "Signet {}"
@@ -33,7 +33,7 @@ msgstr "{} signet sera supprimé. Cette action est irréversible."
 msgid "{} bookmarks will be removed. This can't be undone."
 msgstr "{} signets seront supprimés. Cette action est irréversible."
 
-#: list.ts:223 ui/marks.slint:197
+#: list.ts:223 ui/marks.slint:207
 #, x-machine
 msgid "Clear Bookmarks"
 msgstr "Effacer les signets"
@@ -99,7 +99,7 @@ msgstr "Chapitres et signets"
 msgid "Chapter and Bookmark List…"
 msgstr "Liste des chapitres et signets…"
 
-#: menu.ts:109 ui/marks.slint:195
+#: menu.ts:109 ui/marks.slint:205
 #, x-machine
 msgid "Add Bookmark"
 msgstr "Ajouter un signet"
@@ -109,7 +109,7 @@ msgstr "Ajouter un signet"
 msgid "Can't add bookmarks to this source"
 msgstr "Impossible d'ajouter des signets à cette source"
 
-#: menu.ts:114 menu.ts:125 menu.ts:164 menu.ts:183 menu.ts:237 menu.ts:250 ui/marks.slint:144
+#: menu.ts:114 menu.ts:125 menu.ts:164 menu.ts:183 menu.ts:237 menu.ts:250 ui/marks.slint:154
 #, x-machine
 msgid "No media open"
 msgstr "Aucun média ouvert"
@@ -424,69 +424,69 @@ msgstr "Échec de la boucle A-B : {}"
 msgid "Show Marks on Seek Bar"
 msgstr "Afficher les repères sur la barre de progression"
 
-#: ui/marks.slint:114
-#, x-machine
-msgid "Search by title"
-msgstr "Rechercher par titre"
-
-#: ui/marks.slint:120
-#, x-machine
-msgid "The file has changed; bookmark times may be off"
-msgstr "Le fichier a changé ; les temps des signets peuvent être décalés"
-
-#: ui/marks.slint:144
-#, x-machine
-msgid "No matches"
-msgstr "Aucun résultat"
-
-#: ui/marks.slint:144
-#, x-machine
-msgid "No chapters or bookmarks"
-msgstr "Aucun chapitre ni signet"
-
-#: ui/marks.slint:151
+#: ui/marks.slint:114 ui/marks.slint:161
 #, x-machine
 msgid "Time"
 msgstr "Temps"
 
-#: ui/marks.slint:167
+#: ui/marks.slint:114 ui/marks.slint:177
 #, x-machine
 msgid "Title"
 msgstr "Titre"
 
-#: ui/marks.slint:183
+#: ui/marks.slint:124
+#, x-machine
+msgid "Search by title"
+msgstr "Rechercher par titre"
+
+#: ui/marks.slint:130
+#, x-machine
+msgid "The file has changed; bookmark times may be off"
+msgstr "Le fichier a changé ; les temps des signets peuvent être décalés"
+
+#: ui/marks.slint:154
+#, x-machine
+msgid "No matches"
+msgstr "Aucun résultat"
+
+#: ui/marks.slint:154
+#, x-machine
+msgid "No chapters or bookmarks"
+msgstr "Aucun chapitre ni signet"
+
+#: ui/marks.slint:193
 #, x-machine
 msgid "Title can't be empty"
 msgstr "Le titre ne peut pas être vide"
 
-#: ui/marks.slint:184
+#: ui/marks.slint:194
 #, x-machine
 msgid "Time format is h:mm:ss.d"
 msgstr "Format attendu : h:mm:ss.d"
 
-#: ui/marks.slint:185
+#: ui/marks.slint:195
 #, x-machine
 msgid "Time exceeds the duration ({})"
 msgstr "Le temps dépasse la durée ({})"
 
-#: ui/marks.slint:186
+#: ui/marks.slint:196
 #, x-machine
 msgid "Removed: {}"
 msgstr "Supprimé : {}"
 
-#: ui/marks.slint:187
+#: ui/marks.slint:197
 #, x-machine
 msgid "Can't confirm: {}"
 msgstr "Impossible de confirmer : {}"
 
-#: ui/marks.slint:188
+#: ui/marks.slint:198
 #, x-machine
 msgid "{n} bookmark cleared"
 msgid_plural "{n} bookmarks cleared"
 msgstr[0] "{n} signet effacé"
 msgstr[1] "{n} signets effacés"
 
-#: ui/marks.slint:196
+#: ui/marks.slint:206
 #, x-machine
 msgid "Remove"
 msgstr "Supprimer"

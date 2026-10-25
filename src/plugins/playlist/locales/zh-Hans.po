@@ -165,7 +165,7 @@ msgstr "文件规范路径与已有项重复，已选择已有项"
 msgid "Close the other dialog first"
 msgstr "请先关闭另一个对话框"
 
-#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:57 ui/sidebar.slint:242
+#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:114 ui/sidebar.slint:242
 msgid "Playlist"
 msgstr "播放列表"
 
@@ -381,19 +381,19 @@ msgstr "打开文件夹…"
 msgid "Repeat"
 msgstr "循环"
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 msgid "Off"
 msgstr "不循环"
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 msgid "All"
 msgstr "全部"
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 msgid "One"
 msgstr "单个"
 
-#: main.ts:561 ui/settings.slint:99
+#: main.ts:561 ui/settings.slint:156
 msgid "Shuffle"
 msgstr "随机"
 
@@ -537,7 +537,7 @@ msgstr "第 {} 行：列表已达上限 {} 项"
 msgid "The list is full at {} items"
 msgstr "列表已达上限 {} 项"
 
-#: ui/link.slint:25
+#: ui/link.slint:25 ui/link.slint:34
 msgid "Enter HTTP(S) links; adding only selects, it does not play"
 msgstr "输入 HTTP(S) 链接；添加只选择，不自动播放"
 
@@ -545,67 +545,67 @@ msgstr "输入 HTTP(S) 链接；添加只选择，不自动播放"
 msgid "Add Links to Playlist"
 msgstr "添加链接到播放列表"
 
-#: ui/link.slint:42
+#: ui/link.slint:50
 msgid "Enter the web addresses to add to the playlist below, one per line."
 msgstr "在下方输入要加入播放列表的网址，每行一个。"
 
-#: ui/link.slint:48
+#: ui/link.slint:56
 msgid "Example: {}"
 msgstr "例) {}"
 
-#: ui/link.slint:55 ui/sidebar.slint:466
+#: ui/link.slint:63 ui/sidebar.slint:466
 msgid "Add"
 msgstr "添加"
 
-#: ui/settings.slint:63
-msgid "Open and drop"
-msgstr "打开与拖放"
-
-#: ui/settings.slint:67
+#: ui/settings.slint:105 ui/settings.slint:124
 msgid "When opening a file:"
 msgstr "打开文件时："
 
-#: ui/settings.slint:70
-msgid "Open only that file"
-msgstr "仅打开该文件"
-
-#: ui/settings.slint:70
-msgid "Add similar files"
-msgstr "加入相似文件"
-
-#: ui/settings.slint:70
-msgid "Add all files in the folder"
-msgstr "加入同文件夹全部文件"
-
-#: ui/settings.slint:76
-msgid "Append when opening or dropping; don't clear the list"
-msgstr "打开或拖入时追加，不清空列表"
-
-#: ui/settings.slint:81
-msgid "Insert at the drop position when dropping on the list"
-msgstr "拖到列表时插入到拖放位置"
-
-#: ui/settings.slint:86
-msgid "Playback"
-msgstr "播放"
-
-#: ui/settings.slint:90
+#: ui/settings.slint:105 ui/settings.slint:147
 msgid "Repeat:"
 msgstr "循环："
 
-#: ui/settings.slint:104
+#: ui/settings.slint:120
+msgid "Open and drop"
+msgstr "打开与拖放"
+
+#: ui/settings.slint:127
+msgid "Open only that file"
+msgstr "仅打开该文件"
+
+#: ui/settings.slint:127
+msgid "Add similar files"
+msgstr "加入相似文件"
+
+#: ui/settings.slint:127
+msgid "Add all files in the folder"
+msgstr "加入同文件夹全部文件"
+
+#: ui/settings.slint:133
+msgid "Append when opening or dropping; don't clear the list"
+msgstr "打开或拖入时追加，不清空列表"
+
+#: ui/settings.slint:138
+msgid "Insert at the drop position when dropping on the list"
+msgstr "拖到列表时插入到拖放位置"
+
+#: ui/settings.slint:143
+msgid "Playback"
+msgstr "播放"
+
+#: ui/settings.slint:161
 msgid "Fast advance to next"
 msgstr "快速推进到下一个"
 
-#: ui/settings.slint:109
+#: ui/settings.slint:166
 msgid "List"
 msgstr "列表"
 
-#: ui/settings.slint:111
+#: ui/settings.slint:168
 msgid "Remember list"
 msgstr "记住列表"
 
-#: ui/settings.slint:116
+#: ui/settings.slint:173
 msgid "Confirm before removing all"
 msgstr "移除全部前确认"
 

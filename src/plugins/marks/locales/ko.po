@@ -6,7 +6,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: bookmarks.ts:46 menu.ts:51 ui/marks.slint:56 ui/marks.slint:173
+#: bookmarks.ts:46 menu.ts:51 ui/marks.slint:56 ui/marks.slint:183
 #, x-machine
 msgid "Bookmark {}"
 msgstr "북마크 {}"
@@ -31,7 +31,7 @@ msgstr "북마크 {}개가 제거됩니다. 되돌릴 수 없습니다."
 msgid "{} bookmarks will be removed. This can't be undone."
 msgstr "북마크 {}개가 제거됩니다. 되돌릴 수 없습니다."
 
-#: list.ts:223 ui/marks.slint:197
+#: list.ts:223 ui/marks.slint:207
 #, x-machine
 msgid "Clear Bookmarks"
 msgstr "북마크 지우기"
@@ -97,7 +97,7 @@ msgstr "챕터 및 북마크"
 msgid "Chapter and Bookmark List…"
 msgstr "챕터 및 북마크 목록…"
 
-#: menu.ts:109 ui/marks.slint:195
+#: menu.ts:109 ui/marks.slint:205
 #, x-machine
 msgid "Add Bookmark"
 msgstr "북마크 추가"
@@ -107,7 +107,7 @@ msgstr "북마크 추가"
 msgid "Can't add bookmarks to this source"
 msgstr "이 소스에는 북마크를 추가할 수 없습니다"
 
-#: menu.ts:114 menu.ts:125 menu.ts:164 menu.ts:183 menu.ts:237 menu.ts:250 ui/marks.slint:144
+#: menu.ts:114 menu.ts:125 menu.ts:164 menu.ts:183 menu.ts:237 menu.ts:250 ui/marks.slint:154
 #, x-machine
 msgid "No media open"
 msgstr "열린 미디어가 없습니다"
@@ -422,69 +422,68 @@ msgstr "A-B 구간 반복 실패: {}"
 msgid "Show Marks on Seek Bar"
 msgstr "탐색 막대에 마커 표시"
 
-#: ui/marks.slint:114
-#, x-machine
-msgid "Search by title"
-msgstr "제목으로 검색"
-
-#: ui/marks.slint:120
-#, x-machine
-msgid "The file has changed; bookmark times may be off"
-msgstr "파일이 바뀌어 북마크 시간이 맞지 않을 수 있습니다"
-
-#: ui/marks.slint:144
-#, x-machine
-msgid "No matches"
-msgstr "일치하는 항목 없음"
-
-#: ui/marks.slint:144
-#, x-machine
-msgid "No chapters or bookmarks"
-msgstr "챕터나 북마크가 없습니다"
-
-#: ui/marks.slint:151
+#: ui/marks.slint:114 ui/marks.slint:161
 #, x-machine
 msgid "Time"
 msgstr "시간"
 
-#: ui/marks.slint:167
+#: ui/marks.slint:114 ui/marks.slint:177
 #, x-machine
 msgid "Title"
 msgstr "제목"
 
-#: ui/marks.slint:183
+#: ui/marks.slint:124
+#, x-machine
+msgid "Search by title"
+msgstr "제목으로 검색"
+
+#: ui/marks.slint:130
+#, x-machine
+msgid "The file has changed; bookmark times may be off"
+msgstr "파일이 바뀌어 북마크 시간이 맞지 않을 수 있습니다"
+
+#: ui/marks.slint:154
+#, x-machine
+msgid "No matches"
+msgstr "일치하는 항목 없음"
+
+#: ui/marks.slint:154
+#, x-machine
+msgid "No chapters or bookmarks"
+msgstr "챕터나 북마크가 없습니다"
+
+#: ui/marks.slint:193
 #, x-machine
 msgid "Title can't be empty"
 msgstr "제목은 비워 둘 수 없습니다"
 
-#: ui/marks.slint:184
+#: ui/marks.slint:194
 #, x-machine
 msgid "Time format is h:mm:ss.d"
 msgstr "시간 형식은 h:mm:ss.d입니다"
 
-#: ui/marks.slint:185
+#: ui/marks.slint:195
 #, x-machine
 msgid "Time exceeds the duration ({})"
 msgstr "시간이 전체 길이를 넘습니다 ({})"
 
-#: ui/marks.slint:186
+#: ui/marks.slint:196
 #, x-machine
 msgid "Removed: {}"
 msgstr "제거됨: {}"
 
-#: ui/marks.slint:187
+#: ui/marks.slint:197
 #, x-machine
 msgid "Can't confirm: {}"
 msgstr "확인할 수 없습니다: {}"
 
-#: ui/marks.slint:188
+#: ui/marks.slint:198
 #, x-machine
 msgid "{n} bookmark cleared"
 msgid_plural "{n} bookmarks cleared"
 msgstr[0] "북마크 {n}개를 지웠습니다"
-msgstr[1] ""
 
-#: ui/marks.slint:196
+#: ui/marks.slint:206
 #, x-machine
 msgid "Remove"
 msgstr "제거"

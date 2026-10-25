@@ -217,7 +217,7 @@ msgstr ""
 msgid "Export Clip…"
 msgstr ""
 
-#: main.ts:346 ui/clip.slint:74
+#: main.ts:346 ui/clip.slint:85
 msgid "Export Tasks…"
 msgstr ""
 
@@ -275,11 +275,11 @@ msgstr ""
 msgid "export"
 msgstr ""
 
-#: model.ts:178 ui/clip.slint:13
+#: model.ts:178 ui/clip.slint:14
 msgid "No Audio"
 msgstr ""
 
-#: model.ts:179 ui/clip.slint:13
+#: model.ts:179 ui/clip.slint:14
 msgid "Current Track"
 msgstr ""
 
@@ -295,111 +295,111 @@ msgstr ""
 msgid "Burst"
 msgstr ""
 
-#: ui/burst.slint:35
-msgid "Save to"
-msgstr ""
-
-#: ui/burst.slint:45
-msgid "Snapshot settings"
-msgstr ""
-
-#: ui/burst.slint:48
+#: ui/burst.slint:41 ui/burst.slint:65
 msgid "Count:"
 msgstr ""
 
-#: ui/burst.slint:50
-msgid "frames (2–20)"
-msgstr ""
-
-#: ui/burst.slint:54
+#: ui/burst.slint:41 ui/burst.slint:71
 msgid "Interval:"
 msgstr ""
 
-#: ui/burst.slint:56
-msgid "s (0.1–10)"
-msgstr ""
-
-#: ui/burst.slint:58
-msgid "Start at the current position"
-msgstr ""
-
-#: ui/burst.slint:61
+#: ui/burst.slint:41 ui/burst.slint:78
 msgid "Start:"
 msgstr ""
 
-#: ui/burst.slint:63 ui/clip.slint:34 ui/clip.slint:40
-msgid "Current"
-msgstr ""
-
-#: ui/burst.slint:67
-msgid "Other settings"
-msgstr ""
-
-#: ui/burst.slint:70 ui/clip.slint:47 ui/settings.slint:29
-msgid "Format:"
-msgstr ""
-
-#: ui/burst.slint:79 ui/clip.slint:58
-msgid "Include video effects"
-msgstr ""
-
-#: ui/burst.slint:80
-msgid "Capture subtitles too"
-msgstr ""
-
-#: ui/burst.slint:85 ui/clip.slint:63
-msgid "Information"
-msgstr ""
-
-#: ui/burst.slint:88
+#: ui/burst.slint:44 ui/burst.slint:105
 msgid "Progress:"
 msgstr ""
 
-#: ui/burst.slint:93 ui/clip.slint:66
+#: ui/burst.slint:44 ui/burst.slint:110 ui/clip.slint:32 ui/clip.slint:77
 msgid "Status:"
 msgstr ""
 
-#: ui/burst.slint:100 ui/tasks.slint:80
+#: ui/burst.slint:52
+msgid "Save to"
+msgstr ""
+
+#: ui/burst.slint:62
+msgid "Snapshot settings"
+msgstr ""
+
+#: ui/burst.slint:67
+msgid "frames (2–20)"
+msgstr ""
+
+#: ui/burst.slint:73
+msgid "s (0.1–10)"
+msgstr ""
+
+#: ui/burst.slint:75
+msgid "Start at the current position"
+msgstr ""
+
+#: ui/burst.slint:80 ui/clip.slint:45 ui/clip.slint:51
+msgid "Current"
+msgstr ""
+
+#: ui/burst.slint:84
+msgid "Other settings"
+msgstr ""
+
+#: ui/burst.slint:87 ui/clip.slint:32 ui/clip.slint:58 ui/settings.slint:29 ui/settings.slint:40
+msgid "Format:"
+msgstr ""
+
+#: ui/burst.slint:96 ui/clip.slint:69
+msgid "Include video effects"
+msgstr ""
+
+#: ui/burst.slint:97
+msgid "Capture subtitles too"
+msgstr ""
+
+#: ui/burst.slint:102 ui/clip.slint:74
+msgid "Information"
+msgstr ""
+
+#: ui/burst.slint:117 ui/tasks.slint:80
 msgid "Open Save Folder"
 msgstr ""
 
-#: ui/burst.slint:101
+#: ui/burst.slint:118
 msgid "Capture Current Frame"
 msgstr ""
 
-#: ui/burst.slint:104
+#: ui/burst.slint:121
 msgid "Start"
 msgstr ""
 
-#: ui/clip.slint:29
-msgid "Range"
-msgstr ""
-
-#: ui/clip.slint:32
+#: ui/clip.slint:32 ui/clip.slint:43
 msgid "Start (s):"
 msgstr ""
 
-#: ui/clip.slint:38
+#: ui/clip.slint:32 ui/clip.slint:49
 msgid "End (s):"
 msgstr ""
 
-#: ui/clip.slint:44
-msgid "Output"
-msgstr ""
-
-#: ui/clip.slint:48
-msgid "MP4 (H.264 + AAC)"
-msgstr ""
-
-#: ui/clip.slint:52
+#: ui/clip.slint:32 ui/clip.slint:63
 msgid "Audio:"
 msgstr ""
 
+#: ui/clip.slint:40
+msgid "Range"
+msgstr ""
+
+#: ui/clip.slint:55
+msgid "Output"
+msgstr ""
+
 #: ui/clip.slint:59
+msgid "MP4 (H.264 + AAC)"
+msgstr ""
+
+#: ui/clip.slint:70
 msgid "Export subtitles too"
 msgstr ""
 
-#: ui/clip.slint:77
+#: ui/clip.slint:88
 msgid "Export…"
 msgstr ""
 
@@ -474,35 +474,35 @@ msgstr ""
 msgid "Snapshot Settings"
 msgstr ""
 
-#: ui/settings.slint:26
-msgid "Format"
-msgstr ""
-
-#: ui/settings.slint:39
+#: ui/settings.slint:29 ui/settings.slint:50
 msgid "Quality:"
 msgstr ""
 
-#: ui/settings.slint:49
+#: ui/settings.slint:37
+msgid "Format"
+msgstr ""
+
+#: ui/settings.slint:61
 msgid "Quality applies to JPEG only; copies to the clipboard are always PNG."
 msgstr ""
 
-#: ui/settings.slint:52
+#: ui/settings.slint:64
 msgid "Save location"
 msgstr ""
 
-#: ui/settings.slint:60
+#: ui/settings.slint:72
 msgid "Save to the media folder when possible"
 msgstr ""
 
-#: ui/settings.slint:66
+#: ui/settings.slint:78
 msgid "Rendered frame"
 msgstr ""
 
-#: ui/settings.slint:69
+#: ui/settings.slint:81
 msgid "Include subtitles"
 msgstr ""
 
-#: ui/settings.slint:74
+#: ui/settings.slint:86
 msgid "The rendered frame is made offline: it includes the plugins' video effects, and subtitles are drawn again in the plugins' style, always inside the picture, so it is not pixel for pixel what the screen shows. On-screen messages are not included."
 msgstr ""
 

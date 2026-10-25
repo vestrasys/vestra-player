@@ -189,8 +189,12 @@ msgstr "Fenstergröße nach Videomaßstab, immer im Vordergrund, Minigröße und
 
 #: manifest.json
 #, x-machine
-msgid "Resizes the window to 0.5–2× the video or fits it to the video's aspect ratio, and resizes it automatically when playback starts; never on top, always on top, on top while playing or while playing in fullscreen; mini size and the system's picture-in-picture; hides the pointer while playing.\nThe items are in the context menu under Screen."
-msgstr "Passt das Fenster auf das 0,5- bis 2-Fache des Videos oder an das Seitenverhältnis des Videos an, auf Wunsch automatisch bei Wiedergabestart; nie, immer, während der Wiedergabe oder während der Wiedergabe im Vollbild im Vordergrund; Minigröße und Bild-in-Bild des Systems; blendet den Mauszeiger während der Wiedergabe aus.\nDie Befehle stehen im Kontextmenü unter „Bildschirm“."
+msgid ""
+"Resizes the window to 0.5–2× the video or fits it to the video's aspect ratio, and resizes it automatically when playback starts; never on top, always on top, on top while playing or while playing in fullscreen; mini size and the system's picture-in-picture; hides the pointer while playing.\n"
+"The items are in the context menu under Screen."
+msgstr ""
+"Passt das Fenster auf das 0,5- bis 2-Fache des Videos oder an das Seitenverhältnis des Videos an, auf Wunsch automatisch bei Wiedergabestart; nie, immer, während der Wiedergabe oder während der Wiedergabe im Vollbild im Vordergrund; Minigröße und Bild-in-Bild des Systems; blendet den Mauszeiger während der Wiedergabe aus.\n"
+"Die Befehle stehen im Kontextmenü unter „Bildschirm“."
 
 #: manifest.json
 #, x-machine

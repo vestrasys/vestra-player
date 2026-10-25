@@ -177,44 +177,44 @@ msgstr "Choisir…"
 msgid "Restore Default"
 msgstr "Rétablir"
 
-#: ui/page.slint:91
+#: ui/page.slint:92
 #, x-machine
 msgid "PNG or JPEG, up to 4096×4096 and 16 MB. The image is copied, so the original can be moved."
 msgstr "PNG ou JPEG, jusqu'à 4096×4096 et 16 Mo. L'image est copiée, l'original peut donc être déplacé."
 
-#: ui/page.slint:97
+#: ui/page.slint:98
 #, x-machine
 msgid "Audio only"
 msgstr "Audio seul"
 
-#: ui/page.slint:100
+#: ui/page.slint:101
 #, x-machine
 msgid "Show album cover for audio only"
 msgstr "Afficher la pochette d'album pour l'audio seul"
 
-#: ui/page.slint:106
+#: ui/page.slint:107
 #, x-machine
 msgid "The cover comes from the picture embedded in the file, or a cover, folder or front image in the same folder; without one the logo is shown as a placeholder."
 msgstr "La pochette provient de l'image intégrée au fichier, ou d'une image cover, folder ou front du même dossier ; à défaut, le logo est affiché à sa place."
 
-#: ui/page.slint:117
+#: ui/page.slint:118
 #, x-machine
 msgid "Cover cache unavailable"
 msgstr "Cache des pochettes indisponible"
 
-#: ui/page.slint:118
+#: ui/page.slint:119
 #, x-machine
 msgid "Cover cache: empty"
 msgstr "Cache des pochettes : vide"
 
-#: ui/page.slint:119
+#: ui/page.slint:120
 #, x-machine
 msgid "Cover cache: {n} track, {0}"
 msgid_plural "Cover cache: {n} tracks, {0}"
 msgstr[0] "Cache des pochettes : {n} piste, {0}"
 msgstr[1] "Cache des pochettes : {n} pistes, {0}"
 
-#: ui/page.slint:125
+#: ui/page.slint:126
 #, x-machine
 msgid "Clear Cover Cache"
 msgstr "Vider le cache"

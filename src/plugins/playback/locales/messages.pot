@@ -379,7 +379,7 @@ msgstr ""
 msgid "Time (h:mm:ss.ms)"
 msgstr ""
 
-#: ui/prompt.slint:60 ui/time-jump.slint:128
+#: ui/prompt.slint:60 ui/time-jump.slint:148
 msgid "OK"
 msgstr ""
 
@@ -388,42 +388,42 @@ msgid "Go"
 msgstr ""
 
 #. the unit after a number of seconds.
-#: ui/time-jump.slint:32
+#: ui/time-jump.slint:34
 msgid "s"
 msgstr ""
 
-#: ui/time-jump.slint:38
+#: ui/time-jump.slint:40
 msgid "Default"
 msgstr ""
 
-#: ui/time-jump.slint:65
+#: ui/time-jump.slint:67
 msgid "Seek Steps"
 msgstr ""
 
-#: ui/time-jump.slint:83
-msgid "Set how far each seek key moves during playback."
-msgstr ""
-
-#: ui/time-jump.slint:89
+#: ui/time-jump.slint:78 ui/time-jump.slint:106
 msgid "Left/Right arrow keys:"
 msgstr ""
 
-#: ui/time-jump.slint:96
+#: ui/time-jump.slint:78 ui/time-jump.slint:114
 msgid "Ctrl + Left/Right arrow keys:"
 msgstr ""
 
-#: ui/time-jump.slint:103
+#: ui/time-jump.slint:78 ui/time-jump.slint:122
 msgid "Shift + Left/Right arrow keys:"
 msgstr ""
 
-#: ui/time-jump.slint:110
+#: ui/time-jump.slint:78 ui/time-jump.slint:130
 msgid "Ctrl + Alt + Left/Right arrow keys:"
 msgstr ""
 
-#: ui/time-jump.slint:117
+#: ui/time-jump.slint:99
+msgid "Set how far each seek key moves during playback."
+msgstr ""
+
+#: ui/time-jump.slint:137
 msgid "Range 0.1–3600 s, at most one decimal place"
 msgstr ""
 
-#: ui/time-jump.slint:132
+#: ui/time-jump.slint:152
 msgid "Cancel"
 msgstr ""

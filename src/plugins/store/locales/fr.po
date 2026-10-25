@@ -543,7 +543,7 @@ msgstr "Les dépôts ne contiennent encore aucun plugin"
 msgid "{} · {}"
 msgstr "{} · {}"
 
-#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:222
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:246
 #, x-machine
 msgid "Installed"
 msgstr "Installé"
@@ -768,7 +768,7 @@ msgstr "Incompatible : {}"
 msgid "Latest"
 msgstr "Dernière"
 
-#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:407
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:223 ui/store.slint:431
 #, x-machine
 msgid "Version"
 msgstr "Version"
@@ -1583,12 +1583,12 @@ msgstr "Installer, désinstaller et désactiver d'autres plugins"
 msgid "Replace"
 msgstr "Remplacer"
 
-#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:121
+#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:44 ui/settings.slint:133
 #, x-machine
 msgid "Add"
 msgstr "Ajouter"
 
-#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:79
+#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:43 ui/settings.slint:91
 #, x-machine
 msgid "Remove"
 msgstr "Supprimer"
@@ -1598,7 +1598,7 @@ msgstr "Supprimer"
 msgid "Update"
 msgstr "Mettre à jour"
 
-#: store.ts:368 store.ts:369 store.ts:371 ui/store.slint:257 ui/store.slint:432
+#: store.ts:368 store.ts:369 store.ts:371 ui/store.slint:225 ui/store.slint:281 ui/store.slint:456
 #, x-machine
 msgid "Install"
 msgstr "Installer"
@@ -1648,147 +1648,147 @@ msgstr "Désactiver"
 msgid "Choose a plugin package (.vxp)"
 msgstr "Choisir un paquet de plugin (.vxp)"
 
-#: ui/settings.slint:39
-#, x-machine
-msgid "Check for updates automatically (30 seconds after the player starts, then every 24 hours)"
-msgstr "Rechercher automatiquement les mises à jour (30 secondes après le démarrage du lecteur, puis toutes les 24 heures)"
-
-#: ui/settings.slint:44
-#, x-machine
-msgid "When off, the store goes online only when you open it or click “Refresh”; plugins revoked by a repository are disabled only then too. When updates are available, the “Plugin Store…” menu item shows how many."
-msgstr "Si cette option est désactivée, le catalogue ne se connecte que lorsque vous l'ouvrez ou cliquez sur « Actualiser » ; les plugins révoqués par un dépôt ne sont alors désactivés qu'à ce moment-là. Lorsque des mises à jour sont disponibles, l'élément de menu « Catalogue de plugins… » en indique le nombre."
-
-#: ui/settings.slint:51
-#, x-machine
-msgid "Repositories"
-msgstr "Dépôts"
-
-#: ui/settings.slint:90
-#, x-machine
-msgid "Add Repository…"
-msgstr "Ajouter un dépôt…"
-
-#: ui/settings.slint:114
-#, x-machine
-msgid "The repository's root address or the full address of index.json (https://…)"
-msgstr "L'adresse racine du dépôt ou l'adresse complète de index.json (https://…)"
-
-#: ui/settings.slint:125 ui/store.slint:516
+#: ui/settings.slint:45 ui/settings.slint:137 ui/store.slint:540
 #, x-machine
 msgid "Cancel"
 msgstr "Annuler"
 
-#: ui/settings.slint:130
+#: ui/settings.slint:51
+#, x-machine
+msgid "Check for updates automatically (30 seconds after the player starts, then every 24 hours)"
+msgstr "Rechercher automatiquement les mises à jour (30 secondes après le démarrage du lecteur, puis toutes les 24 heures)"
+
+#: ui/settings.slint:56
+#, x-machine
+msgid "When off, the store goes online only when you open it or click “Refresh”; plugins revoked by a repository are disabled only then too. When updates are available, the “Plugin Store…” menu item shows how many."
+msgstr "Si cette option est désactivée, le catalogue ne se connecte que lorsque vous l'ouvrez ou cliquez sur « Actualiser » ; les plugins révoqués par un dépôt ne sont alors désactivés qu'à ce moment-là. Lorsque des mises à jour sont disponibles, l'élément de menu « Catalogue de plugins… » en indique le nombre."
+
+#: ui/settings.slint:63
+#, x-machine
+msgid "Repositories"
+msgstr "Dépôts"
+
+#: ui/settings.slint:102
+#, x-machine
+msgid "Add Repository…"
+msgstr "Ajouter un dépôt…"
+
+#: ui/settings.slint:126
+#, x-machine
+msgid "The repository's root address or the full address of index.json (https://…)"
+msgstr "L'adresse racine du dépôt ou l'adresse complète de index.json (https://…)"
+
+#: ui/settings.slint:142
 #, x-machine
 msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline, disable the Plugin Store in “Plugin Manager”."
 msgstr "Les dépôts tiers ne sont pas vérifiés par Vestra Player ; leurs plugins peuvent lire vos fichiers ou utiliser le réseau. N'ajoutez que des dépôts de confiance. Le dépôt officiel ne peut pas être supprimé ; pour garder le catalogue hors ligne, désactivez le Catalogue de plugins dans le « Gestionnaire de plugins »."
 
-#: ui/store.slint:216
-#, x-machine
-msgid "Search names, authors, tags…"
-msgstr "Rechercher par nom, auteur, tag…"
-
-#: ui/store.slint:221
-#, x-machine
-msgid "All"
-msgstr "Tous"
-
-#: ui/store.slint:225
-#, x-machine
-msgid "Updates {}"
-msgstr "Mises à jour {}"
-
-#: ui/store.slint:225
-#, x-machine
-msgid "Updates"
-msgstr "Mises à jour"
-
-#: ui/store.slint:233
+#: ui/store.slint:219 ui/store.slint:257
 #, x-machine
 msgid "Tags: All"
 msgstr "Tags : tous"
 
-#: ui/store.slint:240
+#: ui/store.slint:221 ui/store.slint:264
 #, x-machine
 msgid "Sort: Name"
 msgstr "Tri : nom"
 
-#: ui/store.slint:240
+#: ui/store.slint:221 ui/store.slint:264
 #, x-machine
 msgid "Sort: Updated"
 msgstr "Tri : date"
 
-#: ui/store.slint:248
-#, x-machine
-msgid "You can also drop a .vxp plugin package on the player's video area to install it"
-msgstr "Vous pouvez aussi faire glisser un paquet de plugin .vxp sur la zone vidéo du lecteur pour l'installer"
-
-#: ui/store.slint:249
-#, x-machine
-msgid "Install from File…"
-msgstr "Depuis un fichier…"
-
-#: ui/store.slint:250
-#, x-machine
-msgid "Install from Link…"
-msgstr "Depuis un lien…"
-
-#: ui/store.slint:251
-#, x-machine
-msgid "Repositories…"
-msgstr "Dépôts…"
-
-#: ui/store.slint:252
-#, x-machine
-msgid "Refresh"
-msgstr "Actualiser"
-
-#: ui/store.slint:256
-#, x-machine
-msgid "Plugin package link (https://…/name-version.vxp)"
-msgstr "Lien du paquet de plugin (https://…/nom-version.vxp)"
-
-#: ui/store.slint:300
-#, x-machine
-msgid "Select a plugin on the left to see its details"
-msgstr "Sélectionnez un plugin à gauche pour voir ses détails"
-
-#: ui/store.slint:368
-#, x-machine
-msgid "Description"
-msgstr "Description"
-
-#: ui/store.slint:369
-#, x-machine
-msgid "Changelog"
-msgstr "Notes de version"
-
-#: ui/store.slint:370
-#, x-machine
-msgid "Versions"
-msgstr "Versions"
-
-#: ui/store.slint:408
+#: ui/store.slint:224 ui/store.slint:432
 #, x-machine
 msgid "Published"
 msgstr "Publié le"
 
-#: ui/store.slint:409
+#: ui/store.slint:240
+#, x-machine
+msgid "Search names, authors, tags…"
+msgstr "Rechercher par nom, auteur, tag…"
+
+#: ui/store.slint:245
+#, x-machine
+msgid "All"
+msgstr "Tous"
+
+#: ui/store.slint:249
+#, x-machine
+msgid "Updates {}"
+msgstr "Mises à jour {}"
+
+#: ui/store.slint:249
+#, x-machine
+msgid "Updates"
+msgstr "Mises à jour"
+
+#: ui/store.slint:272
+#, x-machine
+msgid "You can also drop a .vxp plugin package on the player's video area to install it"
+msgstr "Vous pouvez aussi faire glisser un paquet de plugin .vxp sur la zone vidéo du lecteur pour l'installer"
+
+#: ui/store.slint:273
+#, x-machine
+msgid "Install from File…"
+msgstr "Depuis un fichier…"
+
+#: ui/store.slint:274
+#, x-machine
+msgid "Install from Link…"
+msgstr "Depuis un lien…"
+
+#: ui/store.slint:275
+#, x-machine
+msgid "Repositories…"
+msgstr "Dépôts…"
+
+#: ui/store.slint:276
+#, x-machine
+msgid "Refresh"
+msgstr "Actualiser"
+
+#: ui/store.slint:280
+#, x-machine
+msgid "Plugin package link (https://…/name-version.vxp)"
+msgstr "Lien du paquet de plugin (https://…/nom-version.vxp)"
+
+#: ui/store.slint:324
+#, x-machine
+msgid "Select a plugin on the left to see its details"
+msgstr "Sélectionnez un plugin à gauche pour voir ses détails"
+
+#: ui/store.slint:392
+#, x-machine
+msgid "Description"
+msgstr "Description"
+
+#: ui/store.slint:393
+#, x-machine
+msgid "Changelog"
+msgstr "Notes de version"
+
+#: ui/store.slint:394
+#, x-machine
+msgid "Versions"
+msgstr "Versions"
+
+#: ui/store.slint:433
 #, x-machine
 msgid "Minimum player"
 msgstr "Lecteur requis"
 
-#: ui/store.slint:475
+#: ui/store.slint:499
 #, x-machine
 msgid "Permissions ({})"
 msgstr "Autorisations ({})"
 
-#: ui/store.slint:489
+#: ui/store.slint:513
 #, x-machine
 msgid "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
 msgstr "Un plugin est un programme complet : les autorisations ci-dessus limitent seulement ce qu'il peut faire avec le lecteur, pas la lecture et l'écriture de fichiers ni l'utilisation du réseau."
 
-#: ui/store.slint:497
+#: ui/store.slint:521
 #, x-machine
 msgid "Disable, reload, open the data folder: Settings ▸ Plugin Manager…"
 msgstr "Désactiver, recharger, ouvrir le dossier de données : Paramètres ▸ Gestionnaire de plugins…"

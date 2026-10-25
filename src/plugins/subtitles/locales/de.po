@@ -196,7 +196,7 @@ msgstr "Position zurücksetzen"
 msgid "Subtitle position: default ({}%)"
 msgstr "Untertitelposition: Standard ({} %)"
 
-#: main.ts:846 ui/settings.slint:94
+#: main.ts:846 ui/settings.slint:117
 #, x-machine
 msgid "Bold"
 msgstr "Fett"
@@ -453,8 +453,12 @@ msgstr "Externe Untertitel laden, Spuren wählen, Stil und Versatz anpassen"
 
 #: manifest.json
 #, x-machine
-msgid "Pick and switch subtitle tracks, load SRT, ASS/SSA, WebVTT, SAMI and MicroDVD subtitles (the encoding is detected), show a secondary subtitle; adjust size, position, font, colour, outline, shadow and background box, and the sync; jump by dialogue; reload external subtitle files automatically when they change.\nFind it in the right-click menu under Subtitles."
-msgstr "Untertitelspuren wählen und wechseln, SRT-, ASS/SSA-, WebVTT-, SAMI- und MicroDVD-Untertitel laden (die Zeichenkodierung wird erkannt), einen Zweituntertitel anzeigen; Größe, Position, Schrift, Farbe, Kontur, Schatten und Hintergrund sowie den Versatz anpassen; von Dialog zu Dialog springen; externe Untertiteldateien bei Änderungen automatisch neu laden.\nZu finden im Kontextmenü unter „Untertitel“."
+msgid ""
+"Pick and switch subtitle tracks, load SRT, ASS/SSA, WebVTT, SAMI and MicroDVD subtitles (the encoding is detected), show a secondary subtitle; adjust size, position, font, colour, outline, shadow and background box, and the sync; jump by dialogue; reload external subtitle files automatically when they change.\n"
+"Find it in the right-click menu under Subtitles."
+msgstr ""
+"Untertitelspuren wählen und wechseln, SRT-, ASS/SSA-, WebVTT-, SAMI- und MicroDVD-Untertitel laden (die Zeichenkodierung wird erkannt), einen Zweituntertitel anzeigen; Größe, Position, Schrift, Farbe, Kontur, Schatten und Hintergrund sowie den Versatz anpassen; von Dialog zu Dialog springen; externe Untertiteldateien bei Änderungen automatisch neu laden.\n"
+"Zu finden im Kontextmenü unter „Untertitel“."
 
 #: manifest.json
 #, x-machine
@@ -931,142 +935,142 @@ msgstr "In den Untertitel eingebettete Schriften wurden ignoriert"
 msgid "Unknown video frame rate; the MicroDVD subtitle was converted at 23.976"
 msgstr "Unbekannte Bildrate; der MicroDVD-Untertitel wurde mit 23,976 umgerechnet"
 
-#: ui/settings.slint:19
+#: ui/settings.slint:21
 #, x-machine
 msgid "Subtitle Settings"
 msgstr "Untertiteleinstellungen"
 
-#: ui/settings.slint:70
+#: ui/settings.slint:78 ui/settings.slint:93
 #, x-machine
 msgid "Font"
 msgstr "Schrift"
 
-#: ui/settings.slint:78 ui/settings.slint:111 ui/settings.slint:123 ui/settings.slint:135 ui/settings.slint:157 ui/settings.slint:169 ui/settings.slint:180 ui/settings.slint:193 ui/settings.slint:213 ui/tune.slint:96 ui/tune.slint:104 ui/tune.slint:123
-#, x-machine
-msgid "Default"
-msgstr "Standard"
-
-#: ui/settings.slint:83
-#, x-machine
-msgid "With the original ASS styles on: fonts follow the subtitle file (missing fonts use the default font); colour, outline, bold, shadow, background box and position have no effect."
-msgstr "Mit originalen ASS-Stilen: Schriften folgen der Untertiteldatei (fehlende Schriften nutzen die Standardschrift); Farbe, Kontur, Fett, Schatten, Hintergrund und Position wirken nicht."
-
-#: ui/settings.slint:102
+#: ui/settings.slint:78 ui/settings.slint:125
 #, x-machine
 msgid "Colour"
 msgstr "Farbe"
 
-#: ui/settings.slint:106
-#, x-machine
-msgid "White"
-msgstr "Weiß"
-
-#: ui/settings.slint:106
-#, x-machine
-msgid "Yellow"
-msgstr "Gelb"
-
-#: ui/settings.slint:106
-#, x-machine
-msgid "Cyan"
-msgstr "Cyan"
-
-#: ui/settings.slint:115
+#: ui/settings.slint:78 ui/settings.slint:138
 #, x-machine
 msgid "Outline {}"
 msgstr "Kontur {}"
 
-#: ui/settings.slint:127
+#: ui/settings.slint:78 ui/settings.slint:150
 #, x-machine
 msgid "Shadow {}"
 msgstr "Schatten {}"
 
-#: ui/settings.slint:141
-#, x-machine
-msgid "Background box (replaces outline and shadow)"
-msgstr "Hintergrund (ersetzt Kontur und Schatten)"
-
-#: ui/settings.slint:149
+#: ui/settings.slint:79 ui/settings.slint:172
 #, x-machine
 msgid "Opacity {}%"
 msgstr "Deckkraft {} %"
 
-#: ui/settings.slint:161
+#: ui/settings.slint:79 ui/settings.slint:184
 #, x-machine
 msgid "Margin {}%"
 msgstr "Rand {} %"
 
-#: ui/settings.slint:173
+#: ui/settings.slint:79 ui/settings.slint:196
 #, x-machine
 msgid "ASS style"
 msgstr "ASS-Stil"
 
-#: ui/settings.slint:176
-#, x-machine
-msgid "Keep original styles"
-msgstr "Originalstile beibehalten"
-
-#: ui/settings.slint:176
-#, x-machine
-msgid "Use subtitle settings"
-msgstr "Untertiteleinstellungen verwenden"
-
-#: ui/settings.slint:185
+#: ui/settings.slint:79 ui/settings.slint:208
 #, x-machine
 msgid "Sync step"
 msgstr "Schrittweite"
 
-#: ui/settings.slint:189
-#, x-machine
-msgid "{} s"
-msgstr "{} s"
-
-#: ui/settings.slint:197
+#: ui/settings.slint:80 ui/settings.slint:220
 #, x-machine
 msgid "Default encoding"
 msgstr "Standardkodierung"
 
-#: ui/settings.slint:202
+#: ui/settings.slint:85 ui/settings.slint:101 ui/settings.slint:134 ui/settings.slint:146 ui/settings.slint:158 ui/settings.slint:180 ui/settings.slint:192 ui/settings.slint:203 ui/settings.slint:216 ui/settings.slint:236 ui/tune.slint:75 ui/tune.slint:119 ui/tune.slint:127 ui/tune.slint:147
+#, x-machine
+msgid "Default"
+msgstr "Standard"
+
+#: ui/settings.slint:106
+#, x-machine
+msgid "With the original ASS styles on: fonts follow the subtitle file (missing fonts use the default font); colour, outline, bold, shadow, background box and position have no effect."
+msgstr "Mit originalen ASS-Stilen: Schriften folgen der Untertiteldatei (fehlende Schriften nutzen die Standardschrift); Farbe, Kontur, Fett, Schatten, Hintergrund und Position wirken nicht."
+
+#: ui/settings.slint:129
+#, x-machine
+msgid "White"
+msgstr "Weiß"
+
+#: ui/settings.slint:129
+#, x-machine
+msgid "Yellow"
+msgstr "Gelb"
+
+#: ui/settings.slint:129
+#, x-machine
+msgid "Cyan"
+msgstr "Cyan"
+
+#: ui/settings.slint:164
+#, x-machine
+msgid "Background box (replaces outline and shadow)"
+msgstr "Hintergrund (ersetzt Kontur und Schatten)"
+
+#: ui/settings.slint:199
+#, x-machine
+msgid "Keep original styles"
+msgstr "Originalstile beibehalten"
+
+#: ui/settings.slint:199
+#, x-machine
+msgid "Use subtitle settings"
+msgstr "Untertiteleinstellungen verwenden"
+
+#: ui/settings.slint:212
+#, x-machine
+msgid "{} s"
+msgstr "{} s"
+
+#: ui/settings.slint:225
 #, x-machine
 msgid "Simplified Chinese (GB18030)"
 msgstr "Chinesisch, vereinfacht (GB18030)"
 
-#: ui/settings.slint:203
+#: ui/settings.slint:226
 #, x-machine
 msgid "Traditional Chinese (Big5)"
 msgstr "Chinesisch, traditionell (Big5)"
 
-#: ui/settings.slint:204
+#: ui/settings.slint:227
 #, x-machine
 msgid "Japanese (Shift_JIS)"
 msgstr "Japanisch (Shift_JIS)"
 
-#: ui/settings.slint:205
+#: ui/settings.slint:228
 #, x-machine
 msgid "Korean (EUC-KR)"
 msgstr "Koreanisch (EUC-KR)"
 
-#: ui/settings.slint:206
+#: ui/settings.slint:229
 #, x-machine
 msgid "Western (Windows-1252)"
 msgstr "Westeuropäisch (Windows-1252)"
 
-#: ui/settings.slint:207
+#: ui/settings.slint:230
 #, x-machine
 msgid "Cyrillic (Windows-1251)"
 msgstr "Kyrillisch (Windows-1251)"
 
-#: ui/settings.slint:208
+#: ui/settings.slint:231
 #, x-machine
 msgid "Western (ISO-8859-1)"
 msgstr "Westeuropäisch (ISO-8859-1)"
 
-#: ui/settings.slint:219
+#: ui/settings.slint:242
 #, x-machine
 msgid "Reload automatically when the subtitle file changes"
 msgstr "Bei Änderung der Untertiteldatei automatisch neu laden"
 
-#: ui/settings.slint:234
+#: ui/settings.slint:257
 #, x-machine
 msgid "Reset All"
 msgstr "Alles zurücksetzen"
@@ -1076,82 +1080,82 @@ msgstr "Alles zurücksetzen"
 msgid "Adjust Sync"
 msgstr "Versatz anpassen"
 
-#: ui/sync.slint:33
-#, x-machine
-msgid "Sync value (ms):"
-msgstr "Versatz (ms):"
-
-#: ui/sync.slint:63
-#, x-machine
-msgid "Apply"
-msgstr "Anwenden"
-
-#: ui/sync.slint:71
+#: ui/sync.slint:29 ui/sync.slint:79
 #, x-machine
 msgid "Positive delays the subtitles, negative advances them."
 msgstr "Positive Werte verzögern die Untertitel, negative ziehen sie vor."
 
-#: ui/tune.slint:19
+#: ui/sync.slint:41
+#, x-machine
+msgid "Sync value (ms):"
+msgstr "Versatz (ms):"
+
+#: ui/sync.slint:71
+#, x-machine
+msgid "Apply"
+msgstr "Anwenden"
+
+#: ui/tune.slint:21
 #, x-machine
 msgid "Subtitle Tuning"
 msgstr "Untertitel-Feinabstimmung"
 
-#: ui/tune.slint:70
-#, x-machine
-msgid "Cancel"
-msgstr "Abbrechen"
-
-#: ui/tune.slint:70
-#, x-machine
-msgid "Load…"
-msgstr "Laden…"
-
-#: ui/tune.slint:92
+#: ui/tune.slint:64 ui/tune.slint:115
 #, x-machine
 msgid "Size {}"
 msgstr "Größe {}"
 
-#: ui/tune.slint:100
+#: ui/tune.slint:64 ui/tune.slint:123
 #, x-machine
 msgid "Position {}%"
 msgstr "Position {} %"
 
-#: ui/tune.slint:101
-#, x-machine
-msgid "Up"
-msgstr "Höher"
-
-#: ui/tune.slint:102
-#, x-machine
-msgid "Down"
-msgstr "Tiefer"
-
-#: ui/tune.slint:110
-#, x-machine
-msgid "In seconds. Positive delays the subtitles, negative advances them. Click to enter a value."
-msgstr "In Sekunden. Positive Werte verzögern die Untertitel, negative ziehen sie vor. Klicken, um einen Wert einzugeben."
-
-#: ui/tune.slint:113
+#: ui/tune.slint:64 ui/tune.slint:137
 #, x-machine
 msgid "Sync {}"
 msgstr "Versatz {}"
 
-#: ui/tune.slint:121
+#: ui/tune.slint:71 ui/tune.slint:93
+#, x-machine
+msgid "Cancel"
+msgstr "Abbrechen"
+
+#: ui/tune.slint:71 ui/tune.slint:93
+#, x-machine
+msgid "Load…"
+msgstr "Laden…"
+
+#: ui/tune.slint:73 ui/tune.slint:124
+#, x-machine
+msgid "Up"
+msgstr "Höher"
+
+#: ui/tune.slint:74 ui/tune.slint:125
+#, x-machine
+msgid "Down"
+msgstr "Tiefer"
+
+#: ui/tune.slint:133
+#, x-machine
+msgid "In seconds. Positive delays the subtitles, negative advances them. Click to enter a value."
+msgstr "In Sekunden. Positive Werte verzögern die Untertitel, negative ziehen sie vor. Klicken, um einen Wert einzugeben."
+
+#: ui/tune.slint:145
 #, x-machine
 msgid "Later"
 msgstr "Später"
 
-#: ui/tune.slint:122
+#: ui/tune.slint:146
 #, x-machine
 msgid "Earlier"
 msgstr "Früher"
 
-#: ui/tune.slint:135
+#: ui/tune.slint:159
 #, x-machine
 msgid "Remove"
 msgstr "Entfernen"
 
-#: ui/tune.slint:136
+#: ui/tune.slint:160
 #, x-machine
 msgid "Settings…"
 msgstr "Einstellungen…"

@@ -93,8 +93,12 @@ msgstr "NES-Spiele-ROMs im Player spielen"
 
 #: manifest.json
 #, x-machine
-msgid "Runs iNES ROMs with JSNES; picture and sound play in the player like any other media.\n.nes files open like media: Open File, a drop on the video, the playlist; the Emulator context menu opens and stops them too. No keyboard controls or save states yet; no games included."
-msgstr "Führt iNES-ROMs mit JSNES aus; Bild und Ton laufen im Player wie andere Medien.\n.nes-Dateien öffnen Sie wie Medien: über „Datei öffnen“, durch Ziehen auf das Video oder über die Wiedergabeliste; auch das Kontextmenü „Emulator“ öffnet und stoppt sie. Noch keine Tastatursteuerung und keine Spielstände; keine Spiele enthalten."
+msgid ""
+"Runs iNES ROMs with JSNES; picture and sound play in the player like any other media.\n"
+".nes files open like media: Open File, a drop on the video, the playlist; the Emulator context menu opens and stops them too. No keyboard controls or save states yet; no games included."
+msgstr ""
+"Führt iNES-ROMs mit JSNES aus; Bild und Ton laufen im Player wie andere Medien.\n"
+".nes-Dateien öffnen Sie wie Medien: über „Datei öffnen“, durch Ziehen auf das Video oder über die Wiedergabeliste; auch das Kontextmenü „Emulator“ öffnet und stoppt sie. Noch keine Tastatursteuerung und keine Spielstände; keine Spiele enthalten."
 
 #: manifest.json
 #, x-machine

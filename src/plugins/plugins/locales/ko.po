@@ -36,7 +36,7 @@ msgstr "이 플러그인의 메뉴, 단축키, 창, 효과가 즉시 제거되�
 msgid "Its menus, shortcuts, windows and effects (such as the equalizer, filters, subtitle style) are removed at once; open media keeps playing. It stays disabled after Vestra Player restarts; you can enable it here at any time."
 msgstr "이 플러그인의 메뉴, 단축키, 창, 효과(이퀄라이저, 필터, 자막 스타일 등)가 즉시 제거되며 열린 미디어는 계속 재생됩니다. Vestra Player를 다시 시작해도 사용 중지 상태가 유지되며, 여기서 언제든 다시 사용할 수 있습니다."
 
-#: manager.ts:239 ui/plugins.slint:310
+#: manager.ts:239 ui/plugins.slint:268 ui/plugins.slint:362
 #, x-machine
 msgid "Disable"
 msgstr "사용 중지"
@@ -360,7 +360,7 @@ msgstr "경고"
 msgid "Note"
 msgstr "참고"
 
-#: ui/plugins.slint:123 ui/plugins.slint:243
+#: ui/plugins.slint:123 ui/plugins.slint:249 ui/plugins.slint:290
 #, x-machine
 msgid "Source"
 msgstr "출처"
@@ -469,59 +469,59 @@ msgid "Data folder unavailable: {}"
 msgstr "데이터 폴더를 사용할 수 없습니다: {}"
 
 #. the version column of a development-loaded plugin (50px wide).
-#: ui/plugins.slint:189
+#: ui/plugins.slint:195 ui/plugins.slint:245
 #, x-machine
 msgid "Dev"
 msgstr "개발"
 
-#: ui/plugins.slint:241
-#, x-machine
-msgid "Plugin"
-msgstr "플러그인"
-
-#: ui/plugins.slint:242
+#: ui/plugins.slint:245 ui/plugins.slint:289
 #, x-machine
 msgid "Version"
 msgstr "버전"
 
-#: ui/plugins.slint:244
+#: ui/plugins.slint:253 ui/plugins.slint:291
 #, x-machine
 msgid "Status"
 msgstr "상태"
 
 #. column header: the size of the plugin's data folder.
-#: ui/plugins.slint:246
+#: ui/plugins.slint:255 ui/plugins.slint:293
 #, x-machine
 msgid "Data"
 msgstr "데이터"
 
-#: ui/plugins.slint:269
-#, x-machine
-msgid "Select a plugin to see its details"
-msgstr "세부 정보를 볼 플러그인을 선택하세요"
-
-#: ui/plugins.slint:310
-#, x-machine
-msgid "Enable"
-msgstr "사용"
-
-#: ui/plugins.slint:315
+#: ui/plugins.slint:262 ui/plugins.slint:367
 #, x-machine
 msgid "Reload"
 msgstr "다시 로드"
 
 #. button: roll the plugin back to its previous version (94px wide).
-#: ui/plugins.slint:317
+#: ui/plugins.slint:263 ui/plugins.slint:369
 #, x-machine
 msgid "Roll Back"
 msgstr "롤백"
 
-#: ui/plugins.slint:324
+#: ui/plugins.slint:264 ui/plugins.slint:376
 #, x-machine
 msgid "Uninstall…"
 msgstr "제거…"
 
-#: ui/plugins.slint:329
+#: ui/plugins.slint:265 ui/plugins.slint:381 ui/plugins.slint:386
 #, x-machine
 msgid "Open Data Folder"
 msgstr "데이터 폴더 열기"
+
+#: ui/plugins.slint:268 ui/plugins.slint:362
+#, x-machine
+msgid "Enable"
+msgstr "사용"
+
+#: ui/plugins.slint:288
+#, x-machine
+msgid "Plugin"
+msgstr "플러그인"
+
+#: ui/plugins.slint:320
+#, x-machine
+msgid "Select a plugin to see its details"
+msgstr "세부 정보를 볼 플러그인을 선택하세요"

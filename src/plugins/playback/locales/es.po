@@ -475,7 +475,7 @@ msgstr "Velocidad (0.25–4×)"
 msgid "Time (h:mm:ss.ms)"
 msgstr "Tiempo (h:mm:ss.ms)"
 
-#: ui/prompt.slint:60 ui/time-jump.slint:128
+#: ui/prompt.slint:60 ui/time-jump.slint:148
 #, x-machine
 msgid "OK"
 msgstr "Aceptar"
@@ -486,52 +486,52 @@ msgid "Go"
 msgstr "Ir"
 
 #. the unit after a number of seconds.
-#: ui/time-jump.slint:32
+#: ui/time-jump.slint:34
 #, x-machine
 msgid "s"
 msgstr "s"
 
-#: ui/time-jump.slint:38
+#: ui/time-jump.slint:40
 #, x-machine
 msgid "Default"
 msgstr "Predeterminado"
 
-#: ui/time-jump.slint:65
+#: ui/time-jump.slint:67
 #, x-machine
 msgid "Seek Steps"
 msgstr "Intervalos de salto"
 
-#: ui/time-jump.slint:83
-#, x-machine
-msgid "Set how far each seek key moves during playback."
-msgstr "Define cuánto avanza o retrocede cada tecla de salto durante la reproducción."
-
-#: ui/time-jump.slint:89
+#: ui/time-jump.slint:78 ui/time-jump.slint:106
 #, x-machine
 msgid "Left/Right arrow keys:"
 msgstr "Flechas izquierda/derecha:"
 
-#: ui/time-jump.slint:96
+#: ui/time-jump.slint:78 ui/time-jump.slint:114
 #, x-machine
 msgid "Ctrl + Left/Right arrow keys:"
 msgstr "Ctrl + flechas izquierda/derecha:"
 
-#: ui/time-jump.slint:103
+#: ui/time-jump.slint:78 ui/time-jump.slint:122
 #, x-machine
 msgid "Shift + Left/Right arrow keys:"
 msgstr "Mayús + flechas izquierda/derecha:"
 
-#: ui/time-jump.slint:110
+#: ui/time-jump.slint:78 ui/time-jump.slint:130
 #, x-machine
 msgid "Ctrl + Alt + Left/Right arrow keys:"
 msgstr "Ctrl + Alt + flechas izquierda/derecha:"
 
-#: ui/time-jump.slint:117
+#: ui/time-jump.slint:99
+#, x-machine
+msgid "Set how far each seek key moves during playback."
+msgstr "Define cuánto avanza o retrocede cada tecla de salto durante la reproducción."
+
+#: ui/time-jump.slint:137
 #, x-machine
 msgid "Range 0.1–3600 s, at most one decimal place"
 msgstr "Valores de 0.1 a 3600 s, con un decimal como máximo"
 
-#: ui/time-jump.slint:132
+#: ui/time-jump.slint:152
 #, x-machine
 msgid "Cancel"
 msgstr "Cancelar"

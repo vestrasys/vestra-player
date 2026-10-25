@@ -96,7 +96,9 @@ msgstr "Juega ROM de NES en el reproductor"
 msgid ""
 "Runs iNES ROMs with JSNES; picture and sound play in the player like any other media.\n"
 ".nes files open like media: Open File, a drop on the video, the playlist; the Emulator context menu opens and stops them too. No keyboard controls or save states yet; no games included."
-msgstr "Ejecuta ROM iNES con JSNES; la imagen y el sonido se reproducen en el reproductor como cualquier otro medio.\nLos archivos .nes se abren como medios: Abrir archivo, arrastrándolos al video o desde la lista de reproducción; el menú contextual Emulador también los abre y detiene. Aún sin controles de teclado ni partidas guardadas; no incluye juegos."
+msgstr ""
+"Ejecuta ROM iNES con JSNES; la imagen y el sonido se reproducen en el reproductor como cualquier otro medio.\n"
+"Los archivos .nes se abren como medios: Abrir archivo, arrastrándolos al video o desde la lista de reproducción; el menú contextual Emulador también los abre y detiene. Aún sin controles de teclado ni partidas guardadas; no incluye juegos."
 
 #: manifest.json
 #, x-machine

@@ -185,23 +185,23 @@ msgstr "按序切换"
 msgid "No audio tracks"
 msgstr "没有音轨"
 
-#: main.ts:557 ui/workbench.slint:594
+#: main.ts:557 ui/workbench.slint:619
 msgid "Stereo"
 msgstr "立体声"
 
-#: main.ts:557 ui/workbench.slint:595
+#: main.ts:557 ui/workbench.slint:620
 msgid "Left Channel"
 msgstr "左声道"
 
-#: main.ts:557 ui/workbench.slint:596
+#: main.ts:557 ui/workbench.slint:621
 msgid "Right Channel"
 msgstr "右声道"
 
-#: main.ts:557 ui/workbench.slint:597
+#: main.ts:557 ui/workbench.slint:622
 msgid "Mono Mix"
 msgstr "单声道混合"
 
-#: main.ts:557 ui/workbench.slint:598
+#: main.ts:557 ui/workbench.slint:623
 msgid "Swap Left and Right"
 msgstr "左右互换"
 
@@ -209,11 +209,11 @@ msgstr "左右互换"
 msgid "No audio track selected"
 msgstr "没有选中的音轨"
 
-#: main.ts:563 ui/workbench.slint:582
+#: main.ts:563 ui/workbench.slint:607
 msgid "The current track is mono"
 msgstr "当前音轨是单声道"
 
-#: main.ts:569 ui/workbench.slint:409 ui/workbench.slint:452
+#: main.ts:569 ui/workbench.slint:411 ui/workbench.slint:476
 msgid "Equalizer"
 msgstr "均衡器"
 
@@ -229,19 +229,19 @@ msgstr "均衡器: 关"
 msgid "Preset"
 msgstr "预设"
 
-#: main.ts:582 ui/workbench.slint:408
+#: main.ts:582 ui/workbench.slint:410 ui/workbench.slint:431
 msgid "Flat"
 msgstr "平直"
 
-#: main.ts:582 ui/workbench.slint:408
+#: main.ts:582 ui/workbench.slint:410 ui/workbench.slint:431
 msgid "Voice"
 msgstr "人声"
 
-#: main.ts:582 ui/workbench.slint:408
+#: main.ts:582 ui/workbench.slint:410 ui/workbench.slint:431
 msgid "Music"
 msgstr "音乐"
 
-#: main.ts:582 ui/workbench.slint:408
+#: main.ts:582 ui/workbench.slint:410 ui/workbench.slint:431
 msgid "Cinema"
 msgstr "影院"
 
@@ -273,19 +273,19 @@ msgstr "超前 50 毫秒"
 msgid "50 ms Later"
 msgstr "滞后 50 毫秒"
 
-#: main.ts:607 main.ts:646 ui/workbench.slint:474
+#: main.ts:607 main.ts:646 ui/workbench.slint:498
 msgid "Reset"
 msgstr "复位"
 
-#: main.ts:611 ui/workbench.slint:648
+#: main.ts:611 ui/workbench.slint:673
 msgid "Don't Keep"
 msgstr "不保持"
 
-#: main.ts:611 ui/workbench.slint:649
+#: main.ts:611 ui/workbench.slint:674
 msgid "Keep for This Run"
 msgstr "本次运行内保持"
 
-#: main.ts:611 ui/workbench.slint:650
+#: main.ts:611 ui/workbench.slint:675
 msgid "Always Keep"
 msgstr "始终保持"
 
@@ -293,7 +293,7 @@ msgstr "始终保持"
 msgid "Processing"
 msgstr "声音处理"
 
-#: main.ts:621 ui/workbench.slint:518
+#: main.ts:621 ui/workbench.slint:425 ui/workbench.slint:543
 msgid "Normalize"
 msgstr "规格化"
 
@@ -305,7 +305,7 @@ msgstr "规格化: 开"
 msgid "Normalize: Off"
 msgstr "规格化: 关"
 
-#: main.ts:633 ui/workbench.slint:531
+#: main.ts:633 ui/workbench.slint:425 ui/workbench.slint:556
 msgid "Crystalizer"
 msgstr "晶化"
 
@@ -321,7 +321,7 @@ msgstr "晶化: 关"
 msgid "Audio processing reset"
 msgstr "音频处理已复位"
 
-#: manifest.json ui/workbench.slint:358
+#: manifest.json ui/workbench.slint:359
 msgid "Audio Workbench"
 msgstr "音频工作台"
 
@@ -393,58 +393,58 @@ msgstr "已应用"
 msgid "Ready"
 msgstr "就绪"
 
-#: ui/workbench.slint:184 ui/workbench.slint:549 ui/workbench.slint:697
+#: ui/workbench.slint:185 ui/workbench.slint:574 ui/workbench.slint:722
 msgid "Default"
 msgstr "默认"
 
-#: ui/workbench.slint:409
+#: ui/workbench.slint:411
 msgid "Effects"
 msgstr "效果"
 
-#: ui/workbench.slint:409
+#: ui/workbench.slint:411
 msgid "Output"
 msgstr "声道与输出"
 
-#: ui/workbench.slint:463
-msgid "Custom"
-msgstr "自定义"
-
-#: ui/workbench.slint:505
+#: ui/workbench.slint:422 ui/workbench.slint:530
 msgid "Audio sync"
 msgstr "声音同步"
 
-#: ui/workbench.slint:506
-msgid "{} ms"
-msgstr "{} ms"
-
-#: ui/workbench.slint:546
-msgid "{} dB"
-msgstr "{} dB"
-
-#: ui/workbench.slint:563
+#: ui/workbench.slint:428 ui/workbench.slint:588
 msgid "Track"
 msgstr "音轨"
 
-#: ui/workbench.slint:576
-msgid "Load…"
-msgstr "载入…"
-
-#: ui/workbench.slint:586
+#: ui/workbench.slint:428 ui/workbench.slint:611
 msgid "Channels"
 msgstr "声道"
 
-#: ui/workbench.slint:614
+#: ui/workbench.slint:428 ui/workbench.slint:639
 msgid "Device"
 msgstr "输出设备"
 
-#: ui/workbench.slint:633
-msgid "Auto-load audio files with the same name"
-msgstr "自动载入同名音频文件"
-
-#: ui/workbench.slint:641
+#: ui/workbench.slint:428 ui/workbench.slint:666
 msgid "Keep sync"
 msgstr "同步保持"
 
-#: ui/workbench.slint:676
+#: ui/workbench.slint:431 ui/workbench.slint:487
+msgid "Custom"
+msgstr "自定义"
+
+#: ui/workbench.slint:531
+msgid "{} ms"
+msgstr "{} ms"
+
+#: ui/workbench.slint:571
+msgid "{} dB"
+msgstr "{} dB"
+
+#: ui/workbench.slint:601
+msgid "Load…"
+msgstr "载入…"
+
+#: ui/workbench.slint:658
+msgid "Auto-load audio files with the same name"
+msgstr "自动载入同名音频文件"
+
+#: ui/workbench.slint:701
 msgid "Retry"
 msgstr "重试"

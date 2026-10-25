@@ -11,22 +11,22 @@ msgstr ""
 msgid "{} (build {})"
 msgstr "{}（ビルド {}）"
 
-#: about.ts:32 about.ts:78 properties.ts:196 properties.ts:285 properties.ts:286 ui/about.slint:81
+#: about.ts:32 about.ts:78 properties.ts:196 properties.ts:285 properties.ts:286 ui/about.slint:86 ui/about.slint:120
 #, x-machine
 msgid "Unknown"
 msgstr "不明"
 
-#: about.ts:34 ui/about.slint:130
+#: about.ts:34 ui/about.slint:116 ui/about.slint:159
 #, x-machine
 msgid "Plugin API"
 msgstr "プラグイン API"
 
-#: about.ts:70 ui/about.slint:126
+#: about.ts:70 ui/about.slint:155
 #, x-machine
 msgid "Version {} (build {})"
 msgstr "バージョン {}（ビルド {}）"
 
-#: about.ts:70 ui/about.slint:126
+#: about.ts:70 ui/about.slint:155
 #, x-machine
 msgid "Version {}"
 msgstr "バージョン {}"
@@ -36,72 +36,72 @@ msgstr "バージョン {}"
 msgid "{}: {}"
 msgstr "{}：{}"
 
-#: about.ts:72 ui/about.slint:141
+#: about.ts:72 ui/about.slint:170
 #, x-machine
 msgid "Loaded plugins"
 msgstr "読み込まれたプラグイン"
 
-#: about.ts:73 ui/about.slint:152
+#: about.ts:73 ui/about.slint:181
 #, x-machine
 msgid "Unknown (cannot read the plugin list)"
 msgstr "不明（プラグイン一覧を読み取れません）"
 
-#: about.ts:76 ui/about.slint:85
+#: about.ts:76 ui/about.slint:90
 #, x-machine
 msgid "Built-in"
 msgstr "内蔵"
 
-#: about.ts:76 ui/about.slint:86
+#: about.ts:76 ui/about.slint:91
 #, x-machine
 msgid "Repository"
 msgstr "リポジトリ"
 
-#: about.ts:76 ui/about.slint:87
+#: about.ts:76 ui/about.slint:92
 #, x-machine
 msgid "Link"
 msgstr "リンク"
 
-#: about.ts:76 ui/about.slint:88
+#: about.ts:76 ui/about.slint:93
 #, x-machine
 msgid "Local file"
 msgstr "ローカルファイル"
 
-#: about.ts:76 ui/about.slint:89
+#: about.ts:76 ui/about.slint:94
 #, x-machine
 msgid "Workshop"
 msgstr "ワークショップ"
 
-#: about.ts:76 ui/about.slint:90
+#: about.ts:76 ui/about.slint:95
 #, x-machine
 msgid "Installed"
 msgstr "インストール済み"
 
-#: about.ts:76 ui/about.slint:91
+#: about.ts:76 ui/about.slint:96
 #, x-machine
 msgid "Development"
 msgstr "開発用読み込み"
 
-#: about.ts:77 ui/about.slint:95
+#: about.ts:77 ui/about.slint:100
 #, x-machine
 msgid "Starting"
 msgstr "起動中"
 
-#: about.ts:77 ui/about.slint:96
+#: about.ts:77 ui/about.slint:101
 #, x-machine
 msgid "Running"
 msgstr "実行中"
 
-#: about.ts:77 ui/about.slint:97
+#: about.ts:77 ui/about.slint:102
 #, x-machine
 msgid "Disabled"
 msgstr "無効"
 
-#: about.ts:77 ui/about.slint:98
+#: about.ts:77 ui/about.slint:103
 #, x-machine
 msgid "Failed"
 msgstr "失敗"
 
-#: about.ts:77 ui/about.slint:99
+#: about.ts:77 ui/about.slint:104
 #, x-machine
 msgid "Stopped"
 msgstr "停止"
@@ -606,7 +606,7 @@ msgstr "エンコーダ"
 msgid "Creation time"
 msgstr "作成日時"
 
-#: properties.ts:222 properties.ts:250 ui/about.slint:141
+#: properties.ts:222 properties.ts:250 ui/about.slint:123 ui/about.slint:170
 #, x-machine
 msgid "Source"
 msgstr "ソース"
@@ -787,32 +787,32 @@ msgstr "Vestra Player 情報.txt"
 msgid "{} info.txt"
 msgstr "{} 情報.txt"
 
-#: ui/about.slint:55
+#: ui/about.slint:60
 #, x-machine
 msgid "About Vestra Player"
 msgstr "Vestra Player について"
 
-#: ui/about.slint:141
+#: ui/about.slint:119 ui/about.slint:170
 #, x-machine
 msgid "Version"
 msgstr "バージョン"
 
-#: ui/about.slint:141
+#: ui/about.slint:127 ui/about.slint:170
 #, x-machine
 msgid "State"
 msgstr "状態"
 
-#: ui/about.slint:181 ui/properties.slint:147
+#: ui/about.slint:213 ui/properties.slint:157
 #, x-machine
 msgid "Copy failed"
 msgstr "コピーに失敗しました"
 
-#: ui/about.slint:187
+#: ui/about.slint:219
 #, x-machine
 msgid "Copy Info"
 msgstr "情報をコピー"
 
-#: ui/about.slint:188 ui/properties.slint:158
+#: ui/about.slint:220 ui/properties.slint:168
 #, x-machine
 msgid "Close"
 msgstr "閉じる"
@@ -840,22 +840,22 @@ msgctxt "tab"
 msgid "System"
 msgstr "システム"
 
-#: ui/properties.slint:148
+#: ui/properties.slint:158
 #, x-machine
 msgid "Save failed: {}"
 msgstr "保存に失敗しました：{}"
 
-#: ui/properties.slint:155
+#: ui/properties.slint:165
 #, x-machine
 msgid "Refresh"
 msgstr "更新"
 
-#: ui/properties.slint:156
+#: ui/properties.slint:166
 #, x-machine
 msgid "Copy"
 msgstr "コピー"
 
-#: ui/properties.slint:157
+#: ui/properties.slint:167
 #, x-machine
 msgid "Save As…"
 msgstr "名前を付けて保存…"

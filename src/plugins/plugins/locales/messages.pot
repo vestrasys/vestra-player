@@ -28,7 +28,7 @@ msgstr ""
 msgid "Its menus, shortcuts, windows and effects (such as the equalizer, filters, subtitle style) are removed at once; open media keeps playing. It stays disabled after Vestra Player restarts; you can enable it here at any time."
 msgstr ""
 
-#: manager.ts:239 ui/plugins.slint:310
+#: manager.ts:239 ui/plugins.slint:268 ui/plugins.slint:362
 msgid "Disable"
 msgstr ""
 
@@ -288,7 +288,7 @@ msgstr ""
 msgid "Note"
 msgstr ""
 
-#: ui/plugins.slint:123 ui/plugins.slint:243
+#: ui/plugins.slint:123 ui/plugins.slint:249 ui/plugins.slint:290
 msgid "Source"
 msgstr ""
 
@@ -377,48 +377,48 @@ msgid "Data folder unavailable: {}"
 msgstr ""
 
 #. the version column of a development-loaded plugin (50px wide).
-#: ui/plugins.slint:189
+#: ui/plugins.slint:195 ui/plugins.slint:245
 msgid "Dev"
 msgstr ""
 
-#: ui/plugins.slint:241
-msgid "Plugin"
-msgstr ""
-
-#: ui/plugins.slint:242
+#: ui/plugins.slint:245 ui/plugins.slint:289
 msgid "Version"
 msgstr ""
 
-#: ui/plugins.slint:244
+#: ui/plugins.slint:253 ui/plugins.slint:291
 msgid "Status"
 msgstr ""
 
 #. column header: the size of the plugin's data folder.
-#: ui/plugins.slint:246
+#: ui/plugins.slint:255 ui/plugins.slint:293
 msgid "Data"
 msgstr ""
 
-#: ui/plugins.slint:269
-msgid "Select a plugin to see its details"
-msgstr ""
-
-#: ui/plugins.slint:310
-msgid "Enable"
-msgstr ""
-
-#: ui/plugins.slint:315
+#: ui/plugins.slint:262 ui/plugins.slint:367
 msgid "Reload"
 msgstr ""
 
 #. button: roll the plugin back to its previous version (94px wide).
-#: ui/plugins.slint:317
+#: ui/plugins.slint:263 ui/plugins.slint:369
 msgid "Roll Back"
 msgstr ""
 
-#: ui/plugins.slint:324
+#: ui/plugins.slint:264 ui/plugins.slint:376
 msgid "Uninstall…"
 msgstr ""
 
-#: ui/plugins.slint:329
+#: ui/plugins.slint:265 ui/plugins.slint:381 ui/plugins.slint:386
 msgid "Open Data Folder"
+msgstr ""
+
+#: ui/plugins.slint:268 ui/plugins.slint:362
+msgid "Enable"
+msgstr ""
+
+#: ui/plugins.slint:288
+msgid "Plugin"
+msgstr ""
+
+#: ui/plugins.slint:320
+msgid "Select a plugin to see its details"
 msgstr ""

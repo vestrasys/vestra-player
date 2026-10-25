@@ -6,7 +6,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: main.ts:195 picture.slint:386
+#: main.ts:195 picture.slint:390
 #, x-machine
 msgid "Shader failed to load"
 msgstr "Shader konnte nicht geladen werden"
@@ -46,17 +46,17 @@ msgstr "Seitenverhältnis: {}"
 msgid "Aspect ratio: Custom - {}"
 msgstr "Seitenverhältnis: Benutzerdefiniert – {}"
 
-#: main.ts:473 main.ts:882 picture.slint:680
+#: main.ts:473 main.ts:882 picture.slint:710
 #, x-machine
 msgid "Keep Aspect Ratio"
 msgstr "Seitenverhältnis beibehalten"
 
-#: main.ts:473 main.ts:882 picture.slint:680
+#: main.ts:473 main.ts:882 picture.slint:710
 #, x-machine
 msgid "Ignore Aspect Ratio"
 msgstr "Seitenverhältnis ignorieren"
 
-#: main.ts:473 picture.slint:680
+#: main.ts:473 picture.slint:710
 #, x-machine
 msgid "Fill Window"
 msgstr "Fenster füllen"
@@ -523,7 +523,7 @@ msgstr "Pixel-Shader"
 msgid "Use Shaders"
 msgstr "Shader verwenden"
 
-#: main.ts:819 main.ts:824 main.ts:833 main.ts:842 main.ts:845 main.ts:1068 picture.slint:365 ui/shaders.slint:120
+#: main.ts:819 main.ts:824 main.ts:833 main.ts:842 main.ts:845 main.ts:1068 picture.slint:369 ui/shaders.slint:131
 #, x-machine
 msgid "Needs GPU rendering (currently software rendering)"
 msgstr "Erfordert GPU-Rendering (derzeit Software-Rendering)"
@@ -548,12 +548,12 @@ msgstr "Shader neu laden"
 msgid "HDR Tone Mapping"
 msgstr "HDR-Tone-Mapping"
 
-#: main.ts:828 main.ts:861 picture.slint:723 picture.slint:752
+#: main.ts:828 main.ts:861 picture.slint:753 picture.slint:782
 #, x-machine
 msgid "Auto"
 msgstr "Automatisch"
 
-#: main.ts:828 picture.slint:752
+#: main.ts:828 picture.slint:782
 #, x-machine
 msgid "Off"
 msgstr "Aus"
@@ -578,7 +578,7 @@ msgstr "Mobius"
 msgid "Reinhard"
 msgstr "Reinhard"
 
-#: main.ts:828 picture.slint:752
+#: main.ts:828 picture.slint:782
 #, x-machine
 msgid "Clip"
 msgstr "Abschneiden"
@@ -593,7 +593,7 @@ msgstr "Dynamische Spitzenerkennung"
 msgid "HDR Settings…"
 msgstr "HDR-Einstellungen…"
 
-#: main.ts:849 main.ts:861 main.ts:871 picture.slint:718
+#: main.ts:849 main.ts:861 main.ts:871 picture.slint:417 picture.slint:748
 #, x-machine
 msgid "Deinterlace"
 msgstr "Deinterlacing"
@@ -603,12 +603,12 @@ msgstr "Deinterlacing"
 msgid "Cycle"
 msgstr "Durchschalten"
 
-#: main.ts:861 picture.slint:723
+#: main.ts:861 picture.slint:753
 #, x-machine
 msgid "Always"
 msgstr "Immer"
 
-#: main.ts:861 picture.slint:723
+#: main.ts:861 picture.slint:753
 #, x-machine
 msgid "Never"
 msgstr "Nie"
@@ -618,12 +618,12 @@ msgstr "Nie"
 msgid "Output"
 msgstr "Ausgabe"
 
-#: main.ts:871 picture.slint:732
+#: main.ts:871 picture.slint:762
 #, x-machine
 msgid "By Frame"
 msgstr "Pro Vollbild"
 
-#: main.ts:871 picture.slint:732
+#: main.ts:871 picture.slint:762
 #, x-machine
 msgid "By Field (Double Rate)"
 msgstr "Pro Halbbild (2× Rate)"
@@ -643,12 +643,12 @@ msgstr "Fenster füllen (Überstand abschneiden)"
 msgid "Cycle Aspect Ratio"
 msgstr "Seitenverhältnis durchschalten"
 
-#: main.ts:899 picture.slint:353 picture.slint:354
+#: main.ts:899 picture.slint:357 picture.slint:358
 #, x-machine
 msgid "Default (Source)"
 msgstr "Standard (Quelle)"
 
-#: main.ts:943 picture.slint:354
+#: main.ts:943 picture.slint:358
 #, x-machine
 msgid "Custom ({})"
 msgstr "Benutzerdefiniert ({})"
@@ -663,7 +663,7 @@ msgstr "Benutzerdefiniert (x:y)"
 msgid "Enter one with Custom Aspect Ratio… first"
 msgstr "Zuerst unter „Benutzerdefiniertes Seitenverhältnis…“ eingeben"
 
-#: main.ts:946 picture.slint:665
+#: main.ts:946 picture.slint:695
 #, x-machine
 msgid "Custom Aspect Ratio…"
 msgstr "Benutzerdefiniertes Seitenverhältnis…"
@@ -673,7 +673,7 @@ msgstr "Benutzerdefiniertes Seitenverhältnis…"
 msgid "Crop/Stretch"
 msgstr "Zuschneiden/Strecken"
 
-#: main.ts:952 picture.slint:630
+#: main.ts:952 picture.slint:660
 #, x-machine
 msgid "None"
 msgstr "Keines"
@@ -743,12 +743,12 @@ msgstr "Nach links"
 msgid "Move Right"
 msgstr "Nach rechts"
 
-#: main.ts:981 ui/shaders.slint:103
+#: main.ts:981 ui/shaders.slint:91 ui/shaders.slint:114
 #, x-machine
 msgid "Move Up"
 msgstr "Nach oben"
 
-#: main.ts:981 ui/shaders.slint:104
+#: main.ts:981 ui/shaders.slint:91 ui/shaders.slint:115
 #, x-machine
 msgid "Move Down"
 msgstr "Nach unten"
@@ -828,7 +828,7 @@ msgstr "Gaußscher Weichzeichner: Ein"
 msgid "Gaussian blur: off"
 msgstr "Gaußscher Weichzeichner: Aus"
 
-#: main.ts:1045 picture.slint:463
+#: main.ts:1045 picture.slint:424 picture.slint:490
 #, x-machine
 msgid "Sharpen"
 msgstr "Schärfen"
@@ -838,12 +838,12 @@ msgstr "Schärfen"
 msgid "Edge Sharpen"
 msgstr "Kantenschärfung"
 
-#: main.ts:1045 picture.slint:516
+#: main.ts:1045 picture.slint:424 picture.slint:545
 #, x-machine
 msgid "Deblock"
 msgstr "Deblocking"
 
-#: main.ts:1045 picture.slint:526
+#: main.ts:1045 picture.slint:424 picture.slint:556
 #, x-machine
 msgid "Deband"
 msgstr "Debanding"
@@ -948,7 +948,7 @@ msgstr "Sättigung +1 %"
 msgid "Hue +1%"
 msgstr "Farbton +1 %"
 
-#: manifest.json picture.slint:317
+#: manifest.json picture.slint:320
 #, x-machine
 msgid "Picture Adjustments"
 msgstr "Bildeinstellungen"
@@ -960,8 +960,12 @@ msgstr "Farbe, Bildverarbeitung, Seitenverhältnis, Zuschnitt, Drehung und HDR"
 
 #: manifest.json
 #, x-machine
-msgid "Adjust brightness, contrast, saturation and hue; image processing such as sharpening, denoising and deblocking; flip, rotation, deinterlacing and frame doubling; aspect ratio, crop/stretch and zooming and panning the frame; with GPU rendering also HDR tone mapping, pixel shaders and motion interpolation.\nFind it in the Video context menu and the Picture Adjustments… window."
-msgstr "Helligkeit, Kontrast, Sättigung und Farbton anpassen; Bildverarbeitung wie Schärfen, Rauschunterdrückung und Deblocking; Spiegeln, Drehung, Deinterlacing und Bildverdopplung; Seitenverhältnis, Zuschneiden/Strecken sowie Zoomen und Verschieben des Bildausschnitts; mit GPU-Rendering zusätzlich HDR-Tone-Mapping, Pixel-Shader und Bewegungsinterpolation.\nZu finden im Kontextmenü „Video“ und im Fenster „Bildeinstellungen…“."
+msgid ""
+"Adjust brightness, contrast, saturation and hue; image processing such as sharpening, denoising and deblocking; flip, rotation, deinterlacing and frame doubling; aspect ratio, crop/stretch and zooming and panning the frame; with GPU rendering also HDR tone mapping, pixel shaders and motion interpolation.\n"
+"Find it in the Video context menu and the Picture Adjustments… window."
+msgstr ""
+"Helligkeit, Kontrast, Sättigung und Farbton anpassen; Bildverarbeitung wie Schärfen, Rauschunterdrückung und Deblocking; Spiegeln, Drehung, Deinterlacing und Bildverdopplung; Seitenverhältnis, Zuschneiden/Strecken sowie Zoomen und Verschieben des Bildausschnitts; mit GPU-Rendering zusätzlich HDR-Tone-Mapping, Pixel-Shader und Bewegungsinterpolation.\n"
+"Zu finden im Kontextmenü „Video“ und im Fenster „Bildeinstellungen…“."
 
 #: manifest.json
 #, x-machine
@@ -983,284 +987,284 @@ msgstr "Farbe"
 msgid "filters"
 msgstr "Filter"
 
-#: picture.slint:232 picture.slint:274 picture.slint:512 picture.slint:704
+#: picture.slint:234 picture.slint:277 picture.slint:540 picture.slint:734
 #, x-machine
 msgid "Default"
 msgstr "Standard"
 
-#: picture.slint:383
+#: picture.slint:387
 #, x-machine
 msgid "No picture in the current source"
 msgstr "Die aktuelle Quelle hat kein Bild"
 
-#: picture.slint:384
+#: picture.slint:388
 #, x-machine
 msgid "Picture processing failed"
 msgstr "Bildverarbeitung fehlgeschlagen"
 
-#: picture.slint:385
+#: picture.slint:389
 #, x-machine
 msgid "Display unavailable"
 msgstr "Anzeige nicht verfügbar"
 
-#: picture.slint:387
+#: picture.slint:391
 #, x-machine
 msgid "Render options unavailable"
 msgstr "Renderoptionen nicht verfügbar"
 
-#: picture.slint:388
+#: picture.slint:392
 #, x-machine
 msgid "Render settings failed"
 msgstr "Rendereinstellungen fehlgeschlagen"
 
-#: picture.slint:391
+#: picture.slint:395
 #, x-machine
 msgid "Another plugin controls the display"
 msgstr "Ein anderes Plugin steuert die Anzeige"
 
-#: picture.slint:392
+#: picture.slint:396
 #, x-machine
 msgid "Another plugin controls the render options"
 msgstr "Ein anderes Plugin steuert die Renderoptionen"
 
-#: picture.slint:404
+#: picture.slint:408
 #, x-machine
 msgid "Color"
 msgstr "Farbe"
 
-#: picture.slint:404
+#: picture.slint:408
 #, x-machine
 msgid "Effects"
 msgstr "Effekte"
 
-#: picture.slint:404
+#: picture.slint:408
 #, x-machine
 msgid "Picture"
 msgstr "Bild"
 
-#: picture.slint:404
+#: picture.slint:408
 #, x-machine
 msgid "Advanced"
 msgstr "Erweitert"
 
-#: picture.slint:432
+#: picture.slint:416 picture.slint:457
 #, x-machine
 msgid "Brightness"
 msgstr "Helligkeit"
 
-#: picture.slint:433
+#: picture.slint:416 picture.slint:458
 #, x-machine
 msgid "Contrast"
 msgstr "Kontrast"
 
-#: picture.slint:434
+#: picture.slint:416 picture.slint:459
 #, x-machine
 msgid "Saturation"
 msgstr "Sättigung"
 
-#: picture.slint:435
+#: picture.slint:416 picture.slint:460
 #, x-machine
 msgid "Hue"
 msgstr "Farbton"
 
-#: picture.slint:436
+#: picture.slint:416 picture.slint:461
 #, x-machine
 msgid "Gamma"
 msgstr "Gamma"
 
-#: picture.slint:441
-#, x-machine
-msgid "Original"
-msgstr "Original"
-
-#: picture.slint:442
-#, x-machine
-msgid "Vivid"
-msgstr "Lebendig"
-
-#: picture.slint:443
-#, x-machine
-msgid "Cinema"
-msgstr "Kino"
-
-#: picture.slint:444
-#, x-machine
-msgid "Soft"
-msgstr "Weich"
-
-#: picture.slint:453
-#, x-machine
-msgid "Blur"
-msgstr "Weichzeichnen"
-
-#: picture.slint:472
-#, x-machine
-msgid "Edges"
-msgstr "Kanten"
-
-#: picture.slint:473
-#, x-machine
-msgid "Wide-radius sharpening that mainly strengthens outlines"
-msgstr "Schärfung mit großem Radius, die vor allem Konturen verstärkt"
-
-#: picture.slint:487
-#, x-machine
-msgid "Denoise"
-msgstr "Entrauschen"
-
-#: picture.slint:495
-#, x-machine
-msgid "3D"
-msgstr "3D"
-
-#: picture.slint:495
-#, x-machine
-msgid "Gradual"
-msgstr "Graduell"
-
-#: picture.slint:495
-#, x-machine
-msgid "Temporal"
-msgstr "Temporal"
-
-#: picture.slint:517
-#, x-machine
-msgid "Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4"
-msgstr "Unter 50 schwach, ab 50 stark; am deutlichsten bei MPEG-2/MPEG-4 mit niedriger Bitrate"
-
-#: picture.slint:540
-#, x-machine
-msgid "Doubles the frame rate (up to 60), blending each in-between frame from its neighbours"
-msgstr "Verdoppelt die Bildrate (bis 60); jedes Zwischenbild wird aus seinen Nachbarn gemischt"
-
-#: picture.slint:544
-#, x-machine
-msgid "Doubling"
-msgstr "Verdoppeln"
-
-#: picture.slint:551
-#, x-machine
-msgid "Rate already high enough"
-msgstr "Rate schon hoch genug"
-
-#: picture.slint:559
-#, x-machine
-msgid "GPU interpolation to the display refresh rate; excludes frame doubling"
-msgstr "GPU-Interpolation auf die Bildwiederholrate des Bildschirms; schließt Bildverdopplung aus"
-
-#: picture.slint:563
-#, x-machine
-msgid "Interpolation"
-msgstr "Interpolation"
-
-#: picture.slint:579
+#: picture.slint:416 picture.slint:609
 #, x-machine
 msgid "Flip"
 msgstr "Spiegeln"
 
-#: picture.slint:585
-#, x-machine
-msgid "Vert."
-msgstr "Vert."
-
-#: picture.slint:593
-#, x-machine
-msgid "Horiz."
-msgstr "Horiz."
-
-#: picture.slint:606
+#: picture.slint:416 picture.slint:636
 #, x-machine
 msgid "Rotate"
 msgstr "Drehen"
 
-#: picture.slint:625
+#: picture.slint:417 picture.slint:655
 #, x-machine
 msgid "Crop/stretch"
 msgstr "Zuschnitt"
 
-#: picture.slint:630
-#, x-machine
-msgid "Stretch"
-msgstr "Strecken"
-
-#: picture.slint:630
-#, x-machine
-msgid "Crop"
-msgstr "Schneiden"
-
-#: picture.slint:649
+#: picture.slint:417 picture.slint:679
 #, x-machine
 msgid "Aspect ratio"
 msgstr "Bildformat"
 
-#: picture.slint:674
+#: picture.slint:417 picture.slint:704
 #, x-machine
 msgid "Display"
 msgstr "Anzeige"
 
-#: picture.slint:688
-#, x-machine
-msgid "Zoom {}%"
-msgstr "Zoom {} %"
-
-#: picture.slint:692
+#: picture.slint:417 picture.slint:722
 #, x-machine
 msgid "Zoom"
 msgstr "Zoom"
 
-#: picture.slint:741
-#, x-machine
-msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays; the slider sets the target brightness"
-msgstr "Tone-Mapping von HDR-Quellen (PQ / HLG) auf SDR-Bildschirmen; der Regler legt die Zielhelligkeit fest"
-
-#: picture.slint:745
+#: picture.slint:417 picture.slint:775
 #, x-machine
 msgid "HDR"
 msgstr "HDR"
 
-#: picture.slint:776
-#, x-machine
-msgid "Target {} nits · Not an HDR source"
-msgstr "Ziel {} Nits · keine HDR-Quelle"
-
-#: picture.slint:776
-#, x-machine
-msgid "Target {} nits"
-msgstr "Ziel {} Nits"
-
-#: picture.slint:786
-#, x-machine
-msgid "mpv user shaders (.glsl), run in list order"
-msgstr "mpv-Benutzer-Shader (.glsl), in Listenreihenfolge ausgeführt"
-
-#: picture.slint:790
+#: picture.slint:417 picture.slint:820
 #, x-machine
 msgid "Shaders"
 msgstr "Shader"
 
-#: picture.slint:793
+#: picture.slint:422 picture.slint:844
+#, x-machine
+msgid "Enable picture effects"
+msgstr "Bildeffekte aktivieren"
+
+#: picture.slint:424 picture.slint:479
+#, x-machine
+msgid "Blur"
+msgstr "Weichzeichnen"
+
+#: picture.slint:424 picture.slint:500
+#, x-machine
+msgid "Edges"
+msgstr "Kanten"
+
+#: picture.slint:424 picture.slint:515
+#, x-machine
+msgid "Denoise"
+msgstr "Entrauschen"
+
+#: picture.slint:424 picture.slint:574
+#, x-machine
+msgid "Doubling"
+msgstr "Verdoppeln"
+
+#: picture.slint:466
+#, x-machine
+msgid "Original"
+msgstr "Original"
+
+#: picture.slint:467
+#, x-machine
+msgid "Vivid"
+msgstr "Lebendig"
+
+#: picture.slint:468
+#, x-machine
+msgid "Cinema"
+msgstr "Kino"
+
+#: picture.slint:469
+#, x-machine
+msgid "Soft"
+msgstr "Weich"
+
+#: picture.slint:501
+#, x-machine
+msgid "Wide-radius sharpening that mainly strengthens outlines"
+msgstr "Schärfung mit großem Radius, die vor allem Konturen verstärkt"
+
+#: picture.slint:523
+#, x-machine
+msgid "3D"
+msgstr "3D"
+
+#: picture.slint:523
+#, x-machine
+msgid "Gradual"
+msgstr "Graduell"
+
+#: picture.slint:523
+#, x-machine
+msgid "Temporal"
+msgstr "Temporal"
+
+#: picture.slint:546
+#, x-machine
+msgid "Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4"
+msgstr "Unter 50 schwach, ab 50 stark; am deutlichsten bei MPEG-2/MPEG-4 mit niedriger Bitrate"
+
+#: picture.slint:570
+#, x-machine
+msgid "Doubles the frame rate (up to 60), blending each in-between frame from its neighbours"
+msgstr "Verdoppelt die Bildrate (bis 60); jedes Zwischenbild wird aus seinen Nachbarn gemischt"
+
+#: picture.slint:581
+#, x-machine
+msgid "Rate already high enough"
+msgstr "Rate schon hoch genug"
+
+#: picture.slint:589
+#, x-machine
+msgid "GPU interpolation to the display refresh rate; excludes frame doubling"
+msgstr "GPU-Interpolation auf die Bildwiederholrate des Bildschirms; schließt Bildverdopplung aus"
+
+#: picture.slint:593
+#, x-machine
+msgid "Interpolation"
+msgstr "Interpolation"
+
+#: picture.slint:615
+#, x-machine
+msgid "Vert."
+msgstr "Vert."
+
+#: picture.slint:623
+#, x-machine
+msgid "Horiz."
+msgstr "Horiz."
+
+#: picture.slint:660
+#, x-machine
+msgid "Stretch"
+msgstr "Strecken"
+
+#: picture.slint:660
+#, x-machine
+msgid "Crop"
+msgstr "Schneiden"
+
+#: picture.slint:718
+#, x-machine
+msgid "Zoom {}%"
+msgstr "Zoom {} %"
+
+#: picture.slint:771
+#, x-machine
+msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays; the slider sets the target brightness"
+msgstr "Tone-Mapping von HDR-Quellen (PQ / HLG) auf SDR-Bildschirmen; der Regler legt die Zielhelligkeit fest"
+
+#: picture.slint:806
+#, x-machine
+msgid "Target {} nits · Not an HDR source"
+msgstr "Ziel {} Nits · keine HDR-Quelle"
+
+#: picture.slint:806
+#, x-machine
+msgid "Target {} nits"
+msgstr "Ziel {} Nits"
+
+#: picture.slint:816
+#, x-machine
+msgid "mpv user shaders (.glsl), run in list order"
+msgstr "mpv-Benutzer-Shader (.glsl), in Listenreihenfolge ausgeführt"
+
+#: picture.slint:823
 #, x-machine
 msgid "Enable"
 msgstr "Aktiv"
 
-#: picture.slint:798
+#: picture.slint:828
 #, x-machine
 msgid "{n} shader"
 msgid_plural "{n} shaders"
 msgstr[0] "{n} Shader"
 msgstr[1] "{n} Shader"
 
-#: picture.slint:801
+#: picture.slint:831
 #, x-machine
 msgid "List…"
 msgstr "Liste…"
 
-#: picture.slint:812
-#, x-machine
-msgid "Enable picture effects"
-msgstr "Bildeffekte aktivieren"
-
-#: picture.slint:829
+#: picture.slint:864
 #, x-machine
 msgid "Retry"
 msgstr "Wiederholen"
@@ -1300,47 +1304,47 @@ msgstr "{} (Datei fehlt)"
 msgid "Shader List"
 msgstr "Shader-Liste"
 
-#: ui/shaders.slint:86
-#, x-machine
-msgid "Enabled {}/{} (run in order)"
-msgstr "Aktiviert {}/{} (in Reihenfolge ausgeführt)"
-
-#: ui/shaders.slint:95
-#, x-machine
-msgid "No shaders"
-msgstr "Keine Shader"
-
-#: ui/shaders.slint:101
+#: ui/shaders.slint:91 ui/shaders.slint:112
 #, x-machine
 msgid "Add…"
 msgstr "Hinzufügen…"
 
-#: ui/shaders.slint:102
+#: ui/shaders.slint:91 ui/shaders.slint:113
 #, x-machine
 msgid "Remove"
 msgstr "Entfernen"
 
-#: ui/shaders.slint:105
+#: ui/shaders.slint:91 ui/shaders.slint:116
 #, x-machine
 msgid "Clear"
 msgstr "Leeren"
 
-#: ui/shaders.slint:108
+#: ui/shaders.slint:97
+#, x-machine
+msgid "Enabled {}/{} (run in order)"
+msgstr "Aktiviert {}/{} (in Reihenfolge ausgeführt)"
+
+#: ui/shaders.slint:106
+#, x-machine
+msgid "No shaders"
+msgstr "Keine Shader"
+
+#: ui/shaders.slint:119
 #, x-machine
 msgid "Other files in the shader folder (double-click to add)"
 msgstr "Weitere Dateien im Shader-Ordner (Doppelklick zum Hinzufügen)"
 
-#: ui/shaders.slint:112
+#: ui/shaders.slint:123
 #, x-machine
 msgid "No other .glsl files"
 msgstr "Keine weiteren .glsl-Dateien"
 
-#: ui/shaders.slint:120
+#: ui/shaders.slint:131
 #, x-machine
 msgid "“Use Shaders” is off"
 msgstr "„Shader verwenden“ ist aus"
 
-#: ui/shaders.slint:126
+#: ui/shaders.slint:137
 #, x-machine
 msgid "Open Folder"
 msgstr "Ordner öffnen"

@@ -141,36 +141,35 @@ msgstr "选择图片…"
 msgid "Restore Default"
 msgstr "恢复默认"
 
-#: ui/page.slint:91
+#: ui/page.slint:92
 msgid "PNG or JPEG, up to 4096×4096 and 16 MB. The image is copied, so the original can be moved."
 msgstr "PNG 或 JPEG，最大 4096×4096、16 MB；图片会复制保存，原文件可以移走。"
 
-#: ui/page.slint:97
+#: ui/page.slint:98
 msgid "Audio only"
 msgstr "纯音频"
 
-#: ui/page.slint:100
+#: ui/page.slint:101
 msgid "Show album cover for audio only"
 msgstr "纯音频时显示专辑封面"
 
-#: ui/page.slint:106
+#: ui/page.slint:107
 msgid "The cover comes from the picture embedded in the file, or a cover, folder or front image in the same folder; without one the logo is shown as a placeholder."
 msgstr "封面取自文件内嵌图片，或同一文件夹中的 cover、folder、front 图片；没有时显示徽标占位。"
 
-#: ui/page.slint:117
+#: ui/page.slint:118
 msgid "Cover cache unavailable"
 msgstr "封面缓存不可用"
 
-#: ui/page.slint:118
+#: ui/page.slint:119
 msgid "Cover cache: empty"
 msgstr "封面缓存：空"
 
-#: ui/page.slint:119
+#: ui/page.slint:120
 msgid "Cover cache: {n} track, {0}"
 msgid_plural "Cover cache: {n} tracks, {0}"
 msgstr[0] "封面缓存：{n} 首，{0}"
-msgstr[1] ""
 
-#: ui/page.slint:125
+#: ui/page.slint:126
 msgid "Clear Cover Cache"
 msgstr "清除封面缓存"

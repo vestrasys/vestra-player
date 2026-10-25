@@ -272,7 +272,7 @@ msgstr "Serienaufnahme…"
 msgid "Export Clip…"
 msgstr "Clip exportieren…"
 
-#: main.ts:346 ui/clip.slint:74
+#: main.ts:346 ui/clip.slint:85
 #, x-machine
 msgid "Export Tasks…"
 msgstr "Exportaufgaben…"
@@ -324,8 +324,12 @@ msgstr "Aktuelles Bild speichern oder kopieren, Serienaufnahmen, Clips exportier
 
 #: manifest.json
 #, x-machine
-msgid "Saves, saves as or copies the current frame (the source frame, or the rendered frame with video effects and subtitles) as PNG, JPEG or BMP; captures a burst of frames; exports part of a video as MP4 and shows its progress in a task list.\nRight-click menu: Video ▸ Snapshot."
-msgstr "Speichert oder kopiert das aktuelle Bild (das Originalbild oder das gerenderte Bild mit Videoeffekten und Untertiteln) als PNG, JPEG oder BMP, auch unter einem neuen Namen; nimmt Bildserien auf; exportiert einen Teil eines Videos als MP4 und zeigt den Fortschritt in einer Aufgabenliste.\nKontextmenü: Video ▸ Schnappschuss."
+msgid ""
+"Saves, saves as or copies the current frame (the source frame, or the rendered frame with video effects and subtitles) as PNG, JPEG or BMP; captures a burst of frames; exports part of a video as MP4 and shows its progress in a task list.\n"
+"Right-click menu: Video ▸ Snapshot."
+msgstr ""
+"Speichert oder kopiert das aktuelle Bild (das Originalbild oder das gerenderte Bild mit Videoeffekten und Untertiteln) als PNG, JPEG oder BMP, auch unter einem neuen Namen; nimmt Bildserien auf; exportiert einen Teil eines Videos als MP4 und zeigt den Fortschritt in einer Aufgabenliste.\n"
+"Kontextmenü: Video ▸ Schnappschuss."
 
 #: manifest.json
 #, x-machine
@@ -342,12 +346,12 @@ msgstr "Schnappschuss"
 msgid "export"
 msgstr "Export"
 
-#: model.ts:178 ui/clip.slint:13
+#: model.ts:178 ui/clip.slint:14
 #, x-machine
 msgid "No Audio"
 msgstr "Kein Ton"
 
-#: model.ts:179 ui/clip.slint:13
+#: model.ts:179 ui/clip.slint:14
 #, x-machine
 msgid "Current Track"
 msgstr "Aktuelle Spur"
@@ -367,137 +371,137 @@ msgstr "Spur {}"
 msgid "Burst"
 msgstr "Serienaufnahme"
 
-#: ui/burst.slint:35
-#, x-machine
-msgid "Save to"
-msgstr "Speicherziel"
-
-#: ui/burst.slint:45
-#, x-machine
-msgid "Snapshot settings"
-msgstr "Schnappschuss-Einstellungen"
-
-#: ui/burst.slint:48
+#: ui/burst.slint:41 ui/burst.slint:65
 #, x-machine
 msgid "Count:"
 msgstr "Anzahl:"
 
-#: ui/burst.slint:50
-#, x-machine
-msgid "frames (2–20)"
-msgstr "Bilder (2–20)"
-
-#: ui/burst.slint:54
+#: ui/burst.slint:41 ui/burst.slint:71
 #, x-machine
 msgid "Interval:"
 msgstr "Intervall:"
 
-#: ui/burst.slint:56
-#, x-machine
-msgid "s (0.1–10)"
-msgstr "s (0.1–10)"
-
-#: ui/burst.slint:58
-#, x-machine
-msgid "Start at the current position"
-msgstr "An der aktuellen Position beginnen"
-
-#: ui/burst.slint:61
+#: ui/burst.slint:41 ui/burst.slint:78
 #, x-machine
 msgid "Start:"
 msgstr "Anfang:"
 
-#: ui/burst.slint:63 ui/clip.slint:34 ui/clip.slint:40
-#, x-machine
-msgid "Current"
-msgstr "Aktuell"
-
-#: ui/burst.slint:67
-#, x-machine
-msgid "Other settings"
-msgstr "Weitere Einstellungen"
-
-#: ui/burst.slint:70 ui/clip.slint:47 ui/settings.slint:29
-#, x-machine
-msgid "Format:"
-msgstr "Format:"
-
-#: ui/burst.slint:79 ui/clip.slint:58
-#, x-machine
-msgid "Include video effects"
-msgstr "Videoeffekte einbeziehen"
-
-#: ui/burst.slint:80
-#, x-machine
-msgid "Capture subtitles too"
-msgstr "Untertitel mit aufnehmen"
-
-#: ui/burst.slint:85 ui/clip.slint:63
-#, x-machine
-msgid "Information"
-msgstr "Informationen"
-
-#: ui/burst.slint:88
+#: ui/burst.slint:44 ui/burst.slint:105
 #, x-machine
 msgid "Progress:"
 msgstr "Fortschritt:"
 
-#: ui/burst.slint:93 ui/clip.slint:66
+#: ui/burst.slint:44 ui/burst.slint:110 ui/clip.slint:32 ui/clip.slint:77
 #, x-machine
 msgid "Status:"
 msgstr "Status:"
 
-#: ui/burst.slint:100 ui/tasks.slint:80
+#: ui/burst.slint:52
+#, x-machine
+msgid "Save to"
+msgstr "Speicherziel"
+
+#: ui/burst.slint:62
+#, x-machine
+msgid "Snapshot settings"
+msgstr "Schnappschuss-Einstellungen"
+
+#: ui/burst.slint:67
+#, x-machine
+msgid "frames (2–20)"
+msgstr "Bilder (2–20)"
+
+#: ui/burst.slint:73
+#, x-machine
+msgid "s (0.1–10)"
+msgstr "s (0.1–10)"
+
+#: ui/burst.slint:75
+#, x-machine
+msgid "Start at the current position"
+msgstr "An der aktuellen Position beginnen"
+
+#: ui/burst.slint:80 ui/clip.slint:45 ui/clip.slint:51
+#, x-machine
+msgid "Current"
+msgstr "Aktuell"
+
+#: ui/burst.slint:84
+#, x-machine
+msgid "Other settings"
+msgstr "Weitere Einstellungen"
+
+#: ui/burst.slint:87 ui/clip.slint:32 ui/clip.slint:58 ui/settings.slint:29 ui/settings.slint:40
+#, x-machine
+msgid "Format:"
+msgstr "Format:"
+
+#: ui/burst.slint:96 ui/clip.slint:69
+#, x-machine
+msgid "Include video effects"
+msgstr "Videoeffekte einbeziehen"
+
+#: ui/burst.slint:97
+#, x-machine
+msgid "Capture subtitles too"
+msgstr "Untertitel mit aufnehmen"
+
+#: ui/burst.slint:102 ui/clip.slint:74
+#, x-machine
+msgid "Information"
+msgstr "Informationen"
+
+#: ui/burst.slint:117 ui/tasks.slint:80
 #, x-machine
 msgid "Open Save Folder"
 msgstr "Speicherordner öffnen"
 
-#: ui/burst.slint:101
+#: ui/burst.slint:118
 #, x-machine
 msgid "Capture Current Frame"
 msgstr "Aktuelles Bild aufnehmen"
 
-#: ui/burst.slint:104
+#: ui/burst.slint:121
 #, x-machine
 msgid "Start"
 msgstr "Starten"
 
-#: ui/clip.slint:29
-#, x-machine
-msgid "Range"
-msgstr "Bereich"
-
-#: ui/clip.slint:32
+#: ui/clip.slint:32 ui/clip.slint:43
 #, x-machine
 msgid "Start (s):"
 msgstr "Anfang (s):"
 
-#: ui/clip.slint:38
+#: ui/clip.slint:32 ui/clip.slint:49
 #, x-machine
 msgid "End (s):"
 msgstr "Ende (s):"
 
-#: ui/clip.slint:44
-#, x-machine
-msgid "Output"
-msgstr "Ausgabe"
-
-#: ui/clip.slint:48
-#, x-machine
-msgid "MP4 (H.264 + AAC)"
-msgstr "MP4 (H.264 + AAC)"
-
-#: ui/clip.slint:52
+#: ui/clip.slint:32 ui/clip.slint:63
 #, x-machine
 msgid "Audio:"
 msgstr "Audio:"
 
+#: ui/clip.slint:40
+#, x-machine
+msgid "Range"
+msgstr "Bereich"
+
+#: ui/clip.slint:55
+#, x-machine
+msgid "Output"
+msgstr "Ausgabe"
+
 #: ui/clip.slint:59
+#, x-machine
+msgid "MP4 (H.264 + AAC)"
+msgstr "MP4 (H.264 + AAC)"
+
+#: ui/clip.slint:70
 #, x-machine
 msgid "Export subtitles too"
 msgstr "Untertitel mit exportieren"
 
-#: ui/clip.slint:77
+#: ui/clip.slint:88
 #, x-machine
 msgid "Export…"
 msgstr "Exportieren…"
@@ -590,42 +594,42 @@ msgstr "Neu gestartet."
 msgid "Snapshot Settings"
 msgstr "Schnappschuss-Einstellungen"
 
-#: ui/settings.slint:26
-#, x-machine
-msgid "Format"
-msgstr "Format"
-
-#: ui/settings.slint:39
+#: ui/settings.slint:29 ui/settings.slint:50
 #, x-machine
 msgid "Quality:"
 msgstr "Qualität:"
 
-#: ui/settings.slint:49
+#: ui/settings.slint:37
+#, x-machine
+msgid "Format"
+msgstr "Format"
+
+#: ui/settings.slint:61
 #, x-machine
 msgid "Quality applies to JPEG only; copies to the clipboard are always PNG."
 msgstr "Die Qualität gilt nur für JPEG; Kopien in die Zwischenablage sind immer PNG."
 
-#: ui/settings.slint:52
+#: ui/settings.slint:64
 #, x-machine
 msgid "Save location"
 msgstr "Speicherort"
 
-#: ui/settings.slint:60
+#: ui/settings.slint:72
 #, x-machine
 msgid "Save to the media folder when possible"
 msgstr "Wenn möglich im Ordner der Mediendatei speichern"
 
-#: ui/settings.slint:66
+#: ui/settings.slint:78
 #, x-machine
 msgid "Rendered frame"
 msgstr "Gerendertes Bild"
 
-#: ui/settings.slint:69
+#: ui/settings.slint:81
 #, x-machine
 msgid "Include subtitles"
 msgstr "Untertitel einbeziehen"
 
-#: ui/settings.slint:74
+#: ui/settings.slint:86
 #, x-machine
 msgid "The rendered frame is made offline: it includes the plugins' video effects, and subtitles are drawn again in the plugins' style, always inside the picture, so it is not pixel for pixel what the screen shows. On-screen messages are not included."
 msgstr "Das gerenderte Bild wird offline erzeugt: Es enthält die Videoeffekte der Plugins, und Untertitel werden im Stil der Plugins neu gezeichnet, immer innerhalb des Bildes. Es entspricht daher nicht Pixel für Pixel der Bildschirmanzeige. Bildschirmmeldungen sind nicht enthalten."

@@ -206,7 +206,7 @@ msgstr "ファイルの正規パスが既存の項目と同じです。その項
 msgid "Close the other dialog first"
 msgstr "先にもう一方のダイアログを閉じてください"
 
-#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:57 ui/sidebar.slint:242
+#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:114 ui/sidebar.slint:242
 #, x-machine
 msgid "Playlist"
 msgstr "プレイリスト"
@@ -476,22 +476,22 @@ msgstr "フォルダを開く…"
 msgid "Repeat"
 msgstr "リピート"
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 #, x-machine
 msgid "Off"
 msgstr "オフ"
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 #, x-machine
 msgid "All"
 msgstr "すべて"
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 #, x-machine
 msgid "One"
 msgstr "1 項目"
 
-#: main.ts:561 ui/settings.slint:99
+#: main.ts:561 ui/settings.slint:156
 #, x-machine
 msgid "Shuffle"
 msgstr "シャッフル"
@@ -670,7 +670,7 @@ msgstr "{} 行目：リストは {} 項目で上限です"
 msgid "The list is full at {} items"
 msgstr "リストは {} 項目で上限です"
 
-#: ui/link.slint:25
+#: ui/link.slint:25 ui/link.slint:34
 #, x-machine
 msgid "Enter HTTP(S) links; adding only selects, it does not play"
 msgstr "HTTP(S) リンクを入力してください。追加しても選択されるだけで、再生はされません"
@@ -680,82 +680,82 @@ msgstr "HTTP(S) リンクを入力してください。追加しても選択さ�
 msgid "Add Links to Playlist"
 msgstr "プレイリストにリンクを追加"
 
-#: ui/link.slint:42
+#: ui/link.slint:50
 #, x-machine
 msgid "Enter the web addresses to add to the playlist below, one per line."
 msgstr "プレイリストに追加する Web アドレスを、1 行に 1 つずつ下に入力してください。"
 
-#: ui/link.slint:48
+#: ui/link.slint:56
 #, x-machine
 msgid "Example: {}"
 msgstr "例：{}"
 
-#: ui/link.slint:55 ui/sidebar.slint:466
+#: ui/link.slint:63 ui/sidebar.slint:466
 #, x-machine
 msgid "Add"
 msgstr "追加"
 
-#: ui/settings.slint:63
-#, x-machine
-msgid "Open and drop"
-msgstr "開く・ドロップ"
-
-#: ui/settings.slint:67
+#: ui/settings.slint:105 ui/settings.slint:124
 #, x-machine
 msgid "When opening a file:"
 msgstr "ファイルを開くとき："
 
-#: ui/settings.slint:70
-#, x-machine
-msgid "Open only that file"
-msgstr "そのファイルだけを開く"
-
-#: ui/settings.slint:70
-#, x-machine
-msgid "Add similar files"
-msgstr "似たファイルを追加"
-
-#: ui/settings.slint:70
-#, x-machine
-msgid "Add all files in the folder"
-msgstr "フォルダ内のすべてのファイルを追加"
-
-#: ui/settings.slint:76
-#, x-machine
-msgid "Append when opening or dropping; don't clear the list"
-msgstr "開くときやドロップするときは追加し、リストを消去しない"
-
-#: ui/settings.slint:81
-#, x-machine
-msgid "Insert at the drop position when dropping on the list"
-msgstr "リストにドロップしたときはドロップ位置に挿入"
-
-#: ui/settings.slint:86
-#, x-machine
-msgid "Playback"
-msgstr "再生"
-
-#: ui/settings.slint:90
+#: ui/settings.slint:105 ui/settings.slint:147
 #, x-machine
 msgid "Repeat:"
 msgstr "リピート："
 
-#: ui/settings.slint:104
+#: ui/settings.slint:120
+#, x-machine
+msgid "Open and drop"
+msgstr "開く・ドロップ"
+
+#: ui/settings.slint:127
+#, x-machine
+msgid "Open only that file"
+msgstr "そのファイルだけを開く"
+
+#: ui/settings.slint:127
+#, x-machine
+msgid "Add similar files"
+msgstr "似たファイルを追加"
+
+#: ui/settings.slint:127
+#, x-machine
+msgid "Add all files in the folder"
+msgstr "フォルダ内のすべてのファイルを追加"
+
+#: ui/settings.slint:133
+#, x-machine
+msgid "Append when opening or dropping; don't clear the list"
+msgstr "開くときやドロップするときは追加し、リストを消去しない"
+
+#: ui/settings.slint:138
+#, x-machine
+msgid "Insert at the drop position when dropping on the list"
+msgstr "リストにドロップしたときはドロップ位置に挿入"
+
+#: ui/settings.slint:143
+#, x-machine
+msgid "Playback"
+msgstr "再生"
+
+#: ui/settings.slint:161
 #, x-machine
 msgid "Fast advance to next"
 msgstr "次の項目へすばやく切り替え"
 
-#: ui/settings.slint:109
+#: ui/settings.slint:166
 #, x-machine
 msgid "List"
 msgstr "リスト"
 
-#: ui/settings.slint:111
+#: ui/settings.slint:168
 #, x-machine
 msgid "Remember list"
 msgstr "リストを記憶"
 
-#: ui/settings.slint:116
+#: ui/settings.slint:173
 #, x-machine
 msgid "Confirm before removing all"
 msgstr "すべて削除する前に確認"

@@ -206,7 +206,7 @@ msgstr "파일의 실제 경로가 기존 항목과 같아 그 항목을 선택�
 msgid "Close the other dialog first"
 msgstr "먼저 다른 대화 상자를 닫으세요"
 
-#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:57 ui/sidebar.slint:242
+#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:114 ui/sidebar.slint:242
 #, x-machine
 msgid "Playlist"
 msgstr "재생목록"
@@ -476,22 +476,22 @@ msgstr "폴더 열기…"
 msgid "Repeat"
 msgstr "반복"
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 #, x-machine
 msgid "Off"
 msgstr "끔"
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 #, x-machine
 msgid "All"
 msgstr "전체"
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 #, x-machine
 msgid "One"
 msgstr "한 항목"
 
-#: main.ts:561 ui/settings.slint:99
+#: main.ts:561 ui/settings.slint:156
 #, x-machine
 msgid "Shuffle"
 msgstr "무작위 재생"
@@ -670,7 +670,7 @@ msgstr "{}번째 줄: 목록이 가득 찼습니다 (최대 {}개)"
 msgid "The list is full at {} items"
 msgstr "목록이 가득 찼습니다 (최대 {}개)"
 
-#: ui/link.slint:25
+#: ui/link.slint:25 ui/link.slint:34
 #, x-machine
 msgid "Enter HTTP(S) links; adding only selects, it does not play"
 msgstr "HTTP(S) 링크를 입력하세요. 추가하면 선택만 하고 재생하지는 않습니다"
@@ -680,82 +680,82 @@ msgstr "HTTP(S) 링크를 입력하세요. 추가하면 선택만 하고 재생�
 msgid "Add Links to Playlist"
 msgstr "재생목록에 링크 추가"
 
-#: ui/link.slint:42
+#: ui/link.slint:50
 #, x-machine
 msgid "Enter the web addresses to add to the playlist below, one per line."
 msgstr "재생목록에 추가할 웹 주소를 아래에 한 줄에 하나씩 입력하세요."
 
-#: ui/link.slint:48
+#: ui/link.slint:56
 #, x-machine
 msgid "Example: {}"
 msgstr "예: {}"
 
-#: ui/link.slint:55 ui/sidebar.slint:466
+#: ui/link.slint:63 ui/sidebar.slint:466
 #, x-machine
 msgid "Add"
 msgstr "추가"
 
-#: ui/settings.slint:63
-#, x-machine
-msgid "Open and drop"
-msgstr "열기 및 끌어서 놓기"
-
-#: ui/settings.slint:67
+#: ui/settings.slint:105 ui/settings.slint:124
 #, x-machine
 msgid "When opening a file:"
 msgstr "파일을 열 때:"
 
-#: ui/settings.slint:70
-#, x-machine
-msgid "Open only that file"
-msgstr "그 파일만 열기"
-
-#: ui/settings.slint:70
-#, x-machine
-msgid "Add similar files"
-msgstr "비슷한 파일 추가"
-
-#: ui/settings.slint:70
-#, x-machine
-msgid "Add all files in the folder"
-msgstr "폴더의 모든 파일 추가"
-
-#: ui/settings.slint:76
-#, x-machine
-msgid "Append when opening or dropping; don't clear the list"
-msgstr "열거나 끌어다 놓을 때 목록을 비우지 않고 뒤에 추가"
-
-#: ui/settings.slint:81
-#, x-machine
-msgid "Insert at the drop position when dropping on the list"
-msgstr "목록에 끌어다 놓으면 놓은 위치에 삽입"
-
-#: ui/settings.slint:86
-#, x-machine
-msgid "Playback"
-msgstr "재생"
-
-#: ui/settings.slint:90
+#: ui/settings.slint:105 ui/settings.slint:147
 #, x-machine
 msgid "Repeat:"
 msgstr "반복:"
 
-#: ui/settings.slint:104
+#: ui/settings.slint:120
+#, x-machine
+msgid "Open and drop"
+msgstr "열기 및 끌어서 놓기"
+
+#: ui/settings.slint:127
+#, x-machine
+msgid "Open only that file"
+msgstr "그 파일만 열기"
+
+#: ui/settings.slint:127
+#, x-machine
+msgid "Add similar files"
+msgstr "비슷한 파일 추가"
+
+#: ui/settings.slint:127
+#, x-machine
+msgid "Add all files in the folder"
+msgstr "폴더의 모든 파일 추가"
+
+#: ui/settings.slint:133
+#, x-machine
+msgid "Append when opening or dropping; don't clear the list"
+msgstr "열거나 끌어다 놓을 때 목록을 비우지 않고 뒤에 추가"
+
+#: ui/settings.slint:138
+#, x-machine
+msgid "Insert at the drop position when dropping on the list"
+msgstr "목록에 끌어다 놓으면 놓은 위치에 삽입"
+
+#: ui/settings.slint:143
+#, x-machine
+msgid "Playback"
+msgstr "재생"
+
+#: ui/settings.slint:161
 #, x-machine
 msgid "Fast advance to next"
 msgstr "다음 항목으로 빠르게 넘어가기"
 
-#: ui/settings.slint:109
+#: ui/settings.slint:166
 #, x-machine
 msgid "List"
 msgstr "목록"
 
-#: ui/settings.slint:111
+#: ui/settings.slint:168
 #, x-machine
 msgid "Remember list"
 msgstr "목록 기억"
 
-#: ui/settings.slint:116
+#: ui/settings.slint:173
 #, x-machine
 msgid "Confirm before removing all"
 msgstr "모두 제거하기 전에 확인"

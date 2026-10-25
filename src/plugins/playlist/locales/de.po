@@ -206,7 +206,7 @@ msgstr "Der kanonische Pfad der Datei entspricht einem vorhandenen Eintrag; dies
 msgid "Close the other dialog first"
 msgstr "Schließen Sie zuerst den anderen Dialog"
 
-#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:57 ui/sidebar.slint:242
+#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:114 ui/sidebar.slint:242
 #, x-machine
 msgid "Playlist"
 msgstr "Wiedergabeliste"
@@ -476,22 +476,22 @@ msgstr "Ordner öffnen…"
 msgid "Repeat"
 msgstr "Wiederholen"
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 #, x-machine
 msgid "Off"
 msgstr "Aus"
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 #, x-machine
 msgid "All"
 msgstr "Alle"
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 #, x-machine
 msgid "One"
 msgstr "Einzeln"
 
-#: main.ts:561 ui/settings.slint:99
+#: main.ts:561 ui/settings.slint:156
 #, x-machine
 msgid "Shuffle"
 msgstr "Zufallswiedergabe"
@@ -543,8 +543,12 @@ msgstr "Wiedergabeliste in der Seitenleiste: hinzufügen, sortieren, wiederholen
 
 #: manifest.json
 #, x-machine
-msgid "A playlist in the right sidebar: add files, folders and links, drag and drop, sort and search, repeat and shuffle, and add the similar files of the same folder when a file is opened; reads and writes M3U, M3U8 and PLS list files and restores the list after a restart.\nEntry points: \"Playlist\" (F6) in the context menu and Playback ▸ Playlist."
-msgstr "Eine Wiedergabeliste in der rechten Seitenleiste: Dateien, Ordner und Links hinzufügen, per Drag & Drop, sortieren und suchen, wiederholen und zufällig abspielen sowie beim Öffnen einer Datei ähnliche Dateien aus demselben Ordner hinzufügen; liest und schreibt M3U-, M3U8- und PLS-Listendateien und stellt die Liste nach einem Neustart wieder her.\nZugang: „Wiedergabeliste“ (F6) im Kontextmenü und Wiedergabe ▸ Wiedergabeliste."
+msgid ""
+"A playlist in the right sidebar: add files, folders and links, drag and drop, sort and search, repeat and shuffle, and add the similar files of the same folder when a file is opened; reads and writes M3U, M3U8 and PLS list files and restores the list after a restart.\n"
+"Entry points: \"Playlist\" (F6) in the context menu and Playback ▸ Playlist."
+msgstr ""
+"Eine Wiedergabeliste in der rechten Seitenleiste: Dateien, Ordner und Links hinzufügen, per Drag & Drop, sortieren und suchen, wiederholen und zufällig abspielen sowie beim Öffnen einer Datei ähnliche Dateien aus demselben Ordner hinzufügen; liest und schreibt M3U-, M3U8- und PLS-Listendateien und stellt die Liste nach einem Neustart wieder her.\n"
+"Zugang: „Wiedergabeliste“ (F6) im Kontextmenü und Wiedergabe ▸ Wiedergabeliste."
 
 #: manifest.json
 #, x-machine
@@ -666,7 +670,7 @@ msgstr "Zeile {}: Die Liste ist mit {} Einträgen voll"
 msgid "The list is full at {} items"
 msgstr "Die Liste ist mit {} Einträgen voll"
 
-#: ui/link.slint:25
+#: ui/link.slint:25 ui/link.slint:34
 #, x-machine
 msgid "Enter HTTP(S) links; adding only selects, it does not play"
 msgstr "Geben Sie HTTP(S)-Links ein; Hinzufügen wählt nur aus, spielt aber nicht ab"
@@ -676,82 +680,82 @@ msgstr "Geben Sie HTTP(S)-Links ein; Hinzufügen wählt nur aus, spielt aber nic
 msgid "Add Links to Playlist"
 msgstr "Links zur Wiedergabeliste hinzufügen"
 
-#: ui/link.slint:42
+#: ui/link.slint:50
 #, x-machine
 msgid "Enter the web addresses to add to the playlist below, one per line."
 msgstr "Geben Sie unten die Webadressen ein, die zur Wiedergabeliste hinzugefügt werden sollen, eine pro Zeile."
 
-#: ui/link.slint:48
+#: ui/link.slint:56
 #, x-machine
 msgid "Example: {}"
 msgstr "Beispiel: {}"
 
-#: ui/link.slint:55 ui/sidebar.slint:466
+#: ui/link.slint:63 ui/sidebar.slint:466
 #, x-machine
 msgid "Add"
 msgstr "Hinzufügen"
 
-#: ui/settings.slint:63
-#, x-machine
-msgid "Open and drop"
-msgstr "Öffnen und Ablegen"
-
-#: ui/settings.slint:67
+#: ui/settings.slint:105 ui/settings.slint:124
 #, x-machine
 msgid "When opening a file:"
 msgstr "Beim Öffnen einer Datei:"
 
-#: ui/settings.slint:70
-#, x-machine
-msgid "Open only that file"
-msgstr "Nur diese Datei öffnen"
-
-#: ui/settings.slint:70
-#, x-machine
-msgid "Add similar files"
-msgstr "Ähnliche Dateien hinzufügen"
-
-#: ui/settings.slint:70
-#, x-machine
-msgid "Add all files in the folder"
-msgstr "Alle Dateien im Ordner hinzufügen"
-
-#: ui/settings.slint:76
-#, x-machine
-msgid "Append when opening or dropping; don't clear the list"
-msgstr "Beim Öffnen oder Ablegen anhängen; Liste nicht leeren"
-
-#: ui/settings.slint:81
-#, x-machine
-msgid "Insert at the drop position when dropping on the list"
-msgstr "Beim Ablegen auf der Liste an der Ablageposition einfügen"
-
-#: ui/settings.slint:86
-#, x-machine
-msgid "Playback"
-msgstr "Wiedergabe"
-
-#: ui/settings.slint:90
+#: ui/settings.slint:105 ui/settings.slint:147
 #, x-machine
 msgid "Repeat:"
 msgstr "Wiederholen:"
 
-#: ui/settings.slint:104
+#: ui/settings.slint:120
+#, x-machine
+msgid "Open and drop"
+msgstr "Öffnen und Ablegen"
+
+#: ui/settings.slint:127
+#, x-machine
+msgid "Open only that file"
+msgstr "Nur diese Datei öffnen"
+
+#: ui/settings.slint:127
+#, x-machine
+msgid "Add similar files"
+msgstr "Ähnliche Dateien hinzufügen"
+
+#: ui/settings.slint:127
+#, x-machine
+msgid "Add all files in the folder"
+msgstr "Alle Dateien im Ordner hinzufügen"
+
+#: ui/settings.slint:133
+#, x-machine
+msgid "Append when opening or dropping; don't clear the list"
+msgstr "Beim Öffnen oder Ablegen anhängen; Liste nicht leeren"
+
+#: ui/settings.slint:138
+#, x-machine
+msgid "Insert at the drop position when dropping on the list"
+msgstr "Beim Ablegen auf der Liste an der Ablageposition einfügen"
+
+#: ui/settings.slint:143
+#, x-machine
+msgid "Playback"
+msgstr "Wiedergabe"
+
+#: ui/settings.slint:161
 #, x-machine
 msgid "Fast advance to next"
 msgstr "Nahtloser Übergang"
 
-#: ui/settings.slint:109
+#: ui/settings.slint:166
 #, x-machine
 msgid "List"
 msgstr "Liste"
 
-#: ui/settings.slint:111
+#: ui/settings.slint:168
 #, x-machine
 msgid "Remember list"
 msgstr "Liste merken"
 
-#: ui/settings.slint:116
+#: ui/settings.slint:173
 #, x-machine
 msgid "Confirm before removing all"
 msgstr "Vor dem Entfernen aller Einträge bestätigen"
@@ -778,18 +782,30 @@ msgstr "Liste schließen"
 
 #: ui/sidebar.slint:314
 #, x-machine
-msgid "{}\nThe file does not exist"
-msgstr "{}\nDie Datei existiert nicht"
+msgid ""
+"{}\n"
+"The file does not exist"
+msgstr ""
+"{}\n"
+"Die Datei existiert nicht"
 
 #: ui/sidebar.slint:315
 #, x-machine
-msgid "{}\nThe file does not exist or cannot be read now; can retry"
-msgstr "{}\nDie Datei existiert nicht oder ist derzeit nicht lesbar; erneuter Versuch möglich"
+msgid ""
+"{}\n"
+"The file does not exist or cannot be read now; can retry"
+msgstr ""
+"{}\n"
+"Die Datei existiert nicht oder ist derzeit nicht lesbar; erneuter Versuch möglich"
 
 #: ui/sidebar.slint:316
 #, x-machine
-msgid "{}\nCannot open this media"
-msgstr "{}\nDieses Medium kann nicht geöffnet werden"
+msgid ""
+"{}\n"
+"Cannot open this media"
+msgstr ""
+"{}\n"
+"Dieses Medium kann nicht geöffnet werden"
 
 #: ui/sidebar.slint:414
 #, x-machine

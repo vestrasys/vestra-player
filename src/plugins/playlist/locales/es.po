@@ -206,7 +206,7 @@ msgstr "La ruta canónica del archivo coincide con un elemento existente; se sel
 msgid "Close the other dialog first"
 msgstr "Cierra primero el otro cuadro de diálogo"
 
-#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:57 ui/sidebar.slint:242
+#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:114 ui/sidebar.slint:242
 #, x-machine
 msgid "Playlist"
 msgstr "Lista de reproducción"
@@ -476,22 +476,22 @@ msgstr "Abrir carpeta…"
 msgid "Repeat"
 msgstr "Repetir"
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 #, x-machine
 msgid "Off"
 msgstr "Desactivado"
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 #, x-machine
 msgid "All"
 msgstr "Todo"
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 #, x-machine
 msgid "One"
 msgstr "Uno"
 
-#: main.ts:561 ui/settings.slint:99
+#: main.ts:561 ui/settings.slint:156
 #, x-machine
 msgid "Shuffle"
 msgstr "Aleatorio"
@@ -546,7 +546,9 @@ msgstr "Lista de reproducción en la barra lateral: agregar, ordenar, repetir y 
 msgid ""
 "A playlist in the right sidebar: add files, folders and links, drag and drop, sort and search, repeat and shuffle, and add the similar files of the same folder when a file is opened; reads and writes M3U, M3U8 and PLS list files and restores the list after a restart.\n"
 "Entry points: \"Playlist\" (F6) in the context menu and Playback ▸ Playlist."
-msgstr "Una lista de reproducción en la barra lateral derecha: agrega archivos, carpetas y enlaces, admite arrastrar y soltar, ordena y busca, repite y reproduce en orden aleatorio, y agrega los archivos similares de la misma carpeta al abrir un archivo; lee y escribe listas M3U, M3U8 y PLS y restaura la lista tras reiniciar.\nAccesos: «Lista de reproducción» (F6) en el menú contextual y Reproducción ▸ Lista de reproducción."
+msgstr ""
+"Una lista de reproducción en la barra lateral derecha: agrega archivos, carpetas y enlaces, admite arrastrar y soltar, ordena y busca, repite y reproduce en orden aleatorio, y agrega los archivos similares de la misma carpeta al abrir un archivo; lee y escribe listas M3U, M3U8 y PLS y restaura la lista tras reiniciar.\n"
+"Accesos: «Lista de reproducción» (F6) en el menú contextual y Reproducción ▸ Lista de reproducción."
 
 #: manifest.json
 #, x-machine
@@ -668,7 +670,7 @@ msgstr "Línea {}: la lista está llena con {} elementos"
 msgid "The list is full at {} items"
 msgstr "La lista está llena con {} elementos"
 
-#: ui/link.slint:25
+#: ui/link.slint:25 ui/link.slint:34
 #, x-machine
 msgid "Enter HTTP(S) links; adding only selects, it does not play"
 msgstr "Escribe enlaces HTTP(S); agregar solo selecciona, no reproduce"
@@ -678,82 +680,82 @@ msgstr "Escribe enlaces HTTP(S); agregar solo selecciona, no reproduce"
 msgid "Add Links to Playlist"
 msgstr "Agregar enlaces a la lista de reproducción"
 
-#: ui/link.slint:42
+#: ui/link.slint:50
 #, x-machine
 msgid "Enter the web addresses to add to the playlist below, one per line."
 msgstr "Escribe abajo las direcciones web que quieres agregar a la lista de reproducción, una por línea."
 
-#: ui/link.slint:48
+#: ui/link.slint:56
 #, x-machine
 msgid "Example: {}"
 msgstr "Ejemplo: {}"
 
-#: ui/link.slint:55 ui/sidebar.slint:466
+#: ui/link.slint:63 ui/sidebar.slint:466
 #, x-machine
 msgid "Add"
 msgstr "Agregar"
 
-#: ui/settings.slint:63
-#, x-machine
-msgid "Open and drop"
-msgstr "Abrir y soltar"
-
-#: ui/settings.slint:67
+#: ui/settings.slint:105 ui/settings.slint:124
 #, x-machine
 msgid "When opening a file:"
 msgstr "Al abrir un archivo:"
 
-#: ui/settings.slint:70
-#, x-machine
-msgid "Open only that file"
-msgstr "Abrir solo ese archivo"
-
-#: ui/settings.slint:70
-#, x-machine
-msgid "Add similar files"
-msgstr "Agregar archivos similares"
-
-#: ui/settings.slint:70
-#, x-machine
-msgid "Add all files in the folder"
-msgstr "Agregar todos los archivos de la carpeta"
-
-#: ui/settings.slint:76
-#, x-machine
-msgid "Append when opening or dropping; don't clear the list"
-msgstr "Agregar al final al abrir o soltar; no vaciar la lista"
-
-#: ui/settings.slint:81
-#, x-machine
-msgid "Insert at the drop position when dropping on the list"
-msgstr "Insertar en la posición donde se suelta sobre la lista"
-
-#: ui/settings.slint:86
-#, x-machine
-msgid "Playback"
-msgstr "Reproducción"
-
-#: ui/settings.slint:90
+#: ui/settings.slint:105 ui/settings.slint:147
 #, x-machine
 msgid "Repeat:"
 msgstr "Repetir:"
 
-#: ui/settings.slint:104
+#: ui/settings.slint:120
+#, x-machine
+msgid "Open and drop"
+msgstr "Abrir y soltar"
+
+#: ui/settings.slint:127
+#, x-machine
+msgid "Open only that file"
+msgstr "Abrir solo ese archivo"
+
+#: ui/settings.slint:127
+#, x-machine
+msgid "Add similar files"
+msgstr "Agregar archivos similares"
+
+#: ui/settings.slint:127
+#, x-machine
+msgid "Add all files in the folder"
+msgstr "Agregar todos los archivos de la carpeta"
+
+#: ui/settings.slint:133
+#, x-machine
+msgid "Append when opening or dropping; don't clear the list"
+msgstr "Agregar al final al abrir o soltar; no vaciar la lista"
+
+#: ui/settings.slint:138
+#, x-machine
+msgid "Insert at the drop position when dropping on the list"
+msgstr "Insertar en la posición donde se suelta sobre la lista"
+
+#: ui/settings.slint:143
+#, x-machine
+msgid "Playback"
+msgstr "Reproducción"
+
+#: ui/settings.slint:161
 #, x-machine
 msgid "Fast advance to next"
 msgstr "Avance rápido al siguiente"
 
-#: ui/settings.slint:109
+#: ui/settings.slint:166
 #, x-machine
 msgid "List"
 msgstr "Lista"
 
-#: ui/settings.slint:111
+#: ui/settings.slint:168
 #, x-machine
 msgid "Remember list"
 msgstr "Recordar lista"
 
-#: ui/settings.slint:116
+#: ui/settings.slint:173
 #, x-machine
 msgid "Confirm before removing all"
 msgstr "Confirmar antes de quitar todo"

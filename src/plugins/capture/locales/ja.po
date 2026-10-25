@@ -272,7 +272,7 @@ msgstr "連写…"
 msgid "Export Clip…"
 msgstr "クリップを書き出す…"
 
-#: main.ts:346 ui/clip.slint:74
+#: main.ts:346 ui/clip.slint:85
 #, x-machine
 msgid "Export Tasks…"
 msgstr "書き出しタスク…"
@@ -346,12 +346,12 @@ msgstr "スナップショット"
 msgid "export"
 msgstr "書き出し"
 
-#: model.ts:178 ui/clip.slint:13
+#: model.ts:178 ui/clip.slint:14
 #, x-machine
 msgid "No Audio"
 msgstr "音声なし"
 
-#: model.ts:179 ui/clip.slint:13
+#: model.ts:179 ui/clip.slint:14
 #, x-machine
 msgid "Current Track"
 msgstr "現在のトラック"
@@ -371,137 +371,137 @@ msgstr "トラック {}"
 msgid "Burst"
 msgstr "連写"
 
-#: ui/burst.slint:35
-#, x-machine
-msgid "Save to"
-msgstr "保存先"
-
-#: ui/burst.slint:45
-#, x-machine
-msgid "Snapshot settings"
-msgstr "スナップショットの設定"
-
-#: ui/burst.slint:48
+#: ui/burst.slint:41 ui/burst.slint:65
 #, x-machine
 msgid "Count:"
 msgstr "枚数："
 
-#: ui/burst.slint:50
-#, x-machine
-msgid "frames (2–20)"
-msgstr "枚（2〜20）"
-
-#: ui/burst.slint:54
+#: ui/burst.slint:41 ui/burst.slint:71
 #, x-machine
 msgid "Interval:"
 msgstr "間隔："
 
-#: ui/burst.slint:56
-#, x-machine
-msgid "s (0.1–10)"
-msgstr "秒（0.1〜10）"
-
-#: ui/burst.slint:58
-#, x-machine
-msgid "Start at the current position"
-msgstr "現在の位置から開始"
-
-#: ui/burst.slint:61
+#: ui/burst.slint:41 ui/burst.slint:78
 #, x-machine
 msgid "Start:"
 msgstr "開始："
 
-#: ui/burst.slint:63 ui/clip.slint:34 ui/clip.slint:40
-#, x-machine
-msgid "Current"
-msgstr "現在"
-
-#: ui/burst.slint:67
-#, x-machine
-msgid "Other settings"
-msgstr "その他の設定"
-
-#: ui/burst.slint:70 ui/clip.slint:47 ui/settings.slint:29
-#, x-machine
-msgid "Format:"
-msgstr "形式："
-
-#: ui/burst.slint:79 ui/clip.slint:58
-#, x-machine
-msgid "Include video effects"
-msgstr "ビデオエフェクトを含める"
-
-#: ui/burst.slint:80
-#, x-machine
-msgid "Capture subtitles too"
-msgstr "字幕もキャプチャ"
-
-#: ui/burst.slint:85 ui/clip.slint:63
-#, x-machine
-msgid "Information"
-msgstr "情報"
-
-#: ui/burst.slint:88
+#: ui/burst.slint:44 ui/burst.slint:105
 #, x-machine
 msgid "Progress:"
 msgstr "進行状況："
 
-#: ui/burst.slint:93 ui/clip.slint:66
+#: ui/burst.slint:44 ui/burst.slint:110 ui/clip.slint:32 ui/clip.slint:77
 #, x-machine
 msgid "Status:"
 msgstr "状態："
 
-#: ui/burst.slint:100 ui/tasks.slint:80
+#: ui/burst.slint:52
+#, x-machine
+msgid "Save to"
+msgstr "保存先"
+
+#: ui/burst.slint:62
+#, x-machine
+msgid "Snapshot settings"
+msgstr "スナップショットの設定"
+
+#: ui/burst.slint:67
+#, x-machine
+msgid "frames (2–20)"
+msgstr "枚（2〜20）"
+
+#: ui/burst.slint:73
+#, x-machine
+msgid "s (0.1–10)"
+msgstr "秒（0.1〜10）"
+
+#: ui/burst.slint:75
+#, x-machine
+msgid "Start at the current position"
+msgstr "現在の位置から開始"
+
+#: ui/burst.slint:80 ui/clip.slint:45 ui/clip.slint:51
+#, x-machine
+msgid "Current"
+msgstr "現在"
+
+#: ui/burst.slint:84
+#, x-machine
+msgid "Other settings"
+msgstr "その他の設定"
+
+#: ui/burst.slint:87 ui/clip.slint:32 ui/clip.slint:58 ui/settings.slint:29 ui/settings.slint:40
+#, x-machine
+msgid "Format:"
+msgstr "形式："
+
+#: ui/burst.slint:96 ui/clip.slint:69
+#, x-machine
+msgid "Include video effects"
+msgstr "ビデオエフェクトを含める"
+
+#: ui/burst.slint:97
+#, x-machine
+msgid "Capture subtitles too"
+msgstr "字幕もキャプチャ"
+
+#: ui/burst.slint:102 ui/clip.slint:74
+#, x-machine
+msgid "Information"
+msgstr "情報"
+
+#: ui/burst.slint:117 ui/tasks.slint:80
 #, x-machine
 msgid "Open Save Folder"
 msgstr "保存フォルダを開く"
 
-#: ui/burst.slint:101
+#: ui/burst.slint:118
 #, x-machine
 msgid "Capture Current Frame"
 msgstr "現在のフレームをキャプチャ"
 
-#: ui/burst.slint:104
+#: ui/burst.slint:121
 #, x-machine
 msgid "Start"
 msgstr "開始"
 
-#: ui/clip.slint:29
-#, x-machine
-msgid "Range"
-msgstr "範囲"
-
-#: ui/clip.slint:32
+#: ui/clip.slint:32 ui/clip.slint:43
 #, x-machine
 msgid "Start (s):"
 msgstr "開始（秒）："
 
-#: ui/clip.slint:38
+#: ui/clip.slint:32 ui/clip.slint:49
 #, x-machine
 msgid "End (s):"
 msgstr "終了（秒）："
 
-#: ui/clip.slint:44
-#, x-machine
-msgid "Output"
-msgstr "出力"
-
-#: ui/clip.slint:48
-#, x-machine
-msgid "MP4 (H.264 + AAC)"
-msgstr "MP4（H.264 + AAC）"
-
-#: ui/clip.slint:52
+#: ui/clip.slint:32 ui/clip.slint:63
 #, x-machine
 msgid "Audio:"
 msgstr "音声："
 
+#: ui/clip.slint:40
+#, x-machine
+msgid "Range"
+msgstr "範囲"
+
+#: ui/clip.slint:55
+#, x-machine
+msgid "Output"
+msgstr "出力"
+
 #: ui/clip.slint:59
+#, x-machine
+msgid "MP4 (H.264 + AAC)"
+msgstr "MP4（H.264 + AAC）"
+
+#: ui/clip.slint:70
 #, x-machine
 msgid "Export subtitles too"
 msgstr "字幕も書き出す"
 
-#: ui/clip.slint:77
+#: ui/clip.slint:88
 #, x-machine
 msgid "Export…"
 msgstr "書き出す…"
@@ -594,42 +594,42 @@ msgstr "もう一度開始しました。"
 msgid "Snapshot Settings"
 msgstr "スナップショットの設定"
 
-#: ui/settings.slint:26
-#, x-machine
-msgid "Format"
-msgstr "形式"
-
-#: ui/settings.slint:39
+#: ui/settings.slint:29 ui/settings.slint:50
 #, x-machine
 msgid "Quality:"
 msgstr "画質："
 
-#: ui/settings.slint:49
+#: ui/settings.slint:37
+#, x-machine
+msgid "Format"
+msgstr "形式"
+
+#: ui/settings.slint:61
 #, x-machine
 msgid "Quality applies to JPEG only; copies to the clipboard are always PNG."
 msgstr "画質は JPEG にのみ適用されます。クリップボードへのコピーは常に PNG です。"
 
-#: ui/settings.slint:52
+#: ui/settings.slint:64
 #, x-machine
 msgid "Save location"
 msgstr "保存場所"
 
-#: ui/settings.slint:60
+#: ui/settings.slint:72
 #, x-machine
 msgid "Save to the media folder when possible"
 msgstr "可能な場合はメディアと同じフォルダに保存"
 
-#: ui/settings.slint:66
+#: ui/settings.slint:78
 #, x-machine
 msgid "Rendered frame"
 msgstr "レンダリング後のフレーム"
 
-#: ui/settings.slint:69
+#: ui/settings.slint:81
 #, x-machine
 msgid "Include subtitles"
 msgstr "字幕を含める"
 
-#: ui/settings.slint:74
+#: ui/settings.slint:86
 #, x-machine
 msgid "The rendered frame is made offline: it includes the plugins' video effects, and subtitles are drawn again in the plugins' style, always inside the picture, so it is not pixel for pixel what the screen shows. On-screen messages are not included."
 msgstr "レンダリング後のフレームはオフラインで生成されます。プラグインのビデオエフェクトを含み、字幕はプラグインのスタイルで描き直され、常に映像の内側に表示されるため、画面の表示とピクセル単位で一致するわけではありません。画面上のメッセージは含まれません。"

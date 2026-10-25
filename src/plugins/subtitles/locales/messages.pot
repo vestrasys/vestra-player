@@ -156,7 +156,7 @@ msgstr ""
 msgid "Subtitle position: default ({}%)"
 msgstr ""
 
-#: main.ts:846 ui/settings.slint:94
+#: main.ts:846 ui/settings.slint:117
 msgid "Bold"
 msgstr ""
 
@@ -746,115 +746,115 @@ msgstr ""
 msgid "Unknown video frame rate; the MicroDVD subtitle was converted at 23.976"
 msgstr ""
 
-#: ui/settings.slint:19
+#: ui/settings.slint:21
 msgid "Subtitle Settings"
 msgstr ""
 
-#: ui/settings.slint:70
+#: ui/settings.slint:78 ui/settings.slint:93
 msgid "Font"
 msgstr ""
 
-#: ui/settings.slint:78 ui/settings.slint:111 ui/settings.slint:123 ui/settings.slint:135 ui/settings.slint:157 ui/settings.slint:169 ui/settings.slint:180 ui/settings.slint:193 ui/settings.slint:213 ui/tune.slint:96 ui/tune.slint:104 ui/tune.slint:123
-msgid "Default"
-msgstr ""
-
-#: ui/settings.slint:83
-msgid "With the original ASS styles on: fonts follow the subtitle file (missing fonts use the default font); colour, outline, bold, shadow, background box and position have no effect."
-msgstr ""
-
-#: ui/settings.slint:102
+#: ui/settings.slint:78 ui/settings.slint:125
 msgid "Colour"
 msgstr ""
 
-#: ui/settings.slint:106
-msgid "White"
-msgstr ""
-
-#: ui/settings.slint:106
-msgid "Yellow"
-msgstr ""
-
-#: ui/settings.slint:106
-msgid "Cyan"
-msgstr ""
-
-#: ui/settings.slint:115
+#: ui/settings.slint:78 ui/settings.slint:138
 msgid "Outline {}"
 msgstr ""
 
-#: ui/settings.slint:127
+#: ui/settings.slint:78 ui/settings.slint:150
 msgid "Shadow {}"
 msgstr ""
 
-#: ui/settings.slint:141
-msgid "Background box (replaces outline and shadow)"
-msgstr ""
-
-#: ui/settings.slint:149
+#: ui/settings.slint:79 ui/settings.slint:172
 msgid "Opacity {}%"
 msgstr ""
 
-#: ui/settings.slint:161
+#: ui/settings.slint:79 ui/settings.slint:184
 msgid "Margin {}%"
 msgstr ""
 
-#: ui/settings.slint:173
+#: ui/settings.slint:79 ui/settings.slint:196
 msgid "ASS style"
 msgstr ""
 
-#: ui/settings.slint:176
-msgid "Keep original styles"
-msgstr ""
-
-#: ui/settings.slint:176
-msgid "Use subtitle settings"
-msgstr ""
-
-#: ui/settings.slint:185
+#: ui/settings.slint:79 ui/settings.slint:208
 msgid "Sync step"
 msgstr ""
 
-#: ui/settings.slint:189
-msgid "{} s"
-msgstr ""
-
-#: ui/settings.slint:197
+#: ui/settings.slint:80 ui/settings.slint:220
 msgid "Default encoding"
 msgstr ""
 
-#: ui/settings.slint:202
+#: ui/settings.slint:85 ui/settings.slint:101 ui/settings.slint:134 ui/settings.slint:146 ui/settings.slint:158 ui/settings.slint:180 ui/settings.slint:192 ui/settings.slint:203 ui/settings.slint:216 ui/settings.slint:236 ui/tune.slint:75 ui/tune.slint:119 ui/tune.slint:127 ui/tune.slint:147
+msgid "Default"
+msgstr ""
+
+#: ui/settings.slint:106
+msgid "With the original ASS styles on: fonts follow the subtitle file (missing fonts use the default font); colour, outline, bold, shadow, background box and position have no effect."
+msgstr ""
+
+#: ui/settings.slint:129
+msgid "White"
+msgstr ""
+
+#: ui/settings.slint:129
+msgid "Yellow"
+msgstr ""
+
+#: ui/settings.slint:129
+msgid "Cyan"
+msgstr ""
+
+#: ui/settings.slint:164
+msgid "Background box (replaces outline and shadow)"
+msgstr ""
+
+#: ui/settings.slint:199
+msgid "Keep original styles"
+msgstr ""
+
+#: ui/settings.slint:199
+msgid "Use subtitle settings"
+msgstr ""
+
+#: ui/settings.slint:212
+msgid "{} s"
+msgstr ""
+
+#: ui/settings.slint:225
 msgid "Simplified Chinese (GB18030)"
 msgstr ""
 
-#: ui/settings.slint:203
+#: ui/settings.slint:226
 msgid "Traditional Chinese (Big5)"
 msgstr ""
 
-#: ui/settings.slint:204
+#: ui/settings.slint:227
 msgid "Japanese (Shift_JIS)"
 msgstr ""
 
-#: ui/settings.slint:205
+#: ui/settings.slint:228
 msgid "Korean (EUC-KR)"
 msgstr ""
 
-#: ui/settings.slint:206
+#: ui/settings.slint:229
 msgid "Western (Windows-1252)"
 msgstr ""
 
-#: ui/settings.slint:207
+#: ui/settings.slint:230
 msgid "Cyrillic (Windows-1251)"
 msgstr ""
 
-#: ui/settings.slint:208
+#: ui/settings.slint:231
 msgid "Western (ISO-8859-1)"
 msgstr ""
 
-#: ui/settings.slint:219
+#: ui/settings.slint:242
 msgid "Reload automatically when the subtitle file changes"
 msgstr ""
 
-#: ui/settings.slint:234
+#: ui/settings.slint:257
 msgid "Reset All"
 msgstr ""
 
@@ -862,66 +862,66 @@ msgstr ""
 msgid "Adjust Sync"
 msgstr ""
 
-#: ui/sync.slint:33
-msgid "Sync value (ms):"
-msgstr ""
-
-#: ui/sync.slint:63
-msgid "Apply"
-msgstr ""
-
-#: ui/sync.slint:71
+#: ui/sync.slint:29 ui/sync.slint:79
 msgid "Positive delays the subtitles, negative advances them."
 msgstr ""
 
-#: ui/tune.slint:19
+#: ui/sync.slint:41
+msgid "Sync value (ms):"
+msgstr ""
+
+#: ui/sync.slint:71
+msgid "Apply"
+msgstr ""
+
+#: ui/tune.slint:21
 msgid "Subtitle Tuning"
 msgstr ""
 
-#: ui/tune.slint:70
-msgid "Cancel"
-msgstr ""
-
-#: ui/tune.slint:70
-msgid "Load…"
-msgstr ""
-
-#: ui/tune.slint:92
+#: ui/tune.slint:64 ui/tune.slint:115
 msgid "Size {}"
 msgstr ""
 
-#: ui/tune.slint:100
+#: ui/tune.slint:64 ui/tune.slint:123
 msgid "Position {}%"
 msgstr ""
 
-#: ui/tune.slint:101
-msgid "Up"
-msgstr ""
-
-#: ui/tune.slint:102
-msgid "Down"
-msgstr ""
-
-#: ui/tune.slint:110
-msgid "In seconds. Positive delays the subtitles, negative advances them. Click to enter a value."
-msgstr ""
-
-#: ui/tune.slint:113
+#: ui/tune.slint:64 ui/tune.slint:137
 msgid "Sync {}"
 msgstr ""
 
-#: ui/tune.slint:121
+#: ui/tune.slint:71 ui/tune.slint:93
+msgid "Cancel"
+msgstr ""
+
+#: ui/tune.slint:71 ui/tune.slint:93
+msgid "Load…"
+msgstr ""
+
+#: ui/tune.slint:73 ui/tune.slint:124
+msgid "Up"
+msgstr ""
+
+#: ui/tune.slint:74 ui/tune.slint:125
+msgid "Down"
+msgstr ""
+
+#: ui/tune.slint:133
+msgid "In seconds. Positive delays the subtitles, negative advances them. Click to enter a value."
+msgstr ""
+
+#: ui/tune.slint:145
 msgid "Later"
 msgstr ""
 
-#: ui/tune.slint:122
+#: ui/tune.slint:146
 msgid "Earlier"
 msgstr ""
 
-#: ui/tune.slint:135
+#: ui/tune.slint:159
 msgid "Remove"
 msgstr ""
 
-#: ui/tune.slint:136
+#: ui/tune.slint:160
 msgid "Settings…"
 msgstr ""

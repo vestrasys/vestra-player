@@ -431,7 +431,7 @@ msgstr ""
 msgid "The archive has several subtitle files:"
 msgstr ""
 
-#: ui/choose.slint:52 ui/download.slint:162
+#: ui/choose.slint:52 ui/download.slint:183
 msgid "Cancel"
 msgstr ""
 
@@ -451,202 +451,202 @@ msgstr ""
 msgid "{} [HI]"
 msgstr ""
 
-#: ui/download.slint:75
-msgid "Title:"
-msgstr ""
-
-#: ui/download.slint:87
-msgid "Search by Title"
-msgstr ""
-
-#: ui/download.slint:88
-msgid "Search Again"
-msgstr ""
-
-#: ui/download.slint:93
-msgid "Searching sends the file name keywords and the file hash to the chosen service. You will not be asked again once you agree."
-msgstr ""
-
-#: ui/download.slint:101
-msgid "Agree and Search"
-msgstr ""
-
-#: ui/download.slint:116
+#: ui/download.slint:80 ui/download.slint:137
 msgid "Language"
 msgstr ""
 
-#: ui/download.slint:117
-msgid "Release"
-msgstr ""
-
-#: ui/download.slint:118
+#: ui/download.slint:81 ui/download.slint:139
 msgid "Format"
 msgstr ""
 
-#: ui/download.slint:119
+#: ui/download.slint:82 ui/download.slint:140
 msgid "FPS"
 msgstr ""
 
-#: ui/download.slint:120
+#: ui/download.slint:83 ui/download.slint:141
 msgid "Downloads"
 msgstr ""
 
-#: ui/download.slint:121
+#: ui/download.slint:85 ui/download.slint:142
 msgid "Match"
 msgstr ""
 
-#: ui/download.slint:122
-msgid "Source"
-msgstr ""
-
-#: ui/download.slint:147
+#: ui/download.slint:85 ui/download.slint:168
 msgid "Hash"
 msgstr ""
 
-#: ui/download.slint:147
+#: ui/download.slint:85 ui/download.slint:168
 msgid "Title"
 msgstr ""
 
-#: ui/download.slint:156
+#: ui/download.slint:87 ui/download.slint:143
+msgid "Source"
+msgstr ""
+
+#: ui/download.slint:96
+msgid "Title:"
+msgstr ""
+
+#: ui/download.slint:108
+msgid "Search by Title"
+msgstr ""
+
+#: ui/download.slint:109
+msgid "Search Again"
+msgstr ""
+
+#: ui/download.slint:114
+msgid "Searching sends the file name keywords and the file hash to the chosen service. You will not be asked again once you agree."
+msgstr ""
+
+#: ui/download.slint:122
+msgid "Agree and Search"
+msgstr ""
+
+#: ui/download.slint:138
+msgid "Release"
+msgstr ""
+
+#: ui/download.slint:177
 msgid "Open"
 msgstr ""
 
-#: ui/download.slint:157
+#: ui/download.slint:178
 msgid "Add"
 msgstr ""
 
-#: ui/download.slint:158
+#: ui/download.slint:179
 msgid "Save Only"
 msgstr ""
 
-#: ui/download.slint:159
+#: ui/download.slint:180
 msgid "Save As…"
 msgstr ""
 
-#: ui/download.slint:160
+#: ui/download.slint:181
 msgid "More"
 msgstr ""
 
-#: ui/download.slint:163 ui/settings.slint:101
+#: ui/download.slint:184 ui/settings.slint:118
 msgid "Settings…"
 msgstr ""
 
-#: ui/service.slint:17
+#: ui/service.slint:19
 msgid "{} Settings"
 msgstr ""
 
-#: ui/service.slint:39
+#: ui/service.slint:42 ui/service.slint:51
 msgid "API key"
 msgstr ""
 
-#: ui/service.slint:39
+#: ui/service.slint:42 ui/service.slint:51
 msgid "Token"
 msgstr ""
 
-#: ui/service.slint:44
+#: ui/service.slint:42 ui/service.slint:56
 msgid "User name"
 msgstr ""
 
-#: ui/service.slint:45 ui/service.slint:50
-msgid "Optional"
-msgstr ""
-
-#: ui/service.slint:49
+#: ui/service.slint:42 ui/service.slint:61
 msgid "Password"
 msgstr ""
 
-#: ui/service.slint:54
+#: ui/service.slint:57 ui/service.slint:62
+msgid "Optional"
+msgstr ""
+
+#: ui/service.slint:66
 msgid "Sign up at opensubtitles.com, then get a free API key on the “API consumers” page. User name and password are optional; logging in gives more downloads per day. Stored in: {}."
 msgstr ""
 
-#: ui/service.slint:55
+#: ui/service.slint:67
 msgid "Sign up at assrt.net, then get the API token in the user center. The service limits how often it can be called. Stored in: {}."
 msgstr ""
 
-#: ui/service.slint:71 ui/settings.slint:102
+#: ui/service.slint:83 ui/settings.slint:119
 msgid "Test"
 msgstr ""
 
-#: ui/service.slint:72
+#: ui/service.slint:84
 msgid "Save"
 msgstr ""
 
-#: ui/settings.slint:30
+#: ui/settings.slint:32
 msgid "Online Subtitle Settings"
 msgstr ""
 
-#: ui/settings.slint:64
-msgid "Services"
-msgstr ""
-
-#: ui/settings.slint:96
-msgid "Move Up"
-msgstr ""
-
-#: ui/settings.slint:97
-msgid "Move Down"
-msgstr ""
-
-#: ui/settings.slint:106
-msgid "Search"
-msgstr ""
-
-#: ui/settings.slint:109
+#: ui/settings.slint:71 ui/settings.slint:126
 msgid "Languages"
 msgstr ""
 
-#: ui/settings.slint:121
+#: ui/settings.slint:71 ui/settings.slint:138
 msgid "Auto search"
 msgstr ""
 
-#: ui/settings.slint:124
-msgid "Off"
-msgstr ""
-
-#: ui/settings.slint:124
-msgid "When opening a video without subtitles"
-msgstr ""
-
-#: ui/settings.slint:131
+#: ui/settings.slint:71 ui/settings.slint:148
 msgid "After search"
 msgstr ""
 
-#: ui/settings.slint:134
-msgid "Show the download window"
-msgstr ""
-
-#: ui/settings.slint:134
-msgid "Load the best result automatically"
-msgstr ""
-
-#: ui/settings.slint:143
-msgid "Only subtitles that exactly match the file (hash)"
-msgstr ""
-
-#: ui/settings.slint:150
+#: ui/settings.slint:71 ui/settings.slint:167
 msgid "Exclude"
 msgstr ""
 
-#: ui/settings.slint:154
-msgid "Separate with commas or spaces"
-msgstr ""
-
-#: ui/settings.slint:159
-msgid "Saving"
-msgstr ""
-
-#: ui/settings.slint:162
+#: ui/settings.slint:71 ui/settings.slint:179
 msgid "Save to"
 msgstr ""
 
-#: ui/settings.slint:165
-msgid "Beside the video when possible"
+#: ui/settings.slint:81
+msgid "Services"
 msgstr ""
 
-#: ui/settings.slint:165
-msgid "Plugin data folder"
+#: ui/settings.slint:113
+msgid "Move Up"
+msgstr ""
+
+#: ui/settings.slint:114
+msgid "Move Down"
+msgstr ""
+
+#: ui/settings.slint:123
+msgid "Search"
+msgstr ""
+
+#: ui/settings.slint:141
+msgid "Off"
+msgstr ""
+
+#: ui/settings.slint:141
+msgid "When opening a video without subtitles"
+msgstr ""
+
+#: ui/settings.slint:151
+msgid "Show the download window"
+msgstr ""
+
+#: ui/settings.slint:151
+msgid "Load the best result automatically"
+msgstr ""
+
+#: ui/settings.slint:160
+msgid "Only subtitles that exactly match the file (hash)"
 msgstr ""
 
 #: ui/settings.slint:171
+msgid "Separate with commas or spaces"
+msgstr ""
+
+#: ui/settings.slint:176
+msgid "Saving"
+msgstr ""
+
+#: ui/settings.slint:182
+msgid "Beside the video when possible"
+msgstr ""
+
+#: ui/settings.slint:182
+msgid "Plugin data folder"
+msgstr ""
+
+#: ui/settings.slint:188
 msgid "Searching sends the file name keywords and the file hash to the chosen service. Keys and passwords are stored in: {}."
 msgstr ""

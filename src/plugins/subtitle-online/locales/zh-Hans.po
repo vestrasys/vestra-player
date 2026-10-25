@@ -434,7 +434,7 @@ msgstr "选择字幕文件"
 msgid "The archive has several subtitle files:"
 msgstr "压缩包里有多个字幕文件："
 
-#: ui/choose.slint:52 ui/download.slint:162
+#: ui/choose.slint:52 ui/download.slint:183
 msgid "Cancel"
 msgstr "取消"
 
@@ -454,202 +454,202 @@ msgstr "{} [机翻]"
 msgid "{} [HI]"
 msgstr "{} [HI]"
 
-#: ui/download.slint:75
-msgid "Title:"
-msgstr "标题："
-
-#: ui/download.slint:87
-msgid "Search by Title"
-msgstr "按标题搜索"
-
-#: ui/download.slint:88
-msgid "Search Again"
-msgstr "再次搜索"
-
-#: ui/download.slint:93
-msgid "Searching sends the file name keywords and the file hash to the chosen service. You will not be asked again once you agree."
-msgstr "搜索会把文件名关键字与文件哈希发送给所选服务。同意后不再提示。"
-
-#: ui/download.slint:101
-msgid "Agree and Search"
-msgstr "同意并搜索"
-
-#: ui/download.slint:116
+#: ui/download.slint:80 ui/download.slint:137
 msgid "Language"
 msgstr "语言"
 
-#: ui/download.slint:117
-msgid "Release"
-msgstr "版本名"
-
-#: ui/download.slint:118
+#: ui/download.slint:81 ui/download.slint:139
 msgid "Format"
 msgstr "格式"
 
-#: ui/download.slint:119
+#: ui/download.slint:82 ui/download.slint:140
 msgid "FPS"
 msgstr "FPS"
 
-#: ui/download.slint:120
+#: ui/download.slint:83 ui/download.slint:141
 msgid "Downloads"
 msgstr "下载数"
 
-#: ui/download.slint:121
+#: ui/download.slint:85 ui/download.slint:142
 msgid "Match"
 msgstr "匹配"
 
-#: ui/download.slint:122
-msgid "Source"
-msgstr "来源"
-
-#: ui/download.slint:147
+#: ui/download.slint:85 ui/download.slint:168
 msgid "Hash"
 msgstr "哈希"
 
-#: ui/download.slint:147
+#: ui/download.slint:85 ui/download.slint:168
 msgid "Title"
 msgstr "标题"
 
-#: ui/download.slint:156
+#: ui/download.slint:87 ui/download.slint:143
+msgid "Source"
+msgstr "来源"
+
+#: ui/download.slint:96
+msgid "Title:"
+msgstr "标题："
+
+#: ui/download.slint:108
+msgid "Search by Title"
+msgstr "按标题搜索"
+
+#: ui/download.slint:109
+msgid "Search Again"
+msgstr "再次搜索"
+
+#: ui/download.slint:114
+msgid "Searching sends the file name keywords and the file hash to the chosen service. You will not be asked again once you agree."
+msgstr "搜索会把文件名关键字与文件哈希发送给所选服务。同意后不再提示。"
+
+#: ui/download.slint:122
+msgid "Agree and Search"
+msgstr "同意并搜索"
+
+#: ui/download.slint:138
+msgid "Release"
+msgstr "版本名"
+
+#: ui/download.slint:177
 msgid "Open"
 msgstr "打开字幕"
 
-#: ui/download.slint:157
+#: ui/download.slint:178
 msgid "Add"
 msgstr "添加字幕"
 
-#: ui/download.slint:158
+#: ui/download.slint:179
 msgid "Save Only"
 msgstr "直接保存"
 
-#: ui/download.slint:159
+#: ui/download.slint:180
 msgid "Save As…"
 msgstr "另存为…"
 
-#: ui/download.slint:160
+#: ui/download.slint:181
 msgid "More"
 msgstr "更多"
 
-#: ui/download.slint:163 ui/settings.slint:101
+#: ui/download.slint:184 ui/settings.slint:118
 msgid "Settings…"
 msgstr "设置…"
 
-#: ui/service.slint:17
+#: ui/service.slint:19
 msgid "{} Settings"
 msgstr "{} 设置"
 
-#: ui/service.slint:39
+#: ui/service.slint:42 ui/service.slint:51
 msgid "API key"
 msgstr "API 密钥"
 
-#: ui/service.slint:39
+#: ui/service.slint:42 ui/service.slint:51
 msgid "Token"
 msgstr "token"
 
-#: ui/service.slint:44
+#: ui/service.slint:42 ui/service.slint:56
 msgid "User name"
 msgstr "用户名"
 
-#: ui/service.slint:45 ui/service.slint:50
-msgid "Optional"
-msgstr "可选"
-
-#: ui/service.slint:49
+#: ui/service.slint:42 ui/service.slint:61
 msgid "Password"
 msgstr "密码"
 
-#: ui/service.slint:54
+#: ui/service.slint:57 ui/service.slint:62
+msgid "Optional"
+msgstr "可选"
+
+#: ui/service.slint:66
 msgid "Sign up at opensubtitles.com, then get a free API key on the “API consumers” page. User name and password are optional; logging in gives more downloads per day. Stored in: {}."
 msgstr "在 opensubtitles.com 注册账号后，到「API consumers」页面免费申请 API 密钥。用户名和密码可选，登录后每日下载次数更多。存放在：{}。"
 
-#: ui/service.slint:55
+#: ui/service.slint:67
 msgid "Sign up at assrt.net, then get the API token in the user center. The service limits how often it can be called. Stored in: {}."
 msgstr "在 assrt.net 注册后，在用户中心取得 API token。服务有调用频率限制。存放在：{}。"
 
-#: ui/service.slint:71 ui/settings.slint:102
+#: ui/service.slint:83 ui/settings.slint:119
 msgid "Test"
 msgstr "测试"
 
-#: ui/service.slint:72
+#: ui/service.slint:84
 msgid "Save"
 msgstr "保存"
 
-#: ui/settings.slint:30
+#: ui/settings.slint:32
 msgid "Online Subtitle Settings"
 msgstr "在线字幕设置"
 
-#: ui/settings.slint:64
-msgid "Services"
-msgstr "服务"
-
-#: ui/settings.slint:96
-msgid "Move Up"
-msgstr "上移"
-
-#: ui/settings.slint:97
-msgid "Move Down"
-msgstr "下移"
-
-#: ui/settings.slint:106
-msgid "Search"
-msgstr "搜索"
-
-#: ui/settings.slint:109
+#: ui/settings.slint:71 ui/settings.slint:126
 msgid "Languages"
 msgstr "首选语言"
 
-#: ui/settings.slint:121
+#: ui/settings.slint:71 ui/settings.slint:138
 msgid "Auto search"
 msgstr "自动搜索"
 
-#: ui/settings.slint:124
-msgid "Off"
-msgstr "不使用"
-
-#: ui/settings.slint:124
-msgid "When opening a video without subtitles"
-msgstr "打开没有字幕的视频时"
-
-#: ui/settings.slint:131
+#: ui/settings.slint:71 ui/settings.slint:148
 msgid "After search"
 msgstr "搜索后"
 
-#: ui/settings.slint:134
-msgid "Show the download window"
-msgstr "显示下载窗口"
-
-#: ui/settings.slint:134
-msgid "Load the best result automatically"
-msgstr "自动载入最佳结果"
-
-#: ui/settings.slint:143
-msgid "Only subtitles that exactly match the file (hash)"
-msgstr "仅查找与文件完全匹配（哈希）的字幕"
-
-#: ui/settings.slint:150
+#: ui/settings.slint:71 ui/settings.slint:167
 msgid "Exclude"
 msgstr "排除关键字"
 
-#: ui/settings.slint:154
-msgid "Separate with commas or spaces"
-msgstr "用逗号或空格分隔"
-
-#: ui/settings.slint:159
-msgid "Saving"
-msgstr "保存"
-
-#: ui/settings.slint:162
+#: ui/settings.slint:71 ui/settings.slint:179
 msgid "Save to"
 msgstr "保存位置"
 
-#: ui/settings.slint:165
+#: ui/settings.slint:81
+msgid "Services"
+msgstr "服务"
+
+#: ui/settings.slint:113
+msgid "Move Up"
+msgstr "上移"
+
+#: ui/settings.slint:114
+msgid "Move Down"
+msgstr "下移"
+
+#: ui/settings.slint:123
+msgid "Search"
+msgstr "搜索"
+
+#: ui/settings.slint:141
+msgid "Off"
+msgstr "不使用"
+
+#: ui/settings.slint:141
+msgid "When opening a video without subtitles"
+msgstr "打开没有字幕的视频时"
+
+#: ui/settings.slint:151
+msgid "Show the download window"
+msgstr "显示下载窗口"
+
+#: ui/settings.slint:151
+msgid "Load the best result automatically"
+msgstr "自动载入最佳结果"
+
+#: ui/settings.slint:160
+msgid "Only subtitles that exactly match the file (hash)"
+msgstr "仅查找与文件完全匹配（哈希）的字幕"
+
+#: ui/settings.slint:171
+msgid "Separate with commas or spaces"
+msgstr "用逗号或空格分隔"
+
+#: ui/settings.slint:176
+msgid "Saving"
+msgstr "保存"
+
+#: ui/settings.slint:182
 msgid "Beside the video when possible"
 msgstr "尽可能保存在视频同目录"
 
-#: ui/settings.slint:165
+#: ui/settings.slint:182
 msgid "Plugin data folder"
 msgstr "插件数据目录"
 
-#: ui/settings.slint:171
+#: ui/settings.slint:188
 msgid "Searching sends the file name keywords and the file hash to the chosen service. Keys and passwords are stored in: {}."
 msgstr "搜索会把文件名关键字与文件哈希发送给所选服务。密钥与密码存放在：{}。"

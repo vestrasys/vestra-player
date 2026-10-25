@@ -345,8 +345,12 @@ msgstr "Stopp"
 #. a tooltip of two lines: the click's action, then the right click's.
 #: ui/bar.slint:78 ui/bar.slint:79
 #, x-machine
-msgid "{}\nRight-click: {}"
-msgstr "{}\nRechtsklick: {}"
+msgid ""
+"{}\n"
+"Right-click: {}"
+msgstr ""
+"{}\n"
+"Rechtsklick: {}"
 
 #. a tooltip of two lines: the click's action, then the right click's.
 #: ui/bar.slint:78
@@ -471,7 +475,7 @@ msgstr "Geschwindigkeit (0.25–4×)"
 msgid "Time (h:mm:ss.ms)"
 msgstr "Zeit (h:mm:ss.ms)"
 
-#: ui/prompt.slint:60 ui/time-jump.slint:128
+#: ui/prompt.slint:60 ui/time-jump.slint:148
 #, x-machine
 msgid "OK"
 msgstr "OK"
@@ -482,52 +486,52 @@ msgid "Go"
 msgstr "Springen"
 
 #. the unit after a number of seconds.
-#: ui/time-jump.slint:32
+#: ui/time-jump.slint:34
 #, x-machine
 msgid "s"
 msgstr "s"
 
-#: ui/time-jump.slint:38
+#: ui/time-jump.slint:40
 #, x-machine
 msgid "Default"
 msgstr "Standard"
 
-#: ui/time-jump.slint:65
+#: ui/time-jump.slint:67
 #, x-machine
 msgid "Seek Steps"
 msgstr "Sprungweiten"
 
-#: ui/time-jump.slint:83
-#, x-machine
-msgid "Set how far each seek key moves during playback."
-msgstr "Legen Sie fest, wie weit jede Sprungtaste während der Wiedergabe springt."
-
-#: ui/time-jump.slint:89
+#: ui/time-jump.slint:78 ui/time-jump.slint:106
 #, x-machine
 msgid "Left/Right arrow keys:"
 msgstr "Pfeil links/rechts:"
 
-#: ui/time-jump.slint:96
+#: ui/time-jump.slint:78 ui/time-jump.slint:114
 #, x-machine
 msgid "Ctrl + Left/Right arrow keys:"
 msgstr "Ctrl + Pfeil links/rechts:"
 
-#: ui/time-jump.slint:103
+#: ui/time-jump.slint:78 ui/time-jump.slint:122
 #, x-machine
 msgid "Shift + Left/Right arrow keys:"
 msgstr "Shift + Pfeil links/rechts:"
 
-#: ui/time-jump.slint:110
+#: ui/time-jump.slint:78 ui/time-jump.slint:130
 #, x-machine
 msgid "Ctrl + Alt + Left/Right arrow keys:"
 msgstr "Ctrl + Alt + Pfeil links/rechts:"
 
-#: ui/time-jump.slint:117
+#: ui/time-jump.slint:99
+#, x-machine
+msgid "Set how far each seek key moves during playback."
+msgstr "Legen Sie fest, wie weit jede Sprungtaste während der Wiedergabe springt."
+
+#: ui/time-jump.slint:137
 #, x-machine
 msgid "Range 0.1–3600 s, at most one decimal place"
 msgstr "Bereich 0.1–3600 s, höchstens eine Nachkommastelle"
 
-#: ui/time-jump.slint:132
+#: ui/time-jump.slint:152
 #, x-machine
 msgid "Cancel"
 msgstr "Abbrechen"

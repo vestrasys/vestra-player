@@ -541,7 +541,7 @@ msgstr "Los repositorios aún no tienen complementos"
 msgid "{} · {}"
 msgstr "{} · {}"
 
-#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:222
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:246
 #, x-machine
 msgid "Installed"
 msgstr "Instalado"
@@ -766,7 +766,7 @@ msgstr "Incompatible: {}"
 msgid "Latest"
 msgstr "Más reciente"
 
-#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:407
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:223 ui/store.slint:431
 #, x-machine
 msgid "Version"
 msgstr "Versión"
@@ -1079,7 +1079,13 @@ msgid ""
 "Current: {3}. After updating you can roll back to {3} in the store.\n"
 "\n"
 "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
-msgstr "Agregados:\n{2}\n\nActual: {3}. Tras actualizar, puedes revertir a {3} en la tienda.\n\nUn complemento es un programa completo: los permisos anteriores solo limitan lo que puede hacer con el reproductor, no la lectura y escritura de archivos ni el uso de la red."
+msgstr ""
+"Agregados:\n"
+"{2}\n"
+"\n"
+"Actual: {3}. Tras actualizar, puedes revertir a {3} en la tienda.\n"
+"\n"
+"Un complemento es un programa completo: los permisos anteriores solo limitan lo que puede hacer con el reproductor, no la lectura y escritura de archivos ni el uso de la red."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1575,12 +1581,12 @@ msgstr "Instalar, desinstalar y desactivar otros complementos"
 msgid "Replace"
 msgstr "Reemplazar"
 
-#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:121
+#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:44 ui/settings.slint:133
 #, x-machine
 msgid "Add"
 msgstr "Agregar"
 
-#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:79
+#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:43 ui/settings.slint:91
 #, x-machine
 msgid "Remove"
 msgstr "Quitar"
@@ -1590,7 +1596,7 @@ msgstr "Quitar"
 msgid "Update"
 msgstr "Actualizar"
 
-#: store.ts:368 store.ts:369 store.ts:371 ui/store.slint:257 ui/store.slint:432
+#: store.ts:368 store.ts:369 store.ts:371 ui/store.slint:225 ui/store.slint:281 ui/store.slint:456
 #, x-machine
 msgid "Install"
 msgstr "Instalar"
@@ -1640,147 +1646,147 @@ msgstr "Desactivar"
 msgid "Choose a plugin package (.vxp)"
 msgstr "Elige un paquete de complemento (.vxp)"
 
-#: ui/settings.slint:39
-#, x-machine
-msgid "Check for updates automatically (30 seconds after the player starts, then every 24 hours)"
-msgstr "Buscar actualizaciones automáticamente (30 segundos después de iniciar el reproductor y luego cada 24 horas)"
-
-#: ui/settings.slint:44
-#, x-machine
-msgid "When off, the store goes online only when you open it or click “Refresh”; plugins revoked by a repository are disabled only then too. When updates are available, the “Plugin Store…” menu item shows how many."
-msgstr "Si está desactivado, la tienda solo se conecta cuando la abres o haces clic en «Actualizar»; los complementos retirados por un repositorio también se desactivan solo entonces. Cuando hay actualizaciones, el elemento de menú «Tienda de complementos…» indica cuántas."
-
-#: ui/settings.slint:51
-#, x-machine
-msgid "Repositories"
-msgstr "Repositorios"
-
-#: ui/settings.slint:90
-#, x-machine
-msgid "Add Repository…"
-msgstr "Agregar repositorio…"
-
-#: ui/settings.slint:114
-#, x-machine
-msgid "The repository's root address or the full address of index.json (https://…)"
-msgstr "La dirección raíz del repositorio o la dirección completa de index.json (https://…)"
-
-#: ui/settings.slint:125 ui/store.slint:516
+#: ui/settings.slint:45 ui/settings.slint:137 ui/store.slint:540
 #, x-machine
 msgid "Cancel"
 msgstr "Cancelar"
 
-#: ui/settings.slint:130
+#: ui/settings.slint:51
+#, x-machine
+msgid "Check for updates automatically (30 seconds after the player starts, then every 24 hours)"
+msgstr "Buscar actualizaciones automáticamente (30 segundos después de iniciar el reproductor y luego cada 24 horas)"
+
+#: ui/settings.slint:56
+#, x-machine
+msgid "When off, the store goes online only when you open it or click “Refresh”; plugins revoked by a repository are disabled only then too. When updates are available, the “Plugin Store…” menu item shows how many."
+msgstr "Si está desactivado, la tienda solo se conecta cuando la abres o haces clic en «Actualizar»; los complementos retirados por un repositorio también se desactivan solo entonces. Cuando hay actualizaciones, el elemento de menú «Tienda de complementos…» indica cuántas."
+
+#: ui/settings.slint:63
+#, x-machine
+msgid "Repositories"
+msgstr "Repositorios"
+
+#: ui/settings.slint:102
+#, x-machine
+msgid "Add Repository…"
+msgstr "Agregar repositorio…"
+
+#: ui/settings.slint:126
+#, x-machine
+msgid "The repository's root address or the full address of index.json (https://…)"
+msgstr "La dirección raíz del repositorio o la dirección completa de index.json (https://…)"
+
+#: ui/settings.slint:142
 #, x-machine
 msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline, disable the Plugin Store in “Plugin Manager”."
 msgstr "Vestra Player no revisa los repositorios de terceros; sus complementos pueden leer tus archivos o usar la red. Agrega solo repositorios de confianza. El repositorio oficial no se puede quitar; para que la tienda no se conecte, desactiva la Tienda de complementos en «Administrador de complementos»."
 
-#: ui/store.slint:216
-#, x-machine
-msgid "Search names, authors, tags…"
-msgstr "Buscar nombres, autores, etiquetas…"
-
-#: ui/store.slint:221
-#, x-machine
-msgid "All"
-msgstr "Todos"
-
-#: ui/store.slint:225
-#, x-machine
-msgid "Updates {}"
-msgstr "Actualizaciones {}"
-
-#: ui/store.slint:225
-#, x-machine
-msgid "Updates"
-msgstr "Actualizaciones"
-
-#: ui/store.slint:233
+#: ui/store.slint:219 ui/store.slint:257
 #, x-machine
 msgid "Tags: All"
 msgstr "Etiquetas: todas"
 
-#: ui/store.slint:240
+#: ui/store.slint:221 ui/store.slint:264
 #, x-machine
 msgid "Sort: Name"
 msgstr "Ordenar: nombre"
 
-#: ui/store.slint:240
+#: ui/store.slint:221 ui/store.slint:264
 #, x-machine
 msgid "Sort: Updated"
 msgstr "Ordenar: actualización"
 
-#: ui/store.slint:248
-#, x-machine
-msgid "You can also drop a .vxp plugin package on the player's video area to install it"
-msgstr "También puedes soltar un paquete de complemento .vxp sobre la zona del video del reproductor para instalarlo"
-
-#: ui/store.slint:249
-#, x-machine
-msgid "Install from File…"
-msgstr "Instalar desde archivo…"
-
-#: ui/store.slint:250
-#, x-machine
-msgid "Install from Link…"
-msgstr "Instalar desde enlace…"
-
-#: ui/store.slint:251
-#, x-machine
-msgid "Repositories…"
-msgstr "Repositorios…"
-
-#: ui/store.slint:252
-#, x-machine
-msgid "Refresh"
-msgstr "Actualizar"
-
-#: ui/store.slint:256
-#, x-machine
-msgid "Plugin package link (https://…/name-version.vxp)"
-msgstr "Enlace del paquete de complemento (https://…/nombre-versión.vxp)"
-
-#: ui/store.slint:300
-#, x-machine
-msgid "Select a plugin on the left to see its details"
-msgstr "Selecciona un complemento a la izquierda para ver sus detalles"
-
-#: ui/store.slint:368
-#, x-machine
-msgid "Description"
-msgstr "Descripción"
-
-#: ui/store.slint:369
-#, x-machine
-msgid "Changelog"
-msgstr "Registro de cambios"
-
-#: ui/store.slint:370
-#, x-machine
-msgid "Versions"
-msgstr "Versiones"
-
-#: ui/store.slint:408
+#: ui/store.slint:224 ui/store.slint:432
 #, x-machine
 msgid "Published"
 msgstr "Publicado"
 
-#: ui/store.slint:409
+#: ui/store.slint:240
+#, x-machine
+msgid "Search names, authors, tags…"
+msgstr "Buscar nombres, autores, etiquetas…"
+
+#: ui/store.slint:245
+#, x-machine
+msgid "All"
+msgstr "Todos"
+
+#: ui/store.slint:249
+#, x-machine
+msgid "Updates {}"
+msgstr "Actualizaciones {}"
+
+#: ui/store.slint:249
+#, x-machine
+msgid "Updates"
+msgstr "Actualizaciones"
+
+#: ui/store.slint:272
+#, x-machine
+msgid "You can also drop a .vxp plugin package on the player's video area to install it"
+msgstr "También puedes soltar un paquete de complemento .vxp sobre la zona del video del reproductor para instalarlo"
+
+#: ui/store.slint:273
+#, x-machine
+msgid "Install from File…"
+msgstr "Instalar desde archivo…"
+
+#: ui/store.slint:274
+#, x-machine
+msgid "Install from Link…"
+msgstr "Instalar desde enlace…"
+
+#: ui/store.slint:275
+#, x-machine
+msgid "Repositories…"
+msgstr "Repositorios…"
+
+#: ui/store.slint:276
+#, x-machine
+msgid "Refresh"
+msgstr "Actualizar"
+
+#: ui/store.slint:280
+#, x-machine
+msgid "Plugin package link (https://…/name-version.vxp)"
+msgstr "Enlace del paquete de complemento (https://…/nombre-versión.vxp)"
+
+#: ui/store.slint:324
+#, x-machine
+msgid "Select a plugin on the left to see its details"
+msgstr "Selecciona un complemento a la izquierda para ver sus detalles"
+
+#: ui/store.slint:392
+#, x-machine
+msgid "Description"
+msgstr "Descripción"
+
+#: ui/store.slint:393
+#, x-machine
+msgid "Changelog"
+msgstr "Registro de cambios"
+
+#: ui/store.slint:394
+#, x-machine
+msgid "Versions"
+msgstr "Versiones"
+
+#: ui/store.slint:433
 #, x-machine
 msgid "Minimum player"
 msgstr "Versión mín. del reproductor"
 
-#: ui/store.slint:475
+#: ui/store.slint:499
 #, x-machine
 msgid "Permissions ({})"
 msgstr "Permisos ({})"
 
-#: ui/store.slint:489
+#: ui/store.slint:513
 #, x-machine
 msgid "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
 msgstr "Un complemento es un programa completo: los permisos anteriores solo limitan lo que puede hacer con el reproductor, no la lectura y escritura de archivos ni el uso de la red."
 
-#: ui/store.slint:497
+#: ui/store.slint:521
 #, x-machine
 msgid "Disable, reload, open the data folder: Settings ▸ Plugin Manager…"
 msgstr "Desactivar, recargar, abrir la carpeta de datos: Configuración ▸ Administrador de complementos…"

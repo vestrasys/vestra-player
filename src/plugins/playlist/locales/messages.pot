@@ -164,7 +164,7 @@ msgstr ""
 msgid "Close the other dialog first"
 msgstr ""
 
-#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:57 ui/sidebar.slint:242
+#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:114 ui/sidebar.slint:242
 msgid "Playlist"
 msgstr ""
 
@@ -380,19 +380,19 @@ msgstr ""
 msgid "Repeat"
 msgstr ""
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 msgid "Off"
 msgstr ""
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 msgid "All"
 msgstr ""
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 msgid "One"
 msgstr ""
 
-#: main.ts:561 ui/settings.slint:99
+#: main.ts:561 ui/settings.slint:156
 msgid "Shuffle"
 msgstr ""
 
@@ -534,7 +534,7 @@ msgstr ""
 msgid "The list is full at {} items"
 msgstr ""
 
-#: ui/link.slint:25
+#: ui/link.slint:25 ui/link.slint:34
 msgid "Enter HTTP(S) links; adding only selects, it does not play"
 msgstr ""
 
@@ -542,67 +542,67 @@ msgstr ""
 msgid "Add Links to Playlist"
 msgstr ""
 
-#: ui/link.slint:42
+#: ui/link.slint:50
 msgid "Enter the web addresses to add to the playlist below, one per line."
 msgstr ""
 
-#: ui/link.slint:48
+#: ui/link.slint:56
 msgid "Example: {}"
 msgstr ""
 
-#: ui/link.slint:55 ui/sidebar.slint:466
+#: ui/link.slint:63 ui/sidebar.slint:466
 msgid "Add"
 msgstr ""
 
-#: ui/settings.slint:63
-msgid "Open and drop"
-msgstr ""
-
-#: ui/settings.slint:67
+#: ui/settings.slint:105 ui/settings.slint:124
 msgid "When opening a file:"
 msgstr ""
 
-#: ui/settings.slint:70
-msgid "Open only that file"
-msgstr ""
-
-#: ui/settings.slint:70
-msgid "Add similar files"
-msgstr ""
-
-#: ui/settings.slint:70
-msgid "Add all files in the folder"
-msgstr ""
-
-#: ui/settings.slint:76
-msgid "Append when opening or dropping; don't clear the list"
-msgstr ""
-
-#: ui/settings.slint:81
-msgid "Insert at the drop position when dropping on the list"
-msgstr ""
-
-#: ui/settings.slint:86
-msgid "Playback"
-msgstr ""
-
-#: ui/settings.slint:90
+#: ui/settings.slint:105 ui/settings.slint:147
 msgid "Repeat:"
 msgstr ""
 
-#: ui/settings.slint:104
+#: ui/settings.slint:120
+msgid "Open and drop"
+msgstr ""
+
+#: ui/settings.slint:127
+msgid "Open only that file"
+msgstr ""
+
+#: ui/settings.slint:127
+msgid "Add similar files"
+msgstr ""
+
+#: ui/settings.slint:127
+msgid "Add all files in the folder"
+msgstr ""
+
+#: ui/settings.slint:133
+msgid "Append when opening or dropping; don't clear the list"
+msgstr ""
+
+#: ui/settings.slint:138
+msgid "Insert at the drop position when dropping on the list"
+msgstr ""
+
+#: ui/settings.slint:143
+msgid "Playback"
+msgstr ""
+
+#: ui/settings.slint:161
 msgid "Fast advance to next"
 msgstr ""
 
-#: ui/settings.slint:109
+#: ui/settings.slint:166
 msgid "List"
 msgstr ""
 
-#: ui/settings.slint:111
+#: ui/settings.slint:168
 msgid "Remember list"
 msgstr ""
 
-#: ui/settings.slint:116
+#: ui/settings.slint:173
 msgid "Confirm before removing all"
 msgstr ""
 

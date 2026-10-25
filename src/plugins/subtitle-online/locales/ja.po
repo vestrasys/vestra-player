@@ -541,7 +541,7 @@ msgstr "字幕ファイルを選択"
 msgid "The archive has several subtitle files:"
 msgstr "アーカイブに複数の字幕ファイルがあります："
 
-#: ui/choose.slint:52 ui/download.slint:162
+#: ui/choose.slint:52 ui/download.slint:183
 #, x-machine
 msgid "Cancel"
 msgstr "キャンセル"
@@ -566,252 +566,252 @@ msgstr "{} [機械翻訳]"
 msgid "{} [HI]"
 msgstr "{} [HI]"
 
-#: ui/download.slint:75
-#, x-machine
-msgid "Title:"
-msgstr "タイトル："
-
-#: ui/download.slint:87
-#, x-machine
-msgid "Search by Title"
-msgstr "タイトルで検索"
-
-#: ui/download.slint:88
-#, x-machine
-msgid "Search Again"
-msgstr "再検索"
-
-#: ui/download.slint:93
-#, x-machine
-msgid "Searching sends the file name keywords and the file hash to the chosen service. You will not be asked again once you agree."
-msgstr "検索すると、ファイル名のキーワードとファイルのハッシュが選択したサービスに送信されます。一度同意すると、次回からは確認しません。"
-
-#: ui/download.slint:101
-#, x-machine
-msgid "Agree and Search"
-msgstr "同意して検索"
-
-#: ui/download.slint:116
+#: ui/download.slint:80 ui/download.slint:137
 #, x-machine
 msgid "Language"
 msgstr "言語"
 
-#: ui/download.slint:117
-#, x-machine
-msgid "Release"
-msgstr "リリース"
-
-#: ui/download.slint:118
+#: ui/download.slint:81 ui/download.slint:139
 #, x-machine
 msgid "Format"
 msgstr "形式"
 
-#: ui/download.slint:119
+#: ui/download.slint:82 ui/download.slint:140
 #, x-machine
 msgid "FPS"
 msgstr "FPS"
 
-#: ui/download.slint:120
+#: ui/download.slint:83 ui/download.slint:141
 #, x-machine
 msgid "Downloads"
 msgstr "DL 数"
 
-#: ui/download.slint:121
+#: ui/download.slint:85 ui/download.slint:142
 #, x-machine
 msgid "Match"
 msgstr "一致"
 
-#: ui/download.slint:122
-#, x-machine
-msgid "Source"
-msgstr "提供元"
-
-#: ui/download.slint:147
+#: ui/download.slint:85 ui/download.slint:168
 #, x-machine
 msgid "Hash"
 msgstr "ハッシュ"
 
-#: ui/download.slint:147
+#: ui/download.slint:85 ui/download.slint:168
 #, x-machine
 msgid "Title"
 msgstr "題名"
 
-#: ui/download.slint:156
+#: ui/download.slint:87 ui/download.slint:143
+#, x-machine
+msgid "Source"
+msgstr "提供元"
+
+#: ui/download.slint:96
+#, x-machine
+msgid "Title:"
+msgstr "タイトル："
+
+#: ui/download.slint:108
+#, x-machine
+msgid "Search by Title"
+msgstr "タイトルで検索"
+
+#: ui/download.slint:109
+#, x-machine
+msgid "Search Again"
+msgstr "再検索"
+
+#: ui/download.slint:114
+#, x-machine
+msgid "Searching sends the file name keywords and the file hash to the chosen service. You will not be asked again once you agree."
+msgstr "検索すると、ファイル名のキーワードとファイルのハッシュが選択したサービスに送信されます。一度同意すると、次回からは確認しません。"
+
+#: ui/download.slint:122
+#, x-machine
+msgid "Agree and Search"
+msgstr "同意して検索"
+
+#: ui/download.slint:138
+#, x-machine
+msgid "Release"
+msgstr "リリース"
+
+#: ui/download.slint:177
 #, x-machine
 msgid "Open"
 msgstr "開く"
 
-#: ui/download.slint:157
+#: ui/download.slint:178
 #, x-machine
 msgid "Add"
 msgstr "追加"
 
-#: ui/download.slint:158
+#: ui/download.slint:179
 #, x-machine
 msgid "Save Only"
 msgstr "保存のみ"
 
-#: ui/download.slint:159
+#: ui/download.slint:180
 #, x-machine
 msgid "Save As…"
 msgstr "名前を付けて保存…"
 
-#: ui/download.slint:160
+#: ui/download.slint:181
 #, x-machine
 msgid "More"
 msgstr "その他"
 
-#: ui/download.slint:163 ui/settings.slint:101
+#: ui/download.slint:184 ui/settings.slint:118
 #, x-machine
 msgid "Settings…"
 msgstr "設定…"
 
-#: ui/service.slint:17
+#: ui/service.slint:19
 #, x-machine
 msgid "{} Settings"
 msgstr "{} の設定"
 
-#: ui/service.slint:39
+#: ui/service.slint:42 ui/service.slint:51
 #, x-machine
 msgid "API key"
 msgstr "API キー"
 
-#: ui/service.slint:39
+#: ui/service.slint:42 ui/service.slint:51
 #, x-machine
 msgid "Token"
 msgstr "トークン"
 
-#: ui/service.slint:44
+#: ui/service.slint:42 ui/service.slint:56
 #, x-machine
 msgid "User name"
 msgstr "ユーザー名"
 
-#: ui/service.slint:45 ui/service.slint:50
-#, x-machine
-msgid "Optional"
-msgstr "任意"
-
-#: ui/service.slint:49
+#: ui/service.slint:42 ui/service.slint:61
 #, x-machine
 msgid "Password"
 msgstr "パスワード"
 
-#: ui/service.slint:54
+#: ui/service.slint:57 ui/service.slint:62
+#, x-machine
+msgid "Optional"
+msgstr "任意"
+
+#: ui/service.slint:66
 #, x-machine
 msgid "Sign up at opensubtitles.com, then get a free API key on the “API consumers” page. User name and password are optional; logging in gives more downloads per day. Stored in: {}."
 msgstr "opensubtitles.com でアカウントを登録し、「API consumers」ページで無料の API キーを取得してください。ユーザー名とパスワードは任意です。ログインすると 1 日のダウンロード数が増えます。保存先：{}。"
 
-#: ui/service.slint:55
+#: ui/service.slint:67
 #, x-machine
 msgid "Sign up at assrt.net, then get the API token in the user center. The service limits how often it can be called. Stored in: {}."
 msgstr "assrt.net で登録し、ユーザーセンターで API トークンを取得してください。このサービスには呼び出し頻度の制限があります。保存先：{}。"
 
-#: ui/service.slint:71 ui/settings.slint:102
+#: ui/service.slint:83 ui/settings.slint:119
 #, x-machine
 msgid "Test"
 msgstr "テスト"
 
-#: ui/service.slint:72
+#: ui/service.slint:84
 #, x-machine
 msgid "Save"
 msgstr "保存"
 
-#: ui/settings.slint:30
+#: ui/settings.slint:32
 #, x-machine
 msgid "Online Subtitle Settings"
 msgstr "オンライン字幕の設定"
 
-#: ui/settings.slint:64
-#, x-machine
-msgid "Services"
-msgstr "サービス"
-
-#: ui/settings.slint:96
-#, x-machine
-msgid "Move Up"
-msgstr "上へ移動"
-
-#: ui/settings.slint:97
-#, x-machine
-msgid "Move Down"
-msgstr "下へ移動"
-
-#: ui/settings.slint:106
-#, x-machine
-msgid "Search"
-msgstr "検索"
-
-#: ui/settings.slint:109
+#: ui/settings.slint:71 ui/settings.slint:126
 #, x-machine
 msgid "Languages"
 msgstr "言語"
 
-#: ui/settings.slint:121
+#: ui/settings.slint:71 ui/settings.slint:138
 #, x-machine
 msgid "Auto search"
 msgstr "自動検索"
 
-#: ui/settings.slint:124
-#, x-machine
-msgid "Off"
-msgstr "オフ"
-
-#: ui/settings.slint:124
-#, x-machine
-msgid "When opening a video without subtitles"
-msgstr "字幕のないビデオを開いたとき"
-
-#: ui/settings.slint:131
+#: ui/settings.slint:71 ui/settings.slint:148
 #, x-machine
 msgid "After search"
 msgstr "検索後"
 
-#: ui/settings.slint:134
-#, x-machine
-msgid "Show the download window"
-msgstr "ダウンロードウインドウを表示"
-
-#: ui/settings.slint:134
-#, x-machine
-msgid "Load the best result automatically"
-msgstr "最適な結果を自動で読み込む"
-
-#: ui/settings.slint:143
-#, x-machine
-msgid "Only subtitles that exactly match the file (hash)"
-msgstr "ファイルと完全に一致する字幕（ハッシュ）のみ"
-
-#: ui/settings.slint:150
+#: ui/settings.slint:71 ui/settings.slint:167
 #, x-machine
 msgid "Exclude"
 msgstr "除外"
 
-#: ui/settings.slint:154
-#, x-machine
-msgid "Separate with commas or spaces"
-msgstr "カンマまたはスペースで区切る"
-
-#: ui/settings.slint:159
-#, x-machine
-msgid "Saving"
-msgstr "保存"
-
-#: ui/settings.slint:162
+#: ui/settings.slint:71 ui/settings.slint:179
 #, x-machine
 msgid "Save to"
 msgstr "保存先"
 
-#: ui/settings.slint:165
+#: ui/settings.slint:81
+#, x-machine
+msgid "Services"
+msgstr "サービス"
+
+#: ui/settings.slint:113
+#, x-machine
+msgid "Move Up"
+msgstr "上へ移動"
+
+#: ui/settings.slint:114
+#, x-machine
+msgid "Move Down"
+msgstr "下へ移動"
+
+#: ui/settings.slint:123
+#, x-machine
+msgid "Search"
+msgstr "検索"
+
+#: ui/settings.slint:141
+#, x-machine
+msgid "Off"
+msgstr "オフ"
+
+#: ui/settings.slint:141
+#, x-machine
+msgid "When opening a video without subtitles"
+msgstr "字幕のないビデオを開いたとき"
+
+#: ui/settings.slint:151
+#, x-machine
+msgid "Show the download window"
+msgstr "ダウンロードウインドウを表示"
+
+#: ui/settings.slint:151
+#, x-machine
+msgid "Load the best result automatically"
+msgstr "最適な結果を自動で読み込む"
+
+#: ui/settings.slint:160
+#, x-machine
+msgid "Only subtitles that exactly match the file (hash)"
+msgstr "ファイルと完全に一致する字幕（ハッシュ）のみ"
+
+#: ui/settings.slint:171
+#, x-machine
+msgid "Separate with commas or spaces"
+msgstr "カンマまたはスペースで区切る"
+
+#: ui/settings.slint:176
+#, x-machine
+msgid "Saving"
+msgstr "保存"
+
+#: ui/settings.slint:182
 #, x-machine
 msgid "Beside the video when possible"
 msgstr "可能な場合はビデオと同じ場所"
 
-#: ui/settings.slint:165
+#: ui/settings.slint:182
 #, x-machine
 msgid "Plugin data folder"
 msgstr "プラグインのデータフォルダ"
 
-#: ui/settings.slint:171
+#: ui/settings.slint:188
 #, x-machine
 msgid "Searching sends the file name keywords and the file hash to the chosen service. Keys and passwords are stored in: {}."
 msgstr "検索すると、ファイル名のキーワードとファイルのハッシュが選択したサービスに送信されます。キーとパスワードの保存先：{}。"

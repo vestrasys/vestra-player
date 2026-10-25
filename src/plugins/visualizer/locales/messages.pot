@@ -138,36 +138,36 @@ msgstr ""
 msgid "Restore Default"
 msgstr ""
 
-#: ui/page.slint:91
+#: ui/page.slint:92
 msgid "PNG or JPEG, up to 4096×4096 and 16 MB. The image is copied, so the original can be moved."
 msgstr ""
 
-#: ui/page.slint:97
+#: ui/page.slint:98
 msgid "Audio only"
 msgstr ""
 
-#: ui/page.slint:100
+#: ui/page.slint:101
 msgid "Show album cover for audio only"
 msgstr ""
 
-#: ui/page.slint:106
+#: ui/page.slint:107
 msgid "The cover comes from the picture embedded in the file, or a cover, folder or front image in the same folder; without one the logo is shown as a placeholder."
 msgstr ""
 
-#: ui/page.slint:117
+#: ui/page.slint:118
 msgid "Cover cache unavailable"
 msgstr ""
 
-#: ui/page.slint:118
+#: ui/page.slint:119
 msgid "Cover cache: empty"
 msgstr ""
 
-#: ui/page.slint:119
+#: ui/page.slint:120
 msgid "Cover cache: {n} track, {0}"
 msgid_plural "Cover cache: {n} tracks, {0}"
 msgstr[0] ""
 msgstr[1] ""
 
-#: ui/page.slint:125
+#: ui/page.slint:126
 msgid "Clear Cover Cache"
 msgstr ""

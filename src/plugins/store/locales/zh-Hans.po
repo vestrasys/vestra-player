@@ -433,7 +433,7 @@ msgstr "仓库里还没有插件"
 msgid "{} · {}"
 msgstr "{} · {}"
 
-#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:222
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:246
 msgid "Installed"
 msgstr "已安装"
 
@@ -613,7 +613,7 @@ msgstr "不兼容：{}"
 msgid "Latest"
 msgstr "最新"
 
-#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:407
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:223 ui/store.slint:431
 msgid "Version"
 msgstr "版本"
 
@@ -1297,11 +1297,11 @@ msgstr "安装、卸载、停用其它插件"
 msgid "Replace"
 msgstr "替换"
 
-#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:121
+#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:44 ui/settings.slint:133
 msgid "Add"
 msgstr "添加"
 
-#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:79
+#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:43 ui/settings.slint:91
 msgid "Remove"
 msgstr "移除"
 
@@ -1309,7 +1309,7 @@ msgstr "移除"
 msgid "Update"
 msgstr "更新"
 
-#: store.ts:368 store.ts:369 store.ts:371 ui/store.slint:257 ui/store.slint:432
+#: store.ts:368 store.ts:369 store.ts:371 ui/store.slint:225 ui/store.slint:281 ui/store.slint:456
 msgid "Install"
 msgstr "安装"
 
@@ -1349,118 +1349,118 @@ msgstr "停用"
 msgid "Choose a plugin package (.vxp)"
 msgstr "选择插件包（.vxp）"
 
-#: ui/settings.slint:39
-msgid "Check for updates automatically (30 seconds after the player starts, then every 24 hours)"
-msgstr "自动检查更新（播放器启动 30 秒后一次，之后每 24 小时）"
-
-#: ui/settings.slint:44
-msgid "When off, the store goes online only when you open it or click “Refresh”; plugins revoked by a repository are disabled only then too. When updates are available, the “Plugin Store…” menu item shows how many."
-msgstr "关闭后只在打开插件商城或点「刷新」时联网；被仓库撤回的插件也只在这时停用。有可以更新的插件时，菜单「插件商城…」会显示数量。"
-
-#: ui/settings.slint:51
-msgid "Repositories"
-msgstr "仓库"
-
-#: ui/settings.slint:90
-msgid "Add Repository…"
-msgstr "添加仓库…"
-
-#: ui/settings.slint:114
-msgid "The repository's root address or the full address of index.json (https://…)"
-msgstr "仓库根地址或 index.json 的完整地址（https://…）"
-
-#: ui/settings.slint:125 ui/store.slint:516
+#: ui/settings.slint:45 ui/settings.slint:137 ui/store.slint:540
 msgid "Cancel"
 msgstr "取消"
 
-#: ui/settings.slint:130
+#: ui/settings.slint:51
+msgid "Check for updates automatically (30 seconds after the player starts, then every 24 hours)"
+msgstr "自动检查更新（播放器启动 30 秒后一次，之后每 24 小时）"
+
+#: ui/settings.slint:56
+msgid "When off, the store goes online only when you open it or click “Refresh”; plugins revoked by a repository are disabled only then too. When updates are available, the “Plugin Store…” menu item shows how many."
+msgstr "关闭后只在打开插件商城或点「刷新」时联网；被仓库撤回的插件也只在这时停用。有可以更新的插件时，菜单「插件商城…」会显示数量。"
+
+#: ui/settings.slint:63
+msgid "Repositories"
+msgstr "仓库"
+
+#: ui/settings.slint:102
+msgid "Add Repository…"
+msgstr "添加仓库…"
+
+#: ui/settings.slint:126
+msgid "The repository's root address or the full address of index.json (https://…)"
+msgstr "仓库根地址或 index.json 的完整地址（https://…）"
+
+#: ui/settings.slint:142
 msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline, disable the Plugin Store in “Plugin Manager”."
 msgstr "第三方仓库未经 Vestra Player 审核，其中的插件可能读取你的文件或联网。只添加你信任的仓库。官方仓库不能移除；不想联网时可以在「插件管理」里停用插件商城。"
 
-#: ui/store.slint:216
-msgid "Search names, authors, tags…"
-msgstr "搜索名称、作者、标签…"
-
-#: ui/store.slint:221
-msgid "All"
-msgstr "全部"
-
-#: ui/store.slint:225
-msgid "Updates {}"
-msgstr "可更新 {}"
-
-#: ui/store.slint:225
-msgid "Updates"
-msgstr "可更新"
-
-#: ui/store.slint:233
+#: ui/store.slint:219 ui/store.slint:257
 msgid "Tags: All"
 msgstr "标签：全部"
 
-#: ui/store.slint:240
+#: ui/store.slint:221 ui/store.slint:264
 msgid "Sort: Name"
 msgstr "排序：名称"
 
-#: ui/store.slint:240
+#: ui/store.slint:221 ui/store.slint:264
 msgid "Sort: Updated"
 msgstr "排序：更新时间"
 
-#: ui/store.slint:248
-msgid "You can also drop a .vxp plugin package on the player's video area to install it"
-msgstr "也可以把 .vxp 插件包拖到播放器的视频区安装"
-
-#: ui/store.slint:249
-msgid "Install from File…"
-msgstr "从文件安装…"
-
-#: ui/store.slint:250
-msgid "Install from Link…"
-msgstr "从链接安装…"
-
-#: ui/store.slint:251
-msgid "Repositories…"
-msgstr "仓库…"
-
-#: ui/store.slint:252
-msgid "Refresh"
-msgstr "刷新"
-
-#: ui/store.slint:256
-msgid "Plugin package link (https://…/name-version.vxp)"
-msgstr "插件包链接（https://…/名称-版本.vxp）"
-
-#: ui/store.slint:300
-msgid "Select a plugin on the left to see its details"
-msgstr "选择左侧的插件查看详情"
-
-#: ui/store.slint:368
-msgid "Description"
-msgstr "说明"
-
-#: ui/store.slint:369
-msgid "Changelog"
-msgstr "更新日志"
-
-#: ui/store.slint:370
-msgid "Versions"
-msgstr "版本"
-
-#: ui/store.slint:408
+#: ui/store.slint:224 ui/store.slint:432
 msgid "Published"
 msgstr "发布日期"
 
-#: ui/store.slint:409
+#: ui/store.slint:240
+msgid "Search names, authors, tags…"
+msgstr "搜索名称、作者、标签…"
+
+#: ui/store.slint:245
+msgid "All"
+msgstr "全部"
+
+#: ui/store.slint:249
+msgid "Updates {}"
+msgstr "可更新 {}"
+
+#: ui/store.slint:249
+msgid "Updates"
+msgstr "可更新"
+
+#: ui/store.slint:272
+msgid "You can also drop a .vxp plugin package on the player's video area to install it"
+msgstr "也可以把 .vxp 插件包拖到播放器的视频区安装"
+
+#: ui/store.slint:273
+msgid "Install from File…"
+msgstr "从文件安装…"
+
+#: ui/store.slint:274
+msgid "Install from Link…"
+msgstr "从链接安装…"
+
+#: ui/store.slint:275
+msgid "Repositories…"
+msgstr "仓库…"
+
+#: ui/store.slint:276
+msgid "Refresh"
+msgstr "刷新"
+
+#: ui/store.slint:280
+msgid "Plugin package link (https://…/name-version.vxp)"
+msgstr "插件包链接（https://…/名称-版本.vxp）"
+
+#: ui/store.slint:324
+msgid "Select a plugin on the left to see its details"
+msgstr "选择左侧的插件查看详情"
+
+#: ui/store.slint:392
+msgid "Description"
+msgstr "说明"
+
+#: ui/store.slint:393
+msgid "Changelog"
+msgstr "更新日志"
+
+#: ui/store.slint:394
+msgid "Versions"
+msgstr "版本"
+
+#: ui/store.slint:433
 msgid "Minimum player"
 msgstr "最低播放器"
 
-#: ui/store.slint:475
+#: ui/store.slint:499
 msgid "Permissions ({})"
 msgstr "权限（{}）"
 
-#: ui/store.slint:489
+#: ui/store.slint:513
 msgid "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
 msgstr "插件是完整的程序，以上权限只限制它使用播放器的功能，不限制它读写文件和联网。"
 
-#: ui/store.slint:497
+#: ui/store.slint:521
 msgid "Disable, reload, open the data folder: Settings ▸ Plugin Manager…"
 msgstr "停用、重新加载、查看数据目录：设置 ▸ 插件管理…"

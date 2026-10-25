@@ -5,7 +5,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: bookmarks.ts:46 menu.ts:51 ui/marks.slint:56 ui/marks.slint:173
+#: bookmarks.ts:46 menu.ts:51 ui/marks.slint:56 ui/marks.slint:183
 msgid "Bookmark {}"
 msgstr "书签 {}"
 
@@ -25,7 +25,7 @@ msgstr "将移除 {} 个书签，不能撤销。"
 msgid "{} bookmarks will be removed. This can't be undone."
 msgstr "将移除 {} 个书签，不能撤销。"
 
-#: list.ts:223 ui/marks.slint:197
+#: list.ts:223 ui/marks.slint:207
 msgid "Clear Bookmarks"
 msgstr "清空书签"
 
@@ -79,7 +79,7 @@ msgstr "章节/书签"
 msgid "Chapter and Bookmark List…"
 msgstr "章节/书签列表…"
 
-#: menu.ts:109 ui/marks.slint:195
+#: menu.ts:109 ui/marks.slint:205
 msgid "Add Bookmark"
 msgstr "添加书签"
 
@@ -87,7 +87,7 @@ msgstr "添加书签"
 msgid "Can't add bookmarks to this source"
 msgstr "当前来源不能添加书签"
 
-#: menu.ts:114 menu.ts:125 menu.ts:164 menu.ts:183 menu.ts:237 menu.ts:250 ui/marks.slint:144
+#: menu.ts:114 menu.ts:125 menu.ts:164 menu.ts:183 menu.ts:237 menu.ts:250 ui/marks.slint:154
 msgid "No media open"
 msgstr "未打开媒体"
 
@@ -339,56 +339,55 @@ msgstr "区段循环失败：{}"
 msgid "Show Marks on Seek Bar"
 msgstr "在进度条上显示标记"
 
-#: ui/marks.slint:114
-msgid "Search by title"
-msgstr "按标题搜索"
-
-#: ui/marks.slint:120
-msgid "The file has changed; bookmark times may be off"
-msgstr "文件已改变，书签时间可能不准"
-
-#: ui/marks.slint:144
-msgid "No matches"
-msgstr "无匹配项"
-
-#: ui/marks.slint:144
-msgid "No chapters or bookmarks"
-msgstr "没有章节或书签"
-
-#: ui/marks.slint:151
+#: ui/marks.slint:114 ui/marks.slint:161
 msgid "Time"
 msgstr "时间"
 
-#: ui/marks.slint:167
+#: ui/marks.slint:114 ui/marks.slint:177
 msgid "Title"
 msgstr "标题"
 
-#: ui/marks.slint:183
+#: ui/marks.slint:124
+msgid "Search by title"
+msgstr "按标题搜索"
+
+#: ui/marks.slint:130
+msgid "The file has changed; bookmark times may be off"
+msgstr "文件已改变，书签时间可能不准"
+
+#: ui/marks.slint:154
+msgid "No matches"
+msgstr "无匹配项"
+
+#: ui/marks.slint:154
+msgid "No chapters or bookmarks"
+msgstr "没有章节或书签"
+
+#: ui/marks.slint:193
 msgid "Title can't be empty"
 msgstr "标题不能为空"
 
-#: ui/marks.slint:184
+#: ui/marks.slint:194
 msgid "Time format is h:mm:ss.d"
 msgstr "时间格式为 h:mm:ss.d"
 
-#: ui/marks.slint:185
+#: ui/marks.slint:195
 msgid "Time exceeds the duration ({})"
 msgstr "时间超出时长（{}）"
 
-#: ui/marks.slint:186
+#: ui/marks.slint:196
 msgid "Removed: {}"
 msgstr "已移除：{}"
 
-#: ui/marks.slint:187
+#: ui/marks.slint:197
 msgid "Can't confirm: {}"
 msgstr "无法确认：{}"
 
-#: ui/marks.slint:188
+#: ui/marks.slint:198
 msgid "{n} bookmark cleared"
 msgid_plural "{n} bookmarks cleared"
 msgstr[0] "已清空 {n} 个书签"
-msgstr[1] ""
 
-#: ui/marks.slint:196
+#: ui/marks.slint:206
 msgid "Remove"
 msgstr "移除"

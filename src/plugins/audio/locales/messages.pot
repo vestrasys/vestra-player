@@ -184,23 +184,23 @@ msgstr ""
 msgid "No audio tracks"
 msgstr ""
 
-#: main.ts:557 ui/workbench.slint:594
+#: main.ts:557 ui/workbench.slint:619
 msgid "Stereo"
 msgstr ""
 
-#: main.ts:557 ui/workbench.slint:595
+#: main.ts:557 ui/workbench.slint:620
 msgid "Left Channel"
 msgstr ""
 
-#: main.ts:557 ui/workbench.slint:596
+#: main.ts:557 ui/workbench.slint:621
 msgid "Right Channel"
 msgstr ""
 
-#: main.ts:557 ui/workbench.slint:597
+#: main.ts:557 ui/workbench.slint:622
 msgid "Mono Mix"
 msgstr ""
 
-#: main.ts:557 ui/workbench.slint:598
+#: main.ts:557 ui/workbench.slint:623
 msgid "Swap Left and Right"
 msgstr ""
 
@@ -208,11 +208,11 @@ msgstr ""
 msgid "No audio track selected"
 msgstr ""
 
-#: main.ts:563 ui/workbench.slint:582
+#: main.ts:563 ui/workbench.slint:607
 msgid "The current track is mono"
 msgstr ""
 
-#: main.ts:569 ui/workbench.slint:409 ui/workbench.slint:452
+#: main.ts:569 ui/workbench.slint:411 ui/workbench.slint:476
 msgid "Equalizer"
 msgstr ""
 
@@ -228,19 +228,19 @@ msgstr ""
 msgid "Preset"
 msgstr ""
 
-#: main.ts:582 ui/workbench.slint:408
+#: main.ts:582 ui/workbench.slint:410 ui/workbench.slint:431
 msgid "Flat"
 msgstr ""
 
-#: main.ts:582 ui/workbench.slint:408
+#: main.ts:582 ui/workbench.slint:410 ui/workbench.slint:431
 msgid "Voice"
 msgstr ""
 
-#: main.ts:582 ui/workbench.slint:408
+#: main.ts:582 ui/workbench.slint:410 ui/workbench.slint:431
 msgid "Music"
 msgstr ""
 
-#: main.ts:582 ui/workbench.slint:408
+#: main.ts:582 ui/workbench.slint:410 ui/workbench.slint:431
 msgid "Cinema"
 msgstr ""
 
@@ -272,19 +272,19 @@ msgstr ""
 msgid "50 ms Later"
 msgstr ""
 
-#: main.ts:607 main.ts:646 ui/workbench.slint:474
+#: main.ts:607 main.ts:646 ui/workbench.slint:498
 msgid "Reset"
 msgstr ""
 
-#: main.ts:611 ui/workbench.slint:648
+#: main.ts:611 ui/workbench.slint:673
 msgid "Don't Keep"
 msgstr ""
 
-#: main.ts:611 ui/workbench.slint:649
+#: main.ts:611 ui/workbench.slint:674
 msgid "Keep for This Run"
 msgstr ""
 
-#: main.ts:611 ui/workbench.slint:650
+#: main.ts:611 ui/workbench.slint:675
 msgid "Always Keep"
 msgstr ""
 
@@ -292,7 +292,7 @@ msgstr ""
 msgid "Processing"
 msgstr ""
 
-#: main.ts:621 ui/workbench.slint:518
+#: main.ts:621 ui/workbench.slint:425 ui/workbench.slint:543
 msgid "Normalize"
 msgstr ""
 
@@ -304,7 +304,7 @@ msgstr ""
 msgid "Normalize: Off"
 msgstr ""
 
-#: main.ts:633 ui/workbench.slint:531
+#: main.ts:633 ui/workbench.slint:425 ui/workbench.slint:556
 msgid "Crystalizer"
 msgstr ""
 
@@ -320,7 +320,7 @@ msgstr ""
 msgid "Audio processing reset"
 msgstr ""
 
-#: manifest.json ui/workbench.slint:358
+#: manifest.json ui/workbench.slint:359
 msgid "Audio Workbench"
 msgstr ""
 
@@ -390,58 +390,58 @@ msgstr ""
 msgid "Ready"
 msgstr ""
 
-#: ui/workbench.slint:184 ui/workbench.slint:549 ui/workbench.slint:697
+#: ui/workbench.slint:185 ui/workbench.slint:574 ui/workbench.slint:722
 msgid "Default"
 msgstr ""
 
-#: ui/workbench.slint:409
+#: ui/workbench.slint:411
 msgid "Effects"
 msgstr ""
 
-#: ui/workbench.slint:409
+#: ui/workbench.slint:411
 msgid "Output"
 msgstr ""
 
-#: ui/workbench.slint:463
-msgid "Custom"
-msgstr ""
-
-#: ui/workbench.slint:505
+#: ui/workbench.slint:422 ui/workbench.slint:530
 msgid "Audio sync"
 msgstr ""
 
-#: ui/workbench.slint:506
-msgid "{} ms"
-msgstr ""
-
-#: ui/workbench.slint:546
-msgid "{} dB"
-msgstr ""
-
-#: ui/workbench.slint:563
+#: ui/workbench.slint:428 ui/workbench.slint:588
 msgid "Track"
 msgstr ""
 
-#: ui/workbench.slint:576
-msgid "Load…"
-msgstr ""
-
-#: ui/workbench.slint:586
+#: ui/workbench.slint:428 ui/workbench.slint:611
 msgid "Channels"
 msgstr ""
 
-#: ui/workbench.slint:614
+#: ui/workbench.slint:428 ui/workbench.slint:639
 msgid "Device"
 msgstr ""
 
-#: ui/workbench.slint:633
-msgid "Auto-load audio files with the same name"
-msgstr ""
-
-#: ui/workbench.slint:641
+#: ui/workbench.slint:428 ui/workbench.slint:666
 msgid "Keep sync"
 msgstr ""
 
-#: ui/workbench.slint:676
+#: ui/workbench.slint:431 ui/workbench.slint:487
+msgid "Custom"
+msgstr ""
+
+#: ui/workbench.slint:531
+msgid "{} ms"
+msgstr ""
+
+#: ui/workbench.slint:571
+msgid "{} dB"
+msgstr ""
+
+#: ui/workbench.slint:601
+msgid "Load…"
+msgstr ""
+
+#: ui/workbench.slint:658
+msgid "Auto-load audio files with the same name"
+msgstr ""
+
+#: ui/workbench.slint:701
 msgid "Retry"
 msgstr ""

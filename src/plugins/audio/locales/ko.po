@@ -231,27 +231,27 @@ msgstr "트랙 순환"
 msgid "No audio tracks"
 msgstr "오디오 트랙이 없습니다"
 
-#: main.ts:557 ui/workbench.slint:594
+#: main.ts:557 ui/workbench.slint:619
 #, x-machine
 msgid "Stereo"
 msgstr "스테레오"
 
-#: main.ts:557 ui/workbench.slint:595
+#: main.ts:557 ui/workbench.slint:620
 #, x-machine
 msgid "Left Channel"
 msgstr "왼쪽 채널"
 
-#: main.ts:557 ui/workbench.slint:596
+#: main.ts:557 ui/workbench.slint:621
 #, x-machine
 msgid "Right Channel"
 msgstr "오른쪽 채널"
 
-#: main.ts:557 ui/workbench.slint:597
+#: main.ts:557 ui/workbench.slint:622
 #, x-machine
 msgid "Mono Mix"
 msgstr "모노 믹스"
 
-#: main.ts:557 ui/workbench.slint:598
+#: main.ts:557 ui/workbench.slint:623
 #, x-machine
 msgid "Swap Left and Right"
 msgstr "좌우 바꾸기"
@@ -261,12 +261,12 @@ msgstr "좌우 바꾸기"
 msgid "No audio track selected"
 msgstr "선택한 오디오 트랙이 없습니다"
 
-#: main.ts:563 ui/workbench.slint:582
+#: main.ts:563 ui/workbench.slint:607
 #, x-machine
 msgid "The current track is mono"
 msgstr "현재 트랙은 모노입니다"
 
-#: main.ts:569 ui/workbench.slint:409 ui/workbench.slint:452
+#: main.ts:569 ui/workbench.slint:411 ui/workbench.slint:476
 #, x-machine
 msgid "Equalizer"
 msgstr "이퀄라이저"
@@ -286,22 +286,22 @@ msgstr "이퀄라이저: 끔"
 msgid "Preset"
 msgstr "프리셋"
 
-#: main.ts:582 ui/workbench.slint:408
+#: main.ts:582 ui/workbench.slint:410 ui/workbench.slint:431
 #, x-machine
 msgid "Flat"
 msgstr "플랫"
 
-#: main.ts:582 ui/workbench.slint:408
+#: main.ts:582 ui/workbench.slint:410 ui/workbench.slint:431
 #, x-machine
 msgid "Voice"
 msgstr "음성"
 
-#: main.ts:582 ui/workbench.slint:408
+#: main.ts:582 ui/workbench.slint:410 ui/workbench.slint:431
 #, x-machine
 msgid "Music"
 msgstr "음악"
 
-#: main.ts:582 ui/workbench.slint:408
+#: main.ts:582 ui/workbench.slint:410 ui/workbench.slint:431
 #, x-machine
 msgid "Cinema"
 msgstr "영화"
@@ -341,22 +341,22 @@ msgstr "50ms 빠르게"
 msgid "50 ms Later"
 msgstr "50ms 느리게"
 
-#: main.ts:607 main.ts:646 ui/workbench.slint:474
+#: main.ts:607 main.ts:646 ui/workbench.slint:498
 #, x-machine
 msgid "Reset"
 msgstr "재설정"
 
-#: main.ts:611 ui/workbench.slint:648
+#: main.ts:611 ui/workbench.slint:673
 #, x-machine
 msgid "Don't Keep"
 msgstr "유지 안 함"
 
-#: main.ts:611 ui/workbench.slint:649
+#: main.ts:611 ui/workbench.slint:674
 #, x-machine
 msgid "Keep for This Run"
 msgstr "이번 실행 동안 유지"
 
-#: main.ts:611 ui/workbench.slint:650
+#: main.ts:611 ui/workbench.slint:675
 #, x-machine
 msgid "Always Keep"
 msgstr "항상 유지"
@@ -366,7 +366,7 @@ msgstr "항상 유지"
 msgid "Processing"
 msgstr "처리"
 
-#: main.ts:621 ui/workbench.slint:518
+#: main.ts:621 ui/workbench.slint:425 ui/workbench.slint:543
 #, x-machine
 msgid "Normalize"
 msgstr "노멀라이즈"
@@ -381,7 +381,7 @@ msgstr "노멀라이즈: 켬"
 msgid "Normalize: Off"
 msgstr "노멀라이즈: 끔"
 
-#: main.ts:633 ui/workbench.slint:531
+#: main.ts:633 ui/workbench.slint:425 ui/workbench.slint:556
 #, x-machine
 msgid "Crystalizer"
 msgstr "크리스털라이저"
@@ -401,7 +401,7 @@ msgstr "크리스털라이저: 끔"
 msgid "Audio processing reset"
 msgstr "오디오 처리를 재설정했습니다"
 
-#: manifest.json ui/workbench.slint:358
+#: manifest.json ui/workbench.slint:359
 #, x-machine
 msgid "Audio Workbench"
 msgstr "오디오 작업대"
@@ -490,72 +490,72 @@ msgstr "적용됨"
 msgid "Ready"
 msgstr "준비됨"
 
-#: ui/workbench.slint:184 ui/workbench.slint:549 ui/workbench.slint:697
+#: ui/workbench.slint:185 ui/workbench.slint:574 ui/workbench.slint:722
 #, x-machine
 msgid "Default"
 msgstr "기본값"
 
-#: ui/workbench.slint:409
+#: ui/workbench.slint:411
 #, x-machine
 msgid "Effects"
 msgstr "효과"
 
-#: ui/workbench.slint:409
+#: ui/workbench.slint:411
 #, x-machine
 msgid "Output"
 msgstr "출력"
 
-#: ui/workbench.slint:463
-#, x-machine
-msgid "Custom"
-msgstr "사용자 지정"
-
-#: ui/workbench.slint:505
+#: ui/workbench.slint:422 ui/workbench.slint:530
 #, x-machine
 msgid "Audio sync"
 msgstr "오디오 싱크"
 
-#: ui/workbench.slint:506
-#, x-machine
-msgid "{} ms"
-msgstr "{}ms"
-
-#: ui/workbench.slint:546
-#, x-machine
-msgid "{} dB"
-msgstr "{} dB"
-
-#: ui/workbench.slint:563
+#: ui/workbench.slint:428 ui/workbench.slint:588
 #, x-machine
 msgid "Track"
 msgstr "트랙"
 
-#: ui/workbench.slint:576
-#, x-machine
-msgid "Load…"
-msgstr "불러오기…"
-
-#: ui/workbench.slint:586
+#: ui/workbench.slint:428 ui/workbench.slint:611
 #, x-machine
 msgid "Channels"
 msgstr "채널"
 
-#: ui/workbench.slint:614
+#: ui/workbench.slint:428 ui/workbench.slint:639
 #, x-machine
 msgid "Device"
 msgstr "장치"
 
-#: ui/workbench.slint:633
-#, x-machine
-msgid "Auto-load audio files with the same name"
-msgstr "이름이 같은 오디오 파일 자동으로 불러오기"
-
-#: ui/workbench.slint:641
+#: ui/workbench.slint:428 ui/workbench.slint:666
 #, x-machine
 msgid "Keep sync"
 msgstr "싱크 유지"
 
-#: ui/workbench.slint:676
+#: ui/workbench.slint:431 ui/workbench.slint:487
+#, x-machine
+msgid "Custom"
+msgstr "사용자 지정"
+
+#: ui/workbench.slint:531
+#, x-machine
+msgid "{} ms"
+msgstr "{}ms"
+
+#: ui/workbench.slint:571
+#, x-machine
+msgid "{} dB"
+msgstr "{} dB"
+
+#: ui/workbench.slint:601
+#, x-machine
+msgid "Load…"
+msgstr "불러오기…"
+
+#: ui/workbench.slint:658
+#, x-machine
+msgid "Auto-load audio files with the same name"
+msgstr "이름이 같은 오디오 파일 자동으로 불러오기"
+
+#: ui/workbench.slint:701
 #, x-machine
 msgid "Retry"
 msgstr "다시 시도"

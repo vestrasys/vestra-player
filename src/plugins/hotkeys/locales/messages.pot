@@ -4,27 +4,27 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: export.ts:16 ui/keys.slint:95
+#: export.ts:16 ui/keys.slint:97
 msgid "({})"
 msgstr ""
 
-#: export.ts:17 ui/keys.slint:101 ui/mouse.slint:143
+#: export.ts:17 ui/keys.slint:103 ui/keys.slint:195 ui/mouse.slint:111 ui/mouse.slint:157
 msgid "Default"
 msgstr ""
 
-#: export.ts:17 ui/keys.slint:98 ui/keys.slint:197
+#: export.ts:17 ui/keys.slint:100 ui/keys.slint:195 ui/keys.slint:208 ui/keys.slint:228
 msgid "Changed"
 msgstr ""
 
-#: export.ts:17 ui/keys.slint:99
+#: export.ts:17 ui/keys.slint:101 ui/keys.slint:195
 msgid "Conflict"
 msgstr ""
 
-#: export.ts:17 ui/keys.slint:100
+#: export.ts:17 ui/keys.slint:102 ui/keys.slint:195
 msgid "Ignored"
 msgstr ""
 
-#: export.ts:17 ui/keys.slint:101
+#: export.ts:17 ui/keys.slint:103 ui/keys.slint:195
 msgid "Not loaded"
 msgstr ""
 
@@ -40,11 +40,11 @@ msgstr ""
 msgid "Player"
 msgstr ""
 
-#: export.ts:30 export.ts:40 ui/keys.slint:225
+#: export.ts:30 export.ts:40 ui/keys.slint:256
 msgid "Command"
 msgstr ""
 
-#: export.ts:30 export.ts:40 ui/keys.slint:233
+#: export.ts:30 export.ts:40 ui/keys.slint:264
 msgid "Shortcut"
 msgstr ""
 
@@ -56,7 +56,7 @@ msgstr ""
 msgid "Source"
 msgstr ""
 
-#: export.ts:30 export.ts:40 ui/keys.slint:239
+#: export.ts:30 export.ts:40 ui/keys.slint:195 ui/keys.slint:270
 msgid "Status"
 msgstr ""
 
@@ -220,131 +220,131 @@ msgstr ""
 msgid "Mouse action updated: {} = (none)"
 msgstr ""
 
-#: ui/keys.slint:111
+#: ui/keys.slint:113
 msgid "Default shortcuts are ignored (Settings ▸ Ignore Default Shortcuts)"
 msgstr ""
 
-#: ui/keys.slint:112
+#: ui/keys.slint:114
 msgid "The plugin is not loaded; this change works again when it is back"
 msgstr ""
 
-#: ui/keys.slint:191
-msgid "Search commands or keys (e.g. Ctrl+)"
-msgstr ""
-
-#: ui/keys.slint:197
-msgid "All"
-msgstr ""
-
-#: ui/keys.slint:197
-msgid "Conflicts"
-msgstr ""
-
-#: ui/keys.slint:197 ui/keys.slint:284
-msgid "Unbound"
-msgstr ""
-
-#: ui/keys.slint:256
-msgid "Loading…"
-msgstr ""
-
-#: ui/keys.slint:256
-msgid "No matching commands"
-msgstr ""
-
-#: ui/keys.slint:264
-msgid "Select a command to change its shortcuts"
-msgstr ""
-
-#: ui/keys.slint:265
-msgid "{} (not loaded)"
-msgstr ""
-
-#: ui/keys.slint:266
-msgid "{} (Player · in panel)"
-msgstr ""
-
-#: ui/keys.slint:266
-msgid "{} (Player)"
-msgstr ""
-
-#: ui/keys.slint:267
-msgid "{0} ({1} · in panel)"
-msgstr ""
-
-#: ui/keys.slint:268
-msgid "{0} ({1})"
-msgstr ""
-
-#: ui/keys.slint:296
+#: ui/keys.slint:199 ui/keys.slint:332
 msgid "Add Key…"
 msgstr ""
 
-#: ui/keys.slint:309
-msgid "Press a shortcut (Esc cancels)"
-msgstr ""
-
-#: ui/keys.slint:339
+#: ui/keys.slint:202 ui/keys.slint:378 ui/keys.slint:397
 msgid "Delete Entry"
 msgstr ""
 
-#: ui/keys.slint:339
+#: ui/keys.slint:203 ui/keys.slint:378 ui/keys.slint:397
 msgid "Restore Default"
 msgstr ""
 
-#: ui/keys.slint:345
+#: ui/keys.slint:205 ui/keys.slint:384 ui/keys.slint:403
 msgid "Unbind All"
 msgstr ""
 
-#: ui/keys.slint:356
+#: ui/keys.slint:208 ui/keys.slint:228
+msgid "All"
+msgstr ""
+
+#: ui/keys.slint:208 ui/keys.slint:228
+msgid "Conflicts"
+msgstr ""
+
+#: ui/keys.slint:208 ui/keys.slint:228 ui/keys.slint:316
+msgid "Unbound"
+msgstr ""
+
+#: ui/keys.slint:222
+msgid "Search commands or keys (e.g. Ctrl+)"
+msgstr ""
+
+#: ui/keys.slint:288
+msgid "Loading…"
+msgstr ""
+
+#: ui/keys.slint:288
+msgid "No matching commands"
+msgstr ""
+
+#: ui/keys.slint:296
+msgid "Select a command to change its shortcuts"
+msgstr ""
+
+#: ui/keys.slint:297
+msgid "{} (not loaded)"
+msgstr ""
+
+#: ui/keys.slint:298
+msgid "{} (Player · in panel)"
+msgstr ""
+
+#: ui/keys.slint:298
+msgid "{} (Player)"
+msgstr ""
+
+#: ui/keys.slint:299
+msgid "{0} ({1} · in panel)"
+msgstr ""
+
+#: ui/keys.slint:300
+msgid "{0} ({1})"
+msgstr ""
+
+#: ui/keys.slint:348
+msgid "Press a shortcut (Esc cancels)"
+msgstr ""
+
+#: ui/keys.slint:416
 msgid "⌘Q is the default shortcut to quit Vestra Player. Change it to “{}”?"
 msgstr ""
 
-#: ui/keys.slint:357
+#: ui/keys.slint:417
 msgid "{0} is already used by “{1}”"
 msgstr ""
 
-#: ui/keys.slint:363
+#: ui/keys.slint:423
 msgid "Replace"
 msgstr ""
 
-#: ui/keys.slint:364 ui/mouse.slint:168
+#: ui/keys.slint:424 ui/mouse.slint:182
 msgid "Cancel"
 msgstr ""
 
-#: ui/keys.slint:379
+#: ui/keys.slint:442
 msgid "Restore All Defaults…"
 msgstr ""
 
-#: ui/keys.slint:380
+#: ui/keys.slint:446
 msgid "Export List…"
 msgstr ""
 
-#: ui/keys.slint:383
+#: ui/keys.slint:449
 msgid "Ignore default shortcuts"
 msgstr ""
 
-#: ui/mouse.slint:67 ui/mouse.slint:132
+#: ui/mouse.slint:67 ui/mouse.slint:146
 msgid "(None)"
 msgstr ""
 
-#: ui/mouse.slint:106
+#: ui/mouse.slint:120
 msgid "Modifier"
 msgstr ""
 
-#: ui/mouse.slint:109
+#: ui/mouse.slint:123
 msgid "None"
 msgstr ""
 
-#: ui/mouse.slint:159
+#: ui/mouse.slint:173
 msgid "Command run by “{}”:"
 msgstr ""
 
-#: ui/mouse.slint:164
+#: ui/mouse.slint:178
 msgid "Type to filter"
 msgstr ""
 
-#: ui/mouse.slint:191
+#: ui/mouse.slint:205
 msgid "A bound left click responds only after the system's double-click interval; the right button always opens the menu."
 msgstr ""
 

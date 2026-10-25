@@ -393,8 +393,12 @@ msgstr "Untertitel für das aktuelle Video suchen und herunterladen"
 
 #: manifest.json
 #, x-machine
-msgid "Search OpenSubtitles.com or Assrt for subtitles by file hash and title, load them right away and keep a copy beside the video. Needs your own API key, kept in the system's secret store.\nFind it in the right-click menu under Subtitles ▸ Online Subtitles."
-msgstr "Untertitel auf OpenSubtitles.com oder Assrt nach Datei-Hash und Titel suchen, sofort laden und eine Kopie neben dem Video ablegen. Erfordert einen eigenen API-Schlüssel, der im Geheimnisspeicher des Systems aufbewahrt wird.\nZu finden im Kontextmenü unter „Untertitel ▸ Online-Untertitel“."
+msgid ""
+"Search OpenSubtitles.com or Assrt for subtitles by file hash and title, load them right away and keep a copy beside the video. Needs your own API key, kept in the system's secret store.\n"
+"Find it in the right-click menu under Subtitles ▸ Online Subtitles."
+msgstr ""
+"Untertitel auf OpenSubtitles.com oder Assrt nach Datei-Hash und Titel suchen, sofort laden und eine Kopie neben dem Video ablegen. Erfordert einen eigenen API-Schlüssel, der im Geheimnisspeicher des Systems aufbewahrt wird.\n"
+"Zu finden im Kontextmenü unter „Untertitel ▸ Online-Untertitel“."
 
 #: manifest.json
 #, x-machine
@@ -537,7 +541,7 @@ msgstr "Untertiteldatei wählen"
 msgid "The archive has several subtitle files:"
 msgstr "Das Archiv enthält mehrere Untertiteldateien:"
 
-#: ui/choose.slint:52 ui/download.slint:162
+#: ui/choose.slint:52 ui/download.slint:183
 #, x-machine
 msgid "Cancel"
 msgstr "Abbrechen"
@@ -562,252 +566,252 @@ msgstr "{} [MT]"
 msgid "{} [HI]"
 msgstr "{} [HI]"
 
-#: ui/download.slint:75
-#, x-machine
-msgid "Title:"
-msgstr "Titel:"
-
-#: ui/download.slint:87
-#, x-machine
-msgid "Search by Title"
-msgstr "Nach Titel suchen"
-
-#: ui/download.slint:88
-#, x-machine
-msgid "Search Again"
-msgstr "Erneut suchen"
-
-#: ui/download.slint:93
-#, x-machine
-msgid "Searching sends the file name keywords and the file hash to the chosen service. You will not be asked again once you agree."
-msgstr "Bei der Suche werden Stichwörter aus dem Dateinamen und der Hash der Datei an den gewählten Dienst gesendet. Nach Ihrer Zustimmung werden Sie nicht erneut gefragt."
-
-#: ui/download.slint:101
-#, x-machine
-msgid "Agree and Search"
-msgstr "Zustimmen und suchen"
-
-#: ui/download.slint:116
+#: ui/download.slint:80 ui/download.slint:137
 #, x-machine
 msgid "Language"
 msgstr "Sprache"
 
-#: ui/download.slint:117
-#, x-machine
-msgid "Release"
-msgstr "Release"
-
-#: ui/download.slint:118
+#: ui/download.slint:81 ui/download.slint:139
 #, x-machine
 msgid "Format"
 msgstr "Format"
 
-#: ui/download.slint:119
+#: ui/download.slint:82 ui/download.slint:140
 #, x-machine
 msgid "FPS"
 msgstr "FPS"
 
-#: ui/download.slint:120
+#: ui/download.slint:83 ui/download.slint:141
 #, x-machine
 msgid "Downloads"
 msgstr "Downloads"
 
-#: ui/download.slint:121
+#: ui/download.slint:85 ui/download.slint:142
 #, x-machine
 msgid "Match"
 msgstr "Treffer"
 
-#: ui/download.slint:122
-#, x-machine
-msgid "Source"
-msgstr "Quelle"
-
-#: ui/download.slint:147
+#: ui/download.slint:85 ui/download.slint:168
 #, x-machine
 msgid "Hash"
 msgstr "Hash"
 
-#: ui/download.slint:147
+#: ui/download.slint:85 ui/download.slint:168
 #, x-machine
 msgid "Title"
 msgstr "Titel"
 
-#: ui/download.slint:156
+#: ui/download.slint:87 ui/download.slint:143
+#, x-machine
+msgid "Source"
+msgstr "Quelle"
+
+#: ui/download.slint:96
+#, x-machine
+msgid "Title:"
+msgstr "Titel:"
+
+#: ui/download.slint:108
+#, x-machine
+msgid "Search by Title"
+msgstr "Nach Titel suchen"
+
+#: ui/download.slint:109
+#, x-machine
+msgid "Search Again"
+msgstr "Erneut suchen"
+
+#: ui/download.slint:114
+#, x-machine
+msgid "Searching sends the file name keywords and the file hash to the chosen service. You will not be asked again once you agree."
+msgstr "Bei der Suche werden Stichwörter aus dem Dateinamen und der Hash der Datei an den gewählten Dienst gesendet. Nach Ihrer Zustimmung werden Sie nicht erneut gefragt."
+
+#: ui/download.slint:122
+#, x-machine
+msgid "Agree and Search"
+msgstr "Zustimmen und suchen"
+
+#: ui/download.slint:138
+#, x-machine
+msgid "Release"
+msgstr "Release"
+
+#: ui/download.slint:177
 #, x-machine
 msgid "Open"
 msgstr "Öffnen"
 
-#: ui/download.slint:157
+#: ui/download.slint:178
 #, x-machine
 msgid "Add"
 msgstr "Hinzufügen"
 
-#: ui/download.slint:158
+#: ui/download.slint:179
 #, x-machine
 msgid "Save Only"
 msgstr "Nur speichern"
 
-#: ui/download.slint:159
+#: ui/download.slint:180
 #, x-machine
 msgid "Save As…"
 msgstr "Speichern unter…"
 
-#: ui/download.slint:160
+#: ui/download.slint:181
 #, x-machine
 msgid "More"
 msgstr "Mehr"
 
-#: ui/download.slint:163 ui/settings.slint:101
+#: ui/download.slint:184 ui/settings.slint:118
 #, x-machine
 msgid "Settings…"
 msgstr "Einstellungen…"
 
-#: ui/service.slint:17
+#: ui/service.slint:19
 #, x-machine
 msgid "{} Settings"
 msgstr "{}-Einstellungen"
 
-#: ui/service.slint:39
+#: ui/service.slint:42 ui/service.slint:51
 #, x-machine
 msgid "API key"
 msgstr "API-Schlüssel"
 
-#: ui/service.slint:39
+#: ui/service.slint:42 ui/service.slint:51
 #, x-machine
 msgid "Token"
 msgstr "Token"
 
-#: ui/service.slint:44
+#: ui/service.slint:42 ui/service.slint:56
 #, x-machine
 msgid "User name"
 msgstr "Benutzername"
 
-#: ui/service.slint:45 ui/service.slint:50
-#, x-machine
-msgid "Optional"
-msgstr "Optional"
-
-#: ui/service.slint:49
+#: ui/service.slint:42 ui/service.slint:61
 #, x-machine
 msgid "Password"
 msgstr "Passwort"
 
-#: ui/service.slint:54
+#: ui/service.slint:57 ui/service.slint:62
+#, x-machine
+msgid "Optional"
+msgstr "Optional"
+
+#: ui/service.slint:66
 #, x-machine
 msgid "Sign up at opensubtitles.com, then get a free API key on the “API consumers” page. User name and password are optional; logging in gives more downloads per day. Stored in: {}."
 msgstr "Registrieren Sie sich bei opensubtitles.com und holen Sie sich auf der Seite „API consumers“ einen kostenlosen API-Schlüssel. Benutzername und Passwort sind optional; angemeldet erhalten Sie mehr Downloads pro Tag. Gespeichert in: {}."
 
-#: ui/service.slint:55
+#: ui/service.slint:67
 #, x-machine
 msgid "Sign up at assrt.net, then get the API token in the user center. The service limits how often it can be called. Stored in: {}."
 msgstr "Registrieren Sie sich bei assrt.net und holen Sie sich das API-Token im Benutzerbereich. Der Dienst begrenzt die Anzahl der Aufrufe. Gespeichert in: {}."
 
-#: ui/service.slint:71 ui/settings.slint:102
+#: ui/service.slint:83 ui/settings.slint:119
 #, x-machine
 msgid "Test"
 msgstr "Testen"
 
-#: ui/service.slint:72
+#: ui/service.slint:84
 #, x-machine
 msgid "Save"
 msgstr "Speichern"
 
-#: ui/settings.slint:30
+#: ui/settings.slint:32
 #, x-machine
 msgid "Online Subtitle Settings"
 msgstr "Online-Untertitel-Einstellungen"
 
-#: ui/settings.slint:64
-#, x-machine
-msgid "Services"
-msgstr "Dienste"
-
-#: ui/settings.slint:96
-#, x-machine
-msgid "Move Up"
-msgstr "Nach oben"
-
-#: ui/settings.slint:97
-#, x-machine
-msgid "Move Down"
-msgstr "Nach unten"
-
-#: ui/settings.slint:106
-#, x-machine
-msgid "Search"
-msgstr "Suchen"
-
-#: ui/settings.slint:109
+#: ui/settings.slint:71 ui/settings.slint:126
 #, x-machine
 msgid "Languages"
 msgstr "Sprachen"
 
-#: ui/settings.slint:121
+#: ui/settings.slint:71 ui/settings.slint:138
 #, x-machine
 msgid "Auto search"
 msgstr "Auto-Suche"
 
-#: ui/settings.slint:124
-#, x-machine
-msgid "Off"
-msgstr "Aus"
-
-#: ui/settings.slint:124
-#, x-machine
-msgid "When opening a video without subtitles"
-msgstr "Beim Öffnen eines Videos ohne Untertitel"
-
-#: ui/settings.slint:131
+#: ui/settings.slint:71 ui/settings.slint:148
 #, x-machine
 msgid "After search"
 msgstr "Nach der Suche"
 
-#: ui/settings.slint:134
-#, x-machine
-msgid "Show the download window"
-msgstr "Download-Fenster anzeigen"
-
-#: ui/settings.slint:134
-#, x-machine
-msgid "Load the best result automatically"
-msgstr "Bestes Ergebnis automatisch laden"
-
-#: ui/settings.slint:143
-#, x-machine
-msgid "Only subtitles that exactly match the file (hash)"
-msgstr "Nur exakt zur Datei passende Untertitel (Hash)"
-
-#: ui/settings.slint:150
+#: ui/settings.slint:71 ui/settings.slint:167
 #, x-machine
 msgid "Exclude"
 msgstr "Ausschließen"
 
-#: ui/settings.slint:154
-#, x-machine
-msgid "Separate with commas or spaces"
-msgstr "Durch Kommas oder Leerzeichen trennen"
-
-#: ui/settings.slint:159
-#, x-machine
-msgid "Saving"
-msgstr "Speichern"
-
-#: ui/settings.slint:162
+#: ui/settings.slint:71 ui/settings.slint:179
 #, x-machine
 msgid "Save to"
 msgstr "Speichern in"
 
-#: ui/settings.slint:165
+#: ui/settings.slint:81
+#, x-machine
+msgid "Services"
+msgstr "Dienste"
+
+#: ui/settings.slint:113
+#, x-machine
+msgid "Move Up"
+msgstr "Nach oben"
+
+#: ui/settings.slint:114
+#, x-machine
+msgid "Move Down"
+msgstr "Nach unten"
+
+#: ui/settings.slint:123
+#, x-machine
+msgid "Search"
+msgstr "Suchen"
+
+#: ui/settings.slint:141
+#, x-machine
+msgid "Off"
+msgstr "Aus"
+
+#: ui/settings.slint:141
+#, x-machine
+msgid "When opening a video without subtitles"
+msgstr "Beim Öffnen eines Videos ohne Untertitel"
+
+#: ui/settings.slint:151
+#, x-machine
+msgid "Show the download window"
+msgstr "Download-Fenster anzeigen"
+
+#: ui/settings.slint:151
+#, x-machine
+msgid "Load the best result automatically"
+msgstr "Bestes Ergebnis automatisch laden"
+
+#: ui/settings.slint:160
+#, x-machine
+msgid "Only subtitles that exactly match the file (hash)"
+msgstr "Nur exakt zur Datei passende Untertitel (Hash)"
+
+#: ui/settings.slint:171
+#, x-machine
+msgid "Separate with commas or spaces"
+msgstr "Durch Kommas oder Leerzeichen trennen"
+
+#: ui/settings.slint:176
+#, x-machine
+msgid "Saving"
+msgstr "Speichern"
+
+#: ui/settings.slint:182
 #, x-machine
 msgid "Beside the video when possible"
 msgstr "Wenn möglich neben dem Video"
 
-#: ui/settings.slint:165
+#: ui/settings.slint:182
 #, x-machine
 msgid "Plugin data folder"
 msgstr "Datenordner des Plugins"
 
-#: ui/settings.slint:171
+#: ui/settings.slint:188
 #, x-machine
 msgid "Searching sends the file name keywords and the file hash to the chosen service. Keys and passwords are stored in: {}."
 msgstr "Bei der Suche werden Stichwörter aus dem Dateinamen und der Hash der Datei an den gewählten Dienst gesendet. Schlüssel und Passwörter werden gespeichert in: {}."

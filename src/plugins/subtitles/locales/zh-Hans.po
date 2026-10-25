@@ -157,7 +157,7 @@ msgstr "复位位置"
 msgid "Subtitle position: default ({}%)"
 msgstr "字幕位置：默认({}%)"
 
-#: main.ts:846 ui/settings.slint:94
+#: main.ts:846 ui/settings.slint:117
 msgid "Bold"
 msgstr "粗体"
 
@@ -749,115 +749,115 @@ msgstr "已忽略字幕内嵌字体"
 msgid "Unknown video frame rate; the MicroDVD subtitle was converted at 23.976"
 msgstr "视频帧率未知，已按 23.976 换算 MicroDVD 字幕"
 
-#: ui/settings.slint:19
+#: ui/settings.slint:21
 msgid "Subtitle Settings"
 msgstr "字幕设置"
 
-#: ui/settings.slint:70
+#: ui/settings.slint:78 ui/settings.slint:93
 msgid "Font"
 msgstr "字体"
 
-#: ui/settings.slint:78 ui/settings.slint:111 ui/settings.slint:123 ui/settings.slint:135 ui/settings.slint:157 ui/settings.slint:169 ui/settings.slint:180 ui/settings.slint:193 ui/settings.slint:213 ui/tune.slint:96 ui/tune.slint:104 ui/tune.slint:123
-msgid "Default"
-msgstr "默认"
-
-#: ui/settings.slint:83
-msgid "With the original ASS styles on: fonts follow the subtitle file (missing fonts use the default font); colour, outline, bold, shadow, background box and position have no effect."
-msgstr "ASS 原样式开启时：字体按字幕文件（缺失字体用默认字体），颜色、描边、粗体、阴影、背景框、位置无效。"
-
-#: ui/settings.slint:102
+#: ui/settings.slint:78 ui/settings.slint:125
 msgid "Colour"
 msgstr "颜色"
 
-#: ui/settings.slint:106
-msgid "White"
-msgstr "白色"
-
-#: ui/settings.slint:106
-msgid "Yellow"
-msgstr "黄色"
-
-#: ui/settings.slint:106
-msgid "Cyan"
-msgstr "青色"
-
-#: ui/settings.slint:115
+#: ui/settings.slint:78 ui/settings.slint:138
 msgid "Outline {}"
 msgstr "描边 {}"
 
-#: ui/settings.slint:127
+#: ui/settings.slint:78 ui/settings.slint:150
 msgid "Shadow {}"
 msgstr "阴影 {}"
 
-#: ui/settings.slint:141
-msgid "Background box (replaces outline and shadow)"
-msgstr "背景框（替代描边与阴影）"
-
-#: ui/settings.slint:149
+#: ui/settings.slint:79 ui/settings.slint:172
 msgid "Opacity {}%"
 msgstr "不透明 {}%"
 
-#: ui/settings.slint:161
+#: ui/settings.slint:79 ui/settings.slint:184
 msgid "Margin {}%"
 msgstr "边距 {}%"
 
-#: ui/settings.slint:173
+#: ui/settings.slint:79 ui/settings.slint:196
 msgid "ASS style"
 msgstr "ASS 样式"
 
-#: ui/settings.slint:176
-msgid "Keep original styles"
-msgstr "保留原样式"
-
-#: ui/settings.slint:176
-msgid "Use subtitle settings"
-msgstr "统一为字幕设置"
-
-#: ui/settings.slint:185
+#: ui/settings.slint:79 ui/settings.slint:208
 msgid "Sync step"
 msgstr "同步单位"
 
-#: ui/settings.slint:189
-msgid "{} s"
-msgstr "{} 秒"
-
-#: ui/settings.slint:197
+#: ui/settings.slint:80 ui/settings.slint:220
 msgid "Default encoding"
 msgstr "默认编码"
 
-#: ui/settings.slint:202
+#: ui/settings.slint:85 ui/settings.slint:101 ui/settings.slint:134 ui/settings.slint:146 ui/settings.slint:158 ui/settings.slint:180 ui/settings.slint:192 ui/settings.slint:203 ui/settings.slint:216 ui/settings.slint:236 ui/tune.slint:75 ui/tune.slint:119 ui/tune.slint:127 ui/tune.slint:147
+msgid "Default"
+msgstr "默认"
+
+#: ui/settings.slint:106
+msgid "With the original ASS styles on: fonts follow the subtitle file (missing fonts use the default font); colour, outline, bold, shadow, background box and position have no effect."
+msgstr "ASS 原样式开启时：字体按字幕文件（缺失字体用默认字体），颜色、描边、粗体、阴影、背景框、位置无效。"
+
+#: ui/settings.slint:129
+msgid "White"
+msgstr "白色"
+
+#: ui/settings.slint:129
+msgid "Yellow"
+msgstr "黄色"
+
+#: ui/settings.slint:129
+msgid "Cyan"
+msgstr "青色"
+
+#: ui/settings.slint:164
+msgid "Background box (replaces outline and shadow)"
+msgstr "背景框（替代描边与阴影）"
+
+#: ui/settings.slint:199
+msgid "Keep original styles"
+msgstr "保留原样式"
+
+#: ui/settings.slint:199
+msgid "Use subtitle settings"
+msgstr "统一为字幕设置"
+
+#: ui/settings.slint:212
+msgid "{} s"
+msgstr "{} 秒"
+
+#: ui/settings.slint:225
 msgid "Simplified Chinese (GB18030)"
 msgstr "简体中文 (GB18030)"
 
-#: ui/settings.slint:203
+#: ui/settings.slint:226
 msgid "Traditional Chinese (Big5)"
 msgstr "繁体中文 (Big5)"
 
-#: ui/settings.slint:204
+#: ui/settings.slint:227
 msgid "Japanese (Shift_JIS)"
 msgstr "日文 (Shift_JIS)"
 
-#: ui/settings.slint:205
+#: ui/settings.slint:228
 msgid "Korean (EUC-KR)"
 msgstr "韩文 (EUC-KR)"
 
-#: ui/settings.slint:206
+#: ui/settings.slint:229
 msgid "Western (Windows-1252)"
 msgstr "西欧 (Windows-1252)"
 
-#: ui/settings.slint:207
+#: ui/settings.slint:230
 msgid "Cyrillic (Windows-1251)"
 msgstr "西里尔 (Windows-1251)"
 
-#: ui/settings.slint:208
+#: ui/settings.slint:231
 msgid "Western (ISO-8859-1)"
 msgstr "西欧 (ISO-8859-1)"
 
-#: ui/settings.slint:219
+#: ui/settings.slint:242
 msgid "Reload automatically when the subtitle file changes"
 msgstr "字幕文件改动后自动重载"
 
-#: ui/settings.slint:234
+#: ui/settings.slint:257
 msgid "Reset All"
 msgstr "全部默认"
 
@@ -865,66 +865,66 @@ msgstr "全部默认"
 msgid "Adjust Sync"
 msgstr "手动调整同步"
 
-#: ui/sync.slint:33
-msgid "Sync value (ms):"
-msgstr "同步值(毫秒)："
-
-#: ui/sync.slint:63
-msgid "Apply"
-msgstr "应用"
-
-#: ui/sync.slint:71
+#: ui/sync.slint:29 ui/sync.slint:79
 msgid "Positive delays the subtitles, negative advances them."
 msgstr "正值字幕滞后，负值超前。"
 
-#: ui/tune.slint:19
+#: ui/sync.slint:41
+msgid "Sync value (ms):"
+msgstr "同步值(毫秒)："
+
+#: ui/sync.slint:71
+msgid "Apply"
+msgstr "应用"
+
+#: ui/tune.slint:21
 msgid "Subtitle Tuning"
 msgstr "字幕微调"
 
-#: ui/tune.slint:70
-msgid "Cancel"
-msgstr "取消"
-
-#: ui/tune.slint:70
-msgid "Load…"
-msgstr "载入…"
-
-#: ui/tune.slint:92
+#: ui/tune.slint:64 ui/tune.slint:115
 msgid "Size {}"
 msgstr "字号 {}"
 
-#: ui/tune.slint:100
+#: ui/tune.slint:64 ui/tune.slint:123
 msgid "Position {}%"
 msgstr "位置 {}%"
 
-#: ui/tune.slint:101
-msgid "Up"
-msgstr "上"
-
-#: ui/tune.slint:102
-msgid "Down"
-msgstr "下"
-
-#: ui/tune.slint:110
-msgid "In seconds. Positive delays the subtitles, negative advances them. Click to enter a value."
-msgstr "单位：秒。正值字幕滞后，负值超前。点击输入数值。"
-
-#: ui/tune.slint:113
+#: ui/tune.slint:64 ui/tune.slint:137
 msgid "Sync {}"
 msgstr "同步 {}"
 
-#: ui/tune.slint:121
+#: ui/tune.slint:71 ui/tune.slint:93
+msgid "Cancel"
+msgstr "取消"
+
+#: ui/tune.slint:71 ui/tune.slint:93
+msgid "Load…"
+msgstr "载入…"
+
+#: ui/tune.slint:73 ui/tune.slint:124
+msgid "Up"
+msgstr "上"
+
+#: ui/tune.slint:74 ui/tune.slint:125
+msgid "Down"
+msgstr "下"
+
+#: ui/tune.slint:133
+msgid "In seconds. Positive delays the subtitles, negative advances them. Click to enter a value."
+msgstr "单位：秒。正值字幕滞后，负值超前。点击输入数值。"
+
+#: ui/tune.slint:145
 msgid "Later"
 msgstr "慢"
 
-#: ui/tune.slint:122
+#: ui/tune.slint:146
 msgid "Earlier"
 msgstr "快"
 
-#: ui/tune.slint:135
+#: ui/tune.slint:159
 msgid "Remove"
 msgstr "移除"
 
-#: ui/tune.slint:136
+#: ui/tune.slint:160
 msgid "Settings…"
 msgstr "设置…"

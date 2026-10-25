@@ -116,7 +116,9 @@ msgstr "Muestra la portada del álbum para solo audio y un logotipo en reposo"
 msgid ""
 "While audio without a picture plays, shows the album cover with title, artist and album; with no media open, shows a logo (which can be replaced with your own image); while media opens, shows a loading screen.\n"
 "Entries: Audio ▸ Show Album Cover for Audio Only, Settings ▸ Appearance."
-msgstr "Mientras se reproduce audio sin imagen, muestra la portada del álbum con el título, el artista y el álbum; sin ningún medio abierto, muestra un logotipo (que puedes sustituir por tu propia imagen); mientras se abre un medio, muestra una pantalla de carga.\nAccesos: Audio ▸ Mostrar portada del álbum para solo audio, Configuración ▸ Apariencia."
+msgstr ""
+"Mientras se reproduce audio sin imagen, muestra la portada del álbum con el título, el artista y el álbum; sin ningún medio abierto, muestra un logotipo (que puedes sustituir por tu propia imagen); mientras se abre un medio, muestra una pantalla de carga.\n"
+"Accesos: Audio ▸ Mostrar portada del álbum para solo audio, Configuración ▸ Apariencia."
 
 #: manifest.json
 #, x-machine
@@ -173,44 +175,44 @@ msgstr "Elegir imagen…"
 msgid "Restore Default"
 msgstr "Restaurar predeterminado"
 
-#: ui/page.slint:91
+#: ui/page.slint:92
 #, x-machine
 msgid "PNG or JPEG, up to 4096×4096 and 16 MB. The image is copied, so the original can be moved."
 msgstr "PNG o JPEG, hasta 4096×4096 y 16 MB. La imagen se copia, así que puedes mover el original."
 
-#: ui/page.slint:97
+#: ui/page.slint:98
 #, x-machine
 msgid "Audio only"
 msgstr "Solo audio"
 
-#: ui/page.slint:100
+#: ui/page.slint:101
 #, x-machine
 msgid "Show album cover for audio only"
 msgstr "Mostrar portada del álbum para solo audio"
 
-#: ui/page.slint:106
+#: ui/page.slint:107
 #, x-machine
 msgid "The cover comes from the picture embedded in the file, or a cover, folder or front image in the same folder; without one the logo is shown as a placeholder."
 msgstr "La portada procede de la imagen incrustada en el archivo, o de una imagen cover, folder o front de la misma carpeta; si no hay ninguna, se muestra el logotipo en su lugar."
 
-#: ui/page.slint:117
+#: ui/page.slint:118
 #, x-machine
 msgid "Cover cache unavailable"
 msgstr "Caché de portadas no disponible"
 
-#: ui/page.slint:118
+#: ui/page.slint:119
 #, x-machine
 msgid "Cover cache: empty"
 msgstr "Caché de portadas: vacía"
 
-#: ui/page.slint:119
+#: ui/page.slint:120
 #, x-machine
 msgid "Cover cache: {n} track, {0}"
 msgid_plural "Cover cache: {n} tracks, {0}"
 msgstr[0] "Caché de portadas: {n} pista, {0}"
 msgstr[1] "Caché de portadas: {n} pistas, {0}"
 
-#: ui/page.slint:125
+#: ui/page.slint:126
 #, x-machine
 msgid "Clear Cover Cache"
 msgstr "Vaciar caché de portadas"

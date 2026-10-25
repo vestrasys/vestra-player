@@ -208,7 +208,7 @@ msgstr "Le chemin canonique du fichier correspond à un élément existant ; ce
 msgid "Close the other dialog first"
 msgstr "Fermez d'abord l'autre boîte de dialogue"
 
-#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:57 ui/sidebar.slint:242
+#: main.ts:147 main.ts:538 main.ts:561 main.ts:714 manifest.json ui/settings.slint:114 ui/sidebar.slint:242
 #, x-machine
 msgid "Playlist"
 msgstr "Liste de lecture"
@@ -478,22 +478,22 @@ msgstr "Ouvrir un dossier…"
 msgid "Repeat"
 msgstr "Répétition"
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 #, x-machine
 msgid "Off"
 msgstr "Désactivée"
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 #, x-machine
 msgid "All"
 msgstr "Tout"
 
-#: main.ts:561 ui/settings.slint:93
+#: main.ts:561 ui/settings.slint:150
 #, x-machine
 msgid "One"
 msgstr "Un seul"
 
-#: main.ts:561 ui/settings.slint:99
+#: main.ts:561 ui/settings.slint:156
 #, x-machine
 msgid "Shuffle"
 msgstr "Lecture aléatoire"
@@ -672,7 +672,7 @@ msgstr "Ligne {} : la liste est pleine ({} éléments)"
 msgid "The list is full at {} items"
 msgstr "La liste est pleine ({} éléments)"
 
-#: ui/link.slint:25
+#: ui/link.slint:25 ui/link.slint:34
 #, x-machine
 msgid "Enter HTTP(S) links; adding only selects, it does not play"
 msgstr "Saisissez des liens HTTP(S) ; l'ajout sélectionne uniquement, sans lancer la lecture"
@@ -682,82 +682,82 @@ msgstr "Saisissez des liens HTTP(S) ; l'ajout sélectionne uniquement, sans lan
 msgid "Add Links to Playlist"
 msgstr "Ajouter des liens à la liste de lecture"
 
-#: ui/link.slint:42
+#: ui/link.slint:50
 #, x-machine
 msgid "Enter the web addresses to add to the playlist below, one per line."
 msgstr "Saisissez ci-dessous les adresses web à ajouter à la liste de lecture, une par ligne."
 
-#: ui/link.slint:48
+#: ui/link.slint:56
 #, x-machine
 msgid "Example: {}"
 msgstr "Exemple : {}"
 
-#: ui/link.slint:55 ui/sidebar.slint:466
+#: ui/link.slint:63 ui/sidebar.slint:466
 #, x-machine
 msgid "Add"
 msgstr "Ajouter"
 
-#: ui/settings.slint:63
-#, x-machine
-msgid "Open and drop"
-msgstr "Ouverture et glisser-déposer"
-
-#: ui/settings.slint:67
+#: ui/settings.slint:105 ui/settings.slint:124
 #, x-machine
 msgid "When opening a file:"
 msgstr "À l'ouverture d'un fichier :"
 
-#: ui/settings.slint:70
-#, x-machine
-msgid "Open only that file"
-msgstr "Ouvrir uniquement ce fichier"
-
-#: ui/settings.slint:70
-#, x-machine
-msgid "Add similar files"
-msgstr "Ajouter les fichiers similaires"
-
-#: ui/settings.slint:70
-#, x-machine
-msgid "Add all files in the folder"
-msgstr "Ajouter tous les fichiers du dossier"
-
-#: ui/settings.slint:76
-#, x-machine
-msgid "Append when opening or dropping; don't clear the list"
-msgstr "Ajouter à la fin lors d'une ouverture ou d'un glisser-déposer ; ne pas vider la liste"
-
-#: ui/settings.slint:81
-#, x-machine
-msgid "Insert at the drop position when dropping on the list"
-msgstr "Insérer à l'emplacement visé lors d'un glisser-déposer sur la liste"
-
-#: ui/settings.slint:86
-#, x-machine
-msgid "Playback"
-msgstr "Lecture"
-
-#: ui/settings.slint:90
+#: ui/settings.slint:105 ui/settings.slint:147
 #, x-machine
 msgid "Repeat:"
 msgstr "Répétition :"
 
-#: ui/settings.slint:104
+#: ui/settings.slint:120
+#, x-machine
+msgid "Open and drop"
+msgstr "Ouverture et glisser-déposer"
+
+#: ui/settings.slint:127
+#, x-machine
+msgid "Open only that file"
+msgstr "Ouvrir uniquement ce fichier"
+
+#: ui/settings.slint:127
+#, x-machine
+msgid "Add similar files"
+msgstr "Ajouter les fichiers similaires"
+
+#: ui/settings.slint:127
+#, x-machine
+msgid "Add all files in the folder"
+msgstr "Ajouter tous les fichiers du dossier"
+
+#: ui/settings.slint:133
+#, x-machine
+msgid "Append when opening or dropping; don't clear the list"
+msgstr "Ajouter à la fin lors d'une ouverture ou d'un glisser-déposer ; ne pas vider la liste"
+
+#: ui/settings.slint:138
+#, x-machine
+msgid "Insert at the drop position when dropping on the list"
+msgstr "Insérer à l'emplacement visé lors d'un glisser-déposer sur la liste"
+
+#: ui/settings.slint:143
+#, x-machine
+msgid "Playback"
+msgstr "Lecture"
+
+#: ui/settings.slint:161
 #, x-machine
 msgid "Fast advance to next"
 msgstr "Passage rapide au suivant"
 
-#: ui/settings.slint:109
+#: ui/settings.slint:166
 #, x-machine
 msgid "List"
 msgstr "Liste"
 
-#: ui/settings.slint:111
+#: ui/settings.slint:168
 #, x-machine
 msgid "Remember list"
 msgstr "Mémoriser la liste"
 
-#: ui/settings.slint:116
+#: ui/settings.slint:173
 #, x-machine
 msgid "Confirm before removing all"
 msgstr "Confirmer avant de tout supprimer"

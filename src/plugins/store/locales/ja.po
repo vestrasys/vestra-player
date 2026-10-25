@@ -541,7 +541,7 @@ msgstr "リポジトリにはまだプラグインがありません"
 msgid "{} · {}"
 msgstr "{} · {}"
 
-#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:222
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:246
 #, x-machine
 msgid "Installed"
 msgstr "インストール済み"
@@ -766,7 +766,7 @@ msgstr "互換性なし：{}"
 msgid "Latest"
 msgstr "最新"
 
-#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:407
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:223 ui/store.slint:431
 #, x-machine
 msgid "Version"
 msgstr "バージョン"
@@ -1154,7 +1154,10 @@ msgid ""
 "From the Vestra Player official repository, author {2}.\n"
 "\n"
 "{3}"
-msgstr "提供元：Vestra Player 公式リポジトリ、作成者：{2}。\n\n{3}"
+msgstr ""
+"提供元：Vestra Player 公式リポジトリ、作成者：{2}。\n"
+"\n"
+"{3}"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1578,12 +1581,12 @@ msgstr "他のプラグインのインストール、アンインストール、
 msgid "Replace"
 msgstr "置き換える"
 
-#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:121
+#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:44 ui/settings.slint:133
 #, x-machine
 msgid "Add"
 msgstr "追加"
 
-#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:79
+#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:43 ui/settings.slint:91
 #, x-machine
 msgid "Remove"
 msgstr "削除"
@@ -1593,7 +1596,7 @@ msgstr "削除"
 msgid "Update"
 msgstr "アップデート"
 
-#: store.ts:368 store.ts:369 store.ts:371 ui/store.slint:257 ui/store.slint:432
+#: store.ts:368 store.ts:369 store.ts:371 ui/store.slint:225 ui/store.slint:281 ui/store.slint:456
 #, x-machine
 msgid "Install"
 msgstr "インストール"
@@ -1643,147 +1646,147 @@ msgstr "無効にする"
 msgid "Choose a plugin package (.vxp)"
 msgstr "プラグインパッケージ（.vxp）を選択"
 
-#: ui/settings.slint:39
-#, x-machine
-msgid "Check for updates automatically (30 seconds after the player starts, then every 24 hours)"
-msgstr "アップデートを自動で確認（プレーヤーの起動 30 秒後、その後は 24 時間ごと）"
-
-#: ui/settings.slint:44
-#, x-machine
-msgid "When off, the store goes online only when you open it or click “Refresh”; plugins revoked by a repository are disabled only then too. When updates are available, the “Plugin Store…” menu item shows how many."
-msgstr "オフにすると、ストアはストアを開いたときか「更新」をクリックしたときだけオンラインになります。リポジトリが取り消したプラグインが無効になるのもそのときだけです。アップデートがあるときは、「プラグインストア…」メニュー項目に件数が表示されます。"
-
-#: ui/settings.slint:51
-#, x-machine
-msgid "Repositories"
-msgstr "リポジトリ"
-
-#: ui/settings.slint:90
-#, x-machine
-msgid "Add Repository…"
-msgstr "リポジトリを追加…"
-
-#: ui/settings.slint:114
-#, x-machine
-msgid "The repository's root address or the full address of index.json (https://…)"
-msgstr "リポジトリのルートアドレス、または index.json の完全なアドレス（https://…）"
-
-#: ui/settings.slint:125 ui/store.slint:516
+#: ui/settings.slint:45 ui/settings.slint:137 ui/store.slint:540
 #, x-machine
 msgid "Cancel"
 msgstr "キャンセル"
 
-#: ui/settings.slint:130
+#: ui/settings.slint:51
+#, x-machine
+msgid "Check for updates automatically (30 seconds after the player starts, then every 24 hours)"
+msgstr "アップデートを自動で確認（プレーヤーの起動 30 秒後、その後は 24 時間ごと）"
+
+#: ui/settings.slint:56
+#, x-machine
+msgid "When off, the store goes online only when you open it or click “Refresh”; plugins revoked by a repository are disabled only then too. When updates are available, the “Plugin Store…” menu item shows how many."
+msgstr "オフにすると、ストアはストアを開いたときか「更新」をクリックしたときだけオンラインになります。リポジトリが取り消したプラグインが無効になるのもそのときだけです。アップデートがあるときは、「プラグインストア…」メニュー項目に件数が表示されます。"
+
+#: ui/settings.slint:63
+#, x-machine
+msgid "Repositories"
+msgstr "リポジトリ"
+
+#: ui/settings.slint:102
+#, x-machine
+msgid "Add Repository…"
+msgstr "リポジトリを追加…"
+
+#: ui/settings.slint:126
+#, x-machine
+msgid "The repository's root address or the full address of index.json (https://…)"
+msgstr "リポジトリのルートアドレス、または index.json の完全なアドレス（https://…）"
+
+#: ui/settings.slint:142
 #, x-machine
 msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline, disable the Plugin Store in “Plugin Manager”."
 msgstr "サードパーティのリポジトリは Vestra Player の審査を受けておらず、そのプラグインがファイルを読み取ったりネットワークを使用したりする可能性があります。信頼できるリポジトリだけを追加してください。公式リポジトリは削除できません。ストアをオフラインのままにするには、「プラグインマネージャー」でプラグインストアを無効にしてください。"
 
-#: ui/store.slint:216
-#, x-machine
-msgid "Search names, authors, tags…"
-msgstr "名前、作成者、タグを検索…"
-
-#: ui/store.slint:221
-#, x-machine
-msgid "All"
-msgstr "すべて"
-
-#: ui/store.slint:225
-#, x-machine
-msgid "Updates {}"
-msgstr "アップデート {}"
-
-#: ui/store.slint:225
-#, x-machine
-msgid "Updates"
-msgstr "アップデート"
-
-#: ui/store.slint:233
+#: ui/store.slint:219 ui/store.slint:257
 #, x-machine
 msgid "Tags: All"
 msgstr "タグ：すべて"
 
-#: ui/store.slint:240
+#: ui/store.slint:221 ui/store.slint:264
 #, x-machine
 msgid "Sort: Name"
 msgstr "並べ替え：名前"
 
-#: ui/store.slint:240
+#: ui/store.slint:221 ui/store.slint:264
 #, x-machine
 msgid "Sort: Updated"
 msgstr "並べ替え：更新日"
 
-#: ui/store.slint:248
-#, x-machine
-msgid "You can also drop a .vxp plugin package on the player's video area to install it"
-msgstr ".vxp プラグインパッケージをプレーヤーのビデオ領域にドロップしてインストールすることもできます"
-
-#: ui/store.slint:249
-#, x-machine
-msgid "Install from File…"
-msgstr "ファイルからインストール…"
-
-#: ui/store.slint:250
-#, x-machine
-msgid "Install from Link…"
-msgstr "リンクからインストール…"
-
-#: ui/store.slint:251
-#, x-machine
-msgid "Repositories…"
-msgstr "リポジトリ…"
-
-#: ui/store.slint:252
-#, x-machine
-msgid "Refresh"
-msgstr "更新"
-
-#: ui/store.slint:256
-#, x-machine
-msgid "Plugin package link (https://…/name-version.vxp)"
-msgstr "プラグインパッケージのリンク（https://…/name-version.vxp）"
-
-#: ui/store.slint:300
-#, x-machine
-msgid "Select a plugin on the left to see its details"
-msgstr "左のプラグインを選択すると詳細が表示されます"
-
-#: ui/store.slint:368
-#, x-machine
-msgid "Description"
-msgstr "説明"
-
-#: ui/store.slint:369
-#, x-machine
-msgid "Changelog"
-msgstr "変更履歴"
-
-#: ui/store.slint:370
-#, x-machine
-msgid "Versions"
-msgstr "バージョン"
-
-#: ui/store.slint:408
+#: ui/store.slint:224 ui/store.slint:432
 #, x-machine
 msgid "Published"
 msgstr "公開日"
 
-#: ui/store.slint:409
+#: ui/store.slint:240
+#, x-machine
+msgid "Search names, authors, tags…"
+msgstr "名前、作成者、タグを検索…"
+
+#: ui/store.slint:245
+#, x-machine
+msgid "All"
+msgstr "すべて"
+
+#: ui/store.slint:249
+#, x-machine
+msgid "Updates {}"
+msgstr "アップデート {}"
+
+#: ui/store.slint:249
+#, x-machine
+msgid "Updates"
+msgstr "アップデート"
+
+#: ui/store.slint:272
+#, x-machine
+msgid "You can also drop a .vxp plugin package on the player's video area to install it"
+msgstr ".vxp プラグインパッケージをプレーヤーのビデオ領域にドロップしてインストールすることもできます"
+
+#: ui/store.slint:273
+#, x-machine
+msgid "Install from File…"
+msgstr "ファイルからインストール…"
+
+#: ui/store.slint:274
+#, x-machine
+msgid "Install from Link…"
+msgstr "リンクからインストール…"
+
+#: ui/store.slint:275
+#, x-machine
+msgid "Repositories…"
+msgstr "リポジトリ…"
+
+#: ui/store.slint:276
+#, x-machine
+msgid "Refresh"
+msgstr "更新"
+
+#: ui/store.slint:280
+#, x-machine
+msgid "Plugin package link (https://…/name-version.vxp)"
+msgstr "プラグインパッケージのリンク（https://…/name-version.vxp）"
+
+#: ui/store.slint:324
+#, x-machine
+msgid "Select a plugin on the left to see its details"
+msgstr "左のプラグインを選択すると詳細が表示されます"
+
+#: ui/store.slint:392
+#, x-machine
+msgid "Description"
+msgstr "説明"
+
+#: ui/store.slint:393
+#, x-machine
+msgid "Changelog"
+msgstr "変更履歴"
+
+#: ui/store.slint:394
+#, x-machine
+msgid "Versions"
+msgstr "バージョン"
+
+#: ui/store.slint:433
 #, x-machine
 msgid "Minimum player"
 msgstr "最低プレーヤーバージョン"
 
-#: ui/store.slint:475
+#: ui/store.slint:499
 #, x-machine
 msgid "Permissions ({})"
 msgstr "権限（{}）"
 
-#: ui/store.slint:489
+#: ui/store.slint:513
 #, x-machine
 msgid "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
 msgstr "プラグインは完全なプログラムです。上記の権限はプレーヤーの機能の使用を制限するだけで、ファイルの読み書きやネットワークの使用は制限しません。"
 
-#: ui/store.slint:497
+#: ui/store.slint:521
 #, x-machine
 msgid "Disable, reload, open the data folder: Settings ▸ Plugin Manager…"
 msgstr "無効化、再読み込み、データフォルダを開く：設定 ▸ プラグインマネージャー…"

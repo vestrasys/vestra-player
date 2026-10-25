@@ -175,44 +175,43 @@ msgstr "이미지 선택…"
 msgid "Restore Default"
 msgstr "기본값 복원"
 
-#: ui/page.slint:91
+#: ui/page.slint:92
 #, x-machine
 msgid "PNG or JPEG, up to 4096×4096 and 16 MB. The image is copied, so the original can be moved."
 msgstr "PNG 또는 JPEG, 최대 4096×4096, 16MB. 이미지는 복사되므로 원본을 옮겨도 됩니다."
 
-#: ui/page.slint:97
+#: ui/page.slint:98
 #, x-machine
 msgid "Audio only"
 msgstr "오디오 전용"
 
-#: ui/page.slint:100
+#: ui/page.slint:101
 #, x-machine
 msgid "Show album cover for audio only"
 msgstr "오디오 전용일 때 앨범 커버 표시"
 
-#: ui/page.slint:106
+#: ui/page.slint:107
 #, x-machine
 msgid "The cover comes from the picture embedded in the file, or a cover, folder or front image in the same folder; without one the logo is shown as a placeholder."
 msgstr "커버는 파일에 포함된 그림이나 같은 폴더의 cover, folder, front 이미지에서 가져오며, 없으면 로고를 대신 표시합니다."
 
-#: ui/page.slint:117
+#: ui/page.slint:118
 #, x-machine
 msgid "Cover cache unavailable"
 msgstr "커버 캐시를 사용할 수 없음"
 
-#: ui/page.slint:118
+#: ui/page.slint:119
 #, x-machine
 msgid "Cover cache: empty"
 msgstr "커버 캐시: 비어 있음"
 
-#: ui/page.slint:119
+#: ui/page.slint:120
 #, x-machine
 msgid "Cover cache: {n} track, {0}"
 msgid_plural "Cover cache: {n} tracks, {0}"
 msgstr[0] "커버 캐시: {n}곡, {0}"
-msgstr[1] ""
 
-#: ui/page.slint:125
+#: ui/page.slint:126
 #, x-machine
 msgid "Clear Cover Cache"
 msgstr "커버 캐시 지우기"

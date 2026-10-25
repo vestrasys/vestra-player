@@ -475,7 +475,7 @@ msgstr "速度（0.25〜4×）"
 msgid "Time (h:mm:ss.ms)"
 msgstr "時間（h:mm:ss.ms）"
 
-#: ui/prompt.slint:60 ui/time-jump.slint:128
+#: ui/prompt.slint:60 ui/time-jump.slint:148
 #, x-machine
 msgid "OK"
 msgstr "OK"
@@ -486,52 +486,52 @@ msgid "Go"
 msgstr "移動"
 
 #. the unit after a number of seconds.
-#: ui/time-jump.slint:32
+#: ui/time-jump.slint:34
 #, x-machine
 msgid "s"
 msgstr "秒"
 
-#: ui/time-jump.slint:38
+#: ui/time-jump.slint:40
 #, x-machine
 msgid "Default"
 msgstr "デフォルト"
 
-#: ui/time-jump.slint:65
+#: ui/time-jump.slint:67
 #, x-machine
 msgid "Seek Steps"
 msgstr "シーク幅"
 
-#: ui/time-jump.slint:83
-#, x-machine
-msgid "Set how far each seek key moves during playback."
-msgstr "再生中、各シークキーで移動する幅を設定します。"
-
-#: ui/time-jump.slint:89
+#: ui/time-jump.slint:78 ui/time-jump.slint:106
 #, x-machine
 msgid "Left/Right arrow keys:"
 msgstr "左/右矢印キー："
 
-#: ui/time-jump.slint:96
+#: ui/time-jump.slint:78 ui/time-jump.slint:114
 #, x-machine
 msgid "Ctrl + Left/Right arrow keys:"
 msgstr "Ctrl + 左/右矢印キー："
 
-#: ui/time-jump.slint:103
+#: ui/time-jump.slint:78 ui/time-jump.slint:122
 #, x-machine
 msgid "Shift + Left/Right arrow keys:"
 msgstr "Shift + 左/右矢印キー："
 
-#: ui/time-jump.slint:110
+#: ui/time-jump.slint:78 ui/time-jump.slint:130
 #, x-machine
 msgid "Ctrl + Alt + Left/Right arrow keys:"
 msgstr "Ctrl + Alt + 左/右矢印キー："
 
-#: ui/time-jump.slint:117
+#: ui/time-jump.slint:99
+#, x-machine
+msgid "Set how far each seek key moves during playback."
+msgstr "再生中、各シークキーで移動する幅を設定します。"
+
+#: ui/time-jump.slint:137
 #, x-machine
 msgid "Range 0.1–3600 s, at most one decimal place"
 msgstr "範囲は 0.1〜3600 秒、小数点以下は 1 桁まで"
 
-#: ui/time-jump.slint:132
+#: ui/time-jump.slint:152
 #, x-machine
 msgid "Cancel"
 msgstr "キャンセル"

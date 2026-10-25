@@ -196,7 +196,7 @@ msgstr "위치 재설정"
 msgid "Subtitle position: default ({}%)"
 msgstr "자막 위치: 기본값 ({}%)"
 
-#: main.ts:846 ui/settings.slint:94
+#: main.ts:846 ui/settings.slint:117
 #, x-machine
 msgid "Bold"
 msgstr "굵게"
@@ -935,142 +935,142 @@ msgstr "자막에 포함된 글꼴을 무시했습니다"
 msgid "Unknown video frame rate; the MicroDVD subtitle was converted at 23.976"
 msgstr "비디오 프레임 속도를 알 수 없어 MicroDVD 자막을 23.976으로 변환했습니다"
 
-#: ui/settings.slint:19
+#: ui/settings.slint:21
 #, x-machine
 msgid "Subtitle Settings"
 msgstr "자막 설정"
 
-#: ui/settings.slint:70
+#: ui/settings.slint:78 ui/settings.slint:93
 #, x-machine
 msgid "Font"
 msgstr "글꼴"
 
-#: ui/settings.slint:78 ui/settings.slint:111 ui/settings.slint:123 ui/settings.slint:135 ui/settings.slint:157 ui/settings.slint:169 ui/settings.slint:180 ui/settings.slint:193 ui/settings.slint:213 ui/tune.slint:96 ui/tune.slint:104 ui/tune.slint:123
-#, x-machine
-msgid "Default"
-msgstr "기본값"
-
-#: ui/settings.slint:83
-#, x-machine
-msgid "With the original ASS styles on: fonts follow the subtitle file (missing fonts use the default font); colour, outline, bold, shadow, background box and position have no effect."
-msgstr "ASS 원본 스타일을 켜면 글꼴은 자막 파일을 따르고(없는 글꼴은 기본 글꼴 사용), 색상, 윤곽선, 굵게, 그림자, 배경 상자, 위치는 적용되지 않습니다."
-
-#: ui/settings.slint:102
+#: ui/settings.slint:78 ui/settings.slint:125
 #, x-machine
 msgid "Colour"
 msgstr "색상"
 
-#: ui/settings.slint:106
-#, x-machine
-msgid "White"
-msgstr "흰색"
-
-#: ui/settings.slint:106
-#, x-machine
-msgid "Yellow"
-msgstr "노란색"
-
-#: ui/settings.slint:106
-#, x-machine
-msgid "Cyan"
-msgstr "청록색"
-
-#: ui/settings.slint:115
+#: ui/settings.slint:78 ui/settings.slint:138
 #, x-machine
 msgid "Outline {}"
 msgstr "윤곽선 {}"
 
-#: ui/settings.slint:127
+#: ui/settings.slint:78 ui/settings.slint:150
 #, x-machine
 msgid "Shadow {}"
 msgstr "그림자 {}"
 
-#: ui/settings.slint:141
-#, x-machine
-msgid "Background box (replaces outline and shadow)"
-msgstr "배경 상자 (윤곽선과 그림자 대신)"
-
-#: ui/settings.slint:149
+#: ui/settings.slint:79 ui/settings.slint:172
 #, x-machine
 msgid "Opacity {}%"
 msgstr "불투명도 {}%"
 
-#: ui/settings.slint:161
+#: ui/settings.slint:79 ui/settings.slint:184
 #, x-machine
 msgid "Margin {}%"
 msgstr "여백 {}%"
 
-#: ui/settings.slint:173
+#: ui/settings.slint:79 ui/settings.slint:196
 #, x-machine
 msgid "ASS style"
 msgstr "ASS 스타일"
 
-#: ui/settings.slint:176
-#, x-machine
-msgid "Keep original styles"
-msgstr "원본 스타일 유지"
-
-#: ui/settings.slint:176
-#, x-machine
-msgid "Use subtitle settings"
-msgstr "자막 설정 사용"
-
-#: ui/settings.slint:185
+#: ui/settings.slint:79 ui/settings.slint:208
 #, x-machine
 msgid "Sync step"
 msgstr "싱크 단위"
 
-#: ui/settings.slint:189
-#, x-machine
-msgid "{} s"
-msgstr "{}초"
-
-#: ui/settings.slint:197
+#: ui/settings.slint:80 ui/settings.slint:220
 #, x-machine
 msgid "Default encoding"
 msgstr "기본 인코딩"
 
-#: ui/settings.slint:202
+#: ui/settings.slint:85 ui/settings.slint:101 ui/settings.slint:134 ui/settings.slint:146 ui/settings.slint:158 ui/settings.slint:180 ui/settings.slint:192 ui/settings.slint:203 ui/settings.slint:216 ui/settings.slint:236 ui/tune.slint:75 ui/tune.slint:119 ui/tune.slint:127 ui/tune.slint:147
+#, x-machine
+msgid "Default"
+msgstr "기본값"
+
+#: ui/settings.slint:106
+#, x-machine
+msgid "With the original ASS styles on: fonts follow the subtitle file (missing fonts use the default font); colour, outline, bold, shadow, background box and position have no effect."
+msgstr "ASS 원본 스타일을 켜면 글꼴은 자막 파일을 따르고(없는 글꼴은 기본 글꼴 사용), 색상, 윤곽선, 굵게, 그림자, 배경 상자, 위치는 적용되지 않습니다."
+
+#: ui/settings.slint:129
+#, x-machine
+msgid "White"
+msgstr "흰색"
+
+#: ui/settings.slint:129
+#, x-machine
+msgid "Yellow"
+msgstr "노란색"
+
+#: ui/settings.slint:129
+#, x-machine
+msgid "Cyan"
+msgstr "청록색"
+
+#: ui/settings.slint:164
+#, x-machine
+msgid "Background box (replaces outline and shadow)"
+msgstr "배경 상자 (윤곽선과 그림자 대신)"
+
+#: ui/settings.slint:199
+#, x-machine
+msgid "Keep original styles"
+msgstr "원본 스타일 유지"
+
+#: ui/settings.slint:199
+#, x-machine
+msgid "Use subtitle settings"
+msgstr "자막 설정 사용"
+
+#: ui/settings.slint:212
+#, x-machine
+msgid "{} s"
+msgstr "{}초"
+
+#: ui/settings.slint:225
 #, x-machine
 msgid "Simplified Chinese (GB18030)"
 msgstr "중국어 간체 (GB18030)"
 
-#: ui/settings.slint:203
+#: ui/settings.slint:226
 #, x-machine
 msgid "Traditional Chinese (Big5)"
 msgstr "중국어 번체 (Big5)"
 
-#: ui/settings.slint:204
+#: ui/settings.slint:227
 #, x-machine
 msgid "Japanese (Shift_JIS)"
 msgstr "일본어 (Shift_JIS)"
 
-#: ui/settings.slint:205
+#: ui/settings.slint:228
 #, x-machine
 msgid "Korean (EUC-KR)"
 msgstr "한국어 (EUC-KR)"
 
-#: ui/settings.slint:206
+#: ui/settings.slint:229
 #, x-machine
 msgid "Western (Windows-1252)"
 msgstr "서유럽어 (Windows-1252)"
 
-#: ui/settings.slint:207
+#: ui/settings.slint:230
 #, x-machine
 msgid "Cyrillic (Windows-1251)"
 msgstr "키릴 문자 (Windows-1251)"
 
-#: ui/settings.slint:208
+#: ui/settings.slint:231
 #, x-machine
 msgid "Western (ISO-8859-1)"
 msgstr "서유럽어 (ISO-8859-1)"
 
-#: ui/settings.slint:219
+#: ui/settings.slint:242
 #, x-machine
 msgid "Reload automatically when the subtitle file changes"
 msgstr "자막 파일이 바뀌면 자동으로 다시 불러오기"
 
-#: ui/settings.slint:234
+#: ui/settings.slint:257
 #, x-machine
 msgid "Reset All"
 msgstr "모두 재설정"
@@ -1080,82 +1080,82 @@ msgstr "모두 재설정"
 msgid "Adjust Sync"
 msgstr "싱크 조정"
 
-#: ui/sync.slint:33
-#, x-machine
-msgid "Sync value (ms):"
-msgstr "싱크 값(ms):"
-
-#: ui/sync.slint:63
-#, x-machine
-msgid "Apply"
-msgstr "적용"
-
-#: ui/sync.slint:71
+#: ui/sync.slint:29 ui/sync.slint:79
 #, x-machine
 msgid "Positive delays the subtitles, negative advances them."
 msgstr "양수는 자막을 늦추고, 음수는 앞당깁니다."
 
-#: ui/tune.slint:19
+#: ui/sync.slint:41
+#, x-machine
+msgid "Sync value (ms):"
+msgstr "싱크 값(ms):"
+
+#: ui/sync.slint:71
+#, x-machine
+msgid "Apply"
+msgstr "적용"
+
+#: ui/tune.slint:21
 #, x-machine
 msgid "Subtitle Tuning"
 msgstr "자막 미세 조정"
 
-#: ui/tune.slint:70
-#, x-machine
-msgid "Cancel"
-msgstr "취소"
-
-#: ui/tune.slint:70
-#, x-machine
-msgid "Load…"
-msgstr "불러오기…"
-
-#: ui/tune.slint:92
+#: ui/tune.slint:64 ui/tune.slint:115
 #, x-machine
 msgid "Size {}"
 msgstr "크기 {}"
 
-#: ui/tune.slint:100
+#: ui/tune.slint:64 ui/tune.slint:123
 #, x-machine
 msgid "Position {}%"
 msgstr "위치 {}%"
 
-#: ui/tune.slint:101
-#, x-machine
-msgid "Up"
-msgstr "위"
-
-#: ui/tune.slint:102
-#, x-machine
-msgid "Down"
-msgstr "아래"
-
-#: ui/tune.slint:110
-#, x-machine
-msgid "In seconds. Positive delays the subtitles, negative advances them. Click to enter a value."
-msgstr "초 단위입니다. 양수는 자막을 늦추고, 음수는 앞당깁니다. 클릭하여 값을 입력하세요."
-
-#: ui/tune.slint:113
+#: ui/tune.slint:64 ui/tune.slint:137
 #, x-machine
 msgid "Sync {}"
 msgstr "싱크 {}"
 
-#: ui/tune.slint:121
+#: ui/tune.slint:71 ui/tune.slint:93
+#, x-machine
+msgid "Cancel"
+msgstr "취소"
+
+#: ui/tune.slint:71 ui/tune.slint:93
+#, x-machine
+msgid "Load…"
+msgstr "불러오기…"
+
+#: ui/tune.slint:73 ui/tune.slint:124
+#, x-machine
+msgid "Up"
+msgstr "위"
+
+#: ui/tune.slint:74 ui/tune.slint:125
+#, x-machine
+msgid "Down"
+msgstr "아래"
+
+#: ui/tune.slint:133
+#, x-machine
+msgid "In seconds. Positive delays the subtitles, negative advances them. Click to enter a value."
+msgstr "초 단위입니다. 양수는 자막을 늦추고, 음수는 앞당깁니다. 클릭하여 값을 입력하세요."
+
+#: ui/tune.slint:145
 #, x-machine
 msgid "Later"
 msgstr "느리게"
 
-#: ui/tune.slint:122
+#: ui/tune.slint:146
 #, x-machine
 msgid "Earlier"
 msgstr "빠르게"
 
-#: ui/tune.slint:135
+#: ui/tune.slint:159
 #, x-machine
 msgid "Remove"
 msgstr "제거"
 
-#: ui/tune.slint:136
+#: ui/tune.slint:160
 #, x-machine
 msgid "Settings…"
 msgstr "설정…"

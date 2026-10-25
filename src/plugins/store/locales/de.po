@@ -541,7 +541,7 @@ msgstr "Die Repositorys enthalten noch keine Plugins"
 msgid "{} · {}"
 msgstr "{} · {}"
 
-#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:222
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:246
 #, x-machine
 msgid "Installed"
 msgstr "Installiert"
@@ -766,7 +766,7 @@ msgstr "Inkompatibel: {}"
 msgid "Latest"
 msgstr "Neueste"
 
-#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:407
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:223 ui/store.slint:431
 #, x-machine
 msgid "Version"
 msgstr "Version"
@@ -1033,13 +1033,37 @@ msgstr "Installiertes „{}“ ersetzen?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
-msgid "{1}\n\nWill install {2} from the official repository.\n\n{3}"
-msgstr "{1}\n\n{2} wird aus dem offiziellen Repository installiert.\n\n{3}"
+msgid ""
+"{1}\n"
+"\n"
+"Will install {2} from the official repository.\n"
+"\n"
+"{3}"
+msgstr ""
+"{1}\n"
+"\n"
+"{2} wird aus dem offiziellen Repository installiert.\n"
+"\n"
+"{3}"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
-msgid "{1}\n\nWill install {2} from the unofficial repository.\n\n{4}\n\n{3}"
-msgstr "{1}\n\n{2} wird aus dem inoffiziellen Repository installiert.\n\n{4}\n\n{3}"
+msgid ""
+"{1}\n"
+"\n"
+"Will install {2} from the unofficial repository.\n"
+"\n"
+"{4}\n"
+"\n"
+"{3}"
+msgstr ""
+"{1}\n"
+"\n"
+"{2} wird aus dem inoffiziellen Repository installiert.\n"
+"\n"
+"{4}\n"
+"\n"
+"{3}"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1048,8 +1072,20 @@ msgstr "„{}“ auf {} aktualisieren? Die neue Version benötigt mehr Berechtig
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
-msgid "Added:\n{2}\n\nCurrent: {3}. After updating you can roll back to {3} in the store.\n\nA plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
-msgstr "Neu:\n{2}\n\nAktuell: {3}. Nach dem Update können Sie im Store auf {3} zurücksetzen.\n\nEin Plugin ist ein vollständiges Programm: Die obigen Berechtigungen beschränken nur, was es mit dem Player tun kann, nicht das Lesen und Schreiben von Dateien oder den Netzwerkzugriff."
+msgid ""
+"Added:\n"
+"{2}\n"
+"\n"
+"Current: {3}. After updating you can roll back to {3} in the store.\n"
+"\n"
+"A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
+msgstr ""
+"Neu:\n"
+"{2}\n"
+"\n"
+"Aktuell: {3}. Nach dem Update können Sie im Store auf {3} zurücksetzen.\n"
+"\n"
+"Ein Plugin ist ein vollständiges Programm: Die obigen Berechtigungen beschränken nur, was es mit dem Player tun kann, nicht das Lesen und Schreiben von Dateien oder den Netzwerkzugriff."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1083,13 +1119,29 @@ msgstr "Aktuell: {2}. Nach der Installation können Sie im Store auf {2} zurück
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
-msgid "Current: {2}. After installing you can restore {2} in the store.\n\nThis version needs more permissions:\n{3}"
-msgstr "Aktuell: {2}. Nach der Installation können Sie {2} im Store wiederherstellen.\n\nDiese Version benötigt mehr Berechtigungen:\n{3}"
+msgid ""
+"Current: {2}. After installing you can restore {2} in the store.\n"
+"\n"
+"This version needs more permissions:\n"
+"{3}"
+msgstr ""
+"Aktuell: {2}. Nach der Installation können Sie {2} im Store wiederherstellen.\n"
+"\n"
+"Diese Version benötigt mehr Berechtigungen:\n"
+"{3}"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
-msgid "Current: {2}. After installing you can roll back to {2} in the store.\n\nThis version needs more permissions:\n{3}"
-msgstr "Aktuell: {2}. Nach der Installation können Sie im Store auf {2} zurücksetzen.\n\nDiese Version benötigt mehr Berechtigungen:\n{3}"
+msgid ""
+"Current: {2}. After installing you can roll back to {2} in the store.\n"
+"\n"
+"This version needs more permissions:\n"
+"{3}"
+msgstr ""
+"Aktuell: {2}. Nach der Installation können Sie im Store auf {2} zurücksetzen.\n"
+"\n"
+"Diese Version benötigt mehr Berechtigungen:\n"
+"{3}"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1098,8 +1150,14 @@ msgstr "„{}“ {} installieren?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
-msgid "From the Vestra Player official repository, author {2}.\n\n{3}"
-msgstr "Aus dem offiziellen Repository von Vestra Player, Autor: {2}.\n\n{3}"
+msgid ""
+"From the Vestra Player official repository, author {2}.\n"
+"\n"
+"{3}"
+msgstr ""
+"Aus dem offiziellen Repository von Vestra Player, Autor: {2}.\n"
+"\n"
+"{3}"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1108,8 +1166,14 @@ msgstr "„{}“ {} aus einem inoffiziellen Repository installieren?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
-msgid "{2}\n\n{3}"
-msgstr "{2}\n\n{3}"
+msgid ""
+"{2}\n"
+"\n"
+"{3}"
+msgstr ""
+"{2}\n"
+"\n"
+"{3}"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1138,8 +1202,16 @@ msgstr "Repository: {} ({}). Dieses Repository wird nicht von Vestra Player gepr
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
-msgid "It will be able to:\n{}\n\nA plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
-msgstr "Es kann dann:\n{}\n\nEin Plugin ist ein vollständiges Programm: Die obigen Berechtigungen beschränken nur, was es mit dem Player tun kann, nicht das Lesen und Schreiben von Dateien oder den Netzwerkzugriff."
+msgid ""
+"It will be able to:\n"
+"{}\n"
+"\n"
+"A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
+msgstr ""
+"Es kann dann:\n"
+"{}\n"
+"\n"
+"Ein Plugin ist ein vollständiges Programm: Die obigen Berechtigungen beschränken nur, was es mit dem Player tun kann, nicht das Lesen und Schreiben von Dateien oder den Netzwerkzugriff."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1168,8 +1240,18 @@ msgstr "Installierte Version durch das Plugin-Paket „{}“ {} ersetzen?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
-msgid "{2}\n\n{3}\n\n{4}"
-msgstr "{2}\n\n{3}\n\n{4}"
+msgid ""
+"{2}\n"
+"\n"
+"{3}\n"
+"\n"
+"{4}"
+msgstr ""
+"{2}\n"
+"\n"
+"{3}\n"
+"\n"
+"{4}"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1178,8 +1260,18 @@ msgstr "Plugin-Paket „{}“ {} installieren?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
-msgid "{2}\n\nCurrently installed: {3} (same source; you can roll back after installing).\n\n{4}"
-msgstr "{2}\n\nDerzeit installiert: {3} (gleiche Quelle; nach der Installation können Sie zurücksetzen).\n\n{4}"
+msgid ""
+"{2}\n"
+"\n"
+"Currently installed: {3} (same source; you can roll back after installing).\n"
+"\n"
+"{4}"
+msgstr ""
+"{2}\n"
+"\n"
+"Derzeit installiert: {3} (gleiche Quelle; nach der Installation können Sie zurücksetzen).\n"
+"\n"
+"{4}"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1213,13 +1305,29 @@ msgstr "Inoffizielles Repository „Unbenanntes Repository“ hinzufügen?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
-msgid "Address: {1}\n\nIts plugins are not reviewed by Vestra Player and may read your files or use the network. The store shows this repository's plugins but does not judge for you whether they can be trusted."
-msgstr "Adresse: {1}\n\nSeine Plugins werden nicht von Vestra Player geprüft und können Ihre Dateien lesen oder auf das Netzwerk zugreifen. Der Store zeigt die Plugins dieses Repositorys an, beurteilt aber nicht für Sie, ob sie vertrauenswürdig sind."
+msgid ""
+"Address: {1}\n"
+"\n"
+"Its plugins are not reviewed by Vestra Player and may read your files or use the network. The store shows this repository's plugins but does not judge for you whether they can be trusted."
+msgstr ""
+"Adresse: {1}\n"
+"\n"
+"Seine Plugins werden nicht von Vestra Player geprüft und können Ihre Dateien lesen oder auf das Netzwerk zugreifen. Der Store zeigt die Plugins dieses Repositorys an, beurteilt aber nicht für Sie, ob sie vertrauenswürdig sind."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
-msgid "Address: {1}\n\nIts plugins are not reviewed by Vestra Player and may read your files or use the network. The store shows this repository's plugins but does not judge for you whether they can be trusted.\n\nThis is a test repository on this machine, without encryption."
-msgstr "Adresse: {1}\n\nSeine Plugins werden nicht von Vestra Player geprüft und können Ihre Dateien lesen oder auf das Netzwerk zugreifen. Der Store zeigt die Plugins dieses Repositorys an, beurteilt aber nicht für Sie, ob sie vertrauenswürdig sind.\n\nDies ist ein Test-Repository auf diesem Computer, ohne Verschlüsselung."
+msgid ""
+"Address: {1}\n"
+"\n"
+"Its plugins are not reviewed by Vestra Player and may read your files or use the network. The store shows this repository's plugins but does not judge for you whether they can be trusted.\n"
+"\n"
+"This is a test repository on this machine, without encryption."
+msgstr ""
+"Adresse: {1}\n"
+"\n"
+"Seine Plugins werden nicht von Vestra Player geprüft und können Ihre Dateien lesen oder auf das Netzwerk zugreifen. Der Store zeigt die Plugins dieses Repositorys an, beurteilt aber nicht für Sie, ob sie vertrauenswürdig sind.\n"
+"\n"
+"Dies ist ein Test-Repository auf diesem Computer, ohne Verschlüsselung."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1248,8 +1356,18 @@ msgstr "{} zurückgezogene Plugins deaktiviert"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
-msgid "The repository revoked these versions. Reasons:\n\n{2}\n\nTo keep using one anyway, choose “Enable Anyway…” on its page in the Plugin Store."
-msgstr "Das Repository hat diese Versionen zurückgezogen. Gründe:\n\n{2}\n\nUm eine davon trotzdem weiter zu verwenden, wählen Sie auf ihrer Seite im Plugin-Store „Trotzdem aktivieren…“."
+msgid ""
+"The repository revoked these versions. Reasons:\n"
+"\n"
+"{2}\n"
+"\n"
+"To keep using one anyway, choose “Enable Anyway…” on its page in the Plugin Store."
+msgstr ""
+"Das Repository hat diese Versionen zurückgezogen. Gründe:\n"
+"\n"
+"{2}\n"
+"\n"
+"Um eine davon trotzdem weiter zu verwenden, wählen Sie auf ihrer Seite im Plugin-Store „Trotzdem aktivieren…“."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1258,13 +1376,23 @@ msgstr "„{}“ {}: {}"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
-msgid "“{}” {}: {}\nYou can update to {} in the Plugin Store."
-msgstr "„{}“ {}: {}\nSie können im Plugin-Store auf {} aktualisieren."
+msgid ""
+"“{}” {}: {}\n"
+"You can update to {} in the Plugin Store."
+msgstr ""
+"„{}“ {}: {}\n"
+"Sie können im Plugin-Store auf {} aktualisieren."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
-msgid "{}\n\n{}"
-msgstr "{}\n\n{}"
+msgid ""
+"{}\n"
+"\n"
+"{}"
+msgstr ""
+"{}\n"
+"\n"
+"{}"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1273,13 +1401,29 @@ msgstr "Zurückgezogenes „{}“ {} trotzdem aktivieren?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
-msgid "The repository's reason for revoking this version: {2}\n\nUsing it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning."
-msgstr "Grund des Repositorys für den Rückzug dieser Version: {2}\n\nDie Verwendung kann riskant sein. Nach Ihrer Bestätigung deaktiviert der Store sie nicht mehr automatisch, und ihre Seite zeigt weiterhin eine Warnung."
+msgid ""
+"The repository's reason for revoking this version: {2}\n"
+"\n"
+"Using it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning."
+msgstr ""
+"Grund des Repositorys für den Rückzug dieser Version: {2}\n"
+"\n"
+"Die Verwendung kann riskant sein. Nach Ihrer Bestätigung deaktiviert der Store sie nicht mehr automatisch, und ihre Seite zeigt weiterhin eine Warnung."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
-msgid "The repository's reason for revoking this version: {2}\n\nUsing it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning.\n\nUpdating to {3} instead is recommended."
-msgstr "Grund des Repositorys für den Rückzug dieser Version: {2}\n\nDie Verwendung kann riskant sein. Nach Ihrer Bestätigung deaktiviert der Store sie nicht mehr automatisch, und ihre Seite zeigt weiterhin eine Warnung.\n\nEmpfohlen wird stattdessen ein Update auf {3}."
+msgid ""
+"The repository's reason for revoking this version: {2}\n"
+"\n"
+"Using it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning.\n"
+"\n"
+"Updating to {3} instead is recommended."
+msgstr ""
+"Grund des Repositorys für den Rückzug dieser Version: {2}\n"
+"\n"
+"Die Verwendung kann riskant sein. Nach Ihrer Bestätigung deaktiviert der Store sie nicht mehr automatisch, und ihre Seite zeigt weiterhin eine Warnung.\n"
+"\n"
+"Empfohlen wird stattdessen ein Update auf {3}."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1288,13 +1432,29 @@ msgstr "„{}“ {} wurde zurückgezogen. Weiter verwenden?"
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
-msgid "It was just enabled again. The repository's reason for revoking this version: {2}\n\nUsing it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning."
-msgstr "Es wurde gerade wieder aktiviert. Grund des Repositorys für den Rückzug dieser Version: {2}\n\nDie Verwendung kann riskant sein. Nach Ihrer Bestätigung deaktiviert der Store sie nicht mehr automatisch, und ihre Seite zeigt weiterhin eine Warnung."
+msgid ""
+"It was just enabled again. The repository's reason for revoking this version: {2}\n"
+"\n"
+"Using it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning."
+msgstr ""
+"Es wurde gerade wieder aktiviert. Grund des Repositorys für den Rückzug dieser Version: {2}\n"
+"\n"
+"Die Verwendung kann riskant sein. Nach Ihrer Bestätigung deaktiviert der Store sie nicht mehr automatisch, und ihre Seite zeigt weiterhin eine Warnung."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
-msgid "It was just enabled again. The repository's reason for revoking this version: {2}\n\nUsing it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning.\n\nUpdating to {3} instead is recommended."
-msgstr "Es wurde gerade wieder aktiviert. Grund des Repositorys für den Rückzug dieser Version: {2}\n\nDie Verwendung kann riskant sein. Nach Ihrer Bestätigung deaktiviert der Store sie nicht mehr automatisch, und ihre Seite zeigt weiterhin eine Warnung.\n\nEmpfohlen wird stattdessen ein Update auf {3}."
+msgid ""
+"It was just enabled again. The repository's reason for revoking this version: {2}\n"
+"\n"
+"Using it may be risky. Once you confirm, the store will not disable it automatically again, and its page keeps showing a warning.\n"
+"\n"
+"Updating to {3} instead is recommended."
+msgstr ""
+"Es wurde gerade wieder aktiviert. Grund des Repositorys für den Rückzug dieser Version: {2}\n"
+"\n"
+"Die Verwendung kann riskant sein. Nach Ihrer Bestätigung deaktiviert der Store sie nicht mehr automatisch, und ihre Seite zeigt weiterhin eine Warnung.\n"
+"\n"
+"Empfohlen wird stattdessen ein Update auf {3}."
 
 #: store.ts:351 store.ts:366 store.ts:367 text.ts:370
 #, x-machine
@@ -1421,12 +1581,12 @@ msgstr "Andere Plugins installieren, deinstallieren und deaktivieren"
 msgid "Replace"
 msgstr "Ersetzen"
 
-#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:121
+#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:44 ui/settings.slint:133
 #, x-machine
 msgid "Add"
 msgstr "Hinzufügen"
 
-#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:79
+#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:43 ui/settings.slint:91
 #, x-machine
 msgid "Remove"
 msgstr "Entfernen"
@@ -1436,7 +1596,7 @@ msgstr "Entfernen"
 msgid "Update"
 msgstr "Aktualisieren"
 
-#: store.ts:368 store.ts:369 store.ts:371 ui/store.slint:257 ui/store.slint:432
+#: store.ts:368 store.ts:369 store.ts:371 ui/store.slint:225 ui/store.slint:281 ui/store.slint:456
 #, x-machine
 msgid "Install"
 msgstr "Installieren"
@@ -1486,147 +1646,147 @@ msgstr "Deaktivieren"
 msgid "Choose a plugin package (.vxp)"
 msgstr "Plugin-Paket auswählen (.vxp)"
 
-#: ui/settings.slint:39
-#, x-machine
-msgid "Check for updates automatically (30 seconds after the player starts, then every 24 hours)"
-msgstr "Automatisch nach Updates suchen (30 Sekunden nach dem Start des Players, danach alle 24 Stunden)"
-
-#: ui/settings.slint:44
-#, x-machine
-msgid "When off, the store goes online only when you open it or click “Refresh”; plugins revoked by a repository are disabled only then too. When updates are available, the “Plugin Store…” menu item shows how many."
-msgstr "Wenn ausgeschaltet, geht der Store nur online, wenn Sie ihn öffnen oder auf „Neu laden“ klicken; von einem Repository zurückgezogene Plugins werden ebenfalls nur dann deaktiviert. Sind Updates verfügbar, zeigt der Menüeintrag „Plugin-Store…“ deren Anzahl."
-
-#: ui/settings.slint:51
-#, x-machine
-msgid "Repositories"
-msgstr "Repositorys"
-
-#: ui/settings.slint:90
-#, x-machine
-msgid "Add Repository…"
-msgstr "Repository hinzufügen…"
-
-#: ui/settings.slint:114
-#, x-machine
-msgid "The repository's root address or the full address of index.json (https://…)"
-msgstr "Stammadresse des Repositorys oder vollständige Adresse von index.json (https://…)"
-
-#: ui/settings.slint:125 ui/store.slint:516
+#: ui/settings.slint:45 ui/settings.slint:137 ui/store.slint:540
 #, x-machine
 msgid "Cancel"
 msgstr "Abbrechen"
 
-#: ui/settings.slint:130
+#: ui/settings.slint:51
+#, x-machine
+msgid "Check for updates automatically (30 seconds after the player starts, then every 24 hours)"
+msgstr "Automatisch nach Updates suchen (30 Sekunden nach dem Start des Players, danach alle 24 Stunden)"
+
+#: ui/settings.slint:56
+#, x-machine
+msgid "When off, the store goes online only when you open it or click “Refresh”; plugins revoked by a repository are disabled only then too. When updates are available, the “Plugin Store…” menu item shows how many."
+msgstr "Wenn ausgeschaltet, geht der Store nur online, wenn Sie ihn öffnen oder auf „Neu laden“ klicken; von einem Repository zurückgezogene Plugins werden ebenfalls nur dann deaktiviert. Sind Updates verfügbar, zeigt der Menüeintrag „Plugin-Store…“ deren Anzahl."
+
+#: ui/settings.slint:63
+#, x-machine
+msgid "Repositories"
+msgstr "Repositorys"
+
+#: ui/settings.slint:102
+#, x-machine
+msgid "Add Repository…"
+msgstr "Repository hinzufügen…"
+
+#: ui/settings.slint:126
+#, x-machine
+msgid "The repository's root address or the full address of index.json (https://…)"
+msgstr "Stammadresse des Repositorys oder vollständige Adresse von index.json (https://…)"
+
+#: ui/settings.slint:142
 #, x-machine
 msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline, disable the Plugin Store in “Plugin Manager”."
 msgstr "Repositorys von Drittanbietern werden nicht von Vestra Player geprüft; ihre Plugins können Ihre Dateien lesen oder auf das Netzwerk zugreifen. Fügen Sie nur Repositorys hinzu, denen Sie vertrauen. Das offizielle Repository kann nicht entfernt werden; um den Store offline zu halten, deaktivieren Sie den Plugin-Store in der „Plugin-Verwaltung“."
 
-#: ui/store.slint:216
-#, x-machine
-msgid "Search names, authors, tags…"
-msgstr "Namen, Autoren, Tags durchsuchen…"
-
-#: ui/store.slint:221
-#, x-machine
-msgid "All"
-msgstr "Alle"
-
-#: ui/store.slint:225
-#, x-machine
-msgid "Updates {}"
-msgstr "Updates {}"
-
-#: ui/store.slint:225
-#, x-machine
-msgid "Updates"
-msgstr "Updates"
-
-#: ui/store.slint:233
+#: ui/store.slint:219 ui/store.slint:257
 #, x-machine
 msgid "Tags: All"
 msgstr "Tags: Alle"
 
-#: ui/store.slint:240
+#: ui/store.slint:221 ui/store.slint:264
 #, x-machine
 msgid "Sort: Name"
 msgstr "Nach Name"
 
-#: ui/store.slint:240
+#: ui/store.slint:221 ui/store.slint:264
 #, x-machine
 msgid "Sort: Updated"
 msgstr "Nach Datum"
 
-#: ui/store.slint:248
-#, x-machine
-msgid "You can also drop a .vxp plugin package on the player's video area to install it"
-msgstr "Sie können ein .vxp-Plugin-Paket auch zum Installieren auf den Videobereich des Players ziehen"
-
-#: ui/store.slint:249
-#, x-machine
-msgid "Install from File…"
-msgstr "Aus Datei…"
-
-#: ui/store.slint:250
-#, x-machine
-msgid "Install from Link…"
-msgstr "Über Link…"
-
-#: ui/store.slint:251
-#, x-machine
-msgid "Repositories…"
-msgstr "Repositorys…"
-
-#: ui/store.slint:252
-#, x-machine
-msgid "Refresh"
-msgstr "Neu laden"
-
-#: ui/store.slint:256
-#, x-machine
-msgid "Plugin package link (https://…/name-version.vxp)"
-msgstr "Link zum Plugin-Paket (https://…/name-version.vxp)"
-
-#: ui/store.slint:300
-#, x-machine
-msgid "Select a plugin on the left to see its details"
-msgstr "Wählen Sie links ein Plugin, um Details anzuzeigen"
-
-#: ui/store.slint:368
-#, x-machine
-msgid "Description"
-msgstr "Beschreibung"
-
-#: ui/store.slint:369
-#, x-machine
-msgid "Changelog"
-msgstr "Änderungen"
-
-#: ui/store.slint:370
-#, x-machine
-msgid "Versions"
-msgstr "Versionen"
-
-#: ui/store.slint:408
+#: ui/store.slint:224 ui/store.slint:432
 #, x-machine
 msgid "Published"
 msgstr "Veröffentlicht"
 
-#: ui/store.slint:409
+#: ui/store.slint:240
+#, x-machine
+msgid "Search names, authors, tags…"
+msgstr "Namen, Autoren, Tags durchsuchen…"
+
+#: ui/store.slint:245
+#, x-machine
+msgid "All"
+msgstr "Alle"
+
+#: ui/store.slint:249
+#, x-machine
+msgid "Updates {}"
+msgstr "Updates {}"
+
+#: ui/store.slint:249
+#, x-machine
+msgid "Updates"
+msgstr "Updates"
+
+#: ui/store.slint:272
+#, x-machine
+msgid "You can also drop a .vxp plugin package on the player's video area to install it"
+msgstr "Sie können ein .vxp-Plugin-Paket auch zum Installieren auf den Videobereich des Players ziehen"
+
+#: ui/store.slint:273
+#, x-machine
+msgid "Install from File…"
+msgstr "Aus Datei…"
+
+#: ui/store.slint:274
+#, x-machine
+msgid "Install from Link…"
+msgstr "Über Link…"
+
+#: ui/store.slint:275
+#, x-machine
+msgid "Repositories…"
+msgstr "Repositorys…"
+
+#: ui/store.slint:276
+#, x-machine
+msgid "Refresh"
+msgstr "Neu laden"
+
+#: ui/store.slint:280
+#, x-machine
+msgid "Plugin package link (https://…/name-version.vxp)"
+msgstr "Link zum Plugin-Paket (https://…/name-version.vxp)"
+
+#: ui/store.slint:324
+#, x-machine
+msgid "Select a plugin on the left to see its details"
+msgstr "Wählen Sie links ein Plugin, um Details anzuzeigen"
+
+#: ui/store.slint:392
+#, x-machine
+msgid "Description"
+msgstr "Beschreibung"
+
+#: ui/store.slint:393
+#, x-machine
+msgid "Changelog"
+msgstr "Änderungen"
+
+#: ui/store.slint:394
+#, x-machine
+msgid "Versions"
+msgstr "Versionen"
+
+#: ui/store.slint:433
 #, x-machine
 msgid "Minimum player"
 msgstr "Mindestversion"
 
-#: ui/store.slint:475
+#: ui/store.slint:499
 #, x-machine
 msgid "Permissions ({})"
 msgstr "Berechtigungen ({})"
 
-#: ui/store.slint:489
+#: ui/store.slint:513
 #, x-machine
 msgid "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
 msgstr "Ein Plugin ist ein vollständiges Programm: Die obigen Berechtigungen beschränken nur, was es mit dem Player tun kann, nicht das Lesen und Schreiben von Dateien oder den Netzwerkzugriff."
 
-#: ui/store.slint:497
+#: ui/store.slint:521
 #, x-machine
 msgid "Disable, reload, open the data folder: Settings ▸ Plugin Manager…"
 msgstr "Deaktivieren, neu laden, Datenordner öffnen: Einstellungen ▸ Plugin-Verwaltung…"

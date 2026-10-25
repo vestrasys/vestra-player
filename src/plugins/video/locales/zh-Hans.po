@@ -5,7 +5,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: main.ts:195 picture.slint:386
+#: main.ts:195 picture.slint:390
 msgid "Shader failed to load"
 msgstr "着色器载入失败"
 
@@ -37,15 +37,15 @@ msgstr "宽高比：{}"
 msgid "Aspect ratio: Custom - {}"
 msgstr "宽高比：自定义 - {}"
 
-#: main.ts:473 main.ts:882 picture.slint:680
+#: main.ts:473 main.ts:882 picture.slint:710
 msgid "Keep Aspect Ratio"
 msgstr "保持宽高比"
 
-#: main.ts:473 main.ts:882 picture.slint:680
+#: main.ts:473 main.ts:882 picture.slint:710
 msgid "Ignore Aspect Ratio"
 msgstr "不保持宽高比"
 
-#: main.ts:473 picture.slint:680
+#: main.ts:473 picture.slint:710
 msgid "Fill Window"
 msgstr "填满窗口"
 
@@ -419,7 +419,7 @@ msgstr "像素着色"
 msgid "Use Shaders"
 msgstr "使用着色器"
 
-#: main.ts:819 main.ts:824 main.ts:833 main.ts:842 main.ts:845 main.ts:1068 picture.slint:365 ui/shaders.slint:120
+#: main.ts:819 main.ts:824 main.ts:833 main.ts:842 main.ts:845 main.ts:1068 picture.slint:369 ui/shaders.slint:131
 msgid "Needs GPU rendering (currently software rendering)"
 msgstr "需要 GPU 渲染（当前为软件渲染）"
 
@@ -439,11 +439,11 @@ msgstr "重新载入着色器"
 msgid "HDR Tone Mapping"
 msgstr "HDR 色调映射"
 
-#: main.ts:828 main.ts:861 picture.slint:723 picture.slint:752
+#: main.ts:828 main.ts:861 picture.slint:753 picture.slint:782
 msgid "Auto"
 msgstr "自动"
 
-#: main.ts:828 picture.slint:752
+#: main.ts:828 picture.slint:782
 msgid "Off"
 msgstr "关"
 
@@ -463,7 +463,7 @@ msgstr "Mobius"
 msgid "Reinhard"
 msgstr "Reinhard"
 
-#: main.ts:828 picture.slint:752
+#: main.ts:828 picture.slint:782
 msgid "Clip"
 msgstr "裁剪"
 
@@ -475,7 +475,7 @@ msgstr "动态峰值检测"
 msgid "HDR Settings…"
 msgstr "HDR 设置…"
 
-#: main.ts:849 main.ts:861 main.ts:871 picture.slint:718
+#: main.ts:849 main.ts:861 main.ts:871 picture.slint:417 picture.slint:748
 msgid "Deinterlace"
 msgstr "反交错"
 
@@ -483,11 +483,11 @@ msgstr "反交错"
 msgid "Cycle"
 msgstr "按序切换"
 
-#: main.ts:861 picture.slint:723
+#: main.ts:861 picture.slint:753
 msgid "Always"
 msgstr "总是使用"
 
-#: main.ts:861 picture.slint:723
+#: main.ts:861 picture.slint:753
 msgid "Never"
 msgstr "不使用"
 
@@ -495,11 +495,11 @@ msgstr "不使用"
 msgid "Output"
 msgstr "输出"
 
-#: main.ts:871 picture.slint:732
+#: main.ts:871 picture.slint:762
 msgid "By Frame"
 msgstr "按帧"
 
-#: main.ts:871 picture.slint:732
+#: main.ts:871 picture.slint:762
 msgid "By Field (Double Rate)"
 msgstr "按场（倍帧率）"
 
@@ -515,11 +515,11 @@ msgstr "填满窗口（裁去多余）"
 msgid "Cycle Aspect Ratio"
 msgstr "依次切换比例"
 
-#: main.ts:899 picture.slint:353 picture.slint:354
+#: main.ts:899 picture.slint:357 picture.slint:358
 msgid "Default (Source)"
 msgstr "默认（按来源）"
 
-#: main.ts:943 picture.slint:354
+#: main.ts:943 picture.slint:358
 msgid "Custom ({})"
 msgstr "自定义（{}）"
 
@@ -531,7 +531,7 @@ msgstr "自定义（x:y）"
 msgid "Enter one with Custom Aspect Ratio… first"
 msgstr "先用「自定义比例…」输入"
 
-#: main.ts:946 picture.slint:665
+#: main.ts:946 picture.slint:695
 msgid "Custom Aspect Ratio…"
 msgstr "自定义比例…"
 
@@ -539,7 +539,7 @@ msgstr "自定义比例…"
 msgid "Crop/Stretch"
 msgstr "裁剪/拉伸"
 
-#: main.ts:952 picture.slint:630
+#: main.ts:952 picture.slint:660
 msgid "None"
 msgstr "不使用"
 
@@ -595,11 +595,11 @@ msgstr "左移"
 msgid "Move Right"
 msgstr "右移"
 
-#: main.ts:981 ui/shaders.slint:103
+#: main.ts:981 ui/shaders.slint:91 ui/shaders.slint:114
 msgid "Move Up"
 msgstr "上移"
 
-#: main.ts:981 ui/shaders.slint:104
+#: main.ts:981 ui/shaders.slint:91 ui/shaders.slint:115
 msgid "Move Down"
 msgstr "下移"
 
@@ -663,7 +663,7 @@ msgstr "高斯模糊: 开"
 msgid "Gaussian blur: off"
 msgstr "高斯模糊: 关"
 
-#: main.ts:1045 picture.slint:463
+#: main.ts:1045 picture.slint:424 picture.slint:490
 msgid "Sharpen"
 msgstr "锐化"
 
@@ -671,11 +671,11 @@ msgstr "锐化"
 msgid "Edge Sharpen"
 msgstr "边缘锐化"
 
-#: main.ts:1045 picture.slint:516
+#: main.ts:1045 picture.slint:424 picture.slint:545
 msgid "Deblock"
 msgstr "去块"
 
-#: main.ts:1045 picture.slint:526
+#: main.ts:1045 picture.slint:424 picture.slint:556
 msgid "Deband"
 msgstr "消色带"
 
@@ -759,7 +759,7 @@ msgstr "饱和度 +1%"
 msgid "Hue +1%"
 msgstr "色调 +1%"
 
-#: manifest.json picture.slint:317
+#: manifest.json picture.slint:320
 msgid "Picture Adjustments"
 msgstr "画面调节"
 
@@ -791,229 +791,228 @@ msgstr "色彩"
 msgid "filters"
 msgstr "滤镜"
 
-#: picture.slint:232 picture.slint:274 picture.slint:512 picture.slint:704
+#: picture.slint:234 picture.slint:277 picture.slint:540 picture.slint:734
 msgid "Default"
 msgstr "默认"
 
-#: picture.slint:383
+#: picture.slint:387
 msgid "No picture in the current source"
 msgstr "当前来源没有画面"
 
-#: picture.slint:384
+#: picture.slint:388
 msgid "Picture processing failed"
 msgstr "画面处理失败"
 
-#: picture.slint:385
+#: picture.slint:389
 msgid "Display unavailable"
 msgstr "画面显示不可用"
 
-#: picture.slint:387
+#: picture.slint:391
 msgid "Render options unavailable"
 msgstr "渲染选项不可用"
 
-#: picture.slint:388
+#: picture.slint:392
 msgid "Render settings failed"
 msgstr "渲染设置失败"
 
-#: picture.slint:391
+#: picture.slint:395
 msgid "Another plugin controls the display"
 msgstr "另一个插件正在控制画面显示"
 
-#: picture.slint:392
+#: picture.slint:396
 msgid "Another plugin controls the render options"
 msgstr "另一个插件正在控制渲染选项"
 
-#: picture.slint:404
+#: picture.slint:408
 msgid "Color"
 msgstr "色彩"
 
-#: picture.slint:404
+#: picture.slint:408
 msgid "Effects"
 msgstr "效果"
 
-#: picture.slint:404
+#: picture.slint:408
 msgid "Picture"
 msgstr "画面"
 
-#: picture.slint:404
+#: picture.slint:408
 msgid "Advanced"
 msgstr "高级"
 
-#: picture.slint:432
+#: picture.slint:416 picture.slint:457
 msgid "Brightness"
 msgstr "亮度"
 
-#: picture.slint:433
+#: picture.slint:416 picture.slint:458
 msgid "Contrast"
 msgstr "对比度"
 
-#: picture.slint:434
+#: picture.slint:416 picture.slint:459
 msgid "Saturation"
 msgstr "饱和度"
 
-#: picture.slint:435
+#: picture.slint:416 picture.slint:460
 msgid "Hue"
 msgstr "色调"
 
-#: picture.slint:436
+#: picture.slint:416 picture.slint:461
 msgid "Gamma"
 msgstr "Gamma"
 
-#: picture.slint:441
-msgid "Original"
-msgstr "原始"
-
-#: picture.slint:442
-msgid "Vivid"
-msgstr "鲜艳"
-
-#: picture.slint:443
-msgid "Cinema"
-msgstr "电影"
-
-#: picture.slint:444
-msgid "Soft"
-msgstr "柔和"
-
-#: picture.slint:453
-msgid "Blur"
-msgstr "高斯模糊"
-
-#: picture.slint:472
-msgid "Edges"
-msgstr "边缘锐化"
-
-#: picture.slint:473
-msgid "Wide-radius sharpening that mainly strengthens outlines"
-msgstr "大范围锐化，主要增强轮廓"
-
-#: picture.slint:487
-msgid "Denoise"
-msgstr "降噪"
-
-#: picture.slint:495
-msgid "3D"
-msgstr "3D"
-
-#: picture.slint:495
-msgid "Gradual"
-msgstr "渐进"
-
-#: picture.slint:495
-msgid "Temporal"
-msgstr "瞬态"
-
-#: picture.slint:517
-msgid "Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4"
-msgstr "小于 50 为弱、50 及以上为强；对低码率 MPEG-2/MPEG-4 效果最明显"
-
-#: picture.slint:540
-msgid "Doubles the frame rate (up to 60), blending each in-between frame from its neighbours"
-msgstr "把帧率提高到 2 倍（最高 60），中间帧由前后两帧混合生成"
-
-#: picture.slint:544
-msgid "Doubling"
-msgstr "倍帧"
-
-#: picture.slint:551
-msgid "Rate already high enough"
-msgstr "当前帧率已足够"
-
-#: picture.slint:559
-msgid "GPU interpolation to the display refresh rate; excludes frame doubling"
-msgstr "GPU 按显示器刷新率插帧；与倍帧互斥"
-
-#: picture.slint:563
-msgid "Interpolation"
-msgstr "运动补偿"
-
-#: picture.slint:579
+#: picture.slint:416 picture.slint:609
 msgid "Flip"
 msgstr "翻转"
 
-#: picture.slint:585
-msgid "Vert."
-msgstr "上下"
-
-#: picture.slint:593
-msgid "Horiz."
-msgstr "左右"
-
-#: picture.slint:606
+#: picture.slint:416 picture.slint:636
 msgid "Rotate"
 msgstr "旋转"
 
-#: picture.slint:625
+#: picture.slint:417 picture.slint:655
 msgid "Crop/stretch"
 msgstr "裁剪/拉伸"
 
-#: picture.slint:630
-msgid "Stretch"
-msgstr "拉伸"
-
-#: picture.slint:630
-msgid "Crop"
-msgstr "裁剪"
-
-#: picture.slint:649
+#: picture.slint:417 picture.slint:679
 msgid "Aspect ratio"
 msgstr "宽高比"
 
-#: picture.slint:674
+#: picture.slint:417 picture.slint:704
 msgid "Display"
 msgstr "显示"
 
-#: picture.slint:688
-msgid "Zoom {}%"
-msgstr "缩放 {}%"
-
-#: picture.slint:692
+#: picture.slint:417 picture.slint:722
 msgid "Zoom"
 msgstr "缩放"
 
-#: picture.slint:741
-msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays; the slider sets the target brightness"
-msgstr "HDR 片源（PQ / HLG）在 SDR 显示器上的色调映射；滑块为目标亮度"
-
-#: picture.slint:745
+#: picture.slint:417 picture.slint:775
 msgid "HDR"
 msgstr "HDR"
 
-#: picture.slint:776
-msgid "Target {} nits · Not an HDR source"
-msgstr "目标亮度 {} 尼特 · 当前片源不是 HDR"
-
-#: picture.slint:776
-msgid "Target {} nits"
-msgstr "目标亮度 {} 尼特"
-
-#: picture.slint:786
-msgid "mpv user shaders (.glsl), run in list order"
-msgstr "mpv 用户着色器（.glsl），按列表顺序执行"
-
-#: picture.slint:790
+#: picture.slint:417 picture.slint:820
 msgid "Shaders"
 msgstr "着色器"
 
-#: picture.slint:793
-msgid "Enable"
-msgstr "启用"
-
-#: picture.slint:798
-msgid "{n} shader"
-msgid_plural "{n} shaders"
-msgstr[0] "{n} 个着色器"
-msgstr[1] ""
-
-#: picture.slint:801
-msgid "List…"
-msgstr "列表…"
-
-#: picture.slint:812
+#: picture.slint:422 picture.slint:844
 msgid "Enable picture effects"
 msgstr "启用画面效果"
 
-#: picture.slint:829
+#: picture.slint:424 picture.slint:479
+msgid "Blur"
+msgstr "高斯模糊"
+
+#: picture.slint:424 picture.slint:500
+msgid "Edges"
+msgstr "边缘锐化"
+
+#: picture.slint:424 picture.slint:515
+msgid "Denoise"
+msgstr "降噪"
+
+#: picture.slint:424 picture.slint:574
+msgid "Doubling"
+msgstr "倍帧"
+
+#: picture.slint:466
+msgid "Original"
+msgstr "原始"
+
+#: picture.slint:467
+msgid "Vivid"
+msgstr "鲜艳"
+
+#: picture.slint:468
+msgid "Cinema"
+msgstr "电影"
+
+#: picture.slint:469
+msgid "Soft"
+msgstr "柔和"
+
+#: picture.slint:501
+msgid "Wide-radius sharpening that mainly strengthens outlines"
+msgstr "大范围锐化，主要增强轮廓"
+
+#: picture.slint:523
+msgid "3D"
+msgstr "3D"
+
+#: picture.slint:523
+msgid "Gradual"
+msgstr "渐进"
+
+#: picture.slint:523
+msgid "Temporal"
+msgstr "瞬态"
+
+#: picture.slint:546
+msgid "Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4"
+msgstr "小于 50 为弱、50 及以上为强；对低码率 MPEG-2/MPEG-4 效果最明显"
+
+#: picture.slint:570
+msgid "Doubles the frame rate (up to 60), blending each in-between frame from its neighbours"
+msgstr "把帧率提高到 2 倍（最高 60），中间帧由前后两帧混合生成"
+
+#: picture.slint:581
+msgid "Rate already high enough"
+msgstr "当前帧率已足够"
+
+#: picture.slint:589
+msgid "GPU interpolation to the display refresh rate; excludes frame doubling"
+msgstr "GPU 按显示器刷新率插帧；与倍帧互斥"
+
+#: picture.slint:593
+msgid "Interpolation"
+msgstr "运动补偿"
+
+#: picture.slint:615
+msgid "Vert."
+msgstr "上下"
+
+#: picture.slint:623
+msgid "Horiz."
+msgstr "左右"
+
+#: picture.slint:660
+msgid "Stretch"
+msgstr "拉伸"
+
+#: picture.slint:660
+msgid "Crop"
+msgstr "裁剪"
+
+#: picture.slint:718
+msgid "Zoom {}%"
+msgstr "缩放 {}%"
+
+#: picture.slint:771
+msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays; the slider sets the target brightness"
+msgstr "HDR 片源（PQ / HLG）在 SDR 显示器上的色调映射；滑块为目标亮度"
+
+#: picture.slint:806
+msgid "Target {} nits · Not an HDR source"
+msgstr "目标亮度 {} 尼特 · 当前片源不是 HDR"
+
+#: picture.slint:806
+msgid "Target {} nits"
+msgstr "目标亮度 {} 尼特"
+
+#: picture.slint:816
+msgid "mpv user shaders (.glsl), run in list order"
+msgstr "mpv 用户着色器（.glsl），按列表顺序执行"
+
+#: picture.slint:823
+msgid "Enable"
+msgstr "启用"
+
+#: picture.slint:828
+msgid "{n} shader"
+msgid_plural "{n} shaders"
+msgstr[0] "{n} 个着色器"
+
+#: picture.slint:831
+msgid "List…"
+msgstr "列表…"
+
+#: picture.slint:864
 msgid "Retry"
 msgstr "重试"
 
@@ -1045,38 +1044,38 @@ msgstr "{}（文件不存在）"
 msgid "Shader List"
 msgstr "着色器列表"
 
-#: ui/shaders.slint:86
-msgid "Enabled {}/{} (run in order)"
-msgstr "已启用 {}/{}（按顺序执行）"
-
-#: ui/shaders.slint:95
-msgid "No shaders"
-msgstr "没有着色器"
-
-#: ui/shaders.slint:101
+#: ui/shaders.slint:91 ui/shaders.slint:112
 msgid "Add…"
 msgstr "添加…"
 
-#: ui/shaders.slint:102
+#: ui/shaders.slint:91 ui/shaders.slint:113
 msgid "Remove"
 msgstr "移除"
 
-#: ui/shaders.slint:105
+#: ui/shaders.slint:91 ui/shaders.slint:116
 msgid "Clear"
 msgstr "清空"
 
-#: ui/shaders.slint:108
+#: ui/shaders.slint:97
+msgid "Enabled {}/{} (run in order)"
+msgstr "已启用 {}/{}（按顺序执行）"
+
+#: ui/shaders.slint:106
+msgid "No shaders"
+msgstr "没有着色器"
+
+#: ui/shaders.slint:119
 msgid "Other files in the shader folder (double-click to add)"
 msgstr "着色器文件夹里的其它文件（双击加入）"
 
-#: ui/shaders.slint:112
+#: ui/shaders.slint:123
 msgid "No other .glsl files"
 msgstr "没有其它 .glsl 文件"
 
-#: ui/shaders.slint:120
+#: ui/shaders.slint:131
 msgid "“Use Shaders” is off"
 msgstr "「使用着色器」未打开"
 
-#: ui/shaders.slint:126
+#: ui/shaders.slint:137
 msgid "Open Folder"
 msgstr "打开文件夹"

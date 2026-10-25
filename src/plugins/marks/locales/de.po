@@ -6,7 +6,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: bookmarks.ts:46 menu.ts:51 ui/marks.slint:56 ui/marks.slint:173
+#: bookmarks.ts:46 menu.ts:51 ui/marks.slint:56 ui/marks.slint:183
 #, x-machine
 msgid "Bookmark {}"
 msgstr "Lesezeichen {}"
@@ -31,7 +31,7 @@ msgstr "{} Lesezeichen wird entfernt. Dies kann nicht rückgängig gemacht werde
 msgid "{} bookmarks will be removed. This can't be undone."
 msgstr "{} Lesezeichen werden entfernt. Dies kann nicht rückgängig gemacht werden."
 
-#: list.ts:223 ui/marks.slint:197
+#: list.ts:223 ui/marks.slint:207
 #, x-machine
 msgid "Clear Bookmarks"
 msgstr "Lesezeichen löschen"
@@ -48,8 +48,12 @@ msgstr "Nach Kapiteln und Lesezeichen springen; einen A-B-Bereich wiederholen"
 
 #: manifest.json
 #, x-machine
-msgid "Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar; sets an A-B range and loops it a chosen number of times.\nFind it in the context menu under \"Playback ▸ Chapters and Bookmarks\" and \"Playback ▸ A-B Loop\"."
-msgstr "Listet die Kapitel des Mediums auf; fügt für jede Datei Lesezeichen hinzu, benennt und verwaltet sie; springt zwischen Kapiteln und Lesezeichen und zeigt sie als Markierungen auf der Zeitleiste; legt einen A-B-Bereich fest und wiederholt ihn beliebig oft.\nZu finden im Kontextmenü unter „Wiedergabe ▸ Kapitel und Lesezeichen“ und „Wiedergabe ▸ A-B-Wiederholung“."
+msgid ""
+"Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar; sets an A-B range and loops it a chosen number of times.\n"
+"Find it in the context menu under \"Playback ▸ Chapters and Bookmarks\" and \"Playback ▸ A-B Loop\"."
+msgstr ""
+"Listet die Kapitel des Mediums auf; fügt für jede Datei Lesezeichen hinzu, benennt und verwaltet sie; springt zwischen Kapiteln und Lesezeichen und zeigt sie als Markierungen auf der Zeitleiste; legt einen A-B-Bereich fest und wiederholt ihn beliebig oft.\n"
+"Zu finden im Kontextmenü unter „Wiedergabe ▸ Kapitel und Lesezeichen“ und „Wiedergabe ▸ A-B-Wiederholung“."
 
 #: manifest.json
 #, x-machine
@@ -93,7 +97,7 @@ msgstr "Kapitel und Lesezeichen"
 msgid "Chapter and Bookmark List…"
 msgstr "Kapitel- und Lesezeichenliste…"
 
-#: menu.ts:109 ui/marks.slint:195
+#: menu.ts:109 ui/marks.slint:205
 #, x-machine
 msgid "Add Bookmark"
 msgstr "Lesezeichen hinzufügen"
@@ -103,7 +107,7 @@ msgstr "Lesezeichen hinzufügen"
 msgid "Can't add bookmarks to this source"
 msgstr "Für diese Quelle können keine Lesezeichen hinzugefügt werden"
 
-#: menu.ts:114 menu.ts:125 menu.ts:164 menu.ts:183 menu.ts:237 menu.ts:250 ui/marks.slint:144
+#: menu.ts:114 menu.ts:125 menu.ts:164 menu.ts:183 menu.ts:237 menu.ts:250 ui/marks.slint:154
 #, x-machine
 msgid "No media open"
 msgstr "Keine Medien geöffnet"
@@ -418,69 +422,69 @@ msgstr "A-B-Wiederholung fehlgeschlagen: {}"
 msgid "Show Marks on Seek Bar"
 msgstr "Markierungen auf der Zeitleiste anzeigen"
 
-#: ui/marks.slint:114
-#, x-machine
-msgid "Search by title"
-msgstr "Nach Titel suchen"
-
-#: ui/marks.slint:120
-#, x-machine
-msgid "The file has changed; bookmark times may be off"
-msgstr "Die Datei wurde geändert; Lesezeichenzeiten stimmen möglicherweise nicht"
-
-#: ui/marks.slint:144
-#, x-machine
-msgid "No matches"
-msgstr "Keine Treffer"
-
-#: ui/marks.slint:144
-#, x-machine
-msgid "No chapters or bookmarks"
-msgstr "Keine Kapitel oder Lesezeichen"
-
-#: ui/marks.slint:151
+#: ui/marks.slint:114 ui/marks.slint:161
 #, x-machine
 msgid "Time"
 msgstr "Zeit"
 
-#: ui/marks.slint:167
+#: ui/marks.slint:114 ui/marks.slint:177
 #, x-machine
 msgid "Title"
 msgstr "Titel"
 
-#: ui/marks.slint:183
+#: ui/marks.slint:124
+#, x-machine
+msgid "Search by title"
+msgstr "Nach Titel suchen"
+
+#: ui/marks.slint:130
+#, x-machine
+msgid "The file has changed; bookmark times may be off"
+msgstr "Die Datei wurde geändert; Lesezeichenzeiten stimmen möglicherweise nicht"
+
+#: ui/marks.slint:154
+#, x-machine
+msgid "No matches"
+msgstr "Keine Treffer"
+
+#: ui/marks.slint:154
+#, x-machine
+msgid "No chapters or bookmarks"
+msgstr "Keine Kapitel oder Lesezeichen"
+
+#: ui/marks.slint:193
 #, x-machine
 msgid "Title can't be empty"
 msgstr "Der Titel darf nicht leer sein"
 
-#: ui/marks.slint:184
+#: ui/marks.slint:194
 #, x-machine
 msgid "Time format is h:mm:ss.d"
 msgstr "Zeitformat: h:mm:ss.d"
 
-#: ui/marks.slint:185
+#: ui/marks.slint:195
 #, x-machine
 msgid "Time exceeds the duration ({})"
 msgstr "Zeit überschreitet die Dauer ({})"
 
-#: ui/marks.slint:186
+#: ui/marks.slint:196
 #, x-machine
 msgid "Removed: {}"
 msgstr "Entfernt: {}"
 
-#: ui/marks.slint:187
+#: ui/marks.slint:197
 #, x-machine
 msgid "Can't confirm: {}"
 msgstr "Bestätigen nicht möglich: {}"
 
-#: ui/marks.slint:188
+#: ui/marks.slint:198
 #, x-machine
 msgid "{n} bookmark cleared"
 msgid_plural "{n} bookmarks cleared"
 msgstr[0] "{n} Lesezeichen gelöscht"
 msgstr[1] "{n} Lesezeichen gelöscht"
 
-#: ui/marks.slint:196
+#: ui/marks.slint:206
 #, x-machine
 msgid "Remove"
 msgstr "Entfernen"

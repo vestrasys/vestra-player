@@ -113,8 +113,12 @@ msgstr "Zeigt bei reinem Audio das Albumcover und im Leerlauf ein Logo"
 
 #: manifest.json
 #, x-machine
-msgid "While audio without a picture plays, shows the album cover with title, artist and album; with no media open, shows a logo (which can be replaced with your own image); while media opens, shows a loading screen.\nEntries: Audio ▸ Show Album Cover for Audio Only, Settings ▸ Appearance."
-msgstr "Während Audio ohne Bild läuft, wird das Albumcover mit Titel, Interpret und Album angezeigt; sind keine Medien geöffnet, ein Logo (durch ein eigenes Bild ersetzbar); während Medien geöffnet werden, ein Ladebildschirm.\nMenüeinträge: Audio ▸ Albumcover bei reinem Audio anzeigen, Einstellungen ▸ Darstellung."
+msgid ""
+"While audio without a picture plays, shows the album cover with title, artist and album; with no media open, shows a logo (which can be replaced with your own image); while media opens, shows a loading screen.\n"
+"Entries: Audio ▸ Show Album Cover for Audio Only, Settings ▸ Appearance."
+msgstr ""
+"Während Audio ohne Bild läuft, wird das Albumcover mit Titel, Interpret und Album angezeigt; sind keine Medien geöffnet, ein Logo (durch ein eigenes Bild ersetzbar); während Medien geöffnet werden, ein Ladebildschirm.\n"
+"Menüeinträge: Audio ▸ Albumcover bei reinem Audio anzeigen, Einstellungen ▸ Darstellung."
 
 #: manifest.json
 #, x-machine
@@ -171,44 +175,44 @@ msgstr "Bild auswählen…"
 msgid "Restore Default"
 msgstr "Standard wiederherstellen"
 
-#: ui/page.slint:91
+#: ui/page.slint:92
 #, x-machine
 msgid "PNG or JPEG, up to 4096×4096 and 16 MB. The image is copied, so the original can be moved."
 msgstr "PNG oder JPEG, bis 4096×4096 und 16 MB. Das Bild wird kopiert, das Original kann also verschoben werden."
 
-#: ui/page.slint:97
+#: ui/page.slint:98
 #, x-machine
 msgid "Audio only"
 msgstr "Reines Audio"
 
-#: ui/page.slint:100
+#: ui/page.slint:101
 #, x-machine
 msgid "Show album cover for audio only"
 msgstr "Albumcover bei reinem Audio anzeigen"
 
-#: ui/page.slint:106
+#: ui/page.slint:107
 #, x-machine
 msgid "The cover comes from the picture embedded in the file, or a cover, folder or front image in the same folder; without one the logo is shown as a placeholder."
 msgstr "Das Cover stammt aus dem in der Datei eingebetteten Bild oder aus einem Bild „cover“, „folder“ oder „front“ im selben Ordner; fehlt es, wird das Logo als Platzhalter angezeigt."
 
-#: ui/page.slint:117
+#: ui/page.slint:118
 #, x-machine
 msgid "Cover cache unavailable"
 msgstr "Cover-Cache nicht verfügbar"
 
-#: ui/page.slint:118
+#: ui/page.slint:119
 #, x-machine
 msgid "Cover cache: empty"
 msgstr "Cover-Cache: leer"
 
-#: ui/page.slint:119
+#: ui/page.slint:120
 #, x-machine
 msgid "Cover cache: {n} track, {0}"
 msgid_plural "Cover cache: {n} tracks, {0}"
 msgstr[0] "Cover-Cache: {n} Titel, {0}"
 msgstr[1] "Cover-Cache: {n} Titel, {0}"
 
-#: ui/page.slint:125
+#: ui/page.slint:126
 #, x-machine
 msgid "Clear Cover Cache"
 msgstr "Cover-Cache leeren"

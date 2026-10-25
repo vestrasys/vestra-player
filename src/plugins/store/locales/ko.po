@@ -541,7 +541,7 @@ msgstr "저장소에 아직 플러그인이 없습니다"
 msgid "{} · {}"
 msgstr "{} · {}"
 
-#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:222
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:246
 #, x-machine
 msgid "Installed"
 msgstr "설치됨"
@@ -766,7 +766,7 @@ msgstr "호환되지 않음: {}"
 msgid "Latest"
 msgstr "최신"
 
-#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:407
+#: store.ts:351 store.ts:366 store.ts:367 text.ts:370 ui/store.slint:223 ui/store.slint:431
 #, x-machine
 msgid "Version"
 msgstr "버전"
@@ -1581,12 +1581,12 @@ msgstr "다른 플러그인 설치, 제거, 사용 중지"
 msgid "Replace"
 msgstr "바꾸기"
 
-#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:121
+#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:44 ui/settings.slint:133
 #, x-machine
 msgid "Add"
 msgstr "추가"
 
-#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:79
+#: store.ts:368 store.ts:369 store.ts:371 ui/settings.slint:43 ui/settings.slint:91
 #, x-machine
 msgid "Remove"
 msgstr "제거"
@@ -1596,7 +1596,7 @@ msgstr "제거"
 msgid "Update"
 msgstr "업데이트"
 
-#: store.ts:368 store.ts:369 store.ts:371 ui/store.slint:257 ui/store.slint:432
+#: store.ts:368 store.ts:369 store.ts:371 ui/store.slint:225 ui/store.slint:281 ui/store.slint:456
 #, x-machine
 msgid "Install"
 msgstr "설치"
@@ -1646,147 +1646,147 @@ msgstr "사용 중지"
 msgid "Choose a plugin package (.vxp)"
 msgstr "플러그인 패키지 선택 (.vxp)"
 
-#: ui/settings.slint:39
-#, x-machine
-msgid "Check for updates automatically (30 seconds after the player starts, then every 24 hours)"
-msgstr "자동으로 업데이트 확인 (플레이어 시작 30초 후, 이후 24시간마다)"
-
-#: ui/settings.slint:44
-#, x-machine
-msgid "When off, the store goes online only when you open it or click “Refresh”; plugins revoked by a repository are disabled only then too. When updates are available, the “Plugin Store…” menu item shows how many."
-msgstr "끄면 스토어를 열거나 “새로 고침”을 클릭할 때만 온라인에 연결하며, 저장소에서 철회한 플러그인도 그때만 사용 중지됩니다. 업데이트가 있으면 “플러그인 스토어…” 메뉴 항목에 개수가 표시됩니다."
-
-#: ui/settings.slint:51
-#, x-machine
-msgid "Repositories"
-msgstr "저장소"
-
-#: ui/settings.slint:90
-#, x-machine
-msgid "Add Repository…"
-msgstr "저장소 추가…"
-
-#: ui/settings.slint:114
-#, x-machine
-msgid "The repository's root address or the full address of index.json (https://…)"
-msgstr "저장소의 루트 주소 또는 index.json의 전체 주소 (https://…)"
-
-#: ui/settings.slint:125 ui/store.slint:516
+#: ui/settings.slint:45 ui/settings.slint:137 ui/store.slint:540
 #, x-machine
 msgid "Cancel"
 msgstr "취소"
 
-#: ui/settings.slint:130
+#: ui/settings.slint:51
+#, x-machine
+msgid "Check for updates automatically (30 seconds after the player starts, then every 24 hours)"
+msgstr "자동으로 업데이트 확인 (플레이어 시작 30초 후, 이후 24시간마다)"
+
+#: ui/settings.slint:56
+#, x-machine
+msgid "When off, the store goes online only when you open it or click “Refresh”; plugins revoked by a repository are disabled only then too. When updates are available, the “Plugin Store…” menu item shows how many."
+msgstr "끄면 스토어를 열거나 “새로 고침”을 클릭할 때만 온라인에 연결하며, 저장소에서 철회한 플러그인도 그때만 사용 중지됩니다. 업데이트가 있으면 “플러그인 스토어…” 메뉴 항목에 개수가 표시됩니다."
+
+#: ui/settings.slint:63
+#, x-machine
+msgid "Repositories"
+msgstr "저장소"
+
+#: ui/settings.slint:102
+#, x-machine
+msgid "Add Repository…"
+msgstr "저장소 추가…"
+
+#: ui/settings.slint:126
+#, x-machine
+msgid "The repository's root address or the full address of index.json (https://…)"
+msgstr "저장소의 루트 주소 또는 index.json의 전체 주소 (https://…)"
+
+#: ui/settings.slint:142
 #, x-machine
 msgid "Third-party repositories are not reviewed by Vestra Player; their plugins may read your files or use the network. Only add repositories you trust. The official repository cannot be removed; to keep the store offline, disable the Plugin Store in “Plugin Manager”."
 msgstr "서드파티 저장소는 Vestra Player에서 검토하지 않으며, 그 플러그인은 파일을 읽거나 네트워크를 사용할 수 있습니다. 신뢰하는 저장소만 추가하세요. 공식 저장소는 제거할 수 없습니다. 스토어를 오프라인으로 두려면 “플러그인 관리자”에서 플러그인 스토어를 사용 중지하세요."
 
-#: ui/store.slint:216
-#, x-machine
-msgid "Search names, authors, tags…"
-msgstr "이름, 작성자, 태그 검색…"
-
-#: ui/store.slint:221
-#, x-machine
-msgid "All"
-msgstr "전체"
-
-#: ui/store.slint:225
-#, x-machine
-msgid "Updates {}"
-msgstr "업데이트 {}"
-
-#: ui/store.slint:225
-#, x-machine
-msgid "Updates"
-msgstr "업데이트"
-
-#: ui/store.slint:233
+#: ui/store.slint:219 ui/store.slint:257
 #, x-machine
 msgid "Tags: All"
 msgstr "태그: 전체"
 
-#: ui/store.slint:240
+#: ui/store.slint:221 ui/store.slint:264
 #, x-machine
 msgid "Sort: Name"
 msgstr "정렬: 이름순"
 
-#: ui/store.slint:240
+#: ui/store.slint:221 ui/store.slint:264
 #, x-machine
 msgid "Sort: Updated"
 msgstr "정렬: 업데이트순"
 
-#: ui/store.slint:248
-#, x-machine
-msgid "You can also drop a .vxp plugin package on the player's video area to install it"
-msgstr ".vxp 플러그인 패키지를 플레이어의 비디오 영역에 끌어다 놓아도 설치할 수 있습니다"
-
-#: ui/store.slint:249
-#, x-machine
-msgid "Install from File…"
-msgstr "파일로 설치…"
-
-#: ui/store.slint:250
-#, x-machine
-msgid "Install from Link…"
-msgstr "링크로 설치…"
-
-#: ui/store.slint:251
-#, x-machine
-msgid "Repositories…"
-msgstr "저장소…"
-
-#: ui/store.slint:252
-#, x-machine
-msgid "Refresh"
-msgstr "새로 고침"
-
-#: ui/store.slint:256
-#, x-machine
-msgid "Plugin package link (https://…/name-version.vxp)"
-msgstr "플러그인 패키지 링크 (https://…/이름-버전.vxp)"
-
-#: ui/store.slint:300
-#, x-machine
-msgid "Select a plugin on the left to see its details"
-msgstr "세부 정보를 보려면 왼쪽에서 플러그인을 선택하세요"
-
-#: ui/store.slint:368
-#, x-machine
-msgid "Description"
-msgstr "설명"
-
-#: ui/store.slint:369
-#, x-machine
-msgid "Changelog"
-msgstr "변경 내역"
-
-#: ui/store.slint:370
-#, x-machine
-msgid "Versions"
-msgstr "버전"
-
-#: ui/store.slint:408
+#: ui/store.slint:224 ui/store.slint:432
 #, x-machine
 msgid "Published"
 msgstr "게시일"
 
-#: ui/store.slint:409
+#: ui/store.slint:240
+#, x-machine
+msgid "Search names, authors, tags…"
+msgstr "이름, 작성자, 태그 검색…"
+
+#: ui/store.slint:245
+#, x-machine
+msgid "All"
+msgstr "전체"
+
+#: ui/store.slint:249
+#, x-machine
+msgid "Updates {}"
+msgstr "업데이트 {}"
+
+#: ui/store.slint:249
+#, x-machine
+msgid "Updates"
+msgstr "업데이트"
+
+#: ui/store.slint:272
+#, x-machine
+msgid "You can also drop a .vxp plugin package on the player's video area to install it"
+msgstr ".vxp 플러그인 패키지를 플레이어의 비디오 영역에 끌어다 놓아도 설치할 수 있습니다"
+
+#: ui/store.slint:273
+#, x-machine
+msgid "Install from File…"
+msgstr "파일로 설치…"
+
+#: ui/store.slint:274
+#, x-machine
+msgid "Install from Link…"
+msgstr "링크로 설치…"
+
+#: ui/store.slint:275
+#, x-machine
+msgid "Repositories…"
+msgstr "저장소…"
+
+#: ui/store.slint:276
+#, x-machine
+msgid "Refresh"
+msgstr "새로 고침"
+
+#: ui/store.slint:280
+#, x-machine
+msgid "Plugin package link (https://…/name-version.vxp)"
+msgstr "플러그인 패키지 링크 (https://…/이름-버전.vxp)"
+
+#: ui/store.slint:324
+#, x-machine
+msgid "Select a plugin on the left to see its details"
+msgstr "세부 정보를 보려면 왼쪽에서 플러그인을 선택하세요"
+
+#: ui/store.slint:392
+#, x-machine
+msgid "Description"
+msgstr "설명"
+
+#: ui/store.slint:393
+#, x-machine
+msgid "Changelog"
+msgstr "변경 내역"
+
+#: ui/store.slint:394
+#, x-machine
+msgid "Versions"
+msgstr "버전"
+
+#: ui/store.slint:433
 #, x-machine
 msgid "Minimum player"
 msgstr "최소 플레이어 버전"
 
-#: ui/store.slint:475
+#: ui/store.slint:499
 #, x-machine
 msgid "Permissions ({})"
 msgstr "권한 ({})"
 
-#: ui/store.slint:489
+#: ui/store.slint:513
 #, x-machine
 msgid "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
 msgstr "플러그인은 완전한 프로그램입니다. 위 권한은 플레이어에서 할 수 있는 일만 제한하며, 파일 읽기·쓰기나 네트워크 사용은 제한하지 않습니다."
 
-#: ui/store.slint:497
+#: ui/store.slint:521
 #, x-machine
 msgid "Disable, reload, open the data folder: Settings ▸ Plugin Manager…"
 msgstr "사용 중지, 다시 로드, 데이터 폴더 열기: 설정 ▸ 플러그인 관리자…"

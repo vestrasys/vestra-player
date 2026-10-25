@@ -36,7 +36,7 @@ msgstr "Menüs, Tastenkürzel, Fenster und Effekte des Plugins werden sofort ent
 msgid "Its menus, shortcuts, windows and effects (such as the equalizer, filters, subtitle style) are removed at once; open media keeps playing. It stays disabled after Vestra Player restarts; you can enable it here at any time."
 msgstr "Menüs, Tastenkürzel, Fenster und Effekte des Plugins (etwa Equalizer, Filter, Untertitelstil) werden sofort entfernt; geöffnete Medien werden weiter abgespielt. Es bleibt auch nach einem Neustart von Vestra Player deaktiviert; Sie können es hier jederzeit wieder aktivieren."
 
-#: manager.ts:239 ui/plugins.slint:310
+#: manager.ts:239 ui/plugins.slint:268 ui/plugins.slint:362
 #, x-machine
 msgid "Disable"
 msgstr "Deaktivieren"
@@ -360,7 +360,7 @@ msgstr "Warnung"
 msgid "Note"
 msgstr "Hinweis"
 
-#: ui/plugins.slint:123 ui/plugins.slint:243
+#: ui/plugins.slint:123 ui/plugins.slint:249 ui/plugins.slint:290
 #, x-machine
 msgid "Source"
 msgstr "Quelle"
@@ -469,59 +469,59 @@ msgid "Data folder unavailable: {}"
 msgstr "Datenordner nicht verfügbar: {}"
 
 #. the version column of a development-loaded plugin (50px wide).
-#: ui/plugins.slint:189
+#: ui/plugins.slint:195 ui/plugins.slint:245
 #, x-machine
 msgid "Dev"
 msgstr "Dev"
 
-#: ui/plugins.slint:241
-#, x-machine
-msgid "Plugin"
-msgstr "Plugin"
-
-#: ui/plugins.slint:242
+#: ui/plugins.slint:245 ui/plugins.slint:289
 #, x-machine
 msgid "Version"
 msgstr "Version"
 
-#: ui/plugins.slint:244
+#: ui/plugins.slint:253 ui/plugins.slint:291
 #, x-machine
 msgid "Status"
 msgstr "Status"
 
 #. column header: the size of the plugin's data folder.
-#: ui/plugins.slint:246
+#: ui/plugins.slint:255 ui/plugins.slint:293
 #, x-machine
 msgid "Data"
 msgstr "Daten"
 
-#: ui/plugins.slint:269
-#, x-machine
-msgid "Select a plugin to see its details"
-msgstr "Wählen Sie ein Plugin, um Details anzuzeigen"
-
-#: ui/plugins.slint:310
-#, x-machine
-msgid "Enable"
-msgstr "Aktivieren"
-
-#: ui/plugins.slint:315
+#: ui/plugins.slint:262 ui/plugins.slint:367
 #, x-machine
 msgid "Reload"
 msgstr "Neu laden"
 
 #. button: roll the plugin back to its previous version (94px wide).
-#: ui/plugins.slint:317
+#: ui/plugins.slint:263 ui/plugins.slint:369
 #, x-machine
 msgid "Roll Back"
 msgstr "Zurücksetzen"
 
-#: ui/plugins.slint:324
+#: ui/plugins.slint:264 ui/plugins.slint:376
 #, x-machine
 msgid "Uninstall…"
 msgstr "Entfernen…"
 
-#: ui/plugins.slint:329
+#: ui/plugins.slint:265 ui/plugins.slint:381 ui/plugins.slint:386
 #, x-machine
 msgid "Open Data Folder"
 msgstr "Datenordner öffnen"
+
+#: ui/plugins.slint:268 ui/plugins.slint:362
+#, x-machine
+msgid "Enable"
+msgstr "Aktivieren"
+
+#: ui/plugins.slint:288
+#, x-machine
+msgid "Plugin"
+msgstr "Plugin"
+
+#: ui/plugins.slint:320
+#, x-machine
+msgid "Select a plugin to see its details"
+msgstr "Wählen Sie ein Plugin, um Details anzuzeigen"

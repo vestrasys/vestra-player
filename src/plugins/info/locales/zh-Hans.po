@@ -9,19 +9,19 @@ msgstr ""
 msgid "{} (build {})"
 msgstr "{}（构建 {}）"
 
-#: about.ts:32 about.ts:78 properties.ts:196 properties.ts:285 properties.ts:286 ui/about.slint:81
+#: about.ts:32 about.ts:78 properties.ts:196 properties.ts:285 properties.ts:286 ui/about.slint:86 ui/about.slint:120
 msgid "Unknown"
 msgstr "未知"
 
-#: about.ts:34 ui/about.slint:130
+#: about.ts:34 ui/about.slint:116 ui/about.slint:159
 msgid "Plugin API"
 msgstr "插件 API"
 
-#: about.ts:70 ui/about.slint:126
+#: about.ts:70 ui/about.slint:155
 msgid "Version {} (build {})"
 msgstr "版本 {}（构建 {}）"
 
-#: about.ts:70 ui/about.slint:126
+#: about.ts:70 ui/about.slint:155
 msgid "Version {}"
 msgstr "版本 {}"
 
@@ -29,59 +29,59 @@ msgstr "版本 {}"
 msgid "{}: {}"
 msgstr "{}：{}"
 
-#: about.ts:72 ui/about.slint:141
+#: about.ts:72 ui/about.slint:170
 msgid "Loaded plugins"
 msgstr "已加载插件"
 
-#: about.ts:73 ui/about.slint:152
+#: about.ts:73 ui/about.slint:181
 msgid "Unknown (cannot read the plugin list)"
 msgstr "未知（无法读取插件列表）"
 
-#: about.ts:76 ui/about.slint:85
+#: about.ts:76 ui/about.slint:90
 msgid "Built-in"
 msgstr "内置"
 
-#: about.ts:76 ui/about.slint:86
+#: about.ts:76 ui/about.slint:91
 msgid "Repository"
 msgstr "仓库"
 
-#: about.ts:76 ui/about.slint:87
+#: about.ts:76 ui/about.slint:92
 msgid "Link"
 msgstr "链接"
 
-#: about.ts:76 ui/about.slint:88
+#: about.ts:76 ui/about.slint:93
 msgid "Local file"
 msgstr "本地文件"
 
-#: about.ts:76 ui/about.slint:89
+#: about.ts:76 ui/about.slint:94
 msgid "Workshop"
 msgstr "插件工坊"
 
-#: about.ts:76 ui/about.slint:90
+#: about.ts:76 ui/about.slint:95
 msgid "Installed"
 msgstr "已安装"
 
-#: about.ts:76 ui/about.slint:91
+#: about.ts:76 ui/about.slint:96
 msgid "Development"
 msgstr "开发加载"
 
-#: about.ts:77 ui/about.slint:95
+#: about.ts:77 ui/about.slint:100
 msgid "Starting"
 msgstr "启动中"
 
-#: about.ts:77 ui/about.slint:96
+#: about.ts:77 ui/about.slint:101
 msgid "Running"
 msgstr "运行中"
 
-#: about.ts:77 ui/about.slint:97
+#: about.ts:77 ui/about.slint:102
 msgid "Disabled"
 msgstr "已停用"
 
-#: about.ts:77 ui/about.slint:98
+#: about.ts:77 ui/about.slint:103
 msgid "Failed"
 msgstr "失败"
 
-#: about.ts:77 ui/about.slint:99
+#: about.ts:77 ui/about.slint:104
 msgid "Stopped"
 msgstr "已停止"
 
@@ -485,7 +485,7 @@ msgstr "编码器"
 msgid "Creation time"
 msgstr "创建时间"
 
-#: properties.ts:222 properties.ts:250 ui/about.slint:141
+#: properties.ts:222 properties.ts:250 ui/about.slint:123 ui/about.slint:170
 msgid "Source"
 msgstr "来源"
 
@@ -630,27 +630,27 @@ msgstr "Vestra Player 信息.txt"
 msgid "{} info.txt"
 msgstr "{} 信息.txt"
 
-#: ui/about.slint:55
+#: ui/about.slint:60
 msgid "About Vestra Player"
 msgstr "关于 Vestra Player"
 
-#: ui/about.slint:141
+#: ui/about.slint:119 ui/about.slint:170
 msgid "Version"
 msgstr "版本"
 
-#: ui/about.slint:141
+#: ui/about.slint:127 ui/about.slint:170
 msgid "State"
 msgstr "状态"
 
-#: ui/about.slint:181 ui/properties.slint:147
+#: ui/about.slint:213 ui/properties.slint:157
 msgid "Copy failed"
 msgstr "复制失败"
 
-#: ui/about.slint:187
+#: ui/about.slint:219
 msgid "Copy Info"
 msgstr "复制信息"
 
-#: ui/about.slint:188 ui/properties.slint:158
+#: ui/about.slint:220 ui/properties.slint:168
 msgid "Close"
 msgstr "关闭"
 
@@ -673,18 +673,18 @@ msgctxt "tab"
 msgid "System"
 msgstr "系统信息"
 
-#: ui/properties.slint:148
+#: ui/properties.slint:158
 msgid "Save failed: {}"
 msgstr "保存失败：{}"
 
-#: ui/properties.slint:155
+#: ui/properties.slint:165
 msgid "Refresh"
 msgstr "刷新"
 
-#: ui/properties.slint:156
+#: ui/properties.slint:166
 msgid "Copy"
 msgstr "复制到剪贴板"
 
-#: ui/properties.slint:157
+#: ui/properties.slint:167
 msgid "Save As…"
 msgstr "保存为…"
